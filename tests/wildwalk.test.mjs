@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -2436,6 +2436,190 @@ test('JUICE-STATUS stun-only + all-zero-status idle battle render safely', ()=>{
   for(const m of [you, g.wild]){ m.status = { burn:0, burnT:0, stun:0, stunImm:0, regen:0, regenRate:0, fBurn:0, fStun:0, fGuard:0, fDodge:0, fHeal:0 }; }
   for(let i=0;i<40;i++){ g.t=i*0.08; api.draw(); }
   assert(g.state==='battle', 'left battle unexpectedly');
+});
+
+// ===================================================================
+// TEAM SYNERGIES — transient team-comp buff layer (G.synergies)
+// ===================================================================
+test('SYN computeSynergies — pairs / mono / rainbow / none / clamp', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const set = arr => { g.team = arr.map(k=> k? api.mk(k,5):null); return api.computeSynergies(); };
+
+  // Rock pair (2 Rock + 2 distinct, non-pairing)
+  let S = set(['pebblin','pebblin','emberpup','puddlet']);
+  assert(Math.abs(S.hpMul-1.10)<1e-9, 'rock pair hpMul '+S.hpMul);
+  assert(S.atkMul===1, 'rock pair leaves atk 1');
+  assert(S.list.length===1 && /HP/.test(S.list[0].tag), 'one rock entry');
+
+  // Mono Fire (doubled axis, replaces pair)
+  S = set(['emberpup','emberpup','emberpup','emberpup']);
+  assert(Math.abs(S.atkMul-1.16)<1e-9, 'mono fire atk '+S.atkMul);
+  assert(S.list.length===1 && S.list[0].name==='Inferno', 'mono name');
+
+  // Rainbow (4 distinct → +5% all, no per-pair)
+  S = set(['emberpup','puddlet','sprig','sparky']);
+  assert(Math.abs(S.atkMul-1.05)<1e-9 && Math.abs(S.hpMul-1.05)<1e-9 && Math.abs(S.spdMul-1.05)<1e-9, 'rainbow 5% all');
+  assert(S.list.length===1 && S.list[0].icon==='🌈', 'rainbow entry');
+
+  // Two pairs (Fire + Rock)
+  S = set(['emberpup','emberpup','pebblin','pebblin']);
+  assert(Math.abs(S.atkMul-1.08)<1e-9 && Math.abs(S.hpMul-1.10)<1e-9, 'two pairs');
+  assert(S.list.length===2, 'two entries');
+
+  // Clamp / boundary — Shadow + Frost guard = 0.10 cap; everything within caps
+  S = set(['umbrat','umbrat','frostkit','frostkit']);
+  assert(Math.abs(S.guardBonus-0.10)<1e-9, 'guard cap '+S.guardBonus);
+  assert(S.atkMul<=1.20 && S.hpMul<=1.20 && S.spdMul<=1.20 && S.guardBonus<=0.10 && S.winHeal<=0.12, 'within caps');
+
+  // Neutral — single filled slot
+  S = set(['emberpup',null,null,null]);
+  assert(S.atkMul===1&&S.hpMul===1&&S.spdMul===1&&S.guardBonus===0&&S.winHeal===0&&S.list.length===0, 'single-slot neutral');
+
+  // Neutral — 3 distinct, no pair
+  S = set(['emberpup','puddlet','sprig',null]);
+  assert(S.list.length===0, '3-distinct neutral');
+});
+
+test('SYN refreshTeamStats — grows maxhp per hpMul, preserves hp-delta + fainted', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team = [api.mk('pebblin',6), api.mk('pebblin',6), api.mk('pebblin',6)]; // all Rock → mono → hpMul 1.20
+  const raw = g.team[0].maxhp;      // makeMon has no hpMul → neutral baseline
+  g.team[2].hp = 0;                  // fainted stays fainted
+  api.updateSynergies();
+  const m = g.team[0];
+  assert(Math.abs(m.maxhp - Math.round(raw*1.20))<=1, 'maxhp grew ~20% ('+m.maxhp+' vs '+raw+')');
+  assert(m.hp===m.maxhp, 'full-hp mon stays full after grow');
+  assert(g.team[2].hp===0, 'fainted mon stays fainted');
+  // wound it, re-run — delta preserved, no free heal, maxhp idempotent
+  const max0 = m.maxhp; m.hp = max0-30;
+  api.updateSynergies();
+  assert(m.maxhp===max0, 'maxhp idempotent on re-run');
+  assert(m.maxhp-m.hp===30, 'missing-hp delta preserved');
+});
+
+test('SYN real-path ATK — Fire pair boosts the TEAM attacker ~8% (drives strike)', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const att = api.mk('emberpup',6);        // same attacker object in both runs (atk never mutated)
+  const measure = (mates)=>{
+    g.team = mates; api.updateSynergies();
+    api.reseed(4242);                      // identical RNG sequence per run → deterministic ratio
+    const def = api.mk('infernyx',60);     // Fire def: no Shadow-dodge / Rock-guard to confound
+    let tot=0; const N=250;
+    for(let i=0;i<N;i++){ def.hp=def.maxhp; api.strike(att, def, +1); tot += def.maxhp-def.hp; }
+    return tot/N;
+  };
+  const syn = measure([att, api.mk('emberpup',6), api.mk('puddlet',6)]); // 2 Fire + Water → Fire PAIR → atkMul 1.08
+  const ctl = measure([att, api.mk('puddlet',6)]);                       // 1 Fire + Water → no pair (control)
+  assert(syn > ctl, 'fire-pair deals more ('+syn+' vs '+ctl+')');
+  const ratio = syn/ctl;
+  assert(ratio>1.06 && ratio<1.10, 'atk boost ~8% got '+ratio);
+});
+
+test('SYN real-path HP — Rock pair raises team maxhp ~10% (drives baseMaxHp)', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team=[api.mk('pebblin',8), api.mk('emberpup',8)]; api.updateSynergies();                   // no pair
+  const ctlMax = g.team[0].maxhp;
+  g.team=[api.mk('pebblin',8), api.mk('pebblin',8), api.mk('emberpup',8)]; api.updateSynergies(); // 2 Rock + Fire → Rock PAIR
+  const synMax = g.team[0].maxhp;
+  assert(synMax > ctlMax, 'rock pair maxhp higher ('+synMax+' vs '+ctlMax+')');
+  assert(Math.abs(synMax/ctlMax - 1.10) < 0.02, 'maxhp ~10% got '+(synMax/ctlMax));
+});
+
+test('SYN real-path SPD — finishSpawn applies team spdMul in combat; wild never inherits it', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.tier=1; g.enc=9; g.lead=0;                                    // skip the gentle first-encounter path
+  g.team=[api.mk('sparky',20),api.mk('sparky',20),api.mk('sparky',20),api.mk('sparky',20)];  // mono-Volt
+  api.updateSynergies();
+  const spdMul=g.synergies.spdMul, base=g.team[0].sp.base.spd;
+  assert(spdMul>1.10, 'mono-Volt spdMul should be ~1.16, got '+spdMul);
+  // spawn through the REAL path — finishSpawn resets every team mon's spd; it MUST re-apply spdMul
+  api.spawn(false);
+  const you=api.activeMon(), wild=g.wild;
+  assert(Math.abs(you.spd - base*spdMul) < 1e-6, 'finishSpawn stripped team spdMul (synergy inert in combat): '+you.spd+' vs '+base*spdMul);
+  // wild-safety: the wild carries its OWN base spd — the player's team synergy must not leak via makeMon
+  assert(Math.abs(wild.spd - wild.sp.base.spd) < 1e-6, 'wild inherited team spdMul: '+wild.spd+' vs '+wild.sp.base.spd);
+});
+
+test('SYN real-path GUARD — team defender only; wild never buffed (attack or guard)', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const tank = api.mk('glaciera',30);      // Frost, big HP — no dodge / rock-guard
+  const wild = api.mk('emberpup',22);
+  const guardTeam   = [tank, api.mk('frostkit',10), api.mk('umbrat',10), api.mk('umbrat',10)]; // Frost pair + Shadow pair → guard 0.10
+  const plainTeam   = [tank, api.mk('puddlet',10)];                                            // no synergy
+  const firePairTeam= [tank, api.mk('emberpup',10), api.mk('emberpup',10)];                    // atkMul 1.08, guard 0
+  const dmg = (mates, att, def, dir)=>{
+    g.team = mates; api.updateSynergies();
+    api.reseed(555);
+    let tot=0; const N=200;
+    for(let i=0;i<N;i++){ def.hp=def.maxhp; api.strike(att, def, dir); tot += def.maxhp-def.hp; }
+    return tot/N;
+  };
+  // (a) wild ATTACKS team defender → guard REDUCES incoming
+  const guarded  = dmg(guardTeam, wild, tank, -1);
+  const unguarded= dmg(plainTeam, wild, tank, -1);
+  assert(guarded < unguarded, 'guard reduces incoming ('+guarded+' vs '+unguarded+')');
+  assert(guarded/unguarded < 0.95, 'guard ~10% got '+(guarded/unguarded));
+  // (b) team ATTACKS wild → wild defender NEVER gets team guardBonus (identical dmg)
+  const wildTakeGuard = dmg(guardTeam, tank, wild, +1);
+  const wildTakePlain = dmg(plainTeam, tank, wild, +1);
+  assert(wildTakeGuard === wildTakePlain, 'wild defender unaffected by team guard ('+wildTakeGuard+' vs '+wildTakePlain+')');
+  // (c) wild ATTACKS → wild attacker NEVER gets team atkMul (identical dmg)
+  const wildHitFire  = dmg(firePairTeam, wild, tank, -1);
+  const wildHitPlain = dmg(plainTeam,    wild, tank, -1);
+  assert(wildHitFire === wildHitPlain, 'wild attacker unaffected by team atk synergy ('+wildHitFire+' vs '+wildHitPlain+')');
+});
+
+test('SYN real-path WIN-HEAL — Water synergy heals survivors more (drives endFight)', ()=>{
+  const measure = (mates)=>{
+    const { api } = boot();
+    const g = api.getG();
+    g.team = mates(api); api.updateSynergies();
+    g.team.forEach(m=>{ m.xp=0; m.xpNext=1e9; });     // freeze levels → maxhp stable through endFight
+    const m = g.team[0];
+    m.hp = Math.round(m.maxhp*0.4);
+    const max = m.maxhp, before = m.hp;
+    g.wild = api.mk('emberpup',2); g.bossWin=false; g.fights=0;
+    api.endFight(true);
+    return (m.hp - before)/max;                        // healed fraction
+  };
+  const syn = measure(api=>[api.mk('puddlet',5), api.mk('puddlet',5), api.mk('sprig',5)]); // 2 Water + Grass → Water PAIR → winHeal 0.06
+  const ctl = measure(api=>[api.mk('puddlet',5), api.mk('sprig',5)]);                       // Water+Grass → no pair → winHeal 0
+  assert(Math.abs(ctl-0.30)<0.01, 'baseline heal 30% got '+ctl);
+  assert(Math.abs(syn-0.36)<0.01, 'water heal 36% got '+syn);
+  assert(syn>ctl, 'water synergy heals more');
+});
+
+test('SYN drawSynergyReadout renders clean with & without synergies', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team=[api.mk('emberpup',5), api.mk('emberpup',5)]; api.updateSynergies();  // one synergy
+  api.draw();
+  g.team=[api.mk('emberpup',5), api.mk('emberpup',5), api.mk('pebblin',5), api.mk('pebblin',5)]; api.updateSynergies(); // two
+  api.draw();
+  g.team=[api.mk('emberpup',5)]; api.updateSynergies();  // none → empty-state hint
+  api.draw();
+  assert(true, 'draw did not throw');
+});
+
+test('SYN no save-shape change — G.synergies never serialized', ()=>{
+  const { api, store } = boot();
+  const g = api.getG();
+  g.team=[api.mk('emberpup',5), api.mk('emberpup',5)]; api.updateSynergies();  // populate G.synergies
+  const keysBefore = Object.keys(api.Dex.data).sort().join(',');
+  api.Dex.save();
+  const raw = store['wildwalk_save_v1'];
+  assert(raw && !/synerg/i.test(raw), 'save must not contain synergies');
+  const parsed = JSON.parse(raw);
+  assert(!('synergies' in parsed), 'no synergies key in save');
+  api.Dex.load();
+  const keysAfter = Object.keys(api.Dex.data).sort().join(',');
+  assert(keysBefore===keysAfter, 'Dex.data shape unchanged after round-trip');
 });
 
 // ===================================================================
