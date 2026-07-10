@@ -42,6 +42,8 @@ header.topbar{
   display:flex; align-items:center; justify-content:space-between; gap:12px;
 }
 header.topbar h1{font-family:var(--serif); font-size:19px; margin:0; font-weight:600; letter-spacing:-.01em;}
+.topbar-stats{display:flex; align-items:center; gap:14px;}
+.day-badge{font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); letter-spacing:.04em; white-space:nowrap;}
 .coins{
   font-family:var(--mono); font-size:14px; font-weight:600; color:var(--accent);
   display:flex; align-items:center; gap:6px; white-space:nowrap;
@@ -185,7 +187,10 @@ nav.tabbar button:active{opacity:.6;}
 <div id="app">
   <header class="topbar">
     <h1>The Collection</h1>
-    <div class="coins"><span class="coin-dot"></span><span id="coin-count">0</span></div>
+    <div class="topbar-stats">
+      <span class="day-badge" id="day-badge">Day 1</span>
+      <div class="coins"><span class="coin-dot"></span><span id="coin-count">0</span></div>
+    </div>
   </header>
 
   <main>
@@ -323,38 +328,47 @@ var NPCS = [
 var TRADE_PAYOUT = { common: 3, uncommon: 6, rare: 14, rareholo: 32, doublerare: 70, ultrarare: 170 };
 var WANT_TIER_POOL = ['uncommon', 'rare', 'rareholo', 'doublerare', 'ultrarare'];
 
+var SUPERMARKET_CHANCE = 0.25;
+
 function freshSchool(){
-  return { wantDate: null, wants: {}, fulfilledToday: {} };
+  return { wantDay: null, wants: {}, fulfilledToday: {} };
 }
 
 function freshSave(){
   return {
     version: 1,
+    day: 1,
     coins: 0,
     packsUnopened: STARTER_PACKS,
     collection: {},
     pity: { sinceRareHoloPlus: 0, sinceUltraRare: 0 },
-    allowance: { lastClaimDate: null, streak: 0 },
+    allowance: { lastClaimDay: null, streak: 0 },
     packsOpenedTotal: 0,
     school: freshSchool(),
   };
 }
 
-function todayKey(d){
-  d = d || new Date();
-  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
-}
-function canClaimAllowance(save){ return save.allowance.lastClaimDate !== todayKey(); }
+// The game runs on its own day counter, not the real calendar date — a
+// single sitting can cover as many in-game days as the player wants, each
+// with a fresh allowance claim and a fresh school want-list, instead of
+// waiting on a real 24 hours between them.
+function canClaimAllowance(save){ return save.allowance.lastClaimDay !== save.day; }
 function claimAllowance(save){
   if (!canClaimAllowance(save)) return 0;
-  var today = todayKey();
-  var yesterday = todayKey(new Date(Date.now() - 86400000));
-  save.allowance.streak = (save.allowance.lastClaimDate === yesterday) ? save.allowance.streak + 1 : 1;
+  save.allowance.streak = (save.allowance.lastClaimDay === save.day - 1) ? save.allowance.streak + 1 : 1;
   var bonus = Math.min(save.allowance.streak - 1, 10) * 2;
   var amount = ALLOWANCE_BASE + bonus;
   save.coins += amount;
-  save.allowance.lastClaimDate = today;
+  save.allowance.lastClaimDay = save.day;
   return amount;
+}
+
+function nextDay(save){
+  save.day += 1;
+  var rand = seededRandom('supermarket-day-' + save.day);
+  var supermarketPack = rand() < SUPERMARKET_CHANCE;
+  if (supermarketPack) save.packsUnopened += 1;
+  return { day: save.day, supermarketPack: supermarketPack };
 }
 
 function buyPack(save){
@@ -463,13 +477,12 @@ function sellAllDuplicates(save){
 }
 
 function refreshSchoolIfNeeded(save){
-  var today = todayKey();
-  if (save.school.wantDate === today) return;
-  save.school.wantDate = today;
+  if (save.school.wantDay === save.day) return;
+  save.school.wantDay = save.day;
   save.school.fulfilledToday = {};
   var wants = {};
   NPCS.forEach(function(npc){
-    var rand = seededRandom(npc.id + '-' + today);
+    var rand = seededRandom(npc.id + '-day-' + save.day);
     var tierRoll = WANT_TIER_POOL[Math.floor(rand() * WANT_TIER_POOL.length)];
     var pool = BY_TIER[tierRoll];
     wants[npc.id] = pool[Math.floor(rand() * pool.length)].id;
@@ -506,6 +519,7 @@ function loadSave(){
     if (raw) {
       var parsed = JSON.parse(raw);
       var base = freshSave();
+      base.day = (typeof parsed.day === 'number') ? parsed.day : 1;
       base.coins = parsed.coins || 0;
       base.packsUnopened = (typeof parsed.packsUnopened === 'number') ? parsed.packsUnopened : STARTER_PACKS;
       base.collection = parsed.collection || {};
@@ -527,6 +541,7 @@ var save = loadSave();
 var els = {};
 var activeTab = 'kiosk';
 var packSession = null;
+var dayEventMessage = null;
 
 function $(id){ return document.getElementById(id); }
 
@@ -535,6 +550,8 @@ function fmtCoins(n){ return String(Math.floor(n)); }
 function renderTopbar(){
   var el = $('coin-count');
   if (el) el.textContent = fmtCoins(save.coins);
+  var dayEl = $('day-badge');
+  if (dayEl) dayEl.textContent = 'Day ' + save.day;
 }
 
 function renderKiosk(){
@@ -553,6 +570,12 @@ function renderKiosk(){
       (streak > 0 ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + streak + '-day streak</div>' : '') +
     '</div>' +
     '<div class="kiosk-card">' +
+      '<h2>End the day</h2>' +
+      '<p class="sub">Move on to tomorrow — allowance and the school want-list reset for the new day.</p>' +
+      '<button class="bigbtn ghost" id="btn-next-day">Go to bed (Day ' + save.day + ' &rarr; Day ' + (save.day + 1) + ')</button>' +
+      (dayEventMessage ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + dayEventMessage + '</div>' : '') +
+    '</div>' +
+    '<div class="kiosk-card">' +
       '<h2>The Kiosk</h2>' +
       '<p class="sub">A pack costs ' + PACK_PRICE + ' coins.</p>' +
       '<button class="bigbtn" id="btn-buy"' + (save.coins < PACK_PRICE ? ' disabled' : '') + '>Buy a pack</button>' +
@@ -569,6 +592,14 @@ function renderKiosk(){
   if (claimBtn) claimBtn.addEventListener('click', function(){
     var amount = claimAllowance(save);
     if (amount > 0) { persist(save); renderTopbar(); renderKiosk(); }
+  });
+  var nextDayBtn = $('btn-next-day');
+  if (nextDayBtn) nextDayBtn.addEventListener('click', function(){
+    var result = nextDay(save);
+    dayEventMessage = result.supermarketPack ? 'Mom took you to the supermarket — +1 pack!' : null;
+    persist(save);
+    renderTopbar();
+    renderKiosk();
   });
   var buyBtn = $('btn-buy');
   if (buyBtn) buyBtn.addEventListener('click', function(){
@@ -840,9 +871,9 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__TC = {
     CORE_SET: CORE_SET, TIERS: TIERS, TIER_BY_KEY: TIER_BY_KEY, TIER_COUNTS: TIER_COUNTS, BY_TIER: BY_TIER, BY_ID: BY_ID,
     TIER_POWER_RANGE: TIER_POWER_RANGE,
-    PACK_PRICE: PACK_PRICE, STARTER_PACKS: STARTER_PACKS, ALLOWANCE_BASE: ALLOWANCE_BASE,
+    PACK_PRICE: PACK_PRICE, STARTER_PACKS: STARTER_PACKS, ALLOWANCE_BASE: ALLOWANCE_BASE, SUPERMARKET_CHANCE: SUPERMARKET_CHANCE,
     SOFT_PITY_START: SOFT_PITY_START, HARD_PITY_RAREHOLO: HARD_PITY_RAREHOLO, HARD_PITY_ULTRARARE: HARD_PITY_ULTRARARE,
-    freshSave: freshSave, todayKey: todayKey, canClaimAllowance: canClaimAllowance, claimAllowance: claimAllowance,
+    freshSave: freshSave, canClaimAllowance: canClaimAllowance, claimAllowance: claimAllowance, nextDay: nextDay,
     buyPack: buyPack, openPack: openPack, sellDuplicate: sellDuplicate, completionFraction: completionFraction,
     hitTierForPack: hitTierForPack, seededRandom: seededRandom, pickWeighted: pickWeighted,
     duplicateValue: duplicateValue, sellAllDuplicates: sellAllDuplicates,
