@@ -1172,6 +1172,7 @@ function catchChance(w){
   if(hasRelic('catch')) c += 0.08;
   if(hasRelic('rare') && w.sp.rarity>=2) c += 0.12;
   c += Dex.up('catch')*0.04;
+  if(setActive('fortune')) c += 0.05;   // Fortune set: catch bonus
   c += weatherCatchBonus();
   if(w.boss) return Math.max(BOSS_CATCH_FLOOR, clamp(c,0.05,0.96));
   return clamp(c, 0.05, 0.96);
@@ -1198,9 +1199,11 @@ function endFight(won){
   const wasBoss = G.bossWin;
   // XP + gold to team
   const w=G.wild;
-  const xp = (10 + Math.round(w.level*4) + w.sp.rarity*6 + (w.elite?20:0)) * (w.boss?BOSS_XP_MUL:1);
+  let xp = (10 + Math.round(w.level*4) + w.sp.rarity*6 + (w.elite?20:0)) * (w.boss?BOSS_XP_MUL:1);
+  if(hasRelic('scholar')) xp = Math.round(xp*1.25);   // Scholar's Lens: +25% XP (before xpToLevels)
   let gold = ri(4,9) + w.sp.rarity*3 + (w.elite?12:0) + (w.boss?BOSS_GOLD:0);
   gold = Math.round(gold * (1 + 0.30*relicCount('gold')));
+  if(setActive('fortune')) gold = Math.round(gold*1.12);   // Fortune set: gold bonus
   if(hasTrinket(activeMon(),'luckycoin')) gold=Math.round(gold*1.3);
   G.gold += gold;
   let evoMsg=''; let leveledAny=false, evoAny=false;
@@ -1219,7 +1222,7 @@ function endFight(won){
   G.wild=null;
   updateSynergies();   // evolutions can change type/maxHP → recompute before the win-heal reads winHeal
   // survivors catch their breath after a win
-  for(const m of G.team){ if(m.hp>0) m.hp=Math.min(m.maxhp, m.hp+m.maxhp*(0.30+(G.synergies?.winHeal||0))); }
+  for(const m of G.team){ if(m.hp>0) m.hp=Math.min(m.maxhp, m.hp+m.maxhp*(0.30+(G.synergies?.winHeal||0)+(hasRelic('secondwind')?0.08:0))); }   // Second Wind: +8% post-win heal
   // boss trophy — full heal of survivors + a consumable + a small permanent buff
   if(G.bossWin){
     G.team.forEach(m=>{ if(m.hp>0) m.hp=m.maxhp; });   // extra full heal of survivors
@@ -1243,20 +1246,45 @@ const CROSS_POOL = [
   {id:'nest',   icon:'🥚', name:'Wild Nest', desc:'A free companion awaits'},
   {id:'relic',  icon:'💎', name:'Relic Cache', desc:'Claim a run boon'},
 ];
+// Run-wide relics. Each is tagged with a `set` ∈ {offense,defense,fortune}; owning
+// SET_THRESHOLD DISTINCT relics of a set lights a small run-wide bonus (see
+// relicSetCount/setActive + the hook points in strike/catchChance/endFight). Set
+// bonuses are single mults (never per-relic) so a 4th/5th set relic adds nothing
+// extra — deliberately bounded, no runaway loop.
 const RELICS = {
-  catch:     {name:"Keeper's Charm",   icon:'🎯', col:'#6fd07a', desc:'Catch rate +8%'},
-  rare:      {name:'Lucky Clover',     icon:'🍀', col:'#67d089', desc:'Rare & Legend catch +12%'},
-  lifesteal: {name:'Bloodstone',       icon:'🩸', col:'#e07a8a', desc:'Your hits heal 12% of damage'},
-  burn:      {name:'Ember Heart',      icon:'🔥', col:'#ff7a3d', desc:'Burns apply +1 stack (cap +1)'},
-  crit:      {name:"Warlord's Banner", icon:'⚔️', col:'#ffd23d', desc:'Crit chance +10%'},
-  critdmg:   {name:"Executioner's Edge",icon:'🗡️',col:'#ffb43d', desc:'Crits hit ×2.2'},
-  thorns:    {name:'Thornmail',        icon:'🛡️', col:'#b98d63', desc:'Reflect 20% of damage taken'},
-  startheal: {name:'Verdant Idol',     icon:'🌿', col:'#6fd05a', desc:'Heal team 15% each fight start'},
-  gold:      {name:"Merchant's Coin",  icon:'💰', col:'#ffd23d', desc:'+30% gold per fight', stack:true},
-  bosspotion:{name:'Phoenix Feather',  icon:'🪶', col:'#ff9b6f', desc:'+1 extra potion after each boss'},
-  honor:     {name:"Pilgrim's Token",  icon:'🕊️', col:'#8fd0ff', desc:'+50% honor on release'},
-  swiftpaw:  {name:'Swiftpaw Charm',   icon:'🦶', col:'#a06bff', desc:'Switch cooldown ×0.6'},
+  catch:     {name:"Keeper's Charm",   icon:'🎯', col:'#6fd07a', desc:'Catch rate +8%',              set:'fortune'},
+  rare:      {name:'Lucky Clover',     icon:'🍀', col:'#67d089', desc:'Rare & Legend catch +12%',    set:'fortune'},
+  lifesteal: {name:'Bloodstone',       icon:'🩸', col:'#e07a8a', desc:'Your hits heal 12% of damage',set:'offense'},
+  burn:      {name:'Ember Heart',      icon:'🔥', col:'#ff7a3d', desc:'Burns apply +1 stack (cap +1)',set:'offense'},
+  crit:      {name:"Warlord's Banner", icon:'⚔️', col:'#ffd23d', desc:'Crit chance +10%',            set:'offense'},
+  critdmg:   {name:"Executioner's Edge",icon:'🗡️',col:'#ffb43d', desc:'Crits hit ×2.2',              set:'offense'},
+  thorns:    {name:'Thornmail',        icon:'🛡️', col:'#b98d63', desc:'Reflect 20% of damage taken', set:'defense'},
+  startheal: {name:'Verdant Idol',     icon:'🌿', col:'#6fd05a', desc:'Heal team 15% each fight start',set:'defense'},
+  gold:      {name:"Merchant's Coin",  icon:'💰', col:'#ffd23d', desc:'+30% gold per fight', stack:true, set:'fortune'},
+  bosspotion:{name:'Phoenix Feather',  icon:'🪶', col:'#ff9b6f', desc:'+1 extra potion after each boss',set:'fortune'},
+  honor:     {name:"Pilgrim's Token",  icon:'🕊️', col:'#8fd0ff', desc:'+50% honor on release',      set:'fortune'},
+  swiftpaw:  {name:'Swiftpaw Charm',   icon:'🦶', col:'#a06bff', desc:'Switch cooldown ×0.6',        set:'defense'},
+  frenzy:    {name:'Frenzy Totem',     icon:'💢', col:'#ff5e5e', desc:'Your hits deal +6% damage',   set:'offense'},
+  secondwind:{name:'Second Wind',      icon:'🌬️', col:'#7fe0c0', desc:'Heal team +8% after each win',set:'defense'},
+  scholar:   {name:"Scholar's Lens",   icon:'📘', col:'#8fb4ff', desc:'+25% XP per fight',           set:'fortune'},
 };
+// Set metadata + threshold. Bonuses are read LIVE at the hooks (never a stored stat).
+const RELIC_SETS = {
+  offense:{name:'Warmonger', icon:'⚔️', col:'#ffd23d', desc:'Team damage ×1.08'},
+  defense:{name:'Sentinel',  icon:'🛡️', col:'#8fd0ff', desc:'Team takes ×0.92 damage'},
+  fortune:{name:'Fortune',   icon:'🍀', col:'#67d089', desc:'Catch +5% · gold ×1.12'},
+};
+const SET_THRESHOLD = 3;
+// # of DISTINCT owned relic ids belonging to `set` (dedup G.relics — a gold stack counts once).
+function relicSetCount(set){
+  if(!G.relics) return 0;
+  const seen=Object.create(null); let n=0;
+  for(const id of G.relics){ if(seen[id]) continue; seen[id]=1; if(RELICS[id] && RELICS[id].set===set) n++; }
+  return n;
+}
+function setActive(set){ return relicSetCount(set) >= SET_THRESHOLD; }
+// Offense set multiplier — ONLY when the team is the attacker (dir>0). Wild attacks (dir<0) never benefit.
+function setAtkMul(dir){ return dir>0 ? (setActive('offense')?1.08:1) : 1; }
 // Held trinkets — one equippable item per monster (holder-keyed; distinct from run-wide relics).
 const TRINKETS = {
   critfang:     {name:'Crit Fang',       icon:'🦷', col:'#ffd23d', desc:'Holder crit chance +12%'},
@@ -1518,7 +1546,7 @@ function updateBattle(dt){
 function strike(att, def, dir){
   const mult = typeMult(att.sp.type, def.sp.type);
   const crit = rnd() < (0.13*weatherCritMul() + (hasRelic('crit')?0.10:0) + (hasTrinket(att,'critfang')?0.12:0));
-  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14) * (hasTrinket(att,'typegem')?1.2:1) * weatherDmgMul(att.sp.type) * synAtkMul(dir);
+  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14) * (hasTrinket(att,'typegem')?1.2:1) * weatherDmgMul(att.sp.type) * synAtkMul(dir) * (dir>0 && hasRelic('frenzy')?1.06:1) * setAtkMul(dir);
   dmg = Math.max(1, Math.round(dmg));
   const dtx = dir>0? 660 : 300;   // defender's on-screen x
   // Shadow dodge (defender passive): full evade, no HP change, no on-hit effects
@@ -1532,6 +1560,7 @@ function strike(att, def, dir){
   if(def.sp.type==='Rock'){ dmg=Math.max(1, Math.round(dmg*(1-ROCK_GUARD))); def.status.fGuard=0.35; }
   if(hasTrinket(def,'guardstone')) dmg=Math.max(1, Math.round(dmg*0.85));
   if(dir<0){ const g=synGuard(); if(g>0) dmg=Math.max(1, Math.round(dmg*(1-g))); }   // team is defender (wild attacking)
+  if(dir<0 && setActive('defense')) dmg=Math.max(1, Math.round(dmg*0.92));            // Sentinel set: team takes 8% less (dir<0 only → enemy never benefits)
   if(dir>0 && def.boss && def.wardT>0) dmg = Math.max(1, Math.round(dmg*WARD_MUL));   // player→warded boss: reduced, floored ≥1
   def.hp = Math.max(0, def.hp - dmg);
   if(hasTrinket(att,'lifeamulet')){ const h=Math.round(dmg*0.15); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
@@ -2013,6 +2042,15 @@ function drawRelicStrip(sx){
     ctx.lineWidth=1.5; ctx.strokeStyle=R.col; roundRect(x,12,20,20,5); ctx.stroke();
     ctx.textAlign='center'; ctx.font='13px system-ui'; ctx.fillStyle='#fff'; ctx.fillText(R.icon, x+10, 27);
     if(s.n>1){ ctx.font='700 8px Segoe UI'; ctx.fillStyle='#ffe9a8'; ctx.textAlign='right'; ctx.fillText('×'+s.n, x+20, 32); }
+    ctx.textAlign='left'; x+=24;
+  }
+  // active-set badges (read-only) — a lit set shows its emblem tinted in its colour
+  for(const s of ['offense','defense','fortune']){
+    if(!setActive(s) || x>884) continue;
+    const S=RELIC_SETS[s];
+    ctx.globalAlpha=0.22; ctx.fillStyle=S.col; roundRect(x,12,20,20,5); ctx.fill(); ctx.globalAlpha=1;
+    ctx.lineWidth=1.5; ctx.strokeStyle=S.col; roundRect(x,12,20,20,5); ctx.stroke();
+    ctx.textAlign='center'; ctx.font='12px system-ui'; ctx.fillStyle='#fff'; ctx.fillText(S.icon, x+10, 27);
     ctx.textAlign='left'; x+=24;
   }
 }
@@ -3045,14 +3083,23 @@ function drawRelic(){
   clearButtons();
   const bw=250, gap=20, y=180, x0=W/2-(bw*3+gap*2)/2;
   G.relicOffer.forEach((id,i)=>{
-    const R=RELICS[id], x=x0+i*(bw+gap);
+    const R=RELICS[id], x=x0+i*(bw+gap), S=RELIC_SETS[R.set];
     panel(x,y,bw,240,null);
     centerText(R.icon, x+bw/2, y+82, '56px system-ui', '#fff');
-    centerText(R.name, x+bw/2, y+128, '800 20px Segoe UI', R.col);
-    centerText(R.desc, x+bw/2, y+158, '600 13px Segoe UI', '#9fb0cc');
-    if(R.stack && hasRelic(id)) centerText('OWNED ×'+relicCount(id), x+bw/2, y+182, '600 11px Segoe UI', '#8fa0c8');
+    centerText(R.name, x+bw/2, y+124, '800 20px Segoe UI', R.col);
+    if(S) centerText(S.icon+' '+S.name+' set', x+bw/2, y+146, '700 11px Segoe UI', S.col);
+    centerText(R.desc, x+bw/2, y+166, '600 13px Segoe UI', '#9fb0cc');
+    if(R.stack && hasRelic(id)) centerText('OWNED ×'+relicCount(id), x+bw/2, y+186, '600 11px Segoe UI', '#8fa0c8');
     centerText('press '+(i+1), x+bw/2, y+228, '600 11px Segoe UI', '#5a6688');
-    btn('relic_'+i, x+20, y+196, bw-40, 34, 'Take', null, {col:'#3a2f5a', accent:R.col});
+    btn('relic_'+i, x+20, y+198, bw-40, 34, 'Take', null, {col:'#3a2f5a', accent:R.col});
+  });
+  // SET BONUSES footer — read-only progress for all three sets (X/3, active highlighted)
+  const fy=y+256;
+  centerText('SET BONUSES  ·  own '+SET_THRESHOLD+' of a set for its bonus', W/2, fy, '800 13px Segoe UI', '#ffe9a8');
+  ['offense','defense','fortune'].forEach((s,k)=>{
+    const S=RELIC_SETS[s], n=relicSetCount(s), on=setActive(s), cx=x0+k*(bw+gap)+bw/2;
+    centerText(S.icon+' '+S.name+'   '+Math.min(n,SET_THRESHOLD)+'/'+SET_THRESHOLD+(on?'  ✓':''), cx, fy+26, '700 13px Segoe UI', on? S.col : '#7a86a8');
+    centerText(S.desc, cx, fy+44, '600 11px Segoe UI', on? '#c9d4f0' : '#6a7590');
   });
 }
 
