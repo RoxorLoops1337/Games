@@ -26,7 +26,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 6. [x] Boss encounters — DONE c6.
 7. [x] Relics / run modifiers — DONE c7.
 8. [x] Held trinkets — DONE c8.
-9. [ ] Between-run meta-progression (bank souls/honor for permanent unlocks).
+9. [x] Between-run meta-progression — DONE c9.
 10. [ ] Sound & music (chiptune battle loop + SFX for hit/catch/level-up).
 11. [ ] Achievements + milestone perks.
 12. [ ] Starter select at run start.
@@ -36,6 +36,18 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c9 — Between-run meta-progression ("The Sanctuary")** (studio: meta + ux designers, lead,
+  engineer, QA). First PERSISTENT save extension — done back-compatibly: Dex.data gains
+  essence:0 + upgrades:{} (Dex.load Object.assigns over defaults, so old {seen,caught,best,runs}
+  saves load fine). Essence is earned each run at game over (dist/15 + souls/12 + new-best
+  bonus) and banked. A Sanctuary screen (from title + game-over, Back/Esc) spends it on 6 tiered
+  permanent upgrades — Fat Purse (+start gold), Herbalist (+start potion), Keeper's Hand (+base
+  catch), Fine Spheres (+start ball tier), Soul Reserve (+start souls), Menagerie (uncommon
+  starters) — which feed newGame()/catchChance. Party stays 4 (slot upgrade cut as risky).
+  +6 tests incl. old-save-loads, essence-persists, buy-changes-newGame, overspend/max-tier
+  guards, superset-save-shape. 84/84 green, 0 flakes. NOTE: WHOLE-SAVE format changed shape
+  (superset) — this is the first cycle to add persistent fields; all future save edits must stay
+  back-compatible the same way.
 - **c8 — Held trinkets** (studio: systems + ux designers, lead, engineer, QA). One equippable
   item slot per monster (m.trinket) + a transient inventory (G.trinkets). 10 trinkets, each
   holder-only: Crit Fang (+12% crit), Type Gem (+20% dmg), Lifesteal Amulet (heal 15%), Swift
