@@ -91,6 +91,11 @@ const SWITCH_ENTRY=0.6;                             // min cd the incoming mon e
 // ---------- boss encounter tuning ----------
 const BOSS_EVERY=6;                 // boss = every 6th fight (end of each biome)
 const BOSS_HP_MUL=2.8, BOSS_ATK_MUL=1.10, BOSS_SPD_MUL=0.92, BOSS_LVL_BONUS=4;
+const ASC_MAX=8, ASC_UNLOCK_TIER=4, ASC_HP_PER=0.12, ASC_ATK_PER=0.10, ASC_ESS_PER=0.25;
+function ascHpMul(){ return 1 + ASC_HP_PER  * (G.asc||0); }
+function ascAtkMul(){ return 1 + ASC_ATK_PER * (G.asc||0); }
+function ascEssenceMul(){ return 1 + ASC_ESS_PER * (G.asc||0); }
+function ascSel(d){ const a=Dex.data.ascension; a.sel=clamp(a.sel+d,0,a.max); Dex.save(); }
 const BOSS_PHASE_PAUSE=0.9;         // phase-break beat (both strikes frozen, bounded)
 const BOSS_INTRO_T=2.2;             // banner freeze (drives battleIntro)
 const TELE_WINDUP=1.0;              // telegraph wind-up seconds
@@ -323,7 +328,7 @@ function xpToLevels(m, gain){
 
 // ---------- pokedex / persistence ----------
 const Dex = {
-  data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, upgrades:{}, muted:false,
+  data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, ascension:{ max:0, sel:0 }, upgrades:{}, muted:false,
          ach:{}, killed:0, released:0, bossKills:0, bestTier:0, fullPartyWin:0, wildCatch:0, runsLog:[],
          daily:{ day:0, dist:0, tier:0 } },
   load(){ try{ const d=JSON.parse(localStorage.getItem(SAVE)); if(d) this.data=Object.assign(this.data,d); }catch(e){} },
@@ -746,6 +751,7 @@ function drawTrainer(x,y,s,t,walking){
 // ===================================================================
 let G;
 function newGame(chosenKey){
+  const A = (Dex.data.ascension && Dex.data.ascension.sel) || 0;
   const pool = starterPool();
   const starterKey = (chosenKey && pool.includes(chosenKey)) ? chosenKey : pick(pool);
   G = {
@@ -753,7 +759,7 @@ function newGame(chosenKey){
     t:0, speed:1,
     team:[ makeMon(starterKey, 3) ],
     box:[],
-    gold: 20 + 15*Dex.up('gold'), souls: 25*Dex.up('souls'), honor:0, potions: 1 + Dex.up('potion'),
+    gold: 20 + 15*Dex.up('gold'), souls: 25*Dex.up('souls'), honor:0, potions: Math.max(0, (1 + Dex.up('potion')) - Math.floor(A/2)),
     ballTier: Math.min(3, Dex.up('ball')),                 // +catch bonus from shop
     bossWin:false,              // boss-reward latch (transient; only Dex.data persists)
     relics:[], relicOffer:null, afterRelic:null,   // roguelike boons (transient)
@@ -782,6 +788,7 @@ function newGame(chosenKey){
     daily:false, dailySeed:0,
     starterKey,
   };
+  G.asc = A;
   Dex.caught(starterKey);
 }
 
@@ -842,7 +849,7 @@ function startDaily(){
   reseed(dailySeedFor(day));          // 1) reseed LCG — world is deterministic for the day
   const k = DAILY_POOL[Math.floor(rnd()*DAILY_POOL.length)];   // 2) deterministic starter (fixed pool → identical for every player), consumes 1 rnd()
   newGame(k);                         // 3) build G; k ∈ COMMONS ⊆ starterPool() so NO extra rnd()
-  G.daily = true; G.dailySeed = day;  // 4) latch mode AFTER newGame (survives startWalk, read in gameOver)
+  G.daily = true; G.dailySeed = day; G.asc = 0;  // 4) latch mode AFTER newGame (survives startWalk, read in gameOver); daily always ascension 0
   startWalk();                        // 5) skip starter-select entirely
 }
 function bossDue(){ return ((G.fights+1) % BOSS_EVERY) === 0; }
@@ -860,6 +867,7 @@ function spawnBoss(forceKey){
   w.clock=0; w.noHeal=false;
   w.bossTitle = BOSS_TITLES[key] || w.sp.name;
   Dex.see(key);
+  w.maxhp = Math.round(w.maxhp * ascHpMul()); w.hp = w.maxhp; w.atk *= ascAtkMul();
   finishSpawn(w);                                     // resets cds/status/pops, sets battleIntro=1.0
   G.battleIntro = BOSS_INTRO_T;                        // extend to cover the banner (single timer)
   sfx('boss');
@@ -901,6 +909,7 @@ function spawnWild(elite){
   w.atk *= weakness;
   if(elite){ w.maxhp=Math.round(w.maxhp*1.4); w.hp=w.maxhp; w.atk = statAt(SPECIES[key].base.atk,lvl)*1.15; w.elite=true; }
   Dex.see(key);
+  w.maxhp = Math.round(w.maxhp * ascHpMul()); w.hp = w.maxhp; w.atk *= ascAtkMul();
   finishSpawn(w);
 }
 function finishSpawn(w){
@@ -1245,12 +1254,19 @@ function proceed(){ startWalk(); }
 
 function gameOver(){
   const earn = Math.floor(G.dist/15) + Math.floor(G.souls/12) + (G.dist>=Dex.data.best?25:0);
-  G.essenceEarned = earn;
-  Dex.awardEssence(earn);      // persists
+  G.essenceEarned = Math.round(earn * ascEssenceMul());
+  Dex.awardEssence(G.essenceEarned);   // award SCALED amount; persists
   Dex.record(G.dist);          // persists (updates best/runs)
   const _rr = Dex.recordRun({dist:G.dist, tier:G.tier, fights:G.fights, dex:Dex.nCaught()});
   G.lastRunRec = _rr.rec; G.lastRunRank = _rr.rank;
   if(G.daily) Dex.recordDaily(G.dailySeed, G.dist, G.tier);
+  if(!G.daily
+     && Dex.data.ascension.max < ASC_MAX
+     && G.asc === Dex.data.ascension.max
+     && G.tier >= ASC_UNLOCK_TIER){
+    Dex.data.ascension.max++;
+    Dex.save();
+  }
   checkAch();
   G.state='gameover'; clearButtons();
   sfx('defeat');
@@ -2255,7 +2271,9 @@ function drawTitle(){
   const db = Dex.data.daily;
   const todayBest = (db && db.day===dInt) ? db.dist : 0;
   const dSub = '#'+dInt+(todayBest>0 ? '  ·  best '+todayBest+'m' : '  ·  unplayed');
-  btn('start', 200, 452, 270, 60, '▶  BEGIN THE WALK', 'random seed', {col:'#3a5a8a', accent:'#6fa0e0', big:true});
+  const tAsc = (Dex.data.ascension && Dex.data.ascension.sel) || 0;
+  const startSub = tAsc>0 ? ('Ascension '+tAsc+'  ·  +'+(25*tAsc)+'% essence') : 'random seed';
+  btn('start', 200, 452, 270, 60, '▶  BEGIN THE WALK', startSub, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
   btn('daily', 490, 452, 270, 60, '📅 DAILY CHALLENGE', dSub, {col:'#5a4a2a', accent:'#ffd27a', big:true});
   btn('dex',159,528,150,44,'📕 POKÉDEX',Dex.nCaught()+'/'+Object.keys(SPECIES).length,{col:'#4a3a6a',accent:'#c9a8ff'});
   btn('records',323,528,150,44,'🏅 RECORDS',Dex.data.best+'m best',{col:'#3a4a6a',accent:'#8fb0ff'});
@@ -2276,10 +2294,23 @@ function drawSanctuary(){
   ctx.fillStyle='rgba(6,8,18,.55)'; ctx.fillRect(0,0,W,H);
   centerText('THE SANCTUARY', W/2, 62, '900 46px Segoe UI', '#ffe9a8');
   centerText('Spend essence on permanent blessings', W/2, 92, '600 15px Segoe UI', '#c9b8ff');
-  roundRect(W/2-140,104,280,30,15); ctx.fillStyle='rgba(58,47,90,.9)'; ctx.fill();
-  ctx.strokeStyle='#c9a8ff'; ctx.lineWidth=2; roundRect(W/2-140,104,280,30,15); ctx.stroke();
-  centerText('✦  '+Dex.data.essence+'  ESSENCE', W/2, 124, '800 17px Segoe UI', '#ffe9a8');
+  // essence pill — moved LEFT
+  roundRect(30,104,280,30,15); ctx.fillStyle='rgba(58,47,90,.9)'; ctx.fill();
+  ctx.strokeStyle='#c9a8ff'; ctx.lineWidth=2; roundRect(30,104,280,30,15); ctx.stroke();
+  centerText('✦  '+Dex.data.essence+'  ESSENCE', 170, 124, '800 17px Segoe UI', '#ffe9a8');
+  // ascension label pill — RIGHT (decorative)
+  const asc = (Dex.data.ascension || {max:0,sel:0});
+  roundRect(674,104,212,30,15); ctx.fillStyle='rgba(58,47,90,.9)'; ctx.fill();
+  ctx.strokeStyle='#c9a8ff'; ctx.lineWidth=2; roundRect(674,104,212,30,15); ctx.stroke();
+  centerText('ASCENSION  '+asc.sel+' / '+asc.max, 780, 124, '800 15px Segoe UI', '#ffe9a8');
+  // one-line modifier hint, in the 134–150 gap above the grid
+  const hint = asc.sel>0
+    ? 'HP +'+(12*asc.sel)+'%  ATK +'+(10*asc.sel)+'%  ·  Essence +'+(25*asc.sel)+'%  ·  Potions −'+Math.floor(asc.sel/2)
+    : 'Ascension 0 — standard difficulty';
+  centerText(hint, 780, 145, '600 11px Segoe UI', '#9fb0cc');
   clearButtons();
+  btn('asc_dn', 630, 104, 40, 30, '◀', null, {col:'#3a2f5a', accent:'#c9a8ff', enabled: asc.sel>0});
+  btn('asc_up', 890, 104, 40, 30, '▶', null, {col:'#3a2f5a', accent:'#c9a8ff', enabled: asc.sel<asc.max});
   const cw=290,ch=175,gx=15,gy=22,x0=30,y0=150;
   UPGRADES.forEach((u,i)=>{
     const c=i%3, r=(i/3|0), x=x0+c*(cw+gx), y=y0+r*(ch+gy), cur=Dex.up(u.key);
@@ -2765,6 +2796,8 @@ function onClick(mx,my){
   if(G.state==='sanctuary'){
     const b=hitButton(mx,my);
     if(b){ if(b.id==='back'){ G.state=G.sanctuaryFrom||'title'; clearButtons(); }
+           else if(b.id==='asc_dn'){ ascSel(-1); }
+           else if(b.id==='asc_up'){ ascSel(+1); }
            else if(b.id.startsWith('buy_')){ buyUpgrade(b.id.slice(4)); } }
     return;
   }
