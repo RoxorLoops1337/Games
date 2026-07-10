@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:()=>newGame(),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices()};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -61,7 +61,15 @@ function boot(seedSave){
   const click = (x,y)=> pointer && pointer({ preventDefault(){}, clientX:x, clientY:y });
   const clickId = (id)=>{ const b=api.getG().buttons.find(b=>b.id===id && b.enabled); if(b){ click(b.x+5,b.y+5); return true; } return false; };
   const toBattle = ()=>{ for(let i=0;i<600;i++){ step(1); const g=api.getG(); if(g.state==='battle'&&g.wild) return true; } return false; };
-  return { api, step, click, clickId, toBattle, getKey:()=>key, store };
+  // BEGIN now opens the starter picker; begin() opens it, picks (a specific
+  // starter if `key` given, else a random one), and enters the walk — keeping
+  // the pre-picker suites green. pick_/back/random exist in G.buttons only after
+  // a draw()/step() runs drawStarter, so step(1) after clicking start.
+  const begin = (key)=>{ clickId('start'); step(1);
+    if(key){ const pool=api.starterPool(); const b=api.getG().buttons.find(x=>x.id==='pick_'+pool.indexOf(key));
+      if(b){ click(b.x+5,b.y+5); return true; } }
+    return clickId('random'); };
+  return { api, step, click, clickId, toBattle, begin, getKey:()=>key, store };
 }
 
 // ---- static data sanity ----
@@ -107,9 +115,9 @@ test('game boots on the title screen', ()=>{
 });
 
 test('start -> walk -> battle -> choice reaches a decision', ()=>{
-  const { api, step, clickId, toBattle } = boot();
+  const { api, step, clickId, toBattle, begin } = boot();
   step(2);
-  assert(clickId('start'), 'no start button');
+  assert(begin(), 'could not begin the walk');
   assert(toBattle(), 'never reached a battle');
   const g = api.getG();
   g.wild.hp = 1; g.battleIntro = 0;               // finish the fight fast
@@ -118,10 +126,78 @@ test('start -> walk -> battle -> choice reaches a decision', ()=>{
   assert(reached, 'battle never resolved to a choice');
 });
 
+// ---- Starter select: newGame(key), pool, picker flow, back, fight resolution ----
+test('SS-a newGame(key) starts the team with that species; bad key falls back to pool', ()=>{
+  const { api } = boot();
+  const COMMONS = api.COMMONS;
+  api.newGame(COMMONS[0]);
+  let g = api.getG();
+  assert(g.team.length===1, `team length ${g.team.length}`);
+  assert(g.team[0].key===COMMONS[0], `team[0] ${g.team[0].key} != ${COMMONS[0]}`);
+  assert(g.team[0].level===3, `starter level ${g.team[0].level}`);
+  assert(g.starterKey===COMMONS[0], `starterKey ${g.starterKey}`);
+  api.newGame('not_a_key');
+  g = api.getG();
+  assert(api.starterPool().includes(g.starterKey), `fallback starter ${g.starterKey} not in pool`);
+});
+
+test('SS-b starterPool honors the menagerie unlock', ()=>{
+  const { api } = boot();
+  const COMMONS = api.COMMONS, UNCOMMONS = api.UNCOMMONS;
+  api.Dex.data.upgrades.menagerie = 0;
+  assert(JSON.stringify(api.starterPool())===JSON.stringify(COMMONS), 'pool should equal COMMONS without menagerie');
+  assert(api.starterPool().length===6, 'pool len 6 without menagerie');
+  // locked uncommon forced in without menagerie -> falls back to a common
+  api.newGame(UNCOMMONS[0]);
+  assert(COMMONS.includes(api.getG().starterKey), `locked uncommon should fall back to a common, got ${api.getG().starterKey}`);
+  // unlock -> uncommons join the pool and can be chosen
+  api.Dex.data.upgrades.menagerie = 1;
+  assert(JSON.stringify(api.starterPool())===JSON.stringify(COMMONS.concat(UNCOMMONS)), 'pool should be COMMONS+UNCOMMONS');
+  assert(api.starterPool().length===12, 'pool len 12 with menagerie');
+  api.newGame(UNCOMMONS[0]);
+  assert(api.getG().starterKey===UNCOMMONS[0], `unlocked uncommon should stick, got ${api.getG().starterKey}`);
+});
+
+test('SS-c picking a starter card enters the walk with the chosen species', ()=>{
+  const { api, step, clickId } = boot();
+  step(2);
+  assert(clickId('start'), 'no start button');
+  assert(api.getG().state==='starter', `expected starter, got ${api.getG().state}`);
+  step(1);                                     // draw the picker so pick_* buttons exist
+  const COMMONS = api.COMMONS;
+  const idx = api.starterPool().indexOf(COMMONS[2]);
+  assert(clickId('pick_'+idx), `no pick_${idx} button`);
+  assert(api.getG().state==='walk', `expected walk, got ${api.getG().state}`);
+  assert(api.getG().team[0].key===COMMONS[2], `team[0] ${api.getG().team[0].key} != ${COMMONS[2]}`);
+});
+
+test('SS-d Back returns to the title and leaves the team untouched', ()=>{
+  const { api, clickId } = boot();
+  const bootStarter = api.getG().starterKey;
+  const bootTeamKey = api.getG().team[0].key;
+  api.openStarter('title'); api.draw();
+  assert(api.getG().state==='starter', 'did not enter starter');
+  assert(clickId('back'), 'no back button');
+  assert(api.getG().state==='title', `back should return to title, got ${api.getG().state}`);
+  assert(api.getG().starterKey===bootStarter && api.getG().team[0].key===bootTeamKey, 'team changed on cancel');
+});
+
+test('SS-e fights still resolve when entering via the starter picker', ()=>{
+  const { api, step, toBattle, begin } = boot();
+  step(2);
+  assert(begin(api.COMMONS[0]), 'could not begin with a chosen starter');
+  assert(api.getG().team[0].key===api.COMMONS[0], 'chosen starter not in play');
+  assert(toBattle(), 'never reached a battle');
+  const g = api.getG(); g.wild.hp = 1; g.battleIntro = 0;
+  let reached = false;
+  for(let i=0;i<400;i++){ step(1); const s=api.getG().state; if(s==='choice'||s==='gameover'){ reached=true; break; } }
+  assert(reached, 'combat did not terminate to a choice/gameover');
+});
+
 test('KILL grants souls, RELEASE grants honor', ()=>{
   const run = (idKey)=>{
-    const { api, step, clickId, toBattle } = boot();
-    step(2); clickId('start'); toBattle();
+    const { api, step, clickId, toBattle, begin } = boot();
+    step(2); begin(); toBattle();
     const g = api.getG(); g.wild.hp=1; g.battleIntro=0;
     for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
     step(1); // draw choice buttons
@@ -135,8 +211,8 @@ test('KILL grants souls, RELEASE grants honor', ()=>{
 
 // ---- full-party acquire opens the swap picker ----
 test('acquiring with a full party opens the swap picker and swap works', ()=>{
-  const { api, step, clickId } = boot();
-  step(2); clickId('start');
+  const { api, step, clickId, begin } = boot();
+  step(2); begin();
   const g = api.getG();
   g.team = [api.mk('emberpup',6), api.mk('puddlet',5), api.mk('sprig',4), api.mk('sparky',3)];
   g.team.forEach(m=> m.hp=m.maxhp);
@@ -157,8 +233,8 @@ test('acquiring with a full party opens the swap picker and swap works', ()=>{
 
 // ---- doCatch routes a full-party catch to a valid resolved state (no flake) ----
 test('doCatch with a full party resolves (swap picker on success, continue on flee)', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); toBattle();
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); toBattle();
   const g = api.getG();
   g.team = [api.mk('emberpup',6), api.mk('puddlet',5), api.mk('sprig',4), api.mk('sparky',3)];
   g.team.forEach(m=> m.hp=m.maxhp);
@@ -242,8 +318,8 @@ test('fire burns, water steals, grass leeches', ()=>{
 
 // ---- ability: stun skips a turn then resumes; immunity holds ----
 test('stun skips then resumes, immunity caps', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g = api.getG();
   const you = g.team[g.lead];
   g.battleIntro = 0;
@@ -280,8 +356,8 @@ test('shadow dodge is partial', ()=>{
 // ---- resolution guard: worst-case mirrors never softlock ----
 test('ability mirrors always resolve to a decision', ()=>{
   const run = (key)=>{
-    const { api, step, clickId, toBattle } = boot();
-    step(2); clickId('start'); assert(toBattle(), 'no battle');
+    const { api, step, clickId, toBattle, begin } = boot();
+    step(2); begin(); assert(toBattle(), 'no battle');
     const g = api.getG();
     g.team = [api.mk(key, 20)]; g.team.forEach(m=>{ m.hp=m.maxhp; }); g.lead = 0;
     g.wild = api.mk(key, 20); g.wild.hp = g.wild.maxhp; g.wild.cd = 0.6;
@@ -297,8 +373,8 @@ test('ability mirrors always resolve to a decision', ()=>{
 // Boot into a live battle with a fresh N-member living team, intro finished, swap ready.
 function battleWithTeam(keys){
   const h = boot();
-  const { api, step, clickId, toBattle } = h;
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, begin } = h;
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g = api.getG();
   g.team = keys.map((k,i)=> api.mk(k, 5+i));
   g.team.forEach(m=> m.hp=m.maxhp);
@@ -503,8 +579,8 @@ test('pickBiased never returns null across all biomes and pools', ()=>{
 
 // ---- biomes: transient, never leaks into the persisted save ----
 test('biome state stays out of the save shape', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g=api.getG();
   g.biome=4; g.biomePrev=2; g.biomeFxT=2; g.biomeLabel='Ashfall Ridge';
   // drive a fight to a win + crossroads so biome logic + a Dex.save() fire
@@ -525,8 +601,8 @@ test('biome state stays out of the save shape', ()=>{
 
 // ---- 1. schedule is a pure, self-deduping function of G.fights ----
 test('boss schedule is pure/deterministic and routes the walk spawn', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g = api.getG();
   for(let f=0; f<=12; f++){ g.fights=f; assert(api.bossDue() === (((f+1)%api.C.BOSS_EVERY)===0), `bossDue wrong at fights=${f}`); }
   // fights=5 -> (5+1)%6===0 -> next walk spawn is a boss
@@ -903,8 +979,8 @@ test('R16 a relic is offered after a boss victory (integration)', ()=>{
 });
 
 test('R17 relics never change the persisted save shape', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g = api.getG();
   g.relics = ['catch','gold','gold','crit'];
   g.wild.hp = 1; g.battleIntro = 0;
@@ -918,8 +994,8 @@ test('R17 relics never change the persisted save shape', ()=>{
 });
 
 test('R18 a battle with all relics active resolves without throwing', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g = api.getG();
   g.relics = ALL_RELICS.slice();
   g.battleIntro = 0;
@@ -1130,8 +1206,8 @@ test('T17 Holder isolation in a live fight; teammate stats untouched', ()=>{
 });
 
 test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g=api.getG();
   g.team.forEach((m,i)=>{ m.trinket=api.TRINKET_KEYS[i%api.TRINKET_KEYS.length]; });
   g.trinkets=['critfang','typegem','luckycoin'];
@@ -1274,9 +1350,9 @@ test('M6 sanctuary screen renders without error from title and gameover', ()=>{
 // ===================================================================
 
 test('A1 every audio hook is a silent no-op with no AudioContext', ()=>{
-  const { api, step, clickId, toBattle } = boot();
+  const { api, step, clickId, toBattle, begin } = boot();
   api.strike(api.mk('emberpup',10), api.mk('sparky',10), +1);   // hit/crit
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g=api.getG(); g.wild.hp=1; g.battleIntro=0;
   for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
   step(1); assert(clickId('kill'), 'no kill button');           // level-up/evolve path
@@ -1382,8 +1458,8 @@ test('ACH4 caught-derived achievement (legendary) grants once', ()=>{
 });
 
 test('ACH5 cumulative counters increment and persist to the save', ()=>{
-  const { api, step, clickId, toBattle, store } = boot();
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, store, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g = api.getG();
   // KILL a wild → killed++
   g.wild = api.mk('emberpup', 5);
@@ -1439,8 +1515,8 @@ test('ACH8 achievements screen opens from title, renders, back returns', ()=>{
 });
 
 test('ACH9 fights still resolve with the achievement checks wired in', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
   const g = api.getG(); g.wild.hp=1; g.battleIntro=0;
   let reached=false;
   for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice'){ reached=true; break; } }

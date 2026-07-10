@@ -29,13 +29,21 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 9. [x] Between-run meta-progression — DONE c9.
 10. [x] Sound & music — DONE c10.
 11. [x] Achievements + milestone perks — DONE c11.
-12. [ ] Starter select at run start.
+12. [x] Starter select — DONE c12.
 13. [ ] Weather / day–night affecting damage + catch.
 14. [ ] Shop restock + reroll; deeper tiers show rarer wares.
 15. [ ] Distance leaderboard (reuse the repo's Cloudflare KV board pattern).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c12 — Starter select** (studio: designer, ux-designer, lead, engineer, QA). BEGIN THE WALK
+  (and game-over WALK AGAIN) now open a CHOOSE YOUR STARTER screen instead of a random pick:
+  a card grid of the unlocked pool (sprite + name + type + HP/ATK/SPD), a 'SURPRISE ME' random
+  button, and BACK. Honors the c9 'menagerie' meta-upgrade (starterPool() = COMMONS, or
+  COMMONS+UNCOMMONS when owned). newGame(chosenKey) validates the key against the pool and falls
+  back to random (a locked uncommon can't be forced in). No save change (starter is per-run).
+  +5 tests (newGame(key) + bad-key fallback; pool honors menagerie both ways; pick enters walk
+  with the chosen species; Back returns to title; fights resolve via the picker). 103/103, 0 flakes.
 - **c11 — Achievements + milestone perks** (studio: meta + ux designers, lead, engineer, QA).
   14 persistent achievements (First Friend, Full Spectrum, Rare Find, Legend Keeper, Boss
   Slayer, Titan Bane ×10, Trailblazer t5, Voidwalker t10, Merciful ×25, Reaper ×25, Full House,
