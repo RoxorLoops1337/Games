@@ -198,10 +198,20 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .pack-star{font-size:44px; color:#ffe9b0; text-shadow:0 2px 8px rgba(0,0,0,.4); line-height:1;}
 .pack-set{font-family:var(--serif); font-weight:700; font-size:15px; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.5); letter-spacing:.06em;}
 .pack-count-label{font-family:var(--mono); font-size:9px; color:rgba(255,255,255,.85); letter-spacing:.2em;}
-.pack.tearing .pack-crimp.top{transform:translateY(-48px) rotate(9deg); opacity:0;}
+.pack.tearing .pack-crimp.top{transform:translateX(110px) rotate(12deg) !important; opacity:0;}
 .pack.tearing .pack-body{animation:packShake 240ms ease-in-out;}
 @keyframes packShake{0%,100%{transform:translateX(0);} 25%{transform:translateX(-3px) rotate(-1deg);} 75%{transform:translateX(3px) rotate(1deg);}}
 @media (prefers-reduced-motion: reduce){.pack-crimp{transition:opacity 200ms;} .pack.tearing .pack-body{animation:none;}}
+.pack-crimp.top{cursor:grab; touch-action:none;}
+.pack-crimp.top.dragging{transition:none; cursor:grabbing;}
+.pack-crimp.top.springback{transition:transform 180ms ease-out;}
+.pull-tab{
+  position:absolute; right:-4px; top:-24px; font-family:var(--mono); font-size:10px; font-weight:700;
+  letter-spacing:.14em; color:var(--accent); white-space:nowrap;
+  animation:pullNudge 1.6s ease-in-out infinite;
+}
+@keyframes pullNudge{0%,100%{transform:translateX(0);} 50%{transform:translateX(8px);}}
+@media (prefers-reduced-motion: reduce){.pull-tab{animation:none;}}
 
 .pack-thumb{
   width:52px; aspect-ratio:150/210; border-radius:3px; flex:none; position:relative;
@@ -246,10 +256,31 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
   100%{box-shadow:0 0 32px 10px var(--t-ultrarare);}
 }
 @media (prefers-reduced-motion: reduce){.rcard.charging{animation:none;}}
-.rcard.closing{transition:transform 300ms cubic-bezier(.4,0,1,1); transform:scaleX(0) !important;}
-.rcard.opening{transition:transform 300ms cubic-bezier(0,0,.2,1); transform:scaleX(1) !important;}
+.rcard.closing{transition:transform 260ms cubic-bezier(.4,0,1,1); transform:scaleX(.04) scale(.92) rotate(-9deg) !important;}
+.rcard.twirl{animation:twirlIn 500ms cubic-bezier(.3,1.35,.45,1);}
+@keyframes twirlIn{
+  0%{transform:scaleX(.04) scale(.85) rotate(-14deg);}
+  55%{transform:scaleX(1.06) scale(1.05) rotate(4deg);}
+  100%{transform:none;}
+}
 .rcard.flyoff{transition:transform 380ms ease-in, opacity 380ms ease-in; transform:translate(-130%,-6%) rotate(-14deg) !important; opacity:0;}
-@media (prefers-reduced-motion: reduce){.rcard.closing,.rcard.opening,.rcard.flyoff{transition:none;}}
+@media (prefers-reduced-motion: reduce){.rcard.closing,.rcard.flyoff{transition:none;} .rcard.twirl{animation:none;}}
+.opener-stage.shake{animation:stageShake 420ms ease-in-out;}
+@keyframes stageShake{
+  0%,100%{transform:translate(0,0);}
+  20%{transform:translate(-7px,3px);}
+  40%{transform:translate(6px,-4px);}
+  60%{transform:translate(-4px,2px);}
+  80%{transform:translate(3px,-2px);}
+}
+@media (prefers-reduced-motion: reduce){.opener-stage.shake{animation:none;}}
+.gold-flash{
+  position:absolute; inset:0; pointer-events:none; z-index:8;
+  background:radial-gradient(circle at 50% 45%, rgba(255,225,150,.55), rgba(255,215,120,0) 65%);
+  opacity:0; animation:flashFade 620ms ease-out forwards;
+}
+@keyframes flashFade{0%{opacity:0;} 18%{opacity:1;} 100%{opacity:0;}}
+@media (prefers-reduced-motion: reduce){.gold-flash{animation:none; display:none;}}
 .reveal-glow{border-radius:11px;}
 .confetti-canvas{position:absolute; inset:0; pointer-events:none; z-index:5;}
 
@@ -342,14 +373,45 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .offer-actions{display:flex; gap:8px;}
 .offer-actions .bigbtn{padding:11px 6px; font-size:13px; min-height:44px;}
 .smallnote{font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-top:10px;}
-.duel-vs{display:flex; align-items:center; justify-content:space-around; gap:8px; margin:12px 0;}
-.duel-side{display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; min-width:0;}
-.duel-side .wm-art{width:62px; height:62px;}
 .duel-name{font-family:var(--serif); font-weight:700; font-size:13px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
-.duel-pow{font-family:var(--mono); font-size:11px; color:var(--ink-soft);}
-.duel-x{font-family:var(--serif); font-size:20px; color:var(--ink-faint); flex:none;}
 .duel-box{border-radius:12px; position:relative;}
 .duel-box.charging{animation:chargeCycle 900ms ease-out;}
+.duel-table{position:relative; min-height:190px; display:flex; align-items:flex-start; justify-content:space-around; gap:8px; margin:12px 0 6px; padding-top:8px;}
+.bcard{display:flex; flex-direction:column; align-items:center; gap:6px; flex:1; min-width:0; opacity:0;}
+.bcard .wm-art{width:86px; height:86px; transition:transform 400ms ease, box-shadow 400ms ease;}
+.bcard.slam{animation:slamIn 420ms cubic-bezier(.2,.85,.3,1) forwards;}
+@keyframes slamIn{
+  0%{opacity:0; transform:scale(1.9) rotate(-9deg) translateY(-16px);}
+  60%{opacity:1; transform:scale(.94) rotate(2deg) translateY(2px);}
+  100%{opacity:1; transform:scale(1) rotate(0) translateY(0);}
+}
+.bcard .b-pow{font-family:var(--mono); font-weight:700; font-size:16px; color:var(--accent); opacity:0;}
+.bcard.show-pow .b-pow{animation:powPop 320ms cubic-bezier(.3,1.6,.5,1) forwards;}
+@keyframes powPop{0%{opacity:0; transform:scale(.4);} 100%{opacity:1; transform:scale(1);}}
+.bcard.winner .wm-art{box-shadow:0 0 26px 6px var(--accent2); transform:scale(1.12);}
+.bcard.loser{transition:opacity 450ms ease-in, transform 450ms ease-in, filter 450ms ease-in; opacity:.35; filter:grayscale(.85); transform:rotate(10deg) translateY(14px) scale(.9);}
+.duel-vs{position:absolute; left:50%; top:34%; transform:translate(-50%,-50%); font-family:var(--serif); font-weight:700; font-size:22px; color:var(--ink-faint); opacity:0; z-index:4;}
+.duel-vs.show-pow{animation:powPop 300ms ease-out forwards;}
+.duel-stamp{
+  position:absolute; left:50%; top:44%; transform:translate(-50%,-50%) scale(0); opacity:0;
+  font-family:var(--serif); font-weight:800; font-size:32px; letter-spacing:.02em; white-space:nowrap;
+  z-index:6; text-shadow:0 3px 12px rgba(0,0,0,.65); pointer-events:none;
+}
+.duel-stamp.win{color:var(--accent2);}
+.duel-stamp.lose{color:#e07a4a;}
+.duel-stamp.stamp-in{animation:stampIn 480ms cubic-bezier(.25,1.5,.4,1) forwards;}
+@keyframes stampIn{
+  0%{opacity:0; transform:translate(-50%,-50%) scale(2.6) rotate(-7deg);}
+  70%{opacity:1; transform:translate(-50%,-50%) scale(.95) rotate(2deg);}
+  100%{opacity:1; transform:translate(-50%,-50%) scale(1) rotate(-2deg);}
+}
+@media (prefers-reduced-motion: reduce){
+  .bcard{opacity:1;}
+  .bcard.slam{animation:none;}
+  .bcard .b-pow{opacity:1; animation:none !important;}
+  .duel-vs{opacity:1; animation:none !important;}
+  .duel-stamp.stamp-in{animation:none; opacity:1; transform:translate(-50%,-50%);}
+}
 .picker-list{max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:8px; margin-top:10px;}
 .picker-row{display:flex; align-items:center; gap:10px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:8px 10px;}
 .picker-row:active{transform:scale(.98);}
@@ -961,6 +1023,13 @@ function sfxReveal(tierKey){
 function sfxTrade(){ beep(523, 0.07, { volume: 0.05 }); setTimeout(function(){ beep(784, 0.12, { volume: 0.05 }); }, 65); }
 function sfxDay(){ beep(220, 0.2, { type: 'sine', volume: 0.045 }); }
 function sfxTear(){ beep(180, 0.09, { type: 'sawtooth', volume: 0.04 }); setTimeout(function(){ beep(240, 0.07, { type: 'sawtooth', volume: 0.035 }); }, 50); }
+function sfxSlam(){ beep(105, 0.11, { type: 'sawtooth', volume: 0.06 }); beep(62, 0.14, { type: 'sine', volume: 0.055 }); }
+function sfxWin(){
+  [523, 659, 784, 1047].forEach(function(f, i){
+    setTimeout(function(){ beep(f, 0.14, { type: 'triangle', volume: 0.055 }); }, i * 95);
+  });
+}
+function sfxLose(){ beep(330, 0.18, { type: 'sine', volume: 0.05 }); setTimeout(function(){ beep(220, 0.3, { type: 'sine', volume: 0.05 }); }, 160); }
 
 var HAPTIC_PATTERNS = { common: 10, uncommon: 14, rare: 22, rareholo: [28, 18, 28], doublerare: [35, 20, 35, 20, 35], ultrarare: [55, 25, 55, 25, 55, 25, 85] };
 function hapticPulse(tierKey){
@@ -1303,19 +1372,58 @@ function openerStagePack(){
   var stage = $('opener-stage');
   stage.innerHTML =
     '<div class="pack" id="opener-pack">' +
-      '<div class="pack-crimp top"></div>' +
+      '<div class="pack-crimp top" id="pack-crimp"><span class="pull-tab">PULL &#8649;</span></div>' +
       '<div class="pack-body"><div class="pack-star">&#9733;</div><div class="pack-set">CORE SET</div><div class="pack-count-label">5 CARDS</div></div>' +
       '<div class="pack-crimp bottom"></div>' +
     '</div>';
   $('opener-dots').innerHTML = '';
-  $('opener-hint').textContent = 'Tap the pack to tear it open';
+  $('opener-hint').textContent = 'Pull the strip to tear the pack open';
   var pack = $('opener-pack');
-  pack.addEventListener('click', function(){
+  var crimp = $('pack-crimp');
+  var torn = false;
+  function doTear(){
+    if (torn) return;
+    torn = true;
+    crimp.classList.remove('dragging', 'springback');
+    crimp.style.transform = '';
     pack.classList.add('tearing');
     sfxTear();
     hapticPulse('rare');
     setTimeout(openerStageCards, 430);
-  }, { once: true });
+  }
+  // Drag the foil strip sideways like a real wrapper; a plain tap still
+  // tears it (desktop clicks, accessibility).
+  var startX = null;
+  var dist = 0;
+  var dragging = false;
+  var TEAR_THRESHOLD = 70;
+  crimp.addEventListener('pointerdown', function(e){
+    if (torn) return;
+    startX = e.clientX;
+    dist = 0;
+    dragging = true;
+    crimp.classList.add('dragging');
+    try { crimp.setPointerCapture(e.pointerId); } catch (err) {}
+  });
+  crimp.addEventListener('pointermove', function(e){
+    if (!dragging || torn) return;
+    dist = Math.max(0, e.clientX - startX);
+    crimp.style.transform = 'translateX(' + Math.min(dist, 110) + 'px) rotate(' + Math.min(dist * 0.06, 7) + 'deg)';
+    if (dist > TEAR_THRESHOLD) { dragging = false; doTear(); }
+  });
+  function endDrag(){
+    if (!dragging || torn) return;
+    dragging = false;
+    crimp.classList.remove('dragging');
+    if (dist < 8) { doTear(); return; }
+    crimp.classList.add('springback');
+    crimp.style.transform = '';
+    setTimeout(function(){ crimp.classList.remove('springback'); }, 200);
+  }
+  crimp.addEventListener('pointerup', endDrag);
+  crimp.addEventListener('pointercancel', endDrag);
+  // tapping the pack body (not the strip) also tears — guarded by `torn`
+  pack.addEventListener('click', doTear);
 }
 
 function openerStageCards(){
@@ -1342,6 +1450,10 @@ function rebuildStack(){
   var top = el.querySelector('.rcard.top');
   top.addEventListener('click', function(){
     sfxClick();
+    // rarer pull = longer charge-up: commons snap over, an Ultra Rare
+    // makes you sit through the full glow cycle
+    var chargeMs = CHARGE_MS[s.pulls[s.index].tier] || 650;
+    top.style.animationDuration = chargeMs + 'ms';
     top.classList.add('charging');
     var done = false;
     var timeoutId;
@@ -1351,12 +1463,15 @@ function rebuildStack(){
       clearTimeout(timeoutId);
       top.removeEventListener('animationend', finishCharge);
       top.classList.remove('charging');
+      top.style.animationDuration = '';
       pinchReveal(top, s.pulls[s.index]);
     };
     top.addEventListener('animationend', finishCharge);
-    timeoutId = setTimeout(finishCharge, 1000);
+    timeoutId = setTimeout(finishCharge, chargeMs + 150);
   }, { once: true });
 }
+
+var CHARGE_MS = { common: 350, uncommon: 480, rare: 650, rareholo: 950, doublerare: 1200, ultrarare: 1600 };
 
 // Pinch the card shut (scaleX -> 0), swap back for face while edge-on,
 // pinch open. Deliberately NOT a perspective/preserve-3d flip — true 3D
@@ -1376,20 +1491,19 @@ function pinchReveal(card, pull){
       (pull.reverseHolo ? '<span class="badge foil">REVERSE HOLO</span>' : '');
     card.innerHTML = cardHTML(pull, { reverseHolo: pull.reverseHolo, badges: badges });
     card.classList.remove('closing');
-    card.classList.add('opening');
+    card.classList.add('twirl');
     var done2 = false;
     var t2;
-    var finishOpen = function(e2){
-      if (e2 && e2.propertyName && e2.propertyName !== 'transform') return;
+    var finishOpen = function(){
       if (done2) return;
       done2 = true;
       clearTimeout(t2);
-      card.removeEventListener('transitionend', finishOpen);
-      card.classList.remove('opening');
+      card.removeEventListener('animationend', finishOpen);
+      card.classList.remove('twirl');
       onRevealed(card, pull);
     };
-    card.addEventListener('transitionend', finishOpen);
-    t2 = setTimeout(finishOpen, 380);
+    card.addEventListener('animationend', finishOpen);
+    t2 = setTimeout(finishOpen, 600);
   };
   card.addEventListener('transitionend', finishClose);
   timeoutId = setTimeout(finishClose, 380);
@@ -1401,6 +1515,18 @@ function onRevealed(card, pull){
   card.style.boxShadow = '0 0 26px 5px var(--t-' + pull.tier + ')';
   card.style.borderRadius = '11px';
   burstConfetti(card, pull.tier);
+  // big pulls hit harder: Double Rare shakes the table, Ultra Rare adds a gold flash
+  if (pull.tier === 'doublerare' || pull.tier === 'ultrarare') {
+    var stage = $('opener-stage');
+    stage.classList.add('shake');
+    setTimeout(function(){ stage.classList.remove('shake'); }, 460);
+  }
+  if (pull.tier === 'ultrarare') {
+    var flash = document.createElement('div');
+    flash.className = 'gold-flash';
+    $('opener').appendChild(flash);
+    setTimeout(function(){ flash.remove(); }, 700);
+  }
   $('opener-hint').textContent = 'Tap anywhere to continue';
   $('opener-stage').addEventListener('click', function(){
     card.classList.add('flyoff');
@@ -1724,6 +1850,9 @@ function openDuelPicker(duelIdx){
   $('modal-backdrop').classList.add('open');
 }
 
+// The duel ceremony: your card slams the table, theirs answers, the POW
+// numbers pop, a suspense glow, then the verdict stamps in and STAYS
+// until you tap the button — no blink-and-you-missed-it.
 function playDuel(duelIdx, myCardId){
   var duel = save.school.duels[duelIdx];
   if (!duel || duel.done) return;
@@ -1734,34 +1863,78 @@ function playDuel(duelIdx, myCardId){
   var myCard = BY_ID[myCardId];
   var stakeCard = BY_ID[result.stake];
   if (!box) { renderSchool(); renderTopbar(); return; }
-  var sideHTML = function(c){
+
+  var bcardHTML = function(c, id){
     var sprite = spriteFor(c, 64);
     var art = sprite
       ? '<div class="wm-sprite" style="background-image:url(' + sprite + ')"></div>'
       : '<span style="font-family:var(--serif);font-weight:700;color:#fff;">' + c.name.charAt(0) + '</span>';
-    return '<div class="duel-side"><div class="wm-art" style="--type-c:' + typeColor(c.type) + '">' + art + '</div>' +
-      '<div class="duel-name">' + c.name + '</div><div class="duel-pow">POW ' + c.power + '</div></div>';
+    return '<div class="bcard" id="' + id + '">' +
+      '<div class="wm-art" style="--type-c:' + typeColor(c.type) + '">' + art + '</div>' +
+      '<div class="duel-name">' + c.name + '</div>' +
+      '<div class="b-pow">POW ' + c.power + '</div>' +
+    '</div>';
   };
   box.innerHTML =
-    '<h2>Flip!</h2>' +
-    '<div class="duel-vs">' + sideHTML(myCard) + '<span class="duel-x">&times;</span>' + sideHTML(stakeCard) + '</div>';
-  box.classList.add('charging');
-  sfxClick();
+    '<h2>Flip duel!</h2>' +
+    '<div class="duel-table">' +
+      bcardHTML(myCard, 'bcard-me') +
+      '<span class="duel-vs" id="duel-vs">VS</span>' +
+      bcardHTML(stakeCard, 'bcard-them') +
+      '<div class="duel-stamp" id="duel-stamp"></div>' +
+    '</div>' +
+    '<div id="duel-done-slot"></div>';
+  box.scrollIntoView({ block: 'nearest' });
+
+  var me = $('bcard-me');
+  var them = $('bcard-them');
+  // beat 1: your card hits the table
+  me.classList.add('slam');
+  sfxSlam();
+  hapticPulse('rare');
+  // beat 2: theirs answers
+  setTimeout(function(){
+    them.classList.add('slam');
+    sfxSlam();
+    hapticPulse('rare');
+  }, 550);
+  // beat 3: the numbers come out
+  setTimeout(function(){
+    me.classList.add('show-pow');
+    them.classList.add('show-pow');
+    $('duel-vs').classList.add('show-pow');
+    sfxClick();
+  }, 1100);
+  // beat 4: suspense
+  setTimeout(function(){ box.classList.add('charging'); }, 1250);
+  // beat 5: the verdict — and it stays on the table
   setTimeout(function(){
     box.classList.remove('charging');
+    var stamp = $('duel-stamp');
+    stamp.textContent = result.won ? 'YOU WON!' : 'YOU LOST';
+    stamp.classList.add(result.won ? 'win' : 'lose', 'stamp-in');
+    var winner = result.won ? me : them;
+    var loser = result.won ? them : me;
+    winner.classList.add('winner');
+    loser.classList.add('loser');
     if (result.won) {
-      sfxReveal(stakeCard.tier);
-      hapticPulse(stakeCard.tier);
+      sfxWin();
+      hapticPulse('ultrarare');
       burstConfetti(box, 'ultrarare');
-      toast('You won ' + stakeCard.name + '!', 'good');
     } else {
-      beep(196, 0.28, { type: 'sine', volume: 0.05 });
+      sfxLose();
       hapticPulse('common');
-      toast(myCard.name + ' is gone...', '');
     }
-    renderSchool();
-    renderTopbar();
-  }, 1000);
+    $('duel-done-slot').innerHTML =
+      '<button class="bigbtn' + (result.won ? '' : ' ghost') + '" id="btn-duel-done" style="margin-top:10px;">' +
+        (result.won ? 'Take both cards' : 'Fine... take it') +
+      '</button>';
+    $('btn-duel-done').addEventListener('click', function(){
+      sfxClick();
+      renderSchool();
+      renderTopbar();
+    });
+  }, 2250);
 }
 
 /* ---- tabs ---- */
