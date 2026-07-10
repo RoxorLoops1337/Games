@@ -985,21 +985,24 @@ let G;
 // ---------- online leaderboard (additive, optional, fully offline-safe) ----------
 const Board = {
   URL: '/api/wildwalk_board',
-  async fetchTop(){
+  async fetchTop(diff){
     if(typeof globalThis.fetch !== 'function') return null;
+    // Normal/legacy stays byte-identical (no ?diff) for back-compat; only
+    // casual/hard append the query param.
+    const url = (diff && diff!=='normal') ? this.URL+'?diff='+encodeURIComponent(diff) : this.URL;
     try{
-      const r = await globalThis.fetch(this.URL);
+      const r = await globalThis.fetch(url);
       if(!r || !r.ok) return null;
       const j = await r.json();
       return (j && Array.isArray(j.top)) ? j.top : null;
     }catch(_){ return null; }
   },
-  submit(name, dist, tier){
+  submit(name, dist, tier, diff){
     if(typeof globalThis.fetch !== 'function') return;
     try{
       const p = globalThis.fetch(this.URL, {
         method:'POST', headers:{'content-type':'application/json'},
-        body:JSON.stringify({ name:name, dist:dist, tier:tier })
+        body:JSON.stringify({ name:name, dist:dist, tier:tier, diff:diff||'normal' })
       });
       if(p && typeof p.catch === 'function') p.catch(()=>{});
     }catch(_){ }
@@ -1598,7 +1601,7 @@ function gameOver(){
     Dex.save();
   }
   checkAch();
-  if(!G.seeded) Board.submit(Dex.data.playerName||'Anonymous', G.dist, G.tier);  // seeded runs never touch the online board (anti-cherry-pick)
+  if(!G.seeded) Board.submit(Dex.data.playerName||'Anonymous', G.dist, G.tier, G.diff||'normal');  // seeded runs never touch the online board (anti-cherry-pick); the run's difficulty picks its board (daily/seeded force normal)
   G.state='gameover'; clearButtons();
   sfx('defeat');
 }
@@ -2581,13 +2584,22 @@ function openPokedex(from){ G.pokedexFrom=from; G.pokedexSel=null; G.state='poke
 function openAchievements(from){ G.achFrom=from; G.state='achievements'; G.achPage=0; clearButtons(); }
 function openRecords(from){
   G.recordsFrom=from; G.state='records';
-  G.recordsTab='local'; G.boardData=undefined; G.boardFetching=false;
+  // recordsBoardDiff is transient on G (never serialized) — default to the
+  // player's current difficulty so the global board opens on the board they play.
+  G.recordsTab='local'; G.recordsBoardDiff=DIFFS[Dex.data.difficulty]?Dex.data.difficulty:'normal';
+  G.boardData=undefined; G.boardFetching=false;
   clearButtons();
+}
+function setRecordsBoardDiff(id){
+  if(!DIFFS[id] || G.recordsBoardDiff===id) return;
+  G.recordsBoardDiff=id; G.boardData=undefined; G.boardFetching=false;   // switch board → refetch
+  ensureBoard();
 }
 function ensureBoard(){
   if(G.boardData!==undefined || G.boardFetching) return;
   G.boardFetching=true;
-  Board.fetchTop().then(rows=>{ G.boardData=rows; G.boardFetching=false; });
+  const diff=G.recordsBoardDiff||'normal';
+  Board.fetchTop(diff).then(rows=>{ G.boardData=rows; G.boardFetching=false; });
 }
 function achToast(a){ G.achMsg='Achievement: '+a.name; G.achIcon=a.icon; G.achMsgT=3.0; }
 function openSanctuary(from){ G.sanctuaryFrom=from; G.sanctTab='blessings'; G.state='sanctuary'; clearButtons(); }
@@ -2826,6 +2838,15 @@ function drawRecordsGlobal(){
   ensureBoard();
   const nm = Dex.data.playerName || '';
   btn('setname', W-206, 74, 184, 30, nm ? ('✎ '+nm) : '✎ SET NAME', null, {col:'#3a2f5a', accent:'#ffe9a8'});
+  // per-difficulty board selector — each preset is its own board (Hard vs Hard)
+  const sel = G.recordsBoardDiff || 'normal';
+  const activeCol='#3a4a6a', idleCol='#20263c';
+  DIFF_ORDER.forEach((id,k)=>{
+    const D=DIFFS[id]; const x=22+k*96;
+    btn('rdiff_'+id, x, 74, 90, 30, D.icon+' '+D.name.toUpperCase(), null,
+      {col: sel===id?activeCol:idleCol, accent: sel===id?'#8fb0ff':undefined, tcol: sel===id?'#eaf0ff':'#8fa0c8'});
+  });
+  centerText('Viewing '+DIFFS[sel].icon+' '+DIFFS[sel].name+' board', W/2,116,'700 13px Segoe UI','#8fa0c8');
   const d = G.boardData;
   if(d===undefined){ centerText('Loading global leaderboard…', W/2,300,'700 18px Segoe UI','#8fa0c8'); return; }
   if(d===null){
@@ -3748,6 +3769,7 @@ function onClick(mx,my){
     if(b.id==='back'){ G.state=G.recordsFrom||'title'; clearButtons(); return; }
     if(b.id==='tab_local'){ G.recordsTab='local'; return; }
     if(b.id==='tab_global'){ G.recordsTab='global'; ensureBoard(); return; }
+    if(b.id && b.id.indexOf('rdiff_')===0){ setRecordsBoardDiff(b.id.slice(6)); return; }
     if(b.id==='setname'){
       const cur = Dex.data.playerName||'';
       const inp = (typeof prompt==='function') ? prompt('Leaderboard name:', cur) : null;
