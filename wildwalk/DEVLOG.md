@@ -21,7 +21,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 1. [x] Graphics & battle-juice overhaul — DONE c1.
 2. [x] Combat abilities per type — DONE c2.
 3. [x] Mid-battle switch — DONE c3.
-4. [ ] Pokédex screen (gallery of seen/caught with stats/flavor) from title + game-over.
+4. [x] Pokédex screen — DONE c4.
 5. [ ] Biomes (forest/cave/volcano/shore) that reskin the walk and bias spawn types.
 6. [ ] Boss encounters every few tiers — phased health bar, big rewards, guaranteed rare.
 7. [ ] Relics / run modifiers picked at milestones (roguelike boons).
@@ -36,6 +36,13 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c4 — Pokédex collection screen** (studio: designer, ux-designer, lead, engineer, QA).
+  A 6-col grid of all 18 species opened from title + game-over (button or 'd' key), with a
+  Back button. Caught = full sprite + name/type/rarity with a rarity-colored glow; seen = dark
+  silhouette + '???' + type; locked = '?'. Header shows Caught/Seen totals + per-rarity chips.
+  Tap a caught/seen card for a detail overlay (HP/ATK/SPD bars, evolution, word-wrapped flavor;
+  spoiler-safe for seen-only). Added a flavor line per species. Read-only over Dex.data
+  (save-safe). +5 tests. 26/26 green.
 - **c3 — Mid-battle party switch** (studio: systems + ux designers, lead, engineer, QA).
   Tap a living reserve card (or keys 1-4) during battle to send it in for type counter-play.
   Anti-abuse: 5s switch cooldown (radial ring + seconds on locked cards) AND incoming mon
