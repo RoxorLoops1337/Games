@@ -86,14 +86,20 @@ nav.tabbar button:active{opacity:.6;}
 .pack-count{font-family:var(--mono); font-size:13px; color:var(--ink-soft); margin-top:8px;}
 
 /* ---- pack opening ---- */
-#screen-pack{display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
+/* #screen-pack.active, not #screen-pack: an ID selector beats .screen{display:none}
+   regardless of .active, which left it always laid out (and pushing later
+   screens out of view) no matter which tab was open. */
+#screen-pack.active{display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
 .pack-stage{position:relative; width:100%; max-width:280px; aspect-ratio:5/7; margin:0 auto;}
-.pull-card{
+.flip-card{
   position:absolute; inset:0; border-radius:16px; background:var(--surface-2);
   border:2px solid var(--line); display:flex; flex-direction:column; align-items:center;
-  justify-content:center; padding:18px; box-shadow:0 0 0 rgba(0,0,0,0);
+  justify-content:center; padding:18px; transform:scaleX(1);
 }
-.pull-card.charging{animation:chargeCycle 900ms ease-out;}
+.flip-card.closing{transition:transform 320ms cubic-bezier(.4,0,1,1); transform:scaleX(0);}
+.flip-card.opening{transition:transform 320ms cubic-bezier(0,0,.2,1); transform:scaleX(1);}
+@media (prefers-reduced-motion: reduce){.flip-card.closing, .flip-card.opening{transition:none;}}
+.flip-card.charging{animation:chargeCycle 900ms ease-out;}
 @keyframes chargeCycle{
   0%{box-shadow:0 0 10px 2px var(--t-common); border-color:var(--t-common);}
   20%{box-shadow:0 0 14px 3px var(--t-uncommon); border-color:var(--t-uncommon);}
@@ -102,20 +108,25 @@ nav.tabbar button:active{opacity:.6;}
   80%{box-shadow:0 0 26px 8px var(--t-doublerare); border-color:var(--t-doublerare);}
   100%{box-shadow:0 0 32px 10px var(--t-ultrarare); border-color:var(--t-ultrarare);}
 }
-@media (prefers-reduced-motion: reduce){.pull-card.charging{animation:none;}}
-.pull-card .back-mark{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint);}
-.pull-card.revealed .back-mark{display:none;}
-.pull-card .card-name{font-family:var(--serif); font-size:20px; font-weight:600; margin:6px 0 2px; display:none;}
-.pull-card .card-type{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); display:none;}
-.pull-card .card-tier{font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.06em; margin-top:10px; padding:4px 10px; border-radius:20px; display:none;}
-.pull-card .card-flavor{font-size:12.5px; color:var(--ink-soft); margin-top:12px; display:none; max-width:34ch;}
-.pull-card .badges{display:none; gap:6px; margin-top:8px;}
-.pull-card.revealed .card-name,
-.pull-card.revealed .card-type,
-.pull-card.revealed .card-tier,
-.pull-card.revealed .card-flavor,
-.pull-card.revealed .badges{display:block;}
-.pull-card.revealed .badges{display:flex;}
+@media (prefers-reduced-motion: reduce){.flip-card.charging{animation:none;}}
+.flip-card .back-glyph{
+  width:46px; height:46px; border-radius:50%; border:2px solid var(--line); margin-bottom:14px;
+  display:flex; align-items:center; justify-content:center; color:var(--ink-faint); font-family:var(--serif); font-size:22px;
+}
+.flip-card .back-mark{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint);}
+.flip-card .card-name{font-family:var(--serif); font-size:20px; font-weight:600; margin:6px 0 2px; display:none;}
+.flip-card .card-type{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); display:none;}
+.flip-card .tier-chip{display:none; margin-top:10px;}
+.flip-card .card-power{margin-top:8px; font-family:var(--mono); font-size:13px; color:var(--accent); font-weight:700; letter-spacing:.03em; display:none;}
+.flip-card .badges{display:none; gap:6px; margin-top:8px;}
+.flip-card .card-flavor{font-size:12.5px; color:var(--ink-soft); margin-top:12px; max-width:34ch; display:none;}
+.flip-card.revealed .back-glyph, .flip-card.revealed .back-mark{display:none;}
+.flip-card.revealed .card-name, .flip-card.revealed .card-type,
+.flip-card.revealed .card-power, .flip-card.revealed .card-flavor{display:block;}
+.flip-card.revealed .tier-chip{display:inline-block;}
+.flip-card.revealed .badges{display:flex;}
+.tier-chip{font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.06em; padding:4px 10px; border-radius:20px; color:#0c0f0d;}
+.power-chip{font-family:var(--mono); font-size:12.5px; font-weight:700; color:var(--accent); letter-spacing:.03em;}
 .badge{font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:20px; font-weight:700;}
 .badge.new{background:var(--accent2); color:#04211c;}
 .badge.foil{background:var(--t-reverseholo); color:#fff;}
@@ -156,7 +167,7 @@ nav.tabbar button:active{opacity:.6;}
 }
 .modal-sheet h3{font-family:var(--serif); font-size:20px; margin:0 0 2px;}
 .modal-sheet .card-type{font-family:var(--mono); font-size:11px; text-transform:uppercase; color:var(--ink-soft); letter-spacing:.06em;}
-.modal-sheet .card-tier{display:inline-block; margin:10px 0; font-family:var(--mono); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px;}
+.modal-sheet .stat-row{display:flex; align-items:center; gap:10px; margin:10px 0;}
 .modal-sheet p.flavor{color:var(--ink-soft); font-size:13.5px; margin:0 0 16px;}
 .modal-row{display:flex; gap:10px;}
 .closebtn{
@@ -181,12 +192,14 @@ nav.tabbar button:active{opacity:.6;}
     <section class="screen active" id="screen-kiosk"></section>
     <section class="screen" id="screen-pack"></section>
     <section class="screen" id="screen-binder"></section>
+    <section class="screen" id="screen-school"></section>
   </main>
 
   <nav class="tabbar">
     <button data-tab="kiosk" class="active"><span class="tabdot"></span>Kiosk</button>
     <button data-tab="pack"><span class="tabdot"></span>Packs</button>
     <button data-tab="binder"><span class="tabdot"></span>Binder</button>
+    <button data-tab="school"><span class="tabdot"></span>School</button>
   </nav>
 </div>
 
@@ -231,6 +244,10 @@ var TIER_BY_KEY = {};
 TIERS.forEach(function(t){ TIER_BY_KEY[t.key] = t; });
 
 var TIER_COUNTS = { common:41, uncommon:25, rare:15, rareholo:10, doublerare:6, ultrarare:3 };
+var TIER_POWER_RANGE = {
+  common: [20, 40], uncommon: [35, 58], rare: [50, 78],
+  rareholo: [65, 95], doublerare: [82, 112], ultrarare: [102, 140],
+};
 var TYPES = ['Ember','Aqua','Verdant','Volt','Stone','Shadow','Crystal','Wind','Lumen','Umbra'];
 var NAME_PRE = ['Pyr','Aqua','Ver','Volt','Ston','Shad','Crys','Wynd','Lum','Umbr','Ker','Fen','Glo','Sil','Tor','Bram','Frost','Emb','Grim','Sol','Riv','Thal','Nyx','Ash','Petal','Quill','Moth','Drift','Coal','Marsh'];
 var NAME_SUF = ['ling','ander','ix','ator','oth','ara','ino','ux','ell','wyn','bok','ryn','ash','ora','iss','eth','umo','ika','orn','ael','yx','oba','und','iel','ossom'];
@@ -270,10 +287,12 @@ function buildCoreSet(){
     var suf = NAME_SUF[Math.floor(rand() * NAME_SUF.length)];
     var type = TYPES[Math.floor(rand() * TYPES.length)];
     var flavor = FLAVORS[Math.floor(rand() * FLAVORS.length)];
+    var range = TIER_POWER_RANGE[tierKey];
+    var power = range[0] + Math.floor(rand() * (range[1] - range[0] + 1));
     var name = pre + suf;
     if (seen[name]) name = name + (idx + 1);
     seen[name] = true;
-    return { id: id, name: name, type: type, tier: tierKey, flavor: flavor };
+    return { id: id, name: name, type: type, tier: tierKey, flavor: flavor, power: power };
   });
   return cards;
 }
@@ -295,6 +314,19 @@ var HARD_PITY_ULTRARARE = 40;
 var HIT_WEIGHTS_BASE = { rare: 0.55, rareholo: 0.30, doublerare: 0.10, ultrarare: 0.05 };
 var SAVE_KEY = 'tc_save_v1';
 
+var NPCS = [
+  { id: 'finn', name: 'Finn', line: 'Trades hard, but keeps his word.' },
+  { id: 'ren', name: 'Ren', line: 'Only wants the shiniest foils.' },
+  { id: 'tova', name: 'Tova', line: 'Collects anything with wings, or claims to.' },
+  { id: 'beck', name: 'Beck', line: 'Always short on coins, always has a card to offer.' },
+];
+var TRADE_PAYOUT = { common: 3, uncommon: 6, rare: 14, rareholo: 32, doublerare: 70, ultrarare: 170 };
+var WANT_TIER_POOL = ['uncommon', 'rare', 'rareholo', 'doublerare', 'ultrarare'];
+
+function freshSchool(){
+  return { wantDate: null, wants: {}, fulfilledToday: {} };
+}
+
 function freshSave(){
   return {
     version: 1,
@@ -304,6 +336,7 @@ function freshSave(){
     pity: { sinceRareHoloPlus: 0, sinceUltraRare: 0 },
     allowance: { lastClaimDate: null, streak: 0 },
     packsOpenedTotal: 0,
+    school: freshSchool(),
   };
 }
 
@@ -392,7 +425,7 @@ function openPack(save, rand){
   var results = pulls.map(function(p){
     var isNew = applyPull(save, p);
     var card = BY_ID[p.id];
-    return { id: p.id, name: card.name, type: card.type, tier: card.tier, flavor: card.flavor, reverseHolo: p.reverseHolo, isNew: isNew };
+    return { id: p.id, name: card.name, type: card.type, tier: card.tier, power: card.power, flavor: card.flavor, reverseHolo: p.reverseHolo, isNew: isNew };
   });
   return results;
 }
@@ -405,6 +438,62 @@ function sellDuplicate(save, id){
   rec.count -= 1;
   save.coins += tier.sell;
   return tier.sell;
+}
+
+function duplicateValue(save){
+  var total = 0;
+  Object.keys(save.collection).forEach(function(id){
+    var rec = save.collection[id];
+    if (rec.count > 1) total += (rec.count - 1) * TIER_BY_KEY[BY_ID[id].tier].sell;
+  });
+  return total;
+}
+
+function sellAllDuplicates(save){
+  var total = 0;
+  Object.keys(save.collection).forEach(function(id){
+    var rec = save.collection[id];
+    if (rec.count > 1) {
+      total += (rec.count - 1) * TIER_BY_KEY[BY_ID[id].tier].sell;
+      rec.count = 1;
+    }
+  });
+  save.coins += total;
+  return total;
+}
+
+function refreshSchoolIfNeeded(save){
+  var today = todayKey();
+  if (save.school.wantDate === today) return;
+  save.school.wantDate = today;
+  save.school.fulfilledToday = {};
+  var wants = {};
+  NPCS.forEach(function(npc){
+    var rand = seededRandom(npc.id + '-' + today);
+    var tierRoll = WANT_TIER_POOL[Math.floor(rand() * WANT_TIER_POOL.length)];
+    var pool = BY_TIER[tierRoll];
+    wants[npc.id] = pool[Math.floor(rand() * pool.length)].id;
+  });
+  save.school.wants = wants;
+}
+
+function canFulfillTrade(save, npcId){
+  if (save.school.fulfilledToday[npcId]) return false;
+  var wantedId = save.school.wants[npcId];
+  if (!wantedId) return false;
+  var rec = save.collection[wantedId];
+  return !!rec && rec.count > 1;
+}
+
+function fulfillTrade(save, npcId){
+  if (!canFulfillTrade(save, npcId)) return null;
+  var wantedId = save.school.wants[npcId];
+  var card = BY_ID[wantedId];
+  save.collection[wantedId].count -= 1;
+  var payout = TRADE_PAYOUT[card.tier];
+  save.coins += payout;
+  save.school.fulfilledToday[npcId] = true;
+  return { cardId: wantedId, coins: payout };
 }
 
 function completionFraction(save){
@@ -423,6 +512,7 @@ function loadSave(){
       base.pity = parsed.pity || base.pity;
       base.allowance = parsed.allowance || base.allowance;
       base.packsOpenedTotal = parsed.packsOpenedTotal || 0;
+      base.school = parsed.school || base.school;
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -452,6 +542,7 @@ function renderKiosk(){
   if (!el) return;
   var canClaim = canClaimAllowance(save);
   var streak = save.allowance.streak;
+  var dupValue = duplicateValue(save);
   el.innerHTML =
     '<div class="kiosk-card">' +
       '<h2>Allowance</h2>' +
@@ -466,6 +557,13 @@ function renderKiosk(){
       '<p class="sub">A pack costs ' + PACK_PRICE + ' coins.</p>' +
       '<button class="bigbtn" id="btn-buy"' + (save.coins < PACK_PRICE ? ' disabled' : '') + '>Buy a pack</button>' +
       '<div class="pack-count">' + save.packsUnopened + ' unopened pack' + (save.packsUnopened === 1 ? '' : 's') + ' waiting</div>' +
+    '</div>' +
+    '<div class="kiosk-card">' +
+      '<h2>Loose duplicates</h2>' +
+      '<p class="sub">Cards you already own more than one of. Selling to the kiosk is quick, but trading at school pays better.</p>' +
+      '<button class="bigbtn ghost" id="btn-sell-dupes"' + (dupValue <= 0 ? ' disabled' : '') + '>' +
+        (dupValue > 0 ? 'Sell all duplicates (+' + dupValue + ')' : 'No duplicates to sell yet') +
+      '</button>' +
     '</div>';
   var claimBtn = $('btn-claim');
   if (claimBtn) claimBtn.addEventListener('click', function(){
@@ -475,6 +573,10 @@ function renderKiosk(){
   var buyBtn = $('btn-buy');
   if (buyBtn) buyBtn.addEventListener('click', function(){
     if (buyPack(save)) { persist(save); renderTopbar(); renderKiosk(); }
+  });
+  var sellDupesBtn = $('btn-sell-dupes');
+  if (sellDupesBtn) sellDupesBtn.addEventListener('click', function(){
+    if (sellAllDuplicates(save) > 0) { persist(save); renderTopbar(); renderKiosk(); renderBinder(); }
   });
 }
 
@@ -518,11 +620,12 @@ function renderPackScreen(){
   var pull = packSession.pulls[packSession.index];
   var dots = packSession.pulls.map(function(_, i){ return '<span class="' + (i < packSession.index ? 'done' : '') + '"></span>'; }).join('');
   el.innerHTML =
-    '<div class="pack-stage"><div class="pull-card" id="pull-card">' +
+    '<div class="pack-stage"><div class="flip-card" id="pull-card">' +
+      '<div class="back-glyph">&#9733;</div>' +
       '<span class="back-mark">Tap to reveal</span>' +
       '<div class="card-name"></div><div class="card-type"></div>' +
-      '<div class="card-tier"></div><div class="badges"></div>' +
-      '<div class="card-flavor"></div>' +
+      '<span class="tier-chip"></span><div class="card-power"></div>' +
+      '<div class="badges"></div><div class="card-flavor"></div>' +
     '</div></div>' +
     '<div class="pack-progress">' + dots + '</div>' +
     '<div class="pack-hint" id="pack-hint">Card ' + (packSession.index + 1) + ' of ' + packSession.pulls.length + '</div>';
@@ -532,36 +635,78 @@ function renderPackScreen(){
     card.classList.add('charging');
     var done = false;
     var timeoutId;
-    var finish = function(){
+    var finishCharge = function(){
       if (done) return;
       done = true;
       clearTimeout(timeoutId);
-      card.removeEventListener('animationend', finish);
-      revealPull(card, pull);
+      card.removeEventListener('animationend', finishCharge);
+      card.classList.remove('charging');
+      closeCard(card, pull);
     };
-    card.addEventListener('animationend', finish);
-    timeoutId = setTimeout(finish, 1000);
+    card.addEventListener('animationend', finishCharge);
+    timeoutId = setTimeout(finishCharge, 1000);
   }, { once: true });
 }
 
-function revealPull(card, pull){
+// Twirl the card shut (scaleX -> 0), swap its face while it's edge-on and
+// invisible, then twirl it back open. Avoids perspective/preserve-3d/
+// backface-visibility, which can leave a stale composited frame painted after
+// the pack screen is hidden on some browsers (a real bug caught in testing —
+// see the switchTab() innerHTML teardown for the other half of that fix).
+function closeCard(card, pull){
+  card.classList.add('closing');
+  var done = false;
+  var timeoutId;
+  var finishClose = function(e){
+    if (e && e.propertyName && e.propertyName !== 'transform') return;
+    if (done) return;
+    done = true;
+    clearTimeout(timeoutId);
+    card.removeEventListener('transitionend', finishClose);
+    card.classList.remove('closing');
+    populateFront(card, pull);
+    card.classList.add('revealed');
+    openCard(card);
+  };
+  card.addEventListener('transitionend', finishClose);
+  timeoutId = setTimeout(finishClose, 400);
+}
+
+function openCard(card){
+  card.classList.add('opening');
+  var done = false;
+  var timeoutId;
+  var finishOpen = function(e){
+    if (e && e.propertyName && e.propertyName !== 'transform') return;
+    if (done) return;
+    done = true;
+    clearTimeout(timeoutId);
+    card.removeEventListener('transitionend', finishOpen);
+    card.classList.remove('opening');
+    afterReveal();
+  };
+  card.addEventListener('transitionend', finishOpen);
+  timeoutId = setTimeout(finishOpen, 400);
+}
+
+function populateFront(card, pull){
   var tier = TIER_BY_KEY[pull.tier];
-  card.classList.remove('charging');
-  card.classList.add('revealed');
   card.style.borderColor = 'var(--t-' + pull.tier + ')';
   card.style.boxShadow = '0 0 24px 4px var(--t-' + pull.tier + ')';
   card.querySelector('.card-name').textContent = pull.name;
   card.querySelector('.card-type').textContent = pull.type;
-  var tierEl = card.querySelector('.card-tier');
+  var tierEl = card.querySelector('.tier-chip');
   tierEl.textContent = tier.name;
-  tierEl.style.display = 'inline-block';
   tierEl.style.background = 'var(--t-' + pull.tier + ')';
-  tierEl.style.color = '#0c0f0d';
+  card.querySelector('.card-power').innerHTML = 'POW <strong>' + pull.power + '</strong>';
   card.querySelector('.card-flavor').textContent = pull.flavor;
   var badges = card.querySelector('.badges');
   badges.innerHTML =
     (pull.isNew ? '<span class="badge new">NEW</span>' : '') +
     (pull.reverseHolo ? '<span class="badge foil">REVERSE HOLO</span>' : '');
+}
+
+function afterReveal(){
   var hint = $('pack-hint');
   if (hint) hint.textContent = 'Tap anywhere to continue';
   document.getElementById('screen-pack').addEventListener('click', function onNext(){
@@ -611,8 +756,11 @@ function openCardModal(id){
     '<button class="closebtn" id="btn-close-modal">&times;</button>' +
     '<h3>' + card.name + '</h3>' +
     '<div class="card-type">' + card.type + '</div>' +
-    '<span class="card-tier" style="background:var(--t-' + card.tier + '); color:#0c0f0d;">' + tier.name + '</span>' +
-    (rec.reverseHolo ? ' <span class="badge foil">REVERSE HOLO</span>' : '') +
+    '<div class="stat-row">' +
+      '<span class="tier-chip" style="background:var(--t-' + card.tier + ');">' + tier.name + '</span>' +
+      '<span class="power-chip">POW ' + card.power + '</span>' +
+      (rec.reverseHolo ? ' <span class="badge foil">REVERSE HOLO</span>' : '') +
+    '</div>' +
     '<p class="flavor">' + card.flavor + '</p>' +
     '<div class="modal-row">' +
       '<button class="bigbtn ghost" id="btn-sell"' + (rec.count <= 1 ? ' disabled' : '') + '>Sell duplicate (+' + tier.sell + ')</button>' +
@@ -627,14 +775,54 @@ function openCardModal(id){
 }
 function closeModal(){ $('modal-backdrop').classList.remove('open'); }
 
+function renderSchool(){
+  var el = $('screen-school');
+  if (!el) return;
+  refreshSchoolIfNeeded(save);
+  persist(save);
+  var cards = NPCS.map(function(npc){
+    var wantedId = save.school.wants[npc.id];
+    var wantedCard = BY_ID[wantedId];
+    var tier = TIER_BY_KEY[wantedCard.tier];
+    var fulfilled = !!save.school.fulfilledToday[npc.id];
+    var canFulfill = canFulfillTrade(save, npc.id);
+    var label = fulfilled ? 'Thanks again!' : (canFulfill ? 'Trade (+' + TRADE_PAYOUT[wantedCard.tier] + ' coins)' : "You don't have a spare " + wantedCard.name);
+    return '<div class="kiosk-card">' +
+      '<h2>' + npc.name + '</h2>' +
+      '<p class="sub">' + npc.line + '</p>' +
+      '<p class="sub">Wants: <strong style="color:var(--ink)">' + wantedCard.name + '</strong></p>' +
+      '<div class="stat-row"><span class="tier-chip" style="background:var(--t-' + wantedCard.tier + ');">' + tier.name + '</span></div>' +
+      '<button class="bigbtn ghost" data-npc="' + npc.id + '"' + ((fulfilled || !canFulfill) ? ' disabled' : '') + '>' + label + '</button>' +
+    '</div>';
+  }).join('');
+  el.innerHTML = cards;
+  el.querySelectorAll('button[data-npc]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var result = fulfillTrade(save, btn.getAttribute('data-npc'));
+      if (result) { persist(save); renderTopbar(); renderSchool(); renderBinder(); }
+    });
+  });
+}
+
 function switchTab(tab){
   activeTab = tab;
-  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+  document.querySelectorAll('.screen').forEach(function(s){
+    s.classList.remove('active');
+    // Every render* function rebuilds its screen's innerHTML from scratch when
+    // it becomes active again, so it's safe to tear down whatever we're leaving.
+    if (s.id !== 'screen-' + tab) s.innerHTML = '';
+  });
   document.querySelectorAll('nav.tabbar button').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
   $('screen-' + tab).classList.add('active');
+  // main's scroll position carries over between screens (they share one
+  // scroll container) — without this, arriving on a short screen right after
+  // a long scrolled-down one renders it pushed almost entirely out of view.
+  var mainEl = document.querySelector('main');
+  if (mainEl) mainEl.scrollTop = 0;
   if (tab === 'kiosk') renderKiosk();
   if (tab === 'pack') renderPackScreen();
   if (tab === 'binder') renderBinder();
+  if (tab === 'school') renderSchool();
 }
 
 function boot(){
@@ -651,11 +839,15 @@ else boot();
 if (typeof globalThis !== 'undefined') {
   globalThis.__TC = {
     CORE_SET: CORE_SET, TIERS: TIERS, TIER_BY_KEY: TIER_BY_KEY, TIER_COUNTS: TIER_COUNTS, BY_TIER: BY_TIER, BY_ID: BY_ID,
+    TIER_POWER_RANGE: TIER_POWER_RANGE,
     PACK_PRICE: PACK_PRICE, STARTER_PACKS: STARTER_PACKS, ALLOWANCE_BASE: ALLOWANCE_BASE,
     SOFT_PITY_START: SOFT_PITY_START, HARD_PITY_RAREHOLO: HARD_PITY_RAREHOLO, HARD_PITY_ULTRARARE: HARD_PITY_ULTRARARE,
     freshSave: freshSave, todayKey: todayKey, canClaimAllowance: canClaimAllowance, claimAllowance: claimAllowance,
     buyPack: buyPack, openPack: openPack, sellDuplicate: sellDuplicate, completionFraction: completionFraction,
     hitTierForPack: hitTierForPack, seededRandom: seededRandom, pickWeighted: pickWeighted,
+    duplicateValue: duplicateValue, sellAllDuplicates: sellAllDuplicates,
+    NPCS: NPCS, TRADE_PAYOUT: TRADE_PAYOUT, freshSchool: freshSchool,
+    refreshSchoolIfNeeded: refreshSchoolIfNeeded, canFulfillTrade: canFulfillTrade, fulfillTrade: fulfillTrade,
   };
 }
 })();
