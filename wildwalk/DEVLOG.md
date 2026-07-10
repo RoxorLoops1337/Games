@@ -47,7 +47,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 27. [x] Party synergies / auras — DONE c27.
 28. [x] Boss telegraph & mechanic variety — DONE c28.
 29. [x] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety) — DONE c29.
-30. [ ] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds).
+30. [x] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds) — DONE c30.
 31. [ ] Codex / lore screen (per-species flavor, type guide, mechanics reference).
 32. [ ] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe).
 33. [ ] Difficulty presets (Casual/Normal/Hard modifiers layered cleanly over ascension).
@@ -55,6 +55,22 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c30 — Seeded shareable run codes** (studio: 3 planners [code-format/run-flow/ux] → lead spec → engineer → QA + orch).
+  Extends the c17 daily seed to arbitrary copy/paste codes so two players can race the EXACT same run. Codec:
+  seedToRunCode(seed) = (seed>>>0).toString(36).toUpperCase() (canonical ≤7-char base36); runCodeToSeed(code)
+  sanitizes ([^0-9A-Z] stripped, uppercased, trimmed) → parseInt(base36)>>>0, null on empty/garbage so the caller
+  falls back to a random seed. Canonical codes round-trip exactly; longer input folds deterministically via ToUint32.
+  startSeededRun(seed) mirrors startDaily EXACTLY (same rnd() consumption order — load-bearing so shared codes don't
+  desync): reseed(seed) → draw starter from the fixed DAILY_POOL (menagerie-independent) → newGame → latch
+  G.seeded/runSeed/runCode/asc=0 → startWalk. Title gets a green 🎲 SEEDED RUN button (3-across row with start+daily,
+  non-overlapping) that prompt()s for a code (blank → random), starts the run, and flashes the canonical code to
+  share; a 🎲 SEED <code> HUD chip and a gameover "share to race" line keep it copyable. FAIRNESS: seeded runs never
+  submit to the online board and never unlock ascension (anti-cherry-pick), gated by !G.seeded at both sites; local
+  records/essence still count. ZERO save-shape change — all new state is transient on G (no Dex.data field; the 8
+  save-shape arrays untouched, asserted by SEED8). +9 real-path tests (SEED1-9): drive the actual
+  startSeededRun/encode/decode + real spawn sequences, never recompute a formula. Determinism proven by NEGATIVE
+  CONTROLS — orchestrator independently broke reseed → SEED4/5/6 went red (224/3), reverted → 227/0; QA also proved
+  the submit-gate (SEED7) and round-trip (SEED1) controls. 227/227 wildwalk + 19/19 board, 0/12 flakes.
 - **c29 — Deeper relics + set bonuses** (studio: relic-designer, balance/ux, lead, engineer, QA + orch).
   Every relic is now tagged with a set ∈ {offense, defense, fortune} (RELIC_SETS); collecting SET_THRESHOLD=3
   DISTINCT relics of a set lights a passive team bonus on top of each relic's own effect. relicSetCount(set)

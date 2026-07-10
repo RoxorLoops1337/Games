@@ -72,6 +72,13 @@ function dailySeedFor(day){                // avalanche day int -> well-mixed 32
   h = (h ^ (h>>>16)) >>> 0;
   return h;
 }
+function seedToRunCode(seed){ return (seed>>>0).toString(36).toUpperCase(); }   // 32-bit uint -> canonical <=7-char base36 code
+function runCodeToSeed(code){
+  const s = String(code).trim().toUpperCase().replace(/[^0-9A-Z]/g,'');
+  if(!s) return null;                                   // empty/garbage -> caller falls back to random
+  const n = parseInt(s, 36);
+  return Number.isFinite(n) ? (n >>> 0) : null;         // canonical (<=7ch) round-trips; longer input folds deterministically via ToUint32
+}
 function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 
 // ---------- type chart ----------
@@ -956,7 +963,7 @@ function newGame(chosenKey){
     pokedexFrom:'title', pokedexSel:null,
     achFrom:'title', achMsg:'', achIcon:'', achMsgT:0,
     pendingMon:null, afterAcquire:null,
-    daily:false, dailySeed:0,
+    daily:false, dailySeed:0, seeded:false, runSeed:0, runCode:'',
     starterKey,
   };
   G.asc = A;
@@ -1039,6 +1046,14 @@ function startDaily(){
   newGame(k);                         // 3) build G; k ∈ COMMONS ⊆ starterPool() so NO extra rnd()
   G.daily = true; G.dailySeed = day; G.asc = 0;  // 4) latch mode AFTER newGame (survives startWalk, read in gameOver); daily always ascension 0
   startWalk();                        // 5) skip starter-select entirely
+}
+function startSeededRun(seed){
+  seed = seed>>>0;
+  reseed(seed);                                              // 1) deterministic world for this seed
+  const k = DAILY_POOL[Math.floor(rnd()*DAILY_POOL.length)]; // 2) same fixed pool as daily; consumes exactly 1 rnd()
+  newGame(k);                                               // 3) build G; k in COMMONS ⊆ starterPool() => NO extra rnd()
+  G.seeded=true; G.runSeed=seed; G.runCode=seedToRunCode(seed); G.asc=0;   // 4) latch AFTER newGame (newGame rebuilds G and would wipe flags)
+  startWalk();                                               // 5) skip starter select
 }
 function bossDue(){ return ((G.fights+1) % BOSS_EVERY) === 0; }
 function spawnBoss(forceKey){
@@ -1480,7 +1495,7 @@ function gameOver(){
   const _rr = Dex.recordRun({dist:G.dist, tier:G.tier, fights:G.fights, dex:Dex.nCaught()});
   G.lastRunRec = _rr.rec; G.lastRunRank = _rr.rank;
   if(G.daily) Dex.recordDaily(G.dailySeed, G.dist, G.tier);
-  if(!G.daily
+  if(!G.daily && !G.seeded
      && Dex.data.ascension.max < ASC_MAX
      && G.asc === Dex.data.ascension.max
      && G.tier >= ASC_UNLOCK_TIER){
@@ -1488,7 +1503,7 @@ function gameOver(){
     Dex.save();
   }
   checkAch();
-  Board.submit(Dex.data.playerName||'Anonymous', G.dist, G.tier);  // online: fire-and-forget, cannot throw/block
+  if(!G.seeded) Board.submit(Dex.data.playerName||'Anonymous', G.dist, G.tier);  // seeded runs never touch the online board (anti-cherry-pick)
   G.state='gameover'; clearButtons();
   sfx('defeat');
 }
@@ -2008,6 +2023,7 @@ function drawHUD(){
   x=chip('🕊️', G.honor, '#8fd0ff', x);
   x=chip('🧪', G.potions, '#6fe0a0', x);
   x=chip('🎯', 'Ball '+['I','II','III','IV'][G.ballTier], '#ff9b6f', x);
+  if(G.seeded) x=chip('🎲','SEED '+G.runCode,'#6fd0b0',x);
   drawRelicStrip(Math.max(x+8, 420));
   // right side
   ctx.textAlign='right'; ctx.font='700 14px Segoe UI';
@@ -2727,8 +2743,9 @@ function drawTitle(){
   const dSub = '#'+dInt+(todayBest>0 ? '  ·  best '+todayBest+'m' : '  ·  unplayed');
   const tAsc = (Dex.data.ascension && Dex.data.ascension.sel) || 0;
   const startSub = tAsc>0 ? ('Ascension '+tAsc+'  ·  +'+(25*tAsc)+'% essence') : 'random seed';
-  btn('start', 200, 452, 270, 60, '▶  BEGIN THE WALK', startSub, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
-  btn('daily', 490, 452, 270, 60, '📅 DAILY CHALLENGE', dSub, {col:'#5a4a2a', accent:'#ffd27a', big:true});
+  btn('start',  96, 452, 240, 60, '▶  BEGIN THE WALK', startSub, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
+  btn('daily', 360, 452, 240, 60, '📅 DAILY CHALLENGE', dSub,    {col:'#5a4a2a', accent:'#ffd27a', big:true});
+  btn('seeded',624, 452, 240, 60, '🎲 SEEDED RUN', 'race a code', {col:'#2f5a4a', accent:'#6fd0b0', big:true});
   btn('dex',159,528,150,44,'📕 POKÉDEX',Dex.nCaught()+'/'+Object.keys(SPECIES).length,{col:'#4a3a6a',accent:'#c9a8ff'});
   btn('records',323,528,150,44,'🏅 RECORDS',Dex.data.best+'m best',{col:'#3a4a6a',accent:'#8fb0ff'});
   btn('sanctuary',487,528,150,44,'✦ SANCTUARY',Dex.data.essence+' essence',{col:'#3a2f5a',accent:'#ffe9a8'});
@@ -3326,6 +3343,7 @@ function drawGameOver(){
   ctx.fillStyle='rgba(6,8,18,.9)'; ctx.fillRect(0,0,W,H);
   centerText('YOUR JOURNEY ENDS', W/2, 150, '900 52px Segoe UI', '#e07a8a');
   centerText('Every companion has fallen.', W/2, 195, '600 18px Segoe UI', '#c9d4f0');
+  if(G.seeded) centerText('🎲 Seed '+G.runCode+' — share to race', W/2, 228, '700 15px Segoe UI', '#6fd0b0');
   centerText('Distance walked: '+G.dist+'m', W/2, 260, '800 30px Segoe UI', '#ffe9a8');
   centerText('Fights: '+G.fights+'   ·   Souls: '+G.souls+'   ·   Honor: '+G.honor, W/2, 300, '600 16px Segoe UI', '#aeb8d8');
   const best = G.dist>=Dex.data.best;
@@ -3348,7 +3366,12 @@ function onClick(mx,my){
   if(G.tutActive){ dismissTut(); sfx('select'); return; }
   { const mb=hitButton(mx,my);
     if(mb){ if(mb.id==='mute'){ toggleMute(); return; } sfx('select'); } }
-  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='tutskip') skipTutorial(); else if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='settings') openSettings('title'); else if(b.id==='daily'){ startDaily(); } else { openStarter('title'); } } return; }
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='tutskip') skipTutorial(); else if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='settings') openSettings('title'); else if(b.id==='daily'){ startDaily(); } else if(b.id==='seeded'){
+      const code = (typeof prompt==='function') ? prompt('Enter a run code to race — or leave blank for a random seed:','') : '';
+      const s = runCodeToSeed(code || '');
+      startSeededRun(s==null ? (Math.floor(rnd()*4294967296)>>>0) : s);
+      flash('Seed: '+G.runCode);   // surface canonical code for copy/share
+    } else { openStarter('title'); } } return; }
   if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='records') openRecords('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
   if(G.state==='starter'){
     const b=hitButton(mx,my); if(!b) return;
