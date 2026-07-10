@@ -2347,5 +2347,50 @@ test('TUT-g active tip swallows a game click', ()=>{
   assert(g.team.length===teamLen, 'catch fired despite gate');
 });
 
+// ---- status VFX render-safety (pip bars, pulse rings, stun stars) ----
+test('JUICE-STATUS all statuses + all flashes forced render across time without throwing', ()=>{
+  const { api, step, begin, toBattle } = boot();
+  step(2); begin();
+  assert(toBattle(), 'never reached battle');
+  const g = api.getG();
+  const C = api.C;
+  const you = api.activeMon();
+  // pick a Rock 'you' and a Shadow wild so both type-pips (guard/phase) get exercised too
+  you.sp = api.SP.terralith;   // Rock type -> guard pip
+  const shadowKey = api.SPECIESKEYS.find(k=> api.SP[k].type==='Shadow');
+  if(shadowKey) g.wild.sp = api.SP[shadowKey];
+  // force EVERY transient status + flash to a hot value on both combatants (render-only writes)
+  for(const m of [you, g.wild]){
+    const s=m.status;
+    s.burn=C.BURN_MAX; s.burnT=2; s.fBurn=0.4;
+    s.stun=C.STUN_DUR; s.stunImm=C.STUN_IMM; s.fStun=0.5;
+    s.regen=C.LEECH_DUR; s.regenRate=1; s.fHeal=0.4;
+    s.fGuard=0.35; s.fDodge=0.4;
+  }
+  // sweep G.t so pulse sin(), star orbit, twinkle, and depletion fracs all vary
+  for(let i=0;i<200;i++){ g.t=i*0.05; api.draw(); }
+  // also emberbrand-style overshoot: burnT > BURN_DUR must clamp the bar to full, not throw
+  you.status.burnT = C.BURN_DUR + 1.5;
+  for(let i=0;i<30;i++){ g.t=i*0.07; api.draw(); }
+  assert(true); // reaching here without a throw is the assertion
+});
+
+test('JUICE-STATUS stun-only + all-zero-status idle battle render safely', ()=>{
+  const { api, step, begin, toBattle } = boot();
+  step(2); begin();
+  assert(toBattle(), 'never reached battle');
+  const g = api.getG();
+  const C = api.C;
+  const you = api.activeMon();
+  // stun-only on both (drives stunStars fade as stun would decay), no flashes
+  you.status.stun = C.STUN_DUR; g.wild.status.stun = C.STUN_DUR*0.5;
+  g.wild.elite = true;   // elite-size-aware star y branch
+  for(let i=0;i<80;i++){ g.t=i*0.06; api.draw(); }
+  // all-zero status: no pips, no bars, no stars, no stunStars body — still must render clean
+  for(const m of [you, g.wild]){ m.status = { burn:0, burnT:0, stun:0, stunImm:0, regen:0, regenRate:0, fBurn:0, fStun:0, fGuard:0, fDodge:0, fHeal:0 }; }
+  for(let i=0;i<40;i++){ g.t=i*0.08; api.draw(); }
+  assert(g.state==='battle', 'left battle unexpectedly');
+});
+
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
