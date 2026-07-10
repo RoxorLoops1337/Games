@@ -203,6 +203,16 @@ function pickBiased(keys){
 
 // ---------- monster instance ----------
 function statAt(base,level){ return base * (1 + 0.14*(level-1)); }
+// Held-trinket stat helpers (holder-keyed; hasTrinket defined near hasRelic).
+function baseMaxHp(m){ return Math.round(statAt(m.sp.base.hp,m.level)*(hasTrinket(m,'vigorcharm')?1.2:1)); }
+function applyTrinketStats(m){
+  const wasDead = m.hp<=0;                       // a fainted mon stays fainted — equipping never revives
+  const nm=baseMaxHp(m); m.hp += (nm-m.maxhp); m.maxhp=nm;
+  if(m.hp>nm)m.hp=nm;
+  if(wasDead) m.hp=0; else if(m.hp<1) m.hp=1;
+  m.spd = m.sp.base.spd * (hasTrinket(m,'swiftfeather')?1.15:1);
+  m.hpShown = m.hp;
+}
 function makeMon(key,level){
   const sp = SPECIES[key];
   const lvl = Math.max(1, Math.round(level));
@@ -212,6 +222,7 @@ function makeMon(key,level){
     maxhp: hp, hp,
     atk: statAt(sp.base.atk,lvl),
     spd: sp.base.spd,
+    trinket:null,               // held trinket id (transient; never serialized)
     xp: 0, xpNext: 12 + lvl*8,
     cd: 0, alive:true,
     // anim
@@ -226,15 +237,14 @@ function xpToLevels(m, gain){
   let leveled = [];
   while(m.xp >= m.xpNext && m.level < 60){
     m.xp -= m.xpNext; m.level++; m.xpNext = 12 + m.level*8;
-    const newMax = Math.round(statAt(m.sp.base.hp, m.level));
-    m.hp += (newMax - m.maxhp); m.maxhp = newMax;
     m.atk = statAt(m.sp.base.atk, m.level);
+    { const newMax = baseMaxHp(m); m.hp += (newMax - m.maxhp); m.maxhp = newMax; }
     // evolution
     if(m.sp.evo && m.level >= (m.sp.rarity===0?8:16)){
       const oldName = m.sp.name;
       const ek = m.sp.evo; m.key = ek; m.sp = SPECIES[ek];
-      const nm = Math.round(statAt(m.sp.base.hp, m.level));
-      m.hp += (nm - m.maxhp); m.maxhp = nm; m.atk = statAt(m.sp.base.atk, m.level);
+      m.atk = statAt(m.sp.base.atk, m.level);
+      const nm = baseMaxHp(m); m.hp += (nm - m.maxhp); m.maxhp = nm;
       leveled.push({evo:true, from:oldName, to:m.sp.name});
       Dex.caught(ek);
     } else leveled.push({evo:false});
@@ -469,6 +479,7 @@ function newGame(){
     ballTier:0,                 // +catch bonus from shop
     bossWin:false,              // boss-reward latch (transient; only Dex.data persists)
     relics:[], relicOffer:null, afterRelic:null,   // roguelike boons (transient)
+    trinkets:[], equipSel:null,                     // held-trinket inventory + equip modal sel (transient)
     dist:0, fights:0, tier:1, enc:0,
     lead:0,
     // world scroll
@@ -605,7 +616,7 @@ function finishSpawn(w){
   // set active lead to first healthy companion
   G.lead = G.team.findIndex(m=>m.hp>0);
   if(G.lead<0) G.lead=0;
-  G.team.forEach(m=>{ m.cd=0.3; m.status=freshStatus(); });
+  G.team.forEach(m=>{ m.cd=0.3; m.status=freshStatus(); m.spd = m.sp.base.spd * (hasTrinket(m,'swiftfeather')?1.15:1); });
   if(hasRelic('startheal')) G.team.forEach(m=>{ if(m.hp>0) m.hp=Math.min(m.maxhp, m.hp+Math.round(m.maxhp*0.15)); });
   G.wild.cd = 0.6; G.wild.status = freshStatus();
   G.switchCd = 0; G.switchAnim = 0;
@@ -613,6 +624,7 @@ function finishSpawn(w){
 }
 function activeMon(){ return G.team[G.lead]; }
 function hasRelic(id){ return !!G.relics && G.relics.indexOf(id)>=0; }
+function hasTrinket(m,id){ return !!m && m.trinket===id; }
 function relicCount(id){ return G.relics? G.relics.reduce((n,x)=>n+(x===id?1:0),0):0; }
 function switchCdMax(){ return SWITCH_CD * (hasRelic('swiftpaw')?0.6:1); }
 
@@ -685,6 +697,7 @@ function endFight(won){
   const xp = (10 + Math.round(w.level*4) + w.sp.rarity*6 + (w.elite?20:0)) * (w.boss?BOSS_XP_MUL:1);
   let gold = ri(4,9) + w.sp.rarity*3 + (w.elite?12:0) + (w.boss?BOSS_GOLD:0);
   gold = Math.round(gold * (1 + 0.30*relicCount('gold')));
+  if(hasTrinket(activeMon(),'luckycoin')) gold=Math.round(gold*1.3);
   G.gold += gold;
   let evoMsg='';
   for(const m of G.team){ if(m.hp>0){
@@ -734,6 +747,20 @@ const RELICS = {
   honor:     {name:"Pilgrim's Token",  icon:'🕊️', col:'#8fd0ff', desc:'+50% honor on release'},
   swiftpaw:  {name:'Swiftpaw Charm',   icon:'🦶', col:'#a06bff', desc:'Switch cooldown ×0.6'},
 };
+// Held trinkets — one equippable item per monster (holder-keyed; distinct from run-wide relics).
+const TRINKETS = {
+  critfang:     {name:'Crit Fang',       icon:'🦷', col:'#ffd23d', desc:'Holder crit chance +12%'},
+  typegem:      {name:'Type Gem',        icon:'💠', col:'#6fd0ff', desc:'Holder deals +20% damage'},
+  lifeamulet:   {name:'Lifesteal Amulet',icon:'🩹', col:'#e07a8a', desc:'Holder heals 15% of damage dealt'},
+  swiftfeather: {name:'Swift Feather',   icon:'💨', col:'#a06bff', desc:'Holder speed +15%'},
+  guardstone:   {name:'Guard Stone',     icon:'🪨', col:'#b98d63', desc:'Holder takes 15% less damage'},
+  reviveberry:  {name:'Revive Berry',    icon:'🍓', col:'#6fd07a', desc:'Once: revive at 50%, then consumed'},
+  focusband:    {name:'Focus Band',      icon:'🧠', col:'#8fd0ff', desc:'Holder resists stun (proc ×0.4)'},
+  vigorcharm:   {name:'Vigor Charm',     icon:'❤️', col:'#ff7a8a', desc:'Holder max HP +20%'},
+  emberbrand:   {name:'Ember Brand',     icon:'🧨', col:'#ff7a3d', desc:"Holder's burns last +1.5s"},
+  luckycoin:    {name:'Lucky Coin',      icon:'🪙', col:'#ffe06a', desc:'Holder kills grant +30% gold'},
+};
+const TRINKET_KEYS = Object.keys(TRINKETS);
 function setupCrossroads(){
   G.tier++;
   updateBiome();                 // sole biome-advance point (tier only rises here)
@@ -787,11 +814,14 @@ function buy(item){
   else if(item==='heal' && G.gold>=15){
     G.gold-=15; G.team.forEach(m=>{ if(m.hp>0) m.hp=m.maxhp; }); flash('Team fully healed!');
   }
+  else if(item==='trinket' && G.gold>=35){
+    G.gold-=35; const tid=pick(TRINKET_KEYS); G.trinkets.push(tid); flash('Bought '+TRINKETS[tid].name+'!');
+  }
   else flash('Not enough gold.');
 }
 
 // ---------- rest / train ----------
-function openRest(){ G.state='rest'; G.restSel=G.lead; clearButtons();
+function openRest(){ G.state='rest'; G.restSel=G.lead; G.equipSel=null; clearButtons();
   // heal all on arrival
   G.team.forEach(m=>{ if(m.hp>0) m.hp=m.maxhp; });
   flash('You rest. Team healed.');
@@ -819,6 +849,8 @@ const STORIES = [
    bad:'You loot it; karma bites. Team takes a scratch.', apply:(g)=>{ if(g){G.potions+=2;} else {G.team.forEach(m=>{if(m.hp>0)m.hp=Math.max(1,m.hp-m.maxhp*0.15);});} }},
   {t:'A glowing spring bubbles nearby.', good:'Its waters empower a companion (+1 level).',
    bad:'Tainted! A companion is weakened this run.', apply:(g)=>{ const m=activeMon(); if(!m)return; if(g){xpToLevels(m,m.xpNext-m.xp);} else {m.hp=Math.max(1,m.hp*0.5|0);} }},
+  {t:"A tinker's pouch lies in the ferns.", good:'Inside: a curious held trinket!',
+   bad:'The bag was bait; footpads snatch 15 gold.', apply:(g)=>{ if(g){ G.trinkets.push(pick(TRINKET_KEYS)); } else { G.gold=Math.max(0,G.gold-15); } }},
 ];
 function openStory(){
   G.story = pick(STORIES);
@@ -873,6 +905,13 @@ function updateBattle(dt){
   if(G.switchCd>0) G.switchCd = Math.max(0, G.switchCd - dt);
   const you=activeMon(), w=G.wild;
   if(!you || you.hp<=0){ // switch
+    if(you && you.hp<=0 && hasTrinket(you,'reviveberry')){
+      you.trinket=null;                 // CONSUMED — not returned to inventory
+      you.hp=Math.round(you.maxhp*0.5);
+      you.status=freshStatus();
+      burst(300,470); flash(you.sp.name+' clung to life!');
+      return;
+    }
     const nxt=G.team.findIndex(m=>m.hp>0);
     if(nxt<0){ gameOver(); return; }
     G.lead=nxt; return;
@@ -909,8 +948,8 @@ function updateBattle(dt){
 }
 function strike(att, def, dir){
   const mult = typeMult(att.sp.type, def.sp.type);
-  const crit = rnd() < (0.13 + (hasRelic('crit')?0.10:0));
-  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14);
+  const crit = rnd() < (0.13 + (hasRelic('crit')?0.10:0) + (hasTrinket(att,'critfang')?0.12:0));
+  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14) * (hasTrinket(att,'typegem')?1.2:1);
   dmg = Math.max(1, Math.round(dmg));
   const dtx = dir>0? 660 : 300;   // defender's on-screen x
   // Shadow dodge (defender passive): full evade, no HP change, no on-hit effects
@@ -922,7 +961,9 @@ function strike(att, def, dir){
   }
   // Rock guard (defender passive): reduce incoming, floor at 1 so every hit still bites
   if(def.sp.type==='Rock'){ dmg=Math.max(1, Math.round(dmg*(1-ROCK_GUARD))); def.status.fGuard=0.35; }
+  if(hasTrinket(def,'guardstone')) dmg=Math.max(1, Math.round(dmg*0.85));
   def.hp = Math.max(0, def.hp - dmg);
+  if(hasTrinket(att,'lifeamulet')){ const h=Math.round(dmg*0.15); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
   if(dir>0 && hasRelic('lifesteal')){ const h=Math.round(dmg*0.12); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
   if(dir<0 && hasRelic('thorns')) att.hp=Math.max(0, att.hp - Math.round(dmg*0.20));
   att.lunge=1; def.hurt=1;
@@ -947,7 +988,7 @@ function strike(att, def, dir){
   switch(att.sp.type){
     case 'Fire': { // burn stacks (capped), refresh duration
       const inc=hasRelic('burn')?2:1, bcap=BURN_MAX+(hasRelic('burn')?1:0);
-      def.status.burn=Math.min(bcap, def.status.burn+inc); def.status.burnT=BURN_DUR; def.status.fBurn=0.4;
+      def.status.burn=Math.min(bcap, def.status.burn+inc); def.status.burnT=BURN_DUR + (hasTrinket(att,'emberbrand')?1.5:0); def.status.fBurn=0.4;
       for(let i=0;i<3;i++){ if(G.parts.length<160) G.parts.push({x:tx,y:210,vx:rr(-40,40),vy:rr(-120,-40),life:rr(0.3,0.6),col:'#ff7a3d',r:rr(2,4)}); }
       break; }
     case 'Water': { // instant lifesteal
@@ -963,7 +1004,7 @@ function strike(att, def, dir){
       att.status.regen=LEECH_DUR; att.status.regenRate=(dmg*GRASS_LEECH)/LEECH_DUR; att.status.fHeal=0.3;
       break; }
     case 'Volt': { // chance to stun (respects immunity window)
-      if(def.status.stunImm<=0 && rnd()<VOLT_STUN){
+      if(def.status.stunImm<=0 && rnd()<VOLT_STUN*(hasTrinket(def,'focusband')?0.4:1)){
         def.status.stun=STUN_DUR; def.status.stunImm=STUN_IMM; def.status.fStun=0.5;
         G.dmgPops.push({x:tx+rr(-20,20), y:200, vy:-40, life:1, txt:'STUN', stun:true, col:'#ffd23d', age:0, rot:0});
         for(let i=0;i<5;i++){ if(G.parts.length<160) G.parts.push({x:tx,y:210,vx:rr(-90,90),vy:rr(-120,20),life:rr(0.2,0.5),col:'#ffd23d',r:rr(2,4)}); }
@@ -1010,6 +1051,7 @@ function bossHeavyStrike(w, def){
   }
   let dmg = w.atk * mult * BOSS_HEAVY_MUL;                 // enrage already folded into w.atk — do NOT re-multiply
   if(def.sp.type==='Rock') dmg *= (1-ROCK_GUARD);
+  if(hasTrinket(def,'guardstone')) dmg *= 0.85;
   dmg = Math.min(dmg, def.maxhp*BOSS_HEAVY_CAP);           // HARD CAP — full-HP mon always survives with ≥40%
   dmg = Math.max(1, Math.round(dmg));
   def.hp = Math.max(0, def.hp - dmg); def.hurt=1; w.lunge=1;
@@ -1299,6 +1341,13 @@ function drawTeam(){
     hpBar(x+40, y+38, 62, 7, m.hp, m.hpShown, m.maxhp);
     // xp bar
     bar(x+40, y+48, 62, 4, m.xp/m.xpNext, '#5a8fe0','#0c1120');
+    // held-trinket badge (read-only; guard against a missing id)
+    if(m.trinket && TRINKETS[m.trinket]){
+      const T=TRINKETS[m.trinket];
+      roundRect(x+88,y+4,18,18,5); ctx.fillStyle='#141b30'; ctx.fill();
+      ctx.lineWidth=1.5; ctx.strokeStyle=T.col; roundRect(x+88,y+4,18,18,5); ctx.stroke();
+      centerText(T.icon,x+97,y+17,'11px system-ui','#fff');
+    }
     // switch-availability overlay (top layer) for living, non-active cards in battle
     if(G.state==='battle' && G.battleIntro<=0 && m.hp>0 && !active){
       const tcol=TYPE_COL[m.sp.type]||'#6fa0e0';
@@ -1837,6 +1886,7 @@ function drawShop(){
     ['ball','Ball Upgrade','Catch rate ↑ ('+['I','II','III','IV'][G.ballTier]+')','30💰', G.gold>=30 && G.ballTier<3],
     ['revive','Revive','Restore a fainted ally','20💰', G.gold>=20],
     ['egg','Mystery Egg','Hatch a new companion','25💰', G.gold>=25],
+    ['trinket','Trinket Bag','A random held trinket','35💰', G.gold>=35],
   ];
   const bw=280, x0=W/2-bw-10, y0=170;
   items.forEach((it,i)=>{
@@ -1851,7 +1901,7 @@ function drawRest(){
   const hasBox=G.box.length>0;
   const ph = hasBox? 500:410;
   panel(W/2-320,80,640,ph,'🔥  Campfire');
-  centerText('Team healed. Spend 💀 souls to train ('+G.souls+' souls):', W/2, 124, '600 14px Segoe UI', '#c9d4f0');
+  centerText('Team healed. Spend 💀 souls to train ('+G.souls+' souls)  ·  tap ＋ to equip', W/2, 124, '600 14px Segoe UI', '#c9d4f0');
   clearButtons();
   const x=W/2-290;
   G.team.forEach((m,i)=>{
@@ -1864,6 +1914,9 @@ function drawRest(){
     ctx.font='600 11px Segoe UI'; ctx.fillStyle=TYPE_COL[m.sp.type];
     ctx.fillText(m.sp.type+'  ·  ATK '+Math.round(m.atk)+'  ·  HP '+m.maxhp, x+58, y+37);
     const cost=8+m.level*4;
+    // held-trinket socket — opaque button face shows the icon (same trick as swap_)
+    btn('equip_'+i, x+392, y+4, 40, 40, m.trinket?TRINKETS[m.trinket].icon:'＋', null,
+      {col:'#241a34', accent:m.trinket?TRINKETS[m.trinket].col:'#3a4780', tcol:'#fff'});
     btn('train_'+i, x+440, y+7, 130, 32, 'Train ('+cost+'💀)', null, {col:'#3a2f5a', accent:'#8a6fd0', enabled:G.souls>=cost});
   });
   if(hasBox){
@@ -1883,6 +1936,60 @@ function drawRest(){
     });
   }
   btn('leave', W/2-110, 80+ph-46, 220, 40, 'Move on →', null, {col:'#3a4a3a', accent:'#6a9a6a'});
+  if(G.equipSel!=null) drawEquipOverlay();
+}
+// Modal equip panel inside state==='rest' (clearButtons isolates hits; overlay-first in onClick).
+function drawEquipOverlay(){
+  clearButtons();
+  ctx.fillStyle='rgba(6,8,18,.82)'; ctx.fillRect(0,0,W,H);
+  panel(W/2-280,120,560,340,'Equip Trinket');
+  const m=G.team[G.equipSel];
+  if(!m){ G.equipSel=null; return; }
+  drawMon(m.sp,270,210,32,1,G.t);
+  ctx.textAlign='left'; ctx.fillStyle='#eaf0ff'; ctx.font='800 18px Segoe UI';
+  ctx.fillText(m.sp.name+'  Lv'+m.level, 330, 190);
+  ctx.fillStyle=TYPE_COL[m.sp.type]; ctx.font='600 12px Segoe UI';
+  ctx.fillText(m.sp.type+'  ·  HP '+m.maxhp, 330, 212);
+  if(m.trinket){
+    const T=TRINKETS[m.trinket];
+    ctx.fillStyle='#eaf0ff'; ctx.font='700 14px Segoe UI';
+    ctx.fillText(T.icon+' '+T.name, 330, 240);
+    ctx.fillStyle='#9fb0cc'; ctx.font='600 11px Segoe UI';
+    ctx.fillText(T.desc, 330, 258);
+    btn('unequip', 560, 176, 160, 32, 'Unequip', null, {col:'#5a2f3a', accent:'#e07a8a'});
+  } else {
+    centerText('No trinket equipped', 480, 244, '600 13px Segoe UI', '#8a94b4');
+  }
+  ctx.textAlign='left'; ctx.fillStyle='#c9d4f0'; ctx.font='700 13px Segoe UI';
+  ctx.fillText('Your Trinkets', 220, 276);
+  const inv=G.trinkets;
+  if(!inv.length){
+    centerText('No trinkets — buy a Trinket Bag at the Merchant.', W/2, 340, '600 13px Segoe UI', '#8a94b4');
+  } else {
+    for(let j=0;j<Math.min(8,inv.length);j++){
+      const id=inv[j], T=TRINKETS[id];
+      const col=j%4, row=(j/4|0), cx=220+col*132, cy=292+row*62;
+      // icon + name ride on the button itself so the opaque button face can't hide them
+      btn('equipinv_'+j, cx, cy, 128, 54, T.icon+'  '+T.name.slice(0,10), 'tap to equip', {col:'#12182c', accent:T.col});
+    }
+    if(inv.length>8) centerText('+'+(inv.length-8)+' more', W/2, 448, '600 12px Segoe UI', '#8a94b4');
+  }
+  btn('equipclose', W/2-90, 470, 180, 32, 'Close', null, {col:'#3a4a3a', accent:'#6a9a6a'});
+}
+// Equip trinket j (from G.trinkets) onto team member i. Swap-neutral: any current
+// trinket returns to inventory, id count is conserved (no dup / no loss).
+function equipTrinket(i,j){
+  const m=G.team[i], id=G.trinkets[j];
+  if(!m||id==null) return;
+  G.trinkets.splice(j,1);
+  if(m.trinket) G.trinkets.push(m.trinket);
+  m.trinket=id; applyTrinketStats(m);
+  flash(m.sp.name+' equipped '+TRINKETS[id].name+'.');
+}
+function unequipTrinket(i){
+  const m=G.team[i]; if(!m||!m.trinket) return;
+  G.trinkets.push(m.trinket); m.trinket=null; applyTrinketStats(m);
+  flash('Unequipped.');
 }
 function swapBox(i){
   const m=G.box[i]; if(!m) return;
@@ -2034,8 +2141,17 @@ function onClick(mx,my){
     case 'shop':
       if(id==='leave') proceed(); else if(id.startsWith('buy_')) buy(id.slice(4)); break;
     case 'rest':
-      if(id==='leave') proceed(); else if(id.startsWith('train_')) train(+id.slice(6));
-      else if(id.startsWith('swap_')) swapBox(+id.slice(5)); break;
+      if(G.equipSel!=null){
+        if(id==='equipclose') G.equipSel=null;
+        else if(id==='unequip') unequipTrinket(G.equipSel);
+        else if(id.startsWith('equipinv_')){ equipTrinket(G.equipSel,+id.slice(9)); G.equipSel=null; }
+        break;
+      }
+      if(id==='leave') proceed();
+      else if(id.startsWith('train_')) train(+id.slice(6));
+      else if(id.startsWith('swap_')) swapBox(+id.slice(5));
+      else if(id.startsWith('equip_')) G.equipSel=+id.slice(6);
+      break;
     case 'story':
       if(id==='act'){ G.storyRevealed=true; G.story.apply(G.storyGood); }
       else if(id==='skip'){ G.storyRevealed=true; G.storyGood=true; /* nothing happens */ G.story={t:G.story.t,good:'You walk on, untroubled.',bad:'',apply:()=>{}}; }

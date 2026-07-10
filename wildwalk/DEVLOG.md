@@ -25,7 +25,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 5. [x] Biomes — DONE c5.
 6. [x] Boss encounters — DONE c6.
 7. [x] Relics / run modifiers — DONE c7.
-8. [ ] Held trinkets (one item slot per monster) from shops/stories.
+8. [x] Held trinkets — DONE c8.
 9. [ ] Between-run meta-progression (bank souls/honor for permanent unlocks).
 10. [ ] Sound & music (chiptune battle loop + SFX for hit/catch/level-up).
 11. [ ] Achievements + milestone perks.
@@ -36,6 +36,16 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c8 — Held trinkets** (studio: systems + ux designers, lead, engineer, QA). One equippable
+  item slot per monster (m.trinket) + a transient inventory (G.trinkets). 10 trinkets, each
+  holder-only: Crit Fang (+12% crit), Type Gem (+20% dmg), Lifesteal Amulet (heal 15%), Swift
+  Feather (+15% spd), Guard Stone (−15% dmg taken), Revive Berry (auto-revive once at 50% then
+  consumed), Focus Band (stun ×0.4), Vigor Charm (+20% maxhp, survives level-ups), Ember Brand
+  (+1.5s burn), Lucky Coin (+30% kill gold). Equip/unequip at the campfire via a modal overlay
+  (conserves ids, no dup/loss); held icon badge on team cards; bought as a Trinket Bag (35g) or
+  found in a story. Save-safe (all transient). +20 tests. Orchestrator caught & fixed 2 bugs the
+  agents missed: equipping no longer revives a fainted holder (+regression test), and the
+  inventory icons/names now render (opaque hitbox was hiding them). 78/78 green, 0 flakes.
 - **c7 — Relics / run modifiers** (studio: systems + ux designers, lead, engineer, QA).
   12 roguelike boons (Keeper's Charm +catch%, Lucky Clover +rare-catch, Bloodstone lifesteal,
   Ember Heart +burn, Warlord's Banner +crit%, Executioner's Edge ×2.2 crits, Thornmail reflect,
