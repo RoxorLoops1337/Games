@@ -39,12 +39,25 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 19. [x] Guided tutorial / first-run onboarding — DONE c19.
 20. [x] More biomes + biome-specific boss variety — DONE c20.
 21. [x] Richer idle + attack sprite animation — DONE c21.
-22. [ ] Endless post-game scaling mode.
+22. [x] Endless post-game scaling mode — DONE c22.
 23. [ ] Status-effect visual polish (clearer burn/stun/shield readouts).
 24. [ ] Online Cloudflare KV leaderboard (functions/api/, deferred from #15).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c22 — Endless post-game depth** (studio: systems-designer, ux-designer, lead, engineer, QA). The run
+  was ALREADY endless (setupCrossroads does G.tier++ uncapped) and ALREADY fair at depth: statAt is linear
+  and the (tier-1)*0.9 foe-level offset is a constant additive bump, so as the team levels the foe's
+  relative advantage SHRINKS toward ~1.15-1.3× — no wall. The systems-designer independently confirmed
+  this, so we SURFACED the endless depth rather than touching combat math. ENDLESS_TIER=15 (where biomes
+  clamp to the final Firstlight); isEndless()/endlessDepth() helpers. Past tier 15 the HUD shows a gold
+  '◆ ENDLESS · Tier N · Depth D · …' marker (else byte-identical to before); the crossroads header gains a
+  '◆ ENDLESS' suffix; the title stats line shows the persisted Deepest tier (reuses Dex.data.bestTier — no
+  new field). +2 endless achievements (tier_15 Abyssbound/100, tier_20 Endless Wanderer/150, gated on
+  bestTier); the achievements grid pitch tightened (y=96+row*54, h=50) so all 16 fit above the back button.
+  ZERO combat/spawn/reward/balance change; no save-shape change. +5 tests (boundary/depth math, biome-clamp
+  alignment, award-at-15/20 grant-once, grid-fits, tier-18 draw smoke). 157/157, 0 flakes. Endless HUD
+  confirmed by screenshot.
 - **c21 — Richer procedural sprite animation** (studio: art-designer, animation-designer, lead, engineer, QA).
   Four purely-visual motion upgrades in drawMon/drawFeature, all deterministic functions of (t, opts) — no
   new state, no timer, no Dex field, no combat/timing/balance change: (1) enabled the winged wing-flap (was
