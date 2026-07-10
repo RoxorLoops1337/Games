@@ -46,6 +46,20 @@ const ri   = (a,b)=> Math.floor(rr(a,b+1));
 const pick = a => a[Math.floor(rnd()*a.length)];
 const clamp= (v,a,b)=> v<a?a:(v>b?b:v);
 const lerp = (a,b,t)=> a+(b-a)*t;
+// ---------- settings accessor + derived getters ----------
+function gset(){
+  let s=Dex.data.settings;
+  if(!s||typeof s!=='object') s=Dex.data.settings={};
+  if(typeof s.musicVol!=='number')       s.musicVol=1;
+  if(typeof s.sfxVol!=='number')         s.sfxVol=1;
+  if(typeof s.reducedMotion!=='boolean') s.reducedMotion=false;
+  if(typeof s.colorblind!=='boolean')    s.colorblind=false;
+  return s;
+}
+function reducedMotion(){ return !!gset().reducedMotion; }
+function motionAmt(){ return reducedMotion()?0:1; }
+function musicBaseGain(){ return clamp(gset().musicVol,0,1)*0.35; }  // 0..0.35
+function sfxScale(){ return clamp(gset().sfxVol,0,1); }              // 0..1
 // ---------- daily-seed challenge ----------
 function dayInt(d){                        // Date -> UTC date int YYYYMMDD (one run per planet-day)
   d = d || new Date();
@@ -63,6 +77,9 @@ function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.flo
 // ---------- type chart ----------
 const TYPES = ['Fire','Water','Grass','Volt','Rock','Shadow'];
 const TYPE_COL = { Fire:'#ff7a3d', Water:'#48b6ff', Grass:'#6fd05a', Volt:'#ffd23d', Rock:'#b98d63', Shadow:'#a06bff' };
+const TYPE_COL_DEFAULT = { Fire:'#ff7a3d', Water:'#48b6ff', Grass:'#6fd05a', Volt:'#ffd23d', Rock:'#b98d63', Shadow:'#a06bff' };
+const TYPE_COL_CB      = { Fire:'#D55E00', Water:'#56B4E9', Grass:'#009E73', Volt:'#F0E442', Rock:'#E69F00', Shadow:'#CC79A7' }; // Okabe–Ito CVD-safe
+function applyPalette(){ Object.assign(TYPE_COL, gset().colorblind ? TYPE_COL_CB : TYPE_COL_DEFAULT); }
 // mult[att][def]
 const CHART = {
   Fire:  { Grass:1.4, Rock:0.72, Water:0.72, Fire:1 },
@@ -352,7 +369,8 @@ function xpToLevels(m, gain){
 const Dex = {
   data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, ascension:{ max:0, sel:0 }, upgrades:{}, muted:false, playerName:'',
          ach:{}, killed:0, released:0, bossKills:0, bestTier:0, fullPartyWin:0, wildCatch:0, runsLog:[],
-         daily:{ day:0, dist:0, tier:0 }, tutorialDone:false },
+         daily:{ day:0, dist:0, tier:0 }, tutorialDone:false,
+         settings:{ musicVol:1, sfxVol:1, reducedMotion:false, colorblind:false } },
   load(){ try{ const d=JSON.parse(localStorage.getItem(SAVE)); if(d) this.data=Object.assign(this.data,d); }catch(e){} },
   save(){ try{ localStorage.setItem(SAVE, JSON.stringify(this.data)); }catch(e){} },
   see(k){ if(!this.data.seen[k]){ this.data.seen[k]=1; this.save(); } },
@@ -383,6 +401,7 @@ const Dex = {
   },
 };
 Dex.load();
+applyPalette();
 
 // ---------- achievements (award-once milestone perks) ----------
 // Predicates read ONLY Dex.data / SPECIES / TYPES so they're headless-evaluable.
@@ -439,7 +458,7 @@ function audioCtx(){
   try{
     _ac=new AC();
     _master=_ac.createGain(); _master.gain.value=0.55; _master.connect(_ac.destination);
-    _musicGain=_ac.createGain(); _musicGain.gain.value=0.35; _musicGain.connect(_master);
+    _musicGain=_ac.createGain(); _musicGain.gain.value=Dex.data.muted?0:musicBaseGain(); _musicGain.connect(_master);
   }catch(e){ _acFailed=true; _ac=null; return null; }
   return _ac;
 }
@@ -447,13 +466,15 @@ function audioCtx(){
 // one-shot SFX voice → _master
 function blip(wave,f0,f1,dur,peak,when){
   if(_voices>16) return;
+  const p=peak*sfxScale();
+  if(p<=0) return;                                  // sfxVol 0 → silent; skip voice (avoids ramp-from-0 NaN)
   const ac=_ac;
   const osc=ac.createOscillator(), g=ac.createGain();
   osc.type=wave;
   osc.frequency.setValueAtTime(f0,when);
   if(f1!=null) osc.frequency.linearRampToValueAtTime(f1,when+dur);
   g.gain.setValueAtTime(0.0001,when);
-  g.gain.linearRampToValueAtTime(peak,when+0.008);
+  g.gain.linearRampToValueAtTime(p,when+0.008);     // was: peak
   g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
   osc.connect(g); g.connect(_master);
   osc.start(when); osc.stop(when+dur+0.02);
@@ -557,7 +578,11 @@ function stopMusicHard(){
 function toggleMute(){
   Dex.data.muted=!Dex.data.muted; Dex.save();
   if(Dex.data.muted){ stopMusicHard(); }
-  else { if(_musicGain) _musicGain.gain.value=0.35; unlockAudio(); sfx('select'); }
+  else { if(_musicGain) _musicGain.gain.value=musicBaseGain(); unlockAudio(); sfx('select'); }
+}
+function applyAudioSettings(){
+  if(!_ac || !_musicGain) return;                          // headless / not-yet-unlocked → no-op
+  try{ _musicGain.gain.value = Dex.data.muted ? 0 : musicBaseGain(); }catch(e){}
 }
 
 // ===================================================================
@@ -574,12 +599,12 @@ function drawMon(sp, x, y, size, dir, t, opts){
   ctx.save();
   ctx.translate(x,y);
   if(dir<0) ctx.scale(-1,1);
-  const bob = Math.sin(t*3 + (opts.bob||0)) * s*0.05;
+  const bob = Math.sin(t*3 + (opts.bob||0)) * s*0.05*(0.3+0.7*motionAmt());
   ctx.translate(0, bob);
   // attack lean forward / hurt recoil back — unscaled space so no shear; dir<0 mirror already aims it at the foe
-  ctx.rotate((opts.lunge||0)*0.16 - (opts.hurtAmt||0)*0.12);
+  ctx.rotate(((opts.lunge||0)*0.16 - (opts.hurtAmt||0)*0.12)*motionAmt());
   // motion transforms (idle breathe + lunge stretch + windup crouch + hurt squash)
-  const sq=1+Math.sin(t*3+(opts.bob||0))*0.04;
+  const sq=1+Math.sin(t*3+(opts.bob||0))*0.04*(0.3+0.7*motionAmt());
   const lg=opts.lunge||0;
   let sx=(1+lg*0.12)/sq, sy=sq*(1-lg*0.10);
   if(opts.wind) ctx.translate(0,opts.wind*s*0.06);
@@ -628,7 +653,7 @@ function drawMon(sp, x, y, size, dir, t, opts){
 
   // wings behind for winged
   if(sp.shape==='winged'){
-    const wf = Math.sin(t*6)*0.3;
+    const wf = Math.sin(t*6)*0.3*motionAmt();
     ctx.fillStyle = shade(acc,10);
     for(const wdir of [-1,1]){
       ctx.save(); ctx.scale(wdir,1); ctx.rotate(-0.3+wf*0.5);
@@ -848,7 +873,7 @@ function newGame(chosenKey){
     tutSeen:{}, tutActive:null,
     // transient message
     msg:'', msgT:0,
-    essenceEarned:0, sanctuaryFrom:'title', starterFrom:'title',
+    essenceEarned:0, sanctuaryFrom:'title', settingsFrom:'title', starterFrom:'title',
     buttons:[],
     pokedexFrom:'title', pokedexSel:null,
     achFrom:'title', achMsg:'', achIcon:'', achMsgT:0,
@@ -2067,6 +2092,7 @@ function drawDmgPops(){
 }
 function drawFx(){ drawParts(); drawDmgPops(); }
 function drawParts(){
+  if(reducedMotion()) return;
   for(const p of G.parts){
     if(p.ring){
       ctx.save(); ctx.globalAlpha=clamp(p.life*2,0,1);
@@ -2145,13 +2171,14 @@ function drawTut(){
 // ===================================================================
 function draw(){
   ctx.clearRect(0,0,W,H);
-  const sh = G.shake>0? {x:rr(-G.shake,G.shake)*1.2,y:rr(-G.shake,G.shake)*0.7}:{x:0,y:0};
+  const sh = (G.shake>0 && !reducedMotion()) ? {x:rr(-G.shake,G.shake)*1.2,y:rr(-G.shake,G.shake)*0.7} : {x:0,y:0};
   ctx.save(); ctx.translate(sh.x,sh.y);
 
   if(G.state==='title'){ drawTitle(); ctx.restore(); return; }
   if(G.state==='pokedex'){ drawPokedex(); ctx.restore(); return; }
   if(G.state==='achievements'){ drawAchievements(); ctx.restore(); return; }
   if(G.state==='sanctuary'){ drawSanctuary(); ctx.restore(); return; }
+  if(G.state==='settings'){ drawSettings(); ctx.restore(); return; }
   if(G.state==='records'){ drawRecords(); ctx.restore(); return; }
   if(G.state==='starter'){ drawStarter(); ctx.restore(); return; }
 
@@ -2227,6 +2254,12 @@ function ensureBoard(){
 }
 function achToast(a){ G.achMsg='Achievement: '+a.name; G.achIcon=a.icon; G.achMsgT=3.0; }
 function openSanctuary(from){ G.sanctuaryFrom=from; G.state='sanctuary'; clearButtons(); }
+function openSettings(from){ G.settingsFrom=from; G.state='settings'; clearButtons(); }
+function sliderRect(which){ return { x:384, y: which==='sfx'?257:205, w:300, h:10 }; }
+function sliderHit(mx,my,which){
+  const r=sliderRect(which);
+  return mx>=r.x-10 && mx<=r.x+r.w+10 && my>=r.y-16 && my<=r.y+r.h+16;
+}
 function openStarter(from){ G.starterFrom=from; G.state='starter'; clearButtons(); }
 function buyUpgrade(key){
   const u=UPGRADES.find(x=>x.key===key); if(!u) return false;
@@ -2476,7 +2509,8 @@ function drawTitle(){
   btn('records',323,528,150,44,'🏅 RECORDS',Dex.data.best+'m best',{col:'#3a4a6a',accent:'#8fb0ff'});
   btn('sanctuary',487,528,150,44,'✦ SANCTUARY',Dex.data.essence+' essence',{col:'#3a2f5a',accent:'#ffe9a8'});
   btn('ach',651,528,150,44,'🏆 AWARDS',achCount()+'/'+ACH.length,{col:'#3a2f4a',accent:'#ff9b6f'});
-  btn('mute', W-52, 14, 38, 34, muteIcon(), null, {col:'#2a2440'});
+  btn('settings', W-98, 14, 38, 34, '⚙', null, {col:'#2a2440'});
+  btn('mute',     W-52, 14, 38, 34, muteIcon(), null, {col:'#2a2440'});
   drawButtons();
 }
 
@@ -2534,6 +2568,71 @@ function drawSanctuary(){
     }
   });
   btn('back', W/2-90, 534, 180, 46, '←  BACK', null, {col:'#3a4a3a', accent:'#6a9a6a'});
+  drawButtons();
+}
+
+function drawSlider(which,label,val,accent){
+  const r=sliderRect(which);
+  ctx.textAlign='left'; ctx.font='700 17px Segoe UI'; ctx.fillStyle='#eaf0ff';
+  ctx.fillText(label, 196, r.y+r.h/2+6);
+  roundRect(r.x,r.y,r.w,r.h,5); ctx.fillStyle='#20263f'; ctx.fill();
+  ctx.strokeStyle='#2a3760'; ctx.lineWidth=1; roundRect(r.x,r.y,r.w,r.h,5); ctx.stroke();
+  const fw=Math.max(r.h, val*r.w);
+  roundRect(r.x,r.y,fw,r.h,5); ctx.fillStyle=accent; ctx.fill();
+  const kx=r.x+val*r.w, ky=r.y+r.h/2;
+  ctx.beginPath(); ctx.arc(kx,ky,9,0,7); ctx.fillStyle='#eaf0ff'; ctx.fill();
+  ctx.strokeStyle=accent; ctx.lineWidth=2.5; ctx.stroke();
+  ctx.textAlign='right'; ctx.font='800 15px Segoe UI'; ctx.fillStyle='#cfe0ff';
+  ctx.fillText(Math.round(val*100)+'%', 764, r.y+r.h/2+6);
+  ctx.textAlign='left';
+}
+function toggleBtn(id,on,x,y){
+  btn(id,x,y,140,40, on?'ON':'OFF', null,
+    on ? {col:'#2f5a3a', accent:'#6fd08a', tcol:'#eafff0'}
+       : {col:'#3a2f44', accent:'#7a6f92', tcol:'#c9bcd8'});
+}
+function drawSettings(){
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#161028'); sky.addColorStop(1,'#3a2a55'); ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+  const kz=Object.keys(SPECIES);
+  for(let i=0;i<6;i++){ const sp=SPECIES[kz[i]];
+    const x=(i*170+G.t*20)%(W+120)-60; ctx.globalAlpha=0.18; drawMon(sp,x,150+(i%2)*60,26,1,G.t+i,{bob:i}); ctx.globalAlpha=1; }
+  ctx.fillStyle='rgba(6,8,18,.6)'; ctx.fillRect(0,0,W,H);
+
+  centerText('SETTINGS', W/2, 62, '900 46px Segoe UI', '#ffe9a8');
+  centerText('Audio · motion · accessibility', W/2, 92, '600 15px Segoe UI', '#c9b8ff');
+
+  panel(160,150,640,370,null);
+  clearButtons();
+  const s = gset();
+
+  ctx.textAlign='left'; ctx.font='800 13px Segoe UI'; ctx.fillStyle='#9fb0cc';
+  ctx.fillText('AUDIO', 196, 190);
+  drawSlider('music','Music',    clamp(s.musicVol,0,1), '#6fa0e0');
+  drawSlider('sfx',  'Sound FX', clamp(s.sfxVol,0,1),   '#8a6fd0');
+
+  ctx.textAlign='left'; ctx.font='800 13px Segoe UI'; ctx.fillStyle='#9fb0cc';
+  ctx.fillText('ACCESSIBILITY', 196, 312);
+
+  ctx.font='700 17px Segoe UI'; ctx.fillStyle='#eaf0ff';
+  ctx.fillText('Reduced Motion', 196, 344);
+  ctx.font='600 12px Segoe UI'; ctx.fillStyle='#9fb0cc';
+  ctx.fillText('Calms screen shake, particles & idle bob', 196, 362);
+  toggleBtn('tg_motion', !!s.reducedMotion, 584, 326);
+
+  ctx.textAlign='left'; ctx.font='700 17px Segoe UI'; ctx.fillStyle='#eaf0ff';
+  ctx.fillText('Colorblind Palette', 196, 406);
+  ctx.font='600 12px Segoe UI'; ctx.fillStyle='#9fb0cc';
+  ctx.fillText('Okabe–Ito type colors', 196, 424);
+  ['Fire','Water','Grass','Volt','Rock','Shadow'].forEach((tp,i)=>{
+    const sx=384+i*30, sy=396;
+    roundRect(sx,sy,22,22,5); ctx.fillStyle=TYPE_COL[tp]; ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,.25)'; ctx.lineWidth=1; roundRect(sx,sy,22,22,5); ctx.stroke();
+  });
+  toggleBtn('tg_cb', !!s.colorblind, 584, 390);
+
+  btn('mute', 196, 456, 160, 44, muteIcon()+'  '+(Dex.data.muted?'Muted':'Sound On'), null, {col:'#2a2440', accent:'#8a7fbf'});
+  btn('back', 604, 456, 160, 44, '←  Back', null, {col:'#3a4a3a', accent:'#6a9a6a'});
   drawButtons();
 }
 
@@ -3006,7 +3105,7 @@ function onClick(mx,my){
   if(G.tutActive){ dismissTut(); sfx('select'); return; }
   { const mb=hitButton(mx,my);
     if(mb){ if(mb.id==='mute'){ toggleMute(); return; } sfx('select'); } }
-  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='tutskip') skipTutorial(); else if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='daily'){ startDaily(); } else { openStarter('title'); } } return; }
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='tutskip') skipTutorial(); else if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='settings') openSettings('title'); else if(b.id==='daily'){ startDaily(); } else { openStarter('title'); } } return; }
   if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='records') openRecords('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
   if(G.state==='starter'){
     const b=hitButton(mx,my); if(!b) return;
@@ -3021,6 +3120,17 @@ function onClick(mx,my){
            else if(b.id==='asc_dn'){ ascSel(-1); }
            else if(b.id==='asc_up'){ ascSel(+1); }
            else if(b.id.startsWith('buy_')){ buyUpgrade(b.id.slice(4)); } }
+    return;
+  }
+  if(G.state==='settings'){
+    if(sliderHit(mx,my,'music')){ const r=sliderRect('music');
+      gset().musicVol=clamp((mx-r.x)/r.w,0,1); Dex.save(); applyAudioSettings(); return; }
+    if(sliderHit(mx,my,'sfx')){ const r=sliderRect('sfx');
+      gset().sfxVol=clamp((mx-r.x)/r.w,0,1); Dex.save(); applyAudioSettings(); return; }
+    const b=hitButton(mx,my);
+    if(b){ if(b.id==='back'){ G.state=G.settingsFrom||'title'; clearButtons(); }
+           else if(b.id==='tg_motion'){ gset().reducedMotion=!gset().reducedMotion; Dex.save(); }
+           else if(b.id==='tg_cb'){ gset().colorblind=!gset().colorblind; Dex.save(); applyPalette(); } }
     return;
   }
   if(G.state==='pokedex'){
@@ -3110,6 +3220,7 @@ window.addEventListener('keydown', e=>{
   if(G.state==='pokedex' && (e.key==='Escape'||e.key==='Backspace'||e.key==='d'||e.key==='D')){ if(G.pokedexSel!=null) G.pokedexSel=null; else { G.state=G.pokedexFrom||'title'; clearButtons(); } e.preventDefault(); return; }
   if((G.state==='title'||G.state==='gameover') && (e.key==='s'||e.key==='S')){ openSanctuary(G.state); e.preventDefault(); return; }
   if(G.state==='sanctuary' && (e.key==='Escape'||e.key==='Backspace')){ G.state=G.sanctuaryFrom||'title'; clearButtons(); e.preventDefault(); return; }
+  if(G.state==='settings' && (e.key==='Escape'||e.key==='Backspace')){ G.state=G.settingsFrom||'title'; clearButtons(); e.preventDefault(); return; }
   if((G.state==='title'||G.state==='gameover') && (e.key==='a'||e.key==='A')){ openAchievements(G.state); e.preventDefault(); return; }
   if(G.state==='achievements' && (e.key==='Escape'||e.key==='Backspace'||e.key==='a'||e.key==='A')){ G.state=G.achFrom||'title'; clearButtons(); e.preventDefault(); return; }
   if((G.state==='title'||G.state==='gameover') && (e.key==='r'||e.key==='R')){ openRecords(G.state); e.preventDefault(); return; }

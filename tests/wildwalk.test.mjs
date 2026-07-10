@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f)};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -680,7 +680,7 @@ test('biome state stays out of the save shape', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
@@ -823,7 +823,7 @@ test('boss fight leaves the save shape untouched', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   // bossKills is a legit persisted achievement counter; any OTHER boss* field is a leak
   for(const k of keys) assert(k==='bossKills' || !/^boss/i.test(k), `boss field leaked into save: ${k}`);
 });
@@ -1079,7 +1079,7 @@ test('R17 relics never change the persisted save shape', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
 });
 
@@ -1307,7 +1307,7 @@ test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
 });
 
@@ -1662,7 +1662,7 @@ test('ACH7 save shape is a superset of the old 7 keys', ()=>{
   api.Dex.save();
   const saved = JSON.parse(store['wildwalk_save_v1']);
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']),
     `save shape wrong: ${keys}`);
 });
 
@@ -1703,7 +1703,7 @@ test('ACH first_catch requires a wild catch, not the auto-caught starter', ()=>{
 // ===================================================================
 // WEATHER / DAY-NIGHT — transient reskin + small balanced dmg/catch mods
 // ===================================================================
-const WSHAPE = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch'];
+const WSHAPE = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch'];
 
 // (a) documented dmg multiplier + catch bonus — holder-agnostic (attacker-type keyed)
 test('WX1 weather applies documented dmg mult, crit mult and catch bonus', ()=>{
@@ -1899,7 +1899,7 @@ test('SHOP4 buyStock applies effect and marks sold', ()=>{
 test('SHOP5 shop activity does not alter save shape', ()=>{
   const { api, store } = boot();
   const g = api.getG();
-  const canonical = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch'];
+  const canonical = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch'];
   api.Dex.save();
   const baseKeys = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
   assert(JSON.stringify(baseKeys)===JSON.stringify(canonical), 'baseline save keys drifted: '+baseKeys.join(','));
@@ -2136,7 +2136,7 @@ test('DAILY7 save shape still matches after a daily run', ()=>{
   api.startDaily();
   api.gameOver();
   const keys = Object.keys(api.Dex.data).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
 });
 
 // ---- ascension (prestige) ----
@@ -2613,6 +2613,94 @@ await atest('BOARD-F fully playable with fetch absent', async()=>{
     assert(g.boardData===null, 'boardData should be null offline');
     api.draw(); // must not throw
   } finally { globalThis.fetch=savedFetch; }
+});
+
+// ---- settings (audio · reduced-motion · colorblind) ----
+test('SET1 default settings present on fresh boot', ()=>{
+  const { api } = boot();
+  const s=api.gset();
+  assert(s.musicVol===1 && s.sfxVol===1 && s.reducedMotion===false && s.colorblind===false, 'defaults wrong: '+JSON.stringify(s));
+});
+
+test('SET2 gset backfills missing / partial settings', ()=>{
+  const { api } = boot();
+  delete api.Dex.data.settings;
+  const s=api.gset();
+  assert(s.musicVol===1 && s.sfxVol===1 && s.reducedMotion===false && s.colorblind===false, 'full backfill failed');
+  api.Dex.data.settings={musicVol:0.5};
+  const s2=api.gset();
+  assert(s2.musicVol===0.5 && s2.sfxVol===1 && s2.reducedMotion===false && s2.colorblind===false, 'partial backfill failed');
+});
+
+test('SET3 derived getters clamp & scale', ()=>{
+  const { api } = boot();
+  api.gset().sfxVol=2;  assert(api.sfxScale()===1, 'sfxScale not clamped hi');
+  api.gset().sfxVol=-1; assert(api.sfxScale()===0, 'sfxScale not clamped lo');
+  api.gset().musicVol=1; assert(Math.abs(api.musicBaseGain()-0.35)<1e-9, 'musicBaseGain(1)!=0.35');
+  api.gset().musicVol=0; assert(api.musicBaseGain()===0, 'musicBaseGain(0)!=0');
+  api.gset().reducedMotion=false; assert(api.motionAmt()===1, 'motionAmt off');
+  api.gset().reducedMotion=true;  assert(api.motionAmt()===0 && api.reducedMotion()===true, 'motionAmt on');
+});
+
+test('SET4 applyPalette swaps TYPE_COL in place (identity preserved)', ()=>{
+  const { api } = boot();
+  const ref=api.TYPE_COL;
+  assert(api.TYPE_COL_CB.Fire==='#D55E00' && api.TYPE_COL_DEFAULT.Fire==='#ff7a3d', 'palette consts wrong');
+  const kd=Object.keys(api.TYPE_COL_DEFAULT).sort(), kc=Object.keys(api.TYPE_COL_CB).sort(), kt=Object.keys(api.TYPE_COL).sort();
+  assert(JSON.stringify(kd)===JSON.stringify(kc) && JSON.stringify(kd)===JSON.stringify(kt), 'palette keys differ');
+  api.gset().colorblind=true;  api.applyPalette();
+  assert(api.TYPE_COL.Fire==='#D55E00' && api.TYPE_COL===ref, 'cb on: wrong hex or identity broke');
+  api.gset().colorblind=false; api.applyPalette();
+  assert(api.TYPE_COL.Fire==='#ff7a3d' && api.TYPE_COL===ref, 'cb off: not restored or identity broke');
+});
+
+test('SET5 sliderRect single-source geometry', ()=>{
+  const { api } = boot();
+  const m=api.sliderRect('music'), f=api.sliderRect('sfx');
+  assert(m.x===384 && m.y===205 && m.w===300 && m.h===10, 'music rect wrong: '+JSON.stringify(m));
+  assert(f.x===384 && f.y===257 && f.w===300, 'sfx rect wrong: '+JSON.stringify(f));
+});
+
+test('SET6 applyAudioSettings is a headless no-op', ()=>{
+  const { api } = boot();
+  assert(api.applyAudioSettings()===undefined, 'applyAudioSettings threw or returned a value');
+});
+
+test('SET7 openSettings sets state + settingsFrom, back round-trips', ()=>{
+  const { api } = boot();
+  api.openSettings('title');
+  const g=api.getG();
+  assert(g.state==='settings' && g.settingsFrom==='title', 'openSettings did not set state/from');
+  g.state=g.settingsFrom||'title';
+  assert(g.state==='title', 'back did not return to title');
+});
+
+test('SET8 draw() in settings state never throws (default + cb/reduced-motion)', ()=>{
+  const { api } = boot();
+  api.openSettings('title');
+  api.draw();
+  api.gset().colorblind=true; api.gset().reducedMotion=true; api.applyPalette();
+  api.draw();
+});
+
+test('SET9 reduced-motion is visual-only: strike damage + shake identical on/off', ()=>{
+  const run=(rm)=>{
+    const { api } = boot();
+    const g=api.getG();
+    g.relics=[];
+    const you=api.mk('emberpup',12), foe=api.mk('puddlet',12);
+    foe.hp = foe.maxhp = 1e9;
+    g.team=[you]; g.wild=foe; g.state='battle'; g.shake=0;
+    api.gset().reducedMotion=rm;
+    api.reseed(12345);
+    const dmg=[];
+    for(let i=0;i<8;i++){ const before=foe.hp; api.strike(you,foe,+1); dmg.push(before-foe.hp); }
+    return { dmg, hp:foe.hp, shake:g.shake };
+  };
+  const off=run(false), on=run(true);
+  assert(JSON.stringify(off.dmg)===JSON.stringify(on.dmg), `strike damage differs rm off ${off.dmg} vs on ${on.dmg}`);
+  assert(off.hp===on.hp, 'foe hp differs rm on vs off');
+  assert(off.shake===on.shake, `G.shake accumulation differs rm off ${off.shake} vs on ${on.shake}`);
 });
 
 })();
