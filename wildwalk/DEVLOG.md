@@ -30,12 +30,22 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 10. [x] Sound & music — DONE c10.
 11. [x] Achievements + milestone perks — DONE c11.
 12. [x] Starter select — DONE c12.
-13. [ ] Weather / day–night affecting damage + catch.
+13. [x] Weather / day–night — DONE c13.
 14. [ ] Shop restock + reroll; deeper tiers show rarer wares.
 15. [ ] Distance leaderboard (reuse the repo's Cloudflare KV board pattern).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c13 — Weather / day–night** (studio: systems + art designers, lead, engineer, QA). 5
+  transient weather kinds (Clear/Rain/Sunshine/Night/Fog), set per encounter from a PURE integer
+  hash of biome+fights (does NOT consume rnd(), fully reproducible/testable, biome-biased via
+  BIOME_WEATHER). Small balanced combat/catch mods folded into strike/bossHeavyStrike/catchChance
+  via weatherDmgMul/weatherCritMul/weatherCatchBonus: Rain Water×1.2/Fire×0.85 +2% catch;
+  Sunshine Fire×1.2/Water×0.9; Night Shadow×1.2 +6% catch; Fog crit×0.55 +3% catch; envelope
+  dmg[0.85,1.2] so every hit still ≥1 HP and fights always resolve. Canvas overlays (rain
+  streaks, sun god-rays, night tint+stars, fog haze — fixed budgets, no G.parts) + a weather
+  chip. Transient (no save change). +5 tests (documented mods; resolve under every weather;
+  transience/purity; draw-never-throws incl. bogus weather). 108/108, 0 flakes.
 - **c12 — Starter select** (studio: designer, ux-designer, lead, engineer, QA). BEGIN THE WALK
   (and game-over WALK AGAIN) now open a CHOOSE YOUR STARTER screen instead of a random pick:
   a card grid of the unlocked pool (sprite + name + type + HP/ATK/SPD), a 'SURPRISE ME' random

@@ -60,6 +60,10 @@ const CHART = {
   Shadow:{ Shadow:1.4, Volt:0.72, Rock:0.72 },
 };
 function typeMult(att,def){ const r = CHART[att]; return (r && r[def]) || 1; }
+// ---------- weather hooks (transient G.weather; neutral when unset/unknown) ----------
+function weatherDmgMul(type){ const w=WEATHER[G.weather]; return (w && w.dmg[type]) || 1; }
+function weatherCritMul(){ const w=WEATHER[G.weather]; return w ? w.critMul : 1; }
+function weatherCatchBonus(){ const w=WEATHER[G.weather]; return w ? w.catch : 0; }
 
 // ---------- ability tuning dials (all single-constant balance) ----------
 const BURN_MAX=3, BURN_DUR=3.0, BURN_PCT=0.02;      // Fire DoT: 2% maxhp/s per stack → ≤6%/s
@@ -189,6 +193,25 @@ const BIOMES = [
     orbKind:'moon', treeN:3, prop:'starfield', favor:['Shadow','Volt'],
     mote:{ col:'rgba(200,180,255,1)', additive:true, density:14, mode:'rise' } },
 ];
+// ---------- weather / day-night (transient, per-encounter; only Dex.data persists) ----------
+// 5 kinds; each reskins the scene via canvas overlay + folds SMALL balanced multipliers
+// into strike/catch. Envelope: dmg ∈ [0.85,1.20], catch ∈ [0,+0.06], critMul ∈ [0.55,1.00].
+const WEATHER_KINDS = ['Clear','Rain','Sunshine','Night','Fog'];
+const WEATHER = {
+  Clear:    { label:'Clear',    icon:'☀',  col:'#ffe9a8', dmg:{},                       catch:0.00, critMul:1.00 },
+  Rain:     { label:'Rain',     icon:'🌧', col:'#7fb8ff', dmg:{Water:1.20, Fire:0.85},  catch:0.02, critMul:1.00 },
+  Sunshine: { label:'Sunshine', icon:'🔆', col:'#ffcf6a', dmg:{Fire:1.20, Water:0.90},  catch:0.00, critMul:1.00 },
+  Night:    { label:'Night',    icon:'🌙', col:'#b7a0ff', dmg:{Shadow:1.20},            catch:0.06, critMul:1.00 },
+  Fog:      { label:'Fog',      icon:'🌫', col:'#c6cbdc', dmg:{},                       catch:0.03, critMul:0.55 },
+};
+const BIOME_WEATHER = [
+  ['Clear','Clear','Sunshine','Rain','Fog'],       // 0 Meadow
+  ['Clear','Rain','Fog','Fog','Night'],            // 1 Deepwood
+  ['Clear','Sunshine','Sunshine','Rain','Rain'],   // 2 Shore
+  ['Night','Night','Fog','Clear'],                 // 3 Caverns
+  ['Sunshine','Sunshine','Clear','Fog'],           // 4 Ashfall
+  ['Night','Night','Fog','Clear'],                 // 5 Void
+];
 // deterministic, monotonic non-decreasing: 1-2 meadow, 3-4 forest, 5-6 shore,
 // 7-8 cave, 9-10 volcano, 11+ void (clamped).
 function biomeForTier(tier){ return Math.min(5, Math.floor((tier-1)/2)); }
@@ -197,8 +220,17 @@ function biomeForTier(tier){ return Math.min(5, Math.floor((tier-1)/2)); }
 function updateBiome(){
   const b = biomeForTier(G.tier);
   if(b !== G.biome){ G.biomePrev = G.biome; G.biome = b;
-    G.biomeLabel = BIOMES[b].name; G.biomeFxT = 2.6; }
+    G.biomeLabel = BIOMES[b].name; G.biomeFxT = 2.6;
+    G.weather = weatherFor(b, G.fights); }   // refresh sky on biome change
 }
+// Pure integer hash → does NOT consume rnd(), so the spawn RNG stream is unperturbed
+// and weather is fully reproducible for tests. Out-of-range biome falls back to Meadow.
+function weatherFor(biome, fights){
+  const arr = BIOME_WEATHER[biome] || BIOME_WEATHER[0];
+  const h = ((biome*73856093) ^ (fights*19349663)) >>> 0;
+  return arr[h % arr.length];
+}
+function setWeather(){ G.weather = weatherFor(G.biome, G.fights); }
 
 // ---------- biome spawn bias ----------
 // Soft weighting: favored types get +BIOME_BOOST weight, everything keeps a base
@@ -677,6 +709,7 @@ function newGame(chosenKey){
     scroll:0, walkTarget:0,
     // biome (transient — never serialized; only Dex.data persists)
     biome:biomeForTier(1), biomePrev:0, biomeFxT:0, biomeLabel:'',
+    weather:'Clear',            // transient day/night+weather (never serialized)
     // battle
     wild:null, dmgPops:[], parts:[], shake:0,
     battleLog:'', outcome:null,
@@ -742,6 +775,7 @@ function startWalk(){
   G.state='walk';
   updateBiome();                 // idempotent desync guard (no-op when unchanged)
   G.scroll=0; G.walkTarget = 320 + G.tier*10;
+  setWeather();                  // walk leg previews the coming sky
   clearButtons();
 }
 function bossDue(){ return ((G.fights+1) % BOSS_EVERY) === 0; }
@@ -806,6 +840,7 @@ function finishSpawn(w){
   G.wild = w;
   G.state='battle';
   G.outcome=null; G.dmgPops=[]; G.parts=[]; G.shake=0;
+  setWeather();                  // same hash inputs → walk & battle agree
   G.battleIntro = 1.0;
   // set active lead to first healthy companion
   G.lead = G.team.findIndex(m=>m.hp>0);
@@ -870,6 +905,7 @@ function catchChance(w){
   if(hasRelic('catch')) c += 0.08;
   if(hasRelic('rare') && w.sp.rarity>=2) c += 0.12;
   c += Dex.up('catch')*0.04;
+  c += weatherCatchBonus();
   if(w.boss) return Math.max(BOSS_CATCH_FLOOR, clamp(c,0.05,0.96));
   return clamp(c, 0.05, 0.96);
 }
@@ -1160,8 +1196,8 @@ function updateBattle(dt){
 }
 function strike(att, def, dir){
   const mult = typeMult(att.sp.type, def.sp.type);
-  const crit = rnd() < (0.13 + (hasRelic('crit')?0.10:0) + (hasTrinket(att,'critfang')?0.12:0));
-  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14) * (hasTrinket(att,'typegem')?1.2:1);
+  const crit = rnd() < (0.13*weatherCritMul() + (hasRelic('crit')?0.10:0) + (hasTrinket(att,'critfang')?0.12:0));
+  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14) * (hasTrinket(att,'typegem')?1.2:1) * weatherDmgMul(att.sp.type);
   dmg = Math.max(1, Math.round(dmg));
   const dtx = dir>0? 660 : 300;   // defender's on-screen x
   // Shadow dodge (defender passive): full evade, no HP change, no on-hit effects
@@ -1262,7 +1298,7 @@ function bossHeavyStrike(w, def){
     def.status.fDodge=0.4; w.lunge=1;
     G.dmgPops.push({x:300+rr(-20,20),y:200,vy:-40,life:1,txt:'DODGE',dodge:true,col:'#a06bff',age:0,rot:0}); return;
   }
-  let dmg = w.atk * mult * BOSS_HEAVY_MUL;                 // enrage already folded into w.atk — do NOT re-multiply
+  let dmg = w.atk * mult * BOSS_HEAVY_MUL * weatherDmgMul(w.sp.type);   // enrage already folded into w.atk — do NOT re-multiply
   if(def.sp.type==='Rock') dmg *= (1-ROCK_GUARD);
   if(hasTrinket(def,'guardstone')) dmg *= 0.85;
   dmg = Math.min(dmg, def.maxhp*BOSS_HEAVY_CAP);           // HARD CAP — full-HP mon always survives with ≥40%
@@ -1394,6 +1430,7 @@ function drawBG(scrollX, tier){   // 'tier' kept for call-site stability; palett
   else if(P.prop==='shore') drawShoreWater(scrollX);
   else if(P.prop==='cave') drawStalactites(scrollX);
   else if(P.prop==='starfield') drawStarfield();
+  drawWeatherBg(scrollX);   // weather sky overlay, behind sprites
 }
 // ---- signature biome props (primitives only, fixed budgets, no per-frame alloc) ----
 function drawCanopy(scrollX){
@@ -1449,6 +1486,87 @@ function drawStarfield(){
     ctx.fillRect(x,y,2,2);
   }
   ctx.restore();
+}
+// ---------- weather overlays (canvas-only, fixed budgets, zero G.parts, 60fps) ----------
+const RAIN_N=70, STAR_N=50, RAY_N=5, FOG_N=6;
+// Background weather (behind sprites) — call as the last line of drawBG.
+function drawWeatherBg(scrollX){
+  const w = WEATHER[G.weather] || WEATHER.Clear;
+  if(w===WEATHER.Night || G.weather==='Night'){
+    ctx.save();
+    ctx.fillStyle='rgba(10,14,40,0.42)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#fff';
+    for(let i=0;i<STAR_N;i++){
+      const x=(i*151+29)%W, y=(i*89+13)%260;
+      ctx.globalAlpha=0.3+0.5*Math.abs(Math.sin(G.t*1.6+i));
+      ctx.fillRect(x,y,2,2);
+    }
+    ctx.restore();
+  } else if(G.weather==='Sunshine'){
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    const rg=ctx.createRadialGradient(150,205,20,150,205,260);
+    rg.addColorStop(0,'rgba(255,230,150,0.22)'); rg.addColorStop(1,'rgba(255,230,150,0)');
+    ctx.fillStyle=rg; ctx.fillRect(0,0,W,H);
+    ctx.translate(150,205); ctx.rotate(G.t*0.05);
+    ctx.strokeStyle='rgba(255,225,150,0.10)'; ctx.lineWidth=8;
+    for(let i=0;i<RAY_N;i++){ const a=(i/RAY_N)*6.283; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*420,Math.sin(a)*420); ctx.stroke(); }
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.fillStyle='rgba(255,200,120,0.05)'; ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  } else if(G.weather==='Fog'){
+    ctx.save();
+    const g=ctx.createLinearGradient(0,300,0,600);
+    g.addColorStop(0,'rgba(200,205,220,0.05)'); g.addColorStop(1,'rgba(200,205,220,0.28)');
+    ctx.fillStyle=g; ctx.fillRect(0,300,W,300);
+    ctx.fillStyle='rgba(210,214,226,0.10)';
+    for(let i=0;i<FOG_N;i++){
+      const bx=(i*220 - G.t*14) ; const px=((bx%(W+240))+(W+240))%(W+240)-120;
+      const py=440 + Math.sin(G.t*0.5+i)*12;
+      ctx.beginPath(); ctx.ellipse(px,py,110,34,0,0,6.283); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // Clear / Rain: nothing here (Rain is a foreground overlay).
+}
+// Foreground weather (over sprites, under HUD) — call end of drawWalk & drawBattle.
+function drawWeatherFg(){
+  const w = WEATHER[G.weather] || WEATHER.Clear;
+  if(G.weather==='Rain'){
+    ctx.save();
+    ctx.fillStyle='rgba(40,60,90,0.10)'; ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='rgba(170,190,220,0.35)'; ctx.lineWidth=1.5;
+    ctx.beginPath();
+    for(let i=0;i<RAIN_N;i++){
+      const spd=220+(i%5)*40;
+      const x=((i*127 + 0) %W);
+      const y=((i*53 + G.t*spd) % (H+20)) - 10;
+      ctx.moveTo(x,y); ctx.lineTo(x-4,y+14);
+    }
+    ctx.stroke();
+    ctx.restore();
+  } else if(G.weather==='Fog'){
+    ctx.save();
+    ctx.fillStyle='rgba(210,214,226,0.10)'; ctx.fillRect(0,0,W,H);
+    ctx.restore();
+  }
+  // Night / Sunshine / Clear: nothing.
+}
+// Weather chip — top-center pill; call in draw() right after drawHUD().
+function drawWeatherChip(){
+  const w = WEATHER[G.weather] || WEATHER.Clear;
+  ctx.save();
+  ctx.font='700 12px Segoe UI, sans-serif';
+  const cw=30+ctx.measureText(w.label).width;
+  roundRect(W/2-cw/2,46,cw,22,11);
+  ctx.fillStyle='rgba(16,22,42,0.9)'; ctx.fill();
+  ctx.strokeStyle=w.col; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.textAlign='left';
+  ctx.font='14px Segoe UI, sans-serif'; ctx.fillStyle=w.col;
+  ctx.fillText(w.icon, W/2-cw/2+9, 62);
+  ctx.font='700 12px Segoe UI, sans-serif'; ctx.fillStyle=w.col;
+  ctx.fillText(w.label, W/2-cw/2+26, 62);
+  ctx.restore(); ctx.textAlign='left';
 }
 // biome-name banner during a transition (walk state, below the HUD)
 function drawBiomeLabel(){
@@ -1786,6 +1904,7 @@ function draw(){
 
   drawFx();
   drawHUD();
+  drawWeatherChip();
   if(G.state!=='title' && G.state!=='gameover' && G.state!=='sanctuary') drawTeam();
   drawButtons();
 
@@ -2078,6 +2197,7 @@ function drawWalk(){
   // progress
   const f=clamp(G.scroll/G.walkTarget,0,1);
   bar(W/2-160,160,320,10,f,'#ffe9a8','#0c1120');
+  drawWeatherFg();
 }
 
 function typeChip(fromT, toT, mult, cy, warn){
@@ -2142,6 +2262,7 @@ function drawBattle(){
   btn('speed', W-110, 54, 96, 30, G.speed+'× speed', null, {col:'#242c48'});
   btn('potion', 14, 54, 150, 30, '🧪 Potion ('+G.potions+')', null,
     {col:'#2a4a3a', accent:'#5fd0a0', enabled:G.potions>0 && you.hp<you.maxhp});
+  drawWeatherFg();
   if(w.boss && G.battleIntro>0) drawBossBanner(w);   // intro banner on top
 }
 function usePotion(){
