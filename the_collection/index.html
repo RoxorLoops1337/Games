@@ -1052,7 +1052,7 @@ function openPack(save, rand){
   var results = pulls.map(function(p){
     var isNew = applyPull(save, p);
     var card = BY_ID[p.id];
-    return { id: p.id, name: card.name, type: card.type, tier: card.tier, power: card.power, flavor: card.flavor, reverseHolo: p.reverseHolo, isNew: isNew };
+    return { id: p.id, name: card.name, type: card.type, tier: card.tier, power: card.power, flavor: card.flavor, move: card.move, illus: card.illus, reverseHolo: p.reverseHolo, isNew: isNew };
   });
   return results;
 }
@@ -1745,6 +1745,11 @@ function animateCoinsTo(target){
 var TIER_CHIP = { common: 'COMMON', uncommon: 'UNCOMMON', rare: 'RARE', rareholo: 'HOLO', doublerare: 'DOUBLE', ultrarare: 'ULTRA' };
 function cardHTML(c, opts){
   opts = opts || {};
+  // Tolerate partial card objects (e.g. pack pulls) by filling gaps from the
+  // canonical card — a missing move used to crash the whole reveal.
+  var full = BY_ID[c.id] || c;
+  var move = c.move || full.move;
+  var illus = c.illus || full.illus;
   var scene = sceneFor(c, 240, 336);
   var artStyle = scene
     ? 'background-image:url(' + scene + ')'
@@ -1752,7 +1757,7 @@ function cardHTML(c, opts){
   var holo = opts.reverseHolo || c.tier === 'rareholo' || c.tier === 'doublerare' || c.tier === 'ultrarare';
   var frame = c.tier === 'common' ? '' : ' f-' + c.tier;
   var costDots = '';
-  for (var i = 0; i < c.move.cost; i++) costDots += '<i></i>';
+  for (var i = 0; i < move.cost; i++) costDots += '<i></i>';
   var chip = TIER_CHIP[c.tier] || TIER_BY_KEY[c.tier].name;
   var spark = (c.tier === 'rareholo' || c.tier === 'doublerare' || c.tier === 'ultrarare') ? '<i class="name-spark">&#10022;</i>' : '';
   return '<div class="tcg-card' + frame + '" style="--type-c:' + typeColor(c.type) + '; --tier-c:var(--t-' + c.tier + ')">' +
@@ -1769,13 +1774,13 @@ function cardHTML(c, opts){
         (opts.badges ? '<div class="tcg2-badges">' + opts.badges + '</div>' : '') +
         '<div class="move-row">' +
           '<span class="energy">' + costDots + '</span>' +
-          '<span class="move-name">' + c.move.name + '</span>' +
-          '<span class="move-dmg">' + c.move.dmg + (c.move.plus ? '+' : '') + '</span>' +
+          '<span class="move-name">' + move.name + '</span>' +
+          '<span class="move-dmg">' + move.dmg + (move.plus ? '+' : '') + '</span>' +
         '</div>' +
-        '<div class="move-text">' + (c.move.text || '') + '</div>' +
+        '<div class="move-text">' + (move.text || '') + '</div>' +
         '<div class="tcg2-div"><i>&#9670;</i></div>' +
         '<div class="tcg2-flavor">' + c.flavor + '</div>' +
-        '<div class="tcg2-foot"><span>Illus. ' + c.illus + '</span><span style="color:var(--tier-c);">&#9670; ' + TIER_BY_KEY[c.tier].name + '</span><span>#' + c.id.slice(1) + '/100</span></div>' +
+        '<div class="tcg2-foot"><span>Illus. ' + illus + '</span><span style="color:var(--tier-c);">&#9670; ' + TIER_BY_KEY[c.tier].name + '</span><span>#' + c.id.slice(1) + '/100</span></div>' +
       '</div>' +
     '</div>' +
     (holo ? '<div class="holo-sheen"></div>' : '') +
