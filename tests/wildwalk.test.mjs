@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -712,12 +712,13 @@ test('boss phases decrement to 1 and the fight always resolves', ()=>{
   const g = api.getG();
   g.team = [api.mk('leviatide',30)];               // huge Water atk vs Fire boss
   g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
-  api.spawnBoss('moltengod');
+  api.spawnBoss('moltengod'); api.reseed(9001);
   g.battleIntro = 0;
   g.team[0].maxhp = g.team[0].hp = 999999;         // survive long enough to out-damage the boss
   const pmax = g.wild.phaseMax;
   let minPhase = pmax, maxPhase = pmax, prev = pmax, everIncreased = false;
   for(let i=0;i<8000 && g.state==='battle';i++){
+    g.team[0].hp = g.team[0].maxhp;                // stay pinned to full — boss heavy-hits scale with maxhp, so top up every frame
     api.upd(0.05);
     if(g.wild){ const p=g.wild.phase;
       if(p>prev) everIncreased=true; prev=p;
@@ -791,10 +792,10 @@ function bossToChoice(bossKey){
   const g = api.getG();
   g.team = [api.mk('leviatide',45)];
   g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
-  api.spawnBoss(bossKey);
+  api.spawnBoss(bossKey); api.reseed(9002);
   g.battleIntro = 0;
   g.team[0].maxhp = g.team[0].hp = 999999;         // survive long enough to defeat the boss
-  for(let i=0;i<8000 && g.state==='battle';i++) api.upd(0.05);
+  for(let i=0;i<8000 && g.state==='battle';i++){ g.team[0].hp = g.team[0].maxhp; api.upd(0.05); }  // pin to full: boss heavy-hits scale with maxhp
   assert(g.state==='choice', `boss fight did not reach choice (${g.state})`);
   step(1);                                         // draw choice buttons
   return h;
@@ -851,7 +852,7 @@ test('boss loop never freezes across telegraphs + a phase break', ()=>{
 // ===================================================================
 // RELICS — run-modifier boons (transient G.relics)
 // ===================================================================
-const ALL_RELICS = ['catch','rare','lifesteal','burn','crit','critdmg','thorns','startheal','gold','bosspotion','honor','swiftpaw'];
+const ALL_RELICS = ['catch','rare','lifesteal','burn','crit','critdmg','thorns','startheal','gold','bosspotion','honor','swiftpaw','frenzy','secondwind','scholar'];
 
 // drive a fresh boss fight to its choice screen (strong team → defeat)
 function bossToChoiceR(bossKey){
@@ -859,23 +860,30 @@ function bossToChoiceR(bossKey){
   const { api, step } = h;
   const g = api.getG();
   g.team = [api.mk('leviatide',45)]; g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
-  api.spawnBoss(bossKey);
+  api.spawnBoss(bossKey); api.reseed(9003);
   g.battleIntro = 0;
   g.team[0].maxhp = g.team[0].hp = 999999;
-  for(let i=0;i<8000 && g.state==='battle';i++) api.upd(0.05);
+  for(let i=0;i<8000 && g.state==='battle';i++){ g.team[0].hp = g.team[0].maxhp; api.upd(0.05); }  // pin to full: boss heavy-hits scale with maxhp
   assert(g.state==='choice', `boss fight did not reach choice (${g.state})`);
   step(1);
   return h;
 }
 
-test('R1 RELICS table is well-formed (12, one stackable = gold)', ()=>{
-  const { RELICS } = boot().api;
+test('R1 RELICS table is well-formed (15, one stackable = gold, every relic set-tagged)', ()=>{
+  const { RELICS, RELIC_SETS, SET_THRESHOLD } = boot().api;
   const keys = Object.keys(RELICS);
-  assert(keys.length===12, `expected 12 relics, got ${keys.length}`);
+  assert(keys.length===15, `expected 15 relics, got ${keys.length}`);
+  const SETS = ['offense','defense','fortune'];
   for(const k of keys){ const r=RELICS[k];
-    assert(r.name && r.icon && r.col && r.desc, `${k}: missing field`); }
+    assert(r.name && r.icon && r.col && r.desc, `${k}: missing field`);
+    assert(SETS.includes(r.set), `${k}: bad/missing set ${r.set}`); }
   const stackers = keys.filter(k=>RELICS[k].stack===true);
   assert(stackers.length===1 && stackers[0]==='gold', `stackers ${stackers}`);
+  // set metadata well-formed + orchestrator-pinned distribution 5/4/6
+  for(const s of SETS){ const S=RELIC_SETS[s]; assert(S && S.name && S.icon && S.col && S.desc, `set ${s} meta missing`); }
+  const dist = {}; for(const k of keys) dist[RELICS[k].set]=(dist[RELICS[k].set]||0)+1;
+  assert(dist.offense===5 && dist.defense===4 && dist.fortune===6, `set distribution ${JSON.stringify(dist)}`);
+  assert(SET_THRESHOLD===3, `SET_THRESHOLD ${SET_THRESHOLD}`);
 });
 
 test('R2 hasRelic/relicCount + no-dup offers', ()=>{
@@ -1092,6 +1100,100 @@ test('R18 a battle with all relics active resolves without throwing', ()=>{
   api.draw();  // exercise drawRelicStrip with a full strip
   for(let i=0;i<4000 && g.state==='battle';i++){ api.upd(0.05); }
   assert(g.state==='choice' || g.state==='gameover', `stuck in ${g.state}`);
+});
+
+// ---- new relics + SET bonuses (reseed → deterministic strike-damage ratios) ----
+// sum team/enemy damage over many strikes with a fixed seed so the ONLY variable
+// is the multiplier under test (crit/rr draws are identical across the two runs).
+function sumStrikeDmg(api, relics, dir){
+  const g=api.getG(); g.relics=relics.slice(); api.reseed(20240607);
+  const att=api.mk('emberpup',30); att.atk=1000;          // Fire, fixed atk
+  const def=api.mk('sparky',30); def.hp=def.maxhp=1e12;   // Volt sponge, never dies
+  let s=0; for(let i=0;i<4000;i++){ const b=def.hp; api.strike(att,def,dir); s+=(b-def.hp); }
+  return s;
+}
+
+test('R19 frenzy adds +6% to your hits — and ONLY your hits (dir>0)', ()=>{
+  const { api } = boot();
+  const base = sumStrikeDmg(api, [], +1), fr = sumStrikeDmg(api, ['frenzy'], +1);
+  const r = fr/base; assert(r>1.055 && r<1.065, `frenzy dir>0 ratio ${r.toFixed(4)} != 1.06`);
+  // wild-safety: the enemy attacking (dir<0) must get NO frenzy bonus
+  const baseW = sumStrikeDmg(api, [], -1), frW = sumStrikeDmg(api, ['frenzy'], -1);
+  assert(frW===baseW, `frenzy leaked to the enemy on dir<0 (${baseW} vs ${frW})`);
+});
+
+test('R20 offense set (Warmonger) ×1.08 to team hits, never to the enemy', ()=>{
+  const { api } = boot(); const g=api.getG();
+  // relicSetCount de-dupes; setActive fires at exactly SET_THRESHOLD distinct
+  g.relics=['crit','critdmg','lifesteal']; assert(api.relicSetCount('offense')===3 && api.setActive('offense'), 'not active at 3 distinct');
+  g.relics=['crit','crit','critdmg'];       assert(api.relicSetCount('offense')===2 && !api.setActive('offense'), 'dupes counted as distinct');
+  // setAtkMul: 1.08 for the team (dir>0), 1 for the enemy (dir<0), 1 below threshold
+  g.relics=['lifesteal','burn','frenzy']; assert(api.setAtkMul(+1)===1.08 && api.setAtkMul(-1)===1, 'setAtkMul gate wrong');
+  g.relics=['lifesteal','burn'];          assert(api.setAtkMul(+1)===1, 'setAtkMul fired below threshold');
+  // integration — isolate the set mult: frenzy present in both, burn/lifesteal don't alter direct hit dmg
+  const off = sumStrikeDmg(api, ['lifesteal','burn'], +1);          // set inactive (2 offense)
+  const on  = sumStrikeDmg(api, ['lifesteal','burn','frenzy'], +1); // frenzy(1.06) × set(1.08) = 1.1448
+  const r = on/off; assert(r>1.140 && r<1.155, `frenzy×offense-set ratio ${r.toFixed(4)} != 1.1448`);
+});
+
+test('R21 scholar multiplies fight XP ×1.25 (drives real endFight)', ()=>{
+  const { api } = boot(); const g=api.getG();
+  // emberpup Lv5 wild → baseXp 30; a Lv3 mon needs 36 to level → only the 1.25× path (38) crosses it
+  const w=api.mk('emberpup',5);
+  const baseXp=(10+Math.round(w.level*4)+w.sp.rarity*6);
+  const lvlFromXp=(mul)=>{ const m=api.mk('emberpup',3); api.xpToLevels(m,Math.round(baseXp*mul)); return m.level; };
+  const l1=lvlFromXp(1), l125=lvlFromXp(1.25);
+  assert(l125>l1, `test vacuous — 1.25× xp did not cross a level (${l1} vs ${l125})`);
+  const runLevel=(relics)=>{ const m=api.mk('emberpup',3); g.team=[m]; g.lead=0;
+    g.relics=relics.slice(); g.bossWin=false; g.fights=0; g.wild=api.mk('emberpup',5); api.endFight(true); return m.level; };
+  assert(runLevel([])===l1, 'no-scholar endFight xp != baseline');
+  assert(runLevel(['scholar'])===l125, 'scholar endFight xp != 1.25× path');
+});
+
+test('R22 defense set (Sentinel) ×0.92 team incoming, never shields the enemy', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.relics=['thorns','startheal','swiftpaw']; assert(api.relicSetCount('defense')===3 && api.setActive('defense'), 'defense not active');
+  // team is defender when the wild attacks (dir<0) → incoming ~8% lower
+  const baseIn = sumStrikeDmg(api, [], -1), redIn = sumStrikeDmg(api, ['thorns','startheal','swiftpaw'], -1);
+  const r = redIn/baseIn; assert(r>0.915 && r<0.925, `defense-set incoming ratio ${r.toFixed(4)} != 0.92`);
+  // wild-safety: when YOUR mon attacks (dir>0) the defender is the wild — set must NOT reduce that dmg
+  const baseOut = sumStrikeDmg(api, [], +1), outSet = sumStrikeDmg(api, ['thorns','startheal','swiftpaw'], +1);
+  assert(outSet===baseOut, `defense set shielded the enemy on dir>0 (${baseOut} vs ${outSet})`);
+});
+
+test('R23 fortune set: +5% catch AND ×1.12 gold (both live-read)', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const w=api.mk('emberpup',5);                       // common, non-boss
+  g.relics=[]; const base=api.catchChance(w);
+  g.relics=['gold','bosspotion','honor'];             // 3 distinct fortune, none touch catchChance directly
+  assert(api.setActive('fortune'), 'fortune not active');
+  assert(Math.abs(api.catchChance(w)-(base+0.05))<1e-9, `fortune catch +0.05 (${base}->${api.catchChance(w)})`);
+  g.relics=['gold','bosspotion'];                     // 2 fortune → inactive
+  assert(Math.abs(api.catchChance(w)-base)<1e-9, 'fortune catch fired below threshold');
+  // gold: seed-locked so the base gold roll is identical across the two runs
+  const goldSum=(relics)=>{ let sum=0; const N=2000; api.reseed(31337);
+    for(let i=0;i<N;i++){ g.relics=relics.slice(); g.gold=0; g.bossWin=false; g.fights=0; g.wild=api.mk('emberpup',5); api.endFight(true); sum+=g.gold; } return sum; };
+  const gOn=goldSum(['bosspotion','honor','scholar']); // 3 fortune, no 'gold' relic → clean set ×1.12
+  const gOff=goldSum(['bosspotion','honor']);          // 2 fortune → inactive
+  const r=gOn/gOff; assert(r>1.10 && r<1.155, `fortune gold ratio ${r.toFixed(4)} != ~1.12`);
+});
+
+test('R24 secondwind adds +8% of maxhp to the post-win survivor heal', ()=>{
+  const { api } = boot(); const g=api.getG();
+  // hp starts low so neither the +30% base nor the +38% boosted heal hits the cap
+  const runHeal=(relics)=>{ const m=api.mk('emberpup',20); m.hp=1; g.team=[m]; g.lead=0;
+    g.relics=relics.slice(); g.bossWin=false; g.fights=0; g.wild=api.mk('emberpup',5); api.reseed(42); api.endFight(true); return {hp:m.hp, max:m.maxhp}; };
+  const b=runHeal([]), s=runHeal(['secondwind']);
+  assert(s.hp>b.hp && s.hp<s.max, `secondwind did not heal more without capping (${b.hp} vs ${s.hp}/${s.max})`);
+  assert(Math.abs((s.hp-b.hp)-0.08*b.max)<1e-6, `expected +${(0.08*b.max).toFixed(2)} hp, got ${(s.hp-b.hp).toFixed(2)}`);
+});
+
+test('R25 set bonus is a single mult — a 4th/5th set relic adds nothing (boundedness)', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.relics=['lifesteal','burn','crit']; assert(api.setAtkMul(+1)===1.08, 'not active at 3');
+  g.relics=['lifesteal','burn','crit','critdmg','frenzy'];   // all 5 offense relics
+  assert(api.relicSetCount('offense')===5, 'count != 5');
+  assert(api.setAtkMul(+1)===1.08, `set mult scaled past threshold to ${api.setAtkMul(+1)}`);
 });
 
 // ===================================================================

@@ -46,7 +46,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 26. [x] New element type + species (Frost) — DONE c26.
 27. [x] Party synergies / auras — DONE c27.
 28. [x] Boss telegraph & mechanic variety — DONE c28.
-29. [ ] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety).
+29. [x] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety) — DONE c29.
 30. [ ] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds).
 31. [ ] Codex / lore screen (per-species flavor, type guide, mechanics reference).
 32. [ ] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe).
@@ -55,6 +55,25 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c29 — Deeper relics + set bonuses** (studio: relic-designer, balance/ux, lead, engineer, QA + orch).
+  Every relic is now tagged with a set ∈ {offense, defense, fortune} (RELIC_SETS); collecting SET_THRESHOLD=3
+  DISTINCT relics of a set lights a passive team bonus on top of each relic's own effect. relicSetCount(set)
+  dedups G.relics (so a stacked gold counts once toward the set), setActive(set)=count≥3. Set bonuses, all
+  live-read + dir-gated for wild-safety: OFFENSE ×1.08 player-hit damage (setAtkMul, dir>0 only), DEFENSE
+  ×0.92 damage taken (dir<0 defender branch only), FORTUNE +5% catch chance & ×1.12 gold. Added 3 relics to
+  round out the sets so each is reachable: Frenzy Totem (offense, +6% your damage), Second Wind (defense,
+  heal team +8% after each win), Scholar's Lens (fortune, +25% XP) → 15 relics total, 5/4/6 across the sets,
+  gold the sole stacker. Relic pick screen shows per-relic set chips + a SET BONUSES footer with live progress
+  (n/3); the party-bar relic strip shows lit-set badges. Zero save-shape change (sets derive from existing
+  G.relics). +7 real-path tests (R19-R25): drive strike/catchChance/endFight/heal through the real hooks,
+  seeded via reseed, each combat assertion proven by a NEGATIVE CONTROL (break setAtkMul/defense mul/fortune
+  gold → its test fails) + a wild-leak control (set bonuses never touch wild attackers). ORCHESTRATOR
+  HARDENING: fixed a PRE-EXISTING boss-fight test flake QA surfaced (unrelated to relics) — boss heavy-hits
+  cap at 60% of maxhp so the 999999-HP tank mon could die in 2 hits, and c28's WARD slowed the kill, so the
+  boss occasionally missed the 8000-frame budget → gameover → assert failed (~1/14). Fixed the 3 boss-drive
+  loops (phase-test, bossToChoice, bossToChoiceR) with a fixed api.reseed(<const>) after spawnBoss AND pinning
+  the tank mon to full HP each frame, so the boss always dies via the execute valve deterministically.
+  218/218 wildwalk + 19/19 board, 0/14 flakes. Set-bonus progress confirmed by screenshot.
 - **c28 — Boss telegraph & mechanic variety** (studio: boss-mechanics, balance/ux, lead, engineer, QA + orch).
   Bosses now rotate THREE telegraphed mechanics (transient w.mechIdx/mech/wardT, no save change): SLAM (the
   existing capped heavy hit), FLURRY (3 rapid hits with an INTEGER running-budget cap so the SUM ≤
