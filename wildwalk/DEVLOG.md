@@ -22,7 +22,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 2. [x] Combat abilities per type — DONE c2.
 3. [x] Mid-battle switch — DONE c3.
 4. [x] Pokédex screen — DONE c4.
-5. [ ] Biomes (forest/cave/volcano/shore) that reskin the walk and bias spawn types.
+5. [x] Biomes — DONE c5.
 6. [ ] Boss encounters every few tiers — phased health bar, big rewards, guaranteed rare.
 7. [ ] Relics / run modifiers picked at milestones (roguelike boons).
 8. [ ] Held trinkets (one item slot per monster) from shops/stories.
@@ -36,6 +36,15 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c5 — Biomes** (studio: art-director, systems-designer, lead, engineer, QA). 6 canvas
+  biomes that advance with depth (Verdant Meadow → Deepwood → Sunlit Shore → Hollow Caverns
+  → Ashfall Ridge → The Deep Void), each a full palette + signature prop (forest canopy, shore
+  waves, cave stalactites, volcano embers, void starfield) with a crossfade + "Now entering"
+  label. Each biome soft-biases spawn types (pickBiased, +2.5 weight, never empties the pool;
+  rarity/tier pools untouched). biomeForTier is pure/deterministic. Save-safe (transient
+  G.biome*). +4 tests. ALSO hardened two pre-existing flaky tests (stun test forced a
+  non-dodging wild; full-party swap now driven via acquire() instead of RNG catch) — suite is
+  now deterministically green (31/31, 0 fails over 25+25 runs).
 - **c4 — Pokédex collection screen** (studio: designer, ux-designer, lead, engineer, QA).
   A 6-col grid of all 18 species opened from title + game-over (button or 'd' key), with a
   Back button. Caught = full sprite + name/type/rarity with a rarity-colored glow; seen = dark

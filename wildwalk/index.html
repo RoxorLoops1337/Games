@@ -110,6 +110,79 @@ const UNCOMMONS  = ['cindermaw','torrentoad','thornbeast','voltfox','boulderk','
 const RARES     = ['infernyx','leviatide','verdragon','stormhorn'];
 const LEGENDS   = ['moltengod','abysslord'];
 
+// ---------- biomes ----------
+// Each biome is a flat, named palette (drawBG reads fields by name, never by
+// ternary) + flavor flags. index = progression order (biomeForTier). Meadow is
+// the original daytime look verbatim; Void is the original tier>5 dark palette.
+const BIOMES = [
+  { name:'Verdant Meadow',  accent:'#a6e86f',
+    skyTop:'#1b2b5a', skyMid:'#3a5da8', skyBot:'#7fa0d8', orb:'#fffadc',
+    hillFar:'#2f4a7a', hillNear:'#365488', tree:'#2f5a3a',
+    ground:'#4a7a4a', groundEdge:'#3a5f3a', path:'#c9a86a', pathStone:'#b09050',
+    orbHalo:'255,250,220', haze:'127,160,216', moteCol:'255,255,255',
+    orbKind:'sun', treeN:8, prop:'none', favor:['Grass','Volt'],
+    mote:{ col:'rgba(255,255,255,1)', additive:false, density:14, mode:'drift' } },
+  { name:'Deepwood',        accent:'#8ad84f',
+    skyTop:'#1a3a2e', skyMid:'#2e6a4a', skyBot:'#6fae7a', orb:'#fff2c0',
+    hillFar:'#25493a', hillNear:'#2f5c48', tree:'#1f4a2c',
+    ground:'#3a6a3f', groundEdge:'#2e5232', path:'#b89a5e', pathStone:'#9c8048',
+    orbHalo:'255,242,192', haze:'111,174,122', moteCol:'200,255,180',
+    orbKind:'sun', treeN:14, prop:'canopy', favor:['Grass','Shadow'],
+    mote:{ col:'rgba(200,255,180,1)', additive:false, density:16, mode:'drift' } },
+  { name:'Sunlit Shore',    accent:'#48b6ff',
+    skyTop:'#1e4a7a', skyMid:'#4a9ad0', skyBot:'#a8e0f0', orb:'#fff4d0',
+    hillFar:'#3a7a9a', hillNear:'#4a94b0', tree:'#3a7a5a',
+    ground:'#d8c48a', groundEdge:'#c0a86a', path:'#e0d0a0', pathStone:'#c8b888',
+    orbHalo:'255,244,208', haze:'168,224,240', moteCol:'255,255,255',
+    orbKind:'sun', treeN:4, prop:'shore', favor:['Water','Volt'],
+    mote:{ col:'rgba(255,255,255,1)', additive:false, density:8, mode:'drift' } },
+  { name:'Hollow Caverns',  accent:'#b98d63',
+    skyTop:'#0e0d16', skyMid:'#1a1826', skyBot:'#2a2438', orb:'#000000',
+    hillFar:'#241f34', hillNear:'#2e2842', tree:'#1e1a2c',
+    ground:'#2a2438', groundEdge:'#1e1a2c', path:'#3a3348', pathStone:'#4a4258',
+    orbHalo:'0,0,0', haze:'42,36,56', moteCol:'150,170,255',
+    orbKind:'none', treeN:3, prop:'cave', favor:['Rock','Shadow'],
+    mote:{ col:'rgba(150,170,255,1)', additive:false, density:10, mode:'drift' } },
+  { name:'Ashfall Ridge',   accent:'#ff7a3d',
+    skyTop:'#2a0e0e', skyMid:'#6a2416', skyBot:'#b04a26', orb:'#ffb060',
+    hillFar:'#3a1a16', hillNear:'#5a2418', tree:'#3a2016',
+    ground:'#4a2620', groundEdge:'#361a16', path:'#6a3a2a', pathStone:'#844a30',
+    orbHalo:'255,120,60', haze:'176,74,38', moteCol:'255,143,74',
+    orbKind:'sun', treeN:3, prop:'none', favor:['Fire','Rock'],
+    mote:{ col:'#ff8f4a', additive:true, density:16, mode:'ember' } },
+  { name:'The Deep Void',   accent:'#a06bff',
+    skyTop:'#0a0818', skyMid:'#1a1230', skyBot:'#2e1a44', orb:'#c9b8ff',
+    hillFar:'#1a1430', hillNear:'#241a3e', tree:'#160f28',
+    ground:'#181228', groundEdge:'#100a1c', path:'#2e2444', pathStone:'#3e3258',
+    orbHalo:'180,160,255', haze:'120,90,180', moteCol:'200,180,255',
+    orbKind:'moon', treeN:3, prop:'starfield', favor:['Shadow','Volt'],
+    mote:{ col:'rgba(200,180,255,1)', additive:true, density:14, mode:'rise' } },
+];
+// deterministic, monotonic non-decreasing: 1-2 meadow, 3-4 forest, 5-6 shore,
+// 7-8 cave, 9-10 volcano, 11+ void (clamped).
+function biomeForTier(tier){ return Math.min(5, Math.floor((tier-1)/2)); }
+// advance the biome as the walk deepens (called from setupCrossroads). Starts a
+// single timer that drives both the crossfade and the name label.
+function updateBiome(){
+  const b = biomeForTier(G.tier);
+  if(b !== G.biome){ G.biomePrev = G.biome; G.biome = b;
+    G.biomeLabel = BIOMES[b].name; G.biomeFxT = 2.6; }
+}
+
+// ---------- biome spawn bias ----------
+// Soft weighting: favored types get +BIOME_BOOST weight, everything keeps a base
+// weight of 1, so no pool is ever empty and every species stays reachable. A pool
+// with no favored type collapses to uniform = identical to unbiased picking.
+const BIOME_BOOST = 2.5;
+function pickBiased(keys){
+  if(!keys||!keys.length) return pick(COMMONS);
+  const fav = (BIOMES[G.biome]||BIOMES[0]).favor||[];
+  let sum=0; const w=keys.map(k=>{ const x=1+(fav.includes(SPECIES[k].type)?BIOME_BOOST:0); sum+=x; return x; });
+  let r=rnd()*sum;
+  for(let i=0;i<keys.length;i++){ r-=w[i]; if(r<0) return keys[i]; }
+  return keys[keys.length-1];
+}
+
 // ---------- monster instance ----------
 function statAt(base,level){ return base * (1 + 0.14*(level-1)); }
 function makeMon(key,level){
@@ -380,6 +453,8 @@ function newGame(){
     lead:0,
     // world scroll
     scroll:0, walkTarget:0,
+    // biome (transient — never serialized; only Dex.data persists)
+    biome:biomeForTier(1), biomePrev:0, biomeFxT:0, biomeLabel:'',
     // battle
     wild:null, dmgPops:[], parts:[], shake:0,
     battleLog:'', outcome:null,
@@ -441,6 +516,7 @@ function flash(m){ G.msg=m; G.msgT=2.2; }
 // ===================================================================
 function startWalk(){
   G.state='walk';
+  updateBiome();                 // idempotent desync guard (no-op when unchanged)
   G.scroll=0; G.walkTarget = 320 + G.tier*10;
   clearButtons();
 }
@@ -469,7 +545,7 @@ function spawnWild(elite){
     else if(G.tier<=5) poolKey = roll<0.35? COMMONS : (roll<0.8? UNCOMMONS : RARES);
     else poolKey = roll<0.2? UNCOMMONS : (roll<0.8? RARES : LEGENDS);
   }
-  const key = pick(poolKey);
+  const key = pickBiased(poolKey);   // biome-biased (base weight 1 → never empty)
   // wild level tracks your team so encounters stay fair, drifting up with depth
   const teamAvg = G.team.reduce((s,m)=>s+m.level,0)/G.team.length;
   let lvl = Math.round(teamAvg + (G.tier-1)*0.9 + ri(-1,1));
@@ -588,6 +664,7 @@ const CROSS_POOL = [
 ];
 function setupCrossroads(){
   G.tier++;
+  updateBiome();                 // sole biome-advance point (tier only rises here)
   G.xoptions = shuffle(CROSS_POOL).slice(0,3);
   G.state='crossroads';
   clearButtons();
@@ -821,61 +898,170 @@ function burst(x,y){
 // ===================================================================
 // Rendering
 // ===================================================================
-function drawBG(scrollX, tier){
+// ---- palette color helpers (biome crossfade) ----
+function lerpHex(c1,c2,k){
+  const a=parseInt(c1.slice(1),16), b=parseInt(c2.slice(1),16);
+  const r=Math.round(((a>>16)&255)+(((b>>16)&255)-((a>>16)&255))*k);
+  const g=Math.round(((a>>8)&255)+(((b>>8)&255)-((a>>8)&255))*k);
+  const bl=Math.round((a&255)+((b&255)-(a&255))*k);
+  return '#'+((1<<24)+(r<<16)+(g<<8)+bl).toString(16).slice(1);
+}
+function lerpRGB(s1,s2,k){
+  const a=s1.split(','), b=s2.split(',');
+  return a.map((v,i)=>Math.round(+v+(+b[i]- +v)*k)).join(',');
+}
+// blend two biome palettes; colors/rgb-strings lerp, scalars/flags come from pb.
+function blend(pa,pb,k){
+  const HEX=['skyTop','skyMid','skyBot','orb','hillFar','hillNear','tree','ground','groundEdge','path','pathStone'];
+  const RGB=['orbHalo','haze','moteCol'];
+  const o=Object.assign({},pb);
+  for(const f of HEX) o[f]=lerpHex(pa[f]||pb[f], pb[f], k);
+  for(const f of RGB) o[f]=lerpRGB(pa[f]||pb[f], pb[f], k);
+  return o;
+}
+
+function drawBG(scrollX, tier){   // 'tier' kept for call-site stability; palette keys off G.biome
+  const b = BIOMES[G.biome] || BIOMES[0];                         // graceful default
+  const P = (G.biomeFxT>0)
+    ? blend(BIOMES[G.biomePrev]||b, b, 1-Math.min(1,G.biomeFxT/2.6))
+    : b;
   // sky
   const sky=ctx.createLinearGradient(0,0,0,H);
-  sky.addColorStop(0, tier>5? '#241a3a':'#1b2b5a');
-  sky.addColorStop(0.6, tier>5? '#4a2f66':'#3a5da8');
-  sky.addColorStop(1, tier>5? '#7a4a6a':'#7fa0d8');
+  sky.addColorStop(0, P.skyTop);
+  sky.addColorStop(0.6, P.skyMid);
+  sky.addColorStop(1, P.skyBot);
   ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
   // sun/moon — kept clear of the HP panels up top
-  ctx.save();
-  const halo=ctx.createRadialGradient(150,205,10, 150,205,120);
-  if(tier>5){ halo.addColorStop(0,'rgba(255,180,140,.5)'); halo.addColorStop(1,'rgba(255,180,140,0)'); }
-  else { halo.addColorStop(0,'rgba(255,250,220,.55)'); halo.addColorStop(1,'rgba(255,250,220,0)'); }
-  ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(150,205,120,0,6.283); ctx.fill();
-  ctx.restore();
-  ctx.fillStyle= tier>5? 'rgba(255,220,180,.6)':'rgba(255,250,220,.85)';
-  ctx.beginPath(); ctx.arc(150,205,44,0,6.283); ctx.fill();
+  if(P.orbKind!=='none'){
+    ctx.save();
+    const halo=ctx.createRadialGradient(150,205,10, 150,205,120);
+    halo.addColorStop(0,'rgba('+P.orbHalo+',0.55)'); halo.addColorStop(1,'rgba('+P.orbHalo+',0)');
+    ctx.fillStyle=halo; ctx.beginPath(); ctx.arc(150,205,120,0,6.283); ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.globalAlpha = P.orbKind==='moon'? 0.75 : 0.85;
+    ctx.fillStyle = P.orb;
+    ctx.beginPath(); ctx.arc(150,205,44,0,6.283); ctx.fill();
+    if(P.orbKind==='moon'){ ctx.globalAlpha=0.22; ctx.fillStyle=P.skyTop;
+      ctx.beginPath(); ctx.arc(168,197,40,0,6.283); ctx.fill(); }   // crescent shade
+    ctx.restore();
+  }
   // haze band on the horizon
   ctx.save();
   const haze=ctx.createLinearGradient(0,H*0.5,0,H*0.62);
-  const skyc= tier>5?'122,74,106':'127,160,216';
-  haze.addColorStop(0,'rgba('+skyc+',0.25)'); haze.addColorStop(1,'rgba('+skyc+',0)');
+  haze.addColorStop(0,'rgba('+P.haze+',0.25)'); haze.addColorStop(1,'rgba('+P.haze+',0)');
   ctx.fillStyle=haze; ctx.fillRect(0,H*0.5,W,H*0.12);
   ctx.restore();
   // far hills (parallax)
-  drawHills(scrollX*0.15, 380, tier>5?'#3a2f55':'#2f4a7a', 180);
-  drawHills(scrollX*0.35, 430, tier>5?'#463864':'#365488', 150);
+  drawHills(scrollX*0.15, 380, P.hillFar, 180);
+  drawHills(scrollX*0.35, 430, P.hillNear, 150);
   // trees mid
-  for(let i=0;i<8;i++){
+  for(let i=0;i<P.treeN;i++){
     const bx = ((i*180 - scrollX*0.6) % (W+220)+ (W+220))%(W+220) -110;
-    drawTree(bx, 460, 40, tier>5?'#2a3a2a':'#2f5a3a');
+    drawTree(bx, 460, 40, P.tree);
   }
   // ground
-  ctx.fillStyle= tier>5?'#3a3050':'#4a7a4a'; ctx.fillRect(0,470,W,H-470);
-  ctx.fillStyle= tier>5?'#2e2642':'#3a5f3a'; ctx.fillRect(0,470,W,10);
+  ctx.fillStyle=P.ground; ctx.fillRect(0,470,W,H-470);
+  ctx.fillStyle=P.groundEdge; ctx.fillRect(0,470,W,10);
   // path
-  ctx.fillStyle= tier>5?'#5a4a5a':'#c9a86a';
+  ctx.fillStyle=P.path;
   ctx.beginPath(); ctx.moveTo(0,540); ctx.lineTo(W,530); ctx.lineTo(W,560); ctx.lineTo(0,570); ctx.fill();
   // path stones
-  ctx.fillStyle= tier>5?'#4a3a4a':'#b09050';
+  ctx.fillStyle=P.pathStone;
   for(let i=0;i<12;i++){ const px=((i*100 - scrollX*0.9)%(W+120)+(W+120))%(W+120)-60; ctx.fillRect(px,545,44,10); }
-  // drifting motes / embers (deterministic, no allocation)
-  ctx.save();
-  const ember = tier>5;
-  if(ember) ctx.globalCompositeOperation='lighter';
-  for(let i=0;i<14;i++){
-    const spd = 8 + (i%5)*4;
-    const bx = ( i*137 - G.t*spd - scrollX*0.05 );
-    const px = ((bx % (W+40)) + (W+40)) % (W+40) - 20;
-    const py = ( (i*97 - G.t*spd*0.6) % (H*0.6) + H*0.6) % (H*0.6) + 40;
-    const r = 1 + (i%3)*0.8;
-    ctx.globalAlpha = ember? 0.55 : 0.3;
-    ctx.fillStyle = ember? '#ff8f4a' : 'rgba(255,255,255,1)';
-    ctx.beginPath(); ctx.arc(px,py,r,0,6.283); ctx.fill();
+  // drifting motes / embers (deterministic, no allocation, flag-driven)
+  const mo = P.mote || {col:'rgba(255,255,255,1)',additive:false,density:14,mode:'drift'};
+  const n = mo.mode==='none'? 0 : (mo.density||0);
+  const mdir = (mo.mode==='ember'||mo.mode==='rise')? -1 : 1;   // upward for embers/rising ash
+  if(n){
+    ctx.save();
+    if(mo.additive) ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle = mo.col;
+    for(let i=0;i<n;i++){
+      const spd = 8 + (i%5)*4;
+      const bx = ( i*137 - G.t*spd - scrollX*0.05 );
+      const px = ((bx % (W+40)) + (W+40)) % (W+40) - 20;
+      const py = ( (i*97 - mdir*G.t*spd*0.6) % (H*0.6) + H*0.6) % (H*0.6) + 40;
+      const r = 1 + (i%3)*0.8;
+      ctx.globalAlpha = mo.additive? 0.55 : 0.3;
+      ctx.beginPath(); ctx.arc(px,py,r,0,6.283); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // signature prop
+  if(P.prop==='canopy') drawCanopy(scrollX);
+  else if(P.prop==='shore') drawShoreWater(scrollX);
+  else if(P.prop==='cave') drawStalactites(scrollX);
+  else if(P.prop==='starfield') drawStarfield();
+}
+// ---- signature biome props (primitives only, fixed budgets, no per-frame alloc) ----
+function drawCanopy(scrollX){
+  ctx.save(); ctx.fillStyle='rgba(20,50,30,0.92)';
+  const off=scrollX*0.4;
+  for(let i=0;i<11;i++){
+    const bx=((i*110 - off) % (W+180) + (W+180)) % (W+180) - 90;
+    const sway=Math.sin(G.t*0.8 + i)*4;
+    const r=46 + (i%3)*14;
+    ctx.beginPath(); ctx.arc(bx+sway, 10 + (i%2)*18, r, 0, 6.283); ctx.fill();
   }
   ctx.restore();
+}
+function drawShoreWater(scrollX){
+  ctx.save();
+  const sea=ctx.createLinearGradient(0,432,0,470);
+  sea.addColorStop(0,'#2f7fb8'); sea.addColorStop(1,'#5ab0d8');
+  ctx.fillStyle=sea; ctx.fillRect(0,432,W,38);
+  ctx.strokeStyle='rgba(255,255,255,0.6)'; ctx.lineWidth=2; ctx.lineJoin='round';
+  for(let row=0;row<3;row++){
+    ctx.beginPath();
+    for(let x=0;x<=W;x+=20){
+      const y=440+row*9 + Math.sin(x*0.03 + G.t*0.8 + row - scrollX*0.002)*3;
+      x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+    }
+    ctx.stroke();
+  }
+  ctx.fillStyle='rgba(255,255,255,0.18)'; ctx.fillRect(0,468,W,5);   // wet sheen at seam
+  ctx.restore();
+}
+function drawStalactites(scrollX){
+  ctx.save();
+  const off=scrollX*0.15;
+  ctx.fillStyle='#1a1626';
+  for(let i=0;i<9;i++){
+    const bx=((i*118 - off) % (W+160) + (W+160)) % (W+160) - 80;
+    const len=30 + (i*37 % 60), w=22 + (i%3)*8;
+    ctx.beginPath(); ctx.moveTo(bx-w,0); ctx.lineTo(bx+w,0); ctx.lineTo(bx,len); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle='#231d34';
+  for(let i=0;i<5;i++){
+    const bx=((i*196 - off) % (W+160) + (W+160)) % (W+160) - 80;
+    const len=24 + (i*53 % 40);
+    ctx.beginPath(); ctx.moveTo(bx-16,470); ctx.lineTo(bx+16,470); ctx.lineTo(bx,470-len); ctx.closePath(); ctx.fill();
+  }
+  ctx.restore();
+}
+function drawStarfield(){
+  ctx.save(); ctx.fillStyle='#fff';
+  for(let i=0;i<40;i++){
+    const x=(i*137+37) % W, y=(i*89+13) % 300;
+    ctx.globalAlpha=0.4 + 0.6*Math.abs(Math.sin(G.t*2 + i));
+    ctx.fillRect(x,y,2,2);
+  }
+  ctx.restore();
+}
+// biome-name banner during a transition (walk state, below the HUD)
+function drawBiomeLabel(){
+  if(!(G.biomeFxT>0)) return;
+  const b=BIOMES[G.biome]||BIOMES[0];
+  const el=2.6 - G.biomeFxT;                 // seconds since the change
+  let a = el<0.35 ? el/0.35 : (G.biomeFxT<0.7 ? G.biomeFxT/0.7 : 1);
+  a=clamp(a,0,1);
+  ctx.save(); ctx.globalAlpha=a; ctx.textAlign='center';
+  ctx.font='600 12px Segoe UI, sans-serif'; ctx.fillStyle='#aeb8d8';
+  ctx.fillText('Now entering', W/2, 100);
+  ctx.font='700 26px Segoe UI, sans-serif'; ctx.fillStyle=b.accent;
+  ctx.fillText(G.biomeLabel||b.name, W/2, 128);
+  ctx.restore(); ctx.textAlign='left';
 }
 function drawHills(off, y, col, h){
   ctx.fillStyle=col; ctx.beginPath(); ctx.moveTo(-100,H);
@@ -1112,10 +1298,9 @@ function draw(){
   if(G.state==='title'){ drawTitle(); ctx.restore(); return; }
   if(G.state==='pokedex'){ drawPokedex(); ctx.restore(); return; }
 
-  const tierForBG = G.state==='battle'&&G.wild&&G.wild.elite? G.tier+1:G.tier;
-  drawBG(G.scroll, tierForBG);
+  drawBG(G.scroll, G.tier);
 
-  if(G.state==='walk') drawWalk();
+  if(G.state==='walk'){ drawWalk(); drawBiomeLabel(); }
   else if(G.state==='battle') drawBattle();
   else if(G.state==='choice') drawChoice();
   else if(G.state==='crossroads') drawCrossroads();
@@ -1669,6 +1854,7 @@ function loop(now){
 
   if(G.state==='walk'){
     G.scroll += sdt*180;
+    if(G.biomeFxT>0) G.biomeFxT = Math.max(0, G.biomeFxT - dt);
     updateFx(dt);
     if(G.scroll>=G.walkTarget){ spawnWild(false); }
   } else if(G.state==='battle'){
