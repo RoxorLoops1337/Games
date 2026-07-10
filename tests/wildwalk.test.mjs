@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -2285,6 +2285,150 @@ test('DAILY7 save shape still matches after a daily run', ()=>{
   api.gameOver();
   const keys = Object.keys(api.Dex.data).sort();
   assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+});
+
+// ===================================================================
+// SEEDED-RUN — shareable run codes (codec round-trip + real-path determinism)
+// ===================================================================
+// Drives the REAL seeded RNG through spawns; never recomputes a formula.
+function seededPrint(api, seed){
+  api.startSeededRun(seed);
+  const starter = api.getG().team[0].key;
+  const seq = [];
+  for(let i=0;i<6;i++){ api.spawn(); const w=api.getG().wild; seq.push(w ? w.key+'@'+w.level : '?'); }
+  return starter+'|'+seq.join(',');
+}
+
+test('SEED1 codec round-trip, canonical shape, format anchors', ()=>{
+  const { api } = boot();
+  const sample = [0,1,7,35,36,255,65535,0x9e3779b9,0xFFFFFFFF, api.dailySeedFor(20260710), api.dailySeedFor(20260711)];
+  for(const S of sample){
+    assert(api.runCodeToSeed(api.seedToRunCode(S))===(S>>>0), `round-trip failed for ${S}`);
+    assert(/^[0-9A-Z]{1,7}$/.test(api.seedToRunCode(S)), `code shape wrong for ${S}: ${api.seedToRunCode(S)}`);
+  }
+  // format anchors (base36 facts, not RNG)
+  assert(api.seedToRunCode(0)==='0', 'anchor 0');
+  assert(api.seedToRunCode(1)==='1', 'anchor 1');
+  assert(api.seedToRunCode(35)==='Z', 'anchor 35');
+  assert(api.seedToRunCode(36)==='10', 'anchor 36');
+  // NEGATIVE CONTROL (a): injectivity on the sample — S and S+1 encode differently
+  for(const S of sample){
+    assert(api.seedToRunCode(S)!==api.seedToRunCode((S+1)>>>0), `encode not injective at ${S}`);
+  }
+  // NEGATIVE CONTROL (b): tampering the code breaks the decode
+  const code = api.seedToRunCode(0x9e3779b9);
+  assert(api.runCodeToSeed(code+'0')!==0x9e3779b9, 'tampered code still decoded to original (round-trip vacuous)');
+});
+
+test('SEED2 sanitization + fold edge cases', ()=>{
+  const { api } = boot();
+  assert(api.runCodeToSeed('zik0zj')===api.runCodeToSeed('ZIK0ZJ'), 'case fold');
+  assert(api.runCodeToSeed(' ZI-K0 ZJ ')===api.runCodeToSeed('ZIK0ZJ'), 'whitespace/dash strip');
+  for(const bad of ['', '   ', '!!!', '---']){
+    assert(api.runCodeToSeed(bad)===null, `garbage should be null: ${JSON.stringify(bad)}`);
+  }
+  assert(api.runCodeToSeed('007')===7, 'leading zeros');
+  assert(api.seedToRunCode(7)==='7', 'encode 7');
+  assert(api.runCodeToSeed('0')===0, 'decode 0');
+  assert(api.runCodeToSeed('1')===1, 'decode 1');
+  const s = api.runCodeToSeed('ZZZZZZZZ');
+  assert(s===api.runCodeToSeed('ZZZZZZZZ'), 'long fold not deterministic');
+  assert(Number.isInteger(s)&&s>=0&&s<2**32, 'long fold not a uint32');
+  assert(api.runCodeToSeed(api.seedToRunCode(s))===s, 'canonical re-encode not idempotent');
+  // NEGATIVE CONTROLS: one-char change diverges; a distinct long code folds distinctly
+  assert(api.runCodeToSeed('ZIK0ZJ')!==api.runCodeToSeed('ZIK0ZK'), 'one-char change did not diverge');
+  let folded=false;
+  for(let k=1;k<=8;k++){ if(api.runCodeToSeed('ZZZZZZZ'+String.fromCharCode(48+k))!==s){ folded=true; break; } }
+  assert(folded, 'no distinct long code folded to a different seed');
+});
+
+test('SEED3 startSeededRun mirrors startDaily (real path, latch/state)', ()=>{
+  const { api } = boot();
+  api.startSeededRun(0x1234);
+  const g = api.getG();
+  assert(g.state==='walk', 'seeded did not skip starter select');
+  assert(g.seeded===true, 'G.seeded not latched');
+  assert(g.runSeed===0x1234, 'G.runSeed wrong');
+  assert(g.runCode===api.seedToRunCode(0x1234), 'G.runCode wrong');
+  assert(g.asc===0, 'G.asc not 0');
+  assert(api.DAILY_POOL.includes(g.team[0].key), 'seeded starter not from DAILY_POOL');
+  assert(g.team.length===1, 'seeded team not solo starter');
+  // NEGATIVE CONTROL: distinguishes seeded from daily mode (no daily latch reuse)
+  assert(g.daily===false, 'seeded run wrongly latched daily=true');
+  assert(g.dailySeed===0, 'seeded run wrongly set dailySeed');
+});
+
+test('SEED4 same seed reproduces; different seed differs (real-path determinism)', ()=>{
+  const { api } = boot();
+  const S = 0xC0FFEE;
+  const f1 = seededPrint(api, S);
+  assert(seededPrint(api, S)===f1, 'same seed did not reproduce the run');
+  // NEGATIVE CONTROL: reseed actually drives RNG (offsets avoid the 0/1 collision)
+  let diff=false;
+  for(const d of [1,2,3,7,13,29,101,1009,7919,40009]){ if(seededPrint(api,(S+d)>>>0)!==f1){ diff=true; break; } }
+  assert(diff, 'seed does not drive RNG');
+});
+
+test('SEED5 shared CODE reproduces the encoder run (format -> run, end-to-end)', ()=>{
+  const { api } = boot();
+  const S = 0xABCDEF;
+  const code = api.seedToRunCode(S);
+  assert(api.runCodeToSeed(code)===S, 'canonical code did not round-trip');
+  assert(seededPrint(api, api.runCodeToSeed(code)) === seededPrint(api, S), 'code did not reproduce the seed run');
+  // NEGATIVE CONTROL: code content is load-bearing
+  const bad = code+'1';
+  assert(api.runCodeToSeed(bad)!==S, 'tampered code decoded to original');
+  assert(seededPrint(api, api.runCodeToSeed(bad)) !== seededPrint(api, S), 'tampered code produced the same run');
+});
+
+test('SEED6 menagerie-independence (cross-player determinism)', ()=>{
+  const a = boot().api;
+  a.startSeededRun(12321);
+  const baseKey = a.getG().team[0].key;
+  const b = boot().api;
+  b.Dex.data.upgrades.menagerie = 1;
+  assert(b.starterPool().length > b.DAILY_POOL.length, 'menagerie did not widen pool (premise broken)');
+  b.startSeededRun(12321);
+  const upgKey = b.getG().team[0].key;
+  assert(upgKey===baseKey, `menagerie desynced the seeded starter: ${upgKey} vs ${baseKey}`);
+  assert(b.DAILY_POOL.includes(upgKey), 'seeded starter escaped DAILY_POOL under menagerie');
+});
+
+test('SEED7 online fairness gate: seeded does NOT submit; normal + daily DO', ()=>{
+  const { api } = boot();
+  const saved = globalThis.fetch;
+  let n = 0;
+  try{
+    globalThis.fetch = (url,opts)=>{ if(opts&&opts.method==='POST') n++; return {catch(){}}; };
+    // seeded: gated
+    api.startSeededRun(1); const g=api.getG(); g.dist=100; g.tier=2;
+    const runsBefore = api.Dex.data.runs; api.gameOver();
+    assert(n===0, 'seeded run submitted online');
+    assert(api.Dex.data.runs===runsBefore+1, 'seeded local record was suppressed');
+    // NEGATIVE CONTROL: normal run still submits under the SAME spy
+    n=0; api.newGame(); const g2=api.getG(); g2.seeded=false; g2.daily=false; g2.dist=50; g2.tier=1; api.gameOver();
+    assert(n===1, 'normal run failed to submit (gate too broad / dead spy)');
+    // NEGATIVE CONTROL: daily still submits
+    n=0; api.startDaily(); const g3=api.getG(); g3.dist=90; g3.tier=2; api.gameOver();
+    assert(n===1, 'daily run failed to submit');
+  } finally { globalThis.fetch = saved; }
+});
+
+test('SEED8 save shape unchanged (transient on G only)', ()=>{
+  const { api, store } = boot();
+  const g = api.getG();
+  assert('seeded' in g && g.seeded===false && g.runSeed===0 && g.runCode==='', 'G seeded defaults missing');
+  api.startSeededRun(3); const gg=api.getG(); gg.dist=120; gg.tier=3; api.gameOver();
+  const keys = Object.keys(api.Dex.data).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(WSHAPE), `save shape changed: ${keys}`);
+  const persisted = JSON.parse(store['wildwalk_save_v1']);
+  assert(!('seeded' in persisted) && !('runCode' in persisted) && !('runSeed' in persisted), 'transient G state leaked into save');
+});
+
+test('SEED9 render safety (smoke)', ()=>{
+  const { api } = boot();
+  api.startSeededRun(5); api.draw();                 // walk state exercises the HUD seed-chip branch
+  api.getG().state='gameover'; api.draw();            // exercises the gameover seed-line branch
 });
 
 // ---- ascension (prestige) ----
