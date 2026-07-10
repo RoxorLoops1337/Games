@@ -50,11 +50,21 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 30. [x] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds) — DONE c30.
 31. [x] Codex / lore screen (per-species flavor, type guide, mechanics reference) — DONE c31.
 32. [x] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe) — DONE c32.
-33. [ ] Difficulty presets (Casual/Normal/Hard modifiers layered cleanly over ascension).
+33. [x] Difficulty presets (Casual/Normal/Hard modifiers layered cleanly over ascension) — DONE c33.
 34. [ ] Achievement chains / tiered milestones (multi-step goals with escalating essence).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c33 — Difficulty presets (Casual/Normal/Hard)** (studio: 3 planners → lead → engineer → QA + orch). A single bounded
+  multiplier layer (hp/atk/essence/catch/gold) that COMPOSES with ascension at the same fold sites (spawnWild/spawnBoss/
+  gameOver-essence/catchChance/endFight-gold) — never replaces it. Normal is a bit-identical no-op (every diffMul===1;
+  y*1===y so no existing combat/economy expectation changes). Casual weakens wilds + easier catches; Hard toughens +
+  richer essence. Persisted additively (Dex.data.difficulty, default 'normal', load-normalizer + old-save default; all 8
+  save-shape arrays updated). Daily & seeded runs force Normal for fairness (like asc=0). Title gets a 3-way segmented
+  picker reading the persisted choice. +13 tests, all negative-controlled: normal-mults-exactly-1, casual<normal<hard via
+  the real spawn/essence/catch paths, ascension-composition, daily/seeded force-normal, persistence/old-save/save-shape.
+  QA proved 4 mutations load-bearing (break normal→no-op reddens; neuter diffHpMul→ordering reddens; drop daily-force→
+  reddens; drop 'difficulty' from an array→6 save-shape guards fire). 259/259 wildwalk + 19/19 board, 0/6 flakes.
 - **c32 — Cosmetic sprite skins** (studio: 3 planners [render/save/ux] → lead spec → engineer → QA + orch). FIRST persistent-state cycle.
   Six essence-bought recolor skins (default/Natural free + Umbral/Gilded/Neon/Pastel/Ember) applied as a pure draw-time palette
   treatment to the player's own monsters only. A skin is a pure (body,acc,belly)->{body,acc,belly} hex transform built on new pure
