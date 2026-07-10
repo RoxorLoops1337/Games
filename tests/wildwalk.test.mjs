@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,ACH_PER_PAGE,achPages:()=>achPages(),openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),DIFFS,setDifficulty:(id)=>setDifficulty(id),diffHpMul:()=>diffHpMul(),diffAtkMul:()=>diffAtkMul(),diffEssMul:()=>diffEssMul(),diffCatchMul:()=>diffCatchMul(),diffGoldMul:()=>diffGoldMul(),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openCodex:(f)=>openCodex(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),SKINS,buySkin:(id)=>buySkin(id),equipSkin:(id)=>equipSkin(id),equippedSkin:()=>equippedSkin(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,ACH_PER_PAGE,achPages:()=>achPages(),openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),DIFFS,setDifficulty:(id)=>setDifficulty(id),diffHpMul:()=>diffHpMul(),diffAtkMul:()=>diffAtkMul(),diffEssMul:()=>diffEssMul(),diffCatchMul:()=>diffCatchMul(),diffGoldMul:()=>diffGoldMul(),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),setRecordsBoardDiff:(id)=>setRecordsBoardDiff(id),openCodex:(f)=>openCodex(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),SKINS,buySkin:(id)=>buySkin(id),equipSkin:(id)=>equipSkin(id),equippedSkin:()=>equippedSkin(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -3349,6 +3349,66 @@ test('BOARD-D gameOver stays sync when fetch rejects/throws/absent', ()=>{
       assert(g.state==='gameover', 'gameOver blocked/failed for a stub');
     } finally { globalThis.fetch=saved; }
   }
+});
+
+// ---- D2. per-difficulty board routing (client side) ----
+test('BOARD-D2 submit forwards diff in POST body; defaults normal', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    let body=null;
+    globalThis.fetch = (u,o)=>{ body=JSON.parse(o.body); return Promise.resolve({ok:true,json:async()=>({})}); };
+    api.Board.submit('Ada',900,5,'hard');
+    assert(body.diff==='hard', 'diff not forwarded: '+JSON.stringify(body));
+    api.Board.submit('Ada',900,5);           // omitted → normal
+    assert(body.diff==='normal', 'omitted diff should default normal: '+JSON.stringify(body));
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-D2 fetchTop keeps normal URL byte-identical; casual/hard add ?diff', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    let url=null;
+    globalThis.fetch = (u)=>{ url=u; return Promise.resolve({ok:true,json:async()=>({top:[]})}); };
+    api.Board.fetchTop();            assert(url==='/api/wildwalk_board', 'default URL changed: '+url);
+    api.Board.fetchTop('normal');    assert(url==='/api/wildwalk_board', 'normal URL not byte-identical: '+url);
+    api.Board.fetchTop('hard');      assert(url==='/api/wildwalk_board?diff=hard', 'hard URL wrong: '+url);
+    api.Board.fetchTop('casual');    assert(url==='/api/wildwalk_board?diff=casual', 'casual URL wrong: '+url);
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-D2 gameOver on a Hard run submits diff:hard', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    let body=null;
+    globalThis.fetch = (u,o)=>{ body=JSON.parse(o.body); return Promise.resolve({ok:true,json:async()=>({})}); };
+    const g=api.getG(); g.dist=500; g.tier=4; g.diff='hard'; g.seeded=false; g.daily=false;
+    api.gameOver();
+    assert(g.state==='gameover', 'gameOver did not complete');
+    assert(body && body.diff==='hard', 'hard run did not route to hard board: '+JSON.stringify(body));
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-D2 gameOver on a daily/normal run submits diff:normal', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    let body=null;
+    globalThis.fetch = (u,o)=>{ body=JSON.parse(o.body); return Promise.resolve({ok:true,json:async()=>({})}); };
+    // daily forces G.diff='normal' (fair race) and is NOT seeded, so it submits.
+    const g=api.getG(); g.dist=333; g.tier=2; g.diff='normal'; g.daily=true; g.seeded=false;
+    api.gameOver();
+    assert(body && body.diff==='normal', 'daily run should route to normal board: '+JSON.stringify(body));
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-D2 records toggle re-fetches the selected board', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    let url=null;
+    globalThis.fetch = (u)=>{ url=u; return Promise.resolve({ok:true,json:async()=>({top:[]})}); };
+    api.Dex.data.difficulty='normal';
+    api.openRecords('title'); const g=api.getG(); g.recordsTab='global';
+    api.ensureBoard();
+    assert(url==='/api/wildwalk_board', 'default records board not normal: '+url);
+    api.setRecordsBoardDiff('hard');
+    assert(g.recordsBoardDiff==='hard', 'toggle did not set hard');
+    assert(url==='/api/wildwalk_board?diff=hard', 'toggle did not refetch hard: '+url);
+  } finally { globalThis.fetch=saved; }
 });
 
 // ---- E. save-shape includes playerName, absent from G ----

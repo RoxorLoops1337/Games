@@ -27,6 +27,11 @@ const post = (env, body, ip) => onRequestPost({
     headers: { 'content-type': 'application/json', 'cf-connecting-ip': ip || '1.1.1.1' },
     body: JSON.stringify(body) }),
 });
+// GET with an optional ?diff= (mirrors how the browser hits the endpoint)
+const get = (env, diff) => onRequestGet({
+  env,
+  request: new Request('http://x/api/wildwalk_board' + (diff ? ('?diff=' + encodeURIComponent(diff)) : '')),
+});
 
 // no binding → 503 (the game shows "offline" instead of breaking; NEVER 500)
 let r = await onRequestGet({ env: {} });
@@ -112,6 +117,98 @@ r = await onRequestPost({ env: { WWBOARD: mockKV() },
     headers: { 'content-type': 'application/json', 'cf-connecting-ip': '9.9.9.9' },
     body: 'not json{' }) });
 ok(r.status === 400, 'malformed JSON body → 400 (not 500)');
+
+// ===================================================================
+// PER-DIFFICULTY BOARD SPLIT (c35)
+// ===================================================================
+
+// --- routing: Hard submit lands on ww:top:hard and NOT on the legacy board ---
+{
+  const kvh = mockKV(); const envH = { WWBOARD: kvh };
+  r = await post(envH, { name: 'HardHero', dist: 800, tier: 6, diff: 'hard' }, '10.0.0.1');
+  j = await r.json();
+  ok(r.status === 200 && j.top.length === 1 && j.top[0].name === 'HardHero', 'hard submit lands');
+  ok(kvh._store.has('ww:top:hard'), 'hard submit writes ww:top:hard');
+  // NEGATIVE CONTROL: the legacy Normal board must be completely untouched
+  ok(!kvh._store.has('ww:top'), 'NEGATIVE CONTROL: hard submit does NOT touch legacy ww:top');
+
+  // GET ?diff=hard reads the hard rows back
+  r = await get(envH, 'hard'); j = await r.json();
+  ok(r.status === 200 && j.top.length === 1 && j.top[0].name === 'HardHero', 'GET ?diff=hard returns hard rows');
+  // GET with no diff reads the (empty) legacy board — hard rows do NOT bleed in
+  r = await get(envH); j = await r.json();
+  ok(r.status === 200 && j.top.length === 0, 'GET no-diff reads legacy board (hard rows absent)');
+}
+
+// --- casual submit lands on ww:top:casual only ---
+{
+  const kvc = mockKV(); const envC = { WWBOARD: kvc };
+  r = await post(envC, { name: 'Chill', dist: 300, tier: 2, diff: 'casual' }, '10.0.0.2');
+  j = await r.json();
+  ok(r.status === 200 && j.top[0].name === 'Chill', 'casual submit lands');
+  ok(kvc._store.has('ww:top:casual'), 'casual submit writes ww:top:casual');
+  ok(!kvc._store.has('ww:top') && !kvc._store.has('ww:top:hard'), 'casual submit touches ONLY ww:top:casual');
+}
+
+// --- back-compat: normal/undefined diff hits legacy ww:top byte-identically ---
+{
+  const kvn = mockKV();
+  // seed a pre-existing legacy entry, as would already exist in production KV
+  await kvn.put('ww:top', JSON.stringify([{ name: 'OldTimer', dist: 500, tier: 3, t: 1 }]));
+  const envN = { WWBOARD: kvn };
+
+  // explicit diff:'normal' writes to legacy key
+  r = await post(envN, { name: 'NormalGuy', dist: 600, tier: 4, diff: 'normal' }, '10.0.0.3');
+  j = await r.json();
+  ok(kvn._store.has('ww:top') && j.top.some(e => e.name === 'NormalGuy'), 'diff:normal writes legacy ww:top');
+  ok(j.top.some(e => e.name === 'OldTimer'), 'pre-existing legacy entry survives');
+  ok(!kvn._store.has('ww:top:normal'), 'never creates a ww:top:normal key');
+
+  // GET with no diff reads the legacy board back (existing entry visible)
+  r = await get(envN); j = await r.json();
+  ok(j.top.some(e => e.name === 'OldTimer') && j.top.some(e => e.name === 'NormalGuy'), 'GET no-diff reads legacy board');
+
+  // omitting diff entirely also routes to legacy
+  r = await post(envN, { name: 'NoDiff', dist: 700, tier: 5 }, '10.0.0.4');
+  j = await r.json();
+  ok(j.top.some(e => e.name === 'NoDiff'), 'omitted diff routes to legacy');
+}
+
+// --- whitelist: a bogus/malicious diff falls back to legacy, never a rogue key ---
+{
+  const kvx = mockKV(); const envX = { WWBOARD: kvx };
+  for (const bad of ['ww:evil', '../x', 'HARD', 'rl:1.1.1.1', '', 'proto__']) {
+    kvx._store.clear();
+    r = await post(envX, { name: 'Rogue', dist: 400, tier: 2, diff: bad }, '10.9.9.' + Math.floor(Math.random()*250));
+    j = await r.json();
+    ok(kvx._store.has('ww:top'), `bogus diff ${JSON.stringify(bad)} falls back to legacy ww:top`);
+    const keys = [...kvx._store.keys()].filter(k => k.startsWith('ww:'));
+    ok(keys.length === 1 && keys[0] === 'ww:top', `bogus diff ${JSON.stringify(bad)} creates no rogue ww: key (${keys})`);
+  }
+  // GET with a bogus diff also resolves to legacy, no throw
+  r = await get(envX, 'ww:evil'); j = await r.json();
+  ok(r.status === 200 && Array.isArray(j.top), 'GET bogus diff resolves to legacy, no throw');
+}
+
+// --- KV TTL: the throttle put must use expirationTtl >= 60 (mockKV throws if < 60) ---
+{
+  let ttlSeen = null;
+  const spyKV = mockKV();
+  const realPut = spyKV.put.bind(spyKV);
+  spyKV.put = async (k, v, opt) => { if (k.startsWith('rl:')) ttlSeen = opt && opt.expirationTtl; return realPut(k, v, opt); };
+  r = await post({ WWBOARD: spyKV }, { name: 'TtlTest', dist: 10, tier: 1, diff: 'hard' }, '11.0.0.1');
+  ok(ttlSeen != null && ttlSeen >= 60, `throttle put uses expirationTtl>=60 (saw ${ttlSeen})`);
+}
+
+// --- boards themselves carry NO TTL (unchanged) ---
+{
+  let boardOpt = 'unset';
+  const spyKV2 = mockKV();
+  const realPut2 = spyKV2.put.bind(spyKV2);
+  spyKV2.put = async (k, v, opt) => { if (k === 'ww:top:hard') boardOpt = opt; return realPut2(k, v, opt); };
+  await post({ WWBOARD: spyKV2 }, { name: 'NoTtl', dist: 20, tier: 1, diff: 'hard' }, '11.0.0.2');
+  ok(boardOpt === undefined, 'board put carries no options (no TTL)');
+}
 
 console.log(`\nwildwalk leaderboard fn: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);

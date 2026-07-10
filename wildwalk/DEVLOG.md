@@ -52,7 +52,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 32. [x] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe) — DONE c32.
 33. [x] Difficulty presets (Casual/Normal/Hard modifiers layered cleanly over ascension) — DONE c33.
 34. [x] Achievement chains / tiered milestones (multi-step goals with escalating essence) — DONE c34.
-35. [ ] Endless-mode leaderboard split (separate boards per difficulty preset so Hard runs compete fairly).
+35. [x] Endless-mode leaderboard split (separate boards per difficulty preset so Hard runs compete fairly) — DONE c35.
 36. [ ] Monster nicknames + a rename UI (persisted per-caught, save-safe, purely cosmetic flavor).
 37. [ ] Elite/shiny wild variants (rare recolored spawns with a small stat halo + a dex "shiny caught" flag).
 38. [ ] Weather/biome-driven type-spawn bias made visible (a "what roams here" biome info panel).
@@ -64,7 +64,14 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
-- **c34 — Achievement chains / tiered milestones** (studio: engineer → QA, lean 2-agent). Reorganized ACH into 3 chains:
+- **c35 — Per-difficulty leaderboard split** (studio: engineer → QA, lean 2-agent). The online board now has separate
+  boards per difficulty so Hard runs compete against Hard. Cloudflare fn routes via a whitelisted boardKey(diff):
+  legacy 'ww:top' stays the Normal board (existing entries survive; default no-diff GET/POST byte-identical), casual/hard
+  live under new 'ww:top:casual'/'ww:top:hard' keys; bogus/malicious diff falls back to Normal (no arbitrary KV keys).
+  Board.submit forwards the run's G.diff (daily/seeded force Normal); Records global tab gets a Casual/Normal/Hard toggle.
+  KV expirationTtl>=60 preserved; no new Dex.data field (toggle transient on G). +c35 tests: routing with a real negative
+  control (Hard submit lands on Hard board, NOT Normal), whitelist fallback, TTL/back-compat, client submit/fetch routing.
+  269/269 wildwalk + 47/47 board, 0/6 flakes. — FINAL cycle of the autonomous run (c16–c35). (studio: engineer → QA, lean 2-agent). Reorganized ACH into 3 chains:
   Collector (catch 5/15/25 → +20/45/90, new ids), Boss Hunter (existing first_boss/boss_10 + new boss_50 → +140),
   Trailblazer (existing tier_5/10/15/20 grouped). Each tier is its own ACH entry, so it reuses the per-id Dex.data.ach
   grant — ZERO save-shape change, no existing id/essence touched (old saves keep everything). Awards screen now paginated
