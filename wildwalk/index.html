@@ -350,7 +350,7 @@ function xpToLevels(m, gain){
 
 // ---------- pokedex / persistence ----------
 const Dex = {
-  data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, ascension:{ max:0, sel:0 }, upgrades:{}, muted:false,
+  data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, ascension:{ max:0, sel:0 }, upgrades:{}, muted:false, playerName:'',
          ach:{}, killed:0, released:0, bossKills:0, bestTier:0, fullPartyWin:0, wildCatch:0, runsLog:[],
          daily:{ day:0, dist:0, tier:0 }, tutorialDone:false },
   load(){ try{ const d=JSON.parse(localStorage.getItem(SAVE)); if(d) this.data=Object.assign(this.data,d); }catch(e){} },
@@ -782,6 +782,30 @@ function drawTrainer(x,y,s,t,walking){
 // Game state
 // ===================================================================
 let G;
+// ---------- online leaderboard (additive, optional, fully offline-safe) ----------
+const Board = {
+  URL: '/api/wildwalk_board',
+  async fetchTop(){
+    if(typeof globalThis.fetch !== 'function') return null;
+    try{
+      const r = await globalThis.fetch(this.URL);
+      if(!r || !r.ok) return null;
+      const j = await r.json();
+      return (j && Array.isArray(j.top)) ? j.top : null;
+    }catch(_){ return null; }
+  },
+  submit(name, dist, tier){
+    if(typeof globalThis.fetch !== 'function') return;
+    try{
+      const p = globalThis.fetch(this.URL, {
+        method:'POST', headers:{'content-type':'application/json'},
+        body:JSON.stringify({ name:name, dist:dist, tier:tier })
+      });
+      if(p && typeof p.catch === 'function') p.catch(()=>{});
+    }catch(_){ }
+  }
+};
+
 const TUT_STEPS = [
   {id:'walk',   state:'walk',       title:'The Walk',
    body:'You march east on your own. Wild monsters appear along the way.'},
@@ -1330,6 +1354,7 @@ function gameOver(){
     Dex.save();
   }
   checkAch();
+  Board.submit(Dex.data.playerName||'Anonymous', G.dist, G.tier);  // online: fire-and-forget, cannot throw/block
   G.state='gameover'; clearButtons();
   sfx('defeat');
 }
@@ -2190,7 +2215,16 @@ function draw(){
 function dexStatus(key){ return Dex.data.caught[key]?2:(Dex.data.seen[key]?1:0); }
 function openPokedex(from){ G.pokedexFrom=from; G.pokedexSel=null; G.state='pokedex'; clearButtons(); }
 function openAchievements(from){ G.achFrom=from; G.state='achievements'; clearButtons(); }
-function openRecords(from){ G.recordsFrom=from; G.state='records'; clearButtons(); }
+function openRecords(from){
+  G.recordsFrom=from; G.state='records';
+  G.recordsTab='local'; G.boardData=undefined; G.boardFetching=false;
+  clearButtons();
+}
+function ensureBoard(){
+  if(G.boardData!==undefined || G.boardFetching) return;
+  G.boardFetching=true;
+  Board.fetchTop().then(rows=>{ G.boardData=rows; G.boardFetching=false; });
+}
 function achToast(a){ G.achMsg='Achievement: '+a.name; G.achIcon=a.icon; G.achMsgT=3.0; }
 function openSanctuary(from){ G.sanctuaryFrom=from; G.state='sanctuary'; clearButtons(); }
 function openStarter(from){ G.starterFrom=from; G.state='starter'; clearButtons(); }
@@ -2333,39 +2367,84 @@ function drawAchievements(){
 function drawRecords(){
   ctx.fillStyle='#12162a'; ctx.fillRect(0,0,W,H);
   centerText('RECORDS', W/2,44,'900 40px Segoe UI','#ffe9a8');
-  centerText('Your best walks', W/2,72,'700 16px Segoe UI','#c9b8ff');
+  const tab = (G.recordsTab==='global') ? 'global' : 'local';
+  clearButtons();
+  const activeCol='#3a4a6a', idleCol='#20263c';
+  btn('tab_local',  W/2-150, 74, 140, 30, 'LOCAL',  null,
+    {col: tab==='local'?activeCol:idleCol,  accent: tab==='local'?'#8fb0ff':undefined,  tcol: tab==='local'?'#eaf0ff':'#8fa0c8'});
+  btn('tab_global', W/2+10,  74, 140, 30, 'GLOBAL', null,
+    {col: tab==='global'?activeCol:idleCol, accent: tab==='global'?'#8fb0ff':undefined, tcol: tab==='global'?'#eaf0ff':'#8fa0c8'});
+  if(tab==='local') drawRecordsLocal(); else drawRecordsGlobal();
+  btn('back', W/2-90, 548, 180, 40, '◀  BACK', null, {col:'#2a3355'});
+  drawButtons();
+}
+function drawRecordsLocal(){
   const log=(Array.isArray(Dex.data.runsLog)?Dex.data.runsLog:[]).slice(0,10);
   if(log.length===0){
     panel(230,210,500,180,null);
     centerText('No runs recorded yet',W/2,285,'800 24px Segoe UI','#eaf0ff');
     centerText('Finish a walk to set your first record.',W/2,320,'600 15px Segoe UI','#8fa0c8');
-  } else {
-    ctx.font='700 12px Segoe UI'; ctx.fillStyle='#8fa0c8'; ctx.textAlign='center';
-    ctx.fillText('RANK',200,100); ctx.fillText('DIST',355,100); ctx.fillText('TIER',505,100);
-    ctx.fillText('FIGHTS',630,100); ctx.fillText('DEX',755,100); ctx.textAlign='left';
-    log.forEach((r,i)=>{
-      const y=112+i*40;
-      const isMe=G.lastRunRec && r===G.lastRunRec;
-      ctx.save();
-      roundRect(150,y,660,36,10); ctx.fillStyle=(i===0)?'#1a2138':'#0e1324'; ctx.fill();
-      ctx.lineWidth=2;
-      if(isMe){ ctx.shadowColor='#6fd07a'; ctx.shadowBlur=10; ctx.strokeStyle='#6fd07a'; }
-      else if(i===0){ ctx.shadowColor='#ffe9a8'; ctx.shadowBlur=8; ctx.strokeStyle='#ffe9a8'; }
-      else { ctx.strokeStyle='#2a3760'; }
-      roundRect(150,y,660,36,10); ctx.stroke();
-      ctx.restore();
-      if(i<=2){ centerText(['🥇','🥈','🥉'][i],200,y+24,'700 20px Segoe UI','#eaf0ff'); }
-      else { centerText('#'+(i+1),200,y+24,'800 16px Segoe UI','#aeb8d8'); }
-      centerText((r.dist??0)+'m',355,y+24,'800 20px Segoe UI','#ffe9a8');
-      centerText('T'+(r.tier??'?'),505,y+23,'700 15px Segoe UI','#c9b8ff');
-      centerText(''+(r.fights??0),630,y+23,'700 15px Segoe UI','#aeb8d8');
-      centerText((r.dex??0)+'/'+Object.keys(SPECIES).length,755,y+23,'700 15px Segoe UI','#c9d4f0');
-      if(isMe){ centerText('◀ THIS RUN',862,y+22,'700 11px Segoe UI','#6fd07a'); }
-    });
+    return;
   }
-  clearButtons();
-  btn('back', W/2-90, 548, 180, 40, '◀  BACK', null, {col:'#2a3355'});
-  drawButtons();
+  ctx.font='700 12px Segoe UI'; ctx.fillStyle='#8fa0c8'; ctx.textAlign='center';
+  ctx.fillText('RANK',200,122); ctx.fillText('DIST',355,122); ctx.fillText('TIER',505,122);
+  ctx.fillText('FIGHTS',630,122); ctx.fillText('DEX',755,122); ctx.textAlign='left';
+  log.forEach((r,i)=>{
+    const y=134+i*40;
+    const isMe=G.lastRunRec && r===G.lastRunRec;
+    ctx.save();
+    roundRect(150,y,660,36,10); ctx.fillStyle=(i===0)?'#1a2138':'#0e1324'; ctx.fill();
+    ctx.lineWidth=2;
+    if(isMe){ ctx.shadowColor='#6fd07a'; ctx.shadowBlur=10; ctx.strokeStyle='#6fd07a'; }
+    else if(i===0){ ctx.shadowColor='#ffe9a8'; ctx.shadowBlur=8; ctx.strokeStyle='#ffe9a8'; }
+    else { ctx.strokeStyle='#2a3760'; }
+    roundRect(150,y,660,36,10); ctx.stroke();
+    ctx.restore();
+    if(i<=2){ centerText(['🥇','🥈','🥉'][i],200,y+24,'700 20px Segoe UI','#eaf0ff'); }
+    else { centerText('#'+(i+1),200,y+24,'800 16px Segoe UI','#aeb8d8'); }
+    centerText((r.dist??0)+'m',355,y+24,'800 20px Segoe UI','#ffe9a8');
+    centerText('T'+(r.tier??'?'),505,y+23,'700 15px Segoe UI','#c9b8ff');
+    centerText(''+(r.fights??0),630,y+23,'700 15px Segoe UI','#aeb8d8');
+    centerText((r.dex??0)+'/'+Object.keys(SPECIES).length,755,y+23,'700 15px Segoe UI','#c9d4f0');
+    if(isMe){ centerText('◀ THIS RUN',862,y+22,'700 11px Segoe UI','#6fd07a'); }
+  });
+}
+function drawRecordsGlobal(){
+  ensureBoard();
+  const nm = Dex.data.playerName || '';
+  btn('setname', W-206, 74, 184, 30, nm ? ('✎ '+nm) : '✎ SET NAME', null, {col:'#3a2f5a', accent:'#ffe9a8'});
+  const d = G.boardData;
+  if(d===undefined){ centerText('Loading global leaderboard…', W/2,300,'700 18px Segoe UI','#8fa0c8'); return; }
+  if(d===null){
+    panel(230,210,500,180,null);
+    centerText('Leaderboard offline', W/2,285,'800 24px Segoe UI','#eaf0ff');
+    centerText('Check your connection and try again.', W/2,320,'600 15px Segoe UI','#8fa0c8');
+    return;
+  }
+  if(d.length===0){
+    panel(230,210,500,180,null);
+    centerText('No global runs yet', W/2,285,'800 24px Segoe UI','#eaf0ff');
+    centerText('Finish a walk to claim the top spot.', W/2,320,'600 15px Segoe UI','#8fa0c8');
+    return;
+  }
+  ctx.font='700 12px Segoe UI'; ctx.fillStyle='#8fa0c8'; ctx.textAlign='center';
+  ctx.fillText('RANK',200,122); ctx.fillText('NAME',380,122); ctx.fillText('DIST',600,122); ctx.fillText('TIER',720,122);
+  ctx.textAlign='left';
+  d.slice(0,10).forEach((r,i)=>{
+    const y=134+i*40;
+    ctx.save();
+    roundRect(150,y,660,36,10); ctx.fillStyle=(i===0)?'#1a2138':'#0e1324'; ctx.fill();
+    ctx.lineWidth=2;
+    if(i===0){ ctx.shadowColor='#ffe9a8'; ctx.shadowBlur=8; ctx.strokeStyle='#ffe9a8'; }
+    else ctx.strokeStyle='#2a3760';
+    roundRect(150,y,660,36,10); ctx.stroke();
+    ctx.restore();
+    if(i<=2) centerText(['🥇','🥈','🥉'][i],200,y+24,'700 20px Segoe UI','#eaf0ff');
+    else     centerText('#'+(i+1),200,y+24,'800 16px Segoe UI','#aeb8d8');
+    centerText(String(r.name||'—'),380,y+23,'700 15px Segoe UI','#eaf0ff');
+    centerText((r.dist??0)+'m',600,y+24,'800 18px Segoe UI','#ffe9a8');
+    centerText('T'+(r.tier??'?'),720,y+23,'700 15px Segoe UI','#c9b8ff');
+  });
 }
 
 function drawTitle(){
@@ -2953,7 +3032,22 @@ function onClick(mx,my){
     return;
   }
   if(G.state==='achievements'){ const b=hitButton(mx,my); if(b && b.id==='back'){ G.state=G.achFrom||'title'; clearButtons(); } return; }
-  if(G.state==='records'){ const b=hitButton(mx,my); if(b && b.id==='back'){ G.state=G.recordsFrom||'title'; clearButtons(); } return; }
+  if(G.state==='records'){
+    const b=hitButton(mx,my); if(!b) return;
+    if(b.id==='back'){ G.state=G.recordsFrom||'title'; clearButtons(); return; }
+    if(b.id==='tab_local'){ G.recordsTab='local'; return; }
+    if(b.id==='tab_global'){ G.recordsTab='global'; ensureBoard(); return; }
+    if(b.id==='setname'){
+      const cur = Dex.data.playerName||'';
+      const inp = (typeof prompt==='function') ? prompt('Leaderboard name:', cur) : null;
+      if(inp!=null){
+        Dex.data.playerName = String(inp).replace(/[^\w \-.']/g,'').trim().slice(0,16);
+        Dex.save();
+      }
+      return;
+    }
+    return;
+  }
   if(G.state==='battle' && G.battleIntro<=0){ const idx=teamCardAt(mx,my); if(idx>=0){ trySwitch(idx); return; } }
   const b=hitButton(mx,my); if(!b) return;
   const id=b.id;

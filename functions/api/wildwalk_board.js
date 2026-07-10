@@ -1,0 +1,69 @@
+// Wildwalk — all-time distance leaderboard (Cloudflare Pages Function).
+//
+// Deployed automatically by Cloudflare Pages from this repo's /functions dir
+// as https://<site>/api/wildwalk_board. Requires ONE dashboard step: in the
+// Pages project → Settings → Bindings → add a KV namespace binding named
+// WWBOARD (its own namespace — do NOT reuse No Room For Heroes' BOARD).
+// Until that binding exists this returns 503 and the game hides the board.
+//
+// A single all-time board, ranked by distance descending, best-per-name.
+//
+//   GET  /api/wildwalk_board                 → { top:[{name,dist,tier,t},...] }
+//   POST /api/wildwalk_board {name,dist,tier}→ validates/clamps, keeps each
+//                              name's best distance, 30s per-IP write throttle,
+//                              caps 50, returns { top:[...] }.
+
+const json = (o, s) => new Response(JSON.stringify(o), {
+  status: s || 200,
+  headers: { 'content-type': 'application/json', 'access-control-allow-origin': '*' },
+});
+
+// binding variable names are case-sensitive in the dashboard — accept any casing
+const kv = env => env.WWBOARD || env.wwboard || env.WwBoard || env.Wwboard || null;
+
+const KEY = 'ww:top';          // all-time board (no TTL — never expires)
+const CAP = 50;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+export async function onRequestGet({ env }) {
+  const KV = kv(env);
+  if (!KV) return json({ error: 'not configured' }, 503);
+  const top = JSON.parse((await KV.get(KEY)) || '[]');
+  return json({ top });
+}
+
+export async function onRequestPost({ request, env }) {
+  const KV = kv(env);
+  if (!KV) return json({ error: 'not configured' }, 503);
+
+  const ip = request.headers.get('cf-connecting-ip') || '?';
+  // 30s per-IP throttle — KV's minimum expirationTtl is 60s (smaller throws →
+  // 500), so store a timestamp and compare for the real window.
+  const last = await KV.get('rl:' + ip);
+  if (last && Date.now() - +last < 30000) return json({ error: 'slow down' }, 429);
+
+  let b; try { b = await request.json(); } catch (_) { return json({ error: 'bad json' }, 400); }
+
+  // Sanitize/clamp everything. name regex strips control chars + HTML/injection
+  // vectors (only \w, space, dash, dot, apostrophe survive), capped 16 chars.
+  const name = String(b.name || '').replace(/[^\w \-.']/g, '').trim().slice(0, 16) || 'Anonymous';
+  const dist = Math.floor(+b.dist);
+  if (!Number.isFinite(dist) || dist < 1 || dist > 100000) return json({ error: 'bad dist' }, 400);
+  const tier = clamp(Math.floor(+b.tier) || 1, 1, 999);
+
+  const top = JSON.parse((await KV.get(KEY)) || '[]');
+  const i = top.findIndex(e => e.name === name);
+  if (i >= 0) {
+    if (top[i].dist >= dist) {                                // not a new personal best
+      await KV.put('rl:' + ip, String(Date.now()), { expirationTtl: 60 });
+      return json({ top });
+    }
+    top.splice(i, 1);
+  }
+  top.push({ name, dist, tier, t: Date.now() });
+  top.sort((a, b2) => b2.dist - a.dist);
+  if (top.length > CAP) top.length = CAP;
+  await KV.put(KEY, JSON.stringify(top));                     // all-time: no TTL
+  await KV.put('rl:' + ip, String(Date.now()), { expirationTtl: 60 });
+  return json({ top });
+}

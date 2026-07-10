@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f)};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -680,7 +680,7 @@ test('biome state stays out of the save shape', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
@@ -823,7 +823,7 @@ test('boss fight leaves the save shape untouched', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   // bossKills is a legit persisted achievement counter; any OTHER boss* field is a leak
   for(const k of keys) assert(k==='bossKills' || !/^boss/i.test(k), `boss field leaked into save: ${k}`);
 });
@@ -1079,7 +1079,7 @@ test('R17 relics never change the persisted save shape', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
 });
 
@@ -1307,7 +1307,7 @@ test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
 });
 
@@ -1662,7 +1662,7 @@ test('ACH7 save shape is a superset of the old 7 keys', ()=>{
   api.Dex.save();
   const saved = JSON.parse(store['wildwalk_save_v1']);
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']),
     `save shape wrong: ${keys}`);
 });
 
@@ -1703,7 +1703,7 @@ test('ACH first_catch requires a wild catch, not the auto-caught starter', ()=>{
 // ===================================================================
 // WEATHER / DAY-NIGHT — transient reskin + small balanced dmg/catch mods
 // ===================================================================
-const WSHAPE = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch'];
+const WSHAPE = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch'];
 
 // (a) documented dmg multiplier + catch bonus — holder-agnostic (attacker-type keyed)
 test('WX1 weather applies documented dmg mult, crit mult and catch bonus', ()=>{
@@ -1899,7 +1899,7 @@ test('SHOP4 buyStock applies effect and marks sold', ()=>{
 test('SHOP5 shop activity does not alter save shape', ()=>{
   const { api, store } = boot();
   const g = api.getG();
-  const canonical = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch'];
+  const canonical = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch'];
   api.Dex.save();
   const baseKeys = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
   assert(JSON.stringify(baseKeys)===JSON.stringify(canonical), 'baseline save keys drifted: '+baseKeys.join(','));
@@ -2136,7 +2136,7 @@ test('DAILY7 save shape still matches after a daily run', ()=>{
   api.startDaily();
   api.gameOver();
   const keys = Object.keys(api.Dex.data).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
 });
 
 // ---- ascension (prestige) ----
@@ -2391,6 +2391,231 @@ test('JUICE-STATUS stun-only + all-zero-status idle battle render safely', ()=>{
   for(let i=0;i<40;i++){ g.t=i*0.08; api.draw(); }
   assert(g.state==='battle', 'left battle unexpectedly');
 });
+
+// ===================================================================
+// ONLINE LEADERBOARD (Board client) — additive, optional, offline-safe
+// ===================================================================
+async function atest(name, fn){ try{ await fn(); passed++; }catch(e){ failed++; console.error(`FAIL ${name}: ${e.message}`); } }
+
+const LOADED = ()=> (async()=>({ ok:true, json:async()=>({ top:[
+  {name:'Ada',dist:900,tier:5,t:1},{name:'Bo',dist:400,tier:3,t:2}] }) }));
+const flush = ()=> new Promise(r=>setTimeout(r,0));
+
+await (async()=>{
+
+// ---- A. Board.fetchTop ----
+await atest('BOARD-A fetchTop loaded → array', async()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    globalThis.fetch = LOADED();
+    const rows = await api.Board.fetchTop();
+    assert(Array.isArray(rows) && rows.length===2, 'expected 2 rows');
+    assert(rows[0].name==='Ada', 'wrong first row');
+  } finally { globalThis.fetch=saved; }
+});
+await atest('BOARD-A fetchTop !ok → null', async()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch = async()=>({ ok:false, status:503, json:async()=>({}) });
+    assert(await api.Board.fetchTop()===null, 'expected null on !ok');
+  } finally { globalThis.fetch=saved; }
+});
+await atest('BOARD-A fetchTop reject → null', async()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch = ()=>Promise.reject(new Error('down'));
+    assert(await api.Board.fetchTop()===null, 'expected null on reject');
+  } finally { globalThis.fetch=saved; }
+});
+await atest('BOARD-A fetchTop sync-throw → null', async()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch = ()=>{ throw new Error('boom'); };
+    assert(await api.Board.fetchTop()===null, 'expected null on sync throw');
+  } finally { globalThis.fetch=saved; }
+});
+await atest('BOARD-A fetchTop malformed json → null', async()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch = async()=>({ ok:true, json:async()=>({}) });
+    assert(await api.Board.fetchTop()===null, 'expected null when no top array');
+  } finally { globalThis.fetch=saved; }
+});
+await atest('BOARD-A fetchTop absent fetch → null', async()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch = undefined;
+    assert(await api.Board.fetchTop()===null, 'expected null when fetch absent');
+  } finally { globalThis.fetch=saved; }
+});
+
+// ---- B. Board.submit ----
+test('BOARD-B submit spy → POST body correct, returns undefined', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    let calls=0, body=null;
+    globalThis.fetch = (u,o)=>{ calls++; body=JSON.parse(o.body); return Promise.resolve({ok:true,json:async()=>({})}); };
+    const r = api.Board.submit('Ada',900,5);
+    assert(r===undefined, 'submit should return undefined');
+    assert(calls===1, 'fetch not called once');
+    assert(body.name==='Ada' && body.dist===900 && body.tier===5, 'bad POST body: '+JSON.stringify(body));
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-B submit reject → no throw', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch = ()=>Promise.reject(new Error('down'));
+    api.Board.submit('X',1,1); // must not throw / unhandled
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-B submit sync-throw → no throw', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch = ()=>{ throw new Error('boom'); };
+    api.Board.submit('X',1,1);
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-B submit absent fetch → no throw, no call', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ let calls=0; globalThis.fetch = undefined;
+    api.Board.submit('X',1,1);
+    assert(calls===0, 'should not call');
+  } finally { globalThis.fetch=saved; }
+});
+
+// ---- C. RECORDS tabs + set-name ----
+test('BOARD-C openRecords defaults to local tab, unfetched', ()=>{
+  const { api } = boot();
+  api.openRecords('title');
+  const g=api.getG();
+  assert(g.state==='records', 'not records state');
+  assert(g.recordsTab==='local', 'default tab not local');
+  assert(g.boardData===undefined, 'boardData should be unfetched');
+});
+test('BOARD-C click tab_global switches tab', ()=>{
+  const { api, clickId } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch=undefined;
+    api.openRecords('title'); api.draw();
+    assert(clickId('tab_global'), 'no tab_global button');
+    assert(api.getG().recordsTab==='global', 'did not switch to global');
+  } finally { globalThis.fetch=saved; }
+});
+await atest('BOARD-C global loaded renders rows', async()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    globalThis.fetch = LOADED();
+    api.openRecords('title'); const g=api.getG(); g.recordsTab='global';
+    api.ensureBoard(); await flush();
+    assert(Array.isArray(g.boardData) && g.boardData.length===2, 'boardData not loaded array');
+    api.draw(); // must not throw
+  } finally { globalThis.fetch=saved; }
+});
+await atest('BOARD-C global offline renders offline panel', async()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    globalThis.fetch = ()=>Promise.reject(new Error('down'));
+    api.openRecords('title'); const g=api.getG(); g.recordsTab='global';
+    api.ensureBoard(); await flush();
+    assert(g.boardData===null, 'boardData should be null offline');
+    api.draw(); // must not throw
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-C global loading state renders', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch=undefined;
+    api.openRecords('title'); const g=api.getG(); g.recordsTab='global';
+    g.boardData=undefined; g.boardFetching=true; // pretend an in-flight fetch
+    api.draw(); // shows Loading…, must not throw
+    assert(g.state==='records', 'left records');
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-C click tab_local returns to local, renders', ()=>{
+  const { api, clickId } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch=undefined;
+    api.openRecords('title'); const g=api.getG(); g.recordsTab='global';
+    api.draw();
+    assert(clickId('tab_local'), 'no tab_local button');
+    assert(g.recordsTab==='local', 'did not return to local');
+    api.draw();
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-C set-name sanitizes + persists', ()=>{
+  const { api, clickId, store } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch=undefined;
+    api.openRecords('title'); const g=api.getG(); g.recordsTab='global';
+    api.draw();
+    globalThis.prompt = ()=>'  Ada<>! ';
+    assert(clickId('setname'), 'no setname button');
+    assert(api.Dex.data.playerName==='Ada', 'name not sanitized: '+api.Dex.data.playerName);
+    assert(JSON.parse(store['wildwalk_save_v1']).playerName==='Ada', 'name not persisted');
+  } finally { globalThis.fetch=saved; delete globalThis.prompt; }
+});
+test('BOARD-C set-name cancel leaves name unchanged', ()=>{
+  const { api, clickId } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch=undefined;
+    api.Dex.data.playerName='Keep';
+    api.openRecords('title'); const g=api.getG(); g.recordsTab='global';
+    api.draw();
+    globalThis.prompt = ()=>null;
+    clickId('setname');
+    assert(api.Dex.data.playerName==='Keep', 'name changed on cancel');
+  } finally { globalThis.fetch=saved; delete globalThis.prompt; }
+});
+test('BOARD-C click back leaves records to origin', ()=>{
+  const { api, clickId } = boot(); const saved=globalThis.fetch;
+  try{ globalThis.fetch=undefined;
+    api.openRecords('title'); api.draw();
+    assert(clickId('back'), 'no back button');
+    assert(api.getG().state==='title', 'did not return to title');
+  } finally { globalThis.fetch=saved; }
+});
+
+// ---- D. gameOver non-blocking submit ----
+test('BOARD-D gameOver submits fire-and-forget with correct body', ()=>{
+  const { api } = boot(); const saved=globalThis.fetch;
+  try{
+    let calls=0, body=null;
+    globalThis.fetch = (u,o)=>{ calls++; body=JSON.parse(o.body); return Promise.resolve({ok:true,json:async()=>({})}); };
+    const g=api.getG(); g.dist=1234; g.tier=5; api.Dex.data.playerName='Zed';
+    api.gameOver();
+    assert(g.state==='gameover', 'gameOver did not complete');
+    assert(calls===1, 'submit not fired once');
+    assert(body.name==='Zed' && body.dist===1234 && body.tier===5, 'bad body: '+JSON.stringify(body));
+  } finally { globalThis.fetch=saved; }
+});
+test('BOARD-D gameOver stays sync when fetch rejects/throws/absent', ()=>{
+  for(const stub of [ ()=>Promise.reject(new Error('down')), ()=>{throw new Error('boom');}, undefined ]){
+    const { api } = boot(); const saved=globalThis.fetch;
+    try{
+      globalThis.fetch = stub;
+      const g=api.getG(); g.dist=10; g.tier=1;
+      api.gameOver();
+      assert(g.state==='gameover', 'gameOver blocked/failed for a stub');
+    } finally { globalThis.fetch=saved; }
+  }
+});
+
+// ---- E. save-shape includes playerName, absent from G ----
+test('BOARD-E playerName in save shape, string, never on G', ()=>{
+  const { api, store } = boot();
+  api.Dex.save();
+  const parsed = JSON.parse(store['wildwalk_save_v1']);
+  const keys = Object.keys(parsed).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(WSHAPE), 'save shape drift: '+keys.join(','));
+  assert(typeof parsed.playerName==='string', 'playerName not a string');
+  assert(!('playerName' in api.getG()), 'playerName leaked onto G');
+});
+
+// ---- F. offline-by-default: whole flow with fetch absent ----
+await atest('BOARD-F fully playable with fetch absent', async()=>{
+  const savedFetch=globalThis.fetch;
+  try{
+    globalThis.fetch = undefined;
+    const { api } = boot();
+    const g=api.getG(); g.dist=321; g.tier=2;
+    api.gameOver(); // no throw even with fetch absent
+    assert(g.state==='gameover', 'gameOver failed offline');
+    api.openRecords('gameover'); g.recordsTab='global';
+    api.ensureBoard(); await flush();
+    assert(g.boardData===null, 'boardData should be null offline');
+    api.draw(); // must not throw
+  } finally { globalThis.fetch=savedFetch; }
+});
+
+})();
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

@@ -18,7 +18,8 @@
     "test:frietkot": "node tests/frietkot_tycoon.test.mjs",
     "test:horse": "node tests/horse_ranch.test.mjs",
     "test:wildwalk": "node tests/wildwalk.test.mjs",
-    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot && npm run test:horse && npm run test:wildwalk"
+    "test:wwboard": "node tests/wildwalk_board.test.mjs",
+    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot && npm run test:horse && npm run test:wildwalk && npm run test:wwboard"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",
