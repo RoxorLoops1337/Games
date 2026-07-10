@@ -26,6 +26,14 @@ ok(TC.CORE_SET.every(c => {
   ok(commonMax < ultraMin, 'common\'s power ceiling stays below Ultra Rare\'s floor');
 }
 
+// ---- printed moves & illustrator credits ----
+ok(TC.CORE_SET.every(c => c.move && c.move.name.includes(' ') && c.move.name.length > 3), 'every card has a two-word move name');
+ok(TC.CORE_SET.every(c => c.move.dmg % 10 === 0 && c.move.dmg >= 10 && c.move.dmg <= 120), 'move damage is a round number tied to POW');
+ok(TC.CORE_SET.every(c => c.move.cost >= 1 && c.move.cost <= 3), 'energy cost runs 1-3');
+ok(TC.CORE_SET.every(c => typeof c.move.text === 'string'), 'every move carries an effect line (possibly blank)');
+ok(TC.CORE_SET.every(c => c.illus && c.illus.length > 2), 'every card credits an illustrator');
+ok(TC.CORE_SET.filter(c => c.move.plus).length > 10, 'a meaningful share of moves have the "+" damage marker');
+
 // ---- fresh save ----
 const S = TC.freshSave();
 ok(S.coins === 0 && S.packsUnopened === TC.STARTER_PACKS, 'starts with 0 coins and the starter packs');
