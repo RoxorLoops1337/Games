@@ -43,7 +43,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 23. [x] Status-effect visual polish — DONE c23.
 24. [x] Online Cloudflare KV leaderboard — DONE c24.
 25. [x] Settings menu — DONE c25.
-26. [ ] New element type + species that use it (e.g. Ice or Wind), with type-chart + biome/boss wiring.
+26. [x] New element type + species (Frost) — DONE c26.
 27. [ ] Party synergies / auras (type-pair or full-team bonuses that reward deliberate team-building).
 28. [ ] Boss telegraph & mechanic variety (distinct wind-ups/patterns per boss, readable tells).
 29. [ ] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety).
@@ -55,6 +55,21 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c26 — New Frost element type + species line** (studio: type-designer, species/art-designer, lead, engineer,
+  QA + orchestrator fix). Added a 7th type, Frost, wired end-to-end: TYPES + all THREE c25 palettes (TYPE_COL,
+  TYPE_COL_DEFAULT icy #8fd8e8, TYPE_COL_CB Okabe-Ito #0072B2); type chart row Frost{Grass1.4,Rock1.4,Fire0.72,
+  Water0.72} + Fire/Rock get Frost:1.4 (2 strengths, 2 weaknesses — every value ∈{0.72,1,1.4}). New CHILL
+  passive (guaranteed on-hit soft-slow, distinct from Volt's hard stun): CHILL_DUR=2.5, CHILL_MUL=1.35 (+35%
+  attack delay); chill/fChill added to both status bags, decayed in statusTick, and the ONLY combat-math change
+  is the cadence hook X.cd=(1/spd)*(chill>0?CHILL_MUL:1) — exactly 1× (bit-identical) for any non-chilled mon.
+  A full common→legendary Frost line (Frostkit→Frostfang→Glaciera, Borealynx) with in-band stats + a new
+  procedural 'frost' feat (ice-shard crown); added to the pools (each →7), a chill snowflake pip, a Long Winter
+  boss title, and Frost added to the Tundra biome favor (→ Frost-themed tundra boss). Pokedex + starter grids
+  retuned to 7 columns (28 species = 4 rows). Full Spectrum now needs 7 types. Count-hardcoded tests bumped
+  24→28 + starterPool 6/12→7/14; +NS5 covering the chart/species/palettes. ORCHESTRATOR FIX: QA flagged the
+  cadence test as a tautology (never drove the real code); I rewrote it to drive updateBattle and proved it
+  catches a broken hook via a negative control, then fixed a flake it introduced (tank both combatants so a
+  one-shot can't end the fight mid-check). 192/192 wildwalk + 19/19 board, 0/16 flakes. Confirmed by screenshot.
 - **c25 — Settings menu** (studio: settings-ux-designer, audio-systems-designer, lead, engineer, QA). A ⚙
   Settings screen from the title with independent MUSIC + SOUND FX volume sliders (click-to-set, shared
   sliderRect geometry so draw/click can't drift; music scales _musicGain 0..0.35, sfx scales each blip peak

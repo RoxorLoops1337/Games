@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -150,14 +150,14 @@ test('SS-b starterPool honors the menagerie unlock', ()=>{
   const COMMONS = api.COMMONS, UNCOMMONS = api.UNCOMMONS;
   api.Dex.data.upgrades.menagerie = 0;
   assert(JSON.stringify(api.starterPool())===JSON.stringify(COMMONS), 'pool should equal COMMONS without menagerie');
-  assert(api.starterPool().length===6, 'pool len 6 without menagerie');
+  assert(api.starterPool().length===7, 'pool len 7 without menagerie');
   // locked uncommon forced in without menagerie -> falls back to a common
   api.newGame(UNCOMMONS[0]);
   assert(COMMONS.includes(api.getG().starterKey), `locked uncommon should fall back to a common, got ${api.getG().starterKey}`);
   // unlock -> uncommons join the pool and can be chosen
   api.Dex.data.upgrades.menagerie = 1;
   assert(JSON.stringify(api.starterPool())===JSON.stringify(COMMONS.concat(UNCOMMONS)), 'pool should be COMMONS+UNCOMMONS');
-  assert(api.starterPool().length===12, 'pool len 12 with menagerie');
+  assert(api.starterPool().length===14, 'pool len 14 with menagerie');
   api.newGame(UNCOMMONS[0]);
   assert(api.getG().starterKey===UNCOMMONS[0], `unlocked uncommon should stick, got ${api.getG().starterKey}`);
 });
@@ -510,7 +510,7 @@ test('pokedex opens from gameover and back returns to gameover', ()=>{
 test('dexProgress counts reflect Dex.data', ()=>{
   const { api } = boot();
   const p=api.dexProgress();
-  assert(p.total===24 && p.caught===api.Dex.nCaught() && p.seen===api.Dex.nSeen(), 'counts mismatch');
+  assert(p.total===28 && p.caught===api.Dex.nCaught() && p.seen===api.Dex.nSeen(), 'counts mismatch');
   api.Dex.data.seen['umbrat']=1;
   const q=api.dexProgress();
   assert(q.seen>=p.seen, 'seen did not grow');
@@ -579,7 +579,7 @@ test('new biomes 6 & 7 exist with all required fields', ()=>{
   const fields=['skyTop','skyMid','skyBot','orb','hillFar','hillNear','tree',
     'ground','groundEdge','path','pathStone','orbHalo','haze','moteCol',
     'accent','orbKind','treeN','prop','favor','mote'];
-  const TYPES=new Set(['Fire','Water','Grass','Volt','Rock','Shadow']);
+  const TYPES=new Set(['Fire','Water','Grass','Volt','Rock','Shadow','Frost']);
   const props=new Set(['none','canopy','shore','cave','starfield']);
   for(const i of [6,7]){
     for(const f of fields) assert(BIOMES[i][f]!==undefined, `biome ${i} missing ${f}`);
@@ -2026,10 +2026,56 @@ test('NS2 2nd-tier evolutions resolve via xpToLevels; every evo target exists', 
   for(const k in api.SP){ const e=api.SP[k].evo; if(e) assert(api.SP[e], k+' evo->'+e+' missing'); }
 });
 
-test('NS3 Dex total reflects new count (24)', ()=>{
+test('NS3 Dex total reflects new count (28)', ()=>{
   const { api } = boot();
-  assert(api.SPECIESKEYS.length===24, `species count ${api.SPECIESKEYS.length} != 24`);
-  assert(api.dexProgress().total===24, `dex total ${api.dexProgress().total} != 24`);
+  assert(api.SPECIESKEYS.length===28, `species count ${api.SPECIESKEYS.length} != 28`);
+  assert(api.dexProgress().total===28, `dex total ${api.dexProgress().total} != 28`);
+});
+
+test('NS5 Frost type: chart, chill passive, species, palettes', ()=>{
+  const { api, toBattle, begin, step } = boot();
+  // 7 types, palettes all carry Frost
+  assert(api.TYPES.length===7 && api.TYPES.includes('Frost'), 'Frost not in TYPES');
+  assert(api.TYPE_COL_DEFAULT.Frost && api.TYPE_COL_CB.Frost && api.TYPE_COL.Frost, 'Frost missing from a palette');
+  // chart: Frost super vs Grass/Rock, resisted by Fire/Water; Fire & Rock melt/shatter Frost
+  assert(api.tm('Frost','Grass')===1.4 && api.tm('Frost','Rock')===1.4, 'Frost supers wrong');
+  assert(api.tm('Frost','Fire')===0.72 && api.tm('Frost','Water')===0.72, 'Frost resists wrong');
+  assert(api.tm('Fire','Frost')===1.4 && api.tm('Rock','Frost')===1.4, 'Frost weaknesses wrong');
+  assert(api.tm('Frost','Volt')===1 && api.tm('Frost','Shadow')===1, 'Frost neutrals wrong');
+  // Frost line present, in-band, chained, in pools
+  for(const k of ['frostkit','frostfang','glaciera','borealynx']) assert(api.SP[k] && api.SP[k].type==='Frost', k+' missing');
+  assert(api.SP.frostkit.rarity===0 && api.SP.frostfang.rarity===1 && api.SP.glaciera.rarity===2 && api.SP.borealynx.rarity===3, 'Frost rarities wrong');
+  assert(api.SP.frostkit.evo==='frostfang' && api.SP.frostfang.evo==='glaciera', 'evo chain broken');
+  assert(api.SP.glaciera.evo===null && api.SP.borealynx.evo===null, 'rare/legendary evo should be null');
+  assert(api.COMMONS.length===7 && api.UNCOMMONS.length===7 && api.RARES.length===7 && api.LEGENDS.length===7, 'pool lengths');
+  assert(api.COMMONS.includes('frostkit') && api.UNCOMMONS.includes('frostfang') && api.RARES.includes('glaciera') && api.LEGENDS.includes('borealynx'), 'pool membership');
+  // CHILL passive: a Frost hit sets chill; a fresh mon has chill 0
+  const frost=api.mk('glaciera',20), foe=api.mk('pebblin',20);
+  frost.cd=0; foe.cd=0; foe.status.stun=0;
+  api.strike(frost, foe, +1);
+  assert(foe.status.chill>0, 'Frost strike did not chill');
+  assert(api.C.CHILL_MUL>1, 'CHILL_MUL must slow (>1)');
+  // REAL-PATH: drive updateBattle and prove the ONLY combat-math change (the cadence hook)
+  // actually scales a chilled mon's next attack delay by CHILL_MUL, and is a no-op otherwise.
+  step(2); begin();
+  assert(toBattle(), 'never reached a battle for cadence check');
+  { const g=api.getG(); g.battleIntro=0;
+    const you=api.activeMon(); const w=g.wild; const spd=you.spd;
+    you.hp=you.maxhp=999999; w.hp=w.maxhp=999999;        // tank both so no strike can end the fight mid-check
+    w.cd=999; you.status.stun=0;                         // isolate: wild won't act this tick
+    you.status.chill=api.C.CHILL_DUR; you.cd=0;
+    api.upd(0.0001);                                      // you.cd<=0 → strike → cadence set
+    assert(g.state==='battle', 'battle ended during chilled tick');
+    assert(Math.abs(you.cd-(1/spd)*api.C.CHILL_MUL)<1e-6, 'chilled cd not CHILL_MUL-scaled: '+you.cd);
+    you.status.chill=0; you.cd=0; w.cd=999; you.status.stun=0;
+    api.upd(0.0001);                                      // control: unchilled cadence
+    assert(Math.abs(you.cd-(1/spd))<1e-6, 'unchilled cadence changed: '+you.cd);
+  }
+  // chill decays to 0 over time
+  for(let i=0;i<400 && foe.status.chill>0;i++) api.statusTick(foe, 0.05);
+  assert(foe.status.chill===0, 'chill did not decay to 0');
+  // zero effect when not chilled
+  const clean=api.mk('sparky',20); assert(clean.status.chill===0, 'fresh mon should have chill 0');
 });
 
 test('NS4 pokedex renders every species (incl. new horn feat + 4th row) without throwing', ()=>{
@@ -2043,7 +2089,7 @@ test('NS4 pokedex renders every species (incl. new horn feat + 4th row) without 
   api.getG().pokedexSel=api.SPECIESKEYS.indexOf('craghorn'); step(3);
   api.getG().pokedexSel=api.SPECIESKEYS.indexOf('fulgorax'); step(3);
   // every 4th-row card rect stays on-screen (bottom < 600)
-  for(let i=18;i<24;i++){ const r=api.pokedexCardAt; }
+  for(let i=21;i<28;i++){ const r=api.pokedexCardAt; }
   assert(true);
 });
 

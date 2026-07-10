@@ -75,19 +75,20 @@ function dailySeedFor(day){                // avalanche day int -> well-mixed 32
 function shuffle(a){ a=a.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(rnd()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 
 // ---------- type chart ----------
-const TYPES = ['Fire','Water','Grass','Volt','Rock','Shadow'];
-const TYPE_COL = { Fire:'#ff7a3d', Water:'#48b6ff', Grass:'#6fd05a', Volt:'#ffd23d', Rock:'#b98d63', Shadow:'#a06bff' };
-const TYPE_COL_DEFAULT = { Fire:'#ff7a3d', Water:'#48b6ff', Grass:'#6fd05a', Volt:'#ffd23d', Rock:'#b98d63', Shadow:'#a06bff' };
-const TYPE_COL_CB      = { Fire:'#D55E00', Water:'#56B4E9', Grass:'#009E73', Volt:'#F0E442', Rock:'#E69F00', Shadow:'#CC79A7' }; // Okabe–Ito CVD-safe
+const TYPES = ['Fire','Water','Grass','Volt','Rock','Shadow','Frost'];
+const TYPE_COL = { Fire:'#ff7a3d', Water:'#48b6ff', Grass:'#6fd05a', Volt:'#ffd23d', Rock:'#b98d63', Shadow:'#a06bff', Frost:'#8fd8e8' };
+const TYPE_COL_DEFAULT = { Fire:'#ff7a3d', Water:'#48b6ff', Grass:'#6fd05a', Volt:'#ffd23d', Rock:'#b98d63', Shadow:'#a06bff', Frost:'#8fd8e8' };
+const TYPE_COL_CB      = { Fire:'#D55E00', Water:'#56B4E9', Grass:'#009E73', Volt:'#F0E442', Rock:'#E69F00', Shadow:'#CC79A7', Frost:'#0072B2' }; // Okabe–Ito CVD-safe
 function applyPalette(){ Object.assign(TYPE_COL, gset().colorblind ? TYPE_COL_CB : TYPE_COL_DEFAULT); }
 // mult[att][def]
 const CHART = {
-  Fire:  { Grass:1.4, Rock:0.72, Water:0.72, Fire:1 },
+  Fire:  { Grass:1.4, Frost:1.4, Rock:0.72, Water:0.72, Fire:1 },
   Water: { Fire:1.4, Rock:1.4, Grass:0.72, Volt:0.72, Water:1 },
   Grass: { Water:1.4, Rock:1.4, Fire:0.72, Grass:1 },
   Volt:  { Water:1.4, Shadow:1.4, Rock:0.72, Grass:0.72, Volt:1 },
-  Rock:  { Fire:1.4, Volt:1.4, Water:0.72, Grass:0.72, Rock:1 },
+  Rock:  { Fire:1.4, Volt:1.4, Frost:1.4, Water:0.72, Grass:0.72, Rock:1 },
   Shadow:{ Shadow:1.4, Volt:0.72, Rock:0.72 },
+  Frost: { Grass:1.4, Rock:1.4, Fire:0.72, Water:0.72, Frost:1 },
 };
 function typeMult(att,def){ const r = CHART[att]; return (r && r[def]) || 1; }
 // ---------- weather hooks (transient G.weather; neutral when unset/unknown) ----------
@@ -102,6 +103,7 @@ const GRASS_LEECH=0.25, LEECH_DUR=2.0;              // Grass regen fraction / du
 const ROCK_GUARD=0.15;                              // Rock incoming-dmg reduction
 const SHADOW_DODGE=0.15;                            // Shadow full-dodge chance
 const VOLT_STUN=0.18, STUN_DUR=0.6, STUN_IMM=2.5;   // Volt stun chance / duration / immunity window
+const CHILL_DUR=2.5, CHILL_MUL=1.35;                // Frost soft-slow: +35% attack delay while chilled (guaranteed on-hit, never turn-denial)
 const SWITCH_CD=5;                                  // battle-seconds between manual party switches
 const SWITCH_ENTRY=0.6;                             // min cd the incoming mon enters battle with
 
@@ -128,10 +130,10 @@ const BOSS_TITLES={ moltengod:'Tyrant of Ash', abysslord:'Lord of the Abyss',
   infernyx:'The Ashen Reborn', leviatide:'Tide That Drowns',
   verdragon:'The Wildwood Wyrm', stormhorn:'Thunder Crown',
   terralith:'The Sky-Weight', tsunareth:'The Drowned Deep', sylvarch:'Spring Unbound',
-  fulgorax:'The Thunderclap', craghorn:'Tusked Ruin', gloomoth:'Wings of Dusk' };
+  fulgorax:'The Thunderclap', craghorn:'Tusked Ruin', gloomoth:'Wings of Dusk', borealynx:'The Long Winter' };
 
 // ---------- species database ----------
-// shape: blob | round | spiky | long | winged ; feat: flame|drip|leaf|bolt|rock|ghost|horn
+// shape: blob | round | spiky | long | winged ; feat: flame|drip|leaf|bolt|rock|ghost|horn|frost
 // rarity: 0 common,1 uncommon,2 rare,3 legendary
 function S(name,type,rarity,shape,feat,body,acc,belly,base,evo,flavor){
   return {name,type,rarity,shape,feat,body,acc,belly,base,evo:evo||null,flavor:flavor||''};
@@ -167,6 +169,12 @@ const SPECIES = {
   tsunareth: S('Tsunareth','Water',3,'long','drip','#12518f','#57c4ff','#bde8ff',{hp:172,atk:27,spd:1.08},null,'The drowned deep gave it a name only tides can pronounce.'),
   sylvarch:  S('Sylvarch','Grass',3,'winged','leaf','#2c7233','#82dc46','#d2ffa0',{hp:162,atk:29,spd:1.10},null,'An entire spring blooms in the wake of its wings.'),
   fulgorax:  S('Fulgorax','Volt',3,'spiky','bolt','#c78a0e','#ffe94a','#fff6bf',{hp:138,atk:34,spd:1.36},null,'It is the thunderclap; the storm is only its echo.'),
+
+  // --- Frost line: common → uncommon → rare → legendary ---
+  frostkit:  S('Frostkit','Frost',0,'blob','frost','#7fcdea','#cdeeff','#f0fbff',{hp:42,atk:8,spd:0.92},'frostfang','Its every yawn frosts the window; it dreams in snowdrifts.'),
+  frostfang: S('Frostfang','Frost',1,'spiky','frost','#5ab4de','#9fe6ff','#dcf4ff',{hp:64,atk:13,spd:1.0},'glaciera','Bites down, and the wound simply freezes shut.'),
+  glaciera:  S('Glaciera','Frost',2,'long','frost','#3aa6c8','#8fdfff','#cdf2ff',{hp:98,atk:20,spd:1.02},null,'A river caught mid-fall, taught to slither and hunt.'),
+  borealynx: S('Borealynx','Frost',3,'winged','frost','#2b86b4','#9ff0ff','#d6f6ff',{hp:168,atk:28,spd:1.12},null,'The aurora is its breath; winter comes when it wakes.'),
 };
 const RARITY_NAME = ['Common','Uncommon','Rare','Legendary'];
 const RARITY_COL  = ['#9fb0cc','#67d089','#ffb43d','#ff6bd5'];
@@ -182,10 +190,10 @@ const UPGRADES = [
   {key:'menagerie', icon:'🐾', name:'Menagerie',    desc:'uncommons can be your starter',   max:1, price:[220]},
 ];
 
-const COMMONS   = ['emberpup','puddlet','sprig','sparky','pebblin','umbrat'];
-const UNCOMMONS  = ['cindermaw','torrentoad','thornbeast','voltfox','boulderk','nightwyrm'];
-const RARES     = ['infernyx','leviatide','verdragon','stormhorn','craghorn','gloomoth'];
-const LEGENDS   = ['moltengod','abysslord','terralith','tsunareth','sylvarch','fulgorax'];
+const COMMONS   = ['emberpup','puddlet','sprig','sparky','pebblin','umbrat','frostkit'];
+const UNCOMMONS  = ['cindermaw','torrentoad','thornbeast','voltfox','boulderk','nightwyrm','frostfang'];
+const RARES     = ['infernyx','leviatide','verdragon','stormhorn','craghorn','gloomoth','glaciera'];
+const LEGENDS   = ['moltengod','abysslord','terralith','tsunareth','sylvarch','fulgorax','borealynx'];
 // starter pool — the ONE source of truth for the starter picker (draw, click,
 // fallback, tests all read this). Menagerie unlock adds uncommons.
 function starterPool(){ return Dex.up('menagerie') ? COMMONS.concat(UNCOMMONS) : COMMONS; }
@@ -243,7 +251,7 @@ const BIOMES = [
     hillFar:'#3f6288', hillNear:'#4e7699', tree:'#39606e',
     ground:'#cadeec', groundEdge:'#a6c2d6', path:'#dbe9f2', pathStone:'#b7ccda',
     orbHalo:'232,246,255', haze:'168,208,232', moteCol:'232,246,255',
-    orbKind:'moon', treeN:4, prop:'none', favor:['Water','Rock'],
+    orbKind:'moon', treeN:4, prop:'none', favor:['Frost','Water','Rock'],
     mote:{ col:'rgba(232,246,255,1)', additive:false, density:18, mode:'drift' } },
   { name:'The Firstlight',    accent:'#ffd76a',
     skyTop:'#2c286a', skyMid:'#8a5ac2', skyBot:'#ffd98a', orb:'#fff6d8',
@@ -341,10 +349,10 @@ function makeMon(key,level){
     // anim
     lunge:0, hurt:0, bob: rnd()*6.28, hpShown:hp, levelFlash:0,
     // transient status bag (never serialized) — reset each fight in finishSpawn
-    status:{ burn:0, burnT:0, stun:0, stunImm:0, regen:0, regenRate:0, fBurn:0, fStun:0, fGuard:0, fDodge:0, fHeal:0 },
+    status:{ burn:0, burnT:0, stun:0, stunImm:0, regen:0, regenRate:0, fBurn:0, fStun:0, fGuard:0, fDodge:0, fHeal:0, chill:0, fChill:0 },
   };
 }
-function freshStatus(){ return { burn:0, burnT:0, stun:0, stunImm:0, regen:0, regenRate:0, fBurn:0, fStun:0, fGuard:0, fDodge:0, fHeal:0 }; }
+function freshStatus(){ return { burn:0, burnT:0, stun:0, stunImm:0, regen:0, regenRate:0, fBurn:0, fStun:0, fGuard:0, fDodge:0, fHeal:0, chill:0, fChill:0 }; }
 function xpToLevels(m, gain){
   m.xp += gain;
   let leveled = [];
@@ -769,6 +777,25 @@ function drawFeature(sp, s, t, acc, body){
     ctx.fillStyle=shade(acc,55);
     for(const d of [-1,1]){ const tw=0.8+0.2*Math.sin(t*4+d*1.3);   // 0.6..1.0 specular twinkle
       ctx.beginPath(); ctx.ellipse(d*s*0.42,-s*1.0,s*0.045*tw,s*0.13*tw,d*0.5,0,6.283); ctx.fill(); }
+  } else if(f==='frost'){
+    // crystalline ice shards — a small frozen crown with a specular twinkle
+    ctx.fillStyle=acc; ctx.strokeStyle=shade(acc,-50); ctx.lineWidth=s*0.03;
+    const shards=[[0,-0.92,0.26],[-0.36,-0.8,0.18],[0.36,-0.8,0.18]];
+    for(let i=0;i<shards.length;i++){ const p=shards[i];
+      const sway=Math.sin(t*3+i*1.4)*s*0.02;
+      const bx=p[0]*s+sway, by=p[1]*s, hh=p[2]*s;
+      ctx.beginPath();
+      ctx.moveTo(bx, by-hh*2.0);
+      ctx.lineTo(bx+hh*0.5, by-hh*0.4);
+      ctx.lineTo(bx, by);
+      ctx.lineTo(bx-hh*0.5, by-hh*0.4);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle=shade(acc,60);
+    for(let i=0;i<shards.length;i++){ const p=shards[i];
+      const tw=0.6+0.4*Math.sin(t*5+i*2.1);
+      ctx.beginPath(); ctx.arc(p[0]*s, p[1]*s-p[2]*s*0.9, s*0.045*tw, 0, 6.283); ctx.fill();
+    }
   }
   ctx.restore();
 }
@@ -1425,8 +1452,8 @@ function updateBattle(dt){
   // tick attacks — player DPS is never gated; boss holds fire during pause/wind-up
   you.cd -= dt;
   if(!(w.boss && (bossPaused || w.tele>0))) w.cd -= dt;
-  if(you.cd<=0 && !bossPaused){ if(you.status.stun>0){ you.cd=0; } else { you.cd = 1/you.spd; strike(you, w, +1); } }
-  if(w.cd<=0 && !(w.boss && (bossPaused || w.tele>0))){ if(w.status.stun>0){ w.cd=0; } else { w.cd = 1/w.spd; strike(w, you, -1); } }
+  if(you.cd<=0 && !bossPaused){ if(you.status.stun>0){ you.cd=0; } else { you.cd = (1/you.spd) * (you.status.chill>0?CHILL_MUL:1); strike(you, w, +1); } }
+  if(w.cd<=0 && !(w.boss && (bossPaused || w.tele>0))){ if(w.status.stun>0){ w.cd=0; } else { w.cd = (1/w.spd) * (w.status.chill>0?CHILL_MUL:1); strike(w, you, -1); } }
 
   // anim decay
   for(const m of [you,w]){ m.lunge=Math.max(0,m.lunge-dt*4); m.hurt=Math.max(0,m.hurt-dt*4); }
@@ -1498,6 +1525,11 @@ function strike(att, def, dir){
         for(let i=0;i<5;i++){ if(G.parts.length<160) G.parts.push({x:tx,y:210,vx:rr(-90,90),vy:rr(-120,20),life:rr(0.2,0.5),col:'#ffd23d',r:rr(2,4)}); }
       }
       break; }
+    case 'Frost': { // guaranteed soft-slow — target attacks slower, never skips a turn
+      def.status.chill = CHILL_DUR; def.status.fChill = 0.4;
+      G.dmgPops.push({x:tx+rr(-20,20), y:200, vy:-40, life:1, txt:'CHILL', chill:true, col:TYPE_COL.Frost, age:0, rot:0});
+      for(let i=0;i<4;i++){ if(G.parts.length<160) G.parts.push({x:tx,y:210,vx:rr(-70,70),vy:rr(-110,-20),life:rr(0.3,0.6),col:TYPE_COL.Frost,r:rr(2,4)}); }
+      break; }
   }
 }
 // tick one mon's status effects (DoT/regen/timers). Fractional HP is fine; hpShown lerps.
@@ -1510,6 +1542,7 @@ function statusTick(m,dt){
   s.stun=Math.max(0,s.stun-dt); s.stunImm=Math.max(0,s.stunImm-dt);
   s.fBurn=Math.max(0,s.fBurn-dt); s.fStun=Math.max(0,s.fStun-dt);
   s.fGuard=Math.max(0,s.fGuard-dt); s.fDodge=Math.max(0,s.fDodge-dt); s.fHeal=Math.max(0,s.fHeal-dt);
+  s.chill=Math.max(0,s.chill-dt); s.fChill=Math.max(0,s.fChill-dt);
 }
 // ---- boss phase-break / telegraph / capped heavy attack ----
 function bossPhaseAdvance(w){
@@ -2026,6 +2059,7 @@ function drawStatusRow(m,x,y,w,facing){
   if(s.burn>0)  pips.push({key:'burn', col:TYPE_COL.Fire,  glyph:'flame', on:s.fBurn>0, n:s.burn>1?s.burn:0, flash:s.fBurn, t:s.burnT, tmax:BURN_DUR});
   if(s.stun>0)  pips.push({key:'stun', col:TYPE_COL.Volt,  glyph:'bolt',  on:s.fStun>0, flash:s.fStun, t:s.stun,  tmax:STUN_DUR});
   if(s.regen>0) pips.push({key:'regen',col:TYPE_COL.Grass, glyph:'plus',  on:s.fHeal>0, flash:s.fHeal, t:s.regen, tmax:LEECH_DUR});
+  if(s.chill>0) pips.push({key:'chill',col:TYPE_COL.Frost, glyph:'snow', on:s.fChill>0, flash:s.fChill, t:s.chill, tmax:CHILL_DUR});
   for(let i=0;i<pips.length && i<4;i++){
     const p=pips[i];
     const px= facing>0? x+i*17 : x+w-14-i*17;
@@ -2048,6 +2082,10 @@ function drawStatusRow(m,x,y,w,facing){
     else if(p.glyph==='flame'){ ctx.beginPath(); ctx.moveTo(cx,cy-4); ctx.quadraticCurveTo(cx+3.5,cy,cx,cy+4); ctx.quadraticCurveTo(cx-3.5,cy,cx,cy-4); ctx.fill(); }
     else if(p.glyph==='bolt'){ ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx+2,cy-4); ctx.lineTo(cx-2,cy); ctx.lineTo(cx+1,cy); ctx.lineTo(cx-2,cy+4); ctx.stroke(); }
     else if(p.glyph==='plus'){ ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,cy-3); ctx.lineTo(cx,cy+3); ctx.moveTo(cx-3,cy); ctx.lineTo(cx+3,cy); ctx.stroke(); }
+    else if(p.glyph==='snow'){ ctx.lineWidth=1.6; ctx.beginPath();
+      for(let a=0;a<3;a++){ const ang=a*Math.PI/3, dx=Math.cos(ang)*4, dy=Math.sin(ang)*4;
+        ctx.moveTo(cx-dx,cy-dy); ctx.lineTo(cx+dx,cy+dy); }
+      ctx.stroke(); }
     if(p.n){ ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.font='700 8px Segoe UI'; ctx.textAlign='right'; ctx.fillText('x'+p.n, px+13, pipY+13); ctx.textAlign='left'; }
     if(p.tmax>0){ // depletion bar for countdown pips (burn/stun/regen). Flash-only pips have no tmax.
       const frac=clamp(p.t/p.tmax,0,1);
@@ -2274,7 +2312,7 @@ function dexProgress(){
   for(const k of keys){ const sp=SPECIES[k]; const r=byRarity[sp.rarity]; r.total++; if(Dex.data.caught[k]) r.caught++; }
   return { caught:Dex.nCaught(), seen:Dex.nSeen(), total:keys.length, byRarity };
 }
-function pokedexCardRect(i){ const c=i%6,r=(i/6)|0; return {x:22+c*155, y:112+r*114, w:140, h:104}; }
+function pokedexCardRect(i){ const c=i%7,r=(i/7)|0; return {x:22+c*134, y:112+r*114, w:122, h:104}; }
 function pokedexCardAt(mx,my){
   for(let i=0;i<Object.keys(SPECIES).length;i++){ const r=pokedexCardRect(i);
     if(mx>=r.x&&mx<=r.x+r.w&&my>=r.y&&my<=r.y+r.h) return i; }
@@ -2652,7 +2690,7 @@ function drawStarter(){
   }
   clearButtons();
   const pool = starterPool();
-  function starterCardRect(i){ const c=i%6, r=(i/6)|0; return {x:22+c*155, y:128+r*184, w:140, h:176}; }
+  function starterCardRect(i){ const c=i%7, r=(i/7)|0; return {x:22+c*134, y:128+r*184, w:122, h:176}; }
   pool.forEach((key,i)=>{
     const sp=SPECIES[key]; const {x,y,w,h}=starterCardRect(i);
     panel(x,y,w,h,null);
