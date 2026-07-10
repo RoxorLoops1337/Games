@@ -1,0 +1,14 @@
+{
+  "name": "The Collection",
+  "short_name": "Collection",
+  "description": "A card-collecting life-sim: kiosk packs, a growing binder, and a hobby that ages up with you.",
+  "start_url": "/the_collection/",
+  "scope": "/the_collection/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#12181a",
+  "theme_color": "#12181a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}
