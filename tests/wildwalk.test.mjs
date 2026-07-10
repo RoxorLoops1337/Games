@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -1534,6 +1534,129 @@ test('ACH first_catch requires a wild catch, not the auto-caught starter', ()=>{
   assert(!D.data.ach.first_catch, 'first_catch fired from the auto-caught starter alone');
   D.data.wildCatch = 1; api.checkAch();
   assert(D.data.ach.first_catch===1, 'first_catch did not fire after a real wild catch');
+});
+
+// ===================================================================
+// WEATHER / DAY-NIGHT — transient reskin + small balanced dmg/catch mods
+// ===================================================================
+const WSHAPE = ['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch'];
+
+// (a) documented dmg multiplier + catch bonus — holder-agnostic (attacker-type keyed)
+test('WX1 weather applies documented dmg mult, crit mult and catch bonus', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  // dmg multipliers key off ATTACKER type, regardless of who holds it
+  g.weather='Rain';
+  assert(Math.abs(api.weatherDmgMul('Water')-1.20)<1e-9, 'Rain Water dmg');
+  assert(Math.abs(api.weatherDmgMul('Fire')-0.85)<1e-9, 'Rain Fire dmg');
+  assert(Math.abs(api.weatherDmgMul('Grass')-1.00)<1e-9, 'Rain Grass neutral');
+  g.weather='Sunshine';
+  assert(Math.abs(api.weatherDmgMul('Fire')-1.20)<1e-9, 'Sun Fire dmg');
+  assert(Math.abs(api.weatherDmgMul('Water')-0.90)<1e-9, 'Sun Water dmg');
+  g.weather='Night';
+  assert(Math.abs(api.weatherDmgMul('Shadow')-1.20)<1e-9, 'Night Shadow dmg');
+  g.weather='Clear';
+  for(const t of api.TYPES) assert(Math.abs(api.weatherDmgMul(t)-1.00)<1e-9, `Clear neutral ${t}`);
+  // crit multiplier: Fog dampens, Clear neutral
+  g.weather='Fog'; assert(Math.abs(api.weatherCritMul()-0.55)<1e-9, 'Fog crit mul');
+  g.weather='Clear'; assert(Math.abs(api.weatherCritMul()-1.00)<1e-9, 'Clear crit mul');
+  // unknown/unset → neutral defaults (missing weather never breaks anything)
+  g.weather='Bogus';
+  assert(api.weatherDmgMul('Fire')===1 && api.weatherCritMul()===1 && api.weatherCatchBonus()===0, 'unknown weather not neutral');
+
+  // catch bonus, on a mid-rarity wild kept off both clamp rails
+  const key = api.SPECIESKEYS.find(k=>api.SP[k].rarity===2);
+  const w = api.mk(key, 4);
+  g.honor=0; g.ballTier=0; g.relics=[];
+  g.weather='Clear'; const cClear = api.catchChance(w);
+  g.weather='Night'; const cNight = api.catchChance(w);
+  g.weather='Fog';   const cFog   = api.catchChance(w);
+  assert(cClear>0.05 && cClear<0.96, `clear catch on rail ${cClear}`);
+  assert(cNight>0.05 && cNight<0.96, `night catch on rail ${cNight}`);
+  assert(Math.abs((cNight-cClear)-0.06)<1e-6, `Night catch bonus ${cNight-cClear}`);
+  assert(Math.abs((cFog-cClear)-0.03)<1e-6, `Fog catch bonus ${cFog-cClear}`);
+});
+
+// (a, end-to-end) attacker-type keying proven over many strikes, holder-agnostic
+test('WX2 strike dmg ratio matches attacker-type weather mult', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  const fireKey  = api.SPECIESKEYS.find(k=>api.SP[k].type==='Fire');
+  const waterKey = api.SPECIESKEYS.find(k=>api.SP[k].type==='Water');
+  // defender is a plain type (not Rock/Shadow) so guard/dodge never distort the sum
+  function sumDmg(weather, attKey){
+    g.weather=weather;
+    const att=api.mk(attKey,10), def=api.mk(waterKey,10);
+    def.maxhp=1e9; let sum=0;
+    for(let i=0;i<3000;i++){ def.hp=def.maxhp; api.strike(att,def,1); sum+=(def.maxhp-def.hp); }
+    return sum;
+  }
+  const fireRatio = sumDmg('Rain', fireKey)/sumDmg('Clear', fireKey);
+  assert(Math.abs(fireRatio-0.85)<0.06, `Fire Rain/Clear ratio ${fireRatio}`);
+  const waterRatio = sumDmg('Rain', waterKey)/sumDmg('Clear', waterKey);
+  assert(Math.abs(waterRatio-1.20)<0.06, `Water Rain/Clear ratio ${waterRatio}`);
+});
+
+// (b) fights still resolve under EVERY weather (incl. same-type mirror)
+test('WX3 battles resolve to a decision under every weather', ()=>{
+  for(const k of boot().api.WEATHER_KINDS){
+    const { api, step, toBattle, begin } = boot();
+    step(2); begin(); assert(toBattle(), `no battle (${k})`);
+    const g=api.getG(); g.weather=k; g.battleIntro=0;
+    let done=false;
+    for(let i=0;i<4000;i++){ api.upd(0.05); const s=api.getG().state; if(s==='choice'||s==='gameover'){ done=true; break; } }
+    assert(done, `weather ${k} never resolved (state ${api.getG().state})`);
+    // same-type mirror matchup under this weather also resolves
+    const you=api.activeMon();
+    const mirror=api.SPECIESKEYS.find(kk=>api.SP[kk].type===you.sp.type);
+    api.finishSpawn(api.mk(mirror, you.level));
+    g.weather=k; g.battleIntro=0;
+    let done2=false;
+    for(let i=0;i<4000;i++){ api.upd(0.05); const s=api.getG().state; if(s==='choice'||s==='gameover'){ done2=true; break; } }
+    assert(done2, `mirror ${k} never resolved (state ${api.getG().state})`);
+  }
+});
+
+// (c) transient — weather never touches the persisted save shape; derivation is pure
+test('WX4 weather is transient (no save-shape change) and weatherFor is pure', ()=>{
+  const { api, step, clickId, toBattle, begin } = boot();
+  step(2); begin(); assert(toBattle(), 'no battle');
+  const g=api.getG(); g.weather='Night';   // non-default kind
+  g.wild.hp=1; g.battleIntro=0;
+  for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
+  step(1); clickId('kill');
+  api.Dex.save();
+  const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
+  const keys=Object.keys(saved).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(WSHAPE), `save shape changed: ${keys}`);
+  assert(!('weather' in saved), 'weather leaked into save');
+  assert(api.WEATHER_KINDS.includes(api.getG().weather), `runtime weather invalid ${api.getG().weather}`);
+  // purity: same inputs → same output, always a valid kind, across biomes/fights
+  for(let b=0;b<6;b++) for(const f of [0,1,2,3,7,13,29]){
+    const a=api.weatherFor(b,f), b2=api.weatherFor(b,f);
+    assert(a===b2, `weatherFor not pure at ${b},${f}`);
+    assert(api.WEATHER_KINDS.includes(a), `weatherFor invalid ${a} at ${b},${f}`);
+  }
+  // out-of-range biome falls back to a valid kind (graceful)
+  assert(api.WEATHER_KINDS.includes(api.weatherFor(99,5)), 'oob biome not graceful');
+});
+
+// (d) drawing every weather (incl. unset/unknown) never throws, walk + battle
+test('WX5 drawing every weather never throws', ()=>{
+  const kinds = boot().api.WEATHER_KINDS.concat([undefined, 'Bogus']);
+  const { api, step, toBattle, begin } = boot();
+  step(2); begin();   // walk state
+  for(const k of kinds){
+    api.getG().weather=k;
+    for(let f=0;f<4;f++){ api.getG().t+=0.13; api.draw(); }
+  }
+  assert(toBattle(), 'no battle for draw test');
+  for(const k of kinds){
+    api.getG().weather=k;
+    for(let f=0;f<4;f++){ api.getG().t+=0.13; api.draw(); }
+  }
+  // reaching here without throwing is the assertion
+  assert(true);
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
