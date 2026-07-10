@@ -45,7 +45,7 @@ function boot(){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM}};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -169,6 +169,103 @@ test('3000 driven iterations across all states never throw', ()=>{
   }
   // reaching here without throwing is the assertion
   assert(true);
+});
+
+// ---- ability: Burn DoT + stack cap ----
+test('burn deals capped DoT and expires', ()=>{
+  const { api } = boot();
+  const { statusTick, mk, C } = api;
+  const d = mk('puddlet', 20); d.hp = d.maxhp;
+  d.status.burn = 3; d.status.burnT = 3;
+  const before = d.hp;
+  statusTick(d, 1.0);
+  const lost = before - d.hp;
+  const expect = d.maxhp * C.BURN_PCT * 3; // 6% maxhp in 1s
+  assert(Math.abs(lost - expect) < 0.5, `burn dot ${lost} vs ${expect}`);
+  assert(Math.abs(d.status.burnT - 2) < 1e-6, `burnT ${d.status.burnT}`);
+  // Fire attacker stacking respects BURN_MAX
+  const att = mk('emberpup', 20); att.atk = 5;
+  const v = mk('sparky', 20); v.hp = v.maxhp;
+  for(let i=0;i<4;i++) api.strike(att, v, +1);
+  assert(v.status.burn === C.BURN_MAX, `stack ${v.status.burn} != ${C.BURN_MAX}`);
+  // let burn duration elapse -> stacks clear
+  v.hp = v.maxhp;
+  for(let i=0;i<40;i++) statusTick(v, 0.1);
+  assert(v.status.burn === 0, `burn should clear, got ${v.status.burn}`);
+});
+
+// ---- ability: Fire burn / Water lifesteal / Grass leech ----
+test('fire burns, water steals, grass leeches', ()=>{
+  const { api } = boot();
+  const { mk, strike, statusTick } = api;
+  // Fire -> burn on a Volt def
+  const fire = mk('emberpup', 20); const vdef = mk('sparky', 20); vdef.hp = vdef.maxhp;
+  strike(fire, vdef, +1);
+  assert(vdef.status.burn > 0 && vdef.status.burnT > 0, 'fire did not burn');
+  // Water lifesteal — injured attacker heals but not past max
+  const water = mk('puddlet', 20); water.hp = water.maxhp - 100 < 1 ? 1 : water.maxhp - 100;
+  const wb = water.hp; const tdef = mk('sprig', 20); tdef.hp = tdef.maxhp;
+  strike(water, tdef, +1);
+  assert(water.hp > wb, 'water did not lifesteal');
+  assert(water.hp <= water.maxhp, 'water over-healed');
+  // Grass leech — regen ticks up over time
+  const grass = mk('sprig', 20); grass.hp = Math.max(1, grass.maxhp - 100);
+  const rdef = mk('pebblin', 20); rdef.hp = rdef.maxhp;
+  strike(grass, rdef, +1);
+  assert(grass.status.regen > 0, 'grass did not set regen');
+  const gb = grass.hp, reg0 = grass.status.regen;
+  statusTick(grass, 0.5);
+  assert(grass.hp > gb, 'grass regen did not heal');
+  assert(grass.status.regen < reg0, 'regen timer did not fall');
+});
+
+// ---- ability: stun skips a turn then resumes; immunity holds ----
+test('stun skips then resumes, immunity caps', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g = api.getG();
+  const you = g.team[g.lead];
+  g.battleIntro = 0; g.wild.hp = g.wild.maxhp = 999999; g.wild.status.stun = 0;
+  you.status.stun = 0.5; you.cd = 0;
+  const whp = g.wild.hp;
+  api.upd(0.1);
+  assert(g.wild.hp === whp, 'stunned mon still attacked');
+  assert(you.status.stun < 0.5, 'stun not decremented');
+  // step past expiry -> it lands a hit
+  for(let i=0;i<20;i++){ api.upd(0.1); if(g.wild.hp < whp) break; }
+  assert(g.wild.hp < whp, 'never resumed attacking after stun');
+  // immunity: repeated Volt strikes cannot re-stun during window
+  const { mk, strike } = api;
+  const volt = mk('sparky', 20); const def = mk('emberpup', 20);
+  def.hp = def.maxhp = 999999; def.status.stunImm = 5;
+  for(let i=0;i<60;i++){ def.hp = def.maxhp; strike(volt, def, +1); assert(def.status.stun === 0, 'immunity breached'); }
+});
+
+// ---- ability: shadow dodge is partial ----
+test('shadow dodge is partial', ()=>{
+  const { api } = boot();
+  const { mk, strike, getG } = api;
+  const att = mk('emberpup', 20); const def = mk('umbrat', 20);
+  let dodges = 0;
+  for(let i=0;i<100;i++){ def.hp = def.maxhp; const before = def.hp; strike(att, def, +1); if(def.hp === before) dodges++; }
+  assert(dodges > 0 && dodges < 100, `dodges ${dodges} not partial`);
+  assert(getG().dmgPops.some(p=>p.dodge), 'no DODGE pop');
+});
+
+// ---- resolution guard: worst-case mirrors never softlock ----
+test('ability mirrors always resolve to a decision', ()=>{
+  const run = (key)=>{
+    const { api, step, clickId, toBattle } = boot();
+    step(2); clickId('start'); assert(toBattle(), 'no battle');
+    const g = api.getG();
+    g.team = [api.mk(key, 20)]; g.team.forEach(m=>{ m.hp=m.maxhp; }); g.lead = 0;
+    g.wild = api.mk(key, 20); g.wild.hp = g.wild.maxhp; g.wild.cd = 0.6;
+    g.battleIntro = 0;
+    for(let i=0;i<4000;i++){ api.upd(0.05); if(g.state!=='battle') break; }
+    assert(g.state==='choice' || g.state==='gameover', `${key} mirror stuck in ${g.state}`);
+  };
+  run('puddlet');  // Water heal mirror
+  run('pebblin');  // Rock guard mirror
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
