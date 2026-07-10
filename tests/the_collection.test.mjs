@@ -122,6 +122,10 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(Array.isArray(pulls) && pulls.length === 5, 'a pack yields 5 cards');
   ok(S3.packsUnopened === TC.STARTER_PACKS - 1 && S3.packsOpenedTotal === 1, 'opening a pack consumes it and tallies the total');
   ok(Object.keys(S3.collection).length === new Set(pulls.map(p => p.id)).size, 'collection reflects the pulled cards');
+  // pulls must be full card objects — the reveal renders their move/illus, and
+  // a missing move once crashed the first card reveal of every pack
+  ok(pulls.every(p => p.move && typeof p.move.cost === 'number' && p.move.name && typeof p.move.dmg === 'number'), 'every pull carries its full move (name, cost, damage)');
+  ok(pulls.every(p => p.illus && p.flavor && typeof p.power === 'number'), 'every pull carries illustrator, flavor and power');
   ok(TC.openPack(Object.assign(TC.freshSave(), { packsUnopened: 0 }), rand) === null, 'opening with no packs left returns null');
 }
 
