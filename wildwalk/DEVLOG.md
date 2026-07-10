@@ -27,7 +27,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 7. [x] Relics / run modifiers — DONE c7.
 8. [x] Held trinkets — DONE c8.
 9. [x] Between-run meta-progression — DONE c9.
-10. [ ] Sound & music (chiptune battle loop + SFX for hit/catch/level-up).
+10. [x] Sound & music — DONE c10.
 11. [ ] Achievements + milestone perks.
 12. [ ] Starter select at run start.
 13. [ ] Weather / day–night affecting damage + catch.
@@ -36,6 +36,18 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c10 — Sound & music** (studio: sound-designer, ux-designer, lead, engineer, QA). A pure
+  Web Audio (oscillator) layer — NO asset files. Chiptune music with walk/battle/boss mood
+  variants via a 25ms look-ahead scheduler (mood follows G.state/boss), + SFX for hit, crit,
+  catch, catch-fail, level-up, evolve, boss-appear, potion, select, defeat. Autoplay-safe:
+  the AudioContext is created/resumed only on the first pointer/key gesture. A persistent
+  🔊/🔇 mute toggle (title + HUD, 'm' key) stored in Dex.data.muted (back-compat default false).
+  The whole layer is a guarded no-op when AudioContext is absent (headless tests) — voice cap
+  16, nodes disconnect on end. +4 tests (no-throw sans AudioContext; muted defaults + old-save
+  load; toggle flips+persists; mute intercept on game-over doesn't start a run). 88/88 green,
+  0 flakes; verified in real Chromium with no JS errors.
+  NOTE (audio-cycle recipe for future sound work): guard every audio call behind a lazy
+  null-returning audioCtx(); never create ctx at load; back-compat the mute pref in Dex.data.
 - **c9 — Between-run meta-progression ("The Sanctuary")** (studio: meta + ux designers, lead,
   engineer, QA). First PERSISTENT save extension — done back-compatibly: Dex.data gains
   essence:0 + upgrades:{} (Dex.load Object.assigns over defaults, so old {seen,caught,best,runs}
