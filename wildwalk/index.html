@@ -71,6 +71,24 @@ const VOLT_STUN=0.18, STUN_DUR=0.6, STUN_IMM=2.5;   // Volt stun chance / durati
 const SWITCH_CD=5;                                  // battle-seconds between manual party switches
 const SWITCH_ENTRY=0.6;                             // min cd the incoming mon enters battle with
 
+// ---------- boss encounter tuning ----------
+const BOSS_EVERY=6;                 // boss = every 6th fight (end of each biome)
+const BOSS_HP_MUL=2.8, BOSS_ATK_MUL=1.10, BOSS_SPD_MUL=0.92, BOSS_LVL_BONUS=4;
+const BOSS_PHASE_PAUSE=0.9;         // phase-break beat (both strikes frozen, bounded)
+const BOSS_INTRO_T=2.2;             // banner freeze (drives battleIntro)
+const TELE_WINDUP=1.0;              // telegraph wind-up seconds
+const TELE_GAP=[4.5,7];             // idle seconds between wind-ups
+const BOSS_HEAVY_MUL=2.6, BOSS_HEAVY_CAP=0.60;   // heavy dmg ≤ 60% of target maxhp — NEVER one-shots
+const BOSS_ENRAGE=1.15;             // per-phase atk bump on phase break
+const BOSS_SOFTCAP=45, BOSS_EXECUTE_DPS=0.08;    // execute valve: after 45 battle-s, heals off + 8% maxhp/s chip
+const BOSS_CATCH_FLOOR=0.90;
+const BOSS_SOULS_MUL=3, BOSS_HONOR_MUL=3, BOSS_GOLD=40, BOSS_XP_MUL=2.2;
+const BOSS_DANGER='#ff3b3b', BOSS_GOLD_C='#ffdf5a';
+const BOSS_PHASE_COL=['#ff8f3d','#ff5a5a','#c452ff'];   // indexed by (phaseMax-phase): hotter/violet each break
+const BOSS_TITLES={ moltengod:'Tyrant of Ash', abysslord:'Lord of the Abyss',
+  infernyx:'The Ashen Reborn', leviatide:'Tide That Drowns',
+  verdragon:'The Wildwood Wyrm', stormhorn:'Thunder Crown' };
+
 // ---------- species database ----------
 // shape: blob | round | spiky | long | winged ; feat: flame|drip|leaf|bolt|rock|ghost|horn
 // rarity: 0 common,1 uncommon,2 rare,3 legendary
@@ -449,6 +467,7 @@ function newGame(){
     box:[],
     gold:20, souls:0, honor:0, potions:1,
     ballTier:0,                 // +catch bonus from shop
+    bossWin:false,              // boss-reward latch (transient; only Dex.data persists)
     dist:0, fights:0, tier:1, enc:0,
     lead:0,
     // world scroll
@@ -520,6 +539,25 @@ function startWalk(){
   G.scroll=0; G.walkTarget = 320 + G.tier*10;
   clearButtons();
 }
+function bossDue(){ return ((G.fights+1) % BOSS_EVERY) === 0; }
+function spawnBoss(forceKey){
+  const teamAvg = G.team.reduce((s,m)=>s+m.level,0)/G.team.length;
+  const pool = G.tier<4 ? RARES : LEGENDS;
+  const key = forceKey || pick(pool);                 // forceKey = test hook only
+  const lvl = Math.round(teamAvg + (G.tier-1)*0.9 + BOSS_LVL_BONUS);
+  const w = makeMon(key, Math.max(3,lvl));
+  w.maxhp = Math.round(w.maxhp*BOSS_HP_MUL); w.hp = w.maxhp;
+  w.atk *= BOSS_ATK_MUL; w.spd *= BOSS_SPD_MUL;
+  w.boss=true; w.elite=true;
+  w.phaseMax = (G.tier>=6?3:2); w.phase = w.phaseMax; w.phaseBreak=0; w.enrage=1;
+  w.tele=0; w.teleActive=false; w.teleCd = rr(TELE_GAP[0],TELE_GAP[1]);
+  w.clock=0; w.noHeal=false;
+  w.bossTitle = BOSS_TITLES[key] || w.sp.name;
+  Dex.see(key);
+  finishSpawn(w);                                     // resets cds/status/pops, sets battleIntro=1.0
+  G.battleIntro = BOSS_INTRO_T;                        // extend to cover the banner (single timer)
+  return w;
+}
 function spawnWild(elite){
   if(!elite) G.enc = (G.enc||0)+1;
   const lead = activeMon() || G.team[0];
@@ -574,6 +612,7 @@ function finishSpawn(w){
 function activeMon(){ return G.team[G.lead]; }
 
 function afterFightChoices(){
+  if(G.wild && G.wild.boss){ G.bossWin=true; burst(660,470); }   // latch + defeat flourish
   G.state='choice';
   clearButtons();
 }
@@ -613,11 +652,12 @@ function catchChance(w){
   c += G.ballTier*0.1;
   c += Math.min(G.honor*0.0025, 0.15);
   c -= (w.level>G.tier*2? 0.05:0);
+  if(w.boss) return Math.max(BOSS_CATCH_FLOOR, clamp(c,0.05,0.96));
   return clamp(c, 0.05, 0.96);
 }
 function doKill(){
   const w=G.wild;
-  const s = Math.round(w.level * (1+w.sp.rarity*0.6) * 2.2) + (w.elite?15:0);
+  const s = (Math.round(w.level * (1+w.sp.rarity*0.6) * 2.2) + (w.elite?15:0)) * (w.boss?BOSS_SOULS_MUL:1);
   G.souls += s;
   Dex.see(w.key);
   flash('Slain. +'+s+' souls.');
@@ -625,7 +665,7 @@ function doKill(){
 }
 function doRelease(){
   const w=G.wild;
-  const h = Math.round(w.level * (1+w.sp.rarity*0.4) * 1.6) + (w.elite?10:0);
+  const h = (Math.round(w.level * (1+w.sp.rarity*0.4) * 1.6) + (w.elite?10:0)) * (w.boss?BOSS_HONOR_MUL:1);
   G.honor += h;
   Dex.see(w.key);
   flash('Released to the wild. +'+h+' honor.');
@@ -634,8 +674,8 @@ function doRelease(){
 function endFight(won){
   // XP + gold to team
   const w=G.wild;
-  const xp = 10 + Math.round(w.level*4) + w.sp.rarity*6 + (w.elite?20:0);
-  const gold = ri(4,9) + w.sp.rarity*3 + (w.elite?12:0);
+  const xp = (10 + Math.round(w.level*4) + w.sp.rarity*6 + (w.elite?20:0)) * (w.boss?BOSS_XP_MUL:1);
+  const gold = ri(4,9) + w.sp.rarity*3 + (w.elite?12:0) + (w.boss?BOSS_GOLD:0);
   G.gold += gold;
   let evoMsg='';
   for(const m of G.team){ if(m.hp>0){
@@ -648,6 +688,13 @@ function endFight(won){
   G.wild=null;
   // survivors catch their breath after a win
   for(const m of G.team){ if(m.hp>0) m.hp=Math.min(m.maxhp, m.hp+m.maxhp*0.30); }
+  // boss trophy — full heal of survivors + a consumable + a small permanent buff
+  if(G.bossWin){
+    G.team.forEach(m=>{ if(m.hp>0) m.hp=m.maxhp; });   // extra full heal of survivors
+    G.potions += 1;                                     // consumable reward
+    G.team.forEach(m=> m.atk *= 1.04);                  // small permanent trophy buff
+    G.bossWin=false;
+  }
   if(G.fights % 3 === 0){ setupCrossroads(); }
   else { startWalk(); }
 }
@@ -793,10 +840,25 @@ function updateBattle(dt){
   // status DoT/regen/timers (a hit to 0 HP is caught by the hp<=0 branches next frame)
   statusTick(you,dt); statusTick(w,dt);
 
-  // tick attacks
-  you.cd -= dt; w.cd -= dt;
-  if(you.cd<=0){ if(you.status.stun>0){ you.cd=0; } else { you.cd = 1/you.spd; strike(you, w, +1); } }
-  if(w.cd<=0){ if(w.status.stun>0){ w.cd=0; } else { w.cd = 1/w.spd; strike(w, you, -1); } }
+  // ---- boss engine (transient boss fields only; guarantees termination) ----
+  let bossPaused=false;
+  if(w.boss){
+    w.clock += dt;
+    // (a) EXECUTE VALVE — guarantees termination even vs a self-healing boss
+    if(w.clock > BOSS_SOFTCAP){ w.noHeal=true; w.hp=Math.max(0, w.hp - w.maxhp*BOSS_EXECUTE_DPS*dt); }
+    // (b) PHASE ADVANCE — monotonic decrement, guarded, fires once per threshold
+    if(w.phase>1 && w.hp <= w.maxhp*(w.phase-1)/w.phaseMax) bossPhaseAdvance(w);
+    // (c) PHASE-BREAK beat — freezes BOTH strikes, bounded ≤ BOSS_PHASE_PAUSE
+    if(w.phaseBreak>0){ w.phaseBreak = Math.max(0, w.phaseBreak-dt); bossPaused=true; }
+    // (d) TELEGRAPH scheduler (only when not paused)
+    else bossTelegraphTick(w, you, dt);
+  }
+
+  // tick attacks — player DPS is never gated; boss holds fire during pause/wind-up
+  you.cd -= dt;
+  if(!(w.boss && (bossPaused || w.tele>0))) w.cd -= dt;
+  if(you.cd<=0 && !bossPaused){ if(you.status.stun>0){ you.cd=0; } else { you.cd = 1/you.spd; strike(you, w, +1); } }
+  if(w.cd<=0 && !(w.boss && (bossPaused || w.tele>0))){ if(w.status.stun>0){ w.cd=0; } else { w.cd = 1/w.spd; strike(w, you, -1); } }
 
   // anim decay
   for(const m of [you,w]){ m.lunge=Math.max(0,m.lunge-dt*4); m.hurt=Math.max(0,m.hurt-dt*4); }
@@ -844,6 +906,7 @@ function strike(att, def, dir){
       for(let i=0;i<3;i++){ if(G.parts.length<160) G.parts.push({x:tx,y:210,vx:rr(-40,40),vy:rr(-120,-40),life:rr(0.3,0.6),col:'#ff7a3d',r:rr(2,4)}); }
       break; }
     case 'Water': { // instant lifesteal
+      if(att.boss && att.noHeal) break;
       const h=Math.round(dmg*WATER_STEAL);
       if(h>0){ att.hp=Math.min(att.maxhp, att.hp+h); att.status.fHeal=0.4;
         G.dmgPops.push({x:(dir>0?300:660)+rr(-20,20), y:200, vy:-40, life:1, txt:'+'+h, heal:true, col:'#7fe0d0', age:0, rot:0});
@@ -851,6 +914,7 @@ function strike(att, def, dir){
       }
       break; }
     case 'Grass': { // over-time leech (regen pip)
+      if(att.boss && att.noHeal) break;
       att.status.regen=LEECH_DUR; att.status.regenRate=(dmg*GRASS_LEECH)/LEECH_DUR; att.status.fHeal=0.3;
       break; }
     case 'Volt': { // chance to stun (respects immunity window)
@@ -866,11 +930,48 @@ function strike(att, def, dir){
 function statusTick(m,dt){
   if(!m || !m.status) return;
   const s=m.status;
+  if(m.boss && m.noHeal) s.regen=0;
   if(s.burnT>0){ s.burnT-=dt; m.hp=Math.max(0, m.hp - m.maxhp*BURN_PCT*s.burn*dt); if(s.burnT<=0) s.burn=0; }
   if(s.regen>0 && m.hp>0){ m.hp=Math.min(m.maxhp, m.hp+s.regenRate*dt); s.regen-=dt; }
   s.stun=Math.max(0,s.stun-dt); s.stunImm=Math.max(0,s.stunImm-dt);
   s.fBurn=Math.max(0,s.fBurn-dt); s.fStun=Math.max(0,s.fStun-dt);
   s.fGuard=Math.max(0,s.fGuard-dt); s.fDodge=Math.max(0,s.fDodge-dt); s.fHeal=Math.max(0,s.fHeal-dt);
+}
+// ---- boss phase-break / telegraph / capped heavy attack ----
+function bossPhaseAdvance(w){
+  w.phase--; w.phaseBreak = BOSS_PHASE_PAUSE;
+  w.enrage *= BOSS_ENRAGE; w.atk *= BOSS_ENRAGE; w.spd *= 1.05;   // enrage beat
+  if(w.status) w.status.regen = 0;                                // heal-block beat (boss only, never player)
+  G.shake = Math.min(12, G.shake+8);
+  G.dmgPops.push({x:660, y:150, vy:-30, life:1.2, txt:'ENRAGED!', heavy:true, col:BOSS_DANGER, age:0, rot:0});
+  for(let i=0;i<12;i++){ if(G.parts.length<160) G.parts.push({x:660,y:210,vx:rr(-130,130),vy:rr(-150,30),life:rr(0.3,0.6),col:BOSS_PHASE_COL[Math.min(2,w.phaseMax-w.phase)],r:rr(3,6)}); }
+  if(G.parts.length<160) G.parts.push({x:660,y:210,ring:true,r:6,life:0.5,col:BOSS_DANGER});
+  w.tele = TELE_WINDUP; w.teleActive = true;                      // arm a telegraph on the new phase
+}
+function bossTelegraphTick(w, def, dt){
+  if(w.tele>0){
+    w.tele -= dt; w.teleActive = true;
+    if(w.tele<=0){ w.tele=0; w.teleActive=false; bossHeavyStrike(w,def); w.teleCd = rr(TELE_GAP[0],TELE_GAP[1]); }
+  } else {
+    w.teleCd -= dt;
+    if(w.teleCd<=0){ w.tele=TELE_WINDUP; w.teleActive=true; }
+  }
+}
+function bossHeavyStrike(w, def){
+  const mult = typeMult(w.sp.type, def.sp.type);
+  if(def.sp.type==='Shadow' && rnd()<SHADOW_DODGE){        // reuse existing dodge
+    def.status.fDodge=0.4; w.lunge=1;
+    G.dmgPops.push({x:300+rr(-20,20),y:200,vy:-40,life:1,txt:'DODGE',dodge:true,col:'#a06bff',age:0,rot:0}); return;
+  }
+  let dmg = w.atk * mult * BOSS_HEAVY_MUL;                 // enrage already folded into w.atk — do NOT re-multiply
+  if(def.sp.type==='Rock') dmg *= (1-ROCK_GUARD);
+  dmg = Math.min(dmg, def.maxhp*BOSS_HEAVY_CAP);           // HARD CAP — full-HP mon always survives with ≥40%
+  dmg = Math.max(1, Math.round(dmg));
+  def.hp = Math.max(0, def.hp - dmg); def.hurt=1; w.lunge=1;
+  G.shake = Math.min(14, G.shake+10);
+  G.dmgPops.push({x:300+rr(-20,20),y:200,vy:-40,life:1.1,txt:'-'+dmg,heavy:true,col:BOSS_DANGER,age:0,rot:0});
+  for(let i=0;i<12;i++){ if(G.parts.length<160) G.parts.push({x:300,y:210,vx:rr(-120,120),vy:rr(-160,40),life:rr(0.3,0.7),col:BOSS_DANGER,r:rr(3,6)}); }
+  if(G.parts.length<160) G.parts.push({x:300,y:210,ring:true,r:6,life:0.5,col:BOSS_DANGER});
 }
 function updateFx(dt){
   for(const p of G.dmgPops){ p.y+=p.vy*dt; p.vy+=40*dt; p.life-=dt*0.9; p.age=(p.age||0)+dt; }
@@ -1189,6 +1290,47 @@ function bigHP(m,x,y,w,facing){
   ctx.strokeStyle='#0c1120'; ctx.lineWidth=1.5; roundRect(x,y,w,12,6); ctx.stroke();
   drawStatusRow(m,x,y,w,facing);
 }
+// ---- boss HP bar (segmented phase bar) / telegraph / intro banner ----
+function drawBossHP(w){
+  const BX=360,BY=98,BW=480,BH=16, RX=840;
+  ctx.textAlign='right';
+  ctx.fillStyle=RARITY_COL[3]; ctx.font='800 20px Segoe UI';
+  ctx.fillText(w.sp.name, RX, 72);
+  ctx.fillStyle='#c9b8ff'; ctx.font='600 11px Segoe UI';
+  ctx.fillText(w.sp.type+' · ☠ BOSS · Lv'+w.level, RX, 88);
+  ctx.textAlign='left';
+  const gr=clamp((w.hpShown==null?w.hp:w.hpShown)/w.maxhp,0,1), r=clamp(w.hp/w.maxhp,0,1);
+  roundRect(BX,BY,BW,BH,8); ctx.fillStyle='#0c1120'; ctx.fill();                        // track
+  if(gr>0){ roundRect(BX,BY,Math.max(2,BW*gr),BH,8); ctx.fillStyle='#ff9b9b'; ctx.fill(); } // drain trail
+  if(r>0){ roundRect(BX,BY,Math.max(2,BW*r),BH,8); ctx.fillStyle=BOSS_PHASE_COL[Math.min(2,w.phaseMax-w.phase)]; ctx.fill();
+    ctx.save(); ctx.globalAlpha=.35; ctx.fillStyle='#fff'; ctx.fillRect(BX+1,BY+1,Math.max(2,BW*r)-2,4); ctx.restore(); }
+  for(let i=1;i<w.phaseMax;i++){ const nx=BX+BW*(i/w.phaseMax);                          // segment ticks
+    ctx.fillStyle='#0c1120'; ctx.fillRect(nx-1,BY,2,BH); ctx.fillStyle='rgba(255,255,255,.5)'; ctx.fillRect(nx-1,BY,1,BH); }
+  ctx.strokeStyle=w.enrage>1?BOSS_DANGER:'#0c1120'; ctx.lineWidth=1.5; roundRect(BX,BY,BW,BH,8); ctx.stroke();
+  centerText('PHASE '+w.phase+' / '+w.phaseMax, BX+50, BY+30, '700 11px Segoe UI', BOSS_PHASE_COL[Math.min(2,w.phaseMax-w.phase)]);
+  drawStatusRow(w, BX, BY, BW, -1);
+  if(w.phaseBreak>0){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    ctx.globalAlpha=clamp(w.phaseBreak/BOSS_PHASE_PAUSE,0,.8); ctx.fillStyle='#fff';
+    roundRect(BX,BY,BW,BH,8); ctx.fill(); ctx.restore(); }
+}
+function drawBossTelegraph(w, yx, wx){
+  const p=w.tele/TELE_WINDUP, puls=0.5+0.5*Math.sin(G.t*14);
+  ctx.save(); ctx.globalAlpha=puls; ctx.strokeStyle=BOSS_DANGER; ctx.lineWidth=2+(1-p)*5;   // closing ring on boss
+  ctx.beginPath(); ctx.arc(wx,470,20+p*70,0,6.283); ctx.stroke(); ctx.restore();
+  centerText('⚠ HEAVY ATTACK ⚠', W/2, 150, '800 22px Segoe UI', BOSS_DANGER);                // danger banner (VS slot)
+  ctx.fillStyle=BOSS_DANGER; ctx.fillRect(360, 132, 480*(1-p), 5);                            // L→R countdown bar
+  ctx.save(); ctx.globalAlpha=0.7; ctx.strokeStyle=BOSS_DANGER; ctx.lineWidth=2;              // reticle on player
+  ctx.beginPath(); ctx.arc(yx,470,18,0,6.283); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(yx-24,470); ctx.lineTo(yx+24,470); ctx.moveTo(yx,446); ctx.lineTo(yx,494); ctx.stroke(); ctx.restore();
+}
+function drawBossBanner(w){
+  const a=clamp(G.battleIntro/BOSS_INTRO_T,0,1);
+  ctx.save(); ctx.globalAlpha=a*0.55; ctx.fillStyle='#06081277'; ctx.fillRect(0,0,W,H);
+  ctx.globalAlpha=a; centerText('⚠ BOSS ⚠', W/2, 250, '700 18px Segoe UI', BOSS_DANGER);
+  ctx.shadowColor=BOSS_GOLD_C; ctx.shadowBlur=10;
+  centerText(w.sp.name, W/2, 292, '900 46px Segoe UI', RARITY_COL[w.sp.rarity]); ctx.shadowBlur=0;
+  centerText(w.bossTitle, W/2, 322, '600 16px Segoe UI', '#e6d2ff'); ctx.restore();
+}
 // status pips under a big HP bar. Fixed order, ≤4 pips, 14px, stride 17.
 function drawStatusRow(m,x,y,w,facing){
   const s=m.status; if(!s) return;
@@ -1232,6 +1374,8 @@ function drawDmgPops(){
       ctx.fillStyle=p.col||'#ffffff'; ctx.fillText(txt,0,0);
       ctx.restore(); continue;
     }
+    if(p.heavy){ ctx.font='900 40px Segoe UI'; ctx.lineWidth=5; ctx.strokeStyle='rgba(6,8,18,.9)';
+      ctx.strokeText(p.txt,0,0); ctx.fillStyle=p.col||BOSS_DANGER; ctx.fillText(p.txt,0,0); ctx.restore(); continue; }
     if(p.crit){ ctx.rotate(p.rot||0); ctx.shadowColor='#ffdf5a'; ctx.shadowBlur=8; }
     ctx.font='800 '+(p.crit?34:22)+'px Segoe UI';
     const txt=p.txt + (p.crit?'!':'');
@@ -1513,23 +1657,29 @@ function drawBattle(){
   // intro slide
   const io=G.battleIntro>0? G.battleIntro:0;
   const sw = G.switchAnim>0 ? G.switchAnim/0.35 : 0;
+  const bWind = (w.boss && w.tele>0) ? (1 - w.tele/TELE_WINDUP) : wWind;
   drawMon(you.sp, yx - io*300 - sw*260, 470 - Math.abs(Math.sin(G.t*3))*4, 44, 1, G.t*1.2, {bob:you.bob, hurt:you.hurt>0, lunge:you.lunge, wind:youWind, hurtAmt:you.hurt});
-  drawMon(w.sp,  wx + io*400, 470, 44 + (w.elite?8:0), -1, G.t*1.2, {bob:w.bob, hurt:w.hurt>0, lunge:w.lunge, wind:wWind, hurtAmt:w.hurt});
+  drawMon(w.sp,  wx + io*400, 470, 44 + (w.elite?8:0), -1, G.t*1.2, {bob:w.bob, hurt:w.hurt>0, lunge:w.lunge, wind:bWind, hurtAmt:w.hurt});
   hitGlow(yx,you.hurt); hitGlow(wx,w.hurt);
   statusGlow(yx,you); statusGlow(wx,w);
   // hp panels
   bigHP(you, 40, 90, 300, 1);
-  bigHP(w, W-340, 90, 300, -1);
-  // VS + type-advantage two-chip readout
-  centerText('VS', W/2, 150, '800 22px Segoe UI', '#6a76a0');
-  const out=typeMult(you.sp.type,w.sp.type), inc=typeMult(w.sp.type,you.sp.type);
-  typeChip(you.sp.type, w.sp.type, out, 172, false);
-  typeChip(w.sp.type, you.sp.type, inc, 196, inc>1);
+  if(w.boss) drawBossHP(w); else bigHP(w, W-340, 90, 300, -1);
+  // VS + type-advantage two-chip readout (replaced by telegraph banner while winding up)
+  if(!(w.boss && w.tele>0)){
+    centerText('VS', W/2, 150, '800 22px Segoe UI', '#6a76a0');
+    const out=typeMult(you.sp.type,w.sp.type), inc=typeMult(w.sp.type,you.sp.type);
+    typeChip(you.sp.type, w.sp.type, out, 172, false);
+    typeChip(w.sp.type, you.sp.type, inc, 196, inc>1);
+  } else {
+    drawBossTelegraph(w, yx, wx);
+  }
   // controls
   clearButtons();
   btn('speed', W-110, 54, 96, 30, G.speed+'× speed', null, {col:'#242c48'});
   btn('potion', 14, 54, 150, 30, '🧪 Potion ('+G.potions+')', null,
     {col:'#2a4a3a', accent:'#5fd0a0', enabled:G.potions>0 && you.hp<you.maxhp});
+  if(w.boss && G.battleIntro>0) drawBossBanner(w);   // intro banner on top
 }
 function usePotion(){
   if(G.potions<=0) return;
@@ -1568,14 +1718,20 @@ function drawChoice(){
   panel(W/2-300, 150, 600, 250, null);
   drawMon(w.sp, W/2, 250, 46, -1, G.t, {bob:0});
   withShadow(W/2, 300, 34,10);
-  centerText('Wild '+w.sp.name+' fainted!', W/2, 190, '800 24px Segoe UI', '#ffe9a8');
-  centerText(RARITY_NAME[w.sp.rarity]+' · '+w.sp.type+' · Lv'+w.level, W/2, 214, '600 14px Segoe UI', RARITY_COL[w.sp.rarity]);
+  if(w.boss){
+    centerText('BOSS DEFEATED', W/2, 190, '900 30px Segoe UI', BOSS_GOLD_C);
+    centerText(w.sp.name+' — '+w.bossTitle, W/2, 214, '600 14px Segoe UI', RARITY_COL[w.sp.rarity]);
+    centerText('+'+BOSS_GOLD+' gold · party fully healed · +1 potion', W/2, 300, '600 13px Segoe UI', '#c9d4f0');
+  } else {
+    centerText('Wild '+w.sp.name+' fainted!', W/2, 190, '800 24px Segoe UI', '#ffe9a8');
+    centerText(RARITY_NAME[w.sp.rarity]+' · '+w.sp.type+' · Lv'+w.level, W/2, 214, '600 14px Segoe UI', RARITY_COL[w.sp.rarity]);
+  }
   clearButtons();
   const cc=Math.round(catchChance(w)*100);
-  const souls=Math.round(w.level*(1+w.sp.rarity*0.6)*2.2)+(w.elite?15:0);
-  const honor=Math.round(w.level*(1+w.sp.rarity*0.4)*1.6)+(w.elite?10:0);
+  const souls=(Math.round(w.level*(1+w.sp.rarity*0.6)*2.2)+(w.elite?15:0))*(w.boss?BOSS_SOULS_MUL:1);
+  const honor=(Math.round(w.level*(1+w.sp.rarity*0.4)*1.6)+(w.elite?10:0))*(w.boss?BOSS_HONOR_MUL:1);
   const bw=180, y=330, gap=10, x0=W/2-(bw*3+gap*2)/2;
-  btn('catch', x0, y, bw, 60, '🎯 CATCH', cc+'% chance', {col:'#2f5a3a', accent:'#6fd07a'});
+  btn('catch', x0, y, bw, 60, '🎯 CATCH', cc+'% chance', w.boss?{col:'#2f5a3a', accent:BOSS_GOLD_C}:{col:'#2f5a3a', accent:'#6fd07a'});
   btn('kill', x0+bw+gap, y, bw, 60, '💀 KILL', '+'+souls+' souls', {col:'#5a2f3a', accent:'#e07a8a'});
   btn('release', x0+2*(bw+gap), y, bw, 60, '🕊️ RELEASE', '+'+honor+' honor', {col:'#2f4a5a', accent:'#6fb0e0'});
 }
@@ -1856,7 +2012,7 @@ function loop(now){
     G.scroll += sdt*180;
     if(G.biomeFxT>0) G.biomeFxT = Math.max(0, G.biomeFxT - dt);
     updateFx(dt);
-    if(G.scroll>=G.walkTarget){ spawnWild(false); }
+    if(G.scroll>=G.walkTarget){ if(bossDue()) spawnBoss(); else spawnWild(false); }
   } else if(G.state==='battle'){
     updateBattle(sdt);
   } else {
