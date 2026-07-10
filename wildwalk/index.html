@@ -330,7 +330,7 @@ function xpToLevels(m, gain){
 const Dex = {
   data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, ascension:{ max:0, sel:0 }, upgrades:{}, muted:false,
          ach:{}, killed:0, released:0, bossKills:0, bestTier:0, fullPartyWin:0, wildCatch:0, runsLog:[],
-         daily:{ day:0, dist:0, tier:0 } },
+         daily:{ day:0, dist:0, tier:0 }, tutorialDone:false },
   load(){ try{ const d=JSON.parse(localStorage.getItem(SAVE)); if(d) this.data=Object.assign(this.data,d); }catch(e){} },
   save(){ try{ localStorage.setItem(SAVE, JSON.stringify(this.data)); }catch(e){} },
   see(k){ if(!this.data.seen[k]){ this.data.seen[k]=1; this.save(); } },
@@ -750,6 +750,16 @@ function drawTrainer(x,y,s,t,walking){
 // Game state
 // ===================================================================
 let G;
+const TUT_STEPS = [
+  {id:'walk',   state:'walk',       title:'The Walk',
+   body:'You march east on your own. Wild monsters appear along the way.'},
+  {id:'battle', state:'battle',     title:'Auto-Battle',
+   body:'Fights play out on their own. Tap a teammate to swap them in — types matter.'},
+  {id:'choice', state:'choice',     title:'After the Fight',
+   body:'CATCH to add it to your team, KILL for souls, or RELEASE for honor.'},
+  {id:'cross',  state:'crossroads', title:'Crossroads',
+   body:'Every three fights you pick a path — shops, campfires, elites and more.'},
+];
 function newGame(chosenKey){
   const A = (Dex.data.ascension && Dex.data.ascension.sel) || 0;
   const pool = starterPool();
@@ -778,6 +788,8 @@ function newGame(chosenKey){
     battleLog:'', outcome:null,
     // crossroads options
     xoptions:[],
+    // tutorial (transient; reset every run)
+    tutSeen:{}, tutActive:null,
     // transient message
     msg:'', msgT:0,
     essenceEarned:0, sanctuaryFrom:'title', starterFrom:'title',
@@ -790,6 +802,22 @@ function newGame(chosenKey){
   };
   G.asc = A;
   Dex.caught(starterKey);
+}
+function tutStep(){
+  if(Dex.data.tutorialDone) return;
+  if(G.tutActive) return;
+  for(const it of TUT_STEPS){
+    if(it.state===G.state && !G.tutSeen[it.id]){ G.tutActive=it; return; }
+  }
+}
+function dismissTut(){
+  if(!G.tutActive) return;
+  G.tutSeen[G.tutActive.id]=1;
+  G.tutActive=null;
+  if(TUT_STEPS.every(s=>G.tutSeen[s.id])){ Dex.data.tutorialDone=true; Dex.save(); }
+}
+function skipTutorial(){
+  Dex.data.tutorialDone=true; Dex.save(); G.tutActive=null;
 }
 
 // ---------- button system ----------
@@ -1998,6 +2026,40 @@ function panel(x,y,w,h,title){
     ctx.fillText(title, x+w/2, y+38); ctx.restore(); ctx.textAlign='left'; }
 }
 function centerText(txt,x,y,font,col){ ctx.textAlign='center'; ctx.font=font; ctx.fillStyle=col; ctx.fillText(txt,x,y); ctx.textAlign='left'; }
+function wrapText(txt, maxW, maxLines){
+  const words=(txt||'').split(' ');
+  const lines=[]; let cur='';
+  for(const wd of words){
+    const trial=cur?cur+' '+wd:wd;
+    if(cur && ctx.measureText(trial).width>maxW){
+      lines.push(cur); cur=wd;
+      if(lines.length===maxLines){ cur=''; break; }
+    } else cur=trial;
+  }
+  if(cur && lines.length<maxLines) lines.push(cur);
+  return lines;
+}
+function drawTut(){
+  const it=G.tutActive; if(!it) return;
+  const x=W/2-320, y=44, w=640, h=88, px=26;
+  ctx.save();
+  ctx.shadowColor='rgba(0,0,0,.5)'; ctx.shadowBlur=18; ctx.shadowOffsetY=4;
+  roundRect(x,y,w,h,14); ctx.fillStyle='rgba(10,14,28,.92)'; ctx.fill();
+  ctx.shadowColor='transparent'; ctx.shadowBlur=0; ctx.shadowOffsetY=0;
+  ctx.strokeStyle='rgba(255,255,255,.14)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(x+12,y+1.5); ctx.lineTo(x+w-12,y+1.5); ctx.stroke();
+  ctx.strokeStyle='#ffe9a8'; ctx.lineWidth=2; roundRect(x,y,w,h,14); ctx.stroke();
+  ctx.textAlign='left'; ctx.font='800 20px Segoe UI'; ctx.fillStyle='#ffe9a8';
+  ctx.fillText(it.title, x+px, y+34);
+  ctx.font='600 15px Segoe UI'; ctx.fillStyle='#c9d4f0';
+  const lines=wrapText(it.body, w-px*2, 2);
+  ctx.fillText(lines[0]||'', x+px, y+60);
+  if(lines[1]) ctx.fillText(lines[1], x+px, y+81);
+  ctx.textAlign='right'; ctx.font='700 13px Segoe UI'; ctx.fillStyle='#aeb8d8';
+  ctx.fillText('Tap to continue ▸', x+w-px, y+h-12);
+  ctx.textAlign='left';
+  ctx.restore();
+}
 
 // ===================================================================
 // Per-state draw
@@ -2060,6 +2122,7 @@ function draw(){
     centerText(G.achMsg, W/2+14, 65, '700 16px Segoe UI', '#ffe9a8');
     ctx.globalAlpha=1;
   }
+  if(G.tutActive) drawTut();
   // vignette (skip on title, which returns early)
   const vig=ctx.createRadialGradient(W/2,H/2,H*0.35, W/2,H/2,H*0.75);
   vig.addColorStop(0,'rgba(6,8,18,0)'); vig.addColorStop(1,'rgba(6,8,18,.4)');
@@ -2267,6 +2330,7 @@ function drawTitle(){
   centerText('Best: '+Dex.data.best+'m   ·   Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length+' caught   ·   Runs '+Dex.data.runs,
     W/2, 420, '600 15px Segoe UI', '#8fa0c8');
   clearButtons();
+  if(!Dex.data.tutorialDone) btn('tutskip', 14, 14, 132, 30, 'Skip Tutorial', null, {col:'#2a2f4a', accent:'#8fa0c8', tcol:'#c9d4f0'});
   const dInt = dayInt();
   const db = Dex.data.daily;
   const todayBest = (db && db.day===dInt) ? db.dist : 0;
@@ -2782,9 +2846,10 @@ function drawGameOver(){
 // Input
 // ===================================================================
 function onClick(mx,my){
+  if(G.tutActive){ dismissTut(); sfx('select'); return; }
   { const mb=hitButton(mx,my);
     if(mb){ if(mb.id==='mute'){ toggleMute(); return; } sfx('select'); } }
-  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='daily'){ startDaily(); } else { openStarter('title'); } } return; }
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='tutskip') skipTutorial(); else if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else if(b.id==='daily'){ startDaily(); } else { openStarter('title'); } } return; }
   if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='records') openRecords('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
   if(G.state==='starter'){
     const b=hitButton(mx,my); if(!b) return;
@@ -2914,6 +2979,7 @@ function loop(now){
     G.scroll += dt*8;
     updateFx(dt);
   }
+  tutStep();
   draw();
   requestAnimationFrame(loop);
 }
