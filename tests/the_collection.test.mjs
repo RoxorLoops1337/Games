@@ -32,11 +32,40 @@ ok(S.coins === 0 && S.packsUnopened === TC.STARTER_PACKS, 'starts with 0 coins a
 ok(Object.keys(S.collection).length === 0, 'starts with an empty collection');
 
 // ---- allowance ----
+ok(S.day === 1, 'a fresh save starts on day 1');
 ok(TC.canClaimAllowance(S) === true, 'allowance claimable on a fresh save');
 const first = TC.claimAllowance(S);
 ok(first === TC.ALLOWANCE_BASE, 'first claim pays the base amount, no streak bonus yet');
 ok(TC.canClaimAllowance(S) === false, 'cannot claim twice the same day');
 ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
+
+// ---- the day counter, not the real calendar, drives progress ----
+{
+  const S10 = TC.freshSave();
+  const r1 = TC.nextDay(S10);
+  ok(S10.day === 2 && r1.day === 2, 'nextDay advances the in-game day, no waiting on the real clock');
+  ok(TC.canClaimAllowance(S10) === true, 'allowance is claimable again on the new day');
+  TC.claimAllowance(S10);
+  TC.nextDay(S10);
+  const bonusAfterConsecutive = TC.claimAllowance(S10);
+  ok(bonusAfterConsecutive === TC.ALLOWANCE_BASE + 2, 'claiming on consecutive days grows the streak bonus');
+  TC.nextDay(S10);
+  TC.nextDay(S10);
+  const S10streakBefore = S10.allowance.streak;
+  TC.claimAllowance(S10);
+  ok(S10.allowance.streak === 1 && S10streakBefore > 1, 'skipping a day resets the streak instead of continuing it');
+}
+{
+  const S11 = TC.freshSave();
+  ok(typeof TC.SUPERMARKET_CHANCE === 'number' && TC.SUPERMARKET_CHANCE > 0, 'supermarket chance is a real probability');
+  let sawSupermarketPack = false;
+  for (let i = 0; i < 40 && !sawSupermarketPack; i++) {
+    const before = S11.packsUnopened;
+    const result = TC.nextDay(S11);
+    if (result.supermarketPack) sawSupermarketPack = (S11.packsUnopened === before + 1);
+  }
+  ok(sawSupermarketPack, 'the supermarket beat eventually grants a bonus pack, and packsUnopened reflects it');
+}
 
 // ---- kiosk economy ----
 {
@@ -136,6 +165,11 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(S9.coins === TC.TRADE_PAYOUT[wantedTier] && S9.collection[wantedId].count === 1, 'coins granted and the spare copy consumed');
   ok(TC.canFulfillTrade(S9, npc.id) === false, 'the same NPC cannot be traded with twice the same day');
   ok(TC.fulfillTrade(S9, npc.id) === null, 'a second same-day trade with the same NPC is rejected');
+
+  TC.nextDay(S9);
+  TC.refreshSchoolIfNeeded(S9);
+  ok(!S9.school.fulfilledToday[npc.id], 'advancing the day clears fulfilledToday for a fresh trade opportunity');
+  ok(S9.school.wantDay === S9.day, 'the want-list is stamped with the current day');
 }
 
 // ---- completion ----
