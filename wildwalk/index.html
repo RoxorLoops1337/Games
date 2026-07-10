@@ -91,7 +91,9 @@ const BOSS_DANGER='#ff3b3b', BOSS_GOLD_C='#ffdf5a';
 const BOSS_PHASE_COL=['#ff8f3d','#ff5a5a','#c452ff'];   // indexed by (phaseMax-phase): hotter/violet each break
 const BOSS_TITLES={ moltengod:'Tyrant of Ash', abysslord:'Lord of the Abyss',
   infernyx:'The Ashen Reborn', leviatide:'Tide That Drowns',
-  verdragon:'The Wildwood Wyrm', stormhorn:'Thunder Crown' };
+  verdragon:'The Wildwood Wyrm', stormhorn:'Thunder Crown',
+  terralith:'The Sky-Weight', tsunareth:'The Drowned Deep', sylvarch:'Spring Unbound',
+  fulgorax:'The Thunderclap', craghorn:'Tusked Ruin', gloomoth:'Wings of Dusk' };
 
 // ---------- species database ----------
 // shape: blob | round | spiky | long | winged ; feat: flame|drip|leaf|bolt|rock|ghost|horn
@@ -111,8 +113,8 @@ const SPECIES = {
   torrentoad:S('Torrentoad','Water',1,'blob','drip','#2f80d0','#63c6ff','#c4ecff',{hp:60,atk:12,spd:1.0},'leviatide','One croak summons a small, sudden downpour.'),
   thornbeast:S('Thornbeast','Grass',1,'spiky','leaf','#489a3f','#8ad84f','#d6ffb0',{hp:62,atk:12,spd:0.95},'verdragon','Bramble hide that even blades think twice about.'),
   voltfox:   S('Voltfox','Volt',1,'long','bolt','#e8b62a','#fff07a','#fff6c0',{hp:48,atk:16,spd:1.3},'stormhorn','Runs so fast it leaves a trail of sparks behind.'),
-  boulderk:  S('Boulderk','Rock',1,'round','rock','#8f6c47','#bd9a6d','#ddc7a6',{hp:74,atk:13,spd:0.78},null,'A walking cliff face; nothing on earth budges it.'),
-  nightwyrm: S('Nightwyrm','Shadow',1,'winged','ghost','#5f3fb0','#a888ff','#d8c6ff',{hp:54,atk:15,spd:1.15},null,'Glides through moonless skies, unseen and unheard.'),
+  boulderk:  S('Boulderk','Rock',1,'round','rock','#8f6c47','#bd9a6d','#ddc7a6',{hp:74,atk:13,spd:0.78},'craghorn','A walking cliff face; nothing on earth budges it.'),
+  nightwyrm: S('Nightwyrm','Shadow',1,'winged','ghost','#5f3fb0','#a888ff','#d8c6ff',{hp:54,atk:15,spd:1.15},'gloomoth','Glides through moonless skies, unseen and unheard.'),
 
   infernyx:  S('Infernyx','Fire',2,'winged','flame','#b83518','#ff7326','#ffb060',{hp:82,atk:22,spd:1.2},null,'Reborn from its own ashes, hotter every time.'),
   leviatide: S('Leviatide','Water',2,'long','drip','#1f66b8','#4fb8ff','#b4e6ff',{hp:100,atk:19,spd:1.02},null,'The ancient tides answer when it calls the deep.'),
@@ -122,6 +124,14 @@ const SPECIES = {
   // legendaries — only appear as elites
   moltengod: S('Moltengod','Fire',3,'winged','flame','#e01f1f','#ff9b2e','#ffd27a',{hp:150,atk:30,spd:1.25},null,'Where it treads, mountains remember how to burn.'),
   abysslord: S('Abysslord','Shadow',3,'winged','ghost','#3a1f88','#8a5cff','#c9a8ff',{hp:170,atk:28,spd:1.2},null,'It rules the dark between stars, and it is patient.'),
+
+  // --- new: complete the two dead-end lines + a legendary per type ---
+  craghorn:  S('Craghorn','Rock',2,'spiky','horn','#6b5236','#ecc978','#c7ad82',{hp:104,atk:20,spd:0.86},null,'A living crag; its ivory tusks have toppled watchtowers.'),
+  gloomoth:  S('Gloomoth','Shadow',2,'winged','ghost','#452a72','#b98cff','#d8c6ff',{hp:84,atk:23,spd:1.24},null,'Moonlight passes through it; nightmares do not.'),
+  terralith: S('Terralith','Rock',3,'winged','rock','#4e4636','#8a7550','#cbb892',{hp:190,atk:26,spd:0.95},null,'A mountain that learned to fly, and never forgot its weight.'),
+  tsunareth: S('Tsunareth','Water',3,'long','drip','#12518f','#57c4ff','#bde8ff',{hp:172,atk:27,spd:1.08},null,'The drowned deep gave it a name only tides can pronounce.'),
+  sylvarch:  S('Sylvarch','Grass',3,'winged','leaf','#2c7233','#82dc46','#d2ffa0',{hp:162,atk:29,spd:1.10},null,'An entire spring blooms in the wake of its wings.'),
+  fulgorax:  S('Fulgorax','Volt',3,'spiky','bolt','#c78a0e','#ffe94a','#fff6bf',{hp:138,atk:34,spd:1.36},null,'It is the thunderclap; the storm is only its echo.'),
 };
 const RARITY_NAME = ['Common','Uncommon','Rare','Legendary'];
 const RARITY_COL  = ['#9fb0cc','#67d089','#ffb43d','#ff6bd5'];
@@ -139,8 +149,8 @@ const UPGRADES = [
 
 const COMMONS   = ['emberpup','puddlet','sprig','sparky','pebblin','umbrat'];
 const UNCOMMONS  = ['cindermaw','torrentoad','thornbeast','voltfox','boulderk','nightwyrm'];
-const RARES     = ['infernyx','leviatide','verdragon','stormhorn'];
-const LEGENDS   = ['moltengod','abysslord'];
+const RARES     = ['infernyx','leviatide','verdragon','stormhorn','craghorn','gloomoth'];
+const LEGENDS   = ['moltengod','abysslord','terralith','tsunareth','sylvarch','fulgorax'];
 // starter pool — the ONE source of truth for the starter picker (draw, click,
 // fallback, tests all read this). Menagerie unlock adds uncommons.
 function starterPool(){ return Dex.up('menagerie') ? COMMONS.concat(UNCOMMONS) : COMMONS; }
@@ -661,6 +671,17 @@ function drawFeature(sp, s, t, acc, body){
     ctx.fillStyle=shade(body,-30);
     ctx.beginPath(); ctx.moveTo(-s*0.4,-s*0.8); ctx.lineTo(-s*0.55,-s*1.15); ctx.lineTo(-s*0.28,-s*0.85); ctx.closePath(); ctx.fill();
     ctx.beginPath(); ctx.moveTo( s*0.4,-s*0.8); ctx.lineTo( s*0.55,-s*1.15); ctx.lineTo( s*0.28,-s*0.85); ctx.closePath(); ctx.fill();
+  } else if(f==='horn'){
+    ctx.fillStyle=acc; ctx.strokeStyle=shade(acc,-45); ctx.lineWidth=s*0.03;
+    for(const d of [-1,1]){
+      ctx.beginPath();
+      ctx.moveTo(d*s*0.22,-s*0.78);
+      ctx.quadraticCurveTo(d*s*0.52,-s*1.06, d*s*0.66,-s*1.34);
+      ctx.quadraticCurveTo(d*s*0.44,-s*1.00, d*s*0.42,-s*0.72);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.fillStyle=shade(acc,55);
+    for(const d of [-1,1]){ ctx.beginPath(); ctx.ellipse(d*s*0.42,-s*1.0,s*0.045,s*0.13,d*0.5,0,6.283); ctx.fill(); }
   }
   ctx.restore();
 }
@@ -2018,7 +2039,7 @@ function dexProgress(){
   for(const k of keys){ const sp=SPECIES[k]; const r=byRarity[sp.rarity]; r.total++; if(Dex.data.caught[k]) r.caught++; }
   return { caught:Dex.nCaught(), seen:Dex.nSeen(), total:keys.length, byRarity };
 }
-function pokedexCardRect(i){ const c=i%6,r=(i/6)|0; return {x:22+c*155, y:118+r*146, w:140, h:132}; }
+function pokedexCardRect(i){ const c=i%6,r=(i/6)|0; return {x:22+c*155, y:112+r*114, w:140, h:104}; }
 function pokedexCardAt(mx,my){
   for(let i=0;i<Object.keys(SPECIES).length;i++){ const r=pokedexCardRect(i);
     if(mx>=r.x&&mx<=r.x+r.w&&my>=r.y&&my<=r.y+r.h) return i; }
@@ -2046,7 +2067,7 @@ function drawPokedex(){
   // grid
   Object.keys(SPECIES).forEach((key,i)=>{
     const sp=SPECIES[key], st=dexStatus(key), r=pokedexCardRect(i);
-    const sx=r.x+r.w/2, sy=r.y+56;
+    const sx=r.x+r.w/2, sy=r.y+42;
     // card frame
     const pg=ctx.createLinearGradient(0,r.y,0,r.y+r.h);
     if(st===0){ pg.addColorStop(0,'#0e1324'); pg.addColorStop(1,'#0a0e1c'); }
@@ -2059,14 +2080,14 @@ function drawPokedex(){
     ctx.strokeStyle = st===2?RARITY_COL[sp.rarity] : st===1?'#2a3760':'#1a2138';
     roundRect(r.x,r.y,r.w,r.h,10); ctx.stroke();
     if(st===2){
-      drawMon(sp, sx, sy, 28, 1, G.t, {bob:i});
-      centerText(sp.name, sx, r.y+r.h-38, '700 14px Segoe UI', '#eaf0ff');
-      centerText(sp.type+' · '+RARITY_NAME[sp.rarity], sx, r.y+r.h-20, '600 11px Segoe UI', TYPE_COL[sp.type]);
+      drawMon(sp, sx, sy, 20, 1, G.t, {bob:i});
+      centerText(sp.name, sx, r.y+r.h-40, '700 14px Segoe UI', '#eaf0ff');
+      centerText(sp.type+' · '+RARITY_NAME[sp.rarity], sx, r.y+r.h-22, '600 11px Segoe UI', TYPE_COL[sp.type]);
     } else if(st===1){
       const sil={...sp, body:'#1c2740', acc:'#1c2740', belly:'#26324e'};
-      drawMon(sil, sx, sy, 28, 1, G.t, {bob:i});
-      centerText('???', sx, r.y+r.h-34, '800 16px Segoe UI', '#5a6688');
-      centerText(sp.type, sx, r.y+r.h-16, '600 11px Segoe UI', TYPE_COL[sp.type]);
+      drawMon(sil, sx, sy, 20, 1, G.t, {bob:i});
+      centerText('???', sx, r.y+r.h-36, '800 16px Segoe UI', '#5a6688');
+      centerText(sp.type, sx, r.y+r.h-18, '600 11px Segoe UI', TYPE_COL[sp.type]);
     } else {
       centerText('?', sx, r.y+r.h/2+14, '900 40px Segoe UI', '#242c46');
     }

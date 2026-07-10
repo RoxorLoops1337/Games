@@ -33,7 +33,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 13. [x] Weather / day–night — DONE c13.
 14. [x] Shop restock + reroll — DONE c14.
 15. [x] Distance leaderboard (LOCAL best-runs) — DONE c15.
-16. [ ] More species + 2nd-tier evolutions (grow the roster / Dex from 18).
+16. [x] More species + 2nd-tier evolutions — DONE c16.
 17. [ ] Daily-seed challenge run (deterministic seed → shareable score).
 18. [ ] Prestige / ascension (opt-in run modifiers for bonus essence).
 19. [ ] Guided tutorial / first-run onboarding.
@@ -45,6 +45,15 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c16 — More species + 2nd-tier evolutions** (studio: designer, ux-designer, lead, engineer, QA).
+  Grew the roster from 18 → 24 species: +2 rares (craghorn Rock·spiky·horn, gloomoth Shadow·winged·ghost)
+  and +4 legendaries (terralith Rock, tsunareth Water, sylvarch Grass, fulgorax Volt) so every type now
+  has a legendary. Completed two dead-end evolution lines: boulderk→craghorn and nightwyrm→gloomoth.
+  Added a new `horn` branch to drawFeature (procedural sprite). Retuned the Pokédex card grid to 4 rows
+  (pokedexCardRect → {x:22+c*155, y:112+r*114, w:140, h:104}) to fit the larger roster with per-rarity
+  progress chips. RARES/LEGENDS pick pools extended. +4 tests (new species keys present; evo lines resolve;
+  horn feat renders without error; 24-species dex progress). 122/122, 0 flakes. Back-compat: species are
+  data-only additions, no save-shape change.
 - **c15 — Local best-runs leaderboard** (studio: designer, ux-designer, lead, engineer, QA).
   Persists Dex.data.runsLog (added additively, back-compat default []): at game over Dex.recordRun
   pushes the run {dist,tier,fights,dex}, coerces NaN→0, sorts by dist desc, caps to 10, saves.
