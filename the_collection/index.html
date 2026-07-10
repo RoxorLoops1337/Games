@@ -59,33 +59,65 @@ nav.tabbar{
   padding-bottom:env(safe-area-inset-bottom,0px);
 }
 nav.tabbar button{
-  flex:1; background:none; border:none; color:var(--ink-faint); padding:11px 4px 9px;
+  flex:1; background:none; border:none; color:var(--ink-faint); padding:9px 4px 8px;
   font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
-  display:flex; flex-direction:column; align-items:center; gap:4px; min-height:52px;
+  display:flex; flex-direction:column; align-items:center; gap:3px; min-height:52px;
+  transition:color 150ms ease;
 }
-nav.tabbar button .tabdot{width:6px;height:6px;border-radius:50%;background:transparent;}
+.tabicon{width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; transition:transform 150ms ease;}
+nav.tabbar button .tabdot{width:4px;height:4px;border-radius:50%;background:transparent;}
 nav.tabbar button.active{color:var(--accent);}
+nav.tabbar button.active .tabicon{transform:translateY(-1px);}
 nav.tabbar button.active .tabdot{background:var(--accent); box-shadow:0 0 5px var(--accent);}
 nav.tabbar button:active{opacity:.6;}
+nav.tabbar button:active .tabicon{transform:scale(.88);}
 
 /* ---- kiosk ---- */
-.kiosk-card{
+.progress-ribbon{
   background:var(--surface); border:1px solid var(--line); border-radius:12px;
-  padding:18px; margin-bottom:14px;
+  padding:14px 16px; margin-bottom:14px;
 }
+.ribbon-row{display:flex; justify-content:space-between; align-items:baseline; font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-bottom:8px;}
+.ribbon-row strong{color:var(--ink); font-size:13px;}
+.ribbon-hint{margin-top:7px; font-family:var(--mono); font-size:11.5px; color:var(--accent);}
+.kiosk-card{
+  background:var(--surface); border:1px solid var(--line); border-left:3px solid var(--line);
+  border-radius:10px 12px 12px 10px; padding:18px; margin-bottom:14px;
+}
+.kiosk-card.accent-gold{border-left-color:var(--accent);}
+.kiosk-card.accent-teal{border-left-color:var(--accent2);}
+.kiosk-card.accent-night{border-left-color:var(--t-doublerare);}
 .kiosk-card h2{font-family:var(--serif); font-size:17px; margin:0 0 4px; font-weight:600;}
+.npc-head{display:flex; align-items:center; gap:10px; margin-bottom:4px;}
+.npc-head h2{margin:0;}
+.npc-avatar{
+  width:30px; height:30px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+  font-family:var(--serif); font-weight:700; font-size:14px; color:#0c0f0d;
+}
 .kiosk-card p.sub{color:var(--ink-soft); font-size:13px; margin:0 0 14px;}
 .bigbtn{
   width:100%; padding:14px; border-radius:9px; border:none; font-size:15px; font-weight:700;
-  background:var(--accent); color:var(--accent-ink); min-height:48px;
+  background:var(--accent); color:var(--accent-ink); min-height:48px; transition:transform 120ms ease;
 }
-.bigbtn:active{transform:scale(.98);}
+.bigbtn:active{transform:scale(.96);}
 .bigbtn[disabled]{background:var(--surface-2); color:var(--ink-faint);}
 .bigbtn.ghost{background:transparent; border:1px solid var(--accent2); color:var(--accent2);}
 .bigbtn.ghost[disabled]{background:transparent; border-color:var(--line); color:var(--ink-faint);}
 .streak-row{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-top:10px;}
-.streak-flame{color:var(--accent);}
+.streak-flame{color:var(--accent); display:inline-block; animation:flamePulse 1.8s ease-in-out infinite;}
+@keyframes flamePulse{0%,100%{opacity:1; transform:scale(1);} 50%{opacity:.55; transform:scale(1.25);}}
+@media (prefers-reduced-motion: reduce){.streak-flame{animation:none;}}
 .pack-count{font-family:var(--mono); font-size:13px; color:var(--ink-soft); margin-top:8px;}
+.dupe-bar{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:12px 14px; margin-bottom:14px; display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.dupe-bar p{margin:0; font-size:12.5px; color:var(--ink-soft); max-width:26ch;}
+.dupe-bar button{
+  flex:none; font-family:var(--mono); font-size:12px; font-weight:700; padding:9px 14px; border-radius:8px;
+  background:var(--surface-2); border:1px solid var(--accent2); color:var(--accent2); min-height:auto; width:auto;
+}
+.dupe-bar button[disabled]{border-color:var(--line); color:var(--ink-faint);}
 
 /* ---- pack opening ---- */
 /* #screen-pack.active, not #screen-pack: an ID selector beats .screen{display:none}
@@ -133,6 +165,9 @@ nav.tabbar button:active{opacity:.6;}
 .badge.new{background:var(--accent2); color:#04211c;}
 .badge.foil{background:var(--t-reverseholo); color:#fff;}
 .pack-hint{margin-top:20px; font-family:var(--mono); font-size:12px; color:var(--ink-faint); letter-spacing:.04em;}
+.confetti-canvas{position:absolute; inset:0; pointer-events:none; z-index:5;}
+.pull-dots{display:flex; gap:7px; justify-content:center; margin-top:14px;}
+.pull-dots .pd{width:11px; height:11px; border-radius:3px;}
 .pack-progress{display:flex; gap:6px; margin-top:16px;}
 .pack-progress span{width:7px;height:7px;border-radius:50%; background:var(--line);}
 .pack-progress span.done{background:var(--accent);}
@@ -159,6 +194,23 @@ nav.tabbar button:active{opacity:.6;}
 .binder-slot.owned{background:var(--surface-2);}
 .binder-slot .foil-dot{position:absolute; top:3px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--t-reverseholo);}
 .binder-slot .count{position:absolute; bottom:3px; right:4px; font-size:8.5px; color:var(--ink-soft);}
+.binder-slot:active{transform:scale(.93);}
+
+/* ---- toasts ---- */
+#toast-stack{
+  position:fixed; left:0; right:0; top:calc(env(safe-area-inset-top,0px) + 68px);
+  z-index:40; display:flex; flex-direction:column; align-items:center; gap:8px; pointer-events:none;
+}
+.toast{
+  background:var(--surface); border:1px solid var(--line); color:var(--ink);
+  font-family:var(--mono); font-size:12.5px; font-weight:600; padding:9px 16px; border-radius:20px;
+  box-shadow:0 6px 20px rgba(0,0,0,.35); opacity:0; transform:translateY(-10px) scale(.96);
+  transition:opacity 220ms ease, transform 220ms ease; max-width:82vw; text-align:center;
+}
+.toast.show{opacity:1; transform:translateY(0) scale(1);}
+.toast.coin{border-color:var(--accent); color:var(--accent);}
+.toast.good{border-color:var(--accent2); color:var(--accent2);}
+@media (prefers-reduced-motion: reduce){.toast{transition:opacity 120ms ease;}}
 
 /* ---- modal ---- */
 #modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:flex-end; z-index:20;}
@@ -169,7 +221,7 @@ nav.tabbar button:active{opacity:.6;}
 }
 .modal-sheet h3{font-family:var(--serif); font-size:20px; margin:0 0 2px;}
 .modal-sheet .card-type{font-family:var(--mono); font-size:11px; text-transform:uppercase; color:var(--ink-soft); letter-spacing:.06em;}
-.modal-sheet .stat-row{display:flex; align-items:center; gap:10px; margin:10px 0;}
+.stat-row{display:flex; align-items:center; gap:10px; margin:10px 0;}
 .modal-sheet p.flavor{color:var(--ink-soft); font-size:13.5px; margin:0 0 16px;}
 .modal-row{display:flex; gap:10px;}
 .closebtn{
@@ -201,12 +253,26 @@ nav.tabbar button:active{opacity:.6;}
   </main>
 
   <nav class="tabbar">
-    <button data-tab="kiosk" class="active"><span class="tabdot"></span>Kiosk</button>
-    <button data-tab="pack"><span class="tabdot"></span>Packs</button>
-    <button data-tab="binder"><span class="tabdot"></span>Binder</button>
-    <button data-tab="school"><span class="tabdot"></span>School</button>
+    <button data-tab="kiosk" class="active">
+      <svg class="tabicon" viewBox="0 0 18 18"><path d="M3 8 L9 3 L15 8"/><rect x="4" y="8" width="10" height="7" rx="1"/><line x1="7" y1="15" x2="7" y2="11"/></svg>
+      Kiosk<span class="tabdot"></span>
+    </button>
+    <button data-tab="pack">
+      <svg class="tabicon" viewBox="0 0 18 18"><rect x="3" y="6" width="12" height="9" rx="1"/><line x1="9" y1="6" x2="9" y2="15"/><path d="M6 6 C6 3 8 2 9 2 C10 2 12 3 12 6"/></svg>
+      Packs<span class="tabdot"></span>
+    </button>
+    <button data-tab="binder">
+      <svg class="tabicon" viewBox="0 0 18 18"><path d="M9 4.5 C7.3 3.4 4.5 3.4 3 4.3 V14 C4.5 13.1 7.3 13.1 9 14.2 C10.7 13.1 13.5 13.1 15 14 V4.3 C13.5 3.4 10.7 3.4 9 4.5 Z"/><line x1="9" y1="4.5" x2="9" y2="14.2"/></svg>
+      Binder<span class="tabdot"></span>
+    </button>
+    <button data-tab="school">
+      <svg class="tabicon" viewBox="0 0 18 18"><path d="M9 4 L16 7 L9 10 L2 7 Z"/><path d="M5 8.3 V12 C5 13 7 14 9 14 C11 14 13 13 13 12 V8.3"/></svg>
+      School<span class="tabdot"></span>
+    </button>
   </nav>
 </div>
+
+<div id="toast-stack"></div>
 
 <div id="modal-backdrop">
   <div class="modal-sheet" id="modal-sheet"></div>
@@ -536,22 +602,152 @@ function persist(save){
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {}
 }
 
+/* ================= feel: sound, haptics, toasts, confetti ================= */
+var audioCtx = null;
+function getAudioCtx(){
+  if (audioCtx) return audioCtx;
+  var Ctx = (typeof AudioContext !== 'undefined') ? AudioContext : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null);
+  if (!Ctx) return null;
+  try { audioCtx = new Ctx(); } catch (e) { audioCtx = null; }
+  return audioCtx;
+}
+function beep(freq, duration, opts){
+  var ctx = getAudioCtx();
+  if (!ctx) return;
+  if (ctx.state === 'suspended' && ctx.resume) { try { ctx.resume(); } catch (e) {} }
+  opts = opts || {};
+  var osc = ctx.createOscillator();
+  var gain = ctx.createGain();
+  osc.type = opts.type || 'square';
+  osc.frequency.value = freq;
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  var now = ctx.currentTime;
+  var peak = opts.volume || 0.05;
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(peak, now + 0.012);
+  gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  osc.start(now);
+  osc.stop(now + duration + 0.02);
+}
+function sfxClick(){ beep(320, 0.05, { type: 'square', volume: 0.035 }); }
+function sfxCoins(){ beep(660, 0.08, { volume: 0.045 }); setTimeout(function(){ beep(880, 0.09, { volume: 0.045 }); }, 55); }
+function sfxPackBought(){ beep(392, 0.07, { type: 'triangle', volume: 0.05 }); setTimeout(function(){ beep(523, 0.1, { type: 'triangle', volume: 0.05 }); }, 60); }
+var REVEAL_FREQ = { common: 440, uncommon: 494, rare: 554, rareholo: 659, doublerare: 784, ultrarare: 988 };
+function sfxReveal(tierKey){
+  var f = REVEAL_FREQ[tierKey] || 440;
+  beep(f, 0.13, { type: 'triangle', volume: 0.055 });
+  if (tierKey === 'doublerare' || tierKey === 'ultrarare') setTimeout(function(){ beep(f * 1.5, 0.16, { type: 'triangle', volume: 0.055 }); }, 90);
+  if (tierKey === 'ultrarare') setTimeout(function(){ beep(f * 2, 0.22, { type: 'sine', volume: 0.06 }); }, 190);
+}
+function sfxTrade(){ beep(523, 0.07, { volume: 0.05 }); setTimeout(function(){ beep(784, 0.12, { volume: 0.05 }); }, 65); }
+function sfxDay(){ beep(220, 0.2, { type: 'sine', volume: 0.045 }); }
+
+var HAPTIC_PATTERNS = { common: 10, uncommon: 14, rare: 22, rareholo: [28, 18, 28], doublerare: [35, 20, 35, 20, 35], ultrarare: [55, 25, 55, 25, 55, 25, 85] };
+function hapticPulse(tierKey){
+  if (typeof navigator === 'undefined' || !navigator.vibrate) return;
+  try { navigator.vibrate(HAPTIC_PATTERNS[tierKey] || 10); } catch (e) {}
+}
+
+function toast(msg, kind){
+  var stack = $('toast-stack');
+  if (!stack) return;
+  var el = document.createElement('div');
+  el.className = 'toast' + (kind ? ' ' + kind : '');
+  el.textContent = msg;
+  stack.appendChild(el);
+  requestAnimationFrame(function(){ el.classList.add('show'); });
+  setTimeout(function(){
+    el.classList.remove('show');
+    setTimeout(function(){ el.remove(); }, 260);
+  }, 1700);
+}
+
+var CONFETTI_COLORS = {
+  rareholo: ['#3f8fae', '#8fd8ee'],
+  doublerare: ['#5a5aae', '#a8a8ff'],
+  ultrarare: ['#a765d6', '#ffd76a', '#6ad4ff'],
+};
+function burstConfetti(container, tierKey){
+  var palette = CONFETTI_COLORS[tierKey];
+  if (!palette || typeof document === 'undefined') return;
+  try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return; } catch (e) {}
+  var rect = container.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  var canvas = document.createElement('canvas');
+  canvas.className = 'confetti-canvas';
+  canvas.width = rect.width;
+  canvas.height = rect.height;
+  container.appendChild(canvas);
+  var ctx2d = canvas.getContext('2d');
+  var count = tierKey === 'ultrarare' ? 46 : (tierKey === 'doublerare' ? 30 : 20);
+  var parts = [];
+  for (var i = 0; i < count; i++) {
+    parts.push({
+      x: canvas.width / 2, y: canvas.height * 0.32,
+      vx: (Math.random() - 0.5) * 7.5, vy: -(Math.random() * 6 + 3),
+      size: Math.random() * 5 + 3, color: palette[i % palette.length],
+      rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+    });
+  }
+  var start = null;
+  function frame(ts){
+    if (!start) start = ts;
+    var elapsed = ts - start;
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height);
+    parts.forEach(function(p){
+      p.vy += 0.2; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      ctx2d.save();
+      ctx2d.translate(p.x, p.y);
+      ctx2d.rotate(p.rot);
+      ctx2d.fillStyle = p.color;
+      ctx2d.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+      ctx2d.restore();
+    });
+    if (elapsed < 900) requestAnimationFrame(frame);
+    else canvas.remove();
+  }
+  requestAnimationFrame(frame);
+}
+
 /* ================= UI ================= */
 var save = loadSave();
-var els = {};
 var activeTab = 'kiosk';
 var packSession = null;
 var dayEventMessage = null;
+var displayedCoins = null;
 
 function $(id){ return document.getElementById(id); }
 
 function fmtCoins(n){ return String(Math.floor(n)); }
 
 function renderTopbar(){
-  var el = $('coin-count');
-  if (el) el.textContent = fmtCoins(save.coins);
   var dayEl = $('day-badge');
   if (dayEl) dayEl.textContent = 'Day ' + save.day;
+  animateCoinsTo(save.coins);
+}
+
+function animateCoinsTo(target){
+  var el = $('coin-count');
+  if (!el) return;
+  if (displayedCoins === null || displayedCoins === target) {
+    displayedCoins = target;
+    el.textContent = fmtCoins(target);
+    return;
+  }
+  var start = displayedCoins;
+  var startTime = null;
+  var duration = 450;
+  function step(ts){
+    if (startTime === null) startTime = ts;
+    var t = Math.min((ts - startTime) / duration, 1);
+    var eased = 1 - Math.pow(1 - t, 3);
+    var value = Math.round(start + (target - start) * eased);
+    el.textContent = fmtCoins(value);
+    if (t < 1) requestAnimationFrame(step);
+    else displayedCoins = target;
+  }
+  requestAnimationFrame(step);
 }
 
 function renderKiosk(){
@@ -559,9 +755,16 @@ function renderKiosk(){
   if (!el) return;
   var canClaim = canClaimAllowance(save);
   var streak = save.allowance.streak;
-  var dupValue = duplicateValue(save);
+  var owned = Object.keys(save.collection).length;
+  var pct = Math.round(completionFraction(save) * 100);
+  var coinsToPack = Math.max(PACK_PRICE - save.coins, 0);
   el.innerHTML =
-    '<div class="kiosk-card">' +
+    '<div class="progress-ribbon">' +
+      '<div class="ribbon-row"><span>Collection</span><strong>' + owned + '/' + CORE_SET.length + ' &middot; ' + pct + '%</strong></div>' +
+      '<div class="progress-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
+      '<div class="ribbon-hint">' + (coinsToPack > 0 ? coinsToPack + ' coins to your next pack' : 'You can afford a pack right now!') + '</div>' +
+    '</div>' +
+    '<div class="kiosk-card accent-gold">' +
       '<h2>Allowance</h2>' +
       '<p class="sub">Claim once a day. Keep the streak going for a bigger bonus.</p>' +
       '<button class="bigbtn" id="btn-claim"' + (canClaim ? '' : ' disabled') + '>' +
@@ -569,29 +772,26 @@ function renderKiosk(){
       '</button>' +
       (streak > 0 ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + streak + '-day streak</div>' : '') +
     '</div>' +
-    '<div class="kiosk-card">' +
-      '<h2>End the day</h2>' +
-      '<p class="sub">Move on to tomorrow — allowance and the school want-list reset for the new day.</p>' +
-      '<button class="bigbtn ghost" id="btn-next-day">Go to bed (Day ' + save.day + ' &rarr; Day ' + (save.day + 1) + ')</button>' +
-      (dayEventMessage ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + dayEventMessage + '</div>' : '') +
-    '</div>' +
-    '<div class="kiosk-card">' +
+    '<div class="kiosk-card accent-teal">' +
       '<h2>The Kiosk</h2>' +
       '<p class="sub">A pack costs ' + PACK_PRICE + ' coins.</p>' +
       '<button class="bigbtn" id="btn-buy"' + (save.coins < PACK_PRICE ? ' disabled' : '') + '>Buy a pack</button>' +
       '<div class="pack-count">' + save.packsUnopened + ' unopened pack' + (save.packsUnopened === 1 ? '' : 's') + ' waiting</div>' +
     '</div>' +
-    '<div class="kiosk-card">' +
-      '<h2>Loose duplicates</h2>' +
-      '<p class="sub">Cards you already own more than one of. Selling to the kiosk is quick, but trading at school pays better.</p>' +
-      '<button class="bigbtn ghost" id="btn-sell-dupes"' + (dupValue <= 0 ? ' disabled' : '') + '>' +
-        (dupValue > 0 ? 'Sell all duplicates (+' + dupValue + ')' : 'No duplicates to sell yet') +
-      '</button>' +
+    '<div class="kiosk-card accent-night">' +
+      '<h2>End the day</h2>' +
+      '<p class="sub">Move on to tomorrow — allowance and the school want-list reset for the new day.</p>' +
+      '<button class="bigbtn ghost" id="btn-next-day">Go to bed (Day ' + save.day + ' &rarr; Day ' + (save.day + 1) + ')</button>' +
+      (dayEventMessage ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + dayEventMessage + '</div>' : '') +
     '</div>';
   var claimBtn = $('btn-claim');
   if (claimBtn) claimBtn.addEventListener('click', function(){
     var amount = claimAllowance(save);
-    if (amount > 0) { persist(save); renderTopbar(); renderKiosk(); }
+    if (amount > 0) {
+      persist(save); renderTopbar(); renderKiosk();
+      sfxCoins();
+      toast('+' + amount + ' allowance', 'coin');
+    }
   });
   var nextDayBtn = $('btn-next-day');
   if (nextDayBtn) nextDayBtn.addEventListener('click', function(){
@@ -600,14 +800,16 @@ function renderKiosk(){
     persist(save);
     renderTopbar();
     renderKiosk();
+    sfxDay();
+    toast(result.supermarketPack ? 'Day ' + result.day + ' — supermarket trip! +1 pack' : 'Day ' + result.day, 'good');
   });
   var buyBtn = $('btn-buy');
   if (buyBtn) buyBtn.addEventListener('click', function(){
-    if (buyPack(save)) { persist(save); renderTopbar(); renderKiosk(); }
-  });
-  var sellDupesBtn = $('btn-sell-dupes');
-  if (sellDupesBtn) sellDupesBtn.addEventListener('click', function(){
-    if (sellAllDuplicates(save) > 0) { persist(save); renderTopbar(); renderKiosk(); renderBinder(); }
+    if (buyPack(save)) {
+      persist(save); renderTopbar(); renderKiosk();
+      sfxPackBought();
+      toast('Pack bought', 'good');
+    }
   });
 }
 
@@ -638,11 +840,14 @@ function renderPackScreen(){
     var newCount = packSession.pulls.filter(function(p){ return p.isNew; }).length;
     var order = ['common','uncommon','rare','rareholo','doublerare','ultrarare'];
     var best = packSession.pulls.reduce(function(a, p){ return order.indexOf(p.tier) > order.indexOf(a.tier) ? p : a; }, packSession.pulls[0]);
+    var dotsRow = packSession.pulls.map(function(p){ return '<span class="pd" style="background:var(--t-' + p.tier + ')"></span>'; }).join('');
+    var headline = order.indexOf(best.tier) >= order.indexOf('rareholo') ? 'Great pack!' : 'Pack complete';
     el.innerHTML =
       '<div class="summary-card">' +
-        '<h2>Pack complete</h2>' +
+        '<h2>' + headline + '</h2>' +
         '<p>' + newCount + ' new card' + (newCount === 1 ? '' : 's') + '. Best pull: ' + best.name + ' (' + TIER_BY_KEY[best.tier].name + ').</p>' +
-        '<button class="bigbtn" id="btn-continue">Back to kiosk</button>' +
+        '<div class="pull-dots">' + dotsRow + '</div>' +
+        '<button class="bigbtn" id="btn-continue" style="margin-top:18px;">Back to kiosk</button>' +
       '</div>';
     var c = $('btn-continue');
     if (c) c.addEventListener('click', function(){ packSession = null; switchTab('kiosk'); });
@@ -664,6 +869,7 @@ function renderPackScreen(){
   card.addEventListener('click', function onReveal(){
     card.removeEventListener('click', onReveal);
     card.classList.add('charging');
+    sfxClick();
     var done = false;
     var timeoutId;
     var finishCharge = function(){
@@ -735,6 +941,9 @@ function populateFront(card, pull){
   badges.innerHTML =
     (pull.isNew ? '<span class="badge new">NEW</span>' : '') +
     (pull.reverseHolo ? '<span class="badge foil">REVERSE HOLO</span>' : '');
+  sfxReveal(pull.tier);
+  hapticPulse(pull.tier);
+  burstConfetti(card.parentElement, pull.tier);
 }
 
 function afterReveal(){
@@ -762,18 +971,34 @@ function renderBinder(){
       (rec ? (rec.reverseHolo ? '<span class="foil-dot"></span>' : '') + (rec.count > 1 ? '<span class="count">x' + rec.count + '</span>' : '') + c.name.slice(0,3).toUpperCase() : '?') +
     '</div>';
   }).join('');
+  var dupValue = duplicateValue(save);
   el.innerHTML =
     '<div class="binder-head"><h2>Core Set &middot; ' + owned + '/' + CORE_SET.length + '</h2>' +
       '<button class="binder-toggle' + (binderShowMissing ? ' active' : '') + '" id="btn-toggle-missing">Missing only</button>' +
     '</div>' +
     '<div class="progress-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
+    '<div class="dupe-bar">' +
+      '<p>Duplicates sell to the kiosk for quick coins — school trades pay more.</p>' +
+      '<button id="btn-sell-dupes"' + (dupValue <= 0 ? ' disabled' : '') + '>' +
+        (dupValue > 0 ? 'Sell all (+' + dupValue + ')' : 'None to sell') +
+      '</button>' +
+    '</div>' +
     '<div class="binder-grid">' + slots + '</div>';
   $('btn-toggle-missing').addEventListener('click', function(){
     binderShowMissing = !binderShowMissing;
     renderBinder();
   });
   el.querySelectorAll('.binder-slot.owned').forEach(function(slotEl){
-    slotEl.addEventListener('click', function(){ openCardModal(slotEl.getAttribute('data-id')); });
+    slotEl.addEventListener('click', function(){ sfxClick(); openCardModal(slotEl.getAttribute('data-id')); });
+  });
+  var sellDupesBtn = $('btn-sell-dupes');
+  if (sellDupesBtn) sellDupesBtn.addEventListener('click', function(){
+    var gained = sellAllDuplicates(save);
+    if (gained > 0) {
+      persist(save); renderTopbar(); renderBinder();
+      sfxCoins();
+      toast('Sold duplicates (+' + gained + ')', 'coin');
+    }
   });
 }
 
@@ -800,12 +1025,18 @@ function openCardModal(id){
   $('btn-close-modal').addEventListener('click', closeModal);
   var sellBtn = $('btn-sell');
   if (sellBtn) sellBtn.addEventListener('click', function(){
-    if (sellDuplicate(save, id) > 0) { persist(save); renderTopbar(); openCardModal(id); renderBinder(); }
+    var gained = sellDuplicate(save, id);
+    if (gained > 0) {
+      persist(save); renderTopbar(); openCardModal(id); renderBinder();
+      sfxCoins();
+      toast('+' + gained + ' coins', 'coin');
+    }
   });
   $('modal-backdrop').classList.add('open');
 }
 function closeModal(){ $('modal-backdrop').classList.remove('open'); }
 
+var NPC_ACCENTS = { finn: 'var(--t-rare)', ren: 'var(--t-rareholo)', tova: 'var(--t-doublerare)', beck: 'var(--accent)' };
 function renderSchool(){
   var el = $('screen-school');
   if (!el) return;
@@ -818,8 +1049,8 @@ function renderSchool(){
     var fulfilled = !!save.school.fulfilledToday[npc.id];
     var canFulfill = canFulfillTrade(save, npc.id);
     var label = fulfilled ? 'Thanks again!' : (canFulfill ? 'Trade (+' + TRADE_PAYOUT[wantedCard.tier] + ' coins)' : "You don't have a spare " + wantedCard.name);
-    return '<div class="kiosk-card">' +
-      '<h2>' + npc.name + '</h2>' +
+    return '<div class="kiosk-card" style="border-left-color:' + NPC_ACCENTS[npc.id] + '">' +
+      '<div class="npc-head"><span class="npc-avatar" style="background:' + NPC_ACCENTS[npc.id] + '">' + npc.name.charAt(0) + '</span><h2>' + npc.name + '</h2></div>' +
       '<p class="sub">' + npc.line + '</p>' +
       '<p class="sub">Wants: <strong style="color:var(--ink)">' + wantedCard.name + '</strong></p>' +
       '<div class="stat-row"><span class="tier-chip" style="background:var(--t-' + wantedCard.tier + ');">' + tier.name + '</span></div>' +
@@ -829,8 +1060,14 @@ function renderSchool(){
   el.innerHTML = cards;
   el.querySelectorAll('button[data-npc]').forEach(function(btn){
     btn.addEventListener('click', function(){
-      var result = fulfillTrade(save, btn.getAttribute('data-npc'));
-      if (result) { persist(save); renderTopbar(); renderSchool(); renderBinder(); }
+      var npcId = btn.getAttribute('data-npc');
+      var npc = NPCS.filter(function(n){ return n.id === npcId; })[0];
+      var result = fulfillTrade(save, npcId);
+      if (result) {
+        persist(save); renderTopbar(); renderSchool(); renderBinder();
+        sfxTrade();
+        toast(npc.name + ' traded you +' + result.coins + ' coins', 'good');
+      }
     });
   });
 }
@@ -858,7 +1095,11 @@ function switchTab(tab){
 
 function boot(){
   document.querySelectorAll('nav.tabbar button').forEach(function(btn){
-    btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+    btn.addEventListener('click', function(){
+      var tab = btn.getAttribute('data-tab');
+      if (tab !== activeTab) sfxClick();
+      switchTab(tab);
+    });
   });
   $('modal-backdrop').addEventListener('click', function(e){ if (e.target === this) closeModal(); });
   renderTopbar();

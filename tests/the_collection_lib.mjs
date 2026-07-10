@@ -28,6 +28,10 @@ export function loadTC() {
   }, { get(t, k) { return (k in t) ? t[k] : noop; } });
   global.window = new Proxy(global, { get(t, k) { return (k in t) ? t[k] : undefined; }, set(t, k, v) { t[k] = v; return true; } });
   global.window.addEventListener = noop;
+  global.requestAnimationFrame = noop;
+  global.cancelAnimationFrame = noop;
+  // Node 21+ ships a getter-only global.navigator; redefine rather than assign.
+  Object.defineProperty(global, 'navigator', { value: { vibrate: noop }, configurable: true });
 
   eval('(function(){' + code + '\n})()');
   return globalThis.__TC;
