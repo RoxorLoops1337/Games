@@ -23,7 +23,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 3. [x] Mid-battle switch — DONE c3.
 4. [x] Pokédex screen — DONE c4.
 5. [x] Biomes — DONE c5.
-6. [ ] Boss encounters every few tiers — phased health bar, big rewards, guaranteed rare.
+6. [x] Boss encounters — DONE c6.
 7. [ ] Relics / run modifiers picked at milestones (roguelike boons).
 8. [ ] Held trinkets (one item slot per monster) from shops/stories.
 9. [ ] Between-run meta-progression (bank souls/honor for permanent unlocks).
@@ -36,6 +36,17 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c6 — Boss encounters** (studio: combat-designer, ux-designer, lead, engineer, QA; shipped
+  in #837). Every 6th fight (end of a biome) spawns a scaled legendary/rare BOSS with a
+  segmented phased HP bar ("PHASE n/max", 2 phases, 3 at tier≥6), an intro banner (name +
+  title), and TELEGRAPHED heavy attacks: a ~1s wind-up ring + "⚠ HEAVY ATTACK ⚠" + a reticle on
+  the target, so you can switch a tank in or pop a potion. Heavy hit hard-capped at 60% of the
+  target's maxhp (never one-shots, only hits the active mon). Phase breaks enrage + heal-block.
+  Anti-softlock: player DPS is never gated, and an execute valve (heals off + 8%/s after 45s)
+  forces every boss fight to end — proven by worst-case self-healer mirror tests. Rewards: 3×
+  souls/honor, +40 gold, 2.2× XP, full team heal + potion + small permanent atk buff, and a
+  90%-floored rare catch. Save-safe (one transient G.bossWin latch). +8 tests. 39/39 green.
+  NOTE: the build agent self-merged this PR; future cycles restrict agents from git/PR ops.
 - **c5 — Biomes** (studio: art-director, systems-designer, lead, engineer, QA). 6 canvas
   biomes that advance with depth (Verdant Meadow → Deepwood → Sunlit Shore → Hollow Caverns
   → Ashfall Ridge → The Deep Void), each a full palette + signature prop (forest canopy, shore
