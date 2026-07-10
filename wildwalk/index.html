@@ -123,6 +123,16 @@ const RARITY_NAME = ['Common','Uncommon','Rare','Legendary'];
 const RARITY_COL  = ['#9fb0cc','#67d089','#ffb43d','#ff6bd5'];
 const CATCH_BASE  = [0.72,0.5,0.32,0.16];
 
+// ---------- between-run meta upgrades (persisted in Dex.data.upgrades) ----------
+const UPGRADES = [
+  {key:'gold',      icon:'💰', name:'Fat Purse',    desc:'+15 starting gold / tier',        max:3, price:[40,90,160]},
+  {key:'potion',    icon:'🧪', name:'Herbalist',    desc:'+1 starting potion / tier',       max:2, price:[60,140]},
+  {key:'catch',     icon:'🎯', name:"Keeper's Hand",desc:'+0.04 base catch rate / tier',    max:3, price:[80,180,320]},
+  {key:'ball',      icon:'⚪', name:'Fine Spheres', desc:'start at a higher ball tier',     max:2, price:[120,260]},
+  {key:'souls',     icon:'💀', name:'Soul Reserve', desc:'+25 starting souls / tier',       max:2, price:[70,150]},
+  {key:'menagerie', icon:'🐾', name:'Menagerie',    desc:'uncommons can be your starter',   max:1, price:[220]},
+];
+
 const COMMONS   = ['emberpup','puddlet','sprig','sparky','pebblin','umbrat'];
 const UNCOMMONS  = ['cindermaw','torrentoad','thornbeast','voltfox','boulderk','nightwyrm'];
 const RARES     = ['infernyx','leviatide','verdragon','stormhorn'];
@@ -254,12 +264,14 @@ function xpToLevels(m, gain){
 
 // ---------- pokedex / persistence ----------
 const Dex = {
-  data:{ seen:{}, caught:{}, best:0, runs:0 },
+  data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, upgrades:{} },
   load(){ try{ const d=JSON.parse(localStorage.getItem(SAVE)); if(d) this.data=Object.assign(this.data,d); }catch(e){} },
   save(){ try{ localStorage.setItem(SAVE, JSON.stringify(this.data)); }catch(e){} },
   see(k){ if(!this.data.seen[k]){ this.data.seen[k]=1; this.save(); } },
   caught(k){ this.data.seen[k]=1; this.data.caught[k]=1; this.save(); },
   record(dist){ if(dist>this.data.best){ this.data.best=dist; } this.data.runs++; this.save(); },
+  up(key){ return this.data.upgrades[key]||0; },
+  awardEssence(n){ this.data.essence=(this.data.essence||0)+n; this.save(); },
   nSeen(){ return Object.keys(this.data.seen).length; },
   nCaught(){ return Object.keys(this.data.caught).length; },
 };
@@ -469,14 +481,14 @@ function drawTrainer(x,y,s,t,walking){
 // ===================================================================
 let G;
 function newGame(){
-  const starterKey = pick(COMMONS);
+  const starterKey = pick(Dex.up('menagerie') ? COMMONS.concat(UNCOMMONS) : COMMONS);
   G = {
     state:'title',
     t:0, speed:1,
     team:[ makeMon(starterKey, 3) ],
     box:[],
-    gold:20, souls:0, honor:0, potions:1,
-    ballTier:0,                 // +catch bonus from shop
+    gold: 20 + 15*Dex.up('gold'), souls: 25*Dex.up('souls'), honor:0, potions: 1 + Dex.up('potion'),
+    ballTier: Math.min(3, Dex.up('ball')),                 // +catch bonus from shop
     bossWin:false,              // boss-reward latch (transient; only Dex.data persists)
     relics:[], relicOffer:null, afterRelic:null,   // roguelike boons (transient)
     trinkets:[], equipSel:null,                     // held-trinket inventory + equip modal sel (transient)
@@ -493,6 +505,7 @@ function newGame(){
     xoptions:[],
     // transient message
     msg:'', msgT:0,
+    essenceEarned:0, sanctuaryFrom:'title',
     buttons:[],
     pokedexFrom:'title', pokedexSel:null,
     pendingMon:null, afterAcquire:null,
@@ -671,6 +684,7 @@ function catchChance(w){
   c -= (w.level>G.tier*2? 0.05:0);
   if(hasRelic('catch')) c += 0.08;
   if(hasRelic('rare') && w.sp.rarity>=2) c += 0.12;
+  c += Dex.up('catch')*0.04;
   if(w.boss) return Math.max(BOSS_CATCH_FLOOR, clamp(c,0.05,0.96));
   return clamp(c, 0.05, 0.96);
 }
@@ -893,7 +907,10 @@ function takeNest(i){
 function proceed(){ startWalk(); }
 
 function gameOver(){
-  Dex.record(G.dist);
+  const earn = Math.floor(G.dist/15) + Math.floor(G.souls/12) + (G.dist>=Dex.data.best?25:0);
+  G.essenceEarned = earn;
+  Dex.awardEssence(earn);      // persists
+  Dex.record(G.dist);          // persists (updates best/runs)
   G.state='gameover'; clearButtons();
 }
 
@@ -1550,6 +1567,7 @@ function draw(){
 
   if(G.state==='title'){ drawTitle(); ctx.restore(); return; }
   if(G.state==='pokedex'){ drawPokedex(); ctx.restore(); return; }
+  if(G.state==='sanctuary'){ drawSanctuary(); ctx.restore(); return; }
 
   drawBG(G.scroll, G.tier);
 
@@ -1569,7 +1587,7 @@ function draw(){
 
   drawFx();
   drawHUD();
-  if(G.state!=='title' && G.state!=='gameover') drawTeam();
+  if(G.state!=='title' && G.state!=='gameover' && G.state!=='sanctuary') drawTeam();
   drawButtons();
 
   // flash msg
@@ -1596,6 +1614,14 @@ function draw(){
 // ===================================================================
 function dexStatus(key){ return Dex.data.caught[key]?2:(Dex.data.seen[key]?1:0); }
 function openPokedex(from){ G.pokedexFrom=from; G.pokedexSel=null; G.state='pokedex'; clearButtons(); }
+function openSanctuary(from){ G.sanctuaryFrom=from; G.state='sanctuary'; clearButtons(); }
+function buyUpgrade(key){
+  const u=UPGRADES.find(x=>x.key===key); if(!u) return false;
+  const cur=Dex.up(key); if(cur>=u.max) return false;      // max-tier guard
+  const price=u.price[cur]; if(Dex.data.essence<price) return false;  // overspend guard
+  Dex.data.essence-=price; Dex.data.upgrades[key]=cur+1; Dex.save();
+  flash('Blessing acquired.'); return true;
+}
 function dexProgress(){
   const keys=Object.keys(SPECIES);
   const byRarity=[{caught:0,total:0},{caught:0,total:0},{caught:0,total:0},{caught:0,total:0}];
@@ -1711,7 +1737,52 @@ function drawTitle(){
     W/2, 420, '600 15px Segoe UI', '#8fa0c8');
   clearButtons();
   btn('start', W/2-130, 460, 260, 60, '▶  BEGIN THE WALK', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
-  btn('dex', W/2-130, 528, 260, 44, '📕  POKÉDEX', Dex.nCaught()+' / '+Object.keys(SPECIES).length+' caught', {col:'#4a3a6a', accent:'#c9a8ff'});
+  btn('dex', W/2-208, 528, 200, 44, '📕 POKÉDEX', Dex.nCaught()+' / '+Object.keys(SPECIES).length, {col:'#4a3a6a', accent:'#c9a8ff'});
+  btn('sanctuary', W/2+8, 528, 200, 44, '✦ SANCTUARY', Dex.data.essence+' essence', {col:'#3a2f5a', accent:'#ffe9a8'});
+  drawButtons();
+}
+
+function drawSanctuary(){
+  const sky=ctx.createLinearGradient(0,0,0,H);
+  sky.addColorStop(0,'#161028'); sky.addColorStop(1,'#3a2a55'); ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
+  for(let i=0;i<6;i++){
+    const k=Object.keys(SPECIES)[i]; const sp=SPECIES[k];
+    const x=(i*170 + G.t*20)% (W+120)-60;
+    ctx.globalAlpha=0.20; drawMon(sp, x, 150+ (i%2)*60, 26, 1, G.t+i,{bob:i}); ctx.globalAlpha=1;
+  }
+  ctx.fillStyle='rgba(6,8,18,.55)'; ctx.fillRect(0,0,W,H);
+  centerText('THE SANCTUARY', W/2, 62, '900 46px Segoe UI', '#ffe9a8');
+  centerText('Spend essence on permanent blessings', W/2, 92, '600 15px Segoe UI', '#c9b8ff');
+  roundRect(W/2-140,104,280,30,15); ctx.fillStyle='rgba(58,47,90,.9)'; ctx.fill();
+  ctx.strokeStyle='#c9a8ff'; ctx.lineWidth=2; roundRect(W/2-140,104,280,30,15); ctx.stroke();
+  centerText('✦  '+Dex.data.essence+'  ESSENCE', W/2, 124, '800 17px Segoe UI', '#ffe9a8');
+  clearButtons();
+  const cw=290,ch=175,gx=15,gy=22,x0=30,y0=150;
+  UPGRADES.forEach((u,i)=>{
+    const c=i%3, r=(i/3|0), x=x0+c*(cw+gx), y=y0+r*(ch+gy), cur=Dex.up(u.key);
+    panel(x,y,cw,ch,null);
+    centerText(u.icon, x+34, y+42, '30px system-ui', '#fff');
+    ctx.textAlign='left'; ctx.font='800 19px Segoe UI'; ctx.fillStyle='#eaf0ff'; ctx.fillText(u.name, x+60, y+38);
+    ctx.textAlign='right'; ctx.font='600 12px Segoe UI'; ctx.fillStyle='#8fa0c8'; ctx.fillText('Tier '+cur+'/'+u.max, x+cw-16, y+30);
+    ctx.textAlign='left';
+    centerText(u.desc, x+cw/2, y+70, '600 12.5px Segoe UI', '#9fb0cc');
+    // tier pips
+    const py=y+108, n=u.max, startX=x+cw/2-(n-1)*11;
+    for(let j=0;j<n;j++){
+      const px=startX+j*22;
+      ctx.beginPath(); ctx.arc(px, py, 6, 0, 6.283);
+      if(j<cur){ ctx.fillStyle='#ffe9a8'; ctx.fill(); }
+      else { ctx.strokeStyle='#5a6688'; ctx.lineWidth=2; ctx.stroke(); }
+      if(j===cur && cur<u.max){ ctx.strokeStyle='#c9a8ff'; ctx.lineWidth=2; ctx.stroke(); }
+    }
+    if(cur>=u.max){
+      btn('buy_'+u.key, x+18, y+128, cw-36, 38, 'MAXED', null, {col:'#242c48', enabled:false});
+    } else {
+      const price=u.price[cur], afford=Dex.data.essence>=price;
+      btn('buy_'+u.key, x+18, y+128, cw-36, 38, '✦ '+price, 'Buy tier '+(cur+1), {col:'#3a2f5a', accent:afford?'#ffe9a8':'#5a6688', enabled:afford});
+    }
+  });
+  btn('back', W/2-90, 534, 180, 46, '←  BACK', null, {col:'#3a4a3a', accent:'#6a9a6a'});
   drawButtons();
 }
 
@@ -2105,9 +2176,11 @@ function drawGameOver(){
   const best = G.dist>=Dex.data.best;
   centerText(best?'★ NEW BEST DISTANCE ★':'Best: '+Dex.data.best+'m', W/2, 340, '700 18px Segoe UI', best?'#6fd07a':'#8fa0c8');
   centerText('Pokédex: '+Dex.nCaught()+' caught / '+Dex.nSeen()+' seen of '+Object.keys(SPECIES).length, W/2, 375, '600 15px Segoe UI', '#c9b8ff');
+  centerText('✦ +'+(G.essenceEarned||0)+' ESSENCE   ·   banked '+Dex.data.essence, W/2, 400, '800 20px Segoe UI', '#ffe9a8');
   clearButtons();
   btn('again', W/2-130, 420, 260, 58, '↻  WALK AGAIN', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
-  btn('dex', W/2-130, 486, 260, 40, '📕  POKÉDEX', null, {col:'#4a3a6a', accent:'#c9a8ff'});
+  btn('dex', W/2-208, 486, 200, 40, '📕 POKÉDEX', null, {col:'#4a3a6a', accent:'#c9a8ff'});
+  btn('sanctuary', W/2+8, 486, 200, 40, '✦ SANCTUARY', null, {col:'#3a2f5a', accent:'#ffe9a8'});
   drawButtons();
 }
 
@@ -2115,8 +2188,14 @@ function drawGameOver(){
 // Input
 // ===================================================================
 function onClick(mx,my){
-  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else { newGame(); startWalk(); } } return; }
-  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else { newGame(); startWalk(); } } return; }
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='sanctuary') openSanctuary('title'); else { newGame(); startWalk(); } } return; }
+  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else { newGame(); startWalk(); } } return; }
+  if(G.state==='sanctuary'){
+    const b=hitButton(mx,my);
+    if(b){ if(b.id==='back'){ G.state=G.sanctuaryFrom||'title'; clearButtons(); }
+           else if(b.id.startsWith('buy_')){ buyUpgrade(b.id.slice(4)); } }
+    return;
+  }
   if(G.state==='pokedex'){
     if(G.pokedexSel!=null){ G.pokedexSel=null; return; }   // any tap closes detail
     const b=hitButton(mx,my);
@@ -2180,6 +2259,8 @@ cv.addEventListener('pointerdown', e=>{ e.preventDefault(); const p=canvasPos(e)
 window.addEventListener('keydown', e=>{
   if((G.state==='title'||G.state==='gameover') && (e.key==='d'||e.key==='D')){ openPokedex(G.state); e.preventDefault(); return; }
   if(G.state==='pokedex' && (e.key==='Escape'||e.key==='Backspace'||e.key==='d'||e.key==='D')){ if(G.pokedexSel!=null) G.pokedexSel=null; else { G.state=G.pokedexFrom||'title'; clearButtons(); } e.preventDefault(); return; }
+  if((G.state==='title'||G.state==='gameover') && (e.key==='s'||e.key==='S')){ openSanctuary(G.state); e.preventDefault(); return; }
+  if(G.state==='sanctuary' && (e.key==='Escape'||e.key==='Backspace')){ G.state=G.sanctuaryFrom||'title'; clearButtons(); e.preventDefault(); return; }
   if(e.key===' '){ if(G.state==='battle') G.speed=G.speed>=3?1:G.speed+1; e.preventDefault(); }
   const n=parseInt(e.key);
   if(n>=1 && n<=4){

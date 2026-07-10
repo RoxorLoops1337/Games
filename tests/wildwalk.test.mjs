@@ -18,7 +18,7 @@ function test(name, fn){ try{ fn(); passed++; } catch(e){ failed++; console.erro
 function assert(cond, msg){ if(!cond) throw new Error(msg||'assertion failed'); }
 
 // ---- build a fresh sandboxed game instance ----
-function boot(){
+function boot(seedSave){
   const gradient = { addColorStop(){} };
   const ctxStub = new Proxy({}, { get(t,p){
     if(p==='measureText') return ()=>({width:40});
@@ -31,6 +31,7 @@ function boot(){
     getBoundingClientRect:()=>({left:0,top:0,width:960,height:600}),
     addEventListener:(e,f)=>{ if(e==='pointerdown') pointer=f; } };
   const store = {};
+  if(seedSave) store['wildwalk_save_v1']=seedSave;
   const sandbox = {
     document:{ getElementById:id=> id==='c'?canvas:{} },
     localStorage:{ getItem:k=> store[k]??null, setItem:(k,v)=>{store[k]=v;} },
@@ -45,7 +46,7 @@ function boot(){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE}};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:()=>newGame(),gameOver:()=>gameOver(),UPGRADES,openSanctuary:(f)=>openSanctuary(f)};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -60,7 +61,7 @@ function boot(){
   const click = (x,y)=> pointer && pointer({ preventDefault(){}, clientX:x, clientY:y });
   const clickId = (id)=>{ const b=api.getG().buttons.find(b=>b.id===id && b.enabled); if(b){ click(b.x+5,b.y+5); return true; } return false; };
   const toBattle = ()=>{ for(let i=0;i<600;i++){ step(1); const g=api.getG(); if(g.state==='battle'&&g.wild) return true; } return false; };
-  return { api, step, click, clickId, toBattle, getKey:()=>key };
+  return { api, step, click, clickId, toBattle, getKey:()=>key, store };
 }
 
 // ---- static data sanity ----
@@ -510,7 +511,7 @@ test('biome state stays out of the save shape', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']),
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','runs','seen','upgrades']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
@@ -653,7 +654,7 @@ test('boss fight leaves the save shape untouched', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','runs','seen','upgrades']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^boss/i.test(k), `boss field leaked into save: ${k}`);
 });
 
@@ -908,7 +909,7 @@ test('R17 relics never change the persisted save shape', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','runs','seen','upgrades']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
 });
 
@@ -1136,7 +1137,7 @@ test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','essence','runs','seen','upgrades']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
 });
 
@@ -1181,6 +1182,86 @@ test('equipping a trinket does not revive a fainted holder', ()=>{
   g.team[0].hp = 3;
   api.equipT(0, 0);
   assert(g.team[0].hp > 0, 'living holder lost all hp on equip');
+});
+
+// ---- meta-progression (between-run upgrades) ----
+test('M1 old-shape save loads and new fields default', ()=>{
+  let api;
+  const boot0 = () => boot(JSON.stringify({seen:{emberpup:1},caught:{emberpup:1},best:120,runs:4}));
+  let b; assert((()=>{ try{ b=boot0(); return true; }catch(e){ return false; } })(), 'old save threw on load');
+  api = b.api;
+  const D = api.Dex;
+  assert(D.data.best===120, `best=${D.data.best}`);
+  assert(D.data.runs===4, `runs=${D.data.runs}`);
+  assert(D.data.essence===0, `essence=${D.data.essence}`);
+  assert(typeof D.data.upgrades==='object' && Object.keys(D.data.upgrades).length===0, 'upgrades not empty object');
+  assert(D.up('gold')===0, 'up(gold) should default 0');
+  assert(D.data.seen.emberpup===1 && D.data.caught.emberpup===1, 'old seen/caught lost');
+});
+
+test('M2 essence earned at game over and persists', ()=>{
+  const { api, store } = boot();
+  const g = api.getG();
+  g.dist = 200; g.souls = 120;
+  const expected = Math.floor(200/15) + Math.floor(120/12) + (200>=api.Dex.data.best?25:0);
+  api.gameOver();
+  assert(api.Dex.data.essence===expected, `essence ${api.Dex.data.essence} != ${expected}`);
+  assert(JSON.parse(store['wildwalk_save_v1']).essence===expected, 'essence not persisted to store');
+  assert(g.essenceEarned===expected, `essenceEarned ${g.essenceEarned}`);
+});
+
+test('M3 buying upgrades changes newGame + catchChance', ()=>{
+  const { api } = boot();
+  api.Dex.data.essence = 1000;
+  assert(api.buyUpgrade('gold')===true, 'gold buy failed');
+  api.newGame();
+  assert(api.getG().gold===35, `gold ${api.getG().gold} != 35`);
+  assert(api.buyUpgrade('potion')===true, 'potion buy failed');
+  api.newGame();
+  assert(api.getG().potions===2, `potions ${api.getG().potions} != 2`);
+  // catch upgrade shifts catchChance by +0.04
+  const w = api.mk('emberpup', 5);
+  const c0 = api.catchChance(w);
+  assert(api.buyUpgrade('catch')===true, 'catch buy failed');
+  const c1 = api.catchChance(w);
+  assert(Math.abs(c1-(c0+0.04))<1e-6 || c1>=0.96, `catchChance ${c1} vs ${c0}+0.04`);
+});
+
+test('M4 guards: cannot overspend or exceed max tier', ()=>{
+  const { api } = boot();
+  api.Dex.data.essence = 0;
+  assert(api.buyUpgrade('gold')===false, 'overspend should fail');
+  assert(api.Dex.up('gold')===0, 'tier changed despite failed buy');
+  api.Dex.data.essence = 100000;
+  let n=0; while(api.buyUpgrade('potion') && n<10) n++;
+  assert(api.Dex.up('potion')===2, `potion tier ${api.Dex.up('potion')} != max 2`);
+  assert(api.buyUpgrade('potion')===false, 'buy past max should fail');
+  assert(api.Dex.up('potion')===2, 'tier moved past max');
+});
+
+test('M5 save shape is a superset (old keys intact)', ()=>{
+  const { api, store } = boot();
+  api.Dex.data.essence = 500;
+  assert(api.buyUpgrade('gold')===true, 'buy failed');
+  const j = JSON.parse(store['wildwalk_save_v1']);
+  for(const k of ['seen','caught','best','runs','essence','upgrades']){
+    assert(k in j, `missing key ${k} in save`);
+  }
+  assert(typeof j.seen==='object' && typeof j.caught==='object', 'seen/caught wrong type');
+  assert(j.upgrades.gold===1, 'purchased upgrade not persisted');
+});
+
+test('M6 sanctuary screen renders without error from title and gameover', ()=>{
+  const { api } = boot();
+  api.Dex.data.essence = 500;
+  api.buyUpgrade('gold');                 // a purchased tier + an unowned one on screen
+  api.openSanctuary('title');
+  assert(api.getG().state==='sanctuary', 'not in sanctuary state');
+  api.draw();                             // must not throw (buttons drawn via loop, this is render-only)
+  // reachable from gameover too
+  api.getG().state='gameover'; api.openSanctuary('gameover');
+  assert(api.getG().sanctuaryFrom==='gameover', 'sanctuaryFrom not tracked');
+  api.draw();
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
