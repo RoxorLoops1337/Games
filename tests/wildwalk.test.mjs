@@ -45,7 +45,7 @@ function boot(){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE}};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE}};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -921,6 +921,266 @@ test('R18 a battle with all relics active resolves without throwing', ()=>{
   api.draw();  // exercise drawRelicStrip with a full strip
   for(let i=0;i<4000 && g.state==='battle';i++){ api.upd(0.05); }
   assert(g.state==='choice' || g.state==='gameover', `stuck in ${g.state}`);
+});
+
+// ===================================================================
+// Held trinkets
+// ===================================================================
+// count how many of N strikes crit (mult=1 vs same type → base = att.atk)
+function strikeDmg(api, att, def, dir){ const before=def.hp; api.strike(att,def,dir); return before-def.hp; }
+
+test('T1 TRINKETS table is well-formed (10 entries)', ()=>{
+  const { TRINKETS, TRINKET_KEYS } = boot().api;
+  const keys = Object.keys(TRINKETS);
+  assert(keys.length===10, `expected 10 trinkets, got ${keys.length}`);
+  for(const k of keys){ const t=TRINKETS[k];
+    assert(t.name && t.icon && t.desc && t.col, `${k}: missing fields`);
+    assert(/^#[0-9a-f]{6}$/i.test(t.col), `${k}: bad col ${t.col}`);
+  }
+  assert(JSON.stringify(TRINKET_KEYS)===JSON.stringify(keys), 'TRINKET_KEYS mismatch');
+});
+
+test('T2 makeMon starts unequipped; newGame G.trinkets empty', ()=>{
+  const { api } = boot();
+  assert(api.mk('emberpup',3).trinket===null, 'trinket should default null');
+  const g=api.getG();
+  assert(Array.isArray(g.trinkets) && g.trinkets.length===0, 'G.trinkets should be empty array');
+  assert(g.equipSel===null, 'equipSel should be null');
+});
+
+test('T3 equip moves an id from inventory onto the mon (count conserved)', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',3)]; g.trinkets=['critfang'];
+  api.equipT(0,0);
+  assert(g.team[0].trinket==='critfang', 'not equipped');
+  assert(g.trinkets.length===0, 'inventory not emptied');
+});
+
+test('T4 equipping over an existing trinket returns the old one', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',3)]; g.trinkets=['critfang'];
+  api.equipT(0,0);                 // holds critfang
+  g.trinkets.push('typegem');
+  api.equipT(0,0);                 // equip typegem, critfang returns
+  assert(g.team[0].trinket==='typegem', 'B not held');
+  assert(g.trinkets.length===1 && g.trinkets[0]==='critfang', 'A not returned exactly once');
+});
+
+test('T5 unequip returns the id; no-op when empty', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',3)]; g.team[0].trinket='critfang';
+  api.unequipT(0);
+  assert(g.team[0].trinket===null && g.trinkets.length===1 && g.trinkets[0]==='critfang', 'unequip failed');
+  api.unequipT(0);                 // no-op
+  assert(g.trinkets.length===1, 'no-op should not add');
+});
+
+test('T6 Crit Fang: holder crits more often; teammate baseline', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('emberpup',40), plain=api.mk('emberpup',40), def=api.mk('emberpup',40);
+  g.team=[holder,plain]; holder.trinket='critfang';
+  def.maxhp=1e9; const N=800;
+  const count=(att)=>{ let c=0; for(let i=0;i<N;i++){ def.hp=1e9; const d=strikeDmg(api,att,def,+1); if(d>att.atk*1.3) c++; } return c; };
+  const ch=count(holder), cp=count(plain);
+  assert(ch>cp, `holder crits ${ch} not > plain ${cp}`);
+});
+
+test('T7 Type Gem: holder mean damage higher; teammate baseline', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('emberpup',30), plain=api.mk('emberpup',30), def=api.mk('emberpup',30);
+  g.team=[holder,plain]; holder.trinket='typegem'; def.maxhp=1e9;
+  const N=1200; const mean=(att)=>{ let s=0; for(let i=0;i<N;i++){ def.hp=1e9; s+=strikeDmg(api,att,def,+1);} return s/N; };
+  const mh=mean(holder), mp=mean(plain);
+  assert(mh>mp*1.1, `holder mean ${mh.toFixed(1)} not > plain ${mp.toFixed(1)}*1.1`);
+});
+
+test('T8 Lifesteal Amulet: injured holder heals on hit; capped; non-holder does not', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('emberpup',30), plain=api.mk('emberpup',30), def=api.mk('emberpup',30);
+  g.team=[holder,plain]; holder.trinket='lifeamulet'; def.maxhp=1e9; def.hp=1e9;
+  holder.hp=10; api.strike(holder,def,+1);
+  assert(holder.hp>10, 'holder did not heal');
+  def.hp=1e9; plain.hp=10; api.strike(plain,def,+1);
+  assert(plain.hp===10, 'non-holder healed unexpectedly');
+  // cap
+  def.hp=1e9; holder.hp=holder.maxhp-1; api.strike(holder,def,+1);
+  assert(holder.hp<=holder.maxhp, 'heal exceeded maxhp');
+});
+
+test('T9 Swift Feather: only holder spd rises ~x1.15; unequip restores; finishSpawn boosts', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('sparky',10), plain=api.mk('sparky',10);
+  g.team=[holder,plain]; holder.trinket='swiftfeather'; api.applyTrinketStats(holder);
+  assert(Math.abs(holder.spd - holder.sp.base.spd*1.15)<1e-6, 'holder spd not boosted');
+  assert(plain.spd===plain.sp.base.spd, 'teammate spd changed');
+  holder.trinket=null; api.applyTrinketStats(holder);
+  assert(Math.abs(holder.spd - holder.sp.base.spd)<1e-6, 'unequip did not restore spd');
+  // finishSpawn per-fight reset applies boost
+  holder.trinket='swiftfeather';
+  api.finishSpawn(api.mk('puddlet',3));
+  assert(Math.abs(holder.spd - holder.sp.base.spd*1.15)<1e-6, 'finishSpawn did not boost');
+  assert(plain.spd===plain.sp.base.spd, 'finishSpawn changed teammate spd');
+});
+
+test('T10 Guard Stone: holder takes less damage (strike + bossHeavyStrike)', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const att=api.mk('emberpup',30);
+  const holder=api.mk('emberpup',40), plain=api.mk('emberpup',40);
+  g.team=[holder,plain]; holder.trinket='guardstone';
+  holder.maxhp=plain.maxhp=1e9; const N=800;
+  const mean=(def)=>{ let s=0; for(let i=0;i<N;i++){ def.hp=1e9; s+=strikeDmg(api,att,def,+1);} return s/N; };
+  assert(mean(holder)<mean(plain), 'guard did not reduce strike dmg');
+  // boss heavy
+  const boss=api.mk('emberpup',1);
+  const bmean=(def)=>{ let s=0; for(let i=0;i<N;i++){ def.hp=1e9; const b=def.hp; api.bossHeavyStrike(boss,def); s+=(b-def.hp);} return s/N; };
+  assert(bmean(holder)<bmean(plain), 'guard did not reduce boss-heavy dmg');
+});
+
+test('T11 Revive Berry: revives once at ~50%, consumed, then normal faint', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('emberpup',20);
+  g.team=[holder]; holder.trinket='reviveberry'; g.lead=0;
+  g.wild=api.mk('puddlet',3); g.wild.hp=g.wild.maxhp; g.battleIntro=0; g.switchCd=0;
+  holder.hp=0; api.upd(0.016);
+  assert(holder.trinket===null, 'berry not consumed');
+  assert(!g.trinkets.includes('reviveberry'), 'consumed berry leaked to inventory');
+  assert(Math.abs(holder.hp - Math.round(holder.maxhp*0.5))<=1, `hp ${holder.hp} not ~50%`);
+  // second faint → gameover (only mon)
+  holder.hp=0; api.upd(0.016);
+  assert(g.state==='gameover', `expected gameover, got ${g.state}`);
+});
+
+test('T12 Focus Band: holder stunned fewer times over N Volt strikes', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const att=api.mk('sparky',20);            // Volt
+  const holder=api.mk('emberpup',20), plain=api.mk('emberpup',20);
+  g.team=[holder,plain]; holder.trinket='focusband';
+  const N=1500;
+  const stuns=(def)=>{ let c=0; for(let i=0;i<N;i++){ def.status.stun=0; def.status.stunImm=0; api.strike(att,def,-1); if(def.status.stun>0) c++; } return c; };
+  const sh=stuns(holder), sp=stuns(plain);
+  assert(sh<sp, `holder stuns ${sh} not < plain ${sp}`);
+});
+
+test('T13 Vigor Charm: only holder maxhp ~x1.2; survives level-ups; unequip restores', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('emberpup',5), plain=api.mk('emberpup',5);
+  g.team=[holder,plain];
+  const base=holder.maxhp; holder.trinket='vigorcharm'; api.applyTrinketStats(holder);
+  assert(Math.abs(holder.maxhp - Math.round(api.statAt(holder.sp.base.hp,holder.level)*1.2))<=1, 'maxhp not x1.2');
+  assert(plain.maxhp===base, 'teammate maxhp changed');
+  // survive level-ups
+  api.xpToLevels(holder, 100000);
+  const expEvo=Math.round(api.statAt(holder.sp.base.hp,holder.level)*1.2);
+  assert(Math.abs(holder.maxhp-expEvo)<=1, `after level maxhp ${holder.maxhp} not ${expEvo}`);
+  holder.trinket=null; api.applyTrinketStats(holder);
+  assert(Math.abs(holder.maxhp - Math.round(api.statAt(holder.sp.base.hp,holder.level)))<=1, 'unequip did not restore maxhp');
+});
+
+test('T14 Ember Brand: holder Fire strike sets longer burnT', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('emberpup',20), plain=api.mk('emberpup',20), def=api.mk('emberpup',20);
+  g.team=[holder,plain]; holder.trinket='emberbrand'; def.maxhp=1e9; def.hp=1e9;
+  api.strike(holder,def,+1); const bh=def.status.burnT;
+  def.status.burnT=0; def.status.burn=0;
+  api.strike(plain,def,+1); const bp=def.status.burnT;
+  assert(bh>bp+1, `holder burnT ${bh} not > plain ${bp}+1`);
+});
+
+test('T15 Lucky Coin: active holder yields more gold on average', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const N=400;
+  const meanGold=(withCoin)=>{ let s=0; for(let i=0;i<N;i++){
+    const m=api.mk('emberpup',10); m.trinket=withCoin?'luckycoin':null;
+    g.team=[m]; g.lead=0; g.gold=0; g.fights=0; g.bossWin=false;
+    g.wild=api.mk('puddlet',5);
+    api.endFight(true); s+=g.gold;
+  } return s/N; };
+  const mc=meanGold(true), mp=meanGold(false);
+  assert(mc>mp, `coin mean ${mc.toFixed(1)} not > plain ${mp.toFixed(1)}`);
+});
+
+test('T16 Conservation across an equip/unequip sequence', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',5),api.mk('sparky',5),api.mk('puddlet',5)];
+  g.trinkets=['critfang','typegem','guardstone','vigorcharm'];
+  const bag=()=>{ const a=[...g.trinkets]; for(const m of g.team) if(m.trinket) a.push(m.trinket); return a.sort().join(','); };
+  const start=bag();
+  api.equipT(0,0); assert(bag()===start,'after eq0');
+  api.equipT(1,0); assert(bag()===start,'after eq1');
+  api.equipT(2,0); assert(bag()===start,'after eq2');
+  api.unequipT(0); assert(bag()===start,'after uneq0');
+  api.equipT(1,g.trinkets.length-1); assert(bag()===start,'after reeq');
+  api.unequipT(1); api.unequipT(2); assert(bag()===start,'after clear');
+});
+
+test('T17 Holder isolation in a live fight; teammate stats untouched', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('emberpup',20), plain=api.mk('sparky',20);
+  g.team=[holder,plain]; holder.trinket='critfang';
+  const ps={maxhp:plain.maxhp, atk:plain.atk, spd:plain.spd};
+  g.wild=api.mk('puddlet',5); g.wild.hp=8; api.finishSpawn(g.wild);
+  for(let i=0;i<4000 && g.state==='battle';i++) api.upd(0.05);
+  assert(g.state==='choice'||g.state==='gameover', `stuck in ${g.state}`);
+  assert(plain.maxhp===ps.maxhp && plain.atk===ps.atk && plain.spd===ps.spd, 'teammate stats changed');
+});
+
+test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g=api.getG();
+  g.team.forEach((m,i)=>{ m.trinket=api.TRINKET_KEYS[i%api.TRINKET_KEYS.length]; });
+  g.trinkets=['critfang','typegem','luckycoin'];
+  g.wild.hp=1; g.battleIntro=0;
+  for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
+  step(1); clickId('kill');
+  api.Dex.save();
+  const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
+  const keys=Object.keys(saved).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']), `save shape changed: ${keys}`);
+  for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
+});
+
+test('T19 Acquire via shop and story grant', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.gold=35; g.trinkets=[]; api.buy('trinket');
+  assert(g.trinkets.length===1, 'shop did not grant a trinket');
+  assert(g.gold===0, `gold not spent, ${g.gold}`);
+  const story=api.STORIES.find(s=>/tinker/i.test(s.t));
+  assert(story, 'trinket story missing');
+  const n=g.trinkets.length; story.apply(true);
+  assert(g.trinkets.length===n+1, 'story good outcome did not grant a trinket');
+});
+
+test('T20 Equip overlay + all-trinkets battle never throws', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',15),api.mk('sparky',15),api.mk('puddlet',15),api.mk('pebblin',15)];
+  g.team[0].trinket='critfang'; g.team[1].trinket='swiftfeather';
+  g.team[2].trinket='guardstone'; g.team[3].trinket='reviveberry';
+  g.trinkets=['typegem','lifeamulet','focusband','vigorcharm','emberbrand','luckycoin','critfang','typegem','guardstone'];
+  api.openRest(); g.equipSel=0;
+  api.draw();                    // populated inventory (>8 → "+N more")
+  g.trinkets=[]; api.draw();      // empty inventory branch
+  // now resolve a full battle with every mon holding a trinket
+  g.equipSel=null;
+  g.wild=api.mk('torrentoad',12); api.finishSpawn(g.wild);
+  for(let i=0;i<4000 && g.state==='battle';i++) api.upd(0.05);
+  assert(g.state==='choice'||g.state==='gameover', `stuck in ${g.state}`);
+});
+
+// ---- trinkets: equipping never revives a fainted holder ----
+test('equipping a trinket does not revive a fainted holder', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team = [api.mk('emberpup',6), api.mk('puddlet',6)];
+  g.team[1].hp = 0;                          // faint the 2nd member
+  g.trinkets = ['vigorcharm','critfang'];    // vigorcharm changes maxhp (worst case for the hp-floor bug)
+  api.equipT(1, 0);                          // equip on the fainted mon
+  assert(g.team[1].trinket === 'vigorcharm', 'trinket not equipped');
+  assert(g.team[1].hp === 0, `fainted holder was revived to ${g.team[1].hp}`);
+  // a living holder still keeps positive hp
+  g.team[0].hp = 3;
+  api.equipT(0, 0);
+  assert(g.team[0].hp > 0, 'living holder lost all hp on equip');
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
