@@ -45,7 +45,7 @@ function boot(){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM}};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),SWITCH_CD,SWITCH_ENTRY,C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM}};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -266,6 +266,91 @@ test('ability mirrors always resolve to a decision', ()=>{
   };
   run('puddlet');  // Water heal mirror
   run('pebblin');  // Rock guard mirror
+});
+
+// ---- mid-battle party switch ----
+// Boot into a live battle with a fresh N-member living team, intro finished, swap ready.
+function battleWithTeam(keys){
+  const h = boot();
+  const { api, step, clickId, toBattle } = h;
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g = api.getG();
+  g.team = keys.map((k,i)=> api.mk(k, 5+i));
+  g.team.forEach(m=> m.hp=m.maxhp);
+  g.lead = 0; g.battleIntro = 0; g.switchCd = 0; g.switchAnim = 0;
+  g.wild.hp = g.wild.maxhp = 999999;   // keep the fight from ending mid-test
+  return h;
+}
+
+test('T1 valid switch: swaps lead, entry cd, cooldown set, wild cd untouched', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet','sprig']);
+  const g = api.getG();
+  const wildCd = g.wild.cd;
+  assert(api.trySwitch(2)===true, 'valid switch should return true');
+  assert(g.lead===2, `lead should be 2, got ${g.lead}`);
+  assert(g.team[2].cd >= api.SWITCH_ENTRY, `incoming cd ${g.team[2].cd} < SWITCH_ENTRY`);
+  assert(g.switchCd===api.SWITCH_CD, `switchCd ${g.switchCd} != ${api.SWITCH_CD}`);
+  assert(g.wild.cd===wildCd, `wild.cd changed ${g.wild.cd} != ${wildCd}`);
+});
+
+test('T2 reject fainted member', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet','sprig']);
+  const g = api.getG();
+  g.team[1].hp = 0;
+  assert(api.trySwitch(1)===false, 'switch to fainted should be false');
+  assert(g.lead===0, `lead should stay 0, got ${g.lead}`);
+});
+
+test('T3 reject self/active', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet']);
+  const g = api.getG();
+  assert(api.trySwitch(g.lead)===false, 'switch to self should be false');
+  assert(g.switchCd===0, `switchCd should stay 0, got ${g.switchCd}`);
+});
+
+test('T4 reject while on cooldown', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet','sprig']);
+  const g = api.getG();
+  assert(api.trySwitch(1)===true, 'first switch ok');
+  assert(g.lead===1, 'lead moved to 1');
+  assert(api.trySwitch(2)===false, 'second switch during cd should fail');
+  assert(g.lead===1, `lead should stay 1, got ${g.lead}`);
+});
+
+test('T5 reject during battle intro', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet']);
+  const g = api.getG();
+  g.battleIntro = 1;
+  assert(api.trySwitch(1)===false, 'switch during intro should fail');
+  assert(g.lead===0, 'lead unchanged');
+  assert(g.switchCd===0, 'no cooldown incurred');
+});
+
+test('T6 anti-softlock: faint auto-switches despite huge manual cooldown', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet','sprig']);
+  const g = api.getG();
+  g.team[g.lead].hp = 0;      // active faints
+  g.switchCd = 99; g.battleIntro = 0;
+  api.upd(0.1);
+  assert(g.state==='gameover' || (g.team[g.lead] && g.team[g.lead].hp>0),
+    `expected auto-switch or gameover, lead=${g.lead} state=${g.state}`);
+});
+
+test('T7 cooldown expiry allows another switch', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet','sprig']);
+  const g = api.getG();
+  assert(api.trySwitch(1)===true, 'first switch ok');
+  api.upd(api.SWITCH_CD + 0.1);
+  assert(g.switchCd===0, `switchCd should drain to 0, got ${g.switchCd}`);
+  assert(api.trySwitch(2)===true, 'switch after cd expiry should succeed');
+  assert(g.lead===2, `lead should be 2, got ${g.lead}`);
+});
+
+test('T8 teamCardAt maps card geometry', ()=>{
+  const { api } = battleWithTeam(['emberpup','puddlet','sprig']);
+  // card i is at x=14+i*118, y=H-70, size 110x60 (H=600)
+  assert(api.teamCardAt(14+1*118+5, 600-70+5)===1, 'card 1 hit-test');
+  assert(api.teamCardAt(0, 0)===-1, 'off-card miss');
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);

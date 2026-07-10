@@ -20,7 +20,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 ## Roadmap (next up — take the top unchecked item each cycle)
 1. [x] Graphics & battle-juice overhaul — DONE c1.
 2. [x] Combat abilities per type — DONE c2.
-3. [ ] Mid-battle switch — tap a party member to send it in (short cooldown) for counter-play.
+3. [x] Mid-battle switch — DONE c3.
 4. [ ] Pokédex screen (gallery of seen/caught with stats/flavor) from title + game-over.
 5. [ ] Biomes (forest/cave/volcano/shore) that reskin the walk and bias spawn types.
 6. [ ] Boss encounters every few tiers — phased health bar, big rewards, guaranteed rare.
@@ -36,6 +36,12 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c3 — Mid-battle party switch** (studio: systems + ux designers, lead, engineer, QA).
+  Tap a living reserve card (or keys 1-4) during battle to send it in for type counter-play.
+  Anti-abuse: 5s switch cooldown (radial ring + seconds on locked cards) AND incoming mon
+  enters with a 0.6s entry cd; the wild's pending attack is NOT reset, so you can't swap to
+  dodge a hit. Reserve cards pulse in their type color with a ↔ glyph when ready. Auto-switch
+  on faint stays cooldown-free (anti-softlock). +8 tests. 21/21 green.
 - **c2 — Per-type combat abilities + status UI** (studio: systems-designer, ux-designer,
   lead, engineer, QA). Fire burn DoT (stacks≤3, ≤6%/s, 3s), Water instant lifesteal (20%),
   Grass over-time leech (25%), Volt shock-stun (18%, 0.6s, 2.5s immunity — no lock), Rock
