@@ -32,10 +32,28 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 12. [x] Starter select — DONE c12.
 13. [x] Weather / day–night — DONE c13.
 14. [x] Shop restock + reroll — DONE c14.
-15. [ ] Distance leaderboard (reuse the repo's Cloudflare KV board pattern).
+15. [x] Distance leaderboard (LOCAL best-runs) — DONE c15.
+16. [ ] More species + 2nd-tier evolutions (grow the roster / Dex from 18).
+17. [ ] Daily-seed challenge run (deterministic seed → shareable score).
+18. [ ] Prestige / ascension (opt-in run modifiers for bonus essence).
+19. [ ] Guided tutorial / first-run onboarding.
+20. [ ] More biomes + biome-specific boss variety.
+21. [ ] Animated multi-frame sprites / richer idle+attack animation.
+22. [ ] Endless post-game scaling mode.
+23. [ ] Status-effect visual polish (clearer burn/stun/shield readouts).
+24. [ ] Online Cloudflare KV leaderboard (functions/api/, deferred from #15).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c15 — Local best-runs leaderboard** (studio: designer, ux-designer, lead, engineer, QA).
+  Persists Dex.data.runsLog (added additively, back-compat default []): at game over Dex.recordRun
+  pushes the run {dist,tier,fights,dex}, coerces NaN→0, sorts by dist desc, caps to 10, saves.
+  A RECORDS screen (new G.state) from title + game-over ('r'/Esc) shows the ranked table with
+  🥇🥈🥉 medals, a gold #1 highlight and a green "◀ THIS RUN" highlight on the just-finished row,
+  plus an empty state. Completed the original 15-item roadmap; appended #16–24 for the studio to
+  continue. +5 tests (old-save loads runsLog=[]; sort+cap-at-10; NaN coercion + rank handle;
+  gameOver records + sets lastRunRec; screen open/back from title+gameover, empty+populated draw).
+  Updated all 7 save-shape arrays to include 'runsLog'. 118/118, 0 flakes.
 - **c14 — Shop restock + reroll** (studio: designer, ux-designer, lead, engineer, QA). The
   Merchant now rolls a randomized 4-slot stock (genShopStock) from a weighted pool biased by
   G.tier — deeper tiers surface more eggs/trinkets, fewer ball upgrades; revive only appears

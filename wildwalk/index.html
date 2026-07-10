@@ -300,12 +300,21 @@ function xpToLevels(m, gain){
 // ---------- pokedex / persistence ----------
 const Dex = {
   data:{ seen:{}, caught:{}, best:0, runs:0, essence:0, upgrades:{}, muted:false,
-         ach:{}, killed:0, released:0, bossKills:0, bestTier:0, fullPartyWin:0, wildCatch:0 },
+         ach:{}, killed:0, released:0, bossKills:0, bestTier:0, fullPartyWin:0, wildCatch:0, runsLog:[] },
   load(){ try{ const d=JSON.parse(localStorage.getItem(SAVE)); if(d) this.data=Object.assign(this.data,d); }catch(e){} },
   save(){ try{ localStorage.setItem(SAVE, JSON.stringify(this.data)); }catch(e){} },
   see(k){ if(!this.data.seen[k]){ this.data.seen[k]=1; this.save(); } },
   caught(k){ this.data.seen[k]=1; this.data.caught[k]=1; this.save(); },
   record(dist){ if(dist>this.data.best){ this.data.best=dist; } this.data.runs++; this.save(); },
+  recordRun(rec){
+    if(!Array.isArray(this.data.runsLog)) this.data.runsLog=[];
+    this.data.runsLog.push({dist:+rec.dist||0, tier:+rec.tier||0, fights:+rec.fights||0, dex:+rec.dex||0});
+    const clean=this.data.runsLog[this.data.runsLog.length-1];
+    this.data.runsLog.sort((a,b)=>(b.dist||0)-(a.dist||0));
+    this.data.runsLog=this.data.runsLog.slice(0,10);
+    this.save();
+    return {rec:clean, rank:this.data.runsLog.indexOf(clean)};
+  },
   up(key){ return this.data.upgrades[key]||0; },
   awardEssence(n){ this.data.essence=(this.data.essence||0)+n; this.save(); },
   nSeen(){ return Object.keys(this.data.seen).length; },
@@ -706,6 +715,7 @@ function newGame(chosenKey){
     shopStock:null, shopRerolls:0,                  // rotating merchant stock (transient; openShop rerolls)
     dist:0, fights:0, tier:1, enc:0,
     lead:0,
+    lastRunRec:null, lastRunRank:-1,   // records-screen highlight (transient)
     // world scroll
     scroll:0, walkTarget:0,
     // biome (transient — never serialized; only Dex.data persists)
@@ -774,6 +784,7 @@ function flash(m){ G.msg=m; G.msgT=2.2; }
 // ===================================================================
 function startWalk(){
   G.state='walk';
+  G.lastRunRec=null; G.lastRunRank=-1;
   updateBiome();                 // idempotent desync guard (no-op when unchanged)
   G.scroll=0; G.walkTarget = 320 + G.tier*10;
   setWeather();                  // walk leg previews the coming sky
@@ -1182,6 +1193,8 @@ function gameOver(){
   G.essenceEarned = earn;
   Dex.awardEssence(earn);      // persists
   Dex.record(G.dist);          // persists (updates best/runs)
+  const _rr = Dex.recordRun({dist:G.dist, tier:G.tier, fights:G.fights, dex:Dex.nCaught()});
+  G.lastRunRec = _rr.rec; G.lastRunRank = _rr.rank;
   checkAch();
   G.state='gameover'; clearButtons();
   sfx('defeat');
@@ -1926,6 +1939,7 @@ function draw(){
   if(G.state==='pokedex'){ drawPokedex(); ctx.restore(); return; }
   if(G.state==='achievements'){ drawAchievements(); ctx.restore(); return; }
   if(G.state==='sanctuary'){ drawSanctuary(); ctx.restore(); return; }
+  if(G.state==='records'){ drawRecords(); ctx.restore(); return; }
   if(G.state==='starter'){ drawStarter(); ctx.restore(); return; }
 
   drawBG(G.scroll, G.tier);
@@ -1987,6 +2001,7 @@ function draw(){
 function dexStatus(key){ return Dex.data.caught[key]?2:(Dex.data.seen[key]?1:0); }
 function openPokedex(from){ G.pokedexFrom=from; G.pokedexSel=null; G.state='pokedex'; clearButtons(); }
 function openAchievements(from){ G.achFrom=from; G.state='achievements'; clearButtons(); }
+function openRecords(from){ G.recordsFrom=from; G.state='records'; clearButtons(); }
 function achToast(a){ G.achMsg='Achievement: '+a.name; G.achIcon=a.icon; G.achMsgT=3.0; }
 function openSanctuary(from){ G.sanctuaryFrom=from; G.state='sanctuary'; clearButtons(); }
 function openStarter(from){ G.starterFrom=from; G.state='starter'; clearButtons(); }
@@ -2126,6 +2141,44 @@ function drawAchievements(){
   drawButtons();
 }
 
+function drawRecords(){
+  ctx.fillStyle='#12162a'; ctx.fillRect(0,0,W,H);
+  centerText('RECORDS', W/2,44,'900 40px Segoe UI','#ffe9a8');
+  centerText('Your best walks', W/2,72,'700 16px Segoe UI','#c9b8ff');
+  const log=(Array.isArray(Dex.data.runsLog)?Dex.data.runsLog:[]).slice(0,10);
+  if(log.length===0){
+    panel(230,210,500,180,null);
+    centerText('No runs recorded yet',W/2,285,'800 24px Segoe UI','#eaf0ff');
+    centerText('Finish a walk to set your first record.',W/2,320,'600 15px Segoe UI','#8fa0c8');
+  } else {
+    ctx.font='700 12px Segoe UI'; ctx.fillStyle='#8fa0c8'; ctx.textAlign='center';
+    ctx.fillText('RANK',200,100); ctx.fillText('DIST',355,100); ctx.fillText('TIER',505,100);
+    ctx.fillText('FIGHTS',630,100); ctx.fillText('DEX',755,100); ctx.textAlign='left';
+    log.forEach((r,i)=>{
+      const y=112+i*40;
+      const isMe=G.lastRunRec && r===G.lastRunRec;
+      ctx.save();
+      roundRect(150,y,660,36,10); ctx.fillStyle=(i===0)?'#1a2138':'#0e1324'; ctx.fill();
+      ctx.lineWidth=2;
+      if(isMe){ ctx.shadowColor='#6fd07a'; ctx.shadowBlur=10; ctx.strokeStyle='#6fd07a'; }
+      else if(i===0){ ctx.shadowColor='#ffe9a8'; ctx.shadowBlur=8; ctx.strokeStyle='#ffe9a8'; }
+      else { ctx.strokeStyle='#2a3760'; }
+      roundRect(150,y,660,36,10); ctx.stroke();
+      ctx.restore();
+      if(i<=2){ centerText(['🥇','🥈','🥉'][i],200,y+24,'700 20px Segoe UI','#eaf0ff'); }
+      else { centerText('#'+(i+1),200,y+24,'800 16px Segoe UI','#aeb8d8'); }
+      centerText((r.dist??0)+'m',355,y+24,'800 20px Segoe UI','#ffe9a8');
+      centerText('T'+(r.tier??'?'),505,y+23,'700 15px Segoe UI','#c9b8ff');
+      centerText(''+(r.fights??0),630,y+23,'700 15px Segoe UI','#aeb8d8');
+      centerText((r.dex??0)+'/'+Object.keys(SPECIES).length,755,y+23,'700 15px Segoe UI','#c9d4f0');
+      if(isMe){ centerText('◀ THIS RUN',862,y+22,'700 11px Segoe UI','#6fd07a'); }
+    });
+  }
+  clearButtons();
+  btn('back', W/2-90, 548, 180, 40, '◀  BACK', null, {col:'#2a3355'});
+  drawButtons();
+}
+
 function drawTitle(){
   const sky=ctx.createLinearGradient(0,0,0,H);
   sky.addColorStop(0,'#161028'); sky.addColorStop(1,'#3a2a55'); ctx.fillStyle=sky; ctx.fillRect(0,0,W,H);
@@ -2143,9 +2196,10 @@ function drawTitle(){
     W/2, 420, '600 15px Segoe UI', '#8fa0c8');
   clearButtons();
   btn('start', W/2-130, 460, 260, 60, '▶  BEGIN THE WALK', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
-  btn('dex', W/2-260, 528, 168, 44, '📕 POKÉDEX', Dex.nCaught()+' / '+Object.keys(SPECIES).length, {col:'#4a3a6a', accent:'#c9a8ff'});
-  btn('sanctuary', W/2-84, 528, 168, 44, '✦ SANCTUARY', Dex.data.essence+' essence', {col:'#3a2f5a', accent:'#ffe9a8'});
-  btn('ach', W/2+92, 528, 168, 44, '🏆 AWARDS', achCount()+' / '+ACH.length, {col:'#3a2f4a', accent:'#ff9b6f'});
+  btn('dex',159,528,150,44,'📕 POKÉDEX',Dex.nCaught()+'/'+Object.keys(SPECIES).length,{col:'#4a3a6a',accent:'#c9a8ff'});
+  btn('records',323,528,150,44,'🏅 RECORDS',Dex.data.best+'m best',{col:'#3a4a6a',accent:'#8fb0ff'});
+  btn('sanctuary',487,528,150,44,'✦ SANCTUARY',Dex.data.essence+' essence',{col:'#3a2f5a',accent:'#ffe9a8'});
+  btn('ach',651,528,150,44,'🏆 AWARDS',achCount()+'/'+ACH.length,{col:'#3a2f4a',accent:'#ff9b6f'});
   btn('mute', W-52, 14, 38, 34, muteIcon(), null, {col:'#2a2440'});
   drawButtons();
 }
@@ -2627,7 +2681,8 @@ function drawGameOver(){
   btn('again', W/2-130, 420, 260, 58, '↻  WALK AGAIN', null, {col:'#3a5a8a', accent:'#6fa0e0', big:true});
   btn('dex', W/2-208, 486, 200, 40, '📕 POKÉDEX', null, {col:'#4a3a6a', accent:'#c9a8ff'});
   btn('sanctuary', W/2+8, 486, 200, 40, '✦ SANCTUARY', null, {col:'#3a2f5a', accent:'#ffe9a8'});
-  btn('ach', W/2-90, 530, 180, 40, '🏆 AWARDS', null, {col:'#3a2f4a', accent:'#ff9b6f'});
+  btn('records', W/2-208, 530, 200, 40, '🏅 RECORDS', null, {col:'#3a4a6a', accent:'#8fb0ff'});
+  btn('ach', W/2+8, 530, 200, 40, '🏆 AWARDS', null, {col:'#3a2f4a', accent:'#ff9b6f'});
   drawButtons();
 }
 
@@ -2637,8 +2692,8 @@ function drawGameOver(){
 function onClick(mx,my){
   { const mb=hitButton(mx,my);
     if(mb){ if(mb.id==='mute'){ toggleMute(); return; } sfx('select'); } }
-  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else { openStarter('title'); } } return; }
-  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
+  if(G.state==='title'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('title'); else if(b.id==='records') openRecords('title'); else if(b.id==='sanctuary') openSanctuary('title'); else if(b.id==='ach') openAchievements('title'); else { openStarter('title'); } } return; }
+  if(G.state==='gameover'){ const b=hitButton(mx,my); if(b){ if(b.id==='dex') openPokedex('gameover'); else if(b.id==='records') openRecords('gameover'); else if(b.id==='sanctuary') openSanctuary('gameover'); else if(b.id==='ach') openAchievements('gameover'); else { openStarter('gameover'); } } return; }
   if(G.state==='starter'){
     const b=hitButton(mx,my); if(!b) return;
     if(b.id==='back'){ G.state=G.starterFrom||'title'; clearButtons(); }
@@ -2661,6 +2716,7 @@ function onClick(mx,my){
     return;
   }
   if(G.state==='achievements'){ const b=hitButton(mx,my); if(b && b.id==='back'){ G.state=G.achFrom||'title'; clearButtons(); } return; }
+  if(G.state==='records'){ const b=hitButton(mx,my); if(b && b.id==='back'){ G.state=G.recordsFrom||'title'; clearButtons(); } return; }
   if(G.state==='battle' && G.battleIntro<=0){ const idx=teamCardAt(mx,my); if(idx>=0){ trySwitch(idx); return; } }
   const b=hitButton(mx,my); if(!b) return;
   const id=b.id;
@@ -2725,6 +2781,8 @@ window.addEventListener('keydown', e=>{
   if(G.state==='sanctuary' && (e.key==='Escape'||e.key==='Backspace')){ G.state=G.sanctuaryFrom||'title'; clearButtons(); e.preventDefault(); return; }
   if((G.state==='title'||G.state==='gameover') && (e.key==='a'||e.key==='A')){ openAchievements(G.state); e.preventDefault(); return; }
   if(G.state==='achievements' && (e.key==='Escape'||e.key==='Backspace'||e.key==='a'||e.key==='A')){ G.state=G.achFrom||'title'; clearButtons(); e.preventDefault(); return; }
+  if((G.state==='title'||G.state==='gameover') && (e.key==='r'||e.key==='R')){ openRecords(G.state); e.preventDefault(); return; }
+  if(G.state==='records' && (e.key==='Escape'||e.key==='Backspace'||e.key==='r'||e.key==='R')){ G.state=G.recordsFrom||'title'; clearButtons(); e.preventDefault(); return; }
   if(e.key===' '){ if(G.state==='battle') G.speed=G.speed>=3?1:G.speed+1; e.preventDefault(); }
   const n=parseInt(e.key);
   if(n>=1 && n<=4){
