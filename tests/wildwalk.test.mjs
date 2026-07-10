@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -590,7 +590,7 @@ test('biome state stays out of the save shape', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
@@ -733,7 +733,7 @@ test('boss fight leaves the save shape untouched', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
   // bossKills is a legit persisted achievement counter; any OTHER boss* field is a leak
   for(const k of keys) assert(k==='bossKills' || !/^boss/i.test(k), `boss field leaked into save: ${k}`);
 });
@@ -989,7 +989,7 @@ test('R17 relics never change the persisted save shape', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
 });
 
@@ -1217,7 +1217,7 @@ test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
 });
 
@@ -1498,7 +1498,7 @@ test('ACH7 save shape is a superset of the old 7 keys', ()=>{
   api.Dex.save();
   const saved = JSON.parse(store['wildwalk_save_v1']);
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']),
     `save shape wrong: ${keys}`);
 });
 
@@ -1539,7 +1539,7 @@ test('ACH first_catch requires a wild catch, not the auto-caught starter', ()=>{
 // ===================================================================
 // WEATHER / DAY-NIGHT — transient reskin + small balanced dmg/catch mods
 // ===================================================================
-const WSHAPE = ['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch'];
+const WSHAPE = ['ach','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch'];
 
 // (a) documented dmg multiplier + catch bonus — holder-agnostic (attacker-type keyed)
 test('WX1 weather applies documented dmg mult, crit mult and catch bonus', ()=>{
@@ -1735,7 +1735,7 @@ test('SHOP4 buyStock applies effect and marks sold', ()=>{
 test('SHOP5 shop activity does not alter save shape', ()=>{
   const { api, store } = boot();
   const g = api.getG();
-  const canonical = ['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch'];
+  const canonical = ['ach','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch'];
   api.Dex.save();
   const baseKeys = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
   assert(JSON.stringify(baseKeys)===JSON.stringify(canonical), 'baseline save keys drifted: '+baseKeys.join(','));
@@ -1881,6 +1881,98 @@ test('NS4 pokedex renders every species (incl. new horn feat + 4th row) without 
   // every 4th-row card rect stays on-screen (bottom < 600)
   for(let i=18;i<24;i++){ const r=api.pokedexCardAt; }
   assert(true);
+});
+
+// ===================================================================
+// DAILY-SEED CHALLENGE (Roadmap #17) — deterministic daily run + Dex.daily
+// ===================================================================
+
+test('DAILY1 dailySeedFor is pure + deterministic, differs across days', ()=>{
+  const { api } = boot();
+  assert(api.dailySeedFor(20260101)===api.dailySeedFor(20260101), 'dailySeedFor not deterministic');
+  assert(api.dailySeedFor(20260101)!==api.dailySeedFor(20260102), 'same seed for different days');
+  // avalanche: consecutive day ints must not be near-neighbours
+  const a=api.dailySeedFor(20260710), b=api.dailySeedFor(20260711), c=api.dailySeedFor(20260712);
+  assert(a!==b && b!==c && a!==c, 'consecutive day seeds collide');
+  assert(Math.abs(a-b)>1000 && Math.abs(b-c)>1000, 'seeds not avalanched');
+});
+
+test('DAILY2 dayInt returns plausible YYYYMMDD for a fixed UTC Date', ()=>{
+  const { api } = boot();
+  assert(api.dayInt(new Date(Date.UTC(2026,6,10)))===20260710, 'dayInt fixed date wrong');
+  assert(api.dayInt(new Date(Date.UTC(2020,0,1)))===20200101, 'dayInt epoch date wrong');
+  assert(api.dayInt()>=20200101, 'dayInt(now) implausible');
+});
+
+test('DAILY3 two startDaily() runs on the same day produce identical starter', ()=>{
+  const { api } = boot();
+  api.startDaily();
+  const g1 = api.getG();
+  const k1 = g1.team[0].key, s1 = g1.dailySeed;
+  assert(g1.daily===true, 'first daily run G.daily not true');
+  assert(g1.state==='walk', 'daily did not skip starter select');
+  assert(api.DAILY_POOL.includes(k1), 'daily starter not from DAILY_POOL (COMMONS)');
+  api.startDaily();
+  const g2 = api.getG();
+  assert(g2.daily===true, 'second daily run G.daily not true');
+  assert(g2.dailySeed===s1, `dailySeed differs ${g2.dailySeed} vs ${s1}`);
+  assert(g2.team[0].key===k1, `daily starters differ ${g2.team[0].key} vs ${k1}`);
+  assert(g2.dailySeed===api.dayInt(), 'dailySeed not the day int');
+});
+
+test('DAILY3b daily starter ignores the menagerie upgrade (cross-player determinism)', ()=>{
+  // Base save: record today's daily starter.
+  const a = boot().api;
+  a.startDaily();
+  const baseKey = a.getG().team[0].key;
+  // A player who bought menagerie (which widens starterPool to COMMONS+UNCOMMONS)
+  // must still get the IDENTICAL daily starter, else the same seed desyncs cross-player.
+  const b = boot().api;
+  b.Dex.data.upgrades.menagerie = 1;
+  assert(b.starterPool().length > b.DAILY_POOL.length, 'menagerie did not widen starterPool (test premise broken)');
+  b.startDaily();
+  const upgKey = b.getG().team[0].key;
+  assert(upgKey===baseKey, `menagerie desynced the daily starter: ${upgKey} vs ${baseKey}`);
+  assert(b.DAILY_POOL.includes(upgKey), 'daily starter escaped DAILY_POOL under menagerie');
+});
+
+test('DAILY4 recordDaily new-day reset + same-day best', ()=>{
+  const { api } = boot();
+  const D = api.Dex;
+  D.recordDaily(20260101, 100, 3);
+  assert(D.data.daily.day===20260101 && D.data.daily.dist===100 && D.data.daily.tier===3, 'first record wrong');
+  D.recordDaily(20260102, 50, 1);                  // new day -> full reset
+  assert(D.data.daily.day===20260102 && D.data.daily.dist===50 && D.data.daily.tier===1, 'new day did not reset');
+  D.recordDaily(20260102, 200, 4);                 // same day, higher dist -> takes dist+its tier
+  assert(D.data.daily.dist===200 && D.data.daily.tier===4, 'same-day best not taken');
+  D.recordDaily(20260102, 10, 9);                  // same day, lower dist -> ignored
+  assert(D.data.daily.dist===200 && D.data.daily.tier===4, 'same-day lower dist overwrote');
+});
+
+test('DAILY5 old save without daily loads with default {day:0,dist:0,tier:0}', ()=>{
+  const { api } = boot(JSON.stringify({seen:{a:1},caught:{a:1},best:222,runs:7,essence:44,upgrades:{},muted:true}));
+  const d = api.Dex.data.daily;
+  assert(d && d.day===0 && d.dist===0 && d.tier===0, 'daily default missing on old save');
+  assert(api.Dex.data.best===222, 'old fields did not load alongside daily default');
+});
+
+test('DAILY6 gameOver in daily mode records the daily result', ()=>{
+  const { api } = boot();
+  api.startDaily();
+  const g = api.getG();
+  g.dist=480; g.tier=5;
+  api.gameOver();
+  assert(g.state==='gameover', 'not gameover');
+  assert(api.Dex.data.daily.dist===480 && api.Dex.data.daily.tier===5, 'daily result not recorded on gameOver');
+  assert(api.Dex.data.daily.day===g.dailySeed, 'daily day not the run day');
+});
+
+test('DAILY7 save shape still matches after a daily run', ()=>{
+  const { api } = boot();
+  api.startDaily();
+  api.gameOver();
+  const keys = Object.keys(api.Dex.data).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
