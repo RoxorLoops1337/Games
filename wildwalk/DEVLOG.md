@@ -49,12 +49,28 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 29. [x] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety) — DONE c29.
 30. [x] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds) — DONE c30.
 31. [x] Codex / lore screen (per-species flavor, type guide, mechanics reference) — DONE c31.
-32. [ ] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe).
+32. [x] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe) — DONE c32.
 33. [ ] Difficulty presets (Casual/Normal/Hard modifiers layered cleanly over ascension).
 34. [ ] Achievement chains / tiered milestones (multi-step goals with escalating essence).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c32 — Cosmetic sprite skins** (studio: 3 planners [render/save/ux] → lead spec → engineer → QA + orch). FIRST persistent-state cycle.
+  Six essence-bought recolor skins (default/Natural free + Umbral/Gilded/Neon/Pastel/Ember) applied as a pure draw-time palette
+  treatment to the player's own monsters only. A skin is a pure (body,acc,belly)->{body,acc,belly} hex transform built on new pure
+  HSL helpers (hexToHsl/hslToHex/skinTint) — drawMon applies opts.skin to its three LOCAL colors and everything downstream (shade-
+  derived shapes, gradients, features) recolors for free; sp/stats are structurally unreachable from skin code. Sold in a new SKINS
+  tab in the Sanctuary (transient G.sanctTab — never serialized) with per-skin swatch previews + OWNED/EQUIP/BUY states; buySkin/
+  equipSkin mirror buyUpgrade's guard→deduct→save; equippedSkin() falls back to default for unknown/unowned ids. SAVE BACK-COMPAT
+  (the cycle's headline risk): Dex.data gains ONE additive top-level field skins:{owned:{default:1},equipped:'default'}; the shallow
+  Object.assign load-merge keeps the default for old saves, plus a defensive load-normalizer hardens a missing/partial/corrupt skins
+  object and force-owns default every load. All 8 hard-coded save-shape key arrays in the test updated with 'skins' in sorted position.
+  Skin is threaded ONLY into the 3 player-mon draw sites (team HUD, walk lead, battle you.sp) + the sanctuary preview; wilds/pokedex/
+  codex/roamers/starter stay canonical. +7 tests: old-save-without-skins loads clean → default, buy/equip round-trips through save/
+  load, economy guards (insufficient/exact-deduct/already-owned/unowned-equip), save-shape, and TWO cosmetic-only proofs — equip-path
+  AND draw-path stat/catchChance snapshots (QA caught that the equip-path test alone missed draw-time mutations and added the draw-path
+  test). Every guard proven LOAD-BEARING: orchestrator independently mutated sp.base.atk at draw time → cosmetic-only(draw) reddened,
+  and removed 'skins' from just WSHAPE → 5 save-shape guards fired; both reverted → 246/0. 246/246 wildwalk + 19/19 board, 0/12 flakes.
 - **c31 — Codex / lore reference screen** (studio: 3 planners [content/navigation/layout] → lead spec → engineer → QA + orch).
   A browsable READ-ONLY reference reachable from the title AND gameover menus (returns to whichever opened it), with three
   tabs: SPECIES (all 28 fully revealed — a lore dex, ungated unlike the Pokédex — each card → a detail overlay with prominent

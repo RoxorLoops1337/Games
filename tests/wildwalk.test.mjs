@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openCodex:(f)=>openCodex(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openCodex:(f)=>openCodex(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),SKINS,buySkin:(id)=>buySkin(id),equipSkin:(id)=>equipSkin(id),equippedSkin:()=>equippedSkin(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -680,7 +680,7 @@ test('biome state stays out of the save shape', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','skins','tutorialDone','upgrades','wildCatch']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
@@ -824,7 +824,7 @@ test('boss fight leaves the save shape untouched', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','skins','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   // bossKills is a legit persisted achievement counter; any OTHER boss* field is a leak
   for(const k of keys) assert(k==='bossKills' || !/^boss/i.test(k), `boss field leaked into save: ${k}`);
 });
@@ -1087,7 +1087,7 @@ test('R17 relics never change the persisted save shape', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','skins','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
 });
 
@@ -1409,7 +1409,7 @@ test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','skins','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
 });
 
@@ -1764,7 +1764,7 @@ test('ACH7 save shape is a superset of the old 7 keys', ()=>{
   api.Dex.save();
   const saved = JSON.parse(store['wildwalk_save_v1']);
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','skins','tutorialDone','upgrades','wildCatch']),
     `save shape wrong: ${keys}`);
 });
 
@@ -1805,7 +1805,7 @@ test('ACH first_catch requires a wild catch, not the auto-caught starter', ()=>{
 // ===================================================================
 // WEATHER / DAY-NIGHT — transient reskin + small balanced dmg/catch mods
 // ===================================================================
-const WSHAPE = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch'];
+const WSHAPE = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','skins','tutorialDone','upgrades','wildCatch'];
 
 // (a) documented dmg multiplier + catch bonus — holder-agnostic (attacker-type keyed)
 test('WX1 weather applies documented dmg mult, crit mult and catch bonus', ()=>{
@@ -2001,7 +2001,7 @@ test('SHOP4 buyStock applies effect and marks sold', ()=>{
 test('SHOP5 shop activity does not alter save shape', ()=>{
   const { api, store } = boot();
   const g = api.getG();
-  const canonical = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch'];
+  const canonical = ['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','skins','tutorialDone','upgrades','wildCatch'];
   api.Dex.save();
   const baseKeys = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
   assert(JSON.stringify(baseKeys)===JSON.stringify(canonical), 'baseline save keys drifted: '+baseKeys.join(','));
@@ -2284,7 +2284,7 @@ test('DAILY7 save shape still matches after a daily run', ()=>{
   api.startDaily();
   api.gameOver();
   const keys = Object.keys(api.Dex.data).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','ascension','best','bestTier','bossKills','caught','daily','essence','fullPartyWin','killed','muted','playerName','released','runs','runsLog','seen','settings','skins','tutorialDone','upgrades','wildCatch']), `save shape changed: ${keys}`);
 });
 
 // ===================================================================
@@ -3454,6 +3454,134 @@ test('CODEX12 save shape unchanged after codex use (protects WSHAPE)', ()=>{
   api.Dex.save();
   const keys=Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
   assert(JSON.stringify(keys)===JSON.stringify(WSHAPE), keys);
+});
+
+// ---- SKINS (cosmetic sprite skins; persistent additive save field) ----
+
+test('SKIN save back-compat: old save without skins loads and defaults', ()=>{
+  // Build a full valid save object that lacks the new 'skins' key.
+  const base = boot();
+  const data = JSON.parse(JSON.stringify(base.api.Dex.data));
+  delete data.skins;
+  const seed = JSON.stringify(data);
+  // NEGATIVE-CONTROL premise: the seed genuinely has no 'skins' key.
+  assert(!('skins' in JSON.parse(seed)), 'seed unexpectedly already had skins');
+  const { api } = boot(seed);   // Dex.load() runs with the old save
+  assert(JSON.stringify(api.Dex.data.skins)===JSON.stringify({owned:{default:1},equipped:'default'}),
+    'skins did not normalize to default: '+JSON.stringify(api.Dex.data.skins));
+});
+
+test('SKIN round-trip persists through save', ()=>{
+  const { api, store } = boot();
+  api.Dex.data.essence = 999;
+  assert(api.buySkin('gold')===true, 'buySkin(gold) should succeed');
+  assert(api.equipSkin('gold')===true, 'equipSkin(gold) should succeed');
+  api.Dex.save();
+  const parsed = JSON.parse(store['wildwalk_save_v1']);
+  assert(parsed.skins.owned.gold===1, 'gold not persisted as owned');
+  assert(parsed.skins.equipped==='gold', 'equipped not persisted');
+});
+
+test('SKIN economy guards', ()=>{
+  // (a) insufficient essence
+  { const { api } = boot(); api.Dex.data.essence = 0;
+    assert(api.buySkin('gold')===false, 'buy should fail with 0 essence');
+    assert(api.Dex.data.essence===0, 'essence changed on failed buy');
+    assert(!api.Dex.data.skins.owned.gold, 'gold owned after failed buy'); }
+  // (b) exact deduction on success
+  { const { api } = boot(); api.Dex.data.essence = 500;
+    assert(api.buySkin('gold')===true, 'buy should succeed');
+    assert(api.Dex.data.essence===500-220, 'essence not deducted exactly 220');
+    assert(api.Dex.data.skins.owned.gold===1, 'gold not owned after buy');
+    // (c) already owned
+    assert(api.buySkin('gold')===false, 'second buy should fail');
+    assert(api.Dex.data.essence===280, 'essence changed on already-owned buy'); }
+  // (d) equip unowned
+  { const { api } = boot();
+    assert(api.equipSkin('neon')===false, 'equip should fail while unowned');
+    assert(api.Dex.data.skins.equipped==='default', 'equipped changed on failed equip'); }
+});
+
+test('SKIN save-shape (WSHAPE now includes skins)', ()=>{
+  const { api, store } = boot();
+  api.Dex.data.essence = 999; api.buySkin('gold'); api.equipSkin('gold'); api.Dex.save();
+  const keys = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(WSHAPE), 'save shape changed: '+keys);
+});
+
+test('SKIN cosmetic-only: equipping a skin mutates no stat/catchChance', ()=>{
+  const { api } = boot();
+  const m = api.mk('emberpup', 7);
+  // full stat snapshot BEFORE equipping a non-default skin
+  const snap = { bhp:m.sp.base.hp, batk:m.sp.base.atk, bspd:m.sp.base.spd,
+    atk:m.atk, hp:m.hp, maxhp:m.maxhp, level:m.level, spd:m.spd, cc:api.catchChance(m) };
+  api.Dex.data.essence = 999;
+  api.buySkin('shadow'); api.equipSkin('shadow');
+  // VACUITY GUARD: the equipped skin actually changed (not comparing default-to-default)
+  assert(api.equippedSkin().id==='shadow', 'skin did not equip; test would be vacuous');
+  // if a skin transform ever mutated a stat/sp.base, one of these reddens.
+  assert(Object.is(m.sp.base.hp, snap.bhp), 'sp.base.hp mutated');
+  assert(Object.is(m.sp.base.atk, snap.batk), 'sp.base.atk mutated');
+  assert(Object.is(m.sp.base.spd, snap.bspd), 'sp.base.spd mutated');
+  assert(Object.is(m.atk, snap.atk), 'm.atk mutated');
+  assert(Object.is(m.hp, snap.hp), 'm.hp mutated');
+  assert(Object.is(m.maxhp, snap.maxhp), 'm.maxhp mutated');
+  assert(Object.is(m.level, snap.level), 'm.level mutated');
+  assert(Object.is(m.spd, snap.spd), 'm.spd mutated');
+  assert(Object.is(api.catchChance(m), snap.cc), 'catchChance mutated');
+});
+
+test('SKIN cosmetic-only (draw path): drawing the player mon with a skin mutates no stat', ()=>{
+  // The skin transform actually RUNS inside drawMon at DRAW time (not at equip time),
+  // so guard the draw path directly: snapshot the ACTIVE player mon's stats, equip a
+  // non-default skin, drive draw() over walk + battle (which draws that mon WITH the
+  // skin transform executing), then assert every stat is byte-identical. If a transform
+  // (or the skin-apply line) ever mutated sp.base or a stat at draw time, this reddens.
+  const { api, step, begin, toBattle } = boot();
+  const g = api.getG();
+  step(2); begin();
+  const pm = api.activeMon();
+  assert(pm && pm.sp, 'no active player mon to draw');
+  const snap = { bhp:pm.sp.base.hp, batk:pm.sp.base.atk, bspd:pm.sp.base.spd,
+    atk:pm.atk, maxhp:pm.maxhp, level:pm.level, spd:pm.spd, cc:api.catchChance(pm) };
+  api.Dex.data.essence = 999;
+  api.buySkin('gold');
+  assert(api.equipSkin('gold')===true && api.equippedSkin().id==='gold', 'skin did not equip; test vacuous');
+  g.state='walk';
+  for(let i=0;i<8;i++){ g.t=i*0.13; api.draw(); }   // draws the player mon w/ skin transform
+  assert(toBattle(), 'no battle reached for draw-path stat guard');
+  for(let i=0;i<8;i++){ g.t=i*0.11; api.draw(); }
+  const now = api.activeMon();
+  assert(Object.is(now.sp.base.hp, snap.bhp), 'draw: sp.base.hp mutated');
+  assert(Object.is(now.sp.base.atk, snap.batk), 'draw: sp.base.atk mutated');
+  assert(Object.is(now.sp.base.spd, snap.bspd), 'draw: sp.base.spd mutated');
+  assert(Object.is(now.atk, snap.atk), 'draw: m.atk mutated');
+  assert(Object.is(now.maxhp, snap.maxhp), 'draw: m.maxhp mutated');
+  assert(Object.is(now.level, snap.level), 'draw: m.level mutated');
+  assert(Object.is(now.spd, snap.spd), 'draw: m.spd mutated');
+  assert(Object.is(api.catchChance(now), snap.cc), 'draw: catchChance mutated');
+});
+
+test('SKIN render-smoke: every skin draws in walk + battle; wild path stays intact', ()=>{
+  const { api, step, begin, toBattle } = boot();
+  const g = api.getG();
+  // walk state — each skin equipped, sweep time
+  step(2); begin(); assert(g.state==='walk' || toBattle() || g.state==='walk', 'no walk/battle');
+  api.Dex.data.essence = 99999;
+  for(const sk of api.SKINS){
+    api.Dex.data.skins.owned[sk.id]=1; api.equipSkin(sk.id);
+    g.state='walk';
+    for(let i=0;i<6;i++){ g.t=i*0.13; api.draw(); }   // no throw = player-mon skin path ok
+  }
+  // battle state — a loud skin equipped, wild mon drawn with NO skin must still render
+  assert(toBattle(), 'no battle reached');
+  api.equipSkin('neon');
+  for(let i=0;i<8;i++){ g.t=i*0.11; api.draw(); }
+  // roamer/title screens must ignore the equipped skin (canonical) — just prove no throw
+  api.equipSkin('ember');
+  g.state='sanctuary'; api.getG().sanctTab='skins'; api.draw();
+  g.state='sanctuary'; api.getG().sanctTab='blessings'; api.draw();
+  g.state='title'; for(let i=0;i<4;i++){ g.t=i*0.1; api.draw(); }
 });
 
 })();
