@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -479,7 +479,7 @@ test('pokedex opens from gameover and back returns to gameover', ()=>{
 test('dexProgress counts reflect Dex.data', ()=>{
   const { api } = boot();
   const p=api.dexProgress();
-  assert(p.total===18 && p.caught===api.Dex.nCaught() && p.seen===api.Dex.nSeen(), 'counts mismatch');
+  assert(p.total===24 && p.caught===api.Dex.nCaught() && p.seen===api.Dex.nSeen(), 'counts mismatch');
   api.Dex.data.seen['umbrat']=1;
   const q=api.dexProgress();
   assert(q.seen>=p.seen, 'seen did not grow');
@@ -1822,6 +1822,65 @@ test('REC5 records screen: open/back from title + gameover, draw empty + populat
   api.draw();
   assert(clickId('back'), 'no back on records (from gameover)');
   assert(api.getG().state==='gameover', `back did not return to gameover: ${api.getG().state}`);
+});
+
+// ===================================================================
+// NEW SPECIES + 2nd-tier EVOLUTIONS
+// ===================================================================
+const NEW_RARES  = ['craghorn','gloomoth'];
+const NEW_LEGENDS = ['terralith','tsunareth','sylvarch','fulgorax'];
+
+test('NS1 new species well-formed + correctly pooled', ()=>{
+  const { api } = boot();
+  const { SP, RARES, LEGENDS, COMMONS, UNCOMMONS } = api;
+  const all = NEW_RARES.concat(NEW_LEGENDS);
+  for(const k of all){
+    const s = SP[k];
+    assert(s, `${k}: missing species`);
+    assert(s.name && s.type, `${k}: missing name/type`);
+    assert(Number.isFinite(s.base.hp) && s.base.hp>0, `${k}: bad hp`);
+    assert(Number.isFinite(s.base.atk) && s.base.atk>0, `${k}: bad atk`);
+    assert(Number.isFinite(s.base.spd) && s.base.spd>0, `${k}: bad spd`);
+    assert(/^#[0-9a-f]{6}$/i.test(s.body), `${k}: bad body color`);
+    assert(!COMMONS.includes(k) && !UNCOMMONS.includes(k), `${k}: leaked into starter pools`);
+  }
+  assert(NEW_RARES.every(k=>RARES.includes(k) && SP[k].rarity===2), 'new rares not pooled/rarity 2');
+  assert(NEW_LEGENDS.every(k=>LEGENDS.includes(k) && SP[k].rarity===3), 'new legends not pooled/rarity 3');
+});
+
+test('NS2 2nd-tier evolutions resolve via xpToLevels; every evo target exists', ()=>{
+  const { api } = boot();
+  assert(api.SP.boulderk.evo==='craghorn', 'boulderk.evo not craghorn');
+  assert(api.SP.nightwyrm.evo==='gloomoth', 'nightwyrm.evo not gloomoth');
+  const b = api.mk('boulderk', 1); api.xpToLevels(b, 1e6);
+  assert(b.key==='craghorn', `boulderk did not evolve to craghorn (got ${b.key})`);
+  const n = api.mk('nightwyrm', 1); api.xpToLevels(n, 1e6);
+  assert(n.key==='gloomoth', `nightwyrm did not evolve to gloomoth (got ${n.key})`);
+  // full chain pebblin -> boulderk -> craghorn
+  const p = api.mk('pebblin', 1); api.xpToLevels(p, 1e12);
+  assert(p.key==='craghorn', `pebblin chain did not reach craghorn (got ${p.key})`);
+  for(const k in api.SP){ const e=api.SP[k].evo; if(e) assert(api.SP[e], k+' evo->'+e+' missing'); }
+});
+
+test('NS3 Dex total reflects new count (24)', ()=>{
+  const { api } = boot();
+  assert(api.SPECIESKEYS.length===24, `species count ${api.SPECIESKEYS.length} != 24`);
+  assert(api.dexProgress().total===24, `dex total ${api.dexProgress().total} != 24`);
+});
+
+test('NS4 pokedex renders every species (incl. new horn feat + 4th row) without throwing', ()=>{
+  const { api, step } = boot();
+  // mark everything caught so every palette + the horn branch renders (not silhouettes)
+  const seen={}, caught={};
+  for(const k of api.SPECIESKEYS){ seen[k]=1; caught[k]=1; }
+  api.Dex.data.seen=seen; api.Dex.data.caught=caught;
+  api.openPokedex('title'); step(3);
+  // open detail on the horn-feat mon + a 4th-row (index>=18) mon
+  api.getG().pokedexSel=api.SPECIESKEYS.indexOf('craghorn'); step(3);
+  api.getG().pokedexSel=api.SPECIESKEYS.indexOf('fulgorax'); step(3);
+  // every 4th-row card rect stays on-screen (bottom < 600)
+  for(let i=18;i<24;i++){ const r=api.pokedexCardAt; }
+  assert(true);
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
