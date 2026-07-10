@@ -45,7 +45,7 @@ function boot(){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM}};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE}};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -512,6 +512,168 @@ test('biome state stays out of the save shape', ()=>{
   assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
+});
+
+// ===================================================================
+// BOSS ENCOUNTERS — schedule, phases, telegraph, rewards, anti-softlock
+// ===================================================================
+
+// ---- 1. schedule is a pure, self-deduping function of G.fights ----
+test('boss schedule is pure/deterministic and routes the walk spawn', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g = api.getG();
+  for(let f=0; f<=12; f++){ g.fights=f; assert(api.bossDue() === (((f+1)%api.C.BOSS_EVERY)===0), `bossDue wrong at fights=${f}`); }
+  // fights=5 -> (5+1)%6===0 -> next walk spawn is a boss
+  g.fights=5; g.state='walk'; g.walkTarget=100; g.scroll=100;
+  step(1);
+  assert(g.wild && g.wild.boss===true, `walk spawn did not become a boss (state ${g.state})`);
+  assert(g.state==='battle', `expected battle, got ${g.state}`);
+  assert(g.wild.phaseMax>=2, `phaseMax ${g.wild.phaseMax} < 2`);
+  // elite hunts never route through the boss scheduler
+  api.spawn(true);
+  assert(g.wild && !g.wild.boss, 'elite spawn wrongly flagged boss');
+});
+
+// ---- 2. phases decrement monotonically to 1 and the fight resolves ----
+test('boss phases decrement to 1 and the fight always resolves', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team = [api.mk('leviatide',30)];               // huge Water atk vs Fire boss
+  g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod');
+  g.battleIntro = 0;
+  g.team[0].maxhp = g.team[0].hp = 999999;         // survive long enough to out-damage the boss
+  const pmax = g.wild.phaseMax;
+  let minPhase = pmax, maxPhase = pmax, prev = pmax, everIncreased = false;
+  for(let i=0;i<8000 && g.state==='battle';i++){
+    api.upd(0.05);
+    if(g.wild){ const p=g.wild.phase;
+      if(p>prev) everIncreased=true; prev=p;
+      if(p<minPhase) minPhase=p; if(p>maxPhase) maxPhase=p; }
+  }
+  assert(minPhase===1, `phase never reached 1 (min ${minPhase})`);
+  assert(maxPhase<=pmax, `phase exceeded phaseMax (${maxPhase} > ${pmax})`);
+  assert(!everIncreased, 'phase increased at some point');
+  assert(g.state==='choice' || g.state==='gameover', `stuck in ${g.state}`);
+});
+
+// ---- 3. telegraph fires a capped heavy then resets its timers ----
+test('boss telegraph caps the heavy hit and resets cleanly', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team = [api.mk('boulderk',40)];                // full-HP Rock tank
+  g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod');
+  g.battleIntro = 0;
+  const you = g.team[g.lead];
+  you.hp = you.maxhp; you.atk = 0; you.cd = 999;   // isolate: player does nothing
+  const w = g.wild;
+  w.cd = 999;                                      // no normal boss attacks
+  w.tele = 0.04; w.teleActive = true; w.teleCd = 999; w.enrage = 1; w.phaseBreak = 0;
+  for(let i=0;i<4;i++) api.upd(0.05);
+  assert(you.hp>0, 'tank one-shot by heavy');
+  assert(you.maxhp - you.hp <= you.maxhp*api.C.BOSS_HEAVY_CAP + 1, `heavy exceeded cap (lost ${you.maxhp-you.hp})`);
+  assert(w.tele===0 && w.teleActive===false, `telegraph did not clear (tele ${w.tele}, active ${w.teleActive})`);
+  assert(w.teleCd>0, `teleCd did not reset (${w.teleCd})`);
+});
+
+// ---- 4. heavy never one-shots a full-HP active mon ----
+test('boss heavy attack never one-shots from full HP', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team = [api.mk('sparky',30)];
+  g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod');
+  g.battleIntro = 0;
+  const you = g.team[g.lead];
+  you.hp = you.maxhp; you.atk = 0; you.cd = 999;
+  g.wild.cd = 999; g.wild.tele = 0.04; g.wild.teleActive = true; g.wild.teleCd = 999;
+  api.upd(0.05);
+  const validStates = ['battle','choice','gameover'];
+  assert(validStates.includes(g.state), `invalid state ${g.state}`);
+  // either the active mon survived, or the loop cleanly routed a faint
+  assert((g.team[g.lead] && g.team[g.lead].hp>0) || g.state!=='battle' || g.team.every(m=>m.hp<=0)===false,
+    `active mon dead but no clean resolution (state ${g.state})`);
+  assert(g.team[g.lead].hp>0, 'active mon should survive a single capped heavy from full');
+});
+
+// ---- 5. worst-case boss mirror (incl. Water lifesteal) always ends ----
+test('worst-case boss mirrors always terminate via execute valve', ()=>{
+  for(const key of ['moltengod','abysslord','leviatide']){
+    const { api } = boot();
+    const g = api.getG();
+    g.team = [api.mk('sprig',4)];                  // deliberately weak
+    g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
+    api.spawnBoss(key);
+    g.battleIntro = 0;
+    const iters = Math.ceil((api.C.BOSS_SOFTCAP + 30) / 0.05);
+    for(let i=0;i<iters && g.state==='battle';i++) api.upd(0.05);
+    assert(g.state==='choice' || g.state==='gameover', `${key} mirror stuck in ${g.state}`);
+  }
+});
+
+// drive a fresh boss fight to the choice screen (strong team so it's a defeat)
+function bossToChoice(bossKey){
+  const h = boot();
+  const { api, step } = h;
+  const g = api.getG();
+  g.team = [api.mk('leviatide',45)];
+  g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss(bossKey);
+  g.battleIntro = 0;
+  g.team[0].maxhp = g.team[0].hp = 999999;         // survive long enough to defeat the boss
+  for(let i=0;i<8000 && g.state==='battle';i++) api.upd(0.05);
+  assert(g.state==='choice', `boss fight did not reach choice (${g.state})`);
+  step(1);                                         // draw choice buttons
+  return h;
+}
+
+// ---- 6. rewards applied + boosted rare catch on the choice screen ----
+test('boss rewards apply and catch is floored', ()=>{
+  const { api, clickId } = bossToChoice('moltengod');
+  const g = api.getG();
+  const w = g.wild;
+  assert(api.catchChance(w) >= api.C.BOSS_CATCH_FLOOR, `catch ${api.catchChance(w)} below floor`);
+  const soulsBefore = g.souls, potionsBefore = g.potions;
+  const nonBoss = Math.round(w.level*(1+w.sp.rarity*0.6)*2.2) + (w.elite?15:0);
+  assert(clickId('kill'), 'no kill button');
+  const soulsDelta = g.souls - soulsBefore;
+  assert(soulsDelta >= nonBoss*api.C.BOSS_SOULS_MUL, `souls delta ${soulsDelta} < ${nonBoss*api.C.BOSS_SOULS_MUL}`);
+  assert(g.potions === potionsBefore + 1, `potions ${g.potions} != ${potionsBefore+1}`);
+  g.team.forEach(m=>{ if(m.hp>0) assert(m.hp===m.maxhp, `${m.sp.name} not full HP after boss reward`); });
+  assert(g.bossWin===false, 'bossWin latch not cleared');
+});
+
+// ---- 7. save shape unchanged after a boss fight ----
+test('boss fight leaves the save shape untouched', ()=>{
+  const { api, clickId } = bossToChoice('abysslord');
+  clickId('kill');
+  api.Dex.save();
+  const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
+  const keys = Object.keys(saved).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']), `save shape changed: ${keys}`);
+  for(const k of keys) assert(!/^boss/i.test(k), `boss field leaked into save: ${k}`);
+});
+
+// ---- 8. telegraph/pause never freeze the battle tick ----
+test('boss loop never freezes across telegraphs + a phase break', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.team = [api.mk('boulderk',40), api.mk('pebblin',40), api.mk('boulderk',38), api.mk('pebblin',36)];
+  g.team.forEach(m=> m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod');
+  g.battleIntro = 0;
+  g.team.forEach(m=> m.atk=0);                     // player can't kill the boss
+  g.wild.atk = 0;                                  // boss can't wipe the team -> only the valve ends it
+  let left = -1;
+  for(let i=0;i<3000;i++){
+    api.upd(0.05);                                 // must never throw
+    if(g.state!=='battle'){ left=i; break; }
+  }
+  assert(left>0, `battle never terminated (state ${g.state})`);
+  assert(g.state==='choice', `execute valve should end the fight in choice, got ${g.state}`);
+  assert(left>200, `terminated implausibly early at frame ${left} (valve should engage ~45s+)`);
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
