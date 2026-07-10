@@ -260,6 +260,12 @@ const BIOME_WEATHER = [
 // deterministic, monotonic non-decreasing: 1-2 meadow, 3-4 forest, 5-6 shore,
 // 7-8 cave, 9-10 volcano, 11+ void (clamped).
 function biomeForTier(tier){ return Math.min(7, Math.floor((tier-1)/2)); }
+// Endless band: the tier where biomeForTier clamps to the final biome (The
+// Firstlight). No new content unlocks past it, so it's the natural post-game
+// depth. Pure presentation — combat/spawn math is untouched.
+const ENDLESS_TIER = 15;
+function isEndless(t){ return (t==null?G.tier:t) >= ENDLESS_TIER; }
+function endlessDepth(t){ return (t==null?G.tier:t) - ENDLESS_TIER + 1; }
 // advance the biome as the walk deepens (called from setupCrossroads). Starts a
 // single timer that drives both the crossfade and the name label.
 function updateBiome(){
@@ -391,6 +397,8 @@ const ACH = [
   {id:'boss_10',      icon:'🏆', name:'Titan Bane',      desc:'Defeat 10 bosses',               essence:80,  test:()=> (Dex.data.bossKills||0)>=10 },
   {id:'tier_5',       icon:'🧭', name:'Trailblazer',     desc:'Reach tier 5',                   essence:40,  test:()=> (Dex.data.bestTier||0)>=5 },
   {id:'tier_10',      icon:'🗺️', name:'Voidwalker',      desc:'Reach tier 10',                  essence:70,  test:()=> (Dex.data.bestTier||0)>=10 },
+  {id:'tier_15',      icon:'🌌', name:'Abyssbound',      desc:'Reach tier 15',                  essence:100, test:()=> (Dex.data.bestTier||0)>=15 },
+  {id:'tier_20',      icon:'♾️', name:'Endless Wanderer', desc:'Reach tier 20',                  essence:150, test:()=> (Dex.data.bestTier||0)>=20 },
   {id:'release_25',   icon:'🕊️', name:'Merciful',        desc:'Release 25 monsters',            essence:35,  test:()=> (Dex.data.released||0)>=25 },
   {id:'kill_25',      icon:'💀', name:'Reaper',          desc:'Slay 25 monsters',               essence:35,  test:()=> (Dex.data.killed||0)>=25 },
   {id:'full_party',   icon:'🐾', name:'Full House',      desc:'Win a fight with a full party of 4', essence:25, test:()=> (Dex.data.fullPartyWin||0)>=1 },
@@ -1793,8 +1801,13 @@ function drawHUD(){
   // right side
   ctx.textAlign='right'; ctx.font='700 14px Segoe UI';
   ctx.fillStyle='#eaf0ff'; ctx.fillText('Dist '+G.dist+'m', W-48, 20);
-  ctx.fillStyle='#8fa0c8'; ctx.font='600 12px Segoe UI';
-  ctx.fillText('Tier '+G.tier+'  ·  Fights '+G.fights+'  ·  Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length, W-48, 36);
+  if(isEndless()){
+    ctx.fillStyle='#ffe9a8'; ctx.font='700 12px Segoe UI';
+    ctx.fillText('◆ ENDLESS · Tier '+G.tier+' · Depth '+endlessDepth()+' · Fights '+G.fights+' · Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length, W-48, 36);
+  }else{
+    ctx.fillStyle='#8fa0c8'; ctx.font='600 12px Segoe UI';
+    ctx.fillText('Tier '+G.tier+'  ·  Fights '+G.fights+'  ·  Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length, W-48, 36);
+  }
   btn('mute', W-40, 7, 30, 30, muteIcon(), null, {col:'#242c48'});
   ctx.textAlign='left';
 }
@@ -2279,7 +2292,7 @@ function drawAchievements(){
   centerText('ACHIEVEMENTS', W/2, 44, '900 40px Segoe UI', '#ffe9a8');
   centerText('Unlocked '+achCount()+' / '+ACH.length, W/2, 72, '700 16px Segoe UI', '#c9b8ff');
   ACH.forEach((a,i)=>{
-    const x=22+(i%2)*468, y=104+((i/2|0))*60, w=450, h=52;
+    const x=22+(i%2)*468, y=96+((i/2|0))*54, w=450, h=50;
     const on=!!Dex.data.ach[a.id];
     ctx.save();
     if(on){ ctx.shadowColor='#ffe9a8'; ctx.shadowBlur=8; }
@@ -2353,7 +2366,7 @@ function drawTitle(){
   centerText('an auto-battler creature hunt', W/2, 300, '600 22px Segoe UI', '#c9b8ff');
   centerText('Walk east · auto-fight wild monsters · then', W/2, 350, '600 17px Segoe UI', '#aeb8d8');
   centerText('CATCH them · KILL for souls · RELEASE for honor', W/2, 375, '700 17px Segoe UI', '#eaf0ff');
-  centerText('Best: '+Dex.data.best+'m   ·   Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length+' caught   ·   Runs '+Dex.data.runs,
+  centerText('Best: '+Dex.data.best+'m   ·   Dex '+Dex.nCaught()+'/'+Object.keys(SPECIES).length+' caught   ·   Runs '+Dex.data.runs+'   ·   Deepest tier '+(Dex.data.bestTier||0),
     W/2, 420, '600 15px Segoe UI', '#8fa0c8');
   clearButtons();
   if(!Dex.data.tutorialDone) btn('tutskip', 14, 14, 132, 30, 'Skip Tutorial', null, {col:'#2a2f4a', accent:'#8fa0c8', tcol:'#c9d4f0'});
@@ -2601,7 +2614,10 @@ function drawChoice(){
 
 function drawCrossroads(){
   centerText('A CROSSROADS', W/2, 100, '800 34px Segoe UI', '#ffe9a8');
-  centerText('Choose your path — tier '+G.tier, W/2, 132, '600 15px Segoe UI', '#aeb8d8');
+  if(isEndless())
+    centerText('Choose your path — tier '+G.tier+'  ·  ◆ ENDLESS', W/2, 132, '700 15px Segoe UI', '#ffe9a8');
+  else
+    centerText('Choose your path — tier '+G.tier, W/2, 132, '600 15px Segoe UI', '#aeb8d8');
   clearButtons();
   const bw=250, gap=20, y=200, x0=W/2-(bw*3+gap*2)/2;
   G.xoptions.forEach((o,i)=>{

@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -1495,9 +1495,9 @@ test('ACH1 old save (no ach) loads and new fields default', ()=>{
   assert(typeof D.upgrades==='object' && Object.keys(D.upgrades).length===0, 'upgrades not intact');
 });
 
-test('ACH2 well-formed table (14 rows, unique ids, essence rewards)', ()=>{
+test('ACH2 well-formed table (16 rows, unique ids, essence rewards)', ()=>{
   const { ACH } = boot().api;
-  assert(ACH.length===14, `expected 14 achievements, got ${ACH.length}`);
+  assert(ACH.length===16, `expected 16 achievements, got ${ACH.length}`);
   const ids=new Set();
   for(const a of ACH){
     assert(a.id && a.icon && a.name && a.desc, `${a.id}: missing field`);
@@ -1545,6 +1545,80 @@ test('ACH4 caught-derived achievement (legendary) grants once', ()=>{
   const e1 = D.essence;
   api.checkAch();
   assert(D.essence===e1, `essence changed on repeat (${e1}->${D.essence})`);
+});
+
+test('ENDLESS const + helpers: threshold=15, isEndless/endlessDepth by explicit arg', ()=>{
+  const { api } = boot();
+  assert(api.ENDLESS_TIER===15, `ENDLESS_TIER ${api.ENDLESS_TIER} != 15`);
+  // boundary: 14 not endless, 15 is
+  assert(api.isEndless(14)===false, 'tier 14 should not be endless');
+  assert(api.isEndless(15)===true,  'tier 15 should be endless');
+  assert(api.isEndless(99)===true,  'tier 99 should be endless');
+  // depth = tier - 15 + 1
+  assert(api.endlessDepth(15)===1,  `depth@15 ${api.endlessDepth(15)} != 1`);
+  assert(api.endlessDepth(20)===6,  `depth@20 ${api.endlessDepth(20)} != 6`);
+  // ENDLESS_TIER aligns with the final-biome clamp (biomeForTier hits 7 at 15)
+  assert(api.biomeForTier(api.ENDLESS_TIER)===7, 'ENDLESS_TIER should land on the final biome');
+  assert(api.biomeForTier(api.ENDLESS_TIER-1)===6, 'tier before ENDLESS_TIER should still be pre-final biome');
+});
+
+test('ENDLESS helpers default to live G.tier when arg omitted', ()=>{
+  const { api } = boot();
+  const G = api.getG();
+  G.tier = 14;
+  assert(api.isEndless()===false, 'G.tier 14 -> not endless');
+  G.tier = 15;
+  assert(api.isEndless()===true, 'G.tier 15 -> endless');
+  assert(api.endlessDepth()===1, `G.tier 15 depth ${api.endlessDepth()} != 1`);
+  G.tier = 23;
+  assert(api.endlessDepth()===9, `G.tier 23 depth ${api.endlessDepth()} != 9`);
+});
+
+test('ENDLESS achievements tier_15/tier_20 present, gate on bestTier, grant once', ()=>{
+  const { api } = boot();
+  const D = api.Dex.data;
+  const a15 = api.ACH.find(a=>a.id==='tier_15');
+  const a20 = api.ACH.find(a=>a.id==='tier_20');
+  assert(a15 && a20, 'tier_15/tier_20 missing from ACH');
+  assert(a15.essence===100 && a20.essence===150, `endless essences off: ${a15.essence}/${a20.essence}`);
+  // not yet reached
+  assert(a15.test()===false && a20.test()===false, 'endless ach should not fire at bestTier 0');
+  // reach 15 -> tier_15 only. Pre-mark the lower tier achs so only tier_15's
+  // reward lands in the delta (caught cleared so no catch achs fire either).
+  D.caught = {};
+  D.ach.tier_5 = 1; D.ach.tier_10 = 1;
+  D.bestTier = 15;
+  const e0 = D.essence;
+  api.checkAch();
+  assert(D.ach.tier_15===1, 'tier_15 not marked at bestTier 15');
+  assert(!D.ach.tier_20, 'tier_20 wrongly fired at bestTier 15');
+  assert(D.essence===e0+100, `tier_15 reward off: ${D.essence} != ${e0}+100`);
+  // reach 20 -> tier_20 fires, tier_15 not re-granted
+  D.bestTier = 20;
+  const e1 = D.essence;
+  api.checkAch();
+  assert(D.ach.tier_20===1, 'tier_20 not marked at bestTier 20');
+  assert(D.essence===e1+150, `tier_20 reward off: ${D.essence} != ${e1}+150`);
+  // repeat: no re-grant
+  const e2 = D.essence;
+  api.checkAch();
+  assert(D.essence===e2, `endless ach re-granted on repeat (${e2}->${D.essence})`);
+});
+
+test('ENDLESS achievements grid fits 8 rows above the back button (y=540)', ()=>{
+  const { api } = boot();
+  // Mirror drawAchievements geometry: y = 96 + row*54, card h = 50.
+  const rows = Math.ceil(api.ACH.length/2);
+  assert(rows===8, `expected 8 rows for ${api.ACH.length} entries, got ${rows}`);
+  const lastRowBottom = 96 + (rows-1)*54 + 50;
+  assert(lastRowBottom <= 540, `last row bottom ${lastRowBottom} collides with back button at 540`);
+});
+
+test('ENDLESS presentation does not throw in draw() at an endless tier', ()=>{
+  const { api } = boot();
+  const G = api.getG();
+  G.tier = 18;                 // endless HUD branch + crossroads suffix active
+  api.draw();                  // stubbed ctx; asserts no render-time error
 });
 
 test('ACH5 cumulative counters increment and persist to the save', ()=>{
