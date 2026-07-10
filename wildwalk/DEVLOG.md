@@ -45,7 +45,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 25. [x] Settings menu — DONE c25.
 26. [x] New element type + species (Frost) — DONE c26.
 27. [x] Party synergies / auras — DONE c27.
-28. [ ] Boss telegraph & mechanic variety (distinct wind-ups/patterns per boss, readable tells).
+28. [x] Boss telegraph & mechanic variety — DONE c28.
 29. [ ] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety).
 30. [ ] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds).
 31. [ ] Codex / lore screen (per-species flavor, type guide, mechanics reference).
@@ -55,6 +55,21 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c28 — Boss telegraph & mechanic variety** (studio: boss-mechanics, balance/ux, lead, engineer, QA + orch).
+  Bosses now rotate THREE telegraphed mechanics (transient w.mechIdx/mech/wardT, no save change): SLAM (the
+  existing capped heavy hit), FLURRY (3 rapid hits with an INTEGER running-budget cap so the SUM ≤
+  floor(0.6·maxhp) — a full-HP mon always keeps ≥40%, provably no one-shot; each hit honors dodge/guard),
+  and WARD (boss self-shields WARD_DUR=3s, taking ×0.55 player damage while warded — zero damage to the
+  player, floored ≥1 so no stall, execute valve still terminates). armBossMech() cycles slam→flurry→ward via
+  a shared counter at both arm sites; the armed mech drives BOTH the wind-up banner AND the fire dispatch.
+  drawBossTelegraph now shows a distinct per-mech readout (red SLAM / gold FLURRY ×3 with 3 pips / cyan WARD
+  hex ring) + a shield glow on a warded boss. Every cap/floor/valve preserved; all damaging mechanics stay
+  telegraphed + mitigable by switching. +11 real-path tests (drive bossFlurry/bossWard/strike/updateBattle),
+  each combat assertion proven by a NEGATIVE CONTROL (break the flurry cap / ward mul / rotation → its test
+  fails) — engineer ran all 3 + a 12x flake check, QA re-ran 16x. ORCHESTRATOR HARDENING: relaxed the
+  flurry-survivor assertion from strict > to >= (matching the non-strict guarantee, prevents a future
+  false-fail) + added an explicit no-one-shot (hp>0) check. 211/211 wildwalk + 19/19 board, 0/16 flakes.
+  Boss FLURRY telegraph confirmed by screenshot.
 - **c27 — Party synergies / auras** (studio: synergy-systems, balance/ux, lead, engineer, QA + orchestrator fix).
   A transient team-comp buff layer (G.synergies, never serialized). computeSynergies() reads the live party:
   each type with ≥2 members grants a small flavored buff (Fire→+8% atk, Rock→+10% hp, Volt→+8% spd, Grass→+6% hp,

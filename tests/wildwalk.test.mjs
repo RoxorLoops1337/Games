@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -2620,6 +2620,165 @@ test('SYN no save-shape change — G.synergies never serialized', ()=>{
   api.Dex.load();
   const keysAfter = Object.keys(api.Dex.data).sort().join(',');
   assert(keysBefore===keysAfter, 'Dex.data shape unchanged after round-trip');
+});
+
+// ===================================================================
+// ROTATING BOSS MECHANICS — slam / flurry / ward (transient state on w)
+// ===================================================================
+
+// ---- spawnBoss inits the rotation state ----
+test('BM-INIT spawnBoss sets mechIdx/mech/wardT to clean defaults', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',10)]; g.team.forEach(m=>m.hp=m.maxhp); g.lead=0;
+  const w=api.spawnBoss('moltengod');
+  assert(w.mechIdx===0, `mechIdx ${w.mechIdx} != 0`);
+  assert(w.mech==='', `mech '${w.mech}' != ''`);
+  assert(w.wardT===0, `wardT ${w.wardT} != 0`);
+});
+
+// ---- rotation is a pure counter: slam→flurry→ward→… (NC: hardcode w.mech='slam' in armBossMech) ----
+test('BM-ROTATION armBossMech cycles slam/flurry/ward deterministically', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',10)]; g.team.forEach(m=>m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod');
+  assert(g.wild.mechIdx===0, `mechIdx ${g.wild.mechIdx} != 0`);
+  const seq=[];
+  for(let i=0;i<6;i++){ api.armBossMech(g.wild); seq.push(g.wild.mech); }
+  assert(JSON.stringify(seq)===JSON.stringify(['slam','flurry','ward','slam','flurry','ward']),
+    `rotation ${seq}`);
+  // arming also sets a wind-up telegraph each time
+  assert(Math.abs(g.wild.tele - api.C.TELE_WINDUP)<1e-9 && g.wild.teleActive===true, 'arm did not raise the telegraph');
+});
+
+// ---- FLURRY never one-shots; the running total cap is BINDING (NC: the `hit>remaining` clamp) ----
+test('BM-FLURRY-CAP flurry sum ≤ floor(cap·maxhp), full-HP mon survives ≥40%, cap binds', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',30)];                 // Fire def: not Shadow/Rock, no trinket → all 3 hits land
+  g.team.forEach(m=>m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod');
+  g.battleIntro=0;
+  g.wild.atk *= 6;                                 // uncapped 3-hit raw ≫ cap → forces the clamp to bind
+  api.reseed(31);
+  const you=g.team[0]; you.hp=you.maxhp;
+  const budget=Math.floor(you.maxhp*api.C.BOSS_HEAVY_CAP);
+  api.bossFlurry(g.wild, you);                     // REAL code path
+  const lost=you.maxhp - you.hp;
+  assert(lost <= budget, `flurry total ${lost} exceeded cap ${budget} (one-shot risk)`);   // NC breaks this
+  // guarantee is hp >= maxhp - floor(0.6*maxhp) >= 0.40*maxhp (non-strict; > would false-fail when 0.6*maxhp is an integer)
+  assert(you.hp >= you.maxhp*0.40, `survivor at ${you.hp} below 40% of ${you.maxhp}`);
+  assert(you.hp > 0, `flurry one-shot the mon (hp ${you.hp})`);
+  assert(lost >= budget-2, `cap not binding: lost ${lost} vs budget ${budget}`);
+  // multi-hit shape: a flurry vs a moderate boss removes strictly more than one small single hit
+  const g2=boot(); const gg=g2.api.getG();
+  gg.team=[g2.api.mk('emberpup',30)]; gg.team.forEach(m=>m.hp=m.maxhp=1e9); gg.lead=0;   // huge hp → cap never binds
+  g2.api.spawnBoss('moltengod'); gg.battleIntro=0;
+  const d2=gg.team[0]; d2.hp=1e9; g2.api.bossFlurry(gg.wild, d2);
+  const flurryLoss=1e9-d2.hp;
+  d2.hp=1e9; g2.api.bossHeavyStrike({atk:gg.wild.atk*(g2.api.C.FLURRY_HIT_MUL/g2.api.C.BOSS_HEAVY_MUL),sp:gg.wild.sp,status:{}}, d2);
+  const oneHit=1e9-d2.hp;
+  assert(flurryLoss > oneHit, `flurry (${flurryLoss}) should hit more than one sub-share strike (${oneHit})`);
+});
+
+// ---- FLURRY honors guardstone per hit (NC: the per-hit hit*=0.85 line) ----
+test('BM-FLURRY-GUARD guardstone holder takes strictly less total from a flurry', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const holder=api.mk('emberpup',40), plain=api.mk('emberpup',40);
+  g.team=[holder,plain]; holder.trinket='guardstone';
+  holder.maxhp=plain.maxhp=1e9;                    // cap never binds → isolates the per-hit guard mult
+  const boss=api.mk('emberpup',1);
+  const N=800; api.reseed(77);
+  const mean=(def)=>{ let s=0; for(let i=0;i<N;i++){ def.hp=1e9; const b=def.hp; api.bossFlurry(boss,def); s+=(b-def.hp); } return s/N; };
+  assert(mean(holder) < mean(plain), 'guardstone did not reduce flurry total');   // NC breaks this
+});
+
+// ---- FLURRY is mitigable: switching during the wind-up moves the hit ----
+test('BM-FLURRY-SWITCH switching mid-windup moves the flurry to the new active', ()=>{
+  const armed=()=>{
+    const { api } = boot(); const g=api.getG();
+    g.team=[api.mk('emberpup',20), api.mk('emberpup',20)];
+    g.team.forEach(m=>{ m.hp=m.maxhp; });
+    g.lead=0; api.spawnBoss('moltengod'); g.battleIntro=0; g.switchCd=0; g.switchAnim=0;
+    g.wild.hp=g.wild.maxhp=1e9;                     // fight can't end
+    g.wild.mech='flurry'; g.wild.tele=0.04; g.wild.teleActive=true; g.wild.teleCd=999; g.wild.phaseBreak=0;
+    g.team.forEach(m=>{ m.atk=0; m.cd=999; }); g.wild.cd=999;   // isolate: only the flurry deals damage
+    return { api, g };
+  };
+  // (a) switch to mon 1 during the wind-up → mon 0 untouched, mon 1 takes it
+  { const { api, g } = armed();
+    assert(api.trySwitch(1)===true, 'switch failed');
+    for(let i=0;i<4 && g.wild.tele>0;i++) api.upd(0.05);
+    assert(g.team[0].hp===g.team[0].maxhp, `original mon hit (${g.team[0].hp}/${g.team[0].maxhp})`);
+    assert(g.team[1].hp < g.team[1].maxhp, 'new active did not take the flurry'); }
+  // (b) control: no switch → mon 0 IS the one hit
+  { const { api, g } = armed();
+    for(let i=0;i<4 && g.wild.tele>0;i++) api.upd(0.05);
+    assert(g.team[0].hp < g.team[0].maxhp, 'active mon should take the flurry when not switching'); }
+});
+
+// ---- WARD sets the shield and deals ZERO damage to the player ----
+test('BM-WARD-VALUE bossWard shields the boss and deals no player damage', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',20)]; g.team.forEach(m=>m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod'); g.battleIntro=0;
+  const you=api.activeMon(); const hp0=you.hp;
+  api.bossWard(g.wild);
+  assert(Math.abs(g.wild.wardT - api.C.WARD_DUR)<1e-9, `wardT ${g.wild.wardT} != ${api.C.WARD_DUR}`);
+  assert(you.hp===hp0, `ward dealt ${hp0-you.hp} player damage (should be 0)`);
+});
+
+// ---- WARD reduces player→boss damage by ×WARD_MUL (NC: the item-6a strike hook) ----
+test('BM-WARD-REDUCTION warded boss takes ≈WARD_MUL× player damage; strike still floors ≥1', ()=>{
+  const { api } = boot(); const g=api.getG();
+  const att=api.mk('leviatide',45);               // Water vs Fire boss → no boss dodge/guard
+  g.team=[att]; g.lead=0;
+  const boss=api.spawnBoss('moltengod'); g.battleIntro=0;
+  const N=800;
+  const mean=(ward)=>{ boss.wardT=ward; api.reseed(909); let s=0;
+    for(let i=0;i<N;i++){ boss.hp=1e9; const b=boss.hp; api.strike(att, boss, +1); s+=(b-boss.hp); } return s/N; };
+  const warded=mean(api.C.WARD_DUR), unwarded=mean(0);
+  const ratio=warded/unwarded;
+  assert(ratio>0.50 && ratio<0.60, `ward ratio ${ratio} not ≈${api.C.WARD_MUL}`);   // NC pushes ratio→~1.0
+  // floor: tiny-atk attacker → warded strike still removes ≥1 (no stall)
+  const tiny=api.mk('leviatide',45); tiny.atk=0.001; boss.wardT=api.C.WARD_DUR; boss.hp=1e9;
+  const b=boss.hp; api.strike(tiny, boss, +1);
+  assert(boss.hp <= b-1, `warded strike floored below 1 (removed ${b-boss.hp})`);
+});
+
+// ---- a ward-exercising boss fight still terminates via the execute valve ----
+test('BM-WARD-TERMINATES ward never stalls the fight; execute valve still ends it', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('sprig',4)]; g.team.forEach(m=>{ m.hp=m.maxhp=1e9; }); g.lead=0;   // survives to the valve
+  api.spawnBoss('moltengod'); g.battleIntro=0;
+  const iters=Math.ceil((api.C.BOSS_SOFTCAP+30)/0.05);
+  for(let i=0;i<iters && g.state==='battle';i++) api.upd(0.05);   // rotation arms ward every 3rd mechanic
+  assert(g.state==='choice' || g.state==='gameover', `ward fight stuck in ${g.state}`);
+});
+
+// ---- drawBossTelegraph renders each mechanic banner without throwing ----
+test('BM-DRAW telegraph + active-ward glow render for every mech (no throw)', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('emberpup',20)]; g.team.forEach(m=>m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod'); g.battleIntro=0; g.state='battle';
+  for(const mech of ['','slam','flurry','ward']){
+    g.wild.mech=mech; g.wild.tele=api.C.TELE_WINDUP*0.5; g.wild.teleActive=true;
+    for(let i=0;i<3;i++){ g.t=i*0.4; api.draw(); }
+  }
+  // active shield glow path
+  g.wild.tele=0; g.wild.teleActive=false; g.wild.wardT=api.C.WARD_DUR;
+  for(let i=0;i<3;i++){ g.t=i*0.4; api.draw(); }
+  assert(true, 'boss-mechanic rendering threw');
+});
+
+// ---- slam path is unchanged: still capped, mech='' dispatches the legacy heavy ----
+test('BM-SLAM-CAP slam (mech empty/slam) still caps at BOSS_HEAVY_CAP', ()=>{
+  const { api } = boot(); const g=api.getG();
+  g.team=[api.mk('boulderk',40)]; g.team.forEach(m=>m.hp=m.maxhp); g.lead=0;
+  api.spawnBoss('moltengod'); g.battleIntro=0;
+  const you=g.team[0]; you.hp=you.maxhp; you.atk=0; you.cd=999;
+  const w=g.wild; w.cd=999; w.mech='slam'; w.tele=0.04; w.teleActive=true; w.teleCd=999; w.enrage=1; w.phaseBreak=0;
+  for(let i=0;i<4;i++) api.upd(0.05);
+  assert(you.hp>0, 'slam one-shot the tank');
+  assert(you.maxhp - you.hp <= you.maxhp*api.C.BOSS_HEAVY_CAP + 1, `slam exceeded cap (lost ${you.maxhp-you.hp})`);
 });
 
 // ===================================================================

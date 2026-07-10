@@ -126,6 +126,10 @@ const BOSS_CATCH_FLOOR=0.90;
 const BOSS_SOULS_MUL=3, BOSS_HONOR_MUL=3, BOSS_GOLD=40, BOSS_XP_MUL=2.2;
 const BOSS_DANGER='#ff3b3b', BOSS_GOLD_C='#ffdf5a';
 const BOSS_PHASE_COL=['#ff8f3d','#ff5a5a','#c452ff'];   // indexed by (phaseMax-phase): hotter/violet each break
+const WARD_DUR=3.0, WARD_MUL=0.55;                                // WARD: boss self-shield seconds / player→boss dmg mult while warded
+const FLURRY_HITS=3, FLURRY_HIT_MUL=BOSS_HEAVY_MUL/FLURRY_HITS;   // FLURRY: N rapid hits; per-hit share derived from the heavy budget (2.6/3≈0.867)
+const BOSS_MECHS=['slam','flurry','ward'];                        // telegraphed mechanic rotation (cycled by w.mechIdx)
+const MECH_COL={ slam:BOSS_DANGER, flurry:'#ffd23d', ward:'#6fe0ff' };  // red / gold / cyan identity
 const BOSS_TITLES={ moltengod:'Tyrant of Ash', abysslord:'Lord of the Abyss',
   infernyx:'The Ashen Reborn', leviatide:'Tide That Drowns',
   verdragon:'The Wildwood Wyrm', stormhorn:'Thunder Crown',
@@ -1050,6 +1054,7 @@ function spawnBoss(forceKey){
   w.boss=true; w.elite=true;
   w.phaseMax = (G.tier>=6?3:2); w.phase = w.phaseMax; w.phaseBreak=0; w.enrage=1;
   w.tele=0; w.teleActive=false; w.teleCd = rr(TELE_GAP[0],TELE_GAP[1]);
+  w.mechIdx=0; w.mech=''; w.wardT=0;
   w.clock=0; w.noHeal=false;
   w.bossTitle = BOSS_TITLES[key] || w.sp.name;
   Dex.see(key);
@@ -1488,6 +1493,7 @@ function updateBattle(dt){
   let bossPaused=false;
   if(w.boss){
     w.clock += dt;
+    if(w.wardT>0) w.wardT = Math.max(0, w.wardT-dt);
     // (a) EXECUTE VALVE — guarantees termination even vs a self-healing boss
     if(w.clock > BOSS_SOFTCAP){ w.noHeal=true; w.hp=Math.max(0, w.hp - w.maxhp*BOSS_EXECUTE_DPS*dt); }
     // (b) PHASE ADVANCE — monotonic decrement, guarded, fires once per threshold
@@ -1526,6 +1532,7 @@ function strike(att, def, dir){
   if(def.sp.type==='Rock'){ dmg=Math.max(1, Math.round(dmg*(1-ROCK_GUARD))); def.status.fGuard=0.35; }
   if(hasTrinket(def,'guardstone')) dmg=Math.max(1, Math.round(dmg*0.85));
   if(dir<0){ const g=synGuard(); if(g>0) dmg=Math.max(1, Math.round(dmg*(1-g))); }   // team is defender (wild attacking)
+  if(dir>0 && def.boss && def.wardT>0) dmg = Math.max(1, Math.round(dmg*WARD_MUL));   // player→warded boss: reduced, floored ≥1
   def.hp = Math.max(0, def.hp - dmg);
   if(hasTrinket(att,'lifeamulet')){ const h=Math.round(dmg*0.15); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
   if(dir>0 && hasRelic('lifesteal')){ const h=Math.round(dmg*0.12); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
@@ -1603,15 +1610,24 @@ function bossPhaseAdvance(w){
   G.dmgPops.push({x:660, y:150, vy:-30, life:1.2, txt:'ENRAGED!', heavy:true, col:BOSS_DANGER, age:0, rot:0});
   for(let i=0;i<12;i++){ if(G.parts.length<160) G.parts.push({x:660,y:210,vx:rr(-130,130),vy:rr(-150,30),life:rr(0.3,0.6),col:BOSS_PHASE_COL[Math.min(2,w.phaseMax-w.phase)],r:rr(3,6)}); }
   if(G.parts.length<160) G.parts.push({x:660,y:210,ring:true,r:6,life:0.5,col:BOSS_DANGER});
-  w.tele = TELE_WINDUP; w.teleActive = true;                      // arm a telegraph on the new phase
+  armBossMech(w);                                                 // arm the next mechanic on the new phase
+}
+function armBossMech(w){
+  w.tele=TELE_WINDUP; w.teleActive=true;
+  w.mech = BOSS_MECHS[w.mechIdx % BOSS_MECHS.length]; w.mechIdx++;
 }
 function bossTelegraphTick(w, def, dt){
   if(w.tele>0){
     w.tele -= dt; w.teleActive = true;
-    if(w.tele<=0){ w.tele=0; w.teleActive=false; bossHeavyStrike(w,def); w.teleCd = rr(TELE_GAP[0],TELE_GAP[1]); }
+    if(w.tele<=0){ w.tele=0; w.teleActive=false;
+      if(w.mech==='flurry') bossFlurry(w,def);
+      else if(w.mech==='ward') bossWard(w);
+      else bossHeavyStrike(w,def);                       // 'slam' + '' default — UNCHANGED path
+      w.teleCd = rr(TELE_GAP[0],TELE_GAP[1]);
+    }
   } else {
     w.teleCd -= dt;
-    if(w.teleCd<=0){ w.tele=TELE_WINDUP; w.teleActive=true; }
+    if(w.teleCd<=0){ armBossMech(w); }
   }
 }
 function bossHeavyStrike(w, def){
@@ -1631,6 +1647,38 @@ function bossHeavyStrike(w, def){
   G.dmgPops.push({x:300+rr(-20,20),y:200,vy:-40,life:1.1,txt:'-'+dmg,heavy:true,col:BOSS_DANGER,age:0,rot:0});
   for(let i=0;i<12;i++){ if(G.parts.length<160) G.parts.push({x:300,y:210,vx:rr(-120,120),vy:rr(-160,40),life:rr(0.3,0.7),col:BOSS_DANGER,r:rr(3,6)}); }
   if(G.parts.length<160) G.parts.push({x:300,y:210,ring:true,r:6,life:0.5,col:BOSS_DANGER});
+}
+function bossFlurry(w, def){
+  const mult = typeMult(w.sp.type, def.sp.type);
+  let remaining = Math.floor(def.maxhp*BOSS_HEAVY_CAP);            // INTEGER total budget — SUM of all hits ≤ this
+  for(let i=0;i<FLURRY_HITS;i++){
+    if(remaining < 1) break;                                       // running total reached the cap → stop
+    if(def.sp.type==='Shadow' && rnd()<SHADOW_DODGE){              // per-hit independent dodge (spends NO budget)
+      def.status.fDodge=0.4; w.lunge=1;
+      G.dmgPops.push({x:300+rr(-20,20),y:200,vy:-40,life:0.9,txt:'DODGE',dodge:true,col:'#a06bff',age:0,rot:0});
+      continue;
+    }
+    let hit = w.atk * mult * FLURRY_HIT_MUL * weatherDmgMul(w.sp.type);  // enrage already folded into w.atk
+    if(def.sp.type==='Rock')          hit *= (1-ROCK_GUARD);
+    if(hasTrinket(def,'guardstone'))  hit *= 0.85;
+    { const g=(G.synergies?.guardBonus||0); if(g>0) hit *= (1-g); }
+    hit = Math.max(1, Math.round(hit));
+    if(hit > remaining) hit = remaining;                           // clamp to remaining integer budget → Σ ≤ floor(cap)
+    remaining -= hit;
+    def.hp = Math.max(0, def.hp - hit); def.hurt=1; w.lunge=1;
+    G.shake = Math.min(14, G.shake + 5);
+    G.dmgPops.push({x:300+rr(-26,26),y:200-i*6,vy:-40,life:1.0,txt:'-'+hit,heavy:true,col:MECH_COL.flurry,age:0,rot:rr(-0.1,0.1)});
+    for(let k=0;k<6;k++){ if(G.parts.length<160) G.parts.push({x:300,y:210,vx:rr(-120,120),vy:rr(-150,40),life:rr(0.25,0.55),col:MECH_COL.flurry,r:rr(2,5)}); }
+  }
+  if(G.parts.length<160) G.parts.push({x:300,y:210,ring:true,r:6,life:0.5,col:MECH_COL.flurry});
+}
+function bossWard(w){
+  w.wardT = WARD_DUR;                                              // boss shields itself; NO damage dealt to the player
+  w.lunge=1; G.shake=Math.min(10,G.shake+4);
+  G.dmgPops.push({x:660,y:150,vy:-24,life:1.1,txt:'🛡 WARD',heal:true,col:MECH_COL.ward,age:0,rot:0});
+  for(let i=0;i<14;i++){ if(G.parts.length<160) G.parts.push({x:660,y:210,vx:rr(-90,90),vy:rr(-120,20),life:rr(0.3,0.7),col:MECH_COL.ward,r:rr(2,5)}); }
+  if(G.parts.length<160) G.parts.push({x:660,y:210,ring:true,r:8,life:0.6,col:MECH_COL.ward});
+  sfx('hit');
 }
 function updateFx(dt){
   for(const p of G.dmgPops){ p.y+=p.vy*dt; p.vy+=40*dt; p.life-=dt*0.9; p.age=(p.age||0)+dt; }
@@ -2115,13 +2163,31 @@ function drawBossHP(w){
 }
 function drawBossTelegraph(w, yx, wx){
   const p=w.tele/TELE_WINDUP, puls=0.5+0.5*Math.sin(G.t*14);
-  ctx.save(); ctx.globalAlpha=puls; ctx.strokeStyle=BOSS_DANGER; ctx.lineWidth=2+(1-p)*5;   // closing ring on boss
+  const mech=w.mech||'slam';
+  const M=({ slam  :{col:MECH_COL.slam,   label:'⚠ SLAM ⚠',              ret:true },
+            flurry:{col:MECH_COL.flurry, label:'⚡ FLURRY ×'+FLURRY_HITS, ret:true },
+            ward  :{col:MECH_COL.ward,   label:'🛡 WARD',                ret:false} })[mech] || {col:MECH_COL.slam,label:'⚠ SLAM ⚠',ret:true};
+  const col=M.col;
+  ctx.save(); ctx.globalAlpha=puls; ctx.strokeStyle=col; ctx.lineWidth=2+(1-p)*5;         // closing ring on boss
   ctx.beginPath(); ctx.arc(wx,470,20+p*70,0,6.283); ctx.stroke(); ctx.restore();
-  centerText('⚠ HEAVY ATTACK ⚠', W/2, 150, '800 22px Segoe UI', BOSS_DANGER);                // danger banner (VS slot)
-  ctx.fillStyle=BOSS_DANGER; ctx.fillRect(360, 132, 480*(1-p), 5);                            // L→R countdown bar
-  ctx.save(); ctx.globalAlpha=0.7; ctx.strokeStyle=BOSS_DANGER; ctx.lineWidth=2;              // reticle on player
-  ctx.beginPath(); ctx.arc(yx,470,18,0,6.283); ctx.stroke();
-  ctx.beginPath(); ctx.moveTo(yx-24,470); ctx.lineTo(yx+24,470); ctx.moveTo(yx,446); ctx.lineTo(yx,494); ctx.stroke(); ctx.restore();
+  centerText(M.label, W/2, 150, '800 22px Segoe UI', col);                                // mech banner (VS slot)
+  ctx.fillStyle=col; ctx.fillRect(360, 132, 480*(1-p), 5);                                // L→R countdown bar
+  if(mech==='flurry'){                                                                     // 3 pips = the 3 sub-hits
+    for(let i=0;i<FLURRY_HITS;i++){ const px=360+480*((i+0.5)/FLURRY_HITS);
+      ctx.save(); ctx.globalAlpha=(1-p)>=i/FLURRY_HITS?1:0.30; ctx.fillStyle=col;
+      ctx.beginPath(); ctx.arc(px,134.5,4,0,6.283); ctx.fill(); ctx.restore(); }
+  }
+  if(mech==='ward'){                                                                       // shield forming: converging hex ring, NO reticle
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle=col; ctx.lineWidth=2;
+    const hexR=30+(1-p)*22; ctx.globalAlpha=0.25+0.45*puls*(1-p);
+    ctx.beginPath();
+    for(let s=0;s<=6;s++){ const a=Math.PI/6+s*Math.PI/3, hx=wx+Math.cos(a)*hexR, hy=470+Math.sin(a)*hexR; s?ctx.lineTo(hx,hy):ctx.moveTo(hx,hy); }
+    ctx.closePath(); ctx.stroke(); ctx.restore();
+  } else {                                                                                  // slam/flurry: player reticle (recolored)
+    ctx.save(); ctx.globalAlpha=0.7; ctx.strokeStyle=col; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(yx,470,18,0,6.283); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(yx-24,470); ctx.lineTo(yx+24,470); ctx.moveTo(yx,446); ctx.lineTo(yx,494); ctx.stroke(); ctx.restore();
+  }
 }
 function drawBossBanner(w){
   const a=clamp(G.battleIntro/BOSS_INTRO_T,0,1);
@@ -2866,6 +2932,15 @@ function drawBattle(){
   const bWind = (w.boss && w.tele>0) ? (1 - w.tele/TELE_WINDUP) : wWind;
   drawMon(you.sp, yx - io*300 - sw*260, 470 - Math.abs(Math.sin(G.t*3))*4, 44, 1, G.t*1.2, {bob:you.bob, hurt:you.hurt>0, lunge:you.lunge, wind:youWind, hurtAmt:you.hurt});
   drawMon(w.sp,  wx + io*400, 470, 44 + (w.elite?8:0), -1, G.t*1.2, {bob:w.bob, hurt:w.hurt>0, lunge:w.lunge, wind:bWind, hurtAmt:w.hurt});
+  if(w.boss && w.wardT>0){                                          // persistent shield hugging the boss while warded
+    const a=clamp(w.wardT/WARD_DUR,0,1), puls=0.5+0.5*Math.sin(G.t*6);
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.strokeStyle=MECH_COL.ward;
+    ctx.globalAlpha=(0.30+0.25*puls)*a; ctx.lineWidth=2.5;
+    ctx.beginPath(); ctx.arc(wx,470,52,0,6.283); ctx.stroke();
+    ctx.globalAlpha=(0.12+0.10*puls)*a; ctx.lineWidth=9;            // soft outer bloom
+    ctx.beginPath(); ctx.arc(wx,470,52,0,6.283); ctx.stroke();
+    ctx.restore();
+  }
   hitGlow(yx,you.hurt); hitGlow(wx,w.hurt);
   statusGlow(yx,you); statusGlow(wx,w);
   stunStars(yx, 470 - Math.abs(Math.sin(G.t*3))*4 - 44 - 18, you);
