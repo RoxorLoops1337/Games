@@ -41,10 +41,36 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 21. [x] Richer idle + attack sprite animation — DONE c21.
 22. [x] Endless post-game scaling mode — DONE c22.
 23. [x] Status-effect visual polish — DONE c23.
-24. [ ] Online Cloudflare KV leaderboard (functions/api/, deferred from #15).
+24. [x] Online Cloudflare KV leaderboard — DONE c24.
+25. [ ] Settings menu (music/SFX volume sliders, reduced-motion toggle dialing down c21 anims, colorblind-friendly type colors, name entry for the board).
+26. [ ] New element type + species that use it (e.g. Ice or Wind), with type-chart + biome/boss wiring.
+27. [ ] Party synergies / auras (type-pair or full-team bonuses that reward deliberate team-building).
+28. [ ] Boss telegraph & mechanic variety (distinct wind-ups/patterns per boss, readable tells).
+29. [ ] Deeper relics/trinkets + set bonuses (collect-N-of-a-kind effects, more build variety).
+30. [ ] Seeded shareable run codes (extend the c17 daily seed to arbitrary copy/paste seeds).
+31. [ ] Codex / lore screen (per-species flavor, type guide, mechanics reference).
+32. [ ] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe).
+33. [ ] Difficulty presets (Casual/Normal/Hard modifiers layered cleanly over ascension).
+34. [ ] Achievement chains / tiered milestones (multi-step goals with escalating essence).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c24 — Online Cloudflare KV leaderboard** (studio: backend-designer, client-integration-designer, lead,
+  engineer, QA). A global best-distance board mirroring the proven No Room For Heroes pattern. NEW Pages
+  Function functions/api/wildwalk_board.js (own KV binding WWBOARD, distinct from NRFH's BOARD): GET → {top},
+  POST {name,dist,tier} sanitizes name ([\w \-.'], 16 chars), clamps dist [1,100000]/tier [1,999], keeps
+  best-per-name by dist, 30s per-IP throttle (expirationTtl:60), caps 50, board key ww:top; returns 503 (never
+  500) when the binding is absent so the game just hides the board. Client Board object (fetchTop/submit) is
+  triple-guarded (typeof globalThis.fetch + try/catch at the sync call site + .catch on the promise) so a
+  relative-URL fetch that throws/rejects in node can't break anything; gameOver fires a best-effort submit that
+  cannot block/throw. RECORDS screen gained LOCAL | GLOBAL tabs (local table unchanged; global shows
+  loading/offline/empty/populated, all row fields coerced) + a Set-Name prompt (guarded) writing additive
+  Dex.data.playerName. New tests/wildwalk_board.test.mjs (19, mockKV enforcing ttl>=60) wired into the check
+  script; +23 client tests (fetchTop/submit under stubbed fetch: loaded/!ok/reject/sync-throw/absent; gameOver
+  stays sync under all failure modes; save-shape incl. playerName across all 8 arrays; full offline run). Game
+  stays fully playable offline. 182/182 wildwalk + 19/19 board, 0 flakes. Completed the 24-item roadmap;
+  appended #25–34 (settings, new type, synergies, boss mechanics, relic sets, shareable seeds, codex, skins,
+  difficulty presets, achievement chains) so the studio keeps going.
 - **c23 — Status-effect readout polish** (studio: combat-ux-designer, vfx-designer, lead, engineer, QA).
   Made the existing status pips clearer, all purely visual (reads only transient m.status.* + the duration
   consts; writes nothing): (1) DEPLETION BARS under each countdown pip — a 14×2px bar whose fill = remaining/max
