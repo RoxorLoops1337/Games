@@ -36,7 +36,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 16. [x] More species + 2nd-tier evolutions — DONE c16.
 17. [x] Daily-seed challenge run — DONE c17.
 18. [x] Prestige / ascension — DONE c18.
-19. [ ] Guided tutorial / first-run onboarding.
+19. [x] Guided tutorial / first-run onboarding — DONE c19.
 20. [ ] More biomes + biome-specific boss variety.
 21. [ ] Animated multi-frame sprites / richer idle+attack animation.
 22. [ ] Endless post-game scaling mode.
@@ -45,6 +45,18 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c19 — Guided tutorial / first-run onboarding** (studio: designer, ux-designer, lead, engineer, QA).
+  A first-run coach-mark overlay. One additive Dex.data flag tutorialDone:false; TUT_STEPS = 4 ordered
+  tips keyed to the first entry of each core state (walk, battle, choice, crossroads). tutStep() (called
+  each frame before draw) raises G.tutActive for the first unseen step matching G.state while
+  !tutorialDone; drawTut() renders a translucent top-center card (title + wrapped body + 'Tap to continue')
+  that never covers the action buttons. onClick's FIRST line dismisses any active tip and swallows the
+  click (coach-mark gating — you tap once to dismiss, again to act), so it can't accidentally fire CATCH.
+  Completing all 4 in a run (or a title-screen 'Skip Tutorial' button) sets tutorialDone+saves; once done
+  it never shows again. G.tutSeen/tutActive reset every run. ZERO combat/spawn/reward/balance code touched.
+  +7 deterministic tests (incl. input-gating drives a real canvas click and asserts the catch did NOT fire);
+  test harness boot() baseline set to tutorialDone:true so combat suites aren't intercepted. 145/145, 0 flakes.
+  All 8 save-shape arrays updated. Back-compat: old saves default tutorialDone=false and get the onboarding.
 - **c18 — Prestige / ascension** (studio: designer, ux-designer, lead, engineer, QA). An opt-in
   difficulty ladder for bonus essence. Dex.data.ascension {max,sel} added additively (max unlocked,
   sel chosen 0..max, cap 8). Each level A stacks: wild & boss HP ×(1+0.12A), ATK ×(1+0.10A), −1
