@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Card Lab — The Collection</title>
+<style>
+/* Editor chrome only. The card's own CSS + design tokens are extracted
+   live from index.html (between the @tokens / @card-css markers), and the
+   card markup comes from the game's __TC.cardHTML via a hidden iframe —
+   so this tool can never drift from what the game actually renders. */
+.lab-body{
+  margin:0; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Arial,sans-serif;
+  background:#f2e7d1; color:#3a2f20; min-height:100vh;
+}
+.lab-top{
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+  padding:14px 18px; background:#fdf8ec; border-bottom:1px solid #dccbaa;
+}
+.lab-top h1{font-family:Georgia,serif; font-size:18px; margin:0;}
+.lab-top a{color:#1f8a6d; font-size:13px; text-decoration:none; font-weight:600;}
+.lab-wrap{display:flex; flex-wrap:wrap; gap:18px; padding:18px; align-items:flex-start; justify-content:center;}
+.lab-stage-col{flex:0 1 460px; min-width:300px; position:sticky; top:12px;}
+#stage{
+  border-radius:14px; padding:26px; display:flex; align-items:center; justify-content:center;
+  min-height:480px; transition:background 200ms ease;
+}
+#stage.room-day{background:#efe4cd; background-image:radial-gradient(rgba(58,47,32,.06) 1px, transparent 1.2px); background-size:17px 17px;}
+#stage.room-night{background:radial-gradient(ellipse at 50% 30%, #332a5e, #171233 78%);}
+#cardbox{width:320px; max-width:80vw;}
+.stage-ctl{display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin-top:12px; font-size:12px;}
+.stage-ctl label{display:flex; align-items:center; gap:6px;}
+.drop-hint{font-size:11.5px; color:#75644c; margin-top:8px; font-family:Menlo,monospace;}
+#stage.dragover{outline:3px dashed #1f8a6d; outline-offset:-8px;}
+.lab-panel{flex:1 1 340px; max-width:460px; display:flex; flex-direction:column; gap:14px;}
+.pgroup{background:#fdf8ec; border:1px solid #dccbaa; border-radius:12px; padding:14px 16px;}
+.pgroup h2{font-size:13px; margin:0 0 10px; text-transform:uppercase; letter-spacing:.06em; color:#75644c; font-family:Menlo,monospace;}
+.pgroup select, .pgroup input[type=file]{width:100%; padding:9px; border-radius:8px; border:1px solid #dccbaa; background:#fffdf6; font-size:13px; color:#3a2f20;}
+.knob{display:grid; grid-template-columns:1fr 64px; gap:2px 10px; align-items:center; margin-bottom:9px;}
+.knob label{font-size:12px;}
+.knob .kv{font-family:Menlo,monospace; font-size:11px; text-align:right; color:#a8731d; font-weight:700;}
+.knob input[type=range]{grid-column:1 / span 2; width:100%; accent-color:#e2a04a;}
+.btnrow{display:flex; gap:8px; flex-wrap:wrap;}
+.lab-btn{
+  flex:1; min-width:120px; padding:11px; border-radius:8px; border:none; font-size:13px; font-weight:700;
+  background:#e2a04a; color:#2a1c08; cursor:pointer;
+}
+.lab-btn.ghost{background:transparent; border:1.5px solid #1f8a6d; color:#1f8a6d;}
+.lab-btn:active{transform:scale(.97);}
+#status{font-size:12px; color:#1f8a6d; min-height:16px; font-family:Menlo,monospace;}
+.tierrow{display:flex; gap:6px; flex-wrap:wrap;}
+.tierrow button{
+  flex:1; padding:7px 4px; border-radius:8px; border:1px solid #dccbaa; background:#fffdf6;
+  font-size:10.5px; font-family:Menlo,monospace; font-weight:700; cursor:pointer; color:#3a2f20; white-space:nowrap;
+}
+.tierrow button.on{border-color:#e2a04a; background:#fdf1da;}
+#loaderr{color:#c85f2c; font-size:13px; padding:0 18px;}
+</style>
+</head>
+<body class="lab-body">
+<div class="lab-top">
+  <h1>Card Lab</h1>
+  <a href="./">&larr; back to the game</a>
+</div>
+<div id="loaderr"></div>
+<div class="lab-wrap">
+  <div class="lab-stage-col">
+    <div id="stage" class="room-day"><div id="cardbox"></div></div>
+    <div class="stage-ctl">
+      <label>Card size <input type="range" id="sizer" min="220" max="420" value="320"></label>
+      <label><input type="checkbox" id="roomtoggle"> night room</label>
+      <label><input type="checkbox" id="badgetoggle"> show NEW badge</label>
+    </div>
+    <div class="drop-hint">Drop an image on the card to preview it as this card's art (preview only — save the file as art/&lt;id&gt;.png to keep it).</div>
+  </div>
+  <div class="lab-panel">
+    <div class="pgroup">
+      <h2>Card</h2>
+      <select id="cardpick"></select>
+      <div class="tierrow" id="tierrow" style="margin-top:10px;"></div>
+      <input type="file" id="artfile" accept="image/*" style="margin-top:10px;">
+    </div>
+    <div class="pgroup">
+      <h2>Design knobs</h2>
+      <div id="knobs"></div>
+    </div>
+    <div class="pgroup">
+      <h2>Export</h2>
+      <div class="btnrow">
+        <button class="lab-btn" id="btn-copy">Copy design.json</button>
+        <button class="lab-btn ghost" id="btn-download">Download</button>
+        <button class="lab-btn ghost" id="btn-reset">Reset all</button>
+      </div>
+      <p id="status"></p>
+      <p style="font-size:11.5px; color:#75644c; margin:6px 0 0;">
+        Put <b>design.json</b> next to the game's index.html (the <code>the_collection/</code> folder)
+        and the game applies it automatically on load.
+      </p>
+    </div>
+  </div>
+</div>
+
+<iframe id="game" src="index.html" style="position:absolute; width:2px; height:2px; opacity:0; pointer-events:none; left:-9999px;" title="game (data source)"></iframe>
+
+<script>
+(function(){
+'use strict';
+
+var KNOBS = [
+  { v: '--tcg-frame-pad',    label: 'Frame thickness',   min: 3,   max: 14,  step: 0.5,  def: 7,   unit: 'px' },
+  { v: '--tcg-radius',       label: 'Corner radius',     min: 6,   max: 22,  step: 1,    def: 12,  unit: 'px' },
+  { v: '--tcg-inner-radius', label: 'Inner radius',      min: 2,   max: 16,  step: 1,    def: 7,   unit: 'px' },
+  { v: '--tcg-art-h',        label: 'Art height',        min: 42,  max: 70,  step: 1,    def: 56,  unit: '%'  },
+  { v: '--tcg-scrim-h',      label: 'Header scrim height', min: 26, max: 80, step: 2,    def: 46,  unit: 'px' },
+  { v: '--tcg-scrim-a',      label: 'Header scrim darkness', min: 0.2, max: 1, step: 0.05, def: 0.7, unit: '' },
+  { v: '--tcg-name-fs',      label: 'Name size',         min: 10,  max: 22,  step: 0.5,  def: 14,  unit: 'px' },
+  { v: '--tcg-pow-fs',       label: 'POW size',          min: 10,  max: 22,  step: 0.5,  def: 15,  unit: 'px' },
+  { v: '--tcg-chip-fs',      label: 'Tier chip size',    min: 6,   max: 11,  step: 0.5,  def: 7.5, unit: 'px' },
+  { v: '--tcg-orb',          label: 'Type orb size',     min: 10,  max: 22,  step: 1,    def: 15,  unit: 'px' },
+  { v: '--tcg-move-name-fs', label: 'Move name size',    min: 9,   max: 18,  step: 0.5,  def: 13,  unit: 'px' },
+  { v: '--tcg-move-dmg-fs',  label: 'Damage size',       min: 9,   max: 19,  step: 0.5,  def: 13.5, unit: 'px' },
+  { v: '--tcg-move-text-fs', label: 'Effect text size',  min: 6.5, max: 13,  step: 0.5,  def: 9,   unit: 'px' },
+  { v: '--tcg-flavor-fs',    label: 'Flavor size',       min: 6.5, max: 12,  step: 0.5,  def: 8.5, unit: 'px' },
+  { v: '--tcg-foot-fs',      label: 'Footer size',       min: 6,   max: 10,  step: 0.5,  def: 7.5, unit: 'px' },
+  { v: '--tcg-body-pad',     label: 'Body padding',      min: 3,   max: 14,  step: 1,    def: 7,   unit: 'px' },
+  { v: '--tcg-body-gap',     label: 'Body row gap',      min: 1,   max: 10,  step: 1,    def: 4,   unit: 'px' },
+  { v: '--tcg-energy',       label: 'Energy dot size',   min: 7,   max: 15,  step: 0.5,  def: 10,  unit: 'px' },
+  { v: '--tcg-sheen-a',      label: 'Holo sheen strength', min: 0, max: 1,   step: 0.05, def: 1,   unit: '' },
+  { v: '--tcg-foil-speed',   label: 'Gold foil speed',   min: 1,   max: 9,   step: 0.5,  def: 4,   unit: 's' },
+];
+var TIERS_ORDER = ['common', 'uncommon', 'rare', 'rareholo', 'doublerare', 'ultrarare'];
+
+var TC = null;
+var currentId = 'c013';
+var artOverride = {};   // id -> objectURL (session-only previews)
+var values = {};        // knob var -> current numeric value
+
+function $(id){ return document.getElementById(id); }
+
+/* ---- pull the game's tokens + card CSS so this preview can't drift ---- */
+function extractCSS(html, startMark, endMark){
+  var a = html.indexOf(startMark);
+  var b = html.indexOf(endMark);
+  if (a === -1 || b === -1 || b <= a) return null;
+  var chunk = html.slice(a, b);
+  return chunk.slice(chunk.indexOf('*/') + 2);
+}
+
+fetch('index.html').then(function(r){ return r.text(); }).then(function(html){
+  var tokens = extractCSS(html, '/* @tokens-start', '/* @tokens-end */');
+  var cardCss = extractCSS(html, '/* @card-css-start', '/* @card-css-end */');
+  if (!tokens || !cardCss) throw new Error('markers not found');
+  var style = document.createElement('style');
+  style.textContent = tokens + '\n' + cardCss;
+  document.head.appendChild(style);
+}).catch(function(e){
+  $('loaderr').textContent = 'Could not extract card CSS from index.html (' + e.message + ') — preview may look wrong.';
+});
+
+/* ---- get the game's data + renderer from the hidden iframe ---- */
+function waitForTC(tries){
+  var frame = $('game');
+  var tc = null;
+  try { tc = frame.contentWindow && frame.contentWindow.__TC; } catch (e) {}
+  if (tc && tc.cardHTML) {
+    TC = tc;
+    initUI();
+    return;
+  }
+  if (tries > 100) {
+    $('loaderr').textContent = 'Could not reach the game data (__TC) — open this page from the same folder as index.html.';
+    return;
+  }
+  setTimeout(function(){ waitForTC(tries + 1); }, 100);
+}
+waitForTC(0);
+
+/* ---- UI ---- */
+function initUI(){
+  var pick = $('cardpick');
+  pick.innerHTML = TC.CORE_SET.map(function(c){
+    return '<option value="' + c.id + '">#' + c.id.slice(1) + '  ' + c.name + '  — ' + TC.TIER_BY_KEY[c.tier].name + ' (' + c.type + ')</option>';
+  }).join('');
+  pick.value = currentId;
+  pick.addEventListener('change', function(){ currentId = pick.value; render(); });
+
+  var tr = $('tierrow');
+  tr.innerHTML = TIERS_ORDER.map(function(t){
+    return '<button data-tier="' + t + '">' + (TC.TIER_CHIP[t] || t) + '</button>';
+  }).join('');
+  tr.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){
+      var card = TC.CORE_SET.find(function(c){ return c.tier === b.getAttribute('data-tier'); });
+      if (card) { currentId = card.id; pick.value = card.id; render(); }
+    });
+  });
+
+  var knobsEl = $('knobs');
+  knobsEl.innerHTML = KNOBS.map(function(k, i){
+    return '<div class="knob">' +
+      '<label for="k' + i + '">' + k.label + '</label>' +
+      '<span class="kv" id="kv' + i + '">' + k.def + k.unit + '</span>' +
+      '<input type="range" id="k' + i + '" min="' + k.min + '" max="' + k.max + '" step="' + k.step + '" value="' + k.def + '">' +
+    '</div>';
+  }).join('');
+  KNOBS.forEach(function(k, i){
+    values[k.v] = k.def;
+    $('k' + i).addEventListener('input', function(){
+      values[k.v] = parseFloat(this.value);
+      $('kv' + i).textContent = this.value + k.unit;
+      $('stage').style.setProperty(k.v, this.value + k.unit);
+    });
+  });
+
+  $('sizer').addEventListener('input', function(){ $('cardbox').style.width = this.value + 'px'; });
+  $('roomtoggle').addEventListener('change', function(){
+    $('stage').className = this.checked ? 'room-night' : 'room-day';
+  });
+  $('badgetoggle').addEventListener('change', render);
+  $('artfile').addEventListener('change', function(){
+    if (this.files && this.files[0]) setArtOverride(this.files[0]);
+  });
+
+  var stage = $('stage');
+  stage.addEventListener('dragover', function(e){ e.preventDefault(); stage.classList.add('dragover'); });
+  stage.addEventListener('dragleave', function(){ stage.classList.remove('dragover'); });
+  stage.addEventListener('drop', function(e){
+    e.preventDefault();
+    stage.classList.remove('dragover');
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) setArtOverride(e.dataTransfer.files[0]);
+  });
+
+  $('btn-copy').addEventListener('click', function(){
+    var json = exportJSON();
+    (navigator.clipboard ? navigator.clipboard.writeText(json) : Promise.reject()).then(function(){
+      $('status').textContent = 'Copied to clipboard ✓';
+    }, function(){
+      $('status').textContent = 'Clipboard blocked — use Download instead.';
+    });
+  });
+  $('btn-download').addEventListener('click', function(){
+    var blob = new Blob([exportJSON()], { type: 'application/json' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'design.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    $('status').textContent = 'Downloaded design.json ✓';
+  });
+  $('btn-reset').addEventListener('click', function(){
+    KNOBS.forEach(function(k, i){
+      values[k.v] = k.def;
+      $('k' + i).value = k.def;
+      $('kv' + i).textContent = k.def + k.unit;
+      $('stage').style.removeProperty(k.v);
+    });
+    $('status').textContent = 'Back to defaults.';
+  });
+
+  render();
+}
+
+function exportJSON(){
+  var out = {};
+  KNOBS.forEach(function(k){ out[k.v] = values[k.v] + k.unit; });
+  return JSON.stringify(out, null, 2);
+}
+
+function setArtOverride(file){
+  if (artOverride[currentId]) URL.revokeObjectURL(artOverride[currentId]);
+  artOverride[currentId] = URL.createObjectURL(file);
+  render();
+}
+
+function render(){
+  var card = TC.CORE_SET.find(function(c){ return c.id === currentId; });
+  if (!card) return;
+  var badges = $('badgetoggle').checked ? '<span class="badge new">NEW</span>' : '';
+  $('cardbox').innerHTML = TC.cardHTML(card, { badges: badges });
+  var artEl = $('cardbox').querySelector('[data-art]');
+  if (!artEl) return;
+  if (artOverride[currentId]) {
+    artEl.style.backgroundImage = 'url(' + artOverride[currentId] + ')';
+    return;
+  }
+  // owner art on disk beats the procedural scene, same rule as the game
+  var img = new Image();
+  img.onload = function(){ artEl.style.backgroundImage = 'url(art/' + card.id + '.png)'; };
+  img.src = 'art/' + card.id + '.png';
+}
+})();
+</script>
+</body>
+</html>
