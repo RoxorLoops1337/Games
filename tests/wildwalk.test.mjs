@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),DIFFS,setDifficulty:(id)=>setDifficulty(id),diffHpMul:()=>diffHpMul(),diffAtkMul:()=>diffAtkMul(),diffEssMul:()=>diffEssMul(),diffCatchMul:()=>diffCatchMul(),diffGoldMul:()=>diffGoldMul(),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openCodex:(f)=>openCodex(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),SKINS,buySkin:(id)=>buySkin(id),equipSkin:(id)=>equipSkin(id),equippedSkin:()=>equippedSkin(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),isEndless:(t)=>isEndless(t),endlessDepth:(t)=>endlessDepth(t),ENDLESS_TIER,BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,RELIC_SETS,SET_THRESHOLD,relicSetCount:(s)=>relicSetCount(s),setActive:(s)=>setActive(s),setAtkMul:(d)=>setAtkMul(d),buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),bossFlurry:(w,d)=>bossFlurry(w,d),bossWard:(w)=>bossWard(w),armBossMech:(w)=>armBossMech(w),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,CHILL_DUR,CHILL_MUL,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE,WARD_DUR,WARD_MUL,FLURRY_HITS,FLURRY_HIT_MUL,BOSS_HEAVY_MUL},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,ACH_PER_PAGE,achPages:()=>achPages(),openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,RARES,LEGENDS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS,reseed:(n)=>reseed(n),dayInt:(d)=>dayInt(d),dailySeedFor:(x)=>dailySeedFor(x),startDaily:()=>startDaily(),startSeededRun:(s)=>startSeededRun(s),seedToRunCode:(s)=>seedToRunCode(s),runCodeToSeed:(c)=>runCodeToSeed(c),DAILY_POOL,ascHpMul:()=>ascHpMul(),ascAtkMul:()=>ascAtkMul(),ascEssenceMul:()=>ascEssenceMul(),ascSel:(d)=>ascSel(d),DIFFS,setDifficulty:(id)=>setDifficulty(id),diffHpMul:()=>diffHpMul(),diffAtkMul:()=>diffAtkMul(),diffEssMul:()=>diffEssMul(),diffCatchMul:()=>diffCatchMul(),diffGoldMul:()=>diffGoldMul(),tutStep:()=>tutStep(),dismissTut:()=>dismissTut(),skipTutorial:()=>skipTutorial(),TUT_STEPS,Board,ensureBoard:()=>ensureBoard(),openRecords:(f)=>openRecords(f),openCodex:(f)=>openCodex(f),openSettings:(f)=>openSettings(f),gset:()=>gset(),applyPalette:()=>applyPalette(),applyAudioSettings:()=>applyAudioSettings(),reducedMotion:()=>reducedMotion(),motionAmt:()=>motionAmt(),musicBaseGain:()=>musicBaseGain(),sfxScale:()=>sfxScale(),sliderRect:(w)=>sliderRect(w),computeSynergies:()=>computeSynergies(),updateSynergies:()=>updateSynergies(),refreshTeamStats:()=>refreshTeamStats(),synAtkMul:(d)=>synAtkMul(d),synGuard:()=>synGuard(),SKINS,buySkin:(id)=>buySkin(id),equipSkin:(id)=>equipSkin(id),equippedSkin:()=>equippedSkin(),TYPE_COL,TYPE_COL_CB,TYPE_COL_DEFAULT};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -1597,9 +1597,9 @@ test('ACH1 old save (no ach) loads and new fields default', ()=>{
   assert(typeof D.upgrades==='object' && Object.keys(D.upgrades).length===0, 'upgrades not intact');
 });
 
-test('ACH2 well-formed table (16 rows, unique ids, essence rewards)', ()=>{
+test('ACH2 well-formed table (20 rows, unique ids, essence rewards)', ()=>{
   const { ACH } = boot().api;
-  assert(ACH.length===16, `expected 16 achievements, got ${ACH.length}`);
+  assert(ACH.length===20, `expected 20 achievements, got ${ACH.length}`);
   const ids=new Set();
   for(const a of ACH){
     assert(a.id && a.icon && a.name && a.desc, `${a.id}: missing field`);
@@ -1707,13 +1707,22 @@ test('ENDLESS achievements tier_15/tier_20 present, gate on bestTier, grant once
   assert(D.essence===e2, `endless ach re-granted on repeat (${e2}->${D.essence})`);
 });
 
-test('ENDLESS achievements grid fits 8 rows above the back button (y=540)', ()=>{
+test('ENDLESS achievements grid: each page fits 8 rows above the back button (y=540)', ()=>{
   const { api } = boot();
-  // Mirror drawAchievements geometry: y = 96 + row*54, card h = 50.
-  const rows = Math.ceil(api.ACH.length/2);
-  assert(rows===8, `expected 8 rows for ${api.ACH.length} entries, got ${rows}`);
-  const lastRowBottom = 96 + (rows-1)*54 + 50;
+  // Paging keeps every page <= ACH_PER_PAGE (16 = 8 rows x 2 cols). Mirror
+  // drawAchievements geometry: y = 96 + row*54, card h = 50.
+  assert(api.ACH_PER_PAGE===16, `ACH_PER_PAGE ${api.ACH_PER_PAGE} != 16`);
+  const rowsPerPage = Math.ceil(api.ACH_PER_PAGE/2);
+  assert(rowsPerPage===8, `expected 8 rows/page, got ${rowsPerPage}`);
+  const lastRowBottom = 96 + (rowsPerPage-1)*54 + 50;
   assert(lastRowBottom <= 540, `last row bottom ${lastRowBottom} collides with back button at 540`);
+  // every page holds no more than ACH_PER_PAGE entries
+  const pages = api.achPages();
+  assert(pages === Math.ceil(api.ACH.length/api.ACH_PER_PAGE), `pages ${pages} wrong for ${api.ACH.length} entries`);
+  for(let p=0;p<pages;p++){
+    const n = Math.min(api.ACH_PER_PAGE, api.ACH.length - p*api.ACH_PER_PAGE);
+    assert(n>0 && n<=api.ACH_PER_PAGE, `page ${p} holds ${n} entries`);
+  }
 });
 
 test('ENDLESS presentation does not throw in draw() at an endless tier', ()=>{
@@ -1800,6 +1809,125 @@ test('ACH first_catch requires a wild catch, not the auto-caught starter', ()=>{
   assert(!D.data.ach.first_catch, 'first_catch fired from the auto-caught starter alone');
   D.data.wildCatch = 1; api.checkAch();
   assert(D.data.ach.first_catch===1, 'first_catch did not fire after a real wild catch');
+});
+
+// ===================================================================
+// ACHIEVEMENT CHAINS — tiered milestones (each tier is its own ACH entry,
+// reusing the per-id Dex.data.ach grant map: no save-shape change).
+// ===================================================================
+
+test('CHAIN1 three chains, tiers contiguous 1..n, escalating essence + thresholds', ()=>{
+  const { ACH } = boot().api;
+  const chains = {};
+  for(const a of ACH){ if(a.chain){ (chains[a.chain.key]=chains[a.chain.key]||[]).push(a); } }
+  const keys = Object.keys(chains).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(['boss','collector','tier']), `expected 3 chains, got ${keys}`);
+  for(const k of keys){
+    const arr = chains[k].slice().sort((a,b)=>a.chain.i-b.chain.i);
+    assert(arr.length>=3, `chain ${k} has only ${arr.length} tiers`);
+    arr.forEach((a,idx)=>{
+      assert(a.chain.i===idx+1, `${a.id}: tier index ${a.chain.i} != ${idx+1}`);
+      assert(a.chain.n===arr.length, `${a.id}: chain.n ${a.chain.n} != ${arr.length}`);
+      assert(a.chain.name===arr[0].chain.name, `${a.id}: chain name mismatch`);
+      assert(Number.isFinite(a.chain.thr), `${a.id}: bad chain.thr`);
+    });
+    for(let i=1;i<arr.length;i++){
+      assert(arr[i].essence>arr[i-1].essence, `${k}: essence not escalating at tier ${i+1} (${arr[i-1].essence}->${arr[i].essence})`);
+      assert(arr[i].chain.thr>arr[i-1].chain.thr, `${k}: thr not escalating at tier ${i+1}`);
+    }
+  }
+});
+
+test('CHAIN2 existing ach ids/essence UNCHANGED; new tiers present with expected essence', ()=>{
+  const { ACH } = boot().api;
+  // pre-existing awards folded into chains MUST keep their id + essence (older saves keep them)
+  const unchanged = {first_boss:25, boss_10:80, tier_5:40, tier_10:70, tier_15:100, tier_20:150};
+  for(const [id,ess] of Object.entries(unchanged)){
+    const a = ACH.find(x=>x.id===id);
+    assert(a, `existing ach ${id} vanished`);
+    assert(a.essence===ess, `existing ach ${id} essence changed to ${a.essence} (must stay ${ess})`);
+  }
+  // brand-new chain tiers (new ids only)
+  const added = {coll_5:20, coll_15:45, coll_25:90, boss_50:140};
+  for(const [id,ess] of Object.entries(added)){
+    const a = ACH.find(x=>x.id===id);
+    assert(a, `new chain tier ${id} missing`);
+    assert(a.essence===ess, `new tier ${id} essence ${a.essence} != ${ess}`);
+    assert(a.chain, `new tier ${id} lacks chain metadata`);
+  }
+});
+
+test('CHAIN3 real-path checkAch grants exactly one chain tier once — with NEGATIVE CONTROL', ()=>{
+  const b = boot();
+  const D = b.api.Dex.data;
+  const coll15 = b.api.ACH.find(a=>a.id==='coll_15');
+  assert(coll15 && coll15.essence===45, `coll_15 essence ${coll15&&coll15.essence} != 45`);
+  // Isolate coll_15: mark EVERY other award already earned so only coll_15 can fire.
+  D.ach = {}; for(const a of b.api.ACH){ if(a.id!=='coll_15') D.ach[a.id]=1; }
+  const keys = b.api.SPECIESKEYS;
+  // --- NEGATIVE CONTROL: 14 species (< 15 threshold) -> coll_15 must NOT grant ---
+  D.caught = {}; for(let i=0;i<14;i++) D.caught[keys[i]]=1;
+  assert(b.api.Dex.nCaught()===14, `setup nCaught ${b.api.Dex.nCaught()} != 14`);
+  const e0 = D.essence;
+  b.api.checkAch();
+  assert(!D.ach.coll_15, 'coll_15 fired BELOW its threshold (negative control failed)');
+  assert(D.essence===e0, `negative control granted essence (${e0}->${D.essence})`);
+  // --- cross the threshold: 15 species -> coll_15 grants EXACTLY its essence, once ---
+  D.caught[keys[14]]=1;
+  assert(b.api.Dex.nCaught()===15, `setup nCaught ${b.api.Dex.nCaught()} != 15`);
+  b.api.checkAch();
+  assert(D.ach.coll_15===1, 'coll_15 not granted at 15 species');
+  assert(D.essence===e0+45, `coll_15 grant off: ${D.essence} != ${e0}+45`);
+  // repeat call: award-once, no double grant
+  b.api.checkAch();
+  assert(D.essence===e0+45, `coll_15 re-granted on repeat (${D.essence})`);
+  // persists across reload without re-granting
+  const b2 = boot(b.store['wildwalk_save_v1']);
+  const D2 = b2.api.Dex.data;
+  assert(D2.ach.coll_15===1, 'reload lost coll_15 grant');
+});
+
+test('CHAIN4 chained boss tier stacks on existing boss awards without re-granting them', ()=>{
+  const b = boot();
+  const D = b.api.Dex.data;
+  // isolate boss_50: pre-mark everything else earned (incl. first_boss/boss_10)
+  D.ach = {}; for(const a of b.api.ACH){ if(a.id!=='boss_50') D.ach[a.id]=1; }
+  D.caught = {};
+  // 49 bosses -> below tier-3 threshold (negative control)
+  D.bossKills = 49;
+  const e0 = D.essence;
+  b.api.checkAch();
+  assert(!D.ach.boss_50, 'boss_50 fired below 50 (negative control failed)');
+  assert(D.essence===e0, `boss_50 negative control granted essence (${e0}->${D.essence})`);
+  // 50 bosses -> boss_50 grants 140, first_boss/boss_10 NOT re-granted
+  D.bossKills = 50;
+  b.api.checkAch();
+  assert(D.ach.boss_50===1, 'boss_50 not granted at 50 bosses');
+  assert(D.essence===e0+140, `boss_50 grant off: ${D.essence} != ${e0}+140`);
+});
+
+test('CHAIN5 Awards screen renders with chains present — all pages, both entry points, no throw', ()=>{
+  const b = boot();
+  const api = b.api;
+  const D = api.Dex.data;
+  // a spread: some chain tiers + a standalone earned, the rest locked
+  D.ach = { coll_5:1, first_boss:1, tier_5:1, tier_10:1, kill_25:1 };
+  const pages = api.achPages();
+  assert(pages>=2, `expected paging (>=2 pages) for ${api.ACH.length} entries, got ${pages}`);
+  // from TITLE — walk every page + out-of-range clamps
+  api.openAchievements('title');
+  assert(api.getG().state==='achievements', 'not on achievements screen');
+  assert(api.getG().achPage===0, 'openAchievements did not reset page to 0');
+  for(let p=0;p<pages;p++){ api.getG().achPage=p; api.getG().buttons=[]; api.draw(); }
+  api.getG().achPage=99; api.draw();   // over-range clamps, no throw
+  api.getG().achPage=-5; api.draw();   // under-range clamps, no throw
+  // from GAMEOVER
+  api.openAchievements('gameover');
+  for(let p=0;p<pages;p++){ api.getG().achPage=p; api.draw(); }
+  // paging buttons exist on a multi-page screen
+  api.getG().achPage=0; api.getG().buttons=[]; api.draw();
+  assert(api.getG().buttons.some(x=>x.id==='ach_next'), 'no NEXT button on multi-page awards');
+  assert(api.getG().buttons.some(x=>x.id==='back'), 'no BACK button on awards');
 });
 
 // ===================================================================

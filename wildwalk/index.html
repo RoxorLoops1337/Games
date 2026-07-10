@@ -519,17 +519,33 @@ applyPalette();
 // Predicates read ONLY Dex.data / SPECIES / TYPES so they're headless-evaluable.
 function _caughtTypes(){ const s=new Set(); for(const k in Dex.data.caught){ if(SPECIES[k]) s.add(SPECIES[k].type); } return s; }
 function _caughtMaxRarity(){ let r=-1; for(const k in Dex.data.caught){ if(SPECIES[k]&&SPECIES[k].rarity>r) r=SPECIES[k].rarity; } return r; }
+// ---------- achievement CHAINS ----------
+// Each chain tier is its OWN ACH entry (same {id,icon,name,desc,essence,test} shape) so it
+// reuses the per-id grant + the Dex.data.ach map — NO new persistent state, NO save-shape change.
+// `chain` groups tiers on the Awards screen: {key,name,i,n,thr} (i=1-based tier, n=total, thr=threshold).
+// Chain members are laid out contiguously in tier order so the screen reads them as a progression.
+// NOTE: first_boss/boss_10 and tier_5..tier_20 pre-date the chain feature — they are folded into
+// their chains (chain field added) WITHOUT changing any existing id or essence, so older saves keep
+// what they earned and nothing is ever re-granted.
 const ACH = [
   {id:'first_catch',  icon:'🎯', name:'First Friend',    desc:'Catch a monster in the wild',   essence:15,  test:()=> (Dex.data.wildCatch||0)>=1 },
   {id:'type_collector',icon:'🌈',name:'Full Spectrum',   desc:'Catch one of every type',        essence:40,  test:()=> _caughtTypes().size===TYPES.length },
   {id:'catch_rare',   icon:'💠', name:'Rare Find',       desc:'Catch a Rare',                   essence:30,  test:()=> _caughtMaxRarity()>=2 },
   {id:'catch_legend', icon:'👑', name:'Legend Keeper',   desc:'Catch a Legendary',              essence:60,  test:()=> _caughtMaxRarity()>=3 },
-  {id:'first_boss',   icon:'⚔️', name:'Boss Slayer',     desc:'Defeat your first boss',         essence:25,  test:()=> (Dex.data.bossKills||0)>=1 },
-  {id:'boss_10',      icon:'🏆', name:'Titan Bane',      desc:'Defeat 10 bosses',               essence:80,  test:()=> (Dex.data.bossKills||0)>=10 },
-  {id:'tier_5',       icon:'🧭', name:'Trailblazer',     desc:'Reach tier 5',                   essence:40,  test:()=> (Dex.data.bestTier||0)>=5 },
-  {id:'tier_10',      icon:'🗺️', name:'Voidwalker',      desc:'Reach tier 10',                  essence:70,  test:()=> (Dex.data.bestTier||0)>=10 },
-  {id:'tier_15',      icon:'🌌', name:'Abyssbound',      desc:'Reach tier 15',                  essence:100, test:()=> (Dex.data.bestTier||0)>=15 },
-  {id:'tier_20',      icon:'♾️', name:'Endless Wanderer', desc:'Reach tier 20',                  essence:150, test:()=> (Dex.data.bestTier||0)>=20 },
+  // --- Collector chain (species caught) ---
+  {id:'coll_5',       icon:'🐣', name:'Collector I',     desc:'Catch 5 species',                essence:20,  chain:{key:'collector',name:'Collector',i:1,n:3,thr:5},  test:()=> Dex.nCaught()>=5 },
+  {id:'coll_15',      icon:'🐥', name:'Collector II',    desc:'Catch 15 species',               essence:45,  chain:{key:'collector',name:'Collector',i:2,n:3,thr:15}, test:()=> Dex.nCaught()>=15 },
+  {id:'coll_25',      icon:'🦉', name:'Collector III',   desc:'Catch 25 species',               essence:90,  chain:{key:'collector',name:'Collector',i:3,n:3,thr:25}, test:()=> Dex.nCaught()>=25 },
+  // --- Boss Hunter chain (bosses defeated) — first two tiers pre-existed as first_boss/boss_10 ---
+  {id:'first_boss',   icon:'⚔️', name:'Boss Slayer',     desc:'Defeat your first boss',         essence:25,  chain:{key:'boss',name:'Boss Hunter',i:1,n:3,thr:1},   test:()=> (Dex.data.bossKills||0)>=1 },
+  {id:'boss_10',      icon:'🏆', name:'Titan Bane',      desc:'Defeat 10 bosses',               essence:80,  chain:{key:'boss',name:'Boss Hunter',i:2,n:3,thr:10},  test:()=> (Dex.data.bossKills||0)>=10 },
+  {id:'boss_50',      icon:'☠️', name:'Titan Reaper',    desc:'Defeat 50 bosses',               essence:140, chain:{key:'boss',name:'Boss Hunter',i:3,n:3,thr:50},  test:()=> (Dex.data.bossKills||0)>=50 },
+  // --- Trailblazer chain (best tier reached) — all four tiers pre-existed ---
+  {id:'tier_5',       icon:'🧭', name:'Trailblazer',     desc:'Reach tier 5',                   essence:40,  chain:{key:'tier',name:'Trailblazer',i:1,n:4,thr:5},   test:()=> (Dex.data.bestTier||0)>=5 },
+  {id:'tier_10',      icon:'🗺️', name:'Voidwalker',      desc:'Reach tier 10',                  essence:70,  chain:{key:'tier',name:'Trailblazer',i:2,n:4,thr:10},  test:()=> (Dex.data.bestTier||0)>=10 },
+  {id:'tier_15',      icon:'🌌', name:'Abyssbound',      desc:'Reach tier 15',                  essence:100, chain:{key:'tier',name:'Trailblazer',i:3,n:4,thr:15},  test:()=> (Dex.data.bestTier||0)>=15 },
+  {id:'tier_20',      icon:'♾️', name:'Endless Wanderer', desc:'Reach tier 20',                  essence:150, chain:{key:'tier',name:'Trailblazer',i:4,n:4,thr:20},  test:()=> (Dex.data.bestTier||0)>=20 },
+  // --- standalone milestones ---
   {id:'release_25',   icon:'🕊️', name:'Merciful',        desc:'Release 25 monsters',            essence:35,  test:()=> (Dex.data.released||0)>=25 },
   {id:'kill_25',      icon:'💀', name:'Reaper',          desc:'Slay 25 monsters',               essence:35,  test:()=> (Dex.data.killed||0)>=25 },
   {id:'full_party',   icon:'🐾', name:'Full House',      desc:'Win a fight with a full party of 4', essence:25, test:()=> (Dex.data.fullPartyWin||0)>=1 },
@@ -537,6 +553,8 @@ const ACH = [
   {id:'bank_500',     icon:'✦', name:'Hoarder',         desc:'Bank 500 essence',               essence:20,  test:()=> (Dex.data.essence||0)>=500 },
   {id:'dist_1000',    icon:'🚩', name:'Marathoner',      desc:'Reach 1000m in a run',           essence:50,  test:()=> (Dex.data.best||0)>=1000 },
 ];
+const ACH_PER_PAGE = 16;   // 8 rows x 2 columns fit above the BACK button (see drawAchievements)
+function achPages(){ return Math.max(1, Math.ceil(ACH.length/ACH_PER_PAGE)); }
 function award(id){
   if(Dex.data.ach[id]) return false;                 // exactly-once gate
   const a=ACH.find(x=>x.id===id); if(!a) return false;
@@ -2560,7 +2578,7 @@ function draw(){
 // ===================================================================
 function dexStatus(key){ return Dex.data.caught[key]?2:(Dex.data.seen[key]?1:0); }
 function openPokedex(from){ G.pokedexFrom=from; G.pokedexSel=null; G.state='pokedex'; clearButtons(); }
-function openAchievements(from){ G.achFrom=from; G.state='achievements'; clearButtons(); }
+function openAchievements(from){ G.achFrom=from; G.state='achievements'; G.achPage=0; clearButtons(); }
 function openRecords(from){
   G.recordsFrom=from; G.state='records';
   G.recordsTab='local'; G.boardData=undefined; G.boardFetching=false;
@@ -2710,11 +2728,17 @@ function drawPokedex(){
 // ===================================================================
 // Achievements — single-page ledger over Dex.data.ach (award-once)
 // ===================================================================
+// per-chain accent so grouped tiers read as one progression on the Awards screen
+const CHAIN_COL={collector:'#7fe0a8', boss:'#ff9b6f', tier:'#8fb0ff'};
 function drawAchievements(){
   ctx.fillStyle='#12162a'; ctx.fillRect(0,0,W,H);
   centerText('ACHIEVEMENTS', W/2, 44, '900 40px Segoe UI', '#ffe9a8');
   centerText('Unlocked '+achCount()+' / '+ACH.length, W/2, 72, '700 16px Segoe UI', '#c9b8ff');
-  ACH.forEach((a,i)=>{
+  const pages=achPages();
+  let page=G.achPage||0; if(page<0) page=0; if(page>=pages) page=pages-1; G.achPage=page;
+  const start=page*ACH_PER_PAGE;
+  const slice=ACH.slice(start, start+ACH_PER_PAGE);
+  slice.forEach((a,i)=>{
     const x=22+(i%2)*468, y=96+((i/2|0))*54, w=450, h=50;
     const on=!!Dex.data.ach[a.id];
     ctx.save();
@@ -2722,6 +2746,8 @@ function drawAchievements(){
     roundRect(x,y,w,h,10); ctx.fillStyle=on?'#1a2138':'#0e1324'; ctx.fill();
     ctx.restore();
     ctx.lineWidth=2; ctx.strokeStyle=on?'#ffe9a8':'#1a2138'; roundRect(x,y,w,h,10); ctx.stroke();
+    // chain accent: colored left bar so tiers of a chain visually group
+    if(a.chain){ const cc=CHAIN_COL[a.chain.key]||'#8fb0ff'; ctx.fillStyle=cc; ctx.globalAlpha=on?1:0.45; roundRect(x,y,5,h,3); ctx.fill(); ctx.globalAlpha=1; }
     ctx.textAlign='left';
     ctx.font='700 22px Segoe UI'; ctx.fillStyle=on?'#eaf0ff':'#5a6688';
     ctx.fillText(on?a.icon:'🔒', x+14, y+34);
@@ -2731,10 +2757,23 @@ function drawAchievements(){
     ctx.fillText(a.desc, x+56, y+40);
     ctx.textAlign='right'; ctx.font='700 14px Segoe UI'; ctx.fillStyle=on?'#ffe9a8':'#5a6688';
     ctx.fillText('✦ +'+a.essence, x+w-16, y+22);
+    // chain progress line: 'Collector 2/3 — next at 15' (or 'complete' at the top earned tier)
+    if(a.chain){
+      const c=a.chain, cc=CHAIN_COL[c.key]||'#8fb0ff';
+      const tag = on ? (c.i>=c.n ? (c.name+' '+c.i+'/'+c.n+' — complete') : (c.name+' '+c.i+'/'+c.n))
+                     : (c.name+' '+c.i+'/'+c.n+' — next at '+c.thr);
+      ctx.font='700 11px Segoe UI'; ctx.fillStyle=on?cc:'#5a6688';
+      ctx.fillText(tag, x+w-16, y+40);
+    }
     ctx.textAlign='left';
   });
   clearButtons();
-  btn('back', W/2-90, 540, 180, 40, '◀  BACK', null, {col:'#2a3355'});
+  if(pages>1){
+    centerText('Page '+(page+1)+' / '+pages, W/2, 534, '700 13px Segoe UI', '#8fa0c8');
+    btn('ach_prev', W/2-270, 540, 150, 40, '◀ PREV', null, {col:'#2a3355', enabled:page>0});
+    btn('ach_next', W/2+120, 540, 150, 40, 'NEXT ▶', null, {col:'#2a3355', enabled:page<pages-1});
+  }
+  btn('back', W/2-75, 540, 150, 40, '◀  BACK', null, {col:'#2a3355'});
   drawButtons();
 }
 
@@ -3703,7 +3742,7 @@ function onClick(mx,my){
     if(i>=0){ const k=Object.keys(SPECIES)[i]; if(dexStatus(k)>=1) G.pokedexSel=i; }  // seen/caught open detail; locked inert
     return;
   }
-  if(G.state==='achievements'){ const b=hitButton(mx,my); if(b && b.id==='back'){ G.state=G.achFrom||'title'; clearButtons(); } return; }
+  if(G.state==='achievements'){ const b=hitButton(mx,my); if(b){ if(b.id==='back'){ G.state=G.achFrom||'title'; clearButtons(); } else if(b.id==='ach_prev'){ G.achPage=Math.max(0,(G.achPage||0)-1); } else if(b.id==='ach_next'){ G.achPage=Math.min(achPages()-1,(G.achPage||0)+1); } } return; }
   if(G.state==='records'){
     const b=hitButton(mx,my); if(!b) return;
     if(b.id==='back'){ G.state=G.recordsFrom||'title'; clearButtons(); return; }

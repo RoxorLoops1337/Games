@@ -51,10 +51,26 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 31. [x] Codex / lore screen (per-species flavor, type guide, mechanics reference) — DONE c31.
 32. [x] Cosmetic sprite skins purchasable with essence (recolors/variants, save-safe) — DONE c32.
 33. [x] Difficulty presets (Casual/Normal/Hard modifiers layered cleanly over ascension) — DONE c33.
-34. [ ] Achievement chains / tiered milestones (multi-step goals with escalating essence).
+34. [x] Achievement chains / tiered milestones (multi-step goals with escalating essence) — DONE c34.
+35. [ ] Endless-mode leaderboard split (separate boards per difficulty preset so Hard runs compete fairly).
+36. [ ] Monster nicknames + a rename UI (persisted per-caught, save-safe, purely cosmetic flavor).
+37. [ ] Elite/shiny wild variants (rare recolored spawns with a small stat halo + a dex "shiny caught" flag).
+38. [ ] Weather/biome-driven type-spawn bias made visible (a "what roams here" biome info panel).
+39. [ ] Active consumable items (bait/lure/smoke) bought in shop, one-shot tactical use in an encounter.
+40. [ ] Team loadout presets — save/name a party composition and quick-swap it at the campfire.
+41. [ ] Run-summary recap screen at gameover (timeline of catches/bosses/biomes, shareable text blurb).
+42. [ ] Ambient audio polish — per-biome music beds + a mute-aware day/night ambience layer.
+43. [ ] New Shadow/Frost cross-type species line + a matching biome to debut it.
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c34 — Achievement chains / tiered milestones** (studio: engineer → QA, lean 2-agent). Reorganized ACH into 3 chains:
+  Collector (catch 5/15/25 → +20/45/90, new ids), Boss Hunter (existing first_boss/boss_10 + new boss_50 → +140),
+  Trailblazer (existing tier_5/10/15/20 grouped). Each tier is its own ACH entry, so it reuses the per-id Dex.data.ach
+  grant — ZERO save-shape change, no existing id/essence touched (old saves keep everything). Awards screen now paginated
+  (16/page) with per-chain accent bars + a "Collector 2/3 — next at 15" progress line. +5 tests incl. a real-path checkAch
+  grant proven by negative control (14 species grants nothing, 15 grants exactly +45 once) + an Awards render-smoke over
+  both openers & all pages. 264/264 wildwalk + 19/19 board, 0/6 flakes.
 - **c33 — Difficulty presets (Casual/Normal/Hard)** (studio: 3 planners → lead → engineer → QA + orch). A single bounded
   multiplier layer (hp/atk/essence/catch/gold) that COMPOSES with ascension at the same fold sites (spawnWild/spawnBoss/
   gameOver-essence/catchChance/endFight-gold) — never replaces it. Normal is a bit-identical no-op (every diffMul===1;
