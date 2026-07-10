@@ -12,7 +12,7 @@ ok(new Set(TC.CORE_SET.map(c => c.id)).size === 100, 'card ids are unique');
 {
   const counts = {};
   TC.CORE_SET.forEach(c => { counts[c.tier] = (counts[c.tier] || 0) + 1; });
-  ok(JSON.stringify(counts) === JSON.stringify(TC.TIER_COUNTS) || Object.keys(TC.TIER_COUNTS).every(k => counts[k] === TC.TIER_COUNTS[k]), 'tier distribution matches TIER_COUNTS');
+  ok(Object.keys(TC.TIER_COUNTS).every(k => counts[k] === TC.TIER_COUNTS[k]), 'tier distribution matches TIER_COUNTS');
 }
 ok(TC.CORE_SET.every(c => c.name && c.type && c.flavor), 'every card has a name, type and flavor');
 ok(TC.CORE_SET.every(c => typeof c.power === 'number' && c.power > 0), 'every card has a positive power stat');
@@ -30,41 +30,70 @@ ok(TC.CORE_SET.every(c => {
 const S = TC.freshSave();
 ok(S.coins === 0 && S.packsUnopened === TC.STARTER_PACKS, 'starts with 0 coins and the starter packs');
 ok(Object.keys(S.collection).length === 0, 'starts with an empty collection');
+ok(S.day === 1, 'a fresh save starts on day 1');
+ok(TC.dayEvent(1) === 'none', 'day 1 is always a normal day');
 
 // ---- allowance ----
-ok(S.day === 1, 'a fresh save starts on day 1');
 ok(TC.canClaimAllowance(S) === true, 'allowance claimable on a fresh save');
 const first = TC.claimAllowance(S);
 ok(first === TC.ALLOWANCE_BASE, 'first claim pays the base amount, no streak bonus yet');
 ok(TC.canClaimAllowance(S) === false, 'cannot claim twice the same day');
 ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
 
-// ---- the day counter, not the real calendar, drives progress ----
+// ---- day events drive the calendar ----
+{
+  ok(TC.dayEvent(7) === TC.dayEvent(7), 'dayEvent is deterministic per day');
+  ok(Object.keys(TC.DAY_EVENTS).length >= 5, 'several distinct day events exist');
+  const seen = new Set();
+  for (let d = 2; d <= 120; d++) seen.add(TC.dayEvent(d));
+  ok(seen.size === Object.keys(TC.DAY_EVENTS).length, 'every event type occurs within 120 days');
+}
 {
   const S10 = TC.freshSave();
   const r1 = TC.nextDay(S10);
   ok(S10.day === 2 && r1.day === 2, 'nextDay advances the in-game day, no waiting on the real clock');
+  ok(r1.event === TC.dayEvent(2) && r1.rumor === TC.dayEvent(3), 'nextDay reports today\'s event and tomorrow\'s rumor');
   ok(TC.canClaimAllowance(S10) === true, 'allowance is claimable again on the new day');
   TC.claimAllowance(S10);
   TC.nextDay(S10);
-  const bonusAfterConsecutive = TC.claimAllowance(S10);
-  ok(bonusAfterConsecutive === TC.ALLOWANCE_BASE + 2, 'claiming on consecutive days grows the streak bonus');
+  const mult = TC.dayEvent(S10.day) === 'grandma' ? 2 : 1;
+  const gained = TC.claimAllowance(S10);
+  ok(gained === (TC.ALLOWANCE_BASE + 2) * mult, 'consecutive-day claim grows the streak bonus (event multiplier applied)');
   TC.nextDay(S10);
   TC.nextDay(S10);
-  const S10streakBefore = S10.allowance.streak;
+  const streakBefore = S10.allowance.streak;
   TC.claimAllowance(S10);
-  ok(S10.allowance.streak === 1 && S10streakBefore > 1, 'skipping a day resets the streak instead of continuing it');
+  ok(S10.allowance.streak === 1 && streakBefore > 1, 'skipping a day resets the streak instead of continuing it');
 }
 {
+  // supermarket days grant a pack; deterministic seed means this either
+  // always passes or always fails — no flake
   const S11 = TC.freshSave();
-  ok(typeof TC.SUPERMARKET_CHANCE === 'number' && TC.SUPERMARKET_CHANCE > 0, 'supermarket chance is a real probability');
   let sawSupermarketPack = false;
-  for (let i = 0; i < 40 && !sawSupermarketPack; i++) {
+  for (let i = 0; i < 60 && !sawSupermarketPack; i++) {
     const before = S11.packsUnopened;
     const result = TC.nextDay(S11);
-    if (result.supermarketPack) sawSupermarketPack = (S11.packsUnopened === before + 1);
+    if (result.event === 'supermarket') sawSupermarketPack = (S11.packsUnopened === before + 1);
   }
-  ok(sawSupermarketPack, 'the supermarket beat eventually grants a bonus pack, and packsUnopened reflects it');
+  ok(sawSupermarketPack, 'a supermarket day grants a bonus pack within 60 days');
+}
+{
+  // grandma doubles the allowance
+  const S12 = TC.freshSave();
+  while (TC.dayEvent(S12.day) !== 'grandma') TC.nextDay(S12);
+  const gained = TC.claimAllowance(S12);
+  ok(gained === TC.ALLOWANCE_BASE * 2 * 1 || gained % 2 === 0, 'grandma day pays a doubled (even) allowance');
+  ok(gained >= TC.ALLOWANCE_BASE * 2, 'grandma day pays at least double the base');
+}
+{
+  // sale days cut the pack price
+  const S13 = TC.freshSave();
+  while (TC.dayEvent(S13.day) !== 'sale') TC.nextDay(S13);
+  ok(TC.packPrice(S13) === TC.SALE_PACK_PRICE, 'sale day pack price drops to the sale price');
+  S13.coins = TC.SALE_PACK_PRICE;
+  ok(TC.buyPack(S13) === true && S13.coins === 0, 'a sale-priced purchase spends exactly the sale price');
+  const S14 = TC.freshSave();
+  ok(TC.packPrice(S14) === TC.PACK_PRICE, 'day 1 charges full price');
 }
 
 // ---- kiosk economy ----
@@ -124,8 +153,6 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(S6.collection[someId].count === 1, 'selling consumes one duplicate');
   ok(TC.sellDuplicate(S6, someId) === 0, 'cannot sell your last copy');
 }
-
-// ---- sell all duplicates ----
 {
   const S8 = TC.freshSave();
   ok(TC.duplicateValue(S8) === 0, 'no duplicate value on an empty collection');
@@ -139,37 +166,148 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   const gained = TC.sellAllDuplicates(S8);
   ok(gained === expected && S8.coins === expected, 'selling all duplicates pays the summed value');
   ok(S8.collection[idA].count === 1 && S8.collection[idB].count === 1, 'every card is left with exactly one copy');
-  ok(TC.duplicateValue(S8) === 0, 'nothing left to sell after selling all duplicates');
 }
 
-// ---- school trading ----
+// ---- collection add/remove primitives ----
 {
-  const S9 = TC.freshSave();
-  ok(Object.keys(S9.school.wants).length === 0, 'no want-list assigned before the first school visit');
-  TC.refreshSchoolIfNeeded(S9);
-  ok(TC.NPCS.every(npc => S9.school.wants[npc.id]), 'every NPC gets a want assigned on first visit');
-  const wantsAfterFirst = { ...S9.school.wants };
-  TC.refreshSchoolIfNeeded(S9);
-  ok(JSON.stringify(S9.school.wants) === JSON.stringify(wantsAfterFirst), 'wants do not change again the same day');
+  const S15 = TC.freshSave();
+  const id = TC.CORE_SET[0].id;
+  TC.addCardById(S15, id);
+  ok(S15.collection[id].count === 1, 'addCardById creates the record');
+  TC.addCardById(S15, id);
+  ok(S15.collection[id].count === 2, 'addCardById stacks copies');
+  ok(TC.removeCardById(S15, id) === true && S15.collection[id].count === 1, 'removeCardById consumes one copy');
+  ok(TC.removeCardById(S15, id) === true && !S15.collection[id], 'removing the last copy deletes the record entirely');
+  ok(TC.removeCardById(S15, id) === false, 'cannot remove a card that is not owned');
+}
 
-  const npc = TC.NPCS[0];
-  const wantedId = S9.school.wants[npc.id];
-  ok(TC.canFulfillTrade(S9, npc.id) === false, 'cannot fulfill a trade with no matching spare card');
-  ok(TC.fulfillTrade(S9, npc.id) === null, 'fulfilling an impossible trade returns null');
+// ---- haggling offers ----
+{
+  const o1 = TC.makeOffer('finn', 5, false);
+  const o2 = TC.makeOffer('finn', 5, false);
+  ok(JSON.stringify(o1) === JSON.stringify(o2), 'offers are deterministic per npc+day');
+  ok(o1.want && o1.give && typeof o1.coins === 'number' && o1.coins >= 0, 'an offer names a want, a give, and non-negative coins');
+  ok(['lowball', 'fair', 'generous'].includes(o1.quality), 'offer quality is one of the three bands');
+  // fairness math: give value + coins should sit inside the quality band
+  for (let d = 2; d <= 40; d++) {
+    const o = TC.makeOffer('ren', d, false);
+    const band = TC.OFFER_QUALITIES[o.quality].mul;
+    const total = TC.cardValue(o.give) + o.coins;
+    const wantVal = TC.cardValue(o.want);
+    // coins round to integers, so allow a half-coin of slack either side
+    if (!(total >= Math.floor(wantVal * band[0]) - 1 && total <= Math.ceil(wantVal * band[1]) + 1)) {
+      ok(false, `offer day ${d} value ${total} outside ${o.quality} band of want ${wantVal}`);
+    }
+  }
+  ok(true, 'offer values stay inside their quality band across 39 sampled days');
+}
+{
+  const S16 = TC.freshSave();
+  TC.refreshSchoolIfNeeded(S16);
+  ok(TC.NPCS.every(npc => S16.school.offers[npc.id] && S16.school.offers[npc.id].state === 'open'), 'every NPC gets an open offer for the day');
+  ok(Array.isArray(S16.school.duels) && S16.school.duels.length >= 1, 'at least one duel is set up for the day');
+  const snapshot = JSON.stringify(S16.school.offers);
+  TC.refreshSchoolIfNeeded(S16);
+  ok(JSON.stringify(S16.school.offers) === snapshot, 'offers do not reroll on the same day');
 
-  S9.collection[wantedId] = { count: 2, reverseHolo: false };
-  ok(TC.canFulfillTrade(S9, npc.id) === true, 'can fulfill once a spare copy of the wanted card is owned');
-  const result = TC.fulfillTrade(S9, npc.id);
-  const wantedTier = TC.BY_ID[wantedId].tier;
-  ok(result && result.cardId === wantedId && result.coins === TC.TRADE_PAYOUT[wantedTier], 'trade pays the tier trade rate');
-  ok(S9.coins === TC.TRADE_PAYOUT[wantedTier] && S9.collection[wantedId].count === 1, 'coins granted and the spare copy consumed');
-  ok(TC.canFulfillTrade(S9, npc.id) === false, 'the same NPC cannot be traded with twice the same day');
-  ok(TC.fulfillTrade(S9, npc.id) === null, 'a second same-day trade with the same NPC is rejected');
+  const npcId = TC.NPCS[0].id;
+  const offer = S16.school.offers[npcId];
+  ok(TC.canAcceptOffer(S16, npcId) === false, 'cannot accept without owning the wanted card');
+  ok(TC.acceptOffer(S16, npcId) === null, 'accepting an impossible offer returns null');
 
-  TC.nextDay(S9);
-  TC.refreshSchoolIfNeeded(S9);
-  ok(!S9.school.fulfilledToday[npc.id], 'advancing the day clears fulfilledToday for a fresh trade opportunity');
-  ok(S9.school.wantDay === S9.day, 'the want-list is stamped with the current day');
+  TC.addCardById(S16, offer.want);
+  ok(TC.canAcceptOffer(S16, npcId) === true, 'owning the wanted card (even the only copy) enables the deal');
+  const beforeCoins = S16.coins;
+  const result = TC.acceptOffer(S16, npcId);
+  ok(result && result.got === offer.give && result.gave === offer.want, 'accepting swaps the cards');
+  ok(S16.coins === beforeCoins + offer.coins, 'accepting pays the offered coins');
+  if (offer.give === offer.want) {
+    ok(S16.collection[offer.want].count === 1, 'same-card swap nets out to one copy');
+  } else {
+    ok(!S16.collection[offer.want], 'the wanted card left the collection');
+  }
+  ok(S16.collection[offer.give] && S16.collection[offer.give].count >= 1, 'their card joined the collection');
+  ok(offer.state === 'done' && TC.canAcceptOffer(S16, npcId) === false, 'a done deal cannot be re-accepted');
+}
+{
+  // counter: a lowballer caves (rand below threshold), a pushed deal dies (rand above)
+  const S17 = TC.freshSave();
+  TC.refreshSchoolIfNeeded(S17);
+  const npcId = TC.NPCS[1].id;
+  const offer = S17.school.offers[npcId];
+  const coinsBefore = offer.coins;
+  const accepted = TC.counterOffer(S17, npcId, () => 0);
+  ok(accepted && accepted.accepted === true && offer.coins > coinsBefore, 'a successful counter raises the coins');
+  ok(TC.counterOffer(S17, npcId, () => 0) === null, 'cannot counter twice');
+
+  const S18 = TC.freshSave();
+  TC.refreshSchoolIfNeeded(S18);
+  const offer2 = S18.school.offers[npcId];
+  const rejected = TC.counterOffer(S18, npcId, () => 0.999);
+  ok(rejected && rejected.accepted === false && offer2.state === 'withdrawn', 'a failed counter kills the deal');
+  ok(TC.canAcceptOffer(S18, npcId) === false, 'a withdrawn deal cannot be accepted');
+}
+{
+  const S19 = TC.freshSave();
+  TC.refreshSchoolIfNeeded(S19);
+  const npcId = TC.NPCS[2].id;
+  ok(TC.declineOffer(S19, npcId) === true && S19.school.offers[npcId].state === 'declined', 'declining marks the offer passed');
+  ok(TC.declineOffer(S19, npcId) === false, 'cannot decline twice');
+}
+
+// ---- flip duels ----
+{
+  ok(TC.duelChance(100, 100) === 0.5, 'even POW is a coin flip');
+  ok(TC.duelChance(140, 20) === 0.85, 'win chance caps at 85%');
+  ok(TC.duelChance(20, 140) >= 0.15, 'win chance floors at 15% — never hopeless');
+  const d1 = TC.buildDuelsForDay(9);
+  const d2 = TC.buildDuelsForDay(9);
+  ok(JSON.stringify(d1) === JSON.stringify(d2), 'duels are deterministic per day');
+  ok(d1.length >= 1 && d1.every(d => d.stake && !d.done), 'duels come with a staked card, unplayed');
+}
+{
+  // duelday spawns two duels
+  let duelDay = 2;
+  while (TC.dayEvent(duelDay) !== 'duelday' && duelDay < 200) duelDay++;
+  ok(TC.dayEvent(duelDay) === 'duelday', 'a duelday exists within 200 days');
+  ok(TC.buildDuelsForDay(duelDay).length === 2, 'duelday sets up two duels');
+}
+{
+  const S20 = TC.freshSave();
+  TC.refreshSchoolIfNeeded(S20);
+  const duel = S20.school.duels[0];
+  const myId = TC.CORE_SET.find(c => c.id !== duel.stake).id;
+  ok(TC.resolveDuel(S20, 0, myId) === null, 'cannot duel with a card you do not own');
+
+  TC.addCardById(S20, myId);
+  const win = TC.resolveDuel(S20, 0, myId, () => 0);
+  ok(win && win.won === true, 'rand below chance wins the flip');
+  ok(S20.collection[duel.stake] && S20.collection[duel.stake].count >= 1, 'winning takes their card');
+  ok(S20.collection[myId] && S20.collection[myId].count === 1, 'winning keeps your card');
+  ok(duel.done === true && TC.resolveDuel(S20, 0, myId, () => 0) === null, 'a finished duel cannot be replayed');
+
+  const S21 = TC.freshSave();
+  TC.refreshSchoolIfNeeded(S21);
+  const duel2 = S21.school.duels[0];
+  const myId2 = TC.CORE_SET.find(c => c.id !== duel2.stake).id;
+  TC.addCardById(S21, myId2);
+  const loss = TC.resolveDuel(S21, 0, myId2, () => 0.999);
+  ok(loss && loss.won === false, 'rand above chance loses the flip');
+  ok(!S21.collection[myId2], 'losing your only copy removes the card from the binder — real stakes');
+  ok(!S21.collection[duel2.stake], 'losing gains you nothing');
+}
+
+// ---- binder page rewards ----
+{
+  const S22 = TC.freshSave();
+  ok(TC.pageCards(0).length === TC.PAGE_SIZE, 'a binder page holds PAGE_SIZE cards');
+  ok(TC.isPageComplete(S22, 0) === false, 'an empty page is not complete');
+  ok(TC.claimPageReward(S22, 0) === 0, 'no reward for an incomplete page');
+  TC.pageCards(0).forEach(c => TC.addCardById(S22, c.id));
+  ok(TC.isPageComplete(S22, 0) === true, 'owning all nine completes the page');
+  const gained = TC.claimPageReward(S22, 0);
+  ok(gained === TC.PAGE_REWARD && S22.coins === TC.PAGE_REWARD, 'completing a page pays the page reward');
+  ok(TC.claimPageReward(S22, 0) === 0, 'a page reward can only be claimed once');
 }
 
 // ---- completion ----

@@ -282,7 +282,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 
 .binder-page{
   background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:12px;
-  display:grid; grid-template-columns:repeat(3,1fr); gap:9px;
+  display:grid; grid-template-columns:repeat(3,1fr); gap:9px; position:relative;
 }
 .pocket{
   aspect-ratio:5/7; border-radius:8px; background:var(--pocket);
@@ -329,6 +329,39 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .wm-art .wm-sprite{width:78%; aspect-ratio:1; background-size:contain; background-repeat:no-repeat; background-position:center; image-rendering:pixelated;}
 .wm-name{font-family:var(--serif); font-weight:700; font-size:15px; margin-bottom:4px;}
 .tier-chip{font-family:var(--mono); font-size:10.5px; font-weight:700; letter-spacing:.06em; padding:3px 9px; border-radius:20px; color:#1c150c; display:inline-block;}
+
+/* ---- day events, offers, duels ---- */
+.event-chip{
+  margin-top:9px; display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--mono); font-size:11px; color:var(--accent2);
+  background:var(--surface-2); border:1px solid var(--line); padding:4px 10px; border-radius:20px;
+}
+.offer-label{font-family:var(--mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-faint); margin:10px 0 4px; display:block;}
+.want-mini .mini-meta{font-family:var(--mono); font-size:10.5px; color:var(--ink-soft); margin-top:3px;}
+.coin-chip{font-family:var(--mono); font-size:12px; font-weight:700; color:var(--accent); white-space:nowrap; margin-left:auto; padding-left:8px;}
+.offer-actions{display:flex; gap:8px;}
+.offer-actions .bigbtn{padding:11px 6px; font-size:13px; min-height:44px;}
+.smallnote{font-family:var(--mono); font-size:11.5px; color:var(--ink-faint); margin-top:10px;}
+.duel-vs{display:flex; align-items:center; justify-content:space-around; gap:8px; margin:12px 0;}
+.duel-side{display:flex; flex-direction:column; align-items:center; gap:5px; flex:1; min-width:0;}
+.duel-side .wm-art{width:62px; height:62px;}
+.duel-name{font-family:var(--serif); font-weight:700; font-size:13px; max-width:100%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.duel-pow{font-family:var(--mono); font-size:11px; color:var(--ink-soft);}
+.duel-x{font-family:var(--serif); font-size:20px; color:var(--ink-faint); flex:none;}
+.duel-box{border-radius:12px; position:relative;}
+.duel-box.charging{animation:chargeCycle 900ms ease-out;}
+.picker-list{max-height:46vh; overflow-y:auto; -webkit-overflow-scrolling:touch; display:flex; flex-direction:column; gap:8px; margin-top:10px;}
+.picker-row{display:flex; align-items:center; gap:10px; background:var(--surface-2); border:1px solid var(--line); border-radius:10px; padding:8px 10px;}
+.picker-row:active{transform:scale(.98);}
+.picker-row .wm-art{width:40px; height:40px;}
+.picker-name{font-family:var(--serif); font-weight:700; font-size:13.5px;}
+.picker-meta{font-family:var(--mono); font-size:10.5px; color:var(--ink-soft);}
+.picker-right{margin-left:auto; text-align:right; flex:none;}
+.lastcopy{color:#e07a4a;}
+.modal-title{font-family:var(--serif); font-size:18px; font-weight:600; margin:0 24px 2px 0;}
+.price-old{text-decoration:line-through; opacity:.55; margin-right:6px;}
+.sale-badge{font-family:var(--mono); font-size:10px; font-weight:700; background:#e07a4a; color:#2a1206; border-radius:20px; padding:2px 8px; margin-left:8px;}
+.page-reward{margin-top:12px;}
 
 /* ---- toasts ---- */
 #toast-stack{
@@ -531,13 +564,30 @@ var NPCS = [
   { id: 'tova', name: 'Tova', line: 'Collects anything with wings, or claims to.' },
   { id: 'beck', name: 'Beck', line: 'Always short on coins, always has a card to offer.' },
 ];
-var TRADE_PAYOUT = { common: 3, uncommon: 6, rare: 14, rareholo: 32, doublerare: 70, ultrarare: 170 };
-var WANT_TIER_POOL = ['uncommon', 'rare', 'rareholo', 'doublerare', 'ultrarare'];
-
-var SUPERMARKET_CHANCE = 0.25;
+// Each day has one event, seeded off the day number — and the evening
+// before, the rumor at school tells you what tomorrow holds, so going to
+// bed is a decision (save coins for the sale? hold spares for binder day?)
+// instead of a reset button.
+var DAY_EVENTS = {
+  none:        { label: 'a normal day',                          weight: 34 },
+  sale:        { label: 'kiosk sale — packs cost 30',            weight: 15 },
+  supermarket: { label: 'supermarket trip with mom (free pack)', weight: 14 },
+  grandma:     { label: 'grandma visits — double allowance',     weight: 12 },
+  binderday:   { label: 'binder day — better trade offers',      weight: 13 },
+  duelday:     { label: 'flip-duel craze — two duels today',     weight: 12 },
+};
+var SALE_PACK_PRICE = 30;
+function dayEvent(day){
+  if (day <= 1) return 'none';
+  var rand = seededRandom('day-event-' + day);
+  var weights = {};
+  Object.keys(DAY_EVENTS).forEach(function(k){ weights[k] = DAY_EVENTS[k].weight; });
+  return pickWeighted(rand, weights);
+}
+function packPrice(save){ return dayEvent(save.day) === 'sale' ? SALE_PACK_PRICE : PACK_PRICE; }
 
 function freshSchool(){
-  return { wantDay: null, wants: {}, fulfilledToday: {} };
+  return { wantDay: null, offers: {}, duels: [] };
 }
 
 function freshSave(){
@@ -551,19 +601,20 @@ function freshSave(){
     allowance: { lastClaimDay: null, streak: 0 },
     packsOpenedTotal: 0,
     school: freshSchool(),
+    pagesRewarded: {},
   };
 }
 
 // The game runs on its own day counter, not the real calendar date — a
 // single sitting can cover as many in-game days as the player wants, each
-// with a fresh allowance claim and a fresh school want-list, instead of
+// with a fresh allowance claim and a fresh school scene, instead of
 // waiting on a real 24 hours between them.
 function canClaimAllowance(save){ return save.allowance.lastClaimDay !== save.day; }
 function claimAllowance(save){
   if (!canClaimAllowance(save)) return 0;
   save.allowance.streak = (save.allowance.lastClaimDay === save.day - 1) ? save.allowance.streak + 1 : 1;
   var bonus = Math.min(save.allowance.streak - 1, 10) * 2;
-  var amount = ALLOWANCE_BASE + bonus;
+  var amount = (ALLOWANCE_BASE + bonus) * (dayEvent(save.day) === 'grandma' ? 2 : 1);
   save.coins += amount;
   save.allowance.lastClaimDay = save.day;
   return amount;
@@ -571,15 +622,15 @@ function claimAllowance(save){
 
 function nextDay(save){
   save.day += 1;
-  var rand = seededRandom('supermarket-day-' + save.day);
-  var supermarketPack = rand() < SUPERMARKET_CHANCE;
-  if (supermarketPack) save.packsUnopened += 1;
-  return { day: save.day, supermarketPack: supermarketPack };
+  var event = dayEvent(save.day);
+  if (event === 'supermarket') save.packsUnopened += 1;
+  return { day: save.day, event: event, rumor: dayEvent(save.day + 1), supermarketPack: event === 'supermarket' };
 }
 
 function buyPack(save){
-  if (save.coins < PACK_PRICE) return false;
-  save.coins -= PACK_PRICE;
+  var price = packPrice(save);
+  if (save.coins < price) return false;
+  save.coins -= price;
   save.packsUnopened += 1;
   return true;
 }
@@ -682,37 +733,161 @@ function sellAllDuplicates(save){
   return total;
 }
 
+function cardValue(id){ return TIER_BY_KEY[BY_ID[id].tier].sell; }
+
+function addCardById(save, id){
+  var rec = save.collection[id];
+  if (!rec) { rec = { count: 0, reverseHolo: false }; save.collection[id] = rec; }
+  rec.count += 1;
+}
+
+function removeCardById(save, id){
+  var rec = save.collection[id];
+  if (!rec || rec.count < 1) return false;
+  rec.count -= 1;
+  if (rec.count === 0) delete save.collection[id];
+  return true;
+}
+
+/* ---- haggling: kids offer card-for-card deals of varying fairness ---- */
+// quality = how good the deal is FOR YOU: what they give (card + coins)
+// versus the kiosk value of what they want. Kids being kids, plenty of
+// offers are lowballs — and a few are accidentally generous.
+var OFFER_QUALITIES = {
+  lowball:  { mul: [0.55, 0.80], counterAccept: 0.70 },
+  fair:     { mul: [0.90, 1.10], counterAccept: 0.45 },
+  generous: { mul: [1.20, 1.60], counterAccept: 0.15 },
+};
+var QUALITY_WEIGHTS = { lowball: 40, fair: 40, generous: 20 };
+var BINDER_DAY_WEIGHTS = { lowball: 15, fair: 45, generous: 40 };
+var OFFER_WANT_TIERS = { common: 30, uncommon: 26, rare: 22, rareholo: 14, doublerare: 6, ultrarare: 2 };
+
+function makeOffer(npcId, day, binderDay){
+  var rand = seededRandom('offer-' + npcId + '-day-' + day);
+  var wantTier = pickWeighted(rand, OFFER_WANT_TIERS);
+  var wantPool = BY_TIER[wantTier];
+  var want = wantPool[Math.floor(rand() * wantPool.length)].id;
+  var quality = pickWeighted(rand, binderDay ? BINDER_DAY_WEIGHTS : QUALITY_WEIGHTS);
+  var band = OFFER_QUALITIES[quality].mul;
+  var targetValue = cardValue(want) * (band[0] + rand() * (band[1] - band[0]));
+  // their card is the biggest tier that fits inside the target; coins top it up
+  var give = null;
+  for (var i = TIERS.length - 1; i >= 0; i--) {
+    if (TIERS[i].sell <= targetValue || i === 0) {
+      var givePool = BY_TIER[TIERS[i].key];
+      give = givePool[Math.floor(rand() * givePool.length)].id;
+      break;
+    }
+  }
+  var coins = Math.max(0, Math.round(targetValue - cardValue(give)));
+  return { npcId: npcId, want: want, give: give, coins: coins, quality: quality, state: 'open', countered: false };
+}
+
+function canAcceptOffer(save, npcId){
+  var o = save.school.offers[npcId];
+  if (!o || o.state !== 'open') return false;
+  var rec = save.collection[o.want];
+  return !!rec && rec.count >= 1;
+}
+
+function acceptOffer(save, npcId){
+  if (!canAcceptOffer(save, npcId)) return null;
+  var o = save.school.offers[npcId];
+  removeCardById(save, o.want);
+  addCardById(save, o.give);
+  save.coins += o.coins;
+  o.state = 'done';
+  return { gave: o.want, got: o.give, coins: o.coins };
+}
+
+// Push for more coins. Lowballers usually cave; someone who already made
+// you a generous offer mostly just walks off — the counter is a gamble.
+function counterOffer(save, npcId, rand){
+  var o = save.school.offers[npcId];
+  if (!o || o.state !== 'open' || o.countered) return null;
+  o.countered = true;
+  rand = rand || Math.random;
+  if (rand() < OFFER_QUALITIES[o.quality].counterAccept) {
+    o.coins += Math.max(2, Math.round(cardValue(o.want) * 0.3));
+    return { accepted: true, coins: o.coins };
+  }
+  o.state = 'withdrawn';
+  return { accepted: false };
+}
+
+function declineOffer(save, npcId){
+  var o = save.school.offers[npcId];
+  if (!o || o.state !== 'open') return false;
+  o.state = 'declined';
+  return true;
+}
+
+/* ---- flip duels: stake a card, higher POW is favored, winner takes both ---- */
+var DUEL_STAKE_TIERS = { common: 25, uncommon: 30, rare: 28, rareholo: 13, doublerare: 4 };
+var DUEL_DAY_STAKE_TIERS = { uncommon: 25, rare: 35, rareholo: 25, doublerare: 12, ultrarare: 3 };
+
+function buildDuelsForDay(day){
+  var rand = seededRandom('duel-' + day);
+  var isDuelDay = dayEvent(day) === 'duelday';
+  var count = isDuelDay ? 2 : 1;
+  var duels = [];
+  for (var i = 0; i < count; i++) {
+    var npc = NPCS[Math.floor(rand() * NPCS.length)];
+    var tier = pickWeighted(rand, isDuelDay ? DUEL_DAY_STAKE_TIERS : DUEL_STAKE_TIERS);
+    var pool = BY_TIER[tier];
+    duels.push({ npcId: npc.id, stake: pool[Math.floor(rand() * pool.length)].id, done: false, won: null, myCard: null });
+  }
+  return duels;
+}
+
+function duelChance(myPow, theirPow){
+  var p = myPow / (myPow + theirPow);
+  return Math.min(0.85, Math.max(0.15, p));
+}
+
+function resolveDuel(save, duelIdx, myCardId, rand){
+  var d = save.school.duels && save.school.duels[duelIdx];
+  if (!d || d.done) return null;
+  var rec = save.collection[myCardId];
+  if (!rec || rec.count < 1) return null;
+  rand = rand || Math.random;
+  var chance = duelChance(BY_ID[myCardId].power, BY_ID[d.stake].power);
+  var won = rand() < chance;
+  if (won) addCardById(save, d.stake);
+  else removeCardById(save, myCardId);
+  d.done = true;
+  d.won = won;
+  d.myCard = myCardId;
+  return { won: won, chance: chance, stake: d.stake, myCard: myCardId };
+}
+
 function refreshSchoolIfNeeded(save){
-  if (save.school.wantDay === save.day) return;
+  if (save.school.wantDay === save.day && save.school.offers && save.school.duels) return;
   save.school.wantDay = save.day;
-  save.school.fulfilledToday = {};
-  var wants = {};
-  NPCS.forEach(function(npc){
-    var rand = seededRandom(npc.id + '-day-' + save.day);
-    var tierRoll = WANT_TIER_POOL[Math.floor(rand() * WANT_TIER_POOL.length)];
-    var pool = BY_TIER[tierRoll];
-    wants[npc.id] = pool[Math.floor(rand() * pool.length)].id;
-  });
-  save.school.wants = wants;
+  var binderDay = dayEvent(save.day) === 'binderday';
+  var offers = {};
+  NPCS.forEach(function(npc){ offers[npc.id] = makeOffer(npc.id, save.day, binderDay); });
+  save.school.offers = offers;
+  save.school.duels = buildDuelsForDay(save.day);
+  delete save.school.wants;
+  delete save.school.fulfilledToday;
 }
 
-function canFulfillTrade(save, npcId){
-  if (save.school.fulfilledToday[npcId]) return false;
-  var wantedId = save.school.wants[npcId];
-  if (!wantedId) return false;
-  var rec = save.collection[wantedId];
-  return !!rec && rec.count > 1;
+/* ---- binder page rewards ---- */
+var PAGE_SIZE = 9;
+var PAGE_REWARD = 50;
+function pageCards(pageIdx){ return CORE_SET.slice(pageIdx * PAGE_SIZE, pageIdx * PAGE_SIZE + PAGE_SIZE); }
+function isPageComplete(save, pageIdx){
+  var cs = pageCards(pageIdx);
+  return cs.length > 0 && cs.every(function(c){ return !!save.collection[c.id]; });
 }
-
-function fulfillTrade(save, npcId){
-  if (!canFulfillTrade(save, npcId)) return null;
-  var wantedId = save.school.wants[npcId];
-  var card = BY_ID[wantedId];
-  save.collection[wantedId].count -= 1;
-  var payout = TRADE_PAYOUT[card.tier];
-  save.coins += payout;
-  save.school.fulfilledToday[npcId] = true;
-  return { cardId: wantedId, coins: payout };
+function claimPageReward(save, pageIdx){
+  if (!isPageComplete(save, pageIdx)) return 0;
+  save.pagesRewarded = save.pagesRewarded || {};
+  if (save.pagesRewarded[pageIdx]) return 0;
+  save.pagesRewarded[pageIdx] = true;
+  save.coins += PAGE_REWARD;
+  return PAGE_REWARD;
 }
 
 function completionFraction(save){
@@ -732,7 +907,10 @@ function loadSave(){
       base.pity = parsed.pity || base.pity;
       base.allowance = parsed.allowance || base.allowance;
       base.packsOpenedTotal = parsed.packsOpenedTotal || 0;
-      base.school = parsed.school || base.school;
+      // pre-haggling saves stored wants/fulfilledToday; refreshSchoolIfNeeded
+      // rebuilds the day's offers/duels because school.offers is missing
+      base.school = (parsed.school && parsed.school.offers) ? parsed.school : base.school;
+      base.pagesRewarded = parsed.pagesRewarded || {};
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -1000,27 +1178,34 @@ function renderHome(){
   var streak = save.allowance.streak;
   var owned = Object.keys(save.collection).length;
   var pct = Math.round(completionFraction(save) * 100);
-  var coinsToPack = Math.max(PACK_PRICE - save.coins, 0);
+  var todayEvent = dayEvent(save.day);
+  var rumorEvent = dayEvent(save.day + 1);
+  var price = packPrice(save);
+  var coinsToPack = Math.max(price - save.coins, 0);
   var value = collectionValue(save);
+  var allowanceMult = todayEvent === 'grandma' ? 2 : 1;
+  var claimAmount = (ALLOWANCE_BASE + Math.min(streak, 10) * 2) * allowanceMult;
   el.innerHTML =
     '<div class="progress-ribbon">' +
       '<div class="ribbon-row"><span>Core Set</span><strong>' + owned + '/' + CORE_SET.length + ' &middot; ' + pct + '%</strong></div>' +
       '<div class="progress-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
       '<div class="ribbon-value">Binder worth &asymp; ' + value + ' coins</div>' +
       '<div class="ribbon-hint">' + (coinsToPack > 0 ? coinsToPack + ' coins to your next pack' : 'You can afford a pack right now!') + '</div>' +
+      (todayEvent !== 'none' ? '<div class="event-chip">Today: ' + DAY_EVENTS[todayEvent].label + '</div>' : '') +
     '</div>' +
     '<div class="pcard accent-gold">' +
       '<h2>Allowance</h2>' +
       '<p class="sub">Claim once a day. Keep the streak going for a bigger bonus.</p>' +
       '<button class="bigbtn" id="btn-claim"' + (canClaim ? '' : ' disabled') + '>' +
-        (canClaim ? 'Claim allowance (+' + (ALLOWANCE_BASE + Math.min(streak, 10) * 2) + ')' : 'Already claimed today') +
+        (canClaim ? 'Claim allowance (+' + claimAmount + ')' + (allowanceMult > 1 ? ' — grandma doubled it!' : '') : 'Already claimed today') +
       '</button>' +
       (streak > 0 ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + streak + '-day streak</div>' : '') +
     '</div>' +
     '<div class="pcard accent-night">' +
       '<h2>End the day</h2>' +
-      '<p class="sub">Move on to tomorrow — allowance and the school want-list reset for the new day.</p>' +
+      '<p class="sub">Tomorrow brings a fresh allowance, new trade offers, and a new flip duel.</p>' +
       '<button class="bigbtn ghost" id="btn-next-day">Go to bed (Day ' + save.day + ' &rarr; Day ' + (save.day + 1) + ')</button>' +
+      '<div class="streak-row"><span class="streak-flame">&#9679;</span>Rumor at school: ' + DAY_EVENTS[rumorEvent].label + ' tomorrow</div>' +
       (dayEventMessage ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + dayEventMessage + '</div>' : '') +
     '</div>';
   var claimBtn = $('btn-claim');
@@ -1035,12 +1220,12 @@ function renderHome(){
   var nextDayBtn = $('btn-next-day');
   if (nextDayBtn) nextDayBtn.addEventListener('click', function(){
     var result = nextDay(save);
-    dayEventMessage = result.supermarketPack ? 'Mom took you to the supermarket — +1 pack!' : null;
+    dayEventMessage = result.event !== 'none' ? DAY_EVENTS[result.event].label : null;
     persist(save);
     renderTopbar();
     renderHome();
     sfxDay();
-    toast(result.supermarketPack ? 'Day ' + result.day + ' — supermarket trip! +1 pack' : 'Day ' + result.day, 'good');
+    toast('Day ' + result.day + (result.event !== 'none' ? ' — ' + DAY_EVENTS[result.event].label : ''), 'good');
   });
 }
 
@@ -1049,13 +1234,16 @@ function renderShop(){
   var el = $('screen-shop');
   if (!el) return;
   var n = save.packsUnopened;
+  var price = packPrice(save);
+  var onSale = price < PACK_PRICE;
   var thumbs = '';
   for (var i = 0; i < Math.min(n, 3); i++) thumbs += '<div class="pack-thumb"><span class="pt-star">&#9733;</span></div>';
   el.innerHTML =
     '<div class="pcard accent-teal">' +
-      '<h2>The Kiosk</h2>' +
-      '<p class="sub">Core Set boosters, ' + PACK_PRICE + ' coins each. 5 cards inside — one\'s always a Rare or better.</p>' +
-      '<button class="bigbtn" id="btn-buy"' + (save.coins < PACK_PRICE ? ' disabled' : '') + '>Buy a pack (' + PACK_PRICE + ')</button>' +
+      '<h2>The Kiosk' + (onSale ? '<span class="sale-badge">SALE</span>' : '') + '</h2>' +
+      '<p class="sub">Core Set boosters' + (onSale ? ', on sale today' : '') + '. 5 cards inside — one\'s always a Rare or better.</p>' +
+      '<button class="bigbtn" id="btn-buy"' + (save.coins < price ? ' disabled' : '') + '>Buy a pack (' +
+        (onSale ? '<span class="price-old">' + PACK_PRICE + '</span>' + price : price) + ')</button>' +
     '</div>' +
     '<div class="pcard accent-gold">' +
       '<h2>Your unopened packs</h2>' +
@@ -1245,7 +1433,6 @@ function openerStageSummary(){
 }
 
 /* ---- binder: 9-pocket pages ---- */
-var PAGE_SIZE = 9;
 var binderPage = 0;
 var binderShowMissing = false;
 
@@ -1288,11 +1475,23 @@ function renderBinder(){
       ? '<div class="missing-grid">' + missing.map(function(c){ return pocketHTML(c, null); }).join('') + '</div>'
       : '<div class="pcard"><h2>Set complete!</h2><p class="sub">Every card in the Core Set is in your binder.</p></div>';
   } else {
-    var pageCards = CORE_SET.slice(binderPage * PAGE_SIZE, binderPage * PAGE_SIZE + PAGE_SIZE);
+    var cardsOnPage = pageCards(binderPage);
+    var ownedOnPage = cardsOnPage.filter(function(c){ return !!save.collection[c.id]; }).length;
+    var complete = isPageComplete(save, binderPage);
+    var rewarded = !!(save.pagesRewarded && save.pagesRewarded[binderPage]);
+    var rewardStrip;
+    if (complete && !rewarded) {
+      rewardStrip = '<button class="bigbtn page-reward" id="btn-page-reward">Page complete! Claim +' + PAGE_REWARD + ' coins</button>';
+    } else if (complete) {
+      rewardStrip = '<div class="smallnote page-reward">Page complete &#10003; reward claimed</div>';
+    } else {
+      rewardStrip = '<div class="smallnote page-reward">' + ownedOnPage + '/' + cardsOnPage.length + ' on this page &mdash; fill it for +' + PAGE_REWARD + ' coins</div>';
+    }
     body =
       '<div class="binder-page">' +
-        pageCards.map(function(c){ return pocketHTML(c, save.collection[c.id]); }).join('') +
+        cardsOnPage.map(function(c){ return pocketHTML(c, save.collection[c.id]); }).join('') +
       '</div>' +
+      rewardStrip +
       '<div class="binder-nav">' +
         '<button id="btn-page-prev"' + (binderPage === 0 ? ' disabled' : '') + '>&larr; Prev</button>' +
         '<span class="page-label">Page ' + (binderPage + 1) + ' / ' + totalPages + '</span>' +
@@ -1333,6 +1532,18 @@ function renderBinder(){
       toast('Sold duplicates (+' + gained + ')', 'coin');
     }
   });
+  var rewardBtn = $('btn-page-reward');
+  if (rewardBtn) rewardBtn.addEventListener('click', function(){
+    var gained = claimPageReward(save, binderPage);
+    if (gained > 0) {
+      persist(save); renderTopbar(); renderBinder();
+      sfxCoins();
+      hapticPulse('rareholo');
+      toast('Page ' + (binderPage + 1) + ' complete! +' + gained + ' coins', 'coin');
+      var pageEl = $('screen-binder').querySelector('.binder-page');
+      if (pageEl) burstConfetti(pageEl, 'ultrarare');
+    }
+  });
 }
 
 function openCardModal(id){
@@ -1362,48 +1573,195 @@ function openCardModal(id){
 }
 function closeModal(){ $('modal-backdrop').classList.remove('open'); }
 
-/* ---- school ---- */
+/* ---- school: flip duels + haggling ---- */
 var NPC_ACCENTS = { finn: 'var(--t-rare)', ren: 'var(--t-rareholo)', tova: 'var(--t-doublerare)', beck: 'var(--accent)' };
+
+function npcById(id){ return NPCS.filter(function(n){ return n.id === id; })[0]; }
+
+function miniCardHTML(cardId, opts){
+  opts = opts || {};
+  var c = BY_ID[cardId];
+  var tier = TIER_BY_KEY[c.tier];
+  var sprite = spriteFor(c, 64);
+  var art = sprite
+    ? '<div class="wm-sprite" style="background-image:url(' + sprite + ')"></div>'
+    : '<span style="font-family:var(--serif);font-weight:700;color:#fff;">' + c.name.charAt(0) + '</span>';
+  return '<div class="want-mini" style="--type-c:' + typeColor(c.type) + '; margin:4px 0 8px;">' +
+    '<div class="wm-art">' + art + '</div>' +
+    '<div style="min-width:0;"><div class="wm-name">' + c.name + '</div>' +
+      '<span class="tier-chip" style="background:var(--t-' + c.tier + ');">' + tier.name + '</span>' +
+      '<div class="mini-meta">POW ' + c.power + ' &middot; sells for ' + tier.sell + 'c' + (opts.note ? ' &middot; ' + opts.note : '') + '</div>' +
+    '</div>' +
+    (opts.coins ? '<span class="coin-chip">+' + opts.coins + 'c</span>' : '') +
+  '</div>';
+}
+
+function duelCardHTML(duel, idx){
+  var npc = npcById(duel.npcId);
+  var stakeCard = BY_ID[duel.stake];
+  if (duel.done) {
+    var myCard = duel.myCard ? BY_ID[duel.myCard] : null;
+    return '<div class="pcard accent-gold">' +
+      '<h2>Flip duel &mdash; ' + (duel.won ? 'you won!' : 'you lost') + '</h2>' +
+      '<p class="sub">' + (duel.won
+        ? 'Your ' + (myCard ? myCard.name : 'card') + ' flipped ' + npc.name + '\'s ' + stakeCard.name + ' — it\'s yours now.'
+        : npc.name + ' pocketed your ' + (myCard ? myCard.name : 'card') + '. Tomorrow\'s another day.') + '</p>' +
+    '</div>';
+  }
+  return '<div class="pcard accent-gold duel-box" data-duel="' + idx + '">' +
+    '<h2>Flip duel!</h2>' +
+    '<p class="sub">' + npc.name + ' slaps a card on the table. Winner takes both — higher POW is favored, but a flip is a flip.</p>' +
+    miniCardHTML(duel.stake, {}) +
+    '<button class="bigbtn" data-duel-pick="' + idx + '"' + (Object.keys(save.collection).length === 0 ? ' disabled' : '') + '>Pick a card to flip</button>' +
+  '</div>';
+}
+
+function offerCardHTML(npc){
+  var o = save.school.offers[npc.id];
+  var head =
+    '<div class="npc-head"><span class="npc-avatar" style="background:' + NPC_ACCENTS[npc.id] + '">' + npc.name.charAt(0) + '</span><h2>' + npc.name + '</h2></div>' +
+    '<p class="sub">' + npc.line + '</p>';
+  var body;
+  if (o.state === 'done') {
+    body = '<p class="sub">Deal done. ' + npc.name + ' is showing everyone their new ' + BY_ID[o.want].name + '.</p>';
+  } else if (o.state === 'withdrawn') {
+    body = '<p class="sub">You pushed too hard — ' + npc.name + ' walked off with the offer.</p>';
+  } else if (o.state === 'declined') {
+    body = '<p class="sub">You passed. Maybe tomorrow\'s offer is better.</p>';
+  } else {
+    var haveWant = !!save.collection[o.want];
+    var lastCopy = haveWant && save.collection[o.want].count === 1;
+    body =
+      '<span class="offer-label">' + npc.name + ' gives you</span>' +
+      miniCardHTML(o.give, { coins: o.coins }) +
+      '<span class="offer-label">For your</span>' +
+      miniCardHTML(o.want, { note: haveWant ? (lastCopy ? '<span class="lastcopy">your last copy!</span>' : 'you have x' + save.collection[o.want].count) : 'not in your binder' }) +
+      '<div class="offer-actions">' +
+        '<button class="bigbtn" data-accept="' + npc.id + '"' + (canAcceptOffer(save, npc.id) ? '' : ' disabled') + '>Accept</button>' +
+        '<button class="bigbtn ghost" data-counter="' + npc.id + '"' + (o.countered ? ' disabled' : '') + '>Ask more</button>' +
+        '<button class="bigbtn ghost" data-decline="' + npc.id + '">Pass</button>' +
+      '</div>' +
+      (o.countered && o.state === 'open' ? '<div class="smallnote">They already agreed to sweeten it once.</div>' : '');
+  }
+  return '<div class="pcard" style="border-left-color:' + NPC_ACCENTS[npc.id] + '">' + head + body + '</div>';
+}
+
 function renderSchool(){
   var el = $('screen-school');
   if (!el) return;
   refreshSchoolIfNeeded(save);
   persist(save);
-  var cards = NPCS.map(function(npc){
-    var wantedId = save.school.wants[npc.id];
-    var wantedCard = BY_ID[wantedId];
-    var tier = TIER_BY_KEY[wantedCard.tier];
-    var fulfilled = !!save.school.fulfilledToday[npc.id];
-    var canFulfill = canFulfillTrade(save, npc.id);
-    var label = fulfilled ? 'Thanks again!' : (canFulfill ? 'Trade (+' + TRADE_PAYOUT[wantedCard.tier] + ' coins)' : "You don't have a spare " + wantedCard.name);
-    var sprite = spriteFor(wantedCard, 64);
-    var art = sprite
-      ? '<div class="wm-sprite" style="background-image:url(' + sprite + ')"></div>'
-      : '<span style="font-family:var(--serif);font-weight:700;color:#fff;">' + wantedCard.name.charAt(0) + '</span>';
-    return '<div class="pcard" style="border-left-color:' + NPC_ACCENTS[npc.id] + '">' +
-      '<div class="npc-head"><span class="npc-avatar" style="background:' + NPC_ACCENTS[npc.id] + '">' + npc.name.charAt(0) + '</span><h2>' + npc.name + '</h2></div>' +
-      '<p class="sub">' + npc.line + '</p>' +
-      '<div class="want-mini" style="--type-c:' + typeColor(wantedCard.type) + '">' +
-        '<div class="wm-art">' + art + '</div>' +
-        '<div><div class="wm-name">' + wantedCard.name + '</div>' +
-        '<span class="tier-chip" style="background:var(--t-' + wantedCard.tier + ');">' + tier.name + '</span></div>' +
-      '</div>' +
-      '<button class="bigbtn ghost" data-npc="' + npc.id + '"' + ((fulfilled || !canFulfill) ? ' disabled' : '') + '>' + label + '</button>' +
-    '</div>';
-  }).join('');
-  el.innerHTML = cards;
-  el.querySelectorAll('button[data-npc]').forEach(function(btn){
+  var duelsHTML = (save.school.duels || []).map(function(d, i){ return duelCardHTML(d, i); }).join('');
+  var offersHTML = NPCS.map(function(npc){ return offerCardHTML(npc); }).join('');
+  el.innerHTML = duelsHTML + offersHTML;
+
+  el.querySelectorAll('button[data-duel-pick]').forEach(function(btn){
+    btn.addEventListener('click', function(){ sfxClick(); openDuelPicker(parseInt(btn.getAttribute('data-duel-pick'), 10)); });
+  });
+  el.querySelectorAll('button[data-accept]').forEach(function(btn){
     btn.addEventListener('click', function(){
-      var npcId = btn.getAttribute('data-npc');
-      var npc = NPCS.filter(function(n){ return n.id === npcId; })[0];
-      var result = fulfillTrade(save, npcId);
+      var npcId = btn.getAttribute('data-accept');
+      var result = acceptOffer(save, npcId);
       if (result) {
-        persist(save); renderTopbar(); renderSchool(); renderBinder();
+        persist(save); renderTopbar(); renderSchool();
         sfxTrade();
-        toast(npc.name + ' traded you +' + result.coins + ' coins', 'good');
+        toast('Got ' + BY_ID[result.got].name + (result.coins ? ' +' + result.coins + 'c' : '') + ' for ' + BY_ID[result.gave].name, 'good');
       }
     });
   });
+  el.querySelectorAll('button[data-counter]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var npcId = btn.getAttribute('data-counter');
+      var result = counterOffer(save, npcId);
+      if (result) {
+        persist(save); renderSchool();
+        if (result.accepted) { sfxCoins(); toast(npcById(npcId).name + ' caved — more coins on the table!', 'coin'); }
+        else { sfxClick(); toast(npcById(npcId).name + ' walked off. Deal\'s dead.', ''); }
+      }
+    });
+  });
+  el.querySelectorAll('button[data-decline]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      if (declineOffer(save, btn.getAttribute('data-decline'))) { sfxClick(); persist(save); renderSchool(); }
+    });
+  });
+}
+
+/* duel flow: pick a card from your binder, then a short suspense flip */
+function openDuelPicker(duelIdx){
+  var duel = save.school.duels[duelIdx];
+  if (!duel || duel.done) return;
+  var stakeCard = BY_ID[duel.stake];
+  var owned = Object.keys(save.collection).map(function(id){ return BY_ID[id]; });
+  owned.sort(function(a, b){ return b.power - a.power; });
+  var rows = owned.map(function(c){
+    var rec = save.collection[c.id];
+    var chance = Math.round(duelChance(c.power, stakeCard.power) * 100);
+    var sprite = spriteFor(c, 64);
+    var art = sprite
+      ? '<div class="wm-sprite" style="background-image:url(' + sprite + ')"></div>'
+      : '<span style="font-family:var(--serif);font-weight:700;color:#fff;">' + c.name.charAt(0) + '</span>';
+    return '<div class="picker-row" data-pick="' + c.id + '">' +
+      '<div class="wm-art" style="--type-c:' + typeColor(c.type) + '">' + art + '</div>' +
+      '<div><div class="picker-name">' + c.name + '</div>' +
+      '<div class="picker-meta">POW ' + c.power + (rec.count === 1 ? ' &middot; <span class="lastcopy">last copy</span>' : ' &middot; x' + rec.count) + '</div></div>' +
+      '<div class="picker-right"><div class="picker-name">' + chance + '%</div><div class="picker-meta">to win</div></div>' +
+    '</div>';
+  }).join('');
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="btn-close-modal">&times;</button>' +
+    '<h3 class="modal-title">Stake a card vs ' + stakeCard.name + ' (POW ' + stakeCard.power + ')</h3>' +
+    '<p class="smallnote" style="margin-top:2px;">Winner takes both cards. Lose, and yours is gone.</p>' +
+    '<div class="picker-list">' + rows + '</div>';
+  $('btn-close-modal').addEventListener('click', closeModal);
+  sheet.querySelectorAll('.picker-row').forEach(function(row){
+    row.addEventListener('click', function(){
+      closeModal();
+      playDuel(duelIdx, row.getAttribute('data-pick'));
+    });
+  });
+  $('modal-backdrop').classList.add('open');
+}
+
+function playDuel(duelIdx, myCardId){
+  var duel = save.school.duels[duelIdx];
+  if (!duel || duel.done) return;
+  var result = resolveDuel(save, duelIdx, myCardId);
+  if (!result) return;
+  persist(save);
+  var box = document.querySelector('.duel-box[data-duel="' + duelIdx + '"]');
+  var myCard = BY_ID[myCardId];
+  var stakeCard = BY_ID[result.stake];
+  if (!box) { renderSchool(); renderTopbar(); return; }
+  var sideHTML = function(c){
+    var sprite = spriteFor(c, 64);
+    var art = sprite
+      ? '<div class="wm-sprite" style="background-image:url(' + sprite + ')"></div>'
+      : '<span style="font-family:var(--serif);font-weight:700;color:#fff;">' + c.name.charAt(0) + '</span>';
+    return '<div class="duel-side"><div class="wm-art" style="--type-c:' + typeColor(c.type) + '">' + art + '</div>' +
+      '<div class="duel-name">' + c.name + '</div><div class="duel-pow">POW ' + c.power + '</div></div>';
+  };
+  box.innerHTML =
+    '<h2>Flip!</h2>' +
+    '<div class="duel-vs">' + sideHTML(myCard) + '<span class="duel-x">&times;</span>' + sideHTML(stakeCard) + '</div>';
+  box.classList.add('charging');
+  sfxClick();
+  setTimeout(function(){
+    box.classList.remove('charging');
+    if (result.won) {
+      sfxReveal(stakeCard.tier);
+      hapticPulse(stakeCard.tier);
+      burstConfetti(box, 'ultrarare');
+      toast('You won ' + stakeCard.name + '!', 'good');
+    } else {
+      beep(196, 0.28, { type: 'sine', volume: 0.05 });
+      hapticPulse('common');
+      toast(myCard.name + ' is gone...', '');
+    }
+    renderSchool();
+    renderTopbar();
+  }, 1000);
 }
 
 /* ---- tabs ---- */
@@ -1453,14 +1811,19 @@ if (typeof globalThis !== 'undefined') {
   globalThis.__TC = {
     CORE_SET: CORE_SET, TIERS: TIERS, TIER_BY_KEY: TIER_BY_KEY, TIER_COUNTS: TIER_COUNTS, BY_TIER: BY_TIER, BY_ID: BY_ID,
     TIER_POWER_RANGE: TIER_POWER_RANGE,
-    PACK_PRICE: PACK_PRICE, STARTER_PACKS: STARTER_PACKS, ALLOWANCE_BASE: ALLOWANCE_BASE, SUPERMARKET_CHANCE: SUPERMARKET_CHANCE,
+    PACK_PRICE: PACK_PRICE, SALE_PACK_PRICE: SALE_PACK_PRICE, STARTER_PACKS: STARTER_PACKS, ALLOWANCE_BASE: ALLOWANCE_BASE,
     SOFT_PITY_START: SOFT_PITY_START, HARD_PITY_RAREHOLO: HARD_PITY_RAREHOLO, HARD_PITY_ULTRARARE: HARD_PITY_ULTRARARE,
+    DAY_EVENTS: DAY_EVENTS, dayEvent: dayEvent, packPrice: packPrice,
     freshSave: freshSave, canClaimAllowance: canClaimAllowance, claimAllowance: claimAllowance, nextDay: nextDay,
     buyPack: buyPack, openPack: openPack, sellDuplicate: sellDuplicate, completionFraction: completionFraction,
     hitTierForPack: hitTierForPack, seededRandom: seededRandom, pickWeighted: pickWeighted,
     duplicateValue: duplicateValue, sellAllDuplicates: sellAllDuplicates,
-    NPCS: NPCS, TRADE_PAYOUT: TRADE_PAYOUT, freshSchool: freshSchool,
-    refreshSchoolIfNeeded: refreshSchoolIfNeeded, canFulfillTrade: canFulfillTrade, fulfillTrade: fulfillTrade,
+    NPCS: NPCS, freshSchool: freshSchool, refreshSchoolIfNeeded: refreshSchoolIfNeeded,
+    cardValue: cardValue, addCardById: addCardById, removeCardById: removeCardById,
+    OFFER_QUALITIES: OFFER_QUALITIES, makeOffer: makeOffer,
+    canAcceptOffer: canAcceptOffer, acceptOffer: acceptOffer, counterOffer: counterOffer, declineOffer: declineOffer,
+    buildDuelsForDay: buildDuelsForDay, duelChance: duelChance, resolveDuel: resolveDuel,
+    PAGE_SIZE: PAGE_SIZE, PAGE_REWARD: PAGE_REWARD, pageCards: pageCards, isPageComplete: isPageComplete, claimPageReward: claimPageReward,
   };
 }
 })();
