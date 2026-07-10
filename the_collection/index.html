@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#12181a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Collection">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<title>The Collection</title>
+<style>
+:root{
+  --bg:#12181a; --surface:#1b2326; --surface-2:#202a2d;
+  --ink:#e7e6dd; --ink-soft:#a7ada3; --ink-faint:#71786f;
+  --accent:#d6a64a; --accent-ink:#241a06;
+  --accent2:#4fbfa8;
+  --line:#2a3336; --line-soft:#232c2f;
+  --serif:'Iowan Old Style','Palatino Linotype','Book Antiqua',Georgia,serif;
+  --sans:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;
+  --mono:'SF Mono','IBM Plex Mono',Menlo,Consolas,monospace;
+  --t-common:#9aa39a; --t-uncommon:#7fae86; --t-rare:#4f9a7a;
+  --t-rareholo:#3f8fae; --t-doublerare:#5a5aae; --t-ultrarare:#a765d6;
+  --t-reverseholo:#3f6fae;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--bg); color:var(--ink); font-family:var(--sans);
+  -webkit-font-smoothing:antialiased; overflow:hidden; position:fixed; inset:0;
+  touch-action:manipulation; user-select:none;
+}
+button{font-family:inherit; -webkit-tap-highlight-color:transparent;}
+
+#app{position:absolute; inset:0; display:flex; flex-direction:column;}
+
+header.topbar{
+  flex:none; padding:calc(env(safe-area-inset-top,0px) + 14px) 18px 12px;
+  border-bottom:1px solid var(--line); background:var(--surface);
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+header.topbar h1{font-family:var(--serif); font-size:19px; margin:0; font-weight:600; letter-spacing:-.01em;}
+.coins{
+  font-family:var(--mono); font-size:14px; font-weight:600; color:var(--accent);
+  display:flex; align-items:center; gap:6px; white-space:nowrap;
+}
+.coins .coin-dot{width:9px;height:9px;border-radius:50%;background:var(--accent); box-shadow:0 0 6px var(--accent);}
+
+main{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative;}
+.screen{display:none; height:100%; padding:16px 16px calc(env(safe-area-inset-bottom,0px) + 16px);}
+.screen.active{display:block;}
+
+nav.tabbar{
+  flex:none; display:flex; border-top:1px solid var(--line); background:var(--surface);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+nav.tabbar button{
+  flex:1; background:none; border:none; color:var(--ink-faint); padding:11px 4px 9px;
+  font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase;
+  display:flex; flex-direction:column; align-items:center; gap:4px; min-height:52px;
+}
+nav.tabbar button .tabdot{width:6px;height:6px;border-radius:50%;background:transparent;}
+nav.tabbar button.active{color:var(--accent);}
+nav.tabbar button.active .tabdot{background:var(--accent); box-shadow:0 0 5px var(--accent);}
+nav.tabbar button:active{opacity:.6;}
+
+/* ---- kiosk ---- */
+.kiosk-card{
+  background:var(--surface); border:1px solid var(--line); border-radius:12px;
+  padding:18px; margin-bottom:14px;
+}
+.kiosk-card h2{font-family:var(--serif); font-size:17px; margin:0 0 4px; font-weight:600;}
+.kiosk-card p.sub{color:var(--ink-soft); font-size:13px; margin:0 0 14px;}
+.bigbtn{
+  width:100%; padding:14px; border-radius:9px; border:none; font-size:15px; font-weight:700;
+  background:var(--accent); color:var(--accent-ink); min-height:48px;
+}
+.bigbtn:active{transform:scale(.98);}
+.bigbtn[disabled]{background:var(--surface-2); color:var(--ink-faint);}
+.bigbtn.ghost{background:transparent; border:1px solid var(--accent2); color:var(--accent2);}
+.bigbtn.ghost[disabled]{background:transparent; border-color:var(--line); color:var(--ink-faint);}
+.streak-row{display:flex; align-items:center; gap:8px; font-family:var(--mono); font-size:12px; color:var(--ink-soft); margin-top:10px;}
+.streak-flame{color:var(--accent);}
+.pack-count{font-family:var(--mono); font-size:13px; color:var(--ink-soft); margin-top:8px;}
+
+/* ---- pack opening ---- */
+#screen-pack{display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;}
+.pack-stage{position:relative; width:100%; max-width:280px; aspect-ratio:5/7; margin:0 auto;}
+.pull-card{
+  position:absolute; inset:0; border-radius:16px; background:var(--surface-2);
+  border:2px solid var(--line); display:flex; flex-direction:column; align-items:center;
+  justify-content:center; padding:18px; box-shadow:0 0 0 rgba(0,0,0,0);
+}
+.pull-card.charging{animation:chargeCycle 900ms ease-out;}
+@keyframes chargeCycle{
+  0%{box-shadow:0 0 10px 2px var(--t-common); border-color:var(--t-common);}
+  20%{box-shadow:0 0 14px 3px var(--t-uncommon); border-color:var(--t-uncommon);}
+  40%{box-shadow:0 0 18px 4px var(--t-rare); border-color:var(--t-rare);}
+  60%{box-shadow:0 0 22px 6px var(--t-rareholo); border-color:var(--t-rareholo);}
+  80%{box-shadow:0 0 26px 8px var(--t-doublerare); border-color:var(--t-doublerare);}
+  100%{box-shadow:0 0 32px 10px var(--t-ultrarare); border-color:var(--t-ultrarare);}
+}
+@media (prefers-reduced-motion: reduce){.pull-card.charging{animation:none;}}
+.pull-card .back-mark{font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-faint);}
+.pull-card.revealed .back-mark{display:none;}
+.pull-card .card-name{font-family:var(--serif); font-size:20px; font-weight:600; margin:6px 0 2px; display:none;}
+.pull-card .card-type{font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-soft); display:none;}
+.pull-card .card-tier{font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:.06em; margin-top:10px; padding:4px 10px; border-radius:20px; display:none;}
+.pull-card .card-flavor{font-size:12.5px; color:var(--ink-soft); margin-top:12px; display:none; max-width:34ch;}
+.pull-card .badges{display:none; gap:6px; margin-top:8px;}
+.pull-card.revealed .card-name,
+.pull-card.revealed .card-type,
+.pull-card.revealed .card-tier,
+.pull-card.revealed .card-flavor,
+.pull-card.revealed .badges{display:block;}
+.pull-card.revealed .badges{display:flex;}
+.badge{font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:20px; font-weight:700;}
+.badge.new{background:var(--accent2); color:#04211c;}
+.badge.foil{background:var(--t-reverseholo); color:#fff;}
+.pack-hint{margin-top:20px; font-family:var(--mono); font-size:12px; color:var(--ink-faint); letter-spacing:.04em;}
+.pack-progress{display:flex; gap:6px; margin-top:16px;}
+.pack-progress span{width:7px;height:7px;border-radius:50%; background:var(--line);}
+.pack-progress span.done{background:var(--accent);}
+
+/* ---- binder ---- */
+.binder-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;}
+.binder-head h2{font-family:var(--serif); font-size:18px; margin:0; font-weight:600;}
+.progress-bar{height:6px; border-radius:4px; background:var(--surface-2); overflow:hidden; margin-bottom:14px;}
+.progress-bar .fill{height:100%; background:var(--accent2);}
+.binder-toggle{
+  font-family:var(--mono); font-size:11px; text-transform:uppercase; letter-spacing:.05em;
+  color:var(--ink-soft); background:var(--surface-2); border:1px solid var(--line);
+  border-radius:20px; padding:6px 12px;
+}
+.binder-toggle.active{color:var(--accent); border-color:var(--accent);}
+.binder-grid{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(58px,1fr)); gap:8px; padding-bottom:20px;
+}
+.binder-slot{
+  aspect-ratio:5/7; border-radius:8px; border:1.5px solid var(--line); background:var(--surface);
+  display:flex; align-items:center; justify-content:center; position:relative; font-family:var(--mono);
+  font-size:9px; color:var(--ink-faint); overflow:hidden;
+}
+.binder-slot.owned{background:var(--surface-2);}
+.binder-slot .foil-dot{position:absolute; top:3px; right:3px; width:6px; height:6px; border-radius:50%; background:var(--t-reverseholo);}
+.binder-slot .count{position:absolute; bottom:3px; right:4px; font-size:8.5px; color:var(--ink-soft);}
+
+/* ---- modal ---- */
+#modal-backdrop{position:fixed; inset:0; background:rgba(0,0,0,.6); display:none; align-items:flex-end; z-index:20;}
+#modal-backdrop.open{display:flex;}
+.modal-sheet{
+  background:var(--surface); border-radius:16px 16px 0 0; padding:20px 20px calc(env(safe-area-inset-bottom,0px)+20px);
+  width:100%; border-top:1px solid var(--line);
+}
+.modal-sheet h3{font-family:var(--serif); font-size:20px; margin:0 0 2px;}
+.modal-sheet .card-type{font-family:var(--mono); font-size:11px; text-transform:uppercase; color:var(--ink-soft); letter-spacing:.06em;}
+.modal-sheet .card-tier{display:inline-block; margin:10px 0; font-family:var(--mono); font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px;}
+.modal-sheet p.flavor{color:var(--ink-soft); font-size:13.5px; margin:0 0 16px;}
+.modal-row{display:flex; gap:10px;}
+.closebtn{
+  position:absolute; top:14px; right:14px; width:30px; height:30px; border-radius:50%;
+  background:var(--surface-2); border:1px solid var(--line); color:var(--ink-soft); font-size:15px;
+}
+
+/* ---- summary ---- */
+.summary-card{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:20px; text-align:center;}
+.summary-card h2{font-family:var(--serif); font-size:19px; margin:0 0 6px;}
+.summary-card p{color:var(--ink-soft); font-size:13.5px; margin:0 0 16px;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header class="topbar">
+    <h1>The Collection</h1>
+    <div class="coins"><span class="coin-dot"></span><span id="coin-count">0</span></div>
+  </header>
+
+  <main>
+    <section class="screen active" id="screen-kiosk"></section>
+    <section class="screen" id="screen-pack"></section>
+    <section class="screen" id="screen-binder"></section>
+  </main>
+
+  <nav class="tabbar">
+    <button data-tab="kiosk" class="active"><span class="tabdot"></span>Kiosk</button>
+    <button data-tab="pack"><span class="tabdot"></span>Packs</button>
+    <button data-tab="binder"><span class="tabdot"></span>Binder</button>
+  </nav>
+</div>
+
+<div id="modal-backdrop">
+  <div class="modal-sheet" id="modal-sheet"></div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ================= RNG ================= */
+function hashStr(str){
+  let h = 1779033703 ^ str.length;
+  for (let i = 0; i < str.length; i++) {
+    h = Math.imul(h ^ str.charCodeAt(i), 3432918353);
+    h = (h << 13) | (h >>> 19);
+  }
+  return (h ^ (h >>> 16)) >>> 0;
+}
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function seededRandom(str){ return mulberry32(hashStr(str)); }
+
+/* ================= data ================= */
+var TIERS = [
+  { key:'common',     name:'Common',      sell:1  },
+  { key:'uncommon',   name:'Uncommon',    sell:2  },
+  { key:'rare',       name:'Rare',        sell:5  },
+  { key:'rareholo',   name:'Rare Holo',   sell:12 },
+  { key:'doublerare', name:'Double Rare', sell:30 },
+  { key:'ultrarare',  name:'Ultra Rare',  sell:80 },
+];
+var TIER_BY_KEY = {};
+TIERS.forEach(function(t){ TIER_BY_KEY[t.key] = t; });
+
+var TIER_COUNTS = { common:41, uncommon:25, rare:15, rareholo:10, doublerare:6, ultrarare:3 };
+var TYPES = ['Ember','Aqua','Verdant','Volt','Stone','Shadow','Crystal','Wind','Lumen','Umbra'];
+var NAME_PRE = ['Pyr','Aqua','Ver','Volt','Ston','Shad','Crys','Wynd','Lum','Umbr','Ker','Fen','Glo','Sil','Tor','Bram','Frost','Emb','Grim','Sol','Riv','Thal','Nyx','Ash','Petal','Quill','Moth','Drift','Coal','Marsh'];
+var NAME_SUF = ['ling','ander','ix','ator','oth','ara','ino','ux','ell','wyn','bok','ryn','ash','ora','iss','eth','umo','ika','orn','ael','yx','oba','und','iel','ossom'];
+var FLAVORS = [
+  "Naps in warm patches of sun and grumbles if woken early.",
+  "First recorded near the old quarry road, chasing dropped coins.",
+  "Hums a two-note tune when it thinks nobody's listening.",
+  "Leaves small scorch marks wherever it sits too long.",
+  "Collects shiny bottle caps in an underground burrow.",
+  "Freezes puddles solid just by stepping in them.",
+  "Only comes out after the streetlights flicker on.",
+  "Known to trade favors for anything sugary.",
+  "Grows a little taller every time it wins a staring contest.",
+  "Its footprints glow faintly for a few seconds after it passes.",
+  "Considered good luck by kids at the bus stop.",
+  "Sheds a fine dust that smells like rain.",
+  "Can balance on a single toe for hours, out of stubbornness.",
+  "Answers to its name only if you already have food.",
+  "Curious about zippers, backpacks, and anything that clicks."
+];
+
+function buildCoreSet(){
+  var order = [];
+  Object.keys(TIER_COUNTS).forEach(function(k){
+    for (var i = 0; i < TIER_COUNTS[k]; i++) order.push(k);
+  });
+  var shuffleRand = seededRandom('the-collection-core-shuffle-v1');
+  for (var i = order.length - 1; i > 0; i--) {
+    var j = Math.floor(shuffleRand() * (i + 1));
+    var tmp = order[i]; order[i] = order[j]; order[j] = tmp;
+  }
+  var seen = {};
+  var cards = order.map(function(tierKey, idx){
+    var id = 'c' + String(idx + 1).padStart(3, '0');
+    var rand = seededRandom(id);
+    var pre = NAME_PRE[Math.floor(rand() * NAME_PRE.length)];
+    var suf = NAME_SUF[Math.floor(rand() * NAME_SUF.length)];
+    var type = TYPES[Math.floor(rand() * TYPES.length)];
+    var flavor = FLAVORS[Math.floor(rand() * FLAVORS.length)];
+    var name = pre + suf;
+    if (seen[name]) name = name + (idx + 1);
+    seen[name] = true;
+    return { id: id, name: name, type: type, tier: tierKey, flavor: flavor };
+  });
+  return cards;
+}
+var CORE_SET = buildCoreSet();
+var BY_ID = {};
+var BY_TIER = {};
+CORE_SET.forEach(function(c){
+  BY_ID[c.id] = c;
+  (BY_TIER[c.tier] = BY_TIER[c.tier] || []).push(c);
+});
+
+/* ================= economy ================= */
+var PACK_PRICE = 40;
+var STARTER_PACKS = 3;
+var ALLOWANCE_BASE = 15;
+var SOFT_PITY_START = 8;
+var HARD_PITY_RAREHOLO = 15;
+var HARD_PITY_ULTRARARE = 40;
+var HIT_WEIGHTS_BASE = { rare: 0.55, rareholo: 0.30, doublerare: 0.10, ultrarare: 0.05 };
+var SAVE_KEY = 'tc_save_v1';
+
+function freshSave(){
+  return {
+    version: 1,
+    coins: 0,
+    packsUnopened: STARTER_PACKS,
+    collection: {},
+    pity: { sinceRareHoloPlus: 0, sinceUltraRare: 0 },
+    allowance: { lastClaimDate: null, streak: 0 },
+    packsOpenedTotal: 0,
+  };
+}
+
+function todayKey(d){
+  d = d || new Date();
+  return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+}
+function canClaimAllowance(save){ return save.allowance.lastClaimDate !== todayKey(); }
+function claimAllowance(save){
+  if (!canClaimAllowance(save)) return 0;
+  var today = todayKey();
+  var yesterday = todayKey(new Date(Date.now() - 86400000));
+  save.allowance.streak = (save.allowance.lastClaimDate === yesterday) ? save.allowance.streak + 1 : 1;
+  var bonus = Math.min(save.allowance.streak - 1, 10) * 2;
+  var amount = ALLOWANCE_BASE + bonus;
+  save.coins += amount;
+  save.allowance.lastClaimDate = today;
+  return amount;
+}
+
+function buyPack(save){
+  if (save.coins < PACK_PRICE) return false;
+  save.coins -= PACK_PRICE;
+  save.packsUnopened += 1;
+  return true;
+}
+
+function pickWeighted(rand, weights){
+  var keys = Object.keys(weights);
+  var total = keys.reduce(function(a, k){ return a + weights[k]; }, 0);
+  var r = rand() * total;
+  for (var i = 0; i < keys.length; i++) {
+    r -= weights[keys[i]];
+    if (r <= 0) return keys[i];
+  }
+  return keys[keys.length - 1];
+}
+
+function hitTierForPack(save, rand){
+  if (save.pity.sinceUltraRare >= HARD_PITY_ULTRARARE) return 'ultrarare';
+  if (save.pity.sinceRareHoloPlus >= HARD_PITY_RAREHOLO) return 'rareholo';
+  var boost = Math.min(save.pity.sinceRareHoloPlus / SOFT_PITY_START, 1) * 0.25;
+  var weights = {
+    rare: Math.max(HIT_WEIGHTS_BASE.rare - boost, 0.15),
+    rareholo: HIT_WEIGHTS_BASE.rareholo + boost * 0.6,
+    doublerare: HIT_WEIGHTS_BASE.doublerare + boost * 0.25,
+    ultrarare: HIT_WEIGHTS_BASE.ultrarare + boost * 0.15,
+  };
+  return pickWeighted(rand, weights);
+}
+
+function drawCard(tierKey, rand){
+  var pool = BY_TIER[tierKey];
+  var card = pool[Math.floor(rand() * pool.length)];
+  var reverseEligible = tierKey === 'common' || tierKey === 'uncommon' || tierKey === 'rare';
+  var reverseHolo = reverseEligible && rand() < 0.12;
+  return { id: card.id, reverseHolo: reverseHolo };
+}
+
+function applyPull(save, pull){
+  var rec = save.collection[pull.id];
+  var isNew = !rec;
+  if (!rec) { rec = { count: 0, reverseHolo: false }; save.collection[pull.id] = rec; }
+  rec.count += 1;
+  if (pull.reverseHolo) rec.reverseHolo = true;
+  return isNew;
+}
+
+function openPack(save, rand){
+  rand = rand || Math.random;
+  if (save.packsUnopened <= 0) return null;
+  save.packsUnopened -= 1;
+  save.packsOpenedTotal += 1;
+
+  var pulls = [];
+  for (var i = 0; i < 3; i++) pulls.push(drawCard('common', rand));
+  pulls.push(drawCard(pickWeighted(rand, { uncommon: 0.70, rare: 0.25, rareholo: 0.05 }), rand));
+
+  var hitTier = hitTierForPack(save, rand);
+  if (hitTier === 'ultrarare') save.pity.sinceUltraRare = 0;
+  else save.pity.sinceUltraRare += 1;
+  if (hitTier === 'rareholo' || hitTier === 'doublerare' || hitTier === 'ultrarare') save.pity.sinceRareHoloPlus = 0;
+  else save.pity.sinceRareHoloPlus += 1;
+  pulls.push(drawCard(hitTier, rand));
+
+  var results = pulls.map(function(p){
+    var isNew = applyPull(save, p);
+    var card = BY_ID[p.id];
+    return { id: p.id, name: card.name, type: card.type, tier: card.tier, flavor: card.flavor, reverseHolo: p.reverseHolo, isNew: isNew };
+  });
+  return results;
+}
+
+function sellDuplicate(save, id){
+  var rec = save.collection[id];
+  if (!rec || rec.count <= 1) return 0;
+  var card = BY_ID[id];
+  var tier = TIER_BY_KEY[card.tier];
+  rec.count -= 1;
+  save.coins += tier.sell;
+  return tier.sell;
+}
+
+function completionFraction(save){
+  return Object.keys(save.collection).length / CORE_SET.length;
+}
+
+function loadSave(){
+  try {
+    var raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      var parsed = JSON.parse(raw);
+      var base = freshSave();
+      base.coins = parsed.coins || 0;
+      base.packsUnopened = (typeof parsed.packsUnopened === 'number') ? parsed.packsUnopened : STARTER_PACKS;
+      base.collection = parsed.collection || {};
+      base.pity = parsed.pity || base.pity;
+      base.allowance = parsed.allowance || base.allowance;
+      base.packsOpenedTotal = parsed.packsOpenedTotal || 0;
+      return base;
+    }
+  } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
+  return freshSave();
+}
+function persist(save){
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {}
+}
+
+/* ================= UI ================= */
+var save = loadSave();
+var els = {};
+var activeTab = 'kiosk';
+var packSession = null;
+
+function $(id){ return document.getElementById(id); }
+
+function fmtCoins(n){ return String(Math.floor(n)); }
+
+function renderTopbar(){
+  var el = $('coin-count');
+  if (el) el.textContent = fmtCoins(save.coins);
+}
+
+function renderKiosk(){
+  var el = $('screen-kiosk');
+  if (!el) return;
+  var canClaim = canClaimAllowance(save);
+  var streak = save.allowance.streak;
+  el.innerHTML =
+    '<div class="kiosk-card">' +
+      '<h2>Allowance</h2>' +
+      '<p class="sub">Claim once a day. Keep the streak going for a bigger bonus.</p>' +
+      '<button class="bigbtn" id="btn-claim"' + (canClaim ? '' : ' disabled') + '>' +
+        (canClaim ? 'Claim allowance (+' + (ALLOWANCE_BASE + Math.min(streak, 10) * 2) + ')' : 'Already claimed today') +
+      '</button>' +
+      (streak > 0 ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + streak + '-day streak</div>' : '') +
+    '</div>' +
+    '<div class="kiosk-card">' +
+      '<h2>The Kiosk</h2>' +
+      '<p class="sub">A pack costs ' + PACK_PRICE + ' coins.</p>' +
+      '<button class="bigbtn" id="btn-buy"' + (save.coins < PACK_PRICE ? ' disabled' : '') + '>Buy a pack</button>' +
+      '<div class="pack-count">' + save.packsUnopened + ' unopened pack' + (save.packsUnopened === 1 ? '' : 's') + ' waiting</div>' +
+    '</div>';
+  var claimBtn = $('btn-claim');
+  if (claimBtn) claimBtn.addEventListener('click', function(){
+    var amount = claimAllowance(save);
+    if (amount > 0) { persist(save); renderTopbar(); renderKiosk(); }
+  });
+  var buyBtn = $('btn-buy');
+  if (buyBtn) buyBtn.addEventListener('click', function(){
+    if (buyPack(save)) { persist(save); renderTopbar(); renderKiosk(); }
+  });
+}
+
+function startPackSession(){
+  if (save.packsUnopened <= 0) { switchTab('kiosk'); return; }
+  var pulls = openPack(save, Math.random);
+  persist(save);
+  renderTopbar();
+  packSession = { pulls: pulls, index: 0 };
+  renderPackScreen();
+}
+
+function renderPackScreen(){
+  var el = $('screen-pack');
+  if (!el) return;
+  if (!packSession) {
+    el.innerHTML =
+      '<div class="kiosk-card" style="text-align:center;">' +
+        '<h2>No packs to open</h2>' +
+        '<p class="sub">' + save.packsUnopened + ' waiting. Visit the kiosk to buy one, or open one below.</p>' +
+        '<button class="bigbtn"' + (save.packsUnopened <= 0 ? ' disabled' : '') + ' id="btn-open-from-tab">Open a pack</button>' +
+      '</div>';
+    var b = $('btn-open-from-tab');
+    if (b) b.addEventListener('click', startPackSession);
+    return;
+  }
+  if (packSession.index >= packSession.pulls.length) {
+    var newCount = packSession.pulls.filter(function(p){ return p.isNew; }).length;
+    var order = ['common','uncommon','rare','rareholo','doublerare','ultrarare'];
+    var best = packSession.pulls.reduce(function(a, p){ return order.indexOf(p.tier) > order.indexOf(a.tier) ? p : a; }, packSession.pulls[0]);
+    el.innerHTML =
+      '<div class="summary-card">' +
+        '<h2>Pack complete</h2>' +
+        '<p>' + newCount + ' new card' + (newCount === 1 ? '' : 's') + '. Best pull: ' + best.name + ' (' + TIER_BY_KEY[best.tier].name + ').</p>' +
+        '<button class="bigbtn" id="btn-continue">Back to kiosk</button>' +
+      '</div>';
+    var c = $('btn-continue');
+    if (c) c.addEventListener('click', function(){ packSession = null; switchTab('kiosk'); });
+    return;
+  }
+  var pull = packSession.pulls[packSession.index];
+  var dots = packSession.pulls.map(function(_, i){ return '<span class="' + (i < packSession.index ? 'done' : '') + '"></span>'; }).join('');
+  el.innerHTML =
+    '<div class="pack-stage"><div class="pull-card" id="pull-card">' +
+      '<span class="back-mark">Tap to reveal</span>' +
+      '<div class="card-name"></div><div class="card-type"></div>' +
+      '<div class="card-tier"></div><div class="badges"></div>' +
+      '<div class="card-flavor"></div>' +
+    '</div></div>' +
+    '<div class="pack-progress">' + dots + '</div>' +
+    '<div class="pack-hint" id="pack-hint">Card ' + (packSession.index + 1) + ' of ' + packSession.pulls.length + '</div>';
+  var card = $('pull-card');
+  card.addEventListener('click', function onReveal(){
+    card.removeEventListener('click', onReveal);
+    card.classList.add('charging');
+    var done = false;
+    var timeoutId;
+    var finish = function(){
+      if (done) return;
+      done = true;
+      clearTimeout(timeoutId);
+      card.removeEventListener('animationend', finish);
+      revealPull(card, pull);
+    };
+    card.addEventListener('animationend', finish);
+    timeoutId = setTimeout(finish, 1000);
+  }, { once: true });
+}
+
+function revealPull(card, pull){
+  var tier = TIER_BY_KEY[pull.tier];
+  card.classList.remove('charging');
+  card.classList.add('revealed');
+  card.style.borderColor = 'var(--t-' + pull.tier + ')';
+  card.style.boxShadow = '0 0 24px 4px var(--t-' + pull.tier + ')';
+  card.querySelector('.card-name').textContent = pull.name;
+  card.querySelector('.card-type').textContent = pull.type;
+  var tierEl = card.querySelector('.card-tier');
+  tierEl.textContent = tier.name;
+  tierEl.style.display = 'inline-block';
+  tierEl.style.background = 'var(--t-' + pull.tier + ')';
+  tierEl.style.color = '#0c0f0d';
+  card.querySelector('.card-flavor').textContent = pull.flavor;
+  var badges = card.querySelector('.badges');
+  badges.innerHTML =
+    (pull.isNew ? '<span class="badge new">NEW</span>' : '') +
+    (pull.reverseHolo ? '<span class="badge foil">REVERSE HOLO</span>' : '');
+  var hint = $('pack-hint');
+  if (hint) hint.textContent = 'Tap anywhere to continue';
+  document.getElementById('screen-pack').addEventListener('click', function onNext(){
+    document.getElementById('screen-pack').removeEventListener('click', onNext);
+    packSession.index += 1;
+    renderPackScreen();
+  }, { once: true });
+}
+
+var binderShowMissing = false;
+function renderBinder(){
+  var el = $('screen-binder');
+  if (!el) return;
+  var owned = Object.keys(save.collection).length;
+  var pct = Math.round(completionFraction(save) * 100);
+  var list = CORE_SET.filter(function(c){ return !binderShowMissing || !save.collection[c.id]; });
+  var slots = list.map(function(c){
+    var rec = save.collection[c.id];
+    var cls = 'binder-slot' + (rec ? ' owned' : '');
+    var style = rec ? ' style="border-color:var(--t-' + c.tier + ')"' : '';
+    return '<div class="' + cls + '" data-id="' + c.id + '"' + style + '>' +
+      (rec ? (rec.reverseHolo ? '<span class="foil-dot"></span>' : '') + (rec.count > 1 ? '<span class="count">x' + rec.count + '</span>' : '') + c.name.slice(0,3).toUpperCase() : '?') +
+    '</div>';
+  }).join('');
+  el.innerHTML =
+    '<div class="binder-head"><h2>Core Set &middot; ' + owned + '/' + CORE_SET.length + '</h2>' +
+      '<button class="binder-toggle' + (binderShowMissing ? ' active' : '') + '" id="btn-toggle-missing">Missing only</button>' +
+    '</div>' +
+    '<div class="progress-bar"><div class="fill" style="width:' + pct + '%"></div></div>' +
+    '<div class="binder-grid">' + slots + '</div>';
+  $('btn-toggle-missing').addEventListener('click', function(){
+    binderShowMissing = !binderShowMissing;
+    renderBinder();
+  });
+  el.querySelectorAll('.binder-slot.owned').forEach(function(slotEl){
+    slotEl.addEventListener('click', function(){ openCardModal(slotEl.getAttribute('data-id')); });
+  });
+}
+
+function openCardModal(id){
+  var card = BY_ID[id];
+  var rec = save.collection[id];
+  if (!card || !rec) return;
+  var tier = TIER_BY_KEY[card.tier];
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="btn-close-modal">&times;</button>' +
+    '<h3>' + card.name + '</h3>' +
+    '<div class="card-type">' + card.type + '</div>' +
+    '<span class="card-tier" style="background:var(--t-' + card.tier + '); color:#0c0f0d;">' + tier.name + '</span>' +
+    (rec.reverseHolo ? ' <span class="badge foil">REVERSE HOLO</span>' : '') +
+    '<p class="flavor">' + card.flavor + '</p>' +
+    '<div class="modal-row">' +
+      '<button class="bigbtn ghost" id="btn-sell"' + (rec.count <= 1 ? ' disabled' : '') + '>Sell duplicate (+' + tier.sell + ')</button>' +
+    '</div>' +
+    '<p class="sub" style="margin-top:10px;color:var(--ink-faint);font-size:12px;">Owned: ' + rec.count + '</p>';
+  $('btn-close-modal').addEventListener('click', closeModal);
+  var sellBtn = $('btn-sell');
+  if (sellBtn) sellBtn.addEventListener('click', function(){
+    if (sellDuplicate(save, id) > 0) { persist(save); renderTopbar(); openCardModal(id); renderBinder(); }
+  });
+  $('modal-backdrop').classList.add('open');
+}
+function closeModal(){ $('modal-backdrop').classList.remove('open'); }
+
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+  document.querySelectorAll('nav.tabbar button').forEach(function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
+  $('screen-' + tab).classList.add('active');
+  if (tab === 'kiosk') renderKiosk();
+  if (tab === 'pack') renderPackScreen();
+  if (tab === 'binder') renderBinder();
+}
+
+function boot(){
+  document.querySelectorAll('nav.tabbar button').forEach(function(btn){
+    btn.addEventListener('click', function(){ switchTab(btn.getAttribute('data-tab')); });
+  });
+  $('modal-backdrop').addEventListener('click', function(e){ if (e.target === this) closeModal(); });
+  renderTopbar();
+  renderKiosk();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+else boot();
+
+if (typeof globalThis !== 'undefined') {
+  globalThis.__TC = {
+    CORE_SET: CORE_SET, TIERS: TIERS, TIER_BY_KEY: TIER_BY_KEY, TIER_COUNTS: TIER_COUNTS, BY_TIER: BY_TIER, BY_ID: BY_ID,
+    PACK_PRICE: PACK_PRICE, STARTER_PACKS: STARTER_PACKS, ALLOWANCE_BASE: ALLOWANCE_BASE,
+    SOFT_PITY_START: SOFT_PITY_START, HARD_PITY_RAREHOLO: HARD_PITY_RAREHOLO, HARD_PITY_ULTRARARE: HARD_PITY_ULTRARARE,
+    freshSave: freshSave, todayKey: todayKey, canClaimAllowance: canClaimAllowance, claimAllowance: claimAllowance,
+    buyPack: buyPack, openPack: openPack, sellDuplicate: sellDuplicate, completionFraction: completionFraction,
+    hitTierForPack: hitTierForPack, seededRandom: seededRandom, pickWeighted: pickWeighted,
+  };
+}
+})();
+</script>
+</body>
+</html>
