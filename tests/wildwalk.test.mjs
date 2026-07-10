@@ -590,7 +590,7 @@ test('biome state stays out of the save shape', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']),
     `save shape changed: ${keys}`);
   for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
@@ -733,7 +733,7 @@ test('boss fight leaves the save shape untouched', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
   // bossKills is a legit persisted achievement counter; any OTHER boss* field is a leak
   for(const k of keys) assert(k==='bossKills' || !/^boss/i.test(k), `boss field leaked into save: ${k}`);
 });
@@ -989,7 +989,7 @@ test('R17 relics never change the persisted save shape', ()=>{
   api.Dex.save();
   const saved = JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/relic/i.test(k), `relic field leaked: ${k}`);
 });
 
@@ -1217,7 +1217,7 @@ test('T18 Save shape unchanged with trinkets equipped/held', ()=>{
   api.Dex.save();
   const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
   const keys=Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']), `save shape changed: ${keys}`);
   for(const k of keys) assert(!/trinket/i.test(k), `trinket field leaked: ${k}`);
 });
 
@@ -1498,7 +1498,7 @@ test('ACH7 save shape is a superset of the old 7 keys', ()=>{
   api.Dex.save();
   const saved = JSON.parse(store['wildwalk_save_v1']);
   const keys = Object.keys(saved).sort();
-  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch']),
+  assert(JSON.stringify(keys)===JSON.stringify(['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch']),
     `save shape wrong: ${keys}`);
 });
 
@@ -1539,7 +1539,7 @@ test('ACH first_catch requires a wild catch, not the auto-caught starter', ()=>{
 // ===================================================================
 // WEATHER / DAY-NIGHT — transient reskin + small balanced dmg/catch mods
 // ===================================================================
-const WSHAPE = ['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch'];
+const WSHAPE = ['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch'];
 
 // (a) documented dmg multiplier + catch bonus — holder-agnostic (attacker-type keyed)
 test('WX1 weather applies documented dmg mult, crit mult and catch bonus', ()=>{
@@ -1735,7 +1735,7 @@ test('SHOP4 buyStock applies effect and marks sold', ()=>{
 test('SHOP5 shop activity does not alter save shape', ()=>{
   const { api, store } = boot();
   const g = api.getG();
-  const canonical = ['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch'];
+  const canonical = ['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','runsLog','seen','upgrades','wildCatch'];
   api.Dex.save();
   const baseKeys = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
   assert(JSON.stringify(baseKeys)===JSON.stringify(canonical), 'baseline save keys drifted: '+baseKeys.join(','));
@@ -1743,6 +1743,85 @@ test('SHOP5 shop activity does not alter save shape', ()=>{
   const after = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
   assert(JSON.stringify(after)===JSON.stringify(canonical), 'save keys changed: '+after.join(','));
   assert(!after.some(k=>/shop|stock|reroll/i.test(k)), 'shop state leaked into save');
+});
+
+// ===================================================================
+// RECORDS — local best-runs leaderboard (Dex.data.runsLog, persisted)
+// ===================================================================
+
+// (a) old save without runsLog loads; runsLog defaults []
+test('REC1 old save without runsLog loads and runsLog defaults []', ()=>{
+  const { api } = boot(JSON.stringify({seen:{a:1},caught:{a:1},best:222,runs:7,essence:44,upgrades:{},muted:true}));
+  assert(Array.isArray(api.Dex.data.runsLog), 'runsLog not an array');
+  assert(api.Dex.data.runsLog.length===0, 'runsLog not empty on old save');
+  assert(api.Dex.data.best===222 && api.Dex.data.runs===7 && api.Dex.data.essence===44, 'old fields did not load');
+  assert(api.Dex.data.muted===true, 'muted did not load');
+});
+
+// (b) recordRun sorts by dist desc and caps at 10; lowest runs dropped
+test('REC2 recordRun sorts desc + caps at 10, drops the two lowest', ()=>{
+  const { api } = boot();
+  api.Dex.data.runsLog = [];
+  const dists = [50,340,120,900,10,470,260,80,610,700,30,150];  // 12 runs, two lowest = 10,30
+  dists.forEach((d,i)=> api.Dex.recordRun({dist:d, tier:1+(i%5), fights:i, dex:i}));
+  const log = api.Dex.data.runsLog;
+  assert(log.length===10, `length ${log.length} != 10`);
+  for(let i=0;i<log.length-1;i++) assert(log[i].dist>=log[i+1].dist, `not desc at ${i}: ${log[i].dist}<${log[i+1].dist}`);
+  const kept = log.map(r=>r.dist);
+  assert(!kept.includes(10) && !kept.includes(30), 'two lowest runs were not dropped');
+  assert(log[0].dist===900, `top run wrong: ${log[0].dist}`);
+});
+
+// recordRun coerces bad input + returns rank; rank -1 if it falls off
+test('REC3 recordRun coerces NaN and returns a rank handle', ()=>{
+  const { api } = boot();
+  api.Dex.data.runsLog = [];
+  const r = api.Dex.recordRun({dist:'oops', tier:undefined, fights:null, dex:NaN});
+  assert(r.rec.dist===0 && r.rec.tier===0 && r.rec.fights===0 && r.rec.dex===0, 'coercion failed');
+  assert(r.rank===0, `rank ${r.rank} != 0`);
+  for(let i=0;i<10;i++) api.Dex.recordRun({dist:1000+i, tier:1, fights:1, dex:1});
+  const r2 = api.Dex.recordRun({dist:1, tier:1, fights:1, dex:1});   // too small, falls off
+  assert(r2.rank===-1, `expected rank -1, got ${r2.rank}`);
+});
+
+// gameOver appends a record and marks the highlight handle
+test('REC4 gameOver records the run and sets lastRunRec highlight', ()=>{
+  const { api } = boot();
+  api.Dex.data.runsLog = [];
+  const g = api.getG();
+  g.dist=555; g.tier=3; g.fights=9; g.souls=0;
+  api.gameOver();
+  assert(g.state==='gameover', 'not gameover');
+  assert(api.Dex.data.runsLog.length===1, 'run not recorded');
+  assert(api.Dex.data.runsLog[0].dist===555, 'recorded dist wrong');
+  assert(g.lastRunRec===api.Dex.data.runsLog[0], 'lastRunRec not the recorded row');
+});
+
+// (d) Records screen opens from title + gameover, Back returns; draw never throws
+test('REC5 records screen: open/back from title + gameover, draw empty + populated', ()=>{
+  const { api, step, clickId } = boot();
+  step(2);                                        // draw title (records button present)
+  api.Dex.data.runsLog = [];
+  assert(clickId('records'), 'no records button on title');
+  assert(api.getG().state==='records', 'did not enter records from title');
+  api.draw();                                     // empty-state draw, must not throw
+  // populate incl. one row === lastRunRec highlight
+  api.Dex.data.runsLog = [];
+  for(let i=0;i<12;i++) api.Dex.recordRun({dist:1000-i*30, tier:1+(i%5), fights:i, dex:i});
+  api.getG().lastRunRec = api.Dex.data.runsLog[0];
+  api.draw();                                     // populated draw, must not throw
+  assert(clickId('back'), 'no back button on records');
+  assert(api.getG().state==='title', `back did not return to title: ${api.getG().state}`);
+
+  // from gameover
+  api.getG().state='gameover'; api.getG().buttons=[];
+  api.draw();
+  assert(clickId('records'), 'no records button on gameover');
+  assert(api.getG().state==='records', 'did not enter records from gameover');
+  assert(api.getG().recordsFrom==='gameover', 'recordsFrom not gameover');
+  api.draw();
+  assert(clickId('back'), 'no back on records (from gameover)');
+  assert(api.getG().state==='gameover', `back did not return to gameover: ${api.getG().state}`);
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
