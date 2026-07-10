@@ -272,6 +272,33 @@ test('3000 driven iterations across all states never throw', ()=>{
   assert(true);
 });
 
+// ---- juice: new sprite motion (wing-flap / blink / lean-recoil / feat flourish) never throws ----
+test('JUICE-MOTION winged+rock+horn render across time with lunge/hurt forced, then idle', ()=>{
+  const { api, step, begin, toBattle } = boot();
+  step(2); begin();
+  assert(toBattle(), 'never reached battle');
+  const g = api.getG();
+  const you = api.activeMon();
+  // RENDER-ONLY sprite swaps: exercise winged wing-flap + rock feat (you) and horn feat (wild)
+  you.sp = api.SP.terralith;    // winged + rock
+  g.wild.sp = api.SP.craghorn;  // spiky + horn
+  // force the transient combat visuals to their peaks (lean + recoil + wind), render-only
+  you.lunge=1; you.hurt=1; g.wild.lunge=1; g.wild.hurt=1;
+  for(let i=0;i<240;i++){ g.t = i*0.05; api.draw(); }   // ~12s sweep, catches blink close + flap arc
+  // neutral idle: flap + blink must be safe at rest too
+  you.lunge=0; you.hurt=0; g.wild.lunge=0; g.wild.hurt=0;
+  for(let i=0;i<120;i++){ g.t = i*0.043; api.draw(); }
+  assert(true); // reaching here without a throw is the assertion
+});
+
+test('JUICE-MOTION bare {bob} opts (pokedex lineup) blink safely across time', ()=>{
+  const { api } = boot();
+  api.openPokedex('title');
+  const g = api.getG();
+  for(let i=0;i<80;i++){ g.t = i*0.09; g.buttons=[]; api.draw(); }  // drawMon called with {bob:i} only
+  assert(g.state==='pokedex', 'left pokedex unexpectedly');
+});
+
 // ---- ability: Burn DoT + stack cap ----
 test('burn deals capped DoT and expires', ()=>{
   const { api } = boot();

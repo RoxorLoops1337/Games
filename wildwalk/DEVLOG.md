@@ -38,13 +38,24 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 18. [x] Prestige / ascension — DONE c18.
 19. [x] Guided tutorial / first-run onboarding — DONE c19.
 20. [x] More biomes + biome-specific boss variety — DONE c20.
-21. [ ] Animated multi-frame sprites / richer idle+attack animation.
+21. [x] Richer idle + attack sprite animation — DONE c21.
 22. [ ] Endless post-game scaling mode.
 23. [ ] Status-effect visual polish (clearer burn/stun/shield readouts).
 24. [ ] Online Cloudflare KV leaderboard (functions/api/, deferred from #15).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c21 — Richer procedural sprite animation** (studio: art-designer, animation-designer, lead, engineer, QA).
+  Four purely-visual motion upgrades in drawMon/drawFeature, all deterministic functions of (t, opts) — no
+  new state, no timer, no Dex field, no combat/timing/balance change: (1) enabled the winged wing-flap (was
+  disabled via a *0), a gentle ±0.15rad beat; (2) per-mon BLINK — eyes became ellipses scaled by a clamped
+  factor 1-0.88*pow(max(0,sin(t*1.85+bob*7)),40) ∈[0.12,1], a brief close ~every 3.4s, phase-shifted per mon
+  so lineups don't blink in unison (at rest blink=1 → ellipse≡the old arc, pixel-identical); (3) attack LEAN
+  (rotate lunge*0.16) + hurt RECOIL (−hurtAmt*0.12) in unscaled space so each fighter leans toward its foe;
+  (4) idle-liveliness flourishes on two static feats (rock chunks micro-bob, horn gleam twinkles). Every term
+  collapses to the current idle look when its opt is 0/absent, so all non-battle callers (title/starter/
+  choice/pokedex/sanctuary) are unchanged. +2 render-safety tests drive draw() 360× over winged/rock/horn
+  sprites with lunge/hurt forced to peak, asserting no throw under the stub ctx. 152/152, 0 flakes. No save change.
 - **c20 — More biomes + biome-themed bosses** (studio: designer, ux-designer, lead, engineer, QA).
   Grew the biome roster 6 → 8 with two endgame zones: idx6 Frostbound Tundra (favor Water/Rock, moon,
   icy blue-white, prop none) and idx7 The Firstlight (favor Volt/Fire, sun, radiant gold/violet starfield —
