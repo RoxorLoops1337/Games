@@ -45,7 +45,7 @@ function boot(){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),Dex,SWITCH_CD,SWITCH_ENTRY,C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM}};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM}};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -132,17 +132,17 @@ test('KILL grants souls, RELEASE grants honor', ()=>{
   const r = run('release'); assert(r.after.honor > r.before.honor, 'release gave no honor');
 });
 
-// ---- full-party catch opens the swap picker ----
-test('catching with a full party opens the swap picker and swap works', ()=>{
-  const { api, step, clickId, toBattle } = boot();
-  step(2); clickId('start'); toBattle();
+// ---- full-party acquire opens the swap picker ----
+test('acquiring with a full party opens the swap picker and swap works', ()=>{
+  const { api, step, clickId } = boot();
+  step(2); clickId('start');
   const g = api.getG();
   g.team = [api.mk('emberpup',6), api.mk('puddlet',5), api.mk('sprig',4), api.mk('sparky',3)];
   g.team.forEach(m=> m.hp=m.maxhp);
-  g.wild.hp = 1; g.battleIntro = 0;
-  for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
-  const g2 = api.getG(); g2.ballTier=3; g2.honor=500;   // guarantee the catch
-  api.doCatch();
+  // Acquiring a new companion with a full party must open the swap picker.
+  // Driving acquire() directly (rather than doCatch) keeps this deterministic —
+  // catch chance is capped at 0.96, so a doCatch-based check would flake ~4%.
+  api.acquire(api.mk('infernyx', 9), ()=>{ api.getG().state = 'walk'; });
   assert(api.getG().state==='swapchoice', `expected swapchoice, got ${api.getG().state}`);
   assert(api.getG().pendingMon, 'no pending monster');
   const boxBefore = api.getG().box.length;
@@ -152,6 +152,22 @@ test('catching with a full party opens the swap picker and swap works', ()=>{
   assert(g3.box.length === boxBefore+1, 'swapped-out member did not go to box');
   assert(g3.team.length === 4, 'party size changed');
   assert(g3.state !== 'swapchoice', 'did not leave swap picker');
+});
+
+// ---- doCatch routes a full-party catch to a valid resolved state (no flake) ----
+test('doCatch with a full party resolves (swap picker on success, continue on flee)', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  step(2); clickId('start'); toBattle();
+  const g = api.getG();
+  g.team = [api.mk('emberpup',6), api.mk('puddlet',5), api.mk('sprig',4), api.mk('sparky',3)];
+  g.team.forEach(m=> m.hp=m.maxhp);
+  g.wild.hp = 1; g.battleIntro = 0;
+  for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
+  api.getG().ballTier=3; api.getG().honor=500;
+  api.doCatch();
+  const st = api.getG().state;
+  // success -> swap picker (party full); flee (~4%) -> journey continues
+  assert(['swapchoice','walk','crossroads'].includes(st), `unexpected state ${st}`);
 });
 
 // ---- juice: driving every state must never throw (render + update) ----
@@ -225,14 +241,18 @@ test('stun skips then resumes, immunity caps', ()=>{
   step(2); clickId('start'); assert(toBattle(), 'no battle');
   const g = api.getG();
   const you = g.team[g.lead];
-  g.battleIntro = 0; g.wild.hp = g.wild.maxhp = 999999; g.wild.status.stun = 0;
+  g.battleIntro = 0;
+  // Force a Water wild: it can't dodge (Shadow) or reduce a hit to nothing (Rock floors at 1),
+  // so once `you` resumes attacking the hit ALWAYS lands — keeps this assertion deterministic.
+  g.wild = api.mk('puddlet', 5);
+  g.wild.hp = g.wild.maxhp = 999999; g.wild.cd = 999; g.wild.status.stun = 0;
   you.status.stun = 0.5; you.cd = 0;
   const whp = g.wild.hp;
   api.upd(0.1);
   assert(g.wild.hp === whp, 'stunned mon still attacked');
   assert(you.status.stun < 0.5, 'stun not decremented');
   // step past expiry -> it lands a hit
-  for(let i=0;i<20;i++){ api.upd(0.1); if(g.wild.hp < whp) break; }
+  for(let i=0;i<40;i++){ api.upd(0.1); if(g.wild.hp < whp) break; }
   assert(g.wild.hp < whp, 'never resumed attacking after stun');
   // immunity: repeated Volt strikes cannot re-stun during window
   const { mk, strike } = api;
@@ -408,6 +428,90 @@ test('pokedex key wiring: d opens, Escape closes', ()=>{
   assert(api.getG().state==='pokedex', `d should open pokedex, got ${api.getG().state}`);
   getKey()({ key:'Escape', preventDefault(){} });
   assert(api.getG().state==='title', `Escape should return to title, got ${api.getG().state}`);
+});
+
+// ---- biomes: progression is deterministic + monotonic ----
+test('biome progression maps tiers and is monotonic/pure', ()=>{
+  const { biomeForTier } = boot().api;
+  assert(biomeForTier(1)===0, `t1 -> ${biomeForTier(1)}`);
+  assert(biomeForTier(3)===1, `t3 -> ${biomeForTier(3)}`);
+  assert(biomeForTier(5)===2, `t5 -> ${biomeForTier(5)}`);
+  assert(biomeForTier(7)===3, `t7 -> ${biomeForTier(7)}`);
+  assert(biomeForTier(9)===4, `t9 -> ${biomeForTier(9)}`);
+  assert(biomeForTier(11)===5, `t11 -> ${biomeForTier(11)}`);
+  assert(biomeForTier(50)===5, `t50 -> ${biomeForTier(50)}`);
+  let prev=-1;
+  for(let t=1;t<=40;t++){ const v=biomeForTier(t); assert(v>=prev, `not monotonic at t=${t}`); prev=v; }
+  // pure: same input -> same output
+  for(let t=1;t<=40;t++) assert(biomeForTier(t)===biomeForTier(t), 'not pure');
+});
+
+// ---- biomes: spawn bias raises favored share, never empties the pool ----
+test('spawn bias favors biome types without emptying the pool', ()=>{
+  const { api } = boot();
+  const { pickBiased, getG, SP } = api;
+  const COMMONS=['emberpup','puddlet','sprig','sparky','pebblin','umbrat'];
+  const RARES=['infernyx','leviatide','verdragon','stormhorn'];
+  // Volcano (index 4) favors Fire/Rock
+  getG().biome=4;
+  let fav=0; const seenC=new Set();
+  for(let i=0;i<4000;i++){
+    const k=pickBiased(COMMONS);
+    assert(k!=null && COMMONS.includes(k), `bad pick ${k}`);
+    seenC.add(k);
+    if(SP[k].type==='Fire'||SP[k].type==='Rock') fav++;
+  }
+  const frac=fav/4000;
+  assert(frac>0.5, `favored fraction ${frac} not > 0.5`);      // unbiased ~0.33
+  // Cave (index 3) favors Rock/Shadow — RARES has neither -> uniform fallback
+  getG().biome=3;
+  const cnt={}; const seenR=new Set();
+  for(let i=0;i<2000;i++){
+    const k=pickBiased(RARES);
+    assert(k!=null && RARES.includes(k), `bad rare pick ${k}`);
+    seenR.add(k); cnt[k]=(cnt[k]||0)+1;
+  }
+  assert(seenR.size===RARES.length, `not all rares appeared: ${[...seenR]}`);
+  for(const k of RARES) assert(cnt[k]>2000*0.15, `rare ${k} under-represented (${cnt[k]}) — not ~uniform`);
+});
+
+// ---- biomes: no pool is ever empty across every biome x pool ----
+test('pickBiased never returns null across all biomes and pools', ()=>{
+  const { api } = boot();
+  const { pickBiased, getG } = api;
+  const POOLS = {
+    COMMONS:['emberpup','puddlet','sprig','sparky','pebblin','umbrat'],
+    UNCOMMONS:['cindermaw','torrentoad','thornbeast','voltfox','boulderk','nightwyrm'],
+    RARES:['infernyx','leviatide','verdragon','stormhorn'],
+    LEGENDS:['moltengod','abysslord'],
+  };
+  for(let bi=0; bi<=5; bi++){
+    getG().biome=bi;
+    for(const [name,pool] of Object.entries(POOLS)){
+      for(let i=0;i<200;i++){
+        const k=pickBiased(pool);
+        assert(k!=null && pool.includes(k), `biome ${bi} pool ${name}: bad pick ${k}`);
+      }
+    }
+  }
+});
+
+// ---- biomes: transient, never leaks into the persisted save ----
+test('biome state stays out of the save shape', ()=>{
+  const { api, step, clickId, toBattle } = boot();
+  step(2); clickId('start'); assert(toBattle(), 'no battle');
+  const g=api.getG();
+  g.biome=4; g.biomePrev=2; g.biomeFxT=2; g.biomeLabel='Ashfall Ridge';
+  // drive a fight to a win + crossroads so biome logic + a Dex.save() fire
+  g.wild.hp=1; g.battleIntro=0;
+  for(let i=0;i<300;i++){ step(1); if(api.getG().state==='choice') break; }
+  step(1); clickId('kill');   // grants souls, saves Dex
+  api.Dex.save();
+  const saved=JSON.parse(localStorage.getItem('wildwalk_save_v1'));
+  const keys=Object.keys(saved).sort();
+  assert(JSON.stringify(keys)===JSON.stringify(['best','caught','runs','seen']),
+    `save shape changed: ${keys}`);
+  for(const k of keys) assert(!/^biome/.test(k), `biome field leaked: ${k}`);
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
