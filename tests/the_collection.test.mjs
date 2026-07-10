@@ -318,6 +318,106 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.claimPageReward(S22, 0) === 0, 'a page reward can only be claimed once');
 }
 
+// ---- chores (daily odd jobs) ----
+{
+  ok(Array.isArray(TC.CHORES) && TC.CHORES.length >= 3, 'there are at least three chores');
+  ok(TC.CHORES.every(c => c.id && c.name && c.prizes), 'every chore has an id, name and prize table');
+  // outcome deterministic per chore per day
+  const a = TC.choreOutcome('laundry', 5);
+  const b = TC.choreOutcome('laundry', 5);
+  ok(JSON.stringify(a) === JSON.stringify(b), 'chore outcome is deterministic per chore + day');
+  ok(a && typeof a.coins === 'number' && a.coins >= 0 && typeof a.candy === 'number', 'chore outcome has coins and candy');
+  const S = TC.freshSave();
+  ok(TC.canDoChore(S, 'laundry') === true, 'a chore is available on a fresh day');
+  const beforeCoins = S.coins, beforeCandy = S.candy;
+  const res = TC.doChore(S, 'laundry');
+  ok(res && S.coins === beforeCoins + res.coins && S.candy === beforeCandy + res.candy, 'doing a chore banks its coins and candy');
+  if (res.cardId) ok(S.collection[res.cardId] && S.collection[res.cardId].count >= 1, 'a lucky-card chore adds the card');
+  ok(TC.canDoChore(S, 'laundry') === false, 'a chore cannot be repeated the same day');
+  ok(TC.doChore(S, 'laundry') === null, 'repeating a chore returns null');
+  TC.nextDay(S);
+  ok(TC.canDoChore(S, 'laundry') === true, 'the chore is available again the next day');
+  // across many days every prize kind actually shows up somewhere
+  let sawCoins = false, sawCandy = false;
+  for (let d = 2; d <= 120; d++) {
+    const o = TC.choreOutcome('dishes', d);
+    if (o.coins > 0) sawCoins = true;
+    if (o.candy > 0) sawCandy = true;
+  }
+  ok(sawCoins && sawCandy, 'chores pay out both coins and candy across many days');
+}
+
+// ---- candy currency ----
+{
+  const S = TC.freshSave();
+  ok(TC.buyCandy(S) === false, 'cannot buy candy with no coins');
+  S.coins = TC.CANDY_PRICE;
+  ok(TC.buyCandy(S) === true && S.candy === 1 && S.coins === 0, 'buying candy spends coins and adds a candy');
+}
+
+// ---- relationships ----
+{
+  const S = TC.freshSave();
+  ok(TC.relOf(S, 'finn') === 0, 'relationships start at neutral 0');
+  ok(TC.relTier(0).key === 'neutral', 'score 0 is the neutral tier');
+  ok(TC.relTier(70).key === 'bestfriend', 'a high score is best friend');
+  ok(TC.relTier(-80).key === 'enemy', 'a low score is enemy');
+  ok(TC.changeRel(S, 'finn', 150) === 100, 'relationship is clamped at +100');
+  ok(TC.changeRel(S, 'finn', -400) === -100, 'relationship is clamped at -100');
+  // candy is the friendship currency
+  const S2 = TC.freshSave();
+  ok(TC.giveCandy(S2, 'ren') === null, 'cannot give candy you do not have');
+  S2.candy = 2;
+  TC.refreshSchoolIfNeeded(S2);
+  const r = TC.giveCandy(S2, 'ren');
+  ok(r && S2.candy === 1 && TC.relOf(S2, 'ren') > 0, 'giving candy costs a candy and raises the relationship');
+  ok(TC.giveCandy(S2, 'ren') === null, 'cannot give the same kid candy twice in a day');
+  // accepting a trade warms the relationship; enemies refuse to trade
+  const S3 = TC.freshSave();
+  TC.changeRel(S3, 'finn', -60);
+  TC.refreshSchoolIfNeeded(S3);
+  ok(S3.school.offers.finn.state === 'refused', 'an enemy refuses to trade');
+  ok(TC.canAcceptOffer(S3, 'finn') === false, 'a refused offer cannot be accepted');
+}
+
+// ---- offers bias toward cards you can actually trade ----
+{
+  const S = TC.freshSave();
+  // own spares of a handful of cards
+  const spares = TC.CORE_SET.slice(0, 6).map(c => c.id);
+  spares.forEach(id => { S.collection[id] = { count: 2, reverseHolo: false }; });
+  TC.refreshSchoolIfNeeded(S);
+  const fulfillable = TC.NPCS.filter(npc => TC.canAcceptOffer(S, npc.id)).length;
+  ok(fulfillable >= 1, 'with spares in hand, at least one kid wants something you can trade');
+}
+
+// ---- steal a card ----
+{
+  ok(TC.stealChance(0) > 0.2 && TC.stealChance(0) < 0.8, 'neutral steal odds sit mid-range');
+  ok(TC.stealChance(100) > TC.stealChance(-100), 'friends are easier to steal from than enemies');
+  ok(TC.stealChance(100) <= 0.8 && TC.stealChance(-100) >= 0.2, 'steal odds are clamped 20-80%');
+  // a clean getaway (rand below chance) nets a card, no relationship hit
+  const S = TC.freshSave();
+  TC.refreshSchoolIfNeeded(S);
+  const before = Object.keys(S.collection).length;
+  const relBefore = TC.relOf(S, 'tova');
+  const good = TC.attemptSteal(S, 'tova', () => 0);
+  ok(good && good.caught === false && good.cardId, 'a successful steal returns the stolen card');
+  ok(Object.keys(S.collection).length >= before, 'the stolen card is added to your binder');
+  ok(TC.relOf(S, 'tova') === relBefore, 'getting away clean does not change the relationship');
+  ok(TC.canSteal(S, 'tova') === false, 'you can only try to steal from a kid once a day');
+  ok(TC.attemptSteal(S, 'tova', () => 0) === null, 'a second same-day steal attempt is rejected');
+  // getting caught (rand above chance) tanks the relationship and costs you a spare
+  const S2 = TC.freshSave();
+  TC.refreshSchoolIfNeeded(S2);
+  const spareId = TC.CORE_SET[0].id;
+  S2.collection[spareId] = { count: 2, reverseHolo: false };
+  const bad = TC.attemptSteal(S2, 'beck', () => 0.999);
+  ok(bad && bad.caught === true, 'a failed steal is flagged as caught');
+  ok(TC.relOf(S2, 'beck') < -20, 'getting caught tanks the relationship');
+  ok(bad.lostCardId === spareId && S2.collection[spareId].count === 1, 'the caught thief loses one spare copy as payback');
+}
+
 // ---- completion ----
 {
   const S7 = TC.freshSave();

@@ -72,6 +72,8 @@ header.topbar h1{font-family:var(--serif); font-size:18px; margin:0; font-weight
   display:flex; align-items:center; gap:6px; white-space:nowrap;
 }
 .coins .coin-dot{width:9px;height:9px;border-radius:50%;background:var(--accent); box-shadow:0 0 6px rgba(226,160,74,.7);}
+.candy{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--t-doublerare); display:flex; align-items:center; gap:4px; white-space:nowrap;}
+.candy .candy-ico{font-size:13px;}
 
 main{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative;}
 .screen{display:none; min-height:100%; padding:16px 16px calc(env(safe-area-inset-bottom,0px) + 16px);}
@@ -514,6 +516,50 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .sale-badge{font-family:var(--mono); font-size:10px; font-weight:700; background:#e07a4a; color:#2a1206; border-radius:20px; padding:2px 8px; margin-left:8px;}
 .page-reward{margin-top:12px;}
 
+/* ---- chores ---- */
+.chore-btn{
+  width:100%; display:flex; align-items:center; gap:12px; text-align:left;
+  background:var(--surface-2); border:1px solid var(--line); border-radius:10px;
+  padding:11px 13px; margin-top:9px; cursor:pointer; color:var(--ink);
+}
+.chore-btn:active{transform:scale(.98);}
+.chore-btn[disabled]{opacity:.5;}
+.chore-emoji{font-size:24px; flex:none; line-height:1;}
+.chore-txt{flex:1; min-width:0; display:flex; flex-direction:column;}
+.chore-txt b{font-family:var(--serif); font-size:14px;}
+.chore-txt small{font-size:11.5px; color:var(--ink-soft);}
+.chore-go{flex:none; font-size:20px; color:var(--accent-deep); font-weight:700;}
+
+/* ---- chore reel ---- */
+.reel-window{
+  margin:6px auto 8px; width:120px; height:120px; border-radius:16px;
+  background:radial-gradient(circle at 50% 40%, #fff, var(--surface-2)); border:2px solid var(--accent);
+  display:flex; align-items:center; justify-content:center; overflow:hidden;
+  box-shadow:inset 0 2px 8px rgba(93,70,35,.25);
+}
+.reel-icon{font-size:60px; line-height:1;}
+.reel-icon.reel-land{animation:reelPop 360ms cubic-bezier(.3,1.5,.5,1);}
+@keyframes reelPop{0%{transform:scale(1.5);}60%{transform:scale(.9);}100%{transform:scale(1);}}
+@media (prefers-reduced-motion: reduce){.reel-icon.reel-land{animation:none;}}
+.reel-result{text-align:center; font-family:var(--mono); font-size:14px; font-weight:700; min-height:20px; margin-bottom:14px;}
+.reel-result.good{color:var(--accent-deep);}
+.reel-result.nada{color:var(--ink-faint);}
+
+/* ---- relationships + social actions ---- */
+.rel-badge{
+  display:inline-block; font-family:var(--mono); font-size:9.5px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.06em; padding:1px 8px; border-radius:20px;
+  border:1px solid; margin-top:2px;
+}
+.social-row{display:flex; gap:8px; margin-top:12px; border-top:1px dashed var(--line); padding-top:11px;}
+.social-btn{
+  flex:1; font-family:var(--mono); font-size:12px; font-weight:700; padding:9px 6px; border-radius:8px;
+  background:var(--surface-2); border:1px solid var(--t-doublerare); color:var(--t-doublerare); cursor:pointer;
+}
+.social-btn.risky{border-color:#c85f2c; color:#c85f2c;}
+.social-btn:active{transform:scale(.97);}
+.social-btn[disabled]{opacity:.45; border-color:var(--line); color:var(--ink-faint);}
+
 /* ---- toasts ---- */
 #toast-stack{
   position:fixed; left:0; right:0; top:calc(env(safe-area-inset-top,0px) + 68px);
@@ -553,6 +599,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
     <h1>The Collection</h1>
     <div class="topbar-stats">
       <span class="day-badge" id="day-badge">Day 1</span>
+      <div class="candy" id="candy-stat" style="display:none;"><span class="candy-ico">🍬</span><span id="candy-count">0</span></div>
       <div class="coins"><span class="coin-dot"></span><span id="coin-count">0</span></div>
     </div>
   </header>
@@ -772,7 +819,7 @@ function dayEvent(day){
 function packPrice(save){ return dayEvent(save.day) === 'sale' ? SALE_PACK_PRICE : PACK_PRICE; }
 
 function freshSchool(){
-  return { wantDay: null, offers: {}, duels: [] };
+  return { wantDay: null, offers: {}, duels: [], gaveCandy: {}, stoleToday: {} };
 }
 
 function freshSave(){
@@ -780,14 +827,138 @@ function freshSave(){
     version: 1,
     day: 1,
     coins: 0,
+    candy: 0,
     packsUnopened: STARTER_PACKS,
     collection: {},
     pity: { sinceRareHoloPlus: 0, sinceUltraRare: 0 },
     allowance: { lastClaimDay: null, streak: 0 },
     packsOpenedTotal: 0,
+    chores: { lastDoneDay: {} },
+    rels: {},
     school: freshSchool(),
     pagesRewarded: {},
   };
+}
+
+/* ================= chores: daily odd jobs with a reveal reel ================= */
+// A handful of once-a-day money actions so the early game isn't just
+// "claim allowance and wait". Each opens a spinning reel that lands on
+// what you found. Outcome is seeded per chore per day (pure + testable);
+// the reel is just the reveal.
+var CHORES = [
+  { id: 'laundry', name: 'Check the laundry', emoji: '🧺',
+    desc: 'Loose change hides in jeans pockets.',
+    reel: ['🪙','🍬','🕳️','🪙','💰','🪙'],
+    prizes: { coin_sm: 42, coin_md: 20, candy: 16, nothing: 14, lucky: 8 } },
+  { id: 'lawn', name: 'Mow the lawn', emoji: '🌱',
+    desc: 'Sweaty work, but the neighbours pay well.',
+    reel: ['🪙','💰','🪙','💰','🪙','🍬'],
+    prizes: { coin_md: 50, coin_lg: 30, candy: 10, nothing: 10 } },
+  { id: 'dishes', name: 'Do the dishes', emoji: '🍽️',
+    desc: 'Mom always slips you a little something.',
+    reel: ['🪙','🪙','🍬','🪙','🕳️','🪙'],
+    prizes: { coin_sm: 48, coin_md: 22, candy: 22, nothing: 8 } },
+];
+var CHORE_BY_ID = {};
+CHORES.forEach(function(c){ CHORE_BY_ID[c.id] = c; });
+var OUTCOME_ICON = { coin_sm: '🪙', coin_md: '💰', coin_lg: '💰', candy: '🍬', lucky: '🃏', nothing: '🕳️' };
+
+function choreOutcome(choreId, day){
+  var chore = CHORE_BY_ID[choreId];
+  if (!chore) return null;
+  var rand = seededRandom('chore-' + choreId + '-day-' + day);
+  var kind = pickWeighted(rand, chore.prizes);
+  var res = { kind: kind, coins: 0, candy: 0, cardId: null };
+  if (kind === 'coin_sm') res.coins = 2 + Math.floor(rand() * 5);
+  else if (kind === 'coin_md') res.coins = 6 + Math.floor(rand() * 7);
+  else if (kind === 'coin_lg') res.coins = 12 + Math.floor(rand() * 10);
+  else if (kind === 'candy') res.candy = 1 + Math.floor(rand() * 2);
+  else if (kind === 'lucky') {
+    var pool = BY_TIER['common'].concat(BY_TIER['uncommon']);
+    res.cardId = pool[Math.floor(rand() * pool.length)].id;
+    res.coins = 3;
+  }
+  return res;
+}
+function canDoChore(save, choreId){ return save.chores.lastDoneDay[choreId] !== save.day; }
+function doChore(save, choreId){
+  if (!canDoChore(save, choreId)) return null;
+  var res = choreOutcome(choreId, save.day);
+  if (!res) return null;
+  save.coins += res.coins;
+  save.candy += res.candy;
+  if (res.cardId) addCardById(save, res.cardId);
+  save.chores.lastDoneDay[choreId] = save.day;
+  return res;
+}
+
+/* ================= candy: a second currency spent on friendships ================= */
+var CANDY_PRICE = 8;
+var CANDY_GIFT_REL = 8;
+function buyCandy(save){
+  if (save.coins < CANDY_PRICE) return false;
+  save.coins -= CANDY_PRICE;
+  save.candy += 1;
+  return true;
+}
+
+/* ================= relationships: friends & enemies at school ================= */
+var ENEMY_THRESHOLD = -40;
+var REL_TIERS = [
+  { min: 60,   key: 'bestfriend', label: 'Best friend', color: 'var(--t-rare)' },
+  { min: 20,   key: 'friend',     label: 'Friend',      color: 'var(--accent2)' },
+  { min: -19,  key: 'neutral',    label: 'Neutral',     color: 'var(--ink-faint)' },
+  { min: -59,  key: 'cold',       label: 'Cold',        color: '#c88a3a' },
+  { min: -100, key: 'enemy',      label: 'Enemy',       color: '#c85f2c' },
+];
+function relOf(save, npcId){ return (save.rels && save.rels[npcId]) || 0; }
+function changeRel(save, npcId, delta){
+  save.rels = save.rels || {};
+  save.rels[npcId] = Math.max(-100, Math.min(100, relOf(save, npcId) + delta));
+  return save.rels[npcId];
+}
+function relTier(score){
+  for (var i = 0; i < REL_TIERS.length; i++) { if (score >= REL_TIERS[i].min) return REL_TIERS[i]; }
+  return REL_TIERS[REL_TIERS.length - 1];
+}
+function giveCandy(save, npcId){
+  if (save.candy < 1) return null;
+  save.school.gaveCandy = save.school.gaveCandy || {};
+  if (save.school.gaveCandy[npcId]) return null;
+  save.candy -= 1;
+  save.school.gaveCandy[npcId] = true;
+  return { rel: changeRel(save, npcId, CANDY_GIFT_REL) };
+}
+
+/* ================= steal a card: risky, relationship-gated ================= */
+function canSteal(save, npcId){
+  return !(save.school.stoleToday && save.school.stoleToday[npcId]);
+}
+// Friends trust you (easier to swipe); enemies keep an eye on you (harder).
+function stealChance(rel){ return Math.min(0.8, Math.max(0.2, 0.45 + rel / 300)); }
+function stealLoot(npcId, day, rand){
+  var tier = pickWeighted(rand, { common: 45, uncommon: 30, rare: 18, rareholo: 7 });
+  var pool = BY_TIER[tier];
+  return pool[Math.floor(rand() * pool.length)].id;
+}
+function attemptSteal(save, npcId, rand){
+  if (!canSteal(save, npcId)) return null;
+  rand = rand || Math.random;
+  save.school.stoleToday = save.school.stoleToday || {};
+  save.school.stoleToday[npcId] = true;
+  var chance = stealChance(relOf(save, npcId));
+  var caught = rand() >= chance;
+  if (!caught) {
+    var loot = stealLoot(npcId, save.day, rand);
+    addCardById(save, loot);
+    return { caught: false, cardId: loot };
+  }
+  // caught red-handed: friendship crashes and they grab a spare of yours
+  changeRel(save, npcId, -35);
+  var lost = null;
+  var spares = spareCardIds(save);
+  if (spares.length) { lost = spares[Math.floor(rand() * spares.length)]; removeCardById(save, lost); }
+  return { caught: true, lostCardId: lost };
 }
 
 // The game runs on its own day counter, not the real calendar date — a
@@ -934,6 +1105,12 @@ function removeCardById(save, id){
   return true;
 }
 
+// Cards you own more than one of — the ones you can trade away without
+// losing them from the binder.
+function spareCardIds(save){
+  return Object.keys(save.collection).filter(function(id){ return save.collection[id].count > 1; });
+}
+
 /* ---- haggling: kids offer card-for-card deals of varying fairness ---- */
 // quality = how good the deal is FOR YOU: what they give (card + coins)
 // versus the kiosk value of what they want. Kids being kids, plenty of
@@ -947,12 +1124,31 @@ var QUALITY_WEIGHTS = { lowball: 40, fair: 40, generous: 20 };
 var BINDER_DAY_WEIGHTS = { lowball: 15, fair: 45, generous: 40 };
 var OFFER_WANT_TIERS = { common: 30, uncommon: 26, rare: 22, rareholo: 14, doublerare: 6, ultrarare: 2 };
 
-function makeOffer(npcId, day, binderDay){
+// Friends skew their offers generous; enemies skew lowball. rel runs -100..100.
+function offerWeightsForRel(rel, binderDay){
+  var base = binderDay ? BINDER_DAY_WEIGHTS : QUALITY_WEIGHTS;
+  var shift = (rel || 0) / 20;
+  return {
+    lowball:  Math.max(2, base.lowball - shift * 6),
+    fair:     base.fair,
+    generous: Math.max(2, base.generous + shift * 6),
+  };
+}
+
+// sparePool = card ids the player owns spares of; when present the kid
+// usually wants one of THOSE (so trades are actually fulfillable), which
+// is what "only kids who want something you have" means in practice.
+function makeOffer(npcId, day, binderDay, rel, sparePool){
   var rand = seededRandom('offer-' + npcId + '-day-' + day);
-  var wantTier = pickWeighted(rand, OFFER_WANT_TIERS);
-  var wantPool = BY_TIER[wantTier];
-  var want = wantPool[Math.floor(rand() * wantPool.length)].id;
-  var quality = pickWeighted(rand, binderDay ? BINDER_DAY_WEIGHTS : QUALITY_WEIGHTS);
+  var want;
+  if (sparePool && sparePool.length && rand() < 0.72) {
+    want = sparePool[Math.floor(rand() * sparePool.length)];
+  } else {
+    var wantTier = pickWeighted(rand, OFFER_WANT_TIERS);
+    var wantPool = BY_TIER[wantTier];
+    want = wantPool[Math.floor(rand() * wantPool.length)].id;
+  }
+  var quality = pickWeighted(rand, offerWeightsForRel(rel, binderDay));
   var band = OFFER_QUALITIES[quality].mul;
   var targetValue = cardValue(want) * (band[0] + rand() * (band[1] - band[0]));
   // their card is the biggest tier that fits inside the target; coins top it up
@@ -982,6 +1178,7 @@ function acceptOffer(save, npcId){
   addCardById(save, o.give);
   save.coins += o.coins;
   o.state = 'done';
+  changeRel(save, npcId, 5); // a completed trade warms things up
   return { gave: o.want, got: o.give, coins: o.coins };
 }
 
@@ -1004,6 +1201,7 @@ function declineOffer(save, npcId){
   var o = save.school.offers[npcId];
   if (!o || o.state !== 'open') return false;
   o.state = 'declined';
+  changeRel(save, npcId, -2); // a small snub
   return true;
 }
 
@@ -1050,10 +1248,19 @@ function refreshSchoolIfNeeded(save){
   if (save.school.wantDay === save.day && save.school.offers && save.school.duels) return;
   save.school.wantDay = save.day;
   var binderDay = dayEvent(save.day) === 'binderday';
+  var spares = spareCardIds(save);
   var offers = {};
-  NPCS.forEach(function(npc){ offers[npc.id] = makeOffer(npc.id, save.day, binderDay); });
+  NPCS.forEach(function(npc){
+    var rel = relOf(save, npc.id);
+    var o = makeOffer(npc.id, save.day, binderDay, rel, spares);
+    // enemies aren't in the mood to trade with you
+    if (rel <= ENEMY_THRESHOLD) o.state = 'refused';
+    offers[npc.id] = o;
+  });
   save.school.offers = offers;
   save.school.duels = buildDuelsForDay(save.day);
+  save.school.gaveCandy = {};
+  save.school.stoleToday = {};
   delete save.school.wants;
   delete save.school.fulfilledToday;
 }
@@ -1087,14 +1294,19 @@ function loadSave(){
       var base = freshSave();
       base.day = (typeof parsed.day === 'number') ? parsed.day : 1;
       base.coins = parsed.coins || 0;
+      base.candy = parsed.candy || 0;
       base.packsUnopened = (typeof parsed.packsUnopened === 'number') ? parsed.packsUnopened : STARTER_PACKS;
       base.collection = parsed.collection || {};
       base.pity = parsed.pity || base.pity;
       base.allowance = parsed.allowance || base.allowance;
       base.packsOpenedTotal = parsed.packsOpenedTotal || 0;
+      base.chores = (parsed.chores && parsed.chores.lastDoneDay) ? parsed.chores : { lastDoneDay: {} };
+      base.rels = parsed.rels || {};
       // pre-haggling saves stored wants/fulfilledToday; refreshSchoolIfNeeded
       // rebuilds the day's offers/duels because school.offers is missing
       base.school = (parsed.school && parsed.school.offers) ? parsed.school : base.school;
+      if (!base.school.gaveCandy) base.school.gaveCandy = {};
+      if (!base.school.stoleToday) base.school.stoleToday = {};
       base.pagesRewarded = parsed.pagesRewarded || {};
       return base;
     }
@@ -1153,6 +1365,9 @@ function sfxWin(){
   });
 }
 function sfxLose(){ beep(330, 0.18, { type: 'sine', volume: 0.05 }); setTimeout(function(){ beep(220, 0.3, { type: 'sine', volume: 0.05 }); }, 160); }
+function sfxTick(){ beep(880, 0.03, { type: 'square', volume: 0.03 }); }
+function sfxSneak(){ beep(140, 0.14, { type: 'sine', volume: 0.045 }); }
+function sfxBusted(){ beep(200, 0.09, { type: 'sawtooth', volume: 0.06 }); setTimeout(function(){ beep(130, 0.22, { type: 'sawtooth', volume: 0.055 }); }, 90); }
 
 var HAPTIC_PATTERNS = { common: 10, uncommon: 14, rare: 22, rareholo: [28, 18, 28], doublerare: [35, 20, 35, 20, 35], ultrarare: [55, 25, 55, 25, 55, 25, 85] };
 function hapticPulse(tierKey){
@@ -1494,6 +1709,12 @@ function fmtCoins(n){ return String(Math.floor(n)); }
 function renderTopbar(){
   var dayEl = $('day-badge');
   if (dayEl) dayEl.textContent = 'Day ' + save.day;
+  var candyStat = $('candy-stat');
+  if (candyStat) {
+    candyStat.style.display = save.candy > 0 ? 'flex' : 'none';
+    var cc = $('candy-count');
+    if (cc) cc.textContent = save.candy;
+  }
   animateCoinsTo(save.coins);
 }
 
@@ -1600,9 +1821,21 @@ function renderHome(){
       '</button>' +
       (streak > 0 ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + streak + '-day streak</div>' : '') +
     '</div>' +
+    '<div class="pcard accent-teal">' +
+      '<h2>Odd jobs</h2>' +
+      '<p class="sub">A few little jobs around the house — each once a day. You never quite know what turns up.</p>' +
+      CHORES.map(function(ch){
+        var done = !canDoChore(save, ch.id);
+        return '<button class="chore-btn" data-chore="' + ch.id + '"' + (done ? ' disabled' : '') + '>' +
+          '<span class="chore-emoji">' + ch.emoji + '</span>' +
+          '<span class="chore-txt"><b>' + ch.name + '</b><small>' + (done ? 'Done for today' : ch.desc) + '</small></span>' +
+          '<span class="chore-go">' + (done ? '&#10003;' : '&#8250;') + '</span>' +
+        '</button>';
+      }).join('') +
+    '</div>' +
     '<div class="pcard accent-night">' +
       '<h2>End the day</h2>' +
-      '<p class="sub">Tomorrow brings a fresh allowance, new trade offers, and a new flip duel.</p>' +
+      '<p class="sub">Tomorrow brings a fresh allowance, chores, new trade offers, and a new flip duel.</p>' +
       '<button class="bigbtn ghost" id="btn-next-day">Go to bed (Day ' + save.day + ' &rarr; Day ' + (save.day + 1) + ')</button>' +
       '<div class="streak-row"><span class="streak-flame">&#9679;</span>Rumor at school: ' + DAY_EVENTS[rumorEvent].label + ' tomorrow</div>' +
       (dayEventMessage ? '<div class="streak-row"><span class="streak-flame">&#9679;</span>' + dayEventMessage + '</div>' : '') +
@@ -1616,6 +1849,9 @@ function renderHome(){
       toast('+' + amount + ' allowance', 'coin');
     }
   });
+  el.querySelectorAll('button[data-chore]').forEach(function(btn){
+    btn.addEventListener('click', function(){ openChoreReel(btn.getAttribute('data-chore')); });
+  });
   var nextDayBtn = $('btn-next-day');
   if (nextDayBtn) nextDayBtn.addEventListener('click', function(){
     var result = nextDay(save);
@@ -1626,6 +1862,61 @@ function renderHome(){
     sfxDay();
     toast('Day ' + result.day + (result.event !== 'none' ? ' — ' + DAY_EVENTS[result.event].label : ''), 'good');
   });
+}
+
+// Do the chore (outcome already decided + banked), then spin a little reel
+// of icons that decelerates and lands on what you found.
+function openChoreReel(choreId){
+  var chore = CHORE_BY_ID[choreId];
+  var res = doChore(save, choreId);
+  if (!res) return;
+  persist(save);
+  renderTopbar();
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<h3 class="modal-title">' + chore.name + '</h3>' +
+    '<div class="reel-window"><div class="reel-icon" id="reel-icon">' + chore.emoji + '</div></div>' +
+    '<div class="reel-result" id="reel-result">&nbsp;</div>' +
+    '<button class="bigbtn" id="reel-done" disabled>Spinning&hellip;</button>';
+  $('modal-backdrop').classList.add('open');
+  var iconEl = $('reel-icon');
+  var landIcon = OUTCOME_ICON[res.kind] || '🪙';
+  var seq = [];
+  for (var i = 0; i < 16; i++) seq.push(chore.reel[i % chore.reel.length]);
+  seq.push(landIcon);
+  var idx = 0;
+  function tick(){
+    iconEl.textContent = seq[idx];
+    sfxTick();
+    idx++;
+    if (idx >= seq.length) {
+      iconEl.classList.add('reel-land');
+      showChoreResult(res);
+      return;
+    }
+    var t = idx / seq.length;
+    setTimeout(tick, 45 + Math.pow(t, 3) * 300);
+  }
+  tick();
+
+  function showChoreResult(r){
+    var parts = [];
+    if (r.coins) parts.push('+' + r.coins + ' coins');
+    if (r.candy) parts.push('+' + r.candy + ' candy 🍬');
+    if (r.cardId) parts.push('a loose card — ' + BY_ID[r.cardId].name + '!');
+    var msg = parts.length ? parts.join(' &middot; ') : 'Nothing this time.';
+    var resEl = $('reel-result');
+    resEl.innerHTML = msg;
+    resEl.classList.add(parts.length ? 'good' : 'nada');
+    if (parts.length) { sfxCoins(); hapticPulse(r.cardId ? 'rare' : 'common'); }
+    var doneBtn = $('reel-done');
+    doneBtn.disabled = false;
+    doneBtn.textContent = parts.length ? 'Nice!' : 'Ah well';
+    doneBtn.addEventListener('click', function(){
+      closeModal();
+      renderHome();
+    });
+  }
 }
 
 /* ---- shop ---- */
@@ -1645,6 +1936,12 @@ function renderShop(){
         (onSale ? '<span class="price-old">' + PACK_PRICE + '</span>' + price : price) + ')</button>' +
     '</div>' +
     '<div class="pcard accent-gold">' +
+      '<h2>Candy 🍬</h2>' +
+      '<p class="sub">' + CANDY_PRICE + ' coins each. Hand it out at school — kids remember who shares their sweets.' +
+        (save.candy > 0 ? ' You have ' + save.candy + '.' : '') + '</p>' +
+      '<button class="bigbtn ghost" id="btn-buy-candy"' + (save.coins < CANDY_PRICE ? ' disabled' : '') + '>Buy candy (' + CANDY_PRICE + ')</button>' +
+    '</div>' +
+    '<div class="pcard accent-gold">' +
       '<h2>Your unopened packs</h2>' +
       '<p class="sub">' + (n > 0 ? 'Tap one to tear it open.' : 'None right now — buy one above, or check back after a supermarket trip.') + '</p>' +
       (n > 0
@@ -1658,6 +1955,14 @@ function renderShop(){
       persist(save); renderTopbar(); renderShop();
       sfxPackBought();
       toast('Pack bought', 'good');
+    }
+  });
+  var candyBtn = $('btn-buy-candy');
+  if (candyBtn) candyBtn.addEventListener('click', function(){
+    if (buyCandy(save)) {
+      persist(save); renderTopbar(); renderShop();
+      sfxCoins();
+      toast('Bought a candy 🍬', 'good');
     }
   });
   var openBtn = $('btn-open-pack');
@@ -2076,11 +2381,20 @@ function duelCardHTML(duel, idx){
 
 function offerCardHTML(npc){
   var o = save.school.offers[npc.id];
+  var rel = relOf(save, npc.id);
+  var tier = relTier(rel);
   var head =
-    '<div class="npc-head"><span class="npc-avatar" style="background:' + NPC_ACCENTS[npc.id] + '">' + npc.name.charAt(0) + '</span><h2>' + npc.name + '</h2></div>' +
+    '<div class="npc-head">' +
+      '<span class="npc-avatar" style="background:' + NPC_ACCENTS[npc.id] + '">' + npc.name.charAt(0) + '</span>' +
+      '<div style="flex:1; min-width:0;"><h2>' + npc.name + '</h2>' +
+      '<span class="rel-badge" style="color:' + tier.color + '; border-color:' + tier.color + '">' + tier.label + '</span></div>' +
+    '</div>' +
     '<p class="sub">' + npc.line + '</p>';
+
   var body;
-  if (o.state === 'done') {
+  if (o.state === 'refused') {
+    body = '<p class="sub">' + npc.name + ' is mad at you and won\'t trade today. Give them candy to patch things up.</p>';
+  } else if (o.state === 'done') {
     body = '<p class="sub">Deal done. ' + npc.name + ' is showing everyone their new ' + BY_ID[o.want].name + '.</p>';
   } else if (o.state === 'withdrawn') {
     body = '<p class="sub">You pushed too hard — ' + npc.name + ' walked off with the offer.</p>';
@@ -2101,7 +2415,19 @@ function offerCardHTML(npc){
       '</div>' +
       (o.countered && o.state === 'open' ? '<div class="smallnote">They already agreed to sweeten it once.</div>' : '');
   }
-  return '<div class="pcard" style="border-left-color:' + NPC_ACCENTS[npc.id] + '">' + head + body + '</div>';
+
+  // social actions available whatever the trade state
+  var gaveCandy = save.school.gaveCandy && save.school.gaveCandy[npc.id];
+  var stole = !canSteal(save, npc.id);
+  var social =
+    '<div class="social-row">' +
+      '<button class="social-btn" data-candy="' + npc.id + '"' + ((save.candy < 1 || gaveCandy) ? ' disabled' : '') + '>' +
+        (gaveCandy ? '🍬 shared today' : '🍬 Give candy') + '</button>' +
+      '<button class="social-btn risky" data-steal="' + npc.id + '"' + (stole ? ' disabled' : '') + '>' +
+        (stole ? 'Tried already' : 'Swipe a card&hellip;') + '</button>' +
+    '</div>';
+
+  return '<div class="pcard" style="border-left-color:' + tier.color + '">' + head + body + social + '</div>';
 }
 
 function renderSchool(){
@@ -2142,6 +2468,56 @@ function renderSchool(){
     btn.addEventListener('click', function(){
       if (declineOffer(save, btn.getAttribute('data-decline'))) { sfxClick(); persist(save); renderSchool(); }
     });
+  });
+  el.querySelectorAll('button[data-candy]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var npcId = btn.getAttribute('data-candy');
+      var result = giveCandy(save, npcId);
+      if (result) {
+        persist(save); renderTopbar(); renderSchool();
+        sfxTrade();
+        toast(npcById(npcId).name + ' loves it! ' + relTier(result.rel).label, 'good');
+      }
+    });
+  });
+  el.querySelectorAll('button[data-steal]').forEach(function(btn){
+    btn.addEventListener('click', function(){ openStealConfirm(btn.getAttribute('data-steal')); });
+  });
+}
+
+// Stealing is a real gamble: a warning first, then a coin-flip resolution.
+function openStealConfirm(npcId){
+  var npc = npcById(npcId);
+  var chance = Math.round(stealChance(relOf(save, npcId)) * 100);
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="btn-close-modal">&times;</button>' +
+    '<h3 class="modal-title">Swipe a card from ' + npc.name + '?</h3>' +
+    '<p class="smallnote" style="margin:4px 0 12px;">Roughly <b>' + chance + '%</b> to pull it off. Get caught and ' + npc.name +
+      ' turns on you — they grab one of your spare cards and won\'t forget it.</p>' +
+    '<div class="modal-row">' +
+      '<button class="bigbtn" id="btn-do-steal">Do it 😼</button>' +
+      '<button class="bigbtn ghost" id="btn-no-steal">Chicken out</button>' +
+    '</div>';
+  $('modal-backdrop').classList.add('open');
+  $('btn-close-modal').addEventListener('click', closeModal);
+  $('btn-no-steal').addEventListener('click', closeModal);
+  $('btn-do-steal').addEventListener('click', function(){
+    var res = attemptSteal(save, npcId);
+    persist(save);
+    closeModal();
+    renderTopbar();
+    renderSchool();
+    if (!res) return;
+    if (res.caught) {
+      sfxBusted();
+      hapticPulse('doublerare');
+      toast('Busted! ' + npc.name + (res.lostCardId ? ' took your ' + BY_ID[res.lostCardId].name : ' is furious'), '');
+    } else {
+      sfxSneak();
+      hapticPulse('rare');
+      toast('Swiped ' + BY_ID[res.cardId].name + ' — nobody saw!', 'good');
+    }
   });
 }
 
@@ -2345,6 +2721,10 @@ if (typeof globalThis !== 'undefined') {
     buildDuelsForDay: buildDuelsForDay, duelChance: duelChance, resolveDuel: resolveDuel,
     PAGE_SIZE: PAGE_SIZE, PAGE_REWARD: PAGE_REWARD, pageCards: pageCards, isPageComplete: isPageComplete, claimPageReward: claimPageReward,
     cardHTML: cardHTML, sceneFor: sceneFor, spriteFor: spriteFor, typeColor: typeColor, TIER_CHIP: TIER_CHIP,
+    CHORES: CHORES, choreOutcome: choreOutcome, canDoChore: canDoChore, doChore: doChore,
+    CANDY_PRICE: CANDY_PRICE, buyCandy: buyCandy, giveCandy: giveCandy,
+    REL_TIERS: REL_TIERS, ENEMY_THRESHOLD: ENEMY_THRESHOLD, relOf: relOf, changeRel: changeRel, relTier: relTier,
+    canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
   };
 }
 })();
