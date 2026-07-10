@@ -1,0 +1,22 @@
+{
+  "--tcg-frame-pad": "7px",
+  "--tcg-radius": "12px",
+  "--tcg-inner-radius": "7px",
+  "--tcg-panel-a": "0.8",
+  "--tcg-scrim-h": "26px",
+  "--tcg-scrim-a": "0.7",
+  "--tcg-name-fs": "14px",
+  "--tcg-pow-fs": "15px",
+  "--tcg-chip-fs": "7.5px",
+  "--tcg-orb": "15px",
+  "--tcg-move-name-fs": "13px",
+  "--tcg-move-dmg-fs": "13.5px",
+  "--tcg-move-text-fs": "9px",
+  "--tcg-flavor-fs": "10px",
+  "--tcg-foot-fs": "8.5px",
+  "--tcg-body-pad": "6px",
+  "--tcg-body-gap": "4px",
+  "--tcg-energy": "12px",
+  "--tcg-sheen-a": "1",
+  "--tcg-foil-speed": "4.5s"
+}
