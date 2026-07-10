@@ -46,7 +46,7 @@ function boot(seedSave){
   let src = html.match(/<script>([\s\S]*)<\/script>/)[1];
   // test-only expose hook (not present in the shipped file)
   src = src.replace('newGame();\nrequestAnimationFrame(loop);',
-    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS};\nnewGame();\nrequestAnimationFrame(loop);');
+    'globalThis.__WW={getG:()=>G,mk:(k,l)=>makeMon(k,l),doCatch:()=>doCatch(),acquire:(m,r)=>acquire(m,r),spawn:e=>spawnWild(e),spawnBoss:(k)=>spawnBoss(k),bossDue:()=>bossDue(),catchChance:(w)=>catchChance(w),tm:(a,b)=>typeMult(a,b),SP:SPECIES,strike:(a,b,d)=>strike(a,b,d),upd:dt=>updateBattle(dt),statusTick:(m,dt)=>statusTick(m,dt),trySwitch:(i)=>trySwitch(i),teamCardAt:(x,y)=>teamCardAt(x,y),openPokedex:(f)=>openPokedex(f),dexProgress:()=>dexProgress(),dexStatus:(k)=>dexStatus(k),pokedexCardAt:(x,y)=>pokedexCardAt(x,y),draw:()=>draw(),biomeForTier:(t)=>biomeForTier(t),BIOMES,pickBiased:(k)=>pickBiased(k),Dex,SWITCH_CD,SWITCH_ENTRY,hasRelic:(id)=>hasRelic(id),relicCount:(id)=>relicCount(id),RELICS,buildRelicOffer:(n)=>buildRelicOffer(n),setupRelicPick:(fn)=>setupRelicPick(fn),takeRelic:(i)=>takeRelic(i),doRelease:()=>doRelease(),finishSpawn:(w)=>finishSpawn(w),endFight:(x)=>endFight(x),switchCdMax:()=>switchCdMax(),TRINKETS,TRINKET_KEYS,hasTrinket:(m,id)=>hasTrinket(m,id),applyTrinketStats:(m)=>applyTrinketStats(m),baseMaxHp:(m)=>baseMaxHp(m),equipT:(i,j)=>equipTrinket(i,j),unequipT:(i)=>unequipTrinket(i),buy:(it)=>buy(it),openShop:()=>openShop(),rerollShop:()=>rerollShop(),buyStock:i=>buyStock(i),rerollCost:()=>rerollCost(),genShopStock:()=>genShopStock(),SHOP_CATALOG,SHOP_STOCK_SIZE,openRest:()=>openRest(),bossHeavyStrike:(w,d)=>bossHeavyStrike(w,d),xpToLevels:(m,g)=>xpToLevels(m,g),STORIES,activeMon:()=>activeMon(),statAt:(b,l)=>statAt(b,l),C:{BURN_MAX,BURN_DUR,BURN_PCT,WATER_STEAL,GRASS_LEECH,LEECH_DUR,ROCK_GUARD,SHADOW_DODGE,VOLT_STUN,STUN_DUR,STUN_IMM,BOSS_EVERY,BOSS_HEAVY_CAP,TELE_WINDUP,BOSS_SOFTCAP,BOSS_EXECUTE_DPS,BOSS_CATCH_FLOOR,BOSS_SOULS_MUL,BOSS_PHASE_PAUSE},buyUpgrade:(k)=>buyUpgrade(k),newGame:(k)=>newGame(k),gameOver:()=>gameOver(),usePotion:()=>usePotion(),UPGRADES,openSanctuary:(f)=>openSanctuary(f),checkAch:()=>checkAch(),award:(id)=>award(id),achCount:()=>achCount(),ACH,openAchievements:(f)=>openAchievements(f),TYPES,SPECIESKEYS:Object.keys(SPECIES),doKill:()=>doKill(),afterFightChoices:()=>afterFightChoices(),starterPool:()=>starterPool(),openStarter:(f)=>openStarter(f),startWalk:()=>startWalk(),COMMONS,UNCOMMONS,weatherDmgMul:(t)=>weatherDmgMul(t),weatherCritMul:()=>weatherCritMul(),weatherCatchBonus:()=>weatherCatchBonus(),setWeather:()=>setWeather(),weatherFor:(b,f)=>weatherFor(b,f),WEATHER,WEATHER_KINDS};\nnewGame();\nrequestAnimationFrame(loop);');
 
   // Install the sandbox globals for the eval'd script. The running game keeps
   // calling requestAnimationFrame/performance while we step it, so these stay
@@ -1657,6 +1657,92 @@ test('WX5 drawing every weather never throws', ()=>{
   }
   // reaching here without throwing is the assertion
   assert(true);
+});
+
+// ---- rotating shop stock + reroll ----
+function validSlot(api, s){
+  const cat = api.SHOP_CATALOG;
+  const valid = Object.keys(cat);
+  assert(valid.includes(s.id), 'invalid stock id '+s.id);
+  assert(s.price===cat[s.id].price, 'price mismatch for '+s.id);
+  assert(s.price>=12 && s.price<=35, 'price out of budget '+s.price);
+  assert(s.sold===false, 'fresh slot not unsold');
+}
+
+// (a) entering shop generates valid stock within budget + tier gating
+test('SHOP1 openShop generates valid stock within budget', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.tier=3; g.ballTier=0;
+  g.team.forEach(m=>{ m.hp=m.maxhp; });   // no fainted ally
+  api.openShop();
+  assert(g.state==='shop', 'not in shop state');
+  assert(g.shopStock.length===api.SHOP_STOCK_SIZE, 'wrong stock size');
+  g.shopStock.forEach(s=>validSlot(api,s));
+  assert(!g.shopStock.some(s=>s.id==='revive'), 'revive offered with no fainted ally');
+  g.ballTier=3; api.openShop();
+  assert(!g.shopStock.some(s=>s.id==='ball'), 'ball offered when maxed');
+});
+
+// (b) reroll deducts gold + refreshes to valid stock, cost escalates
+test('SHOP2 reroll deducts gold and refreshes', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  g.gold=100; api.openShop();
+  const c=api.rerollCost(); const before=g.gold;
+  api.rerollShop();
+  assert(g.gold===before-c, 'reroll did not deduct cost');
+  assert(g.shopRerolls===1, 'reroll counter not incremented');
+  assert(api.rerollCost()>c, 'reroll cost did not escalate');
+  assert(g.shopStock.length===api.SHOP_STOCK_SIZE, 'stock size changed');
+  g.shopStock.forEach(s=>validSlot(api,s));
+});
+
+// (c) reroll blocked when broke — true no-op
+test('SHOP3 reroll blocked when insufficient gold', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  api.openShop(); g.gold=1;
+  assert(api.rerollCost()>1, 'cost not above test gold');
+  const stock=g.shopStock, before=g.gold;
+  api.rerollShop();
+  assert(g.gold===before, 'gold changed on blocked reroll');
+  assert(g.shopStock===stock, 'stock replaced on blocked reroll');
+});
+
+// (d) buying a slot applies effect + marks sold; sold/broke slots are no-ops
+test('SHOP4 buyStock applies effect and marks sold', ()=>{
+  const { api } = boot();
+  const g = api.getG();
+  api.openShop();
+  g.shopStock=[{id:'potion',price:12,sold:false}];
+  g.gold=50; const p=g.potions;
+  api.buyStock(0);
+  assert(g.potions===p+1, 'potion not granted');
+  assert(g.gold===38, 'gold not deducted');
+  assert(g.shopStock[0].sold===true, 'slot not marked sold');
+  // second buy on sold slot: no-op
+  api.buyStock(0);
+  assert(g.potions===p+1 && g.gold===38, 'sold slot re-purchased');
+  // insufficient gold: no-op, stays unsold
+  g.shopStock[0].sold=false; g.gold=0;
+  api.buyStock(0);
+  assert(g.potions===p+1, 'potion granted with no gold');
+  assert(g.shopStock[0].sold===false, 'slot marked sold on failed buy');
+});
+
+// (e) no save-shape change from shop activity
+test('SHOP5 shop activity does not alter save shape', ()=>{
+  const { api, store } = boot();
+  const g = api.getG();
+  const canonical = ['ach','best','bestTier','bossKills','caught','essence','fullPartyWin','killed','muted','released','runs','seen','upgrades','wildCatch'];
+  api.Dex.save();
+  const baseKeys = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
+  assert(JSON.stringify(baseKeys)===JSON.stringify(canonical), 'baseline save keys drifted: '+baseKeys.join(','));
+  api.openShop(); g.gold=100; api.rerollShop(); api.buyStock(0); api.Dex.save();
+  const after = Object.keys(JSON.parse(store['wildwalk_save_v1'])).sort();
+  assert(JSON.stringify(after)===JSON.stringify(canonical), 'save keys changed: '+after.join(','));
+  assert(!after.some(k=>/shop|stock|reroll/i.test(k)), 'shop state leaked into save');
 });
 
 console.log(`wildwalk: ${passed} passed, ${failed} failed`);
