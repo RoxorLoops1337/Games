@@ -40,11 +40,22 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 20. [x] More biomes + biome-specific boss variety — DONE c20.
 21. [x] Richer idle + attack sprite animation — DONE c21.
 22. [x] Endless post-game scaling mode — DONE c22.
-23. [ ] Status-effect visual polish (clearer burn/stun/shield readouts).
+23. [x] Status-effect visual polish — DONE c23.
 24. [ ] Online Cloudflare KV leaderboard (functions/api/, deferred from #15).
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c23 — Status-effect readout polish** (studio: combat-ux-designer, vfx-designer, lead, engineer, QA).
+  Made the existing status pips clearer, all purely visual (reads only transient m.status.* + the duration
+  consts; writes nothing): (1) DEPLETION BARS under each countdown pip — a 14×2px bar whose fill = remaining/max
+  (burn→burnT/BURN_DUR, stun→stun/STUN_DUR, regen→regen/LEECH_DUR, clamped [0,1] so emberbrand overshoot reads
+  full); flash-only pips (Rock guard, Shadow phase) stay barless. (2) ACTIVE PULSE — an additive white→colour
+  ring on a pip while its flash flag is hot, alpha sin-pulsed off G.t and self-extinguishing as the flash decays.
+  (3) STUN STARS — a new stunStars() draws 3 twinkling 4-point stars orbiting above a stunned combatant, alpha
+  = stun/STUN_DUR so it fades out; called for both fighters after statusGlow, matching the you-bob and elite-size.
+  No combat/duration/decay/resolution change; no new state/field/save change. +2 render-safety tests force ALL
+  statuses + all flash flags on both combatants and sweep draw() 0-10s (incl. emberbrand overshoot + all-zero +
+  stun-only), asserting no throw under the stub ctx. 159/159, 0 flakes. Badges confirmed by screenshot.
 - **c22 — Endless post-game depth** (studio: systems-designer, ux-designer, lead, engineer, QA). The run
   was ALREADY endless (setupCrossroads does G.tier++ uncapped) and ALREADY fair at depth: statAt is linear
   and the (tier-1)*0.9 foe-level offset is a constant additive bump, so as the team levels the foe's

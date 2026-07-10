@@ -1971,17 +1971,26 @@ function drawStatusRow(m,x,y,w,facing){
   const s=m.status; if(!s) return;
   const pipY=y+26;
   const pips=[];
-  if(m.sp.type==='Rock')  pips.push({key:'guard', col:TYPE_COL.Rock,  glyph:'shield', on:s.fGuard>0});
-  if(m.sp.type==='Shadow')pips.push({key:'phase', col:TYPE_COL.Shadow,glyph:'phase',  on:s.fDodge>0});
-  if(s.burn>0)  pips.push({key:'burn', col:TYPE_COL.Fire,  glyph:'flame', on:s.fBurn>0, n:s.burn>1?s.burn:0});
-  if(s.stun>0)  pips.push({key:'stun', col:TYPE_COL.Volt,  glyph:'bolt',  on:s.fStun>0});
-  if(s.regen>0) pips.push({key:'regen',col:TYPE_COL.Grass, glyph:'plus',  on:s.fHeal>0});
+  if(m.sp.type==='Rock')  pips.push({key:'guard', col:TYPE_COL.Rock,  glyph:'shield', on:s.fGuard>0, flash:s.fGuard});
+  if(m.sp.type==='Shadow')pips.push({key:'phase', col:TYPE_COL.Shadow,glyph:'phase',  on:s.fDodge>0, flash:s.fDodge});
+  if(s.burn>0)  pips.push({key:'burn', col:TYPE_COL.Fire,  glyph:'flame', on:s.fBurn>0, n:s.burn>1?s.burn:0, flash:s.fBurn, t:s.burnT, tmax:BURN_DUR});
+  if(s.stun>0)  pips.push({key:'stun', col:TYPE_COL.Volt,  glyph:'bolt',  on:s.fStun>0, flash:s.fStun, t:s.stun,  tmax:STUN_DUR});
+  if(s.regen>0) pips.push({key:'regen',col:TYPE_COL.Grass, glyph:'plus',  on:s.fHeal>0, flash:s.fHeal, t:s.regen, tmax:LEECH_DUR});
   for(let i=0;i<pips.length && i<4;i++){
     const p=pips[i];
     const px= facing>0? x+i*17 : x+w-14-i*17;
     ctx.save();
     roundRect(px,pipY,14,14,4); ctx.globalAlpha=0.22; ctx.fillStyle=p.col; ctx.fill();
     ctx.globalAlpha=1; ctx.lineWidth=1; ctx.strokeStyle=p.col; roundRect(px,pipY,14,14,4); ctx.stroke();
+    if(p.on){ // fresh-proc pulse: soft additive ring that fades with the flash timer
+      const pulse=0.5+0.5*Math.sin(G.t*8);
+      const k=clamp((p.flash||0)*2,0,1);
+      ctx.save(); ctx.globalCompositeOperation='lighter';
+      ctx.globalAlpha=(0.25+0.35*pulse)*k;
+      ctx.lineWidth=1.5; ctx.strokeStyle=p.col;
+      roundRect(px-2,pipY-2,18,18,6); ctx.stroke();
+      ctx.restore();
+    }
     const gc=p.on?'#ffffff':p.col; ctx.fillStyle=gc; ctx.strokeStyle=gc;
     const cx=px+7, cy=pipY+7;
     if(p.glyph==='shield'){ ctx.beginPath(); ctx.moveTo(cx,cy-4); ctx.lineTo(cx+3,cy-2); ctx.lineTo(cx+3,cy+1); ctx.lineTo(cx,cy+4); ctx.lineTo(cx-3,cy+1); ctx.lineTo(cx-3,cy-2); ctx.closePath(); ctx.fill(); }
@@ -1990,6 +1999,12 @@ function drawStatusRow(m,x,y,w,facing){
     else if(p.glyph==='bolt'){ ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx+2,cy-4); ctx.lineTo(cx-2,cy); ctx.lineTo(cx+1,cy); ctx.lineTo(cx-2,cy+4); ctx.stroke(); }
     else if(p.glyph==='plus'){ ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,cy-3); ctx.lineTo(cx,cy+3); ctx.moveTo(cx-3,cy); ctx.lineTo(cx+3,cy); ctx.stroke(); }
     if(p.n){ ctx.globalAlpha=1; ctx.fillStyle='#fff'; ctx.font='700 8px Segoe UI'; ctx.textAlign='right'; ctx.fillText('x'+p.n, px+13, pipY+13); ctx.textAlign='left'; }
+    if(p.tmax>0){ // depletion bar for countdown pips (burn/stun/regen). Flash-only pips have no tmax.
+      const frac=clamp(p.t/p.tmax,0,1);
+      const bx=px, by=pipY+15, bw=14, bh=2;
+      ctx.globalAlpha=0.20; ctx.fillStyle=p.col; ctx.fillRect(bx,by,bw,bh);
+      ctx.globalAlpha=0.90; ctx.fillStyle=p.col; ctx.fillRect(bx,by,bw*frac,bh);
+    }
     ctx.restore();
   }
 }
@@ -2519,6 +2534,25 @@ function statusGlow(x,m){ if(!m||!m.status)return; const s=m.status;
     ctx.fillStyle=rg; ctx.beginPath(); ctx.arc(x,470,56,0,6.283); ctx.fill(); ctx.restore(); } }
   if(s.burn>0){ for(let i=0;i<2;i++){ if(G.parts.length<140) G.parts.push({x:x+rr(-16,16),y:490,vx:rr(-14,14),vy:rr(-70,-30),life:rr(0.3,0.6),col:'#ff7a3d',r:rr(1.5,3)}); } }
 }
+// overhead "stunned" read: 3 twinkling stars orbiting a squashed ring, fading with remaining stun
+function star4(cx,cy,r){ const r2=r*0.4;
+  ctx.beginPath();
+  ctx.moveTo(cx,cy-r); ctx.lineTo(cx+r2,cy-r2); ctx.lineTo(cx+r,cy); ctx.lineTo(cx+r2,cy+r2);
+  ctx.lineTo(cx,cy+r); ctx.lineTo(cx-r2,cy+r2); ctx.lineTo(cx-r,cy); ctx.lineTo(cx-r2,cy-r2);
+  ctx.closePath(); ctx.fill();
+}
+function stunStars(x,y,m){ if(!m||!m.status) return; const s=m.status; if(!(s.stun>0)) return;
+  const a=clamp(s.stun/STUN_DUR,0,1); if(a<=0) return;
+  const N=3, R=13;
+  ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.fillStyle='#ffd23d';
+  for(let i=0;i<N;i++){
+    const ph=i*(6.2832/N), ang=G.t*4+ph;
+    const sx=x+Math.cos(ang)*R, sy=y+Math.sin(ang)*R*0.45;
+    const tw=0.7+0.3*Math.sin(G.t*9+ph);
+    ctx.globalAlpha=a*tw; star4(sx,sy,3.2);
+  }
+  ctx.restore();
+}
 function hitGlow(x,hurt){ if(hurt<=0)return; ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=hurt*0.5; const g=ctx.createRadialGradient(x,470,0,x,470,60); g.addColorStop(0,'#fff'); g.addColorStop(1,'rgba(255,255,255,0)'); ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,470,60,0,6.283); ctx.fill(); ctx.restore(); }
 function drawBattle(){
   const you=activeMon(), w=G.wild;
@@ -2536,6 +2570,8 @@ function drawBattle(){
   drawMon(w.sp,  wx + io*400, 470, 44 + (w.elite?8:0), -1, G.t*1.2, {bob:w.bob, hurt:w.hurt>0, lunge:w.lunge, wind:bWind, hurtAmt:w.hurt});
   hitGlow(yx,you.hurt); hitGlow(wx,w.hurt);
   statusGlow(yx,you); statusGlow(wx,w);
+  stunStars(yx, 470 - Math.abs(Math.sin(G.t*3))*4 - 44 - 18, you);
+  stunStars(wx, 470 - (44 + (w.elite?8:0)) - 18, w);
   // hp panels
   bigHP(you, 40, 90, 300, 1);
   if(w.boss) drawBossHP(w); else bigHP(w, W-340, 90, 300, -1);
