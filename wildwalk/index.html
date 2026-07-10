@@ -68,6 +68,8 @@ const GRASS_LEECH=0.25, LEECH_DUR=2.0;              // Grass regen fraction / du
 const ROCK_GUARD=0.15;                              // Rock incoming-dmg reduction
 const SHADOW_DODGE=0.15;                            // Shadow full-dodge chance
 const VOLT_STUN=0.18, STUN_DUR=0.6, STUN_IMM=2.5;   // Volt stun chance / duration / immunity window
+const SWITCH_CD=5;                                  // battle-seconds between manual party switches
+const SWITCH_ENTRY=0.6;                             // min cd the incoming mon enters battle with
 
 // ---------- species database ----------
 // shape: blob | round | spiky | long | winged ; feat: flame|drip|leaf|bolt|rock|ghost|horn
@@ -489,6 +491,7 @@ function finishSpawn(w){
   if(G.lead<0) G.lead=0;
   G.team.forEach(m=>{ m.cd=0.3; m.status=freshStatus(); });
   G.wild.cd = 0.6; G.wild.status = freshStatus();
+  G.switchCd = 0; G.switchAnim = 0;
   clearButtons();
 }
 function activeMon(){ return G.team[G.lead]; }
@@ -700,6 +703,7 @@ function gameOver(){
 // ===================================================================
 function updateBattle(dt){
   if(G.battleIntro>0){ G.battleIntro-=dt; return; }
+  if(G.switchCd>0) G.switchCd = Math.max(0, G.switchCd - dt);
   const you=activeMon(), w=G.wild;
   if(!you || you.hp<=0){ // switch
     const nxt=G.team.findIndex(m=>m.hp>0);
@@ -718,6 +722,7 @@ function updateBattle(dt){
 
   // anim decay
   for(const m of [you,w]){ m.lunge=Math.max(0,m.lunge-dt*4); m.hurt=Math.max(0,m.hurt-dt*4); }
+  if(G.switchAnim>0) G.switchAnim = Math.max(0, G.switchAnim - dt);
   updateFx(dt);
 }
 function strike(att, def, dir){
@@ -946,6 +951,25 @@ function drawTeam(){
     hpBar(x+40, y+38, 62, 7, m.hp, m.hpShown, m.maxhp);
     // xp bar
     bar(x+40, y+48, 62, 4, m.xp/m.xpNext, '#5a8fe0','#0c1120');
+    // switch-availability overlay (top layer) for living, non-active cards in battle
+    if(G.state==='battle' && G.battleIntro<=0 && m.hp>0 && !active){
+      const tcol=TYPE_COL[m.sp.type]||'#6fa0e0';
+      if((G.switchCd||0)<=0){
+        // READY: pulsing type border + swap glyph
+        ctx.save(); ctx.globalAlpha=0.6+0.4*Math.sin(G.t*4);
+        ctx.strokeStyle=tcol; ctx.lineWidth=2; roundRect(x,y,110,60,9); ctx.stroke();
+        ctx.globalAlpha=1; ctx.fillStyle=tcol; ctx.font='11px Segoe UI'; ctx.textAlign='left';
+        ctx.fillText('↔', x+98, y+52); ctx.restore();
+      } else {
+        // LOCKED: dim + radial cooldown sweep + seconds
+        ctx.save(); ctx.fillStyle='rgba(10,14,28,.55)'; roundRect(x,y,110,60,9); ctx.fill();
+        const cx=x+55, cy=y+30;
+        ctx.beginPath(); ctx.arc(cx,cy,24, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(1 - G.switchCd/SWITCH_CD));
+        ctx.strokeStyle='#6a76a0'; ctx.lineWidth=3; ctx.stroke();
+        ctx.fillStyle='#cdd6f0'; ctx.font='700 14px Segoe UI'; ctx.textAlign='center';
+        ctx.fillText(Math.ceil(G.switchCd), cx, cy+5); ctx.textAlign='left'; ctx.restore();
+      }
+    }
   }
   if(G.box.length){ ctx.fillStyle='#6a76a0'; ctx.font='600 11px Segoe UI';
     ctx.fillText('📦 Box: '+G.box.length, x0+4*118+4, y+34); }
@@ -1197,7 +1221,8 @@ function drawBattle(){
   withShadow(yx,548,40,12); withShadow(wx,548,40,12);
   // intro slide
   const io=G.battleIntro>0? G.battleIntro:0;
-  drawMon(you.sp, yx - io*300, 470 - Math.abs(Math.sin(G.t*3))*4, 44, 1, G.t*1.2, {bob:you.bob, hurt:you.hurt>0, lunge:you.lunge, wind:youWind, hurtAmt:you.hurt});
+  const sw = G.switchAnim>0 ? G.switchAnim/0.35 : 0;
+  drawMon(you.sp, yx - io*300 - sw*260, 470 - Math.abs(Math.sin(G.t*3))*4, 44, 1, G.t*1.2, {bob:you.bob, hurt:you.hurt>0, lunge:you.lunge, wind:youWind, hurtAmt:you.hurt});
   drawMon(w.sp,  wx + io*400, 470, 44 + (w.elite?8:0), -1, G.t*1.2, {bob:w.bob, hurt:w.hurt>0, lunge:w.lunge, wind:wWind, hurtAmt:w.hurt});
   hitGlow(yx,you.hurt); hitGlow(wx,w.hurt);
   statusGlow(yx,you); statusGlow(wx,w);
@@ -1221,6 +1246,30 @@ function usePotion(){
   G.potions--; m.hp=Math.min(m.maxhp, m.hp + m.maxhp*0.45);
   for(let i=0;i<12;i++){ const a=rnd()*6.283; G.parts.push({x:300,y:470,vx:Math.cos(a)*60,vy:Math.sin(a)*60-40,life:rr(.4,.8),col:'#6fe0a0',r:rr(2,4)}); }
   flash('Potion used — HP restored.');
+}
+// Mid-battle party switch: tap a living, non-active team card to send it in.
+// Gated by a battle-time cooldown + entry cd so it can't dodge every hit.
+function trySwitch(idx){
+  if(G.state!=='battle') return false;
+  if(G.battleIntro>0) return false;
+  if(idx===G.lead) return false;
+  if(!G.team[idx] || G.team[idx].hp<=0){
+    if(G.team[idx] && G.team[idx].hp<=0) flash(G.team[idx].sp.name+' has fainted!');
+    return false;
+  }
+  if((G.switchCd||0)>0){ flash('Swap recharging…'); return false; }
+  G.lead = idx;
+  const m=G.team[idx]; m.cd = Math.max(1/m.spd, SWITCH_ENTRY);
+  G.switchCd = SWITCH_CD; G.switchAnim = 0.35;
+  m.lunge = 1; flash('Go, '+m.sp.name+'!');
+  return true;
+}
+// Hit-test a team-strip card; geometry mirrors drawTeam exactly.
+function teamCardAt(mx,my){
+  const y=H-70, x0=14;
+  for(let i=0;i<4;i++){ const x=x0+i*118;
+    if(G.team[i] && mx>=x && mx<=x+110 && my>=y && my<=y+60) return i; }
+  return -1;
 }
 
 function drawChoice(){
@@ -1436,6 +1485,7 @@ function drawGameOver(){
 function onClick(mx,my){
   if(G.state==='title'){ if(hitButton(mx,my)){ newGame(); startWalk(); } return; }
   if(G.state==='gameover'){ if(hitButton(mx,my)){ newGame(); startWalk(); } return; }
+  if(G.state==='battle' && G.battleIntro<=0){ const idx=teamCardAt(mx,my); if(idx>=0){ trySwitch(idx); return; } }
   const b=hitButton(mx,my); if(!b) return;
   const id=b.id;
   switch(G.state){
@@ -1485,6 +1535,7 @@ window.addEventListener('keydown', e=>{
     else if(n<=3 && G.state==='crossroads'){ onClickById('x'+(n-1)); }
     else if(n<=3 && G.state==='nest'){ onClickById('nest_'+(n-1)); }
     else if(G.state==='swapchoice'){ onClickById('swapout_'+(n-1)); }
+    else if(n>=1 && n<=4 && G.state==='battle'){ trySwitch(n-1); }
   }
 });
 function onClickById(id){ const b=G.buttons.find(x=>x.id===id && x.enabled); if(b){ const cx=b.x+2,cy=b.y+2; onClick(cx,cy);} }
