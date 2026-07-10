@@ -24,7 +24,7 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 4. [x] Pokédex screen — DONE c4.
 5. [x] Biomes — DONE c5.
 6. [x] Boss encounters — DONE c6.
-7. [ ] Relics / run modifiers picked at milestones (roguelike boons).
+7. [x] Relics / run modifiers — DONE c7.
 8. [ ] Held trinkets (one item slot per monster) from shops/stories.
 9. [ ] Between-run meta-progression (bank souls/honor for permanent unlocks).
 10. [ ] Sound & music (chiptune battle loop + SFX for hit/catch/level-up).
@@ -36,6 +36,16 @@ done, then take the next unchecked item. Keep every change self-contained (one f
 
 ## Cycle history
 (newest first — appended each cycle)
+- **c7 — Relics / run modifiers** (studio: systems + ux designers, lead, engineer, QA).
+  12 roguelike boons (Keeper's Charm +catch%, Lucky Clover +rare-catch, Bloodstone lifesteal,
+  Ember Heart +burn, Warlord's Banner +crit%, Executioner's Edge ×2.2 crits, Thornmail reflect,
+  Verdant Idol fight-start heal, Merchant's Coin +30% gold [stackable], Phoenix Feather +boss
+  potion, Pilgrim's Token +honor, Swiftpaw ×0.6 switch cd). Offered as a 3-card CLAIM A RELIC
+  pick after every boss win + a new 'Relic Cache' crossroads option; no duplicate offers;
+  owned relics shown as a HUD icon strip (×N for stacks). Each hooks a real system
+  (catchChance/strike/finishSpawn/endFight/doRelease/switchCdMax). Transient G.relics
+  (save-safe). +18 tests (each hook asserted; save shape unchanged; all-relics battle resolves).
+  57/57 green, 0 flakes/10 runs. Engineer respected the no-git guardrail.
 - **c6 — Boss encounters** (studio: combat-designer, ux-designer, lead, engineer, QA; shipped
   in #837). Every 6th fight (end of a biome) spawns a scaled legendary/rare BOSS with a
   segmented phased HP bar ("PHASE n/max", 2 phases, 3 at tier≥6), an intro banner (name +

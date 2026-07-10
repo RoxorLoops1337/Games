@@ -468,6 +468,7 @@ function newGame(){
     gold:20, souls:0, honor:0, potions:1,
     ballTier:0,                 // +catch bonus from shop
     bossWin:false,              // boss-reward latch (transient; only Dex.data persists)
+    relics:[], relicOffer:null, afterRelic:null,   // roguelike boons (transient)
     dist:0, fights:0, tier:1, enc:0,
     lead:0,
     // world scroll
@@ -605,11 +606,15 @@ function finishSpawn(w){
   G.lead = G.team.findIndex(m=>m.hp>0);
   if(G.lead<0) G.lead=0;
   G.team.forEach(m=>{ m.cd=0.3; m.status=freshStatus(); });
+  if(hasRelic('startheal')) G.team.forEach(m=>{ if(m.hp>0) m.hp=Math.min(m.maxhp, m.hp+Math.round(m.maxhp*0.15)); });
   G.wild.cd = 0.6; G.wild.status = freshStatus();
   G.switchCd = 0; G.switchAnim = 0;
   clearButtons();
 }
 function activeMon(){ return G.team[G.lead]; }
+function hasRelic(id){ return !!G.relics && G.relics.indexOf(id)>=0; }
+function relicCount(id){ return G.relics? G.relics.reduce((n,x)=>n+(x===id?1:0),0):0; }
+function switchCdMax(){ return SWITCH_CD * (hasRelic('swiftpaw')?0.6:1); }
 
 function afterFightChoices(){
   if(G.wild && G.wild.boss){ G.bossWin=true; burst(660,470); }   // latch + defeat flourish
@@ -652,6 +657,8 @@ function catchChance(w){
   c += G.ballTier*0.1;
   c += Math.min(G.honor*0.0025, 0.15);
   c -= (w.level>G.tier*2? 0.05:0);
+  if(hasRelic('catch')) c += 0.08;
+  if(hasRelic('rare') && w.sp.rarity>=2) c += 0.12;
   if(w.boss) return Math.max(BOSS_CATCH_FLOOR, clamp(c,0.05,0.96));
   return clamp(c, 0.05, 0.96);
 }
@@ -666,16 +673,18 @@ function doKill(){
 function doRelease(){
   const w=G.wild;
   const h = (Math.round(w.level * (1+w.sp.rarity*0.4) * 1.6) + (w.elite?10:0)) * (w.boss?BOSS_HONOR_MUL:1);
-  G.honor += h;
+  let hh = h; if(hasRelic('honor')) hh = Math.round(hh*1.5); G.honor += hh;
   Dex.see(w.key);
-  flash('Released to the wild. +'+h+' honor.');
+  flash('Released to the wild. +'+hh+' honor.');
   endFight(true);
 }
 function endFight(won){
+  const wasBoss = G.bossWin;
   // XP + gold to team
   const w=G.wild;
   const xp = (10 + Math.round(w.level*4) + w.sp.rarity*6 + (w.elite?20:0)) * (w.boss?BOSS_XP_MUL:1);
-  const gold = ri(4,9) + w.sp.rarity*3 + (w.elite?12:0) + (w.boss?BOSS_GOLD:0);
+  let gold = ri(4,9) + w.sp.rarity*3 + (w.elite?12:0) + (w.boss?BOSS_GOLD:0);
+  gold = Math.round(gold * (1 + 0.30*relicCount('gold')));
   G.gold += gold;
   let evoMsg='';
   for(const m of G.team){ if(m.hp>0){
@@ -692,11 +701,12 @@ function endFight(won){
   if(G.bossWin){
     G.team.forEach(m=>{ if(m.hp>0) m.hp=m.maxhp; });   // extra full heal of survivors
     G.potions += 1;                                     // consumable reward
+    if(hasRelic('bosspotion')) G.potions += 1;          // Phoenix Feather relic
     G.team.forEach(m=> m.atk *= 1.04);                  // small permanent trophy buff
     G.bossWin=false;
   }
-  if(G.fights % 3 === 0){ setupCrossroads(); }
-  else { startWalk(); }
+  const nextStep = (G.fights % 3 === 0) ? setupCrossroads : startWalk;
+  if(wasBoss) setupRelicPick(nextStep); else nextStep();
 }
 
 // ---------- crossroads ----------
@@ -708,13 +718,44 @@ const CROSS_POOL = [
   {id:'gamble', icon:'🎲', name:'Gambler', desc:'Wager gold on the dice'},
   {id:'shrine', icon:'✨', name:'Shrine', desc:'Spend honor for a blessing'},
   {id:'nest',   icon:'🥚', name:'Wild Nest', desc:'A free companion awaits'},
+  {id:'relic',  icon:'💎', name:'Relic Cache', desc:'Claim a run boon'},
 ];
+const RELICS = {
+  catch:     {name:"Keeper's Charm",   icon:'🎯', col:'#6fd07a', desc:'Catch rate +8%'},
+  rare:      {name:'Lucky Clover',     icon:'🍀', col:'#67d089', desc:'Rare & Legend catch +12%'},
+  lifesteal: {name:'Bloodstone',       icon:'🩸', col:'#e07a8a', desc:'Your hits heal 12% of damage'},
+  burn:      {name:'Ember Heart',      icon:'🔥', col:'#ff7a3d', desc:'Burns apply +1 stack (cap +1)'},
+  crit:      {name:"Warlord's Banner", icon:'⚔️', col:'#ffd23d', desc:'Crit chance +10%'},
+  critdmg:   {name:"Executioner's Edge",icon:'🗡️',col:'#ffb43d', desc:'Crits hit ×2.2'},
+  thorns:    {name:'Thornmail',        icon:'🛡️', col:'#b98d63', desc:'Reflect 20% of damage taken'},
+  startheal: {name:'Verdant Idol',     icon:'🌿', col:'#6fd05a', desc:'Heal team 15% each fight start'},
+  gold:      {name:"Merchant's Coin",  icon:'💰', col:'#ffd23d', desc:'+30% gold per fight', stack:true},
+  bosspotion:{name:'Phoenix Feather',  icon:'🪶', col:'#ff9b6f', desc:'+1 extra potion after each boss'},
+  honor:     {name:"Pilgrim's Token",  icon:'🕊️', col:'#8fd0ff', desc:'+50% honor on release'},
+  swiftpaw:  {name:'Swiftpaw Charm',   icon:'🦶', col:'#a06bff', desc:'Switch cooldown ×0.6'},
+};
 function setupCrossroads(){
   G.tier++;
   updateBiome();                 // sole biome-advance point (tier only rises here)
-  G.xoptions = shuffle(CROSS_POOL).slice(0,3);
+  const avail = CROSS_POOL.filter(o=> o.id!=='relic' || Object.keys(RELICS).some(id=>RELICS[id].stack||!hasRelic(id)));
+  G.xoptions = shuffle(avail).slice(0,3);
   G.state='crossroads';
   clearButtons();
+}
+function buildRelicOffer(n){
+  const avail = Object.keys(RELICS).filter(id => RELICS[id].stack || !hasRelic(id));
+  return shuffle(avail).slice(0, n);
+}
+function setupRelicPick(nextStep){
+  const ids = buildRelicOffer(3);
+  if(!ids.length){ if(nextStep) nextStep(); return; }
+  G.relicOffer = ids; G.afterRelic = nextStep; G.state='relic'; clearButtons();
+}
+function takeRelic(i){
+  const id = G.relicOffer && G.relicOffer[i]; if(!id) return;
+  G.relics.push(id);
+  flash('Relic gained: '+RELICS[id].name); burst(W/2,250);
+  const ret=G.afterRelic; G.relicOffer=null; G.afterRelic=null; if(ret) ret();
 }
 function resolveCross(id){
   if(id==='shop') openShop();
@@ -724,6 +765,7 @@ function resolveCross(id){
   else if(id==='gamble') openGamble();
   else if(id==='shrine') openShrine();
   else if(id==='nest') openNest();
+  else if(id==='relic') setupRelicPick(proceed);
 }
 
 // ---------- shop ----------
@@ -867,8 +909,8 @@ function updateBattle(dt){
 }
 function strike(att, def, dir){
   const mult = typeMult(att.sp.type, def.sp.type);
-  const crit = rnd()<0.13;
-  let dmg = att.atk * mult * (crit?1.8:1) * rr(0.86,1.14);
+  const crit = rnd() < (0.13 + (hasRelic('crit')?0.10:0));
+  let dmg = att.atk * mult * (crit?(hasRelic('critdmg')?2.2:1.8):1) * rr(0.86,1.14);
   dmg = Math.max(1, Math.round(dmg));
   const dtx = dir>0? 660 : 300;   // defender's on-screen x
   // Shadow dodge (defender passive): full evade, no HP change, no on-hit effects
@@ -881,6 +923,8 @@ function strike(att, def, dir){
   // Rock guard (defender passive): reduce incoming, floor at 1 so every hit still bites
   if(def.sp.type==='Rock'){ dmg=Math.max(1, Math.round(dmg*(1-ROCK_GUARD))); def.status.fGuard=0.35; }
   def.hp = Math.max(0, def.hp - dmg);
+  if(dir>0 && hasRelic('lifesteal')){ const h=Math.round(dmg*0.12); if(h>0) att.hp=Math.min(att.maxhp, att.hp+h); }
+  if(dir<0 && hasRelic('thorns')) att.hp=Math.max(0, att.hp - Math.round(dmg*0.20));
   att.lunge=1; def.hurt=1;
   G.shake = Math.min(10, G.shake + (crit?7:3));
   const tx = dir>0? 660 : 300;
@@ -902,7 +946,8 @@ function strike(att, def, dir){
   // ---- attacker on-hit effects (only on a landed hit) ----
   switch(att.sp.type){
     case 'Fire': { // burn stacks (capped), refresh duration
-      def.status.burn=Math.min(BURN_MAX, def.status.burn+1); def.status.burnT=BURN_DUR; def.status.fBurn=0.4;
+      const inc=hasRelic('burn')?2:1, bcap=BURN_MAX+(hasRelic('burn')?1:0);
+      def.status.burn=Math.min(bcap, def.status.burn+inc); def.status.burnT=BURN_DUR; def.status.fBurn=0.4;
       for(let i=0;i<3;i++){ if(G.parts.length<160) G.parts.push({x:tx,y:210,vx:rr(-40,40),vy:rr(-120,-40),life:rr(0.3,0.6),col:'#ff7a3d',r:rr(2,4)}); }
       break; }
     case 'Water': { // instant lifesteal
@@ -1190,6 +1235,7 @@ function drawHUD(){
   x=chip('🕊️', G.honor, '#8fd0ff', x);
   x=chip('🧪', G.potions, '#6fe0a0', x);
   x=chip('🎯', 'Ball '+['I','II','III','IV'][G.ballTier], '#ff9b6f', x);
+  drawRelicStrip(Math.max(x+8, 420));
   // right side
   ctx.textAlign='right'; ctx.font='700 14px Segoe UI';
   ctx.fillStyle='#eaf0ff'; ctx.fillText('Dist '+G.dist+'m', W-14, 20);
@@ -1205,6 +1251,20 @@ function chip(icon,val,col,x){
   ctx.font='14px system-ui'; ctx.fillText(icon, x+6, 27);
   ctx.font='700 14px Segoe UI'; ctx.fillStyle=col; ctx.fillText(String(val), x+24, 27);
   return x+w+8;
+}
+function drawRelicStrip(sx){
+  if(!G.relics || !G.relics.length) return;
+  const seen=[]; for(const id of G.relics){ if(!seen.some(s=>s.id===id)) seen.push({id,n:relicCount(id)}); }
+  let x=sx;
+  for(const s of seen){
+    if(x>720) break;
+    const R=RELICS[s.id];
+    roundRect(x,12,20,20,5); ctx.fillStyle='#141b30'; ctx.fill();
+    ctx.lineWidth=1.5; ctx.strokeStyle=R.col; roundRect(x,12,20,20,5); ctx.stroke();
+    ctx.textAlign='center'; ctx.font='13px system-ui'; ctx.fillStyle='#fff'; ctx.fillText(R.icon, x+10, 27);
+    if(s.n>1){ ctx.font='700 8px Segoe UI'; ctx.fillStyle='#ffe9a8'; ctx.textAlign='right'; ctx.fillText('×'+s.n, x+20, 32); }
+    ctx.textAlign='left'; x+=24;
+  }
 }
 
 // team strip
@@ -1252,7 +1312,7 @@ function drawTeam(){
         // LOCKED: dim + radial cooldown sweep + seconds
         ctx.save(); ctx.fillStyle='rgba(10,14,28,.55)'; roundRect(x,y,110,60,9); ctx.fill();
         const cx=x+55, cy=y+30;
-        ctx.beginPath(); ctx.arc(cx,cy,24, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(1 - G.switchCd/SWITCH_CD));
+        ctx.beginPath(); ctx.arc(cx,cy,24, -Math.PI/2, -Math.PI/2 + 2*Math.PI*(1 - G.switchCd/switchCdMax()));
         ctx.strokeStyle='#6a76a0'; ctx.lineWidth=3; ctx.stroke();
         ctx.fillStyle='#cdd6f0'; ctx.font='700 14px Segoe UI'; ctx.textAlign='center';
         ctx.fillText(Math.ceil(G.switchCd), cx, cy+5); ctx.textAlign='left'; ctx.restore();
@@ -1448,6 +1508,7 @@ function draw(){
   else if(G.state==='battle') drawBattle();
   else if(G.state==='choice') drawChoice();
   else if(G.state==='crossroads') drawCrossroads();
+  else if(G.state==='relic') drawRelic();
   else if(G.state==='shop') drawShop();
   else if(G.state==='rest') drawRest();
   else if(G.state==='story') drawStory();
@@ -1701,7 +1762,7 @@ function trySwitch(idx){
   if((G.switchCd||0)>0){ flash('Swap recharging…'); return false; }
   G.lead = idx;
   const m=G.team[idx]; m.cd = Math.max(1/m.spd, SWITCH_ENTRY);
-  G.switchCd = SWITCH_CD; G.switchAnim = 0.35;
+  G.switchCd = switchCdMax(); G.switchAnim = 0.35;
   m.lunge = 1; flash('Go, '+m.sp.name+'!');
   return true;
 }
@@ -1748,6 +1809,22 @@ function drawCrossroads(){
     centerText(o.name, x+bw/2, y+130, '800 22px Segoe UI', '#eaf0ff');
     centerText(o.desc, x+bw/2, y+160, '600 13px Segoe UI', '#9fb0cc');
     btn('x'+i, x+20, y+180, bw-40, 40, 'Choose', null, {col:'#2a3760', accent:'#5a76b0'});
+  });
+}
+function drawRelic(){
+  centerText('CLAIM A RELIC', W/2, 100, '800 34px Segoe UI', '#ffe9a8');
+  centerText('A boon for the road ahead', W/2, 132, '600 15px Segoe UI', '#aeb8d8');
+  clearButtons();
+  const bw=250, gap=20, y=180, x0=W/2-(bw*3+gap*2)/2;
+  G.relicOffer.forEach((id,i)=>{
+    const R=RELICS[id], x=x0+i*(bw+gap);
+    panel(x,y,bw,240,null);
+    centerText(R.icon, x+bw/2, y+82, '56px system-ui', '#fff');
+    centerText(R.name, x+bw/2, y+128, '800 20px Segoe UI', R.col);
+    centerText(R.desc, x+bw/2, y+158, '600 13px Segoe UI', '#9fb0cc');
+    if(R.stack && hasRelic(id)) centerText('OWNED ×'+relicCount(id), x+bw/2, y+182, '600 11px Segoe UI', '#8fa0c8');
+    centerText('press '+(i+1), x+bw/2, y+228, '600 11px Segoe UI', '#5a6688');
+    btn('relic_'+i, x+20, y+196, bw-40, 34, 'Take', null, {col:'#3a2f5a', accent:R.col});
   });
 }
 
@@ -1952,6 +2029,8 @@ function onClick(mx,my){
       if(id==='catch') doCatch(); else if(id==='kill') doKill(); else if(id==='release') doRelease(); break;
     case 'crossroads':
       if(id.startsWith('x')){ resolveCross(G.xoptions[+id[1]].id); } break;
+    case 'relic':
+      if(id.startsWith('relic_')) takeRelic(+id.slice(6)); break;
     case 'shop':
       if(id==='leave') proceed(); else if(id.startsWith('buy_')) buy(id.slice(4)); break;
     case 'rest':
@@ -1991,6 +2070,7 @@ window.addEventListener('keydown', e=>{
     // map number to the nth actionable button of choice-like states
     if(n<=3 && G.state==='choice'){ onClickById(['catch','kill','release'][n-1]); }
     else if(n<=3 && G.state==='crossroads'){ onClickById('x'+(n-1)); }
+    else if(n<=3 && G.state==='relic'){ onClickById('relic_'+(n-1)); }
     else if(n<=3 && G.state==='nest'){ onClickById('nest_'+(n-1)); }
     else if(G.state==='swapchoice'){ onClickById('swapout_'+(n-1)); }
     else if(n>=1 && n<=4 && G.state==='battle'){ trySwitch(n-1); }
