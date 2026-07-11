@@ -645,6 +645,23 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(plain > 40, 'the majority of days are ordinary');
 }
 
+// ---- feed the cat ----
+{
+  const S = TC.freshSave();
+  ok(TC.feedPet(S) === null, 'you cannot feed the cat with no candy');
+  S.candy = 2;
+  const r = TC.feedPet(S);
+  ok(r && r.affection === 1, 'feeding bumps affection');
+  ok(S.candy === 1, 'feeding spends a candy');
+  TC.feedPet(S);
+  ok(S.pet.affection === 2 && S.candy === 0, 'affection accumulates and candy runs out');
+  ok(TC.feedPet(S) === null, 'no candy left, no feeding');
+  // old saves without a pet field still load with a default cat and can be fed
+  const old = TC.freshSave(); delete old.pet; old.candy = 1;
+  const r2 = TC.feedPet(old);
+  ok(r2 && old.pet && old.pet.name === 'Biscuit', 'a save missing the pet field defaults to Biscuit and feeds fine');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');

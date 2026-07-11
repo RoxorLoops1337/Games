@@ -942,6 +942,7 @@ function freshSave(){
     fishing: { day: null, casts: 0 },
     arcade: { day: null, plays: 0 },
     jumprope: { day: null, tries: 0 },
+    pet: { name: 'Biscuit', affection: 0 },
   };
 }
 
@@ -1005,6 +1006,21 @@ function buyCandy(save){
   save.coins -= CANDY_PRICE;
   save.candy += 1;
   return true;
+}
+
+/* ================= your cat: feed it, name it ================= */
+function feedPet(save){
+  if (save.candy < 1) return null;
+  save.candy -= 1;
+  save.pet = save.pet || { name: 'Biscuit', affection: 0 };
+  save.pet.affection = (save.pet.affection || 0) + 1;
+  return { affection: save.pet.affection };
+}
+function petMood(affection){
+  if (affection >= 12) return 'adores you.';
+  if (affection >= 6) return 'is very fond of you.';
+  if (affection >= 1) return 'is warming up to you.';
+  return '';
 }
 
 /* ================= relationships: friends & enemies at school ================= */
@@ -1648,6 +1664,7 @@ function loadSave(){
       base.fishing = (parsed.fishing && typeof parsed.fishing.casts === 'number') ? parsed.fishing : { day: null, casts: 0 };
       base.arcade = (parsed.arcade && typeof parsed.arcade.plays === 'number') ? parsed.arcade : { day: null, plays: 0 };
       base.jumprope = (parsed.jumprope && typeof parsed.jumprope.tries === 'number') ? parsed.jumprope : { day: null, tries: 0 };
+      base.pet = (parsed.pet && parsed.pet.name) ? { name: parsed.pet.name, affection: parsed.pet.affection || 0 } : { name: 'Biscuit', affection: 0 };
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3072,7 +3089,7 @@ var W = {
   goalsOpen: true, goalsSig: '', goalsT: 0,
   pet: { x: 250, y: 546, dir: 'down', walk: 0, moving: false, emote: null, emoteT: 0, name: 'Biscuit' },
   petIntroed: false, sitting: false,
-  petSpot: { isPet: true, label: function(){ return 'Pet ' + W.pet.name; }, action: function(){ petTheCat(); } },
+  petSpot: { isPet: true, label: function(){ return 'Pet ' + W.pet.name; }, action: function(){ openPetMenu(); } },
   fade: 0, fadeState: 'idle', fadeHold: 0, pendingTravel: null, pendingSleep: false, sleepCard: null,
 };
 var ZOOM = 1.15, WALK_SPEED = 168, PLAYER_R = 13;
@@ -3083,6 +3100,7 @@ function worldInit(){
   var ctx = W.cv.getContext('2d');
   if (!ctx || typeof ctx.fillRect !== 'function') return;   // headless stub → skip
   W.ctx = ctx;
+  if (save.pet && save.pet.name) W.pet.name = save.pet.name;   // remember your cat's name
   W.maps = buildMaps();
   worldResize();
   window.addEventListener('resize', worldResize);
@@ -3334,7 +3352,7 @@ function updateFade(dt){
 // catching up if it lags. Rests just behind you when you stop.
 function updatePet(dt){
   var p = W.pet;
-  var off = 30;
+  var off = 30 - Math.min(8, (save.pet && save.pet.affection) || 0);   // a well-fed cat sticks closer
   var dv = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] }[W.dir] || [0,1];
   var tx = W.px - dv[0] * off, ty = W.py - dv[1] * off + 4;
   var dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
@@ -3590,6 +3608,54 @@ function actChore(choreId){
 function petTheCat(){
   W.pet.emote = 'heart'; W.pet.emoteT = 1.6; W.pet.moving = false;
   sfxPurr(); hapticPulse('common');
+}
+// the little cat menu: scratch, feed a treat, or rename
+function openPetMenu(){
+  var name = W.pet.name, candy = save.candy;
+  var mood = (save.pet && save.pet.affection) ? petMood(save.pet.affection) : '';
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="wm-x">&times;</button>' +
+    '<h3 class="modal-title">🐱 ' + name + '</h3>' +
+    (mood ? '<p class="smallnote" style="margin:2px 0 10px;">' + name + ' ' + mood + '</p>' : '') +
+    '<div class="wmenu">' +
+      '<button id="pm-scratch"><span class="wm-emoji">🫳</span><span>Give it a scratch <small>' + name + ' purrs</small></span></button>' +
+      '<button id="pm-feed"' + (candy < 1 ? ' disabled' : '') + '><span class="wm-emoji">🍬</span><span>Feed a treat <small>' + (candy > 0 ? 'you have ' + candy : 'no candy — buy some at the kiosk') + '</small></span></button>' +
+      '<button id="pm-rename"><span class="wm-emoji">🏷️</span><span>Rename&hellip; <small>currently ' + name + '</small></span></button>' +
+    '</div>';
+  $('modal-backdrop').classList.add('open');
+  $('wm-x').addEventListener('click', closeModal);
+  $('pm-scratch').addEventListener('click', function(){ closeModal(); petTheCat(); });
+  var fb = $('pm-feed');
+  if (fb) fb.addEventListener('click', function(){
+    var r = feedPet(save);
+    if (!r) return;
+    persist(save); renderTopbar(); closeModal();
+    W.pet.emote = 'heart'; W.pet.emoteT = 2.2; W.pet.big = true; W.pet.moving = false;
+    sfxPurr(); hapticPulse('rare');
+    toast(name + ' munches happily 🍬', 'good');
+  });
+  $('pm-rename').addEventListener('click', openRenamePet);
+}
+function openRenamePet(){
+  var names = ['Biscuit', 'Mochi', 'Pixel', 'Ziggy', 'Clover', 'Pepper'];
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="wm-x">&times;</button>' +
+    '<h3 class="modal-title">Name your cat</h3>' +
+    '<div class="wmenu">' +
+      names.map(function(n){ return '<button data-nm="' + n + '"' + (n === W.pet.name ? ' disabled' : '') + '><span class="wm-emoji">🐾</span><span>' + n + (n === W.pet.name ? ' <small>current name</small>' : '') + '</span></button>'; }).join('') +
+    '</div>';
+  $('modal-backdrop').classList.add('open');
+  $('wm-x').addEventListener('click', openPetMenu);   // back to the cat menu
+  sheet.querySelectorAll('button[data-nm]').forEach(function(b){
+    b.addEventListener('click', function(){
+      var nm = b.getAttribute('data-nm');
+      W.pet.name = nm; save.pet = save.pet || { name: 'Biscuit', affection: 0 }; save.pet.name = nm;
+      persist(save); sfxClick(); closeModal();
+      toast('Your cat is now called ' + nm + ' 🐱', 'good');
+    });
+  });
 }
 // check the home mailbox — a flavour note and sometimes loose change
 function actCheckMail(){
@@ -4728,10 +4794,16 @@ function drawPet(ctx, p){
   if (p.emoteT > 0) {
     var t = 1.3 - p.emoteT, ey = hy - 13 - t * 7;
     ctx.globalAlpha = Math.min(1, p.emoteT * 2);
-    if (p.emote === 'heart') { ctx.fillStyle = '#e8556a'; drawHeart(ctx, hx, ey, 4.2); }
-    else { ctx.fillStyle = '#f4ead2'; ctx.font = '700 13px serif'; ctx.textAlign = 'center'; ctx.fillText('?', hx, ey + 4); }
+    if (p.emote === 'heart') {
+      ctx.fillStyle = '#e8556a';
+      if (p.big) {   // a happy burst of hearts when fed
+        drawHeart(ctx, hx, ey, 4.6);
+        ctx.globalAlpha *= 0.8; drawHeart(ctx, hx - 9, ey + 3 - Math.sin(p.emoteT * 4) * 2, 3.2);
+        drawHeart(ctx, hx + 9, ey + 2 - Math.cos(p.emoteT * 4) * 2, 3.2);
+      } else { drawHeart(ctx, hx, ey, 4.2); }
+    } else { ctx.fillStyle = '#f4ead2'; ctx.font = '700 13px serif'; ctx.textAlign = 'center'; ctx.fillText('?', hx, ey + 4); }
     ctx.globalAlpha = 1;
-  }
+  } else if (p.big) { p.big = false; }
 }
 function drawHeart(ctx, x, y, r){
   ctx.beginPath();
@@ -4860,6 +4932,7 @@ if (typeof globalThis !== 'undefined') {
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     walkersOutCount: walkersOutCount,
     ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
+    feedPet: feedPet,
     JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay,
   };
 }
