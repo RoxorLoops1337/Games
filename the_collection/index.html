@@ -978,6 +978,7 @@ function freshSave(){
     goalBonus: { day: null },
     jrBest: 0,
     arcadeBulls: 0,
+    fishJournal: {},
   };
 }
 
@@ -1267,17 +1268,39 @@ function checkMail(save){
 // The pond: a handful of casts a day. Mostly a few coins, sometimes candy
 // or a soggy card, sometimes just an old boot. Seeded per day + cast number.
 var FISH_CASTS_PER_DAY = 4;
+// A little side-collection: the actual fish you can hook. Each sells for a few
+// coins and is logged in your catch journal the first time you land it.
+var FISH_SPECIES = [
+  { id: 'minnow',  name: 'Minnow',      emoji: '🐟', coins: 3,  weight: 34 },
+  { id: 'perch',   name: 'Perch',       emoji: '🐠', coins: 5,  weight: 26 },
+  { id: 'catfish', name: 'Catfish',     emoji: '🐡', coins: 7,  weight: 18 },
+  { id: 'eel',     name: 'Ribbon Eel',  emoji: '🦎', coins: 9,  weight: 12 },
+  { id: 'koi',     name: 'Spotted Koi', emoji: '🎏', coins: 14, weight: 7 },
+  { id: 'goldfish',name: 'Golden Fish', emoji: '✨', coins: 22, weight: 3 },
+];
+var FISH_BY_ID = {}; FISH_SPECIES.forEach(function(f){ FISH_BY_ID[f.id] = f; });
 function fishOutcome(day, castNo){
   var rand = seededRandom('fish-' + day + '-' + castNo);
-  var kind = pickWeighted(rand, { coin: 38, bigcoin: 16, candy: 12, card: 15, boot: 19 });
-  var res = { kind: kind, coins: 0, candy: 0, cardId: null, label: '' };
-  if (kind === 'coin') { res.coins = 2 + Math.floor(rand() * 5); res.label = 'a handful of wet coins'; }
+  var kind = pickWeighted(rand, { fish: 30, coin: 26, bigcoin: 13, candy: 10, card: 12, boot: 9 });
+  var res = { kind: kind, coins: 0, candy: 0, cardId: null, fishId: null, label: '' };
+  if (kind === 'fish') {
+    var w = {}; FISH_SPECIES.forEach(function(f){ w[f.id] = f.weight; });
+    var sp = FISH_BY_ID[pickWeighted(rand, w)];
+    res.fishId = sp.id; res.coins = sp.coins; res.label = sp.name + ' ' + sp.emoji;
+  }
+  else if (kind === 'coin') { res.coins = 2 + Math.floor(rand() * 5); res.label = 'a handful of wet coins'; }
   else if (kind === 'bigcoin') { res.coins = 8 + Math.floor(rand() * 10); res.label = 'a dropped coin purse!'; }
   else if (kind === 'candy') { res.candy = 1 + Math.floor(rand() * 2); res.label = 'a floating candy 🍬'; }
   else if (kind === 'card') { var pool = BY_TIER['common'].concat(BY_TIER['uncommon']); res.cardId = pool[Math.floor(rand() * pool.length)].id; res.coins = 2; res.label = 'a waterlogged card'; }
   else { res.label = 'an old boot'; }
   return res;
 }
+// journal state: which species you've logged, plus a completion count. Pure.
+function fishJournalState(save){
+  var j = save.fishJournal || {};
+  return FISH_SPECIES.map(function(f){ return { id: f.id, name: f.name, emoji: f.emoji, coins: f.coins, caught: !!j[f.id] }; });
+}
+function fishJournalCount(save){ var j = save.fishJournal || {}, n = 0; FISH_SPECIES.forEach(function(f){ if (j[f.id]) n++; }); return n; }
 // How many of the street's townsfolk are out today — a smaller crowd when
 // the weather's bad. Deterministic off the day's weather.
 function walkersOutCount(day){
@@ -1301,6 +1324,11 @@ function fishCast(save){
   save.coins += res.coins;
   save.candy += res.candy;
   if (res.cardId) addCardById(save, res.cardId);
+  if (res.fishId) {
+    save.fishJournal = save.fishJournal || {};
+    res.fishNew = !save.fishJournal[res.fishId];   // first time landing this species?
+    save.fishJournal[res.fishId] = true;
+  }
   return res;
 }
 
@@ -1813,6 +1841,7 @@ function loadSave(){
       base.goalBonus = (parsed.goalBonus && typeof parsed.goalBonus.day !== 'undefined') ? parsed.goalBonus : { day: null };
       base.jrBest = (typeof parsed.jrBest === 'number') ? parsed.jrBest : 0;
       base.arcadeBulls = (typeof parsed.arcadeBulls === 'number') ? parsed.arcadeBulls : 0;
+      base.fishJournal = (parsed.fishJournal && typeof parsed.fishJournal === 'object') ? parsed.fishJournal : {};
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3996,7 +4025,7 @@ function actFish(){
   $('modal-backdrop').classList.add('open');
   var iconEl = $('reel-icon');
   var reel = ['🎣', '🌊', '🐟', '🌊', '💦', '🌊'];
-  var landIcon = { coin: '🪙', bigcoin: '💰', candy: '🍬', card: '🃏', boot: '🥾' }[res.kind] || '🌊';
+  var landIcon = res.fishId ? FISH_BY_ID[res.fishId].emoji : ({ coin: '🪙', bigcoin: '💰', candy: '🍬', card: '🃏', boot: '🥾' }[res.kind] || '🌊');
   var seq = []; for (var i = 0; i < 14; i++) seq.push(reel[i % reel.length]); seq.push(landIcon);
   var idx = 0;
   (function tick(){
@@ -4011,12 +4040,41 @@ function actFish(){
     if (res.candy) parts.push('+' + res.candy + ' 🍬');
     if (res.cardId) parts.push(BY_ID[res.cardId].name + '!');
     var el = $('reel-result');
-    el.innerHTML = 'You reeled in ' + res.label + (parts.length ? ' — ' + parts.join(' &middot; ') : '.');
+    el.innerHTML = 'You reeled in ' + res.label + (parts.length ? ' — ' + parts.join(' &middot; ') : '.') +
+      (res.fishNew ? '<br><span style="color:var(--accent-deep);font-weight:700;">🆕 New for your catch journal!</span>' : '');
     el.classList.add(win ? 'good' : 'nada');
-    if (win) { sfxCoins(); hapticPulse(res.cardId ? 'rare' : 'common'); }
+    if (win) { sfxCoins(); hapticPulse(res.fishNew || res.cardId ? 'rare' : 'common'); }
+    if (res.fishNew) { var fw = $('modal-sheet'); if (fw) burstConfetti(fw, 'rare'); }
     var b = $('reel-done'); b.disabled = false; b.textContent = win ? 'Nice catch!' : 'Ah well';
     b.addEventListener('click', closeModal);
+    // journal shortcut — always available so the collection is discoverable
+    var jb = document.createElement('button');
+    jb.className = 'bigbtn ghost'; jb.style.marginTop = '8px';
+    jb.textContent = '📖 Catch journal (' + fishJournalCount(save) + '/' + FISH_SPECIES.length + ')';
+    jb.addEventListener('click', actFishJournal);
+    b.parentNode.insertBefore(jb, b.nextSibling);
   }
+}
+// the catch journal — every fish species, caught ones lit, the rest a mystery
+function actFishJournal(){
+  var st = fishJournalState(save), got = fishJournalCount(save);
+  var rows = st.map(function(f){
+    return '<div class="ach-row' + (f.caught ? ' on' : '') + '">' +
+      '<span class="ach-ic">' + (f.caught ? f.emoji : '🎣') + '</span>' +
+      '<span class="ach-tx"><b>' + (f.caught ? f.name : '???') + '</b><small>' + (f.caught ? 'sells for ' + f.coins + 'c' : 'not caught yet') + '</small></span>' +
+      (f.caught ? '<span class="ach-chk">✓</span>' : '') + '</div>';
+  }).join('');
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="fj-x">&times;</button>' +
+    '<h3 class="modal-title">🎣 Catch Journal</h3>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">' + got + ' of ' + st.length + ' species landed' + (got === st.length ? ' — you caught them all! 🏆' : '') + '</p>' +
+    '<div class="ach-list">' + rows + '</div>' +
+    '<button class="bigbtn" id="fj-done" style="margin-top:8px;">Close</button>';
+  $('modal-backdrop').classList.add('open');
+  $('fj-x').addEventListener('click', closeModal);
+  $('fj-done').addEventListener('click', closeModal);
+  sfxClick();
 }
 function actMowLawn(nbId){
   var st = lawnState(save, nbId);
@@ -5347,6 +5405,7 @@ if (typeof globalThis !== 'undefined') {
     DAILY_GOAL_BONUS: DAILY_GOAL_BONUS, allGoalsDone: allGoalsDone, dailyBonusClaimable: dailyBonusClaimable, claimDailyBonus: claimDailyBonus,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
+    FISH_SPECIES: FISH_SPECIES, fishJournalState: fishJournalState, fishJournalCount: fishJournalCount,
     walkersOutCount: walkersOutCount, npcGreeting: npcGreeting, NPC_GREETINGS: NPC_GREETINGS,
     ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
     cartDashReward: cartDashReward, cartDashLeft: cartDashLeft, canCartDash: canCartDash, cartDash: cartDash,

@@ -543,7 +543,7 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canFish(S) === true, 'you can fish on a fresh day');
   const o = TC.fishOutcome(3, 1);
   ok(o && typeof o.kind === 'string' && typeof o.label === 'string', 'a fish outcome has a kind and a label');
-  ok(['coin', 'bigcoin', 'candy', 'card', 'boot'].includes(o.kind), 'fish outcome kinds are from the known set');
+  ok(['fish', 'coin', 'bigcoin', 'candy', 'card', 'boot'].includes(o.kind), 'fish outcome kinds are from the known set');
   ok(JSON.stringify(TC.fishOutcome(3, 1)) === JSON.stringify(TC.fishOutcome(3, 1)), 'fish outcome is deterministic for day+cast');
   // exhaust the day's casts
   let caught = 0;
@@ -559,6 +559,46 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   // old saves without a fishing field still load and fish
   const old = TC.freshSave(); delete old.fishing;
   ok(TC.canFish(old) === true && TC.fishCast(old) !== null, 'a save missing the fishing field still works');
+}
+
+// ---- fishing catch journal ----
+{
+  // a fish catch carries a valid species and coins
+  let sawFish = false;
+  for (let d = 2; d < 200 && !sawFish; d++) for (let c = 1; c <= 4 && !sawFish; c++) {
+    const r = TC.fishOutcome(d, c);
+    if (r.kind === 'fish') { sawFish = true;
+      ok(TC.FISH_SPECIES.some(f => f.id === r.fishId), 'a caught fish is a real species');
+      ok(r.coins > 0 && r.label.length > 0, 'a fish sells for coins and has a label');
+    }
+  }
+  ok(sawFish, 'fish catches occur across days');
+  // journal starts empty and logs species on first catch
+  const S = TC.freshSave();
+  ok(TC.fishJournalCount(S) === 0, 'the catch journal starts empty');
+  ok(TC.fishJournalState(S).every(f => f.caught === false), 'every species starts uncaught');
+  // find a day/cast that lands a fish and cast it
+  let done = false;
+  for (let d = 2; d < 200 && !done; d++) {
+    const probe = TC.fishOutcome(d, 1);
+    if (probe.kind === 'fish') {
+      const T = TC.freshSave(); T.day = d; T.fishing = { day: d, casts: 0 };
+      const r = TC.fishCast(T);
+      ok(r.fishId === probe.fishId, 'fishCast lands the deterministic species');
+      ok(r.fishNew === true && T.fishJournal[probe.fishId] === true, 'a first catch is flagged new and logged');
+      ok(TC.fishJournalCount(T) === 1, 'the journal count reflects the logged species');
+      // re-catching the same species is not new
+      T.fishing = { day: d, casts: 0 };
+      const r2 = TC.fishCast(T);
+      if (r2.fishId === probe.fishId) ok(r2.fishNew === false, 'a repeat catch of the same species is not new');
+      done = true;
+    }
+  }
+  ok(done, 'exercised a fish catch through fishCast');
+  // old save without a fishJournal still logs
+  const noJ = TC.freshSave(); delete noJ.fishJournal;
+  for (let d = 2; d < 200; d++) { noJ.day = d; noJ.fishing = { day: d, casts: 0 };
+    const r = TC.fishCast(noJ); if (r.fishId) { ok(noJ.fishJournal[r.fishId] === true, 'a save missing fishJournal still logs a catch'); break; } }
 }
 
 // ---- townsfolk presence ----
