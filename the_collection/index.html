@@ -2880,7 +2880,9 @@ var W = {
   vx: 0, vy: 0, moving: false, walk: 0,
   keys: {}, dpad: {}, running: false, last: 0, active: true,
   prompt: null,       // the currently-focusable interaction
-  cam: { x: 0, y: 0 },
+  cam: { x: 0, y: 0 }, camSnap: true,
+  target: null,       // tap-to-walk destination {x,y,spot}
+  lastX: 0, lastY: 0, stall: 0,
   maps: null, actorPhase: 0,
 };
 var ZOOM = 1.15, WALK_SPEED = 168, PLAYER_R = 13;
@@ -2928,7 +2930,18 @@ function bindWorldInput(){
     else if (k === 'arrowright' || k === 'd') W.keys.right = 1;
     else if (k === ' ' || k === 'enter' || k === 'e') { worldInteract(); return; }
     else return;
+    W.target = null;               // manual steering cancels tap-to-walk
     e.preventDefault();
+  });
+  // tap / click anywhere on the map to walk there; tap near a person or door
+  // to walk over and interact automatically.
+  W.cv.addEventListener('pointerdown', function(e){
+    if (worldBlocked() || activeTab !== 'world') return;
+    var p = screenToWorld(e.clientX, e.clientY);
+    var m = curMap(), snap = null, sd = 52;
+    m.spots.forEach(function(sp){ var d = Math.hypot(p.x - sp.x, p.y - sp.y); if (d < sd) { sd = d; snap = sp; } });
+    W.target = { x: p.x, y: p.y, spot: snap };
+    W.stall = 0;
   });
   window.addEventListener('keyup', function(e){
     var k = e.key.toLowerCase();
@@ -2939,7 +2952,7 @@ function bindWorldInput(){
   });
   document.querySelectorAll('#dpad .dbtn').forEach(function(btn){
     var dir = btn.getAttribute('data-dir');
-    function on(e){ e.preventDefault(); W.dpad[dir] = 1; btn.classList.add('on'); }
+    function on(e){ e.preventDefault(); W.dpad[dir] = 1; W.target = null; btn.classList.add('on'); }
     function off(e){ if (e) e.preventDefault(); W.dpad[dir] = 0; btn.classList.remove('on'); }
     btn.addEventListener('pointerdown', on);
     btn.addEventListener('pointerup', off);
@@ -2955,11 +2968,16 @@ function inputVector(){
   if (x && y) { x *= 0.7071; y *= 0.7071; }
   return { x: x, y: y };
 }
+function screenToWorld(cx, cy){
+  var r = W.cv.getBoundingClientRect();
+  return { x: (cx - r.left - W.vw / 2) / ZOOM + W.cam.x, y: (cy - r.top - W.vh / 2) / ZOOM + W.cam.y };
+}
 
 /* ---------- world helpers ---------- */
 function curMap(){ return W.maps[W.map]; }
 function goMap(id, sx, sy, silent){
-  W.map = id; W.px = sx; W.py = sy; W.vx = W.vy = 0; W.moving = false;
+  W.map = id; W.px = sx; W.py = sy; W.vx = W.vy = 0; W.moving = false; W.dir = 'down';
+  W.target = null; W.camSnap = true;
   var m = W.maps[id];
   var loc = $('world-loc'); if (loc) loc.textContent = m.title;
   if (!silent) sfxClick();
@@ -2994,7 +3012,17 @@ function worldLoop(ts){
 }
 function worldUpdate(dt){
   W.actorPhase += dt;
-  var v = worldBlocked() ? { x: 0, y: 0 } : inputVector();
+  var kv = inputVector();
+  var v = { x: 0, y: 0 };
+  if (worldBlocked()) { W.target = null; }
+  else if (kv.x || kv.y) { v = kv; W.target = null; }
+  else if (W.target) {
+    var dx = W.target.x - W.px, dy = W.target.y - W.py, dist = Math.hypot(dx, dy);
+    if (dist < 7) {
+      var t = W.target; W.target = null;
+      if (t.spot && t.spot.action) { W.prompt = t.spot; sfxClick(); t.spot.action(); }
+    } else { v = { x: dx / dist, y: dy / dist }; }
+  }
   W.moving = !!(v.x || v.y);
   if (W.moving) {
     if (Math.abs(v.x) > Math.abs(v.y)) W.dir = v.x > 0 ? 'right' : 'left';
@@ -3003,6 +3031,12 @@ function worldUpdate(dt){
     moveAxis(0, v.y * WALK_SPEED * dt);
     W.walk += dt * 9;
   } else W.walk = 0;
+  // give up on a tap target we can't reach (blocked by a wall)
+  if (W.target) {
+    W.stall = (Math.hypot(W.px - W.lastX, W.py - W.lastY) < 0.4) ? W.stall + dt : 0;
+    if (W.stall > 0.4) { W.target = null; W.stall = 0; }
+  }
+  W.lastX = W.px; W.lastY = W.py;
 
   var m = curMap();
   // auto-portals: step onto a door to travel
@@ -3327,12 +3361,14 @@ function openMarketMenu(){
 function worldDraw(){
   var ctx = W.ctx, m = curMap();
   var vw = W.vw, vh = W.vh;
-  // camera centers on player, clamped to map
+  // camera centers on player, clamped to map, and eases toward the target
   var halfW = vw / (2 * ZOOM), halfH = vh / (2 * ZOOM);
-  W.cam.x = Math.max(halfW, Math.min(m.w - halfW, W.px));
-  W.cam.y = Math.max(halfH, Math.min(m.h - halfH, W.py));
-  if (m.w < 2 * halfW) W.cam.x = m.w / 2;
-  if (m.h < 2 * halfH) W.cam.y = m.h / 2;
+  var tcx = Math.max(halfW, Math.min(m.w - halfW, W.px));
+  var tcy = Math.max(halfH, Math.min(m.h - halfH, W.py));
+  if (m.w < 2 * halfW) tcx = m.w / 2;
+  if (m.h < 2 * halfH) tcy = m.h / 2;
+  if (W.camSnap) { W.cam.x = tcx; W.cam.y = tcy; W.camSnap = false; }
+  else { W.cam.x += (tcx - W.cam.x) * 0.16; W.cam.y += (tcy - W.cam.y) * 0.16; }
 
   ctx.setTransform(W.dpr, 0, 0, W.dpr, 0, 0);
   ctx.clearRect(0, 0, vw, vh);
@@ -3512,25 +3548,20 @@ function drawProp(ctx, p){
     ctx.fillStyle = '#2c2438'; ctx.fillRect(p.x+p.w-40, p.y-14, 30, 18);
   }
 }
-// a bobbing person (NPC): body + head + optional apron + name + '!' bubble
+// a standing NPC: the shared chibi + a name tag and '!' business bubble.
+// NPCs face the player a little so the town feels attentive.
 function drawPerson(ctx, x, y, color, name, dir, phase, actor){
-  var bob = Math.sin(phase * 2) * 1.5;
-  shadowEllipse(ctx, x, y+16, 13, 5);
-  // legs
-  ctx.fillStyle = '#3a3550'; ctx.fillRect(x-7, y+4, 5, 10); ctx.fillRect(x+2, y+4, 5, 10);
-  // body
-  ctx.fillStyle = color; roundRectPath(ctx, x-10, y-10+bob, 20, 20, 6); ctx.fill();
-  if (actor && actor.apron) { ctx.fillStyle = 'rgba(255,255,255,.5)'; roundRectPath(ctx, x-7, y-4+bob, 14, 12, 3); ctx.fill(); }
-  // head
-  ctx.fillStyle = '#f3c99a'; ctx.beginPath(); ctx.arc(x, y-18+bob, 8.5, 0, 6.283); ctx.fill();
-  ctx.fillStyle = '#4a3b2a'; ctx.beginPath(); ctx.arc(x, y-22+bob, 8.5, Math.PI*1.05, Math.PI*1.95); ctx.fill();
+  var face = 'down';
+  if (actor) { var dx = W.px - x, dy = W.py - y;
+    face = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); }
+  drawChar(ctx, x, y, { tee: color, cap: (actor && actor.hair) || '#4a3b2a', capDark:(actor && actor.hair) || '#3a2d1f', dir: face, walk: null, apron: actor && actor.apron });
   // name tag
   if (name) { ctx.fillStyle = 'rgba(20,16,10,.6)'; ctx.font = '600 10px sans-serif'; ctx.textAlign = 'center';
-    var tw = ctx.measureText(name).width + 10; roundRectPath(ctx, x-tw/2, y-42+bob, tw, 13, 6); ctx.fill();
-    ctx.fillStyle = '#ffe9c2'; ctx.fillText(name, x, y-32+bob); }
+    var tw = ctx.measureText(name).width + 10; roundRectPath(ctx, x-tw/2, y-44, tw, 13, 6); ctx.fill();
+    ctx.fillStyle = '#ffe9c2'; ctx.fillText(name, x, y-34); }
   // attention bubble if this NPC has something to do
   if (actor && npcHasBusiness(actor)) {
-    var by = y-52+bob + Math.sin(W.actorPhase*4)*1.5;
+    var by = y-54 + Math.sin(W.actorPhase*4)*1.5;
     ctx.fillStyle = '#e2a04a'; ctx.beginPath(); ctx.arc(x, by, 7, 0, 6.283); ctx.fill();
     ctx.fillStyle = '#2a1c08'; ctx.font = '700 11px serif'; ctx.textAlign = 'center'; ctx.fillText('!', x, by+4);
   }
@@ -3544,28 +3575,62 @@ function npcHasBusiness(a){
   return false;
 }
 function drawPlayer(ctx){
-  var x = W.px, y = W.py;
-  var bob = W.moving ? Math.abs(Math.sin(W.walk)) * 2.5 : 0;
-  var step = W.moving ? Math.sin(W.walk) * 4 : 0;
-  shadowEllipse(ctx, x, y+15, 13, 5);
-  // legs (alternate)
-  ctx.fillStyle = '#39507a'; ctx.fillRect(x-7, y+3+ (step>0?-step:0)*0, 5, 11); ctx.fillRect(x+2, y+3, 5, 11);
-  ctx.fillRect(x-7, y+3, 5, 11-Math.max(0,step)); ctx.fillRect(x+2, y+3, 5, 11-Math.max(0,-step));
-  // body (red tee)
-  ctx.fillStyle = '#d8503f'; roundRectPath(ctx, x-11, y-12-bob, 22, 22, 7); ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,.18)'; roundRectPath(ctx, x-11, y-12-bob, 22, 8, 6); ctx.fill();
+  drawChar(ctx, W.px, W.py, {
+    tee:'#d8503f', cap:'#2f6bbf', capDark:'#2456a0',
+    dir: W.dir, walk: W.moving ? W.walk : null,
+  });
+}
+// A cute directional chibi: shadow, swinging legs/arms, body, head that
+// faces up/down/left/right, cap with a brim in the facing direction.
+function drawChar(ctx, x, y, o){
+  var dir = o.dir || 'down';
+  var moving = o.walk !== null && o.walk !== undefined;
+  var swing = moving ? Math.sin(o.walk) * 4 : 0;
+  var bob = moving ? Math.abs(Math.sin(o.walk)) * 2.2 : 0;
+  var yy = y - bob;
+  shadowEllipse(ctx, x, y + 15, 13, 5);
+  var skin = o.skin || '#f6cfa0', hair = o.hair || o.cap;
+  // legs
+  ctx.fillStyle = o.pants || '#39507a';
+  if (dir === 'left' || dir === 'right') {
+    ctx.fillRect(x - 3, yy + 6, 5, 11 + swing * 0.4);
+    ctx.fillRect(x - 3, yy + 6, 5, 11 - swing * 0.4);
+  } else {
+    ctx.fillRect(x - 7, yy + 6, 5, 11 - Math.max(0, swing));
+    ctx.fillRect(x + 2, yy + 6, 5, 11 - Math.max(0, -swing));
+  }
+  // arms (behind body edges), swing opposite legs
+  ctx.fillStyle = o.tee;
+  if (dir !== 'up' && dir !== 'down') {
+    ctx.fillRect(x + (dir === 'right' ? 6 : -10), yy - 6 + swing * 0.5, 4, 12);
+  }
+  // body / shirt
+  ctx.fillStyle = o.tee; roundRectPath(ctx, x - 11, yy - 12, 22, 22, 7); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.16)'; roundRectPath(ctx, x - 11, yy - 12, 22, 8, 6); ctx.fill();
+  if (o.apron) { ctx.fillStyle = 'rgba(255,255,255,.5)'; roundRectPath(ctx, x - 7, yy - 6, 14, 14, 3); ctx.fill(); }
   // head
-  ctx.fillStyle = '#f6cfa0'; ctx.beginPath(); ctx.arc(x, y-21-bob, 9.5, 0, 6.283); ctx.fill();
-  // hair / cap
-  ctx.fillStyle = '#2f6bbf'; ctx.beginPath(); ctx.arc(x, y-25-bob, 9.5, Math.PI*1.02, Math.PI*1.98); ctx.fill();
-  ctx.fillRect(x-2, y-34-bob, 4, 4);
-  // cap brim faces walk dir
-  ctx.fillStyle = '#2456a0';
-  var brim = W.dir === 'left' ? -12 : W.dir === 'right' ? 4 : -4;
-  ctx.fillRect(x+brim, y-26-bob, 9, 3);
-  // eyes hint of direction
-  ctx.fillStyle = '#2a2018';
-  if (W.dir !== 'up') { var ex = W.dir==='left'?-4:W.dir==='right'?1:-3; ctx.fillRect(x+ex, y-22-bob, 2, 2); ctx.fillRect(x+ex+5, y-22-bob, 2, 2); }
+  ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(x, yy - 21, 9.5, 0, 6.283); ctx.fill();
+  // hair cap over the crown
+  ctx.fillStyle = hair; ctx.beginPath();
+  if (dir === 'up') ctx.arc(x, yy - 21, 9.6, 0, Math.PI * 2);           // back of head
+  else ctx.arc(x, yy - 24, 9.5, Math.PI * 1.0, Math.PI * 2.0);          // top hair
+  ctx.fill();
+  // cap brim + face
+  if (dir !== 'up') {
+    ctx.fillStyle = o.capDark || hair;
+    var brim = dir === 'left' ? -13 : dir === 'right' ? 5 : -4;
+    ctx.fillRect(x + brim, yy - 25, 9, 3);
+    // eyes
+    ctx.fillStyle = '#2a2018';
+    var ex = dir === 'left' ? -5 : dir === 'right' ? 1 : -3.5;
+    ctx.fillRect(x + ex, yy - 21, 2, 2.4);
+    if (dir === 'down') ctx.fillRect(x + ex + 5, yy - 21, 2, 2.4);
+    else if (dir === 'left') ctx.fillRect(x + ex + 3.5, yy - 21, 2, 2.4);
+    else ctx.fillRect(x + ex + 3.5, yy - 21, 2, 2.4);
+  } else {
+    // little tuft at the back
+    ctx.fillStyle = hair; ctx.fillRect(x - 2, yy - 31, 4, 4);
+  }
 }
 function drawSpotMarker(ctx, x, y, near){
   var t = (Math.sin(W.actorPhase*3)+1)/2;
