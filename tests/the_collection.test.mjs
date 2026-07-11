@@ -694,6 +694,37 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.giveCandy(old, TC.NPCS[0].id) !== null && typeof TC.popDealBonus(old.pop) === 'number', 'systems tolerate a save missing pop');
 }
 
+// ---- getting-started tutorial ----
+{
+  const S = TC.freshSave();
+  ok(TC.tutorialCount(S) === 0 && TC.tutorialDone(S) === false, 'a fresh save has the whole tutorial ahead');
+  ok(TC.tutorialState(S).every(t => t.done === false && t.hint.length > 0), 'every step starts undone with a hint');
+  // completing steps flips them done
+  S.packsOpenedTotal = 1;
+  ok(TC.tutorialState(S).find(t => t.id === 'pack').done === true, 'opening a pack completes the pack step');
+  S.collection[TC.CORE_SET[0].id] = 1;
+  S.chores.lastDoneDay = { dishes: 1 };
+  S.allowance.lastClaimDay = 1;
+  S.lawns.lastMowed = { delgado: 1 };
+  S.pop = 5;
+  ok(TC.tutorialDone(S) === true && TC.tutorialCount(S) === TC.TUTORIAL_STEPS.length, 'doing all the things finishes the tutorial');
+  // progress detection marks steps seen once
+  const P = TC.freshSave(); P.storySeen = true;
+  ok(TC.checkTutorialProgress(P).length === 0, 'nothing new on a fresh started game');
+  P.packsOpenedTotal = 1; P.collection[TC.CORE_SET[0].id] = 1;
+  const neu = TC.checkTutorialProgress(P);
+  ok(neu.length === 2 && neu.some(t => t.id === 'pack') && neu.some(t => t.id === 'binder'), 'newly-done steps are reported once');
+  ok(TC.checkTutorialProgress(P).length === 0, 'the same steps are not reported twice');
+  ok(P.tutSeen.pack === true, 'completed steps are marked seen on the save');
+  // seedTutSeen suppresses a veteran's past progress
+  const vet = TC.freshSave(); vet.packsOpenedTotal = 9; vet.collection[TC.CORE_SET[0].id] = 1; vet.storySeen = true;
+  TC.seedTutSeen(vet);
+  ok(TC.checkTutorialProgress(vet).length === 0, 'seeding the seen-set stops old progress from re-toasting');
+  // a save missing the tutorial fields still works
+  const bare = TC.freshSave(); delete bare.tutSeen; bare.storySeen = true; bare.packsOpenedTotal = 1;
+  ok(TC.checkTutorialProgress(bare).length >= 1, 'a save without tutSeen still detects progress');
+}
+
 // ---- jump-rope personal best ----
 {
   const S = TC.freshSave();
