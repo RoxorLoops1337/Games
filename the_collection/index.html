@@ -146,19 +146,18 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
   box-shadow:0 2px 0 #a8731d;
 }
 #world-controls{position:absolute; inset:0; pointer-events:none; z-index:4;}
-.dpad{
-  position:absolute; left:calc(env(safe-area-inset-left,0px) + 20px); bottom:calc(env(safe-area-inset-bottom,0px) + 28px);
-  width:150px; height:150px; pointer-events:none;
+/* floating joystick: appears wherever you touch, drag to steer */
+.joy-el{position:absolute; pointer-events:none; z-index:6; transform:translate(-50%,-50%); will-change:left,top;}
+.joy-base{
+  width:118px; height:118px; border-radius:50%;
+  background:radial-gradient(circle, rgba(253,248,236,.12), rgba(253,248,236,.04));
+  border:2px solid rgba(253,248,236,.55); box-shadow:0 4px 14px rgba(0,0,0,.22);
 }
-.dbtn{
-  position:absolute; width:52px; height:52px; border:none; pointer-events:auto;
-  background:rgba(253,248,236,.86); color:var(--ink); font-size:15px; line-height:1;
-  border-radius:13px; box-shadow:0 3px 8px rgba(0,0,0,.25); display:flex; align-items:center; justify-content:center;
-  transition:transform .06s, background .1s; touch-action:none; -webkit-user-select:none; user-select:none;
+.joy-knob{
+  width:56px; height:56px; border-radius:50%;
+  background:radial-gradient(circle at 38% 32%, rgba(255,250,238,.98), rgba(226,160,74,.9) 70%, #c07f27);
+  box-shadow:0 3px 10px rgba(0,0,0,.35), inset 0 1px 2px rgba(255,255,255,.5);
 }
-.dbtn:active,.dbtn.on{transform:scale(.9); background:var(--accent); color:#2a1c08;}
-.dbtn.up{left:49px; top:0;} .dbtn.down{left:49px; top:98px;}
-.dbtn.left{left:0; top:49px;} .dbtn.right{left:98px; top:49px;}
 .act-btn{
   position:absolute; right:calc(env(safe-area-inset-right,0px) + 26px); bottom:calc(env(safe-area-inset-bottom,0px) + 52px);
   width:74px; height:74px; border-radius:50%; border:none; pointer-events:auto;
@@ -735,12 +734,8 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
       <div id="world-goals" class="world-goals"></div>
       <div id="world-prompt" class="world-prompt"></div>
       <div id="world-controls">
-        <div id="dpad" class="dpad">
-          <button class="dbtn up" data-dir="up" aria-label="up">&#9650;</button>
-          <button class="dbtn left" data-dir="left" aria-label="left">&#9664;</button>
-          <button class="dbtn right" data-dir="right" aria-label="right">&#9654;</button>
-          <button class="dbtn down" data-dir="down" aria-label="down">&#9660;</button>
-        </div>
+        <div id="joy-base" class="joy-el joy-base" hidden></div>
+        <div id="joy-knob" class="joy-el joy-knob" hidden></div>
         <button id="act-btn" class="act-btn">A</button>
       </div>
     </section>
@@ -3355,6 +3350,7 @@ var W = {
   map: 'town', px: 270, py: 512, dir: 'down',
   vx: 0, vy: 0, moving: false, walk: 0,
   keys: {}, dpad: {}, running: false, last: 0, active: true,
+  joy: { active: false, id: null, ox: 0, oy: 0, dx: 0, dy: 0, moved: false, tx: 0, ty: 0 },  // floating joystick
   prompt: null,       // the currently-focusable interaction
   cam: { x: 0, y: 0 }, camSnap: true,
   target: null,       // tap-to-walk destination {x,y,spot}
@@ -3388,7 +3384,7 @@ function worldInit(){
   if (!save.storySeen) setTimeout(function(){ if (typeof introStory === 'function') introStory(); }, 500);
 }
 function worldResume(){ W.active = true; }
-function worldPause(){ W.active = false; W.keys = {}; W.dpad = {}; }
+function worldPause(){ W.active = false; W.keys = {}; W.dpad = {}; W.joy.active = false; W.joy.dx = 0; W.joy.dy = 0; hideJoystick(); }
 
 function worldResize(){
   if (!W.cv) return;
@@ -3419,16 +3415,39 @@ function bindWorldInput(){
     W.target = null;               // manual steering cancels tap-to-walk
     e.preventDefault();
   });
-  // tap / click anywhere on the map to walk there; tap near a person or door
-  // to walk over and interact automatically.
+  // Touch anywhere on the map to raise a floating joystick and drag to steer.
+  // A quick tap that barely moves still walks-to-that-spot (auto-interacting
+  // near a person/door), so tap-navigation keeps working alongside the stick.
   W.cv.addEventListener('pointerdown', function(e){
     if (worldBlocked() || activeTab !== 'world') return;
-    var p = screenToWorld(e.clientX, e.clientY);
-    var m = curMap(), snap = null, sd = 52;
-    m.spots.forEach(function(sp){ var d = Math.hypot(p.x - sp.x, p.y - sp.y); if (d < sd) { sd = d; snap = sp; } });
-    W.target = { x: p.x, y: p.y, spot: snap };
-    W.stall = 0;
+    e.preventDefault();
+    try { W.cv.setPointerCapture(e.pointerId); } catch (er) {}
+    var j = W.joy;
+    j.active = true; j.id = e.pointerId; j.ox = e.clientX; j.oy = e.clientY;
+    j.dx = 0; j.dy = 0; j.moved = false;
+    var p = screenToWorld(e.clientX, e.clientY); j.tx = p.x; j.ty = p.y;  // remembered for a tap-to-walk
+    showJoystick(e.clientX, e.clientY, e.clientX, e.clientY);
   });
+  W.cv.addEventListener('pointermove', function(e){
+    var j = W.joy; if (!j.active || e.pointerId !== j.id) return;
+    e.preventDefault();
+    var v = joyVector(e.clientX - j.ox, e.clientY - j.oy, JOY_RADIUS, JOY_DEAD);
+    if (v.mag > 0) { j.moved = true; W.target = null; }
+    j.dx = v.x; j.dy = v.y;
+    showJoystick(j.ox, j.oy, j.ox + v.x * JOY_RADIUS, j.oy + v.y * JOY_RADIUS);
+  });
+  function endJoy(e){
+    var j = W.joy; if (!j.active || (e && e.pointerId !== j.id)) return;
+    if (!j.moved) {   // a tap, not a drag → walk to where you tapped
+      var m = curMap(), snap = null, sd = 52;
+      m.spots.forEach(function(sp){ var d = Math.hypot(j.tx - sp.x, j.ty - sp.y); if (d < sd) { sd = d; snap = sp; } });
+      W.target = { x: j.tx, y: j.ty, spot: snap }; W.stall = 0;
+    }
+    j.active = false; j.id = null; j.dx = 0; j.dy = 0;
+    hideJoystick();
+  }
+  W.cv.addEventListener('pointerup', endJoy);
+  W.cv.addEventListener('pointercancel', endJoy);
   window.addEventListener('keyup', function(e){
     var k = e.key.toLowerCase();
     if (k === 'arrowup' || k === 'w') W.keys.up = 0;
@@ -3436,19 +3455,27 @@ function bindWorldInput(){
     else if (k === 'arrowleft' || k === 'a') W.keys.left = 0;
     else if (k === 'arrowright' || k === 'd') W.keys.right = 0;
   });
-  document.querySelectorAll('#dpad .dbtn').forEach(function(btn){
-    var dir = btn.getAttribute('data-dir');
-    function on(e){ e.preventDefault(); W.dpad[dir] = 1; W.target = null; btn.classList.add('on'); }
-    function off(e){ if (e) e.preventDefault(); W.dpad[dir] = 0; btn.classList.remove('on'); }
-    btn.addEventListener('pointerdown', on);
-    btn.addEventListener('pointerup', off);
-    btn.addEventListener('pointerleave', off);
-    btn.addEventListener('pointercancel', off);
-  });
   var actBtn = $('act-btn');
   if (actBtn) actBtn.addEventListener('pointerdown', function(e){ e.preventDefault(); worldInteract(); });
 }
+var JOY_RADIUS = 52, JOY_DEAD = 9;
+// Analog stick vector from the drag offset: below the deadzone it's neutral,
+// otherwise a direction scaled 0..1 by how far you've pushed (clamped). Pure.
+function joyVector(dx, dy, radius, dead){
+  var dist = Math.hypot(dx, dy);
+  if (dist < dead) return { x: 0, y: 0, mag: 0 };
+  var mag = Math.min(1, dist / radius);
+  return { x: (dx / dist) * mag, y: (dy / dist) * mag, mag: mag };
+}
+function showJoystick(bx, by, kx, ky){
+  var r = W.cv.getBoundingClientRect();
+  var base = $('joy-base'), knob = $('joy-knob');
+  if (base) { base.hidden = false; base.style.left = (bx - r.left) + 'px'; base.style.top = (by - r.top) + 'px'; }
+  if (knob) { knob.hidden = false; knob.style.left = (kx - r.left) + 'px'; knob.style.top = (ky - r.top) + 'px'; }
+}
+function hideJoystick(){ var base = $('joy-base'), knob = $('joy-knob'); if (base) base.hidden = true; if (knob) knob.hidden = true; }
 function inputVector(){
+  if (W.joy.active && (W.joy.dx || W.joy.dy)) return { x: W.joy.dx, y: W.joy.dy };   // analog stick wins
   var x = (W.keys.right || W.dpad.right ? 1 : 0) - (W.keys.left || W.dpad.left ? 1 : 0);
   var y = (W.keys.down || W.dpad.down ? 1 : 0) - (W.keys.up || W.dpad.up ? 1 : 0);
   if (x && y) { x *= 0.7071; y *= 0.7071; }
@@ -5551,7 +5578,7 @@ if (typeof globalThis !== 'undefined') {
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     FISH_SPECIES: FISH_SPECIES, fishJournalState: fishJournalState, fishJournalCount: fishJournalCount,
-    walkersOutCount: walkersOutCount, npcGreeting: npcGreeting, NPC_GREETINGS: NPC_GREETINGS,
+    walkersOutCount: walkersOutCount, npcGreeting: npcGreeting, NPC_GREETINGS: NPC_GREETINGS, joyVector: joyVector,
     ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
     cartDashReward: cartDashReward, cartDashLeft: cartDashLeft, canCartDash: canCartDash, cartDash: cartDash,
     ACHIEVEMENTS: ACHIEVEMENTS, achievementsState: achievementsState, achievementCount: achievementCount,
