@@ -473,6 +473,38 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(JSON.stringify(o1) === JSON.stringify(o2), 'lottery outcome is deterministic for a given day and ticket number');
 }
 
+// ---- scratch-and-match 3x3 grid ----
+{
+  const complete = (g, L) => !!g[L[0]] && g[L[0]] === g[L[1]] && g[L[1]] === g[L[2]];
+  const anyLine = (g) => TC.SCRATCH_LINES.find(L => complete(g, L)) || null;
+  // determinism: same day+ticket => same grid
+  const a = TC.scratchGrid(9, 2), b = TC.scratchGrid(9, 2);
+  ok(JSON.stringify(a) === JSON.stringify(b), 'scratch grid is deterministic for a given day and ticket number');
+  ok(Array.isArray(a.cells) && a.cells.length === 9, 'the scratch grid has nine cells');
+  // the grid mirrors the underlying economy outcome
+  const outc = TC.lotteryOutcome(9, 2);
+  ok(a.kind === outc.kind && a.coins === outc.coins && a.cardId === outc.cardId, 'the grid carries the same outcome as lotteryOutcome');
+  // sweep a range of tickets: winners have a valid highlighted line, losers have none
+  let sawWin = false, sawLoss = false;
+  for (let t = 1; t <= 80; t++) {
+    for (let d = 1; d <= 12; d++) {
+      const g = TC.scratchGrid(d, t);
+      if (g.kind === 'nothing') {
+        sawLoss = true;
+        ok(g.line === null, 'a losing grid highlights no line');
+        ok(anyLine(g.cells) === null, 'a losing grid has no accidental three-in-a-row');
+      } else {
+        sawWin = true;
+        ok(Array.isArray(g.line) && g.line.length === 3, 'a winning grid highlights a triple');
+        ok(TC.SCRATCH_LINES.some(L => L.join(',') === g.line.join(',')), 'the winning line is a real row/column/diagonal');
+        ok(g.line.every(i => g.cells[i] === g.symbol), 'the three highlighted cells all show the prize symbol');
+      }
+    }
+  }
+  ok(sawWin, 'the sweep produced at least one winning grid');
+  ok(sawLoss, 'the sweep produced at least one losing grid');
+}
+
 // ---- supermarket gating ----
 {
   const S = TC.freshSave();
