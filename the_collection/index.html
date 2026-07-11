@@ -4016,6 +4016,25 @@ function worldDraw(){
   if (m.kind === 'indoor') drawIndoor(ctx, m);
   else drawOutdoor(ctx, m);
 
+  // tap-to-move destination marker: a pulsing ground ring where you tapped,
+  // so it's clear the character is walking somewhere. Warm gold for a plain
+  // spot, teal when you're heading to an interaction (door/person).
+  if (W.target) {
+    var mk = W.target, pulse = (W.actorPhase * 2) % 1;      // 0→1 loop
+    var mc = mk.spot ? '#4fb8a8' : '#e2a04a';
+    ctx.save();
+    ctx.translate(mk.x, mk.y);
+    ctx.scale(1, 0.5);                                       // flatten into the ground plane
+    for (var ri = 0; ri < 2; ri++) {                        // two expanding rings, staggered
+      var t = (pulse + ri * 0.5) % 1;
+      ctx.strokeStyle = mc; ctx.globalAlpha = (1 - t) * 0.7; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(0, 0, 4 + t * 16, 0, 6.283); ctx.stroke();
+    }
+    ctx.globalAlpha = 0.9; ctx.fillStyle = mc;
+    ctx.beginPath(); ctx.arc(0, 0, 2.5, 0, 6.283); ctx.fill();
+    ctx.restore();
+  }
+
   // collect drawables for y-sort (player + actors + buildings-as-tall)
   var drawList = [];
   if (m.buildings) m.buildings.forEach(function(b){ drawList.push({ y: b.y + b.h, fn: function(){ drawBuilding(ctx, b); } }); });
