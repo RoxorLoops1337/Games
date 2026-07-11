@@ -638,6 +638,32 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(typeof TC.achievementCount(old) === 'number', 'achievements tolerate a save missing optional fields');
 }
 
+// ---- daily-goal completion bonus ----
+{
+  function allDone(){
+    const S = TC.freshSave(); S.day = 3; S.coins = 0;
+    S.allowance.lastClaimDay = S.day;             // allowance claimed
+    S.chores.lastDoneDay = { dishes: S.day };     // a chore done
+    S.lawns = { lastMowed: {}, lastAnyDay: S.day };
+    S.school = { wantDay: S.day, offers: {}, duels: [], gaveCandy: {}, stoleToday: {} };
+    return S;
+  }
+  const fresh = TC.freshSave();
+  ok(TC.allGoalsDone(fresh) === false, 'a fresh day has goals outstanding');
+  ok(TC.dailyBonusClaimable(fresh) === false, 'no bonus while goals remain');
+  const S = allDone();
+  ok(TC.allGoalsDone(S) === true, 'all four goals can be marked done');
+  ok(TC.dailyBonusClaimable(S) === true, 'the bonus is claimable once every goal is done');
+  const got = TC.claimDailyBonus(S);
+  ok(got === TC.DAILY_GOAL_BONUS && S.coins === TC.DAILY_GOAL_BONUS, 'claiming pays the bonus into coins');
+  ok(TC.dailyBonusClaimable(S) === false && TC.claimDailyBonus(S) === 0, 'the bonus is once per day');
+  S.day += 1; S.allowance.lastClaimDay = S.day; S.chores.lastDoneDay = { dishes: S.day };
+  S.lawns.lastAnyDay = S.day; S.school.wantDay = S.day;
+  ok(TC.dailyBonusClaimable(S) === true, 'a new day makes the bonus available again');
+  const old = TC.freshSave(); delete old.goalBonus; const S2 = allDone(); delete S2.goalBonus;
+  ok(TC.claimDailyBonus(S2) === TC.DAILY_GOAL_BONUS, 'a save missing goalBonus still awards the bonus');
+}
+
 // ---- new-card "NEW" badge tracking ----
 {
   const S = TC.freshSave();
