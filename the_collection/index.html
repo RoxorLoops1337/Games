@@ -3178,7 +3178,7 @@ function goMap(id, sx, sy, silent){
 function setLocLabel(){
   var loc = $('world-loc'); if (!loc || !W.maps) return;
   var m = W.maps[W.map]; if (!m) return;
-  var wx = m.kind === 'indoor' ? '' : ' · ' + weatherFor(save.day);
+  var wx = m.kind === 'indoor' ? '' : ' · ' + weatherFor(save.day) + ' · ' + seasonFor(save.day);
   loc.textContent = m.title + ' · ' + daypart().key + wx;
 }
 // The collapsible "Today" checklist, shown only on the town.
@@ -3961,7 +3961,7 @@ function worldDraw(){
   // daypart particles: golden-hour motes, dusk stars (screen space, subtle)
   drawDaypartParticles(ctx, vw, vh);
   // weather overlay (rain streaks / overcast wash) — outdoors only
-  if (m.kind !== 'indoor') drawWeather(ctx, vw, vh);
+  if (m.kind !== 'indoor') { drawSeasonParticles(ctx, vw, vh); drawWeather(ctx, vw, vh); }
   // corner minimap on the town so it's easy to navigate
   if (m.buildings) drawMinimap(ctx, m, vw, vh);
   // transition fade (+ the sleep "Day N" card) over everything
@@ -4079,6 +4079,46 @@ function drawDaypartParticles(ctx, vw, vh){
     ctx.restore();
   }
 }
+// season particles: petals (spring), sun motes (summer), leaves (autumn),
+// snow (winter). Screen space, subtle, outdoors only.
+function drawSeasonParticles(ctx, vw, vh){
+  var ssn = seasonFor(save.day);
+  ctx.save();
+  if (ssn === 'winter') {
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    for (var i = 0; i < 46; i++) {
+      var x = (i * 71.3 + Math.sin(W.actorPhase * 0.7 + i) * 20) % (vw + 20);
+      var y = ((i * 53.1) + W.actorPhase * 46) % (vh + 20) - 10;
+      ctx.globalAlpha = 0.5 + 0.4 * Math.sin(i);
+      ctx.beginPath(); ctx.arc(x, y, 1.8, 0, 6.283); ctx.fill();
+    }
+  } else if (ssn === 'autumn') {
+    var LC = ['#d98a3a', '#c85f2c', '#e0b24a'];
+    for (var a = 0; a < 20; a++) {
+      var lx = (a * 91.7 + Math.sin(W.actorPhase * 1.2 + a) * 40) % (vw + 20);
+      var ly = ((a * 77.3) + W.actorPhase * 34) % (vh + 20) - 10;
+      ctx.globalAlpha = 0.7; ctx.fillStyle = LC[a % 3];
+      ctx.save(); ctx.translate(lx, ly); ctx.rotate(W.actorPhase * 2 + a);
+      ctx.beginPath(); ctx.ellipse(0, 0, 4.5, 2, 0, 0, 6.283); ctx.fill(); ctx.restore();
+    }
+  } else if (ssn === 'spring') {
+    for (var p = 0; p < 20; p++) {
+      var bx = (p * 89.1 + Math.sin(W.actorPhase + p) * 30) % (vw + 20);
+      var by = ((p * 63.7) + W.actorPhase * 26) % (vh + 20) - 10;
+      ctx.globalAlpha = 0.6; ctx.fillStyle = (p % 2) ? '#f6c9d8' : '#f4d5e2';
+      ctx.beginPath(); ctx.ellipse(bx, by, 3, 2, W.actorPhase + p, 0, 6.283); ctx.fill();
+    }
+  } else { // summer — a few lazy sun motes
+    ctx.fillStyle = 'rgba(255,240,180,.5)';
+    for (var s = 0; s < 12; s++) {
+      var mx = (s * 121.3 + W.actorPhase * (5 + s % 3)) % vw;
+      var my = (s * 97.1 + Math.sin(W.actorPhase * 0.5 + s) * 20 + 30) % vh;
+      ctx.globalAlpha = 0.2 + 0.2 * Math.sin(W.actorPhase + s);
+      ctx.beginPath(); ctx.arc(mx, my, 2, 0, 6.283); ctx.fill();
+    }
+  }
+  ctx.restore();
+}
 function drawMinimap(ctx, m, vw, vh){
   var mw = 116, mh = 88, pad = 8;
   var ox = vw - mw - pad, oy = 42;            // top-right, just under the location pill
@@ -4124,10 +4164,16 @@ function weatherFor(day){
   if (r < 0.85) return 'overcast';
   return 'rain';
 }
+// The town rolls through the seasons a week at a time. Day 1 is spring.
+var SEASONS = ['spring', 'summer', 'autumn', 'winter'];
+function seasonFor(day){ return SEASONS[Math.floor((Math.max(1, day) - 1) / 7) % 4]; }
+var SEASON_GRASS   = { spring:'#5cad4a', summer:'#4f9e46', autumn:'#8a9a3a', winter:'#a7bcae' };
+var SEASON_GRASS_PG = { spring:'#8fbd6a', summer:'#84b45f', autumn:'#bcab58', winter:'#c6d1c6' };
 
 function drawOutdoor(ctx, m){
-  // grass base with soft patches
-  ctx.fillStyle = m.playground ? '#8bb86a' : '#5aa64f';
+  // grass base with soft patches, tinted by the season
+  var ssn = seasonFor(save.day);
+  ctx.fillStyle = m.playground ? SEASON_GRASS_PG[ssn] : SEASON_GRASS[ssn];
   ctx.fillRect(0, 0, m.w, m.h);
   var g = ctx.createLinearGradient(0, 0, 0, m.h);
   g.addColorStop(0, 'rgba(255,255,255,.05)'); g.addColorStop(1, 'rgba(0,0,0,.08)');
@@ -4264,6 +4310,11 @@ function drawBuilding(ctx, b){
   // roof (trapezoid)
   ctx.fillStyle = b.roof; ctx.beginPath();
   ctx.moveTo(b.x-14, b.y+44); ctx.lineTo(b.x + b.w*0.5, b.y-6); ctx.lineTo(b.x+b.w+14, b.y+44); ctx.closePath(); ctx.fill();
+  if (seasonFor(save.day) === 'winter') {   // a dusting of snow on the roof
+    ctx.fillStyle = 'rgba(255,255,255,.82)'; ctx.beginPath();
+    ctx.moveTo(b.x-6, b.y+30); ctx.lineTo(b.x + b.w*0.5, b.y-2); ctx.lineTo(b.x+b.w+6, b.y+30);
+    ctx.lineTo(b.x+b.w+2, b.y+34); ctx.lineTo(b.x + b.w*0.5, b.y+4); ctx.lineTo(b.x-2, b.y+34); ctx.closePath(); ctx.fill();
+  }
   ctx.fillStyle = shade(b.roof, -14); ctx.fillRect(b.x-14, b.y+40, b.w+28, 7);
   // door
   var dw = 46, dx = doorX(b) - dw/2;
@@ -4354,6 +4405,11 @@ function drawHouse(ctx, h){
   g.addColorStop(0, h.wall); g.addColorStop(1, shade(h.wall,-16));
   ctx.fillStyle = g; roundRectPath(ctx, h.x, h.y+24, h.w, h.h-24, 8); ctx.fill();
   ctx.fillStyle = h.roof; ctx.beginPath(); ctx.moveTo(h.x-10, h.y+34); ctx.lineTo(h.x+h.w/2, h.y-4); ctx.lineTo(h.x+h.w+10, h.y+34); ctx.closePath(); ctx.fill();
+  if (seasonFor(save.day) === 'winter') {
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.beginPath();
+    ctx.moveTo(h.x-4, h.y+24); ctx.lineTo(h.x+h.w/2, h.y-2); ctx.lineTo(h.x+h.w+4, h.y+24);
+    ctx.lineTo(h.x+h.w, h.y+28); ctx.lineTo(h.x+h.w/2, h.y+4); ctx.lineTo(h.x, h.y+28); ctx.closePath(); ctx.fill();
+  }
   ctx.fillStyle = shade(h.roof,-24); roundRectPath(ctx, h.x+h.w/2-16, h.y+h.h-40, 32, 40, 5); ctx.fill();
   ctx.fillStyle = '#bfe6f2'; roundRectPath(ctx, h.x+14, h.y+44, 26, 24, 4); ctx.fill(); roundRectPath(ctx, h.x+h.w-40, h.y+44, 26, 24, 4); ctx.fill();
 }
@@ -4728,7 +4784,7 @@ if (typeof globalThis !== 'undefined') {
     canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
-    dailyGoals: dailyGoals, weatherFor: weatherFor, cardOfDay: cardOfDay,
+    dailyGoals: dailyGoals, weatherFor: weatherFor, cardOfDay: cardOfDay, seasonFor: seasonFor,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     walkersOutCount: walkersOutCount,

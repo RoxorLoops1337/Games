@@ -624,6 +624,16 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(ids.size > 1, 'the featured card varies across days');
 }
 
+// ---- seasons ----
+{
+  ok(TC.seasonFor(1) === 'spring', 'day 1 is spring');
+  ok(TC.seasonFor(7) === 'spring' && TC.seasonFor(8) === 'summer', 'the season flips after a week');
+  ok(TC.seasonFor(15) === 'autumn' && TC.seasonFor(22) === 'winter', 'autumn then winter follow');
+  ok(TC.seasonFor(29) === 'spring', 'the seasons wrap back to spring after a full year');
+  ok(['spring', 'summer', 'autumn', 'winter'].includes(TC.seasonFor(123)), 'season is always a known one');
+  ok(TC.seasonFor(50) === TC.seasonFor(50), 'season is deterministic per day');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
