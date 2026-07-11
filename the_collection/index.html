@@ -636,6 +636,11 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .reel-result{text-align:center; font-family:var(--mono); font-size:14px; font-weight:700; min-height:20px; margin-bottom:14px;}
 .reel-result.good{color:var(--accent-deep);}
 .reel-result.nada{color:var(--ink-faint);}
+.cd-hud{display:flex; justify-content:space-between; font-family:var(--mono); font-weight:700; font-size:13px; color:var(--ink); margin:2px 2px 8px;}
+.cd-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px;}
+.cd-cell{aspect-ratio:1/1; border:none; border-radius:12px; background:var(--panel,#efe6d4); font-size:26px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .06s, box-shadow .12s, background .12s;}
+.cd-cell.lit{background:#ffe6a6; box-shadow:0 0 0 3px #e2a04a, 0 0 14px rgba(226,160,74,.7); transform:scale(1.06);}
+.cd-cell:active{transform:scale(.94);}
 
 /* ---- relationships + social actions ---- */
 .rel-badge{
@@ -941,6 +946,7 @@ function freshSave(){
     mail: { lastDay: null },
     fishing: { day: null, casts: 0 },
     arcade: { day: null, plays: 0 },
+    cart: { day: null },
     jumprope: { day: null, tries: 0 },
     pet: { name: 'Biscuit', affection: 0 },
   };
@@ -1282,6 +1288,31 @@ function arcadePlay(save, offset){
   save.arcade.plays += 1;
   var res = arcadeReward(offset);
   save.coins += res.coins;
+  return res;
+}
+
+// Supermarket cart-dash: while a parent shops, you grab as many items off the
+// shelves as you can in a short window. Reward scales with the tally; playable
+// once per shopping day (canEnterMarket already gates the whole supermarket).
+// Reward mapping is pure + tested; the whack-a-shelf UI lives in the modal.
+function cartDashReward(hits){
+  if (hits >= 8) return { tier: 'sweep',  coins: 14, candy: 1 };
+  if (hits >= 5) return { tier: 'great',  coins: 8,  candy: 0 };
+  if (hits >= 2) return { tier: 'ok',     coins: 4,  candy: 0 };
+  return { tier: 'slow', coins: 1, candy: 0 };
+}
+function cartDashLeft(save){
+  var c = save.cart || {};
+  return (c.day === save.day) ? 0 : 1;
+}
+function canCartDash(save){ return cartDashLeft(save) > 0; }
+function cartDash(save, hits){
+  if (!canCartDash(save)) return null;
+  save.cart = save.cart || { day: null };
+  save.cart.day = save.day;
+  var res = cartDashReward(Math.max(0, hits | 0));
+  save.coins += res.coins;
+  if (res.candy) save.candy = (save.candy || 0) + res.candy;
   return res;
 }
 
@@ -1663,6 +1694,7 @@ function loadSave(){
       base.mail = (parsed.mail && typeof parsed.mail.lastDay !== 'undefined') ? parsed.mail : { lastDay: null };
       base.fishing = (parsed.fishing && typeof parsed.fishing.casts === 'number') ? parsed.fishing : { day: null, casts: 0 };
       base.arcade = (parsed.arcade && typeof parsed.arcade.plays === 'number') ? parsed.arcade : { day: null, plays: 0 };
+      base.cart = (parsed.cart && typeof parsed.cart.day !== 'undefined') ? parsed.cart : { day: null };
       base.jumprope = (parsed.jumprope && typeof parsed.jumprope.tries === 'number') ? parsed.jumprope : { day: null, tries: 0 };
       base.pet = (parsed.pet && parsed.pet.name) ? { name: parsed.pet.name, affection: parsed.pet.affection || 0 } : { name: 'Biscuit', affection: 0 };
       return base;
@@ -3600,6 +3632,7 @@ function buildMaps(){
     portals: [ { x:225, y:392, w:70, h:24, to:'town', sx:848, sy:280 } ],
     spots: [
       { x:260, y:340, r:70, label:function(){ return 'Checkout — grab the free booster'; }, action:openMarketMenu },
+      { x:130, y:130, r:64, label:function(){ return canCartDash(save) ? 'Cart dash — grab groceries!' : 'Cart dash — done for today'; }, action:actCartDash },
       { x:260, y:388, r:44, label:function(){ return 'Leave'; }, action:function(){ travel('town',848,280); } },
     ],
   };
@@ -3997,6 +4030,51 @@ function openMarketMenu(){
   $('wm-x').addEventListener('click', closeModal);
   var pb = $('wm-mpack'); if (pb) pb.addEventListener('click', function(){ if (buyPack(save)) { persist(save); renderTopbar(); sfxPackBought(); toast('Pack bought', 'good'); openMarketMenu(); } });
   var ob = $('wm-mopen'); if (ob) ob.addEventListener('click', function(){ closeModal(); startPackOpening(); });
+}
+// Cart-dash: a quick whack-a-shelf. One item glows at a time; tap it before it
+// moves to grab it. Grab as many as you can before the timer runs out.
+var CART_DASH_ITEMS = ['🥫','🍎','🥖','🧀','🍫','🥛','🧃','🍪'];
+function actCartDash(){
+  if (!canCartDash(save)) { toast('You already dashed the cart today', ''); return; }
+  var sheet = $('modal-sheet');
+  var cells = '';
+  for (var i = 0; i < 6; i++) cells += '<button class="cd-cell" data-i="' + i + '"><span></span></button>';
+  sheet.innerHTML =
+    '<h3 class="modal-title">🛒 Cart Dash</h3>' +
+    '<p class="smallnote" style="margin:2px 0 8px;">Tap the glowing item to toss it in the cart — grab all you can!</p>' +
+    '<div class="cd-hud"><span id="cd-time">8.0s</span><span id="cd-score">0 grabbed</span></div>' +
+    '<div class="cd-grid">' + cells + '</div>' +
+    '<div class="reel-result" id="cd-res">&nbsp;</div>' +
+    '<button class="bigbtn" id="cd-btn" style="display:none;">Done</button>';
+  $('modal-backdrop').classList.add('open');
+  var grid = sheet.querySelector('.cd-grid'), cellsEl = sheet.querySelectorAll('.cd-cell');
+  var hits = 0, lit = -1, timeLeft = 8.0, over = false, hop = null, tick = null;
+  function relight(){
+    if (over) return;
+    if (lit >= 0) { cellsEl[lit].classList.remove('lit'); cellsEl[lit].firstChild.textContent = ''; }
+    var next; do { next = Math.floor(seededRandom('cd-' + save.day + '-' + hits + '-' + Math.round(timeLeft * 10))() * 6); } while (next === lit);
+    lit = next; cellsEl[lit].classList.add('lit');
+    cellsEl[lit].firstChild.textContent = CART_DASH_ITEMS[Math.floor(seededRandom('cdi-' + save.day + '-' + hits + '-' + lit)() * CART_DASH_ITEMS.length)];
+    hop = setTimeout(relight, 780);
+  }
+  function finish(){
+    over = true; if (hop) clearTimeout(hop); if (tick) clearInterval(tick);
+    var res = cartDash(save, hits); persist(save); renderTopbar();
+    var el = $('cd-res');
+    el.innerHTML = (res.tier === 'sweep' ? 'Clean sweep! ' : res.tier === 'great' ? 'Great haul! ' : res.tier === 'ok' ? 'Nice. ' : 'Slow today. ') +
+      '+' + res.coins + ' coins' + (res.candy ? ' & a candy 🍬' : '');
+    el.classList.add(res.coins >= 8 ? 'good' : 'nada'); sfxCoins();
+    $('cd-btn').style.display = ''; $('cd-btn').addEventListener('click', closeModal);
+  }
+  grid.addEventListener('click', function(e){
+    var b = e.target.closest('.cd-cell'); if (!b || over) return;
+    if (+b.dataset.i === lit) { hits++; $('cd-score').textContent = hits + ' grabbed'; sfxClick();
+      if (hop) clearTimeout(hop); relight(); }
+  });
+  var t0 = timeLeft;
+  tick = setInterval(function(){ timeLeft -= 0.1; if (timeLeft <= 0) { timeLeft = 0; $('cd-time').textContent = '0.0s'; finish(); }
+    else $('cd-time').textContent = timeLeft.toFixed(1) + 's'; }, 100);
+  relight();
 }
 
 /* =====================================================================
@@ -5039,6 +5117,7 @@ if (typeof globalThis !== 'undefined') {
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     walkersOutCount: walkersOutCount, npcGreeting: npcGreeting, NPC_GREETINGS: NPC_GREETINGS,
     ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
+    cartDashReward: cartDashReward, cartDashLeft: cartDashLeft, canCartDash: canCartDash, cartDash: cartDash,
     feedPet: feedPet,
     JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay,
   };

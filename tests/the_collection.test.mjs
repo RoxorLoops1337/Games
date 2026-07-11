@@ -615,6 +615,21 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canJumpRope(old) === true && TC.jumpRopePlay(old, 4) !== null, 'a save missing the jumprope field still works');
 }
 
+// ---- supermarket cart dash ----
+{
+  ok(TC.cartDashReward(9).coins === 14 && TC.cartDashReward(9).candy === 1, 'a clean sweep pays the most, plus a candy');
+  ok(TC.cartDashReward(5).coins === 8 && TC.cartDashReward(2).coins === 4, 'mid tallies pay mid amounts');
+  ok(TC.cartDashReward(0).coins === 1, 'even a slow dash pays a little');
+  const S = TC.freshSave(); S.day = 4; S.coins = 0; S.candy = 0;
+  ok(TC.canCartDash(S) === true && TC.cartDashLeft(S) === 1, 'the cart dash is available once on a shopping day');
+  const r = TC.cartDash(S, 8);
+  ok(r && S.coins === 14 && S.candy === 1, 'playing pays out coins (and candy) into the save');
+  ok(TC.canCartDash(S) === false && TC.cartDash(S, 8) === null, 'the cart dash is once-per-day');
+  S.day += 1; ok(TC.canCartDash(S) === true, 'it refills on a new day');
+  const old = TC.freshSave(); delete old.cart;
+  ok(TC.canCartDash(old) === true && TC.cartDash(old, 3) !== null, 'a save missing the cart field still works');
+}
+
 // ---- npc greetings ----
 {
   const g = TC.npcGreeting({ id: 'keeper' }, 3);
