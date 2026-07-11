@@ -615,6 +615,23 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canJumpRope(old) === true && TC.jumpRopePlay(old, 4) !== null, 'a save missing the jumprope field still works');
 }
 
+// ---- jump-rope personal best ----
+{
+  const S = TC.freshSave();
+  ok(S.jrBest === 0, 'a fresh save has no jump-rope record');
+  let r = TC.updateJumpBest(S, 7);
+  ok(r.isNew === true && r.best === 7 && S.jrBest === 7, 'a first run sets the record');
+  r = TC.updateJumpBest(S, 5);
+  ok(r.isNew === false && r.best === 7 && S.jrBest === 7, 'a worse run does not lower the record');
+  r = TC.updateJumpBest(S, 12);
+  ok(r.isNew === true && r.best === 12, 'a better run raises the record');
+  ok(TC.updateJumpBest(S, 12).isNew === false, 'tying the record is not a new best');
+  ok(TC.updateJumpBest(TC.freshSave(), 0).isNew === false, 'a zero-jump run is never a record');
+  const noField = TC.freshSave(); delete noField.jrBest;
+  const nb = TC.updateJumpBest(noField, 4);
+  ok(nb.isNew === true && nb.best === 4, 'a save missing jrBest still records a best');
+}
+
 // ---- achievements / trophy wall ----
 {
   const S = TC.freshSave();
