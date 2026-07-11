@@ -663,6 +663,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .ach-tx small{font-size:11px; color:var(--ink-faint);}
 .ach-chk{color:var(--accent-deep); font-weight:800;}
 .daysum{background:#fff6e0; box-shadow:inset 0 0 0 1.5px #e2a04a; border-radius:10px; padding:9px 12px; margin:2px 0 10px; font-size:13px; font-weight:600; color:var(--ink); text-align:center;}
+.streak-strip{background:linear-gradient(90deg,#ffe0b0,#ffd0a0); box-shadow:inset 0 0 0 1.5px #e2874f; border-radius:10px; padding:8px 12px; margin:2px 0 10px; font-size:12.5px; font-weight:700; color:#8a4a1e; text-align:center;}
 
 /* ---- relationships + social actions ---- */
 .rel-badge{
@@ -1127,6 +1128,16 @@ function claimAllowance(save){
   save.coins += amount;
   save.allowance.lastClaimDay = save.day;
   return amount;
+}
+// What claiming allowance TODAY would give — the streak it becomes, the streak
+// bonus, and the total. Pure, so the Dad modal shows exactly what he'll pay.
+function allowanceStreakInfo(save){
+  var a = save.allowance || { streak: 0, lastClaimDay: null };
+  var continues = a.lastClaimDay === save.day - 1;
+  var streak = continues ? (a.streak || 0) + 1 : 1;
+  var bonus = Math.min(streak - 1, 10) * 2;
+  var grandma = dayEvent(save.day) === 'grandma';
+  return { streak: streak, bonus: bonus, continues: continues, grandma: grandma, amount: (ALLOWANCE_BASE + bonus) * (grandma ? 2 : 1) };
 }
 
 function nextDay(save){
@@ -4001,21 +4012,29 @@ function actMowLawn(nbId){
 function actDad(){
   var sheet = $('modal-sheet');
   var canClaim = canClaimAllowance(save);
-  var claimAmt = (ALLOWANCE_BASE + Math.min(save.allowance.streak, 10) * 2) * (dayEvent(save.day) === 'grandma' ? 2 : 1);
+  var info = allowanceStreakInfo(save);
+  var streakLine = (canClaim && info.streak > 1)
+    ? '<div class="streak-strip">🔥 ' + info.streak + '-day streak &middot; +' + info.bonus + ' bonus' + (info.grandma ? ' &middot; grandma doubles it!' : '') + '</div>'
+    : (canClaim && info.grandma ? '<div class="streak-strip">👵 Grandma’s visiting — allowance doubled!</div>' : '');
   sheet.innerHTML =
     '<button class="closebtn" id="wm-x">&times;</button>' +
     '<h3 class="modal-title">Dad</h3>' +
+    streakLine +
     '<div class="wmenu">' +
       '<button id="wm-allow"' + (canClaim ? '' : ' disabled') + '><span class="wm-emoji">💵</span><span>' +
-        (canClaim ? 'Ask for allowance <small>+' + claimAmt + ' coins' + (dayEvent(save.day)==='grandma'?' · grandma doubled it!':'') + '</small>' : 'Already got it today <small>come back tomorrow</small>') + '</span></button>' +
+        (canClaim ? 'Ask for allowance <small>+' + info.amount + ' coins</small>' : 'Already got it today <small>keep the streak — come back tomorrow</small>') + '</span></button>' +
       '<button id="wm-nvm"><span class="wm-emoji">💬</span><span>“Just saying hi.” <small>the bed’s in the back room when you’re tired</small></span></button>' +
     '</div>';
   $('modal-backdrop').classList.add('open');
   $('wm-x').addEventListener('click', closeModal);
   $('wm-nvm').addEventListener('click', closeModal);
   $('wm-allow').addEventListener('click', function(){
+    var claimed = allowanceStreakInfo(save);   // capture before the claim mutates it
     var amt = claimAllowance(save);
-    if (amt > 0) { persist(save); renderTopbar(); sfxCoins(); toast('+' + amt + ' allowance', 'coin'); }
+    if (amt > 0) { persist(save); renderTopbar(); sfxCoins();
+      toast((claimed.streak > 1 ? '🔥 ' + claimed.streak + '-day streak! ' : '') + '+' + amt + ' allowance', 'coin');
+      if (claimed.streak >= 3) hapticPulse('rare');
+    }
     closeModal();
   });
 }
@@ -5287,7 +5306,7 @@ if (typeof globalThis !== 'undefined') {
     PACK_PRICE: PACK_PRICE, SALE_PACK_PRICE: SALE_PACK_PRICE, STARTER_PACKS: STARTER_PACKS, ALLOWANCE_BASE: ALLOWANCE_BASE,
     SOFT_PITY_START: SOFT_PITY_START, HARD_PITY_RAREHOLO: HARD_PITY_RAREHOLO, HARD_PITY_ULTRARARE: HARD_PITY_ULTRARARE,
     DAY_EVENTS: DAY_EVENTS, dayEvent: dayEvent, packPrice: packPrice,
-    freshSave: freshSave, canClaimAllowance: canClaimAllowance, claimAllowance: claimAllowance, nextDay: nextDay,
+    freshSave: freshSave, canClaimAllowance: canClaimAllowance, claimAllowance: claimAllowance, allowanceStreakInfo: allowanceStreakInfo, nextDay: nextDay,
     buyPack: buyPack, openPack: openPack, sellDuplicate: sellDuplicate, completionFraction: completionFraction,
     hitTierForPack: hitTierForPack, seededRandom: seededRandom, pickWeighted: pickWeighted,
     duplicateValue: duplicateValue, sellAllDuplicates: sellAllDuplicates,
