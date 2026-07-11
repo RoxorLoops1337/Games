@@ -628,6 +628,14 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 }
 .reel-icon{font-size:60px; line-height:1;}
 .reel-icon.reel-land{animation:reelPop 360ms cubic-bezier(.3,1.5,.5,1);}
+/* lottery scratch-off foil */
+.scratch-wrap{position:relative; width:120px; height:120px; margin:6px auto 8px;}
+.scratch-wrap .reel-window{margin:0; width:120px; height:120px;}
+.scratch-foil{position:absolute; inset:0; border-radius:16px; cursor:pointer; user-select:none;
+  background:repeating-linear-gradient(115deg, #c3c8cf 0 8px, #aeb4bc 8px 16px); border:2px solid #9aa0a8;
+  display:flex; align-items:center; justify-content:center; color:#5a5f66; font-weight:700; font-size:13px;
+  letter-spacing:.5px; text-shadow:0 1px 0 rgba(255,255,255,.4); transition:opacity .35s ease, transform .35s ease;}
+.scratch-foil.scratched{opacity:0; transform:scale(1.08); pointer-events:none;}
 /* arcade timing bar */
 .arc-bar{position:relative; height:30px; margin:8px 0 10px; border-radius:9px; overflow:hidden;
   background:linear-gradient(90deg,#c85f2c,#e2a04a 30%,#e2a04a 70%,#c85f2c); border:2px solid var(--line);}
@@ -4082,13 +4090,32 @@ function openScratchReveal(res){
   if (res.kind === 'jackpot') line = 'JACKPOT! +' + res.coins + ' coins and a ' + BY_ID[res.cardId].name + '! 🎉';
   else if (res.coins) line = 'A little winner — +' + res.coins + ' coins!';
   else line = 'Nothing this time. “Better luck next week, kid.”';
+  var icon = res.kind === 'jackpot' ? '💎' : (res.coins ? '🪙' : '🕳️');
   sheet.innerHTML =
     '<h3 class="modal-title">🎟️ Scratch the ticket</h3>' +
-    '<div class="reel-window"><div class="reel-icon reel-land">' + (res.kind==='jackpot'?'💎':(res.coins?'🪙':'🕳️')) + '</div></div>' +
-    '<div class="reel-result ' + (win?'good':'nada') + '">' + line + '</div>' +
-    '<button class="bigbtn" id="wm-done" style="margin-top:12px;">' + (win?'Sweet!':'Ah well') + '</button>';
-  if (win) { sfxCoins(); hapticPulse(res.kind==='jackpot'?'ultrarare':'rare'); }
-  $('wm-done').addEventListener('click', function(){ closeModal(); });
+    '<div class="scratch-wrap">' +
+      '<div class="reel-window"><div class="reel-icon" id="scratch-icon">' + icon + '</div></div>' +
+      '<div class="scratch-foil" id="scratch-foil"><span>✨ Scratch! ✨</span></div>' +
+    '</div>' +
+    '<div class="reel-result ' + (win ? 'good' : 'nada') + '" id="scratch-res" style="visibility:hidden;">' + line + '</div>' +
+    '<button class="bigbtn" id="wm-done" style="margin-top:12px; visibility:hidden;">' + (win ? 'Sweet!' : 'Ah well') + '</button>';
+  $('modal-backdrop').classList.add('open');
+  var foil = $('scratch-foil'), scratches = 0, revealed = false;
+  function reveal(){
+    if (revealed) return; revealed = true;
+    foil.classList.add('scratched');
+    $('scratch-icon').classList.add('reel-land');
+    $('scratch-res').style.visibility = '';
+    var b = $('wm-done'); b.style.visibility = '';
+    b.addEventListener('click', closeModal);
+    if (win) { sfxCoins(); hapticPulse(res.kind === 'jackpot' ? 'ultrarare' : 'rare'); } else { sfxClick(); }
+  }
+  foil.addEventListener('click', function(){
+    scratches++;
+    foil.style.opacity = String(Math.max(0, 1 - scratches * 0.34));   // wears away with each scratch
+    try { sfxTick(); } catch (e) {}
+    if (scratches >= 3) reveal();
+  });
 }
 // One kid's trade + social panel, reusing the school markup & logic.
 function openNpcSheet(npcId){
