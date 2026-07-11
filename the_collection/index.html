@@ -3178,7 +3178,8 @@ function goMap(id, sx, sy, silent){
 function setLocLabel(){
   var loc = $('world-loc'); if (!loc || !W.maps) return;
   var m = W.maps[W.map]; if (!m) return;
-  var wx = m.kind === 'indoor' ? '' : ' · ' + weatherFor(save.day) + ' · ' + seasonFor(save.day);
+  var fest = m.kind === 'indoor' ? null : festivalFor(save.day);
+  var wx = m.kind === 'indoor' ? '' : ' · ' + weatherFor(save.day) + ' · ' + seasonFor(save.day) + (fest ? ' · ' + FESTIVAL_LABEL[fest] + '!' : '');
   loc.textContent = m.title + ' · ' + daypart().key + wx;
 }
 // The collapsible "Today" checklist, shown only on the town.
@@ -3688,10 +3689,14 @@ function actArcade(){
 function actNoticeBoard(){
   var today = dayEvent(save.day), tomorrow = dayEvent(save.day + 1);
   var cid = cardOfDay(save.day);
+  var fest = festivalFor(save.day);
+  var festLine = fest === 'fair' ? '🎉 The square is decked out for the town fair today!'
+    : fest === 'lights' ? '✨ Winter lights are strung across the street tonight.' : '';
   var sheet = $('modal-sheet');
   sheet.innerHTML =
     '<button class="closebtn" id="wm-x">&times;</button>' +
     '<h3 class="modal-title">📌 Town Notice Board</h3>' +
+    (festLine ? '<div class="notice-row" style="color:var(--accent-deep);font-weight:600;"><span class="notice-k">Special</span><span>' + festLine + '</span></div>' : '') +
     '<div class="notice-row"><span class="notice-k">Today</span><span>' + (today !== 'none' ? DAY_EVENTS[today].label : 'a normal day around town') + '</span></div>' +
     '<div class="notice-row"><span class="notice-k">Tomorrow</span><span>' + (tomorrow !== 'none' ? DAY_EVENTS[tomorrow].label : 'looks quiet') + '</span></div>' +
     '<div class="notice-cardhead">&#10022; Card of the day &#10022;</div>' +
@@ -3942,6 +3947,8 @@ function worldDraw(){
 
   // birds drift across the sky, above everything
   if (m.birds) m.birds.forEach(function(bd){ drawBird(ctx, bd.x, bd.y, bd.phase); });
+  // festive bunting / lights strung overhead on special days (town only)
+  if (m.buildings) { var fest = festivalFor(save.day); if (fest) drawFestival(ctx, m, fest); }
 
   // spot markers (little glints on the ground)
   ctx.globalAlpha = 0.9;
@@ -4139,6 +4146,42 @@ function drawSeasonParticles(ctx, vw, vh){
   }
   ctx.restore();
 }
+// overhead festival decor across the street (world space, town only)
+function drawFestival(ctx, m, fest){
+  var x0 = 60, x1 = m.w - 60, y = 470, sag = 40;
+  function garlandY(x){ var t = (x - x0) / (x1 - x0); return y + Math.sin(t * Math.PI) * sag; }
+  if (fest === 'fair') {
+    // draped string
+    ctx.strokeStyle = 'rgba(60,40,25,.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y); for (var x = x0; x <= x1; x += 20) ctx.lineTo(x, garlandY(x)); ctx.stroke();
+    // triangular flags
+    var FC = ['#e2543f', '#e2a04a', '#54b899', '#5aa3dc', '#b45fd8'];
+    for (var fx = x0; fx <= x1 - 30; fx += 30) {
+      var gy = garlandY(fx + 15);
+      ctx.fillStyle = FC[(fx / 30 | 0) % FC.length];
+      ctx.beginPath(); ctx.moveTo(fx, gy); ctx.lineTo(fx + 30, gy); ctx.lineTo(fx + 15, gy + 20); ctx.closePath(); ctx.fill();
+    }
+    // a couple of paper lanterns near the square
+    [[540, 500], [720, 496], [900, 502]].forEach(function(p, i){
+      var by = p[1] + Math.sin(W.actorPhase * 1.5 + i) * 3;
+      ctx.strokeStyle = 'rgba(60,40,25,.4)'; ctx.beginPath(); ctx.moveTo(p[0], garlandY(p[0])); ctx.lineTo(p[0], by - 10); ctx.stroke();
+      ctx.fillStyle = ['#e2543f', '#f4c542', '#54b899'][i % 3]; ctx.beginPath(); ctx.ellipse(p[0], by, 9, 11, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,.3)'; ctx.beginPath(); ctx.ellipse(p[0] - 2, by - 3, 3, 4, 0, 0, 6.283); ctx.fill();
+    });
+  } else if (fest === 'lights') {
+    // a swooping string of warm glowing bulbs
+    ctx.strokeStyle = 'rgba(50,40,30,.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x0, y); for (var lx = x0; lx <= x1; lx += 20) ctx.lineTo(lx, garlandY(lx)); ctx.stroke();
+    var BC = ['#ffd24a', '#ff8a5a', '#8ad0ff', '#ff6a9a', '#9affb0'];
+    for (var bx = x0; bx <= x1; bx += 34) {
+      var by2 = garlandY(bx) + 4, tw = 0.55 + 0.45 * Math.sin(W.actorPhase * 3 + bx);
+      ctx.globalAlpha = tw; ctx.fillStyle = BC[(bx / 34 | 0) % BC.length];
+      ctx.beginPath(); ctx.arc(bx, by2, 4.5, 0, 6.283); ctx.fill();
+      ctx.globalAlpha = tw * 0.35; ctx.beginPath(); ctx.arc(bx, by2, 9, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
 function drawMinimap(ctx, m, vw, vh){
   var mw = 116, mh = 88, pad = 8;
   var ox = vw - mw - pad, oy = 42;            // top-right, just under the location pill
@@ -4189,6 +4232,14 @@ var SEASONS = ['spring', 'summer', 'autumn', 'winter'];
 function seasonFor(day){ return SEASONS[Math.floor((Math.max(1, day) - 1) / 7) % 4]; }
 var SEASON_GRASS   = { spring:'#5cad4a', summer:'#4f9e46', autumn:'#8a9a3a', winter:'#a7bcae' };
 var SEASON_GRASS_PG = { spring:'#8fbd6a', summer:'#84b45f', autumn:'#bcab58', winter:'#c6d1c6' };
+// Special days deck the town out: a fair every tenth day, warm string
+// lights all through winter. Ordinary days return null. Deterministic.
+function festivalFor(day){
+  if (day >= 1 && day % 10 === 0) return 'fair';
+  if (seasonFor(day) === 'winter') return 'lights';
+  return null;
+}
+var FESTIVAL_LABEL = { fair: 'town fair', lights: 'winter lights' };
 
 function drawOutdoor(ctx, m){
   // grass base with soft patches, tinted by the season
@@ -4804,7 +4855,7 @@ if (typeof globalThis !== 'undefined') {
     canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
-    dailyGoals: dailyGoals, weatherFor: weatherFor, cardOfDay: cardOfDay, seasonFor: seasonFor,
+    dailyGoals: dailyGoals, weatherFor: weatherFor, cardOfDay: cardOfDay, seasonFor: seasonFor, festivalFor: festivalFor,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     walkersOutCount: walkersOutCount,

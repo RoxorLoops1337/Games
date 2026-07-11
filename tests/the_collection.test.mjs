@@ -634,6 +634,17 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.seasonFor(50) === TC.seasonFor(50), 'season is deterministic per day');
 }
 
+// ---- festivals ----
+{
+  ok(TC.festivalFor(10) === 'fair' && TC.festivalFor(20) === 'fair', 'a fair falls on every tenth day');
+  ok(TC.festivalFor(3) === null && TC.festivalFor(5) === null, 'ordinary spring days have no festival');
+  ok(TC.festivalFor(24) === 'lights', 'winter days get the lights');
+  ok(TC.festivalFor(24) === TC.festivalFor(24), 'festival is deterministic per day');
+  // most days are ordinary
+  let plain = 0; for (let d = 1; d < 100; d++) if (TC.festivalFor(d) === null) plain++;
+  ok(plain > 40, 'the majority of days are ordinary');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
