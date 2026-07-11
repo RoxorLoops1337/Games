@@ -3886,6 +3886,24 @@ function actSitBench(){
   W.px = 540; W.py = 636; W.dir = 'down'; W.target = null; W.sitting = true;
   sfxClick();
 }
+// A ping-pong "sweeping light" for the arc-bar timing games (arcade + jump
+// rope): drives the mark 0↔100%, reports the current distance from centre
+// (0 = dead centre, 1 = far edge), and stops on demand. Speed is adjustable
+// mid-run so jump rope can accelerate.
+function makeSweep(mark, speed){
+  var pos = 0, dir = 1, raf = null, live = true;
+  (function frame(){
+    if (!live) return;
+    pos += dir * speed; if (pos >= 100) { pos = 100; dir = -1; } else if (pos <= 0) { pos = 0; dir = 1; }
+    mark.style.left = pos + '%'; raf = requestAnimationFrame(frame);
+  })();
+  return {
+    offset: function(){ return Math.abs(pos - 50) / 50; },
+    getSpeed: function(){ return speed; },
+    setSpeed: function(s){ speed = s; },
+    stop: function(){ live = false; if (raf) cancelAnimationFrame(raf); },
+  };
+}
 // cast a line at the pond — a short reel, then a seeded catch
 // school jump-rope — keep tapping on the beat to build a streak
 function actJumpRope(){
@@ -3900,19 +3918,18 @@ function actJumpRope(){
     '<div class="reel-result" id="jr-res">Streak: 0</div>' +
     '<button class="bigbtn" id="jr-btn">JUMP</button>';
   $('modal-backdrop').classList.add('open');
-  var mark = $('jr-mark'), pos = 0, dir = 1, speed = 1.8, streak = 0, ended = false, raf = null;
-  function frame(){ if (ended) return; pos += dir * speed; if (pos >= 100) { pos = 100; dir = -1; } else if (pos <= 0) { pos = 0; dir = 1; } mark.style.left = pos + '%'; raf = requestAnimationFrame(frame); }
-  raf = requestAnimationFrame(frame);
+  var streak = 0, ended = false;
+  var sweep = makeSweep($('jr-mark'), 1.8);
   function jump(){
     if (ended) return;
-    var offset = Math.abs(pos - 50) / 50;
+    var offset = sweep.offset();
     if (offset <= 0.34) {
-      streak++; speed = Math.min(4.4, speed + 0.2); $('jr-res').textContent = 'Streak: ' + streak; sfxTick();
+      streak++; sweep.setSpeed(Math.min(4.4, sweep.getSpeed() + 0.2)); $('jr-res').textContent = 'Streak: ' + streak; sfxTick();
       if (streak >= 15) endRun(true);   // a perfect run caps out
     } else { endRun(false); }
   }
   function endRun(perfect){
-    ended = true; if (raf) cancelAnimationFrame(raf);
+    ended = true; sweep.stop();
     var res = jumpRopePlay(save, streak, buddy.id);
     var rec = updateJumpBest(save, streak);
     persist(save); renderTopbar();
@@ -3944,17 +3961,11 @@ function actArcade(){
     '<div class="reel-result" id="arc-res">&nbsp;</div>' +
     '<button class="bigbtn" id="arc-btn">STOP</button>';
   $('modal-backdrop').classList.add('open');
-  var mark = $('arc-mark'), pos = 0, dir = 1, stopped = false, raf = null;
-  function frame(){
-    if (stopped) return;
-    pos += dir * 1.9; if (pos >= 100) { pos = 100; dir = -1; } else if (pos <= 0) { pos = 0; dir = 1; }
-    mark.style.left = pos + '%';
-    raf = requestAnimationFrame(frame);
-  }
-  raf = requestAnimationFrame(frame);
+  var stopped = false;
+  var sweep = makeSweep($('arc-mark'), 1.9);
   function doStop(){
-    stopped = true; if (raf) cancelAnimationFrame(raf);
-    var offset = Math.abs(pos - 50) / 50;
+    stopped = true;
+    var offset = sweep.offset(); sweep.stop();
     var res = arcadePlay(save, offset); persist(save); renderTopbar();
     var el = $('arc-res');
     if (res && res.coins) {
