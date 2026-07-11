@@ -1204,6 +1204,14 @@ function fishOutcome(day, castNo){
   else { res.label = 'an old boot'; }
   return res;
 }
+// How many of the street's townsfolk are out today — a smaller crowd when
+// the weather's bad. Deterministic off the day's weather.
+function walkersOutCount(day){
+  var w = weatherFor(day);
+  if (w === 'rain') return 1;
+  if (w === 'overcast') return 2;
+  return 3;
+}
 function fishCastsLeft(save){
   var f = save.fishing || {};
   var used = (f.day === save.day) ? (f.casts || 0) : 0;
@@ -3268,9 +3276,9 @@ function buildMaps(){
     mailbox: { x: 330, y: 486 },
     // ambient townsfolk strolling the street (visual only, no collision)
     walkers: [
-      { a:{x:90,y:520}, b:{x:1410,y:520}, u:0.15, sgn:1, speed:30, color:'#c98a3a', hair:'#5a3a24', wphase:0 },
-      { a:{x:1410,y:566}, b:{x:90,y:566}, u:0.6, sgn:1, speed:26, color:'#5a8f6a', hair:'#3a2d1f', wphase:1.5 },
-      { a:{x:243,y:640}, b:{x:243,y:1120}, u:0.35, sgn:1, speed:22, color:'#b06a9a', hair:'#402038', wphase:3 },
+      { a:{x:90,y:520}, b:{x:1410,y:520}, u:0.15, sgn:1, speed:30, color:'#c98a3a', hair:'#5a3a24', wphase:0, name:'Rosa', gr:0 },
+      { a:{x:1410,y:566}, b:{x:90,y:566}, u:0.6, sgn:1, speed:26, color:'#5a8f6a', hair:'#3a2d1f', wphase:1.5, name:'Sam', gr:2 },
+      { a:{x:243,y:640}, b:{x:243,y:1120}, u:0.35, sgn:1, speed:22, color:'#b06a9a', hair:'#402038', wphase:3, name:'Pip', gr:4 },
     ],
     birds: [ {x:200,y:120,speed:60,phase:0}, {x:900,y:80,speed:44,phase:2} ],
     benches: [ { x:540, y:648 } ],
@@ -3661,7 +3669,7 @@ function worldDraw(){
   if (m.benches) m.benches.forEach(function(bn){ drawList.push({ y: bn.y + 6, fn: function(){ drawTownBench(ctx, bn.x, bn.y); } }); });
   if (m.trees) m.trees.forEach(function(t){ drawList.push({ y: t.y + 40, fn: function(){ drawTree(ctx, t.x, t.y); } }); });
   if (m.actors) m.actors.forEach(function(a){ drawList.push({ y: a.y + 22, fn: function(){ drawPerson(ctx, a.x, a.y, a.color, a.name, 'down', W.actorPhase + a.x, a); } }); });
-  if (m.walkers) m.walkers.forEach(function(wk){ drawList.push({ y: wk.y + 16, fn: function(){ drawChar(ctx, wk.x, wk.y, { tee: wk.color, cap: wk.hair, capDark: wk.hair, dir: wk.dir || 'right', walk: wk.wphase }); } }); });
+  if (m.walkers) { var wout = walkersOutCount(save.day); m.walkers.forEach(function(wk, i){ if (i >= wout) return; drawList.push({ y: wk.y + 16, fn: function(){ drawWalker(ctx, wk); } }); }); }
   drawList.push({ y: W.pet.y, fn: function(){ drawPet(ctx, W.pet); } });
   drawList.push({ y: W.py, fn: function(){ drawPlayer(ctx); } });
   drawList.sort(function(a, b){ return a.y - b.y; });
@@ -3716,7 +3724,8 @@ function drawWeather(ctx, vw, vh){
 }
 // advance strolling townsfolk (ping-pong along a→b) and drifting birds
 function updateAmbient(m, dt){
-  if (m.walkers) m.walkers.forEach(function(wk){
+  if (m.walkers) { var wout = walkersOutCount(save.day); m.walkers.forEach(function(wk, i){
+    if (i >= wout) return;
     var segLen = Math.hypot(wk.b.x - wk.a.x, wk.b.y - wk.a.y) || 1;
     wk.u += wk.sgn * wk.speed * dt / segLen;
     if (wk.u >= 1) { wk.u = 1; wk.sgn = -1; } else if (wk.u <= 0) { wk.u = 0; wk.sgn = 1; }
@@ -3725,8 +3734,43 @@ function updateAmbient(m, dt){
     var vx = (wk.b.x - wk.a.x) * wk.sgn, vy = (wk.b.y - wk.a.y) * wk.sgn;
     wk.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? 'right' : 'left') : (vy > 0 ? 'down' : 'up');
     wk.wphase = (wk.wphase || 0) + dt * 9;
-  });
+  }); }
   if (m.birds) m.birds.forEach(function(bd){ bd.x += bd.speed * dt; if (bd.x > m.w + 80) bd.x = -80; bd.phase += dt * 8; });
+}
+var GREETINGS = ['Nice day!', 'Off to the kiosk?', 'Say hi to your folks!', 'Seen the new cards?', 'Mind the road!', 'Lovely little town, hm?'];
+var GREETINGS_RAIN = ['Rotten weather!', 'Stay dry out there!', 'Ugh, my socks…', 'Should’ve brought a hood.'];
+// a townsperson: the chibi + name tag, an umbrella in the rain, and a
+// friendly speech bubble when the player is close.
+function drawWalker(ctx, wk){
+  var raining = weatherFor(save.day) === 'rain';
+  drawChar(ctx, wk.x, wk.y, { tee: wk.color, cap: wk.hair, capDark: wk.hair, dir: wk.dir || 'right', walk: wk.wphase });
+  if (wk.name) { ctx.fillStyle = 'rgba(20,16,10,.5)'; ctx.font = '600 9px sans-serif'; ctx.textAlign = 'center';
+    var tw = ctx.measureText(wk.name).width + 8; roundRectPath(ctx, wk.x - tw / 2, wk.y - 42, tw, 12, 5); ctx.fill();
+    ctx.fillStyle = '#ffe9c2'; ctx.fillText(wk.name, wk.x, wk.y - 33); }
+  if (raining) drawUmbrella(ctx, wk.x, wk.y - 30);
+  // greet the player when nearby (rotating line, per-walker, changes slowly)
+  var d = Math.hypot(W.px - wk.x, W.py - wk.y);
+  if (d < 130) {
+    var pool = raining ? GREETINGS_RAIN : GREETINGS;
+    var line = pool[((wk.gr || 0) + Math.floor(W.actorPhase / 5)) % pool.length];
+    ctx.globalAlpha = Math.max(0, Math.min(1, (130 - d) / 40));
+    drawSpeechBubble(ctx, wk.x, wk.y - (raining ? 58 : 48), line);
+    ctx.globalAlpha = 1;
+  }
+}
+function drawSpeechBubble(ctx, cx, cy, text){
+  ctx.font = '600 11px sans-serif'; ctx.textAlign = 'center';
+  var w = ctx.measureText(text).width + 18, h = 20;
+  ctx.fillStyle = 'rgba(253,248,236,.96)';
+  roundRectPath(ctx, cx - w / 2, cy - h, w, h, 8); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(cx - 5, cy - 1); ctx.lineTo(cx + 5, cy - 1); ctx.lineTo(cx, cy + 6); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#3a2f20'; ctx.fillText(text, cx, cy - h / 2 + 4);
+}
+function drawUmbrella(ctx, x, y){
+  ctx.fillStyle = '#7a6a4a'; ctx.fillRect(x - 1, y, 2, 16);   // handle
+  ctx.fillStyle = '#d8503f'; ctx.beginPath(); ctx.arc(x, y, 15, Math.PI, 0); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(x - 15, y); ctx.lineTo(x + 15, y); ctx.moveTo(x - 7, y); ctx.lineTo(x - 6, y - 8); ctx.moveTo(x + 7, y); ctx.lineTo(x + 6, y - 8); ctx.stroke();
 }
 function drawBird(ctx, x, y, phase){
   var flap = Math.sin(phase) * 5;
@@ -4243,6 +4287,9 @@ function drawPlayer(ctx){
     ctx.fillStyle = 'rgba(60,50,40,.6)'; ctx.font = '700 11px serif'; ctx.textAlign = 'left';
     ctx.fillText('z', zx, zy); ctx.font = '700 9px serif'; ctx.fillText('z', zx + 7, zy - 7);
   }
+  // hold an umbrella outdoors in the rain
+  var m = curMap();
+  if (m && m.kind !== 'indoor' && weatherFor(save.day) === 'rain') drawUmbrella(ctx, W.px + 6, W.py - 28);
 }
 // A cute directional chibi: shadow, swinging legs/arms, body, head that
 // faces up/down/left/right, cap with a brim in the facing direction.
@@ -4347,6 +4394,7 @@ if (typeof globalThis !== 'undefined') {
     dailyGoals: dailyGoals, weatherFor: weatherFor,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
+    walkersOutCount: walkersOutCount,
   };
 }
 })();

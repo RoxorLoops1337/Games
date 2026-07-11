@@ -561,6 +561,18 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canFish(old) === true && TC.fishCast(old) !== null, 'a save missing the fishing field still works');
 }
 
+// ---- townsfolk presence ----
+{
+  for (let d = 1; d < 200; d++) {
+    const n = TC.walkersOutCount(d);
+    ok(n >= 1 && n <= 3, 'townsfolk count stays within 1..3');
+    const w = TC.weatherFor(d);
+    if (w === 'rain') ok(n === 1, 'only one hardy soul is out in the rain');
+    if (w === 'clear' || w === 'cloudy') ok(n === 3, 'a full crowd on fair days');
+  }
+  ok(TC.walkersOutCount(7) === TC.walkersOutCount(7), 'townsfolk count is deterministic per day');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
