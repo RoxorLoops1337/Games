@@ -73,6 +73,15 @@ header.topbar h1{font-family:var(--serif); font-size:18px; margin:0; font-weight
 }
 .coins .coin-dot{width:9px;height:9px;border-radius:50%;background:var(--accent); box-shadow:0 0 6px rgba(226,160,74,.7);}
 .candy{font-family:var(--mono); font-size:13px; font-weight:600; color:var(--t-doublerare); display:flex; align-items:center; gap:4px; white-space:nowrap;}
+.packs-btn{
+  font-family:var(--mono); font-size:13px; font-weight:700; color:#2a1c08; display:flex; align-items:center; gap:4px;
+  border:none; cursor:pointer; padding:3px 9px 3px 7px; border-radius:11px; white-space:nowrap;
+  background:radial-gradient(circle at 40% 30%, #f4bd6a, #e2a04a 70%); box-shadow:0 2px 6px rgba(0,0,0,.25);
+  animation:packbob 1.6s ease-in-out infinite;
+}
+.packs-btn:active{transform:scale(.92);}
+.packs-btn .candy-ico{font-size:14px;}
+@keyframes packbob{0%,100%{transform:translateY(0);}50%{transform:translateY(-2px);}}
 .candy .candy-ico{font-size:13px;}
 
 main{flex:1; min-height:0; overflow-y:auto; -webkit-overflow-scrolling:touch; position:relative;}
@@ -721,6 +730,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
     <h1>The Collection</h1>
     <div class="topbar-stats">
       <span class="day-badge" id="day-badge">Day 1</span>
+      <button class="packs-btn" id="packs-btn" style="display:none;" aria-label="open a pack"><span class="candy-ico">🎒</span><span id="packs-count">0</span></button>
       <div class="candy" id="pop-stat" style="display:none;"><span class="candy-ico">⭐</span><span id="pop-count">0</span></div>
       <div class="candy" id="candy-stat" style="display:none;"><span class="candy-ico">🍬</span><span id="candy-count">0</span></div>
       <div class="coins"><span class="coin-dot"></span><span id="coin-count">0</span></div>
@@ -2317,6 +2327,21 @@ function hydrateOwnerArt(root){
     } catch (e) {}
   });
 }
+// Probe + cache painted art ahead of time so a card can render its PNG
+// directly instead of flashing the procedural art first, then swapping.
+function preloadOwnerArt(ids){
+  if (typeof Image === 'undefined' || !ids) return;
+  ids.forEach(function(id){
+    if (typeof ownerArt[id] !== 'undefined') return;   // already known or in flight
+    ownerArt[id] = 0;   // pending sentinel: not a string (scene still shows), not re-probed
+    try {
+      var img = new Image();
+      img.onload = function(){ ownerArt[id] = 'art/' + id + '.png'; };
+      img.onerror = function(){ ownerArt[id] = false; };
+      img.src = 'art/' + id + '.png';
+    } catch (e) { ownerArt[id] = false; }
+  });
+}
 
 /* ================= UI ================= */
 var save = loadSave();
@@ -2342,6 +2367,12 @@ function renderTopbar(){
     popStat.style.display = (save.pop > 0) ? 'flex' : 'none';
     var pc = $('pop-count');
     if (pc) pc.textContent = save.pop;
+  }
+  var packsBtn = $('packs-btn');
+  if (packsBtn) {
+    packsBtn.style.display = (save.packsUnopened > 0) ? 'flex' : 'none';
+    var pk = $('packs-count');
+    if (pk) pk.textContent = save.packsUnopened;
   }
   animateCoinsTo(save.coins);
 }
@@ -2378,10 +2409,16 @@ function cardHTML(c, opts){
   var full = BY_ID[c.id] || c;
   var move = c.move || full.move;
   var illus = c.illus || full.illus;
-  var scene = sceneFor(c, 240, 336);
-  var artStyle = scene
-    ? 'background-image:url(' + scene + ')'
-    : 'background:' + typeColor(c.type);
+  // Prefer painted PNG art when we already know it exists (preloaded), so the
+  // reveal shows it straight away instead of flashing the procedural art first.
+  var own = ownerArt[c.id];
+  var artStyle;
+  if (typeof own === 'string') {
+    artStyle = 'background-image:url(' + own + ')';
+  } else {
+    var scene = sceneFor(c, 240, 336);
+    artStyle = scene ? 'background-image:url(' + scene + ')' : 'background:' + typeColor(c.type);
+  }
   var holo = opts.reverseHolo || c.tier === 'rareholo' || c.tier === 'doublerare' || c.tier === 'ultrarare';
   var frame = c.tier === 'common' ? '' : ' f-' + c.tier;
   var costDots = '';
@@ -2608,6 +2645,7 @@ var opener = { session: null };
 function startPackOpening(){
   if (save.packsUnopened <= 0) return;
   var pulls = openPack(save, Math.random);
+  preloadOwnerArt(pulls.map(function(p){ return p.id; }));   // fetch painted art now so reveals show it directly
   persist(save);
   renderTopbar();
   opener.session = { pulls: pulls, index: 0 };
@@ -2856,6 +2894,7 @@ function pocketHTML(c, rec, isNew){
 function renderBinder(){
   var el = $('screen-binder');
   if (!el) return;
+  preloadOwnerArt(Object.keys(save.collection));   // so a tapped card's PNG shows directly, no procedural flash
   var owned = Object.keys(save.collection).length;
   var pct = Math.round(completionFraction(save) * 100);
   var dupValue = duplicateValue(save);
@@ -3331,6 +3370,11 @@ function boot(){
     // summary keeps the recap honest instead of silently swallowing pulls.
     if (opener.session && opener.session.index < opener.session.pulls.length) openerStageSummary();
     else closeOpener();
+  });
+  var packsBtn = $('packs-btn');
+  if (packsBtn) packsBtn.addEventListener('click', function(){
+    // open packs from your backpack anywhere — no trip to the kiosk needed
+    if (save.packsUnopened > 0 && !(opener.session)) { sfxClick(); startPackOpening(); }
   });
   renderTopbar();
   activeTab = 'world';
