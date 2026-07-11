@@ -620,6 +620,14 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 }
 .reel-icon{font-size:60px; line-height:1;}
 .reel-icon.reel-land{animation:reelPop 360ms cubic-bezier(.3,1.5,.5,1);}
+/* arcade timing bar */
+.arc-bar{position:relative; height:30px; margin:8px 0 10px; border-radius:9px; overflow:hidden;
+  background:linear-gradient(90deg,#c85f2c,#e2a04a 30%,#e2a04a 70%,#c85f2c); border:2px solid var(--line);}
+.arc-zone{position:absolute; left:33%; width:34%; top:0; bottom:0; background:rgba(60,180,110,.55);
+  box-shadow:0 0 8px rgba(60,180,110,.5);}
+.arc-zone i{position:absolute; left:calc(50% - 8%); width:16%; top:0; bottom:0; background:rgba(60,200,120,.9);}
+.arc-zone::before{content:""; position:absolute; left:50%; top:0; bottom:0; width:2px; margin-left:-1px; background:rgba(255,255,255,.7);}
+.arc-mark{position:absolute; top:-2px; bottom:-2px; width:4px; margin-left:-2px; left:0; background:#fff; border-radius:2px; box-shadow:0 0 6px rgba(255,255,255,.9);}
 @keyframes reelPop{0%{transform:scale(1.5);}60%{transform:scale(.9);}100%{transform:scale(1);}}
 @media (prefers-reduced-motion: reduce){.reel-icon.reel-land{animation:none;}}
 .reel-result{text-align:center; font-family:var(--mono); font-size:14px; font-weight:700; min-height:20px; margin-bottom:14px;}
@@ -929,6 +937,7 @@ function freshSave(){
     lottery: { bought: 0 },
     mail: { lastDay: null },
     fishing: { day: null, casts: 0 },
+    arcade: { day: null, plays: 0 },
   };
 }
 
@@ -1227,6 +1236,32 @@ function fishCast(save){
   save.coins += res.coins;
   save.candy += res.candy;
   if (res.cardId) addCardById(save, res.cardId);
+  return res;
+}
+
+// The kiosk arcade cabinet: a timing game. offset is how far the marker
+// stopped from the target centre (0 = bullseye, 1 = the far edge). The
+// reward mapping is pure + tested; the sweeping bar lives in the UI.
+var ARCADE_PLAYS_PER_DAY = 3;
+function arcadeReward(offset){
+  if (offset <= 0.08) return { tier: 'bullseye', coins: 12 };
+  if (offset <= 0.20) return { tier: 'good',     coins: 6 };
+  if (offset <= 0.34) return { tier: 'edge',     coins: 2 };
+  return { tier: 'miss', coins: 0 };
+}
+function arcadePlaysLeft(save){
+  var a = save.arcade || {};
+  var used = (a.day === save.day) ? (a.plays || 0) : 0;
+  return Math.max(0, ARCADE_PLAYS_PER_DAY - used);
+}
+function canPlayArcade(save){ return arcadePlaysLeft(save) > 0; }
+function arcadePlay(save, offset){
+  if (!canPlayArcade(save)) return null;
+  save.arcade = save.arcade || { day: null, plays: 0 };
+  if (save.arcade.day !== save.day) { save.arcade.day = save.day; save.arcade.plays = 0; }
+  save.arcade.plays += 1;
+  var res = arcadeReward(offset);
+  save.coins += res.coins;
   return res;
 }
 
@@ -1577,6 +1612,7 @@ function loadSave(){
       base.lottery = (parsed.lottery && typeof parsed.lottery.bought === 'number') ? parsed.lottery : { bought: 0 };
       base.mail = (parsed.mail && typeof parsed.mail.lastDay !== 'undefined') ? parsed.mail : { lastDay: null };
       base.fishing = (parsed.fishing && typeof parsed.fishing.casts === 'number') ? parsed.fishing : { day: null, casts: 0 };
+      base.arcade = (parsed.arcade && typeof parsed.arcade.plays === 'number') ? parsed.arcade : { day: null, plays: 0 };
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3439,14 +3475,16 @@ function buildMaps(){
       { t:'shopcounter', x:70, y:120, w:320, h:56 },
       { t:'cardrack', x:18, y:206, w:60, h:46 },
       { t:'fridge', x:398, y:200, w:44, h:66 },
+      { t:'arcade', x:110, y:232, w:52, h:74 },
       { t:'plant', x:36, y:360 }, { t:'plant', x:424, y:360 },
     ],
-    solids: [ {x:70,y:120,w:320,h:56}, {x:18,y:206,w:60,h:46}, {x:398,y:200,w:44,h:66}, {x:0,y:0,w:460,h:40} ],
+    solids: [ {x:70,y:120,w:320,h:56}, {x:18,y:206,w:60,h:46}, {x:398,y:200,w:44,h:66}, {x:110,y:232,w:52,h:74}, {x:0,y:0,w:460,h:40} ],
     actors: [ { id:'keeper', x:230, y:96, color:'#5a8f6a', name:'Shopkeeper', apron:true } ],
     portals: [ { x:200, y:372, w:70, h:24, to:'town', sx:712, sy:500 } ],
     spots: [
       { x:230, y:150, r:78, label:function(){ return 'Talk to the shopkeeper'; }, action:openKioskMenu },
-      { x:235, y:360, r:46, label:function(){ return 'Leave the kiosk'; }, action:function(){ travel('town',712,500); } },
+      { x:136, y:324, r:52, label:function(){ var n = arcadePlaysLeft(save); return n > 0 ? 'Play the arcade (' + n + ' left)' : 'Arcade — out of plays today'; }, action:actArcade },
+      { x:300, y:360, r:46, label:function(){ return 'Leave the kiosk'; }, action:function(){ travel('town',712,500); } },
     ],
   };
 
@@ -3521,6 +3559,43 @@ function actSitBench(){
   sfxClick();
 }
 // cast a line at the pond — a short reel, then a seeded catch
+// the kiosk arcade — a stop-the-light timing game
+function actArcade(){
+  if (!canPlayArcade(save)) { toast('The arcade’s out of plays for today', ''); return; }
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<h3 class="modal-title">🕹️ Coin Catcher</h3>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">Stop the light in the green — dead centre pays the most!</p>' +
+    '<div class="arc-bar"><div class="arc-zone"><i></i></div><div class="arc-mark" id="arc-mark"></div></div>' +
+    '<div class="reel-result" id="arc-res">&nbsp;</div>' +
+    '<button class="bigbtn" id="arc-btn">STOP</button>';
+  $('modal-backdrop').classList.add('open');
+  var mark = $('arc-mark'), pos = 0, dir = 1, stopped = false, raf = null;
+  function frame(){
+    if (stopped) return;
+    pos += dir * 1.9; if (pos >= 100) { pos = 100; dir = -1; } else if (pos <= 0) { pos = 0; dir = 1; }
+    mark.style.left = pos + '%';
+    raf = requestAnimationFrame(frame);
+  }
+  raf = requestAnimationFrame(frame);
+  function doStop(){
+    stopped = true; if (raf) cancelAnimationFrame(raf);
+    var offset = Math.abs(pos - 50) / 50;
+    var res = arcadePlay(save, offset); persist(save); renderTopbar();
+    var el = $('arc-res');
+    if (res && res.coins) {
+      el.innerHTML = (res.tier === 'bullseye' ? 'BULLSEYE! ' : 'Nice! ') + '+' + res.coins + ' coins' + (res.tier === 'bullseye' ? ' 🎉' : '');
+      el.classList.add('good'); sfxCoins(); hapticPulse(res.tier === 'bullseye' ? 'rare' : 'common');
+    } else { el.innerHTML = 'Missed — nothing this time.'; el.classList.add('nada'); sfxClick(); }
+    var left = arcadePlaysLeft(save);
+    var b = $('arc-btn'); b.textContent = left > 0 ? 'Play again (' + left + ')' : 'Done';
+  }
+  $('arc-btn').addEventListener('click', function(){
+    if (!stopped) doStop();
+    else if (canPlayArcade(save)) actArcade();
+    else closeModal();
+  });
+}
 function actFish(){
   if (!canFish(save)) { toast('The fish aren’t biting today', ''); return; }
   var res = fishCast(save);
@@ -4312,6 +4387,16 @@ function drawProp(ctx, p){
     ctx.fillStyle = '#f4ead2'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 3); ctx.fill();
     ctx.fillStyle = ['#e2a04a','#54b899','#5aa3dc','#b45fd8'][(p.x/36|0)%4]; roundRectPath(ctx, p.x+3, p.y+3, p.w-6, p.h-9, 2); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(p.x+4, p.y+p.h-5, p.w-8, 2);
+  } else if (p.t === 'arcade') {
+    shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 7);
+    ctx.fillStyle = '#2c2438'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 6); ctx.fill();            // cabinet
+    ctx.fillStyle = '#e2543f'; roundRectPath(ctx, p.x+2, p.y-2, p.w-4, 14, 5); ctx.fill();        // marquee
+    var glow = 0.6 + 0.4 * Math.sin(W.actorPhase * 4);
+    ctx.fillStyle = 'rgba(90,180,220,' + glow + ')'; roundRectPath(ctx, p.x+7, p.y+16, p.w-14, 26, 3); ctx.fill();  // screen
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(p.x+10, p.y+20, 6, 4);
+    ctx.fillStyle = '#4a4258'; roundRectPath(ctx, p.x+6, p.y+48, p.w-12, 16, 3); ctx.fill();       // control panel
+    ctx.fillStyle = '#e8c14a'; ctx.beginPath(); ctx.arc(p.x+16, p.y+56, 3, 0, 6.283); ctx.fill();  // buttons
+    ctx.fillStyle = '#e2543f'; ctx.beginPath(); ctx.arc(p.x+p.w-16, p.y+56, 3, 0, 6.283); ctx.fill();
   } else if (p.t === 'bed') {
     shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 7);
     ctx.fillStyle = '#8a5a34'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 6); ctx.fill();      // frame
@@ -4520,6 +4605,7 @@ if (typeof globalThis !== 'undefined') {
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     walkersOutCount: walkersOutCount,
+    ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
   };
 }
 })();

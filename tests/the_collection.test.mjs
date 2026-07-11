@@ -573,6 +573,27 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.walkersOutCount(7) === TC.walkersOutCount(7), 'townsfolk count is deterministic per day');
 }
 
+// ---- arcade cabinet ----
+{
+  ok(TC.arcadeReward(0).tier === 'bullseye' && TC.arcadeReward(0).coins === 12, 'a dead-centre stop is a bullseye');
+  ok(TC.arcadeReward(0.15).tier === 'good' && TC.arcadeReward(0.15).coins > 0, 'a close stop pays out');
+  ok(TC.arcadeReward(0.3).tier === 'edge' && TC.arcadeReward(0.3).coins > 0, 'an edge stop pays a little');
+  ok(TC.arcadeReward(0.9).coins === 0, 'a wild miss pays nothing');
+  const S = TC.freshSave();
+  ok(TC.arcadePlaysLeft(S) === TC.ARCADE_PLAYS_PER_DAY, 'a fresh day has all arcade plays');
+  const before = S.coins;
+  const r = TC.arcadePlay(S, 0);
+  ok(r && S.coins === before + r.coins, 'playing credits the reward coins');
+  ok(TC.arcadePlaysLeft(S) === TC.ARCADE_PLAYS_PER_DAY - 1, 'playing uses a daily play');
+  let n = 0; while (TC.canPlayArcade(S)) { TC.arcadePlay(S, 0.5); n++; }
+  ok(n === TC.ARCADE_PLAYS_PER_DAY - 1, 'the daily play limit is enforced');
+  ok(TC.arcadePlay(S, 0) === null, 'no plays left returns null');
+  S.day += 1;
+  ok(TC.canPlayArcade(S) === true, 'arcade plays refill on a new day');
+  const old = TC.freshSave(); delete old.arcade;
+  ok(TC.canPlayArcade(old) === true && TC.arcadePlay(old, 0) !== null, 'a save missing the arcade field still works');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
