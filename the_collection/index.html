@@ -3002,6 +3002,7 @@ var W = {
   pet: { x: 250, y: 546, dir: 'down', walk: 0, moving: false, emote: null, emoteT: 0, name: 'Biscuit' },
   petIntroed: false, sitting: false,
   petSpot: { isPet: true, label: function(){ return 'Pet ' + W.pet.name; }, action: function(){ petTheCat(); } },
+  fade: 0, fadeState: 'idle', fadeHold: 0, pendingTravel: null, pendingSleep: false, sleepCard: null,
 };
 var ZOOM = 1.15, WALK_SPEED = 168, PLAYER_R = 13;
 
@@ -3035,8 +3036,8 @@ function worldResize(){
 
 /* ---------- input ---------- */
 function worldBlocked(){
-  // paused while a modal / pack opener is up, or while off the world tab
-  return !W.active ||
+  // paused while a modal / pack opener is up, mid-fade, or off the world tab
+  return !W.active || W.fadeState !== 'idle' ||
     ($('modal-backdrop') && $('modal-backdrop').classList.contains('open')) ||
     ($('opener') && $('opener').classList.contains('open'));
 }
@@ -3159,6 +3160,7 @@ function worldLoop(ts){
 }
 function worldUpdate(dt){
   W.actorPhase += dt;
+  updateFade(dt);
   updateAmbient(curMap(), dt);
   // keep the "Today" checklist current as state changes (throttled)
   W.goalsT += dt; if (W.goalsT > 0.4) { W.goalsT = 0; refreshGoals(false); }
@@ -3216,7 +3218,45 @@ function worldUpdate(dt){
   else hidePrompt();
 }
 function doPortal(p){
-  goMap(p.to, p.sx, p.sy);
+  travel(p.to, p.sx, p.sy);
+}
+// Fade out → switch map → fade in, so doorways feel like real thresholds.
+function travel(id, sx, sy){
+  if (W.fadeState !== 'idle') return;
+  W.pendingTravel = { id: id, sx: sx, sy: sy };
+  W.fadeState = 'out';
+}
+// Sleep: fade to night, show a "Day N" card, wake on the new day.
+function sleepTransition(){
+  if (W.fadeState !== 'idle') return;
+  W.pendingSleep = true;
+  W.fadeState = 'out';
+}
+var FADE_SPEED = 6;   // ~0.17s per fade half
+function updateFade(dt){
+  if (W.fadeState === 'out') {
+    W.fade = Math.min(1, W.fade + dt * FADE_SPEED);
+    if (W.fade >= 1) {
+      if (W.pendingSleep) {
+        W.pendingSleep = false;
+        var r = nextDay(save);
+        dayEventMessage = r.event !== 'none' ? DAY_EVENTS[r.event].label : null;
+        persist(save); renderTopbar(); setLocLabel(); refreshGoals(true); sfxDay();
+        W.sleepCard = { day: r.day, event: r.event };
+        W.fadeState = 'hold'; W.fadeHold = 0;
+      } else if (W.pendingTravel) {
+        var t = W.pendingTravel; W.pendingTravel = null;
+        goMap(t.id, t.sx, t.sy, true);
+        W.fadeState = 'in';
+      } else { W.fadeState = 'in'; }
+    }
+  } else if (W.fadeState === 'hold') {
+    W.fadeHold += dt;
+    if (W.fadeHold > 1.0) W.fadeState = 'in';
+  } else if (W.fadeState === 'in') {
+    W.fade = Math.max(0, W.fade - dt * FADE_SPEED);
+    if (W.fade <= 0) { W.fade = 0; W.fadeState = 'idle'; W.sleepCard = null; }
+  }
 }
 // The pet trails a fixed distance behind the player's facing, easing in and
 // catching up if it lags. Rests just behind you when you stop.
@@ -3406,7 +3446,7 @@ function buildMaps(){
     portals: [ { x:200, y:372, w:70, h:24, to:'town', sx:712, sy:500 } ],
     spots: [
       { x:230, y:150, r:78, label:function(){ return 'Talk to the shopkeeper'; }, action:openKioskMenu },
-      { x:235, y:360, r:46, label:function(){ return 'Leave the kiosk'; }, action:function(){ goMap('town',712,500); } },
+      { x:235, y:360, r:46, label:function(){ return 'Leave the kiosk'; }, action:function(){ travel('town',712,500); } },
     ],
   };
 
@@ -3426,7 +3466,7 @@ function buildMaps(){
       return { x:k.x, y:k.y+26, r:60, label:function(){ return 'Talk to ' + k.name; }, action:function(){ openNpcSheet(k.id); } };
     }).concat([
       { x:300, y:340, r:56, label:function(){ refreshSchoolIfNeeded(save); var d=(save.school.duels||[]).filter(function(x){return !x.done;}).length; return d ? 'Flip-duel corner (' + d + ')' : 'The duel corner is quiet today'; }, action:openDuelCorner },
-      { x:300, y:430, r:46, label:function(){ return 'Head home'; }, action:function(){ goMap('town',1211,520); } },
+      { x:300, y:430, r:46, label:function(){ return 'Head home'; }, action:function(){ travel('town',1211,520); } },
     ]),
   };
 
@@ -3445,7 +3485,7 @@ function buildMaps(){
     portals: [ { x:225, y:392, w:70, h:24, to:'town', sx:848, sy:280 } ],
     spots: [
       { x:260, y:340, r:70, label:function(){ return 'Checkout — grab the free booster'; }, action:openMarketMenu },
-      { x:260, y:388, r:44, label:function(){ return 'Leave'; }, action:function(){ goMap('town',848,280); } },
+      { x:260, y:388, r:44, label:function(){ return 'Leave'; }, action:function(){ travel('town',848,280); } },
     ],
   };
 
@@ -3565,10 +3605,8 @@ function actBed(){
   $('wm-x').addEventListener('click', closeModal);
   $('wm-nope').addEventListener('click', closeModal);
   $('wm-sleep').addEventListener('click', function(){
-    var r = nextDay(save);
-    dayEventMessage = r.event !== 'none' ? DAY_EVENTS[r.event].label : null;
-    persist(save); renderTopbar(); closeModal(); sfxDay(); setLocLabel(); refreshGoals(true);
-    toast('Day ' + r.day + (r.event !== 'none' ? ' — ' + DAY_EVENTS[r.event].label : ''), 'good');
+    closeModal();
+    sleepTransition();   // fade to night → "Day N" card → wake (advances the day once)
   });
 }
 function openKioskMenu(){
@@ -3749,6 +3787,25 @@ function worldDraw(){
   if (m.kind !== 'indoor') drawWeather(ctx, vw, vh);
   // corner minimap on the town so it's easy to navigate
   if (m.buildings) drawMinimap(ctx, m, vw, vh);
+  // transition fade (+ the sleep "Day N" card) over everything
+  if (W.fade > 0.001) drawFade(ctx, vw, vh);
+}
+function drawFade(ctx, vw, vh){
+  ctx.save();
+  ctx.fillStyle = 'rgba(14,12,20,' + W.fade + ')'; ctx.fillRect(0, 0, vw, vh);
+  if (W.sleepCard && W.fade > 0.8) {
+    ctx.globalAlpha = Math.min(1, (W.fade - 0.8) / 0.2);
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,240,200,.5)'; ctx.font = '600 15px serif';
+    ctx.fillText('z z z', vw / 2, vh / 2 - 52);
+    ctx.fillStyle = '#ffe9c2'; ctx.font = '700 34px serif';
+    ctx.fillText('Day ' + W.sleepCard.day, vw / 2, vh / 2);
+    var ev = W.sleepCard.event;
+    ctx.fillStyle = 'rgba(255,233,194,.75)'; ctx.font = '400 13px sans-serif';
+    ctx.fillText(ev && ev !== 'none' ? DAY_EVENTS[ev].label : 'a fresh morning', vw / 2, vh / 2 + 28);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
 }
 function drawWeather(ctx, vw, vh){
   var w = weatherFor(save.day);
