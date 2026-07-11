@@ -615,6 +615,15 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canJumpRope(old) === true && TC.jumpRopePlay(old, 4) !== null, 'a save missing the jumprope field still works');
 }
 
+// ---- card of the day ----
+{
+  const id = TC.cardOfDay(5);
+  ok(!!TC.BY_ID[id], 'card of the day is a real card id');
+  ok(TC.cardOfDay(5) === TC.cardOfDay(5), 'card of the day is deterministic for a given day');
+  const ids = new Set(); for (let d = 1; d < 60; d++) ids.add(TC.cardOfDay(d));
+  ok(ids.size > 1, 'the featured card varies across days');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');

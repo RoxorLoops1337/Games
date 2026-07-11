@@ -176,6 +176,9 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 }
 .wmenu button .wm-emoji{font-size:22px; width:26px; text-align:center;}
 .wmenu button small{display:block; font-weight:500; color:var(--ink-soft); font-size:11.5px; margin-top:2px;}
+.notice-row{display:flex; gap:10px; align-items:baseline; padding:7px 2px; border-bottom:1px dashed var(--line); font-size:13px;}
+.notice-row .notice-k{flex:none; width:74px; font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--accent-deep);}
+.notice-cardhead{text-align:center; font-family:var(--serif); font-size:12px; color:var(--ink-soft); margin:12px 0 2px; letter-spacing:.04em;}
 .wmenu button:disabled{opacity:.5;}
 .wmenu button:active:not(:disabled){transform:scale(.98);}
 
@@ -1307,6 +1310,11 @@ function dailyGoals(save){
     { id: 'lawn',      label: 'Mow a neighbour’s lawn',  done: lawnDone },
     { id: 'school',    label: 'Sort things out at school', done: !!schoolHandled },
   ];
+}
+// The notice board's "card of the day" — a deterministic pick per day.
+function cardOfDay(day){
+  var rand = seededRandom('card-of-day-' + day);
+  return CORE_SET[Math.floor(rand() * CORE_SET.length)].id;
 }
 
 function buyPack(save){
@@ -3386,6 +3394,7 @@ function buildMaps(){
     ],
     birds: [ {x:200,y:120,speed:60,phase:0}, {x:900,y:80,speed:44,phase:2} ],
     benches: [ { x:540, y:648 } ],
+    notice: { x: 720, y: 616 },
     pond: { x:367, y:1010, rx:96, ry:58, reeds:[ {x:280,y:1002}, {x:456,y:1006}, {x:318,y:1064}, {x:420,y:964} ] },
     buildings: [
       { key:'home',   x:120, y:250, w:290, h:210, wall:'#e6c98f', roof:'#b5622f', sign:'HOME' },
@@ -3397,6 +3406,7 @@ function buildMaps(){
     solids: [
       {x:120,y:250,w:290,h:190}, {x:600,y:300,w:230,h:150}, {x:1040,y:230,w:340,h:220}, {x:690,y:60,w:320,h:150},
       {x:279,y:964,w:176,h:92},   // the pond (can't walk on water)
+      {x:698,y:596,w:44,h:24},    // notice board
     ].concat(houses.map(function(h){ return { x:h.x, y:h.y, w:h.w, h:h.h - 34 }; })),
     portals: [
       { x:210, y:452, w:66, h:26, to:'home',   sx:220, sy:322, label:'HOME' },
@@ -3434,6 +3444,11 @@ function buildMaps(){
     x: 367, y: 936, r: 58, kind: 'fish',
     label: function(){ var n = fishCastsLeft(save); return n > 0 ? 'Fish here (' + n + ' casts left)' : 'The fish aren’t biting today'; },
     action: actFish,
+  });
+  maps.town.spots.push({
+    x: 720, y: 668, r: 52, kind: 'notice',
+    label: function(){ return 'Read the notice board'; },
+    action: actNoticeBoard,
   });
 
   /* ---------- HOME INTERIOR ---------- */
@@ -3664,6 +3679,24 @@ function actArcade(){
     else closeModal();
   });
 }
+// read the town notice board — today's news, tomorrow's rumour, card of the day
+function actNoticeBoard(){
+  var today = dayEvent(save.day), tomorrow = dayEvent(save.day + 1);
+  var cid = cardOfDay(save.day);
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="wm-x">&times;</button>' +
+    '<h3 class="modal-title">📌 Town Notice Board</h3>' +
+    '<div class="notice-row"><span class="notice-k">Today</span><span>' + (today !== 'none' ? DAY_EVENTS[today].label : 'a normal day around town') + '</span></div>' +
+    '<div class="notice-row"><span class="notice-k">Tomorrow</span><span>' + (tomorrow !== 'none' ? DAY_EVENTS[tomorrow].label : 'looks quiet') + '</span></div>' +
+    '<div class="notice-cardhead">&#10022; Card of the day &#10022;</div>' +
+    miniCardHTML(cid, { note: (save.collection[cid] ? 'in your binder' : 'not yet yours') }) +
+    '<button class="bigbtn" id="wm-done" style="margin-top:6px;">Got it</button>';
+  $('modal-backdrop').classList.add('open');
+  $('wm-x').addEventListener('click', closeModal);
+  $('wm-done').addEventListener('click', closeModal);
+  sfxClick();
+}
 function actFish(){
   if (!canFish(save)) { toast('The fish aren’t biting today', ''); return; }
   var res = fishCast(save);
@@ -3893,6 +3926,7 @@ function worldDraw(){
   if (m.houses) m.houses.forEach(function(h){ drawList.push({ y: h.y + h.h, fn: function(){ drawHouse(ctx, h); } }); });
   if (m.bushes) m.bushes.forEach(function(bu){ drawList.push({ y: bu.y + 12, fn: function(){ drawBush(ctx, bu.x, bu.y); } }); });
   if (m.benches) m.benches.forEach(function(bn){ drawList.push({ y: bn.y + 6, fn: function(){ drawTownBench(ctx, bn.x, bn.y); } }); });
+  if (m.notice) drawList.push({ y: m.notice.y + 6, fn: function(){ drawNoticeBoard(ctx, m.notice.x, m.notice.y); } });
   if (m.trees) m.trees.forEach(function(t){ drawList.push({ y: t.y + 40, fn: function(){ drawTree(ctx, t.x, t.y); } }); });
   if (m.actors) m.actors.forEach(function(a){ drawList.push({ y: a.y + 22, fn: function(){ drawPerson(ctx, a.x, a.y, a.color, a.name, 'down', W.actorPhase + a.x, a); } }); });
   if (m.walkers) { var wout = walkersOutCount(save.day); m.walkers.forEach(function(wk, i){ if (i >= wout) return; drawList.push({ y: wk.y + 16, fn: function(){ drawWalker(ctx, wk); } }); }); }
@@ -4129,7 +4163,6 @@ function drawOutdoor(ctx, m){
   if (m.playground) { ctx.fillStyle = '#c8a15a'; ctx.fillRect(m.w/2-40, m.h-16, 80, 16); }
 }
 function drawFence(ctx, f){
-  var horiz = Math.abs(f.x2 - f.x1) > Math.abs(f.y2 - f.y1);
   var len = Math.hypot(f.x2 - f.x1, f.y2 - f.y1), n = Math.max(2, Math.round(len / 26));
   // rail
   ctx.strokeStyle = '#e7dcc0'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(f.x1, f.y1 - 8); ctx.lineTo(f.x2, f.y2 - 8); ctx.stroke();
@@ -4358,6 +4391,18 @@ function drawPond(ctx, p){
       ctx.beginPath(); ctx.moveTo(rd.x + 5, rd.y); ctx.quadraticCurveTo(rd.x + 5 + sway, rd.y - 8, rd.x + 6 + sway, rd.y - 16); ctx.stroke();
     });
   }
+}
+function drawNoticeBoard(ctx, x, y){
+  shadowEllipse(ctx, x, y + 14, 30, 7);
+  ctx.fillStyle = '#6a4a2a'; ctx.fillRect(x - 24, y - 6, 5, 22); ctx.fillRect(x + 19, y - 6, 5, 22);   // posts
+  ctx.fillStyle = '#8a5a34'; roundRectPath(ctx, x - 28, y - 30, 56, 30, 4); ctx.fill();                // frame
+  ctx.fillStyle = '#d8c49a'; roundRectPath(ctx, x - 24, y - 27, 48, 24, 3); ctx.fill();                // cork
+  // little pinned notes
+  ctx.fillStyle = '#fff'; ctx.fillRect(x - 19, y - 23, 13, 10); ctx.fillRect(x - 2, y - 24, 11, 9);
+  ctx.fillStyle = '#e2a04a'; ctx.fillRect(x + 12, y - 22, 9, 12);
+  ctx.fillStyle = 'rgba(0,0,0,.2)'; ctx.fillRect(x - 19, y - 20, 13, 1); ctx.fillRect(x - 2, y - 21, 11, 1);
+  // pitched roof
+  ctx.fillStyle = '#6a4a2a'; ctx.beginPath(); ctx.moveTo(x - 30, y - 30); ctx.lineTo(x, y - 40); ctx.lineTo(x + 30, y - 30); ctx.closePath(); ctx.fill();
 }
 function drawTownBench(ctx, x, y){
   shadowEllipse(ctx, x, y + 12, 34, 8);
@@ -4683,7 +4728,7 @@ if (typeof globalThis !== 'undefined') {
     canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
-    dailyGoals: dailyGoals, weatherFor: weatherFor,
+    dailyGoals: dailyGoals, weatherFor: weatherFor, cardOfDay: cardOfDay,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     walkersOutCount: walkersOutCount,
