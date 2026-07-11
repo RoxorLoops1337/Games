@@ -3274,8 +3274,16 @@ function worldUpdate(dt){
     moveAxis(0, v.y * WALK_SPEED * dt);
     W.walk += dt * 9;
     W.footT = (W.footT || 0) + dt;
-    if (W.footT > 0.30) { W.footT = 0; sfxStep(); }
+    if (W.footT > 0.30) { W.footT = 0; sfxStep();
+      W.puffs = W.puffs || [];
+      W.puffs.push({ x: W.px + (W.dir === 'left' ? 5 : W.dir === 'right' ? -5 : 0), y: W.py + 11, t: 0 });
+      if (W.puffs.length > 8) W.puffs.shift();
+    }
   } else { W.walk = 0; W.footT = 0.3; }
+  // age footstep dust; a puff lives ~0.5s then is culled
+  if (W.puffs && W.puffs.length) {
+    for (var pf = W.puffs.length - 1; pf >= 0; pf--) { W.puffs[pf].t += dt; if (W.puffs[pf].t > 0.5) W.puffs.splice(pf, 1); }
+  }
   // give up on a tap target we can't reach (blocked by a wall)
   if (W.target) {
     W.stall = (Math.hypot(W.px - W.lastX, W.py - W.lastY) < 0.4) ? W.stall + dt : 0;
@@ -4015,6 +4023,17 @@ function worldDraw(){
 
   if (m.kind === 'indoor') drawIndoor(ctx, m);
   else drawOutdoor(ctx, m);
+
+  // footstep dust: little puffs kicked up as the player walks, fading fast
+  if (W.puffs && W.puffs.length) {
+    for (var pu = 0; pu < W.puffs.length; pu++) {
+      var pf2 = W.puffs[pu], k = pf2.t / 0.5;                 // 0→1 life
+      ctx.globalAlpha = (1 - k) * 0.4;
+      ctx.fillStyle = '#efe3c8';
+      ctx.beginPath(); ctx.ellipse(pf2.x, pf2.y - k * 3, 4 + k * 4, 2 + k * 2, 0, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
 
   // tap-to-move destination marker: a pulsing ground ring where you tapped,
   // so it's clear the character is walking somewhere. Warm gold for a plain
