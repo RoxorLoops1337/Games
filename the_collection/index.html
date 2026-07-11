@@ -3542,13 +3542,15 @@ function buildMaps(){
       { t:'cardrack', x:18, y:206, w:60, h:46 },
       { t:'fridge', x:398, y:200, w:44, h:66 },
       { t:'arcade', x:110, y:232, w:52, h:74 },
+      { t:'display', x:312, y:198, w:40, h:54 },
       { t:'plant', x:36, y:360 }, { t:'plant', x:424, y:360 },
     ],
-    solids: [ {x:70,y:120,w:320,h:56}, {x:18,y:206,w:60,h:46}, {x:398,y:200,w:44,h:66}, {x:110,y:232,w:52,h:74}, {x:0,y:0,w:460,h:40} ],
+    solids: [ {x:70,y:120,w:320,h:56}, {x:18,y:206,w:60,h:46}, {x:398,y:200,w:44,h:66}, {x:110,y:232,w:52,h:74}, {x:312,y:198,w:40,h:54}, {x:0,y:0,w:460,h:40} ],
     actors: [ { id:'keeper', x:230, y:96, color:'#5a8f6a', name:'Shopkeeper', apron:true } ],
     portals: [ { x:200, y:372, w:70, h:24, to:'town', sx:712, sy:500 } ],
     spots: [
       { x:230, y:150, r:78, label:function(){ return 'Talk to the shopkeeper'; }, action:openKioskMenu },
+      { x:332, y:266, r:46, label:function(){ return 'Look at today’s featured card'; }, action:actFeaturedCard },
       { x:136, y:324, r:52, label:function(){ var n = arcadePlaysLeft(save); return n > 0 ? 'Play the arcade (' + n + ' left)' : 'Arcade — out of plays today'; }, action:actArcade },
       { x:300, y:360, r:46, label:function(){ return 'Leave the kiosk'; }, action:function(){ travel('town',712,500); } },
     ],
@@ -3750,6 +3752,24 @@ function actArcade(){
     else if (canPlayArcade(save)) actArcade();
     else closeModal();
   });
+}
+// the kiosk shop-window: the shopkeeper's pick of the day, in a little
+// standee. Informational only — it does NOT change pack RNG, it just tells
+// you which card the town is buzzing about (matches the notice board).
+function actFeaturedCard(){
+  var cid = cardOfDay(save.day);
+  var have = !!save.collection[cid];
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="fc-x">&times;</button>' +
+    '<h3 class="modal-title">&#10022; Today’s Featured Card</h3>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">The shopkeeper taps the glass: “This one’s flying off the shelves — pull it fresh from a pack!”</p>' +
+    miniCardHTML(cid, { note: (have ? 'already in your binder' : 'not yet yours') }) +
+    '<button class="bigbtn" id="fc-done" style="margin-top:6px;">Nice</button>';
+  $('modal-backdrop').classList.add('open');
+  $('fc-x').addEventListener('click', closeModal);
+  $('fc-done').addEventListener('click', closeModal);
+  sfxClick();
 }
 // read the town notice board — today's news, tomorrow's rumour, card of the day
 function actNoticeBoard(){
@@ -4717,6 +4737,28 @@ function drawProp(ctx, p){
     ctx.fillStyle = '#4a4258'; roundRectPath(ctx, p.x+6, p.y+48, p.w-12, 16, 3); ctx.fill();       // control panel
     ctx.fillStyle = '#e8c14a'; ctx.beginPath(); ctx.arc(p.x+16, p.y+56, 3, 0, 6.283); ctx.fill();  // buttons
     ctx.fillStyle = '#e2543f'; ctx.beginPath(); ctx.arc(p.x+p.w-16, p.y+56, 3, 0, 6.283); ctx.fill();
+  } else if (p.t === 'display') {
+    // a lit shop-window standee showing the day's featured card
+    shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 6);
+    var pulse = 0.5 + 0.5 * Math.sin(W.actorPhase * 2.4);
+    var cid = (typeof save !== 'undefined' && save) ? cardOfDay(save.day) : null;
+    var card = cid ? CORE_SET.filter(function(c){ return c.id === cid; })[0] : null;
+    var tc = card ? typeColor(card.type) : '#b3a58e';
+    // glow halo behind the case
+    ctx.save(); ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = 'rgba(255,225,150,' + (0.10 + 0.10 * pulse) + ')';
+    ctx.beginPath(); ctx.arc(p.x+p.w/2, p.y+p.h/2, p.w*1.1, 0, 6.283); ctx.fill();
+    ctx.restore();
+    ctx.fillStyle = '#3a2e22'; roundRectPath(ctx, p.x-3, p.y-3, p.w+6, p.h+6, 6); ctx.fill();   // stand base
+    ctx.fillStyle = '#d8c49a'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 5); ctx.fill();            // window frame
+    ctx.fillStyle = shade(tc, 6); roundRectPath(ctx, p.x+5, p.y+5, p.w-10, p.h-18, 3); ctx.fill(); // card face
+    ctx.fillStyle = lightenHex(tc, 0.35); ctx.beginPath();                                        // creature blob
+    ctx.arc(p.x+p.w/2, p.y+p.h/2-3, p.w*0.24, 0, 6.283); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,' + (0.18 + 0.22 * pulse) + ')';                            // glass sheen
+    roundRectPath(ctx, p.x+5, p.y+5, p.w-10, 8, 3); ctx.fill();
+    ctx.fillStyle = '#e2543f'; roundRectPath(ctx, p.x+2, p.y+p.h-12, p.w-4, 12, 3); ctx.fill();   // "TODAY" tag
+    ctx.fillStyle = '#fff'; ctx.font = '700 8px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('TODAY', p.x+p.w/2, p.y+p.h-3.5);
   } else if (p.t === 'bed') {
     shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 7);
     ctx.fillStyle = '#8a5a34'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 6); ctx.fill();      // frame
