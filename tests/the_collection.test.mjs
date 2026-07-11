@@ -430,6 +430,62 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(Math.abs(TC.completionFraction(S7) - 1 / 100) < 1e-9, 'completion reflects one owned card out of 100');
 }
 
+// ---- town: neighbours & lawns ----
+{
+  ok(Array.isArray(TC.NEIGHBORS) && TC.NEIGHBORS.length === 5, 'there are five neighbours to mow for');
+  const S = TC.freshSave();
+  const nb = TC.NEIGHBORS[0].id;
+  ok(TC.lawnState(S, nb).canMow === true, 'a fresh lawn can be mowed');
+  const res = TC.mowLawn(S, nb);
+  ok(res !== null, 'mowing a fresh lawn succeeds');
+  ok(S.coins >= 0 && S.lawns.lastMowed[nb] === S.day, 'mowing records the day it was done');
+  ok(TC.lawnState(S, nb).canMow === false, 'you cannot mow the same lawn twice');
+  ok(TC.mowLawn(S, TC.NEIGHBORS[1].id) === null, 'only one lawn can be mowed per day');
+  // after a week the same lawn is available again (if it is a new day)
+  S.day += TC.LAWN_COOLDOWN;
+  ok(TC.lawnState(S, nb).canMow === true, 'a lawn regrows after the cooldown');
+  ok(TC.lawnState(S, TC.NEIGHBORS[1].id).canMow === true, 'a different lawn is free once the daily limit resets');
+  // cooldown still blocks before a full week passes
+  const S2 = TC.freshSave();
+  TC.mowLawn(S2, nb);
+  S2.day += 3;
+  const st = TC.lawnState(S2, nb);
+  ok(st.canMow === false && st.onCooldown === true && st.daysLeft === TC.LAWN_COOLDOWN - 3, 'mid-cooldown reports the days left');
+  ok(TC.mowLawn(S, 'not-a-neighbour') === null, 'mowing an unknown neighbour is rejected');
+  // lawn payout is deterministic per neighbour+day
+  const a = TC.lawnOutcome(nb, 5), b = TC.lawnOutcome(nb, 5);
+  ok(JSON.stringify(a) === JSON.stringify(b), 'lawn payout is deterministic for a given neighbour and day');
+}
+
+// ---- kiosk lottery ----
+{
+  const S = TC.freshSave();
+  S.coins = 3;
+  ok(TC.buyLottery(S) === null, 'you cannot buy a lottery ticket without enough coins');
+  S.coins = 100;
+  const before = S.coins;
+  const res = TC.buyLottery(S);
+  ok(res && typeof res.kind === 'string', 'buying a ticket returns an outcome');
+  ok(S.lottery.bought === 1, 'the ticket counter increments');
+  ok(S.coins <= before - TC.LOTTERY_PRICE + res.coins + 1, 'the ticket price is deducted and winnings added');
+  if (res.cardId) ok(!!S.collection[res.cardId], 'a jackpot card lands in the binder');
+  const o1 = TC.lotteryOutcome(7, 3), o2 = TC.lotteryOutcome(7, 3);
+  ok(JSON.stringify(o1) === JSON.stringify(o2), 'lottery outcome is deterministic for a given day and ticket number');
+}
+
+// ---- supermarket gating ----
+{
+  const S = TC.freshSave();
+  // find a supermarket day and a non-supermarket day
+  let superDay = null, normalDay = null;
+  for (let d = 2; d < 400 && (superDay === null || normalDay === null); d++) {
+    if (TC.dayEvent(d) === 'supermarket') { if (superDay === null) superDay = d; }
+    else if (normalDay === null) normalDay = d;
+  }
+  S.day = superDay; ok(TC.canEnterMarket(S) === true, 'the supermarket opens on a shopping day');
+  S.day = normalDay; ok(TC.canEnterMarket(S) === false, 'the supermarket is closed without a parent trip');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
