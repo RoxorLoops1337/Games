@@ -615,6 +615,29 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canJumpRope(old) === true && TC.jumpRopePlay(old, 4) !== null, 'a save missing the jumprope field still works');
 }
 
+// ---- achievements / trophy wall ----
+{
+  const S = TC.freshSave();
+  ok(TC.achievementCount(S) === 0, 'a fresh save has no achievements');
+  const st = TC.achievementsState(S);
+  ok(st.length === TC.ACHIEVEMENTS.length && st.every(a => a.done === false), 'every achievement starts locked');
+  S.packsOpenedTotal = 1;
+  ok(st.find, 'sanity'); // state is a snapshot; recompute after mutating
+  ok(TC.achievementsState(S).find(a => a.id === 'firstpack').done === true, 'opening a pack unlocks First Rip');
+  S.day = 8; S.coins = 120;
+  const st2 = TC.achievementsState(S);
+  ok(st2.find(a => a.id === 'week').done === true, 'reaching day 7 unlocks Regular');
+  ok(st2.find(a => a.id === 'saver').done === true, 'saving 100 coins unlocks Piggy Bank');
+  ok(TC.achievementCount(S) === 3, 'the tally counts unlocked achievements');
+  // completion-based ones
+  const full = TC.freshSave(); TC.CORE_SET.forEach(c => { full.collection[c.id] = 1; });
+  ok(TC.achievementsState(full).find(a => a.id === 'complete').done === true, 'a full binder unlocks Completionist');
+  ok(TC.achievementsState(full).find(a => a.id === 'half').done === true, 'a full binder also counts as half full');
+  // old save missing optional fields must not throw
+  const old = TC.freshSave(); delete old.pet; delete old.lottery; delete old.allowance;
+  ok(typeof TC.achievementCount(old) === 'number', 'achievements tolerate a save missing optional fields');
+}
+
 // ---- supermarket cart dash ----
 {
   ok(TC.cartDashReward(9).coins === 14 && TC.cartDashReward(9).candy === 1, 'a clean sweep pays the most, plus a candy');
