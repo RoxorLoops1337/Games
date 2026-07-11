@@ -977,6 +977,7 @@ function freshSave(){
     newCards: {},
     goalBonus: { day: null },
     jrBest: 0,
+    arcadeBulls: 0,
   };
 }
 
@@ -1326,6 +1327,8 @@ function arcadePlay(save, offset){
   save.arcade.plays += 1;
   var res = arcadeReward(offset);
   save.coins += res.coins;
+  if (res.tier === 'bullseye') save.arcadeBulls = (save.arcadeBulls || 0) + 1;   // lifetime precision tally
+  res.totalBulls = save.arcadeBulls || 0;
   return res;
 }
 
@@ -1809,6 +1812,7 @@ function loadSave(){
       base.newCards = (parsed.newCards && typeof parsed.newCards === 'object') ? parsed.newCards : {};
       base.goalBonus = (parsed.goalBonus && typeof parsed.goalBonus.day !== 'undefined') ? parsed.goalBonus : { day: null };
       base.jrBest = (typeof parsed.jrBest === 'number') ? parsed.jrBest : 0;
+      base.arcadeBulls = (typeof parsed.arcadeBulls === 'number') ? parsed.arcadeBulls : 0;
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3904,7 +3908,8 @@ function actArcade(){
   var sheet = $('modal-sheet');
   sheet.innerHTML =
     '<h3 class="modal-title">🕹️ Coin Catcher</h3>' +
-    '<p class="smallnote" style="margin:2px 0 10px;">Stop the light in the green — dead centre pays the most!</p>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">Stop the light in the green — dead centre pays the most!' +
+      (save.arcadeBulls ? ' <b>🎯 Bullseyes: ' + save.arcadeBulls + '</b>' : '') + '</p>' +
     '<div class="arc-bar"><div class="arc-zone"><i></i></div><div class="arc-mark" id="arc-mark"></div></div>' +
     '<div class="reel-result" id="arc-res">&nbsp;</div>' +
     '<button class="bigbtn" id="arc-btn">STOP</button>';
@@ -3923,7 +3928,8 @@ function actArcade(){
     var res = arcadePlay(save, offset); persist(save); renderTopbar();
     var el = $('arc-res');
     if (res && res.coins) {
-      el.innerHTML = (res.tier === 'bullseye' ? 'BULLSEYE! ' : 'Nice! ') + '+' + res.coins + ' coins' + (res.tier === 'bullseye' ? ' 🎉' : '');
+      el.innerHTML = (res.tier === 'bullseye' ? 'BULLSEYE! ' : 'Nice! ') + '+' + res.coins + ' coins' +
+        (res.tier === 'bullseye' ? ' 🎉 <span class="smallnote">(' + res.totalBulls + ' total)</span>' : '');
       el.classList.add('good'); sfxCoins(); hapticPulse(res.tier === 'bullseye' ? 'rare' : 'common');
     } else { el.innerHTML = 'Missed — nothing this time.'; el.classList.add('nada'); sfxClick(); }
     var left = arcadePlaysLeft(save);

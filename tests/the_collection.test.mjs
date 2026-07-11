@@ -592,6 +592,17 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canPlayArcade(S) === true, 'arcade plays refill on a new day');
   const old = TC.freshSave(); delete old.arcade;
   ok(TC.canPlayArcade(old) === true && TC.arcadePlay(old, 0) !== null, 'a save missing the arcade field still works');
+  // lifetime bullseye tally
+  const B = TC.freshSave();
+  ok(B.arcadeBulls === 0, 'a fresh save has no bullseyes');
+  let rr = TC.arcadePlay(B, 0);       // dead centre = bullseye
+  ok(B.arcadeBulls === 1 && rr.totalBulls === 1, 'a bullseye increments the lifetime tally');
+  rr = TC.arcadePlay(B, 0.3);          // an edge, not a bullseye
+  ok(B.arcadeBulls === 1 && rr.totalBulls === 1, 'a non-bullseye leaves the tally unchanged');
+  rr = TC.arcadePlay(B, 0);            // next day not needed; still has plays? ensure plays left
+  ok(B.arcadeBulls === 2, 'another bullseye keeps counting');
+  const noB = TC.freshSave(); delete noB.arcadeBulls;
+  ok(TC.arcadePlay(noB, 0).totalBulls === 1, 'a save missing arcadeBulls still tallies');
 }
 
 // ---- jump rope ----
