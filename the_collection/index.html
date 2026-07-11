@@ -643,14 +643,17 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 }
 .reel-icon{font-size:60px; line-height:1;}
 .reel-icon.reel-land{animation:reelPop 360ms cubic-bezier(.3,1.5,.5,1);}
-/* lottery scratch-off foil */
-.scratch-wrap{position:relative; width:120px; height:120px; margin:6px auto 8px;}
-.scratch-wrap .reel-window{margin:0; width:120px; height:120px;}
-.scratch-foil{position:absolute; inset:0; border-radius:16px; cursor:pointer; user-select:none;
-  background:repeating-linear-gradient(115deg, #c3c8cf 0 8px, #aeb4bc 8px 16px); border:2px solid #9aa0a8;
-  display:flex; align-items:center; justify-content:center; color:#5a5f66; font-weight:700; font-size:13px;
-  letter-spacing:.5px; text-shadow:0 1px 0 rgba(255,255,255,.4); transition:opacity .35s ease, transform .35s ease;}
-.scratch-foil.scratched{opacity:0; transform:scale(1.08); pointer-events:none;}
+/* lottery scratch-and-match 3x3 grid */
+.sc-grid{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; width:min(280px,80vw); margin:6px auto 12px; touch-action:none;}
+.sc-cell{position:relative; aspect-ratio:1/1; border-radius:12px; overflow:hidden; user-select:none;
+  background:radial-gradient(circle at 50% 40%, #fff, var(--surface-2)); box-shadow:inset 0 2px 6px rgba(93,70,35,.22);}
+.sc-sym{position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:34px; line-height:1;}
+.sc-foil{position:absolute; inset:0; cursor:pointer;
+  background:repeating-linear-gradient(115deg, #c3c8cf 0 7px, #aeb4bc 7px 14px); border:2px solid #9aa0a8; border-radius:12px;
+  transition:opacity .28s ease, transform .28s ease;}
+.sc-cell.scratched .sc-foil{opacity:0; transform:scale(1.12); pointer-events:none;}
+.sc-cell.win{box-shadow:inset 0 0 0 3px #3cb46e, 0 0 12px rgba(60,180,110,.6); background:#eafff1;}
+.sc-cell.win .sc-sym{animation:reelPop 360ms cubic-bezier(.3,1.5,.5,1);}
 /* arcade timing bar */
 .arc-bar{position:relative; height:30px; margin:8px 0 10px; border-radius:9px; overflow:hidden;
   background:linear-gradient(90deg,#c85f2c,#e2a04a 30%,#e2a04a 70%,#c85f2c); border:2px solid var(--line);}
@@ -1261,10 +1264,47 @@ function buyLottery(save){
   save.coins -= LOTTERY_PRICE;
   save.lottery = save.lottery || { bought: 0 };
   save.lottery.bought += 1;
-  var res = lotteryOutcome(save.day, save.lottery.bought);
+  var res = scratchGrid(save.day, save.lottery.bought);
   save.coins += res.coins;
   if (res.cardId) addCardById(save, res.cardId);
   return res;
+}
+// A 3x3 scratch-and-match card. The prize (and its odds) come straight from
+// lotteryOutcome, so the economy is unchanged; this just lays the outcome out
+// as a grid where a win shows the prize symbol three-in-a-line and a loss has
+// no matching line. Pure + deterministic per day+ticket.
+var SCRATCH_LINES = [[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+var SCRATCH_SYMS = ['💎','🪙','🍀','⭐','🔔','🍒','🍋'];
+var SCRATCH_PRIZE_SYM = { jackpot:'💎', coin_lg:'🪙', coin_md:'🍀', coin_sm:'⭐' };
+function scratchGrid(day, ticketNo){
+  var res = lotteryOutcome(day, ticketNo);
+  var rand = seededRandom('scratch-' + day + '-' + ticketNo);
+  var win = res.kind !== 'nothing';
+  var prize = SCRATCH_PRIZE_SYM[res.kind] || null;
+  function complete(g, L){ return !!g[L[0]] && g[L[0]] === g[L[1]] && g[L[1]] === g[L[2]]; }
+  function badLine(g, except){ for (var i = 0; i < SCRATCH_LINES.length; i++){ var L = SCRATCH_LINES[i]; if (L !== except && complete(g, L)) return L; } return null; }
+  function sym(){ return SCRATCH_SYMS[Math.floor(rand() * SCRATCH_SYMS.length)]; }
+  var cells = [null,null,null,null,null,null,null,null,null], line = null, i, guard, L;
+  if (win) {
+    line = SCRATCH_LINES[Math.floor(rand() * SCRATCH_LINES.length)];
+    for (i = 0; i < 3; i++) cells[line[i]] = prize;
+    for (i = 0; i < 9; i++) if (!cells[i]) cells[i] = sym();
+    guard = 0;
+    while ((L = badLine(cells, line)) && guard++ < 60) {
+      var k = -1; for (i = 0; i < 3; i++) if (line.indexOf(L[i]) < 0) { k = L[i]; break; }
+      if (k < 0) k = L[0];
+      var cur = cells[k], a; do { a = sym(); } while (a === cur);
+      cells[k] = a;
+    }
+  } else {
+    for (i = 0; i < 9; i++) cells[i] = sym();
+    guard = 0;
+    while ((L = badLine(cells, null)) && guard++ < 60) {
+      var kk = L[Math.floor(rand() * 3)], cur2 = cells[kk], a2; do { a2 = sym(); } while (a2 === cur2);
+      cells[kk] = a2;
+    }
+  }
+  return { kind: res.kind, coins: res.coins, cardId: res.cardId, cells: cells, line: win ? line : null, symbol: prize };
 }
 // The supermarket is only reachable when a parent takes you — that's the
 // "supermarket trip" day event.
@@ -4416,38 +4456,70 @@ function openLotteryAgeGate(){
     openScratchReveal(res);
   });
 }
+// The 3x3 scratch-and-match ticket: rub each foil-covered cell to reveal its
+// symbol; match three in a row / column / diagonal to win. The outcome is
+// already decided (and the prize already banked) in buyLottery -> scratchGrid;
+// this is pure presentation. res.cells = 9 symbols, res.line = winning triple
+// (or null), res.symbol = the matching prize symbol.
 function openScratchReveal(res){
   var sheet = $('modal-sheet');
   var win = res.coins || res.cardId;
   var line;
   if (res.kind === 'jackpot') line = 'JACKPOT! +' + res.coins + ' coins and a ' + BY_ID[res.cardId].name + '! 🎉';
-  else if (res.coins) line = 'A little winner — +' + res.coins + ' coins!';
-  else line = 'Nothing this time. “Better luck next week, kid.”';
-  var icon = res.kind === 'jackpot' ? '💎' : (res.coins ? '🪙' : '🕳️');
+  else if (res.coins) line = 'Three in a row — +' + res.coins + ' coins!';
+  else line = 'No match this time. “Better luck next week, kid.”';
+  var cellsHTML = '';
+  for (var i = 0; i < 9; i++) {
+    cellsHTML += '<div class="sc-cell" data-i="' + i + '">' +
+      '<span class="sc-sym">' + res.cells[i] + '</span>' +
+      '<span class="sc-foil"></span></div>';
+  }
   sheet.innerHTML =
-    '<h3 class="modal-title">🎟️ Scratch the ticket</h3>' +
-    '<div class="scratch-wrap">' +
-      '<div class="reel-window"><div class="reel-icon" id="scratch-icon">' + icon + '</div></div>' +
-      '<div class="scratch-foil" id="scratch-foil"><span>✨ Scratch! ✨</span></div>' +
-    '</div>' +
+    '<h3 class="modal-title">🎟️ Scratch &amp; match</h3>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">Rub to uncover all nine — line up three of a kind!</p>' +
+    '<div class="sc-grid" id="sc-grid">' + cellsHTML + '</div>' +
     '<div class="reel-result ' + (win ? 'good' : 'nada') + '" id="scratch-res" style="visibility:hidden;">' + line + '</div>' +
     '<button class="bigbtn" id="wm-done" style="margin-top:12px; visibility:hidden;">' + (win ? 'Sweet!' : 'Ah well') + '</button>';
   $('modal-backdrop').classList.add('open');
-  var foil = $('scratch-foil'), scratches = 0, revealed = false;
-  function reveal(){
-    if (revealed) return; revealed = true;
-    foil.classList.add('scratched');
-    $('scratch-icon').classList.add('reel-land');
-    $('scratch-res').style.visibility = '';
-    var b = $('wm-done'); b.style.visibility = '';
-    b.addEventListener('click', closeModal);
+  var grid = $('sc-grid');
+  var cellEls = grid.querySelectorAll('.sc-cell');
+  var cleared = [false,false,false,false,false,false,false,false,false];
+  var count = 0, finished = false, rubbing = false;
+  function scratchCell(i){
+    if (cleared[i]) return;
+    cleared[i] = true; count++;
+    cellEls[i].classList.add('scratched');
+    try { sfxTick(); } catch (e) {}
+    if (count >= 9) finish();
+  }
+  function cellFromPoint(x, y){
+    var el = document.elementFromPoint ? document.elementFromPoint(x, y) : null;
+    if (!el) return -1;
+    var cell = el.closest ? el.closest('.sc-cell') : null;
+    if (!cell || !grid.contains(cell)) return -1;
+    var idx = cell.getAttribute('data-i');
+    return idx == null ? -1 : parseInt(idx, 10);
+  }
+  function finish(){
+    if (finished) return; finished = true;
+    if (res.line) { for (var k = 0; k < res.line.length; k++) cellEls[res.line[k]].classList.add('win'); }
+    var rEl = $('scratch-res'); if (rEl) rEl.style.visibility = '';
+    var b = $('wm-done'); if (b) { b.style.visibility = ''; b.addEventListener('click', closeModal); }
     if (win) { sfxCoins(); hapticPulse(res.kind === 'jackpot' ? 'ultrarare' : 'rare'); } else { sfxClick(); }
   }
-  foil.addEventListener('click', function(){
-    scratches++;
-    foil.style.opacity = String(Math.max(0, 1 - scratches * 0.34));   // wears away with each scratch
-    try { sfxTick(); } catch (e) {}
-    if (scratches >= 3) reveal();
+  function handleMove(x, y){ var i = cellFromPoint(x, y); if (i >= 0) scratchCell(i); }
+  // Pointer/touch rubbing: drag across cells to uncover them. A plain tap also
+  // scratches the tapped cell so it works without dragging.
+  grid.addEventListener('pointerdown', function(e){ rubbing = true; handleMove(e.clientX, e.clientY); });
+  grid.addEventListener('pointermove', function(e){ if (rubbing) handleMove(e.clientX, e.clientY); });
+  window.addEventListener('pointerup', function(){ rubbing = false; });
+  grid.addEventListener('touchstart', function(e){ rubbing = true; var t = e.touches[0]; if (t) handleMove(t.clientX, t.clientY); });
+  grid.addEventListener('touchmove', function(e){ if (!rubbing) return; var t = e.touches[0]; if (t) { handleMove(t.clientX, t.clientY); e.preventDefault(); } }, { passive: false });
+  window.addEventListener('touchend', function(){ rubbing = false; });
+  // Click fallback (also covers headless/synthetic clicks in tests).
+  grid.addEventListener('click', function(e){
+    var cell = e.target.closest ? e.target.closest('.sc-cell') : null;
+    if (cell) scratchCell(parseInt(cell.getAttribute('data-i'), 10));
   });
 }
 // One kid's trade + social panel, reusing the school markup & logic.
@@ -5701,7 +5773,7 @@ if (typeof globalThis !== 'undefined') {
     TUTORIAL_STEPS: TUTORIAL_STEPS, TUTORIAL_REWARD: TUTORIAL_REWARD, tutorialState: tutorialState, tutorialCount: tutorialCount, tutorialDone: tutorialDone, checkTutorialProgress: checkTutorialProgress, seedTutSeen: seedTutSeen,
     canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
-    LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
+    LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, scratchGrid: scratchGrid, SCRATCH_LINES: SCRATCH_LINES, openScratchReveal: (typeof openScratchReveal === 'function' ? openScratchReveal : null), canEnterMarket: canEnterMarket,
     dailyGoals: dailyGoals, weatherFor: weatherFor, cardOfDay: cardOfDay, seasonFor: seasonFor, festivalFor: festivalFor,
     DAILY_GOAL_BONUS: DAILY_GOAL_BONUS, allGoalsDone: allGoalsDone, dailyBonusClaimable: dailyBonusClaimable, claimDailyBonus: claimDailyBonus,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
