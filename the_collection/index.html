@@ -1773,6 +1773,9 @@ var ACHIEVEMENTS = [
   { id:'pal',       icon:'🐱', title:'Best Friends',   desc:'Reach 10 pet affection',      check:function(s){ return ((s.pet&&s.pet.affection)||0) >= 10; } },
   { id:'lucky',     icon:'🎟️', title:'Feeling Lucky',  desc:'Buy a lottery ticket',        check:function(s){ return ((s.lottery&&s.lottery.bought)||0) >= 1; } },
   { id:'streak',    icon:'🔥', title:'On a Roll',      desc:'Hit a 5-day allowance streak',check:function(s){ return ((s.allowance&&s.allowance.streak)||0) >= 5; } },
+  { id:'angler',    icon:'🎣', title:'Master Angler',  desc:'Catch every fish species',    check:function(s){ return fishJournalCount(s) >= FISH_SPECIES.length; } },
+  { id:'skipper',   icon:'🪢', title:'Rope Star',      desc:'Reach a jump-rope streak of 10',check:function(s){ return (s.jrBest||0) >= 10; } },
+  { id:'sharp',     icon:'🎯', title:'Sharpshooter',   desc:'Land 10 arcade bullseyes',    check:function(s){ return (s.arcadeBulls||0) >= 10; } },
 ];
 function achievementsState(save){ return ACHIEVEMENTS.map(function(a){ return { id:a.id, icon:a.icon, title:a.title, desc:a.desc, done:!!a.check(save) }; }); }
 function achievementCount(save){ var n = 0; for (var i = 0; i < ACHIEVEMENTS.length; i++) if (ACHIEVEMENTS[i].check(save)) n++; return n; }
