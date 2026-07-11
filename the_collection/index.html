@@ -1523,6 +1523,7 @@ function sfxWin(){
 }
 function sfxLose(){ beep(330, 0.18, { type: 'sine', volume: 0.05 }); setTimeout(function(){ beep(220, 0.3, { type: 'sine', volume: 0.05 }); }, 160); }
 function sfxTick(){ beep(880, 0.03, { type: 'square', volume: 0.03 }); }
+function sfxStep(){ beep(150 + Math.random() * 20, 0.045, { type: 'sine', volume: 0.02 }); }
 function sfxSneak(){ beep(140, 0.14, { type: 'sine', volume: 0.045 }); }
 function sfxBusted(){ beep(200, 0.09, { type: 'sawtooth', volume: 0.06 }); setTimeout(function(){ beep(130, 0.22, { type: 'sawtooth', volume: 0.055 }); }, 90); }
 
@@ -3030,7 +3031,9 @@ function worldUpdate(dt){
     moveAxis(v.x * WALK_SPEED * dt, 0);
     moveAxis(0, v.y * WALK_SPEED * dt);
     W.walk += dt * 9;
-  } else W.walk = 0;
+    W.footT = (W.footT || 0) + dt;
+    if (W.footT > 0.30) { W.footT = 0; sfxStep(); }
+  } else { W.walk = 0; W.footT = 0.3; }
   // give up on a tap target we can't reach (blocked by a wall)
   if (W.target) {
     W.stall = (Math.hypot(W.px - W.lastX, W.py - W.lastY) < 0.4) ? W.stall + dt : 0;
@@ -3095,7 +3098,12 @@ function buildMaps(){
   maps.town = {
     title: 'Sunnyside Town', w: TW, h: TH, kind: 'outdoor',
     grass: scatter('town-grass', 150, TW, TH),
+    flowers: scatter('town-flowers', 90, TW, TH),
+    bushes: [ {x:120,y:640}, {x:520,y:640}, {x:900,y:620}, {x:1180,y:640}, {x:420,y:1030}, {x:1080,y:1030}, {x:1000,y:150}, {x:1420,y:700} ],
     trees: [ {x:70,y:150}, {x:470,y:120}, {x:930,y:140}, {x:1420,y:180}, {x:60,y:640}, {x:1440,y:560}, {x:1440,y:980}, {x:70,y:1010} ],
+    // decorative picket fence around the home's front yard (gap for the path)
+    fences: [ {x1:70,y1:470,x2:210,y2:470}, {x1:276,y1:470,x2:470,y2:470}, {x1:70,y1:470,x2:70,y2:250}, {x1:470,y1:470,x2:470,y2:250} ],
+    mailbox: { x: 330, y: 486 },
     buildings: [
       { key:'home',   x:120, y:250, w:290, h:210, wall:'#e6c98f', roof:'#b5622f', sign:'HOME' },
       { key:'kiosk',  x:600, y:300, w:230, h:170, wall:'#8fcadb', roof:'#2f7d94', sign:'KIOSK' },
@@ -3168,7 +3176,7 @@ function buildMaps(){
   /* ---------- SCHOOL PLAYGROUND ---------- */
   var kids = NPCS.map(function(n, i){
     var cols = ['#c0577a','#4a6ea8','#c98a3a','#5a8f6a'];
-    return { id:n.id, x:120 + i*140, y:170 + (i%2)*120, color:cols[i%4], name:n.name };
+    return { id:n.id, x:120 + i*140, y:170 + (i%2)*120, color:cols[i%4], name:n.name, wander:true, seed:i*1.7 };
   });
   maps.school = {
     title: 'School Playground', w: 640, h: 460, kind:'outdoor', playground:true,
@@ -3384,6 +3392,7 @@ function worldDraw(){
   var drawList = [];
   if (m.buildings) m.buildings.forEach(function(b){ drawList.push({ y: b.y + b.h, fn: function(){ drawBuilding(ctx, b); } }); });
   if (m.houses) m.houses.forEach(function(h){ drawList.push({ y: h.y + h.h, fn: function(){ drawHouse(ctx, h); } }); });
+  if (m.bushes) m.bushes.forEach(function(bu){ drawList.push({ y: bu.y + 12, fn: function(){ drawBush(ctx, bu.x, bu.y); } }); });
   if (m.trees) m.trees.forEach(function(t){ drawList.push({ y: t.y + 40, fn: function(){ drawTree(ctx, t.x, t.y); } }); });
   if (m.actors) m.actors.forEach(function(a){ drawList.push({ y: a.y + 22, fn: function(){ drawPerson(ctx, a.x, a.y, a.color, a.name, 'down', W.actorPhase + a.x, a); } }); });
   drawList.push({ y: W.py, fn: function(){ drawPlayer(ctx); } });
@@ -3410,11 +3419,39 @@ function drawOutdoor(ctx, m){
   ctx.fillStyle = g; ctx.fillRect(0, 0, m.w, m.h);
   if (m.grass) { ctx.fillStyle = m.playground ? 'rgba(90,150,70,.5)' : 'rgba(70,140,60,.55)';
     m.grass.forEach(function(p){ ctx.beginPath(); ctx.ellipse(p.x, p.y, 7*p.s, 3.5*p.s, 0, 0, 6.283); ctx.fill(); }); }
+  // little flowers dotted over the grass (skip the road band so none land on tarmac)
+  if (m.flowers) { var FC = ['#e86a8f','#f4c542','#e9f0f5','#c98ad9']; m.flowers.forEach(function(p, i){
+    if (p.y > 486 && p.y < 590) return;
+    var c = FC[i % FC.length];
+    ctx.fillStyle = c; for (var a = 0; a < 4; a++) { ctx.beginPath(); ctx.arc(p.x + Math.cos(a*1.57)*2.4, p.y + Math.sin(a*1.57)*2.4, 2.1*p.s, 0, 6.283); ctx.fill(); }
+    ctx.fillStyle = '#fff3c0'; ctx.beginPath(); ctx.arc(p.x, p.y, 1.6*p.s, 0, 6.283); ctx.fill();
+  }); }
   if (!m.playground) drawTownPaths(ctx, m);
   if (m.playground) drawPlaygroundGround(ctx, m);
+  // decorative fence + mailbox sit on top of the paths at the yard border
+  if (m.fences) { m.fences.forEach(function(f){ drawFence(ctx, f); }); }
+  if (m.mailbox) drawMailbox(ctx, m.mailbox.x, m.mailbox.y);
   if (m.equip) m.equip.forEach(function(e){ drawEquip(ctx, e); });
   // exit gate marker on playground
   if (m.playground) { ctx.fillStyle = '#c8a15a'; ctx.fillRect(m.w/2-40, m.h-16, 80, 16); }
+}
+function drawFence(ctx, f){
+  var horiz = Math.abs(f.x2 - f.x1) > Math.abs(f.y2 - f.y1);
+  var len = Math.hypot(f.x2 - f.x1, f.y2 - f.y1), n = Math.max(2, Math.round(len / 26));
+  // rail
+  ctx.strokeStyle = '#e7dcc0'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(f.x1, f.y1 - 8); ctx.lineTo(f.x2, f.y2 - 8); ctx.stroke();
+  for (var i = 0; i <= n; i++) {
+    var t = i / n, x = f.x1 + (f.x2 - f.x1) * t, y = f.y1 + (f.y2 - f.y1) * t;
+    ctx.fillStyle = '#f2ead2'; roundRectPath(ctx, x - 2.5, y - 16, 5, 18, 2); ctx.fill();
+    ctx.fillStyle = '#d8cca8'; ctx.beginPath(); ctx.moveTo(x - 2.5, y - 16); ctx.lineTo(x, y - 20); ctx.lineTo(x + 2.5, y - 16); ctx.closePath(); ctx.fill();
+  }
+}
+function drawMailbox(ctx, x, y){
+  shadowEllipse(ctx, x, y + 2, 9, 4);
+  ctx.fillStyle = '#7a5230'; ctx.fillRect(x - 2, y - 18, 4, 20);          // post
+  ctx.fillStyle = '#3f6fae'; roundRectPath(ctx, x - 9, y - 30, 18, 14, 4); ctx.fill();
+  ctx.fillStyle = shade('#3f6fae', 22); roundRectPath(ctx, x - 9, y - 30, 18, 5, 4); ctx.fill();
+  ctx.fillStyle = '#d85a5a'; ctx.fillRect(x + 7, y - 30, 3, 9);           // little flag
 }
 function drawTownPaths(ctx, m){
   ctx.fillStyle = '#d8c08c';
@@ -3487,6 +3524,28 @@ function drawBuilding(ctx, b){
   // sign
   ctx.fillStyle = 'rgba(30,20,10,.82)'; roundRectPath(ctx, doorX(b)-52, b.y+b.h-70, 104, 18, 5); ctx.fill();
   ctx.fillStyle = '#ffe9c2'; ctx.font = '700 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(b.sign, doorX(b), b.y+b.h-57);
+  // floating "!" when there's something worth doing inside
+  if (buildingBusiness(b.key)) {
+    var bx = doorX(b), by = b.y - 16 + Math.sin(W.actorPhase * 3) * 3;
+    ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(bx, b.y - 2, 8, 3, 0, 0, 6.283); ctx.fill();
+    ctx.fillStyle = '#e2a04a'; ctx.beginPath(); ctx.arc(bx, by, 11, 0, 6.283); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(bx - 4, by + 8); ctx.lineTo(bx + 4, by + 8); ctx.lineTo(bx, by + 15); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#2a1c08'; ctx.font = '800 15px serif'; ctx.textAlign = 'center'; ctx.fillText('!', bx, by + 5);
+  }
+}
+// does this building have an action available right now? drives the "!" marker
+function buildingBusiness(key){
+  if (key === 'home') return canDoChore(save, 'dishes') || canDoChore(save, 'laundry') || canClaimAllowance(save);
+  if (key === 'kiosk') return save.coins >= packPrice(save) || save.packsUnopened > 0;
+  if (key === 'market') return canEnterMarket(save);
+  if (key === 'school') {
+    var s = save.school; if (!s) return false;
+    if (s.wantDay !== save.day) return true;              // a fresh day's offers are waiting
+    var open = s.offers && Object.keys(s.offers).some(function(id){ return s.offers[id].state === 'open'; });
+    var duel = s.duels && s.duels.some(function(d){ return !d.done; });
+    return !!(open || duel);
+  }
+  return false;
 }
 function drawHouse(ctx, h){
   shadowEllipse(ctx, h.x+h.w/2, h.y+h.h+4, h.w*0.5, 10);
@@ -3496,6 +3555,15 @@ function drawHouse(ctx, h){
   ctx.fillStyle = h.roof; ctx.beginPath(); ctx.moveTo(h.x-10, h.y+34); ctx.lineTo(h.x+h.w/2, h.y-4); ctx.lineTo(h.x+h.w+10, h.y+34); ctx.closePath(); ctx.fill();
   ctx.fillStyle = shade(h.roof,-24); roundRectPath(ctx, h.x+h.w/2-16, h.y+h.h-40, 32, 40, 5); ctx.fill();
   ctx.fillStyle = '#bfe6f2'; roundRectPath(ctx, h.x+14, h.y+44, 26, 24, 4); ctx.fill(); roundRectPath(ctx, h.x+h.w-40, h.y+44, 26, 24, 4); ctx.fill();
+}
+function drawBush(ctx, x, y){
+  shadowEllipse(ctx, x, y + 8, 20, 7);
+  ctx.fillStyle = '#3a842f';
+  [[-11,0,13],[11,0,13],[0,-6,15]].forEach(function(c){ ctx.beginPath(); ctx.arc(x+c[0], y+c[1], c[2], 0, 6.283); ctx.fill(); });
+  ctx.fillStyle = 'rgba(255,255,255,.12)'; ctx.beginPath(); ctx.arc(x-5, y-10, 7, 0, 6.283); ctx.fill();
+  // occasional berries
+  ctx.fillStyle = '#e8556a';
+  [[-6,2],[7,-2],[2,5]].forEach(function(b){ ctx.beginPath(); ctx.arc(x+b[0], y+b[1], 1.8, 0, 6.283); ctx.fill(); });
 }
 function drawTree(ctx, x, y){
   shadowEllipse(ctx, x, y+34, 26, 9);
@@ -3551,6 +3619,9 @@ function drawProp(ctx, p){
 // a standing NPC: the shared chibi + a name tag and '!' business bubble.
 // NPCs face the player a little so the town feels attentive.
 function drawPerson(ctx, x, y, color, name, dir, phase, actor){
+  // wandering kids sway gently around their spot (visual only — the
+  // interaction spot stays put, so the sway is kept small).
+  if (actor && actor.wander) x += Math.sin(W.actorPhase * 0.9 + (actor.seed || 0)) * 4;
   var face = 'down';
   if (actor) { var dx = W.px - x, dy = W.py - y;
     face = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); }
