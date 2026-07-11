@@ -5005,7 +5005,11 @@ function drawPerson(ctx, x, y, color, name, dir, phase, actor){
   var face = 'down';
   if (actor) { var dx = W.px - x, dy = W.py - y;
     face = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up'); }
-  drawChar(ctx, x, y, { tee: color, cap: (actor && actor.hair) || '#4a3b2a', capDark:(actor && actor.hair) || '#3a2d1f', dir: face, walk: null, apron: actor && actor.apron });
+  // wandering kids wave and give a happy hop when you come up to them
+  var near = !!actor && Math.hypot(W.px - x, W.py - y) < 78 && !npcHasBusiness(actor);
+  var waving = near && actor.wander;
+  var hop = waving ? Math.abs(Math.sin(W.actorPhase * 6)) * 3 : 0;
+  drawChar(ctx, x, y - hop, { tee: color, cap: (actor && actor.hair) || '#4a3b2a', capDark:(actor && actor.hair) || '#3a2d1f', dir: face, walk: null, apron: actor && actor.apron, wave: waving });
   // name tag
   if (name) { ctx.fillStyle = 'rgba(20,16,10,.6)'; ctx.font = '600 10px sans-serif'; ctx.textAlign = 'center';
     var tw = ctx.measureText(name).width + 10; roundRectPath(ctx, x-tw/2, y-44, tw, 13, 6); ctx.fill();
@@ -5177,6 +5181,16 @@ function drawChar(ctx, x, y, o){
   } else {
     // little tuft at the back
     ctx.fillStyle = hair; ctx.fillRect(x - 2, yy - 31, 4, 4);
+  }
+  // a friendly raised, waggling hand when greeting the player
+  if (o.wave) {
+    var wob = Math.sin(W.actorPhase * 9) * 0.5;                 // -0.5..0.5 rad waggle
+    ctx.save();
+    ctx.translate(x + 11, yy - 10);                            // shoulder on the right
+    ctx.rotate(-0.9 + wob);
+    ctx.fillStyle = o.tee; ctx.fillRect(0, -2, 4, 13);          // raised forearm
+    ctx.fillStyle = skin; ctx.beginPath(); ctx.arc(2, 12, 3.4, 0, 6.283); ctx.fill();  // hand
+    ctx.restore();
   }
 }
 function drawSpotMarker(ctx, x, y, near){
