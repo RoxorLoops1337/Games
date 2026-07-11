@@ -3017,6 +3017,7 @@ function worldLoop(ts){
 }
 function worldUpdate(dt){
   W.actorPhase += dt;
+  updateAmbient(curMap(), dt);
   var kv = inputVector();
   var v = { x: 0, y: 0 };
   if (worldBlocked()) { W.target = null; }
@@ -3108,6 +3109,13 @@ function buildMaps(){
     // decorative picket fence around the home's front yard (gap for the path)
     fences: [ {x1:70,y1:470,x2:210,y2:470}, {x1:276,y1:470,x2:470,y2:470}, {x1:70,y1:470,x2:70,y2:250}, {x1:470,y1:470,x2:470,y2:250} ],
     mailbox: { x: 330, y: 486 },
+    // ambient townsfolk strolling the street (visual only, no collision)
+    walkers: [
+      { a:{x:90,y:520}, b:{x:1410,y:520}, u:0.15, sgn:1, speed:30, color:'#c98a3a', hair:'#5a3a24', wphase:0 },
+      { a:{x:1410,y:566}, b:{x:90,y:566}, u:0.6, sgn:1, speed:26, color:'#5a8f6a', hair:'#3a2d1f', wphase:1.5 },
+      { a:{x:243,y:640}, b:{x:243,y:1120}, u:0.35, sgn:1, speed:22, color:'#b06a9a', hair:'#402038', wphase:3 },
+    ],
+    birds: [ {x:200,y:120,speed:60,phase:0}, {x:900,y:80,speed:44,phase:2} ],
     buildings: [
       { key:'home',   x:120, y:250, w:290, h:210, wall:'#e6c98f', roof:'#b5622f', sign:'HOME' },
       { key:'kiosk',  x:600, y:300, w:230, h:170, wall:'#8fcadb', roof:'#2f7d94', sign:'KIOSK' },
@@ -3417,9 +3425,13 @@ function worldDraw(){
   if (m.bushes) m.bushes.forEach(function(bu){ drawList.push({ y: bu.y + 12, fn: function(){ drawBush(ctx, bu.x, bu.y); } }); });
   if (m.trees) m.trees.forEach(function(t){ drawList.push({ y: t.y + 40, fn: function(){ drawTree(ctx, t.x, t.y); } }); });
   if (m.actors) m.actors.forEach(function(a){ drawList.push({ y: a.y + 22, fn: function(){ drawPerson(ctx, a.x, a.y, a.color, a.name, 'down', W.actorPhase + a.x, a); } }); });
+  if (m.walkers) m.walkers.forEach(function(wk){ drawList.push({ y: wk.y + 16, fn: function(){ drawChar(ctx, wk.x, wk.y, { tee: wk.color, cap: wk.hair, capDark: wk.hair, dir: wk.dir || 'right', walk: wk.wphase }); } }); });
   drawList.push({ y: W.py, fn: function(){ drawPlayer(ctx); } });
   drawList.sort(function(a, b){ return a.y - b.y; });
   drawList.forEach(function(d){ d.fn(); });
+
+  // birds drift across the sky, above everything
+  if (m.birds) m.birds.forEach(function(bd){ drawBird(ctx, bd.x, bd.y, bd.phase); });
 
   // spot markers (little glints on the ground)
   ctx.globalAlpha = 0.9;
@@ -3441,6 +3453,75 @@ function worldDraw(){
     ctx.fillRect(0, 0, vw, vh);
     ctx.restore();
   }
+  // daypart particles: golden-hour motes, dusk stars (screen space, subtle)
+  drawDaypartParticles(ctx, vw, vh);
+  // corner minimap on the town so it's easy to navigate
+  if (m.buildings) drawMinimap(ctx, m, vw, vh);
+}
+// advance strolling townsfolk (ping-pong along a→b) and drifting birds
+function updateAmbient(m, dt){
+  if (m.walkers) m.walkers.forEach(function(wk){
+    var segLen = Math.hypot(wk.b.x - wk.a.x, wk.b.y - wk.a.y) || 1;
+    wk.u += wk.sgn * wk.speed * dt / segLen;
+    if (wk.u >= 1) { wk.u = 1; wk.sgn = -1; } else if (wk.u <= 0) { wk.u = 0; wk.sgn = 1; }
+    wk.x = wk.a.x + (wk.b.x - wk.a.x) * wk.u;
+    wk.y = wk.a.y + (wk.b.y - wk.a.y) * wk.u;
+    var vx = (wk.b.x - wk.a.x) * wk.sgn, vy = (wk.b.y - wk.a.y) * wk.sgn;
+    wk.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? 'right' : 'left') : (vy > 0 ? 'down' : 'up');
+    wk.wphase = (wk.wphase || 0) + dt * 9;
+  });
+  if (m.birds) m.birds.forEach(function(bd){ bd.x += bd.speed * dt; if (bd.x > m.w + 80) bd.x = -80; bd.phase += dt * 8; });
+}
+function drawBird(ctx, x, y, phase){
+  var flap = Math.sin(phase) * 5;
+  ctx.strokeStyle = 'rgba(40,40,55,.6)'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - 7, y); ctx.lineTo(x, y - flap); ctx.lineTo(x + 7, y);
+  ctx.stroke();
+}
+function drawDaypartParticles(ctx, vw, vh){
+  var dp = daypart();
+  if (dp.key === 'golden' || dp.key === 'morning') {
+    ctx.save(); ctx.fillStyle = 'rgba(255,240,200,.5)';
+    for (var i = 0; i < 16; i++) {
+      var px = (i * 97.3 + W.actorPhase * (8 + i % 5) ) % vw;
+      var py = (i * 61.7 + Math.sin(W.actorPhase * 0.6 + i) * 14 + 40) % vh;
+      ctx.globalAlpha = 0.25 + 0.25 * Math.sin(W.actorPhase + i);
+      ctx.beginPath(); ctx.arc(px, py, 1.6, 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+  } else if (dp.key === 'dusk') {
+    ctx.save(); ctx.fillStyle = '#fff';
+    for (var s = 0; s < 22; s++) {
+      var sx = (s * 173.4) % vw, sy = (s * 89.1) % (vh * 0.5);
+      ctx.globalAlpha = 0.15 + 0.35 * (0.5 + 0.5 * Math.sin(W.actorPhase * 1.5 + s * 1.3));
+      ctx.fillRect(sx, sy, 1.6, 1.6);
+    }
+    ctx.restore();
+  }
+}
+function drawMinimap(ctx, m, vw, vh){
+  var mw = 116, mh = 88, pad = 8;
+  var ox = vw - mw - pad, oy = 42;            // top-right, just under the location pill
+  var sx = mw / m.w, sy = mh / m.h;
+  ctx.save();
+  ctx.globalAlpha = 0.86;
+  ctx.fillStyle = 'rgba(30,40,26,.72)'; roundRectPath(ctx, ox - 4, oy - 4, mw + 8, mh + 8, 9); ctx.fill();
+  ctx.fillStyle = 'rgba(120,175,95,.5)'; roundRectPath(ctx, ox, oy, mw, mh, 6); ctx.fill();
+  // building blips (highlight ones with a "!")
+  if (m.buildings) m.buildings.forEach(function(b){
+    var bx = ox + (b.x + b.w / 2) * sx, by = oy + (b.y + b.h / 2) * sy;
+    var hot = buildingBusiness(b.key);
+    ctx.fillStyle = hot ? '#ffd24a' : 'rgba(255,245,225,.9)';
+    ctx.fillRect(bx - 3, by - 3, 6, 6);
+    if (hot) { ctx.globalAlpha = 0.5 + 0.4 * Math.sin(W.actorPhase * 3); ctx.beginPath(); ctx.arc(bx, by, 5.5, 0, 6.283); ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 1.4; ctx.stroke(); ctx.globalAlpha = 0.86; }
+  });
+  // neighbour houses as small dots
+  if (m.houses) { ctx.fillStyle = 'rgba(240,220,180,.85)'; m.houses.forEach(function(h){ ctx.fillRect(ox + (h.x + h.w / 2) * sx - 1.5, oy + (h.y + h.h / 2) * sy - 1.5, 3, 3); }); }
+  // player dot
+  ctx.fillStyle = '#e2543f'; ctx.beginPath(); ctx.arc(ox + W.px * sx, oy + W.py * sy, 3, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 1; ctx.stroke();
+  ctx.restore();
 }
 // A soft daylight cycle keyed to the in-game day. Days only advance when you
 // go to bed, so each day gets its own mood: bright midday, warm morning,
