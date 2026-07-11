@@ -647,15 +647,17 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
 
 // ---- jump rope ----
 {
-  ok(TC.jumpRopeReward(0).coins === 0, 'zero jumps pays nothing');
-  ok(TC.jumpRopeReward(6).coins > 0 && TC.jumpRopeReward(6).rel > 0, 'a decent streak pays coins and befriends');
-  ok(TC.jumpRopeReward(20).coins >= TC.jumpRopeReward(10).coins, 'a longer streak never pays less');
+  ok(TC.jumpRopeReward(0).pop === 0, 'zero jumps earns no popularity');
+  ok(TC.jumpRopeReward(6).pop > 0 && TC.jumpRopeReward(6).rel > 0, 'a decent streak earns popularity and befriends');
+  ok(TC.jumpRopeReward(20).pop >= TC.jumpRopeReward(10).pop, 'a longer streak never earns less popularity');
+  ok(TC.jumpRopeReward(6).coins === undefined, 'rope skipping no longer pays coins');
   ok(TC.jumpRopeReward(3).rel === 0, 'a tiny streak gives no relationship bump');
   const S = TC.freshSave();
   ok(TC.jumpRopeTriesLeft(S) === TC.JUMPROPE_TRIES_PER_DAY, 'a fresh day has all jump-rope tries');
-  const before = S.coins, relBefore = TC.relOf(S, TC.NPCS[0].id);
+  const before = S.pop, coinsBefore = S.coins, relBefore = TC.relOf(S, TC.NPCS[0].id);
   const r = TC.jumpRopePlay(S, 6, TC.NPCS[0].id);
-  ok(r && S.coins === before + r.coins, 'playing credits coins');
+  ok(r && S.pop === before + r.pop, 'playing credits popularity');
+  ok(S.coins === coinsBefore, 'playing does not credit coins');
   ok(TC.relOf(S, TC.NPCS[0].id) > relBefore, 'a good run bumps the buddy relationship');
   ok(TC.jumpRopeTriesLeft(S) === TC.JUMPROPE_TRIES_PER_DAY - 1, 'playing uses a daily try');
   let n = 0; while (TC.canJumpRope(S)) { TC.jumpRopePlay(S, 2); n++; }
@@ -664,6 +666,32 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   S.day += 1; ok(TC.canJumpRope(S) === true, 'tries refill on a new day');
   const old = TC.freshSave(); delete old.jumprope;
   ok(TC.canJumpRope(old) === true && TC.jumpRopePlay(old, 4) !== null, 'a save missing the jumprope field still works');
+}
+
+// ---- popularity ----
+{
+  ok(TC.popularityTier(0).key === 'unknown', 'a fresh kid is unknown');
+  ok(TC.popularityTier(30).key === 'liked' && TC.popularityTier(80).key === 'star', 'popularity climbs through the tiers');
+  ok(TC.popularityTier(1000).key === 'star', 'popularity tops out at school star');
+  // better deals: bonus grows with popularity, capped
+  ok(TC.popDealBonus(0) === 0 && TC.popDealBonus(40) === 10 && TC.popDealBonus(1000) === 20, 'deal bonus scales and caps at 20');
+  // easier friends: bonus grows with popularity, capped
+  ok(TC.popFriendBonus(0) === 0 && TC.popFriendBonus(24) === 2 && TC.popFriendBonus(1000) === 8, 'friend bonus scales and caps at 8');
+  // rope skipping raises popularity, not coins
+  const S = TC.freshSave();
+  ok(S.pop === 0, 'a fresh save has no popularity');
+  const c0 = S.coins;
+  TC.jumpRopePlay(S, 8, TC.NPCS[0].id);
+  ok(S.pop > 0 && S.coins === c0, 'a rope run raises popularity and leaves coins alone');
+  // popularity makes candy gifts befriend faster
+  const P = TC.freshSave(); P.candy = 2; P.pop = 60;
+  const Q = TC.freshSave(); Q.candy = 2; Q.pop = 0;
+  const pr = TC.giveCandy(P, TC.NPCS[1].id);
+  const qr = TC.giveCandy(Q, TC.NPCS[1].id);
+  ok(pr.rel > qr.rel, 'a popular kid earns more goodwill per candy');
+  // a save missing pop still works everywhere
+  const old = TC.freshSave(); delete old.pop; old.candy = 1;
+  ok(TC.giveCandy(old, TC.NPCS[0].id) !== null && typeof TC.popDealBonus(old.pop) === 'number', 'systems tolerate a save missing pop');
 }
 
 // ---- jump-rope personal best ----

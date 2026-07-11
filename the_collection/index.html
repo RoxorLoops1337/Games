@@ -719,6 +719,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
     <h1>The Collection</h1>
     <div class="topbar-stats">
       <span class="day-badge" id="day-badge">Day 1</span>
+      <div class="candy" id="pop-stat" style="display:none;"><span class="candy-ico">⭐</span><span id="pop-count">0</span></div>
       <div class="candy" id="candy-stat" style="display:none;"><span class="candy-ico">🍬</span><span id="candy-count">0</span></div>
       <div class="coins"><span class="coin-dot"></span><span id="coin-count">0</span></div>
     </div>
@@ -979,6 +980,7 @@ function freshSave(){
     jrBest: 0,
     arcadeBulls: 0,
     fishJournal: {},
+    pop: 0,
   };
 }
 
@@ -1078,13 +1080,27 @@ function relTier(score){
   for (var i = 0; i < REL_TIERS.length; i++) { if (score >= REL_TIERS[i].min) return REL_TIERS[i]; }
   return REL_TIERS[REL_TIERS.length - 1];
 }
+// Popularity: earned by showing off (jump rope). Being the cool kid gets you
+// better trade offers and makes friends faster at school. All pure + tested.
+var POP_TIERS = [
+  { min: 0,  key: 'unknown', label: 'Just another kid' },
+  { min: 10, key: 'noticed', label: 'Getting noticed' },
+  { min: 25, key: 'liked',   label: 'Well-liked' },
+  { min: 45, key: 'popular', label: 'Popular' },
+  { min: 75, key: 'star',    label: 'School star' },
+];
+function popularityTier(pop){ pop = pop || 0; for (var i = POP_TIERS.length - 1; i >= 0; i--) { if (pop >= POP_TIERS[i].min) return POP_TIERS[i]; } return POP_TIERS[0]; }
+// virtual relationship points folded into trades — the popular kid gets sweeter deals
+function popDealBonus(pop){ return Math.min(20, Math.floor((pop || 0) / 4)); }
+// bonus relationship whenever you befriend someone — friends come easier when you're cool
+function popFriendBonus(pop){ return Math.min(8, Math.floor((pop || 0) / 12)); }
 function giveCandy(save, npcId){
   if (save.candy < 1) return null;
   save.school.gaveCandy = save.school.gaveCandy || {};
   if (save.school.gaveCandy[npcId]) return null;
   save.candy -= 1;
   save.school.gaveCandy[npcId] = true;
-  return { rel: changeRel(save, npcId, CANDY_GIFT_REL) };
+  return { rel: changeRel(save, npcId, CANDY_GIFT_REL + popFriendBonus(save.pop)) };
 }
 
 /* ================= steal a card: risky, relationship-gated ================= */
@@ -1389,9 +1405,10 @@ function cartDash(save, hits){
 // Reward and relationship bump are pure + tested; the beat lives in the UI.
 var JUMPROPE_TRIES_PER_DAY = 3;
 function jumpRopeReward(streak){
-  var coins = Math.min(streak, 12) * 2 + (streak >= 10 ? 6 : 0);
+  // rope skipping shows off — you earn popularity (not coins) plus friendship
+  var pop = Math.min(streak, 12) + (streak >= 10 ? 4 : 0);
   var rel = streak >= 5 ? Math.min(6, Math.floor(streak / 3)) : 0;
-  return { coins: coins, rel: rel, streak: streak };
+  return { pop: pop, rel: rel, streak: streak };
 }
 function jumpRopeTriesLeft(save){
   var j = save.jumprope || {};
@@ -1405,8 +1422,8 @@ function jumpRopePlay(save, streak, npcId){
   if (save.jumprope.day !== save.day) { save.jumprope.day = save.day; save.jumprope.tries = 0; }
   save.jumprope.tries += 1;
   var res = jumpRopeReward(streak);
-  save.coins += res.coins;
-  if (res.rel && npcId) res.relNow = changeRel(save, npcId, res.rel);
+  save.pop = (save.pop || 0) + res.pop;
+  if (res.rel && npcId) res.relNow = changeRel(save, npcId, res.rel + popFriendBonus(save.pop));
   return res;
 }
 // Track the best jump-rope streak ever, so there's a record to chase. Pure.
@@ -1726,8 +1743,9 @@ function refreshSchoolIfNeeded(save){
   var offers = {};
   NPCS.forEach(function(npc){
     var rel = relOf(save, npc.id);
-    var o = makeOffer(npc.id, save.day, binderDay, rel, spares);
-    // enemies aren't in the mood to trade with you
+    // popularity sweetens deals: it acts like extra goodwill when the offer is rolled
+    var o = makeOffer(npc.id, save.day, binderDay, rel + popDealBonus(save.pop), spares);
+    // enemies aren't in the mood to trade with you (real relationship, not popularity)
     if (rel <= ENEMY_THRESHOLD) o.state = 'refused';
     offers[npc.id] = o;
   });
@@ -1845,6 +1863,7 @@ function loadSave(){
       base.jrBest = (typeof parsed.jrBest === 'number') ? parsed.jrBest : 0;
       base.arcadeBulls = (typeof parsed.arcadeBulls === 'number') ? parsed.arcadeBulls : 0;
       base.fishJournal = (parsed.fishJournal && typeof parsed.fishJournal === 'object') ? parsed.fishJournal : {};
+      base.pop = (typeof parsed.pop === 'number') ? parsed.pop : 0;
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -2262,6 +2281,12 @@ function renderTopbar(){
     candyStat.style.display = save.candy > 0 ? 'flex' : 'none';
     var cc = $('candy-count');
     if (cc) cc.textContent = save.candy;
+  }
+  var popStat = $('pop-stat');
+  if (popStat) {
+    popStat.style.display = (save.pop > 0) ? 'flex' : 'none';
+    var pc = $('pop-count');
+    if (pc) pc.textContent = save.pop;
   }
   animateCoinsTo(save.coins);
 }
@@ -3912,7 +3937,7 @@ function actJumpRope(){
   var sheet = $('modal-sheet');
   sheet.innerHTML =
     '<h3 class="modal-title">🪢 Jump Rope</h3>' +
-    '<p class="smallnote" style="margin:2px 0 10px;">Tap JUMP each time the light hits the green. Keep the rhythm!' +
+    '<p class="smallnote" style="margin:2px 0 10px;">Tap JUMP on the green to show off — a long streak wins ⭐ popularity!' +
       (save.jrBest ? ' <b>Best: ' + save.jrBest + '</b>' : '') + '</p>' +
     '<div class="arc-bar"><div class="arc-zone"><i></i></div><div class="arc-mark" id="jr-mark"></div></div>' +
     '<div class="reel-result" id="jr-res">Streak: 0</div>' +
@@ -3934,12 +3959,12 @@ function actJumpRope(){
     var rec = updateJumpBest(save, streak);
     persist(save); renderTopbar();
     var el = $('jr-res');
-    if (res && res.coins) {
+    if (res && res.pop) {
       el.innerHTML = (rec.isNew && streak > 0 ? '🏅 New record — ' + streak + ' jumps! ' : perfect ? 'Perfect run! ' : 'Streak ' + streak + '! ') +
-        '+' + res.coins + ' coins' + (res.rel ? ' &middot; ' + buddy.name + ' had fun with you!' : '');
+        '+' + res.pop + ' ⭐ popularity' + (res.rel ? ' &middot; ' + buddy.name + ' had fun with you!' : '');
       el.classList.add('good'); sfxCoins(); hapticPulse(rec.isNew || perfect ? 'rare' : 'common');
       if (rec.isNew && streak > 0) { var jw = $('modal-sheet'); if (jw) burstConfetti(jw, 'rare'); }
-    } else { el.innerHTML = 'Tripped! No coins that time.'; el.classList.add('nada'); sfxClick(); }
+    } else { el.innerHTML = 'Tripped! No popularity that time.'; el.classList.add('nada'); sfxClick(); }
     var left = jumpRopeTriesLeft(save);
     $('jr-btn').textContent = left > 0 ? 'Again (' + left + ')' : 'Done';
   }
@@ -5406,6 +5431,7 @@ if (typeof globalThis !== 'undefined') {
     CHORES: CHORES, choreOutcome: choreOutcome, canDoChore: canDoChore, doChore: doChore,
     CANDY_PRICE: CANDY_PRICE, buyCandy: buyCandy, giveCandy: giveCandy,
     REL_TIERS: REL_TIERS, ENEMY_THRESHOLD: ENEMY_THRESHOLD, relOf: relOf, changeRel: changeRel, relTier: relTier,
+    POP_TIERS: POP_TIERS, popularityTier: popularityTier, popDealBonus: popDealBonus, popFriendBonus: popFriendBonus,
     canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
