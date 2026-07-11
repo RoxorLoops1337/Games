@@ -536,6 +536,31 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canCheckMail(old) === true, 'a save missing the mail field still allows checking mail');
 }
 
+// ---- fishing ----
+{
+  const S = TC.freshSave();
+  ok(TC.fishCastsLeft(S) === TC.FISH_CASTS_PER_DAY, 'a fresh day starts with a full set of casts');
+  ok(TC.canFish(S) === true, 'you can fish on a fresh day');
+  const o = TC.fishOutcome(3, 1);
+  ok(o && typeof o.kind === 'string' && typeof o.label === 'string', 'a fish outcome has a kind and a label');
+  ok(['coin', 'bigcoin', 'candy', 'card', 'boot'].includes(o.kind), 'fish outcome kinds are from the known set');
+  ok(JSON.stringify(TC.fishOutcome(3, 1)) === JSON.stringify(TC.fishOutcome(3, 1)), 'fish outcome is deterministic for day+cast');
+  // exhaust the day's casts
+  let caught = 0;
+  for (let i = 0; i < TC.FISH_CASTS_PER_DAY; i++) { const r = TC.fishCast(S); if (r) caught++; }
+  ok(caught === TC.FISH_CASTS_PER_DAY, 'you get exactly the daily number of casts');
+  ok(TC.canFish(S) === false && TC.fishCast(S) === null, 'casts run out for the day');
+  S.day += 1;
+  ok(TC.canFish(S) === true, 'casts refill on a new day');
+  // a card catch lands in the binder
+  let sawCard = false;
+  for (let d = 2; d < 60 && !sawCard; d++) { const r = TC.fishOutcome(d, 1); if (r.cardId) { sawCard = true; ok(!!TC.BY_ID[r.cardId], 'a caught card is a real card id'); } }
+  ok(sawCard, 'card catches occur across days');
+  // old saves without a fishing field still load and fish
+  const old = TC.freshSave(); delete old.fishing;
+  ok(TC.canFish(old) === true && TC.fishCast(old) !== null, 'a save missing the fishing field still works');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
