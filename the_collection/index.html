@@ -928,6 +928,7 @@ function freshSave(){
     lawns: { lastMowed: {}, lastAnyDay: null },
     lottery: { bought: 0 },
     mail: { lastDay: null },
+    fishing: { day: null, casts: 0 },
   };
 }
 
@@ -1187,6 +1188,38 @@ function checkMail(save){
   save.mail.lastDay = save.day;
   if (c.coins) save.coins += c.coins;
   return c;
+}
+
+// The pond: a handful of casts a day. Mostly a few coins, sometimes candy
+// or a soggy card, sometimes just an old boot. Seeded per day + cast number.
+var FISH_CASTS_PER_DAY = 4;
+function fishOutcome(day, castNo){
+  var rand = seededRandom('fish-' + day + '-' + castNo);
+  var kind = pickWeighted(rand, { coin: 38, bigcoin: 16, candy: 12, card: 15, boot: 19 });
+  var res = { kind: kind, coins: 0, candy: 0, cardId: null, label: '' };
+  if (kind === 'coin') { res.coins = 2 + Math.floor(rand() * 5); res.label = 'a handful of wet coins'; }
+  else if (kind === 'bigcoin') { res.coins = 8 + Math.floor(rand() * 10); res.label = 'a dropped coin purse!'; }
+  else if (kind === 'candy') { res.candy = 1 + Math.floor(rand() * 2); res.label = 'a floating candy 🍬'; }
+  else if (kind === 'card') { var pool = BY_TIER['common'].concat(BY_TIER['uncommon']); res.cardId = pool[Math.floor(rand() * pool.length)].id; res.coins = 2; res.label = 'a waterlogged card'; }
+  else { res.label = 'an old boot'; }
+  return res;
+}
+function fishCastsLeft(save){
+  var f = save.fishing || {};
+  var used = (f.day === save.day) ? (f.casts || 0) : 0;
+  return Math.max(0, FISH_CASTS_PER_DAY - used);
+}
+function canFish(save){ return fishCastsLeft(save) > 0; }
+function fishCast(save){
+  if (!canFish(save)) return null;
+  save.fishing = save.fishing || { day: null, casts: 0 };
+  if (save.fishing.day !== save.day) { save.fishing.day = save.day; save.fishing.casts = 0; }
+  save.fishing.casts += 1;
+  var res = fishOutcome(save.day, save.fishing.casts);
+  save.coins += res.coins;
+  save.candy += res.candy;
+  if (res.cardId) addCardById(save, res.cardId);
+  return res;
 }
 
 // A short "today" checklist derived purely from existing state, so the
@@ -1535,6 +1568,7 @@ function loadSave(){
       base.lawns = (parsed.lawns && parsed.lawns.lastMowed) ? parsed.lawns : { lastMowed: {}, lastAnyDay: null };
       base.lottery = (parsed.lottery && typeof parsed.lottery.bought === 'number') ? parsed.lottery : { bought: 0 };
       base.mail = (parsed.mail && typeof parsed.mail.lastDay !== 'undefined') ? parsed.mail : { lastDay: null };
+      base.fishing = (parsed.fishing && typeof parsed.fishing.casts === 'number') ? parsed.fishing : { day: null, casts: 0 };
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3240,6 +3274,7 @@ function buildMaps(){
     ],
     birds: [ {x:200,y:120,speed:60,phase:0}, {x:900,y:80,speed:44,phase:2} ],
     benches: [ { x:540, y:648 } ],
+    pond: { x:367, y:1010, rx:96, ry:58, reeds:[ {x:280,y:1002}, {x:456,y:1006}, {x:318,y:1064}, {x:420,y:964} ] },
     buildings: [
       { key:'home',   x:120, y:250, w:290, h:210, wall:'#e6c98f', roof:'#b5622f', sign:'HOME' },
       { key:'kiosk',  x:600, y:300, w:230, h:170, wall:'#8fcadb', roof:'#2f7d94', sign:'KIOSK' },
@@ -3249,6 +3284,7 @@ function buildMaps(){
     houses: houses,
     solids: [
       {x:120,y:250,w:290,h:190}, {x:600,y:300,w:230,h:150}, {x:1040,y:230,w:340,h:220}, {x:690,y:60,w:320,h:150},
+      {x:279,y:964,w:176,h:92},   // the pond (can't walk on water)
     ].concat(houses.map(function(h){ return { x:h.x, y:h.y, w:h.w, h:h.h - 34 }; })),
     portals: [
       { x:210, y:452, w:66, h:26, to:'home',   sx:285, sy:405, label:'HOME' },
@@ -3281,6 +3317,11 @@ function buildMaps(){
     x: 540, y: 664, r: 50, kind: 'bench',
     label: function(){ return W.sitting ? 'Get up' : 'Sit on the bench'; },
     action: actSitBench,
+  });
+  maps.town.spots.push({
+    x: 367, y: 936, r: 58, kind: 'fish',
+    label: function(){ var n = fishCastsLeft(save); return n > 0 ? 'Fish here (' + n + ' casts left)' : 'The fish aren’t biting today'; },
+    action: actFish,
   });
 
   /* ---------- HOME INTERIOR ---------- */
@@ -3401,6 +3442,44 @@ function actSitBench(){
   if (W.sitting) { W.sitting = false; sfxClick(); return; }
   W.px = 540; W.py = 636; W.dir = 'down'; W.target = null; W.sitting = true;
   sfxClick();
+}
+// cast a line at the pond — a short reel, then a seeded catch
+function actFish(){
+  if (!canFish(save)) { toast('The fish aren’t biting today', ''); return; }
+  var res = fishCast(save);
+  if (!res) return;
+  persist(save); renderTopbar();
+  W.dir = 'down';
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<h3 class="modal-title">Fishing&hellip;</h3>' +
+    '<div class="reel-window"><div class="reel-icon" id="reel-icon">🎣</div></div>' +
+    '<div class="reel-result" id="reel-result">&nbsp;</div>' +
+    '<button class="bigbtn" id="reel-done" disabled>Casting&hellip;</button>';
+  $('modal-backdrop').classList.add('open');
+  var iconEl = $('reel-icon');
+  var reel = ['🎣', '🌊', '🐟', '🌊', '💦', '🌊'];
+  var landIcon = { coin: '🪙', bigcoin: '💰', candy: '🍬', card: '🃏', boot: '🥾' }[res.kind] || '🌊';
+  var seq = []; for (var i = 0; i < 14; i++) seq.push(reel[i % reel.length]); seq.push(landIcon);
+  var idx = 0;
+  (function tick(){
+    iconEl.textContent = seq[idx]; sfxTick(); idx++;
+    if (idx >= seq.length) { iconEl.classList.add('reel-land'); showFish(); return; }
+    setTimeout(tick, 50 + Math.pow(idx / seq.length, 3) * 280);
+  })();
+  function showFish(){
+    var win = res.coins || res.candy || res.cardId;
+    var parts = [];
+    if (res.coins) parts.push('+' + res.coins + ' coins');
+    if (res.candy) parts.push('+' + res.candy + ' 🍬');
+    if (res.cardId) parts.push(BY_ID[res.cardId].name + '!');
+    var el = $('reel-result');
+    el.innerHTML = 'You reeled in ' + res.label + (parts.length ? ' — ' + parts.join(' &middot; ') : '.');
+    el.classList.add(win ? 'good' : 'nada');
+    if (win) { sfxCoins(); hapticPulse(res.cardId ? 'rare' : 'common'); }
+    var b = $('reel-done'); b.disabled = false; b.textContent = win ? 'Nice catch!' : 'Ah well';
+    b.addEventListener('click', closeModal);
+  }
 }
 function actMowLawn(nbId){
   var st = lawnState(save, nbId);
@@ -3741,6 +3820,7 @@ function drawOutdoor(ctx, m){
   }); }
   if (!m.playground) drawTownPaths(ctx, m);
   if (m.playground) drawPlaygroundGround(ctx, m);
+  if (m.pond) drawPond(ctx, m.pond);
   // drifting cloud shadows on cloudy / overcast / rainy days
   var wth = weatherFor(save.day);
   if (wth !== 'clear') {
@@ -3946,6 +4026,32 @@ function drawBush(ctx, x, y){
   // occasional berries
   ctx.fillStyle = '#e8556a';
   [[-6,2],[7,-2],[2,5]].forEach(function(b){ ctx.beginPath(); ctx.arc(x+b[0], y+b[1], 1.8, 0, 6.283); ctx.fill(); });
+}
+function drawPond(ctx, p){
+  // muddy bank
+  ctx.fillStyle = '#8a7a4e'; ctx.beginPath(); ctx.ellipse(p.x, p.y, p.rx + 10, p.ry + 8, 0, 0, 6.283); ctx.fill();
+  // water with a soft vertical gradient
+  var g = ctx.createLinearGradient(0, p.y - p.ry, 0, p.y + p.ry);
+  g.addColorStop(0, '#5aa9c8'); g.addColorStop(1, '#3f7ea0');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.ellipse(p.x, p.y, p.rx, p.ry, 0, 0, 6.283); ctx.fill();
+  // expanding ripple rings
+  ctx.strokeStyle = 'rgba(255,255,255,.28)'; ctx.lineWidth = 1.6;
+  for (var r = 0; r < 2; r++) {
+    var t = ((W.actorPhase + r * 0.9) % 1.8) / 1.8;
+    ctx.globalAlpha = 0.4 * (1 - t);
+    ctx.beginPath(); ctx.ellipse(p.x - 10, p.y - 6, 10 + t * 44, 6 + t * 26, 0, 0, 6.283); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+  // a glint
+  ctx.fillStyle = 'rgba(255,255,255,.4)'; ctx.beginPath(); ctx.ellipse(p.x + p.rx * 0.35, p.y - p.ry * 0.4, 14, 5, -0.4, 0, 6.283); ctx.fill();
+  // reeds around the bank
+  if (p.reeds) { ctx.strokeStyle = '#3f7d3a'; ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+    p.reeds.forEach(function(rd, i){
+      var sway = Math.sin(W.actorPhase * 2 + i) * 3;
+      ctx.beginPath(); ctx.moveTo(rd.x, rd.y); ctx.quadraticCurveTo(rd.x + sway, rd.y - 10, rd.x + sway, rd.y - 20); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(rd.x + 5, rd.y); ctx.quadraticCurveTo(rd.x + 5 + sway, rd.y - 8, rd.x + 6 + sway, rd.y - 16); ctx.stroke();
+    });
+  }
 }
 function drawTownBench(ctx, x, y){
   shadowEllipse(ctx, x, y + 12, 34, 8);
@@ -4240,6 +4346,7 @@ if (typeof globalThis !== 'undefined') {
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
     dailyGoals: dailyGoals, weatherFor: weatherFor,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
+    FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
   };
 }
 })();
