@@ -641,6 +641,14 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .cd-cell{aspect-ratio:1/1; border:none; border-radius:12px; background:var(--panel,#efe6d4); font-size:26px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:transform .06s, box-shadow .12s, background .12s;}
 .cd-cell.lit{background:#ffe6a6; box-shadow:0 0 0 3px #e2a04a, 0 0 14px rgba(226,160,74,.7); transform:scale(1.06);}
 .cd-cell:active{transform:scale(.94);}
+.ach-list{display:flex; flex-direction:column; gap:6px; max-height:52vh; overflow-y:auto;}
+.ach-row{display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; background:var(--panel,#efe6d4); opacity:.6;}
+.ach-row.on{opacity:1; background:#fff6e0; box-shadow:inset 0 0 0 1.5px #e2a04a;}
+.ach-ic{font-size:20px; width:24px; text-align:center;}
+.ach-tx{display:flex; flex-direction:column; min-width:0; flex:1;}
+.ach-tx b{font-size:13px; color:var(--ink);}
+.ach-tx small{font-size:11px; color:var(--ink-faint);}
+.ach-chk{color:var(--accent-deep); font-weight:800;}
 
 /* ---- relationships + social actions ---- */
 .rel-badge{
@@ -1666,6 +1674,23 @@ function claimPageReward(save, pageIdx){
 function completionFraction(save){
   return Object.keys(save.collection).length / CORE_SET.length;
 }
+
+// The trophy wall at home: persistent goals derived purely from existing save
+// stats (no new save field — read defensively so old saves are fine). Each has
+// a check(save) predicate; the modal renders locked/unlocked state.
+var ACHIEVEMENTS = [
+  { id:'firstpack', icon:'🎴', title:'First Rip',     desc:'Open your first pack',        check:function(s){ return (s.packsOpenedTotal||0) >= 1; } },
+  { id:'ten',       icon:'📇', title:'Getting Started', desc:'Collect 10 different cards',  check:function(s){ return Object.keys(s.collection||{}).length >= 10; } },
+  { id:'half',      icon:'📖', title:'Half Full',      desc:'Fill half the binder',        check:function(s){ return completionFraction(s) >= 0.5; } },
+  { id:'complete',  icon:'🏆', title:'Completionist',  desc:'Complete the whole binder',   check:function(s){ return completionFraction(s) >= 1; } },
+  { id:'week',      icon:'📅', title:'Regular',        desc:'Reach day 7',                 check:function(s){ return (s.day||1) >= 7; } },
+  { id:'saver',     icon:'💰', title:'Piggy Bank',     desc:'Save up 100 coins',           check:function(s){ return (s.coins||0) >= 100; } },
+  { id:'pal',       icon:'🐱', title:'Best Friends',   desc:'Reach 10 pet affection',      check:function(s){ return ((s.pet&&s.pet.affection)||0) >= 10; } },
+  { id:'lucky',     icon:'🎟️', title:'Feeling Lucky',  desc:'Buy a lottery ticket',        check:function(s){ return ((s.lottery&&s.lottery.bought)||0) >= 1; } },
+  { id:'streak',    icon:'🔥', title:'On a Roll',      desc:'Hit a 5-day allowance streak',check:function(s){ return ((s.allowance&&s.allowance.streak)||0) >= 5; } },
+];
+function achievementsState(save){ return ACHIEVEMENTS.map(function(a){ return { id:a.id, icon:a.icon, title:a.title, desc:a.desc, done:!!a.check(save) }; }); }
+function achievementCount(save){ var n = 0; for (var i = 0; i < ACHIEVEMENTS.length; i++) if (ACHIEVEMENTS[i].check(save)) n++; return n; }
 
 function loadSave(){
   try {
@@ -3523,11 +3548,12 @@ function buildMaps(){
     rug: {x:150,y:186,w:150,h:120},
     props: [
       { t:'bookshelf', x:330, y:34, w:88, h:24 },
+      { t:'achboard', x:40, y:32, w:78, h:34 },
       { t:'couch',   x:150, y:58, w:130, h:42 },
       { t:'tv',      x:196, y:300, w:64, h:16 },
       { t:'plant',   x:404, y:344 }, { t:'plant', x:30, y:344 },
     ],
-    solids: [ {x:150,y:58,w:130,h:42}, {x:0,y:0,w:440,h:30} ],
+    solids: [ {x:150,y:58,w:130,h:42}, {x:40,y:32,w:78,h:34}, {x:0,y:0,w:440,h:30} ],
     actors: [ { id:'dad', x:215, y:132, color:'#4a6ea8', name:'Dad' } ],
     portals: [
       { x:185, y:352, w:70, h:26, to:'town', sx:243, sy:500 },
@@ -3536,6 +3562,7 @@ function buildMaps(){
     ],
     spots: [
       { x:215, y:150, r:64, label:function(){ return canClaimAllowance(save) ? 'Ask Dad for your allowance' : 'Talk to Dad'; }, action:actDad },
+      { x:79, y:96, r:52, label:function(){ return 'Look at your trophy wall (' + achievementCount(save) + '/' + ACHIEVEMENTS.length + ')'; }, action:actAchievements },
     ],
   };
   maps.home_kitchen = {
@@ -4075,6 +4102,28 @@ function actCartDash(){
   tick = setInterval(function(){ timeLeft -= 0.1; if (timeLeft <= 0) { timeLeft = 0; $('cd-time').textContent = '0.0s'; finish(); }
     else $('cd-time').textContent = timeLeft.toFixed(1) + 's'; }, 100);
   relight();
+}
+// The home trophy wall: shows every achievement with locked/unlocked state and
+// an overall tally. Purely informational (reads live save stats).
+function actAchievements(){
+  var st = achievementsState(save), done = 0;
+  var rows = st.map(function(a){ if (a.done) done++;
+    return '<div class="ach-row' + (a.done ? ' on' : '') + '">' +
+      '<span class="ach-ic">' + (a.done ? a.icon : '🔒') + '</span>' +
+      '<span class="ach-tx"><b>' + a.title + '</b><small>' + a.desc + '</small></span>' +
+      (a.done ? '<span class="ach-chk">✓</span>' : '') + '</div>';
+  }).join('');
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="ac-x">&times;</button>' +
+    '<h3 class="modal-title">🏆 Trophy Wall</h3>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">' + done + ' of ' + st.length + ' earned — keep collecting!</p>' +
+    '<div class="ach-list">' + rows + '</div>' +
+    '<button class="bigbtn" id="ac-done" style="margin-top:8px;">Close</button>';
+  $('modal-backdrop').classList.add('open');
+  $('ac-x').addEventListener('click', closeModal);
+  $('ac-done').addEventListener('click', closeModal);
+  sfxClick();
 }
 
 /* =====================================================================
@@ -4814,6 +4863,18 @@ function drawProp(ctx, p){
     ctx.fillStyle = 'rgba(120,150,170,.35)'; ctx.fillRect(p.x+4, p.y+4, p.w-8, p.h*0.42);   // glass door / freezer top
     ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x+3, p.y+p.h*0.5); ctx.lineTo(p.x+p.w-3, p.y+p.h*0.5); ctx.stroke();
     ctx.fillStyle = '#9fb0bd'; ctx.fillRect(p.x+p.w-9, p.y+8, 4, 14); ctx.fillRect(p.x+p.w-9, p.y+p.h*0.5+8, 4, 14);
+  } else if (p.t === 'achboard') {
+    // a framed cork trophy board with little pinned award cards
+    shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 4);
+    ctx.fillStyle = '#6b4a2c'; roundRectPath(ctx, p.x-2, p.y-2, p.w+4, p.h+4, 4); ctx.fill();   // frame
+    ctx.fillStyle = '#c79a5e'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 3); ctx.fill();            // cork
+    var done = (typeof save !== 'undefined' && save) ? achievementCount(save) : 0;
+    for (var ai = 0; ai < 6; ai++) {                                                             // pinned award chits
+      var cx = p.x+8 + (ai%3)*24, cy = p.y+7 + Math.floor(ai/3)*15;
+      ctx.fillStyle = ai < done ? '#ffd86a' : '#efe3c8';
+      roundRectPath(ctx, cx, cy, 16, 11, 2); ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.arc(cx+8, cy+1.5, 1.2, 0, 6.283); ctx.fill();
+    }
   } else if (p.t === 'bookshelf') {
     shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 5);
     ctx.fillStyle = '#7a5230'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 3); ctx.fill();
@@ -5118,6 +5179,7 @@ if (typeof globalThis !== 'undefined') {
     walkersOutCount: walkersOutCount, npcGreeting: npcGreeting, NPC_GREETINGS: NPC_GREETINGS,
     ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
     cartDashReward: cartDashReward, cartDashLeft: cartDashLeft, canCartDash: canCartDash, cartDash: cartDash,
+    ACHIEVEMENTS: ACHIEVEMENTS, achievementsState: achievementsState, achievementCount: achievementCount,
     feedPet: feedPet,
     JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay,
   };
