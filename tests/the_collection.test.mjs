@@ -486,6 +486,26 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   S.day = normalDay; ok(TC.canEnterMarket(S) === false, 'the supermarket is closed without a parent trip');
 }
 
+// ---- daily goals nudge ----
+{
+  const S = TC.freshSave();
+  const g0 = TC.dailyGoals(S);
+  ok(Array.isArray(g0) && g0.length === 4, 'four daily goals are offered');
+  ok(g0.every(x => x.id && x.label && typeof x.done === 'boolean'), 'each goal has an id, label and done flag');
+  const allowance = g0.find(x => x.id === 'allowance');
+  ok(allowance.done === false, 'the allowance goal is open on a fresh day');
+  TC.claimAllowance(S);
+  ok(TC.dailyGoals(S).find(x => x.id === 'allowance').done === true, 'claiming allowance ticks its goal off');
+  // mowing a lawn ticks the lawn goal
+  ok(TC.dailyGoals(S).find(x => x.id === 'lawn').done === false, 'lawn goal starts open');
+  TC.mowLawn(S, TC.NEIGHBORS[0].id);
+  ok(TC.dailyGoals(S).find(x => x.id === 'lawn').done === true, 'mowing a lawn ticks the lawn goal off');
+  // doing a chore ticks the chore goal
+  ok(TC.dailyGoals(S).find(x => x.id === 'chore').done === false, 'chore goal starts open');
+  TC.doChore(S, 'dishes');
+  ok(TC.dailyGoals(S).find(x => x.id === 'chore').done === true, 'doing a chore ticks the chore goal off');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');

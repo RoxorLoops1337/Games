@@ -109,6 +109,26 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
   letter-spacing:.03em; pointer-events:none; z-index:4; backdrop-filter:blur(3px);
   box-shadow:0 2px 8px rgba(0,0,0,.25);
 }
+.world-goals{
+  position:absolute; top:44px; left:calc(env(safe-area-inset-left,0px) + 10px);
+  z-index:4; width:172px; font-size:12px; color:#fff;
+  background:rgba(30,24,16,.62); border-radius:12px; padding:8px 10px; backdrop-filter:blur(3px);
+  box-shadow:0 3px 10px rgba(0,0,0,.25); display:none; pointer-events:auto;
+  border:1px solid rgba(255,220,150,.18);
+}
+.world-goals.show{display:block;}
+.world-goals .wg-head{display:flex; align-items:center; justify-content:space-between; gap:8px; cursor:pointer;}
+.world-goals .wg-title{font-family:var(--serif); font-weight:600; font-size:12.5px; letter-spacing:.02em;}
+.world-goals .wg-count{font-family:var(--mono); font-size:10px; color:#ffd98a;}
+.world-goals ul{list-style:none; margin:7px 0 0; padding:0; display:flex; flex-direction:column; gap:5px;}
+.world-goals.collapsed ul{display:none;}
+.world-goals li{display:flex; align-items:center; gap:7px; line-height:1.15;}
+.world-goals li .wg-box{
+  flex:none; width:14px; height:14px; border-radius:4px; border:1.5px solid rgba(255,235,200,.55);
+  display:flex; align-items:center; justify-content:center; font-size:10px; color:#2a1c08;
+}
+.world-goals li.done .wg-box{background:#7ec86a; border-color:#7ec86a;}
+.world-goals li.done span{opacity:.55; text-decoration:line-through;}
 .world-prompt{
   position:absolute; left:50%; bottom:150px; transform:translateX(-50%) translateY(8px);
   background:rgba(20,16,10,.82); color:#ffe9c2; font-size:13.5px; font-weight:600;
@@ -669,6 +689,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
     <section class="screen active" id="screen-world">
       <canvas id="world-canvas"></canvas>
       <div id="world-loc" class="world-loc">Home</div>
+      <div id="world-goals" class="world-goals"></div>
       <div id="world-prompt" class="world-prompt"></div>
       <div id="world-controls">
         <div id="dpad" class="dpad">
@@ -1137,6 +1158,24 @@ function buyLottery(save){
 // The supermarket is only reachable when a parent takes you — that's the
 // "supermarket trip" day event.
 function canEnterMarket(save){ return dayEvent(save.day) === 'supermarket'; }
+
+// A short "today" checklist derived purely from existing state, so the
+// player always has direction. No new save fields — everything is read
+// back off the day's chores / lawns / allowance / school.
+function dailyGoals(save){
+  var s = save.school || {};
+  var choreDone = !canDoChore(save, 'dishes') || !canDoChore(save, 'laundry');
+  var lawnDone = !!(save.lawns && save.lawns.lastAnyDay === save.day);
+  var schoolHandled = s.wantDay === save.day &&
+    !(s.offers && Object.keys(s.offers).some(function(id){ return s.offers[id].state === 'open'; })) &&
+    !(s.duels && s.duels.some(function(d){ return !d.done; }));
+  return [
+    { id: 'allowance', label: 'Claim your allowance',    done: !canClaimAllowance(save) },
+    { id: 'chore',     label: 'Do a chore at home',      done: choreDone },
+    { id: 'lawn',      label: 'Mow a neighbour’s lawn',  done: lawnDone },
+    { id: 'school',    label: 'Sort things out at school', done: !!schoolHandled },
+  ];
+}
 
 function buyPack(save){
   var price = packPrice(save);
@@ -2885,6 +2924,7 @@ var W = {
   target: null,       // tap-to-walk destination {x,y,spot}
   lastX: 0, lastY: 0, stall: 0,
   maps: null, actorPhase: 0,
+  goalsOpen: true, goalsSig: '', goalsT: 0,
 };
 var ZOOM = 1.15, WALK_SPEED = 168, PLAYER_R = 13;
 
@@ -2980,12 +3020,33 @@ function goMap(id, sx, sy, silent){
   W.map = id; W.px = sx; W.py = sy; W.vx = W.vy = 0; W.moving = false; W.dir = 'down';
   W.target = null; W.camSnap = true;
   setLocLabel();
+  refreshGoals(true);
   if (!silent) sfxClick();
 }
 function setLocLabel(){
   var loc = $('world-loc'); if (!loc || !W.maps) return;
   var m = W.maps[W.map]; if (!m) return;
   loc.textContent = m.title + ' · ' + daypart().key;
+}
+// The collapsible "Today" checklist, shown only on the town.
+function refreshGoals(force){
+  var el = $('world-goals'); if (!el) return;
+  var onTown = W.maps && W.map === 'town';
+  el.classList.toggle('show', onTown);
+  if (!onTown) return;
+  var goals = dailyGoals(save);
+  var done = goals.filter(function(g){ return g.done; }).length;
+  var sig = (W.goalsOpen ? 'o' : 'c') + goals.map(function(g){ return g.done ? 1 : 0; }).join('');
+  if (!force && sig === W.goalsSig) return;
+  W.goalsSig = sig;
+  el.classList.toggle('collapsed', !W.goalsOpen);
+  el.innerHTML =
+    '<div class="wg-head"><span class="wg-title">Today</span><span class="wg-count">' + done + '/' + goals.length + (W.goalsOpen ? ' ▾' : ' ▸') + '</span></div>' +
+    '<ul>' + goals.map(function(g){
+      return '<li class="' + (g.done ? 'done' : '') + '"><span class="wg-box">' + (g.done ? '✓' : '') + '</span><span>' + g.label + '</span></li>';
+    }).join('') + '</ul>';
+  var head = el.querySelector('.wg-head');
+  if (head) head.addEventListener('click', function(){ W.goalsOpen = !W.goalsOpen; refreshGoals(true); });
 }
 function rectHit(px, py, r, rc){
   return px + r > rc.x && px - r < rc.x + rc.w && py + r > rc.y && py - r < rc.y + rc.h;
@@ -3018,6 +3079,8 @@ function worldLoop(ts){
 function worldUpdate(dt){
   W.actorPhase += dt;
   updateAmbient(curMap(), dt);
+  // keep the "Today" checklist current as state changes (throttled)
+  W.goalsT += dt; if (W.goalsT > 0.4) { W.goalsT = 0; refreshGoals(false); }
   var kv = inputVector();
   var v = { x: 0, y: 0 };
   if (worldBlocked()) { W.target = null; }
@@ -3646,6 +3709,8 @@ function drawBuilding(ctx, b){
   [[b.x+18, b.y+52],[b.x+b.w-52, b.y+52]].forEach(function(w){ roundRectPath(ctx, w[0], w[1], 34, 30, 4); ctx.fill(); });
   ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 2;
   [[b.x+18, b.y+52],[b.x+b.w-52, b.y+52]].forEach(function(w){ ctx.beginPath(); ctx.moveTo(w[0]+17,w[1]); ctx.lineTo(w[0]+17,w[1]+30); ctx.moveTo(w[0],w[1]+15); ctx.lineTo(w[0]+34,w[1]+15); ctx.stroke(); });
+  // per-building facade flourishes so each reads at a glance
+  drawFacade(ctx, b);
   // sign
   ctx.fillStyle = 'rgba(30,20,10,.82)'; roundRectPath(ctx, doorX(b)-52, b.y+b.h-70, 104, 18, 5); ctx.fill();
   ctx.fillStyle = '#ffe9c2'; ctx.font = '700 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(b.sign, doorX(b), b.y+b.h-57);
@@ -3656,6 +3721,52 @@ function drawBuilding(ctx, b){
     ctx.fillStyle = '#e2a04a'; ctx.beginPath(); ctx.arc(bx, by, 11, 0, 6.283); ctx.fill();
     ctx.beginPath(); ctx.moveTo(bx - 4, by + 8); ctx.lineTo(bx + 4, by + 8); ctx.lineTo(bx, by + 15); ctx.closePath(); ctx.fill();
     ctx.fillStyle = '#2a1c08'; ctx.font = '800 15px serif'; ctx.textAlign = 'center'; ctx.fillText('!', bx, by + 5);
+  }
+}
+// small per-building details drawn over the base box so each storefront
+// reads at a glance (data-driven off b.key).
+function drawFacade(ctx, b){
+  if (b.key === 'home') {
+    // brick chimney with a rising wisp of smoke
+    var cx = b.x + b.w * 0.74, cy = b.y + 8;
+    ctx.fillStyle = '#9a5636'; ctx.fillRect(cx - 8, cy, 16, 26);
+    ctx.fillStyle = shade('#9a5636', -18); ctx.fillRect(cx - 10, cy - 4, 20, 6);
+    ctx.fillStyle = 'rgba(240,240,245,.5)';
+    for (var s = 0; s < 3; s++) {
+      var t = (W.actorPhase * 0.6 + s * 0.5) % 1.6;
+      ctx.globalAlpha = 0.45 * (1 - t / 1.6);
+      ctx.beginPath(); ctx.arc(cx + Math.sin(t * 3 + s) * 5, cy - 6 - t * 22, 4 + t * 4, 0, 6.283); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  } else if (b.key === 'kiosk') {
+    // striped awning over the storefront
+    var ay = b.y + 42, aw = b.w - 20, ax = b.x + 10, ah = 18;
+    var stripes = Math.round(aw / 20);
+    for (var i = 0; i < stripes; i++) {
+      ctx.fillStyle = i % 2 ? '#e9f2f5' : '#2f9ab8';
+      ctx.beginPath();
+      ctx.moveTo(ax + i * (aw / stripes), ay); ctx.lineTo(ax + (i + 1) * (aw / stripes), ay);
+      ctx.lineTo(ax + (i + 1) * (aw / stripes), ay + ah - 5); ctx.lineTo(ax + (i + 0.5) * (aw / stripes), ay + ah);
+      ctx.lineTo(ax + i * (aw / stripes), ay + ah - 5); ctx.closePath(); ctx.fill();
+    }
+    ctx.fillStyle = 'rgba(0,0,0,.12)'; ctx.fillRect(ax, ay, aw, 4);
+  } else if (b.key === 'market') {
+    // long striped storefront band + a big display window
+    var by = b.y + 34, bw = b.w - 16, bxx = b.x + 8, bh = 12;
+    var st = Math.round(bw / 22);
+    for (var k = 0; k < st; k++) { ctx.fillStyle = k % 2 ? '#e2543f' : '#f4ead2'; ctx.fillRect(bxx + k * (bw / st), by, bw / st + 0.5, bh); }
+    ctx.fillStyle = '#bfe6f2'; roundRectPath(ctx, b.x + 20, b.y + 58, b.w - 40, 44, 5); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.fillRect(b.x + 26, b.y + 62, (b.w - 52) * 0.4, 8);
+  } else if (b.key === 'school') {
+    // a little bell cupola on the roof peak + a flag
+    var px = doorX(b);
+    ctx.fillStyle = '#f4ead2'; roundRectPath(ctx, px - 12, b.y - 20, 24, 18, 3); ctx.fill();
+    ctx.fillStyle = shade(b.roof, -10); ctx.beginPath(); ctx.moveTo(px - 14, b.y - 20); ctx.lineTo(px, b.y - 30); ctx.lineTo(px + 14, b.y - 20); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#e2a04a'; ctx.beginPath(); ctx.arc(px, b.y - 10, 4.5, Math.PI, 0); ctx.fill();
+    // flag on a pole to the side
+    ctx.strokeStyle = '#7a6a4a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(b.x + b.w - 16, b.y - 2); ctx.lineTo(b.x + b.w - 16, b.y - 30); ctx.stroke();
+    ctx.fillStyle = '#d8503f'; var fw = 3 + Math.sin(W.actorPhase * 4) * 1.5;
+    ctx.beginPath(); ctx.moveTo(b.x + b.w - 16, b.y - 30); ctx.lineTo(b.x + b.w - 16 + 16, b.y - 27 + fw); ctx.lineTo(b.x + b.w - 16, b.y - 22); ctx.closePath(); ctx.fill();
   }
 }
 // does this building have an action available right now? drives the "!" marker
@@ -3909,6 +4020,7 @@ if (typeof globalThis !== 'undefined') {
     canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
+    dailyGoals: dailyGoals,
   };
 }
 })();
