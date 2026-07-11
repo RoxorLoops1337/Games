@@ -3017,6 +3017,7 @@ function worldInit(){
   bindWorldInput();
   goMap('town', 270, 520, true);
   W.running = true; W.active = true; W.last = 0;
+  try { window.__W = W; } catch (e) {}   // dev aid: inspect world state from the console
   requestAnimationFrame(worldLoop);
   if (!W.petIntroed) { W.petIntroed = true; setTimeout(function(){ if (typeof toast === 'function') toast('🐱 ' + W.pet.name + ' the cat tags along!', 'good'); }, 1000); }
 }
@@ -3207,9 +3208,9 @@ function worldUpdate(dt){
     var d = Math.hypot(W.px - sp.x, W.py - sp.y);
     if (d < (sp.r || 56) && d < bestD) { bestD = d; best = sp; }
   }
-  // Biscuit is always pettable when you're beside it and nothing else is closer
-  var pd = Math.hypot(W.px - W.pet.x, W.py - W.pet.y);
-  if (pd < 40 && pd < bestD) { best = W.petSpot; }
+  // Biscuit is pettable when you're beside it and there's no real interaction
+  // spot in range (so people/props always take priority over the cat)
+  if (!best && Math.hypot(W.px - W.pet.x, W.py - W.pet.y) < 44) { best = W.petSpot; }
   W.prompt = best;
   if (best) showPrompt((best.label ? best.label() : 'Look'), true);
   else hidePrompt();
@@ -3295,7 +3296,7 @@ function buildMaps(){
       {x:279,y:964,w:176,h:92},   // the pond (can't walk on water)
     ].concat(houses.map(function(h){ return { x:h.x, y:h.y, w:h.w, h:h.h - 34 }; })),
     portals: [
-      { x:210, y:452, w:66, h:26, to:'home',   sx:285, sy:405, label:'HOME' },
+      { x:210, y:452, w:66, h:26, to:'home',   sx:220, sy:322, label:'HOME' },
       { x:682, y:462, w:60, h:24, to:'kiosk',  sx:230, sy:340 },
       { x:1178,y:472, w:66, h:24, to:'school', sx:320, sy:400 },
       { x:816, y:216, w:64, h:24, to:'market', sx:260, sy:360, guard: function(){ return canEnterMarket(save); }, blocked:'The supermarket needs mom or dad — come back on a shopping day.' },
@@ -3333,31 +3334,59 @@ function buildMaps(){
   });
 
   /* ---------- HOME INTERIOR ---------- */
+  // The home is three connected rooms you walk between through doorways:
+  // living room (entry) ↔ kitchen (Mom) and ↔ laundry/bedroom (washer + bed).
   maps.home = {
-    title: 'Your House', w: 560, h: 460, kind: 'indoor', floor:'#c99b63',
-    rug: {x:210,y:230,w:150,h:150},
+    title: 'Living Room', w: 440, h: 380, kind: 'indoor', floor:'#c99b63',
+    rug: {x:150,y:186,w:150,h:120},
     props: [
-      { t:'poster', x:120, y:34, w:36, h:26 }, { t:'poster', x:186, y:34, w:36, h:26 },
-      { t:'fridge', x:14,  y:52, w:44, h:66 },
-      { t:'counter', x:64,  y:70, w:196, h:52 },   // kitchen counter (mom)
-      { t:'bookshelf', x:330, y:34, w:84, h:26 },
-      { t:'washer',  x:430, y:80, w:74,  h:74 },    // laundry
-      { t:'couch',   x:250, y:74, w:120, h:40 },
-      { t:'tv',      x:410, y:210, w:70, h:16 },
-      { t:'table',   x:40,  y:306, w:70, h:40 },
-      { t:'plant',   x:520, y:400 }, { t:'plant', x:36, y:404 },
+      { t:'bookshelf', x:330, y:34, w:88, h:24 },
+      { t:'couch',   x:150, y:58, w:130, h:42 },
+      { t:'tv',      x:196, y:300, w:64, h:16 },
+      { t:'plant',   x:404, y:344 }, { t:'plant', x:30, y:344 },
     ],
-    solids: [ {x:64,y:70,w:196,h:52}, {x:14,y:52,w:44,h:66}, {x:430,y:80,w:74,h:74}, {x:250,y:64,w:120,h:44}, {x:40,y:306,w:70,h:40}, {x:0,y:0,w:560,h:30} ],
-    actors: [
-      { id:'mom', x:150, y:140, color:'#c0577a', name:'Mom' },
-      { id:'dad', x:300, y:130, color:'#4a6ea8', name:'Dad' },
+    solids: [ {x:150,y:58,w:130,h:42}, {x:0,y:0,w:440,h:30} ],
+    actors: [ { id:'dad', x:215, y:132, color:'#4a6ea8', name:'Dad' } ],
+    portals: [
+      { x:185, y:352, w:70, h:26, to:'town', sx:243, sy:500 },
+      { x:412, y:150, w:28, h:64, to:'home_kitchen', sx:56, sy:184, door:'Kitchen' },
+      { x:0,   y:150, w:28, h:64, to:'home_laundry', sx:360, sy:184, door:'Laundry' },
     ],
-    portals: [ { x:250, y:432, w:70, h:26, to:'town', sx:243, sy:500 } ],
+    spots: [
+      { x:215, y:150, r:64, label:function(){ return canClaimAllowance(save) ? 'Ask Dad for your allowance' : 'Talk to Dad'; }, action:actDad },
+    ],
+  };
+  maps.home_kitchen = {
+    title: 'Kitchen', w: 420, h: 360, kind: 'indoor', floor:'#cdb98f',
+    props: [
+      { t:'poster', x:190, y:8, w:36, h:26 },
+      { t:'fridge', x:14,  y:40, w:44, h:66 },
+      { t:'counter', x:70, y:50, w:190, h:52 },
+      { t:'table',  x:150, y:250, w:80, h:44 },
+      { t:'plant',  x:384, y:322 },
+    ],
+    solids: [ {x:14,y:40,w:44,h:66}, {x:70,y:50,w:190,h:52}, {x:150,y:250,w:80,h:44}, {x:0,y:0,w:420,h:30} ],
+    actors: [ { id:'mom', x:150, y:130, color:'#c0577a', name:'Mom' } ],
+    portals: [ { x:0, y:150, w:28, h:64, to:'home', sx:392, sy:184, door:'Living room' } ],
     spots: [
       { x:150, y:150, r:66, label:function(){ return canDoChore(save,'dishes') ? 'Help Mom with the dishes' : 'Dishes are done — thanks, sweetie'; }, action:function(){ actChore('dishes'); } },
-      { x:467, y:150, r:60, label:function(){ return canDoChore(save,'laundry') ? 'Check the laundry for loose change' : 'Laundry’s already checked today'; }, action:function(){ actChore('laundry'); } },
-      { x:300, y:150, r:66, label:function(){ return canClaimAllowance(save) ? 'Ask Dad for your allowance' : 'Talk to Dad'; }, action:actDad },
-      { x:280, y:420, r:50, label:function(){ return 'Go outside'; }, action:function(){ goMap('town',243,500); } },
+    ],
+  };
+  maps.home_laundry = {
+    title: 'Laundry & Bedroom', w: 420, h: 360, kind: 'indoor', floor:'#c4cace',
+    rug: {x:236,y:150,w:150,h:110},
+    props: [
+      { t:'poster', x:60, y:8, w:36, h:26 },
+      { t:'washer', x:30, y:44, w:74, h:74 },
+      { t:'bed',    x:250, y:52, w:120, h:78 },
+      { t:'plant',  x:40, y:322 },
+    ],
+    solids: [ {x:30,y:44,w:74,h:74}, {x:250,y:52,w:120,h:78}, {x:0,y:0,w:420,h:30} ],
+    actors: [],
+    portals: [ { x:392, y:150, w:28, h:64, to:'home', sx:52, sy:184, door:'Living room' } ],
+    spots: [
+      { x:67, y:150, r:60, label:function(){ return canDoChore(save,'laundry') ? 'Check the laundry for loose change' : 'Laundry’s already checked today'; }, action:function(){ actChore('laundry'); } },
+      { x:310, y:150, r:66, label:function(){ return 'Go to bed'; }, action:actBed },
     ],
   };
 
@@ -3510,19 +3539,35 @@ function actDad(){
     '<div class="wmenu">' +
       '<button id="wm-allow"' + (canClaim ? '' : ' disabled') + '><span class="wm-emoji">💵</span><span>' +
         (canClaim ? 'Ask for allowance <small>+' + claimAmt + ' coins' + (dayEvent(save.day)==='grandma'?' · grandma doubled it!':'') + '</small>' : 'Already got it today <small>come back tomorrow</small>') + '</span></button>' +
-      '<button id="wm-bed"><span class="wm-emoji">🛏️</span><span>Go to bed <small>end Day ' + save.day + ' → Day ' + (save.day+1) + '</small></span></button>' +
+      '<button id="wm-nvm"><span class="wm-emoji">💬</span><span>“Just saying hi.” <small>the bed’s in the back room when you’re tired</small></span></button>' +
     '</div>';
   $('modal-backdrop').classList.add('open');
   $('wm-x').addEventListener('click', closeModal);
+  $('wm-nvm').addEventListener('click', closeModal);
   $('wm-allow').addEventListener('click', function(){
     var amt = claimAllowance(save);
     if (amt > 0) { persist(save); renderTopbar(); sfxCoins(); toast('+' + amt + ' allowance', 'coin'); }
     closeModal();
   });
-  $('wm-bed').addEventListener('click', function(){
+}
+// the bed in the back room — end the day
+function actBed(){
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="wm-x">&times;</button>' +
+    '<h3 class="modal-title">Your bed</h3>' +
+    '<p class="smallnote" style="margin:4px 0 12px;">Tomorrow brings a fresh allowance, chores, trades and new weather.</p>' +
+    '<div class="wmenu">' +
+      '<button id="wm-sleep"><span class="wm-emoji">🛏️</span><span>Go to sleep <small>end Day ' + save.day + ' → Day ' + (save.day + 1) + '</small></span></button>' +
+      '<button id="wm-nope"><span class="wm-emoji">🙂</span><span>Not sleepy yet</span></button>' +
+    '</div>';
+  $('modal-backdrop').classList.add('open');
+  $('wm-x').addEventListener('click', closeModal);
+  $('wm-nope').addEventListener('click', closeModal);
+  $('wm-sleep').addEventListener('click', function(){
     var r = nextDay(save);
     dayEventMessage = r.event !== 'none' ? DAY_EVENTS[r.event].label : null;
-    persist(save); renderTopbar(); closeModal(); sfxDay(); setLocLabel();
+    persist(save); renderTopbar(); closeModal(); sfxDay(); setLocLabel(); refreshGoals(true);
     toast('Day ' + r.day + (r.event !== 'none' ? ' — ' + DAY_EVENTS[r.event].label : ''), 'good');
   });
 }
@@ -3945,9 +3990,26 @@ function drawIndoor(ctx, m){
   ctx.fillStyle = 'rgba(255,255,255,.06)'; ctx.fillRect(0, 26, m.w, 4);
   if (m.rug) { ctx.fillStyle = 'rgba(180,90,70,.5)'; roundRectPath(ctx, m.rug.x, m.rug.y, m.rug.w, m.rug.h, 10); ctx.fill(); }
   if (m.props) m.props.forEach(function(p){ drawProp(ctx, p); });
-  // exit mat at the door
-  m.portals.forEach(function(p){ ctx.fillStyle = 'rgba(90,60,35,.6)'; roundRectPath(ctx, p.x-6, p.y-2, p.w+12, p.h+8, 6); ctx.fill();
-    ctx.fillStyle = 'rgba(255,240,210,.7)'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('EXIT', p.x + p.w/2, p.y + p.h + 4); });
+  // doorways: an EXIT mat for the way out to town, and a dark archway with
+  // a room label for the interior doorways between rooms.
+  m.portals.forEach(function(p){
+    if (p.to === 'town') {
+      ctx.fillStyle = 'rgba(90,60,35,.6)'; roundRectPath(ctx, p.x-6, p.y-2, p.w+12, p.h+8, 6); ctx.fill();
+      ctx.fillStyle = 'rgba(255,240,210,.7)'; ctx.font = '10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('EXIT', p.x + p.w/2, p.y + p.h + 4);
+    } else {
+      var onRight = p.x > m.w / 2;
+      ctx.fillStyle = 'rgba(40,28,18,.9)'; roundRectPath(ctx, p.x - 2, p.y - 4, p.w + 4, p.h + 8, 4); ctx.fill();  // dark opening
+      ctx.fillStyle = '#3a2a1c'; ctx.beginPath();                                                                  // arch top
+      ctx.moveTo(p.x - 2, p.y - 2); ctx.quadraticCurveTo(p.x + p.w/2, p.y - 16, p.x + p.w + 2, p.y - 2); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = 'rgba(120,90,55,.9)'; ctx.fillRect(p.x + 2, p.y, p.w - 4, p.h);                              // threshold light
+      if (p.door) {
+        ctx.fillStyle = 'rgba(30,20,10,.8)'; ctx.font = '600 9px sans-serif'; ctx.textAlign = onRight ? 'right' : 'left';
+        var lx = onRight ? p.x - 6 : p.x + p.w + 6;
+        roundRectPath(ctx, onRight ? lx - ctx.measureText(p.door).width - 8 : lx - 4, p.y - 2, ctx.measureText(p.door).width + 12, 14, 5); ctx.fill();
+        ctx.fillStyle = '#ffe9c2'; ctx.fillText(p.door, onRight ? lx - 4 : lx + 2, p.y + 8);
+      }
+    }
+  });
 }
 
 /* ---- prop / building / person drawing ---- */
@@ -4193,6 +4255,12 @@ function drawProp(ctx, p){
     ctx.fillStyle = '#f4ead2'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 3); ctx.fill();
     ctx.fillStyle = ['#e2a04a','#54b899','#5aa3dc','#b45fd8'][(p.x/36|0)%4]; roundRectPath(ctx, p.x+3, p.y+3, p.w-6, p.h-9, 2); ctx.fill();
     ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(p.x+4, p.y+p.h-5, p.w-8, 2);
+  } else if (p.t === 'bed') {
+    shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 7);
+    ctx.fillStyle = '#8a5a34'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 6); ctx.fill();      // frame
+    ctx.fillStyle = '#e8ecf0'; roundRectPath(ctx, p.x+4, p.y+16, p.w-8, p.h-20, 5); ctx.fill();  // mattress/duvet
+    ctx.fillStyle = '#6aa3d8'; roundRectPath(ctx, p.x+4, p.y+16, p.w-8, 20, 5); ctx.fill();       // folded blanket
+    ctx.fillStyle = '#fff'; roundRectPath(ctx, p.x+10, p.y+4, 42, 22, 6); ctx.fill();             // pillow
   }
 }
 // a standing NPC: the shared chibi + a name tag and '!' business bubble.
