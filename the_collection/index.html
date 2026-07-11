@@ -664,6 +664,9 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .ach-chk{color:var(--accent-deep); font-weight:800;}
 .daysum{background:#fff6e0; box-shadow:inset 0 0 0 1.5px #e2a04a; border-radius:10px; padding:9px 12px; margin:2px 0 10px; font-size:13px; font-weight:600; color:var(--ink); text-align:center;}
 .streak-strip{background:linear-gradient(90deg,#ffe0b0,#ffd0a0); box-shadow:inset 0 0 0 1.5px #e2874f; border-radius:10px; padding:8px 12px; margin:2px 0 10px; font-size:12.5px; font-weight:700; color:#8a4a1e; text-align:center;}
+.story-dots{display:flex; gap:6px; justify-content:center; margin-top:4px;}
+.story-dots .sd{width:7px; height:7px; border-radius:50%; background:var(--ink-faint); opacity:.4;}
+.story-dots .sd.on{opacity:1; background:var(--accent); transform:scale(1.15);}
 
 /* ---- relationships + social actions ---- */
 .rel-badge{
@@ -981,6 +984,9 @@ function freshSave(){
     arcadeBulls: 0,
     fishJournal: {},
     pop: 0,
+    storySeen: false,
+    tutSeen: {},
+    tutRewarded: false,
   };
 }
 
@@ -1811,6 +1817,36 @@ function checkNewAchievements(save){
 // Seed the seen-set with everything already earned, without toasting — used on
 // load so an existing player isn't spammed for past progress.
 function seedAchSeen(save){ save.achSeen = save.achSeen || {}; for (var i = 0; i < ACHIEVEMENTS.length; i++) if (ACHIEVEMENTS[i].check(save)) save.achSeen[ACHIEVEMENTS[i].id] = true; return save.achSeen; }
+
+// ---- getting-started tutorial: first-time milestones that guide a new player ----
+// Each step's done() reads existing save state (cumulative markers), so progress
+// survives across days and needs no separate tracking. The story intro sets the
+// scene; steps toast as you naturally complete them (see celebrateTutorial).
+var TUTORIAL_REWARD = 20;
+var TUTORIAL_STEPS = [
+  { id:'pack',   label:'Open your first card pack',  hint:'Walk to the Kiosk (top-right of town) and open a booster.',       done:function(s){ return (s.packsOpenedTotal||0) >= 1; } },
+  { id:'binder', label:'Start your collection',       hint:'Every card you pull lands in your Binder — check the bottom tab.', done:function(s){ return Object.keys(s.collection||{}).length >= 1; } },
+  { id:'chore',  label:'Help out at home',            hint:'Do the dishes with Mom in the kitchen, or check the laundry.',    done:function(s){ return !!(s.chores && Object.keys(s.chores.lastDoneDay||{}).length >= 1); } },
+  { id:'allow',  label:'Collect your allowance',      hint:'Ask Dad in the living room for your pocket money.',               done:function(s){ return !!(s.allowance && s.allowance.lastClaimDay != null); } },
+  { id:'lawn',   label:'Mow a neighbour’s lawn',      hint:'Stop by a neighbour’s house in town and offer to mow.',           done:function(s){ return !!(s.lawns && Object.keys(s.lawns.lastMowed||{}).length >= 1); } },
+  { id:'school', label:'Make your mark at school',    hint:'Jump rope for popularity, or trade cards with the kids.',         done:function(s){ return (s.pop||0) > 0 || !!(s.rels && Object.keys(s.rels).some(function(k){ return s.rels[k] > 0; })); } },
+];
+function tutorialState(save){ return TUTORIAL_STEPS.map(function(t){ return { id:t.id, label:t.label, hint:t.hint, done:!!t.done(save) }; }); }
+function tutorialCount(save){ var n = 0; for (var i = 0; i < TUTORIAL_STEPS.length; i++) if (TUTORIAL_STEPS[i].done(save)) n++; return n; }
+function tutorialDone(save){ return tutorialCount(save) === TUTORIAL_STEPS.length; }
+// steps newly completed since last check (marks them seen). Pure but for save.tutSeen.
+function checkTutorialProgress(save){
+  save.tutSeen = save.tutSeen || {};
+  var out = [];
+  for (var i = 0; i < TUTORIAL_STEPS.length; i++) {
+    var t = TUTORIAL_STEPS[i];
+    if (t.done(save) && !save.tutSeen[t.id]) { save.tutSeen[t.id] = true; out.push(t); }
+  }
+  return out;
+}
+// mark all currently-done steps seen without toasting — used on load so an
+// existing player isn't retroactively walked through the tutorial.
+function seedTutSeen(save){ save.tutSeen = save.tutSeen || {}; for (var i = 0; i < TUTORIAL_STEPS.length; i++) if (TUTORIAL_STEPS[i].done(save)) save.tutSeen[TUTORIAL_STEPS[i].id] = true; return save.tutSeen; }
 // A start-of-day snapshot so bedtime can recap what you did today. Pure reads.
 function daySnapshot(save){ return { day: save.day, coins: save.coins || 0, cards: Object.keys(save.collection || {}).length, ach: achievementCount(save) }; }
 function daySummary(save){
@@ -1864,6 +1900,13 @@ function loadSave(){
       base.arcadeBulls = (typeof parsed.arcadeBulls === 'number') ? parsed.arcadeBulls : 0;
       base.fishJournal = (parsed.fishJournal && typeof parsed.fishJournal === 'object') ? parsed.fishJournal : {};
       base.pop = (typeof parsed.pop === 'number') ? parsed.pop : 0;
+      // existing players: skip the intro story and don't re-toast tutorial steps
+      // they've already done (a brand-new save keeps storySeen false).
+      var isReturning = (typeof parsed.packsOpenedTotal === 'number' && parsed.packsOpenedTotal > 0) || Object.keys(parsed.collection || {}).length > 0 || (parsed.day || 1) > 1;
+      base.storySeen = (typeof parsed.storySeen === 'boolean') ? parsed.storySeen : isReturning;
+      base.tutSeen = (parsed.tutSeen && typeof parsed.tutSeen === 'object') ? parsed.tutSeen : {};
+      if (isReturning) seedTutSeen(base);
+      base.tutRewarded = (typeof parsed.tutRewarded === 'boolean') ? parsed.tutRewarded : (isReturning && tutorialDone(base));
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -1871,6 +1914,7 @@ function loadSave(){
 }
 function persist(save){
   try { celebrateNewAchievements(save); } catch (e) {}
+  try { celebrateTutorial(save); } catch (e) {}
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {}
 }
 // Toast each freshly-unlocked achievement (staggered so several read cleanly).
@@ -1879,6 +1923,22 @@ function celebrateNewAchievements(save){
   for (var i = 0; i < neu.length; i++) (function(a, d){
     setTimeout(function(){ toast(a.icon + ' ' + a.title + ' unlocked!', 'good'); try { hapticPulse('rare'); } catch (e) {} }, d);
   })(neu[i], i * 500);
+  return neu.length;
+}
+// Nudge the player through the getting-started steps: toast each first-time
+// milestone, and pay a small bonus the first time all of them are done. Only
+// runs once the intro story has been seen (a brand-new game, not a veteran).
+function celebrateTutorial(save){
+  if (!save.storySeen) return 0;   // don't fire until the story kicks things off
+  var neu = checkTutorialProgress(save);
+  for (var i = 0; i < neu.length; i++) (function(t, d){
+    setTimeout(function(){ toast('✓ ' + t.label + '  (' + tutorialCount(save) + '/' + TUTORIAL_STEPS.length + ')', 'good'); try { hapticPulse('common'); } catch (e) {} }, d);
+  })(neu[i], i * 500);
+  if (neu.length && tutorialDone(save) && !save.tutRewarded) {
+    save.tutRewarded = true; save.coins += TUTORIAL_REWARD;
+    setTimeout(function(){ toast('🎓 All set — here’s +' + TUTORIAL_REWARD + ' coins to get you going!', 'coin');
+      try { hapticPulse('rare'); renderTopbar(); } catch (e) {} }, neu.length * 500 + 200);
+  }
   return neu.length;
 }
 
@@ -3324,6 +3384,8 @@ function worldInit(){
   try { window.__W = W; } catch (e) {}   // dev aid: inspect world state from the console
   requestAnimationFrame(worldLoop);
   if (!W.petIntroed) { W.petIntroed = true; setTimeout(function(){ if (typeof toast === 'function') toast('🐱 ' + W.pet.name + ' the cat tags along!', 'good'); }, 1000); }
+  // brand-new game: roll the opening story, which hands off to the checklist
+  if (!save.storySeen) setTimeout(function(){ if (typeof introStory === 'function') introStory(); }, 500);
 }
 function worldResume(){ W.active = true; }
 function worldPause(){ W.active = false; W.keys = {}; W.dpad = {}; }
@@ -4041,10 +4103,12 @@ function actNoticeBoard(){
     '<div class="notice-row"><span class="notice-k">Tomorrow</span><span>' + (tomorrow !== 'none' ? DAY_EVENTS[tomorrow].label : 'looks quiet') + '</span></div>' +
     '<div class="notice-cardhead">&#10022; Card of the day &#10022;</div>' +
     miniCardHTML(cid, { note: (save.collection[cid] ? 'in your binder' : 'not yet yours') }) +
+    (!tutorialDone(save) ? '<button class="bigbtn ghost" id="wm-tut" style="margin-top:6px;">🎒 Getting Started (' + tutorialCount(save) + '/' + TUTORIAL_STEPS.length + ')</button>' : '') +
     '<button class="bigbtn" id="wm-done" style="margin-top:6px;">Got it</button>';
   $('modal-backdrop').classList.add('open');
   $('wm-x').addEventListener('click', closeModal);
   $('wm-done').addEventListener('click', closeModal);
+  var tb = $('wm-tut'); if (tb) tb.addEventListener('click', actTutorial);
   sfxClick();
 }
 function actFish(){
@@ -4370,6 +4434,52 @@ function actAchievements(){
   $('modal-backdrop').classList.add('open');
   $('ac-x').addEventListener('click', closeModal);
   $('ac-done').addEventListener('click', closeModal);
+  sfxClick();
+}
+// The opening story — sets the scene for a brand-new game, then hands off to
+// the getting-started checklist.
+function introStory(){
+  var panels = [
+    { emoji:'🏙️', title:'Welcome to Sunnyside', text:'It’s summer in Sunnyside Town — and the whole neighbourhood is crazy about Creature Cards. Rare ones, shiny ones, ones nobody’s ever seen…' },
+    { emoji:'📖', title:'Your empty binder', text:'You’ve got a few coins and one big goal: collect them all. Earn money with chores, lawns and odd jobs, then rip packs at the Kiosk and trade with the kids at school.' },
+    { emoji:'⭐', title:'Get popular', text:'Show off with the jump rope at school to earn popularity. The cool kid gets better trades and makes friends faster. Ready to build the ultimate collection?' },
+  ];
+  var i = 0;
+  function draw(){
+    var pnl = panels[i], sheet = $('modal-sheet');
+    sheet.innerHTML =
+      '<div style="text-align:center;">' +
+        '<div style="font-size:52px; line-height:1; margin:6px 0;">' + pnl.emoji + '</div>' +
+        '<h3 class="modal-title" style="text-align:center;">' + pnl.title + '</h3>' +
+        '<p class="smallnote" style="margin:6px 4px 14px; line-height:1.5;">' + pnl.text + '</p>' +
+        '<div class="story-dots">' + panels.map(function(_, k){ return '<span class="sd' + (k === i ? ' on' : '') + '"></span>'; }).join('') + '</div>' +
+        '<button class="bigbtn" id="story-next" style="margin-top:14px;">' + (i < panels.length - 1 ? 'Next' : 'Let’s go! 🎒') + '</button>' +
+      '</div>';
+    $('modal-backdrop').classList.add('open');
+    $('story-next').addEventListener('click', function(){
+      sfxClick();
+      if (i < panels.length - 1) { i++; draw(); }
+      else { save.storySeen = true; persist(save); closeModal(); setTimeout(actTutorial, 260); }
+    });
+  }
+  draw();
+}
+// The getting-started checklist — reachable from the story and the notice board.
+function actTutorial(){
+  var st = tutorialState(save), got = tutorialCount(save);
+  var next = st.filter(function(t){ return !t.done; })[0];
+  var rows = st.map(function(t){ return checklistRow(t.done, t.done ? '✅' : '▫️', t.label, t.done ? 'done' : t.hint); }).join('');
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<button class="closebtn" id="tut-x">&times;</button>' +
+    '<h3 class="modal-title">🎒 Getting Started</h3>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">' + got + ' of ' + st.length + ' done' +
+      (tutorialDone(save) ? ' — you’re all set! 🎉' : (next ? ' · up next: ' + next.hint : '')) + '</p>' +
+    '<div class="ach-list">' + rows + '</div>' +
+    '<button class="bigbtn" id="tut-done" style="margin-top:8px;">' + (tutorialDone(save) ? 'Done' : 'Got it') + '</button>';
+  $('modal-backdrop').classList.add('open');
+  $('tut-x').addEventListener('click', closeModal);
+  $('tut-done').addEventListener('click', closeModal);
   sfxClick();
 }
 
@@ -5432,6 +5542,7 @@ if (typeof globalThis !== 'undefined') {
     CANDY_PRICE: CANDY_PRICE, buyCandy: buyCandy, giveCandy: giveCandy,
     REL_TIERS: REL_TIERS, ENEMY_THRESHOLD: ENEMY_THRESHOLD, relOf: relOf, changeRel: changeRel, relTier: relTier,
     POP_TIERS: POP_TIERS, popularityTier: popularityTier, popDealBonus: popDealBonus, popFriendBonus: popFriendBonus,
+    TUTORIAL_STEPS: TUTORIAL_STEPS, TUTORIAL_REWARD: TUTORIAL_REWARD, tutorialState: tutorialState, tutorialCount: tutorialCount, tutorialDone: tutorialDone, checkTutorialProgress: checkTutorialProgress, seedTutSeen: seedTutSeen,
     canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
