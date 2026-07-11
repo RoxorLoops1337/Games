@@ -704,6 +704,21 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   // old save missing optional fields must not throw
   const old = TC.freshSave(); delete old.pet; delete old.lottery; delete old.allowance;
   ok(typeof TC.achievementCount(old) === 'number', 'achievements tolerate a save missing optional fields');
+  // cross-system achievements tied to the minigames / fish journal
+  const M = TC.freshSave();
+  ok(TC.achievementsState(M).find(a => a.id === 'angler').done === false, 'Master Angler starts locked');
+  TC.FISH_SPECIES.forEach(f => { M.fishJournal[f.id] = true; });
+  ok(TC.achievementsState(M).find(a => a.id === 'angler').done === true, 'catching every fish unlocks Master Angler');
+  M.jrBest = 10;
+  ok(TC.achievementsState(M).find(a => a.id === 'skipper').done === true, 'a jump-rope streak of 10 unlocks Rope Star');
+  M.arcadeBulls = 10;
+  ok(TC.achievementsState(M).find(a => a.id === 'sharp').done === true, 'ten arcade bullseyes unlock Sharpshooter');
+  const partial = TC.freshSave(); partial.jrBest = 9; partial.arcadeBulls = 9;
+  ok(TC.achievementsState(partial).find(a => a.id === 'skipper').done === false &&
+     TC.achievementsState(partial).find(a => a.id === 'sharp').done === false, 'just-short values stay locked');
+  // these tolerate a save missing the newer fields
+  const bare = TC.freshSave(); delete bare.fishJournal; delete bare.jrBest; delete bare.arcadeBulls;
+  ok(typeof TC.achievementCount(bare) === 'number', 'cross-system achievements tolerate missing fields');
 }
 
 // ---- allowance streak info ----
