@@ -615,6 +615,19 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canJumpRope(old) === true && TC.jumpRopePlay(old, 4) !== null, 'a save missing the jumprope field still works');
 }
 
+// ---- npc greetings ----
+{
+  const g = TC.npcGreeting({ id: 'keeper' }, 3);
+  ok(typeof g === 'string' && g.length > 0, 'an npc greeting is a non-empty string');
+  ok(TC.NPC_GREETINGS.keeper.includes(g), 'the keeper greets from their own line pool');
+  ok(TC.npcGreeting({ id: 'keeper' }, 3) === TC.npcGreeting({ id: 'keeper' }, 3), 'a greeting is deterministic for a given day');
+  ok(TC.npcGreeting({}, 3) === null && TC.npcGreeting(null, 1) === null, 'an actor without an id has no greeting');
+  const kid = TC.npcGreeting({ id: 'finn' }, 5);
+  ok(typeof kid === 'string' && kid.length > 0, 'a school kid falls back to the generic greeting pool');
+  const days = new Set(); for (let d = 1; d < 40; d++) days.add(TC.npcGreeting({ id: 'mom' }, d));
+  ok(days.size > 1, 'a greeting varies across days');
+}
+
 // ---- card of the day ----
 {
   const id = TC.cardOfDay(5);

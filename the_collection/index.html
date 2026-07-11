@@ -4786,6 +4786,17 @@ function drawPerson(ctx, x, y, color, name, dir, phase, actor){
     var by = y-54 + Math.sin(W.actorPhase*4)*1.5;
     ctx.fillStyle = '#e2a04a'; ctx.beginPath(); ctx.arc(x, by, 7, 0, 6.283); ctx.fill();
     ctx.fillStyle = '#2a1c08'; ctx.font = '700 11px serif'; ctx.textAlign = 'center'; ctx.fillText('!', x, by+4);
+  } else if (actor) {
+    // a friendly greeting when the player wanders up close
+    var d = Math.hypot(W.px - x, W.py - y);
+    var line = d < 78 ? npcGreeting(actor, save.day) : null;
+    if (line) {
+      ctx.font = '600 10px sans-serif'; ctx.textAlign = 'center';
+      var bw = ctx.measureText(line).width + 14, bx = x - bw/2, by2 = y - 62;
+      ctx.fillStyle = 'rgba(255,255,255,.94)'; roundRectPath(ctx, bx, by2, bw, 16, 8); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(x-4, by2+16); ctx.lineTo(x+4, by2+16); ctx.lineTo(x, by2+22); ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#3a2d1f'; ctx.fillText(line, x, by2+11);
+    }
   }
 }
 function npcHasBusiness(a){
@@ -4795,6 +4806,22 @@ function npcHasBusiness(a){
   // school kids: open offer available
   if (save.school && save.school.offers && save.school.offers[a.id]) return save.school.offers[a.id].state === 'open';
   return false;
+}
+// A short line each townsperson says when you wander up to them — chosen
+// deterministically per day so the world feels populated, not scripted.
+// Falls back to a generic pool; kids reuse their NPCS `line` too.
+var NPC_GREETINGS = {
+  mom: ['Hi sweetie!', 'Don’t track mud in.', 'Lunch is nearly ready.'],
+  dad: ['Hey champ.', 'Working hard, I see.', 'Saving up for a pack?'],
+  keeper: ['Welcome in!', 'Fresh packs today.', 'Take a look around.'],
+  cashier: ['Beep… beep…', 'Find everything okay?', 'Next in line!'],
+};
+var NPC_GREETINGS_GENERIC = ['Hey!', 'Nice day, huh?', 'What’s up?', 'Good to see ya.', 'Seen any rares?'];
+function npcGreeting(actor, day){
+  if (!actor || !actor.id) return null;
+  var pool = NPC_GREETINGS[actor.id] || NPC_GREETINGS_GENERIC;
+  var rand = seededRandom('greet-' + actor.id + '-' + Math.max(1, day));
+  return pool[Math.floor(rand() * pool.length)];
 }
 // Biscuit — a little orange tabby that trails the player everywhere.
 function drawPet(ctx, p){
@@ -4972,7 +4999,7 @@ if (typeof globalThis !== 'undefined') {
     dailyGoals: dailyGoals, weatherFor: weatherFor, cardOfDay: cardOfDay, seasonFor: seasonFor, festivalFor: festivalFor,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
-    walkersOutCount: walkersOutCount,
+    walkersOutCount: walkersOutCount, npcGreeting: npcGreeting, NPC_GREETINGS: NPC_GREETINGS,
     ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
     feedPet: feedPet,
     JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay,
