@@ -938,6 +938,7 @@ function freshSave(){
     mail: { lastDay: null },
     fishing: { day: null, casts: 0 },
     arcade: { day: null, plays: 0 },
+    jumprope: { day: null, tries: 0 },
   };
 }
 
@@ -1262,6 +1263,31 @@ function arcadePlay(save, offset){
   save.arcade.plays += 1;
   var res = arcadeReward(offset);
   save.coins += res.coins;
+  return res;
+}
+
+// School jump-rope: keep the rhythm going. streak = jumps landed on the beat.
+// Reward and relationship bump are pure + tested; the beat lives in the UI.
+var JUMPROPE_TRIES_PER_DAY = 3;
+function jumpRopeReward(streak){
+  var coins = Math.min(streak, 12) * 2 + (streak >= 10 ? 6 : 0);
+  var rel = streak >= 5 ? Math.min(6, Math.floor(streak / 3)) : 0;
+  return { coins: coins, rel: rel, streak: streak };
+}
+function jumpRopeTriesLeft(save){
+  var j = save.jumprope || {};
+  var used = (j.day === save.day) ? (j.tries || 0) : 0;
+  return Math.max(0, JUMPROPE_TRIES_PER_DAY - used);
+}
+function canJumpRope(save){ return jumpRopeTriesLeft(save) > 0; }
+function jumpRopePlay(save, streak, npcId){
+  if (!canJumpRope(save)) return null;
+  save.jumprope = save.jumprope || { day: null, tries: 0 };
+  if (save.jumprope.day !== save.day) { save.jumprope.day = save.day; save.jumprope.tries = 0; }
+  save.jumprope.tries += 1;
+  var res = jumpRopeReward(streak);
+  save.coins += res.coins;
+  if (res.rel && npcId) res.relNow = changeRel(save, npcId, res.rel);
   return res;
 }
 
@@ -1613,6 +1639,7 @@ function loadSave(){
       base.mail = (parsed.mail && typeof parsed.mail.lastDay !== 'undefined') ? parsed.mail : { lastDay: null };
       base.fishing = (parsed.fishing && typeof parsed.fishing.casts === 'number') ? parsed.fishing : { day: null, casts: 0 };
       base.arcade = (parsed.arcade && typeof parsed.arcade.plays === 'number') ? parsed.arcade : { day: null, plays: 0 };
+      base.jumprope = (parsed.jumprope && typeof parsed.jumprope.tries === 'number') ? parsed.jumprope : { day: null, tries: 0 };
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3496,7 +3523,7 @@ function buildMaps(){
   maps.school = {
     title: 'School Playground', w: 640, h: 460, kind:'outdoor', playground:true,
     grass: scatter('school-grass', 60, 640, 460),
-    equip: [ {t:'slide',x:500,y:90}, {t:'sandbox',x:70,y:330}, {t:'bench',x:300,y:360} ],
+    equip: [ {t:'slide',x:500,y:90}, {t:'sandbox',x:70,y:330}, {t:'bench',x:300,y:360}, {t:'skiprope',x:420,y:120} ],
     solids: [ {x:496,y:96,w:80,h:70}, {x:60,y:330,w:110,h:80} ],
     actors: kids,
     portals: [ { x:285, y:432, w:70, h:26, to:'town', sx:1211, sy:520 } ],
@@ -3504,6 +3531,7 @@ function buildMaps(){
       return { x:k.x, y:k.y+26, r:60, label:function(){ return 'Talk to ' + k.name; }, action:function(){ openNpcSheet(k.id); } };
     }).concat([
       { x:300, y:340, r:56, label:function(){ refreshSchoolIfNeeded(save); var d=(save.school.duels||[]).filter(function(x){return !x.done;}).length; return d ? 'Flip-duel corner (' + d + ')' : 'The duel corner is quiet today'; }, action:openDuelCorner },
+      { x:420, y:172, r:50, label:function(){ var n = jumpRopeTriesLeft(save); return n > 0 ? 'Jump rope (' + n + ' left)' : 'Too puffed to skip again today'; }, action:actJumpRope },
       { x:300, y:430, r:46, label:function(){ return 'Head home'; }, action:function(){ travel('town',1211,520); } },
     ]),
   };
@@ -3559,6 +3587,46 @@ function actSitBench(){
   sfxClick();
 }
 // cast a line at the pond — a short reel, then a seeded catch
+// school jump-rope — keep tapping on the beat to build a streak
+function actJumpRope(){
+  if (!canJumpRope(save)) { toast('Too puffed to skip again today', ''); return; }
+  var buddy = NPCS[0];
+  var sheet = $('modal-sheet');
+  sheet.innerHTML =
+    '<h3 class="modal-title">🪢 Jump Rope</h3>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">Tap JUMP each time the light hits the green. Keep the rhythm!</p>' +
+    '<div class="arc-bar"><div class="arc-zone"><i></i></div><div class="arc-mark" id="jr-mark"></div></div>' +
+    '<div class="reel-result" id="jr-res">Streak: 0</div>' +
+    '<button class="bigbtn" id="jr-btn">JUMP</button>';
+  $('modal-backdrop').classList.add('open');
+  var mark = $('jr-mark'), pos = 0, dir = 1, speed = 1.8, streak = 0, ended = false, raf = null;
+  function frame(){ if (ended) return; pos += dir * speed; if (pos >= 100) { pos = 100; dir = -1; } else if (pos <= 0) { pos = 0; dir = 1; } mark.style.left = pos + '%'; raf = requestAnimationFrame(frame); }
+  raf = requestAnimationFrame(frame);
+  function jump(){
+    if (ended) return;
+    var offset = Math.abs(pos - 50) / 50;
+    if (offset <= 0.34) {
+      streak++; speed = Math.min(4.4, speed + 0.2); $('jr-res').textContent = 'Streak: ' + streak; sfxTick();
+      if (streak >= 15) endRun(true);   // a perfect run caps out
+    } else { endRun(false); }
+  }
+  function endRun(perfect){
+    ended = true; if (raf) cancelAnimationFrame(raf);
+    var res = jumpRopePlay(save, streak, buddy.id); persist(save); renderTopbar();
+    var el = $('jr-res');
+    if (res && res.coins) {
+      el.innerHTML = (perfect ? 'Perfect run! ' : 'Streak ' + streak + '! ') + '+' + res.coins + ' coins' + (res.rel ? ' &middot; ' + buddy.name + ' had fun with you!' : '');
+      el.classList.add('good'); sfxCoins(); hapticPulse(perfect ? 'rare' : 'common');
+    } else { el.innerHTML = 'Tripped! No coins that time.'; el.classList.add('nada'); sfxClick(); }
+    var left = jumpRopeTriesLeft(save);
+    $('jr-btn').textContent = left > 0 ? 'Again (' + left + ')' : 'Done';
+  }
+  $('jr-btn').addEventListener('click', function(){
+    if (!ended) jump();
+    else if (canJumpRope(save)) actJumpRope();
+    else closeModal();
+  });
+}
 // the kiosk arcade — a stop-the-light timing game
 function actArcade(){
   if (!canPlayArcade(save)) { toast('The arcade’s out of plays for today', ''); return; }
@@ -4321,6 +4389,20 @@ function drawEquip(ctx, e){
   } else if (e.t === 'bench') {
     shadowEllipse(ctx, e.x+30, e.y+22, 32, 6);
     ctx.fillStyle = '#a9743e'; roundRectPath(ctx, e.x, e.y, 64, 12, 3); ctx.fill(); ctx.fillRect(e.x+4, e.y+12, 6, 12); ctx.fillRect(e.x+54, e.y+12, 6, 12);
+  } else if (e.t === 'skiprope') {
+    // two kids turning a rope that swings up and over
+    var lx = e.x - 26, rx = e.x + 26, cy = e.y;
+    var swing = Math.sin(W.actorPhase * 3);
+    shadowEllipse(ctx, e.x, cy + 20, 34, 7);
+    ctx.strokeStyle = '#c05a8f'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(lx, cy - 6); ctx.quadraticCurveTo(e.x, cy - 6 - swing * 34, rx, cy - 6); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx, cy - 6); ctx.quadraticCurveTo(e.x, cy - 6 + Math.min(0, -swing) * 30 + 26, rx, cy - 6); ctx.stroke();
+    // turners
+    [[lx, '#c98a3a'], [rx, '#5a8f6a']].forEach(function(t){
+      ctx.fillStyle = t[1]; ctx.beginPath(); ctx.ellipse(t[0], cy, 8, 10, 0, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#f3c99a'; ctx.beginPath(); ctx.arc(t[0], cy - 12, 5.5, 0, 6.283); ctx.fill();
+      ctx.fillStyle = '#4a3b2a'; ctx.beginPath(); ctx.arc(t[0], cy - 14, 5.5, Math.PI, 0); ctx.fill();
+    });
   }
 }
 function drawProp(ctx, p){
@@ -4606,6 +4688,7 @@ if (typeof globalThis !== 'undefined') {
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     walkersOutCount: walkersOutCount,
     ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
+    JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay,
   };
 }
 })();

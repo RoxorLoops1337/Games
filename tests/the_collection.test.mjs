@@ -594,6 +594,27 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.canPlayArcade(old) === true && TC.arcadePlay(old, 0) !== null, 'a save missing the arcade field still works');
 }
 
+// ---- jump rope ----
+{
+  ok(TC.jumpRopeReward(0).coins === 0, 'zero jumps pays nothing');
+  ok(TC.jumpRopeReward(6).coins > 0 && TC.jumpRopeReward(6).rel > 0, 'a decent streak pays coins and befriends');
+  ok(TC.jumpRopeReward(20).coins >= TC.jumpRopeReward(10).coins, 'a longer streak never pays less');
+  ok(TC.jumpRopeReward(3).rel === 0, 'a tiny streak gives no relationship bump');
+  const S = TC.freshSave();
+  ok(TC.jumpRopeTriesLeft(S) === TC.JUMPROPE_TRIES_PER_DAY, 'a fresh day has all jump-rope tries');
+  const before = S.coins, relBefore = TC.relOf(S, TC.NPCS[0].id);
+  const r = TC.jumpRopePlay(S, 6, TC.NPCS[0].id);
+  ok(r && S.coins === before + r.coins, 'playing credits coins');
+  ok(TC.relOf(S, TC.NPCS[0].id) > relBefore, 'a good run bumps the buddy relationship');
+  ok(TC.jumpRopeTriesLeft(S) === TC.JUMPROPE_TRIES_PER_DAY - 1, 'playing uses a daily try');
+  let n = 0; while (TC.canJumpRope(S)) { TC.jumpRopePlay(S, 2); n++; }
+  ok(n === TC.JUMPROPE_TRIES_PER_DAY - 1, 'the daily try limit is enforced');
+  ok(TC.jumpRopePlay(S, 5) === null, 'no tries left returns null');
+  S.day += 1; ok(TC.canJumpRope(S) === true, 'tries refill on a new day');
+  const old = TC.freshSave(); delete old.jumprope;
+  ok(TC.canJumpRope(old) === true && TC.jumpRopePlay(old, 4) !== null, 'a save missing the jumprope field still works');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
