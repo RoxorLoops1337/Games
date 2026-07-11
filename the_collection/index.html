@@ -2417,6 +2417,20 @@ function renderHome(){
   });
 }
 
+// Shared slot-reel animation: cycle `count` filler icons with a cubic
+// deceleration ramp, then land on `landIcon` and call onLand(). Used by the
+// chore reel and the fishing reel so the spin feel stays identical.
+function spinReel(iconEl, reel, count, landIcon, baseMs, rampMs, onLand){
+  var seq = [];
+  for (var i = 0; i < count; i++) seq.push(reel[i % reel.length]);
+  seq.push(landIcon);
+  var idx = 0;
+  (function tick(){
+    iconEl.textContent = seq[idx]; sfxTick(); idx++;
+    if (idx >= seq.length) { iconEl.classList.add('reel-land'); onLand(); return; }
+    setTimeout(tick, baseMs + Math.pow(idx / seq.length, 3) * rampMs);
+  })();
+}
 // Do the chore (outcome already decided + banked), then spin a little reel
 // of icons that decelerates and lands on what you found.
 function openChoreReel(choreId){
@@ -2434,23 +2448,7 @@ function openChoreReel(choreId){
   $('modal-backdrop').classList.add('open');
   var iconEl = $('reel-icon');
   var landIcon = OUTCOME_ICON[res.kind] || '🪙';
-  var seq = [];
-  for (var i = 0; i < 16; i++) seq.push(chore.reel[i % chore.reel.length]);
-  seq.push(landIcon);
-  var idx = 0;
-  function tick(){
-    iconEl.textContent = seq[idx];
-    sfxTick();
-    idx++;
-    if (idx >= seq.length) {
-      iconEl.classList.add('reel-land');
-      showChoreResult(res);
-      return;
-    }
-    var t = idx / seq.length;
-    setTimeout(tick, 45 + Math.pow(t, 3) * 300);
-  }
-  tick();
+  spinReel(iconEl, chore.reel, 16, landIcon, 45, 300, function(){ showChoreResult(res); });
 
   function showChoreResult(r){
     var parts = [];
@@ -4029,13 +4027,7 @@ function actFish(){
   var iconEl = $('reel-icon');
   var reel = ['🎣', '🌊', '🐟', '🌊', '💦', '🌊'];
   var landIcon = res.fishId ? FISH_BY_ID[res.fishId].emoji : ({ coin: '🪙', bigcoin: '💰', candy: '🍬', card: '🃏', boot: '🥾' }[res.kind] || '🌊');
-  var seq = []; for (var i = 0; i < 14; i++) seq.push(reel[i % reel.length]); seq.push(landIcon);
-  var idx = 0;
-  (function tick(){
-    iconEl.textContent = seq[idx]; sfxTick(); idx++;
-    if (idx >= seq.length) { iconEl.classList.add('reel-land'); showFish(); return; }
-    setTimeout(tick, 50 + Math.pow(idx / seq.length, 3) * 280);
-  })();
+  spinReel(iconEl, reel, 14, landIcon, 50, 280, showFish);
   function showFish(){
     var win = res.coins || res.candy || res.cardId;
     var parts = [];
