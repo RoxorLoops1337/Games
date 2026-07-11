@@ -507,6 +507,8 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .pk-q{font-family:var(--serif); font-size:20px; color:var(--ink-faint);}
 .pk-count{position:absolute; bottom:3px; right:5px; font-family:var(--mono); font-size:8.5px; color:var(--stock-ink-soft);}
 .foil-dot{position:absolute; bottom:5px; left:6px; width:6px; height:6px; border-radius:50%; background:var(--t-reverseholo);}
+.pk-new{position:absolute; top:4px; right:4px; background:#e2543f; color:#fff; font-family:var(--mono); font-size:7.5px; font-weight:700; letter-spacing:.5px; padding:1.5px 4px; border-radius:5px; box-shadow:0 1px 3px rgba(0,0,0,.3); animation:pknew 1.1s ease-in-out infinite;}
+@keyframes pknew{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
 .binder-nav{display:flex; align-items:center; justify-content:space-between; margin-top:12px; padding-bottom:8px;}
 .binder-nav button{
   font-family:var(--mono); font-size:12px; font-weight:700; padding:10px 18px; border-radius:8px;
@@ -960,6 +962,7 @@ function freshSave(){
     pet: { name: 'Biscuit', affection: 0 },
     achSeen: {},
     dayStart: { day: 1, coins: 0, cards: 0, ach: 0 },
+    newCards: {},
   };
 }
 
@@ -1485,9 +1488,14 @@ function cardValue(id){ return TIER_BY_KEY[BY_ID[id].tier].sell; }
 
 function addCardById(save, id){
   var rec = save.collection[id];
-  if (!rec) { rec = { count: 0, reverseHolo: false }; save.collection[id] = rec; }
+  if (!rec) {
+    rec = { count: 0, reverseHolo: false }; save.collection[id] = rec;
+    save.newCards = save.newCards || {}; save.newCards[id] = true;   // flag first-time pulls for the binder "NEW" badge
+  }
   rec.count += 1;
 }
+// clear a card's "NEW" flag once the player has looked at it in the binder
+function markCardSeen(save, id){ if (save.newCards && save.newCards[id]) { delete save.newCards[id]; return true; } return false; }
 
 function removeCardById(save, id){
   var rec = save.collection[id];
@@ -1755,6 +1763,7 @@ function loadSave(){
       // seed today's snapshot from current progress so an existing save doesn't
       // show a bogus first-night delta
       base.dayStart = (parsed.dayStart && typeof parsed.dayStart.day === 'number') ? parsed.dayStart : daySnapshot(base);
+      base.newCards = (parsed.newCards && typeof parsed.newCards === 'object') ? parsed.newCards : {};
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -2661,7 +2670,7 @@ function openerStageSummary(){
 var binderPage = 0;
 var binderShowMissing = false;
 
-function pocketHTML(c, rec){
+function pocketHTML(c, rec, isNew){
   var tc = 'var(--t-' + c.tier + ')';
   if (!rec) {
     return '<div class="pocket">' +
@@ -2681,6 +2690,7 @@ function pocketHTML(c, rec){
     '<div class="pk-name">' + c.name + '</div>' +
     (rec.reverseHolo ? '<span class="foil-dot"></span>' : '') +
     (rec.count > 1 ? '<span class="pk-count">x' + rec.count + '</span>' : '') +
+    (isNew ? '<span class="pk-new">NEW</span>' : '') +
   '</div>';
 }
 
@@ -2714,7 +2724,7 @@ function renderBinder(){
     }
     body =
       '<div class="binder-page">' +
-        cardsOnPage.map(function(c){ return pocketHTML(c, save.collection[c.id]); }).join('') +
+        cardsOnPage.map(function(c){ return pocketHTML(c, save.collection[c.id], !!(save.newCards && save.newCards[c.id])); }).join('') +
       '</div>' +
       rewardStrip +
       '<div class="binder-nav">' +
@@ -2775,6 +2785,7 @@ function openCardModal(id){
   var card = BY_ID[id];
   var rec = save.collection[id];
   if (!card || !rec) return;
+  if (markCardSeen(save, id)) { persist(save); renderBinder(); }   // clear the "NEW" badge once looked at
   var tier = TIER_BY_KEY[card.tier];
   var sheet = $('modal-sheet');
   sheet.innerHTML =
@@ -5227,7 +5238,7 @@ if (typeof globalThis !== 'undefined') {
     hitTierForPack: hitTierForPack, seededRandom: seededRandom, pickWeighted: pickWeighted,
     duplicateValue: duplicateValue, sellAllDuplicates: sellAllDuplicates,
     NPCS: NPCS, freshSchool: freshSchool, refreshSchoolIfNeeded: refreshSchoolIfNeeded,
-    cardValue: cardValue, addCardById: addCardById, removeCardById: removeCardById,
+    cardValue: cardValue, addCardById: addCardById, removeCardById: removeCardById, markCardSeen: markCardSeen,
     OFFER_QUALITIES: OFFER_QUALITIES, makeOffer: makeOffer,
     canAcceptOffer: canAcceptOffer, acceptOffer: acceptOffer, counterOffer: counterOffer, declineOffer: declineOffer,
     buildDuelsForDay: buildDuelsForDay, duelChance: duelChance, resolveDuel: resolveDuel,

@@ -638,6 +638,27 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(typeof TC.achievementCount(old) === 'number', 'achievements tolerate a save missing optional fields');
 }
 
+// ---- new-card "NEW" badge tracking ----
+{
+  const S = TC.freshSave();
+  const id = TC.CORE_SET[0].id;
+  ok(!S.newCards[id], 'a card starts not-new');
+  TC.addCardById(S, id);
+  ok(S.newCards[id] === true, 'a first-time pull is flagged new');
+  TC.addCardById(S, id);   // a duplicate
+  ok(S.newCards[id] === true, 'pulling a duplicate keeps the flag (already owned, still unseen)');
+  ok(TC.markCardSeen(S, id) === true && !S.newCards[id], 'viewing the card clears the new flag');
+  ok(TC.markCardSeen(S, id) === false, 'clearing an already-seen card is a no-op');
+  // duplicate of an already-owned card does not re-flag once seen
+  TC.addCardById(S, id);
+  ok(!S.newCards[id], 'a duplicate of a seen, already-owned card is not re-flagged');
+  // old save without newCards still works
+  const old = TC.freshSave(); delete old.newCards;
+  const id2 = TC.CORE_SET[1].id;
+  TC.addCardById(old, id2);
+  ok(old.newCards && old.newCards[id2] === true, 'addCardById tolerates a save missing newCards');
+}
+
 // ---- day summary (bedtime recap) ----
 {
   const S = TC.freshSave();
