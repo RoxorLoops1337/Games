@@ -2925,6 +2925,8 @@ var W = {
   lastX: 0, lastY: 0, stall: 0,
   maps: null, actorPhase: 0,
   goalsOpen: true, goalsSig: '', goalsT: 0,
+  pet: { x: 250, y: 546, dir: 'down', walk: 0, moving: false, emote: null, emoteT: 0, name: 'Biscuit' },
+  petIntroed: false,
 };
 var ZOOM = 1.15, WALK_SPEED = 168, PLAYER_R = 13;
 
@@ -2941,6 +2943,7 @@ function worldInit(){
   goMap('town', 270, 520, true);
   W.running = true; W.active = true; W.last = 0;
   requestAnimationFrame(worldLoop);
+  if (!W.petIntroed) { W.petIntroed = true; setTimeout(function(){ if (typeof toast === 'function') toast('🐱 ' + W.pet.name + ' the cat tags along!', 'good'); }, 1000); }
 }
 function worldResume(){ W.active = true; }
 function worldPause(){ W.active = false; W.keys = {}; W.dpad = {}; }
@@ -3019,6 +3022,7 @@ function curMap(){ return W.maps[W.map]; }
 function goMap(id, sx, sy, silent){
   W.map = id; W.px = sx; W.py = sy; W.vx = W.vy = 0; W.moving = false; W.dir = 'down';
   W.target = null; W.camSnap = true;
+  W.pet.x = sx - 26; W.pet.y = sy + 8; W.pet.emoteT = 0; W.pet.moving = false;  // the pet comes with you
   setLocLabel();
   refreshGoals(true);
   if (!silent) sfxClick();
@@ -3108,6 +3112,7 @@ function worldUpdate(dt){
     if (W.stall > 0.4) { W.target = null; W.stall = 0; }
   }
   W.lastX = W.px; W.lastY = W.py;
+  updatePet(dt);
 
   var m = curMap();
   // auto-portals: step onto a door to travel
@@ -3132,6 +3137,23 @@ function worldUpdate(dt){
 function doPortal(p){
   goMap(p.to, p.sx, p.sy);
 }
+// The pet trails a fixed distance behind the player's facing, easing in and
+// catching up if it lags. Rests just behind you when you stop.
+function updatePet(dt){
+  var p = W.pet;
+  var off = 30;
+  var dv = { up:[0,-1], down:[0,1], left:[-1,0], right:[1,0] }[W.dir] || [0,1];
+  var tx = W.px - dv[0] * off, ty = W.py - dv[1] * off + 4;
+  var dx = tx - p.x, dy = ty - p.y, d = Math.hypot(dx, dy);
+  if (d > 4) {
+    var spd = Math.min(WALK_SPEED * 1.2, 26 + d * 5);
+    p.x += (dx / d) * spd * dt; p.y += (dy / d) * spd * dt;
+    p.dir = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    p.moving = true; p.walk += dt * 12;
+  } else { p.moving = false; }
+  if (p.emoteT > 0) p.emoteT -= dt;
+}
+function petReact(kind){ W.pet.emote = kind; W.pet.emoteT = 1.3; }
 function showPrompt(text, ready){
   var el = $('world-prompt'); if (!el) return;
   el.innerHTML = (ready ? '<span class="akey">A</span>' : '') + '<span>' + text + '</span>';
@@ -3144,7 +3166,7 @@ function hidePrompt(){
 }
 function worldInteract(){
   if (worldBlocked() || activeTab !== 'world') return;
-  if (W.prompt && W.prompt.action) { sfxClick(); W.prompt.action(); }
+  if (W.prompt && W.prompt.action) { sfxClick(); petReact('heart'); W.prompt.action(); }
 }
 
 /* =====================================================================
@@ -3489,6 +3511,7 @@ function worldDraw(){
   if (m.trees) m.trees.forEach(function(t){ drawList.push({ y: t.y + 40, fn: function(){ drawTree(ctx, t.x, t.y); } }); });
   if (m.actors) m.actors.forEach(function(a){ drawList.push({ y: a.y + 22, fn: function(){ drawPerson(ctx, a.x, a.y, a.color, a.name, 'down', W.actorPhase + a.x, a); } }); });
   if (m.walkers) m.walkers.forEach(function(wk){ drawList.push({ y: wk.y + 16, fn: function(){ drawChar(ctx, wk.x, wk.y, { tee: wk.color, cap: wk.hair, capDark: wk.hair, dir: wk.dir || 'right', walk: wk.wphase }); } }); });
+  drawList.push({ y: W.pet.y, fn: function(){ drawPet(ctx, W.pet); } });
   drawList.push({ y: W.py, fn: function(){ drawPlayer(ctx); } });
   drawList.sort(function(a, b){ return a.y - b.y; });
   drawList.forEach(function(d){ d.fn(); });
@@ -3915,6 +3938,58 @@ function npcHasBusiness(a){
   // school kids: open offer available
   if (save.school && save.school.offers && save.school.offers[a.id]) return save.school.offers[a.id].state === 'open';
   return false;
+}
+// Biscuit — a little orange tabby that trails the player everywhere.
+function drawPet(ctx, p){
+  var x = p.x, y = p.y, dir = p.dir || 'down';
+  var bob = p.moving ? Math.abs(Math.sin(p.walk)) * 1.4 : 0;
+  var yy = y - bob;
+  var col = '#d68a4a', dark = shade(col, -24);
+  shadowEllipse(ctx, x, y + 7, 11, 4);
+  // tail, wagging
+  var wag = Math.sin((p.walk || 0) * 0.7 + W.actorPhase * 3) * 4;
+  var tbx = x + (dir === 'left' ? 8 : dir === 'right' ? -8 : 0);
+  ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(tbx, yy + 2);
+  ctx.quadraticCurveTo(tbx + (dir === 'left' ? 14 : dir === 'right' ? -14 : 10), yy - 4 + wag, tbx + (dir === 'left' ? 14 : dir === 'right' ? -14 : 12), yy - 12 + wag);
+  ctx.stroke();
+  // legs
+  var sw = p.moving ? Math.sin(p.walk) * 2 : 0;
+  ctx.fillStyle = dark; ctx.fillRect(x - 6, yy + 4, 3, 6 + sw); ctx.fillRect(x + 3, yy + 4, 3, 6 - sw);
+  // body
+  ctx.fillStyle = col; ctx.beginPath(); ctx.ellipse(x, yy, 10, 8, 0, 0, 6.283); ctx.fill();
+  ctx.fillStyle = 'rgba(255,255,255,.16)'; ctx.beginPath(); ctx.ellipse(x, yy - 2, 8, 4, 0, 0, 6.283); ctx.fill();
+  ctx.strokeStyle = dark; ctx.lineWidth = 1.4; for (var st = -1; st <= 1; st++) { ctx.beginPath(); ctx.moveTo(x + st * 4, yy - 6); ctx.lineTo(x + st * 4, yy - 1); ctx.stroke(); }
+  // head
+  var hx = x + (dir === 'left' ? -6 : dir === 'right' ? 6 : 0), hy = yy - (dir === 'up' ? 8 : 6);
+  ctx.fillStyle = col; ctx.beginPath(); ctx.arc(hx, hy, 6.5, 0, 6.283); ctx.fill();
+  ctx.fillStyle = col; ctx.beginPath();
+  ctx.moveTo(hx - 5.5, hy - 3); ctx.lineTo(hx - 8, hy - 9); ctx.lineTo(hx - 2, hy - 6); ctx.closePath();
+  ctx.moveTo(hx + 5.5, hy - 3); ctx.lineTo(hx + 8, hy - 9); ctx.lineTo(hx + 2, hy - 6); ctx.closePath(); ctx.fill();
+  // face — cats blink every few seconds; hidden when facing away
+  if (dir !== 'up') {
+    var blink = (W.actorPhase % 3.5) < 0.14;
+    var ex = dir === 'left' ? -3.5 : dir === 'right' ? 0.5 : -2.5;
+    ctx.fillStyle = '#2a2018';
+    if (blink) { ctx.fillRect(hx + ex, hy - 1, 2, 1); ctx.fillRect(hx + ex + 4, hy - 1, 2, 1); }
+    else { ctx.fillRect(hx + ex, hy - 2, 2, 2.4); ctx.fillRect(hx + ex + 4, hy - 2, 2, 2.4); }
+    ctx.fillStyle = '#e07a7a'; ctx.beginPath(); ctx.arc(hx + ex + 2.6, hy + 2, 1.2, 0, 6.283); ctx.fill();
+  }
+  // emote bubble
+  if (p.emoteT > 0) {
+    var t = 1.3 - p.emoteT, ey = hy - 13 - t * 7;
+    ctx.globalAlpha = Math.min(1, p.emoteT * 2);
+    if (p.emote === 'heart') { ctx.fillStyle = '#e8556a'; drawHeart(ctx, hx, ey, 4.2); }
+    else { ctx.fillStyle = '#f4ead2'; ctx.font = '700 13px serif'; ctx.textAlign = 'center'; ctx.fillText('?', hx, ey + 4); }
+    ctx.globalAlpha = 1;
+  }
+}
+function drawHeart(ctx, x, y, r){
+  ctx.beginPath();
+  ctx.moveTo(x, y + r * 0.9);
+  ctx.bezierCurveTo(x + r, y - r * 0.4, x + r * 0.55, y - r * 1.15, x, y - r * 0.35);
+  ctx.bezierCurveTo(x - r * 0.55, y - r * 1.15, x - r, y - r * 0.4, x, y + r * 0.9);
+  ctx.closePath(); ctx.fill();
 }
 function drawPlayer(ctx){
   drawChar(ctx, W.px, W.py, {
