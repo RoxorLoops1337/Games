@@ -3030,7 +3030,8 @@ function goMap(id, sx, sy, silent){
 function setLocLabel(){
   var loc = $('world-loc'); if (!loc || !W.maps) return;
   var m = W.maps[W.map]; if (!m) return;
-  loc.textContent = m.title + ' · ' + daypart().key;
+  var wx = m.kind === 'indoor' ? '' : ' · ' + weatherFor(save.day);
+  loc.textContent = m.title + ' · ' + daypart().key + wx;
 }
 // The collapsible "Today" checklist, shown only on the town.
 function refreshGoals(force){
@@ -3541,8 +3542,27 @@ function worldDraw(){
   }
   // daypart particles: golden-hour motes, dusk stars (screen space, subtle)
   drawDaypartParticles(ctx, vw, vh);
+  // weather overlay (rain streaks / overcast wash) — outdoors only
+  if (m.kind !== 'indoor') drawWeather(ctx, vw, vh);
   // corner minimap on the town so it's easy to navigate
   if (m.buildings) drawMinimap(ctx, m, vw, vh);
+}
+function drawWeather(ctx, vw, vh){
+  var w = weatherFor(save.day);
+  if (w === 'rain') {
+    ctx.save();
+    ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#8b96ae'; ctx.globalAlpha = 0.22; ctx.fillRect(0, 0, vw, vh);
+    ctx.restore();
+    ctx.save(); ctx.strokeStyle = 'rgba(205,218,236,.5)'; ctx.lineWidth = 1.4; ctx.lineCap = 'round';
+    for (var i = 0; i < 90; i++) {
+      var x = (i * 61.3) % (vw + 20);
+      var y = ((i * 93.7) + W.actorPhase * 620) % (vh + 24) - 12;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x - 6, y + 15); ctx.stroke();
+    }
+    ctx.restore();
+  } else if (w === 'overcast') {
+    ctx.save(); ctx.globalCompositeOperation = 'multiply'; ctx.fillStyle = '#b6bcc6'; ctx.globalAlpha = 0.17; ctx.fillRect(0, 0, vw, vh); ctx.restore();
+  }
 }
 // advance strolling townsfolk (ping-pong along a→b) and drifting birds
 function updateAmbient(m, dt){
@@ -3621,6 +3641,17 @@ var DAYPARTS = [
 function daypart(){ return DAYPARTS[((save.day % DAYPARTS.length) + DAYPARTS.length) % DAYPARTS.length]; }
 function ambientTint(){ return daypart(); }
 
+// Each day gets its own weather, seeded off the day number so it's stable
+// and testable. Day 1 is always a clear start.
+function weatherFor(day){
+  if (day <= 1) return 'clear';
+  var r = seededRandom('weather-' + day)();
+  if (r < 0.46) return 'clear';
+  if (r < 0.70) return 'cloudy';
+  if (r < 0.85) return 'overcast';
+  return 'rain';
+}
+
 function drawOutdoor(ctx, m){
   // grass base with soft patches
   ctx.fillStyle = m.playground ? '#8bb86a' : '#5aa64f';
@@ -3639,6 +3670,17 @@ function drawOutdoor(ctx, m){
   }); }
   if (!m.playground) drawTownPaths(ctx, m);
   if (m.playground) drawPlaygroundGround(ctx, m);
+  // drifting cloud shadows on cloudy / overcast / rainy days
+  var wth = weatherFor(save.day);
+  if (wth !== 'clear') {
+    ctx.save(); ctx.fillStyle = 'rgba(30,40,52,' + (wth === 'overcast' || wth === 'rain' ? 0.12 : 0.08) + ')';
+    for (var c = 0; c < 5; c++) {
+      var cx = ((c * 380 + W.actorPhase * 16) % (m.w + 320)) - 160;
+      var cy = ((c * 251 + 140) % (m.h - 120)) + 60;
+      ctx.beginPath(); ctx.ellipse(cx, cy, 140, 68, 0, 0, 6.283); ctx.fill();
+    }
+    ctx.restore();
+  }
   // decorative fence + mailbox sit on top of the paths at the yard border
   if (m.fences) { m.fences.forEach(function(f){ drawFence(ctx, f); }); }
   if (m.mailbox) drawMailbox(ctx, m.mailbox.x, m.mailbox.y);
@@ -3677,6 +3719,16 @@ function drawTownPaths(ctx, m){
   // dashed centre line
   ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 3; ctx.setLineDash([16, 14]);
   ctx.beginPath(); ctx.moveTo(48, 539); ctx.lineTo(m.w - 48, 539); ctx.stroke(); ctx.setLineDash([]);
+  // puddles with a rippling ring when it rains
+  if (weatherFor(save.day) === 'rain') {
+    var puddles = [[300, 528], [720, 556], [1120, 532], [520, 562], [960, 546]];
+    var rr = (W.actorPhase % 1.4) / 1.4;
+    puddles.forEach(function(pp){
+      ctx.fillStyle = 'rgba(150,180,214,.28)'; ctx.beginPath(); ctx.ellipse(pp[0], pp[1], 26, 9, 0, 0, 6.283); ctx.fill();
+      ctx.strokeStyle = 'rgba(215,228,244,' + (0.35 * (1 - rr)) + ')'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.ellipse(pp[0], pp[1], 7 + rr * 15, 2.5 + rr * 5, 0, 0, 6.283); ctx.stroke();
+    });
+  }
 }
 function doorX(b){
   if (b.key === 'home') return 243; if (b.key === 'kiosk') return 712; if (b.key === 'school') return 1211; if (b.key === 'market') return 848; return b.x + b.w/2;
@@ -4095,7 +4147,7 @@ if (typeof globalThis !== 'undefined') {
     canSteal: canSteal, stealChance: stealChance, attemptSteal: attemptSteal, spareCardIds: spareCardIds,
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
-    dailyGoals: dailyGoals,
+    dailyGoals: dailyGoals, weatherFor: weatherFor,
   };
 }
 })();

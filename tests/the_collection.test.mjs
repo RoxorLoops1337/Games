@@ -506,6 +506,16 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.dailyGoals(S).find(x => x.id === 'chore').done === true, 'doing a chore ticks the chore goal off');
 }
 
+// ---- weather ----
+{
+  ok(TC.weatherFor(1) === 'clear', 'day 1 is always clear');
+  const kinds = new Set();
+  for (let d = 2; d < 300; d++) kinds.add(TC.weatherFor(d));
+  ok([...kinds].every(k => ['clear', 'cloudy', 'overcast', 'rain'].includes(k)), 'weather is always one of the known kinds');
+  ok(kinds.has('rain') && kinds.has('clear') && kinds.has('cloudy'), 'the weather varies across days');
+  ok(TC.weatherFor(42) === TC.weatherFor(42), 'weather is deterministic for a given day');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
