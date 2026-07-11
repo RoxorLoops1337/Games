@@ -601,6 +601,26 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
     const r = TC.fishCast(noJ); if (r.fishId) { ok(noJ.fishJournal[r.fishId] === true, 'a save missing fishJournal still logs a catch'); break; } }
 }
 
+// ---- floating joystick vector ----
+{
+  const R = 52, D = 9;
+  // inside the deadzone → neutral (stand still even while the stick is down)
+  ok(TC.joyVector(0, 0, R, D).mag === 0, 'no drag is neutral');
+  ok(TC.joyVector(5, 5, R, D).mag === 0, 'a tiny wobble under the deadzone is neutral');
+  // a partial push gives a proportional magnitude (analog speed)
+  const half = TC.joyVector(26, 0, R, D);
+  ok(Math.abs(half.mag - 0.5) < 1e-9 && Math.abs(half.x - 0.5) < 1e-9 && half.y === 0, 'a half push points right at half strength');
+  // pushing past the radius clamps to full strength but keeps direction
+  const over = TC.joyVector(200, 0, R, D);
+  ok(over.mag === 1 && Math.abs(over.x - 1) < 1e-9, 'pushing past the ring clamps to full speed');
+  // direction is a proper unit-scaled vector: magnitude of {x,y} equals mag
+  const diag = TC.joyVector(100, 100, R, D);
+  ok(Math.abs(Math.hypot(diag.x, diag.y) - diag.mag) < 1e-9 && diag.mag === 1, 'a diagonal push is full strength along the diagonal');
+  // down/left directions carry the right signs
+  const dl = TC.joyVector(-30, 40, R, D);
+  ok(dl.x < 0 && dl.y > 0, 'down-left drag yields negative x, positive y');
+}
+
 // ---- townsfolk presence ----
 {
   for (let d = 1; d < 200; d++) {
