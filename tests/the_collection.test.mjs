@@ -638,6 +638,28 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(typeof TC.achievementCount(old) === 'number', 'achievements tolerate a save missing optional fields');
 }
 
+// ---- allowance streak info ----
+{
+  const S = TC.freshSave();
+  for (let day = 1; day <= 5; day++) {
+    S.day = day;
+    const info = TC.allowanceStreakInfo(S);
+    const before = S.coins;
+    const paid = TC.claimAllowance(S);
+    ok(paid === info.amount, 'day ' + day + ': streak info predicts the exact payout');
+    ok(S.coins === before + paid, 'day ' + day + ': coins rise by the payout');
+    ok(info.streak === day, 'day ' + day + ': the streak grows each consecutive day');
+  }
+  ok(S.allowance.streak === 5, 'a five-day run builds a streak of 5');
+  // a gap resets the streak
+  S.day = 10;
+  ok(TC.allowanceStreakInfo(S).streak === 1, 'skipping days resets the streak to 1');
+  // old save without an allowance field still yields numbers
+  const old = TC.freshSave(); delete old.allowance;
+  const oi = TC.allowanceStreakInfo(old);
+  ok(oi.streak === 1 && typeof oi.amount === 'number', 'streak info tolerates a missing allowance field');
+}
+
 // ---- daily-goal completion bonus ----
 {
   function allDone(){
