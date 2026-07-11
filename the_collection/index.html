@@ -129,6 +129,9 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 }
 .world-goals li.done .wg-box{background:#7ec86a; border-color:#7ec86a;}
 .world-goals li.done span{opacity:.55; text-decoration:line-through;}
+.world-goals li.wg-bonus{display:block; margin-top:4px; padding-top:5px; border-top:1px solid rgba(255,235,200,.18); font-size:11px; font-weight:600;}
+.world-goals li.wg-bonus.pending{color:#ffd98a; opacity:.85;}
+.world-goals li.wg-bonus:not(.pending){color:#8fe08a;}
 .world-prompt{
   position:absolute; left:50%; bottom:150px; transform:translateX(-50%) translateY(8px);
   background:rgba(20,16,10,.82); color:#ffe9c2; font-size:13.5px; font-weight:600;
@@ -963,6 +966,7 @@ function freshSave(){
     achSeen: {},
     dayStart: { day: 1, coins: 0, cards: 0, ach: 0 },
     newCards: {},
+    goalBonus: { day: null },
   };
 }
 
@@ -1372,6 +1376,18 @@ function dailyGoals(save){
     { id: 'school',    label: 'Sort things out at school', done: !!schoolHandled },
   ];
 }
+// Clearing all of the day's goals earns a one-time bonus — a reason to make
+// the full round rather than cherry-pick. Pure + tested.
+var DAILY_GOAL_BONUS = 30;
+function allGoalsDone(save){ return dailyGoals(save).every(function(g){ return g.done; }); }
+function dailyBonusClaimable(save){ return allGoalsDone(save) && !(save.goalBonus && save.goalBonus.day === save.day); }
+function claimDailyBonus(save){
+  if (!dailyBonusClaimable(save)) return 0;
+  save.goalBonus = save.goalBonus || { day: null };
+  save.goalBonus.day = save.day;
+  save.coins += DAILY_GOAL_BONUS;
+  return DAILY_GOAL_BONUS;
+}
 // The notice board's "card of the day" — a deterministic pick per day.
 function cardOfDay(day){
   var rand = seededRandom('card-of-day-' + day);
@@ -1764,6 +1780,7 @@ function loadSave(){
       // show a bogus first-night delta
       base.dayStart = (parsed.dayStart && typeof parsed.dayStart.day === 'number') ? parsed.dayStart : daySnapshot(base);
       base.newCards = (parsed.newCards && typeof parsed.newCards === 'object') ? parsed.newCards : {};
+      base.goalBonus = (parsed.goalBonus && typeof parsed.goalBonus.day !== 'undefined') ? parsed.goalBonus : { day: null };
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3318,7 +3335,14 @@ function refreshGoals(force){
   if (!onTown) return;
   var goals = dailyGoals(save);
   var done = goals.filter(function(g){ return g.done; }).length;
-  var sig = (W.goalsOpen ? 'o' : 'c') + goals.map(function(g){ return g.done ? 1 : 0; }).join('');
+  // clearing the whole list pays a one-time bonus, celebrated on the spot
+  if (dailyBonusClaimable(save)) {
+    var gained = claimDailyBonus(save);
+    if (gained > 0) { persist(save); renderTopbar(); sfxCoins(); hapticPulse('rareholo');
+      toast('All goals done! +' + gained + ' coins 🎉', 'coin'); }
+  }
+  var bonusDone = save.goalBonus && save.goalBonus.day === save.day;
+  var sig = (W.goalsOpen ? 'o' : 'c') + goals.map(function(g){ return g.done ? 1 : 0; }).join('') + (bonusDone ? 'B' : '');
   if (!force && sig === W.goalsSig) return;
   W.goalsSig = sig;
   el.classList.toggle('collapsed', !W.goalsOpen);
@@ -3326,7 +3350,10 @@ function refreshGoals(force){
     '<div class="wg-head"><span class="wg-title">Today</span><span class="wg-count">' + done + '/' + goals.length + (W.goalsOpen ? ' ▾' : ' ▸') + '</span></div>' +
     '<ul>' + goals.map(function(g){
       return '<li class="' + (g.done ? 'done' : '') + '"><span class="wg-box">' + (g.done ? '✓' : '') + '</span><span>' + g.label + '</span></li>';
-    }).join('') + '</ul>';
+    }).join('') +
+    (bonusDone ? '<li class="wg-bonus">🎉 All done — bonus +' + DAILY_GOAL_BONUS + ' claimed</li>'
+               : '<li class="wg-bonus pending">Clear all ' + goals.length + ' for +' + DAILY_GOAL_BONUS + ' coins</li>') +
+    '</ul>';
   var head = el.querySelector('.wg-head');
   if (head) head.addEventListener('click', function(){ W.goalsOpen = !W.goalsOpen; refreshGoals(true); });
 }
@@ -5251,6 +5278,7 @@ if (typeof globalThis !== 'undefined') {
     NEIGHBORS: NEIGHBORS, LAWN_COOLDOWN: LAWN_COOLDOWN, lawnState: lawnState, lawnOutcome: lawnOutcome, mowLawn: mowLawn,
     LOTTERY_PRICE: LOTTERY_PRICE, lotteryOutcome: lotteryOutcome, buyLottery: buyLottery, canEnterMarket: canEnterMarket,
     dailyGoals: dailyGoals, weatherFor: weatherFor, cardOfDay: cardOfDay, seasonFor: seasonFor, festivalFor: festivalFor,
+    DAILY_GOAL_BONUS: DAILY_GOAL_BONUS, allGoalsDone: allGoalsDone, dailyBonusClaimable: dailyBonusClaimable, claimDailyBonus: claimDailyBonus,
     mailboxContent: mailboxContent, canCheckMail: canCheckMail, checkMail: checkMail,
     FISH_CASTS_PER_DAY: FISH_CASTS_PER_DAY, fishOutcome: fishOutcome, fishCastsLeft: fishCastsLeft, canFish: canFish, fishCast: fishCast,
     walkersOutCount: walkersOutCount, npcGreeting: npcGreeting, NPC_GREETINGS: NPC_GREETINGS,
