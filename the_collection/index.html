@@ -4058,14 +4058,19 @@ function actFish(){
     b.parentNode.insertBefore(jb, b.nextSibling);
   }
 }
+// one row of a checklist-style modal (shared by the trophy wall & catch
+// journal): an icon, a title + subtitle, and a tick when the row is fulfilled.
+function checklistRow(on, icon, title, sub){
+  return '<div class="ach-row' + (on ? ' on' : '') + '">' +
+    '<span class="ach-ic">' + icon + '</span>' +
+    '<span class="ach-tx"><b>' + title + '</b><small>' + sub + '</small></span>' +
+    (on ? '<span class="ach-chk">✓</span>' : '') + '</div>';
+}
 // the catch journal — every fish species, caught ones lit, the rest a mystery
 function actFishJournal(){
   var st = fishJournalState(save), got = fishJournalCount(save);
   var rows = st.map(function(f){
-    return '<div class="ach-row' + (f.caught ? ' on' : '') + '">' +
-      '<span class="ach-ic">' + (f.caught ? f.emoji : '🎣') + '</span>' +
-      '<span class="ach-tx"><b>' + (f.caught ? f.name : '???') + '</b><small>' + (f.caught ? 'sells for ' + f.coins + 'c' : 'not caught yet') + '</small></span>' +
-      (f.caught ? '<span class="ach-chk">✓</span>' : '') + '</div>';
+    return checklistRow(f.caught, f.caught ? f.emoji : '🎣', f.caught ? f.name : '???', f.caught ? 'sells for ' + f.coins + 'c' : 'not caught yet');
   }).join('');
   var sheet = $('modal-sheet');
   sheet.innerHTML =
@@ -4325,10 +4330,7 @@ function actCartDash(){
 function actAchievements(){
   var st = achievementsState(save), done = 0;
   var rows = st.map(function(a){ if (a.done) done++;
-    return '<div class="ach-row' + (a.done ? ' on' : '') + '">' +
-      '<span class="ach-ic">' + (a.done ? a.icon : '🔒') + '</span>' +
-      '<span class="ach-tx"><b>' + a.title + '</b><small>' + a.desc + '</small></span>' +
-      (a.done ? '<span class="ach-chk">✓</span>' : '') + '</div>';
+    return checklistRow(a.done, a.done ? a.icon : '🔒', a.title, a.desc);
   }).join('');
   var sheet = $('modal-sheet');
   sheet.innerHTML =
