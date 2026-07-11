@@ -638,6 +638,26 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(typeof TC.achievementCount(old) === 'number', 'achievements tolerate a save missing optional fields');
 }
 
+// ---- day summary (bedtime recap) ----
+{
+  const S = TC.freshSave();
+  S.dayStart = TC.daySnapshot(S);            // baseline at day start
+  let sum = TC.daySummary(S);
+  ok(sum.cards === 0 && sum.coins === 0 && sum.ach === 0, 'a fresh day has an empty recap');
+  S.coins += 25; TC.addCardById(S, TC.CORE_SET[0].id); TC.addCardById(S, TC.CORE_SET[1].id);
+  sum = TC.daySummary(S);
+  ok(sum.cards === 2, 'the recap counts new cards collected today');
+  ok(sum.coins === 25, 'the recap counts coins earned today');
+  S.packsOpenedTotal = 1;                     // crosses the First Rip achievement
+  ok(TC.daySummary(S).ach === 1, 'the recap counts trophies earned today');
+  // spending shows as a negative coin delta, cards never go negative
+  const S2 = TC.freshSave(); S2.coins = 50; S2.dayStart = TC.daySnapshot(S2); S2.coins = 30;
+  ok(TC.daySummary(S2).coins === -20 && TC.daySummary(S2).cards === 0, 'spending nets negative coins without breaking card count');
+  // a save missing dayStart falls back to a zero-delta snapshot
+  const old = TC.freshSave(); delete old.dayStart; old.coins = 99;
+  ok(TC.daySummary(old).coins === 0, 'a save without dayStart yields a safe empty recap');
+}
+
 // ---- new-achievement detection (toast trigger) ----
 {
   const S = TC.freshSave();

@@ -649,6 +649,7 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .ach-tx b{font-size:13px; color:var(--ink);}
 .ach-tx small{font-size:11px; color:var(--ink-faint);}
 .ach-chk{color:var(--accent-deep); font-weight:800;}
+.daysum{background:#fff6e0; box-shadow:inset 0 0 0 1.5px #e2a04a; border-radius:10px; padding:9px 12px; margin:2px 0 10px; font-size:13px; font-weight:600; color:var(--ink); text-align:center;}
 
 /* ---- relationships + social actions ---- */
 .rel-badge{
@@ -958,6 +959,7 @@ function freshSave(){
     jumprope: { day: null, tries: 0 },
     pet: { name: 'Biscuit', affection: 0 },
     achSeen: {},
+    dayStart: { day: 1, coins: 0, cards: 0, ach: 0 },
   };
 }
 
@@ -1706,6 +1708,16 @@ function checkNewAchievements(save){
 // Seed the seen-set with everything already earned, without toasting — used on
 // load so an existing player isn't spammed for past progress.
 function seedAchSeen(save){ save.achSeen = save.achSeen || {}; for (var i = 0; i < ACHIEVEMENTS.length; i++) if (ACHIEVEMENTS[i].check(save)) save.achSeen[ACHIEVEMENTS[i].id] = true; return save.achSeen; }
+// A start-of-day snapshot so bedtime can recap what you did today. Pure reads.
+function daySnapshot(save){ return { day: save.day, coins: save.coins || 0, cards: Object.keys(save.collection || {}).length, ach: achievementCount(save) }; }
+function daySummary(save){
+  var s = save.dayStart || daySnapshot(save);
+  return {
+    cards: Math.max(0, Object.keys(save.collection || {}).length - (s.cards || 0)),
+    coins: (save.coins || 0) - (s.coins || 0),
+    ach: Math.max(0, achievementCount(save) - (s.ach || 0)),
+  };
+}
 
 function loadSave(){
   try {
@@ -1740,6 +1752,9 @@ function loadSave(){
       // seed the achievement seen-set so existing progress isn't re-toasted on load
       base.achSeen = (parsed.achSeen && typeof parsed.achSeen === 'object') ? parsed.achSeen : {};
       seedAchSeen(base);
+      // seed today's snapshot from current progress so an existing save doesn't
+      // show a bogus first-night delta
+      base.dayStart = (parsed.dayStart && typeof parsed.dayStart.day === 'number') ? parsed.dayStart : daySnapshot(base);
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3422,6 +3437,7 @@ function updateFade(dt){
       if (W.pendingSleep) {
         W.pendingSleep = false;
         var r = nextDay(save);
+        save.dayStart = daySnapshot(save);   // baseline for tomorrow's bedtime recap
         dayEventMessage = r.event !== 'none' ? DAY_EVENTS[r.event].label : null;
         persist(save); renderTopbar(); setLocLabel(); refreshGoals(true); sfxDay();
         W.sleepCard = { day: r.day, event: r.event };
@@ -3960,9 +3976,18 @@ function actDad(){
 // the bed in the back room — end the day
 function actBed(){
   var sheet = $('modal-sheet');
+  var sum = daySummary(save);
+  var bits = [];
+  if (sum.cards > 0) bits.push('🎴 ' + sum.cards + ' new card' + (sum.cards > 1 ? 's' : ''));
+  if (sum.coins > 0) bits.push('🪙 +' + sum.coins + ' coins');
+  if (sum.ach > 0) bits.push('🏆 ' + sum.ach + ' trophy' + (sum.ach > 1 ? 's' : ''));
+  var recap = bits.length
+    ? '<div class="daysum">Today you got ' + bits.join(' · ') + '.</div>'
+    : '<div class="daysum">A quiet day around town.</div>';
   sheet.innerHTML =
     '<button class="closebtn" id="wm-x">&times;</button>' +
     '<h3 class="modal-title">Your bed</h3>' +
+    recap +
     '<p class="smallnote" style="margin:4px 0 12px;">Tomorrow brings a fresh allowance, chores, trades and new weather.</p>' +
     '<div class="wmenu">' +
       '<button id="wm-sleep"><span class="wm-emoji">🛏️</span><span>Go to sleep <small>end Day ' + save.day + ' → Day ' + (save.day + 1) + '</small></span></button>' +
@@ -5208,6 +5233,7 @@ if (typeof globalThis !== 'undefined') {
     cartDashReward: cartDashReward, cartDashLeft: cartDashLeft, canCartDash: canCartDash, cartDash: cartDash,
     ACHIEVEMENTS: ACHIEVEMENTS, achievementsState: achievementsState, achievementCount: achievementCount,
     checkNewAchievements: checkNewAchievements, seedAchSeen: seedAchSeen,
+    daySnapshot: daySnapshot, daySummary: daySummary,
     feedPet: feedPet,
     JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay,
   };
