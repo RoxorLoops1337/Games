@@ -516,6 +516,26 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(TC.weatherFor(42) === TC.weatherFor(42), 'weather is deterministic for a given day');
 }
 
+// ---- mailbox ----
+{
+  const S = TC.freshSave();
+  ok(TC.canCheckMail(S) === true, 'a fresh day has unread mail');
+  const c = TC.mailboxContent(S.day);
+  ok(c && typeof c.note === 'string' && typeof c.coins === 'number', 'mail content has a note and (maybe) coins');
+  ok(TC.mailboxContent(5).note === TC.mailboxContent(5).note, 'mail is deterministic for a given day');
+  const before = S.coins;
+  const got = TC.checkMail(S);
+  ok(got !== null, 'checking mail the first time returns content');
+  ok(S.coins === before + got.coins, 'any loose change from the mail is credited');
+  ok(TC.canCheckMail(S) === false, 'mail can only be checked once a day');
+  ok(TC.checkMail(S) === null, 'a second same-day mail check returns nothing');
+  S.day += 1;
+  ok(TC.canCheckMail(S) === true, 'a new day brings new mail');
+  // old saves without a mail field still load and can check mail
+  const old = TC.freshSave(); delete old.mail;
+  ok(TC.canCheckMail(old) === true, 'a save missing the mail field still allows checking mail');
+}
+
 // ---- determinism ----
 {
   const rA = TC.seededRandom('same-seed');
