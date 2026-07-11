@@ -2979,9 +2979,13 @@ function curMap(){ return W.maps[W.map]; }
 function goMap(id, sx, sy, silent){
   W.map = id; W.px = sx; W.py = sy; W.vx = W.vy = 0; W.moving = false; W.dir = 'down';
   W.target = null; W.camSnap = true;
-  var m = W.maps[id];
-  var loc = $('world-loc'); if (loc) loc.textContent = m.title;
+  setLocLabel();
   if (!silent) sfxClick();
+}
+function setLocLabel(){
+  var loc = $('world-loc'); if (!loc || !W.maps) return;
+  var m = W.maps[W.map]; if (!m) return;
+  loc.textContent = m.title + ' · ' + daypart().key;
 }
 function rectHit(px, py, r, rc){
   return px + r > rc.x && px - r < rc.x + rc.w && py + r > rc.y && py - r < rc.y + rc.h;
@@ -3141,12 +3145,17 @@ function buildMaps(){
     title: 'Your House', w: 560, h: 460, kind: 'indoor', floor:'#c99b63',
     rug: {x:210,y:230,w:150,h:150},
     props: [
-      { t:'counter', x:60,  y:70, w:200, h:52 },   // kitchen counter (mom)
+      { t:'poster', x:120, y:34, w:36, h:26 }, { t:'poster', x:186, y:34, w:36, h:26 },
+      { t:'fridge', x:14,  y:52, w:44, h:66 },
+      { t:'counter', x:64,  y:70, w:196, h:52 },   // kitchen counter (mom)
+      { t:'bookshelf', x:330, y:34, w:84, h:26 },
       { t:'washer',  x:430, y:80, w:74,  h:74 },    // laundry
-      { t:'couch',   x:250, y:70, w:120, h:40 },
+      { t:'couch',   x:250, y:74, w:120, h:40 },
       { t:'tv',      x:410, y:210, w:70, h:16 },
+      { t:'table',   x:40,  y:306, w:70, h:40 },
+      { t:'plant',   x:520, y:400 }, { t:'plant', x:36, y:404 },
     ],
-    solids: [ {x:60,y:70,w:200,h:52}, {x:430,y:80,w:74,h:74}, {x:250,y:60,w:120,h:44}, {x:0,y:0,w:560,h:30} ],
+    solids: [ {x:64,y:70,w:196,h:52}, {x:14,y:52,w:44,h:66}, {x:430,y:80,w:74,h:74}, {x:250,y:64,w:120,h:44}, {x:40,y:306,w:70,h:40}, {x:0,y:0,w:560,h:30} ],
     actors: [
       { id:'mom', x:150, y:140, color:'#c0577a', name:'Mom' },
       { id:'dad', x:300, y:130, color:'#4a6ea8', name:'Dad' },
@@ -3163,8 +3172,15 @@ function buildMaps(){
   /* ---------- KIOSK INTERIOR ---------- */
   maps.kiosk = {
     title: 'The Kiosk', w: 460, h: 400, kind:'indoor', floor:'#cdb98f',
-    props: [ { t:'shopcounter', x:70, y:120, w:320, h:56 }, { t:'shelf', x:60, y:40, w:340, h:40 } ],
-    solids: [ {x:70,y:120,w:320,h:56}, {x:0,y:0,w:460,h:40} ],
+    props: [
+      { t:'shelf', x:60, y:40, w:340, h:40 },
+      { t:'poster', x:150, y:6, w:36, h:26 }, { t:'poster', x:270, y:6, w:36, h:26 },
+      { t:'shopcounter', x:70, y:120, w:320, h:56 },
+      { t:'cardrack', x:18, y:206, w:60, h:46 },
+      { t:'fridge', x:398, y:200, w:44, h:66 },
+      { t:'plant', x:36, y:360 }, { t:'plant', x:424, y:360 },
+    ],
+    solids: [ {x:70,y:120,w:320,h:56}, {x:18,y:206,w:60,h:46}, {x:398,y:200,w:44,h:66}, {x:0,y:0,w:460,h:40} ],
     actors: [ { id:'keeper', x:230, y:96, color:'#5a8f6a', name:'Shopkeeper', apron:true } ],
     portals: [ { x:200, y:372, w:70, h:24, to:'town', sx:712, sy:500 } ],
     spots: [
@@ -3196,8 +3212,14 @@ function buildMaps(){
   /* ---------- SUPERMARKET ---------- */
   maps.market = {
     title: 'Supermarket', w: 520, h: 420, kind:'indoor', floor:'#dfe3e8',
-    props: [ {t:'aisle',x:80,y:70,w:120,h:40}, {t:'aisle',x:320,y:70,w:120,h:40}, {t:'aisle',x:80,y:180,w:120,h:40}, {t:'aisle',x:320,y:180,w:120,h:40}, {t:'checkout',x:180,y:300,w:160,h:44} ],
-    solids: [ {x:80,y:70,w:120,h:40},{x:320,y:70,w:120,h:40},{x:80,y:180,w:120,h:40},{x:320,y:180,w:120,h:40},{x:180,y:300,w:160,h:44},{x:0,y:0,w:520,h:30} ],
+    props: [
+      {t:'poster',x:210,y:6,w:40,h:24},
+      {t:'aisle',x:80,y:70,w:120,h:40}, {t:'aisle',x:320,y:70,w:120,h:40}, {t:'aisle',x:80,y:180,w:120,h:40}, {t:'aisle',x:320,y:180,w:120,h:40},
+      {t:'fridge',x:466,y:56,w:44,h:150},
+      {t:'checkout',x:180,y:300,w:160,h:44},
+      {t:'cart',x:70,y:360}, {t:'cart',x:450,y:360},
+    ],
+    solids: [ {x:80,y:70,w:120,h:40},{x:320,y:70,w:120,h:40},{x:80,y:180,w:120,h:40},{x:320,y:180,w:120,h:40},{x:466,y:56,w:44,h:150},{x:180,y:300,w:160,h:44},{x:0,y:0,w:520,h:30} ],
     actors: [ { id:'cashier', x:260, y:285, color:'#7a5aa8', name:'Cashier' } ],
     portals: [ { x:225, y:392, w:70, h:24, to:'town', sx:848, sy:280 } ],
     spots: [
@@ -3249,7 +3271,7 @@ function actDad(){
   $('wm-bed').addEventListener('click', function(){
     var r = nextDay(save);
     dayEventMessage = r.event !== 'none' ? DAY_EVENTS[r.event].label : null;
-    persist(save); renderTopbar(); closeModal(); sfxDay();
+    persist(save); renderTopbar(); closeModal(); sfxDay(); setLocLabel();
     toast('Day ' + r.day + (r.event !== 'none' ? ' — ' + DAY_EVENTS[r.event].label : ''), 'good');
   });
 }
@@ -3408,7 +3430,29 @@ function worldDraw(){
   ctx.globalAlpha = 1;
 
   ctx.restore();
+
+  // time-of-day ambient wash over the whole scene (screen space, gentle)
+  var amb = ambientTint();
+  if (amb.alpha > 0) {
+    ctx.save();
+    ctx.globalCompositeOperation = amb.mode;
+    ctx.globalAlpha = amb.alpha * (m.kind === 'indoor' ? 0.55 : 1);
+    ctx.fillStyle = amb.color;
+    ctx.fillRect(0, 0, vw, vh);
+    ctx.restore();
+  }
 }
+// A soft daylight cycle keyed to the in-game day. Days only advance when you
+// go to bed, so each day gets its own mood: bright midday, warm morning,
+// golden hour, or blue dusk. Kept subtle so the art stays readable.
+var DAYPARTS = [
+  { key:'midday', color:'#fff4d8', alpha:0.00, mode:'source-over' },
+  { key:'morning', color:'#ffe4b8', alpha:0.16, mode:'soft-light' },
+  { key:'golden', color:'#ffb45a', alpha:0.20, mode:'soft-light' },
+  { key:'dusk',   color:'#43417e', alpha:0.24, mode:'multiply' },
+];
+function daypart(){ return DAYPARTS[((save.day % DAYPARTS.length) + DAYPARTS.length) % DAYPARTS.length]; }
+function ambientTint(){ return daypart(); }
 
 function drawOutdoor(ctx, m){
   // grass base with soft patches
@@ -3614,6 +3658,41 @@ function drawProp(ctx, p){
     shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 7);
     ctx.fillStyle = '#8a7fa8'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 6); ctx.fill();
     ctx.fillStyle = '#2c2438'; ctx.fillRect(p.x+p.w-40, p.y-14, 30, 18);
+  } else if (p.t === 'fridge') {
+    shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 6);
+    ctx.fillStyle = '#e9eef2'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(120,150,170,.35)'; ctx.fillRect(p.x+4, p.y+4, p.w-8, p.h*0.42);   // glass door / freezer top
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x+3, p.y+p.h*0.5); ctx.lineTo(p.x+p.w-3, p.y+p.h*0.5); ctx.stroke();
+    ctx.fillStyle = '#9fb0bd'; ctx.fillRect(p.x+p.w-9, p.y+8, 4, 14); ctx.fillRect(p.x+p.w-9, p.y+p.h*0.5+8, 4, 14);
+  } else if (p.t === 'bookshelf') {
+    shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 5);
+    ctx.fillStyle = '#7a5230'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 3); ctx.fill();
+    for (var bi = 0; bi < Math.floor(p.w/10); bi++) { ctx.fillStyle = ['#c05050','#4a7ea8','#5a9a6a','#d8a24a','#c98a3a','#7a5aa8'][bi%6]; ctx.fillRect(p.x+4+bi*10, p.y+4, 7, p.h-8); }
+  } else if (p.t === 'table') {
+    shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 6);
+    ctx.fillStyle = '#a9743e'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; roundRectPath(ctx, p.x+4, p.y+4, p.w-8, 8, 4); ctx.fill();
+    ctx.fillStyle = '#e8c14a'; ctx.beginPath(); ctx.arc(p.x+p.w/2, p.y+p.h/2, 6, 0, 6.283); ctx.fill();  // a fruit bowl
+  } else if (p.t === 'cardrack') {
+    shadowEllipse(ctx, p.x+p.w/2, p.y+p.h+3, p.w*0.5, 5);
+    ctx.fillStyle = '#4a3b2a'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 4); ctx.fill();
+    for (var cr = 0; cr < 3; cr++) for (var cc = 0; cc < 4; cc++) { ctx.fillStyle = ['#e2a04a','#54b899','#5aa3dc','#b45fd8'][(cr+cc)%4]; roundRectPath(ctx, p.x+5+cc*13, p.y+5+cr*13, 10, 11, 2); ctx.fill(); }
+  } else if (p.t === 'cart') {
+    shadowEllipse(ctx, p.x, p.y+10, 16, 5);
+    ctx.strokeStyle = '#9aa4ad'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(p.x-12, p.y-16); ctx.lineTo(p.x-8, p.y-2); ctx.lineTo(p.x+12, p.y-2); ctx.lineTo(p.x+15, p.y-16); ctx.stroke();
+    ctx.fillStyle = 'rgba(150,164,173,.4)'; roundRectPath(ctx, p.x-9, p.y-15, 22, 13, 2); ctx.fill();
+    ctx.fillStyle = '#7a828a'; ctx.beginPath(); ctx.arc(p.x-6, p.y+2, 2.5, 0, 6.283); ctx.arc(p.x+9, p.y+2, 2.5, 0, 6.283); ctx.fill();
+  } else if (p.t === 'plant') {
+    shadowEllipse(ctx, p.x, p.y+12, 12, 5);
+    ctx.fillStyle = '#b5622f'; roundRectPath(ctx, p.x-9, p.y, 18, 14, 3); ctx.fill();   // pot
+    ctx.fillStyle = '#3f8f3a';
+    [[0,-10,10],[-7,-4,8],[7,-4,8]].forEach(function(c){ ctx.beginPath(); ctx.arc(p.x+c[0], p.y+c[1], c[2], 0, 6.283); ctx.fill(); });
+    ctx.fillStyle = 'rgba(255,255,255,.14)'; ctx.beginPath(); ctx.arc(p.x-4, p.y-12, 4, 0, 6.283); ctx.fill();
+  } else if (p.t === 'poster') {
+    ctx.fillStyle = '#f4ead2'; roundRectPath(ctx, p.x, p.y, p.w, p.h, 3); ctx.fill();
+    ctx.fillStyle = ['#e2a04a','#54b899','#5aa3dc','#b45fd8'][(p.x/36|0)%4]; roundRectPath(ctx, p.x+3, p.y+3, p.w-6, p.h-9, 2); ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(p.x+4, p.y+p.h-5, p.w-8, 2);
   }
 }
 // a standing NPC: the shared chibi + a name tag and '!' business bubble.
