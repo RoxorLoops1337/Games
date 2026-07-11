@@ -976,6 +976,7 @@ function freshSave(){
     dayStart: { day: 1, coins: 0, cards: 0, ach: 0 },
     newCards: {},
     goalBonus: { day: null },
+    jrBest: 0,
   };
 }
 
@@ -1376,6 +1377,13 @@ function jumpRopePlay(save, streak, npcId){
   save.coins += res.coins;
   if (res.rel && npcId) res.relNow = changeRel(save, npcId, res.rel);
   return res;
+}
+// Track the best jump-rope streak ever, so there's a record to chase. Pure.
+function updateJumpBest(save, streak){
+  var best = save.jrBest || 0;
+  var isNew = streak > best;
+  if (isNew) save.jrBest = streak;
+  return { best: save.jrBest || 0, isNew: isNew };
 }
 
 // A short "today" checklist derived purely from existing state, so the
@@ -1800,6 +1808,7 @@ function loadSave(){
       base.dayStart = (parsed.dayStart && typeof parsed.dayStart.day === 'number') ? parsed.dayStart : daySnapshot(base);
       base.newCards = (parsed.newCards && typeof parsed.newCards === 'object') ? parsed.newCards : {};
       base.goalBonus = (parsed.goalBonus && typeof parsed.goalBonus.day !== 'undefined') ? parsed.goalBonus : { day: null };
+      base.jrBest = (typeof parsed.jrBest === 'number') ? parsed.jrBest : 0;
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
@@ -3851,7 +3860,8 @@ function actJumpRope(){
   var sheet = $('modal-sheet');
   sheet.innerHTML =
     '<h3 class="modal-title">🪢 Jump Rope</h3>' +
-    '<p class="smallnote" style="margin:2px 0 10px;">Tap JUMP each time the light hits the green. Keep the rhythm!</p>' +
+    '<p class="smallnote" style="margin:2px 0 10px;">Tap JUMP each time the light hits the green. Keep the rhythm!' +
+      (save.jrBest ? ' <b>Best: ' + save.jrBest + '</b>' : '') + '</p>' +
     '<div class="arc-bar"><div class="arc-zone"><i></i></div><div class="arc-mark" id="jr-mark"></div></div>' +
     '<div class="reel-result" id="jr-res">Streak: 0</div>' +
     '<button class="bigbtn" id="jr-btn">JUMP</button>';
@@ -3869,11 +3879,15 @@ function actJumpRope(){
   }
   function endRun(perfect){
     ended = true; if (raf) cancelAnimationFrame(raf);
-    var res = jumpRopePlay(save, streak, buddy.id); persist(save); renderTopbar();
+    var res = jumpRopePlay(save, streak, buddy.id);
+    var rec = updateJumpBest(save, streak);
+    persist(save); renderTopbar();
     var el = $('jr-res');
     if (res && res.coins) {
-      el.innerHTML = (perfect ? 'Perfect run! ' : 'Streak ' + streak + '! ') + '+' + res.coins + ' coins' + (res.rel ? ' &middot; ' + buddy.name + ' had fun with you!' : '');
-      el.classList.add('good'); sfxCoins(); hapticPulse(perfect ? 'rare' : 'common');
+      el.innerHTML = (rec.isNew && streak > 0 ? '🏅 New record — ' + streak + ' jumps! ' : perfect ? 'Perfect run! ' : 'Streak ' + streak + '! ') +
+        '+' + res.coins + ' coins' + (res.rel ? ' &middot; ' + buddy.name + ' had fun with you!' : '');
+      el.classList.add('good'); sfxCoins(); hapticPulse(rec.isNew || perfect ? 'rare' : 'common');
+      if (rec.isNew && streak > 0) { var jw = $('modal-sheet'); if (jw) burstConfetti(jw, 'rare'); }
     } else { el.innerHTML = 'Tripped! No coins that time.'; el.classList.add('nada'); sfxClick(); }
     var left = jumpRopeTriesLeft(save);
     $('jr-btn').textContent = left > 0 ? 'Again (' + left + ')' : 'Done';
@@ -5334,7 +5348,7 @@ if (typeof globalThis !== 'undefined') {
     checkNewAchievements: checkNewAchievements, seedAchSeen: seedAchSeen,
     daySnapshot: daySnapshot, daySummary: daySummary,
     feedPet: feedPet,
-    JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay,
+    JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay, updateJumpBest: updateJumpBest,
   };
 }
 })();
