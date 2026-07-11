@@ -638,6 +638,27 @@ ok(TC.claimAllowance(S) === 0, 'a same-day second claim pays nothing');
   ok(typeof TC.achievementCount(old) === 'number', 'achievements tolerate a save missing optional fields');
 }
 
+// ---- new-achievement detection (toast trigger) ----
+{
+  const S = TC.freshSave();
+  ok(TC.checkNewAchievements(S).length === 0, 'a fresh save unlocks nothing new');
+  S.packsOpenedTotal = 1;
+  const neu = TC.checkNewAchievements(S);
+  ok(neu.length === 1 && neu[0].id === 'firstpack', 'crossing a threshold reports exactly the new achievement');
+  ok(TC.checkNewAchievements(S).length === 0, 'the same achievement is not reported twice');
+  ok(S.achSeen && S.achSeen.firstpack === true, 'the unlocked achievement is marked seen on the save');
+  S.day = 8; S.coins = 200;
+  const neu2 = TC.checkNewAchievements(S);
+  ok(neu2.length === 2 && neu2.map(a => a.id).sort().join() === 'saver,week', 'multiple simultaneous unlocks are all reported');
+  // seedAchSeen suppresses past progress
+  const existing = TC.freshSave(); existing.packsOpenedTotal = 5; existing.day = 10;
+  TC.seedAchSeen(existing);
+  ok(TC.checkNewAchievements(existing).length === 0, 'seeding the seen-set stops old progress from re-toasting');
+  // a save missing achSeen still works
+  const noSeen = TC.freshSave(); delete noSeen.achSeen; noSeen.packsOpenedTotal = 1;
+  ok(TC.checkNewAchievements(noSeen).length === 1, 'a save without achSeen still detects new achievements');
+}
+
 // ---- supermarket cart dash ----
 {
   ok(TC.cartDashReward(9).coins === 14 && TC.cartDashReward(9).candy === 1, 'a clean sweep pays the most, plus a candy');
