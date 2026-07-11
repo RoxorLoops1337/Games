@@ -3365,6 +3365,22 @@ function boot(){
     });
   });
   $('modal-backdrop').addEventListener('click', function(e){ if (e.target === this) closeModal(); });
+  // Touch bleed-through guard: when a menu opens, the same press that opened it
+  // (A button, a spot tap) can release onto a button that's now under the finger
+  // and instantly trigger it. Briefly ignore taps inside a freshly-opened menu.
+  (function(){
+    var backdrop = $('modal-backdrop'); if (!backdrop || typeof MutationObserver === 'undefined') return;
+    var now = function(){ return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); };
+    var guardUntil = 0;
+    new MutationObserver(function(){
+      if (backdrop.classList.contains('open')) guardUntil = now() + 320;
+    }).observe(backdrop, { attributes: true, attributeFilter: ['class'] });
+    ['pointerdown', 'pointerup', 'click'].forEach(function(type){
+      backdrop.addEventListener(type, function(e){
+        if (now() < guardUntil) { e.stopPropagation(); e.preventDefault(); }
+      }, true);
+    });
+  })();
   $('opener-close').addEventListener('click', function(){
     // Cards were already added when the pack opened; skipping ahead to the
     // summary keeps the recap honest instead of silently swallowing pulls.
