@@ -2309,6 +2309,26 @@ function sceneFor(card, w, h){
   return url;
 }
 
+// Owner-supplied painted building art for the town map: if
+// the_collection/art/buildings/<key>.png exists it replaces the drawn
+// facade for that building (home / kiosk / school / market). Loaded
+// lazily on first draw; missing files keep the procedural version, so
+// the map never breaks.
+var buildingArt = {};
+function buildingSprite(key){
+  var s = buildingArt[key];
+  if (s === false) return null;
+  if (s) return (s.complete && s.naturalWidth) ? s : null;
+  if (typeof Image === 'undefined') { buildingArt[key] = false; return null; }
+  try {
+    var img = new Image();
+    img.onerror = function(){ buildingArt[key] = false; };
+    img.src = 'art/buildings/' + key + '.png';
+    buildingArt[key] = img;
+  } catch (e) { buildingArt[key] = false; }
+  return null;
+}
+
 // Owner-supplied painted art: if the_collection/art/<id>.png exists it
 // replaces the procedural scene automatically (probe result cached).
 // Generate with the repo's local ComfyUI pipeline — see art/README.md.
@@ -5097,6 +5117,9 @@ function shadowEllipse(ctx, x, y, rx, ry){
   ctx.fillStyle = 'rgba(0,0,0,.18)'; ctx.beginPath(); ctx.ellipse(x, y, rx, ry, 0, 0, 6.283); ctx.fill();
 }
 function drawBuilding(ctx, b){
+  // Painted sprite override (owner art) — replaces the whole drawn facade.
+  var spr = buildingSprite(b.key);
+  if (spr) { drawBuildingSprite(ctx, b, spr); drawBuildingMarker(ctx, b); return; }
   shadowEllipse(ctx, b.x + b.w/2, b.y + b.h + 6, b.w*0.5, 14);
   // body
   var g = ctx.createLinearGradient(0, b.y, 0, b.y + b.h);
@@ -5126,13 +5149,30 @@ function drawBuilding(ctx, b){
   ctx.fillStyle = 'rgba(30,20,10,.82)'; roundRectPath(ctx, doorX(b)-52, b.y+b.h-70, 104, 18, 5); ctx.fill();
   ctx.fillStyle = '#ffe9c2'; ctx.font = '700 11px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(b.sign, doorX(b), b.y+b.h-57);
   // floating "!" when there's something worth doing inside
-  if (buildingBusiness(b.key)) {
-    var bx = doorX(b), by = b.y - 16 + Math.sin(W.actorPhase * 3) * 3;
-    ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(bx, b.y - 2, 8, 3, 0, 0, 6.283); ctx.fill();
-    ctx.fillStyle = '#e2a04a'; ctx.beginPath(); ctx.arc(bx, by, 11, 0, 6.283); ctx.fill();
-    ctx.beginPath(); ctx.moveTo(bx - 4, by + 8); ctx.lineTo(bx + 4, by + 8); ctx.lineTo(bx, by + 15); ctx.closePath(); ctx.fill();
-    ctx.fillStyle = '#2a1c08'; ctx.font = '800 15px serif'; ctx.textAlign = 'center'; ctx.fillText('!', bx, by + 5);
-  }
+  drawBuildingMarker(ctx, b);
+}
+// Draws a painted building sprite over its map footprint: anchored
+// bottom-centre on the building's ground line (b.y+b.h) and scaled to
+// the footprint width (+ a per-building factor so yards/props that
+// overhang the core building don't shrink it). Camera-independent.
+var BUILDING_ART_SCALE = { home: 1.30, kiosk: 1.18, school: 1.30, market: 1.18 };
+function drawBuildingSprite(ctx, b, img){
+  var k = BUILDING_ART_SCALE[b.key] || 1.2;
+  var dw = b.w * k;
+  var dh = img.naturalHeight * (dw / img.naturalWidth);
+  var cx = b.x + b.w / 2, baseY = b.y + b.h;
+  shadowEllipse(ctx, cx, baseY + 6, b.w * 0.5, 14);
+  ctx.drawImage(img, cx - dw / 2, baseY - dh, dw, dh);
+}
+// The floating "!" affordance shown when a building has something to do
+// inside — shared by the drawn and painted-sprite building paths.
+function drawBuildingMarker(ctx, b){
+  if (!buildingBusiness(b.key)) return;
+  var bx = doorX(b), by = b.y - 16 + Math.sin(W.actorPhase * 3) * 3;
+  ctx.fillStyle = 'rgba(0,0,0,.15)'; ctx.beginPath(); ctx.ellipse(bx, b.y - 2, 8, 3, 0, 0, 6.283); ctx.fill();
+  ctx.fillStyle = '#e2a04a'; ctx.beginPath(); ctx.arc(bx, by, 11, 0, 6.283); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(bx - 4, by + 8); ctx.lineTo(bx + 4, by + 8); ctx.lineTo(bx, by + 15); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#2a1c08'; ctx.font = '800 15px serif'; ctx.textAlign = 'center'; ctx.fillText('!', bx, by + 5);
 }
 // small per-building details drawn over the base box so each storefront
 // reads at a glance (data-driven off b.key).
