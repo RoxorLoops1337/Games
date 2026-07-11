@@ -957,6 +957,7 @@ function freshSave(){
     cart: { day: null },
     jumprope: { day: null, tries: 0 },
     pet: { name: 'Biscuit', affection: 0 },
+    achSeen: {},
   };
 }
 
@@ -1691,6 +1692,20 @@ var ACHIEVEMENTS = [
 ];
 function achievementsState(save){ return ACHIEVEMENTS.map(function(a){ return { id:a.id, icon:a.icon, title:a.title, desc:a.desc, done:!!a.check(save) }; }); }
 function achievementCount(save){ var n = 0; for (var i = 0; i < ACHIEVEMENTS.length; i++) if (ACHIEVEMENTS[i].check(save)) n++; return n; }
+// Return achievements newly unlocked since last check and mark them seen. Pure
+// (mutates only save.achSeen); the UI celebrates whatever this returns.
+function checkNewAchievements(save){
+  save.achSeen = save.achSeen || {};
+  var out = [];
+  for (var i = 0; i < ACHIEVEMENTS.length; i++) {
+    var a = ACHIEVEMENTS[i];
+    if (a.check(save) && !save.achSeen[a.id]) { save.achSeen[a.id] = true; out.push(a); }
+  }
+  return out;
+}
+// Seed the seen-set with everything already earned, without toasting — used on
+// load so an existing player isn't spammed for past progress.
+function seedAchSeen(save){ save.achSeen = save.achSeen || {}; for (var i = 0; i < ACHIEVEMENTS.length; i++) if (ACHIEVEMENTS[i].check(save)) save.achSeen[ACHIEVEMENTS[i].id] = true; return save.achSeen; }
 
 function loadSave(){
   try {
@@ -1722,13 +1737,25 @@ function loadSave(){
       base.cart = (parsed.cart && typeof parsed.cart.day !== 'undefined') ? parsed.cart : { day: null };
       base.jumprope = (parsed.jumprope && typeof parsed.jumprope.tries === 'number') ? parsed.jumprope : { day: null, tries: 0 };
       base.pet = (parsed.pet && parsed.pet.name) ? { name: parsed.pet.name, affection: parsed.pet.affection || 0 } : { name: 'Biscuit', affection: 0 };
+      // seed the achievement seen-set so existing progress isn't re-toasted on load
+      base.achSeen = (parsed.achSeen && typeof parsed.achSeen === 'object') ? parsed.achSeen : {};
+      seedAchSeen(base);
       return base;
     }
   } catch (e) { /* corrupt/blocked storage falls back to a fresh save */ }
   return freshSave();
 }
 function persist(save){
+  try { celebrateNewAchievements(save); } catch (e) {}
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {}
+}
+// Toast each freshly-unlocked achievement (staggered so several read cleanly).
+function celebrateNewAchievements(save){
+  var neu = checkNewAchievements(save);
+  for (var i = 0; i < neu.length; i++) (function(a, d){
+    setTimeout(function(){ toast(a.icon + ' ' + a.title + ' unlocked!', 'good'); try { hapticPulse('rare'); } catch (e) {} }, d);
+  })(neu[i], i * 500);
+  return neu.length;
 }
 
 /* ================= feel: sound, haptics, toasts, confetti ================= */
@@ -5180,6 +5207,7 @@ if (typeof globalThis !== 'undefined') {
     ARCADE_PLAYS_PER_DAY: ARCADE_PLAYS_PER_DAY, arcadeReward: arcadeReward, arcadePlaysLeft: arcadePlaysLeft, canPlayArcade: canPlayArcade, arcadePlay: arcadePlay,
     cartDashReward: cartDashReward, cartDashLeft: cartDashLeft, canCartDash: canCartDash, cartDash: cartDash,
     ACHIEVEMENTS: ACHIEVEMENTS, achievementsState: achievementsState, achievementCount: achievementCount,
+    checkNewAchievements: checkNewAchievements, seedAchSeen: seedAchSeen,
     feedPet: feedPet,
     JUMPROPE_TRIES_PER_DAY: JUMPROPE_TRIES_PER_DAY, jumpRopeReward: jumpRopeReward, jumpRopeTriesLeft: jumpRopeTriesLeft, canJumpRope: canJumpRope, jumpRopePlay: jumpRopePlay,
   };
