@@ -53,6 +53,7 @@ const STATIC_PATHS = [
   'horse_ranch',
   'wildwalk',
   'the_collection',
+  'coin_pusher',
   'tools',
 ];
 
