@@ -118,7 +118,8 @@ const dropped = S.coins[S.coins.length - 1];
 t.eq(dropped.st, 'air', 'spawned coin is falling from the slot');
 step(2);
 t.eq(dropped.st, 'plat', 'dropped coin lands on the platform');
-t.ok(dropped.y >= CP.pusherFront(0) + dropped.r - 0.01, 'landed coin is in front of the pusher');
+t.ok(dropped.onPush || dropped.y >= CP.pusherFront(0) + dropped.r - 0.01,
+     'landed coin sits on the shelf or in front of the pusher');
 S.wallet = 0; S.cd = 0;
 t.ok(!CP.drop(50), 'cannot drop with an empty wallet');
 t.eq(S.wallet, 0, 'wallet never goes negative');
@@ -295,18 +296,21 @@ t.ok(Array.isArray(MACHINES.neon.slots) && MACHINES.neon.slots.length === 3, 'ne
 t.ok(MACHINES.neon.pegs.length >= 12, 'the peg board is populated');
 // drops snap to the nearest slot mouth
 S.wallet = 30; S.cd = 0; S.dropped = 1;
-CP.drop(40);
+CP.drop(44);
 const snapped = S.coins[S.coins.length - 1];
-t.ok(Math.abs(snapped.x - 50) < 1, 'a drop at x=40 enters the middle slot');
-// pegs knock falling coins sideways
+t.ok(Math.abs(snapped.x - 50) < 1, 'a drop at x=44 enters the middle slot');
+// the pin dance: a real Galton-board descent that takes visible time
 S.coins.length = 0;
 const pegged = CP.spawnDrop(50, 20, 'coin');
-let deflected = false;
-for (let i = 0; i < 240 && pegged.st === 'air'; i++) {
+let ticks = 0, deflected = false;
+for (; ticks < 60 * 5 && pegged.st === 'air'; ticks++) {
   CP.tick(DT);
   if (Math.abs(pegged.x - 50) > 2) deflected = true;
 }
-t.ok(deflected, 'the peg board deflects falling coins');
+t.ok(pegged.st !== 'air', 'pegged coin eventually lands');
+t.ok(pegged.pegHits >= 2, 'coin ricocheted off several pins (' + pegged.pegHits + ' hits)');
+t.ok(ticks >= 54 && ticks <= 240, 'the descent takes a visible 0.9-4s (' + (ticks / 60).toFixed(2) + 's)');
+t.ok(deflected, 'the pins knocked the coin off its slot line');
 t.ok(pegged.x >= 8 && pegged.x <= 92, 'pegged coin stays inside the cabinet');
 const tray0 = S.tray.coins, s3 = S.score;
 CP.srand(23);
@@ -320,6 +324,25 @@ const ball = CP.place(50, CP.tierFront(0) - 0.5, 'ball', 0, 'plat');
 ball.vy = 70;
 step(2);
 t.ok(S.slotAnim !== null || S.banner !== null, 'collected bonus ball triggers the slot');
+
+// -------- landing on the pusher shelf and getting scraped off --------
+CP.srand(33); CP.setMachine('gold');
+S.coins.length = 0;
+S.phase = Math.PI; // shelf fully extended
+const rider = CP.spawnDrop(50, 15, 'coin');
+rider.z = 12; rider.vz = 0; // just above the shelf top
+for (let i = 0; i < 120 && !rider.onPush; i++) CP.tick(DT);
+t.ok(rider.onPush, 'a coin can land ON the moving pusher shelf');
+t.eq(rider.z, C.PUSH_H, 'shelf-rider sits on the shelf top');
+let scraped = false, backOnField = false;
+for (let i = 0; i < 60 * 6; i++) {
+  CP.tick(DT);
+  if (!rider.onPush) scraped = true;
+  if (scraped && rider.st === 'plat' && !rider.onPush && rider.z < 0.5) { backOnField = true; break; }
+}
+t.ok(scraped, 'the retracting shelf scrapes the coin off its edge');
+t.ok(backOnField, 'the scraped coin drops onto the field below');
+t.ok(rider.y >= CP.pusherFront(0) + rider.r - 0.5, 'it now sits in front of the pusher, ready to be pushed');
 
 // -------- high roller: cash bills --------
 t.ok(CP.buyMachine('bandit'), 'high roller unlocks');
