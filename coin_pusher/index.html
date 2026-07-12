@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<title>Gold Rush — Coin Pusher</title>
+<title>Gold Rush Arcade — Coin Pushers</title>
 <style>
   html, body { margin: 0; padding: 0; background: #0b0609; height: 100%; overflow: hidden; }
   canvas { display: block; touch-action: none; -webkit-user-select: none; user-select: none; }
@@ -14,14 +14,21 @@
 <script>
 'use strict';
 // ============================================================================
-// GOLD RUSH — a coin pusher machine.
-// One file, vanilla canvas. Physics is a 2.5D plane sim: x across the
-// platform, y into the machine (0 = back wall, increases toward the player),
-// z = height above the platform. A kinematic pusher bar oscillates at the
-// back; coins dropped through the slot land in front of it and get shoved
-// forward through the pile until they tip over the front edge (win) or drift
-// into the side gutters (house keeps those).
-// Headless mode (tests): no canvas ctx -> sim only, driven via window.CP.
+// GOLD RUSH ARCADE — a hall of coin pusher machines.
+//
+// Physics is a 2.5D plane sim: x across the platform, y into the machine
+// (0 = back, grows toward the player), z = absolute height. Machines are
+// data: each defines one or two TIERS (playfields) with their own kinematic
+// pusher. Penny Falls is the two-tier classic — its upper shelf's front edge
+// is simultaneously the drop-off for tier 0 and the moving pusher face for
+// tier 1, exactly like the 1964 Crompton machines.
+//
+// Meta game: wins pay POINTS (spendable) and refund COINS (ammo). Points
+// unlock machines and buy prizes in the shop; prizes can be listed on
+// PusherBay, a simulated marketplace where they sell for coins over real
+// time (even while the game is closed).
+//
+// Headless mode (tests): no canvas ctx -> sim + economy only, via window.CP.
 // ============================================================================
 
 const canvas = document.getElementById('c');
@@ -32,28 +39,129 @@ const HEADLESS = !ctx;
 
 // ---------------------------------------------------------------- constants
 const C = {
-  W: 100,               // platform width in world units
-  PLAT_FRONT: 84,       // y of the front edge — past this, coins tip and fall
-  GUT_Y: 36,            // side walls end here; beyond it the side gutters open
-  GUT_LO: 1.5, GUT_HI: 98.5, // centre past these while in gutter zone = lost
-  COIN_R: 4.6, LUCKY_R: 5.0, GEM_R: 5.2,
-  COIN_H: 1.7,          // coin thickness (resting height of a stacked coin)
-  PUSH_MIN: 10, PUSH_MAX: 30, PUSH_PERIOD: 3.4, PUSH_H: 9,
-  SLOT_Y: 20,           // depth where dropped coins land
-  DROP_Z: 62,           // height coins fall from
+  W: 100,
+  PLAT_FRONT: 84,          // gold-machine front edge (baseline; tiers override)
+  GUT_LO: 1.5, GUT_HI: 98.5,
+  COIN_R: 4.6, LUCKY_R: 5.0, GEM_R: 5.2, TAG_R: 6.4, BILL_R: 7.0, BALL_R: 4.8,
+  COIN_H: 1.7,
+  PUSH_MIN: 10, PUSH_MAX: 30, PUSH_H: 9,
+  DROP_Z: 62,
   GRAV: 260,
-  TRAY_Z: -30,          // tray floor height (below platform)
-  GUT_KILL: -44,        // gutter coins vanish below this
+  TRAY_Z: -30,
+  GUT_KILL: -44,
   FRICTION: 3.0, SETTLE: 0.5, REST: 0.05,
+  LIP_G: 34,               // deceleration climbing the incline lip
+  MAX_LAY: 2,              // coins can stack three high (lay 0,1,2)
   START_WALLET: 25, REGEN_CAP: 25, REGEN_T: 3,
   DROP_CD: 0.28, COMBO_WIN: 1.4, COMBO_CAP: 5,
   METER_MAX: 20,
   PTS: { coin: 10, lucky: 50, gem: 500 },
   PAY: { coin: 1, lucky: 2, gem: 5 },
   P_LUCKY: 0.10, P_GEM: 0.025,
-  MAX_COINS: 130,
   SAVE_KEY: 'coin_pusher_save',
+  LIST_MAX: 4,
+  SELL_TIERS: [                       // PusherBay pricing strategies
+    { name: 'Quick', mul: 0.7, dur: 45e3 },
+    { name: 'Fair', mul: 1.0, dur: 180e3 },
+    { name: 'Greedy', mul: 1.5, dur: 600e3 },
+  ],
 };
+
+// ---------------------------------------------------------------- machines
+// Four real-world machine types (see HANDOVER / PR notes for sources):
+// classic carnival pusher, UK two-tier penny falls, Japanese medal game
+// with bonus-ball slot, and the US gas-station quarter bandit.
+const MACHINES = {
+  gold: {
+    name: 'GOLD RUSH', sub: 'CLASSIC PUSHER', unlock: 0,
+    coin: { r: 4.6, val: 10, style: 'gold', sym: '¢' },
+    luckyVal: 50, gemVal: 500,
+    pushPeriod: 3.4, maxCoins: 170,
+    tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
+    gutY: 36, lipW: 7, lipH: 2.2,
+    tagEvery: 8,
+    tags: [
+      { val: 100, col: '#43d17c' }, { val: 250, col: '#3fa9f5' }, { val: 500, col: '#ef4b5d' },
+    ],
+    special: null,
+    theme: { room: '#2a1520', cabA: '#8c1f2e', cabB: '#4a0f1a', trim: '#f2cd5e',
+             titleA: '#fff0b8', titleB: '#b07a14', sub: '#e8b6be',
+             floorA: '#585f6a', floorB: '#99a1ad', accent: '#ffd75e' },
+  },
+  penny: {
+    name: 'PENNY FALLS', sub: 'SEASIDE 2p CASCADE', unlock: 1500,
+    coin: { r: 3.7, val: 5, style: 'copper', sym: '2' },
+    luckyVal: 25, gemVal: 250,
+    pushPeriod: 3.0, maxCoins: 210,
+    // tier 0 = elevated sliding shelf; its drop edge is 'dyn' — the moving
+    // face at pusherFront(1), which doubles as tier 1's pusher.
+    tiers: [
+      { z: 12, back: 0, front: 'dyn', min: 2, max: 12, phase: 0, slotY: 8 },
+      { z: 0, back: 34, front: 86, min: 36, max: 50, phase: Math.PI, slotY: null },
+    ],
+    gutY: 58, lipW: 6, lipH: 2.0,
+    tagEvery: 10,
+    tags: [
+      { val: 50, col: '#43d17c' }, { val: 100, col: '#3fa9f5' }, { val: 250, col: '#ef4b5d' },
+    ],
+    special: null,
+    theme: { room: '#12303a', cabA: '#1d6d7a', cabB: '#0d3742', trim: '#f5e3b8',
+             titleA: '#fdf6dd', titleB: '#c8862c', sub: '#a8d8de',
+             floorA: '#5c6660', floorB: '#98a394', accent: '#ffb64a' },
+  },
+  neon: {
+    name: 'NEON MEDAL', sub: 'TOKYO ARCADE', unlock: 6000,
+    coin: { r: 4.4, val: 15, style: 'medal', sym: '★' },
+    luckyVal: 75, gemVal: 750,
+    pushPeriod: 3.2, maxCoins: 180,
+    tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
+    gutY: 40, lipW: 7, lipH: 2.2,
+    tagEvery: 9,
+    tags: [
+      { val: 150, col: '#37e6b0' }, { val: 300, col: '#c86bff' }, { val: 600, col: '#ff5a8a' },
+    ],
+    special: 'ball', ballChance: 0.06,
+    theme: { room: '#170b2e', cabA: '#3b1a70', cabB: '#1b0b3a', trim: '#63e7ff',
+             titleA: '#d9fbff', titleB: '#1f9ecf', sub: '#c9a7ff',
+             floorA: '#3f4358', floorB: '#767c99', accent: '#63e7ff' },
+  },
+  bandit: {
+    name: 'HIGH ROLLER', sub: 'VEGAS QUARTER BANDIT', unlock: 20000,
+    coin: { r: 4.8, val: 25, style: 'silver', sym: '25' },
+    luckyVal: 125, gemVal: 1250,
+    pushPeriod: 3.8, maxCoins: 150,
+    tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 28, phase: 0, slotY: 20 }],
+    gutY: 30, lipW: 8, lipH: 2.4,   // gutters open early: high risk, high pay
+    tagEvery: 7,
+    tags: [
+      { val: 500, col: '#43d17c' }, { val: 1000, col: '#f7a534' }, { val: 2500, col: '#ef4b5d' },
+    ],
+    special: 'bill', billEvery: 12, billVal: 1500,
+    theme: { room: '#26060a', cabA: '#191114', cabB: '#080506', trim: '#e8b64a',
+             titleA: '#ffe9b0', titleB: '#a8681a', sub: '#d98a8a',
+             floorA: '#403a44', floorB: '#79707e', accent: '#ff4b4b' },
+  },
+};
+const MACH_IDS = ['gold', 'penny', 'neon', 'bandit'];
+
+// ------------------------------------------------------------------ prizes
+const PRIZES = [
+  { id: 'key', icon: '\u{1F511}', name: 'Lucky Keychain', cost: 300, base: 40 },
+  { id: 'duck', icon: '\u{1F986}', name: 'Rubber Duck', cost: 500, base: 65 },
+  { id: 'bear', icon: '\u{1F9F8}', name: 'Plush Bear', cost: 900, base: 115 },
+  { id: 'globe', icon: '\u{1F52E}', name: 'Snow Globe', cost: 1400, base: 180 },
+  { id: 'robot', icon: '\u{1F916}', name: 'Vinyl Robot', cost: 2200, base: 290 },
+  { id: 'skate', icon: '\u{1F6F9}', name: 'Mini Skateboard', cost: 3500, base: 460 },
+  { id: 'game', icon: '\u{1F579}\u{FE0F}', name: 'Retro Handheld', cost: 5200, base: 690 },
+  { id: 'boombox', icon: '\u{1F4FB}', name: 'Boombox', cost: 7500, base: 1000 },
+  { id: 'ring', icon: '\u{1F48D}', name: 'Gem Ring', cost: 11000, base: 1500 },
+  { id: 'trophy', icon: '\u{1F3C6}', name: 'Gold Trophy', cost: 16000, base: 2200 },
+  { id: 'crown', icon: '\u{1F451}', name: 'Royal Crown', cost: 26000, base: 3600 },
+  { id: 'arcade', icon: '\u{1F3B0}', name: 'Arcade Cabinet', cost: 45000, base: 6500 },
+];
+const BUYERS = ['pixelPanda99', 'arcadeQueen', 'tokenTom', '2pTerry', 'medalMaster',
+  'quarterQuinn', 'lucky_luna', 'pusherPete', 'neonNori', 'cascadeCarl',
+  'goldieGwen', 'duckCollector', 'vintageVera', 'jackpotJoe', 'seasideSam'];
 
 // ------------------------------------------------------------------- state
 const S = {
@@ -61,10 +169,20 @@ const S = {
   score: 0, best: 0, wallet: C.START_WALLET,
   combo: 0, lastCollect: -99, meter: 0,
   time: 0, phase: 0, cd: 0, regen: 0,
-  shake: 0, aimX: 50, mute: false, started: HEADLESS,
+  shake: 0, aimX: 50, mute: false,
   dropped: 0, collected: 0, lost: 0, jackpots: 0,
   banner: null, trayPile: 0, denyT: 0,
+  screen: 'lobby', mach: 'gold',
+  unlocked: ['gold'],
+  prizes: {},              // prize id -> owned count
+  listings: [],            // {pid, price, endT}
+  slog: [],                // sale log: {pid, price, buyer}
+  slotAnim: null,          // neon slot spin overlay
+  sellPick: null, uiFlash: null, shopPage: 0,
 };
+
+function M() { return MACHINES[S.mach]; }
+function lastTier() { return M().tiers.length - 1; }
 
 // seeded rng so tests are deterministic; browser reseeds from the clock
 let rngState = 1234;
@@ -77,14 +195,17 @@ function rng() {
 }
 
 // sound hooks — no-ops headless / until the browser block installs real ones
-let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() {}, slot() {} };
+let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() {},
+            slot() {}, tag() {}, bill() {}, ball() {}, reel() {}, buy() {}, sold() {} };
 
 // ------------------------------------------------------------- persistence
 function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
-      score: S.score, best: S.best, wallet: S.wallet, meter: S.meter,
+      v: 2, score: S.score, best: S.best, wallet: S.wallet, meter: S.meter,
       mute: S.mute, jackpots: S.jackpots, collected: S.collected,
+      mach: S.mach, unlocked: S.unlocked, prizes: S.prizes,
+      listings: S.listings, slog: S.slog,
     }));
   } catch (e) {}
 }
@@ -96,33 +217,60 @@ function load() {
     S.wallet = (typeof d.wallet === 'number') ? d.wallet : C.START_WALLET;
     S.meter = d.meter || 0; S.mute = !!d.mute;
     S.jackpots = d.jackpots || 0; S.collected = d.collected || 0;
+    if (d.v >= 2) {
+      if (MACHINES[d.mach]) S.mach = d.mach;
+      if (Array.isArray(d.unlocked)) S.unlocked = d.unlocked.filter(id => MACHINES[id]);
+      if (S.unlocked.indexOf('gold') < 0) S.unlocked.push('gold');
+      if (d.prizes && typeof d.prizes === 'object') S.prizes = d.prizes;
+      if (Array.isArray(d.listings)) S.listings = d.listings.filter(l => l && l.pid && l.endT);
+      if (Array.isArray(d.slog)) S.slog = d.slog.slice(0, 8);
+    }
   } catch (e) {}
 }
 
-// ------------------------------------------------------------------ coins
-function mkCoin(x, y, kind, lay, st) {
-  const r = kind === 'gem' ? C.GEM_R : kind === 'lucky' ? C.LUCKY_R : C.COIN_R;
+// ------------------------------------------------------------------- items
+function kindR(kind) {
+  if (kind === 'gem') return C.GEM_R;
+  if (kind === 'lucky') return M().coin.r + 0.4;
+  if (kind === 'tag') return C.TAG_R;
+  if (kind === 'bill') return C.BILL_R;
+  if (kind === 'ball') return C.BALL_R;
+  return M().coin.r;
+}
+function kindM(kind) {
+  return { gem: 2.2, lucky: 1.2, tag: 3.0, bill: 2.5, ball: 0.9 }[kind] || 1;
+}
+function mkCoin(x, y, kind, lay, st, tier) {
+  tier = tier || 0;
+  const td = M().tiers[tier];
   return {
-    x, y, z: lay ? C.COIN_H : 0, vx: 0, vy: 0, vz: 0,
-    r, m: kind === 'gem' ? 2.2 : kind === 'lucky' ? 1.2 : 1,
-    kind, st: st || 'plat', lay: lay || 0,
+    x, y, z: td.z + (lay || 0) * C.COIN_H, vx: 0, vy: 0, vz: 0,
+    r: kindR(kind), m: kindM(kind),
+    kind, st: st || 'plat', lay: lay || 0, tier,
     rot: rng() * 6.28, vrot: 0, glint: rng() * 7,
-    bounces: 0, ttl: 0, scored: false, checked1: false, ty: y,
+    bounces: 0, ttl: 0, scored: false, chk1: false, chk2: false,
+    val: 0, col: null,
   };
 }
-function place(x, y, kind, lay, st) {
-  const c = mkCoin(x, y, kind || 'coin', lay || 0, st || 'plat');
+function place(x, y, kind, lay, st, tier) {
+  // infer tier from depth when not given (keeps the old test API)
+  if (tier === undefined) {
+    tier = 0;
+    const ts = M().tiers;
+    for (let i = ts.length - 1; i >= 0; i--) { if (y >= ts[i].back) { tier = i; break; } }
+  }
+  const c = mkCoin(x, y, kind || 'coin', lay || 0, st || 'plat', tier);
   S.coins.push(c);
   return c;
 }
-function spawnDrop(x, ty, kind) {
-  if (S.coins.length >= C.MAX_COINS) return null;
-  const c = mkCoin(x, ty, kind, 0, 'drop');
+function spawnDrop(x, ty, kind, tag) {
+  if (S.coins.length >= M().maxCoins) return null;
+  const c = mkCoin(x, ty, kind, 0, 'air', 0);
   c.z = C.DROP_Z; c.vz = 0; c.vrot = (rng() - 0.5) * 10;
+  if (tag) { c.val = tag.val; c.col = tag.col; }
   S.coins.push(c);
   return c;
 }
-
 function rollKind() {
   const r = rng();
   if (r < C.P_GEM) return 'gem';
@@ -130,24 +278,60 @@ function rollKind() {
   return 'coin';
 }
 
-function pusherFront() {
-  return C.PUSH_MIN + (C.PUSH_MAX - C.PUSH_MIN) * (0.5 - 0.5 * Math.cos(S.phase));
+// ------------------------------------------------------------------ pusher
+function pusherFront(ti) {
+  const td = M().tiers[ti || 0];
+  const ph = S.phase + (td.phase || 0);
+  return td.min + (td.max - td.min) * (0.5 - 0.5 * Math.cos(ph));
 }
-function pusherVel() {
-  return (C.PUSH_MAX - C.PUSH_MIN) * 0.5 * Math.sin(S.phase) * (2 * Math.PI / C.PUSH_PERIOD);
+function pusherVel(ti) {
+  const td = M().tiers[ti || 0];
+  const ph = S.phase + (td.phase || 0);
+  return (td.max - td.min) * 0.5 * Math.sin(ph) * (2 * Math.PI / M().pushPeriod);
+}
+function tierFront(ti) {
+  const td = M().tiers[ti];
+  return td.front === 'dyn' ? pusherFront(ti + 1) : td.front;
 }
 
 // --------------------------------------------------------------- scoring
+function addPts(n) {
+  S.score += n;
+  if (S.score > S.best) S.best = S.score;
+}
 function scoreCoin(c) {
   const now = S.time;
+  S.collected++;
+  if (c.kind === 'ball') {
+    spinSlot();
+    S.shake += 4;
+    save();
+    return;
+  }
+  if (c.kind === 'tag') {
+    addPts(c.val);
+    S.floats.push({ txt: 'TAG +' + c.val, wx: c.x, wy: 96, age: 0, max: 1.3, col: c.col || '#43d17c', big: true });
+    S.shake += 4;
+    SND.tag();
+    burst(c.x, 96, C.TRAY_Z, 'tag');
+    save();
+    return;
+  }
+  if (c.kind === 'bill') {
+    addPts(M().billVal || 1000);
+    S.floats.push({ txt: 'CASH +' + (M().billVal || 1000), wx: c.x, wy: 96, age: 0, max: 1.4, col: '#7ee787', big: true });
+    S.shake += 6;
+    SND.bill();
+    burst(c.x, 96, C.TRAY_Z, 'bill');
+    save();
+    return;
+  }
   S.combo = (now - S.lastCollect <= C.COMBO_WIN) ? S.combo + 1 : 1;
   S.lastCollect = now;
   const mult = Math.min(S.combo, C.COMBO_CAP);
-  const pts = c.kind === 'gem' ? C.PTS.gem : C.PTS[c.kind] * mult;
-  S.score += pts;
+  const pts = c.kind === 'gem' ? M().gemVal : c.kind === 'lucky' ? M().luckyVal * mult : M().coin.val * mult;
+  addPts(pts);
   S.wallet += C.PAY[c.kind];
-  S.collected++;
-  if (S.score > S.best) S.best = S.score;
   S.floats.push({ txt: '+' + pts, wx: c.x, wy: 96, age: 0, max: 1.1,
                   col: c.kind === 'gem' ? '#7be9ff' : c.kind === 'lucky' ? '#ffe066' : '#ffd24a',
                   big: c.kind !== 'coin' || mult >= 3 });
@@ -163,98 +347,198 @@ function jackpot() {
   S.banner = { txt: 'JACKPOT!', ttl: 2.6, max: 2.6 };
   S.shake += 9;
   SND.jackpot();
+  const tags = M().tags;
   for (let i = 0; i < 10; i++) {
     S.rain.push({
       t: 0.12 * i,
       x: 10 + rng() * 80,
-      y: 32 + rng() * 42,
-      kind: i === 4 ? 'gem' : (i % 3 === 0 ? 'lucky' : 'coin'),
+      y: M().tiers[0].slotY + rng() * 14,
+      kind: i === 4 ? 'gem' : i === 8 ? 'tag' : (i % 3 === 0 ? 'lucky' : 'coin'),
+      tag: tags[0],
     });
   }
   save();
+}
+
+// neon machine: a collected bonus ball spins the slot
+function spinSlot() {
+  const r = rng();
+  let out;
+  if (r < 0.07) { out = { syms: '⭐⭐⭐', label: 'JACKPOT!' }; jackpot(); }
+  else if (r < 0.20) { out = { syms: '\u{1F352}\u{1F352}\u{1F352}', label: '+30 COINS' }; S.wallet += 30; }
+  else if (r < 0.36) { out = { syms: '\u{1F48E}\u{1F48E}\u{1F48E}', label: '+600 PTS' }; addPts(600); }
+  else if (r < 0.64) { out = { syms: '\u{1F514}\u{1F514}\u{1F34B}', label: '+10 COINS' }; S.wallet += 10; }
+  else { out = { syms: '\u{1F352}\u{1F514}\u{1F34B}', label: '+100 PTS' }; addPts(100); }
+  S.slotAnim = { t: 0, syms: out.syms, label: out.label };
+  if (!S.banner) S.banner = { txt: 'BONUS BALL!', ttl: 1.2, max: 1.2 };
+  SND.ball();
+  save();
+  return out;
 }
 
 function drop(x) {
   if (S.cd > 0) return false;
   if (S.wallet < 1) { S.denyT = 0.6; SND.deny(); return false; }
   S.wallet--; S.cd = C.DROP_CD; S.dropped++; S.meter++;
-  const kind = rollKind();
+  const Mv = M();
+  let kind, tag = null;
+  if (Mv.special === 'bill' && S.dropped % Mv.billEvery === 0) kind = 'bill';
+  else if (Mv.tagEvery && S.dropped % Mv.tagEvery === 0) { kind = 'tag'; tag = Mv.tags[(rng() * Mv.tags.length) | 0]; }
+  else if (Mv.special === 'ball' && rng() < Mv.ballChance) kind = 'ball';
+  else kind = rollKind();
   const ax = Math.max(8, Math.min(92, x === undefined ? S.aimX : x));
-  spawnDrop(ax + (rng() - 0.5) * 2, C.SLOT_Y + (rng() - 0.5) * 5, kind);
+  spawnDrop(ax + (rng() - 0.5) * 2, Mv.tiers[0].slotY + (rng() - 0.5) * 5, kind, tag);
   SND.slot();
   if (S.meter >= C.METER_MAX) jackpot();
   save();
   return true;
 }
 
-// ------------------------------------------------------------------ reset
-function initPile() {
-  S.coins.length = 0;
-  // a healthy pile near the edge so the first few drops already pay out
-  const rows = [
-    { y: 47, n: 7 }, { y: 55, n: 8 }, { y: 63, n: 8 },
-    { y: 70, n: 8 }, { y: 76, n: 7 }, { y: 81, n: 6 },
-  ];
-  let luckyLeft = 3;
-  for (const row of rows) {
-    for (let i = 0; i < row.n; i++) {
-      const x = 50 + (i - (row.n - 1) / 2) * (86 / row.n) + (rng() - 0.5) * 3;
-      let kind = 'coin';
-      if (luckyLeft > 0 && rng() < 0.09) { kind = 'lucky'; luckyLeft--; }
-      place(x, row.y + (rng() - 0.5) * 2.5, kind, 0, 'plat');
+// ---------------------------------------------------------------- economy
+function buyMachine(id) {
+  const m = MACHINES[id];
+  if (!m || S.unlocked.indexOf(id) >= 0) return false;
+  if (S.score < m.unlock) return false;
+  S.score -= m.unlock;
+  S.unlocked.push(id);
+  SND.buy();
+  save();
+  return true;
+}
+function setMachine(id) {
+  if (!MACHINES[id] || S.unlocked.indexOf(id) < 0) return false;
+  S.mach = id;
+  reset();
+  S.screen = 'game';
+  save();
+  return true;
+}
+function buyPrize(pid) {
+  const p = PRIZES.find(q => q.id === pid);
+  if (!p || S.score < p.cost) { S.uiFlash = { msg: 'NOT ENOUGH POINTS', t: 1 }; SND.deny(); return false; }
+  S.score -= p.cost;
+  S.prizes[pid] = (S.prizes[pid] || 0) + 1;
+  SND.buy();
+  save();
+  return true;
+}
+function listPrize(pid, tier, now) {
+  if (S.listings.length >= C.LIST_MAX) { S.uiFlash = { msg: 'STORE FULL (4 SLOTS)', t: 1 }; return false; }
+  if (!S.prizes[pid]) return false;
+  const p = PRIZES.find(q => q.id === pid);
+  if (!p) return false;
+  const t = C.SELL_TIERS[tier] || C.SELL_TIERS[1];
+  S.prizes[pid]--;
+  if (!S.prizes[pid]) delete S.prizes[pid];
+  S.listings.push({ pid, price: Math.round(p.base * t.mul), endT: now + t.dur, dur: t.dur });
+  save();
+  return true;
+}
+function resolveSales(now) {
+  let changed = false;
+  for (let i = S.listings.length - 1; i >= 0; i--) {
+    const l = S.listings[i];
+    if (now >= l.endT) {
+      S.wallet += l.price;
+      S.slog.unshift({ pid: l.pid, price: l.price, buyer: BUYERS[(rng() * BUYERS.length) | 0] });
+      S.listings.splice(i, 1);
+      changed = true;
+      SND.sold();
     }
   }
-  place(50 + (rng() - 0.5) * 10, 58, 'gem', 0, 'plat');
-  // a few loose ones mid-field
-  for (let i = 0; i < 4; i++) place(20 + rng() * 60, 36 + rng() * 8, 'coin', 0, 'plat');
-  // settle the pile so it doesn't pop on the first frame, then sweep up
-  // anything the settle spilled over an edge — the game starts clean
+  if (S.slog.length > 8) S.slog.length = 8;
+  if (changed) save();
+  return changed;
+}
+
+// ------------------------------------------------------------------ reset
+function fillRows(tier, y0, y1, opts) {
+  const Mv = M();
+  const step = Mv.coin.r * 2.05;
+  let luckyLeft = opts.lucky || 0;
+  for (let y = y0; y <= y1; y += step) {
+    const n = Math.floor(84 / step);
+    for (let i = 0; i < n; i++) {
+      const x = 50 + (i - (n - 1) / 2) * step * 1.04 + (rng() - 0.5) * 2.5;
+      let kind = 'coin';
+      if (luckyLeft > 0 && rng() < 0.06) { kind = 'lucky'; luckyLeft--; }
+      place(x, y + (rng() - 0.5) * 2, kind, 0, 'plat', tier);
+    }
+  }
+}
+function initPile() {
+  S.coins.length = 0;
+  const Mv = M();
+  const lt = lastTier();
+  const td = Mv.tiers[lt];
+  const front = td.front === 'dyn' ? td.min : td.front;
+  // dense pile on the payout tier, heaviest near the edge
+  fillRows(lt, td.back + (lt > 0 ? 14 : 42), front - 4, { lucky: 4 });
+  // penny falls: a starter spread on the upper shelf too
+  if (lt > 0) fillRows(0, 10, Mv.tiers[0].min + 16, { lucky: 1 });
+  // seeded specials: a gem and two point tags mid-pile
+  place(50 + (rng() - 0.5) * 10, front - 22, 'gem', 0, 'plat', lt);
+  for (let i = 0; i < 2; i++) {
+    const tg = Mv.tags[i % Mv.tags.length];
+    const t = place(22 + rng() * 56, front - 12 - rng() * 14, 'tag', 0, 'plat', lt);
+    t.val = tg.val; t.col = tg.col;
+  }
+  if (Mv.special === 'bill') {
+    const b = place(35 + rng() * 30, front - 18, 'bill', 0, 'plat', lt);
+    b.val = Mv.billVal;
+  }
+  // a second storey: coins resting on top of the pile
+  const base = S.coins.filter(c => c.kind === 'coin' && c.tier === lt);
+  for (let i = 0; i < Math.min(12, base.length); i++) {
+    const under = base[(rng() * base.length) | 0];
+    place(under.x + (rng() - 0.5) * 2, under.y + (rng() - 0.5) * 2, 'coin', 1, 'plat', lt);
+  }
+  // settle so nothing pops on the first frame, then sweep spillage
   for (let i = 0; i < 140; i++) step(1 / 60, true);
   for (let i = S.coins.length - 1; i >= 0; i--) {
     if (S.coins[i].st !== 'plat') S.coins.splice(i, 1);
   }
   S.trayPile = 0; S.lost = 0;
 }
-
 function reset() {
-  S.score = 0; S.wallet = C.START_WALLET; S.meter = 0; S.combo = 0;
-  S.lastCollect = -99; S.time = 0; S.phase = 0; S.cd = 0; S.regen = 0;
-  S.dropped = 0; S.collected = 0; S.lost = 0;
+  // re-racks the current machine's pile; points/wallet/meter are global now
+  S.combo = 0; S.lastCollect = -99; S.time = 0; S.phase = 0; S.cd = 0;
   S.floats.length = 0; S.parts.length = 0; S.rain.length = 0;
-  S.banner = null; S.trayPile = 0; S.shake = 0;
+  S.banner = null; S.slotAnim = null; S.trayPile = 0; S.shake = 0;
   initPile();
   save();
 }
 
 // ------------------------------------------------------------- simulation
-function landCoin(c, pf) {
+function findSupport(c, lay) {
+  for (const o of S.coins) {
+    if (o === c || o.st !== 'plat' || o.lay !== lay || o.tier !== c.tier) continue;
+    const dx = o.x - c.x, dy = o.y - c.y;
+    if (dx * dx + dy * dy < Math.pow((o.r + c.r) * 0.85, 2)) return o;
+  }
+  return null;
+}
+function landCoin(c, lay) {
+  const td = M().tiers[c.tier];
   c.st = 'plat';
-  c.z = c.lay ? C.COIN_H : 0;
-  c.vz = 0;
+  c.lay = lay;
+  c.z = td.z + lay * C.COIN_H;
+  c.vz = 0; c.chk1 = false; c.chk2 = false;
+  const pf = pusherFront(c.tier);
   c.y = Math.max(c.y, pf + c.r);
   c.vx += (rng() - 0.5) * 7;
   c.vy += (rng() - 0.5) * 5;
   SND.clink();
 }
 
-function support(c) {
-  // nearest settled base-layer coin underneath a stacked coin
-  for (const o of S.coins) {
-    if (o === c || o.st !== 'plat' || o.lay !== 0) continue;
-    const dx = o.x - c.x, dy = o.y - c.y;
-    if (dx * dx + dy * dy < Math.pow((o.r + c.r) * 0.85, 2)) return o;
-  }
-  return null;
-}
-
 function step(dt, quiet) {
   S.time += dt;
   if (S.cd > 0) S.cd -= dt;
   if (S.denyT > 0) S.denyT -= dt;
-  S.phase += dt * 2 * Math.PI / C.PUSH_PERIOD;
-  const pf = pusherFront();
-  const pv = pusherVel();
+  S.phase += dt * 2 * Math.PI / M().pushPeriod;
   S.shake = Math.max(0, S.shake - dt * 12);
+  const Mv = M();
+  const lt = lastTier();
 
   // wallet trickle so nobody is ever fully stuck
   if (S.wallet < C.REGEN_CAP) {
@@ -267,49 +551,65 @@ function step(dt, quiet) {
     S.rain[i].t -= dt;
     if (S.rain[i].t <= 0) {
       const r = S.rain.splice(i, 1)[0];
-      spawnDrop(r.x, r.y, r.kind);
+      spawnDrop(r.x, r.y, r.kind, r.kind === 'tag' ? r.tag : null);
     }
   }
-
-  const fr = Math.exp(-C.FRICTION * dt);
+  if (S.slotAnim) { S.slotAnim.t += dt; if (S.slotAnim.t > 2.4) S.slotAnim = null; }
 
   for (const c of S.coins) {
-    if (c.st === 'drop') {
+    if (c.st === 'air') {
+      // falling toward its target tier (from the slot, a hop, or the rain)
+      const td = Mv.tiers[c.tier];
       c.vz += C.GRAV * dt;
       c.z -= c.vz * dt;
       c.rot += c.vrot * dt;
-      if (!c.checked1 && c.z <= C.COIN_H) {
-        c.checked1 = true;
-        const s = support(c);
-        if (s) { c.lay = 1; landCoin(c, pf); continue; }
+      c.y += c.vy * dt;
+      c.vy *= Math.exp(-1.5 * dt);
+      if (!c.chk2 && c.z <= td.z + 2 * C.COIN_H) {
+        c.chk2 = true;
+        if (findSupport(c, 1)) { landCoin(c, 2); continue; }
       }
-      if (c.z <= 0) { c.lay = 0; landCoin(c, pf); }
+      if (!c.chk1 && c.z <= td.z + C.COIN_H) {
+        c.chk1 = true;
+        if (findSupport(c, 0)) { landCoin(c, 1); continue; }
+      }
+      if (c.z <= td.z) landCoin(c, 0);
     } else if (c.st === 'plat') {
-      // the pusher: a moving wall. Contact snaps the coin to its face and,
-      // while advancing, imparts its speed — the pile chain does the rest.
+      const td = Mv.tiers[c.tier];
+      const isLast = c.tier === lt;
+      const pf = pusherFront(c.tier);
+      const pv = pusherVel(c.tier);
       if (c.y - c.r < pf) {
         c.y = pf + c.r;
         if (pv > 0) c.vy = Math.max(c.vy, pv);
       }
+      const fr = Math.exp(-(c.kind === 'ball' ? 1.0 : C.FRICTION) * dt);
       c.vx *= fr; c.vy *= fr;
-      if (Math.abs(c.vx) < C.SETTLE) c.vx = 0;
-      if (Math.abs(c.vy) < C.SETTLE) c.vy = 0;
+      const st = c.kind === 'ball' ? 0.15 : C.SETTLE;
+      if (Math.abs(c.vx) < st) c.vx = 0;
+      if (Math.abs(c.vy) < st) c.vy = 0;
+      const front = tierFront(c.tier);
+      // the incline lip: forward motion is resisted on the last stretch, so
+      // coins stall teetering at the brink until the pile shoves them over
+      if (isLast && c.lay === 0 && c.vy > 0 && c.y > front - Mv.lipW && c.y <= front) {
+        c.vy = Math.max(0, c.vy - C.LIP_G * dt);
+      }
       c.x += c.vx * dt;
       c.y += c.vy * dt;
-      // stacked coins ride their support and drop when it slides away
-      if (c.lay === 1) {
-        const s = support(c);
+      // stacked coins ride their support and topple down when it slides away
+      if (c.lay > 0) {
+        const s = findSupport(c, c.lay - 1);
         if (s) {
           const k = Math.min(1, dt * 5);
           c.vx += (s.vx - c.vx) * k;
           c.vy += (s.vy - c.vy) * k;
         } else {
-          c.lay = 0; c.z = 0;
+          c.lay--; c.z = td.z + c.lay * C.COIN_H;
           if (!quiet) SND.clink();
         }
       }
-      // side walls near the back; open gutters after GUT_Y
-      if (c.y < C.GUT_Y) {
+      // side walls; gutters only open on the payout tier
+      if (!isLast || c.y < Mv.gutY) {
         if (c.x < c.r) { c.x = c.r; c.vx *= -0.3; }
         if (c.x > C.W - c.r) { c.x = C.W - c.r; c.vx *= -0.3; }
       } else if (c.x < C.GUT_LO || c.x > C.GUT_HI) {
@@ -318,9 +618,14 @@ function step(dt, quiet) {
         if (!quiet) SND.thud();
         continue;
       }
-      // over the front edge — the money moment
-      if (c.y > C.PLAT_FRONT) {
-        c.st = 'fall'; c.vz = 0; c.vrot = (rng() - 0.5) * 12 + Math.sign(c.vy || 1) * 4;
+      // over the edge: payout tier -> tray; upper tier -> hop down a level
+      if (c.y > front) {
+        if (isLast) {
+          c.st = 'fall'; c.vz = 0; c.vrot = (rng() - 0.5) * 12 + Math.sign(c.vy || 1) * 4;
+        } else {
+          c.st = 'air'; c.tier++; c.vz = 0; c.chk1 = c.chk2 = false;
+          c.vrot = (rng() - 0.5) * 8;
+        }
       }
     } else if (c.st === 'fall') {
       c.vz += C.GRAV * dt;
@@ -346,8 +651,7 @@ function step(dt, quiet) {
     }
   }
 
-  // coin vs coin — positional correction + impulse, same layer only.
-  // O(n^2) with n <= 130 is fine at 60fps.
+  // coin vs coin — positional correction + impulse; same tier & layer only
   const cs = S.coins;
   for (let iter = 0; iter < 3; iter++) {
     for (let i = 0; i < cs.length; i++) {
@@ -355,7 +659,7 @@ function step(dt, quiet) {
       if (a.st !== 'plat') continue;
       for (let j = i + 1; j < cs.length; j++) {
         const b = cs[j];
-        if (b.st !== 'plat' || a.lay !== b.lay) continue;
+        if (b.st !== 'plat' || a.lay !== b.lay || a.tier !== b.tier) continue;
         let dx = b.x - a.x, dy = b.y - a.y;
         const rr = a.r + b.r;
         const d2 = dx * dx + dy * dy;
@@ -385,7 +689,6 @@ function step(dt, quiet) {
     else if (c.st === 'tray' && c.ttl <= 0) { cs.splice(i, 1); S.trayPile = Math.min(S.trayPile + 1, 14); }
   }
 
-  // floats / banner
   for (let i = S.floats.length - 1; i >= 0; i--) {
     const f = S.floats[i];
     f.age += dt;
@@ -395,7 +698,10 @@ function step(dt, quiet) {
     S.banner.ttl -= dt;
     if (S.banner.ttl <= 0) S.banner = null;
   }
-  // combo lapses
+  if (S.uiFlash) {
+    S.uiFlash.t -= dt;
+    if (S.uiFlash.t <= 0) S.uiFlash = null;
+  }
   if (S.combo > 0 && S.time - S.lastCollect > C.COMBO_WIN) S.combo = 0;
 }
 
@@ -407,8 +713,9 @@ function tick(dt) {
 
 // ------------------------------------------------------------- public API
 window.CP = {
-  S, C, tick, step, drop, reset, srand, place, spawnDrop, jackpot,
-  pusherFront, pusherVel, scoreCoin, save, load, HEADLESS,
+  S, C, MACHINES, PRIZES, tick, step, drop, reset, srand, place, spawnDrop,
+  jackpot, spinSlot, pusherFront, pusherVel, tierFront, scoreCoin, save, load,
+  buyMachine, setMachine, buyPrize, listPrize, resolveSales, M, HEADLESS,
 };
 
 load();
@@ -419,6 +726,7 @@ initPile();
 // ============================================================================
 if (!HEADLESS) (function browser() {
   srand((Date.now() % 2147483647) || 1); // fresh luck each session; tests keep the fixed seed
+  resolveSales(Date.now());              // PusherBay kept selling while we were away
 
   // ------------------------------------------------------------------ audio
   let AC = null, master = null, noiseBuf = null;
@@ -471,10 +779,16 @@ if (!HEADLESS) (function browser() {
     jackpot() { [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => setTimeout(() => { tone(f, 0.22, 'square', 0.14); tone(f / 2, 0.22, 'triangle', 0.14); }, i * 110)); },
     deny() { tone(150, 0.18, 'square', 0.14, 90); },
     thud() { tone(75, 0.1, 'sine', 0.30, 50); },
+    tag() { noise(0.06, 0.18, 1800); [988, 1318].forEach((f, i) => setTimeout(() => tone(f, 0.22, 'sine', 0.26), i * 70)); },
+    bill() { [740, 932, 1244].forEach((f, i) => setTimeout(() => tone(f, 0.24, 'triangle', 0.24), i * 80)); noise(0.1, 0.1, 900); },
+    ball() { tone(420, 0.3, 'sine', 0.25, 840); },
+    reel() { tone(220 + Math.random() * 80, 0.04, 'square', 0.08); },
+    buy() { tone(660, 0.1, 'square', 0.15); setTimeout(() => tone(990, 0.16, 'square', 0.15), 90); noise(0.05, 0.1, 3000); },
+    sold() { [784, 988, 1318].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'sine', 0.2), i * 90)); },
   };
 
   // --------------------------------------------------------------- viewport
-  const LW = 480, LH = 840;    // logical canvas size (portrait)
+  const LW = 480, LH = 840;
   let scale = 1, offX = 0, offY = 0;
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -489,8 +803,6 @@ if (!HEADLESS) (function browser() {
   window.addEventListener('resize', resize);
   resize();
 
-  // playfield projection: world (x 0..100, y 0..100, z) -> logical px.
-  // Depth is foreshortened; width grows toward the player.
   const PF = { top: 238, bot: 596, cx: LW / 2, w0: 240, w1: 442 };
   function eyd(y) {
     const t = Math.max(0, Math.min(y / 100, 1.18));
@@ -500,17 +812,19 @@ if (!HEADLESS) (function browser() {
     const e = eyd(y);
     const half = (PF.w0 + (PF.w1 - PF.w0) * Math.min(e, 1)) / 2;
     const u = half * 2 / 100;
-    // height above the plane foreshortens; drops below the edge read as a
-    // full-speed plunge into the tray, so negative z maps steeper
     const zk = (z || 0) >= 0 ? 0.5 : 1.0;
     return { x: PF.cx + (x - 50) * u, y: PF.top + (PF.bot - PF.top) * e - (z || 0) * u * zk, u };
   }
 
   // ------------------------------------------------------------------ input
-  const BTNS = [
-    { x: 448, y: 30, r: 19, id: 'mute' },
-    { x: 402, y: 30, r: 19, id: 'reset' },
-  ];
+  let uiButtons = [];   // rebuilt by every draw pass
+  function hit(px, py) {
+    for (let i = uiButtons.length - 1; i >= 0; i--) {
+      const b = uiButtons[i];
+      if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) { b.cb(); return true; }
+    }
+    return false;
+  }
   let held = false, holdT = 0;
   function toLogical(ev) {
     const r = canvas.getBoundingClientRect();
@@ -521,7 +835,7 @@ if (!HEADLESS) (function browser() {
     };
   }
   function aimFrom(p) {
-    const e = eyd(C.SLOT_Y);
+    const e = eyd(M().tiers[0].slotY);
     const half = (PF.w0 + (PF.w1 - PF.w0) * e) / 2;
     const u = half * 2 / 100;
     S.aimX = Math.max(8, Math.min(92, 50 + (p.x - PF.cx) / u));
@@ -531,20 +845,17 @@ if (!HEADLESS) (function browser() {
     audioInit();
     if (AC && AC.state === 'suspended') AC.resume();
     const p = toLogical(ev);
-    if (!S.started) { S.started = true; return; }
-    for (const b of BTNS) {
-      const dx = p.x - b.x, dy = p.y - b.y;
-      if (dx * dx + dy * dy < b.r * b.r) {
-        if (b.id === 'mute') { S.mute = !S.mute; save(); }
-        else if (b.id === 'reset') { reset(); }
-        return;
-      }
+    if (hit(p.x, p.y)) return;
+    if (S.screen === 'game') {
+      aimFrom(p);
+      drop(S.aimX);
+      held = true; holdT = 0;
+    } else if (S.screen === 'store') {
+      S.sellPick = null;    // tap outside the popup closes it
     }
-    aimFrom(p);
-    drop(S.aimX);
-    held = true; holdT = 0;
   });
   canvas.addEventListener('pointermove', (ev) => {
+    if (S.screen !== 'game') return;
     const p = toLogical(ev);
     if (p.y > 120) aimFrom(p);
   });
@@ -554,19 +865,23 @@ if (!HEADLESS) (function browser() {
 
   // -------------------------------------------------------------- particles
   function burstScreen(sx, sy, kind) {
-    const n = kind === 'gem' ? 26 : 14;
+    const n = kind === 'gem' || kind === 'tag' || kind === 'bill' ? 24 : 14;
+    const col = kind === 'gem' ? '#8ef0ff' : kind === 'bill' ? '#7ee787' : null;
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 160;
       S.parts.push({
         x: sx, y: sy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 90,
         g: 300, life: 0, max: 0.5 + Math.random() * 0.5,
-        col: kind === 'gem' ? '#8ef0ff' : (Math.random() < 0.5 ? '#ffd75e' : '#fff3b0'),
+        col: col || (Math.random() < 0.5 ? '#ffd75e' : '#fff3b0'),
         sz: 1.5 + Math.random() * 2.5, spin: Math.random() * 6,
       });
     }
   }
+  window.__cpBurst = function (wx, wy, wz, kind) {
+    const p = w2s(wx, wy, wz);
+    burstScreen(p.x, p.y, kind);
+  };
 
-  // pre-rendered platform scratches (world-space line list)
   const SCRATCH = [];
   {
     const old = rngState; srand(777);
@@ -577,7 +892,7 @@ if (!HEADLESS) (function browser() {
     rngState = old;
   }
 
-  // ------------------------------------------------------------------ draw
+  // ------------------------------------------------------------ draw helpers
   function rr(x, y, w, h, r) {
     ctx.beginPath();
     ctx.moveTo(x + r, y);
@@ -594,12 +909,35 @@ if (!HEADLESS) (function browser() {
     ctx.closePath();
   }
   function fmt(n) { return ('' + Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function txt(s, x, y, font, col, align, stroke) {
+    ctx.font = font;
+    ctx.textAlign = align || 'center';
+    ctx.textBaseline = 'middle';
+    if (stroke) { ctx.lineWidth = stroke.w; ctx.strokeStyle = stroke.col; ctx.strokeText(s, x, y); }
+    ctx.fillStyle = col;
+    ctx.fillText(s, x, y);
+  }
+  function uiBtn(x, y, w, h, label, cb, opts) {
+    opts = opts || {};
+    uiButtons.push({ x, y, w, h, cb });
+    rr(x, y, w, h, opts.r || 12);
+    if (opts.grad) {
+      const g = ctx.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0, opts.grad[0]); g.addColorStop(1, opts.grad[1]);
+      ctx.fillStyle = g;
+    } else ctx.fillStyle = opts.bg || 'rgba(20,10,14,0.8)';
+    ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = opts.border || '#7d5a24'; ctx.stroke();
+    if (label) txt(label, x + w / 2, y + h / 2 + 1, opts.font || '800 15px Verdana, sans-serif', opts.col || '#f2cd5e');
+  }
 
   let dispScore = 0;
 
-  function drawBackground(t) {
+  // --------------------------------------------------------- machine screen
+  function drawBackground() {
+    const T = M().theme;
     const g = ctx.createRadialGradient(LW / 2, 300, 60, LW / 2, 420, 620);
-    g.addColorStop(0, '#2a1520');
+    g.addColorStop(0, T.room);
     g.addColorStop(0.6, '#160a12');
     g.addColorStop(1, '#0b0609');
     ctx.fillStyle = g;
@@ -607,25 +945,24 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawMarquee(t) {
-    // arch
+    const T = M().theme;
     ctx.save();
     rr(28, 18, LW - 56, 116, 46);
     const g = ctx.createLinearGradient(0, 18, 0, 134);
-    g.addColorStop(0, '#5d1420');
-    g.addColorStop(0.5, '#8c1f2e');
-    g.addColorStop(1, '#4a0f1a');
+    g.addColorStop(0, T.cabB);
+    g.addColorStop(0.5, T.cabA);
+    g.addColorStop(1, T.cabB);
     ctx.fillStyle = g; ctx.fill();
     ctx.lineWidth = 5;
     const gg = ctx.createLinearGradient(0, 14, 0, 138);
-    gg.addColorStop(0, '#f7d977'); gg.addColorStop(0.5, '#a87b1e'); gg.addColorStop(1, '#f2cd5e');
+    gg.addColorStop(0, T.trim); gg.addColorStop(0.5, '#a87b1e'); gg.addColorStop(1, T.trim);
     ctx.strokeStyle = gg; ctx.stroke();
-    // chasing bulbs
     const jam = S.banner ? 12 : 5;
     const N = 22;
     for (let i = 0; i < N; i++) {
       const u = i / (N - 1);
       const bx = 52 + u * (LW - 104);
-      const by = 32 + Math.sin(u * Math.PI) * -6 + (i % 2) * 0;
+      const by = 32 + Math.sin(u * Math.PI) * -6;
       const on = S.banner ? ((i + Math.floor(t * jam)) % 2 === 0)
                           : ((i + Math.floor(t * jam)) % 3 === 0);
       ctx.beginPath(); ctx.arc(bx, by, 4.2, 0, 7);
@@ -636,35 +973,25 @@ if (!HEADLESS) (function browser() {
         ctx.fillStyle = 'rgba(255,220,130,0.22)'; ctx.fill();
       }
     }
-    // title
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '900 42px Georgia, serif';
     const tg = ctx.createLinearGradient(0, 52, 0, 96);
-    tg.addColorStop(0, '#fff0b8'); tg.addColorStop(0.5, '#f5c542'); tg.addColorStop(1, '#b07a14');
-    ctx.lineWidth = 6; ctx.strokeStyle = '#3a1006';
-    ctx.strokeText('GOLD RUSH', LW / 2, 74);
+    tg.addColorStop(0, T.titleA); tg.addColorStop(0.5, T.accent); tg.addColorStop(1, T.titleB);
+    ctx.font = '900 40px Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6; ctx.strokeStyle = '#20080a';
+    ctx.strokeText(M().name, LW / 2, 74);
     ctx.fillStyle = tg;
-    ctx.fillText('GOLD RUSH', LW / 2, 74);
-    ctx.font = '700 13px Georgia, serif';
-    ctx.fillStyle = '#e8b6be';
-    ctx.fillText('✦  C O I N   P U S H E R  ✦', LW / 2, 107);
+    ctx.fillText(M().name, LW / 2, 74);
+    txt('✦  ' + M().sub + '  ✦', LW / 2, 107, '700 12px Georgia, serif', T.sub);
     ctx.restore();
-    // corner buttons
-    for (const b of BTNS) {
-      ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, 7);
-      ctx.fillStyle = 'rgba(20,10,14,0.75)'; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
-      ctx.font = '16px serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#f2cd5e';
-      ctx.fillText(b.id === 'mute' ? (S.mute ? '\u{1F507}' : '\u{1F50A}') : '↺', b.x, b.y + 1);
-    }
+    // corner buttons: home, reset, mute
+    uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'lobby'; save(); }, { r: 10, font: '20px serif' });
+    uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
+    uiBtn(LW - 96, 12, 38, 36, '↺', () => reset(), { r: 10, font: '18px serif' });
   }
 
   function drawMeter(t) {
     const x = 70, y = 148, w = LW - 140, h = 15;
     const fr = S.meter / C.METER_MAX;
-    ctx.font = '800 11px Verdana, sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     rr(x - 4, y - 4, w + 8, h + 8, 9);
     ctx.fillStyle = '#1c0d13'; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = '#6e4c1c'; ctx.stroke();
@@ -676,15 +1003,15 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = g; ctx.fill();
       if (pulse > 0) { ctx.fillStyle = 'rgba(255,240,180,' + pulse + ')'; ctx.fill(); }
     }
-    ctx.fillStyle = fr > 0.5 ? '#fff5d6' : '#caa25a';
-    ctx.fillText('JACKPOT ' + S.meter + ' / ' + C.METER_MAX, LW / 2, y + h / 2 + 0.5);
+    txt('JACKPOT ' + S.meter + ' / ' + C.METER_MAX, LW / 2, y + h / 2 + 0.5,
+        '800 11px Verdana, sans-serif', fr > 0.5 ? '#fff5d6' : '#caa25a');
   }
 
   function drawCabinet() {
-    // side pillars framing the glass
+    const T = M().theme;
     ctx.save();
     const g = ctx.createLinearGradient(0, 170, 0, 700);
-    g.addColorStop(0, '#4d1220'); g.addColorStop(1, '#2a0a13');
+    g.addColorStop(0, T.cabA); g.addColorStop(1, T.cabB);
     ctx.fillStyle = g;
     ctx.fillRect(4, 170, 22, 540);
     ctx.fillRect(LW - 26, 170, 22, 540);
@@ -694,22 +1021,20 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
-  function drawBackWall(t) {
-    // dark steel wall behind the pusher, with the drop slot + aim guide
-    const a = w2s(0, 0, 0), b = w2s(100, 0, 0);
+  function drawBackWall() {
+    const a = w2s(0, 0, M().tiers[0].z);
     ctx.save();
     const g = ctx.createLinearGradient(0, 172, 0, a.y);
     g.addColorStop(0, '#20242c'); g.addColorStop(1, '#3a4049');
     ctx.fillStyle = g;
-    ctx.fillRect(26, 172, LW - 52, a.y - 172);
-    // slot rail
+    ctx.fillRect(26, 172, LW - 52, Math.max(10, a.y - 172));
     ctx.fillStyle = '#12151a';
     ctx.fillRect(60, 186, LW - 120, 12);
     ctx.strokeStyle = '#565e69'; ctx.lineWidth = 1.5;
     ctx.strokeRect(60, 186, LW - 120, 12);
-    // aim guide: light column down to the landing depth
-    const ap = w2s(S.aimX, C.SLOT_Y, 0);
-    const e = eyd(C.SLOT_Y);
+    const slotY = M().tiers[0].slotY;
+    const ap = w2s(S.aimX, slotY, M().tiers[0].z);
+    const e = eyd(slotY);
     const u = (PF.w0 + (PF.w1 - PF.w0) * e) / 100;
     const gx = PF.cx + (S.aimX - 50) * u;
     const lg = ctx.createLinearGradient(0, 192, 0, ap.y);
@@ -717,7 +1042,6 @@ if (!HEADLESS) (function browser() {
     lg.addColorStop(1, 'rgba(255,222,120,0.03)');
     ctx.fillStyle = lg;
     ctx.fillRect(gx - 7, 192, 14, ap.y - 192);
-    // slot marker
     ctx.fillStyle = S.cd > 0 ? '#6e5320' : '#ffd75e';
     rr(gx - 10, 184, 20, 15, 4); ctx.fill();
     ctx.fillStyle = '#12151a';
@@ -725,40 +1049,39 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
-  function drawFloor() {
-    const p00 = w2s(0, 0, 0), p10 = w2s(100, 0, 0);
-    const p01 = w2s(0, C.PLAT_FRONT, 0), p11 = w2s(100, C.PLAT_FRONT, 0);
+  function drawTierFloor(y0, y1, z, scratches) {
+    const T = M().theme;
+    const p00 = w2s(0, y0, z), p10 = w2s(100, y0, z);
+    const p01 = w2s(0, y1, z), p11 = w2s(100, y1, z);
     poly([p00, p10, p11, p01]);
     const g = ctx.createLinearGradient(0, p00.y, 0, p01.y);
-    g.addColorStop(0, '#585f6a');
-    g.addColorStop(0.55, '#767e8a');
-    g.addColorStop(1, '#99a1ad');
+    g.addColorStop(0, T.floorA);
+    g.addColorStop(1, T.floorB);
     ctx.fillStyle = g; ctx.fill();
-    // brushed bands
-    ctx.save();
-    ctx.clip();
-    ctx.globalAlpha = 0.05;
-    for (let i = 0; i < 6; i++) {
-      const y = i * 100 / 6 + 6;
-      const a = w2s(0, y, 0), b = w2s(100, y, 0);
-      ctx.fillStyle = i % 2 ? '#ffffff' : '#000000';
-      poly([a, b, w2s(100, y + 7, 0), w2s(0, y + 7, 0)]);
-      ctx.fill();
+    if (scratches) {
+      ctx.save();
+      ctx.clip();
+      ctx.globalAlpha = 0.06;
+      ctx.strokeStyle = '#dfe5ee';
+      ctx.lineWidth = 1;
+      for (const s of SCRATCH) {
+        if (s.y1 < y0 || s.y1 > y1) continue;
+        const a = w2s(s.x1, s.y1, z), b = w2s(s.x2, s.y2, z);
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      }
+      ctx.restore();
     }
-    ctx.globalAlpha = 0.06;
-    ctx.strokeStyle = '#dfe5ee';
-    ctx.lineWidth = 1;
-    for (const s of SCRATCH) {
-      const a = w2s(s.x1, s.y1, 0), b = w2s(s.x2, s.y2, 0);
-      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
-    }
-    ctx.restore();
-    // side gutters: dark voids along the sides past GUT_Y
+  }
+
+  function drawGutters() {
+    const Mv = M();
+    const lt = lastTier();
+    const front = tierFront(lt);
     for (const side of [0, 1]) {
       const x0 = side ? 100 : 0;
       const xin = side ? 96 : 4;
-      const a = w2s(x0, C.GUT_Y, 0), b = w2s(xin, C.GUT_Y, 0);
-      const c2 = w2s(xin, C.PLAT_FRONT, 0), d = w2s(x0, C.PLAT_FRONT, 0);
+      const a = w2s(x0, Mv.gutY, 0), b = w2s(xin, Mv.gutY, 0);
+      const c2 = w2s(xin, front, 0), d = w2s(x0, front, 0);
       poly([a, b, c2, d]);
       const gg = ctx.createLinearGradient(a.x, 0, b.x, 0);
       gg.addColorStop(side ? 1 : 0, 'rgba(8,6,10,0.9)');
@@ -767,144 +1090,156 @@ if (!HEADLESS) (function browser() {
     }
   }
 
-  function drawPusher(t) {
-    const pf = pusherFront();
-    const tl = w2s(1, 0, C.PUSH_H), tr = w2s(99, 0, C.PUSH_H);
-    const fl = w2s(1, pf, C.PUSH_H), frt = w2s(99, pf, C.PUSH_H);
-    const bl = w2s(1, pf, 0), br = w2s(99, pf, 0);
-    // top surface
+  function drawLip() {
+    const Mv = M();
+    const lt = lastTier();
+    const front = tierFront(lt);
+    const a = w2s(0, front - Mv.lipW, 0), b = w2s(100, front - Mv.lipW, 0);
+    const c2 = w2s(100, front, Mv.lipH), d = w2s(0, front, Mv.lipH);
+    poly([a, b, c2, d]);
+    const g = ctx.createLinearGradient(0, a.y, 0, c2.y);
+    g.addColorStop(0, 'rgba(255,255,255,0.05)');
+    g.addColorStop(1, 'rgba(255,255,255,0.22)');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(240,246,255,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(c2.x, c2.y); ctx.stroke();
+  }
+
+  function drawPusherBlock(ti, t) {
+    const td = M().tiers[ti];
+    const pf = pusherFront(ti);
+    const zTop = td.z + C.PUSH_H, zBot = td.z;
+    const tl = w2s(1, td.back, zTop), tr = w2s(99, td.back, zTop);
+    const fl = w2s(1, pf, zTop), frt = w2s(99, pf, zTop);
+    const bl = w2s(1, pf, zBot), br = w2s(99, pf, zBot);
     poly([tl, tr, frt, fl]);
     const tg = ctx.createLinearGradient(0, tl.y, 0, fl.y);
     tg.addColorStop(0, '#8b93a0'); tg.addColorStop(1, '#b8bfca');
     ctx.fillStyle = tg; ctx.fill();
-    // decal
     ctx.save();
     ctx.clip();
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '900 ' + Math.max(10, (fl.y - tl.y) * 0.5) + 'px Verdana, sans-serif';
-    ctx.fillStyle = 'rgba(140,31,46,0.55)';
-    ctx.fillText('▼ PUSH ▼', LW / 2, (tl.y + fl.y) / 2);
+    txt('▼ PUSH ▼', LW / 2, (tl.y + fl.y) / 2,
+        '900 ' + Math.max(10, (fl.y - tl.y) * 0.5) + 'px Verdana, sans-serif', 'rgba(120,40,50,0.5)');
     ctx.restore();
-    // front face
     poly([fl, frt, br, bl]);
     const fg = ctx.createLinearGradient(0, fl.y, 0, bl.y);
     fg.addColorStop(0, '#697180'); fg.addColorStop(0.5, '#4c525e'); fg.addColorStop(1, '#33383f');
     ctx.fillStyle = fg; ctx.fill();
     ctx.strokeStyle = 'rgba(230,238,250,0.35)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(fl.x, fl.y); ctx.lineTo(frt.x, frt.y); ctx.stroke();
-    // LED strip blinking on the face
     const on = Math.floor(t * 4) % 2 === 0;
     ctx.fillStyle = on ? '#ff5a4e' : '#5b2320';
-    const n = 8;
-    for (let i = 0; i < n; i++) {
-      const u = (i + 0.5) / n;
+    for (let i = 0; i < 8; i++) {
+      const u = (i + 0.5) / 8;
       const x = fl.x + (frt.x - fl.x) * u;
       const y = (fl.y + bl.y) / 2;
       ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill();
     }
   }
 
+  // penny falls: the elevated shelf whose face pushes tier 1
+  function drawShelf(t) {
+    const Mv = M();
+    const td0 = Mv.tiers[0];
+    const face = pusherFront(1);
+    drawTierFloor(td0.back, face, td0.z, false);
+    // shelf front face descending to the lower field
+    const fl = w2s(0, face, td0.z), frt = w2s(100, face, td0.z);
+    const bl = w2s(0, face, 0), br = w2s(100, face, 0);
+    poly([fl, frt, br, bl]);
+    const fg = ctx.createLinearGradient(0, fl.y, 0, bl.y);
+    fg.addColorStop(0, '#5a6270'); fg.addColorStop(1, '#292d34');
+    ctx.fillStyle = fg; ctx.fill();
+    ctx.strokeStyle = 'rgba(230,238,250,0.4)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(fl.x, fl.y); ctx.lineTo(frt.x, frt.y); ctx.stroke();
+    drawPusherBlock(0, t);
+  }
+
+  const COIN_PAL = {
+    gold: { edge: '#7d5a14', f0: '#ffedaa', f1: '#f2c04a', f2: '#ad7c1a', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(136,94,18,0.85)' },
+    copper: { edge: '#6e4226', f0: '#f0b98a', f1: '#c87f4a', f2: '#7d4a24', ring: 'rgba(94,52,24,0.6)', sym: 'rgba(94,52,24,0.9)' },
+    silver: { edge: '#6f7680', f0: '#f4f7fa', f1: '#c3ccd6', f2: '#7e8894', ring: 'rgba(90,100,112,0.6)', sym: 'rgba(90,100,112,0.95)' },
+    medal: { edge: '#8a5f10', f0: '#fff8cf', f1: '#ffd75e', f2: '#c78f18', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(150,96,10,0.9)' },
+  };
+
   function drawCoin(c, t) {
+    const Mv = M();
     const inGut = c.st === 'gutter';
-    const p = w2s(c.x, Math.min(c.y, 108), c.z);
+    // incline lip: visually climb the last stretch
+    let zv = c.z;
+    if (c.st === 'plat' && c.tier === lastTier()) {
+      const front = tierFront(c.tier);
+      const p = (c.y - (front - Mv.lipW)) / Mv.lipW;
+      if (p > 0) zv += Math.min(p, 1) * Mv.lipH;
+    }
+    const p = w2s(c.x, Math.min(c.y, 108), zv);
     const u = p.u;
     const rx = c.r * u;
     let ry = rx * 0.46;
-    // tumble
     let tumble = 1;
-    if (c.st === 'fall' || inGut || c.st === 'drop') {
+    if (c.st === 'fall' || inGut || c.st === 'air') {
       tumble = Math.max(0.22, Math.abs(Math.cos(c.rot)));
       ry = rx * 0.46 * tumble + rx * 0.10 * (1 - tumble);
     }
-    // teeter at the edge
     if (c.st === 'plat') {
-      const over = (c.y - (C.PLAT_FRONT - c.r)) / c.r;
+      const front = tierFront(c.tier);
+      const over = (c.y - (front - c.r)) / c.r;
       if (over > 0) ry *= 1 + Math.min(over, 1) * 0.18;
     }
     ctx.save();
     if (inGut) ctx.globalAlpha = Math.max(0.1, 1 - (c.z / C.GUT_KILL) * 0.9);
     if (c.st === 'tray') ctx.globalAlpha = Math.max(0, Math.min(1, c.ttl / 0.6));
-    // shadow on the plane
-    if (c.z > 0.5 && (c.st === 'plat' || c.st === 'drop')) {
-      const sp = w2s(c.x, Math.min(c.y, 108), 0);
-      ctx.beginPath();
-      ctx.ellipse(sp.x, sp.y, rx * Math.max(0.4, 1 - c.z * 0.006), ry * Math.max(0.4, 1 - c.z * 0.006), 0, 0, 7);
-      ctx.fillStyle = 'rgba(10,10,16,0.28)';
-      ctx.fill();
-    }
-    const edgeH = Math.max(1.5, C.COIN_H * u * 0.5) * (0.5 + 0.5 * tumble);
-    if (c.kind === 'gem') {
-      // faceted diamond
-      ctx.translate(p.x, p.y);
-      const s = rx * 1.15;
-      ctx.beginPath();
-      ctx.moveTo(0, -s * 0.62);
-      ctx.lineTo(s * 0.72, -s * 0.1);
-      ctx.lineTo(0, s * 0.62);
-      ctx.lineTo(-s * 0.72, -s * 0.1);
-      ctx.closePath();
-      const g = ctx.createLinearGradient(-s, -s, s, s);
-      g.addColorStop(0, '#d8fbff'); g.addColorStop(0.45, '#4ecbe8'); g.addColorStop(1, '#1b6fa8');
-      ctx.fillStyle = g; ctx.fill();
-      ctx.strokeStyle = '#0d3f66'; ctx.lineWidth = 1.4; ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(-s * 0.72, -s * 0.1); ctx.lineTo(s * 0.72, -s * 0.1);
-      ctx.moveTo(0, -s * 0.62); ctx.lineTo(0, s * 0.62);
-      ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1; ctx.stroke();
-      // sparkle
-      if ((t + c.glint) % 1.6 < 0.14) {
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5;
+    // shadow
+    if (c.st === 'plat' || c.st === 'air') {
+      const td = Mv.tiers[c.tier];
+      if (c.z > td.z + 0.5) {
+        const sp = w2s(c.x, Math.min(c.y, 108), td.z);
         ctx.beginPath();
-        ctx.moveTo(-s * 0.3 - 5, -s * 0.3); ctx.lineTo(-s * 0.3 + 5, -s * 0.3);
-        ctx.moveTo(-s * 0.3, -s * 0.3 - 5); ctx.lineTo(-s * 0.3, -s * 0.3 + 5);
-        ctx.stroke();
+        ctx.ellipse(sp.x, sp.y, rx * Math.max(0.4, 1 - (c.z - td.z) * 0.006), ry * Math.max(0.4, 1 - (c.z - td.z) * 0.006), 0, 0, 7);
+        ctx.fillStyle = 'rgba(10,10,16,0.28)';
+        ctx.fill();
       }
-      ctx.restore();
-      return;
     }
+    if (c.kind === 'gem') { drawGem(c, p, rx, t); ctx.restore(); return; }
+    if (c.kind === 'tag') { drawTag(c, p, rx, ry); ctx.restore(); return; }
+    if (c.kind === 'bill') { drawBill(c, p, rx, ry); ctx.restore(); return; }
+    if (c.kind === 'ball') { drawBall(c, p, rx, t); ctx.restore(); return; }
     const lucky = c.kind === 'lucky';
-    // edge (cylinder side)
+    const pal = lucky ? COIN_PAL.gold : (COIN_PAL[Mv.coin.style] || COIN_PAL.gold);
+    const edgeH = Math.max(1.5, C.COIN_H * u * 0.5) * (0.5 + 0.5 * tumble);
     ctx.beginPath();
     ctx.ellipse(p.x, p.y + edgeH, rx, ry, 0, 0, 7);
-    ctx.fillStyle = lucky ? '#8a5f10' : '#7d5a14';
+    ctx.fillStyle = pal.edge;
     ctx.fill();
     ctx.fillRect(p.x - rx, p.y, rx * 2, edgeH);
-    // ridged edge hint
     ctx.fillStyle = 'rgba(60,38,6,0.5)';
     for (let i = -3; i <= 3; i++) {
       ctx.fillRect(p.x + i * rx / 3.6 - 0.5, p.y + edgeH * 0.2, 1, edgeH * 0.9);
     }
-    // face
     const fg = ctx.createRadialGradient(p.x - rx * 0.35, p.y - ry * 0.5, rx * 0.1, p.x, p.y, rx * 1.25);
     if (lucky) {
       fg.addColorStop(0, '#fff8cf'); fg.addColorStop(0.45, '#ffdf6b'); fg.addColorStop(1, '#c78f18');
     } else {
-      fg.addColorStop(0, '#ffedaa'); fg.addColorStop(0.45, '#f2c04a'); fg.addColorStop(1, '#ad7c1a');
+      fg.addColorStop(0, pal.f0); fg.addColorStop(0.45, pal.f1); fg.addColorStop(1, pal.f2);
     }
     ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7);
     ctx.fillStyle = fg; ctx.fill();
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(120,80,12,0.8)';
+    ctx.strokeStyle = pal.ring;
     ctx.stroke();
-    // embossed inner ring
     ctx.beginPath(); ctx.ellipse(p.x, p.y, rx * 0.68, ry * 0.68, 0, 0, 7);
-    ctx.strokeStyle = 'rgba(122,84,14,0.55)'; ctx.stroke();
+    ctx.strokeStyle = pal.ring; ctx.stroke();
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 0.7, rx * 0.68, ry * 0.68, 0, 0, 7);
-    ctx.strokeStyle = 'rgba(255,244,200,0.5)'; ctx.stroke();
-    // symbol
+    ctx.strokeStyle = 'rgba(255,250,235,0.5)'; ctx.stroke();
     if (ry > 3) {
-      ctx.fillStyle = lucky ? 'rgba(150,96,10,0.9)' : 'rgba(136,94,18,0.85)';
-      ctx.font = '900 ' + Math.max(6, ry * 1.05) + 'px Georgia, serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(lucky ? '★' : '¢', p.x, p.y + 0.5);
+      txt(lucky ? '★' : Mv.coin.sym, p.x, p.y + 0.5,
+          '900 ' + Math.max(6, ry * 1.05) + 'px Georgia, serif', pal.sym);
     }
-    // moving glint
     const gph = (t * 0.5 + c.glint) % (Math.PI * 2);
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, rx * 0.9, ry * 0.9, 0, gph, gph + 0.9);
     ctx.strokeStyle = 'rgba(255,252,230,0.85)'; ctx.lineWidth = 1.6;
     ctx.stroke();
-    // occasional sparkle flash
     if (lucky && (t * 0.9 + c.glint) % 2.3 < 0.12) {
       ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.4;
       const sx2 = p.x + rx * 0.4, sy2 = p.y - ry * 0.4;
@@ -916,9 +1251,79 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
-  function drawFrontAndTray(t) {
-    const l = w2s(0, C.PLAT_FRONT, 0), r = w2s(100, C.PLAT_FRONT, 0);
-    // front face of the platform
+  function drawGem(c, p, rx, t) {
+    ctx.translate(p.x, p.y);
+    const s = rx * 1.15;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.62);
+    ctx.lineTo(s * 0.72, -s * 0.1);
+    ctx.lineTo(0, s * 0.62);
+    ctx.lineTo(-s * 0.72, -s * 0.1);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(-s, -s, s, s);
+    g.addColorStop(0, '#d8fbff'); g.addColorStop(0.45, '#4ecbe8'); g.addColorStop(1, '#1b6fa8');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = '#0d3f66'; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.72, -s * 0.1); ctx.lineTo(s * 0.72, -s * 0.1);
+    ctx.moveTo(0, -s * 0.62); ctx.lineTo(0, s * 0.62);
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+    if ((t + c.glint) % 1.6 < 0.14) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.3 - 5, -s * 0.3); ctx.lineTo(-s * 0.3 + 5, -s * 0.3);
+      ctx.moveTo(-s * 0.3, -s * 0.3 - 5); ctx.lineTo(-s * 0.3, -s * 0.3 + 5);
+      ctx.stroke();
+    }
+  }
+
+  function drawTag(c, p, rx, ry) {
+    // a plastic value card lying on the pile
+    const w = rx * 1.9, h = ry * 2.4;
+    ctx.translate(p.x, p.y);
+    ctx.fillStyle = 'rgba(10,10,16,0.3)';
+    rr(-w / 2 + 1.5, -h / 2 + 2.5, w, h, 4); ctx.fill();
+    rr(-w / 2, -h / 2, w, h, 4);
+    ctx.fillStyle = c.col || '#43d17c'; ctx.fill();
+    ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(255,255,255,0.85)'; ctx.stroke();
+    rr(-w / 2 + 2.5, -h / 2 + 2.5, w - 5, h - 5, 3);
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.beginPath(); ctx.arc(0, -h / 2 + 4, 1.6, 0, 7);
+    ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fill();
+    txt('' + c.val, 0, 2, '900 ' + Math.max(7, h * 0.42) + 'px Verdana, sans-serif', '#ffffff',
+        'center', { w: 2.5, col: 'rgba(0,0,0,0.45)' });
+  }
+
+  function drawBill(c, p, rx, ry) {
+    const w = rx * 2.1, h = ry * 2.1;
+    ctx.translate(p.x, p.y);
+    rr(-w / 2, -h / 2, w, h, 2);
+    ctx.fillStyle = '#3f9d5a'; ctx.fill();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = '#1d5c31'; ctx.stroke();
+    rr(-w / 2 + 2, -h / 2 + 2, w - 4, h - 4, 2);
+    ctx.strokeStyle = 'rgba(230,255,235,0.5)'; ctx.stroke();
+    // band wrap like the real gas-station pushers
+    ctx.fillStyle = '#e8dfb0';
+    ctx.fillRect(-w * 0.14, -h / 2, w * 0.28, h);
+    txt('$', 0, 1, '900 ' + Math.max(7, h * 0.6) + 'px Georgia, serif', '#1d5c31');
+  }
+
+  function drawBall(c, p, rx, t) {
+    const g = ctx.createRadialGradient(p.x - rx * 0.3, p.y - rx * 0.3, rx * 0.1, p.x, p.y, rx * 1.2);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#63e7ff'); g.addColorStop(1, '#7a2ce8');
+    ctx.beginPath(); ctx.arc(p.x, p.y, rx * 0.95, 0, 7);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.globalAlpha = 0.4 + 0.25 * Math.sin(t * 6 + c.glint);
+    ctx.beginPath(); ctx.arc(p.x, p.y, rx * 1.4, 0, 7);
+    ctx.strokeStyle = '#63e7ff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.globalAlpha = 1;
+    txt('B', p.x, p.y + 0.5, '900 ' + rx + 'px Verdana, sans-serif', 'rgba(40,10,80,0.7)');
+  }
+
+  function drawFrontAndTray() {
+    const lt = lastTier();
+    const front = tierFront(lt);
+    const l = w2s(0, front, 0), r = w2s(100, front, 0);
     ctx.beginPath();
     ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y);
     ctx.lineTo(r.x + 4, 648); ctx.lineTo(l.x - 4, 648);
@@ -928,7 +1333,6 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = g; ctx.fill();
     ctx.strokeStyle = 'rgba(235,240,250,0.5)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y); ctx.stroke();
-    // warning stripes on the lip
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(l.x, l.y + 3); ctx.lineTo(r.x, r.y + 3);
@@ -942,14 +1346,12 @@ if (!HEADLESS) (function browser() {
       ctx.closePath(); ctx.fill();
     }
     ctx.restore();
-    // tray opening
     rr(58, 648, LW - 116, 52, 14);
     const tg = ctx.createLinearGradient(0, 648, 0, 700);
     tg.addColorStop(0, '#050507'); tg.addColorStop(1, '#1d1410');
     ctx.fillStyle = tg; ctx.fill();
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#6e4c1c'; ctx.stroke();
-    // warm glow when combo is alive
     if (S.combo > 0 && S.time - S.lastCollect < C.COMBO_WIN) {
       ctx.save();
       ctx.globalAlpha = 0.28 * (1 - (S.time - S.lastCollect) / C.COMBO_WIN);
@@ -957,7 +1359,6 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = '#ffae34'; ctx.fill();
       ctx.restore();
     }
-    // collected pile resting in the tray
     for (let i = 0; i < S.trayPile; i++) {
       const px = LW / 2 + Math.sin(i * 2.399) * (60 + (i % 3) * 22);
       const py = 682 - (i % 3) * 5;
@@ -970,7 +1371,6 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawGlass(t) {
-    // static diagonal reflections + a slow moving sheen
     ctx.save();
     ctx.beginPath();
     ctx.rect(26, 172, LW - 52, 470);
@@ -997,8 +1397,7 @@ if (!HEADLESS) (function browser() {
       if (p.life >= p.max) { S.parts.splice(i, 1); continue; }
       p.vy += p.g * dt;
       p.x += p.vx * dt; p.y += p.vy * dt;
-      const a = 1 - p.life / p.max;
-      ctx.globalAlpha = a;
+      ctx.globalAlpha = 1 - p.life / p.max;
       ctx.fillStyle = p.col;
       ctx.save();
       ctx.translate(p.x, p.y);
@@ -1019,12 +1418,7 @@ if (!HEADLESS) (function browser() {
       ctx.globalAlpha = Math.min(1, (1 - k) * 2);
       ctx.translate(p.x, p.y - 14 - k * 46);
       ctx.scale(scl, scl);
-      ctx.font = '900 22px Verdana, sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(30,10,5,0.9)';
-      ctx.strokeText(f.txt, 0, 0);
-      ctx.fillStyle = f.col;
-      ctx.fillText(f.txt, 0, 0);
+      txt(f.txt, 0, 0, '900 22px Verdana, sans-serif', f.col, 'center', { w: 5, col: 'rgba(30,10,5,0.9)' });
       ctx.restore();
     }
   }
@@ -1038,7 +1432,7 @@ if (!HEADLESS) (function browser() {
     ctx.globalAlpha = b.ttl < 0.5 ? b.ttl * 2 : 1;
     ctx.translate(LW / 2, 400);
     ctx.scale(pop, pop);
-    ctx.font = '900 58px Georgia, serif';
+    ctx.font = '900 54px Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 10; ctx.strokeStyle = '#4a0f1a';
     ctx.strokeText(b.txt, 0, 0);
@@ -1046,6 +1440,33 @@ if (!HEADLESS) (function browser() {
     g.addColorStop(0, '#fff6c8'); g.addColorStop(0.5, '#ffd24a'); g.addColorStop(1, '#ff8a2a');
     ctx.fillStyle = g;
     ctx.fillText(b.txt, 0, 0);
+    ctx.restore();
+  }
+
+  const REEL = ['\u{1F352}', '\u{1F514}', '\u{1F34B}', '⭐', '\u{1F48E}'];
+  function drawSlot(t) {
+    if (!S.slotAnim) return;
+    const a = S.slotAnim;
+    ctx.save();
+    ctx.globalAlpha = a.t > 2.0 ? Math.max(0, (2.4 - a.t) / 0.4) : 1;
+    rr(LW / 2 - 110, 300, 220, 110, 16);
+    ctx.fillStyle = 'rgba(12,6,24,0.92)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#63e7ff'; ctx.stroke();
+    const stops = [0.5, 0.8, 1.1];
+    const syms = Array.from(a.syms);
+    for (let i = 0; i < 3; i++) {
+      const x = LW / 2 - 66 + i * 66;
+      rr(x - 26, 316, 52, 52, 8);
+      ctx.fillStyle = '#f5f2ff'; ctx.fill();
+      const sym = a.t < stops[i]
+        ? REEL[Math.floor((a.t * 18 + i * 2)) % REEL.length]
+        : (syms[i] || syms[0]);
+      txt(sym, x, 344, '30px serif', '#000');
+      if (a.t < stops[i] && Math.random() < 0.4) SND.reel();
+    }
+    if (a.t >= 1.1) {
+      txt(a.label, LW / 2, 390, '900 18px Verdana, sans-serif', '#ffe066', 'center', { w: 4, col: 'rgba(20,5,40,0.9)' });
+    }
     ctx.restore();
   }
 
@@ -1057,100 +1478,42 @@ if (!HEADLESS) (function browser() {
     g.addColorStop(0, '#241018'); g.addColorStop(1, '#150a10');
     ctx.fillStyle = g; ctx.fill();
     ctx.lineWidth = 2.5; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
-    ctx.textBaseline = 'middle';
-    // score
-    ctx.textAlign = 'left';
-    ctx.font = '700 11px Verdana, sans-serif';
-    ctx.fillStyle = '#a8828e';
-    ctx.fillText('SCORE', 34, 734);
-    ctx.font = '900 34px Verdana, sans-serif';
-    ctx.fillStyle = '#ffd75e';
-    ctx.fillText(fmt(dispScore), 34, 762);
-    // best
-    ctx.textAlign = 'right';
-    ctx.font = '700 11px Verdana, sans-serif';
-    ctx.fillStyle = '#a8828e';
-    ctx.fillText('BEST', LW - 34, 734);
-    ctx.font = '800 20px Verdana, sans-serif';
-    ctx.fillStyle = '#e8c17a';
-    ctx.fillText(fmt(S.best), LW - 34, 758);
-    // wallet
+    txt('POINTS', 34, 734, '700 11px Verdana, sans-serif', '#a8828e', 'left');
+    txt(fmt(dispScore), 34, 762, '900 34px Verdana, sans-serif', '#ffd75e', 'left');
+    txt('BEST', LW - 34, 734, '700 11px Verdana, sans-serif', '#a8828e', 'right');
+    txt(fmt(S.best), LW - 34, 758, '800 20px Verdana, sans-serif', '#e8c17a', 'right');
     const wx = 34, wy = 800;
     ctx.beginPath(); ctx.ellipse(wx + 8, wy + 3, 10, 9, 0, 0, 7);
     ctx.fillStyle = '#8a5f10'; ctx.fill();
     ctx.beginPath(); ctx.ellipse(wx + 8, wy, 10, 9, 0, 0, 7);
     ctx.fillStyle = '#f2c04a'; ctx.fill();
     ctx.strokeStyle = '#8a5f10'; ctx.lineWidth = 1.5; ctx.stroke();
-    ctx.textAlign = 'left';
     const flash = S.denyT > 0 && Math.floor(S.denyT * 10) % 2 === 0;
-    ctx.font = '900 24px Verdana, sans-serif';
-    ctx.fillStyle = flash ? '#ff5a4e' : '#fff0c0';
-    ctx.fillText('× ' + S.wallet, wx + 24, wy + 1);
-    // regen ring
+    txt('× ' + S.wallet, wx + 24, wy + 1, '900 24px Verdana, sans-serif', flash ? '#ff5a4e' : '#fff0c0', 'left');
     if (S.wallet < C.REGEN_CAP) {
       ctx.beginPath();
       ctx.arc(wx + 8, wy, 13, -Math.PI / 2, -Math.PI / 2 + (S.regen / C.REGEN_T) * Math.PI * 2);
       ctx.strokeStyle = 'rgba(255,220,120,0.75)'; ctx.lineWidth = 2.5; ctx.stroke();
     }
-    // hint
-    ctx.textAlign = 'right';
-    ctx.font = '600 11px Verdana, sans-serif';
-    ctx.fillStyle = '#8f6f78';
-    ctx.fillText(S.wallet < 1 ? 'coin refilling…' : 'TAP TO DROP • HOLD FOR AUTO', LW - 34, 800);
+    txt(S.wallet < 1 ? 'coin refilling… sell prizes on PusherBay!' : 'TAP TO DROP • HOLD FOR AUTO',
+        LW - 34, 800, '600 11px Verdana, sans-serif', '#8f6f78', 'right');
   }
 
-  function drawStart(t) {
-    ctx.fillStyle = 'rgba(8,4,7,0.78)';
-    ctx.fillRect(0, 0, LW, LH);
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '900 54px Georgia, serif';
-    const g = ctx.createLinearGradient(0, 330, 0, 390);
-    g.addColorStop(0, '#fff0b8'); g.addColorStop(1, '#c8901c');
-    ctx.lineWidth = 8; ctx.strokeStyle = '#3a1006';
-    ctx.strokeText('GOLD RUSH', LW / 2, 360);
-    ctx.fillStyle = g;
-    ctx.fillText('GOLD RUSH', LW / 2, 360);
-    ctx.font = '700 16px Georgia, serif';
-    ctx.fillStyle = '#e8b6be';
-    ctx.fillText('drop coins • push the pile • win big', LW / 2, 402);
-    const pulse = 0.6 + 0.4 * Math.sin(t * 3);
-    ctx.font = '800 24px Verdana, sans-serif';
-    ctx.fillStyle = 'rgba(255,215,94,' + pulse + ')';
-    ctx.fillText('TAP TO PLAY', LW / 2, 470);
-  }
-
-  // score burst hook — the sim calls burst(); in the browser it maps to screen
-  window.__cpBurst = function (wx, wy, wz, kind) {
-    const p = w2s(wx, wy, wz);
-    burstScreen(p.x, p.y, kind);
-  };
-
-  // ------------------------------------------------------------------ loop
-  let last = 0;
-  function frame(ts) {
-    requestAnimationFrame(frame);
-    const dt = Math.min((ts - last) / 1000 || 0.016, 0.05);
-    last = ts;
-    if (S.started) {
-      tick(dt);
-      if (held) {
-        holdT += dt;
-        if (holdT > 0.45 && S.cd <= 0) drop(S.aimX);
-      }
-    }
-    const t = S.time;
-    ctx.setTransform(scale, 0, 0, scale, offX, offY);
-    if (S.shake > 0.1) {
-      ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
-    }
-    drawBackground(t);
+  function drawGame(t, dt) {
+    drawBackground();
     drawMarquee(t);
     drawMeter(t);
     drawCabinet();
-    drawBackWall(t);
-    drawFloor();
-    drawPusher(t);
-    // coins back-to-front; anything past the edge draws over the tray face
+    drawBackWall();
+    const Mv = M();
+    const lt = lastTier();
+    // payout tier floor + gutters + lip
+    const tdL = Mv.tiers[lt];
+    drawTierFloor(tdL.back, tierFront(lt), tdL.z, true);
+    drawGutters();
+    drawLip();
+    if (lt > 0) drawShelf(t);
+    else drawPusherBlock(0, t);
     const onPlat = [], offEdge = [];
     for (const c of S.coins) {
       (c.st === 'fall' || c.st === 'tray' || c.st === 'gutter' ? offEdge : onPlat).push(c);
@@ -1158,14 +1521,255 @@ if (!HEADLESS) (function browser() {
     const byDepth = (a, b) => (a.y + a.lay * 0.5) - (b.y + b.lay * 0.5);
     onPlat.sort(byDepth); offEdge.sort(byDepth);
     for (const c of onPlat) drawCoin(c, t);
-    drawFrontAndTray(t);
+    drawFrontAndTray();
     for (const c of offEdge) drawCoin(c, t);
     drawGlass(t);
     drawParticles(dt);
     drawFloats();
     drawBanner(t);
+    drawSlot(t);
     drawHUD(t, dt);
-    if (!S.started) drawStart(ts / 1000);
+  }
+
+  // ------------------------------------------------------------ lobby screen
+  function drawMiniMachine(x, y, w, h, id, t) {
+    const m = MACHINES[id];
+    const T = m.theme;
+    rr(x, y, w, h, 14);
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, T.cabA); g.addColorStop(1, T.cabB);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = T.trim; ctx.stroke();
+    // marquee stripe with bulbs
+    rr(x + 10, y + 8, w - 20, 30, 10);
+    ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fill();
+    for (let i = 0; i < 7; i++) {
+      const on = (i + Math.floor(t * 5)) % 3 === 0;
+      ctx.beginPath(); ctx.arc(x + 20 + i * (w - 40) / 6, y + 13, 2.2, 0, 7);
+      ctx.fillStyle = on ? '#ffe9a3' : 'rgba(0,0,0,0.4)'; ctx.fill();
+    }
+    txt(m.name, x + w / 2, y + 25, '900 15px Georgia, serif', T.titleA);
+    // mini playfield with a coin pile
+    const fx = x + 16, fy = y + 46, fw = w - 32, fh = h - 100;
+    rr(fx, fy, fw, fh, 8);
+    const fg = ctx.createLinearGradient(0, fy, 0, fy + fh);
+    fg.addColorStop(0, T.floorA); fg.addColorStop(1, T.floorB);
+    ctx.fillStyle = fg; ctx.fill();
+    const pal = COIN_PAL[m.coin.style] || COIN_PAL.gold;
+    for (let i = 0; i < 12; i++) {
+      const cx2 = fx + 12 + ((i * 37) % (fw - 24));
+      const cy2 = fy + fh - 10 - ((i * 13) % (fh - 26));
+      ctx.beginPath(); ctx.ellipse(cx2, cy2 + 1.6, 6.5, 3, 0, 0, 7);
+      ctx.fillStyle = pal.edge; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx2, cy2, 6.5, 3, 0, 0, 7);
+      ctx.fillStyle = pal.f1; ctx.fill();
+    }
+    if (m.tiers.length > 1) {
+      ctx.fillStyle = 'rgba(255,255,255,0.14)';
+      ctx.fillRect(fx + 4, fy + 8, fw - 8, fh * 0.32);
+      txt('2-TIER', fx + fw / 2, fy + 8 + fh * 0.16, '800 10px Verdana, sans-serif', 'rgba(255,255,255,0.7)');
+    }
+    if (m.special === 'ball') txt('SLOT BONUS', fx + fw / 2, fy + fh * 0.24, '800 10px Verdana, sans-serif', T.accent);
+    if (m.special === 'bill') txt('CASH BILLS', fx + fw / 2, fy + fh * 0.24, '800 10px Verdana, sans-serif', '#7ee787');
+    txt(m.sub, x + w / 2, y + h - 40, '600 9px Verdana, sans-serif', T.sub);
+  }
+
+  function drawLobby(t) {
+    const g = ctx.createRadialGradient(LW / 2, 260, 80, LW / 2, 420, 640);
+    g.addColorStop(0, '#2a1520'); g.addColorStop(1, '#0b0609');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, LW, LH);
+    // header
+    const tg = ctx.createLinearGradient(0, 36, 0, 76);
+    tg.addColorStop(0, '#fff0b8'); tg.addColorStop(1, '#b07a14');
+    ctx.font = '900 36px Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6; ctx.strokeStyle = '#3a1006';
+    ctx.strokeText('GOLD RUSH ARCADE', LW / 2, 52);
+    ctx.fillStyle = tg;
+    ctx.fillText('GOLD RUSH ARCADE', LW / 2, 52);
+    txt('pick a machine • win points • collect prizes', LW / 2, 84, '700 13px Georgia, serif', '#e8b6be');
+    // balances
+    rr(40, 104, LW - 80, 40, 12);
+    ctx.fillStyle = 'rgba(20,10,14,0.8)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    txt('✦ ' + fmt(S.score) + ' pts', 130, 125, '800 16px Verdana, sans-serif', '#ffd75e');
+    txt('● ' + fmt(S.wallet) + ' coins', LW - 130, 125, '800 16px Verdana, sans-serif', '#f2c04a');
+    // machine cards
+    const cw = 210, ch = 250;
+    MACH_IDS.forEach((id, i) => {
+      const x = 22 + (i % 2) * (cw + 16), y = 162 + Math.floor(i / 2) * (ch + 18);
+      const m = MACHINES[id];
+      const owned = S.unlocked.indexOf(id) >= 0;
+      drawMiniMachine(x, y, cw, ch, id, t);
+      if (owned) {
+        uiBtn(x + 30, y + ch - 34, cw - 60, 26, 'PLAY', () => setMachine(id),
+              { grad: ['#3f9d5a', '#1d5c31'], border: '#7ee787', col: '#eaffef', font: '900 14px Verdana, sans-serif' });
+      } else {
+        const afford = S.score >= m.unlock;
+        uiBtn(x + 16, y + ch - 34, cw - 32, 26, '\u{1F512} ' + fmt(m.unlock) + ' pts',
+              () => { if (!buyMachine(id)) { S.uiFlash = { msg: 'NEED ' + fmt(m.unlock) + ' POINTS', t: 1.2 }; SND.deny(); } },
+              { bg: afford ? 'rgba(90,60,10,0.9)' : 'rgba(30,20,25,0.9)',
+                border: afford ? '#ffd75e' : '#5a4048',
+                col: afford ? '#ffe9a3' : '#8f6f78', font: '800 13px Verdana, sans-serif' });
+      }
+    });
+    // bottom buttons
+    uiBtn(28, 712, (LW - 72) / 2, 58, '\u{1F9F8}  PRIZE SHOP', () => { S.screen = 'shop'; },
+          { grad: ['#8c1f2e', '#4a0f1a'], border: '#f2cd5e', font: '900 16px Verdana, sans-serif' });
+    uiBtn(44 + (LW - 72) / 2, 712, (LW - 72) / 2, 58, '\u{1F3F7}\u{FE0F}  PUSHERBAY', () => { S.screen = 'store'; },
+          { grad: ['#1d6d7a', '#0d3742'], border: '#63e7ff', col: '#d9fbff', font: '900 16px Verdana, sans-serif' });
+    const nl = S.listings.length;
+    if (nl) txt(nl + ' listing' + (nl > 1 ? 's' : '') + ' active', LW - 130, 792, '600 11px Verdana, sans-serif', '#63e7ff');
+    txt('best haul: ' + fmt(S.best) + ' pts', 130, 792, '600 11px Verdana, sans-serif', '#8f6f78');
+  }
+
+  // ------------------------------------------------------------- shop screen
+  function drawShop(t) {
+    ctx.fillStyle = '#150a10';
+    ctx.fillRect(0, 0, LW, LH);
+    const g = ctx.createRadialGradient(LW / 2, 200, 60, LW / 2, 300, 560);
+    g.addColorStop(0, '#33121e'); g.addColorStop(1, '#150a10');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, LW, LH);
+    uiBtn(14, 14, 44, 38, '←', () => { S.screen = 'lobby'; }, { r: 10, font: '20px serif' });
+    txt('PRIZE SHOP', LW / 2, 36, '900 30px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
+    txt('✦ ' + fmt(S.score) + ' pts to spend', LW / 2, 70, '800 15px Verdana, sans-serif', '#fff0c0');
+    const cw = 146, chh = 168;
+    PRIZES.forEach((p, i) => {
+      const x = 12 + (i % 3) * (cw + 9), y = 96 + Math.floor(i / 3) * (chh + 10);
+      const afford = S.score >= p.cost;
+      rr(x, y, cw, chh, 12);
+      const cg = ctx.createLinearGradient(0, y, 0, y + chh);
+      cg.addColorStop(0, afford ? '#31202a' : '#221820'); cg.addColorStop(1, '#170e14');
+      ctx.fillStyle = cg; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = afford ? '#7d5a24' : '#40323a'; ctx.stroke();
+      txt(p.icon, x + cw / 2, y + 42, '44px serif', '#fff');
+      txt(p.name, x + cw / 2, y + 84, '700 11px Verdana, sans-serif', afford ? '#f5e3c8' : '#8f7f88');
+      txt('sells ~' + fmt(p.base) + ' ●', x + cw / 2, y + 103, '600 10px Verdana, sans-serif', '#63b7c4');
+      const owned = S.prizes[p.id] || 0;
+      if (owned) {
+        rr(x + cw - 34, y + 6, 28, 20, 8);
+        ctx.fillStyle = '#3f9d5a'; ctx.fill();
+        txt('×' + owned, x + cw - 20, y + 16, '800 11px Verdana, sans-serif', '#eaffef');
+      }
+      uiBtn(x + 12, y + chh - 44, cw - 24, 32, '✦ ' + fmt(p.cost), () => buyPrize(p.id),
+            { bg: afford ? 'rgba(140,90,20,0.9)' : 'rgba(40,30,36,0.9)',
+              border: afford ? '#ffd75e' : '#5a4048',
+              col: afford ? '#ffe9a3' : '#7a6a72', font: '800 13px Verdana, sans-serif' });
+    });
+    if (S.uiFlash) {
+      txt(S.uiFlash.msg, LW / 2, 820, '900 15px Verdana, sans-serif',
+          Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e');
+    }
+  }
+
+  // ------------------------------------------------------------ store screen
+  function drawStore(t, now) {
+    ctx.fillStyle = '#0a141c';
+    ctx.fillRect(0, 0, LW, LH);
+    const g = ctx.createRadialGradient(LW / 2, 160, 60, LW / 2, 260, 560);
+    g.addColorStop(0, '#10303c'); g.addColorStop(1, '#0a141c');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, LW, LH);
+    uiBtn(14, 14, 44, 38, '←', () => { S.screen = 'lobby'; S.sellPick = null; }, { r: 10, font: '20px serif', border: '#2e6b7a' });
+    txt('PusherBay', LW / 2, 36, '900 32px Georgia, serif', '#63e7ff', 'center', { w: 5, col: '#04222e' });
+    txt('your online prize store • ● ' + fmt(S.wallet) + ' coins', LW / 2, 70, '700 13px Verdana, sans-serif', '#a8d8de');
+    // inventory
+    txt('YOUR PRIZES — tap to list for sale', 24, 104, '800 12px Verdana, sans-serif', '#7fb8c4', 'left');
+    const inv = Object.keys(S.prizes);
+    if (!inv.length) {
+      txt('no prizes yet — win points and visit the Prize Shop!', LW / 2, 150, '600 12px Verdana, sans-serif', '#5f8f9a');
+    }
+    inv.slice(0, 5).forEach((pid, i) => {
+      const p = PRIZES.find(q => q.id === pid);
+      const x = 20 + i * 90, y = 118;
+      uiBtn(x, y, 82, 74, '', () => { S.sellPick = pid; },
+            { bg: 'rgba(10,40,52,0.9)', border: S.sellPick === pid ? '#ffe066' : '#2e6b7a', r: 10 });
+      txt(p.icon, x + 41, y + 26, '28px serif', '#fff');
+      txt('×' + S.prizes[pid], x + 41, y + 56, '800 12px Verdana, sans-serif', '#d9fbff');
+    });
+    if (inv.length > 5) txt('+' + (inv.length - 5) + ' more', LW - 40, 155, '600 10px Verdana, sans-serif', '#5f8f9a');
+    // active listings
+    txt('LIVE LISTINGS (' + S.listings.length + '/' + C.LIST_MAX + ')', 24, 222, '800 12px Verdana, sans-serif', '#7fb8c4', 'left');
+    S.listings.forEach((l, i) => {
+      const p = PRIZES.find(q => q.id === l.pid);
+      const y = 236 + i * 54;
+      rr(20, y, LW - 40, 46, 10);
+      ctx.fillStyle = 'rgba(10,40,52,0.85)'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#2e6b7a'; ctx.stroke();
+      txt(p.icon, 46, y + 23, '22px serif', '#fff');
+      txt(p.name, 70, y + 15, '700 12px Verdana, sans-serif', '#d9fbff', 'left');
+      txt('● ' + fmt(l.price), LW - 36, y + 15, '800 13px Verdana, sans-serif', '#ffe066', 'right');
+      const left = Math.max(0, l.endT - now);
+      const frac = 1 - Math.min(1, left / (l.dur || 600e3));
+      rr(70, y + 28, LW - 130, 8, 4);
+      ctx.fillStyle = '#0a222c'; ctx.fill();
+      rr(70, y + 28, Math.max(6, (LW - 130) * frac), 8, 4);
+      ctx.fillStyle = '#37e6b0'; ctx.fill();
+      const mins = Math.ceil(left / 60000);
+      txt(left <= 0 ? 'selling…' : '~' + mins + 'm', LW - 36, y + 32, '600 10px Verdana, sans-serif', '#7fb8c4', 'right');
+    });
+    // sale log
+    const ly = 236 + C.LIST_MAX * 54 + 14;
+    txt('SOLD', 24, ly, '800 12px Verdana, sans-serif', '#7fb8c4', 'left');
+    S.slog.slice(0, 5).forEach((s2, i) => {
+      const p = PRIZES.find(q => q.id === s2.pid);
+      txt((p ? p.icon + ' ' + p.name : s2.pid) + '  →  @' + s2.buyer, 24, ly + 22 + i * 24,
+          '600 11px Verdana, sans-serif', '#9fd4de', 'left');
+      txt('+' + fmt(s2.price) + ' ●', LW - 24, ly + 22 + i * 24, '800 12px Verdana, sans-serif', '#ffe066', 'right');
+    });
+    if (!S.slog.length) txt('nothing sold yet', 24, ly + 22, '600 11px Verdana, sans-serif', '#5f8f9a', 'left');
+    // price picker popup
+    if (S.sellPick && S.prizes[S.sellPick]) {
+      const p = PRIZES.find(q => q.id === S.sellPick);
+      rr(50, 560, LW - 100, 216, 16);
+      ctx.fillStyle = 'rgba(6,20,28,0.97)'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#63e7ff'; ctx.stroke();
+      txt(p.icon + '  ' + p.name, LW / 2, 588, '800 16px Verdana, sans-serif', '#d9fbff');
+      txt('choose your price:', LW / 2, 612, '600 11px Verdana, sans-serif', '#7fb8c4');
+      C.SELL_TIERS.forEach((tr, i) => {
+        const price = Math.round(p.base * tr.mul);
+        const mins = Math.round(tr.dur / 60000) || 1;
+        uiBtn(70, 626 + i * 44, LW - 140, 36,
+              tr.name + '  ● ' + fmt(price) + '  (~' + mins + ' min)',
+              () => { listPrize(S.sellPick, i, Date.now()); S.sellPick = null; },
+              { bg: 'rgba(20,60,72,0.95)', border: '#37e6b0', col: '#eafff8', font: '800 13px Verdana, sans-serif' });
+      });
+    }
+    if (S.uiFlash) {
+      txt(S.uiFlash.msg, LW / 2, 820, '900 15px Verdana, sans-serif',
+          Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#63e7ff');
+    }
+  }
+
+  // ------------------------------------------------------------------ loop
+  let last = 0, saleT = 0;
+  function frame(ts) {
+    requestAnimationFrame(frame);
+    const dt = Math.min((ts - last) / 1000 || 0.016, 0.05);
+    last = ts;
+    const now = Date.now();
+    saleT += dt;
+    if (saleT > 1) { saleT = 0; resolveSales(now); }
+    if (S.screen === 'game') {
+      tick(dt);
+      if (held) {
+        holdT += dt;
+        if (holdT > 0.45 && S.cd <= 0) drop(S.aimX);
+      }
+    } else {
+      // keep light UI timers alive outside the machine
+      if (S.uiFlash) { S.uiFlash.t -= dt; if (S.uiFlash.t <= 0) S.uiFlash = null; }
+    }
+    uiButtons = [];
+    ctx.setTransform(scale, 0, 0, scale, offX, offY);
+    if (S.screen === 'game' && S.shake > 0.1) {
+      ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
+    }
+    const t = S.screen === 'game' ? S.time : ts / 1000;
+    if (S.screen === 'lobby') drawLobby(t);
+    else if (S.screen === 'shop') drawShop(t);
+    else if (S.screen === 'store') drawStore(t, now);
+    else drawGame(t, dt);
   }
   requestAnimationFrame(frame);
 })();
