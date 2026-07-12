@@ -54,6 +54,7 @@ const STATIC_PATHS = [
   'wildwalk',
   'the_collection',
   'ballistic',
+  'coin_pusher',
   'tools',
 ];
 
