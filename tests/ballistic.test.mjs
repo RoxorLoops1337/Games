@@ -23,7 +23,8 @@ const EXPOSE = `__out.api = { getG:()=>G, getMeta:()=>meta, getScreen:()=>screen
  offerPerks, applyPerk, PERKS, UPGRADES, buyUpgrade, saveMeta, loadMeta, dailyBonus,
  collectItem, damageBrick, killBrick, explode, addGems, reseed, draw, update, uiClick,
  startGame, fmt, SKINS, skinUnlocked, brickHp, toughChance, doubleWave,
- C:{ROWS,COLS,CELL,GY,LAUNCH_Y,PERK_EVERY,REVIVE_COST,BALL_R} };\n`;
+ castAbility, ABILITIES, abilityCost, addEnergy,
+ C:{ROWS,COLS,CELL,GY,LAUNCH_Y,PERK_EVERY,REVIVE_COST,BALL_R,ENERGY_MAX} };\n`;
 
 function boot(seedSave){
   const gradient = { addColorStop(){} };
@@ -285,6 +286,114 @@ test('surge waves double-descend and never skip the perk cadence', () => {
   assert(G.wave === 20 && G.phase === 'perk', 'perk not skipped by wave jumps');
 });
 
+// ---- active abilities --------------------------------------------------------
+test('kills charge the energy meter and it caps at max', () => {
+  const a = boot();
+  a.reseed(4); a.startGame();
+  const G = a.getG();
+  G.energy = 0; G.combo = 0;
+  G.bricks.length = 0;
+  G.bricks.push({ id: 1, col: 0, row: 3, hp: 1, max: 1, bomb: false });
+  a.killBrick(G.bricks[0]);
+  assert(G.energy > 0, 'kill gave energy');
+  a.addEnergy(9999);
+  assert(G.energy === a.C.ENERGY_MAX, 'energy capped at max');
+});
+
+test('abilities are gated by energy and by the aim phase', () => {
+  const a = boot();
+  a.reseed(4); a.startGame();
+  const G = a.getG();
+  G.energy = 0;
+  assert(a.castAbility('over') === false, 'no energy → refused');
+  G.energy = a.C.ENERGY_MAX;
+  G.phase = 'fly';
+  assert(a.castAbility('over') === false, 'wrong phase → refused');
+  G.phase = 'aim';
+  assert(a.castAbility('nope') === false, 'unknown ability → refused');
+  assert(a.castAbility('over') === true, 'affordable in aim → cast');
+  assert(G.overcharge === true, 'overcharge armed');
+});
+
+test('Overcharge doubles volley damage and grants pierce for one shot', () => {
+  const a = boot();
+  a.reseed(4); a.startGame();
+  const G = a.getG();
+  G.power = 3; G.pierce = false;
+  G.energy = a.C.ENERGY_MAX;
+  a.castAbility('over');
+  a.fireVolley(0.2, -1);
+  assert(G.volleyDmg === 6, 'damage doubled for the volley');
+  assert(G.volleyPierce === true, 'volley pierces');
+  assert(G.overcharge === false, 'overcharge consumed');
+  // next volley is back to normal
+  G.phase = 'aim';
+  a.fireVolley(0.2, -1);
+  assert(G.volleyDmg === 3 && G.volleyPierce === false, 'buff was one-shot only');
+});
+
+test('Blast obliterates the front row and heavily damages the row behind', () => {
+  const a = boot();
+  a.reseed(4); a.startGame();
+  const G = a.getG();
+  G.energy = a.C.ENERGY_MAX;
+  G.wave = 10; G.power = 1;
+  G.bricks.length = 0; G.items.length = 0;
+  G.bricks.push({ id: 1, col: 2, row: 6, hp: 5, max: 5, bomb: false });   // front row
+  G.bricks.push({ id: 2, col: 3, row: 6, hp: 9, max: 9, bomb: false });   // front row
+  G.bricks.push({ id: 3, col: 4, row: 5, hp: 9999, max: 9999, bomb: false }); // row behind (survives, dented)
+  G.bricks.push({ id: 4, col: 5, row: 2, hp: 50, max: 50, bomb: false });  // untouched
+  a.castAbility('blast');
+  assert(!G.bricks.find(b => b.id === 1) && !G.bricks.find(b => b.id === 2), 'front row wiped');
+  assert(G.bricks.find(b => b.id === 3).hp < 9999, 'row behind damaged');
+  assert(G.bricks.find(b => b.id === 4).hp === 50, 'distant row untouched');
+});
+
+test('Freeze skips exactly one descent, then normal descent resumes', () => {
+  const a = boot();
+  a.reseed(4); a.startGame();
+  const G = a.getG();
+  G.energy = a.C.ENERGY_MAX;
+  a.castAbility('freeze');
+  assert(G.freeze === true, 'freeze armed');
+  G.bricks.length = 0; G.items.length = 0; G.balls.length = 0; G.queue = 0;
+  G.bricks.push({ id: 1, col: 0, row: 2, hp: 5, max: 5, bomb: false });
+  a.endVolley();
+  assert(G.bricks.find(b => b.id === 1).row === 2, 'row did NOT descend while frozen');
+  assert(G.freeze === false, 'freeze consumed');
+  const rowNow = G.bricks.find(b => b.id === 1).row;
+  a.endVolley();
+  assert(G.bricks.find(b => b.id === 1).row === rowNow + 1, 'descent resumes next turn');
+});
+
+test('Perfect clear (empty board in one volley) pays a bonus', () => {
+  const a = boot();
+  a.reseed(4); a.startGame();
+  const G = a.getG();
+  const m = a.getMeta();
+  G.bricks.length = 0; G.items.length = 0; G.balls.length = 0; G.queue = 0;
+  G.energy = 10; m.gems = 0; const score0 = G.score;
+  a.endVolley();
+  assert(G.perfects === 1, 'perfect counted');
+  assert(m.gems > 0, 'gems paid');
+  assert(G.energy > 10, 'energy refunded');
+  assert(G.score > score0, 'score bonus');
+});
+
+test('efficient perk discounts ability cost; power-cell refills energy', () => {
+  const a = boot();
+  a.reseed(4); a.startGame();
+  const G = a.getG();
+  const grab = id => a.PERKS.find(p => p.id === id);
+  const blast = a.ABILITIES.find(x => x.id === 'blast');
+  const base = a.abilityCost(blast);
+  a.applyPerk(grab('effic'));
+  assert(a.abilityCost(blast) < base, 'cost reduced');
+  G.energy = 0;
+  a.applyPerk(grab('charge'));
+  assert(G.energy === a.C.ENERGY_MAX, 'power cell refilled energy');
+});
+
 // ---- game over / revive ----------------------------------------------------
 test('brick reaching the line ends the run and banks best/topRuns', () => {
   const a = boot();
@@ -403,6 +512,7 @@ test('draw + update run clean through every phase (render smoke)', () => {
   a.uiClick('shop'); a.draw();                    // shop
   a.uiClick('back'); a.startGame();
   const G = a.getG();
+  G.energy = a.C.ENERGY_MAX; a.draw();            // ability bar, powers "ready"
   G.aim = { x: 300, y: 200 }; a.draw();           // aim + guide
   G.aim = null;
   a.fireVolley(0.3, -1);
