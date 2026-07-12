@@ -722,6 +722,36 @@ const SCENES = {
     if(((t*2)|0)%2) { c.fillStyle='#39ff88'; c.fillRect(146,58,6,10); } // cursor
   },
 
+  goldrush(c,t){ // coin pusher: sliding shelf, coin drop, gold spill
+    bg(c,'#160c14');
+    for(let i=0;i<13;i++){                                   // marquee bulbs
+      const on=((t*4|0)+i)%2;
+      dot(c,10+i*12,6,2.5,on?'#ffcf4d':'#4a3a20');
+    }
+    c.fillStyle='#241220'; c.fillRect(14,12,132,66);         // cabinet
+    c.fillStyle='#0e0810'; c.fillRect(20,16,116,56);         // glass interior
+    const push=Math.sin(t*2.2), pw=30+push*11;
+    c.fillStyle='#8a2438'; c.fillRect(20,38,pw,12);          // pusher block
+    c.fillStyle='#b03a50'; c.fillRect(20,38,pw,3);
+    c.fillStyle='#3a2430'; c.fillRect(20,50,116,8);          // platform
+    for(let i=0;i<8;i++){                                    // coin hoard
+      const jitter=push>0.6?Math.sin(t*20+i)*.8:0;
+      const x=56+i*10+jitter, y=47-(i%2)*2;
+      dot(c,x,y,4.2,'#c89a2e'); dot(c,x,y,3.2,'#ffcf4d');
+      c.fillStyle='#e8b83a'; c.fillRect(x-1,y-2,2,4);
+    }
+    const p=(t%1.4)/1.4;                                     // coin dropping in
+    dot(c,40,18+p*26,3.5,'#ffcf4d');
+    const q=(t%2.1)/2.1;                                     // coin spilling off edge
+    if(q<.55) dot(c,133+q*6,Math.min(50+q*q*160,84),3.5,`rgba(255,207,77,${1-q})`);
+    for(let i=0;i<4;i++){                                    // sparkles
+      const sp=(t*1.6+i*.6)%1;
+      c.fillStyle=`rgba(255,240,170,${1-sp})`; c.font='8px monospace';
+      c.fillText('✦',60+rnd(i)*70,44-sp*20);
+    }
+    c.fillStyle='#ffcf4d'; c.font='bold 7px monospace'; c.fillText('GOLD RUSH',60,86);
+  },
+
   snake(c,t){ // the OG: snake doing laps + blinking food
     bg(c,'#020a02');
     c.strokeStyle='rgba(0,255,0,.07)';
@@ -794,6 +824,8 @@ const GAMES = [
     desc:'Merge two cuties, get a cuter one. Pet everything.', tags:['cozy','arcade'] },
   { id:'wildwalk', href:'/wildwalk/', title:'Wildwalk', ac:'#9dff6d',
     desc:'Catch • Kill • Release — snap decisions as the wildlife parades by.', tags:['arcade','cozy'] },
+  { id:'goldrush', href:'/coin_pusher/', title:'Gold Rush', ac:'#ffcf4d',
+    desc:'Coin pusher machine — drop coins, tip the hoard over the edge.', tags:['arcade','cozy'] },
   { id:'spijker', href:'/spijker_master/', title:'Spijker Master', ac:'#c8ccd4',
     desc:'Steer the nail through the gates, then hammer it home for coins.', tags:['arcade'] },
   { id:'cars90', href:'/nineties_cars/', title:"'90s Cars 3D", ac:'#7ec8ff',
