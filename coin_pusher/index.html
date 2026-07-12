@@ -47,6 +47,12 @@ const C = {
   PUSH_MIN: 10, PUSH_MAX: 30, PUSH_H: 9,
   DROP_Z: 62,
   GRAV: 260,
+  // pachinko board physics (see PR notes: Galton-board reflection model)
+  GRAV_PEG: 225,       // balls descend slowly between the pins
+  PEG_E: 0.42,         // coefficient of restitution at each pin (0.4-0.8 realistic)
+  PEG_RR: 3.4,         // thin pin + coin combined collision radius in the board plane
+  PEG_EXIT: 16,        // below this height the coin has left the board
+  PEG_VCAP: 58,        // terminal fall speed inside the board
   TRAY_Z: -30,
   GUT_KILL: -44,
   FRICTION: 3.0, SETTLE: 0.5, REST: 0.05,
@@ -134,9 +140,13 @@ const MACHINES = {
     special: 'ball', ballChance: 0.06,
     prizeIds: ['robot', 'game'],
     // pachinko drop: three fixed coin slots feed a chrome peg board; coins
-    // ricochet pin to pin before landing on the platform
-    slots: [25, 50, 75],
-    pegRows: [[52, 20, 15], [44, 27.5, 15], [36, 20, 15]], // [z, firstX, stepX]
+    // ricochet pin to pin for a couple of seconds before landing on the
+    // pusher shelf or the field. Staggered triangular grid (Galton board).
+    slots: [30, 50, 70],
+    pegRows: [                                   // [z, firstX, stepX]
+      [56, 20, 10], [49, 15, 10], [42, 20, 10],
+      [35, 15, 10], [28, 20, 10], [21, 15, 10],
+    ],
     theme: { room: '#170b2e', cabA: '#3b1a70', cabB: '#1b0b3a', trim: '#63e7ff',
              titleA: '#d9fbff', titleB: '#1f9ecf', sub: '#c9a7ff',
              floorA: '#3f4358', floorB: '#767c99', accent: '#63e7ff' },
@@ -166,7 +176,7 @@ for (const id of MACH_IDS) {
   if (!m.pegRows) continue;
   m.pegs = [];
   for (const [z, x0, dx] of m.pegRows) {
-    for (let x = x0; x <= 82; x += dx) m.pegs.push({ x, z });
+    for (let x = x0; x <= 86; x += dx) m.pegs.push({ x, z });
   }
 }
 
@@ -207,6 +217,7 @@ const S = {
   listings: [],            // {pid, qty, price, nextT, iv}
   slog: [],                // sale log: {pid, price, buyer}
   slotAnim: null,          // neon slot spin overlay
+  pegFx: [],               // transient pin-impact flashes {x, z, t}
   sellPick: null, sellQty: 1, uiFlash: null, buyOpen: false,
 };
 
@@ -293,8 +304,8 @@ function mkCoin(x, y, kind, lay, st, tier) {
     r: kindR(kind), m: kindM(kind),
     kind, st: st || 'plat', lay: lay || 0, tier,
     rot: rng() * 6.28, vrot: 0, glint: rng() * 7,
-    bounces: 0, ttl: 0, scored: false, chk1: false, chk2: false,
-    val: 0, col: null, pid: null, pegCd: 0,
+    bounces: 0, ttl: 0, scored: false, chk1: false, chk2: false, chkP: false,
+    val: 0, col: null, pid: null, onPush: false, pegHits: 0,
   };
 }
 function place(x, y, kind, lay, st, tier) {
@@ -679,36 +690,92 @@ function step(dt, quiet) {
     }
   }
   if (S.slotAnim) { S.slotAnim.t += dt; if (S.slotAnim.t > 2.4) S.slotAnim = null; }
+  for (let i = S.pegFx.length - 1; i >= 0; i--) {
+    S.pegFx[i].t -= dt;
+    if (S.pegFx[i].t <= 0) S.pegFx.splice(i, 1);
+  }
 
   for (const c of S.coins) {
     if (c.st === 'air') {
       // falling toward its target tier (from the slot, a hop, or the rain)
       const td = Mv.tiers[c.tier];
-      c.vz += C.GRAV * dt;
+      const inBoard = Mv.pegs && c.tier === 0 && c.z > C.PEG_EXIT;
+      // inside the peg board gravity is gentle and drag caps the fall speed,
+      // so the pin-to-pin dance takes a visible second or two
+      c.vz += (inBoard ? C.GRAV_PEG : C.GRAV) * dt;
+      if (inBoard && c.vz > C.PEG_VCAP) c.vz = C.PEG_VCAP;
       c.z -= c.vz * dt;
       c.rot += c.vrot * dt;
       c.y += c.vy * dt;
       c.vy *= Math.exp(-1.5 * dt);
-      // pachinko peg board: ricochet pin to pin on the way down
-      if (Mv.pegs && c.tier === 0 && c.z > 24) {
-        if (c.pegCd > 0) c.pegCd -= dt;
-        else {
-          for (const pg of Mv.pegs) {
-            const dx = c.x - pg.x, dz = c.z - pg.z;
-            if (dx * dx < 12 && dz * dz < 6) {
-              c.vx = (dx >= 0 ? 1 : -1) * (16 + rng() * 18);
-              c.vz *= 0.55;
-              c.pegCd = 0.09;
-              if (!quiet) SND.ping();
-              break;
-            }
+      if (inBoard) {
+        // Galton-board collision: reflect the velocity about the contact
+        // normal with restitution, plus a whisper of chaos — the same tiny
+        // contact differences that make every real Plinko path unique
+        for (const pg of Mv.pegs) {
+          const dx = c.x - pg.x, dz = c.z - pg.z;
+          const d2 = dx * dx + dz * dz;
+          if (d2 >= C.PEG_RR * C.PEG_RR || d2 < 0.0001) continue;
+          const d = Math.sqrt(d2), nx = dx / d, nz = dz / d;
+          c.x = pg.x + nx * C.PEG_RR;
+          c.z = pg.z + nz * C.PEG_RR;
+          let vx = c.vx, vzUp = -c.vz;      // board coords: z up
+          const vn = vx * nx + vzUp * nz;
+          if (vn < -3.5) {
+            // solid strike: reflect about the normal with restitution
+            const e = C.PEG_E + (rng() - 0.5) * 0.12;
+            vx -= (1 + e) * vn * nx;
+            vzUp -= (1 + e) * vn * nz;
+            vx = vx * 0.98 + (rng() - 0.5) * 4;
+            c.vx = vx; c.vz = -vzUp;
+            c.vrot = (rng() - 0.5) * 16;
+            c.pegHits++;
+            S.pegFx.push({ x: pg.x, z: pg.z, t: 0.22 });
+            if (!quiet) SND.ping();
+          } else if (vn < 0) {
+            // grazing/resting: kill the normal component and roll off the
+            // pin toward whichever side the coin already leans
+            vx -= vn * nx;
+            vzUp -= vn * nz;
+            // near the side rails the roll always leads back inward, so the
+            // wall lane never becomes a pin-free funnel
+            const s = c.x < 16 ? 1 : c.x > 84 ? -1
+                    : dx !== 0 ? Math.sign(dx) : (rng() < 0.5 ? -1 : 1);
+            vx += s * C.GRAV_PEG * Math.abs(nz) * dt * 0.8;
+            c.vx = vx; c.vz = -vzUp;
           }
+          if (c.vx > 26) c.vx = 26;
+          if (c.vx < -26) c.vx = -26;
         }
       }
       c.x += c.vx * dt;
-      c.vx *= Math.exp(-0.9 * dt);
-      if (c.x < 9) { c.x = 9; c.vx = Math.abs(c.vx) * 0.5; }
-      if (c.x > 91) { c.x = 91; c.vx = -Math.abs(c.vx) * 0.5; }
+      c.vx *= Math.exp(-(inBoard ? 0.7 : 0.9) * dt);
+      if (c.x < 9) { c.x = 9; c.vx = Math.abs(c.vx) * 0.45; }
+      if (c.x > 91) { c.x = 91; c.vx = -Math.abs(c.vx) * 0.45; }
+      if (inBoard) {
+        // anti-wedge: a coin dithering in a pin pocket gets nudged free
+        if (Math.abs(c.vz) < 4 && Math.abs(c.vx) < 4) c.stuckT = (c.stuckT || 0) + dt;
+        else c.stuckT = 0;
+        if (c.stuckT > 0.7) {
+          c.stuckT = 0;
+          c.vx += (rng() < 0.5 ? -1 : 1) * 14;
+          c.vz = Math.max(c.vz, 8);
+        }
+      }
+      // land ON the moving pusher shelf when it is underneath — the real
+      // two-stage pusher action: ride the shelf, get scraped off later
+      const pfA = pusherFront(c.tier);
+      if (!c.chkP && c.z <= td.z + C.PUSH_H && c.z > td.z + C.PUSH_H - 3) {
+        c.chkP = true;
+        if (c.y < pfA - c.r * 0.3) {
+          c.st = 'plat'; c.onPush = true; c.lay = 0;
+          c.z = td.z + C.PUSH_H; c.vz = 0;
+          c.vx += (rng() - 0.5) * 5;
+          c.vy += (rng() - 0.5) * 3;
+          if (!quiet) SND.clink();
+          continue;
+        }
+      }
       if (!c.chk2 && c.z <= td.z + 2 * C.COIN_H) {
         c.chk2 = true;
         if (findSupport(c, 1)) { landCoin(c, 2); continue; }
@@ -718,6 +785,30 @@ function step(dt, quiet) {
         if (findSupport(c, 0)) { landCoin(c, 1); continue; }
       }
       if (c.z <= td.z) landCoin(c, 0);
+    } else if (c.st === 'plat' && c.onPush) {
+      // riding the pusher shelf: dragged forward as it extends; the fixed
+      // back wall stops it riding back, so a retracting shelf slides out
+      // from underneath until the coin tips off the front edge
+      const td = Mv.tiers[c.tier];
+      const pf = pusherFront(c.tier);
+      const pv = pusherVel(c.tier);
+      if (pv > 0) c.y += pv * dt;
+      const fr = Math.exp(-C.FRICTION * dt);
+      c.vx *= fr; c.vy *= fr;
+      if (Math.abs(c.vx) < C.SETTLE) c.vx = 0;
+      if (Math.abs(c.vy) < C.SETTLE) c.vy = 0;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      if (c.x < c.r) { c.x = c.r; c.vx *= -0.3; }
+      if (c.x > C.W - c.r) { c.x = C.W - c.r; c.vx *= -0.3; }
+      if (c.y < td.back + c.r * 0.5) c.y = td.back + c.r * 0.5;
+      if (c.y > pf) {
+        // scraped off the shelf edge — drop to the field below
+        c.st = 'air'; c.onPush = false;
+        c.vz = 0; c.chk1 = c.chk2 = false; c.chkP = true;
+        c.vy = Math.max(c.vy, 6);
+        c.vrot = (rng() - 0.5) * 8;
+      }
     } else if (c.st === 'plat') {
       const td = Mv.tiers[c.tier];
       const isLast = c.tier === lt;
@@ -767,7 +858,7 @@ function step(dt, quiet) {
         if (isLast) {
           c.st = 'fall'; c.vz = 0; c.vrot = (rng() - 0.5) * 12 + Math.sign(c.vy || 1) * 4;
         } else {
-          c.st = 'air'; c.tier++; c.vz = 0; c.chk1 = c.chk2 = false;
+          c.st = 'air'; c.tier++; c.vz = 0; c.chk1 = c.chk2 = false; c.chkP = true;
           c.vrot = (rng() - 0.5) * 8;
         }
       }
@@ -803,7 +894,7 @@ function step(dt, quiet) {
       if (a.st !== 'plat') continue;
       for (let j = i + 1; j < cs.length; j++) {
         const b = cs[j];
-        if (b.st !== 'plat' || a.lay !== b.lay || a.tier !== b.tier) continue;
+        if (b.st !== 'plat' || a.lay !== b.lay || a.tier !== b.tier || a.onPush !== b.onPush) continue;
         let dx = b.x - a.x, dy = b.y - a.y;
         const rr = a.r + b.r;
         const d2 = dx * dx + dy * dy;
@@ -958,8 +1049,14 @@ if (!HEADLESS) (function browser() {
     const e = eyd(y);
     const half = (PF.w0 + (PF.w1 - PF.w0) * Math.min(e, 1)) / 2;
     const u = half * 2 / 100;
-    const zk = (z || 0) >= 0 ? 0.5 : 1.0;
-    return { x: PF.cx + (x - 50) * u, y: PF.top + (PF.bot - PF.top) * e - (z || 0) * u * zk, u };
+    z = z || 0;
+    // piecewise height scale: stack/pusher heights stay squat, but the air
+    // above (where the peg board lives) is stretched so drops read tall;
+    // below the edge the plunge into the tray maps steeper still
+    let off;
+    if (z >= 0) off = u * (0.5 * Math.min(z, 12) + 0.62 * Math.max(0, z - 12));
+    else off = u * z;
+    return { x: PF.cx + (x - 50) * u, y: PF.top + (PF.bot - PF.top) * e - off, u };
   }
 
   // ------------------------------------------------------------------ input
@@ -1242,12 +1339,33 @@ if (!HEADLESS) (function browser() {
     }
     // chrome peg board behind the glass
     if (Mv.pegs) {
+      // backboard panel so the pin field reads as a vertical pachinko board
+      const tl2 = w2s(11, slotY, 60), br2 = w2s(89, slotY, C.PEG_EXIT - 1);
+      rr(tl2.x, tl2.y, br2.x - tl2.x, br2.y - tl2.y, 10);
+      const bg2 = ctx.createLinearGradient(0, tl2.y, 0, br2.y);
+      bg2.addColorStop(0, 'rgba(10,8,26,0.85)');
+      bg2.addColorStop(1, 'rgba(16,12,38,0.35)');
+      ctx.fillStyle = bg2; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(99,231,255,0.35)'; ctx.stroke();
       for (const pg of Mv.pegs) {
         const pp = w2s(pg.x, slotY, pg.z);
-        const g2 = ctx.createRadialGradient(pp.x - 1, pp.y - 1, 0.5, pp.x, pp.y, 4);
-        g2.addColorStop(0, '#f3f8ff'); g2.addColorStop(0.6, '#9aa6b4'); g2.addColorStop(1, '#4a525e');
-        ctx.beginPath(); ctx.arc(pp.x, pp.y, 3.4, 0, 7);
+        // pin shadow + chrome head with a specular dot
+        ctx.beginPath(); ctx.arc(pp.x + 1, pp.y + 1.5, 4, 0, 7);
+        ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill();
+        const g2 = ctx.createRadialGradient(pp.x - 1.4, pp.y - 1.4, 0.4, pp.x, pp.y, 4.6);
+        g2.addColorStop(0, '#ffffff'); g2.addColorStop(0.45, '#aeb9c8'); g2.addColorStop(1, '#3e4550');
+        ctx.beginPath(); ctx.arc(pp.x, pp.y, 4.1, 0, 7);
         ctx.fillStyle = g2; ctx.fill();
+        ctx.beginPath(); ctx.arc(pp.x - 1.3, pp.y - 1.3, 1, 0, 7);
+        ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+      }
+      // impact flashes where a coin just struck a pin
+      for (const fx of S.pegFx) {
+        const pp = w2s(fx.x, slotY, fx.z);
+        const a = fx.t / 0.22;
+        ctx.beginPath(); ctx.arc(pp.x, pp.y, 5 + (1 - a) * 6, 0, 7);
+        ctx.strokeStyle = 'rgba(255,240,170,' + (0.85 * a) + ')';
+        ctx.lineWidth = 2; ctx.stroke();
       }
     }
     ctx.restore();
@@ -1393,8 +1511,8 @@ if (!HEADLESS) (function browser() {
     ctx.save();
     if (inGut) ctx.globalAlpha = Math.max(0.1, 1 - (c.z / C.GUT_KILL) * 0.9);
     if (c.st === 'tray') ctx.globalAlpha = Math.max(0, Math.min(1, c.ttl / 0.6));
-    // shadow
-    if (c.st === 'plat' || c.st === 'air') {
+    // shadow (not for shelf-riders — they sit flush on the pusher top)
+    if ((c.st === 'plat' || c.st === 'air') && !c.onPush) {
       const td = Mv.tiers[c.tier];
       if (c.z > td.z + 0.5) {
         const sp = w2s(c.x, Math.min(c.y, 108), td.z);
