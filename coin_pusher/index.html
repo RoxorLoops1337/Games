@@ -94,7 +94,6 @@ const MACHINES = {
     pushPeriod: 3.4, maxCoins: 170,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
     gutY: 36, lipW: 7, lipH: 2.2,
-    tagEvery: 8,
     tags: [
       { val: 100, col: '#43d17c' }, { val: 250, col: '#3fa9f5' }, { val: 500, col: '#ef4b5d' },
     ],
@@ -116,7 +115,6 @@ const MACHINES = {
       { z: 0, back: 34, front: 86, min: 36, max: 50, phase: Math.PI, slotY: null },
     ],
     gutY: 58, lipW: 6, lipH: 2.0,
-    tagEvery: 10,
     tags: [
       { val: 50, col: '#43d17c' }, { val: 100, col: '#3fa9f5' }, { val: 250, col: '#ef4b5d' },
     ],
@@ -133,11 +131,10 @@ const MACHINES = {
     pushPeriod: 3.2, maxCoins: 180,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
     gutY: 40, lipW: 7, lipH: 2.2,
-    tagEvery: 9,
     tags: [
       { val: 150, col: '#37e6b0' }, { val: 300, col: '#c86bff' }, { val: 600, col: '#ff5a8a' },
     ],
-    special: 'ball', ballChance: 0.06,
+    special: 'ball', ballEvery: 22,
     prizeIds: ['robot', 'game'],
     // pachinko drop: three fixed coin slots feed a chrome peg board; coins
     // ricochet pin to pin for a couple of seconds before landing on the
@@ -158,11 +155,10 @@ const MACHINES = {
     pushPeriod: 3.8, maxCoins: 150,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 28, phase: 0, slotY: 20 }],
     gutY: 30, lipW: 8, lipH: 2.4,   // gutters open early: high risk, high pay
-    tagEvery: 7,
     tags: [
       { val: 500, col: '#43d17c' }, { val: 1000, col: '#f7a534' }, { val: 2500, col: '#ef4b5d' },
     ],
-    special: 'bill', billEvery: 12, billVal: 1500,
+    special: 'bill', billVal: 1500,
     prizeIds: ['ring', 'trophy'],
     theme: { room: '#26060a', cabA: '#191114', cabB: '#080506', trim: '#e8b64a',
              titleA: '#ffe9b0', titleB: '#a8681a', sub: '#d98a8a',
@@ -218,8 +214,13 @@ const S = {
   slog: [],                // sale log: {pid, price, buyer}
   slotAnim: null,          // neon slot spin overlay
   pegFx: [],               // transient pin-impact flashes {x, z, t}
+  side: 0,                 // which of the machine's four sides you stand at
+  sideSeen: {},            // 'mach:side' -> last visit (ms) for leftover coins
+  pileSalt: 12345,         // per-session flavour for the other sides' piles
   sellPick: null, sellQty: 1, uiFlash: null, buyOpen: false,
 };
+// session-only cache of the piles on the machine sides you walked away from
+const sideStore = {};
 
 function M() { return MACHINES[S.mach]; }
 function lastTier() { return M().tiers.length - 1; }
@@ -246,7 +247,7 @@ function save() {
       meter: S.meter, mute: S.mute, jackpots: S.jackpots, collected: S.collected,
       coinsSpent: S.coinsSpent, coinsBack: S.coinsBack,
       mach: S.mach, unlocked: S.unlocked, prizes: S.prizes,
-      listings: S.listings, slog: S.slog,
+      listings: S.listings, slog: S.slog, sideSeen: S.sideSeen,
       tray: { coins: S.tray.coins, prizes: S.tray.prizes },
     }));
   } catch (e) {}
@@ -274,6 +275,7 @@ function load() {
         S.tray.coins = d.tray.coins || 0;
         S.tray.prizes = Array.isArray(d.tray.prizes) ? d.tray.prizes : [];
       }
+      if (d.sideSeen && typeof d.sideSeen === 'object') S.sideSeen = d.sideSeen;
     } else if (d.v === 2 && Array.isArray(d.listings)) {
       // v2 listings were coin-priced one-shots — hand the items back
       for (const l of d.listings) {
@@ -441,16 +443,20 @@ function jackpot() {
   S.banner = { txt: 'JACKPOT!', ttl: 2.6, max: 2.6 };
   S.shake += 9;
   SND.jackpot();
-  const tags = M().tags;
-  for (let i = 0; i < 10; i++) {
+  const Mv = M();
+  // the attendant restocks the big platform: coins, POINT TAGS, a gem —
+  // and a cash bill on the high roller
+  const kinds = ['coin', 'coin', 'coin', 'coin', 'lucky', 'tag', 'tag', 'gem',
+                 Mv.special === 'bill' ? 'bill' : 'coin', 'coin'];
+  kinds.forEach((kind, i) => {
     S.rain.push({
       t: 0.12 * i,
       x: 10 + rng() * 80,
-      y: M().tiers[0].slotY + rng() * 14,
-      kind: i === 4 ? 'gem' : i === 8 ? 'tag' : (i % 3 === 0 ? 'lucky' : 'coin'),
-      tag: tags[0],
+      y: Mv.tiers[0].slotY + rng() * 14,
+      kind,
+      tag: kind === 'tag' ? Mv.tags[(rng() * Mv.tags.length) | 0] : null,
     });
-  }
+  });
   save();
 }
 
@@ -475,15 +481,8 @@ function drop(x) {
   if (S.wallet < 1) { S.denyT = 0.6; SND.deny(); return false; }
   S.wallet--; S.cd = C.DROP_CD; S.dropped++; S.meter++; S.coinsSpent++;
   const Mv = M();
-  let kind, tag = null;
-  if (S.prizeDebt > 0 && S.dropped % 10 === 0) {
-    // restock a won prize onto the field
-    S.prizeDebt--;
-    kind = 'prize';
-  } else if (Mv.special === 'bill' && S.dropped % Mv.billEvery === 0) kind = 'bill';
-  else if (Mv.tagEvery && S.dropped % Mv.tagEvery === 0) { kind = 'tag'; tag = Mv.tags[(rng() * Mv.tags.length) | 0]; }
-  else if (Mv.special === 'ball' && rng() < Mv.ballChance) kind = 'ball';
-  else kind = rollKind();
+  // you always insert a COIN — specials are the machine's job to restock
+  const kind = rng() < C.P_LUCKY ? 'lucky' : 'coin';
   let ax = Math.max(8, Math.min(92, x === undefined ? S.aimX : x));
   // slot machines: coins can only enter through the fixed mouths
   if (Mv.slots) {
@@ -491,9 +490,18 @@ function drop(x) {
     Mv.slots.forEach((sx, i) => { const d = Math.abs(sx - ax); if (d < bd) { bd = d; bi = i; } });
     ax = Mv.slots[bi];
   }
-  const c = spawnDrop(ax + (rng() - 0.5) * (Mv.slots ? 0.5 : 2), Mv.tiers[0].slotY + (rng() - 0.5) * 5, kind, tag);
-  if (c && kind === 'prize') c.pid = Mv.prizeIds[(rng() * Mv.prizeIds.length) | 0];
+  spawnDrop(ax + (rng() - 0.5) * (Mv.slots ? 0.5 : 2), Mv.tiers[0].slotY + (rng() - 0.5) * 5, kind, null);
   SND.slot();
+  // machine-side events (they never eat your inserted coin)
+  if (S.prizeDebt > 0 && S.dropped % 10 === 0) {
+    S.prizeDebt--;
+    S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: Mv.tiers[0].slotY + 4 + rng() * 8,
+                  kind: 'prize', pid: Mv.prizeIds[(rng() * Mv.prizeIds.length) | 0] });
+  }
+  if (Mv.special === 'ball' && Mv.ballEvery && S.dropped % Mv.ballEvery === 0) {
+    S.rain.push({ t: 0.3, x: 20 + rng() * 60, y: Mv.tiers[0].slotY + 4 + rng() * 8, kind: 'ball' });
+    if (!S.banner) S.banner = { txt: 'BONUS BALL!', ttl: 1.2, max: 1.2 };
+  }
   if (S.meter >= C.METER_MAX) jackpot();
   save();
   return true;
@@ -529,9 +537,38 @@ function buyMachine(id) {
   save();
   return true;
 }
+function switchSide(dir, now) {
+  now = now || 0;
+  // remember this side's pile, then walk around the cabinet
+  sideStore[S.mach + ':' + S.side] = S.coins.slice();
+  S.side = (S.side + (dir >= 0 ? 1 : -1) + 4) % 4;
+  const key = S.mach + ':' + S.side;
+  if (sideStore[key]) {
+    S.coins = sideStore[key];
+  } else {
+    // every side carries its own pile — some just look juicier than others
+    srand(((S.mach.charCodeAt(0) * 97 + S.side * 7919 + S.pileSalt) >>> 0) || 1);
+    initPile();
+  }
+  S.banner = { txt: 'SIDE ' + (S.side + 1) + ' / 4', ttl: 1.1, max: 1.1 };
+  // sometimes the last player left a coin or two in this side's tray
+  const last = S.sideSeen[key] || 0;
+  if (now - last > 150e3 && rng() < 0.6) {
+    const n = 1 + (rng() < 0.35 ? 1 : 0);
+    S.tray.coins += n;
+    for (let i = 0; i < n; i++) trayAdd('coin', { x: 40 + i * 12 });
+    S.floats.push({ txt: 'someone left ' + n + ' coin' + (n > 1 ? 's' : '') + '!',
+                    wx: 50, wy: 96, age: 0, max: 1.6, col: '#7ee787', big: true });
+    SND.clink();
+  }
+  S.sideSeen[key] = now;
+  save();
+  return S.side;
+}
 function setMachine(id) {
   if (!MACHINES[id] || S.unlocked.indexOf(id) < 0) return false;
   S.mach = id;
+  S.side = 0;
   reset();
   S.screen = 'game';
   save();
@@ -686,7 +723,8 @@ function step(dt, quiet) {
     S.rain[i].t -= dt;
     if (S.rain[i].t <= 0) {
       const r = S.rain.splice(i, 1)[0];
-      spawnDrop(r.x, r.y, r.kind, r.kind === 'tag' ? r.tag : null);
+      const c2 = spawnDrop(r.x, r.y, r.kind, r.kind === 'tag' ? r.tag : null);
+      if (c2 && r.kind === 'prize') c2.pid = r.pid;
     }
   }
   if (S.slotAnim) { S.slotAnim.t += dt; if (S.slotAnim.t > 2.4) S.slotAnim = null; }
@@ -868,6 +906,10 @@ function step(dt, quiet) {
       c.y += c.vy * dt;
       c.vy *= Math.exp(-1.2 * dt);
       c.rot += c.vrot * dt;
+      // the cabinet funnels everything that clears the front edge into the
+      // tray — corner drops slide inward instead of missing the opening
+      const fx2 = Math.max(22, Math.min(78, c.x));
+      c.x += (fx2 - c.x) * Math.min(1, dt * 5);
       if (c.z <= C.TRAY_Z) {
         if (!c.scored) { c.scored = true; if (!quiet) scoreCoin(c); }
         c.z = C.TRAY_Z;
@@ -951,7 +993,7 @@ window.CP = {
   S, C, MACHINES, PRIZES, tick, step, drop, reset, srand, place, spawnDrop,
   jackpot, spinSlot, pusherFront, pusherVel, tierFront, scoreCoin, save, load,
   buyMachine, setMachine, buyPrize, listPrize, resolveSales, M, HEADLESS,
-  buyCoins, exchangePrize, collectTray,
+  buyCoins, exchangePrize, collectTray, switchSide,
 };
 
 load();
@@ -962,6 +1004,7 @@ initPile();
 // ============================================================================
 if (!HEADLESS) (function browser() {
   srand((Date.now() % 2147483647) || 1); // fresh luck each session; tests keep the fixed seed
+  S.pileSalt = (rng() * 1e9) | 0;
   resolveSales(Date.now());              // PusherBay kept selling while we were away
 
   // ------------------------------------------------------------------ audio
@@ -1724,6 +1767,16 @@ if (!HEADLESS) (function browser() {
         ctx.strokeStyle = 'rgba(120,80,12,0.7)'; ctx.lineWidth = 0.8; ctx.stroke();
       }
     });
+    // walk around the cabinet: it has four sides, go see which looks best
+    uiBtn(14, 652, 40, 48, '◀', () => switchSide(-1, Date.now()),
+          { bg: 'rgba(20,10,14,0.85)', border: '#7d5a24', font: '20px serif', r: 10 });
+    uiBtn(LW - 54, 652, 40, 48, '▶', () => switchSide(1, Date.now()),
+          { bg: 'rgba(20,10,14,0.85)', border: '#7d5a24', font: '20px serif', r: 10 });
+    for (let i = 0; i < 4; i++) {
+      ctx.beginPath(); ctx.arc(LW / 2 - 21 + i * 14, 708, 3.4, 0, 7);
+      ctx.fillStyle = i === S.side ? '#ffd75e' : 'rgba(255,215,94,0.25)';
+      ctx.fill();
+    }
     // scoop it out
     if (S.tray.coins > 0 || S.tray.prizes.length > 0) {
       const nP = S.tray.prizes.length;
