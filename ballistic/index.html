@@ -233,7 +233,8 @@ function spawnWave(){
     if (rand() < toughChance(w)) hp = base * 2;
     else if (w > 25 && rand() < 0.1) hp = base * 3;
     const bomb = rand() < 0.12 * G.luck;
-    G.bricks.push({ id: brickId++, col: cols[i], row: 0, hp: bomb ? 1 : hp, max: bomb ? 1 : hp, bomb, sc: 0, yo: 0 });
+    const species = Math.floor(rand() * SPECIES.length);
+    G.bricks.push({ id: brickId++, col: cols[i], row: 0, hp: bomb ? 1 : hp, max: bomb ? 1 : hp, bomb, species, sc: 0, yo: 0 });
   }
   const free = cols.slice(n);
   // the free +1-ball orb: guaranteed while learning, then no longer a given —
@@ -360,7 +361,7 @@ function collectItem(it, ball, auto){
   const i = G.items.indexOf(it);
   if (i >= 0) G.items.splice(i, 1);
   const x = it.col * CELL + CELL / 2, y = GY + it.row * CELL + CELL / 2;
-  if (it.type === 'orb'){ G.ballCount++; addText(x, y, '+1 ●', '#8be9ff', 16); sfx('orb'); }
+  if (it.type === 'orb'){ G.ballCount++; addText(x, y, '+1 pal 🐾', '#8be9ff', 16); sfx('orb'); }
   else if (it.type === 'gem'){ const got = addGems(1); addText(x, y, '+' + got + ' 💎', '#8be9ff', 15); sfx('gem'); }
   else if (it.type === 'star'){ const s = 10 * G.wave; G.score += s; addText(x, y, '+' + fmt(s) + ' ★', '#ffd166', 16); sfx('gem'); }
   else if (it.type === 'laserH'){ laser(it, true); }
@@ -713,11 +714,21 @@ function fmt(n){
   if (n >= 1e4) return Math.floor(n / 1e3) + 'k';
   return '' + Math.floor(n);
 }
-function brickColor(b){
-  if (b.bomb) return '#ff7b00';
-  const hue = (205 + b.hp * 3) % 360;    // hue climbs with hp — quantized so the sprite cache stays small
-  return 'hsl(' + (Math.round(hue / 6) * 6) + ',88%,58%)';
-}
+// ---- cute critters — each brick is a little animal, drawn on canvas --------
+// Pastel body + ear style + cheek accent. A brick's species is picked at spawn
+// (b.species) so it's stable; the HP number rides on its tummy.
+const SPECIES = [
+  { n:'cat',   body:'#ffcf87', ear:'cat',      accent:'#ff9ec4', ink:'#5a3d1e' },
+  { n:'fox',   body:'#ff9d5c', ear:'cat',      accent:'#fff2e0', ink:'#7a3510' },
+  { n:'panda', body:'#f4f4fb', ear:'round',    accent:'#ffb3c9', ink:'#3a3a4a', patch:true },
+  { n:'bunny', body:'#ffc2dc', ear:'long',     accent:'#ff7eb0', ink:'#7a3a55' },
+  { n:'frog',  body:'#a6e26b', ear:'toad',     accent:'#ff9ec4', ink:'#3e6b1e' },
+  { n:'bear',  body:'#c99b6a', ear:'round',    accent:'#ff9ec4', ink:'#5a3d20' },
+  { n:'pig',   body:'#ffb0c8', ear:'cat',      accent:'#ff7ea6', ink:'#8a3f57', snout:true },
+  { n:'koala', body:'#b9c1cd', ear:'biground', accent:'#ffb3c9', ink:'#464e5a' },
+];
+const spec = b => SPECIES[(b && b.species != null ? b.species : 0) % SPECIES.length] || SPECIES[0];
+function brickColor(b){ return b && b.bomb ? '#ff6b5c' : spec(b).body; }
 function rr(x, y, w, h, r){
   ctx.beginPath();
   if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
@@ -782,6 +793,82 @@ function brickSprite(color){
   pathRR(g, 9, 9, 54, 54, 13); g.fill();
   g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1.5;
   pathRR(g, 10, 10, 52, 52, 12); g.stroke();
+  spriteCache.set(key, c);
+  return c;
+}
+// A cute animal face baked into a 72px sprite (cached). Ears + eyes + rosy
+// cheeks live in the upper half; the HP number is drawn over the tummy later.
+function animalSprite(idx, bomb){
+  const key = 'animal:' + idx + (bomb ? 'b' : '');
+  if (spriteCache.has(key)) return spriteCache.get(key);
+  const sp = SPECIES[idx % SPECIES.length] || SPECIES[0];
+  const body = bomb ? '#ff6b5c' : sp.body;
+  const ink = bomb ? '#5a1e18' : sp.ink;
+  const S = 72, c = makeCanvas(S, S), g = c.getContext('2d');
+  const disc = (x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+  const ex = 27, ex2 = 45, ey = 33;                         // eye anchors
+  // ears (drawn under the body so they tuck in) --------------------------------
+  g.fillStyle = body;
+  const ear = bomb ? 'cat' : sp.ear;
+  if (ear === 'cat'){                                        // triangle ears
+    for (const dx of [-1, 1]){
+      const bx = 36 + dx * 17;
+      g.beginPath(); g.moveTo(bx - 9, 16); g.lineTo(bx + 9, 16); g.lineTo(bx + dx * 4, 2); g.closePath(); g.fill();
+      g.fillStyle = sp.accent; g.globalAlpha = 0.85;
+      g.beginPath(); g.moveTo(bx - 4, 14); g.lineTo(bx + 4, 14); g.lineTo(bx + dx * 2, 6); g.closePath(); g.fill();
+      g.globalAlpha = 1; g.fillStyle = body;
+    }
+  } else if (ear === 'round'){ disc(20, 16, 9); disc(52, 16, 9); }
+  else if (ear === 'biground'){ disc(17, 18, 12); disc(55, 18, 12); }
+  else if (ear === 'long'){                                  // bunny ears
+    for (const dx of [-1, 1]){
+      const bx = 36 + dx * 12;
+      g.beginPath(); g.ellipse(bx, 8, 6, 15, dx * 0.2, 0, Math.PI * 2); g.fill();
+      g.fillStyle = sp.accent; g.globalAlpha = 0.8;
+      g.beginPath(); g.ellipse(bx, 9, 2.6, 10, dx * 0.2, 0, Math.PI * 2); g.fill();
+      g.globalAlpha = 1; g.fillStyle = body;
+    }
+  } else if (ear === 'toad'){ disc(24, 16, 8); disc(48, 16, 8); }   // frog eye bumps (whites drawn below)
+  // body ----------------------------------------------------------------------
+  g.shadowColor = bomb ? '#ff7b00' : body; g.shadowBlur = 9;
+  g.fillStyle = body; pathRR(g, 9, 12, 54, 51, 20); g.fill();
+  g.shadowBlur = 0;
+  const gr = g.createLinearGradient(0, 12, 0, 63);
+  gr.addColorStop(0, 'rgba(255,255,255,0.38)');
+  gr.addColorStop(0.4, 'rgba(255,255,255,0.05)');
+  gr.addColorStop(1, 'rgba(0,0,0,0.22)');
+  g.fillStyle = gr; pathRR(g, 9, 12, 54, 51, 20); g.fill();
+  // panda eye patches / pig snout ---------------------------------------------
+  if (sp.patch && !bomb){ g.fillStyle = sp.ink; g.globalAlpha = 0.9;
+    g.beginPath(); g.ellipse(ex, ey, 7, 9, 0.5, 0, 7); g.fill();
+    g.beginPath(); g.ellipse(ex2, ey, 7, 9, -0.5, 0, 7); g.fill(); g.globalAlpha = 1; }
+  // cheeks ---------------------------------------------------------------------
+  g.fillStyle = sp.accent; g.globalAlpha = 0.55;
+  disc(22, 44, 5); disc(50, 44, 5); g.globalAlpha = 1;
+  // eyes -----------------------------------------------------------------------
+  if (ear === 'toad'){                                       // frog: eyes on the bumps
+    g.fillStyle = '#fff'; disc(24, 16, 6); disc(48, 16, 6);
+    g.fillStyle = ink; disc(25, 17, 3); disc(49, 17, 3);
+    g.fillStyle = '#fff'; disc(26, 16, 1); disc(50, 16, 1);
+  } else if (bomb){                                          // grumpy angry eyes + brows
+    g.strokeStyle = ink; g.lineWidth = 2.4; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(ex - 6, ey - 6); g.lineTo(ex + 5, ey - 2); g.stroke();
+    g.beginPath(); g.moveTo(ex2 + 6, ey - 6); g.lineTo(ex2 - 5, ey - 2); g.stroke();
+    g.fillStyle = ink; disc(ex, ey + 2, 4); disc(ex2, ey + 2, 4);
+    g.fillStyle = '#ffd166'; disc(52, 15, 2.4);              // spark
+  } else {
+    g.fillStyle = ink; disc(ex, ey, 4.6); disc(ex2, ey, 4.6);
+    g.fillStyle = '#fff'; disc(ex - 1.4, ey - 1.6, 1.7); disc(ex2 - 1.4, ey - 1.6, 1.7);
+  }
+  // nose / mouth ---------------------------------------------------------------
+  if (!bomb){
+    g.fillStyle = sp.snout ? '#e888a4' : ink;
+    if (sp.snout){ g.beginPath(); g.ellipse(36, 42, 6, 4, 0, 0, 7); g.fill();
+      g.fillStyle = '#b9506a'; disc(34, 42, 1); disc(38, 42, 1); }
+    else { g.beginPath(); g.moveTo(33, 40); g.lineTo(39, 40); g.lineTo(36, 43.5); g.closePath(); g.fill();
+      g.strokeStyle = ink; g.lineWidth = 1.6; g.lineCap = 'round';
+      g.beginPath(); g.arc(36, 44, 3.2, 0.15 * Math.PI, 0.85 * Math.PI); g.stroke(); }
+  }
   spriteCache.set(key, c);
   return c;
 }
@@ -858,7 +945,7 @@ function drawMenu(){
   ctx.shadowBlur = 0;
   ctx.font = '600 17px system-ui,sans-serif';
   ctx.fillStyle = '#8888bb';
-  ctx.fillText('one more volley.', W / 2, 212);
+  ctx.fillText('critter cannon ✦ one more volley', W / 2, 212);
   ctx.fillStyle = '#fff';
   ctx.font = '700 20px system-ui,sans-serif';
   ctx.fillText('🏆 Best ' + fmt(meta.best) + '   ·   wave ' + meta.bestWave, W / 2, 280);
@@ -958,36 +1045,37 @@ function drawGame(){
   ctx.beginPath(); ctx.moveTo(0, LAUNCH_Y); ctx.lineTo(W, LAUNCH_Y); ctx.stroke();
   ctx.setLineDash([]); ctx.lineDashOffset = 0;
 
-  // bricks — cached neon sprites, spawn pop + descend tween
+  // bricks — cute cached animal sprites, spawn pop + descend tween
   for (const b of G.bricks){
     const bx = cx(b), by = cy(b) + (b.yo || 0);
     const sc = easeOutBack(Math.min(1, b.sc == null ? 1 : b.sc));
-    const spr = brickSprite(brickColor(b));
+    const wob = Math.sin(animT * 3 + b.id) * 0.04;           // gentle idle wobble
+    const spr = animalSprite(b.species || 0, b.bomb);
     const half = 36 * sc;
-    ctx.drawImage(spr, bx - half, by - half, half * 2, half * 2);
+    ctx.save();
+    ctx.translate(bx, by); ctx.rotate(wob);
+    ctx.drawImage(spr, -half, -half, half * 2, half * 2);
     if (b.flash > 0){
-      ctx.globalAlpha = b.flash * 0.8;
+      ctx.globalAlpha = b.flash * 0.85;
       ctx.globalCompositeOperation = 'lighter';
-      ctx.drawImage(spr, bx - half, by - half, half * 2, half * 2);
+      ctx.drawImage(spr, -half, -half, half * 2, half * 2);
       ctx.globalCompositeOperation = 'source-over';
       ctx.globalAlpha = 1;
     }
+    ctx.restore();
     if (b.row === ROWS - 1){
       ctx.strokeStyle = 'rgba(255,60,80,' + (0.5 + 0.5 * Math.sin(G.dangerPulse)) + ')';
       ctx.lineWidth = 3;
-      rr(bx - 28, by - 28, 56, 56, 12); ctx.stroke();
+      rr(bx - 28, by - 26, 56, 54, 16); ctx.stroke();
     }
+    // HP number rides on the tummy (lower half of the face)
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    if (b.bomb){
-      ctx.font = '22px system-ui,sans-serif';
-      ctx.fillText('💥', bx, by + 1);
-    } else {
-      ctx.font = '800 ' + (b.hp >= 1000 ? 17 : 21) + 'px system-ui,sans-serif';
-      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-      ctx.strokeText(fmt(b.hp), bx, by + 1);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(fmt(b.hp), bx, by + 1);
-    }
+    const ny = by + 13;
+    ctx.font = '800 ' + (b.hp >= 1000 ? 14 : 17) + 'px system-ui,sans-serif';
+    ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+    ctx.strokeText(fmt(b.hp), bx, ny);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(fmt(b.hp), bx, ny);
   }
 
   // items — glowing pickups
@@ -995,13 +1083,22 @@ function drawGame(){
     const x = it.col * CELL + CELL / 2, y = GY + it.row * CELL + CELL / 2 + (it.yo || 0);
     const pulse = 1 + 0.1 * Math.sin(animT * 5 + it.col);
     if (it.type === 'orb'){
+      // a little friend waiting to join the volley (+1 ball)
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(glowSprite('#8be9ff'), x - 22 * pulse, y - 22 * pulse, 44 * pulse, 44 * pulse);
       ctx.globalCompositeOperation = 'source-over';
-      ctx.strokeStyle = '#8be9ff'; ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(x, y, 14 * pulse, 0, Math.PI * 2); ctx.stroke();
+      const r = 11 * pulse;
+      ctx.fillStyle = '#bff0ff';
+      ctx.beginPath(); ctx.arc(x - r * 0.55, y - r * 0.7, r * 0.42, 0, Math.PI * 2); ctx.fill();  // ears
+      ctx.beginPath(); ctx.arc(x + r * 0.55, y - r * 0.7, r * 0.42, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#eaffff';
-      ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(40,80,110,0.9)';
+      ctx.beginPath(); ctx.arc(x - r * 0.32, y - r * 0.08, r * 0.14, 0, Math.PI * 2); ctx.fill();  // eyes
+      ctx.beginPath(); ctx.arc(x + r * 0.32, y - r * 0.08, r * 0.14, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = 'rgba(255,150,190,0.7)';
+      ctx.beginPath(); ctx.arc(x - r * 0.5, y + r * 0.22, r * 0.13, 0, Math.PI * 2); ctx.fill();    // cheeks
+      ctx.beginPath(); ctx.arc(x + r * 0.5, y + r * 0.22, r * 0.13, 0, Math.PI * 2); ctx.fill();
     } else {
       ctx.globalCompositeOperation = 'lighter';
       ctx.drawImage(glowSprite(it.type === 'star' ? '#ffd166' : '#8be9ff'), x - 20, y - 20, 40, 40);
@@ -1063,6 +1160,12 @@ function drawGame(){
     ctx.beginPath(); ctx.arc(ball.x - 2, ball.y - 2, BALL_R * 0.4, 0, Math.PI * 2); ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
+  // tiny eyes so each pellet reads as a little critter
+  ctx.fillStyle = 'rgba(35,25,20,0.92)';
+  for (const ball of G.balls){
+    ctx.beginPath(); ctx.arc(ball.x - 2.4, ball.y - 0.5, 1.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(ball.x + 2.4, ball.y - 0.5, 1.4, 0, Math.PI * 2); ctx.fill();
+  }
 
   // shatter debris (normal blend so shards read as solid)
   for (const f of G.frags){
@@ -1080,10 +1183,14 @@ function drawGame(){
     ctx.globalCompositeOperation = 'lighter';
     ctx.drawImage(glowSprite(skin.glow), G.launchX - 24, LAUNCH_Y - BALL_R - 24, 48, 48);
     ctx.globalCompositeOperation = 'source-over';
+    const lx = G.launchX, ly = LAUNCH_Y - BALL_R;
     ctx.fillStyle = skin.c;
-    ctx.beginPath(); ctx.arc(G.launchX, LAUNCH_Y - BALL_R, BALL_R + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(lx, ly, BALL_R + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = 'rgba(35,25,20,0.92)';
+    ctx.beginPath(); ctx.arc(lx - 2.6, ly - 0.5, 1.5, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(lx + 2.6, ly - 0.5, 1.5, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#fff'; ctx.font = '700 15px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('×' + G.ballCount, G.launchX, LAUNCH_Y + 20);
+    ctx.fillText('×' + G.ballCount, lx, LAUNCH_Y + 20);
   }
   if (G.phase === 'aim' && G.aim){
     const dx = G.aim.x - G.launchX, dy = G.aim.y - (LAUNCH_Y - BALL_R);
