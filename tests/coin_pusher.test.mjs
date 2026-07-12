@@ -53,6 +53,7 @@ const platCoins = () => S.coins.filter(c => c.st === 'plat');
 t.ok(CP.HEADLESS, 'headless mode detected');
 t.eq(S.score, 0, 'starts at 0 points');
 t.eq(S.wallet, C.START_WALLET, 'starts with full wallet');
+t.eq(S.money, C.START_MONEY, 'starts with pocket money');
 t.eq(S.mach, 'gold', 'starts on the gold machine');
 t.ok(S.unlocked.length === 1 && S.unlocked[0] === 'gold', 'only gold unlocked at first');
 t.ok(platCoins().length >= 40, 'initial pile is dense (' + platCoins().length + ' pieces)');
@@ -60,6 +61,8 @@ t.ok(S.coins.some(c => c.kind === 'gem'), 'initial pile contains a gem');
 t.ok(S.coins.some(c => c.kind === 'lucky'), 'initial pile contains lucky coins');
 t.eq(S.coins.filter(c => c.kind === 'tag').length, 2, 'initial pile has two point tags');
 t.ok(S.coins.filter(c => c.kind === 'tag').every(c => c.val > 0 && c.col), 'tags carry a value and a colour');
+t.ok(S.coins.filter(c => c.kind === 'prize').length >= 1, 'real prizes ride the pile');
+t.ok(S.coins.filter(c => c.kind === 'prize').every(c => PRIZES.some(p => p.id === c.pid)), 'pile prizes are shop items');
 t.ok(platCoins().every(c => c.y >= 0 && c.y <= C.PLAT_FRONT + c.r), 'pile sits on the platform');
 
 // -------- machine roster --------
@@ -128,13 +131,23 @@ const tagDrop = S.coins[S.coins.length - 1];
 t.eq(tagDrop.kind, 'tag', 'every Nth drop is a point tag');
 t.ok(tagDrop.val > 0, 'dropped tag has a value');
 
-// -------- wallet regen --------
-S.wallet = 3; S.regen = 0;
-step(C.REGEN_T + 0.1);
-t.ok(S.wallet >= 4, 'wallet trickles back over time');
-S.wallet = C.REGEN_CAP;
-step(C.REGEN_T + 0.1);
-t.eq(S.wallet, C.REGEN_CAP, 'regen respects the cap');
+// -------- broke bailout (the house comps you only when truly flat) --------
+S.coins.length = 0; // an empty field: nothing can fall into the tray meanwhile
+S.wallet = 0; S.money = 0; S.tray.coins = 0; S.regen = 0;
+step(C.PITY_T + 0.1);
+t.ok(S.wallet >= 1, 'flat-broke player gets a slow comp coin');
+S.wallet = 0; S.money = C.PACKS[0].m; S.regen = 0;
+step(C.PITY_T + 0.1);
+t.eq(S.wallet, 0, 'no comp while you can afford a coin pack');
+S.money = C.START_MONEY;
+
+// -------- money buys coins --------
+S.money = 500; S.wallet = 0;
+t.ok(CP.buyCoins(0), 'can buy the small pack');
+t.eq(S.wallet, C.PACKS[0].c, 'pack delivers its coins');
+t.eq(S.money, 500 - C.PACKS[0].m, 'pack costs money');
+t.ok(!CP.buyCoins(2), 'cannot afford the big pack');
+t.eq(S.wallet, C.PACKS[0].c, 'failed purchase changes nothing');
 
 // -------- incline lip: slow coins stall at the brink --------
 CP.srand(9); CP.reset();
@@ -173,21 +186,23 @@ step(2.5);
 const capPts = (() => { let s = 0; for (let i = 1; i <= 8; i++) s += C.PTS.coin * Math.min(i, C.COMBO_CAP); return s; })();
 t.eq(S.score, capPts, 'combo multiplier caps at ×' + C.COMBO_CAP);
 
-// -------- payouts per kind --------
+// -------- payouts per kind: winnings land in the TRAY, not the wallet --------
 CP.srand(11); CP.reset();
 S.coins.length = 0; S.score = 0; S.combo = 0; S.lastCollect = -99;
-let w1 = S.wallet;
+S.tray.coins = 0; S.tray.items.length = 0; S.tray.prizes.length = 0;
+const wFixed = S.wallet;
 const lucky = CP.place(50, C.PLAT_FRONT - 0.5, 'lucky', 0, 'plat');
 lucky.vy = 70;
 step(2);
 t.eq(S.score, MACHINES.gold.luckyVal, 'lucky coin pays its value');
-t.eq(S.wallet, w1 + C.PAY.lucky, 'lucky coin refunds 2 to the wallet');
-S.combo = 0; S.lastCollect = -99; w1 = S.wallet; const s1 = S.score;
+t.eq(S.tray.coins, C.PAY.lucky, 'lucky coin drops 2 coins into the tray');
+t.eq(S.wallet, wFixed, 'the wallet is untouched until you collect');
+S.combo = 0; S.lastCollect = -99; const s1 = S.score;
 const gem = CP.place(50, C.PLAT_FRONT - 0.5, 'gem', 0, 'plat');
 gem.vy = 70;
 step(2);
 t.eq(S.score, s1 + MACHINES.gold.gemVal, 'gem pays its value flat');
-t.eq(S.wallet, w1 + C.PAY.gem, 'gem refunds 5 to the wallet');
+t.eq(S.tray.coins, C.PAY.lucky + C.PAY.gem, 'gem drops 5 coins into the tray');
 // tag pays flat, no combo involvement
 S.combo = 0; S.lastCollect = -99; const s2 = S.score;
 const tagC = CP.place(50, C.PLAT_FRONT - 0.5, 'tag', 0, 'plat');
@@ -195,6 +210,30 @@ tagC.val = 250; tagC.vy = 70;
 step(2);
 t.eq(S.score, s2 + 250, 'point tag pays its printed value');
 t.eq(S.combo, 0, 'tags do not enter the combo chain');
+// scooping the tray moves it all into your pockets
+const wScoop = S.wallet, trayC = S.tray.coins;
+t.ok(CP.collectTray(), 'tray with winnings can be collected');
+t.eq(S.wallet, wScoop + trayC, 'collected coins land in the wallet');
+t.eq(S.tray.coins + S.tray.items.length + S.tray.prizes.length, 0, 'tray is empty after scooping');
+t.ok(!CP.collectTray(), 'empty tray has nothing to collect');
+
+// -------- winning a prize off the pile --------
+S.coins.length = 0; S.prizes = {};
+const pr = CP.place(50, C.PLAT_FRONT - 0.5, 'prize', 0, 'plat');
+pr.pid = 'bear'; pr.vy = 90;
+const debt0 = S.prizeDebt;
+step(2.5);
+t.ok(pr.scored, 'prize pushed over the edge is won');
+t.eq(S.tray.prizes[0], 'bear', 'won prize waits in the tray');
+t.eq(S.prizeDebt, debt0 + 1, 'machine owes the pile a restock');
+CP.collectTray();
+t.eq(S.prizes.bear, 1, 'collected prize joins the inventory');
+// the restock arrives through the coin slot a few drops later
+S.wallet = 30; S.dropped = 9; S.cd = 0;
+CP.drop(50);
+const restock = S.coins[S.coins.length - 1];
+t.eq(restock.kind, 'prize', 'the machine restocks a prize through the slot');
+t.ok(MACHINES.gold.prizeIds.indexOf(restock.pid) >= 0, 'restocked prize suits the machine');
 
 // -------- gutters eat coins silently --------
 CP.srand(13); CP.reset();
@@ -248,15 +287,32 @@ payer.vy = 70;
 step(2);
 t.eq(S.score, 1000 + MACHINES.penny.coin.val, 'penny falls pays 2p values');
 
-// -------- neon medal: bonus ball spins the slot --------
+// -------- neon medal: three slots, peg board, bonus ball --------
 S.score = MACHINES.neon.unlock + MACHINES.bandit.unlock + 2000;
 t.ok(CP.buyMachine('neon'), 'neon medal unlocks');
 CP.srand(23); CP.setMachine('neon');
-const w2 = S.wallet, s3 = S.score;
+t.ok(Array.isArray(MACHINES.neon.slots) && MACHINES.neon.slots.length === 3, 'neon has three coin slots');
+t.ok(MACHINES.neon.pegs.length >= 12, 'the peg board is populated');
+// drops snap to the nearest slot mouth
+S.wallet = 30; S.cd = 0; S.dropped = 1;
+CP.drop(40);
+const snapped = S.coins[S.coins.length - 1];
+t.ok(Math.abs(snapped.x - 50) < 1, 'a drop at x=40 enters the middle slot');
+// pegs knock falling coins sideways
+S.coins.length = 0;
+const pegged = CP.spawnDrop(50, 20, 'coin');
+let deflected = false;
+for (let i = 0; i < 240 && pegged.st === 'air'; i++) {
+  CP.tick(DT);
+  if (Math.abs(pegged.x - 50) > 2) deflected = true;
+}
+t.ok(deflected, 'the peg board deflects falling coins');
+t.ok(pegged.x >= 8 && pegged.x <= 92, 'pegged coin stays inside the cabinet');
+const tray0 = S.tray.coins, s3 = S.score;
 CP.srand(23);
 const out = CP.spinSlot();
 t.ok(out && out.syms && out.label, 'slot spin returns an outcome');
-t.ok(S.wallet > w2 || S.score > s3 || S.jackpots > 0, 'slot outcome pays something');
+t.ok(S.tray.coins > tray0 || S.score > s3 || S.jackpots > 0, 'slot outcome pays something');
 t.ok(S.slotAnim !== null, 'slot animation armed');
 S.slotAnim = null;
 S.coins.length = 0;
@@ -279,39 +335,60 @@ bill.vy = 70;
 step(2);
 t.eq(S.score, s4 + MACHINES.bandit.billVal, 'a collected bill pays big');
 
-// -------- prize shop --------
-S.score = 1000;
+// -------- prize shop: buy with points, trade back for points --------
+S.score = 1000; S.prizes = {};
 t.ok(CP.buyPrize('key'), 'can buy an affordable prize');
 t.eq(S.score, 1000 - PRIZES.find(p => p.id === 'key').cost, 'prize cost deducted from points');
 t.eq(S.prizes.key, 1, 'prize lands in the inventory');
 t.ok(!CP.buyPrize('arcade'), 'cannot buy above your points');
 CP.buyPrize('key');
 t.eq(S.prizes.key, 2, 'prizes stack in the inventory');
+const sX = S.score;
+t.ok(CP.exchangePrize('key'), 'prizes exchange back into points');
+t.eq(S.score, sX + Math.round(PRIZES.find(p => p.id === 'key').cost * C.EXCHANGE),
+     'exchange pays ' + Math.round(C.EXCHANGE * 100) + '% of the shop cost');
+t.eq(S.prizes.key, 1, 'exchanged prize leaves the inventory');
+t.ok(!CP.exchangePrize('trophy'), 'cannot exchange what you do not own');
 
-// -------- PusherBay marketplace --------
+// -------- PusherBay marketplace: bulk listings sell for MONEY --------
+S.prizes = { key: 1, duck: 6 };
+S.listings.length = 0;
 const keyBase = PRIZES.find(p => p.id === 'key').base;
+const duckBase = PRIZES.find(p => p.id === 'duck').base;
 t.ok(CP.listPrize('key', 0, 1000), 'can list an owned prize');
-t.eq(S.prizes.key, 1, 'listing removes one from the inventory');
+t.ok(!S.prizes.key, 'listing removes it from the inventory');
 t.eq(S.listings.length, 1, 'listing is live');
 t.eq(S.listings[0].price, Math.round(keyBase * C.SELL_TIERS[0].mul), 'quick-sale price is discounted');
-const wBefore = S.wallet;
+const mBefore = S.money;
 t.ok(!CP.resolveSales(1000 + C.SELL_TIERS[0].dur - 1), 'listing has not sold yet');
 t.ok(CP.resolveSales(1000 + C.SELL_TIERS[0].dur + 1), 'listing sells when its timer lapses');
-t.eq(S.listings.length, 0, 'sold listing is cleared');
-t.eq(S.wallet, wBefore + Math.round(keyBase * 0.7), 'sale pays coins into the wallet');
-t.ok(S.slog.length === 1 && typeof S.slog[0].buyer === 'string' && S.slog[0].buyer.length > 0,
+t.eq(S.listings.length, 0, 'sold-out listing is cleared');
+t.eq(S.money, mBefore + Math.round(keyBase * 0.7), 'sales pay MONEY, not coins');
+t.ok(S.slog.length >= 1 && typeof S.slog[0].buyer === 'string' && S.slog[0].buyer.length > 0,
      'sale log records the buyer');
+// bulk listing: several of the same prize sell one by one
+t.ok(CP.listPrize('duck', 0, 10000, 3), 'can list three ducks at once');
+t.eq(S.prizes.duck, 3, 'bulk listing takes all three from the inventory');
+t.eq(S.listings[0].qty, 3, 'listing carries its quantity');
+const iv = C.SELL_TIERS[0].dur, m1 = S.money;
+CP.resolveSales(10000 + iv + 1);
+t.eq(S.listings[0].qty, 2, 'first unit sold on schedule');
+t.eq(S.money, m1 + Math.round(duckBase * 0.7), 'each unit pays its price');
+CP.resolveSales(10000 + iv * 3 + 10);
+t.eq(S.listings.length, 0, 'remaining units sell out over time');
+t.eq(S.money, m1 + Math.round(duckBase * 0.7) * 3, 'all three units paid');
 // listing cap
-S.prizes.duck = 6;
-for (let i = 0; i < C.LIST_MAX; i++) CP.listPrize('duck', 1, 5000);
-t.eq(S.listings.length, C.LIST_MAX, 'store holds four listings');
-t.ok(!CP.listPrize('duck', 1, 5000), 'fifth listing is rejected');
+S.prizes.duck = 20;
+for (let i = 0; i < C.LIST_MAX; i++) CP.listPrize('duck', 1, 50000, 1);
+t.eq(S.listings.length, C.LIST_MAX, 'store holds ' + C.LIST_MAX + ' listings');
+t.ok(!CP.listPrize('duck', 1, 50000, 1), 'over-cap listing is rejected');
 S.listings.length = 0;
-t.ok(!CP.listPrize('trophy', 1, 5000), 'cannot list a prize you do not own');
+t.ok(!CP.listPrize('trophy', 1, 50000), 'cannot list a prize you do not own');
 
-// -------- the actual game loop: drops eventually pay out --------
+// -------- the actual game loop: drops pay out, the house still wins --------
 CP.srand(31); CP.setMachine('gold');
 S.wallet = 999;
+S.coinsSpent = 0; S.coinsBack = 0; S.tray.coins = 0; S.tray.items.length = 0; S.tray.prizes.length = 0;
 const startScore = S.score;
 let drops = 0;
 for (let sec = 0; sec < 90; sec++) {
@@ -322,6 +399,10 @@ for (let sec = 0; sec < 90; sec++) {
 t.ok(drops > 60, 'kept dropping coins throughout');
 t.ok(S.score > startScore, 'sustained play pushes coins off the edge and earns points');
 t.ok(S.collected > 0, 'collected counter tracks payouts');
+CP.collectTray();
+t.ok(S.coinsBack > 0, 'some coins did come back');
+t.ok(S.coinsSpent > S.coinsBack, 'house edge: you always lose more coins than you win (' +
+     S.coinsBack + ' back of ' + S.coinsSpent + ' spent)');
 
 // -------- stability --------
 let sane = true, contained = true;
@@ -347,12 +428,14 @@ t.ok(S.coins.length <= MACHINES.gold.maxCoins, 'coin count respects the machine 
 t.ok(S.best >= S.score, 'best tracks the high water mark');
 CP.save();
 const saved = JSON.parse(store[C.SAVE_KEY]);
-t.eq(saved.v, 2, 'save is v2');
+t.eq(saved.v, 3, 'save is v3');
 t.eq(saved.best, S.best, 'best is persisted');
 t.eq(saved.wallet, S.wallet, 'wallet is persisted');
+t.eq(saved.money, S.money, 'money is persisted');
 t.eq(saved.score, S.score, 'points balance is persisted');
 t.ok(Array.isArray(saved.unlocked) && saved.unlocked.length === 4, 'machine unlocks are persisted');
 t.ok(saved.prizes && typeof saved.prizes === 'object', 'prize inventory is persisted');
+t.ok(saved.tray && typeof saved.tray.coins === 'number', 'uncollected tray is persisted');
 S.mute = true; CP.save();
 t.ok(JSON.parse(store[C.SAVE_KEY]).mute === true, 'mute is persisted');
 
@@ -370,7 +453,23 @@ const CP2 = loadGame(store2);
 t.eq(CP2.S.score, 500, 'v1 score migrates to points');
 t.eq(CP2.S.best, 900, 'v1 best migrates');
 t.eq(CP2.S.wallet, 7, 'v1 wallet migrates');
+t.eq(CP2.S.money, CP2.C.START_MONEY, 'v1 save gets starter money');
 t.ok(CP2.S.unlocked.length === 1 && CP2.S.unlocked[0] === 'gold', 'migrated save starts with gold only');
 t.ok(CP2.S.listings.length === 0 && Object.keys(CP2.S.prizes).length === 0, 'migrated save has a clean store');
+
+// -------- v2 save migration: coin-priced listings are handed back --------
+const store3 = { coin_pusher_save: JSON.stringify({
+  v: 2, score: 2000, best: 3000, wallet: 12, meter: 5, mute: false,
+  mach: 'penny', unlocked: ['gold', 'penny'], prizes: { bear: 1 },
+  listings: [{ pid: 'duck', price: 46, endT: 99 }, { pid: 'duck', price: 46, endT: 99 }],
+  slog: [],
+}) };
+const CP3 = loadGame(store3);
+t.eq(CP3.S.score, 2000, 'v2 points migrate');
+t.eq(CP3.S.money, CP3.C.START_MONEY, 'v2 save gets starter money');
+t.eq(CP3.S.prizes.duck, 2, 'v2 listings are returned to the inventory');
+t.eq(CP3.S.prizes.bear, 1, 'v2 inventory survives');
+t.eq(CP3.S.listings.length, 0, 'no stale coin-priced listings survive');
+t.eq(CP3.S.mach, 'penny', 'v2 machine choice survives');
 
 t.done();
