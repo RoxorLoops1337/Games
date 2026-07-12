@@ -23,7 +23,7 @@ const EXPOSE = `__out.api = { getG:()=>G, getMeta:()=>meta, getScreen:()=>screen
  offerPerks, applyPerk, PERKS, UPGRADES, buyUpgrade, saveMeta, loadMeta, dailyBonus,
  collectItem, damageBrick, killBrick, explode, addGems, reseed, draw, update, uiClick,
  startGame, fmt, SKINS, skinUnlocked, brickHp, toughChance, doubleWave,
- castAbility, ABILITIES, abilityCost, addEnergy,
+ castAbility, ABILITIES, abilityCost, addEnergy, SPECIES, brickColor, animalSprite,
  C:{ROWS,COLS,CELL,GY,LAUNCH_Y,PERK_EVERY,REVIVE_COST,BALL_R,ENERGY_MAX} };\n`;
 
 function boot(seedSave){
@@ -71,6 +71,21 @@ test('boots into menu and draws without error', () => {
   const a = boot();
   assert(a.getScreen() === 'menu', 'starts on menu');
   a.draw(); a.update(0.016);
+});
+
+test('every spawned brick is a valid cute-animal species', () => {
+  const a = boot();
+  a.reseed(2024); a.startGame();
+  const G = a.getG();
+  assert(a.SPECIES.length >= 6, 'a roster of critters');
+  for (const b of G.bricks){
+    assert(b.species >= 0 && b.species < a.SPECIES.length, 'species index in range');
+  }
+  // colors/sprites resolve even for a hand-made brick with no species field
+  assert(typeof a.brickColor({ hp: 3 }) === 'string', 'brickColor tolerates missing species');
+  const bombCol = a.brickColor({ bomb: true });
+  assert(bombCol && bombCol !== a.brickColor({ species: 0 }), 'bombs look distinct');
+  a.animalSprite(0, false); a.animalSprite(3, false); a.animalSprite(0, true);   // no throw
 });
 
 test('startGame spawns wave 1 with bricks and a +1-ball orb', () => {
