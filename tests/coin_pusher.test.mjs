@@ -124,13 +124,16 @@ S.wallet = 0; S.cd = 0;
 t.ok(!CP.drop(50), 'cannot drop with an empty wallet');
 t.eq(S.wallet, 0, 'wallet never goes negative');
 
-// -------- tag drops on schedule --------
-CP.srand(7); CP.reset(); S.wallet = 25;
-S.dropped = MACHINES.gold.tagEvery - 1; S.cd = 0;
-CP.drop(50);
-const tagDrop = S.coins[S.coins.length - 1];
-t.eq(tagDrop.kind, 'tag', 'every Nth drop is a point tag');
-t.ok(tagDrop.val > 0, 'dropped tag has a value');
+// -------- you only ever insert coins --------
+CP.srand(7); CP.reset(); S.wallet = 99;
+let allCoins = true;
+for (let i = 0; i < 25; i++) {
+  S.cd = 0;
+  CP.drop(20 + i * 2.5);
+  const k = S.coins[S.coins.length - 1].kind;
+  if (k !== 'coin' && k !== 'lucky') allCoins = false;
+}
+t.ok(allCoins, 'the slot only ever takes coins — no tags/gems/bills from your hand');
 
 // -------- broke bailout (the house comps you only when truly flat) --------
 S.coins.length = 0; // an empty field: nothing can fall into the tray meanwhile
@@ -229,12 +232,17 @@ t.eq(S.tray.prizes[0], 'bear', 'won prize waits in the tray');
 t.eq(S.prizeDebt, debt0 + 1, 'machine owes the pile a restock');
 CP.collectTray();
 t.eq(S.prizes.bear, 1, 'collected prize joins the inventory');
-// the restock arrives through the coin slot a few drops later
-S.wallet = 30; S.dropped = 9; S.cd = 0;
+// the machine drops the restock itself a few drops later — your inserted
+// coin still arrives as a coin
+S.wallet = 30; S.dropped = 9; S.cd = 0; S.rain.length = 0;
 CP.drop(50);
-const restock = S.coins[S.coins.length - 1];
-t.eq(restock.kind, 'prize', 'the machine restocks a prize through the slot');
-t.ok(MACHINES.gold.prizeIds.indexOf(restock.pid) >= 0, 'restocked prize suits the machine');
+const inserted = S.coins[S.coins.length - 1];
+t.ok(inserted.kind === 'coin' || inserted.kind === 'lucky', 'the insert is still a coin');
+const restockRain = S.rain.find(r => r.kind === 'prize');
+t.ok(!!restockRain, 'the machine queues a prize restock of its own');
+t.ok(MACHINES.gold.prizeIds.indexOf(restockRain.pid) >= 0, 'restocked prize suits the machine');
+step(1.5);
+t.ok(S.coins.some(c => c.kind === 'prize' && c.pid === restockRain.pid), 'restocked prize landed on the field');
 
 // -------- gutters eat coins silently --------
 CP.srand(13); CP.reset();
@@ -261,8 +269,26 @@ CP.drop(50);
 t.eq(S.meter, 0, 'meter resets on jackpot');
 t.eq(S.jackpots, jp0 + 1, 'jackpot counted');
 t.ok(S.rain.length > 0 || S.coins.length > before + 1, 'jackpot queues a coin rain');
+t.eq(S.rain.filter(r => r.kind === 'tag').length, 2, 'the jackpot restocks POINT TAGS onto the platform');
+t.ok(S.rain.some(r => r.kind === 'gem'), 'the jackpot restocks a gem');
+t.ok(S.rain.filter(r => r.kind === 'tag').every(r => r.tag && r.tag.val > 0), 'restocked tags carry values');
 step(1.3);
 t.ok(S.coins.length >= before + 8, 'jackpot rained bonus coins onto the platform');
+// the points supply now comes from the machine, not from your inserts
+t.ok(S.coins.some(c => c.kind === 'tag' && c.st !== 'gutter'), 'fresh tags are on the field after the jackpot');
+
+// -------- the tray funnel: front falls never miss --------
+CP.srand(21); CP.reset();
+S.coins.length = 0;
+const corner = CP.place(4, C.PLAT_FRONT - 0.5, 'coin', 0, 'plat');
+corner.vy = 70;
+const cornerPrize = CP.place(96, C.PLAT_FRONT - 0.5, 'prize', 0, 'plat');
+cornerPrize.pid = 'key'; cornerPrize.vy = 90;
+step(2.5);
+t.ok(corner.scored, 'corner coin over the front edge still scores');
+t.ok(corner.x >= 20, 'falling coin was funneled inward to the tray');
+t.ok(cornerPrize.scored, 'corner prize over the front edge is won');
+t.ok(cornerPrize.x <= 80, 'falling prize was funneled inward to the tray');
 
 // -------- penny falls: the two-tier cascade --------
 CP.srand(19); CP.setMachine('penny');
@@ -344,19 +370,54 @@ t.ok(scraped, 'the retracting shelf scrapes the coin off its edge');
 t.ok(backOnField, 'the scraped coin drops onto the field below');
 t.ok(rider.y >= CP.pusherFront(0) + rider.r - 0.5, 'it now sits in front of the pusher, ready to be pushed');
 
-// -------- high roller: cash bills --------
+// -------- neon: the machine releases bonus balls on its own --------
+CP.srand(35); CP.setMachine('neon');
+S.wallet = 99; S.cd = 0; S.dropped = MACHINES.neon.ballEvery - 1; S.rain.length = 0;
+CP.drop(50);
+t.ok(S.rain.some(r => r.kind === 'ball'), 'every Nth insert the machine releases a bonus ball');
+
+// -------- high roller: cash bills come from the attendant --------
 t.ok(CP.buyMachine('bandit'), 'high roller unlocks');
 CP.srand(29); CP.setMachine('bandit');
-S.wallet = 25; S.cd = 0;
-S.dropped = MACHINES.bandit.billEvery - 1;
+S.wallet = 30; S.cd = 0; S.meter = C.METER_MAX - 1; S.rain.length = 0;
 CP.drop(50);
-const billDrop = S.coins[S.coins.length - 1];
-t.eq(billDrop.kind, 'bill', 'high roller drops wrapped cash bills');
-S.coins.length = 0; const s4 = S.score;
+t.ok(S.rain.some(r => r.kind === 'bill'), 'high roller jackpots restock wrapped cash bills');
+S.coins.length = 0; S.rain.length = 0; const s4 = S.score;
 const bill = CP.place(50, CP.tierFront(0) - 0.5, 'bill', 0, 'plat');
 bill.vy = 70;
 step(2);
 t.eq(S.score, s4 + MACHINES.bandit.billVal, 'a collected bill pays big');
+
+// -------- walking around the machine: four sides, four piles --------
+CP.srand(37); CP.setMachine('gold');
+t.eq(S.side, 0, 'you start at the front side');
+S.tray.coins = 0; S.tray.items.length = 0; S.sideSeen = {};
+const side0Snapshot = JSON.stringify(S.coins.map(c => [c.x.toFixed(2), c.y.toFixed(2)]));
+const marker = CP.place(50, 50, 'gem', 0, 'plat'); // remember this side by its extra gem
+const side0Count = S.coins.length;
+CP.switchSide(1, 1000000);
+t.eq(S.side, 1, 'walking right goes to side 2');
+const side1Snapshot = JSON.stringify(S.coins.map(c => [c.x.toFixed(2), c.y.toFixed(2)]));
+t.ok(side1Snapshot !== side0Snapshot, 'each side carries its own pile');
+CP.switchSide(1, 1000000); CP.switchSide(1, 1000000); CP.switchSide(1, 1000000);
+t.eq(S.side, 0, 'four walks bring you back around');
+t.eq(S.coins.length, side0Count, 'your side is exactly as you left it');
+t.ok(S.coins.includes(marker), 'even the gem you memorised is still there');
+// forgotten coins: some sides have a little gift waiting in the tray
+S.sideSeen = {}; S.tray.coins = 0; S.tray.items.length = 0;
+CP.srand(41);
+let found = 0;
+for (let i = 0; i < 8 && !found; i++) {
+  CP.switchSide(1, 5000000 + i);
+  found = S.tray.coins;
+}
+t.ok(found >= 1, 'sometimes someone left coins in another side\'s tray');
+// but a side you just checked stays empty on the way back
+CP.switchSide(1, 5000010);          // step away (this side may gift once)
+const trayAfterAway = S.tray.coins;
+CP.switchSide(-1, 5000020);         // return to the side checked seconds ago
+t.eq(S.tray.coins, trayAfterAway, 'a freshly checked side has nothing new');
+S.tray.coins = 0; S.tray.items.length = 0; S.tray.prizes.length = 0;
 
 // -------- prize shop: buy with points, trade back for points --------
 S.score = 1000; S.prizes = {};
