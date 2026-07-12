@@ -47,6 +47,13 @@ function rand(){                                   // mulberry32
 const ri = (a, b) => a + Math.floor(rand() * (b - a + 1));
 const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
+// ---- difficulty curve ------------------------------------------------------
+// HP grows quadratically while the volley only grows linearly (one orb per
+// wave), so runs tighten instead of coasting forever.
+function brickHp(w){ return w + Math.floor(w * w / 45); }
+const toughChance = w => Math.min(0.35, 0.18 + w * 0.004);
+const doubleWave = w => w >= 18 && w % 6 === 0;   // surprise double-descent waves
+
 // ---- persistent meta -------------------------------------------------------
 const META_KEY = 'ballistic_meta_v1';
 let meta = null;
@@ -137,8 +144,9 @@ let brickId = 1;
 function newRun(){
   G = {
     phase: 'aim',            // aim | fly | perk | over
-    wave: 0, score: 0, combo: 0, bestCombo: 0,
-    bricks: [], items: [], balls: [], parts: [], texts: [], beams: [],
+    wave: 0, score: 0, combo: 0, bestCombo: 0, nextPerkAt: PERK_EVERY,
+    bricks: [], items: [], balls: [], parts: [], texts: [], beams: [], frags: [], rings: [],
+    flash: 0, flashCol: '#ffd166', scorePunch: 0,
     ballCount: 1 + (meta.up.balls || 0),
     power: 1 + (meta.up.power || 0),
     pierce: false, crit: 0, boom: 0, gemMul: 1, luck: 1,
@@ -171,27 +179,30 @@ function spawnWave(){
   const w = G.wave;
   const cols = [0, 1, 2, 3, 4, 5, 6];
   for (let i = cols.length - 1; i > 0; i--){ const j = Math.floor(rand() * (i + 1)); [cols[i], cols[j]] = [cols[j], cols[i]]; }
-  const n = clamp(3 + Math.floor(w / 7) + (rand() < 0.5 ? 1 : 0), 3, 6);
+  const n = clamp(3 + Math.floor(w / 6) + (rand() < 0.5 ? 1 : 0), 3, 6);
+  const base = brickHp(w);
   for (let i = 0; i < n; i++){
-    let hp = w;
-    if (rand() < 0.2) hp = w * 2;
-    else if (w > 30 && rand() < 0.1) hp = w * 3;
+    let hp = base;
+    if (rand() < toughChance(w)) hp = base * 2;
+    else if (w > 25 && rand() < 0.1) hp = base * 3;
     const bomb = rand() < 0.12 * G.luck;
-    G.bricks.push({ id: brickId++, col: cols[i], row: 0, hp: bomb ? 1 : hp, max: bomb ? 1 : hp, bomb });
+    G.bricks.push({ id: brickId++, col: cols[i], row: 0, hp: bomb ? 1 : hp, max: bomb ? 1 : hp, bomb, sc: 0, yo: 0 });
   }
   const free = cols.slice(n);
-  if (free.length) G.items.push({ col: free.shift(), row: 0, type: 'orb' });
+  // the free +1-ball orb: guaranteed while learning, then no longer a given —
+  // the volley has to lag the walls or nothing ever threatens you
+  if (free.length && (w <= 3 || rand() < 0.8)) G.items.push({ col: free.shift(), row: 0, type: 'orb', sc: 0, yo: 0 });
   const extras = [['gem', 0.4], ['laserH', 0.07], ['laserV', 0.07], ['star', 0.08]];
   for (const [type, p] of extras){
-    if (free.length && rand() < p * G.luck) G.items.push({ col: free.shift(), row: 0, type });
+    if (free.length && rand() < p * G.luck) G.items.push({ col: free.shift(), row: 0, type, sc: 0, yo: 0 });
   }
 }
 
 function descend(){
-  for (const b of G.bricks) b.row++;
+  for (const b of G.bricks){ b.row++; b.yo = (b.yo || 0) - CELL; }   // yo eases back to 0 (visual tween)
   for (let i = G.items.length - 1; i >= 0; i--){
     const it = G.items[i];
-    it.row++;
+    it.row++; it.yo = (it.yo || 0) - CELL;
     if (it.row >= ROWS){                       // mercy: pickups at the line auto-collect
       if (it.type === 'orb' || it.type === 'gem') collectItem(it, null, true);
       G.items.splice(i, 1);
@@ -253,11 +264,19 @@ function killBrick(b){
   meta.bricks++;
   G.score += b.max;
   G.combo++;
+  G.scorePunch = 1;
   if (G.combo > G.bestCombo) G.bestCombo = G.combo;
   boomFx(cx(b), cy(b), brickColor(b), b.bomb ? 26 : 12);
+  shatterFx(b);
+  ringFx(cx(b), cy(b), brickColor(b), 40);
   addText(cx(b), cy(b), '+' + fmt(b.max), '#ffffff', 15);
   for (const [at, msg] of COMBO_CALLS){
-    if (G.combo === at){ addText(W / 2, GY + 150, msg, '#ffd166', 34); G.shake = Math.max(G.shake, 8); sfx('combo'); buzz(25); break; }
+    if (G.combo === at){
+      addText(W / 2, GY + 150, msg, '#ffd166', 34);
+      G.shake = Math.max(G.shake, 8);
+      G.flash = 0.6; G.flashCol = '#ffd166';
+      sfx('combo'); buzz(25); break;
+    }
   }
   sfx('pop'); buzz(8);
   if (b.bomb || rand() < G.boom) explode(b.col, b.row);
@@ -265,7 +284,9 @@ function killBrick(b){
 
 function explode(col, row){
   sfx('bomb'); buzz(40); G.shake = Math.max(G.shake, 10);
+  G.flash = Math.max(G.flash, 0.45); G.flashCol = '#ff7b00';
   boomFx(col * CELL + CELL / 2, GY + row * CELL + CELL / 2, '#ff7b00', 30);
+  ringFx(col * CELL + CELL / 2, GY + row * CELL + CELL / 2, '#ff7b00', 110);
   const dmg = Math.ceil(G.wave / 2) + G.power * 2;
   for (const b of G.bricks.slice()){
     if (Math.abs(b.col - col) <= 1 && Math.abs(b.row - row) <= 1 && !(b.col === col && b.row === row)){
@@ -393,7 +414,16 @@ function endVolley(){
   descend();
   if (checkOver()){ gameOver(); return; }
   spawnWave();
-  if (G.wave % PERK_EVERY === 0){
+  if (doubleWave(G.wave)){                     // surge wave: two rows at once
+    descend();
+    if (checkOver()){ gameOver(); return; }
+    spawnWave();
+    addText(W / 2, GY + 130, '⚠ SURGE ⚠', '#ff5570', 30);
+    G.shake = Math.max(G.shake, 8);
+    sfx('bomb'); buzz(40);
+  }
+  if (G.wave >= G.nextPerkAt){
+    G.nextPerkAt += PERK_EVERY;
     G.perkOffer = offerPerks();
     G.phase = 'perk';
     sfx('perkOffer');
@@ -408,6 +438,21 @@ function boomFx(x, y, color, n){
     const a = rand() * Math.PI * 2, sp = 60 + rand() * 240;
     G.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.4 + rand() * 0.4, t: 0, color, r: 1.5 + rand() * 2.5 });
   }
+}
+// brick shatters into spinning shards that tumble off the board
+function shatterFx(b){
+  const color = brickColor(b);
+  for (let i = 0; i < 7; i++){
+    G.frags.push({
+      x: cx(b) + (rand() - 0.5) * 30, y: cy(b) + (rand() - 0.5) * 30,
+      vx: (rand() - 0.5) * 320, vy: -80 - rand() * 180,
+      rot: rand() * Math.PI, vr: (rand() - 0.5) * 14,
+      s: 6 + rand() * 10, color, t: 0, life: 0.7 + rand() * 0.4,
+    });
+  }
+}
+function ringFx(x, y, color, r){
+  G.rings.push({ x, y, r: 6, max: r, color, t: 0, life: 0.35 });
 }
 function addText(x, y, str, color, size){
   G.texts.push({ x, y, str, color, size, t: 0, life: 0.9 });
@@ -542,11 +587,15 @@ canvas.addEventListener('pointercancel', () => { pointer.down = false; pointer.b
 window.addEventListener('resize', fit);
 
 // ---- update ----------------------------------------------------------------
+let animT = 0;                 // global clock for ambient animation (stars, pulses)
 function update(dt){
+  animT += dt;
   if (toast){ toast.t -= dt; if (toast.t <= 0) toast = null; }
   if (!G || screen !== 'game') return;
   G.dangerPulse += dt * 5;
   if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 40);
+  if (G.flash > 0) G.flash = Math.max(0, G.flash - dt * 2.2);
+  if (G.scorePunch > 0) G.scorePunch = Math.max(0, G.scorePunch - dt * 4);
   if (G.phase === 'fly'){
     G.flyT += dt;
     const steps = G.timeScale;
@@ -557,6 +606,16 @@ function update(dt){
     p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt;
     if (p.t >= p.life) G.parts.splice(i, 1);
   }
+  for (let i = G.frags.length - 1; i >= 0; i--){
+    const f = G.frags[i];
+    f.t += dt; f.x += f.vx * dt; f.y += f.vy * dt; f.vy += 900 * dt; f.rot += f.vr * dt;
+    if (f.t >= f.life) G.frags.splice(i, 1);
+  }
+  for (let i = G.rings.length - 1; i >= 0; i--){
+    const r = G.rings[i];
+    r.t += dt; r.r = 6 + (r.max - 6) * (r.t / r.life);
+    if (r.t >= r.life) G.rings.splice(i, 1);
+  }
   for (let i = G.texts.length - 1; i >= 0; i--){
     const t = G.texts[i];
     t.t += dt; t.y -= 30 * dt;
@@ -566,7 +625,17 @@ function update(dt){
     G.beams[i].t -= dt;
     if (G.beams[i].t <= 0) G.beams.splice(i, 1);
   }
-  for (const b of G.bricks) if (b.flash) b.flash = Math.max(0, b.flash - dt * 6);
+  // spawn pop-in + descend tween
+  const ease = Math.min(1, dt * 9);
+  for (const b of G.bricks){
+    if (b.flash) b.flash = Math.max(0, b.flash - dt * 6);
+    if (b.sc < 1) b.sc = Math.min(1, b.sc + dt * 4);
+    if (b.yo) { b.yo *= (1 - ease); if (Math.abs(b.yo) < 0.5) b.yo = 0; }
+  }
+  for (const it of G.items){
+    if (it.sc < 1) it.sc = Math.min(1, (it.sc || 0) + dt * 4);
+    if (it.yo) { it.yo *= (1 - ease); if (Math.abs(it.yo) < 0.5) it.yo = 0; }
+  }
 }
 
 // ---- draw ------------------------------------------------------------------
@@ -579,8 +648,8 @@ function fmt(n){
 }
 function brickColor(b){
   if (b.bomb) return '#ff7b00';
-  const hue = (200 + b.hp * 6) % 360;
-  return 'hsl(' + hue + ',85%,60%)';
+  const hue = (205 + b.hp * 3) % 360;    // hue climbs with hp — quantized so the sprite cache stays small
+  return 'hsl(' + (Math.round(hue / 6) * 6) + ',88%,58%)';
 }
 function rr(x, y, w, h, r){
   ctx.beginPath();
@@ -598,12 +667,95 @@ function drawBtn(id, x, y, w, h, label, color, size){
   ctx.fillText(label, x + w / 2, y + h / 2 + 1);
 }
 
+// ---- render caches ----------------------------------------------------------
+// Glow is expensive per-frame but free at build time: every brick color and
+// ball glow is rendered ONCE (shadowBlur, gradients, sheen) into an offscreen
+// canvas, then blitted with drawImage. Additive passes ('lighter') give bloom.
+const spriteCache = new Map();
+function makeCanvas(w, h){
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return c;
+}
+function withAlpha(col, a){
+  if (col[0] === '#') return col + Math.round(a * 255).toString(16).padStart(2, '0');
+  if (col.startsWith('hsl(')) return col.replace('hsl(', 'hsla(').replace(')', ',' + a + ')');
+  return col;
+}
+function pathRR(g, x, y, w, h, r){
+  g.beginPath();
+  if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h);
+}
+function glowSprite(color){
+  const key = 'glow:' + color;
+  if (spriteCache.has(key)) return spriteCache.get(key);
+  const S = 64, c = makeCanvas(S, S), g = c.getContext('2d');
+  const gr = g.createRadialGradient(S / 2, S / 2, 1, S / 2, S / 2, S / 2);
+  gr.addColorStop(0, withAlpha(color, 0.85));
+  gr.addColorStop(0.35, withAlpha(color, 0.3));
+  gr.addColorStop(1, withAlpha(color, 0));
+  g.fillStyle = gr;
+  g.fillRect(0, 0, S, S);
+  spriteCache.set(key, c);
+  return c;
+}
+function brickSprite(color){
+  const key = 'brick:' + color;
+  if (spriteCache.has(key)) return spriteCache.get(key);
+  const S = 72, c = makeCanvas(S, S), g = c.getContext('2d');
+  g.shadowColor = color; g.shadowBlur = 9;                 // baked-in neon halo
+  g.fillStyle = color;
+  pathRR(g, 9, 9, 54, 54, 13); g.fill();
+  g.shadowBlur = 0;
+  const gr = g.createLinearGradient(0, 9, 0, 63);          // glassy sheen
+  gr.addColorStop(0, 'rgba(255,255,255,0.42)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,0.06)');
+  gr.addColorStop(1, 'rgba(0,0,0,0.30)');
+  g.fillStyle = gr;
+  pathRR(g, 9, 9, 54, 54, 13); g.fill();
+  g.strokeStyle = 'rgba(255,255,255,0.35)'; g.lineWidth = 1.5;
+  pathRR(g, 10, 10, 52, 52, 12); g.stroke();
+  spriteCache.set(key, c);
+  return c;
+}
+const easeOutBack = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2; };
+
+// parallax starfield, drifting down slowly — twinkle via per-star phase
+const STARS = [];
+for (let i = 0; i < 90; i++){
+  STARS.push({ x: Math.random() * W, y: Math.random() * H, z: 0.25 + Math.random() * 0.75, tw: Math.random() * 6.28 });
+}
+
 function drawBg(){
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  g.addColorStop(0, '#101030'); g.addColorStop(1, '#080814');
+  g.addColorStop(0, '#0d0d28'); g.addColorStop(0.6, '#0a0a1c'); g.addColorStop(1, '#060610');
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+// nebula + stars in world space; hue drifts deeper with the wave count
+function drawSpace(){
+  const wave = (G && screen === 'game') ? G.wave : 0;
+  const hue = (250 + wave * 4) % 360;
+  ctx.globalCompositeOperation = 'lighter';
+  let neb = ctx.createRadialGradient(W * 0.8, H * 0.22, 10, W * 0.8, H * 0.22, 330);
+  neb.addColorStop(0, 'hsla(' + hue + ',70%,30%,0.16)');
+  neb.addColorStop(1, 'hsla(' + hue + ',70%,30%,0)');
+  ctx.fillStyle = neb; ctx.fillRect(0, 0, W, H);
+  neb = ctx.createRadialGradient(W * 0.12, H * 0.72, 10, W * 0.12, H * 0.72, 300);
+  neb.addColorStop(0, 'hsla(' + ((hue + 70) % 360) + ',75%,32%,0.13)');
+  neb.addColorStop(1, 'hsla(' + ((hue + 70) % 360) + ',75%,32%,0)');
+  ctx.fillStyle = neb; ctx.fillRect(0, 0, W, H);
+  for (const s of STARS){
+    const y = (s.y + animT * 9 * s.z) % H;
+    const a = (0.2 + 0.5 * s.z) * (0.55 + 0.45 * Math.sin(animT * 2 + s.tw));
+    ctx.globalAlpha = a;
+    ctx.fillStyle = '#cfe4ff';
+    ctx.fillRect(s.x, y, 1.6 * s.z + 0.6, 1.6 * s.z + 0.6);
+  }
+  ctx.globalAlpha = 1;
+  ctx.globalCompositeOperation = 'source-over';
 }
 
 function draw(){
@@ -612,6 +764,7 @@ function draw(){
   let shx = 0, shy = 0;
   if (G && G.shake > 0.3){ shx = (rand() - 0.5) * G.shake; shy = (rand() - 0.5) * G.shake; }
   ctx.setTransform(scale, 0, 0, scale, offX + shx * scale, offY + shy * scale);
+  drawSpace();
   if (screen === 'menu') drawMenu();
   else if (screen === 'shop') drawShop();
   else drawGame();
@@ -628,9 +781,14 @@ function draw(){
 
 function drawMenu(){
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-  ctx.font = '900 58px system-ui,sans-serif';
-  ctx.fillStyle = '#ffd166';
+  const pulse = 1 + 0.03 * Math.sin(animT * 2.4);
+  ctx.font = '900 ' + Math.round(58 * pulse) + 'px system-ui,sans-serif';
+  const tg = ctx.createLinearGradient(0, 140, 0, 200);
+  tg.addColorStop(0, '#fff3b0'); tg.addColorStop(0.5, '#ffd166'); tg.addColorStop(1, '#ff7b00');
+  ctx.shadowColor = '#ff7b00'; ctx.shadowBlur = 24 + 10 * Math.sin(animT * 2.4);
+  ctx.fillStyle = tg;
   ctx.fillText('BALLISTIC', W / 2, 170);
+  ctx.shadowBlur = 0;
   ctx.font = '600 17px system-ui,sans-serif';
   ctx.fillStyle = '#8888bb';
   ctx.fillText('one more volley.', W / 2, 212);
@@ -703,113 +861,185 @@ function drawShop(){
 
 function drawGame(){
   const skin = SKINS[meta.skin] || SKINS[0];
-  // HUD
-  ctx.textBaseline = 'middle';
-  ctx.font = '700 17px system-ui,sans-serif';
-  ctx.textAlign = 'left'; ctx.fillStyle = '#9999cc';
-  ctx.fillText('WAVE ' + G.wave, 16, 34);
-  ctx.textAlign = 'right'; ctx.fillStyle = '#8be9ff';
-  ctx.fillText('💎 ' + fmt(meta.gems), W - 16, 34);
-  ctx.textAlign = 'center';
-  ctx.font = '900 34px system-ui,sans-serif'; ctx.fillStyle = '#fff';
-  ctx.fillText(fmt(G.score), W / 2, 44);
-  ctx.font = '600 12px system-ui,sans-serif'; ctx.fillStyle = '#666699';
-  ctx.fillText('best ' + fmt(meta.best), W / 2, 74);
-
-  // grid area frame + danger line
-  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
-  ctx.strokeRect(0.5, GY + 0.5, W - 1, ROWS * CELL - 1);
   const danger = G.bricks.some(b => b.row >= ROWS - 1);
-  ctx.strokeStyle = danger ? 'rgba(255,60,80,' + (0.55 + 0.45 * Math.sin(G.dangerPulse)) + ')' : 'rgba(255,255,255,0.15)';
-  ctx.lineWidth = danger ? 3 : 1;
-  ctx.setLineDash([8, 8]);
-  ctx.beginPath(); ctx.moveTo(0, LAUNCH_Y); ctx.lineTo(W, LAUNCH_Y); ctx.stroke();
-  ctx.setLineDash([]);
 
-  // bricks
+  // neon side walls
+  ctx.globalCompositeOperation = 'lighter';
+  let wallG = ctx.createLinearGradient(0, GY, 0, LAUNCH_Y);
+  wallG.addColorStop(0, withAlpha(skin.glow, 0));
+  wallG.addColorStop(1, withAlpha(skin.glow, 0.5));
+  ctx.fillStyle = wallG;
+  ctx.fillRect(0, GY, 3, ROWS * CELL);
+  ctx.fillRect(W - 3, GY, 3, ROWS * CELL);
+  ctx.globalCompositeOperation = 'source-over';
+
+  // danger heat rising from the line
+  if (danger){
+    const a = 0.22 + 0.16 * Math.sin(G.dangerPulse);
+    const dg = ctx.createLinearGradient(0, LAUNCH_Y - 110, 0, LAUNCH_Y);
+    dg.addColorStop(0, 'rgba(255,50,80,0)');
+    dg.addColorStop(1, 'rgba(255,50,80,' + a + ')');
+    ctx.fillStyle = dg;
+    ctx.fillRect(0, LAUNCH_Y - 110, W, 110);
+  }
+  ctx.strokeStyle = danger
+    ? 'rgba(255,60,80,' + (0.55 + 0.45 * Math.sin(G.dangerPulse)) + ')'
+    : 'rgba(139,233,255,0.22)';
+  ctx.lineWidth = danger ? 3 : 1.5;
+  ctx.setLineDash([8, 8]);
+  ctx.lineDashOffset = -animT * 30;
+  ctx.beginPath(); ctx.moveTo(0, LAUNCH_Y); ctx.lineTo(W, LAUNCH_Y); ctx.stroke();
+  ctx.setLineDash([]); ctx.lineDashOffset = 0;
+
+  // bricks — cached neon sprites, spawn pop + descend tween
   for (const b of G.bricks){
-    const x = b.col * CELL + 3, y = GY + b.row * CELL + 3, s = CELL - 6;
-    ctx.fillStyle = brickColor(b);
-    rr(x, y, s, s, 10); ctx.fill();
-    if (b.flash > 0){ ctx.fillStyle = 'rgba(255,255,255,' + (b.flash * 0.7) + ')'; rr(x, y, s, s, 10); ctx.fill(); }
+    const bx = cx(b), by = cy(b) + (b.yo || 0);
+    const sc = easeOutBack(Math.min(1, b.sc == null ? 1 : b.sc));
+    const spr = brickSprite(brickColor(b));
+    const half = 36 * sc;
+    ctx.drawImage(spr, bx - half, by - half, half * 2, half * 2);
+    if (b.flash > 0){
+      ctx.globalAlpha = b.flash * 0.8;
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(spr, bx - half, by - half, half * 2, half * 2);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
+    }
     if (b.row === ROWS - 1){
       ctx.strokeStyle = 'rgba(255,60,80,' + (0.5 + 0.5 * Math.sin(G.dangerPulse)) + ')';
-      ctx.lineWidth = 3; rr(x, y, s, s, 10); ctx.stroke();
+      ctx.lineWidth = 3;
+      rr(bx - 28, by - 28, 56, 56, 12); ctx.stroke();
     }
-    ctx.fillStyle = 'rgba(0,0,0,0.55)';
-    ctx.font = '800 ' + (b.hp >= 1000 ? 16 : 20) + 'px system-ui,sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(b.bomb ? '💥' : fmt(b.hp), x + s / 2, y + s / 2 + 1);
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    if (b.bomb){
+      ctx.font = '22px system-ui,sans-serif';
+      ctx.fillText('💥', bx, by + 1);
+    } else {
+      ctx.font = '800 ' + (b.hp >= 1000 ? 17 : 21) + 'px system-ui,sans-serif';
+      ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+      ctx.strokeText(fmt(b.hp), bx, by + 1);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(fmt(b.hp), bx, by + 1);
+    }
   }
 
-  // items
+  // items — glowing pickups
   for (const it of G.items){
-    const x = it.col * CELL + CELL / 2, y = GY + it.row * CELL + CELL / 2;
-    const pulse = 1 + 0.08 * Math.sin(G.dangerPulse * 1.4 + it.col);
+    const x = it.col * CELL + CELL / 2, y = GY + it.row * CELL + CELL / 2 + (it.yo || 0);
+    const pulse = 1 + 0.1 * Math.sin(animT * 5 + it.col);
     if (it.type === 'orb'){
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(glowSprite('#8be9ff'), x - 22 * pulse, y - 22 * pulse, 44 * pulse, 44 * pulse);
+      ctx.globalCompositeOperation = 'source-over';
       ctx.strokeStyle = '#8be9ff'; ctx.lineWidth = 2;
       ctx.beginPath(); ctx.arc(x, y, 14 * pulse, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = '#8be9ff';
+      ctx.fillStyle = '#eaffff';
       ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
     } else {
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.drawImage(glowSprite(it.type === 'star' ? '#ffd166' : '#8be9ff'), x - 20, y - 20, 40, 40);
+      ctx.globalCompositeOperation = 'source-over';
       const icon = { gem: '💎', star: '⭐', laserH: '↔️', laserV: '↕️' }[it.type] || '?';
-      ctx.font = (22 * pulse) + 'px system-ui,sans-serif'; ctx.textAlign = 'center';
+      ctx.font = (22 * pulse) + 'px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(icon, x, y + 1);
     }
   }
 
-  // laser beams
+  // additive pass: beams, particles, shockwaves, balls
+  ctx.globalCompositeOperation = 'lighter';
   for (const bm of G.beams){
-    ctx.fillStyle = 'rgba(139,233,255,' + (bm.t * 3) + ')';
-    if (bm.h) ctx.fillRect(0, GY + bm.row * CELL + CELL / 2 - 6, W, 12);
-    else ctx.fillRect(bm.col * CELL + CELL / 2 - 6, GY, 12, ROWS * CELL);
+    const a = clamp(bm.t * 4, 0, 1);
+    ctx.globalAlpha = a;
+    if (bm.h){
+      const y = GY + bm.row * CELL + CELL / 2;
+      const bg = ctx.createLinearGradient(0, y - 14, 0, y + 14);
+      bg.addColorStop(0, 'rgba(139,233,255,0)'); bg.addColorStop(0.5, 'rgba(139,233,255,0.9)'); bg.addColorStop(1, 'rgba(139,233,255,0)');
+      ctx.fillStyle = bg; ctx.fillRect(0, y - 14, W, 28);
+      ctx.fillStyle = '#fff'; ctx.fillRect(0, y - 2, W, 4);
+    } else {
+      const x = bm.col * CELL + CELL / 2;
+      const bg = ctx.createLinearGradient(x - 14, 0, x + 14, 0);
+      bg.addColorStop(0, 'rgba(139,233,255,0)'); bg.addColorStop(0.5, 'rgba(139,233,255,0.9)'); bg.addColorStop(1, 'rgba(139,233,255,0)');
+      ctx.fillStyle = bg; ctx.fillRect(x - 14, GY, 28, ROWS * CELL);
+      ctx.fillStyle = '#fff'; ctx.fillRect(x - 2, GY, 4, ROWS * CELL);
+    }
   }
-
-  // particles
+  ctx.globalAlpha = 1;
   for (const p of G.parts){
     ctx.globalAlpha = 1 - p.t / p.life;
     ctx.fillStyle = p.color;
     ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
   }
+  for (const r of G.rings){
+    ctx.globalAlpha = (1 - r.t / r.life) * 0.9;
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = 3.5 * (1 - r.t / r.life) + 0.5;
+    ctx.beginPath(); ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2); ctx.stroke();
+  }
   ctx.globalAlpha = 1;
-
-  // balls + trails
   for (const ball of G.balls){
-    for (let i = 0; i < ball.trail.length; i += 2){
-      ctx.globalAlpha = 0.05 + (i / ball.trail.length) * 0.25;
-      ctx.fillStyle = skin.glow;
-      ctx.beginPath(); ctx.arc(ball.trail[i], ball.trail[i + 1], BALL_R * 0.8, 0, Math.PI * 2); ctx.fill();
+    // tapered motion-blur trail
+    const tr = ball.trail;
+    for (let i = 2; i < tr.length; i += 2){
+      const f = i / tr.length;
+      ctx.globalAlpha = f * 0.5;
+      ctx.strokeStyle = skin.glow;
+      ctx.lineWidth = BALL_R * 1.6 * f;
+      ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(tr[i - 2], tr[i - 1]); ctx.lineTo(tr[i], tr[i + 1]); ctx.stroke();
     }
     ctx.globalAlpha = 1;
+    ctx.drawImage(glowSprite(skin.glow), ball.x - 20, ball.y - 20, 40, 40);
     ctx.fillStyle = skin.c;
     ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath(); ctx.arc(ball.x - 2, ball.y - 2, BALL_R * 0.4, 0, Math.PI * 2); ctx.fill();
   }
+  ctx.globalCompositeOperation = 'source-over';
+
+  // shatter debris (normal blend so shards read as solid)
+  for (const f of G.frags){
+    ctx.globalAlpha = 1 - f.t / f.life;
+    ctx.save();
+    ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+    ctx.fillStyle = f.color;
+    ctx.fillRect(-f.s / 2, -f.s / 2, f.s, f.s);
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
 
   // launcher + aim guide
   if (G.phase === 'aim' || G.phase === 'perk'){
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.drawImage(glowSprite(skin.glow), G.launchX - 24, LAUNCH_Y - BALL_R - 24, 48, 48);
+    ctx.globalCompositeOperation = 'source-over';
     ctx.fillStyle = skin.c;
     ctx.beginPath(); ctx.arc(G.launchX, LAUNCH_Y - BALL_R, BALL_R + 1, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#fff'; ctx.font = '700 15px system-ui,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff'; ctx.font = '700 15px system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('×' + G.ballCount, G.launchX, LAUNCH_Y + 20);
   }
   if (G.phase === 'aim' && G.aim){
     const dx = G.aim.x - G.launchX, dy = G.aim.y - (LAUNCH_Y - BALL_R);
     const len = Math.hypot(dx, dy);
     if (len > 8 && dy < -0.08 * len){
-      let nx = dx / len, ny = dy / len;
-      // dotted guide with one wall-bounce preview
-      let px = G.launchX, py = LAUNCH_Y - BALL_R, vx = nx, vy = ny, total = 560;
-      ctx.fillStyle = 'rgba(255,255,255,0.8)';
-      let step = 22;
-      for (let d = 0; d < total; d += step){
+      let px = G.launchX, py = LAUNCH_Y - BALL_R, vx = dx / len, vy = dy / len;
+      const total = 560, step = 22;
+      const march = (animT * 130) % step;       // dots march toward the target
+      ctx.globalCompositeOperation = 'lighter';
+      for (let d = -march; d < total; d += step){
+        if (d > 0){
+          ctx.globalAlpha = 1 - d / total;
+          ctx.drawImage(glowSprite(skin.glow), px - 9, py - 9, 18, 18);
+          ctx.fillStyle = '#fff';
+          ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI * 2); ctx.fill();
+        }
         px += vx * step; py += vy * step;
         if (px < BALL_R){ px = BALL_R; vx = Math.abs(vx); }
         if (px > W - BALL_R){ px = W - BALL_R; vx = -Math.abs(vx); }
         if (py < GY + BALL_R) break;
-        ctx.globalAlpha = 1 - d / total;
-        ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
   }
   if (G.phase === 'aim' && G.wave <= 1){
@@ -821,12 +1051,31 @@ function drawGame(){
   // floating texts
   for (const t of G.texts){
     ctx.globalAlpha = 1 - t.t / t.life;
-    ctx.fillStyle = t.color;
     ctx.font = '900 ' + t.size + 'px system-ui,sans-serif';
     ctx.textAlign = 'center';
+    ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+    ctx.strokeText(t.str, t.x, t.y);
+    ctx.fillStyle = t.color;
     ctx.fillText(t.str, t.x, t.y);
   }
   ctx.globalAlpha = 1;
+
+  // HUD on top of the action
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 17px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.fillStyle = '#9999cc';
+  ctx.fillText('WAVE ' + G.wave, 16, 34);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#8be9ff';
+  ctx.fillText('💎 ' + fmt(meta.gems), W - 16, 34);
+  ctx.textAlign = 'center';
+  const punch = 34 + 12 * G.scorePunch;
+  ctx.font = '900 ' + punch + 'px system-ui,sans-serif';
+  ctx.shadowColor = skin.glow; ctx.shadowBlur = 14 * G.scorePunch;
+  ctx.fillStyle = '#fff';
+  ctx.fillText(fmt(G.score), W / 2, 44);
+  ctx.shadowBlur = 0;
+  ctx.font = '600 12px system-ui,sans-serif'; ctx.fillStyle = '#666699';
+  ctx.fillText('best ' + fmt(meta.best), W / 2, 74);
 
   // fly-phase controls: combo counter + fast forward
   if (G.phase === 'fly'){
@@ -835,6 +1084,15 @@ function drawGame(){
       ctx.fillText('×' + G.combo, 18, LAUNCH_Y + 44);
     }
     drawBtn('speed', W - 108, LAUNCH_Y + 22, 92, 46, '▶▶ ×' + G.timeScale, G.timeScale > 1 ? '#e0356e' : '#22224a', 17);
+  }
+
+  // combo / explosion vignette flash
+  if (G.flash > 0){
+    const vg = ctx.createRadialGradient(W / 2, H / 2, H * 0.25, W / 2, H / 2, H * 0.72);
+    vg.addColorStop(0, withAlpha(G.flashCol, 0));
+    vg.addColorStop(1, withAlpha(G.flashCol, 0.4 * G.flash));
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, W, H);
   }
 
   if (G.phase === 'perk') drawPerkOverlay();

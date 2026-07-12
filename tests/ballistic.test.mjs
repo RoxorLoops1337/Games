@@ -22,7 +22,7 @@ const EXPOSE = `__out.api = { getG:()=>G, getMeta:()=>meta, getScreen:()=>screen
  newRun, spawnWave, descend, checkOver, gameOver, revive, fireVolley, stepPhysics, endVolley,
  offerPerks, applyPerk, PERKS, UPGRADES, buyUpgrade, saveMeta, loadMeta, dailyBonus,
  collectItem, damageBrick, killBrick, explode, addGems, reseed, draw, update, uiClick,
- startGame, fmt, SKINS, skinUnlocked,
+ startGame, fmt, SKINS, skinUnlocked, brickHp, toughChance, doubleWave,
  C:{ROWS,COLS,CELL,GY,LAUNCH_Y,PERK_EVERY,REVIVE_COST,BALL_R} };\n`;
 
 function boot(seedSave){
@@ -42,7 +42,11 @@ function boot(seedSave){
   const store = {};
   if (seedSave) store['ballistic_meta_v1'] = seedSave;
   const sandbox = {
-    document: { getElementById: id => id === 'c' ? canvas : {} },
+    document: {
+      getElementById: id => id === 'c' ? canvas : {},
+      // offscreen sprite-cache canvases share the same no-op 2d context
+      createElement: () => ({ width: 0, height: 0, getContext: () => ctxStub }),
+    },
     window: { innerWidth: 420, innerHeight: 780, devicePixelRatio: 1, addEventListener(){} },
     localStorage: { getItem: k => store[k] ?? null, setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } },
     requestAnimationFrame: () => {},
@@ -254,6 +258,31 @@ test('perk screen triggers every 5th wave and picking one resumes aiming', () =>
   a.uiClick('perk0');
   assert(G.phase === 'aim' && G.perkOffer === null, 'back to aiming');
   assert(G.perksTaken.length === 1, 'perk recorded');
+});
+
+// ---- difficulty curve --------------------------------------------------------
+test('brick hp grows superlinearly while early waves stay gentle', () => {
+  const a = boot();
+  assert(a.brickHp(1) === 1 && a.brickHp(2) === 2, 'gentle start');
+  assert(a.brickHp(30) >= 30 * 1.5, 'quadratic term bites by wave 30');
+  assert(a.brickHp(60) >= 60 * 2, 'late game doubles+');
+  assert(a.toughChance(50) <= 0.35, 'tough chance capped');
+  assert(a.toughChance(40) > a.toughChance(5), 'tough chance scales');
+});
+
+test('surge waves double-descend and never skip the perk cadence', () => {
+  const a = boot();
+  a.reseed(21); a.startGame();
+  const G = a.getG();
+  assert(a.doubleWave(18) && !a.doubleWave(19) && a.doubleWave(24), 'surge rule');
+  G.wave = 17; G.nextPerkAt = 20;
+  G.bricks.length = 0; G.items.length = 0; G.balls.length = 0; G.queue = 0;
+  a.endVolley();                                  // 17 → 18 triggers surge → 19
+  assert(G.wave === 19, 'surge spawned two waves');
+  assert(G.bricks.some(b => b.row === 0) && G.bricks.some(b => b.row === 1), 'both rows on board');
+  assert(G.phase === 'aim', 'no perk yet');
+  a.endVolley();                                  // 19 → 20 crosses nextPerkAt
+  assert(G.wave === 20 && G.phase === 'perk', 'perk not skipped by wave jumps');
 });
 
 // ---- game over / revive ----------------------------------------------------
