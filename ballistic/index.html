@@ -1,0 +1,922 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<title>Ballistic ⚡ one more volley</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin:0; padding:0; height:100%; background:#0a0a18; overflow:hidden;
+    overscroll-behavior:none; touch-action:none; user-select:none; -webkit-user-select:none; }
+  canvas { display:block; touch-action:none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+// ============================================================================
+// BALLISTIC — endless volley brick-breaker, tuned for "one more run".
+// One file, vanilla canvas. Logical world is fixed 420x780 (7 cols x 60px),
+// letterboxed to the viewport. All UI is canvas-drawn (hit-tested rects).
+// Save lives in localStorage 'ballistic_meta_v1' — NEVER rename.
+// ============================================================================
+
+const W = 420, H = 780;
+const COLS = 7, CELL = 60, ROWS = 9;
+const GY = 96;                        // grid top
+const LAUNCH_Y = GY + ROWS * CELL;    // 636 — balls land / fire from here
+const BALL_R = 7;
+const BALL_SPD = 820;                 // units/sec
+const VOLLEY_GAP = 0.065;             // sec between balls leaving the launcher
+const PERK_EVERY = 5;                 // waves between perk offers
+const REVIVE_COST = 75;               // gems, once per run
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// ---- seeded rng (deterministic under test) --------------------------------
+let rngState = (Math.random() * 2 ** 31) | 0 || 1;
+function reseed(n){ rngState = n | 0 || 1; }
+function rand(){                                   // mulberry32
+  rngState |= 0; rngState = (rngState + 0x6D2B79F5) | 0;
+  let t = Math.imul(rngState ^ (rngState >>> 15), 1 | rngState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const ri = (a, b) => a + Math.floor(rand() * (b - a + 1));
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
+
+// ---- persistent meta -------------------------------------------------------
+const META_KEY = 'ballistic_meta_v1';
+let meta = null;
+function defaultMeta(){
+  return { gems: 0, best: 0, bestWave: 0, streak: 0, lastDay: 0, sound: 1,
+           up: { balls: 0, power: 0, head: 0, gemx: 0 }, skin: 0,
+           runs: 0, bricks: 0, topRuns: [] };
+}
+function loadMeta(){
+  meta = defaultMeta();
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    if (raw){ const m = JSON.parse(raw); Object.assign(meta, m); meta.up = Object.assign(defaultMeta().up, m.up || {}); }
+  } catch (e) {}
+}
+function saveMeta(){ try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch (e) {} }
+
+// Daily streak — the Wordle hook. First run of each new day bumps the streak
+// (a 1-day gap resets it) and pays gems scaled by it.
+function dailyBonus(day){
+  const d = day !== undefined ? day : Math.floor(Date.now() / 86400000);
+  if (meta.lastDay === d) return 0;
+  meta.streak = (meta.lastDay === d - 1) ? meta.streak + 1 : 1;
+  meta.lastDay = d;
+  const bonus = 10 * Math.min(meta.streak, 10);
+  meta.gems += bonus;
+  saveMeta();
+  return bonus;
+}
+
+// ---- meta shop (permanent upgrades — the idle-game hook) -------------------
+const UPGRADES = [
+  { id:'balls', name:'Extra Ball',  desc:'+1 starting ball',        icon:'●',  max:5, cost:l => 30 * 2 ** l },
+  { id:'power', name:'Power Core',  desc:'+1 ball damage',          icon:'⚡', max:3, cost:l => 120 * 3 ** l },
+  { id:'head',  name:'Head Start',  desc:'start 5 waves deep',      icon:'⏩', max:2, cost:l => 150 * 3 ** l },
+  { id:'gemx',  name:'Gem Boost',   desc:'+25% gems earned',        icon:'💎', max:4, cost:l => 50 * 2 ** l },
+];
+function buyUpgrade(id){
+  const u = UPGRADES.find(x => x.id === id);
+  const lvl = meta.up[id] || 0;
+  if (!u || lvl >= u.max) return false;
+  const c = u.cost(lvl);
+  if (meta.gems < c) return false;
+  meta.gems -= c; meta.up[id] = lvl + 1; saveMeta();
+  sfx('buy'); return true;
+}
+
+// ---- skins (trail colors) unlocked by best-score milestones ----------------
+const SKINS = [
+  { name:'Ember',  need:0,     c:'#ffd166', glow:'#ff7b00' },
+  { name:'Frost',  need:500,   c:'#8be9ff', glow:'#2f9dff' },
+  { name:'Toxin',  need:2000,  c:'#9dff6b', glow:'#2fbf3f' },
+  { name:'Blush',  need:5000,  c:'#ff8fc7', glow:'#ff2f9d' },
+  { name:'Void',   need:12000, c:'#c9a6ff', glow:'#7b2fff' },
+  { name:'Gold',   need:30000, c:'#fff3b0', glow:'#ffcf00' },
+];
+const skinUnlocked = i => meta.best >= SKINS[i].need;
+
+// ---- in-run perks (the roguelite hook: pick 1 of 3 every 5 waves) ----------
+const PERKS = [
+  { id:'balls',  name:'+3 Balls',     desc:'three more in the volley', icon:'●●●', apply:g => { g.ballCount += 3; } },
+  { id:'power',  name:'Power +1',     desc:'every hit does +1',        icon:'⚡',  apply:g => { g.power += 1; } },
+  { id:'pierce', name:'Piercing',     desc:'balls smash through kills',icon:'➤',  once:true, apply:g => { g.pierce = true; } },
+  { id:'crit',   name:'Critical +15%',desc:'crits hit for 3×',         icon:'✸',  apply:g => { g.crit += 0.15; } },
+  { id:'boom',   name:'Volatile +15%',desc:'kills may explode',        icon:'💥', apply:g => { g.boom += 0.15; } },
+  { id:'gemx',   name:'Gems ×2',      desc:'double gem pickups',       icon:'💎', apply:g => { g.gemMul *= 2; } },
+  { id:'shrink', name:'Shrink Ray',   desc:'all bricks lose 30% HP',   icon:'🌀', apply:g => { for (const b of g.bricks) b.hp = Math.max(1, Math.ceil(b.hp * 0.7)); } },
+  { id:'lucky',  name:'Lucky Drops',  desc:'+50% bonus item spawns',   icon:'🍀', apply:g => { g.luck *= 1.5; } },
+];
+function offerPerks(){
+  const pool = PERKS.filter(p => !(p.once && G.perksTaken.includes(p.id)));
+  const offer = [];
+  while (offer.length < 3 && pool.length){
+    offer.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+  }
+  return offer;
+}
+function applyPerk(p){
+  p.apply(G);
+  G.perksTaken.push(p.id);
+  sfx('perk'); buzz(30);
+}
+
+// ---- run state -------------------------------------------------------------
+let G = null;
+let brickId = 1;
+
+function newRun(){
+  G = {
+    phase: 'aim',            // aim | fly | perk | over
+    wave: 0, score: 0, combo: 0, bestCombo: 0,
+    bricks: [], items: [], balls: [], parts: [], texts: [], beams: [],
+    ballCount: 1 + (meta.up.balls || 0),
+    power: 1 + (meta.up.power || 0),
+    pierce: false, crit: 0, boom: 0, gemMul: 1, luck: 1,
+    launchX: W / 2, nextX: null, queue: 0, queueT: 0, firstBall: true,
+    aim: null, timeScale: 1, flyT: 0,
+    perkOffer: null, perksTaken: [],
+    revived: false, runGems: 0, shake: 0, dangerPulse: 0,
+    newBest: false, over: null,
+  };
+  meta.runs++;
+  // Head start: jump the wave counter, prefill 3 aged rows, credit some score.
+  const head = 5 * (meta.up.head || 0);
+  if (head){
+    G.wave = Math.max(0, head - 3);
+    for (let i = 0; i < 3; i++){
+      spawnWave();
+      for (const b of G.bricks) b.row++;
+      for (const it of G.items) it.row++;
+    }
+    G.score = 8 * head;
+  }
+  spawnWave();
+  saveMeta();
+}
+
+// Each wave: a fresh row of bricks at the top plus a guaranteed +1-ball orb
+// (the genre's pacing trick — your volley grows roughly as fast as the walls).
+function spawnWave(){
+  G.wave++;
+  const w = G.wave;
+  const cols = [0, 1, 2, 3, 4, 5, 6];
+  for (let i = cols.length - 1; i > 0; i--){ const j = Math.floor(rand() * (i + 1)); [cols[i], cols[j]] = [cols[j], cols[i]]; }
+  const n = clamp(3 + Math.floor(w / 7) + (rand() < 0.5 ? 1 : 0), 3, 6);
+  for (let i = 0; i < n; i++){
+    let hp = w;
+    if (rand() < 0.2) hp = w * 2;
+    else if (w > 30 && rand() < 0.1) hp = w * 3;
+    const bomb = rand() < 0.12 * G.luck;
+    G.bricks.push({ id: brickId++, col: cols[i], row: 0, hp: bomb ? 1 : hp, max: bomb ? 1 : hp, bomb });
+  }
+  const free = cols.slice(n);
+  if (free.length) G.items.push({ col: free.shift(), row: 0, type: 'orb' });
+  const extras = [['gem', 0.4], ['laserH', 0.07], ['laserV', 0.07], ['star', 0.08]];
+  for (const [type, p] of extras){
+    if (free.length && rand() < p * G.luck) G.items.push({ col: free.shift(), row: 0, type });
+  }
+}
+
+function descend(){
+  for (const b of G.bricks) b.row++;
+  for (let i = G.items.length - 1; i >= 0; i--){
+    const it = G.items[i];
+    it.row++;
+    if (it.row >= ROWS){                       // mercy: pickups at the line auto-collect
+      if (it.type === 'orb' || it.type === 'gem') collectItem(it, null, true);
+      G.items.splice(i, 1);
+    }
+  }
+}
+const checkOver = () => G.bricks.some(b => b.row >= ROWS);
+
+function gameOver(){
+  G.phase = 'over';
+  const endGems = addGems(Math.floor(G.score / 150) + G.wave);
+  G.over = { endGems };
+  if (G.score > meta.best){ meta.best = G.score; G.newBest = true; }
+  if (G.wave > meta.bestWave) meta.bestWave = G.wave;
+  meta.topRuns.push({ score: G.score, wave: G.wave, t: Date.now() });
+  meta.topRuns.sort((a, b) => b.score - a.score);
+  if (meta.topRuns.length > 5) meta.topRuns.length = 5;
+  saveMeta();
+  sfx('over'); buzz(120); G.shake = 14;
+}
+
+function revive(){
+  if (G.revived || meta.gems < REVIVE_COST) return false;
+  meta.gems -= REVIVE_COST; saveMeta();
+  G.revived = true;
+  G.bricks = G.bricks.filter(b => b.row < ROWS - 4);
+  G.items = G.items.filter(it => it.row < ROWS - 4);
+  G.phase = 'aim'; G.over = null;
+  sfx('perk'); boomFx(W / 2, LAUNCH_Y - CELL * 2, '#8be9ff', 40);
+  return true;
+}
+
+// gems bank instantly (mid-run spending on revives, and it just feels better)
+function addGems(n){
+  const amt = Math.max(0, Math.round(n * G.gemMul * (1 + 0.25 * (meta.up.gemx || 0))));
+  meta.gems += amt; G.runGems += amt;
+  return amt;
+}
+
+// ---- combat ----------------------------------------------------------------
+const COMBO_CALLS = [[50, 'GODLIKE!!'], [35, 'UNREAL!'], [20, 'MEGA!'], [10, 'GREAT!'], [5, 'NICE!']];
+
+function damageBrick(b, dmg, bx, by){
+  let d = dmg;
+  const crit = rand() < G.crit;
+  if (crit) d *= 3;
+  b.hp -= d;
+  b.flash = 1;
+  if (crit) addText(bx ?? cx(b), by ?? cy(b), 'CRIT', '#ffb347', 18);
+  sfx('hit', clamp(200 + G.combo * 10, 200, 900));
+  if (b.hp <= 0){ killBrick(b); return true; }
+  return false;
+}
+
+function killBrick(b){
+  const i = G.bricks.indexOf(b);
+  if (i < 0) return;
+  G.bricks.splice(i, 1);
+  meta.bricks++;
+  G.score += b.max;
+  G.combo++;
+  if (G.combo > G.bestCombo) G.bestCombo = G.combo;
+  boomFx(cx(b), cy(b), brickColor(b), b.bomb ? 26 : 12);
+  addText(cx(b), cy(b), '+' + fmt(b.max), '#ffffff', 15);
+  for (const [at, msg] of COMBO_CALLS){
+    if (G.combo === at){ addText(W / 2, GY + 150, msg, '#ffd166', 34); G.shake = Math.max(G.shake, 8); sfx('combo'); buzz(25); break; }
+  }
+  sfx('pop'); buzz(8);
+  if (b.bomb || rand() < G.boom) explode(b.col, b.row);
+}
+
+function explode(col, row){
+  sfx('bomb'); buzz(40); G.shake = Math.max(G.shake, 10);
+  boomFx(col * CELL + CELL / 2, GY + row * CELL + CELL / 2, '#ff7b00', 30);
+  const dmg = Math.ceil(G.wave / 2) + G.power * 2;
+  for (const b of G.bricks.slice()){
+    if (Math.abs(b.col - col) <= 1 && Math.abs(b.row - row) <= 1 && !(b.col === col && b.row === row)){
+      b.hp -= dmg; b.flash = 1;
+      if (b.hp <= 0) killBrick(b);
+    }
+  }
+}
+
+function laser(it, horizontal){
+  sfx('laser'); G.shake = Math.max(G.shake, 6);
+  const dmg = G.power * 2;
+  G.beams.push({ h: horizontal, col: it.col, row: it.row, t: 0.25 });
+  for (const b of G.bricks.slice()){
+    if (horizontal ? b.row === it.row : b.col === it.col){
+      b.hp -= dmg; b.flash = 1;
+      if (b.hp <= 0) killBrick(b);
+    }
+  }
+}
+
+function collectItem(it, ball, auto){
+  const i = G.items.indexOf(it);
+  if (i >= 0) G.items.splice(i, 1);
+  const x = it.col * CELL + CELL / 2, y = GY + it.row * CELL + CELL / 2;
+  if (it.type === 'orb'){ G.ballCount++; addText(x, y, '+1 ●', '#8be9ff', 16); sfx('orb'); }
+  else if (it.type === 'gem'){ const got = addGems(1); addText(x, y, '+' + got + ' 💎', '#8be9ff', 15); sfx('gem'); }
+  else if (it.type === 'star'){ const s = 10 * G.wave; G.score += s; addText(x, y, '+' + fmt(s) + ' ★', '#ffd166', 16); sfx('gem'); }
+  else if (it.type === 'laserH'){ laser(it, true); }
+  else if (it.type === 'laserV'){ laser(it, false); }
+  if (!auto) boomFx(x, y, '#8be9ff', 8);
+}
+
+// ---- volley / physics ------------------------------------------------------
+function fireVolley(dx, dy){
+  const len = Math.hypot(dx, dy);
+  if (!len || dy > -0.08 * len) return false;       // must aim upward
+  let nx = dx / len, ny = dy / len;
+  const maxSide = 0.985;                            // never fully horizontal
+  if (Math.abs(nx) > maxSide){ nx = maxSide * Math.sign(nx); ny = -Math.sqrt(1 - nx * nx); }
+  G.dir = { x: nx, y: ny };
+  G.queue = G.ballCount; G.queueT = 0;
+  G.balls = []; G.nextX = null; G.firstBall = true;
+  G.combo = 0; G.flyT = 0;
+  G.phase = 'fly';
+  sfx('fire');
+  return true;
+}
+
+function stepPhysics(dt){
+  // launcher feeds the queue
+  if (G.queue > 0){
+    G.queueT -= dt;
+    if (G.queueT <= 0){
+      G.balls.push({ x: G.launchX, y: LAUNCH_Y - BALL_R, vx: G.dir.x * BALL_SPD, vy: G.dir.y * BALL_SPD, trail: [], lastHit: 0 });
+      G.queue--; G.queueT = VOLLEY_GAP;
+    }
+  }
+  const sub = Math.max(1, Math.ceil((BALL_SPD * dt) / 6));
+  const sdt = dt / sub;
+  for (let bi = G.balls.length - 1; bi >= 0; bi--){
+    const ball = G.balls[bi];
+    let landed = false;
+    for (let s = 0; s < sub && !landed; s++){
+      ball.x += ball.vx * sdt;
+      ball.y += ball.vy * sdt;
+      if (ball.x < BALL_R){ ball.x = BALL_R; ball.vx = Math.abs(ball.vx); }
+      if (ball.x > W - BALL_R){ ball.x = W - BALL_R; ball.vx = -Math.abs(ball.vx); }
+      if (ball.y < GY + BALL_R){ ball.y = GY + BALL_R; ball.vy = Math.abs(ball.vy); }
+      if (ball.y >= LAUNCH_Y - BALL_R && ball.vy > 0){ landed = true; break; }
+      collideBricks(ball);
+      collideItems(ball);
+    }
+    ball.trail.push(ball.x, ball.y);
+    if (ball.trail.length > 12) ball.trail.splice(0, 2);
+    if (landed){
+      if (G.firstBall){ G.nextX = clamp(ball.x, BALL_R + 2, W - BALL_R - 2); G.firstBall = false; }
+      G.balls.splice(bi, 1);
+    }
+  }
+  if (G.queue === 0 && G.balls.length === 0) endVolley();
+}
+
+function collideBricks(ball){
+  const c0 = clamp(Math.floor((ball.x - BALL_R) / CELL), 0, COLS - 1);
+  const c1 = clamp(Math.floor((ball.x + BALL_R) / CELL), 0, COLS - 1);
+  const r0 = clamp(Math.floor((ball.y - BALL_R - GY) / CELL), 0, ROWS - 1);
+  const r1 = clamp(Math.floor((ball.y + BALL_R - GY) / CELL), 0, ROWS - 1);
+  for (const b of G.bricks){
+    if (b.col < c0 || b.col > c1 || b.row < r0 || b.row > r1) continue;
+    const bx = b.col * CELL, by = GY + b.row * CELL;
+    const nx = clamp(ball.x, bx, bx + CELL), ny = clamp(ball.y, by, by + CELL);
+    const ddx = ball.x - nx, ddy = ball.y - ny;
+    if (ddx * ddx + ddy * ddy > BALL_R * BALL_R) continue;
+    if (ball.lastHit === b.id) continue;             // no double-tick on one contact
+    ball.lastHit = b.id;
+    const killed = damageBrick(b, G.power, ball.x, ball.y);
+    if (killed && G.pierce) return;                  // smash through
+    // reflect off the axis of least penetration
+    const penX = BALL_R - Math.abs(ddx), penY = BALL_R - Math.abs(ddy);
+    if (Math.abs(ddx) > Math.abs(ddy)){
+      ball.vx = Math.abs(ball.vx) * (ddx > 0 ? 1 : -1);
+      ball.x += (ddx > 0 ? penX : -penX);
+    } else {
+      ball.vy = Math.abs(ball.vy) * (ddy > 0 ? 1 : -1);
+      ball.y += (ddy > 0 ? penY : -penY);
+    }
+    return;
+  }
+  ball.lastHit = 0;
+}
+
+function collideItems(ball){
+  for (const it of G.items.slice()){
+    const x = it.col * CELL + CELL / 2, y = GY + it.row * CELL + CELL / 2;
+    const dx = ball.x - x, dy = ball.y - y;
+    if (dx * dx + dy * dy < (BALL_R + 14) * (BALL_R + 14)) collectItem(it, ball);
+  }
+}
+
+function endVolley(){
+  if (G.combo >= 5) G.score += G.combo * Math.ceil(G.wave / 2);
+  if (G.nextX != null) G.launchX = G.nextX;
+  G.timeScale = 1;
+  descend();
+  if (checkOver()){ gameOver(); return; }
+  spawnWave();
+  if (G.wave % PERK_EVERY === 0){
+    G.perkOffer = offerPerks();
+    G.phase = 'perk';
+    sfx('perkOffer');
+  } else {
+    G.phase = 'aim';
+  }
+}
+
+// ---- juice: particles / floating text / shake ------------------------------
+function boomFx(x, y, color, n){
+  for (let i = 0; i < n; i++){
+    const a = rand() * Math.PI * 2, sp = 60 + rand() * 240;
+    G.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 0.4 + rand() * 0.4, t: 0, color, r: 1.5 + rand() * 2.5 });
+  }
+}
+function addText(x, y, str, color, size){
+  G.texts.push({ x, y, str, color, size, t: 0, life: 0.9 });
+}
+
+// ---- audio (tiny webaudio synth) + haptics ---------------------------------
+let AC = null;
+function ac(){
+  if (AC) return AC;
+  const Ctor = (typeof window !== 'undefined') && (window.AudioContext || window.webkitAudioContext);
+  if (!Ctor) return null;
+  try { AC = new Ctor(); } catch (e) { return null; }
+  return AC;
+}
+function beep(freq, dur, type, vol, slide){
+  const a = ac(); if (!a || !meta.sound) return;
+  try {
+    const o = a.createOscillator(), g = a.createGain();
+    o.type = type || 'square'; o.frequency.value = freq;
+    if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, slide), a.currentTime + dur);
+    g.gain.value = vol || 0.08;
+    g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+    o.connect(g); g.connect(a.destination);
+    o.start(); o.stop(a.currentTime + dur);
+  } catch (e) {}
+}
+function sfx(kind, p){
+  if (kind === 'hit') beep(p || 300, 0.05, 'square', 0.035);
+  else if (kind === 'pop') beep(500, 0.09, 'triangle', 0.09, 900);
+  else if (kind === 'gem') beep(880, 0.12, 'triangle', 0.08, 1320);
+  else if (kind === 'orb') beep(660, 0.1, 'sine', 0.1, 990);
+  else if (kind === 'fire') beep(220, 0.08, 'sawtooth', 0.05, 440);
+  else if (kind === 'combo') beep(700, 0.18, 'square', 0.09, 1400);
+  else if (kind === 'laser') beep(1300, 0.22, 'sawtooth', 0.07, 180);
+  else if (kind === 'bomb') beep(90, 0.3, 'sawtooth', 0.14, 40);
+  else if (kind === 'perk'){ beep(523, 0.1, 'square', 0.07); beep(784, 0.16, 'square', 0.07, 1046); }
+  else if (kind === 'perkOffer') beep(440, 0.12, 'triangle', 0.07, 660);
+  else if (kind === 'over') beep(300, 0.6, 'sawtooth', 0.12, 60);
+  else if (kind === 'buy') beep(600, 0.1, 'square', 0.08, 900);
+  else if (kind === 'click') beep(440, 0.05, 'square', 0.05);
+}
+function buzz(ms){ try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+// ---- screens / phases outside the run --------------------------------------
+let screen = 'menu';        // menu | game | shop
+let toast = null;           // {str, t}
+function toMenu(){ screen = 'menu'; }
+function startGame(){
+  const bonus = dailyBonus();
+  if (bonus) toast = { str: '🔥 Day ' + meta.streak + ' streak! +' + bonus + ' 💎', t: 3 };
+  newRun();
+  screen = 'game';
+  sfx('click');
+}
+
+// ---- layout / input --------------------------------------------------------
+let scale = 1, offX = 0, offY = 0;
+function fit(){
+  const vw = window.innerWidth || W, vh = window.innerHeight || H;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = vw * dpr; canvas.height = vh * dpr;
+  canvas.style.width = vw + 'px'; canvas.style.height = vh + 'px';
+  scale = Math.min(vw / W, vh / H) * dpr;
+  offX = (vw * dpr - W * scale) / 2;
+  offY = (vh * dpr - H * scale) / 2;
+}
+function toWorld(e){
+  const r = canvas.getBoundingClientRect();
+  const dpr = canvas.width / (r.width || 1);
+  return { x: ((e.clientX - r.left) * dpr - offX) / scale,
+           y: ((e.clientY - r.top) * dpr - offY) / scale };
+}
+
+let UI = [];                // rebuilt every frame by the draw pass
+function button(id, x, y, w, h){ UI.push({ id, x, y, w, h }); }
+function uiAt(x, y){
+  for (let i = UI.length - 1; i >= 0; i--){
+    const b = UI[i];
+    if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return b.id;
+  }
+  return null;
+}
+
+function uiClick(id){
+  sfx('click');
+  if (id === 'play') startGame();
+  else if (id === 'shop') screen = 'shop';
+  else if (id === 'back') screen = 'menu';
+  else if (id === 'sound'){ meta.sound = meta.sound ? 0 : 1; saveMeta(); }
+  else if (id === 'speed'){ G.timeScale = G.timeScale >= 3 ? 1 : G.timeScale + 1; }
+  else if (id === 'retry') startGame();
+  else if (id === 'menu'){ toMenu(); }
+  else if (id === 'revive') revive();
+  else if (id.startsWith('perk')){
+    const p = G.perkOffer[+id.slice(4)];
+    if (p){ applyPerk(p); G.perkOffer = null; G.phase = 'aim'; }
+  }
+  else if (id.startsWith('buy:')) buyUpgrade(id.slice(4));
+  else if (id.startsWith('skin:')){
+    const i = +id.slice(5);
+    if (skinUnlocked(i)){ meta.skin = i; saveMeta(); }
+  }
+}
+
+let pointer = { down: false, sx: 0, sy: 0, x: 0, y: 0, btn: null };
+function onDown(x, y){
+  ac() && AC && AC.state === 'suspended' && AC.resume && AC.resume();
+  pointer.down = true; pointer.sx = pointer.x = x; pointer.sy = pointer.y = y;
+  pointer.btn = uiAt(x, y);
+  if (!pointer.btn && screen === 'game' && G.phase === 'aim') G.aim = { x, y };
+}
+function onMove(x, y){
+  if (!pointer.down) return;
+  pointer.x = x; pointer.y = y;
+  if (G && G.aim) { G.aim.x = x; G.aim.y = y; }
+}
+function onUp(x, y){
+  pointer.down = false;
+  const btn = uiAt(x, y);
+  if (pointer.btn && btn === pointer.btn){ pointer.btn = null; if (G) G.aim = null; uiClick(btn); return; }
+  pointer.btn = null;
+  if (screen === 'game' && G.phase === 'aim' && G.aim){
+    const dx = x - G.launchX, dy = y - (LAUNCH_Y - BALL_R);
+    G.aim = null;
+    fireVolley(dx, dy);
+  }
+}
+canvas.addEventListener('pointerdown', e => { e.preventDefault(); const p = toWorld(e); onDown(p.x, p.y); }, { passive: false });
+canvas.addEventListener('pointermove', e => { e.preventDefault(); const p = toWorld(e); onMove(p.x, p.y); }, { passive: false });
+canvas.addEventListener('pointerup',   e => { e.preventDefault(); const p = toWorld(e); onUp(p.x, p.y); }, { passive: false });
+canvas.addEventListener('pointercancel', () => { pointer.down = false; pointer.btn = null; if (G) G.aim = null; });
+window.addEventListener('resize', fit);
+
+// ---- update ----------------------------------------------------------------
+function update(dt){
+  if (toast){ toast.t -= dt; if (toast.t <= 0) toast = null; }
+  if (!G || screen !== 'game') return;
+  G.dangerPulse += dt * 5;
+  if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 40);
+  if (G.phase === 'fly'){
+    G.flyT += dt;
+    const steps = G.timeScale;
+    for (let i = 0; i < steps && G.phase === 'fly'; i++) stepPhysics(dt);
+  }
+  for (let i = G.parts.length - 1; i >= 0; i--){
+    const p = G.parts[i];
+    p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 300 * dt;
+    if (p.t >= p.life) G.parts.splice(i, 1);
+  }
+  for (let i = G.texts.length - 1; i >= 0; i--){
+    const t = G.texts[i];
+    t.t += dt; t.y -= 30 * dt;
+    if (t.t >= t.life) G.texts.splice(i, 1);
+  }
+  for (let i = G.beams.length - 1; i >= 0; i--){
+    G.beams[i].t -= dt;
+    if (G.beams[i].t <= 0) G.beams.splice(i, 1);
+  }
+  for (const b of G.bricks) if (b.flash) b.flash = Math.max(0, b.flash - dt * 6);
+}
+
+// ---- draw ------------------------------------------------------------------
+const cx = b => b.col * CELL + CELL / 2;
+const cy = b => GY + b.row * CELL + CELL / 2;
+function fmt(n){
+  if (n >= 1e6) return (n / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'm';
+  if (n >= 1e4) return Math.floor(n / 1e3) + 'k';
+  return '' + Math.floor(n);
+}
+function brickColor(b){
+  if (b.bomb) return '#ff7b00';
+  const hue = (200 + b.hp * 6) % 360;
+  return 'hsl(' + hue + ',85%,60%)';
+}
+function rr(x, y, w, h, r){
+  ctx.beginPath();
+  if (ctx.roundRect) ctx.roundRect(x, y, w, h, r); else ctx.rect(x, y, w, h);
+}
+
+function drawBtn(id, x, y, w, h, label, color, size){
+  button(id, x, y, w, h);
+  ctx.fillStyle = color || '#22224a';
+  rr(x, y, w, h, 14); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = '#fff';
+  ctx.font = '700 ' + (size || 20) + 'px system-ui,sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(label, x + w / 2, y + h / 2 + 1);
+}
+
+function drawBg(){
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  const g = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  g.addColorStop(0, '#101030'); g.addColorStop(1, '#080814');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function draw(){
+  UI = [];
+  drawBg();
+  let shx = 0, shy = 0;
+  if (G && G.shake > 0.3){ shx = (rand() - 0.5) * G.shake; shy = (rand() - 0.5) * G.shake; }
+  ctx.setTransform(scale, 0, 0, scale, offX + shx * scale, offY + shy * scale);
+  if (screen === 'menu') drawMenu();
+  else if (screen === 'shop') drawShop();
+  else drawGame();
+  if (toast){
+    ctx.globalAlpha = Math.min(1, toast.t);
+    ctx.fillStyle = '#22224a'; rr(W / 2 - 150, 130, 300, 44, 22); ctx.fill();
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.fillStyle = '#ffd166'; ctx.font = '700 17px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(toast.str, W / 2, 152);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawMenu(){
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '900 58px system-ui,sans-serif';
+  ctx.fillStyle = '#ffd166';
+  ctx.fillText('BALLISTIC', W / 2, 170);
+  ctx.font = '600 17px system-ui,sans-serif';
+  ctx.fillStyle = '#8888bb';
+  ctx.fillText('one more volley.', W / 2, 212);
+  ctx.fillStyle = '#fff';
+  ctx.font = '700 20px system-ui,sans-serif';
+  ctx.fillText('🏆 Best ' + fmt(meta.best) + '   ·   wave ' + meta.bestWave, W / 2, 280);
+  if (meta.streak > 1){
+    ctx.fillStyle = '#ff7b00';
+    ctx.fillText('🔥 ' + meta.streak + ' day streak', W / 2, 316);
+  }
+  ctx.fillStyle = '#8be9ff';
+  ctx.fillText('💎 ' + fmt(meta.gems), W / 2, meta.streak > 1 ? 352 : 316);
+  drawBtn('play', W / 2 - 120, 420, 240, 72, '▶  PLAY', '#e0356e', 28);
+  drawBtn('shop', W / 2 - 120, 512, 240, 56, '💎 UPGRADES', '#22224a');
+  drawBtn('sound', W - 70, H - 70, 50, 50, meta.sound ? '🔊' : '🔇', '#22224a');
+  // ball skin picker
+  ctx.font = '600 14px system-ui,sans-serif';
+  ctx.fillStyle = '#8888bb';
+  ctx.fillText('ball trail — unlock with best score', W / 2, 606);
+  const n = SKINS.length, bw = 52, x0 = W / 2 - (n * bw) / 2;
+  for (let i = 0; i < n; i++){
+    const x = x0 + i * bw + bw / 2, y = 646;
+    button('skin:' + i, x - 22, y - 22, 44, 44);
+    ctx.beginPath(); ctx.arc(x, y, 15, 0, Math.PI * 2);
+    ctx.fillStyle = skinUnlocked(i) ? SKINS[i].c : '#333350';
+    ctx.fill();
+    if (meta.skin === i){ ctx.strokeStyle = '#fff'; ctx.lineWidth = 3; ctx.stroke(); }
+    if (!skinUnlocked(i)){
+      ctx.fillStyle = '#666688'; ctx.font = '600 10px system-ui,sans-serif';
+      ctx.fillText(fmt(SKINS[i].need), x, y + 26);
+    }
+  }
+}
+
+function drawShop(){
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = '900 34px system-ui,sans-serif';
+  ctx.fillStyle = '#ffd166';
+  ctx.fillText('UPGRADES', W / 2, 90);
+  ctx.font = '700 22px system-ui,sans-serif';
+  ctx.fillStyle = '#8be9ff';
+  ctx.fillText('💎 ' + fmt(meta.gems), W / 2, 132);
+  let y = 190;
+  for (const u of UPGRADES){
+    const lvl = meta.up[u.id] || 0, maxed = lvl >= u.max;
+    ctx.fillStyle = '#181838'; rr(30, y, W - 60, 86, 16); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.textAlign = 'left';
+    ctx.font = '700 19px system-ui,sans-serif'; ctx.fillStyle = '#fff';
+    ctx.fillText(u.icon + ' ' + u.name, 50, y + 28);
+    ctx.font = '500 14px system-ui,sans-serif'; ctx.fillStyle = '#9999cc';
+    ctx.fillText(u.desc, 50, y + 54);
+    // level pips
+    for (let i = 0; i < u.max; i++){
+      ctx.fillStyle = i < lvl ? '#ffd166' : '#333355';
+      ctx.beginPath(); ctx.arc(56 + i * 16, y + 72, 5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.textAlign = 'center';
+    if (maxed){
+      ctx.font = '700 16px system-ui,sans-serif'; ctx.fillStyle = '#ffd166';
+      ctx.fillText('MAX', W - 90, y + 43);
+    } else {
+      const c = u.cost(lvl), can = meta.gems >= c;
+      drawBtn('buy:' + u.id, W - 140, y + 20, 100, 46, '💎 ' + fmt(c), can ? '#2a6f4e' : '#333350', 16);
+    }
+    y += 102;
+  }
+  drawBtn('back', W / 2 - 90, y + 14, 180, 54, '← BACK', '#22224a');
+}
+
+function drawGame(){
+  const skin = SKINS[meta.skin] || SKINS[0];
+  // HUD
+  ctx.textBaseline = 'middle';
+  ctx.font = '700 17px system-ui,sans-serif';
+  ctx.textAlign = 'left'; ctx.fillStyle = '#9999cc';
+  ctx.fillText('WAVE ' + G.wave, 16, 34);
+  ctx.textAlign = 'right'; ctx.fillStyle = '#8be9ff';
+  ctx.fillText('💎 ' + fmt(meta.gems), W - 16, 34);
+  ctx.textAlign = 'center';
+  ctx.font = '900 34px system-ui,sans-serif'; ctx.fillStyle = '#fff';
+  ctx.fillText(fmt(G.score), W / 2, 44);
+  ctx.font = '600 12px system-ui,sans-serif'; ctx.fillStyle = '#666699';
+  ctx.fillText('best ' + fmt(meta.best), W / 2, 74);
+
+  // grid area frame + danger line
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+  ctx.strokeRect(0.5, GY + 0.5, W - 1, ROWS * CELL - 1);
+  const danger = G.bricks.some(b => b.row >= ROWS - 1);
+  ctx.strokeStyle = danger ? 'rgba(255,60,80,' + (0.55 + 0.45 * Math.sin(G.dangerPulse)) + ')' : 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = danger ? 3 : 1;
+  ctx.setLineDash([8, 8]);
+  ctx.beginPath(); ctx.moveTo(0, LAUNCH_Y); ctx.lineTo(W, LAUNCH_Y); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // bricks
+  for (const b of G.bricks){
+    const x = b.col * CELL + 3, y = GY + b.row * CELL + 3, s = CELL - 6;
+    ctx.fillStyle = brickColor(b);
+    rr(x, y, s, s, 10); ctx.fill();
+    if (b.flash > 0){ ctx.fillStyle = 'rgba(255,255,255,' + (b.flash * 0.7) + ')'; rr(x, y, s, s, 10); ctx.fill(); }
+    if (b.row === ROWS - 1){
+      ctx.strokeStyle = 'rgba(255,60,80,' + (0.5 + 0.5 * Math.sin(G.dangerPulse)) + ')';
+      ctx.lineWidth = 3; rr(x, y, s, s, 10); ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.font = '800 ' + (b.hp >= 1000 ? 16 : 20) + 'px system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(b.bomb ? '💥' : fmt(b.hp), x + s / 2, y + s / 2 + 1);
+  }
+
+  // items
+  for (const it of G.items){
+    const x = it.col * CELL + CELL / 2, y = GY + it.row * CELL + CELL / 2;
+    const pulse = 1 + 0.08 * Math.sin(G.dangerPulse * 1.4 + it.col);
+    if (it.type === 'orb'){
+      ctx.strokeStyle = '#8be9ff'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(x, y, 14 * pulse, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = '#8be9ff';
+      ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+    } else {
+      const icon = { gem: '💎', star: '⭐', laserH: '↔️', laserV: '↕️' }[it.type] || '?';
+      ctx.font = (22 * pulse) + 'px system-ui,sans-serif'; ctx.textAlign = 'center';
+      ctx.fillText(icon, x, y + 1);
+    }
+  }
+
+  // laser beams
+  for (const bm of G.beams){
+    ctx.fillStyle = 'rgba(139,233,255,' + (bm.t * 3) + ')';
+    if (bm.h) ctx.fillRect(0, GY + bm.row * CELL + CELL / 2 - 6, W, 12);
+    else ctx.fillRect(bm.col * CELL + CELL / 2 - 6, GY, 12, ROWS * CELL);
+  }
+
+  // particles
+  for (const p of G.parts){
+    ctx.globalAlpha = 1 - p.t / p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // balls + trails
+  for (const ball of G.balls){
+    for (let i = 0; i < ball.trail.length; i += 2){
+      ctx.globalAlpha = 0.05 + (i / ball.trail.length) * 0.25;
+      ctx.fillStyle = skin.glow;
+      ctx.beginPath(); ctx.arc(ball.trail[i], ball.trail[i + 1], BALL_R * 0.8, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = skin.c;
+    ctx.beginPath(); ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // launcher + aim guide
+  if (G.phase === 'aim' || G.phase === 'perk'){
+    ctx.fillStyle = skin.c;
+    ctx.beginPath(); ctx.arc(G.launchX, LAUNCH_Y - BALL_R, BALL_R + 1, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#fff'; ctx.font = '700 15px system-ui,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('×' + G.ballCount, G.launchX, LAUNCH_Y + 20);
+  }
+  if (G.phase === 'aim' && G.aim){
+    const dx = G.aim.x - G.launchX, dy = G.aim.y - (LAUNCH_Y - BALL_R);
+    const len = Math.hypot(dx, dy);
+    if (len > 8 && dy < -0.08 * len){
+      let nx = dx / len, ny = dy / len;
+      // dotted guide with one wall-bounce preview
+      let px = G.launchX, py = LAUNCH_Y - BALL_R, vx = nx, vy = ny, total = 560;
+      ctx.fillStyle = 'rgba(255,255,255,0.8)';
+      let step = 22;
+      for (let d = 0; d < total; d += step){
+        px += vx * step; py += vy * step;
+        if (px < BALL_R){ px = BALL_R; vx = Math.abs(vx); }
+        if (px > W - BALL_R){ px = W - BALL_R; vx = -Math.abs(vx); }
+        if (py < GY + BALL_R) break;
+        ctx.globalAlpha = 1 - d / total;
+        ctx.beginPath(); ctx.arc(px, py, 3.5, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+  if (G.phase === 'aim' && G.wave <= 1){
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    ctx.font = '600 17px system-ui,sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('drag to aim ✦ release to fire', W / 2, LAUNCH_Y + 64);
+  }
+
+  // floating texts
+  for (const t of G.texts){
+    ctx.globalAlpha = 1 - t.t / t.life;
+    ctx.fillStyle = t.color;
+    ctx.font = '900 ' + t.size + 'px system-ui,sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t.str, t.x, t.y);
+  }
+  ctx.globalAlpha = 1;
+
+  // fly-phase controls: combo counter + fast forward
+  if (G.phase === 'fly'){
+    if (G.combo >= 2){
+      ctx.fillStyle = '#ffd166'; ctx.font = '900 22px system-ui,sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText('×' + G.combo, 18, LAUNCH_Y + 44);
+    }
+    drawBtn('speed', W - 108, LAUNCH_Y + 22, 92, 46, '▶▶ ×' + G.timeScale, G.timeScale > 1 ? '#e0356e' : '#22224a', 17);
+  }
+
+  if (G.phase === 'perk') drawPerkOverlay();
+  if (G.phase === 'over') drawOver();
+}
+
+function drawPerkOverlay(){
+  ctx.fillStyle = 'rgba(8,8,20,0.82)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffd166'; ctx.font = '900 30px system-ui,sans-serif';
+  ctx.fillText('WAVE ' + G.wave + ' — PICK ONE', W / 2, 160);
+  const offer = G.perkOffer || [];
+  for (let i = 0; i < offer.length; i++){
+    const p = offer[i], y = 220 + i * 130;
+    button('perk' + i, 40, y, W - 80, 110);
+    ctx.fillStyle = '#1c1c40'; rr(40, y, W - 80, 110, 18); ctx.fill();
+    ctx.strokeStyle = '#ffd166'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.font = '34px system-ui,sans-serif';
+    ctx.fillText(p.icon, 88, y + 55);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#fff'; ctx.font = '800 21px system-ui,sans-serif';
+    ctx.fillText(p.name, 140, y + 40);
+    ctx.fillStyle = '#9999cc'; ctx.font = '500 15px system-ui,sans-serif';
+    ctx.fillText(p.desc, 140, y + 70);
+    ctx.textAlign = 'center';
+  }
+}
+
+function drawOver(){
+  ctx.fillStyle = 'rgba(8,8,20,0.88)';
+  ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ff5570'; ctx.font = '900 44px system-ui,sans-serif';
+  ctx.fillText('GAME OVER', W / 2, 150);
+  if (G.newBest){
+    ctx.fillStyle = '#ffd166'; ctx.font = '900 26px system-ui,sans-serif';
+    ctx.fillText('★ NEW BEST! ★', W / 2, 198);
+  }
+  ctx.fillStyle = '#fff'; ctx.font = '900 52px system-ui,sans-serif';
+  ctx.fillText(fmt(G.score), W / 2, 268);
+  ctx.font = '600 18px system-ui,sans-serif'; ctx.fillStyle = '#9999cc';
+  ctx.fillText('wave ' + G.wave + '  ·  best combo ×' + G.bestCombo, W / 2, 312);
+  ctx.fillStyle = '#8be9ff';
+  ctx.fillText('+' + fmt(G.runGems) + ' 💎 this run', W / 2, 344);
+  let y = 400;
+  if (!G.revived){
+    const can = meta.gems >= REVIVE_COST;
+    drawBtn('revive', W / 2 - 130, y, 260, 62,
+      '💖 REVIVE — 💎 ' + REVIVE_COST, can ? '#2a6f4e' : '#333350', 20);
+    y += 82;
+  }
+  drawBtn('retry', W / 2 - 130, y, 260, 66, '↻  ONE MORE RUN', '#e0356e', 22);
+  drawBtn('menu', W / 2 - 90, y + 86, 180, 50, 'MENU', '#22224a', 17);
+  // local top runs
+  const top = meta.topRuns || [];
+  if (top.length){
+    ctx.fillStyle = '#666699'; ctx.font = '600 13px system-ui,sans-serif';
+    let ty = y + 168;
+    ctx.fillText('— your top runs —', W / 2, ty);
+    for (let i = 0; i < top.length && i < 3; i++){
+      ty += 22;
+      ctx.fillStyle = i === 0 ? '#ffd166' : '#9999cc';
+      ctx.fillText((i + 1) + '.  ' + fmt(top[i].score) + '  (wave ' + top[i].wave + ')', W / 2, ty);
+    }
+  }
+}
+
+// ---- main loop --------------------------------------------------------------
+let lastT = 0;
+function loop(t){
+  requestAnimationFrame(loop);
+  const dt = clamp((t - lastT) / 1000 || 0.016, 0, 0.05);
+  lastT = t;
+  update(dt);
+  draw();
+}
+
+fit();
+loadMeta();
+toMenu();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
