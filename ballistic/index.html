@@ -31,6 +31,7 @@ const BALL_SPD = 820;                 // units/sec
 const VOLLEY_GAP = 0.065;             // sec between balls leaving the launcher
 const PERK_EVERY = 5;                 // waves between perk offers
 const REVIVE_COST = 75;               // gems, once per run
+const ENERGY_MAX = 100;               // active-ability meter cap
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -122,7 +123,51 @@ const PERKS = [
   { id:'gemx',   name:'Gems ×2',      desc:'double gem pickups',       icon:'💎', apply:g => { g.gemMul *= 2; } },
   { id:'shrink', name:'Shrink Ray',   desc:'all bricks lose 30% HP',   icon:'🌀', apply:g => { for (const b of g.bricks) b.hp = Math.max(1, Math.ceil(b.hp * 0.7)); } },
   { id:'lucky',  name:'Lucky Drops',  desc:'+50% bonus item spawns',   icon:'🍀', apply:g => { g.luck *= 1.5; } },
+  { id:'charge', name:'Power Cell',   desc:'refill your energy now',   icon:'🔋', apply:g => { addEnergy(ENERGY_MAX); } },
+  { id:'effic',  name:'Efficient',    desc:'abilities cost 25% less',  icon:'♻️', apply:g => { g.abilityMul *= 0.75; } },
+  { id:'siphon', name:'Energy Siphon',desc:'+50% energy per kill',     icon:'🌊', apply:g => { g.energyMul *= 1.5; } },
 ];
+
+// ---- ACTIVE ABILITIES — the "more to do" layer -----------------------------
+// A meter charges as you break bricks; between volleys you tap to spend it.
+// Every turn becomes a decision: nuke now, freeze for breathing room, or bank
+// energy for an Overcharged volley that doubles damage and pierces.
+const ABILITIES = [
+  { id:'blast',  name:'Blast',      icon:'💥', cost:40,
+    desc:'obliterate the bottom row',
+    cast:g => {
+      if (!g.bricks.length) return;
+      const maxRow = Math.max(...g.bricks.map(b => b.row));
+      g.flash = 0.7; g.flashCol = '#ff7b00'; g.shake = Math.max(g.shake, 14); buzz(60);
+      const heavy = Math.ceil(brickHp(g.wave) * 1.5) + g.power * 4;
+      for (const b of g.bricks.slice()){
+        if (b.row === maxRow) killBrick(b);                 // wipe the front line outright
+        else if (b.row === maxRow - 1){ b.hp -= heavy; b.flash = 1; if (b.hp <= 0) killBrick(b); }
+      }
+      ringFx(W / 2, GY + maxRow * CELL + CELL / 2, '#ff7b00', 260);
+    } },
+  { id:'freeze', name:'Freeze',     icon:'❄️', cost:30,
+    desc:'skip the next descent',
+    cast:g => { g.freeze = true; addText(W / 2, GY + 130, '❄ FROZEN ❄', '#8be9ff', 26); ringFx(W / 2, LAUNCH_Y - CELL, '#8be9ff', 200); } },
+  { id:'over',   name:'Overcharge', icon:'⚡', cost:55,
+    desc:'next volley: 2× dmg + pierce',
+    cast:g => { g.overcharge = true; addText(g.launchX, LAUNCH_Y - 40, '⚡ CHARGED', '#ffd166', 20); } },
+];
+const abilityCost = ab => Math.ceil(ab.cost * (G.abilityMul || 1));
+
+function addEnergy(n){ G.energy = clamp(G.energy + n, 0, ENERGY_MAX); }
+
+function castAbility(id){
+  if (!G || G.phase !== 'aim') return false;
+  const ab = ABILITIES.find(a => a.id === id);
+  if (!ab) return false;
+  const cost = abilityCost(ab);
+  if (G.energy < cost) return false;
+  G.energy -= cost;
+  ab.cast(G);
+  sfx('perk'); buzz(30);
+  return true;
+}
 function offerPerks(){
   const pool = PERKS.filter(p => !(p.once && G.perksTaken.includes(p.id)));
   const offer = [];
@@ -150,6 +195,8 @@ function newRun(){
     ballCount: 1 + (meta.up.balls || 0),
     power: 1 + (meta.up.power || 0),
     pierce: false, crit: 0, boom: 0, gemMul: 1, luck: 1,
+    energy: 0, energyMul: 1, abilityMul: 1, freeze: false, overcharge: false,
+    volleyDmg: 1, volleyPierce: false, perfects: 0,
     launchX: W / 2, nextX: null, queue: 0, queueT: 0, firstBall: true,
     aim: null, timeScale: 1, flyT: 0,
     perkOffer: null, perksTaken: [],
@@ -265,6 +312,7 @@ function killBrick(b){
   G.score += b.max;
   G.combo++;
   G.scorePunch = 1;
+  addEnergy((2 + Math.min(6, Math.floor(G.combo / 4))) * (G.energyMul || 1));   // combos charge faster
   if (G.combo > G.bestCombo) G.bestCombo = G.combo;
   boomFx(cx(b), cy(b), brickColor(b), b.bomb ? 26 : 12);
   shatterFx(b);
@@ -331,6 +379,10 @@ function fireVolley(dx, dy){
   G.queue = G.ballCount; G.queueT = 0;
   G.balls = []; G.nextX = null; G.firstBall = true;
   G.combo = 0; G.flyT = 0;
+  // Overcharge (spent this shot): the whole volley hits for 2× and pierces.
+  G.volleyDmg = G.power * (G.overcharge ? 2 : 1);
+  G.volleyPierce = G.pierce || G.overcharge;
+  G.overcharge = false;
   G.phase = 'fly';
   sfx('fire');
   return true;
@@ -383,8 +435,8 @@ function collideBricks(ball){
     if (ddx * ddx + ddy * ddy > BALL_R * BALL_R) continue;
     if (ball.lastHit === b.id) continue;             // no double-tick on one contact
     ball.lastHit = b.id;
-    const killed = damageBrick(b, G.power, ball.x, ball.y);
-    if (killed && G.pierce) return;                  // smash through
+    const killed = damageBrick(b, G.volleyDmg, ball.x, ball.y);
+    if (killed && G.volleyPierce) return;            // smash through
     // reflect off the axis of least penetration
     const penX = BALL_R - Math.abs(ddx), penY = BALL_R - Math.abs(ddy);
     if (Math.abs(ddx) > Math.abs(ddy)){
@@ -411,8 +463,22 @@ function endVolley(){
   if (G.combo >= 5) G.score += G.combo * Math.ceil(G.wave / 2);
   if (G.nextX != null) G.launchX = G.nextX;
   G.timeScale = 1;
-  descend();
-  if (checkOver()){ gameOver(); return; }
+  // Perfect clear: emptied the whole board in one volley — big payoff.
+  if (G.bricks.length === 0){
+    G.perfects++;
+    const bonus = addGems(3 + G.wave);
+    addEnergy(30);
+    G.score += 25 * G.wave;
+    addText(W / 2, GY + 130, 'PERFECT! +' + fmt(bonus) + '💎', '#ffd166', 30);
+    G.flash = 0.8; G.flashCol = '#8be9ff'; G.shake = Math.max(G.shake, 10);
+    sfx('combo'); buzz(60);
+  }
+  // Freeze ability: consume it to skip this turn's descent.
+  if (G.freeze){ G.freeze = false; }
+  else {
+    descend();
+    if (checkOver()){ gameOver(); return; }
+  }
   spawnWave();
   if (doubleWave(G.wave)){                     // surge wave: two rows at once
     descend();
@@ -550,6 +616,7 @@ function uiClick(id){
     const p = G.perkOffer[+id.slice(4)];
     if (p){ applyPerk(p); G.perkOffer = null; G.phase = 'aim'; }
   }
+  else if (id.startsWith('ability:')) castAbility(id.slice(8));
   else if (id.startsWith('buy:')) buyUpgrade(id.slice(4));
   else if (id.startsWith('skin:')){
     const i = +id.slice(5);
@@ -1042,10 +1109,10 @@ function drawGame(){
       ctx.globalCompositeOperation = 'source-over';
     }
   }
-  if (G.phase === 'aim' && G.wave <= 1){
-    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+  if (G.phase === 'aim' && G.wave <= 1 && !G.aim){
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
     ctx.font = '600 17px system-ui,sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText('drag to aim ✦ release to fire', W / 2, LAUNCH_Y + 64);
+    ctx.fillText('drag to aim ✦ release to fire', W / 2, GY + ROWS * CELL * 0.6);
   }
 
   // floating texts
@@ -1077,7 +1144,8 @@ function drawGame(){
   ctx.font = '600 12px system-ui,sans-serif'; ctx.fillStyle = '#666699';
   ctx.fillText('best ' + fmt(meta.best), W / 2, 74);
 
-  // fly-phase controls: combo counter + fast forward
+  // launcher-zone controls: abilities while aiming, combo + fast-forward in flight
+  if (G.phase === 'aim') drawAbilityBar(skin);
   if (G.phase === 'fly'){
     if (G.combo >= 2){
       ctx.fillStyle = '#ffd166'; ctx.font = '900 22px system-ui,sans-serif'; ctx.textAlign = 'left';
@@ -1097,6 +1165,50 @@ function drawGame(){
 
   if (G.phase === 'perk') drawPerkOverlay();
   if (G.phase === 'over') drawOver();
+}
+
+// active-ability dock: energy meter + three tappable powers, drawn in the
+// launcher zone during the aim phase
+function drawAbilityBar(skin){
+  const bx = 16, bw = W - 32, by = 684, bh = 9;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#8be9ff'; ctx.font = '700 11px system-ui,sans-serif';
+  ctx.fillText('⚡ ENERGY  ' + Math.floor(G.energy) + ' / ' + ENERGY_MAX, W / 2, by - 9);
+  ctx.fillStyle = 'rgba(255,255,255,0.10)'; rr(bx, by, bw, bh, 4); ctx.fill();
+  const frac = clamp(G.energy / ENERGY_MAX, 0, 1);
+  if (frac > 0){
+    ctx.save(); rr(bx, by, bw, bh, 4); ctx.clip();
+    const eg = ctx.createLinearGradient(bx, 0, bx + bw, 0);
+    eg.addColorStop(0, '#2f9dff'); eg.addColorStop(1, '#8be9ff');
+    ctx.fillStyle = eg; ctx.fillRect(bx, by, bw * frac, bh);
+    ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.4 + 0.25 * Math.sin(animT * 4);
+    ctx.fillStyle = '#eaffff'; ctx.fillRect(bx + bw * frac - 4, by, 4, bh);
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    ctx.restore();
+  }
+  const n = ABILITIES.length, gap = 9, w = (bw - (n - 1) * gap) / n, y = 700, h = 62;
+  for (let i = 0; i < n; i++){
+    const ab = ABILITIES[i], x = bx + i * (w + gap);
+    const cost = abilityCost(ab), ready = G.energy >= cost;
+    button('ability:' + ab.id, x, y, w, h);
+    ctx.fillStyle = ready ? '#183456' : '#1c1c34';
+    rr(x, y, w, h, 13); ctx.fill();
+    ctx.strokeStyle = ready ? '#8be9ff' : 'rgba(255,255,255,0.10)'; ctx.lineWidth = ready ? 2 : 1.5; ctx.stroke();
+    if (ready){
+      ctx.globalCompositeOperation = 'lighter'; ctx.globalAlpha = 0.2 + 0.14 * Math.sin(animT * 4 + i);
+      ctx.drawImage(glowSprite('#8be9ff'), x + w / 2 - 32, y + h / 2 - 32, 64, 64);
+      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+    }
+    ctx.globalAlpha = ready ? 1 : 0.45;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '21px system-ui,sans-serif';
+    ctx.fillText(ab.icon, x + w / 2, y + 18);
+    ctx.font = '700 12px system-ui,sans-serif'; ctx.fillStyle = ready ? '#fff' : '#8888aa';
+    ctx.fillText(ab.name, x + w / 2, y + 38);
+    ctx.font = '700 11px system-ui,sans-serif'; ctx.fillStyle = ready ? '#ffd166' : '#8888aa';
+    ctx.fillText('⚡' + cost, x + w / 2, y + 52);
+    ctx.globalAlpha = 1;
+  }
 }
 
 function drawPerkOverlay(){
