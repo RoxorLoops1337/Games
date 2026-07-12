@@ -537,6 +537,35 @@ nav.tabbar button:active .tabicon{transform:scale(.88);}
 .missing-grid{display:grid; grid-template-columns:repeat(5,1fr); gap:8px; padding-bottom:20px;}
 .missing-grid .pocket{padding:3px;}
 
+/* ---- binder page-turn (3D flip) ---- */
+.binder-book{position:relative; perspective:1700px; touch-action:pan-y; margin-top:10px;}
+.binder-book .binder-page{margin-top:0;}
+.flip-leaf{
+  position:absolute; top:0; left:0; right:0; z-index:6;
+  transform-origin:left center; transform-style:preserve-3d; will-change:transform;
+  box-shadow:0 14px 30px rgba(60,40,15,.22);
+}
+.flip-face{
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  border-radius:14px; overflow:hidden;
+  backface-visibility:hidden; -webkit-backface-visibility:hidden;
+}
+.flip-front .binder-page{height:100%; box-sizing:border-box;}
+.flip-shade{
+  position:absolute; inset:0; opacity:0; pointer-events:none; border-radius:14px;
+  background:linear-gradient(100deg, rgba(20,12,4,.42), rgba(20,12,4,0) 62%);
+}
+/* the back of the leaf: a plain stock sheet with a gutter shadow along the spine */
+.flip-back{
+  transform:rotateY(180deg);
+  background:
+    linear-gradient(270deg, rgba(20,12,4,.16), rgba(20,12,4,0) 34%),
+    repeating-linear-gradient(45deg, var(--surface) 0 11px, var(--surface-2) 11px 22px);
+  border:1px solid var(--line);
+}
+.flip-spine{position:absolute; top:0; bottom:0; right:0; width:14px; background:linear-gradient(270deg, rgba(20,12,4,.22), rgba(20,12,4,0));}
+@media (prefers-reduced-motion: reduce){ .flip-leaf{transition:none !important;} }
+
 /* ---- school ---- */
 .npc-head{display:flex; align-items:center; gap:10px; margin-bottom:4px;}
 .npc-head h2{margin:0;}
@@ -2967,6 +2996,14 @@ function pocketHTML(c, rec, isNew){
   '</div>';
 }
 
+// Build just the 9-pocket grid contents for one page (used by the flip animation
+// so it can render the incoming/outgoing pages independently of the live render).
+function buildBinderPageHTML(pageIndex){
+  return pageCards(pageIndex).map(function(c){
+    return pocketHTML(c, save.collection[c.id], !!(save.newCards && save.newCards[c.id]));
+  }).join('');
+}
+
 function renderBinder(){
   var el = $('screen-binder');
   if (!el) return;
@@ -2997,8 +3034,10 @@ function renderBinder(){
       rewardStrip = '<div class="smallnote page-reward">' + ownedOnPage + '/' + cardsOnPage.length + ' on this page &mdash; fill it for +' + PAGE_REWARD + ' coins</div>';
     }
     body =
-      '<div class="binder-page">' +
-        cardsOnPage.map(function(c){ return pocketHTML(c, save.collection[c.id], !!(save.newCards && save.newCards[c.id])); }).join('') +
+      '<div class="binder-book" id="binder-book">' +
+        '<div class="binder-page" id="bpage">' +
+          cardsOnPage.map(function(c){ return pocketHTML(c, save.collection[c.id], !!(save.newCards && save.newCards[c.id])); }).join('') +
+        '</div>' +
       '</div>' +
       rewardStrip +
       '<div class="binder-nav">' +
@@ -3037,9 +3076,10 @@ function renderBinder(){
   });
   hydrateOwnerArt(el);   // swap any not-yet-cached pockets to painted PNG art
   var prev = $('btn-page-prev');
-  if (prev) prev.addEventListener('click', function(){ sfxClick(); binderPage--; renderBinder(); });
+  if (prev) prev.addEventListener('click', function(){ requestBinderFlip(1); });
   var next = $('btn-page-next');
-  if (next) next.addEventListener('click', function(){ sfxClick(); binderPage++; renderBinder(); });
+  if (next) next.addEventListener('click', function(){ requestBinderFlip(-1); });
+  setupBinderFlip();
   el.querySelectorAll('.pocket.owned').forEach(function(slotEl){
     slotEl.addEventListener('click', function(){ sfxClick(); openCardModal(slotEl.getAttribute('data-id')); });
   });
@@ -3064,6 +3104,118 @@ function renderBinder(){
       if (pageEl) burstConfetti(pageEl, 'ultrarare');
     }
   });
+}
+
+// Programmatic flip entry point for the Prev/Next buttons. dir<0 = forward (to a
+// higher page number), dir>0 = back. Falls back to an instant page swap if the
+// interactive book isn't mounted (e.g. reduced-motion or missing DOM).
+function requestBinderFlip(dir){
+  var book = $('binder-book');
+  if (book && typeof book.__flip === 'function') book.__flip(dir);
+  else { binderPage += (dir < 0 ? 1 : -1); renderBinder(); }
+}
+
+// Interactive 3D page-turn for the binder. Drag horizontally across the page and
+// the leaf lifts and rotates around the spine (left edge), following your finger;
+// past vertical the shaded back of the page shows. Release past a third of the way
+// to complete the turn, otherwise it springs back. The Prev/Next buttons drive the
+// same animation via book.__flip(). All presentation — the underlying page model
+// (binderPage / pageCards) is untouched.
+function setupBinderFlip(){
+  var book = $('binder-book');
+  if (!book) return;
+  var totalPages = Math.ceil(CORE_SET.length / PAGE_SIZE);
+  var reduce = false;
+  try { reduce = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); } catch (e) {}
+
+  var sx = 0, sy = 0, w = 1, pressed = false, decided = false, active = false, busy = false, dir = 0, leaf = null, prog = 0;
+
+  function canDir(d){ var t = binderPage + (d < 0 ? 1 : -1); return t >= 0 && t < totalPages; }
+  // Forward (d<0): leaf is the current page, turns 0 -> -180 and reveals the next
+  // page beneath. Back (d>0): leaf is the previous page, closes -180 -> 0 on top of
+  // the current page beneath.
+  function rotFor(d, p){ return d < 0 ? -p * 180 : -180 * (1 - p); }
+
+  function buildLeaf(d){
+    var beneathIdx = d < 0 ? binderPage + 1 : binderPage;
+    var leafIdx    = d < 0 ? binderPage     : binderPage - 1;
+    var page = $('bpage');
+    var h = page.getBoundingClientRect().height;
+    book.style.height = h + 'px';
+    page.innerHTML = buildBinderPageHTML(beneathIdx);   // what shows under the turning leaf
+    var el = document.createElement('div');
+    el.className = 'flip-leaf';
+    el.style.height = h + 'px';
+    el.innerHTML =
+      '<div class="flip-face flip-front"><div class="binder-page">' + buildBinderPageHTML(leafIdx) + '</div><span class="flip-shade"></span></div>' +
+      '<div class="flip-face flip-back"><span class="flip-spine"></span></div>';
+    book.appendChild(el);
+    return el;
+  }
+
+  function setRot(deg){
+    if (!leaf) return;
+    leaf.style.transform = 'rotateY(' + deg + 'deg)';
+    var sh = leaf.querySelector('.flip-shade');
+    if (sh) sh.style.opacity = String(0.5 * Math.sin(Math.min(Math.abs(deg), 180) * Math.PI / 180));   // peaks at 90deg
+  }
+
+  function settle(d, toEnd){
+    busy = true; active = false;
+    var endDeg = toEnd ? rotFor(d, 1) : rotFor(d, 0);
+    if (!leaf) { finishSettle(d, toEnd); return; }
+    leaf.style.transition = 'transform ' + (toEnd ? '.36s' : '.26s') + ' cubic-bezier(.2,.72,.28,1)';
+    leaf.getBoundingClientRect();   // reflow so the transition takes
+    setRot(endDeg);
+    var done = false;
+    var fin = function(){ if (done) return; done = true; finishSettle(d, toEnd); };
+    leaf.addEventListener('transitionend', fin, { once: true });
+    setTimeout(fin, 440);
+    if (toEnd) { try { sfxTick(); } catch (e) {} hapticPulse('tick'); }
+  }
+  function finishSettle(d, toEnd){
+    if (toEnd) binderPage += (d < 0 ? 1 : -1);
+    renderBinder();   // rebuilds the page fresh (removes the leaf, reattaches handlers, hydrates art)
+  }
+
+  // Programmatic flip for the nav buttons.
+  book.__flip = function(d){
+    if (busy || active || !canDir(d)) return;
+    if (reduce) { binderPage += (d < 0 ? 1 : -1); renderBinder(); return; }
+    dir = d; leaf = buildLeaf(d); setRot(rotFor(d, 0)); leaf.getBoundingClientRect();
+    settle(d, true);
+  };
+
+  book.addEventListener('pointerdown', function(e){
+    if (busy || active) return;
+    pressed = true; decided = false; sx = e.clientX; sy = e.clientY;
+    w = book.getBoundingClientRect().width || 1;
+  });
+  book.addEventListener('pointermove', function(e){
+    if (busy || !pressed) return;
+    if (!decided) {
+      var dx0 = e.clientX - sx, dy0 = e.clientY - sy;
+      if (Math.abs(dx0) < 8 || Math.abs(dx0) <= Math.abs(dy0)) return;   // let vertical scroll & taps through
+      decided = true;
+      dir = dx0 < 0 ? -1 : 1;
+      if (!canDir(dir)) return;   // at an edge — nothing to turn
+      if (reduce) { binderPage += (dir < 0 ? 1 : -1); renderBinder(); return; }
+      active = true;
+      leaf = buildLeaf(dir);
+      try { book.setPointerCapture(e.pointerId); } catch (err) {}
+    }
+    if (!active || !leaf) return;
+    e.preventDefault();
+    prog = Math.min(1, Math.max(0, Math.abs(e.clientX - sx) / w));
+    setRot(rotFor(dir, prog));
+  });
+  function end(){
+    pressed = false;
+    if (!active || !leaf) { decided = false; return; }
+    settle(dir, prog > 0.32);   // past a third → complete the turn, else spring back
+  }
+  book.addEventListener('pointerup', end);
+  book.addEventListener('pointercancel', end);
 }
 
 function openCardModal(id){
