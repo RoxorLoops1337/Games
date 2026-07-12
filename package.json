@@ -20,8 +20,9 @@
     "test:wildwalk": "node tests/wildwalk.test.mjs",
     "test:wwboard": "node tests/wildwalk_board.test.mjs",
     "test:collection": "node tests/the_collection.test.mjs",
+    "test:ballistic": "node tests/ballistic.test.mjs",
     "test:pusher": "node tests/coin_pusher.test.mjs",
-    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot && npm run test:horse && npm run test:wildwalk && npm run test:wwboard && npm run test:collection && npm run test:pusher"
+    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot && npm run test:horse && npm run test:wildwalk && npm run test:wwboard && npm run test:collection && npm run test:ballistic && npm run test:pusher"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",
