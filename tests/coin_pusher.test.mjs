@@ -388,6 +388,56 @@ bill.vy = 70;
 step(2);
 t.eq(S.score, s4 + MACHINES.bandit.billVal, 'a collected bill pays big');
 
+// -------- the Lucky Wheel --------
+CP.srand(43); CP.setMachine('gold');
+t.eq(CP.WHEEL.length, 8, 'the wheel has eight segments');
+S.tray.coins = 0; S.tray.items.length = 0; S.tray.prizes.length = 0;
+const wSnap = { pts: S.score, money: S.money, tray: 0, meter: S.meter, jp: S.jackpots };
+const seg = CP.spinWheel();
+t.ok(seg && seg.label, 'spin returns a segment');
+t.ok(S.score > wSnap.pts || S.money > wSnap.money || S.tray.coins > 0 || S.tray.prizes.length > 0
+     || S.meter !== wSnap.meter || S.jackpots > wSnap.jp || S.rain.some(r => r.kind === 'gem'),
+     'every wheel segment pays something');
+t.ok(S.wheelAnim !== null && typeof S.wheelAnim.seg === 'number', 'wheel animation armed');
+S.wheelAnim = null; S.rain.length = 0;
+// wheel chips on the field trigger a spin when collected
+S.coins.length = 0;
+const chip = CP.place(50, C.PLAT_FRONT - 0.5, 'chip', 0, 'plat');
+chip.vy = 70;
+step(1.5);
+t.ok(chip.scored, 'wheel chip over the edge is collected');
+t.ok(S.wheelAnim !== null, 'collected chip spins the Lucky Wheel');
+S.wheelAnim = null;
+// the machine restocks a chip every 30th insert
+S.wallet = 99; S.cd = 0; S.dropped = 29; S.rain.length = 0;
+CP.drop(50);
+t.ok(S.rain.some(r => r.kind === 'chip'), 'every 30th insert the machine drops a wheel chip');
+
+// -------- mystery gift chests --------
+CP.srand(47); CP.setMachine('gold');
+t.ok(S.coins.some(c => c.kind === 'chest'), 'a gift chest hides in every pile');
+S.coins.length = 0; S.wheelAnim = null;
+S.tray.coins = 0; S.tray.items.length = 0; S.tray.prizes.length = 0;
+const cSnap = { pts: S.score, tray: 0 };
+const chest = CP.place(50, C.PLAT_FRONT - 0.5, 'chest', 0, 'plat');
+chest.vy = 90;
+step(2);
+t.ok(chest.scored, 'chest pushed over the edge opens');
+t.ok(S.score > cSnap.pts || S.tray.coins > 0 || S.tray.prizes.length > 0 || S.wheelAnim !== null,
+     'the chest paid out a gift');
+
+// -------- daily gift --------
+S.wallet = 10; S.money = 200; S.wheelAnim = null;
+t.ok(CP.claimDaily('Mon Jul 13 2026'), 'daily gift claims on a fresh day');
+t.eq(S.wallet, 25, 'daily gift pays 15 coins');
+t.eq(S.money, 300, 'daily gift pays $1.00');
+t.ok(S.wheelAnim !== null, 'daily gift includes a wheel spin');
+t.ok(!CP.claimDaily('Mon Jul 13 2026'), 'cannot claim twice on the same day');
+t.ok(CP.claimDaily('Tue Jul 14 2026'), 'a new day resets the gift');
+CP.save();
+t.eq(JSON.parse(store[C.SAVE_KEY]).lastDaily, 'Tue Jul 14 2026', 'daily claim is persisted');
+S.wheelAnim = null;
+
 // -------- walking around the machine: four sides, four piles --------
 CP.srand(37); CP.setMachine('gold');
 t.eq(S.side, 0, 'you start at the front side');

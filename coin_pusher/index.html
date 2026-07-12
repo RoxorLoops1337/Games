@@ -214,6 +214,8 @@ const S = {
   slog: [],                // sale log: {pid, price, buyer}
   slotAnim: null,          // neon slot spin overlay
   pegFx: [],               // transient pin-impact flashes {x, z, t}
+  wheelAnim: null,         // Lucky Wheel overlay {t, seg, label}
+  lastDaily: null,         // day key of the last claimed daily gift
   side: 0,                 // which of the machine's four sides you stand at
   sideSeen: {},            // 'mach:side' -> last visit (ms) for leftover coins
   pileSalt: 12345,         // per-session flavour for the other sides' piles
@@ -247,7 +249,7 @@ function save() {
       meter: S.meter, mute: S.mute, jackpots: S.jackpots, collected: S.collected,
       coinsSpent: S.coinsSpent, coinsBack: S.coinsBack,
       mach: S.mach, unlocked: S.unlocked, prizes: S.prizes,
-      listings: S.listings, slog: S.slog, sideSeen: S.sideSeen,
+      listings: S.listings, slog: S.slog, sideSeen: S.sideSeen, lastDaily: S.lastDaily,
       tray: { coins: S.tray.coins, prizes: S.tray.prizes },
     }));
   } catch (e) {}
@@ -276,6 +278,7 @@ function load() {
         S.tray.prizes = Array.isArray(d.tray.prizes) ? d.tray.prizes : [];
       }
       if (d.sideSeen && typeof d.sideSeen === 'object') S.sideSeen = d.sideSeen;
+      if (d.lastDaily) S.lastDaily = d.lastDaily;
     } else if (d.v === 2 && Array.isArray(d.listings)) {
       // v2 listings were coin-priced one-shots — hand the items back
       for (const l of d.listings) {
@@ -293,10 +296,12 @@ function kindR(kind) {
   if (kind === 'bill') return C.BILL_R;
   if (kind === 'ball') return C.BALL_R;
   if (kind === 'prize') return C.PRIZE_R;
+  if (kind === 'chest') return 7.0;
+  if (kind === 'chip') return M().coin.r + 0.2;
   return M().coin.r;
 }
 function kindM(kind) {
-  return { gem: 2.2, lucky: 1.2, tag: 3.0, bill: 2.5, ball: 0.9, prize: 4.0 }[kind] || 1;
+  return { gem: 2.2, lucky: 1.2, tag: 3.0, bill: 2.5, ball: 0.9, prize: 4.0, chest: 3.5, chip: 1.1 }[kind] || 1;
 }
 function mkCoin(x, y, kind, lay, st, tier) {
   tier = tier || 0;
@@ -385,6 +390,18 @@ function scoreCoin(c) {
     save();
     return;
   }
+  if (c.kind === 'chip') {
+    S.floats.push({ txt: 'WHEEL SPIN!', wx: c.x, wy: 96, age: 0, max: 1.4, col: '#63e7ff', big: true });
+    S.shake += 4;
+    spinWheel();
+    burst(c.x, 96, C.TRAY_Z, 'tag');
+    return;
+  }
+  if (c.kind === 'chest') {
+    openChest(c);
+    save();
+    return;
+  }
   if (c.kind === 'tag') {
     addPts(c.val);
     trayAdd('tag', { col: c.col, x: c.x });
@@ -447,7 +464,7 @@ function jackpot() {
   // the attendant restocks the big platform: coins, POINT TAGS, a gem —
   // and a cash bill on the high roller
   const kinds = ['coin', 'coin', 'coin', 'coin', 'lucky', 'tag', 'tag', 'gem',
-                 Mv.special === 'bill' ? 'bill' : 'coin', 'coin'];
+                 Mv.special === 'bill' ? 'bill' : 'coin', 'chip'];
   kinds.forEach((kind, i) => {
     S.rain.push({
       t: 0.12 * i,
@@ -476,6 +493,63 @@ function spinSlot() {
   return out;
 }
 
+// Lucky Wheel — spun by wheel chips won off the field, gift chests, and the
+// daily gift (after the mobile coin pusher classics)
+const WHEEL = [
+  { label: '25 ●', w: 17, fx: () => { S.tray.coins += 25; trayAdd('coin', { x: 50 }); } },
+  { label: '+300 ✦', w: 15, fx: () => addPts(300) },
+  { label: 'GEM', w: 10, fx: () => S.rain.push({ t: 0.3, x: 30 + rng() * 40, y: M().tiers[0].slotY + 6, kind: 'gem' }) },
+  { label: '+$1.50', w: 13, fx: () => { S.money += 150; } },
+  { label: 'PRIZE', w: 8, fx: () => { const pz = PRIZES[(rng() * 3) | 0]; S.tray.prizes.push(pz.id); trayAdd('prize', { pid: pz.id, x: 50 }); } },
+  { label: '+150 ✦', w: 16, fx: () => addPts(150) },
+  { label: 'METER +8', w: 15, fx: () => { S.meter += 8; if (S.meter >= C.METER_MAX) jackpot(); } },
+  { label: 'JACKPOT', w: 6, fx: () => jackpot() },
+];
+function spinWheel() {
+  const total = WHEEL.reduce((a, s) => a + s.w, 0);
+  let r = rng() * total, idx = 0;
+  for (let i = 0; i < WHEEL.length; i++) { r -= WHEEL[i].w; if (r <= 0) { idx = i; break; } }
+  WHEEL[idx].fx();
+  S.wheelAnim = { t: 0, seg: idx, label: WHEEL[idx].label };
+  SND.bill();
+  save();
+  return WHEEL[idx];
+}
+function openChest(c) {
+  const r = rng();
+  let txt;
+  if (r < 0.4) {
+    const n = 8 + ((rng() * 10) | 0);
+    S.tray.coins += n; trayAdd('coin', { x: c.x });
+    txt = 'GIFT: +' + n + ' ●';
+  } else if (r < 0.7) {
+    const pts = 150 + ((rng() * 5) | 0) * 50;
+    addPts(pts);
+    txt = 'GIFT: +' + pts + ' PTS';
+  } else if (r < 0.9) {
+    txt = 'GIFT: WHEEL SPIN!';
+    spinWheel();
+  } else {
+    const pz = PRIZES[(rng() * 3) | 0];
+    S.tray.prizes.push(pz.id); trayAdd('prize', { pid: pz.id, x: c.x });
+    txt = 'GIFT: ' + pz.name + '!';
+  }
+  S.floats.push({ txt, wx: c.x, wy: 96, age: 0, max: 1.5, col: '#ffb0e0', big: true });
+  S.shake += 5;
+  SND.gem();
+  burst(c.x, 96, C.TRAY_Z, 'tag');
+}
+function claimDaily(dayKey) {
+  if (!dayKey || S.lastDaily === dayKey) return false;
+  S.lastDaily = dayKey;
+  S.wallet += 15;
+  S.money += 100;
+  S.floats.push({ txt: 'DAILY GIFT: 15 ● + $1.00', wx: 50, wy: 96, age: 0, max: 1.8, col: '#7ee787', big: true });
+  spinWheel();
+  save();
+  return true;
+}
+
 function drop(x) {
   if (S.cd > 0) return false;
   if (S.wallet < 1) { S.denyT = 0.6; SND.deny(); return false; }
@@ -497,6 +571,9 @@ function drop(x) {
     S.prizeDebt--;
     S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: Mv.tiers[0].slotY + 4 + rng() * 8,
                   kind: 'prize', pid: Mv.prizeIds[(rng() * Mv.prizeIds.length) | 0] });
+  }
+  if (S.dropped % 30 === 0) {
+    S.rain.push({ t: 0.35, x: 20 + rng() * 60, y: Mv.tiers[0].slotY + 4 + rng() * 8, kind: 'chip' });
   }
   if (Mv.special === 'ball' && Mv.ballEvery && S.dropped % Mv.ballEvery === 0) {
     S.rain.push({ t: 0.3, x: 20 + rng() * 60, y: Mv.tiers[0].slotY + 4 + rng() * 8, kind: 'ball' });
@@ -648,6 +725,8 @@ function initPile() {
     const t = place(22 + rng() * 56, front - 12 - rng() * 14, 'tag', 0, 'plat', lt);
     t.val = tg.val; t.col = tg.col;
   }
+  // a mystery gift chest hides mid-pile
+  place(30 + rng() * 40, front - 30 - rng() * 4, 'chest', 0, 'plat', lt);
   // real prizes ride the pile — deep enough that they take work to win
   Mv.prizeIds.forEach((pid, i) => {
     const pr = place(30 + i * 40 + (rng() - 0.5) * 8, front - 28 - rng() * 8, 'prize', 0, 'plat', lt);
@@ -728,6 +807,7 @@ function step(dt, quiet) {
     }
   }
   if (S.slotAnim) { S.slotAnim.t += dt; if (S.slotAnim.t > 2.4) S.slotAnim = null; }
+  if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) S.wheelAnim = null; }
   for (let i = S.pegFx.length - 1; i >= 0; i--) {
     S.pegFx[i].t -= dt;
     if (S.pegFx[i].t <= 0) S.pegFx.splice(i, 1);
@@ -994,6 +1074,7 @@ window.CP = {
   jackpot, spinSlot, pusherFront, pusherVel, tierFront, scoreCoin, save, load,
   buyMachine, setMachine, buyPrize, listPrize, resolveSales, M, HEADLESS,
   buyCoins, exchangePrize, collectTray, switchSide,
+  spinWheel, claimDaily, WHEEL,
 };
 
 load();
@@ -1569,7 +1650,8 @@ if (!HEADLESS) (function browser() {
     if (c.kind === 'tag') { drawTag(c, p, rx, ry); ctx.restore(); return; }
     if (c.kind === 'bill') { drawBill(c, p, rx, ry); ctx.restore(); return; }
     if (c.kind === 'ball') { drawBall(c, p, rx, t); ctx.restore(); return; }
-    if (c.kind === 'prize') { drawPrize(c, p, rx, t); ctx.restore(); return; }
+    if (c.kind === 'prize' || c.kind === 'chest') { drawPrize(c, p, rx, t); ctx.restore(); return; }
+    if (c.kind === 'chip') { drawChip(c, p, rx, ry, t); ctx.restore(); return; }
     const lucky = c.kind === 'lucky';
     const pal = lucky ? COIN_PAL.gold : (COIN_PAL[Mv.coin.style] || COIN_PAL.gold);
     const edgeH = Math.max(1.5, C.COIN_H * u * 0.5) * (0.5 + 0.5 * tumble);
@@ -1676,7 +1758,7 @@ if (!HEADLESS) (function browser() {
 
   function drawPrize(c, p, rx, t) {
     // a real prize riding the pile: soft base pad + the item, gently bobbing
-    const pz = PRIZES.find(q => q.id === c.pid);
+    const pz = c.kind === 'chest' ? null : PRIZES.find(q => q.id === c.pid);
     const bob = c.st === 'plat' ? Math.sin(t * 2 + c.glint) * 1.2 : 0;
     ctx.beginPath(); ctx.ellipse(p.x, p.y + rx * 0.35, rx * 1.05, rx * 0.45, 0, 0, 7);
     ctx.fillStyle = 'rgba(20,12,8,0.45)'; ctx.fill();
@@ -1688,8 +1770,28 @@ if (!HEADLESS) (function browser() {
     // glow ring so it reads as the thing to win
     ctx.globalAlpha = 0.30 + 0.18 * Math.sin(t * 3 + c.glint);
     ctx.beginPath(); ctx.ellipse(p.x, p.y + rx * 0.3, rx * 1.25, rx * 0.55, 0, 0, 7);
-    ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.strokeStyle = c.kind === 'chest' ? '#ffb0e0' : '#ffe066';
+    ctx.lineWidth = 2; ctx.stroke();
     ctx.globalAlpha = 1;
+  }
+
+  function drawChip(c, p, rx, ry, t) {
+    const edgeH = Math.max(1.5, C.COIN_H * p.u * 0.5);
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + edgeH, rx, ry, 0, 0, 7);
+    ctx.fillStyle = '#0c4a5e'; ctx.fill();
+    ctx.fillRect(p.x - rx, p.y, rx * 2, edgeH);
+    const g = ctx.createRadialGradient(p.x - rx * 0.3, p.y - ry * 0.4, rx * 0.1, p.x, p.y, rx * 1.2);
+    g.addColorStop(0, '#e8fdff'); g.addColorStop(0.5, '#57d8f0'); g.addColorStop(1, '#1a7ca0');
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7);
+    ctx.fillStyle = g; ctx.fill();
+    // spinning rainbow rim marks it as a wheel token
+    const hue = (t * 140 + c.glint * 60) % 360;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'hsl(' + hue + ',95%,65%)';
+    ctx.stroke();
+    if (ry > 3) {
+      txt('W', p.x, p.y + 0.5, '900 ' + Math.max(6, ry * 1.1) + 'px Verdana, sans-serif', 'rgba(8,50,66,0.9)');
+    }
   }
 
   function drawBall(c, p, rx, t) {
@@ -1888,6 +1990,60 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
+  const WHEEL_COLS = ['#f2c04a', '#ef4b5d', '#37b6e6', '#b06be8'];
+  function drawWheel() {
+    if (!S.wheelAnim) return;
+    const a = S.wheelAnim;
+    // tap to dismiss once the result is in
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { if (a.t > 2.8) S.wheelAnim = null; } });
+    ctx.fillStyle = 'rgba(5,3,8,0.72)';
+    ctx.fillRect(0, 0, LW, LH);
+    const cx = LW / 2, cy = 390, R = 132;
+    // spin: four full turns easing out onto the winning segment
+    const k = Math.min(1, a.t / 2.6);
+    const ease = 1 - Math.pow(1 - k, 3);
+    const target = (Math.PI * 2) * 4 + (-Math.PI / 2) - (a.seg + 0.5) * (Math.PI / 4);
+    const rot = ease * target;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, R, i * Math.PI / 4, (i + 1) * Math.PI / 4);
+      ctx.closePath();
+      ctx.fillStyle = WHEEL_COLS[i % 4];
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(20,8,4,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.save();
+      ctx.rotate((i + 0.5) * Math.PI / 4);
+      txt(WHEEL[i].label, R * 0.62, 0, '900 13px Verdana, sans-serif', '#1d1016');
+      ctx.restore();
+    }
+    ctx.restore();
+    // hub + rim + pointer
+    ctx.beginPath(); ctx.arc(cx, cy, R + 5, 0, 7);
+    ctx.lineWidth = 8; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 20, 0, 7);
+    ctx.fillStyle = '#ffd75e'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - 14, cy - R - 16); ctx.lineTo(cx + 14, cy - R - 16); ctx.lineTo(cx, cy - R + 8);
+    ctx.closePath();
+    ctx.fillStyle = '#ff5a4e'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    txt('LUCKY WHEEL', cx, cy - R - 44, '900 26px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
+    if (a.t > 2.6) {
+      const pop = 1 + Math.sin((a.t - 2.6) * 8) * 0.05;
+      ctx.save();
+      ctx.translate(cx, cy + R + 44);
+      ctx.scale(pop, pop);
+      txt(a.label, 0, 0, '900 30px Verdana, sans-serif', '#fff6c8', 'center', { w: 6, col: '#3a1006' });
+      ctx.restore();
+      txt('tap to continue', cx, cy + R + 76, '600 11px Verdana, sans-serif', '#c8a8b0');
+    }
+  }
+
   function drawHUD(t, dt) {
     dispScore += (S.score - dispScore) * Math.min(1, dt * 8);
     if (Math.abs(dispScore - S.score) < 1) dispScore = S.score;
@@ -2045,10 +2201,20 @@ if (!HEADLESS) (function browser() {
     txt(fmt$(S.money), 290, 125, '800 15px Verdana, sans-serif', '#7ee787');
     uiBtn(346, 109, 104, 30, '+ BUY COINS', () => { S.buyOpen = true; },
           { grad: ['#3f9d5a', '#1d5c31'], border: '#7ee787', col: '#eaffef', font: '800 11px Verdana, sans-serif', r: 9 });
+    // daily gift
+    const dayKey = new Date().toDateString();
+    if (S.lastDaily !== dayKey) {
+      const pulse = 0.6 + 0.4 * Math.sin(t * 4);
+      uiBtn(120, 150, 240, 26, '\u{1F381} DAILY GIFT — CLAIM!', () => claimDaily(dayKey),
+            { grad: ['#8c2f6b', '#4a1038'], border: 'rgba(255,176,224,' + pulse + ')',
+              col: '#ffd9ee', font: '900 13px Verdana, sans-serif', r: 13 });
+    } else {
+      txt('daily gift claimed ✓', LW / 2, 163, '600 11px Verdana, sans-serif', '#6f8f78');
+    }
     // machine cards
-    const cw = 210, ch = 250;
+    const cw = 210, ch = 244;
     MACH_IDS.forEach((id, i) => {
-      const x = 22 + (i % 2) * (cw + 16), y = 162 + Math.floor(i / 2) * (ch + 18);
+      const x = 22 + (i % 2) * (cw + 16), y = 184 + Math.floor(i / 2) * (ch + 14);
       const m = MACHINES[id];
       const owned = S.unlocked.indexOf(id) >= 0;
       drawMiniMachine(x, y, cw, ch, id, t);
@@ -2228,6 +2394,7 @@ if (!HEADLESS) (function browser() {
     } else {
       // keep light UI timers alive outside the machine
       if (S.uiFlash) { S.uiFlash.t -= dt; if (S.uiFlash.t <= 0) S.uiFlash = null; }
+      if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) S.wheelAnim = null; }
     }
     uiButtons = [];
     ctx.setTransform(scale, 0, 0, scale, offX, offY);
@@ -2240,6 +2407,7 @@ if (!HEADLESS) (function browser() {
     else if (S.screen === 'store') drawStore(t, now);
     else drawGame(t, dt);
     drawBuyModal();
+    drawWheel();
   }
   requestAnimationFrame(frame);
 })();
