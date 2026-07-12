@@ -1634,6 +1634,13 @@ if (!HEADLESS) (function browser() {
       tumble = Math.max(0.22, Math.abs(Math.cos(c.rot)));
       ry = rx * 0.46 * tumble + rx * 0.10 * (1 - tumble);
     }
+    // inside the pachinko board the coin rolls face-on against the glass —
+    // a full round coin. It tips over into the flat view as it lands.
+    let face = 0;
+    if (c.st === 'air' && Mv.pegs && c.tier === 0) {
+      face = Math.max(0, Math.min(1, (c.z - 10) / 8));
+      ry += (rx - ry) * face;
+    }
     if (c.st === 'plat') {
       const front = tierFront(c.tier);
       const over = (c.y - (front - c.r)) / c.r;
@@ -1658,10 +1665,10 @@ if (!HEADLESS) (function browser() {
     if (c.kind === 'bill') { drawBill(c, p, rx, ry); ctx.restore(); return; }
     if (c.kind === 'ball') { drawBall(c, p, rx, t); ctx.restore(); return; }
     if (c.kind === 'prize' || c.kind === 'chest') { drawPrize(c, p, rx, t); ctx.restore(); return; }
-    if (c.kind === 'chip') { drawChip(c, p, rx, ry, t); ctx.restore(); return; }
+    if (c.kind === 'chip') { drawChip(c, p, rx, ry, t, face); ctx.restore(); return; }
     const lucky = c.kind === 'lucky';
     const pal = lucky ? COIN_PAL.gold : (COIN_PAL[Mv.coin.style] || COIN_PAL.gold);
-    const edgeH = Math.max(1.5, C.COIN_H * u * 0.5) * (0.5 + 0.5 * tumble);
+    const edgeH = Math.max(1.5, C.COIN_H * u * 0.5) * (0.5 + 0.5 * tumble) * (1 - face);
     ctx.beginPath();
     ctx.ellipse(p.x, p.y + edgeH, rx, ry, 0, 0, 7);
     ctx.fillStyle = pal.edge;
@@ -1687,8 +1694,13 @@ if (!HEADLESS) (function browser() {
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 0.7, rx * 0.68, ry * 0.68, 0, 0, 7);
     ctx.strokeStyle = 'rgba(255,250,235,0.5)'; ctx.stroke();
     if (ry > 3) {
-      txt(lucky ? '★' : Mv.coin.sym, p.x, p.y + 0.5,
+      // face-on coins visibly spin as they ricochet
+      ctx.save();
+      ctx.translate(p.x, p.y + 0.5);
+      ctx.rotate(face * c.rot);
+      txt(lucky ? '★' : Mv.coin.sym, 0, 0,
           '900 ' + Math.max(6, ry * 1.05) + 'px Georgia, serif', pal.sym);
+      ctx.restore();
     }
     const gph = (t * 0.5 + c.glint) % (Math.PI * 2);
     ctx.beginPath();
@@ -1782,8 +1794,8 @@ if (!HEADLESS) (function browser() {
     ctx.globalAlpha = 1;
   }
 
-  function drawChip(c, p, rx, ry, t) {
-    const edgeH = Math.max(1.5, C.COIN_H * p.u * 0.5);
+  function drawChip(c, p, rx, ry, t, face) {
+    const edgeH = Math.max(1.5, C.COIN_H * p.u * 0.5) * (1 - (face || 0));
     ctx.beginPath(); ctx.ellipse(p.x, p.y + edgeH, rx, ry, 0, 0, 7);
     ctx.fillStyle = '#0c4a5e'; ctx.fill();
     ctx.fillRect(p.x - rx, p.y, rx * 2, edgeH);
