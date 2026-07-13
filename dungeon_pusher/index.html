@@ -60,21 +60,37 @@ const C = {
   POTION_HEAL: 20,
   KEY_KILL: 1, KEY_ELITE: 2, KEY_BOSS: 3,   // keys paid per slain foe
   P_CHEST_KEY: 0.2,
-  // combat is played in ROUNDS: a purse of coins to drop, then the tray
-  // resolves piece by piece, then the enemy takes its turn
-  ROUND_COINS: 10, POUCH_COINS: 2,      // base purse; each pouch adds +2
+  // combat is played in ROUNDS: your PURSE is a deck of typed coins — you
+  // choose which to insert — then the tray resolves and the foes act
+  POUCH_COINS: 2,                       // shop pouch: +2 gold coins to the purse
   ROUND_RAIN: 5,                        // fresh pieces rained onto the pile each round
-  P_LUCKY: 0.08,                        // insert roll
-  MIX: { silver: 0.20, green: 0.10, lucky: 0.05 },   // pile composition
-  DMG: { gold: 1, lucky: 3 },           // per coin at resolve
+  MIX: { silver: 0.20, green: 0.10, lucky: 0.05 },   // machine pile composition
+  DMG: { gold: 1, lucky: 3, blue: 1 },  // per coin at resolve (blue hits ALL foes)
+  RED_HEAL: 1,                          // red coins mend 1 HP each
   SKULL_DMG: 4,                         // + floor scaling on top; bypasses block
+  TILTS: 3,                             // machine tilts per round
+  BANK_MAX: 3,                          // tray pieces you may hold for next round
   ITEM_CAP: 12,                         // max arsenal items seeded per battle
 };
+// your purse starts here; heroes add their signature pair on top
+const START_PURSE = { coin: 5, silver: 5, green: 0, red: 0, blue: 0, lucky: 0 };
+const COIN_KINDS = ['coin', 'silver', 'green', 'red', 'blue', 'lucky'];
+const COIN_INFO = {
+  coin:   { name: 'Gold',   what: '1 dmg' },
+  silver: { name: 'Silver', what: '1 block' },
+  green:  { name: 'Venom',  what: '1 poison' },
+  red:    { name: 'Heart',  what: 'heal 1' },
+  blue:   { name: 'Frost',  what: '1 dmg to ALL foes' },
+  lucky:  { name: 'Lucky',  what: '3 dmg' },
+};
+// the after-battle coin offer draws from this bag
+const COIN_REWARD_W = [['coin', 24], ['silver', 22], ['green', 18], ['red', 16], ['blue', 12], ['lucky', 8]];
 // the order the tray resolves in: bank the loot, raise the guard, mend,
 // then unleash — curses always land last
-const RESOLVE_ORDER = ['gem', 'bag', 'silver', 'shielditem', 'heartitem',
-                       'gold', 'lucky', 'weapon', 'green', 'vial', 'frost', 'skull'];
-const RESOLVE_DELAY = { gem: 0.26, bag: 0.26, silver: 0.16, gold: 0.14, lucky: 0.22, green: 0.18 };
+const RESOLVE_ORDER = ['gem', 'bag', 'silver', 'shielditem', 'red', 'heartitem',
+                       'gold', 'lucky', 'blue', 'weapon', 'green', 'vial', 'frost', 'skull'];
+// deliberately UNHURRIED: each piece gets its moment so the damage reads
+const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42, lucky: 0.7, blue: 0.75, green: 0.5 };
 
 // ------------------------------------------------------------ the machine
 // One battle cabinet, restyled per floor. Same geometry as the classic
@@ -135,29 +151,31 @@ function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
 // ----------------------------------------------------------------- enemies
 // The cast wears real sprites borrowed from No Room For Heroes (see
 // art/CREDITS.txt); ids double as art sheet keys, icons are the fallback.
+// HP retuned (~x2.4) for the purse-as-deck era: the whole purse is dealt every
+// round, so a patient pusher earns far more per round than the old fixed purse
 const ENEMIES = [
-  { id: 'orc',      icon: '\u{1F9CC}', name: 'Orc Grunt',       hp: 12, atk: 2, trait: null,    gold: 8 },
-  { id: 'smasher',  icon: '\u{1F47A}', name: 'Goblin Smasher',  hp: 10, atk: 1, trait: 'fast',  gold: 9 },
-  { id: 'goblin',   icon: '\u{1F47A}', name: 'Goblin Mugger',   hp: 15, atk: 3, trait: 'thief', gold: 14 },
-  { id: 'slime',    icon: '\u{1F7E2}', name: 'Gel Cube',        hp: 13, atk: 2, trait: 'venom', gold: 12 },
-  { id: 'totem',    icon: '\u{1F5FF}', name: 'War Totem',       hp: 16, atk: 3, trait: 'curse', gold: 15 },
-  { id: 'skeleton', icon: '\u{1F480}', name: 'Skeleton Guard',  hp: 20, atk: 4, trait: null,    gold: 13 },
-  { id: 'revenant', icon: '\u{1F9DF}', name: 'Bone Revenant',   hp: 15, atk: 3, trait: 'regen', gold: 14 },
-  { id: 'ogre',     icon: '\u{1F479}', name: 'Ogre Brute',      hp: 30, atk: 5, trait: 'tough', gold: 18 },
+  { id: 'orc',      icon: '\u{1F9CC}', name: 'Orc Grunt',       hp: 28, atk: 2, trait: null,    gold: 8 },
+  { id: 'smasher',  icon: '\u{1F47A}', name: 'Goblin Smasher',  hp: 24, atk: 1, trait: 'fast',  gold: 9 },
+  { id: 'goblin',   icon: '\u{1F47A}', name: 'Goblin Mugger',   hp: 36, atk: 3, trait: 'thief', gold: 14 },
+  { id: 'slime',    icon: '\u{1F7E2}', name: 'Gel Cube',        hp: 31, atk: 2, trait: 'venom', gold: 12 },
+  { id: 'totem',    icon: '\u{1F5FF}', name: 'War Totem',       hp: 38, atk: 3, trait: 'curse', gold: 15 },
+  { id: 'skeleton', icon: '\u{1F480}', name: 'Skeleton Guard',  hp: 48, atk: 4, trait: null,    gold: 13 },
+  { id: 'revenant', icon: '\u{1F9DF}', name: 'Bone Revenant',   hp: 36, atk: 3, trait: 'regen', gold: 14 },
+  { id: 'ogre',     icon: '\u{1F479}', name: 'Ogre Brute',      hp: 72, atk: 5, trait: 'tough', gold: 18 },
 ];
 const BOSSES = [
-  { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 55, atk: 5, trait: 'curse', gold: 60 },
-  { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 70, atk: 6, trait: 'regen', gold: 80 },
-  { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 85, atk: 7, trait: 'venom', gold: 100 },
+  { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 120, atk: 5, trait: 'curse', gold: 60 },
+  { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 155, atk: 6, trait: 'regen', gold: 80 },
+  { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 190, atk: 7, trait: 'venom', gold: 100 },
 ];
 // ------------------------------------------------------------------ heroes
 // Four adventurers to pick from (sprites borrowed from NRFH's hero classes);
-// each brings one small edge into the dungeon.
+// each carries two signature coins on top of the shared 5 gold + 5 silver.
 const HEROES = [
-  { id: 'knight', name: 'Knight', icon: '\u{1F93A}', perk: '+10 MAX HP' },
-  { id: 'rogue',  name: 'Rogue',  icon: '\u{1F977}', perk: 'STARTS WITH 5 KEYS' },
-  { id: 'wizard', name: 'Mage',   icon: '\u{1F9D9}', perk: '+2 ● EVERY ROUND' },
-  { id: 'cleric', name: 'Cleric', icon: '\u{1F64F}', perk: '2 POTIONS' },
+  { id: 'knight', name: 'Knight', icon: '\u{1F93A}', coin: 'silver', perk: '+2 SILVER (block)' },
+  { id: 'rogue',  name: 'Rogue',  icon: '\u{1F977}', coin: 'green',  perk: '+2 VENOM (poison)' },
+  { id: 'wizard', name: 'Mage',   icon: '\u{1F9D9}', coin: 'blue',   perk: '+2 FROST (hits ALL)' },
+  { id: 'cleric', name: 'Cleric', icon: '\u{1F64F}', coin: 'red',    perk: '+2 HEART (heal)' },
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
 const TRAIT_TXT = {
@@ -187,9 +205,10 @@ const S = {
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
-  enemy: null,                         // live foe during battle
-  battle: null,                        // round machine {round, phase, loot, queue, ...}
-  victory: null,                       // battle-won overlay {t, gold, keys}
+  foes: [],                            // the battle pack (1-3 monsters gang up)
+  enemy: null,                         // the TARGETED foe (points into S.foes)
+  battle: null,                        // round machine {round, phase, hand, loot, ...}
+  victory: null,                       // battle-won overlay {t, gold, keys, offer}
   room: null,                          // open non-battle room {type, ...}
   over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
   best: { floor: 0, depth: 0, kills: 0, gold: 0 },
@@ -222,10 +241,11 @@ function save() {
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
-        gold: S.run.gold, pouch: S.run.pouch, arsenal: S.run.arsenal,
+        gold: S.run.gold, purse: S.run.purse, arsenal: S.run.arsenal,
         relics: S.run.relics, potions: S.run.potions, whet: S.run.whet,
         kills: S.run.kills, goldEarned: S.run.goldEarned, map: S.run.map,
         keys: S.run.keys, meter: S.meter,
+        pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
       } : null,
     }));
   } catch (e) {}
@@ -245,7 +265,8 @@ function load() {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
         floor: d.run.floor || 1, depth: d.run.depth || 1,
         hp: d.run.hp, maxHp: d.run.maxHp || C.START_HP,
-        gold: d.run.gold || 0, pouch: d.run.pouch || 0, wallet: 0,
+        gold: d.run.gold || 0, wallet: 0,
+        purse: (d.run.purse && typeof d.run.purse === 'object') ? { ...START_PURSE, ...d.run.purse } : { ...START_PURSE },
         arsenal: (d.run.arsenal && typeof d.run.arsenal === 'object') ? d.run.arsenal : {},
         relics: Array.isArray(d.run.relics) ? d.run.relics.filter(relicById) : [],
         potions: d.run.potions || 0, whet: d.run.whet || 0,
@@ -254,6 +275,9 @@ function load() {
         room: null,
         keys: (typeof d.run.keys === 'number') ? d.run.keys : C.START_KEYS,
         block: 0, windUsed: false, battleEnt: null,
+        pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
+        pileFloor: d.run.pileFloor || 0,
+        pending: Array.isArray(d.run.pending) ? d.run.pending : [],
       };
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
@@ -335,14 +359,42 @@ function weaponDmg(base) {
   if (hasRelic('whet')) d = Math.round(d * 1.3);
   return d;
 }
-function dmgEnemy(n, src) {
-  if (!S.run || !S.enemy || S.enemy.hp <= 0) return 0;
+// hurt ONE foe (a braced foe shrugs off half)
+function dmgFoe(e, n, src) {
+  if (!S.run || !e || e.hp <= 0) return 0;
   n = Math.max(1, Math.round(n));
-  S.enemy.hp -= n;
-  S.enemy.hitT = 0.3;
+  if (e.braced) n = Math.max(1, Math.ceil(n / 2));
+  e.hp -= n;
+  e.hitT = 0.3;
   floatAnchor('-' + n, 'enemy', src === 'pois' ? '#b8f26b' : '#ff8a6b', n >= 8);
-  if (S.enemy.hp <= 0) winBattle();
+  if (e.hp <= 0) foeDown(e);
   return n;
+}
+function dmgEnemy(n, src) { return dmgFoe(S.enemy, n, src); }
+// blue coins: the frost bites EVERY foe at once
+function dmgAll(n) {
+  for (const f of S.foes) {
+    if (f.hp > 0) dmgFoe(f, n);
+  }
+}
+// a foe falls: its bounty pays out on the spot, its room dweller is gone
+function foeDown(e) {
+  if (e.paid) return;
+  e.paid = true;
+  S.run.kills++;
+  const gold = e.gold;
+  const keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
+  S.run.keys += keys;
+  addGold(gold);
+  floatAnchor('+' + keys + ' \u{1F5DD}', 'enemy', '#ffd75e', true);
+  S.battle.goldWon += gold;
+  S.battle.keysWon += keys;
+  if (e.entIdx !== null && e.entIdx !== undefined && S.run.room && S.run.room.ents[e.entIdx]) {
+    S.run.room.ents[e.entIdx].done = true;
+  }
+  S.shake += 6;
+  retarget();
+  if (!S.foes.some(f => f.hp > 0)) winBattle();
 }
 function poisonEnemy(stacks) {
   if (!S.run || !S.enemy || S.enemy.hp <= 0) return 0;
@@ -380,7 +432,10 @@ function addGold(n) {
 }
 function addCoins(n) {
   if (!S.run) return;
-  S.run.wallet += n;
+  if (S.battle && S.battle.hand) {
+    S.battle.hand.coin = (S.battle.hand.coin || 0) + n;
+    syncWallet();
+  }
   floatAnchor('+' + n + ' ●', 'hero', '#f2c04a');
 }
 // direct hit: curses and poison ignore your shield entirely
@@ -479,6 +534,10 @@ function openChest(c) {
 function grantItem(iid, n) {
   if (!S.run || !itemById(iid)) return;
   S.run.arsenal[iid] = (S.run.arsenal[iid] || 0) + (n || 1);
+  // this floor's machine is already racked: the new gear drops in next fight
+  if (S.run.pileFloor === S.run.floor) {
+    for (let k = 0; k < (n || 1); k++) S.run.pending.push(iid);
+  }
 }
 
 // FRENZY: filling the meter makes the dungeon rain bonuses on the field
@@ -526,22 +585,80 @@ function spinWheel() {
   return WHEEL[idx];
 }
 
-// -------------------------------------------------------------------- drop
-function roundCoins() {
-  return C.ROUND_COINS + (S.run ? (S.run.pouch || 0) * C.POUCH_COINS : 0);
+// ------------------------------------------------------------ drop & hand
+// Your purse is a DECK: every round it refills as your hand, and YOU pick
+// which coin type slides into the slot next.
+function syncWallet() {
+  if (!S.run) return;
+  const B = S.battle;
+  S.run.wallet = B && B.hand ? COIN_KINDS.reduce((a, k) => a + (B.hand[k] || 0), 0) : 0;
+}
+function selectCoin(k) {
+  if (!S.battle || !S.battle.hand || COIN_KINDS.indexOf(k) < 0) return false;
+  if ((S.battle.hand[k] || 0) < 1) return false;
+  S.battle.sel = k;
+  return true;
+}
+// when the chosen stack runs dry, slide to the next one you still hold
+function autoSel() {
+  const B = S.battle;
+  if (!B || !B.hand) return;
+  if ((B.hand[B.sel] || 0) > 0) return;
+  for (const k of COIN_KINDS) {
+    if ((B.hand[k] || 0) > 0) { B.sel = k; return; }
+  }
 }
 function drop(x) {
   if (S.screen !== 'battle' || !S.run || S.victory) return false;
-  if (!S.battle || S.battle.phase !== 'drop') return false;
+  const B = S.battle;
+  if (!B || B.phase !== 'drop') return false;
   if (S.cd > 0) return false;
-  if (S.run.wallet < 1) { S.denyT = 0.6; SND.deny(); return false; }
-  S.run.wallet--; S.cd = C.DROP_CD; S.dropped++; S.meter++;
-  const pLucky = C.P_LUCKY * (hasRelic('clover') ? 2 : 1);
-  const kind = rng() < pLucky ? 'lucky' : 'coin';
+  autoSel();
+  const kind = B.sel;
+  if ((B.hand[kind] || 0) < 1) { S.denyT = 0.6; SND.deny(); return false; }
+  B.hand[kind]--;
+  syncWallet();
+  autoSel();
+  S.cd = C.DROP_CD; S.dropped++; S.meter++;
   const ax = Math.max(8, Math.min(92, x === undefined ? S.aimX : x));
   spawnDrop(ax + (rng() - 0.5) * 2, MACH.tiers[0].slotY + (rng() - 0.5) * 5, kind);
   SND.slot();
   if (S.meter >= C.METER_MAX) frenzy();
+  return true;
+}
+// TILT the machine — the classic sin, three charges a round
+function tilt(dir) {
+  if (S.screen !== 'battle' || !S.run || S.victory) return false;
+  const B = S.battle;
+  if (!B || B.phase !== 'drop' || B.tilts < 1) return false;
+  B.tilts--;
+  for (const c of S.coins) {
+    if (c.st !== 'plat') continue;
+    if (dir === 'l') c.vx -= 20 + rng() * 8;
+    else if (dir === 'r') c.vx += 20 + rng() * 8;
+    else { c.vy += 11 + rng() * 5; c.vx += (rng() - 0.5) * 6; }
+  }
+  S.shake += 4;
+  SND.thud();
+  return true;
+}
+// hold a caught piece back for next round (up to 3)
+function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
+function bankLoot(key) {
+  const B = S.battle;
+  if (!B || B.phase !== 'drop' || B.banked.length >= C.BANK_MAX) return false;
+  const i = B.loot.findIndex(l => lootKey(l) === key);
+  if (i < 0) return false;
+  B.banked.push(B.loot.splice(i, 1)[0]);
+  SND.clink();
+  return true;
+}
+function unbankLoot(key) {
+  const B = S.battle;
+  if (!B || B.phase !== 'drop') return false;
+  const i = B.banked.findIndex(l => lootKey(l) === key);
+  if (i < 0) return false;
+  B.loot.push(B.banked.splice(i, 1)[0]);
   return true;
 }
 // what a fresh pile piece is made of (inserts are always gold/lucky;
@@ -583,23 +700,99 @@ function mkEnemy(type, eid) {
     stunned: 0, pois: 0, hitT: 0, lungeT: 0,
   };
 }
-function startBattle(type, entIdx, eid) {
+// its plan for the round, telegraphed on its panel
+function rollIntent(e) {
+  if (e.trait === 'curse' && rng() < 0.4) { e.intent = { t: 'curse' }; return; }
+  const r = rng();
+  if (r < 0.2 && e.intent && e.intent.t !== 'heavy') e.intent = { t: 'heavy', dmg: e.atk * 2 };
+  else if (r < 0.36) e.intent = { t: 'brace' };
+  else e.intent = { t: 'hit', dmg: e.atk };
+}
+// deal a hand from the purse (a thief may have cut it)
+function dealHand() {
+  const B = S.battle;
+  B.hand = { ...S.run.purse };
+  let cut = B.stolen || 0;
+  for (const k of COIN_KINDS) {
+    while (cut > 0 && B.hand[k] > 0) { B.hand[k]--; cut--; }
+  }
+  B.stolen = 0;
+  B.sel = 'coin';
+  autoSel();
+  syncWallet();
+}
+// remember this floor's machine exactly as you left it
+function serializePile() {
+  return S.coins
+    .filter(c => c.st === 'plat')
+    .map(c => ({ k: c.kind, x: Math.round(c.x * 10) / 10, y: Math.round(c.y * 10) / 10,
+                 lay: c.lay, iid: c.iid || undefined, temp: c.temp || undefined }));
+}
+function restorePile(pieces) {
+  S.coins.length = 0;
+  for (const p of pieces) {
+    const c = place(p.x, p.y, p.k, p.lay || 0, 'plat', 0);
+    c.iid = p.iid || null;
+    c.temp = !!p.temp;
+  }
+  S.trayPile = 0;
+}
+function startBattle(type, entIdx, eid, extras) {
   if (!S.run) return false;
   S.run.battleEnt = (entIdx === undefined) ? null : entIdx;
-  S.enemy = mkEnemy(type, eid);
-  S.battle = { round: 1, phase: 'drop', loot: [], queue: [], qi: 0, qt: 0,
-               stolen: 0, et: 0, struck: false };
+  // the pack: the foe you bumped plus anything that joins it
+  S.foes = [mkEnemy(type, eid)];
+  S.foes[0].entIdx = (entIdx === undefined) ? null : entIdx;
+  for (const ex of extras || []) {
+    const f = mkEnemy(ex.mtype, ex.eid);
+    f.entIdx = ex.entIdx;
+    S.foes.push(f);
+  }
+  for (const f of S.foes) rollIntent(f);
+  S.battle = { round: 1, phase: 'drop', loot: [], banked: [], queue: [], qi: 0, qt: 0,
+               stolen: 0, actList: [], actPtr: 0, actT: 0, target: 0,
+               tilts: C.TILTS, hand: null, sel: 'coin', goldWon: 0, keysWon: 0 };
+  S.enemy = S.foes[0];
   S.screen = 'battle';
   S.victory = null;
   S.run.windUsed = false;
   S.pPois = 0;
-  S.run.wallet = roundCoins();
+  dealHand();
   S.run.block = hasRelic('plate') ? 4 : 0;
-  initPile();
-  S.banner = { txt: S.enemy.boss ? 'BOSS FIGHT!' : S.enemy.name, ttl: 1.8, max: 1.8 };
+  // ONE machine per floor: the pile persists between fights, so the silver
+  // you stashed deep last battle is still creeping toward the edge
+  if (S.run.pileSave && S.run.pileFloor === S.run.floor) {
+    restorePile(S.run.pileSave);
+  } else {
+    initPile();
+    S.run.pileFloor = S.run.floor;
+  }
+  // gear bought since the rack was set drops in now
+  for (let i = 0; i < (S.run.pending || []).length; i++) {
+    S.rain.push({ t: 0.3 + i * 0.25, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6,
+                  kind: 'item', iid: S.run.pending[i] });
+  }
+  S.run.pending = [];
+  S.banner = {
+    txt: S.foes[0].boss ? 'BOSS FIGHT!'
+       : S.foes.length > 1 ? S.foes.length + ' FOES GANG UP!' : S.foes[0].name,
+    ttl: 1.8, max: 1.8,
+  };
   SND.door();
   save();
   return true;
+}
+// tap a foe on its panel to aim your gold at it
+function setTarget(i) {
+  if (!S.battle || !S.foes[i] || S.foes[i].hp <= 0) return false;
+  S.battle.target = i;
+  S.enemy = S.foes[i];
+  return true;
+}
+function retarget() {
+  if (S.enemy && S.enemy.hp > 0) return;
+  const i = S.foes.findIndex(f => f.hp > 0);
+  if (i >= 0) { S.battle.target = i; S.enemy = S.foes[i]; }
 }
 
 // ------------------------------------------------------- the round machine
@@ -630,7 +823,7 @@ function startResolve() {
   B.queue = buildQueue(B.loot);
   B.loot = [];
   B.qi = 0;
-  B.qt = 0.55;                          // a breath before the first piece flies
+  B.qt = 0.9;                           // a breath before the first piece flies
   S.tray.items.length = 0;
   if (B.queue.length) S.banner = { txt: 'YOUR TURN!', ttl: 1.0, max: 1.0 };
   return true;
@@ -647,9 +840,11 @@ function applyLoot(q) {
   else if (q.t === 'bag') addGold(8);
   else if (q.t === 'silver') addBlock(1);
   else if (q.t === 'shielditem') addBlock(itemById(q.iid).block);
+  else if (q.t === 'red') healPlayer(C.RED_HEAL);
   else if (q.t === 'heartitem') healPlayer(itemById(q.iid).heal);
   else if (q.t === 'gold') { dmgEnemy(C.DMG.gold); SND.collect(2); }
   else if (q.t === 'lucky') { dmgEnemy(C.DMG.lucky); SND.gem(); }
+  else if (q.t === 'blue') { dmgAll(C.DMG.blue); SND.stun(); }
   else if (q.t === 'weapon') {
     const it = itemById(q.iid);
     floatAt(it.name + '!', 50, '#ffe066', true);
@@ -665,36 +860,47 @@ function applyLoot(q) {
   }
   if (window.__dpResolveFx) window.__dpResolveFx(q);
 }
-function enemyAct() {
-  const e = S.enemy;
+// one foe plays out its telegraphed intent
+function enemyActFoe(e) {
   if (!e || e.hp <= 0 || !S.run) return;
+  e.braced = false;                     // last round's guard drops as it moves
   if (e.stunned > 0) {
     e.stunned--;
     floatAnchor('FROZEN — turn skipped', 'enemy', '#8be7ff', true);
     SND.stun();
+    rollIntent(e);
     return;
   }
+  const it = e.intent || { t: 'hit', dmg: e.atk };
   e.lungeT = 0.4;
-  const hits = e.trait === 'fast' ? 2 : 1;
-  for (let h = 0; h < hits && S.run; h++) {
-    if (e.trait === 'thief') {
-      S.battle.stolen += 2;
-      floatAnchor('purse cut! -2 ● next round', 'hero', '#ff9d3c', true);
+  if (it.t === 'brace') {
+    e.braced = true;
+    floatAnchor(e.name + ' braces', 'enemy', '#c8d6e8');
+  } else if (it.t === 'curse') {
+    for (let h = 0; h < 2; h++) {
+      S.rain.push({ t: 0.3 + h * 0.25, x: 15 + rng() * 70, y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
     }
-    if (e.trait === 'venom') {
-      S.pPois += 2;
-      floatAnchor('POISONED!', 'hero', '#b8f26b', true);
+    floatAnchor('skulls rain onto the field!', 'hero', '#c86bff', true);
+  } else {
+    const hits = e.trait === 'fast' ? 2 : 1;
+    for (let h = 0; h < hits && S.run; h++) {
+      if (e.trait === 'thief') {
+        S.battle.stolen += 2;
+        floatAnchor('purse cut! -2 coins next round', 'hero', '#ff9d3c', true);
+      }
+      if (e.trait === 'venom') {
+        S.pPois += 2;
+        floatAnchor('POISONED!', 'hero', '#b8f26b', true);
+      }
+      hurtPlayer(it.t === 'heavy' ? e.atk * 2 : e.atk, 'slain by ' + (e.name || 'the dungeon'));
     }
-    if (e.trait === 'curse') {
-      S.rain.push({ t: 0.3 + h * 0.2, x: 15 + rng() * 70, y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
-    }
-    hurtPlayer(e.atk, 'slain by ' + (e.name || 'the dungeon'));
   }
+  if (S.run) rollIntent(e);             // and shows you its NEXT move
 }
 function endRoundTicks() {
-  const e = S.enemy;
-  if (e && e.hp > 0) {
-    if (e.pois > 0) { const s = e.pois; e.pois--; dmgEnemy(s, 'pois'); }
+  for (const e of S.foes) {
+    if (e.hp <= 0) continue;
+    if (e.pois > 0) { const s = e.pois; e.pois--; dmgFoe(e, s, 'pois'); }
     if (e.hp > 0 && e.trait === 'regen' && e.hp < e.maxHp) {
       e.hp = Math.min(e.maxHp, e.hp + 3);
       floatAnchor('+3', 'enemy', '#7ee787');
@@ -709,11 +915,13 @@ function newRound() {
   const B = S.battle;
   B.round++;
   B.phase = 'drop';
-  B.loot = []; B.queue = []; B.qi = 0; B.struck = false;
+  // banked pieces carry over as the seed of the new round's loot
+  B.loot = B.banked; B.banked = [];
+  B.queue = []; B.qi = 0;
+  B.tilts = C.TILTS;
   // block melts between rounds — unless the Aegis holds it
   S.run.block = (hasRelic('aegis') ? S.run.block : 0) + (hasRelic('plate') ? 4 : 0);
-  S.run.wallet = Math.max(3, roundCoins() - B.stolen);
-  B.stolen = 0;
+  dealHand();
   // the dungeon re-salts the pile so long fights never run dry
   for (let i = 0; i < C.ROUND_RAIN; i++) {
     S.rain.push({ t: 0.15 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: rollPileKind() });
@@ -722,9 +930,9 @@ function newRound() {
   save();
 }
 function battleTick(dt) {
-  const e = S.enemy, B = S.battle;
+  const B = S.battle;
   if (!B || !S.run) return;
-  if (e) {
+  for (const e of S.foes) {
     if (e.hitT > 0) e.hitT -= dt;
     if (e.lungeT > 0) e.lungeT -= dt;
   }
@@ -739,42 +947,62 @@ function battleTick(dt) {
         B.qi++;
         applyLoot(q);
         if (!S.run || S.victory) return;
-        B.qt = RESOLVE_DELAY[q.t] || 0.5;
+        B.qt = RESOLVE_DELAY[q.t] || 0.9;
       } else {
         B.phase = 'enemy';
-        B.et = 1.1;
-        B.struck = false;
+        B.actList = S.foes.map((f, i) => i).filter(i => S.foes[i].hp > 0);
+        B.actPtr = 0;
+        B.actT = 0.7;
       }
     }
   } else if (B.phase === 'enemy') {
-    B.et -= dt;
-    if (!B.struck && B.et <= 0.6) {
-      B.struck = true;
-      enemyAct();
-      if (!S.run || S.victory) return;
-    }
-    if (B.et <= 0) {
-      endRoundTicks();
-      if (S.run && S.enemy && S.enemy.hp > 0 && !S.victory) newRound();
+    B.actT -= dt;
+    if (B.actT <= 0) {
+      if (B.actPtr < B.actList.length) {
+        enemyActFoe(S.foes[B.actList[B.actPtr]]);
+        B.actPtr++;
+        B.actT = 0.75;
+        if (!S.run || S.victory) return;
+      } else {
+        endRoundTicks();
+        if (S.run && S.foes.some(f => f.hp > 0) && !S.victory) newRound();
+      }
     }
   }
 }
+// three coins glint in the rubble — take ONE into your purse for good
+function rollOffer() {
+  const offer = [];
+  const bag = COIN_REWARD_W.slice();
+  while (offer.length < 3 && bag.length) {
+    const total = bag.reduce((a, w) => a + w[1], 0);
+    let r = rng() * total, idx = 0;
+    for (let i = 0; i < bag.length; i++) { r -= bag[i][1]; if (r <= 0) { idx = i; break; } }
+    offer.push(bag.splice(idx, 1)[0][0]);
+  }
+  return offer;
+}
+function pickCoin(i) {
+  if (!S.run || !S.victory || !S.victory.offer || S.victory.picked) return false;
+  const k = S.victory.offer[i];
+  if (!k) return false;
+  S.run.purse[k] = (S.run.purse[k] || 0) + 1;
+  S.victory.picked = k;
+  SND.buy();
+  save();
+  return true;
+}
 function winBattle() {
-  const e = S.enemy;
-  let gold = e.gold + (hasRelic('piggy') ? 4 : 0);
-  S.run.kills++;
-  addGold(gold, 50);
-  // every slain monster coughs up dungeon keys
-  const keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
-  S.run.keys += keys;
-  floatAt('+' + keys + ' KEY' + (keys > 1 ? 'S' : '') + ' \u{1F5DD}', 50, '#ffd75e', true);
-  S.victory = { t: 0, gold, keys, boss: e.boss };
+  const anyBoss = S.foes.some(f => f.boss);
+  if (hasRelic('piggy')) { addGold(4); S.battle.goldWon += 4; }
+  S.victory = { t: 0, gold: S.battle.goldWon, keys: S.battle.keysWon, boss: anyBoss,
+                offer: rollOffer(), picked: null };
   S.banner = { txt: 'VICTORY!', ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.winb();
-  if (e.boss) {
+  if (anyBoss) {
     const h = Math.round(S.run.maxHp * 0.35);
-    healPlayer(h, 50);
+    healPlayer(h);
   }
   bestify();
   save();
@@ -783,9 +1011,10 @@ function winBattle() {
 function leaveBattle() {
   if (!S.run || S.screen !== 'battle' || !S.victory) return false;
   const boss = S.victory.boss;
-  const ei = S.run.battleEnt;
-  if (S.run.room && ei !== null && S.run.room.ents[ei]) S.run.room.ents[ei].done = true;
-  S.victory = null; S.enemy = null; S.battle = null; S.run.battleEnt = null;
+  // the machine remembers this floor's pile — stash wisely
+  S.run.pileSave = serializePile();
+  S.run.pileFloor = S.run.floor;
+  S.victory = null; S.foes = []; S.enemy = null; S.battle = null; S.run.battleEnt = null;
   S.coins.length = 0;
   if (boss) {              // the lair opens: stairs down appear where it fell
     S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
@@ -809,6 +1038,7 @@ function endRun(cause) {
     floor: S.run.floor, depth: S.run.depth, kills: S.run.kills, gold: S.run.goldEarned,
   };
   S.run = null;
+  S.foes = [];
   S.enemy = null;
   S.battle = null;
   S.victory = null;
@@ -829,24 +1059,26 @@ function newRun(heroId) {
   S.run = {
     hero: hero.id,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
-    gold: 0, pouch: 0, wallet: 0, keys: C.START_KEYS,
+    gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS,
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
+    pileSave: null, pileFloor: 0, pending: [],
   };
-  // the chosen adventurer's edge
-  if (hero.id === 'knight') { S.run.maxHp += 10; S.run.hp += 10; }
-  else if (hero.id === 'rogue') S.run.keys = 5;
-  else if (hero.id === 'wizard') S.run.pouch = 1;
-  else if (hero.id === 'cleric') S.run.potions = 2;
+  // the chosen adventurer's signature coins
+  S.run.purse[hero.coin] += 2;
   S.heroPick = hero.id;
-  S.enemy = null; S.victory = null; S.room = null; S.over = null;
+  S.foes = []; S.enemy = null; S.victory = null; S.room = null; S.over = null;
   S.meter = 0; S.pPois = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
   genFloor();
   S.screen = 'dungeon';
   save();
   return S.run;
+}
+function purseTotal() {
+  if (!S.run) return 0;
+  return COIN_KINDS.reduce((a, k) => a + (S.run.purse[k] || 0), 0);
 }
 function toast(txt2) { S.toast = { txt: txt2, t: 2.6 }; }
 // roll the 1-3 inhabitants of a room at the given distance from the stairs
@@ -1029,10 +1261,12 @@ function tryDoor(dir) {
   save();
   return true;
 }
-// the stairs after the boss falls
+// the stairs after the boss falls: new floor, new MACHINE (fresh pile)
 function nextFloor() {
   if (!S.run) return false;
   S.run.floor++;
+  S.run.pileSave = null;
+  S.run.pending = [];
   S.banner = { txt: 'FLOOR ' + S.run.floor, ttl: 1.8, max: 1.8 };
   genFloor();
   save();
@@ -1045,7 +1279,14 @@ function interact(i) {
   if (!e || (e.done && e.kind !== 'shop')) return false;
   if (e.kind === 'monster') {
     SND.door();
-    startBattle(e.mtype, i, e.eid);
+    // every other living monster in the room GANGS UP with it
+    const extras = [];
+    S.run.room.ents.forEach((o, j) => {
+      if (j !== i && o.kind === 'monster' && !o.done) {
+        extras.push({ mtype: o.mtype, eid: o.eid, entIdx: j });
+      }
+    });
+    startBattle(e.mtype, i, e.eid, extras);
     return true;
   }
   if (e.kind === 'stairs') {
@@ -1082,6 +1323,10 @@ function chestGift() {
   if (r < C.P_CHEST_KEY) {
     S.run.keys++;
     toast('the chest holds a KEY! \u{1F5DD}');
+  } else if (r < 0.4) {
+    const k = COIN_KINDS[(rng() * COIN_KINDS.length) | 0];
+    S.run.purse[k] = (S.run.purse[k] || 0) + 1;
+    toast('a ' + COIN_INFO[k].name.toUpperCase() + ' COIN joins your purse!');
   } else if (r < 0.65) {
     const g = 10 + S.run.depth * 2 + (S.run.floor - 1) * 6 + ((rng() * 8) | 0);
     addGold(g);
@@ -1113,7 +1358,11 @@ function shopStock() {
     st.push({ kind: 'item', iid: pick, label: it.icon + ' ' + it.name, price: Math.round(it.cost * mult), sold: false });
   }
   st.push({ kind: 'potion', label: '\u{1F9F4} Potion (+' + C.POTION_HEAL + ' HP)', price: Math.round(30 * mult), sold: false });
-  st.push({ kind: 'pouch', label: '\u{1F45B} Coin Pouch (+' + C.POUCH_COINS + ' ● every round)', price: Math.round(40 * mult), sold: false });
+  st.push({ kind: 'pouch', label: '\u{1F45B} Coin Pouch (+' + C.POUCH_COINS + ' gold coins to your purse)', price: Math.round(40 * mult), sold: false });
+  {
+    const k = COIN_KINDS[1 + ((rng() * (COIN_KINDS.length - 1)) | 0)];
+    st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(22 * mult), sold: false });
+  }
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(45 * mult), sold: false });
   const owned = S.run.relics;
   const avail = RELICS.filter(r => owned.indexOf(r.id) < 0);
@@ -1131,7 +1380,8 @@ function buyShop(i) {
   it.sold = true;
   if (it.kind === 'item') grantItem(it.iid, 1);
   else if (it.kind === 'potion') S.run.potions++;
-  else if (it.kind === 'pouch') S.run.pouch++;
+  else if (it.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
+  else if (it.kind === 'coin') S.run.purse[it.cid] = (S.run.purse[it.cid] || 0) + 1;
   else if (it.kind === 'maxhp') { S.run.maxHp += 10; S.run.hp += 10; }
   else if (it.kind === 'relic') S.run.relics.push(it.rid);
   SND.buy();
@@ -1144,7 +1394,7 @@ function boonOptions() {
   opts.push({ kind: 'item', iid: it.id, label: it.icon + ' Take a ' + it.name });
   opts.push(rng() < 0.5
     ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
-    : { kind: 'pouch', label: '\u{1F45B} Coin Pouch: +' + C.POUCH_COINS + ' ● every round' });
+    : { kind: 'pouch', label: '\u{1F45B} +' + C.POUCH_COINS + ' gold coins to your purse' });
   const owned = S.run.relics;
   const avail = RELICS.filter(r => owned.indexOf(r.id) < 0);
   if (avail.length && rng() < 0.55) {
@@ -1161,7 +1411,7 @@ function pickBoon(i) {
   if (!o) return false;
   if (o.kind === 'item') grantItem(o.iid, 1);
   else if (o.kind === 'maxhp') { S.run.maxHp += 12; S.run.hp = Math.min(S.run.maxHp, S.run.hp + 12); }
-  else if (o.kind === 'pouch') S.run.pouch++;
+  else if (o.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
   else if (o.kind === 'relic') S.run.relics.push(o.rid);
   else if (o.kind === 'whet') S.run.whet++;
   S.room.done = true;
@@ -1465,10 +1715,12 @@ window.DP = {
   chestGift, startBattle, mkEnemy, battleTick, winBattle, endRun,
   buyShop, pickBoon, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
-  dmgEnemy, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
+  dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify,
-  startResolve, endRoundNow, buildQueue, applyLoot, enemyAct, endRoundTicks,
-  newRound, roundCoins, rollPileKind,
+  startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
+  newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
+  bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer,
+  COIN_KINDS, COIN_INFO, START_PURSE,
 };
 
 load();
@@ -1596,14 +1848,20 @@ if (!HEADLESS) (function browser() {
     g.fillStyle = pal.sym;
     g.fillText(sym, cx, cy + ry * 0.04);
   }
-  // one palette per coin ROLE: gold strikes, silver shields, green poisons
+  // one palette per coin ROLE: gold strikes, silver shields, green poisons,
+  // red mends, blue freezes the whole pack
   const COIN_PALS = {
     coin:   { edge: '#7d5a14', f0: '#ffedaa', f1: '#f2c04a', f2: '#ad7c1a', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(136,94,18,0.85)' },
     lucky:  { edge: '#8a5f10', f0: '#fff8cf', f1: '#ffdf6b', f2: '#c78f18', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(150,96,10,0.9)' },
     silver: { edge: '#6f7680', f0: '#f4f7fa', f1: '#c3ccd6', f2: '#7e8894', ring: 'rgba(90,100,112,0.6)', sym: 'rgba(90,100,112,0.95)' },
     green:  { edge: '#2f6b30', f0: '#e0ffd8', f1: '#8ed67e', f2: '#3f8f42', ring: 'rgba(35,95,40,0.6)',  sym: 'rgba(25,75,30,0.9)' },
+    red:    { edge: '#7a2430', f0: '#ffd8dc', f1: '#e87a8a', f2: '#a83a4a', ring: 'rgba(120,40,55,0.6)', sym: 'rgba(110,30,45,0.9)' },
+    blue:   { edge: '#2a4a7a', f0: '#d8ecff', f1: '#7ab0e8', f2: '#3a6aa8', ring: 'rgba(40,75,125,0.6)', sym: 'rgba(30,60,110,0.9)' },
   };
-  const COIN_SYMS = { coin: '⚔', lucky: '★', silver: '◆', green: '☠' };
+  const COIN_SYMS = { coin: '⚔', lucky: '★', silver: '◆', green: '☠', red: '♥', blue: '❆' };
+  const COIN_UI = {
+    coin: '#f2c04a', silver: '#c3ccd6', green: '#8ed67e', red: '#e87a8a', blue: '#7ab0e8', lucky: '#ffdf6b',
+  };
   function flatSprite(styleKey, pal, sym) {
     return sprite('cf_' + styleKey + '_' + sym, 96, 66, (g) => {
       const cx = 48, cy = 24, rx = 44, ry = 20, eh = 9;
@@ -1881,68 +2139,164 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(-40, -40, LW + 80, LH + 80);
   }
 
+  // the hero's strike: armed by the resolve so his lunge meets the impact
+  const HFX = { until: -1, dur: 0.4, tx: 340 };
   function drawEnemyPanel(t) {
+    // the battle STAGE: your hero holds the left, the pack prowls the right
     const T = theme();
-    const e = S.enemy;
     ctx.save();
     rr(20, 12, LW - 40, 128, 20);
     ctx.fillStyle = lgr('ep:' + fkey(), 0, 12, 0, 140, [[0, '#241c2c'], [1, '#171019']]);
     ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = T.cabB; ctx.stroke();
-    // wall torches flank the foe
-    for (const tx of [48, LW - 48]) {
-      const fl = 1 + Math.sin(t * 9 + tx) * 0.18;
-      ctx.globalAlpha = 0.5;
-      ctx.beginPath(); ctx.arc(tx, 52, 14 * fl, 0, 7);
-      ctx.fillStyle = '#ff9d3c'; ctx.fill();
-      ctx.globalAlpha = 1;
-      txt('\u{1F525}', tx, 52, (18 + fl * 4) + 'px serif', '#fff');
+    // stage floorline
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(36, 112); ctx.lineTo(LW - 36, 112); ctx.stroke();
+    // the dueling line
+    ctx.globalAlpha = 0.35 + 0.1 * Math.sin(t * 3);
+    txt('⚔', 146, 64, '17px serif', '#c8a05a');
+    ctx.globalAlpha = 1;
+
+    // ---- your hero, stage left ----
+    const hx = 72, hy = 112;
+    ANCHORS.hero.x = hx; ANCHORS.hero.y = 56;
+    let hdx = 0, hlk = 0;
+    if (S.run && t < HFX.until) {
+      hlk = Math.max(0, Math.min(1, 1 - (HFX.until - t) / HFX.dur));
+      hdx = Math.sin(hlk * Math.PI) * Math.max(0, HFX.tx - hx - 54);
     }
-    if (e) {
-      const dead = e.hp <= 0;
-      const lunge = e.lungeT > 0 ? Math.sin((0.4 - e.lungeT) / 0.4 * Math.PI) : 0;
-      const bob = dead ? 0 : Math.sin(t * 2.2) * 3;
-      const breathe = dead ? 1 : 1 + Math.sin(t * 2.2 + 1) * 0.03;
-      const sz = e.boss ? 64 : 52;
-      // menace aura behind the foe
-      if (!dead) {
-        ctx.globalAlpha = (e.boss ? 0.3 : 0.18) + 0.08 * Math.sin(t * 3);
-        ctx.beginPath(); ctx.arc(LW / 2, 58, sz * 0.85 + lunge * 8, 0, 7);
-        ctx.fillStyle = e.boss ? '#ffd75e' : e.elite ? '#ff9d3c' : '#ef4b5d';
-        ctx.fill();
-        ctx.globalAlpha = 1;
-      }
+    ctx.beginPath(); ctx.ellipse(hx + hdx, hy + 4, 19, 5.5, 0, 0, 7);
+    ctx.fillStyle = 'rgba(6,3,8,0.55)'; ctx.fill();
+    ctx.save();
+    ctx.translate(hx + hdx, hy - 34 + Math.sin(t * 2.4) * 2);
+    if (S.hurtT > 0) ctx.rotate(Math.sin(t * 50) * 0.09);
+    else if (hdx > 2) ctx.rotate(0.13);              // leaning into the blow
+    const hero = S.run ? (S.run.hero || 'knight') : 'knight';
+    const hkey = hero + '_idle';
+    if (!(SHEETS[hkey] && drawArt(hkey, 0, 34, (SHEETS[hkey].bh || 50) * 1.12, 'r', t))) {
+      txt((heroById(hero) || HEROES[0]).icon, 0, -6, '40px serif', '#fff');
+    }
+    if (S.hurtT > 0.2) {
+      ctx.globalAlpha = Math.min(1, S.hurtT * 2);
+      ctx.beginPath(); ctx.arc(0, -14, 26, 0, 7);
+      ctx.fillStyle = 'rgba(255,70,60,0.35)'; ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    ctx.restore();
+    // his blade sings mid-lunge
+    if (hlk > 0.3 && hlk < 0.8) {
       ctx.save();
-      ctx.translate(LW / 2, 58 + bob + lunge * 22);
+      ctx.globalAlpha = 0.9;
+      ctx.translate(hx + hdx + 30, hy - 46);
+      ctx.rotate(-0.6 + hlk * 1.5);
+      txt('⚡', 0, 0, '26px serif', '#fff');
+      ctx.restore();
+    }
+    // the shield ring: your block, made visible
+    if (S.run && S.run.block > 0) {
+      const pulse = 1 + Math.sin(t * 4) * 0.05;
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath(); ctx.arc(hx, hy - 32, 30 * pulse, 0, 7);
+      ctx.lineWidth = 3; ctx.strokeStyle = '#9fc8e8'; ctx.stroke();
+      ctx.globalAlpha = 1;
+      rr(hx + 24, hy - 14, 32, 17, 8);
+      ctx.fillStyle = '#2a3a4e'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#9fc8e8'; ctx.stroke();
+      txt('\u{1F6E1}' + S.run.block, hx + 40, hy - 5, '800 9px Verdana, sans-serif', '#d8ecff');
+      ctx.restore();
+    }
+    if (S.pPois > 0) txt('☠ ' + S.pPois, hx + 34, hy - 38, '800 11px Verdana, sans-serif', '#b8f26b', 'left');
+    if (S.hurtT > 0.28) txt('\u{1F4A2}', hx + 26, hy - 56, '22px serif', '#fff');
+
+    // ---- the pack, stage right ----
+    const foes = S.foes || [];
+    const n = foes.length;
+    const footY = 108;
+    for (let i = 0; i < n; i++) {
+      const e = foes[i];
+      const scl = n <= 1 ? 1 : n === 2 ? 0.85 : 0.72;
+      const cx = n === 1 ? LW - 156 : (LW - 84) - (n - 1 - i) * Math.min(122, 216 / (n - 1));
+      const isTgt = S.battle && S.battle.target === i;
+      if (isTgt) { ANCHORS.enemy.x = cx; ANCHORS.enemy.y = 56; }
+      if (e.hp <= 0) {
+        // its dust settles where it stood
+        ctx.save();
+        ctx.globalAlpha = S.victory ? Math.max(0.1, 1 - S.victory.t) : 0.3;
+        txt('\u{1F4A8}', cx, footY - 26, '26px serif', '#fff');
+        ctx.restore();
+        continue;
+      }
+      // its attack: a full lunge ACROSS the stage at your hero
+      const lk = e.lungeT > 0 ? Math.sin((0.4 - e.lungeT) / 0.4 * Math.PI) : 0;
+      const it = e.intent || {};
+      const charges = e.lungeT > 0 && (it.t === 'hit' || it.t === 'heavy' || !it.t);
+      const dx = -lk * (charges ? Math.max(0, cx - hx - 56) : 10);
+      const bob = Math.sin(t * 2.2 + i * 1.7) * 2.5;
+      const breathe = 1 + Math.sin(t * 2.2 + 1 + i) * 0.03;
+      const sz = (e.boss ? 64 : 52) * scl;
+      // menace aura — the TARGET burns brightest
+      ctx.globalAlpha = ((e.boss ? 0.3 : 0.18) + 0.08 * Math.sin(t * 3)) * (isTgt ? 1.4 : 0.7);
+      ctx.beginPath(); ctx.arc(cx + dx, footY - sz * 0.55, sz * 0.8 + lk * 8, 0, 7);
+      ctx.fillStyle = e.boss ? '#ffd75e' : e.elite ? '#ff9d3c' : '#ef4b5d';
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.save();
+      ctx.translate(cx + dx, footY - 34 * scl + bob - lk * 8);
+      if (dx < -4) ctx.rotate(-0.16);                // airborne, fangs first
       ctx.scale(breathe + (e.hitT > 0 ? 0.12 : 0), 1 / (breathe + (e.hitT > 0 ? 0.12 : 0)) * breathe);
       if (e.hitT > 0) ctx.rotate(Math.sin(t * 60) * 0.08);
-      if (dead) { ctx.globalAlpha = Math.max(0, 1 - S.victory.t * 1.2); ctx.rotate(0.6); }
       if (e.stunned > 0) ctx.globalAlpha *= 0.75;
       const artKey = foeArtKey(e);
-      if (!(artKey && drawArt(artKey, 0, 36, SHEETS[artKey].bh || 76, 'd', t))) {
-        txt(e.icon, 0, 0, sz + 'px serif', '#fff');
+      if (!(artKey && drawArt(artKey, 0, 34 * scl, (SHEETS[artKey].bh || 76) * scl, 'l', t))) {
+        txt(e.icon, 0, 0, Math.round(sz) + 'px serif', '#fff');
       }
-      // a red sting flashes over the sprite as your loot lands
       if (e.hitT > 0 && artKey) {
         ctx.globalAlpha = e.hitT * 1.2;
         ctx.beginPath(); ctx.arc(0, 0, sz * 0.7, 0, 7);
         ctx.fillStyle = 'rgba(255,90,80,0.4)'; ctx.fill();
       }
       ctx.restore();
-      if (e.stunned > 0 && !dead) txt('❄ frozen ×' + e.stunned, LW / 2 + 74, 36, '800 12px Verdana, sans-serif', '#8be7ff');
-      if (e.pois > 0 && !dead) txt('☠ ' + e.pois, LW / 2 - 74, 36, '800 14px Verdana, sans-serif', '#b8f26b');
-      txt(e.name, LW / 2, 100, '900 15px Georgia, serif', e.boss ? '#ffd75e' : '#e8dce8',
-          'center', { w: 4, col: 'rgba(20,8,24,0.9)' });
-      // HP bar
-      bar(96, 112, LW - 192, 13, Math.max(0, e.hp / e.maxHp), '#ef4b5d', '#a8213a');
-      txt(Math.max(0, e.hp) + ' / ' + e.maxHp, LW / 2, 118.5, '800 10px Verdana, sans-serif', '#ffe8ec');
-      // its intent for the end of this round
-      if (!dead) {
-        const intent = e.stunned > 0 ? '❄ frozen — skips its turn'
-          : '⚔ ' + e.atk + (e.trait === 'fast' ? ' ×2' : '') + ' at round end';
-        txt(intent, 96, 131, '800 10px Verdana, sans-serif',
-            e.stunned > 0 ? '#8be7ff' : '#ffb4a8', 'left');
-        if (e.trait) txt(TRAIT_TXT[e.trait], LW - 96, 131, '600 8px Verdana, sans-serif', '#9a8aa0', 'right');
+      // the blow lands on your hero
+      if (lk > 0.8 && charges) txt('\u{1F4A5}', hx + 30, hy - 44, '26px serif', '#fff');
+      // your mark hovers over the target — tap another foe to switch
+      if (isTgt && n > 1) {
+        txt('▼', cx, 28 + Math.sin(t * 5) * 2, '900 13px Verdana, sans-serif', '#ffd75e', 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
+      }
+      // per-foe bar + status + intent
+      const bw = n === 1 ? 128 : 84;
+      const by = 118;
+      bar(cx - bw / 2, by, bw, n === 1 ? 11 : 9, Math.max(0, e.hp / e.maxHp), '#ef4b5d', '#a8213a');
+      txt(Math.max(0, e.hp) + '/' + e.maxHp, cx, by + (n === 1 ? 5.5 : 4.5),
+          '800 ' + (n === 1 ? 9 : 8) + 'px Verdana, sans-serif', '#ffe8ec');
+      if (e.pois > 0) txt('☠' + e.pois, cx - bw / 2 - 13, by + 4, '800 10px Verdana, sans-serif', '#b8f26b');
+      if (e.braced) txt('\u{1F6E1}', cx + bw / 2 + 11, by + 4, '11px serif', '#fff');
+      const intentTxt = e.stunned > 0 ? '❄ skips turn'
+        : it.t === 'heavy' ? '\u{1F4A5} ' + (e.atk * 2) + (e.trait === 'fast' ? '×2' : '')
+        : it.t === 'brace' ? '\u{1F6E1} braces'
+        : it.t === 'curse' ? '\u{1F480} skulls'
+        : '⚔ ' + e.atk + (e.trait === 'fast' ? '×2' : '');
+      // the telegraph: over its head in a pack, under the bar when alone
+      // (the lone foe's name owns the headline spot)
+      txt(intentTxt, cx, n === 1 ? by + 18 : Math.max(26, footY - sz - 20 * scl),
+          '800 ' + (n === 1 ? 11 : 9) + 'px Verdana, sans-serif',
+          e.stunned > 0 ? '#8be7ff' : it.t === 'heavy' ? '#ff5a4e' : it.t === 'brace' ? '#c8d6e8' : it.t === 'curse' ? '#c86bff' : '#ffb4a8',
+          'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
+      // tap to target
+      if (n > 1 && S.battle && !S.victory) {
+        const ii = i;
+        uiButtons.push({ x: cx - 52, y: 16, w: 104, h: 120, cb: () => setTarget(ii) });
+      }
+    }
+    if (n) {
+      const tgt = S.enemy;
+      if (tgt && n === 1) {
+        txt(tgt.name, LW - 156, 30, '900 13px Georgia, serif', tgt.boss ? '#ffd75e' : '#e8dce8',
+            'center', { w: 4, col: 'rgba(20,8,24,0.9)' });
+        if (tgt.trait) txt(TRAIT_TXT[tgt.trait], LW - 156, 43, '600 8px Verdana, sans-serif', '#9a8aa0');
+      } else if (tgt && tgt.hp > 0) {
+        txt('target: ' + tgt.name, LW / 2 + 20, 133, '800 10px Georgia, serif', '#ffd75e',
+            'center', { w: 3, col: 'rgba(20,8,24,0.9)' });
       }
       // round chip
       if (S.battle) {
@@ -1957,21 +2311,22 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawMeter(t) {
-    const x = 70, y = 150, w = LW - 140, h = 14;
+    // slimmed down and tucked over the coin wall — the hand row owns y144 now
+    const x = 150, y = 196, w = LW - 300, h = 8;
     const fr = S.meter / C.METER_MAX;
-    rr(x - 4, y - 4, w + 8, h + 8, 9);
-    ctx.fillStyle = '#1c0d13'; ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = '#6e4c1c'; ctx.stroke();
+    rr(x - 3, y - 3, w + 6, h + 6, 7);
+    ctx.fillStyle = 'rgba(28,13,19,0.85)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = '#6e4c1c'; ctx.stroke();
     if (fr > 0) {
       const pulse = fr > 0.8 ? 0.25 + 0.2 * Math.sin(t * 10) : 0;
-      rr(x, y, Math.max(8, w * fr), h, 7);
+      rr(x, y, Math.max(6, w * fr), h, 4);
       const g = ctx.createLinearGradient(x, 0, x + w, 0);
       g.addColorStop(0, '#ff9d3c'); g.addColorStop(1, '#ff4b2e');
       ctx.fillStyle = g; ctx.fill();
       if (pulse > 0) { ctx.fillStyle = 'rgba(255,240,180,' + pulse + ')'; ctx.fill(); }
     }
-    txt('FRENZY ' + S.meter + ' / ' + C.METER_MAX, LW / 2, y + h / 2 + 0.5,
-        '800 10px Verdana, sans-serif', fr > 0.5 ? '#fff5d6' : '#caa25a');
+    txt('FRENZY', x - 12, y + h / 2 + 0.5, '800 8px Verdana, sans-serif',
+        fr > 0.5 ? '#ffd75e' : '#8a6f4a', 'right');
   }
 
   function drawCabinet() {
@@ -2274,7 +2629,7 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = '#ffae34'; ctx.fill();
       ctx.restore();
     }
-    const TRAY_COL = { coin: '#f2c04a', lucky: '#ffdf6b', silver: '#c3ccd6', green: '#8ed67e' };
+    const TRAY_COL = COIN_UI;
     items.forEach((it, i) => {
       const px = LW / 2 + Math.sin(i * 2.399) * (18 + ((i * 7) % 130));
       const py = 686 - (i % 3) * 6;
@@ -2393,7 +2748,9 @@ if (!HEADLESS) (function browser() {
 
   // floats pin to the machine (wx) or to a screen anchor: the foe, your
   // hero, or the gold counter — so resolve numbers pop where they land
-  const ANCHORS = { enemy: { x: LW / 2, y: 96 }, hero: { x: 78, y: 636 }, gold: { x: 90, y: 756 } };
+  // hero/enemy anchors live on the battle STAGE and are re-pinned every
+  // frame by drawEnemyPanel (the enemy anchor tracks the TARGET foe)
+  const ANCHORS = { enemy: { x: LW - 156, y: 56 }, hero: { x: 72, y: 56 }, gold: { x: 90, y: 756 } };
   function drawFloats() {
     for (const f of S.floats) {
       const p = f.anchor ? ANCHORS[f.anchor] || ANCHORS.hero : w2s(f.wx, f.wy, C.TRAY_Z);
@@ -2402,7 +2759,7 @@ if (!HEADLESS) (function browser() {
       const scl = (f.big ? 1.5 : 1) * (0.6 + 0.4 * pop);
       ctx.save();
       ctx.globalAlpha = Math.min(1, (1 - k) * 2);
-      ctx.translate(p.x, p.y - 14 - k * 46);
+      ctx.translate(p.x, p.y - 12 - k * (f.anchor ? 32 : 46));
       ctx.scale(scl, scl);
       txt(f.txt, 0, 0, '900 22px Verdana, sans-serif', f.col, 'center', { w: 5, col: 'rgba(30,10,5,0.9)' });
       ctx.restore();
@@ -2501,7 +2858,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = '#8a5f10'; ctx.fill();
     ctx.beginPath(); ctx.ellipse(126, 761, 9, 8, 0, 0, 7);
     ctx.fillStyle = '#f2c04a'; ctx.fill();
-    txt(S.screen === 'battle' ? '× ' + r.wallet : '× ' + roundCoins() + '/rd',
+    txt(S.screen === 'battle' ? '× ' + r.wallet : '× ' + purseTotal() + ' purse',
         140, 762, '900 ' + (S.screen === 'battle' ? 18 : 13) + 'px Verdana, sans-serif',
         flash ? '#ff5a4e' : '#fff0c0', 'left');
     txt('\u{1F5DD} × ' + r.keys, 190, 762, '900 15px Verdana, sans-serif',
@@ -2534,8 +2891,8 @@ if (!HEADLESS) (function browser() {
       hint = 'FLOOR ' + r.floor + ' • ' + found + ' / ' + rooms.length + ' rooms uncovered';
     }
     else if (!S.battle || S.battle.phase === 'drop') {
-      hint = r.wallet < 1 ? 'purse empty — END TURN when you are ready'
-           : r.wallet + ' ● left • TAP TO DROP • END TURN anytime';
+      hint = r.wallet < 1 ? 'hand empty — bank loot, TILT, or END TURN'
+           : r.wallet + ' ● in hand • TAP TO DROP • pick your coin up top';
     } else hint = S.battle.phase === 'resolve' ? 'the tray resolves…' : 'the foe strikes back…';
     txt(hint, LW - 34, 814, '600 10px Verdana, sans-serif', '#8f6f78', 'right');
   }
@@ -2548,25 +2905,57 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(8,4,10,' + (0.55 * k) + ')';
     ctx.fillRect(0, 0, LW, LH);
     if (k < 1) return;
-    rr(70, 300, LW - 140, 250, 20);
+    const hasOffer = v.offer && v.offer.length > 0;
+    const py = hasOffer ? 218 : 300, ph = hasOffer ? 404 : 250;
+    rr(70, py, LW - 140, ph, 20);
     ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
-    txt(v.boss ? '\u{1F451}' : '\u{1F3C6}', LW / 2, 350, '44px serif', '#fff');
-    txt(v.boss ? 'FLOOR CLEARED!' : 'VICTORY!', LW / 2, 398, '900 28px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
+    txt(v.boss ? '\u{1F451}' : '\u{1F3C6}', LW / 2, py + 50, '44px serif', '#fff');
+    txt(v.boss ? 'FLOOR CLEARED!' : 'VICTORY!', LW / 2, py + 98, '900 28px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
     txt('+' + v.gold + ' gold   •   +' + v.keys + ' \u{1F5DD} key' + (v.keys > 1 ? 's' : ''),
-        LW / 2, 432, '800 15px Verdana, sans-serif', '#fff0c0');
-    if (v.boss) txt('the stairs descend… +35% HP restored', LW / 2, 456, '600 11px Verdana, sans-serif', '#7ee787');
+        LW / 2, py + 132, '800 15px Verdana, sans-serif', '#fff0c0');
+    if (v.boss) txt('the stairs descend… +35% HP restored', LW / 2, py + 154, '600 11px Verdana, sans-serif', '#7ee787');
+    // the spoils: pick ONE coin to join your purse for the rest of the run
+    if (hasOffer) {
+      txt(v.picked ? 'the ' + COIN_INFO[v.picked].name.toUpperCase() + ' coin joins your purse!'
+                   : 'CHOOSE A SPOIL — one coin for your purse:',
+          LW / 2, py + 178, '800 11px Verdana, sans-serif', v.picked ? '#7ee787' : '#e8d0a0');
+      v.offer.forEach((ck, i) => {
+        const cx = LW / 2 + (i - 1) * 100, cy = py + 232;
+        const isPick = v.picked === ck;
+        const dim = v.picked && !isPick;
+        ctx.save();
+        ctx.globalAlpha = dim ? 0.3 : 1;
+        if (!v.picked || isPick) {
+          const pulse = isPick ? 1 : 1 + Math.sin(t * 4 + i * 2) * 0.04;
+          ctx.beginPath(); ctx.arc(cx, cy, 30 * pulse, 0, 7);
+          ctx.fillStyle = isPick ? 'rgba(126,214,160,0.25)' : 'rgba(255,240,190,0.12)'; ctx.fill();
+          ctx.lineWidth = 2; ctx.strokeStyle = isPick ? '#7ed6a0' : 'rgba(255,215,94,0.5)'; ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy + 2, 22, 0, 7);
+        ctx.fillStyle = 'rgba(20,10,4,0.6)'; ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, 22, 0, 7);
+        ctx.fillStyle = COIN_UI[ck]; ctx.fill();
+        ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(60,40,10,0.75)'; ctx.stroke();
+        txt(COIN_SYMS[ck], cx, cy + 1, '800 19px serif', 'rgba(40,24,4,0.85)');
+        txt(COIN_INFO[ck].name, cx, cy + 40, '800 11px Verdana, sans-serif', dim ? '#8a7a6a' : '#ffe9a3');
+        txt(COIN_INFO[ck].what, cx, cy + 54, '600 8px Verdana, sans-serif', dim ? '#6a5a4a' : '#c0a880');
+        ctx.restore();
+        if (!v.picked) uiButtons.push({ x: cx - 42, y: cy - 34, w: 84, h: 94, cb: () => pickCoin(i) });
+      });
+    }
     const pulse = 1 + Math.sin(t * 5) * 0.03;
-    uiBtn(LW / 2 - 90 * pulse, 480 - 2, 180 * pulse, 40, v.boss ? 'DESCEND ▼' : 'CONTINUE ▶', () => leaveBattle(),
+    const label = v.boss ? 'DESCEND ▼' : hasOffer && !v.picked ? 'SKIP ▶' : 'CONTINUE ▶';
+    uiBtn(LW / 2 - 90 * pulse, py + ph - 62, 180 * pulse, 40, label, () => leaveBattle(),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 14 });
   }
 
   function drawBattle(t, dt) {
     drawBackground();
     drawEnemyPanel(t);
-    drawMeter(t);
     drawCabinet();
     drawBackWall();
+    drawMeter(t);
     drawTierFloor(MACH.tiers[0].back, tierFront(0), 0);
     drawSideRails();
     drawLip();
@@ -2592,20 +2981,22 @@ if (!HEADLESS) (function browser() {
       const label = phase === 'resolve' ? '✦ RESOLVING THE TRAY ✦' : '⚔ ENEMY TURN ⚔';
       txt(label, LW / 2, 178, '900 15px Georgia, serif',
           phase === 'resolve' ? '#ffd75e' : '#ff8a8a', 'center', { w: 4, col: 'rgba(10,5,12,0.95)' });
-    } else if (S.battle && S.battle.loot.length) {
+    } else if (S.battle && (S.battle.loot.length || S.battle.banked.length)) {
       drawLootStrip(t);
     }
     drawResolveFx(dt);
-    drawBattleHero(t);
     drawFloats();
     // END TURN is ALWAYS there during the drop phase — end whenever you like,
     // coins left in the purse or not. It pulses once the purse runs dry.
     if (phase === 'drop' && !S.victory) {
+      drawHandRow(t);
+      drawTiltCluster(t);
       const empty = S.run.wallet < 1;
       const pulse = empty ? 1 + Math.sin(t * 6) * 0.05 : 1;
-      uiBtn(LW / 2 - 84 * pulse, 596, 168 * pulse, 40, 'END TURN ▶', () => endRoundNow(),
+      const bw = 158 * pulse;
+      uiBtn(LW - 96 - bw / 2, 596, bw, 40, 'END TURN ▶', () => endRoundNow(),
             { grad: empty ? ['#ffd75e', '#c98f2a'] : ['#c8a05a', '#8a6a2a'],
-              border: '#fff0c0', col: '#3a2406', font: '900 16px Verdana, sans-serif', r: 15 });
+              border: '#fff0c0', col: '#3a2406', font: '900 15px Verdana, sans-serif', r: 15 });
     }
     drawHUD(t);
     drawVignette(0.55);
@@ -2624,6 +3015,58 @@ if (!HEADLESS) (function browser() {
     drawVictory(t);
   }
 
+  // your HAND for the round: one chip per coin type still in it — tap to
+  // choose what the slot takes next
+  function drawHandRow(t) {
+    const B = S.battle;
+    if (!B || !B.hand) return;
+    const kinds = COIN_KINDS.filter(k => (B.hand[k] || 0) > 0);
+    if (!kinds.length) return;
+    const n = kinds.length;
+    const w = n * 56 + 16;
+    rr(LW / 2 - w / 2, 144, w, 40, 20);
+    ctx.fillStyle = 'rgba(12,7,14,0.78)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,215,94,0.35)'; ctx.stroke();
+    kinds.forEach((k, i) => {
+      const cx = LW / 2 - w / 2 + 36 + i * 56, cy = 164;
+      const sel = B.sel === k;
+      const r = sel ? 15 + Math.sin(t * 6) * 0.8 : 12;
+      if (sel) {
+        ctx.beginPath(); ctx.arc(cx, cy, r + 4.5, 0, 7);
+        ctx.fillStyle = 'rgba(255,240,190,0.22)'; ctx.fill();
+      }
+      ctx.beginPath(); ctx.arc(cx, cy + 1.5, r, 0, 7);
+      ctx.fillStyle = 'rgba(20,10,4,0.6)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7);
+      ctx.fillStyle = COIN_UI[k]; ctx.fill();
+      ctx.lineWidth = sel ? 2.5 : 1.2;
+      ctx.strokeStyle = sel ? '#fff' : 'rgba(60,40,10,0.7)';
+      ctx.stroke();
+      txt(COIN_SYMS[k], cx, cy + 1, (sel ? '800 14px' : '800 11px') + ' serif', 'rgba(40,24,4,0.85)');
+      txt('×' + B.hand[k], cx + r - 2, cy - r + 2, '900 10px Verdana, sans-serif', '#fff0c0', 'left');
+      uiButtons.push({ x: cx - 27, y: 140, w: 54, h: 48, cb: () => selectCoin(k) });
+    });
+    // what the chosen coin will DO, whispered below the coin wall
+    const info = COIN_INFO[B.sel];
+    if (info) {
+      txt(info.name.toUpperCase() + ' — ' + info.what, LW / 2, 218,
+          '700 10px Verdana, sans-serif', 'rgba(255,233,163,0.8)', 'center', { w: 3, col: 'rgba(12,6,10,0.85)' });
+    }
+  }
+  // TILT! Nudge the pile — three charges a round, spend them or lose them
+  function drawTiltCluster(t) {
+    const B = S.battle;
+    if (!B) return;
+    const on = B.tilts > 0;
+    txt('TILT ×' + B.tilts, 78, 589, '800 10px Verdana, sans-serif', on ? '#ffe9a3' : '#6a5a4a');
+    [['◀', 'l'], ['▼', 'f'], ['▶', 'r']].forEach(([sym, dir], i) => {
+      uiBtn(16 + i * 46, 596, 40, 40, sym, () => tilt(dir),
+            { grad: on ? ['#6a5a7e', '#3a3048'] : ['#3a3440', '#262230'],
+              border: on ? '#c8b8e0' : '#55506a',
+              col: on ? '#f0e8ff' : '#6a6580', font: '900 15px Verdana, sans-serif', r: 12 });
+    });
+  }
+
   // ------------------------------------------------- resolve cinematics
   // each applied loot piece launches a projectile: silver arcs to the hero,
   // gold smacks the foe, gems ring the gold counter
@@ -2631,7 +3074,8 @@ if (!HEADLESS) (function browser() {
   const LOOT_ICON = {
     gold: '●', lucky: '★', silver: '●', green: '●', gem: '\u{1F48E}', bag: '\u{1F4B0}', skull: '☠\u{FE0F}',
   };
-  const LOOT_COL = { gold: '#f2c04a', lucky: '#ffdf6b', silver: '#c3ccd6', green: '#8ed67e' };
+  const LOOT_COL = { gold: '#f2c04a', lucky: '#ffdf6b', silver: '#c3ccd6', green: '#8ed67e',
+                     red: '#e87a8a', blue: '#7ab0e8', coin: '#f2c04a' };
   function fxIcon(q) {
     if (q.t === 'weapon' || q.t === 'vial' || q.t === 'shielditem' || q.t === 'heartitem' || q.t === 'frost') {
       const it = itemById(q.iid);
@@ -2639,123 +3083,175 @@ if (!HEADLESS) (function browser() {
     }
     return LOOT_ICON[q.t] || '●';
   }
+  // every piece announces WHAT it is about to do while it flies
+  function fxLabel(q) {
+    if (q.t === 'gold') return C.DMG.gold + ' DMG';
+    if (q.t === 'lucky') return C.DMG.lucky + ' DMG!';
+    if (q.t === 'blue') return C.DMG.blue + ' TO ALL!';
+    if (q.t === 'green') return 'POISON';
+    if (q.t === 'silver') return '+1 BLOCK';
+    if (q.t === 'red') return '+' + C.RED_HEAL + ' HP';
+    if (q.t === 'gem') return '+15 GOLD';
+    if (q.t === 'bag') return '+8 GOLD';
+    if (q.t === 'skull') return 'CURSE!';
+    const it = itemById(q.iid);
+    if (!it) return '';
+    if (q.t === 'weapon') return weaponDmg(it.dmg) + ' DMG!';
+    if (q.t === 'shielditem') return '+' + it.block + ' BLOCK';
+    if (q.t === 'heartitem') return '+' + it.heal + ' HP';
+    if (q.t === 'vial') return 'POISON ×' + (it.pois + (hasRelic('venom') ? 2 : 0));
+    if (q.t === 'frost') return 'FREEZE!';
+    return '';
+  }
+  const RINGS = [];
   window.__dpResolveFx = function (q) {
-    const toHero = q.t === 'silver' || q.t === 'shielditem' || q.t === 'heartitem' || q.t === 'skull';
+    const toHero = q.t === 'silver' || q.t === 'red' || q.t === 'shielditem' || q.t === 'heartitem' || q.t === 'skull';
     const toGold = q.t === 'gem' || q.t === 'bag';
-    const tgt = toGold ? { x: 90, y: 756 } : toHero ? { x: ANCHORS.hero.x, y: ANCHORS.hero.y + 22 } : { x: LW / 2, y: 66 };
-    const big = q.t === 'weapon' || q.t === 'vial' || q.t === 'frost';
-    RFX.push({
-      x0: LW / 2 + (Math.random() - 0.5) * 90, y0: 672,
+    const tgt = toGold ? { x: 90, y: 756 }
+              : toHero ? { x: ANCHORS.hero.x, y: ANCHORS.hero.y + 28 }
+              : { x: ANCHORS.enemy.x, y: ANCHORS.enemy.y + 26 };
+    const big = q.t === 'weapon' || q.t === 'vial' || q.t === 'frost' || q.t === 'lucky' || q.t === 'blue' || q.t === 'skull';
+    const f = {
+      x0: LW / 2 + (Math.random() - 0.5) * 70, y0: 664,
       x1: tgt.x, y1: tgt.y,
-      t: 0, dur: big ? 0.42 : 0.26,
-      icon: fxIcon(q), q,
-      lift: 60 + Math.random() * 60,
-      spin: (Math.random() - 0.5) * 10,
-    });
+      t: 0, dur: big ? 0.72 : 0.5, big,
+      icon: fxIcon(q), label: fxLabel(q), q,
+      lift: 90 + Math.random() * 70,
+      spin: (Math.random() - 0.5) * 7,
+    };
+    RFX.push(f);
+    // a strike headed for a foe? the hero LUNGES to deliver it himself
+    if (!toHero && !toGold) { HFX.until = S.time + f.dur + 0.08; HFX.dur = f.dur + 0.08; HFX.tx = tgt.x; }
   };
   function drawResolveFx(dt) {
+    // impact rings ripple out where a piece lands
+    for (let i = RINGS.length - 1; i >= 0; i--) {
+      const r = RINGS[i];
+      r.t += dt;
+      const k = r.t / 0.38;
+      if (k >= 1) { RINGS.splice(i, 1); continue; }
+      ctx.save();
+      ctx.globalAlpha = (1 - k) * 0.8;
+      ctx.lineWidth = 3.5 * (1 - k) + 1;
+      ctx.strokeStyle = r.col;
+      ctx.beginPath(); ctx.arc(r.x, r.y, 8 + k * 36, 0, 7); ctx.stroke();
+      ctx.restore();
+    }
     for (let i = RFX.length - 1; i >= 0; i--) {
       const f = RFX[i];
       f.t += dt;
       const k = Math.min(1, f.t / f.dur);
       if (k >= 1) {
-        // impact!
+        // IMPACT — burst, ring, and a kick of screen-shake
         burstScreen(f.x1, f.y1, f.q.t === 'skull' ? 'skull' : f.q.t === 'gem' ? 'gem' : 'item');
+        RINGS.push({ x: f.x1, y: f.y1, t: 0, col: LOOT_COL[f.q.t] || '#ffe4b0' });
+        S.shake += f.big ? 5 : 2.2;
         RFX.splice(i, 1);
         continue;
       }
-      const x = f.x0 + (f.x1 - f.x0) * k;
-      const y = f.y0 + (f.y1 - f.y0) * k - Math.sin(k * Math.PI) * f.lift;
+      const ease = k * k * (3 - 2 * k);              // winds up, then WHAM
+      const x = f.x0 + (f.x1 - f.x0) * ease;
+      const y = f.y0 + (f.y1 - f.y0) * ease - Math.sin(ease * Math.PI) * f.lift;
       ctx.save();
       ctx.translate(x, y);
+      const pop = 1 + (f.big ? 0.5 : 0.25) * Math.sin(ease * Math.PI);   // swells mid-flight
+      ctx.scale(pop, pop);
       ctx.rotate(f.spin * f.t);
       const col = LOOT_COL[f.q.t];
       if (col) {
-        // a proper little coin in flight
-        ctx.beginPath(); ctx.ellipse(0, 2, 9, 7, 0, 0, 7);
+        // a proper coin in flight — big enough to follow
+        ctx.beginPath(); ctx.ellipse(0, 3, 13, 10, 0, 0, 7);
         ctx.fillStyle = 'rgba(20,10,4,0.5)'; ctx.fill();
-        ctx.beginPath(); ctx.ellipse(0, 0, 9, 7 * Math.abs(Math.cos(f.t * 14)), 0, 0, 7);
+        ctx.beginPath(); ctx.ellipse(0, 0, 13, 10 * Math.abs(Math.cos(f.t * 10)), 0, 0, 7);
         ctx.fillStyle = col; ctx.fill();
-        ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.stroke();
+        ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.stroke();
       } else {
-        txt(f.icon, 0, 0, '24px serif', '#fff');
+        txt(f.icon, 0, 0, '34px serif', '#fff');
       }
       ctx.restore();
+      // its promise rides along above it
+      if (f.label) {
+        txt(f.label, x, y - 30, '900 13px Verdana, sans-serif', col || '#ffe4b0',
+            'center', { w: 4, col: 'rgba(12,5,10,0.95)' });
+      }
       // sparkle trail
-      if (Math.random() < 0.5 && S.parts.length < 130) {
-        S.parts.push({ x, y, vx: (Math.random() - 0.5) * 20, vy: 10, g: 30, life: 0, max: 0.3,
-                       col: col || '#ffe4b0', sz: 1.6, spin: 2, shape: 'star' });
+      if (S.parts.length < 150) {
+        S.parts.push({ x: x + (Math.random() - 0.5) * 8, y: y + 6, vx: (Math.random() - 0.5) * 26, vy: 16,
+                       g: 40, life: 0, max: 0.34,
+                       col: col || '#ffe4b0', sz: f.big ? 2.4 : 1.8, spin: 3, shape: 'star' });
       }
     }
   }
-  // the queue still waiting its turn, pinned above the tray
+  // one little tray/queue token: item icon, coin blob, or fallback glyph
+  function lootChip(x, y, key, count) {
+    const it = itemById(key);
+    const col = LOOT_COL[key];
+    if (it) txt(it.icon, x, y - 1, '15px serif', '#fff');
+    else if (col) {
+      ctx.beginPath(); ctx.ellipse(x, y, 7.5, 6, 0, 0, 7);
+      ctx.fillStyle = col; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(60,40,10,0.6)'; ctx.stroke();
+    } else txt(LOOT_ICON[key] || '●', x, y - 1, '14px serif', '#fff');
+    if (count > 1) txt('×' + count, x + 11, y + 1, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
+  }
+  function groupCounts(list, mapFn) {
+    const counts = {};
+    for (const p of list) {
+      const key = mapFn(p);
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    return counts;
+  }
+  // the queue still waiting its turn, pinned above the tray — and during the
+  // drop phase, the tap-to-BANK strip (stash up to 3 pieces for next round)
   function drawLootStrip(t) {
     const B = S.battle;
     if (!B) return;
-    let pieces;
-    if (B.phase === 'drop') {
-      pieces = B.loot.map(l => (l.k === 'item' ? { t: 'item', iid: l.iid } : { t: l.k }));
-    } else {
-      pieces = B.queue.slice(B.qi).map(q => q);
+    if (B.phase !== 'drop') {
+      const pieces = B.queue.slice(B.qi);
+      if (!pieces.length) return;
+      const counts = groupCounts(pieces, p => p.iid || p.t);
+      const keys = Object.keys(counts);
+      const w = Math.min(LW - 40, keys.length * 52 + 20);
+      rr(LW / 2 - w / 2, 610, w, 30, 15);
+      ctx.fillStyle = 'rgba(12,7,14,0.88)'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,215,94,0.5)'; ctx.stroke();
+      keys.slice(0, 8).forEach((key, i) => lootChip(LW / 2 - w / 2 + 28 + i * 52, 625, key, counts[key]));
+      return;
     }
-    if (!pieces.length) return;
-    const counts = {};
-    for (const p of pieces) {
-      const key = p.iid || p.t;
-      counts[key] = (counts[key] || 0) + 1;
-    }
+    if (!B.loot.length && !B.banked.length) return;
+    // tray box (left): tap a group to stash one for next round
+    const counts = groupCounts(B.loot, lootKey);
     const keys = Object.keys(counts);
-    const w = Math.min(LW - 40, keys.length * 52 + 20);
-    rr(LW / 2 - w / 2, 610, w, 30, 15);
+    rr(12, 552, 292, 34, 12);
     ctx.fillStyle = 'rgba(12,7,14,0.88)'; ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,215,94,0.5)'; ctx.stroke();
-    keys.slice(0, 8).forEach((key, i) => {
-      const x = LW / 2 - w / 2 + 28 + i * 52;
-      const it = itemById(key);
-      const col = LOOT_COL[key];
-      if (it) txt(it.icon, x, 624, '15px serif', '#fff');
-      else if (col) {
-        ctx.beginPath(); ctx.ellipse(x, 625, 7.5, 6, 0, 0, 7);
-        ctx.fillStyle = col; ctx.fill();
-        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(60,40,10,0.6)'; ctx.stroke();
-      } else txt(LOOT_ICON[key] || '●', x, 624, '14px serif', '#fff');
-      txt('×' + counts[key], x + 12, 626, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
+    txt('TRAY', 24, 569, '800 9px Verdana, sans-serif', '#a08a5a', 'left');
+    keys.slice(0, 5).forEach((key, i) => {
+      const x = 72 + i * 48;
+      lootChip(x, 569, key, counts[key]);
+      if (B.banked.length < C.BANK_MAX) {
+        uiButtons.push({ x: x - 18, y: 550, w: 44, h: 38, cb: () => bankLoot(key) });
+      }
     });
-  }
-  // your hero stands ringside — silver flies to HIM
-  function drawBattleHero(t) {
-    const hx = ANCHORS.hero.x, hy = ANCHORS.hero.y + 30;
-    const hurt = S.hurtT > 0;
-    ctx.beginPath(); ctx.ellipse(hx, hy + 12, 18, 6, 0, 0, 7);
-    ctx.fillStyle = 'rgba(6,3,8,0.6)'; ctx.fill();
-    ctx.save();
-    ctx.translate(hx, hy - 6 + Math.sin(t * 2.4) * 2);
-    if (hurt) ctx.rotate(Math.sin(t * 50) * 0.09);
-    const hero = S.run.hero || 'knight';
-    const hk = hero + '_idle';
-    if (!(SHEETS[hk] && drawArt(hk, 0, 22, SHEETS[hk].bh || 50, 'r', t))) {
-      txt((heroById(hero) || HEROES[0]).icon, 0, 0, '38px serif', '#fff');
+    // bank box (right): stashed pieces skip the resolve and return next round
+    const canBank = B.loot.length > 0 && B.banked.length < C.BANK_MAX;
+    rr(312, 552, 156, 34, 12);
+    ctx.fillStyle = 'rgba(12,7,20,0.9)'; ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = canBank ? 'rgba(140,200,255,' + (0.55 + 0.25 * Math.sin(t * 4)) + ')' : 'rgba(140,180,230,0.4)';
+    ctx.stroke();
+    txt('\u{1F512}' + B.banked.length + '/' + C.BANK_MAX, 324, 569, '800 9px Verdana, sans-serif', '#8fb8e0', 'left');
+    const bCounts = groupCounts(B.banked, lootKey);
+    Object.keys(bCounts).slice(0, 3).forEach((key, i) => {
+      const x = 380 + i * 34;
+      lootChip(x, 569, key, bCounts[key]);
+      uiButtons.push({ x: x - 16, y: 550, w: 32, h: 38, cb: () => unbankLoot(key) });
+    });
+    if (!B.banked.length) {
+      txt(canBank ? 'tap tray to stash' : 'bank', 386, 569, '600 8px Verdana, sans-serif', '#5a7a9a', 'left');
     }
-    ctx.restore();
-    // the shield ring: your block, made visible
-    if (S.run.block > 0) {
-      const pulse = 1 + Math.sin(t * 4) * 0.05;
-      ctx.save();
-      ctx.globalAlpha = 0.75;
-      ctx.beginPath(); ctx.arc(hx, hy - 8, 27 * pulse, 0, 7);
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = '#9fc8e8';
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-      rr(hx + 14, hy - 28, 30, 17, 8);
-      ctx.fillStyle = '#2a3a4e'; ctx.fill();
-      ctx.lineWidth = 1.5; ctx.strokeStyle = '#9fc8e8'; ctx.stroke();
-      txt('\u{1F6E1}' + S.run.block, hx + 29, hy - 19, '800 9px Verdana, sans-serif', '#d8ecff');
-      ctx.restore();
-    }
-    if (S.pPois > 0) txt('☠ ' + S.pPois, hx - 26, hy - 26, '800 11px Verdana, sans-serif', '#b8f26b');
   }
-
   // -------------------------------------------------------- dungeon screen
   // A real crawl: drive the hero with the thumb-stick (or WASD / arrows),
   // bump into dwellers to interact, walk through doorways on any wall.

@@ -1,9 +1,10 @@
 // Headless suite for Dungeon Pusher (coin pusher roguelike). The game's inline
 // <script> is evaluated with a stubbed DOM and no canvas ctx, which flips its
 // HEADLESS switch: the full 2.5D pusher sim plus the whole roguelike layer
-// (round-based battles with a resolve queue, enemy turns, the top-down room
-// crawl with keys/doors/inhabitants, shops, forges, relics, save/load) runs
-// and is driven through window.DP.
+// (the purse-as-deck hand, TILT charges, tray banking, telegraphed enemy
+// intents, multi-foe gang-ups, the per-floor persistent pile, the top-down
+// room crawl with keys/doors/inhabitants, shops, forges, relics, save/load)
+// runs and is driven through window.DP.
 // A second pass loads the game WITH a stub canvas ctx and drives the real
 // requestAnimationFrame loop across every screen to catch render-time errors.
 import { readFileSync } from 'node:fs';
@@ -61,11 +62,10 @@ t.eq = (a, b, msg) => t.ok(a === b, msg + ' [' + a + ' != ' + b + ']');
 
 const store = {};
 const { DP } = loadGame(store, false);
-const { S, C, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL } = DP;
+const { S, C, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL, COIN_KINDS } = DP;
 const DT = 1 / 60;
 const step = (secs) => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) DP.tick(DT); };
 const platCoins = () => S.coins.filter(c => c.st === 'plat');
-const ENT_KINDS = ['monster', 'chest', 'shop', 'smith', 'shrine', 'wheel', 'stairs'];
 const mkMonster = (eid) => ({ kind: 'monster', mtype: 'battle', eid: eid || 'orc', done: false, px: 0.5, py: 0.4 });
 const mapRooms = () => Object.values(S.run.map.rooms);
 const DX = { n: 0, s: 0, e: 1, w: -1 }, DY = { n: -1, s: 1, e: 0, w: 0 };
@@ -92,6 +92,13 @@ const untilPhase = (phase, maxSecs) => {
   }
   return S.battle && S.battle.phase === phase;
 };
+// zero the current hand (drop() refuses an empty hand; nothing auto-fires)
+const drainHand = () => { for (const k of COIN_KINDS) S.battle.hand[k] = 0; };
+// win + leave the current battle without side quests
+const finishFight = () => {
+  for (const f of S.foes) { if (f.hp > 0) { f.hp = 1; DP.dmgFoe(f, 5); } }
+  DP.leaveBattle();
+};
 
 // -------- boot state --------
 t.ok(DP.HEADLESS, 'headless mode detected');
@@ -102,22 +109,27 @@ t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the best
 t.eq(BOSSES.length, 3, 'three floor bosses');
 t.ok(RELICS.length >= 8 && RELICS.every(r => r.id && r.desc), 'relic shelf is stocked');
 t.eq(WHEEL.length, 8, 'the lucky wheel has eight segments');
+t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
+t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
+     'every coin type is described');
 
-// -------- the four adventurers --------
-t.ok(DP.HEROES.length === 4 && DP.HEROES.every(h => h.id && h.name && h.perk), 'four heroes to choose from');
+// -------- the four adventurers and their signature coins --------
+t.ok(DP.HEROES.length === 4 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
+     'four heroes, each with a signature coin');
 DP.srand(41);
 DP.newRun('knight');
 t.eq(S.run.hero, 'knight', 'the knight answers the call');
-t.eq(S.run.maxHp, C.START_HP + 10, 'knight perk: +10 max HP');
-t.eq(S.run.hp, S.run.maxHp, 'and starts at full');
+t.eq(S.run.purse.silver, DP.START_PURSE.silver + 2, 'knight signature: +2 SILVER');
+t.eq(S.run.hp, S.run.maxHp, 'and starts at full HP');
 DP.newRun('rogue');
-t.eq(S.run.keys, 5, 'rogue perk: five starting keys');
-t.eq(S.run.maxHp, C.START_HP, 'no HP bonus for the rogue');
+t.eq(S.run.purse.green, 2, 'rogue signature: +2 VENOM');
 DP.newRun('wizard');
-t.eq(S.run.pouch, 1, 'mage perk: a coin pouch');
-t.eq(DP.roundCoins(), C.ROUND_COINS + C.POUCH_COINS, 'so every purse runs richer');
+t.eq(S.run.purse.blue, 2, 'mage signature: +2 FROST (the gang-buster)');
 DP.newRun('cleric');
-t.eq(S.run.potions, 2, 'cleric perk: two potions');
+t.eq(S.run.purse.red, 2, 'cleric signature: +2 HEART');
+t.eq(S.run.purse.coin, DP.START_PURSE.coin, 'everyone starts with 5 gold coins');
+t.eq(S.run.purse.silver, DP.START_PURSE.silver, 'and 5 silver');
+t.eq(DP.purseTotal(), 12, 'twelve coins in the opening purse');
 t.eq(S.heroPick, 'cleric', 'the pick is remembered');
 DP.newRun('nonsense');
 t.eq(S.run.hero, 'cleric', 'unknown heroes fall back to the remembered pick');
@@ -129,11 +141,11 @@ t.eq(S.screen, 'dungeon', 'new run opens in the dungeon');
 t.eq(S.run.floor, 1, 'run starts on floor 1');
 t.eq(S.run.depth, 1, 'run starts at room 1');
 t.eq(S.run.hp, C.START_HP, 'full HP at the start');
-t.eq(S.run.keys, 5, 'the rogue jangles five keys');
-t.eq(S.run.pouch, 0, 'no coin pouches yet');
+t.eq(S.run.keys, C.START_KEYS, 'the starter key ring');
 t.ok(S.run.arsenal.sword === 1 && S.run.arsenal.shield === 1 && S.run.arsenal.vial === 1,
      'starter arsenal: sword, shield, venom vial');
 t.eq(S.run.potions, C.START_POTIONS, 'one potion in the belt');
+t.eq(S.run.pileSave, null, 'no machine racked yet');
 // -------- the floor MAP: a real crawl --------
 t.ok(S.run.map && S.run.map.rooms, 'a floor map is carved');
 t.ok(mapRooms().length >= 9, 'the floor holds ' + mapRooms().length + ' rooms');
@@ -204,8 +216,13 @@ t.ok(DP.interact(0), 'tapping the monster starts the fight');
 t.eq(S.screen, 'battle', 'the fight is on');
 t.ok(S.enemy && S.enemy.hp > 0 && S.enemy.hp === S.enemy.maxHp, 'the foe appears at full health');
 t.eq(S.enemy.id, 'orc', 'the room told you exactly who lurks — and it delivered');
-t.ok(S.battle && S.battle.round === 1 && S.battle.phase === 'drop', 'round 1, purse in hand');
-t.eq(S.run.wallet, C.ROUND_COINS, 'the purse holds the round coins');
+t.eq(S.foes.length, 1, 'a lone monster fights alone');
+t.ok(S.battle && S.battle.round === 1 && S.battle.phase === 'drop', 'round 1, hand dealt');
+t.eq(S.run.wallet, DP.purseTotal(), 'the WHOLE purse is dealt as your hand');
+t.eq(S.battle.tilts, C.TILTS, 'three TILT charges ready');
+t.eq(S.battle.sel, 'coin', 'gold is queued in the slot by default');
+t.ok(S.enemy.intent && ['hit', 'heavy', 'brace', 'curse'].indexOf(S.enemy.intent.t) >= 0,
+     'the foe telegraphs its plan (' + S.enemy.intent.t + ')');
 t.ok(platCoins().length >= 40, 'battle pile is dense (' + platCoins().length + ' pieces)');
 t.ok(S.coins.some(c => c.kind === 'item' && c.iid === 'sword'), 'your sword rides the pile');
 t.eq(S.coins.filter(c => c.kind === 'item').length, 3, 'the whole starter arsenal is racked');
@@ -223,17 +240,20 @@ for (let i = 0; i < 300; i++) { DP.step(DT, true); const f = DP.pusherFront(0); 
 t.ok(lo >= C.PUSH_MIN - 0.01 && hi <= C.PUSH_MAX + 0.01, 'pusher stays within its travel');
 t.ok(hi - lo > (C.PUSH_MAX - C.PUSH_MIN) * 0.8, 'pusher sweeps most of its travel');
 
-// -------- dropping spends the round purse --------
-S.cd = 0; S.run.wallet = 10; S.meter = 0; S.dropped = 0;
-const w0 = S.run.wallet, n0 = S.coins.length;
+// -------- dropping spends the hand --------
+S.cd = 0; S.meter = 0; S.dropped = 0;
+S.battle.hand = { coin: 10, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+S.battle.sel = 'coin';
+const n0 = S.coins.length;
 t.ok(DP.drop(50), 'drop accepted');
-t.eq(S.run.wallet, w0 - 1, 'drop costs one coin');
+t.eq(S.battle.hand.coin, 9, 'drop spends one coin from the hand');
+t.eq(S.run.wallet, 9, 'the wallet mirrors the hand');
 t.eq(S.coins.length, n0 + 1, 'drop spawns a coin');
 t.eq(S.meter, 1, 'drop feeds the frenzy meter');
 t.ok(!DP.drop(50), 'cooldown blocks an immediate second drop');
 const dropped = S.coins[S.coins.length - 1];
 t.eq(dropped.st, 'air', 'spawned coin is falling from the slot');
-t.ok(dropped.kind === 'coin' || dropped.kind === 'lucky', 'you always insert gold (or lucky) coins');
+t.eq(dropped.kind, 'coin', 'the slot takes the SELECTED kind');
 let landed = false;
 for (let i = 0; i < 60 * 6 && !landed; i++) { DP.tick(DT); if (dropped.st === 'plat') landed = true; }
 t.ok(landed, 'dropped coin lands on the platform (or the shelf)');
@@ -250,7 +270,6 @@ for (const [kind, x] of pieces) {
   const c = DP.place(x, C.PLAT_FRONT - 0.5, kind, 0, 'plat');
   c.vy = 70;
 }
-S.run.wallet = 5;                    // purse not empty: no auto-resolve yet
 step(1.5);
 t.eq(S.enemy.hp, hp0, 'no damage during the drop phase — the tray only collects');
 t.eq(S.run.hp, hpMe0, 'even skulls wait for the resolve');
@@ -261,19 +280,19 @@ t.ok(S.battle.loot.some(l => l.k === 'silver') && S.battle.loot.some(l => l.k ==
 // -------- the resolve queue: ordered, one piece at a time --------
 {
   const q = DP.buildQueue([
-    { k: 'skull' }, { k: 'coin' }, { k: 'item', iid: 'shield' }, { k: 'silver' },
-    { k: 'gem' }, { k: 'item', iid: 'sword' }, { k: 'green' }, { k: 'lucky' },
+    { k: 'skull' }, { k: 'coin' }, { k: 'item', iid: 'shield' }, { k: 'silver' }, { k: 'red' },
+    { k: 'gem' }, { k: 'item', iid: 'sword' }, { k: 'green' }, { k: 'lucky' }, { k: 'blue' },
   ]);
   const order = q.map(x => x.t);
-  t.eq(order.join(','), 'gem,silver,shielditem,gold,lucky,weapon,green,skull',
-       'the queue banks gold, shields, then strikes — curses last');
+  t.eq(order.join(','), 'gem,silver,shielditem,red,gold,lucky,blue,weapon,green,skull',
+       'the queue banks gold, shields, mends, then strikes — curses last');
 }
 // full pipeline: the tray NEVER resolves itself — END TURN is yours to press
-S.run.wallet = 0;
+drainHand();
 S.run.block = 0;
 const g0 = S.run.gold;
 step(3);
-t.eq(S.battle.phase, 'drop', 'purse spent + field settled — still waiting for YOU');
+t.eq(S.battle.phase, 'drop', 'hand spent + field settled — still waiting for YOU');
 t.ok(DP.endRoundNow(), 'pressing END TURN starts the show');
 t.eq(S.battle.phase, 'resolve', 'and only then does the tray fire');
 t.ok(untilPhase('enemy', 8), 'the whole queue plays out');
@@ -288,30 +307,33 @@ t.eq(S.run.hp, hpMe0 - (C.SKULL_DMG + S.run.floor - 1), 'the skull cursed straig
 S.run.hp = 200; S.run.maxHp = 200;
 S.run.block = 3;
 S.enemy.trait = null; S.enemy.pois = 0;
+S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };   // pin the telegraph for the math below
 const hpBefore = S.run.hp, atk = S.enemy.atk;
-t.ok(untilPhase('drop', 4), 'the enemy strikes and a new round begins');
+t.ok(untilPhase('drop', 5), 'the enemy strikes and a new round begins');
 t.eq(S.battle.round, 2, 'round 2');
 t.eq(S.run.hp, hpBefore - Math.max(0, atk - 3), 'block soaked 3 of the blow');
-t.eq(S.run.wallet, C.ROUND_COINS, 'a fresh purse for the new round');
+t.eq(S.run.wallet, DP.purseTotal(), 'a fresh hand is dealt from the purse');
+t.eq(S.battle.tilts, C.TILTS, 'the TILT charges refresh');
 t.eq(S.run.block, 0, 'leftover block melts between rounds');
 step(1.5);                            // let the round-start rain land
 t.ok(S.coins.length > 0, 'the dungeon re-salts the pile each round');
 
 // -------- END TURN is always available — even with coins left to spend --------
-S.run.wallet = 3;
-t.ok(DP.endRoundNow(), 'END TURN fires even with coins still in the purse');
-t.eq(S.battle.phase, 'resolve', 'straight to the resolve, purse be damned');
-t.ok(untilPhase('drop', 6), 'and on into round 3');
+t.ok(S.run.wallet > 0, 'coins still in hand');
+t.ok(DP.endRoundNow(), 'END TURN fires even with coins still in the hand');
+t.eq(S.battle.phase, 'resolve', 'straight to the resolve, hand be damned');
+S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
+t.ok(untilPhase('drop', 8), 'and on into round 3');
 t.eq(S.battle.round, 3, 'round 3');
-// a fresh purse arrives regardless of what you left unspent
-t.eq(S.run.wallet, DP.roundCoins(), 'the new turn refills the purse');
+// a fresh hand arrives regardless of what you left unspent
+t.eq(S.run.wallet, DP.purseTotal(), 'the new turn re-deals the whole purse');
 // but it does nothing outside the drop phase
 S.battle.phase = 'resolve';
 t.ok(!DP.endRoundNow(), 'END TURN is inert mid-resolve');
 S.battle.phase = 'drop';
 
 // -------- applyLoot effects (unit level) --------
-S.enemy.hp = S.enemy.maxHp = 500; S.enemy.pois = 0; S.enemy.stunned = 0;
+S.enemy.hp = S.enemy.maxHp = 500; S.enemy.pois = 0; S.enemy.stunned = 0; S.enemy.braced = false;
 S.run.block = 0; S.run.hp = 100; S.run.maxHp = 200;
 const eh = S.enemy.hp;
 DP.applyLoot({ t: 'weapon', iid: 'sword' });
@@ -322,6 +344,9 @@ DP.applyLoot({ t: 'shielditem' , iid: 'shield' });
 t.eq(S.run.block, DP.itemById('shield').block, 'shield item raises its listed block');
 DP.applyLoot({ t: 'heartitem', iid: 'heart' });
 t.eq(S.run.hp, 100 + DP.itemById('heart').heal, 'heart heals its listed HP');
+const hpR = S.run.hp;
+DP.applyLoot({ t: 'red' });
+t.eq(S.run.hp, hpR + C.RED_HEAL, 'a HEART COIN mends ' + C.RED_HEAL + ' HP');
 DP.applyLoot({ t: 'vial', iid: 'vial' });
 t.eq(S.enemy.pois, DP.itemById('vial').pois, 'venom vial applies its stacks');
 DP.applyLoot({ t: 'frost', iid: 'frost' });
@@ -333,15 +358,16 @@ t.ok(S.run.gold >= 8, 'gold bag banks gold');
 S.enemy.stunned = 1;
 S.run.block = 0;
 const hpF = S.run.hp;
-DP.enemyAct();
+DP.enemyActFoe(S.enemy);
 t.eq(S.run.hp, hpF, 'a frozen foe cannot strike');
 t.eq(S.enemy.stunned, 0, 'the freeze thaws after the skipped turn');
-DP.enemyAct();
+S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
+DP.enemyActFoe(S.enemy);
 t.ok(S.run.hp < hpF, 'thawed, it strikes again');
 
 // -------- poison ticks at round end and decays --------
 S.enemy.hp = S.enemy.maxHp = 500;
-S.enemy.pois = 3; S.enemy.trait = null;
+S.enemy.pois = 3; S.enemy.trait = null; S.enemy.braced = false;
 S.pPois = 2;
 S.run.hp = 100; S.run.block = 5;
 const ehP = S.enemy.hp, phP = S.run.hp;
@@ -357,27 +383,117 @@ DP.endRoundTicks();
 t.eq(S.enemy.hp, 103, 'a regenerating foe knits +3 at round end');
 S.enemy.trait = null;
 
+// -------- enemy INTENTS: the telegraphed moves play out --------
+S.run.hp = 200; S.run.maxHp = 200; S.run.block = 0;
+S.enemy.trait = null;
+S.enemy.intent = { t: 'heavy', dmg: S.enemy.atk * 2 };
+{
+  const hh = S.run.hp;
+  DP.enemyActFoe(S.enemy);
+  t.eq(S.run.hp, hh - S.enemy.atk * 2, 'a HEAVY blow lands double');
+}
+S.enemy.intent = { t: 'brace' };
+DP.enemyActFoe(S.enemy);
+t.ok(S.enemy.braced, 'a bracing foe raises its guard');
+{
+  const bh = S.enemy.hp;
+  DP.dmgFoe(S.enemy, 8);
+  t.eq(S.enemy.hp, bh - 4, 'and shrugs off HALF of what you throw');
+}
+S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
+DP.enemyActFoe(S.enemy);
+t.ok(!S.enemy.braced, 'the guard drops the moment it moves again');
+S.rain.length = 0;
+S.enemy.intent = { t: 'curse' };
+DP.enemyActFoe(S.enemy);
+t.eq(S.rain.filter(r => r.kind === 'skull').length, 2, 'a CURSE hurls two skulls onto the field');
+S.rain.length = 0;
+// the intent roller: varied, legal, never two heavies in a row
+{
+  const e = { trait: null, atk: 3, intent: null };
+  const seen = new Set();
+  let doubleHeavy = false;
+  for (let i = 0; i < 300; i++) {
+    const prev = e.intent && e.intent.t;
+    DP.rollIntent(e);
+    if (prev === 'heavy' && e.intent.t === 'heavy') doubleHeavy = true;
+    seen.add(e.intent.t);
+  }
+  t.ok(seen.has('hit') && seen.has('heavy') && seen.has('brace'), 'intents vary (' + [...seen].join(',') + ')');
+  t.ok(!seen.has('curse'), 'plain foes never roll curses');
+  t.ok(!doubleHeavy, 'never two HEAVY wind-ups in a row');
+  const c = { trait: 'curse', atk: 3, intent: null };
+  let sawCurse = false;
+  for (let i = 0; i < 100; i++) { DP.rollIntent(c); if (c.intent.t === 'curse') sawCurse = true; }
+  t.ok(sawCurse, 'curse-trait foes roll curse intents');
+}
+
 // -------- enemy traits on its turn --------
 // fast: two strikes
 S.enemy.trait = 'fast'; S.run.block = 0; S.run.hp = 150;
+S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
 const hpFast = S.run.hp;
-DP.enemyAct();
+DP.enemyActFoe(S.enemy);
 t.eq(S.run.hp, hpFast - S.enemy.atk * 2, 'a fast foe strikes twice in its turn');
-// thief: cuts the NEXT round's purse
+// thief: cuts the NEXT round's hand
 S.enemy.trait = 'thief'; S.battle.stolen = 0; S.run.hp = 150;
-DP.enemyAct();
+S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
+DP.enemyActFoe(S.enemy);
 t.eq(S.battle.stolen, 2, 'a thief cuts your purse');
 DP.newRound();
-t.eq(S.run.wallet, DP.roundCoins() - 2, 'the stolen coins are missing from the new purse');
+t.eq(S.run.wallet, DP.purseTotal() - 2, 'the stolen coins are missing from the new hand');
 // venom: poisons you
 S.enemy.trait = 'venom'; S.pPois = 0; S.run.hp = 150;
-DP.enemyAct();
+S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
+DP.enemyActFoe(S.enemy);
 t.eq(S.pPois, 2, 'a venomous bite poisons you');
-// curse: hurls skulls onto the field
-S.enemy.trait = 'curse'; S.rain.length = 0; S.run.hp = 150;
-DP.enemyAct();
-t.ok(S.rain.some(r => r.kind === 'skull'), 'a cursed foe hurls a skull onto the field');
 S.enemy.trait = null; S.rain.length = 0; S.pPois = 0;
+
+// -------- TILT: three shoves a round --------
+S.battle.phase = 'drop';
+S.coins.length = 0;
+S.battle.tilts = C.TILTS;
+{
+  const tc = DP.place(50, 40, 'coin', 0, 'plat');
+  t.ok(DP.tilt('l'), 'tilt accepted');
+  t.ok(tc.vx < 0, 'a left tilt shoves the pile left');
+  t.eq(S.battle.tilts, C.TILTS - 1, 'a charge is spent');
+  const vy0 = tc.vy;
+  t.ok(DP.tilt('f'), 'the forward bump');
+  t.ok(tc.vy > vy0, 'shoves the pile toward the tray');
+  DP.tilt('r');
+  t.eq(S.battle.tilts, 0, 'three charges a round');
+  t.ok(!DP.tilt('l'), 'no charges, no tilt');
+  S.battle.phase = 'resolve';
+  S.battle.tilts = 1;
+  t.ok(!DP.tilt('l'), 'no tilting outside the drop phase');
+  S.battle.phase = 'drop';
+  DP.newRound();
+  t.eq(S.battle.tilts, C.TILTS, 'a new round restores the charges');
+}
+
+// -------- BANKING: stash tray pieces for next round --------
+S.battle.phase = 'drop';
+S.battle.loot = [{ k: 'coin' }, { k: 'coin' }, { k: 'silver' }, { k: 'item', iid: 'sword' }, { k: 'gem' }];
+S.battle.banked = [];
+t.ok(DP.bankLoot('coin'), 'a tray coin goes into the bank');
+t.eq(S.battle.loot.length, 4, 'off the tray');
+t.eq(S.battle.banked.length, 1, 'into the stash');
+DP.bankLoot('sword');
+DP.bankLoot('gem');
+t.eq(S.battle.banked.length, C.BANK_MAX, 'the bank holds ' + C.BANK_MAX);
+t.ok(!DP.bankLoot('silver'), 'and not one more');
+t.ok(DP.unbankLoot('gem'), 'tap the bank to put one back');
+t.ok(DP.bankLoot('silver'), 'freeing a slot lets you stash again');
+t.ok(!DP.bankLoot('nonsense'), 'cannot bank what the tray does not hold');
+// banked pieces skip the resolve and seed the NEXT round's loot
+{
+  const stash = S.battle.banked.length;
+  DP.newRound();
+  t.eq(S.battle.loot.length, stash, 'the stash carries into the new round');
+  t.ok(S.battle.loot.some(l => l.iid === 'sword'), 'stashed gear included');
+  t.eq(S.battle.banked.length, 0, 'the bank empties back onto the tray');
+}
 
 // -------- the walls are SOLID: nothing is ever lost off the sides --------
 DP.srand(13);
@@ -388,7 +504,6 @@ const shoved = DP.place(6, 46, 'item', 0, 'plat');
 shoved.iid = 'axe'; shoved.vx = -60;
 const scoin = DP.place(6, 60, 'coin', 0, 'plat');
 scoin.vx = -60;
-S.run.wallet = 5;                     // keep the round machine in the drop phase
 step(3);
 t.ok(S.coins.includes(shoved), 'an item shoved hard into the wall stays on the field');
 t.eq(shoved.st, 'plat', 'still sitting on the platform');
@@ -405,7 +520,8 @@ t.eq(S.battle.loot.length, 1, 'and it joined the round loot');
 
 // -------- frenzy meter --------
 S.battle.phase = 'drop';
-S.meter = C.METER_MAX - 1; S.run.wallet = 30; S.cd = 0; S.rain.length = 0;
+S.meter = C.METER_MAX - 1; S.cd = 0; S.rain.length = 0;
+S.battle.hand.coin = 30; S.battle.sel = 'coin';
 DP.drop(50);
 t.eq(S.meter, 0, 'meter resets on frenzy');
 t.ok(S.rain.filter(r => ['coin', 'lucky', 'silver', 'green', 'bag'].indexOf(r.kind) >= 0).length >= 6,
@@ -416,7 +532,7 @@ step(2);
 t.ok(S.coins.some(c => c.kind === 'item' && c.temp), 'free weapons landed on the field');
 S.rain.length = 0;
 
-// -------- winning pays gold AND keys; victory halts the round machine --------
+// -------- winning pays gold AND keys, and offers a coin --------
 S.enemy.hp = 3; S.enemy.trait = null; S.enemy.pois = 0;
 const kills0 = S.run.kills, gold1 = S.run.gold, keys0 = S.run.keys, depth0 = S.run.depth;
 DP.applyLoot({ t: 'weapon', iid: 'sword' });
@@ -425,11 +541,13 @@ t.eq(S.run.kills, kills0 + 1, 'kill counted');
 t.ok(S.run.gold > gold1, 'victory pays the bounty');
 t.eq(S.run.keys, keys0 + C.KEY_KILL, 'every monster killed gives a key');
 t.eq(S.victory.keys, C.KEY_KILL, 'the overlay brags about it');
+t.ok(Array.isArray(S.victory.offer) && S.victory.offer.length === 3, 'three spoil coins glint in the rubble');
 t.ok(DP.leaveBattle(), 'CONTINUE returns to the room');
 t.eq(S.screen, 'dungeon', 'back in the top-down room');
 t.eq(S.battle, null, 'the round machine rests');
 t.eq(S.run.depth, depth0, 'winning a fight does NOT change rooms');
 t.ok(S.run.room.ents[0].done, 'the slain monster is gone from the room');
+t.ok(Array.isArray(S.run.pileSave), 'and the machine remembers its pile');
 
 // -------- keys unlock doors; unlocked doors allow BACKTRACKING --------
 {
@@ -474,23 +592,25 @@ t.ok(S.run.room.ents[0].done, 'the slain monster is gone from the room');
 // -------- room inhabitants --------
 {
   DP.srand(19);
-  let keyDrops = 0;
+  let keyDrops = 0, coinDrops = 0;
   for (let i = 0; i < 30; i++) {
     S.run.room.ents = [{ kind: 'chest', done: false }];
     const snap = {
-      gold: S.run.gold, keys: S.run.keys, potions: S.run.potions,
+      gold: S.run.gold, keys: S.run.keys, potions: S.run.potions, purse: DP.purseTotal(),
       arsenal: Object.values(S.run.arsenal).reduce((a, b) => a + b, 0),
     };
     t.ok(DP.interact(0), 'chest ' + i + ' opens');
     if (S.run.keys > snap.keys) keyDrops++;
+    if (DP.purseTotal() > snap.purse) coinDrops++;
     const gained = S.run.gold > snap.gold || S.run.keys > snap.keys
-      || S.run.potions > snap.potions
+      || S.run.potions > snap.potions || DP.purseTotal() > snap.purse
       || Object.values(S.run.arsenal).reduce((a, b) => a + b, 0) > snap.arsenal;
     if (!gained) t.ok(false, 'chest ' + i + ' paid nothing!');
     t.ok(S.run.room.ents[0].done, 'chest ' + i + ' is spent');
     t.ok(!DP.interact(0), 'chest ' + i + ' cannot be opened twice');
   }
   t.ok(keyDrops >= 1, 'some chests hold keys (' + keyDrops + '/30)');
+  t.ok(coinDrops >= 1, 'some chests hold purse coins (' + coinDrops + '/30)');
   t.ok(S.toast, 'chests tell you what you got');
 }
 // shrine heals and cleanses
@@ -505,7 +625,7 @@ S.run.room.ents = [{ kind: 'wheel', done: false }];
 DP.interact(0);
 t.ok(S.wheelAnim !== null, 'the wheel ghost spins the lucky wheel');
 
-// -------- the shopkeeper (now selling coin pouches) --------
+// -------- the shopkeeper (pouches and single coins for the purse) --------
 DP.srand(23);
 S.run.room.ents = [{ kind: 'shop', done: false }];
 t.ok(DP.interact(0), 'talking to the shopkeeper opens the shop');
@@ -514,6 +634,8 @@ t.ok(S.room.stock.length >= 6, 'shop stocks a full shelf (' + S.room.stock.lengt
 t.ok(S.room.stock.filter(x => x.kind === 'item').length === 3, 'three arsenal items on sale');
 t.ok(S.room.stock.some(x => x.kind === 'relic'), 'a relic gleams in the case');
 t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
+t.ok(S.room.stock.some(x => x.kind === 'coin' && COIN_KINDS.includes(x.cid)),
+     'and a single typed coin for the purse');
 S.run.gold = 0;
 t.ok(!DP.buyShop(0), 'cannot buy broke');
 S.run.gold = 10000;
@@ -523,10 +645,17 @@ const had = S.run.arsenal[iid] || 0;
 t.ok(DP.buyShop(itemSlot), 'gold buys the item');
 t.eq(S.run.arsenal[iid], had + 1, 'bought item joins the arsenal');
 t.ok(!DP.buyShop(itemSlot), 'cannot buy the same slot twice');
-const pouchSlot = S.room.stock.findIndex(x => x.kind === 'pouch');
-const purse0 = DP.roundCoins();
-DP.buyShop(pouchSlot);
-t.eq(DP.roundCoins(), purse0 + C.POUCH_COINS, 'a pouch fattens every future round purse');
+{
+  const pouchSlot = S.room.stock.findIndex(x => x.kind === 'pouch');
+  const pc0 = S.run.purse.coin;
+  DP.buyShop(pouchSlot);
+  t.eq(S.run.purse.coin, pc0 + C.POUCH_COINS, 'a pouch drops ' + C.POUCH_COINS + ' gold coins into the purse');
+  const coinSlot = S.room.stock.findIndex(x => x.kind === 'coin');
+  const cid = S.room.stock[coinSlot].cid;
+  const cc0 = S.run.purse[cid] || 0;
+  DP.buyShop(coinSlot);
+  t.eq(S.run.purse[cid], cc0 + 1, 'the bought ' + cid.toUpperCase() + ' coin joins the purse for good');
+}
 const relicSlot = S.room.stock.findIndex(x => x.kind === 'relic');
 const rid = S.room.stock[relicSlot].rid;
 t.ok(DP.buyShop(relicSlot), 'gold buys the relic');
@@ -581,7 +710,10 @@ t.eq(DP.weaponDmg(10), 10, 'without it, damage is flat');
 // venom gland boosts vials, not green coins
 S.run.relics = ['venom'];
 S.enemy = DP.mkEnemy('battle'); S.enemy.hp = 500;
-S.screen = 'battle'; S.battle = { round: 1, phase: 'resolve', loot: [], queue: [], qi: 0, qt: 0, settleT: 0, stolen: 0 };
+S.foes = [S.enemy];
+S.screen = 'battle';
+S.battle = { round: 1, phase: 'resolve', loot: [], banked: [], queue: [], qi: 0, qt: 0,
+             stolen: 0, target: 0, tilts: C.TILTS, hand: null, sel: 'coin', goldWon: 0, keysWon: 0 };
 DP.applyLoot({ t: 'vial', iid: 'vial' });
 t.eq(S.enemy.pois, DP.itemById('vial').pois + 2, 'venom gland adds two stacks to vials');
 S.enemy.pois = 0;
@@ -592,7 +724,7 @@ S.run.relics = ['plate'];
 DP.newRound();
 t.eq(S.run.block, 4, 'battle plate raises 4 block every round');
 S.run.relics = [];
-S.screen = 'dungeon'; S.battle = null;
+S.screen = 'dungeon'; S.battle = null; S.foes = [];
 // second wind: survive a killing blow once
 S.run.relics = ['wind']; S.run.windUsed = false; S.run.hp = 3; S.run.block = 0;
 DP.hurtPlayer(99, 'test doom');
@@ -601,6 +733,130 @@ DP.hurtPlayer(99, 'test doom');
 t.eq(S.run, null, 'the second killing blow lands — run over');
 t.eq(S.screen, 'over', 'game over screen');
 t.ok(S.over && S.over.cause === 'test doom', 'the cause of death is recorded');
+
+// -------- your purse is a DECK: the hand and the selector --------
+DP.srand(71);
+DP.newRun('cleric');                     // purse: 5 gold, 5 silver, 2 heart
+S.run.room.ents = [mkMonster('orc')];
+DP.interact(0);
+{
+  const B = S.battle;
+  t.ok(B.hand && B.hand.coin === 5 && B.hand.silver === 5 && B.hand.red === 2,
+       'the whole purse is dealt as your hand');
+  t.eq(S.run.wallet, 12, 'the wallet counts the hand');
+  t.ok(DP.selectCoin('red'), 'tap the heart chip');
+  t.eq(B.sel, 'red', 'hearts queued for the slot');
+  t.ok(!DP.selectCoin('blue'), 'cannot select a coin you do not hold');
+  t.ok(!DP.selectCoin('nonsense'), 'nor one that does not exist');
+  // dropping spends the SELECTED kind
+  S.cd = 0;
+  t.ok(DP.drop(50), 'drop accepted');
+  t.eq(B.hand.red, 1, 'one heart left the hand');
+  t.eq(S.coins[S.coins.length - 1].kind, 'red', 'and a HEART coin falls into the slot');
+  t.eq(S.run.wallet, 11, 'the wallet follows');
+  S.cd = 0; DP.drop(50);
+  t.eq(B.hand.red, 0, 'hearts spent');
+  S.cd = 0; DP.drop(50);
+  t.eq(S.coins[S.coins.length - 1].kind, B.sel, 'the selector slides to a stack you still hold');
+  t.ok(B.sel !== 'red', 'no phantom hearts');
+  drainHand();
+  S.cd = 0;
+  t.ok(!DP.drop(50), 'an empty hand cannot drop');
+  finishFight();
+}
+
+// -------- multi-foe GANG-UPS --------
+DP.srand(53);
+S.run.room.ents = [mkMonster('orc'), mkMonster('goblin'), { kind: 'chest', done: false }];
+DP.interact(0);
+t.eq(S.foes.length, 2, 'the other room monster GANGS UP');
+t.eq(S.foes[1].id, 'goblin', 'and it is exactly who was prowling there');
+t.ok(S.foes.every(f => f.intent), 'every foe telegraphs an intent');
+t.ok(S.enemy === S.foes[0], 'the foe you tapped is targeted first');
+t.ok(DP.setTarget(1), 'tap the other panel to retarget');
+t.ok(S.enemy === S.foes[1], 'your gold now aims at the goblin');
+t.ok(!DP.setTarget(7), 'cannot target a foe that is not there');
+// blue FROST coins bite EVERY foe at once
+S.foes[0].hp = S.foes[0].maxHp = 10;
+S.foes[1].hp = S.foes[1].maxHp = 10;
+S.foes[0].braced = false; S.foes[1].braced = false;
+DP.applyLoot({ t: 'blue' });
+t.ok(S.foes[0].hp === 10 - C.DMG.blue && S.foes[1].hp === 10 - C.DMG.blue,
+     'the FROST coin bites every foe for ' + C.DMG.blue);
+// per-kill payout mid-fight
+{
+  const kk = S.run.keys, kg = S.run.gold;
+  S.foes[1].hp = 1;
+  DP.dmgFoe(S.foes[1], 5);
+  t.ok(!S.victory, 'one foe down — the fight rages on');
+  t.eq(S.run.keys, kk + C.KEY_KILL, 'the kill pays its key on the spot');
+  t.ok(S.run.gold > kg, 'and its gold');
+  t.ok(S.enemy === S.foes[0], 'your aim snaps back to a living foe');
+  t.ok(S.run.room.ents[1].done, 'the slain gang member is cleared from the room');
+  S.foes[0].hp = 1;
+  DP.dmgFoe(S.foes[0], 5);
+  t.ok(S.victory, 'last foe down -> victory');
+  t.ok(S.victory.gold > 0 && S.victory.keys >= 2 * C.KEY_KILL, 'the overlay tallies the whole gang');
+}
+DP.leaveBattle();
+
+// -------- the spoils: pick ONE of three coins --------
+DP.srand(67);
+S.run.room.ents = [mkMonster('orc')];
+DP.interact(0);
+S.enemy.hp = 1; DP.dmgEnemy(3);
+t.ok(S.victory && Array.isArray(S.victory.offer), 'victory arms a coin offer');
+t.eq(S.victory.offer.length, 3, 'three coins glint');
+t.eq(new Set(S.victory.offer).size, 3, 'all different');
+t.ok(S.victory.offer.every(k => COIN_KINDS.includes(k)), 'each a real coin type');
+{
+  const pick = S.victory.offer[1];
+  const before = S.run.purse[pick] || 0;
+  t.ok(DP.pickCoin(1), 'you take the middle one');
+  t.eq(S.run.purse[pick], before + 1, 'it joins the purse for the rest of the run');
+  t.eq(S.victory.picked, pick, 'the overlay remembers');
+  t.ok(!DP.pickCoin(0), 'one pick only — no second grab');
+}
+DP.leaveBattle();
+
+// -------- ONE machine per floor: the pile persists between fights --------
+DP.srand(61);
+DP.newRun('knight');
+S.run.room.ents = [mkMonster('orc')];
+DP.interact(0);
+t.ok(platCoins().length > 20, 'a fresh floor racks a fresh dense pile');
+t.eq(S.run.pileFloor, S.run.floor, 'the rack is stamped to this floor');
+// sculpt the pile into something recognizable, then win and leave
+S.coins.length = 0;
+DP.place(33, 44, 'silver', 0, 'plat');
+DP.place(66, 44, 'coin', 1, 'plat');
+{
+  const it = DP.place(50, 30, 'item', 0, 'plat');
+  it.iid = 'sword';
+}
+finishFight();
+t.ok(Array.isArray(S.run.pileSave) && S.run.pileSave.length === 3, 'leaving saves the machine exactly');
+// gear bought between fights queues up as pending rain
+S.run.pending.length = 0;
+DP.grantItem('axe', 1);
+t.eq(S.run.pending.length, 1, 'mid-floor gear waits as pending rain');
+// next fight on the SAME floor: the very same pile
+S.rain.length = 0;
+S.run.room.ents = [mkMonster('orc')];
+DP.interact(0);
+t.eq(platCoins().length, 3, 'same floor -> the very same pile');
+t.ok(S.coins.some(c => c.kind === 'silver' && Math.abs(c.x - 33) < 0.2), 'the stashed silver is where you left it');
+t.ok(S.coins.some(c => c.kind === 'item' && c.iid === 'sword'), 'racked gear rides through too');
+t.ok(S.rain.some(r => r.kind === 'item' && r.iid === 'axe'), 'and the pending axe rains in');
+t.eq(S.run.pending.length, 0, 'the pending queue empties');
+finishFight();
+// a new floor scraps the old machine
+DP.nextFloor();
+t.eq(S.run.pileSave, null, 'a new floor scraps the saved pile');
+S.run.room.ents = [mkMonster('orc')];
+DP.interact(0);
+t.ok(platCoins().length > 20, 'and racks a fresh dense pile');
+finishFight();
 
 // -------- scaling: deeper and lower is meaner --------
 DP.srand(33);
@@ -655,7 +911,9 @@ t.eq(saved.v, 1, 'save is v1');
 t.ok(saved.mute === true, 'mute is persisted');
 t.ok(saved.run && saved.run.floor === 2, 'the run survives in the save');
 t.eq(saved.run.keys, S.run.keys, 'keys are persisted');
-t.eq(saved.run.pouch, S.run.pouch, 'coin pouches are persisted');
+t.ok(saved.run.purse && typeof saved.run.purse.coin === 'number', 'the coin purse is persisted');
+t.ok('pileSave' in saved.run && Array.isArray(saved.run.pending), 'the floor machine state is persisted');
+t.eq(saved.run.hero, S.run.hero, 'the chosen hero is persisted');
 t.ok(saved.run.map && saved.run.map.rooms && saved.run.map.cur, 'the whole floor MAP is persisted');
 t.ok(saved.best && saved.best.floor >= 1, 'best progress is persisted');
 // unlock a door + move, then check the exploration state survives a reload
@@ -670,6 +928,7 @@ t.ok(DP2.S.run && DP2.S.run.floor === 2, 'reload resumes the saved run');
 t.eq(DP2.S.screen, 'title', 'resume lands on the title (CONTINUE offered)');
 t.eq(DP2.S.run.map.cur, S.run.map.cur, 'you reload in the same room you left');
 t.ok(DP2.S.run.room === DP2.S.run.map.rooms[DP2.S.run.map.cur], 'the room ref is rewired on load');
+t.eq(DP2.purseTotal.call ? DP2.purseTotal() : 0, DP.purseTotal(), 'the purse survives the reload intact');
 t.ok(Object.values(DP2.S.run.map.links).some(l => l.open), 'unlocked doors stay unlocked');
 t.eq(Object.values(DP2.S.run.map.rooms).filter(r => r.visited).length,
      mapRooms().filter(r => r.visited).length, 'the uncovered map survives the reload');
@@ -682,18 +941,19 @@ DP2.save();
 const saved2 = JSON.parse(store[C.SAVE_KEY]);
 t.ok(saved2.run === null, 'dead runs are not saved');
 t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
-// a pre-round save (no pouch/room) migrates cleanly
+// a pre-purse save (wallet/pouch era) migrates cleanly
 {
   const storeOld = { dungeon_pusher_save: JSON.stringify({
     v: 1, mute: false, best: { floor: 1, depth: 2, kills: 3, gold: 10 },
-    run: { floor: 1, depth: 2, hp: 50, maxHp: 60, gold: 5, wallet: 10,
+    run: { floor: 1, depth: 2, hp: 50, maxHp: 60, gold: 5, wallet: 10, pouch: 1,
            arsenal: { sword: 1 }, relics: [], potions: 1, whet: 0,
            kills: 1, goldEarned: 5, block: 0 },
   }) };
   const { DP: DPold } = loadGame(storeOld, false);
   t.ok(DPold.S.run && DPold.S.run.hp === 50, 'an old save still resumes');
   t.eq(DPold.S.run.keys, DPold.C.START_KEYS, 'old saves get the starter keys');
-  t.eq(DPold.S.run.pouch, 0, 'old saves start without pouches');
+  t.eq(DPold.S.run.purse.coin, DPold.START_PURSE.coin, 'old saves get the starter purse');
+  t.eq(DPold.S.run.pileSave, null, 'and no phantom pile');
   t.ok(DPold.S.run.map && Object.keys(DPold.S.run.map.rooms).length >= 9,
        'old saves get a fresh floor map carved');
   t.ok(DPold.S.run.room === DPold.S.run.map.rooms[DPold.S.run.map.cur], 'and stand in its entrance');
@@ -702,7 +962,7 @@ t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
 {
   const storeV1 = { dungeon_pusher_save: JSON.stringify({
     v: 1, mute: false, best: { floor: 2, depth: 1, kills: 5, gold: 20 },
-    run: { floor: 2, depth: 1, hp: 40, maxHp: 60, gold: 12, pouch: 1,
+    run: { floor: 2, depth: 1, hp: 40, maxHp: 60, gold: 12,
            arsenal: { sword: 1 }, relics: [], potions: 1, whet: 0, keys: 2,
            kills: 5, goldEarned: 20,
            map: { rooms: {
@@ -713,8 +973,8 @@ t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
   const { DP: DPv1 } = loadGame(storeV1, false);
   t.eq(DPv1.S.run.map.v, 2, 'v1 maps are re-carved to the corridor format');
   t.ok(Object.keys(DPv1.S.run.map.rooms).length >= 9, 'the fresh floor is a full random layout');
-  t.eq(DPv1.S.run.floor, 2, 'run progress (floor, gold, pouch) survives the re-carve');
-  t.eq(DPv1.S.run.pouch, 1, 'pouches intact');
+  t.eq(DPv1.S.run.floor, 2, 'run progress (floor, gold) survives the re-carve');
+  t.eq(DPv1.S.run.purse.silver, DPv1.START_PURSE.silver, 'the purse falls back to the starter deck');
 }
 // randomness: consecutive floors carve different dungeons
 {
@@ -731,10 +991,11 @@ t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
 function runScript(D) {
   D.srand(1337);
   D.S.victory = null;
-  D.S.enemy.hp = D.S.enemy.maxHp = 99999;
+  D.S.foes.forEach(f => { f.hp = f.maxHp = 99999; });
   D.S.battle.phase = 'drop';
   D.S.battle.loot.length = 0;
-  D.S.run.wallet = 99;
+  D.S.battle.hand = { coin: 99, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+  D.S.battle.sel = 'coin';
   D.reset();                     // zeroes time + pusher phase, re-racks the pile
   D.S.cd = 0; D.drop(30);
   for (let i = 0; i < 60; i++) D.tick(1 / 60);
@@ -750,7 +1011,7 @@ t.eq(runA, runB, 'same seed + same inputs = identical sim');
 // -------- stability: whole rounds cycle without breaking the sim --------
 DP.srand(41);
 DP.newRun(); DP.startBattle('battle');
-S.enemy.hp = S.enemy.maxHp = 99999;
+S.foes.forEach(f => { f.hp = f.maxHp = 99999; });
 S.run.hp = S.run.maxHp = 99999;      // god mode: this is a physics soak test
 for (let sec = 0; sec < 60; sec++) {
   S.cd = 0;
@@ -798,11 +1059,17 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.pickBoon(0);
   frames(6);
   D.closeModal();
-  D.interact(0);                                  // fight the rat
+  D.interact(0);                                  // fight the orc
   D.S.enemy.hp = D.S.enemy.maxHp = 500;
-  D.S.run.wallet = 4;
-  for (let i = 0; i < 4; i++) { D.S.cd = 0; D.drop(20 + i * 16); frames(24); }   // spend the purse
-  frames(60);                                     // pieces settle; END TURN button pulses
+  frames(10);                                     // hand selector row + tilt cluster
+  for (let i = 0; i < 4; i++) { D.S.cd = 0; D.drop(20 + i * 16); frames(24); }   // spend part of the hand
+  D.tilt('l');
+  frames(20);                                     // the pile lurches
+  D.S.battle.loot.push({ k: 'coin' }, { k: 'silver' });
+  frames(6);                                      // tray strip + bank box
+  D.bankLoot('coin');
+  frames(6);                                      // a banked chip
+  frames(40);                                     // pieces settle; END TURN button pulses
   D.endRoundNow();                                // the player presses it
   let guard = 0;
   while (D.S.battle && D.S.battle.round < 2 && guard++ < 80) frames(10);         // resolve + enemy turn -> round 2
@@ -811,9 +1078,25 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   frames(30);                                     // wheel overlay over battle
   D.S.wheelAnim = null;
   D.S.enemy.hp = 1; D.dmgEnemy(5);
-  frames(40);                                     // victory overlay
+  frames(40);                                     // victory overlay + the coin offer
+  D.pickCoin(0);
+  frames(10);                                     // the picked coin glows
   D.leaveBattle();
   frames(10);
+  // a 2-foe GANG-UP: the multi-foe panel, retargeting, frost AoE
+  D.S.run.room.ents = [
+    { kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.3, py: 0.3 },
+    { kind: 'monster', mtype: 'battle', eid: 'goblin', done: false, px: 0.7, py: 0.3 },
+  ];
+  D.interact(0);
+  frames(12);                                     // two panels, two intents
+  D.setTarget(1);
+  frames(6);                                      // the target marker moves
+  D.S.foes.forEach(f => { f.hp = 1; });
+  D.dmgAll(5);
+  frames(30);                                     // gang wiped -> victory
+  D.leaveBattle();
+  frames(6);
   // walk through a real unlocked corridor (exercises doorway + fog rendering)
   D.S.run.keys = 5;
   {
