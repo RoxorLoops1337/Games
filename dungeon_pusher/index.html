@@ -1,0 +1,2467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Dungeon Pusher — Coin Pusher Roguelike</title>
+<style>
+  html, body { margin: 0; padding: 0; background: #0b0609; height: 100%; overflow: hidden; }
+  canvas { display: block; touch-action: none; -webkit-user-select: none; user-select: none; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+'use strict';
+// ============================================================================
+// DUNGEON PUSHER — a coin pusher roguelike.
+//
+// The coin pusher IS the combat system: every fight is a pusher machine, and
+// whatever drops into the tray fires at the enemy. Coins chip away (and refund
+// ammo), your arsenal items ride the pile — swords and bombs deal damage,
+// venom vials stack poison, shields block, hearts heal, frost runes stun.
+// Items shoved into the side gutters are DESTROYED, so aim matters.
+//
+// Between fights: a procedural dungeon of doors. Pick one to reveal a fight,
+// an elite, a shop, a forge boon, a healing shrine, treasure, or the Lucky
+// Wheel. Every 8th room is the floor boss; floors escalate forever.
+//
+// Physics is the 2.5D plane sim from Gold Rush Arcade: x across the platform,
+// y into the machine (0 = back), z = height. Headless mode (tests): no canvas
+// ctx -> sim + roguelike logic only, via window.DP.
+// ============================================================================
+
+const canvas = document.getElementById('c');
+let ctx = null;
+try { ctx = canvas && canvas.getContext ? canvas.getContext('2d') : null; } catch (e) { ctx = null; }
+if (ctx && typeof ctx.save !== 'function') ctx = null;
+const HEADLESS = !ctx;
+
+// ---------------------------------------------------------------- constants
+const C = {
+  W: 100,
+  PLAT_FRONT: 84,
+  GUT_LO: 1.5, GUT_HI: 98.5,
+  COIN_R: 4.6,
+  COIN_H: 1.7,
+  PUSH_MIN: 10, PUSH_MAX: 30, PUSH_H: 9,
+  DROP_Z: 62,
+  GRAV: 260,
+  TRAY_Z: -30,
+  GUT_KILL: -44,
+  FRICTION: 3.0, SETTLE: 0.5, REST: 0.05,
+  LIP_G: 34,
+  MAX_LAY: 2,
+  PITY_T: 5,                            // broke bailout: +1 coin per 5s in battle
+  DROP_CD: 0.28, COMBO_WIN: 1.4, COMBO_CAP: 5,
+  METER_MAX: 18,                        // inserts to trigger a FRENZY rain
+  SAVE_KEY: 'dungeon_pusher_save',
+  START_HP: 60, START_COINS: 20, START_POTIONS: 1,
+  POTION_HEAL: 20,
+  BOSS_DEPTH: 8,
+  P_LUCKY: 0.10,
+  DMG: { coin: 2, lucky: 4 },
+  REFUND: { coin: 1, lucky: 2 },
+  SKULL_DMG: 4,                         // + floor scaling on top
+  POIS_TICK: 2.0,                       // seconds between poison ticks
+  ITEM_CAP: 12,                         // max arsenal items seeded per battle
+};
+
+// ------------------------------------------------------------ the machine
+// One battle cabinet, restyled per floor. Same geometry as the classic
+// GOLD RUSH pusher so the proven physics constants carry over.
+const MACH = {
+  coin: { r: 4.6, style: 'gold', sym: '¢' },
+  pushPeriod: 3.4, maxCoins: 170,
+  tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
+  gutY: 36, lipW: 7, lipH: 2.2,
+};
+function M() { return MACH; }
+function lastTier() { return 0; }
+
+// per-floor dungeon skins (cycled past the last one)
+const FLOORS = [
+  { name: 'THE CATACOMBS', room: '#33313f', cabA: '#8b93a8', cabB: '#5d6478', trim: '#d8dfe8',
+    floorA: '#9aa1b0', floorB: '#cdd3de', accent: '#8be7ff', door: '#5d6478' },
+  { name: 'THE SEWERS', room: '#25382c', cabA: '#7fae8c', cabB: '#527a5e', trim: '#d6efd6',
+    floorA: '#8fa39a', floorB: '#bcd6c4', accent: '#7ee787', door: '#527a5e' },
+  { name: 'THE CRYPT', room: '#372c44', cabA: '#a48ac8', cabB: '#71589a', trim: '#e8dcf8',
+    floorA: '#9a92ab', floorB: '#cfc4de', accent: '#c86bff', door: '#71589a' },
+  { name: 'THE FORGE', room: '#442a26', cabA: '#c88a6b', cabB: '#96543e', trim: '#f8dcc8',
+    floorA: '#ab9490', floorB: '#dec7bc', accent: '#ff9d3c', door: '#96543e' },
+];
+function theme() { return FLOORS[((S.run ? S.run.floor : 1) - 1) % FLOORS.length]; }
+
+// ------------------------------------------------------------------- items
+// Your arsenal: bought in shops, won from boons and wheels. Every battle the
+// whole arsenal is racked onto the pile; a collected item FIRES (once per
+// battle), a gutter-lost item is DESTROYED for good.
+const ITEMS = [
+  { id: 'sword',  icon: '\u{1F5E1}\u{FE0F}', name: 'Sword',       kind: 'weapon', dmg: 8,  cost: 26 },
+  { id: 'axe',    icon: '\u{1FA93}',          name: 'War Axe',     kind: 'weapon', dmg: 14, cost: 48 },
+  { id: 'hammer', icon: '\u{1F528}',          name: 'Doom Hammer', kind: 'weapon', dmg: 24, cost: 85 },
+  { id: 'bomb',   icon: '\u{1F4A3}',          name: 'Bomb',        kind: 'weapon', dmg: 18, cost: 62, splash: true },
+  { id: 'vial',   icon: '\u{1F9EA}',          name: 'Venom Vial',  kind: 'poison', pois: 4, cost: 40 },
+  { id: 'shield', icon: '\u{1F6E1}\u{FE0F}', name: 'Shield',      kind: 'shield', block: 6, cost: 34 },
+  { id: 'heart',  icon: '❤\u{FE0F}',     name: 'Heart',       kind: 'heal',   heal: 9, cost: 38 },
+  { id: 'frost',  icon: '❄\u{FE0F}',     name: 'Frost Rune',  kind: 'stun',   stun: 3, cost: 55 },
+];
+function itemById(id) { return ITEMS.find(i => i.id === id); }
+
+// ------------------------------------------------------------------ relics
+const RELICS = [
+  { id: 'whet',    icon: '\u{1FA9A}', name: 'Whetstone',   desc: 'weapons deal +30% damage' },
+  { id: 'venom',   icon: '\u{1F40D}', name: 'Venom Gland', desc: 'poison applies +2 stacks' },
+  { id: 'magnet',  icon: '\u{1F9F2}', name: 'Magnet',      desc: 'gutter falls bounce back half the time' },
+  { id: 'clover',  icon: '\u{1F340}', name: 'Clover',      desc: 'lucky coins twice as often' },
+  { id: 'wind',    icon: '\u{1F4A8}', name: 'Second Wind', desc: 'survive a killing blow at 1 HP (once per fight)' },
+  { id: 'piggy',   icon: '\u{1F437}', name: 'Piggy Bank',  desc: '+4 gold after every victory' },
+  { id: 'lantern', icon: '\u{1F3EE}', name: 'Lantern',     desc: 'all dungeon doors are revealed' },
+  { id: 'plate',   icon: '\u{1F6E1}\u{FE0F}', name: 'Battle Plate', desc: 'start every fight with +4 block' },
+];
+function relicById(id) { return RELICS.find(r => r.id === id); }
+function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
+
+// ----------------------------------------------------------------- enemies
+const ENEMIES = [
+  { id: 'rat',     icon: '\u{1F400}', name: 'Dire Rat',       hp: 18, atk: 3, period: 6.5, trait: null,     gold: 8 },
+  { id: 'bat',     icon: '\u{1F987}', name: 'Cave Bat',       hp: 16, atk: 2, period: 4.2, trait: 'fast',   gold: 9 },
+  { id: 'slime',   icon: '\u{1FAB4}', name: 'Gloop Slime',    hp: 28, atk: 3, period: 7.0, trait: 'tough',  gold: 11 },
+  { id: 'goblin',  icon: '\u{1F47A}', name: 'Goblin Mugger',  hp: 24, atk: 4, period: 6.0, trait: 'thief',  gold: 14 },
+  { id: 'spider',  icon: '\u{1F577}\u{FE0F}', name: 'Venom Spider', hp: 22, atk: 3, period: 6.0, trait: 'venom', gold: 12 },
+  { id: 'skel',    icon: '\u{1F480}', name: 'Skeleton Guard', hp: 32, atk: 5, period: 6.5, trait: null,     gold: 13 },
+  { id: 'cultist', icon: '\u{1F9D9}', name: 'Skull Cultist',  hp: 26, atk: 4, period: 6.5, trait: 'curse',  gold: 15 },
+  { id: 'ghost',   icon: '\u{1F47B}', name: 'Restless Ghost', hp: 24, atk: 4, period: 5.5, trait: 'regen',  gold: 14 },
+  { id: 'ogre',    icon: '\u{1F479}', name: 'Ogre Brute',     hp: 46, atk: 7, period: 8.0, trait: 'tough',  gold: 18 },
+];
+const BOSSES = [
+  { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 95,  atk: 8,  period: 7.0, trait: 'curse', gold: 60 },
+  { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 115, atk: 9,  period: 6.5, trait: 'regen', gold: 80 },
+  { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 135, atk: 10, period: 6.0, trait: 'venom', gold: 100 },
+];
+const TRAIT_TXT = {
+  fast: 'strikes quickly', tough: 'thick hide', thief: 'steals coins on hit',
+  venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field', regen: 'regenerates',
+};
+
+// door types for the dungeon
+const DOOR_INFO = {
+  battle:   { icon: '⚔\u{FE0F}', name: 'FIGHT' },
+  elite:    { icon: '\u{1F525}',      name: 'ELITE' },
+  boss:     { icon: '\u{1F451}',      name: 'BOSS' },
+  shop:     { icon: '\u{1F6D2}',      name: 'SHOP' },
+  forge:    { icon: '⚒\u{FE0F}', name: 'FORGE' },
+  shrine:   { icon: '⛲',         name: 'SHRINE' },
+  treasure: { icon: '\u{1F48E}',      name: 'TREASURE' },
+  wheel:    { icon: '\u{1F3A1}',      name: 'WHEEL' },
+};
+
+// ------------------------------------------------------------------- state
+const S = {
+  coins: [], floats: [], parts: [], rain: [],
+  combo: 0, lastCollect: -99, meter: 0,
+  time: 0, phase: 0, cd: 0, regen: 0,
+  shake: 0, aimX: 50, mute: false,
+  dropped: 0, collected: 0, lost: 0,
+  banner: null, trayPile: 0, denyT: 0, fever: 0, hurtT: 0,
+  tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
+  screen: 'title',                     // title | dungeon | battle | over
+  run: null,                           // the current roguelike run (see newRun)
+  enemy: null,                         // live foe during battle
+  victory: null,                       // battle-won overlay {t, gold}
+  room: null,                          // open non-battle room {type, ...}
+  over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
+  best: { floor: 0, depth: 0, kills: 0, gold: 0 },
+  wheelAnim: null, uiFlash: null,
+  pPois: 0, pPoisT: 0, ePoisT: 0,
+};
+
+// seeded rng so tests are deterministic; browser reseeds from the clock
+let rngState = 1234;
+function srand(s) { rngState = (s >>> 0) || 1; }
+function rng() {
+  rngState |= 0; rngState = (rngState + 0x6D2B79F5) | 0;
+  let t = Math.imul(rngState ^ (rngState >>> 15), 1 | rngState);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+
+// sound hooks — no-ops headless / until the browser block installs real ones
+let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() {},
+            slot() {}, hit() {}, hurt() {}, heal() {}, poison() {}, block() {},
+            stun() {}, buy() {}, door() {}, dead() {}, winb() {}, reel() {} };
+
+// ------------------------------------------------------------- persistence
+function save() {
+  try {
+    localStorage.setItem(C.SAVE_KEY, JSON.stringify({
+      v: 1, mute: S.mute, best: S.best,
+      run: S.run ? {
+        floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
+        gold: S.run.gold, wallet: S.run.wallet, arsenal: S.run.arsenal,
+        relics: S.run.relics, potions: S.run.potions, whet: S.run.whet,
+        kills: S.run.kills, goldEarned: S.run.goldEarned, doors: S.run.doors,
+        block: S.run.block, meter: S.meter,
+      } : null,
+    }));
+  } catch (e) {}
+}
+function load() {
+  try {
+    const d = JSON.parse(localStorage.getItem(C.SAVE_KEY));
+    if (!d) return;
+    S.mute = !!d.mute;
+    if (d.best && typeof d.best === 'object') {
+      S.best = { floor: d.best.floor || 0, depth: d.best.depth || 0,
+                 kills: d.best.kills || 0, gold: d.best.gold || 0 };
+    }
+    if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
+      S.run = {
+        floor: d.run.floor || 1, depth: d.run.depth || 1,
+        hp: d.run.hp, maxHp: d.run.maxHp || C.START_HP,
+        gold: d.run.gold || 0, wallet: (typeof d.run.wallet === 'number') ? d.run.wallet : C.START_COINS,
+        arsenal: (d.run.arsenal && typeof d.run.arsenal === 'object') ? d.run.arsenal : {},
+        relics: Array.isArray(d.run.relics) ? d.run.relics.filter(relicById) : [],
+        potions: d.run.potions || 0, whet: d.run.whet || 0,
+        kills: d.run.kills || 0, goldEarned: d.run.goldEarned || 0,
+        doors: Array.isArray(d.run.doors) ? d.run.doors : null,
+        block: d.run.block || 0, windUsed: false,
+      };
+      for (const k of Object.keys(S.run.arsenal)) {
+        if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
+      }
+      if (!S.run.doors) genDoors();
+      S.meter = d.run.meter || 0;
+    }
+  } catch (e) {}
+}
+
+// ------------------------------------------------------------------- pieces
+function kindR(kind) {
+  if (kind === 'gem') return 5.2;
+  if (kind === 'lucky') return MACH.coin.r + 0.4;
+  if (kind === 'item') return 7.6;
+  if (kind === 'skull') return 5.6;
+  if (kind === 'bag') return 6.2;
+  if (kind === 'chest') return 7.0;
+  if (kind === 'chip') return MACH.coin.r + 0.2;
+  return MACH.coin.r;
+}
+function kindM(kind) {
+  return { gem: 2.2, lucky: 1.2, item: 3.6, skull: 1.6, bag: 2.6, chest: 3.5, chip: 1.1 }[kind] || 1;
+}
+function mkCoin(x, y, kind, lay, st, tier) {
+  tier = tier || 0;
+  const td = MACH.tiers[tier];
+  return {
+    x, y, z: td.z + (lay || 0) * C.COIN_H, vx: 0, vy: 0, vz: 0,
+    r: kindR(kind), m: kindM(kind),
+    kind, st: st || 'plat', lay: lay || 0, tier,
+    rot: rng() * 6.28, vrot: 0, glint: rng() * 7,
+    bounces: 0, ttl: 0, scored: false, chk1: false, chk2: false, chkP: false,
+    iid: null, temp: false, onPush: false, saved: false,
+  };
+}
+function place(x, y, kind, lay, st, tier) {
+  const c = mkCoin(x, y, kind || 'coin', lay || 0, st || 'plat', tier || 0);
+  S.coins.push(c);
+  return c;
+}
+function spawnDrop(x, ty, kind) {
+  if (S.coins.length >= MACH.maxCoins) return null;
+  const c = mkCoin(x, ty, kind, 0, 'air', 0);
+  c.z = C.DROP_Z; c.vz = 0; c.vrot = (rng() - 0.5) * 10;
+  S.coins.push(c);
+  return c;
+}
+
+// ------------------------------------------------------------------ pusher
+function pusherFront(ti) {
+  const td = MACH.tiers[ti || 0];
+  const ph = S.phase + (td.phase || 0);
+  return td.min + (td.max - td.min) * (0.5 - 0.5 * Math.cos(ph));
+}
+function pusherVel(ti) {
+  const td = MACH.tiers[ti || 0];
+  const ph = S.phase + (td.phase || 0);
+  return (td.max - td.min) * 0.5 * Math.sin(ph) * (2 * Math.PI / MACH.pushPeriod);
+}
+function tierFront(ti) { return MACH.tiers[ti].front; }
+
+// ---------------------------------------------------------- combat effects
+function floatAt(txt2, wx, col, big) {
+  S.floats.push({ txt: txt2, wx: wx === undefined ? 50 : wx, wy: 96, age: 0, max: 1.3, col: col || '#ffd24a', big: !!big });
+}
+function weaponDmg(base) {
+  let d = base + (S.run ? S.run.whet : 0);
+  if (hasRelic('whet')) d = Math.round(d * 1.3);
+  if (S.fever > 0) d *= 2;
+  return d;
+}
+function dmgEnemy(n, wx, col) {
+  if (!S.run || !S.enemy || S.enemy.hp <= 0) return 0;
+  n = Math.max(1, Math.round(n));
+  S.enemy.hp -= n;
+  S.enemy.hitT = 0.3;
+  floatAt('-' + n, wx, col || '#ff8a6b', n >= 10);
+  if (S.enemy.hp <= 0) winBattle();
+  return n;
+}
+function poisonEnemy(stacks, wx) {
+  if (!S.run || !S.enemy || S.enemy.hp <= 0) return 0;
+  if (hasRelic('venom')) stacks += 2;
+  S.enemy.pois += stacks;
+  floatAt('POISON +' + stacks, wx, '#b8f26b', true);
+  SND.poison();
+  return stacks;
+}
+function stunEnemy(secs, wx) {
+  if (!S.run || !S.enemy || S.enemy.hp <= 0) return;
+  S.enemy.stunT = Math.max(S.enemy.stunT, secs);
+  floatAt('FROZEN ' + secs + 's', wx, '#8be7ff', true);
+  SND.stun();
+}
+function addBlock(n, wx) {
+  if (!S.run) return;
+  S.run.block += n;
+  floatAt('BLOCK +' + n, wx, '#c8d6e8', true);
+  SND.block();
+}
+function healPlayer(n, wx) {
+  if (!S.run) return 0;
+  const before = S.run.hp;
+  S.run.hp = Math.min(S.run.maxHp, S.run.hp + n);
+  const got = S.run.hp - before;
+  if (got > 0) floatAt('+' + got + ' HP', wx, '#7ee787', true);
+  SND.heal();
+  return got;
+}
+function addGold(n, wx) {
+  if (!S.run) return;
+  S.run.gold += n;
+  S.run.goldEarned += n;
+  floatAt('+' + n + ' GOLD', wx, '#ffd75e', n >= 15);
+}
+function addCoins(n, wx) {
+  if (!S.run) return;
+  S.run.wallet += n;
+  if (wx !== null) floatAt('+' + n + ' ●', wx, '#f2c04a');
+}
+function hurtPlayer(n, cause) {
+  if (!S.run || S.run.hp <= 0) return;
+  // block soaks first
+  if (S.run.block > 0) {
+    const soak = Math.min(S.run.block, n);
+    S.run.block -= soak; n -= soak;
+    if (soak > 0) { floatAt('BLOCKED ' + soak, 50, '#c8d6e8'); SND.block(); }
+  }
+  if (n <= 0) return;
+  S.run.hp -= n;
+  S.hurtT = 0.45;
+  S.shake += Math.min(9, 3 + n * 0.5);
+  floatAt('-' + n + ' HP', 50, '#ff5a4e', n >= 6);
+  SND.hurt();
+  if (S.run.hp <= 0) {
+    if (hasRelic('wind') && !S.run.windUsed) {
+      S.run.windUsed = true;
+      S.run.hp = 1;
+      S.banner = { txt: 'SECOND WIND!', ttl: 1.6, max: 1.6 };
+      return;
+    }
+    endRun(cause || 'slain');
+  }
+}
+function usePotion() {
+  if (!S.run || S.run.potions < 1 || S.run.hp >= S.run.maxHp) return false;
+  S.run.potions--;
+  healPlayer(C.POTION_HEAL, 50);
+  SND.buy();
+  save();
+  return true;
+}
+
+// --------------------------------------------------------------- scoring
+// The tray is the trigger: anything that lands there FIRES immediately.
+function trayAdd(kind, extra) {
+  S.tray.items.push({ kind, iid: extra && extra.iid, x: extra ? extra.x : 50 });
+  if (S.tray.items.length > 24) S.tray.items.shift();
+}
+function scoreCoin(c) {
+  const now = S.time;
+  S.collected++;
+  if (c.kind === 'item') {
+    const it = itemById(c.iid);
+    trayAdd('item', { iid: c.iid, x: c.x });
+    if (it) fireItem(it, c.x);
+    S.shake += 4;
+    burst(c.x, 96, C.TRAY_Z, 'item');
+    return;
+  }
+  if (c.kind === 'skull') {
+    const dmg = C.SKULL_DMG + (S.run ? S.run.floor - 1 : 0);
+    floatAt('CURSED!', c.x, '#c86bff', true);
+    hurtPlayer(dmg, 'a cursed skull');
+    burst(c.x, 96, C.TRAY_Z, 'skull');
+    return;
+  }
+  if (c.kind === 'gem') {
+    addGold(15, c.x);
+    S.shake += 4;
+    SND.gem();
+    burst(c.x, 96, C.TRAY_Z, 'gem');
+    trayAdd('gem', { x: c.x });
+    return;
+  }
+  if (c.kind === 'bag') {
+    addGold(8, c.x);
+    SND.gem();
+    burst(c.x, 96, C.TRAY_Z, 'bag');
+    trayAdd('bag', { x: c.x });
+    return;
+  }
+  if (c.kind === 'chip') {
+    floatAt('WHEEL SPIN!', c.x, '#63e7ff', true);
+    S.shake += 4;
+    spinWheel();
+    burst(c.x, 96, C.TRAY_Z, 'chip');
+    return;
+  }
+  if (c.kind === 'chest') {
+    openChest(c);
+    return;
+  }
+  // plain + lucky coins: combo-chained chip damage, and the ammo refund
+  S.combo = (now - S.lastCollect <= C.COMBO_WIN) ? S.combo + 1 : 1;
+  S.lastCollect = now;
+  const mult = Math.min(S.combo, C.COMBO_CAP);
+  if (mult >= C.COMBO_CAP && S.fever <= 0) {
+    S.fever = 6;
+    S.banner = { txt: 'FEVER ×2!', ttl: 1.6, max: 1.6 };
+    SND.jackpot();
+  }
+  let dmg = (c.kind === 'lucky' ? C.DMG.lucky : C.DMG.coin) * mult;
+  if (S.fever > 0) dmg *= 2;
+  addCoins(C.REFUND[c.kind] || 1, null);
+  dmgEnemy(dmg, c.x, c.kind === 'lucky' ? '#ffe066' : '#ffb46b');
+  trayAdd(c.kind, { x: c.x });
+  if (mult > 1) S.floats.push({ txt: 'COMBO ×' + mult, wx: 50, wy: 60, age: 0, max: 0.9, col: '#ff9d3c', big: mult >= 4 });
+  S.shake += mult > 2 ? 2 : 1;
+  SND.collect(mult);
+  burst(c.x, 96, C.TRAY_Z, c.kind);
+}
+function fireItem(it, wx) {
+  if (it.kind === 'weapon') {
+    const d = weaponDmg(it.dmg);
+    floatAt(it.name + '!', wx, '#ffe066', true);
+    dmgEnemy(d, wx, '#ff8a6b');
+    S.shake += it.splash ? 7 : 4;
+    SND.hit();
+    if (it.splash) {
+      // the blast rattles the whole pile
+      for (const o of S.coins) {
+        if (o.st !== 'plat') continue;
+        o.vx += (rng() - 0.5) * 26;
+        o.vy += (rng() - 0.2) * 18;
+      }
+    }
+  } else if (it.kind === 'poison') {
+    poisonEnemy(it.pois, wx);
+  } else if (it.kind === 'shield') {
+    addBlock(it.block, wx);
+  } else if (it.kind === 'heal') {
+    healPlayer(it.heal, wx);
+  } else if (it.kind === 'stun') {
+    stunEnemy(it.stun, wx);
+  }
+}
+function openChest(c) {
+  const r = rng();
+  let txt2;
+  if (r < 0.35) {
+    const n = 5 + ((rng() * 6) | 0);
+    addCoins(n, c.x);
+    txt2 = 'CHEST: +' + n + ' ●';
+  } else if (r < 0.6) {
+    const g = 8 + ((rng() * 8) | 0);
+    addGold(g, c.x);
+    txt2 = 'CHEST: +' + g + ' GOLD';
+  } else if (r < 0.8) {
+    txt2 = 'CHEST: WHEEL SPIN!';
+    spinWheel();
+  } else {
+    const it = ITEMS[(rng() * 4) | 0];
+    grantItem(it.id, 1);
+    txt2 = 'CHEST: ' + it.name + '!';
+  }
+  floatAt(txt2, c.x, '#ffb0e0', true);
+  S.shake += 5;
+  SND.gem();
+  burst(c.x, 96, C.TRAY_Z, 'chest');
+}
+function grantItem(iid, n) {
+  if (!S.run || !itemById(iid)) return;
+  S.run.arsenal[iid] = (S.run.arsenal[iid] || 0) + (n || 1);
+}
+
+// FRENZY: filling the meter makes the dungeon rain bonuses on the field
+function frenzy() {
+  S.meter = 0;
+  S.banner = { txt: 'FRENZY!', ttl: 2.2, max: 2.2 };
+  S.shake += 8;
+  SND.jackpot();
+  const kinds = ['coin', 'coin', 'coin', 'coin', 'lucky', 'coin', 'bag', 'coin'];
+  kinds.forEach((kind, i) => {
+    S.rain.push({ t: 0.12 * i, x: 10 + rng() * 80, y: MACH.tiers[0].slotY + rng() * 14, kind });
+  });
+  // two free (temporary) weapons ride the rain — lose them or use them
+  for (let i = 0; i < 2; i++) {
+    const it = ITEMS[(rng() * 4) | 0];
+    S.rain.push({ t: 1 + 0.3 * i, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
+  }
+  save();
+}
+
+// -------------------------------------------------------------- lucky wheel
+const WHEEL = [
+  { label: '8 ●', w: 16, fx: () => addCoins(8, 50) },
+  { label: '+15 G', w: 15, fx: () => addGold(15, 50) },
+  { label: 'HEAL 8', w: 13, fx: () => healPlayer(8, 50) },
+  { label: 'BLOCK 5', w: 12, fx: () => addBlock(5, 50) },
+  { label: 'SMITE', w: 12, fx: () => { if (S.enemy && S.enemy.hp > 0) dmgEnemy(12, 50, '#ffe066'); else addGold(6, 50); } },
+  { label: 'ITEM', w: 9, fx: () => { const it = ITEMS[(rng() * ITEMS.length) | 0]; grantItem(it.id, 1); floatAt(it.name + '!', 50, '#ffe066', true); } },
+  { label: '+30 G', w: 7, fx: () => addGold(30, 50) },
+  { label: 'FRENZY', w: 8, fx: () => { if (S.screen === 'battle') frenzy(); else addCoins(8, 50); } },
+];
+function spinWheel() {
+  const total = WHEEL.reduce((a, s) => a + s.w, 0);
+  let r = rng() * total, idx = 0;
+  for (let i = 0; i < WHEEL.length; i++) { r -= WHEEL[i].w; if (r <= 0) { idx = i; break; } }
+  WHEEL[idx].fx();
+  S.wheelAnim = { t: 0, seg: idx, label: WHEEL[idx].label };
+  SND.gem();
+  save();
+  return WHEEL[idx];
+}
+
+// -------------------------------------------------------------------- drop
+function drop(x) {
+  if (S.screen !== 'battle' || !S.run || S.victory) return false;
+  if (S.cd > 0) return false;
+  if (S.run.wallet < 1) { S.denyT = 0.6; SND.deny(); return false; }
+  S.run.wallet--; S.cd = C.DROP_CD; S.dropped++; S.meter++;
+  const pLucky = C.P_LUCKY * (hasRelic('clover') ? 2 : 1);
+  const kind = rng() < pLucky ? 'lucky' : 'coin';
+  const ax = Math.max(8, Math.min(92, x === undefined ? S.aimX : x));
+  spawnDrop(ax + (rng() - 0.5) * 2, MACH.tiers[0].slotY + (rng() - 0.5) * 5, kind);
+  SND.slot();
+  if (S.meter >= C.METER_MAX) frenzy();
+  return true;
+}
+
+// ------------------------------------------------------------------ battle
+function scaleMult() {
+  return 1 + 0.10 * (S.run.depth - 1) + 0.45 * (S.run.floor - 1);
+}
+function mkEnemy(type) {
+  const mult = scaleMult();
+  let base, eliteK = 1;
+  if (type === 'boss') {
+    base = BOSSES[(S.run.floor - 1) % BOSSES.length];
+  } else {
+    // deeper rooms unlock meaner pools
+    const poolMax = Math.min(ENEMIES.length, 4 + S.run.depth + (S.run.floor - 1) * 2);
+    base = ENEMIES[(rng() * poolMax) | 0];
+    if (type === 'elite') eliteK = 1.6;
+  }
+  const hp = Math.round(base.hp * mult * eliteK);
+  return {
+    id: base.id, icon: base.icon, name: (type === 'elite' ? 'ELITE ' : '') + base.name,
+    hp, maxHp: hp,
+    atk: Math.round(base.atk * mult * (type === 'elite' ? 1.3 : 1)),
+    period: base.period, atkT: base.period * 1.35,   // opening grace
+    trait: base.trait, gold: Math.round(base.gold * mult * (type === 'elite' ? 1.8 : 1)),
+    boss: type === 'boss', stunT: 0, pois: 0, hitT: 0, lungeT: 0, regenT: 0,
+  };
+}
+function startBattle(type) {
+  if (!S.run) return false;
+  S.enemy = mkEnemy(type);
+  S.screen = 'battle';
+  S.victory = null;
+  S.run.windUsed = false;
+  S.pPois = 0; S.pPoisT = 0; S.ePoisT = 0;
+  S.combo = 0; S.lastCollect = -99; S.fever = 0;
+  if (hasRelic('plate')) S.run.block += 4;
+  initPile();
+  S.banner = { txt: S.enemy.boss ? 'BOSS FIGHT!' : S.enemy.name, ttl: 1.8, max: 1.8 };
+  SND.door();
+  save();
+  return true;
+}
+function enemyAttack() {
+  const e = S.enemy;
+  e.lungeT = 0.35;
+  let atk = e.atk;
+  if (e.trait === 'thief' && S.run.wallet > 0) {
+    const steal = Math.min(2, S.run.wallet);
+    S.run.wallet -= steal;
+    floatAt('STOLE ' + steal + ' ●!', 50, '#ff9d3c', true);
+  }
+  if (e.trait === 'venom') {
+    S.pPois = (S.pPois || 0) + 2;
+    floatAt('POISONED!', 50, '#b8f26b', true);
+  }
+  if (e.trait === 'curse') {
+    S.rain.push({ t: 0.3, x: 15 + rng() * 70, y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
+  }
+  hurtPlayer(atk, 'slain by ' + (e.name || 'the dungeon'));
+}
+function battleTick(dt) {
+  const e = S.enemy;
+  if (!e || !S.run) return;
+  if (e.hitT > 0) e.hitT -= dt;
+  if (e.lungeT > 0) e.lungeT -= dt;
+  if (e.hp <= 0) return;
+  // poison on the enemy: stacks tick down, each tick deals the stack count
+  if (e.pois > 0) {
+    S.ePoisT += dt;
+    if (S.ePoisT >= C.POIS_TICK) {
+      S.ePoisT = 0;
+      dmgEnemy(e.pois, 22, '#b8f26b');
+      e.pois--;
+    }
+  }
+  if (e.hp <= 0) return;
+  // poison on the player
+  if (S.pPois > 0) {
+    S.pPoisT += dt;
+    if (S.pPoisT >= C.POIS_TICK) {
+      S.pPoisT = 0;
+      hurtPlayer(1, 'poison');
+      S.pPois--;
+    }
+  }
+  if (!S.run) return;
+  if (e.trait === 'regen' && e.hp < e.maxHp) {
+    e.regenT += dt;
+    if (e.regenT >= 3) { e.regenT = 0; e.hp = Math.min(e.maxHp, e.hp + 2); }
+  }
+  if (e.stunT > 0) { e.stunT -= dt; return; }
+  e.atkT -= dt;
+  if (e.atkT <= 0) {
+    e.atkT = e.period;
+    enemyAttack();
+  }
+}
+function winBattle() {
+  const e = S.enemy;
+  let gold = e.gold + (hasRelic('piggy') ? 4 : 0);
+  S.run.kills++;
+  addGold(gold, 50);
+  S.victory = { t: 0, gold, boss: e.boss };
+  S.banner = { txt: 'VICTORY!', ttl: 2.2, max: 2.2 };
+  S.shake += 8;
+  SND.winb();
+  if (e.boss) {
+    S.run.floor++;
+    S.run.depth = 0;             // advance() below bumps it to 1
+    const h = Math.round(S.run.maxHp * 0.35);
+    healPlayer(h, 50);
+  }
+  bestify();
+  save();
+}
+function bestify() {
+  const b = S.best, r = S.run;
+  if (!r) return;
+  if (r.floor > b.floor || (r.floor === b.floor && r.depth > b.depth)) { b.floor = r.floor; b.depth = r.depth; }
+  if (r.kills > b.kills) b.kills = r.kills;
+  if (r.goldEarned > b.gold) b.gold = r.goldEarned;
+}
+function endRun(cause) {
+  bestify();
+  S.over = {
+    cause: cause || 'fell',
+    floor: S.run.floor, depth: S.run.depth, kills: S.run.kills, gold: S.run.goldEarned,
+  };
+  S.run = null;
+  S.enemy = null;
+  S.victory = null;
+  S.room = null;
+  S.screen = 'over';
+  SND.dead();
+  save();
+}
+
+// ----------------------------------------------------------------- dungeon
+function newRun() {
+  S.run = {
+    floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
+    gold: 0, wallet: C.START_COINS,
+    arsenal: { sword: 1, shield: 1, vial: 1 },
+    relics: [], potions: C.START_POTIONS, whet: 0,
+    kills: 0, goldEarned: 0, doors: null, block: 0, windUsed: false,
+  };
+  S.enemy = null; S.victory = null; S.room = null; S.over = null;
+  S.meter = 0; S.pPois = 0;
+  S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
+  genDoors();
+  S.screen = 'dungeon';
+  save();
+  return S.run;
+}
+function doorPool() {
+  const d = S.run.depth;
+  const w = [['battle', 40], ['shop', 14], ['forge', 12], ['shrine', 10], ['treasure', 9], ['wheel', 6]];
+  if (d >= 3) w.push(['elite', 11]);
+  return w;
+}
+function rollDoor() {
+  const pool = doorPool();
+  const total = pool.reduce((a, p) => a + p[1], 0);
+  let r = rng() * total;
+  for (const [type, wt] of pool) { r -= wt; if (r <= 0) return type; }
+  return 'battle';
+}
+function genDoors() {
+  if (!S.run) return null;
+  if (S.run.depth >= C.BOSS_DEPTH) {
+    S.run.doors = [{ type: 'boss', known: true, used: false }];
+    return S.run.doors;
+  }
+  const doors = [];
+  for (let i = 0; i < 3; i++) {
+    doors.push({ type: rollDoor(), known: rng() < 0.35, used: false });
+  }
+  // never a fight-free room set: gold and progress need blood
+  if (!doors.some(dr => dr.type === 'battle' || dr.type === 'elite')) {
+    doors[(rng() * 3) | 0] = { type: 'battle', known: false, used: false };
+  }
+  S.run.doors = doors;
+  return doors;
+}
+function enterDoor(i) {
+  if (!S.run || S.screen !== 'dungeon' || S.room) return false;
+  const d = S.run.doors && S.run.doors[i];
+  if (!d || d.used) return false;
+  d.used = true; d.known = true;
+  SND.door();
+  if (d.type === 'battle' || d.type === 'elite' || d.type === 'boss') {
+    startBattle(d.type);
+    return true;
+  }
+  S.room = makeRoom(d.type);
+  save();
+  return true;
+}
+function makeRoom(type) {
+  if (type === 'shop') return { type, stock: shopStock(), done: false };
+  if (type === 'forge') return { type, opts: boonOptions(), done: false };
+  if (type === 'shrine') {
+    const h = healPlayer(Math.round(S.run.maxHp * 0.35), 50);
+    S.pPois = 0;
+    return { type, done: true, msg: 'The waters restore ' + h + ' HP and cleanse all poison.' };
+  }
+  if (type === 'treasure') {
+    const g = 12 + S.run.depth * 3 + (S.run.floor - 1) * 8 + ((rng() * 8) | 0);
+    addGold(g, 50);
+    let msg = 'You pry open the hoard: +' + g + ' gold.';
+    if (rng() < 0.35) {
+      const it = ITEMS[(rng() * ITEMS.length) | 0];
+      grantItem(it.id, 1);
+      msg += ' A ' + it.name + ' glints beneath!';
+    }
+    return { type, done: true, msg };
+  }
+  if (type === 'wheel') {
+    spinWheel();
+    return { type, done: true, msg: 'The carnival ghost grants you one free spin.' };
+  }
+  return { type: 'shrine', done: true, msg: 'An empty room. Eerie.' };
+}
+function shopStock() {
+  const st = [];
+  const mult = 1 + 0.25 * (S.run.floor - 1);
+  // three distinct items
+  const ids = ITEMS.map(i => i.id);
+  for (let i = 0; i < 3; i++) {
+    const pick = ids.splice((rng() * ids.length) | 0, 1)[0];
+    const it = itemById(pick);
+    st.push({ kind: 'item', iid: pick, label: it.icon + ' ' + it.name, price: Math.round(it.cost * mult), sold: false });
+  }
+  st.push({ kind: 'potion', label: '\u{1F9F4} Potion (+' + C.POTION_HEAL + ' HP)', price: Math.round(30 * mult), sold: false });
+  st.push({ kind: 'coins', n: 12, label: '● 12 coins', price: Math.round(18 * mult), sold: false });
+  st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(45 * mult), sold: false });
+  const owned = S.run.relics;
+  const avail = RELICS.filter(r => owned.indexOf(r.id) < 0);
+  if (avail.length) {
+    const rl = avail[(rng() * avail.length) | 0];
+    st.push({ kind: 'relic', rid: rl.id, label: rl.icon + ' ' + rl.name, sub: rl.desc, price: Math.round(70 * mult), sold: false });
+  }
+  return st;
+}
+function buyShop(i) {
+  if (!S.run || !S.room || S.room.type !== 'shop') return false;
+  const it = S.room.stock[i];
+  if (!it || it.sold || S.run.gold < it.price) { S.uiFlash = { msg: 'NOT ENOUGH GOLD', t: 1 }; SND.deny(); return false; }
+  S.run.gold -= it.price;
+  it.sold = true;
+  if (it.kind === 'item') grantItem(it.iid, 1);
+  else if (it.kind === 'potion') S.run.potions++;
+  else if (it.kind === 'coins') S.run.wallet += it.n;
+  else if (it.kind === 'maxhp') { S.run.maxHp += 10; S.run.hp += 10; }
+  else if (it.kind === 'relic') S.run.relics.push(it.rid);
+  SND.buy();
+  save();
+  return true;
+}
+function boonOptions() {
+  const opts = [];
+  const it = ITEMS[(rng() * ITEMS.length) | 0];
+  opts.push({ kind: 'item', iid: it.id, label: it.icon + ' Take a ' + it.name });
+  opts.push(rng() < 0.5
+    ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
+    : { kind: 'coins', label: '● +10 coins' });
+  const owned = S.run.relics;
+  const avail = RELICS.filter(r => owned.indexOf(r.id) < 0);
+  if (avail.length && rng() < 0.55) {
+    const rl = avail[(rng() * avail.length) | 0];
+    opts.push({ kind: 'relic', rid: rl.id, label: rl.icon + ' ' + rl.name, sub: rl.desc });
+  } else {
+    opts.push({ kind: 'whet', label: '\u{1FA9A} Hone: all weapons +1 damage' });
+  }
+  return opts;
+}
+function pickBoon(i) {
+  if (!S.run || !S.room || S.room.type !== 'forge' || S.room.done) return false;
+  const o = S.room.opts[i];
+  if (!o) return false;
+  if (o.kind === 'item') grantItem(o.iid, 1);
+  else if (o.kind === 'maxhp') { S.run.maxHp += 12; S.run.hp = Math.min(S.run.maxHp, S.run.hp + 12); }
+  else if (o.kind === 'coins') S.run.wallet += 10;
+  else if (o.kind === 'relic') S.run.relics.push(o.rid);
+  else if (o.kind === 'whet') S.run.whet++;
+  S.room.done = true;
+  S.room.msg = 'The forge hums. Boon granted.';
+  SND.buy();
+  save();
+  return true;
+}
+// leave the open room / victory screen and walk deeper
+function advance() {
+  if (!S.run) return false;
+  if (S.screen === 'battle' && !S.victory) return false;
+  S.room = null;
+  S.victory = null;
+  S.enemy = null;
+  S.coins.length = 0;
+  S.run.depth++;
+  genDoors();
+  S.screen = 'dungeon';
+  save();
+  return true;
+}
+
+// ------------------------------------------------------------------ reset
+function fillRows(y0, y1, luckyN) {
+  const step2 = MACH.coin.r * 2.05;
+  let luckyLeft = luckyN || 0;
+  for (let y = y0; y <= y1; y += step2) {
+    const n = Math.floor(84 / step2);
+    for (let i = 0; i < n; i++) {
+      const x = 50 + (i - (n - 1) / 2) * step2 * 1.04 + (rng() - 0.5) * 2.5;
+      let kind = 'coin';
+      if (luckyLeft > 0 && rng() < 0.06) { kind = 'lucky'; luckyLeft--; }
+      place(x, y + (rng() - 0.5) * 2, kind, 0, 'plat', 0);
+    }
+  }
+}
+function initPile() {
+  S.coins.length = 0;
+  const td = MACH.tiers[0];
+  const front = td.front;
+  fillRows(td.back + 42, front - 4, 4);
+  // gold on the field: a bag always, a gem sometimes
+  place(30 + rng() * 40, front - 26 - rng() * 6, 'bag', 0, 'plat', 0);
+  if (rng() < 0.4) place(50 + (rng() - 0.5) * 30, front - 22, 'gem', 0, 'plat', 0);
+  if (rng() < 0.35) place(30 + rng() * 40, front - 30 - rng() * 4, 'chest', 0, 'plat', 0);
+  if (rng() < 0.3) place(25 + rng() * 50, front - 18 - rng() * 10, 'chip', 0, 'plat', 0);
+  // the arsenal rides the pile — deep enough that it takes pushing to fire
+  if (S.run) {
+    let placed = 0;
+    const ids = Object.keys(S.run.arsenal);
+    for (const iid of ids) {
+      for (let k = 0; k < S.run.arsenal[iid] && placed < C.ITEM_CAP; k++) {
+        const pr = place(16 + ((placed * 23) % 68) + (rng() - 0.5) * 6,
+                         front - 26 - rng() * 12, 'item', 0, 'plat', 0);
+        pr.iid = iid;
+        placed++;
+      }
+    }
+  }
+  // a second storey: coins resting on top of the pile
+  const base = S.coins.filter(c => c.kind === 'coin');
+  for (let i = 0; i < Math.min(12, base.length); i++) {
+    const under = base[(rng() * base.length) | 0];
+    place(under.x + (rng() - 0.5) * 2, under.y + (rng() - 0.5) * 2, 'coin', 1, 'plat', 0);
+  }
+  // settle so nothing pops on the first frame, then sweep spillage
+  const savedEnemy = S.enemy;
+  S.enemy = null;                       // no combat during the settle
+  for (let i = 0; i < 140; i++) step(1 / 60, true);
+  S.enemy = savedEnemy;
+  for (let i = S.coins.length - 1; i >= 0; i--) {
+    if (S.coins[i].st !== 'plat') S.coins.splice(i, 1);
+  }
+  S.trayPile = 0; S.lost = 0;
+}
+function reset() {
+  S.combo = 0; S.lastCollect = -99; S.time = 0; S.phase = 0; S.cd = 0;
+  S.floats.length = 0; S.parts.length = 0; S.rain.length = 0;
+  S.banner = null; S.trayPile = 0; S.shake = 0;
+  S.tray.items.length = 0;
+  initPile();
+}
+
+// ------------------------------------------------------------- simulation
+function findSupport(c, lay) {
+  for (const o of S.coins) {
+    if (o === c || o.st !== 'plat' || o.lay !== lay || o.tier !== c.tier) continue;
+    const dx = o.x - c.x, dy = o.y - c.y;
+    if (dx * dx + dy * dy < Math.pow((o.r + c.r) * 0.85, 2)) return o;
+  }
+  return null;
+}
+function landCoin(c, lay) {
+  const td = MACH.tiers[c.tier];
+  c.st = 'plat';
+  c.lay = lay;
+  c.z = td.z + lay * C.COIN_H;
+  c.vz = 0; c.chk1 = false; c.chk2 = false;
+  const pf = pusherFront(c.tier);
+  c.y = Math.max(c.y, pf + c.r);
+  c.vx += (rng() - 0.5) * 7;
+  c.vy += (rng() - 0.5) * 5;
+  c.popT = 0.18;
+  SND.clink();
+}
+// an item shoved into the gutter is destroyed — unless the magnet saves it.
+// quiet = the initPile settle: nothing is truly lost before the fight starts.
+function gutterLoss(c, quiet) {
+  if (quiet) return true;
+  if (hasRelic('magnet') && !c.saved && rng() < 0.5) {
+    c.saved = true;
+    c.x = c.x < 50 ? C.GUT_LO + c.r + 2 : C.GUT_HI - c.r - 2;
+    c.vx = (c.x < 50 ? 1 : -1) * 18;
+    floatAt('MAGNET!', c.x, '#8be7ff');
+    return false;
+  }
+  if (c.kind === 'item' && !c.temp && S.run) {
+    const it = itemById(c.iid);
+    if (S.run.arsenal[c.iid] > 0) {
+      S.run.arsenal[c.iid]--;
+      if (!S.run.arsenal[c.iid]) delete S.run.arsenal[c.iid];
+    }
+    S.banner = { txt: (it ? it.name.toUpperCase() : 'ITEM') + ' LOST!', ttl: 1.4, max: 1.4 };
+    SND.thud();
+  }
+  return true;
+}
+
+function step(dt, quiet) {
+  S.time += dt;
+  if (S.cd > 0) S.cd -= dt;
+  if (S.denyT > 0) S.denyT -= dt;
+  if (S.hurtT > 0) S.hurtT -= dt;
+  S.phase += dt * 2 * Math.PI / MACH.pushPeriod;
+  S.shake = Math.max(0, S.shake - dt * 12);
+  if (S.fever > 0) S.fever -= dt;
+
+  // enemy AI runs only while the fight is live
+  if (S.screen === 'battle' && S.enemy && !S.victory && !quiet) battleTick(dt);
+
+  // broke bailout: out of ammo mid-fight, the dungeon takes pity — slowly
+  if (S.screen === 'battle' && S.run && !S.victory && S.run.wallet < 1) {
+    S.regen += dt;
+    if (S.regen >= C.PITY_T) { S.regen = 0; S.run.wallet++; }
+  } else S.regen = 0;
+
+  // rain queue (frenzy bonuses, cursed skulls)
+  for (let i = S.rain.length - 1; i >= 0; i--) {
+    S.rain[i].t -= dt;
+    if (S.rain[i].t <= 0) {
+      const r = S.rain.splice(i, 1)[0];
+      const c2 = spawnDrop(r.x, r.y, r.kind);
+      if (c2 && r.kind === 'item') { c2.iid = r.iid; c2.temp = !!r.temp; }
+    }
+  }
+  if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) S.wheelAnim = null; }
+
+  for (const c of S.coins) {
+    if (c.st === 'air') {
+      const td = MACH.tiers[c.tier];
+      c.vz += C.GRAV * dt;
+      c.z -= c.vz * dt;
+      c.rot += c.vrot * dt;
+      c.y += c.vy * dt;
+      c.vy *= Math.exp(-1.5 * dt);
+      c.x += c.vx * dt;
+      c.vx *= Math.exp(-0.9 * dt);
+      if (c.x < 9) { c.x = 9; c.vx = Math.abs(c.vx) * 0.45; }
+      if (c.x > 91) { c.x = 91; c.vx = -Math.abs(c.vx) * 0.45; }
+      // land ON the moving pusher shelf when it is underneath
+      const pfA = pusherFront(c.tier);
+      if (!c.chkP && c.z <= td.z + C.PUSH_H && c.z > td.z + C.PUSH_H - 3) {
+        c.chkP = true;
+        if (c.y < pfA - c.r * 0.3) {
+          c.st = 'plat'; c.onPush = true; c.lay = 0;
+          c.z = td.z + C.PUSH_H; c.vz = 0;
+          c.vx += (rng() - 0.5) * 5;
+          c.vy += (rng() - 0.5) * 3;
+          if (!quiet) SND.clink();
+          continue;
+        }
+      }
+      if (!c.chk2 && c.z <= td.z + 2 * C.COIN_H) {
+        c.chk2 = true;
+        if (findSupport(c, 1)) { landCoin(c, 2); continue; }
+      }
+      if (!c.chk1 && c.z <= td.z + C.COIN_H) {
+        c.chk1 = true;
+        if (findSupport(c, 0)) { landCoin(c, 1); continue; }
+      }
+      if (c.z <= td.z) landCoin(c, 0);
+    } else if (c.st === 'plat' && c.onPush) {
+      const td = MACH.tiers[c.tier];
+      const pf = pusherFront(c.tier);
+      const pv = pusherVel(c.tier);
+      if (pv > 0) c.y += pv * dt;
+      const fr = Math.exp(-C.FRICTION * dt);
+      c.vx *= fr; c.vy *= fr;
+      if (Math.abs(c.vx) < C.SETTLE) c.vx = 0;
+      if (Math.abs(c.vy) < C.SETTLE) c.vy = 0;
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      if (c.x < c.r) { c.x = c.r; c.vx *= -0.3; }
+      if (c.x > C.W - c.r) { c.x = C.W - c.r; c.vx *= -0.3; }
+      if (c.y < td.back + c.r * 0.5) c.y = td.back + c.r * 0.5;
+      if (c.y > pf) {
+        c.st = 'air'; c.onPush = false;
+        c.vz = 0; c.chk1 = c.chk2 = false; c.chkP = true;
+        c.vy = Math.max(c.vy, 6);
+        c.vrot = (rng() - 0.5) * 8;
+      }
+    } else if (c.st === 'plat') {
+      const td = MACH.tiers[c.tier];
+      const pf = pusherFront(c.tier);
+      const pv = pusherVel(c.tier);
+      if (c.y - c.r < pf) {
+        c.y = pf + c.r;
+        if (pv > 0) c.vy = Math.max(c.vy, pv);
+      }
+      if (c.popT > 0) c.popT -= dt;
+      const fr = Math.exp(-C.FRICTION * dt);
+      c.vx *= fr; c.vy *= fr;
+      if (Math.abs(c.vx) < C.SETTLE) c.vx = 0;
+      if (Math.abs(c.vy) < C.SETTLE) c.vy = 0;
+      const front = tierFront(c.tier);
+      // the incline lip: coins stall teetering at the brink until shoved
+      if (c.lay === 0 && c.vy > 0 && c.y > front - MACH.lipW && c.y <= front) {
+        c.vy = Math.max(0, c.vy - C.LIP_G * dt);
+      }
+      c.x += c.vx * dt;
+      c.y += c.vy * dt;
+      if (c.lay > 0) {
+        const s = findSupport(c, c.lay - 1);
+        if (s) {
+          const k = Math.min(1, dt * 5);
+          c.vx += (s.vx - c.vx) * k;
+          c.vy += (s.vy - c.vy) * k;
+        } else {
+          c.lay--; c.z = td.z + c.lay * C.COIN_H;
+          if (!quiet) SND.clink();
+        }
+      }
+      // side walls; gutters open on the MID zone only, closing before the lip
+      const gutOpen = c.y >= MACH.gutY && c.y < front - MACH.lipW - 2;
+      if (!gutOpen) {
+        if (c.x < c.r) { c.x = c.r; c.vx *= -0.3; }
+        if (c.x > C.W - c.r) { c.x = C.W - c.r; c.vx *= -0.3; }
+      } else if (c.x < C.GUT_LO || c.x > C.GUT_HI) {
+        if (gutterLoss(c, quiet)) {
+          c.st = 'gutter'; c.vz = 0; c.vrot = (rng() - 0.5) * 14;
+          S.lost++;
+          if (!quiet) SND.thud();
+        }
+        continue;
+      }
+      if (c.y > front) {
+        c.st = 'fall'; c.vz = 0; c.vrot = (rng() - 0.5) * 12 + Math.sign(c.vy || 1) * 4;
+      }
+    } else if (c.st === 'fall') {
+      c.vz += C.GRAV * dt;
+      c.z -= c.vz * dt;
+      c.y += c.vy * dt;
+      c.vy *= Math.exp(-1.2 * dt);
+      c.rot += c.vrot * dt;
+      // the cabinet funnels everything over the front edge into the tray
+      const fx2 = Math.max(22, Math.min(78, c.x));
+      c.x += (fx2 - c.x) * Math.min(1, dt * 5);
+      if (c.z <= C.TRAY_Z) {
+        if (!c.scored) { c.scored = true; if (!quiet) scoreCoin(c); }
+        c.z = C.TRAY_Z;
+        c.vz = -c.vz * 0.42;
+        c.bounces++;
+        c.vrot *= 0.5;
+        if (c.bounces >= 3 || c.vz > -25) { c.st = 'tray'; c.ttl = 1.5; c.z = C.TRAY_Z; }
+        else if (!quiet) SND.clink();
+      }
+    } else if (c.st === 'gutter') {
+      c.vz += C.GRAV * dt;
+      c.z -= c.vz * dt;
+      c.rot += c.vrot * dt;
+    } else if (c.st === 'tray') {
+      c.ttl -= dt;
+    }
+  }
+
+  // coin vs coin — positional correction + impulse; same layer only.
+  const cs = S.coins;
+  const plats = [];
+  for (const c of cs) if (c.st === 'plat') plats.push(c);
+  plats.sort((a, b) => a.x - b.x);
+  const REACH = kindR('item') * 2 + 0.5;
+  for (let iter = 0; iter < 3; iter++) {
+    for (let i = 0; i < plats.length; i++) {
+      const a = plats[i];
+      for (let j = i + 1; j < plats.length; j++) {
+        const b = plats[j];
+        if (b.x - a.x > REACH) break;
+        if (a.lay !== b.lay || a.tier !== b.tier || a.onPush !== b.onPush) continue;
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const rr = a.r + b.r;
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= rr * rr || d2 === 0) continue;
+        const d = Math.sqrt(d2);
+        const nx = dx / d, ny = dy / d;
+        const overlap = rr - d;
+        const ima = 1 / a.m, imb = 1 / b.m, ims = ima + imb;
+        const corr = overlap * 0.8 / ims;
+        a.x -= nx * corr * ima; a.y -= ny * corr * ima;
+        b.x += nx * corr * imb; b.y += ny * corr * imb;
+        const rvx = b.vx - a.vx, rvy = b.vy - a.vy;
+        const vn = rvx * nx + rvy * ny;
+        if (vn < 0) {
+          const jimp = -(1 + C.REST) * vn / ims;
+          a.vx -= nx * jimp * ima; a.vy -= ny * jimp * ima;
+          b.vx += nx * jimp * imb; b.vy += ny * jimp * imb;
+        }
+      }
+    }
+  }
+
+  // cleanup
+  for (let i = cs.length - 1; i >= 0; i--) {
+    const c = cs[i];
+    if (c.st === 'gutter' && c.z < C.GUT_KILL) cs.splice(i, 1);
+    else if (c.st === 'tray' && c.ttl <= 0) { cs.splice(i, 1); S.trayPile = Math.min(S.trayPile + 1, 14); }
+  }
+
+  for (let i = S.floats.length - 1; i >= 0; i--) {
+    const f = S.floats[i];
+    f.age += dt;
+    if (f.age >= f.max) S.floats.splice(i, 1);
+  }
+  if (S.banner) {
+    S.banner.ttl -= dt;
+    if (S.banner.ttl <= 0) S.banner = null;
+  }
+  if (S.uiFlash) {
+    S.uiFlash.t -= dt;
+    if (S.uiFlash.t <= 0) S.uiFlash = null;
+  }
+  if (S.combo > 0 && S.time - S.lastCollect > C.COMBO_WIN) S.combo = 0;
+}
+
+function tick(dt) {
+  dt = Math.min(dt, 0.05);
+  const n = 2, sub = dt / n;
+  for (let i = 0; i < n; i++) step(sub);
+}
+
+// ------------------------------------------------------------- public API
+window.DP = {
+  S, C, MACH, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL, DOOR_INFO, FLOORS,
+  tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
+  pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
+  newRun, genDoors, enterDoor, makeRoom, advance, startBattle, mkEnemy,
+  enemyAttack, battleTick, winBattle, endRun, buyShop, pickBoon, usePotion,
+  spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
+  dmgEnemy, hurtPlayer, healPlayer, addBlock, poisonEnemy, stunEnemy,
+  addGold, addCoins, fireItem, weaponDmg, theme, scaleMult, bestify,
+};
+
+load();
+
+// ============================================================================
+// Everything below is browser-only: audio, input, rendering.
+// ============================================================================
+if (!HEADLESS) (function browser() {
+  srand((Date.now() % 2147483647) || 1); // fresh luck each session; tests keep the fixed seed
+
+  // pre-rendered sprite cache (coins render once to an offscreen canvas)
+  const SPR = {};
+  function sprite(key, w, h, build) {
+    let cv = SPR[key];
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      build(cv.getContext('2d'), w, h);
+      SPR[key] = cv;
+    }
+    return cv;
+  }
+  function buildCoinFace(g, cx, cy, rx, ry, pal, sym) {
+    const fg = g.createRadialGradient(cx - rx * 0.35, cy - ry * 0.5, rx * 0.1, cx, cy, rx * 1.25);
+    fg.addColorStop(0, pal.f0); fg.addColorStop(0.45, pal.f1); fg.addColorStop(1, pal.f2);
+    g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7);
+    g.fillStyle = fg; g.fill();
+    g.lineWidth = rx / 44;
+    g.strokeStyle = pal.ring; g.stroke();
+    g.beginPath(); g.ellipse(cx, cy, rx * 0.68, ry * 0.68, 0, 0, 7);
+    g.strokeStyle = pal.ring; g.stroke();
+    g.beginPath(); g.ellipse(cx, cy + rx / 30, rx * 0.68, ry * 0.68, 0, 0, 7);
+    g.strokeStyle = 'rgba(255,250,235,0.5)'; g.stroke();
+    g.font = '900 ' + Math.max(6, ry * 1.05) + 'px Georgia, serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = pal.sym;
+    g.fillText(sym, cx, cy + ry * 0.04);
+  }
+  const COIN_PAL = { edge: '#7d5a14', f0: '#ffedaa', f1: '#f2c04a', f2: '#ad7c1a', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(136,94,18,0.85)' };
+  const LUCKY_PAL = { edge: '#8a5f10', f0: '#fff8cf', f1: '#ffdf6b', f2: '#c78f18', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(150,96,10,0.9)' };
+  function flatSprite(styleKey, pal, sym) {
+    return sprite('cf_' + styleKey + '_' + sym, 96, 66, (g) => {
+      const cx = 48, cy = 24, rx = 44, ry = 20, eh = 9;
+      g.beginPath(); g.ellipse(cx, cy + eh, rx, ry, 0, 0, 7);
+      g.fillStyle = pal.edge; g.fill();
+      g.fillRect(cx - rx, cy, rx * 2, eh);
+      g.fillStyle = 'rgba(60,38,6,0.5)';
+      for (let i = -3; i <= 3; i++) g.fillRect(cx + i * rx / 3.6 - 1, cy + eh * 0.2, 2, eh * 0.9);
+      buildCoinFace(g, cx, cy, rx, ry, pal, sym);
+    });
+  }
+  // gradient cache for the big static fills; keys include the floor skin
+  const GRAD = {};
+  function lgr(key, x0, y0, x1, y1, stops) {
+    let g = GRAD[key];
+    if (!g) {
+      g = ctx.createLinearGradient(x0, y0, x1, y1);
+      for (const s of stops) g.addColorStop(s[0], s[1]);
+      GRAD[key] = g;
+    }
+    return g;
+  }
+  function rgr(key, x0, y0, r0, x1, y1, r1, stops) {
+    let g = GRAD[key];
+    if (!g) {
+      g = ctx.createRadialGradient(x0, y0, r0, x1, y1, r1);
+      for (const s of stops) g.addColorStop(s[0], s[1]);
+      GRAD[key] = g;
+    }
+    return g;
+  }
+  function fkey() { return ((S.run ? S.run.floor : 1) - 1) % FLOORS.length; }
+
+  // ------------------------------------------------------------------ audio
+  let AC = null, master = null, noiseBuf = null;
+  function audioInit() {
+    if (AC) return;
+    const A = window.AudioContext || window.webkitAudioContext;
+    if (!A) return;
+    try {
+      AC = new A();
+      master = AC.createGain();
+      master.gain.value = 0.5;
+      master.connect(AC.destination);
+      const len = AC.sampleRate * 0.2;
+      noiseBuf = AC.createBuffer(1, len, AC.sampleRate);
+      const ch = noiseBuf.getChannelData(0);
+      for (let i = 0; i < len; i++) ch[i] = Math.random() * 2 - 1;
+    } catch (e) { AC = null; }
+  }
+  function tone(f, dur, type, vol, f2) {
+    if (!AC || S.mute) return;
+    const t0 = AC.currentTime;
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = type; o.frequency.setValueAtTime(f, t0);
+    if (f2) o.frequency.exponentialRampToValueAtTime(Math.max(f2, 30), t0 + dur);
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    o.connect(g); g.connect(master);
+    o.start(t0); o.stop(t0 + dur + 0.02);
+  }
+  function noise(dur, vol, hp) {
+    if (!AC || S.mute || !noiseBuf) return;
+    const t0 = AC.currentTime;
+    const src = AC.createBufferSource(); src.buffer = noiseBuf;
+    const flt = AC.createBiquadFilter(); flt.type = 'highpass'; flt.frequency.value = hp;
+    const g = AC.createGain();
+    g.gain.setValueAtTime(vol, t0);
+    g.gain.exponentialRampToValueAtTime(0.001, t0 + dur);
+    src.connect(flt); flt.connect(g); g.connect(master);
+    src.start(t0); src.stop(t0 + dur + 0.02);
+  }
+  SND = {
+    clink() { const f = 1300 + Math.random() * 900; tone(f, 0.07, 'triangle', 0.22, f * 0.55); noise(0.045, 0.14, 2800); },
+    slot() { tone(340, 0.06, 'square', 0.10, 240); noise(0.05, 0.08, 1400); },
+    collect(m) {
+      const f = 640 * Math.pow(1.14, Math.min(m, 6));
+      tone(f, 0.17, 'sine', 0.30); tone(f * 2, 0.12, 'sine', 0.13);
+      noise(0.03, 0.10, 4200);
+    },
+    gem() { [880, 1108, 1318, 1760].forEach((f, i) => setTimeout(() => tone(f, 0.35, 'sine', 0.22), i * 55)); },
+    jackpot() { [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => setTimeout(() => { tone(f, 0.22, 'square', 0.14); tone(f / 2, 0.22, 'triangle', 0.14); }, i * 110)); },
+    deny() { tone(150, 0.18, 'square', 0.14, 90); },
+    thud() { tone(75, 0.1, 'sine', 0.30, 50); },
+    hit() { noise(0.08, 0.2, 900); tone(180, 0.12, 'square', 0.2, 90); },
+    hurt() { tone(120, 0.25, 'sawtooth', 0.22, 60); noise(0.12, 0.14, 500); },
+    heal() { [660, 880, 1108].forEach((f, i) => setTimeout(() => tone(f, 0.2, 'sine', 0.2), i * 70)); },
+    poison() { tone(300, 0.3, 'sawtooth', 0.12, 150); },
+    block() { tone(500, 0.08, 'square', 0.18, 420); noise(0.05, 0.12, 3200); },
+    stun() { [1600, 1200, 900].forEach((f, i) => setTimeout(() => tone(f, 0.15, 'sine', 0.18), i * 70)); },
+    buy() { tone(660, 0.1, 'square', 0.15); setTimeout(() => tone(990, 0.16, 'square', 0.15), 90); noise(0.05, 0.1, 3000); },
+    door() { tone(90, 0.35, 'sine', 0.3, 55); noise(0.2, 0.1, 300); },
+    dead() { [400, 300, 220, 150].forEach((f, i) => setTimeout(() => tone(f, 0.32, 'triangle', 0.22), i * 160)); },
+    winb() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.25, 'square', 0.16), i * 110)); },
+    reel() { tone(220 + Math.random() * 80, 0.04, 'square', 0.08); },
+  };
+
+  // --------------------------------------------------------------- viewport
+  const LW = 480, LH = 840;
+  let scale = 1, offX = 0, offY = 0;
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.floor(window.innerWidth * dpr);
+    canvas.height = Math.floor(window.innerHeight * dpr);
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    scale = Math.min(canvas.width / LW, canvas.height / LH);
+    offX = (canvas.width - LW * scale) / 2;
+    offY = (canvas.height - LH * scale) / 2;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  const PF = { top: 238, bot: 596, cx: LW / 2, w0: 240, w1: 442 };
+  function eyd(y) {
+    const t = Math.max(0, Math.min(y / 100, 1.18));
+    return t * (0.72 + 0.28 * Math.min(t, 1));
+  }
+  function w2s(x, y, z) {
+    const e = eyd(y);
+    const half = (PF.w0 + (PF.w1 - PF.w0) * Math.min(e, 1)) / 2;
+    const u = half * 2 / 100;
+    z = z || 0;
+    let off;
+    if (z >= 0) off = u * (0.5 * Math.min(z, 12) + 0.62 * Math.max(0, z - 12));
+    else off = u * z;
+    return { x: PF.cx + (x - 50) * u, y: PF.top + (PF.bot - PF.top) * e - off, u };
+  }
+
+  // ------------------------------------------------------------------ input
+  let uiButtons = [];   // rebuilt by every draw pass
+  function hit(px, py) {
+    for (let i = uiButtons.length - 1; i >= 0; i--) {
+      const b = uiButtons[i];
+      if (px >= b.x && px <= b.x + b.w && py >= b.y && py <= b.y + b.h) { b.cb(); return true; }
+    }
+    return false;
+  }
+  let held = false, holdT = 0;
+  function toLogical(ev) {
+    const r = canvas.getBoundingClientRect();
+    const dpr = canvas.width / r.width;
+    return {
+      x: ((ev.clientX - r.left) * dpr - offX) / scale,
+      y: ((ev.clientY - r.top) * dpr - offY) / scale,
+    };
+  }
+  function aimFrom(p) {
+    const e = eyd(MACH.tiers[0].slotY);
+    const half = (PF.w0 + (PF.w1 - PF.w0) * e) / 2;
+    const u = half * 2 / 100;
+    S.aimX = Math.max(8, Math.min(92, 50 + (p.x - PF.cx) / u));
+  }
+  canvas.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    audioInit();
+    if (AC && AC.state === 'suspended') AC.resume();
+    const p = toLogical(ev);
+    if (hit(p.x, p.y)) return;
+    if (S.screen === 'battle' && !S.victory) {
+      aimFrom(p);
+      drop(S.aimX);
+      held = true; holdT = 0;
+    }
+  });
+  canvas.addEventListener('pointermove', (ev) => {
+    if (S.screen !== 'battle') return;
+    const p = toLogical(ev);
+    if (p.y > 180) aimFrom(p);
+  });
+  window.addEventListener('pointerup', () => { held = false; });
+  window.addEventListener('pointercancel', () => { held = false; });
+  document.addEventListener('visibilitychange', save);
+
+  // -------------------------------------------------------------- particles
+  const PASTELS = ['#ffb3c8', '#ffe08a', '#b8f2d0', '#cdb8ff', '#a8e8ff', '#ffd6a8'];
+  function burstScreen(sx, sy, kind) {
+    const n = kind === 'gem' || kind === 'item' ? 24 : 14;
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 160;
+      S.parts.push({
+        x: sx, y: sy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 90,
+        g: 300, life: 0, max: 0.5 + Math.random() * 0.5,
+        col: kind === 'gem' ? '#8ef0ff' : kind === 'skull' ? '#c86bff' : PASTELS[(Math.random() * PASTELS.length) | 0],
+        sz: 2 + Math.random() * 3, spin: Math.random() * 6,
+        shape: Math.random() < 0.35 ? 'heart' : Math.random() < 0.5 ? 'star' : 'sq',
+      });
+    }
+    if (S.parts.length > 130) S.parts.splice(0, S.parts.length - 130);
+  }
+  window.__dpBurst = function (wx, wy, wz, kind) {
+    const p = w2s(wx, wy, wz);
+    burstScreen(p.x, p.y, kind);
+  };
+
+  const SCRATCH = [];
+  {
+    const old = rngState; srand(777);
+    for (let i = 0; i < 34; i++) {
+      const y = 4 + rng() * 78, x = 4 + rng() * 92;
+      SCRATCH.push({ x1: x, y1: y, x2: x + (rng() - 0.5) * 26, y2: y + (rng() - 0.5) * 5 });
+    }
+    rngState = old;
+  }
+
+  // ------------------------------------------------------------ draw helpers
+  function rr(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+  function poly(pts) {
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+    ctx.closePath();
+  }
+  function fmt(n) { return ('' + Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  function txt(s, x, y, font, col, align, stroke) {
+    ctx.font = font;
+    ctx.textAlign = align || 'center';
+    ctx.textBaseline = 'middle';
+    if (stroke) { ctx.lineWidth = stroke.w; ctx.strokeStyle = stroke.col; ctx.strokeText(s, x, y); }
+    ctx.fillStyle = col;
+    ctx.fillText(s, x, y);
+  }
+  function uiBtn(x, y, w, h, label, cb, opts) {
+    opts = opts || {};
+    uiButtons.push({ x, y, w, h, cb });
+    rr(x, y, w, h, opts.r || 12);
+    if (opts.grad) {
+      const g = ctx.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0, opts.grad[0]); g.addColorStop(1, opts.grad[1]);
+      ctx.fillStyle = g;
+    } else ctx.fillStyle = opts.bg || 'rgba(20,10,14,0.8)';
+    ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = opts.border || '#7d5a24'; ctx.stroke();
+    if (label) txt(label, x + w / 2, y + h / 2 + 1, opts.font || '800 15px Verdana, sans-serif', opts.col || '#f2cd5e');
+  }
+  function bar(x, y, w, h, frac, colA, colB, bg) {
+    rr(x, y, w, h, h / 2);
+    ctx.fillStyle = bg || 'rgba(0,0,0,0.55)'; ctx.fill();
+    if (frac > 0.01) {
+      rr(x + 1.5, y + 1.5, Math.max(h - 3, (w - 3) * Math.min(1, frac)), h - 3, (h - 3) / 2);
+      const g = ctx.createLinearGradient(x, 0, x + w, 0);
+      g.addColorStop(0, colA); g.addColorStop(1, colB);
+      ctx.fillStyle = g; ctx.fill();
+    }
+  }
+
+  // -------------------------------------------------------- battle: cabinet
+  function drawBackground() {
+    const T = theme();
+    ctx.fillStyle = rgr('bg:' + fkey(), LW / 2, 300, 60, LW / 2, 420, 620,
+      [[0, T.room], [0.6, '#241a26'], [1, '#171019']]);
+    ctx.fillRect(-40, -40, LW + 80, LH + 80);
+  }
+
+  function drawEnemyPanel(t) {
+    const T = theme();
+    const e = S.enemy;
+    ctx.save();
+    rr(20, 12, LW - 40, 128, 20);
+    ctx.fillStyle = lgr('ep:' + fkey(), 0, 12, 0, 140, [[0, '#241c2c'], [1, '#171019']]);
+    ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = T.cabB; ctx.stroke();
+    // wall torches flank the foe
+    for (const tx of [48, LW - 48]) {
+      const fl = 1 + Math.sin(t * 9 + tx) * 0.18;
+      ctx.globalAlpha = 0.5;
+      ctx.beginPath(); ctx.arc(tx, 52, 14 * fl, 0, 7);
+      ctx.fillStyle = '#ff9d3c'; ctx.fill();
+      ctx.globalAlpha = 1;
+      txt('\u{1F525}', tx, 52, (18 + fl * 4) + 'px serif', '#fff');
+    }
+    if (e) {
+      const dead = e.hp <= 0;
+      const lunge = e.lungeT > 0 ? Math.sin((0.35 - e.lungeT) / 0.35 * Math.PI) : 0;
+      const bob = dead ? 0 : Math.sin(t * 2.2) * 3;
+      const sz = e.boss ? 64 : 52;
+      ctx.save();
+      ctx.translate(LW / 2, 58 + bob + lunge * 16);
+      if (e.hitT > 0) ctx.rotate(Math.sin(t * 60) * 0.08);
+      if (dead) { ctx.globalAlpha = Math.max(0, 1 - S.victory.t * 1.2); ctx.rotate(0.6); }
+      if (e.stunT > 0) ctx.globalAlpha *= 0.75;
+      txt(e.icon, 0, 0, sz + 'px serif', '#fff');
+      ctx.restore();
+      if (e.stunT > 0 && !dead) txt('❄ ' + Math.ceil(e.stunT), LW / 2 + 46, 36, '800 14px Verdana, sans-serif', '#8be7ff');
+      if (e.pois > 0 && !dead) txt('☠ ' + e.pois, LW / 2 - 46, 36, '800 14px Verdana, sans-serif', '#b8f26b');
+      txt(e.name, LW / 2, 100, '900 15px Georgia, serif', e.boss ? '#ffd75e' : '#e8dce8',
+          'center', { w: 4, col: 'rgba(20,8,24,0.9)' });
+      // HP bar
+      bar(96, 112, LW - 192, 13, Math.max(0, e.hp / e.maxHp), '#ef4b5d', '#a8213a');
+      txt(Math.max(0, e.hp) + ' / ' + e.maxHp, LW / 2, 118.5, '800 10px Verdana, sans-serif', '#ffe8ec');
+      // attack telegraph
+      if (!dead) {
+        const frac = Math.max(0, Math.min(1, 1 - e.atkT / e.period));
+        const urgent = e.atkT < 1;
+        bar(120, 128, LW - 240, 6, e.stunT > 0 ? 0 : frac, urgent ? '#ff5a4e' : '#ff9d3c', '#ffd75e');
+        txt('⚔ ' + e.atk, 100, 131, '800 10px Verdana, sans-serif', urgent && Math.floor(t * 8) % 2 ? '#ff5a4e' : '#c8a8b0', 'right');
+        if (e.trait) txt(TRAIT_TXT[e.trait], LW - 96, 131, '600 8px Verdana, sans-serif', '#9a8aa0', 'right');
+      }
+    }
+    ctx.restore();
+    uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
+  }
+
+  function drawMeter(t) {
+    const x = 70, y = 150, w = LW - 140, h = 14;
+    const fr = S.meter / C.METER_MAX;
+    rr(x - 4, y - 4, w + 8, h + 8, 9);
+    ctx.fillStyle = '#1c0d13'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#6e4c1c'; ctx.stroke();
+    if (fr > 0) {
+      const pulse = fr > 0.8 ? 0.25 + 0.2 * Math.sin(t * 10) : 0;
+      rr(x, y, Math.max(8, w * fr), h, 7);
+      const g = ctx.createLinearGradient(x, 0, x + w, 0);
+      g.addColorStop(0, '#ff9d3c'); g.addColorStop(1, '#ff4b2e');
+      ctx.fillStyle = g; ctx.fill();
+      if (pulse > 0) { ctx.fillStyle = 'rgba(255,240,180,' + pulse + ')'; ctx.fill(); }
+    }
+    txt('FRENZY ' + S.meter + ' / ' + C.METER_MAX, LW / 2, y + h / 2 + 0.5,
+        '800 10px Verdana, sans-serif', fr > 0.5 ? '#fff5d6' : '#caa25a');
+  }
+
+  function drawCabinet() {
+    const T = theme();
+    ctx.save();
+    const g = ctx.createLinearGradient(0, 170, 0, 700);
+    g.addColorStop(0, T.cabA); g.addColorStop(1, T.cabB);
+    ctx.fillStyle = g;
+    ctx.fillRect(4, 170, 22, 540);
+    ctx.fillRect(LW - 26, 170, 22, 540);
+    ctx.fillStyle = 'rgba(255,214,120,0.16)';
+    ctx.fillRect(8, 170, 3, 540);
+    ctx.fillRect(LW - 12, 170, 3, 540);
+    ctx.restore();
+  }
+
+  function drawBackWall() {
+    const a = w2s(0, 0, MACH.tiers[0].z);
+    ctx.save();
+    const g = ctx.createLinearGradient(0, 172, 0, a.y);
+    g.addColorStop(0, '#20242c'); g.addColorStop(1, '#3a4049');
+    ctx.fillStyle = g;
+    ctx.fillRect(26, 172, LW - 52, Math.max(10, a.y - 172));
+    ctx.fillStyle = '#12151a';
+    ctx.fillRect(60, 186, LW - 120, 12);
+    ctx.strokeStyle = '#565e69'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(60, 186, LW - 120, 12);
+    const slotY = MACH.tiers[0].slotY;
+    const ap = w2s(S.aimX, slotY, MACH.tiers[0].z);
+    const e = eyd(slotY);
+    const u = (PF.w0 + (PF.w1 - PF.w0) * e) / 100;
+    const gx = PF.cx + (S.aimX - 50) * u;
+    const lg = ctx.createLinearGradient(0, 192, 0, ap.y);
+    lg.addColorStop(0, 'rgba(255,222,120,0.55)');
+    lg.addColorStop(1, 'rgba(255,222,120,0.03)');
+    ctx.fillStyle = lg;
+    ctx.fillRect(gx - 7, 192, 14, ap.y - 192);
+    ctx.fillStyle = S.cd > 0 ? '#6e5320' : '#ffd75e';
+    rr(gx - 10, 184, 20, 15, 4); ctx.fill();
+    ctx.fillStyle = '#12151a';
+    ctx.fillRect(gx - 5, 187, 10, 9);
+    ctx.restore();
+  }
+
+  function drawTierFloor(y0, y1, z) {
+    const T = theme();
+    const p00 = w2s(0, y0, z), p10 = w2s(100, y0, z);
+    const p01 = w2s(0, y1, z), p11 = w2s(100, y1, z);
+    poly([p00, p10, p11, p01]);
+    ctx.fillStyle = lgr('fl:' + fkey() + ':' + (p00.y | 0) + ':' + (p01.y | 0),
+      0, p00.y, 0, p01.y, [[0, T.floorA], [1, T.floorB]]);
+    ctx.fill();
+    ctx.save();
+    ctx.clip();
+    ctx.globalAlpha = 0.06;
+    ctx.strokeStyle = '#dfe5ee';
+    ctx.lineWidth = 1;
+    for (const s of SCRATCH) {
+      if (s.y1 < y0 || s.y1 > y1) continue;
+      const a = w2s(s.x1, s.y1, z), b = w2s(s.x2, s.y2, z);
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawGutters() {
+    const front = tierFront(0);
+    const gEnd = front - MACH.lipW - 2;
+    for (const side of [0, 1]) {
+      const x0 = side ? 100 : 0;
+      const xin = side ? 96 : 4;
+      const a = w2s(x0, MACH.gutY, 0), b = w2s(xin, MACH.gutY, 0);
+      const c2 = w2s(xin, gEnd, 0), d = w2s(x0, gEnd, 0);
+      poly([a, b, c2, d]);
+      const gg = ctx.createLinearGradient(a.x, 0, b.x, 0);
+      gg.addColorStop(side ? 1 : 0, 'rgba(8,6,10,0.9)');
+      gg.addColorStop(side ? 0 : 1, 'rgba(8,6,10,0.0)');
+      ctx.fillStyle = gg; ctx.fill();
+      const r1 = w2s(x0, gEnd, 2.4), r2 = w2s(x0, front, 2.4), r3 = w2s(x0, front, 0), r4 = w2s(x0, gEnd, 0);
+      poly([r1, r2, r3, r4]);
+      const rg = ctx.createLinearGradient(0, r1.y, 0, r3.y);
+      rg.addColorStop(0, '#aeb6c2'); rg.addColorStop(1, '#5a616c');
+      ctx.fillStyle = rg; ctx.fill();
+      ctx.strokeStyle = 'rgba(240,246,255,0.55)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(r1.x, r1.y); ctx.lineTo(r2.x, r2.y); ctx.stroke();
+    }
+  }
+
+  function drawLip() {
+    const front = tierFront(0);
+    const a = w2s(0, front - MACH.lipW, 0), b = w2s(100, front - MACH.lipW, 0);
+    const c2 = w2s(100, front, MACH.lipH), d = w2s(0, front, MACH.lipH);
+    poly([a, b, c2, d]);
+    const g = ctx.createLinearGradient(0, a.y, 0, c2.y);
+    g.addColorStop(0, 'rgba(255,255,255,0.05)');
+    g.addColorStop(1, 'rgba(255,255,255,0.22)');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = 'rgba(240,246,255,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(c2.x, c2.y); ctx.stroke();
+  }
+
+  function drawPusherBlock(t) {
+    const td = MACH.tiers[0];
+    const pf = pusherFront(0);
+    const zTop = td.z + C.PUSH_H, zBot = td.z;
+    const tl = w2s(1, td.back, zTop), tr = w2s(99, td.back, zTop);
+    const fl = w2s(1, pf, zTop), frt = w2s(99, pf, zTop);
+    const bl = w2s(1, pf, zBot), br = w2s(99, pf, zBot);
+    poly([tl, tr, frt, fl]);
+    const tg = ctx.createLinearGradient(0, tl.y, 0, fl.y);
+    tg.addColorStop(0, '#8b93a0'); tg.addColorStop(1, '#b8bfca');
+    ctx.fillStyle = tg; ctx.fill();
+    ctx.save();
+    ctx.clip();
+    txt('▼ PUSH ▼', LW / 2, (tl.y + fl.y) / 2,
+        '900 ' + Math.max(10, (fl.y - tl.y) * 0.5) + 'px Verdana, sans-serif', 'rgba(120,40,50,0.5)');
+    ctx.restore();
+    poly([fl, frt, br, bl]);
+    const fg = ctx.createLinearGradient(0, fl.y, 0, bl.y);
+    fg.addColorStop(0, '#697180'); fg.addColorStop(0.5, '#4c525e'); fg.addColorStop(1, '#33383f');
+    ctx.fillStyle = fg; ctx.fill();
+    ctx.strokeStyle = 'rgba(230,238,250,0.35)'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(fl.x, fl.y); ctx.lineTo(frt.x, frt.y); ctx.stroke();
+    const on = Math.floor(t * 4) % 2 === 0;
+    ctx.fillStyle = on ? '#ff5a4e' : '#5b2320';
+    for (let i = 0; i < 8; i++) {
+      const u = (i + 0.5) / 8;
+      const x = fl.x + (frt.x - fl.x) * u;
+      const y = (fl.y + bl.y) / 2;
+      ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill();
+    }
+  }
+
+  // ---------------------------------------------------------- battle: pieces
+  const ITEM_GLOW = { weapon: '#ffb46b', poison: '#b8f26b', shield: '#c8d6e8', heal: '#ff8da1', stun: '#8be7ff' };
+  function drawCoin(c, t) {
+    const inGut = c.st === 'gutter';
+    let zv = c.z;
+    if (c.st === 'plat') {
+      const front = tierFront(c.tier);
+      const p2 = (c.y - (front - MACH.lipW)) / MACH.lipW;
+      if (p2 > 0) zv += Math.min(p2, 1) * MACH.lipH;
+    }
+    const p = w2s(c.x, Math.min(c.y, 108), zv);
+    const u = p.u;
+    const rx = c.r * u;
+    let ry = rx * 0.46;
+    let tumble = 1;
+    if (c.st === 'fall' || inGut || c.st === 'air') {
+      tumble = Math.max(0.22, Math.abs(Math.cos(c.rot)));
+      ry = rx * 0.46 * tumble + rx * 0.10 * (1 - tumble);
+    }
+    if (c.st === 'plat') {
+      const front = tierFront(c.tier);
+      const over = (c.y - (front - c.r)) / c.r;
+      if (over > 0) ry *= 1 + Math.min(over, 1) * 0.18;
+    }
+    ctx.save();
+    if (inGut) ctx.globalAlpha = Math.max(0.1, 1 - (c.z / C.GUT_KILL) * 0.9);
+    if (c.st === 'tray') ctx.globalAlpha = Math.max(0, Math.min(1, c.ttl / 0.6));
+    if ((c.st === 'plat' || c.st === 'air') && !c.onPush) {
+      const td = MACH.tiers[c.tier];
+      if (c.z > td.z + 0.5) {
+        const sp = w2s(c.x, Math.min(c.y, 108), td.z);
+        ctx.beginPath();
+        ctx.ellipse(sp.x, sp.y, rx * Math.max(0.4, 1 - (c.z - td.z) * 0.006), ry * Math.max(0.4, 1 - (c.z - td.z) * 0.006), 0, 0, 7);
+        ctx.fillStyle = 'rgba(10,10,16,0.28)';
+        ctx.fill();
+      }
+    }
+    if (c.kind === 'gem') { drawGem(c, p, rx, t); ctx.restore(); return; }
+    if (c.kind === 'item' || c.kind === 'chest' || c.kind === 'bag' || c.kind === 'skull') {
+      drawItem(c, p, rx, t); ctx.restore(); return;
+    }
+    if (c.kind === 'chip') { drawChip(c, p, rx, ry, t); ctx.restore(); return; }
+    const lucky = c.kind === 'lucky';
+    const pal = lucky ? LUCKY_PAL : COIN_PAL;
+    const sym = lucky ? '★' : MACH.coin.sym;
+    const pop = c.popT > 0 ? 1 + 0.22 * (c.popT / 0.18) : 1;
+    const drx = rx * pop, dry = ry * pop;
+    const spr = flatSprite(lucky ? 'lucky' : 'gold', pal, sym);
+    const hs = dry / (drx * 0.4583);
+    const w = drx * (96 / 44), h = (66 / 96) * w * hs;
+    ctx.drawImage(spr, p.x - w / 2, p.y - (24 / 66) * h, w, h);
+    const gph = (t * 0.5 + c.glint) % (Math.PI * 2);
+    ctx.beginPath();
+    ctx.ellipse(p.x, p.y, drx * 0.9, dry * 0.9, 0, gph, gph + 0.9);
+    ctx.strokeStyle = 'rgba(255,252,230,0.85)'; ctx.lineWidth = 1.6;
+    ctx.stroke();
+    if (lucky && (t * 0.9 + c.glint) % 2.3 < 0.12) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.4;
+      const sx2 = p.x + drx * 0.4, sy2 = p.y - dry * 0.4;
+      ctx.beginPath();
+      ctx.moveTo(sx2 - 5, sy2); ctx.lineTo(sx2 + 5, sy2);
+      ctx.moveTo(sx2, sy2 - 5); ctx.lineTo(sx2, sy2 + 5);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawGem(c, p, rx, t) {
+    ctx.translate(p.x, p.y);
+    const s = rx * 1.15;
+    ctx.beginPath();
+    ctx.moveTo(0, -s * 0.62);
+    ctx.lineTo(s * 0.72, -s * 0.1);
+    ctx.lineTo(0, s * 0.62);
+    ctx.lineTo(-s * 0.72, -s * 0.1);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(-s, -s, s, s);
+    g.addColorStop(0, '#d8fbff'); g.addColorStop(0.45, '#4ecbe8'); g.addColorStop(1, '#1b6fa8');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.strokeStyle = '#0d3f66'; ctx.lineWidth = 1.4; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(-s * 0.72, -s * 0.1); ctx.lineTo(s * 0.72, -s * 0.1);
+    ctx.moveTo(0, -s * 0.62); ctx.lineTo(0, s * 0.62);
+    ctx.strokeStyle = 'rgba(255,255,255,0.55)'; ctx.lineWidth = 1; ctx.stroke();
+    if ((t + c.glint) % 1.6 < 0.14) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(-s * 0.3 - 5, -s * 0.3); ctx.lineTo(-s * 0.3 + 5, -s * 0.3);
+      ctx.moveTo(-s * 0.3, -s * 0.3 - 5); ctx.lineTo(-s * 0.3, -s * 0.3 + 5);
+      ctx.stroke();
+    }
+  }
+
+  // arsenal items / chests / gold bags / cursed skulls: emoji riding the pile
+  function drawItem(c, p, rx, t) {
+    const it = c.kind === 'item' ? itemById(c.iid) : null;
+    const icon = c.kind === 'chest' ? '\u{1F381}' : c.kind === 'bag' ? '\u{1F4B0}'
+               : c.kind === 'skull' ? '☠\u{FE0F}' : (it ? it.icon : '❓');
+    const bob = c.st === 'plat' ? Math.sin(t * 2 + c.glint) * 1.2 : 0;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + rx * 0.35, rx * 1.05, rx * 0.45, 0, 0, 7);
+    ctx.fillStyle = 'rgba(20,12,8,0.45)'; ctx.fill();
+    ctx.save();
+    ctx.translate(p.x, p.y - rx * 0.4 + bob);
+    if (c.st === 'fall' || c.st === 'air') ctx.rotate(Math.sin(c.rot) * 0.3);
+    txt(icon, 0, 0, Math.round(rx * (c.kind === 'item' ? 2.6 : 2.2)) + 'px serif', '#fff');
+    ctx.restore();
+    // glow ring: friendly gold for loot, sickly purple for curses
+    const glow = c.kind === 'skull' ? '#c86bff'
+               : c.kind === 'chest' ? '#ffb0e0'
+               : c.kind === 'bag' ? '#ffd75e'
+               : (it ? ITEM_GLOW[it.kind] || '#ffe066' : '#ffe066');
+    ctx.globalAlpha = 0.30 + 0.18 * Math.sin(t * 3 + c.glint);
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + rx * 0.3, rx * 1.25, rx * 0.55, 0, 0, 7);
+    ctx.strokeStyle = glow;
+    ctx.lineWidth = 2; ctx.stroke();
+    ctx.globalAlpha = 1;
+    if (c.temp && c.st === 'plat') {
+      txt('FREE', p.x, p.y - rx * 1.6, '800 8px Verdana, sans-serif', '#ffe066');
+    }
+  }
+
+  function drawChip(c, p, rx, ry, t) {
+    const edgeH = Math.max(1.5, C.COIN_H * p.u * 0.5);
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + edgeH, rx, ry, 0, 0, 7);
+    ctx.fillStyle = '#0c4a5e'; ctx.fill();
+    ctx.fillRect(p.x - rx, p.y, rx * 2, edgeH);
+    const g = ctx.createRadialGradient(p.x - rx * 0.3, p.y - ry * 0.4, rx * 0.1, p.x, p.y, rx * 1.2);
+    g.addColorStop(0, '#e8fdff'); g.addColorStop(0.5, '#57d8f0'); g.addColorStop(1, '#1a7ca0');
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7);
+    ctx.fillStyle = g; ctx.fill();
+    const hue = (t * 140 + c.glint * 60) % 360;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'hsl(' + hue + ',95%,65%)';
+    ctx.stroke();
+    if (ry > 3) {
+      txt('W', p.x, p.y + 0.5, '900 ' + Math.max(6, ry * 1.1) + 'px Verdana, sans-serif', 'rgba(8,50,66,0.9)');
+    }
+  }
+
+  function drawFrontAndTray() {
+    const front = tierFront(0);
+    const l = w2s(0, front, 0), r = w2s(100, front, 0);
+    ctx.beginPath();
+    ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y);
+    ctx.lineTo(r.x + 4, 648); ctx.lineTo(l.x - 4, 648);
+    ctx.closePath();
+    ctx.fillStyle = lgr('ff:' + fkey() + ':' + (l.y | 0), 0, l.y, 0, 648,
+      [[0, '#5c5766'], [0.15, '#3a3542'], [1, '#221d28']]);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(235,240,250,0.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y); ctx.stroke();
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(l.x, l.y + 3); ctx.lineTo(r.x, r.y + 3);
+    ctx.lineTo(r.x + 1, l.y + 12); ctx.lineTo(l.x - 1, l.y + 12);
+    ctx.closePath(); ctx.clip();
+    for (let x = l.x - 20; x < r.x + 20; x += 18) {
+      ctx.fillStyle = 'rgba(240,190,60,0.5)';
+      ctx.beginPath();
+      ctx.moveTo(x, l.y + 12); ctx.lineTo(x + 9, l.y + 12);
+      ctx.lineTo(x + 18, l.y + 2); ctx.lineTo(x + 9, l.y + 2);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    rr(58, 648, LW - 116, 52, 14);
+    ctx.fillStyle = lgr('tray', 0, 648, 0, 700, [[0, '#120a12'], [1, '#2a1c24']]);
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#c99ab0'; ctx.stroke();
+    if (S.combo > 0 && S.time - S.lastCollect < C.COMBO_WIN) {
+      ctx.save();
+      ctx.globalAlpha = 0.28 * (1 - (S.time - S.lastCollect) / C.COMBO_WIN);
+      rr(58, 648, LW - 116, 52, 14);
+      ctx.fillStyle = '#ffae34'; ctx.fill();
+      ctx.restore();
+    }
+    // the last few pickups rattle around the tray
+    const items = S.tray.items;
+    items.forEach((it, i) => {
+      const px = LW / 2 + Math.sin(i * 2.399) * (18 + ((i * 7) % 130));
+      const py = 686 - (i % 3) * 6;
+      if (it.kind === 'item') {
+        const def = itemById(it.iid);
+        txt(def ? def.icon : '❓', px, py - 8, '20px serif', '#fff');
+      } else if (it.kind === 'gem') {
+        ctx.beginPath(); ctx.ellipse(px, py - 2, 8, 5, 0, 0, 7);
+        ctx.fillStyle = '#4ecbe8'; ctx.fill();
+      } else if (it.kind === 'bag') {
+        txt('\u{1F4B0}', px, py - 8, '18px serif', '#fff');
+      } else {
+        ctx.beginPath(); ctx.ellipse(px, py, 10, 4.4, 0, 0, 7);
+        ctx.fillStyle = '#8a5f10'; ctx.fill();
+        ctx.beginPath(); ctx.ellipse(px, py - 2, 10, 4.4, 0, 0, 7);
+        ctx.fillStyle = it.kind === 'lucky' ? '#ffdf6b' : '#f2c04a';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(120,80,12,0.7)'; ctx.lineWidth = 0.8; ctx.stroke();
+      }
+    });
+    txt('⚔ the tray FIRES everything that lands in it', LW / 2, 708, '600 9px Verdana, sans-serif', '#8f6f78');
+  }
+
+  function drawGlass(t) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(26, 172, LW - 52, 470);
+    ctx.clip();
+    ctx.globalAlpha = 0.05;
+    ctx.fillStyle = '#ffffff';
+    poly([{ x: 60, y: 172 }, { x: 150, y: 172 }, { x: -40, y: 642 }, { x: -130, y: 642 }]);
+    ctx.fill();
+    poly([{ x: 320, y: 172 }, { x: 355, y: 172 }, { x: 165, y: 642 }, { x: 130, y: 642 }]);
+    ctx.fill();
+    const sx = ((t * 40) % (LW + 400)) - 200;
+    ctx.globalAlpha = 0.09;
+    poly([{ x: sx, y: 172 }, { x: sx + 60, y: 172 }, { x: sx - 130, y: 642 }, { x: sx - 190, y: 642 }]);
+    ctx.fill();
+    ctx.globalAlpha = 0.05;
+    ctx.beginPath();
+    ctx.ellipse(LW / 2, 130, 300, 70, 0, 0, Math.PI);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawParticles(dt) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = S.parts.length - 1; i >= 0; i--) {
+      const p = S.parts[i];
+      p.life += dt;
+      if (p.life >= p.max) { S.parts.splice(i, 1); continue; }
+      p.vy += p.g * dt;
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      ctx.globalAlpha = 1 - p.life / p.max;
+      ctx.fillStyle = p.col;
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.spin * p.life * 4);
+      const s = p.sz;
+      if (p.shape === 'heart') {
+        ctx.beginPath();
+        ctx.moveTo(0, s * 0.7);
+        ctx.bezierCurveTo(-s * 1.3, -s * 0.3, -s * 0.5, -s * 1.1, 0, -s * 0.3);
+        ctx.bezierCurveTo(s * 0.5, -s * 1.1, s * 1.3, -s * 0.3, 0, s * 0.7);
+        ctx.fill();
+      } else if (p.shape === 'star') {
+        ctx.beginPath();
+        ctx.moveTo(0, -s); ctx.lineTo(s * 0.3, -s * 0.3); ctx.lineTo(s, 0); ctx.lineTo(s * 0.3, s * 0.3);
+        ctx.lineTo(0, s); ctx.lineTo(-s * 0.3, s * 0.3); ctx.lineTo(-s, 0); ctx.lineTo(-s * 0.3, -s * 0.3);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillRect(-s / 2, -s / 2, s, s);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  function drawFloats() {
+    for (const f of S.floats) {
+      const p = w2s(f.wx, f.wy, C.TRAY_Z);
+      const k = f.age / f.max;
+      const pop = k < 0.18 ? k / 0.18 : 1;
+      const scl = (f.big ? 1.5 : 1) * (0.6 + 0.4 * pop);
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, (1 - k) * 2);
+      ctx.translate(p.x, p.y - 14 - k * 46);
+      ctx.scale(scl, scl);
+      txt(f.txt, 0, 0, '900 22px Verdana, sans-serif', f.col, 'center', { w: 5, col: 'rgba(30,10,5,0.9)' });
+      ctx.restore();
+    }
+  }
+
+  function drawBanner(t) {
+    if (!S.banner) return;
+    const b = S.banner;
+    const k = 1 - b.ttl / b.max;
+    const pop = k < 0.12 ? Math.sin((k / 0.12) * Math.PI / 2) : 1 + Math.sin(t * 9) * 0.04;
+    ctx.save();
+    ctx.globalAlpha = b.ttl < 0.5 ? b.ttl * 2 : 1;
+    ctx.translate(LW / 2, 400);
+    ctx.scale(pop, pop);
+    ctx.font = '900 44px Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 10; ctx.strokeStyle = '#2a1030';
+    ctx.strokeText(b.txt, 0, 0);
+    const g = ctx.createLinearGradient(0, -30, 0, 30);
+    g.addColorStop(0, '#fff6c8'); g.addColorStop(0.5, '#ffd24a'); g.addColorStop(1, '#ff8a2a');
+    ctx.fillStyle = g;
+    ctx.fillText(b.txt, 0, 0);
+    ctx.restore();
+  }
+
+  const WHEEL_COLS = ['#f2c04a', '#ef4b5d', '#37b6e6', '#b06be8'];
+  function drawWheel() {
+    if (!S.wheelAnim) return;
+    const a = S.wheelAnim;
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { if (a.t > 2.8) S.wheelAnim = null; } });
+    ctx.fillStyle = 'rgba(5,3,8,0.72)';
+    ctx.fillRect(0, 0, LW, LH);
+    const cx = LW / 2, cy = 390, R = 132;
+    const k = Math.min(1, a.t / 2.6);
+    const ease = 1 - Math.pow(1 - k, 3);
+    const target = (Math.PI * 2) * 4 + (-Math.PI / 2) - (a.seg + 0.5) * (Math.PI / 4);
+    const rot = ease * target;
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(rot);
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, R, i * Math.PI / 4, (i + 1) * Math.PI / 4);
+      ctx.closePath();
+      ctx.fillStyle = WHEEL_COLS[i % 4];
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(20,8,4,0.6)'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.save();
+      ctx.rotate((i + 0.5) * Math.PI / 4);
+      txt(WHEEL[i].label, R * 0.62, 0, '900 13px Verdana, sans-serif', '#1d1016');
+      ctx.restore();
+    }
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(cx, cy, R + 5, 0, 7);
+    ctx.lineWidth = 8; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, 20, 0, 7);
+    ctx.fillStyle = '#ffd75e'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx - 14, cy - R - 16); ctx.lineTo(cx + 14, cy - R - 16); ctx.lineTo(cx, cy - R + 8);
+    ctx.closePath();
+    ctx.fillStyle = '#ff5a4e'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
+    txt('LUCKY WHEEL', cx, cy - R - 44, '900 26px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
+    if (a.t > 2.6) {
+      const pop = 1 + Math.sin((a.t - 2.6) * 8) * 0.05;
+      ctx.save();
+      ctx.translate(cx, cy + R + 44);
+      ctx.scale(pop, pop);
+      txt(a.label, 0, 0, '900 30px Verdana, sans-serif', '#fff6c8', 'center', { w: 6, col: '#3a1006' });
+      ctx.restore();
+      txt('tap to continue', cx, cy + R + 76, '600 11px Verdana, sans-serif', '#c8a8b0');
+    }
+  }
+
+  // ------------------------------------------------------------- shared HUD
+  function drawHUD(t) {
+    const r = S.run;
+    if (!r) return;
+    rr(14, 714, LW - 28, 112, 16);
+    ctx.fillStyle = lgr('hud', 0, 714, 0, 826, [[0, '#3a2a3e'], [1, '#241a28']]);
+    ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#e8b6ce'; ctx.stroke();
+    // HP
+    txt('HP', 34, 733, '800 11px Verdana, sans-serif', '#a8828e', 'left');
+    bar(58, 726, 210, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
+    txt(r.hp + ' / ' + r.maxHp, 163, 734, '800 10px Verdana, sans-serif', '#0e2a18');
+    if (S.pPois > 0) txt('☠ ' + S.pPois, 282, 733, '800 12px Verdana, sans-serif', '#b8f26b', 'left');
+    if (r.block > 0) txt('\u{1F6E1} ' + r.block, 320, 733, '800 12px Verdana, sans-serif', '#c8d6e8', 'left');
+    // gold + coins
+    txt('\u{1FA99} ' + fmt(r.gold), 34, 762, '900 18px Verdana, sans-serif', '#ffd75e', 'left');
+    const flash = S.denyT > 0 && Math.floor(S.denyT * 10) % 2 === 0;
+    ctx.beginPath(); ctx.ellipse(150, 763, 9, 8, 0, 0, 7);
+    ctx.fillStyle = '#8a5f10'; ctx.fill();
+    ctx.beginPath(); ctx.ellipse(150, 761, 9, 8, 0, 0, 7);
+    ctx.fillStyle = '#f2c04a'; ctx.fill();
+    txt('× ' + r.wallet, 164, 762, '900 18px Verdana, sans-serif', flash ? '#ff5a4e' : '#fff0c0', 'left');
+    if (S.regen > 0) {
+      ctx.beginPath();
+      ctx.arc(150, 761, 12, -Math.PI / 2, -Math.PI / 2 + (S.regen / C.PITY_T) * Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,220,120,0.75)'; ctx.lineWidth = 2.5; ctx.stroke();
+    }
+    // potion button
+    if (r.potions > 0) {
+      uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
+            { grad: ['#8c2f6b', '#4a1038'], border: '#ffb0e0', col: '#ffd9ee', font: '800 11px Verdana, sans-serif', r: 9 });
+    }
+    // relic shelf
+    r.relics.slice(0, 8).forEach((rid, i) => {
+      const rl = relicById(rid);
+      if (rl) txt(rl.icon, 366 + (i % 4) * 24, 728 + Math.floor(i / 4) * 24, '17px serif', '#fff');
+    });
+    // arsenal strip
+    const ids = Object.keys(r.arsenal);
+    let ax = 34;
+    ids.slice(0, 8).forEach((iid) => {
+      const it = itemById(iid);
+      if (!it) return;
+      txt(it.icon, ax, 796, '16px serif', '#fff');
+      txt('×' + r.arsenal[iid], ax + 15, 798, '800 10px Verdana, sans-serif', '#d8c8dc', 'left');
+      ax += 46;
+    });
+    if (!ids.length) txt('arsenal empty — visit a shop!', 34, 796, '600 10px Verdana, sans-serif', '#8f6f78', 'left');
+    txt(S.screen === 'battle'
+        ? (r.wallet < 1 ? 'out of coins — the dungeon pities you slowly…' : 'TAP TO DROP • HOLD FOR AUTO')
+        : 'FLOOR ' + r.floor + ' • ROOM ' + r.depth + ' / ' + C.BOSS_DEPTH,
+        LW - 34, 814, '600 10px Verdana, sans-serif', '#8f6f78', 'right');
+  }
+
+  // --------------------------------------------------------- battle screen
+  function drawVictory(t) {
+    const v = S.victory;
+    if (!v) return;
+    const k = Math.min(1, v.t / 0.5);
+    ctx.fillStyle = 'rgba(8,4,10,' + (0.55 * k) + ')';
+    ctx.fillRect(0, 0, LW, LH);
+    if (k < 1) return;
+    rr(70, 300, LW - 140, 250, 20);
+    ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+    txt(v.boss ? '\u{1F451}' : '\u{1F3C6}', LW / 2, 350, '44px serif', '#fff');
+    txt(v.boss ? 'FLOOR CLEARED!' : 'VICTORY!', LW / 2, 398, '900 28px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
+    txt('+' + v.gold + ' gold', LW / 2, 432, '800 16px Verdana, sans-serif', '#fff0c0');
+    if (v.boss) txt('the stairs descend… +35% HP restored', LW / 2, 456, '600 11px Verdana, sans-serif', '#7ee787');
+    const pulse = 1 + Math.sin(t * 5) * 0.03;
+    uiBtn(LW / 2 - 90 * pulse, 480 - 2, 180 * pulse, 40, 'GO DEEPER ▼', () => advance(),
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 14 });
+  }
+
+  function drawBattle(t, dt) {
+    drawBackground();
+    drawEnemyPanel(t);
+    drawMeter(t);
+    drawCabinet();
+    drawBackWall();
+    drawTierFloor(MACH.tiers[0].back, tierFront(0), 0);
+    drawGutters();
+    drawLip();
+    drawPusherBlock(t);
+    const onPlat = [], offEdge = [];
+    for (const c of S.coins) {
+      (c.st === 'fall' || c.st === 'tray' || c.st === 'gutter' ? offEdge : onPlat).push(c);
+    }
+    const byDepth = (a, b) => (a.y + a.lay * 0.5) - (b.y + b.lay * 0.5);
+    onPlat.sort(byDepth); offEdge.sort(byDepth);
+    for (const c of onPlat) drawCoin(c, t);
+    drawFrontAndTray();
+    for (const c of offEdge) drawCoin(c, t);
+    drawGlass(t);
+    drawParticles(dt);
+    drawFloats();
+    if (S.fever > 0) {
+      const hue = (t * 160) % 360;
+      const a2 = Math.min(1, S.fever / 1.2) * (0.5 + 0.25 * Math.sin(t * 8));
+      ctx.save();
+      ctx.globalAlpha = a2;
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = 'hsl(' + hue + ',85%,72%)';
+      rr(8, 8, LW - 16, LH - 16, 22);
+      ctx.stroke();
+      txt('FEVER ×2  ' + Math.ceil(S.fever) + 's', LW / 2, 176,
+          '900 15px Georgia, serif', 'hsl(' + hue + ',90%,80%)',
+          'center', { w: 4, col: '#2a1030' });
+      ctx.restore();
+    }
+    drawHUD(t);
+    // hurt vignette
+    if (S.hurtT > 0) {
+      ctx.save();
+      ctx.globalAlpha = Math.min(0.5, S.hurtT * 1.2);
+      const g = ctx.createRadialGradient(LW / 2, LH / 2, 200, LW / 2, LH / 2, 560);
+      g.addColorStop(0, 'rgba(200,20,30,0)');
+      g.addColorStop(1, 'rgba(200,20,30,0.9)');
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, LW, LH);
+      ctx.restore();
+    }
+    drawBanner(t);
+    drawVictory(t);
+  }
+
+  // -------------------------------------------------------- dungeon screen
+  function drawDoor(x, y, w, h, d, t, idx) {
+    const T = theme();
+    // frame
+    ctx.save();
+    const arch = (px, py, pw, ph) => {
+      ctx.beginPath();
+      ctx.moveTo(px, py + ph);
+      ctx.lineTo(px, py + pw / 2);
+      ctx.arc(px + pw / 2, py + pw / 2, pw / 2, Math.PI, 0);
+      ctx.lineTo(px + pw, py + ph);
+      ctx.closePath();
+    };
+    arch(x - 8, y - 8, w + 16, h + 8);
+    ctx.fillStyle = '#191219'; ctx.fill();
+    arch(x, y, w, h);
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    if (d.used) { g.addColorStop(0, '#171019'); g.addColorStop(1, '#0d090d'); }
+    else { g.addColorStop(0, T.door); g.addColorStop(1, '#241a26'); }
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = d.used ? '#3a2f3a' : T.trim; ctx.stroke();
+    if (!d.used) {
+      // wood planks
+      ctx.save(); arch(x, y, w, h); ctx.clip();
+      ctx.globalAlpha = 0.22;
+      ctx.strokeStyle = '#0d090d'; ctx.lineWidth = 2;
+      for (let i = 1; i < 4; i++) {
+        ctx.beginPath(); ctx.moveTo(x + (w / 4) * i, y); ctx.lineTo(x + (w / 4) * i, y + h); ctx.stroke();
+      }
+      ctx.restore();
+      // handle
+      ctx.beginPath(); ctx.arc(x + w - 14, y + h * 0.55, 4, 0, 7);
+      ctx.fillStyle = '#ffd75e'; ctx.fill();
+    }
+    const info = DOOR_INFO[d.type];
+    const bob = Math.sin(t * 2 + idx * 2.1) * 3;
+    if (d.known && !d.used) {
+      txt(info.icon, x + w / 2, y + h * 0.36 + bob, '34px serif', '#fff');
+      txt(info.name, x + w / 2, y + h * 0.62, '900 13px Verdana, sans-serif',
+          d.type === 'boss' ? '#ffd75e' : d.type === 'elite' ? '#ff9d3c' : '#e8dce8',
+          'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
+    } else if (!d.used) {
+      txt('?', x + w / 2, y + h * 0.42 + bob, '900 40px Georgia, serif', 'rgba(232,220,232,0.75)');
+      txt('unknown', x + w / 2, y + h * 0.64, '600 10px Verdana, sans-serif', '#9a8aa0');
+    } else {
+      txt('cleared', x + w / 2, y + h * 0.5, '600 11px Verdana, sans-serif', '#5a4a5a');
+    }
+    ctx.restore();
+    if (!d.used && !S.room) {
+      uiButtons.push({ x: x - 8, y: y - 8, w: w + 16, h: h + 16, cb: () => enterDoor(idx) });
+    }
+  }
+
+  function drawDungeon(t) {
+    const T = theme();
+    drawBackground();
+    // heading
+    ctx.font = '900 30px Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 7; ctx.strokeStyle = '#2a1030';
+    ctx.strokeText(T.name, LW / 2, 52);
+    ctx.fillStyle = lgr('dtt:' + fkey(), 0, 36, 0, 70, [[0, '#fff4d6'], [1, T.accent]]);
+    ctx.fillText(T.name, LW / 2, 52);
+    txt('FLOOR ' + S.run.floor + '  •  ROOM ' + S.run.depth + ' / ' + C.BOSS_DEPTH,
+        LW / 2, 86, '800 13px Verdana, sans-serif', '#c8a8b0');
+    // room dots
+    for (let i = 1; i <= C.BOSS_DEPTH; i++) {
+      const x = LW / 2 - (C.BOSS_DEPTH - 1) * 11 + (i - 1) * 22;
+      ctx.beginPath(); ctx.arc(x, 110, i === C.BOSS_DEPTH ? 5.5 : 3.6, 0, 7);
+      ctx.fillStyle = i < S.run.depth ? '#7ee787' : i === S.run.depth ? '#ffd75e' : 'rgba(255,215,94,0.22)';
+      ctx.fill();
+      if (i === C.BOSS_DEPTH) txt('\u{1F451}', x, 110, '9px serif', '#fff');
+    }
+    // stone floor
+    const g = ctx.createLinearGradient(0, 560, 0, 700);
+    g.addColorStop(0, '#241a26'); g.addColorStop(1, '#171019');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 560, LW, 150);
+    // doors
+    const doors = S.run.doors || [];
+    if (doors.length === 1) {
+      drawDoor(LW / 2 - 90, 250, 180, 310, doors[0], t, 0);
+      txt('the boss lairs beyond', LW / 2, 600, '700 12px Verdana, sans-serif', '#ff9d3c');
+    } else {
+      doors.forEach((d, i) => drawDoor(38 + i * 142, 280, 122, 260, d, t, i));
+      txt('choose a door…', LW / 2, 590, '700 12px Verdana, sans-serif', '#c8a8b0');
+    }
+    // torch posts between doors
+    for (const tx of [30, LW - 30]) {
+      const fl = 1 + Math.sin(t * 8 + tx) * 0.2;
+      ctx.globalAlpha = 0.35;
+      ctx.beginPath(); ctx.arc(tx, 250, 16 * fl, 0, 7);
+      ctx.fillStyle = '#ff9d3c'; ctx.fill();
+      ctx.globalAlpha = 1;
+      txt('\u{1F525}', tx, 252, '20px serif', '#fff');
+    }
+    drawFloats();
+    drawHUD(t);
+    drawBanner(t);
+    uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'title'; save(); }, { r: 10, font: '20px serif' });
+    uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
+    drawRoomModal(t);
+  }
+
+  // ------------------------------------------------------------ room modal
+  function drawRoomModal(t) {
+    const room = S.room;
+    if (!room) return;
+    ctx.fillStyle = 'rgba(5,3,8,0.72)';
+    ctx.fillRect(0, 0, LW, LH);
+    const info = DOOR_INFO[room.type] || DOOR_INFO.shrine;
+    const isShop = room.type === 'shop';
+    const isForge = room.type === 'forge' && !room.done;
+    const ph = isShop ? 470 : isForge ? 330 : 220;
+    const py = isShop ? 160 : 250;
+    rr(36, py, LW - 72, ph, 18);
+    ctx.fillStyle = 'rgba(22,13,24,0.97)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+    txt(info.icon + '  ' + info.name, LW / 2, py + 34, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    if (isShop) {
+      txt('\u{1FA99} ' + S.run.gold + ' gold', LW / 2, py + 60, '800 13px Verdana, sans-serif', '#fff0c0');
+      room.stock.forEach((it, i) => {
+        const y = py + 78 + i * 46;
+        const afford = !it.sold && S.run.gold >= it.price;
+        uiBtn(56, y, LW - 112, 38, '', () => buyShop(i),
+              { bg: it.sold ? 'rgba(20,14,20,0.9)' : afford ? 'rgba(140,90,20,0.9)' : 'rgba(40,30,36,0.9)',
+                border: it.sold ? '#3a2f3a' : afford ? '#ffd75e' : '#5a4048', r: 10 });
+        txt(it.label, 70, y + (it.sub ? 13 : 19), '800 12px Verdana, sans-serif',
+            it.sold ? '#5a4a5a' : afford ? '#ffe9a3' : '#7a6a72', 'left');
+        if (it.sub) txt(it.sub, 70, y + 28, '600 9px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
+        txt(it.sold ? 'SOLD' : it.price + ' G', LW - 70, y + 19, '900 13px Verdana, sans-serif',
+            it.sold ? '#5a4a5a' : afford ? '#ffd75e' : '#7a6a72', 'right');
+      });
+    } else if (isForge) {
+      txt('choose a boon', LW / 2, py + 60, '700 12px Verdana, sans-serif', '#c8a8b0');
+      room.opts.forEach((o, i) => {
+        const y = py + 80 + i * 56;
+        uiBtn(56, y, LW - 112, 46, '', () => pickBoon(i),
+              { bg: 'rgba(60,35,20,0.9)', border: '#ff9d3c', r: 10 });
+        txt(o.label, LW / 2, y + (o.sub ? 16 : 23), '800 13px Verdana, sans-serif', '#ffe9a3');
+        if (o.sub) txt(o.sub, LW / 2, y + 33, '600 9px Verdana, sans-serif', '#b09a78');
+      });
+    } else {
+      // resolved rooms: shrine / treasure / wheel / forge-done — wrap the tale
+      const words = (room.msg || '').split(' ');
+      const lines = [''];
+      for (const w of words) {
+        if ((lines[lines.length - 1] + ' ' + w).length > 44) lines.push(w);
+        else lines[lines.length - 1] = (lines[lines.length - 1] + ' ' + w).trim();
+      }
+      lines.slice(0, 4).forEach((ln, i) =>
+        txt(ln, LW / 2, py + 70 + i * 20, '700 12px Verdana, sans-serif', '#e8dce8'));
+    }
+    if (!isForge) {
+      uiBtn(LW / 2 - 90, py + ph - 52, 180, 38, 'ONWARD ▼', () => advance(),
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 13 });
+    }
+    if (S.uiFlash) {
+      txt(S.uiFlash.msg, LW / 2, py + ph + 24, '900 14px Verdana, sans-serif',
+          Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e');
+    }
+  }
+
+  // ------------------------------------------------------------ title/over
+  function drawTitle(t) {
+    ctx.fillStyle = rgr('titlebg', LW / 2, 260, 80, LW / 2, 420, 640,
+      [[0, '#33202e'], [1, '#140d16']]);
+    ctx.fillRect(0, 0, LW, LH);
+    // a mound of coins under the logo
+    for (let i = 0; i < 26; i++) {
+      const cx2 = LW / 2 + Math.sin(i * 2.399) * (30 + ((i * 17) % 150));
+      const cy2 = 260 + ((i * 13) % 44);
+      ctx.beginPath(); ctx.ellipse(cx2, cy2 + 2, 13, 6, 0, 0, 7);
+      ctx.fillStyle = '#7d5a14'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(cx2, cy2, 13, 6, 0, 0, 7);
+      ctx.fillStyle = '#f2c04a'; ctx.fill();
+      ctx.strokeStyle = 'rgba(122,84,14,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+    }
+    txt('⚔\u{FE0F}', LW / 2 - 130, 210 + Math.sin(t * 2) * 5, '40px serif', '#fff');
+    txt('\u{1F409}', LW / 2 + 130, 210 + Math.cos(t * 2) * 5, '40px serif', '#fff');
+    ctx.font = '900 52px Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 10; ctx.strokeStyle = '#2a1030';
+    ctx.strokeText('DUNGEON', LW / 2, 150);
+    ctx.strokeText('PUSHER', LW / 2, 205);
+    const g = lgr('logott', 0, 120, 0, 235, [[0, '#fff4d6'], [0.5, '#ffd75e'], [1, '#ff8a2a']]);
+    ctx.fillStyle = g;
+    ctx.fillText('DUNGEON', LW / 2, 150);
+    ctx.fillText('PUSHER', LW / 2, 205);
+    txt('a coin pusher roguelike', LW / 2, 330, '800 14px Verdana, sans-serif', '#c8a8b0');
+    const HOW = [
+      '● drop coins — the pusher shoves the pile',
+      '⚔ everything that falls in the TRAY fires at the foe',
+      '\u{1F5E1} swords, bombs & vials ride the pile — push them over',
+      '\u{1F573} gutter items are DESTROYED — aim well',
+      '\u{1F6AA} between fights: doors, shops, forges, shrines…',
+    ];
+    HOW.forEach((h, i) => txt(h, LW / 2, 376 + i * 24, '600 11px Verdana, sans-serif', '#9a8aa0'));
+    if (S.run) {
+      uiBtn(LW / 2 - 130, 520, 260, 52, '▶ CONTINUE — FLOOR ' + S.run.floor,
+            () => { S.screen = 'dungeon'; save(); },
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 16 });
+      uiBtn(LW / 2 - 130, 584, 260, 44, 'NEW RUN (abandons the old)', () => newRun(),
+            { bg: 'rgba(90,40,20,0.9)', border: '#ff9d3c', col: '#ffd9b0', font: '800 12px Verdana, sans-serif', r: 14 });
+    } else {
+      const pulse = 1 + Math.sin(t * 4) * 0.03;
+      uiBtn(LW / 2 - 130 * pulse, 540 - 26 * pulse + 26, 260 * pulse, 52 * pulse, '▶ ENTER THE DUNGEON', () => newRun(),
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif', r: 16 });
+    }
+    if (S.best.floor > 0) {
+      txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + '  •  ' + S.best.kills + ' kills  •  ' + fmt(S.best.gold) + ' gold looted',
+          LW / 2, 668, '700 11px Verdana, sans-serif', '#8f6f78');
+    }
+    txt('every fight is a coin pusher. push your arsenal over the edge.', LW / 2, 700, '600 10px Verdana, sans-serif', '#6a5a68');
+    uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
+  }
+
+  function drawOver(t) {
+    ctx.fillStyle = rgr('overbg', LW / 2, 300, 60, LW / 2, 420, 620,
+      [[0, '#331420'], [1, '#120a10']]);
+    ctx.fillRect(0, 0, LW, LH);
+    const o = S.over || { cause: 'fell', floor: 1, depth: 1, kills: 0, gold: 0 };
+    txt('\u{1F480}', LW / 2, 180 + Math.sin(t * 1.5) * 4, '80px serif', '#fff');
+    ctx.font = '900 40px Georgia, serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 8; ctx.strokeStyle = '#2a1030';
+    ctx.strokeText('THE RUN ENDS', LW / 2, 268);
+    ctx.fillStyle = lgr('overtt', 0, 245, 0, 292, [[0, '#ffb0b8'], [1, '#a8213a']]);
+    ctx.fillText('THE RUN ENDS', LW / 2, 268);
+    txt(o.cause, LW / 2, 310, '700 14px Verdana, sans-serif', '#c8a8b0');
+    const rows = [
+      ['reached', 'floor ' + o.floor + ', room ' + o.depth],
+      ['monsters slain', '' + o.kills],
+      ['gold looted', fmt(o.gold)],
+    ];
+    rows.forEach((rw, i) => {
+      txt(rw[0], LW / 2 - 24, 370 + i * 30, '600 13px Verdana, sans-serif', '#9a8aa0', 'right');
+      txt(rw[1], LW / 2 + 0, 370 + i * 30, '900 14px Verdana, sans-serif', '#ffe9a3', 'left');
+    });
+    if (S.best.floor > 0) {
+      txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + ' • ' + S.best.kills + ' kills',
+          LW / 2, 480, '700 11px Verdana, sans-serif', '#8f6f78');
+    }
+    uiBtn(LW / 2 - 120, 530, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(),
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 17px Verdana, sans-serif', r: 16 });
+    uiBtn(LW / 2 - 80, 596, 160, 38, 'TITLE', () => { S.screen = 'title'; },
+          { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 13px Verdana, sans-serif', r: 12 });
+  }
+
+  // ------------------------------------------------------------------ loop
+  let last = 0;
+  function frame(ts) {
+    requestAnimationFrame(frame);
+    const dt = Math.min((ts - last) / 1000 || 0.016, 0.05);
+    last = ts;
+    if (S.screen === 'battle') {
+      tick(dt);
+      if (S.victory) S.victory.t += dt;
+      if (held && !S.victory) {
+        holdT += dt;
+        if (holdT > 0.45 && S.cd <= 0) drop(S.aimX);
+      }
+    } else {
+      // keep light UI timers alive outside the machine
+      if (S.uiFlash) { S.uiFlash.t -= dt; if (S.uiFlash.t <= 0) S.uiFlash = null; }
+      if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) S.wheelAnim = null; }
+      if (S.banner) { S.banner.ttl -= dt; if (S.banner.ttl <= 0) S.banner = null; }
+      for (let i = S.floats.length - 1; i >= 0; i--) {
+        const f = S.floats[i];
+        f.age += dt;
+        if (f.age >= f.max) S.floats.splice(i, 1);
+      }
+    }
+    uiButtons = [];
+    ctx.setTransform(scale, 0, 0, scale, offX, offY);
+    if (S.screen === 'battle' && S.shake > 0.1) {
+      ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
+    }
+    const t = S.screen === 'battle' ? S.time : ts / 1000;
+    if (S.screen === 'title') drawTitle(t);
+    else if (S.screen === 'dungeon' && S.run) drawDungeon(t);
+    else if (S.screen === 'battle' && S.run) drawBattle(t, dt);
+    else if (S.screen === 'over') drawOver(t);
+    else drawTitle(t);
+    drawWheel();
+  }
+  requestAnimationFrame(frame);
+})();
+
+// particle burst — no-op headless, screen-space in the browser
+function burst(wx, wy, wz, kind) {
+  if (window.__dpBurst) window.__dpBurst(wx, wy, wz, kind);
+}
+</script>
+</body>
+</html>
