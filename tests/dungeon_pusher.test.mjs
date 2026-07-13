@@ -1,8 +1,9 @@
 // Headless suite for Dungeon Pusher (coin pusher roguelike). The game's inline
 // <script> is evaluated with a stubbed DOM and no canvas ctx, which flips its
 // HEADLESS switch: the full 2.5D pusher sim plus the whole roguelike layer
-// (battles, enemy AI, poison/stun/block, arsenal, dungeon doors, shops,
-// forges, relics, save/load) runs and is driven through window.DP.
+// (battles, enemy AI, poison/stun/block, arsenal, the top-down room crawl
+// with keys/doors/inhabitants, shops, forges, relics, save/load) runs and is
+// driven through window.DP.
 // A second pass loads the game WITH a stub canvas ctx and drives the real
 // requestAnimationFrame loop across every screen to catch render-time errors.
 import { readFileSync } from 'node:fs';
@@ -59,6 +60,8 @@ const { S, C, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL } = DP;
 const DT = 1 / 60;
 const step = (secs) => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) DP.tick(DT); };
 const platCoins = () => S.coins.filter(c => c.st === 'plat');
+const ENT_KINDS = ['monster', 'chest', 'shop', 'smith', 'shrine', 'wheel'];
+const mkMonster = (eid) => ({ kind: 'monster', mtype: 'battle', eid: eid || 'rat', done: false });
 
 // -------- boot state --------
 t.ok(DP.HEADLESS, 'headless mode detected');
@@ -78,34 +81,52 @@ t.eq(S.run.floor, 1, 'run starts on floor 1');
 t.eq(S.run.depth, 1, 'run starts at room 1');
 t.eq(S.run.hp, C.START_HP, 'full HP at the start');
 t.eq(S.run.wallet, C.START_COINS, 'starting coin purse');
+t.eq(S.run.keys, C.START_KEYS, 'you start with three keys');
 t.ok(S.run.arsenal.sword === 1 && S.run.arsenal.shield === 1 && S.run.arsenal.vial === 1,
      'starter arsenal: sword, shield, venom vial');
 t.eq(S.run.potions, C.START_POTIONS, 'one potion in the belt');
-t.ok(Array.isArray(S.run.doors) && S.run.doors.length === 3, 'three doors await');
-t.ok(S.run.doors.every(d => ['battle', 'elite', 'shop', 'forge', 'shrine', 'treasure', 'wheel'].indexOf(d.type) >= 0),
-     'door types are valid');
-t.ok(S.run.doors.some(d => d.type === 'battle' || d.type === 'elite'), 'at least one door hides a fight');
+t.ok(S.run.room && Array.isArray(S.run.room.ents), 'the first room is furnished');
+t.ok(S.run.room.ents.length >= 1 && S.run.room.ents.length <= 3, 'a room holds 1-3 inhabitants');
+t.ok(S.run.room.ents.every(e => ENT_KINDS.indexOf(e.kind) >= 0), 'inhabitant kinds are valid');
+t.ok(S.run.room.doors.length >= 2 && S.run.room.doors.length <= 3, 'locked exit doors on the far wall');
+t.ok(S.run.room.doors.every(d => Array.isArray(d.spec) && d.spec.length >= 1 && d.spec.length <= 3),
+     'each door pre-rolls the room behind it');
 
-// door generation is procedural but always fair
+// -------- room generation is procedural but sane --------
 {
-  let sawShop = false, sawFight = true;
+  let sawMonster = false, sawService = false, dupService = false, badMonster = false;
   for (let i = 0; i < 40; i++) {
-    DP.genDoors();
-    if (!S.run.doors.some(d => d.type === 'battle' || d.type === 'elite')) sawFight = false;
-    if (S.run.doors.some(d => d.type === 'shop')) sawShop = true;
+    DP.genRoom();
+    const ents = S.run.room.ents;
+    if (ents.some(e => e.kind === 'monster')) sawMonster = true;
+    if (ents.some(e => e.kind !== 'monster')) sawService = true;
+    for (const k of ENT_KINDS.slice(1)) {
+      if (ents.filter(e => e.kind === k).length > 1) dupService = true;
+    }
+    for (const e of ents) {
+      if (e.kind === 'monster' && !ENEMIES.some(en => en.id === e.eid)) badMonster = true;
+    }
   }
-  t.ok(sawFight, 'every door set contains a fight');
-  t.ok(sawShop, 'shops appear in the rotation');
+  t.ok(sawMonster, 'monsters roam the rooms');
+  t.ok(sawService, 'chests, keepers and shrines appear too');
+  t.ok(!dupService, 'never two of the same service in one room');
+  t.ok(!badMonster, 'every room monster is pre-rolled from the bestiary');
 }
+// the softlock guard: key-broke in a fight-free room summons a wanderer
+S.run.keys = 0;
+DP.genRoom([{ kind: 'chest', done: false }]);
+t.ok(S.run.room.ents.some(e => e.kind === 'monster'), 'no keys + no monster -> a wanderer finds you');
+S.run.keys = C.START_KEYS;
 
-// -------- entering a battle door --------
+// -------- tapping a monster starts the pusher fight --------
 DP.srand(7);
-S.run.doors = [{ type: 'battle', known: false, used: false }, { type: 'shop', known: true, used: false }, { type: 'shrine', known: false, used: false }];
-t.ok(DP.enterDoor(0), 'battle door opens');
+S.run.room.ents = [mkMonster('rat'), { kind: 'chest', done: false }];
+t.ok(DP.interact(0), 'tapping the monster starts the fight');
 t.eq(S.screen, 'battle', 'the fight is on');
-t.ok(S.enemy && S.enemy.hp > 0 && S.enemy.hp === S.enemy.maxHp, 'a foe appears at full health');
+t.ok(S.enemy && S.enemy.hp > 0 && S.enemy.hp === S.enemy.maxHp, 'the foe appears at full health');
+t.eq(S.enemy.id, 'rat', 'the room told you exactly who lurks — and it delivered');
+t.eq(S.run.battleEnt, 0, 'the battle remembers which inhabitant it is');
 t.ok(S.enemy.atkT > 0, 'enemy attack timer is armed');
-t.ok(S.run.doors[0].used, 'the door is spent');
 t.ok(platCoins().length >= 40, 'battle pile is dense (' + platCoins().length + ' pieces)');
 t.ok(S.coins.some(c => c.kind === 'item' && c.iid === 'sword'), 'your sword rides the pile');
 t.eq(S.coins.filter(c => c.kind === 'item').length, 3, 'the whole starter arsenal is racked');
@@ -217,9 +238,8 @@ t.eq(S.enemy.atkT, atkT0, 'a frozen foe cannot wind up its attack');
 DP.srand(13);
 S.coins.length = 0;
 S.run.arsenal.axe = 1;
-const doomed = DP.place(3, MACH_GUT_Y() + 10, 'item', 0, 'plat');
+const doomed = DP.place(3, DP.MACH.gutY + 10, 'item', 0, 'plat');
 doomed.iid = 'axe'; doomed.vx = -30;
-function MACH_GUT_Y() { return DP.MACH.gutY; }
 const lost0 = S.lost;
 step(3);
 t.eq(S.lost, lost0 + 1, 'item drifting off the side is lost');
@@ -302,9 +322,9 @@ const sw0 = S.run.arsenal.sword || 0;
 step(3);
 t.eq(S.run.arsenal.sword || 0, sw0, 'temporary items are not arsenal losses');
 
-// -------- winning a battle --------
+// -------- winning a battle pays gold AND a key --------
 S.enemy.hp = 3; S.enemy.trait = null; S.enemy.pois = 0;
-const kills0 = S.run.kills, gold0 = S.run.gold;
+const kills0 = S.run.kills, gold0 = S.run.gold, keys0 = S.run.keys, depth0 = S.run.depth;
 S.coins.length = 0;
 const killer = DP.place(50, C.PLAT_FRONT - 0.5, 'item', 0, 'plat');
 killer.iid = 'sword'; killer.vy = 90;
@@ -312,39 +332,66 @@ step(1.5);
 t.ok(S.victory, 'the foe falls — victory overlay armed');
 t.eq(S.run.kills, kills0 + 1, 'kill counted');
 t.ok(S.run.gold > gold0, 'victory pays the bounty');
-const depth0 = S.run.depth;
-t.ok(DP.advance(), 'GO DEEPER advances the run');
-t.eq(S.run.depth, depth0 + 1, 'one room deeper');
-t.eq(S.screen, 'dungeon', 'back to the doors');
+t.eq(S.run.keys, keys0 + C.KEY_KILL, 'every monster killed gives a key');
+t.eq(S.victory.keys, C.KEY_KILL, 'the overlay brags about it');
+t.ok(DP.leaveBattle(), 'CONTINUE returns to the room');
+t.eq(S.screen, 'dungeon', 'back in the top-down room');
+t.eq(S.run.depth, depth0, 'winning a fight does NOT change rooms');
+t.ok(S.run.room.ents[0].done, 'the slain monster is gone from the room');
 t.eq(S.victory, null, 'victory overlay cleared');
-t.ok(Array.isArray(S.run.doors) && S.run.doors.length === 3, 'fresh doors generated');
+t.eq(S.run.battleEnt, null, 'battle entity slot cleared');
 
-// -------- non-battle rooms --------
-// shrine heals
+// -------- keys unlock doors --------
+const kD = S.run.keys, dD = S.run.depth;
+t.ok(DP.useDoor(0), 'a key opens the door');
+t.eq(S.run.keys, kD - 1, 'the key is spent');
+t.eq(S.run.depth, dD + 1, 'one room deeper');
+t.ok(S.run.room.ents.length >= 1, 'the next room is furnished');
+S.run.keys = 0;
+t.ok(!DP.useDoor(0), 'no key, no passage');
+t.ok(S.uiFlash && S.uiFlash.msg.indexOf('KEY') >= 0, 'the lock demands a key');
+S.run.keys = 3;
+
+// -------- room inhabitants --------
+// chest: always gives SOMETHING
+{
+  DP.srand(19);
+  let keyDrops = 0;
+  for (let i = 0; i < 30; i++) {
+    S.run.room.ents = [{ kind: 'chest', done: false }];
+    const snap = {
+      gold: S.run.gold, wallet: S.run.wallet, keys: S.run.keys, potions: S.run.potions,
+      arsenal: Object.values(S.run.arsenal).reduce((a, b) => a + b, 0),
+    };
+    t.ok(DP.interact(0), 'chest ' + i + ' opens');
+    if (S.run.keys > snap.keys) keyDrops++;
+    const gained = S.run.gold > snap.gold || S.run.wallet > snap.wallet || S.run.keys > snap.keys
+      || S.run.potions > snap.potions
+      || Object.values(S.run.arsenal).reduce((a, b) => a + b, 0) > snap.arsenal;
+    if (!gained) t.ok(false, 'chest ' + i + ' paid nothing!');
+    t.ok(S.run.room.ents[0].done, 'chest ' + i + ' is spent');
+    t.ok(!DP.interact(0), 'chest ' + i + ' cannot be opened twice');
+  }
+  t.ok(keyDrops >= 1, 'some chests hold keys (' + keyDrops + '/30)');
+  t.ok(S.toast, 'chests tell you what you got');
+}
+// shrine heals and cleanses
 S.run.hp = 10; S.run.maxHp = 60; S.pPois = 5;
-S.run.doors = [{ type: 'shrine', known: true, used: false }, { type: 'battle', known: false, used: false }, { type: 'battle', known: false, used: false }];
-t.ok(DP.enterDoor(0), 'shrine door opens');
-t.ok(S.room && S.room.type === 'shrine' && S.room.done, 'shrine resolves instantly');
+S.run.room.ents = [{ kind: 'shrine', done: false }];
+DP.interact(0);
 t.eq(S.run.hp, 10 + Math.round(60 * 0.35), 'shrine heals 35% of max HP');
 t.eq(S.pPois, 0, 'shrine cleanses poison');
-DP.advance();
-// treasure pays gold
-const gT = S.run.gold;
-S.run.doors = [{ type: 'treasure', known: true, used: false }, { type: 'battle', known: false, used: false }, { type: 'battle', known: false, used: false }];
-DP.enterDoor(0);
-t.ok(S.run.gold > gT, 'treasure room pays gold');
-DP.advance();
-// wheel room grants a spin
+t.ok(S.run.room.ents[0].done, 'shrine is spent');
+// wheel ghost grants a spin
 S.wheelAnim = null;
-S.run.doors = [{ type: 'wheel', known: true, used: false }, { type: 'battle', known: false, used: false }, { type: 'battle', known: false, used: false }];
-DP.enterDoor(0);
-t.ok(S.wheelAnim !== null, 'wheel room spins the lucky wheel');
-DP.advance();
+S.run.room.ents = [{ kind: 'wheel', done: false }];
+DP.interact(0);
+t.ok(S.wheelAnim !== null, 'the wheel ghost spins the lucky wheel');
 
-// -------- the shop --------
+// -------- the shopkeeper --------
 DP.srand(23);
-S.run.doors = [{ type: 'shop', known: true, used: false }, { type: 'battle', known: false, used: false }, { type: 'battle', known: false, used: false }];
-DP.enterDoor(0);
+S.run.room.ents = [{ kind: 'shop', done: false }];
+t.ok(DP.interact(0), 'talking to the shopkeeper opens the shop');
 t.ok(S.room && S.room.type === 'shop', 'shop is open');
 t.ok(S.room.stock.length >= 6, 'shop stocks a full shelf (' + S.room.stock.length + ')');
 t.ok(S.room.stock.filter(x => x.kind === 'item').length === 3, 'three arsenal items on sale');
@@ -371,18 +418,23 @@ const potSlot = S.room.stock.findIndex(x => x.kind === 'potion');
 const pot0 = S.run.potions;
 DP.buyShop(potSlot);
 t.eq(S.run.potions, pot0 + 1, 'potion joins the belt');
-DP.advance();
+t.ok(DP.closeModal(), 'LEAVE closes the shop');
+t.ok(!S.run.room.ents[0].done, 'the shopkeeper stays in the room');
+DP.interact(0);
+t.ok(S.room && S.room.stock[itemSlot].sold, 'reopening shows the same shelf — sold stays sold');
+DP.closeModal();
 
-// -------- the forge --------
+// -------- the blacksmith --------
 DP.srand(29);
-S.run.doors = [{ type: 'forge', known: true, used: false }, { type: 'battle', known: false, used: false }, { type: 'battle', known: false, used: false }];
-DP.enterDoor(0);
-t.ok(S.room && S.room.type === 'forge' && !S.room.done, 'forge offers its boons');
+S.run.room.ents = [{ kind: 'smith', done: false }];
+t.ok(DP.interact(0), 'the blacksmith offers his boons');
+t.ok(S.room && S.room.type === 'forge' && !S.room.done, 'forge menu is open');
 t.eq(S.room.opts.length, 3, 'three boons to choose from');
 t.ok(DP.pickBoon(0), 'boon accepted');
 t.ok(S.room.done, 'forge is spent after one boon');
 t.ok(!DP.pickBoon(1), 'no double-dipping at the forge');
-DP.advance();
+t.ok(S.run.room.ents[0].done, 'the blacksmith packs up after one boon');
+DP.closeModal();
 
 // -------- potions --------
 S.run.hp = 10; S.run.maxHp = 60; S.run.potions = 1;
@@ -392,6 +444,17 @@ t.eq(S.run.potions, 0, 'potion is spent');
 t.ok(!DP.usePotion(), 'no potions left to drink');
 S.run.hp = S.run.maxHp; S.run.potions = 5;
 t.ok(!DP.usePotion(), 'cannot drink at full health');
+
+// -------- elites pay double keys --------
+DP.srand(31);
+S.run.room.ents = [{ kind: 'monster', mtype: 'elite', eid: 'ogre', done: false }];
+DP.interact(0);
+t.ok(S.enemy.elite && S.enemy.name.indexOf('ELITE') === 0, 'elites are branded');
+const keysE = S.run.keys;
+S.enemy.hp = 1;
+DP.dmgEnemy(5, 50);
+t.eq(S.run.keys, keysE + C.KEY_ELITE, 'an elite kill pays ' + C.KEY_ELITE + ' keys');
+DP.leaveBattle();
 
 // -------- relic effects --------
 // whetstone: +30% weapon damage
@@ -405,6 +468,12 @@ S.enemy = DP.mkEnemy('battle'); S.enemy.hp = 500;
 S.screen = 'battle';
 DP.poisonEnemy(4, 50);
 t.eq(S.enemy.pois, 6, 'venom gland adds two stacks');
+// lantern: every door scouted
+S.run.relics = ['lantern'];
+S.screen = 'dungeon';
+DP.genRoom();
+t.ok(S.run.room.doors.every(d => d.known), 'the lantern reveals every door');
+S.run.relics = [];
 // second wind: survive a killing blow once
 S.run.relics = ['wind']; S.run.windUsed = false; S.run.hp = 3; S.run.block = 0;
 DP.hurtPlayer(99, 'test doom');
@@ -416,18 +485,9 @@ t.eq(S.screen, 'over', 'game over screen');
 t.ok(S.over && S.over.cause === 'test doom', 'the cause of death is recorded');
 
 // -------- scaling: deeper and lower is meaner --------
-DP.srand(31);
+DP.srand(33);
 DP.newRun();
-const e11 = DP.mkEnemy('battle');
-S.run.depth = 6;
-const e16 = DP.mkEnemy('battle');
-S.run.floor = 3; S.run.depth = 1;
-const e31 = DP.mkEnemy('battle');
-t.ok(DP.scaleMult() > 1.5, 'floor 3 multiplier bites');
-S.run.floor = 1; S.run.depth = 1;
-void e11; void e16; void e31;
 {
-  // compare same base enemy across scaling by pinning the pool roll
   const base = ENEMIES[0];
   const mk = (floor, depth) => { S.run.floor = floor; S.run.depth = depth; return Math.round(base.hp * DP.scaleMult()); };
   const shallow = mk(1, 1), deep = mk(1, 7), lower = mk(2, 7);
@@ -435,30 +495,37 @@ void e11; void e16; void e31;
   t.ok(lower > deep, 'the next floor is meaner at equal depth');
   S.run.floor = 1; S.run.depth = 1;
 }
-const elite = (() => { DP.srand(5); S.run.depth = 4; const e = DP.mkEnemy('elite'); S.run.depth = 1; return e; })();
-t.ok(elite.name.indexOf('ELITE') === 0, 'elites are branded');
-// boss picks by floor and is branded boss
 const boss = DP.mkEnemy('boss');
 t.ok(boss.boss, 'boss flag set');
 t.eq(boss.id, BOSSES[0].id, 'floor 1 summons the first boss');
 
-// -------- boss victory clears the floor --------
+// -------- the boss room --------
 DP.srand(37);
-S.run.depth = C.BOSS_DEPTH;
-DP.genDoors();
-t.eq(S.run.doors.length, 1, 'room 8 has a single door');
-t.eq(S.run.doors[0].type, 'boss', 'and the boss waits behind it');
-DP.enterDoor(0);
+S.run.depth = C.BOSS_DEPTH - 1;
+DP.genRoom();
+t.eq(S.run.room.doors.length, 1, 'the room before the lair has a single door');
+t.ok(S.run.room.doors[0].boss && S.run.room.doors[0].known, 'and it is marked with the crown');
+S.run.keys = 1;
+t.ok(DP.useDoor(0), 'one key opens the boss door');
+t.eq(S.run.depth, C.BOSS_DEPTH, 'you stand in the lair');
+t.eq(S.run.room.ents.length, 1, 'the lair holds only the boss');
+t.ok(S.run.room.ents[0].kind === 'monster' && S.run.room.ents[0].mtype === 'boss', 'and it IS the boss');
+t.eq(S.run.room.doors.length, 0, 'no doors out — the only way is through');
+DP.interact(0);
 t.ok(S.enemy && S.enemy.boss, 'boss fight underway');
 S.run.hp = 30; S.run.maxHp = 100;
+const keysB = S.run.keys;
 S.enemy.hp = 1;
 DP.dmgEnemy(5, 50);
 t.ok(S.victory && S.victory.boss, 'boss down');
-t.eq(S.run.floor, 2, 'floor counter advances');
+t.eq(S.run.keys, keysB + C.KEY_BOSS, 'the boss hoard holds ' + C.KEY_BOSS + ' keys');
 t.ok(S.run.hp > 30, 'the stairwell rest heals');
-DP.advance();
+t.eq(S.run.floor, 1, 'still floor 1 until you take the stairs');
+DP.leaveBattle();
+t.eq(S.run.floor, 2, 'DESCEND drops to the next floor');
 t.eq(S.run.depth, 1, 'next floor starts at room 1');
-t.eq(S.screen, 'dungeon', 'back among the doors');
+t.eq(S.screen, 'dungeon', 'back in a fresh room');
+t.ok(S.run.room.ents.length >= 1, 'the new floor room is furnished');
 
 // -------- persistence --------
 S.mute = true;
@@ -467,13 +534,16 @@ const saved = JSON.parse(store[C.SAVE_KEY]);
 t.eq(saved.v, 1, 'save is v1');
 t.ok(saved.mute === true, 'mute is persisted');
 t.ok(saved.run && saved.run.floor === 2, 'the run survives in the save');
+t.eq(saved.run.keys, S.run.keys, 'keys are persisted');
+t.ok(saved.run.room && Array.isArray(saved.run.room.ents), 'the current room is persisted');
 t.ok(saved.run.arsenal && typeof saved.run.arsenal === 'object', 'arsenal is persisted');
-t.ok(Array.isArray(saved.run.doors), 'current doors are persisted');
 t.ok(saved.best && saved.best.floor >= 1, 'best progress is persisted');
 // a fresh boot resumes the run
 const { DP: DP2 } = loadGame(store, false);
 t.ok(DP2.S.run && DP2.S.run.floor === 2, 'reload resumes the saved run');
 t.eq(DP2.S.screen, 'title', 'resume lands on the title (CONTINUE offered)');
+t.eq(DP2.S.run.keys, S.run.keys, 'keys reload');
+t.ok(DP2.S.run.room && DP2.S.run.room.ents.length >= 1, 'the room reloads intact');
 t.ok(DP2.S.best.floor >= 1, 'best stats reload');
 // death wipes the run but keeps the best
 DP2.S.screen = 'battle';
@@ -484,6 +554,19 @@ DP2.save();
 const saved2 = JSON.parse(store[C.SAVE_KEY]);
 t.ok(saved2.run === null, 'dead runs are not saved');
 t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
+// a pre-crawl save (no room/keys) migrates cleanly
+{
+  const storeOld = { dungeon_pusher_save: JSON.stringify({
+    v: 1, mute: false, best: { floor: 1, depth: 2, kills: 3, gold: 10 },
+    run: { floor: 1, depth: 2, hp: 50, maxHp: 60, gold: 5, wallet: 10,
+           arsenal: { sword: 1 }, relics: [], potions: 1, whet: 0,
+           kills: 1, goldEarned: 5, doors: [{ type: 'battle' }], block: 0 },
+  }) };
+  const { DP: DPold } = loadGame(storeOld, false);
+  t.ok(DPold.S.run && DPold.S.run.hp === 50, 'an old save still resumes');
+  t.eq(DPold.S.run.keys, DPold.C.START_KEYS, 'old saves get the starter keys');
+  t.ok(DPold.S.run.room && DPold.S.run.room.ents.length >= 1, 'old saves get a furnished room');
+}
 
 // -------- determinism --------
 function runScript(D) {
@@ -522,7 +605,6 @@ for (const c of S.coins) {
 t.ok(sane, 'no NaN/Infinity positions after long play');
 t.ok(contained, 'platform coins stay within the machine');
 t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
-t.ok(S.run === null || S.run.hp > 0 || true, 'run state consistent');
 
 // ============================================================
 // render smoke: load WITH a stub ctx and drive the real
@@ -536,18 +618,26 @@ t.ok(S.run === null || S.run.hp > 0 || true, 'run state consistent');
   const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
   frames(12);                                     // title
   D.srand(99); D.newRun();
-  frames(12);                                     // dungeon doors
-  D.S.run.doors = [{ type: 'shop', known: true, used: false }, { type: 'battle', known: false, used: false }, { type: 'elite', known: true, used: false }];
-  D.enterDoor(0);
+  frames(20);                                     // top-down room, hero walking home
+  D.S.run.room.ents = [
+    { kind: 'monster', mtype: 'battle', eid: 'rat', done: false },
+    { kind: 'shop', done: false },
+    { kind: 'chest', done: false },
+  ];
+  frames(10);                                     // three inhabitants drawn
+  D.interact(2);
+  frames(10);                                     // chest toast
+  D.interact(1);
   frames(10);                                     // shop modal
-  D.advance();
-  D.S.run.doors[0] = { type: 'forge', known: true, used: false };
-  D.enterDoor(0);
+  D.closeModal();
+  D.S.run.room.ents[1] = { kind: 'smith', done: false };
+  D.interact(1);
   frames(8);                                      // forge modal
   D.pickBoon(0);
-  frames(6);                                      // forge done msg
-  D.advance();
-  D.startBattle('battle');
+  frames(6);
+  D.closeModal();
+  frames(6);                                      // done entities render faded
+  D.interact(0);                                  // fight the rat
   D.S.run.wallet = 50;
   for (let i = 0; i < 8; i++) { D.S.cd = 0; D.drop(20 + i * 8); frames(20); }   // live combat
   D.spinWheel();
@@ -557,11 +647,14 @@ t.ok(S.run === null || S.run.hp > 0 || true, 'run state consistent');
   frames(10);                                     // hurt vignette
   D.S.enemy.hp = 1; D.dmgEnemy(5, 50);
   frames(40);                                     // victory overlay
-  D.advance();
-  frames(8);
-  D.S.run.depth = D.C.BOSS_DEPTH; D.genDoors();
-  frames(8);                                      // single boss door
-  D.enterDoor(0);
+  D.leaveBattle();
+  frames(10);                                     // back in the room, monster slain
+  D.S.run.keys = 5;
+  D.S.run.depth = D.C.BOSS_DEPTH - 1; D.genRoom();
+  frames(8);                                      // single crowned boss door
+  D.useDoor(0);
+  frames(8);                                      // the boss lair
+  D.interact(0);
   frames(12);                                     // boss battle
   D.hurtPlayer(99999, 'render doom');
   frames(12);                                     // game over screen

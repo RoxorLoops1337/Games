@@ -56,9 +56,11 @@ const C = {
   DROP_CD: 0.28, COMBO_WIN: 1.4, COMBO_CAP: 5,
   METER_MAX: 18,                        // inserts to trigger a FRENZY rain
   SAVE_KEY: 'dungeon_pusher_save',
-  START_HP: 60, START_COINS: 20, START_POTIONS: 1,
+  START_HP: 60, START_COINS: 20, START_POTIONS: 1, START_KEYS: 3,
   POTION_HEAL: 20,
   BOSS_DEPTH: 8,
+  KEY_KILL: 1, KEY_ELITE: 2, KEY_BOSS: 3,   // keys paid per slain foe
+  P_CHEST_KEY: 0.2,
   P_LUCKY: 0.10,
   DMG: { coin: 2, lucky: 4 },
   REFUND: { coin: 1, lucky: 2 },
@@ -144,16 +146,14 @@ const TRAIT_TXT = {
   venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field', regen: 'regenerates',
 };
 
-// door types for the dungeon
-const DOOR_INFO = {
-  battle:   { icon: '⚔\u{FE0F}', name: 'FIGHT' },
-  elite:    { icon: '\u{1F525}',      name: 'ELITE' },
-  boss:     { icon: '\u{1F451}',      name: 'BOSS' },
-  shop:     { icon: '\u{1F6D2}',      name: 'SHOP' },
-  forge:    { icon: '⚒\u{FE0F}', name: 'FORGE' },
-  shrine:   { icon: '⛲',         name: 'SHRINE' },
-  treasure: { icon: '\u{1F48E}',      name: 'TREASURE' },
-  wheel:    { icon: '\u{1F3A1}',      name: 'WHEEL' },
+// room inhabitants for the top-down crawl
+const ENT_INFO = {
+  monster: { icon: '\u{1F47E}', name: 'MONSTER' },
+  chest:   { icon: '\u{1F9F0}', name: 'CHEST' },
+  shop:    { icon: '\u{1F9D4}', name: 'SHOPKEEPER' },
+  smith:   { icon: '\u{1F477}', name: 'BLACKSMITH' },
+  shrine:  { icon: '⛲',    name: 'SHRINE' },
+  wheel:   { icon: '\u{1F3A1}', name: 'WHEEL GHOST' },
 };
 
 // ------------------------------------------------------------------- state
@@ -172,8 +172,9 @@ const S = {
   room: null,                          // open non-battle room {type, ...}
   over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
   best: { floor: 0, depth: 0, kills: 0, gold: 0 },
-  wheelAnim: null, uiFlash: null,
+  wheelAnim: null, uiFlash: null, toast: null,
   pPois: 0, pPoisT: 0, ePoisT: 0,
+  roomStamp: 0,                        // bumps on room change (avatar resets)
 };
 
 // seeded rng so tests are deterministic; browser reseeds from the clock
@@ -200,8 +201,8 @@ function save() {
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
         gold: S.run.gold, wallet: S.run.wallet, arsenal: S.run.arsenal,
         relics: S.run.relics, potions: S.run.potions, whet: S.run.whet,
-        kills: S.run.kills, goldEarned: S.run.goldEarned, doors: S.run.doors,
-        block: S.run.block, meter: S.meter,
+        kills: S.run.kills, goldEarned: S.run.goldEarned, room: S.run.room,
+        keys: S.run.keys, block: S.run.block, meter: S.meter,
       } : null,
     }));
   } catch (e) {}
@@ -224,13 +225,14 @@ function load() {
         relics: Array.isArray(d.run.relics) ? d.run.relics.filter(relicById) : [],
         potions: d.run.potions || 0, whet: d.run.whet || 0,
         kills: d.run.kills || 0, goldEarned: d.run.goldEarned || 0,
-        doors: Array.isArray(d.run.doors) ? d.run.doors : null,
-        block: d.run.block || 0, windUsed: false,
+        room: (d.run.room && Array.isArray(d.run.room.ents)) ? d.run.room : null,
+        keys: (typeof d.run.keys === 'number') ? d.run.keys : C.START_KEYS,
+        block: d.run.block || 0, windUsed: false, battleEnt: null,
       };
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
       }
-      if (!S.run.doors) genDoors();
+      if (!S.run.room) genRoom();      // pre-key saves get a fresh room
       S.meter = d.run.meter || 0;
     }
   } catch (e) {}
@@ -562,15 +564,17 @@ function drop(x) {
 function scaleMult() {
   return 1 + 0.10 * (S.run.depth - 1) + 0.45 * (S.run.floor - 1);
 }
-function mkEnemy(type) {
+function enemyPool(depth) {
+  // deeper rooms unlock meaner pools
+  return Math.min(ENEMIES.length, 4 + depth + (S.run.floor - 1) * 2);
+}
+function mkEnemy(type, eid) {
   const mult = scaleMult();
   let base, eliteK = 1;
   if (type === 'boss') {
     base = BOSSES[(S.run.floor - 1) % BOSSES.length];
   } else {
-    // deeper rooms unlock meaner pools
-    const poolMax = Math.min(ENEMIES.length, 4 + S.run.depth + (S.run.floor - 1) * 2);
-    base = ENEMIES[(rng() * poolMax) | 0];
+    base = (eid && ENEMIES.find(e => e.id === eid)) || ENEMIES[(rng() * enemyPool(S.run.depth)) | 0];
     if (type === 'elite') eliteK = 1.6;
   }
   const hp = Math.round(base.hp * mult * eliteK);
@@ -580,12 +584,14 @@ function mkEnemy(type) {
     atk: Math.round(base.atk * mult * (type === 'elite' ? 1.3 : 1)),
     period: base.period, atkT: base.period * 1.35,   // opening grace
     trait: base.trait, gold: Math.round(base.gold * mult * (type === 'elite' ? 1.8 : 1)),
-    boss: type === 'boss', stunT: 0, pois: 0, hitT: 0, lungeT: 0, regenT: 0,
+    boss: type === 'boss', elite: type === 'elite',
+    stunT: 0, pois: 0, hitT: 0, lungeT: 0, regenT: 0,
   };
 }
-function startBattle(type) {
+function startBattle(type, entIdx, eid) {
   if (!S.run) return false;
-  S.enemy = mkEnemy(type);
+  S.run.battleEnt = (entIdx === undefined) ? null : entIdx;
+  S.enemy = mkEnemy(type, eid);
   S.screen = 'battle';
   S.victory = null;
   S.run.windUsed = false;
@@ -658,18 +664,37 @@ function winBattle() {
   let gold = e.gold + (hasRelic('piggy') ? 4 : 0);
   S.run.kills++;
   addGold(gold, 50);
-  S.victory = { t: 0, gold, boss: e.boss };
+  // every slain monster coughs up dungeon keys
+  const keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
+  S.run.keys += keys;
+  floatAt('+' + keys + ' KEY' + (keys > 1 ? 'S' : '') + ' \u{1F5DD}', 50, '#ffd75e', true);
+  S.victory = { t: 0, gold, keys, boss: e.boss };
   S.banner = { txt: 'VICTORY!', ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.winb();
   if (e.boss) {
-    S.run.floor++;
-    S.run.depth = 0;             // advance() below bumps it to 1
     const h = Math.round(S.run.maxHp * 0.35);
     healPlayer(h, 50);
   }
   bestify();
   save();
+}
+// tap CONTINUE on the victory overlay: back to the top-down room
+function leaveBattle() {
+  if (!S.run || S.screen !== 'battle' || !S.victory) return false;
+  const boss = S.victory.boss;
+  const ei = S.run.battleEnt;
+  if (S.run.room && ei !== null && S.run.room.ents[ei]) S.run.room.ents[ei].done = true;
+  S.victory = null; S.enemy = null; S.run.battleEnt = null;
+  S.coins.length = 0;
+  if (boss) {              // the stairs descend: next floor, room 1
+    S.run.floor++;
+    S.run.depth = 1;
+    genRoom();
+  }
+  S.screen = 'dungeon';
+  save();
+  return true;
 }
 function bestify() {
   const b = S.best, r = S.run;
@@ -694,90 +719,158 @@ function endRun(cause) {
 }
 
 // ----------------------------------------------------------------- dungeon
+// The dungeon is a top-down crawl: each room holds 1-3 inhabitants (monsters,
+// chests, a shopkeeper, a blacksmith, a shrine, the wheel ghost) and locked
+// exit doors. Opening a door EATS A KEY; slain monsters cough keys up.
 function newRun() {
   S.run = {
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
-    gold: 0, wallet: C.START_COINS,
+    gold: 0, wallet: C.START_COINS, keys: C.START_KEYS,
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0,
-    kills: 0, goldEarned: 0, doors: null, block: 0, windUsed: false,
+    kills: 0, goldEarned: 0, room: null, block: 0, windUsed: false, battleEnt: null,
   };
   S.enemy = null; S.victory = null; S.room = null; S.over = null;
   S.meter = 0; S.pPois = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
-  genDoors();
+  genRoom();
   S.screen = 'dungeon';
   save();
   return S.run;
 }
-function doorPool() {
-  const d = S.run.depth;
-  const w = [['battle', 40], ['shop', 14], ['forge', 12], ['shrine', 10], ['treasure', 9], ['wheel', 6]];
-  if (d >= 3) w.push(['elite', 11]);
-  return w;
+function toast(txt2) { S.toast = { txt: txt2, t: 2.6 }; }
+// roll the 1-3 inhabitants of a room at the given depth
+function genEnts(depth) {
+  const r = rng();
+  const n = r < 0.38 ? 1 : r < 0.82 ? 2 : 3;
+  const ents = [];
+  const SVC = [['chest', 30], ['shop', 22], ['smith', 16], ['shrine', 18], ['wheel', 12]];
+  for (let i = 0; i < n; i++) {
+    const avail = SVC.filter(s => !ents.some(e => e.kind === s[0]));
+    if (rng() < 0.55 || !avail.length) {
+      const mtype = depth >= 3 && rng() < 0.22 ? 'elite' : 'battle';
+      const eid = ENEMIES[(rng() * enemyPool(depth)) | 0].id;
+      ents.push({ kind: 'monster', mtype, eid, done: false });
+    } else {
+      const total = avail.reduce((a, s) => a + s[1], 0);
+      let rr2 = rng() * total, pick = avail[0][0];
+      for (const [kind, wt] of avail) { rr2 -= wt; if (rr2 <= 0) { pick = kind; break; } }
+      ents.push({ kind: pick, done: false });
+    }
+  }
+  return ents;
 }
-function rollDoor() {
-  const pool = doorPool();
-  const total = pool.reduce((a, p) => a + p[1], 0);
-  let r = rng() * total;
-  for (const [type, wt] of pool) { r -= wt; if (r <= 0) return type; }
-  return 'battle';
-}
-function genDoors() {
+// build the CURRENT room (from a door's pre-rolled spec, or fresh)
+function genRoom(spec) {
   if (!S.run) return null;
-  if (S.run.depth >= C.BOSS_DEPTH) {
-    S.run.doors = [{ type: 'boss', known: true, used: false }];
-    return S.run.doors;
+  const depth = S.run.depth;
+  let ents;
+  if (depth >= C.BOSS_DEPTH) {
+    ents = [{ kind: 'monster', mtype: 'boss', done: false }];
+  } else {
+    ents = (spec || genEnts(depth)).map(e => ({ ...e, done: false }));
+    // never stranded: key-broke in a fight-free room -> a wanderer finds YOU
+    if (S.run.keys < 1 && !ents.some(e => e.kind === 'monster' && !e.done)) {
+      const eid = ENEMIES[(rng() * enemyPool(depth)) | 0].id;
+      ents.push({ kind: 'monster', mtype: 'battle', eid, done: false });
+    }
   }
-  const doors = [];
-  for (let i = 0; i < 3; i++) {
-    doors.push({ type: rollDoor(), known: rng() < 0.35, used: false });
+  const room = { ents, doors: [] };
+  const nd = depth + 1;
+  if (depth >= C.BOSS_DEPTH) {
+    room.doors = [];                       // the only way out is through the boss
+  } else if (nd >= C.BOSS_DEPTH) {
+    room.doors = [{ known: true, boss: true, spec: null }];
+  } else {
+    const dn = rng() < 0.65 ? 2 : 3;
+    for (let i = 0; i < dn; i++) {
+      room.doors.push({ known: hasRelic('lantern') || rng() < 0.35, boss: false, spec: genEnts(nd) });
+    }
   }
-  // never a fight-free room set: gold and progress need blood
-  if (!doors.some(dr => dr.type === 'battle' || dr.type === 'elite')) {
-    doors[(rng() * 3) | 0] = { type: 'battle', known: false, used: false };
-  }
-  S.run.doors = doors;
-  return doors;
+  S.run.room = room;
+  S.roomStamp++;
+  return room;
 }
-function enterDoor(i) {
+// tap an inhabitant
+function interact(i) {
   if (!S.run || S.screen !== 'dungeon' || S.room) return false;
-  const d = S.run.doors && S.run.doors[i];
-  if (!d || d.used) return false;
-  d.used = true; d.known = true;
-  SND.door();
-  if (d.type === 'battle' || d.type === 'elite' || d.type === 'boss') {
-    startBattle(d.type);
+  const e = S.run.room && S.run.room.ents[i];
+  if (!e || (e.done && e.kind !== 'shop')) return false;
+  if (e.kind === 'monster') {
+    SND.door();
+    startBattle(e.mtype, i, e.eid);
     return true;
   }
-  S.room = makeRoom(d.type);
+  if (e.kind === 'chest') {
+    chestGift();
+    e.done = true;
+  } else if (e.kind === 'shrine') {
+    const h = healPlayer(Math.round(S.run.maxHp * 0.35), 50);
+    S.pPois = 0;
+    toast('the waters restore ' + h + ' HP and cleanse poison');
+    e.done = true;
+    SND.heal();
+  } else if (e.kind === 'wheel') {
+    spinWheel();
+    toast('the carnival ghost grants one free spin');
+    e.done = true;
+  } else if (e.kind === 'shop') {
+    if (!e.stock) e.stock = shopStock();
+    S.room = { type: 'shop', stock: e.stock, ent: i };
+    SND.buy();
+  } else if (e.kind === 'smith') {
+    if (!e.opts) e.opts = boonOptions();
+    S.room = { type: 'forge', opts: e.opts, done: false, ent: i };
+    SND.clink();
+  }
   save();
   return true;
 }
-function makeRoom(type) {
-  if (type === 'shop') return { type, stock: shopStock(), done: false };
-  if (type === 'forge') return { type, opts: boonOptions(), done: false };
-  if (type === 'shrine') {
-    const h = healPlayer(Math.round(S.run.maxHp * 0.35), 50);
-    S.pPois = 0;
-    return { type, done: true, msg: 'The waters restore ' + h + ' HP and cleanse all poison.' };
-  }
-  if (type === 'treasure') {
-    const g = 12 + S.run.depth * 3 + (S.run.floor - 1) * 8 + ((rng() * 8) | 0);
+function chestGift() {
+  const r = rng();
+  if (r < C.P_CHEST_KEY) {
+    S.run.keys++;
+    toast('the chest holds a KEY! \u{1F5DD}');
+  } else if (r < 0.45) {
+    const g = 10 + S.run.depth * 2 + (S.run.floor - 1) * 6 + ((rng() * 8) | 0);
     addGold(g, 50);
-    let msg = 'You pry open the hoard: +' + g + ' gold.';
-    if (rng() < 0.35) {
-      const it = ITEMS[(rng() * ITEMS.length) | 0];
-      grantItem(it.id, 1);
-      msg += ' A ' + it.name + ' glints beneath!';
-    }
-    return { type, done: true, msg };
+    toast('+' + g + ' gold');
+  } else if (r < 0.65) {
+    const n = 6 + ((rng() * 6) | 0);
+    addCoins(n, null);
+    toast('+' + n + ' coins for the pusher');
+  } else if (r < 0.88) {
+    const it = ITEMS[(rng() * ITEMS.length) | 0];
+    grantItem(it.id, 1);
+    toast('a ' + it.name + ' joins your arsenal!');
+  } else {
+    S.run.potions++;
+    toast('a potion for the belt!');
   }
-  if (type === 'wheel') {
-    spinWheel();
-    return { type, done: true, msg: 'The carnival ghost grants you one free spin.' };
+  SND.gem();
+}
+// tap a locked exit door — costs one key
+function useDoor(i) {
+  if (!S.run || S.screen !== 'dungeon' || S.room) return false;
+  const d = S.run.room && S.run.room.doors[i];
+  if (!d) return false;
+  if (S.run.keys < 1) {
+    S.uiFlash = { msg: 'YOU NEED A KEY \u{1F5DD}', t: 1.2 };
+    SND.deny();
+    return false;
   }
-  return { type: 'shrine', done: true, msg: 'An empty room. Eerie.' };
+  S.run.keys--;
+  S.run.depth++;
+  SND.door();
+  genRoom(d.spec);
+  save();
+  return true;
+}
+function closeModal() {
+  if (!S.room) return false;
+  S.room = null;
+  save();
+  return true;
 }
 function shopStock() {
   const st = [];
@@ -843,21 +936,10 @@ function pickBoon(i) {
   else if (o.kind === 'whet') S.run.whet++;
   S.room.done = true;
   S.room.msg = 'The forge hums. Boon granted.';
+  if (S.room.ent !== undefined && S.run.room.ents[S.room.ent]) {
+    S.run.room.ents[S.room.ent].done = true;   // the blacksmith packs up
+  }
   SND.buy();
-  save();
-  return true;
-}
-// leave the open room / victory screen and walk deeper
-function advance() {
-  if (!S.run) return false;
-  if (S.screen === 'battle' && !S.victory) return false;
-  S.room = null;
-  S.victory = null;
-  S.enemy = null;
-  S.coins.length = 0;
-  S.run.depth++;
-  genDoors();
-  S.screen = 'dungeon';
   save();
   return true;
 }
@@ -1191,11 +1273,12 @@ function tick(dt) {
 
 // ------------------------------------------------------------- public API
 window.DP = {
-  S, C, MACH, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL, DOOR_INFO, FLOORS,
+  S, C, MACH, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL, ENT_INFO, FLOORS,
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
-  newRun, genDoors, enterDoor, makeRoom, advance, startBattle, mkEnemy,
-  enemyAttack, battleTick, winBattle, endRun, buyShop, pickBoon, usePotion,
+  newRun, genRoom, genEnts, interact, useDoor, closeModal, leaveBattle,
+  chestGift, startBattle, mkEnemy, enemyAttack, battleTick, winBattle, endRun,
+  buyShop, pickBoon, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, hurtPlayer, healPlayer, addBlock, poisonEnemy, stunEnemy,
   addGold, addCoins, fireItem, weaponDmg, theme, scaleMult, bestify,
@@ -2057,17 +2140,19 @@ if (!HEADLESS) (function browser() {
     txt(r.hp + ' / ' + r.maxHp, 163, 734, '800 10px Verdana, sans-serif', '#0e2a18');
     if (S.pPois > 0) txt('☠ ' + S.pPois, 282, 733, '800 12px Verdana, sans-serif', '#b8f26b', 'left');
     if (r.block > 0) txt('\u{1F6E1} ' + r.block, 320, 733, '800 12px Verdana, sans-serif', '#c8d6e8', 'left');
-    // gold + coins
+    // gold + coins + keys
     txt('\u{1FA99} ' + fmt(r.gold), 34, 762, '900 18px Verdana, sans-serif', '#ffd75e', 'left');
     const flash = S.denyT > 0 && Math.floor(S.denyT * 10) % 2 === 0;
-    ctx.beginPath(); ctx.ellipse(150, 763, 9, 8, 0, 0, 7);
+    ctx.beginPath(); ctx.ellipse(126, 763, 9, 8, 0, 0, 7);
     ctx.fillStyle = '#8a5f10'; ctx.fill();
-    ctx.beginPath(); ctx.ellipse(150, 761, 9, 8, 0, 0, 7);
+    ctx.beginPath(); ctx.ellipse(126, 761, 9, 8, 0, 0, 7);
     ctx.fillStyle = '#f2c04a'; ctx.fill();
-    txt('× ' + r.wallet, 164, 762, '900 18px Verdana, sans-serif', flash ? '#ff5a4e' : '#fff0c0', 'left');
+    txt('× ' + r.wallet, 140, 762, '900 18px Verdana, sans-serif', flash ? '#ff5a4e' : '#fff0c0', 'left');
+    txt('\u{1F5DD} × ' + r.keys, 190, 762, '900 15px Verdana, sans-serif',
+        r.keys < 1 ? '#ff5a4e' : '#ffe9a3', 'left');
     if (S.regen > 0) {
       ctx.beginPath();
-      ctx.arc(150, 761, 12, -Math.PI / 2, -Math.PI / 2 + (S.regen / C.PITY_T) * Math.PI * 2);
+      ctx.arc(126, 761, 12, -Math.PI / 2, -Math.PI / 2 + (S.regen / C.PITY_T) * Math.PI * 2);
       ctx.strokeStyle = 'rgba(255,220,120,0.75)'; ctx.lineWidth = 2.5; ctx.stroke();
     }
     // potion button
@@ -2110,10 +2195,11 @@ if (!HEADLESS) (function browser() {
     ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
     txt(v.boss ? '\u{1F451}' : '\u{1F3C6}', LW / 2, 350, '44px serif', '#fff');
     txt(v.boss ? 'FLOOR CLEARED!' : 'VICTORY!', LW / 2, 398, '900 28px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
-    txt('+' + v.gold + ' gold', LW / 2, 432, '800 16px Verdana, sans-serif', '#fff0c0');
+    txt('+' + v.gold + ' gold   •   +' + v.keys + ' \u{1F5DD} key' + (v.keys > 1 ? 's' : ''),
+        LW / 2, 432, '800 15px Verdana, sans-serif', '#fff0c0');
     if (v.boss) txt('the stairs descend… +35% HP restored', LW / 2, 456, '600 11px Verdana, sans-serif', '#7ee787');
     const pulse = 1 + Math.sin(t * 5) * 0.03;
-    uiBtn(LW / 2 - 90 * pulse, 480 - 2, 180 * pulse, 40, 'GO DEEPER ▼', () => advance(),
+    uiBtn(LW / 2 - 90 * pulse, 480 - 2, 180 * pulse, 40, v.boss ? 'DESCEND ▼' : 'CONTINUE ▶', () => leaveBattle(),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 14 });
   }
 
@@ -2170,116 +2256,275 @@ if (!HEADLESS) (function browser() {
   }
 
   // -------------------------------------------------------- dungeon screen
-  function drawDoor(x, y, w, h, d, t, idx) {
-    const T = theme();
-    // frame
-    ctx.save();
-    const arch = (px, py, pw, ph) => {
-      ctx.beginPath();
-      ctx.moveTo(px, py + ph);
-      ctx.lineTo(px, py + pw / 2);
-      ctx.arc(px + pw / 2, py + pw / 2, pw / 2, Math.PI, 0);
-      ctx.lineTo(px + pw, py + ph);
-      ctx.closePath();
-    };
-    arch(x - 8, y - 8, w + 16, h + 8);
-    ctx.fillStyle = '#191219'; ctx.fill();
-    arch(x, y, w, h);
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    if (d.used) { g.addColorStop(0, '#171019'); g.addColorStop(1, '#0d090d'); }
-    else { g.addColorStop(0, T.door); g.addColorStop(1, '#241a26'); }
-    ctx.fillStyle = g; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = d.used ? '#3a2f3a' : T.trim; ctx.stroke();
-    if (!d.used) {
-      // wood planks
-      ctx.save(); arch(x, y, w, h); ctx.clip();
-      ctx.globalAlpha = 0.22;
-      ctx.strokeStyle = '#0d090d'; ctx.lineWidth = 2;
-      for (let i = 1; i < 4; i++) {
-        ctx.beginPath(); ctx.moveTo(x + (w / 4) * i, y); ctx.lineTo(x + (w / 4) * i, y + h); ctx.stroke();
-      }
-      ctx.restore();
-      // handle
-      ctx.beginPath(); ctx.arc(x + w - 14, y + h * 0.55, 4, 0, 7);
-      ctx.fillStyle = '#ffd75e'; ctx.fill();
-    }
-    const info = DOOR_INFO[d.type];
-    const bob = Math.sin(t * 2 + idx * 2.1) * 3;
-    if (d.known && !d.used) {
-      txt(info.icon, x + w / 2, y + h * 0.36 + bob, '34px serif', '#fff');
-      txt(info.name, x + w / 2, y + h * 0.62, '900 13px Verdana, sans-serif',
-          d.type === 'boss' ? '#ffd75e' : d.type === 'elite' ? '#ff9d3c' : '#e8dce8',
-          'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
-    } else if (!d.used) {
-      txt('?', x + w / 2, y + h * 0.42 + bob, '900 40px Georgia, serif', 'rgba(232,220,232,0.75)');
-      txt('unknown', x + w / 2, y + h * 0.64, '600 10px Verdana, sans-serif', '#9a8aa0');
-    } else {
-      txt('cleared', x + w / 2, y + h * 0.5, '600 11px Verdana, sans-serif', '#5a4a5a');
-    }
-    ctx.restore();
-    if (!d.used && !S.room) {
-      uiButtons.push({ x: x - 8, y: y - 8, w: w + 16, h: h + 16, cb: () => enterDoor(idx) });
+  // Top-down room crawl: tiled floor, locked doors on the far wall, 1-3
+  // inhabitants to walk up to, and your little hero doing the walking.
+  const ROOM = { x: 34, y: 176, w: LW - 68, h: 456, wallH: 64 };
+  const ENT_SLOTS = [
+    [{ x: 0.5, y: 0.42 }],
+    [{ x: 0.28, y: 0.38 }, { x: 0.72, y: 0.46 }],
+    [{ x: 0.24, y: 0.34 }, { x: 0.76, y: 0.38 }, { x: 0.5, y: 0.56 }],
+  ];
+  function entPos(i, n) {
+    const s = ENT_SLOTS[Math.min(n, 3) - 1][Math.min(i, 2)];
+    return { x: ROOM.x + ROOM.w * s.x, y: ROOM.y + ROOM.wallH + (ROOM.h - ROOM.wallH) * s.y };
+  }
+  function doorPos(i, n) {
+    const xs = n === 1 ? [0.5] : n === 2 ? [0.3, 0.7] : [0.2, 0.5, 0.8];
+    return { x: ROOM.x + ROOM.w * xs[i], y: ROOM.y + ROOM.wallH - 4 };
+  }
+  // the hero: browser-side puppet that walks to whatever you tap
+  const AV = { x: LW / 2, y: 0, tx: LW / 2, ty: 0, act: null, stamp: -1, step: 0 };
+  function avHome() {
+    AV.x = AV.tx = LW / 2;
+    AV.y = AV.ty = ROOM.y + ROOM.h - 44;
+    AV.act = null;
+  }
+  function walkTo(x, y, act) {
+    AV.tx = Math.max(ROOM.x + 24, Math.min(ROOM.x + ROOM.w - 24, x));
+    AV.ty = Math.max(ROOM.y + ROOM.wallH + 18, Math.min(ROOM.y + ROOM.h - 24, y));
+    AV.act = act;
+  }
+  function avTick(dt) {
+    if (S.roomStamp !== AV.stamp) { AV.stamp = S.roomStamp; avHome(); }
+    const dx = AV.tx - AV.x, dy = AV.ty - AV.y;
+    const d = Math.hypot(dx, dy);
+    if (d > 3) {
+      const sp = 240 * dt;
+      const k = Math.min(1, sp / d);
+      AV.x += dx * k; AV.y += dy * k;
+      AV.step += dt * 14;
+    } else if (AV.act) {
+      const act = AV.act; AV.act = null;
+      act();
     }
   }
 
-  function drawDungeon(t) {
+  function drawRoomBox(t) {
+    const T = theme();
+    // outer dark + far wall
+    rr(ROOM.x - 10, ROOM.y - 10, ROOM.w + 20, ROOM.h + 20, 14);
+    ctx.fillStyle = '#0d090d'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = T.cabB; ctx.stroke();
+    // far wall (doors live here)
+    ctx.fillStyle = lgr('wall:' + fkey(), 0, ROOM.y, 0, ROOM.y + ROOM.wallH,
+      [[0, '#171019'], [1, T.door]]);
+    ctx.fillRect(ROOM.x, ROOM.y, ROOM.w, ROOM.wallH);
+    // brick lines
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.strokeStyle = '#0d090d'; ctx.lineWidth = 1.5;
+    for (let r = 1; r < 3; r++) {
+      const y = ROOM.y + (ROOM.wallH / 3) * r;
+      ctx.beginPath(); ctx.moveTo(ROOM.x, y); ctx.lineTo(ROOM.x + ROOM.w, y); ctx.stroke();
+      for (let x = ROOM.x + ((r % 2) * 28); x < ROOM.x + ROOM.w; x += 56) {
+        ctx.beginPath(); ctx.moveTo(x, y - ROOM.wallH / 3); ctx.lineTo(x, y); ctx.stroke();
+      }
+    }
+    ctx.restore();
+    // tiled floor
+    const fy = ROOM.y + ROOM.wallH;
+    const fh = ROOM.h - ROOM.wallH;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ROOM.x, fy, ROOM.w, fh); ctx.clip();
+    ctx.fillStyle = T.floorB;
+    ctx.fillRect(ROOM.x, fy, ROOM.w, fh);
+    const TS = 46;
+    for (let r = 0; r < Math.ceil(fh / TS); r++) {
+      for (let cix = 0; cix < Math.ceil(ROOM.w / TS); cix++) {
+        if ((r + cix) % 2 === 0) continue;
+        ctx.fillStyle = 'rgba(20,12,22,0.14)';
+        ctx.fillRect(ROOM.x + cix * TS, fy + r * TS, TS, TS);
+      }
+    }
+    // cracked-tile flavour, deterministic per skin
+    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = '#0d090d'; ctx.lineWidth = 1.5;
+    for (const s of SCRATCH.slice(0, 14)) {
+      const x = ROOM.x + (s.x1 / 100) * ROOM.w, y = fy + (s.y1 / 84) * fh;
+      ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (s.x2 - s.x1) * 1.5, y + (s.y2 - s.y1) * 1.5); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // wall torches
+    for (const tx of [ROOM.x + 26, ROOM.x + ROOM.w - 26]) {
+      const fl = 1 + Math.sin(t * 9 + tx) * 0.2;
+      ctx.globalAlpha = 0.32;
+      ctx.beginPath(); ctx.arc(tx, fy + 12, 20 * fl, 0, 7);
+      ctx.fillStyle = '#ff9d3c'; ctx.fill();
+      ctx.globalAlpha = 1;
+      txt('\u{1F525}', tx, fy + 8, '18px serif', '#fff');
+    }
+    ctx.restore();
+    // wall/floor seam
+    ctx.beginPath(); ctx.moveTo(ROOM.x, fy); ctx.lineTo(ROOM.x + ROOM.w, fy);
+    ctx.strokeStyle = 'rgba(240,246,255,0.25)'; ctx.lineWidth = 2; ctx.stroke();
+  }
+
+  function drawExitDoor(i, n, d, t) {
+    const p = doorPos(i, n);
+    const w = d.boss ? 78 : 58, h = d.boss ? 60 : 48;
+    const x = p.x - w / 2, y = p.y - h;
+    const T = theme();
+    // arch
+    ctx.beginPath();
+    ctx.moveTo(x, y + h);
+    ctx.lineTo(x, y + w * 0.3);
+    ctx.arc(x + w / 2, y + w * 0.3, w / 2, Math.PI, 0);
+    ctx.lineTo(x + w, y + h);
+    ctx.closePath();
+    const g = ctx.createLinearGradient(0, y, 0, y + h);
+    g.addColorStop(0, '#0d090d'); g.addColorStop(1, '#241a26');
+    ctx.fillStyle = g; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = d.boss ? '#ffd75e' : T.trim; ctx.stroke();
+    const bob = Math.sin(t * 2.4 + i * 2.1) * 2;
+    if (d.boss) {
+      txt('\u{1F451}', p.x, y + h * 0.45 + bob, '26px serif', '#fff');
+      txt('BOSS', p.x, y + h + 12, '900 11px Verdana, sans-serif', '#ffd75e', 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
+    } else if (d.known && d.spec) {
+      // scouted: the next room's dwellers peek through
+      const icons = d.spec.slice(0, 3).map(e =>
+        e.kind === 'monster' ? ((ENEMIES.find(en => en.id === e.eid) || {}).icon || ENT_INFO.monster.icon)
+                             : ENT_INFO[e.kind].icon);
+      txt(icons.join(''), p.x, y + h * 0.48 + bob, (icons.length > 2 ? 11 : 14) + 'px serif', '#fff');
+    } else {
+      txt('?', p.x, y + h * 0.48 + bob, '900 20px Georgia, serif', 'rgba(232,220,232,0.7)');
+    }
+    // the lock
+    const locked = S.run.keys < 1;
+    txt('\u{1F512}', p.x + w / 2 - 6, y + h - 8, '13px serif', '#fff');
+    txt('1\u{1F5DD}', p.x, y + h - 6, '800 9px Verdana, sans-serif',
+        locked && Math.floor(t * 4) % 2 ? '#ff5a4e' : '#ffd75e');
+    if (!S.room) {
+      uiButtons.push({ x: x - 6, y: y - 8, w: w + 12, h: h + 16,
+                       cb: () => walkTo(p.x, p.y + 26, () => useDoor(i)) });
+    }
+  }
+
+  function drawEnt(i, e, n, t) {
+    const p = entPos(i, n);
+    const info = ENT_INFO[e.kind];
+    let icon = info.icon, label = info.name, col = '#e8dce8';
+    if (e.kind === 'monster') {
+      const en = ENEMIES.find(x => x.id === e.eid);
+      icon = e.mtype === 'boss' ? BOSSES[(S.run.floor - 1) % BOSSES.length].icon : (en ? en.icon : info.icon);
+      label = e.mtype === 'boss' ? 'THE BOSS' : e.mtype === 'elite' ? 'ELITE FOE' : (en ? en.name : 'MONSTER');
+      col = e.mtype === 'boss' ? '#ffd75e' : e.mtype === 'elite' ? '#ff9d3c' : '#ffb4a8';
+    }
+    ctx.save();
+    if (e.done) {
+      // spent: chests gape, folk pack up, monsters are dust
+      ctx.globalAlpha = 0.28;
+      txt(e.kind === 'monster' ? '\u{1F4A8}' : icon, p.x, p.y - 12, '30px serif', '#fff');
+      txt(e.kind === 'monster' ? 'slain' : 'done', p.x, p.y + 14, '600 9px Verdana, sans-serif', '#9a8aa0');
+      ctx.restore();
+      return;
+    }
+    // shadow + idle bob
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + 6, 20, 7, 0, 0, 7);
+    ctx.fillStyle = 'rgba(10,6,12,0.5)'; ctx.fill();
+    const bob = Math.sin(t * 2.6 + i * 2.4) * 2.5;
+    const size = e.kind === 'monster' && e.mtype === 'boss' ? 52 : 34;
+    // monsters get a menacing aura
+    if (e.kind === 'monster') {
+      ctx.globalAlpha = 0.16 + 0.08 * Math.sin(t * 4 + i);
+      ctx.beginPath(); ctx.arc(p.x, p.y - 14 + bob, size * 0.72, 0, 7);
+      ctx.fillStyle = e.mtype === 'elite' ? '#ff9d3c' : '#ef4b5d'; ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+    txt(icon, p.x, p.y - 14 + bob, size + 'px serif', '#fff');
+    if (e.mtype === 'elite') txt('\u{1F525}', p.x + 20, p.y - 30 + bob, '14px serif', '#fff');
+    txt(label, p.x, p.y + 18, '800 9px Verdana, sans-serif', col, 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
+    ctx.restore();
+    if (!S.room) {
+      uiButtons.push({ x: p.x - 34, y: p.y - 44, w: 68, h: 74,
+                       cb: () => walkTo(p.x, p.y + 22, () => interact(i)) });
+    }
+  }
+
+  function drawHero(t) {
+    // walking bob + tiny sword
+    const moving = Math.hypot(AV.tx - AV.x, AV.ty - AV.y) > 3;
+    const hop = moving ? Math.abs(Math.sin(AV.step)) * 4 : Math.sin(t * 2) * 1.5;
+    ctx.beginPath(); ctx.ellipse(AV.x, AV.y + 4, 15, 6, 0, 0, 7);
+    ctx.fillStyle = 'rgba(10,6,12,0.5)'; ctx.fill();
+    txt('\u{1F93A}', AV.x, AV.y - 16 - hop, '34px serif', '#fff');
+    if (S.run.keys > 0) txt('\u{1F5DD}', AV.x + 16, AV.y - 34 - hop, '11px serif', '#fff');
+  }
+
+  function drawToast() {
+    if (!S.toast) return;
+    const a = Math.min(1, S.toast.t / 0.5);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.font = '800 13px Verdana, sans-serif';
+    const w = ctx.measureText(S.toast.txt).width + 36;
+    rr(LW / 2 - w / 2, ROOM.y + ROOM.wallH + 12, w, 30, 15);
+    ctx.fillStyle = 'rgba(12,7,14,0.92)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+    txt(S.toast.txt, LW / 2, ROOM.y + ROOM.wallH + 27, '800 13px Verdana, sans-serif', '#ffe9a3');
+    ctx.restore();
+  }
+
+  function drawDungeon(t, dt) {
     const T = theme();
     drawBackground();
+    if (!S.room) avTick(dt);
     // heading
-    ctx.font = '900 30px Georgia, serif';
+    ctx.font = '900 28px Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 7; ctx.strokeStyle = '#2a1030';
-    ctx.strokeText(T.name, LW / 2, 52);
-    ctx.fillStyle = lgr('dtt:' + fkey(), 0, 36, 0, 70, [[0, '#fff4d6'], [1, T.accent]]);
-    ctx.fillText(T.name, LW / 2, 52);
+    ctx.strokeText(T.name, LW / 2, 46);
+    ctx.fillStyle = lgr('dtt:' + fkey(), 0, 32, 0, 62, [[0, '#fff4d6'], [1, T.accent]]);
+    ctx.fillText(T.name, LW / 2, 46);
     txt('FLOOR ' + S.run.floor + '  •  ROOM ' + S.run.depth + ' / ' + C.BOSS_DEPTH,
-        LW / 2, 86, '800 13px Verdana, sans-serif', '#c8a8b0');
+        LW / 2, 76, '800 12px Verdana, sans-serif', '#c8a8b0');
     // room dots
     for (let i = 1; i <= C.BOSS_DEPTH; i++) {
       const x = LW / 2 - (C.BOSS_DEPTH - 1) * 11 + (i - 1) * 22;
-      ctx.beginPath(); ctx.arc(x, 110, i === C.BOSS_DEPTH ? 5.5 : 3.6, 0, 7);
+      ctx.beginPath(); ctx.arc(x, 100, i === C.BOSS_DEPTH ? 5.5 : 3.6, 0, 7);
       ctx.fillStyle = i < S.run.depth ? '#7ee787' : i === S.run.depth ? '#ffd75e' : 'rgba(255,215,94,0.22)';
       ctx.fill();
-      if (i === C.BOSS_DEPTH) txt('\u{1F451}', x, 110, '9px serif', '#fff');
+      if (i === C.BOSS_DEPTH) txt('\u{1F451}', x, 100, '9px serif', '#fff');
     }
-    // stone floor
-    const g = ctx.createLinearGradient(0, 560, 0, 700);
-    g.addColorStop(0, '#241a26'); g.addColorStop(1, '#171019');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 560, LW, 150);
-    // doors
-    const doors = S.run.doors || [];
-    if (doors.length === 1) {
-      drawDoor(LW / 2 - 90, 250, 180, 310, doors[0], t, 0);
-      txt('the boss lairs beyond', LW / 2, 600, '700 12px Verdana, sans-serif', '#ff9d3c');
-    } else {
-      doors.forEach((d, i) => drawDoor(38 + i * 142, 280, 122, 260, d, t, i));
-      txt('choose a door…', LW / 2, 590, '700 12px Verdana, sans-serif', '#c8a8b0');
+    // keys, right where door decisions happen
+    txt('\u{1F5DD} × ' + S.run.keys, LW / 2, 128, '900 16px Verdana, sans-serif',
+        S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
+    drawRoomBox(t);
+    // exit doors on the far wall
+    const doors = (S.run.room && S.run.room.doors) || [];
+    doors.forEach((d, i) => drawExitDoor(i, doors.length, d, t));
+    if (!doors.length) txt('slay the boss to descend', LW / 2, ROOM.y + 40, '800 11px Verdana, sans-serif', '#ffd75e');
+    // inhabitants, back-to-front with the hero in the mix
+    const ents = (S.run.room && S.run.room.ents) || [];
+    const order = ents.map((e, i) => ({ e, i, y: entPos(i, ents.length).y }));
+    order.push({ hero: true, y: AV.y });
+    order.sort((a, b) => a.y - b.y);
+    for (const o of order) {
+      if (o.hero) drawHero(t);
+      else drawEnt(o.i, o.e, ents.length, t);
     }
-    // torch posts between doors
-    for (const tx of [30, LW - 30]) {
-      const fl = 1 + Math.sin(t * 8 + tx) * 0.2;
-      ctx.globalAlpha = 0.35;
-      ctx.beginPath(); ctx.arc(tx, 250, 16 * fl, 0, 7);
-      ctx.fillStyle = '#ff9d3c'; ctx.fill();
-      ctx.globalAlpha = 1;
-      txt('\u{1F525}', tx, 252, '20px serif', '#fff');
-    }
-    drawFloats();
+    drawToast();
     drawHUD(t);
     drawBanner(t);
+    if (S.uiFlash && !S.room) {
+      txt(S.uiFlash.msg, LW / 2, ROOM.y + ROOM.wallH + 60, '900 15px Verdana, sans-serif',
+          Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
+    }
     uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'title'; save(); }, { r: 10, font: '20px serif' });
     uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
     drawRoomModal(t);
   }
 
   // ------------------------------------------------------------ room modal
+  const MODAL_INFO = {
+    shop: { icon: '\u{1F9D4}', name: 'SHOPKEEPER' },
+    forge: { icon: '\u{1F477}', name: 'BLACKSMITH' },
+  };
   function drawRoomModal(t) {
     const room = S.room;
     if (!room) return;
     ctx.fillStyle = 'rgba(5,3,8,0.72)';
     ctx.fillRect(0, 0, LW, LH);
-    const info = DOOR_INFO[room.type] || DOOR_INFO.shrine;
+    const info = MODAL_INFO[room.type] || MODAL_INFO.shop;
     const isShop = room.type === 'shop';
     const isForge = room.type === 'forge' && !room.done;
     const ph = isShop ? 470 : isForge ? 330 : 220;
@@ -2323,7 +2568,7 @@ if (!HEADLESS) (function browser() {
         txt(ln, LW / 2, py + 70 + i * 20, '700 12px Verdana, sans-serif', '#e8dce8'));
     }
     if (!isForge) {
-      uiBtn(LW / 2 - 90, py + ph - 52, 180, 38, 'ONWARD ▼', () => advance(),
+      uiBtn(LW / 2 - 90, py + ph - 52, 180, 38, 'LEAVE', () => closeModal(),
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 13 });
     }
     if (S.uiFlash) {
@@ -2364,7 +2609,8 @@ if (!HEADLESS) (function browser() {
       '⚔ everything that falls in the TRAY fires at the foe',
       '\u{1F5E1} swords, bombs & vials ride the pile — push them over',
       '\u{1F573} gutter items are DESTROYED — aim well',
-      '\u{1F6AA} between fights: doors, shops, forges, shrines…',
+      '\u{1F6AA} crawl the dungeon: monsters, chests, shopkeepers…',
+      '\u{1F5DD} doors need KEYS — every monster slain drops one',
     ];
     HOW.forEach((h, i) => txt(h, LW / 2, 376 + i * 24, '600 11px Verdana, sans-serif', '#9a8aa0'));
     if (S.run) {
@@ -2436,6 +2682,7 @@ if (!HEADLESS) (function browser() {
       if (S.uiFlash) { S.uiFlash.t -= dt; if (S.uiFlash.t <= 0) S.uiFlash = null; }
       if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) S.wheelAnim = null; }
       if (S.banner) { S.banner.ttl -= dt; if (S.banner.ttl <= 0) S.banner = null; }
+      if (S.toast) { S.toast.t -= dt; if (S.toast.t <= 0) S.toast = null; }
       for (let i = S.floats.length - 1; i >= 0; i--) {
         const f = S.floats[i];
         f.age += dt;
@@ -2449,7 +2696,7 @@ if (!HEADLESS) (function browser() {
     }
     const t = S.screen === 'battle' ? S.time : ts / 1000;
     if (S.screen === 'title') drawTitle(t);
-    else if (S.screen === 'dungeon' && S.run) drawDungeon(t);
+    else if (S.screen === 'dungeon' && S.run) drawDungeon(t, dt);
     else if (S.screen === 'battle' && S.run) drawBattle(t, dt);
     else if (S.screen === 'over') drawOver(t);
     else drawTitle(t);
