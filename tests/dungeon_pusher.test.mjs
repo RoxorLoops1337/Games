@@ -59,8 +59,18 @@ const { S, C, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL } = DP;
 const DT = 1 / 60;
 const step = (secs) => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) DP.tick(DT); };
 const platCoins = () => S.coins.filter(c => c.st === 'plat');
-const ENT_KINDS = ['monster', 'chest', 'shop', 'smith', 'shrine', 'wheel'];
-const mkMonster = (eid) => ({ kind: 'monster', mtype: 'battle', eid: eid || 'rat', done: false });
+const ENT_KINDS = ['monster', 'chest', 'shop', 'smith', 'shrine', 'wheel', 'stairs'];
+const mkMonster = (eid) => ({ kind: 'monster', mtype: 'battle', eid: eid || 'rat', done: false, px: 0.5, py: 0.4 });
+const mapRooms = () => Object.values(S.run.map.rooms);
+// a direction from the current room that actually has a neighbour
+const openDir = () => {
+  const r = DP.curRoom();
+  for (const d of ['n', 's', 'e', 'w']) {
+    const k = (r.gx + { n: 0, s: 0, e: 1, w: -1 }[d]) + ',' + (r.gy + { n: -1, s: 1, e: 0, w: 0 }[d]);
+    if (S.run.map.rooms[k]) return d;
+  }
+  return null;
+};
 // run the round machine until the given phase (or a timeout)
 const untilPhase = (phase, maxSecs) => {
   for (let i = 0; i < Math.round((maxSecs || 12) * 60); i++) {
@@ -93,34 +103,58 @@ t.eq(DP.roundCoins(), C.ROUND_COINS, 'the round purse starts at ' + C.ROUND_COIN
 t.ok(S.run.arsenal.sword === 1 && S.run.arsenal.shield === 1 && S.run.arsenal.vial === 1,
      'starter arsenal: sword, shield, venom vial');
 t.eq(S.run.potions, C.START_POTIONS, 'one potion in the belt');
-t.ok(S.run.room && Array.isArray(S.run.room.ents), 'the first room is furnished');
-t.ok(S.run.room.ents.length >= 1 && S.run.room.ents.length <= 3, 'a room holds 1-3 inhabitants');
-t.ok(S.run.room.ents.every(e => ENT_KINDS.indexOf(e.kind) >= 0), 'inhabitant kinds are valid');
-t.ok(S.run.room.doors.length >= 2 && S.run.room.doors.length <= 3, 'locked exit doors on the far wall');
-
-// -------- room generation is procedural but sane --------
+// -------- the floor MAP: a real crawl --------
+t.ok(S.run.map && S.run.map.rooms, 'a floor map is carved');
+t.ok(mapRooms().length >= 10, 'the floor holds ' + mapRooms().length + ' rooms');
+t.eq(S.run.map.cur, '0,0', 'you start at the entrance');
+t.ok(S.run.room === S.run.map.rooms['0,0'], 'the current room IS the map room');
+t.ok(S.run.room.visited, 'the entrance is uncovered');
+t.eq(mapRooms().filter(r => r.visited).length, 1, 'the rest of the map is fog');
+t.eq(mapRooms().filter(r => r.boss).length, 1, 'exactly one boss lair per floor');
 {
-  let sawMonster = false, sawService = false, dupService = false, badMonster = false;
-  for (let i = 0; i < 40; i++) {
-    DP.genRoom();
-    const ents = S.run.room.ents;
-    if (ents.some(e => e.kind === 'monster')) sawMonster = true;
-    if (ents.some(e => e.kind !== 'monster')) sawService = true;
-    for (const k of ENT_KINDS.slice(1)) {
-      if (ents.filter(e => e.kind === k).length > 1) dupService = true;
+  const boss = mapRooms().find(r => r.boss);
+  t.ok(mapRooms().every(r => r.dist <= boss.dist), 'the boss lairs in the farthest room');
+  t.ok(boss.ents.length === 1 && boss.ents[0].mtype === 'boss', 'the lair holds only the boss');
+  // connectivity: BFS over the grid reaches every room
+  const rooms = S.run.map.rooms;
+  const q2 = ['0,0'], seen = { '0,0': true };
+  while (q2.length) {
+    const r = rooms[q2.shift()];
+    for (const [dx, dy] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
+      const k = (r.gx + dx) + ',' + (r.gy + dy);
+      if (rooms[k] && !seen[k]) { seen[k] = true; q2.push(k); }
     }
-    for (const e of ents) {
-      if (e.kind === 'monster' && !ENEMIES.some(en => en.id === e.eid)) badMonster = true;
+  }
+  t.eq(Object.keys(seen).length, mapRooms().length, 'every room is reachable on foot');
+}
+// dweller generation across many floors is sane
+{
+  let sawMonster = false, sawService = false, dupService = false, badMonster = false, noPos = false;
+  for (let i = 0; i < 8; i++) {
+    DP.genFloor();
+    for (const r of mapRooms()) {
+      const ents = r.ents;
+      if (ents.some(e => e.kind === 'monster')) sawMonster = true;
+      if (ents.some(e => e.kind !== 'monster')) sawService = true;
+      for (const k of ['chest', 'shop', 'smith', 'shrine', 'wheel']) {
+        if (ents.filter(e => e.kind === k).length > 1) dupService = true;
+      }
+      for (const e of ents) {
+        if (e.kind === 'monster' && e.mtype !== 'boss' && !ENEMIES.some(en => en.id === e.eid)) badMonster = true;
+        if (typeof e.px !== 'number' || typeof e.py !== 'number') noPos = true;
+      }
     }
   }
   t.ok(sawMonster, 'monsters roam the rooms');
   t.ok(sawService, 'chests, keepers and shrines appear too');
   t.ok(!dupService, 'never two of the same service in one room');
   t.ok(!badMonster, 'every room monster is pre-rolled from the bestiary');
+  t.ok(!noPos, 'every dweller has a floor position to walk to');
 }
-// the softlock guard: key-broke in a fight-free room summons a wanderer
+// the softlock guard: key-broke with nothing left to slay -> a wanderer
 S.run.keys = 0;
-DP.genRoom([{ kind: 'chest', done: false }]);
+S.run.room.ents = [];
+DP.keyGuard();
 t.ok(S.run.room.ents.some(e => e.kind === 'monster'), 'no keys + no monster -> a wanderer finds you');
 S.run.keys = C.START_KEYS;
 
@@ -355,15 +389,40 @@ t.eq(S.battle, null, 'the round machine rests');
 t.eq(S.run.depth, depth0, 'winning a fight does NOT change rooms');
 t.ok(S.run.room.ents[0].done, 'the slain monster is gone from the room');
 
-// -------- keys unlock doors --------
-const kD = S.run.keys, dD = S.run.depth;
-t.ok(DP.useDoor(0), 'a key opens the door');
-t.eq(S.run.keys, kD - 1, 'the key is spent');
-t.eq(S.run.depth, dD + 1, 'one room deeper');
-S.run.keys = 0;
-t.ok(!DP.useDoor(0), 'no key, no passage');
-t.ok(S.uiFlash && S.uiFlash.msg.indexOf('KEY') >= 0, 'the lock demands a key');
-S.run.keys = 3;
+// -------- keys unlock doors; unlocked doors allow BACKTRACKING --------
+{
+  const dir = openDir();
+  const from = S.run.map.cur;
+  const kD = S.run.keys;
+  t.eq(DP.tryDoor(dir), 'unlocked', 'the first bump spends a key to unlock');
+  t.eq(S.run.keys, kD - 1, 'the key is spent');
+  t.eq(S.run.map.cur, from, 'unlocking does not move you yet');
+  t.eq(DP.tryDoor(dir), true, 'the open door lets you through');
+  t.ok(S.run.map.cur !== from, 'you stand in the next room');
+  t.ok(DP.curRoom().visited, 'the new room is uncovered on the map');
+  t.eq(S.run.depth, DP.curRoom().dist + 1, 'depth tracks the room distance');
+  const kBack = S.run.keys;
+  const back = { n: 's', s: 'n', e: 'w', w: 'e' }[dir];
+  t.eq(DP.tryDoor(back), true, 'walking BACK through the same door is free');
+  t.eq(S.run.keys, kBack, 'no key spent on the return trip');
+  t.eq(S.run.map.cur, from, 'back in the previous room — rooms persist');
+  t.eq(DP.tryDoor(dir), true, 'and forth again, still free');
+  DP.tryDoor(back);          // return to the entrance for the tests below
+  // a still-locked door refuses the key-broke (any unused neighbour door)
+  S.run.keys = 0;
+  let lockedDir = null;
+  for (const d of ['n', 's', 'e', 'w']) {
+    if (d === dir) continue;
+    const r = DP.curRoom();
+    const k = (r.gx + { n: 0, s: 0, e: 1, w: -1 }[d]) + ',' + (r.gy + { n: -1, s: 1, e: 0, w: 0 }[d]);
+    if (S.run.map.rooms[k]) { lockedDir = d; break; }
+  }
+  if (lockedDir) {
+    t.ok(!DP.tryDoor(lockedDir), 'no key, no passage');
+    t.ok(S.uiFlash && S.uiFlash.msg.indexOf('KEY') >= 0, 'the lock demands a key');
+  }
+  S.run.keys = 3;
+}
 
 // -------- room inhabitants --------
 {
@@ -486,12 +545,7 @@ S.run.relics = ['plate'];
 DP.newRound();
 t.eq(S.run.block, 4, 'battle plate raises 4 block every round');
 S.run.relics = [];
-// lantern: every door scouted
 S.screen = 'dungeon'; S.battle = null;
-S.run.relics = ['lantern'];
-DP.genRoom();
-t.ok(S.run.room.doors.every(d => d.known), 'the lantern reveals every door');
-S.run.relics = [];
 // second wind: survive a killing blow once
 S.run.relics = ['wind']; S.run.windUsed = false; S.run.hp = 3; S.run.block = 0;
 DP.hurtPlayer(99, 'test doom');
@@ -516,17 +570,16 @@ const boss = DP.mkEnemy('boss');
 t.ok(boss.boss, 'boss flag set');
 t.eq(boss.id, BOSSES[0].id, 'floor 1 summons the first boss');
 
-// -------- the boss room --------
+// -------- the boss lair -> the stairs down --------
 DP.srand(37);
-S.run.depth = C.BOSS_DEPTH - 1;
-DP.genRoom();
-t.eq(S.run.room.doors.length, 1, 'the room before the lair has a single door');
-t.ok(S.run.room.doors[0].boss && S.run.room.doors[0].known, 'and it is marked with the crown');
-S.run.keys = 1;
-t.ok(DP.useDoor(0), 'one key opens the boss door');
-t.eq(S.run.depth, C.BOSS_DEPTH, 'you stand in the lair');
-t.eq(S.run.room.ents.length, 1, 'the lair holds only the boss');
-t.eq(S.run.room.doors.length, 0, 'no doors out — the only way is through');
+{
+  // walk to the lair the test way: teleport the map cursor there
+  const bossK = Object.keys(S.run.map.rooms).find(k => S.run.map.rooms[k].boss);
+  S.run.map.cur = bossK;
+  S.run.room = S.run.map.rooms[bossK];
+  S.run.room.visited = true;
+  S.run.depth = S.run.room.dist + 1;
+}
 DP.interact(0);
 t.ok(S.enemy && S.enemy.boss, 'boss fight underway');
 S.run.hp = 30; S.run.maxHp = 100;
@@ -537,9 +590,15 @@ t.ok(S.victory && S.victory.boss, 'boss down');
 t.eq(S.run.keys, keysB + C.KEY_BOSS, 'the boss hoard holds ' + C.KEY_BOSS + ' keys');
 t.ok(S.run.hp > 30, 'the stairwell rest heals');
 DP.leaveBattle();
-t.eq(S.run.floor, 2, 'DESCEND drops to the next floor');
-t.eq(S.run.depth, 1, 'next floor starts at room 1');
+t.eq(S.run.floor, 1, 'still floor 1 — the stairs are an invitation, not a shove');
+t.ok(S.run.room.ents.length === 1 && S.run.room.ents[0].kind === 'stairs',
+     'the stairs down appear where the boss fell');
+DP.interact(0);
+t.eq(S.run.floor, 2, 'stepping onto the stairs descends');
+t.ok(S.run.map && S.run.map.cur === '0,0', 'a fresh floor map is carved');
+t.eq(S.run.depth, 1, 'next floor starts at the entrance');
 t.eq(S.screen, 'dungeon', 'back in a fresh room');
+t.eq(mapRooms().filter(r => r.visited).length, 1, 'the new floor is all fog again');
 
 // -------- persistence --------
 S.mute = true;
@@ -550,13 +609,23 @@ t.ok(saved.mute === true, 'mute is persisted');
 t.ok(saved.run && saved.run.floor === 2, 'the run survives in the save');
 t.eq(saved.run.keys, S.run.keys, 'keys are persisted');
 t.eq(saved.run.pouch, S.run.pouch, 'coin pouches are persisted');
-t.ok(saved.run.room && Array.isArray(saved.run.room.ents), 'the current room is persisted');
+t.ok(saved.run.map && saved.run.map.rooms && saved.run.map.cur, 'the whole floor MAP is persisted');
 t.ok(saved.best && saved.best.floor >= 1, 'best progress is persisted');
+// unlock a door + move, then check the exploration state survives a reload
+{
+  const dir = openDir();
+  S.run.keys = 2;
+  DP.tryDoor(dir); DP.tryDoor(dir);
+  DP.save();
+}
 const { DP: DP2 } = loadGame(store, false);
 t.ok(DP2.S.run && DP2.S.run.floor === 2, 'reload resumes the saved run');
 t.eq(DP2.S.screen, 'title', 'resume lands on the title (CONTINUE offered)');
-t.eq(DP2.S.run.keys, S.run.keys, 'keys reload');
-t.ok(DP2.S.run.room && DP2.S.run.room.ents.length >= 1, 'the room reloads intact');
+t.eq(DP2.S.run.map.cur, S.run.map.cur, 'you reload in the same room you left');
+t.ok(DP2.S.run.room === DP2.S.run.map.rooms[DP2.S.run.map.cur], 'the room ref is rewired on load');
+t.ok(Object.values(DP2.S.run.map.links).some(l => l.open), 'unlocked doors stay unlocked');
+t.eq(Object.values(DP2.S.run.map.rooms).filter(r => r.visited).length,
+     mapRooms().filter(r => r.visited).length, 'the uncovered map survives the reload');
 // death wipes the run but keeps the best
 DP2.S.screen = 'battle';
 DP2.S.enemy = DP2.mkEnemy('battle');
@@ -578,7 +647,9 @@ t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
   t.ok(DPold.S.run && DPold.S.run.hp === 50, 'an old save still resumes');
   t.eq(DPold.S.run.keys, DPold.C.START_KEYS, 'old saves get the starter keys');
   t.eq(DPold.S.run.pouch, 0, 'old saves start without pouches');
-  t.ok(DPold.S.run.room && DPold.S.run.room.ents.length >= 1, 'old saves get a furnished room');
+  t.ok(DPold.S.run.map && Object.keys(DPold.S.run.map.rooms).length >= 10,
+       'old saves get a fresh floor map carved');
+  t.ok(DPold.S.run.room === DPold.S.run.map.rooms[DPold.S.run.map.cur], 'and stand in its entrance');
 }
 
 // -------- determinism --------
@@ -633,11 +704,11 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
   frames(12);                                     // title
   D.srand(99); D.newRun();
-  frames(20);                                     // top-down room, hero walking home
+  frames(20);                                     // the crawl: room, minimap, hero
   D.S.run.room.ents = [
-    { kind: 'monster', mtype: 'battle', eid: 'rat', done: false },
-    { kind: 'shop', done: false },
-    { kind: 'chest', done: false },
+    { kind: 'monster', mtype: 'battle', eid: 'rat', done: false, px: 0.3, py: 0.3 },
+    { kind: 'shop', done: false, px: 0.7, py: 0.3 },
+    { kind: 'chest', done: false, px: 0.5, py: 0.6 },
   ];
   frames(10);
   D.interact(2);
@@ -645,7 +716,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.interact(1);
   frames(10);                                     // shop modal
   D.closeModal();
-  D.S.run.room.ents[1] = { kind: 'smith', done: false };
+  D.S.run.room.ents[1] = { kind: 'smith', done: false, px: 0.7, py: 0.3 };
   D.interact(1);
   frames(8);                                      // forge modal
   D.pickBoon(0);
@@ -666,10 +737,24 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   frames(40);                                     // victory overlay
   D.leaveBattle();
   frames(10);
+  // walk through a real unlocked door (exercises doorway + fog rendering)
   D.S.run.keys = 5;
-  D.S.run.depth = D.C.BOSS_DEPTH - 1; D.genRoom();
-  frames(8);                                      // single crowned boss door
-  D.useDoor(0);
+  {
+    const r = D.curRoom();
+    for (const d of ['n', 's', 'e', 'w']) {
+      const k = (r.gx + { n: 0, s: 0, e: 1, w: -1 }[d]) + ',' + (r.gy + { n: -1, s: 1, e: 0, w: 0 }[d]);
+      if (D.S.run.map.rooms[k]) { D.tryDoor(d); D.tryDoor(d); break; }
+    }
+  }
+  frames(10);                                     // next room, minimap grew
+  // teleport to the boss lair and fight
+  {
+    const bossK = Object.keys(D.S.run.map.rooms).find(k => D.S.run.map.rooms[k].boss);
+    D.S.run.map.cur = bossK;
+    D.S.run.room = D.S.run.map.rooms[bossK];
+    D.S.run.room.visited = true;
+    D.S.roomStamp++;
+  }
   frames(8);                                      // the boss lair
   D.interact(0);
   frames(12);                                     // boss battle
