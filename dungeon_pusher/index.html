@@ -243,10 +243,9 @@ function load() {
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
       }
-      if (!S.run.map) genFloor();      // pre-map saves get a fresh floor
-      else {
-        if (!S.run.map.links) S.run.map.links = {};
-        migrateLinks(S.run.map);
+      if (!S.run.map || S.run.map.v !== 2) {
+        genFloor();                    // pre-corridor saves get a fresh random floor
+      } else {
         S.run.room = S.run.map.rooms[S.run.map.cur];
         S.run.depth = (S.run.room.dist || 0) + 1;
       }
@@ -883,8 +882,10 @@ function rollSize() {
 }
 function genFloor() {
   if (!S.run) return null;
-  const target = 10 + Math.min(3, S.run.floor - 1);
-  const rooms = { '0,0': { gx: 0, gy: 0, ents: [], visited: true, dist: 0, boss: false, size: 's' } };
+  // every floor rolls its own bones: size, sprawl and loopiness all vary
+  const target = 9 + ((rng() * 4) | 0) + Math.min(3, S.run.floor - 1);
+  const loopP = 0.18 + rng() * 0.27;
+  const rooms = { '0,0': { gx: 0, gy: 0, ents: [], visited: true, dist: 0, boss: false, size: rng() < 0.5 ? 's' : 'w' } };
   const links = {};
   const keys2 = ['0,0'];
   let guard = 0;
@@ -905,7 +906,7 @@ function genFloor() {
       const nk = rkey(r.gx + DIRS[d][0], r.gy + DIRS[d][1]);
       if (!rooms[nk]) continue;
       const lk = lkey(r.gx, r.gy, rooms[nk].gx, rooms[nk].gy);
-      if (!links[lk] && rng() < 0.3) links[lk] = { open: false };
+      if (!links[lk] && rng() < loopP) links[lk] = { open: false };
     }
   }
   // distances from the start, walking the CORRIDORS
@@ -954,21 +955,6 @@ function doorTo(dir, from) {
 function linkOpen(a, b) {
   const l = S.run.map.links[lkey(a.gx, a.gy, b.gx, b.gy)];
   return !!(l && l.open);
-}
-// pre-corridor saves connected every touching pair — grandfather that in
-function migrateLinks(map) {
-  if (map.v >= 2) return;
-  for (const k of Object.keys(map.rooms)) {
-    const r = map.rooms[k];
-    for (const d of ['s', 'e']) {
-      const nk = rkey(r.gx + DIRS[d][0], r.gy + DIRS[d][1]);
-      if (!map.rooms[nk]) continue;
-      const lk = lkey(r.gx, r.gy, map.rooms[nk].gx, map.rooms[nk].gy);
-      if (!map.links[lk]) map.links[lk] = { open: false };
-    }
-    if (!r.size) r.size = 'b';
-  }
-  map.v = 2;
 }
 // never stranded: key-broke with nothing left to slay in the uncovered
 // map -> a wanderer finds YOU
