@@ -244,13 +244,13 @@ t.ok(S.battle.loot.some(l => l.k === 'silver') && S.battle.loot.some(l => l.k ==
   t.eq(order.join(','), 'gem,silver,shielditem,gold,lucky,weapon,green,skull',
        'the queue banks gold, shields, then strikes — curses last');
 }
-// full pipeline: the tray NEVER resolves itself — the button is yours
+// full pipeline: the tray NEVER resolves itself — END TURN is yours to press
 S.run.wallet = 0;
 S.run.block = 0;
 const g0 = S.run.gold;
 step(3);
 t.eq(S.battle.phase, 'drop', 'purse spent + field settled — still waiting for YOU');
-t.ok(DP.endRoundNow(), 'pressing RESOLVE starts the show');
+t.ok(DP.endRoundNow(), 'pressing END TURN starts the show');
 t.eq(S.battle.phase, 'resolve', 'and only then does the tray fire');
 t.ok(untilPhase('enemy', 8), 'the whole queue plays out');
 t.eq(S.enemy.hp, hp0 - 2 * C.DMG.gold, 'two gold coins each smacked for ' + C.DMG.gold);
@@ -273,14 +273,18 @@ t.eq(S.run.block, 0, 'leftover block melts between rounds');
 step(1.5);                            // let the round-start rain land
 t.ok(S.coins.length > 0, 'the dungeon re-salts the pile each round');
 
-// -------- endRoundNow skips the settle wait --------
+// -------- END TURN is always available — even with coins left to spend --------
 S.run.wallet = 3;
-t.ok(!DP.endRoundNow(), 'cannot resolve while the purse still has coins');
-S.run.wallet = 0;
-t.ok(DP.endRoundNow(), 'RESOLVE button fires with an empty purse');
-t.eq(S.battle.phase, 'resolve', 'straight to the resolve');
+t.ok(DP.endRoundNow(), 'END TURN fires even with coins still in the purse');
+t.eq(S.battle.phase, 'resolve', 'straight to the resolve, purse be damned');
 t.ok(untilPhase('drop', 6), 'and on into round 3');
 t.eq(S.battle.round, 3, 'round 3');
+// a fresh purse arrives regardless of what you left unspent
+t.eq(S.run.wallet, DP.roundCoins(), 'the new turn refills the purse');
+// but it does nothing outside the drop phase
+S.battle.phase = 'resolve';
+t.ok(!DP.endRoundNow(), 'END TURN is inert mid-resolve');
+S.battle.phase = 'drop';
 
 // -------- applyLoot effects (unit level) --------
 S.enemy.hp = S.enemy.maxHp = 500; S.enemy.pois = 0; S.enemy.stunned = 0;
@@ -774,7 +778,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.S.enemy.hp = D.S.enemy.maxHp = 500;
   D.S.run.wallet = 4;
   for (let i = 0; i < 4; i++) { D.S.cd = 0; D.drop(20 + i * 16); frames(24); }   // spend the purse
-  frames(60);                                     // pieces settle; RESOLVE button pulses
+  frames(60);                                     // pieces settle; END TURN button pulses
   D.endRoundNow();                                // the player presses it
   let guard = 0;
   while (D.S.battle && D.S.battle.round < 2 && guard++ < 80) frames(10);         // resolve + enemy turn -> round 2

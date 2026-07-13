@@ -16,9 +16,9 @@
 // ============================================================================
 // DUNGEON PUSHER — a coin pusher roguelike.
 //
-// The coin pusher IS the combat system, played in ROUNDS: each round you
+// The coin pusher IS the combat system, played in TURNS: each turn you
 // spend a purse of coins into the machine, the tray COLLECTS what falls,
-// and when YOU press RESOLVE it fires piece by piece — gems bank gold,
+// and when YOU press END TURN it fires piece by piece — gems bank gold,
 // silver coins shield the hero, gold coins strike, green coins poison,
 // arsenal items hit big, cursed skulls bite last. Then the enemy takes its
 // telegraphed turn. The side walls are SOLID: nothing is ever lost off the
@@ -617,12 +617,13 @@ function startResolve() {
   B.qi = 0;
   B.qt = 0.55;                          // a breath before the first piece flies
   S.tray.items.length = 0;
-  if (B.queue.length) S.banner = { txt: 'RESOLVE!', ttl: 1.0, max: 1.0 };
+  if (B.queue.length) S.banner = { txt: 'YOUR TURN!', ttl: 1.0, max: 1.0 };
   return true;
 }
-// tap RESOLVE once the purse is empty to skip the settle wait
+// END TURN: the player ends their drop phase whenever they like — spent
+// purse or coins still to spend — and the tray resolves what it caught
 function endRoundNow() {
-  if (!S.battle || S.battle.phase !== 'drop' || !S.run || S.run.wallet >= 1) return false;
+  if (!S.battle || S.battle.phase !== 'drop' || !S.run) return false;
   return startResolve();
 }
 function applyLoot(q) {
@@ -714,7 +715,7 @@ function battleTick(dt) {
   }
   if (S.victory) return;
   if (B.phase === 'drop') {
-    // the tray never resolves itself — the RESOLVE button is yours to press
+    // the tray never resolves itself — the END TURN button is yours to press
   } else if (B.phase === 'resolve') {
     B.qt -= dt;
     if (B.qt <= 0) {
@@ -2411,8 +2412,8 @@ if (!HEADLESS) (function browser() {
       hint = 'FLOOR ' + r.floor + ' • ' + found + ' / ' + rooms.length + ' rooms uncovered';
     }
     else if (!S.battle || S.battle.phase === 'drop') {
-      hint = r.wallet < 1 ? 'purse empty — press RESOLVE when you are ready'
-           : r.wallet + ' ● left this round • TAP TO DROP • HOLD FOR AUTO';
+      hint = r.wallet < 1 ? 'purse empty — END TURN when you are ready'
+           : r.wallet + ' ● left • TAP TO DROP • END TURN anytime';
     } else hint = S.battle.phase === 'resolve' ? 'the tray resolves…' : 'the foe strikes back…';
     txt(hint, LW - 34, 814, '600 10px Verdana, sans-serif', '#8f6f78', 'right');
   }
@@ -2475,13 +2476,14 @@ if (!HEADLESS) (function browser() {
     drawResolveFx(dt);
     drawBattleHero(t);
     drawFloats();
-    // purse empty: the round is YOURS to end — the button waits for you
-    if (phase === 'drop' && S.run.wallet < 1 && !S.victory) {
-      const busy = S.rain.length > 0 || S.coins.some(c => c.st === 'air' || c.st === 'fall');
-      const pulse = 1 + Math.sin(t * 6) * 0.05;
-      uiBtn(LW / 2 - 84 * pulse, 596, 168 * pulse, 40, '✦ RESOLVE ✦', () => endRoundNow(),
-            { grad: ['#ffd75e', '#c98f2a'], border: '#fff0c0', col: '#3a2406', font: '900 16px Verdana, sans-serif', r: 15 });
-      if (busy) txt('(pieces still falling…)', LW / 2, 646, '600 9px Verdana, sans-serif', '#c8a8b0');
+    // END TURN is ALWAYS there during the drop phase — end whenever you like,
+    // coins left in the purse or not. It pulses once the purse runs dry.
+    if (phase === 'drop' && !S.victory) {
+      const empty = S.run.wallet < 1;
+      const pulse = empty ? 1 + Math.sin(t * 6) * 0.05 : 1;
+      uiBtn(LW / 2 - 84 * pulse, 596, 168 * pulse, 40, 'END TURN ▶', () => endRoundNow(),
+            { grad: empty ? ['#ffd75e', '#c98f2a'] : ['#c8a05a', '#8a6a2a'],
+              border: '#fff0c0', col: '#3a2406', font: '900 16px Verdana, sans-serif', r: 15 });
     }
     drawHUD(t);
     drawVignette(0.55);
@@ -3273,10 +3275,10 @@ if (!HEADLESS) (function browser() {
     ctx.fillText('PUSHER', LW / 2, 205);
     txt('a coin pusher roguelike', LW / 2, 330, '800 14px Verdana, sans-serif', '#c8a8b0');
     const HOW = [
-      '● spend your purse of coins into the pusher each round',
-      '\u{1F3AF} the tray COLLECTS — then resolves piece by piece:',
+      '● spend your purse of coins into the pusher each turn',
+      '\u{1F3AF} the tray COLLECTS — END TURN to fire it piece by piece:',
       'gold strikes ⚔  silver shields \u{1F6E1}  green poisons ☠',
-      '\u{1F5E1} your arsenal rides the pile — press RESOLVE to fire',
+      '\u{1F5E1} your arsenal rides the pile — push it over the front',
       '\u{1F6AA} crawl the dungeon: monsters, chests, shopkeepers…',
       '\u{1F5DD} doors need KEYS — every monster slain drops one',
     ];
