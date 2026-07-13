@@ -193,19 +193,30 @@ t.eq(S.combo, 2, 'combo counter tracked the chain');
 step(C.COMBO_WIN + 0.6);
 t.eq(S.combo, 0, 'combo lapses after the window');
 
-// combo cap
-S.coins.length = 0; S.score = 0; S.combo = 0; S.lastCollect = -99;
+// combo cap + FEVER: hitting max combo ignites 6s of double points
+S.coins.length = 0; S.score = 0; S.combo = 0; S.lastCollect = -99; S.fever = 0;
 for (let i = 0; i < 8; i++) {
   const c = CP.place(12 + i * 10, C.PLAT_FRONT - 0.5, 'coin', 0, 'plat');
   c.vy = 70;
 }
 step(2.5);
-const capPts = (() => { let s = 0; for (let i = 1; i <= 8; i++) s += C.PTS.coin * Math.min(i, C.COMBO_CAP); return s; })();
-t.eq(S.score, capPts, 'combo multiplier caps at ×' + C.COMBO_CAP);
+t.ok(S.fever > 0 || S.score > 0, 'the chain ran');
+const capPts = (() => {
+  let s = 0;
+  for (let i = 1; i <= 8; i++) {
+    const mult = Math.min(i, C.COMBO_CAP);
+    s += C.PTS.coin * mult * (mult >= C.COMBO_CAP ? 2 : 1); // fever doubles from x5 on
+  }
+  return s;
+})();
+t.eq(S.score, capPts, 'combo caps at ×' + C.COMBO_CAP + ' and max combo ignites FEVER ×2');
+t.ok(S.fever > 0, 'fever is burning after a maxed combo');
+step(6.5);
+t.ok(S.fever <= 0, 'fever burns out after six seconds');
 
 // -------- payouts per kind: winnings land in the TRAY, not the wallet --------
 CP.srand(11); CP.reset();
-S.coins.length = 0; S.score = 0; S.combo = 0; S.lastCollect = -99;
+S.coins.length = 0; S.score = 0; S.combo = 0; S.lastCollect = -99; S.fever = 0;
 S.tray.coins = 0; S.tray.items.length = 0; S.tray.prizes.length = 0;
 const wFixed = S.wallet;
 const lucky = CP.place(50, C.PLAT_FRONT - 0.5, 'lucky', 0, 'plat');
