@@ -91,13 +91,13 @@ function lastTier() { return 0; }
 // per-floor dungeon skins (cycled past the last one)
 const FLOORS = [
   { name: 'THE CATACOMBS', room: '#33313f', cabA: '#8b93a8', cabB: '#5d6478', trim: '#d8dfe8',
-    floorA: '#9aa1b0', floorB: '#cdd3de', accent: '#8be7ff', door: '#5d6478' },
+    floorA: '#9aa1b0', floorB: '#cdd3de', accent: '#8be7ff', door: '#5d6478', tile: 'leisteen' },
   { name: 'THE SEWERS', room: '#25382c', cabA: '#7fae8c', cabB: '#527a5e', trim: '#d6efd6',
-    floorA: '#8fa39a', floorB: '#bcd6c4', accent: '#7ee787', door: '#527a5e' },
+    floorA: '#8fa39a', floorB: '#bcd6c4', accent: '#7ee787', door: '#527a5e', tile: 'kassei' },
   { name: 'THE CRYPT', room: '#372c44', cabA: '#a48ac8', cabB: '#71589a', trim: '#e8dcf8',
-    floorA: '#9a92ab', floorB: '#cfc4de', accent: '#c86bff', door: '#71589a' },
+    floorA: '#9a92ab', floorB: '#cfc4de', accent: '#c86bff', door: '#71589a', tile: 'marmer' },
   { name: 'THE FORGE', room: '#442a26', cabA: '#c88a6b', cabB: '#96543e', trim: '#f8dcc8',
-    floorA: '#ab9490', floorB: '#dec7bc', accent: '#ff9d3c', door: '#96543e' },
+    floorA: '#ab9490', floorB: '#dec7bc', accent: '#ff9d3c', door: '#96543e', tile: 'terracotta' },
 ];
 function theme() { return FLOORS[((S.run ? S.run.floor : 1) - 1) % FLOORS.length]; }
 
@@ -133,22 +133,33 @@ function relicById(id) { return RELICS.find(r => r.id === id); }
 function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
 
 // ----------------------------------------------------------------- enemies
+// The cast wears real sprites borrowed from No Room For Heroes (see
+// art/CREDITS.txt); ids double as art sheet keys, icons are the fallback.
 const ENEMIES = [
-  { id: 'rat',     icon: '\u{1F400}', name: 'Dire Rat',       hp: 12, atk: 2, trait: null,     gold: 8 },
-  { id: 'bat',     icon: '\u{1F987}', name: 'Cave Bat',       hp: 10, atk: 1, trait: 'fast',   gold: 9 },
-  { id: 'slime',   icon: '\u{1FAB4}', name: 'Gloop Slime',    hp: 18, atk: 2, trait: 'tough',  gold: 11 },
-  { id: 'goblin',  icon: '\u{1F47A}', name: 'Goblin Mugger',  hp: 15, atk: 3, trait: 'thief',  gold: 14 },
-  { id: 'spider',  icon: '\u{1F577}\u{FE0F}', name: 'Venom Spider', hp: 13, atk: 2, trait: 'venom', gold: 12 },
-  { id: 'skel',    icon: '\u{1F480}', name: 'Skeleton Guard', hp: 20, atk: 4, trait: null,     gold: 13 },
-  { id: 'cultist', icon: '\u{1F9D9}', name: 'Skull Cultist',  hp: 16, atk: 3, trait: 'curse',  gold: 15 },
-  { id: 'ghost',   icon: '\u{1F47B}', name: 'Restless Ghost', hp: 15, atk: 3, trait: 'regen',  gold: 14 },
-  { id: 'ogre',    icon: '\u{1F479}', name: 'Ogre Brute',     hp: 30, atk: 5, trait: 'tough',  gold: 18 },
+  { id: 'orc',      icon: '\u{1F9CC}', name: 'Orc Grunt',       hp: 12, atk: 2, trait: null,    gold: 8 },
+  { id: 'smasher',  icon: '\u{1F47A}', name: 'Goblin Smasher',  hp: 10, atk: 1, trait: 'fast',  gold: 9 },
+  { id: 'goblin',   icon: '\u{1F47A}', name: 'Goblin Mugger',   hp: 15, atk: 3, trait: 'thief', gold: 14 },
+  { id: 'slime',    icon: '\u{1F7E2}', name: 'Gel Cube',        hp: 13, atk: 2, trait: 'venom', gold: 12 },
+  { id: 'totem',    icon: '\u{1F5FF}', name: 'War Totem',       hp: 16, atk: 3, trait: 'curse', gold: 15 },
+  { id: 'skeleton', icon: '\u{1F480}', name: 'Skeleton Guard',  hp: 20, atk: 4, trait: null,    gold: 13 },
+  { id: 'revenant', icon: '\u{1F9DF}', name: 'Bone Revenant',   hp: 15, atk: 3, trait: 'regen', gold: 14 },
+  { id: 'ogre',     icon: '\u{1F479}', name: 'Ogre Brute',      hp: 30, atk: 5, trait: 'tough', gold: 18 },
 ];
 const BOSSES = [
   { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 55, atk: 5, trait: 'curse', gold: 60 },
   { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 70, atk: 6, trait: 'regen', gold: 80 },
   { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 85, atk: 7, trait: 'venom', gold: 100 },
 ];
+// ------------------------------------------------------------------ heroes
+// Four adventurers to pick from (sprites borrowed from NRFH's hero classes);
+// each brings one small edge into the dungeon.
+const HEROES = [
+  { id: 'knight', name: 'Knight', icon: '\u{1F93A}', perk: '+10 MAX HP' },
+  { id: 'rogue',  name: 'Rogue',  icon: '\u{1F977}', perk: 'STARTS WITH 5 KEYS' },
+  { id: 'wizard', name: 'Mage',   icon: '\u{1F9D9}', perk: '+2 ● EVERY ROUND' },
+  { id: 'cleric', name: 'Cleric', icon: '\u{1F64F}', perk: '2 POTIONS' },
+];
+function heroById(id) { return HEROES.find(h => h.id === id); }
 const TRAIT_TXT = {
   fast: 'strikes twice a round', tough: 'thick hide', thief: 'steals coins from your purse',
   venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field', regen: 'regenerates each round',
@@ -184,6 +195,7 @@ const S = {
   best: { floor: 0, depth: 0, kills: 0, gold: 0 },
   wheelAnim: null, uiFlash: null, toast: null,
   pPois: 0,
+  heroPick: 'knight',                  // last chosen adventurer (persisted)
   roomStamp: 0,                        // bumps on room change (avatar resets)
 };
 
@@ -206,8 +218,9 @@ let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() 
 function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
-      v: 1, mute: S.mute, best: S.best,
+      v: 1, mute: S.mute, best: S.best, heroPick: S.heroPick,
       run: S.run ? {
+        hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
         gold: S.run.gold, pouch: S.run.pouch, arsenal: S.run.arsenal,
         relics: S.run.relics, potions: S.run.potions, whet: S.run.whet,
@@ -226,8 +239,10 @@ function load() {
       S.best = { floor: d.best.floor || 0, depth: d.best.depth || 0,
                  kills: d.best.kills || 0, gold: d.best.gold || 0 };
     }
+    if (d.heroPick && heroById(d.heroPick)) S.heroPick = d.heroPick;
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
+        hero: heroById(d.run.hero) ? d.run.hero : 'knight',
         floor: d.run.floor || 1, depth: d.run.depth || 1,
         hp: d.run.hp, maxHp: d.run.maxHp || C.START_HP,
         gold: d.run.gold || 0, pouch: d.run.pouch || 0, wallet: 0,
@@ -809,14 +824,22 @@ function endRun(cause) {
 // exit doors. Unlocking a door EATS A KEY (once — then it stays open for
 // backtracking); slain monsters cough keys up. The floor is a real MAP:
 // rooms persist, and the minimap uncovers as you explore.
-function newRun() {
+function newRun(heroId) {
+  const hero = heroById(heroId) || heroById(S.heroPick) || HEROES[0];
   S.run = {
+    hero: hero.id,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
     gold: 0, pouch: 0, wallet: 0, keys: C.START_KEYS,
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
   };
+  // the chosen adventurer's edge
+  if (hero.id === 'knight') { S.run.maxHp += 10; S.run.hp += 10; }
+  else if (hero.id === 'rogue') S.run.keys = 5;
+  else if (hero.id === 'wizard') S.run.pouch = 1;
+  else if (hero.id === 'cleric') S.run.potions = 2;
+  S.heroPick = hero.id;
   S.enemy = null; S.victory = null; S.room = null; S.over = null;
   S.meter = 0; S.pPois = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
@@ -1434,6 +1457,7 @@ function tick(dt) {
 // ------------------------------------------------------------- public API
 window.DP = {
   S, C, MACH, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL, ENT_INFO, FLOORS,
+  HEROES, heroById,
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
   newRun, genFloor, genEnts, interact, tryDoor, curRoom, doorTo, nextFloor,
@@ -1454,6 +1478,95 @@ load();
 // ============================================================================
 if (!HEADLESS) (function browser() {
   srand((Date.now() % 2147483647) || 1); // fresh luck each session; tests keep the fixed seed
+
+  // ------------------------------------------------- borrowed pixel art
+  // Sprites from No Room For Heroes, floors from Frietkot Tycoon (see
+  // art/CREDITS.txt). All optional: emoji and flat fills stand by whenever
+  // a file is missing — art must never break the game.
+  function loadImg(src) {
+    const im = new Image();
+    im._ok = false;
+    im.onload = () => { im._ok = true; };
+    im.onerror = () => {};
+    im.src = src;
+    return im;
+  }
+  const ART_IMG = {};
+  function art(key, src) {
+    if (!ART_IMG[key]) ART_IMG[key] = loadImg(src);
+    return ART_IMG[key];
+  }
+  // sheet metadata: 4-row LPC sheets face up/left/down/right; 1-row strips
+  // face wherever they were drawn. ay = feet line in source px; body = the
+  // character's real height in source px (LPC frames are mostly padding).
+  // rh/bh = desired BODY heights in the room / the battle panel.
+  const SHEETS = {
+    // the four adventurers (LPC bodies are ~40px regardless of frame size)
+    knight_idle: { src: 'art/knight_idle.png', fw: 64, fh: 64, n: 2, fps: 4, ay: 62, body: 40, rows: 4, rh: 42, bh: 50 },
+    knight_walk: { src: 'art/knight_walk.png', fw: 64, fh: 64, n: 8, fps: 11, ay: 62, body: 40, rows: 4, rh: 42 },
+    rogue_idle:  { src: 'art/rogue_idle.png',  fw: 64, fh: 64, n: 2, fps: 4, ay: 62, body: 40, rows: 4, rh: 42, bh: 50 },
+    rogue_walk:  { src: 'art/rogue_walk.png',  fw: 64, fh: 64, n: 8, fps: 11, ay: 62, body: 40, rows: 4, rh: 42 },
+    wizard_idle: { src: 'art/wizard_idle.png', fw: 192, fh: 192, n: 2, fps: 4, ay: 126, body: 42, rows: 4, rh: 42, bh: 50 },
+    wizard_walk: { src: 'art/wizard_walk.png', fw: 192, fh: 192, n: 8, fps: 11, ay: 126, body: 42, rows: 4, rh: 42 },
+    cleric_idle: { src: 'art/cleric_universal.png', fw: 64, fh: 64, n: 1, fps: 1, ay: 62, body: 40, rows: 4, row0: 8, rh: 42, bh: 50 },
+    cleric_walk: { src: 'art/cleric_universal.png', fw: 64, fh: 64, n: 9, fps: 11, ay: 62, body: 40, rows: 4, row0: 8, rh: 42 },
+    // the bestiary (ids match ENEMIES)
+    orc:      { src: 'art/orc_idle.png',      fw: 192, fh: 192, n: 2, fps: 3, ay: 125, body: 36, rows: 1, rh: 46, bh: 58 },
+    smasher:  { src: 'art/smasher_idle.png',  fw: 64, fh: 64, n: 2, fps: 4, ay: 61, body: 40, rows: 4, rh: 42, bh: 56 },
+    goblin:   { src: 'art/goblin_idle.png',   fw: 64, fh: 64, n: 2, fps: 4, ay: 61, body: 40, rows: 4, rh: 42, bh: 56 },
+    slime:    { src: 'art/slime_idle.png',    fw: 178, fh: 191, n: 4, fps: 5, ay: 188, body: 175, rows: 1, rh: 52, bh: 62 },
+    totem:    { src: 'art/totem_idle.png',    fw: 64, fh: 64, n: 2, fps: 4, ay: 61, body: 40, rows: 4, rh: 44, bh: 58 },
+    skeleton: { src: 'art/skeleton_idle.png', fw: 64, fh: 64, n: 2, fps: 4, ay: 61, body: 40, rows: 4, rh: 42, bh: 56 },
+    revenant: { src: 'art/revenant_idle.png', fw: 64, fh: 64, n: 2, fps: 4, ay: 61, body: 40, rows: 4, rh: 42, bh: 56 },
+    ogre:     { src: 'art/ogre_idle.png',     fw: 192, fh: 192, n: 2, fps: 4, ay: 126, body: 46, rows: 4, rh: 52, bh: 66 },
+    // the floor bosses (tight-cropped strips: body fills the frame)
+    dragon: { src: 'art/dragon_idle.png', fw: 149, fh: 105, n: 6, fps: 7, ay: 104, body: 100, rows: 1, rh: 68, bh: 76 },
+    lich:   { src: 'art/lich_idle.png',   fw: 280, fh: 210, n: 5, fps: 5, ay: 205, body: 200, rows: 1, rh: 80, bh: 82 },
+    demon:  { src: 'art/demon_idle.png',  fw: 196, fh: 120, n: 4, fps: 6, ay: 118, body: 114, rows: 1, rh: 70, bh: 76 },
+    // the shopkeeper mans his stall here too
+    keeper: { src: 'art/keeper.png', fw: 30, fh: 55, n: 1, fps: 1, ay: 55, body: 55, rows: 1, rh: 50 },
+  };
+  const DIR_ROW = { u: 0, l: 1, d: 2, r: 3 };
+  function drawArt(key, x, footY, targetH, dir, animT) {
+    const sh = SHEETS[key];
+    if (!sh) return false;
+    const im = art(key, sh.src);
+    if (!im._ok) return false;
+    const frame = Math.floor((animT || 0) * (sh.fps || 1)) % (sh.n || 1);
+    const row = sh.rows === 4 ? (sh.row0 || 0) + (DIR_ROW[dir] === undefined ? 2 : DIR_ROW[dir]) : 0;
+    const sc = targetH / (sh.body || sh.fh);
+    ctx.save();
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(im, frame * sh.fw, row * sh.fh, sh.fw, sh.fh,
+      Math.round(x - sh.fw * sc / 2), Math.round(footY - sh.ay * sc),
+      Math.round(sh.fw * sc), Math.round(sh.fh * sc));
+    ctx.restore();
+    return true;
+  }
+  // which sheet a battle foe / room monster wears
+  function foeArtKey(idOrEnt) {
+    if (!idOrEnt) return null;
+    if (typeof idOrEnt === 'string') return SHEETS[idOrEnt] ? idOrEnt : null;
+    const e = idOrEnt;
+    if (e.mtype === 'boss' || e.boss) return BOSSES[(S.run.floor - 1) % BOSSES.length].id;
+    return SHEETS[e.eid || e.id] ? (e.eid || e.id) : null;
+  }
+  // Frietkot floor tiles as seamless patterns (halved so the grain reads)
+  const FLOOR_PATS = {};
+  function floorPattern(tile) {
+    if (!tile) return null;
+    const im = art('floor_' + tile, 'art/floor_' + tile + '.png');
+    if (!im._ok) return null;
+    if (!FLOOR_PATS[tile]) {
+      const cv = document.createElement('canvas');
+      cv.width = cv.height = 80;
+      const g = cv.getContext('2d');
+      g.imageSmoothingEnabled = true;
+      g.drawImage(im, 0, 0, 80, 80);
+      FLOOR_PATS[tile] = ctx.createPattern(cv, 'repeat');
+    }
+    return FLOOR_PATS[tile];
+  }
 
   // pre-rendered sprite cache (coins render once to an offscreen canvas)
   const SPR = {};
@@ -1805,7 +1918,16 @@ if (!HEADLESS) (function browser() {
       if (e.hitT > 0) ctx.rotate(Math.sin(t * 60) * 0.08);
       if (dead) { ctx.globalAlpha = Math.max(0, 1 - S.victory.t * 1.2); ctx.rotate(0.6); }
       if (e.stunned > 0) ctx.globalAlpha *= 0.75;
-      txt(e.icon, 0, 0, sz + 'px serif', '#fff');
+      const artKey = foeArtKey(e);
+      if (!(artKey && drawArt(artKey, 0, 36, SHEETS[artKey].bh || 76, 'd', t))) {
+        txt(e.icon, 0, 0, sz + 'px serif', '#fff');
+      }
+      // a red sting flashes over the sprite as your loot lands
+      if (e.hitT > 0 && artKey) {
+        ctx.globalAlpha = e.hitT * 1.2;
+        ctx.beginPath(); ctx.arc(0, 0, sz * 0.7, 0, 7);
+        ctx.fillStyle = 'rgba(255,90,80,0.4)'; ctx.fill();
+      }
       ctx.restore();
       if (e.stunned > 0 && !dead) txt('❄ frozen ×' + e.stunned, LW / 2 + 74, 36, '800 12px Verdana, sans-serif', '#8be7ff');
       if (e.pois > 0 && !dead) txt('☠ ' + e.pois, LW / 2 - 74, 36, '800 14px Verdana, sans-serif', '#b8f26b');
@@ -2609,7 +2731,11 @@ if (!HEADLESS) (function browser() {
     ctx.save();
     ctx.translate(hx, hy - 6 + Math.sin(t * 2.4) * 2);
     if (hurt) ctx.rotate(Math.sin(t * 50) * 0.09);
-    txt('\u{1F93A}', 0, 0, '38px serif', '#fff');
+    const hero = S.run.hero || 'knight';
+    const hk = hero + '_idle';
+    if (!(SHEETS[hk] && drawArt(hk, 0, 22, SHEETS[hk].bh || 50, 'r', t))) {
+      txt((heroById(hero) || HEROES[0]).icon, 0, 0, '38px serif', '#fff');
+    }
     ctx.restore();
     // the shield ring: your block, made visible
     if (S.run.block > 0) {
@@ -2667,7 +2793,8 @@ if (!HEADLESS) (function browser() {
     return { x: FR.x0, y: cy };
   }
   // the hero puppet + inputs
-  const AV = { x: LW / 2, y: 0, stamp: -1, step: 0, moving: false, fx: 0, fy: -1 };
+  let heroSel = heroById(S.heroPick) ? S.heroPick : 'knight';
+  const AV = { x: LW / 2, y: 0, stamp: -1, step: 0, moving: false, fx: 0, fy: -1, dir: 'u', animT: 0 };
   const JOY = { active: false, ox: 0, oy: 0, dx: 0, dy: 0, id: null };
   const KEYS = {};
   window.addEventListener('keydown', (ev) => { KEYS[ev.key.toLowerCase()] = true; });
@@ -2708,7 +2835,9 @@ if (!HEADLESS) (function browser() {
     if (!AV.moving) return;
     if (mag > 1) { vx /= mag; vy /= mag; }
     AV.fx = vx; AV.fy = vy;
+    AV.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? 'r' : 'l') : (vy > 0 ? 'd' : 'u');
     AV.step += dt * 13;
+    AV.animT += dt;
     const SPD = 195;
     let nx = AV.x + vx * SPD * dt;
     let ny = AV.y + vy * SPD * dt;
@@ -2793,19 +2922,25 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(FR.x1, FR.y0, ROOM.sideW, FR.y1 - FR.y0);
     ctx.fillStyle = lgr('bw:' + fkey(), 0, ROOM.y + ROOM.h, 0, FR.y1, [[0, '#171019'], [1, T.door]]);
     ctx.fillRect(ROOM.x, FR.y1, ROOM.w, ROOM.botH);
-    // tiled floor
+    // tiled floor: real Frietkot stone when it loads, painted checker till then
     const fy = FR.y0;
     const fh = FR.y1 - FR.y0;
     ctx.save();
     ctx.beginPath(); ctx.rect(FR.x0, fy, FR.x1 - FR.x0, fh); ctx.clip();
-    ctx.fillStyle = T.floorB;
-    ctx.fillRect(FR.x0, fy, FR.x1 - FR.x0, fh);
-    const TS = 46;
-    for (let r = 0; r < Math.ceil(fh / TS); r++) {
-      for (let cix = 0; cix < Math.ceil((FR.x1 - FR.x0) / TS); cix++) {
-        if ((r + cix) % 2 === 0) continue;
-        ctx.fillStyle = 'rgba(20,12,22,0.14)';
-        ctx.fillRect(FR.x0 + cix * TS, fy + r * TS, TS, TS);
+    const pat = floorPattern(T.tile);
+    if (pat) {
+      ctx.fillStyle = pat;
+      ctx.fillRect(FR.x0, fy, FR.x1 - FR.x0, fh);
+    } else {
+      ctx.fillStyle = T.floorB;
+      ctx.fillRect(FR.x0, fy, FR.x1 - FR.x0, fh);
+      const TS = 46;
+      for (let r = 0; r < Math.ceil(fh / TS); r++) {
+        for (let cix = 0; cix < Math.ceil((FR.x1 - FR.x0) / TS); cix++) {
+          if ((r + cix) % 2 === 0) continue;
+          ctx.fillStyle = 'rgba(20,12,22,0.14)';
+          ctx.fillRect(FR.x0 + cix * TS, fy + r * TS, TS, TS);
+        }
       }
     }
     // a dungeon floor is never that clean — sink the whole thing into gloom
@@ -2933,7 +3068,26 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = '#ffd75e'; ctx.fill();
       ctx.globalAlpha = 1;
     }
-    txt(icon, p.x, p.y - 14 + bob, size + 'px serif', '#fff');
+    // real sprites where we have them, emoji everywhere else
+    let drewArt = false;
+    if (e.kind === 'monster') {
+      const key = foeArtKey(e);
+      if (key) {
+        const sh = SHEETS[key];
+        drewArt = drawArt(key, p.x, p.y + 4 + bob * 0.4, sh.rh, 'd', t);
+        if (drewArt && e.mtype === 'elite') {
+          // elites run hot: a faint red heat over the sprite
+          ctx.save();
+          ctx.globalAlpha = 0.22 + 0.1 * Math.sin(t * 5);
+          ctx.beginPath(); ctx.arc(p.x, p.y - sh.rh * 0.4, sh.rh * 0.42, 0, 7);
+          ctx.fillStyle = '#ff9d3c'; ctx.fill();
+          ctx.restore();
+        }
+      }
+    } else if (e.kind === 'shop') {
+      drewArt = drawArt('keeper', p.x, p.y + 4 + bob * 0.4, SHEETS.keeper.rh, 'd', t);
+    }
+    if (!drewArt) txt(icon, p.x, p.y - 14 + bob, size + 'px serif', '#fff');
     if (e.mtype === 'elite') txt('\u{1F525}', p.x + 20, p.y - 30 + bob, '14px serif', '#fff');
     txt(label, p.x, p.y + 18, '800 9px Verdana, sans-serif', col, 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
     // whisper when the hero is close
@@ -2953,11 +3107,18 @@ if (!HEADLESS) (function browser() {
       S.parts.push({ x: AV.x - AV.fx * 10, y: AV.y + 4, vx: -AV.fx * 24 + (Math.random() - 0.5) * 12,
                      vy: -6, g: -20, life: 0, max: 0.4, col: '#8a7a90', sz: 1.8, spin: 1, shape: 'sq' });
     }
-    ctx.save();
-    ctx.translate(AV.x, AV.y - 14 - hop);
-    if (AV.moving) ctx.rotate(AV.fx * 0.08);
-    txt('\u{1F93A}', 0, 0, '34px serif', '#fff');
-    ctx.restore();
+    // the chosen adventurer, striding in their true colours
+    const hero = S.run.hero || 'knight';
+    const key = hero + (AV.moving ? '_walk' : '_idle');
+    const sh = SHEETS[key];
+    const drewArt = sh && drawArt(key, AV.x, AV.y + 6, sh.rh, AV.dir || 'd', AV.moving ? AV.animT : t);
+    if (!drewArt) {
+      ctx.save();
+      ctx.translate(AV.x, AV.y - 14 - hop);
+      if (AV.moving) ctx.rotate(AV.fx * 0.08);
+      txt((heroById(hero) || HEROES[0]).icon, 0, 0, '34px serif', '#fff');
+      ctx.restore();
+    }
     if (S.run.keys > 0) txt('\u{1F5DD}', AV.x + 16, AV.y - 32 - hop, '11px serif', '#fff');
   }
 
@@ -3275,32 +3436,47 @@ if (!HEADLESS) (function browser() {
     ctx.fillText('PUSHER', LW / 2, 205);
     txt('a coin pusher roguelike', LW / 2, 330, '800 14px Verdana, sans-serif', '#c8a8b0');
     const HOW = [
-      '● spend your purse of coins into the pusher each turn',
-      '\u{1F3AF} the tray COLLECTS — END TURN to fire it piece by piece:',
-      'gold strikes ⚔  silver shields \u{1F6E1}  green poisons ☠',
-      '\u{1F5E1} your arsenal rides the pile — push it over the front',
+      '● spend your purse each turn — the tray COLLECTS',
+      'END TURN fires it: gold strikes ⚔ silver shields \u{1F6E1} green poisons ☠',
       '\u{1F6AA} crawl the dungeon: monsters, chests, shopkeepers…',
       '\u{1F5DD} doors need KEYS — every monster slain drops one',
     ];
-    HOW.forEach((h, i) => txt(h, LW / 2, 376 + i * 24, '600 11px Verdana, sans-serif', '#9a8aa0'));
+    HOW.forEach((h, i) => txt(h, LW / 2, 372 + i * 22, '600 11px Verdana, sans-serif', '#9a8aa0'));
     drawMotes(1 / 60, 1);
     drawVignette(0.4);
+    // choose your adventurer
+    txt('— CHOOSE YOUR HERO —', LW / 2, 472, '900 12px Georgia, serif', '#ffd75e');
+    HEROES.forEach((h, i) => {
+      const x = 22 + i * 112, y = 484, w = 104, hh = 118;
+      const sel = heroSel === h.id;
+      uiBtn(x, y, w, hh, '', () => { heroSel = h.id; S.heroPick = h.id; save(); },
+            { bg: sel ? 'rgba(66,44,72,0.95)' : 'rgba(26,17,28,0.9)',
+              border: sel ? '#ffd75e' : '#4a3a50', r: 12 });
+      const key = h.id + '_idle';
+      if (!(SHEETS[key] && drawArt(key, x + w / 2, y + 72, 46, 'd', t))) {
+        txt(h.icon, x + w / 2, y + 48, '34px serif', '#fff');
+      }
+      txt(h.name, x + w / 2, y + 88, '900 11px Verdana, sans-serif', sel ? '#ffd75e' : '#c8b0cc');
+      txt(h.perk, x + w / 2, y + 104, '700 7px Verdana, sans-serif', sel ? '#ffe9a3' : '#8f7f92');
+      if (sel) {
+        txt('▼', x + w / 2, y - 8 + Math.sin(t * 4) * 2, '900 12px Verdana, sans-serif', '#ffd75e');
+      }
+    });
     if (S.run) {
-      uiBtn(LW / 2 - 130, 520, 260, 52, '▶ CONTINUE — FLOOR ' + S.run.floor,
+      uiBtn(LW / 2 - 130, 620, 260, 48, '▶ CONTINUE — FLOOR ' + S.run.floor,
             () => { S.screen = 'dungeon'; save(); },
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 16 });
-      uiBtn(LW / 2 - 130, 584, 260, 44, 'NEW RUN (abandons the old)', () => newRun(),
+      uiBtn(LW / 2 - 130, 676, 260, 40, 'NEW RUN (abandons the old)', () => newRun(heroSel),
             { bg: 'rgba(90,40,20,0.9)', border: '#ff9d3c', col: '#ffd9b0', font: '800 12px Verdana, sans-serif', r: 14 });
     } else {
       const pulse = 1 + Math.sin(t * 4) * 0.03;
-      uiBtn(LW / 2 - 130 * pulse, 540 - 26 * pulse + 26, 260 * pulse, 52 * pulse, '▶ ENTER THE DUNGEON', () => newRun(),
+      uiBtn(LW / 2 - 130 * pulse, 628, 260 * pulse, 52 * pulse, '▶ ENTER THE DUNGEON', () => newRun(heroSel),
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif', r: 16 });
     }
     if (S.best.floor > 0) {
       txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + '  •  ' + S.best.kills + ' kills  •  ' + fmt(S.best.gold) + ' gold looted',
-          LW / 2, 668, '700 11px Verdana, sans-serif', '#8f6f78');
+          LW / 2, 736, '700 11px Verdana, sans-serif', '#8f6f78');
     }
-    txt('every fight is a coin pusher. push your arsenal over the edge.', LW / 2, 700, '600 10px Verdana, sans-serif', '#6a5a68');
     uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
   }
 
@@ -3330,7 +3506,7 @@ if (!HEADLESS) (function browser() {
       txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + ' • ' + S.best.kills + ' kills',
           LW / 2, 480, '700 11px Verdana, sans-serif', '#8f6f78');
     }
-    uiBtn(LW / 2 - 120, 530, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(),
+    uiBtn(LW / 2 - 120, 530, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(heroSel),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 17px Verdana, sans-serif', r: 16 });
     uiBtn(LW / 2 - 80, 596, 160, 38, 'TITLE', () => { S.screen = 'title'; },
           { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 13px Verdana, sans-serif', r: 12 });
