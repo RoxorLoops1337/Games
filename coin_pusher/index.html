@@ -99,9 +99,9 @@ const MACHINES = {
     ],
     special: null,
     prizeIds: ['paw', 'boba', 'dino'],
-    theme: { room: '#2a1520', cabA: '#8c1f2e', cabB: '#4a0f1a', trim: '#f2cd5e',
-             titleA: '#fff0b8', titleB: '#b07a14', sub: '#e8b6be',
-             floorA: '#585f6a', floorB: '#99a1ad', accent: '#ffd75e' },
+    theme: { room: '#4a3244', cabA: '#f4a7b9', cabB: '#d987a0', trim: '#fff1d6',
+             titleA: '#fffdf5', titleB: '#e8a24a', sub: '#7a3b52',
+             floorA: '#9aa1b0', floorB: '#cdd3de', accent: '#ffcf6b' },
   },
   penny: {
     name: 'PENNY FALLS', sub: 'SEASIDE 2p CASCADE', unlock: 1500,
@@ -120,9 +120,9 @@ const MACHINES = {
     ],
     special: null,
     prizeIds: ['star', 'rainbow', 'cat'],
-    theme: { room: '#12303a', cabA: '#1d6d7a', cabB: '#0d3742', trim: '#f5e3b8',
-             titleA: '#fdf6dd', titleB: '#c8862c', sub: '#a8d8de',
-             floorA: '#5c6660', floorB: '#98a394', accent: '#ffb64a' },
+    theme: { room: '#2e4a45', cabA: '#9fd8c9', cabB: '#75bcab', trim: '#fff6e0',
+             titleA: '#ffffff', titleB: '#3f8f7c', sub: '#2f6b5e',
+             floorA: '#8fa39a', floorB: '#c5d6cd', accent: '#ffb64a' },
   },
   neon: {
     name: 'NEON MEDAL', sub: 'TOKYO ARCADE', unlock: 6000,
@@ -145,9 +145,9 @@ const MACHINES = {
       [63, 15, 10], [56, 20, 10], [49, 15, 10], [42, 20, 10],
       [35, 15, 10], [28, 20, 10], [21, 15, 10],
     ],
-    theme: { room: '#170b2e', cabA: '#3b1a70', cabB: '#1b0b3a', trim: '#63e7ff',
-             titleA: '#d9fbff', titleB: '#1f9ecf', sub: '#c9a7ff',
-             floorA: '#3f4358', floorB: '#767c99', accent: '#63e7ff' },
+    theme: { room: '#3a3057', cabA: '#b9a5e8', cabB: '#8f78ce', trim: '#e8f4ff',
+             titleA: '#ffffff', titleB: '#6b4fc1', sub: '#4a3a80',
+             floorA: '#8b8fa8', floorB: '#c6c9de', accent: '#8be7ff' },
   },
   bandit: {
     name: 'HIGH ROLLER', sub: 'VEGAS QUARTER BANDIT', unlock: 20000,
@@ -161,9 +161,9 @@ const MACHINES = {
     ],
     special: 'bill', billVal: 1500,
     prizeIds: ['watch_black', 'arcade', 'panda'],
-    theme: { room: '#26060a', cabA: '#191114', cabB: '#080506', trim: '#e8b64a',
-             titleA: '#ffe9b0', titleB: '#a8681a', sub: '#d98a8a',
-             floorA: '#403a44', floorB: '#79707e', accent: '#ff4b4b' },
+    theme: { room: '#4a2f3a', cabA: '#f2c7d4', cabB: '#d9a0b8', trim: '#ffe9b0',
+             titleA: '#fffdf5', titleB: '#c2778f', sub: '#8f4f66',
+             floorA: '#a39aa5', floorB: '#d8ced8', accent: '#ff9db0' },
   },
 };
 const MACH_IDS = ['gold', 'penny', 'neon', 'bandit'];
@@ -217,7 +217,7 @@ const S = {
   shake: 0, aimX: 50, mute: false,
   dropped: 0, collected: 0, lost: 0, jackpots: 0,
   coinsSpent: 0, coinsBack: 0,   // house-edge bookkeeping
-  banner: null, trayPile: 0, denyT: 0,
+  banner: null, trayPile: 0, denyT: 0, fever: 0,
   tray: { coins: 0, prizes: [], items: [] },  // your winnings pile up here
   prizeDebt: 0,            // won prizes owed back to the pile
   screen: 'lobby', mach: 'gold',
@@ -423,9 +423,9 @@ function scoreCoin(c) {
     return;
   }
   if (c.kind === 'tag') {
-    addPts(c.val);
+    addPts(S.fever > 0 ? c.val * 2 : c.val);
     trayAdd('tag', { col: c.col, x: c.x });
-    S.floats.push({ txt: 'TAG +' + c.val, wx: c.x, wy: 96, age: 0, max: 1.3, col: c.col || '#43d17c', big: true });
+    S.floats.push({ txt: 'TAG +' + (S.fever > 0 ? c.val * 2 : c.val), wx: c.x, wy: 96, age: 0, max: 1.3, col: c.col || '#43d17c', big: true });
     S.shake += 4;
     SND.tag();
     burst(c.x, 96, C.TRAY_Z, 'tag');
@@ -433,7 +433,7 @@ function scoreCoin(c) {
     return;
   }
   if (c.kind === 'bill') {
-    addPts(M().billVal || 1000);
+    addPts((M().billVal || 1000) * (S.fever > 0 ? 2 : 1));
     trayAdd('bill', { x: c.x });
     S.floats.push({ txt: 'CASH +' + (M().billVal || 1000), wx: c.x, wy: 96, age: 0, max: 1.4, col: '#7ee787', big: true });
     S.shake += 6;
@@ -445,7 +445,13 @@ function scoreCoin(c) {
   S.combo = (now - S.lastCollect <= C.COMBO_WIN) ? S.combo + 1 : 1;
   S.lastCollect = now;
   const mult = Math.min(S.combo, C.COMBO_CAP);
-  const pts = c.kind === 'gem' ? M().gemVal : c.kind === 'lucky' ? M().luckyVal * mult : M().coin.val * mult;
+  if (mult >= C.COMBO_CAP && S.fever <= 0) {
+    S.fever = 6;
+    S.banner = { txt: 'FEVER ×2!', ttl: 1.6, max: 1.6 };
+    SND.jackpot();
+  }
+  let pts = c.kind === 'gem' ? M().gemVal : c.kind === 'lucky' ? M().luckyVal * mult : M().coin.val * mult;
+  if (S.fever > 0) pts *= 2;
   addPts(pts);
   S.tray.coins += C.PAY[c.kind];
   trayAdd(c.kind, { x: c.x });
@@ -797,6 +803,7 @@ function landCoin(c, lay) {
   c.y = Math.max(c.y, pf + c.r);
   c.vx += (rng() - 0.5) * 7;
   c.vy += (rng() - 0.5) * 5;
+  c.popT = 0.18;
   SND.clink();
 }
 
@@ -806,6 +813,7 @@ function step(dt, quiet) {
   if (S.denyT > 0) S.denyT -= dt;
   S.phase += dt * 2 * Math.PI / M().pushPeriod;
   S.shake = Math.max(0, S.shake - dt * 12);
+  if (S.fever > 0) S.fever -= dt;
   const Mv = M();
   const lt = lastTier();
 
@@ -956,6 +964,7 @@ function step(dt, quiet) {
         c.y = pf + c.r;
         if (pv > 0) c.vy = Math.max(c.vy, pv);
       }
+      if (c.popT > 0) c.popT -= dt;
       const fr = Math.exp(-(c.kind === 'ball' ? 1.0 : C.FRICTION) * dt);
       c.vx *= fr; c.vy *= fr;
       const st = c.kind === 'ball' ? 0.15 : C.SETTLE;
@@ -1031,15 +1040,21 @@ function step(dt, quiet) {
     }
   }
 
-  // coin vs coin — positional correction + impulse; same tier & layer only
+  // coin vs coin — positional correction + impulse; same tier & layer only.
+  // Sweep-and-prune: sorted by x, the inner loop breaks as soon as the gap
+  // exceeds the biggest possible pair radius — O(n·k) instead of O(n²).
   const cs = S.coins;
+  const plats = [];
+  for (const c of cs) if (c.st === 'plat') plats.push(c);
+  plats.sort((a, b) => a.x - b.x);
+  const REACH = C.PRIZE_R * 2 + 0.5;
   for (let iter = 0; iter < 3; iter++) {
-    for (let i = 0; i < cs.length; i++) {
-      const a = cs[i];
-      if (a.st !== 'plat') continue;
-      for (let j = i + 1; j < cs.length; j++) {
-        const b = cs[j];
-        if (b.st !== 'plat' || a.lay !== b.lay || a.tier !== b.tier || a.onPush !== b.onPush) continue;
+    for (let i = 0; i < plats.length; i++) {
+      const a = plats[i];
+      for (let j = i + 1; j < plats.length; j++) {
+        const b = plats[j];
+        if (b.x - a.x > REACH) break;
+        if (a.lay !== b.lay || a.tier !== b.tier || a.onPush !== b.onPush) continue;
         let dx = b.x - a.x, dy = b.y - a.y;
         const rr = a.r + b.r;
         const d2 = dx * dx + dy * dy;
@@ -1118,6 +1133,76 @@ if (!HEADLESS) (function browser() {
     im.onerror = () => {};
     im.src = 'prizes/' + pz.id + '.png';
   }
+  // pre-rendered sprite cache: coins were costing a fresh radial gradient
+  // and ~8 path ops EACH, EVERY frame — now they render once to an
+  // offscreen canvas and blit with drawImage
+  const SPR = {};
+  function sprite(key, w, h, build) {
+    let cv = SPR[key];
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.width = w; cv.height = h;
+      build(cv.getContext('2d'), w, h);
+      SPR[key] = cv;
+    }
+    return cv;
+  }
+  function buildCoinFace(g, cx, cy, rx, ry, pal, sym) {
+    const fg = g.createRadialGradient(cx - rx * 0.35, cy - ry * 0.5, rx * 0.1, cx, cy, rx * 1.25);
+    fg.addColorStop(0, pal.f0); fg.addColorStop(0.45, pal.f1); fg.addColorStop(1, pal.f2);
+    g.beginPath(); g.ellipse(cx, cy, rx, ry, 0, 0, 7);
+    g.fillStyle = fg; g.fill();
+    g.lineWidth = rx / 44;
+    g.strokeStyle = pal.ring; g.stroke();
+    g.beginPath(); g.ellipse(cx, cy, rx * 0.68, ry * 0.68, 0, 0, 7);
+    g.strokeStyle = pal.ring; g.stroke();
+    g.beginPath(); g.ellipse(cx, cy + rx / 30, rx * 0.68, ry * 0.68, 0, 0, 7);
+    g.strokeStyle = 'rgba(255,250,235,0.5)'; g.stroke();
+    g.font = '900 ' + Math.max(6, ry * 1.05) + 'px Georgia, serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillStyle = pal.sym;
+    g.fillText(sym, cx, cy + ry * 0.04);
+  }
+  const LUCKY_PAL = { edge: '#8a5f10', f0: '#fff8cf', f1: '#ffdf6b', f2: '#c78f18',
+                      ring: 'rgba(122,84,14,0.55)', sym: 'rgba(150,96,10,0.9)' };
+  function flatSprite(styleKey, pal, sym) {
+    return sprite('cf_' + styleKey + '_' + sym, 96, 66, (g) => {
+      const cx = 48, cy = 24, rx = 44, ry = 20, eh = 9;
+      g.beginPath(); g.ellipse(cx, cy + eh, rx, ry, 0, 0, 7);
+      g.fillStyle = pal.edge; g.fill();
+      g.fillRect(cx - rx, cy, rx * 2, eh);
+      g.fillStyle = 'rgba(60,38,6,0.5)';
+      for (let i = -3; i <= 3; i++) g.fillRect(cx + i * rx / 3.6 - 1, cy + eh * 0.2, 2, eh * 0.9);
+      buildCoinFace(g, cx, cy, rx, ry, pal, sym);
+    });
+  }
+  function faceSprite(styleKey, pal, sym) {
+    return sprite('cq_' + styleKey + '_' + sym, 96, 96, (g) => {
+      buildCoinFace(g, 48, 48, 44, 44, pal, sym);
+    });
+  }
+  // gradient cache: the big static background fills were being re-created
+  // every frame; keys include the machine so themes stay distinct
+  const GRAD = {};
+  function lgr(key, x0, y0, x1, y1, stops) {
+    let g = GRAD[key];
+    if (!g) {
+      g = ctx.createLinearGradient(x0, y0, x1, y1);
+      for (const s of stops) g.addColorStop(s[0], s[1]);
+      GRAD[key] = g;
+    }
+    return g;
+  }
+  function rgr(key, x0, y0, r0, x1, y1, r1, stops) {
+    let g = GRAD[key];
+    if (!g) {
+      g = ctx.createRadialGradient(x0, y0, r0, x1, y1, r1);
+      for (const s of stops) g.addColorStop(s[0], s[1]);
+      GRAD[key] = g;
+    }
+    return g;
+  }
+
   function drawPIcon(pid, x, y, h, emojiFont) {
     const im = PRIZE_IMG[pid];
     if (im) {
@@ -1286,18 +1371,20 @@ if (!HEADLESS) (function browser() {
   document.addEventListener('visibilitychange', save);
 
   // -------------------------------------------------------------- particles
+  const PASTELS = ['#ffb3c8', '#ffe08a', '#b8f2d0', '#cdb8ff', '#a8e8ff', '#ffd6a8'];
   function burstScreen(sx, sy, kind) {
     const n = kind === 'gem' || kind === 'tag' || kind === 'bill' ? 24 : 14;
-    const col = kind === 'gem' ? '#8ef0ff' : kind === 'bill' ? '#7ee787' : null;
     for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2, sp = 40 + Math.random() * 160;
       S.parts.push({
         x: sx, y: sy, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 90,
         g: 300, life: 0, max: 0.5 + Math.random() * 0.5,
-        col: col || (Math.random() < 0.5 ? '#ffd75e' : '#fff3b0'),
-        sz: 1.5 + Math.random() * 2.5, spin: Math.random() * 6,
+        col: kind === 'gem' ? '#8ef0ff' : PASTELS[(Math.random() * PASTELS.length) | 0],
+        sz: 2 + Math.random() * 3, spin: Math.random() * 6,
+        shape: Math.random() < 0.35 ? 'heart' : Math.random() < 0.5 ? 'star' : 'sq',
       });
     }
+    if (S.parts.length > 130) S.parts.splice(0, S.parts.length - 130);
   }
   window.__cpBurst = function (wx, wy, wz, kind) {
     const p = w2s(wx, wy, wz);
@@ -1359,11 +1446,8 @@ if (!HEADLESS) (function browser() {
   // --------------------------------------------------------- machine screen
   function drawBackground() {
     const T = M().theme;
-    const g = ctx.createRadialGradient(LW / 2, 300, 60, LW / 2, 420, 620);
-    g.addColorStop(0, T.room);
-    g.addColorStop(0.6, '#160a12');
-    g.addColorStop(1, '#0b0609');
-    ctx.fillStyle = g;
+    ctx.fillStyle = rgr('bg:' + S.mach, LW / 2, 300, 60, LW / 2, 420, 620,
+      [[0, T.room], [0.6, '#241a26'], [1, '#171019']]);
     ctx.fillRect(-40, -40, LW + 80, LH + 80);
   }
 
@@ -1371,40 +1455,48 @@ if (!HEADLESS) (function browser() {
     const T = M().theme;
     ctx.save();
     rr(28, 18, LW - 56, 116, 46);
-    const g = ctx.createLinearGradient(0, 18, 0, 134);
-    g.addColorStop(0, T.cabB);
-    g.addColorStop(0.5, T.cabA);
-    g.addColorStop(1, T.cabB);
-    ctx.fillStyle = g; ctx.fill();
+    ctx.fillStyle = lgr('mq:' + S.mach, 0, 18, 0, 134,
+      [[0, T.cabB], [0.5, T.cabA], [1, T.cabB]]);
+    ctx.fill();
     ctx.lineWidth = 5;
-    const gg = ctx.createLinearGradient(0, 14, 0, 138);
-    gg.addColorStop(0, T.trim); gg.addColorStop(0.5, '#a87b1e'); gg.addColorStop(1, T.trim);
-    ctx.strokeStyle = gg; ctx.stroke();
-    const jam = S.banner ? 12 : 5;
+    ctx.strokeStyle = lgr('mqt:' + S.mach, 0, 14, 0, 138,
+      [[0, T.trim], [0.5, '#c9a05e'], [1, T.trim]]);
+    ctx.stroke();
+    const frenzy = S.banner || S.fever > 0;
+    const jam = frenzy ? 12 : 5;
     const N = 22;
+    const BULBS = ['#ffd1dc', '#c9f2d8', '#fff3b8', '#d6e5ff', '#f2d6ff'];
     for (let i = 0; i < N; i++) {
       const u = i / (N - 1);
       const bx = 52 + u * (LW - 104);
       const by = 32 + Math.sin(u * Math.PI) * -6;
-      const on = S.banner ? ((i + Math.floor(t * jam)) % 2 === 0)
-                          : ((i + Math.floor(t * jam)) % 3 === 0);
+      const on = frenzy ? ((i + Math.floor(t * jam)) % 2 === 0)
+                        : ((i + Math.floor(t * jam)) % 3 === 0);
       ctx.beginPath(); ctx.arc(bx, by, 4.2, 0, 7);
-      ctx.fillStyle = on ? '#ffe9a3' : '#5c3a20';
+      ctx.fillStyle = on ? BULBS[i % BULBS.length] : 'rgba(70,50,64,0.9)';
       ctx.fill();
       if (on) {
         ctx.beginPath(); ctx.arc(bx, by, 8, 0, 7);
-        ctx.fillStyle = 'rgba(255,220,130,0.22)'; ctx.fill();
+        ctx.fillStyle = 'rgba(255,225,240,0.25)'; ctx.fill();
       }
     }
-    const tg = ctx.createLinearGradient(0, 52, 0, 96);
-    tg.addColorStop(0, T.titleA); tg.addColorStop(0.5, T.accent); tg.addColorStop(1, T.titleB);
-    ctx.font = '900 40px Georgia, serif';
+    ctx.font = '900 36px "Comic Sans MS", "Chalkboard SE", "Comic Neue", cursive';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 6; ctx.strokeStyle = '#20080a';
-    ctx.strokeText(M().name, LW / 2, 74);
-    ctx.fillStyle = tg;
-    ctx.fillText(M().name, LW / 2, 74);
-    txt('✦  ' + M().sub + '  ✦', LW / 2, 107, '700 12px Georgia, serif', T.sub);
+    ctx.lineWidth = 7; ctx.strokeStyle = '#4a2440';
+    ctx.strokeText(M().name, LW / 2, 72);
+    ctx.fillStyle = lgr('mqtt:' + S.mach, 0, 52, 0, 96,
+      [[0, T.titleA], [0.5, T.accent], [1, T.titleB]]);
+    ctx.fillText(M().name, LW / 2, 72);
+    txt('✦  ' + M().sub + '  ✦', LW / 2, 106, '700 12px "Comic Sans MS", "Chalkboard SE", cursive', T.sub);
+    // the machine's plush mascot rides the marquee and cheers on wins
+    const plushId = M().prizeIds[M().prizeIds.length - 1];
+    const cheer = S.banner || S.fever > 0;
+    const mBob = cheer ? -Math.abs(Math.sin(t * 10)) * 9 : Math.sin(t * 2) * 3;
+    ctx.save();
+    ctx.translate(76, 92 + mBob);
+    ctx.rotate(cheer ? Math.sin(t * 12) * 0.14 : Math.sin(t * 1.3) * 0.05);
+    drawPIcon(plushId, 0, 0, 52, '38px serif');
+    ctx.restore();
     ctx.restore();
     // corner buttons: home, reset, mute
     uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'lobby'; save(); }, { r: 10, font: '20px serif' });
@@ -1518,17 +1610,19 @@ if (!HEADLESS) (function browser() {
       bg2.addColorStop(0, 'rgba(10,8,26,0.85)');
       bg2.addColorStop(1, 'rgba(16,12,38,0.35)');
       ctx.fillStyle = bg2; ctx.fill();
+      const pin = sprite('pin', 14, 14, (g) => {
+        g.beginPath(); g.arc(8, 8.5, 4, 0, 7);
+        g.fillStyle = 'rgba(0,0,0,0.45)'; g.fill();
+        const g2 = g.createRadialGradient(5.6, 5.6, 0.4, 7, 7, 4.6);
+        g2.addColorStop(0, '#ffffff'); g2.addColorStop(0.45, '#aeb9c8'); g2.addColorStop(1, '#3e4550');
+        g.beginPath(); g.arc(7, 7, 4.1, 0, 7);
+        g.fillStyle = g2; g.fill();
+        g.beginPath(); g.arc(5.7, 5.7, 1, 0, 7);
+        g.fillStyle = 'rgba(255,255,255,0.95)'; g.fill();
+      });
       for (const pg of Mv.pegs) {
         const pp = w2s(pg.x, slotY, pg.z);
-        // pin shadow + chrome head with a specular dot
-        ctx.beginPath(); ctx.arc(pp.x + 1, pp.y + 1.5, 4, 0, 7);
-        ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fill();
-        const g2 = ctx.createRadialGradient(pp.x - 1.4, pp.y - 1.4, 0.4, pp.x, pp.y, 4.6);
-        g2.addColorStop(0, '#ffffff'); g2.addColorStop(0.45, '#aeb9c8'); g2.addColorStop(1, '#3e4550');
-        ctx.beginPath(); ctx.arc(pp.x, pp.y, 4.1, 0, 7);
-        ctx.fillStyle = g2; ctx.fill();
-        ctx.beginPath(); ctx.arc(pp.x - 1.3, pp.y - 1.3, 1, 0, 7);
-        ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.fill();
+        ctx.drawImage(pin, pp.x - 7, pp.y - 7);
       }
       // impact flashes where a coin just struck a pin
       for (const fx of S.pegFx) {
@@ -1547,10 +1641,16 @@ if (!HEADLESS) (function browser() {
     const p00 = w2s(0, y0, z), p10 = w2s(100, y0, z);
     const p01 = w2s(0, y1, z), p11 = w2s(100, y1, z);
     poly([p00, p10, p11, p01]);
-    const g = ctx.createLinearGradient(0, p00.y, 0, p01.y);
-    g.addColorStop(0, T.floorA);
-    g.addColorStop(1, T.floorB);
-    ctx.fillStyle = g; ctx.fill();
+    if (scratches) {
+      // the payout tier is static per machine — cache its gradient
+      ctx.fillStyle = lgr('fl:' + S.mach + ':' + (p00.y | 0) + ':' + (p01.y | 0),
+        0, p00.y, 0, p01.y, [[0, T.floorA], [1, T.floorB]]);
+    } else {
+      const g = ctx.createLinearGradient(0, p00.y, 0, p01.y);
+      g.addColorStop(0, T.floorA); g.addColorStop(1, T.floorB);
+      ctx.fillStyle = g;
+    }
+    ctx.fill();
     if (scratches) {
       ctx.save();
       ctx.clip();
@@ -1716,53 +1816,49 @@ if (!HEADLESS) (function browser() {
     if (c.kind === 'prize' || c.kind === 'chest') { drawPrize(c, p, rx, t); ctx.restore(); return; }
     if (c.kind === 'chip') { drawChip(c, p, rx, ry, t, face); ctx.restore(); return; }
     const lucky = c.kind === 'lucky';
-    const pal = lucky ? COIN_PAL.gold : (COIN_PAL[Mv.coin.style] || COIN_PAL.gold);
-    const edgeH = Math.max(1.5, C.COIN_H * u * 0.5) * (0.5 + 0.5 * tumble) * (1 - face);
-    ctx.beginPath();
-    ctx.ellipse(p.x, p.y + edgeH, rx, ry, 0, 0, 7);
-    ctx.fillStyle = pal.edge;
-    ctx.fill();
-    ctx.fillRect(p.x - rx, p.y, rx * 2, edgeH);
-    ctx.fillStyle = 'rgba(60,38,6,0.5)';
-    for (let i = -3; i <= 3; i++) {
-      ctx.fillRect(p.x + i * rx / 3.6 - 0.5, p.y + edgeH * 0.2, 1, edgeH * 0.9);
-    }
-    const fg = ctx.createRadialGradient(p.x - rx * 0.35, p.y - ry * 0.5, rx * 0.1, p.x, p.y, rx * 1.25);
-    if (lucky) {
-      fg.addColorStop(0, '#fff8cf'); fg.addColorStop(0.45, '#ffdf6b'); fg.addColorStop(1, '#c78f18');
-    } else {
-      fg.addColorStop(0, pal.f0); fg.addColorStop(0.45, pal.f1); fg.addColorStop(1, pal.f2);
-    }
-    ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7);
-    ctx.fillStyle = fg; ctx.fill();
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = pal.ring;
-    ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(p.x, p.y, rx * 0.68, ry * 0.68, 0, 0, 7);
-    ctx.strokeStyle = pal.ring; ctx.stroke();
-    ctx.beginPath(); ctx.ellipse(p.x, p.y + 0.7, rx * 0.68, ry * 0.68, 0, 0, 7);
-    ctx.strokeStyle = 'rgba(255,250,235,0.5)'; ctx.stroke();
-    if (ry > 3) {
-      // face-on coins visibly spin as they ricochet
+    const styleKey = lucky ? 'lucky' : Mv.coin.style;
+    const pal = lucky ? LUCKY_PAL : (COIN_PAL[Mv.coin.style] || COIN_PAL.gold);
+    const sym = lucky ? '★' : Mv.coin.sym;
+    // fresh landings pop with a little squash-and-stretch
+    const pop = c.popT > 0 ? 1 + 0.22 * (c.popT / 0.18) : 1;
+    const drx = rx * pop, dry = ry * pop;
+    if (face > 0.02) {
+      const fs = faceSprite(styleKey, pal, sym);
       ctx.save();
-      ctx.translate(p.x, p.y + 0.5);
-      ctx.rotate(face * c.rot);
-      txt(lucky ? '★' : Mv.coin.sym, 0, 0,
-          '900 ' + Math.max(6, ry * 1.05) + 'px Georgia, serif', pal.sym);
+      ctx.translate(p.x, p.y);
+      ctx.rotate(c.rot * 0.6);
+      ctx.globalAlpha *= Math.min(1, face + 0.15);
+      ctx.drawImage(fs, -drx, -drx, drx * 2, drx * 2);
       ctx.restore();
     }
+    if (face < 0.98) {
+      const spr = flatSprite(styleKey, pal, sym);
+      // ry carries tumble/teeter/lip; scale sprite height to match
+      const hs = dry / (drx * 0.4583);
+      const w = drx * (96 / 44), h = (66 / 96) * w * hs;
+      ctx.save();
+      ctx.globalAlpha *= (1 - face);
+      ctx.drawImage(spr, p.x - w / 2, p.y - (24 / 66) * h, w, h);
+      ctx.restore();
+    }
+    // live glint: a cheap stroke, no gradients
     const gph = (t * 0.5 + c.glint) % (Math.PI * 2);
     ctx.beginPath();
-    ctx.ellipse(p.x, p.y, rx * 0.9, ry * 0.9, 0, gph, gph + 0.9);
+    ctx.ellipse(p.x, p.y, drx * 0.9, (face > 0.5 ? drx : dry) * 0.9, 0, gph, gph + 0.9);
     ctx.strokeStyle = 'rgba(255,252,230,0.85)'; ctx.lineWidth = 1.6;
     ctx.stroke();
     if (lucky && (t * 0.9 + c.glint) % 2.3 < 0.12) {
       ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.4;
-      const sx2 = p.x + rx * 0.4, sy2 = p.y - ry * 0.4;
+      const sx2 = p.x + drx * 0.4, sy2 = p.y - dry * 0.4;
       ctx.beginPath();
       ctx.moveTo(sx2 - 5, sy2); ctx.lineTo(sx2 + 5, sy2);
       ctx.moveTo(sx2, sy2 - 5); ctx.lineTo(sx2, sy2 + 5);
       ctx.stroke();
+    }
+    // sparkle trail while dancing down the peg board
+    if (face > 0.9 && Math.random() < 0.25 && S.parts.length < 120) {
+      S.parts.push({ x: p.x, y: p.y, vx: (Math.random() - 0.5) * 20, vy: 10,
+                     g: 40, life: 0, max: 0.4, col: '#ffe4f2', sz: 1.6, spin: 2, shape: 'star' });
     }
     ctx.restore();
   }
@@ -1883,9 +1979,9 @@ if (!HEADLESS) (function browser() {
     ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y);
     ctx.lineTo(r.x + 4, 648); ctx.lineTo(l.x - 4, 648);
     ctx.closePath();
-    const g = ctx.createLinearGradient(0, l.y, 0, 648);
-    g.addColorStop(0, '#4b515c'); g.addColorStop(0.15, '#2c3138'); g.addColorStop(1, '#15171c');
-    ctx.fillStyle = g; ctx.fill();
+    ctx.fillStyle = lgr('ff:' + S.mach + ':' + (l.y | 0), 0, l.y, 0, 648,
+      [[0, '#5c5766'], [0.15, '#3a3542'], [1, '#221d28']]);
+    ctx.fill();
     ctx.strokeStyle = 'rgba(235,240,250,0.5)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y); ctx.stroke();
     ctx.save();
@@ -1902,11 +1998,10 @@ if (!HEADLESS) (function browser() {
     }
     ctx.restore();
     rr(58, 648, LW - 116, 52, 14);
-    const tg = ctx.createLinearGradient(0, 648, 0, 700);
-    tg.addColorStop(0, '#050507'); tg.addColorStop(1, '#1d1410');
-    ctx.fillStyle = tg; ctx.fill();
+    ctx.fillStyle = lgr('tray', 0, 648, 0, 700, [[0, '#120a12'], [1, '#2a1c24']]);
+    ctx.fill();
     ctx.lineWidth = 3;
-    ctx.strokeStyle = '#6e4c1c'; ctx.stroke();
+    ctx.strokeStyle = '#c99ab0'; ctx.stroke();
     if (S.combo > 0 && S.time - S.lastCollect < C.COMBO_WIN) {
       ctx.save();
       ctx.globalAlpha = 0.28 * (1 - (S.time - S.lastCollect) / C.COMBO_WIN);
@@ -1953,8 +2048,9 @@ if (!HEADLESS) (function browser() {
       const nP = S.tray.prizes.length;
       const label = 'COLLECT  ' + (S.tray.coins > 0 ? S.tray.coins + ' ●' : '') +
                     (nP ? (S.tray.coins > 0 ? '  +' : '') + nP + ' \u{1F381}' : '');
-      uiBtn(LW / 2 - 90, 652, 180, 26, label, () => collectTray(),
-            { grad: ['#3f9d5a', '#1d5c31'], border: '#7ee787', col: '#eaffef',
+      const pulseW = 180 + Math.sin(S.time * 6) * 8;
+      uiBtn(LW / 2 - pulseW / 2, 652, pulseW, 26, label, () => collectTray(),
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24',
               font: '900 13px Verdana, sans-serif', r: 13 });
     }
   }
@@ -2060,7 +2156,22 @@ if (!HEADLESS) (function browser() {
       ctx.save();
       ctx.translate(p.x, p.y);
       ctx.rotate(p.spin * p.life * 4);
-      ctx.fillRect(-p.sz / 2, -p.sz / 2, p.sz, p.sz);
+      const s = p.sz;
+      if (p.shape === 'heart') {
+        ctx.beginPath();
+        ctx.moveTo(0, s * 0.7);
+        ctx.bezierCurveTo(-s * 1.3, -s * 0.3, -s * 0.5, -s * 1.1, 0, -s * 0.3);
+        ctx.bezierCurveTo(s * 0.5, -s * 1.1, s * 1.3, -s * 0.3, 0, s * 0.7);
+        ctx.fill();
+      } else if (p.shape === 'star') {
+        ctx.beginPath();
+        ctx.moveTo(0, -s); ctx.lineTo(s * 0.3, -s * 0.3); ctx.lineTo(s, 0); ctx.lineTo(s * 0.3, s * 0.3);
+        ctx.lineTo(0, s); ctx.lineTo(-s * 0.3, s * 0.3); ctx.lineTo(-s, 0); ctx.lineTo(-s * 0.3, -s * 0.3);
+        ctx.closePath();
+        ctx.fill();
+      } else {
+        ctx.fillRect(-s / 2, -s / 2, s, s);
+      }
       ctx.restore();
     }
     ctx.restore();
@@ -2090,9 +2201,9 @@ if (!HEADLESS) (function browser() {
     ctx.globalAlpha = b.ttl < 0.5 ? b.ttl * 2 : 1;
     ctx.translate(LW / 2, 400);
     ctx.scale(pop, pop);
-    ctx.font = '900 54px Georgia, serif';
+    ctx.font = '900 50px "Comic Sans MS", "Chalkboard SE", cursive';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 10; ctx.strokeStyle = '#4a0f1a';
+    ctx.lineWidth = 10; ctx.strokeStyle = '#4a2440';
     ctx.strokeText(b.txt, 0, 0);
     const g = ctx.createLinearGradient(0, -30, 0, 30);
     g.addColorStop(0, '#fff6c8'); g.addColorStop(0.5, '#ffd24a'); g.addColorStop(1, '#ff8a2a');
@@ -2186,10 +2297,9 @@ if (!HEADLESS) (function browser() {
     dispScore += (S.score - dispScore) * Math.min(1, dt * 8);
     if (Math.abs(dispScore - S.score) < 1) dispScore = S.score;
     rr(14, 714, LW - 28, 112, 16);
-    const g = ctx.createLinearGradient(0, 714, 0, 826);
-    g.addColorStop(0, '#241018'); g.addColorStop(1, '#150a10');
-    ctx.fillStyle = g; ctx.fill();
-    ctx.lineWidth = 2.5; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    ctx.fillStyle = lgr('hud', 0, 714, 0, 826, [[0, '#3a2a3e'], [1, '#241a28']]);
+    ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#e8b6ce'; ctx.stroke();
     txt('POINTS', 34, 734, '700 11px Verdana, sans-serif', '#a8828e', 'left');
     txt(fmt(dispScore), 34, 762, '900 34px Verdana, sans-serif', '#ffd75e', 'left');
     txt('BEST', LW - 34, 734, '700 11px Verdana, sans-serif', '#a8828e', 'right');
@@ -2270,6 +2380,21 @@ if (!HEADLESS) (function browser() {
     drawFloats();
     drawBanner(t);
     drawSlot(t);
+    // FEVER: a soft rainbow frame pulses around the whole machine
+    if (S.fever > 0) {
+      const hue = (t * 160) % 360;
+      const a2 = Math.min(1, S.fever / 1.2) * (0.5 + 0.25 * Math.sin(t * 8));
+      ctx.save();
+      ctx.globalAlpha = a2;
+      ctx.lineWidth = 7;
+      ctx.strokeStyle = 'hsl(' + hue + ',85%,72%)';
+      rr(8, 8, LW - 16, LH - 16, 22);
+      ctx.stroke();
+      txt('FEVER ×2  ' + Math.ceil(S.fever) + 's', LW / 2, 176,
+          '900 15px "Comic Sans MS", "Chalkboard SE", cursive', 'hsl(' + hue + ',90%,80%)',
+          'center', { w: 4, col: '#4a2440' });
+      ctx.restore();
+    }
     drawHUD(t, dt);
   }
 
@@ -2317,20 +2442,17 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawLobby(t) {
-    const g = ctx.createRadialGradient(LW / 2, 260, 80, LW / 2, 420, 640);
-    g.addColorStop(0, '#2a1520'); g.addColorStop(1, '#0b0609');
-    ctx.fillStyle = g;
+    ctx.fillStyle = rgr('lobbybg', LW / 2, 260, 80, LW / 2, 420, 640,
+      [[0, '#4a3248'], [1, '#1f1622']]);
     ctx.fillRect(0, 0, LW, LH);
     // header
-    const tg = ctx.createLinearGradient(0, 36, 0, 76);
-    tg.addColorStop(0, '#fff0b8'); tg.addColorStop(1, '#b07a14');
-    ctx.font = '900 36px Georgia, serif';
+    ctx.font = '900 31px "Comic Sans MS", "Chalkboard SE", cursive';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 6; ctx.strokeStyle = '#3a1006';
+    ctx.lineWidth = 6; ctx.strokeStyle = '#4a2440';
     ctx.strokeText('GOLD RUSH ARCADE', LW / 2, 52);
-    ctx.fillStyle = tg;
+    ctx.fillStyle = lgr('lobbytt', 0, 36, 0, 76, [[0, '#fff4d6'], [1, '#f2a0b8']]);
     ctx.fillText('GOLD RUSH ARCADE', LW / 2, 52);
-    txt('pick a machine • win points • collect prizes', LW / 2, 84, '700 13px Georgia, serif', '#e8b6be');
+    txt('pick a machine • win points • collect prizes', LW / 2, 84, '700 12px "Comic Sans MS", "Chalkboard SE", cursive', '#e8b6ce');
     // balances: points / coins / money
     rr(16, 104, LW - 32, 40, 12);
     ctx.fillStyle = 'rgba(20,10,14,0.8)'; ctx.fill();
@@ -2367,6 +2489,14 @@ if (!HEADLESS) (function browser() {
               { bg: afford ? 'rgba(90,60,10,0.9)' : 'rgba(30,20,25,0.9)',
                 border: afford ? '#ffd75e' : '#5a4048',
                 col: afford ? '#ffe9a3' : '#8f6f78', font: '800 13px Verdana, sans-serif' });
+        // "so close!" — progress toward the unlock
+        const frac = Math.max(0, Math.min(1, S.score / m.unlock));
+        rr(x + 16, y + ch - 5, cw - 32, 4, 2);
+        ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fill();
+        if (frac > 0.02) {
+          rr(x + 16, y + ch - 5, (cw - 32) * frac, 4, 2);
+          ctx.fillStyle = afford ? '#b8f2d0' : '#f2a0b8'; ctx.fill();
+        }
       }
     });
     // bottom buttons
