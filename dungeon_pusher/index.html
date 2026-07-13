@@ -52,22 +52,30 @@ const C = {
   FRICTION: 3.0, SETTLE: 0.5, REST: 0.05,
   LIP_G: 34,
   MAX_LAY: 2,
-  PITY_T: 5,                            // broke bailout: +1 coin per 5s in battle
-  DROP_CD: 0.28, COMBO_WIN: 1.4, COMBO_CAP: 5,
+  DROP_CD: 0.28,
   METER_MAX: 18,                        // inserts to trigger a FRENZY rain
   SAVE_KEY: 'dungeon_pusher_save',
-  START_HP: 60, START_COINS: 20, START_POTIONS: 1, START_KEYS: 3,
+  START_HP: 60, START_POTIONS: 1, START_KEYS: 3,
   POTION_HEAL: 20,
   BOSS_DEPTH: 8,
   KEY_KILL: 1, KEY_ELITE: 2, KEY_BOSS: 3,   // keys paid per slain foe
   P_CHEST_KEY: 0.2,
-  P_LUCKY: 0.10,
-  DMG: { coin: 2, lucky: 4 },
-  REFUND: { coin: 1, lucky: 2 },
-  SKULL_DMG: 4,                         // + floor scaling on top
-  POIS_TICK: 2.0,                       // seconds between poison ticks
+  // combat is played in ROUNDS: a purse of coins to drop, then the tray
+  // resolves piece by piece, then the enemy takes its turn
+  ROUND_COINS: 10, POUCH_COINS: 2,      // base purse; each pouch adds +2
+  ROUND_RAIN: 5,                        // fresh pieces rained onto the pile each round
+  SETTLE_WAIT: 1.0,                     // quiet seconds before auto-resolve
+  P_LUCKY: 0.08,                        // insert roll
+  MIX: { silver: 0.20, green: 0.10, lucky: 0.05 },   // pile composition
+  DMG: { gold: 1, lucky: 3 },           // per coin at resolve
+  SKULL_DMG: 4,                         // + floor scaling on top; bypasses block
   ITEM_CAP: 12,                         // max arsenal items seeded per battle
 };
+// the order the tray resolves in: bank the loot, raise the guard, mend,
+// then unleash — curses always land last
+const RESOLVE_ORDER = ['gem', 'bag', 'silver', 'shielditem', 'heartitem',
+                       'gold', 'lucky', 'weapon', 'green', 'vial', 'frost', 'skull'];
+const RESOLVE_DELAY = { gem: 0.26, bag: 0.26, silver: 0.16, gold: 0.14, lucky: 0.22, green: 0.18 };
 
 // ------------------------------------------------------------ the machine
 // One battle cabinet, restyled per floor. Same geometry as the classic
@@ -106,44 +114,44 @@ const ITEMS = [
   { id: 'vial',   icon: '\u{1F9EA}',          name: 'Venom Vial',  kind: 'poison', pois: 4, cost: 40 },
   { id: 'shield', icon: '\u{1F6E1}\u{FE0F}', name: 'Shield',      kind: 'shield', block: 6, cost: 34 },
   { id: 'heart',  icon: '❤\u{FE0F}',     name: 'Heart',       kind: 'heal',   heal: 9, cost: 38 },
-  { id: 'frost',  icon: '❄\u{FE0F}',     name: 'Frost Rune',  kind: 'stun',   stun: 3, cost: 55 },
+  { id: 'frost',  icon: '❄\u{FE0F}',     name: 'Frost Rune',  kind: 'stun',   stun: 1, cost: 55 },
 ];
 function itemById(id) { return ITEMS.find(i => i.id === id); }
 
 // ------------------------------------------------------------------ relics
 const RELICS = [
   { id: 'whet',    icon: '\u{1FA9A}', name: 'Whetstone',   desc: 'weapons deal +30% damage' },
-  { id: 'venom',   icon: '\u{1F40D}', name: 'Venom Gland', desc: 'poison applies +2 stacks' },
+  { id: 'venom',   icon: '\u{1F40D}', name: 'Venom Gland', desc: 'venom vials apply +2 stacks' },
   { id: 'magnet',  icon: '\u{1F9F2}', name: 'Magnet',      desc: 'gutter falls bounce back half the time' },
   { id: 'clover',  icon: '\u{1F340}', name: 'Clover',      desc: 'lucky coins twice as often' },
   { id: 'wind',    icon: '\u{1F4A8}', name: 'Second Wind', desc: 'survive a killing blow at 1 HP (once per fight)' },
   { id: 'piggy',   icon: '\u{1F437}', name: 'Piggy Bank',  desc: '+4 gold after every victory' },
   { id: 'lantern', icon: '\u{1F3EE}', name: 'Lantern',     desc: 'all dungeon doors are revealed' },
-  { id: 'plate',   icon: '\u{1F6E1}\u{FE0F}', name: 'Battle Plate', desc: 'start every fight with +4 block' },
+  { id: 'plate',   icon: '\u{1F6E1}\u{FE0F}', name: 'Battle Plate', desc: 'start every round with +4 block' },
 ];
 function relicById(id) { return RELICS.find(r => r.id === id); }
 function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
 
 // ----------------------------------------------------------------- enemies
 const ENEMIES = [
-  { id: 'rat',     icon: '\u{1F400}', name: 'Dire Rat',       hp: 18, atk: 3, period: 6.5, trait: null,     gold: 8 },
-  { id: 'bat',     icon: '\u{1F987}', name: 'Cave Bat',       hp: 16, atk: 2, period: 4.2, trait: 'fast',   gold: 9 },
-  { id: 'slime',   icon: '\u{1FAB4}', name: 'Gloop Slime',    hp: 28, atk: 3, period: 7.0, trait: 'tough',  gold: 11 },
-  { id: 'goblin',  icon: '\u{1F47A}', name: 'Goblin Mugger',  hp: 24, atk: 4, period: 6.0, trait: 'thief',  gold: 14 },
-  { id: 'spider',  icon: '\u{1F577}\u{FE0F}', name: 'Venom Spider', hp: 22, atk: 3, period: 6.0, trait: 'venom', gold: 12 },
-  { id: 'skel',    icon: '\u{1F480}', name: 'Skeleton Guard', hp: 32, atk: 5, period: 6.5, trait: null,     gold: 13 },
-  { id: 'cultist', icon: '\u{1F9D9}', name: 'Skull Cultist',  hp: 26, atk: 4, period: 6.5, trait: 'curse',  gold: 15 },
-  { id: 'ghost',   icon: '\u{1F47B}', name: 'Restless Ghost', hp: 24, atk: 4, period: 5.5, trait: 'regen',  gold: 14 },
-  { id: 'ogre',    icon: '\u{1F479}', name: 'Ogre Brute',     hp: 46, atk: 7, period: 8.0, trait: 'tough',  gold: 18 },
+  { id: 'rat',     icon: '\u{1F400}', name: 'Dire Rat',       hp: 12, atk: 2, trait: null,     gold: 8 },
+  { id: 'bat',     icon: '\u{1F987}', name: 'Cave Bat',       hp: 10, atk: 1, trait: 'fast',   gold: 9 },
+  { id: 'slime',   icon: '\u{1FAB4}', name: 'Gloop Slime',    hp: 18, atk: 2, trait: 'tough',  gold: 11 },
+  { id: 'goblin',  icon: '\u{1F47A}', name: 'Goblin Mugger',  hp: 15, atk: 3, trait: 'thief',  gold: 14 },
+  { id: 'spider',  icon: '\u{1F577}\u{FE0F}', name: 'Venom Spider', hp: 13, atk: 2, trait: 'venom', gold: 12 },
+  { id: 'skel',    icon: '\u{1F480}', name: 'Skeleton Guard', hp: 20, atk: 4, trait: null,     gold: 13 },
+  { id: 'cultist', icon: '\u{1F9D9}', name: 'Skull Cultist',  hp: 16, atk: 3, trait: 'curse',  gold: 15 },
+  { id: 'ghost',   icon: '\u{1F47B}', name: 'Restless Ghost', hp: 15, atk: 3, trait: 'regen',  gold: 14 },
+  { id: 'ogre',    icon: '\u{1F479}', name: 'Ogre Brute',     hp: 30, atk: 5, trait: 'tough',  gold: 18 },
 ];
 const BOSSES = [
-  { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 95,  atk: 8,  period: 7.0, trait: 'curse', gold: 60 },
-  { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 115, atk: 9,  period: 6.5, trait: 'regen', gold: 80 },
-  { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 135, atk: 10, period: 6.0, trait: 'venom', gold: 100 },
+  { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 55, atk: 5, trait: 'curse', gold: 60 },
+  { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 70, atk: 6, trait: 'regen', gold: 80 },
+  { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 85, atk: 7, trait: 'venom', gold: 100 },
 ];
 const TRAIT_TXT = {
-  fast: 'strikes quickly', tough: 'thick hide', thief: 'steals coins on hit',
-  venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field', regen: 'regenerates',
+  fast: 'strikes twice a round', tough: 'thick hide', thief: 'steals coins from your purse',
+  venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field', regen: 'regenerates each round',
 };
 
 // room inhabitants for the top-down crawl
@@ -159,21 +167,22 @@ const ENT_INFO = {
 // ------------------------------------------------------------------- state
 const S = {
   coins: [], floats: [], parts: [], rain: [],
-  combo: 0, lastCollect: -99, meter: 0,
-  time: 0, phase: 0, cd: 0, regen: 0,
+  meter: 0,
+  time: 0, phase: 0, cd: 0,
   shake: 0, aimX: 50, mute: false,
   dropped: 0, collected: 0, lost: 0,
-  banner: null, trayPile: 0, denyT: 0, fever: 0, hurtT: 0,
+  banner: null, trayPile: 0, denyT: 0, hurtT: 0,
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   enemy: null,                         // live foe during battle
-  victory: null,                       // battle-won overlay {t, gold}
+  battle: null,                        // round machine {round, phase, loot, queue, ...}
+  victory: null,                       // battle-won overlay {t, gold, keys}
   room: null,                          // open non-battle room {type, ...}
   over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
   best: { floor: 0, depth: 0, kills: 0, gold: 0 },
   wheelAnim: null, uiFlash: null, toast: null,
-  pPois: 0, pPoisT: 0, ePoisT: 0,
+  pPois: 0,
   roomStamp: 0,                        // bumps on room change (avatar resets)
 };
 
@@ -199,10 +208,10 @@ function save() {
       v: 1, mute: S.mute, best: S.best,
       run: S.run ? {
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
-        gold: S.run.gold, wallet: S.run.wallet, arsenal: S.run.arsenal,
+        gold: S.run.gold, pouch: S.run.pouch, arsenal: S.run.arsenal,
         relics: S.run.relics, potions: S.run.potions, whet: S.run.whet,
         kills: S.run.kills, goldEarned: S.run.goldEarned, room: S.run.room,
-        keys: S.run.keys, block: S.run.block, meter: S.meter,
+        keys: S.run.keys, meter: S.meter,
       } : null,
     }));
   } catch (e) {}
@@ -220,14 +229,14 @@ function load() {
       S.run = {
         floor: d.run.floor || 1, depth: d.run.depth || 1,
         hp: d.run.hp, maxHp: d.run.maxHp || C.START_HP,
-        gold: d.run.gold || 0, wallet: (typeof d.run.wallet === 'number') ? d.run.wallet : C.START_COINS,
+        gold: d.run.gold || 0, pouch: d.run.pouch || 0, wallet: 0,
         arsenal: (d.run.arsenal && typeof d.run.arsenal === 'object') ? d.run.arsenal : {},
         relics: Array.isArray(d.run.relics) ? d.run.relics.filter(relicById) : [],
         potions: d.run.potions || 0, whet: d.run.whet || 0,
         kills: d.run.kills || 0, goldEarned: d.run.goldEarned || 0,
         room: (d.run.room && Array.isArray(d.run.room.ents)) ? d.run.room : null,
         keys: (typeof d.run.keys === 'number') ? d.run.keys : C.START_KEYS,
-        block: d.run.block || 0, windUsed: false, battleEnt: null,
+        block: 0, windUsed: false, battleEnt: null,
       };
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
@@ -291,77 +300,74 @@ function pusherVel(ti) {
 function tierFront(ti) { return MACH.tiers[ti].front; }
 
 // ---------------------------------------------------------- combat effects
+// floats can pin to a world x (the machine) or to a named screen anchor
+// ('enemy' | 'hero' | 'gold') — the browser maps anchors to screen spots
 function floatAt(txt2, wx, col, big) {
   S.floats.push({ txt: txt2, wx: wx === undefined ? 50 : wx, wy: 96, age: 0, max: 1.3, col: col || '#ffd24a', big: !!big });
+}
+function floatAnchor(txt2, anchor, col, big) {
+  S.floats.push({ txt: txt2, anchor, age: 0, max: 1.2, col: col || '#ffd24a', big: !!big });
 }
 function weaponDmg(base) {
   let d = base + (S.run ? S.run.whet : 0);
   if (hasRelic('whet')) d = Math.round(d * 1.3);
-  if (S.fever > 0) d *= 2;
   return d;
 }
-function dmgEnemy(n, wx, col) {
+function dmgEnemy(n, src) {
   if (!S.run || !S.enemy || S.enemy.hp <= 0) return 0;
   n = Math.max(1, Math.round(n));
   S.enemy.hp -= n;
   S.enemy.hitT = 0.3;
-  floatAt('-' + n, wx, col || '#ff8a6b', n >= 10);
+  floatAnchor('-' + n, 'enemy', src === 'pois' ? '#b8f26b' : '#ff8a6b', n >= 8);
   if (S.enemy.hp <= 0) winBattle();
   return n;
 }
-function poisonEnemy(stacks, wx) {
+function poisonEnemy(stacks) {
   if (!S.run || !S.enemy || S.enemy.hp <= 0) return 0;
-  if (hasRelic('venom')) stacks += 2;
   S.enemy.pois += stacks;
-  floatAt('POISON +' + stacks, wx, '#b8f26b', true);
+  floatAnchor('☠ +' + stacks, 'enemy', '#b8f26b', stacks >= 3);
   SND.poison();
   return stacks;
 }
-function stunEnemy(secs, wx) {
+function stunEnemy(rounds) {
   if (!S.run || !S.enemy || S.enemy.hp <= 0) return;
-  S.enemy.stunT = Math.max(S.enemy.stunT, secs);
-  floatAt('FROZEN ' + secs + 's', wx, '#8be7ff', true);
+  S.enemy.stunned += rounds;
+  floatAnchor('FROZEN!', 'enemy', '#8be7ff', true);
   SND.stun();
 }
-function addBlock(n, wx) {
+function addBlock(n) {
   if (!S.run) return;
   S.run.block += n;
-  floatAt('BLOCK +' + n, wx, '#c8d6e8', true);
+  floatAnchor('\u{1F6E1} +' + n, 'hero', '#c8d6e8', n >= 4);
   SND.block();
 }
-function healPlayer(n, wx) {
+function healPlayer(n) {
   if (!S.run) return 0;
   const before = S.run.hp;
   S.run.hp = Math.min(S.run.maxHp, S.run.hp + n);
   const got = S.run.hp - before;
-  if (got > 0) floatAt('+' + got + ' HP', wx, '#7ee787', true);
+  if (got > 0) floatAnchor('+' + got + ' HP', 'hero', '#7ee787', got >= 8);
   SND.heal();
   return got;
 }
-function addGold(n, wx) {
+function addGold(n) {
   if (!S.run) return;
   S.run.gold += n;
   S.run.goldEarned += n;
-  floatAt('+' + n + ' GOLD', wx, '#ffd75e', n >= 15);
+  floatAnchor('+' + n + ' G', 'gold', '#ffd75e', n >= 15);
 }
-function addCoins(n, wx) {
+function addCoins(n) {
   if (!S.run) return;
   S.run.wallet += n;
-  if (wx !== null) floatAt('+' + n + ' ●', wx, '#f2c04a');
+  floatAnchor('+' + n + ' ●', 'hero', '#f2c04a');
 }
-function hurtPlayer(n, cause) {
+// direct hit: curses and poison ignore your shield entirely
+function hpHit(n, cause, col) {
   if (!S.run || S.run.hp <= 0) return;
-  // block soaks first
-  if (S.run.block > 0) {
-    const soak = Math.min(S.run.block, n);
-    S.run.block -= soak; n -= soak;
-    if (soak > 0) { floatAt('BLOCKED ' + soak, 50, '#c8d6e8'); SND.block(); }
-  }
-  if (n <= 0) return;
   S.run.hp -= n;
   S.hurtT = 0.45;
   S.shake += Math.min(9, 3 + n * 0.5);
-  floatAt('-' + n + ' HP', 50, '#ff5a4e', n >= 6);
+  floatAnchor('-' + n + ' HP', 'hero', col || '#ff5a4e', n >= 6);
   SND.hurt();
   if (S.run.hp <= 0) {
     if (hasRelic('wind') && !S.run.windUsed) {
@@ -373,6 +379,17 @@ function hurtPlayer(n, cause) {
     endRun(cause || 'slain');
   }
 }
+function hurtPlayer(n, cause) {
+  if (!S.run || S.run.hp <= 0) return;
+  // block soaks first
+  if (S.run.block > 0) {
+    const soak = Math.min(S.run.block, n);
+    S.run.block -= soak; n -= soak;
+    if (soak > 0) { floatAnchor('BLOCKED ' + soak, 'hero', '#c8d6e8'); SND.block(); }
+  }
+  if (n <= 0) return;
+  hpHit(n, cause);
+}
 function usePotion() {
   if (!S.run || S.run.potions < 1 || S.run.hp >= S.run.maxHp) return false;
   S.run.potions--;
@@ -383,44 +400,15 @@ function usePotion() {
 }
 
 // --------------------------------------------------------------- scoring
-// The tray is the trigger: anything that lands there FIRES immediately.
+// Nothing fires on impact any more: the tray COLLECTS. Everything that
+// lands there joins the round's loot and resolves when your purse is spent.
+// Only the spice — wheel chips and field chests — pops immediately.
 function trayAdd(kind, extra) {
   S.tray.items.push({ kind, iid: extra && extra.iid, x: extra ? extra.x : 50 });
   if (S.tray.items.length > 24) S.tray.items.shift();
 }
 function scoreCoin(c) {
-  const now = S.time;
   S.collected++;
-  if (c.kind === 'item') {
-    const it = itemById(c.iid);
-    trayAdd('item', { iid: c.iid, x: c.x });
-    if (it) fireItem(it, c.x);
-    S.shake += 4;
-    burst(c.x, 96, C.TRAY_Z, 'item');
-    return;
-  }
-  if (c.kind === 'skull') {
-    const dmg = C.SKULL_DMG + (S.run ? S.run.floor - 1 : 0);
-    floatAt('CURSED!', c.x, '#c86bff', true);
-    hurtPlayer(dmg, 'a cursed skull');
-    burst(c.x, 96, C.TRAY_Z, 'skull');
-    return;
-  }
-  if (c.kind === 'gem') {
-    addGold(15, c.x);
-    S.shake += 4;
-    SND.gem();
-    burst(c.x, 96, C.TRAY_Z, 'gem');
-    trayAdd('gem', { x: c.x });
-    return;
-  }
-  if (c.kind === 'bag') {
-    addGold(8, c.x);
-    SND.gem();
-    burst(c.x, 96, C.TRAY_Z, 'bag');
-    trayAdd('bag', { x: c.x });
-    return;
-  }
   if (c.kind === 'chip') {
     floatAt('WHEEL SPIN!', c.x, '#63e7ff', true);
     S.shake += 4;
@@ -432,60 +420,25 @@ function scoreCoin(c) {
     openChest(c);
     return;
   }
-  // plain + lucky coins: combo-chained chip damage, and the ammo refund
-  S.combo = (now - S.lastCollect <= C.COMBO_WIN) ? S.combo + 1 : 1;
-  S.lastCollect = now;
-  const mult = Math.min(S.combo, C.COMBO_CAP);
-  if (mult >= C.COMBO_CAP && S.fever <= 0) {
-    S.fever = 6;
-    S.banner = { txt: 'FEVER ×2!', ttl: 1.6, max: 1.6 };
-    SND.jackpot();
-  }
-  let dmg = (c.kind === 'lucky' ? C.DMG.lucky : C.DMG.coin) * mult;
-  if (S.fever > 0) dmg *= 2;
-  addCoins(C.REFUND[c.kind] || 1, null);
-  dmgEnemy(dmg, c.x, c.kind === 'lucky' ? '#ffe066' : '#ffb46b');
-  trayAdd(c.kind, { x: c.x });
-  if (mult > 1) S.floats.push({ txt: 'COMBO ×' + mult, wx: 50, wy: 60, age: 0, max: 0.9, col: '#ff9d3c', big: mult >= 4 });
-  S.shake += mult > 2 ? 2 : 1;
-  SND.collect(mult);
+  if (!S.battle) return;
+  S.battle.loot.push({ k: c.kind, iid: c.iid });
+  trayAdd(c.kind, { iid: c.iid, x: c.x });
+  S.shake += c.kind === 'item' ? 3 : 1;
+  if (c.kind === 'skull') SND.poison();
+  else if (c.kind === 'gem' || c.kind === 'bag') SND.gem();
+  else SND.collect(1 + (S.battle.loot.length % 5));
   burst(c.x, 96, C.TRAY_Z, c.kind);
-}
-function fireItem(it, wx) {
-  if (it.kind === 'weapon') {
-    const d = weaponDmg(it.dmg);
-    floatAt(it.name + '!', wx, '#ffe066', true);
-    dmgEnemy(d, wx, '#ff8a6b');
-    S.shake += it.splash ? 7 : 4;
-    SND.hit();
-    if (it.splash) {
-      // the blast rattles the whole pile
-      for (const o of S.coins) {
-        if (o.st !== 'plat') continue;
-        o.vx += (rng() - 0.5) * 26;
-        o.vy += (rng() - 0.2) * 18;
-      }
-    }
-  } else if (it.kind === 'poison') {
-    poisonEnemy(it.pois, wx);
-  } else if (it.kind === 'shield') {
-    addBlock(it.block, wx);
-  } else if (it.kind === 'heal') {
-    healPlayer(it.heal, wx);
-  } else if (it.kind === 'stun') {
-    stunEnemy(it.stun, wx);
-  }
 }
 function openChest(c) {
   const r = rng();
   let txt2;
   if (r < 0.35) {
-    const n = 5 + ((rng() * 6) | 0);
-    addCoins(n, c.x);
-    txt2 = 'CHEST: +' + n + ' ●';
+    const n = 3 + ((rng() * 4) | 0);
+    addCoins(n);
+    txt2 = 'CHEST: +' + n + ' ● THIS ROUND';
   } else if (r < 0.6) {
     const g = 8 + ((rng() * 8) | 0);
-    addGold(g, c.x);
+    addGold(g);
     txt2 = 'CHEST: +' + g + ' GOLD';
   } else if (r < 0.8) {
     txt2 = 'CHEST: WHEEL SPIN!';
@@ -493,6 +446,7 @@ function openChest(c) {
   } else {
     const it = ITEMS[(rng() * 4) | 0];
     grantItem(it.id, 1);
+    S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
     txt2 = 'CHEST: ' + it.name + '!';
   }
   floatAt(txt2, c.x, '#ffb0e0', true);
@@ -511,7 +465,7 @@ function frenzy() {
   S.banner = { txt: 'FRENZY!', ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.jackpot();
-  const kinds = ['coin', 'coin', 'coin', 'coin', 'lucky', 'coin', 'bag', 'coin'];
+  const kinds = ['coin', 'coin', 'silver', 'coin', 'lucky', 'green', 'bag', 'coin'];
   kinds.forEach((kind, i) => {
     S.rain.push({ t: 0.12 * i, x: 10 + rng() * 80, y: MACH.tiers[0].slotY + rng() * 14, kind });
   });
@@ -525,14 +479,19 @@ function frenzy() {
 
 // -------------------------------------------------------------- lucky wheel
 const WHEEL = [
-  { label: '8 ●', w: 16, fx: () => addCoins(8, 50) },
-  { label: '+15 G', w: 15, fx: () => addGold(15, 50) },
-  { label: 'HEAL 8', w: 13, fx: () => healPlayer(8, 50) },
-  { label: 'BLOCK 5', w: 12, fx: () => addBlock(5, 50) },
-  { label: 'SMITE', w: 12, fx: () => { if (S.enemy && S.enemy.hp > 0) dmgEnemy(12, 50, '#ffe066'); else addGold(6, 50); } },
-  { label: 'ITEM', w: 9, fx: () => { const it = ITEMS[(rng() * ITEMS.length) | 0]; grantItem(it.id, 1); floatAt(it.name + '!', 50, '#ffe066', true); } },
-  { label: '+30 G', w: 7, fx: () => addGold(30, 50) },
-  { label: 'FRENZY', w: 8, fx: () => { if (S.screen === 'battle') frenzy(); else addCoins(8, 50); } },
+  { label: '+5 ●', w: 16, fx: () => { if (S.battle) addCoins(5); else addGold(5); } },
+  { label: '+15 G', w: 15, fx: () => addGold(15) },
+  { label: 'HEAL 8', w: 13, fx: () => healPlayer(8) },
+  { label: 'BLOCK 5', w: 12, fx: () => addBlock(5) },
+  { label: 'SMITE', w: 12, fx: () => { if (S.enemy && S.enemy.hp > 0) dmgEnemy(12); else addGold(6); } },
+  { label: 'ITEM', w: 9, fx: () => {
+      const it = ITEMS[(rng() * ITEMS.length) | 0];
+      grantItem(it.id, 1);
+      floatAt(it.name + '!', 50, '#ffe066', true);
+      if (S.battle) S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
+    } },
+  { label: '+30 G', w: 7, fx: () => addGold(30) },
+  { label: 'FRENZY', w: 8, fx: () => { if (S.screen === 'battle') frenzy(); else addGold(8); } },
 ];
 function spinWheel() {
   const total = WHEEL.reduce((a, s) => a + s.w, 0);
@@ -546,8 +505,12 @@ function spinWheel() {
 }
 
 // -------------------------------------------------------------------- drop
+function roundCoins() {
+  return C.ROUND_COINS + (S.run ? (S.run.pouch || 0) * C.POUCH_COINS : 0);
+}
 function drop(x) {
   if (S.screen !== 'battle' || !S.run || S.victory) return false;
+  if (!S.battle || S.battle.phase !== 'drop') return false;
   if (S.cd > 0) return false;
   if (S.run.wallet < 1) { S.denyT = 0.6; SND.deny(); return false; }
   S.run.wallet--; S.cd = C.DROP_CD; S.dropped++; S.meter++;
@@ -559,17 +522,28 @@ function drop(x) {
   if (S.meter >= C.METER_MAX) frenzy();
   return true;
 }
+// what a fresh pile piece is made of (inserts are always gold/lucky;
+// the FIELD carries the silver and venom coins you push for)
+function rollPileKind() {
+  const r = rng();
+  const luckyP = C.MIX.lucky * (hasRelic('clover') ? 2 : 1);
+  if (r < C.MIX.silver) return 'silver';
+  if (r < C.MIX.silver + C.MIX.green) return 'green';
+  if (r < C.MIX.silver + C.MIX.green + luckyP) return 'lucky';
+  return 'coin';
+}
 
 // ------------------------------------------------------------------ battle
 function scaleMult() {
-  return 1 + 0.10 * (S.run.depth - 1) + 0.45 * (S.run.floor - 1);
+  return 1 + 0.07 * (S.run.depth - 1) + 0.35 * (S.run.floor - 1);
 }
 function enemyPool(depth) {
   // deeper rooms unlock meaner pools
   return Math.min(ENEMIES.length, 4 + depth + (S.run.floor - 1) * 2);
 }
 function mkEnemy(type, eid) {
-  const mult = scaleMult();
+  // bosses scale by FLOOR only — their lair sits at max depth by design
+  const mult = type === 'boss' ? 1 + 0.35 * (S.run.floor - 1) : scaleMult();
   let base, eliteK = 1;
   if (type === 'boss') {
     base = BOSSES[(S.run.floor - 1) % BOSSES.length];
@@ -582,81 +556,188 @@ function mkEnemy(type, eid) {
     id: base.id, icon: base.icon, name: (type === 'elite' ? 'ELITE ' : '') + base.name,
     hp, maxHp: hp,
     atk: Math.round(base.atk * mult * (type === 'elite' ? 1.3 : 1)),
-    period: base.period, atkT: base.period * 1.35,   // opening grace
     trait: base.trait, gold: Math.round(base.gold * mult * (type === 'elite' ? 1.8 : 1)),
     boss: type === 'boss', elite: type === 'elite',
-    stunT: 0, pois: 0, hitT: 0, lungeT: 0, regenT: 0,
+    stunned: 0, pois: 0, hitT: 0, lungeT: 0,
   };
 }
 function startBattle(type, entIdx, eid) {
   if (!S.run) return false;
   S.run.battleEnt = (entIdx === undefined) ? null : entIdx;
   S.enemy = mkEnemy(type, eid);
+  S.battle = { round: 1, phase: 'drop', loot: [], queue: [], qi: 0, qt: 0,
+               settleT: 0, stolen: 0, et: 0, struck: false };
   S.screen = 'battle';
   S.victory = null;
   S.run.windUsed = false;
-  S.pPois = 0; S.pPoisT = 0; S.ePoisT = 0;
-  S.combo = 0; S.lastCollect = -99; S.fever = 0;
-  if (hasRelic('plate')) S.run.block += 4;
+  S.pPois = 0;
+  S.run.wallet = roundCoins();
+  S.run.block = hasRelic('plate') ? 4 : 0;
   initPile();
   S.banner = { txt: S.enemy.boss ? 'BOSS FIGHT!' : S.enemy.name, ttl: 1.8, max: 1.8 };
   SND.door();
   save();
   return true;
 }
-function enemyAttack() {
+
+// ------------------------------------------------------- the round machine
+// drop: spend your purse into the machine -> everything the tray catches is
+//   this round's loot
+// resolve: the loot fires one piece at a time — bank gold, raise the shield,
+//   mend, then unleash on the foe; curses last
+// enemy: the foe takes its telegraphed turn, then poison ticks, new round
+function buildQueue(loot) {
+  const q = [];
+  for (const l of loot) {
+    if (l.k === 'coin') q.push({ t: 'gold' });
+    else if (l.k === 'item') {
+      const it = itemById(l.iid);
+      if (!it) continue;
+      const t = it.kind === 'weapon' ? 'weapon' : it.kind === 'poison' ? 'vial'
+              : it.kind === 'shield' ? 'shielditem' : it.kind === 'heal' ? 'heartitem' : 'frost';
+      q.push({ t, iid: l.iid });
+    } else q.push({ t: l.k });
+  }
+  q.sort((a, b) => RESOLVE_ORDER.indexOf(a.t) - RESOLVE_ORDER.indexOf(b.t));
+  return q;
+}
+function startResolve() {
+  const B = S.battle;
+  if (!B || B.phase !== 'drop') return false;
+  B.phase = 'resolve';
+  B.queue = buildQueue(B.loot);
+  B.loot = [];
+  B.qi = 0;
+  B.qt = 0.55;                          // a breath before the first piece flies
+  S.tray.items.length = 0;
+  if (B.queue.length) S.banner = { txt: 'RESOLVE!', ttl: 1.0, max: 1.0 };
+  return true;
+}
+// tap RESOLVE once the purse is empty to skip the settle wait
+function endRoundNow() {
+  if (!S.battle || S.battle.phase !== 'drop' || !S.run || S.run.wallet >= 1) return false;
+  return startResolve();
+}
+function applyLoot(q) {
+  if (!S.run) return;
+  if (q.t === 'gem') addGold(15);
+  else if (q.t === 'bag') addGold(8);
+  else if (q.t === 'silver') addBlock(1);
+  else if (q.t === 'shielditem') addBlock(itemById(q.iid).block);
+  else if (q.t === 'heartitem') healPlayer(itemById(q.iid).heal);
+  else if (q.t === 'gold') { dmgEnemy(C.DMG.gold); SND.collect(2); }
+  else if (q.t === 'lucky') { dmgEnemy(C.DMG.lucky); SND.gem(); }
+  else if (q.t === 'weapon') {
+    const it = itemById(q.iid);
+    floatAt(it.name + '!', 50, '#ffe066', true);
+    dmgEnemy(weaponDmg(it.dmg));
+    S.shake += it.splash ? 8 : 5;
+    SND.hit();
+  } else if (q.t === 'green') poisonEnemy(1);
+  else if (q.t === 'vial') poisonEnemy(itemById(q.iid).pois + (hasRelic('venom') ? 2 : 0));
+  else if (q.t === 'frost') stunEnemy(itemById(q.iid).stun);
+  else if (q.t === 'skull') {
+    floatAnchor('CURSED!', 'hero', '#c86bff', true);
+    hpHit(C.SKULL_DMG + S.run.floor - 1, 'a cursed skull', '#c86bff');
+  }
+  if (window.__dpResolveFx) window.__dpResolveFx(q);
+}
+function enemyAct() {
   const e = S.enemy;
-  e.lungeT = 0.35;
-  let atk = e.atk;
-  if (e.trait === 'thief' && S.run.wallet > 0) {
-    const steal = Math.min(2, S.run.wallet);
-    S.run.wallet -= steal;
-    floatAt('STOLE ' + steal + ' ●!', 50, '#ff9d3c', true);
+  if (!e || e.hp <= 0 || !S.run) return;
+  if (e.stunned > 0) {
+    e.stunned--;
+    floatAnchor('FROZEN — turn skipped', 'enemy', '#8be7ff', true);
+    SND.stun();
+    return;
   }
-  if (e.trait === 'venom') {
-    S.pPois = (S.pPois || 0) + 2;
-    floatAt('POISONED!', 50, '#b8f26b', true);
+  e.lungeT = 0.4;
+  const hits = e.trait === 'fast' ? 2 : 1;
+  for (let h = 0; h < hits && S.run; h++) {
+    if (e.trait === 'thief') {
+      S.battle.stolen += 2;
+      floatAnchor('purse cut! -2 ● next round', 'hero', '#ff9d3c', true);
+    }
+    if (e.trait === 'venom') {
+      S.pPois += 2;
+      floatAnchor('POISONED!', 'hero', '#b8f26b', true);
+    }
+    if (e.trait === 'curse') {
+      S.rain.push({ t: 0.3 + h * 0.2, x: 15 + rng() * 70, y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
+    }
+    hurtPlayer(e.atk, 'slain by ' + (e.name || 'the dungeon'));
   }
-  if (e.trait === 'curse') {
-    S.rain.push({ t: 0.3, x: 15 + rng() * 70, y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
+}
+function endRoundTicks() {
+  const e = S.enemy;
+  if (e && e.hp > 0) {
+    if (e.pois > 0) { const s = e.pois; e.pois--; dmgEnemy(s, 'pois'); }
+    if (e.hp > 0 && e.trait === 'regen' && e.hp < e.maxHp) {
+      e.hp = Math.min(e.maxHp, e.hp + 3);
+      floatAnchor('+3', 'enemy', '#7ee787');
+    }
   }
-  hurtPlayer(atk, 'slain by ' + (e.name || 'the dungeon'));
+  if (S.run && S.pPois > 0) {
+    const s = S.pPois; S.pPois--;
+    hpHit(s, 'poison', '#b8f26b');
+  }
+}
+function newRound() {
+  const B = S.battle;
+  B.round++;
+  B.phase = 'drop';
+  B.loot = []; B.queue = []; B.qi = 0; B.settleT = 0; B.struck = false;
+  S.run.block = hasRelic('plate') ? 4 : 0;
+  S.run.wallet = Math.max(3, roundCoins() - B.stolen);
+  B.stolen = 0;
+  // the dungeon re-salts the pile so long fights never run dry
+  for (let i = 0; i < C.ROUND_RAIN; i++) {
+    S.rain.push({ t: 0.15 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: rollPileKind() });
+  }
+  S.banner = { txt: 'ROUND ' + B.round, ttl: 1.3, max: 1.3 };
+  save();
 }
 function battleTick(dt) {
-  const e = S.enemy;
-  if (!e || !S.run) return;
-  if (e.hitT > 0) e.hitT -= dt;
-  if (e.lungeT > 0) e.lungeT -= dt;
-  if (e.hp <= 0) return;
-  // poison on the enemy: stacks tick down, each tick deals the stack count
-  if (e.pois > 0) {
-    S.ePoisT += dt;
-    if (S.ePoisT >= C.POIS_TICK) {
-      S.ePoisT = 0;
-      dmgEnemy(e.pois, 22, '#b8f26b');
-      e.pois--;
+  const e = S.enemy, B = S.battle;
+  if (!B || !S.run) return;
+  if (e) {
+    if (e.hitT > 0) e.hitT -= dt;
+    if (e.lungeT > 0) e.lungeT -= dt;
+  }
+  if (S.victory) return;
+  if (B.phase === 'drop') {
+    // purse spent and the field gone quiet -> the tray resolves itself
+    const busy = S.rain.length > 0 || S.coins.some(c => c.st === 'air' || c.st === 'fall');
+    if (S.run.wallet < 1 && !busy) {
+      B.settleT += dt;
+      if (B.settleT >= C.SETTLE_WAIT) startResolve();
+    } else B.settleT = 0;
+  } else if (B.phase === 'resolve') {
+    B.qt -= dt;
+    if (B.qt <= 0) {
+      if (B.qi < B.queue.length) {
+        const q = B.queue[B.qi];
+        B.qi++;
+        applyLoot(q);
+        if (!S.run || S.victory) return;
+        B.qt = RESOLVE_DELAY[q.t] || 0.5;
+      } else {
+        B.phase = 'enemy';
+        B.et = 1.1;
+        B.struck = false;
+      }
     }
-  }
-  if (e.hp <= 0) return;
-  // poison on the player
-  if (S.pPois > 0) {
-    S.pPoisT += dt;
-    if (S.pPoisT >= C.POIS_TICK) {
-      S.pPoisT = 0;
-      hurtPlayer(1, 'poison');
-      S.pPois--;
+  } else if (B.phase === 'enemy') {
+    B.et -= dt;
+    if (!B.struck && B.et <= 0.6) {
+      B.struck = true;
+      enemyAct();
+      if (!S.run || S.victory) return;
     }
-  }
-  if (!S.run) return;
-  if (e.trait === 'regen' && e.hp < e.maxHp) {
-    e.regenT += dt;
-    if (e.regenT >= 3) { e.regenT = 0; e.hp = Math.min(e.maxHp, e.hp + 2); }
-  }
-  if (e.stunT > 0) { e.stunT -= dt; return; }
-  e.atkT -= dt;
-  if (e.atkT <= 0) {
-    e.atkT = e.period;
-    enemyAttack();
+    if (B.et <= 0) {
+      endRoundTicks();
+      if (S.run && S.enemy && S.enemy.hp > 0 && !S.victory) newRound();
+    }
   }
 }
 function winBattle() {
@@ -685,7 +766,7 @@ function leaveBattle() {
   const boss = S.victory.boss;
   const ei = S.run.battleEnt;
   if (S.run.room && ei !== null && S.run.room.ents[ei]) S.run.room.ents[ei].done = true;
-  S.victory = null; S.enemy = null; S.run.battleEnt = null;
+  S.victory = null; S.enemy = null; S.battle = null; S.run.battleEnt = null;
   S.coins.length = 0;
   if (boss) {              // the stairs descend: next floor, room 1
     S.run.floor++;
@@ -711,6 +792,7 @@ function endRun(cause) {
   };
   S.run = null;
   S.enemy = null;
+  S.battle = null;
   S.victory = null;
   S.room = null;
   S.screen = 'over';
@@ -725,7 +807,7 @@ function endRun(cause) {
 function newRun() {
   S.run = {
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
-    gold: 0, wallet: C.START_COINS, keys: C.START_KEYS,
+    gold: 0, pouch: 0, wallet: 0, keys: C.START_KEYS,
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0,
     kills: 0, goldEarned: 0, room: null, block: 0, windUsed: false, battleEnt: null,
@@ -831,14 +913,10 @@ function chestGift() {
   if (r < C.P_CHEST_KEY) {
     S.run.keys++;
     toast('the chest holds a KEY! \u{1F5DD}');
-  } else if (r < 0.45) {
-    const g = 10 + S.run.depth * 2 + (S.run.floor - 1) * 6 + ((rng() * 8) | 0);
-    addGold(g, 50);
-    toast('+' + g + ' gold');
   } else if (r < 0.65) {
-    const n = 6 + ((rng() * 6) | 0);
-    addCoins(n, null);
-    toast('+' + n + ' coins for the pusher');
+    const g = 10 + S.run.depth * 2 + (S.run.floor - 1) * 6 + ((rng() * 8) | 0);
+    addGold(g);
+    toast('+' + g + ' gold');
   } else if (r < 0.88) {
     const it = ITEMS[(rng() * ITEMS.length) | 0];
     grantItem(it.id, 1);
@@ -883,7 +961,7 @@ function shopStock() {
     st.push({ kind: 'item', iid: pick, label: it.icon + ' ' + it.name, price: Math.round(it.cost * mult), sold: false });
   }
   st.push({ kind: 'potion', label: '\u{1F9F4} Potion (+' + C.POTION_HEAL + ' HP)', price: Math.round(30 * mult), sold: false });
-  st.push({ kind: 'coins', n: 12, label: '● 12 coins', price: Math.round(18 * mult), sold: false });
+  st.push({ kind: 'pouch', label: '\u{1F45B} Coin Pouch (+' + C.POUCH_COINS + ' ● every round)', price: Math.round(40 * mult), sold: false });
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(45 * mult), sold: false });
   const owned = S.run.relics;
   const avail = RELICS.filter(r => owned.indexOf(r.id) < 0);
@@ -901,7 +979,7 @@ function buyShop(i) {
   it.sold = true;
   if (it.kind === 'item') grantItem(it.iid, 1);
   else if (it.kind === 'potion') S.run.potions++;
-  else if (it.kind === 'coins') S.run.wallet += it.n;
+  else if (it.kind === 'pouch') S.run.pouch++;
   else if (it.kind === 'maxhp') { S.run.maxHp += 10; S.run.hp += 10; }
   else if (it.kind === 'relic') S.run.relics.push(it.rid);
   SND.buy();
@@ -914,7 +992,7 @@ function boonOptions() {
   opts.push({ kind: 'item', iid: it.id, label: it.icon + ' Take a ' + it.name });
   opts.push(rng() < 0.5
     ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
-    : { kind: 'coins', label: '● +10 coins' });
+    : { kind: 'pouch', label: '\u{1F45B} Coin Pouch: +' + C.POUCH_COINS + ' ● every round' });
   const owned = S.run.relics;
   const avail = RELICS.filter(r => owned.indexOf(r.id) < 0);
   if (avail.length && rng() < 0.55) {
@@ -931,7 +1009,7 @@ function pickBoon(i) {
   if (!o) return false;
   if (o.kind === 'item') grantItem(o.iid, 1);
   else if (o.kind === 'maxhp') { S.run.maxHp += 12; S.run.hp = Math.min(S.run.maxHp, S.run.hp + 12); }
-  else if (o.kind === 'coins') S.run.wallet += 10;
+  else if (o.kind === 'pouch') S.run.pouch++;
   else if (o.kind === 'relic') S.run.relics.push(o.rid);
   else if (o.kind === 'whet') S.run.whet++;
   S.room.done = true;
@@ -945,16 +1023,14 @@ function pickBoon(i) {
 }
 
 // ------------------------------------------------------------------ reset
-function fillRows(y0, y1, luckyN) {
+function fillRows(y0, y1) {
   const step2 = MACH.coin.r * 2.05;
-  let luckyLeft = luckyN || 0;
   for (let y = y0; y <= y1; y += step2) {
     const n = Math.floor(84 / step2);
     for (let i = 0; i < n; i++) {
       const x = 50 + (i - (n - 1) / 2) * step2 * 1.04 + (rng() - 0.5) * 2.5;
-      let kind = 'coin';
-      if (luckyLeft > 0 && rng() < 0.06) { kind = 'lucky'; luckyLeft--; }
-      place(x, y + (rng() - 0.5) * 2, kind, 0, 'plat', 0);
+      // the field is a mix: gold to strike, silver to shield, venom to sicken
+      place(x, y + (rng() - 0.5) * 2, rollPileKind(), 0, 'plat', 0);
     }
   }
 }
@@ -962,7 +1038,7 @@ function initPile() {
   S.coins.length = 0;
   const td = MACH.tiers[0];
   const front = td.front;
-  fillRows(td.back + 42, front - 4, 4);
+  fillRows(td.back + 42, front - 4);
   // gold on the field: a bag always, a gem sometimes
   place(30 + rng() * 40, front - 26 - rng() * 6, 'bag', 0, 'plat', 0);
   if (rng() < 0.4) place(50 + (rng() - 0.5) * 30, front - 22, 'gem', 0, 'plat', 0);
@@ -988,17 +1064,17 @@ function initPile() {
     place(under.x + (rng() - 0.5) * 2, under.y + (rng() - 0.5) * 2, 'coin', 1, 'plat', 0);
   }
   // settle so nothing pops on the first frame, then sweep spillage
-  const savedEnemy = S.enemy;
-  S.enemy = null;                       // no combat during the settle
+  const savedBattle = S.battle;
+  S.battle = null;                      // the round machine sleeps during the settle
   for (let i = 0; i < 140; i++) step(1 / 60, true);
-  S.enemy = savedEnemy;
+  S.battle = savedBattle;
   for (let i = S.coins.length - 1; i >= 0; i--) {
     if (S.coins[i].st !== 'plat') S.coins.splice(i, 1);
   }
   S.trayPile = 0; S.lost = 0;
 }
 function reset() {
-  S.combo = 0; S.lastCollect = -99; S.time = 0; S.phase = 0; S.cd = 0;
+  S.time = 0; S.phase = 0; S.cd = 0;
   S.floats.length = 0; S.parts.length = 0; S.rain.length = 0;
   S.banner = null; S.trayPile = 0; S.shake = 0;
   S.tray.items.length = 0;
@@ -1057,16 +1133,9 @@ function step(dt, quiet) {
   if (S.hurtT > 0) S.hurtT -= dt;
   S.phase += dt * 2 * Math.PI / MACH.pushPeriod;
   S.shake = Math.max(0, S.shake - dt * 12);
-  if (S.fever > 0) S.fever -= dt;
 
-  // enemy AI runs only while the fight is live
-  if (S.screen === 'battle' && S.enemy && !S.victory && !quiet) battleTick(dt);
-
-  // broke bailout: out of ammo mid-fight, the dungeon takes pity — slowly
-  if (S.screen === 'battle' && S.run && !S.victory && S.run.wallet < 1) {
-    S.regen += dt;
-    if (S.regen >= C.PITY_T) { S.regen = 0; S.run.wallet++; }
-  } else S.regen = 0;
+  // the round machine runs only while the fight is live
+  if (S.screen === 'battle' && !quiet) battleTick(dt);
 
   // rain queue (frenzy bonuses, cursed skulls)
   for (let i = S.rain.length - 1; i >= 0; i--) {
@@ -1262,7 +1331,6 @@ function step(dt, quiet) {
     S.uiFlash.t -= dt;
     if (S.uiFlash.t <= 0) S.uiFlash = null;
   }
-  if (S.combo > 0 && S.time - S.lastCollect > C.COMBO_WIN) S.combo = 0;
 }
 
 function tick(dt) {
@@ -1277,11 +1345,13 @@ window.DP = {
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
   newRun, genRoom, genEnts, interact, useDoor, closeModal, leaveBattle,
-  chestGift, startBattle, mkEnemy, enemyAttack, battleTick, winBattle, endRun,
+  chestGift, startBattle, mkEnemy, battleTick, winBattle, endRun,
   buyShop, pickBoon, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
-  dmgEnemy, hurtPlayer, healPlayer, addBlock, poisonEnemy, stunEnemy,
-  addGold, addCoins, fireItem, weaponDmg, theme, scaleMult, bestify,
+  dmgEnemy, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
+  addGold, addCoins, weaponDmg, theme, scaleMult, bestify,
+  startResolve, endRoundNow, buildQueue, applyLoot, enemyAct, endRoundTicks,
+  newRound, roundCoins, rollPileKind,
 };
 
 load();
@@ -1320,8 +1390,14 @@ if (!HEADLESS) (function browser() {
     g.fillStyle = pal.sym;
     g.fillText(sym, cx, cy + ry * 0.04);
   }
-  const COIN_PAL = { edge: '#7d5a14', f0: '#ffedaa', f1: '#f2c04a', f2: '#ad7c1a', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(136,94,18,0.85)' };
-  const LUCKY_PAL = { edge: '#8a5f10', f0: '#fff8cf', f1: '#ffdf6b', f2: '#c78f18', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(150,96,10,0.9)' };
+  // one palette per coin ROLE: gold strikes, silver shields, green poisons
+  const COIN_PALS = {
+    coin:   { edge: '#7d5a14', f0: '#ffedaa', f1: '#f2c04a', f2: '#ad7c1a', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(136,94,18,0.85)' },
+    lucky:  { edge: '#8a5f10', f0: '#fff8cf', f1: '#ffdf6b', f2: '#c78f18', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(150,96,10,0.9)' },
+    silver: { edge: '#6f7680', f0: '#f4f7fa', f1: '#c3ccd6', f2: '#7e8894', ring: 'rgba(90,100,112,0.6)', sym: 'rgba(90,100,112,0.95)' },
+    green:  { edge: '#2f6b30', f0: '#e0ffd8', f1: '#8ed67e', f2: '#3f8f42', ring: 'rgba(35,95,40,0.6)',  sym: 'rgba(25,75,30,0.9)' },
+  };
+  const COIN_SYMS = { coin: '⚔', lucky: '★', silver: '◆', green: '☠' };
   function flatSprite(styleKey, pal, sym) {
     return sprite('cf_' + styleKey + '_' + sym, 96, 66, (g) => {
       const cx = 48, cy = 24, rx = 44, ry = 20, eh = 9;
@@ -1603,30 +1679,47 @@ if (!HEADLESS) (function browser() {
     }
     if (e) {
       const dead = e.hp <= 0;
-      const lunge = e.lungeT > 0 ? Math.sin((0.35 - e.lungeT) / 0.35 * Math.PI) : 0;
+      const lunge = e.lungeT > 0 ? Math.sin((0.4 - e.lungeT) / 0.4 * Math.PI) : 0;
       const bob = dead ? 0 : Math.sin(t * 2.2) * 3;
+      const breathe = dead ? 1 : 1 + Math.sin(t * 2.2 + 1) * 0.03;
       const sz = e.boss ? 64 : 52;
+      // menace aura behind the foe
+      if (!dead) {
+        ctx.globalAlpha = (e.boss ? 0.3 : 0.18) + 0.08 * Math.sin(t * 3);
+        ctx.beginPath(); ctx.arc(LW / 2, 58, sz * 0.85 + lunge * 8, 0, 7);
+        ctx.fillStyle = e.boss ? '#ffd75e' : e.elite ? '#ff9d3c' : '#ef4b5d';
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
       ctx.save();
-      ctx.translate(LW / 2, 58 + bob + lunge * 16);
+      ctx.translate(LW / 2, 58 + bob + lunge * 22);
+      ctx.scale(breathe + (e.hitT > 0 ? 0.12 : 0), 1 / (breathe + (e.hitT > 0 ? 0.12 : 0)) * breathe);
       if (e.hitT > 0) ctx.rotate(Math.sin(t * 60) * 0.08);
       if (dead) { ctx.globalAlpha = Math.max(0, 1 - S.victory.t * 1.2); ctx.rotate(0.6); }
-      if (e.stunT > 0) ctx.globalAlpha *= 0.75;
+      if (e.stunned > 0) ctx.globalAlpha *= 0.75;
       txt(e.icon, 0, 0, sz + 'px serif', '#fff');
       ctx.restore();
-      if (e.stunT > 0 && !dead) txt('❄ ' + Math.ceil(e.stunT), LW / 2 + 46, 36, '800 14px Verdana, sans-serif', '#8be7ff');
-      if (e.pois > 0 && !dead) txt('☠ ' + e.pois, LW / 2 - 46, 36, '800 14px Verdana, sans-serif', '#b8f26b');
+      if (e.stunned > 0 && !dead) txt('❄ frozen ×' + e.stunned, LW / 2 + 74, 36, '800 12px Verdana, sans-serif', '#8be7ff');
+      if (e.pois > 0 && !dead) txt('☠ ' + e.pois, LW / 2 - 74, 36, '800 14px Verdana, sans-serif', '#b8f26b');
       txt(e.name, LW / 2, 100, '900 15px Georgia, serif', e.boss ? '#ffd75e' : '#e8dce8',
           'center', { w: 4, col: 'rgba(20,8,24,0.9)' });
       // HP bar
       bar(96, 112, LW - 192, 13, Math.max(0, e.hp / e.maxHp), '#ef4b5d', '#a8213a');
       txt(Math.max(0, e.hp) + ' / ' + e.maxHp, LW / 2, 118.5, '800 10px Verdana, sans-serif', '#ffe8ec');
-      // attack telegraph
+      // its intent for the end of this round
       if (!dead) {
-        const frac = Math.max(0, Math.min(1, 1 - e.atkT / e.period));
-        const urgent = e.atkT < 1;
-        bar(120, 128, LW - 240, 6, e.stunT > 0 ? 0 : frac, urgent ? '#ff5a4e' : '#ff9d3c', '#ffd75e');
-        txt('⚔ ' + e.atk, 100, 131, '800 10px Verdana, sans-serif', urgent && Math.floor(t * 8) % 2 ? '#ff5a4e' : '#c8a8b0', 'right');
+        const intent = e.stunned > 0 ? '❄ frozen — skips its turn'
+          : '⚔ ' + e.atk + (e.trait === 'fast' ? ' ×2' : '') + ' at round end';
+        txt(intent, 96, 131, '800 10px Verdana, sans-serif',
+            e.stunned > 0 ? '#8be7ff' : '#ffb4a8', 'left');
         if (e.trait) txt(TRAIT_TXT[e.trait], LW - 96, 131, '600 8px Verdana, sans-serif', '#9a8aa0', 'right');
+      }
+      // round chip
+      if (S.battle) {
+        rr(30, 20, 74, 22, 11);
+        ctx.fillStyle = 'rgba(10,6,12,0.8)'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = T.accent; ctx.stroke();
+        txt('ROUND ' + S.battle.round, 67, 31, '900 10px Verdana, sans-serif', T.accent);
       }
     }
     ctx.restore();
@@ -1825,11 +1918,11 @@ if (!HEADLESS) (function browser() {
     }
     if (c.kind === 'chip') { drawChip(c, p, rx, ry, t); ctx.restore(); return; }
     const lucky = c.kind === 'lucky';
-    const pal = lucky ? LUCKY_PAL : COIN_PAL;
-    const sym = lucky ? '★' : MACH.coin.sym;
+    const pal = COIN_PALS[c.kind] || COIN_PALS.coin;
+    const sym = COIN_SYMS[c.kind] || '⚔';
     const pop = c.popT > 0 ? 1 + 0.22 * (c.popT / 0.18) : 1;
     const drx = rx * pop, dry = ry * pop;
-    const spr = flatSprite(lucky ? 'lucky' : 'gold', pal, sym);
+    const spr = flatSprite(c.kind, pal, sym);
     const hs = dry / (drx * 0.4583);
     const w = drx * (96 / 44), h = (66 / 96) * w * hs;
     ctx.drawImage(spr, p.x - w / 2, p.y - (24 / 66) * h, w, h);
@@ -1951,21 +2044,25 @@ if (!HEADLESS) (function browser() {
     ctx.fill();
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#c99ab0'; ctx.stroke();
-    if (S.combo > 0 && S.time - S.lastCollect < C.COMBO_WIN) {
+    // the round's loot rattles around the tray until it resolves
+    const items = S.tray.items;
+    const trayGlow = S.battle && S.battle.loot.length > 0;
+    if (trayGlow) {
       ctx.save();
-      ctx.globalAlpha = 0.28 * (1 - (S.time - S.lastCollect) / C.COMBO_WIN);
+      ctx.globalAlpha = 0.10 + 0.06 * Math.sin(S.time * 5);
       rr(58, 648, LW - 116, 52, 14);
       ctx.fillStyle = '#ffae34'; ctx.fill();
       ctx.restore();
     }
-    // the last few pickups rattle around the tray
-    const items = S.tray.items;
+    const TRAY_COL = { coin: '#f2c04a', lucky: '#ffdf6b', silver: '#c3ccd6', green: '#8ed67e' };
     items.forEach((it, i) => {
       const px = LW / 2 + Math.sin(i * 2.399) * (18 + ((i * 7) % 130));
       const py = 686 - (i % 3) * 6;
       if (it.kind === 'item') {
         const def = itemById(it.iid);
         txt(def ? def.icon : '❓', px, py - 8, '20px serif', '#fff');
+      } else if (it.kind === 'skull') {
+        txt('☠\u{FE0F}', px, py - 8, '16px serif', '#fff');
       } else if (it.kind === 'gem') {
         ctx.beginPath(); ctx.ellipse(px, py - 2, 8, 5, 0, 0, 7);
         ctx.fillStyle = '#4ecbe8'; ctx.fill();
@@ -1975,12 +2072,11 @@ if (!HEADLESS) (function browser() {
         ctx.beginPath(); ctx.ellipse(px, py, 10, 4.4, 0, 0, 7);
         ctx.fillStyle = '#8a5f10'; ctx.fill();
         ctx.beginPath(); ctx.ellipse(px, py - 2, 10, 4.4, 0, 0, 7);
-        ctx.fillStyle = it.kind === 'lucky' ? '#ffdf6b' : '#f2c04a';
+        ctx.fillStyle = TRAY_COL[it.kind] || '#f2c04a';
         ctx.fill();
         ctx.strokeStyle = 'rgba(120,80,12,0.7)'; ctx.lineWidth = 0.8; ctx.stroke();
       }
     });
-    txt('⚔ the tray FIRES everything that lands in it', LW / 2, 708, '600 9px Verdana, sans-serif', '#8f6f78');
   }
 
   function drawGlass(t) {
@@ -2040,9 +2136,47 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
+  // ------------------------------------------------------------- ambience
+  // drifting dust motes and a soft vignette put the dungeon in the air
+  const MOTES = [];
+  {
+    const old = rngState; srand(4242);
+    for (let i = 0; i < 34; i++) {
+      MOTES.push({ x: rng() * LW, y: rng() * LH, r: 0.8 + rng() * 1.8,
+                   vx: (rng() - 0.5) * 7, vy: -4 - rng() * 9, ph: rng() * 7 });
+    }
+    rngState = old;
+  }
+  function drawMotes(dt, warm) {
+    ctx.save();
+    for (const m of MOTES) {
+      m.x += m.vx * dt; m.y += m.vy * dt;
+      if (m.y < -6) { m.y = LH + 6; m.x = Math.random() * LW; }
+      if (m.x < -6) m.x = LW + 6;
+      if (m.x > LW + 6) m.x = -6;
+      ctx.globalAlpha = 0.10 + 0.08 * Math.sin(S.time * 1.4 + m.ph);
+      ctx.beginPath(); ctx.arc(m.x, m.y, m.r, 0, 7);
+      ctx.fillStyle = warm ? '#ffd9a0' : '#c8d8f0';
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  function drawVignette(strength) {
+    ctx.save();
+    const g = rgr('vig', LW / 2, LH / 2, 240, LW / 2, LH / 2, 620,
+      [[0, 'rgba(8,4,10,0)'], [1, 'rgba(8,4,10,0.9)']]);
+    ctx.globalAlpha = strength || 0.5;
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, LW, LH);
+    ctx.restore();
+  }
+
+  // floats pin to the machine (wx) or to a screen anchor: the foe, your
+  // hero, or the gold counter — so resolve numbers pop where they land
+  const ANCHORS = { enemy: { x: LW / 2, y: 96 }, hero: { x: 78, y: 636 }, gold: { x: 90, y: 756 } };
   function drawFloats() {
     for (const f of S.floats) {
-      const p = w2s(f.wx, f.wy, C.TRAY_Z);
+      const p = f.anchor ? ANCHORS[f.anchor] || ANCHORS.hero : w2s(f.wx, f.wy, C.TRAY_Z);
       const k = f.age / f.max;
       const pop = k < 0.18 ? k / 0.18 : 1;
       const scl = (f.big ? 1.5 : 1) * (0.6 + 0.4 * pop);
@@ -2147,14 +2281,11 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = '#8a5f10'; ctx.fill();
     ctx.beginPath(); ctx.ellipse(126, 761, 9, 8, 0, 0, 7);
     ctx.fillStyle = '#f2c04a'; ctx.fill();
-    txt('× ' + r.wallet, 140, 762, '900 18px Verdana, sans-serif', flash ? '#ff5a4e' : '#fff0c0', 'left');
+    txt(S.screen === 'battle' ? '× ' + r.wallet : '× ' + roundCoins() + '/rd',
+        140, 762, '900 ' + (S.screen === 'battle' ? 18 : 13) + 'px Verdana, sans-serif',
+        flash ? '#ff5a4e' : '#fff0c0', 'left');
     txt('\u{1F5DD} × ' + r.keys, 190, 762, '900 15px Verdana, sans-serif',
         r.keys < 1 ? '#ff5a4e' : '#ffe9a3', 'left');
-    if (S.regen > 0) {
-      ctx.beginPath();
-      ctx.arc(126, 761, 12, -Math.PI / 2, -Math.PI / 2 + (S.regen / C.PITY_T) * Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,220,120,0.75)'; ctx.lineWidth = 2.5; ctx.stroke();
-    }
     // potion button
     if (r.potions > 0) {
       uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
@@ -2176,10 +2307,13 @@ if (!HEADLESS) (function browser() {
       ax += 46;
     });
     if (!ids.length) txt('arsenal empty — visit a shop!', 34, 796, '600 10px Verdana, sans-serif', '#8f6f78', 'left');
-    txt(S.screen === 'battle'
-        ? (r.wallet < 1 ? 'out of coins — the dungeon pities you slowly…' : 'TAP TO DROP • HOLD FOR AUTO')
-        : 'FLOOR ' + r.floor + ' • ROOM ' + r.depth + ' / ' + C.BOSS_DEPTH,
-        LW - 34, 814, '600 10px Verdana, sans-serif', '#8f6f78', 'right');
+    let hint;
+    if (S.screen !== 'battle') hint = 'FLOOR ' + r.floor + ' • ROOM ' + r.depth + ' / ' + C.BOSS_DEPTH;
+    else if (!S.battle || S.battle.phase === 'drop') {
+      hint = r.wallet < 1 ? 'purse empty — the tray is about to resolve…'
+           : r.wallet + ' ● left this round • TAP TO DROP • HOLD FOR AUTO';
+    } else hint = S.battle.phase === 'resolve' ? 'the tray resolves…' : 'the foe strikes back…';
+    txt(hint, LW - 34, 814, '600 10px Verdana, sans-serif', '#8f6f78', 'right');
   }
 
   // --------------------------------------------------------- battle screen
@@ -2223,23 +2357,31 @@ if (!HEADLESS) (function browser() {
     drawFrontAndTray();
     for (const c of offEdge) drawCoin(c, t);
     drawGlass(t);
+    drawMotes(dt, 1);
     drawParticles(dt);
+    const phase = S.battle ? S.battle.phase : 'drop';
+    // resolve/enemy phases: dim the machine and run the cinematics
+    if (phase !== 'drop' && !S.victory) {
+      ctx.fillStyle = 'rgba(8,4,12,0.38)';
+      ctx.fillRect(0, 160, LW, 500);
+      drawLootStrip(t);
+      const label = phase === 'resolve' ? '✦ RESOLVING THE TRAY ✦' : '⚔ ENEMY TURN ⚔';
+      txt(label, LW / 2, 178, '900 15px Georgia, serif',
+          phase === 'resolve' ? '#ffd75e' : '#ff8a8a', 'center', { w: 4, col: 'rgba(10,5,12,0.95)' });
+    } else if (S.battle && S.battle.loot.length) {
+      drawLootStrip(t);
+    }
+    drawResolveFx(dt);
+    drawBattleHero(t);
     drawFloats();
-    if (S.fever > 0) {
-      const hue = (t * 160) % 360;
-      const a2 = Math.min(1, S.fever / 1.2) * (0.5 + 0.25 * Math.sin(t * 8));
-      ctx.save();
-      ctx.globalAlpha = a2;
-      ctx.lineWidth = 7;
-      ctx.strokeStyle = 'hsl(' + hue + ',85%,72%)';
-      rr(8, 8, LW - 16, LH - 16, 22);
-      ctx.stroke();
-      txt('FEVER ×2  ' + Math.ceil(S.fever) + 's', LW / 2, 176,
-          '900 15px Georgia, serif', 'hsl(' + hue + ',90%,80%)',
-          'center', { w: 4, col: '#2a1030' });
-      ctx.restore();
+    // purse empty: offer the skip
+    if (phase === 'drop' && S.run.wallet < 1 && !S.victory) {
+      const pulse = 1 + Math.sin(t * 6) * 0.04;
+      uiBtn(LW / 2 - 74 * pulse, 604, 148 * pulse, 34, 'RESOLVE ▶', () => endRoundNow(),
+            { grad: ['#ffd75e', '#c98f2a'], border: '#fff0c0', col: '#3a2406', font: '900 14px Verdana, sans-serif', r: 13 });
     }
     drawHUD(t);
+    drawVignette(0.55);
     // hurt vignette
     if (S.hurtT > 0) {
       ctx.save();
@@ -2253,6 +2395,134 @@ if (!HEADLESS) (function browser() {
     }
     drawBanner(t);
     drawVictory(t);
+  }
+
+  // ------------------------------------------------- resolve cinematics
+  // each applied loot piece launches a projectile: silver arcs to the hero,
+  // gold smacks the foe, gems ring the gold counter
+  const RFX = [];
+  const LOOT_ICON = {
+    gold: '●', lucky: '★', silver: '●', green: '●', gem: '\u{1F48E}', bag: '\u{1F4B0}', skull: '☠\u{FE0F}',
+  };
+  const LOOT_COL = { gold: '#f2c04a', lucky: '#ffdf6b', silver: '#c3ccd6', green: '#8ed67e' };
+  function fxIcon(q) {
+    if (q.t === 'weapon' || q.t === 'vial' || q.t === 'shielditem' || q.t === 'heartitem' || q.t === 'frost') {
+      const it = itemById(q.iid);
+      return it ? it.icon : '❓';
+    }
+    return LOOT_ICON[q.t] || '●';
+  }
+  window.__dpResolveFx = function (q) {
+    const toHero = q.t === 'silver' || q.t === 'shielditem' || q.t === 'heartitem' || q.t === 'skull';
+    const toGold = q.t === 'gem' || q.t === 'bag';
+    const tgt = toGold ? { x: 90, y: 756 } : toHero ? { x: ANCHORS.hero.x, y: ANCHORS.hero.y + 22 } : { x: LW / 2, y: 66 };
+    const big = q.t === 'weapon' || q.t === 'vial' || q.t === 'frost';
+    RFX.push({
+      x0: LW / 2 + (Math.random() - 0.5) * 90, y0: 672,
+      x1: tgt.x, y1: tgt.y,
+      t: 0, dur: big ? 0.42 : 0.26,
+      icon: fxIcon(q), q,
+      lift: 60 + Math.random() * 60,
+      spin: (Math.random() - 0.5) * 10,
+    });
+  };
+  function drawResolveFx(dt) {
+    for (let i = RFX.length - 1; i >= 0; i--) {
+      const f = RFX[i];
+      f.t += dt;
+      const k = Math.min(1, f.t / f.dur);
+      if (k >= 1) {
+        // impact!
+        burstScreen(f.x1, f.y1, f.q.t === 'skull' ? 'skull' : f.q.t === 'gem' ? 'gem' : 'item');
+        RFX.splice(i, 1);
+        continue;
+      }
+      const x = f.x0 + (f.x1 - f.x0) * k;
+      const y = f.y0 + (f.y1 - f.y0) * k - Math.sin(k * Math.PI) * f.lift;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(f.spin * f.t);
+      const col = LOOT_COL[f.q.t];
+      if (col) {
+        // a proper little coin in flight
+        ctx.beginPath(); ctx.ellipse(0, 2, 9, 7, 0, 0, 7);
+        ctx.fillStyle = 'rgba(20,10,4,0.5)'; ctx.fill();
+        ctx.beginPath(); ctx.ellipse(0, 0, 9, 7 * Math.abs(Math.cos(f.t * 14)), 0, 0, 7);
+        ctx.fillStyle = col; ctx.fill();
+        ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.stroke();
+      } else {
+        txt(f.icon, 0, 0, '24px serif', '#fff');
+      }
+      ctx.restore();
+      // sparkle trail
+      if (Math.random() < 0.5 && S.parts.length < 130) {
+        S.parts.push({ x, y, vx: (Math.random() - 0.5) * 20, vy: 10, g: 30, life: 0, max: 0.3,
+                       col: col || '#ffe4b0', sz: 1.6, spin: 2, shape: 'star' });
+      }
+    }
+  }
+  // the queue still waiting its turn, pinned above the tray
+  function drawLootStrip(t) {
+    const B = S.battle;
+    if (!B) return;
+    let pieces;
+    if (B.phase === 'drop') {
+      pieces = B.loot.map(l => (l.k === 'item' ? { t: 'item', iid: l.iid } : { t: l.k }));
+    } else {
+      pieces = B.queue.slice(B.qi).map(q => q);
+    }
+    if (!pieces.length) return;
+    const counts = {};
+    for (const p of pieces) {
+      const key = p.iid || p.t;
+      counts[key] = (counts[key] || 0) + 1;
+    }
+    const keys = Object.keys(counts);
+    const w = Math.min(LW - 40, keys.length * 52 + 20);
+    rr(LW / 2 - w / 2, 610, w, 30, 15);
+    ctx.fillStyle = 'rgba(12,7,14,0.88)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,215,94,0.5)'; ctx.stroke();
+    keys.slice(0, 8).forEach((key, i) => {
+      const x = LW / 2 - w / 2 + 28 + i * 52;
+      const it = itemById(key);
+      const col = LOOT_COL[key];
+      if (it) txt(it.icon, x, 624, '15px serif', '#fff');
+      else if (col) {
+        ctx.beginPath(); ctx.ellipse(x, 625, 7.5, 6, 0, 0, 7);
+        ctx.fillStyle = col; ctx.fill();
+        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(60,40,10,0.6)'; ctx.stroke();
+      } else txt(LOOT_ICON[key] || '●', x, 624, '14px serif', '#fff');
+      txt('×' + counts[key], x + 12, 626, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
+    });
+  }
+  // your hero stands ringside — silver flies to HIM
+  function drawBattleHero(t) {
+    const hx = ANCHORS.hero.x, hy = ANCHORS.hero.y + 30;
+    const hurt = S.hurtT > 0;
+    ctx.beginPath(); ctx.ellipse(hx, hy + 12, 18, 6, 0, 0, 7);
+    ctx.fillStyle = 'rgba(6,3,8,0.6)'; ctx.fill();
+    ctx.save();
+    ctx.translate(hx, hy - 6 + Math.sin(t * 2.4) * 2);
+    if (hurt) ctx.rotate(Math.sin(t * 50) * 0.09);
+    txt('\u{1F93A}', 0, 0, '38px serif', '#fff');
+    ctx.restore();
+    // the shield ring: your block, made visible
+    if (S.run.block > 0) {
+      const pulse = 1 + Math.sin(t * 4) * 0.05;
+      ctx.save();
+      ctx.globalAlpha = 0.75;
+      ctx.beginPath(); ctx.arc(hx, hy - 8, 27 * pulse, 0, 7);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#9fc8e8';
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      rr(hx + 14, hy - 28, 30, 17, 8);
+      ctx.fillStyle = '#2a3a4e'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#9fc8e8'; ctx.stroke();
+      txt('\u{1F6E1}' + S.run.block, hx + 29, hy - 19, '800 9px Verdana, sans-serif', '#d8ecff');
+      ctx.restore();
+    }
+    if (S.pPois > 0) txt('☠ ' + S.pPois, hx - 26, hy - 26, '800 11px Verdana, sans-serif', '#b8f26b');
   }
 
   // -------------------------------------------------------- dungeon screen
@@ -2335,6 +2605,18 @@ if (!HEADLESS) (function browser() {
         ctx.fillStyle = 'rgba(20,12,22,0.14)';
         ctx.fillRect(ROOM.x + cix * TS, fy + r * TS, TS, TS);
       }
+    }
+    // a dungeon floor is never that clean — sink the whole thing into gloom
+    ctx.fillStyle = 'rgba(16,10,20,0.42)';
+    ctx.fillRect(ROOM.x, fy, ROOM.w, fh);
+    // pools of torchlight breathe against the dark
+    for (const tx of [ROOM.x + 26, ROOM.x + ROOM.w - 26]) {
+      const fl2 = 0.16 + 0.05 * Math.sin(t * 9 + tx);
+      const lg2 = ctx.createRadialGradient(tx, fy + 14, 8, tx, fy + 14, 130);
+      lg2.addColorStop(0, 'rgba(255,170,80,' + fl2 + ')');
+      lg2.addColorStop(1, 'rgba(255,170,80,0)');
+      ctx.fillStyle = lg2;
+      ctx.fillRect(tx - 130, fy, 260, 200);
     }
     // cracked-tile flavour, deterministic per skin
     ctx.globalAlpha = 0.12;
@@ -2502,8 +2784,10 @@ if (!HEADLESS) (function browser() {
       if (o.hero) drawHero(t);
       else drawEnt(o.i, o.e, ents.length, t);
     }
+    drawMotes(dt, 1);
     drawToast();
     drawHUD(t);
+    drawVignette(0.35);
     drawBanner(t);
     if (S.uiFlash && !S.room) {
       txt(S.uiFlash.msg, LW / 2, ROOM.y + ROOM.wallH + 60, '900 15px Verdana, sans-serif',
@@ -2592,8 +2876,8 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = '#f2c04a'; ctx.fill();
       ctx.strokeStyle = 'rgba(122,84,14,0.6)'; ctx.lineWidth = 1; ctx.stroke();
     }
-    txt('⚔\u{FE0F}', LW / 2 - 130, 210 + Math.sin(t * 2) * 5, '40px serif', '#fff');
-    txt('\u{1F409}', LW / 2 + 130, 210 + Math.cos(t * 2) * 5, '40px serif', '#fff');
+    txt('⚔\u{FE0F}', LW / 2 - 168, 178 + Math.sin(t * 2) * 5, '34px serif', '#fff');
+    txt('\u{1F409}', LW / 2 + 168, 178 + Math.cos(t * 2) * 5, '34px serif', '#fff');
     ctx.font = '900 52px Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 10; ctx.strokeStyle = '#2a1030';
@@ -2605,14 +2889,16 @@ if (!HEADLESS) (function browser() {
     ctx.fillText('PUSHER', LW / 2, 205);
     txt('a coin pusher roguelike', LW / 2, 330, '800 14px Verdana, sans-serif', '#c8a8b0');
     const HOW = [
-      '● drop coins — the pusher shoves the pile',
-      '⚔ everything that falls in the TRAY fires at the foe',
-      '\u{1F5E1} swords, bombs & vials ride the pile — push them over',
-      '\u{1F573} gutter items are DESTROYED — aim well',
+      '● spend your purse of coins into the pusher each round',
+      '\u{1F3AF} the tray COLLECTS — then resolves piece by piece:',
+      'gold strikes ⚔  silver shields \u{1F6E1}  green poisons ☠',
+      '\u{1F5E1} your arsenal rides the pile — gutter items are LOST',
       '\u{1F6AA} crawl the dungeon: monsters, chests, shopkeepers…',
       '\u{1F5DD} doors need KEYS — every monster slain drops one',
     ];
     HOW.forEach((h, i) => txt(h, LW / 2, 376 + i * 24, '600 11px Verdana, sans-serif', '#9a8aa0'));
+    drawMotes(1 / 60, 1);
+    drawVignette(0.4);
     if (S.run) {
       uiBtn(LW / 2 - 130, 520, 260, 52, '▶ CONTINUE — FLOOR ' + S.run.floor,
             () => { S.screen = 'dungeon'; save(); },
@@ -2679,6 +2965,7 @@ if (!HEADLESS) (function browser() {
       }
     } else {
       // keep light UI timers alive outside the machine
+      if (RFX.length) RFX.length = 0;
       if (S.uiFlash) { S.uiFlash.t -= dt; if (S.uiFlash.t <= 0) S.uiFlash = null; }
       if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) S.wheelAnim = null; }
       if (S.banner) { S.banner.ttl -= dt; if (S.banner.ttl <= 0) S.banner = null; }
