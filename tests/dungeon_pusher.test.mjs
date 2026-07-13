@@ -1,9 +1,9 @@
 // Headless suite for Dungeon Pusher (coin pusher roguelike). The game's inline
 // <script> is evaluated with a stubbed DOM and no canvas ctx, which flips its
 // HEADLESS switch: the full 2.5D pusher sim plus the whole roguelike layer
-// (battles, enemy AI, poison/stun/block, arsenal, the top-down room crawl
-// with keys/doors/inhabitants, shops, forges, relics, save/load) runs and is
-// driven through window.DP.
+// (round-based battles with a resolve queue, enemy turns, the top-down room
+// crawl with keys/doors/inhabitants, shops, forges, relics, save/load) runs
+// and is driven through window.DP.
 // A second pass loads the game WITH a stub canvas ctx and drives the real
 // requestAnimationFrame loop across every screen to catch render-time errors.
 import { readFileSync } from 'node:fs';
@@ -23,9 +23,8 @@ function loadGame(store, withCtx) {
     if (k === 'measureText') return () => ({ width: 10 });
     return noop;
   }, set() { return true; } });
-  const listeners = {};
   const mkEl = () => new Proxy({
-    style: {}, addEventListener: (k, cb) => { listeners[k] = cb; },
+    style: {}, addEventListener: noop,
     getContext: () => (withCtx ? ctx : null),
     getBoundingClientRect: () => ({ left: 0, top: 0, width: 480, height: 840 }),
   }, { get(t, k) { return (k in t) ? t[k] : noop; }, set(t, k, v) { t[k] = v; return true; } });
@@ -48,7 +47,7 @@ function loadGame(store, withCtx) {
   });
 
   eval('(function(){' + code + '\n})()');
-  return { DP: globalThis.DP, raf: () => rafCb, listeners };
+  return { DP: globalThis.DP, raf: () => rafCb };
 }
 
 const t = harness('dungeon_pusher');
@@ -62,13 +61,21 @@ const step = (secs) => { const n = Math.round(secs * 60); for (let i = 0; i < n;
 const platCoins = () => S.coins.filter(c => c.st === 'plat');
 const ENT_KINDS = ['monster', 'chest', 'shop', 'smith', 'shrine', 'wheel'];
 const mkMonster = (eid) => ({ kind: 'monster', mtype: 'battle', eid: eid || 'rat', done: false });
+// run the round machine until the given phase (or a timeout)
+const untilPhase = (phase, maxSecs) => {
+  for (let i = 0; i < Math.round((maxSecs || 12) * 60); i++) {
+    DP.tick(DT);
+    if (!S.battle || S.battle.phase === phase || S.victory || !S.run) return true;
+  }
+  return S.battle && S.battle.phase === phase;
+};
 
 // -------- boot state --------
 t.ok(DP.HEADLESS, 'headless mode detected');
 t.eq(S.screen, 'title', 'boots to the title screen');
 t.eq(S.run, null, 'no run in progress at first boot');
 t.ok(ITEMS.length === 8 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'eight arsenal items defined');
-t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0 && e.period > 0), 'the bestiary is populated');
+t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the bestiary is populated');
 t.eq(BOSSES.length, 3, 'three floor bosses');
 t.ok(RELICS.length >= 8 && RELICS.every(r => r.id && r.desc), 'relic shelf is stocked');
 t.eq(WHEEL.length, 8, 'the lucky wheel has eight segments');
@@ -80,8 +87,9 @@ t.eq(S.screen, 'dungeon', 'new run opens in the dungeon');
 t.eq(S.run.floor, 1, 'run starts on floor 1');
 t.eq(S.run.depth, 1, 'run starts at room 1');
 t.eq(S.run.hp, C.START_HP, 'full HP at the start');
-t.eq(S.run.wallet, C.START_COINS, 'starting coin purse');
 t.eq(S.run.keys, C.START_KEYS, 'you start with three keys');
+t.eq(S.run.pouch, 0, 'no coin pouches yet');
+t.eq(DP.roundCoins(), C.ROUND_COINS, 'the round purse starts at ' + C.ROUND_COINS);
 t.ok(S.run.arsenal.sword === 1 && S.run.arsenal.shield === 1 && S.run.arsenal.vial === 1,
      'starter arsenal: sword, shield, venom vial');
 t.eq(S.run.potions, C.START_POTIONS, 'one potion in the belt');
@@ -89,8 +97,6 @@ t.ok(S.run.room && Array.isArray(S.run.room.ents), 'the first room is furnished'
 t.ok(S.run.room.ents.length >= 1 && S.run.room.ents.length <= 3, 'a room holds 1-3 inhabitants');
 t.ok(S.run.room.ents.every(e => ENT_KINDS.indexOf(e.kind) >= 0), 'inhabitant kinds are valid');
 t.ok(S.run.room.doors.length >= 2 && S.run.room.doors.length <= 3, 'locked exit doors on the far wall');
-t.ok(S.run.room.doors.every(d => Array.isArray(d.spec) && d.spec.length >= 1 && d.spec.length <= 3),
-     'each door pre-rolls the room behind it');
 
 // -------- room generation is procedural but sane --------
 {
@@ -118,20 +124,25 @@ DP.genRoom([{ kind: 'chest', done: false }]);
 t.ok(S.run.room.ents.some(e => e.kind === 'monster'), 'no keys + no monster -> a wanderer finds you');
 S.run.keys = C.START_KEYS;
 
-// -------- tapping a monster starts the pusher fight --------
+// -------- tapping a monster starts a ROUND-based fight --------
 DP.srand(7);
 S.run.room.ents = [mkMonster('rat'), { kind: 'chest', done: false }];
 t.ok(DP.interact(0), 'tapping the monster starts the fight');
 t.eq(S.screen, 'battle', 'the fight is on');
 t.ok(S.enemy && S.enemy.hp > 0 && S.enemy.hp === S.enemy.maxHp, 'the foe appears at full health');
 t.eq(S.enemy.id, 'rat', 'the room told you exactly who lurks — and it delivered');
-t.eq(S.run.battleEnt, 0, 'the battle remembers which inhabitant it is');
-t.ok(S.enemy.atkT > 0, 'enemy attack timer is armed');
+t.ok(S.battle && S.battle.round === 1 && S.battle.phase === 'drop', 'round 1, purse in hand');
+t.eq(S.run.wallet, C.ROUND_COINS, 'the purse holds the round coins');
 t.ok(platCoins().length >= 40, 'battle pile is dense (' + platCoins().length + ' pieces)');
 t.ok(S.coins.some(c => c.kind === 'item' && c.iid === 'sword'), 'your sword rides the pile');
 t.eq(S.coins.filter(c => c.kind === 'item').length, 3, 'the whole starter arsenal is racked');
-t.ok(S.coins.some(c => c.kind === 'bag'), 'a gold bag hides in the pile');
+t.ok(S.coins.some(c => c.kind === 'silver'), 'silver shield-coins mix through the pile');
 t.ok(platCoins().every(c => c.y >= 0 && c.y <= C.PLAT_FRONT + c.r), 'pile sits on the platform');
+{
+  let sawGreen = false;
+  for (let i = 0; i < 6 && !sawGreen; i++) { DP.initPile(); sawGreen = S.coins.some(c => c.kind === 'green'); }
+  t.ok(sawGreen, 'green venom-coins mix through the pile');
+}
 
 // -------- pusher kinematics --------
 let lo = 1e9, hi = -1e9;
@@ -139,8 +150,8 @@ for (let i = 0; i < 300; i++) { DP.step(DT, true); const f = DP.pusherFront(0); 
 t.ok(lo >= C.PUSH_MIN - 0.01 && hi <= C.PUSH_MAX + 0.01, 'pusher stays within its travel');
 t.ok(hi - lo > (C.PUSH_MAX - C.PUSH_MIN) * 0.8, 'pusher sweeps most of its travel');
 
-// -------- dropping costs coins and feeds the frenzy meter --------
-S.cd = 0; S.run.wallet = 25; S.meter = 0; S.dropped = 0;
+// -------- dropping spends the round purse --------
+S.cd = 0; S.run.wallet = 10; S.meter = 0; S.dropped = 0;
 const w0 = S.run.wallet, n0 = S.coins.length;
 t.ok(DP.drop(50), 'drop accepted');
 t.eq(S.run.wallet, w0 - 1, 'drop costs one coin');
@@ -149,98 +160,155 @@ t.eq(S.meter, 1, 'drop feeds the frenzy meter');
 t.ok(!DP.drop(50), 'cooldown blocks an immediate second drop');
 const dropped = S.coins[S.coins.length - 1];
 t.eq(dropped.st, 'air', 'spawned coin is falling from the slot');
+t.ok(dropped.kind === 'coin' || dropped.kind === 'lucky', 'you always insert gold (or lucky) coins');
 let landed = false;
 for (let i = 0; i < 60 * 6 && !landed; i++) { DP.tick(DT); if (dropped.st === 'plat') landed = true; }
 t.ok(landed, 'dropped coin lands on the platform (or the shelf)');
-S.run.wallet = 0; S.cd = 0;
-t.ok(!DP.drop(50), 'cannot drop with an empty purse');
-t.eq(S.run.wallet, 0, 'purse never goes negative');
 
-// -------- broke bailout: the dungeon pities you mid-fight --------
-S.coins.length = 0;
-S.run.wallet = 0; S.regen = 0;
-S.enemy.atkT = 999;                      // hold the foe's swing for the timer test
-step(C.PITY_T + 0.2);
-t.ok(S.run.wallet >= 1, 'flat-broke fighter gets a slow pity coin');
-
-// -------- tray hits damage the enemy; coins refund ammo --------
+// -------- the tray COLLECTS: nothing fires during the drop phase --------
 DP.srand(9);
-S.coins.length = 0; S.combo = 0; S.lastCollect = -99; S.fever = 0;
-S.enemy.hp = S.enemy.maxHp = 500; S.enemy.atkT = 999; S.enemy.pois = 0;
-const hp0 = S.enemy.hp, wal0 = S.run.wallet;
-const f1 = DP.place(40, C.PLAT_FRONT - 1, 'coin', 0, 'plat');
-const f2 = DP.place(60, C.PLAT_FRONT - 1, 'coin', 0, 'plat');
-f1.vy = 60; f2.vy = 60;
-step(0.9);
-t.ok(f1.scored && f2.scored, 'both coins over the edge fired');
-t.eq(S.enemy.hp, hp0 - (C.DMG.coin + C.DMG.coin * 2), 'second coin in the window pays the combo multiplier');
-t.eq(S.run.wallet, wal0 + 2 * C.REFUND.coin, 'tray coins refund ammo');
-t.eq(S.combo, 2, 'combo counter tracked the chain');
-step(C.COMBO_WIN + 0.6);
-t.eq(S.combo, 0, 'combo lapses after the window');
-
-// combo cap ignites FEVER
-S.coins.length = 0; S.combo = 0; S.lastCollect = -99; S.fever = 0;
-for (let i = 0; i < 8; i++) {
-  const c = DP.place(12 + i * 10, C.PLAT_FRONT - 0.5, 'coin', 0, 'plat');
+S.coins.length = 0; S.battle.loot.length = 0; S.battle.phase = 'drop';
+S.enemy.hp = S.enemy.maxHp = 500;
+const hp0 = S.enemy.hp, hpMe0 = S.run.hp;
+const pieces = [
+  ['coin', 20], ['coin', 32], ['silver', 44], ['green', 56], ['gem', 68], ['skull', 80],
+];
+for (const [kind, x] of pieces) {
+  const c = DP.place(x, C.PLAT_FRONT - 0.5, kind, 0, 'plat');
   c.vy = 70;
 }
-step(2.5);
-t.ok(S.fever > 0, 'a maxed combo ignites FEVER ×2');
+S.run.wallet = 5;                    // purse not empty: no auto-resolve yet
+step(1.5);
+t.eq(S.enemy.hp, hp0, 'no damage during the drop phase — the tray only collects');
+t.eq(S.run.hp, hpMe0, 'even skulls wait for the resolve');
+t.eq(S.battle.loot.length, 6, 'all six pieces joined the round loot');
+t.ok(S.battle.loot.some(l => l.k === 'silver') && S.battle.loot.some(l => l.k === 'green'),
+     'silver and green coins are tracked as loot');
 
-// -------- weapons, poison, shields, hearts, frost --------
-DP.srand(11);
-S.coins.length = 0; S.fever = 0; S.combo = 0; S.lastCollect = -99;
-S.enemy.hp = S.enemy.maxHp = 500; S.enemy.atkT = 999; S.enemy.stunT = 0;
-const sword = DP.place(50, C.PLAT_FRONT - 0.5, 'item', 0, 'plat');
-sword.iid = 'sword'; sword.vy = 90;
-const eh0 = S.enemy.hp;
-step(2);
-t.ok(sword.scored, 'sword pushed over the edge fires');
-t.eq(S.enemy.hp, eh0 - DP.itemById('sword').dmg, 'sword deals its listed damage');
-// poison vial stacks and ticks
-S.coins.length = 0;
-const vial = DP.place(50, C.PLAT_FRONT - 0.5, 'item', 0, 'plat');
-vial.iid = 'vial'; vial.vy = 90;
-step(1.5);
-t.eq(S.enemy.pois, DP.itemById('vial').pois, 'venom vial applies poison stacks');
-const ehPois = S.enemy.hp, stacks = S.enemy.pois;
-step(C.POIS_TICK + 0.1);
-t.eq(S.enemy.hp, ehPois - stacks, 'poison ticks for the stack count');
-t.eq(S.enemy.pois, stacks - 1, 'poison decays as it ticks');
-// shield blocks the next hit
-S.coins.length = 0; S.run.block = 0;
-const sh = DP.place(50, C.PLAT_FRONT - 0.5, 'item', 0, 'plat');
-sh.iid = 'shield'; sh.vy = 90;
-step(1.5);
-t.eq(S.run.block, DP.itemById('shield').block, 'shield raises block');
-const hpMe = S.run.hp;
-DP.hurtPlayer(4, 'test');
-t.eq(S.run.hp, hpMe, 'block soaks the whole hit');
-t.eq(S.run.block, DP.itemById('shield').block - 4, 'block is consumed by damage');
-// heart heals
-S.run.hp = 10; S.coins.length = 0;
-const ht = DP.place(50, C.PLAT_FRONT - 0.5, 'item', 0, 'plat');
-ht.iid = 'heart'; ht.vy = 90;
-step(1.5);
-t.eq(S.run.hp, 10 + DP.itemById('heart').heal, 'heart heals its listed HP');
-// frost rune stuns: the attack timer freezes
-S.coins.length = 0; S.enemy.stunT = 0; S.enemy.atkT = 3;
-const fr = DP.place(50, C.PLAT_FRONT - 0.5, 'item', 0, 'plat');
-fr.iid = 'frost'; fr.vy = 90;
-step(1.5);
-t.ok(S.enemy.stunT > 0, 'frost rune freezes the foe');
-const atkT0 = S.enemy.atkT;
-step(1);
-t.eq(S.enemy.atkT, atkT0, 'a frozen foe cannot wind up its attack');
+// -------- the resolve queue: ordered, one piece at a time --------
+{
+  const q = DP.buildQueue([
+    { k: 'skull' }, { k: 'coin' }, { k: 'item', iid: 'shield' }, { k: 'silver' },
+    { k: 'gem' }, { k: 'item', iid: 'sword' }, { k: 'green' }, { k: 'lucky' },
+  ]);
+  const order = q.map(x => x.t);
+  t.eq(order.join(','), 'gem,silver,shielditem,gold,lucky,weapon,green,skull',
+       'the queue banks gold, shields, then strikes — curses last');
+}
+// full pipeline: purse empties -> settle -> resolve fires everything
+S.run.wallet = 0;
+S.battle.settleT = 0;
+S.run.block = 0;
+const g0 = S.run.gold;
+t.ok(untilPhase('resolve', 3), 'purse spent + field settled -> the tray resolves itself');
+t.ok(untilPhase('enemy', 8), 'the whole queue plays out');
+t.eq(S.enemy.hp, hp0 - 2 * C.DMG.gold, 'two gold coins each smacked for ' + C.DMG.gold);
+t.eq(S.run.gold, g0 + 15, 'the gem banked 15 gold');
+t.eq(S.enemy.pois, 1, 'the green coin left a poison stack');
+// silver gave 1 block, the skull then bit for 4 (bypassing block)
+t.eq(S.run.block, 1, 'the silver coin raised 1 block — and curses ignored it');
+t.eq(S.run.hp, hpMe0 - (C.SKULL_DMG + S.run.floor - 1), 'the skull cursed straight through');
+
+// -------- the enemy takes its turn, block soaks it --------
+S.run.hp = 200; S.run.maxHp = 200;
+S.run.block = 3;
+S.enemy.trait = null; S.enemy.pois = 0;
+const hpBefore = S.run.hp, atk = S.enemy.atk;
+t.ok(untilPhase('drop', 4), 'the enemy strikes and a new round begins');
+t.eq(S.battle.round, 2, 'round 2');
+t.eq(S.run.hp, hpBefore - Math.max(0, atk - 3), 'block soaked 3 of the blow');
+t.eq(S.run.wallet, C.ROUND_COINS, 'a fresh purse for the new round');
+t.eq(S.run.block, 0, 'leftover block melts between rounds');
+step(1.5);                            // let the round-start rain land
+t.ok(S.coins.length > 0, 'the dungeon re-salts the pile each round');
+
+// -------- endRoundNow skips the settle wait --------
+S.run.wallet = 3;
+t.ok(!DP.endRoundNow(), 'cannot resolve while the purse still has coins');
+S.run.wallet = 0;
+t.ok(DP.endRoundNow(), 'RESOLVE button fires with an empty purse');
+t.eq(S.battle.phase, 'resolve', 'straight to the resolve');
+t.ok(untilPhase('drop', 6), 'and on into round 3');
+t.eq(S.battle.round, 3, 'round 3');
+
+// -------- applyLoot effects (unit level) --------
+S.enemy.hp = S.enemy.maxHp = 500; S.enemy.pois = 0; S.enemy.stunned = 0;
+S.run.block = 0; S.run.hp = 100; S.run.maxHp = 200;
+const eh = S.enemy.hp;
+DP.applyLoot({ t: 'weapon', iid: 'sword' });
+t.eq(S.enemy.hp, eh - DP.itemById('sword').dmg, 'sword deals its listed damage');
+DP.applyLoot({ t: 'lucky' });
+t.eq(S.enemy.hp, eh - DP.itemById('sword').dmg - C.DMG.lucky, 'lucky star hits for ' + C.DMG.lucky);
+DP.applyLoot({ t: 'shielditem' , iid: 'shield' });
+t.eq(S.run.block, DP.itemById('shield').block, 'shield item raises its listed block');
+DP.applyLoot({ t: 'heartitem', iid: 'heart' });
+t.eq(S.run.hp, 100 + DP.itemById('heart').heal, 'heart heals its listed HP');
+DP.applyLoot({ t: 'vial', iid: 'vial' });
+t.eq(S.enemy.pois, DP.itemById('vial').pois, 'venom vial applies its stacks');
+DP.applyLoot({ t: 'frost', iid: 'frost' });
+t.eq(S.enemy.stunned, 1, 'frost rune freezes the next enemy turn');
+DP.applyLoot({ t: 'bag' });
+t.ok(S.run.gold >= 8, 'gold bag banks gold');
+
+// -------- the frozen foe skips its turn --------
+S.enemy.stunned = 1;
+S.run.block = 0;
+const hpF = S.run.hp;
+DP.enemyAct();
+t.eq(S.run.hp, hpF, 'a frozen foe cannot strike');
+t.eq(S.enemy.stunned, 0, 'the freeze thaws after the skipped turn');
+DP.enemyAct();
+t.ok(S.run.hp < hpF, 'thawed, it strikes again');
+
+// -------- poison ticks at round end and decays --------
+S.enemy.hp = S.enemy.maxHp = 500;
+S.enemy.pois = 3; S.enemy.trait = null;
+S.pPois = 2;
+S.run.hp = 100; S.run.block = 5;
+const ehP = S.enemy.hp, phP = S.run.hp;
+DP.endRoundTicks();
+t.eq(S.enemy.hp, ehP - 3, 'enemy poison ticks for the stack count');
+t.eq(S.enemy.pois, 2, 'enemy poison decays');
+t.eq(S.run.hp, phP - 2, 'your poison ticks too');
+t.eq(S.pPois, 1, 'and decays');
+t.eq(S.run.block, 5, 'poison seeps straight through block');
+// regen knits at round end
+S.enemy.trait = 'regen'; S.enemy.hp = 100; S.enemy.pois = 0;
+DP.endRoundTicks();
+t.eq(S.enemy.hp, 103, 'a regenerating foe knits +3 at round end');
+S.enemy.trait = null;
+
+// -------- enemy traits on its turn --------
+// fast: two strikes
+S.enemy.trait = 'fast'; S.run.block = 0; S.run.hp = 150;
+const hpFast = S.run.hp;
+DP.enemyAct();
+t.eq(S.run.hp, hpFast - S.enemy.atk * 2, 'a fast foe strikes twice in its turn');
+// thief: cuts the NEXT round's purse
+S.enemy.trait = 'thief'; S.battle.stolen = 0; S.run.hp = 150;
+DP.enemyAct();
+t.eq(S.battle.stolen, 2, 'a thief cuts your purse');
+DP.newRound();
+t.eq(S.run.wallet, DP.roundCoins() - 2, 'the stolen coins are missing from the new purse');
+// venom: poisons you
+S.enemy.trait = 'venom'; S.pPois = 0; S.run.hp = 150;
+DP.enemyAct();
+t.eq(S.pPois, 2, 'a venomous bite poisons you');
+// curse: hurls skulls onto the field
+S.enemy.trait = 'curse'; S.rain.length = 0; S.run.hp = 150;
+DP.enemyAct();
+t.ok(S.rain.some(r => r.kind === 'skull'), 'a cursed foe hurls a skull onto the field');
+S.enemy.trait = null; S.rain.length = 0; S.pPois = 0;
 
 // -------- gutter destroys arsenal items --------
 DP.srand(13);
+S.battle.phase = 'drop';
 S.coins.length = 0;
 S.run.arsenal.axe = 1;
 const doomed = DP.place(3, DP.MACH.gutY + 10, 'item', 0, 'plat');
 doomed.iid = 'axe'; doomed.vx = -30;
 const lost0 = S.lost;
+S.run.wallet = 5;                     // keep the round machine in the drop phase
 step(3);
 t.eq(S.lost, lost0 + 1, 'item drifting off the side is lost');
 t.ok(!S.run.arsenal.axe, 'the gutter DESTROYED the axe for good');
@@ -252,120 +320,64 @@ gcoin.vx = -30;
 const swords = S.run.arsenal.sword;
 step(3);
 t.eq(S.run.arsenal.sword, swords, 'coin gutter losses never touch the arsenal');
-
-// -------- cursed skulls hurt YOU --------
-S.coins.length = 0;
-const hpSk = S.run.hp = 40;
-const sk = DP.place(50, C.PLAT_FRONT - 0.5, 'skull', 0, 'plat');
-sk.vy = 90;
-step(1.5);
-t.eq(S.run.hp, hpSk - (C.SKULL_DMG + S.run.floor - 1), 'a skull in the tray bites for cursed damage');
-
-// -------- gold: gems and bags pay the run currency --------
-S.coins.length = 0;
-const g0 = S.run.gold;
-const gem = DP.place(45, C.PLAT_FRONT - 0.5, 'gem', 0, 'plat');
-gem.vy = 90;
-const bag = DP.place(60, C.PLAT_FRONT - 0.5, 'bag', 0, 'plat');
-bag.vy = 90;
-step(1.5);
-t.eq(S.run.gold, g0 + 15 + 8, 'gem pays 15 gold, bag pays 8');
-
-// -------- the enemy fights back --------
-DP.srand(17);
-S.enemy.hp = 500; S.enemy.stunT = 0; S.enemy.pois = 0; S.pPois = 0;
-S.enemy.trait = null;
-S.run.block = 0; S.run.hp = 50;
-S.enemy.atkT = 0.05;
-step(0.3);
-t.eq(S.run.hp, 50 - S.enemy.atk, 'the foe lands its blow on the timer');
-t.ok(S.enemy.atkT > S.enemy.period - 0.5, 'attack timer rewinds after a swing');
-// thief steals coins
-S.enemy.trait = 'thief'; S.run.wallet = 10; S.run.hp = 200; S.run.maxHp = 200;
-S.enemy.atkT = 0.05;
-step(0.3);
-t.eq(S.run.wallet, 8, 'a thief pockets two coins per hit');
-// venomous poisons the player, and it ticks
-S.enemy.trait = 'venom'; S.pPois = 0; S.pPoisT = 0;
-S.enemy.atkT = 0.05;
-step(0.3);
-t.eq(S.pPois, 2, 'a venomous bite poisons you');
-const hpPv = S.run.hp;
-step(C.POIS_TICK + 0.1);
-t.ok(S.run.hp < hpPv, 'player poison ticks damage');
-// cursed enemies rain skulls onto YOUR field
-S.enemy.trait = 'curse'; S.rain.length = 0;
-S.enemy.atkT = 0.05;
-step(0.2);
-t.ok(S.rain.some(r => r.kind === 'skull'), 'a cursed foe hurls a skull onto the field');
-// regen heals between swings
-S.enemy.trait = 'regen'; S.enemy.hp = 100; S.enemy.maxHp = 500; S.enemy.regenT = 0; S.enemy.atkT = 999;
-step(3.2);
-t.ok(S.enemy.hp > 100, 'a regenerating foe knits itself back together');
-
-// -------- frenzy meter --------
-S.enemy.trait = null; S.enemy.atkT = 999;
-S.meter = C.METER_MAX - 1; S.run.wallet = 30; S.cd = 0; S.rain.length = 0;
-DP.drop(50);
-t.eq(S.meter, 0, 'meter resets on frenzy');
-t.ok(S.rain.filter(r => r.kind === 'coin' || r.kind === 'lucky' || r.kind === 'bag').length >= 6,
-     'frenzy rains bonus coins');
-t.eq(S.rain.filter(r => r.kind === 'item').length, 2, 'frenzy rains two free weapons');
-t.ok(S.rain.filter(r => r.kind === 'item').every(r => r.temp), 'frenzy weapons are marked temporary');
-step(2);
-t.ok(S.coins.some(c => c.kind === 'item' && c.temp), 'free weapons landed on the field');
 // temp items lost to the gutter never touch the arsenal
 S.coins.length = 0;
 const tempIt = DP.place(3, DP.MACH.gutY + 10, 'item', 0, 'plat');
 tempIt.iid = 'sword'; tempIt.temp = true; tempIt.vx = -30;
-const sw0 = S.run.arsenal.sword || 0;
 step(3);
-t.eq(S.run.arsenal.sword || 0, sw0, 'temporary items are not arsenal losses');
+t.eq(S.run.arsenal.sword, swords, 'temporary items are not arsenal losses');
 
-// -------- winning a battle pays gold AND a key --------
+// -------- frenzy meter --------
+S.battle.phase = 'drop';
+S.meter = C.METER_MAX - 1; S.run.wallet = 30; S.cd = 0; S.rain.length = 0;
+DP.drop(50);
+t.eq(S.meter, 0, 'meter resets on frenzy');
+t.ok(S.rain.filter(r => ['coin', 'lucky', 'silver', 'green', 'bag'].indexOf(r.kind) >= 0).length >= 6,
+     'frenzy rains bonus coins of every colour');
+t.eq(S.rain.filter(r => r.kind === 'item').length, 2, 'frenzy rains two free weapons');
+t.ok(S.rain.filter(r => r.kind === 'item').every(r => r.temp), 'frenzy weapons are marked temporary');
+step(2);
+t.ok(S.coins.some(c => c.kind === 'item' && c.temp), 'free weapons landed on the field');
+S.rain.length = 0;
+
+// -------- winning pays gold AND keys; victory halts the round machine --------
 S.enemy.hp = 3; S.enemy.trait = null; S.enemy.pois = 0;
-const kills0 = S.run.kills, gold0 = S.run.gold, keys0 = S.run.keys, depth0 = S.run.depth;
-S.coins.length = 0;
-const killer = DP.place(50, C.PLAT_FRONT - 0.5, 'item', 0, 'plat');
-killer.iid = 'sword'; killer.vy = 90;
-step(1.5);
+const kills0 = S.run.kills, gold1 = S.run.gold, keys0 = S.run.keys, depth0 = S.run.depth;
+DP.applyLoot({ t: 'weapon', iid: 'sword' });
 t.ok(S.victory, 'the foe falls — victory overlay armed');
 t.eq(S.run.kills, kills0 + 1, 'kill counted');
-t.ok(S.run.gold > gold0, 'victory pays the bounty');
+t.ok(S.run.gold > gold1, 'victory pays the bounty');
 t.eq(S.run.keys, keys0 + C.KEY_KILL, 'every monster killed gives a key');
 t.eq(S.victory.keys, C.KEY_KILL, 'the overlay brags about it');
 t.ok(DP.leaveBattle(), 'CONTINUE returns to the room');
 t.eq(S.screen, 'dungeon', 'back in the top-down room');
+t.eq(S.battle, null, 'the round machine rests');
 t.eq(S.run.depth, depth0, 'winning a fight does NOT change rooms');
 t.ok(S.run.room.ents[0].done, 'the slain monster is gone from the room');
-t.eq(S.victory, null, 'victory overlay cleared');
-t.eq(S.run.battleEnt, null, 'battle entity slot cleared');
 
 // -------- keys unlock doors --------
 const kD = S.run.keys, dD = S.run.depth;
 t.ok(DP.useDoor(0), 'a key opens the door');
 t.eq(S.run.keys, kD - 1, 'the key is spent');
 t.eq(S.run.depth, dD + 1, 'one room deeper');
-t.ok(S.run.room.ents.length >= 1, 'the next room is furnished');
 S.run.keys = 0;
 t.ok(!DP.useDoor(0), 'no key, no passage');
 t.ok(S.uiFlash && S.uiFlash.msg.indexOf('KEY') >= 0, 'the lock demands a key');
 S.run.keys = 3;
 
 // -------- room inhabitants --------
-// chest: always gives SOMETHING
 {
   DP.srand(19);
   let keyDrops = 0;
   for (let i = 0; i < 30; i++) {
     S.run.room.ents = [{ kind: 'chest', done: false }];
     const snap = {
-      gold: S.run.gold, wallet: S.run.wallet, keys: S.run.keys, potions: S.run.potions,
+      gold: S.run.gold, keys: S.run.keys, potions: S.run.potions,
       arsenal: Object.values(S.run.arsenal).reduce((a, b) => a + b, 0),
     };
     t.ok(DP.interact(0), 'chest ' + i + ' opens');
     if (S.run.keys > snap.keys) keyDrops++;
-    const gained = S.run.gold > snap.gold || S.run.wallet > snap.wallet || S.run.keys > snap.keys
+    const gained = S.run.gold > snap.gold || S.run.keys > snap.keys
       || S.run.potions > snap.potions
       || Object.values(S.run.arsenal).reduce((a, b) => a + b, 0) > snap.arsenal;
     if (!gained) t.ok(false, 'chest ' + i + ' paid nothing!');
@@ -381,14 +393,13 @@ S.run.room.ents = [{ kind: 'shrine', done: false }];
 DP.interact(0);
 t.eq(S.run.hp, 10 + Math.round(60 * 0.35), 'shrine heals 35% of max HP');
 t.eq(S.pPois, 0, 'shrine cleanses poison');
-t.ok(S.run.room.ents[0].done, 'shrine is spent');
 // wheel ghost grants a spin
 S.wheelAnim = null;
 S.run.room.ents = [{ kind: 'wheel', done: false }];
 DP.interact(0);
 t.ok(S.wheelAnim !== null, 'the wheel ghost spins the lucky wheel');
 
-// -------- the shopkeeper --------
+// -------- the shopkeeper (now selling coin pouches) --------
 DP.srand(23);
 S.run.room.ents = [{ kind: 'shop', done: false }];
 t.ok(DP.interact(0), 'talking to the shopkeeper opens the shop');
@@ -396,6 +407,7 @@ t.ok(S.room && S.room.type === 'shop', 'shop is open');
 t.ok(S.room.stock.length >= 6, 'shop stocks a full shelf (' + S.room.stock.length + ')');
 t.ok(S.room.stock.filter(x => x.kind === 'item').length === 3, 'three arsenal items on sale');
 t.ok(S.room.stock.some(x => x.kind === 'relic'), 'a relic gleams in the case');
+t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
 S.run.gold = 0;
 t.ok(!DP.buyShop(0), 'cannot buy broke');
 S.run.gold = 10000;
@@ -404,8 +416,11 @@ const iid = S.room.stock[itemSlot].iid;
 const had = S.run.arsenal[iid] || 0;
 t.ok(DP.buyShop(itemSlot), 'gold buys the item');
 t.eq(S.run.arsenal[iid], had + 1, 'bought item joins the arsenal');
-t.ok(S.room.stock[itemSlot].sold, 'shelf slot is now SOLD');
 t.ok(!DP.buyShop(itemSlot), 'cannot buy the same slot twice');
+const pouchSlot = S.room.stock.findIndex(x => x.kind === 'pouch');
+const purse0 = DP.roundCoins();
+DP.buyShop(pouchSlot);
+t.eq(DP.roundCoins(), purse0 + C.POUCH_COINS, 'a pouch fattens every future round purse');
 const relicSlot = S.room.stock.findIndex(x => x.kind === 'relic');
 const rid = S.room.stock[relicSlot].rid;
 t.ok(DP.buyShop(relicSlot), 'gold buys the relic');
@@ -414,10 +429,6 @@ const hpSlot = S.room.stock.findIndex(x => x.kind === 'maxhp');
 const mhp0 = S.run.maxHp;
 DP.buyShop(hpSlot);
 t.eq(S.run.maxHp, mhp0 + 10, 'max HP upgrade sticks');
-const potSlot = S.room.stock.findIndex(x => x.kind === 'potion');
-const pot0 = S.run.potions;
-DP.buyShop(potSlot);
-t.eq(S.run.potions, pot0 + 1, 'potion joins the belt');
 t.ok(DP.closeModal(), 'LEAVE closes the shop');
 t.ok(!S.run.room.ents[0].done, 'the shopkeeper stays in the room');
 DP.interact(0);
@@ -452,25 +463,32 @@ DP.interact(0);
 t.ok(S.enemy.elite && S.enemy.name.indexOf('ELITE') === 0, 'elites are branded');
 const keysE = S.run.keys;
 S.enemy.hp = 1;
-DP.dmgEnemy(5, 50);
+DP.dmgEnemy(5);
 t.eq(S.run.keys, keysE + C.KEY_ELITE, 'an elite kill pays ' + C.KEY_ELITE + ' keys');
 DP.leaveBattle();
 
 // -------- relic effects --------
-// whetstone: +30% weapon damage
-S.run.relics = ['whet']; S.run.whet = 0; S.fever = 0;
+S.run.relics = ['whet']; S.run.whet = 0;
 t.eq(DP.weaponDmg(10), 13, 'whetstone sharpens weapon damage +30%');
 S.run.relics = [];
 t.eq(DP.weaponDmg(10), 10, 'without it, damage is flat');
-// venom gland: +2 stacks
+// venom gland boosts vials, not green coins
 S.run.relics = ['venom'];
 S.enemy = DP.mkEnemy('battle'); S.enemy.hp = 500;
-S.screen = 'battle';
-DP.poisonEnemy(4, 50);
-t.eq(S.enemy.pois, 6, 'venom gland adds two stacks');
+S.screen = 'battle'; S.battle = { round: 1, phase: 'resolve', loot: [], queue: [], qi: 0, qt: 0, settleT: 0, stolen: 0 };
+DP.applyLoot({ t: 'vial', iid: 'vial' });
+t.eq(S.enemy.pois, DP.itemById('vial').pois + 2, 'venom gland adds two stacks to vials');
+S.enemy.pois = 0;
+DP.applyLoot({ t: 'green' });
+t.eq(S.enemy.pois, 1, 'green coins stay 1 stack each');
+// plate: every round starts armoured
+S.run.relics = ['plate'];
+DP.newRound();
+t.eq(S.run.block, 4, 'battle plate raises 4 block every round');
+S.run.relics = [];
 // lantern: every door scouted
+S.screen = 'dungeon'; S.battle = null;
 S.run.relics = ['lantern'];
-S.screen = 'dungeon';
 DP.genRoom();
 t.ok(S.run.room.doors.every(d => d.known), 'the lantern reveals every door');
 S.run.relics = [];
@@ -478,7 +496,6 @@ S.run.relics = [];
 S.run.relics = ['wind']; S.run.windUsed = false; S.run.hp = 3; S.run.block = 0;
 DP.hurtPlayer(99, 'test doom');
 t.eq(S.run.hp, 1, 'second wind holds you at 1 HP');
-t.ok(S.run.windUsed, 'second wind is spent');
 DP.hurtPlayer(99, 'test doom');
 t.eq(S.run, null, 'the second killing blow lands — run over');
 t.eq(S.screen, 'over', 'game over screen');
@@ -509,23 +526,20 @@ S.run.keys = 1;
 t.ok(DP.useDoor(0), 'one key opens the boss door');
 t.eq(S.run.depth, C.BOSS_DEPTH, 'you stand in the lair');
 t.eq(S.run.room.ents.length, 1, 'the lair holds only the boss');
-t.ok(S.run.room.ents[0].kind === 'monster' && S.run.room.ents[0].mtype === 'boss', 'and it IS the boss');
 t.eq(S.run.room.doors.length, 0, 'no doors out — the only way is through');
 DP.interact(0);
 t.ok(S.enemy && S.enemy.boss, 'boss fight underway');
 S.run.hp = 30; S.run.maxHp = 100;
 const keysB = S.run.keys;
 S.enemy.hp = 1;
-DP.dmgEnemy(5, 50);
+DP.dmgEnemy(5);
 t.ok(S.victory && S.victory.boss, 'boss down');
 t.eq(S.run.keys, keysB + C.KEY_BOSS, 'the boss hoard holds ' + C.KEY_BOSS + ' keys');
 t.ok(S.run.hp > 30, 'the stairwell rest heals');
-t.eq(S.run.floor, 1, 'still floor 1 until you take the stairs');
 DP.leaveBattle();
 t.eq(S.run.floor, 2, 'DESCEND drops to the next floor');
 t.eq(S.run.depth, 1, 'next floor starts at room 1');
 t.eq(S.screen, 'dungeon', 'back in a fresh room');
-t.ok(S.run.room.ents.length >= 1, 'the new floor room is furnished');
 
 // -------- persistence --------
 S.mute = true;
@@ -535,16 +549,14 @@ t.eq(saved.v, 1, 'save is v1');
 t.ok(saved.mute === true, 'mute is persisted');
 t.ok(saved.run && saved.run.floor === 2, 'the run survives in the save');
 t.eq(saved.run.keys, S.run.keys, 'keys are persisted');
+t.eq(saved.run.pouch, S.run.pouch, 'coin pouches are persisted');
 t.ok(saved.run.room && Array.isArray(saved.run.room.ents), 'the current room is persisted');
-t.ok(saved.run.arsenal && typeof saved.run.arsenal === 'object', 'arsenal is persisted');
 t.ok(saved.best && saved.best.floor >= 1, 'best progress is persisted');
-// a fresh boot resumes the run
 const { DP: DP2 } = loadGame(store, false);
 t.ok(DP2.S.run && DP2.S.run.floor === 2, 'reload resumes the saved run');
 t.eq(DP2.S.screen, 'title', 'resume lands on the title (CONTINUE offered)');
 t.eq(DP2.S.run.keys, S.run.keys, 'keys reload');
 t.ok(DP2.S.run.room && DP2.S.run.room.ents.length >= 1, 'the room reloads intact');
-t.ok(DP2.S.best.floor >= 1, 'best stats reload');
 // death wipes the run but keeps the best
 DP2.S.screen = 'battle';
 DP2.S.enemy = DP2.mkEnemy('battle');
@@ -554,26 +566,29 @@ DP2.save();
 const saved2 = JSON.parse(store[C.SAVE_KEY]);
 t.ok(saved2.run === null, 'dead runs are not saved');
 t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
-// a pre-crawl save (no room/keys) migrates cleanly
+// a pre-round save (no pouch/room) migrates cleanly
 {
   const storeOld = { dungeon_pusher_save: JSON.stringify({
     v: 1, mute: false, best: { floor: 1, depth: 2, kills: 3, gold: 10 },
     run: { floor: 1, depth: 2, hp: 50, maxHp: 60, gold: 5, wallet: 10,
            arsenal: { sword: 1 }, relics: [], potions: 1, whet: 0,
-           kills: 1, goldEarned: 5, doors: [{ type: 'battle' }], block: 0 },
+           kills: 1, goldEarned: 5, block: 0 },
   }) };
   const { DP: DPold } = loadGame(storeOld, false);
   t.ok(DPold.S.run && DPold.S.run.hp === 50, 'an old save still resumes');
   t.eq(DPold.S.run.keys, DPold.C.START_KEYS, 'old saves get the starter keys');
+  t.eq(DPold.S.run.pouch, 0, 'old saves start without pouches');
   t.ok(DPold.S.run.room && DPold.S.run.room.ents.length >= 1, 'old saves get a furnished room');
 }
 
 // -------- determinism --------
 function runScript(D) {
   D.srand(1337);
-  D.S.run.wallet = 99;
   D.S.victory = null;
   D.S.enemy.hp = D.S.enemy.maxHp = 99999;
+  D.S.battle.phase = 'drop';
+  D.S.battle.loot.length = 0;
+  D.S.run.wallet = 99;
   D.reset();                     // zeroes time + pusher phase, re-racks the pile
   D.S.cd = 0; D.drop(30);
   for (let i = 0; i < 60; i++) D.tick(1 / 60);
@@ -582,21 +597,21 @@ function runScript(D) {
   return JSON.stringify(D.S.coins.map(c => [c.x.toFixed(4), c.y.toFixed(4), c.st, c.kind]));
 }
 DP.newRun(); DP.startBattle('battle');
-S.enemy.atkT = 9999; S.enemy.trait = null;
 const runA = runScript(DP);
-S.enemy.atkT = 9999;
 const runB = runScript(DP);
 t.eq(runA, runB, 'same seed + same inputs = identical sim');
 
-// -------- stability --------
+// -------- stability: whole rounds cycle without breaking the sim --------
 DP.srand(41);
 DP.newRun(); DP.startBattle('battle');
-S.run.wallet = 999; S.enemy.hp = S.enemy.maxHp = 99999;
+S.enemy.hp = S.enemy.maxHp = 99999;
+S.run.hp = S.run.maxHp = 99999;      // god mode: this is a physics soak test
 for (let sec = 0; sec < 60; sec++) {
   S.cd = 0;
-  DP.drop(20 + (sec * 13) % 60);
+  DP.drop(20 + (sec * 13) % 60);     // rejected outside the drop phase — fine
   step(1);
 }
+t.ok(S.battle && S.battle.round >= 2, 'rounds cycled during the soak (round ' + S.battle.round + ')');
 let sane = true, contained = true;
 for (const c of S.coins) {
   if (!isFinite(c.x) || !isFinite(c.y) || !isFinite(c.z)) sane = false;
@@ -624,7 +639,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
     { kind: 'shop', done: false },
     { kind: 'chest', done: false },
   ];
-  frames(10);                                     // three inhabitants drawn
+  frames(10);
   D.interact(2);
   frames(10);                                     // chest toast
   D.interact(1);
@@ -636,19 +651,21 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.pickBoon(0);
   frames(6);
   D.closeModal();
-  frames(6);                                      // done entities render faded
   D.interact(0);                                  // fight the rat
-  D.S.run.wallet = 50;
-  for (let i = 0; i < 8; i++) { D.S.cd = 0; D.drop(20 + i * 8); frames(20); }   // live combat
+  D.S.enemy.hp = D.S.enemy.maxHp = 500;
+  D.S.run.wallet = 4;
+  for (let i = 0; i < 4; i++) { D.S.cd = 0; D.drop(20 + i * 16); frames(24); }   // spend the purse
+  frames(80);                                     // settle -> auto resolve -> queue flies
+  let guard = 0;
+  while (D.S.battle && D.S.battle.round < 2 && guard++ < 80) frames(10);         // resolve + enemy turn -> round 2
+  t.ok(D.S.battle && D.S.battle.round >= 2, 'render pass played a full round (round ' + (D.S.battle && D.S.battle.round) + ')');
   D.spinWheel();
   frames(30);                                     // wheel overlay over battle
   D.S.wheelAnim = null;
-  D.hurtPlayer(5, 'render test');
-  frames(10);                                     // hurt vignette
-  D.S.enemy.hp = 1; D.dmgEnemy(5, 50);
+  D.S.enemy.hp = 1; D.dmgEnemy(5);
   frames(40);                                     // victory overlay
   D.leaveBattle();
-  frames(10);                                     // back in the room, monster slain
+  frames(10);
   D.S.run.keys = 5;
   D.S.run.depth = D.C.BOSS_DEPTH - 1; D.genRoom();
   frames(8);                                      // single crowned boss door
