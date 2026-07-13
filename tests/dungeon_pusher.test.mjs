@@ -62,12 +62,19 @@ const platCoins = () => S.coins.filter(c => c.st === 'plat');
 const ENT_KINDS = ['monster', 'chest', 'shop', 'smith', 'shrine', 'wheel', 'stairs'];
 const mkMonster = (eid) => ({ kind: 'monster', mtype: 'battle', eid: eid || 'rat', done: false, px: 0.5, py: 0.4 });
 const mapRooms = () => Object.values(S.run.map.rooms);
-// a direction from the current room that actually has a neighbour
-const openDir = () => {
+const DX = { n: 0, s: 0, e: 1, w: -1 }, DY = { n: -1, s: 1, e: 0, w: 0 };
+const lk2 = (a, b) => (a.gy < b.gy || (a.gy === b.gy && a.gx < b.gx))
+  ? a.gx + ',' + a.gy + '~' + b.gx + ',' + b.gy
+  : b.gx + ',' + b.gy + '~' + a.gx + ',' + a.gy;
+// a direction from the current room where a corridor was actually dug
+const openDir = (wantOpen) => {
   const r = DP.curRoom();
   for (const d of ['n', 's', 'e', 'w']) {
-    const k = (r.gx + { n: 0, s: 0, e: 1, w: -1 }[d]) + ',' + (r.gy + { n: -1, s: 1, e: 0, w: 0 }[d]);
-    if (S.run.map.rooms[k]) return d;
+    const nb = S.run.map.rooms[(r.gx + DX[d]) + ',' + (r.gy + DY[d])];
+    if (!nb) continue;
+    const l = S.run.map.links[lk2(r, nb)];
+    if (!l) continue;
+    if (wantOpen === undefined || !!l.open === wantOpen) return d;
   }
   return null;
 };
@@ -115,17 +122,25 @@ t.eq(mapRooms().filter(r => r.boss).length, 1, 'exactly one boss lair per floor'
   const boss = mapRooms().find(r => r.boss);
   t.ok(mapRooms().every(r => r.dist <= boss.dist), 'the boss lairs in the farthest room');
   t.ok(boss.ents.length === 1 && boss.ents[0].mtype === 'boss', 'the lair holds only the boss');
-  // connectivity: BFS over the grid reaches every room
+  t.eq(boss.size, 'b', 'the boss lair is a big chamber');
+  t.ok(mapRooms().every(r => ['s', 'w', 't', 'b'].indexOf(r.size) >= 0), 'every room has a blueprint size');
+  {
+    let variety = new Set(mapRooms().map(r => r.size));
+    t.ok(variety.size >= 2, 'rooms come in different sizes (' + [...variety].join(',') + ')');
+  }
+  // connectivity: BFS along the CORRIDORS reaches every room
   const rooms = S.run.map.rooms;
   const q2 = ['0,0'], seen = { '0,0': true };
   while (q2.length) {
     const r = rooms[q2.shift()];
     for (const [dx, dy] of [[0, -1], [0, 1], [1, 0], [-1, 0]]) {
       const k = (r.gx + dx) + ',' + (r.gy + dy);
-      if (rooms[k] && !seen[k]) { seen[k] = true; q2.push(k); }
+      if (rooms[k] && !seen[k] && S.run.map.links[lk2(r, rooms[k])]) { seen[k] = true; q2.push(k); }
     }
   }
-  t.eq(Object.keys(seen).length, mapRooms().length, 'every room is reachable on foot');
+  t.eq(Object.keys(seen).length, mapRooms().length, 'every room is reachable through dug corridors');
+  // corridors are explicit: adjacency alone is not a door
+  t.ok(Object.keys(S.run.map.links).length >= mapRooms().length - 1, 'at least a spanning tree of corridors');
 }
 // dweller generation across many floors is sane
 {
@@ -229,12 +244,14 @@ t.ok(S.battle.loot.some(l => l.k === 'silver') && S.battle.loot.some(l => l.k ==
   t.eq(order.join(','), 'gem,silver,shielditem,gold,lucky,weapon,green,skull',
        'the queue banks gold, shields, then strikes — curses last');
 }
-// full pipeline: purse empties -> settle -> resolve fires everything
+// full pipeline: the tray NEVER resolves itself — the button is yours
 S.run.wallet = 0;
-S.battle.settleT = 0;
 S.run.block = 0;
 const g0 = S.run.gold;
-t.ok(untilPhase('resolve', 3), 'purse spent + field settled -> the tray resolves itself');
+step(3);
+t.eq(S.battle.phase, 'drop', 'purse spent + field settled — still waiting for YOU');
+t.ok(DP.endRoundNow(), 'pressing RESOLVE starts the show');
+t.eq(S.battle.phase, 'resolve', 'and only then does the tray fire');
 t.ok(untilPhase('enemy', 8), 'the whole queue plays out');
 t.eq(S.enemy.hp, hp0 - 2 * C.DMG.gold, 'two gold coins each smacked for ' + C.DMG.gold);
 t.eq(S.run.gold, g0 + 15, 'the gem banked 15 gold');
@@ -334,32 +351,29 @@ DP.enemyAct();
 t.ok(S.rain.some(r => r.kind === 'skull'), 'a cursed foe hurls a skull onto the field');
 S.enemy.trait = null; S.rain.length = 0; S.pPois = 0;
 
-// -------- gutter destroys arsenal items --------
+// -------- the walls are SOLID: nothing is ever lost off the sides --------
 DP.srand(13);
 S.battle.phase = 'drop';
 S.coins.length = 0;
 S.run.arsenal.axe = 1;
-const doomed = DP.place(3, DP.MACH.gutY + 10, 'item', 0, 'plat');
-doomed.iid = 'axe'; doomed.vx = -30;
-const lost0 = S.lost;
+const shoved = DP.place(6, 46, 'item', 0, 'plat');
+shoved.iid = 'axe'; shoved.vx = -60;
+const scoin = DP.place(6, 60, 'coin', 0, 'plat');
+scoin.vx = -60;
 S.run.wallet = 5;                     // keep the round machine in the drop phase
 step(3);
-t.eq(S.lost, lost0 + 1, 'item drifting off the side is lost');
-t.ok(!S.run.arsenal.axe, 'the gutter DESTROYED the axe for good');
-t.ok(!S.coins.includes(doomed), 'gutter item was removed from the world');
-// plain coins are lost silently without touching the arsenal
-S.coins.length = 0;
-const gcoin = DP.place(3, DP.MACH.gutY + 10, 'coin', 0, 'plat');
-gcoin.vx = -30;
-const swords = S.run.arsenal.sword;
-step(3);
-t.eq(S.run.arsenal.sword, swords, 'coin gutter losses never touch the arsenal');
-// temp items lost to the gutter never touch the arsenal
-S.coins.length = 0;
-const tempIt = DP.place(3, DP.MACH.gutY + 10, 'item', 0, 'plat');
-tempIt.iid = 'sword'; tempIt.temp = true; tempIt.vx = -30;
-step(3);
-t.eq(S.run.arsenal.sword, swords, 'temporary items are not arsenal losses');
+t.ok(S.coins.includes(shoved), 'an item shoved hard into the wall stays on the field');
+t.eq(shoved.st, 'plat', 'still sitting on the platform');
+t.ok(shoved.x >= shoved.r - 0.01, 'the side wall held it');
+t.ok(S.coins.includes(scoin) && scoin.x >= scoin.r - 0.01, 'coins bounce off the walls too');
+t.eq(S.run.arsenal.axe, 1, 'the arsenal never loses a piece to the sides');
+// the only exit is the FRONT: over the lip and into the tray
+S.coins.length = 0; S.battle.loot.length = 0;
+const fronted = DP.place(50, C.PLAT_FRONT - 0.5, 'coin', 0, 'plat');
+fronted.vy = 70;
+step(1.5);
+t.ok(fronted.scored, 'over the front edge -> collected');
+t.eq(S.battle.loot.length, 1, 'and it joined the round loot');
 
 // -------- frenzy meter --------
 S.battle.phase = 'drop';
@@ -408,20 +422,25 @@ t.ok(S.run.room.ents[0].done, 'the slain monster is gone from the room');
   t.eq(S.run.map.cur, from, 'back in the previous room — rooms persist');
   t.eq(DP.tryDoor(dir), true, 'and forth again, still free');
   DP.tryDoor(back);          // return to the entrance for the tests below
-  // a still-locked door refuses the key-broke (any unused neighbour door)
+  // a still-locked corridor refuses the key-broke
   S.run.keys = 0;
-  let lockedDir = null;
-  for (const d of ['n', 's', 'e', 'w']) {
-    if (d === dir) continue;
-    const r = DP.curRoom();
-    const k = (r.gx + { n: 0, s: 0, e: 1, w: -1 }[d]) + ',' + (r.gy + { n: -1, s: 1, e: 0, w: 0 }[d]);
-    if (S.run.map.rooms[k]) { lockedDir = d; break; }
-  }
+  const lockedDir = openDir(false);
   if (lockedDir) {
     t.ok(!DP.tryDoor(lockedDir), 'no key, no passage');
     t.ok(S.uiFlash && S.uiFlash.msg.indexOf('KEY') >= 0, 'the lock demands a key');
   }
+  // adjacency without a corridor is a solid wall, key or not
   S.run.keys = 3;
+  {
+    const r = DP.curRoom();
+    for (const d of ['n', 's', 'e', 'w']) {
+      const nb = S.run.map.rooms[(r.gx + DX[d]) + ',' + (r.gy + DY[d])];
+      if (nb && !S.run.map.links[lk2(r, nb)]) {
+        t.ok(!DP.tryDoor(d), 'no corridor dug -> no door, even with keys');
+        break;
+      }
+    }
+  }
 }
 
 // -------- room inhabitants --------
@@ -613,7 +632,7 @@ t.ok(saved.run.map && saved.run.map.rooms && saved.run.map.cur, 'the whole floor
 t.ok(saved.best && saved.best.floor >= 1, 'best progress is persisted');
 // unlock a door + move, then check the exploration state survives a reload
 {
-  const dir = openDir();
+  const dir = openDir(false) || openDir();
   S.run.keys = 2;
   DP.tryDoor(dir); DP.tryDoor(dir);
   DP.save();
@@ -651,6 +670,24 @@ t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
        'old saves get a fresh floor map carved');
   t.ok(DPold.S.run.room === DPold.S.run.map.rooms[DPold.S.run.map.cur], 'and stand in its entrance');
 }
+// a pre-corridor map (v1: links only tracked unlocks) gets corridors grandfathered in
+{
+  const storeV1 = { dungeon_pusher_save: JSON.stringify({
+    v: 1, mute: false, best: { floor: 1, depth: 1, kills: 0, gold: 0 },
+    run: { floor: 1, depth: 1, hp: 40, maxHp: 60, gold: 0, pouch: 0,
+           arsenal: { sword: 1 }, relics: [], potions: 1, whet: 0, keys: 2,
+           kills: 0, goldEarned: 0,
+           map: { rooms: {
+             '0,0': { gx: 0, gy: 0, ents: [], visited: true, dist: 0, boss: false },
+             '1,0': { gx: 1, gy: 0, ents: [{ kind: 'chest', done: false }], visited: false, dist: 1, boss: true },
+           }, links: {}, cur: '0,0' } },
+  }) };
+  const { DP: DPv1 } = loadGame(storeV1, false);
+  t.ok(DPv1.S.run.map.v === 2, 'v1 map is stamped migrated');
+  t.ok(DPv1.S.run.map.links['0,0~1,0'] && !DPv1.S.run.map.links['0,0~1,0'].open,
+       'touching v1 rooms get a locked corridor grandfathered in');
+  t.eq(DPv1.S.run.map.rooms['0,0'].size, 'b', 'v1 rooms default to big chambers');
+}
 
 // -------- determinism --------
 function runScript(D) {
@@ -680,6 +717,7 @@ S.run.hp = S.run.maxHp = 99999;      // god mode: this is a physics soak test
 for (let sec = 0; sec < 60; sec++) {
   S.cd = 0;
   DP.drop(20 + (sec * 13) % 60);     // rejected outside the drop phase — fine
+  if (S.battle && S.battle.phase === 'drop' && S.run.wallet < 1) DP.endRoundNow();
   step(1);
 }
 t.ok(S.battle && S.battle.round >= 2, 'rounds cycled during the soak (round ' + S.battle.round + ')');
@@ -726,7 +764,8 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.S.enemy.hp = D.S.enemy.maxHp = 500;
   D.S.run.wallet = 4;
   for (let i = 0; i < 4; i++) { D.S.cd = 0; D.drop(20 + i * 16); frames(24); }   // spend the purse
-  frames(80);                                     // settle -> auto resolve -> queue flies
+  frames(60);                                     // pieces settle; RESOLVE button pulses
+  D.endRoundNow();                                // the player presses it
   let guard = 0;
   while (D.S.battle && D.S.battle.round < 2 && guard++ < 80) frames(10);         // resolve + enemy turn -> round 2
   t.ok(D.S.battle && D.S.battle.round >= 2, 'render pass played a full round (round ' + (D.S.battle && D.S.battle.round) + ')');
@@ -737,16 +776,14 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   frames(40);                                     // victory overlay
   D.leaveBattle();
   frames(10);
-  // walk through a real unlocked door (exercises doorway + fog rendering)
+  // walk through a real unlocked corridor (exercises doorway + fog rendering)
   D.S.run.keys = 5;
   {
-    const r = D.curRoom();
     for (const d of ['n', 's', 'e', 'w']) {
-      const k = (r.gx + { n: 0, s: 0, e: 1, w: -1 }[d]) + ',' + (r.gy + { n: -1, s: 1, e: 0, w: 0 }[d]);
-      if (D.S.run.map.rooms[k]) { D.tryDoor(d); D.tryDoor(d); break; }
+      if (D.doorTo(d)) { D.tryDoor(d); D.tryDoor(d); break; }
     }
   }
-  frames(10);                                     // next room, minimap grew
+  frames(10);                                     // next (differently sized) room, minimap grew
   // teleport to the boss lair and fight
   {
     const bossK = Object.keys(D.S.run.map.rooms).find(k => D.S.run.map.rooms[k].boss);
