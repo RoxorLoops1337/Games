@@ -469,8 +469,8 @@ t.ok(S.score > cSnap.pts || S.tray.coins > 0 || S.tray.prizes.length > 0 || S.wh
 // -------- daily gift --------
 S.wallet = 10; S.money = 200; S.wheelAnim = null;
 t.ok(CP.claimDaily('Mon Jul 13 2026'), 'daily gift claims on a fresh day');
-t.eq(S.wallet, 25, 'daily gift pays 15 coins');
-t.eq(S.money, 300, 'daily gift pays $1.00');
+t.eq(S.wallet, 35, 'daily gift pays 25 coins');
+t.eq(S.money, 400, 'daily gift pays $2.00');
 t.ok(S.wheelAnim !== null, 'daily gift includes a wheel spin');
 t.ok(!CP.claimDaily('Mon Jul 13 2026'), 'cannot claim twice on the same day');
 t.ok(CP.claimDaily('Tue Jul 14 2026'), 'a new day resets the gift');
@@ -577,6 +577,31 @@ CP.collectTray();
 t.ok(S.coinsBack > 0, 'some coins did come back');
 t.ok(S.coinsSpent > S.coinsBack, 'house edge: you always lose more coins than you win (' +
      S.coinsBack + ' back of ' + S.coinsSpent + ' spent)');
+
+// -------- economy viability: a fresh player can actually keep playing --------
+// Regression guard for "we don't earn enough points to keep playing": a
+// brand-new save must earn real progress before its starting wallet runs
+// dry, and a couple of cheap prizes must be able to fund the next coin pack.
+CP.srand(61); CP.setMachine('gold');
+S.wallet = C.START_WALLET; S.money = C.START_MONEY; S.score = 0;
+CP.reset();
+let freshDrops = 0;
+for (let sec = 0; sec < 120 && (S.wallet > 0 || S.tray.coins > 0); sec++) {
+  S.cd = 0;
+  if (S.wallet > 0 && CP.drop(20 + (sec * 13) % 60)) freshDrops++;
+  step(1);
+  if (S.tray.coins > 0 && sec % 5 === 0) CP.collectTray(); // a player periodically scoops the tray
+}
+CP.collectTray();
+t.ok(freshDrops >= 60, 'a fresh wallet, topped up by collecting the tray, lasts for real drops (' + freshDrops + ')');
+t.ok(S.score >= MACHINES.penny.unlock, 'a single starting session earns enough to unlock the second machine');
+const cheapest = PRIZES[0];
+const fairEach = Math.round(cheapest.base * C.SELL_TIERS[1].mul);
+const neededToFundPack = Math.ceil(C.PACKS[0].m / fairEach);
+t.ok(neededToFundPack <= 3, 'selling a few of the cheapest prize funds the smallest coin pack (' +
+     neededToFundPack + ' needed)');
+t.ok(S.score >= cheapest.cost * neededToFundPack,
+     'a fresh session earns enough points to afford those prizes');
 
 // -------- stability --------
 let sane = true, contained = true;

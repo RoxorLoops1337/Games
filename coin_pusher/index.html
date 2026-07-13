@@ -58,11 +58,11 @@ const C = {
   FRICTION: 3.0, SETTLE: 0.5, REST: 0.05,
   LIP_G: 34,               // deceleration climbing the incline lip
   MAX_LAY: 2,              // coins can stack three high (lay 0,1,2)
-  START_WALLET: 25, START_MONEY: 500,   // money is stored in cents
-  PITY_T: 6,                            // broke bailout: +1 coin per 6s
+  START_WALLET: 45, START_MONEY: 700,   // money is stored in cents
+  PITY_T: 4,                            // broke bailout: +1 coin per 4s
   DROP_CD: 0.28, COMBO_WIN: 1.4, COMBO_CAP: 5,
   METER_MAX: 20,
-  PTS: { coin: 10, lucky: 50, gem: 500 },
+  PTS: { coin: 15, lucky: 75, gem: 750 },
   PAY: { coin: 1, lucky: 2, gem: 5 },   // coins returned to the TRAY, not the wallet
   P_LUCKY: 0.10, P_GEM: 0.025,
   PRIZE_R: 8.0,
@@ -75,9 +75,9 @@ const C = {
     { name: 'Greedy', mul: 1.5, dur: 600e3 },
   ],
   PACKS: [                              // money -> coins; the only way in, so the
-    { c: 12, m: 100 },                  // house edge on the field really bites
-    { c: 70, m: 500 },
-    { c: 160, m: 1000 },
+    { c: 16, m: 100 },                  // house edge on the field really bites
+    { c: 90, m: 500 },
+    { c: 200, m: 1000 },
   ],
   EXCHANGE: 0.6,                        // prize -> points at 60% of shop cost
 };
@@ -89,13 +89,13 @@ const C = {
 const MACHINES = {
   gold: {
     name: 'GOLD RUSH', sub: 'CLASSIC PUSHER', unlock: 0,
-    coin: { r: 4.6, val: 10, style: 'gold', sym: '¢' },
-    luckyVal: 50, gemVal: 500,
+    coin: { r: 4.6, val: 15, style: 'gold', sym: '¢' },
+    luckyVal: 75, gemVal: 750,
     pushPeriod: 3.4, maxCoins: 170,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
     gutY: 36, lipW: 7, lipH: 2.2,
     tags: [
-      { val: 100, col: '#43d17c' }, { val: 250, col: '#3fa9f5' }, { val: 500, col: '#ef4b5d' },
+      { val: 150, col: '#43d17c' }, { val: 375, col: '#3fa9f5' }, { val: 750, col: '#ef4b5d' },
     ],
     special: null,
     prizeIds: ['paw', 'boba', 'dino'],
@@ -105,8 +105,8 @@ const MACHINES = {
   },
   penny: {
     name: 'PENNY FALLS', sub: 'SEASIDE 2p CASCADE', unlock: 1500,
-    coin: { r: 3.7, val: 5, style: 'copper', sym: '2' },
-    luckyVal: 25, gemVal: 250,
+    coin: { r: 3.7, val: 8, style: 'copper', sym: '2' },
+    luckyVal: 40, gemVal: 400,
     pushPeriod: 3.0, maxCoins: 210,
     // tier 0 = elevated sliding shelf; its drop edge is 'dyn' — the moving
     // face at pusherFront(1), which doubles as tier 1's pusher.
@@ -116,7 +116,7 @@ const MACHINES = {
     ],
     gutY: 58, lipW: 6, lipH: 2.0,
     tags: [
-      { val: 50, col: '#43d17c' }, { val: 100, col: '#3fa9f5' }, { val: 250, col: '#ef4b5d' },
+      { val: 75, col: '#43d17c' }, { val: 150, col: '#3fa9f5' }, { val: 375, col: '#ef4b5d' },
     ],
     special: null,
     prizeIds: ['star', 'rainbow', 'cat'],
@@ -126,13 +126,13 @@ const MACHINES = {
   },
   neon: {
     name: 'NEON MEDAL', sub: 'TOKYO ARCADE', unlock: 6000,
-    coin: { r: 4.4, val: 15, style: 'medal', sym: '★' },
-    luckyVal: 75, gemVal: 750,
+    coin: { r: 4.4, val: 22, style: 'medal', sym: '★' },
+    luckyVal: 110, gemVal: 1100,
     pushPeriod: 3.2, maxCoins: 180,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
     gutY: 40, lipW: 7, lipH: 2.2,
     tags: [
-      { val: 150, col: '#37e6b0' }, { val: 300, col: '#c86bff' }, { val: 600, col: '#ff5a8a' },
+      { val: 225, col: '#37e6b0' }, { val: 450, col: '#c86bff' }, { val: 900, col: '#ff5a8a' },
     ],
     special: 'ball', ballEvery: 22,
     prizeIds: ['controller', 'tamagotchi', 'shiba'],
@@ -151,15 +151,15 @@ const MACHINES = {
   },
   bandit: {
     name: 'HIGH ROLLER', sub: 'VEGAS QUARTER BANDIT', unlock: 20000,
-    coin: { r: 4.8, val: 25, style: 'silver', sym: '25' },
-    luckyVal: 125, gemVal: 1250,
+    coin: { r: 4.8, val: 38, style: 'silver', sym: '25' },
+    luckyVal: 190, gemVal: 1900,
     pushPeriod: 3.8, maxCoins: 150,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 28, phase: 0, slotY: 20 }],
     gutY: 30, lipW: 8, lipH: 2.4,   // gutters open early: high risk, high pay
     tags: [
-      { val: 500, col: '#43d17c' }, { val: 1000, col: '#f7a534' }, { val: 2500, col: '#ef4b5d' },
+      { val: 750, col: '#43d17c' }, { val: 1500, col: '#f7a534' }, { val: 3750, col: '#ef4b5d' },
     ],
-    special: 'bill', billVal: 1500,
+    special: 'bill', billVal: 2200,
     prizeIds: ['watch_black', 'arcade', 'panda'],
     theme: { room: '#4a2f3a', cabA: '#f2c7d4', cabB: '#d9a0b8', trim: '#ffe9b0',
              titleA: '#fffdf5', titleB: '#c2778f', sub: '#8f4f66',
@@ -179,23 +179,23 @@ for (const id of MACH_IDS) {
 
 // ------------------------------------------------------------------ prizes
 const PRIZES = [
-  { id: 'paw', icon: '\u{1F43E}', name: 'Paw Charm', cost: 300, base: 40 },
-  { id: 'star', icon: '⭐', name: 'Lucky Star', cost: 450, base: 55 },
-  { id: 'boba', icon: '\u{1F9CB}', name: 'Boba Buddy', cost: 600, base: 70 },
-  { id: 'rainbow', icon: '\u{1F308}', name: 'Rainbow Charm', cost: 800, base: 95 },
-  { id: 'burger', icon: '\u{1F354}', name: 'Burger Charm', cost: 1100, base: 125 },
-  { id: 'controller', icon: '\u{1F3AE}', name: 'Mini Controller', cost: 1500, base: 170 },
-  { id: 'sneaker', icon: '\u{1F45F}', name: 'Mini Sneaker', cost: 2000, base: 230 },
-  { id: 'watch_blue', icon: '⌚', name: 'Digi Watch Blue', cost: 2800, base: 310 },
-  { id: 'watch_pink', icon: '⌚', name: 'Digi Watch Pink', cost: 3200, base: 355 },
-  { id: 'watch_black', icon: '⌚', name: 'Digi Watch Black', cost: 3600, base: 400 },
-  { id: 'tamagotchi', icon: '\u{1F95A}', name: 'Pocket Pet', cost: 5000, base: 560 },
-  { id: 'arcade', icon: '\u{1F579}\u{FE0F}', name: 'Mini Arcade', cost: 6500, base: 720 },
-  { id: 'dino', icon: '\u{1F996}', name: 'Dino Plush', cost: 9000, base: 990 },
-  { id: 'cat', icon: '\u{1F431}', name: 'Cat Plush', cost: 12000, base: 1300 },
-  { id: 'shiba', icon: '\u{1F436}', name: 'Shiba Plush', cost: 16000, base: 1750 },
-  { id: 'axolotl', icon: '\u{1F98E}', name: 'Axolotl Plush', cost: 21000, base: 2300 },
-  { id: 'panda', icon: '\u{1F43C}', name: 'Panda Plush', cost: 28000, base: 3000 },
+  { id: 'paw', icon: '\u{1F43E}', name: 'Paw Charm', cost: 300, base: 85 },
+  { id: 'star', icon: '⭐', name: 'Lucky Star', cost: 450, base: 120 },
+  { id: 'boba', icon: '\u{1F9CB}', name: 'Boba Buddy', cost: 600, base: 155 },
+  { id: 'rainbow', icon: '\u{1F308}', name: 'Rainbow Charm', cost: 800, base: 205 },
+  { id: 'burger', icon: '\u{1F354}', name: 'Burger Charm', cost: 1100, base: 270 },
+  { id: 'controller', icon: '\u{1F3AE}', name: 'Mini Controller', cost: 1500, base: 365 },
+  { id: 'sneaker', icon: '\u{1F45F}', name: 'Mini Sneaker', cost: 2000, base: 490 },
+  { id: 'watch_blue', icon: '⌚', name: 'Digi Watch Blue', cost: 2800, base: 660 },
+  { id: 'watch_pink', icon: '⌚', name: 'Digi Watch Pink', cost: 3200, base: 755 },
+  { id: 'watch_black', icon: '⌚', name: 'Digi Watch Black', cost: 3600, base: 850 },
+  { id: 'tamagotchi', icon: '\u{1F95A}', name: 'Pocket Pet', cost: 5000, base: 1190 },
+  { id: 'arcade', icon: '\u{1F579}\u{FE0F}', name: 'Mini Arcade', cost: 6500, base: 1530 },
+  { id: 'dino', icon: '\u{1F996}', name: 'Dino Plush', cost: 9000, base: 2100 },
+  { id: 'cat', icon: '\u{1F431}', name: 'Cat Plush', cost: 12000, base: 2750 },
+  { id: 'shiba', icon: '\u{1F436}', name: 'Shiba Plush', cost: 16000, base: 3700 },
+  { id: 'axolotl', icon: '\u{1F98E}', name: 'Axolotl Plush', cost: 21000, base: 4850 },
+  { id: 'panda', icon: '\u{1F43C}', name: 'Panda Plush', cost: 28000, base: 6300 },
 ];
 // saves from before the real prize art map onto the new catalog
 const PRIZE_MIGRATE = {
@@ -522,12 +522,12 @@ function spinSlot() {
 // Lucky Wheel — spun by wheel chips won off the field, gift chests, and the
 // daily gift (after the mobile coin pusher classics)
 const WHEEL = [
-  { label: '25 ●', w: 17, fx: () => { S.tray.coins += 25; trayAdd('coin', { x: 50 }); } },
-  { label: '+300 ✦', w: 15, fx: () => addPts(300) },
+  { label: '35 ●', w: 17, fx: () => { S.tray.coins += 35; trayAdd('coin', { x: 50 }); } },
+  { label: '+450 ✦', w: 15, fx: () => addPts(450) },
   { label: 'GEM', w: 10, fx: () => S.rain.push({ t: 0.3, x: 30 + rng() * 40, y: M().tiers[0].slotY + 6, kind: 'gem' }) },
-  { label: '+$1.50', w: 13, fx: () => { S.money += 150; } },
+  { label: '+$2.50', w: 13, fx: () => { S.money += 250; } },
   { label: 'PRIZE', w: 8, fx: () => { const pz = PRIZES[(rng() * 3) | 0]; S.tray.prizes.push(pz.id); trayAdd('prize', { pid: pz.id, x: 50 }); } },
-  { label: '+150 ✦', w: 16, fx: () => addPts(150) },
+  { label: '+220 ✦', w: 16, fx: () => addPts(220) },
   { label: 'METER +8', w: 15, fx: () => { S.meter += 8; if (S.meter >= C.METER_MAX) jackpot(); } },
   { label: 'JACKPOT', w: 6, fx: () => jackpot() },
 ];
@@ -545,11 +545,11 @@ function openChest(c) {
   const r = rng();
   let txt;
   if (r < 0.4) {
-    const n = 8 + ((rng() * 10) | 0);
+    const n = 12 + ((rng() * 14) | 0);
     S.tray.coins += n; trayAdd('coin', { x: c.x });
     txt = 'GIFT: +' + n + ' ●';
   } else if (r < 0.7) {
-    const pts = 150 + ((rng() * 5) | 0) * 50;
+    const pts = 220 + ((rng() * 5) | 0) * 70;
     addPts(pts);
     txt = 'GIFT: +' + pts + ' PTS';
   } else if (r < 0.9) {
@@ -568,9 +568,9 @@ function openChest(c) {
 function claimDaily(dayKey) {
   if (!dayKey || S.lastDaily === dayKey) return false;
   S.lastDaily = dayKey;
-  S.wallet += 15;
-  S.money += 100;
-  S.floats.push({ txt: 'DAILY GIFT: 15 ● + $1.00', wx: 50, wy: 96, age: 0, max: 1.8, col: '#7ee787', big: true });
+  S.wallet += 25;
+  S.money += 200;
+  S.floats.push({ txt: 'DAILY GIFT: 25 ● + $2.00', wx: 50, wy: 96, age: 0, max: 1.8, col: '#7ee787', big: true });
   spinWheel();
   save();
   return true;
