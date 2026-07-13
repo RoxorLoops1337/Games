@@ -98,7 +98,7 @@ const MACHINES = {
       { val: 100, col: '#43d17c' }, { val: 250, col: '#3fa9f5' }, { val: 500, col: '#ef4b5d' },
     ],
     special: null,
-    prizeIds: ['key', 'duck'],
+    prizeIds: ['paw', 'boba', 'dino'],
     theme: { room: '#2a1520', cabA: '#8c1f2e', cabB: '#4a0f1a', trim: '#f2cd5e',
              titleA: '#fff0b8', titleB: '#b07a14', sub: '#e8b6be',
              floorA: '#585f6a', floorB: '#99a1ad', accent: '#ffd75e' },
@@ -119,7 +119,7 @@ const MACHINES = {
       { val: 50, col: '#43d17c' }, { val: 100, col: '#3fa9f5' }, { val: 250, col: '#ef4b5d' },
     ],
     special: null,
-    prizeIds: ['duck', 'bear'],
+    prizeIds: ['star', 'rainbow', 'cat'],
     theme: { room: '#12303a', cabA: '#1d6d7a', cabB: '#0d3742', trim: '#f5e3b8',
              titleA: '#fdf6dd', titleB: '#c8862c', sub: '#a8d8de',
              floorA: '#5c6660', floorB: '#98a394', accent: '#ffb64a' },
@@ -135,7 +135,7 @@ const MACHINES = {
       { val: 150, col: '#37e6b0' }, { val: 300, col: '#c86bff' }, { val: 600, col: '#ff5a8a' },
     ],
     special: 'ball', ballEvery: 22,
-    prizeIds: ['robot', 'game'],
+    prizeIds: ['controller', 'tamagotchi', 'shiba'],
     // pachinko drop: three fixed coin slots feed a chrome peg board; coins
     // ricochet pin to pin for a couple of seconds before landing on the
     // pusher shelf or the field. Staggered triangular grid (Galton board).
@@ -160,7 +160,7 @@ const MACHINES = {
       { val: 500, col: '#43d17c' }, { val: 1000, col: '#f7a534' }, { val: 2500, col: '#ef4b5d' },
     ],
     special: 'bill', billVal: 1500,
-    prizeIds: ['ring', 'trophy'],
+    prizeIds: ['watch_black', 'arcade', 'panda'],
     theme: { room: '#26060a', cabA: '#191114', cabB: '#080506', trim: '#e8b64a',
              titleA: '#ffe9b0', titleB: '#a8681a', sub: '#d98a8a',
              floorA: '#403a44', floorB: '#79707e', accent: '#ff4b4b' },
@@ -179,19 +179,31 @@ for (const id of MACH_IDS) {
 
 // ------------------------------------------------------------------ prizes
 const PRIZES = [
-  { id: 'key', icon: '\u{1F511}', name: 'Lucky Keychain', cost: 300, base: 40 },
-  { id: 'duck', icon: '\u{1F986}', name: 'Rubber Duck', cost: 500, base: 65 },
-  { id: 'bear', icon: '\u{1F9F8}', name: 'Plush Bear', cost: 900, base: 115 },
-  { id: 'globe', icon: '\u{1F52E}', name: 'Snow Globe', cost: 1400, base: 180 },
-  { id: 'robot', icon: '\u{1F916}', name: 'Vinyl Robot', cost: 2200, base: 290 },
-  { id: 'skate', icon: '\u{1F6F9}', name: 'Mini Skateboard', cost: 3500, base: 460 },
-  { id: 'game', icon: '\u{1F579}\u{FE0F}', name: 'Retro Handheld', cost: 5200, base: 690 },
-  { id: 'boombox', icon: '\u{1F4FB}', name: 'Boombox', cost: 7500, base: 1000 },
-  { id: 'ring', icon: '\u{1F48D}', name: 'Gem Ring', cost: 11000, base: 1500 },
-  { id: 'trophy', icon: '\u{1F3C6}', name: 'Gold Trophy', cost: 16000, base: 2200 },
-  { id: 'crown', icon: '\u{1F451}', name: 'Royal Crown', cost: 26000, base: 3600 },
-  { id: 'arcade', icon: '\u{1F3B0}', name: 'Arcade Cabinet', cost: 45000, base: 6500 },
+  { id: 'paw', icon: '\u{1F43E}', name: 'Paw Charm', cost: 300, base: 40 },
+  { id: 'star', icon: '⭐', name: 'Lucky Star', cost: 450, base: 55 },
+  { id: 'boba', icon: '\u{1F9CB}', name: 'Boba Buddy', cost: 600, base: 70 },
+  { id: 'rainbow', icon: '\u{1F308}', name: 'Rainbow Charm', cost: 800, base: 95 },
+  { id: 'burger', icon: '\u{1F354}', name: 'Burger Charm', cost: 1100, base: 125 },
+  { id: 'controller', icon: '\u{1F3AE}', name: 'Mini Controller', cost: 1500, base: 170 },
+  { id: 'sneaker', icon: '\u{1F45F}', name: 'Mini Sneaker', cost: 2000, base: 230 },
+  { id: 'watch_blue', icon: '⌚', name: 'Digi Watch Blue', cost: 2800, base: 310 },
+  { id: 'watch_pink', icon: '⌚', name: 'Digi Watch Pink', cost: 3200, base: 355 },
+  { id: 'watch_black', icon: '⌚', name: 'Digi Watch Black', cost: 3600, base: 400 },
+  { id: 'tamagotchi', icon: '\u{1F95A}', name: 'Pocket Pet', cost: 5000, base: 560 },
+  { id: 'arcade', icon: '\u{1F579}\u{FE0F}', name: 'Mini Arcade', cost: 6500, base: 720 },
+  { id: 'dino', icon: '\u{1F996}', name: 'Dino Plush', cost: 9000, base: 990 },
+  { id: 'cat', icon: '\u{1F431}', name: 'Cat Plush', cost: 12000, base: 1300 },
+  { id: 'shiba', icon: '\u{1F436}', name: 'Shiba Plush', cost: 16000, base: 1750 },
+  { id: 'axolotl', icon: '\u{1F98E}', name: 'Axolotl Plush', cost: 21000, base: 2300 },
+  { id: 'panda', icon: '\u{1F43C}', name: 'Panda Plush', cost: 28000, base: 3000 },
 ];
+// saves from before the real prize art map onto the new catalog
+const PRIZE_MIGRATE = {
+  key: 'paw', duck: 'boba', bear: 'cat', globe: 'star', robot: 'controller',
+  skate: 'sneaker', game: 'tamagotchi', boombox: 'arcade', ring: 'watch_pink',
+  trophy: 'watch_black', crown: 'panda',
+};
+function migratePid(pid) { return PRIZE_MIGRATE[pid] || pid; }
 const BUYERS = ['pixelPanda99', 'arcadeQueen', 'tokenTom', '2pTerry', 'medalMaster',
   'quarterQuinn', 'lucky_luna', 'pusherPete', 'neonNori', 'cascadeCarl',
   'goldieGwen', 'duckCollector', 'vintageVera', 'jackpotJoe', 'seasideSam'];
@@ -286,6 +298,13 @@ function load() {
         if (l && l.pid) S.prizes[l.pid] = (S.prizes[l.pid] || 0) + 1;
       }
     }
+    // old prize ids -> the new real-art catalog (all save versions)
+    const mp = {};
+    for (const k of Object.keys(S.prizes)) mp[migratePid(k)] = (mp[migratePid(k)] || 0) + S.prizes[k];
+    S.prizes = mp;
+    for (const l of S.listings) l.pid = migratePid(l.pid);
+    S.tray.prizes = S.tray.prizes.map(migratePid);
+    for (const s2 of S.slog) s2.pid = migratePid(s2.pid);
   } catch (e) {}
 }
 
@@ -1087,6 +1106,25 @@ initPile();
 if (!HEADLESS) (function browser() {
   srand((Date.now() % 2147483647) || 1); // fresh luck each session; tests keep the fixed seed
   S.pileSalt = (rng() * 1e9) | 0;
+  // real prize art — cut from the owner's keychain photo sheets. Missing
+  // files must never break anything: the emoji fallback always stands by.
+  const PRIZE_IMG = {};
+  for (const pz of PRIZES) {
+    const im = new Image();
+    im.onload = () => { PRIZE_IMG[pz.id] = im; };
+    im.onerror = () => {};
+    im.src = 'prizes/' + pz.id + '.png';
+  }
+  function drawPIcon(pid, x, y, h, emojiFont) {
+    const im = PRIZE_IMG[pid];
+    if (im) {
+      const w = h * im.width / im.height;
+      ctx.drawImage(im, x - w / 2, y - h / 2, w, h);
+    } else {
+      const pz = PRIZES.find(q => q.id === pid);
+      txt(pz ? pz.icon : '\u{1F381}', x, y, emojiFont || Math.round(h * 0.8) + 'px serif', '#fff');
+    }
+  }
   resolveSales(Date.now());              // PusherBay kept selling while we were away
 
   // ------------------------------------------------------------------ audio
@@ -1783,7 +1821,8 @@ if (!HEADLESS) (function browser() {
     ctx.save();
     ctx.translate(p.x, p.y - rx * 0.4 + bob);
     if (c.st === 'fall' || c.st === 'air') ctx.rotate(Math.sin(c.rot) * 0.3);
-    txt(pz ? pz.icon : '\u{1F381}', 0, 0, Math.round(rx * 2.4) + 'px serif', '#fff');
+    if (c.kind === 'chest' || !c.pid) txt('\u{1F381}', 0, 0, Math.round(rx * 2.4) + 'px serif', '#fff');
+    else drawPIcon(c.pid, 0, 0, rx * 3.0);
     ctx.restore();
     // glow ring so it reads as the thing to win
     ctx.globalAlpha = 0.30 + 0.18 * Math.sin(t * 3 + c.glint);
@@ -1869,8 +1908,8 @@ if (!HEADLESS) (function browser() {
       const px = LW / 2 + Math.sin(i * 2.399) * (18 + ((i * 7) % 130));
       const py = 686 - (i % 3) * 6;
       if (it.kind === 'prize') {
-        const pz = PRIZES.find(q => q.id === it.pid);
-        txt(pz ? pz.icon : '\u{1F381}', px, py - 8, '22px serif', '#fff');
+        if (it.pid) drawPIcon(it.pid, px, py - 10, 28, '22px serif');
+        else txt('\u{1F381}', px, py - 8, '22px serif', '#fff');
       } else if (it.kind === 'tag') {
         rr(px - 8, py - 10, 16, 12, 3);
         ctx.fillStyle = it.col || '#43d17c'; ctx.fill();
@@ -2340,7 +2379,11 @@ if (!HEADLESS) (function browser() {
     txt('✦ ' + fmt(S.score) + ' pts to spend • prizes trade back at ' + Math.round(C.EXCHANGE * 100) + '%',
         LW / 2, 70, '800 13px Verdana, sans-serif', '#fff0c0');
     const cw = 146, chh = 168;
-    PRIZES.forEach((p, i) => {
+    const PER = 9;
+    const pages = Math.ceil(PRIZES.length / PER);
+    S.shopPage = Math.max(0, Math.min(S.shopPage || 0, pages - 1));
+    const pageItems = PRIZES.slice(S.shopPage * PER, S.shopPage * PER + PER);
+    pageItems.forEach((p, i) => {
       const x = 12 + (i % 3) * (cw + 9), y = 96 + Math.floor(i / 3) * (chh + 10);
       const afford = S.score >= p.cost;
       rr(x, y, cw, chh, 12);
@@ -2348,7 +2391,7 @@ if (!HEADLESS) (function browser() {
       cg.addColorStop(0, afford ? '#31202a' : '#221820'); cg.addColorStop(1, '#170e14');
       ctx.fillStyle = cg; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = afford ? '#7d5a24' : '#40323a'; ctx.stroke();
-      txt(p.icon, x + cw / 2, y + 40, '40px serif', '#fff');
+      drawPIcon(p.id, x + cw / 2, y + 40, 58, '40px serif');
       txt(p.name, x + cw / 2, y + 78, '700 11px Verdana, sans-serif', afford ? '#f5e3c8' : '#8f7f88');
       txt('sells ~' + fmt$(p.base), x + cw / 2, y + 95, '600 10px Verdana, sans-serif', '#63b7c4');
       const owned = S.prizes[p.id] || 0;
@@ -2370,6 +2413,12 @@ if (!HEADLESS) (function browser() {
               { bg: 'rgba(20,60,72,0.9)', border: '#37e6b0', col: '#eafff8', font: '800 9px Verdana, sans-serif' });
       }
     });
+    // page flippers
+    uiBtn(LW / 2 - 110, 648, 60, 36, '◀', () => { S.shopPage = (S.shopPage + pages - 1) % pages; },
+          { bg: 'rgba(40,20,30,0.9)', border: '#7d5a24', font: '18px serif' });
+    uiBtn(LW / 2 + 50, 648, 60, 36, '▶', () => { S.shopPage = (S.shopPage + 1) % pages; },
+          { bg: 'rgba(40,20,30,0.9)', border: '#7d5a24', font: '18px serif' });
+    txt('page ' + (S.shopPage + 1) + ' / ' + pages, LW / 2, 666, '800 13px Verdana, sans-serif', '#caa25a');
     if (S.uiFlash) {
       txt(S.uiFlash.msg, LW / 2, 820, '900 15px Verdana, sans-serif',
           Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e');
@@ -2397,7 +2446,7 @@ if (!HEADLESS) (function browser() {
       const x = 20 + i * 90, y = 118;
       uiBtn(x, y, 82, 74, '', () => { S.sellPick = pid; S.sellQty = 1; },
             { bg: 'rgba(10,40,52,0.9)', border: S.sellPick === pid ? '#ffe066' : '#2e6b7a', r: 10 });
-      txt(p.icon, x + 41, y + 26, '28px serif', '#fff');
+      drawPIcon(pid, x + 41, y + 26, 40, '28px serif');
       txt('×' + S.prizes[pid], x + 41, y + 56, '800 12px Verdana, sans-serif', '#d9fbff');
     });
     if (inv.length > 5) txt('+' + (inv.length - 5) + ' more', LW - 40, 155, '600 10px Verdana, sans-serif', '#5f8f9a');
@@ -2409,7 +2458,7 @@ if (!HEADLESS) (function browser() {
       rr(20, y, LW - 40, 36, 9);
       ctx.fillStyle = 'rgba(10,40,52,0.85)'; ctx.fill();
       ctx.lineWidth = 1.5; ctx.strokeStyle = '#2e6b7a'; ctx.stroke();
-      txt(p.icon, 42, y + 18, '18px serif', '#fff');
+      drawPIcon(l.pid, 42, y + 18, 26, '18px serif');
       txt(p.name + (l.qty > 1 ? '  ×' + l.qty : ''), 62, y + 12, '700 11px Verdana, sans-serif', '#d9fbff', 'left');
       txt(fmt$(l.price) + ' ea', LW - 36, y + 12, '800 12px Verdana, sans-serif', '#ffe066', 'right');
       const left = Math.max(0, l.nextT - now);
@@ -2426,7 +2475,8 @@ if (!HEADLESS) (function browser() {
     txt('SOLD', 24, ly, '800 12px Verdana, sans-serif', '#7fb8c4', 'left');
     S.slog.slice(0, 5).forEach((s2, i) => {
       const p = PRIZES.find(q => q.id === s2.pid);
-      txt((p ? p.icon + ' ' + p.name : s2.pid) + '  →  @' + s2.buyer, 24, ly + 22 + i * 24,
+      drawPIcon(s2.pid, 34, ly + 22 + i * 24, 20, '14px serif');
+      txt((p ? p.name : s2.pid) + '  →  @' + s2.buyer, 50, ly + 22 + i * 24,
           '600 11px Verdana, sans-serif', '#9fd4de', 'left');
       txt('+' + fmt$(s2.price), LW - 24, ly + 22 + i * 24, '800 12px Verdana, sans-serif', '#7ee787', 'right');
     });
@@ -2439,7 +2489,8 @@ if (!HEADLESS) (function browser() {
       rr(50, 520, LW - 100, 264, 16);
       ctx.fillStyle = 'rgba(6,20,28,0.97)'; ctx.fill();
       ctx.lineWidth = 3; ctx.strokeStyle = '#63e7ff'; ctx.stroke();
-      txt(p.icon + '  ' + p.name, LW / 2, 548, '800 16px Verdana, sans-serif', '#d9fbff');
+      drawPIcon(S.sellPick, LW / 2 - 90, 548, 30, '20px serif');
+      txt(p.name, LW / 2 + 12, 548, '800 16px Verdana, sans-serif', '#d9fbff');
       // how many to list (one sells per interval)
       txt('quantity:', 96, 578, '600 11px Verdana, sans-serif', '#7fb8c4', 'left');
       for (let q = 1; q <= maxQ; q++) {

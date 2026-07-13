@@ -65,6 +65,19 @@ t.ok(S.coins.filter(c => c.kind === 'prize').length >= 1, 'real prizes ride the 
 t.ok(S.coins.filter(c => c.kind === 'prize').every(c => PRIZES.some(p => p.id === c.pid)), 'pile prizes are shop items');
 t.ok(platCoins().every(c => c.y >= 0 && c.y <= C.PLAT_FRONT + c.r), 'pile sits on the platform');
 
+// -------- the real prize catalog --------
+t.eq(PRIZES.length, 17, 'seventeen real keychain prizes in the catalog');
+{
+  const { readdirSync } = await import('node:fs');
+  const here2 = dirname(fileURLToPath(import.meta.url));
+  const art = new Set(readdirSync(join(here2, '..', 'coin_pusher', 'prizes')));
+  t.ok(PRIZES.every(p => art.has(p.id + '.png')), 'every prize has its cut-out art on disk');
+  t.ok(PRIZES.every(p => p.cost > 0 && p.base > 0 && p.icon), 'every prize has cost, base price, and an emoji fallback');
+}
+t.ok(['gold', 'penny', 'neon', 'bandit'].every(id =>
+  MACHINES[id].prizeIds.length === 3 && MACHINES[id].prizeIds.every(pid => PRIZES.some(p => p.id === pid))),
+  'each machine fields three catalog prizes');
+
 // -------- machine roster --------
 t.eq(Object.keys(MACHINES).length, 4, 'four machine types exist');
 t.ok(MACHINES.gold.unlock === 0 && MACHINES.penny.unlock > 0 && MACHINES.neon.unlock > MACHINES.penny.unlock
@@ -224,14 +237,14 @@ t.ok(!CP.collectTray(), 'empty tray has nothing to collect');
 // -------- winning a prize off the pile --------
 S.coins.length = 0; S.prizes = {};
 const pr = CP.place(50, C.PLAT_FRONT - 0.5, 'prize', 0, 'plat');
-pr.pid = 'bear'; pr.vy = 90;
+pr.pid = 'cat'; pr.vy = 90;
 const debt0 = S.prizeDebt;
 step(2.5);
 t.ok(pr.scored, 'prize pushed over the edge is won');
-t.eq(S.tray.prizes[0], 'bear', 'won prize waits in the tray');
+t.eq(S.tray.prizes[0], 'cat', 'won prize waits in the tray');
 t.eq(S.prizeDebt, debt0 + 1, 'machine owes the pile a restock');
 CP.collectTray();
-t.eq(S.prizes.bear, 1, 'collected prize joins the inventory');
+t.eq(S.prizes.cat, 1, 'collected prize joins the inventory');
 // the machine drops the restock itself a few drops later — your inserted
 // coin still arrives as a coin
 S.wallet = 30; S.dropped = 9; S.cd = 0; S.rain.length = 0;
@@ -283,7 +296,7 @@ S.coins.length = 0;
 const corner = CP.place(4, C.PLAT_FRONT - 0.5, 'coin', 0, 'plat');
 corner.vy = 70;
 const cornerPrize = CP.place(96, C.PLAT_FRONT - 0.5, 'prize', 0, 'plat');
-cornerPrize.pid = 'key'; cornerPrize.vy = 90;
+cornerPrize.pid = 'paw'; cornerPrize.vy = 90;
 step(2.5);
 t.ok(corner.scored, 'corner coin over the front edge still scores');
 t.ok(corner.x >= 20, 'falling coin was funneled inward to the tray');
@@ -471,26 +484,26 @@ S.tray.coins = 0; S.tray.items.length = 0; S.tray.prizes.length = 0;
 
 // -------- prize shop: buy with points, trade back for points --------
 S.score = 1000; S.prizes = {};
-t.ok(CP.buyPrize('key'), 'can buy an affordable prize');
-t.eq(S.score, 1000 - PRIZES.find(p => p.id === 'key').cost, 'prize cost deducted from points');
-t.eq(S.prizes.key, 1, 'prize lands in the inventory');
-t.ok(!CP.buyPrize('arcade'), 'cannot buy above your points');
-CP.buyPrize('key');
-t.eq(S.prizes.key, 2, 'prizes stack in the inventory');
+t.ok(CP.buyPrize('paw'), 'can buy an affordable prize');
+t.eq(S.score, 1000 - PRIZES.find(p => p.id === 'paw').cost, 'prize cost deducted from points');
+t.eq(S.prizes.paw, 1, 'prize lands in the inventory');
+t.ok(!CP.buyPrize('panda'), 'cannot buy above your points');
+CP.buyPrize('paw');
+t.eq(S.prizes.paw, 2, 'prizes stack in the inventory');
 const sX = S.score;
-t.ok(CP.exchangePrize('key'), 'prizes exchange back into points');
-t.eq(S.score, sX + Math.round(PRIZES.find(p => p.id === 'key').cost * C.EXCHANGE),
+t.ok(CP.exchangePrize('paw'), 'prizes exchange back into points');
+t.eq(S.score, sX + Math.round(PRIZES.find(p => p.id === 'paw').cost * C.EXCHANGE),
      'exchange pays ' + Math.round(C.EXCHANGE * 100) + '% of the shop cost');
-t.eq(S.prizes.key, 1, 'exchanged prize leaves the inventory');
-t.ok(!CP.exchangePrize('trophy'), 'cannot exchange what you do not own');
+t.eq(S.prizes.paw, 1, 'exchanged prize leaves the inventory');
+t.ok(!CP.exchangePrize('panda'), 'cannot exchange what you do not own');
 
 // -------- PusherBay marketplace: bulk listings sell for MONEY --------
-S.prizes = { key: 1, duck: 6 };
+S.prizes = { paw: 1, boba: 6 };
 S.listings.length = 0;
-const keyBase = PRIZES.find(p => p.id === 'key').base;
-const duckBase = PRIZES.find(p => p.id === 'duck').base;
-t.ok(CP.listPrize('key', 0, 1000), 'can list an owned prize');
-t.ok(!S.prizes.key, 'listing removes it from the inventory');
+const keyBase = PRIZES.find(p => p.id === 'paw').base;
+const duckBase = PRIZES.find(p => p.id === 'boba').base;
+t.ok(CP.listPrize('paw', 0, 1000), 'can list an owned prize');
+t.ok(!S.prizes.paw, 'listing removes it from the inventory');
 t.eq(S.listings.length, 1, 'listing is live');
 t.eq(S.listings[0].price, Math.round(keyBase * C.SELL_TIERS[0].mul), 'quick-sale price is discounted');
 const mBefore = S.money;
@@ -501,8 +514,8 @@ t.eq(S.money, mBefore + Math.round(keyBase * 0.7), 'sales pay MONEY, not coins')
 t.ok(S.slog.length >= 1 && typeof S.slog[0].buyer === 'string' && S.slog[0].buyer.length > 0,
      'sale log records the buyer');
 // bulk listing: several of the same prize sell one by one
-t.ok(CP.listPrize('duck', 0, 10000, 3), 'can list three ducks at once');
-t.eq(S.prizes.duck, 3, 'bulk listing takes all three from the inventory');
+t.ok(CP.listPrize('boba', 0, 10000, 3), 'can list three bobas at once');
+t.eq(S.prizes.boba, 3, 'bulk listing takes all three from the inventory');
 t.eq(S.listings[0].qty, 3, 'listing carries its quantity');
 const iv = C.SELL_TIERS[0].dur, m1 = S.money;
 CP.resolveSales(10000 + iv + 1);
@@ -512,12 +525,12 @@ CP.resolveSales(10000 + iv * 3 + 10);
 t.eq(S.listings.length, 0, 'remaining units sell out over time');
 t.eq(S.money, m1 + Math.round(duckBase * 0.7) * 3, 'all three units paid');
 // listing cap
-S.prizes.duck = 20;
-for (let i = 0; i < C.LIST_MAX; i++) CP.listPrize('duck', 1, 50000, 1);
+S.prizes.boba = 20;
+for (let i = 0; i < C.LIST_MAX; i++) CP.listPrize('boba', 1, 50000, 1);
 t.eq(S.listings.length, C.LIST_MAX, 'store holds ' + C.LIST_MAX + ' listings');
-t.ok(!CP.listPrize('duck', 1, 50000, 1), 'over-cap listing is rejected');
+t.ok(!CP.listPrize('boba', 1, 50000, 1), 'over-cap listing is rejected');
 S.listings.length = 0;
-t.ok(!CP.listPrize('trophy', 1, 50000), 'cannot list a prize you do not own');
+t.ok(!CP.listPrize('panda', 1, 50000), 'cannot list a prize you do not own');
 
 // -------- the actual game loop: drops pay out, the house still wins --------
 CP.srand(31); CP.setMachine('gold');
@@ -601,8 +614,8 @@ const store3 = { coin_pusher_save: JSON.stringify({
 const CP3 = loadGame(store3);
 t.eq(CP3.S.score, 2000, 'v2 points migrate');
 t.eq(CP3.S.money, CP3.C.START_MONEY, 'v2 save gets starter money');
-t.eq(CP3.S.prizes.duck, 2, 'v2 listings are returned to the inventory');
-t.eq(CP3.S.prizes.bear, 1, 'v2 inventory survives');
+t.eq(CP3.S.prizes.boba, 2, 'v2 listings map to the new catalog (duck -> boba)');
+t.eq(CP3.S.prizes.cat, 1, 'v2 inventory migrates (bear -> cat)');
 t.eq(CP3.S.listings.length, 0, 'no stale coin-priced listings survive');
 t.eq(CP3.S.mach, 'penny', 'v2 machine choice survives');
 
