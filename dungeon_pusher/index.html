@@ -57,7 +57,6 @@ const C = {
   SAVE_KEY: 'dungeon_pusher_save',
   START_HP: 60, START_POTIONS: 1, START_KEYS: 3,
   POTION_HEAL: 20,
-  BOSS_DEPTH: 8,
   KEY_KILL: 1, KEY_ELITE: 2, KEY_BOSS: 3,   // keys paid per slain foe
   P_CHEST_KEY: 0.2,
   // combat is played in ROUNDS: a purse of coins to drop, then the tray
@@ -126,7 +125,7 @@ const RELICS = [
   { id: 'clover',  icon: '\u{1F340}', name: 'Clover',      desc: 'lucky coins twice as often' },
   { id: 'wind',    icon: '\u{1F4A8}', name: 'Second Wind', desc: 'survive a killing blow at 1 HP (once per fight)' },
   { id: 'piggy',   icon: '\u{1F437}', name: 'Piggy Bank',  desc: '+4 gold after every victory' },
-  { id: 'lantern', icon: '\u{1F3EE}', name: 'Lantern',     desc: 'all dungeon doors are revealed' },
+  { id: 'lantern', icon: '\u{1F3EE}', name: 'Lantern',     desc: 'the whole floor map is revealed' },
   { id: 'plate',   icon: '\u{1F6E1}\u{FE0F}', name: 'Battle Plate', desc: 'start every round with +4 block' },
 ];
 function relicById(id) { return RELICS.find(r => r.id === id); }
@@ -162,6 +161,7 @@ const ENT_INFO = {
   smith:   { icon: '\u{1F477}', name: 'BLACKSMITH' },
   shrine:  { icon: '⛲',    name: 'SHRINE' },
   wheel:   { icon: '\u{1F3A1}', name: 'WHEEL GHOST' },
+  stairs:  { icon: '\u{1FA9C}', name: 'STAIRS DOWN' },
 };
 
 // ------------------------------------------------------------------- state
@@ -210,7 +210,7 @@ function save() {
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
         gold: S.run.gold, pouch: S.run.pouch, arsenal: S.run.arsenal,
         relics: S.run.relics, potions: S.run.potions, whet: S.run.whet,
-        kills: S.run.kills, goldEarned: S.run.goldEarned, room: S.run.room,
+        kills: S.run.kills, goldEarned: S.run.goldEarned, map: S.run.map,
         keys: S.run.keys, meter: S.meter,
       } : null,
     }));
@@ -234,14 +234,20 @@ function load() {
         relics: Array.isArray(d.run.relics) ? d.run.relics.filter(relicById) : [],
         potions: d.run.potions || 0, whet: d.run.whet || 0,
         kills: d.run.kills || 0, goldEarned: d.run.goldEarned || 0,
-        room: (d.run.room && Array.isArray(d.run.room.ents)) ? d.run.room : null,
+        map: (d.run.map && d.run.map.rooms && d.run.map.rooms[d.run.map.cur]) ? d.run.map : null,
+        room: null,
         keys: (typeof d.run.keys === 'number') ? d.run.keys : C.START_KEYS,
         block: 0, windUsed: false, battleEnt: null,
       };
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
       }
-      if (!S.run.room) genRoom();      // pre-key saves get a fresh room
+      if (!S.run.map) genFloor();      // pre-map saves get a fresh floor
+      else {
+        if (!S.run.map.links) S.run.map.links = {};
+        S.run.room = S.run.map.rooms[S.run.map.cur];
+        S.run.depth = (S.run.room.dist || 0) + 1;
+      }
       S.meter = d.run.meter || 0;
     }
   } catch (e) {}
@@ -768,10 +774,9 @@ function leaveBattle() {
   if (S.run.room && ei !== null && S.run.room.ents[ei]) S.run.room.ents[ei].done = true;
   S.victory = null; S.enemy = null; S.battle = null; S.run.battleEnt = null;
   S.coins.length = 0;
-  if (boss) {              // the stairs descend: next floor, room 1
-    S.run.floor++;
-    S.run.depth = 1;
-    genRoom();
+  if (boss) {              // the lair opens: stairs down appear where it fell
+    S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
+    S.banner = { txt: 'THE STAIRS APPEAR', ttl: 1.8, max: 1.8 };
   }
   S.screen = 'dungeon';
   save();
@@ -803,26 +808,28 @@ function endRun(cause) {
 // ----------------------------------------------------------------- dungeon
 // The dungeon is a top-down crawl: each room holds 1-3 inhabitants (monsters,
 // chests, a shopkeeper, a blacksmith, a shrine, the wheel ghost) and locked
-// exit doors. Opening a door EATS A KEY; slain monsters cough keys up.
+// exit doors. Unlocking a door EATS A KEY (once — then it stays open for
+// backtracking); slain monsters cough keys up. The floor is a real MAP:
+// rooms persist, and the minimap uncovers as you explore.
 function newRun() {
   S.run = {
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
     gold: 0, pouch: 0, wallet: 0, keys: C.START_KEYS,
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0,
-    kills: 0, goldEarned: 0, room: null, block: 0, windUsed: false, battleEnt: null,
+    kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
   };
   S.enemy = null; S.victory = null; S.room = null; S.over = null;
   S.meter = 0; S.pPois = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
-  genRoom();
+  genFloor();
   S.screen = 'dungeon';
   save();
   return S.run;
 }
 function toast(txt2) { S.toast = { txt: txt2, t: 2.6 }; }
-// roll the 1-3 inhabitants of a room at the given depth
-function genEnts(depth) {
+// roll the 1-3 inhabitants of a room at the given distance from the stairs
+function genEnts(dist) {
   const r = rng();
   const n = r < 0.38 ? 1 : r < 0.82 ? 2 : 3;
   const ents = [];
@@ -830,8 +837,8 @@ function genEnts(depth) {
   for (let i = 0; i < n; i++) {
     const avail = SVC.filter(s => !ents.some(e => e.kind === s[0]));
     if (rng() < 0.55 || !avail.length) {
-      const mtype = depth >= 3 && rng() < 0.22 ? 'elite' : 'battle';
-      const eid = ENEMIES[(rng() * enemyPool(depth)) | 0].id;
+      const mtype = dist >= 2 && rng() < 0.22 ? 'elite' : 'battle';
+      const eid = ENEMIES[(rng() * enemyPool(dist + 1)) | 0].id;
       ents.push({ kind: 'monster', mtype, eid, done: false });
     } else {
       const total = avail.reduce((a, s) => a + s[1], 0);
@@ -842,38 +849,143 @@ function genEnts(depth) {
   }
   return ents;
 }
-// build the CURRENT room (from a door's pre-rolled spec, or fresh)
-function genRoom(spec) {
-  if (!S.run) return null;
-  const depth = S.run.depth;
-  let ents;
-  if (depth >= C.BOSS_DEPTH) {
-    ents = [{ kind: 'monster', mtype: 'boss', done: false }];
-  } else {
-    ents = (spec || genEnts(depth)).map(e => ({ ...e, done: false }));
-    // never stranded: key-broke in a fight-free room -> a wanderer finds YOU
-    if (S.run.keys < 1 && !ents.some(e => e.kind === 'monster' && !e.done)) {
-      const eid = ENEMIES[(rng() * enemyPool(depth)) | 0].id;
-      ents.push({ kind: 'monster', mtype: 'battle', eid, done: false });
-    }
-  }
-  const room = { ents, doors: [] };
-  const nd = depth + 1;
-  if (depth >= C.BOSS_DEPTH) {
-    room.doors = [];                       // the only way out is through the boss
-  } else if (nd >= C.BOSS_DEPTH) {
-    room.doors = [{ known: true, boss: true, spec: null }];
-  } else {
-    const dn = rng() < 0.65 ? 2 : 3;
-    for (let i = 0; i < dn; i++) {
-      room.doors.push({ known: hasRelic('lantern') || rng() < 0.35, boss: false, spec: genEnts(nd) });
-    }
-  }
-  S.run.room = room;
-  S.roomStamp++;
-  return room;
+// ------------------------------------------------------------ the floor map
+const DIRS = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+const OPP = { n: 's', s: 'n', e: 'w', w: 'e' };
+function rkey(x, y) { return x + ',' + y; }
+function lkey(x1, y1, x2, y2) {
+  return (y1 < y2 || (y1 === y2 && x1 < x2))
+    ? x1 + ',' + y1 + '~' + x2 + ',' + y2
+    : x2 + ',' + y2 + '~' + x1 + ',' + y1;
 }
-// tap an inhabitant
+// scatter the room's dwellers so there is space to walk between them
+function placeEnts(ents) {
+  const spots = [];
+  for (const e of ents) {
+    for (let tries = 0; tries < 12; tries++) {
+      const px = 0.16 + rng() * 0.68, py = 0.14 + rng() * 0.56;
+      if (spots.every(s => Math.hypot(s[0] - px, s[1] - py) > 0.26)) {
+        e.px = px; e.py = py;
+        spots.push([px, py]);
+        break;
+      }
+      if (tries === 11) { e.px = 0.5; e.py = 0.4; }
+    }
+  }
+  return ents;
+}
+// carve this floor: a random walk of connected rooms; the boss lairs at the
+// farthest one, everything else gets its dwellers rolled up front (the map
+// exists — the fog just hides it)
+function genFloor() {
+  if (!S.run) return null;
+  const target = 10 + Math.min(3, S.run.floor - 1);
+  const rooms = { '0,0': { gx: 0, gy: 0, ents: [], visited: true, dist: 0, boss: false } };
+  const keys2 = ['0,0'];
+  let guard = 0;
+  while (keys2.length < target && guard++ < 400) {
+    const from = rooms[keys2[(rng() * keys2.length) | 0]];
+    const dir = ['n', 's', 'e', 'w'][(rng() * 4) | 0];
+    const nx = from.gx + DIRS[dir][0], ny = from.gy + DIRS[dir][1];
+    if (rooms[rkey(nx, ny)]) continue;
+    rooms[rkey(nx, ny)] = { gx: nx, gy: ny, ents: [], visited: false, dist: 0, boss: false };
+    keys2.push(rkey(nx, ny));
+  }
+  // distances from the start, walking the grid
+  const q = ['0,0'];
+  const seen = { '0,0': true };
+  while (q.length) {
+    const r = rooms[q.shift()];
+    for (const d of ['n', 's', 'e', 'w']) {
+      const k = rkey(r.gx + DIRS[d][0], r.gy + DIRS[d][1]);
+      if (rooms[k] && !seen[k]) { seen[k] = true; rooms[k].dist = r.dist + 1; q.push(k); }
+    }
+  }
+  // the boss takes the farthest room
+  let bossK = '0,0';
+  for (const k of keys2) if (rooms[k].dist > rooms[bossK].dist) bossK = k;
+  for (const k of keys2) {
+    const r = rooms[k];
+    if (k === bossK) {
+      r.boss = true;
+      r.ents = placeEnts([{ kind: 'monster', mtype: 'boss', done: false }]);
+    } else if (k === '0,0') {
+      r.ents = rng() < 0.6 ? placeEnts([{ kind: 'chest', done: false }]) : [];
+    } else {
+      r.ents = placeEnts(genEnts(r.dist));
+    }
+  }
+  S.run.map = { rooms, links: {}, cur: '0,0' };
+  S.run.room = rooms['0,0'];
+  S.run.depth = 1;
+  S.enterDir = null;
+  S.roomStamp++;
+  return S.run.map;
+}
+function curRoom() { return S.run && S.run.map ? S.run.map.rooms[S.run.map.cur] : null; }
+function linkOpen(a, b) {
+  const l = S.run.map.links[lkey(a.gx, a.gy, b.gx, b.gy)];
+  return !!(l && l.open);
+}
+// never stranded: key-broke with nothing left to slay in the uncovered
+// map -> a wanderer finds YOU
+function keyGuard() {
+  if (!S.run || S.run.keys > 0) return;
+  const rooms = S.run.map.rooms;
+  for (const k of Object.keys(rooms)) {
+    if (!rooms[k].visited) continue;
+    if (rooms[k].ents.some(e => e.kind === 'monster' && !e.done)) return;
+  }
+  const r = curRoom();
+  const eid = ENEMIES[(rng() * enemyPool(r.dist + 1)) | 0].id;
+  r.ents.push(placeEnts([{ kind: 'monster', mtype: 'battle', eid, done: false }])[0]);
+  toast('something crawls out of the dark…');
+}
+// walk into a doorway. Locked -> spend a key to unlock (it STAYS open);
+// open -> step through into the next room
+function tryDoor(dir) {
+  if (!S.run || S.screen !== 'dungeon' || S.room) return false;
+  const r = curRoom();
+  const nk = rkey(r.gx + DIRS[dir][0], r.gy + DIRS[dir][1]);
+  const nb = S.run.map.rooms[nk];
+  if (!nb) return false;
+  const lk = lkey(r.gx, r.gy, nb.gx, nb.gy);
+  const l = S.run.map.links[lk];
+  if (!l || !l.open) {
+    if (S.run.keys < 1) {
+      S.uiFlash = { msg: 'YOU NEED A KEY \u{1F5DD}', t: 1.2 };
+      SND.deny();
+      keyGuard();
+      return false;
+    }
+    S.run.keys--;
+    S.run.map.links[lk] = { open: true };
+    SND.buy();
+    toast('the lock falls away');
+    save();
+    return 'unlocked';
+  }
+  S.run.map.cur = nk;
+  nb.visited = true;
+  S.run.room = nb;
+  S.run.depth = nb.dist + 1;
+  S.enterDir = dir;
+  S.roomStamp++;
+  SND.door();
+  keyGuard();
+  save();
+  return true;
+}
+// the stairs after the boss falls
+function nextFloor() {
+  if (!S.run) return false;
+  S.run.floor++;
+  S.banner = { txt: 'FLOOR ' + S.run.floor, ttl: 1.8, max: 1.8 };
+  genFloor();
+  save();
+  return true;
+}
+// bump into an inhabitant
 function interact(i) {
   if (!S.run || S.screen !== 'dungeon' || S.room) return false;
   const e = S.run.room && S.run.room.ents[i];
@@ -881,6 +993,10 @@ function interact(i) {
   if (e.kind === 'monster') {
     SND.door();
     startBattle(e.mtype, i, e.eid);
+    return true;
+  }
+  if (e.kind === 'stairs') {
+    nextFloor();
     return true;
   }
   if (e.kind === 'chest') {
@@ -926,23 +1042,6 @@ function chestGift() {
     toast('a potion for the belt!');
   }
   SND.gem();
-}
-// tap a locked exit door — costs one key
-function useDoor(i) {
-  if (!S.run || S.screen !== 'dungeon' || S.room) return false;
-  const d = S.run.room && S.run.room.doors[i];
-  if (!d) return false;
-  if (S.run.keys < 1) {
-    S.uiFlash = { msg: 'YOU NEED A KEY \u{1F5DD}', t: 1.2 };
-    SND.deny();
-    return false;
-  }
-  S.run.keys--;
-  S.run.depth++;
-  SND.door();
-  genRoom(d.spec);
-  save();
-  return true;
 }
 function closeModal() {
   if (!S.room) return false;
@@ -1344,7 +1443,8 @@ window.DP = {
   S, C, MACH, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL, ENT_INFO, FLOORS,
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
-  newRun, genRoom, genEnts, interact, useDoor, closeModal, leaveBattle,
+  newRun, genFloor, genEnts, interact, tryDoor, curRoom, nextFloor, keyGuard,
+  closeModal, leaveBattle,
   chestGift, startBattle, mkEnemy, battleTick, winBattle, endRun,
   buyShop, pickBoon, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
@@ -1561,15 +1661,30 @@ if (!HEADLESS) (function browser() {
       aimFrom(p);
       drop(S.aimX);
       held = true; holdT = 0;
+    } else if (S.screen === 'dungeon' && !S.room && p.y > 130 && p.y < 700) {
+      // the thumb-stick springs up wherever you touch
+      JOY.active = true; JOY.id = ev.pointerId;
+      JOY.ox = p.x; JOY.oy = p.y; JOY.dx = 0; JOY.dy = 0;
     }
   });
   canvas.addEventListener('pointermove', (ev) => {
-    if (S.screen !== 'battle') return;
     const p = toLogical(ev);
+    if (JOY.active && ev.pointerId === JOY.id) {
+      JOY.dx = p.x - JOY.ox;
+      JOY.dy = p.y - JOY.oy;
+      return;
+    }
+    if (S.screen !== 'battle') return;
     if (p.y > 180) aimFrom(p);
   });
-  window.addEventListener('pointerup', () => { held = false; });
-  window.addEventListener('pointercancel', () => { held = false; });
+  const joyEnd = (ev) => {
+    held = false;
+    if (!ev || ev.pointerId === undefined || ev.pointerId === JOY.id) {
+      JOY.active = false; JOY.id = null; JOY.dx = 0; JOY.dy = 0;
+    }
+  };
+  window.addEventListener('pointerup', joyEnd);
+  window.addEventListener('pointercancel', joyEnd);
   document.addEventListener('visibilitychange', save);
 
   // -------------------------------------------------------------- particles
@@ -2308,7 +2423,11 @@ if (!HEADLESS) (function browser() {
     });
     if (!ids.length) txt('arsenal empty — visit a shop!', 34, 796, '600 10px Verdana, sans-serif', '#8f6f78', 'left');
     let hint;
-    if (S.screen !== 'battle') hint = 'FLOOR ' + r.floor + ' • ROOM ' + r.depth + ' / ' + C.BOSS_DEPTH;
+    if (S.screen !== 'battle') {
+      const rooms = r.map ? Object.keys(r.map.rooms) : [];
+      const found = rooms.filter(k => r.map.rooms[k].visited).length;
+      hint = 'FLOOR ' + r.floor + ' • ' + found + ' / ' + rooms.length + ' rooms uncovered';
+    }
     else if (!S.battle || S.battle.phase === 'drop') {
       hint = r.wallet < 1 ? 'purse empty — the tray is about to resolve…'
            : r.wallet + ' ● left this round • TAP TO DROP • HOLD FOR AUTO';
@@ -2526,60 +2645,137 @@ if (!HEADLESS) (function browser() {
   }
 
   // -------------------------------------------------------- dungeon screen
-  // Top-down room crawl: tiled floor, locked doors on the far wall, 1-3
-  // inhabitants to walk up to, and your little hero doing the walking.
-  const ROOM = { x: 34, y: 176, w: LW - 68, h: 456, wallH: 64 };
-  const ENT_SLOTS = [
-    [{ x: 0.5, y: 0.42 }],
-    [{ x: 0.28, y: 0.38 }, { x: 0.72, y: 0.46 }],
-    [{ x: 0.24, y: 0.34 }, { x: 0.76, y: 0.38 }, { x: 0.5, y: 0.56 }],
-  ];
-  function entPos(i, n) {
-    const s = ENT_SLOTS[Math.min(n, 3) - 1][Math.min(i, 2)];
-    return { x: ROOM.x + ROOM.w * s.x, y: ROOM.y + ROOM.wallH + (ROOM.h - ROOM.wallH) * s.y };
+  // A real crawl: drive the hero with the thumb-stick (or WASD / arrows),
+  // bump into dwellers to interact, walk through doorways on any wall.
+  // Rooms persist — backtrack freely — and the minimap uncovers as you go.
+  const ROOM = { x: 34, y: 168, w: LW - 68, h: 464, wallH: 56, botH: 26, sideW: 16 };
+  const FR = {
+    x0: ROOM.x + ROOM.sideW, x1: ROOM.x + ROOM.w - ROOM.sideW,
+    y0: ROOM.y + ROOM.wallH, y1: ROOM.y + ROOM.h - ROOM.botH,
+  };
+  const DOOR_HALF = 30, HERO_R = 13;
+  function entPos(e) {
+    return {
+      x: FR.x0 + (FR.x1 - FR.x0) * (e.px === undefined ? 0.5 : e.px),
+      y: FR.y0 + 26 + (FR.y1 - FR.y0 - 46) * (e.py === undefined ? 0.4 : e.py),
+    };
   }
-  function doorPos(i, n) {
-    const xs = n === 1 ? [0.5] : n === 2 ? [0.3, 0.7] : [0.2, 0.5, 0.8];
-    return { x: ROOM.x + ROOM.w * xs[i], y: ROOM.y + ROOM.wallH - 4 };
+  function doorCenter(dir) {
+    const cx = (FR.x0 + FR.x1) / 2, cy = (FR.y0 + FR.y1) / 2;
+    if (dir === 'n') return { x: cx, y: FR.y0 };
+    if (dir === 's') return { x: cx, y: FR.y1 };
+    if (dir === 'e') return { x: FR.x1, y: cy };
+    return { x: FR.x0, y: cy };
   }
-  // the hero: browser-side puppet that walks to whatever you tap
-  const AV = { x: LW / 2, y: 0, tx: LW / 2, ty: 0, act: null, stamp: -1, step: 0 };
-  function avHome() {
-    AV.x = AV.tx = LW / 2;
-    AV.y = AV.ty = ROOM.y + ROOM.h - 44;
-    AV.act = null;
-  }
-  function walkTo(x, y, act) {
-    AV.tx = Math.max(ROOM.x + 24, Math.min(ROOM.x + ROOM.w - 24, x));
-    AV.ty = Math.max(ROOM.y + ROOM.wallH + 18, Math.min(ROOM.y + ROOM.h - 24, y));
-    AV.act = act;
+  // the hero puppet + inputs
+  const AV = { x: LW / 2, y: 0, stamp: -1, step: 0, moving: false, fx: 0, fy: -1 };
+  const JOY = { active: false, ox: 0, oy: 0, dx: 0, dy: 0, id: null };
+  const KEYS = {};
+  window.addEventListener('keydown', (ev) => { KEYS[ev.key.toLowerCase()] = true; });
+  window.addEventListener('keyup', (ev) => { KEYS[ev.key.toLowerCase()] = false; });
+  const entCool = {};
+  function avSpawn() {
+    AV.stamp = S.roomStamp;
+    for (const k of Object.keys(entCool)) delete entCool[k];
+    if (S.enterDir) {
+      const p = doorCenter(OPP[S.enterDir]);
+      const inX = p.x === FR.x0 ? 34 : p.x === FR.x1 ? -34 : 0;
+      const inY = p.y === FR.y0 ? 34 : p.y === FR.y1 ? -34 : 0;
+      AV.x = p.x + inX;
+      AV.y = p.y + inY;
+    } else {
+      AV.x = (FR.x0 + FR.x1) / 2;
+      AV.y = FR.y1 - 40;
+    }
   }
   function avTick(dt) {
-    if (S.roomStamp !== AV.stamp) { AV.stamp = S.roomStamp; avHome(); }
-    const dx = AV.tx - AV.x, dy = AV.ty - AV.y;
-    const d = Math.hypot(dx, dy);
-    if (d > 3) {
-      const sp = 240 * dt;
-      const k = Math.min(1, sp / d);
-      AV.x += dx * k; AV.y += dy * k;
-      AV.step += dt * 14;
-    } else if (AV.act) {
-      const act = AV.act; AV.act = null;
-      act();
+    if (S.roomStamp !== AV.stamp) avSpawn();
+    // stick + keys
+    let vx = 0, vy = 0;
+    if (JOY.active) {
+      const d = Math.hypot(JOY.dx, JOY.dy);
+      if (d > 6) {
+        const k = Math.min(1, d / 48);
+        vx = (JOY.dx / d) * k; vy = (JOY.dy / d) * k;
+      }
+    }
+    if (KEYS.arrowleft || KEYS.a) vx -= 1;
+    if (KEYS.arrowright || KEYS.d) vx += 1;
+    if (KEYS.arrowup || KEYS.w) vy -= 1;
+    if (KEYS.arrowdown || KEYS.s) vy += 1;
+    const mag = Math.hypot(vx, vy);
+    AV.moving = mag > 0.05;
+    if (!AV.moving) return;
+    if (mag > 1) { vx /= mag; vy /= mag; }
+    AV.fx = vx; AV.fy = vy;
+    AV.step += dt * 13;
+    const SPD = 195;
+    let nx = AV.x + vx * SPD * dt;
+    let ny = AV.y + vy * SPD * dt;
+    // doorways: walking past a wall inside a door gap steps through
+    const room = curRoom();
+    const cx = (FR.x0 + FR.x1) / 2, cy = (FR.y0 + FR.y1) / 2;
+    const inGapX = Math.abs(nx - cx) < DOOR_HALF - 8;
+    const inGapY = Math.abs(ny - cy) < DOOR_HALF - 8;
+    const tryStep = (dir) => {
+      const res = tryDoor(dir);
+      if (res !== true) {
+        // locked (or just unlocked): stay inside
+        nx = Math.max(FR.x0 + HERO_R, Math.min(FR.x1 - HERO_R, nx));
+        ny = Math.max(FR.y0 + HERO_R, Math.min(FR.y1 - HERO_R, ny));
+      }
+      return res;
+    };
+    const nbr = (dir) => room && S.run.map.rooms[rkey(room.gx + DIRS[dir][0], room.gy + DIRS[dir][1])];
+    // inside a door gap the hero may step into the recess; past the
+    // threshold the door is tried (unlock or walk through)
+    if (ny < FR.y0 + HERO_R) {
+      if (inGapX && nbr('n')) { if (ny < FR.y0 - 10) tryStep('n'); }
+      else ny = FR.y0 + HERO_R;
+    }
+    if (ny > FR.y1 - HERO_R) {
+      if (inGapX && nbr('s')) { if (ny > FR.y1 + 10) tryStep('s'); }
+      else ny = FR.y1 - HERO_R;
+    }
+    if (nx < FR.x0 + HERO_R) {
+      if (inGapY && nbr('w')) { if (nx < FR.x0 - 8) tryStep('w'); }
+      else nx = FR.x0 + HERO_R;
+    }
+    if (nx > FR.x1 - HERO_R) {
+      if (inGapY && nbr('e')) { if (nx > FR.x1 + 8) tryStep('e'); }
+      else nx = FR.x1 - HERO_R;
+    }
+    if (S.roomStamp !== AV.stamp) { avSpawn(); return; }
+    AV.x = nx; AV.y = ny;
+    // bump into a dweller -> interact (once, until you step away)
+    if (S.room) return;
+    const ents = (curRoom() && curRoom().ents) || [];
+    for (let i = 0; i < ents.length; i++) {
+      const e = ents[i];
+      const p = entPos(e);
+      const d2 = Math.hypot(AV.x - p.x, AV.y - (p.y - 6));
+      if (d2 > 52) { delete entCool[i]; continue; }
+      if (d2 < 34 && !entCool[i] && (!e.done || e.kind === 'shop')) {
+        entCool[i] = true;
+        interact(i);
+        if (S.screen !== 'dungeon') return;
+      }
     }
   }
 
   function drawRoomBox(t) {
     const T = theme();
-    // outer dark + far wall
+    const room = curRoom();
+    const has = (dir) => room && S.run.map.rooms[rkey(room.gx + DIRS[dir][0], room.gy + DIRS[dir][1])];
+    const open = (dir) => has(dir) && linkOpen(room, has(dir));
+    // outer dark + frame
     rr(ROOM.x - 10, ROOM.y - 10, ROOM.w + 20, ROOM.h + 20, 14);
     ctx.fillStyle = '#0d090d'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = T.cabB; ctx.stroke();
-    // far wall (doors live here)
+    // far wall
     ctx.fillStyle = lgr('wall:' + fkey(), 0, ROOM.y, 0, ROOM.y + ROOM.wallH,
       [[0, '#171019'], [1, T.door]]);
     ctx.fillRect(ROOM.x, ROOM.y, ROOM.w, ROOM.wallH);
-    // brick lines
     ctx.save();
     ctx.globalAlpha = 0.18;
     ctx.strokeStyle = '#0d090d'; ctx.lineWidth = 1.5;
@@ -2591,26 +2787,33 @@ if (!HEADLESS) (function browser() {
       }
     }
     ctx.restore();
+    // side + bottom walls
+    ctx.fillStyle = lgr('sw:' + fkey(), ROOM.x, 0, ROOM.x + ROOM.sideW, 0, [[0, '#171019'], [1, T.door]]);
+    ctx.fillRect(ROOM.x, FR.y0, ROOM.sideW, FR.y1 - FR.y0);
+    ctx.fillStyle = lgr('se:' + fkey(), ROOM.x + ROOM.w, 0, ROOM.x + ROOM.w - ROOM.sideW, 0, [[0, '#171019'], [1, T.door]]);
+    ctx.fillRect(FR.x1, FR.y0, ROOM.sideW, FR.y1 - FR.y0);
+    ctx.fillStyle = lgr('bw:' + fkey(), 0, ROOM.y + ROOM.h, 0, FR.y1, [[0, '#171019'], [1, T.door]]);
+    ctx.fillRect(ROOM.x, FR.y1, ROOM.w, ROOM.botH);
     // tiled floor
-    const fy = ROOM.y + ROOM.wallH;
-    const fh = ROOM.h - ROOM.wallH;
+    const fy = FR.y0;
+    const fh = FR.y1 - FR.y0;
     ctx.save();
-    ctx.beginPath(); ctx.rect(ROOM.x, fy, ROOM.w, fh); ctx.clip();
+    ctx.beginPath(); ctx.rect(FR.x0, fy, FR.x1 - FR.x0, fh); ctx.clip();
     ctx.fillStyle = T.floorB;
-    ctx.fillRect(ROOM.x, fy, ROOM.w, fh);
+    ctx.fillRect(FR.x0, fy, FR.x1 - FR.x0, fh);
     const TS = 46;
     for (let r = 0; r < Math.ceil(fh / TS); r++) {
-      for (let cix = 0; cix < Math.ceil(ROOM.w / TS); cix++) {
+      for (let cix = 0; cix < Math.ceil((FR.x1 - FR.x0) / TS); cix++) {
         if ((r + cix) % 2 === 0) continue;
         ctx.fillStyle = 'rgba(20,12,22,0.14)';
-        ctx.fillRect(ROOM.x + cix * TS, fy + r * TS, TS, TS);
+        ctx.fillRect(FR.x0 + cix * TS, fy + r * TS, TS, TS);
       }
     }
     // a dungeon floor is never that clean — sink the whole thing into gloom
     ctx.fillStyle = 'rgba(16,10,20,0.42)';
-    ctx.fillRect(ROOM.x, fy, ROOM.w, fh);
+    ctx.fillRect(FR.x0, fy, FR.x1 - FR.x0, fh);
     // pools of torchlight breathe against the dark
-    for (const tx of [ROOM.x + 26, ROOM.x + ROOM.w - 26]) {
+    for (const tx of [FR.x0 + 16, FR.x1 - 16]) {
       const fl2 = 0.16 + 0.05 * Math.sin(t * 9 + tx);
       const lg2 = ctx.createRadialGradient(tx, fy + 14, 8, tx, fy + 14, 130);
       lg2.addColorStop(0, 'rgba(255,170,80,' + fl2 + ')');
@@ -2618,16 +2821,16 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = lg2;
       ctx.fillRect(tx - 130, fy, 260, 200);
     }
-    // cracked-tile flavour, deterministic per skin
+    // cracked-tile flavour
     ctx.globalAlpha = 0.12;
     ctx.strokeStyle = '#0d090d'; ctx.lineWidth = 1.5;
     for (const s of SCRATCH.slice(0, 14)) {
-      const x = ROOM.x + (s.x1 / 100) * ROOM.w, y = fy + (s.y1 / 84) * fh;
+      const x = FR.x0 + (s.x1 / 100) * (FR.x1 - FR.x0), y = fy + (s.y1 / 84) * fh;
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (s.x2 - s.x1) * 1.5, y + (s.y2 - s.y1) * 1.5); ctx.stroke();
     }
     ctx.globalAlpha = 1;
     // wall torches
-    for (const tx of [ROOM.x + 26, ROOM.x + ROOM.w - 26]) {
+    for (const tx of [FR.x0 + 16, FR.x1 - 16]) {
       const fl = 1 + Math.sin(t * 9 + tx) * 0.2;
       ctx.globalAlpha = 0.32;
       ctx.beginPath(); ctx.arc(tx, fy + 12, 20 * fl, 0, 7);
@@ -2636,53 +2839,69 @@ if (!HEADLESS) (function browser() {
       txt('\u{1F525}', tx, fy + 8, '18px serif', '#fff');
     }
     ctx.restore();
-    // wall/floor seam
-    ctx.beginPath(); ctx.moveTo(ROOM.x, fy); ctx.lineTo(ROOM.x + ROOM.w, fy);
-    ctx.strokeStyle = 'rgba(240,246,255,0.25)'; ctx.lineWidth = 2; ctx.stroke();
+    // seams
+    ctx.strokeStyle = 'rgba(240,246,255,0.22)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(FR.x0, FR.y0); ctx.lineTo(FR.x1, FR.y0); ctx.stroke();
+    // the doorways
+    for (const dir of ['n', 's', 'e', 'w']) {
+      if (has(dir)) drawDoorway(dir, open(dir), t);
+    }
   }
 
-  function drawExitDoor(i, n, d, t) {
-    const p = doorPos(i, n);
-    const w = d.boss ? 78 : 58, h = d.boss ? 60 : 48;
-    const x = p.x - w / 2, y = p.y - h;
-    const T = theme();
-    // arch
-    ctx.beginPath();
-    ctx.moveTo(x, y + h);
-    ctx.lineTo(x, y + w * 0.3);
-    ctx.arc(x + w / 2, y + w * 0.3, w / 2, Math.PI, 0);
-    ctx.lineTo(x + w, y + h);
-    ctx.closePath();
-    const g = ctx.createLinearGradient(0, y, 0, y + h);
-    g.addColorStop(0, '#0d090d'); g.addColorStop(1, '#241a26');
-    ctx.fillStyle = g; ctx.fill();
-    ctx.lineWidth = 2.5; ctx.strokeStyle = d.boss ? '#ffd75e' : T.trim; ctx.stroke();
-    const bob = Math.sin(t * 2.4 + i * 2.1) * 2;
-    if (d.boss) {
-      txt('\u{1F451}', p.x, y + h * 0.45 + bob, '26px serif', '#fff');
-      txt('BOSS', p.x, y + h + 12, '900 11px Verdana, sans-serif', '#ffd75e', 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
-    } else if (d.known && d.spec) {
-      // scouted: the next room's dwellers peek through
-      const icons = d.spec.slice(0, 3).map(e =>
-        e.kind === 'monster' ? ((ENEMIES.find(en => en.id === e.eid) || {}).icon || ENT_INFO.monster.icon)
-                             : ENT_INFO[e.kind].icon);
-      txt(icons.join(''), p.x, y + h * 0.48 + bob, (icons.length > 2 ? 11 : 14) + 'px serif', '#fff');
+  function drawDoorway(dir, isOpen, t) {
+    const p = doorCenter(dir);
+    const locked = !isOpen;
+    const kcol = S.run.keys < 1 && locked && Math.floor(t * 4) % 2 ? '#ff5a4e' : '#ffd75e';
+    ctx.save();
+    if (dir === 'n' || dir === 's') {
+      const y0 = dir === 'n' ? ROOM.y : FR.y1;
+      const hh = dir === 'n' ? ROOM.wallH : ROOM.botH;
+      // the opening
+      ctx.fillStyle = isOpen ? '#060309' : '#1c1220';
+      ctx.fillRect(p.x - DOOR_HALF, y0, DOOR_HALF * 2, hh);
+      ctx.strokeStyle = isOpen ? 'rgba(255,215,94,0.5)' : '#3a2f3a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(p.x - DOOR_HALF, y0, DOOR_HALF * 2, hh);
+      if (isOpen) {
+        // a beckoning glow from the next room
+        const g = ctx.createLinearGradient(0, y0, 0, y0 + (dir === 'n' ? hh + 26 : -26));
+        g.addColorStop(0, 'rgba(255,200,110,0.20)');
+        g.addColorStop(1, 'rgba(255,200,110,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(p.x - DOOR_HALF + 4, dir === 'n' ? y0 : y0 - 26, DOOR_HALF * 2 - 8, hh + 26);
+        txt(dir === 'n' ? '▲' : '▼', p.x, y0 + hh / 2, '900 12px Verdana, sans-serif', 'rgba(255,220,140,0.8)');
+      } else {
+        // barred gate
+        ctx.strokeStyle = '#4a3a50'; ctx.lineWidth = 3;
+        for (let i = -1; i <= 1; i++) {
+          ctx.beginPath(); ctx.moveTo(p.x + i * 16, y0 + 3); ctx.lineTo(p.x + i * 16, y0 + hh - 3); ctx.stroke();
+        }
+        txt('\u{1F512}', p.x, y0 + hh / 2 - 4, '13px serif', '#fff');
+        txt('1\u{1F5DD}', p.x, y0 + hh / 2 + 10, '800 9px Verdana, sans-serif', kcol);
+      }
     } else {
-      txt('?', p.x, y + h * 0.48 + bob, '900 20px Georgia, serif', 'rgba(232,220,232,0.7)');
+      const x0 = dir === 'w' ? ROOM.x : FR.x1;
+      ctx.fillStyle = isOpen ? '#060309' : '#1c1220';
+      ctx.fillRect(x0, p.y - DOOR_HALF, ROOM.sideW, DOOR_HALF * 2);
+      ctx.strokeStyle = isOpen ? 'rgba(255,215,94,0.5)' : '#3a2f3a';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x0, p.y - DOOR_HALF, ROOM.sideW, DOOR_HALF * 2);
+      if (isOpen) {
+        txt(dir === 'w' ? '◀' : '▶', x0 + ROOM.sideW / 2, p.y, '900 11px Verdana, sans-serif', 'rgba(255,220,140,0.8)');
+      } else {
+        ctx.strokeStyle = '#4a3a50'; ctx.lineWidth = 3;
+        for (let i = -1; i <= 1; i++) {
+          ctx.beginPath(); ctx.moveTo(x0 + 2, p.y + i * 16); ctx.lineTo(x0 + ROOM.sideW - 2, p.y + i * 16); ctx.stroke();
+        }
+        txt('\u{1F512}', x0 + ROOM.sideW / 2, p.y - 8, '11px serif', '#fff');
+        txt('1\u{1F5DD}', x0 + ROOM.sideW / 2, p.y + 8, '800 8px Verdana, sans-serif', kcol);
+      }
     }
-    // the lock
-    const locked = S.run.keys < 1;
-    txt('\u{1F512}', p.x + w / 2 - 6, y + h - 8, '13px serif', '#fff');
-    txt('1\u{1F5DD}', p.x, y + h - 6, '800 9px Verdana, sans-serif',
-        locked && Math.floor(t * 4) % 2 ? '#ff5a4e' : '#ffd75e');
-    if (!S.room) {
-      uiButtons.push({ x: x - 6, y: y - 8, w: w + 12, h: h + 16,
-                       cb: () => walkTo(p.x, p.y + 26, () => useDoor(i)) });
-    }
+    ctx.restore();
   }
 
-  function drawEnt(i, e, n, t) {
-    const p = entPos(i, n);
+  function drawEnt(i, e, t) {
+    const p = entPos(e);
     const info = ENT_INFO[e.kind];
     let icon = info.icon, label = info.name, col = '#e8dce8';
     if (e.kind === 'monster') {
@@ -2692,44 +2911,121 @@ if (!HEADLESS) (function browser() {
       col = e.mtype === 'boss' ? '#ffd75e' : e.mtype === 'elite' ? '#ff9d3c' : '#ffb4a8';
     }
     ctx.save();
-    if (e.done) {
-      // spent: chests gape, folk pack up, monsters are dust
+    if (e.done && e.kind !== 'shop') {
       ctx.globalAlpha = 0.28;
       txt(e.kind === 'monster' ? '\u{1F4A8}' : icon, p.x, p.y - 12, '30px serif', '#fff');
       txt(e.kind === 'monster' ? 'slain' : 'done', p.x, p.y + 14, '600 9px Verdana, sans-serif', '#9a8aa0');
       ctx.restore();
       return;
     }
-    // shadow + idle bob
     ctx.beginPath(); ctx.ellipse(p.x, p.y + 6, 20, 7, 0, 0, 7);
     ctx.fillStyle = 'rgba(10,6,12,0.5)'; ctx.fill();
     const bob = Math.sin(t * 2.6 + i * 2.4) * 2.5;
-    const size = e.kind === 'monster' && e.mtype === 'boss' ? 52 : 34;
-    // monsters get a menacing aura
+    const size = e.kind === 'monster' && e.mtype === 'boss' ? 52 : e.kind === 'stairs' ? 44 : 34;
     if (e.kind === 'monster') {
       ctx.globalAlpha = 0.16 + 0.08 * Math.sin(t * 4 + i);
       ctx.beginPath(); ctx.arc(p.x, p.y - 14 + bob, size * 0.72, 0, 7);
       ctx.fillStyle = e.mtype === 'elite' ? '#ff9d3c' : '#ef4b5d'; ctx.fill();
       ctx.globalAlpha = 1;
     }
+    if (e.kind === 'stairs') {
+      ctx.globalAlpha = 0.25 + 0.12 * Math.sin(t * 3);
+      ctx.beginPath(); ctx.arc(p.x, p.y - 14 + bob, 34, 0, 7);
+      ctx.fillStyle = '#ffd75e'; ctx.fill();
+      ctx.globalAlpha = 1;
+    }
     txt(icon, p.x, p.y - 14 + bob, size + 'px serif', '#fff');
     if (e.mtype === 'elite') txt('\u{1F525}', p.x + 20, p.y - 30 + bob, '14px serif', '#fff');
     txt(label, p.x, p.y + 18, '800 9px Verdana, sans-serif', col, 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
-    ctx.restore();
-    if (!S.room) {
-      uiButtons.push({ x: p.x - 34, y: p.y - 44, w: 68, h: 74,
-                       cb: () => walkTo(p.x, p.y + 22, () => interact(i)) });
+    // whisper when the hero is close
+    const dh = Math.hypot(AV.x - p.x, AV.y - (p.y - 6));
+    if (dh < 74 && dh > 34) {
+      txt('!', p.x + 18, p.y - 38 + bob, '900 14px Georgia, serif', '#ffe066', 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
     }
+    ctx.restore();
   }
 
   function drawHero(t) {
-    // walking bob + tiny sword
-    const moving = Math.hypot(AV.tx - AV.x, AV.ty - AV.y) > 3;
-    const hop = moving ? Math.abs(Math.sin(AV.step)) * 4 : Math.sin(t * 2) * 1.5;
-    ctx.beginPath(); ctx.ellipse(AV.x, AV.y + 4, 15, 6, 0, 0, 7);
+    const hop = AV.moving ? Math.abs(Math.sin(AV.step)) * 4 : Math.sin(t * 2) * 1.5;
+    ctx.beginPath(); ctx.ellipse(AV.x, AV.y + 6, 15, 6, 0, 0, 7);
     ctx.fillStyle = 'rgba(10,6,12,0.5)'; ctx.fill();
-    txt('\u{1F93A}', AV.x, AV.y - 16 - hop, '34px serif', '#fff');
-    if (S.run.keys > 0) txt('\u{1F5DD}', AV.x + 16, AV.y - 34 - hop, '11px serif', '#fff');
+    // walk dust
+    if (AV.moving && Math.random() < 0.25 && S.parts.length < 120) {
+      S.parts.push({ x: AV.x - AV.fx * 10, y: AV.y + 4, vx: -AV.fx * 24 + (Math.random() - 0.5) * 12,
+                     vy: -6, g: -20, life: 0, max: 0.4, col: '#8a7a90', sz: 1.8, spin: 1, shape: 'sq' });
+    }
+    ctx.save();
+    ctx.translate(AV.x, AV.y - 14 - hop);
+    if (AV.moving) ctx.rotate(AV.fx * 0.08);
+    txt('\u{1F93A}', 0, 0, '34px serif', '#fff');
+    ctx.restore();
+    if (S.run.keys > 0) txt('\u{1F5DD}', AV.x + 16, AV.y - 32 - hop, '11px serif', '#fff');
+  }
+
+  function drawJoystick() {
+    if (!JOY.active) return;
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.beginPath(); ctx.arc(JOY.ox, JOY.oy, 48, 0, 7);
+    ctx.lineWidth = 3; ctx.strokeStyle = '#e8dce8'; ctx.stroke();
+    const d = Math.hypot(JOY.dx, JOY.dy) || 1;
+    const k = Math.min(48, d);
+    ctx.globalAlpha = 0.55;
+    ctx.beginPath(); ctx.arc(JOY.ox + (JOY.dx / d) * k, JOY.oy + (JOY.dy / d) * k, 20, 0, 7);
+    ctx.fillStyle = '#e8dce8'; ctx.fill();
+    ctx.restore();
+  }
+
+  // the fog-of-war minimap: visited rooms solid, glimpsed neighbours hollow
+  function drawMinimap(t) {
+    const map = S.run.map;
+    if (!map) return;
+    const rooms = map.rooms;
+    const lantern = hasRelic('lantern');
+    const seen = {};
+    for (const k of Object.keys(rooms)) {
+      const r = rooms[k];
+      if (lantern || r.visited) { seen[k] = 2; continue; }
+      for (const d of ['n', 's', 'e', 'w']) {
+        const nk = rkey(r.gx + DIRS[d][0], r.gy + DIRS[d][1]);
+        if (rooms[nk] && rooms[nk].visited) { seen[k] = 1; break; }
+      }
+    }
+    const ks = Object.keys(seen);
+    if (!ks.length) return;
+    let minX = 99, maxX = -99, minY = 99, maxY = -99;
+    for (const k of ks) {
+      const r = rooms[k];
+      minX = Math.min(minX, r.gx); maxX = Math.max(maxX, r.gx);
+      minY = Math.min(minY, r.gy); maxY = Math.max(maxY, r.gy);
+    }
+    const cell = 13, gap = 3;
+    const mw = (maxX - minX + 1) * (cell + gap) + 12;
+    const mh = (maxY - minY + 1) * (cell + gap) + 12;
+    const mx = LW - 14 - mw, my = 56;
+    rr(mx, my, mw, mh, 8);
+    ctx.fillStyle = 'rgba(10,6,12,0.82)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(232,220,232,0.35)'; ctx.stroke();
+    for (const k of ks) {
+      const r = rooms[k];
+      const x = mx + 6 + (r.gx - minX) * (cell + gap);
+      const y = my + 6 + (r.gy - minY) * (cell + gap);
+      const isCur = k === map.cur;
+      if (seen[k] === 2) {
+        rr(x, y, cell, cell, 3);
+        ctx.fillStyle = isCur ? theme().accent : r.boss ? 'rgba(255,215,94,0.75)' : 'rgba(180,160,190,0.55)';
+        ctx.fill();
+      } else {
+        rr(x, y, cell, cell, 3);
+        ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(180,160,190,0.4)'; ctx.stroke();
+      }
+      if (r.boss && (seen[k] === 2 || lantern)) txt('\u{1F451}', x + cell / 2, y + cell / 2, '8px serif', '#fff');
+      if (isCur) {
+        const pulse = 0.6 + 0.4 * Math.sin(t * 5);
+        rr(x - 1.5, y - 1.5, cell + 3, cell + 3, 4);
+        ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,255,255,' + pulse + ')'; ctx.stroke();
+      }
+    }
   }
 
   function drawToast() {
@@ -2750,44 +3046,34 @@ if (!HEADLESS) (function browser() {
     const T = theme();
     drawBackground();
     if (!S.room) avTick(dt);
+    if (S.screen !== 'dungeon') return;   // a bump may have started a battle
     // heading
-    ctx.font = '900 28px Georgia, serif';
+    ctx.font = '900 26px Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 7; ctx.strokeStyle = '#2a1030';
-    ctx.strokeText(T.name, LW / 2, 46);
-    ctx.fillStyle = lgr('dtt:' + fkey(), 0, 32, 0, 62, [[0, '#fff4d6'], [1, T.accent]]);
-    ctx.fillText(T.name, LW / 2, 46);
-    txt('FLOOR ' + S.run.floor + '  •  ROOM ' + S.run.depth + ' / ' + C.BOSS_DEPTH,
-        LW / 2, 76, '800 12px Verdana, sans-serif', '#c8a8b0');
-    // room dots
-    for (let i = 1; i <= C.BOSS_DEPTH; i++) {
-      const x = LW / 2 - (C.BOSS_DEPTH - 1) * 11 + (i - 1) * 22;
-      ctx.beginPath(); ctx.arc(x, 100, i === C.BOSS_DEPTH ? 5.5 : 3.6, 0, 7);
-      ctx.fillStyle = i < S.run.depth ? '#7ee787' : i === S.run.depth ? '#ffd75e' : 'rgba(255,215,94,0.22)';
-      ctx.fill();
-      if (i === C.BOSS_DEPTH) txt('\u{1F451}', x, 100, '9px serif', '#fff');
-    }
-    // keys, right where door decisions happen
-    txt('\u{1F5DD} × ' + S.run.keys, LW / 2, 128, '900 16px Verdana, sans-serif',
+    ctx.strokeText(T.name, LW / 2 - 30, 44);
+    ctx.fillStyle = lgr('dtt:' + fkey(), 0, 30, 0, 60, [[0, '#fff4d6'], [1, T.accent]]);
+    ctx.fillText(T.name, LW / 2 - 30, 44);
+    txt('FLOOR ' + S.run.floor, LW / 2 - 30, 74, '800 12px Verdana, sans-serif', '#c8a8b0');
+    txt('\u{1F5DD} × ' + S.run.keys, LW / 2 - 30, 104, '900 16px Verdana, sans-serif',
         S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
     drawRoomBox(t);
-    // exit doors on the far wall
-    const doors = (S.run.room && S.run.room.doors) || [];
-    doors.forEach((d, i) => drawExitDoor(i, doors.length, d, t));
-    if (!doors.length) txt('slay the boss to descend', LW / 2, ROOM.y + 40, '800 11px Verdana, sans-serif', '#ffd75e');
-    // inhabitants, back-to-front with the hero in the mix
-    const ents = (S.run.room && S.run.room.ents) || [];
-    const order = ents.map((e, i) => ({ e, i, y: entPos(i, ents.length).y }));
+    // dwellers + hero, back-to-front
+    const ents = (curRoom() && curRoom().ents) || [];
+    const order = ents.map((e, i) => ({ e, i, y: entPos(e).y }));
     order.push({ hero: true, y: AV.y });
     order.sort((a, b) => a.y - b.y);
     for (const o of order) {
       if (o.hero) drawHero(t);
-      else drawEnt(o.i, o.e, ents.length, t);
+      else drawEnt(o.i, o.e, t);
     }
     drawMotes(dt, 1);
+    drawParticles(dt);
     drawToast();
+    drawJoystick();
     drawHUD(t);
     drawVignette(0.35);
+    drawMinimap(t);
     drawBanner(t);
     if (S.uiFlash && !S.room) {
       txt(S.uiFlash.msg, LW / 2, ROOM.y + ROOM.wallH + 60, '900 15px Verdana, sans-serif',
@@ -2795,9 +3081,9 @@ if (!HEADLESS) (function browser() {
     }
     uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'title'; save(); }, { r: 10, font: '20px serif' });
     uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
+    txt('drag to walk • WASD works too', LW / 2, ROOM.y + ROOM.h + 16, '600 9px Verdana, sans-serif', '#6a5a68');
     drawRoomModal(t);
   }
-
   // ------------------------------------------------------------ room modal
   const MODAL_INFO = {
     shop: { icon: '\u{1F9D4}', name: 'SHOPKEEPER' },
