@@ -981,8 +981,11 @@ function step(dt, quiet) {
           if (!quiet) SND.clink();
         }
       }
-      // side walls; gutters only open on the payout tier
-      if (!isLast || c.y < Mv.gutY) {
+      // side walls; gutters only open on the payout tier's MID zone —
+      // they close again before the lip, so everything that reaches the
+      // front is guaranteed to funnel into the tray
+      const gutOpen = isLast && c.y >= Mv.gutY && c.y < front - Mv.lipW - 2;
+      if (!gutOpen) {
         if (c.x < c.r) { c.x = c.r; c.vx *= -0.3; }
         if (c.x > C.W - c.r) { c.x = C.W - c.r; c.vx *= -0.3; }
       } else if (c.x < C.GUT_LO || c.x > C.GUT_HI) {
@@ -1567,16 +1570,25 @@ if (!HEADLESS) (function browser() {
     const Mv = M();
     const lt = lastTier();
     const front = tierFront(lt);
+    const gEnd = front - Mv.lipW - 2;
     for (const side of [0, 1]) {
       const x0 = side ? 100 : 0;
       const xin = side ? 96 : 4;
       const a = w2s(x0, Mv.gutY, 0), b = w2s(xin, Mv.gutY, 0);
-      const c2 = w2s(xin, front, 0), d = w2s(x0, front, 0);
+      const c2 = w2s(xin, gEnd, 0), d = w2s(x0, gEnd, 0);
       poly([a, b, c2, d]);
       const gg = ctx.createLinearGradient(a.x, 0, b.x, 0);
       gg.addColorStop(side ? 1 : 0, 'rgba(8,6,10,0.9)');
       gg.addColorStop(side ? 0 : 1, 'rgba(8,6,10,0.0)');
       ctx.fillStyle = gg; ctx.fill();
+      // guard rail closing the gutter: the corner funnels to the tray
+      const r1 = w2s(x0, gEnd, 2.4), r2 = w2s(x0, front, 2.4), r3 = w2s(x0, front, 0), r4 = w2s(x0, gEnd, 0);
+      poly([r1, r2, r3, r4]);
+      const rg = ctx.createLinearGradient(0, r1.y, 0, r3.y);
+      rg.addColorStop(0, '#aeb6c2'); rg.addColorStop(1, '#5a616c');
+      ctx.fillStyle = rg; ctx.fill();
+      ctx.strokeStyle = 'rgba(240,246,255,0.55)'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(r1.x, r1.y); ctx.lineTo(r2.x, r2.y); ctx.stroke();
     }
   }
 

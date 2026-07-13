@@ -302,6 +302,22 @@ t.ok(corner.scored, 'corner coin over the front edge still scores');
 t.ok(corner.x >= 20, 'falling coin was funneled inward to the tray');
 t.ok(cornerPrize.scored, 'corner prize over the front edge is won');
 t.ok(cornerPrize.x <= 80, 'falling prize was funneled inward to the tray');
+// the gutters close before the lip: a coin hugging the wall at the very
+// front cannot slip out the side any more — it MUST go over and pay
+CP.srand(53); CP.reset();
+S.coins.length = 0;
+const gutEnd = CP.tierFront(0) - MACHINES.gold.lipW - 2;
+const hugger = CP.place(2, gutEnd + 1, 'coin', 0, 'plat');
+hugger.vx = -25; hugger.vy = 55;
+const lostBefore = S.lost;
+step(2.5);
+t.eq(S.lost, lostBefore, 'the front corner guard wall blocks the side exit');
+t.ok(hugger.scored, 'the wall-hugging coin funnels over the front and pays');
+// while the mid-zone gutters still take their cut
+const mid = CP.place(2, MACHINES.gold.gutY + 8, 'coin', 0, 'plat');
+mid.vx = -25;
+step(2);
+t.eq(S.lost, lostBefore + 1, 'mid-zone gutters still eat wall-huggers');
 
 // -------- penny falls: the two-tier cascade --------
 CP.srand(19); CP.setMachine('penny');
