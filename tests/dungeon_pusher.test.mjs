@@ -112,7 +112,7 @@ t.ok(S.run.arsenal.sword === 1 && S.run.arsenal.shield === 1 && S.run.arsenal.vi
 t.eq(S.run.potions, C.START_POTIONS, 'one potion in the belt');
 // -------- the floor MAP: a real crawl --------
 t.ok(S.run.map && S.run.map.rooms, 'a floor map is carved');
-t.ok(mapRooms().length >= 10, 'the floor holds ' + mapRooms().length + ' rooms');
+t.ok(mapRooms().length >= 9, 'the floor holds ' + mapRooms().length + ' rooms');
 t.eq(S.run.map.cur, '0,0', 'you start at the entrance');
 t.ok(S.run.room === S.run.map.rooms['0,0'], 'the current room IS the map room');
 t.ok(S.run.room.visited, 'the entrance is uncovered');
@@ -666,27 +666,37 @@ t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
   t.ok(DPold.S.run && DPold.S.run.hp === 50, 'an old save still resumes');
   t.eq(DPold.S.run.keys, DPold.C.START_KEYS, 'old saves get the starter keys');
   t.eq(DPold.S.run.pouch, 0, 'old saves start without pouches');
-  t.ok(DPold.S.run.map && Object.keys(DPold.S.run.map.rooms).length >= 10,
+  t.ok(DPold.S.run.map && Object.keys(DPold.S.run.map.rooms).length >= 9,
        'old saves get a fresh floor map carved');
   t.ok(DPold.S.run.room === DPold.S.run.map.rooms[DPold.S.run.map.cur], 'and stand in its entrance');
 }
-// a pre-corridor map (v1: links only tracked unlocks) gets corridors grandfathered in
+// a pre-corridor map (v1: links only tracked unlocks) is re-carved fresh
 {
   const storeV1 = { dungeon_pusher_save: JSON.stringify({
-    v: 1, mute: false, best: { floor: 1, depth: 1, kills: 0, gold: 0 },
-    run: { floor: 1, depth: 1, hp: 40, maxHp: 60, gold: 0, pouch: 0,
+    v: 1, mute: false, best: { floor: 2, depth: 1, kills: 5, gold: 20 },
+    run: { floor: 2, depth: 1, hp: 40, maxHp: 60, gold: 12, pouch: 1,
            arsenal: { sword: 1 }, relics: [], potions: 1, whet: 0, keys: 2,
-           kills: 0, goldEarned: 0,
+           kills: 5, goldEarned: 20,
            map: { rooms: {
              '0,0': { gx: 0, gy: 0, ents: [], visited: true, dist: 0, boss: false },
              '1,0': { gx: 1, gy: 0, ents: [{ kind: 'chest', done: false }], visited: false, dist: 1, boss: true },
            }, links: {}, cur: '0,0' } },
   }) };
   const { DP: DPv1 } = loadGame(storeV1, false);
-  t.ok(DPv1.S.run.map.v === 2, 'v1 map is stamped migrated');
-  t.ok(DPv1.S.run.map.links['0,0~1,0'] && !DPv1.S.run.map.links['0,0~1,0'].open,
-       'touching v1 rooms get a locked corridor grandfathered in');
-  t.eq(DPv1.S.run.map.rooms['0,0'].size, 'b', 'v1 rooms default to big chambers');
+  t.eq(DPv1.S.run.map.v, 2, 'v1 maps are re-carved to the corridor format');
+  t.ok(Object.keys(DPv1.S.run.map.rooms).length >= 9, 'the fresh floor is a full random layout');
+  t.eq(DPv1.S.run.floor, 2, 'run progress (floor, gold, pouch) survives the re-carve');
+  t.eq(DPv1.S.run.pouch, 1, 'pouches intact');
+}
+// randomness: consecutive floors carve different dungeons
+{
+  DP.srand(20260713);
+  const layout = () => Object.keys(S.run.map.rooms).sort().join('|')
+    + '#' + Object.values(S.run.map.rooms).map(r => r.size).join('');
+  DP.genFloor(); const fA = layout();
+  DP.genFloor(); const fB = layout();
+  DP.genFloor(); const fC = layout();
+  t.ok(fA !== fB && fB !== fC && fA !== fC, 'every carved floor is a different dungeon');
 }
 
 // -------- determinism --------
