@@ -36,6 +36,12 @@ function loadGame(store, withCtx) {
   };
   let rafCb = null;
   global.requestAnimationFrame = (cb) => { rafCb = cb; };
+  global.Image = class {
+    constructor() { this._ok = false; }
+    set src(v) { this._src = v; if (this.onload) this.onload(); }
+    get src() { return this._src; }
+    get width() { return 64; } get height() { return 64; }
+  };
   global.addEventListener = noop;
   global.devicePixelRatio = 1;
   global.innerWidth = 480; global.innerHeight = 840;
@@ -60,7 +66,7 @@ const DT = 1 / 60;
 const step = (secs) => { const n = Math.round(secs * 60); for (let i = 0; i < n; i++) DP.tick(DT); };
 const platCoins = () => S.coins.filter(c => c.st === 'plat');
 const ENT_KINDS = ['monster', 'chest', 'shop', 'smith', 'shrine', 'wheel', 'stairs'];
-const mkMonster = (eid) => ({ kind: 'monster', mtype: 'battle', eid: eid || 'rat', done: false, px: 0.5, py: 0.4 });
+const mkMonster = (eid) => ({ kind: 'monster', mtype: 'battle', eid: eid || 'orc', done: false, px: 0.5, py: 0.4 });
 const mapRooms = () => Object.values(S.run.map.rooms);
 const DX = { n: 0, s: 0, e: 1, w: -1 }, DY = { n: -1, s: 1, e: 0, w: 0 };
 const lk2 = (a, b) => (a.gy < b.gy || (a.gy === b.gy && a.gx < b.gx))
@@ -97,16 +103,34 @@ t.eq(BOSSES.length, 3, 'three floor bosses');
 t.ok(RELICS.length >= 8 && RELICS.every(r => r.id && r.desc), 'relic shelf is stocked');
 t.eq(WHEEL.length, 8, 'the lucky wheel has eight segments');
 
+// -------- the four adventurers --------
+t.ok(DP.HEROES.length === 4 && DP.HEROES.every(h => h.id && h.name && h.perk), 'four heroes to choose from');
+DP.srand(41);
+DP.newRun('knight');
+t.eq(S.run.hero, 'knight', 'the knight answers the call');
+t.eq(S.run.maxHp, C.START_HP + 10, 'knight perk: +10 max HP');
+t.eq(S.run.hp, S.run.maxHp, 'and starts at full');
+DP.newRun('rogue');
+t.eq(S.run.keys, 5, 'rogue perk: five starting keys');
+t.eq(S.run.maxHp, C.START_HP, 'no HP bonus for the rogue');
+DP.newRun('wizard');
+t.eq(S.run.pouch, 1, 'mage perk: a coin pouch');
+t.eq(DP.roundCoins(), C.ROUND_COINS + C.POUCH_COINS, 'so every purse runs richer');
+DP.newRun('cleric');
+t.eq(S.run.potions, 2, 'cleric perk: two potions');
+t.eq(S.heroPick, 'cleric', 'the pick is remembered');
+DP.newRun('nonsense');
+t.eq(S.run.hero, 'cleric', 'unknown heroes fall back to the remembered pick');
+
 // -------- a new run --------
 DP.srand(42);
-DP.newRun();
+DP.newRun('rogue');
 t.eq(S.screen, 'dungeon', 'new run opens in the dungeon');
 t.eq(S.run.floor, 1, 'run starts on floor 1');
 t.eq(S.run.depth, 1, 'run starts at room 1');
 t.eq(S.run.hp, C.START_HP, 'full HP at the start');
-t.eq(S.run.keys, C.START_KEYS, 'you start with three keys');
+t.eq(S.run.keys, 5, 'the rogue jangles five keys');
 t.eq(S.run.pouch, 0, 'no coin pouches yet');
-t.eq(DP.roundCoins(), C.ROUND_COINS, 'the round purse starts at ' + C.ROUND_COINS);
 t.ok(S.run.arsenal.sword === 1 && S.run.arsenal.shield === 1 && S.run.arsenal.vial === 1,
      'starter arsenal: sword, shield, venom vial');
 t.eq(S.run.potions, C.START_POTIONS, 'one potion in the belt');
@@ -175,11 +199,11 @@ S.run.keys = C.START_KEYS;
 
 // -------- tapping a monster starts a ROUND-based fight --------
 DP.srand(7);
-S.run.room.ents = [mkMonster('rat'), { kind: 'chest', done: false }];
+S.run.room.ents = [mkMonster('orc'), { kind: 'chest', done: false }];
 t.ok(DP.interact(0), 'tapping the monster starts the fight');
 t.eq(S.screen, 'battle', 'the fight is on');
 t.ok(S.enemy && S.enemy.hp > 0 && S.enemy.hp === S.enemy.maxHp, 'the foe appears at full health');
-t.eq(S.enemy.id, 'rat', 'the room told you exactly who lurks — and it delivered');
+t.eq(S.enemy.id, 'orc', 'the room told you exactly who lurks — and it delivered');
 t.ok(S.battle && S.battle.round === 1 && S.battle.phase === 'drop', 'round 1, purse in hand');
 t.eq(S.run.wallet, C.ROUND_COINS, 'the purse holds the round coins');
 t.ok(platCoins().length >= 40, 'battle pile is dense (' + platCoins().length + ' pieces)');
@@ -758,7 +782,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.srand(99); D.newRun();
   frames(20);                                     // the crawl: room, minimap, hero
   D.S.run.room.ents = [
-    { kind: 'monster', mtype: 'battle', eid: 'rat', done: false, px: 0.3, py: 0.3 },
+    { kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.3, py: 0.3 },
     { kind: 'shop', done: false, px: 0.7, py: 0.3 },
     { kind: 'chest', done: false, px: 0.5, py: 0.6 },
   ];
