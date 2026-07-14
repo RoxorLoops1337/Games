@@ -1443,4 +1443,35 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.ok(true, 'all screens rendered without throwing');
 }
 
+// -------- refresh on the victory screen still yields the stairs (regression) --------
+// Winning a boss saves the run with the boss marked done, but the stairs are only
+// spawned when CONTINUE is tapped (leaveBattle). A browser refresh at the victory
+// overlay must not soft-lock the floor: reconcileStairs() rebuilds them on load.
+// (Runs last: loadGame() rebinds global.localStorage, so keep it clear of the
+// ordering-sensitive persistence tests above.)
+{
+  const rstore = {};
+  const { DP: A } = loadGame(rstore, false);
+  A.srand(41);
+  A.newRun('knight');
+  const bossK = Object.keys(A.S.run.map.rooms).find(k => A.S.run.map.rooms[k].boss);
+  A.S.run.map.cur = bossK;
+  A.S.run.room = A.S.run.map.rooms[bossK];
+  A.S.run.room.visited = true;
+  A.interact(0);                       // pick a fight with the boss
+  A.S.enemy.hp = 1;
+  A.dmgEnemy(5);                       // fell it — winBattle() marks it done + saves
+  t.ok(A.S.victory && A.S.victory.boss, 'boss felled, victory overlay up');
+  const bossRoom = A.S.run.map.rooms[bossK];
+  t.ok(bossRoom.ents.some(e => e.mtype === 'boss' && e.done), 'the boss ent is marked done');
+  t.ok(!bossRoom.ents.some(e => e.kind === 'stairs'), 'no stairs before CONTINUE is tapped');
+  A.save();                            // persist the state as it stands at the victory screen
+  // ---- the refresh ----
+  const { DP: B } = loadGame(rstore, false);
+  const bk2 = Object.keys(B.S.run.map.rooms).find(k => B.S.run.map.rooms[k].boss);
+  const reloaded = B.S.run.map.rooms[bk2];
+  t.ok(reloaded.ents.length === 1 && reloaded.ents[0].kind === 'stairs',
+       'after a refresh the fallen boss lair holds the stairs down');
+}
+
 t.done();

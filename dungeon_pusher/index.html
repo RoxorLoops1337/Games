@@ -369,9 +369,27 @@ function load() {
         S.run.room = S.run.map.rooms[S.run.map.cur];
         S.run.depth = (S.run.room.dist || 0) + 1;
       }
+      reconcileStairs();   // a boss felled just before a refresh still gets its stairs
       S.meter = d.run.meter || 0;
     }
   } catch (e) {}
+}
+// A boss room whose boss has fallen must always hold the stairs down. Normally
+// leaveBattle() spawns them when CONTINUE is tapped, but a browser refresh on
+// the victory screen skips that step — the save already has the boss marked
+// done (from winBattle) yet no stairs, which would soft-lock the floor. Rebuild
+// the stairs on load so the descent is always reachable.
+function reconcileStairs() {
+  if (!S.run || !S.run.map) return;
+  for (const k of Object.keys(S.run.map.rooms)) {
+    const r = S.run.map.rooms[k];
+    if (!r.boss || !Array.isArray(r.ents)) continue;
+    const bossDown = r.ents.some(e => e.kind === 'monster' && e.mtype === 'boss' && e.done);
+    const hasStairs = r.ents.some(e => e.kind === 'stairs');
+    if (bossDown && !hasStairs) {
+      r.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
+    }
+  }
 }
 
 // ------------------------------------------------------------------- pieces
