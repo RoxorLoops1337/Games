@@ -274,6 +274,17 @@ S.cd = 0; DP.drop(50);
 t.eq(S.cd, C.DROP_CD / 4, '×4 quarters it — four times as fast');
 t.eq(DP.cycleTurbo(), 1, 'and it wraps back to off');
 t.eq(S.turbo, 1, 'the choice is sticky on the state');
+// TURBO also quickens the pusher slide (a milder bump than the drop rate)
+t.eq(DP.pushRate(), 1, 'off: the pusher runs at base speed');
+S.turbo = 2; t.eq(DP.pushRate(), 1.5, '×2 turbo slides the pusher 1.5× faster');
+S.turbo = 4; t.eq(DP.pushRate(), 2, '×4 turbo doubles the pusher speed');
+{
+  // the phase really does advance faster under turbo
+  S.turbo = 1; S.phase = 0; DP.step(1, true); const slow = S.phase;
+  S.turbo = 4; S.phase = 0; DP.step(1, true); const fast = S.phase;
+  t.ok(Math.abs(fast - slow * 2) < 1e-9, 'and the slide phase advances at double rate');
+}
+S.turbo = 1;
 
 // -------- a PACKED machine holds your coin back instead of eating it --------
 // (the bug: holding to drop at the cap silently drained the hand)

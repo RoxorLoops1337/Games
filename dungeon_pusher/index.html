@@ -414,6 +414,11 @@ function spawnDrop(x, ty, kind) {
 }
 
 // ------------------------------------------------------------------ pusher
+// TURBO also quickens the slide — a milder bump than the drop rate so the
+// pile isn't flung: ×2 turbo -> 1.5× pusher, ×4 -> 2×
+function pushRate() {
+  return S.turbo === 4 ? 2 : S.turbo === 2 ? 1.5 : 1;
+}
 function pusherFront(ti) {
   const td = MACH.tiers[ti || 0];
   const ph = S.phase + (td.phase || 0);
@@ -422,7 +427,7 @@ function pusherFront(ti) {
 function pusherVel(ti) {
   const td = MACH.tiers[ti || 0];
   const ph = S.phase + (td.phase || 0);
-  return (td.max - td.min) * 0.5 * Math.sin(ph) * (2 * Math.PI / MACH.pushPeriod);
+  return (td.max - td.min) * 0.5 * Math.sin(ph) * (2 * Math.PI / MACH.pushPeriod) * pushRate();
 }
 function tierFront(ti) { return MACH.tiers[ti].front; }
 
@@ -1712,7 +1717,7 @@ function step(dt, quiet) {
   if (S.cd > 0) S.cd -= dt;
   if (S.denyT > 0) S.denyT -= dt;
   if (S.hurtT > 0) S.hurtT -= dt;
-  S.phase += dt * 2 * Math.PI / MACH.pushPeriod;
+  S.phase += dt * 2 * Math.PI / MACH.pushPeriod * pushRate();
   S.shake = Math.max(0, Math.min(8, S.shake) - dt * 16);   // hard cap + brisk decay
 
   // the round machine runs only while the fight is live
@@ -1922,7 +1927,7 @@ window.DP = {
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer,
-  rollRelicDrop, bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, packWard, RARITY,
+  rollRelicDrop, bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
 };
 
