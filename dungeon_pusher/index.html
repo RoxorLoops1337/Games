@@ -54,7 +54,7 @@ const C = {
   LIP_G: 34,
   MAX_LAY: 2,
   DROP_CD: 0.28,
-  METER_MAX: 18,                        // inserts to trigger a FRENZY rain
+  METER_MAX: 26,                        // inserts to trigger the JACKPOT (earns slower now)
   SAVE_KEY: 'dungeon_pusher_save',
   START_HP: 60, START_POTIONS: 1, START_KEYS: 3,
   POTION_HEAL: 20,
@@ -135,16 +135,68 @@ const ITEMS = [
 function itemById(id) { return ITEMS.find(i => i.id === id); }
 
 // ------------------------------------------------------------------ relics
+// ARTIFACTS: rarity 'c' (common) / 'r' (rare) / 'e' (epic). Commons drop
+// often; epics are the build-warping ones. Won after ELITE fights, or
+// bought dearly from the shop.
+const RARITY = {
+  c: { name: 'COMMON', col: '#c8c8c8', w: 60, price: 90 },
+  r: { name: 'RARE',   col: '#7ab0e8', w: 30, price: 150 },
+  e: { name: 'EPIC',   col: '#c86bff', w: 10, price: 230 },
+};
 const RELICS = [
-  { id: 'whet',    icon: '\u{1FA9A}', name: 'Whetstone',   desc: 'weapons deal +30% damage' },
-  { id: 'venom',   icon: '\u{1F40D}', name: 'Venom Gland', desc: 'venom vials apply +2 stacks' },
-  { id: 'aegis',   icon: '\u{1F530}', name: 'Aegis',       desc: 'unspent block carries into the next round' },
-  { id: 'clover',  icon: '\u{1F340}', name: 'Clover',      desc: 'lucky coins twice as often' },
-  { id: 'wind',    icon: '\u{1F4A8}', name: 'Second Wind', desc: 'survive a killing blow at 1 HP (once per fight)' },
-  { id: 'piggy',   icon: '\u{1F437}', name: 'Piggy Bank',  desc: '+4 gold after every victory' },
-  { id: 'lantern', icon: '\u{1F3EE}', name: 'Lantern',     desc: 'the whole floor map is revealed' },
-  { id: 'plate',   icon: '\u{1F6E1}\u{FE0F}', name: 'Battle Plate', desc: 'start every round with +4 block' },
+  // the founding shelf
+  { id: 'whet',    rar: 'r', icon: '\u{1FA9A}', name: 'Whetstone',   desc: 'weapons deal +30% damage' },
+  { id: 'venom',   rar: 'r', icon: '\u{1F40D}', name: 'Venom Gland', desc: 'venom vials apply +2 stacks' },
+  { id: 'aegis',   rar: 'r', icon: '\u{1F530}', name: 'Aegis',       desc: 'unspent block carries into the next round' },
+  { id: 'clover',  rar: 'c', icon: '\u{1F340}', name: 'Clover',      desc: 'lucky coins twice as often' },
+  { id: 'wind',    rar: 'e', icon: '\u{1F4A8}', name: 'Second Wind', desc: 'survive a killing blow at 1 HP (once per fight)' },
+  { id: 'piggy',   rar: 'c', icon: '\u{1F437}', name: 'Piggy Bank',  desc: '+4 gold after every victory' },
+  { id: 'lantern', rar: 'c', icon: '\u{1F3EE}', name: 'Lantern',     desc: 'the whole floor map is revealed' },
+  { id: 'plate',   rar: 'r', icon: '\u{1F6E1}\u{FE0F}', name: 'Battle Plate', desc: 'start every round with +4 block' },
+  // coin-benders: COMMON
+  { id: 'goldedge',   rar: 'c', icon: '⚔\u{FE0F}',  name: 'Gilded Edge',   desc: 'gold coins deal +1 damage' },
+  { id: 'silvercore', rar: 'c', icon: '\u{1F948}', name: 'Silver Core',   desc: 'silver coins give +1 block' },
+  { id: 'venomtip',   rar: 'c', icon: '\u{1F9EA}', name: 'Venom Tip',     desc: 'venom coins apply +1 stack' },
+  { id: 'warmheart',  rar: 'c', icon: '\u{1F497}', name: 'Warm Heart',    desc: 'heart coins heal +1 HP' },
+  { id: 'frostshard', rar: 'c', icon: '\u{1F9CA}', name: 'Frost Shard',   desc: 'frost coins deal +1 to every foe' },
+  { id: 'starmetal',  rar: 'c', icon: '\u{1F31F}', name: 'Star Metal',    desc: 'lucky coins deal +2 damage' },
+  { id: 'gemcutter',  rar: 'c', icon: '\u{1F48E}', name: 'Gem Cutter',    desc: 'gems pay +10 gold' },
+  { id: 'fatpouch',   rar: 'c', icon: '\u{1F45B}', name: 'Fat Pouch',     desc: 'gold bags pay +7 gold' },
+  { id: 'wardcandle', rar: 'c', icon: '\u{1F56F}\u{FE0F}', name: 'Warding Candle', desc: 'cursed skulls bite for 3 less' },
+  { id: 'strongbox',  rar: 'c', icon: '\u{1F4E6}', name: 'Strongbox',     desc: 'the bank holds +2 pieces' },
+  { id: 'crowbar',    rar: 'c', icon: '\u{1F527}', name: 'Crowbar',       desc: '+1 TILT charge every round' },
+  { id: 'minter',     rar: 'c', icon: '\u{1FA99}', name: 'Minter',        desc: 'your hand holds a bonus gold coin each round' },
+  // coin-benders: RARE
+  { id: 'twinfangs',  rar: 'r', icon: '\u{1F9B7}', name: 'Twin Fangs',    desc: 'poison you apply is DOUBLED' },
+  { id: 'spikeshield',rar: 'r', icon: '\u{1F994}', name: 'Spiked Shield', desc: 'silver coins also deal 1 damage' },
+  { id: 'bloodgold',  rar: 'r', icon: '\u{1FA78}', name: 'Blood Gold',    desc: 'gold coins heal 1 HP as they strike' },
+  { id: 'bulwarkram', rar: 'r', icon: '\u{1F3F0}', name: 'Bulwark Ram',   desc: 'each resolve ends with a strike equal to your block' },
+  { id: 'echobell',   rar: 'r', icon: '\u{1F514}', name: 'Echo Bell',     desc: 'the first piece of every resolve fires twice' },
+  { id: 'momentum',   rar: 'r', icon: '\u{1F300}', name: 'Momentum',      desc: 'gold hits harder for every 5 gold already fired' },
+  { id: 'alchemist',  rar: 'r', icon: '⚗\u{FE0F}',  name: 'Alchemist',     desc: 'venom coins also heal 1 HP' },
+  { id: 'sniperlens', rar: 'r', icon: '\u{1F3AF}', name: 'Sniper Lens',   desc: 'lucky coins pierce a braced guard' },
+  { id: 'loadstone',  rar: 'r', icon: '\u{1F9F2}', name: 'Loadstone',     desc: 'the round rain drops +3 extra pieces' },
+  { id: 'thornmail',  rar: 'r', icon: '\u{1F335}', name: 'Thornmail',     desc: 'attackers take back half your block' },
+  { id: 'quicksilver',rar: 'r', icon: '⚡',        name: 'Quicksilver',   desc: 'the resolve ramps up speed twice as fast' },
+  { id: 'fourth',     rar: 'r', icon: '\u{1F0CF}', name: 'Gambler’s Purse', desc: 'victory offers FOUR coins to pick from' },
+  // coin-benders: EPIC
+  { id: 'plaguelord', rar: 'e', icon: '\u{1F9A0}', name: 'Plague Lord',   desc: 'poison never wears off' },
+  { id: 'stormcall',  rar: 'e', icon: '\u{1F329}\u{FE0F}', name: 'Stormcaller', desc: 'every 8th resolved piece zaps ALL foes for 3' },
+  { id: 'vampblade',  rar: 'e', icon: '\u{1F9DB}', name: 'Vampire Blade', desc: 'weapons heal you for half their damage' },
+  { id: 'midas',      rar: 'e', icon: '\u{1F451}', name: 'Midas Touch',   desc: 'all gold income +30%' },
+  { id: 'twinstrike', rar: 'e', icon: '\u{1F5E1}\u{FE0F}', name: 'Twin Strike', desc: 'gold coins strike TWICE' },
+  { id: 'grandbank',  rar: 'e', icon: '\u{1F3E6}', name: 'Grand Bank',    desc: 'banked pieces come back duplicated' },
 ];
+// weighted pull from the unowned shelf — commons far more often
+function rollRelicDrop() {
+  if (!S.run) return null;
+  const pool = RELICS.filter(rl => S.run.relics.indexOf(rl.id) < 0);
+  if (!pool.length) return null;
+  const total = pool.reduce((a, rl) => a + RARITY[rl.rar].w, 0);
+  let r = rng() * total;
+  for (const rl of pool) { r -= RARITY[rl.rar].w; if (r <= 0) return rl.id; }
+  return pool[pool.length - 1].id;
+}
 function relicById(id) { return RELICS.find(r => r.id === id); }
 function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
 
@@ -359,18 +411,23 @@ function weaponDmg(base) {
   if (hasRelic('whet')) d = Math.round(d * 1.3);
   return d;
 }
-// hurt ONE foe (a braced foe shrugs off half)
-function dmgFoe(e, n, src) {
+// hurt ONE foe (a braced foe shrugs off half — unless the hit pierces)
+function dmgFoe(e, n, src, pierce) {
   if (!S.run || !e || e.hp <= 0) return 0;
   n = Math.max(1, Math.round(n));
-  if (e.braced) n = Math.max(1, Math.ceil(n / 2));
+  if (e.braced && !pierce) n = Math.max(1, Math.ceil(n / 2));
   e.hp -= n;
   e.hitT = 0.3;
   floatAnchor('-' + n, 'enemy', src === 'pois' ? '#b8f26b' : '#ff8a6b', n >= 8);
   if (e.hp <= 0) foeDown(e);
   return n;
 }
-function dmgEnemy(n, src) { return dmgFoe(S.enemy, n, src); }
+function dmgEnemy(n, src, pierce) { return dmgFoe(S.enemy, n, src, pierce); }
+// what one gold coin hits for, artifacts included (momentum counts fired gold)
+function goldDmg() {
+  return C.DMG.gold + (hasRelic('goldedge') ? 1 : 0)
+       + (hasRelic('momentum') && S.battle ? Math.floor((S.battle.goldFired || 0) / 5) : 0);
+}
 // blue coins: the frost bites EVERY foe at once
 function dmgAll(n) {
   for (const f of S.foes) {
@@ -426,6 +483,7 @@ function healPlayer(n) {
 }
 function addGold(n) {
   if (!S.run) return;
+  if (hasRelic('midas')) n = Math.round(n * 1.3);
   S.run.gold += n;
   S.run.goldEarned += n;
   floatAnchor('+' + n + ' G', 'gold', '#ffd75e', n >= 15);
@@ -540,20 +598,29 @@ function grantItem(iid, n) {
   }
 }
 
-// FRENZY: filling the meter makes the dungeon rain bonuses on the field
+// JACKPOT: filling the meter sprouts copies of YOUR OWN GEAR onto the
+// field — three free swings of the arsenal you built, not a coin firehose
 function frenzy() {
   S.meter = 0;
-  S.banner = { txt: 'FRENZY!', ttl: 2.2, max: 2.2 };
+  S.banner = { txt: 'JACKPOT!', ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.jackpot();
-  const kinds = ['coin', 'coin', 'silver', 'coin', 'lucky', 'green', 'bag', 'coin'];
-  kinds.forEach((kind, i) => {
-    S.rain.push({ t: 0.12 * i, x: 10 + rng() * 80, y: MACH.tiers[0].slotY + rng() * 14, kind });
-  });
-  // two free (temporary) weapons ride the rain — lose them or use them
-  for (let i = 0; i < 2; i++) {
-    const it = ITEMS[(rng() * 4) | 0];
-    S.rain.push({ t: 1 + 0.3 * i, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
+  const owned = [];
+  if (S.run) {
+    for (const iid of Object.keys(S.run.arsenal)) {
+      for (let k = 0; k < S.run.arsenal[iid]; k++) owned.push(iid);
+    }
+  }
+  if (owned.length) {
+    for (let i = 0; i < 3; i++) {
+      const iid = owned[(rng() * owned.length) | 0];
+      S.rain.push({ t: 0.3 + 0.35 * i, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid, temp: true });
+    }
+  } else {
+    // no arsenal to echo? a modest coin consolation
+    for (let i = 0; i < 4; i++) {
+      S.rain.push({ t: 0.15 * i, x: 10 + rng() * 80, y: MACH.tiers[0].slotY + rng() * 14, kind: 'coin' });
+    }
   }
   save();
 }
@@ -644,9 +711,10 @@ function tilt(dir) {
 }
 // hold a caught piece back for next round (up to 3)
 function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
+function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0); }
 function bankLoot(key) {
   const B = S.battle;
-  if (!B || B.phase !== 'drop' || B.banked.length >= C.BANK_MAX) return false;
+  if (!B || B.phase !== 'drop' || B.banked.length >= bankMax()) return false;
   const i = B.loot.findIndex(l => lootKey(l) === key);
   if (i < 0) return false;
   B.banked.push(B.loot.splice(i, 1)[0]);
@@ -717,6 +785,8 @@ function dealHand() {
     while (cut > 0 && B.hand[k] > 0) { B.hand[k]--; cut--; }
   }
   B.stolen = 0;
+  // the Minter strikes you a bonus gold coin every round
+  if (hasRelic('minter')) B.hand.coin = (B.hand.coin || 0) + 1;
   B.sel = 'coin';
   autoSel();
   syncWallet();
@@ -751,7 +821,8 @@ function startBattle(type, entIdx, eid, extras) {
   for (const f of S.foes) rollIntent(f);
   S.battle = { round: 1, phase: 'drop', loot: [], banked: [], queue: [], qi: 0, qt: 0,
                stolen: 0, actList: [], actPtr: 0, actT: 0, target: 0,
-               tilts: C.TILTS, hand: null, sel: 'coin', goldWon: 0, keysWon: 0 };
+               tilts: C.TILTS + (hasRelic('crowbar') ? 1 : 0),
+               hand: null, sel: 'coin', goldWon: 0, keysWon: 0 };
   S.enemy = S.foes[0];
   S.screen = 'battle';
   S.victory = null;
@@ -814,7 +885,14 @@ function buildQueue(loot) {
     } else q.push({ t: l.k });
   }
   q.sort((a, b) => RESOLVE_ORDER.indexOf(a.t) - RESOLVE_ORDER.indexOf(b.t));
+  // the Echo Bell rings the opening piece twice
+  if (hasRelic('echobell') && q.length) q.unshift({ ...q[0] });
   return q;
+}
+// the resolve RAMPS UP: every next piece flies faster than the last, so a
+// thirty-coin barrage ends in a machine-gun crescendo instead of a slog
+function resolveSpeed(qi) {
+  return Math.max(0.12, Math.pow(hasRelic('quicksilver') ? 0.82 : 0.9, qi || 0));
 }
 function startResolve() {
   const B = S.battle;
@@ -823,6 +901,7 @@ function startResolve() {
   B.queue = buildQueue(B.loot);
   B.loot = [];
   B.qi = 0;
+  B.goldFired = 0;
   B.qt = 0.9;                           // a breath before the first piece flies
   S.tray.items.length = 0;
   if (B.queue.length) S.banner = { txt: 'YOUR TURN!', ttl: 1.0, max: 1.0 };
@@ -836,27 +915,47 @@ function endRoundNow() {
 }
 function applyLoot(q) {
   if (!S.run) return;
-  if (q.t === 'gem') addGold(15);
-  else if (q.t === 'bag') addGold(8);
-  else if (q.t === 'silver') addBlock(1);
+  if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0));
+  else if (q.t === 'bag') addGold(8 + (hasRelic('fatpouch') ? 7 : 0));
+  else if (q.t === 'silver') {
+    addBlock(1 + (hasRelic('silvercore') ? 1 : 0));
+    if (hasRelic('spikeshield')) dmgEnemy(1);
+  }
   else if (q.t === 'shielditem') addBlock(itemById(q.iid).block);
-  else if (q.t === 'red') healPlayer(C.RED_HEAL);
+  else if (q.t === 'red') healPlayer(C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0));
   else if (q.t === 'heartitem') healPlayer(itemById(q.iid).heal);
-  else if (q.t === 'gold') { dmgEnemy(C.DMG.gold); SND.collect(2); }
-  else if (q.t === 'lucky') { dmgEnemy(C.DMG.lucky); SND.gem(); }
-  else if (q.t === 'blue') { dmgAll(C.DMG.blue); SND.stun(); }
+  else if (q.t === 'gold') {
+    const d = goldDmg();
+    dmgEnemy(d);
+    if (hasRelic('twinstrike') && S.run && !S.victory) dmgEnemy(d);
+    if (hasRelic('bloodgold')) healPlayer(1);
+    if (S.battle) S.battle.goldFired = (S.battle.goldFired || 0) + 1;
+    SND.collect(2);
+  }
+  else if (q.t === 'lucky') { dmgEnemy(C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0), null, hasRelic('sniperlens')); SND.gem(); }
+  else if (q.t === 'blue') { dmgAll(C.DMG.blue + (hasRelic('frostshard') ? 1 : 0)); SND.stun(); }
   else if (q.t === 'weapon') {
     const it = itemById(q.iid);
     floatAt(it.name + '!', 50, '#ffe066', true);
-    dmgEnemy(weaponDmg(it.dmg));
+    const wd = weaponDmg(it.dmg);
+    dmgEnemy(wd);
+    if (hasRelic('vampblade')) healPlayer(Math.ceil(wd / 2));
     S.shake += it.splash ? 8 : 5;
     SND.hit();
-  } else if (q.t === 'green') poisonEnemy(1);
-  else if (q.t === 'vial') poisonEnemy(itemById(q.iid).pois + (hasRelic('venom') ? 2 : 0));
+  } else if (q.t === 'green') {
+    poisonEnemy((1 + (hasRelic('venomtip') ? 1 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
+    if (hasRelic('alchemist')) healPlayer(1);
+  }
+  else if (q.t === 'vial') poisonEnemy((itemById(q.iid).pois + (hasRelic('venom') ? 2 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
   else if (q.t === 'frost') stunEnemy(itemById(q.iid).stun);
   else if (q.t === 'skull') {
     floatAnchor('CURSED!', 'hero', '#c86bff', true);
-    hpHit(C.SKULL_DMG + S.run.floor - 1, 'a cursed skull', '#c86bff');
+    hpHit(Math.max(1, C.SKULL_DMG + S.run.floor - 1 - (hasRelic('wardcandle') ? 3 : 0)), 'a cursed skull', '#c86bff');
+  }
+  // the storm rides the rhythm of the resolve
+  if (hasRelic('stormcall') && S.run && !S.victory && S.battle && S.battle.qi > 0 && S.battle.qi % 8 === 0) {
+    floatAnchor('⚡ STORM!', 'enemy', '#8be7ff', true);
+    dmgAll(3);
   }
   if (window.__dpResolveFx) window.__dpResolveFx(q);
 }
@@ -883,6 +982,7 @@ function enemyActFoe(e) {
     floatAnchor('skulls rain onto the field!', 'hero', '#c86bff', true);
   } else {
     const hits = e.trait === 'fast' ? 2 : 1;
+    const preBlock = S.run.block;
     for (let h = 0; h < hits && S.run; h++) {
       if (e.trait === 'thief') {
         S.battle.stolen += 2;
@@ -894,13 +994,22 @@ function enemyActFoe(e) {
       }
       hurtPlayer(it.t === 'heavy' ? e.atk * 2 : e.atk, 'slain by ' + (e.name || 'the dungeon'));
     }
+    // Thornmail: your wall bites back
+    if (S.run && hasRelic('thornmail') && preBlock > 0 && e.hp > 0) {
+      floatAnchor('\u{1F335} thorns', 'enemy', '#8ed67e');
+      dmgFoe(e, Math.ceil(preBlock / 2));
+    }
   }
   if (S.run) rollIntent(e);             // and shows you its NEXT move
 }
 function endRoundTicks() {
   for (const e of S.foes) {
     if (e.hp <= 0) continue;
-    if (e.pois > 0) { const s = e.pois; e.pois--; dmgFoe(e, s, 'pois'); }
+    if (e.pois > 0) {
+      const s = e.pois;
+      if (!hasRelic('plaguelord')) e.pois--;   // the Plague Lord's rot never fades
+      dmgFoe(e, s, 'pois');
+    }
     if (e.hp > 0 && e.trait === 'regen' && e.hp < e.maxHp) {
       e.hp = Math.min(e.maxHp, e.hp + 3);
       floatAnchor('+3', 'enemy', '#7ee787');
@@ -916,14 +1025,16 @@ function newRound() {
   B.round++;
   B.phase = 'drop';
   // banked pieces carry over as the seed of the new round's loot
-  B.loot = B.banked; B.banked = [];
+  // (the Grand Bank pays them back double)
+  B.loot = hasRelic('grandbank') ? B.banked.concat(B.banked.map(l => ({ ...l }))) : B.banked;
+  B.banked = [];
   B.queue = []; B.qi = 0;
-  B.tilts = C.TILTS;
+  B.tilts = C.TILTS + (hasRelic('crowbar') ? 1 : 0);
   // block melts between rounds — unless the Aegis holds it
   S.run.block = (hasRelic('aegis') ? S.run.block : 0) + (hasRelic('plate') ? 4 : 0);
   dealHand();
   // the dungeon re-salts the pile so long fights never run dry
-  for (let i = 0; i < C.ROUND_RAIN; i++) {
+  for (let i = 0; i < C.ROUND_RAIN + (hasRelic('loadstone') ? 3 : 0); i++) {
     S.rain.push({ t: 0.15 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: rollPileKind() });
   }
   S.banner = { txt: 'ROUND ' + B.round, ttl: 1.3, max: 1.3 };
@@ -947,8 +1058,14 @@ function battleTick(dt) {
         B.qi++;
         applyLoot(q);
         if (!S.run || S.victory) return;
-        B.qt = RESOLVE_DELAY[q.t] || 0.9;
+        B.qt = (RESOLVE_DELAY[q.t] || 0.9) * resolveSpeed(B.qi);
       } else {
+        // the Bulwark Ram: your wall itself slams the target as a finisher
+        if (hasRelic('bulwarkram') && S.run.block > 0 && S.enemy && S.enemy.hp > 0) {
+          floatAnchor('\u{1F3F0} RAM!', 'enemy', '#c8d6e8', true);
+          dmgEnemy(S.run.block);
+          if (!S.run || S.victory) return;
+        }
         B.phase = 'enemy';
         B.actList = S.foes.map((f, i) => i).filter(i => S.foes[i].hp > 0);
         B.actPtr = 0;
@@ -974,7 +1091,8 @@ function battleTick(dt) {
 function rollOffer() {
   const offer = [];
   const bag = COIN_REWARD_W.slice();
-  while (offer.length < 3 && bag.length) {
+  const picks = hasRelic('fourth') ? 4 : 3;
+  while (offer.length < picks && bag.length) {
     const total = bag.reduce((a, w) => a + w[1], 0);
     let r = rng() * total, idx = 0;
     for (let i = 0; i < bag.length; i++) { r -= bag[i][1]; if (r <= 0) { idx = i; break; } }
@@ -995,8 +1113,15 @@ function pickCoin(i) {
 function winBattle() {
   const anyBoss = S.foes.some(f => f.boss);
   if (hasRelic('piggy')) { addGold(4); S.battle.goldWon += 4; }
+  // felling an ELITE shakes an artifact loose (gold if the shelf is full)
+  let relicDrop = null;
+  if (S.foes.some(f => f.elite)) {
+    relicDrop = rollRelicDrop();
+    if (relicDrop) S.run.relics.push(relicDrop);
+    else { addGold(25); S.battle.goldWon += 25; }
+  }
   S.victory = { t: 0, gold: S.battle.goldWon, keys: S.battle.keysWon, boss: anyBoss,
-                offer: rollOffer(), picked: null };
+                offer: rollOffer(), picked: null, relic: relicDrop };
   S.banner = { txt: 'VICTORY!', ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.winb();
@@ -1348,6 +1473,8 @@ function closeModal() {
   return true;
 }
 function shopStock() {
+  // the keeper knows what his shelf is worth now — everything costs more,
+  // and artifacts are priced by their rarity
   const st = [];
   const mult = 1 + 0.25 * (S.run.floor - 1);
   // three distinct items
@@ -1355,20 +1482,21 @@ function shopStock() {
   for (let i = 0; i < 3; i++) {
     const pick = ids.splice((rng() * ids.length) | 0, 1)[0];
     const it = itemById(pick);
-    st.push({ kind: 'item', iid: pick, label: it.icon + ' ' + it.name, price: Math.round(it.cost * mult), sold: false });
+    st.push({ kind: 'item', iid: pick, label: it.icon + ' ' + it.name, price: Math.round(it.cost * 1.4 * mult), sold: false });
   }
-  st.push({ kind: 'potion', label: '\u{1F9F4} Potion (+' + C.POTION_HEAL + ' HP)', price: Math.round(30 * mult), sold: false });
-  st.push({ kind: 'pouch', label: '\u{1F45B} Coin Pouch (+' + C.POUCH_COINS + ' gold coins to your purse)', price: Math.round(40 * mult), sold: false });
+  st.push({ kind: 'potion', label: '\u{1F9F4} Potion (+' + C.POTION_HEAL + ' HP)', price: Math.round(45 * mult), sold: false });
+  st.push({ kind: 'pouch', label: '\u{1F45B} Coin Pouch (+' + C.POUCH_COINS + ' gold coins to your purse)', price: Math.round(60 * mult), sold: false });
   {
     const k = COIN_KINDS[1 + ((rng() * (COIN_KINDS.length - 1)) | 0)];
-    st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(22 * mult), sold: false });
+    st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(34 * mult), sold: false });
   }
-  st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(45 * mult), sold: false });
-  const owned = S.run.relics;
-  const avail = RELICS.filter(r => owned.indexOf(r.id) < 0);
-  if (avail.length) {
-    const rl = avail[(rng() * avail.length) | 0];
-    st.push({ kind: 'relic', rid: rl.id, label: rl.icon + ' ' + rl.name, sub: rl.desc, price: Math.round(70 * mult), sold: false });
+  st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(65 * mult), sold: false });
+  const rid2 = rollRelicDrop();
+  if (rid2) {
+    const rl = relicById(rid2);
+    st.push({ kind: 'relic', rid: rl.id, rar: rl.rar,
+              label: rl.icon + ' ' + rl.name + ' [' + RARITY[rl.rar].name + ']', sub: rl.desc,
+              price: Math.round(RARITY[rl.rar].price * mult), sold: false });
   }
   return st;
 }
@@ -1720,6 +1848,7 @@ window.DP = {
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer,
+  rollRelicDrop, bankMax, goldDmg, resolveSpeed, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE,
 };
 
@@ -2325,7 +2454,7 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = g; ctx.fill();
       if (pulse > 0) { ctx.fillStyle = 'rgba(255,240,180,' + pulse + ')'; ctx.fill(); }
     }
-    txt('FRENZY', x - 12, y + h / 2 + 0.5, '800 8px Verdana, sans-serif',
+    txt('JACKPOT', x - 12, y + h / 2 + 0.5, '800 8px Verdana, sans-serif',
         fr > 0.5 ? '#ffd75e' : '#8a6f4a', 'right');
   }
 
@@ -2868,10 +2997,10 @@ if (!HEADLESS) (function browser() {
       uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
             { grad: ['#8c2f6b', '#4a1038'], border: '#ffb0e0', col: '#ffd9ee', font: '800 11px Verdana, sans-serif', r: 9 });
     }
-    // relic shelf
-    r.relics.slice(0, 8).forEach((rid, i) => {
+    // artifact shelf (up to 12 on display)
+    r.relics.slice(0, 12).forEach((rid, i) => {
       const rl = relicById(rid);
-      if (rl) txt(rl.icon, 366 + (i % 4) * 24, 728 + Math.floor(i / 4) * 24, '17px serif', '#fff');
+      if (rl) txt(rl.icon, 360 + (i % 4) * 25, 726 + Math.floor(i / 4) * 23, '15px serif', '#fff');
     });
     // arsenal strip
     const ids = Object.keys(r.arsenal);
@@ -2906,7 +3035,9 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(0, 0, LW, LH);
     if (k < 1) return;
     const hasOffer = v.offer && v.offer.length > 0;
-    const py = hasOffer ? 218 : 300, ph = hasOffer ? 404 : 250;
+    const rl = v.relic ? relicById(v.relic) : null;
+    const exY = rl ? 44 : 0;                     // room for the artifact banner
+    const py = (hasOffer ? 218 : 300) - exY / 2, ph = (hasOffer ? 404 : 250) + exY;
     rr(70, py, LW - 140, ph, 20);
     ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
@@ -2915,13 +3046,23 @@ if (!HEADLESS) (function browser() {
     txt('+' + v.gold + ' gold   •   +' + v.keys + ' \u{1F5DD} key' + (v.keys > 1 ? 's' : ''),
         LW / 2, py + 132, '800 15px Verdana, sans-serif', '#fff0c0');
     if (v.boss) txt('the stairs descend… +35% HP restored', LW / 2, py + 154, '600 11px Verdana, sans-serif', '#7ee787');
+    // an elite's hoard: the artifact it was guarding
+    if (rl) {
+      const rc = RARITY[rl.rar];
+      rr(92, py + 164, LW - 184, 34, 12);
+      ctx.fillStyle = 'rgba(10,6,14,0.85)'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = rc.col; ctx.stroke();
+      txt(rl.icon + ' ' + rl.name + '  [' + rc.name + ']', LW / 2, py + 176, '900 11px Verdana, sans-serif', rc.col);
+      txt(rl.desc, LW / 2, py + 191, '600 8px Verdana, sans-serif', '#c8b8cc');
+    }
     // the spoils: pick ONE coin to join your purse for the rest of the run
     if (hasOffer) {
       txt(v.picked ? 'the ' + COIN_INFO[v.picked].name.toUpperCase() + ' coin joins your purse!'
                    : 'CHOOSE A SPOIL — one coin for your purse:',
-          LW / 2, py + 178, '800 11px Verdana, sans-serif', v.picked ? '#7ee787' : '#e8d0a0');
+          LW / 2, py + 178 + exY, '800 11px Verdana, sans-serif', v.picked ? '#7ee787' : '#e8d0a0');
+      const sp = v.offer.length >= 4 ? 82 : 100;
       v.offer.forEach((ck, i) => {
-        const cx = LW / 2 + (i - 1) * 100, cy = py + 232;
+        const cx = LW / 2 + (i - (v.offer.length - 1) / 2) * sp, cy = py + 232 + exY;
         const isPick = v.picked === ck;
         const dim = v.picked && !isPick;
         ctx.save();
@@ -3085,12 +3226,12 @@ if (!HEADLESS) (function browser() {
   }
   // every piece announces WHAT it is about to do while it flies
   function fxLabel(q) {
-    if (q.t === 'gold') return C.DMG.gold + ' DMG';
-    if (q.t === 'lucky') return C.DMG.lucky + ' DMG!';
-    if (q.t === 'blue') return C.DMG.blue + ' TO ALL!';
-    if (q.t === 'green') return 'POISON';
-    if (q.t === 'silver') return '+1 BLOCK';
-    if (q.t === 'red') return '+' + C.RED_HEAL + ' HP';
+    if (q.t === 'gold') return goldDmg() + ' DMG';
+    if (q.t === 'lucky') return (C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0)) + ' DMG!';
+    if (q.t === 'blue') return (C.DMG.blue + (hasRelic('frostshard') ? 1 : 0)) + ' TO ALL!';
+    if (q.t === 'green') return 'POISON' + (hasRelic('twinfangs') || hasRelic('venomtip') ? ' ×' + ((1 + (hasRelic('venomtip') ? 1 : 0)) * (hasRelic('twinfangs') ? 2 : 1)) : '');
+    if (q.t === 'silver') return '+' + (1 + (hasRelic('silvercore') ? 1 : 0)) + ' BLOCK';
+    if (q.t === 'red') return '+' + (C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0)) + ' HP';
     if (q.t === 'gem') return '+15 GOLD';
     if (q.t === 'bag') return '+8 GOLD';
     if (q.t === 'skull') return 'CURSE!';
@@ -3111,10 +3252,12 @@ if (!HEADLESS) (function browser() {
               : toHero ? { x: ANCHORS.hero.x, y: ANCHORS.hero.y + 28 }
               : { x: ANCHORS.enemy.x, y: ANCHORS.enemy.y + 26 };
     const big = q.t === 'weapon' || q.t === 'vial' || q.t === 'frost' || q.t === 'lucky' || q.t === 'blue' || q.t === 'skull';
+    // the barrage RAMPS UP: deep into the queue, pieces fly ever faster
+    const spd = Math.max(0.35, resolveSpeed(S.battle ? S.battle.qi : 0));
     const f = {
       x0: LW / 2 + (Math.random() - 0.5) * 70, y0: 664,
       x1: tgt.x, y1: tgt.y,
-      t: 0, dur: big ? 0.72 : 0.5, big,
+      t: 0, dur: (big ? 0.72 : 0.5) * spd, big,
       icon: fxIcon(q), label: fxLabel(q), q,
       lift: 90 + Math.random() * 70,
       spin: (Math.random() - 0.5) * 7,
@@ -3230,18 +3373,18 @@ if (!HEADLESS) (function browser() {
     keys.slice(0, 5).forEach((key, i) => {
       const x = 72 + i * 48;
       lootChip(x, 569, key, counts[key]);
-      if (B.banked.length < C.BANK_MAX) {
+      if (B.banked.length < bankMax()) {
         uiButtons.push({ x: x - 18, y: 550, w: 44, h: 38, cb: () => bankLoot(key) });
       }
     });
     // bank box (right): stashed pieces skip the resolve and return next round
-    const canBank = B.loot.length > 0 && B.banked.length < C.BANK_MAX;
+    const canBank = B.loot.length > 0 && B.banked.length < bankMax();
     rr(312, 552, 156, 34, 12);
     ctx.fillStyle = 'rgba(12,7,20,0.9)'; ctx.fill();
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = canBank ? 'rgba(140,200,255,' + (0.55 + 0.25 * Math.sin(t * 4)) + ')' : 'rgba(140,180,230,0.4)';
     ctx.stroke();
-    txt('\u{1F512}' + B.banked.length + '/' + C.BANK_MAX, 324, 569, '800 9px Verdana, sans-serif', '#8fb8e0', 'left');
+    txt('\u{1F512}' + B.banked.length + '/' + bankMax(), 324, 569, '800 9px Verdana, sans-serif', '#8fb8e0', 'left');
     const bCounts = groupCounts(B.banked, lootKey);
     Object.keys(bCounts).slice(0, 3).forEach((key, i) => {
       const x = 380 + i * 34;
