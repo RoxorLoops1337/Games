@@ -2336,15 +2336,31 @@ if (!HEADLESS) (function browser() {
   function uiBtn(x, y, w, h, label, cb, opts) {
     opts = opts || {};
     uiButtons.push({ x, y, w, h, cb });
-    rr(x, y, w, h, opts.r || 12);
+    const r = opts.r || 12;
+    // soft drop shadow grounds every button
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
+    ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+    rr(x, y, w, h, r);
     if (opts.grad) {
       const g = ctx.createLinearGradient(0, y, 0, y + h);
       g.addColorStop(0, opts.grad[0]); g.addColorStop(1, opts.grad[1]);
       ctx.fillStyle = g;
-    } else ctx.fillStyle = opts.bg || 'rgba(20,10,14,0.8)';
+    } else ctx.fillStyle = opts.bg || 'rgba(20,10,14,0.85)';
     ctx.fill();
-    ctx.lineWidth = 2; ctx.strokeStyle = opts.border || '#7d5a24'; ctx.stroke();
-    if (label) txt(label, x + w / 2, y + h / 2 + 1, opts.font || '800 15px Verdana, sans-serif', opts.col || '#f2cd5e');
+    ctx.restore();
+    ctx.lineWidth = 2; ctx.strokeStyle = opts.border || '#7d5a24';
+    rr(x, y, w, h, r); ctx.stroke();
+    // glass gloss across the upper half
+    ctx.save();
+    rr(x + 2, y + 2, w - 4, Math.max(4, h * 0.44), Math.max(3, r - 3));
+    const gl = ctx.createLinearGradient(0, y, 0, y + h * 0.5);
+    gl.addColorStop(0, 'rgba(255,255,255,0.26)');
+    gl.addColorStop(1, 'rgba(255,255,255,0.02)');
+    ctx.fillStyle = gl; ctx.fill();
+    ctx.restore();
+    if (label) txt(label, x + w / 2, y + h / 2 + 1, opts.font || '800 15px Verdana, sans-serif', opts.col || '#f2cd5e',
+                   'center', { w: 3, col: 'rgba(15,6,8,0.35)' });
   }
   function bar(x, y, w, h, frac, colA, colB, bg) {
     rr(x, y, w, h, h / 2);
@@ -2358,29 +2374,109 @@ if (!HEADLESS) (function browser() {
   }
 
   // -------------------------------------------------------- battle: cabinet
-  function drawBackground() {
+  // slow drifting bokeh orbs, tinted by the floor theme (positions are fixed;
+  // only alpha/drift animate, so this stays cheap)
+  const BOKEH = Array.from({ length: 14 }, (_, i) => ({
+    x: (i * 137.5) % 480, y: 120 + (i * 233.7) % 620,
+    r: 14 + (i * 41) % 42, ph: i * 1.7, sp: 0.16 + (i % 5) * 0.05,
+  }));
+  function drawBackground(t) {
     const T = theme();
     ctx.fillStyle = rgr('bg:' + fkey(), LW / 2, 300, 60, LW / 2, 420, 620,
       [[0, T.room], [0.6, '#241a26'], [1, '#171019']]);
     ctx.fillRect(-40, -40, LW + 80, LH + 80);
+    t = t || 0;
+    ctx.save();
+    // god-rays falling from the vault above
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 3; i++) {
+      const bx = 90 + i * 150 + Math.sin(t * 0.25 + i * 2.4) * 26;
+      const g = ctx.createLinearGradient(bx, 0, bx - 90, LH);
+      g.addColorStop(0, 'rgba(255,236,190,0.055)');
+      g.addColorStop(0.5, 'rgba(255,236,190,0.02)');
+      g.addColorStop(1, 'rgba(255,236,190,0)');
+      ctx.fillStyle = g;
+      poly([{ x: bx - 26, y: -20 }, { x: bx + 26, y: -20 }, { x: bx - 60, y: LH + 20 }, { x: bx - 130, y: LH + 20 }]);
+      ctx.fill();
+    }
+    // theme-tinted bokeh, breathing slowly
+    for (const b of BOKEH) {
+      const a = 0.05 + 0.035 * Math.sin(t * b.sp + b.ph);
+      if (a <= 0.015) continue;
+      ctx.globalAlpha = a;
+      const y = b.y + Math.sin(t * b.sp * 0.7 + b.ph) * 14;
+      ctx.fillStyle = T.accent;
+      ctx.beginPath(); ctx.arc(b.x, y, b.r, 0, 7); ctx.fill();
+    }
+    ctx.restore();
   }
 
   // the hero's strike: armed by the resolve so his lunge meets the impact
   const HFX = { until: -1, dur: 0.4, tx: 340 };
-  function drawEnemyPanel(t) {
+  // a glossy HP bar with a pale "damage ghost" that drains after each hit
+  function hpBar(x, y, w, h, hp, maxHp, ghost) {
+    rr(x - 1, y - 1, w + 2, h + 2, (h + 2) / 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.66)'; ctx.fill();
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.stroke();
+    const gf = Math.max(0, Math.min(1, ghost / maxHp));
+    const f = Math.max(0, Math.min(1, hp / maxHp));
+    if (gf > 0.01) {
+      rr(x + 1, y + 1, Math.max(h - 2, (w - 2) * gf), h - 2, (h - 2) / 2);
+      ctx.fillStyle = '#ffe9c9'; ctx.fill();
+    }
+    if (f > 0.01) {
+      rr(x + 1, y + 1, Math.max(h - 2, (w - 2) * f), h - 2, (h - 2) / 2);
+      const g = ctx.createLinearGradient(x, 0, x + w, 0);
+      g.addColorStop(0, '#ff6f6f'); g.addColorStop(1, '#b01e36');
+      ctx.fillStyle = g; ctx.fill();
+      // gloss strip
+      rr(x + 2, y + 1.5, Math.max(2, (w - 4) * f), Math.max(1.5, (h - 3) * 0.4), 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.32)'; ctx.fill();
+    }
+  }
+  // a soft light pool under a combatant's feet
+  function spotlight(x, y, r, col, a) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    const g = ctx.createRadialGradient(x, y, 2, x, y, r);
+    g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.globalAlpha = a;
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.32, 0, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+  function drawEnemyPanel(t, dt) {
     // the battle STAGE: your hero holds the left, the pack prowls the right
     const T = theme();
+    dt = dt || 0.016;
     ctx.save();
+    // panel: soft shadow, arched gradient, dark outer + gold inner border
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5;
     rr(20, 12, LW - 40, 128, 20);
-    ctx.fillStyle = lgr('ep:' + fkey(), 0, 12, 0, 140, [[0, '#241c2c'], [1, '#171019']]);
+    ctx.fillStyle = lgr('ep:' + fkey(), 0, 12, 0, 140, [[0, '#2c2234'], [0.72, '#1b1420'], [1, '#241a28']]);
     ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = T.cabB; ctx.stroke();
-    // stage floorline
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 2;
+    ctx.restore();
+    // a faint arena glow behind the duel
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = rgr('epGlow:' + fkey(), LW / 2, 118, 8, LW / 2, 118, 240,
+      [[0, 'rgba(255,220,160,0.10)'], [1, 'rgba(0,0,0,0)']]);
+    rr(22, 14, LW - 44, 124, 19); ctx.fill();
+    ctx.restore();
+    rr(20, 12, LW - 40, 128, 20);
+    ctx.lineWidth = 3.5; ctx.strokeStyle = '#0e0a14'; ctx.stroke();
+    rr(22.5, 14.5, LW - 45, 123, 18);
+    ctx.lineWidth = 1.6;
+    ctx.strokeStyle = lgr('epRim', 0, 14, 0, 138, [[0, '#e8c877'], [0.5, '#8a6a34'], [1, '#5a4520']]);
+    ctx.stroke();
+    // stage floorline + light pools
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(36, 112); ctx.lineTo(LW - 36, 112); ctx.stroke();
+    spotlight(72, 112, 58, 'rgba(140,190,255,0.5)', 0.35);
     // the dueling line
-    ctx.globalAlpha = 0.35 + 0.1 * Math.sin(t * 3);
-    txt('⚔', 146, 64, '17px serif', '#c8a05a');
+    ctx.globalAlpha = 0.4 + 0.12 * Math.sin(t * 3);
+    txt('⚔', 146, 64, '17px serif', '#e8c877');
     ctx.globalAlpha = 1;
 
     // ---- your hero, stage left ----
@@ -2461,6 +2557,16 @@ if (!HEADLESS) (function browser() {
       const bob = Math.sin(t * 2.2 + i * 1.7) * 2.5;
       const breathe = 1 + Math.sin(t * 2.2 + 1 + i) * 0.03;
       const sz = (e.boss ? 64 : 52) * scl;
+      // its light pool — the TARGET stands in a ring of gold
+      spotlight(cx + dx, footY, 46 * scl + 14, e.boss ? 'rgba(255,215,94,0.55)' : 'rgba(239,75,93,0.45)', isTgt ? 0.5 : 0.25);
+      if (isTgt && n > 1) {
+        ctx.save();
+        ctx.globalAlpha = 0.75 + 0.2 * Math.sin(t * 5);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#ffd75e';
+        ctx.beginPath(); ctx.ellipse(cx + dx, footY + 1, 30 * scl + 6, (30 * scl + 6) * 0.3, 0, 0, 7); ctx.stroke();
+        ctx.restore();
+      }
       // menace aura — the TARGET burns brightest
       ctx.globalAlpha = ((e.boss ? 0.3 : 0.18) + 0.08 * Math.sin(t * 3)) * (isTgt ? 1.4 : 0.7);
       ctx.beginPath(); ctx.arc(cx + dx, footY - sz * 0.55, sz * 0.8 + lk * 8, 0, 7);
@@ -2489,12 +2595,14 @@ if (!HEADLESS) (function browser() {
       if (isTgt && n > 1) {
         txt('▼', cx, 28 + Math.sin(t * 5) * 2, '900 13px Verdana, sans-serif', '#ffd75e', 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
       }
-      // per-foe bar + status + intent
+      // per-foe bar + status + intent — with a pale ghost that drains after hits
+      if (e._ghost === undefined || e._ghost < e.hp) e._ghost = e.hp;
+      if (e._ghost > e.hp) e._ghost = Math.max(e.hp, e._ghost - dt * Math.max(6, e.maxHp * 0.55));
       const bw = n === 1 ? 128 : 84;
       const by = 118;
-      bar(cx - bw / 2, by, bw, n === 1 ? 11 : 9, Math.max(0, e.hp / e.maxHp), '#ef4b5d', '#a8213a');
+      hpBar(cx - bw / 2, by, bw, n === 1 ? 11 : 9, Math.max(0, e.hp), e.maxHp, e._ghost);
       txt(Math.max(0, e.hp) + '/' + e.maxHp, cx, by + (n === 1 ? 5.5 : 4.5),
-          '800 ' + (n === 1 ? 9 : 8) + 'px Verdana, sans-serif', '#ffe8ec');
+          '800 ' + (n === 1 ? 9 : 8) + 'px Verdana, sans-serif', '#fff4f6', 'center', { w: 2.5, col: 'rgba(40,5,12,0.8)' });
       if (e.pois > 0) txt('☠' + e.pois, cx - bw / 2 - 13, by + 4, '800 10px Verdana, sans-serif', '#b8f26b');
       if (e.braced) txt('\u{1F6E1}', cx + bw / 2 + 11, by + 4, '11px serif', '#fff');
       // its defensive mechanic, badged under the bar (packs); the lone foe
@@ -2520,7 +2628,7 @@ if (!HEADLESS) (function browser() {
     }
     // a gentle nudge that the foes are tappable
     if (n && S.battle && !S.victory && S.foeInfo === null) {
-      txt('\u{1F449} tap a foe for info', LW - 156, n === 1 ? 128 : 12, '600 8px Verdana, sans-serif', '#7a6a80');
+      txt('\u{1F449} tap a foe for info', 36, 133, '600 8px Verdana, sans-serif', '#7a6a80', 'left');
     }
     if (n) {
       const tgt = S.enemy;
@@ -2561,6 +2669,15 @@ if (!HEADLESS) (function browser() {
       g.addColorStop(0, '#ff9d3c'); g.addColorStop(1, '#ff4b2e');
       ctx.fillStyle = g; ctx.fill();
       if (pulse > 0) { ctx.fillStyle = 'rgba(255,240,180,' + pulse + ')'; ctx.fill(); }
+      // gloss
+      rr(x, y, Math.max(6, w * fr), h * 0.45, 3);
+      ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fill();
+    }
+    // segment ticks make the climb readable
+    ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1;
+    for (let i = 1; i < 6; i++) {
+      const tx2 = x + (w * i) / 6;
+      ctx.beginPath(); ctx.moveTo(tx2, y); ctx.lineTo(tx2, y + h); ctx.stroke();
     }
     txt('JACKPOT', x - 12, y + h / 2 + 0.5, '800 8px Verdana, sans-serif',
         fr > 0.5 ? '#ffd75e' : '#8a6f4a', 'right');
@@ -2580,27 +2697,60 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
-  function drawBackWall() {
+  function drawBackWall(t) {
+    const T = theme();
     const a = w2s(0, 0, MACH.tiers[0].z);
+    t = t || 0;
     ctx.save();
     const g = ctx.createLinearGradient(0, 172, 0, a.y);
     g.addColorStop(0, '#20242c'); g.addColorStop(1, '#3a4049');
     ctx.fillStyle = g;
     ctx.fillRect(26, 172, LW - 52, Math.max(10, a.y - 172));
-    ctx.fillStyle = '#12151a';
-    ctx.fillRect(60, 186, LW - 120, 12);
-    ctx.strokeStyle = '#565e69'; ctx.lineWidth = 1.5;
-    ctx.strokeRect(60, 186, LW - 120, 12);
+    // brushed panel lines
+    ctx.globalAlpha = 0.08;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+    for (let x = 40; x < LW - 40; x += 24) {
+      ctx.beginPath(); ctx.moveTo(x, 173); ctx.lineTo(x - 4, a.y - 2); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // the coin channel with a CHASING marquee of bulbs — a real arcade top
+    ctx.fillStyle = '#0d1015';
+    rr(58, 184, LW - 116, 15, 7); ctx.fill();
+    ctx.strokeStyle = '#565e69'; ctx.lineWidth = 1.5; ctx.stroke();
+    const nb = 16, chase = Math.floor(t * 9) % nb;
+    for (let i = 0; i < nb; i++) {
+      const bx = 70 + (LW - 140) * (i / (nb - 1));
+      const lit = (i - chase + nb) % nb < 3;
+      if (lit) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.5;
+        ctx.fillStyle = T.accent;
+        ctx.beginPath(); ctx.arc(bx, 191.5, 5.5, 0, 7); ctx.fill();
+        ctx.restore();
+      }
+      ctx.fillStyle = lit ? '#fff2c8' : '#2a2f38';
+      ctx.beginPath(); ctx.arc(bx, 191.5, 2, 0, 7); ctx.fill();
+    }
     const slotY = MACH.tiers[0].slotY;
     const ap = w2s(S.aimX, slotY, MACH.tiers[0].z);
     const e = eyd(slotY);
     const u = (PF.w0 + (PF.w1 - PF.w0) * e) / 100;
     const gx = PF.cx + (S.aimX - 50) * u;
-    const lg = ctx.createLinearGradient(0, 192, 0, ap.y);
-    lg.addColorStop(0, 'rgba(255,222,120,0.55)');
+    const lg = ctx.createLinearGradient(0, 200, 0, ap.y);
+    lg.addColorStop(0, 'rgba(255,222,120,0.5)');
     lg.addColorStop(1, 'rgba(255,222,120,0.03)');
     ctx.fillStyle = lg;
-    ctx.fillRect(gx - 7, 192, 14, ap.y - 192);
+    ctx.fillRect(gx - 7, 200, 14, ap.y - 200);
+    // the slot itself glows when ready
+    if (S.cd <= 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.35 + 0.15 * Math.sin(t * 6);
+      ctx.fillStyle = '#ffd75e';
+      ctx.beginPath(); ctx.arc(gx, 191, 12, 0, 7); ctx.fill();
+      ctx.restore();
+    }
     ctx.fillStyle = S.cd > 0 ? '#6e5320' : '#ffd75e';
     rr(gx - 10, 184, 20, 15, 4); ctx.fill();
     ctx.fillStyle = '#12151a';
@@ -2637,10 +2787,13 @@ if (!HEADLESS) (function browser() {
       const r1 = w2s(x0, 2, 2.4), r2 = w2s(x0, front, 2.4), r3 = w2s(x0, front, 0), r4 = w2s(x0, 2, 0);
       poly([r1, r2, r3, r4]);
       const rg = ctx.createLinearGradient(0, r1.y, 0, r3.y);
-      rg.addColorStop(0, '#aeb6c2'); rg.addColorStop(1, '#5a616c');
+      rg.addColorStop(0, '#b6bdc9'); rg.addColorStop(0.5, '#89909c'); rg.addColorStop(1, '#565d68');
       ctx.fillStyle = rg; ctx.fill();
-      ctx.strokeStyle = 'rgba(240,246,255,0.55)'; ctx.lineWidth = 1.5;
+      // polished top edge + a whisper of gold beneath it
+      ctx.strokeStyle = 'rgba(245,250,255,0.7)'; ctx.lineWidth = 1.8;
       ctx.beginPath(); ctx.moveTo(r1.x, r1.y); ctx.lineTo(r2.x, r2.y); ctx.stroke();
+      ctx.strokeStyle = 'rgba(232,200,119,0.3)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(r1.x, r1.y + 2.2); ctx.lineTo(r2.x, r2.y + 2.2); ctx.stroke();
     }
   }
 
@@ -2658,34 +2811,62 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawPusherBlock(t) {
+    const T = theme();
     const td = MACH.tiers[0];
     const pf = pusherFront(0);
     const zTop = td.z + C.PUSH_H, zBot = td.z;
     const tl = w2s(1, td.back, zTop), tr = w2s(99, td.back, zTop);
     const fl = w2s(1, pf, zTop), frt = w2s(99, pf, zTop);
     const bl = w2s(1, pf, zBot), br = w2s(99, pf, zBot);
+    // brushed-steel top
     poly([tl, tr, frt, fl]);
     const tg = ctx.createLinearGradient(0, tl.y, 0, fl.y);
-    tg.addColorStop(0, '#8b93a0'); tg.addColorStop(1, '#b8bfca');
+    tg.addColorStop(0, '#828a98'); tg.addColorStop(0.55, '#a8b0bc'); tg.addColorStop(1, '#c2c9d4');
     ctx.fillStyle = tg; ctx.fill();
     ctx.save();
     ctx.clip();
-    txt('▼ PUSH ▼', LW / 2, (tl.y + fl.y) / 2,
-        '900 ' + Math.max(10, (fl.y - tl.y) * 0.5) + 'px Verdana, sans-serif', 'rgba(120,40,50,0.5)');
+    ctx.globalAlpha = 0.1;
+    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+    for (let i = 0; i < 7; i++) {
+      const y = tl.y + (fl.y - tl.y) * (i / 7);
+      ctx.beginPath(); ctx.moveTo(tl.x, y); ctx.lineTo(tr.x, y); ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    // the PUSH legend, embossed then lit by the theme accent
+    const py2 = (tl.y + fl.y) / 2;
+    const pfs = Math.max(10, (fl.y - tl.y) * 0.5);
+    txt('▼ PUSH ▼', LW / 2, py2 + 1, '900 ' + pfs + 'px Verdana, sans-serif', 'rgba(255,255,255,0.35)');
+    ctx.save();
+    ctx.globalAlpha = 0.65 + 0.25 * Math.sin(t * 2.6);
+    txt('▼ PUSH ▼', LW / 2, py2, '900 ' + pfs + 'px Verdana, sans-serif', T.accent);
     ctx.restore();
+    ctx.restore();
+    // face: dark bevel with a gold hairline and a chasing LED rail
     poly([fl, frt, br, bl]);
     const fg = ctx.createLinearGradient(0, fl.y, 0, bl.y);
-    fg.addColorStop(0, '#697180'); fg.addColorStop(0.5, '#4c525e'); fg.addColorStop(1, '#33383f');
+    fg.addColorStop(0, '#6d7584'); fg.addColorStop(0.45, '#494f5b'); fg.addColorStop(1, '#2c3038');
     ctx.fillStyle = fg; ctx.fill();
-    ctx.strokeStyle = 'rgba(230,238,250,0.35)'; ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(240,246,255,0.5)'; ctx.lineWidth = 1.6;
     ctx.beginPath(); ctx.moveTo(fl.x, fl.y); ctx.lineTo(frt.x, frt.y); ctx.stroke();
-    const on = Math.floor(t * 4) % 2 === 0;
-    ctx.fillStyle = on ? '#ff5a4e' : '#5b2320';
-    for (let i = 0; i < 8; i++) {
-      const u = (i + 0.5) / 8;
+    ctx.strokeStyle = 'rgba(232,200,119,0.4)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(bl.x, bl.y - 1.5); ctx.lineTo(br.x, br.y - 1.5); ctx.stroke();
+    const nLed = 10, lead = Math.floor(t * 8) % nLed;
+    for (let i = 0; i < nLed; i++) {
+      const u = (i + 0.5) / nLed;
       const x = fl.x + (frt.x - fl.x) * u;
       const y = (fl.y + bl.y) / 2;
-      ctx.beginPath(); ctx.arc(x, y, 2.2, 0, 7); ctx.fill();
+      const d = (i - lead + nLed) % nLed;
+      const lit = d < 3;
+      if (lit) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.4 - d * 0.12;
+        ctx.fillStyle = '#ff8a5e';
+        ctx.beginPath(); ctx.arc(x, y, 5, 0, 7); ctx.fill();
+        ctx.restore();
+      }
+      ctx.fillStyle = lit ? '#ffd0b0' : '#463034';
+      ctx.beginPath(); ctx.arc(x, y, 2, 0, 7); ctx.fill();
     }
   }
 
@@ -2838,29 +3019,43 @@ if (!HEADLESS) (function browser() {
     ctx.fill();
     ctx.strokeStyle = 'rgba(235,240,250,0.5)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y); ctx.stroke();
+    // hazard chevrons, slowly marching toward the tray
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(l.x, l.y + 3); ctx.lineTo(r.x, r.y + 3);
     ctx.lineTo(r.x + 1, l.y + 12); ctx.lineTo(l.x - 1, l.y + 12);
     ctx.closePath(); ctx.clip();
-    for (let x = l.x - 20; x < r.x + 20; x += 18) {
-      ctx.fillStyle = 'rgba(240,190,60,0.5)';
+    const scroll = (S.time * 8) % 18;
+    for (let x = l.x - 36 + scroll; x < r.x + 20; x += 18) {
+      ctx.fillStyle = 'rgba(240,190,60,0.55)';
       ctx.beginPath();
       ctx.moveTo(x, l.y + 12); ctx.lineTo(x + 9, l.y + 12);
       ctx.lineTo(x + 18, l.y + 2); ctx.lineTo(x + 9, l.y + 2);
       ctx.closePath(); ctx.fill();
     }
     ctx.restore();
+    // gold hairline under the chevrons
+    ctx.strokeStyle = 'rgba(232,200,119,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(l.x - 1, l.y + 13); ctx.lineTo(r.x + 1, r.y + 13); ctx.stroke();
+    // the tray: velvet-dark bowl with a gold rim and an inner glow
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
     rr(58, 648, LW - 116, 52, 14);
-    ctx.fillStyle = lgr('tray', 0, 648, 0, 700, [[0, '#120a12'], [1, '#2a1c24']]);
+    ctx.fillStyle = lgr('tray', 0, 648, 0, 700, [[0, '#0e070f'], [0.7, '#231622'], [1, '#31202c']]);
     ctx.fill();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#c99ab0'; ctx.stroke();
+    ctx.restore();
+    rr(58, 648, LW - 116, 52, 14);
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = lgr('trayRim', 0, 648, 0, 700, [[0, '#e8c877'], [0.6, '#9a7440'], [1, '#6a4e28']]);
+    ctx.stroke();
+    rr(61, 651, LW - 122, 46, 11);
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.stroke();
     // the round's loot rattles around the tray until it resolves
     const items = S.tray.items;
     const trayGlow = S.battle && S.battle.loot.length > 0;
     if (trayGlow) {
       ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
       ctx.globalAlpha = 0.10 + 0.06 * Math.sin(S.time * 5);
       rr(58, 648, LW - 116, 52, 14);
       ctx.fillStyle = '#ffae34'; ctx.fill();
@@ -3096,10 +3291,19 @@ if (!HEADLESS) (function browser() {
   function drawHUD(t) {
     const r = S.run;
     if (!r) return;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = -3;
     rr(14, 714, LW - 28, 112, 16);
-    ctx.fillStyle = lgr('hud', 0, 714, 0, 826, [[0, '#3a2a3e'], [1, '#241a28']]);
+    ctx.fillStyle = lgr('hud', 0, 714, 0, 826, [[0, '#412e46'], [0.12, '#332439'], [1, '#221826']]);
     ctx.fill();
+    ctx.restore();
+    rr(14, 714, LW - 28, 112, 16);
     ctx.lineWidth = 2.5; ctx.strokeStyle = '#e8b6ce'; ctx.stroke();
+    rr(16.5, 716.5, LW - 33, 107, 14);
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(232,200,119,0.25)'; ctx.stroke();
+    // a hairline separates stats from the arsenal strip
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(28, 778); ctx.lineTo(LW - 28, 778); ctx.stroke();
     // HP
     txt('HP', 34, 733, '800 11px Verdana, sans-serif', '#a8828e', 'left');
     bar(58, 726, 210, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
@@ -3218,10 +3422,10 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawBattle(t, dt) {
-    drawBackground();
-    drawEnemyPanel(t);
+    drawBackground(t);
+    drawEnemyPanel(t, dt);
     drawCabinet();
-    drawBackWall();
+    drawBackWall(t);
     drawMeter(t);
     drawTierFloor(MACH.tiers[0].back, tierFront(0), 0);
     drawSideRails();
@@ -3261,9 +3465,21 @@ if (!HEADLESS) (function browser() {
       const empty = S.run.wallet < 1;
       const pulse = empty ? 1 + Math.sin(t * 6) * 0.05 : 1;
       const bw = 158 * pulse;
-      uiBtn(LW - 96 - bw / 2, 596, bw, 40, 'END TURN ▶', () => endRoundNow(),
+      const bx2 = LW - 96 - bw / 2;
+      uiBtn(bx2, 596, bw, 40, 'END TURN ▶', () => endRoundNow(),
             { grad: empty ? ['#ffd75e', '#c98f2a'] : ['#c8a05a', '#8a6a2a'],
               border: '#fff0c0', col: '#3a2406', font: '900 15px Verdana, sans-serif', r: 15 });
+      // a shine sweeps across it, begging to be pressed
+      ctx.save();
+      rr(bx2, 596, bw, 40, 15); ctx.clip();
+      const sx2 = bx2 - 60 + ((t * 110) % (bw + 120));
+      const sg = ctx.createLinearGradient(sx2 - 22, 0, sx2 + 22, 0);
+      sg.addColorStop(0, 'rgba(255,255,255,0)');
+      sg.addColorStop(0.5, 'rgba(255,255,255,' + (empty ? 0.4 : 0.22) + ')');
+      sg.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sg;
+      ctx.fillRect(sx2 - 26, 596, 52, 40);
+      ctx.restore();
     }
     drawSpeedBtn(t);
     if (phase === 'drop' && !S.victory) drawTurboBtn(t);
@@ -3352,26 +3568,49 @@ if (!HEADLESS) (function browser() {
     if (!kinds.length) return;
     const n = kinds.length;
     const w = n * 56 + 16;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
     rr(LW / 2 - w / 2, 144, w, 40, 20);
-    ctx.fillStyle = 'rgba(12,7,14,0.78)'; ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,215,94,0.35)'; ctx.stroke();
+    ctx.fillStyle = 'rgba(14,8,16,0.88)'; ctx.fill();
+    ctx.restore();
+    rr(LW / 2 - w / 2, 144, w, 40, 20);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = lgr('handRim', 0, 144, 0, 184, [[0, 'rgba(232,200,119,0.7)'], [1, 'rgba(122,90,36,0.4)']]);
+    ctx.stroke();
     kinds.forEach((k, i) => {
       const cx = LW / 2 - w / 2 + 36 + i * 56, cy = 164;
       const sel = B.sel === k;
       const r = sel ? 15 + Math.sin(t * 6) * 0.8 : 12;
       if (sel) {
-        ctx.beginPath(); ctx.arc(cx, cy, r + 4.5, 0, 7);
-        ctx.fillStyle = 'rgba(255,240,190,0.22)'; ctx.fill();
+        // the chosen coin sits in a halo
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        const hg = ctx.createRadialGradient(cx, cy, 2, cx, cy, r + 12);
+        hg.addColorStop(0, 'rgba(255,240,190,0.4)'); hg.addColorStop(1, 'rgba(255,240,190,0)');
+        ctx.fillStyle = hg;
+        ctx.beginPath(); ctx.arc(cx, cy, r + 12, 0, 7); ctx.fill();
+        ctx.restore();
       }
-      ctx.beginPath(); ctx.arc(cx, cy + 1.5, r, 0, 7);
-      ctx.fillStyle = 'rgba(20,10,4,0.6)'; ctx.fill();
+      ctx.beginPath(); ctx.arc(cx, cy + 2, r, 0, 7);
+      ctx.fillStyle = 'rgba(10,5,2,0.7)'; ctx.fill();
+      // a shaded coin face, lit from the upper left
+      const cg = ctx.createRadialGradient(cx - r * 0.4, cy - r * 0.45, r * 0.15, cx, cy, r * 1.15);
+      cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.25, COIN_UI[k]); cg.addColorStop(1, COIN_UI[k]);
       ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7);
-      ctx.fillStyle = COIN_UI[k]; ctx.fill();
+      ctx.fillStyle = cg; ctx.fill();
       ctx.lineWidth = sel ? 2.5 : 1.2;
       ctx.strokeStyle = sel ? '#fff' : 'rgba(60,40,10,0.7)';
       ctx.stroke();
+      // inner ring like a minted coin
+      ctx.beginPath(); ctx.arc(cx, cy, r - 3, 0, 7);
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(60,35,8,0.35)'; ctx.stroke();
       txt(COIN_SYMS[k], cx, cy + 1, (sel ? '800 14px' : '800 11px') + ' serif', 'rgba(40,24,4,0.85)');
-      txt('×' + B.hand[k], cx + r - 2, cy - r + 2, '900 10px Verdana, sans-serif', '#fff0c0', 'left');
+      // count badge
+      const bx = cx + r - 1, byy = cy - r + 1;
+      ctx.beginPath(); ctx.arc(bx + 5, byy, 7.5, 0, 7);
+      ctx.fillStyle = 'rgba(12,6,10,0.92)'; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = sel ? '#ffd75e' : 'rgba(232,200,119,0.4)'; ctx.stroke();
+      txt(B.hand[k], bx + 5, byy + 0.5, '900 9px Verdana, sans-serif', '#fff0c0');
       uiButtons.push({ x: cx - 27, y: 140, w: 54, h: 48, cb: () => selectCoin(k) });
     });
     // what the chosen coin will DO, whispered below the coin wall
@@ -4130,7 +4369,7 @@ if (!HEADLESS) (function browser() {
 
   function drawDungeon(t, dt) {
     const T = theme();
-    drawBackground();
+    drawBackground(t);
     updateRoomRect();
     if (!S.room && !mapView) avTick(dt);
     if (S.screen !== 'dungeon') return;   // a bump may have started a battle
