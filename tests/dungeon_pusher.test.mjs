@@ -107,7 +107,9 @@ t.eq(S.run, null, 'no run in progress at first boot');
 t.ok(ITEMS.length === 8 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'eight arsenal items defined');
 t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the bestiary is populated');
 t.eq(BOSSES.length, 3, 'three floor bosses');
-t.ok(RELICS.length >= 8 && RELICS.every(r => r.id && r.desc), 'relic shelf is stocked');
+t.ok(RELICS.length >= 38 && RELICS.every(r => r.id && r.desc), 'the artifact shelf is stocked (' + RELICS.length + ')');
+t.ok(RELICS.every(r => ['c', 'r', 'e'].indexOf(r.rar) >= 0), 'every artifact carries a rarity stamp');
+t.eq(new Set(RELICS.map(r => r.id)).size, RELICS.length, 'no duplicate artifact ids');
 t.eq(WHEEL.length, 8, 'the lucky wheel has eight segments');
 t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
@@ -276,6 +278,11 @@ t.eq(S.run.hp, hpMe0, 'even skulls wait for the resolve');
 t.eq(S.battle.loot.length, 6, 'all six pieces joined the round loot');
 t.ok(S.battle.loot.some(l => l.k === 'silver') && S.battle.loot.some(l => l.k === 'green'),
      'silver and green coins are tracked as loot');
+
+// -------- the resolve RAMPS UP: every next piece flies faster --------
+t.ok(DP.resolveSpeed(1) > DP.resolveSpeed(5) && DP.resolveSpeed(5) > DP.resolveSpeed(15),
+     'the barrage accelerates piece by piece');
+t.ok(DP.resolveSpeed(200) >= 0.12, 'with a floor, so it never hits zero');
 
 // -------- the resolve queue: ordered, one piece at a time --------
 {
@@ -518,19 +525,32 @@ step(1.5);
 t.ok(fronted.scored, 'over the front edge -> collected');
 t.eq(S.battle.loot.length, 1, 'and it joined the round loot');
 
-// -------- frenzy meter --------
+// -------- the JACKPOT meter: your own arsenal echoes onto the field --------
 S.battle.phase = 'drop';
 S.meter = C.METER_MAX - 1; S.cd = 0; S.rain.length = 0;
 S.battle.hand.coin = 30; S.battle.sel = 'coin';
 DP.drop(50);
-t.eq(S.meter, 0, 'meter resets on frenzy');
-t.ok(S.rain.filter(r => ['coin', 'lucky', 'silver', 'green', 'bag'].indexOf(r.kind) >= 0).length >= 6,
-     'frenzy rains bonus coins of every colour');
-t.eq(S.rain.filter(r => r.kind === 'item').length, 2, 'frenzy rains two free weapons');
-t.ok(S.rain.filter(r => r.kind === 'item').every(r => r.temp), 'frenzy weapons are marked temporary');
+t.eq(S.meter, 0, 'meter resets on jackpot');
+{
+  const items = S.rain.filter(r => r.kind === 'item');
+  t.eq(items.length, 3, 'the jackpot sprouts THREE of your own items — not a coin firehose');
+  t.ok(items.every(r => r.temp), 'they are free temporary copies');
+  t.ok(items.every(r => (S.run.arsenal[r.iid] || 0) > 0), 'each one is gear you actually own');
+  t.eq(S.rain.filter(r => r.kind !== 'item').length, 0, 'no coin spray riding along');
+}
 step(2);
-t.ok(S.coins.some(c => c.kind === 'item' && c.temp), 'free weapons landed on the field');
+t.ok(S.coins.some(c => c.kind === 'item' && c.temp), 'the free gear landed on the field');
 S.rain.length = 0;
+// an empty arsenal falls back to a modest coin consolation
+{
+  const saveArs = S.run.arsenal;
+  S.run.arsenal = {};
+  DP.frenzy();
+  t.ok(S.rain.filter(r => r.kind === 'coin').length >= 3 && !S.rain.some(r => r.kind === 'item'),
+       'no gear to echo -> a few coins instead');
+  S.run.arsenal = saveArs;
+  S.rain.length = 0;
+}
 
 // -------- winning pays gold AND keys, and offers a coin --------
 S.enemy.hp = 3; S.enemy.trait = null; S.enemy.pois = 0;
@@ -542,6 +562,7 @@ t.ok(S.run.gold > gold1, 'victory pays the bounty');
 t.eq(S.run.keys, keys0 + C.KEY_KILL, 'every monster killed gives a key');
 t.eq(S.victory.keys, C.KEY_KILL, 'the overlay brags about it');
 t.ok(Array.isArray(S.victory.offer) && S.victory.offer.length === 3, 'three spoil coins glint in the rubble');
+t.ok(!S.victory.relic, 'common monsters guard no artifacts');
 t.ok(DP.leaveBattle(), 'CONTINUE returns to the room');
 t.eq(S.screen, 'dungeon', 'back in the top-down room');
 t.eq(S.battle, null, 'the round machine rests');
@@ -636,6 +657,13 @@ t.ok(S.room.stock.some(x => x.kind === 'relic'), 'a relic gleams in the case');
 t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
 t.ok(S.room.stock.some(x => x.kind === 'coin' && COIN_KINDS.includes(x.cid)),
      'and a single typed coin for the purse');
+t.eq(S.room.stock.find(x => x.kind === 'potion').price, 45, 'potions cost more now');
+t.eq(S.room.stock.find(x => x.kind === 'pouch').price, 60, 'pouches too');
+{
+  const relicStock = S.room.stock.find(x => x.kind === 'relic');
+  t.ok(relicStock && relicStock.price >= 90, 'artifacts are priced by rarity, from 90 up (' + relicStock.price + ')');
+  t.ok(relicStock.label.indexOf('[') > 0, 'and advertise their rarity on the label');
+}
 S.run.gold = 0;
 t.ok(!DP.buyShop(0), 'cannot buy broke');
 S.run.gold = 10000;
@@ -700,7 +728,15 @@ const keysE = S.run.keys;
 S.enemy.hp = 1;
 DP.dmgEnemy(5);
 t.eq(S.run.keys, keysE + C.KEY_ELITE, 'an elite kill pays ' + C.KEY_ELITE + ' keys');
+// and shakes an ARTIFACT loose
+t.ok(S.victory && S.victory.relic, 'the elite was guarding an artifact');
+t.ok(S.run.relics.indexOf(S.victory.relic) >= 0, 'it joins your shelf on the spot');
+{
+  const rl = RELICS.find(r => r.id === S.victory.relic);
+  t.ok(rl && ['c', 'r', 'e'].indexOf(rl.rar) >= 0, 'and it is a real catalogued drop');
+}
 DP.leaveBattle();
+S.run.relics = [];
 
 // -------- relic effects --------
 S.run.relics = ['whet']; S.run.whet = 0;
@@ -733,6 +769,159 @@ DP.hurtPlayer(99, 'test doom');
 t.eq(S.run, null, 'the second killing blow lands — run over');
 t.eq(S.screen, 'over', 'game over screen');
 t.ok(S.over && S.over.cause === 'test doom', 'the cause of death is recorded');
+
+// -------- the ARTIFACT catalog: rarity-weighted drops --------
+DP.srand(77);
+DP.newRun('knight');
+{
+  const counts = { c: 0, r: 0, e: 0 };
+  for (let i = 0; i < 300; i++) {
+    S.run.relics = [];
+    const id = DP.rollRelicDrop();
+    counts[RELICS.find(r => r.id === id).rar]++;
+  }
+  t.ok(counts.c > counts.r && counts.r > counts.e,
+       'commons drop most, epics least (' + counts.c + '/' + counts.r + '/' + counts.e + ')');
+  t.ok(counts.e > 0, 'but epics DO drop');
+}
+S.run.relics = RELICS.map(r => r.id);
+t.eq(DP.rollRelicDrop(), null, 'a full shelf drops nothing more');
+S.run.relics = [];
+
+// -------- artifact effects on the coins --------
+DP.srand(79);
+S.run.room.ents = [mkMonster('orc')];
+DP.interact(0);
+S.enemy.hp = S.enemy.maxHp = 500; S.enemy.braced = false; S.enemy.trait = null;
+S.run.hp = 100; S.run.maxHp = 200;
+S.run.relics = ['goldedge'];
+t.eq(DP.goldDmg(), C.DMG.gold + 1, 'Gilded Edge: gold coins +1 damage');
+S.run.relics = ['momentum'];
+S.battle.goldFired = 10;
+t.eq(DP.goldDmg(), C.DMG.gold + 2, 'Momentum: +1 per 5 gold already fired');
+S.battle.goldFired = 0;
+S.run.relics = ['twinstrike'];
+{
+  const h0 = S.enemy.hp;
+  DP.applyLoot({ t: 'gold' });
+  t.eq(S.enemy.hp, h0 - 2 * C.DMG.gold, 'Twin Strike: gold coins hit twice');
+}
+S.run.relics = ['twinfangs', 'venomtip'];
+S.enemy.pois = 0;
+DP.applyLoot({ t: 'green' });
+t.eq(S.enemy.pois, 4, 'Venom Tip + Twin Fangs: 2 stacks, doubled to 4');
+S.run.relics = ['plaguelord'];
+S.enemy.pois = 3; S.pPois = 0;
+DP.endRoundTicks();
+t.eq(S.enemy.pois, 3, 'Plague Lord: the rot never fades');
+S.enemy.pois = 0;
+S.run.relics = ['wardcandle'];
+{
+  const h0 = S.run.hp;
+  DP.applyLoot({ t: 'skull' });
+  t.eq(S.run.hp, h0 - Math.max(1, C.SKULL_DMG + S.run.floor - 1 - 3), 'Warding Candle blunts the curse');
+}
+S.run.relics = ['sniperlens'];
+S.enemy.braced = true;
+{
+  const h0 = S.enemy.hp;
+  DP.applyLoot({ t: 'lucky' });
+  t.eq(S.enemy.hp, h0 - C.DMG.lucky, 'Sniper Lens: lucky pierces a braced guard');
+  S.enemy.braced = false;
+}
+S.run.relics = ['spikeshield', 'silvercore'];
+S.run.block = 0;
+{
+  const h0 = S.enemy.hp;
+  DP.applyLoot({ t: 'silver' });
+  t.eq(S.run.block, 2, 'Silver Core: silver gives +1 block');
+  t.eq(S.enemy.hp, h0 - 1, 'Spiked Shield: and the silver cuts for 1');
+}
+S.run.relics = ['warmheart'];
+S.run.hp = 50;
+DP.applyLoot({ t: 'red' });
+t.eq(S.run.hp, 50 + C.RED_HEAL + 1, 'Warm Heart: heart coins heal +1');
+S.run.relics = ['gemcutter', 'fatpouch'];
+{
+  const g0 = S.run.gold;
+  DP.applyLoot({ t: 'gem' });
+  DP.applyLoot({ t: 'bag' });
+  t.eq(S.run.gold, g0 + 25 + 15, 'Gem Cutter + Fat Pouch fatten the payouts');
+}
+S.run.relics = ['vampblade'];
+S.run.hp = 50;
+{
+  const wd = DP.weaponDmg(DP.itemById('sword').dmg);
+  DP.applyLoot({ t: 'weapon', iid: 'sword' });
+  t.eq(S.run.hp, 50 + Math.ceil(wd / 2), 'Vampire Blade: weapons feed you half their bite');
+}
+S.run.relics = ['stormcall'];
+S.battle.qi = 8;
+{
+  const h0 = S.enemy.hp;
+  DP.applyLoot({ t: 'silver' });
+  t.eq(S.enemy.hp, h0 - 3, 'Stormcaller: every 8th piece zaps all foes for 3');
+}
+S.battle.qi = 0;
+// the Bulwark Ram finishes the resolve with a block-sized slam
+S.run.relics = ['bulwarkram'];
+S.run.block = 7;
+S.battle.phase = 'resolve'; S.battle.queue = []; S.battle.qi = 0; S.battle.qt = 0;
+{
+  const h0 = S.enemy.hp;
+  DP.battleTick(0.05);
+  t.eq(S.enemy.hp, h0 - 7, 'Bulwark Ram: a finisher equal to your block');
+  t.eq(S.battle.phase, 'enemy', 'then the foes take their turn');
+}
+S.battle.phase = 'drop'; S.run.block = 0;
+// Thornmail bites the attacker back
+S.run.relics = ['thornmail'];
+S.run.block = 6; S.run.hp = 150;
+S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
+{
+  const h0 = S.enemy.hp;
+  DP.enemyActFoe(S.enemy);
+  t.eq(S.enemy.hp, h0 - 3, 'Thornmail: the attacker takes back half your block');
+}
+// Echo Bell rings the opening piece twice
+S.run.relics = ['echobell'];
+{
+  const q = DP.buildQueue([{ k: 'coin' }, { k: 'silver' }]);
+  t.eq(q.length, 3, 'Echo Bell adds an echo');
+  t.eq(q[0].t, q[1].t, 'the first piece fires twice');
+}
+// Quicksilver steepens the ramp
+S.run.relics = [];
+{
+  const plain = DP.resolveSpeed(10);
+  S.run.relics = ['quicksilver'];
+  t.ok(DP.resolveSpeed(10) < plain, 'Quicksilver: the barrage ramps twice as fast');
+}
+// Crowbar / Strongbox / Minter quality-of-life
+S.run.relics = ['crowbar', 'strongbox', 'minter'];
+t.eq(DP.bankMax(), C.BANK_MAX + 2, 'Strongbox: the bank holds two more');
+S.battle.banked = []; S.battle.stolen = 0;
+DP.newRound();
+t.eq(S.battle.tilts, C.TILTS + 1, 'Crowbar: an extra TILT every round');
+t.eq(S.run.wallet, DP.purseTotal() + 1, 'Minter: a bonus gold coin in every hand');
+// Midas gilds all income
+S.run.relics = ['midas'];
+{
+  const g0 = S.run.gold;
+  DP.addGold(10);
+  t.eq(S.run.gold, g0 + 13, 'Midas Touch: +30% gold from everything');
+}
+// Grand Bank pays the stash back double
+S.run.relics = ['grandbank'];
+S.battle.banked = [{ k: 'coin' }, { k: 'silver' }];
+S.battle.phase = 'drop';
+DP.newRound();
+t.eq(S.battle.loot.length, 4, 'Grand Bank: the stash comes back duplicated');
+// Gambler's Purse widens the victory offer
+S.run.relics = ['fourth'];
+t.eq(DP.rollOffer().length, 4, 'Gambler’s Purse: FOUR coins to pick from');
+S.run.relics = [];
+finishFight();
 
 // -------- your purse is a DECK: the hand and the selector --------
 DP.srand(71);
@@ -1083,10 +1272,11 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   frames(10);                                     // the picked coin glows
   D.leaveBattle();
   frames(10);
-  // a 2-foe GANG-UP: the multi-foe panel, retargeting, frost AoE
+  // a 2-foe GANG-UP (one elite): multi-foe panel, retargeting, frost AoE,
+  // and the artifact-drop banner on the victory overlay
   D.S.run.room.ents = [
     { kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.3, py: 0.3 },
-    { kind: 'monster', mtype: 'battle', eid: 'goblin', done: false, px: 0.7, py: 0.3 },
+    { kind: 'monster', mtype: 'elite', eid: 'goblin', done: false, px: 0.7, py: 0.3 },
   ];
   D.interact(0);
   frames(12);                                     // two panels, two intents
