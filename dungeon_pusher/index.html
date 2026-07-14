@@ -276,7 +276,7 @@ const S = {
   meter: 0,
   time: 0, phase: 0, cd: 0,
   shake: 0, aimX: 50, mute: false, resolveMul: 1,   // sticky resolve fast-forward (×1/2/3)
-  turbo: false,                        // sticky TURBO: drop coins at double speed
+  turbo: 1,                            // sticky TURBO drop-rate multiplier (1 / 2 / 4)
   dropped: 0, collected: 0,
   banner: null, trayPile: 0, denyT: 0, hurtT: 0,
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
@@ -333,7 +333,8 @@ function load() {
     if (!d) return;
     S.mute = !!d.mute;
     if (d.resolveMul === 2 || d.resolveMul === 3) S.resolveMul = d.resolveMul;
-    S.turbo = !!d.turbo;
+    if (d.turbo === 2 || d.turbo === 4) S.turbo = d.turbo;
+    else if (d.turbo === true) S.turbo = 2;   // migrate the old on/off flag
     if (d.best && typeof d.best === 'object') {
       S.best = { floor: d.best.floor || 0, depth: d.best.depth || 0,
                  kills: d.best.kills || 0, gold: d.best.gold || 0 };
@@ -735,7 +736,7 @@ function drop(x) {
   B.hand[kind]--;
   syncWallet();
   autoSel();
-  S.cd = C.DROP_CD * (S.turbo ? 0.5 : 1);   // TURBO halves the cooldown -> double drops
+  S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×4 shortens the cooldown to match
   S.dropped++; S.meter++;
   SND.slot();
   if (S.meter >= C.METER_MAX) frenzy();
@@ -954,6 +955,12 @@ function cycleSpeed() {
   S.resolveMul = S.resolveMul >= 3 ? 1 : (S.resolveMul || 1) + 1;
   save();
   return S.resolveMul;
+}
+// TURBO drop rate steps off -> ×2 -> ×4 -> off
+function cycleTurbo() {
+  S.turbo = S.turbo === 1 || !S.turbo ? 2 : S.turbo === 2 ? 4 : 1;
+  save();
+  return S.turbo;
 }
 function startResolve() {
   const B = S.battle;
@@ -1913,7 +1920,7 @@ window.DP = {
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer,
-  rollRelicDrop, bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, packWard, RARITY,
+  rollRelicDrop, bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
 };
 
@@ -2969,8 +2976,8 @@ if (!HEADLESS) (function browser() {
 
   // sticky TURBO: drop coins at double speed (mirrors the resolve-speed pill)
   function drawTurboBtn(t) {
-    const on = S.turbo;
-    uiBtn(14, 148, 96, 24, on ? '\u{26A1} TURBO' : '\u{26A1} turbo', () => { S.turbo = !S.turbo; save(); },
+    const on = (S.turbo || 1) > 1;
+    uiBtn(14, 148, 96, 24, on ? '\u{26A1} ×' + S.turbo : '\u{26A1} turbo', () => cycleTurbo(),
       { r: 12, grad: on ? ['#c85a2a', '#7a2e10'] : ['#3a3440', '#262230'],
         border: on ? '#ffb072' : '#7d5a24',
         col: on ? '#ffe0c0' : '#b8a882', font: '900 12px Verdana, sans-serif' });
