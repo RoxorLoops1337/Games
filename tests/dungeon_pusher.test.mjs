@@ -260,16 +260,20 @@ let landed = false;
 for (let i = 0; i < 60 * 6 && !landed; i++) { DP.tick(DT); if (dropped.st === 'plat') landed = true; }
 t.ok(landed, 'dropped coin lands on the platform (or the shelf)');
 
-// -------- TURBO: half the cooldown, double the drops --------
+// -------- TURBO: cycles off / ×2 / ×4, shortening the drop cooldown --------
 S.battle.hand = { coin: 20, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
 S.battle.sel = 'coin';
-S.turbo = false; S.cd = 0;
+S.turbo = 1; S.cd = 0;
 DP.drop(50);
-t.eq(S.cd, C.DROP_CD, 'normal drop sets the full cooldown');
-S.turbo = true; S.cd = 0;
-DP.drop(50);
-t.eq(S.cd, C.DROP_CD * 0.5, 'TURBO halves the cooldown — coins drop twice as fast');
-S.turbo = false;
+t.eq(S.cd, C.DROP_CD, 'off: a normal drop sets the full cooldown');
+t.eq(DP.cycleTurbo(), 2, 'tapping TURBO steps to ×2');
+S.cd = 0; DP.drop(50);
+t.eq(S.cd, C.DROP_CD / 2, '×2 halves the cooldown — coins drop twice as fast');
+t.eq(DP.cycleTurbo(), 4, 'again -> ×4');
+S.cd = 0; DP.drop(50);
+t.eq(S.cd, C.DROP_CD / 4, '×4 quarters it — four times as fast');
+t.eq(DP.cycleTurbo(), 1, 'and it wraps back to off');
+t.eq(S.turbo, 1, 'the choice is sticky on the state');
 
 // -------- a PACKED machine holds your coin back instead of eating it --------
 // (the bug: holding to drop at the cap silently drained the hand)
