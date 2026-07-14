@@ -297,10 +297,11 @@ t.eq(S.battle.loot.length, 6, 'all six pieces joined the round loot');
 t.ok(S.battle.loot.some(l => l.k === 'silver') && S.battle.loot.some(l => l.k === 'green'),
      'silver and green coins are tracked as loot');
 
-// -------- the resolve RAMPS UP: every next piece flies faster --------
-t.ok(DP.resolveSpeed(1) > DP.resolveSpeed(5) && DP.resolveSpeed(5) > DP.resolveSpeed(15),
-     'the barrage accelerates piece by piece');
-t.ok(DP.resolveSpeed(200) >= 0.12, 'with a floor, so it never hits zero');
+// -------- the resolve RAMPS UP (per same-type run, then resets) --------
+t.ok(DP.resolveSpeed(0) > DP.resolveSpeed(1) && DP.resolveSpeed(1) > DP.resolveSpeed(4),
+     'each next same-type piece flies a little faster');
+t.eq(DP.resolveSpeed(0), 1, 'a fresh run starts at full delay (no speed-up on the first piece)');
+t.ok(DP.resolveSpeed(200) >= 0.4, 'floored at 0.4 so a long run never machine-guns');
 
 // -------- the resolve queue: ordered, one piece at a time --------
 {
@@ -312,6 +313,40 @@ t.ok(DP.resolveSpeed(200) >= 0.12, 'with a floor, so it never hits zero');
   t.eq(order.join(','), 'gem,silver,shielditem,red,gold,lucky,blue,weapon,green,skull',
        'the queue banks gold, shields, mends, then strikes — curses last');
 }
+// the acceleration counter RESETS every time the resolved type changes.
+// Fully isolated in its own throwaway battle so it disturbs nothing.
+{
+  DP.srand(555);
+  DP.newRun('knight');
+  DP.startBattle('battle');
+  const B = S.battle;
+  S.foes.forEach(f => { f.hp = f.maxHp = 9999; });
+  B.phase = 'drop';
+  // gold sorts before green in the resolve order -> gold run, then green run
+  B.loot = [{ k: 'coin' }, { k: 'coin' }, { k: 'coin' }, { k: 'green' }, { k: 'green' }];
+  DP.endRoundNow();
+  DP.battleTick(1);
+  t.eq(B.rampType, 'gold', 'ramp locks onto the gold run');
+  t.eq(B.rampN, 0, 'and the first piece is unaccelerated');
+  DP.battleTick(1);
+  t.eq(B.rampN, 1, 'the second gold fires quicker');
+  DP.battleTick(1);
+  t.eq(B.rampN, 2, 'the third quicker still');
+  DP.battleTick(1);
+  t.eq(B.rampType, 'green', 'then the run switches to venom');
+  t.eq(B.rampN, 0, 'and the acceleration RESTARTS from slow');
+}
+// restore the suite's working battle
+DP.srand(42);
+DP.newRun('rogue');
+S.run.room.ents = [mkMonster('orc')];
+DP.interact(0);
+S.enemy.hp = S.enemy.maxHp = 500;
+S.battle.phase = 'drop';
+S.battle.loot.length = 0;
+for (const [kind, x] of pieces) { const c = DP.place(x, C.PLAT_FRONT - 0.5, kind, 0, 'plat'); c.vy = 70; }
+step(1.5);
+
 // full pipeline: the tray NEVER resolves itself — END TURN is yours to press
 drainHand();
 S.run.block = 0;
@@ -911,9 +946,10 @@ S.run.relics = ['echobell'];
 // Quicksilver steepens the ramp
 S.run.relics = [];
 {
-  const plain = DP.resolveSpeed(10);
+  const plain = DP.resolveSpeed(3);
   S.run.relics = ['quicksilver'];
-  t.ok(DP.resolveSpeed(10) < plain, 'Quicksilver: the barrage ramps twice as fast');
+  t.ok(DP.resolveSpeed(3) < plain, 'Quicksilver: the barrage ramps faster');
+  S.run.relics = [];
 }
 // Crowbar / Strongbox / Minter quality-of-life
 S.run.relics = ['crowbar', 'strongbox', 'minter'];
