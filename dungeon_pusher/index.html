@@ -2039,10 +2039,19 @@ if (!HEADLESS) (function browser() {
     tilt_f: 'art/machine/tilt_f.png',
     tilt_r: 'art/machine/tilt_r.png',
     end_turn: 'art/machine/end_turn.png',
+    plat: 'art/machine/plat_stone.png',
+    backwall: 'art/machine/backwall.png',
+    cab: 'art/machine/cab_wood.png',
+    tray: 'art/machine/tray_face.png',
+    torch_l: 'art/machine/torch_l.png',
+    torch_r: 'art/machine/torch_r.png',
   };
   function machArt(key) {
     const im = art('mach_' + key, MACH_ART[key]);
     return im._ok ? im : null;
+  }
+  function imAspect(im, fallback) {
+    return (im.naturalHeight || 0) > 0 ? im.naturalHeight / im.naturalWidth : fallback;
   }
 
   // Frietkot floor tiles as seamless patterns (halved so the grain reads)
@@ -2490,6 +2499,21 @@ if (!HEADLESS) (function browser() {
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(36, 112); ctx.lineTo(LW - 36, 112); ctx.stroke();
     spotlight(72, 112, 58, 'rgba(140,190,255,0.5)', 0.35);
+    // wall torches flank the arena, flames breathing (tucked below the
+    // ROUND chip and the mute button)
+    const tcL = machArt('torch_l'), tcR = machArt('torch_r');
+    if (tcL && tcR) {
+      const fl2 = 1 + Math.sin(t * 8) * 0.12;
+      for (const [im, tx] of [[tcL, 26], [tcR, LW - 52]]) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.18 + 0.07 * Math.sin(t * 9 + tx);
+        ctx.fillStyle = '#ff9d3c';
+        ctx.beginPath(); ctx.arc(tx + 13, 60, 16 * fl2, 0, 7); ctx.fill();
+        ctx.restore();
+        ctx.drawImage(im, tx, 48, 26, 55);
+      }
+    }
     // the dueling line
     ctx.globalAlpha = 0.4 + 0.12 * Math.sin(t * 3);
     txt('⚔', 146, 64, '17px serif', '#e8c877');
@@ -2675,29 +2699,32 @@ if (!HEADLESS) (function browser() {
     const fr = S.meter / C.METER_MAX;
     // the gilded gauge from the cabinet concept, with our LIVE fill laid
     // into its channel — painted strip as the fallback
-    const frame = machArt('jackpot');
-    if (frame) {
-      const iw = 264, ih = iw * (94 / 360) * 0.62;   // gently flattened to fit the shelf
-      const x0 = LW / 2 - iw / 2, y0 = 197;
-      ctx.drawImage(frame, x0, y0, iw, ih);
-      // the live channel (covers the render's baked-in segments)
-      const cx0 = x0 + iw * 0.085, cw = iw * 0.83;
-      const cy0 = y0 + ih * 0.30, chh = ih * 0.40;
-      rr(cx0, cy0, cw, chh, chh / 2);
-      ctx.fillStyle = 'rgba(16,8,6,0.92)'; ctx.fill();
+    const tube = machArt('jackpot');
+    if (tube) {
+      // the runic lightning tube: a dark ghost of it when empty, and the
+      // charged version revealed from the left as the meter climbs
+      const iw = 268, ih = iw * imAspect(tube, 50 / 352);
+      const x0 = LW / 2 - iw / 2, y0 = 198;
+      ctx.save();
+      ctx.globalAlpha = 0.45;
+      ctx.drawImage(tube, x0, y0, iw, ih);
+      ctx.fillStyle = 'rgba(10,8,20,0.5)';
+      rr(x0 + 2, y0 + 2, iw - 4, ih - 4, ih / 2); ctx.fill();
+      ctx.restore();
       if (fr > 0.01) {
-        const pulse = fr > 0.8 ? 0.25 + 0.2 * Math.sin(t * 10) : 0;
-        rr(cx0 + 1, cy0 + 1, Math.max(4, (cw - 2) * fr), chh - 2, (chh - 2) / 2);
-        const g = ctx.createLinearGradient(cx0, 0, cx0 + cw, 0);
-        g.addColorStop(0, '#ff9d3c'); g.addColorStop(1, '#ff4b2e');
-        ctx.fillStyle = g; ctx.fill();
-        if (pulse > 0) { ctx.fillStyle = 'rgba(255,240,180,' + pulse + ')'; ctx.fill(); }
+        ctx.save();
+        ctx.beginPath(); ctx.rect(x0, y0 - 4, iw * fr, ih + 8); ctx.clip();
+        ctx.drawImage(tube, x0, y0, iw, ih);
+        if (fr > 0.8) {
+          // near-jackpot: the tube crackles
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.25 + 0.2 * Math.sin(t * 10);
+          ctx.drawImage(tube, x0, y0, iw, ih);
+        }
+        ctx.restore();
       }
-      ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1;
-      for (let i = 1; i < 6; i++) {
-        const tx2 = cx0 + (cw * i) / 6;
-        ctx.beginPath(); ctx.moveTo(tx2, cy0); ctx.lineTo(tx2, cy0 + chh); ctx.stroke();
-      }
+      txt('JACKPOT', x0 - 8, y0 + ih / 2, '800 8px Verdana, sans-serif',
+          fr > 0.5 ? '#8be7ff' : '#8a6f4a', 'right');
       return;
     }
     // slimmed down and tucked over the coin wall — the hand row owns y144 now
@@ -2734,6 +2761,14 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = g;
     ctx.fillRect(4, 170, 22, 540);
     ctx.fillRect(LW - 26, 170, 22, 540);
+    const wood = machArt('cab');
+    if (wood) {
+      // timber cabinet flanks, tinted by the floor theme underneath
+      ctx.globalAlpha = 0.85;
+      ctx.drawImage(wood, 4, 170, 22, 540);
+      ctx.drawImage(wood, LW - 26, 170, 22, 540);
+      ctx.globalAlpha = 1;
+    }
     ctx.fillStyle = 'rgba(255,214,120,0.16)';
     ctx.fillRect(8, 170, 3, 540);
     ctx.fillRect(LW - 12, 170, 3, 540);
@@ -2749,13 +2784,22 @@ if (!HEADLESS) (function browser() {
     g.addColorStop(0, '#20242c'); g.addColorStop(1, '#3a4049');
     ctx.fillStyle = g;
     ctx.fillRect(26, 172, LW - 52, Math.max(10, a.y - 172));
-    // brushed panel lines
-    ctx.globalAlpha = 0.08;
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
-    for (let x = 40; x < LW - 40; x += 24) {
-      ctx.beginPath(); ctx.moveTo(x, 173); ctx.lineTo(x - 4, a.y - 2); ctx.stroke();
+    const wallArt = machArt('backwall');
+    if (wallArt) {
+      // the dwarven rune-circuit wall
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.drawImage(wallArt, 26, 171, LW - 52, Math.max(12, a.y - 169));
+      ctx.restore();
+    } else {
+      // brushed panel lines
+      ctx.globalAlpha = 0.08;
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+      for (let x = 40; x < LW - 40; x += 24) {
+        ctx.beginPath(); ctx.moveTo(x, 173); ctx.lineTo(x - 4, a.y - 2); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
     // the coin channel with a CHASING marquee of bulbs — a real arcade top
     // (the gilded JACKPOT gauge takes this spot when its art is in)
     if (!machArt('jackpot')) {
@@ -2814,6 +2858,14 @@ if (!HEADLESS) (function browser() {
     ctx.fill();
     ctx.save();
     ctx.clip();
+    // the runic stone slab, laid over the theme tint so each floor still
+    // carries its own hue
+    const slab = machArt('plat');
+    if (slab) {
+      ctx.globalAlpha = 0.6;
+      ctx.drawImage(slab, p01.x - 6, p00.y - 4, (p11.x - p01.x) + 12, (p01.y - p00.y) + 8);
+      ctx.globalAlpha = 1;
+    }
     ctx.globalAlpha = 0.06;
     ctx.strokeStyle = '#dfe5ee';
     ctx.lineWidth = 1;
@@ -2878,18 +2930,10 @@ if (!HEADLESS) (function browser() {
       ctx.beginPath(); ctx.moveTo(tl.x, y); ctx.lineTo(tr.x, y); ctx.stroke();
     }
     ctx.globalAlpha = 1;
-    // the PUSH legend: the real neon sign when its art is in, embossed
-    // accent text otherwise
+    // the PUSH legend when no sign art is in
     const sign = machArt('push_sign');
     const py2 = (tl.y + fl.y) / 2;
-    if (sign) {
-      const sh2 = Math.max(14, (fl.y - tl.y) * 0.8);
-      const sw2 = sh2 * (300 / 66);
-      ctx.save();
-      ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 2.6);
-      ctx.drawImage(sign, LW / 2 - sw2 / 2, py2 - sh2 / 2, sw2, sh2);
-      ctx.restore();
-    } else {
+    if (!sign) {
       const pfs = Math.max(10, (fl.y - tl.y) * 0.5);
       txt('▼ PUSH ▼', LW / 2, py2 + 1, '900 ' + pfs + 'px Verdana, sans-serif', 'rgba(255,255,255,0.35)');
       ctx.save();
@@ -2898,6 +2942,16 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
     }
     ctx.restore();
+    // the carved wooden sign stands proud on the pusher plate (outside the
+    // clip, so it overhangs like a real standee)
+    if (sign) {
+      const sh2 = (fl.y - tl.y) + 12;
+      const sw2 = sh2 / imAspect(sign, 96 / 270);
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
+      ctx.drawImage(sign, LW / 2 - sw2 / 2, fl.y - sh2 - 1, sw2, sh2);
+      ctx.restore();
+    }
     // face: dark bevel with a gold hairline and a chasing LED rail
     poly([fl, frt, br, bl]);
     const fg = ctx.createLinearGradient(0, fl.y, 0, bl.y);
@@ -3113,12 +3167,21 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = lgr('tray', 0, 648, 0, 700, [[0, '#0e070f'], [0.7, '#231622'], [1, '#31202c']]);
     ctx.fill();
     ctx.restore();
-    rr(58, 648, LW - 116, 52, 14);
-    ctx.lineWidth = 2.5;
-    ctx.strokeStyle = lgr('trayRim', 0, 648, 0, 700, [[0, '#e8c877'], [0.6, '#9a7440'], [1, '#6a4e28']]);
-    ctx.stroke();
-    rr(61, 651, LW - 122, 46, 11);
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.stroke();
+    const trayArt = machArt('tray');
+    if (trayArt) {
+      // the stone catch-box from the concept sheet
+      ctx.save();
+      rr(56, 646, LW - 112, 56, 14); ctx.clip();
+      ctx.drawImage(trayArt, 54, 645, LW - 108, 58);
+      ctx.restore();
+    } else {
+      rr(58, 648, LW - 116, 52, 14);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = lgr('trayRim', 0, 648, 0, 700, [[0, '#e8c877'], [0.6, '#9a7440'], [1, '#6a4e28']]);
+      ctx.stroke();
+      rr(61, 651, LW - 122, 46, 11);
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.stroke();
+    }
     // the round's loot rattles around the tray until it resolves
     const items = S.tray.items;
     const trayGlow = S.battle && S.battle.loot.length > 0;
@@ -3537,12 +3600,12 @@ if (!HEADLESS) (function browser() {
       const bx2 = LW - 100 - bw / 2;
       const etArt = machArt('end_turn');
       if (etArt) {
-        // the neon pill from the cabinet concept
-        const bh2 = bw * (64 / 262);
+        // the dragon-sealed scroll from the concept sheet
+        const bh2 = bw * imAspect(etArt, 108 / 364);
         const by2 = 616 - bh2 / 2;
         ctx.save();
-        ctx.shadowColor = 'rgba(255,60,30,' + (empty ? 0.55 : 0.3) + ')';
-        ctx.shadowBlur = empty ? 18 : 10;
+        ctx.shadowColor = 'rgba(255,190,80,' + (empty ? 0.6 : 0.3) + ')';
+        ctx.shadowBlur = empty ? 18 : 9;
         ctx.drawImage(etArt, bx2, by2, bw, bh2);
         ctx.restore();
         uiButtons.push({ x: bx2, y: by2, w: bw, h: bh2, cb: () => endRoundNow() });
@@ -3551,19 +3614,20 @@ if (!HEADLESS) (function browser() {
               { grad: empty ? ['#ffd75e', '#c98f2a'] : ['#c8a05a', '#8a6a2a'],
                 border: '#fff0c0', col: '#3a2406', font: '900 15px Verdana, sans-serif', r: 15 });
       }
-      // a shine sweeps across it, begging to be pressed
-      const shH = etArt ? bw * (64 / 262) : 40;
-      const shY = etArt ? 616 - shH / 2 : 596;
-      ctx.save();
-      rr(bx2 + 3, shY + 3, bw - 6, shH - 6, 13); ctx.clip();
-      const sx2 = bx2 - 60 + ((t * 110) % (bw + 120));
-      const sg = ctx.createLinearGradient(sx2 - 22, 0, sx2 + 22, 0);
-      sg.addColorStop(0, 'rgba(255,255,255,0)');
-      sg.addColorStop(0.5, 'rgba(255,255,255,' + (empty ? 0.4 : 0.22) + ')');
-      sg.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = sg;
-      ctx.fillRect(sx2 - 26, shY, 52, shH);
-      ctx.restore();
+      // a shine sweeps across the painted fallback (the scroll art carries
+      // its own charm and a sweep would box its transparent corners)
+      if (!etArt) {
+        ctx.save();
+        rr(bx2 + 3, 599, bw - 6, 34, 13); ctx.clip();
+        const sx2 = bx2 - 60 + ((t * 110) % (bw + 120));
+        const sg = ctx.createLinearGradient(sx2 - 22, 0, sx2 + 22, 0);
+        sg.addColorStop(0, 'rgba(255,255,255,0)');
+        sg.addColorStop(0.5, 'rgba(255,255,255,' + (empty ? 0.4 : 0.22) + ')');
+        sg.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = sg;
+        ctx.fillRect(sx2 - 26, 596, 52, 40);
+        ctx.restore();
+      }
     }
     drawSpeedBtn(t);
     if (phase === 'drop' && !S.victory) drawTurboBtn(t);
@@ -3715,13 +3779,21 @@ if (!HEADLESS) (function browser() {
     [['◀', 'l'], ['▼', 'f'], ['▶', 'r']].forEach(([sym, dir], i) => {
       const x = 16 + i * 46;
       if (arts[i]) {
-        // the gold plates from the cabinet concept
+        // the carved stone plates from the concept sheet, lit while charged
+        if (on) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.14 + 0.05 * Math.sin(t * 4 + i);
+          ctx.fillStyle = '#ffca7a';
+          ctx.beginPath(); ctx.arc(x + 20, 616, 24, 0, 7); ctx.fill();
+          ctx.restore();
+        }
         ctx.save();
         if (!on) ctx.globalAlpha = 0.45;
         ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
-        ctx.drawImage(arts[i], x, 596, 40, 40);
+        ctx.drawImage(arts[i], x - 2, 594, 44, 44);
         ctx.restore();
-        uiButtons.push({ x, y: 596, w: 40, h: 40, cb: () => tilt(dir) });
+        uiButtons.push({ x: x - 2, y: 594, w: 44, h: 44, cb: () => tilt(dir) });
       } else {
         uiBtn(x, 596, 40, 40, sym, () => tilt(dir),
               { grad: on ? ['#6a5a7e', '#3a3048'] : ['#3a3440', '#262230'],

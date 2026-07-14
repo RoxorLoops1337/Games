@@ -1088,5 +1088,7 @@ attack while heroes are in its room, not a walk cycle.
 
 
 ===== machine/ =====
-Cabinet dressing (push_sign, jackpot_frame, fascia, tilt_*, end_turn) cropped
-from an AI-generated arcade-cabinet concept supplied by the repo owner.
+Cabinet dressing cropped from AI-generated concept sheets supplied by the
+repo owner (runic-dwarven set): push_sign, jackpot_frame (lightning tube),
+fascia (runic banner), tilt_*, end_turn (dragon scroll), plat_stone,
+backwall, cab_wood, tray_face, torch_l/r.
