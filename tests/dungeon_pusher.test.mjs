@@ -260,6 +260,17 @@ let landed = false;
 for (let i = 0; i < 60 * 6 && !landed; i++) { DP.tick(DT); if (dropped.st === 'plat') landed = true; }
 t.ok(landed, 'dropped coin lands on the platform (or the shelf)');
 
+// -------- TURBO: half the cooldown, double the drops --------
+S.battle.hand = { coin: 20, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+S.battle.sel = 'coin';
+S.turbo = false; S.cd = 0;
+DP.drop(50);
+t.eq(S.cd, C.DROP_CD, 'normal drop sets the full cooldown');
+S.turbo = true; S.cd = 0;
+DP.drop(50);
+t.eq(S.cd, C.DROP_CD * 0.5, 'TURBO halves the cooldown — coins drop twice as fast');
+S.turbo = false;
+
 // -------- a PACKED machine holds your coin back instead of eating it --------
 // (the bug: holding to drop at the cap silently drained the hand)
 {
