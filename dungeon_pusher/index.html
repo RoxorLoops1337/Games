@@ -2045,6 +2045,13 @@ if (!HEADLESS) (function browser() {
     tray: 'art/machine/tray_face.png',
     torch_l: 'art/machine/torch_l.png',
     torch_r: 'art/machine/torch_r.png',
+    pill: 'art/machine/pill_idle.png',
+    pill_glow: 'art/machine/pill_glow.png',
+    square: 'art/machine/btn_square.png',
+    frame_wide: 'art/machine/frame_wide.png',
+    frame_stage: 'art/machine/frame_stage.png',
+    frame_tall: 'art/machine/frame_tall.png',
+    rail: 'art/machine/rail_wood.png',
   };
   function machArt(key) {
     const im = art('mach_' + key, MACH_ART[key]);
@@ -2053,6 +2060,20 @@ if (!HEADLESS) (function browser() {
   function imAspect(im, fallback) {
     return (im.naturalHeight || 0) > 0 ? im.naturalHeight / im.naturalWidth : fallback;
   }
+  // engraved coin faces + pile pieces + arsenal items from the piece sheet
+  const PIECE_ART = {
+    coin: 'coin_coin', silver: 'coin_silver', green: 'coin_green', red: 'coin_red',
+    blue: 'coin_blue', lucky: 'coin_lucky',
+    gem: 'piece_gem', bag: 'piece_bag', skull: 'piece_skull', chest: 'piece_chest',
+  };
+  const ITEM_ART = ['sword', 'shield', 'vial', 'axe', 'heart', 'frost', 'hammer'];
+  function pieceImg(name) {
+    const im = art('pc_' + name, 'art/machine/pieces/' + name + '.png');
+    return im._ok ? im : null;
+  }
+  function pieceArt(kind) { return PIECE_ART[kind] ? pieceImg(PIECE_ART[kind]) : null; }
+  function itemArt(iid) { return ITEM_ART.indexOf(iid) >= 0 ? pieceImg('item_' + iid) : null; }
+  function imW(im, h) { return h * ((im.naturalWidth || 1) / (im.naturalHeight || 1)); }
 
   // Frietkot floor tiles as seamless patterns (halved so the grain reads)
   const FLOOR_PATS = {};
@@ -2475,13 +2496,28 @@ if (!HEADLESS) (function browser() {
     const T = theme();
     dt = dt || 0.016;
     ctx.save();
-    // panel: soft shadow, arched gradient, dark outer + gold inner border
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5;
-    rr(20, 12, LW - 40, 128, 20);
-    ctx.fillStyle = lgr('ep:' + fkey(), 0, 12, 0, 140, [[0, '#2c2234'], [0.72, '#1b1420'], [1, '#241a28']]);
-    ctx.fill();
-    ctx.restore();
+    const stageFrame = machArt('frame_stage');
+    if (stageFrame) {
+      // the runic banner frame from the UI sheet IS the arena
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = 5;
+      ctx.drawImage(stageFrame, 12, 6, LW - 24, 138);
+      ctx.restore();
+    } else {
+      // panel: soft shadow, arched gradient, dark outer + gold inner border
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 16; ctx.shadowOffsetY = 5;
+      rr(20, 12, LW - 40, 128, 20);
+      ctx.fillStyle = lgr('ep:' + fkey(), 0, 12, 0, 140, [[0, '#2c2234'], [0.72, '#1b1420'], [1, '#241a28']]);
+      ctx.fill();
+      ctx.restore();
+      rr(20, 12, LW - 40, 128, 20);
+      ctx.lineWidth = 3.5; ctx.strokeStyle = '#0e0a14'; ctx.stroke();
+      rr(22.5, 14.5, LW - 45, 123, 18);
+      ctx.lineWidth = 1.6;
+      ctx.strokeStyle = lgr('epRim', 0, 14, 0, 138, [[0, '#e8c877'], [0.5, '#8a6a34'], [1, '#5a4520']]);
+      ctx.stroke();
+    }
     // a faint arena glow behind the duel
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
@@ -2489,12 +2525,6 @@ if (!HEADLESS) (function browser() {
       [[0, 'rgba(255,220,160,0.10)'], [1, 'rgba(0,0,0,0)']]);
     rr(22, 14, LW - 44, 124, 19); ctx.fill();
     ctx.restore();
-    rr(20, 12, LW - 40, 128, 20);
-    ctx.lineWidth = 3.5; ctx.strokeStyle = '#0e0a14'; ctx.stroke();
-    rr(22.5, 14.5, LW - 45, 123, 18);
-    ctx.lineWidth = 1.6;
-    ctx.strokeStyle = lgr('epRim', 0, 14, 0, 138, [[0, '#e8c877'], [0.5, '#8a6a34'], [1, '#5a4520']]);
-    ctx.stroke();
     // stage floorline + light pools
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(36, 112); ctx.lineTo(LW - 36, 112); ctx.stroke();
@@ -2761,10 +2791,10 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = g;
     ctx.fillRect(4, 170, 22, 540);
     ctx.fillRect(LW - 26, 170, 22, 540);
-    const wood = machArt('cab');
+    const wood = machArt('rail') || machArt('cab');
     if (wood) {
-      // timber cabinet flanks, tinted by the floor theme underneath
-      ctx.globalAlpha = 0.85;
+      // riveted timber rails flank the cabinet, tinted by the theme beneath
+      ctx.globalAlpha = 0.9;
       ctx.drawImage(wood, 4, 170, 22, 540);
       ctx.drawImage(wood, LW - 26, 170, 22, 540);
       ctx.globalAlpha = 1;
@@ -3026,10 +3056,18 @@ if (!HEADLESS) (function browser() {
     const sym = COIN_SYMS[c.kind] || '⚔';
     const pop = c.popT > 0 ? 1 + 0.22 * (c.popT / 0.18) : 1;
     const drx = rx * pop, dry = ry * pop;
-    const spr = flatSprite(c.kind, pal, sym);
-    const hs = dry / (drx * 0.4583);
-    const w = drx * (96 / 44), h = (66 / 96) * w * hs;
-    ctx.drawImage(spr, p.x - w / 2, p.y - (24 / 66) * h, w, h);
+    const face = pieceArt(c.kind);
+    if (face) {
+      // the engraved face from the piece sheet, resting on a painted edge
+      ctx.beginPath(); ctx.ellipse(p.x, p.y + drx * 0.17, drx, dry, 0, 0, 7);
+      ctx.fillStyle = pal.edge; ctx.fill();
+      ctx.drawImage(face, p.x - drx, p.y - dry, drx * 2, dry * 2);
+    } else {
+      const spr = flatSprite(c.kind, pal, sym);
+      const hs = dry / (drx * 0.4583);
+      const w = drx * (96 / 44), h = (66 / 96) * w * hs;
+      ctx.drawImage(spr, p.x - w / 2, p.y - (24 / 66) * h, w, h);
+    }
     const gph = (t * 0.5 + c.glint) % (Math.PI * 2);
     ctx.beginPath();
     ctx.ellipse(p.x, p.y, drx * 0.9, dry * 0.9, 0, gph, gph + 0.9);
@@ -3047,6 +3085,19 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawGem(c, p, rx, t) {
+    const gemIm = pieceArt('gem');
+    if (gemIm) {
+      const gh = rx * 2.1, gw = imW(gemIm, gh);
+      ctx.drawImage(gemIm, p.x - gw / 2, p.y - gh * 0.62, gw, gh);
+      if ((t + c.glint) % 1.6 < 0.14) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(p.x - rx * 0.3 - 5, p.y - rx * 0.3); ctx.lineTo(p.x - rx * 0.3 + 5, p.y - rx * 0.3);
+        ctx.moveTo(p.x - rx * 0.3, p.y - rx * 0.3 - 5); ctx.lineTo(p.x - rx * 0.3, p.y - rx * 0.3 + 5);
+        ctx.stroke();
+      }
+      return;
+    }
     ctx.translate(p.x, p.y);
     const s = rx * 1.15;
     ctx.beginPath();
@@ -3083,7 +3134,14 @@ if (!HEADLESS) (function browser() {
     ctx.save();
     ctx.translate(p.x, p.y - rx * 0.4 + bob);
     if (c.st === 'fall' || c.st === 'air') ctx.rotate(Math.sin(c.rot) * 0.3);
-    txt(icon, 0, 0, Math.round(rx * (c.kind === 'item' ? 2.6 : 2.2)) + 'px serif', '#fff');
+    const im = c.kind === 'item' ? itemArt(c.iid) : pieceArt(c.kind);
+    if (im) {
+      const hgt = rx * (c.kind === 'item' ? 2.9 : 2.5);
+      const wdt = imW(im, hgt);
+      ctx.drawImage(im, -wdt / 2, -hgt * 0.55, wdt, hgt);
+    } else {
+      txt(icon, 0, 0, Math.round(rx * (c.kind === 'item' ? 2.6 : 2.2)) + 'px serif', '#fff');
+    }
     ctx.restore();
     // glow ring: friendly gold for loot, sickly purple for curses
     const glow = c.kind === 'skull' ? '#c86bff'
@@ -3197,7 +3255,14 @@ if (!HEADLESS) (function browser() {
     items.forEach((it, i) => {
       const px = LW / 2 + Math.sin(i * 2.399) * (18 + ((i * 7) % 130));
       const py = 686 - (i % 3) * 6;
-      if (it.kind === 'item') {
+      const im = it.kind === 'item' ? itemArt(it.iid) : pieceArt(it.kind);
+      if (im && it.kind !== 'item' && PIECE_ART[it.kind] && it.kind !== 'gem' && it.kind !== 'bag' && it.kind !== 'skull' && it.kind !== 'chest') {
+        // minted coins lie flat in the tray
+        ctx.drawImage(im, px - 10, py - 9, 20, 9);
+      } else if (im) {
+        const hgt = it.kind === 'item' ? 22 : 18, wdt = imW(im, hgt);
+        ctx.drawImage(im, px - wdt / 2, py - hgt + 2, wdt, hgt);
+      } else if (it.kind === 'item') {
         const def = itemById(it.iid);
         txt(def ? def.icon : '❓', px, py - 8, '20px serif', '#fff');
       } else if (it.kind === 'skull') {
@@ -3330,10 +3395,26 @@ if (!HEADLESS) (function browser() {
     }
   }
 
+  // a carved stone pill from the UI sheet — ember-lit when active.
+  // Returns false when the art is missing so callers can fall back.
+  function pillBtn(x, y, w, h, label, cb, on, col) {
+    const im = machArt(on ? 'pill_glow' : 'pill');
+    if (!im) return false;
+    uiButtons.push({ x, y, w, h, cb });
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
+    ctx.drawImage(im, x, y - 3, w, h + 6);
+    ctx.restore();
+    txt(label, x + w / 2, y + h / 2 + 1, '900 12px Verdana, sans-serif', col,
+        'center', { w: 3, col: 'rgba(30,12,4,0.6)' });
+    return true;
+  }
   // sticky TURBO: drop coins at double speed (mirrors the resolve-speed pill)
   function drawTurboBtn(t) {
     const on = (S.turbo || 1) > 1;
-    uiBtn(14, 148, 96, 24, on ? '\u{26A1} ×' + S.turbo : '\u{26A1} turbo', () => cycleTurbo(),
+    const label = on ? '\u{26A1} ×' + S.turbo : '\u{26A1} turbo';
+    if (pillBtn(14, 148, 96, 24, label, () => cycleTurbo(), on, on ? '#ffe0c0' : '#c8b89a')) return;
+    uiBtn(14, 148, 96, 24, label, () => cycleTurbo(),
       { r: 12, grad: on ? ['#c85a2a', '#7a2e10'] : ['#3a3440', '#262230'],
         border: on ? '#ffb072' : '#7d5a24',
         col: on ? '#ffe0c0' : '#b8a882', font: '900 12px Verdana, sans-serif' });
@@ -3341,8 +3422,10 @@ if (!HEADLESS) (function browser() {
   // sticky resolve fast-forward: tap to cycle ×1 / ×2 / ×3 (persists)
   function drawSpeedBtn(t) {
     const mul = S.resolveMul || 1;
+    const label = '\u{23E9} ×' + mul;
+    if (pillBtn(LW - 86, 148, 72, 24, label, () => cycleSpeed(), mul > 1, mul > 1 ? '#ffe9a3' : '#c8b89a')) return;
     const live = S.battle && S.battle.phase !== 'drop' && !S.victory;
-    uiBtn(LW - 86, 148, 72, 24, '\u{23E9} ×' + mul, () => cycleSpeed(),
+    uiBtn(LW - 86, 148, 72, 24, label, () => cycleSpeed(),
       { r: 12, grad: live ? ['#7e6a3a', '#4a3a1a'] : ['#3a3440', '#262230'],
         border: mul > 1 ? '#ffd75e' : '#7d5a24',
         col: mul > 1 ? '#ffe9a3' : '#b8a882', font: '900 13px Verdana, sans-serif' });
@@ -3423,19 +3506,28 @@ if (!HEADLESS) (function browser() {
   function drawHUD(t) {
     const r = S.run;
     if (!r) return;
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = -3;
-    rr(14, 714, LW - 28, 112, 16);
-    ctx.fillStyle = lgr('hud', 0, 714, 0, 826, [[0, '#412e46'], [0.12, '#332439'], [1, '#221826']]);
-    ctx.fill();
-    ctx.restore();
-    rr(14, 714, LW - 28, 112, 16);
-    ctx.lineWidth = 2.5; ctx.strokeStyle = '#e8b6ce'; ctx.stroke();
-    rr(16.5, 716.5, LW - 33, 107, 14);
-    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(232,200,119,0.25)'; ctx.stroke();
-    // a hairline separates stats from the arsenal strip
-    ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(28, 778); ctx.lineTo(LW - 28, 778); ctx.stroke();
+    const hudFrame = machArt('frame_wide');
+    if (hudFrame) {
+      // bronze-cornered rune frame from the UI sheet
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = -3;
+      ctx.drawImage(hudFrame, 6, 703, LW - 12, 134);
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 14; ctx.shadowOffsetY = -3;
+      rr(14, 714, LW - 28, 112, 16);
+      ctx.fillStyle = lgr('hud', 0, 714, 0, 826, [[0, '#412e46'], [0.12, '#332439'], [1, '#221826']]);
+      ctx.fill();
+      ctx.restore();
+      rr(14, 714, LW - 28, 112, 16);
+      ctx.lineWidth = 2.5; ctx.strokeStyle = '#e8b6ce'; ctx.stroke();
+      rr(16.5, 716.5, LW - 33, 107, 14);
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(232,200,119,0.25)'; ctx.stroke();
+      // a hairline separates stats from the arsenal strip
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(28, 778); ctx.lineTo(LW - 28, 778); ctx.stroke();
+    }
     // HP
     txt('HP', 34, 733, '800 11px Verdana, sans-serif', '#a8828e', 'left');
     bar(58, 726, 210, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
@@ -3500,9 +3592,17 @@ if (!HEADLESS) (function browser() {
     const rl = v.relic ? relicById(v.relic) : null;
     const exY = rl ? 44 : 0;                     // room for the artifact banner
     const py = (hasOffer ? 218 : 300) - exY / 2, ph = (hasOffer ? 404 : 250) + exY;
-    rr(70, py, LW - 140, ph, 20);
-    ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+    const vFrame = machArt('frame_tall');
+    if (vFrame) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+      ctx.drawImage(vFrame, 62, py - 8, LW - 124, ph + 16);
+      ctx.restore();
+    } else {
+      rr(70, py, LW - 140, ph, 20);
+      ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+    }
     txt(v.boss ? '\u{1F451}' : '\u{1F3C6}', LW / 2, py + 50, '44px serif', '#fff');
     txt(v.boss ? 'FLOOR CLEARED!' : 'VICTORY!', LW / 2, py + 98, '900 28px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
     txt('+' + v.gold + ' gold   •   +' + v.keys + ' \u{1F5DD} key' + (v.keys > 1 ? 's' : ''),
@@ -3537,10 +3637,15 @@ if (!HEADLESS) (function browser() {
         }
         ctx.beginPath(); ctx.arc(cx, cy + 2, 22, 0, 7);
         ctx.fillStyle = 'rgba(20,10,4,0.6)'; ctx.fill();
-        ctx.beginPath(); ctx.arc(cx, cy, 22, 0, 7);
-        ctx.fillStyle = COIN_UI[ck]; ctx.fill();
-        ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(60,40,10,0.75)'; ctx.stroke();
-        txt(COIN_SYMS[ck], cx, cy + 1, '800 19px serif', 'rgba(40,24,4,0.85)');
+        const face2 = pieceArt(ck);
+        if (face2) {
+          ctx.drawImage(face2, cx - 23, cy - 23, 46, 46);
+        } else {
+          ctx.beginPath(); ctx.arc(cx, cy, 22, 0, 7);
+          ctx.fillStyle = COIN_UI[ck]; ctx.fill();
+          ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(60,40,10,0.75)'; ctx.stroke();
+          txt(COIN_SYMS[ck], cx, cy + 1, '800 19px serif', 'rgba(40,24,4,0.85)');
+        }
         txt(COIN_INFO[ck].name, cx, cy + 40, '800 11px Verdana, sans-serif', dim ? '#8a7a6a' : '#ffe9a3');
         txt(COIN_INFO[ck].what, cx, cy + 54, '600 8px Verdana, sans-serif', dim ? '#6a5a4a' : '#c0a880');
         ctx.restore();
@@ -3667,9 +3772,22 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(6,3,10,0.72)'; ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { S.foeInfo = null; } });
     const cw = LW - 96, cx = LW / 2, cy = 250, ch = 340;
-    rr(cx - cw / 2, cy, cw, ch, 18);
-    ctx.fillStyle = 'rgba(24,14,26,0.98)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = e.boss ? '#ffd75e' : e.elite ? '#ff9d3c' : '#c86bff'; ctx.stroke();
+    const fFrame = machArt('frame_tall');
+    if (fFrame) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+      ctx.drawImage(fFrame, cx - cw / 2 - 8, cy - 8, cw + 16, ch + 16);
+      ctx.restore();
+      // a rank-coloured accent ring inside the stone
+      rr(cx - cw / 2 + 10, cy + 10, cw - 20, ch - 20, 12);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = e.boss ? 'rgba(255,215,94,0.5)' : e.elite ? 'rgba(255,157,60,0.5)' : 'rgba(200,107,255,0.4)';
+      ctx.stroke();
+    } else {
+      rr(cx - cw / 2, cy, cw, ch, 18);
+      ctx.fillStyle = 'rgba(24,14,26,0.98)'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = e.boss ? '#ffd75e' : e.elite ? '#ff9d3c' : '#c86bff'; ctx.stroke();
+    }
     // portrait
     const key = foeArtKey(e);
     if (!(key && drawArt(key, cx, cy + 96, (SHEETS[key].bh || 72), 'd', t))) {
@@ -3741,18 +3859,27 @@ if (!HEADLESS) (function browser() {
       }
       ctx.beginPath(); ctx.arc(cx, cy + 2, r, 0, 7);
       ctx.fillStyle = 'rgba(10,5,2,0.7)'; ctx.fill();
-      // a shaded coin face, lit from the upper left
-      const cg = ctx.createRadialGradient(cx - r * 0.4, cy - r * 0.45, r * 0.15, cx, cy, r * 1.15);
-      cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.25, COIN_UI[k]); cg.addColorStop(1, COIN_UI[k]);
-      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7);
-      ctx.fillStyle = cg; ctx.fill();
-      ctx.lineWidth = sel ? 2.5 : 1.2;
-      ctx.strokeStyle = sel ? '#fff' : 'rgba(60,40,10,0.7)';
-      ctx.stroke();
-      // inner ring like a minted coin
-      ctx.beginPath(); ctx.arc(cx, cy, r - 3, 0, 7);
-      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(60,35,8,0.35)'; ctx.stroke();
-      txt(COIN_SYMS[k], cx, cy + 1, (sel ? '800 14px' : '800 11px') + ' serif', 'rgba(40,24,4,0.85)');
+      const face = pieceArt(k);
+      if (face) {
+        // the real minted face from the piece sheet
+        ctx.drawImage(face, cx - r - 1, cy - r - 1, r * 2 + 2, r * 2 + 2);
+        if (sel) {
+          ctx.beginPath(); ctx.arc(cx, cy, r + 0.5, 0, 7);
+          ctx.lineWidth = 2.2; ctx.strokeStyle = '#fff'; ctx.stroke();
+        }
+      } else {
+        // a shaded coin face, lit from the upper left
+        const cg = ctx.createRadialGradient(cx - r * 0.4, cy - r * 0.45, r * 0.15, cx, cy, r * 1.15);
+        cg.addColorStop(0, '#ffffff'); cg.addColorStop(0.25, COIN_UI[k]); cg.addColorStop(1, COIN_UI[k]);
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7);
+        ctx.fillStyle = cg; ctx.fill();
+        ctx.lineWidth = sel ? 2.5 : 1.2;
+        ctx.strokeStyle = sel ? '#fff' : 'rgba(60,40,10,0.7)';
+        ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, r - 3, 0, 7);
+        ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(60,35,8,0.35)'; ctx.stroke();
+        txt(COIN_SYMS[k], cx, cy + 1, (sel ? '800 14px' : '800 11px') + ' serif', 'rgba(40,24,4,0.85)');
+      }
       // count badge
       const bx = cx + r - 1, byy = cy - r + 1;
       ctx.beginPath(); ctx.arc(bx + 5, byy, 7.5, 0, 7);
@@ -3897,8 +4024,19 @@ if (!HEADLESS) (function browser() {
       ctx.scale(pop, pop);
       ctx.rotate(f.spin * f.t);
       const col = LOOT_COL[f.q.t];
-      if (col) {
-        // a proper coin in flight — big enough to follow
+      const fim = f.q.iid ? itemArt(f.q.iid) : pieceArt(f.q.t === 'gold' ? 'coin' : f.q.t);
+      if (fim && f.q.iid) {
+        // the weapon itself flies at the foe
+        const hgt = 34, wdt = imW(fim, hgt);
+        ctx.drawImage(fim, -wdt / 2, -hgt / 2, wdt, hgt);
+      } else if (fim) {
+        // the minted coin spins in flight
+        const flip = Math.max(0.18, Math.abs(Math.cos(f.t * 10)));
+        ctx.save();
+        ctx.scale(1, flip);
+        ctx.drawImage(fim, -13, -13, 26, 26);
+        ctx.restore();
+      } else if (col) {
         ctx.beginPath(); ctx.ellipse(0, 3, 13, 10, 0, 0, 7);
         ctx.fillStyle = 'rgba(20,10,4,0.5)'; ctx.fill();
         ctx.beginPath(); ctx.ellipse(0, 0, 13, 10 * Math.abs(Math.cos(f.t * 10)), 0, 0, 7);
@@ -3924,11 +4062,16 @@ if (!HEADLESS) (function browser() {
   // one little tray/queue token: item icon, coin blob, or fallback glyph
   function lootChip(x, y, key, count) {
     const it = itemById(key);
-    const col = LOOT_COL[key];
-    if (it) txt(it.icon, x, y - 1, '15px serif', '#fff');
-    else if (col) {
+    // sheet art first: item renders upright, coins as tilted little discs
+    const im = it ? itemArt(key) : pieceArt(key === 'gold' ? 'coin' : key);
+    if (im) {
+      const hgt = it ? 18 : 15;
+      const wdt = Math.min(imW(im, hgt), 20);
+      ctx.drawImage(im, x - wdt / 2, y - hgt / 2 - 1, wdt, it ? hgt : hgt * 0.8);
+    } else if (it) txt(it.icon, x, y - 1, '15px serif', '#fff');
+    else if (LOOT_COL[key]) {
       ctx.beginPath(); ctx.ellipse(x, y, 7.5, 6, 0, 0, 7);
-      ctx.fillStyle = col; ctx.fill();
+      ctx.fillStyle = LOOT_COL[key]; ctx.fill();
       ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(60,40,10,0.6)'; ctx.stroke();
     } else txt(LOOT_ICON[key] || '●', x, y - 1, '14px serif', '#fff');
     if (count > 1) txt('×' + count, x + 11, y + 1, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
@@ -4598,9 +4741,17 @@ if (!HEADLESS) (function browser() {
     const rows = isShop ? room.stock.length : 0;
     const ph = isShop ? 78 + rows * 46 + 60 : isForge ? 330 : 220;
     const py = isShop ? 132 : 250;
-    rr(36, py, LW - 72, ph, 18);
-    ctx.fillStyle = 'rgba(22,13,24,0.97)'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+    const mFrame = machArt('frame_tall');
+    if (mFrame) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+      ctx.drawImage(mFrame, 28, py - 8, LW - 56, ph + 16);
+      ctx.restore();
+    } else {
+      rr(36, py, LW - 72, ph, 18);
+      ctx.fillStyle = 'rgba(22,13,24,0.97)'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+    }
     txt(info.icon + '  ' + info.name, LW / 2, py + 34, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     if (isShop) {
       txt('\u{1FA99} ' + S.run.gold + ' gold', LW / 2, py + 60, '800 13px Verdana, sans-serif', '#fff0c0');
