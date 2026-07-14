@@ -893,10 +893,12 @@ function buildQueue(loot) {
   if (hasRelic('echobell') && q.length) q.unshift({ ...q[0] });
   return q;
 }
-// the resolve RAMPS UP: every next piece flies faster than the last, so a
-// thirty-coin barrage ends in a machine-gun crescendo instead of a slog
-function resolveSpeed(qi) {
-  return Math.max(0.12, Math.pow(hasRelic('quicksilver') ? 0.82 : 0.9, qi || 0));
+// the resolve RAMPS UP within a run of the SAME piece: each next coin fires
+// 10% faster than the one before, but the counter RESETS the moment the type
+// changes (gold -> silver -> items each start slow again). Floored at 0.4 so
+// even a long same-type barrage never blurs into a machine-gun
+function resolveSpeed(n) {
+  return Math.max(0.4, Math.pow(hasRelic('quicksilver') ? 0.8 : 0.9, n || 0));
 }
 function startResolve() {
   const B = S.battle;
@@ -906,6 +908,7 @@ function startResolve() {
   B.loot = [];
   B.qi = 0;
   B.goldFired = 0;
+  B.rampN = 0; B.rampType = null;       // the per-type acceleration counter
   B.qt = 0.9;                           // a breath before the first piece flies
   S.tray.items.length = 0;
   if (B.queue.length) S.banner = { txt: 'YOUR TURN!', ttl: 1.0, max: 1.0 };
@@ -1060,9 +1063,12 @@ function battleTick(dt) {
       if (B.qi < B.queue.length) {
         const q = B.queue[B.qi];
         B.qi++;
+        // ramp within a same-type run; restart the count when the type flips
+        if (q.t === B.rampType) B.rampN = (B.rampN || 0) + 1;
+        else { B.rampType = q.t; B.rampN = 0; }
         applyLoot(q);
         if (!S.run || S.victory) return;
-        B.qt = (RESOLVE_DELAY[q.t] || 0.9) * resolveSpeed(B.qi);
+        B.qt = (RESOLVE_DELAY[q.t] || 0.9) * resolveSpeed(B.rampN);
       } else {
         // the Bulwark Ram: your wall itself slams the target as a finisher
         if (hasRelic('bulwarkram') && S.run.block > 0 && S.enemy && S.enemy.hp > 0) {
@@ -1643,7 +1649,7 @@ function step(dt, quiet) {
   if (S.denyT > 0) S.denyT -= dt;
   if (S.hurtT > 0) S.hurtT -= dt;
   S.phase += dt * 2 * Math.PI / MACH.pushPeriod;
-  S.shake = Math.max(0, S.shake - dt * 12);
+  S.shake = Math.max(0, Math.min(8, S.shake) - dt * 16);   // hard cap + brisk decay
 
   // the round machine runs only while the fight is live
   if (S.screen === 'battle' && !quiet) battleTick(dt);
@@ -3257,7 +3263,7 @@ if (!HEADLESS) (function browser() {
               : { x: ANCHORS.enemy.x, y: ANCHORS.enemy.y + 26 };
     const big = q.t === 'weapon' || q.t === 'vial' || q.t === 'frost' || q.t === 'lucky' || q.t === 'blue' || q.t === 'skull';
     // the barrage RAMPS UP: deep into the queue, pieces fly ever faster
-    const spd = Math.max(0.35, resolveSpeed(S.battle ? S.battle.qi : 0));
+    const spd = Math.max(0.4, resolveSpeed(S.battle ? S.battle.rampN : 0));
     const f = {
       x0: LW / 2 + (Math.random() - 0.5) * 70, y0: 664,
       x1: tgt.x, y1: tgt.y,
@@ -3289,10 +3295,11 @@ if (!HEADLESS) (function browser() {
       f.t += dt;
       const k = Math.min(1, f.t / f.dur);
       if (k >= 1) {
-        // IMPACT — burst, ring, and a kick of screen-shake
+        // IMPACT — burst, ring, and a small kick of screen-shake (capped, so
+        // a fast barrage of impacts can't pile up into a seizure)
         burstScreen(f.x1, f.y1, f.q.t === 'skull' ? 'skull' : f.q.t === 'gem' ? 'gem' : 'item');
         RINGS.push({ x: f.x1, y: f.y1, t: 0, col: LOOT_COL[f.q.t] || '#ffe4b0' });
-        S.shake += f.big ? 5 : 2.2;
+        S.shake = Math.min(6, S.shake + (f.big ? 2.4 : 1));
         RFX.splice(i, 1);
         continue;
       }
