@@ -1086,3 +1086,7 @@ attack while heroes are in its room, not a walk cycle.
   Url(s)    : https://opengameart.org/content/lpc-pregnancy-bases-maternity-wear
 
 
+
+===== machine/ =====
+Cabinet dressing (push_sign, jackpot_frame, fascia, tilt_*, end_turn) cropped
+from an AI-generated arcade-cabinet concept supplied by the repo owner.

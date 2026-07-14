@@ -2029,6 +2029,22 @@ if (!HEADLESS) (function browser() {
     if (e.mtype === 'boss' || e.boss) return BOSSES[(S.run.floor - 1) % BOSSES.length].id;
     return SHEETS[e.eid || e.id] ? (e.eid || e.id) : null;
   }
+  // machine dressing cut from the owner's AI-rendered cabinet concept
+  // (art/machine/*). Everything falls back to the painted version.
+  const MACH_ART = {
+    push_sign: 'art/machine/push_sign.png',
+    jackpot: 'art/machine/jackpot_frame.png',
+    fascia: 'art/machine/fascia.png',
+    tilt_l: 'art/machine/tilt_l.png',
+    tilt_f: 'art/machine/tilt_f.png',
+    tilt_r: 'art/machine/tilt_r.png',
+    end_turn: 'art/machine/end_turn.png',
+  };
+  function machArt(key) {
+    const im = art('mach_' + key, MACH_ART[key]);
+    return im._ok ? im : null;
+  }
+
   // Frietkot floor tiles as seamless patterns (halved so the grain reads)
   const FLOOR_PATS = {};
   function floorPattern(tile) {
@@ -2656,9 +2672,36 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawMeter(t) {
+    const fr = S.meter / C.METER_MAX;
+    // the gilded gauge from the cabinet concept, with our LIVE fill laid
+    // into its channel — painted strip as the fallback
+    const frame = machArt('jackpot');
+    if (frame) {
+      const iw = 264, ih = iw * (94 / 360) * 0.62;   // gently flattened to fit the shelf
+      const x0 = LW / 2 - iw / 2, y0 = 197;
+      ctx.drawImage(frame, x0, y0, iw, ih);
+      // the live channel (covers the render's baked-in segments)
+      const cx0 = x0 + iw * 0.085, cw = iw * 0.83;
+      const cy0 = y0 + ih * 0.30, chh = ih * 0.40;
+      rr(cx0, cy0, cw, chh, chh / 2);
+      ctx.fillStyle = 'rgba(16,8,6,0.92)'; ctx.fill();
+      if (fr > 0.01) {
+        const pulse = fr > 0.8 ? 0.25 + 0.2 * Math.sin(t * 10) : 0;
+        rr(cx0 + 1, cy0 + 1, Math.max(4, (cw - 2) * fr), chh - 2, (chh - 2) / 2);
+        const g = ctx.createLinearGradient(cx0, 0, cx0 + cw, 0);
+        g.addColorStop(0, '#ff9d3c'); g.addColorStop(1, '#ff4b2e');
+        ctx.fillStyle = g; ctx.fill();
+        if (pulse > 0) { ctx.fillStyle = 'rgba(255,240,180,' + pulse + ')'; ctx.fill(); }
+      }
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 1;
+      for (let i = 1; i < 6; i++) {
+        const tx2 = cx0 + (cw * i) / 6;
+        ctx.beginPath(); ctx.moveTo(tx2, cy0); ctx.lineTo(tx2, cy0 + chh); ctx.stroke();
+      }
+      return;
+    }
     // slimmed down and tucked over the coin wall — the hand row owns y144 now
     const x = 150, y = 196, w = LW - 300, h = 8;
-    const fr = S.meter / C.METER_MAX;
     rr(x - 3, y - 3, w + 6, h + 6, 7);
     ctx.fillStyle = 'rgba(28,13,19,0.85)'; ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = '#6e4c1c'; ctx.stroke();
@@ -2714,23 +2757,26 @@ if (!HEADLESS) (function browser() {
     }
     ctx.globalAlpha = 1;
     // the coin channel with a CHASING marquee of bulbs — a real arcade top
-    ctx.fillStyle = '#0d1015';
-    rr(58, 184, LW - 116, 15, 7); ctx.fill();
-    ctx.strokeStyle = '#565e69'; ctx.lineWidth = 1.5; ctx.stroke();
-    const nb = 16, chase = Math.floor(t * 9) % nb;
-    for (let i = 0; i < nb; i++) {
-      const bx = 70 + (LW - 140) * (i / (nb - 1));
-      const lit = (i - chase + nb) % nb < 3;
-      if (lit) {
-        ctx.save();
-        ctx.globalCompositeOperation = 'lighter';
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = T.accent;
-        ctx.beginPath(); ctx.arc(bx, 191.5, 5.5, 0, 7); ctx.fill();
-        ctx.restore();
+    // (the gilded JACKPOT gauge takes this spot when its art is in)
+    if (!machArt('jackpot')) {
+      ctx.fillStyle = '#0d1015';
+      rr(58, 184, LW - 116, 15, 7); ctx.fill();
+      ctx.strokeStyle = '#565e69'; ctx.lineWidth = 1.5; ctx.stroke();
+      const nb = 16, chase = Math.floor(t * 9) % nb;
+      for (let i = 0; i < nb; i++) {
+        const bx = 70 + (LW - 140) * (i / (nb - 1));
+        const lit = (i - chase + nb) % nb < 3;
+        if (lit) {
+          ctx.save();
+          ctx.globalCompositeOperation = 'lighter';
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = T.accent;
+          ctx.beginPath(); ctx.arc(bx, 191.5, 5.5, 0, 7); ctx.fill();
+          ctx.restore();
+        }
+        ctx.fillStyle = lit ? '#fff2c8' : '#2a2f38';
+        ctx.beginPath(); ctx.arc(bx, 191.5, 2, 0, 7); ctx.fill();
       }
-      ctx.fillStyle = lit ? '#fff2c8' : '#2a2f38';
-      ctx.beginPath(); ctx.arc(bx, 191.5, 2, 0, 7); ctx.fill();
     }
     const slotY = MACH.tiers[0].slotY;
     const ap = w2s(S.aimX, slotY, MACH.tiers[0].z);
@@ -2832,14 +2878,25 @@ if (!HEADLESS) (function browser() {
       ctx.beginPath(); ctx.moveTo(tl.x, y); ctx.lineTo(tr.x, y); ctx.stroke();
     }
     ctx.globalAlpha = 1;
-    // the PUSH legend, embossed then lit by the theme accent
+    // the PUSH legend: the real neon sign when its art is in, embossed
+    // accent text otherwise
+    const sign = machArt('push_sign');
     const py2 = (tl.y + fl.y) / 2;
-    const pfs = Math.max(10, (fl.y - tl.y) * 0.5);
-    txt('▼ PUSH ▼', LW / 2, py2 + 1, '900 ' + pfs + 'px Verdana, sans-serif', 'rgba(255,255,255,0.35)');
-    ctx.save();
-    ctx.globalAlpha = 0.65 + 0.25 * Math.sin(t * 2.6);
-    txt('▼ PUSH ▼', LW / 2, py2, '900 ' + pfs + 'px Verdana, sans-serif', T.accent);
-    ctx.restore();
+    if (sign) {
+      const sh2 = Math.max(14, (fl.y - tl.y) * 0.8);
+      const sw2 = sh2 * (300 / 66);
+      ctx.save();
+      ctx.globalAlpha = 0.8 + 0.2 * Math.sin(t * 2.6);
+      ctx.drawImage(sign, LW / 2 - sw2 / 2, py2 - sh2 / 2, sw2, sh2);
+      ctx.restore();
+    } else {
+      const pfs = Math.max(10, (fl.y - tl.y) * 0.5);
+      txt('▼ PUSH ▼', LW / 2, py2 + 1, '900 ' + pfs + 'px Verdana, sans-serif', 'rgba(255,255,255,0.35)');
+      ctx.save();
+      ctx.globalAlpha = 0.65 + 0.25 * Math.sin(t * 2.6);
+      txt('▼ PUSH ▼', LW / 2, py2, '900 ' + pfs + 'px Verdana, sans-serif', T.accent);
+      ctx.restore();
+    }
     ctx.restore();
     // face: dark bevel with a gold hairline and a chasing LED rail
     poly([fl, frt, br, bl]);
@@ -3037,6 +3094,18 @@ if (!HEADLESS) (function browser() {
     // gold hairline under the chevrons
     ctx.strokeStyle = 'rgba(232,200,119,0.35)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(l.x - 1, l.y + 13); ctx.lineTo(r.x + 1, r.y + 13); ctx.stroke();
+    // the engraved dragon-vs-knight plate dresses the fascia
+    const plate = machArt('fascia');
+    if (plate) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(l.x, l.y + 14); ctx.lineTo(r.x, r.y + 14);
+      ctx.lineTo(r.x + 4, 646); ctx.lineTo(l.x - 4, 646);
+      ctx.closePath(); ctx.clip();
+      ctx.globalAlpha = 0.92;
+      ctx.drawImage(plate, l.x - 6, l.y + 12, (r.x - l.x) + 12, 646 - (l.y + 12));
+      ctx.restore();
+    }
     // the tray: velvet-dark bowl with a gold rim and an inner glow
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
@@ -3464,21 +3533,36 @@ if (!HEADLESS) (function browser() {
       drawTiltCluster(t);
       const empty = S.run.wallet < 1;
       const pulse = empty ? 1 + Math.sin(t * 6) * 0.05 : 1;
-      const bw = 158 * pulse;
-      const bx2 = LW - 96 - bw / 2;
-      uiBtn(bx2, 596, bw, 40, 'END TURN ▶', () => endRoundNow(),
-            { grad: empty ? ['#ffd75e', '#c98f2a'] : ['#c8a05a', '#8a6a2a'],
-              border: '#fff0c0', col: '#3a2406', font: '900 15px Verdana, sans-serif', r: 15 });
+      const bw = 170 * pulse;
+      const bx2 = LW - 100 - bw / 2;
+      const etArt = machArt('end_turn');
+      if (etArt) {
+        // the neon pill from the cabinet concept
+        const bh2 = bw * (64 / 262);
+        const by2 = 616 - bh2 / 2;
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,60,30,' + (empty ? 0.55 : 0.3) + ')';
+        ctx.shadowBlur = empty ? 18 : 10;
+        ctx.drawImage(etArt, bx2, by2, bw, bh2);
+        ctx.restore();
+        uiButtons.push({ x: bx2, y: by2, w: bw, h: bh2, cb: () => endRoundNow() });
+      } else {
+        uiBtn(bx2, 596, bw, 40, 'END TURN ▶', () => endRoundNow(),
+              { grad: empty ? ['#ffd75e', '#c98f2a'] : ['#c8a05a', '#8a6a2a'],
+                border: '#fff0c0', col: '#3a2406', font: '900 15px Verdana, sans-serif', r: 15 });
+      }
       // a shine sweeps across it, begging to be pressed
+      const shH = etArt ? bw * (64 / 262) : 40;
+      const shY = etArt ? 616 - shH / 2 : 596;
       ctx.save();
-      rr(bx2, 596, bw, 40, 15); ctx.clip();
+      rr(bx2 + 3, shY + 3, bw - 6, shH - 6, 13); ctx.clip();
       const sx2 = bx2 - 60 + ((t * 110) % (bw + 120));
       const sg = ctx.createLinearGradient(sx2 - 22, 0, sx2 + 22, 0);
       sg.addColorStop(0, 'rgba(255,255,255,0)');
       sg.addColorStop(0.5, 'rgba(255,255,255,' + (empty ? 0.4 : 0.22) + ')');
       sg.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = sg;
-      ctx.fillRect(sx2 - 26, 596, 52, 40);
+      ctx.fillRect(sx2 - 26, shY, 52, shH);
       ctx.restore();
     }
     drawSpeedBtn(t);
@@ -3567,18 +3651,18 @@ if (!HEADLESS) (function browser() {
     const kinds = COIN_KINDS.filter(k => (B.hand[k] || 0) > 0);
     if (!kinds.length) return;
     const n = kinds.length;
-    const w = n * 56 + 16;
+    const w = Math.max(n * 56 + 16, 168);
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
-    rr(LW / 2 - w / 2, 144, w, 40, 20);
+    rr(LW / 2 - w / 2, 144, w, 50, 20);
     ctx.fillStyle = 'rgba(14,8,16,0.88)'; ctx.fill();
     ctx.restore();
-    rr(LW / 2 - w / 2, 144, w, 40, 20);
+    rr(LW / 2 - w / 2, 144, w, 50, 20);
     ctx.lineWidth = 1.5;
-    ctx.strokeStyle = lgr('handRim', 0, 144, 0, 184, [[0, 'rgba(232,200,119,0.7)'], [1, 'rgba(122,90,36,0.4)']]);
+    ctx.strokeStyle = lgr('handRim', 0, 144, 0, 194, [[0, 'rgba(232,200,119,0.7)'], [1, 'rgba(122,90,36,0.4)']]);
     ctx.stroke();
     kinds.forEach((k, i) => {
-      const cx = LW / 2 - w / 2 + 36 + i * 56, cy = 164;
+      const cx = LW / 2 - (n * 56) / 2 + 28 + i * 56, cy = 162;
       const sel = B.sel === k;
       const r = sel ? 15 + Math.sin(t * 6) * 0.8 : 12;
       if (sel) {
@@ -3613,11 +3697,11 @@ if (!HEADLESS) (function browser() {
       txt(B.hand[k], bx + 5, byy + 0.5, '900 9px Verdana, sans-serif', '#fff0c0');
       uiButtons.push({ x: cx - 27, y: 140, w: 54, h: 48, cb: () => selectCoin(k) });
     });
-    // what the chosen coin will DO, whispered below the coin wall
+    // what the chosen coin will DO, captioned inside the hand tray
     const info = COIN_INFO[B.sel];
     if (info) {
-      txt(info.name.toUpperCase() + ' — ' + info.what, LW / 2, 218,
-          '700 10px Verdana, sans-serif', 'rgba(255,233,163,0.8)', 'center', { w: 3, col: 'rgba(12,6,10,0.85)' });
+      txt(info.name.toUpperCase() + ' — ' + info.what, LW / 2, 186,
+          '700 8px Verdana, sans-serif', 'rgba(255,233,163,0.85)');
     }
   }
   // TILT! Nudge the pile — three charges a round, spend them or lose them
@@ -3625,12 +3709,25 @@ if (!HEADLESS) (function browser() {
     const B = S.battle;
     if (!B) return;
     const on = B.tilts > 0;
-    txt('TILT ×' + B.tilts, 78, 589, '800 10px Verdana, sans-serif', on ? '#ffe9a3' : '#6a5a4a');
+    txt('TILT ×' + B.tilts, 78, 585, '800 10px Verdana, sans-serif', on ? '#ffe9a3' : '#6a5a4a',
+        'center', { w: 3, col: 'rgba(15,6,8,0.6)' });
+    const arts = [machArt('tilt_l'), machArt('tilt_f'), machArt('tilt_r')];
     [['◀', 'l'], ['▼', 'f'], ['▶', 'r']].forEach(([sym, dir], i) => {
-      uiBtn(16 + i * 46, 596, 40, 40, sym, () => tilt(dir),
-            { grad: on ? ['#6a5a7e', '#3a3048'] : ['#3a3440', '#262230'],
-              border: on ? '#c8b8e0' : '#55506a',
-              col: on ? '#f0e8ff' : '#6a6580', font: '900 15px Verdana, sans-serif', r: 12 });
+      const x = 16 + i * 46;
+      if (arts[i]) {
+        // the gold plates from the cabinet concept
+        ctx.save();
+        if (!on) ctx.globalAlpha = 0.45;
+        ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
+        ctx.drawImage(arts[i], x, 596, 40, 40);
+        ctx.restore();
+        uiButtons.push({ x, y: 596, w: 40, h: 40, cb: () => tilt(dir) });
+      } else {
+        uiBtn(x, 596, 40, 40, sym, () => tilt(dir),
+              { grad: on ? ['#6a5a7e', '#3a3048'] : ['#3a3440', '#262230'],
+                border: on ? '#c8b8e0' : '#55506a',
+                col: on ? '#f0e8ff' : '#6a6580', font: '900 15px Verdana, sans-serif', r: 12 });
+      }
     });
   }
 
