@@ -762,7 +762,7 @@ t.ok(Array.isArray(S.run.pileSave), 'and the machine remembers its pile');
 S.run.hp = 10; S.run.maxHp = 60; S.pPois = 5;
 S.run.room.ents = [{ kind: 'shrine', done: false }];
 DP.interact(0);
-t.eq(S.run.hp, 10 + Math.round(60 * 0.35), 'shrine heals 35% of max HP');
+t.eq(S.run.hp, 10 + Math.round(60 * 0.25), 'shrine heals 25% of max HP');
 t.eq(S.pPois, 0, 'shrine cleanses poison');
 // wheel ghost grants a spin
 S.wheelAnim = null;
