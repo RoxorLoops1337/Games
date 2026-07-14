@@ -302,6 +302,15 @@ t.ok(DP.resolveSpeed(0) > DP.resolveSpeed(1) && DP.resolveSpeed(1) > DP.resolveS
      'each next same-type piece flies a little faster');
 t.eq(DP.resolveSpeed(0), 1, 'a fresh run starts at full delay (no speed-up on the first piece)');
 t.ok(DP.resolveSpeed(200) >= 0.4, 'floored at 0.4 so a long run never machine-guns');
+// the sticky ×1/×2/×3 fast-forward divides every resolve delay
+S.resolveMul = 1;
+const d1 = DP.resolveDelay(0.6, 0);
+t.eq(DP.cycleSpeed(), 2, 'tapping the speed button steps to ×2');
+t.eq(DP.resolveDelay(0.6, 0), d1 / 2, '×2 halves the delay between pieces');
+t.eq(DP.cycleSpeed(), 3, 'again -> ×3');
+t.eq(DP.resolveDelay(0.6, 0), d1 / 3, '×3 thirds it');
+t.eq(DP.cycleSpeed(), 1, 'and it wraps back to ×1');
+t.eq(S.resolveMul, 1, 'the choice is sticky on the state');
 
 // -------- the resolve queue: ordered, one piece at a time --------
 {
@@ -437,11 +446,47 @@ t.eq(S.enemy.pois, 2, 'enemy poison decays');
 t.eq(S.run.hp, phP - 2, 'your poison ticks too');
 t.eq(S.pPois, 1, 'and decays');
 t.eq(S.run.block, 5, 'poison seeps straight through block');
-// regen knits at round end
-S.enemy.trait = 'regen'; S.enemy.hp = 100; S.enemy.pois = 0;
+// regen knits at round end (now a DEFENSIVE mechanic)
+S.enemy.def = 'regen'; S.enemy.hp = 100; S.enemy.pois = 0;
 DP.endRoundTicks();
-t.eq(S.enemy.hp, 103, 'a regenerating foe knits +3 at round end');
-S.enemy.trait = null;
+t.eq(S.enemy.hp, 100 + C.REGEN_HP, 'a regenerating foe knits back at round end');
+S.enemy.def = null;
+
+// -------- the defensive mechanics: each wants a different tactic --------
+const savedFoes0 = S.foes, savedEnemy0 = S.enemy;
+{
+  const mk = (def) => { const e = { hp: 100, maxHp: 100, def, pois: 0, braced: false, hitT: 0 }; return e; };
+  S.foes = [];  // no pack ward bleeding in
+  // GEL: every hit capped, but poison bypasses
+  let g = mk('gel'); S.foes = [g]; S.enemy = g;
+  t.eq(DP.dmgFoe(g, 9), C.GEL_CAP, 'gel caps a big hit at ' + C.GEL_CAP);
+  t.eq(DP.dmgFoe(g, 1), 1, 'a 1-damage coin still lands its 1');
+  const gp = g.hp; DP.dmgFoe(g, 6, 'pois');
+  t.eq(g.hp, gp - 6, 'but POISON pours straight through the gel');
+  // ARMOR: flat absorb, chip coins bounce off
+  let a = mk('armor'); S.foes = [a]; S.enemy = a;
+  t.eq(DP.dmgFoe(a, 1), 0, 'armour swallows a lone gold coin whole');
+  t.eq(DP.dmgFoe(a, 5), 5 - C.ARMOR, 'a big hit gets through minus the armour');
+  const ap = a.hp; DP.dmgFoe(a, 4, 'pois');
+  t.eq(a.hp, ap - 4, 'poison ignores armour too');
+  // THICK: immune to poison, full physical
+  let k = mk('thick'); S.foes = [k]; S.enemy = k;
+  const kp = k.hp;
+  t.eq(DP.dmgFoe(k, 8, 'pois'), 0, 'a thick hide shrugs off poison entirely');
+  t.eq(k.hp, kp, 'no HP lost to venom');
+  t.eq(DP.dmgFoe(k, 8), 8, 'but raw physical lands in full');
+  // WARD: protects the WHOLE pack; killing the warder drops the guard
+  let totem = mk('ward'), grunt = mk(null);
+  S.foes = [totem, grunt]; S.enemy = grunt;
+  t.eq(DP.dmgFoe(grunt, 5), 5 - C.WARD, 'the ward shields even the grunt beside the totem');
+  totem.hp = 0;   // totem falls
+  t.eq(DP.dmgFoe(grunt, 5), 5, 'with the totem down, the ward is gone');
+}
+// restore the suite's original battle foe (keeps its room entIdx linkage)
+S.foes = savedFoes0; S.enemy = savedEnemy0;
+S.enemy.hp = S.enemy.maxHp = 500;
+S.enemy.def = null; S.enemy.trait = null; S.enemy.braced = false;
+S.battle.target = 0;
 
 // -------- enemy INTENTS: the telegraphed moves play out --------
 S.run.hp = 200; S.run.maxHp = 200; S.run.block = 0;

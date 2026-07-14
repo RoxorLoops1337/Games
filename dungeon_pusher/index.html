@@ -71,6 +71,11 @@ const C = {
   TILTS: 3,                             // machine tilts per round
   BANK_MAX: 3,                          // tray pieces you may hold for next round
   ITEM_CAP: 12,                         // max arsenal items seeded per battle
+  // monster defensive mechanics — each demands a different tactic
+  GEL_CAP: 2,                           // ooze: every single hit is capped at this
+  ARMOR: 2,                             // bone armour: flat absorb per non-poison hit
+  WARD: 2,                              // totem ward: flat DR over the whole pack
+  REGEN_HP: 3,                          // knit back per round
 };
 // your purse starts here; heroes add their signature pair on top
 const START_PURSE = { coin: 5, silver: 5, green: 0, red: 0, blue: 0, lucky: 0 };
@@ -205,20 +210,28 @@ function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
 // art/CREDITS.txt); ids double as art sheet keys, icons are the fallback.
 // HP retuned (~x2.4) for the purse-as-deck era: the whole purse is dealt every
 // round, so a patient pusher earns far more per round than the old fixed purse
+// Each foe pairs an ATTACK rider (trait: how it hurts you) with a DEFENSIVE
+// mechanic (def: how it takes damage) so no two want the same tactic:
+//   gel   — every hit capped at GEL_CAP; chip it down or POISON it
+//   armor — absorbs ARMOR off each hit; gold coins bounce, bring poison/big hits
+//   thick — IMMUNE to poison; answer with raw physical damage
+//   regen — knits HP each round; out-tick it with poison or burst it down
+//   ward  — projects DR over the whole pack; punch through or focus it first
 const ENEMIES = [
-  { id: 'orc',      icon: '\u{1F9CC}', name: 'Orc Grunt',       hp: 28, atk: 2, trait: null,    gold: 8 },
-  { id: 'smasher',  icon: '\u{1F47A}', name: 'Goblin Smasher',  hp: 24, atk: 1, trait: 'fast',  gold: 9 },
-  { id: 'goblin',   icon: '\u{1F47A}', name: 'Goblin Mugger',   hp: 36, atk: 3, trait: 'thief', gold: 14 },
-  { id: 'slime',    icon: '\u{1F7E2}', name: 'Gel Cube',        hp: 31, atk: 2, trait: 'venom', gold: 12 },
-  { id: 'totem',    icon: '\u{1F5FF}', name: 'War Totem',       hp: 38, atk: 3, trait: 'curse', gold: 15 },
-  { id: 'skeleton', icon: '\u{1F480}', name: 'Skeleton Guard',  hp: 48, atk: 4, trait: null,    gold: 13 },
-  { id: 'revenant', icon: '\u{1F9DF}', name: 'Bone Revenant',   hp: 36, atk: 3, trait: 'regen', gold: 14 },
-  { id: 'ogre',     icon: '\u{1F479}', name: 'Ogre Brute',      hp: 72, atk: 5, trait: 'tough', gold: 18 },
+  { id: 'orc',      icon: '\u{1F9CC}', name: 'Orc Grunt',       hp: 28, atk: 2, trait: null,    def: null,    gold: 8 },
+  { id: 'smasher',  icon: '\u{1F47A}', name: 'Goblin Smasher',  hp: 24, atk: 1, trait: 'fast',  def: null,    gold: 9 },
+  { id: 'goblin',   icon: '\u{1F47A}', name: 'Goblin Mugger',   hp: 34, atk: 3, trait: 'thief', def: null,    gold: 14 },
+  // the mechanic-bearing foes carry less raw HP — their gimmick IS their bulk
+  { id: 'slime',    icon: '\u{1F7E2}', name: 'Gel Cube',        hp: 22, atk: 2, trait: 'venom', def: 'gel',   gold: 12 },
+  { id: 'totem',    icon: '\u{1F5FF}', name: 'War Totem',       hp: 28, atk: 3, trait: 'curse', def: 'ward',  gold: 15 },
+  { id: 'skeleton', icon: '\u{1F480}', name: 'Skeleton Guard',  hp: 33, atk: 4, trait: null,    def: 'armor', gold: 13 },
+  { id: 'revenant', icon: '\u{1F9DF}', name: 'Bone Revenant',   hp: 28, atk: 3, trait: null,    def: 'regen', gold: 14 },
+  { id: 'ogre',     icon: '\u{1F479}', name: 'Ogre Brute',      hp: 58, atk: 5, trait: null,    def: 'thick', gold: 18 },
 ];
 const BOSSES = [
-  { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 120, atk: 5, trait: 'curse', gold: 60 },
-  { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 155, atk: 6, trait: 'regen', gold: 80 },
-  { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 190, atk: 7, trait: 'venom', gold: 100 },
+  { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 104, atk: 5, trait: 'curse', def: 'armor', gold: 60 },
+  { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 138, atk: 6, trait: null,    def: 'regen', gold: 80 },
+  { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 168, atk: 7, trait: 'venom', def: 'thick', gold: 100 },
 ];
 // ------------------------------------------------------------------ heroes
 // Four adventurers to pick from (sprites borrowed from NRFH's hero classes);
@@ -231,8 +244,19 @@ const HEROES = [
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
 const TRAIT_TXT = {
-  fast: 'strikes twice a round', tough: 'thick hide', thief: 'steals coins from your purse',
-  venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field', regen: 'regenerates each round',
+  fast: 'strikes twice a round', thief: 'steals coins from your purse',
+  venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field',
+};
+// the defensive mechanic, spelled out on the foe's panel
+const DEF_TXT = {
+  gel: 'gelatinous — every hit capped at ' + 2, armor: 'armoured — absorbs ' + 2 + ' off each hit',
+  thick: 'thick hide — IMMUNE to poison', regen: 'regenerates each round',
+  ward: 'warded — protects the pack (−' + 2 + ' dmg)',
+};
+// a compact badge for each foe so its mechanic reads at a glance
+const DEF_BADGE = {
+  gel: '\u{1F9EB} gel', armor: '\u{1F6E1}\u{FE0F}' + 2, thick: '☠\u{FE0F}\u{1F6AB}',
+  regen: '♻\u{FE0F}', ward: '\u{1F531}',
 };
 
 // room inhabitants for the top-down crawl
@@ -251,7 +275,7 @@ const S = {
   coins: [], floats: [], parts: [], rain: [],
   meter: 0,
   time: 0, phase: 0, cd: 0,
-  shake: 0, aimX: 50, mute: false,
+  shake: 0, aimX: 50, mute: false, resolveMul: 1,   // sticky resolve fast-forward (×1/2/3)
   dropped: 0, collected: 0,
   banner: null, trayPile: 0, denyT: 0, hurtT: 0,
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
@@ -289,7 +313,7 @@ let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() 
 function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
-      v: 1, mute: S.mute, best: S.best, heroPick: S.heroPick,
+      v: 1, mute: S.mute, resolveMul: S.resolveMul, best: S.best, heroPick: S.heroPick,
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -307,6 +331,7 @@ function load() {
     const d = JSON.parse(localStorage.getItem(C.SAVE_KEY));
     if (!d) return;
     S.mute = !!d.mute;
+    if (d.resolveMul === 2 || d.resolveMul === 3) S.resolveMul = d.resolveMul;
     if (d.best && typeof d.best === 'object') {
       S.best = { floor: d.best.floor || 0, depth: d.best.depth || 0,
                  kills: d.best.kills || 0, gold: d.best.gold || 0 };
@@ -411,14 +436,30 @@ function weaponDmg(base) {
   if (hasRelic('whet')) d = Math.round(d * 1.3);
   return d;
 }
-// hurt ONE foe (a braced foe shrugs off half — unless the hit pierces)
+// any living warded foe throws a damage-reducing ward over the WHOLE pack —
+// so killing the totem is how you drop everyone's guard
+function packWard() {
+  return (S.foes && S.foes.some(f => f.hp > 0 && f.def === 'ward')) ? C.WARD : 0;
+}
+// hurt ONE foe, routed through its defensive mechanic. Poison is the universal
+// solvent (bypasses gel/armor/ward) — but 'thick' hides shrug poison off entirely
 function dmgFoe(e, n, src, pierce) {
   if (!S.run || !e || e.hp <= 0) return 0;
+  const poison = src === 'pois';
   n = Math.max(1, Math.round(n));
-  if (e.braced && !pierce) n = Math.max(1, Math.ceil(n / 2));
+  if (poison) {
+    if (e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
+  } else {
+    if (e.def === 'gel') n = Math.min(n, C.GEL_CAP);            // ooze caps the hit
+    const absorb = (e.def === 'armor' ? C.ARMOR : 0) + packWard();
+    if (absorb) n -= absorb;                                    // armour / ward soak
+    if (e.braced && !pierce) n = Math.ceil(n / 2);              // its round-stance
+  }
+  n = Math.round(n);
+  if (n <= 0) { floatAnchor('BLOCKED', 'enemy', '#c8d6e8'); e.hitT = 0.15; return 0; }
   e.hp -= n;
   e.hitT = 0.3;
-  floatAnchor('-' + n, 'enemy', src === 'pois' ? '#b8f26b' : '#ff8a6b', n >= 8);
+  floatAnchor('-' + n, 'enemy', poison ? '#b8f26b' : '#ff8a6b', n >= 8);
   if (e.hp <= 0) foeDown(e);
   return n;
 }
@@ -703,13 +744,14 @@ function tilt(dir) {
   const B = S.battle;
   if (!B || B.phase !== 'drop' || B.tilts < 1) return false;
   B.tilts--;
+  // a gentler nudge — enough to shift the pile, not to fling it
   for (const c of S.coins) {
     if (c.st !== 'plat') continue;
-    if (dir === 'l') c.vx -= 20 + rng() * 8;
-    else if (dir === 'r') c.vx += 20 + rng() * 8;
-    else { c.vy += 11 + rng() * 5; c.vx += (rng() - 0.5) * 6; }
+    if (dir === 'l') c.vx -= 10 + rng() * 4;
+    else if (dir === 'r') c.vx += 10 + rng() * 4;
+    else { c.vy += 6 + rng() * 3; c.vx += (rng() - 0.5) * 4; }
   }
-  S.shake += 4;
+  S.shake += 2.5;
   SND.thud();
   return true;
 }
@@ -767,7 +809,8 @@ function mkEnemy(type, eid) {
     id: base.id, icon: base.icon, name: (type === 'elite' ? 'ELITE ' : '') + base.name,
     hp, maxHp: hp,
     atk: Math.round(base.atk * mult * (type === 'elite' ? 1.3 : 1)),
-    trait: base.trait, gold: Math.round(base.gold * mult * (type === 'elite' ? 1.8 : 1)),
+    trait: base.trait, def: base.def || null,
+    gold: Math.round(base.gold * mult * (type === 'elite' ? 1.8 : 1)),
     boss: type === 'boss', elite: type === 'elite',
     stunned: 0, pois: 0, hitT: 0, lungeT: 0,
   };
@@ -900,6 +943,15 @@ function buildQueue(loot) {
 function resolveSpeed(n) {
   return Math.max(0.4, Math.pow(hasRelic('quicksilver') ? 0.8 : 0.9, n || 0));
 }
+// the sticky fast-forward: ×1 / ×2 / ×3, applied to every resolve delay
+function resolveDelay(base, n) {
+  return base * resolveSpeed(n) / (S.resolveMul || 1);
+}
+function cycleSpeed() {
+  S.resolveMul = S.resolveMul >= 3 ? 1 : (S.resolveMul || 1) + 1;
+  save();
+  return S.resolveMul;
+}
 function startResolve() {
   const B = S.battle;
   if (!B || B.phase !== 'drop') return false;
@@ -909,7 +961,7 @@ function startResolve() {
   B.qi = 0;
   B.goldFired = 0;
   B.rampN = 0; B.rampType = null;       // the per-type acceleration counter
-  B.qt = 0.9;                           // a breath before the first piece flies
+  B.qt = 0.9 / (S.resolveMul || 1);     // a breath before the first piece flies
   S.tray.items.length = 0;
   if (B.queue.length) S.banner = { txt: 'YOUR TURN!', ttl: 1.0, max: 1.0 };
   return true;
@@ -1017,9 +1069,9 @@ function endRoundTicks() {
       if (!hasRelic('plaguelord')) e.pois--;   // the Plague Lord's rot never fades
       dmgFoe(e, s, 'pois');
     }
-    if (e.hp > 0 && e.trait === 'regen' && e.hp < e.maxHp) {
-      e.hp = Math.min(e.maxHp, e.hp + 3);
-      floatAnchor('+3', 'enemy', '#7ee787');
+    if (e.hp > 0 && e.def === 'regen' && e.hp < e.maxHp) {
+      e.hp = Math.min(e.maxHp, e.hp + C.REGEN_HP);
+      floatAnchor('+' + C.REGEN_HP, 'enemy', '#7ee787');
     }
   }
   if (S.run && S.pPois > 0) {
@@ -1068,7 +1120,7 @@ function battleTick(dt) {
         else { B.rampType = q.t; B.rampN = 0; }
         applyLoot(q);
         if (!S.run || S.victory) return;
-        B.qt = (RESOLVE_DELAY[q.t] || 0.9) * resolveSpeed(B.rampN);
+        B.qt = resolveDelay(RESOLVE_DELAY[q.t] || 0.9, B.rampN);
       } else {
         // the Bulwark Ram: your wall itself slams the target as a finisher
         if (hasRelic('bulwarkram') && S.run.block > 0 && S.enemy && S.enemy.hp > 0) {
@@ -1858,8 +1910,8 @@ window.DP = {
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer,
-  rollRelicDrop, bankMax, goldDmg, resolveSpeed, RARITY,
-  COIN_KINDS, COIN_INFO, START_PURSE,
+  rollRelicDrop, bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, packWard, RARITY,
+  COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
 };
 
 load();
@@ -2410,6 +2462,10 @@ if (!HEADLESS) (function browser() {
           '800 ' + (n === 1 ? 9 : 8) + 'px Verdana, sans-serif', '#ffe8ec');
       if (e.pois > 0) txt('☠' + e.pois, cx - bw / 2 - 13, by + 4, '800 10px Verdana, sans-serif', '#b8f26b');
       if (e.braced) txt('\u{1F6E1}', cx + bw / 2 + 11, by + 4, '11px serif', '#fff');
+      // its defensive mechanic, badged under the bar (packs); the lone foe
+      // gets the full description in its header instead
+      if (e.def && n > 1) txt(DEF_BADGE[e.def], cx, by + 13, '800 8px Verdana, sans-serif',
+                              '#d8c8f0', 'center', { w: 2, col: 'rgba(10,5,12,0.9)' });
       const intentTxt = e.stunned > 0 ? '❄ skips turn'
         : it.t === 'heavy' ? '\u{1F4A5} ' + (e.atk * 2) + (e.trait === 'fast' ? '×2' : '')
         : it.t === 'brace' ? '\u{1F6E1} braces'
@@ -2432,9 +2488,12 @@ if (!HEADLESS) (function browser() {
       if (tgt && n === 1) {
         txt(tgt.name, LW - 156, 30, '900 13px Georgia, serif', tgt.boss ? '#ffd75e' : '#e8dce8',
             'center', { w: 4, col: 'rgba(20,8,24,0.9)' });
-        if (tgt.trait) txt(TRAIT_TXT[tgt.trait], LW - 156, 43, '600 8px Verdana, sans-serif', '#9a8aa0');
+        if (tgt.def) txt(DEF_BADGE[tgt.def] + ' ' + DEF_TXT[tgt.def], LW - 156, 43,
+                         '600 8px Verdana, sans-serif', '#c3a8e0');
+        if (tgt.trait) txt(TRAIT_TXT[tgt.trait], LW - 156, tgt.def ? 54 : 43, '600 8px Verdana, sans-serif', '#9a8aa0');
       } else if (tgt && tgt.hp > 0) {
-        txt('target: ' + tgt.name, LW / 2 + 20, 133, '800 10px Georgia, serif', '#ffd75e',
+        // up top, clear of the per-foe mechanic badges below the bars
+        txt('\u{1F3AF} ' + tgt.name, LW / 2, 15, '800 10px Georgia, serif', '#ffd75e',
             'center', { w: 3, col: 'rgba(20,8,24,0.9)' });
       }
       // round chip
@@ -2905,6 +2964,16 @@ if (!HEADLESS) (function browser() {
     }
   }
 
+  // sticky resolve fast-forward: tap to cycle ×1 / ×2 / ×3 (persists)
+  function drawSpeedBtn(t) {
+    const mul = S.resolveMul || 1;
+    const live = S.battle && S.battle.phase !== 'drop' && !S.victory;
+    uiBtn(LW - 86, 148, 72, 24, '\u{23E9} ×' + mul, () => cycleSpeed(),
+      { r: 12, grad: live ? ['#7e6a3a', '#4a3a1a'] : ['#3a3440', '#262230'],
+        border: mul > 1 ? '#ffd75e' : '#7d5a24',
+        col: mul > 1 ? '#ffe9a3' : '#b8a882', font: '900 13px Verdana, sans-serif' });
+  }
+
   function drawBanner(t) {
     if (!S.banner) return;
     const b = S.banner;
@@ -3149,6 +3218,7 @@ if (!HEADLESS) (function browser() {
             { grad: empty ? ['#ffd75e', '#c98f2a'] : ['#c8a05a', '#8a6a2a'],
               border: '#fff0c0', col: '#3a2406', font: '900 15px Verdana, sans-serif', r: 15 });
     }
+    drawSpeedBtn(t);
     drawHUD(t);
     drawVignette(0.55);
     // hurt vignette
@@ -3263,7 +3333,7 @@ if (!HEADLESS) (function browser() {
               : { x: ANCHORS.enemy.x, y: ANCHORS.enemy.y + 26 };
     const big = q.t === 'weapon' || q.t === 'vial' || q.t === 'frost' || q.t === 'lucky' || q.t === 'blue' || q.t === 'skull';
     // the barrage RAMPS UP: deep into the queue, pieces fly ever faster
-    const spd = Math.max(0.4, resolveSpeed(S.battle ? S.battle.rampN : 0));
+    const spd = Math.max(0.4, resolveSpeed(S.battle ? S.battle.rampN : 0)) / (S.resolveMul || 1);
     const f = {
       x0: LW / 2 + (Math.random() - 0.5) * 70, y0: 664,
       x1: tgt.x, y1: tgt.y,
