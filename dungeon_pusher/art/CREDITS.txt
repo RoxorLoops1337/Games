@@ -1092,3 +1092,7 @@ Cabinet dressing cropped from AI-generated concept sheets supplied by the
 repo owner (runic-dwarven set): push_sign, jackpot_frame (lightning tube),
 fascia (runic banner), tilt_*, end_turn (dragon scroll), plat_stone,
 backwall, cab_wood, tray_face, torch_l/r.
+Round 3 (green-screen sheets, chroma-keyed): pieces/ (six engraved coin
+faces, gem, bag, skull, chest, seven arsenal items) and UI chrome
+(pill_idle/glow, btn_square, frame_wide, frame_stage, frame_tall,
+rail_wood).
