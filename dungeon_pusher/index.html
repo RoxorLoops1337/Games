@@ -102,7 +102,7 @@ const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42
 // GOLD RUSH pusher so the proven physics constants carry over.
 const MACH = {
   coin: { r: 4.6, style: 'gold', sym: '¢' },
-  pushPeriod: 3.4, maxCoins: 210,   // headroom for the floor-persistent pile + a fast hold
+  pushPeriod: 2.83, maxCoins: 210,  // ~20% quicker slide; headroom for the floor-persistent pile
   tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
   lipW: 7, lipH: 2.2,
 };
@@ -276,6 +276,7 @@ const S = {
   meter: 0,
   time: 0, phase: 0, cd: 0,
   shake: 0, aimX: 50, mute: false, resolveMul: 1,   // sticky resolve fast-forward (×1/2/3)
+  turbo: false,                        // sticky TURBO: drop coins at double speed
   dropped: 0, collected: 0,
   banner: null, trayPile: 0, denyT: 0, hurtT: 0,
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
@@ -313,7 +314,7 @@ let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() 
 function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
-      v: 1, mute: S.mute, resolveMul: S.resolveMul, best: S.best, heroPick: S.heroPick,
+      v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -332,6 +333,7 @@ function load() {
     if (!d) return;
     S.mute = !!d.mute;
     if (d.resolveMul === 2 || d.resolveMul === 3) S.resolveMul = d.resolveMul;
+    S.turbo = !!d.turbo;
     if (d.best && typeof d.best === 'object') {
       S.best = { floor: d.best.floor || 0, depth: d.best.depth || 0,
                  kills: d.best.kills || 0, gold: d.best.gold || 0 };
@@ -733,7 +735,8 @@ function drop(x) {
   B.hand[kind]--;
   syncWallet();
   autoSel();
-  S.cd = C.DROP_CD; S.dropped++; S.meter++;
+  S.cd = C.DROP_CD * (S.turbo ? 0.5 : 1);   // TURBO halves the cooldown -> double drops
+  S.dropped++; S.meter++;
   SND.slot();
   if (S.meter >= C.METER_MAX) frenzy();
   return true;
@@ -2964,6 +2967,14 @@ if (!HEADLESS) (function browser() {
     }
   }
 
+  // sticky TURBO: drop coins at double speed (mirrors the resolve-speed pill)
+  function drawTurboBtn(t) {
+    const on = S.turbo;
+    uiBtn(14, 148, 96, 24, on ? '\u{26A1} TURBO' : '\u{26A1} turbo', () => { S.turbo = !S.turbo; save(); },
+      { r: 12, grad: on ? ['#c85a2a', '#7a2e10'] : ['#3a3440', '#262230'],
+        border: on ? '#ffb072' : '#7d5a24',
+        col: on ? '#ffe0c0' : '#b8a882', font: '900 12px Verdana, sans-serif' });
+  }
   // sticky resolve fast-forward: tap to cycle ×1 / ×2 / ×3 (persists)
   function drawSpeedBtn(t) {
     const mul = S.resolveMul || 1;
@@ -3219,6 +3230,7 @@ if (!HEADLESS) (function browser() {
               border: '#fff0c0', col: '#3a2406', font: '900 15px Verdana, sans-serif', r: 15 });
     }
     drawSpeedBtn(t);
+    if (phase === 'drop' && !S.victory) drawTurboBtn(t);
     drawHUD(t);
     drawVignette(0.55);
     // hurt vignette
