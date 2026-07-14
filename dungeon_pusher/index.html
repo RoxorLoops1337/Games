@@ -97,7 +97,7 @@ const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42
 // GOLD RUSH pusher so the proven physics constants carry over.
 const MACH = {
   coin: { r: 4.6, style: 'gold', sym: '¢' },
-  pushPeriod: 3.4, maxCoins: 170,
+  pushPeriod: 3.4, maxCoins: 210,   // headroom for the floor-persistent pile + a fast hold
   tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
   lipW: 7, lipH: 2.2,
 };
@@ -683,12 +683,16 @@ function drop(x) {
   autoSel();
   const kind = B.sel;
   if ((B.hand[kind] || 0) < 1) { S.denyT = 0.6; SND.deny(); return false; }
+  // spawn FIRST — if the machine is packed to its cap, hold the coin back
+  // in your hand rather than silently swallowing it (and don't burn the
+  // cooldown, so the held stream resumes the instant the field clears)
+  const ax = Math.max(8, Math.min(92, x === undefined ? S.aimX : x));
+  const c = spawnDrop(ax + (rng() - 0.5) * 2, MACH.tiers[0].slotY + (rng() - 0.5) * 5, kind);
+  if (!c) { S.denyT = 0.35; return false; }
   B.hand[kind]--;
   syncWallet();
   autoSel();
   S.cd = C.DROP_CD; S.dropped++; S.meter++;
-  const ax = Math.max(8, Math.min(92, x === undefined ? S.aimX : x));
-  spawnDrop(ax + (rng() - 0.5) * 2, MACH.tiers[0].slotY + (rng() - 0.5) * 5, kind);
   SND.slot();
   if (S.meter >= C.METER_MAX) frenzy();
   return true;
@@ -4162,7 +4166,8 @@ if (!HEADLESS) (function browser() {
       if (S.victory) S.victory.t += dt;
       if (held && !S.victory) {
         holdT += dt;
-        if (holdT > 0.45 && S.cd <= 0) drop(S.aimX);
+        // a short warm-up, then a steady pour paced by the drop cooldown
+        if (holdT > 0.22 && S.cd <= 0) drop(S.aimX);
       }
     } else {
       // keep light UI timers alive outside the machine

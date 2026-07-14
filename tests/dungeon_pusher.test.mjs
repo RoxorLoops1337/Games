@@ -260,6 +260,24 @@ let landed = false;
 for (let i = 0; i < 60 * 6 && !landed; i++) { DP.tick(DT); if (dropped.st === 'plat') landed = true; }
 t.ok(landed, 'dropped coin lands on the platform (or the shelf)');
 
+// -------- a PACKED machine holds your coin back instead of eating it --------
+// (the bug: holding to drop at the cap silently drained the hand)
+{
+  while (S.coins.length < DP.MACH.maxCoins) DP.place(10 + Math.random() * 80, Math.random() * 80, 'coin', 0, 'plat');
+  S.cd = 0;
+  S.battle.hand = { coin: 5, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+  S.battle.sel = 'coin';
+  const hand0 = S.battle.hand.coin, coins0 = S.coins.length;
+  t.ok(!DP.drop(50), 'a full machine refuses the drop');
+  t.eq(S.battle.hand.coin, hand0, 'and the coin stays in your hand — nothing lost');
+  t.eq(S.coins.length, coins0, 'no phantom coin spawned over the cap');
+  t.eq(S.cd, 0, 'the cooldown is not burned, so the pour resumes the instant the field clears');
+  // clear a slot -> the very next drop goes through
+  S.coins.pop();
+  t.ok(DP.drop(50), 'freeing a slot lets the held coin fall');
+  t.eq(S.battle.hand.coin, hand0 - 1, 'now exactly one coin leaves the hand');
+}
+
 // -------- the tray COLLECTS: nothing fires during the drop phase --------
 DP.srand(9);
 S.coins.length = 0; S.battle.loot.length = 0; S.battle.phase = 'drop';
