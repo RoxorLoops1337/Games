@@ -1354,7 +1354,8 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.interact(2);
   frames(10);                                     // chest toast
   D.interact(1);
-  frames(10);                                     // shop modal
+  frames(10);                                     // shop modal (full 8-item shelf)
+  t.ok(D.S.room && D.S.room.stock.length >= 7, 'the render-pass shop shows a tall shelf');
   D.closeModal();
   D.S.run.room.ents[1] = { kind: 'smith', done: false, px: 0.7, py: 0.3 };
   D.interact(1);
@@ -1365,6 +1366,11 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.interact(0);                                  // fight the orc
   D.S.enemy.hp = D.S.enemy.maxHp = 500;
   frames(10);                                     // hand selector row + tilt cluster
+  D.S.foeInfo = 0;                                // pop the bestiary info card
+  frames(8);
+  t.eq(D.S.foeInfo, 0, 'tapping a foe opens its info card');
+  D.S.foeInfo = null;
+  frames(4);
   for (let i = 0; i < 4; i++) { D.S.cd = 0; D.drop(20 + i * 16); frames(24); }   // spend part of the hand
   D.tilt('l');
   frames(20);                                     // the pile lurches

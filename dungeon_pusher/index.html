@@ -283,6 +283,7 @@ const S = {
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
+  foeInfo: null,                       // index of the foe whose bestiary card is open
   enemy: null,                         // the TARGETED foe (points into S.foes)
   battle: null,                        // round machine {round, phase, hand, loot, ...}
   victory: null,                       // battle-won overlay {t, gold, keys, offer}
@@ -877,6 +878,7 @@ function startBattle(type, entIdx, eid, extras) {
   S.enemy = S.foes[0];
   S.screen = 'battle';
   S.victory = null;
+  S.foeInfo = null;
   S.run.windUsed = false;
   S.pPois = 0;
   dealHand();
@@ -1211,7 +1213,7 @@ function leaveBattle() {
   // the machine remembers this floor's pile — stash wisely
   S.run.pileSave = serializePile();
   S.run.pileFloor = S.run.floor;
-  S.victory = null; S.foes = []; S.enemy = null; S.battle = null; S.run.battleEnt = null;
+  S.victory = null; S.foes = []; S.foeInfo = null; S.enemy = null; S.battle = null; S.run.battleEnt = null;
   S.coins.length = 0;
   if (boss) {              // the lair opens: stairs down appear where it fell
     S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
@@ -2487,11 +2489,15 @@ if (!HEADLESS) (function browser() {
           '800 ' + (n === 1 ? 11 : 9) + 'px Verdana, sans-serif',
           e.stunned > 0 ? '#8be7ff' : it.t === 'heavy' ? '#ff5a4e' : it.t === 'brace' ? '#c8d6e8' : it.t === 'curse' ? '#c86bff' : '#ffb4a8',
           'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
-      // tap to target
-      if (n > 1 && S.battle && !S.victory) {
+      // tap a foe to inspect it (and, in a pack, aim your gold at it)
+      if (S.battle && !S.victory) {
         const ii = i;
-        uiButtons.push({ x: cx - 52, y: 16, w: 104, h: 120, cb: () => setTarget(ii) });
+        uiButtons.push({ x: cx - 52, y: 16, w: 104, h: 120, cb: () => { if (n > 1) setTarget(ii); S.foeInfo = ii; } });
       }
+    }
+    // a gentle nudge that the foes are tappable
+    if (n && S.battle && !S.victory && S.foeInfo === null) {
+      txt('\u{1F449} tap a foe for info', LW - 156, n === 1 ? 128 : 12, '600 8px Verdana, sans-serif', '#7a6a80');
     }
     if (n) {
       const tgt = S.enemy;
@@ -3252,7 +3258,66 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
     }
     drawBanner(t);
+    drawFoeInfo(t);              // the inspect card rides on top of the intro banner
     drawVictory(t);
+  }
+
+  // tap a monster mid-fight to read its bestiary card: stats, its mechanic,
+  // and the tactic that beats it
+  const DEF_TIP = {
+    gel: 'chip it with many small coins, or POISON it', armor: 'gold bounces — bring poison, lucky or weapons',
+    thick: 'poison does nothing; answer with raw damage', regen: 'out-tick it with poison, or burst it down fast',
+    ward: 'punch through with big hits — or kill it first',
+  };
+  const TRAIT_ATK = {
+    fast: 'strikes TWICE each turn', thief: 'steals coins from next round',
+    venom: 'poisons you when it hits', curse: 'rains cursed skulls onto the field',
+  };
+  function drawFoeInfo(t) {
+    if (S.foeInfo === null || !S.foes || !S.foes[S.foeInfo]) return;
+    const e = S.foes[S.foeInfo];
+    // dim + a full-screen tap-catcher to dismiss
+    ctx.fillStyle = 'rgba(6,3,10,0.72)'; ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { S.foeInfo = null; } });
+    const cw = LW - 96, cx = LW / 2, cy = 250, ch = 340;
+    rr(cx - cw / 2, cy, cw, ch, 18);
+    ctx.fillStyle = 'rgba(24,14,26,0.98)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = e.boss ? '#ffd75e' : e.elite ? '#ff9d3c' : '#c86bff'; ctx.stroke();
+    // portrait
+    const key = foeArtKey(e);
+    if (!(key && drawArt(key, cx, cy + 96, (SHEETS[key].bh || 72), 'd', t))) {
+      txt(e.icon, cx, cy + 60, '48px serif', '#fff');
+    }
+    txt(e.name, cx, cy + 128, '900 18px Georgia, serif', e.boss ? '#ffd75e' : '#f0e0f0', 'center', { w: 4, col: '#20081a' });
+    txt('❤\u{FE0F} ' + Math.max(0, e.hp) + ' / ' + e.maxHp + '     ⚔ ' + e.atk + ' atk',
+        cx, cy + 152, '800 12px Verdana, sans-serif', '#e8c8d0');
+    let yy = cy + 182;
+    // defensive mechanic
+    if (e.def) {
+      txt(DEF_BADGE[e.def] + '  ' + DEF_TXT[e.def], cx, yy, '800 11px Verdana, sans-serif', '#c3a8e0');
+      yy += 18;
+      txt('\u{1F449} ' + DEF_TIP[e.def], cx, yy, '700 10px Verdana, sans-serif', '#8ed67e');
+      yy += 24;
+    } else {
+      txt('no special defence — hit it however you like', cx, yy, '700 11px Verdana, sans-serif', '#a89aae');
+      yy += 24;
+    }
+    // attack rider
+    if (e.trait && TRAIT_ATK[e.trait]) {
+      txt('\u{1F5E1}\u{FE0F} ' + TRAIT_ATK[e.trait], cx, yy, '800 11px Verdana, sans-serif', '#ffb4a8');
+      yy += 22;
+    }
+    // what it's about to do
+    const it = e.intent || {};
+    const plan = e.stunned > 0 ? 'frozen — it skips its next turn'
+      : it.t === 'heavy' ? 'winding up a HEAVY blow (' + (e.atk * 2) + ')'
+      : it.t === 'brace' ? 'bracing — it will take half damage'
+      : it.t === 'curse' ? 'about to hurl a skull volley'
+      : 'a plain strike for ' + e.atk;
+    txt('this turn: ' + plan, cx, yy, '700 10px Verdana, sans-serif', '#c8b8a0');
+    const pulse = 1 + Math.sin(t * 5) * 0.03;
+    uiBtn(cx - 80 * pulse, cy + ch - 44, 160 * pulse, 34, 'GOT IT ▶', () => { S.foeInfo = null; },
+      { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
 
   // your HAND for the round: one chip per coin type still in it — tap to
@@ -4097,8 +4162,11 @@ if (!HEADLESS) (function browser() {
     const info = MODAL_INFO[room.type] || MODAL_INFO.shop;
     const isShop = room.type === 'shop';
     const isForge = room.type === 'forge' && !room.done;
-    const ph = isShop ? 470 : isForge ? 330 : 220;
-    const py = isShop ? 160 : 250;
+    // the shelf grows with the stock — size the panel (and the LEAVE button
+    // below it) to fit however many wares the keeper is showing
+    const rows = isShop ? room.stock.length : 0;
+    const ph = isShop ? 78 + rows * 46 + 60 : isForge ? 330 : 220;
+    const py = isShop ? 132 : 250;
     rr(36, py, LW - 72, ph, 18);
     ctx.fillStyle = 'rgba(22,13,24,0.97)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
