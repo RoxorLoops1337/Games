@@ -63,6 +63,7 @@ const C = {
   KEY_CARRY: 3,                         // keys you may carry down to the next floor
   STAIR_TOLL: 2,                        // purse coins owed to descend the stairs
   WHEEL_COST: 5,                        // coins the dungeon wheel ghost charges per spin
+  SHOP_REROLL: 10,                      // coins to remove a shop ware and re-roll the slot
   // combat is played in ROUNDS: your PURSE is a deck of typed coins — you
   // choose which to insert — then the tray resolves and the foes act
   POUCH_COINS: 2,                       // shop pouch: +2 gold coins to the purse
@@ -1908,21 +1909,58 @@ function shopStock() {
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(65 * mult), sold: false });
   // NOTE: artifacts are no longer sold here — the wheel of fortune (and the
   // boss's choice) is the only place to win them now.
+  // every ware also carries a COIN price (1/2/5 of a single kind, by worth)
+  for (const s of st) s.coinPrice = coinPriceFor(s.price);
   return st;
 }
-function buyShop(i) {
-  if (!S.run || !S.room || S.room.type !== 'shop') return false;
-  const it = S.room.stock[i];
-  if (!it || it.sold || S.run.gold < it.price) { S.uiFlash = { msg: 'NOT ENOUGH GOLD', t: 1 }; SND.deny(); return false; }
-  S.run.gold -= it.price;
-  it.sold = true;
+// wares cost 1, 2, or 5 coins of a single kind depending on their gold worth
+function coinPriceFor(price) { return price < 45 ? 1 : price < 95 ? 2 : 5; }
+// a fresh random gear slot for the shelf (used when a slot is re-rolled)
+function mkShopItem() {
+  const it = ITEMS[(rng() * ITEMS.length) | 0];
+  const price = Math.round(it.cost * 1.4 * (1 + 0.25 * (S.run.floor - 1)));
+  return { kind: 'item', iid: it.id, label: it.icon + ' ' + it.name, price, coinPrice: coinPriceFor(price), sold: false };
+}
+// the fattest single coin-kind that can cover n (null if none can)
+function coinKindWith(n) {
+  let best = null, bestN = -1;
+  for (const k of COIN_KINDS) { const c = S.run.purse[k] || 0; if (c >= n && c > bestN) { best = k; bestN = c; } }
+  return best;
+}
+function grantShopWare(it) {
   if (it.kind === 'item') grantItem(it.iid, 1);
   else if (it.kind === 'potion') S.run.potions++;
   else if (it.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
   else if (it.kind === 'coin') S.run.purse[it.cid] = (S.run.purse[it.cid] || 0) + 1;
   else if (it.kind === 'maxhp') { S.run.maxHp += 10; S.run.hp += 10; }
-  else if (it.kind === 'relic') S.run.relics.push(it.rid);
+}
+// buy a ware with GOLD (pay omitted / 'gold') or COINS (pay === 'coins')
+function buyShop(i, pay) {
+  if (!S.run || !S.room || S.room.type !== 'shop') return false;
+  const it = S.room.stock[i];
+  if (!it || it.sold) return false;
+  if (pay === 'coins') {
+    const k = coinKindWith(it.coinPrice);
+    if (!k) { S.uiFlash = { msg: 'NOT ENOUGH COINS', t: 1 }; SND.deny(); return false; }
+    spendKind(k, it.coinPrice);
+  } else {
+    if (S.run.gold < it.price) { S.uiFlash = { msg: 'NOT ENOUGH GOLD', t: 1 }; SND.deny(); return false; }
+    S.run.gold -= it.price;
+  }
+  it.sold = true;
+  grantShopWare(it);
   SND.buy();
+  save();
+  return true;
+}
+// pay 10 coins of any kind to REMOVE a ware — a fresh gear slot takes its place
+function rerollSlot(i) {
+  if (!S.run || !S.room || S.room.type !== 'shop') return false;
+  const it = S.room.stock[i];
+  if (!it || it.sold) return false;
+  if (!spendPurse(C.SHOP_REROLL)) { S.uiFlash = { msg: 'REMOVE COSTS ' + C.SHOP_REROLL + ' COINS', t: 1.2 }; SND.deny(); return false; }
+  S.room.stock[i] = mkShopItem();
+  SND.clink();
   save();
   return true;
 }
@@ -2267,7 +2305,7 @@ window.DP = {
   keyGuard, closeModal, leaveBattle,
   rollChestPrize, acceptPrize, denyPrize, spendPurse, spendKind,
   startBattle, mkEnemy, battleTick, winBattle, endRun,
-  buyShop, pickBoon, shopStock, boonOptions, usePotion,
+  buyShop, rerollSlot, coinPriceFor, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify,
@@ -5187,7 +5225,7 @@ if (!HEADLESS) (function browser() {
     // the shelf grows with the stock — size the panel (and the LEAVE button
     // below it) to fit however many wares the keeper is showing
     const rows = isShop ? room.stock.length : 0;
-    const ph = isShop ? 78 + rows * 46 + 60 : isForge ? 330 : isChest ? 250 : 220;
+    const ph = isShop ? 84 + rows * 50 + 60 : isForge ? 330 : isChest ? 250 : 220;
     const py = isShop ? 132 : 250;
     const mFrame = machArt('frame_tall');
     if (mFrame) {
@@ -5202,18 +5240,33 @@ if (!HEADLESS) (function browser() {
     }
     txt(info.icon + '  ' + info.name, LW / 2, py + 34, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     if (isShop) {
-      txt('\u{1FA99} ' + S.run.gold + ' gold', LW / 2, py + 60, '800 13px Verdana, sans-serif', '#fff0c0');
+      txt('\u{1FA99} ' + S.run.gold + ' gold   •   \u{1FA99} ' + purseTotal() + ' coins   (✕ removes for ' + C.SHOP_REROLL + ')',
+          LW / 2, py + 60, '700 11px Verdana, sans-serif', '#fff0c0');
+      const rx = LW - 54;                                   // right edge of the shelf
       room.stock.forEach((it, i) => {
-        const y = py + 78 + i * 46;
-        const afford = !it.sold && S.run.gold >= it.price;
-        uiBtn(56, y, LW - 112, 38, '', () => buyShop(i),
-              { bg: it.sold ? 'rgba(20,14,20,0.9)' : afford ? 'rgba(140,90,20,0.9)' : 'rgba(40,30,36,0.9)',
-                border: it.sold ? '#3a2f3a' : afford ? '#ffd75e' : '#5a4048', r: 10 });
-        txt(it.label, 70, y + (it.sub ? 13 : 19), '800 12px Verdana, sans-serif',
-            it.sold ? '#5a4a5a' : afford ? '#ffe9a3' : '#7a6a72', 'left');
-        if (it.sub) txt(it.sub, 70, y + 28, '600 9px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
-        txt(it.sold ? 'SOLD' : it.price + ' G', LW - 70, y + 19, '900 13px Verdana, sans-serif',
-            it.sold ? '#5a4a5a' : afford ? '#ffd75e' : '#7a6a72', 'right');
+        const y = py + 84 + i * 50;
+        // the ware panel (label only — the buttons live to the right)
+        rr(54, y, rx - 54, 44, 10);
+        ctx.fillStyle = it.sold ? 'rgba(20,14,20,0.9)' : 'rgba(46,32,38,0.92)'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = it.sold ? '#3a2f3a' : '#5a4048'; ctx.stroke();
+        txt(it.label, 66, y + (it.sub ? 16 : 25), '800 12px Verdana, sans-serif',
+            it.sold ? '#5a4a5a' : '#ffe9a3', 'left');
+        if (it.sub) txt(it.sub, 66, y + 31, '600 9px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
+        if (it.sold) { txt('SOLD', rx - 34, y + 26, '900 13px Verdana, sans-serif', '#5a4a5a'); return; }
+        // three chips: pay GOLD · pay COINS · remove (re-roll) for 10 coins
+        const goldOk = S.run.gold >= it.price;
+        const coinOk = !!coinKindWith(it.coinPrice);
+        const remOk = purseTotal() >= C.SHOP_REROLL;
+        const remX = rx - 30, coinX = remX - 4 - 46, goldX = coinX - 4 - 56;
+        uiBtn(goldX, y + 7, 56, 30, it.price + ' G', () => buyShop(i, 'gold'),
+              { bg: goldOk ? 'rgba(140,90,20,0.95)' : 'rgba(40,30,36,0.9)', border: goldOk ? '#ffd75e' : '#5a4048',
+                col: goldOk ? '#ffe9a3' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
+        uiBtn(coinX, y + 7, 46, 30, it.coinPrice + ' ●', () => buyShop(i, 'coins'),
+              { bg: coinOk ? 'rgba(40,90,120,0.95)' : 'rgba(40,30,36,0.9)', border: coinOk ? '#63c8ff' : '#5a4048',
+                col: coinOk ? '#cfeeff' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
+        uiBtn(remX, y + 7, 30, 30, '✕', () => rerollSlot(i),
+              { bg: remOk ? 'rgba(90,40,44,0.95)' : 'rgba(40,30,36,0.9)', border: remOk ? '#e0707a' : '#5a4048',
+                col: remOk ? '#ffd0d4' : '#7a6a72', font: '900 13px Verdana, sans-serif', r: 8 });
       });
     } else if (isForge) {
       txt('choose a boon', LW / 2, py + 60, '700 12px Verdana, sans-serif', '#c8a8b0');

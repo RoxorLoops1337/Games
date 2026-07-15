@@ -862,6 +862,45 @@ const hpSlot = S.room.stock.findIndex(x => x.kind === 'maxhp');
 const mhp0 = S.run.maxHp;
 DP.buyShop(hpSlot);
 t.eq(S.run.maxHp, mhp0 + 10, 'max HP upgrade sticks');
+// -------- paying with COINS + removing a ware for 10 coins --------
+{
+  // every ware carries a coin price of 1, 2, or 5 of a single kind
+  t.ok(S.room.stock.every(x => [1, 2, 5].indexOf(x.coinPrice) >= 0), 'every ware has a 1/2/5 coin price');
+  t.eq(DP.coinPriceFor(30), 1, 'cheap wares cost 1 coin');
+  t.eq(DP.coinPriceFor(60), 2, 'mid wares cost 2 coins');
+  t.eq(DP.coinPriceFor(200), 5, 'dear wares cost 5 coins');
+  // buy an unsold item with coins of a single kind
+  const cSlot = S.room.stock.findIndex(x => !x.sold && x.kind === 'item');
+  const ware = S.room.stock[cSlot];
+  for (const k of COIN_KINDS) S.run.purse[k] = 0;
+  S.run.purse.silver = ware.coinPrice;                     // exactly enough of ONE kind
+  const goldBefore = S.run.gold;
+  const armBefore = S.run.arsenal[ware.iid] || 0;
+  t.ok(DP.buyShop(cSlot, 'coins'), 'coins buy the ware');
+  t.eq(S.run.purse.silver, 0, 'the coin price is drawn from a single kind');
+  t.eq(S.run.gold, goldBefore, 'and no gold is spent when paying with coins');
+  t.eq(S.run.arsenal[ware.iid], armBefore + 1, 'the coin-bought ware is delivered');
+  t.ok(S.room.stock[cSlot].sold, 'a coin-bought slot is marked sold');
+  // too few coins in any single kind → refused
+  const cSlot2 = S.room.stock.findIndex(x => !x.sold && x.kind === 'item');
+  if (cSlot2 >= 0) {
+    for (const k of COIN_KINDS) S.run.purse[k] = 0;
+    S.run.purse.coin = S.room.stock[cSlot2].coinPrice - 1;
+    t.ok(!DP.buyShop(cSlot2, 'coins'), 'a purse short of the coin price is refused');
+    t.ok(!S.room.stock[cSlot2].sold, 'and the ware stays on the shelf');
+  }
+  // REMOVE a ware for 10 coins → a fresh gear slot replaces it
+  const remSlot = S.room.stock.findIndex(x => !x.sold);
+  for (const k of COIN_KINDS) S.run.purse[k] = 0;
+  S.run.purse.coin = 4;                                     // short of the removal fee
+  t.ok(!DP.rerollSlot(remSlot), 'removing costs coins the purse cannot cover');
+  S.run.purse.coin = 12;
+  t.ok(DP.rerollSlot(remSlot), 'ten coins remove the ware');
+  t.eq(DP.purseTotal(), 2, 'the removal skims exactly ' + C.SHOP_REROLL + ' coins');
+  t.eq(S.room.stock[remSlot].kind, 'item', 'a fresh gear slot takes its place');
+  t.ok(!S.room.stock[remSlot].sold, 'the replacement is buyable');
+  t.ok('coinPrice' in S.room.stock[remSlot], 'and it too carries a coin price');
+}
 t.ok(DP.closeModal(), 'LEAVE closes the shop');
 t.ok(S.run.room.ents[0].done, 'the merchant serves one visit, then leaves the room');
 t.ok(!DP.interact(0), 'the shop cannot be reopened once the merchant has gone');
