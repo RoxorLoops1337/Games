@@ -2052,6 +2052,9 @@ if (!HEADLESS) (function browser() {
     frame_stage: 'art/machine/frame_stage.png',
     frame_tall: 'art/machine/frame_tall.png',
     rail: 'art/machine/rail_wood.png',
+    pusher_top: 'art/machine/pusher_top.png',
+    pusher_face: 'art/machine/pusher_face.png',
+    rail_run: 'art/machine/rail_run.png',
   };
   function machArt(key) {
     const im = art('mach_' + key, MACH_ART[key]);
@@ -2910,13 +2913,27 @@ if (!HEADLESS) (function browser() {
   // full-length guard rails: this machine never eats a piece off the sides
   function drawSideRails() {
     const front = tierFront(0);
+    const railSkin = machArt('rail_run');
     for (const side of [0, 1]) {
       const x0 = side ? 100 : 0;
       const r1 = w2s(x0, 2, 2.4), r2 = w2s(x0, front, 2.4), r3 = w2s(x0, front, 0), r4 = w2s(x0, 2, 0);
       poly([r1, r2, r3, r4]);
-      const rg = ctx.createLinearGradient(0, r1.y, 0, r3.y);
-      rg.addColorStop(0, '#b6bdc9'); rg.addColorStop(0.5, '#89909c'); rg.addColorStop(1, '#565d68');
-      ctx.fillStyle = rg; ctx.fill();
+      if (railSkin) {
+        // the runed bronze guard rail, sheared into the rail's run
+        const rg2 = ctx.createLinearGradient(0, r1.y, 0, r3.y);
+        rg2.addColorStop(0, '#8a7a58'); rg2.addColorStop(1, '#4a4030');
+        ctx.fillStyle = rg2; ctx.fill();
+        ctx.save();
+        poly([r1, r2, r3, r4]); ctx.clip();
+        const bx0 = Math.min(r1.x, r2.x, r3.x, r4.x), bx1 = Math.max(r1.x, r2.x, r3.x, r4.x);
+        const by0 = Math.min(r1.y, r2.y), by1 = Math.max(r3.y, r4.y);
+        ctx.drawImage(railSkin, bx0 - 4, by0 - 1, (bx1 - bx0) + 8, (by1 - by0) + 2);
+        ctx.restore();
+      } else {
+        const rg = ctx.createLinearGradient(0, r1.y, 0, r3.y);
+        rg.addColorStop(0, '#b6bdc9'); rg.addColorStop(0.5, '#89909c'); rg.addColorStop(1, '#565d68');
+        ctx.fillStyle = rg; ctx.fill();
+      }
       // polished top edge + a whisper of gold beneath it
       ctx.strokeStyle = 'rgba(245,250,255,0.7)'; ctx.lineWidth = 1.8;
       ctx.beginPath(); ctx.moveTo(r1.x, r1.y); ctx.lineTo(r2.x, r2.y); ctx.stroke();
@@ -2946,20 +2963,26 @@ if (!HEADLESS) (function browser() {
     const tl = w2s(1, td.back, zTop), tr = w2s(99, td.back, zTop);
     const fl = w2s(1, pf, zTop), frt = w2s(99, pf, zTop);
     const bl = w2s(1, pf, zBot), br = w2s(99, pf, zBot);
-    // brushed-steel top
+    // the pusher top: the carved stone slab when its skin is in, brushed
+    // steel otherwise
     poly([tl, tr, frt, fl]);
+    const topSkin = machArt('pusher_top');
     const tg = ctx.createLinearGradient(0, tl.y, 0, fl.y);
     tg.addColorStop(0, '#828a98'); tg.addColorStop(0.55, '#a8b0bc'); tg.addColorStop(1, '#c2c9d4');
     ctx.fillStyle = tg; ctx.fill();
     ctx.save();
     ctx.clip();
-    ctx.globalAlpha = 0.1;
-    ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
-    for (let i = 0; i < 7; i++) {
-      const y = tl.y + (fl.y - tl.y) * (i / 7);
-      ctx.beginPath(); ctx.moveTo(tl.x, y); ctx.lineTo(tr.x, y); ctx.stroke();
+    if (topSkin) {
+      ctx.drawImage(topSkin, tl.x - 8, tl.y - 2, (tr.x - tl.x) + 16, (fl.y - tl.y) + 4);
+    } else {
+      ctx.globalAlpha = 0.1;
+      ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
+      for (let i = 0; i < 7; i++) {
+        const y = tl.y + (fl.y - tl.y) * (i / 7);
+        ctx.beginPath(); ctx.moveTo(tl.x, y); ctx.lineTo(tr.x, y); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     }
-    ctx.globalAlpha = 1;
     // the PUSH legend when no sign art is in
     const sign = machArt('push_sign');
     const py2 = (tl.y + fl.y) / 2;
@@ -2983,8 +3006,19 @@ if (!HEADLESS) (function browser() {
       ctx.drawImage(sign, LW / 2 - sw2 / 2, fl.y - sh2 - 1, sw2, sh2);
       ctx.restore();
     }
-    // face: dark bevel with a gold hairline and a chasing LED rail
+    // face: the riveted iron strip when skinned, painted bevel + LED chase
+    // otherwise
     poly([fl, frt, br, bl]);
+    const faceSkin = machArt('pusher_face');
+    if (faceSkin) {
+      ctx.save();
+      ctx.clip();
+      ctx.drawImage(faceSkin, fl.x - 6, fl.y - 1, (frt.x - fl.x) + 12, (bl.y - fl.y) + 2);
+      ctx.restore();
+      ctx.strokeStyle = 'rgba(240,246,255,0.4)'; ctx.lineWidth = 1.2;
+      ctx.beginPath(); ctx.moveTo(fl.x, fl.y); ctx.lineTo(frt.x, frt.y); ctx.stroke();
+      return;
+    }
     const fg = ctx.createLinearGradient(0, fl.y, 0, bl.y);
     fg.addColorStop(0, '#6d7584'); fg.addColorStop(0.45, '#494f5b'); fg.addColorStop(1, '#2c3038');
     ctx.fillStyle = fg; ctx.fill();
@@ -3512,7 +3546,7 @@ if (!HEADLESS) (function browser() {
       // bronze-cornered rune frame from the UI sheet
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.55)'; ctx.shadowBlur = 12; ctx.shadowOffsetY = -3;
-      ctx.drawImage(hudFrame, 6, 703, LW - 12, 134);
+      ctx.drawImage(hudFrame, 4, 699, LW - 8, 144);
       ctx.restore();
     } else {
       ctx.save();
@@ -3530,9 +3564,9 @@ if (!HEADLESS) (function browser() {
       ctx.beginPath(); ctx.moveTo(28, 778); ctx.lineTo(LW - 28, 778); ctx.stroke();
     }
     // HP
-    txt('HP', 34, 733, '800 11px Verdana, sans-serif', '#a8828e', 'left');
-    bar(58, 726, 210, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
-    txt(r.hp + ' / ' + r.maxHp, 163, 734, '800 10px Verdana, sans-serif', '#0e2a18');
+    txt('HP', 52, 733, '800 11px Verdana, sans-serif', '#b89aa4', 'left');
+    bar(74, 726, 194, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
+    txt(r.hp + ' / ' + r.maxHp, 171, 734, '800 10px Verdana, sans-serif', '#0e2a18');
     if (S.pPois > 0) txt('☠ ' + S.pPois, 282, 733, '800 12px Verdana, sans-serif', '#b8f26b', 'left');
     if (r.block > 0) txt('\u{1F6E1} ' + r.block, 320, 733, '800 12px Verdana, sans-serif', '#c8d6e8', 'left');
     // gold + coins + keys
@@ -3578,7 +3612,7 @@ if (!HEADLESS) (function browser() {
       hint = r.wallet < 1 ? 'hand empty — bank loot, TILT, or END TURN'
            : r.wallet + ' ● in hand • TAP TO DROP • pick your coin up top';
     } else hint = S.battle.phase === 'resolve' ? 'the tray resolves…' : 'the foe strikes back…';
-    txt(hint, LW - 34, 814, '600 10px Verdana, sans-serif', '#8f6f78', 'right');
+    txt(hint, LW - 40, 806, '600 9px Verdana, sans-serif', '#9a7f88', 'right');
   }
 
   // --------------------------------------------------------- battle screen
