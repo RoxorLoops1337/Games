@@ -104,7 +104,7 @@ const finishFight = () => {
 t.ok(DP.HEADLESS, 'headless mode detected');
 t.eq(S.screen, 'title', 'boots to the title screen');
 t.eq(S.run, null, 'no run in progress at first boot');
-t.ok(ITEMS.length === 8 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'eight arsenal items defined');
+t.ok(ITEMS.length === 13 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'thirteen arsenal items defined');
 t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the bestiary is populated');
 t.eq(BOSSES.length, 3, 'three floor bosses');
 t.ok(RELICS.length >= 88 && RELICS.every(r => r.id && r.desc), 'the relic shelf is stocked (' + RELICS.length + ')');
@@ -1426,11 +1426,11 @@ finishFight();
 // -------- ACTS: a new bestiary every 5 floors (Roguebook-style) --------
 {
   t.eq(DP.ENEMY_TIERS.length, 3, 'three acts of enemies');
-  t.ok(DP.ENEMY_TIERS.every(tier => tier.length === 8), 'eight foes per act');
+  t.ok(DP.ENEMY_TIERS.every(tier => tier.length === 10), 'ten foes per act');
   const all = DP.ENEMY_TIERS.flat();
   t.eq(new Set(all.map(e => e.id)).size, all.length, 'no duplicate ids across acts');
   t.ok(all.every(e => e.hp > 0 && e.atk > 0 && e.icon && e.name), 'every act foe is fully statted');
-  const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech'];
+  const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech', 'bleeder', 'burner'];
   const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward'];
   t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
   // act boundaries
@@ -1692,6 +1692,299 @@ t.ok(contained, 'platform coins stay within the machine');
 t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 
 // ============================================================
+// WOUNDS: BLEED (front-loaded, halves; bones immune) and
+// BURN (hot, fades by 2; gel quenches half on apply)
+// ============================================================
+{
+  const wstore = {};
+  const { DP: W } = loadGame(wstore, false);
+  const WS = W.S;
+  const fight = (eid) => {
+    WS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid, done: false, px: 0.5, py: 0.4 }];
+    W.interact(0);
+    WS.enemy.hp = WS.enemy.maxHp = 500;
+    return WS.enemy;
+  };
+  const winOut = () => { WS.enemy.hp = 1; W.dmgEnemy(9); if (WS.victory) { if (WS.victory.offer) W.pickCoin(0); W.leaveBattle(); } };
+  W.srand(4101);
+  W.newRun('knight');
+  WS.run.hp = WS.run.maxHp = 500;
+
+  let e = fight('orc');
+  W.bleedEnemy(8);
+  t.eq(e.bleed, 8, 'bleed stacks land on a fleshy foe');
+  let hp0 = e.hp;
+  W.endRoundTicks();
+  t.eq(hp0 - e.hp, 8, 'bleed ticks its full stacks');
+  t.eq(e.bleed, 4, 'the wound half-closes each round');
+  e.bleed = 0;
+  W.burnEnemy(6);
+  t.eq(e.burn, 6, 'burn stacks land');
+  hp0 = e.hp;
+  W.endRoundTicks();
+  t.eq(hp0 - e.hp, 6, 'burn ticks its full stacks');
+  t.eq(e.burn, 4, 'the fire dies down by 2 each round');
+  winOut();
+
+  e = fight('skeleton');
+  W.bleedEnemy(5);
+  t.eq(e.bleed || 0, 0, 'bones cannot bleed — armor foes are immune');
+  W.burnEnemy(5);
+  t.eq(e.burn, 5, 'bones still burn — armor does not stop fire');
+  winOut();
+
+  e = fight('ogre');
+  W.bleedEnemy(5);
+  t.eq(e.bleed, 5, 'thick hide (poison-immune) bleeds just fine');
+  winOut();
+
+  e = fight('slime');
+  W.burnEnemy(6);
+  t.eq(e.burn, 3, 'wet gel quenches half of any burn on apply');
+  winOut();
+
+  // the wound-dealers mark YOU
+  e = fight('gutterrat');
+  e.intent = { t: 'hit', dmg: e.atk };
+  W.enemyActFoe(e);
+  t.eq(WS.pBleed, 2, 'a bleeder leaves you bleeding');
+  hp0 = WS.run.hp;
+  W.endRoundTicks();
+  t.ok(WS.run.hp < hp0, 'your bleed ticks at round end');
+  t.eq(WS.pBleed, 1, 'your wound half-closes too');
+  winOut();
+
+  e = fight('emberimp');
+  e.intent = { t: 'hit', dmg: e.atk };
+  W.enemyActFoe(e);
+  t.eq(WS.pBurn, 2, 'a burner sets you ablaze');
+  W.endRoundTicks();
+  t.eq(WS.pBurn, 0, 'your fire dies down by 2');
+  winOut();
+
+  // the new foes exist in every act, indexed so the hand-off stays monotone
+  for (const id of ['gutterrat', 'emberimp', 'fleshripper', 'pyretotem', 'bloodfiend', 'ashogre']) {
+    t.ok(W.enemyById(id), 'new foe ' + id + ' is in the bestiary');
+  }
+}
+
+// ============================================================
+// PETS: living gear — summoned from the pile, they soak blows
+// meant for you and act every round
+// ============================================================
+{
+  const pstore = {};
+  const { DP: P } = loadGame(pstore, false);
+  const PS = P.S;
+  P.srand(7202);
+  P.newRun('knight');
+  PS.run.hp = PS.run.maxHp = 500;
+  PS.run.arsenal = { pup: 1, newt: 1, rat: 1 };
+  PS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  P.interact(0);
+  PS.enemy.hp = PS.enemy.maxHp = 500;
+
+  P.applyLoot({ t: 'petitem', iid: 'pup' });
+  P.applyLoot({ t: 'petitem', iid: 'newt' });
+  P.applyLoot({ t: 'petitem', iid: 'rat' });
+  t.eq(PS.pets.length, 3, 'three pets summoned from the tray');
+  t.eq(PS.pets[0].hp, 12, 'the Rock Pup arrives at its listed HP');
+
+  // pets act: pup blocks, newt burns, rat gnaws + bleeds
+  const blk0 = PS.run.block, ehp0 = PS.enemy.hp;
+  P.petsAct();
+  t.eq(PS.run.block - blk0, 1, 'the pup growls up +1 block');
+  t.eq(PS.enemy.burn, 1, 'the newt spits 1 burn');
+  t.eq(PS.enemy.bleed, 1, 'the rat opens 1 bleed');
+  t.eq(ehp0 - PS.enemy.hp, 1, 'the rat gnaws for 1');
+
+  // the pack soaks the blow: orc atk vs pup first
+  PS.run.block = 0;
+  const e = PS.foes[0];
+  e.intent = { t: 'hit', dmg: e.atk };
+  const myHp = PS.run.hp, pupHp = PS.pets[0].hp;
+  P.enemyActFoe(e);
+  t.eq(PS.run.hp, myHp, 'the pack soaks the whole blow — you take nothing');
+  t.ok(PS.pets[0].hp < pupHp, 'the pup carried the wound');
+
+  // a monster blow chews THROUGH the pack into you
+  PS.pets.forEach(p => { p.hp = 1; });
+  e.atk = 10;
+  e.intent = { t: 'hit', dmg: 10 };
+  P.enemyActFoe(e);
+  t.ok(PS.pets.every(p => p.hp <= 0), 'a heavy blow fells the whole weakened pack');
+  t.ok(PS.run.hp < myHp, 'what the pack could not soak reaches you');
+
+  // pet cap: the pack is full — extra summons feed the pack instead
+  PS.pets.length = 0;
+  for (let i = 0; i < 7; i++) P.applyLoot({ t: 'petitem', iid: 'pup' });
+  t.eq(PS.pets.filter(p => p.hp > 0).length, P.petCap(), 'the stage holds at most petCap() pets');
+}
+
+// ============================================================
+// THE EMBER SHELF: 50 new relics, wired for real
+// ============================================================
+{
+  const rstore = {};
+  const { DP: R } = loadGame(rstore, false);
+  const RS = R.S;
+  t.ok(R.RELICS.length >= 138, 'the shelf holds 138+ relics (' + R.RELICS.length + ')');
+  const newIds = ['matchstick', 'embershot', 'arsonist', 'cauterize', 'ashfall', 'papercut', 'scalpel',
+    'leechkit', 'kennel', 'treats', 'guarddog', 'mender', 'bloodscent', 'balancedblade', 'frostsmith',
+    'apothecary', 'hoarder', 'firstblood', 'firebrand', 'slowburn', 'wildfire', 'heatwave', 'dragonbreath',
+    'serrator', 'rustfang', 'arterial', 'butcher', 'bloodprice', 'petwhistle', 'packleader', 'vengeful',
+    'gritcollar', 'sterling', 'frostbite', 'luckystreak', 'hailstorm', 'quartermaster', 'bombardier',
+    'shieldwall', 'alloy', 'hemorrhage', 'infernolord', 'exsanguinate', 'pyroclasm', 'eternalflame',
+    'alphabond', 'warhound', 'beastmaster', 'crimsonrain', 'soulchain'];
+  t.eq(newIds.length, 50, 'exactly 50 relics on the new shelf');
+  t.ok(newIds.every(id => R.relicById(id)), 'every new relic is on the catalog');
+
+  R.srand(9303);
+  R.newRun('knight');
+  RS.run.hp = RS.run.maxHp = 500;
+  const brawl = (eid, extra) => {
+    RS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid, done: false, px: 0.5, py: 0.4 }];
+    if (extra) RS.run.room.ents.push({ kind: 'monster', mtype: 'battle', eid: extra, done: false, px: 0.3, py: 0.3 });
+    R.interact(0);
+    for (const f of RS.foes) { f.hp = f.maxHp = 500; f.braced = false; }
+    return RS.foes[0];
+  };
+  const winOut = () => {
+    RS.foes.forEach(f => { f.hp = Math.min(f.hp, 1); });
+    R.dmgAll(9);
+    if (RS.victory) { if (RS.victory.offer) R.pickCoin(0); R.leaveBattle(); }
+  };
+
+  // coin-benders: matchstick / embershot / rustfang / crimsonrain / dragonbreath
+  RS.run.relics.push('matchstick', 'embershot', 'rustfang', 'crimsonrain', 'dragonbreath', 'hailstorm');
+  let e = brawl('orc', 'orc');
+  R.applyLoot({ t: 'gold' });
+  t.eq(e.burn, 1, 'Matchstick: a gold coin leaves 1 burn');
+  R.applyLoot({ t: 'lucky' });
+  t.eq(e.burn, 3, 'Ember Shot: a lucky coin stacks 2 more burn');
+  R.applyLoot({ t: 'green' });
+  t.eq(e.bleed, 1, 'Rust Fang: a venom coin opens 1 bleed');
+  R.applyLoot({ t: 'red' });
+  t.ok(RS.foes.every(f => f.bleed >= 1), 'Crimson Rain: a heart coin bleeds the whole pack');
+  const burn0 = RS.foes[1].burn || 0;
+  R.applyLoot({ t: 'blue' });
+  t.eq(RS.foes[1].burn, burn0 + 1, 'Dragon Breath: frost ignites every foe');
+
+  // Heat Wave rides any burning foe
+  RS.run.relics.push('heatwave');
+  const base = R.goldDmg();
+  RS.foes.forEach(f => { f.burn = 0; });
+  t.eq(R.goldDmg(), base - 1, 'Heat Wave sleeps when nothing burns');
+
+  // weapons: Serrator opens wounds, Butcher carves them wider
+  RS.run.relics.push('serrator');
+  e.bleed = 0;
+  R.applyLoot({ t: 'weapon', iid: 'sword' });
+  t.eq(e.bleed, 2, 'Serrator: the sword leaves 2 bleed');
+  RS.run.relics.push('butcher');
+  let hp0 = e.hp;
+  R.applyLoot({ t: 'weapon', iid: 'sword' });
+  const plain = R.weaponDmg(R.itemById('sword').dmg);
+  t.eq(hp0 - e.hp, plain + 3, 'Butcher: +3 damage into a bleeding foe');
+
+  // Arterial Cut: any 8+ hit opens a wound
+  RS.run.relics.push('arterial');
+  e.bleed = 0;
+  R.dmgFoe(e, 9);
+  t.ok(e.bleed >= 2, 'Arterial Cut: a heavy hit opens 2 bleed');
+
+  // Frostbite: frozen foes crack
+  RS.run.relics.push('frostbite');
+  e.stunned = 1;
+  hp0 = e.hp;
+  R.dmgFoe(e, 5);
+  t.eq(hp0 - e.hp, 7, 'Frostbite: +2 into a frozen foe');
+  e.stunned = 0;
+
+  // Lucky Streak heats up; Alloy fuses every third silver
+  RS.run.relics.push('luckystreak', 'alloy');
+  RS.battle.luckyFired = 0;
+  hp0 = e.hp;
+  R.applyLoot({ t: 'lucky' });
+  const first = hp0 - e.hp;
+  hp0 = e.hp;
+  R.applyLoot({ t: 'lucky' });
+  t.eq(hp0 - e.hp, first + 1, 'Lucky Streak: the second lucky hits +1');
+  RS.run.block = 0; RS.battle.silverFired = 0;
+  R.applyLoot({ t: 'silver' }); R.applyLoot({ t: 'silver' }); R.applyLoot({ t: 'silver' });
+  t.eq(RS.run.block, 3 + 3, 'Alloy: three silvers pay a bonus +3 block');
+
+  // ticks: Slow Burn / Inferno Lord / Hemorrhage / Wildfire / Cauterize / Leech Kit
+  RS.run.relics.push('slowburn', 'cauterize', 'leechkit', 'wildfire');
+  e.burn = 5; e.bleed = 4;
+  RS.foes[1].burn = 0; RS.foes[1].bleed = 0;
+  RS.run.hp = 400;
+  R.endRoundTicks();
+  t.eq(e.burn, 4, 'Slow Burn: the fire fades by only 1');
+  t.eq(e.bleed, 2, 'bleed still halves');
+  t.eq(RS.foes[1].burn, 1, 'Wildfire: the flames leap to the other foe');
+  t.ok(RS.run.hp > 400, 'Cauterize + Leech Kit: the ticks feed you');
+  RS.run.relics.push('hemorrhage', 'infernolord');
+  e.burn = 5; e.bleed = 4;
+  RS.foes[1].hp = 0;              // clear the stage so Wildfire has no partner
+  R.endRoundTicks();
+  t.eq(e.burn, 5, 'Inferno Lord: burn never fades');
+  t.eq(e.bleed, 4, 'Hemorrhage: bleed never fades');
+
+  // death bounties: Ashfall / Blood Price / First Blood / Exsanguinate
+  RS.run.relics.push('ashfall', 'bloodprice', 'firstblood', 'exsanguinate');
+  winOut();
+  e = brawl('orc', 'orc');
+  const other = RS.foes[1];
+  e.burn = 3; e.bleed = 4; e.hp = 1;
+  const gold0 = RS.run.gold;
+  R.dmgFoe(e, 2);
+  t.ok(RS.run.gold - gold0 >= e.gold + 6 + 2 + 5, 'Ashfall + Blood Price + First Blood pay their bounties');
+  t.ok(other.bleed >= 4, 'Exsanguinate: the wound splashes onto the pack');
+
+  // Sterling Heart: overheal hardens
+  RS.run.relics.push('sterling');
+  RS.run.hp = RS.run.maxHp;
+  RS.run.block = 0;
+  R.healPlayer(5);
+  t.eq(RS.run.block, 3, 'Sterling Heart: overheal becomes up to 3 block');
+
+  // Quartermaster: the first item fires twice
+  RS.run.relics.push('quartermaster');
+  winOut();
+  e = brawl('orc');
+  hp0 = e.hp;
+  R.applyLoot({ t: 'weapon', iid: 'sword' });
+  t.ok(hp0 - e.hp >= plain * 2, 'Quartermaster: the first sword swings twice');
+
+  // Eternal Flame greets the pack; Pet Whistle pre-summons; Soul Chain shields
+  RS.run.relics.push('eternalflame', 'petwhistle', 'soulchain', 'kennel');
+  RS.run.arsenal = { pup: 2 };
+  winOut();
+  e = brawl('orc');
+  t.eq(e.burn, 2, 'Eternal Flame: the battle opens with the foe alight');
+  t.eq(RS.pets.length, 2, 'Pet Whistle: both pups pre-summon at battle start');
+  t.eq(RS.pets[0].hp, 12 + 4, 'Kennel: pets arrive with +4 HP');
+  const rallied = R.summonPet('pup');
+  t.eq(RS.pets.length, 2, 'a whistled pet rallies instead of duplicating');
+  t.ok(rallied === RS.pets[0] || rallied === RS.pets[1], 'the pile copy boosts the beast already out');
+  RS.pets.forEach(p => { p.hp = 30; p.maxHp = 30; });
+  RS.run.block = 0;
+  RS.pets[0].hp = 0; RS.pets[1].hp = 0;
+  RS.run.hp = 400;
+  R.hurtPlayer(5);
+  t.eq(RS.run.hp, 395, 'Soul Chain sleeps once the pack is down');
+  RS.pets[0].hp = 10;
+  R.hurtPlayer(5);
+  t.eq(RS.run.hp, 391, 'Soul Chain: -1 damage while a pet lives');
+
+  // the ledger reads the new bends
+  t.ok(R.coinFx('coin').mods.some(m => m.indexOf('Matchstick') === 0), 'the BAG lists Matchstick on gold');
+  t.ok(R.itemFx('pup').main.indexOf('HP pet') > 0, 'the BAG reads a pet item as a pet');
+  t.ok(R.itemFx('torch').main.indexOf('BURN') > 0, 'the BAG reads the torch in burn stacks');
+}
+
+// ============================================================
 // INVENTORY: the effect sheet folds every relic into the numbers
 // ============================================================
 {
@@ -1775,6 +2068,15 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.eq(D.S.foeInfo, 0, 'tapping a foe opens its info card');
   D.S.foeInfo = null;
   frames(4);
+  // the menagerie + the wound pips render mid-battle
+  D.summonPet('pup'); D.summonPet('newt'); D.summonPet('rat');
+  D.S.enemy.burn = 3; D.S.enemy.bleed = 2; D.S.enemy.pois = 1;
+  D.S.pBleed = 2; D.S.pBurn = 1;
+  frames(8);
+  D.S.pets[1].hp = 0;                             // one fallen pet puffs away
+  frames(4);
+  t.eq(D.S.pets.length, 3, 'the pet pack rode along through the render');
+  D.S.pets.length = 0; D.S.pBleed = 0; D.S.pBurn = 0;
   // the BAG overlay, every tab, mid-battle
   D.S.run.relics.push('goldedge', 'twinfangs');
   D.S.inv = { tab: 'coins' };
