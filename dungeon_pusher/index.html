@@ -62,6 +62,7 @@ const C = {
   P_CHEST_KEY: 0.2,
   KEY_CARRY: 3,                         // keys you may carry down to the next floor
   STAIR_TOLL: 2,                        // purse coins owed to descend the stairs
+  WHEEL_COST: 5,                        // coins the dungeon wheel ghost charges per spin
   // combat is played in ROUNDS: your PURSE is a deck of typed coins — you
   // choose which to insert — then the tray resolves and the foes act
   POUCH_COINS: 2,                       // shop pouch: +2 gold coins to the purse
@@ -206,6 +207,22 @@ function rollRelicDrop() {
 }
 function relicById(id) { return RELICS.find(r => r.id === id); }
 function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
+// pull a random UNOWNED artifact of a given rarity (null if that shelf is bare)
+function rollRelicByRar(rar) {
+  if (!S.run) return null;
+  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0);
+  return pool.length ? pool[(rng() * pool.length) | 0].id : null;
+}
+// grant a random unowned artifact of a rarity; returns the id, or null if none
+function grantArtifact(rar) {
+  const id = rollRelicByRar(rar);
+  if (id) S.run.relics.push(id);
+  return id;
+}
+// items carry an implicit rarity by price: the pricier gear is the rarer find
+function itemRar(it) { return it.cost >= 55 ? 'r' : 'c'; }
+function itemsByRar(rar) { return ITEMS.filter(it => itemRar(it) === rar); }
+function randItem(rar) { const pool = itemsByRar(rar); return pool[(rng() * pool.length) | 0]; }
 
 // ----------------------------------------------------------------- enemies
 // The cast wears real sprites borrowed from No Room For Heroes (see
@@ -756,23 +773,43 @@ function frenzy() {
   save();
 }
 
-// -------------------------------------------------------------- lucky wheel
+// -------------------------------------------------------------- wheel of fortune
+// The WHEEL is now the ONLY faucet for artifacts (alongside the boss's
+// choice). Found in the dungeon it costs 5 coins to spin (see the wheel
+// ghost); a free spin is granted after every ELITE. Prizes: gold, a wad of
+// coins, artifacts, a stab of lost HP, or an item — common or rare.
+function wheelCoins(n) {
+  const k = COIN_KINDS[(rng() * COIN_KINDS.length) | 0];
+  S.run.purse[k] = (S.run.purse[k] || 0) + n;
+  floatAt('+' + n + ' ' + COIN_INFO[k].name + '!', 50, '#ffe066', true);
+}
+function wheelItem(rar) {
+  const it = randItem(rar);
+  grantItem(it.id, 1);
+  floatAt(it.name + '!', 50, rar === 'r' ? '#7ab0e8' : '#ffe066', true);
+  if (S.battle) S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
+}
+function wheelArtifact(rar, n) {
+  let got = 0;
+  for (let i = 0; i < (n || 1); i++) {
+    const id = grantArtifact(rar);
+    if (id) { got++; floatAt(relicById(id).icon + ' ' + relicById(id).name + '!', 50, RARITY[rar].col, true); }
+  }
+  if (!got) addGold(20 + S.run.floor * 4);      // the shelf was full — gold instead
+}
 const WHEEL = [
-  { label: '+5 ●', w: 16, fx: () => { if (S.battle) addCoins(5); else addGold(5); } },
-  { label: '+15 G', w: 15, fx: () => addGold(15) },
-  { label: 'HEAL 8', w: 13, fx: () => healPlayer(8) },
-  { label: 'BLOCK 5', w: 12, fx: () => addBlock(5) },
-  { label: 'SMITE', w: 12, fx: () => { if (S.enemy && S.enemy.hp > 0) dmgEnemy(12); else addGold(6); } },
-  { label: 'ITEM', w: 9, fx: () => {
-      const it = ITEMS[(rng() * ITEMS.length) | 0];
-      grantItem(it.id, 1);
-      floatAt(it.name + '!', 50, '#ffe066', true);
-      if (S.battle) S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
-    } },
-  { label: '+30 G', w: 7, fx: () => addGold(30) },
-  { label: 'FRENZY', w: 8, fx: () => { if (S.screen === 'battle') frenzy(); else addGold(8); } },
+  { label: '+GOLD',   col: '#f2c04a', w: 15, fx: () => addGold(14 + S.run.floor * 3 + ((rng() * 10) | 0)) },
+  { label: '+2 ●',    col: '#f2c04a', w: 14, fx: () => wheelCoins(2) },
+  { label: '+3 ●',    col: '#e8b24a', w: 11, fx: () => wheelCoins(3) },
+  { label: '+5 ●',    col: '#e0a038', w: 6,  fx: () => wheelCoins(5) },
+  { label: 'COMMON\nITEM', col: '#8fd18f', w: 12, fx: () => wheelItem('c') },
+  { label: 'RARE\nITEM',   col: '#5aa0e0', w: 7,  fx: () => wheelItem('r') },
+  { label: '2 COMMON\nARTIFACTS', col: '#c8c8c8', w: 9, fx: () => wheelArtifact('c', 2) },
+  { label: 'RARE\nARTIFACT',      col: '#b06be8', w: 6, fx: () => wheelArtifact('r', 1) },
+  { label: '−5 HP',   col: '#ef4b5d', w: 8,  fx: () => { S.run.hp = Math.max(1, S.run.hp - 5); floatAt('−5 HP!', 50, '#ef4b5d', true); S.shake += 5; } },
 ];
 function spinWheel() {
+  if (!S.run) return null;
   const total = WHEEL.reduce((a, s) => a + s.w, 0);
   let r = rng() * total, idx = 0;
   for (let i = 0; i < WHEEL.length; i++) { r -= WHEEL[i].w; if (r <= 0) { idx = i; break; } }
@@ -1301,16 +1338,18 @@ function pickCoin(i) {
 }
 function winBattle() {
   const anyBoss = S.foes.some(f => f.boss);
+  const anyElite = S.foes.some(f => f.elite);
   if (hasRelic('piggy')) { addGold(4); S.battle.goldWon += 4; }
-  // felling an ELITE shakes an artifact loose (gold if the shelf is full)
-  let relicDrop = null;
-  if (S.foes.some(f => f.elite)) {
-    relicDrop = rollRelicDrop();
-    if (relicDrop) S.run.relics.push(relicDrop);
-    else { addGold(25); S.battle.goldWon += 25; }
+  // A BOSS lets you choose one artifact from a spread of two commons + a rare.
+  let relicOffer = null;
+  if (anyBoss) {
+    const seen = [];
+    const pick = (rar) => { const p = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && seen.indexOf(rl.id) < 0); if (!p.length) return null; const id = p[(rng() * p.length) | 0].id; seen.push(id); return id; };
+    relicOffer = [pick('c'), pick('c'), pick('r')].filter(Boolean);
   }
   S.victory = { t: 0, gold: S.battle.goldWon, keys: S.battle.keysWon, boss: anyBoss,
-                offer: rollOffer(), picked: null, relic: relicDrop };
+                offer: anyBoss ? null : rollOffer(), picked: null,
+                relicOffer, relicPicked: null, freeSpin: anyElite };
   S.banner = { txt: 'VICTORY!', ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.winb();
@@ -1318,8 +1357,21 @@ function winBattle() {
     const h = Math.round(S.run.maxHp * 0.22);
     healPlayer(h);
   }
+  // an ELITE hands you a FREE spin of the wheel of fortune on the spot
+  if (anyElite) spinWheel();
   bestify();
   save();
+}
+// take one artifact from the boss's spread (once)
+function pickRelicOffer(i) {
+  if (!S.run || !S.victory || !S.victory.relicOffer || S.victory.relicPicked) return false;
+  const id = S.victory.relicOffer[i];
+  if (!id || S.run.relics.indexOf(id) >= 0) return false;
+  S.run.relics.push(id);
+  S.victory.relicPicked = id;
+  SND.buy();
+  save();
+  return true;
 }
 // tap CONTINUE on the victory overlay: back to the top-down room
 function leaveBattle() {
@@ -1650,8 +1702,14 @@ function interact(i) {
     e.done = true;
     SND.heal();
   } else if (e.kind === 'wheel') {
+    // the carnival ghost charges 5 coins of any kind for a spin
+    if (!spendPurse(C.WHEEL_COST)) {
+      S.uiFlash = { msg: 'THE GHOST WANTS ' + C.WHEEL_COST + ' COINS', t: 1.4 };
+      SND.deny();
+      return false;
+    }
     spinWheel();
-    toast('the carnival ghost grants one free spin');
+    toast('you feed the ghost ' + C.WHEEL_COST + ' coins and spin the wheel');
     e.done = true;
   } else if (e.kind === 'shop') {
     if (!e.stock) e.stock = shopStock();
@@ -1737,13 +1795,8 @@ function shopStock() {
     st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(34 * mult), sold: false });
   }
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(65 * mult), sold: false });
-  const rid2 = rollRelicDrop();
-  if (rid2) {
-    const rl = relicById(rid2);
-    st.push({ kind: 'relic', rid: rl.id, rar: rl.rar,
-              label: rl.icon + ' ' + rl.name + ' [' + RARITY[rl.rar].name + ']', sub: rl.desc,
-              price: Math.round(RARITY[rl.rar].price * mult), sold: false });
-  }
+  // NOTE: artifacts are no longer sold here — the wheel of fortune (and the
+  // boss's choice) is the only place to win them now.
   return st;
 }
 function buyShop(i) {
@@ -1769,14 +1822,10 @@ function boonOptions() {
   opts.push(rng() < 0.5
     ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
     : { kind: 'pouch', label: '\u{1F45B} +' + C.POUCH_COINS + ' gold coins to your purse' });
-  const owned = S.run.relics;
-  const avail = RELICS.filter(r => owned.indexOf(r.id) < 0);
-  if (avail.length && rng() < 0.55) {
-    const rl = avail[(rng() * avail.length) | 0];
-    opts.push({ kind: 'relic', rid: rl.id, label: rl.icon + ' ' + rl.name, sub: rl.desc });
-  } else {
-    opts.push({ kind: 'whet', label: '\u{1FA9A} Hone: all weapons +1 damage' });
-  }
+  // the forge hones gear and grit, never artifacts — those come off the wheel
+  opts.push(rng() < 0.5
+    ? { kind: 'whet', label: '\u{1FA9A} Hone: all weapons +1 damage' }
+    : { kind: 'potion', label: '\u{1F9F4} A brace of potions (+2)' });
   return opts;
 }
 function pickBoon(i) {
@@ -1786,7 +1835,7 @@ function pickBoon(i) {
   if (o.kind === 'item') grantItem(o.iid, 1);
   else if (o.kind === 'maxhp') { S.run.maxHp += 12; S.run.hp = Math.min(S.run.maxHp, S.run.hp + 12); }
   else if (o.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
-  else if (o.kind === 'relic') S.run.relics.push(o.rid);
+  else if (o.kind === 'potion') S.run.potions += 2;
   else if (o.kind === 'whet') S.run.whet++;
   S.room.done = true;
   S.room.msg = 'The forge hums. Boon granted.';
@@ -2107,14 +2156,15 @@ window.DP = {
   keyGuard, closeModal, leaveBattle,
   rollChestPrize, acceptPrize, denyPrize, spendPurse, spendKind,
   startBattle, mkEnemy, battleTick, winBattle, endRun,
-  buyShop, pickBoon, usePotion,
+  buyShop, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
-  bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer,
-  rollRelicDrop, bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, packWard, RARITY,
+  bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
+  rollRelicDrop, rollRelicByRar, grantArtifact, itemRar, itemsByRar,
+  bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
 };
 
@@ -3725,24 +3775,28 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(5,3,8,0.72)';
     ctx.fillRect(0, 0, LW, LH);
     const cx = LW / 2, cy = 390, R = 132;
+    const N = WHEEL.length, seg = (Math.PI * 2) / N;
     const k = Math.min(1, a.t / 2.6);
     const ease = 1 - Math.pow(1 - k, 3);
-    const target = (Math.PI * 2) * 4 + (-Math.PI / 2) - (a.seg + 0.5) * (Math.PI / 4);
+    const target = (Math.PI * 2) * 4 + (-Math.PI / 2) - (a.seg + 0.5) * seg;
     const rot = ease * target;
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(rot);
-    for (let i = 0; i < 8; i++) {
+    for (let i = 0; i < N; i++) {
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.arc(0, 0, R, i * Math.PI / 4, (i + 1) * Math.PI / 4);
+      ctx.arc(0, 0, R, i * seg, (i + 1) * seg);
       ctx.closePath();
-      ctx.fillStyle = WHEEL_COLS[i % 4];
+      ctx.fillStyle = WHEEL[i].col || WHEEL_COLS[i % 4];
       ctx.fill();
       ctx.strokeStyle = 'rgba(20,8,4,0.6)'; ctx.lineWidth = 2; ctx.stroke();
       ctx.save();
-      ctx.rotate((i + 0.5) * Math.PI / 4);
-      txt(WHEEL[i].label, R * 0.62, 0, '900 13px Verdana, sans-serif', '#1d1016');
+      ctx.rotate((i + 0.5) * seg);
+      // labels may be two lines (split on \n) — stack them along the spoke
+      const lines = String(WHEEL[i].label).split('\n');
+      lines.forEach((ln, li) =>
+        txt(ln, R * 0.60, (li - (lines.length - 1) / 2) * 12, '900 11px Verdana, sans-serif', '#1d1016'));
       ctx.restore();
     }
     ctx.restore();
@@ -3756,15 +3810,17 @@ if (!HEADLESS) (function browser() {
     ctx.closePath();
     ctx.fillStyle = '#ff5a4e'; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = '#fff'; ctx.stroke();
-    txt('LUCKY WHEEL', cx, cy - R - 44, '900 26px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
+    txt('WHEEL OF FORTUNE', cx, cy - R - 44, '900 24px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
     if (a.t > 2.6) {
       const pop = 1 + Math.sin((a.t - 2.6) * 8) * 0.05;
+      const rlines = String(a.label).split('\n');
       ctx.save();
       ctx.translate(cx, cy + R + 44);
       ctx.scale(pop, pop);
-      txt(a.label, 0, 0, '900 30px Verdana, sans-serif', '#fff6c8', 'center', { w: 6, col: '#3a1006' });
+      rlines.forEach((ln, li) =>
+        txt(ln, 0, li * 26 - (rlines.length - 1) * 13, '900 26px Verdana, sans-serif', '#fff6c8', 'center', { w: 6, col: '#3a1006' }));
       ctx.restore();
-      txt('tap to continue', cx, cy + R + 76, '600 11px Verdana, sans-serif', '#c8a8b0');
+      txt('tap to continue', cx, cy + R + 76 + (rlines.length - 1) * 14, '600 11px Verdana, sans-serif', '#c8a8b0');
     }
   }
 
@@ -3854,10 +3910,10 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(8,4,10,' + (0.55 * k) + ')';
     ctx.fillRect(0, 0, LW, LH);
     if (k < 1) return;
-    const hasOffer = v.offer && v.offer.length > 0;
-    const rl = v.relic ? relicById(v.relic) : null;
-    const exY = rl ? 44 : 0;                     // room for the artifact banner
-    const py = (hasOffer ? 218 : 300) - exY / 2, ph = (hasOffer ? 404 : 250) + exY;
+    const hasCoinOffer = v.offer && v.offer.length > 0;
+    const hasRelicOffer = v.boss && v.relicOffer && v.relicOffer.length > 0;
+    const hasOffer = hasCoinOffer || hasRelicOffer;
+    const py = hasOffer ? 200 : 300, ph = hasRelicOffer ? 470 : hasCoinOffer ? 404 : 250;
     const vFrame = machArt('frame_tall');
     if (vFrame) {
       ctx.save();
@@ -3873,24 +3929,35 @@ if (!HEADLESS) (function browser() {
     txt(v.boss ? 'FLOOR CLEARED!' : 'VICTORY!', LW / 2, py + 98, '900 28px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
     txt('+' + v.gold + ' gold   •   +' + v.keys + ' \u{1F5DD} key' + (v.keys > 1 ? 's' : ''),
         LW / 2, py + 132, '800 15px Verdana, sans-serif', '#fff0c0');
-    if (v.boss) txt('the stairs descend… +35% HP restored', LW / 2, py + 154, '600 11px Verdana, sans-serif', '#7ee787');
-    // an elite's hoard: the artifact it was guarding
-    if (rl) {
-      const rc = RARITY[rl.rar];
-      rr(92, py + 164, LW - 184, 34, 12);
-      ctx.fillStyle = 'rgba(10,6,14,0.85)'; ctx.fill();
-      ctx.lineWidth = 2; ctx.strokeStyle = rc.col; ctx.stroke();
-      txt(rl.icon + ' ' + rl.name + '  [' + rc.name + ']', LW / 2, py + 176, '900 11px Verdana, sans-serif', rc.col);
-      txt(rl.desc, LW / 2, py + 191, '600 8px Verdana, sans-serif', '#c8b8cc');
+    if (v.boss) txt('the stairs descend… +22% HP restored', LW / 2, py + 154, '600 11px Verdana, sans-serif', '#7ee787');
+    else if (v.freeSpin) txt('the elite’s WHEEL OF FORTUNE spins — free!', LW / 2, py + 154, '700 11px Verdana, sans-serif', '#b06be8');
+    // a BOSS lets you claim one artifact from a spread of two commons + a rare
+    if (hasRelicOffer) {
+      txt(v.relicPicked ? relicById(v.relicPicked).name + ' claimed!' : 'CLAIM AN ARTIFACT — choose one:',
+          LW / 2, py + 180, '800 12px Verdana, sans-serif', v.relicPicked ? '#7ee787' : '#e8d0a0');
+      v.relicOffer.forEach((id, i) => {
+        const rl2 = relicById(id); const rc = RARITY[rl2.rar];
+        const ry = py + 200 + i * 58;
+        const isPick = v.relicPicked === id;
+        const dim = v.relicPicked && !isPick;
+        ctx.save(); ctx.globalAlpha = dim ? 0.32 : 1;
+        rr(92, ry, LW - 184, 50, 12);
+        ctx.fillStyle = isPick ? 'rgba(28,52,34,0.92)' : 'rgba(14,8,18,0.92)'; ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = isPick ? '#7ed6a0' : rc.col; ctx.stroke();
+        txt(rl2.icon + '  ' + rl2.name + '  [' + rc.name + ']', LW / 2, ry + 19, '900 12px Verdana, sans-serif', isPick ? '#bff0cf' : rc.col);
+        txt(rl2.desc, LW / 2, ry + 36, '600 9px Verdana, sans-serif', '#c8b8cc');
+        ctx.restore();
+        if (!v.relicPicked) uiButtons.push({ x: 92, y: ry, w: LW - 184, h: 50, cb: () => pickRelicOffer(i) });
+      });
     }
     // the spoils: pick ONE coin to join your purse for the rest of the run
-    if (hasOffer) {
+    if (hasCoinOffer) {
       txt(v.picked ? 'the ' + COIN_INFO[v.picked].name.toUpperCase() + ' coin joins your purse!'
                    : 'CHOOSE A SPOIL — one coin for your purse:',
-          LW / 2, py + 178 + exY, '800 11px Verdana, sans-serif', v.picked ? '#7ee787' : '#e8d0a0');
+          LW / 2, py + 178, '800 11px Verdana, sans-serif', v.picked ? '#7ee787' : '#e8d0a0');
       const sp = v.offer.length >= 4 ? 82 : 100;
       v.offer.forEach((ck, i) => {
-        const cx = LW / 2 + (i - (v.offer.length - 1) / 2) * sp, cy = py + 232 + exY;
+        const cx = LW / 2 + (i - (v.offer.length - 1) / 2) * sp, cy = py + 232;
         const isPick = v.picked === ck;
         const dim = v.picked && !isPick;
         ctx.save();
@@ -3919,7 +3986,8 @@ if (!HEADLESS) (function browser() {
       });
     }
     const pulse = 1 + Math.sin(t * 5) * 0.03;
-    const label = v.boss ? 'DESCEND ▼' : hasOffer && !v.picked ? 'SKIP ▶' : 'CONTINUE ▶';
+    const label = v.boss ? (hasRelicOffer && !v.relicPicked ? 'SKIP ▼' : 'DESCEND ▼')
+                : hasCoinOffer && !v.picked ? 'SKIP ▶' : 'CONTINUE ▶';
     uiBtn(LW / 2 - 90 * pulse, py + ph - 62, 180 * pulse, 40, label, () => leaveBattle(),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 14 });
   }
