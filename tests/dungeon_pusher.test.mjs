@@ -765,24 +765,42 @@ t.ok(Array.isArray(S.run.pileSave), 'and the machine remembers its pile');
 {
   DP.srand(19);
   let keyDrops = 0, coinDrops = 0;
+  const prizeKinds = {};
   for (let i = 0; i < 30; i++) {
     S.run.room.ents = [{ kind: 'chest', done: false }];
     const snap = {
-      gold: S.run.gold, keys: S.run.keys, potions: S.run.potions, purse: DP.purseTotal(),
+      gold: S.run.gold, keys: S.run.keys, purse: DP.purseTotal(),
       arsenal: Object.values(S.run.arsenal).reduce((a, b) => a + b, 0),
     };
-    t.ok(DP.interact(0), 'chest ' + i + ' opens');
-    if (S.run.keys > snap.keys) keyDrops++;
-    if (DP.purseTotal() > snap.purse) coinDrops++;
-    const gained = S.run.gold > snap.gold || S.run.keys > snap.keys
-      || S.run.potions > snap.potions || DP.purseTotal() > snap.purse
-      || Object.values(S.run.arsenal).reduce((a, b) => a + b, 0) > snap.arsenal;
-    if (!gained) t.ok(false, 'chest ' + i + ' paid nothing!');
+    // opening a chest offers ONE prize behind an accept/deny gamble
+    t.ok(DP.interact(0), 'chest ' + i + ' opens a gamble');
+    t.ok(S.room && S.room.type === 'chest' && S.room.prize, 'chest ' + i + ' shows a prize to weigh');
+    const prize = S.room.prize;
+    prizeKinds[prize.kind] = (prizeKinds[prize.kind] || 0) + 1;
+    t.ok(['gold', 'item', 'coin', 'key'].indexOf(prize.kind) >= 0, 'chest ' + i + ' prize is gold/item/coin/key');
+    if (i % 5 === 0) {
+      // every so often, LEAVE IT — nothing gained, but the chest still retires
+      t.ok(DP.denyPrize(), 'chest ' + i + ' declined');
+      const same = S.run.gold === snap.gold && S.run.keys === snap.keys
+        && DP.purseTotal() === snap.purse
+        && Object.values(S.run.arsenal).reduce((a, b) => a + b, 0) === snap.arsenal;
+      t.ok(same, 'declining chest ' + i + ' grants nothing');
+    } else {
+      t.ok(DP.acceptPrize(), 'chest ' + i + ' accepted');
+      if (S.run.keys > snap.keys) keyDrops++;
+      if (DP.purseTotal() > snap.purse) coinDrops++;
+      const gained = S.run.gold > snap.gold || S.run.keys > snap.keys
+        || DP.purseTotal() > snap.purse
+        || Object.values(S.run.arsenal).reduce((a, b) => a + b, 0) > snap.arsenal;
+      if (!gained) t.ok(false, 'accepted chest ' + i + ' paid nothing!');
+    }
+    t.ok(!S.room, 'chest ' + i + ' modal closes after the choice');
     t.ok(S.run.room.ents[0].done, 'chest ' + i + ' is spent');
     t.ok(!DP.interact(0), 'chest ' + i + ' cannot be opened twice');
   }
   t.ok(keyDrops >= 1, 'some chests hold keys (' + keyDrops + '/30)');
   t.ok(coinDrops >= 1, 'some chests hold purse coins (' + coinDrops + '/30)');
+  t.ok(Object.keys(prizeKinds).length >= 3, 'chests roll a spread of prize kinds (' + Object.keys(prizeKinds).join('/') + ')');
   t.ok(S.toast, 'chests tell you what you got');
 }
 // shrine heals and cleanses
@@ -1485,7 +1503,9 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   ];
   frames(10);
   D.interact(2);
-  frames(10);                                     // chest toast
+  frames(10);                                     // chest gamble modal (accept/deny)
+  D.acceptPrize();                                // take the prize, chest retires
+  frames(6);
   D.interact(1);
   frames(10);                                     // shop modal (full 8-item shelf)
   t.ok(D.S.room && D.S.room.stock.length >= 7, 'the render-pass shop shows a tall shelf');
