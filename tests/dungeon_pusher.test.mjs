@@ -107,7 +107,7 @@ t.eq(S.run, null, 'no run in progress at first boot');
 t.ok(ITEMS.length === 8 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'eight arsenal items defined');
 t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the bestiary is populated');
 t.eq(BOSSES.length, 3, 'three floor bosses');
-t.ok(RELICS.length >= 38 && RELICS.every(r => r.id && r.desc), 'the artifact shelf is stocked (' + RELICS.length + ')');
+t.ok(RELICS.length >= 88 && RELICS.every(r => r.id && r.desc), 'the artifact shelf is stocked (' + RELICS.length + ')');
 t.ok(RELICS.every(r => ['c', 'r', 'e'].indexOf(r.rar) >= 0), 'every artifact carries a rarity stamp');
 t.eq(new Set(RELICS.map(r => r.id)).size, RELICS.length, 'no duplicate artifact ids');
 t.eq(WHEEL.length, 9, 'the wheel of fortune has nine prize segments');
@@ -983,6 +983,83 @@ DP.hurtPlayer(99, 'test doom');
 t.eq(S.run, null, 'the second killing blow lands — run over');
 t.eq(S.screen, 'over', 'game over screen');
 t.ok(S.over && S.over.cause === 'test doom', 'the cause of death is recorded');
+
+// -------- the deep vault: the 50 new artifacts are real mechanics --------
+DP.srand(83);
+DP.newRun('knight');
+{
+  // a fresh battle harness we can re-arm between checks
+  const arm = (hp) => {
+    S.screen = 'battle';
+    S.enemy = DP.mkEnemy('battle'); S.enemy.hp = S.enemy.maxHp = hp || 500; S.enemy.def = null; S.enemy.braced = false;
+    S.foes = [S.enemy];
+    S.battle = { round: 1, phase: 'resolve', loot: [], banked: [], queue: [], qi: 0, qt: 0,
+                 stolen: 0, target: 0, tilts: C.TILTS, hand: null, sel: 'coin', goldWon: 0, keysWon: 0, goldFired: 0 };
+  };
+  const hpOf = (fx) => { arm(500); const b = S.enemy.hp; fx(); return b - S.enemy.hp; };
+  const only = (id) => { S.run.relics = id ? [id] : []; };
+
+  // --- coin/weapon damage & effect boosters ---
+  only(); const gBase = hpOf(() => DP.applyLoot({ t: 'gold' }));
+  only('keenedge'); t.eq(hpOf(() => DP.applyLoot({ t: 'gold' })), gBase + 1, 'Keen Edge: gold coins +1 damage');
+  only('warlord'); arm(500); S.battle.goldFired = 6; { const b = S.enemy.hp; DP.applyLoot({ t: 'gold' }); t.eq(b - S.enemy.hp, gBase + 2, 'Warlord: +1 per 3 gold already fired'); }
+  only('berserker'); arm(500); S.run.hp = 5; S.run.maxHp = 100; t.eq(hpOf(() => DP.applyLoot({ t: 'gold' })), gBase + 2, 'Berserker: +2 gold damage while under half HP'); S.run.hp = S.run.maxHp = 100;
+  only(); const lBase = hpOf(() => DP.applyLoot({ t: 'lucky' }));
+  only('horseshoe'); t.eq(hpOf(() => DP.applyLoot({ t: 'lucky' })), lBase + 1, 'Horseshoe: lucky coins +1 damage');
+  only('armory'); arm(500); { const b = S.enemy.hp; DP.applyLoot({ t: 'weapon', iid: 'sword' }); t.eq(b - S.enemy.hp, DP.weaponDmg(DP.itemById('sword').dmg) + 2, 'Armory: weapons +2 damage'); }
+  only('emberhoard'); arm(500); S.foes = [S.enemy, DP.mkEnemy('battle')]; S.foes[1].hp = 50; { const b = S.foes[1].hp; DP.applyLoot({ t: 'gold' }); t.ok(S.foes[1].hp < b, 'Ember Hoard: gold also singes all foes'); }
+
+  // --- block / defense ---
+  only(); arm(500); S.run.block = 0; DP.applyLoot({ t: 'silver' }); const sBase = S.run.block;
+  only('bulwark'); arm(500); S.run.block = 0; DP.applyLoot({ t: 'silver' }); t.eq(S.run.block, sBase + 1, 'Bulwark: silver coins +1 block');
+  only('plateup'); arm(500); S.run.block = 0; DP.applyLoot({ t: 'shielditem', iid: 'shield' }); t.eq(S.run.block, DP.itemById('shield').block + 3, 'Reinforced Plate: shield items +3 block');
+  only('ironhide'); DP.newRound(); t.eq(S.run.block, 2, 'Iron Hide: +2 block at round start');
+  only('barricade'); DP.newRound(); t.eq(S.run.block, 3, 'Barricade: +3 block at round start');
+  S.screen = 'dungeon'; S.battle = null;
+  only('thickskin'); S.run.hp = 50; S.run.maxHp = 60; S.run.block = 0; DP.hurtPlayer(6, 'x'); t.eq(S.run.hp, 50 - 5, 'Thick Skin: 1 less from every hit');
+  only('guardian'); S.run.hp = 50; S.run.block = 10; DP.hurtPlayer(6, 'x'); t.eq(S.run.hp, 52, 'Guardian: a full block soak heals 2'); S.run.block = 0;
+
+  // --- healing ---
+  only(); arm(500); const rBase = (() => { S.run.hp = 10; S.run.maxHp = 60; DP.applyLoot({ t: 'red' }); return S.run.hp - 10; })();
+  only('greensprig'); arm(500); S.run.hp = 10; DP.applyLoot({ t: 'red' }); t.eq(S.run.hp - 10, rBase + 1, 'Green Sprig: heart coins heal +1');
+  only('fieldmedic'); arm(500); S.run.hp = 10; DP.applyLoot({ t: 'heartitem', iid: 'heart' }); t.eq(S.run.hp - 10, DP.itemById('heart').heal + 4, 'Field Medic: heart items heal +4');
+  S.run.hp = S.run.maxHp = 100;
+
+  // --- poison / frost / curse ---
+  only('toxicology'); arm(500); S.enemy.pois = 0; DP.applyLoot({ t: 'green' }); t.eq(S.enemy.pois, 2, 'Toxicology: venom coins +1 stack');
+  only('deepfreeze'); arm(500); S.enemy.stunned = 0; DP.applyLoot({ t: 'frost', iid: 'frost' }); t.eq(S.enemy.stunned, DP.itemById('frost').stun + 1, 'Deep Freeze: frost stuns +1 round');
+  S.screen = 'dungeon'; S.battle = null;
+  only(); S.run.hp = 60; S.run.maxHp = 60; S.run.floor = 1;
+  only('blessing'); arm(500); S.screen = 'battle'; S.run.hp = 60; DP.applyLoot({ t: 'skull' }); const withBless = 60 - S.run.hp;
+  only(); arm(500); S.run.hp = 60; DP.applyLoot({ t: 'skull' }); const noBless = 60 - S.run.hp;
+  t.eq(withBless, noBless - 2, 'Blessing: cursed skulls bite 2 less');
+  S.screen = 'dungeon'; S.battle = null; S.run.hp = S.run.maxHp = 100;
+
+  // --- economy ---
+  only(); const before1 = S.run.gold; DP.addGold(100); const g1 = S.run.gold - before1;
+  only('goldrush'); const before2 = S.run.gold; DP.addGold(100); t.eq(S.run.gold - before2, Math.round(g1 * 1.4), 'Gold Rush: +40% gold income');
+  only('vault'); t.eq(DP.bankMax(), C.BANK_MAX + 1, 'Vault: bank holds +1');
+  only('richhand'); arm(500); DP.dealHand(); t.ok((S.battle.hand.coin || 0) >= (S.run.purse.coin || 0) + 1, 'Rich Hand: a bonus gold coin in hand');
+  only('tollkeeper'); arm(500); DP.dealHand(); t.ok((S.battle.hand.coin || 0) >= (S.run.purse.coin || 0) + 2, 'Tollkeeper: two bonus gold coins in hand');
+
+  // --- resolve shaping ---
+  only('finale'); { const q = DP.buildQueue([{ k: 'coin' }, { k: 'silver' }]); t.ok(q.length === 3, 'Finale: the last piece is encored'); }
+  only('reverb'); { const q = DP.buildQueue([{ k: 'coin' }, { k: 'silver' }]); t.ok(q.length === 3, 'Reverb: the first piece rings twice'); }
+
+  // --- survival / on-kill / on-win ---
+  only('revenant'); S.screen = 'dungeon'; S.battle = null; S.run.windUsed = false; S.run.hp = 3; S.run.block = 0;
+  DP.hurtPlayer(99, 'x'); t.eq(S.run.hp, 1, 'Revenant: first killing blow survived');
+  DP.hurtPlayer(99, 'x'); t.eq(S.run.hp, 1, 'Revenant: a SECOND killing blow survived too');
+  DP.hurtPlayer(99, 'x'); t.eq(S.run, null, 'the third blow lands');
+  DP.newRun('knight');
+  only('prospector'); arm(500); S.run.gold = 0; S.enemy.hp = 1; S.enemy.gold = 10; DP.dmgEnemy(5);
+  t.ok(S.run.gold >= 12, 'Prospector: +2 gold on a kill (' + S.run.gold + ')');
+  only('graverobber'); arm(500); S.enemy = DP.mkEnemy('elite'); S.enemy.elite = true; S.enemy.hp = 1; S.foes = [S.enemy]; const k0 = S.run.keys; DP.dmgEnemy(5);
+  t.ok(S.run.keys >= k0 + C.KEY_ELITE + 1, 'Grave Robber: +1 key on an elite kill');
+  only('secondbreath'); arm(500); S.enemy.hp = 1; S.run.hp = 10; S.run.maxHp = 100; DP.dmgEnemy(5); t.ok(S.run.hp >= 18, 'Second Breath: +8 HP on victory');
+  S.run.relics = [];
+  S.screen = 'dungeon'; S.battle = null; S.foes = []; S.victory = null;
+}
 
 // -------- the ARTIFACT catalog: rarity-weighted drops --------
 DP.srand(77);

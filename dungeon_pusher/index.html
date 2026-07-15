@@ -194,6 +194,60 @@ const RELICS = [
   { id: 'midas',      rar: 'e', icon: '\u{1F451}', name: 'Midas Touch',   desc: 'all gold income +30%' },
   { id: 'twinstrike', rar: 'e', icon: '\u{1F5E1}\u{FE0F}', name: 'Twin Strike', desc: 'gold coins strike TWICE' },
   { id: 'grandbank',  rar: 'e', icon: '\u{1F3E6}', name: 'Grand Bank',    desc: 'banked pieces come back duplicated' },
+  // ---- the deep vaults: 50 more artifacts ----
+  // COMMON — steady, stacking bonuses
+  { id: 'keenedge',   rar: 'c', icon: '\u{1F5E1}\u{FE0F}', name: 'Keen Edge',   desc: 'gold coins deal +1 damage' },
+  { id: 'bulwark',    rar: 'c', icon: '\u{1F6E1}\u{FE0F}', name: 'Bulwark',     desc: 'silver coins give +1 block' },
+  { id: 'greensprig', rar: 'c', icon: '\u{1F49A}', name: 'Green Sprig',   desc: 'heart coins heal +1 HP' },
+  { id: 'permafrost', rar: 'c', icon: '\u{2744}\u{FE0F}', name: 'Permafrost', desc: 'frost coins deal +1 to every foe' },
+  { id: 'horseshoe',  rar: 'c', icon: '\u{1F9F2}', name: 'Horseshoe',     desc: 'lucky coins deal +1 damage' },
+  { id: 'toxicology', rar: 'c', icon: '\u{2697}\u{FE0F}', name: 'Toxicology', desc: 'venom coins apply +1 stack' },
+  { id: 'armory',     rar: 'c', icon: '\u{1F5C4}\u{FE0F}', name: 'Armory',    desc: 'weapons deal +2 damage' },
+  { id: 'fieldmedic', rar: 'c', icon: '\u{1FA79}', name: 'Field Medic',   desc: 'heart items heal +4 HP' },
+  { id: 'plateup',    rar: 'c', icon: '\u{1F531}', name: 'Reinforced Plate', desc: 'shield items give +3 block' },
+  { id: 'ironhide',   rar: 'c', icon: '\u{1F417}', name: 'Iron Hide',     desc: 'start every round with +2 block' },
+  { id: 'mending',    rar: 'c', icon: '\u{1F33F}', name: 'Mending',       desc: 'heal 2 HP at the start of each round' },
+  { id: 'saltpile',   rar: 'c', icon: '\u{1F9C2}', name: 'Salt Pile',     desc: '+2 extra pieces rain in each round' },
+  { id: 'prybar',     rar: 'c', icon: '\u{1F529}', name: 'Prybar',        desc: '+1 TILT charge every round' },
+  { id: 'vault',      rar: 'c', icon: '\u{1F5DD}\u{FE0F}', name: 'Vault',   desc: 'the bank holds +1 piece' },
+  { id: 'prospector', rar: 'c', icon: '\u{26CF}\u{FE0F}', name: 'Prospector', desc: '+2 gold for every kill' },
+  { id: 'luckypenny', rar: 'c', icon: '\u{1FA99}', name: 'Lucky Penny',   desc: '+3 gold at the start of each round' },
+  { id: 'cloverfield',rar: 'c', icon: '\u{2618}\u{FE0F}', name: 'Clover Field', desc: 'lucky coins turn up even more often' },
+  { id: 'blessing',   rar: 'c', icon: '\u{271D}\u{FE0F}', name: 'Blessing', desc: 'cursed skulls bite for 2 less' },
+  { id: 'elixir',     rar: 'c', icon: '\u{1F9F4}', name: 'Elixir',        desc: 'potions heal +8 HP' },
+  { id: 'richhand',   rar: 'c', icon: '\u{1F4B0}', name: 'Rich Hand',     desc: 'your hand holds a bonus gold coin each round' },
+  { id: 'glimmergem', rar: 'c', icon: '\u{1F4A0}', name: 'Glimmer Gem',   desc: 'gems pay +8 gold' },
+  { id: 'taxman',     rar: 'c', icon: '\u{1F9FE}', name: 'Taxman',        desc: '+1 gold each time a gold coin fires' },
+  { id: 'scavenger',  rar: 'c', icon: '\u{1F526}', name: 'Scavenger',     desc: 'gold bags pay +5 gold' },
+  { id: 'thickskin',  rar: 'c', icon: '\u{1F9F1}', name: 'Thick Skin',    desc: 'take 1 less from every enemy hit' },
+  { id: 'sparkstone', rar: 'c', icon: '\u{2728}', name: 'Spark Stone',    desc: 'frost coins deal +1 more when 2+ foes stand' },
+  { id: 'deadeye',    rar: 'c', icon: '\u{1F441}\u{FE0F}', name: 'Dead Eye', desc: 'lucky coins pierce a braced guard' },
+  // RARE — build-shapers
+  { id: 'berserker',  rar: 'r', icon: '\u{1F620}', name: 'Berserker',     desc: 'gold coins deal +2 while you are below half HP' },
+  { id: 'retort',     rar: 'r', icon: '\u{1F994}', name: 'Retort',        desc: 'silver coins also deal 2 damage' },
+  { id: 'phoenixember',rar: 'r', icon: '\u{1F525}', name: 'Phoenix Ember', desc: 'heart coins also give 1 block' },
+  { id: 'blightlord', rar: 'r', icon: '\u{1F9A0}', name: 'Blight Lord',   desc: 'venom coins also deal 1 damage' },
+  { id: 'assassin',   rar: 'r', icon: '\u{1F5E1}\u{FE0F}', name: 'Assassin', desc: 'lucky coins pierce guards and deal +2' },
+  { id: 'heavyarms',  rar: 'r', icon: '\u{1F4AA}', name: 'Heavy Arms',    desc: 'weapons deal +30% damage' },
+  { id: 'deepfreeze', rar: 'r', icon: '\u{1F328}\u{FE0F}', name: 'Deep Freeze', desc: 'frost runes stun +1 round' },
+  { id: 'barricade',  rar: 'r', icon: '\u{1F9F1}', name: 'Barricade',     desc: 'start every round with +3 block' },
+  { id: 'retribution',rar: 'r', icon: '\u{1F335}', name: 'Retribution',   desc: 'attackers take 2 back whenever they hit you' },
+  { id: 'guardian',   rar: 'r', icon: '\u{1F47C}', name: 'Guardian',      desc: 'when your block fully soaks a hit, heal 2' },
+  { id: 'overdrive',  rar: 'r', icon: '\u{26A1}', name: 'Overdrive',      desc: 'the resolve ramps up speed twice as fast' },
+  { id: 'reverb',     rar: 'r', icon: '\u{1F515}', name: 'Reverb',        desc: 'the first piece of every resolve fires twice' },
+  { id: 'tollkeeper', rar: 'r', icon: '\u{1F9F3}', name: 'Tollkeeper',    desc: 'your hand holds two bonus gold coins each round' },
+  { id: 'graverobber',rar: 'r', icon: '\u{26B0}\u{FE0F}', name: 'Grave Robber', desc: '+1 key for every elite or boss slain' },
+  { id: 'tithe',      rar: 'r', icon: '\u{26EA}', name: 'Tithe',          desc: '+5 gold after every victory' },
+  { id: 'secondbreath',rar: 'r', icon: '\u{1F32C}\u{FE0F}', name: 'Second Breath', desc: 'heal 8 HP after every victory' },
+  { id: 'emberhoard', rar: 'r', icon: '\u{1FA94}', name: 'Ember Hoard',   desc: 'gold coins also singe ALL foes for 1' },
+  { id: 'contagion',  rar: 'r', icon: '\u{1F578}\u{FE0F}', name: 'Contagion', desc: 'venom coins also seep 1 stack to every foe' },
+  { id: 'jackpotcharm',rar: 'r', icon: '\u{1F3B0}', name: 'Jackpot Charm', desc: 'filling the JACKPOT meter also pays +15 gold' },
+  // EPIC — run-defining
+  { id: 'goldrush',   rar: 'e', icon: '\u{1F911}', name: 'Gold Rush',     desc: 'all gold income +40%' },
+  { id: 'finale',     rar: 'e', icon: '\u{1F386}', name: 'Finale',        desc: 'the last piece of every resolve fires twice' },
+  { id: 'bloodthirst',rar: 'e', icon: '\u{1F9DB}\u{200D}\u{2642}\u{FE0F}', name: 'Blood Thirst', desc: 'every coin and weapon heals you 1 on hit' },
+  { id: 'revenant',   rar: 'e', icon: '\u{1FAB6}', name: 'Revenant',      desc: 'survive TWO killing blows at 1 HP each fight' },
+  { id: 'warlord',    rar: 'e', icon: '\u{1F396}\u{FE0F}', name: 'Warlord', desc: 'gold coins hit harder for every 3 gold already fired' },
 ];
 // weighted pull from the unowned shelf — commons far more often
 function rollRelicDrop() {
@@ -573,8 +627,13 @@ function dmgFoe(e, n, src, pierce) {
 function dmgEnemy(n, src, pierce) { return dmgFoe(S.enemy, n, src, pierce); }
 // what one gold coin hits for, artifacts included (momentum counts fired gold)
 function goldDmg() {
-  return C.DMG.gold + (hasRelic('goldedge') ? 1 : 0)
-       + (hasRelic('momentum') && S.battle ? Math.floor((S.battle.goldFired || 0) / 5) : 0);
+  let d = C.DMG.gold + (hasRelic('goldedge') ? 1 : 0) + (hasRelic('keenedge') ? 1 : 0);
+  if (S.battle) {
+    if (hasRelic('momentum')) d += Math.floor((S.battle.goldFired || 0) / 5);
+    if (hasRelic('warlord')) d += Math.floor((S.battle.goldFired || 0) / 3);
+  }
+  if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) d += 2;
+  return d;
 }
 // blue coins: the frost bites EVERY foe at once
 function dmgAll(n) {
@@ -588,9 +647,11 @@ function foeDown(e) {
   e.paid = true;
   S.run.kills++;
   const gold = e.gold;
-  const keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
+  let keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
+  if (hasRelic('graverobber') && (e.elite || e.boss)) keys += 1;   // rob the tougher graves
   S.run.keys += keys;
   addGold(gold);
+  if (hasRelic('prospector')) { addGold(2); S.battle.goldWon += 2; }
   floatAnchor('+' + keys + ' \u{1F5DD}', 'enemy', '#ffd75e', true);
   S.battle.goldWon += gold;
   S.battle.keysWon += keys;
@@ -631,7 +692,10 @@ function healPlayer(n) {
 }
 function addGold(n) {
   if (!S.run) return;
-  if (hasRelic('midas')) n = Math.round(n * 1.3);
+  let mul = 1;
+  if (hasRelic('midas')) mul += 0.3;
+  if (hasRelic('goldrush')) mul += 0.4;
+  if (mul !== 1) n = Math.round(n * mul);
   S.run.gold += n;
   S.run.goldEarned += n;
   floatAnchor('+' + n + ' G', 'gold', '#ffd75e', n >= 15);
@@ -653,8 +717,10 @@ function hpHit(n, cause, col) {
   floatAnchor('-' + n + ' HP', 'hero', col || '#ff5a4e', n >= 6);
   SND.hurt();
   if (S.run.hp <= 0) {
-    if (hasRelic('wind') && !S.run.windUsed) {
-      S.run.windUsed = true;
+    // Second Wind saves once; the Revenant stands you up twice per fight
+    const saves = (hasRelic('wind') ? 1 : 0) + (hasRelic('revenant') ? 2 : 0);
+    if ((S.run.windUsed || 0) < saves) {
+      S.run.windUsed = (S.run.windUsed || 0) + 1;
       S.run.hp = 1;
       S.banner = { txt: 'SECOND WIND!', ttl: 1.6, max: 1.6 };
       return;
@@ -664,13 +730,19 @@ function hpHit(n, cause, col) {
 }
 function hurtPlayer(n, cause) {
   if (!S.run || S.run.hp <= 0) return;
+  if (hasRelic('thickskin')) n = Math.max(1, n - 1);   // hide turns the edge
+  const incoming = n;
   // block soaks first
   if (S.run.block > 0) {
     const soak = Math.min(S.run.block, n);
     S.run.block -= soak; n -= soak;
     if (soak > 0) { floatAnchor('BLOCKED ' + soak, 'hero', '#c8d6e8'); SND.block(); }
   }
-  if (n <= 0) return;
+  if (n <= 0) {
+    // Guardian rewards a wall that swallowed the whole blow
+    if (hasRelic('guardian') && incoming > 0) healPlayer(2);
+    return;
+  }
   hpHit(n, cause);
 }
 function usePotion() {
@@ -750,6 +822,7 @@ function grantItem(iid, n) {
 // field — three free swings of the arsenal you built, not a coin firehose
 function frenzy() {
   S.meter = 0;
+  if (hasRelic('jackpotcharm')) { addGold(15); if (S.battle) S.battle.goldWon += 15; }
   S.banner = { txt: 'JACKPOT!', ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.jackpot();
@@ -885,7 +958,10 @@ function tilt(dir) {
 }
 // hold a caught piece back for next round (up to 3)
 function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
-function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0); }
+function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 1 : 0); }
+// the round-start guard from artifacts, stacked
+function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 3 : 0); }
+function tiltCount() { return C.TILTS + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0); }
 function bankLoot(key) {
   const B = S.battle;
   if (!B || B.phase !== 'drop' || B.banked.length >= bankMax()) return false;
@@ -907,7 +983,7 @@ function unbankLoot(key) {
 // the FIELD carries the silver and venom coins you push for)
 function rollPileKind() {
   const r = rng();
-  const luckyP = C.MIX.lucky * (hasRelic('clover') ? 2 : 1);
+  const luckyP = C.MIX.lucky * (hasRelic('clover') ? 2 : 1) * (hasRelic('cloverfield') ? 1.5 : 1);
   if (r < C.MIX.silver) return 'silver';
   if (r < C.MIX.silver + C.MIX.green) return 'green';
   if (r < C.MIX.silver + C.MIX.green + luckyP) return 'lucky';
@@ -975,8 +1051,9 @@ function dealHand() {
     while (cut > 0 && B.hand[k] > 0) { B.hand[k]--; cut--; }
   }
   B.stolen = 0;
-  // the Minter strikes you a bonus gold coin every round
-  if (hasRelic('minter')) B.hand.coin = (B.hand.coin || 0) + 1;
+  // the Minter / Rich Hand / Tollkeeper strike you bonus gold coins each round
+  const bonusCoin = (hasRelic('minter') ? 1 : 0) + (hasRelic('richhand') ? 1 : 0) + (hasRelic('tollkeeper') ? 2 : 0);
+  if (bonusCoin) B.hand.coin = (B.hand.coin || 0) + bonusCoin;
   B.sel = 'coin';
   autoSel();
   syncWallet();
@@ -1011,7 +1088,7 @@ function startBattle(type, entIdx, eid, extras) {
   for (const f of S.foes) rollIntent(f);
   S.battle = { round: 1, phase: 'drop', loot: [], banked: [], queue: [], qi: 0, qt: 0,
                stolen: 0, actList: [], actPtr: 0, actT: 0, target: 0,
-               tilts: C.TILTS + (hasRelic('crowbar') ? 1 : 0),
+               tilts: tiltCount(),
                hand: null, sel: 'coin', goldWon: 0, keysWon: 0 };
   S.enemy = S.foes[0];
   S.screen = 'battle';
@@ -1020,7 +1097,7 @@ function startBattle(type, entIdx, eid, extras) {
   S.run.windUsed = false;
   S.pPois = 0;
   dealHand();
-  S.run.block = hasRelic('plate') ? 4 : 0;
+  S.run.block = startBlock();
   // ONE machine per floor: the pile persists between fights, so the silver
   // you stashed deep last battle is still creeping toward the edge
   if (S.run.pileSave && S.run.pileFloor === S.run.floor) {
@@ -1076,8 +1153,10 @@ function buildQueue(loot) {
     } else q.push({ t: l.k });
   }
   q.sort((a, b) => RESOLVE_ORDER.indexOf(a.t) - RESOLVE_ORDER.indexOf(b.t));
-  // the Echo Bell rings the opening piece twice
-  if (hasRelic('echobell') && q.length) q.unshift({ ...q[0] });
+  // the Echo Bell / Reverb ring the opening piece twice
+  if ((hasRelic('echobell') || hasRelic('reverb')) && q.length) q.unshift({ ...q[0] });
+  // Finale encores the closing piece
+  if (hasRelic('finale') && q.length) q.push({ ...q[q.length - 1] });
   return q;
 }
 // the resolve RAMPS UP within a run of the SAME piece: each next coin fires
@@ -1085,7 +1164,7 @@ function buildQueue(loot) {
 // changes (gold -> silver -> items each start slow again). Floored at 0.4 so
 // even a long same-type barrage never blurs into a machine-gun
 function resolveSpeed(n) {
-  return Math.max(0.4, Math.pow(hasRelic('quicksilver') ? 0.8 : 0.9, n || 0));
+  return Math.max(0.4, Math.pow(hasRelic('quicksilver') || hasRelic('overdrive') ? 0.8 : 0.9, n || 0));
 }
 // the sticky fast-forward: ×1 / ×2 / ×3, applied to every resolve delay
 function resolveDelay(base, n) {
@@ -1124,42 +1203,63 @@ function endRoundNow() {
 }
 function applyLoot(q) {
   if (!S.run) return;
-  if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0));
-  else if (q.t === 'bag') addGold(8 + (hasRelic('fatpouch') ? 7 : 0));
+  if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0));
+  else if (q.t === 'bag') addGold(8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
   else if (q.t === 'silver') {
-    addBlock(1 + (hasRelic('silvercore') ? 1 : 0));
+    addBlock(1 + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0));
     if (hasRelic('spikeshield')) dmgEnemy(1);
+    if (hasRelic('retort')) dmgEnemy(2);
   }
-  else if (q.t === 'shielditem') addBlock(itemById(q.iid).block);
-  else if (q.t === 'red') healPlayer(C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0));
-  else if (q.t === 'heartitem') healPlayer(itemById(q.iid).heal);
+  else if (q.t === 'shielditem') addBlock(itemById(q.iid).block + (hasRelic('plateup') ? 3 : 0));
+  else if (q.t === 'red') {
+    healPlayer(C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0) + (hasRelic('greensprig') ? 1 : 0));
+    if (hasRelic('phoenixember')) addBlock(1);
+  }
+  else if (q.t === 'heartitem') healPlayer(itemById(q.iid).heal + (hasRelic('fieldmedic') ? 4 : 0));
   else if (q.t === 'gold') {
     const d = goldDmg();
     dmgEnemy(d);
     if (hasRelic('twinstrike') && S.run && !S.victory) dmgEnemy(d);
     if (hasRelic('bloodgold')) healPlayer(1);
+    if (hasRelic('bloodthirst')) healPlayer(1);
+    if (hasRelic('emberhoard') && S.run && !S.victory) dmgAll(1);
+    if (hasRelic('taxman')) addGold(1);
     if (S.battle) S.battle.goldFired = (S.battle.goldFired || 0) + 1;
     SND.collect(2);
   }
-  else if (q.t === 'lucky') { dmgEnemy(C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0), null, hasRelic('sniperlens')); SND.gem(); }
-  else if (q.t === 'blue') { dmgAll(C.DMG.blue + (hasRelic('frostshard') ? 1 : 0)); SND.stun(); }
+  else if (q.t === 'lucky') {
+    const ld = C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0);
+    dmgEnemy(ld, null, hasRelic('sniperlens') || hasRelic('deadeye') || hasRelic('assassin'));
+    if (hasRelic('bloodthirst')) healPlayer(1);
+    SND.gem();
+  }
+  else if (q.t === 'blue') {
+    let bd = C.DMG.blue + (hasRelic('frostshard') ? 1 : 0) + (hasRelic('permafrost') ? 1 : 0);
+    if (hasRelic('sparkstone') && S.foes.filter(f => f.hp > 0).length >= 2) bd += 1;
+    dmgAll(bd); SND.stun();
+  }
   else if (q.t === 'weapon') {
     const it = itemById(q.iid);
     floatAt(it.name + '!', 50, '#ffe066', true);
-    const wd = weaponDmg(it.dmg);
+    let wd = weaponDmg(it.dmg) + (hasRelic('armory') ? 2 : 0);
+    if (hasRelic('heavyarms')) wd = Math.round(wd * 1.3);
     dmgEnemy(wd);
     if (hasRelic('vampblade')) healPlayer(Math.ceil(wd / 2));
+    if (hasRelic('bloodthirst')) healPlayer(1);
     S.shake += it.splash ? 8 : 5;
     SND.hit();
   } else if (q.t === 'green') {
-    poisonEnemy((1 + (hasRelic('venomtip') ? 1 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
+    poisonEnemy((1 + (hasRelic('venomtip') ? 1 : 0) + (hasRelic('toxicology') ? 1 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
+    if (hasRelic('blightlord')) dmgEnemy(1);
+    if (hasRelic('contagion')) for (const f of S.foes) { if (f.hp > 0 && f !== S.enemy) f.pois += 1; }
     if (hasRelic('alchemist')) healPlayer(1);
   }
   else if (q.t === 'vial') poisonEnemy((itemById(q.iid).pois + (hasRelic('venom') ? 2 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
-  else if (q.t === 'frost') stunEnemy(itemById(q.iid).stun);
+  else if (q.t === 'frost') stunEnemy(itemById(q.iid).stun + (hasRelic('deepfreeze') ? 1 : 0));
   else if (q.t === 'skull') {
     floatAnchor('CURSED!', 'hero', '#c86bff', true);
-    hpHit(Math.max(1, C.SKULL_DMG + S.run.floor - 1 - (hasRelic('wardcandle') ? 3 : 0)), 'a cursed skull', '#c86bff');
+    const ward = (hasRelic('wardcandle') ? 3 : 0) + (hasRelic('blessing') ? 2 : 0);
+    hpHit(Math.max(1, C.SKULL_DMG + S.run.floor - 1 - ward), 'a cursed skull', '#c86bff');
   }
   // the storm rides the rhythm of the resolve
   if (hasRelic('stormcall') && S.run && !S.victory && S.battle && S.battle.qi > 0 && S.battle.qi % 8 === 0) {
@@ -1217,6 +1317,11 @@ function enemyActFoe(e) {
       floatAnchor('\u{1F335} thorns', 'enemy', '#8ed67e');
       dmgFoe(e, Math.ceil(preBlock / 2));
     }
+    // Retribution: a flat sting back at anything that dared strike you
+    if (S.run && hasRelic('retribution') && e.hp > 0) {
+      floatAnchor('\u{1F335} +2', 'enemy', '#8ed67e');
+      dmgFoe(e, 2);
+    }
   }
   if (S.run) rollIntent(e);             // and shows you its NEXT move
 }
@@ -1252,12 +1357,16 @@ function newRound() {
   B.loot = hasRelic('grandbank') ? B.banked.concat(B.banked.map(l => ({ ...l }))) : B.banked;
   B.banked = [];
   B.queue = []; B.qi = 0;
-  B.tilts = C.TILTS + (hasRelic('crowbar') ? 1 : 0);
+  B.tilts = tiltCount();
   // block melts between rounds — unless the Aegis holds it
-  S.run.block = (hasRelic('aegis') ? S.run.block : 0) + (hasRelic('plate') ? 4 : 0);
+  S.run.block = (hasRelic('aegis') ? S.run.block : 0) + startBlock();
+  // Mending knits a little flesh, the Lucky Penny a little coin, each round
+  if (hasRelic('mending')) healPlayer(2);
+  if (hasRelic('luckypenny')) addGold(3);
   dealHand();
   // the dungeon re-salts the pile so long fights never run dry
-  for (let i = 0; i < C.ROUND_RAIN + (hasRelic('loadstone') ? 3 : 0); i++) {
+  const rainN = C.ROUND_RAIN + (hasRelic('loadstone') ? 3 : 0) + (hasRelic('saltpile') ? 2 : 0);
+  for (let i = 0; i < rainN; i++) {
     S.rain.push({ t: 0.15 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: rollPileKind() });
   }
   S.banner = { txt: 'ROUND ' + B.round, ttl: 1.3, max: 1.3 };
@@ -1340,6 +1449,8 @@ function winBattle() {
   const anyBoss = S.foes.some(f => f.boss);
   const anyElite = S.foes.some(f => f.elite);
   if (hasRelic('piggy')) { addGold(4); S.battle.goldWon += 4; }
+  if (hasRelic('tithe')) { addGold(5); S.battle.goldWon += 5; }
+  if (hasRelic('secondbreath')) healPlayer(8);
   // A BOSS lets you choose one artifact from a spread of two commons + a rare.
   let relicOffer = null;
   if (anyBoss) {
