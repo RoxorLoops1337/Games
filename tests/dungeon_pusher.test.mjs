@@ -110,7 +110,8 @@ t.eq(BOSSES.length, 3, 'three floor bosses');
 t.ok(RELICS.length >= 38 && RELICS.every(r => r.id && r.desc), 'the artifact shelf is stocked (' + RELICS.length + ')');
 t.ok(RELICS.every(r => ['c', 'r', 'e'].indexOf(r.rar) >= 0), 'every artifact carries a rarity stamp');
 t.eq(new Set(RELICS.map(r => r.id)).size, RELICS.length, 'no duplicate artifact ids');
-t.eq(WHEEL.length, 8, 'the lucky wheel has eight segments');
+t.eq(WHEEL.length, 9, 'the wheel of fortune has nine prize segments');
+t.ok(WHEEL.every(s => s.label && typeof s.fx === 'function'), 'every wheel segment names a prize and an effect');
 t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
@@ -809,11 +810,20 @@ S.run.room.ents = [{ kind: 'shrine', done: false }];
 DP.interact(0);
 t.eq(S.run.hp, 10 + Math.round(60 * 0.25), 'shrine heals 25% of max HP');
 t.eq(S.pPois, 0, 'shrine cleanses poison');
-// wheel ghost grants a spin
+// wheel ghost charges 5 coins of any kind for a spin
 S.wheelAnim = null;
+for (const k of COIN_KINDS) S.run.purse[k] = 0;
+S.run.purse.coin = 4;                                  // one short of the fee
 S.run.room.ents = [{ kind: 'wheel', done: false }];
-DP.interact(0);
-t.ok(S.wheelAnim !== null, 'the wheel ghost spins the lucky wheel');
+t.ok(!DP.interact(0), 'the ghost refuses a purse short of the fee');
+t.ok(S.wheelAnim === null, 'no spin without paying');
+t.ok(!S.run.room.ents[0].done, 'the ghost lingers until paid');
+S.run.purse.coin = 8;
+const wheelPurse = DP.purseTotal();
+t.ok(DP.interact(0), 'paying the fee spins the wheel');
+t.ok(S.wheelAnim !== null, 'the wheel of fortune turns');
+t.ok(DP.purseTotal() <= wheelPurse - C.WHEEL_COST, 'the ghost pockets ' + C.WHEEL_COST + ' coins');
+t.ok(S.run.room.ents[0].done, 'the ghost vanishes after the spin');
 
 // -------- the shopkeeper (pouches and single coins for the purse) --------
 DP.srand(23);
@@ -822,17 +832,12 @@ t.ok(DP.interact(0), 'talking to the shopkeeper opens the shop');
 t.ok(S.room && S.room.type === 'shop', 'shop is open');
 t.ok(S.room.stock.length >= 6, 'shop stocks a full shelf (' + S.room.stock.length + ')');
 t.ok(S.room.stock.filter(x => x.kind === 'item').length === 3, 'three arsenal items on sale');
-t.ok(S.room.stock.some(x => x.kind === 'relic'), 'a relic gleams in the case');
+t.ok(!S.room.stock.some(x => x.kind === 'relic'), 'no artifacts in the case — those come off the wheel now');
 t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
 t.ok(S.room.stock.some(x => x.kind === 'coin' && COIN_KINDS.includes(x.cid)),
      'and a single typed coin for the purse');
 t.eq(S.room.stock.find(x => x.kind === 'potion').price, 45, 'potions cost more now');
 t.eq(S.room.stock.find(x => x.kind === 'pouch').price, 60, 'pouches too');
-{
-  const relicStock = S.room.stock.find(x => x.kind === 'relic');
-  t.ok(relicStock && relicStock.price >= 90, 'artifacts are priced by rarity, from 90 up (' + relicStock.price + ')');
-  t.ok(relicStock.label.indexOf('[') > 0, 'and advertise their rarity on the label');
-}
 S.run.gold = 0;
 t.ok(!DP.buyShop(0), 'cannot buy broke');
 S.run.gold = 10000;
@@ -853,10 +858,6 @@ t.ok(!DP.buyShop(itemSlot), 'cannot buy the same slot twice');
   DP.buyShop(coinSlot);
   t.eq(S.run.purse[cid], cc0 + 1, 'the bought ' + cid.toUpperCase() + ' coin joins the purse for good');
 }
-const relicSlot = S.room.stock.findIndex(x => x.kind === 'relic');
-const rid = S.room.stock[relicSlot].rid;
-t.ok(DP.buyShop(relicSlot), 'gold buys the relic');
-t.ok(DP.hasRelic(rid), 'relic is now owned');
 const hpSlot = S.room.stock.findIndex(x => x.kind === 'maxhp');
 const mhp0 = S.run.maxHp;
 DP.buyShop(hpSlot);
@@ -886,8 +887,10 @@ t.ok(!DP.usePotion(), 'no potions left to drink');
 S.run.hp = S.run.maxHp; S.run.potions = 5;
 t.ok(!DP.usePotion(), 'cannot drink at full health');
 
-// -------- elites pay double keys --------
+// -------- elites pay double keys and grant a FREE wheel spin --------
 DP.srand(31);
+S.wheelAnim = null;
+S.run.relics = [];
 S.run.room.ents = [{ kind: 'monster', mtype: 'elite', eid: 'ogre', done: false }];
 DP.interact(0);
 t.ok(S.enemy.elite && S.enemy.name.indexOf('ELITE') === 0, 'elites are branded');
@@ -895,15 +898,59 @@ const keysE = S.run.keys;
 S.enemy.hp = 1;
 DP.dmgEnemy(5);
 t.eq(S.run.keys, keysE + C.KEY_ELITE, 'an elite kill pays ' + C.KEY_ELITE + ' keys');
-// and shakes an ARTIFACT loose
-t.ok(S.victory && S.victory.relic, 'the elite was guarding an artifact');
-t.ok(S.run.relics.indexOf(S.victory.relic) >= 0, 'it joins your shelf on the spot');
-{
-  const rl = RELICS.find(r => r.id === S.victory.relic);
-  t.ok(rl && ['c', 'r', 'e'].indexOf(rl.rar) >= 0, 'and it is a real catalogued drop');
-}
+// a free wheel of fortune spins on the spot
+t.ok(S.victory && S.victory.freeSpin, 'the elite grants a free spin');
+t.ok(S.wheelAnim !== null, 'and the wheel of fortune turns for free');
+t.ok(!S.victory.relicOffer, 'an elite offers no artifact CHOICE — only the spin');
 DP.leaveBattle();
 S.run.relics = [];
+
+// -------- the wheel of fortune is the only faucet for artifacts --------
+{
+  // shops sell none; forges hone gear, not artifacts
+  DP.srand(44);
+  S.run.relics = [];
+  let relicInShop = false, relicInForge = false;
+  for (let i = 0; i < 40; i++) {
+    if (DP.shopStock().some(x => x.kind === 'relic')) relicInShop = true;
+    if (DP.boonOptions().some(o => o.kind === 'relic')) relicInForge = true;
+  }
+  t.ok(!relicInShop, 'no shop shelf ever holds an artifact');
+  t.ok(!relicInForge, 'no forge boon is ever an artifact');
+  // the wheel table can win artifacts of both rarities
+  S.run.relics = [];
+  t.ok(WHEEL.some(s => /ARTIFACT/.test(s.label)), 'the wheel lists artifact prizes');
+  const rareGot = DP.grantArtifact('r');
+  t.ok(rareGot && RELICS.find(r => r.id === rareGot).rar === 'r', 'grantArtifact pulls a rare artifact');
+  const comGot = DP.grantArtifact('c');
+  t.ok(comGot && RELICS.find(r => r.id === comGot).rar === 'c', 'and a common one');
+  t.ok(S.run.relics.indexOf(rareGot) >= 0 && S.run.relics.indexOf(comGot) >= 0, 'both land on the shelf');
+  S.run.relics = [];
+}
+
+// -------- a boss lets you CHOOSE one of two commons + a rare --------
+{
+  DP.srand(46);
+  S.run.relics = [];
+  S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: 'ogre', done: false }];
+  DP.interact(0);
+  t.ok(S.enemy && S.enemy.boss, 'the boss stands');
+  S.enemy.hp = 1;
+  DP.dmgEnemy(5);
+  t.ok(S.victory && S.victory.boss, 'boss felled');
+  const off = S.victory.relicOffer;
+  t.ok(Array.isArray(off) && off.length === 3, 'the boss lays out three artifacts');
+  t.eq(off.filter(id => RELICS.find(r => r.id === id).rar === 'c').length, 2, 'two of them common');
+  t.eq(off.filter(id => RELICS.find(r => r.id === id).rar === 'r').length, 1, 'one of them rare');
+  t.ok(!S.victory.offer, 'a boss offers artifacts, not a coin spoil');
+  t.ok(DP.pickRelicOffer(2), 'claiming the rare works');
+  t.ok(DP.hasRelic(off[2]), 'the claimed artifact is owned');
+  t.ok(!DP.pickRelicOffer(0), 'only one artifact may be claimed');
+  t.ok(!DP.hasRelic(off[0]), 'the unclaimed ones stay behind');
+  S.run.purse.coin = (S.run.purse.coin || 0) + C.STAIR_TOLL;   // afford the descent
+  DP.leaveBattle();
+  S.run.relics = [];
+}
 
 // -------- relic effects --------
 S.run.relics = ['whet']; S.run.whet = 0;
@@ -1579,6 +1626,17 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   frames(8);                                      // the boss lair
   D.interact(0);
   frames(12);                                     // boss battle
+  D.S.enemy.hp = 1; D.dmgEnemy(5);                // fell the boss
+  frames(40);                                     // boss victory: the 2-common + 1-rare artifact choice
+  t.ok(D.S.victory && D.S.victory.relicOffer, 'boss victory renders the artifact choice');
+  D.pickRelicOffer(0);
+  frames(10);                                     // the claimed artifact glows
+  D.S.run.purse.coin = (D.S.run.purse.coin || 0) + 5;
+  D.leaveBattle();                                // descend past the boss
+  frames(8);
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  frames(8);
   D.hurtPlayer(99999, 'render doom');
   frames(12);                                     // game over screen
   t.eq(D.S.screen, 'over', 'render pass ends on the over screen');
