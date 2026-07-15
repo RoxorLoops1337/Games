@@ -80,6 +80,7 @@ const C = {
   ARMOR: 2,                             // bone armour: flat absorb per non-poison hit
   WARD: 2,                              // totem ward: flat DR over the whole pack
   REGEN_HP: 3,                          // knit back per round
+  PET_CAP: 5,                           // how many pets can crowd the stage at once
 };
 // your purse starts here; heroes add their signature pair on top
 const START_PURSE = { coin: 5, silver: 5, green: 0, red: 0, blue: 0, lucky: 0 };
@@ -96,10 +97,12 @@ const COIN_INFO = {
 const COIN_REWARD_W = [['coin', 24], ['silver', 22], ['green', 18], ['red', 16], ['blue', 12], ['lucky', 8]];
 // the order the tray resolves in: bank the loot, raise the guard, mend,
 // then unleash — curses always land last
-const RESOLVE_ORDER = ['gem', 'bag', 'silver', 'shielditem', 'red', 'heartitem',
-                       'gold', 'lucky', 'blue', 'weapon', 'green', 'vial', 'frost', 'skull'];
+const RESOLVE_ORDER = ['gem', 'bag', 'silver', 'shielditem', 'red', 'heartitem', 'petitem',
+                       'gold', 'lucky', 'blue', 'weapon', 'bleeditem', 'green', 'vial',
+                       'burnitem', 'frost', 'skull'];
 // deliberately UNHURRIED: each piece gets its moment so the damage reads
-const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42, lucky: 0.7, blue: 0.75, green: 0.5 };
+const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42, lucky: 0.7, blue: 0.75, green: 0.5,
+                        petitem: 0.7, burnitem: 0.55, bleeditem: 0.55 };
 
 // ------------------------------------------------------------ the machine
 // One battle cabinet, restyled per floor. Same geometry as the classic
@@ -140,6 +143,15 @@ const ITEMS = [
   { id: 'shield', icon: '\u{1F6E1}\u{FE0F}', name: 'Shield',      kind: 'shield', block: 6, cost: 34 },
   { id: 'heart',  icon: '❤\u{FE0F}',     name: 'Heart',       kind: 'heal',   heal: 6, cost: 38 },
   { id: 'frost',  icon: '❄\u{FE0F}',     name: 'Frost Rune',  kind: 'stun',   stun: 1, cost: 55 },
+  // the wound kit: fire and steel that linger
+  { id: 'torch',  icon: '\u{1F525}',      name: 'Torch',       kind: 'burn',  burn: 5,  cost: 30 },
+  { id: 'razor',  icon: '\u{1FA92}',      name: 'Serrated Razor', kind: 'bleed', bleed: 4, cost: 36 },
+  // PETS: living gear. A pet rides the pile like any item; when the tray
+  // collects it, it JOINS YOUR SIDE for the battle — soaking blows meant
+  // for you and acting every round. Stack copies to field a whole pack.
+  { id: 'pup',    icon: '\u{1F436}',      name: 'Rock Pup',    kind: 'pet', php: 12, cost: 45 },
+  { id: 'newt',   icon: '\u{1F98E}',      name: 'Cinder Newt', kind: 'pet', php: 7,  cost: 55 },
+  { id: 'rat',    icon: '\u{1F400}',      name: 'Fang Rat',    kind: 'pet', php: 8,  cost: 55 },
 ];
 function itemById(id) { return ITEMS.find(i => i.id === id); }
 
@@ -249,6 +261,60 @@ const RELICS = [
   { id: 'bloodthirst',rar: 'e', icon: '\u{1F9DB}\u{200D}\u{2642}\u{FE0F}', name: 'Blood Thirst', desc: 'every coin and weapon heals you 1 on hit' },
   { id: 'revenant',   rar: 'e', icon: '\u{1FAB6}', name: 'Revenant',      desc: 'survive TWO killing blows at 1 HP each fight' },
   { id: 'warlord',    rar: 'e', icon: '\u{1F396}\u{FE0F}', name: 'Warlord', desc: 'gold coins hit harder for every 3 gold already fired' },
+  // ---- the ember shelf: BURN, BLEED and the menagerie (50 more) ----
+  // COMMON
+  { id: 'matchstick',  rar: 'c', icon: '\u{1F525}', name: 'Matchstick',    desc: 'gold coins also apply 1 BURN' },
+  { id: 'embershot',   rar: 'c', icon: '\u{1F386}', name: 'Ember Shot',    desc: 'lucky coins also apply 2 BURN' },
+  { id: 'arsonist',    rar: 'c', icon: '\u{1F9E8}', name: 'Arsonist',      desc: 'torches apply +3 burn' },
+  { id: 'cauterize',   rar: 'c', icon: '\u{1FA79}', name: 'Cauterize',     desc: 'heal 1 whenever a foe’s burn ticks' },
+  { id: 'ashfall',     rar: 'c', icon: '\u{26B1}\u{FE0F}', name: 'Ashfall', desc: 'foes that die burning pay +6 gold' },
+  { id: 'papercut',    rar: 'c', icon: '\u{1F4C4}', name: 'Papercut',      desc: 'the first piece of every resolve also applies 1 BLEED' },
+  { id: 'scalpel',     rar: 'c', icon: '\u{1F52A}', name: 'Scalpel',       desc: 'razors apply +2 bleed' },
+  { id: 'leechkit',    rar: 'c', icon: '\u{1FAB1}', name: 'Leech Kit',     desc: 'heal 1 whenever a foe’s bleed ticks' },
+  { id: 'kennel',      rar: 'c', icon: '\u{1F3E0}', name: 'Kennel',        desc: 'pets arrive with +4 max HP' },
+  { id: 'treats',      rar: 'c', icon: '\u{1F356}', name: 'Treats',        desc: 'your weakest pet heals 2 every round' },
+  { id: 'guarddog',    rar: 'c', icon: '\u{1F415}', name: 'Guard Dog',     desc: 'while any pet lives, +1 block every round' },
+  { id: 'mender',      rar: 'c', icon: '\u{1F48A}', name: 'Mender',        desc: 'potions also heal every pet 5' },
+  { id: 'bloodscent',  rar: 'c', icon: '\u{1F443}', name: 'Blood Scent',   desc: 'pets deal +1 damage to BLEEDING foes' },
+  { id: 'balancedblade', rar: 'c', icon: '\u{2694}\u{FE0F}', name: 'Balanced Blade', desc: 'swords deal +4 damage' },
+  { id: 'frostsmith',  rar: 'c', icon: '\u{2744}\u{FE0F}', name: 'Frostsmith', desc: 'frost runes also grant 4 block' },
+  { id: 'apothecary',  rar: 'c', icon: '\u{1F9EB}', name: 'Apothecary',    desc: 'potions heal +6 HP' },
+  { id: 'hoarder',     rar: 'c', icon: '\u{1F4E5}', name: 'Hoarder',       desc: 'banked pieces pay +1 gold each when they return' },
+  { id: 'firstblood',  rar: 'c', icon: '\u{1F3C1}', name: 'First Blood',   desc: 'the first foe to fall each battle pays +5 gold' },
+  // RARE
+  { id: 'firebrand',   rar: 'r', icon: '\u{1F525}', name: 'Firebrand',     desc: 'burn you apply gains +1 stack' },
+  { id: 'slowburn',    rar: 'r', icon: '\u{1F56F}\u{FE0F}', name: 'Slow Burn', desc: 'burn fades 1 slower each round' },
+  { id: 'wildfire',    rar: 'r', icon: '\u{1F32A}\u{FE0F}', name: 'Wildfire', desc: 'when a foe’s burn ticks, 1 burn spreads to each other foe' },
+  { id: 'heatwave',    rar: 'r', icon: '\u{1F321}\u{FE0F}', name: 'Heat Wave', desc: 'gold coins deal +1 while any foe burns' },
+  { id: 'dragonbreath',rar: 'r', icon: '\u{1F432}', name: 'Dragon Breath', desc: 'frost coins turn to FIRE: also 1 burn to every foe' },
+  { id: 'serrator',    rar: 'r', icon: '\u{1FA9A}', name: 'Serrator',      desc: 'weapons also apply 2 BLEED' },
+  { id: 'rustfang',    rar: 'r', icon: '\u{1F9AB}', name: 'Rust Fang',     desc: 'venom coins also apply 1 BLEED' },
+  { id: 'arterial',    rar: 'r', icon: '\u{1F489}', name: 'Arterial Cut',  desc: 'your hits of 8+ damage also apply 2 BLEED' },
+  { id: 'butcher',     rar: 'r', icon: '\u{1F969}', name: 'Butcher',       desc: 'weapons deal +3 to BLEEDING foes' },
+  { id: 'bloodprice',  rar: 'r', icon: '\u{1FA99}', name: 'Blood Price',   desc: 'bleeding foes pay +2 gold when they fall' },
+  { id: 'petwhistle',  rar: 'r', icon: '\u{1F3B5}', name: 'Pet Whistle',   desc: 'your pets summon themselves at battle start' },
+  { id: 'packleader',  rar: 'r', icon: '\u{1F43A}', name: 'Pack Leader',   desc: 'pets act TWICE every round' },
+  { id: 'vengeful',    rar: 'r', icon: '\u{1F47B}', name: 'Vengeful Spirit', desc: 'a slain pet avenges itself: 6 damage to its killer' },
+  { id: 'gritcollar',  rar: 'r', icon: '\u{1F9B4}', name: 'Grit Collar',   desc: 'each pet survives its first death at 1 HP' },
+  { id: 'sterling',    rar: 'r', icon: '\u{1F948}', name: 'Sterling Heart', desc: 'overhealing becomes block (up to 3 a pop)' },
+  { id: 'frostbite',   rar: 'r', icon: '\u{1F976}', name: 'Frostbite',     desc: 'FROZEN foes take +2 from every hit' },
+  { id: 'luckystreak', rar: 'r', icon: '\u{1F3B2}', name: 'Lucky Streak',  desc: 'lucky coins deal +1 per lucky already fired this resolve' },
+  { id: 'hailstorm',   rar: 'r', icon: '\u{1F328}\u{FE0F}', name: 'Hailstorm', desc: 'frost coins deal +1 for each OTHER foe standing' },
+  { id: 'quartermaster', rar: 'r', icon: '\u{1F4E6}', name: 'Quartermaster', desc: 'the first item to fire each battle fires twice' },
+  { id: 'bombardier',  rar: 'r', icon: '\u{1F9E8}', name: 'Bombardier',    desc: 'bombs also apply 4 BURN' },
+  { id: 'shieldwall',  rar: 'r', icon: '\u{1F6E1}\u{FE0F}', name: 'Shield Wall', desc: 'shield items grant +2 block per living pet' },
+  { id: 'alloy',       rar: 'r', icon: '\u{2699}\u{FE0F}', name: 'Alloy',   desc: 'every 3rd silver coin in a resolve gives +3 block' },
+  // EPIC
+  { id: 'hemorrhage',  rar: 'e', icon: '\u{1FA78}', name: 'Hemorrhage',    desc: 'BLEED never fades — the wound stays open' },
+  { id: 'infernolord', rar: 'e', icon: '\u{1F608}', name: 'Inferno Lord',  desc: 'BURN never fades — the fire keeps eating' },
+  { id: 'exsanguinate',rar: 'e', icon: '\u{1F9DB}', name: 'Exsanguinate',  desc: 'a bleeding foe that falls splashes its bleed onto the pack' },
+  { id: 'pyroclasm',   rar: 'e', icon: '\u{1F30B}', name: 'Pyroclasm',     desc: 'a burning foe that falls splashes 3 burn onto the pack' },
+  { id: 'eternalflame',rar: 'e', icon: '\u{1F702}', name: 'Eternal Flame', desc: 'every battle begins with ALL foes at 2 burn' },
+  { id: 'alphabond',   rar: 'e', icon: '\u{1F43E}', name: 'Alpha Bond',    desc: 'your first pet each battle arrives TWICE' },
+  { id: 'warhound',    rar: 'e', icon: '\u{1F415}\u{200D}\u{1F9BA}', name: 'War Hound', desc: 'pets deal DOUBLE damage' },
+  { id: 'beastmaster', rar: 'e', icon: '\u{1F981}', name: 'Beastmaster',   desc: 'room for +2 pets, and all pets get +2 HP' },
+  { id: 'crimsonrain', rar: 'e', icon: '\u{1F327}\u{FE0F}', name: 'Crimson Rain', desc: 'heart coins also apply 1 BLEED to every foe' },
+  { id: 'soulchain',   rar: 'e', icon: '\u{26D3}\u{FE0F}', name: 'Soul Chain', desc: 'while any pet lives, you take 1 less from every hit' },
 ];
 // weighted pull from the unowned shelf — commons far more often
 function rollRelicDrop() {
@@ -335,6 +401,8 @@ function coinFx(k) {
     if (M('twinstrike', 'strikes TWICE')) main += ' ×2';
     M('momentum', '+1 dmg per 5 gold fired');
     M('warlord', '+1 dmg per 3 gold fired');
+    M('heatwave', '+1 dmg while any foe burns');
+    M('matchstick', 'also applies 1 BURN');
     M('emberhoard', 'splashes 1 dmg to ALL foes');
     M('bloodgold', 'heals 1 HP on strike');
     M('bloodthirst', 'heals 1 HP on strike');
@@ -348,6 +416,7 @@ function coinFx(k) {
     if (M('spikeshield', 'also deals 1 dmg')) d += 1;
     if (M('retort', 'also deals 2 dmg')) d += 2;
     if (d) main += ' + ' + d + ' dmg';
+    M('alloy', 'every 3rd silver: +3 block');
     M('aegis', 'unspent block carries over');
   } else if (k === 'green') {
     let p = 1;
@@ -355,6 +424,7 @@ function coinFx(k) {
     if (M('toxicology', '+1 stack')) p++;
     if (M('twinfangs', 'poison DOUBLED')) p *= 2;
     main = p + ' poison';
+    M('rustfang', 'also applies 1 BLEED');
     M('blightlord', 'also deals 1 dmg');
     M('contagion', 'spreads 1 poison to the whole pack');
     if (M('alchemist', 'heals 1 HP')) main += ' + heal 1';
@@ -365,18 +435,23 @@ function coinFx(k) {
     if (M('greensprig', '+1 HP')) h++;
     main = 'heal ' + h + ' HP';
     M('phoenixember', 'also grants 1 block');
+    M('crimsonrain', 'also applies 1 BLEED to every foe');
   } else if (k === 'blue') {
     let d = C.DMG.blue;
     if (M('frostshard', '+1 dmg')) d++;
     if (M('permafrost', '+1 dmg')) d++;
     main = d + ' dmg to ALL foes';
     M('sparkstone', '+1 dmg against packs of 2+');
+    M('hailstorm', '+1 dmg per other foe standing');
+    M('dragonbreath', 'also 1 BURN to every foe');
   } else if (k === 'lucky') {
     let d = C.DMG.lucky;
     if (M('starmetal', '+2 dmg')) d += 2;
     if (M('horseshoe', '+1 dmg')) d += 1;
     if (M('assassin', '+2 dmg, pierces guards')) d += 2;
     main = d + ' dmg';
+    M('luckystreak', '+1 dmg per lucky already fired');
+    M('embershot', 'also applies 2 BURN');
     M('sniperlens', 'pierces braced guards');
     M('deadeye', 'pierces braced guards');
     M('bloodthirst', 'heals 1 HP on strike');
@@ -395,8 +470,12 @@ function itemFx(iid) {
     if (S.run && S.run.whet > 0) mods.push('forge-honed: +' + S.run.whet + ' dmg');
     M('whet', '+30% dmg');
     if (M('armory', '+2 dmg')) w += 2;
+    if (it.id === 'sword' && M('balancedblade', '+4 dmg')) w += 4;
     if (M('heavyarms', '+30% dmg')) w = Math.round(w * 1.3);
     main = w + ' dmg' + (it.splash ? ' (splash)' : '');
+    M('serrator', 'also applies 2 BLEED');
+    M('butcher', '+3 dmg to bleeding foes');
+    if (it.id === 'bomb') M('bombardier', 'also applies 4 BURN');
     M('vampblade', 'heals half its dmg');
     M('bloodthirst', 'heals 1 HP on strike');
   } else if (it.kind === 'poison') {
@@ -406,6 +485,7 @@ function itemFx(iid) {
   } else if (it.kind === 'shield') {
     main = (it.block + (hasRelic('plateup') ? 3 : 0)) + ' block';
     M('plateup', '+3 block');
+    M('shieldwall', '+2 block per living pet');
   } else if (it.kind === 'heal') {
     main = 'heal ' + (it.heal + (hasRelic('fieldmedic') ? 4 : 0)) + ' HP';
     M('fieldmedic', '+4 HP');
@@ -413,6 +493,28 @@ function itemFx(iid) {
     const st = it.stun + (hasRelic('deepfreeze') ? 1 : 0);
     main = 'freeze a foe ' + st + ' turn' + (st > 1 ? 's' : '');
     M('deepfreeze', '+1 turn');
+    M('frostsmith', 'also grants 4 block');
+  } else if (it.kind === 'burn') {
+    main = (it.burn + (hasRelic('arsonist') ? 3 : 0) + (hasRelic('firebrand') ? 1 : 0)) + ' BURN';
+    M('arsonist', '+3 burn');
+    M('firebrand', '+1 stack');
+    M('slowburn', 'fades 1 slower');
+    M('infernolord', 'never fades');
+  } else if (it.kind === 'bleed') {
+    main = (it.bleed + (hasRelic('scalpel') ? 2 : 0)) + ' BLEED';
+    M('scalpel', '+2 bleed');
+    M('hemorrhage', 'never fades');
+  } else if (it.kind === 'pet') {
+    const hp = it.php + (hasRelic('kennel') ? 4 : 0) + (hasRelic('beastmaster') ? 2 : 0);
+    const deed = it.id === 'pup' ? 'growls +1 block' : it.id === 'newt' ? 'spits 1 BURN' : 'gnaws 1 dmg + 1 BLEED';
+    main = hp + ' HP pet';
+    mods.push('soaks blows for you • ' + deed + ' each round');
+    M('kennel', '+4 max HP');
+    M('beastmaster', '+2 HP, bigger pack');
+    M('packleader', 'acts twice a round');
+    M('warhound', 'double damage');
+    M('gritcollar', 'survives its first death');
+    M('vengeful', 'avenges its death: 6 dmg');
   }
   return { main, mods };
 }
@@ -438,6 +540,13 @@ function runMods() {
   if (hasRelic('grandbank')) rows.push(['bank payout', 'banked pieces duplicate']);
   if (hasRelic('quicksilver') || hasRelic('overdrive')) rows.push(['resolve', 'ramps 2× as fast']);
   if (hasRelic('wind')) rows.push(['second wind', S.run && S.run.windUsed ? 'SPENT' : 'ready — survives a killing blow']);
+  if (hasRelic('petwhistle')) rows.push(['pets', 'summon at battle start (Pet Whistle)']);
+  if (hasRelic('soulchain')) rows.push(['soul chain', '−1 damage taken while a pet lives']);
+  if (hasRelic('eternalflame')) rows.push(['eternal flame', 'every battle opens with all foes burning']);
+  if (hasRelic('hemorrhage')) rows.push(['bleed', 'never fades (Hemorrhage)']);
+  if (hasRelic('infernolord')) rows.push(['burn', 'never fades (Inferno Lord)']);
+  if (hasRelic('papercut')) rows.push(['first piece', 'applies 1 BLEED (Papercut)']);
+  if (hasRelic('quartermaster')) rows.push(['first item', 'fires twice each battle']);
   return rows;
 }
 
@@ -470,6 +579,10 @@ const ENEMY_TIERS = [
     { id: 'skeleton', icon: '\u{1F480}', name: 'Skeleton Guard',  hp: 33, atk: 4, trait: null,    def: 'armor', gold: 13 },
     { id: 'revenant', icon: '\u{1F9DF}', name: 'Bone Revenant',   hp: 28, atk: 3, trait: null,    def: 'regen', gold: 14 },
     { id: 'ogre',     icon: '\u{1F479}', name: 'Ogre Brute',      hp: 58, atk: 5, trait: null,    def: 'thick', gold: 18 },
+    // the wound-dealers: their blows linger — BLEED halves each round,
+    // BURN dies fast but hits hot
+    { id: 'gutterrat', icon: '\u{1F400}', name: 'Gutter Rat',     hp: 24, atk: 2, trait: 'bleeder', def: null,  gold: 10 },
+    { id: 'emberimp',  icon: '\u{1F47A}', name: 'Ember Imp',      hp: 22, atk: 2, trait: 'burner',  def: null,  gold: 11 },
   ],
   // ---- ACT 2 (floors 6-10): the Deep Halls — frost-touched kin ----
   [
@@ -481,6 +594,9 @@ const ENEMY_TIERS = [
     { id: 'cryptguard',  icon: '\u{1F480}', name: 'Crypt Guard',   hp: 50, atk: 4, trait: 'enrage', def: 'armor', gold: 22 },
     { id: 'barrowwight', icon: '\u{1F9DF}', name: 'Barrow Wight',  hp: 44, atk: 4, trait: 'venom',  def: 'regen', gold: 23 },
     { id: 'frostogre',   icon: '\u{1F479}', name: 'Frost Ogre',    hp: 80, atk: 6, trait: null,     def: 'thick', gold: 30 },
+    // thick hide + bleeder: poison bounces off it, but it bleeds just fine
+    { id: 'fleshripper', icon: '\u{1F9DF}', name: 'Flesh Ripper',  hp: 44, atk: 4, trait: 'bleeder', def: 'thick', gold: 24 },
+    { id: 'pyretotem',   icon: '\u{1F5FF}', name: 'Pyre Totem',    hp: 40, atk: 4, trait: 'burner',  def: 'ward',  gold: 25 },
   ],
   // ---- ACT 3 (floors 11+): the Abyss — ember-wreathed horrors ----
   [
@@ -492,6 +608,8 @@ const ENEMY_TIERS = [
     { id: 'abyssguard',  icon: '\u{1F480}', name: 'Abyss Guard',    hp: 66, atk: 7, trait: 'enrage', def: 'armor', gold: 32 },
     { id: 'duskwraith',  icon: '\u{1F9DF}', name: 'Dusk Wraith',    hp: 58, atk: 6, trait: 'leech',  def: 'regen', gold: 33 },
     { id: 'infernogre',  icon: '\u{1F479}', name: 'Infernal Ogre',  hp: 100, atk: 8, trait: 'enrage', def: 'thick', gold: 44 },
+    { id: 'bloodfiend',  icon: '\u{1F9DB}', name: 'Blood Fiend',    hp: 60, atk: 6, trait: 'bleeder', def: 'regen', gold: 34 },
+    { id: 'ashogre',     icon: '\u{1F479}', name: 'Ash Ogre',       hp: 90, atk: 7, trait: 'burner',  def: 'thick', gold: 42 },
   ],
 ];
 // back-compat alias: the act-1 roster (tests and old references)
@@ -527,6 +645,7 @@ const TRAIT_TXT = {
   fast: 'strikes twice a round', thief: 'steals coins from your purse',
   venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field',
   enrage: 'fury builds — +1 attack every round', leech: 'drinks the damage it deals',
+  bleeder: 'its blows leave you BLEEDING', burner: 'its blows set you ABLAZE',
 };
 // the defensive mechanic, spelled out on the foe's panel
 const DEF_TXT = {
@@ -564,6 +683,7 @@ const S = {
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
+  pets: [],                            // your summoned pack {iid, icon, name, hp, maxHp}
   foeInfo: null,                       // index of the foe whose bestiary card is open
   inv: null,                           // inventory overlay {tab: 'coins'|'items'|'relics'|'stats'}
   enemy: null,                         // the TARGETED foe (points into S.foes)
@@ -573,7 +693,7 @@ const S = {
   over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
   best: { floor: 0, depth: 0, kills: 0, gold: 0 },
   wheelAnim: null, pendingPick: null, relicPick: null, uiFlash: null, toast: null,
-  pPois: 0,
+  pPois: 0, pBleed: 0, pBurn: 0,       // what the dungeon left festering on YOU
   heroPick: 'knight',                  // last chosen adventurer (persisted)
   roomStamp: 0,                        // bumps on room change (avatar resets)
 };
@@ -766,25 +886,31 @@ function weaponDmg(base) {
 function packWard() {
   return (S.foes && S.foes.some(f => f.hp > 0 && f.def === 'ward')) ? C.WARD : 0;
 }
-// hurt ONE foe, routed through its defensive mechanic. Poison is the universal
-// solvent (bypasses gel/armor/ward) — but 'thick' hides shrug poison off entirely
+// hurt ONE foe, routed through its defensive mechanic. The three DoTs are
+// the universal solvents (they slip past gel/armor/ward/brace) but each has
+// its own wall: 'thick' shrugs poison, bones ('armor') can't bleed, and
+// 'gel' quenches half of any burn AT APPLY TIME.
+const DOT_COL = { pois: '#b8f26b', bleed: '#ff5a6e', burn: '#ff9d3c' };
 function dmgFoe(e, n, src, pierce) {
   if (!S.run || !e || e.hp <= 0) return 0;
-  const poison = src === 'pois';
+  const dot = src === 'pois' || src === 'bleed' || src === 'burn';
   n = Math.max(1, Math.round(n));
-  if (poison) {
-    if (e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
+  if (dot) {
+    if (src === 'pois' && e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
   } else {
     if (e.def === 'gel') n = Math.min(n, C.GEL_CAP);            // ooze caps the hit
     const absorb = (e.def === 'armor' ? C.ARMOR : 0) + packWard();
     if (absorb) n -= absorb;                                    // armour / ward soak
     if (e.braced && !pierce) n = Math.ceil(n / 2);              // its round-stance
+    if (e.stunned > 0 && hasRelic('frostbite')) n += 2;         // Frostbite: brittle ice
   }
   n = Math.round(n);
   if (n <= 0) { floatAnchor('BLOCKED', 'enemy', '#c8d6e8'); e.hitT = 0.15; return 0; }
   e.hp -= n;
   e.hitT = 0.3;
-  floatAnchor('-' + n, 'enemy', poison ? '#b8f26b' : '#ff8a6b', n >= 8);
+  floatAnchor('-' + n, 'enemy', dot ? DOT_COL[src] : '#ff8a6b', n >= 8);
+  // Arterial Cut: a heavy blow opens a wound
+  if (!dot && n >= 8 && hasRelic('arterial') && e.hp > 0) applyBleed(e, 2, true);
   if (e.hp <= 0) foeDown(e);
   return n;
 }
@@ -797,6 +923,7 @@ function goldDmg() {
     if (hasRelic('warlord')) d += Math.floor((S.battle.goldFired || 0) / 3);
   }
   if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) d += 2;
+  if (hasRelic('heatwave') && S.foes && S.foes.some(f => f.hp > 0 && f.burn > 0)) d += 1;
   return d;
 }
 // blue coins: the frost bites EVERY foe at once
@@ -810,12 +937,24 @@ function foeDown(e) {
   if (e.paid) return;
   e.paid = true;
   S.run.kills++;
-  const gold = e.gold;
+  let gold = e.gold;
+  // the wound bounties: Ashfall pays for kindling, Blood Price for red work
+  if (hasRelic('ashfall') && e.burn > 0) gold += 6;
+  if (hasRelic('bloodprice') && e.bleed > 0) gold += 2;
+  if (hasRelic('firstblood') && S.battle && !S.battle.firstBlood) { S.battle.firstBlood = true; gold += 5; }
   let keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
   if (hasRelic('graverobber') && (e.elite || e.boss)) keys += 1;   // rob the tougher graves
   S.run.keys += keys;
   addGold(gold);
   if (hasRelic('prospector')) { addGold(2); S.battle.goldWon += 2; }
+  // its wounds splash onto whoever still stands
+  if (hasRelic('exsanguinate') && e.bleed > 0) {
+    for (const f of S.foes) if (f !== e && f.hp > 0) applyBleed(f, e.bleed, true);
+  }
+  if (hasRelic('pyroclasm') && e.burn > 0) {
+    for (const f of S.foes) if (f !== e && f.hp > 0 && f.def !== 'gel') f.burn = (f.burn || 0) + 3;
+    for (const f of S.foes) if (f !== e && f.hp > 0 && f.def === 'gel') f.burn = (f.burn || 0) + 2;
+  }
   floatAnchor('+' + keys + ' \u{1F5DD}', 'enemy', '#ffd75e', true);
   S.battle.goldWon += gold;
   S.battle.keysWon += keys;
@@ -833,11 +972,130 @@ function poisonEnemy(stacks) {
   SND.poison();
   return stacks;
 }
+// BLEED a foe: front-loaded rot — ticks its stacks, then HALVES each round.
+// Bones can't bleed: 'armor' foes shrug it entirely.
+function applyBleed(e, stacks, quiet) {
+  if (!S.run || !e || e.hp <= 0 || stacks <= 0) return 0;
+  if (e.def === 'armor') { if (!quiet) floatAnchor('NO BLOOD', 'enemy', '#9aa0a8'); return 0; }
+  e.bleed = (e.bleed || 0) + stacks;
+  floatAnchor('\u{1FA78} +' + stacks, 'enemy', '#ff5a6e', stacks >= 3);
+  return stacks;
+}
+function bleedEnemy(stacks) {
+  return applyBleed(S.enemy, stacks);
+}
+// BURN a foe: hits hot, dies fast — ticks its stacks, then fades by 2.
+// Wet 'gel' bodies quench HALF the stacks as they land.
+function applyBurn(e, stacks) {
+  if (!S.run || !e || e.hp <= 0 || stacks <= 0) return 0;
+  if (hasRelic('firebrand')) stacks += 1;
+  if (e.def === 'gel') stacks = Math.max(1, Math.ceil(stacks / 2));
+  e.burn = (e.burn || 0) + stacks;
+  floatAnchor('\u{1F525} +' + stacks, 'enemy', '#ff9d3c', stacks >= 3);
+  return stacks;
+}
+function burnEnemy(stacks) {
+  return applyBurn(S.enemy, stacks);
+}
 function stunEnemy(rounds) {
   if (!S.run || !S.enemy || S.enemy.hp <= 0) return;
   S.enemy.stunned += rounds;
   floatAnchor('FROZEN!', 'enemy', '#8be7ff', true);
   SND.stun();
+}
+
+// ------------------------------------------------------------------- pets
+// A pet is living gear: its item rides the pile, and when the tray collects
+// it the beast JOINS YOUR SIDE for the battle. Pets stand between you and
+// the pack — enemy blows land on them first — and each acts every round:
+//   pup  (Rock Pup)    growls up +1 block
+//   newt (Cinder Newt) spits 1 BURN at your target
+//   rat  (Fang Rat)    gnaws 1 dmg and opens 1 BLEED
+function petCap() { return C.PET_CAP + (hasRelic('beastmaster') ? 2 : 0); }
+function summonPet(iid) {
+  const it = itemById(iid);
+  if (!S.run || !it || it.kind !== 'pet') return null;
+  // a whistled pet is already on the stage — its pile copy is a morale boost
+  const early = S.pets.find(p => p.iid === iid && p.hp > 0 && p.whistled && !p.rallied);
+  if (early) {
+    early.rallied = true;
+    early.hp = Math.min(early.maxHp, early.hp + 5);
+    floatAnchor(early.icon + ' rallies! +5', 'hero', '#8ed67e');
+    return early;
+  }
+  if (S.pets.filter(p => p.hp > 0).length >= petCap()) {
+    // no room in the pack — the treat feeds everyone instead
+    for (const p of S.pets) if (p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + 3);
+    floatAnchor('the pack is full — snacks all round', 'hero', '#c8b89a');
+    return null;
+  }
+  const hp = it.php + (hasRelic('kennel') ? 4 : 0) + (hasRelic('beastmaster') ? 2 : 0);
+  const pet = { iid, icon: it.icon, name: it.name, hp, maxHp: hp };
+  S.pets.push(pet);
+  floatAnchor(it.icon + ' ' + it.name + ' joins!', 'hero', '#ffd75e', true);
+  // Alpha Bond: your first companion each battle brings its twin
+  if (hasRelic('alphabond') && S.battle && !S.battle.alphaUsed) {
+    S.battle.alphaUsed = true;
+    if (S.pets.filter(p => p.hp > 0).length < petCap()) {
+      S.pets.push({ iid, icon: it.icon, name: it.name, hp, maxHp: hp });
+      floatAnchor('\u{1F43E} its twin follows!', 'hero', '#ffd75e');
+    }
+  }
+  return pet;
+}
+function petDies(p, killer) {
+  if (hasRelic('gritcollar') && !p.gritUsed) {
+    p.gritUsed = true;
+    p.hp = 1;
+    floatAnchor(p.icon + ' refuses to fall!', 'hero', '#ffe9a3');
+    return;
+  }
+  p.hp = 0;
+  floatAnchor(p.icon + ' falls…', 'hero', '#9a8aa0', true);
+  if (hasRelic('vengeful') && killer && killer.hp > 0) {
+    floatAnchor('\u{1F47B} VENGEANCE', 'enemy', '#c8b8ff');
+    dmgFoe(killer, 6);
+  }
+}
+// the pack stands in front of you: an enemy blow chews through pets first
+function petSoak(dmg, attacker) {
+  for (const p of S.pets) {
+    if (dmg <= 0) break;
+    if (p.hp <= 0) continue;
+    const soak = Math.min(p.hp, dmg);
+    p.hp -= soak;
+    dmg -= soak;
+    floatAnchor(p.icon + ' -' + soak, 'hero', '#c8d6e8');
+    if (p.hp <= 0) petDies(p, attacker);
+  }
+  return dmg;
+}
+// every pet acts once per round (the Pack Leader drills them twice)
+function petsAct() {
+  if (!S.run || !S.pets.length) return;
+  const acts = hasRelic('packleader') ? 2 : 1;
+  const dmul = hasRelic('warhound') ? 2 : 1;
+  for (const p of S.pets.slice()) {
+    if (p.hp <= 0) continue;
+    for (let a = 0; a < acts && S.run && !S.victory; a++) {
+      if (p.iid === 'pup') addBlock(1);
+      else if (p.iid === 'newt') { if (S.enemy && S.enemy.hp > 0) applyBurn(S.enemy, 1 * dmul); }
+      else if (p.iid === 'rat') {
+        if (S.enemy && S.enemy.hp > 0) {
+          const bonus = hasRelic('bloodscent') && S.enemy.bleed > 0 ? 1 : 0;
+          dmgFoe(S.enemy, 1 * dmul + bonus);
+          if (S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
+        }
+      }
+    }
+  }
+  if (!S.run || S.victory) return;
+  if (hasRelic('guarddog') && S.pets.some(p => p.hp > 0)) addBlock(1);
+  if (hasRelic('treats')) {
+    let weak = null;
+    for (const p of S.pets) if (p.hp > 0 && p.hp < p.maxHp && (!weak || p.hp < weak.hp)) weak = p;
+    if (weak) { weak.hp = Math.min(weak.maxHp, weak.hp + 2); floatAnchor(weak.icon + ' +2', 'hero', '#7ee787'); }
+  }
 }
 function addBlock(n) {
   if (!S.run) return;
@@ -851,6 +1109,8 @@ function healPlayer(n) {
   S.run.hp = Math.min(S.run.maxHp, S.run.hp + n);
   const got = S.run.hp - before;
   if (got > 0) floatAnchor('+' + got + ' HP', 'hero', '#7ee787', got >= 8);
+  // Sterling Heart: the excess hardens into a small wall
+  if (hasRelic('sterling') && n > got) addBlock(Math.min(3, n - got));
   SND.heal();
   return got;
 }
@@ -895,6 +1155,8 @@ function hpHit(n, cause, col) {
 function hurtPlayer(n, cause) {
   if (!S.run || S.run.hp <= 0) return;
   if (hasRelic('thickskin')) n = Math.max(1, n - 1);   // hide turns the edge
+  // Soul Chain: your pack shares the pain
+  if (hasRelic('soulchain') && S.pets.some(p => p.hp > 0)) n = Math.max(1, n - 1);
   const incoming = n;
   // block soaks first
   if (S.run.block > 0) {
@@ -912,7 +1174,9 @@ function hurtPlayer(n, cause) {
 function usePotion() {
   if (!S.run || S.run.potions < 1 || S.run.hp >= S.run.maxHp) return false;
   S.run.potions--;
-  healPlayer(C.POTION_HEAL, 50);
+  healPlayer(C.POTION_HEAL + (hasRelic('elixir') ? 8 : 0) + (hasRelic('apothecary') ? 6 : 0));
+  // the Mender splits the draught with the pack
+  if (hasRelic('mender')) for (const p of S.pets) if (p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + 5);
   SND.buy();
   save();
   return true;
@@ -1200,7 +1464,7 @@ function mkEnemy(type, eid) {
     trait: base.trait, def: base.def || null,
     gold: Math.round(base.gold * mult * (type === 'elite' ? 1.8 : 1)),
     boss: type === 'boss', elite: type === 'elite',
-    stunned: 0, pois: 0, hitT: 0, lungeT: 0,
+    stunned: 0, pois: 0, bleed: 0, burn: 0, hitT: 0, lungeT: 0,
   };
 }
 // its plan for the round, telegraphed on its panel
@@ -1264,7 +1528,26 @@ function startBattle(type, entIdx, eid, extras) {
   S.victory = null;
   S.foeInfo = null;
   S.run.windUsed = false;
-  S.pPois = 0;
+  S.pPois = 0; S.pBleed = 0; S.pBurn = 0;
+  S.pets = [];
+  // the Eternal Flame greets every pack with kindling
+  if (hasRelic('eternalflame')) {
+    for (const f of S.foes) f.burn = f.def === 'gel' ? 1 : 2;
+  }
+  // the Pet Whistle calls the menagerie out before a single coin drops
+  // (flags land AFTER the roll call, so copies summon rather than rally)
+  if (hasRelic('petwhistle')) {
+    const called = [];
+    for (const iid of Object.keys(S.run.arsenal)) {
+      const it = itemById(iid);
+      if (!it || it.kind !== 'pet') continue;
+      for (let k = 0; k < S.run.arsenal[iid]; k++) {
+        const p = summonPet(iid);
+        if (p) called.push(p);
+      }
+    }
+    for (const p of called) p.whistled = true;
+  }
   dealHand();
   S.run.block = startBlock();
   // ONE machine per floor: the pile persists between fights, so the silver
@@ -1317,7 +1600,9 @@ function buildQueue(loot) {
       const it = itemById(l.iid);
       if (!it) continue;
       const t = it.kind === 'weapon' ? 'weapon' : it.kind === 'poison' ? 'vial'
-              : it.kind === 'shield' ? 'shielditem' : it.kind === 'heal' ? 'heartitem' : 'frost';
+              : it.kind === 'shield' ? 'shielditem' : it.kind === 'heal' ? 'heartitem'
+              : it.kind === 'burn' ? 'burnitem' : it.kind === 'bleed' ? 'bleeditem'
+              : it.kind === 'pet' ? 'petitem' : 'frost';
       q.push({ t, iid: l.iid });
     } else q.push({ t: l.k });
   }
@@ -1372,23 +1657,39 @@ function endRoundNow() {
 }
 function applyLoot(q) {
   if (!S.run) return;
+  const B = S.battle;
+  // Papercut: the opening piece of every resolve nicks the target
+  if (B && B.qi === 1 && hasRelic('papercut') && S.enemy && S.enemy.hp > 0 && !S.victory) {
+    applyBleed(S.enemy, 1, true);
+  }
   if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0));
   else if (q.t === 'bag') addGold(8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
   else if (q.t === 'silver') {
     addBlock(1 + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0));
     if (hasRelic('spikeshield')) dmgEnemy(1);
     if (hasRelic('retort')) dmgEnemy(2);
+    // the Alloy fuses every third silver into a plate
+    if (B && hasRelic('alloy')) {
+      B.silverFired = (B.silverFired || 0) + 1;
+      if (B.silverFired % 3 === 0) addBlock(3);
+    }
   }
-  else if (q.t === 'shielditem') addBlock(itemById(q.iid).block + (hasRelic('plateup') ? 3 : 0));
+  else if (q.t === 'shielditem') {
+    addBlock(itemById(q.iid).block + (hasRelic('plateup') ? 3 : 0)
+           + (hasRelic('shieldwall') ? 2 * S.pets.filter(p => p.hp > 0).length : 0));
+  }
   else if (q.t === 'red') {
     healPlayer(C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0) + (hasRelic('greensprig') ? 1 : 0));
     if (hasRelic('phoenixember')) addBlock(1);
+    // Crimson Rain: mercy for you, misery for them
+    if (hasRelic('crimsonrain')) for (const f of S.foes) if (f.hp > 0) applyBleed(f, 1, true);
   }
   else if (q.t === 'heartitem') healPlayer(itemById(q.iid).heal + (hasRelic('fieldmedic') ? 4 : 0));
   else if (q.t === 'gold') {
     const d = goldDmg();
     dmgEnemy(d);
     if (hasRelic('twinstrike') && S.run && !S.victory) dmgEnemy(d);
+    if (hasRelic('matchstick') && S.run && !S.victory && S.enemy && S.enemy.hp > 0) applyBurn(S.enemy, 1);
     if (hasRelic('bloodgold')) healPlayer(1);
     if (hasRelic('bloodthirst')) healPlayer(1);
     if (hasRelic('emberhoard') && S.run && !S.victory) dmgAll(1);
@@ -1397,38 +1698,69 @@ function applyLoot(q) {
     SND.collect(2);
   }
   else if (q.t === 'lucky') {
-    const ld = C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0);
+    let ld = C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0);
+    // Lucky Streak: the dice heat up as they roll
+    if (S.battle && hasRelic('luckystreak')) {
+      ld += S.battle.luckyFired || 0;
+      S.battle.luckyFired = (S.battle.luckyFired || 0) + 1;
+    }
     dmgEnemy(ld, null, hasRelic('sniperlens') || hasRelic('deadeye') || hasRelic('assassin'));
+    if (hasRelic('embershot') && S.run && !S.victory && S.enemy && S.enemy.hp > 0) applyBurn(S.enemy, 2);
     if (hasRelic('bloodthirst')) healPlayer(1);
     SND.gem();
   }
   else if (q.t === 'blue') {
     let bd = C.DMG.blue + (hasRelic('frostshard') ? 1 : 0) + (hasRelic('permafrost') ? 1 : 0);
     if (hasRelic('sparkstone') && S.foes.filter(f => f.hp > 0).length >= 2) bd += 1;
-    dmgAll(bd); SND.stun();
+    if (hasRelic('hailstorm')) bd += Math.max(0, S.foes.filter(f => f.hp > 0).length - 1);
+    dmgAll(bd);
+    // Dragon Breath: the frost ignites
+    if (hasRelic('dragonbreath') && S.run && !S.victory) {
+      for (const f of S.foes) if (f.hp > 0) applyBurn(f, 1);
+    }
+    SND.stun();
   }
   else if (q.t === 'weapon') {
     const it = itemById(q.iid);
     floatAt(it.name + '!', 50, '#ffe066', true);
     let wd = weaponDmg(it.dmg) + (hasRelic('armory') ? 2 : 0);
+    if (hasRelic('balancedblade') && q.iid === 'sword') wd += 4;
+    if (hasRelic('butcher') && S.enemy && S.enemy.bleed > 0) wd += 3;
     if (hasRelic('heavyarms')) wd = Math.round(wd * 1.3);
     dmgEnemy(wd);
+    if (S.run && !S.victory && S.enemy && S.enemy.hp > 0) {
+      if (hasRelic('serrator')) applyBleed(S.enemy, 2, true);
+      if (hasRelic('bombardier') && q.iid === 'bomb') applyBurn(S.enemy, 4);
+    }
     if (hasRelic('vampblade')) healPlayer(Math.ceil(wd / 2));
     if (hasRelic('bloodthirst')) healPlayer(1);
     S.shake += it.splash ? 8 : 5;
     SND.hit();
   } else if (q.t === 'green') {
     poisonEnemy((1 + (hasRelic('venomtip') ? 1 : 0) + (hasRelic('toxicology') ? 1 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
+    if (hasRelic('rustfang') && S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
     if (hasRelic('blightlord')) dmgEnemy(1);
     if (hasRelic('contagion')) for (const f of S.foes) { if (f.hp > 0 && f !== S.enemy) f.pois += 1; }
     if (hasRelic('alchemist')) healPlayer(1);
   }
   else if (q.t === 'vial') poisonEnemy((itemById(q.iid).pois + (hasRelic('venom') ? 2 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
-  else if (q.t === 'frost') stunEnemy(itemById(q.iid).stun + (hasRelic('deepfreeze') ? 1 : 0));
+  else if (q.t === 'burnitem') burnEnemy(itemById(q.iid).burn + (hasRelic('arsonist') ? 3 : 0));
+  else if (q.t === 'bleeditem') bleedEnemy(itemById(q.iid).bleed + (hasRelic('scalpel') ? 2 : 0));
+  else if (q.t === 'petitem') summonPet(q.iid);
+  else if (q.t === 'frost') {
+    stunEnemy(itemById(q.iid).stun + (hasRelic('deepfreeze') ? 1 : 0));
+    if (hasRelic('frostsmith')) addBlock(4);
+  }
   else if (q.t === 'skull') {
     floatAnchor('CURSED!', 'hero', '#c86bff', true);
     const ward = (hasRelic('wardcandle') ? 3 : 0) + (hasRelic('blessing') ? 2 : 0);
     hpHit(Math.max(1, C.SKULL_DMG + S.run.floor - 1 - ward), 'a cursed skull', '#c86bff');
+  }
+  // the Quartermaster hands the first piece of gear back for a second swing
+  if (q.iid && hasRelic('quartermaster') && S.battle && !S.battle.qmUsed && S.run && !S.victory) {
+    S.battle.qmUsed = true;
+    floatAnchor('\u{1F4E6} AGAIN!', 'hero', '#ffe9a3');
+    applyLoot({ ...q });
   }
   // the storm rides the rhythm of the resolve
   if (hasRelic('stormcall') && S.run && !S.victory && S.battle && S.battle.qi > 0 && S.battle.qi % 8 === 0) {
@@ -1466,12 +1798,24 @@ function enemyActFoe(e) {
         S.battle.stolen += 2;
         floatAnchor('purse cut! -2 coins next round', 'hero', '#ff9d3c', true);
       }
+      // your pack stands in the way: pets chew the blow down before it
+      // reaches you — and a fully-soaked hit spares you its venom too
+      let blow = petSoak(it.t === 'heavy' ? e.atk * 2 : e.atk, e);
+      if (blow <= 0) continue;
       if (e.trait === 'venom') {
         S.pPois += 2;
         floatAnchor('POISONED!', 'hero', '#b8f26b', true);
       }
+      if (e.trait === 'bleeder') {
+        S.pBleed += 2;
+        floatAnchor('BLEEDING!', 'hero', '#ff5a6e', true);
+      }
+      if (e.trait === 'burner') {
+        S.pBurn += 2;
+        floatAnchor('ABLAZE!', 'hero', '#ff9d3c', true);
+      }
       const hpPre = S.run.hp;
-      hurtPlayer(it.t === 'heavy' ? e.atk * 2 : e.atk, 'slain by ' + (e.name || 'the dungeon'));
+      hurtPlayer(blow, 'slain by ' + (e.name || 'the dungeon'));
       // LEECH (act 3): it drinks whatever got through your block
       if (S.run && e.trait === 'leech' && e.hp > 0) {
         const drank = hpPre - S.run.hp;
@@ -1495,12 +1839,31 @@ function enemyActFoe(e) {
   if (S.run) rollIntent(e);             // and shows you its NEXT move
 }
 function endRoundTicks() {
+  // Wildfire spreads AFTER the loop — a flame that leaps mid-tick must not
+  // tick again this round (nor re-ignite the foe it just left)
+  const wildfire = [];
   for (const e of S.foes) {
     if (e.hp <= 0) continue;
     if (e.pois > 0) {
       const s = e.pois;
       if (!hasRelic('plaguelord')) e.pois--;   // the Plague Lord's rot never fades
       dmgFoe(e, s, 'pois');
+    }
+    // BLEED: ticks its stacks, then the wound half-closes (Hemorrhage: never)
+    if (e.hp > 0 && e.bleed > 0) {
+      const s = e.bleed;
+      if (!hasRelic('hemorrhage')) e.bleed = Math.floor(e.bleed / 2);
+      dmgFoe(e, s, 'bleed');
+      if (hasRelic('leechkit')) healPlayer(1);
+    }
+    // BURN: hits hot then fades by 2 (Slow Burn: 1; Inferno Lord: never)
+    if (e.hp > 0 && e.burn > 0) {
+      const s = e.burn;
+      e.burn = Math.max(0, e.burn - (hasRelic('infernolord') ? 0 : hasRelic('slowburn') ? 1 : 2));
+      dmgFoe(e, s, 'burn');
+      if (hasRelic('cauterize')) healPlayer(1);
+      // Wildfire: the flames leap to whoever stands next to it
+      if (hasRelic('wildfire')) wildfire.push(e);
     }
     // ENRAGE (act 2+): its fury builds — one more attack every round
     if (e.hp > 0 && e.trait === 'enrage') {
@@ -1512,9 +1875,21 @@ function endRoundTicks() {
       floatAnchor('+' + C.REGEN_HP, 'enemy', '#7ee787');
     }
   }
+  for (const e of wildfire) {
+    for (const f of S.foes) if (f !== e && f.hp > 0) f.burn = (f.burn || 0) + 1;
+  }
   if (S.run && S.pPois > 0) {
     const s = S.pPois; S.pPois--;
     hpHit(s, 'poison', '#b8f26b');
+  }
+  // your own wounds: bleed half-closes, fire dies down by 2
+  if (S.run && S.pBleed > 0) {
+    const s = S.pBleed; S.pBleed = Math.floor(S.pBleed / 2);
+    hpHit(s, 'bleeding out', '#ff5a6e');
+  }
+  if (S.run && S.pBurn > 0) {
+    const s = S.pBurn; S.pBurn = Math.max(0, S.pBurn - 2);
+    hpHit(s, 'burning alive', '#ff9d3c');
   }
 }
 function newRound() {
@@ -1522,7 +1897,8 @@ function newRound() {
   B.round++;
   B.phase = 'drop';
   // banked pieces carry over as the seed of the new round's loot
-  // (the Grand Bank pays them back double)
+  // (the Grand Bank pays them back double, the Hoarder skims interest)
+  if (hasRelic('hoarder') && B.banked.length) addGold(B.banked.length);
   B.loot = hasRelic('grandbank') ? B.banked.concat(B.banked.map(l => ({ ...l }))) : B.banked;
   B.banked = [];
   B.queue = []; B.qi = 0;
@@ -1570,6 +1946,9 @@ function battleTick(dt) {
           dmgEnemy(S.run.block);
           if (!S.run || S.victory) return;
         }
+        // then your pack gets its bites in before the foes swing back
+        petsAct();
+        if (!S.run || S.victory) return;
         B.phase = 'enemy';
         B.actList = S.foes.map((f, i) => i).filter(i => S.foes[i].hp > 0);
         B.actPtr = 0;
@@ -1660,7 +2039,8 @@ function leaveBattle() {
   // the machine remembers this floor's pile — stash wisely
   S.run.pileSave = serializePile();
   S.run.pileFloor = S.run.floor;
-  S.victory = null; S.foes = []; S.foeInfo = null; S.enemy = null; S.battle = null; S.run.battleEnt = null;
+  S.victory = null; S.foes = []; S.pets = []; S.foeInfo = null; S.enemy = null; S.battle = null; S.run.battleEnt = null;
+  S.pBleed = 0; S.pBurn = 0;
   S.coins.length = 0;
   if (boss) {              // the lair opens: stairs down appear where it fell
     S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
@@ -1685,6 +2065,7 @@ function endRun(cause) {
   };
   S.run = null;
   S.foes = [];
+  S.pets = [];
   S.enemy = null;
   S.battle = null;
   S.victory = null;
@@ -1715,8 +2096,8 @@ function newRun(heroId) {
   // the chosen adventurer's signature coins
   S.run.purse[hero.coin] += 2;
   S.heroPick = hero.id;
-  S.foes = []; S.enemy = null; S.victory = null; S.room = null; S.over = null; S.inv = null;
-  S.meter = 0; S.pPois = 0;
+  S.foes = []; S.pets = []; S.enemy = null; S.victory = null; S.room = null; S.over = null; S.inv = null;
+  S.meter = 0; S.pPois = 0; S.pBleed = 0; S.pBurn = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
   genFloor();
   S.screen = 'dungeon';
@@ -2477,6 +2858,7 @@ window.DP = {
   buyShop, rerollSlot, coinPriceFor, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
+  bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap,
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
@@ -2554,6 +2936,10 @@ if (!HEADLESS) (function browser() {
     emberorc: ['orc', '#ff6b4a'], nightsmash: ['smasher', '#ff8a5e'], bloodmugger: ['goblin', '#ff5a6e'],
     plaguecube: ['slime', '#d0ff4a'], doomtotem: ['totem', '#ff9d3c'], abyssguard: ['skeleton', '#ff5a4e'],
     duskwraith: ['revenant', '#c86bff'], infernogre: ['ogre', '#ff6b4a'],
+    // the wound-dealers (bleed/burn), one pair per act
+    gutterrat: ['goblin', '#a8784a'], emberimp: ['smasher', '#ff9d3c'],
+    fleshripper: ['revenant', '#ff8a6b'], pyretotem: ['totem', '#ff6b4a'],
+    bloodfiend: ['revenant', '#ff4a6e'], ashogre: ['ogre', '#9a9aa8'],
   };
   function tintedArt(baseKey, variantKey, tint) {
     const ck = 'tint_' + variantKey;
@@ -3292,7 +3678,28 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
     }
     if (S.pPois > 0) txt('☠ ' + S.pPois, hx + 34, hy - 38, '800 11px Verdana, sans-serif', '#b8f26b', 'left');
+    if (S.pBleed > 0) txt('\u{1FA78} ' + S.pBleed, hx + 34, hy - 26, '800 11px Verdana, sans-serif', '#ff5a6e', 'left');
+    if (S.pBurn > 0) txt('\u{1F525} ' + S.pBurn, hx + 34, hy - 50, '800 11px Verdana, sans-serif', '#ff9d3c', 'left');
     if (S.hurtT > 0.28) txt('\u{1F4A2}', hx + 26, hy - 56, '22px serif', '#fff');
+    // ---- the pack: your pets stand at the hero's heel ----
+    S.pets.forEach((p, pi) => {
+      const px2 = hx + 38 + pi * 24, py2 = hy + 2;
+      if (p.hp <= 0) {
+        ctx.save(); ctx.globalAlpha = 0.25;
+        txt('\u{1F4A8}', px2, py2 - 10, '14px serif', '#fff');
+        ctx.restore();
+        return;
+      }
+      const pbob = Math.sin(t * 3 + pi * 1.3) * 1.5;
+      ctx.beginPath(); ctx.ellipse(px2, py2 + 2, 8, 2.6, 0, 0, 7);
+      ctx.fillStyle = 'rgba(6,3,8,0.5)'; ctx.fill();
+      txt(p.icon, px2, py2 - 9 + pbob, '16px serif', '#fff');
+      // a sliver of a health bar under each beast
+      const pf = Math.max(0, p.hp / p.maxHp);
+      ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(px2 - 8, py2 + 5, 16, 3);
+      ctx.fillStyle = pf < 0.35 ? '#ff5a4e' : '#7ee787';
+      ctx.fillRect(px2 - 8, py2 + 5, 16 * pf, 3);
+    });
 
     // ---- the pack, stage right ----
     const foes = S.foes || [];
@@ -3366,7 +3773,11 @@ if (!HEADLESS) (function browser() {
       hpBar(cx - bw / 2, by, bw, n === 1 ? 11 : 9, Math.max(0, e.hp), e.maxHp, e._ghost);
       txt(Math.max(0, e.hp) + '/' + e.maxHp, cx, by + (n === 1 ? 5.5 : 4.5),
           '800 ' + (n === 1 ? 9 : 8) + 'px Verdana, sans-serif', '#fff4f6', 'center', { w: 2.5, col: 'rgba(40,5,12,0.8)' });
-      if (e.pois > 0) txt('☠' + e.pois, cx - bw / 2 - 13, by + 4, '800 10px Verdana, sans-serif', '#b8f26b');
+      // the wound ledger: poison, then bleed, then burn stack down the side
+      let sy2 = by + 4;
+      if (e.pois > 0) { txt('☠' + e.pois, cx - bw / 2 - 13, sy2, '800 10px Verdana, sans-serif', '#b8f26b'); sy2 += 11; }
+      if (e.bleed > 0) { txt('\u{1FA78}' + e.bleed, cx - bw / 2 - 13, sy2, '800 10px Verdana, sans-serif', '#ff5a6e'); sy2 += 11; }
+      if (e.burn > 0) { txt('\u{1F525}' + e.burn, cx - bw / 2 - 13, sy2, '800 10px Verdana, sans-serif', '#ff9d3c'); }
       if (e.braced) txt('\u{1F6E1}', cx + bw / 2 + 11, by + 4, '11px serif', '#fff');
       // its defensive mechanic, badged under the bar (packs); the lone foe
       // gets the full description in its header instead
@@ -3750,7 +4161,8 @@ if (!HEADLESS) (function browser() {
   }
 
   // ---------------------------------------------------------- battle: pieces
-  const ITEM_GLOW = { weapon: '#ffb46b', poison: '#b8f26b', shield: '#c8d6e8', heal: '#ff8da1', stun: '#8be7ff' };
+  const ITEM_GLOW = { weapon: '#ffb46b', poison: '#b8f26b', shield: '#c8d6e8', heal: '#ff8da1', stun: '#8be7ff',
+                      burn: '#ff9d3c', bleed: '#ff5a6e', pet: '#ffd75e' };
   function drawCoin(c, t) {
     let zv = c.z;
     if (c.st === 'plat') {
@@ -4338,8 +4750,19 @@ if (!HEADLESS) (function browser() {
     txt('HP', 52, 733, '800 11px Verdana, sans-serif', '#b89aa4', 'left');
     bar(74, 726, 194, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
     txt(r.hp + ' / ' + r.maxHp, 171, 734, '800 10px Verdana, sans-serif', '#0e2a18');
-    if (S.pPois > 0) txt('☠ ' + S.pPois, 282, 733, '800 12px Verdana, sans-serif', '#b8f26b', 'left');
-    if (r.block > 0) txt('\u{1F6E1} ' + r.block, 320, 733, '800 12px Verdana, sans-serif', '#c8d6e8', 'left');
+    // the status ribbon: block, then whatever the dungeon left festering
+    {
+      const st = [];
+      if (r.block > 0) st.push(['\u{1F6E1}' + r.block, '#c8d6e8']);
+      if (S.pPois > 0) st.push(['☠' + S.pPois, '#b8f26b']);
+      if (S.pBleed > 0) st.push(['\u{1FA78}' + S.pBleed, '#ff5a6e']);
+      if (S.pBurn > 0) st.push(['\u{1F525}' + S.pBurn, '#ff9d3c']);
+      let sx3 = 280;
+      for (const [txt3, col3] of st) {
+        txt(txt3, sx3, 733, '800 11px Verdana, sans-serif', col3, 'left');
+        sx3 += 8 + txt3.length * 8;
+      }
+    }
     // gold + coins + keys
     txt('\u{1FA99} ' + fmt(r.gold), 34, 762, '900 18px Verdana, sans-serif', '#ffd75e', 'left');
     const flash = S.denyT > 0 && Math.floor(S.denyT * 10) % 2 === 0;
@@ -4604,6 +5027,8 @@ if (!HEADLESS) (function browser() {
     fast: 'strikes TWICE each turn', thief: 'steals coins from next round',
     venom: 'poisons you when it hits', curse: 'rains cursed skulls onto the field',
     enrage: 'FURY: +1 attack every round — kill it fast', leech: 'LEECH: heals for damage dealt — block hard',
+    bleeder: 'BLEEDER: its hits leave wounds that halve each round',
+    burner: 'BURNER: its hits ignite you — hot, but fades fast',
   };
   function drawFoeInfo(t) {
     if (S.foeInfo === null || !S.foes || !S.foes[S.foeInfo]) return;
@@ -4936,9 +5361,10 @@ if (!HEADLESS) (function browser() {
     gold: '●', lucky: '★', silver: '●', green: '●', gem: '\u{1F48E}', bag: '\u{1F4B0}', skull: '☠\u{FE0F}',
   };
   const LOOT_COL = { gold: '#f2c04a', lucky: '#ffdf6b', silver: '#c3ccd6', green: '#8ed67e',
-                     red: '#e87a8a', blue: '#7ab0e8', coin: '#f2c04a' };
+                     red: '#e87a8a', blue: '#7ab0e8', coin: '#f2c04a',
+                     burnitem: '#ff9d3c', bleeditem: '#ff5a6e', petitem: '#ffd75e' };
   function fxIcon(q) {
-    if (q.t === 'weapon' || q.t === 'vial' || q.t === 'shielditem' || q.t === 'heartitem' || q.t === 'frost') {
+    if (q.iid) {
       const it = itemById(q.iid);
       return it ? it.icon : '❓';
     }
@@ -4962,16 +5388,21 @@ if (!HEADLESS) (function browser() {
     if (q.t === 'heartitem') return '+' + it.heal + ' HP';
     if (q.t === 'vial') return 'POISON ×' + (it.pois + (hasRelic('venom') ? 2 : 0));
     if (q.t === 'frost') return 'FREEZE!';
+    if (q.t === 'burnitem') return 'BURN ×' + (it.burn + (hasRelic('arsonist') ? 3 : 0));
+    if (q.t === 'bleeditem') return 'BLEED ×' + (it.bleed + (hasRelic('scalpel') ? 2 : 0));
+    if (q.t === 'petitem') return it.name.toUpperCase() + ' JOINS!';
     return '';
   }
   const RINGS = [];
   window.__dpResolveFx = function (q) {
-    const toHero = q.t === 'silver' || q.t === 'red' || q.t === 'shielditem' || q.t === 'heartitem' || q.t === 'skull';
+    const toHero = q.t === 'silver' || q.t === 'red' || q.t === 'shielditem' || q.t === 'heartitem'
+                || q.t === 'skull' || q.t === 'petitem';
     const toGold = q.t === 'gem' || q.t === 'bag';
     const tgt = toGold ? { x: 90, y: 756 }
               : toHero ? { x: ANCHORS.hero.x, y: ANCHORS.hero.y + 28 }
               : { x: ANCHORS.enemy.x, y: ANCHORS.enemy.y + 26 };
-    const big = q.t === 'weapon' || q.t === 'vial' || q.t === 'frost' || q.t === 'lucky' || q.t === 'blue' || q.t === 'skull';
+    const big = q.t === 'weapon' || q.t === 'vial' || q.t === 'frost' || q.t === 'lucky' || q.t === 'blue'
+             || q.t === 'skull' || q.t === 'petitem' || q.t === 'burnitem' || q.t === 'bleeditem';
     // the barrage RAMPS UP: deep into the queue, pieces fly ever faster
     const spd = Math.max(0.4, resolveSpeed(S.battle ? S.battle.rampN : 0)) / (S.resolveMul || 1);
     const f = {
