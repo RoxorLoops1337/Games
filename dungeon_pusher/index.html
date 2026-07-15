@@ -217,17 +217,61 @@ function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
 //   thick — IMMUNE to poison; answer with raw physical damage
 //   regen — knits HP each round; out-tick it with poison or burst it down
 //   ward  — projects DR over the whole pack; punch through or focus it first
-const ENEMIES = [
-  { id: 'orc',      icon: '\u{1F9CC}', name: 'Orc Grunt',       hp: 28, atk: 2, trait: null,    def: null,    gold: 8 },
-  { id: 'smasher',  icon: '\u{1F47A}', name: 'Goblin Smasher',  hp: 24, atk: 2, trait: 'fast',  def: null,    gold: 9 },
-  { id: 'goblin',   icon: '\u{1F47A}', name: 'Goblin Mugger',   hp: 34, atk: 3, trait: 'thief', def: null,    gold: 14 },
-  // the mechanic-bearing foes carry less raw HP — their gimmick IS their bulk
-  { id: 'slime',    icon: '\u{1F7E2}', name: 'Gel Cube',        hp: 22, atk: 2, trait: 'venom', def: 'gel',   gold: 12 },
-  { id: 'totem',    icon: '\u{1F5FF}', name: 'War Totem',       hp: 28, atk: 3, trait: 'curse', def: 'ward',  gold: 15 },
-  { id: 'skeleton', icon: '\u{1F480}', name: 'Skeleton Guard',  hp: 33, atk: 4, trait: null,    def: 'armor', gold: 13 },
-  { id: 'revenant', icon: '\u{1F9DF}', name: 'Bone Revenant',   hp: 28, atk: 3, trait: null,    def: 'regen', gold: 14 },
-  { id: 'ogre',     icon: '\u{1F479}', name: 'Ogre Brute',      hp: 58, atk: 5, trait: null,    def: 'thick', gold: 18 },
+// THE BESTIARY, in ACTS like a proper roguelike: every 5 floors a new
+// roster takes over — same bones, meaner combinations, new mechanics.
+// Act 2 introduces ENRAGE (attack grows every round: kill it fast).
+// Act 3 introduces LEECH (heals itself for the damage it deals: block hard).
+// Art: acts 2-3 wear palette-swapped kin of the act-1 sprites (base+tint).
+const ENEMY_TIERS = [
+  // ---- ACT 1 (floors 1-5): the Catacombs crew ----
+  [
+    { id: 'orc',      icon: '\u{1F9CC}', name: 'Orc Grunt',       hp: 28, atk: 2, trait: null,    def: null,    gold: 8 },
+    { id: 'smasher',  icon: '\u{1F47A}', name: 'Goblin Smasher',  hp: 24, atk: 2, trait: 'fast',  def: null,    gold: 9 },
+    { id: 'goblin',   icon: '\u{1F47A}', name: 'Goblin Mugger',   hp: 34, atk: 3, trait: 'thief', def: null,    gold: 14 },
+    // the mechanic-bearing foes carry less raw HP — the gimmick IS the bulk
+    { id: 'slime',    icon: '\u{1F7E2}', name: 'Gel Cube',        hp: 22, atk: 2, trait: 'venom', def: 'gel',   gold: 12 },
+    { id: 'totem',    icon: '\u{1F5FF}', name: 'War Totem',       hp: 28, atk: 3, trait: 'curse', def: 'ward',  gold: 15 },
+    { id: 'skeleton', icon: '\u{1F480}', name: 'Skeleton Guard',  hp: 33, atk: 4, trait: null,    def: 'armor', gold: 13 },
+    { id: 'revenant', icon: '\u{1F9DF}', name: 'Bone Revenant',   hp: 28, atk: 3, trait: null,    def: 'regen', gold: 14 },
+    { id: 'ogre',     icon: '\u{1F479}', name: 'Ogre Brute',      hp: 58, atk: 5, trait: null,    def: 'thick', gold: 18 },
+  ],
+  // ---- ACT 2 (floors 6-10): the Deep Halls — frost-touched kin ----
+  [
+    { id: 'frostorc',    icon: '\u{1F9CC}', name: 'Frost Orc',     hp: 40, atk: 3, trait: 'fast',   def: null,    gold: 16 },
+    { id: 'gloomsmash',  icon: '\u{1F47A}', name: 'Gloom Smasher', hp: 38, atk: 3, trait: 'fast',   def: 'gel',   gold: 18 },
+    { id: 'palemugger',  icon: '\u{1F47A}', name: 'Pale Mugger',   hp: 46, atk: 4, trait: 'thief',  def: 'armor', gold: 24 },
+    { id: 'venomcube',   icon: '\u{1F7E3}', name: 'Venom Cube',    hp: 34, atk: 3, trait: 'venom',  def: 'gel',   gold: 20 },
+    { id: 'runetotem',   icon: '\u{1F5FF}', name: 'Rune Totem',    hp: 42, atk: 4, trait: 'curse',  def: 'ward',  gold: 24 },
+    { id: 'cryptguard',  icon: '\u{1F480}', name: 'Crypt Guard',   hp: 50, atk: 4, trait: 'enrage', def: 'armor', gold: 22 },
+    { id: 'barrowwight', icon: '\u{1F9DF}', name: 'Barrow Wight',  hp: 44, atk: 4, trait: 'venom',  def: 'regen', gold: 23 },
+    { id: 'frostogre',   icon: '\u{1F479}', name: 'Frost Ogre',    hp: 80, atk: 6, trait: null,     def: 'thick', gold: 30 },
+  ],
+  // ---- ACT 3 (floors 11+): the Abyss — ember-wreathed horrors ----
+  [
+    { id: 'emberorc',    icon: '\u{1F9CC}', name: 'Ember Orc',      hp: 55, atk: 5, trait: 'leech',  def: null,    gold: 26 },
+    { id: 'nightsmash',  icon: '\u{1F47A}', name: 'Night Smasher',  hp: 50, atk: 4, trait: 'fast',   def: 'gel',   gold: 26 },
+    { id: 'bloodmugger', icon: '\u{1F47A}', name: 'Blood Mugger',   hp: 62, atk: 6, trait: 'thief',  def: 'armor', gold: 34 },
+    { id: 'plaguecube',  icon: '\u{1F7E2}', name: 'Plague Cube',    hp: 46, atk: 5, trait: 'venom',  def: 'gel',   gold: 30 },
+    { id: 'doomtotem',   icon: '\u{1F5FF}', name: 'Doom Totem',     hp: 56, atk: 6, trait: 'curse',  def: 'ward',  gold: 34 },
+    { id: 'abyssguard',  icon: '\u{1F480}', name: 'Abyss Guard',    hp: 66, atk: 7, trait: 'enrage', def: 'armor', gold: 32 },
+    { id: 'duskwraith',  icon: '\u{1F9DF}', name: 'Dusk Wraith',    hp: 58, atk: 6, trait: 'leech',  def: 'regen', gold: 33 },
+    { id: 'infernogre',  icon: '\u{1F479}', name: 'Infernal Ogre',  hp: 100, atk: 8, trait: 'enrage', def: 'thick', gold: 44 },
+  ],
 ];
+// back-compat alias: the act-1 roster (tests and old references)
+const ENEMIES = ENEMY_TIERS[0];
+// which act a floor belongs to (0-based; acts past the last reuse its roster)
+function actIdx(floor) { return ((floor - 1) / 5) | 0; }
+function curRoster() {
+  return ENEMY_TIERS[Math.min(ENEMY_TIERS.length - 1, actIdx(S.run ? S.run.floor : 1))];
+}
+function enemyById(id) {
+  for (const tier of ENEMY_TIERS) {
+    const e = tier.find(x => x.id === id);
+    if (e) return e;
+  }
+  return null;
+}
 const BOSSES = [
   { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 104, atk: 6, trait: 'curse', def: 'armor', gold: 60 },
   { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 138, atk: 7, trait: null,    def: 'regen', gold: 80 },
@@ -246,6 +290,7 @@ function heroById(id) { return HEROES.find(h => h.id === id); }
 const TRAIT_TXT = {
   fast: 'strikes twice a round', thief: 'steals coins from your purse',
   venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field',
+  enrage: 'fury builds — +1 attack every round', leech: 'drinks the damage it deals',
 };
 // the defensive mechanic, spelled out on the foe's panel
 const DEF_TXT = {
@@ -831,21 +876,36 @@ function rollPileKind() {
 }
 
 // ------------------------------------------------------------------ battle
+// each ACT resets the ramp with a stronger roster (the tier bases carry the
+// big jumps between acts); acts past the last roster keep ramping instead
 function scaleMult() {
-  return 1 + 0.075 * (S.run.depth - 1) + 0.37 * (S.run.floor - 1);
+  const act = actIdx(S.run.floor);
+  const fInAct = (S.run.floor - 1) - act * 5;
+  const beyond = Math.max(0, S.run.floor - ENEMY_TIERS.length * 5);
+  // per-act ramp + an act carry tuned so the hand-off to a new (stronger)
+  // roster never softens the curve; past the last act it just keeps climbing
+  return 1 + 0.075 * (S.run.depth - 1) + 0.22 * fInAct + 0.33 * act + 0.3 * beyond;
 }
 function enemyPool(depth) {
-  // deeper rooms unlock meaner pools
-  return Math.min(ENEMIES.length, 4 + depth + (S.run.floor - 1) * 2);
+  // deeper rooms unlock the meaner half of THIS act's roster
+  const n = curRoster().length;
+  const fInAct = (S.run.floor - 1) % 5;
+  return Math.min(n, 4 + depth + fInAct * 2);
 }
 function mkEnemy(type, eid) {
-  // bosses scale by FLOOR only — their lair sits at max depth by design
-  const mult = type === 'boss' ? 1 + 0.37 * (S.run.floor - 1) : scaleMult();
+  const act = actIdx(S.run.floor);
+  // bosses rotate per ACT (dragon act 1, lich act 2, demon act 3, then round
+  // again) and scale by floor only — their lair sits at max depth by design
+  const mult = type === 'boss'
+    ? 1 + 0.20 * ((S.run.floor - 1) % 5) + 0.45 * act
+      + 0.3 * Math.max(0, S.run.floor - ENEMY_TIERS.length * 5)
+    : scaleMult();
   let base, eliteK = 1;
   if (type === 'boss') {
-    base = BOSSES[(S.run.floor - 1) % BOSSES.length];
+    base = BOSSES[act % BOSSES.length];
   } else {
-    base = (eid && ENEMIES.find(e => e.id === eid)) || ENEMIES[(rng() * enemyPool(S.run.depth)) | 0];
+    const roster = curRoster();
+    base = (eid && enemyById(eid)) || roster[(rng() * enemyPool(S.run.depth)) | 0];
     if (type === 'elite') eliteK = 1.6;
   }
   const hp = Math.round(base.hp * mult * eliteK);
@@ -1102,7 +1162,16 @@ function enemyActFoe(e) {
         S.pPois += 2;
         floatAnchor('POISONED!', 'hero', '#b8f26b', true);
       }
+      const hpPre = S.run.hp;
       hurtPlayer(it.t === 'heavy' ? e.atk * 2 : e.atk, 'slain by ' + (e.name || 'the dungeon'));
+      // LEECH (act 3): it drinks whatever got through your block
+      if (S.run && e.trait === 'leech' && e.hp > 0) {
+        const drank = hpPre - S.run.hp;
+        if (drank > 0 && e.hp < e.maxHp) {
+          e.hp = Math.min(e.maxHp, e.hp + drank);
+          floatAnchor('\u{1FA78} +' + drank, 'enemy', '#ff8a8a');
+        }
+      }
     }
     // Thornmail: your wall bites back
     if (S.run && hasRelic('thornmail') && preBlock > 0 && e.hp > 0) {
@@ -1119,6 +1188,11 @@ function endRoundTicks() {
       const s = e.pois;
       if (!hasRelic('plaguelord')) e.pois--;   // the Plague Lord's rot never fades
       dmgFoe(e, s, 'pois');
+    }
+    // ENRAGE (act 2+): its fury builds — one more attack every round
+    if (e.hp > 0 && e.trait === 'enrage') {
+      e.atk++;
+      floatAnchor('\u{1F4A2} +1 ATK', 'enemy', '#ff9d3c');
     }
     if (e.hp > 0 && e.def === 'regen' && e.hp < e.maxHp) {
       e.hp = Math.min(e.maxHp, e.hp + C.REGEN_HP);
@@ -1329,7 +1403,7 @@ function genEnts(dist) {
     const avail = SVC.filter(s => !ents.some(e => e.kind === s[0]));
     if (rng() < 0.55 || !avail.length) {
       const mtype = dist >= 2 && rng() < 0.22 ? 'elite' : 'battle';
-      const eid = ENEMIES[(rng() * enemyPool(dist + 1)) | 0].id;
+      const eid = curRoster()[(rng() * enemyPool(dist + 1)) | 0].id;
       ents.push({ kind: 'monster', mtype, eid, done: false });
     } else {
       const total = avail.reduce((a, s) => a + s[1], 0);
@@ -1460,7 +1534,7 @@ function keyGuard() {
     if (rooms[k].ents.some(e => e.kind === 'monster' && !e.done)) return;
   }
   const r = curRoom();
-  const eid = ENEMIES[(rng() * enemyPool(r.dist + 1)) | 0].id;
+  const eid = curRoster()[(rng() * enemyPool(r.dist + 1)) | 0].id;
   r.ents.push(placeEnts([{ kind: 'monster', mtype: 'battle', eid, done: false }])[0]);
   toast('something crawls out of the dark…');
 }
@@ -1965,7 +2039,8 @@ function tick(dt) {
 
 // ------------------------------------------------------------- public API
 window.DP = {
-  S, C, MACH, ITEMS, ENEMIES, BOSSES, RELICS, WHEEL, ENT_INFO, FLOORS,
+  S, C, MACH, ITEMS, ENEMIES, ENEMY_TIERS, BOSSES, RELICS, WHEEL, ENT_INFO, FLOORS,
+  actIdx, curRoster, enemyById,
   HEROES, heroById,
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
@@ -2038,11 +2113,52 @@ if (!HEADLESS) (function browser() {
     // the shopkeeper mans his stall here too
     keeper: { src: 'art/keeper.png', fw: 30, fh: 55, n: 1, fps: 1, ay: 55, body: 55, rows: 1, rh: 50 },
   };
+  // acts 2-3 wear palette-swapped kin: same sheet, hue-washed once into an
+  // offscreen canvas and cached. Register variants as {base, tint} entries.
+  const TIER_SKINS = {
+    // Act 2 — frost-touched
+    frostorc: ['orc', '#58b8ff'], gloomsmash: ['smasher', '#8a7ae8'], palemugger: ['goblin', '#b8c8e8'],
+    venomcube: ['slime', '#c86bff'], runetotem: ['totem', '#58b8ff'], cryptguard: ['skeleton', '#7ac8e8'],
+    barrowwight: ['revenant', '#7ee7a0'], frostogre: ['ogre', '#58b8ff'],
+    // Act 3 — ember-wreathed
+    emberorc: ['orc', '#ff6b4a'], nightsmash: ['smasher', '#ff8a5e'], bloodmugger: ['goblin', '#ff5a6e'],
+    plaguecube: ['slime', '#d0ff4a'], doomtotem: ['totem', '#ff9d3c'], abyssguard: ['skeleton', '#ff5a4e'],
+    duskwraith: ['revenant', '#c86bff'], infernogre: ['ogre', '#ff6b4a'],
+  };
+  function tintedArt(baseKey, variantKey, tint) {
+    const ck = 'tint_' + variantKey;
+    if (ART_IMG[ck]) return ART_IMG[ck];
+    const base = art(baseKey, SHEETS[baseKey].src);
+    if (!base._ok) return base;                 // not loaded yet — caller bails
+    const cv = document.createElement('canvas');
+    cv.width = base.naturalWidth || base.width;
+    cv.height = base.naturalHeight || base.height;
+    const g = cv.getContext('2d');
+    if (g) {
+      g.drawImage(base, 0, 0);
+      g.globalCompositeOperation = 'source-atop';
+      g.globalAlpha = 0.42;
+      g.fillStyle = tint;
+      g.fillRect(0, 0, cv.width, cv.height);
+    }
+    cv._ok = true;
+    ART_IMG[ck] = cv;
+    return cv;
+  }
+  function sheetOf(key) { return SHEETS[key] || (TIER_SKINS[key] ? SHEETS[TIER_SKINS[key][0]] : null); }
   const DIR_ROW = { u: 0, l: 1, d: 2, r: 3 };
   function drawArt(key, x, footY, targetH, dir, animT) {
-    const sh = SHEETS[key];
-    if (!sh) return false;
-    const im = art(key, sh.src);
+    let sh = SHEETS[key];
+    let im;
+    if (!sh && TIER_SKINS[key]) {
+      const [baseKey, tint] = TIER_SKINS[key];
+      sh = SHEETS[baseKey];
+      if (!sh) return false;
+      im = tintedArt(baseKey, key, tint);
+    } else {
+      if (!sh) return false;
+      im = art(key, sh.src);
+    }
     if (!im._ok) return false;
     const frame = Math.floor((animT || 0) * (sh.fps || 1)) % (sh.n || 1);
     const row = sh.rows === 4 ? (sh.row0 || 0) + (DIR_ROW[dir] === undefined ? 2 : DIR_ROW[dir]) : 0;
@@ -2058,10 +2174,11 @@ if (!HEADLESS) (function browser() {
   // which sheet a battle foe / room monster wears
   function foeArtKey(idOrEnt) {
     if (!idOrEnt) return null;
-    if (typeof idOrEnt === 'string') return SHEETS[idOrEnt] ? idOrEnt : null;
+    const has = (k) => !!(SHEETS[k] || TIER_SKINS[k]);
+    if (typeof idOrEnt === 'string') return has(idOrEnt) ? idOrEnt : null;
     const e = idOrEnt;
-    if (e.mtype === 'boss' || e.boss) return BOSSES[(S.run.floor - 1) % BOSSES.length].id;
-    return SHEETS[e.eid || e.id] ? (e.eid || e.id) : null;
+    if (e.mtype === 'boss' || e.boss) return BOSSES[actIdx(S.run.floor) % BOSSES.length].id;
+    return has(e.eid || e.id) ? (e.eid || e.id) : null;
   }
   // machine dressing cut from the owner's AI-rendered cabinet concept
   // (art/machine/*). Everything falls back to the painted version.
@@ -2687,7 +2804,7 @@ if (!HEADLESS) (function browser() {
       if (e.hitT > 0) ctx.rotate(Math.sin(t * 60) * 0.08);
       if (e.stunned > 0) ctx.globalAlpha *= 0.75;
       const artKey = foeArtKey(e);
-      if (!(artKey && drawArt(artKey, 0, 34 * scl, (SHEETS[artKey].bh || 76) * scl, 'l', t))) {
+      if (!(artKey && drawArt(artKey, 0, 34 * scl, (sheetOf(artKey).bh || 76) * scl, 'l', t))) {
         txt(e.icon, 0, 0, Math.round(sz) + 'px serif', '#fff');
       }
       if (e.hitT > 0 && artKey) {
@@ -3853,6 +3970,7 @@ if (!HEADLESS) (function browser() {
   const TRAIT_ATK = {
     fast: 'strikes TWICE each turn', thief: 'steals coins from next round',
     venom: 'poisons you when it hits', curse: 'rains cursed skulls onto the field',
+    enrage: 'FURY: +1 attack every round — kill it fast', leech: 'LEECH: heals for damage dealt — block hard',
   };
   function drawFoeInfo(t) {
     if (S.foeInfo === null || !S.foes || !S.foes[S.foeInfo]) return;
@@ -3879,7 +3997,7 @@ if (!HEADLESS) (function browser() {
     }
     // portrait
     const key = foeArtKey(e);
-    if (!(key && drawArt(key, cx, cy + 96, (SHEETS[key].bh || 72), 'd', t))) {
+    if (!(key && drawArt(key, cx, cy + 96, (sheetOf(key).bh || 72), 'd', t))) {
       txt(e.icon, cx, cy + 60, '48px serif', '#fff');
     }
     txt(e.name, cx, cy + 128, '900 18px Georgia, serif', e.boss ? '#ffd75e' : '#f0e0f0', 'center', { w: 4, col: '#20081a' });
@@ -4506,8 +4624,8 @@ if (!HEADLESS) (function browser() {
     const info = ENT_INFO[e.kind];
     let icon = info.icon, label = info.name, col = '#e8dce8';
     if (e.kind === 'monster') {
-      const en = ENEMIES.find(x => x.id === e.eid);
-      icon = e.mtype === 'boss' ? BOSSES[(S.run.floor - 1) % BOSSES.length].icon : (en ? en.icon : info.icon);
+      const en = enemyById(e.eid);
+      icon = e.mtype === 'boss' ? BOSSES[actIdx(S.run.floor) % BOSSES.length].icon : (en ? en.icon : info.icon);
       label = e.mtype === 'boss' ? 'THE BOSS' : e.mtype === 'elite' ? 'ELITE FOE' : (en ? en.name : 'MONSTER');
       col = e.mtype === 'boss' ? '#ffd75e' : e.mtype === 'elite' ? '#ff9d3c' : '#ffb4a8';
     }
@@ -4540,7 +4658,7 @@ if (!HEADLESS) (function browser() {
     if (e.kind === 'monster') {
       const key = foeArtKey(e);
       if (key) {
-        const sh = SHEETS[key];
+        const sh = sheetOf(key);
         drewArt = drawArt(key, p.x, p.y + 4 + bob * 0.4, sh.rh, 'd', t);
         if (drewArt && e.mtype === 'elite') {
           // elites run hot: a faint red heat over the sprite

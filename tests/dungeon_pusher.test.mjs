@@ -1199,6 +1199,80 @@ DP.interact(0);
 t.ok(platCoins().length > 20, 'and racks a fresh dense pile');
 finishFight();
 
+// -------- ACTS: a new bestiary every 5 floors (Roguebook-style) --------
+{
+  t.eq(DP.ENEMY_TIERS.length, 3, 'three acts of enemies');
+  t.ok(DP.ENEMY_TIERS.every(tier => tier.length === 8), 'eight foes per act');
+  const all = DP.ENEMY_TIERS.flat();
+  t.eq(new Set(all.map(e => e.id)).size, all.length, 'no duplicate ids across acts');
+  t.ok(all.every(e => e.hp > 0 && e.atk > 0 && e.icon && e.name), 'every act foe is fully statted');
+  const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech'];
+  const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward'];
+  t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
+  // act boundaries
+  t.eq(DP.actIdx(1), 0, 'floor 1 is act 1');
+  t.eq(DP.actIdx(5), 0, 'floor 5 still act 1');
+  t.eq(DP.actIdx(6), 1, 'floor 6 opens act 2');
+  t.eq(DP.actIdx(10), 1, 'floor 10 closes act 2');
+  t.eq(DP.actIdx(11), 2, 'floor 11 opens act 3');
+  // act 2+ foes are strictly meaner than their act-1 kin
+  for (let i = 0; i < 8; i++) {
+    t.ok(DP.ENEMY_TIERS[1][i].hp > DP.ENEMY_TIERS[0][i].hp && DP.ENEMY_TIERS[2][i].hp > DP.ENEMY_TIERS[1][i].hp,
+         'slot ' + i + ' grows tougher act by act');
+  }
+}
+{
+  DP.srand(83);
+  DP.newRun('knight');
+  // floor 6 spawns exclusively from the act-2 roster
+  S.run.floor = 6;
+  const tier2 = new Set(DP.ENEMY_TIERS[1].map(e => e.id));
+  for (let i = 0; i < 20; i++) {
+    const e = DP.mkEnemy('battle');
+    t.ok(tier2.has(e.id), 'floor 6 spawn #' + i + ' comes from act 2 (' + e.id + ')');
+    if (!tier2.has(e.id)) break;
+  }
+  t.eq(DP.curRoster()[0].id, 'frostorc', 'the roster helper agrees');
+  // bosses rotate per act: dragon, lich, demon
+  S.run.floor = 1; t.eq(DP.mkEnemy('boss').id, 'dragon', 'act 1 boss: the Vault Dragon');
+  S.run.floor = 7; t.eq(DP.mkEnemy('boss').id, 'lich', 'act 2 boss: the Coin Lich');
+  S.run.floor = 12; t.eq(DP.mkEnemy('boss').id, 'demon', 'act 3 boss: the Pit Boss');
+  S.run.floor = 16; t.eq(DP.mkEnemy('boss').id, 'dragon', 'act 4 cycles back around, scaled up');
+  // an act-3 spawn at floor 11 out-muscles its act-2 kin at floor 10
+  S.run.floor = 10; S.run.depth = 1;
+  const late2 = DP.mkEnemy('battle', 'frostorc');
+  S.run.floor = 11;
+  const early3 = DP.mkEnemy('battle', 'emberorc');
+  t.ok(early3.hp > late2.hp, 'the act hand-off never softens (' + late2.hp + ' -> ' + early3.hp + ')');
+  S.run.floor = 1;
+}
+// -------- the act-2/3 mechanics: ENRAGE and LEECH --------
+{
+  DP.srand(89);
+  S.run.room.ents = [mkMonster('orc')];
+  DP.interact(0);
+  S.enemy.hp = S.enemy.maxHp = 400;
+  // enrage: fury builds at round end
+  S.enemy.trait = 'enrage'; S.enemy.pois = 0;
+  const atk0 = S.enemy.atk;
+  DP.endRoundTicks();
+  t.eq(S.enemy.atk, atk0 + 1, 'an enraged foe gains +1 attack every round');
+  // leech: it drinks what got through the block
+  S.enemy.trait = 'leech'; S.enemy.atk = 6;
+  S.enemy.intent = { t: 'hit', dmg: 6 };
+  S.run.hp = 150; S.run.maxHp = 200; S.run.block = 0;
+  S.enemy.hp = 100;
+  DP.enemyActFoe(S.enemy);
+  t.eq(S.enemy.hp, 106, 'a leech heals for the damage it dealt');
+  // fully blocked -> nothing to drink
+  S.enemy.intent = { t: 'hit', dmg: 6 };
+  S.run.block = 20; S.enemy.hp = 100;
+  DP.enemyActFoe(S.enemy);
+  t.eq(S.enemy.hp, 100, 'a blocked leech drinks nothing');
+  S.enemy.trait = null;
+  finishFight();
+}
+
 // -------- scaling: deeper and lower is meaner --------
 DP.srand(33);
 DP.newRun();
