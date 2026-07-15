@@ -889,17 +889,27 @@ t.eq(S.run.maxHp, mhp0 + 10, 'max HP upgrade sticks');
     t.ok(!DP.buyShop(cSlot2, 'coins'), 'a purse short of the coin price is refused');
     t.ok(!S.room.stock[cSlot2].sold, 'and the ware stays on the shelf');
   }
-  // REMOVE a ware for 10 coins → a fresh gear slot replaces it
-  const remSlot = S.room.stock.findIndex(x => !x.sold);
+  // REMOVE an item from YOUR PACK for 10 coins — the shelf is untouched
+  const shelfBefore = S.room.stock.map(x => x.label).join('|');
+  S.run.arsenal.sword = (S.run.arsenal.sword || 0) + 1;
+  const swords = S.run.arsenal.sword;
   for (const k of COIN_KINDS) S.run.purse[k] = 0;
   S.run.purse.coin = 4;                                     // short of the removal fee
-  t.ok(!DP.rerollSlot(remSlot), 'removing costs coins the purse cannot cover');
+  t.ok(!DP.removeArsenal('sword'), 'removing costs coins the purse cannot cover');
+  t.eq(S.run.arsenal.sword, swords, 'the refused sword stays in the pack');
   S.run.purse.coin = 12;
-  t.ok(DP.rerollSlot(remSlot), 'ten coins remove the ware');
-  t.eq(DP.purseTotal(), 2, 'the removal skims exactly ' + C.SHOP_REROLL + ' coins');
-  t.eq(S.room.stock[remSlot].kind, 'item', 'a fresh gear slot takes its place');
-  t.ok(!S.room.stock[remSlot].sold, 'the replacement is buyable');
-  t.ok('coinPrice' in S.room.stock[remSlot], 'and it too carries a coin price');
+  t.ok(DP.removeArsenal('sword'), 'ten coins and the keeper takes the sword');
+  t.eq(DP.purseTotal(), 2, 'the removal skims exactly ' + C.SHOP_REMOVE + ' coins');
+  t.eq(S.run.arsenal.sword || 0, swords - 1, 'one copy left the pack');
+  t.eq(S.room.stock.map(x => x.label).join('|'), shelfBefore, 'the SHELF is untouched — removal thins YOUR pack');
+  t.ok(!DP.removeArsenal('hammer'), 'the keeper cannot take what you do not own');
+  // the racked pile forgets the removed copy too
+  S.run.purse.coin = 12;
+  S.run.arsenal.vial = 1;
+  S.run.pileSave = [{ k: 'item', x: 50, y: 40, lay: 0, iid: 'vial' }];
+  S.run.pileFloor = S.run.floor;
+  t.ok(DP.removeArsenal('vial'), 'the keeper takes the vial');
+  t.ok(!S.run.pileSave.some(p => p.iid === 'vial'), 'and scrubs it off this floor\'s racked pile');
 }
 t.ok(DP.closeModal(), 'LEAVE closes the shop');
 t.ok(S.run.room.ents[0].done, 'the merchant serves one visit, then leaves the room');
