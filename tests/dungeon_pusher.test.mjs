@@ -685,14 +685,26 @@ DP.drop(50);
 t.eq(S.meter, 0, 'meter resets on jackpot');
 {
   const items = S.rain.filter(r => r.kind === 'item');
-  t.eq(items.length, 3, 'the jackpot sprouts THREE of your own items — not a coin firehose');
-  t.ok(items.every(r => r.temp), 'they are free temporary copies');
-  t.ok(items.every(r => (S.run.arsenal[r.iid] || 0) > 0), 'each one is gear you actually own');
+  t.eq(items.length, 1, 'the jackpot catapults exactly ONE of your items');
+  t.ok(items.every(r => r.temp), 'it is a free temporary copy');
+  t.ok(items.every(r => (S.run.arsenal[r.iid] || 0) > 0), 'and gear you actually own');
+  t.ok(items[0].y >= 12 && items[0].y <= DP.tierFront(0) - 12, 'it lands somewhere on the BOARD, not just the slot line');
   t.eq(S.rain.filter(r => r.kind !== 'item').length, 0, 'no coin spray riding along');
 }
 step(2);
 t.ok(S.coins.some(c => c.kind === 'item' && c.temp), 'the free gear landed on the field');
 S.rain.length = 0;
+// the landing spot is luck: two jackpots scatter to different places
+{
+  DP.frenzy();
+  const a = S.rain.filter(r => r.kind === 'item')[0];
+  S.rain.length = 0;
+  DP.frenzy();
+  const b = S.rain.filter(r => r.kind === 'item')[0];
+  t.ok(a && b && (Math.abs(a.x - b.x) > 0.001 || Math.abs(a.y - b.y) > 0.001),
+       'the catapult aims somewhere new each time');
+  S.rain.length = 0;
+}
 // an empty arsenal falls back to a modest coin consolation
 {
   const saveArs = S.run.arsenal;
