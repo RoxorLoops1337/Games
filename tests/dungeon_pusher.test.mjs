@@ -835,7 +835,7 @@ t.ok(S.room.stock.filter(x => x.kind === 'item').length === 3, 'three arsenal it
 t.eq(S.room.stock.filter(x => x.kind === 'relic').length, 1, 'ONE relic sits in the case');
 {
   const rslot = S.room.stock.find(x => x.kind === 'relic');
-  t.eq(RELICS.find(r => r.id === rslot.rid).rar, 'c', 'and it is always a COMMON');
+  t.ok(['c', 'r', 'e'].includes(RELICS.find(r => r.id === rslot.rid).rar), 'the cased relic carries a real rarity');
   t.ok(rslot.sub && rslot.sub.length > 0, 'its effect text hangs under the label');
 }
 t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
@@ -963,16 +963,23 @@ S.run.relics = [];
 
 // -------- relic faucets: the wheel, the boss — and ONE common in the shop --------
 {
-  // shops sell exactly one COMMON; forges hone gear, never relics
+  // shops sell exactly ONE relic — 80% common / 15% rare / 5% epic;
+  // forges hone gear, never relics
   DP.srand(44);
   S.run.relics = [];
   let badShopRelic = false, relicInForge = false;
-  for (let i = 0; i < 40; i++) {
+  const rarCount = { c: 0, r: 0, e: 0 };
+  for (let i = 0; i < 300; i++) {
     const shelf = DP.shopStock().filter(x => x.kind === 'relic');
-    if (shelf.length !== 1 || RELICS.find(r => r.id === shelf[0].rid).rar !== 'c') badShopRelic = true;
-    if (DP.boonOptions().some(o => o.kind === 'relic')) relicInForge = true;
+    if (shelf.length !== 1) badShopRelic = true;
+    else rarCount[RELICS.find(r => r.id === shelf[0].rid).rar]++;
+    if (i < 40 && DP.boonOptions().some(o => o.kind === 'relic')) relicInForge = true;
   }
-  t.ok(!badShopRelic, 'every shop case holds exactly one COMMON relic');
+  t.ok(!badShopRelic, 'every shop case holds exactly one relic');
+  t.ok(rarCount.c > 180, 'commons dominate the case (~80%: ' + rarCount.c + '/300)');
+  t.ok(rarCount.r > 15 && rarCount.r < 90, 'rares show up now and then (~15%: ' + rarCount.r + '/300)');
+  t.ok(rarCount.e >= 3 && rarCount.e < 40, 'epics are the 5% jackpot (' + rarCount.e + '/300)');
+  t.ok(rarCount.c > rarCount.r && rarCount.r > rarCount.e, 'the odds ladder holds: c > r > e');
   t.ok(!relicInForge, 'no forge boon is ever an relic');
   // buying the cased relic puts it on your shelf
   {
