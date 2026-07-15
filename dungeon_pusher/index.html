@@ -2439,8 +2439,8 @@ function closeModal() {
   return true;
 }
 function shopStock() {
-  // the keeper knows what his shelf is worth now — everything costs more,
-  // and relics are priced by their rarity
+  // the keeper knows what his shelf is worth now — GOLD prices are DOUBLE
+  // what the wares are worth (coins stay the honest currency)
   const st = [];
   const mult = 1 + 0.25 * (S.run.floor - 1);
   // three distinct items
@@ -2457,10 +2457,22 @@ function shopStock() {
     st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(34 * mult), sold: false });
   }
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(65 * mult), sold: false });
-  // NOTE: relics are no longer sold here — the wheel of fortune (and the
-  // boss's choice) is the only place to win them now.
-  // every ware also carries a COIN price (1/2/5 of a single kind, by worth)
-  for (const s of st) s.coinPrice = coinPriceFor(s.price);
+  // ONE common relic rounds out the case (the wheel and the boss's hoard
+  // stay the only source of rares and epics)
+  {
+    const rid = rollRelicByRar('c');
+    if (rid) {
+      const rl = relicById(rid);
+      st.push({ kind: 'relic', rid, label: rl.icon + ' ' + rl.name, sub: rl.desc,
+                price: Math.round(RARITY.c.price * mult), sold: false });
+    }
+  }
+  // every ware also carries a COIN price (1/2/5 of a single kind, by its
+  // true worth) — then the gold tag doubles
+  for (const s of st) {
+    s.coinPrice = coinPriceFor(s.price);
+    s.price *= 2;
+  }
   return st;
 }
 // wares cost 1, 2, or 5 coins of a single kind depending on their gold worth
@@ -2477,6 +2489,7 @@ function grantShopWare(it) {
   else if (it.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
   else if (it.kind === 'coin') S.run.purse[it.cid] = (S.run.purse[it.cid] || 0) + 1;
   else if (it.kind === 'maxhp') { S.run.maxHp += 10; S.run.hp += 10; }
+  else if (it.kind === 'relic' && S.run.relics.indexOf(it.rid) < 0) S.run.relics.push(it.rid);
 }
 // buy a ware with GOLD (pay omitted / 'gold') or COINS (pay === 'coins')
 function buyShop(i, pay) {

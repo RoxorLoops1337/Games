@@ -832,12 +832,18 @@ t.ok(DP.interact(0), 'talking to the shopkeeper opens the shop');
 t.ok(S.room && S.room.type === 'shop', 'shop is open');
 t.ok(S.room.stock.length >= 6, 'shop stocks a full shelf (' + S.room.stock.length + ')');
 t.ok(S.room.stock.filter(x => x.kind === 'item').length === 3, 'three arsenal items on sale');
-t.ok(!S.room.stock.some(x => x.kind === 'relic'), 'no relics in the case — those come off the wheel now');
+t.eq(S.room.stock.filter(x => x.kind === 'relic').length, 1, 'ONE relic sits in the case');
+{
+  const rslot = S.room.stock.find(x => x.kind === 'relic');
+  t.eq(RELICS.find(r => r.id === rslot.rid).rar, 'c', 'and it is always a COMMON');
+  t.ok(rslot.sub && rslot.sub.length > 0, 'its effect text hangs under the label');
+}
 t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
 t.ok(S.room.stock.some(x => x.kind === 'coin' && COIN_KINDS.includes(x.cid)),
      'and a single typed coin for the purse');
-t.eq(S.room.stock.find(x => x.kind === 'potion').price, 45, 'potions cost more now');
-t.eq(S.room.stock.find(x => x.kind === 'pouch').price, 60, 'pouches too');
+t.eq(S.room.stock.find(x => x.kind === 'potion').price, 90, 'potion gold price is DOUBLED');
+t.eq(S.room.stock.find(x => x.kind === 'pouch').price, 120, 'pouch too');
+t.eq(S.room.stock.find(x => x.kind === 'potion').coinPrice, 2, 'the COIN price stays honest (from the true worth)');
 S.run.gold = 0;
 t.ok(!DP.buyShop(0), 'cannot buy broke');
 S.run.gold = 10000;
@@ -954,18 +960,30 @@ t.ok(!S.victory.relicOffer, 'an elite offers no relic CHOICE — only the spin')
 DP.leaveBattle();
 S.run.relics = [];
 
-// -------- the wheel of fortune is the only faucet for relics --------
+// -------- relic faucets: the wheel, the boss — and ONE common in the shop --------
 {
-  // shops sell none; forges hone gear, not relics
+  // shops sell exactly one COMMON; forges hone gear, never relics
   DP.srand(44);
   S.run.relics = [];
-  let relicInShop = false, relicInForge = false;
+  let badShopRelic = false, relicInForge = false;
   for (let i = 0; i < 40; i++) {
-    if (DP.shopStock().some(x => x.kind === 'relic')) relicInShop = true;
+    const shelf = DP.shopStock().filter(x => x.kind === 'relic');
+    if (shelf.length !== 1 || RELICS.find(r => r.id === shelf[0].rid).rar !== 'c') badShopRelic = true;
     if (DP.boonOptions().some(o => o.kind === 'relic')) relicInForge = true;
   }
-  t.ok(!relicInShop, 'no shop shelf ever holds an relic');
+  t.ok(!badShopRelic, 'every shop case holds exactly one COMMON relic');
   t.ok(!relicInForge, 'no forge boon is ever an relic');
+  // buying the cased relic puts it on your shelf
+  {
+    S.run.room.ents = [{ kind: 'shop', done: false }];
+    DP.interact(0);
+    const ri = S.room.stock.findIndex(x => x.kind === 'relic');
+    S.run.gold = 10000;
+    t.ok(DP.buyShop(ri, 'gold'), 'gold buys the cased relic');
+    t.ok(DP.hasRelic(S.room.stock[ri].rid), 'and it lands on your shelf');
+    S.run.relics = [];
+    DP.closeModal();
+  }
   // the wheel table can win relics of both rarities
   S.run.relics = [];
   t.ok(WHEEL.some(s => /RELIC/.test(s.label)), 'the wheel lists relic prizes');
