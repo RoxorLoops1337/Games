@@ -144,7 +144,7 @@ const ITEMS = [
 function itemById(id) { return ITEMS.find(i => i.id === id); }
 
 // ------------------------------------------------------------------ relics
-// ARTIFACTS: rarity 'c' (common) / 'r' (rare) / 'e' (epic). Commons drop
+// RELICS: rarity 'c' (common) / 'r' (rare) / 'e' (epic). Commons drop
 // often; epics are the build-warping ones. Won after ELITE fights, or
 // bought dearly from the shop.
 const RARITY = {
@@ -195,7 +195,7 @@ const RELICS = [
   { id: 'midas',      rar: 'e', icon: '\u{1F451}', name: 'Midas Touch',   desc: 'all gold income +30%' },
   { id: 'twinstrike', rar: 'e', icon: '\u{1F5E1}\u{FE0F}', name: 'Twin Strike', desc: 'gold coins strike TWICE' },
   { id: 'grandbank',  rar: 'e', icon: '\u{1F3E6}', name: 'Grand Bank',    desc: 'banked pieces come back duplicated' },
-  // ---- the deep vaults: 50 more artifacts ----
+  // ---- the deep vaults: 50 more relics ----
   // COMMON — steady, stacking bonuses
   { id: 'keenedge',   rar: 'c', icon: '\u{1F5E1}\u{FE0F}', name: 'Keen Edge',   desc: 'gold coins deal +1 damage' },
   { id: 'bulwark',    rar: 'c', icon: '\u{1F6E1}\u{FE0F}', name: 'Bulwark',     desc: 'silver coins give +1 block' },
@@ -262,19 +262,19 @@ function rollRelicDrop() {
 }
 function relicById(id) { return RELICS.find(r => r.id === id); }
 function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
-// pull a random UNOWNED artifact of a given rarity (null if that shelf is bare)
+// pull a random UNOWNED relic of a given rarity (null if that shelf is bare)
 function rollRelicByRar(rar) {
   if (!S.run) return null;
   const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0);
   return pool.length ? pool[(rng() * pool.length) | 0].id : null;
 }
-// grant a random unowned artifact of a rarity; returns the id, or null if none
-function grantArtifact(rar) {
+// grant a random unowned relic of a rarity; returns the id, or null if none
+function grantRelic(rar) {
   const id = rollRelicByRar(rar);
   if (id) S.run.relics.push(id);
   return id;
 }
-// a spread of up to `count` DISTINCT unowned artifacts of a rarity, to choose from
+// a spread of up to `count` DISTINCT unowned relics of a rarity, to choose from
 function rollRelicPool(rar, count) {
   if (!S.run) return [];
   const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0).map(rl => rl.id);
@@ -282,7 +282,7 @@ function rollRelicPool(rar, count) {
   while (out.length < count && pool.length) out.push(pool.splice((rng() * pool.length) | 0, 1)[0]);
   return out;
 }
-// open the artifact-CHOICE overlay: pick `picks` from a spread of that rarity.
+// open the relic-CHOICE overlay: pick `picks` from a spread of that rarity.
 // If the shelf is too full to fill the spread, grant what's left (or gold).
 function openRelicPick(rar, picks) {
   if (!S.run) return false;
@@ -299,7 +299,7 @@ function openRelicPick(rar, picks) {
   save();
   return true;
 }
-// claim one artifact from the wheel's spread; closes once `picks` are taken
+// claim one relic from the wheel's spread; closes once `picks` are taken
 function pickWheelRelic(i) {
   const rp = S.relicPick;
   if (!S.run || !rp) return false;
@@ -319,8 +319,8 @@ function randItem(rar) { const pool = itemsByRar(rar); return pool[(rng() * pool
 
 // -------------------------------------------------------------- the ledger
 // The inventory's effect sheet: what each coin/item ACTUALLY does right now,
-// with every owned artifact folded in. `main` is the headline number, `mods`
-// names each artifact bending it — so the bag doubles as a build overview.
+// with every owned relic folded in. `main` is the headline number, `mods`
+// names each relic bending it — so the bag doubles as a build overview.
 function coinFx(k) {
   const mods = [];
   let main = '';
@@ -416,7 +416,7 @@ function itemFx(iid) {
   }
   return { main, mods };
 }
-// the run-wide numbers the stats tab reads out (artifact bends included)
+// the run-wide numbers the stats tab reads out (relic bends included)
 function runMods() {
   const tiltMods = ['crowbar', 'prybar'].filter(hasRelic).map(id => relicById(id).name + ' +1').join(', ');
   const rainB = (hasRelic('loadstone') ? 3 : 0) + (hasRelic('saltpile') ? 2 : 0);
@@ -424,7 +424,7 @@ function runMods() {
   const rows = [
     ['bank slots', bankMax() + (hasRelic('strongbox') ? ' (Strongbox +2)' : '')],
     ['tilts / round', tiltCount() + (tiltMods ? ' (' + tiltMods + ')' : '')],
-    ['round rain', (C.ROUND_RAIN + rainB) + ' pieces' + (rainB ? ' (+' + rainB + ' from artifacts)' : '')],
+    ['round rain', (C.ROUND_RAIN + rainB) + ' pieces' + (rainB ? ' (+' + rainB + ' from relics)' : '')],
     ['victory offer', (hasRelic('fourth') ? 4 : 3) + ' coins' + (hasRelic('fourth') ? ' (Gambler’s Purse)' : '')],
   ];
   if (handB) rows.push(['hand bonus', '+' + handB + ' gold coin' + (handB > 1 ? 's' : '') + ' every round']);
@@ -789,7 +789,7 @@ function dmgFoe(e, n, src, pierce) {
   return n;
 }
 function dmgEnemy(n, src, pierce) { return dmgFoe(S.enemy, n, src, pierce); }
-// what one gold coin hits for, artifacts included (momentum counts fired gold)
+// what one gold coin hits for, relics included (momentum counts fired gold)
 function goldDmg() {
   let d = C.DMG.gold + (hasRelic('goldedge') ? 1 : 0) + (hasRelic('keenedge') ? 1 : 0);
   if (S.battle) {
@@ -1011,10 +1011,10 @@ function frenzy() {
 }
 
 // -------------------------------------------------------------- wheel of fortune
-// The WHEEL is now the ONLY faucet for artifacts (alongside the boss's
+// The WHEEL is now the ONLY faucet for relics (alongside the boss's
 // choice). Found in the dungeon it costs 5 coins to spin (see the wheel
 // ghost); a free spin is granted after every ELITE. Prizes: gold, a wad of
-// coins, artifacts, a stab of lost HP, or an item — common or rare.
+// coins, relics, a stab of lost HP, or an item — common or rare.
 function wheelCoins(n) {
   const k = COIN_KINDS[(rng() * COIN_KINDS.length) | 0];
   S.run.purse[k] = (S.run.purse[k] || 0) + n;
@@ -1026,9 +1026,9 @@ function wheelItem(rar) {
   floatAt(it.name + '!', 50, rar === 'r' ? '#7ab0e8' : '#ffe066', true);
   if (S.battle) S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
 }
-// the wheel doesn't just hand you an artifact — it lets you CHOOSE. The pick
+// the wheel doesn't just hand you an relic — it lets you CHOOSE. The pick
 // overlay opens once the wheel is dismissed (see dismissWheel).
-function wheelArtifact(rar, n) {
+function wheelRelic(rar, n) {
   S.pendingPick = { rar, picks: n || 1 };
 }
 const WHEEL = [
@@ -1038,8 +1038,8 @@ const WHEEL = [
   { label: '+5 ●',    col: '#e0a038', w: 6,  fx: () => wheelCoins(5) },
   { label: 'COMMON\nITEM', col: '#8fd18f', w: 12, fx: () => wheelItem('c') },
   { label: 'RARE\nITEM',   col: '#5aa0e0', w: 7,  fx: () => wheelItem('r') },
-  { label: '2 COMMON\nARTIFACTS', col: '#c8c8c8', w: 9, fx: () => wheelArtifact('c', 2) },
-  { label: 'RARE\nARTIFACT',      col: '#b06be8', w: 6, fx: () => wheelArtifact('r', 1) },
+  { label: '2 COMMON\nRELICS', col: '#c8c8c8', w: 9, fx: () => wheelRelic('c', 2) },
+  { label: 'RARE\nRELIC',      col: '#b06be8', w: 6, fx: () => wheelRelic('r', 1) },
   { label: '−5 HP',   col: '#ef4b5d', w: 8,  fx: () => { S.run.hp = Math.max(1, S.run.hp - 5); floatAt('−5 HP!', 50, '#ef4b5d', true); S.shake += 5; } },
 ];
 function spinWheel() {
@@ -1053,7 +1053,7 @@ function spinWheel() {
   save();
   return WHEEL[idx];
 }
-// clear the wheel overlay — and, if it won an artifact, open the CHOICE now
+// clear the wheel overlay — and, if it won an relic, open the CHOICE now
 function dismissWheel() {
   S.wheelAnim = null;
   if (S.pendingPick) {
@@ -1128,7 +1128,7 @@ function tilt(dir) {
 // hold a caught piece back for next round (up to 3)
 function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
 function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 1 : 0); }
-// the round-start guard from artifacts, stacked
+// the round-start guard from relics, stacked
 function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 3 : 0); }
 function tiltCount() { return C.TILTS + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0); }
 function bankLoot(key) {
@@ -1620,7 +1620,7 @@ function winBattle() {
   if (hasRelic('piggy')) { addGold(4); S.battle.goldWon += 4; }
   if (hasRelic('tithe')) { addGold(5); S.battle.goldWon += 5; }
   if (hasRelic('secondbreath')) healPlayer(8);
-  // A BOSS lets you choose one artifact from a spread of two commons + a rare.
+  // A BOSS lets you choose one relic from a spread of two commons + a rare.
   let relicOffer = null;
   if (anyBoss) {
     const seen = [];
@@ -1642,7 +1642,7 @@ function winBattle() {
   bestify();
   save();
 }
-// take one artifact from the boss's spread (once)
+// take one relic from the boss's spread (once)
 function pickRelicOffer(i) {
   if (!S.run || !S.victory || !S.victory.relicOffer || S.victory.relicPicked) return false;
   const id = S.victory.relicOffer[i];
@@ -2059,7 +2059,7 @@ function closeModal() {
 }
 function shopStock() {
   // the keeper knows what his shelf is worth now — everything costs more,
-  // and artifacts are priced by their rarity
+  // and relics are priced by their rarity
   const st = [];
   const mult = 1 + 0.25 * (S.run.floor - 1);
   // three distinct items
@@ -2076,7 +2076,7 @@ function shopStock() {
     st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(34 * mult), sold: false });
   }
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(65 * mult), sold: false });
-  // NOTE: artifacts are no longer sold here — the wheel of fortune (and the
+  // NOTE: relics are no longer sold here — the wheel of fortune (and the
   // boss's choice) is the only place to win them now.
   // every ware also carries a COIN price (1/2/5 of a single kind, by worth)
   for (const s of st) s.coinPrice = coinPriceFor(s.price);
@@ -2140,7 +2140,7 @@ function boonOptions() {
   opts.push(rng() < 0.5
     ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
     : { kind: 'pouch', label: '\u{1F45B} +' + C.POUCH_COINS + ' gold coins to your purse' });
-  // the forge hones gear and grit, never artifacts — those come off the wheel
+  // the forge hones gear and grit, never relics — those come off the wheel
   opts.push(rng() < 0.5
     ? { kind: 'whet', label: '\u{1FA9A} Hone: all weapons +1 damage' }
     : { kind: 'potion', label: '\u{1F9F4} A brace of potions (+2)' });
@@ -2482,7 +2482,7 @@ window.DP = {
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
-  rollRelicDrop, rollRelicByRar, grantArtifact, itemRar, itemsByRar,
+  rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
@@ -4265,7 +4265,7 @@ if (!HEADLESS) (function browser() {
     }
   }
 
-  // the wheel's artifact prize: CHOOSE which one(s) join your shelf
+  // the wheel's relic prize: CHOOSE which one(s) join your shelf
   function drawRelicPick(t) {
     const rp = S.relicPick;
     if (!rp) return;
@@ -4285,9 +4285,9 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = 'rgba(22,13,24,0.98)'; ctx.fill();
       ctx.lineWidth = 3; ctx.strokeStyle = RARITY[rp.rar].col; ctx.stroke();
     }
-    txt('\u{1F3A1} ARTIFACT WON!', LW / 2, py + 40, '900 21px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt('\u{1F3A1} RELIC WON!', LW / 2, py + 40, '900 21px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     const left = rp.picks - rp.chosen.length;
-    txt(left > 0 ? 'CHOOSE ' + left + ' — tap an artifact to claim it' : 'claimed!',
+    txt(left > 0 ? 'CHOOSE ' + left + ' — tap an relic to claim it' : 'claimed!',
         LW / 2, py + 68, '800 12px Verdana, sans-serif', left > 0 ? '#e8d0a0' : '#7ee787');
     rp.pool.forEach((id, i) => {
       const rl = relicById(id), rc = RARITY[rl.rar];
@@ -4357,7 +4357,7 @@ if (!HEADLESS) (function browser() {
       uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
             { grad: ['#8c2f6b', '#4a1038'], border: '#ffb0e0', col: '#ffd9ee', font: '800 11px Verdana, sans-serif', r: 9 });
     }
-    // artifact shelf: a peek at the first few — the BAG holds the full ledger
+    // relic shelf: a peek at the first few — the BAG holds the full ledger
     r.relics.slice(0, 3).forEach((rid, i) => {
       const rl = relicById(rid);
       if (rl) txt(rl.icon, 362 + i * 24, 726, '14px serif', '#fff');
@@ -4365,7 +4365,7 @@ if (!HEADLESS) (function browser() {
     if (r.relics.length > 3) {
       txt('+' + (r.relics.length - 3), 434, 726, '800 10px Verdana, sans-serif', '#c8a8b0', 'left');
     }
-    // the BAG: coins, arsenal, artifacts and stats — everything you carry
+    // the BAG: coins, arsenal, relics and stats — everything you carry
     uiBtn(354, 742, 112, 30, '\u{1F392} BAG', () => { S.inv = S.inv ? null : { tab: 'coins' }; },
           { grad: ['#5a4a7e', '#332448'], border: '#c8b8e0', col: '#f0e8ff',
             font: '900 12px Verdana, sans-serif', r: 10 });
@@ -4419,9 +4419,9 @@ if (!HEADLESS) (function browser() {
         LW / 2, py + 132, '800 15px Verdana, sans-serif', '#fff0c0');
     if (v.boss) txt('the stairs descend… +22% HP restored', LW / 2, py + 154, '600 11px Verdana, sans-serif', '#7ee787');
     else if (v.freeSpin) txt('the elite’s WHEEL OF FORTUNE spins — free!', LW / 2, py + 154, '700 11px Verdana, sans-serif', '#b06be8');
-    // a BOSS lets you claim one artifact from a spread of two commons + a rare
+    // a BOSS lets you claim one relic from a spread of two commons + a rare
     if (hasRelicOffer) {
-      txt(v.relicPicked ? relicById(v.relicPicked).name + ' claimed!' : 'CLAIM AN ARTIFACT — choose one:',
+      txt(v.relicPicked ? relicById(v.relicPicked).name + ' claimed!' : 'CLAIM AN RELIC — choose one:',
           LW / 2, py + 180, '800 12px Verdana, sans-serif', v.relicPicked ? '#7ee787' : '#e8d0a0');
       v.relicOffer.forEach((id, i) => {
         const rl2 = relicById(id); const rc = RARITY[rl2.rar];
@@ -4663,8 +4663,8 @@ if (!HEADLESS) (function browser() {
   }
 
   // ------------------------------------------------------ the BAG overlay
-  // Everything you carry on one card: the purse (with every artifact bend
-  // folded into the numbers), the arsenal, the artifact shelf, and the
+  // Everything you carry on one card: the purse (with every relic bend
+  // folded into the numbers), the arsenal, the relic shelf, and the
   // run's stats. Opened from the HUD's BAG button or the 'i' key.
   const INV_TABS = [['coins', 'COINS'], ['items', 'ITEMS'], ['relics', 'RELICS'], ['stats', 'STATS']];
   const ACT_NAMES = ['ACT I — THE CATACOMBS', 'ACT II — THE DEEP HALLS', 'ACT III — THE ABYSS'];
@@ -4735,7 +4735,7 @@ if (!HEADLESS) (function browser() {
         txt('× ' + (r.purse[k] || 0) + (inFight ? '   (' + (S.battle.hand[k] || 0) + ' in hand)' : ''),
             x0 + 50, ry + 8, '800 12px Verdana, sans-serif', '#d8c8dc', 'left');
         txt(fx.main, xe - 4, ry - 11, '900 13px Verdana, sans-serif', '#ffe9a3', 'right');
-        wrapLines(fx.mods.join('  •  ') || 'no artifacts bend this coin', 46, 2).forEach((ln, li) => {
+        wrapLines(fx.mods.join('  •  ') || 'no relics bend this coin', 46, 2).forEach((ln, li) => {
           txt(ln, x0 + 50, ry + 28 + li * 14, '600 10px Verdana, sans-serif',
               fx.mods.length ? '#8ed67e' : '#6a5a68', 'left');
         });
@@ -4771,7 +4771,7 @@ if (!HEADLESS) (function browser() {
       if (!ids.length) txt('the rack is empty — visit a shop!', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#8f6f78');
       contentH = 36 + (ids.length + 1) * 68;
     } else if (tab === 'relics') {
-      txt('ARTIFACTS — ' + r.relics.length + ' collected', x0, y0 - 10, '800 11px Verdana, sans-serif', '#e8c877', 'left');
+      txt('RELICS — ' + r.relics.length + ' collected', x0, y0 - 10, '800 11px Verdana, sans-serif', '#e8c877', 'left');
       r.relics.forEach((rid, i) => {
         const rl = relicById(rid);
         if (!rl) return;
@@ -4784,10 +4784,10 @@ if (!HEADLESS) (function browser() {
           txt(ln, x0 + 40, ry + 10 + li * 13, '600 11px Verdana, sans-serif', '#c8b8d0', 'left');
         });
       });
-      if (!r.relics.length) txt('no artifacts yet — spin the wheel or fell a boss', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#8f6f78');
+      if (!r.relics.length) txt('no relics yet — spin the wheel or fell a boss', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#8f6f78');
       contentH = 40 + r.relics.length * 58;
     } else {
-      // STATS: the run's vitals, then every run-wide artifact bend
+      // STATS: the run's vitals, then every run-wide relic bend
       const core = [
         ['HP', r.hp + ' / ' + r.maxHp + (S.pPois > 0 ? '   ☠ poisoned ' + S.pPois : '')],
         ['block', '' + r.block + (hasRelic('aegis') ? ' (carries over)' : '')],

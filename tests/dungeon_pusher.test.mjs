@@ -107,9 +107,9 @@ t.eq(S.run, null, 'no run in progress at first boot');
 t.ok(ITEMS.length === 8 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'eight arsenal items defined');
 t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the bestiary is populated');
 t.eq(BOSSES.length, 3, 'three floor bosses');
-t.ok(RELICS.length >= 88 && RELICS.every(r => r.id && r.desc), 'the artifact shelf is stocked (' + RELICS.length + ')');
-t.ok(RELICS.every(r => ['c', 'r', 'e'].indexOf(r.rar) >= 0), 'every artifact carries a rarity stamp');
-t.eq(new Set(RELICS.map(r => r.id)).size, RELICS.length, 'no duplicate artifact ids');
+t.ok(RELICS.length >= 88 && RELICS.every(r => r.id && r.desc), 'the relic shelf is stocked (' + RELICS.length + ')');
+t.ok(RELICS.every(r => ['c', 'r', 'e'].indexOf(r.rar) >= 0), 'every relic carries a rarity stamp');
+t.eq(new Set(RELICS.map(r => r.id)).size, RELICS.length, 'no duplicate relic ids');
 t.eq(WHEEL.length, 9, 'the wheel of fortune has nine prize segments');
 t.ok(WHEEL.every(s => s.label && typeof s.fx === 'function'), 'every wheel segment names a prize and an effect');
 t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
@@ -714,7 +714,7 @@ t.ok(S.run.gold > gold1, 'victory pays the bounty');
 t.eq(S.run.keys, keys0 + C.KEY_KILL, 'every monster killed gives a key');
 t.eq(S.victory.keys, C.KEY_KILL, 'the overlay brags about it');
 t.ok(Array.isArray(S.victory.offer) && S.victory.offer.length === 3, 'three spoil coins glint in the rubble');
-t.ok(!S.victory.relic, 'common monsters guard no artifacts');
+t.ok(!S.victory.relic, 'common monsters guard no relics');
 t.ok(DP.leaveBattle(), 'CONTINUE returns to the room');
 t.eq(S.screen, 'dungeon', 'back in the top-down room');
 t.eq(S.battle, null, 'the round machine rests');
@@ -832,7 +832,7 @@ t.ok(DP.interact(0), 'talking to the shopkeeper opens the shop');
 t.ok(S.room && S.room.type === 'shop', 'shop is open');
 t.ok(S.room.stock.length >= 6, 'shop stocks a full shelf (' + S.room.stock.length + ')');
 t.ok(S.room.stock.filter(x => x.kind === 'item').length === 3, 'three arsenal items on sale');
-t.ok(!S.room.stock.some(x => x.kind === 'relic'), 'no artifacts in the case — those come off the wheel now');
+t.ok(!S.room.stock.some(x => x.kind === 'relic'), 'no relics in the case — those come off the wheel now');
 t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
 t.ok(S.room.stock.some(x => x.kind === 'coin' && COIN_KINDS.includes(x.cid)),
      'and a single typed coin for the purse');
@@ -940,13 +940,13 @@ t.eq(S.run.keys, keysE + C.KEY_ELITE, 'an elite kill pays ' + C.KEY_ELITE + ' ke
 // a free wheel of fortune spins on the spot
 t.ok(S.victory && S.victory.freeSpin, 'the elite grants a free spin');
 t.ok(S.wheelAnim !== null, 'and the wheel of fortune turns for free');
-t.ok(!S.victory.relicOffer, 'an elite offers no artifact CHOICE — only the spin');
+t.ok(!S.victory.relicOffer, 'an elite offers no relic CHOICE — only the spin');
 DP.leaveBattle();
 S.run.relics = [];
 
-// -------- the wheel of fortune is the only faucet for artifacts --------
+// -------- the wheel of fortune is the only faucet for relics --------
 {
-  // shops sell none; forges hone gear, not artifacts
+  // shops sell none; forges hone gear, not relics
   DP.srand(44);
   S.run.relics = [];
   let relicInShop = false, relicInForge = false;
@@ -954,44 +954,44 @@ S.run.relics = [];
     if (DP.shopStock().some(x => x.kind === 'relic')) relicInShop = true;
     if (DP.boonOptions().some(o => o.kind === 'relic')) relicInForge = true;
   }
-  t.ok(!relicInShop, 'no shop shelf ever holds an artifact');
-  t.ok(!relicInForge, 'no forge boon is ever an artifact');
-  // the wheel table can win artifacts of both rarities
+  t.ok(!relicInShop, 'no shop shelf ever holds an relic');
+  t.ok(!relicInForge, 'no forge boon is ever an relic');
+  // the wheel table can win relics of both rarities
   S.run.relics = [];
-  t.ok(WHEEL.some(s => /ARTIFACT/.test(s.label)), 'the wheel lists artifact prizes');
-  const rareGot = DP.grantArtifact('r');
-  t.ok(rareGot && RELICS.find(r => r.id === rareGot).rar === 'r', 'grantArtifact pulls a rare artifact');
-  const comGot = DP.grantArtifact('c');
+  t.ok(WHEEL.some(s => /RELIC/.test(s.label)), 'the wheel lists relic prizes');
+  const rareGot = DP.grantRelic('r');
+  t.ok(rareGot && RELICS.find(r => r.id === rareGot).rar === 'r', 'grantRelic pulls a rare relic');
+  const comGot = DP.grantRelic('c');
   t.ok(comGot && RELICS.find(r => r.id === comGot).rar === 'c', 'and a common one');
   t.ok(S.run.relics.indexOf(rareGot) >= 0 && S.run.relics.indexOf(comGot) >= 0, 'both land on the shelf');
   S.run.relics = [];
 }
 
-// -------- winning an artifact on the wheel lets you CHOOSE it --------
+// -------- winning an relic on the wheel lets you CHOOSE it --------
 {
   DP.srand(52);
   S.run.relics = [];
-  // the RARE ARTIFACT segment defers a choice rather than granting at random
-  const rareSeg = WHEEL.find(s => s.label === 'RARE\nARTIFACT');
+  // the RARE RELIC segment defers a choice rather than granting at random
+  const rareSeg = WHEEL.find(s => s.label === 'RARE\nRELIC');
   S.pendingPick = null; S.relicPick = null;
   rareSeg.fx();
-  t.ok(S.pendingPick && S.pendingPick.rar === 'r' && S.pendingPick.picks === 1, 'a rare-artifact spin defers ONE pick');
+  t.ok(S.pendingPick && S.pendingPick.rar === 'r' && S.pendingPick.picks === 1, 'a rare-relic spin defers ONE pick');
   t.eq(S.run.relics.length, 0, 'nothing is granted until you choose');
   // dismissing the wheel opens the choice overlay
   S.wheelAnim = { t: 5, seg: 0, label: 'x' };
   DP.dismissWheel();
   t.ok(S.wheelAnim === null, 'the wheel clears');
-  t.ok(S.relicPick && S.relicPick.pool.length >= 2, 'a spread of rare artifacts to choose from (' + (S.relicPick && S.relicPick.pool.length) + ')');
+  t.ok(S.relicPick && S.relicPick.pool.length >= 2, 'a spread of rare relics to choose from (' + (S.relicPick && S.relicPick.pool.length) + ')');
   t.ok(S.relicPick.pool.every(id => RELICS.find(r => r.id === id).rar === 'r'), 'all choices are rare');
   const chosen = S.relicPick.pool[1];
-  t.ok(DP.pickWheelRelic(1), 'claiming a rare artifact works');
-  t.ok(DP.hasRelic(chosen), 'the chosen artifact is owned');
+  t.ok(DP.pickWheelRelic(1), 'claiming a rare relic works');
+  t.ok(DP.hasRelic(chosen), 'the chosen relic is owned');
   t.ok(S.relicPick === null, 'one pick closes a single-pick menu');
-  t.eq(S.run.relics.length, 1, 'exactly one artifact was taken');
+  t.eq(S.run.relics.length, 1, 'exactly one relic was taken');
 
   // the 2-COMMON segment lets you take TWO
   S.run.relics = [];
-  const comSeg = WHEEL.find(s => s.label === '2 COMMON\nARTIFACTS');
+  const comSeg = WHEEL.find(s => s.label === '2 COMMON\nRELICS');
   comSeg.fx();
   t.eq(S.pendingPick.picks, 2, 'two commons deferred');
   DP.dismissWheel();
@@ -1023,13 +1023,13 @@ S.run.relics = [];
   DP.dmgEnemy(5);
   t.ok(S.victory && S.victory.boss, 'boss felled');
   const off = S.victory.relicOffer;
-  t.ok(Array.isArray(off) && off.length === 3, 'the boss lays out three artifacts');
+  t.ok(Array.isArray(off) && off.length === 3, 'the boss lays out three relics');
   t.eq(off.filter(id => RELICS.find(r => r.id === id).rar === 'c').length, 2, 'two of them common');
   t.eq(off.filter(id => RELICS.find(r => r.id === id).rar === 'r').length, 1, 'one of them rare');
-  t.ok(!S.victory.offer, 'a boss offers artifacts, not a coin spoil');
+  t.ok(!S.victory.offer, 'a boss offers relics, not a coin spoil');
   t.ok(DP.pickRelicOffer(2), 'claiming the rare works');
-  t.ok(DP.hasRelic(off[2]), 'the claimed artifact is owned');
-  t.ok(!DP.pickRelicOffer(0), 'only one artifact may be claimed');
+  t.ok(DP.hasRelic(off[2]), 'the claimed relic is owned');
+  t.ok(!DP.pickRelicOffer(0), 'only one relic may be claimed');
   t.ok(!DP.hasRelic(off[0]), 'the unclaimed ones stay behind');
   S.run.purse.coin = (S.run.purse.coin || 0) + C.STAIR_TOLL;   // afford the descent
   DP.leaveBattle();
@@ -1068,7 +1068,7 @@ t.eq(S.run, null, 'the second killing blow lands — run over');
 t.eq(S.screen, 'over', 'game over screen');
 t.ok(S.over && S.over.cause === 'test doom', 'the cause of death is recorded');
 
-// -------- the deep vault: the 50 new artifacts are real mechanics --------
+// -------- the deep vault: the 50 new relics are real mechanics --------
 DP.srand(83);
 DP.newRun('knight');
 {
@@ -1145,7 +1145,7 @@ DP.newRun('knight');
   S.screen = 'dungeon'; S.battle = null; S.foes = []; S.victory = null;
 }
 
-// -------- the ARTIFACT catalog: rarity-weighted drops --------
+// -------- the RELIC catalog: rarity-weighted drops --------
 DP.srand(77);
 DP.newRun('knight');
 {
@@ -1163,7 +1163,7 @@ S.run.relics = RELICS.map(r => r.id);
 t.eq(DP.rollRelicDrop(), null, 'a full shelf drops nothing more');
 S.run.relics = [];
 
-// -------- artifact effects on the coins --------
+// -------- relic effects on the coins --------
 DP.srand(79);
 S.run.room.ents = [mkMonster('orc')];
 DP.interact(0);
@@ -1692,22 +1692,22 @@ t.ok(contained, 'platform coins stay within the machine');
 t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 
 // ============================================================
-// INVENTORY: the effect sheet folds every artifact into the numbers
+// INVENTORY: the effect sheet folds every relic into the numbers
 // ============================================================
 {
   const istore = {};
   const { DP: I } = loadGame(istore, false);
   I.srand(777);
   I.newRun('knight');
-  // baseline: no artifacts
+  // baseline: no relics
   t.eq(I.coinFx('coin').main, '1 dmg', 'bare gold coin reads 1 dmg');
-  t.eq(I.coinFx('coin').mods.length, 0, 'no artifact mods on a bare coin');
+  t.eq(I.coinFx('coin').mods.length, 0, 'no relic mods on a bare coin');
   t.eq(I.coinFx('red').main, 'heal 1 HP', 'bare heart coin heals 1');
   t.eq(I.coinFx('lucky').main, '3 dmg', 'bare lucky coin reads 3 dmg');
-  // artifacts bend the sheet
+  // relics bend the sheet
   I.S.run.relics.push('goldedge', 'twinstrike', 'twinfangs', 'venomtip', 'warmheart', 'silvercore', 'spikeshield');
   t.eq(I.coinFx('coin').main, '2 dmg ×2', 'Gilded Edge + Twin Strike fold into gold');
-  t.ok(I.coinFx('coin').mods.length === 2, 'gold lists both artifact mods');
+  t.ok(I.coinFx('coin').mods.length === 2, 'gold lists both relic mods');
   t.eq(I.coinFx('green').main, '4 poison', 'Venom Tip + Twin Fangs: (1+1)*2 poison');
   t.eq(I.coinFx('red').main, 'heal 2 HP', 'Warm Heart heals +1');
   t.eq(I.coinFx('silver').main, '2 block + 1 dmg', 'Silver Core + Spiked Shield fold into silver');
@@ -1781,11 +1781,11 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   frames(6);
   for (const tab of ['items', 'relics', 'stats']) { D.S.inv.tab = tab; frames(4); }
   t.ok(D.S.inv && D.S.inv.tab === 'stats', 'the BAG rendered all four tabs in battle');
-  // a fat artifact shelf scrolls instead of truncating
+  // a fat relic shelf scrolls instead of truncating
   D.S.run.relics.push(...D.RELICS.slice(0, 20).map(rl => rl.id));
   D.S.inv = { tab: 'relics', scroll: 99999 };
   frames(6);
-  t.ok(D.S.inv.maxScroll > 0, 'a 20+ artifact shelf overflows into a scroll (' + D.S.inv.maxScroll + ')');
+  t.ok(D.S.inv.maxScroll > 0, 'a 20+ relic shelf overflows into a scroll (' + D.S.inv.maxScroll + ')');
   t.ok(D.S.inv.scroll <= D.S.inv.maxScroll, 'the BAG scroll clamps to the shelf bottom');
   D.S.inv.scroll = -50;
   frames(3);
@@ -1808,10 +1808,10 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.spinWheel();
   frames(30);                                     // wheel overlay over battle
   D.S.wheelAnim = null;
-  // the artifact-choice overlay renders and takes a pick
+  // the relic-choice overlay renders and takes a pick
   D.S.run.relics = [];
   D.openRelicPick('r', 1);
-  frames(12);                                     // the CHOOSE-an-artifact menu
+  frames(12);                                     // the CHOOSE-an-relic menu
   if (D.S.relicPick) D.pickWheelRelic(0);
   frames(8);
   D.S.enemy.hp = 1; D.dmgEnemy(5);
@@ -1821,7 +1821,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.leaveBattle();
   frames(10);
   // a 2-foe GANG-UP (one elite): multi-foe panel, retargeting, frost AoE,
-  // and the artifact-drop banner on the victory overlay
+  // and the relic-drop banner on the victory overlay
   D.S.run.room.ents = [
     { kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.3, py: 0.3 },
     { kind: 'monster', mtype: 'elite', eid: 'goblin', done: false, px: 0.7, py: 0.3 },
@@ -1855,10 +1855,10 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.interact(0);
   frames(12);                                     // boss battle
   D.S.enemy.hp = 1; D.dmgEnemy(5);                // fell the boss
-  frames(40);                                     // boss victory: the 2-common + 1-rare artifact choice
-  t.ok(D.S.victory && D.S.victory.relicOffer, 'boss victory renders the artifact choice');
+  frames(40);                                     // boss victory: the 2-common + 1-rare relic choice
+  t.ok(D.S.victory && D.S.victory.relicOffer, 'boss victory renders the relic choice');
   D.pickRelicOffer(0);
-  frames(10);                                     // the claimed artifact glows
+  frames(10);                                     // the claimed relic glows
   D.S.run.purse.coin = (D.S.run.purse.coin || 0) + 5;
   D.leaveBattle();                                // descend past the boss
   frames(8);
