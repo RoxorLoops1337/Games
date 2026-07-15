@@ -1692,6 +1692,46 @@ t.ok(contained, 'platform coins stay within the machine');
 t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 
 // ============================================================
+// INVENTORY: the effect sheet folds every artifact into the numbers
+// ============================================================
+{
+  const istore = {};
+  const { DP: I } = loadGame(istore, false);
+  I.srand(777);
+  I.newRun('knight');
+  // baseline: no artifacts
+  t.eq(I.coinFx('coin').main, '1 dmg', 'bare gold coin reads 1 dmg');
+  t.eq(I.coinFx('coin').mods.length, 0, 'no artifact mods on a bare coin');
+  t.eq(I.coinFx('red').main, 'heal 1 HP', 'bare heart coin heals 1');
+  t.eq(I.coinFx('lucky').main, '3 dmg', 'bare lucky coin reads 3 dmg');
+  // artifacts bend the sheet
+  I.S.run.relics.push('goldedge', 'twinstrike', 'twinfangs', 'venomtip', 'warmheart', 'silvercore', 'spikeshield');
+  t.eq(I.coinFx('coin').main, '2 dmg, strikes TWICE', 'Gilded Edge + Twin Strike fold into gold');
+  t.ok(I.coinFx('coin').mods.length === 2, 'gold lists both artifact mods');
+  t.eq(I.coinFx('green').main, '4 poison', 'Venom Tip + Twin Fangs: (1+1)*2 poison');
+  t.eq(I.coinFx('red').main, 'heal 2 HP', 'Warm Heart heals +1');
+  t.eq(I.coinFx('silver').main, '2 block + 1 dmg', 'Silver Core + Spiked Shield fold into silver');
+  // items: forge hone + whetstone + venom gland
+  t.eq(I.itemFx('sword').main, '8 dmg', 'bare sword reads its base damage');
+  I.S.run.whet = 2;
+  I.S.run.relics.push('whet', 'venom');
+  t.eq(I.itemFx('sword').main, I.weaponDmg(8) + ' dmg', 'sword sheet matches weaponDmg with hone + Whetstone');
+  t.ok(I.itemFx('sword').mods.length === 2, 'sword lists hone and Whetstone');
+  t.eq(I.itemFx('vial').main, ((4 + 2) * 2) + ' poison', 'vial folds Venom Gland then Twin Fangs');
+  t.eq(I.itemFx('shield').main, '6 block', 'shield reads its block');
+  // run-wide mods
+  let rows = I.runMods();
+  t.eq(rows.find(r => r[0] === 'bank slots')[1], '' + I.bankMax(), 'stats row matches bankMax()');
+  I.S.run.relics.push('strongbox', 'crowbar', 'fourth');
+  rows = I.runMods();
+  t.ok(rows.find(r => r[0] === 'bank slots')[1].indexOf('Strongbox') > 0, 'Strongbox shows on the bank row');
+  t.ok(rows.find(r => r[0] === 'tilts / round')[1].indexOf('4') === 0, 'Crowbar bumps tilts to 4');
+  t.ok(rows.find(r => r[0] === 'victory offer')[1].indexOf('4 coins') === 0, 'Gambler’s Purse shows 4 coins');
+  // every coin kind produces a sheet
+  for (const k of I.COIN_KINDS) t.ok(I.coinFx(k).main.length > 0, 'coinFx(' + k + ') has a headline');
+}
+
+// ============================================================
 // render smoke: load WITH a stub ctx and drive the real
 // rAF loop through every screen — catches draw-time crashes
 // ============================================================
@@ -1718,6 +1758,9 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   frames(10);                                     // shop modal (full 8-item shelf)
   t.ok(D.S.room && D.S.room.stock.length >= 7, 'the render-pass shop shows a tall shelf');
   D.closeModal();
+  D.S.inv = { tab: 'coins' };                     // the BAG over the crawl too
+  frames(5);
+  D.S.inv = null;
   D.S.run.room.ents[1] = { kind: 'smith', done: false, px: 0.7, py: 0.3 };
   D.interact(1);
   frames(8);                                      // forge modal
@@ -1732,6 +1775,14 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.eq(D.S.foeInfo, 0, 'tapping a foe opens its info card');
   D.S.foeInfo = null;
   frames(4);
+  // the BAG overlay, every tab, mid-battle
+  D.S.run.relics.push('goldedge', 'twinfangs');
+  D.S.inv = { tab: 'coins' };
+  frames(6);
+  for (const tab of ['items', 'relics', 'stats']) { D.S.inv.tab = tab; frames(4); }
+  t.ok(D.S.inv && D.S.inv.tab === 'stats', 'the BAG rendered all four tabs in battle');
+  D.S.inv = null;
+  frames(2);
   for (let i = 0; i < 4; i++) { D.S.cd = 0; D.drop(20 + i * 16); frames(24); }   // spend part of the hand
   D.tilt('l');
   frames(20);                                     // the pile lurches
