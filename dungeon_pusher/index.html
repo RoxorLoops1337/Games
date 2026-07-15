@@ -2973,9 +2973,10 @@ if (!HEADLESS) (function browser() {
     }
     ctx.restore();
     // the carved wooden sign stands proud on the pusher plate (outside the
-    // clip, so it overhangs like a real standee)
+    // clip, so it overhangs like a real standee). FIXED size — it rides the
+    // plate without breathing as the perspective changes
     if (sign) {
-      const sh2 = (fl.y - tl.y) + 12;
+      const sh2 = 34;
       const sw2 = sh2 / imAspect(sign, 96 / 270);
       ctx.save();
       ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
