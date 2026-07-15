@@ -2973,7 +2973,13 @@ if (!HEADLESS) (function browser() {
     ctx.save();
     ctx.clip();
     if (topSkin) {
-      ctx.drawImage(topSkin, tl.x - 8, tl.y - 2, (tr.x - tl.x) + 16, (fl.y - tl.y) + 4);
+      // RIGID skin: sized once for the fully-extended plate and glued to
+      // the moving front edge — the back of it slides under the wall slot
+      // instead of the texture stretching
+      const flMax = w2s(1, C.PUSH_MAX, zTop), frMax = w2s(99, C.PUSH_MAX, zTop);
+      const skinH = (flMax.y - tl.y) + 4;
+      const skinW = (frMax.x - flMax.x) + 14;
+      ctx.drawImage(topSkin, LW / 2 - skinW / 2, fl.y - skinH + 2, skinW, skinH);
     } else {
       ctx.globalAlpha = 0.1;
       ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 1;
