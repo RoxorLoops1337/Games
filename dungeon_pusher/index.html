@@ -1640,8 +1640,9 @@ function interact(i) {
     return true;
   }
   if (e.kind === 'chest') {
-    chestGift();
-    e.done = true;
+    // a gamble: the lid lifts on ONE prize — take it or leave it
+    S.room = { type: 'chest', prize: rollChestPrize(), taken: false, ent: i };
+    SND.gem();
   } else if (e.kind === 'shrine') {
     const h = healPlayer(Math.round(S.run.maxHp * 0.25), 50);
     S.pPois = 0;
@@ -1664,35 +1665,54 @@ function interact(i) {
   save();
   return true;
 }
-function chestGift() {
+// roll a single chest prize: gold, an item, a coin, or a key
+function rollChestPrize() {
   const r = rng();
   if (r < C.P_CHEST_KEY) {
-    S.run.keys++;
-    toast('the chest holds a KEY! \u{1F5DD}');
-  } else if (r < 0.4) {
+    return { kind: 'key', n: 1, icon: '\u{1F5DD}', label: 'a KEY' };
+  } else if (r < 0.5) {
     const k = COIN_KINDS[(rng() * COIN_KINDS.length) | 0];
-    S.run.purse[k] = (S.run.purse[k] || 0) + 1;
-    toast('a ' + COIN_INFO[k].name.toUpperCase() + ' COIN joins your purse!');
-  } else if (r < 0.65) {
+    return { kind: 'coin', coin: k, n: 1, icon: '\u{1FA99}',
+             label: 'a ' + COIN_INFO[k].name.toUpperCase() + ' coin' };
+  } else if (r < 0.75) {
     const g = 10 + S.run.depth * 2 + (S.run.floor - 1) * 6 + ((rng() * 8) | 0);
-    addGold(g);
-    toast('+' + g + ' gold');
-  } else if (r < 0.88) {
-    const it = ITEMS[(rng() * ITEMS.length) | 0];
-    grantItem(it.id, 1);
-    toast('a ' + it.name + ' joins your arsenal!');
-  } else {
-    S.run.potions++;
-    toast('a potion for the belt!');
+    return { kind: 'gold', n: g, icon: '\u{1FA99}', label: '+' + g + ' gold' };
   }
+  const it = ITEMS[(rng() * ITEMS.length) | 0];
+  return { kind: 'item', iid: it.id, icon: it.icon, label: 'a ' + it.name };
+}
+function grantPrize(p) {
+  if (!S.run || !p) return;
+  if (p.kind === 'key') S.run.keys += p.n;
+  else if (p.kind === 'coin') S.run.purse[p.coin] = (S.run.purse[p.coin] || 0) + p.n;
+  else if (p.kind === 'gold') addGold(p.n);
+  else if (p.kind === 'item') grantItem(p.iid, 1);
+}
+// ACCEPT the chest's offer — pocket the prize, then the chest is spent
+function acceptPrize() {
+  if (!S.run || !S.room || S.room.type !== 'chest' || S.room.taken) return false;
+  S.room.taken = true;
+  grantPrize(S.room.prize);
+  toast('you take ' + S.room.prize.label);
   SND.gem();
+  return closeModal();
+}
+// DENY it — the chest snaps shut, prize forfeit, but no longer yours to open
+function denyPrize() {
+  if (!S.run || !S.room || S.room.type !== 'chest' || S.room.taken) return false;
+  S.room.taken = true;
+  toast('you leave the chest untouched');
+  SND.deny();
+  return closeModal();
 }
 function closeModal() {
   if (!S.room) return false;
-  // the keeper serves one visit, then packs his cart and leaves the room
-  if (S.room.type === 'shop' && S.room.ent !== undefined && S.run && S.run.room && S.run.room.ents[S.room.ent]) {
-    S.run.room.ents[S.room.ent].done = true;
-    toast('the merchant packs up and moves on');
+  const rm = S.room;
+  // a served shop and an opened chest both retire once you walk away
+  if ((rm.type === 'shop' || rm.type === 'chest') && rm.ent !== undefined &&
+      S.run && S.run.room && S.run.room.ents[rm.ent]) {
+    S.run.room.ents[rm.ent].done = true;
+    if (rm.type === 'shop') toast('the merchant packs up and moves on');
   }
   S.room = null;
   save();
@@ -2085,7 +2105,8 @@ window.DP = {
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
   newRun, genFloor, genEnts, interact, tryDoor, curRoom, doorTo, nextFloor,
   keyGuard, closeModal, leaveBattle,
-  chestGift, startBattle, mkEnemy, battleTick, winBattle, endRun,
+  rollChestPrize, acceptPrize, denyPrize, spendPurse, spendKind,
+  startBattle, mkEnemy, battleTick, winBattle, endRun,
   buyShop, pickBoon, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
@@ -4973,6 +4994,7 @@ if (!HEADLESS) (function browser() {
   const MODAL_INFO = {
     shop: { icon: '\u{1F9D4}', name: 'SHOPKEEPER' },
     forge: { icon: '\u{1F477}', name: 'BLACKSMITH' },
+    chest: { icon: '\u{1F9F0}', name: 'A CHEST CREAKS OPEN' },
   };
   function drawRoomModal(t) {
     const room = S.room;
@@ -4982,10 +5004,11 @@ if (!HEADLESS) (function browser() {
     const info = MODAL_INFO[room.type] || MODAL_INFO.shop;
     const isShop = room.type === 'shop';
     const isForge = room.type === 'forge' && !room.done;
+    const isChest = room.type === 'chest';
     // the shelf grows with the stock — size the panel (and the LEAVE button
     // below it) to fit however many wares the keeper is showing
     const rows = isShop ? room.stock.length : 0;
-    const ph = isShop ? 78 + rows * 46 + 60 : isForge ? 330 : 220;
+    const ph = isShop ? 78 + rows * 46 + 60 : isForge ? 330 : isChest ? 250 : 220;
     const py = isShop ? 132 : 250;
     const mFrame = machArt('frame_tall');
     if (mFrame) {
@@ -5022,6 +5045,15 @@ if (!HEADLESS) (function browser() {
         txt(o.label, LW / 2, y + (o.sub ? 16 : 23), '800 13px Verdana, sans-serif', '#ffe9a3');
         if (o.sub) txt(o.sub, LW / 2, y + 33, '600 9px Verdana, sans-serif', '#b09a78');
       });
+    } else if (isChest) {
+      const p = room.prize;
+      txt('the lid lifts on…', LW / 2, py + 66, '700 12px Verdana, sans-serif', '#c8a8b0');
+      txt(p.icon, LW / 2, py + 116, '900 46px Georgia, serif', '#ffe9a3');
+      txt(p.label, LW / 2, py + 150, '900 16px Verdana, sans-serif', '#ffd75e');
+      uiBtn(56, py + ph - 58, (LW - 128) / 2, 40, 'TAKE IT', () => acceptPrize(),
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 12 });
+      uiBtn(LW / 2 + 8, py + ph - 58, (LW - 128) / 2, 40, 'LEAVE IT', () => denyPrize(),
+            { bg: 'rgba(60,40,44,0.95)', border: '#a06a72', col: '#e8c8cc', font: '900 14px Verdana, sans-serif', r: 12 });
     } else {
       // resolved rooms: shrine / treasure / wheel / forge-done — wrap the tale
       const words = (room.msg || '').split(' ');
@@ -5033,7 +5065,7 @@ if (!HEADLESS) (function browser() {
       lines.slice(0, 4).forEach((ln, i) =>
         txt(ln, LW / 2, py + 70 + i * 20, '700 12px Verdana, sans-serif', '#e8dce8'));
     }
-    if (!isForge) {
+    if (!isForge && !isChest) {
       uiBtn(LW / 2 - 90, py + ph - 52, 180, 38, 'LEAVE', () => closeModal(),
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 13 });
     }
