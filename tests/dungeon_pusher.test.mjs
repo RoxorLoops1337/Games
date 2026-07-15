@@ -1706,7 +1706,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.eq(I.coinFx('lucky').main, '3 dmg', 'bare lucky coin reads 3 dmg');
   // artifacts bend the sheet
   I.S.run.relics.push('goldedge', 'twinstrike', 'twinfangs', 'venomtip', 'warmheart', 'silvercore', 'spikeshield');
-  t.eq(I.coinFx('coin').main, '2 dmg, strikes TWICE', 'Gilded Edge + Twin Strike fold into gold');
+  t.eq(I.coinFx('coin').main, '2 dmg ×2', 'Gilded Edge + Twin Strike fold into gold');
   t.ok(I.coinFx('coin').mods.length === 2, 'gold lists both artifact mods');
   t.eq(I.coinFx('green').main, '4 poison', 'Venom Tip + Twin Fangs: (1+1)*2 poison');
   t.eq(I.coinFx('red').main, 'heal 2 HP', 'Warm Heart heals +1');

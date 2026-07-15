@@ -324,34 +324,63 @@ function randItem(rar) { const pool = itemsByRar(rar); return pool[(rng() * pool
 function coinFx(k) {
   const mods = [];
   let main = '';
+  const M = (id, txt2) => { if (hasRelic(id)) { const rl = relicById(id); mods.push((rl ? rl.name : id) + ': ' + txt2); return true; } return false; };
   if (k === 'coin') {
-    main = (C.DMG.gold + (hasRelic('goldedge') ? 1 : 0)) + ' dmg';
-    if (hasRelic('goldedge')) mods.push('Gilded Edge: +1 dmg');
-    if (hasRelic('twinstrike')) { main += ', strikes TWICE'; mods.push('Twin Strike: hits twice'); }
-    if (hasRelic('momentum')) mods.push('Momentum: +1 dmg per 5 gold fired');
-    if (hasRelic('bloodgold')) mods.push('Blood Gold: heals 1 HP on strike');
+    let d = C.DMG.gold;
+    if (M('goldedge', '+1 dmg')) d++;
+    if (M('keenedge', '+1 dmg')) d++;
+    if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) { d += 2; mods.push('Berserker: +2 dmg (below half HP)'); }
+    else M('berserker', '+2 dmg while below half HP');
+    main = d + ' dmg';
+    if (M('twinstrike', 'strikes TWICE')) main += ' ×2';
+    M('momentum', '+1 dmg per 5 gold fired');
+    M('warlord', '+1 dmg per 3 gold fired');
+    M('emberhoard', 'splashes 1 dmg to ALL foes');
+    M('bloodgold', 'heals 1 HP on strike');
+    M('bloodthirst', 'heals 1 HP on strike');
+    M('taxman', '+1 gold per coin fired');
   } else if (k === 'silver') {
-    main = (1 + (hasRelic('silvercore') ? 1 : 0)) + ' block';
-    if (hasRelic('silvercore')) mods.push('Silver Core: +1 block');
-    if (hasRelic('spikeshield')) { main += ' + 1 dmg'; mods.push('Spiked Shield: also deals 1 dmg'); }
-    if (hasRelic('aegis')) mods.push('Aegis: unspent block carries over');
+    let b = 1;
+    if (M('silvercore', '+1 block')) b++;
+    if (M('bulwark', '+1 block')) b++;
+    main = b + ' block';
+    let d = 0;
+    if (M('spikeshield', 'also deals 1 dmg')) d += 1;
+    if (M('retort', 'also deals 2 dmg')) d += 2;
+    if (d) main += ' + ' + d + ' dmg';
+    M('aegis', 'unspent block carries over');
   } else if (k === 'green') {
-    main = ((1 + (hasRelic('venomtip') ? 1 : 0)) * (hasRelic('twinfangs') ? 2 : 1)) + ' poison';
-    if (hasRelic('venomtip')) mods.push('Venom Tip: +1 stack');
-    if (hasRelic('twinfangs')) mods.push('Twin Fangs: poison DOUBLED');
-    if (hasRelic('alchemist')) { main += ' + heal 1'; mods.push('Alchemist: heals 1 HP'); }
-    if (hasRelic('plaguelord')) mods.push('Plague Lord: poison never fades');
+    let p = 1;
+    if (M('venomtip', '+1 stack')) p++;
+    if (M('toxicology', '+1 stack')) p++;
+    if (M('twinfangs', 'poison DOUBLED')) p *= 2;
+    main = p + ' poison';
+    M('blightlord', 'also deals 1 dmg');
+    M('contagion', 'spreads 1 poison to the whole pack');
+    if (M('alchemist', 'heals 1 HP')) main += ' + heal 1';
+    M('plaguelord', 'poison never fades');
   } else if (k === 'red') {
-    main = 'heal ' + (C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0)) + ' HP';
-    if (hasRelic('warmheart')) mods.push('Warm Heart: +1 HP');
+    let h = C.RED_HEAL;
+    if (M('warmheart', '+1 HP')) h++;
+    if (M('greensprig', '+1 HP')) h++;
+    main = 'heal ' + h + ' HP';
+    M('phoenixember', 'also grants 1 block');
   } else if (k === 'blue') {
-    main = (C.DMG.blue + (hasRelic('frostshard') ? 1 : 0)) + ' dmg to ALL foes';
-    if (hasRelic('frostshard')) mods.push('Frost Shard: +1 dmg');
+    let d = C.DMG.blue;
+    if (M('frostshard', '+1 dmg')) d++;
+    if (M('permafrost', '+1 dmg')) d++;
+    main = d + ' dmg to ALL foes';
+    M('sparkstone', '+1 dmg against packs of 2+');
   } else if (k === 'lucky') {
-    main = (C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0)) + ' dmg';
-    if (hasRelic('starmetal')) mods.push('Star Metal: +2 dmg');
-    if (hasRelic('sniperlens')) mods.push('Sniper Lens: pierces braced guards');
-    if (hasRelic('clover')) mods.push('Clover: minted twice as often');
+    let d = C.DMG.lucky;
+    if (M('starmetal', '+2 dmg')) d += 2;
+    if (M('horseshoe', '+1 dmg')) d += 1;
+    if (M('assassin', '+2 dmg, pierces guards')) d += 2;
+    main = d + ' dmg';
+    M('sniperlens', 'pierces braced guards');
+    M('deadeye', 'pierces braced guards');
+    M('bloodthirst', 'heals 1 HP on strike');
+    M('clover', 'minted twice as often');
   }
   return { main, mods };
 }
@@ -360,37 +389,54 @@ function itemFx(iid) {
   if (!it) return { main: '', mods: [] };
   const mods = [];
   let main = '';
+  const M = (id, txt2) => { if (hasRelic(id)) { const rl = relicById(id); mods.push((rl ? rl.name : id) + ': ' + txt2); return true; } return false; };
   if (it.kind === 'weapon') {
-    main = weaponDmg(it.dmg) + ' dmg' + (it.splash ? ' (splash)' : '');
+    let w = weaponDmg(it.dmg);
     if (S.run && S.run.whet > 0) mods.push('forge-honed: +' + S.run.whet + ' dmg');
-    if (hasRelic('whet')) mods.push('Whetstone: +30% dmg');
-    if (hasRelic('vampblade')) mods.push('Vampire Blade: heals half its dmg');
+    M('whet', '+30% dmg');
+    if (M('armory', '+2 dmg')) w += 2;
+    if (M('heavyarms', '+30% dmg')) w = Math.round(w * 1.3);
+    main = w + ' dmg' + (it.splash ? ' (splash)' : '');
+    M('vampblade', 'heals half its dmg');
+    M('bloodthirst', 'heals 1 HP on strike');
   } else if (it.kind === 'poison') {
     main = ((it.pois + (hasRelic('venom') ? 2 : 0)) * (hasRelic('twinfangs') ? 2 : 1)) + ' poison';
-    if (hasRelic('venom')) mods.push('Venom Gland: +2 stacks');
-    if (hasRelic('twinfangs')) mods.push('Twin Fangs: poison DOUBLED');
-  } else if (it.kind === 'shield') main = it.block + ' block';
-  else if (it.kind === 'heal') main = 'heal ' + it.heal + ' HP';
-  else if (it.kind === 'stun') main = 'freeze a foe ' + it.stun + ' turn';
+    M('venom', '+2 stacks');
+    M('twinfangs', 'poison DOUBLED');
+  } else if (it.kind === 'shield') {
+    main = (it.block + (hasRelic('plateup') ? 3 : 0)) + ' block';
+    M('plateup', '+3 block');
+  } else if (it.kind === 'heal') {
+    main = 'heal ' + (it.heal + (hasRelic('fieldmedic') ? 4 : 0)) + ' HP';
+    M('fieldmedic', '+4 HP');
+  } else if (it.kind === 'stun') {
+    const st = it.stun + (hasRelic('deepfreeze') ? 1 : 0);
+    main = 'freeze a foe ' + st + ' turn' + (st > 1 ? 's' : '');
+    M('deepfreeze', '+1 turn');
+  }
   return { main, mods };
 }
 // the run-wide numbers the stats tab reads out (artifact bends included)
 function runMods() {
+  const tiltMods = ['crowbar', 'prybar'].filter(hasRelic).map(id => relicById(id).name + ' +1').join(', ');
+  const rainB = (hasRelic('loadstone') ? 3 : 0) + (hasRelic('saltpile') ? 2 : 0);
+  const handB = (hasRelic('minter') ? 1 : 0) + (hasRelic('richhand') ? 1 : 0) + (hasRelic('tollkeeper') ? 2 : 0);
   const rows = [
     ['bank slots', bankMax() + (hasRelic('strongbox') ? ' (Strongbox +2)' : '')],
-    ['tilts / round', (C.TILTS + (hasRelic('crowbar') ? 1 : 0)) + (hasRelic('crowbar') ? ' (Crowbar +1)' : '')],
-    ['round rain', (C.ROUND_RAIN + (hasRelic('loadstone') ? 3 : 0)) + ' pieces' + (hasRelic('loadstone') ? ' (Loadstone +3)' : '')],
+    ['tilts / round', tiltCount() + (tiltMods ? ' (' + tiltMods + ')' : '')],
+    ['round rain', (C.ROUND_RAIN + rainB) + ' pieces' + (rainB ? ' (+' + rainB + ' from artifacts)' : '')],
     ['victory offer', (hasRelic('fourth') ? 4 : 3) + ' coins' + (hasRelic('fourth') ? ' (Gambler’s Purse)' : '')],
   ];
-  if (hasRelic('minter')) rows.push(['hand bonus', '+1 gold coin (Minter)']);
+  if (handB) rows.push(['hand bonus', '+' + handB + ' gold coin' + (handB > 1 ? 's' : '') + ' every round']);
   if (hasRelic('midas')) rows.push(['gold income', '+30% (Midas Touch)']);
   if (hasRelic('piggy')) rows.push(['victory bounty', '+4 gold (Piggy Bank)']);
+  if (hasRelic('luckypenny')) rows.push(['round start', '+3 gold (Lucky Penny)']);
   if (hasRelic('plate')) rows.push(['round start', '+4 block (Battle Plate)']);
   if (hasRelic('thornmail')) rows.push(['thorns', 'half your block bites back']);
-  if (hasRelic('echobell')) rows.push(['first piece', 'fires twice (Echo Bell)']);
+  if (hasRelic('echobell') || hasRelic('reverb')) rows.push(['first piece', 'fires twice']);
   if (hasRelic('stormcall')) rows.push(['storm', 'every 8th piece zaps ALL for 3']);
   if (hasRelic('grandbank')) rows.push(['bank payout', 'banked pieces duplicate']);
-  if (hasRelic('quicksilver')) rows.push(['resolve', 'ramps 2× as fast (Quicksilver)']);
+  if (hasRelic('quicksilver') || hasRelic('overdrive')) rows.push(['resolve', 'ramps 2× as fast']);
   if (hasRelic('wind')) rows.push(['second wind', S.run && S.run.windUsed ? 'SPENT' : 'ready — survives a killing blow']);
   return rows;
 }
