@@ -63,7 +63,7 @@ const C = {
   KEY_CARRY: 3,                         // keys you may carry down to the next floor
   STAIR_TOLL: 2,                        // purse coins owed to descend the stairs
   WHEEL_COST: 5,                        // coins the dungeon wheel ghost charges per spin
-  SHOP_REROLL: 10,                      // coins to remove a shop ware and re-roll the slot
+  SHOP_REMOVE: 10,                      // coins the keeper takes to REMOVE an item from YOUR pack
   // combat is played in ROUNDS: your PURSE is a deck of typed coins — you
   // choose which to insert — then the tray resolves and the foes act
   POUCH_COINS: 2,                       // shop pouch: +2 gold coins to the purse
@@ -2465,12 +2465,6 @@ function shopStock() {
 }
 // wares cost 1, 2, or 5 coins of a single kind depending on their gold worth
 function coinPriceFor(price) { return price < 45 ? 1 : price < 95 ? 2 : 5; }
-// a fresh random gear slot for the shelf (used when a slot is re-rolled)
-function mkShopItem() {
-  const it = ITEMS[(rng() * ITEMS.length) | 0];
-  const price = Math.round(it.cost * 1.4 * (1 + 0.25 * (S.run.floor - 1)));
-  return { kind: 'item', iid: it.id, label: it.icon + ' ' + it.name, price, coinPrice: coinPriceFor(price), sold: false };
-}
 // the fattest single coin-kind that can cover n (null if none can)
 function coinKindWith(n) {
   let best = null, bestN = -1;
@@ -2503,13 +2497,24 @@ function buyShop(i, pay) {
   save();
   return true;
 }
-// pay 10 coins of any kind to REMOVE a ware — a fresh gear slot takes its place
-function rerollSlot(i) {
+// pay 10 coins of any kind for the keeper to TAKE an item OFF YOUR HANDS —
+// the rack thins, so next battle's pile carries one piece less junk
+function removeArsenal(iid) {
   if (!S.run || !S.room || S.room.type !== 'shop') return false;
-  const it = S.room.stock[i];
-  if (!it || it.sold) return false;
-  if (!spendPurse(C.SHOP_REROLL)) { S.uiFlash = { msg: 'REMOVE COSTS ' + C.SHOP_REROLL + ' COINS', t: 1.2 }; SND.deny(); return false; }
-  S.room.stock[i] = mkShopItem();
+  const it = itemById(iid);
+  if (!it || !(S.run.arsenal[iid] > 0)) return false;
+  if (!spendPurse(C.SHOP_REMOVE)) { S.uiFlash = { msg: 'REMOVING COSTS ' + C.SHOP_REMOVE + ' COINS', t: 1.2 }; SND.deny(); return false; }
+  S.run.arsenal[iid]--;
+  if (S.run.arsenal[iid] <= 0) delete S.run.arsenal[iid];
+  // scrub one copy from wherever it waits: the drop-in queue first,
+  // then this floor's racked pile
+  const pi = (S.run.pending || []).indexOf(iid);
+  if (pi >= 0) S.run.pending.splice(pi, 1);
+  else if (S.run.pileSave) {
+    const idx = S.run.pileSave.findIndex(p => p.k === 'item' && p.iid === iid && !p.temp);
+    if (idx >= 0) S.run.pileSave.splice(idx, 1);
+  }
+  toast('the keeper takes the ' + it.name + ' off your hands');
   SND.clink();
   save();
   return true;
@@ -2855,7 +2860,7 @@ window.DP = {
   keyGuard, closeModal, leaveBattle,
   rollChestPrize, acceptPrize, denyPrize, spendPurse, spendKind,
   startBattle, mkEnemy, battleTick, winBattle, endRun,
-  buyShop, rerollSlot, coinPriceFor, pickBoon, shopStock, boonOptions, usePotion,
+  buyShop, removeArsenal, coinPriceFor, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
   bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap,
@@ -6179,7 +6184,10 @@ if (!HEADLESS) (function browser() {
     // the shelf grows with the stock — size the panel (and the LEAVE button
     // below it) to fit however many wares the keeper is showing
     const rows = isShop ? room.stock.length : 0;
-    const ph = isShop ? 84 + rows * 50 + 60 : isForge ? 330 : isChest ? 250 : 220;
+    // the pack-thinning strip sizes with YOUR arsenal (up to two rows)
+    const arsIds = isShop && S.run ? Object.keys(S.run.arsenal).filter(id => S.run.arsenal[id] > 0) : [];
+    const arsRows = Math.min(2, Math.ceil(arsIds.length / 8)) || 0;
+    const ph = isShop ? 84 + rows * 50 + (arsRows ? 30 + arsRows * 42 : 0) + 60 : isForge ? 330 : isChest ? 250 : 220;
     const py = isShop ? 132 : 250;
     const mFrame = machArt('frame_tall');
     if (mFrame) {
@@ -6191,7 +6199,7 @@ if (!HEADLESS) (function browser() {
     }
     txt(info.icon + '  ' + info.name, LW / 2, py + 34, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     if (isShop) {
-      txt('\u{1FA99} ' + S.run.gold + ' gold   •   \u{1FA99} ' + purseTotal() + ' coins   (✕ removes for ' + C.SHOP_REROLL + ')',
+      txt('\u{1FA99} ' + S.run.gold + ' gold   •   \u{1FA99} ' + purseTotal() + ' coins',
           LW / 2, py + 60, '700 11px Verdana, sans-serif', '#fff0c0');
       const rx = LW - 54;                                   // right edge of the shelf
       room.stock.forEach((it, i) => {
@@ -6204,21 +6212,35 @@ if (!HEADLESS) (function browser() {
             it.sold ? '#5a4a5a' : '#ffe9a3', 'left');
         if (it.sub) txt(it.sub, 66, y + 31, '600 9px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
         if (it.sold) { txt('SOLD', rx - 34, y + 26, '900 13px Verdana, sans-serif', '#5a4a5a'); return; }
-        // three chips: pay GOLD · pay COINS · remove (re-roll) for 10 coins
+        // two chips: pay GOLD or pay COINS
         const goldOk = S.run.gold >= it.price;
         const coinOk = !!coinKindWith(it.coinPrice);
-        const remOk = purseTotal() >= C.SHOP_REROLL;
-        const remX = rx - 30, coinX = remX - 4 - 46, goldX = coinX - 4 - 56;
+        const coinX = rx - 8 - 46, goldX = coinX - 4 - 56;
         uiBtn(goldX, y + 7, 56, 30, it.price + ' G', () => buyShop(i, 'gold'),
               { bg: goldOk ? 'rgba(140,90,20,0.95)' : 'rgba(40,30,36,0.9)', border: goldOk ? '#ffd75e' : '#5a4048',
                 col: goldOk ? '#ffe9a3' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
         uiBtn(coinX, y + 7, 46, 30, it.coinPrice + ' ●', () => buyShop(i, 'coins'),
               { bg: coinOk ? 'rgba(40,90,120,0.95)' : 'rgba(40,30,36,0.9)', border: coinOk ? '#63c8ff' : '#5a4048',
                 col: coinOk ? '#cfeeff' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
-        uiBtn(remX, y + 7, 30, 30, '✕', () => rerollSlot(i),
-              { bg: remOk ? 'rgba(90,40,44,0.95)' : 'rgba(40,30,36,0.9)', border: remOk ? '#e0707a' : '#5a4048',
-                col: remOk ? '#ffd0d4' : '#7a6a72', font: '900 13px Verdana, sans-serif', r: 8 });
       });
+      // pack thinning: the keeper buys junk out of YOUR arsenal — every
+      // removal is one piece less clogging next battle's pile
+      if (arsIds.length) {
+        const sy = py + 84 + rows * 50 + 4;
+        const remOk = purseTotal() >= C.SHOP_REMOVE;
+        txt('sell the keeper your junk — tap an item to REMOVE it (' + C.SHOP_REMOVE + ' ●)',
+            LW / 2, sy + 10, '700 10px Verdana, sans-serif', remOk ? '#e0a8b0' : '#7a6a72');
+        arsIds.slice(0, 16).forEach((iid, i) => {
+          const it2 = itemById(iid);
+          if (!it2) return;
+          const bx = 56 + (i % 8) * 46, by2 = sy + 22 + ((i / 8) | 0) * 42;
+          uiBtn(bx, by2, 42, 36, '', () => removeArsenal(iid),
+                { bg: remOk ? 'rgba(90,40,44,0.95)' : 'rgba(40,30,36,0.9)',
+                  border: remOk ? '#e0707a' : '#5a4048', r: 9 });
+          txt(it2.icon, bx + 16, by2 + 17, '15px serif', '#fff');
+          txt('×' + S.run.arsenal[iid], bx + 34, by2 + 24, '800 9px Verdana, sans-serif', '#ffd0d4');
+        });
+      }
     } else if (isForge) {
       txt('choose a boon', LW / 2, py + 60, '700 12px Verdana, sans-serif', '#c8a8b0');
       room.opts.forEach((o, i) => {
