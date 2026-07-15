@@ -1246,8 +1246,8 @@ function grantItem(iid, n) {
   }
 }
 
-// JACKPOT: filling the meter sprouts copies of YOUR OWN GEAR onto the
-// field — three free swings of the arsenal you built, not a coin firehose
+// JACKPOT: filling the meter catapults ONE echo of your own gear onto a
+// random spot of the board — where it lands is half the prize
 function frenzy() {
   S.meter = 0;
   if (hasRelic('jackpotcharm')) { addGold(15); if (S.battle) S.battle.goldWon += 15; }
@@ -1261,10 +1261,10 @@ function frenzy() {
     }
   }
   if (owned.length) {
-    for (let i = 0; i < 3; i++) {
-      const iid = owned[(rng() * owned.length) | 0];
-      S.rain.push({ t: 0.3 + 0.35 * i, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid, temp: true });
-    }
+    // ONE echo of your gear, CATAPULTED to a random spot on the board —
+    // deep in the back or teetering right at the lip, luck decides
+    const iid = owned[(rng() * owned.length) | 0];
+    S.rain.push({ t: 0.4, x: 12 + rng() * 76, y: 12 + rng() * (tierFront(0) - 24), kind: 'item', iid, temp: true });
   } else {
     // no arsenal to echo? a modest coin consolation
     for (let i = 0; i < 4; i++) {
