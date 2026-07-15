@@ -317,6 +317,130 @@ function itemRar(it) { return it.cost >= 55 ? 'r' : 'c'; }
 function itemsByRar(rar) { return ITEMS.filter(it => itemRar(it) === rar); }
 function randItem(rar) { const pool = itemsByRar(rar); return pool[(rng() * pool.length) | 0]; }
 
+// -------------------------------------------------------------- the ledger
+// The inventory's effect sheet: what each coin/item ACTUALLY does right now,
+// with every owned artifact folded in. `main` is the headline number, `mods`
+// names each artifact bending it — so the bag doubles as a build overview.
+function coinFx(k) {
+  const mods = [];
+  let main = '';
+  const M = (id, txt2) => { if (hasRelic(id)) { const rl = relicById(id); mods.push((rl ? rl.name : id) + ': ' + txt2); return true; } return false; };
+  if (k === 'coin') {
+    let d = C.DMG.gold;
+    if (M('goldedge', '+1 dmg')) d++;
+    if (M('keenedge', '+1 dmg')) d++;
+    if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) { d += 2; mods.push('Berserker: +2 dmg (below half HP)'); }
+    else M('berserker', '+2 dmg while below half HP');
+    main = d + ' dmg';
+    if (M('twinstrike', 'strikes TWICE')) main += ' ×2';
+    M('momentum', '+1 dmg per 5 gold fired');
+    M('warlord', '+1 dmg per 3 gold fired');
+    M('emberhoard', 'splashes 1 dmg to ALL foes');
+    M('bloodgold', 'heals 1 HP on strike');
+    M('bloodthirst', 'heals 1 HP on strike');
+    M('taxman', '+1 gold per coin fired');
+  } else if (k === 'silver') {
+    let b = 1;
+    if (M('silvercore', '+1 block')) b++;
+    if (M('bulwark', '+1 block')) b++;
+    main = b + ' block';
+    let d = 0;
+    if (M('spikeshield', 'also deals 1 dmg')) d += 1;
+    if (M('retort', 'also deals 2 dmg')) d += 2;
+    if (d) main += ' + ' + d + ' dmg';
+    M('aegis', 'unspent block carries over');
+  } else if (k === 'green') {
+    let p = 1;
+    if (M('venomtip', '+1 stack')) p++;
+    if (M('toxicology', '+1 stack')) p++;
+    if (M('twinfangs', 'poison DOUBLED')) p *= 2;
+    main = p + ' poison';
+    M('blightlord', 'also deals 1 dmg');
+    M('contagion', 'spreads 1 poison to the whole pack');
+    if (M('alchemist', 'heals 1 HP')) main += ' + heal 1';
+    M('plaguelord', 'poison never fades');
+  } else if (k === 'red') {
+    let h = C.RED_HEAL;
+    if (M('warmheart', '+1 HP')) h++;
+    if (M('greensprig', '+1 HP')) h++;
+    main = 'heal ' + h + ' HP';
+    M('phoenixember', 'also grants 1 block');
+  } else if (k === 'blue') {
+    let d = C.DMG.blue;
+    if (M('frostshard', '+1 dmg')) d++;
+    if (M('permafrost', '+1 dmg')) d++;
+    main = d + ' dmg to ALL foes';
+    M('sparkstone', '+1 dmg against packs of 2+');
+  } else if (k === 'lucky') {
+    let d = C.DMG.lucky;
+    if (M('starmetal', '+2 dmg')) d += 2;
+    if (M('horseshoe', '+1 dmg')) d += 1;
+    if (M('assassin', '+2 dmg, pierces guards')) d += 2;
+    main = d + ' dmg';
+    M('sniperlens', 'pierces braced guards');
+    M('deadeye', 'pierces braced guards');
+    M('bloodthirst', 'heals 1 HP on strike');
+    M('clover', 'minted twice as often');
+  }
+  return { main, mods };
+}
+function itemFx(iid) {
+  const it = itemById(iid);
+  if (!it) return { main: '', mods: [] };
+  const mods = [];
+  let main = '';
+  const M = (id, txt2) => { if (hasRelic(id)) { const rl = relicById(id); mods.push((rl ? rl.name : id) + ': ' + txt2); return true; } return false; };
+  if (it.kind === 'weapon') {
+    let w = weaponDmg(it.dmg);
+    if (S.run && S.run.whet > 0) mods.push('forge-honed: +' + S.run.whet + ' dmg');
+    M('whet', '+30% dmg');
+    if (M('armory', '+2 dmg')) w += 2;
+    if (M('heavyarms', '+30% dmg')) w = Math.round(w * 1.3);
+    main = w + ' dmg' + (it.splash ? ' (splash)' : '');
+    M('vampblade', 'heals half its dmg');
+    M('bloodthirst', 'heals 1 HP on strike');
+  } else if (it.kind === 'poison') {
+    main = ((it.pois + (hasRelic('venom') ? 2 : 0)) * (hasRelic('twinfangs') ? 2 : 1)) + ' poison';
+    M('venom', '+2 stacks');
+    M('twinfangs', 'poison DOUBLED');
+  } else if (it.kind === 'shield') {
+    main = (it.block + (hasRelic('plateup') ? 3 : 0)) + ' block';
+    M('plateup', '+3 block');
+  } else if (it.kind === 'heal') {
+    main = 'heal ' + (it.heal + (hasRelic('fieldmedic') ? 4 : 0)) + ' HP';
+    M('fieldmedic', '+4 HP');
+  } else if (it.kind === 'stun') {
+    const st = it.stun + (hasRelic('deepfreeze') ? 1 : 0);
+    main = 'freeze a foe ' + st + ' turn' + (st > 1 ? 's' : '');
+    M('deepfreeze', '+1 turn');
+  }
+  return { main, mods };
+}
+// the run-wide numbers the stats tab reads out (artifact bends included)
+function runMods() {
+  const tiltMods = ['crowbar', 'prybar'].filter(hasRelic).map(id => relicById(id).name + ' +1').join(', ');
+  const rainB = (hasRelic('loadstone') ? 3 : 0) + (hasRelic('saltpile') ? 2 : 0);
+  const handB = (hasRelic('minter') ? 1 : 0) + (hasRelic('richhand') ? 1 : 0) + (hasRelic('tollkeeper') ? 2 : 0);
+  const rows = [
+    ['bank slots', bankMax() + (hasRelic('strongbox') ? ' (Strongbox +2)' : '')],
+    ['tilts / round', tiltCount() + (tiltMods ? ' (' + tiltMods + ')' : '')],
+    ['round rain', (C.ROUND_RAIN + rainB) + ' pieces' + (rainB ? ' (+' + rainB + ' from artifacts)' : '')],
+    ['victory offer', (hasRelic('fourth') ? 4 : 3) + ' coins' + (hasRelic('fourth') ? ' (Gambler’s Purse)' : '')],
+  ];
+  if (handB) rows.push(['hand bonus', '+' + handB + ' gold coin' + (handB > 1 ? 's' : '') + ' every round']);
+  if (hasRelic('midas')) rows.push(['gold income', '+30% (Midas Touch)']);
+  if (hasRelic('piggy')) rows.push(['victory bounty', '+4 gold (Piggy Bank)']);
+  if (hasRelic('luckypenny')) rows.push(['round start', '+3 gold (Lucky Penny)']);
+  if (hasRelic('plate')) rows.push(['round start', '+4 block (Battle Plate)']);
+  if (hasRelic('thornmail')) rows.push(['thorns', 'half your block bites back']);
+  if (hasRelic('echobell') || hasRelic('reverb')) rows.push(['first piece', 'fires twice']);
+  if (hasRelic('stormcall')) rows.push(['storm', 'every 8th piece zaps ALL for 3']);
+  if (hasRelic('grandbank')) rows.push(['bank payout', 'banked pieces duplicate']);
+  if (hasRelic('quicksilver') || hasRelic('overdrive')) rows.push(['resolve', 'ramps 2× as fast']);
+  if (hasRelic('wind')) rows.push(['second wind', S.run && S.run.windUsed ? 'SPENT' : 'ready — survives a killing blow']);
+  return rows;
+}
+
 // ----------------------------------------------------------------- enemies
 // The cast wears real sprites borrowed from No Room For Heroes (see
 // art/CREDITS.txt); ids double as art sheet keys, icons are the fallback.
@@ -441,6 +565,7 @@ const S = {
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
   foeInfo: null,                       // index of the foe whose bestiary card is open
+  inv: null,                           // inventory overlay {tab: 'coins'|'items'|'relics'|'stats'}
   enemy: null,                         // the TARGETED foe (points into S.foes)
   battle: null,                        // round machine {round, phase, hand, loot, ...}
   victory: null,                       // battle-won overlay {t, gold, keys, offer}
@@ -1564,6 +1689,7 @@ function endRun(cause) {
   S.battle = null;
   S.victory = null;
   S.room = null;
+  S.inv = null;
   S.screen = 'over';
   SND.dead();
   save();
@@ -1589,7 +1715,7 @@ function newRun(heroId) {
   // the chosen adventurer's signature coins
   S.run.purse[hero.coin] += 2;
   S.heroPick = hero.id;
-  S.foes = []; S.enemy = null; S.victory = null; S.room = null; S.over = null;
+  S.foes = []; S.enemy = null; S.victory = null; S.room = null; S.over = null; S.inv = null;
   S.meter = 0; S.pPois = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
   genFloor();
@@ -2359,6 +2485,7 @@ window.DP = {
   rollRelicDrop, rollRelicByRar, grantArtifact, itemRar, itemsByRar,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
+  coinFx, itemFx, runMods,
 };
 
 load();
@@ -2624,6 +2751,82 @@ if (!HEADLESS) (function browser() {
   }
   function fkey() { return ((S.run ? S.run.floor : 1) - 1) % FLOORS.length; }
 
+  // ---------------------------------------------------- static layer cache
+  // Phones choke on the per-frame stack of shadowBlur'd images and fresh
+  // gradients, so everything that doesn't move is painted ONCE into an
+  // offscreen canvas (at device resolution) and blitted per frame. A layer
+  // rebuilds itself whenever its dep-string changes — floor skin, viewport
+  // scale, or a piece of art finishing its load.
+  const LAYERS = {};
+  function layer(key, x, y, w, h, deps, paint) {
+    let l = LAYERS[key];
+    const dep = deps.join('|') + '|' + scale.toFixed(3);
+    if (!l || l.dep !== dep) {
+      const cv = (l && l.cv) || document.createElement('canvas');
+      cv.width = Math.max(1, Math.ceil(w * scale));
+      cv.height = Math.max(1, Math.ceil(h * scale));
+      const g = cv.getContext('2d');
+      if (g) {
+        const main = ctx;
+        ctx = g;
+        try {
+          ctx.setTransform(scale, 0, 0, scale, -x * scale, -y * scale);
+          paint();
+        } finally { ctx = main; }
+      }
+      l = LAYERS[key] = { cv, dep, x, y, w, h };
+    }
+    ctx.drawImage(l.cv, x, y, w, h);
+  }
+  // an image pre-composited WITH its drop shadow — one blur at build time
+  // instead of a slow shadowBlur every frame. Returned canvas carries _pad.
+  const SSPR = {};
+  function shadowSprite(key, im, w, h, blur, offY, shadow) {
+    const k = key + ':' + (w | 0) + 'x' + (h | 0) + ':' + scale.toFixed(2);
+    let cv = SSPR[k];
+    if (!cv) {
+      const pad = blur + Math.abs(offY || 0) + 2;
+      cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.ceil((w + pad * 2) * scale));
+      cv.height = Math.max(1, Math.ceil((h + pad * 2) * scale));
+      const g = cv.getContext('2d');
+      if (g) {
+        g.setTransform(scale, 0, 0, scale, 0, 0);
+        g.shadowColor = shadow || 'rgba(0,0,0,0.45)';
+        g.shadowBlur = blur; g.shadowOffsetY = offY || 0;
+        g.drawImage(im, pad, pad, w, h);
+      }
+      cv._pad = pad;
+      SSPR[k] = cv;
+    }
+    return cv;
+  }
+  // draw an image with a cached shadow at (x,y,w,h) — same look as the old
+  // per-frame shadowBlur path, none of the cost
+  function shadowImg(key, im, x, y, w, h, blur, offY, shadow) {
+    const sp = shadowSprite(key, im, w, h, blur, offY, shadow);
+    const pad = sp._pad;
+    ctx.drawImage(sp, x - pad, y - pad, w + pad * 2, h + pad * 2);
+  }
+  // soft radial light pool, rendered once per colour
+  const SPOTS = {};
+  function spotSprite(col) {
+    let cv = SPOTS[col];
+    if (!cv) {
+      cv = document.createElement('canvas');
+      cv.width = cv.height = 128;
+      const g = cv.getContext('2d');
+      if (g) {
+        const gr = g.createRadialGradient(64, 64, 2, 64, 64, 62);
+        gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = gr;
+        g.fillRect(0, 0, 128, 128);
+      }
+      SPOTS[col] = cv;
+    }
+    return cv;
+  }
+
   // ------------------------------------------------------------------ audio
   let AC = null, master = null, noiseBuf = null;
   function audioInit() {
@@ -2840,10 +3043,9 @@ if (!HEADLESS) (function browser() {
     opts = opts || {};
     uiButtons.push({ x, y, w, h, cb });
     const r = opts.r || 12;
-    // soft drop shadow grounds every button
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.45)';
-    ctx.shadowBlur = 8; ctx.shadowOffsetY = 3;
+    // soft offset shade grounds every button (cheaper than shadowBlur)
+    rr(x - 1, y + 2, w + 2, h + 2, r + 1);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill();
     rr(x, y, w, h, r);
     if (opts.grad) {
       const g = ctx.createLinearGradient(0, y, 0, y + h);
@@ -2851,7 +3053,6 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = g;
     } else ctx.fillStyle = opts.bg || 'rgba(20,10,14,0.85)';
     ctx.fill();
-    ctx.restore();
     ctx.lineWidth = 2; ctx.strokeStyle = opts.border || '#7d5a24';
     rr(x, y, w, h, r); ctx.stroke();
     // glass gloss across the upper half
@@ -2883,7 +3084,9 @@ if (!HEADLESS) (function browser() {
     x: (i * 137.5) % 480, y: 120 + (i * 233.7) % 620,
     r: 14 + (i * 41) % 42, ph: i * 1.7, sp: 0.16 + (i % 5) * 0.05,
   }));
-  function drawBackground(t) {
+  // the dungeon backdrop, split so the static half can be baked into a layer:
+  // base gradient + god rays are frozen (they barely move), bokeh stays live
+  function bgBase(t) {
     const T = theme();
     ctx.fillStyle = rgr('bg:' + fkey(), LW / 2, 300, 60, LW / 2, 420, 620,
       [[0, T.room], [0.6, '#241a26'], [1, '#171019']]);
@@ -2902,6 +3105,12 @@ if (!HEADLESS) (function browser() {
       poly([{ x: bx - 26, y: -20 }, { x: bx + 26, y: -20 }, { x: bx - 60, y: LH + 20 }, { x: bx - 130, y: LH + 20 }]);
       ctx.fill();
     }
+    ctx.restore();
+  }
+  function bgBokeh(t) {
+    const T = theme();
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
     // theme-tinted bokeh, breathing slowly
     for (const b of BOKEH) {
       const a = 0.05 + 0.035 * Math.sin(t * b.sp + b.ph);
@@ -2929,30 +3138,24 @@ if (!HEADLESS) (function browser() {
     }
     if (f > 0.01) {
       rr(x + 1, y + 1, Math.max(h - 2, (w - 2) * f), h - 2, (h - 2) / 2);
-      const g = ctx.createLinearGradient(x, 0, x + w, 0);
-      g.addColorStop(0, '#ff6f6f'); g.addColorStop(1, '#b01e36');
-      ctx.fillStyle = g; ctx.fill();
+      ctx.fillStyle = lgr('hp:' + (x | 0) + ':' + (w | 0), x, 0, x + w, 0,
+        [[0, '#ff6f6f'], [1, '#b01e36']]);
+      ctx.fill();
       // gloss strip
       rr(x + 2, y + 1.5, Math.max(2, (w - 4) * f), Math.max(1.5, (h - 3) * 0.4), 2);
       ctx.fillStyle = 'rgba(255,255,255,0.32)'; ctx.fill();
     }
   }
-  // a soft light pool under a combatant's feet
+  // a soft light pool under a combatant's feet (cached sprite — cheap)
   function spotlight(x, y, r, col, a) {
     ctx.save();
     ctx.globalCompositeOperation = 'lighter';
-    const g = ctx.createRadialGradient(x, y, 2, x, y, r);
-    g.addColorStop(0, col); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.globalAlpha = a;
-    ctx.fillStyle = g;
-    ctx.beginPath(); ctx.ellipse(x, y, r, r * 0.32, 0, 0, 7); ctx.fill();
+    ctx.drawImage(spotSprite(col), x - r, y - r * 0.32, r * 2, r * 0.64);
     ctx.restore();
   }
-  function drawEnemyPanel(t, dt) {
-    // the battle STAGE: your hero holds the left, the pack prowls the right
-    const T = theme();
-    dt = dt || 0.016;
-    ctx.save();
+  // the arena's fixed dressing — painted ONCE into the battle base layer
+  function stageChrome() {
     const stageFrame = machArt('frame_stage');
     if (stageFrame) {
       // the runic banner frame from the UI sheet IS the arena
@@ -2982,23 +3185,32 @@ if (!HEADLESS) (function browser() {
       [[0, 'rgba(255,220,160,0.10)'], [1, 'rgba(0,0,0,0)']]);
     rr(22, 14, LW - 44, 124, 19); ctx.fill();
     ctx.restore();
-    // stage floorline + light pools
+    // stage floorline + the hero's light pool
     ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(36, 112); ctx.lineTo(LW - 36, 112); ctx.stroke();
     spotlight(72, 112, 58, 'rgba(140,190,255,0.5)', 0.35);
-    // wall torches flank the arena, flames breathing (tucked below the
-    // ROUND chip and the mute button)
+    // wall torches flank the arena (their breathing glows stay live)
     const tcL = machArt('torch_l'), tcR = machArt('torch_r');
     if (tcL && tcR) {
+      ctx.drawImage(tcL, 26, 48, 26, 55);
+      ctx.drawImage(tcR, LW - 52, 48, 26, 55);
+    }
+  }
+  function drawEnemyPanel(t, dt) {
+    // the battle STAGE: your hero holds the left, the pack prowls the right
+    const T = theme();
+    dt = dt || 0.016;
+    ctx.save();
+    // torch flames breathe over the cached chrome
+    if (machArt('torch_l')) {
       const fl2 = 1 + Math.sin(t * 8) * 0.12;
-      for (const [im, tx] of [[tcL, 26], [tcR, LW - 52]]) {
+      for (const tx of [26, LW - 52]) {
         ctx.save();
         ctx.globalCompositeOperation = 'lighter';
         ctx.globalAlpha = 0.18 + 0.07 * Math.sin(t * 9 + tx);
         ctx.fillStyle = '#ff9d3c';
         ctx.beginPath(); ctx.arc(tx + 13, 60, 16 * fl2, 0, 7); ctx.fill();
         ctx.restore();
-        ctx.drawImage(im, tx, 48, 26, 55);
       }
     }
     // the dueling line
@@ -3262,10 +3474,9 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
-  function drawBackWall(t) {
-    const T = theme();
+  // the wall itself never moves — it lives in the battle base layer
+  function drawBackWallStatic() {
     const a = w2s(0, 0, MACH.tiers[0].z);
-    t = t || 0;
     ctx.save();
     const g = ctx.createLinearGradient(0, 172, 0, a.y);
     g.addColorStop(0, '#20242c'); g.addColorStop(1, '#3a4049');
@@ -3286,13 +3497,21 @@ if (!HEADLESS) (function browser() {
         ctx.beginPath(); ctx.moveTo(x, 173); ctx.lineTo(x - 4, a.y - 2); ctx.stroke();
       }
       ctx.globalAlpha = 1;
-    }
-    // the coin channel with a CHASING marquee of bulbs — a real arcade top
-    // (the gilded JACKPOT gauge takes this spot when its art is in)
-    if (!machArt('jackpot')) {
+      // the coin channel housing (its chasing bulbs stay live)
       ctx.fillStyle = '#0d1015';
       rr(58, 184, LW - 116, 15, 7); ctx.fill();
       ctx.strokeStyle = '#565e69'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawBackWall(t) {
+    const T = theme();
+    const a = w2s(0, 0, MACH.tiers[0].z);
+    t = t || 0;
+    ctx.save();
+    // the CHASING marquee of bulbs — a real arcade top
+    // (the gilded JACKPOT gauge takes this spot when its art is in)
+    if (!machArt('jackpot')) {
       const nb = 16, chase = Math.floor(t * 9) % nb;
       for (let i = 0; i < nb; i++) {
         const bx = 70 + (LW - 140) * (i / (nb - 1));
@@ -3314,11 +3533,14 @@ if (!HEADLESS) (function browser() {
     const e = eyd(slotY);
     const u = (PF.w0 + (PF.w1 - PF.w0) * e) / 100;
     const gx = PF.cx + (S.aimX - 50) * u;
-    const lg = ctx.createLinearGradient(0, 200, 0, ap.y);
-    lg.addColorStop(0, 'rgba(255,222,120,0.5)');
-    lg.addColorStop(1, 'rgba(255,222,120,0.03)');
-    ctx.fillStyle = lg;
+    // the aim beam — clipped to the wall so it slips UNDER the cached floor
+    ctx.save();
+    ctx.beginPath(); ctx.rect(26, 172, LW - 52, Math.max(10, a.y - 172));
+    ctx.clip();
+    ctx.fillStyle = lgr('beam:' + (ap.y | 0), 0, 200, 0, ap.y,
+      [[0, 'rgba(255,222,120,0.5)'], [1, 'rgba(255,222,120,0.03)']]);
     ctx.fillRect(gx - 7, 200, 14, ap.y - 200);
+    ctx.restore();
     // the slot itself glows when ready
     if (S.cd <= 0) {
       ctx.save();
@@ -3461,10 +3683,7 @@ if (!HEADLESS) (function browser() {
     if (sign) {
       const sh2 = 34;
       const sw2 = sh2 / imAspect(sign, 96 / 270);
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 5; ctx.shadowOffsetY = 2;
-      ctx.drawImage(sign, LW / 2 - sw2 / 2, fl.y - sh2 - 1, sw2, sh2);
-      ctx.restore();
+      shadowImg('sign', sign, LW / 2 - sw2 / 2, fl.y - sh2 - 1, sw2, sh2, 5, 2, 'rgba(0,0,0,0.4)');
     }
     // face: the riveted iron strip when skinned, painted bevel + LED chase
     // otherwise
@@ -3685,7 +3904,8 @@ if (!HEADLESS) (function browser() {
     }
   }
 
-  function drawFrontAndTray() {
+  // fascia + tray bowl are bolted down — painted once into a cached strip
+  function frontStatic() {
     const front = tierFront(0);
     const l = w2s(0, front, 0), r = w2s(100, front, 0);
     ctx.beginPath();
@@ -3697,21 +3917,6 @@ if (!HEADLESS) (function browser() {
     ctx.fill();
     ctx.strokeStyle = 'rgba(235,240,250,0.5)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.moveTo(l.x, l.y); ctx.lineTo(r.x, r.y); ctx.stroke();
-    // hazard chevrons, slowly marching toward the tray
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(l.x, l.y + 3); ctx.lineTo(r.x, r.y + 3);
-    ctx.lineTo(r.x + 1, l.y + 12); ctx.lineTo(l.x - 1, l.y + 12);
-    ctx.closePath(); ctx.clip();
-    const scroll = (S.time * 8) % 18;
-    for (let x = l.x - 36 + scroll; x < r.x + 20; x += 18) {
-      ctx.fillStyle = 'rgba(240,190,60,0.55)';
-      ctx.beginPath();
-      ctx.moveTo(x, l.y + 12); ctx.lineTo(x + 9, l.y + 12);
-      ctx.lineTo(x + 18, l.y + 2); ctx.lineTo(x + 9, l.y + 2);
-      ctx.closePath(); ctx.fill();
-    }
-    ctx.restore();
     // gold hairline under the chevrons
     ctx.strokeStyle = 'rgba(232,200,119,0.35)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(l.x - 1, l.y + 13); ctx.lineTo(r.x + 1, r.y + 13); ctx.stroke();
@@ -3749,6 +3954,28 @@ if (!HEADLESS) (function browser() {
       rr(61, 651, LW - 122, 46, 11);
       ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.6)'; ctx.stroke();
     }
+  }
+  function drawFrontAndTray() {
+    const front = tierFront(0);
+    const l = w2s(0, front, 0), r = w2s(100, front, 0);
+    layer('front', 0, l.y - 14, LW, 716 - (l.y - 14),
+      ['f' + fkey(), machArt('fascia') ? 1 : 0, machArt('tray') ? 1 : 0],
+      frontStatic);
+    // hazard chevrons, slowly marching toward the tray
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(l.x, l.y + 3); ctx.lineTo(r.x, r.y + 3);
+    ctx.lineTo(r.x + 1, l.y + 12); ctx.lineTo(l.x - 1, l.y + 12);
+    ctx.closePath(); ctx.clip();
+    const scroll = (S.time * 8) % 18;
+    for (let x = l.x - 36 + scroll; x < r.x + 20; x += 18) {
+      ctx.fillStyle = 'rgba(240,190,60,0.55)';
+      ctx.beginPath();
+      ctx.moveTo(x, l.y + 12); ctx.lineTo(x + 9, l.y + 12);
+      ctx.lineTo(x + 18, l.y + 2); ctx.lineTo(x + 9, l.y + 2);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
     // the round's loot rattles around the tray until it resolves
     const items = S.tray.items;
     const trayGlow = S.battle && S.battle.loot.length > 0;
@@ -3910,10 +4137,7 @@ if (!HEADLESS) (function browser() {
     const im = machArt(on ? 'pill_glow' : 'pill');
     if (!im) return false;
     uiButtons.push({ x, y, w, h, cb });
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 2;
-    ctx.drawImage(im, x, y - 3, w, h + 6);
-    ctx.restore();
+    shadowImg(on ? 'pillg' : 'pill', im, x, y - 3, w, h + 6, 6, 2);
     txt(label, x + w / 2, y + h / 2 + 1, '900 12px Verdana, sans-serif', col,
         'center', { w: 3, col: 'rgba(30,12,4,0.6)' });
     return true;
@@ -4057,9 +4281,7 @@ if (!HEADLESS) (function browser() {
   }
 
   // ------------------------------------------------------------- shared HUD
-  function drawHUD(t) {
-    const r = S.run;
-    if (!r) return;
+  function hudChrome() {
     const hudFrame = machArt('frame_wide');
     if (hudFrame) {
       // bronze-cornered rune frame from the UI sheet
@@ -4082,6 +4304,12 @@ if (!HEADLESS) (function browser() {
       ctx.strokeStyle = 'rgba(255,255,255,0.07)'; ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(28, 778); ctx.lineTo(LW - 28, 778); ctx.stroke();
     }
+  }
+  function drawHUD(t) {
+    const r = S.run;
+    if (!r) return;
+    layer('hud', 0, 682, LW, LH - 682,
+      [machArt('frame_wide') ? 1 : 0], hudChrome);
     // HP
     txt('HP', 52, 733, '800 11px Verdana, sans-serif', '#b89aa4', 'left');
     bar(74, 726, 194, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
@@ -4105,11 +4333,18 @@ if (!HEADLESS) (function browser() {
       uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
             { grad: ['#8c2f6b', '#4a1038'], border: '#ffb0e0', col: '#ffd9ee', font: '800 11px Verdana, sans-serif', r: 9 });
     }
-    // artifact shelf (up to 12 on display)
-    r.relics.slice(0, 12).forEach((rid, i) => {
+    // artifact shelf: a peek at the first few — the BAG holds the full ledger
+    r.relics.slice(0, 3).forEach((rid, i) => {
       const rl = relicById(rid);
-      if (rl) txt(rl.icon, 360 + (i % 4) * 25, 726 + Math.floor(i / 4) * 23, '15px serif', '#fff');
+      if (rl) txt(rl.icon, 362 + i * 24, 726, '14px serif', '#fff');
     });
+    if (r.relics.length > 3) {
+      txt('+' + (r.relics.length - 3), 434, 726, '800 10px Verdana, sans-serif', '#c8a8b0', 'left');
+    }
+    // the BAG: coins, arsenal, artifacts and stats — everything you carry
+    uiBtn(354, 742, 112, 30, '\u{1F392} BAG', () => { S.inv = S.inv ? null : { tab: 'coins' }; },
+          { grad: ['#5a4a7e', '#332448'], border: '#c8b8e0', col: '#f0e8ff',
+            font: '900 12px Verdana, sans-serif', r: 10 });
     // arsenal strip
     const ids = Object.keys(r.arsenal);
     let ax = 34;
@@ -4148,10 +4383,7 @@ if (!HEADLESS) (function browser() {
     const py = hasOffer ? 200 : 300, ph = hasRelicOffer ? 470 : hasCoinOffer ? 404 : 250;
     const vFrame = machArt('frame_tall');
     if (vFrame) {
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
-      ctx.drawImage(vFrame, 62, py - 8, LW - 124, ph + 16);
-      ctx.restore();
+      shadowImg('vicframe', vFrame, 62, py - 8, LW - 124, ph + 16, 18, 6, 'rgba(0,0,0,0.6)');
     } else {
       rr(70, py, LW - 140, ph, 20);
       ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
@@ -4224,15 +4456,30 @@ if (!HEADLESS) (function browser() {
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 14 });
   }
 
+  // everything about the machine that never moves, in ONE cached blit:
+  // backdrop, stage chrome, cabinet, back wall, platform, rails, lip
+  function battleBase() {
+    layer('battle', 0, 0, LW, LH, [
+      'f' + fkey(),
+      machArt('frame_stage') ? 1 : 0, machArt('torch_l') ? 1 : 0,
+      machArt('rail') ? 1 : 0, machArt('cab') ? 1 : 0,
+      machArt('backwall') ? 1 : 0, machArt('jackpot') ? 1 : 0,
+      machArt('plat') ? 1 : 0, machArt('rail_run') ? 1 : 0,
+    ], () => {
+      bgBase(0);
+      stageChrome();
+      drawCabinet();
+      drawBackWallStatic();
+      drawTierFloor(MACH.tiers[0].back, tierFront(0), 0);
+      drawSideRails();
+      drawLip();
+    });
+  }
   function drawBattle(t, dt) {
-    drawBackground(t);
+    battleBase();
     drawEnemyPanel(t, dt);
-    drawCabinet();
     drawBackWall(t);
     drawMeter(t);
-    drawTierFloor(MACH.tiers[0].back, tierFront(0), 0);
-    drawSideRails();
-    drawLip();
     drawPusherBlock(t);
     const onPlat = [], offEdge = [];
     for (const c of S.coins) {
@@ -4274,11 +4521,12 @@ if (!HEADLESS) (function browser() {
         // the dragon-sealed scroll from the concept sheet
         const bh2 = bw * imAspect(etArt, 108 / 364);
         const by2 = 616 - bh2 / 2;
-        ctx.save();
-        ctx.shadowColor = 'rgba(255,190,80,' + (empty ? 0.6 : 0.3) + ')';
-        ctx.shadowBlur = empty ? 18 : 9;
-        ctx.drawImage(etArt, bx2, by2, bw, bh2);
-        ctx.restore();
+        // pre-glowed sprite at base size; the pulse just scales the blit
+        const baseW = 170, baseH = baseW * imAspect(etArt, 108 / 364);
+        const sp = shadowSprite(empty ? 'et1' : 'et0', etArt, baseW, baseH,
+          empty ? 18 : 9, 0, 'rgba(255,190,80,' + (empty ? 0.6 : 0.3) + ')');
+        const sc2 = bw / baseW, pad2 = sp._pad * sc2;
+        ctx.drawImage(sp, bx2 - pad2, by2 - pad2, bw + pad2 * 2, bh2 + pad2 * 2);
         uiButtons.push({ x: bx2, y: by2, w: bw, h: bh2, cb: () => endRoundNow() });
       } else {
         uiBtn(bx2, 596, bw, 40, 'END TURN ▶', () => endRoundNow(),
@@ -4318,6 +4566,7 @@ if (!HEADLESS) (function browser() {
     drawBanner(t);
     drawFoeInfo(t);              // the inspect card rides on top of the intro banner
     drawVictory(t);
+    drawInventory(t);            // the BAG rides on top of everything
   }
 
   // tap a monster mid-fight to read its bestiary card: stats, its mechanic,
@@ -4341,10 +4590,7 @@ if (!HEADLESS) (function browser() {
     const cw = LW - 96, cx = LW / 2, cy = 250, ch = 340;
     const fFrame = machArt('frame_tall');
     if (fFrame) {
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
-      ctx.drawImage(fFrame, cx - cw / 2 - 8, cy - 8, cw + 16, ch + 16);
-      ctx.restore();
+      shadowImg('foeframe', fFrame, cx - cw / 2 - 8, cy - 8, cw + 16, ch + 16, 18, 6, 'rgba(0,0,0,0.6)');
       // a rank-coloured accent ring inside the stone
       rr(cx - cw / 2 + 10, cy + 10, cw - 20, ch - 20, 12);
       ctx.lineWidth = 1.5;
@@ -4392,6 +4638,141 @@ if (!HEADLESS) (function browser() {
       { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
 
+  // ------------------------------------------------------ the BAG overlay
+  // Everything you carry on one card: the purse (with every artifact bend
+  // folded into the numbers), the arsenal, the artifact shelf, and the
+  // run's stats. Opened from the HUD's BAG button or the 'i' key.
+  const INV_TABS = [['coins', 'COINS'], ['items', 'ITEMS'], ['relics', 'RELICS'], ['stats', 'STATS']];
+  const ACT_NAMES = ['ACT I — THE CATACOMBS', 'ACT II — THE DEEP HALLS', 'ACT III — THE ABYSS'];
+  function wrapLines(s, maxChars, maxLines) {
+    const words = ('' + s).split(' ');
+    const lines = [''];
+    for (const w of words) {
+      if (lines[lines.length - 1] && (lines[lines.length - 1] + ' ' + w).length > maxChars) lines.push(w);
+      else lines[lines.length - 1] = (lines[lines.length - 1] + ' ' + w).trim();
+    }
+    return lines.slice(0, maxLines || 3);
+  }
+  function invCoinIcon(k, cx, cy, r) {
+    const face = pieceArt(k);
+    if (face) { ctx.drawImage(face, cx - r, cy - r, r * 2, r * 2); return; }
+    ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7);
+    ctx.fillStyle = COIN_UI[k]; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(60,40,10,0.7)'; ctx.stroke();
+    txt(COIN_SYMS[k], cx, cy + 1, '800 12px serif', 'rgba(40,24,4,0.85)');
+  }
+  function drawInventory(t) {
+    if (!S.inv || !S.run) return;
+    const r = S.run;
+    ctx.fillStyle = 'rgba(6,3,10,0.8)'; ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { S.inv = null; } });
+    const px = 20, pw = LW - 40, py = 74, ph = 684;
+    rr(px, py, pw, ph, 18);
+    ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    rr(px + 3.5, py + 3.5, pw - 7, ph - 7, 15);
+    ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(232,200,119,0.35)'; ctx.stroke();
+    uiButtons.push({ x: px, y: py, w: pw, h: ph, cb: () => {} });   // the card swallows taps
+    txt('\u{1F392} INVENTORY', LW / 2, py + 28, '900 21px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    const hero = heroById(r.hero) || HEROES[0];
+    txt(hero.icon + ' ' + hero.name + '  •  floor ' + r.floor + '  •  ' +
+        ACT_NAMES[Math.min(ACT_NAMES.length - 1, actIdx(r.floor))],
+        LW / 2, py + 50, '700 10px Verdana, sans-serif', '#c8a8b0');
+    // tab rail
+    const tw = (pw - 24) / INV_TABS.length;
+    INV_TABS.forEach(([id, label], i) => {
+      const on = S.inv.tab === id;
+      uiBtn(px + 12 + i * tw, py + 62, tw - 5, 27, label, () => { S.inv.tab = id; },
+            { grad: on ? ['#8a6a2a', '#5a4014'] : ['#3a3440', '#262230'],
+              border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
+              font: '900 11px Verdana, sans-serif', r: 9 });
+    });
+    const y0 = py + 106, x0 = px + 16, xe = px + pw - 16;
+    const tab = S.inv.tab;
+    if (tab === 'coins') {
+      const inFight = S.battle && S.battle.hand;
+      txt('PURSE — ' + purseTotal() + ' coins' + (inFight ? '  (this round’s hand shown too)' : ''),
+          x0, y0 - 8, '800 10px Verdana, sans-serif', '#e8c877', 'left');
+      COIN_KINDS.forEach((k, i) => {
+        const ry = y0 + 12 + i * 82;
+        rr(x0 - 6, ry - 22, pw - 20, 76, 10);
+        ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
+        invCoinIcon(k, x0 + 16, ry, 16);
+        const fx = coinFx(k);
+        txt(COIN_INFO[k].name, x0 + 42, ry - 10, '900 13px Verdana, sans-serif', COIN_UI[k], 'left');
+        txt('× ' + (r.purse[k] || 0) + (inFight ? '   (' + (S.battle.hand[k] || 0) + ' in hand)' : ''),
+            x0 + 42, ry + 7, '800 11px Verdana, sans-serif', '#d8c8dc', 'left');
+        txt(fx.main, xe - 4, ry - 10, '900 12px Verdana, sans-serif', '#ffe9a3', 'right');
+        wrapLines(fx.mods.join('  •  ') || 'no artifacts bend this coin', 52, 2).forEach((ln, li) => {
+          txt(ln, x0 + 42, ry + 25 + li * 12, '600 9px Verdana, sans-serif',
+              fx.mods.length ? '#8ed67e' : '#6a5a68', 'left');
+        });
+      });
+    } else if (tab === 'items') {
+      txt('ARSENAL — racked onto the pile every battle, each fires once',
+          x0, y0 - 8, '800 10px Verdana, sans-serif', '#e8c877', 'left');
+      const ids = Object.keys(r.arsenal).filter(iid => r.arsenal[iid] > 0);
+      ids.slice(0, 8).forEach((iid, i) => {
+        const it = itemById(iid);
+        if (!it) return;
+        const ry = y0 + 14 + i * 56;
+        rr(x0 - 6, ry - 20, pw - 20, 50, 10);
+        ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
+        const im = itemArt(iid);
+        if (im) { const hh = 34, ww = imW(im, hh); ctx.drawImage(im, x0 + 16 - ww / 2, ry - 15, ww, hh); }
+        else txt(it.icon, x0 + 16, ry + 2, '22px serif', '#fff');
+        const fx = itemFx(iid);
+        txt(it.name + '  × ' + r.arsenal[iid], x0 + 42, ry - 6, '900 12px Verdana, sans-serif', '#f0e0f0', 'left');
+        txt(fx.main, xe - 4, ry - 6, '900 12px Verdana, sans-serif', '#ffe9a3', 'right');
+        txt(wrapLines(fx.mods.join('  •  ') || '—', 58, 1)[0], x0 + 42, ry + 12,
+            '600 9px Verdana, sans-serif', fx.mods.length ? '#8ed67e' : '#6a5a68', 'left');
+      });
+      const ny = y0 + 14 + Math.min(ids.length, 8) * 56;
+      // potions ride along
+      rr(x0 - 6, ny - 20, pw - 20, 50, 10);
+      ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
+      txt('\u{1F9F4}', x0 + 16, ny + 2, '22px serif', '#fff');
+      txt('Potion  × ' + r.potions, x0 + 42, ny - 6, '900 12px Verdana, sans-serif', '#ffd9ee', 'left');
+      txt('heal ' + C.POTION_HEAL + ' HP', xe - 4, ny - 6, '900 12px Verdana, sans-serif', '#ffe9a3', 'right');
+      txt('drink any time from the HUD', x0 + 42, ny + 12, '600 9px Verdana, sans-serif', '#8f6f78', 'left');
+      if (!ids.length) txt('the rack is empty — visit a shop!', LW / 2, y0 + 40, '700 11px Verdana, sans-serif', '#8f6f78');
+    } else if (tab === 'relics') {
+      txt('ARTIFACTS — ' + r.relics.length + ' collected', x0, y0 - 8, '800 10px Verdana, sans-serif', '#e8c877', 'left');
+      const max = 13;
+      r.relics.slice(0, max).forEach((rid, i) => {
+        const rl = relicById(rid);
+        if (!rl) return;
+        const ry = y0 + 16 + i * 38;
+        txt(rl.icon, x0 + 10, ry, '16px serif', '#fff');
+        txt(rl.name, x0 + 30, ry - 6, '900 11px Verdana, sans-serif', RARITY[rl.rar].col, 'left');
+        txt(wrapLines(rl.desc, 60, 1)[0], x0 + 30, ry + 8, '600 9px Verdana, sans-serif', '#b8a8c0', 'left');
+      });
+      if (r.relics.length > max) {
+        txt('…and ' + (r.relics.length - max) + ' more', LW / 2, y0 + 16 + max * 38, '700 10px Verdana, sans-serif', '#8f6f78');
+      }
+      if (!r.relics.length) txt('no artifacts yet — beat an ELITE or raid a shop', LW / 2, y0 + 40, '700 11px Verdana, sans-serif', '#8f6f78');
+    } else {
+      // STATS: the run's vitals, then every run-wide artifact bend
+      const core = [
+        ['HP', r.hp + ' / ' + r.maxHp + (S.pPois > 0 ? '   ☠ poisoned ' + S.pPois : '')],
+        ['block', '' + r.block + (hasRelic('aegis') ? ' (carries over)' : '')],
+        ['gold', fmt(r.gold)],
+        ['keys', '' + r.keys],
+        ['purse', purseTotal() + ' coins'],
+        ['monsters slain', '' + r.kills],
+        ['gold looted', fmt(r.goldEarned)],
+      ];
+      const rows = core.concat(runMods());
+      rows.slice(0, 18).forEach((rw, i) => {
+        const ry = y0 + 10 + i * 27;
+        txt(rw[0], LW / 2 - 16, ry, '600 11px Verdana, sans-serif', '#9a8aa0', 'right');
+        txt(rw[1], LW / 2 + 2, ry, '800 11px Verdana, sans-serif', '#ffe9a3', 'left');
+      });
+    }
+    uiBtn(LW / 2 - 80, py + ph - 46, 160, 34, 'CLOSE ✕', () => { S.inv = null; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
+
   // your HAND for the round: one chip per coin type still in it — tap to
   // choose what the slot takes next
   function drawHandRow(t) {
@@ -4401,11 +4782,11 @@ if (!HEADLESS) (function browser() {
     if (!kinds.length) return;
     const n = kinds.length;
     const w = Math.max(n * 56 + 16, 168);
-    ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 3;
+    // a cheap offset shade instead of a per-frame shadowBlur
+    rr(LW / 2 - w / 2 - 2, 147, w + 4, 51, 21);
+    ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fill();
     rr(LW / 2 - w / 2, 144, w, 50, 20);
     ctx.fillStyle = 'rgba(14,8,16,0.88)'; ctx.fill();
-    ctx.restore();
     rr(LW / 2 - w / 2, 144, w, 50, 20);
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = lgr('handRim', 0, 144, 0, 194, [[0, 'rgba(232,200,119,0.7)'], [1, 'rgba(122,90,36,0.4)']]);
@@ -4484,8 +4865,7 @@ if (!HEADLESS) (function browser() {
         }
         ctx.save();
         if (!on) ctx.globalAlpha = 0.45;
-        ctx.shadowColor = 'rgba(0,0,0,0.45)'; ctx.shadowBlur = 6; ctx.shadowOffsetY = 3;
-        ctx.drawImage(arts[i], x - 2, 594, 44, 44);
+        shadowImg('tilt' + i, arts[i], x - 2, 594, 44, 44, 6, 3);
         ctx.restore();
         uiButtons.push({ x: x - 2, y: 594, w: 44, h: 44, cb: () => tilt(dir) });
       } else {
@@ -4742,7 +5122,14 @@ if (!HEADLESS) (function browser() {
   const AV = { x: LW / 2, y: 0, stamp: -1, step: 0, moving: false, fx: 0, fy: -1, dir: 'u', animT: 0 };
   const JOY = { active: false, ox: 0, oy: 0, dx: 0, dy: 0, id: null };
   const KEYS = {};
-  window.addEventListener('keydown', (ev) => { KEYS[ev.key.toLowerCase()] = true; });
+  window.addEventListener('keydown', (ev) => {
+    KEYS[ev.key.toLowerCase()] = true;
+    // the BAG: 'i' toggles, Escape closes
+    if (ev.key === 'Escape' && S.inv) S.inv = null;
+    else if (ev.key.toLowerCase() === 'i' && S.run && (S.screen === 'dungeon' || S.screen === 'battle')) {
+      S.inv = S.inv ? null : { tab: 'coins' };
+    }
+  });
   window.addEventListener('keyup', (ev) => { KEYS[ev.key.toLowerCase()] = false; });
   const entCool = {};
   function avSpawn() {
@@ -5248,7 +5635,8 @@ if (!HEADLESS) (function browser() {
 
   function drawDungeon(t, dt) {
     const T = theme();
-    drawBackground(t);
+    layer('dbg', 0, 0, LW, LH, ['f' + fkey()], () => bgBase(0));
+    bgBokeh(t);
     updateRoomRect();
     if (!S.room && !mapView) avTick(dt);
     if (S.screen !== 'dungeon') return;   // a bump may have started a battle
@@ -5289,6 +5677,7 @@ if (!HEADLESS) (function browser() {
     txt('drag to walk • WASD works too', LW / 2, 704, '600 9px Verdana, sans-serif', '#6a5a68');
     drawRoomModal(t);
     drawMapView(t);
+    drawInventory(t);
   }
   // ------------------------------------------------------------ room modal
   const MODAL_INFO = {
@@ -5312,10 +5701,7 @@ if (!HEADLESS) (function browser() {
     const py = isShop ? 132 : 250;
     const mFrame = machArt('frame_tall');
     if (mFrame) {
-      ctx.save();
-      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
-      ctx.drawImage(mFrame, 28, py - 8, LW - 56, ph + 16);
-      ctx.restore();
+      shadowImg('modframe', mFrame, 28, py - 8, LW - 56, ph + 16, 18, 6, 'rgba(0,0,0,0.6)');
     } else {
       rr(36, py, LW - 72, ph, 18);
       ctx.fillStyle = 'rgba(22,13,24,0.97)'; ctx.fill();
