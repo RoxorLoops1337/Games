@@ -2457,14 +2457,18 @@ function shopStock() {
     st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(34 * mult), sold: false });
   }
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(65 * mult), sold: false });
-  // ONE common relic rounds out the case (the wheel and the boss's hoard
-  // stay the only source of rares and epics)
+  // ONE relic rounds out the case: 80% common, 15% rare, 5% epic —
+  // priced by its rarity tag (and if that shelf is bare, step down a tier)
   {
-    const rid = rollRelicByRar('c');
+    const roll = rng();
+    let rar = roll < 0.80 ? 'c' : roll < 0.95 ? 'r' : 'e';
+    let rid = rollRelicByRar(rar);
+    if (!rid && rar === 'e') { rar = 'r'; rid = rollRelicByRar(rar); }
+    if (!rid && rar === 'r') { rar = 'c'; rid = rollRelicByRar(rar); }
     if (rid) {
       const rl = relicById(rid);
       st.push({ kind: 'relic', rid, label: rl.icon + ' ' + rl.name, sub: rl.desc,
-                price: Math.round(RARITY.c.price * mult), sold: false });
+                price: Math.round(RARITY[rar].price * mult), sold: false });
     }
   }
   // every ware also carries a COIN price (1/2/5 of a single kind, by its
