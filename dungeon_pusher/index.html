@@ -416,10 +416,23 @@ function mkCoin(x, y, kind, lay, st, tier) {
     rot: rng() * 6.28, vrot: 0, glint: rng() * 7,
     bounces: 0, ttl: 0, scored: false, chk1: false, chk2: false, chkP: false,
     iid: null, temp: false, onPush: false,
+    tip: 0, tipV: 0, pvx: 0, pvy: 0,   // topple state (items only, see below)
   };
 }
+// items topple like real objects: tip angle 0 = upright, ±TIP_LIM = flat on
+// a side. Seeded from fields that are already random (no extra rng draw, so
+// the determinism guarantee is untouched): roughly half start lying down,
+// the rest stand with a small lean.
+const TIP_LIM = 1.45, TIP_OVER = 0.6;
+function seedTip(c) {
+  if (c.kind !== 'item') return c;
+  const h = (Math.sin(c.rot * 91.7 + c.glint * 47.3) + 1) / 2;
+  const h2 = (Math.sin(c.rot * 53.1 + c.glint * 29.9) + 1) / 2;
+  c.tip = h < 0.5 ? (h2 < 0.5 ? -1 : 1) * (0.95 + h * 0.9) : (h2 - 0.5) * 0.3;
+  return c;
+}
 function place(x, y, kind, lay, st, tier) {
-  const c = mkCoin(x, y, kind || 'coin', lay || 0, st || 'plat', tier || 0);
+  const c = seedTip(mkCoin(x, y, kind || 'coin', lay || 0, st || 'plat', tier || 0));
   S.coins.push(c);
   return c;
 }
@@ -1841,6 +1854,22 @@ function step(dt, quiet) {
       // sides — the only way off the field is over the FRONT, into the tray
       if (c.x < c.r) { c.x = c.r; c.vx *= -0.3; }
       if (c.x > C.W - c.r) { c.x = C.W - c.r; c.vx *= -0.3; }
+      // items TOPPLE: jolts (collisions, tilts, the pusher's shove) rock
+      // them; leaned past the tipping point they fall flat like dominoes,
+      // small leans right themselves. Purely visual — never touches x/y.
+      if (c.kind === 'item') {
+        const jolt = Math.abs(c.vx - c.pvx) + Math.abs(c.vy - c.pvy);
+        if (jolt > 5) {
+          c.tipV += Math.sin(c.glint * 37.7 + c.x * 0.61 + c.y * 0.29) * Math.min(jolt, 30) * 0.045;
+        }
+        if (Math.abs(c.tip) < TIP_OVER) c.tipV -= c.tip * 7 * dt;
+        else c.tipV += Math.sign(c.tip) * 5.5 * dt;
+        c.tipV *= Math.exp(-2.2 * dt);
+        c.tip += c.tipV * dt;
+        if (c.tip > TIP_LIM) { c.tip = TIP_LIM; if (c.tipV > 0) c.tipV *= -0.2; }
+        if (c.tip < -TIP_LIM) { c.tip = -TIP_LIM; if (c.tipV < 0) c.tipV *= -0.2; }
+        c.pvx = c.vx; c.pvy = c.vy;
+      }
       if (c.y > front) {
         c.st = 'fall'; c.vz = 0; c.vrot = (rng() - 0.5) * 12 + Math.sign(c.vy || 1) * 4;
       }
@@ -3170,18 +3199,24 @@ if (!HEADLESS) (function browser() {
     const icon = c.kind === 'chest' ? '\u{1F381}' : c.kind === 'bag' ? '\u{1F4B0}'
                : c.kind === 'skull' ? '☠\u{FE0F}' : (it ? it.icon : '❓');
     const bob = c.st === 'plat' ? Math.sin(t * 2 + c.glint) * 1.2 : 0;
-    ctx.beginPath(); ctx.ellipse(p.x, p.y + rx * 0.35, rx * 1.05, rx * 0.45, 0, 0, 7);
+    // the shadow spreads as the piece lies down
+    const tipK = c.kind === 'item' ? Math.abs(Math.sin(c.tip || 0)) : 0;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + rx * 0.35, rx * (1.05 + tipK * 0.6), rx * 0.45, 0, 0, 7);
     ctx.fillStyle = 'rgba(20,12,8,0.45)'; ctx.fill();
     ctx.save();
-    ctx.translate(p.x, p.y - rx * 0.4 + bob);
+    // pivot at the piece's BASE so toppling reads like a falling domino
+    ctx.translate(p.x, p.y + rx * 0.25 + bob * (1 - tipK * 0.7));
     if (c.st === 'fall' || c.st === 'air') ctx.rotate(Math.sin(c.rot) * 0.3);
+    else if (c.kind === 'item') ctx.rotate(c.tip || 0);
     const im = c.kind === 'item' ? itemArt(c.iid) : pieceArt(c.kind);
     if (im) {
       const hgt = rx * (c.kind === 'item' ? 2.9 : 2.5);
       const wdt = imW(im, hgt);
-      ctx.drawImage(im, -wdt / 2, -hgt * 0.55, wdt, hgt);
+      // lying pieces foreshorten a touch, like seen from above
+      const squash = 1 - tipK * 0.18;
+      ctx.drawImage(im, -wdt / 2, -hgt * 1.05 * squash, wdt, hgt * squash);
     } else {
-      txt(icon, 0, 0, Math.round(rx * (c.kind === 'item' ? 2.6 : 2.2)) + 'px serif', '#fff');
+      txt(icon, 0, -rx * 0.75, Math.round(rx * (c.kind === 'item' ? 2.6 : 2.2)) + 'px serif', '#fff');
     }
     ctx.restore();
     // glow ring: friendly gold for loot, sickly purple for curses
