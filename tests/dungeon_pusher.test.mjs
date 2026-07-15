@@ -844,10 +844,8 @@ const mhp0 = S.run.maxHp;
 DP.buyShop(hpSlot);
 t.eq(S.run.maxHp, mhp0 + 10, 'max HP upgrade sticks');
 t.ok(DP.closeModal(), 'LEAVE closes the shop');
-t.ok(!S.run.room.ents[0].done, 'the shopkeeper stays in the room');
-DP.interact(0);
-t.ok(S.room && S.room.stock[itemSlot].sold, 'reopening shows the same shelf — sold stays sold');
-DP.closeModal();
+t.ok(S.run.room.ents[0].done, 'the merchant serves one visit, then leaves the room');
+t.ok(!DP.interact(0), 'the shop cannot be reopened once the merchant has gone');
 
 // -------- the blacksmith --------
 DP.srand(29);
@@ -1311,12 +1309,35 @@ DP.leaveBattle();
 t.eq(S.run.floor, 1, 'still floor 1 — the stairs are an invitation, not a shove');
 t.ok(S.run.room.ents.length === 1 && S.run.room.ents[0].kind === 'stairs',
      'the stairs down appear where the boss fell');
+// the stairwell toll: too broke to descend holds you on the floor
+{
+  const stash = { ...S.run.purse };
+  for (const k of COIN_KINDS) S.run.purse[k] = 0;
+  S.run.purse.coin = 1;                    // one short of the toll
+  t.ok(!DP.interact(0), 'a purse under the toll cannot descend');
+  t.eq(S.run.floor, 1, 'still floor 1 without the toll');
+  t.eq(DP.purseTotal(), 1, 'the toll is not skimmed on a failed descent');
+  S.run.purse = stash;                     // restore the hoard and pay properly
+}
+const purseBefore = DP.purseTotal();
 DP.interact(0);
+t.eq(DP.purseTotal(), purseBefore - C.STAIR_TOLL, 'descending pays the ' + C.STAIR_TOLL + '-coin toll');
 t.eq(S.run.floor, 2, 'stepping onto the stairs descends');
 t.ok(S.run.map && S.run.map.cur === '0,0', 'a fresh floor map is carved');
 t.eq(S.run.depth, 1, 'next floor starts at the entrance');
 t.eq(S.screen, 'dungeon', 'back in a fresh room');
 t.eq(mapRooms().filter(r => r.visited).length, 1, 'the new floor is all fog again');
+// the key-carry cap: a bulging ring is trimmed on the way down
+{
+  S.run.keys = 9;
+  S.run.purse.coin = (S.run.purse.coin || 0) + C.STAIR_TOLL;   // afford the toll
+  DP.nextFloor();
+  t.eq(S.run.keys, C.KEY_CARRY, 'only ' + C.KEY_CARRY + ' keys survive the descent');
+  S.run.keys = 2;
+  DP.nextFloor();
+  t.eq(S.run.keys, 2, 'a ring under the cap descends untouched');
+  S.run.floor = 2;   // rewind the counter for the persistence checks below
+}
 
 // -------- persistence --------
 S.mute = true;
