@@ -967,6 +967,51 @@ S.run.relics = [];
   S.run.relics = [];
 }
 
+// -------- winning an artifact on the wheel lets you CHOOSE it --------
+{
+  DP.srand(52);
+  S.run.relics = [];
+  // the RARE ARTIFACT segment defers a choice rather than granting at random
+  const rareSeg = WHEEL.find(s => s.label === 'RARE\nARTIFACT');
+  S.pendingPick = null; S.relicPick = null;
+  rareSeg.fx();
+  t.ok(S.pendingPick && S.pendingPick.rar === 'r' && S.pendingPick.picks === 1, 'a rare-artifact spin defers ONE pick');
+  t.eq(S.run.relics.length, 0, 'nothing is granted until you choose');
+  // dismissing the wheel opens the choice overlay
+  S.wheelAnim = { t: 5, seg: 0, label: 'x' };
+  DP.dismissWheel();
+  t.ok(S.wheelAnim === null, 'the wheel clears');
+  t.ok(S.relicPick && S.relicPick.pool.length >= 2, 'a spread of rare artifacts to choose from (' + (S.relicPick && S.relicPick.pool.length) + ')');
+  t.ok(S.relicPick.pool.every(id => RELICS.find(r => r.id === id).rar === 'r'), 'all choices are rare');
+  const chosen = S.relicPick.pool[1];
+  t.ok(DP.pickWheelRelic(1), 'claiming a rare artifact works');
+  t.ok(DP.hasRelic(chosen), 'the chosen artifact is owned');
+  t.ok(S.relicPick === null, 'one pick closes a single-pick menu');
+  t.eq(S.run.relics.length, 1, 'exactly one artifact was taken');
+
+  // the 2-COMMON segment lets you take TWO
+  S.run.relics = [];
+  const comSeg = WHEEL.find(s => s.label === '2 COMMON\nARTIFACTS');
+  comSeg.fx();
+  t.eq(S.pendingPick.picks, 2, 'two commons deferred');
+  DP.dismissWheel();
+  t.ok(S.relicPick && S.relicPick.picks === 2 && S.relicPick.pool.length >= 3, 'a spread to pick two commons from');
+  DP.pickWheelRelic(0);
+  t.ok(S.relicPick && S.relicPick.chosen.length === 1, 'first common taken, menu stays open');
+  DP.pickWheelRelic(1);
+  t.ok(S.relicPick === null, 'the menu closes once both are taken');
+  t.eq(S.run.relics.length, 2, 'two commons claimed');
+
+  // a nearly-full shelf can't fill a menu — it just grants what's left (no overlay)
+  S.run.relics = RELICS.filter(r => r.rar === 'r').slice(1).map(r => r.id);   // own all rares but one
+  S.pendingPick = null; S.relicPick = null;
+  const before = S.run.relics.length;
+  DP.openRelicPick('r', 1);
+  t.ok(S.relicPick === null, 'no menu when the shelf is too full to offer a choice');
+  t.eq(S.run.relics.length, before + 1, 'the last rare is granted outright');
+  S.run.relics = [];
+}
+
 // -------- a boss lets you CHOOSE one of two commons + a rare --------
 {
   DP.srand(46);
@@ -1702,6 +1747,12 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   D.spinWheel();
   frames(30);                                     // wheel overlay over battle
   D.S.wheelAnim = null;
+  // the artifact-choice overlay renders and takes a pick
+  D.S.run.relics = [];
+  D.openRelicPick('r', 1);
+  frames(12);                                     // the CHOOSE-an-artifact menu
+  if (D.S.relicPick) D.pickWheelRelic(0);
+  frames(8);
   D.S.enemy.hp = 1; D.dmgEnemy(5);
   frames(40);                                     // victory overlay + the coin offer
   D.pickCoin(0);

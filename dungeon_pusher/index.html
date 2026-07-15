@@ -274,6 +274,44 @@ function grantArtifact(rar) {
   if (id) S.run.relics.push(id);
   return id;
 }
+// a spread of up to `count` DISTINCT unowned artifacts of a rarity, to choose from
+function rollRelicPool(rar, count) {
+  if (!S.run) return [];
+  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0).map(rl => rl.id);
+  const out = [];
+  while (out.length < count && pool.length) out.push(pool.splice((rng() * pool.length) | 0, 1)[0]);
+  return out;
+}
+// open the artifact-CHOICE overlay: pick `picks` from a spread of that rarity.
+// If the shelf is too full to fill the spread, grant what's left (or gold).
+function openRelicPick(rar, picks) {
+  if (!S.run) return false;
+  const pool = rollRelicPool(rar, picks + 2);
+  if (pool.length <= picks) {
+    // not enough choice to be worth a menu — just grant them
+    let got = 0;
+    for (const id of pool) { S.run.relics.push(id); got++; floatAt(relicById(id).icon + ' ' + relicById(id).name + '!', 50, RARITY[rar].col, true); }
+    if (!got) addGold(20 + S.run.floor * 4);
+    save();
+    return false;
+  }
+  S.relicPick = { pool, picks, chosen: [], rar };
+  save();
+  return true;
+}
+// claim one artifact from the wheel's spread; closes once `picks` are taken
+function pickWheelRelic(i) {
+  const rp = S.relicPick;
+  if (!S.run || !rp) return false;
+  const id = rp.pool[i];
+  if (!id || rp.chosen.indexOf(id) >= 0 || S.run.relics.indexOf(id) >= 0) return false;
+  S.run.relics.push(id);
+  rp.chosen.push(id);
+  SND.buy();
+  if (rp.chosen.length >= rp.picks) { S.relicPick = null; }
+  save();
+  return true;
+}
 // items carry an implicit rarity by price: the pricier gear is the rarer find
 function itemRar(it) { return it.cost >= 55 ? 'r' : 'c'; }
 function itemsByRar(rar) { return ITEMS.filter(it => itemRar(it) === rar); }
@@ -409,7 +447,7 @@ const S = {
   room: null,                          // open non-battle room {type, ...}
   over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
   best: { floor: 0, depth: 0, kills: 0, gold: 0 },
-  wheelAnim: null, uiFlash: null, toast: null,
+  wheelAnim: null, pendingPick: null, relicPick: null, uiFlash: null, toast: null,
   pPois: 0,
   heroPick: 'knight',                  // last chosen adventurer (persisted)
   roomStamp: 0,                        // bumps on room change (avatar resets)
@@ -863,13 +901,10 @@ function wheelItem(rar) {
   floatAt(it.name + '!', 50, rar === 'r' ? '#7ab0e8' : '#ffe066', true);
   if (S.battle) S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
 }
+// the wheel doesn't just hand you an artifact — it lets you CHOOSE. The pick
+// overlay opens once the wheel is dismissed (see dismissWheel).
 function wheelArtifact(rar, n) {
-  let got = 0;
-  for (let i = 0; i < (n || 1); i++) {
-    const id = grantArtifact(rar);
-    if (id) { got++; floatAt(relicById(id).icon + ' ' + relicById(id).name + '!', 50, RARITY[rar].col, true); }
-  }
-  if (!got) addGold(20 + S.run.floor * 4);      // the shelf was full — gold instead
+  S.pendingPick = { rar, picks: n || 1 };
 }
 const WHEEL = [
   { label: '+GOLD',   col: '#f2c04a', w: 15, fx: () => addGold(14 + S.run.floor * 3 + ((rng() * 10) | 0)) },
@@ -892,6 +927,14 @@ function spinWheel() {
   SND.gem();
   save();
   return WHEEL[idx];
+}
+// clear the wheel overlay — and, if it won an artifact, open the CHOICE now
+function dismissWheel() {
+  S.wheelAnim = null;
+  if (S.pendingPick) {
+    const p = S.pendingPick; S.pendingPick = null;
+    openRelicPick(p.rar, p.picks);
+  }
 }
 
 // ------------------------------------------------------------ drop & hand
@@ -2097,7 +2140,7 @@ function step(dt, quiet) {
       if (c2 && r.kind === 'item') { c2.iid = r.iid; c2.temp = !!r.temp; }
     }
   }
-  if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) S.wheelAnim = null; }
+  if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) dismissWheel(); }
 
   for (const c of S.coins) {
     if (c.st === 'air') {
@@ -2312,6 +2355,7 @@ window.DP = {
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
+  dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantArtifact, itemRar, itemsByRar,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
@@ -3920,7 +3964,7 @@ if (!HEADLESS) (function browser() {
   function drawWheel() {
     if (!S.wheelAnim) return;
     const a = S.wheelAnim;
-    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { if (a.t > 2.8) S.wheelAnim = null; } });
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { if (a.t > 2.8) dismissWheel(); } });
     ctx.fillStyle = 'rgba(5,3,8,0.72)';
     ctx.fillRect(0, 0, LW, LH);
     const cx = LW / 2, cy = 390, R = 132;
@@ -3971,6 +4015,45 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
       txt('tap to continue', cx, cy + R + 76 + (rlines.length - 1) * 14, '600 11px Verdana, sans-serif', '#c8a8b0');
     }
+  }
+
+  // the wheel's artifact prize: CHOOSE which one(s) join your shelf
+  function drawRelicPick(t) {
+    const rp = S.relicPick;
+    if (!rp) return;
+    ctx.fillStyle = 'rgba(6,3,10,0.82)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => {} });   // swallow taps behind the menu
+    const rows = rp.pool.length;
+    const py = 150, ph = 150 + rows * 62;
+    const frame = machArt('frame_tall');
+    if (frame) {
+      ctx.save();
+      ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+      ctx.drawImage(frame, 28, py - 8, LW - 56, ph + 16);
+      ctx.restore();
+    } else {
+      rr(36, py, LW - 72, ph, 18);
+      ctx.fillStyle = 'rgba(22,13,24,0.98)'; ctx.fill();
+      ctx.lineWidth = 3; ctx.strokeStyle = RARITY[rp.rar].col; ctx.stroke();
+    }
+    txt('\u{1F3A1} ARTIFACT WON!', LW / 2, py + 40, '900 21px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    const left = rp.picks - rp.chosen.length;
+    txt(left > 0 ? 'CHOOSE ' + left + ' — tap an artifact to claim it' : 'claimed!',
+        LW / 2, py + 68, '800 12px Verdana, sans-serif', left > 0 ? '#e8d0a0' : '#7ee787');
+    rp.pool.forEach((id, i) => {
+      const rl = relicById(id), rc = RARITY[rl.rar];
+      const y = py + 84 + i * 62;
+      const taken = rp.chosen.indexOf(id) >= 0;
+      ctx.save(); ctx.globalAlpha = (left <= 0 && !taken) ? 0.32 : 1;
+      rr(60, y, LW - 120, 54, 12);
+      ctx.fillStyle = taken ? 'rgba(28,52,34,0.92)' : 'rgba(14,8,18,0.94)'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = taken ? '#7ed6a0' : rc.col; ctx.stroke();
+      txt(rl.icon + '  ' + rl.name + '  [' + rc.name + ']', LW / 2, y + 20, '900 13px Verdana, sans-serif', taken ? '#bff0cf' : rc.col);
+      txt(rl.desc, LW / 2, y + 38, '600 9px Verdana, sans-serif', '#c8b8cc');
+      ctx.restore();
+      if (!taken && left > 0) uiButtons.push({ x: 60, y, w: LW - 120, h: 54, cb: () => pickWheelRelic(i) });
+    });
   }
 
   // ------------------------------------------------------------- shared HUD
@@ -5429,7 +5512,7 @@ if (!HEADLESS) (function browser() {
       // keep light UI timers alive outside the machine
       if (RFX.length) RFX.length = 0;
       if (S.uiFlash) { S.uiFlash.t -= dt; if (S.uiFlash.t <= 0) S.uiFlash = null; }
-      if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) S.wheelAnim = null; }
+      if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) dismissWheel(); }
       if (S.banner) { S.banner.ttl -= dt; if (S.banner.ttl <= 0) S.banner = null; }
       if (S.toast) { S.toast.t -= dt; if (S.toast.t <= 0) S.toast = null; }
       for (let i = S.floats.length - 1; i >= 0; i--) {
@@ -5450,6 +5533,7 @@ if (!HEADLESS) (function browser() {
     else if (S.screen === 'over') drawOver(t);
     else drawTitle(t);
     drawWheel();
+    drawRelicPick(t);
   }
   requestAnimationFrame(frame);
 })();
