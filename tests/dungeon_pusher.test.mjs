@@ -304,6 +304,33 @@ S.turbo = 1;
   t.eq(S.battle.hand.coin, hand0 - 1, 'now exactly one coin leaves the hand');
 }
 
+// -------- items TOPPLE like real objects --------
+{
+  // some seeded pile items start lying on their side, some stand
+  DP.srand(97);
+  DP.initPile();
+  const its = S.coins.filter(c => c.kind === 'item');
+  t.ok(its.length > 0, 'the pile racks items to topple');
+  t.ok(its.some(c => Math.abs(c.tip) > 0.8) || its.length < 2,
+       'seeded items can start flat on a side');
+  // beyond the tipping point an item falls all the way over...
+  S.battle.phase = 'drop';
+  const it2 = DP.place(50, 40, 'item', 0, 'plat');
+  it2.iid = 'sword';
+  it2.tip = 0.8; it2.tipV = 0;
+  for (let i = 0; i < 180; i++) DP.step(1 / 60, true);
+  t.ok(it2.tip > 1.3, 'past the tipping point it falls flat (' + it2.tip.toFixed(2) + ')');
+  // ...while a small lean rights itself
+  it2.tip = 0.2; it2.tipV = 0;
+  for (let i = 0; i < 180; i++) DP.step(1 / 60, true);
+  t.ok(Math.abs(it2.tip) < 0.15, 'a slight lean settles back upright (' + it2.tip.toFixed(2) + ')');
+  // coins never tip
+  const cc = DP.place(60, 40, 'coin', 0, 'plat');
+  cc.pvx = 99;
+  DP.step(1 / 60, true);
+  t.eq(cc.tip, 0, 'coins are flat discs — no topple state');
+}
+
 // -------- the tray COLLECTS: nothing fires during the drop phase --------
 DP.srand(9);
 S.coins.length = 0; S.battle.loot.length = 0; S.battle.phase = 'drop';
