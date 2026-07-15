@@ -1781,6 +1781,16 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   frames(6);
   for (const tab of ['items', 'relics', 'stats']) { D.S.inv.tab = tab; frames(4); }
   t.ok(D.S.inv && D.S.inv.tab === 'stats', 'the BAG rendered all four tabs in battle');
+  // a fat artifact shelf scrolls instead of truncating
+  D.S.run.relics.push(...D.RELICS.slice(0, 20).map(rl => rl.id));
+  D.S.inv = { tab: 'relics', scroll: 99999 };
+  frames(6);
+  t.ok(D.S.inv.maxScroll > 0, 'a 20+ artifact shelf overflows into a scroll (' + D.S.inv.maxScroll + ')');
+  t.ok(D.S.inv.scroll <= D.S.inv.maxScroll, 'the BAG scroll clamps to the shelf bottom');
+  D.S.inv.scroll = -50;
+  frames(3);
+  t.ok(D.S.inv.scroll >= 0, 'the BAG scroll clamps to the shelf top');
+  D.S.run.relics.length = 2;
   D.S.inv = null;
   frames(2);
   for (let i = 0; i < 4; i++) { D.S.cd = 0; D.drop(20 + i * 16); frames(24); }   // spend part of the hand

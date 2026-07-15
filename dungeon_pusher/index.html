@@ -2947,11 +2947,17 @@ if (!HEADLESS) (function browser() {
     const u = half * 2 / 100;
     S.aimX = Math.max(8, Math.min(92, 50 + (p.x - PF.cx) / u));
   }
+  // the BAG scrolls: drag pans the shelf, a short tap still presses buttons
+  let invDrag = null;
   canvas.addEventListener('pointerdown', (ev) => {
     ev.preventDefault();
     audioInit();
     if (AC && AC.state === 'suspended') AC.resume();
     const p = toLogical(ev);
+    if (S.inv) {
+      invDrag = { id: ev.pointerId, x0: p.x, y0: p.y, sc0: S.inv.scroll || 0, moved: 0 };
+      return;
+    }
     if (hit(p.x, p.y)) return;
     if (S.screen === 'battle' && !S.victory) {
       aimFrom(p);
@@ -2965,6 +2971,13 @@ if (!HEADLESS) (function browser() {
   });
   canvas.addEventListener('pointermove', (ev) => {
     const p = toLogical(ev);
+    if (invDrag && ev.pointerId === invDrag.id) {
+      if (!S.inv) { invDrag = null; return; }
+      const dy = p.y - invDrag.y0;
+      invDrag.moved = Math.max(invDrag.moved, Math.abs(dy), Math.abs(p.x - invDrag.x0));
+      S.inv.scroll = Math.max(0, Math.min(invDrag.sc0 - dy, S.inv.maxScroll || 0));
+      return;
+    }
     if (JOY.active && ev.pointerId === JOY.id) {
       JOY.dx = p.x - JOY.ox;
       JOY.dy = p.y - JOY.oy;
@@ -2975,12 +2988,23 @@ if (!HEADLESS) (function browser() {
   });
   const joyEnd = (ev) => {
     held = false;
+    if (invDrag && (!ev || ev.pointerId === undefined || ev.pointerId === invDrag.id)) {
+      // barely moved? it was a tap — press whatever sat under the finger
+      if (invDrag.moved < 8) hit(invDrag.x0, invDrag.y0);
+      invDrag = null;
+    }
     if (!ev || ev.pointerId === undefined || ev.pointerId === JOY.id) {
       JOY.active = false; JOY.id = null; JOY.dx = 0; JOY.dy = 0;
     }
   };
   window.addEventListener('pointerup', joyEnd);
   window.addEventListener('pointercancel', joyEnd);
+  // desktop: the wheel pans the BAG's shelf
+  canvas.addEventListener('wheel', (ev) => {
+    if (!S.inv) return;
+    ev.preventDefault();
+    S.inv.scroll = Math.max(0, Math.min((S.inv.scroll || 0) + ev.deltaY * 0.6, S.inv.maxScroll || 0));
+  }, { passive: false });
   document.addEventListener('visibilitychange', save);
 
   // -------------------------------------------------------------- particles
@@ -4682,75 +4706,86 @@ if (!HEADLESS) (function browser() {
     const tw = (pw - 24) / INV_TABS.length;
     INV_TABS.forEach(([id, label], i) => {
       const on = S.inv.tab === id;
-      uiBtn(px + 12 + i * tw, py + 62, tw - 5, 27, label, () => { S.inv.tab = id; },
+      uiBtn(px + 12 + i * tw, py + 62, tw - 5, 27, label, () => { S.inv.tab = id; S.inv.scroll = 0; },
             { grad: on ? ['#8a6a2a', '#5a4014'] : ['#3a3440', '#262230'],
               border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
               font: '900 11px Verdana, sans-serif', r: 9 });
     });
-    const y0 = py + 106, x0 = px + 16, xe = px + pw - 16;
+    // ---- the scrolling shelf: everything below the tabs pans with a drag,
+    // a flick of the wheel, and clamps to the content's true height
+    const vy0 = py + 96, vy1 = py + ph - 58, viewH = vy1 - vy0;
+    const y0 = py + 116, x0 = px + 16, xe = px + pw - 22;
     const tab = S.inv.tab;
+    let contentH = 0;
+    ctx.save();
+    ctx.beginPath(); ctx.rect(px + 4, vy0, pw - 8, viewH); ctx.clip();
+    const sc = Math.max(0, Math.min(S.inv.scroll || 0, S.inv.maxScroll || 0));
+    ctx.translate(0, -sc);
     if (tab === 'coins') {
       const inFight = S.battle && S.battle.hand;
       txt('PURSE — ' + purseTotal() + ' coins' + (inFight ? '  (this round’s hand shown too)' : ''),
-          x0, y0 - 8, '800 10px Verdana, sans-serif', '#e8c877', 'left');
+          x0, y0 - 10, '800 11px Verdana, sans-serif', '#e8c877', 'left');
       COIN_KINDS.forEach((k, i) => {
-        const ry = y0 + 12 + i * 82;
-        rr(x0 - 6, ry - 22, pw - 20, 76, 10);
+        const ry = y0 + 18 + i * 96;
+        rr(x0 - 6, ry - 26, pw - 20, 90, 10);
         ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
-        invCoinIcon(k, x0 + 16, ry, 16);
+        invCoinIcon(k, x0 + 19, ry + 2, 19);
         const fx = coinFx(k);
-        txt(COIN_INFO[k].name, x0 + 42, ry - 10, '900 13px Verdana, sans-serif', COIN_UI[k], 'left');
+        txt(COIN_INFO[k].name, x0 + 50, ry - 11, '900 15px Verdana, sans-serif', COIN_UI[k], 'left');
         txt('× ' + (r.purse[k] || 0) + (inFight ? '   (' + (S.battle.hand[k] || 0) + ' in hand)' : ''),
-            x0 + 42, ry + 7, '800 11px Verdana, sans-serif', '#d8c8dc', 'left');
-        txt(fx.main, xe - 4, ry - 10, '900 12px Verdana, sans-serif', '#ffe9a3', 'right');
-        wrapLines(fx.mods.join('  •  ') || 'no artifacts bend this coin', 52, 2).forEach((ln, li) => {
-          txt(ln, x0 + 42, ry + 25 + li * 12, '600 9px Verdana, sans-serif',
+            x0 + 50, ry + 8, '800 12px Verdana, sans-serif', '#d8c8dc', 'left');
+        txt(fx.main, xe - 4, ry - 11, '900 13px Verdana, sans-serif', '#ffe9a3', 'right');
+        wrapLines(fx.mods.join('  •  ') || 'no artifacts bend this coin', 46, 2).forEach((ln, li) => {
+          txt(ln, x0 + 50, ry + 28 + li * 14, '600 10px Verdana, sans-serif',
               fx.mods.length ? '#8ed67e' : '#6a5a68', 'left');
         });
       });
+      contentH = 30 + COIN_KINDS.length * 96;
     } else if (tab === 'items') {
       txt('ARSENAL — racked onto the pile every battle, each fires once',
-          x0, y0 - 8, '800 10px Verdana, sans-serif', '#e8c877', 'left');
+          x0, y0 - 10, '800 10px Verdana, sans-serif', '#e8c877', 'left');
       const ids = Object.keys(r.arsenal).filter(iid => r.arsenal[iid] > 0);
-      ids.slice(0, 8).forEach((iid, i) => {
+      ids.forEach((iid, i) => {
         const it = itemById(iid);
         if (!it) return;
-        const ry = y0 + 14 + i * 56;
-        rr(x0 - 6, ry - 20, pw - 20, 50, 10);
+        const ry = y0 + 20 + i * 68;
+        rr(x0 - 6, ry - 24, pw - 20, 62, 10);
         ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
         const im = itemArt(iid);
-        if (im) { const hh = 34, ww = imW(im, hh); ctx.drawImage(im, x0 + 16 - ww / 2, ry - 15, ww, hh); }
-        else txt(it.icon, x0 + 16, ry + 2, '22px serif', '#fff');
+        if (im) { const hh = 44, ww = imW(im, hh); ctx.drawImage(im, x0 + 19 - ww / 2, ry - 19, ww, hh); }
+        else txt(it.icon, x0 + 19, ry + 4, '26px serif', '#fff');
         const fx = itemFx(iid);
-        txt(it.name + '  × ' + r.arsenal[iid], x0 + 42, ry - 6, '900 12px Verdana, sans-serif', '#f0e0f0', 'left');
-        txt(fx.main, xe - 4, ry - 6, '900 12px Verdana, sans-serif', '#ffe9a3', 'right');
-        txt(wrapLines(fx.mods.join('  •  ') || '—', 58, 1)[0], x0 + 42, ry + 12,
-            '600 9px Verdana, sans-serif', fx.mods.length ? '#8ed67e' : '#6a5a68', 'left');
+        txt(it.name + '  × ' + r.arsenal[iid], x0 + 50, ry - 6, '900 14px Verdana, sans-serif', '#f0e0f0', 'left');
+        txt(fx.main, xe - 4, ry - 6, '900 13px Verdana, sans-serif', '#ffe9a3', 'right');
+        txt(wrapLines(fx.mods.join('  •  ') || '—', 52, 1)[0], x0 + 50, ry + 15,
+            '600 10px Verdana, sans-serif', fx.mods.length ? '#8ed67e' : '#6a5a68', 'left');
       });
-      const ny = y0 + 14 + Math.min(ids.length, 8) * 56;
+      const ny = y0 + 20 + ids.length * 68;
       // potions ride along
-      rr(x0 - 6, ny - 20, pw - 20, 50, 10);
+      rr(x0 - 6, ny - 24, pw - 20, 62, 10);
       ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
-      txt('\u{1F9F4}', x0 + 16, ny + 2, '22px serif', '#fff');
-      txt('Potion  × ' + r.potions, x0 + 42, ny - 6, '900 12px Verdana, sans-serif', '#ffd9ee', 'left');
-      txt('heal ' + C.POTION_HEAL + ' HP', xe - 4, ny - 6, '900 12px Verdana, sans-serif', '#ffe9a3', 'right');
-      txt('drink any time from the HUD', x0 + 42, ny + 12, '600 9px Verdana, sans-serif', '#8f6f78', 'left');
-      if (!ids.length) txt('the rack is empty — visit a shop!', LW / 2, y0 + 40, '700 11px Verdana, sans-serif', '#8f6f78');
+      txt('\u{1F9F4}', x0 + 19, ny + 4, '26px serif', '#fff');
+      txt('Potion  × ' + r.potions, x0 + 50, ny - 6, '900 14px Verdana, sans-serif', '#ffd9ee', 'left');
+      txt('heal ' + C.POTION_HEAL + ' HP', xe - 4, ny - 6, '900 13px Verdana, sans-serif', '#ffe9a3', 'right');
+      txt('drink any time from the HUD', x0 + 50, ny + 15, '600 10px Verdana, sans-serif', '#8f6f78', 'left');
+      if (!ids.length) txt('the rack is empty — visit a shop!', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#8f6f78');
+      contentH = 36 + (ids.length + 1) * 68;
     } else if (tab === 'relics') {
-      txt('ARTIFACTS — ' + r.relics.length + ' collected', x0, y0 - 8, '800 10px Verdana, sans-serif', '#e8c877', 'left');
-      const max = 13;
-      r.relics.slice(0, max).forEach((rid, i) => {
+      txt('ARTIFACTS — ' + r.relics.length + ' collected', x0, y0 - 10, '800 11px Verdana, sans-serif', '#e8c877', 'left');
+      r.relics.forEach((rid, i) => {
         const rl = relicById(rid);
         if (!rl) return;
-        const ry = y0 + 16 + i * 38;
-        txt(rl.icon, x0 + 10, ry, '16px serif', '#fff');
-        txt(rl.name, x0 + 30, ry - 6, '900 11px Verdana, sans-serif', RARITY[rl.rar].col, 'left');
-        txt(wrapLines(rl.desc, 60, 1)[0], x0 + 30, ry + 8, '600 9px Verdana, sans-serif', '#b8a8c0', 'left');
+        const ry = y0 + 22 + i * 58;
+        rr(x0 - 6, ry - 22, pw - 20, 52, 10);
+        ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fill();
+        txt(rl.icon, x0 + 14, ry + 2, '22px serif', '#fff');
+        txt(rl.name, x0 + 40, ry - 8, '900 14px Verdana, sans-serif', RARITY[rl.rar].col, 'left');
+        wrapLines(rl.desc, 50, 2).forEach((ln, li) => {
+          txt(ln, x0 + 40, ry + 10 + li * 13, '600 11px Verdana, sans-serif', '#c8b8d0', 'left');
+        });
       });
-      if (r.relics.length > max) {
-        txt('…and ' + (r.relics.length - max) + ' more', LW / 2, y0 + 16 + max * 38, '700 10px Verdana, sans-serif', '#8f6f78');
-      }
-      if (!r.relics.length) txt('no artifacts yet — beat an ELITE or raid a shop', LW / 2, y0 + 40, '700 11px Verdana, sans-serif', '#8f6f78');
+      if (!r.relics.length) txt('no artifacts yet — spin the wheel or fell a boss', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#8f6f78');
+      contentH = 40 + r.relics.length * 58;
     } else {
       // STATS: the run's vitals, then every run-wide artifact bend
       const core = [
@@ -4763,11 +4798,27 @@ if (!HEADLESS) (function browser() {
         ['gold looted', fmt(r.goldEarned)],
       ];
       const rows = core.concat(runMods());
-      rows.slice(0, 18).forEach((rw, i) => {
-        const ry = y0 + 10 + i * 27;
-        txt(rw[0], LW / 2 - 16, ry, '600 11px Verdana, sans-serif', '#9a8aa0', 'right');
-        txt(rw[1], LW / 2 + 2, ry, '800 11px Verdana, sans-serif', '#ffe9a3', 'left');
+      rows.forEach((rw, i) => {
+        const ry = y0 + 6 + i * 31;
+        txt(rw[0], LW / 2 - 16, ry, '600 12px Verdana, sans-serif', '#9a8aa0', 'right');
+        txt(rw[1], LW / 2 + 2, ry, '800 12px Verdana, sans-serif', '#ffe9a3', 'left');
       });
+      contentH = 30 + rows.length * 31;
+    }
+    ctx.restore();
+    // clamp the pan now that the tab's true height is known
+    S.inv.maxScroll = Math.max(0, contentH + (y0 - vy0) - viewH);
+    if ((S.inv.scroll || 0) > S.inv.maxScroll) S.inv.scroll = S.inv.maxScroll;
+    if ((S.inv.scroll || 0) < 0) S.inv.scroll = 0;
+    // a slim scrollbar tells the thumb there's more shelf below
+    if (S.inv.maxScroll > 0) {
+      const track = viewH - 8;
+      const thumbH = Math.max(26, track * viewH / (viewH + S.inv.maxScroll));
+      const ty = vy0 + 4 + (track - thumbH) * ((S.inv.scroll || 0) / S.inv.maxScroll);
+      rr(px + pw - 10, vy0 + 4, 4, track, 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fill();
+      rr(px + pw - 10, ty, 4, thumbH, 2);
+      ctx.fillStyle = 'rgba(232,200,119,0.5)'; ctx.fill();
     }
     uiBtn(LW / 2 - 80, py + ph - 46, 160, 34, 'CLOSE ✕', () => { S.inv = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
