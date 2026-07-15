@@ -5715,7 +5715,7 @@ if (!HEADLESS) (function browser() {
       const p = entPos(e);
       const d2 = Math.hypot(AV.x - p.x, AV.y - (p.y - 6));
       if (d2 > 52) { delete entCool[i]; continue; }
-      if (d2 < 34 && !entCool[i] && (!e.done || e.kind === 'shop')) {
+      if (d2 < 34 && !entCool[i] && !e.done) {
         entCool[i] = true;
         interact(i);
         if (S.screen !== 'dungeon') return;
@@ -5877,10 +5877,13 @@ if (!HEADLESS) (function browser() {
       col = e.mtype === 'boss' ? '#ffd75e' : e.mtype === 'elite' ? '#ff9d3c' : '#ffb4a8';
     }
     ctx.save();
-    if (e.done && e.kind !== 'shop') {
+    if (e.done) {
+      // spent dwellers fade out — and the served keeper walks off entirely
       ctx.globalAlpha = 0.28;
-      txt(e.kind === 'monster' ? '\u{1F4A8}' : icon, p.x, p.y - 12, '30px serif', '#fff');
-      txt(e.kind === 'monster' ? 'slain' : 'done', p.x, p.y + 14, '600 9px Verdana, sans-serif', '#9a8aa0');
+      const gone = e.kind === 'monster' || e.kind === 'shop';
+      txt(gone ? '\u{1F4A8}' : icon, p.x, p.y - 12, '30px serif', '#fff');
+      txt(e.kind === 'monster' ? 'slain' : e.kind === 'shop' ? 'moved on' : 'done',
+          p.x, p.y + 14, '600 9px Verdana, sans-serif', '#9a8aa0');
       ctx.restore();
       return;
     }

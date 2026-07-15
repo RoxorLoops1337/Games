@@ -919,6 +919,7 @@ t.eq(S.run.maxHp, mhp0 + 10, 'max HP upgrade sticks');
 }
 t.ok(DP.closeModal(), 'LEAVE closes the shop');
 t.ok(S.run.room.ents[0].done, 'the merchant serves one visit, then leaves the room');
+t.ok(!DP.interact(0), 'the departed keeper cannot be hailed again');
 t.ok(!DP.interact(0), 'the shop cannot be reopened once the merchant has gone');
 
 // -------- the blacksmith --------
