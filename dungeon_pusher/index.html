@@ -1290,7 +1290,7 @@ function wheelItem(rar) {
   floatAt(it.name + '!', 50, rar === 'r' ? '#7ab0e8' : '#ffe066', true);
   if (S.battle) S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6, kind: 'item', iid: it.id, temp: true });
 }
-// the wheel doesn't just hand you an relic — it lets you CHOOSE. The pick
+// the wheel doesn't just hand you a relic — it lets you CHOOSE. The pick
 // overlay opens once the wheel is dismissed (see dismissWheel).
 function wheelRelic(rar, n) {
   S.pendingPick = { rar, picks: n || 1 };
@@ -1317,7 +1317,7 @@ function spinWheel() {
   save();
   return WHEEL[idx];
 }
-// clear the wheel overlay — and, if it won an relic, open the CHOICE now
+// clear the wheel overlay — and, if it won a relic, open the CHOICE now
 function dismissWheel() {
   S.wheelAnim = null;
   if (S.pendingPick) {
@@ -4721,7 +4721,7 @@ if (!HEADLESS) (function browser() {
     }
     txt('\u{1F3A1} RELIC WON!', LW / 2, py + 40, '900 21px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     const left = rp.picks - rp.chosen.length;
-    txt(left > 0 ? 'CHOOSE ' + left + ' — tap an relic to claim it' : 'claimed!',
+    txt(left > 0 ? 'CHOOSE ' + left + ' — tap a relic to claim it' : 'claimed!',
         LW / 2, py + 68, '800 12px Verdana, sans-serif', left > 0 ? '#e8d0a0' : '#7ee787');
     rp.pool.forEach((id, i) => {
       const rl = relicById(id), rc = RARITY[rl.rar];
@@ -4852,7 +4852,9 @@ if (!HEADLESS) (function browser() {
     const py = hasOffer ? 200 : 300, ph = hasRelicOffer ? 470 : hasCoinOffer ? 404 : 250;
     const vFrame = machArt('frame_tall');
     if (vFrame) {
-      shadowImg('vicframe', vFrame, 62, py - 8, LW - 124, ph + 16, 18, 6, 'rgba(0,0,0,0.6)');
+      // stretched WELL past the content box, so the art's ornate rune
+      // border falls outside the text and offers instead of under them
+      shadowImg('vicframe', vFrame, 36, py - 26, LW - 72, ph + 52, 18, 6, 'rgba(0,0,0,0.6)');
     } else {
       rr(70, py, LW - 140, ph, 20);
       ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
@@ -4866,7 +4868,7 @@ if (!HEADLESS) (function browser() {
     else if (v.freeSpin) txt('the elite’s WHEEL OF FORTUNE spins — free!', LW / 2, py + 154, '700 11px Verdana, sans-serif', '#b06be8');
     // a BOSS lets you claim one relic from a spread of two commons + a rare
     if (hasRelicOffer) {
-      txt(v.relicPicked ? relicById(v.relicPicked).name + ' claimed!' : 'CLAIM AN RELIC — choose one:',
+      txt(v.relicPicked ? relicById(v.relicPicked).name + ' claimed!' : 'CLAIM A RELIC — choose one:',
           LW / 2, py + 180, '800 12px Verdana, sans-serif', v.relicPicked ? '#7ee787' : '#e8d0a0');
       v.relicOffer.forEach((id, i) => {
         const rl2 = relicById(id); const rc = RARITY[rl2.rar];
