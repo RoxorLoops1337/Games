@@ -104,7 +104,7 @@ const finishFight = () => {
 t.ok(DP.HEADLESS, 'headless mode detected');
 t.eq(S.screen, 'title', 'boots to the title screen');
 t.eq(S.run, null, 'no run in progress at first boot');
-t.ok(ITEMS.length === 13 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'thirteen arsenal items defined');
+t.ok(ITEMS.length === 15 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'fifteen arsenal items defined');
 t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the bestiary is populated');
 t.eq(BOSSES.length, 3, 'three floor bosses');
 t.ok(RELICS.length >= 88 && RELICS.every(r => r.id && r.desc), 'the relic shelf is stocked (' + RELICS.length + ')');
@@ -928,6 +928,7 @@ t.eq(S.run.maxHp, mhp0 + 10, 'max HP upgrade sticks');
   // the racked pile forgets the removed copy too
   S.run.purse.coin = 12;
   S.run.arsenal.vial = 1;
+  S.run.pending = [];                                       // nothing queued — the pile holds the copy
   S.run.pileSave = [{ k: 'item', x: 50, y: 40, lay: 0, iid: 'vial' }];
   S.run.pileFloor = S.run.floor;
   t.ok(DP.removeArsenal('vial'), 'the keeper takes the vial');
@@ -1478,12 +1479,13 @@ finishFight();
 // -------- ACTS: a new bestiary every 5 floors (Roguebook-style) --------
 {
   t.eq(DP.ENEMY_TIERS.length, 3, 'three acts of enemies');
-  t.ok(DP.ENEMY_TIERS.every(tier => tier.length === 10), 'ten foes per act');
+  t.ok(DP.ENEMY_TIERS.every(tier => tier.length === 13), 'thirteen foes per act');
   const all = DP.ENEMY_TIERS.flat();
   t.eq(new Set(all.map(e => e.id)).size, all.length, 'no duplicate ids across acts');
   t.ok(all.every(e => e.hp > 0 && e.atk > 0 && e.icon && e.name), 'every act foe is fully statted');
-  const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech', 'bleeder', 'burner'];
-  const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward'];
+  const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech', 'bleeder', 'burner',
+                    'gremlin', 'rustmite', 'magnet', 'bell', 'chrono', 'coward', 'twin'];
+  const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward', 'mirror', 'tar'];
   t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
   // act boundaries
   t.eq(DP.actIdx(1), 0, 'floor 1 is act 1');
@@ -2106,6 +2108,187 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   HS.room = { type: 'forge', opts: [{ kind: 'str', label: 'x' }], done: false };
   H.pickBoon(0);
   t.eq(HS.run.str, 1, 'War Paint at the forge grants +1 STRENGTH');
+}
+
+// ============================================================
+// TRICKSTERS & LESSER HEXES: the machine-warpers, war paints,
+// and the elite curses that bend how you PLAY
+// ============================================================
+{
+  const tstore = {};
+  const { DP: T } = loadGame(tstore, false);
+  const TS = T.S;
+  T.srand(8811);
+  T.newRun('knight');
+  TS.run.hp = TS.run.maxHp = 500;
+  const brawl = (eid, extra) => {
+    TS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid, done: false, px: 0.5, py: 0.4 }];
+    if (extra) TS.run.room.ents.push({ kind: 'monster', mtype: 'battle', eid: extra, done: false, px: 0.3, py: 0.3 });
+    T.interact(0);
+    for (const f of TS.foes) { f.hp = f.maxHp = 500; f.braced = false; }
+    return TS.foes[0];
+  };
+  const winOut = () => {
+    TS.foes.forEach(f => { f.hp = Math.min(f.hp, 1); f.trait = null; });
+    T.dmgAll(9);
+    if (TS.victory) { if (TS.victory.offer) T.pickCoin(0); T.leaveBattle(); }
+  };
+
+  // war paints: temporary STRENGTH / DEXTERITY for one battle
+  let e = brawl('orc');
+  const g0 = T.goldDmg();
+  T.applyLoot({ t: 'buffitem', iid: 'horn' });
+  t.eq(T.goldDmg(), g0 + 2, 'the War Horn grants +2 STR for the battle');
+  T.applyLoot({ t: 'buffitem', iid: 'tonic' });
+  TS.run.block = 0;
+  T.applyLoot({ t: 'silver' });
+  t.eq(TS.run.block, 3, 'the Grip Tonic makes silvers block 1+2');
+  winOut();
+  t.eq(TS.tempStr, 0, 'war paints wash off when the battle ends');
+  t.eq(T.goldDmg(), g0, 'gold is back to its plain self');
+
+  // lesser hexes: frostbitten hands / lead purse / blackout / rust
+  e = brawl('orc');
+  TS.noTiltT = 1;
+  TS.battle.tilts = 3;
+  t.ok(!T.tilt('l'), 'FROSTBITTEN HANDS: the TILT is refused');
+  t.eq(TS.battle.tilts, 3, 'and no charge is wasted');
+  TS.noTiltT = 0;
+  TS.leadT = 1;
+  TS.run.purse = { coin: 8, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+  T.dealHand();
+  t.eq(TS.battle.hand.coin, 5, 'LEAD PURSE: the hand is dealt 3 short');
+  TS.leadT = 0;
+  TS.rustT = 1;
+  TS.battle.rustSpent = false;
+  let hp0 = e.hp;
+  T.applyLoot({ t: 'weapon', iid: 'sword' });
+  const full = T.weaponDmg(T.itemById('sword').dmg);
+  t.eq(hp0 - e.hp, Math.floor(full / 2), 'RUST: the first item fires at half effect');
+  hp0 = e.hp;
+  T.applyLoot({ t: 'weapon', iid: 'sword' });
+  t.eq(hp0 - e.hp, full, 'the second item swings clean');
+  TS.rustT = 0;
+  // an elite's hex intent lands one of the four
+  const elite = T.mkEnemy('elite', 'orc');
+  elite.intent = { t: 'hex' };
+  TS.foes.push(elite);
+  T.enemyActFoe(elite);
+  t.ok(TS.noTiltT + TS.leadT + TS.blackT + TS.rustT > 0, 'an elite hex lands one of the four curses');
+  TS.noTiltT = 0; TS.leadT = 0; TS.blackT = 0; TS.rustT = 0;
+  TS.foes.pop();
+  winOut();
+
+  // TRAY GREMLIN: filches the smallest piece; killing it refunds the stash
+  e = brawl('traygremlin');
+  TS.battle.loot = [{ k: 'gem' }, { k: 'coin' }, { k: 'silver' }];
+  e.intent = { t: 'brace' };
+  T.enemyActFoe(e);
+  t.eq(TS.battle.loot.length, 2, 'the gremlin filches a piece');
+  t.ok(!TS.battle.loot.some(l => l.k === 'coin'), 'it takes the SMALLEST (the plain coin)');
+  t.eq(e.belly.length, 1, 'the stash sits in its belly');
+  e.hp = 1;
+  T.dmgFoe(e, 5);
+  t.eq(TS.battle.loot.length, 3, 'killing it spills the stash back into your tray');
+  if (TS.victory) { if (TS.victory.offer) T.pickCoin(0); T.leaveBattle(); }
+
+  // RUST MITE corrodes a pile coin into a slug; slugs collect as nothing
+  e = brawl('rustmite');
+  T.S.coins.length = 0;
+  T.place(50, 40, 'coin', 0, 'plat', 0);
+  e.intent = { t: 'brace' };
+  T.enemyActFoe(e);
+  t.eq(TS.coins[0].kind, 'slug', 'the mite corrodes the coin into a slug');
+  TS.battle.loot = [];
+  T.scoreCoin(TS.coins[0]);
+  t.eq(TS.battle.loot.length, 0, 'a collected slug is worth NOTHING');
+  winOut();
+
+  // MAGNET WRAITH drags the pile back
+  e = brawl('magnetwraith');
+  T.S.coins.length = 0;
+  T.place(50, 60, 'coin', 0, 'plat', 0);
+  T.place(30, 60, 'coin', 0, 'plat', 0);
+  e.intent = { t: 'brace' };
+  T.enemyActFoe(e);
+  t.ok(TS.coins.every(c => c.y < 60), 'the wraith drags both coins away from the edge');
+  winOut();
+
+  // BELL KEEPER: every 10th piece tolls +5 block for the pack
+  e = brawl('bellkeeper', 'orc');
+  TS.battle.qi = 10;
+  T.applyLoot({ t: 'gold' });
+  t.ok(TS.foes.every(f => f.block === 5), 'the bell tolls on the 10th piece: pack +5 block');
+  hp0 = e.hp;
+  T.dmgFoe(e, 4);
+  t.eq(e.hp, hp0, 'its block soaks the next blow whole');
+  T.endRoundTicks();
+  t.ok(TS.foes.every(f => !f.block), 'tolled shields melt at round end');
+  winOut();
+
+  // MIRROR SHELL bounces the first hit back (capped), then cracks open
+  e = brawl('mirrorshell');
+  hp0 = TS.run.hp;
+  t.eq(T.dmgFoe(e, 20), 0, 'the mirror eats the first blow');
+  t.eq(TS.run.hp, hp0 - 8, 'and reflects it back at you (capped at 8)');
+  t.ok(T.dmgFoe(e, 5) > 0, 'the second hit lands clean');
+  T.endRoundTicks();
+  t.eq(T.dmgFoe(e, 5), 0, 'a new round re-polishes the mirror');
+  winOut();
+
+  // TAR CUBE: every 3rd piece sticks; its death refunds the stuck coins
+  e = brawl('tarcube');
+  T.dmgFoe(e, 3); T.dmgFoe(e, 3);
+  hp0 = e.hp;
+  t.eq(T.dmgFoe(e, 3), 0, 'the third piece STICKS in the tar');
+  t.eq(e.hp, hp0, 'and deals nothing');
+  t.eq((e.belly || []).length, 1, 'the coin sits in the tar');
+  TS.battle.loot = [];
+  e.hp = 1;
+  T.dmgFoe(e, 5);
+  t.ok(TS.battle.loot.some(l => l.k === 'coin'), 'its death refunds the stuck coin');
+  if (TS.victory) { if (TS.victory.offer) T.pickCoin(0); T.leaveBattle(); }
+
+  // CHRONOPHAGE eats a TILT on heavy hits
+  e = brawl('chronophage');
+  TS.battle.tilts = 3;
+  T.dmgFoe(e, 9);
+  t.eq(TS.battle.tilts, 2, 'a 9-damage hit feeds it a TILT');
+  T.dmgFoe(e, 3);
+  t.eq(TS.battle.tilts, 2, 'small hits leave your tilts alone');
+  winOut();
+
+  // COWARD KING hides behind his weakest lackey
+  e = brawl('cowardking', 'orc');
+  TS.foes[1].hp = 30;
+  T.setTarget(0);
+  t.eq(TS.enemy.id, 'orc', 'targeting the king lands you on his lackey');
+  t.eq(TS.foes[1].id, 'cowardking', 'the king now cowers in the back slot');
+  winOut();
+
+  // TWIN IDOL: met alone it splits — and a lone survivor raises its twin
+  TS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'twinidol', done: false, px: 0.5, py: 0.4 }];
+  T.interact(0);
+  t.eq(TS.foes.length, 2, 'the idol splits into a bonded pair');
+  TS.foes[0].hp = 0;
+  T.endRoundTicks();
+  t.ok(TS.foes[0].hp > 0, 'the living twin RAISES its fallen partner');
+  TS.foes.forEach(f => { f.hp = 1; f.trait = null; });
+  T.dmgAll(9);
+  t.ok(TS.victory, 'felling both in one round ends it for good');
+
+  // the forge's permanent stats are VERY RARE
+  {
+    T.srand(31);
+    let strN = 0, dexN = 0;
+    for (let i = 0; i < 400; i++) {
+      const opts = T.boonOptions();
+      if (opts.some(o => o.kind === 'str')) strN++;
+      if (opts.some(o => o.kind === 'dex')) dexN++;
+    }
+    t.ok(strN > 8 && strN < 80, 'War Paint is a rare forge prize (~8%: ' + strN + '/400)');
+    t.ok(dexN > 8 && dexN < 80, 'Sure Hands too (~8%: ' + dexN + '/400)');
+  }
 }
 
 // ============================================================
