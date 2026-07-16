@@ -3329,6 +3329,26 @@ if (!HEADLESS) (function browser() {
     return FLOOR_PATS[tile];
   }
 
+  // warm the ENTIRE art cache at startup so nothing streams in mid-run:
+  // every character/enemy/boss sheet, all the machine dressing, the coin &
+  // item faces, the floor tiles, and the act 2/3 palette-swaps.
+  function preloadArt() {
+    for (const k of Object.keys(SHEETS)) art(k, SHEETS[k].src);
+    for (const k of Object.keys(MACH_ART)) art('mach_' + k, MACH_ART[k]);
+    const pieces = Object.values(PIECE_ART).concat(ITEM_ART.map(i => 'item_' + i));
+    for (const name of pieces) art('pc_' + name, 'art/machine/pieces/' + name + '.png');
+    for (const f of FLOORS) if (f.tile) art('floor_' + f.tile, 'art/floor_' + f.tile + '.png');
+    // bake each palette-swapped kin as soon as its base sheet has loaded
+    for (const variant of Object.keys(TIER_SKINS)) {
+      const [baseKey, tint] = TIER_SKINS[variant];
+      const base = art(baseKey, SHEETS[baseKey].src);
+      const bake = () => { base._ok = true; tintedArt(baseKey, variant, tint); };
+      if (base._ok) bake();
+      else if (base.addEventListener) base.addEventListener('load', bake);
+    }
+  }
+  preloadArt();
+
   // pre-rendered sprite cache (coins render once to an offscreen canvas)
   const SPR = {};
   function sprite(key, w, h, build) {
