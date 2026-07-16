@@ -116,9 +116,9 @@ t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
 
-// -------- the four adventurers and their signature coins --------
-t.ok(DP.HEROES.length === 4 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
-     'four heroes, each with a signature coin');
+// -------- the five adventurers and their signature coins --------
+t.ok(DP.HEROES.length === 5 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
+     'five heroes, each with a signature coin');
 DP.srand(41);
 DP.newRun('knight');
 t.eq(S.run.hero, 'knight', 'the knight answers the call');
@@ -2327,6 +2327,46 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
     t.ok(strN > 8 && strN < 80, 'War Paint is a rare forge prize (~8%: ' + strN + '/400)');
     t.ok(dexN > 8 && dexN < 80, 'Sure Hands too (~8%: ' + dexN + '/400)');
   }
+}
+
+// ============================================================
+// THE POLTERGEIST: a hero that cannot touch coins — its purse
+// rains itself in and it fights by SHAKING the machine
+// ============================================================
+{
+  const gstore = {};
+  const { DP: G } = loadGame(gstore, false);
+  const GS = G.S;
+  G.srand(1313);
+  G.newRun('ghost');
+  t.eq(GS.run.hero, 'ghost', 'the Poltergeist answers the call');
+  t.eq(GS.run.purse.lucky, 2, 'its signature: +2 LUCKY (ghost-luck)');
+  const purseN = G.purseTotal();
+  GS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  GS.rain.length = 0;
+  G.interact(0);
+  GS.enemy.hp = GS.enemy.maxHp = 500;
+  t.eq(GS.run.wallet, 0, 'it holds NO hand — the wallet reads zero');
+  t.eq(GS.rain.filter(r => G.COIN_KINDS.includes(r.kind)).length, purseN,
+       'the whole purse rains itself into the machine (' + purseN + ' pieces)');
+  t.ok(!G.drop(50), 'it cannot DROP a coin');
+  t.eq(GS.battle.tilts, C.TILTS * 2, 'TILT charges are DOUBLED');
+  // its shakes hit harder
+  G.S.coins.length = 0;
+  const c1 = G.place(50, 40, 'coin', 0, 'plat', 0);
+  G.tilt('r');
+  t.ok(c1.vx >= 15, 'the ghost\'s tilt shoves half again as hard (' + c1.vx.toFixed(1) + ')');
+  // the purse still GROWS normally — next round rains more
+  GS.run.purse.coin += 3;
+  GS.rain.length = 0;
+  G.dealHand();
+  t.eq(GS.rain.length, G.purseTotal(), 'a fatter purse rains a fatter storm');
+  // other heroes still deal a normal hand
+  G.newRun('knight');
+  GS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  G.interact(0);
+  t.ok(GS.run.wallet > 0, 'the knight still holds a proper hand');
+  t.eq(GS.battle.tilts, C.TILTS, 'and normal TILT charges');
 }
 
 // ============================================================

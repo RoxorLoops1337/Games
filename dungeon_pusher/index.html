@@ -659,8 +659,13 @@ const HEROES = [
   { id: 'rogue',  name: 'Rogue',  icon: '\u{1F977}', coin: 'green',  perk: '+2 VENOM (poison)' },
   { id: 'wizard', name: 'Mage',   icon: '\u{1F9D9}', coin: 'blue',   perk: '+2 FROST (hits ALL)' },
   { id: 'cleric', name: 'Cleric', icon: '\u{1F64F}', coin: 'red',    perk: '+2 HEART (heal)' },
+  // the out-of-the-box one: a ghost that CANNOT touch coins. Its purse
+  // rains itself into the machine and it fights by SHAKING THE WORLD.
+  { id: 'ghost',  name: 'Poltergeist', icon: '\u{1F47B}', coin: 'lucky', perk: 'purse RAINS in • TILT ×2' },
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
+// the Poltergeist's whole kit hangs off this one question
+function ghostRun() { return !!(S.run && S.run.hero === 'ghost'); }
 const TRAIT_TXT = {
   fast: 'strikes twice a round', thief: 'steals coins from your purse',
   venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field',
@@ -1487,11 +1492,13 @@ function tilt(dir) {
   }
   B.tilts--;
   // a gentler nudge — enough to shift the pile, not to fling it
+  // (the Poltergeist shakes half again as hard: the machine IS its hands)
+  const gm = ghostRun() ? 1.5 : 1;
   for (const c of S.coins) {
     if (c.st !== 'plat') continue;
-    if (dir === 'l') c.vx -= 10 + rng() * 4;
-    else if (dir === 'r') c.vx += 10 + rng() * 4;
-    else { c.vy += 6 + rng() * 3; c.vx += (rng() - 0.5) * 4; }
+    if (dir === 'l') c.vx -= (10 + rng() * 4) * gm;
+    else if (dir === 'r') c.vx += (10 + rng() * 4) * gm;
+    else { c.vy += (6 + rng() * 3) * gm; c.vx += (rng() - 0.5) * 4 * gm; }
   }
   S.shake += 2.5;
   SND.thud();
@@ -1502,7 +1509,7 @@ function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
 function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 1 : 0); }
 // the round-start guard from relics, stacked
 function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 3 : 0); }
-function tiltCount() { return C.TILTS + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0); }
+function tiltCount() { return C.TILTS * (ghostRun() ? 2 : 1) + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0); }
 function bankLoot(key) {
   const B = S.battle;
   if (!B || B.phase !== 'drop' || B.banked.length >= bankMax()) return false;
@@ -1604,6 +1611,18 @@ function dealHand() {
   // the Minter / Rich Hand / Tollkeeper strike you bonus gold coins each round
   const bonusCoin = (hasRelic('minter') ? 1 : 0) + (hasRelic('richhand') ? 1 : 0) + (hasRelic('tollkeeper') ? 2 : 0);
   if (bonusCoin) B.hand.coin = (B.hand.coin || 0) + bonusCoin;
+  // the POLTERGEIST cannot hold a hand: its whole purse pours in from
+  // above at spots of the machine's choosing — you steer with TILT alone
+  if (ghostRun()) {
+    let gi = 0;
+    for (const k of COIN_KINDS) {
+      for (let n2 = 0; n2 < (B.hand[k] || 0); n2++) {
+        S.rain.push({ t: 0.25 + gi * 0.14, x: 10 + rng() * 80, y: MACH.tiers[0].slotY + rng() * 10, kind: k });
+        gi++;
+      }
+      B.hand[k] = 0;
+    }
+  }
   B.sel = 'coin';
   autoSel();
   syncWallet();
@@ -2869,11 +2888,15 @@ function initPile() {
     const under = base[(rng() * base.length) | 0];
     place(under.x + (rng() - 0.5) * 2, under.y + (rng() - 0.5) * 2, 'coin', 1, 'plat', 0);
   }
-  // settle so nothing pops on the first frame, then sweep spillage
+  // settle so nothing pops on the first frame, then sweep spillage.
+  // Queued rain (the Poltergeist's purse, pending gear) waits OUT the
+  // settle — otherwise the sweep would eat it mid-air.
   const savedBattle = S.battle;
+  const savedRain = S.rain.splice(0, S.rain.length);
   S.battle = null;                      // the round machine sleeps during the settle
   for (let i = 0; i < 140; i++) step(1 / 60, true);
   S.battle = savedBattle;
+  S.rain.push(...savedRain);
   for (let i = S.coins.length - 1; i >= 0; i--) {
     if (S.coins[i].st !== 'plat') S.coins.splice(i, 1);
   }
@@ -3147,7 +3170,7 @@ window.DP = {
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
-  darkFloor, payableKinds, coinKindWith,
+  darkFloor, payableKinds, coinKindWith, ghostRun,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
@@ -5136,7 +5159,8 @@ if (!HEADLESS) (function browser() {
       hint = 'FLOOR ' + r.floor + ' • ' + found + ' / ' + rooms.length + ' rooms uncovered';
     }
     else if (!S.battle || S.battle.phase === 'drop') {
-      hint = r.wallet < 1 ? 'hand empty — bank loot, TILT, or END TURN'
+      hint = ghostRun() ? 'the purse rains itself — TILT the world, then END TURN'
+           : r.wallet < 1 ? 'hand empty — bank loot, TILT, or END TURN'
            : r.wallet + ' ● in hand • TAP TO DROP • pick your coin up top';
     } else hint = S.battle.phase === 'resolve' ? 'the tray resolves…' : 'the foe strikes back…';
     txt(hint, LW - 40, 806, '600 9px Verdana, sans-serif', '#9a7f88', 'right');
@@ -6711,8 +6735,9 @@ if (!HEADLESS) (function browser() {
     drawVignette(0.4);
     // choose your adventurer
     txt('— CHOOSE YOUR HERO —', LW / 2, 472, '900 12px Georgia, serif', '#ffd75e');
+    const hw = Math.floor((LW - 24 - (HEROES.length - 1) * 6) / HEROES.length);
     HEROES.forEach((h, i) => {
-      const x = 22 + i * 112, y = 484, w = 104, hh = 118;
+      const x = 12 + i * (hw + 6), y = 484, w = hw, hh = 118;
       const sel = heroSel === h.id;
       uiBtn(x, y, w, hh, '', () => { heroSel = h.id; S.heroPick = h.id; save(); },
             { bg: sel ? 'rgba(66,44,72,0.95)' : 'rgba(26,17,28,0.9)',
