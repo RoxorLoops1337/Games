@@ -3869,7 +3869,8 @@ if (!HEADLESS) (function browser() {
   // the hero's strike: armed by the resolve so his lunge meets the impact
   const HFX = { until: -1, dur: 0.4, tx: 340 };
   // a glossy HP bar with a pale "damage ghost" that drains after each hit
-  function hpBar(x, y, w, h, hp, maxHp, ghost) {
+  function hpBar(x, y, w, h, hp, maxHp, ghost, cols) {
+    cols = cols || ['#ff6f6f', '#b01e36'];
     rr(x - 1, y - 1, w + 2, h + 2, (h + 2) / 2);
     ctx.fillStyle = 'rgba(0,0,0,0.66)'; ctx.fill();
     ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(255,255,255,0.14)'; ctx.stroke();
@@ -3881,8 +3882,8 @@ if (!HEADLESS) (function browser() {
     }
     if (f > 0.01) {
       rr(x + 1, y + 1, Math.max(h - 2, (w - 2) * f), h - 2, (h - 2) / 2);
-      ctx.fillStyle = lgr('hp:' + (x | 0) + ':' + (w | 0), x, 0, x + w, 0,
-        [[0, '#ff6f6f'], [1, '#b01e36']]);
+      ctx.fillStyle = lgr('hp:' + (x | 0) + ':' + (w | 0) + ':' + cols[0], x, 0, x + w, 0,
+        [[0, cols[0]], [1, cols[1]]]);
       ctx.fill();
       // gloss strip
       rr(x + 2, y + 1.5, Math.max(2, (w - 4) * f), Math.max(1.5, (h - 3) * 0.4), 2);
@@ -3996,31 +3997,55 @@ if (!HEADLESS) (function browser() {
       txt('⚡', 0, 0, '26px serif', '#fff');
       ctx.restore();
     }
-    // the shield ring: your block, made visible
+    // the shield ring: your block, made visible (the count lives in the ribbon)
     if (S.run && S.run.block > 0) {
       const pulse = 1 + Math.sin(t * 4) * 0.05;
       ctx.save();
-      ctx.globalAlpha = 0.75;
+      ctx.globalAlpha = 0.7;
       ctx.beginPath(); ctx.arc(hx, hy - 32, 30 * pulse, 0, 7);
       ctx.lineWidth = 3; ctx.strokeStyle = '#9fc8e8'; ctx.stroke();
-      ctx.globalAlpha = 1;
-      rr(hx + 24, hy - 14, 32, 17, 8);
-      ctx.fillStyle = '#2a3a4e'; ctx.fill();
-      ctx.lineWidth = 1.5; ctx.strokeStyle = '#9fc8e8'; ctx.stroke();
-      txt('\u{1F6E1}' + S.run.block, hx + 40, hy - 5, '800 9px Verdana, sans-serif', '#d8ecff');
       ctx.restore();
     }
-    if (S.pPois > 0) txt('☠ ' + S.pPois, hx + 34, hy - 38, '800 11px Verdana, sans-serif', '#b8f26b', 'left');
-    if (S.pBleed > 0) txt('\u{1FA78} ' + S.pBleed, hx + 34, hy - 26, '800 11px Verdana, sans-serif', '#ff5a6e', 'left');
-    if (S.pBurn > 0) txt('\u{1F525} ' + S.pBurn, hx + 34, hy - 50, '800 11px Verdana, sans-serif', '#ff9d3c', 'left');
-    if (S.weakT > 0) txt('\u{2B07} WEAK ' + S.weakT, hx - 62, hy - 38, '800 10px Verdana, sans-serif', '#c8b8e0', 'left');
-    if (S.taxT > 0) txt('\u{1FA99}☠ ' + S.taxT, hx - 62, hy - 26, '800 10px Verdana, sans-serif', '#ffd75e', 'left');
-    if (S.noTiltT > 0) txt('❄✋', hx - 62, hy - 14, '800 10px Verdana, sans-serif', '#8be7ff', 'left');
-    if (S.leadT > 0) txt('\u{1FAB6} -3', hx - 62, hy - 50, '800 10px Verdana, sans-serif', '#c8c8d6', 'left');
-    if (S.rustT > 0) txt('\u{1F9A0} rust', hx - 62, hy - 62, '800 10px Verdana, sans-serif', '#c8a86a', 'left');
-    if (strTotal() > 0) txt('\u{1F4AA}' + strTotal(), hx + 34, hy - 62, '800 10px Verdana, sans-serif', '#ffb46b', 'left');
-    if (dexTotal() > 0) txt('\u{1F933}' + dexTotal(), hx + 58, hy - 62, '800 10px Verdana, sans-serif', '#8be7ff', 'left');
     if (S.hurtT > 0.28) txt('\u{1F4A2}', hx + 26, hy - 56, '22px serif', '#fff');
+    // ---- the hero card: name, HP bar + number, and a tidy status ribbon,
+    // mirroring the foe's card on the right so the duel reads at a glance ----
+    if (S.run) {
+      const hName = (heroById(S.run.hero) || HEROES[0]).name.toUpperCase();
+      txt(hName, hx, 15, '800 10px Georgia, serif', '#8fe39a', 'center', { w: 3, col: 'rgba(8,24,14,0.9)' });
+      const hbw = 112, hbx = hx - hbw / 2, hby = 113;
+      if (S.hpGhost === undefined || S.hpGhost < S.run.hp) S.hpGhost = S.run.hp;
+      if (S.hpGhost > S.run.hp) S.hpGhost = Math.max(S.run.hp, S.hpGhost - dt * Math.max(6, S.run.maxHp * 0.55));
+      const low = S.run.hp / S.run.maxHp < 0.3;
+      hpBar(hbx, hby, hbw, 12, Math.max(0, S.run.hp), S.run.maxHp, S.hpGhost,
+            low ? ['#ff6f6f', '#b01e36'] : ['#8fe39a', '#3f9d5a']);
+      txt(Math.max(0, S.run.hp) + ' / ' + S.run.maxHp, hx, hby + 6, '800 9px Verdana, sans-serif',
+          '#f0fff0', 'center', { w: 2.5, col: 'rgba(6,26,12,0.85)' });
+      // a compact status strip under the bar: block & boons first, then debuffs
+      const st = [];
+      if (S.run.block > 0) st.push(['\u{1F6E1}' + S.run.block, '#cfe4ff']);
+      if (strTotal() > 0) st.push(['\u{1F4AA}' + strTotal(), '#ffb46b']);
+      if (dexTotal() > 0) st.push(['\u{1F933}' + dexTotal(), '#8be7ff']);
+      if (S.pPois > 0) st.push(['☠' + S.pPois, '#b8f26b']);
+      if (S.pBleed > 0) st.push(['\u{1FA78}' + S.pBleed, '#ff5a6e']);
+      if (S.pBurn > 0) st.push(['\u{1F525}' + S.pBurn, '#ff9d3c']);
+      if (S.weakT > 0) st.push(['\u{2B07}' + S.weakT, '#c8b8e0']);
+      if (S.taxT > 0) st.push(['\u{1FA99}☠' + S.taxT, '#ffd75e']);
+      if (S.noTiltT > 0) st.push(['❄✋', '#8be7ff']);
+      if (S.leadT > 0) st.push(['\u{1FAB6}', '#c8c8d6']);
+      if (S.blackT > 0) st.push(['❓', '#9a8aa0']);
+      if (S.rustT > 0) st.push(['\u{1F9A0}', '#c8a86a']);
+      if (st.length) {
+        // scale the gap so even a long list stays within the hero's column
+        const wof = (s) => 12 + s[0].length * 5.5;
+        const total = st.reduce((a, s) => a + wof(s), 0);
+        const gap = Math.min(0, (128 - total)) / Math.max(1, st.length);
+        let sx = Math.max(6, hx - Math.min(total, 128) / 2);
+        for (const s of st) {
+          txt(s[0], sx, hby + 22, '800 9px Verdana, sans-serif', s[1], 'left', { w: 2, col: 'rgba(8,5,12,0.85)' });
+          sx += wof(s) + gap;
+        }
+      }
+    }
     // ---- the pack: your pets stand at the hero's heel ----
     S.pets.forEach((p, pi) => {
       const px2 = hx + 38 + pi * 24, py2 = hy + 2;
@@ -4144,9 +4169,6 @@ if (!HEADLESS) (function browser() {
       }
     }
     // a gentle nudge that the foes are tappable
-    if (n && S.battle && !S.victory && S.foeInfo === null) {
-      txt('\u{1F449} tap a foe for info', 36, 133, '600 8px Verdana, sans-serif', '#7a6a80', 'left');
-    }
     if (n) {
       const tgt = S.enemy;
       if (tgt && n === 1) {
@@ -5089,12 +5111,12 @@ if (!HEADLESS) (function browser() {
     if (!r) return;
     layer('hud', 0, 682, LW, LH - 682,
       [machArt('frame_wide') ? 1 : 0], hudChrome);
-    // HP
-    txt('HP', 52, 733, '800 11px Verdana, sans-serif', '#b89aa4', 'left');
-    bar(74, 726, 194, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
-    txt(r.hp + ' / ' + r.maxHp, 171, 734, '800 10px Verdana, sans-serif', '#0e2a18');
-    // the status ribbon: block, then whatever the dungeon left festering
-    {
+    // HP + status ribbon — only DOWN IN THE DUNGEON. In battle the hero's
+    // card up top (beside the foe he faces) owns his health and status.
+    if (S.screen !== 'battle') {
+      txt('HP', 52, 733, '800 11px Verdana, sans-serif', '#b89aa4', 'left');
+      bar(74, 726, 194, 15, r.hp / r.maxHp, r.hp / r.maxHp < 0.3 ? '#ff5a4e' : '#7ee787', '#3f9d5a');
+      txt(r.hp + ' / ' + r.maxHp, 171, 734, '800 10px Verdana, sans-serif', '#0e2a18');
       const st = [];
       if (r.block > 0) st.push(['\u{1F6E1}' + r.block, '#c8d6e8']);
       if (S.pPois > 0) st.push(['☠' + S.pPois, '#b8f26b']);
@@ -5111,6 +5133,10 @@ if (!HEADLESS) (function browser() {
         txt(txt3, sx3, 733, '800 11px Verdana, sans-serif', col3, 'left');
         sx3 += 8 + txt3.length * 8;
       }
+    } else if (S.foeInfo === null && (S.foes || []).some(f => f.hp > 0)) {
+      // the HP row is free in battle (the hero's card up top owns it) — a
+      // quiet nudge lives here instead
+      txt('\u{1F449} tap a foe for its bestiary card', 52, 733, '600 10px Verdana, sans-serif', '#8a7a90', 'left');
     }
     // gold + coins + keys
     txt('\u{1FA99} ' + fmt(r.gold), 34, 762, '900 18px Verdana, sans-serif', '#ffd75e', 'left');
