@@ -128,6 +128,9 @@ const FLOORS = [
     floorA: '#ab9490', floorB: '#dec7bc', accent: '#ff9d3c', door: '#96543e', tile: 'terracotta' },
 ];
 function theme() { return FLOORS[((S.run ? S.run.floor : 1) - 1) % FLOORS.length]; }
+// every 3rd floor the torches are DEAD: you carry your own light and only
+// a small circle around you is lit — find the doors in the dark
+function darkFloor() { return !!(S.run && S.run.floor % 3 === 0); }
 
 // ------------------------------------------------------------------- items
 // Your arsenal: bought in shops, won from boons and wheels. Every battle the
@@ -175,7 +178,6 @@ const RELICS = [
   { id: 'clover',  rar: 'c', icon: '\u{1F340}', name: 'Clover',      desc: 'lucky coins twice as often' },
   { id: 'wind',    rar: 'e', icon: '\u{1F4A8}', name: 'Second Wind', desc: 'survive a killing blow at 1 HP (once per fight)' },
   { id: 'piggy',   rar: 'c', icon: '\u{1F437}', name: 'Piggy Bank',  desc: '+4 gold after every victory' },
-  { id: 'lantern', rar: 'c', icon: '\u{1F3EE}', name: 'Lantern',     desc: 'the whole floor map is revealed' },
   { id: 'plate',   rar: 'r', icon: '\u{1F6E1}\u{FE0F}', name: 'Battle Plate', desc: 'start every round with +4 block' },
   // coin-benders: COMMON
   { id: 'goldedge',   rar: 'c', icon: '⚔\u{FE0F}',  name: 'Gilded Edge',   desc: 'gold coins deal +1 damage' },
@@ -710,6 +712,7 @@ const S = {
   pets: [],                            // your summoned pack {iid, icon, name, hp, maxHp}
   foeInfo: null,                       // index of the foe whose bestiary card is open
   inv: null,                           // inventory overlay {tab: 'coins'|'items'|'relics'|'stats'}
+  coinPick: null,                      // shop coin-payment picker {slot, price}
   enemy: null,                         // the TARGETED foe (points into S.foes)
   battle: null,                        // round machine {round, phase, hand, loot, ...}
   victory: null,                       // battle-won overlay {t, gold, keys, offer}
@@ -757,6 +760,7 @@ function save() {
         kills: S.run.kills, goldEarned: S.run.goldEarned, map: S.run.map,
         keys: S.run.keys, meter: S.meter,
         pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
+        mapFloor: S.run.mapFloor,
       } : null,
     }));
   } catch (e) {}
@@ -793,6 +797,7 @@ function load() {
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
         pending: Array.isArray(d.run.pending) ? d.run.pending : [],
+        mapFloor: d.run.mapFloor || 0,
       };
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
@@ -2307,7 +2312,7 @@ function newRun(heroId) {
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0, str: 0, dex: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
-    pileSave: null, pileFloor: 0, pending: [],
+    pileSave: null, pileFloor: 0, pending: [], mapFloor: 0,
   };
   // the chosen adventurer's signature coins
   S.run.purse[hero.coin] += 2;
@@ -2643,6 +2648,7 @@ function denyPrize() {
   return closeModal();
 }
 function closeModal() {
+  S.coinPick = null;
   if (!S.room) return false;
   const rm = S.room;
   // a served shop and an opened chest both retire once you walk away
@@ -2674,6 +2680,8 @@ function shopStock() {
     st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(34 * mult), sold: false });
   }
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(65 * mult), sold: false });
+  // a torn map of THIS floor — next floor you're blind again
+  st.push({ kind: 'map', label: '\u{1F5FA}\u{FE0F} Torn Map (reveals THIS floor)', price: Math.round(28 * mult), sold: false });
   // ONE relic rounds out the case: 80% common, 15% rare, 5% epic —
   // priced by its rarity tag (and if that shelf is bare, step down a tier)
   {
@@ -2704,23 +2712,31 @@ function coinKindWith(n) {
   for (const k of COIN_KINDS) { const c = S.run.purse[k] || 0; if (c >= n && c > bestN) { best = k; bestN = c; } }
   return best;
 }
+// every purse pocket deep enough to cover n — the payment picker's options
+function payableKinds(n) {
+  return COIN_KINDS.filter(k => (S.run.purse[k] || 0) >= n);
+}
 function grantShopWare(it) {
   if (it.kind === 'item') grantItem(it.iid, 1);
   else if (it.kind === 'potion') S.run.potions++;
   else if (it.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
   else if (it.kind === 'coin') S.run.purse[it.cid] = (S.run.purse[it.cid] || 0) + 1;
   else if (it.kind === 'maxhp') { S.run.maxHp += 10; S.run.hp += 10; }
+  else if (it.kind === 'map') { S.run.mapFloor = S.run.floor; toast('the torn map bares this floor'); }
   else if (it.kind === 'relic' && S.run.relics.indexOf(it.rid) < 0) S.run.relics.push(it.rid);
 }
-// buy a ware with GOLD (pay omitted / 'gold') or COINS (pay === 'coins')
-function buyShop(i, pay) {
+// buy a ware with GOLD (pay omitted / 'gold') or COINS (pay === 'coins').
+// Coin buys take an explicit KIND — the picker menu chooses which purse
+// pocket pays; omitted, the fattest pocket that can cover it steps up.
+function buyShop(i, pay, kind) {
   if (!S.run || !S.room || S.room.type !== 'shop') return false;
   const it = S.room.stock[i];
   if (!it || it.sold) return false;
   if (pay === 'coins') {
-    const k = coinKindWith(it.coinPrice);
-    if (!k) { S.uiFlash = { msg: 'NOT ENOUGH COINS', t: 1 }; SND.deny(); return false; }
+    const k = kind || coinKindWith(it.coinPrice);
+    if (!k || !((S.run.purse[k] || 0) >= it.coinPrice)) { S.uiFlash = { msg: 'NOT ENOUGH COINS', t: 1 }; SND.deny(); return false; }
     spendKind(k, it.coinPrice);
+    S.coinPick = null;
   } else {
     if (S.run.gold < it.price) { S.uiFlash = { msg: 'NOT ENOUGH GOLD', t: 1 }; SND.deny(); return false; }
     S.run.gold -= it.price;
@@ -3111,6 +3127,7 @@ window.DP = {
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
+  darkFloor, payableKinds, coinKindWith,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
@@ -6241,7 +6258,8 @@ if (!HEADLESS) (function browser() {
   // what the hero knows of the floor: 2 = walked, 1 = glimpsed through a door
   function mapKnowledge() {
     const rooms = S.run.map.rooms;
-    const lantern = hasRelic('lantern');
+    // a bought Torn Map bares its OWN floor only
+    const lantern = S.run.mapFloor === S.run.floor;
     const seen = {};
     for (const k of Object.keys(rooms)) {
       const r = rooms[k];
@@ -6418,6 +6436,10 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = lgr('dtt:' + fkey(), 0, 30, 0, 60, [[0, '#fff4d6'], [1, T.accent]]);
     ctx.fillText(T.name, LW / 2 - 30, 44);
     txt('FLOOR ' + S.run.floor, LW / 2 - 30, 74, '800 12px Verdana, sans-serif', '#c8a8b0');
+    if (darkFloor()) {
+      txt('\u{1F56F}\u{FE0F} THE TORCHES ARE DEAD — follow your light', LW / 2 - 30, 89,
+          '700 9px Verdana, sans-serif', '#ff9d3c');
+    }
     txt('\u{1F5DD} × ' + S.run.keys, LW / 2 - 30, 104, '900 16px Verdana, sans-serif',
         S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
     drawRoomBox(t);
@@ -6429,6 +6451,26 @@ if (!HEADLESS) (function browser() {
     for (const o of order) {
       if (o.hero) drawHero(t);
       else drawEnt(o.i, o.e, t);
+    }
+    // a DARK floor: the room drowns in black except your torch's circle
+    if (darkFloor() && !S.room) {
+      const flick = 118 + Math.sin(t * 7) * 4 + Math.sin(t * 13.7) * 2;
+      const dg = ctx.createRadialGradient(AV.x, AV.y - 14, flick * 0.35, AV.x, AV.y - 14, flick);
+      dg.addColorStop(0, 'rgba(8,5,2,0)');
+      dg.addColorStop(0.72, 'rgba(8,5,2,0.55)');
+      dg.addColorStop(1, 'rgba(8,5,2,0.96)');
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(ROOM.x - 22, ROOM.y - 6, ROOM.w + 44, ROOM.h + ROOM.wallH + 30);
+      ctx.clip();
+      ctx.fillStyle = dg;
+      ctx.fillRect(ROOM.x - 22, ROOM.y - 6, ROOM.w + 44, ROOM.h + ROOM.wallH + 30);
+      // the torch itself gutters in your fist
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.10 + 0.05 * Math.sin(t * 9);
+      ctx.fillStyle = '#ff9d3c';
+      ctx.beginPath(); ctx.arc(AV.x, AV.y - 14, 40, 0, 7); ctx.fill();
+      ctx.restore();
     }
     drawMotes(dt, 1);
     drawParticles(dt);
@@ -6502,9 +6544,13 @@ if (!HEADLESS) (function browser() {
         uiBtn(goldX, y + 7, 56, 30, it.price + ' G', () => buyShop(i, 'gold'),
               { bg: goldOk ? 'rgba(140,90,20,0.95)' : 'rgba(40,30,36,0.9)', border: goldOk ? '#ffd75e' : '#5a4048',
                 col: goldOk ? '#ffe9a3' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
-        uiBtn(coinX, y + 7, 46, 30, it.coinPrice + ' ●', () => buyShop(i, 'coins'),
-              { bg: coinOk ? 'rgba(40,90,120,0.95)' : 'rgba(40,30,36,0.9)', border: coinOk ? '#63c8ff' : '#5a4048',
-                col: coinOk ? '#cfeeff' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
+        uiBtn(coinX, y + 7, 46, 30, it.coinPrice + ' ●', () => {
+          // one pocket deep enough? pay straight. More? YOU pick which.
+          const kinds = payableKinds(it.coinPrice);
+          if (kinds.length <= 1) buyShop(i, 'coins', kinds[0]);
+          else S.coinPick = { slot: i, price: it.coinPrice };
+        }, { bg: coinOk ? 'rgba(40,90,120,0.95)' : 'rgba(40,30,36,0.9)', border: coinOk ? '#63c8ff' : '#5a4048',
+             col: coinOk ? '#cfeeff' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
       });
       // pack thinning: the keeper buys junk out of YOUR arsenal — every
       // removal is one piece less clogging next battle's pile
@@ -6560,6 +6606,30 @@ if (!HEADLESS) (function browser() {
     if (S.uiFlash) {
       txt(S.uiFlash.msg, LW / 2, py + ph + 24, '900 14px Verdana, sans-serif',
           Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e');
+    }
+    // the coin-payment picker: WHICH pocket pays?
+    if (S.coinPick && isShop) {
+      const cp = S.coinPick;
+      const ware = room.stock[cp.slot];
+      const kinds = ware && !ware.sold ? payableKinds(cp.price) : [];
+      if (!kinds.length) { S.coinPick = null; return; }
+      ctx.fillStyle = 'rgba(5,3,8,0.7)'; ctx.fillRect(0, 0, LW, LH);
+      uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { S.coinPick = null; } });
+      const kw = 74, kpw = Math.max(kinds.length * kw + 28, 220), kpx = LW / 2 - kpw / 2, kpy = 330;
+      rr(kpx, kpy, kpw, 132, 16);
+      ctx.fillStyle = 'rgba(24,14,26,0.98)'; ctx.fill();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = '#63c8ff'; ctx.stroke();
+      uiButtons.push({ x: kpx, y: kpy, w: kpw, h: 132, cb: () => {} });
+      txt('PAY ' + cp.price + ' ● — from which pocket?', LW / 2, kpy + 22, '800 12px Verdana, sans-serif', '#cfeeff');
+      kinds.forEach((k, ki) => {
+        const kx = LW / 2 - (kinds.length * kw) / 2 + ki * kw + kw / 2;
+        uiBtn(kx - 31, kpy + 40, 62, 62, '', () => buyShop(cp.slot, 'coins', k),
+              { bg: 'rgba(40,60,80,0.9)', border: COIN_UI[k], r: 12 });
+        invCoinIcon(k, kx, kpy + 62, 14);
+        txt(COIN_INFO[k].name, kx, kpy + 84, '800 9px Verdana, sans-serif', COIN_UI[k]);
+        txt('× ' + (S.run.purse[k] || 0), kx, kpy + 95, '700 9px Verdana, sans-serif', '#d8c8dc');
+      });
+      txt('tap outside to cancel', LW / 2, kpy + 120, '600 9px Verdana, sans-serif', '#8f6f78');
     }
   }
 
