@@ -1882,7 +1882,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   const rstore = {};
   const { DP: R } = loadGame(rstore, false);
   const RS = R.S;
-  t.ok(R.RELICS.length >= 138, 'the shelf holds 138+ relics (' + R.RELICS.length + ')');
+  t.ok(R.RELICS.length >= 137, 'the shelf holds 137+ relics (' + R.RELICS.length + ', Lantern retired)');
   const newIds = ['matchstick', 'embershot', 'arsonist', 'cauterize', 'ashfall', 'papercut', 'scalpel',
     'leechkit', 'kennel', 'treats', 'guarddog', 'mender', 'bloodscent', 'balancedblade', 'frostsmith',
     'apothecary', 'hoarder', 'firstblood', 'firebrand', 'slowburn', 'wildfire', 'heatwave', 'dragonbreath',
@@ -2289,6 +2289,56 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
     t.ok(strN > 8 && strN < 80, 'War Paint is a rare forge prize (~8%: ' + strN + '/400)');
     t.ok(dexN > 8 && dexN < 80, 'Sure Hands too (~8%: ' + dexN + '/400)');
   }
+}
+
+// ============================================================
+// THE CRAWL: coin-payment picking, floor-scoped maps, dark floors
+// ============================================================
+{
+  const dstore = {};
+  const { DP: D2 } = loadGame(dstore, false);
+  const DS = D2.S;
+  D2.srand(4477);
+  D2.newRun('knight');
+
+  // dark floors: every 3rd, the torches are dead
+  t.ok(!D2.darkFloor(), 'floor 1 is lit');
+  DS.run.floor = 3;
+  t.ok(D2.darkFloor(), 'floor 3 is DARK');
+  DS.run.floor = 6;
+  t.ok(D2.darkFloor(), 'floor 6 too');
+  DS.run.floor = 7;
+  t.ok(!D2.darkFloor(), 'floor 7 is lit again');
+  DS.run.floor = 1;
+
+  // the Torn Map bares only the floor it was bought on
+  t.ok(!D2.RELICS.some(rl => rl.id === 'lantern'), 'the run-wide Lantern relic is retired');
+  DS.run.room.ents = [{ kind: 'shop', done: false }];
+  D2.interact(0);
+  const mapSlot = DS.room.stock.findIndex(x => x.kind === 'map');
+  t.ok(mapSlot >= 0, 'the keeper sells a Torn Map');
+  DS.run.gold = 10000;
+  t.ok(D2.buyShop(mapSlot, 'gold'), 'gold buys the map');
+  t.eq(DS.run.mapFloor, 1, 'it is stamped with THIS floor');
+  DS.run.floor = 2;
+  t.ok(DS.run.mapFloor !== DS.run.floor, 'and the next floor is blind again');
+  DS.run.floor = 1;
+
+  // paying with coins asks WHICH pocket — and honors the choice
+  const itemSlot = DS.room.stock.findIndex(x => x.kind === 'item' && !x.sold);
+  const price = DS.room.stock[itemSlot].coinPrice;
+  for (const k of D2.COIN_KINDS) DS.run.purse[k] = 0;
+  DS.run.purse.coin = price + 1;
+  DS.run.purse.green = price + 2;
+  t.eq(D2.payableKinds(price).length, 2, 'two pockets can cover the price');
+  t.ok(D2.buyShop(itemSlot, 'coins', 'green'), 'the picker pays with the CHOSEN kind');
+  t.eq(DS.run.purse.green, 2, 'the venom pocket paid');
+  t.eq(DS.run.purse.coin, price + 1, 'the gold pocket was left alone');
+  // a kind too shallow to pay is refused
+  const slot2 = DS.room.stock.findIndex(x => !x.sold && x.coinPrice);
+  DS.run.purse.red = 0;
+  t.ok(!D2.buyShop(slot2, 'coins', 'red'), 'an empty pocket cannot pay');
+  D2.closeModal();
 }
 
 // ============================================================
