@@ -97,12 +97,12 @@ const COIN_INFO = {
 const COIN_REWARD_W = [['coin', 24], ['silver', 22], ['green', 18], ['red', 16], ['blue', 12], ['lucky', 8]];
 // the order the tray resolves in: bank the loot, raise the guard, mend,
 // then unleash — curses always land last
-const RESOLVE_ORDER = ['gem', 'bag', 'silver', 'shielditem', 'red', 'heartitem', 'petitem',
+const RESOLVE_ORDER = ['gem', 'bag', 'buffitem', 'silver', 'shielditem', 'red', 'heartitem', 'petitem',
                        'gold', 'lucky', 'blue', 'weapon', 'bleeditem', 'green', 'vial',
                        'burnitem', 'frost', 'skull'];
 // deliberately UNHURRIED: each piece gets its moment so the damage reads
 const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42, lucky: 0.7, blue: 0.75, green: 0.5,
-                        petitem: 0.7, burnitem: 0.55, bleeditem: 0.55 };
+                        petitem: 0.7, burnitem: 0.55, bleeditem: 0.55, buffitem: 0.55 };
 
 // ------------------------------------------------------------ the machine
 // One battle cabinet, restyled per floor. Same geometry as the classic
@@ -152,6 +152,9 @@ const ITEMS = [
   { id: 'pup',    icon: '\u{1F436}',      name: 'Rock Pup',    kind: 'pet', php: 12, cost: 45 },
   { id: 'newt',   icon: '\u{1F98E}',      name: 'Cinder Newt', kind: 'pet', php: 7,  cost: 55 },
   { id: 'rat',    icon: '\u{1F400}',      name: 'Fang Rat',    kind: 'pet', php: 8,  cost: 55 },
+  // battle-long war paints: temporary STRENGTH / DEXTERITY for ONE fight
+  { id: 'horn',   icon: '\u{1F4EF}',      name: 'War Horn',    kind: 'buff', str: 2, cost: 38 },
+  { id: 'tonic',  icon: '\u{1F964}',      name: 'Grip Tonic',  kind: 'buff', dex: 2, cost: 38 },
 ];
 function itemById(id) { return ITEMS.find(i => i.id === id); }
 
@@ -393,7 +396,7 @@ function coinFx(k) {
   const M = (id, txt2) => { if (hasRelic(id)) { const rl = relicById(id); mods.push((rl ? rl.name : id) + ': ' + txt2); return true; } return false; };
   if (k === 'coin') {
     let d = C.DMG.gold;
-    if (S.run && S.run.str > 0) { d += S.run.str; mods.push('Strength: +' + S.run.str + ' dmg'); }
+    if (strTotal() > 0) { d += strTotal(); mods.push('Strength: +' + strTotal() + ' dmg'); }
     if (M('goldedge', '+1 dmg')) d++;
     if (M('keenedge', '+1 dmg')) d++;
     if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) { d += 2; mods.push('Berserker: +2 dmg (below half HP)'); }
@@ -410,6 +413,7 @@ function coinFx(k) {
     M('taxman', '+1 gold per coin fired');
   } else if (k === 'silver') {
     let b = 1;
+    if (dexTotal() > 0) { b += dexTotal(); mods.push('Dexterity: +' + dexTotal() + ' block'); }
     if (M('silvercore', '+1 block')) b++;
     if (M('bulwark', '+1 block')) b++;
     main = b + ' block';
@@ -447,7 +451,7 @@ function coinFx(k) {
     M('dragonbreath', 'also 1 BURN to every foe');
   } else if (k === 'lucky') {
     let d = C.DMG.lucky;
-    if (S.run && S.run.str > 0) { d += S.run.str; mods.push('Strength: +' + S.run.str + ' dmg'); }
+    if (strTotal() > 0) { d += strTotal(); mods.push('Strength: +' + strTotal() + ' dmg'); }
     if (M('starmetal', '+2 dmg')) d += 2;
     if (M('horseshoe', '+1 dmg')) d += 1;
     if (M('assassin', '+2 dmg, pierces guards')) d += 2;
@@ -506,6 +510,8 @@ function itemFx(iid) {
     main = (it.bleed + (hasRelic('scalpel') ? 2 : 0)) + ' BLEED';
     M('scalpel', '+2 bleed');
     M('hemorrhage', 'never fades');
+  } else if (it.kind === 'buff') {
+    main = it.str ? '+' + it.str + ' STRENGTH for one battle' : '+' + it.dex + ' DEXTERITY for one battle';
   } else if (it.kind === 'pet') {
     const hp = it.php + (hasRelic('kennel') ? 4 : 0) + (hasRelic('beastmaster') ? 2 : 0);
     const deed = it.id === 'pup' ? 'growls +1 block' : it.id === 'newt' ? 'spits 1 BURN' : 'gnaws 1 dmg + 1 BLEED';
@@ -585,6 +591,10 @@ const ENEMY_TIERS = [
     // BURN dies fast but hits hot
     { id: 'gutterrat', icon: '\u{1F400}', name: 'Gutter Rat',     hp: 24, atk: 2, trait: 'bleeder', def: null,  gold: 10 },
     { id: 'emberimp',  icon: '\u{1F47A}', name: 'Ember Imp',      hp: 22, atk: 2, trait: 'burner',  def: null,  gold: 11 },
+    // the machine-warpers: their tricks bend the PUSHER, not your HP bar
+    { id: 'traygremlin', icon: '\u{1F47A}', name: 'Tray Gremlin', hp: 36, atk: 2, trait: 'gremlin', def: null,  gold: 16 },
+    { id: 'rustmite',    icon: '\u{1FAB2}', name: 'Rust Mite',    hp: 30, atk: 2, trait: 'rustmite', def: null, gold: 13 },
+    { id: 'tarcube',     icon: '\u{2B1B}', name: 'Tar Cube',      hp: 34, atk: 2, trait: null,      def: 'tar', gold: 15 },
   ],
   // ---- ACT 2 (floors 6-10): the Deep Halls — frost-touched kin ----
   [
@@ -599,6 +609,9 @@ const ENEMY_TIERS = [
     // thick hide + bleeder: poison bounces off it, but it bleeds just fine
     { id: 'fleshripper', icon: '\u{1F9DF}', name: 'Flesh Ripper',  hp: 44, atk: 4, trait: 'bleeder', def: 'thick', gold: 24 },
     { id: 'pyretotem',   icon: '\u{1F5FF}', name: 'Pyre Totem',    hp: 40, atk: 4, trait: 'burner',  def: 'ward',  gold: 25 },
+    { id: 'magnetwraith', icon: '\u{1F9DF}', name: 'Magnet Wraith', hp: 48, atk: 3, trait: 'magnet', def: null,   gold: 22 },
+    { id: 'bellkeeper',   icon: '\u{1F514}', name: 'Bell Keeper',   hp: 46, atk: 3, trait: 'bell',   def: null,   gold: 24 },
+    { id: 'mirrorshell',  icon: '\u{1FA9E}', name: 'Mirror Shell',  hp: 44, atk: 4, trait: null,     def: 'mirror', gold: 24 },
   ],
   // ---- ACT 3 (floors 11+): the Abyss — ember-wreathed horrors ----
   [
@@ -612,6 +625,9 @@ const ENEMY_TIERS = [
     { id: 'infernogre',  icon: '\u{1F479}', name: 'Infernal Ogre',  hp: 100, atk: 8, trait: 'enrage', def: 'thick', gold: 44 },
     { id: 'bloodfiend',  icon: '\u{1F9DB}', name: 'Blood Fiend',    hp: 60, atk: 6, trait: 'bleeder', def: 'regen', gold: 34 },
     { id: 'ashogre',     icon: '\u{1F479}', name: 'Ash Ogre',       hp: 90, atk: 7, trait: 'burner',  def: 'thick', gold: 42 },
+    { id: 'chronophage', icon: '\u{231B}', name: 'Chronophage',    hp: 62, atk: 6, trait: 'chrono',  def: null,    gold: 34 },
+    { id: 'cowardking',  icon: '\u{1F451}', name: 'Coward King',    hp: 66, atk: 5, trait: 'coward',  def: 'armor', gold: 40 },
+    { id: 'twinidol',    icon: '\u{1F5FF}', name: 'Twin Idol',      hp: 56, atk: 5, trait: 'twin',    def: null,    gold: 30 },
   ],
 ];
 // back-compat alias: the act-1 roster (tests and old references)
@@ -648,17 +664,23 @@ const TRAIT_TXT = {
   venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field',
   enrage: 'fury builds — +1 attack every round', leech: 'drinks the damage it deals',
   bleeder: 'its blows leave you BLEEDING', burner: 'its blows set you ABLAZE',
+  gremlin: 'filches a piece from your tray each turn', rustmite: 'corrodes a pile coin into a slug',
+  magnet: 'drags your pile away from the edge', bell: 'tolls every 10th piece: the pack shields',
+  chrono: 'devours a TILT when hit for 8+', coward: 'hides behind its weakest ally when targeted',
+  twin: 'raises its fallen twin — fell both in one round',
 };
 // the defensive mechanic, spelled out on the foe's panel
 const DEF_TXT = {
   gel: 'gelatinous — every hit capped at ' + 2, armor: 'armoured — absorbs ' + 2 + ' off each hit',
   thick: 'thick hide — IMMUNE to poison', regen: 'regenerates each round',
   ward: 'warded — protects the pack (−' + 2 + ' dmg)',
+  mirror: 'mirrored — reflects the first hit each round (up to 8)',
+  tar: 'tarred — every 3rd piece STICKS (returned on its death)',
 };
 // a compact badge for each foe so its mechanic reads at a glance
 const DEF_BADGE = {
   gel: '\u{1F9EB} gel', armor: '\u{1F6E1}\u{FE0F}' + 2, thick: '☠\u{FE0F}\u{1F6AB}',
-  regen: '♻\u{FE0F}', ward: '\u{1F531}',
+  regen: '♻\u{FE0F}', ward: '\u{1F531}', mirror: '\u{1FA9E}', tar: '\u{2B1B}',
 };
 
 // room inhabitants for the top-down crawl
@@ -698,6 +720,11 @@ const S = {
   pPois: 0, pBleed: 0, pBurn: 0,       // what the dungeon left festering on YOU
   weakT: 0,                            // WEAKNESS rounds: your damage halves
   taxT: 0,                             // MISER'S CURSE rounds: every coin fired burns 1 HP
+  noTiltT: 0,                          // FROSTBITTEN HANDS rounds: TILT is dead
+  leadT: 0,                            // LEAD PURSE rounds: hands dealt 3 coins short
+  blackT: 0,                           // BLACKOUT rounds: enemy intents hidden
+  rustT: 0,                            // RUST rounds: your first item fires at half effect
+  tempStr: 0, tempDex: 0,              // battle-long war paints (War Horn / Grip Tonic)
   heroPick: 'knight',                  // last chosen adventurer (persisted)
   roomStamp: 0,                        // bumps on room change (avatar resets)
 };
@@ -726,7 +753,7 @@ function save() {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
         gold: S.run.gold, purse: S.run.purse, arsenal: S.run.arsenal,
-        relics: S.run.relics, potions: S.run.potions, whet: S.run.whet, str: S.run.str,
+        relics: S.run.relics, potions: S.run.potions, whet: S.run.whet, str: S.run.str, dex: S.run.dex,
         kills: S.run.kills, goldEarned: S.run.goldEarned, map: S.run.map,
         keys: S.run.keys, meter: S.meter,
         pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
@@ -757,7 +784,7 @@ function load() {
         purse: (d.run.purse && typeof d.run.purse === 'object') ? { ...START_PURSE, ...d.run.purse } : { ...START_PURSE },
         arsenal: (d.run.arsenal && typeof d.run.arsenal === 'object') ? d.run.arsenal : {},
         relics: Array.isArray(d.run.relics) ? d.run.relics.filter(relicById) : [],
-        potions: d.run.potions || 0, whet: d.run.whet || 0, str: d.run.str || 0,
+        potions: d.run.potions || 0, whet: d.run.whet || 0, str: d.run.str || 0, dex: d.run.dex || 0,
         kills: d.run.kills || 0, goldEarned: d.run.goldEarned || 0,
         map: (d.run.map && d.run.map.rooms && d.run.map.rooms[d.run.map.cur]) ? d.run.map : null,
         room: null,
@@ -881,8 +908,12 @@ function floatAt(txt2, wx, col, big) {
 function floatAnchor(txt2, anchor, col, big) {
   S.floats.push({ txt: txt2, anchor, age: 0, max: 1.2, col: col || '#ffd24a', big: !!big });
 }
+// effective STRENGTH / DEXTERITY: the rare permanent stat plus this
+// battle's war paints
+function strTotal() { return ((S.run && S.run.str) || 0) + (S.tempStr || 0); }
+function dexTotal() { return ((S.run && S.run.dex) || 0) + (S.tempDex || 0); }
 function weaponDmg(base) {
-  let d = base + (S.run ? S.run.whet + (S.run.str || 0) : 0);
+  let d = base + (S.run ? S.run.whet : 0) + strTotal();
   if (hasRelic('whet')) d = Math.round(d * 1.3);
   return d;
 }
@@ -905,11 +936,35 @@ function dmgFoe(e, n, src, pierce) {
   if (dot) {
     if (src === 'pois' && e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
   } else {
+    // MIRROR SHELL: the first direct hit each round bounces back at you
+    if (e.def === 'mirror' && !e.mirrorSpent) {
+      e.mirrorSpent = true;
+      e.hitT = 0.15;
+      floatAnchor('\u{1FA9E} MIRRORED!', 'enemy', '#9ae8e8', true);
+      hurtPlayer(Math.min(n, 8), 'your own blow, mirrored');
+      return 0;
+    }
     if (e.def === 'gel') n = Math.min(n, C.GEL_CAP);            // ooze caps the hit
     const absorb = (e.def === 'armor' ? C.ARMOR : 0) + packWard();
     if (absorb) n -= absorb;                                    // armour / ward soak
     if (e.braced && !pierce) n = Math.ceil(n / 2);              // its round-stance
     if (e.stunned > 0 && hasRelic('frostbite')) n += 2;         // Frostbite: brittle ice
+    // a shielded foe (the Bell Keeper's toll) soaks with its block first
+    if (n > 0 && e.block > 0) {
+      const soak = Math.min(e.block, n);
+      e.block -= soak; n -= soak;
+      if (soak > 0) floatAnchor('\u{1F6E1} ' + soak + ' soaked', 'enemy', '#c8d6e8');
+    }
+    // TAR: every 3rd piece that strikes it STICKS in the ooze
+    if (e.def === 'tar' && n > 0) {
+      e.tarN = (e.tarN || 0) + 1;
+      if (e.tarN % 3 === 0) {
+        (e.belly = e.belly || []).push({ k: 'coin' });
+        e.hitT = 0.15;
+        floatAnchor('STUCK in the tar!', 'enemy', '#8a8a5a');
+        return 0;
+      }
+    }
   }
   n = Math.round(n);
   if (n <= 0) { floatAnchor('BLOCKED', 'enemy', '#c8d6e8'); e.hitT = 0.15; return 0; }
@@ -918,6 +973,11 @@ function dmgFoe(e, n, src, pierce) {
   floatAnchor('-' + n, 'enemy', dot ? DOT_COL[src] : '#ff8a6b', n >= 8);
   // Arterial Cut: a heavy blow opens a wound
   if (!dot && n >= 8 && hasRelic('arterial') && e.hp > 0) applyBleed(e, 2, true);
+  // the CHRONOPHAGE feeds on heavy blows: 8+ damage costs you a TILT
+  if (!dot && n >= 8 && e.trait === 'chrono' && e.hp > 0 && S.battle && S.battle.tilts > 0) {
+    S.battle.tilts--;
+    floatAnchor('⌛ it devours a TILT', 'enemy', '#c8a8ff');
+  }
   if (e.hp <= 0) foeDown(e);
   return n;
 }
@@ -931,7 +991,7 @@ function goldDmg() {
   }
   if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) d += 2;
   if (hasRelic('heatwave') && S.foes && S.foes.some(f => f.hp > 0 && f.burn > 0)) d += 1;
-  d += (S.run && S.run.str) || 0;      // STRENGTH: +1 per point, every strike
+  d += strTotal();                     // STRENGTH: +1 per point, every strike
   return d;
 }
 // blue coins: the frost bites EVERY foe at once
@@ -970,6 +1030,12 @@ function foeDown(e) {
     S.run.room.ents[e.entIdx].done = true;
   }
   S.shake += 6;
+  // whatever it swallowed — the gremlin's stash, the tar's coins — spills back
+  if (e.belly && e.belly.length && S.battle) {
+    S.battle.loot.push(...e.belly);
+    floatAnchor('its stash spills back into your tray!', 'enemy', '#ffd75e', true);
+    e.belly = [];
+  }
   retarget();
   if (!S.foes.some(f => f.hp > 0)) winBattle();
 }
@@ -1211,6 +1277,11 @@ function scoreCoin(c) {
     openChest(c);
     return;
   }
+  // a corroded SLUG is worth nothing — it just clatters into the tray
+  if (c.kind === 'slug') {
+    floatAt('a worthless slug…', c.x, '#8a8a8a');
+    return;
+  }
   if (!S.battle) return;
   S.battle.loot.push({ k: c.kind, iid: c.iid });
   trayAdd(c.kind, { iid: c.iid, x: c.x });
@@ -1385,6 +1456,12 @@ function tilt(dir) {
   if (S.screen !== 'battle' || !S.run || S.victory) return false;
   const B = S.battle;
   if (!B || B.phase !== 'drop' || B.tilts < 1) return false;
+  // FROSTBITTEN HANDS: too numb to shake the machine this round
+  if (S.noTiltT > 0) {
+    floatAnchor('❄ your hands are too numb to TILT', 'hero', '#8be7ff');
+    SND.deny();
+    return false;
+  }
   B.tilts--;
   // a gentler nudge — enough to shift the pile, not to fling it
   for (const c of S.coins) {
@@ -1472,7 +1549,7 @@ function mkEnemy(type, eid) {
     trait: base.trait, def: base.def || null,
     gold: Math.round(base.gold * mult * (type === 'elite' ? 1.8 : 1)),
     boss: type === 'boss', elite: type === 'elite',
-    stunned: 0, pois: 0, bleed: 0, burn: 0, hitT: 0, lungeT: 0,
+    stunned: 0, pois: 0, bleed: 0, burn: 0, block: 0, hitT: 0, lungeT: 0,
   };
 }
 // its plan for the round, telegraphed on its panel
@@ -1482,6 +1559,9 @@ function rollIntent(e) {
   //   Pit Boss    -> WEAKNESS: your blows halve
   //   Vault Dragon-> BRAND: it sets you ablaze on the spot
   if (e.boss && (!e.intent || e.intent.t !== 'hex') && rng() < 0.22) { e.intent = { t: 'hex' }; return; }
+  // elites dabble in lesser hexes: frostbitten hands / lead purse /
+  // blackout / rust — one in seven turns
+  if (e.elite && (!e.intent || e.intent.t !== 'hex') && rng() < 0.15) { e.intent = { t: 'hex' }; return; }
   if (e.trait === 'curse' && rng() < 0.4) { e.intent = { t: 'curse' }; return; }
   const r = rng();
   if (r < 0.2 && e.intent && e.intent.t !== 'heavy') e.intent = { t: 'heavy', dmg: e.atk * 2 };
@@ -1492,7 +1572,8 @@ function rollIntent(e) {
 function dealHand() {
   const B = S.battle;
   B.hand = { ...S.run.purse };
-  let cut = B.stolen || 0;
+  // a thief's cut, plus the LEAD PURSE hex weighing the hand down
+  let cut = (B.stolen || 0) + (S.leadT > 0 ? 3 : 0);
   for (const k of COIN_KINDS) {
     while (cut > 0 && B.hand[k] > 0) { B.hand[k]--; cut--; }
   }
@@ -1542,7 +1623,18 @@ function startBattle(type, entIdx, eid, extras) {
   S.foeInfo = null;
   S.run.windUsed = false;
   S.pPois = 0; S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
+  S.noTiltT = 0; S.leadT = 0; S.blackT = 0; S.rustT = 0;
+  S.tempStr = 0; S.tempDex = 0;
   S.pets = [];
+  // TWIN IDOLS: met alone, the idol splits into a bonded pair — fell them
+  // in the same round or watch one raise the other
+  if (S.foes.length === 1 && S.foes[0].trait === 'twin') {
+    const a = S.foes[0];
+    const half = Math.max(1, Math.floor(a.maxHp / 2));
+    a.hp = a.maxHp = half;
+    const b = { ...a };
+    S.foes.push(b);
+  }
   // the Eternal Flame greets every pack with kindling
   if (hasRelic('eternalflame')) {
     for (const f of S.foes) f.burn = f.def === 'gel' ? 1 : 2;
@@ -1589,6 +1681,16 @@ function startBattle(type, entIdx, eid, extras) {
 // tap a foe on its panel to aim your gold at it
 function setTarget(i) {
   if (!S.battle || !S.foes[i] || S.foes[i].hp <= 0) return false;
+  // the COWARD KING swaps with his weakest lackey the moment you aim at him
+  const f = S.foes[i];
+  if (f.trait === 'coward') {
+    let w = -1;
+    S.foes.forEach((o, j) => { if (j !== i && o.hp > 0 && (w < 0 || o.hp < S.foes[w].hp)) w = j; });
+    if (w >= 0) {
+      S.foes[i] = S.foes[w]; S.foes[w] = f;
+      floatAnchor('the king HIDES behind his lackey!', 'enemy', '#ffd75e', true);
+    }
+  }
   S.battle.target = i;
   S.enemy = S.foes[i];
   return true;
@@ -1615,7 +1717,7 @@ function buildQueue(loot) {
       const t = it.kind === 'weapon' ? 'weapon' : it.kind === 'poison' ? 'vial'
               : it.kind === 'shield' ? 'shielditem' : it.kind === 'heal' ? 'heartitem'
               : it.kind === 'burn' ? 'burnitem' : it.kind === 'bleed' ? 'bleeditem'
-              : it.kind === 'pet' ? 'petitem' : 'frost';
+              : it.kind === 'pet' ? 'petitem' : it.kind === 'buff' ? 'buffitem' : 'frost';
       q.push({ t, iid: l.iid });
     } else q.push({ t: l.k });
   }
@@ -1675,10 +1777,18 @@ function applyLoot(q) {
   if (B && B.qi === 1 && hasRelic('papercut') && S.enemy && S.enemy.hp > 0 && !S.victory) {
     applyBleed(S.enemy, 1, true);
   }
+  // RUST: the round's first piece of gear fires at half effect
+  let rustK = 1;
+  if (S.rustT > 0 && q.iid && B && !B.rustSpent) {
+    B.rustSpent = true;
+    rustK = 0.5;
+    floatAnchor('\u{1F9A0} RUSTED — half effect', 'hero', '#c8a86a');
+  }
+  const rusted = (v) => Math.max(1, Math.floor(v * rustK));
   if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0));
   else if (q.t === 'bag') addGold(8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
   else if (q.t === 'silver') {
-    addBlock(1 + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0));
+    addBlock(1 + dexTotal() + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0));
     if (hasRelic('spikeshield')) dmgEnemy(1);
     if (hasRelic('retort')) dmgEnemy(2);
     // the Alloy fuses every third silver into a plate
@@ -1688,8 +1798,14 @@ function applyLoot(q) {
     }
   }
   else if (q.t === 'shielditem') {
-    addBlock(itemById(q.iid).block + (hasRelic('plateup') ? 3 : 0)
+    addBlock(rusted(itemById(q.iid).block) + (hasRelic('plateup') ? 3 : 0)
            + (hasRelic('shieldwall') ? 2 * S.pets.filter(p => p.hp > 0).length : 0));
+  }
+  else if (q.t === 'buffitem') {
+    const it = itemById(q.iid);
+    if (it.str) { S.tempStr += rusted(it.str); floatAnchor('\u{1F4AA} +' + rusted(it.str) + ' STRENGTH this battle!', 'hero', '#ffb46b', true); }
+    if (it.dex) { S.tempDex += rusted(it.dex); floatAnchor('\u{1F933} +' + rusted(it.dex) + ' DEXTERITY this battle!', 'hero', '#8be7ff', true); }
+    SND.buy();
   }
   else if (q.t === 'red') {
     healPlayer(C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0) + (hasRelic('greensprig') ? 1 : 0));
@@ -1697,7 +1813,7 @@ function applyLoot(q) {
     // Crimson Rain: mercy for you, misery for them
     if (hasRelic('crimsonrain')) for (const f of S.foes) if (f.hp > 0) applyBleed(f, 1, true);
   }
-  else if (q.t === 'heartitem') healPlayer(itemById(q.iid).heal + (hasRelic('fieldmedic') ? 4 : 0));
+  else if (q.t === 'heartitem') healPlayer(rusted(itemById(q.iid).heal) + (hasRelic('fieldmedic') ? 4 : 0));
   else if (q.t === 'gold') {
     const d = goldDmg();
     dmgEnemy(d);
@@ -1711,7 +1827,7 @@ function applyLoot(q) {
     SND.collect(2);
   }
   else if (q.t === 'lucky') {
-    let ld = C.DMG.lucky + ((S.run && S.run.str) || 0)
+    let ld = C.DMG.lucky + strTotal()
            + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0);
     // Lucky Streak: the dice heat up as they roll
     if (S.battle && hasRelic('luckystreak')) {
@@ -1741,6 +1857,7 @@ function applyLoot(q) {
     if (hasRelic('balancedblade') && q.iid === 'sword') wd += 4;
     if (hasRelic('butcher') && S.enemy && S.enemy.bleed > 0) wd += 3;
     if (hasRelic('heavyarms')) wd = Math.round(wd * 1.3);
+    wd = rusted(wd);
     dmgEnemy(wd);
     if (S.run && !S.victory && S.enemy && S.enemy.hp > 0) {
       if (hasRelic('serrator')) applyBleed(S.enemy, 2, true);
@@ -1757,9 +1874,9 @@ function applyLoot(q) {
     if (hasRelic('contagion')) for (const f of S.foes) { if (f.hp > 0 && f !== S.enemy) f.pois += 1; }
     if (hasRelic('alchemist')) healPlayer(1);
   }
-  else if (q.t === 'vial') poisonEnemy((itemById(q.iid).pois + (hasRelic('venom') ? 2 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
-  else if (q.t === 'burnitem') burnEnemy(itemById(q.iid).burn + (hasRelic('arsonist') ? 3 : 0));
-  else if (q.t === 'bleeditem') bleedEnemy(itemById(q.iid).bleed + (hasRelic('scalpel') ? 2 : 0));
+  else if (q.t === 'vial') poisonEnemy((rusted(itemById(q.iid).pois) + (hasRelic('venom') ? 2 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
+  else if (q.t === 'burnitem') burnEnemy(rusted(itemById(q.iid).burn) + (hasRelic('arsonist') ? 3 : 0));
+  else if (q.t === 'bleeditem') bleedEnemy(rusted(itemById(q.iid).bleed) + (hasRelic('scalpel') ? 2 : 0));
   else if (q.t === 'petitem') summonPet(q.iid);
   else if (q.t === 'frost') {
     stunEnemy(itemById(q.iid).stun + (hasRelic('deepfreeze') ? 1 : 0));
@@ -1775,6 +1892,12 @@ function applyLoot(q) {
       (q.t === 'gold' || q.t === 'silver' || q.t === 'green' || q.t === 'red' || q.t === 'blue' || q.t === 'lucky')) {
     hpHit(1, 'the miser’s curse', '#ffd75e');
     if (!S.run) return;
+  }
+  // the BELL KEEPER tolls on every 10th piece you fire: the pack shields up
+  if (S.battle && S.run && !S.victory && S.battle.qi > 0 && S.battle.qi % 10 === 0 &&
+      S.foes.some(f => f.hp > 0 && f.trait === 'bell')) {
+    floatAnchor('\u{1F514} the bell tolls — the pack shields!', 'enemy', '#e8c877', true);
+    for (const f of S.foes) if (f.hp > 0) f.block = (f.block || 0) + 5;
   }
   // the Quartermaster hands the first piece of gear back for a second swing
   if (q.iid && hasRelic('quartermaster') && S.battle && !S.battle.qmUsed && S.run && !S.victory) {
@@ -1800,22 +1923,59 @@ function enemyActFoe(e) {
     rollIntent(e);
     return;
   }
+  // the machine-warpers work their mischief on top of their blow
+  if (e.trait === 'gremlin' && S.battle && S.battle.loot.length) {
+    // it filches the SMALLEST piece from your tray — kill it to get it back
+    const order = ['coin', 'silver', 'green', 'red', 'blue', 'lucky', 'gem', 'bag'];
+    let idx = -1;
+    for (const k of order) { idx = S.battle.loot.findIndex(l => l.k === k); if (idx >= 0) break; }
+    if (idx < 0) idx = 0;
+    (e.belly = e.belly || []).push(S.battle.loot.splice(idx, 1)[0]);
+    floatAnchor('the gremlin filches from your tray!', 'hero', '#ff9d3c', true);
+  }
+  if (e.trait === 'rustmite') {
+    const targets = S.coins.filter(c => c.st === 'plat' && (c.kind === 'coin' || c.kind === 'silver' || c.kind === 'lucky'));
+    if (targets.length) {
+      const c = targets[(rng() * targets.length) | 0];
+      c.kind = 'slug';
+      floatAt('corroded…', c.x, '#c8a86a');
+    }
+  }
+  if (e.trait === 'magnet') {
+    const plat = S.coins.filter(c => c.st === 'plat' && c.y > 18);
+    if (plat.length) {
+      for (let m = 0; m < 2 && plat.length; m++) {
+        const c = plat.splice((rng() * plat.length) | 0, 1)[0];
+        c.y = Math.max(10, c.y - 12);
+      }
+      floatAnchor('\u{1F9F2} the pile is dragged BACK', 'hero', '#b8b8ff');
+    }
+  }
   const it = e.intent || { t: 'hit', dmg: e.atk };
   e.lungeT = 0.4;
   if (it.t === 'brace') {
     e.braced = true;
     floatAnchor(e.name + ' braces', 'enemy', '#c8d6e8');
   } else if (it.t === 'hex') {
-    // the boss's signature hex lands on YOU
-    if (e.id === 'lich') {
-      S.taxT = Math.max(S.taxT, 3);
-      floatAnchor('MISER’S CURSE! coins burn 1 HP (3 rounds)', 'hero', '#ffd75e', true);
-    } else if (e.id === 'demon') {
-      S.weakT = Math.max(S.weakT, 2);
-      floatAnchor('WEAKENED! your blows halve (2 rounds)', 'hero', '#c8b8e0', true);
+    if (e.boss) {
+      // the boss's signature hex lands on YOU
+      if (e.id === 'lich') {
+        S.taxT = Math.max(S.taxT, 3);
+        floatAnchor('MISER’S CURSE! coins burn 1 HP (3 rounds)', 'hero', '#ffd75e', true);
+      } else if (e.id === 'demon') {
+        S.weakT = Math.max(S.weakT, 2);
+        floatAnchor('WEAKENED! your blows halve (2 rounds)', 'hero', '#c8b8e0', true);
+      } else {
+        S.pBurn += 4;
+        floatAnchor('BRANDED! the dragon sets you ablaze', 'hero', '#ff9d3c', true);
+      }
     } else {
-      S.pBurn += 4;
-      floatAnchor('BRANDED! the dragon sets you ablaze', 'hero', '#ff9d3c', true);
+      // an elite's lesser hex
+      const h2 = (rng() * 4) | 0;
+      if (h2 === 0) { S.noTiltT = Math.max(S.noTiltT, 1); floatAnchor('❄ FROSTBITTEN HANDS! no TILT next round', 'hero', '#8be7ff', true); }
+      else if (h2 === 1) { S.leadT = Math.max(S.leadT, 2); floatAnchor('\u{1FAB6} LEAD PURSE! hands dealt 3 short', 'hero', '#c8c8d6', true); }
+      else if (h2 === 2) { S.blackT = Math.max(S.blackT, 2); floatAnchor('\u{1F311} BLACKOUT! intents hidden', 'hero', '#9a8aa0', true); }
+      else { S.rustT = Math.max(S.rustT, 2); floatAnchor('\u{1F9A0} RUST! your first item fires at half', 'hero', '#c8a86a', true); }
     }
     SND.poison();
   } else if (it.t === 'curse') {
@@ -1927,6 +2087,24 @@ function endRoundTicks() {
   // the hexes wear off round by round
   if (S.weakT > 0) S.weakT--;
   if (S.taxT > 0) S.taxT--;
+  if (S.noTiltT > 0) S.noTiltT--;
+  if (S.leadT > 0) S.leadT--;
+  if (S.blackT > 0) S.blackT--;
+  if (S.rustT > 0) S.rustT--;
+  // a lone TWIN IDOL raises its fallen partner — fell them together
+  {
+    const twins = S.foes.filter(f => f.trait === 'twin');
+    if (twins.length === 2) {
+      const dead = twins.find(f => f.hp <= 0), alive = twins.find(f => f.hp > 0);
+      if (dead && alive) {
+        dead.hp = Math.max(1, Math.floor(dead.maxHp / 2));
+        dead.pois = 0; dead.bleed = 0; dead.burn = 0;
+        floatAnchor('the idol RAISES its twin!', 'enemy', '#c86bff', true);
+      }
+    }
+  }
+  // mirror stances re-polish and tolled shields melt between rounds
+  for (const f of S.foes) { f.mirrorSpent = false; f.block = 0; }
 }
 function newRound() {
   const B = S.battle;
@@ -1939,6 +2117,7 @@ function newRound() {
   B.banked = [];
   B.queue = []; B.qi = 0;
   B.tilts = tiltCount();
+  B.rustSpent = false;                  // the RUST hex bites once per round
   // block melts between rounds — unless the Aegis holds it
   S.run.block = (hasRelic('aegis') ? S.run.block : 0) + startBlock();
   // Mending knits a little flesh, the Lucky Penny a little coin, each round
@@ -2077,6 +2256,7 @@ function leaveBattle() {
   S.run.pileFloor = S.run.floor;
   S.victory = null; S.foes = []; S.pets = []; S.foeInfo = null; S.enemy = null; S.battle = null; S.run.battleEnt = null;
   S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
+  S.noTiltT = 0; S.leadT = 0; S.blackT = 0; S.rustT = 0; S.tempStr = 0; S.tempDex = 0;
   S.coins.length = 0;
   if (boss) {              // the lair opens: stairs down appear where it fell
     S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
@@ -2125,7 +2305,7 @@ function newRun(heroId) {
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
     gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS,
     arsenal: { sword: 1, shield: 1, vial: 1 },
-    relics: [], potions: C.START_POTIONS, whet: 0, str: 0,
+    relics: [], potions: C.START_POTIONS, whet: 0, str: 0, dex: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
     pileSave: null, pileFloor: 0, pending: [],
   };
@@ -2134,6 +2314,7 @@ function newRun(heroId) {
   S.heroPick = hero.id;
   S.foes = []; S.pets = []; S.enemy = null; S.victory = null; S.room = null; S.over = null; S.inv = null;
   S.meter = 0; S.pPois = 0; S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
+  S.noTiltT = 0; S.leadT = 0; S.blackT = 0; S.rustT = 0; S.tempStr = 0; S.tempDex = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
   genFloor();
   S.screen = 'dungeon';
@@ -2577,10 +2758,12 @@ function boonOptions() {
   const it = ITEMS[(rng() * ITEMS.length) | 0];
   opts.push({ kind: 'item', iid: it.id, label: it.icon + ' Take a ' + it.name });
   {
+    // permanent STRENGTH / DEXTERITY are VERY RARE prizes (8% each)
     const r2 = rng();
-    opts.push(r2 < 0.34 ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
-            : r2 < 0.67 ? { kind: 'pouch', label: '\u{1F45B} +' + C.POUCH_COINS + ' gold coins to your purse' }
-            : { kind: 'str', label: '\u{1F4AA} War Paint: +1 STRENGTH', sub: 'every gold, lucky and weapon hit deals +1 forever' });
+    opts.push(r2 < 0.42 ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
+            : r2 < 0.84 ? { kind: 'pouch', label: '\u{1F45B} +' + C.POUCH_COINS + ' gold coins to your purse' }
+            : r2 < 0.92 ? { kind: 'str', label: '\u{1F4AA} War Paint: +1 STRENGTH', sub: 'every gold, lucky and weapon hit deals +1 forever' }
+            : { kind: 'dex', label: '\u{1F933} Sure Hands: +1 DEXTERITY', sub: 'every silver coin blocks +1 forever' });
   }
   // the forge hones gear and grit, never relics — those come off the wheel
   opts.push(rng() < 0.5
@@ -2596,6 +2779,7 @@ function pickBoon(i) {
   else if (o.kind === 'maxhp') { S.run.maxHp += 12; S.run.hp = Math.min(S.run.maxHp, S.run.hp + 12); }
   else if (o.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
   else if (o.kind === 'str') S.run.str = (S.run.str || 0) + 1;
+  else if (o.kind === 'dex') S.run.dex = (S.run.dex || 0) + 1;
   else if (o.kind === 'potion') S.run.potions += 2;
   else if (o.kind === 'whet') S.run.whet++;
   S.room.done = true;
@@ -2920,7 +3104,7 @@ window.DP = {
   buyShop, removeArsenal, coinPriceFor, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
-  bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap,
+  bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap, strTotal, dexTotal,
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
@@ -3002,6 +3186,10 @@ if (!HEADLESS) (function browser() {
     gutterrat: ['goblin', '#a8784a'], emberimp: ['smasher', '#ff9d3c'],
     fleshripper: ['revenant', '#ff8a6b'], pyretotem: ['totem', '#ff6b4a'],
     bloodfiend: ['revenant', '#ff4a6e'], ashogre: ['ogre', '#9a9aa8'],
+    // the machine-warpers and trick-stances, three per act
+    traygremlin: ['goblin', '#5ad0c8'], rustmite: ['slime', '#c88a4a'], tarcube: ['slime', '#4a4a52'],
+    magnetwraith: ['revenant', '#b8b8ff'], bellkeeper: ['totem', '#e8c877'], mirrorshell: ['skeleton', '#9ae8e8'],
+    chronophage: ['ogre', '#c8a8ff'], cowardking: ['goblin', '#ffd75e'], twinidol: ['totem', '#c86bff'],
   };
   function tintedArt(baseKey, variantKey, tint) {
     const ck = 'tint_' + variantKey;
@@ -3161,10 +3349,13 @@ if (!HEADLESS) (function browser() {
     green:  { edge: '#2f6b30', f0: '#e0ffd8', f1: '#8ed67e', f2: '#3f8f42', ring: 'rgba(35,95,40,0.6)',  sym: 'rgba(25,75,30,0.9)' },
     red:    { edge: '#7a2430', f0: '#ffd8dc', f1: '#e87a8a', f2: '#a83a4a', ring: 'rgba(120,40,55,0.6)', sym: 'rgba(110,30,45,0.9)' },
     blue:   { edge: '#2a4a7a', f0: '#d8ecff', f1: '#7ab0e8', f2: '#3a6aa8', ring: 'rgba(40,75,125,0.6)', sym: 'rgba(30,60,110,0.9)' },
+    // a Rust Mite's leavings: a corroded, worthless slug
+    slug:   { edge: '#4a4a4a', f0: '#9a9a9a', f1: '#7a7a7a', f2: '#525252', ring: 'rgba(60,60,60,0.6)', sym: 'rgba(50,50,50,0.9)' },
   };
-  const COIN_SYMS = { coin: '⚔', lucky: '★', silver: '◆', green: '☠', red: '♥', blue: '❆' };
+  const COIN_SYMS = { coin: '⚔', lucky: '★', silver: '◆', green: '☠', red: '♥', blue: '❆', slug: '·' };
   const COIN_UI = {
     coin: '#f2c04a', silver: '#c3ccd6', green: '#8ed67e', red: '#e87a8a', blue: '#7ab0e8', lucky: '#ffdf6b',
+    slug: '#8a8a8a',
   };
   function flatSprite(styleKey, pal, sym) {
     return sprite('cf_' + styleKey + '_' + sym, 96, 66, (g) => {
@@ -3744,6 +3935,11 @@ if (!HEADLESS) (function browser() {
     if (S.pBurn > 0) txt('\u{1F525} ' + S.pBurn, hx + 34, hy - 50, '800 11px Verdana, sans-serif', '#ff9d3c', 'left');
     if (S.weakT > 0) txt('\u{2B07} WEAK ' + S.weakT, hx - 62, hy - 38, '800 10px Verdana, sans-serif', '#c8b8e0', 'left');
     if (S.taxT > 0) txt('\u{1FA99}☠ ' + S.taxT, hx - 62, hy - 26, '800 10px Verdana, sans-serif', '#ffd75e', 'left');
+    if (S.noTiltT > 0) txt('❄✋', hx - 62, hy - 14, '800 10px Verdana, sans-serif', '#8be7ff', 'left');
+    if (S.leadT > 0) txt('\u{1FAB6} -3', hx - 62, hy - 50, '800 10px Verdana, sans-serif', '#c8c8d6', 'left');
+    if (S.rustT > 0) txt('\u{1F9A0} rust', hx - 62, hy - 62, '800 10px Verdana, sans-serif', '#c8a86a', 'left');
+    if (strTotal() > 0) txt('\u{1F4AA}' + strTotal(), hx + 34, hy - 62, '800 10px Verdana, sans-serif', '#ffb46b', 'left');
+    if (dexTotal() > 0) txt('\u{1F933}' + dexTotal(), hx + 58, hy - 62, '800 10px Verdana, sans-serif', '#8be7ff', 'left');
     if (S.hurtT > 0.28) txt('\u{1F4A2}', hx + 26, hy - 56, '22px serif', '#fff');
     // ---- the pack: your pets stand at the hero's heel ----
     S.pets.forEach((p, pi) => {
@@ -3843,11 +4039,13 @@ if (!HEADLESS) (function browser() {
       if (e.bleed > 0) { txt('\u{1FA78}' + e.bleed, cx - bw / 2 - 13, sy2, '800 10px Verdana, sans-serif', '#ff5a6e'); sy2 += 11; }
       if (e.burn > 0) { txt('\u{1F525}' + e.burn, cx - bw / 2 - 13, sy2, '800 10px Verdana, sans-serif', '#ff9d3c'); }
       if (e.braced) txt('\u{1F6E1}', cx + bw / 2 + 11, by + 4, '11px serif', '#fff');
+      if (e.block > 0) txt('\u{1F6E1}' + e.block, cx + bw / 2 + 13, by + (e.braced ? 15 : 4), '800 9px Verdana, sans-serif', '#e8c877');
       // its defensive mechanic, badged under the bar (packs); the lone foe
       // gets the full description in its header instead
       if (e.def && n > 1) txt(DEF_BADGE[e.def], cx, by + 13, '800 8px Verdana, sans-serif',
                               '#d8c8f0', 'center', { w: 2, col: 'rgba(10,5,12,0.9)' });
-      const intentTxt = e.stunned > 0 ? '❄ skips turn'
+      const intentTxt = S.blackT > 0 ? '❓ ???'
+        : e.stunned > 0 ? '❄ skips turn'
         : it.t === 'heavy' ? '\u{1F4A5} ' + (e.atk * 2) + (e.trait === 'fast' ? '×2' : '')
         : it.t === 'brace' ? '\u{1F6E1} braces'
         : it.t === 'curse' ? '\u{1F480} skulls'
@@ -4227,7 +4425,7 @@ if (!HEADLESS) (function browser() {
 
   // ---------------------------------------------------------- battle: pieces
   const ITEM_GLOW = { weapon: '#ffb46b', poison: '#b8f26b', shield: '#c8d6e8', heal: '#ff8da1', stun: '#8be7ff',
-                      burn: '#ff9d3c', bleed: '#ff5a6e', pet: '#ffd75e' };
+                      burn: '#ff9d3c', bleed: '#ff5a6e', pet: '#ffd75e', buff: '#ffe066' };
   function drawCoin(c, t) {
     let zv = c.z;
     if (c.st === 'plat') {
@@ -4824,6 +5022,10 @@ if (!HEADLESS) (function browser() {
       if (S.pBurn > 0) st.push(['\u{1F525}' + S.pBurn, '#ff9d3c']);
       if (S.weakT > 0) st.push(['\u{2B07}' + S.weakT, '#c8b8e0']);
       if (S.taxT > 0) st.push(['\u{1FA99}☠' + S.taxT, '#ffd75e']);
+      if (S.noTiltT > 0) st.push(['❄✋', '#8be7ff']);
+      if (S.leadT > 0) st.push(['\u{1FAB6}', '#c8c8d6']);
+      if (S.blackT > 0) st.push(['❓', '#9a8aa0']);
+      if (S.rustT > 0) st.push(['\u{1F9A0}', '#c8a86a']);
       let sx3 = 280;
       for (const [txt3, col3] of st) {
         txt(txt3, sx3, 733, '800 11px Verdana, sans-serif', col3, 'left');
@@ -5091,6 +5293,8 @@ if (!HEADLESS) (function browser() {
     gel: 'chip it with many small coins, or POISON it', armor: 'gold bounces — bring poison, lucky or weapons',
     thick: 'poison does nothing; answer with raw damage', regen: 'out-tick it with poison, or burst it down fast',
     ward: 'punch through with big hits — or kill it first',
+    mirror: 'lead with a CHEAP coin to spring the mirror, then unload',
+    tar: 'the DoTs slip past the tar — or feed it and claim the refund',
   };
   const TRAIT_ATK = {
     fast: 'strikes TWICE each turn', thief: 'steals coins from next round',
@@ -5098,6 +5302,13 @@ if (!HEADLESS) (function browser() {
     enrage: 'FURY: +1 attack every round — kill it fast', leech: 'LEECH: heals for damage dealt — block hard',
     bleeder: 'BLEEDER: its hits leave wounds that halve each round',
     burner: 'BURNER: its hits ignite you — hot, but fades fast',
+    gremlin: 'GREMLIN: filches your tray each turn — its stash returns when it dies',
+    rustmite: 'RUST MITE: corrodes a pile coin into a worthless slug each turn',
+    magnet: 'MAGNET: drags your pile away from the edge each turn',
+    bell: 'BELL: every 10th piece you fire shields the whole pack (+5)',
+    chrono: 'CHRONOPHAGE: hits of 8+ cost you a TILT charge',
+    coward: 'COWARD: swaps with its weakest ally when you target it',
+    twin: 'TWIN: raises its fallen partner — kill both in ONE round',
   };
   function drawFoeInfo(t) {
     if (S.foeInfo === null || !S.foes || !S.foes[S.foeInfo]) return;
@@ -5145,7 +5356,8 @@ if (!HEADLESS) (function browser() {
     }
     // what it's about to do
     const it = e.intent || {};
-    const plan = e.stunned > 0 ? 'frozen — it skips its next turn'
+    const plan = S.blackT > 0 ? 'unknowable — the BLACKOUT swallows its plan'
+      : e.stunned > 0 ? 'frozen — it skips its next turn'
       : it.t === 'heavy' ? 'winding up a HEAVY blow (' + (e.atk * 2) + ')'
       : it.t === 'brace' ? 'bracing — it will take half damage'
       : it.t === 'curse' ? 'about to hurl a skull volley'
@@ -5285,7 +5497,8 @@ if (!HEADLESS) (function browser() {
       // STATS: the run's vitals, then every run-wide relic bend
       const core = [
         ['HP', r.hp + ' / ' + r.maxHp + (S.pPois > 0 ? '   ☠ poisoned ' + S.pPois : '')],
-        ['strength', '\u{1F4AA} ' + (r.str || 0) + (r.str > 0 ? '  (+' + r.str + ' dmg per hit)' : '')],
+        ['strength', '\u{1F4AA} ' + strTotal() + (strTotal() > 0 ? '  (+' + strTotal() + ' dmg per hit)' : '')],
+        ['dexterity', '\u{1F933} ' + dexTotal() + (dexTotal() > 0 ? '  (+' + dexTotal() + ' block per silver)' : '')],
         ['block', '' + r.block + (hasRelic('aegis') ? ' (carries over)' : '')],
         ['gold', fmt(r.gold)],
         ['keys', '' + r.keys],
@@ -5462,12 +5675,13 @@ if (!HEADLESS) (function browser() {
     if (q.t === 'burnitem') return 'BURN ×' + (it.burn + (hasRelic('arsonist') ? 3 : 0));
     if (q.t === 'bleeditem') return 'BLEED ×' + (it.bleed + (hasRelic('scalpel') ? 2 : 0));
     if (q.t === 'petitem') return it.name.toUpperCase() + ' JOINS!';
+    if (q.t === 'buffitem') return it.str ? '+' + it.str + ' STR!' : '+' + it.dex + ' DEX!';
     return '';
   }
   const RINGS = [];
   window.__dpResolveFx = function (q) {
     const toHero = q.t === 'silver' || q.t === 'red' || q.t === 'shielditem' || q.t === 'heartitem'
-                || q.t === 'skull' || q.t === 'petitem';
+                || q.t === 'skull' || q.t === 'petitem' || q.t === 'buffitem';
     const toGold = q.t === 'gem' || q.t === 'bag';
     const tgt = toGold ? { x: 90, y: 756 }
               : toHero ? { x: ANCHORS.hero.x, y: ANCHORS.hero.y + 28 }
