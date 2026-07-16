@@ -2338,6 +2338,13 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   const { DP: G } = loadGame(gstore, false);
   const GS = G.S;
   G.srand(1313);
+  // the ghost is EARNED: locked until a run has reached floor 20
+  t.ok(!G.heroUnlocked('ghost'), 'a fresh profile has not earned the Poltergeist');
+  G.newRun('ghost');
+  t.eq(GS.run.hero, 'knight', 'picking the locked ghost falls back to the knight');
+  t.ok(G.heroUnlocked('knight'), 'the mortal four are always open');
+  GS.best.floor = 20;
+  t.ok(G.heroUnlocked('ghost'), 'floor 20 on the record breaks the seal');
   G.newRun('ghost');
   t.eq(GS.run.hero, 'ghost', 'the Poltergeist answers the call');
   t.eq(GS.run.purse.lucky, 2, 'its signature: +2 LUCKY (ghost-luck)');

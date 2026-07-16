@@ -664,6 +664,12 @@ const HEROES = [
   { id: 'ghost',  name: 'Poltergeist', icon: '\u{1F47B}', coin: 'lucky', perk: 'purse RAINS in • TILT ×2' },
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
+// the Poltergeist is EARNED: it answers only to those who have carried a
+// run down to floor 20 (best-run depth, persisted across runs)
+const GHOST_UNLOCK_FLOOR = 20;
+function heroUnlocked(id) {
+  return id !== 'ghost' || !!(S.best && S.best.floor >= GHOST_UNLOCK_FLOOR);
+}
 // the Poltergeist's whole kit hangs off this one question
 function ghostRun() { return !!(S.run && S.run.hero === 'ghost'); }
 const TRAIT_TXT = {
@@ -2343,7 +2349,9 @@ function endRun(cause) {
 // backtracking); slain monsters cough keys up. The floor is a real MAP:
 // rooms persist, and the minimap uncovers as you explore.
 function newRun(heroId) {
-  const hero = heroById(heroId) || heroById(S.heroPick) || HEROES[0];
+  let hero = heroById(heroId) || heroById(S.heroPick) || HEROES[0];
+  // a still-locked hero falls back to the knight — no sneaking past the seal
+  if (!heroUnlocked(hero.id)) hero = HEROES[0];
   S.run = {
     hero: hero.id,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
@@ -3170,7 +3178,7 @@ window.DP = {
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
-  darkFloor, payableKinds, coinKindWith, ghostRun,
+  darkFloor, payableKinds, coinKindWith, ghostRun, heroUnlocked,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
@@ -5966,7 +5974,7 @@ if (!HEADLESS) (function browser() {
     return { x: FR.x0, y: cy };
   }
   // the hero puppet + inputs
-  let heroSel = heroById(S.heroPick) ? S.heroPick : 'knight';
+  let heroSel = heroById(S.heroPick) && heroUnlocked(S.heroPick) ? S.heroPick : 'knight';
   const AV = { x: LW / 2, y: 0, stamp: -1, step: 0, moving: false, fx: 0, fy: -1, dir: 'u', animT: 0 };
   const JOY = { active: false, ox: 0, oy: 0, dx: 0, dy: 0, id: null };
   const KEYS = {};
@@ -6739,9 +6747,23 @@ if (!HEADLESS) (function browser() {
     HEROES.forEach((h, i) => {
       const x = 12 + i * (hw + 6), y = 484, w = hw, hh = 118;
       const sel = heroSel === h.id;
-      uiBtn(x, y, w, hh, '', () => { heroSel = h.id; S.heroPick = h.id; save(); },
-            { bg: sel ? 'rgba(66,44,72,0.95)' : 'rgba(26,17,28,0.9)',
-              border: sel ? '#ffd75e' : '#4a3a50', r: 12 });
+      const locked = !heroUnlocked(h.id);
+      uiBtn(x, y, w, hh, '', () => {
+        if (locked) return;
+        heroSel = h.id; S.heroPick = h.id; save();
+      }, { bg: locked ? 'rgba(14,10,16,0.92)' : sel ? 'rgba(66,44,72,0.95)' : 'rgba(26,17,28,0.9)',
+           border: locked ? '#33283a' : sel ? '#ffd75e' : '#4a3a50', r: 12 });
+      if (locked) {
+        // a sealed silhouette — carry a run to floor 20 to break the seal
+        ctx.save();
+        ctx.globalAlpha = 0.22;
+        txt(h.icon, x + w / 2, y + 44, '34px serif', '#fff');
+        ctx.restore();
+        txt('\u{1F512}', x + w / 2, y + 52, '16px serif', '#fff');
+        txt('???', x + w / 2, y + 88, '900 11px Verdana, sans-serif', '#5a4a5f');
+        txt('reach FLOOR ' + GHOST_UNLOCK_FLOOR, x + w / 2, y + 104, '700 7px Verdana, sans-serif', '#7a6a80');
+        return;
+      }
       const key = h.id + '_idle';
       if (!(SHEETS[key] && drawArt(key, x + w / 2, y + 72, 46, 'd', t))) {
         txt(h.icon, x + w / 2, y + 48, '34px serif', '#fff');
