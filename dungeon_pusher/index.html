@@ -393,6 +393,7 @@ function coinFx(k) {
   const M = (id, txt2) => { if (hasRelic(id)) { const rl = relicById(id); mods.push((rl ? rl.name : id) + ': ' + txt2); return true; } return false; };
   if (k === 'coin') {
     let d = C.DMG.gold;
+    if (S.run && S.run.str > 0) { d += S.run.str; mods.push('Strength: +' + S.run.str + ' dmg'); }
     if (M('goldedge', '+1 dmg')) d++;
     if (M('keenedge', '+1 dmg')) d++;
     if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) { d += 2; mods.push('Berserker: +2 dmg (below half HP)'); }
@@ -446,6 +447,7 @@ function coinFx(k) {
     M('dragonbreath', 'also 1 BURN to every foe');
   } else if (k === 'lucky') {
     let d = C.DMG.lucky;
+    if (S.run && S.run.str > 0) { d += S.run.str; mods.push('Strength: +' + S.run.str + ' dmg'); }
     if (M('starmetal', '+2 dmg')) d += 2;
     if (M('horseshoe', '+1 dmg')) d += 1;
     if (M('assassin', '+2 dmg, pierces guards')) d += 2;
@@ -694,6 +696,8 @@ const S = {
   best: { floor: 0, depth: 0, kills: 0, gold: 0 },
   wheelAnim: null, pendingPick: null, relicPick: null, uiFlash: null, toast: null,
   pPois: 0, pBleed: 0, pBurn: 0,       // what the dungeon left festering on YOU
+  weakT: 0,                            // WEAKNESS rounds: your damage halves
+  taxT: 0,                             // MISER'S CURSE rounds: every coin fired burns 1 HP
   heroPick: 'knight',                  // last chosen adventurer (persisted)
   roomStamp: 0,                        // bumps on room change (avatar resets)
 };
@@ -722,7 +726,7 @@ function save() {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
         gold: S.run.gold, purse: S.run.purse, arsenal: S.run.arsenal,
-        relics: S.run.relics, potions: S.run.potions, whet: S.run.whet,
+        relics: S.run.relics, potions: S.run.potions, whet: S.run.whet, str: S.run.str,
         kills: S.run.kills, goldEarned: S.run.goldEarned, map: S.run.map,
         keys: S.run.keys, meter: S.meter,
         pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
@@ -736,7 +740,8 @@ function load() {
     if (!d) return;
     S.mute = !!d.mute;
     if (d.resolveMul === 2 || d.resolveMul === 3) S.resolveMul = d.resolveMul;
-    if (d.turbo === 2 || d.turbo === 4) S.turbo = d.turbo;
+    if (d.turbo === 2 || d.turbo === 5 || d.turbo === 10) S.turbo = d.turbo;
+    else if (d.turbo === 4) S.turbo = 5;      // migrate the old ×4 step
     else if (d.turbo === true) S.turbo = 2;   // migrate the old on/off flag
     if (d.best && typeof d.best === 'object') {
       S.best = { floor: d.best.floor || 0, depth: d.best.depth || 0,
@@ -752,7 +757,7 @@ function load() {
         purse: (d.run.purse && typeof d.run.purse === 'object') ? { ...START_PURSE, ...d.run.purse } : { ...START_PURSE },
         arsenal: (d.run.arsenal && typeof d.run.arsenal === 'object') ? d.run.arsenal : {},
         relics: Array.isArray(d.run.relics) ? d.run.relics.filter(relicById) : [],
-        potions: d.run.potions || 0, whet: d.run.whet || 0,
+        potions: d.run.potions || 0, whet: d.run.whet || 0, str: d.run.str || 0,
         kills: d.run.kills || 0, goldEarned: d.run.goldEarned || 0,
         map: (d.run.map && d.run.map.rooms && d.run.map.rooms[d.run.map.cur]) ? d.run.map : null,
         room: null,
@@ -851,9 +856,9 @@ function spawnDrop(x, ty, kind) {
 
 // ------------------------------------------------------------------ pusher
 // TURBO also quickens the slide — a milder bump than the drop rate so the
-// pile isn't flung: ×2 turbo -> 1.5× pusher, ×4 -> 2×
+// pile isn't flung: ×2 turbo -> 1.5× pusher, ×5 -> 2×, ×10 -> 2.5×
 function pushRate() {
-  return S.turbo === 4 ? 2 : S.turbo === 2 ? 1.5 : 1;
+  return S.turbo === 10 ? 2.5 : S.turbo === 5 ? 2 : S.turbo === 2 ? 1.5 : 1;
 }
 function pusherFront(ti) {
   const td = MACH.tiers[ti || 0];
@@ -877,7 +882,7 @@ function floatAnchor(txt2, anchor, col, big) {
   S.floats.push({ txt: txt2, anchor, age: 0, max: 1.2, col: col || '#ffd24a', big: !!big });
 }
 function weaponDmg(base) {
-  let d = base + (S.run ? S.run.whet : 0);
+  let d = base + (S.run ? S.run.whet + (S.run.str || 0) : 0);
   if (hasRelic('whet')) d = Math.round(d * 1.3);
   return d;
 }
@@ -894,6 +899,8 @@ const DOT_COL = { pois: '#b8f26b', bleed: '#ff5a6e', burn: '#ff9d3c' };
 function dmgFoe(e, n, src, pierce) {
   if (!S.run || !e || e.hp <= 0) return 0;
   const dot = src === 'pois' || src === 'bleed' || src === 'burn';
+  // WEAKNESS saps your arm: direct blows halve (rounded down); rot still rots
+  if (!dot && S.weakT > 0) n = Math.max(1, Math.floor(n / 2));
   n = Math.max(1, Math.round(n));
   if (dot) {
     if (src === 'pois' && e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
@@ -924,6 +931,7 @@ function goldDmg() {
   }
   if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) d += 2;
   if (hasRelic('heatwave') && S.foes && S.foes.some(f => f.hp > 0 && f.burn > 0)) d += 1;
+  d += (S.run && S.run.str) || 0;      // STRENGTH: +1 per point, every strike
   return d;
 }
 // blue coins: the frost bites EVERY foe at once
@@ -1366,7 +1374,7 @@ function drop(x) {
   B.hand[kind]--;
   syncWallet();
   autoSel();
-  S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×4 shortens the cooldown to match
+  S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 shortens the cooldown to match
   S.dropped++; S.meter++;
   SND.slot();
   if (S.meter >= C.METER_MAX) frenzy();
@@ -1469,6 +1477,11 @@ function mkEnemy(type, eid) {
 }
 // its plan for the round, telegraphed on its panel
 function rollIntent(e) {
+  // bosses weave HEXES: signature curses that bend how YOU play
+  //   Coin Lich   -> MISER'S CURSE: every coin you fire burns 1 HP
+  //   Pit Boss    -> WEAKNESS: your blows halve
+  //   Vault Dragon-> BRAND: it sets you ablaze on the spot
+  if (e.boss && (!e.intent || e.intent.t !== 'hex') && rng() < 0.22) { e.intent = { t: 'hex' }; return; }
   if (e.trait === 'curse' && rng() < 0.4) { e.intent = { t: 'curse' }; return; }
   const r = rng();
   if (r < 0.2 && e.intent && e.intent.t !== 'heavy') e.intent = { t: 'heavy', dmg: e.atk * 2 };
@@ -1528,7 +1541,7 @@ function startBattle(type, entIdx, eid, extras) {
   S.victory = null;
   S.foeInfo = null;
   S.run.windUsed = false;
-  S.pPois = 0; S.pBleed = 0; S.pBurn = 0;
+  S.pPois = 0; S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
   S.pets = [];
   // the Eternal Flame greets every pack with kindling
   if (hasRelic('eternalflame')) {
@@ -1629,9 +1642,9 @@ function cycleSpeed() {
   save();
   return S.resolveMul;
 }
-// TURBO drop rate steps off -> ×2 -> ×4 -> off
+// TURBO drop rate steps off -> ×2 -> ×5 -> ×10 -> off
 function cycleTurbo() {
-  S.turbo = S.turbo === 1 || !S.turbo ? 2 : S.turbo === 2 ? 4 : 1;
+  S.turbo = S.turbo === 1 || !S.turbo ? 2 : S.turbo === 2 ? 5 : S.turbo === 5 ? 10 : 1;
   save();
   return S.turbo;
 }
@@ -1698,7 +1711,8 @@ function applyLoot(q) {
     SND.collect(2);
   }
   else if (q.t === 'lucky') {
-    let ld = C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0);
+    let ld = C.DMG.lucky + ((S.run && S.run.str) || 0)
+           + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0);
     // Lucky Streak: the dice heat up as they roll
     if (S.battle && hasRelic('luckystreak')) {
       ld += S.battle.luckyFired || 0;
@@ -1756,6 +1770,12 @@ function applyLoot(q) {
     const ward = (hasRelic('wardcandle') ? 3 : 0) + (hasRelic('blessing') ? 2 : 0);
     hpHit(Math.max(1, C.SKULL_DMG + S.run.floor - 1 - ward), 'a cursed skull', '#c86bff');
   }
+  // the MISER'S CURSE: every coin you fire burns 1 HP, straight through block
+  if (S.taxT > 0 && S.run && !S.victory &&
+      (q.t === 'gold' || q.t === 'silver' || q.t === 'green' || q.t === 'red' || q.t === 'blue' || q.t === 'lucky')) {
+    hpHit(1, 'the miser’s curse', '#ffd75e');
+    if (!S.run) return;
+  }
   // the Quartermaster hands the first piece of gear back for a second swing
   if (q.iid && hasRelic('quartermaster') && S.battle && !S.battle.qmUsed && S.run && !S.victory) {
     S.battle.qmUsed = true;
@@ -1785,6 +1805,19 @@ function enemyActFoe(e) {
   if (it.t === 'brace') {
     e.braced = true;
     floatAnchor(e.name + ' braces', 'enemy', '#c8d6e8');
+  } else if (it.t === 'hex') {
+    // the boss's signature hex lands on YOU
+    if (e.id === 'lich') {
+      S.taxT = Math.max(S.taxT, 3);
+      floatAnchor('MISER’S CURSE! coins burn 1 HP (3 rounds)', 'hero', '#ffd75e', true);
+    } else if (e.id === 'demon') {
+      S.weakT = Math.max(S.weakT, 2);
+      floatAnchor('WEAKENED! your blows halve (2 rounds)', 'hero', '#c8b8e0', true);
+    } else {
+      S.pBurn += 4;
+      floatAnchor('BRANDED! the dragon sets you ablaze', 'hero', '#ff9d3c', true);
+    }
+    SND.poison();
   } else if (it.t === 'curse') {
     for (let h = 0; h < 2; h++) {
       S.rain.push({ t: 0.3 + h * 0.25, x: 15 + rng() * 70, y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
@@ -1891,6 +1924,9 @@ function endRoundTicks() {
     const s = S.pBurn; S.pBurn = Math.max(0, S.pBurn - 2);
     hpHit(s, 'burning alive', '#ff9d3c');
   }
+  // the hexes wear off round by round
+  if (S.weakT > 0) S.weakT--;
+  if (S.taxT > 0) S.taxT--;
 }
 function newRound() {
   const B = S.battle;
@@ -2040,7 +2076,7 @@ function leaveBattle() {
   S.run.pileSave = serializePile();
   S.run.pileFloor = S.run.floor;
   S.victory = null; S.foes = []; S.pets = []; S.foeInfo = null; S.enemy = null; S.battle = null; S.run.battleEnt = null;
-  S.pBleed = 0; S.pBurn = 0;
+  S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
   S.coins.length = 0;
   if (boss) {              // the lair opens: stairs down appear where it fell
     S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
@@ -2089,7 +2125,7 @@ function newRun(heroId) {
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
     gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS,
     arsenal: { sword: 1, shield: 1, vial: 1 },
-    relics: [], potions: C.START_POTIONS, whet: 0,
+    relics: [], potions: C.START_POTIONS, whet: 0, str: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
     pileSave: null, pileFloor: 0, pending: [],
   };
@@ -2097,7 +2133,7 @@ function newRun(heroId) {
   S.run.purse[hero.coin] += 2;
   S.heroPick = hero.id;
   S.foes = []; S.pets = []; S.enemy = null; S.victory = null; S.room = null; S.over = null; S.inv = null;
-  S.meter = 0; S.pPois = 0; S.pBleed = 0; S.pBurn = 0;
+  S.meter = 0; S.pPois = 0; S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
   genFloor();
   S.screen = 'dungeon';
@@ -2540,9 +2576,12 @@ function boonOptions() {
   const opts = [];
   const it = ITEMS[(rng() * ITEMS.length) | 0];
   opts.push({ kind: 'item', iid: it.id, label: it.icon + ' Take a ' + it.name });
-  opts.push(rng() < 0.5
-    ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
-    : { kind: 'pouch', label: '\u{1F45B} +' + C.POUCH_COINS + ' gold coins to your purse' });
+  {
+    const r2 = rng();
+    opts.push(r2 < 0.34 ? { kind: 'maxhp', label: '❤\u{FE0F} +12 max HP (and heal 12)' }
+            : r2 < 0.67 ? { kind: 'pouch', label: '\u{1F45B} +' + C.POUCH_COINS + ' gold coins to your purse' }
+            : { kind: 'str', label: '\u{1F4AA} War Paint: +1 STRENGTH', sub: 'every gold, lucky and weapon hit deals +1 forever' });
+  }
   // the forge hones gear and grit, never relics — those come off the wheel
   opts.push(rng() < 0.5
     ? { kind: 'whet', label: '\u{1FA9A} Hone: all weapons +1 damage' }
@@ -2556,6 +2595,7 @@ function pickBoon(i) {
   if (o.kind === 'item') grantItem(o.iid, 1);
   else if (o.kind === 'maxhp') { S.run.maxHp += 12; S.run.hp = Math.min(S.run.maxHp, S.run.hp + 12); }
   else if (o.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
+  else if (o.kind === 'str') S.run.str = (S.run.str || 0) + 1;
   else if (o.kind === 'potion') S.run.potions += 2;
   else if (o.kind === 'whet') S.run.whet++;
   S.room.done = true;
@@ -3702,6 +3742,8 @@ if (!HEADLESS) (function browser() {
     if (S.pPois > 0) txt('☠ ' + S.pPois, hx + 34, hy - 38, '800 11px Verdana, sans-serif', '#b8f26b', 'left');
     if (S.pBleed > 0) txt('\u{1FA78} ' + S.pBleed, hx + 34, hy - 26, '800 11px Verdana, sans-serif', '#ff5a6e', 'left');
     if (S.pBurn > 0) txt('\u{1F525} ' + S.pBurn, hx + 34, hy - 50, '800 11px Verdana, sans-serif', '#ff9d3c', 'left');
+    if (S.weakT > 0) txt('\u{2B07} WEAK ' + S.weakT, hx - 62, hy - 38, '800 10px Verdana, sans-serif', '#c8b8e0', 'left');
+    if (S.taxT > 0) txt('\u{1FA99}☠ ' + S.taxT, hx - 62, hy - 26, '800 10px Verdana, sans-serif', '#ffd75e', 'left');
     if (S.hurtT > 0.28) txt('\u{1F4A2}', hx + 26, hy - 56, '22px serif', '#fff');
     // ---- the pack: your pets stand at the hero's heel ----
     S.pets.forEach((p, pi) => {
@@ -3809,6 +3851,7 @@ if (!HEADLESS) (function browser() {
         : it.t === 'heavy' ? '\u{1F4A5} ' + (e.atk * 2) + (e.trait === 'fast' ? '×2' : '')
         : it.t === 'brace' ? '\u{1F6E1} braces'
         : it.t === 'curse' ? '\u{1F480} skulls'
+        : it.t === 'hex' ? '\u{1F52E} HEX'
         : '⚔ ' + e.atk + (e.trait === 'fast' ? '×2' : '');
       // the telegraph: over its head in a pack, under the bar when alone
       // (the lone foe's name owns the headline spot)
@@ -4779,6 +4822,8 @@ if (!HEADLESS) (function browser() {
       if (S.pPois > 0) st.push(['☠' + S.pPois, '#b8f26b']);
       if (S.pBleed > 0) st.push(['\u{1FA78}' + S.pBleed, '#ff5a6e']);
       if (S.pBurn > 0) st.push(['\u{1F525}' + S.pBurn, '#ff9d3c']);
+      if (S.weakT > 0) st.push(['\u{2B07}' + S.weakT, '#c8b8e0']);
+      if (S.taxT > 0) st.push(['\u{1FA99}☠' + S.taxT, '#ffd75e']);
       let sx3 = 280;
       for (const [txt3, col3] of st) {
         txt(txt3, sx3, 733, '800 11px Verdana, sans-serif', col3, 'left');
@@ -5104,6 +5149,7 @@ if (!HEADLESS) (function browser() {
       : it.t === 'heavy' ? 'winding up a HEAVY blow (' + (e.atk * 2) + ')'
       : it.t === 'brace' ? 'bracing — it will take half damage'
       : it.t === 'curse' ? 'about to hurl a skull volley'
+      : it.t === 'hex' ? 'weaving its signature HEX on you'
       : 'a plain strike for ' + e.atk;
     txt('this turn: ' + plan, cx, yy, '700 10px Verdana, sans-serif', '#c8b8a0');
     const pulse = 1 + Math.sin(t * 5) * 0.03;
@@ -5239,6 +5285,7 @@ if (!HEADLESS) (function browser() {
       // STATS: the run's vitals, then every run-wide relic bend
       const core = [
         ['HP', r.hp + ' / ' + r.maxHp + (S.pPois > 0 ? '   ☠ poisoned ' + S.pPois : '')],
+        ['strength', '\u{1F4AA} ' + (r.str || 0) + (r.str > 0 ? '  (+' + r.str + ' dmg per hit)' : '')],
         ['block', '' + r.block + (hasRelic('aegis') ? ' (carries over)' : '')],
         ['gold', fmt(r.gold)],
         ['keys', '' + r.keys],
