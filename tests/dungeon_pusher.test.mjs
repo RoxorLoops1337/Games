@@ -270,19 +270,23 @@ t.eq(S.cd, C.DROP_CD, 'off: a normal drop sets the full cooldown');
 t.eq(DP.cycleTurbo(), 2, 'tapping TURBO steps to ×2');
 S.cd = 0; DP.drop(50);
 t.eq(S.cd, C.DROP_CD / 2, '×2 halves the cooldown — coins drop twice as fast');
-t.eq(DP.cycleTurbo(), 4, 'again -> ×4');
+t.eq(DP.cycleTurbo(), 5, 'again -> ×5');
 S.cd = 0; DP.drop(50);
-t.eq(S.cd, C.DROP_CD / 4, '×4 quarters it — four times as fast');
+t.eq(S.cd, C.DROP_CD / 5, '×5 pours five times as fast');
+t.eq(DP.cycleTurbo(), 10, 'again -> ×10');
+S.cd = 0; DP.drop(50);
+t.eq(S.cd, C.DROP_CD / 10, '×10 is a firehose');
 t.eq(DP.cycleTurbo(), 1, 'and it wraps back to off');
 t.eq(S.turbo, 1, 'the choice is sticky on the state');
 // TURBO also quickens the pusher slide (a milder bump than the drop rate)
 t.eq(DP.pushRate(), 1, 'off: the pusher runs at base speed');
 S.turbo = 2; t.eq(DP.pushRate(), 1.5, '×2 turbo slides the pusher 1.5× faster');
-S.turbo = 4; t.eq(DP.pushRate(), 2, '×4 turbo doubles the pusher speed');
+S.turbo = 5; t.eq(DP.pushRate(), 2, '×5 turbo doubles the pusher speed');
+S.turbo = 10; t.eq(DP.pushRate(), 2.5, '×10 turbo runs the pusher 2.5×');
 {
   // the phase really does advance faster under turbo
   S.turbo = 1; S.phase = 0; DP.step(1, true); const slow = S.phase;
-  S.turbo = 4; S.phase = 0; DP.step(1, true); const fast = S.phase;
+  S.turbo = 5; S.phase = 0; DP.step(1, true); const fast = S.phase;
   t.ok(Math.abs(fast - slow * 2) < 1e-9, 'and the slide phase advances at double rate');
 }
 S.turbo = 1;
@@ -2030,6 +2034,78 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.ok(R.coinFx('coin').mods.some(m => m.indexOf('Matchstick') === 0), 'the BAG lists Matchstick on gold');
   t.ok(R.itemFx('pup').main.indexOf('HP pet') > 0, 'the BAG reads a pet item as a pet');
   t.ok(R.itemFx('torch').main.indexOf('BURN') > 0, 'the BAG reads the torch in burn stacks');
+}
+
+// ============================================================
+// HEXES & GRIT: strength, weakness, and the miser's curse
+// ============================================================
+{
+  const hstore = {};
+  const { DP: H } = loadGame(hstore, false);
+  const HS = H.S;
+  H.srand(6006);
+  H.newRun('knight');
+  HS.run.hp = HS.run.maxHp = 500;
+
+  // STRENGTH: +1 per point on gold, lucky and weapons
+  const g0 = H.goldDmg(), w0 = H.weaponDmg(8);
+  HS.run.str = 3;
+  t.eq(H.goldDmg(), g0 + 3, 'strength rides every gold coin');
+  t.eq(H.weaponDmg(8), w0 + 3, 'and every weapon swing');
+  HS.run.str = 0;
+
+  HS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  H.interact(0);
+  HS.enemy.hp = HS.enemy.maxHp = 500;
+
+  // WEAKNESS: direct blows halve (rounded down), DoTs do not care
+  HS.weakT = 2;
+  let hp0 = HS.enemy.hp;
+  H.dmgFoe(HS.enemy, 9);
+  t.eq(hp0 - HS.enemy.hp, 4, 'weakness halves a 9 into a 4');
+  HS.enemy.pois = 6;
+  hp0 = HS.enemy.hp;
+  H.dmgFoe(HS.enemy, 6, 'pois');
+  t.eq(hp0 - HS.enemy.hp, 6, 'rot ignores your weak arm');
+  H.endRoundTicks();
+  t.eq(HS.weakT, 1, 'weakness wears off round by round');
+  HS.weakT = 0; HS.enemy.pois = 0;
+
+  // MISER'S CURSE: every coin fired burns 1 HP straight through block
+  HS.taxT = 2;
+  HS.run.block = 10;
+  const myHp = HS.run.hp;
+  H.applyLoot({ t: 'gold' });
+  t.eq(HS.run.hp, myHp - 1, 'a taxed gold coin bites 1 HP');
+  H.applyLoot({ t: 'silver' });
+  t.eq(HS.run.hp, myHp - 2, 'even a silver pays the miser — block does not help');
+  H.applyLoot({ t: 'weapon', iid: 'sword' });
+  t.eq(HS.run.hp, myHp - 2, 'items are not coins — the curse ignores them');
+  H.endRoundTicks();
+  H.endRoundTicks();
+  t.eq(HS.taxT, 0, 'the curse lifts after its rounds');
+
+  // boss hexes: each boss weaves its signature
+  const lich = H.mkEnemy('boss');
+  lich.id = 'lich'; lich.intent = { t: 'hex' };
+  HS.foes = [lich]; HS.enemy = lich;
+  H.enemyActFoe(lich);
+  t.eq(HS.taxT, 3, 'the Coin Lich lays the MISER’S CURSE (3 rounds)');
+  const demon = H.mkEnemy('boss');
+  demon.id = 'demon'; demon.intent = { t: 'hex' };
+  H.enemyActFoe(demon);
+  t.eq(HS.weakT, 2, 'the Pit Boss saps you WEAK (2 rounds)');
+  const dragon = H.mkEnemy('boss');
+  dragon.id = 'dragon'; dragon.intent = { t: 'hex' };
+  const burn0 = HS.pBurn;
+  H.enemyActFoe(dragon);
+  t.eq(HS.pBurn, burn0 + 4, 'the Vault Dragon BRANDS you with 4 burn');
+
+  // the forge can paint strength on
+  HS.run.str = 0;
+  HS.room = { type: 'forge', opts: [{ kind: 'str', label: 'x' }], done: false };
+  H.pickBoon(0);
+  t.eq(HS.run.str, 1, 'War Paint at the forge grants +1 STRENGTH');
 }
 
 // ============================================================
