@@ -992,7 +992,7 @@ S.run.relics = [];
   t.ok(rarCount.r > 15 && rarCount.r < 90, 'rares show up now and then (~15%: ' + rarCount.r + '/300)');
   t.ok(rarCount.e >= 3 && rarCount.e < 40, 'epics are the 5% jackpot (' + rarCount.e + '/300)');
   t.ok(rarCount.c > rarCount.r && rarCount.r > rarCount.e, 'the odds ladder holds: c > r > e');
-  t.ok(!relicInForge, 'no forge boon is ever an relic');
+  t.ok(!relicInForge, 'no forge boon is ever a relic');
   // buying the cased relic puts it on your shelf
   {
     S.run.room.ents = [{ kind: 'shop', done: false }];
@@ -1015,7 +1015,7 @@ S.run.relics = [];
   S.run.relics = [];
 }
 
-// -------- winning an relic on the wheel lets you CHOOSE it --------
+// -------- winning a relic on the wheel lets you CHOOSE it --------
 {
   DP.srand(52);
   S.run.relics = [];
