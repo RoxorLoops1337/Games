@@ -261,8 +261,8 @@ let landed = false;
 for (let i = 0; i < 60 * 6 && !landed; i++) { DP.tick(DT); if (dropped.st === 'plat') landed = true; }
 t.ok(landed, 'dropped coin lands on the platform (or the shelf)');
 
-// -------- TURBO: cycles off / ×2 / ×4, shortening the drop cooldown --------
-S.battle.hand = { coin: 20, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+// -------- TURBO: off / ×2 / ×5 / ×10 / ×20, a GENUINE multiple of drop rate --------
+S.battle.hand = { coin: 40, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
 S.battle.sel = 'coin';
 S.turbo = 1; S.cd = 0;
 DP.drop(50);
@@ -276,10 +276,48 @@ t.eq(S.cd, C.DROP_CD / 5, '×5 pours five times as fast');
 t.eq(DP.cycleTurbo(), 10, 'again -> ×10');
 S.cd = 0; DP.drop(50);
 t.eq(S.cd, C.DROP_CD / 10, '×10 is a firehose');
+t.eq(DP.cycleTurbo(), 20, 'again -> ×20');
+S.cd = 0; DP.drop(50);
+t.eq(S.cd, C.DROP_CD / 20, '×20 shortens the cooldown twentyfold');
 t.eq(DP.cycleTurbo(), 1, 'and it wraps back to off');
 t.eq(S.turbo, 1, 'the choice is sticky on the state');
-// TURBO also quickens the pusher slide (a milder bump than the drop rate)
-t.eq(DP.pushRate(), 1, 'off: the pusher runs at base speed');
+// the forced pour (hold-drop) ignores the cooldown gate so a frame can fire many
+{
+  S.turbo = 20; S.cd = 999;
+  const hand0 = S.battle.hand.coin;
+  t.ok(DP.drop(50, true), 'a forced pour drops even mid-cooldown');
+  t.eq(S.battle.hand.coin, hand0 - 1, 'and it spends a coin');
+}
+// GENUINE ×N: pouring for the same wall-clock drops N× as many coins.
+// pourStep(dt) accumulates a budget and fires many coins per frame at high turbo.
+{
+  const pourFor = (turbo, secs) => {
+    S.turbo = turbo; S.pourAcc = 0; S.cd = 0;
+    // a giant hand + empty field so neither the hand nor the coin cap caps us
+    S.battle.hand = { coin: 100000, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+    S.battle.sel = 'coin';
+    S.coins.length = 0;
+    let n = 0;
+    const dt = 1 / 60;
+    for (let i = 0; i < Math.round(secs * 60); i++) {
+      n += DP.pourStep(dt);
+      S.coins.length = 0;   // clear the field so the machine never fills
+    }
+    return n;
+  };
+  const secs = 10;
+  const base = pourFor(1, secs), t2 = pourFor(2, secs);
+  const t5 = pourFor(5, secs), t10 = pourFor(10, secs), t20 = pourFor(20, secs);
+  t.ok(Math.abs(base / secs - 3.57) < 0.3, 'off pours ~3.6 coins/sec (' + (base / secs).toFixed(1) + ')');
+  t.ok(Math.abs(t2 / base - 2) < 0.15, '×2 pours a genuine ~2× (' + t2 + ' vs ' + base + ')');
+  t.ok(Math.abs(t5 / base - 5) < 0.2, '×5 pours a genuine ~5× (' + t5 + ' vs ' + base + ')');
+  t.ok(Math.abs(t10 / base - 10) < 0.4, '×10 pours a genuine ~10× (' + t10 + ' vs ' + base + ')');
+  t.ok(Math.abs(t20 / base - 20) < 0.6, '×20 pours a genuine ~20× (' + t20 + ' vs ' + base + ')');
+  S.coins.length = 0;
+}
+// TURBO also quickens the pusher slide — deliberately milder than the drop rate
+t.eq(DP.pushRate(), 3, '×20 turbo still keeps the pusher tame at 3×');
+S.turbo = 1; t.eq(DP.pushRate(), 1, 'off: the pusher runs at base speed');
 S.turbo = 2; t.eq(DP.pushRate(), 1.5, '×2 turbo slides the pusher 1.5× faster');
 S.turbo = 5; t.eq(DP.pushRate(), 2, '×5 turbo doubles the pusher speed');
 S.turbo = 10; t.eq(DP.pushRate(), 2.5, '×10 turbo runs the pusher 2.5×');

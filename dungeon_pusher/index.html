@@ -700,9 +700,9 @@ const ENT_INFO = {
 const S = {
   coins: [], floats: [], parts: [], rain: [],
   meter: 0,
-  time: 0, phase: 0, cd: 0,
+  time: 0, phase: 0, cd: 0, pourAcc: 0,
   shake: 0, aimX: 50, mute: false, resolveMul: 1,   // sticky resolve fast-forward (×1/2/3)
-  turbo: 1,                            // sticky TURBO drop-rate multiplier (1 / 2 / 4)
+  turbo: 1,                            // sticky TURBO drop-rate multiplier (1 / 2 / 5 / 10 / 20)
   dropped: 0, collected: 0,
   banner: null, trayPile: 0, denyT: 0, hurtT: 0,
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
@@ -771,7 +771,7 @@ function load() {
     if (!d) return;
     S.mute = !!d.mute;
     if (d.resolveMul === 2 || d.resolveMul === 3) S.resolveMul = d.resolveMul;
-    if (d.turbo === 2 || d.turbo === 5 || d.turbo === 10) S.turbo = d.turbo;
+    if (d.turbo === 2 || d.turbo === 5 || d.turbo === 10 || d.turbo === 20) S.turbo = d.turbo;
     else if (d.turbo === 4) S.turbo = 5;      // migrate the old ×4 step
     else if (d.turbo === true) S.turbo = 2;   // migrate the old on/off flag
     if (d.best && typeof d.best === 'object') {
@@ -887,10 +887,11 @@ function spawnDrop(x, ty, kind) {
 }
 
 // ------------------------------------------------------------------ pusher
-// TURBO also quickens the slide — a milder bump than the drop rate so the
-// pile isn't flung: ×2 turbo -> 1.5× pusher, ×5 -> 2×, ×10 -> 2.5×
+// TURBO also quickens the slide — but the pusher is deliberately kept MILD
+// (the drop rate is the true ×N; a pusher moving 20× would fling the pile off
+// the edge). ×2 -> 1.5×, ×5 -> 2×, ×10 -> 2.5×, ×20 -> 3×.
 function pushRate() {
-  return S.turbo === 10 ? 2.5 : S.turbo === 5 ? 2 : S.turbo === 2 ? 1.5 : 1;
+  return S.turbo === 20 ? 3 : S.turbo === 10 ? 2.5 : S.turbo === 5 ? 2 : S.turbo === 2 ? 1.5 : 1;
 }
 function pusherFront(ti) {
   const td = MACH.tiers[ti || 0];
@@ -1433,14 +1434,16 @@ function autoSel() {
     if ((B.hand[k] || 0) > 0) { B.sel = k; return; }
   }
 }
-function drop(x) {
+// `force` (the hold-pour) skips the cooldown gate and manages its own timing
+// via the pour budget, so turbo can fire several coins in a single frame.
+function drop(x, force) {
   if (S.screen !== 'battle' || !S.run || S.victory) return false;
   const B = S.battle;
   if (!B || B.phase !== 'drop') return false;
-  if (S.cd > 0) return false;
+  if (!force && S.cd > 0) return false;
   autoSel();
   const kind = B.sel;
-  if ((B.hand[kind] || 0) < 1) { S.denyT = 0.6; SND.deny(); return false; }
+  if ((B.hand[kind] || 0) < 1) { if (!force) { S.denyT = 0.6; SND.deny(); } return false; }
   // spawn FIRST — if the machine is packed to its cap, hold the coin back
   // in your hand rather than silently swallowing it (and don't burn the
   // cooldown, so the held stream resumes the instant the field clears)
@@ -1450,11 +1453,26 @@ function drop(x) {
   B.hand[kind]--;
   syncWallet();
   autoSel();
-  S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 shortens the cooldown to match
+  S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 / ×20 shortens the cooldown to match
   S.dropped++; S.meter++;
   SND.slot();
   if (S.meter >= C.METER_MAX) frenzy();
   return true;
+}
+// the hold-pour: turn elapsed time into as many drops as the (turbo-shortened)
+// interval allows this frame — so TURBO is a GENUINE ×N of the base drop rate,
+// not one-coin-per-frame. Returns how many coins actually fell.
+function pourStep(dt) {
+  const interval = C.DROP_CD / (S.turbo || 1);
+  S.pourAcc = (S.pourAcc || 0) + dt;
+  let dropped = 0, guard = 0;
+  while (S.pourAcc >= interval && guard < 256) {
+    S.pourAcc -= interval;
+    guard++;
+    if (!drop(S.aimX, true)) { S.pourAcc = 0; break; }   // hand empty / field packed
+    dropped++;
+  }
+  return dropped;
 }
 // TILT the machine — the classic sin, three charges a round
 function tilt(dir) {
@@ -1749,9 +1767,11 @@ function cycleSpeed() {
   save();
   return S.resolveMul;
 }
-// TURBO drop rate steps off -> ×2 -> ×5 -> ×10 -> off
+// TURBO drop rate steps off -> ×2 -> ×5 -> ×10 -> ×20 -> off. Each step is a
+// GENUINE multiple of the base drop rate: the hold-pour fires as many coins
+// per frame as the shortened cooldown budget allows (see the frame loop).
 function cycleTurbo() {
-  S.turbo = S.turbo === 1 || !S.turbo ? 2 : S.turbo === 2 ? 5 : S.turbo === 5 ? 10 : 1;
+  S.turbo = S.turbo === 2 ? 5 : S.turbo === 5 ? 10 : S.turbo === 10 ? 20 : S.turbo === 20 ? 1 : 2;
   save();
   return S.turbo;
 }
@@ -2860,7 +2880,7 @@ function initPile() {
   S.trayPile = 0;
 }
 function reset() {
-  S.time = 0; S.phase = 0; S.cd = 0;
+  S.time = 0; S.phase = 0; S.cd = 0; S.pourAcc = 0;
   S.floats.length = 0; S.parts.length = 0; S.rain.length = 0;
   S.banner = null; S.trayPile = 0; S.shake = 0;
   S.tray.items.length = 0;
@@ -3128,7 +3148,7 @@ window.DP = {
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
   darkFloor, payableKinds, coinKindWith,
-  bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, packWard, RARITY,
+  bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
 };
@@ -6768,9 +6788,11 @@ if (!HEADLESS) (function browser() {
       if (S.victory) S.victory.t += dt;
       if (held && !S.victory) {
         holdT += dt;
-        // a short warm-up, then a steady pour paced by the drop cooldown
-        if (holdT > 0.22 && S.cd <= 0) drop(S.aimX);
-      }
+        // a short warm-up, then a steady pour paced by the turbo-shortened
+        // interval (fires several coins per frame at high turbo — a true ×N)
+        if (holdT > 0.22) pourStep(dt);
+        else S.pourAcc = 0;
+      } else S.pourAcc = 0;
     } else {
       // keep light UI timers alive outside the machine
       if (RFX.length) RFX.length = 0;
