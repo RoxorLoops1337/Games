@@ -662,7 +662,7 @@ const HEROES = [
   // the out-of-the-box ones: a ghost that CANNOT touch coins and fights
   // by SHAKING THE WORLD, and a keeper whose CLAW plucks the pile clean
   { id: 'ghost',  name: 'Poltergeist', icon: '\u{1F47B}', coin: 'lucky', perk: 'purse RAINS in • TILT ×2' },
-  { id: 'crane',  name: 'Crane Keeper', icon: '\u{1F579}\u{FE0F}', coin: 'coin', perk: 'CLAW plucks the pile ×3' },
+  { id: 'crane',  name: 'Crane Keeper', icon: '\u{1F579}\u{FE0F}', coin: 'coin', perk: 'a real CLAW GAME ×2' },
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
 // the Poltergeist is EARNED: it answers only to those who have carried a
@@ -675,8 +675,9 @@ function heroUnlocked(id) {
 function ghostRun() { return !!(S.run && S.run.hero === 'ghost'); }
 // ...and the Crane Keeper's off this one
 function craneRun() { return !!(S.run && S.run.hero === 'crane'); }
-// grabs per round: three, plus one for every act survived
-function grabCount() { return 3 + ((((S.run ? S.run.floor : 1) - 1) / 5) | 0); }
+// claw drops per round: two, plus one per act survived (capped at four —
+// each drop hauls a whole CHUNK now)
+function grabCount() { return 2 + Math.min(2, (((S.run ? S.run.floor : 1) - 1) / 5) | 0); }
 const TRAIT_TXT = {
   fast: 'strikes twice a round', thief: 'steals coins from your purse',
   venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field',
@@ -1452,38 +1453,46 @@ function autoSel() {
 }
 // `force` (the hold-pour) skips the cooldown gate and manages its own timing
 // via the pour budget, so turbo can fire several coins in a single frame.
-// the CLAW: the Crane Keeper's release-to-pluck. It plunges at x and
-// closes on the front-most piece it can reach — gear is grabbed from
-// wider out (the claw never misses what it was built for), and a plunge
-// onto bare stone still spends the grab, like every crane game ever.
-function craneGrab(x) {
-  if (!craneRun() || S.screen !== 'battle' || !S.run || S.victory) return false;
+// the CLAW DROP: classic claw-machine rules. Two moves park the claw over
+// (x, y) — slide RIGHT, then slide UP the board — and the release drops
+// it. It closes on a CHUNK (up to 6 pieces in its spread, nearest first)
+// and hoists it to the tray… but claws have holes: roughly a third of the
+// haul wriggles free mid-hoist and clatters back onto the pile.
+function craneDrop(x, y) {
+  if (!craneRun() || S.screen !== 'battle' || !S.run || S.victory) return null;
   const B = S.battle;
-  if (!B || B.phase !== 'drop') return false;
-  if ((B.grabs || 0) < 1) { S.denyT = 0.5; SND.deny(); return false; }
+  if (!B || B.phase !== 'drop') return null;
+  if ((B.grabs || 0) < 1) { S.denyT = 0.5; SND.deny(); return null; }
   B.grabs--;
-  let best = null, bestScore = 1e9;
-  for (const c of S.coins) {
-    if (c.st !== 'plat') continue;
-    const reach = c.kind === 'item' ? 13 : 7;
-    const dx = Math.abs(c.x - x);
-    if (dx > reach) continue;
-    // shallow (front) pieces first — the claw can't dig under the pile
-    const score = dx + (84 - c.y) * 0.15 - c.lay * 2 - (c.kind === 'item' ? 4 : 0);
-    if (score < bestScore) { bestScore = score; best = c; }
+  const near = S.coins
+    .filter(c => c.st === 'plat')
+    .map(c => ({ c, d: Math.hypot(c.x - x, (c.y - y) * 0.9) }))
+    .filter(o => o.d <= (o.c.kind === 'item' ? 13 : 10))
+    .sort((a, b) => a.d - b.d)
+    .slice(0, 6);
+  const caught = [], slipped = [];
+  for (const o of near) {
+    S.coins.splice(S.coins.indexOf(o.c), 1);
+    if (rng() < 0.35) slipped.push(o.c);
+    else caught.push(o.c);
   }
-  if (!best) {
+  // the escapees tumble back down around the grab point, stirring the pile
+  for (const c of slipped) {
+    const back = spawnDrop(Math.max(6, Math.min(94, x + (rng() - 0.5) * 14)),
+                           Math.max(6, Math.min(78, y + (rng() - 0.5) * 10)), c.kind);
+    if (back) { back.iid = c.iid || null; back.temp = !!c.temp; }
+  }
+  if (!near.length) {
     floatAt('the claw closes on air…', x, '#9a8aa0');
     SND.deny();
-    return false;
+  } else {
+    floatAt('\u{1F579} ' + caught.length + ' caught' + (slipped.length ? ' — ' + slipped.length + ' slipped!' : '!'),
+            x, '#ffe066', true);
+    SND.clink();
   }
-  S.coins.splice(S.coins.indexOf(best), 1);
-  const label = best.kind === 'item' ? (itemById(best.iid) || {}).name
-              : best.kind === 'coin' ? 'Gold' : COIN_INFO[best.kind] ? COIN_INFO[best.kind].name : best.kind;
-  floatAt('\u{1F579} ' + label + '!', best.x, '#ffe066', true);
-  if (window.__dpClaw) window.__dpClaw(x, best.kind, best.iid);
-  scoreCoin(best);
-  return true;
+  if (window.__dpClaw) window.__dpClaw(x, y, caught.length, slipped.length);
+  for (const c of caught) scoreCoin(c);
+  return { caught: caught.length, slipped: slipped.length };
 }
 function drop(x, force) {
   if (S.screen !== 'battle' || !S.run || S.victory) return false;
@@ -3219,7 +3228,7 @@ window.DP = {
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
-  darkFloor, payableKinds, coinKindWith, ghostRun, heroUnlocked, craneRun, craneGrab, grabCount,
+  darkFloor, payableKinds, coinKindWith, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
@@ -3755,8 +3764,6 @@ if (!HEADLESS) (function browser() {
     if (p.y > 180) aimFrom(p);
   });
   const joyEnd = (ev) => {
-    // the Crane Keeper's RELEASE is the plunge: let go and the claw drops
-    if (held && craneRun() && S.screen === 'battle' && !S.victory) craneGrab(S.aimX);
     held = false;
     if (invDrag && (!ev || ev.pointerId === undefined || ev.pointerId === invDrag.id)) {
       // barely moved? it was a tap — press whatever sat under the finger
@@ -4872,54 +4879,113 @@ if (!HEADLESS) (function browser() {
   }
 
   // ------------------------------------------------------ the CLAW rig
-  // the Crane Keeper's claw rides a rail over the platform: it tracks the
-  // finger, and a grab plays a quick dip down into the pile and back
-  const CLAW = { until: -1, x: 50, icon: null };
-  window.__dpClaw = function (x, kind, iid) {
-    CLAW.until = S.time + 0.45;
-    CLAW.x = x;
-    CLAW.icon = kind === 'item' ? (itemById(iid) || {}).icon : null;
-  };
+  // a REAL claw game: hold #1 slides the claw RIGHT (release locks it),
+  // hold #2 slides it UP the board — and that release DROPS it. The claw
+  // dives, closes on a chunk, and ferries the haul to the tray while the
+  // escapees rain back down (craneDrop spawns them as falling pieces).
+  const CLAW = { phase: 'idle', x: 10, y: 74, t: 0, haul: 0 };
+  window.__dpClaw = function (x, y, caught, slipped) { CLAW.haul = caught; };
+  function clawReset() { CLAW.phase = 'idle'; CLAW.x = 10; CLAW.y = 74; CLAW.t = 0; CLAW.haul = 0; }
+  function clawTick(dt) {
+    if (!craneRun() || S.screen !== 'battle' || !S.battle || S.battle.phase !== 'drop' || S.victory) {
+      if (CLAW.phase !== 'idle') clawReset();
+      return;
+    }
+    const canGrab = (S.battle.grabs || 0) > 0;
+    if (CLAW.phase === 'idle') {
+      if (held && canGrab) { CLAW.phase = 'movex'; }
+    } else if (CLAW.phase === 'movex') {
+      if (!held) CLAW.phase = 'lockx';
+      else { CLAW.x += 44 * dt; if (CLAW.x > 94) CLAW.x = 6; }   // wraps — no dead ends
+    } else if (CLAW.phase === 'lockx') {
+      if (held) CLAW.phase = 'movey';
+    } else if (CLAW.phase === 'movey') {
+      if (!held) { CLAW.phase = 'dropping'; CLAW.t = 0; }
+      else { CLAW.y -= 36 * dt; if (CLAW.y < 6) CLAW.y = 78; }   // wraps too
+    } else if (CLAW.phase === 'dropping') {
+      CLAW.t += dt;
+      if (CLAW.t >= 0.5) {
+        craneDrop(CLAW.x, CLAW.y);      // pieces vanish; the slips rain back
+        CLAW.phase = 'carry'; CLAW.t = 0;
+      }
+    } else if (CLAW.phase === 'carry') {
+      CLAW.t += dt;
+      if (CLAW.t >= 0.7) {
+        if (CLAW.haul > 0) burstScreen(LW / 2, 660, 'item');
+        clawReset();
+      }
+    }
+  }
   function drawClaw(t) {
     const B = S.battle;
     const railY = 208;
     const e = eyd(MACH.tiers[0].slotY);
     const u = (PF.w0 + (PF.w1 - PF.w0) * e) / 100;
-    const dipping = t < CLAW.until;
-    const ax = dipping ? CLAW.x : S.aimX;
-    const gx = PF.cx + (ax - 50) * u;
+    // where the claw HEAD hangs in the world right now
+    let wx = CLAW.x, wy = CLAW.y, wz = 30;
+    if (CLAW.phase === 'dropping') {
+      const k = Math.min(1, CLAW.t / 0.5);
+      wz = 30 - 28 * Math.sin(k * Math.PI / 2);               // dives to the deck
+    } else if (CLAW.phase === 'carry') {
+      const k = Math.min(1, CLAW.t / 0.7);
+      wz = 2 + 34 * k;
+      wy = CLAW.y + (96 - CLAW.y) * k;                        // ferries to the tray
+      wx = CLAW.x + (50 - CLAW.x) * k;
+    }
+    const head = w2s(wx, Math.min(wy, 88), wz);
+    const gx = PF.cx + (wx - 50) * u;                          // carriage stays on the rail
     // the rail
     ctx.strokeStyle = 'rgba(210,220,235,0.45)'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.moveTo(52, railY); ctx.lineTo(LW - 52, railY); ctx.stroke();
     ctx.strokeStyle = 'rgba(120,110,90,0.6)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(52, railY + 2.5); ctx.lineTo(LW - 52, railY + 2.5); ctx.stroke();
-    // the dip: cable runs down toward the pile and springs back
-    let ext = 0;
-    if (dipping) {
-      const k = 1 - (CLAW.until - t) / 0.45;
-      ext = Math.sin(k * Math.PI) * 170;
+    // the landing ring: where the claw will bite, drawn on the deck
+    if (CLAW.phase === 'movex' || CLAW.phase === 'lockx' || CLAW.phase === 'movey') {
+      const ring = w2s(CLAW.x, Math.min(CLAW.y, 84), 0);
+      ctx.save();
+      ctx.globalAlpha = 0.5 + 0.2 * Math.sin(t * 6);
+      ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath(); ctx.ellipse(ring.x, ring.y, 10 * ring.u * 2.2, 10 * ring.u * 2.2 * 0.42, 0, 0, 7);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
     }
-    const cy = railY + 16 + ext;
-    // carriage + cable
+    // carriage + cable + pincers
     rr(gx - 9, railY - 5, 18, 10, 4);
     ctx.fillStyle = '#8a7a58'; ctx.fill();
     ctx.strokeStyle = 'rgba(20,14,10,0.8)'; ctx.lineWidth = 1; ctx.stroke();
     ctx.strokeStyle = 'rgba(200,205,215,0.85)'; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.moveTo(gx, railY + 5); ctx.lineTo(gx, cy); ctx.stroke();
-    // the pincers: open while tracking, snapped shut on the way back up
-    const open = dipping ? 3 : 7;
-    ctx.strokeStyle = '#d8c8a0'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(gx, railY + 5); ctx.lineTo(head.x, head.y - 8); ctx.stroke();
+    const shut = CLAW.phase === 'carry' || (CLAW.phase === 'dropping' && CLAW.t > 0.35);
+    const open = shut ? 3 : 8;
+    ctx.strokeStyle = '#d8c8a0'; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
     ctx.beginPath();
-    ctx.moveTo(gx - open, cy + 10); ctx.quadraticCurveTo(gx - 10, cy + 2, gx, cy);
-    ctx.quadraticCurveTo(gx + 10, cy + 2, gx + open, cy + 10);
+    ctx.moveTo(head.x - open, head.y + 6); ctx.quadraticCurveTo(head.x - 11, head.y - 4, head.x, head.y - 8);
+    ctx.quadraticCurveTo(head.x + 11, head.y - 4, head.x + open, head.y + 6);
     ctx.stroke();
     ctx.lineCap = 'butt';
-    if (dipping && CLAW.icon) txt(CLAW.icon, gx, cy + 16, '14px serif', '#fff');
-    // grabs left, riding the rail's right end
+    // the haul dangles under the shut pincers on the ferry home
+    if (CLAW.phase === 'carry' && CLAW.haul > 0) {
+      for (let i = 0; i < Math.min(CLAW.haul, 4); i++) {
+        ctx.beginPath(); ctx.ellipse(head.x + (i - 1.5) * 7, head.y + 10 + (i % 2) * 3, 6, 3, 0, 0, 7);
+        ctx.fillStyle = '#f2c04a'; ctx.fill();
+        ctx.strokeStyle = 'rgba(122,84,14,0.7)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      txt('+' + CLAW.haul, head.x + 24, head.y + 8, '900 12px Verdana, sans-serif', '#ffe9a3');
+    }
+    // grabs left + the move coaching, riding the rail
     if (B) {
       const none = (B.grabs || 0) < 1;
       txt('\u{1F579} ×' + (B.grabs || 0), LW - 66, railY - 12, '900 12px Verdana, sans-serif',
           none ? '#6a5a4a' : '#ffe9a3', 'left', { w: 3, col: 'rgba(10,5,12,0.9)' });
+      const coach = none ? 'the claw is spent — END TURN'
+        : CLAW.phase === 'idle' ? 'HOLD — the claw slides ▶'
+        : CLAW.phase === 'movex' ? 'release to LOCK'
+        : CLAW.phase === 'lockx' ? 'HOLD again — it slides ▲'
+        : CLAW.phase === 'movey' ? 'release to DROP!' : '';
+      if (coach) txt(coach, LW / 2, railY - 12, '800 10px Verdana, sans-serif', '#ffe066',
+                     'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
     }
   }
   function drawGlass(t) {
@@ -5288,7 +5354,7 @@ if (!HEADLESS) (function browser() {
     }
     else if (!S.battle || S.battle.phase === 'drop') {
       hint = ghostRun() ? 'the purse rains itself — TILT the world, then END TURN'
-           : craneRun() ? ((S.battle && S.battle.grabs) || 0) + ' grabs — drag the claw, RELEASE to pluck'
+           : craneRun() ? ((S.battle && S.battle.grabs) || 0) + ' claw drops — HOLD to slide, release, HOLD, release'
            : r.wallet < 1 ? 'hand empty — bank loot, TILT, or END TURN'
            : r.wallet + ' ● in hand • TAP TO DROP • pick your coin up top';
     } else hint = S.battle.phase === 'resolve' ? 'the tray resolves…' : 'the foe strikes back…';
@@ -6956,6 +7022,7 @@ if (!HEADLESS) (function browser() {
     if (S.screen === 'battle') {
       tick(dt);
       if (S.victory) S.victory.t += dt;
+      clawTick(dt);                       // the Crane Keeper's two-move rig
       if (held && !S.victory) {
         holdT += dt;
         // a short warm-up, then a steady pour paced by the turbo-shortened

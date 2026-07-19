@@ -2395,48 +2395,53 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.eq(KS.run.wallet, 0, 'it holds no hand either');
   t.eq(KS.rain.filter(r => K.COIN_KINDS.includes(r.kind)).length, purseN, 'its purse rains in like the ghost');
   t.ok(!K.drop(50), 'its finger cannot DROP — it drives the claw');
-  t.eq(KS.battle.grabs, 3, 'three grabs on the rail');
+  t.eq(KS.battle.grabs, 2, 'two claw drops on the rail');
 
-  // a pluck: the nearest front piece within reach joins the tray loot
+  // a DROP hauls a CHUNK: everything in the claw's spread leaves the deck,
+  // split between the tray (caught) and the pile (slipped back through
+  // the claw's holes as falling pieces)
   K.S.coins.length = 0;
-  K.place(50, 60, 'coin', 0, 'plat', 0);
-  K.place(80, 60, 'silver', 0, 'plat', 0);
+  K.place(48, 58, 'coin', 0, 'plat', 0);
+  K.place(52, 62, 'silver', 0, 'plat', 0);
+  K.place(50, 55, 'coin', 0, 'plat', 0);
+  K.place(85, 60, 'lucky', 0, 'plat', 0);          // out of the spread
   KS.battle.loot = [];
-  t.ok(K.craneGrab(51), 'the claw closes on the gold coin');
-  t.eq(KS.battle.loot.length, 1, 'the plucked piece lands in the round loot');
-  t.eq(KS.battle.loot[0].k, 'coin', 'and it is the coin under the claw');
-  t.eq(KS.battle.grabs, 2, 'one grab spent');
-  t.eq(KS.coins.length, 1, 'the piece left the platform');
+  const res = K.craneDrop(50, 59);
+  t.ok(res, 'the claw drops on the cluster');
+  t.eq(res.caught + res.slipped, 3, 'the whole chunk left the deck (far coin spared)');
+  t.eq(KS.battle.loot.length, res.caught, 'the caught pieces fill the tray loot');
+  t.eq(KS.coins.filter(c => c.st === 'air').length, res.slipped, 'the slipped ones tumble back as falling pieces');
+  t.eq(KS.coins.filter(c => c.st === 'plat').length, 1, 'only the far lucky still sits on the deck');
+  t.eq(KS.battle.grabs, 1, 'one drop spent');
 
-  // gear is grabbed from wider out — the claw never misses what it wants
-  const it = K.place(62, 60, 'item', 0, 'plat', 0);
-  it.iid = 'sword';
-  t.ok(K.craneGrab(50), 'a sword 12 units off-centre is still snatched');
-  t.eq(KS.battle.loot.filter(l => l.k === 'item').length, 1, 'the sword is in the tray');
-
-  // a plunge onto bare stone still spends the grab
+  // the claw holds at most SIX pieces
   K.S.coins.length = 0;
-  t.ok(!K.craneGrab(50), 'the claw closes on air');
-  t.eq(KS.battle.grabs, 0, 'and the grab is spent — like every crane game ever');
-  t.ok(!K.craneGrab(50), 'no grabs left, no plunge');
+  for (let i = 0; i < 8; i++) K.place(46 + (i % 4) * 3, 56 + ((i / 4) | 0) * 4, 'coin', 0, 'plat', 0);
+  KS.battle.loot = [];
+  const res2 = K.craneDrop(50, 58);
+  t.eq(res2.caught + res2.slipped, 6, 'six pieces max per bite');
+  t.eq(KS.coins.filter(c => c.st === 'plat').length, 2, 'the overflow stays on the deck');
+  t.eq(KS.battle.grabs, 0, 'the rail is spent');
+  t.eq(K.craneDrop(50, 58), null, 'no drops left, no bite');
 
-  // grabs rewind each round, and grow +1 per act
+  // a drop onto bare stone still spends the grab
   KS.battle.phase = 'drop';
   K.newRound();
-  t.eq(KS.battle.grabs, 3, 'a fresh round rewinds the claw');
-  KS.run.floor = 6;
-  t.eq(K.grabCount(), 4, 'act 2 fits a fourth grab');
-  KS.run.floor = 11;
-  t.eq(K.grabCount(), 5, 'act 3 a fifth');
-  KS.run.floor = 1;
-
-  // grabbing feeds scoreCoin: a chest pops on the spot
-  K.newRound();
   K.S.coins.length = 0;
-  K.place(40, 60, 'chest', 0, 'plat', 0);
-  const lootN = KS.battle.loot.length;
-  t.ok(K.craneGrab(40), 'the claw lifts a chest');
-  t.ok(KS.coins.length === 0 || KS.battle.loot.length >= lootN, 'and the chest pops open in its pincers');
+  const res3 = K.craneDrop(50, 58);
+  t.ok(res3 && res3.caught === 0 && res3.slipped === 0, 'the claw closes on air');
+  t.eq(KS.battle.grabs, K.grabCount() - 1, 'and the drop is spent — like every crane game ever');
+
+  // drops rewind each round, and grow +1 per act (capped at four)
+  K.newRound();
+  t.eq(KS.battle.grabs, 2, 'a fresh round rewinds the claw');
+  KS.run.floor = 6;
+  t.eq(K.grabCount(), 3, 'act 2 fits a third drop');
+  KS.run.floor = 11;
+  t.eq(K.grabCount(), 4, 'act 3 a fourth');
+  KS.run.floor = 21;
+  t.eq(K.grabCount(), 4, 'and it caps there');
+  KS.run.floor = 1;
 }
 
 // ============================================================
