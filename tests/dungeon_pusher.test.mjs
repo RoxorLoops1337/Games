@@ -116,9 +116,9 @@ t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
 
-// -------- the five adventurers and their signature coins --------
-t.ok(DP.HEROES.length === 5 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
-     'five heroes, each with a signature coin');
+// -------- the six adventurers and their signature coins --------
+t.ok(DP.HEROES.length === 6 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
+     'six heroes, each with a signature coin');
 DP.srand(41);
 DP.newRun('knight');
 t.eq(S.run.hero, 'knight', 'the knight answers the call');
@@ -2374,6 +2374,69 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   G.interact(0);
   t.ok(GS.run.wallet > 0, 'the knight still holds a proper hand');
   t.eq(GS.battle.tilts, C.TILTS, 'and normal TILT charges');
+}
+
+// ============================================================
+// THE CRANE KEEPER: no dropping — a CLAW plucks the pile
+// ============================================================
+{
+  const cstore = {};
+  const { DP: K } = loadGame(cstore, false);
+  const KS = K.S;
+  K.srand(2424);
+  K.newRun('crane');
+  t.eq(KS.run.hero, 'crane', 'the Crane Keeper answers the call (no unlock gate)');
+  t.eq(KS.run.purse.coin, DP.START_PURSE.coin + 2, 'its signature: +2 GOLD');
+  const purseN = K.purseTotal();
+  KS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  KS.rain.length = 0;
+  K.interact(0);
+  KS.enemy.hp = KS.enemy.maxHp = 500;
+  t.eq(KS.run.wallet, 0, 'it holds no hand either');
+  t.eq(KS.rain.filter(r => K.COIN_KINDS.includes(r.kind)).length, purseN, 'its purse rains in like the ghost');
+  t.ok(!K.drop(50), 'its finger cannot DROP — it drives the claw');
+  t.eq(KS.battle.grabs, 3, 'three grabs on the rail');
+
+  // a pluck: the nearest front piece within reach joins the tray loot
+  K.S.coins.length = 0;
+  K.place(50, 60, 'coin', 0, 'plat', 0);
+  K.place(80, 60, 'silver', 0, 'plat', 0);
+  KS.battle.loot = [];
+  t.ok(K.craneGrab(51), 'the claw closes on the gold coin');
+  t.eq(KS.battle.loot.length, 1, 'the plucked piece lands in the round loot');
+  t.eq(KS.battle.loot[0].k, 'coin', 'and it is the coin under the claw');
+  t.eq(KS.battle.grabs, 2, 'one grab spent');
+  t.eq(KS.coins.length, 1, 'the piece left the platform');
+
+  // gear is grabbed from wider out — the claw never misses what it wants
+  const it = K.place(62, 60, 'item', 0, 'plat', 0);
+  it.iid = 'sword';
+  t.ok(K.craneGrab(50), 'a sword 12 units off-centre is still snatched');
+  t.eq(KS.battle.loot.filter(l => l.k === 'item').length, 1, 'the sword is in the tray');
+
+  // a plunge onto bare stone still spends the grab
+  K.S.coins.length = 0;
+  t.ok(!K.craneGrab(50), 'the claw closes on air');
+  t.eq(KS.battle.grabs, 0, 'and the grab is spent — like every crane game ever');
+  t.ok(!K.craneGrab(50), 'no grabs left, no plunge');
+
+  // grabs rewind each round, and grow +1 per act
+  KS.battle.phase = 'drop';
+  K.newRound();
+  t.eq(KS.battle.grabs, 3, 'a fresh round rewinds the claw');
+  KS.run.floor = 6;
+  t.eq(K.grabCount(), 4, 'act 2 fits a fourth grab');
+  KS.run.floor = 11;
+  t.eq(K.grabCount(), 5, 'act 3 a fifth');
+  KS.run.floor = 1;
+
+  // grabbing feeds scoreCoin: a chest pops on the spot
+  K.newRound();
+  K.S.coins.length = 0;
+  K.place(40, 60, 'chest', 0, 'plat', 0);
+  const lootN = KS.battle.loot.length;
+  t.ok(K.craneGrab(40), 'the claw lifts a chest');
+  t.ok(KS.coins.length === 0 || KS.battle.loot.length >= lootN, 'and the chest pops open in its pincers');
 }
 
 // ============================================================
