@@ -1287,7 +1287,7 @@ function trayAdd(kind, extra) {
   S.tray.items.push({ kind, iid: extra && extra.iid, x: extra ? extra.x : 50 });
   if (S.tray.items.length > 24) S.tray.items.shift();
 }
-function scoreCoin(c) {
+function scoreCoin(c, quiet) {
   S.collected++;
   if (c.kind === 'chip') {
     floatAt('WHEEL SPIN!', c.x, '#63e7ff', true);
@@ -1308,6 +1308,7 @@ function scoreCoin(c) {
   if (!S.battle) return;
   S.battle.loot.push({ k: c.kind, iid: c.iid });
   trayAdd(c.kind, { iid: c.iid, x: c.x });
+  if (quiet) return;                      // the CLAW celebrates on delivery instead
   S.shake += c.kind === 'item' ? 3 : 1;
   if (c.kind === 'skull') SND.poison();
   else if (c.kind === 'gem' || c.kind === 'bag') SND.gem();
@@ -1490,8 +1491,10 @@ function craneDrop(x, y) {
             x, '#ffe066', true);
     SND.clink();
   }
-  if (window.__dpClaw) window.__dpClaw(x, y, caught.length, slipped.length);
-  for (const c of caught) scoreCoin(c);
+  // hand the renderer the ACTUAL pieces so the claw is seen holding them;
+  // score quietly — the tray fanfare plays when the claw delivers, not now
+  if (window.__dpClaw) window.__dpClaw(x, y, caught.map(c => ({ kind: c.kind, iid: c.iid || null })), slipped.length);
+  for (const c of caught) scoreCoin(c, true);
   return { caught: caught.length, slipped: slipped.length };
 }
 function drop(x, force) {
@@ -4879,13 +4882,16 @@ if (!HEADLESS) (function browser() {
   }
 
   // ------------------------------------------------------ the CLAW rig
-  // a REAL claw game: hold #1 slides the claw RIGHT (release locks it),
-  // hold #2 slides it UP the board — and that release DROPS it. The claw
-  // dives, closes on a chunk, and ferries the haul to the tray while the
-  // escapees rain back down (craneDrop spawns them as falling pieces).
-  const CLAW = { phase: 'idle', x: 10, y: 74, t: 0, haul: 0 };
-  window.__dpClaw = function (x, y, caught, slipped) { CLAW.haul = caught; };
-  function clawReset() { CLAW.phase = 'idle'; CLAW.x = 10; CLAW.y = 74; CLAW.t = 0; CLAW.haul = 0; }
+  // a REAL claw game with SHOWMANSHIP: hold #1 slides the claw RIGHT
+  // (release locks it), hold #2 slides it UP the board — that release
+  // DROPS it. The claw plunges jaws-wide, CHOMPS the chunk in a dust
+  // poof, strains as it hoists the actual pieces in its teeth, ferries
+  // them swaying home, then springs open and rains the haul into the
+  // tray — while the slips clatter back down onto the pile.
+  const CLAW_T = { dive: 0.5, grab: 0.34, lift: 0.55, carry: 0.6, open: 0.45 };
+  const CLAW = { phase: 'idle', x: 10, y: 74, t: 0, haul: [], slips: 0 };
+  window.__dpClaw = function (x, y, caught, slipped) { CLAW.haul = caught || []; CLAW.slips = slipped; };
+  function clawReset() { CLAW.phase = 'idle'; CLAW.x = 10; CLAW.y = 74; CLAW.t = 0; CLAW.haul = []; CLAW.slips = 0; }
   function clawTick(dt) {
     if (!craneRun() || S.screen !== 'battle' || !S.battle || S.battle.phase !== 'drop' || S.victory) {
       if (CLAW.phase !== 'idle') clawReset();
@@ -4900,20 +4906,62 @@ if (!HEADLESS) (function browser() {
     } else if (CLAW.phase === 'lockx') {
       if (held) CLAW.phase = 'movey';
     } else if (CLAW.phase === 'movey') {
-      if (!held) { CLAW.phase = 'dropping'; CLAW.t = 0; }
+      if (!held) { CLAW.phase = 'dive'; CLAW.t = 0; }
       else { CLAW.y -= 36 * dt; if (CLAW.y < 6) CLAW.y = 78; }   // wraps too
-    } else if (CLAW.phase === 'dropping') {
+    } else if (CLAW.phase === 'dive') {
       CLAW.t += dt;
-      if (CLAW.t >= 0.5) {
-        craneDrop(CLAW.x, CLAW.y);      // pieces vanish; the slips rain back
-        CLAW.phase = 'carry'; CLAW.t = 0;
+      if (CLAW.t >= CLAW_T.dive) {
+        CLAW.phase = 'grab'; CLAW.t = 0;
+        craneDrop(CLAW.x, CLAW.y);      // jaws in the pile: the chunk is chosen
+        S.shake += 2;
+      }
+    } else if (CLAW.phase === 'grab') {
+      CLAW.t += dt;
+      if (CLAW.t >= CLAW_T.grab) { CLAW.phase = 'lift'; CLAW.t = 0; }
+    } else if (CLAW.phase === 'lift') {
+      CLAW.t += dt;
+      if (CLAW.t >= CLAW_T.lift) {
+        if (CLAW.haul.length) { CLAW.phase = 'carry'; CLAW.t = 0; }
+        else clawReset();               // came up empty — slink home
       }
     } else if (CLAW.phase === 'carry') {
       CLAW.t += dt;
-      if (CLAW.t >= 0.7) {
-        if (CLAW.haul > 0) burstScreen(LW / 2, 660, 'item');
-        clawReset();
+      if (CLAW.t >= CLAW_T.carry) {
+        CLAW.phase = 'open'; CLAW.t = 0;
+        // the payoff: jaws spring open and the haul rains into the tray
+        burstScreen(LW / 2, 655, 'item');
+        if (CLAW.haul.some(p => p.kind === 'gem')) SND.gem();
+        else SND.collect(3);
+        S.shake += 3;
       }
+    } else if (CLAW.phase === 'open') {
+      CLAW.t += dt;
+      if (CLAW.t >= CLAW_T.open) clawReset();
+    }
+  }
+  // a mini piece rendered in the claw's teeth — real faces, not gold blobs
+  function drawClawPiece(pc, sx, sy, rx) {
+    if (pc.kind === 'gem') {
+      const im = pieceArt('gem');
+      if (im) { const gh = rx * 2.2, gw = imW(im, gh); ctx.drawImage(im, sx - gw / 2, sy - gh * 0.6, gw, gh); return; }
+    }
+    if (pc.kind === 'item' || pc.kind === 'chest' || pc.kind === 'bag' || pc.kind === 'skull') {
+      const it = pc.iid ? itemById(pc.iid) : null;
+      const icon = pc.kind === 'chest' ? '\u{1F9F0}' : pc.kind === 'bag' ? '\u{1F4B0}'
+        : pc.kind === 'skull' ? '\u{1F480}' : (it ? it.icon : '\u{2754}');
+      txt(icon, sx, sy - rx * 1.1, '900 ' + Math.round(rx * 2.2) + 'px sans-serif', '#fff', 'center');
+      return;
+    }
+    const pal = COIN_PALS[pc.kind] || COIN_PALS.coin;
+    const ry = rx * 0.46;
+    ctx.beginPath(); ctx.ellipse(sx, sy + rx * 0.17, rx, ry, 0, 0, 7);
+    ctx.fillStyle = pal.edge; ctx.fill();
+    const face = pieceArt(pc.kind);
+    if (face) ctx.drawImage(face, sx - rx, sy - ry, rx * 2, ry * 2);
+    else {
+      const spr = flatSprite(pc.kind, pal, COIN_SYMS[pc.kind] || '⚔');
+      const w = rx * (96 / 44), h = (66 / 96) * w;
+      ctx.drawImage(spr, sx - w / 2, sy - (24 / 66) * h, w, h);
     }
   }
   function drawClaw(t) {
@@ -4921,69 +4969,197 @@ if (!HEADLESS) (function browser() {
     const railY = 208;
     const e = eyd(MACH.tiers[0].slotY);
     const u = (PF.w0 + (PF.w1 - PF.w0) * e) / 100;
-    // where the claw HEAD hangs in the world right now
-    let wx = CLAW.x, wy = CLAW.y, wz = 30;
-    if (CLAW.phase === 'dropping') {
-      const k = Math.min(1, CLAW.t / 0.5);
-      wz = 30 - 28 * Math.sin(k * Math.PI / 2);               // dives to the deck
-    } else if (CLAW.phase === 'carry') {
-      const k = Math.min(1, CLAW.t / 0.7);
-      wz = 2 + 34 * k;
-      wy = CLAW.y + (96 - CLAW.y) * k;                        // ferries to the tray
-      wx = CLAW.x + (50 - CLAW.x) * k;
+    const ph = CLAW.phase, k = nm => Math.min(1, CLAW.t / CLAW_T[nm]);
+    // where the claw HEAD hangs in the world right now, and how wide the
+    // jaws gape — every phase has its own body language
+    let wx = CLAW.x, wy = CLAW.y, wz = 34;
+    let openAmt = 9 + Math.sin(t * 2.6) * 1.2;              // idle jaws breathe, hungry
+    if (ph === 'dive') {
+      const q = k('dive');
+      wz = 34 - 32 * q * q;                                  // gravity plunge
+      openAmt = 9 + 7 * q;                                   // spreads WIDE on the way down
+    } else if (ph === 'grab') {
+      const q = k('grab');
+      wz = 2;
+      const snap = Math.min(1, q / 0.3);                     // CHOMP with elastic overshoot
+      openAmt = 16 - 14 * snap + (q > 0.3 ? Math.sin((q - 0.3) * 30) * 2.4 * (1 - q) : 0);
+    } else if (ph === 'lift') {
+      const q = k('lift'), s = q * q * (3 - 2 * q);
+      wz = 2 + 32 * s;                                       // smooth strained hoist
+      openAmt = 2 + Math.sin(t * 15) * 0.7;                  // jaws jitter under the load
+    } else if (ph === 'carry') {
+      const q = k('carry'), s = q * q * (3 - 2 * q);
+      wz = 34; wy = CLAW.y + (96 - CLAW.y) * s; wx = CLAW.x + (50 - CLAW.x) * s;
+      openAmt = 2 + Math.sin(t * 15) * 0.7;
+    } else if (ph === 'open') {
+      wx = 50; wy = 96; wz = 34;
+      openAmt = 2 + 12 * Math.min(1, k('open') * 2.4);       // springs open — payday
     }
     const head = w2s(wx, Math.min(wy, 88), wz);
-    const gx = PF.cx + (wx - 50) * u;                          // carriage stays on the rail
-    // the rail
-    ctx.strokeStyle = 'rgba(210,220,235,0.45)'; ctx.lineWidth = 3;
+    const sc = head.u * 0.66;                                // the rig scales with depth, like the coins
+    const sway = (ph === 'movex' || ph === 'carry') ? Math.sin(t * 5) * 2.5 : 0;
+    let hx = head.x + sway, hy = head.y;
+    // the last stretch dips the claw right over the tray mouth, so the
+    // dump happens where the loot actually lands
+    if (ph === 'carry' && k('carry') > 0.6) {
+      const b = (k('carry') - 0.6) / 0.4;
+      hx += (LW / 2 - hx) * b; hy += (505 - hy) * b * b;
+    } else if (ph === 'open') { hx = LW / 2; hy = 505; }
+    const gx = PF.cx + (wx - 50) * u;                        // carriage stays on the rail
+    // the rail: a proper gantry with end brackets
+    ctx.strokeStyle = 'rgba(210,220,235,0.5)'; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(52, railY); ctx.lineTo(LW - 52, railY); ctx.stroke();
-    ctx.strokeStyle = 'rgba(120,110,90,0.6)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(52, railY + 2.5); ctx.lineTo(LW - 52, railY + 2.5); ctx.stroke();
-    // the landing ring: where the claw will bite, drawn on the deck
-    if (CLAW.phase === 'movex' || CLAW.phase === 'lockx' || CLAW.phase === 'movey') {
+    ctx.strokeStyle = 'rgba(90,80,64,0.7)'; ctx.lineWidth = 1.4;
+    ctx.beginPath(); ctx.moveTo(52, railY + 3); ctx.lineTo(LW - 52, railY + 3); ctx.stroke();
+    ctx.fillStyle = '#6a5c44';
+    rr(49, railY - 6, 6, 13, 2); ctx.fill();
+    rr(LW - 55, railY - 6, 6, 13, 2); ctx.fill();
+    // the landing ring: pulsing bite mark + falling chevrons say DROP HERE
+    if (ph === 'movex' || ph === 'lockx' || ph === 'movey') {
       const ring = w2s(CLAW.x, Math.min(CLAW.y, 84), 0);
+      const rw = 10 * ring.u * 2.2;
       ctx.save();
-      ctx.globalAlpha = 0.5 + 0.2 * Math.sin(t * 6);
-      ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2;
+      ctx.globalAlpha = 0.55 + 0.25 * Math.sin(t * 6);
+      ctx.strokeStyle = '#ffe066'; ctx.lineWidth = 2.4;
       ctx.setLineDash([5, 4]);
-      ctx.beginPath(); ctx.ellipse(ring.x, ring.y, 10 * ring.u * 2.2, 10 * ring.u * 2.2 * 0.42, 0, 0, 7);
+      ctx.beginPath(); ctx.ellipse(ring.x, ring.y, rw, rw * 0.42, 0, 0, 7);
       ctx.stroke();
       ctx.setLineDash([]);
+      ctx.strokeStyle = 'rgba(255,224,102,0.5)'; ctx.lineWidth = 1.4;
+      ctx.beginPath(); ctx.ellipse(ring.x, ring.y, rw * (0.55 + 0.35 * ((t * 1.4) % 1)), rw * 0.42 * (0.55 + 0.35 * ((t * 1.4) % 1)), 0, 0, 7);
+      ctx.stroke();
+      if (ph === 'movey') {                                  // chevrons rain toward the mark
+        ctx.fillStyle = '#ffe066';
+        for (let i = 0; i < 3; i++) {
+          const cy = ring.y - 46 + (((t * 55 + i * 16) % 48));
+          ctx.globalAlpha = 0.7 * (1 - Math.abs(cy - (ring.y - 22)) / 26);
+          ctx.beginPath();
+          ctx.moveTo(ring.x - 5, cy); ctx.lineTo(ring.x + 5, cy); ctx.lineTo(ring.x, cy + 5);
+          ctx.closePath(); ctx.fill();
+        }
+      }
       ctx.restore();
     }
-    // carriage + cable + pincers
-    rr(gx - 9, railY - 5, 18, 10, 4);
-    ctx.fillStyle = '#8a7a58'; ctx.fill();
-    ctx.strokeStyle = 'rgba(20,14,10,0.8)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.strokeStyle = 'rgba(200,205,215,0.85)'; ctx.lineWidth = 1.6;
-    ctx.beginPath(); ctx.moveTo(gx, railY + 5); ctx.lineTo(head.x, head.y - 8); ctx.stroke();
-    const shut = CLAW.phase === 'carry' || (CLAW.phase === 'dropping' && CLAW.t > 0.35);
-    const open = shut ? 3 : 8;
-    ctx.strokeStyle = '#d8c8a0'; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
-    ctx.beginPath();
-    ctx.moveTo(head.x - open, head.y + 6); ctx.quadraticCurveTo(head.x - 11, head.y - 4, head.x, head.y - 8);
-    ctx.quadraticCurveTo(head.x + 11, head.y - 4, head.x + open, head.y + 6);
-    ctx.stroke();
-    ctx.lineCap = 'butt';
-    // the haul dangles under the shut pincers on the ferry home
-    if (CLAW.phase === 'carry' && CLAW.haul > 0) {
-      for (let i = 0; i < Math.min(CLAW.haul, 4); i++) {
-        ctx.beginPath(); ctx.ellipse(head.x + (i - 1.5) * 7, head.y + 10 + (i % 2) * 3, 6, 3, 0, 0, 7);
-        ctx.fillStyle = '#f2c04a'; ctx.fill();
-        ctx.strokeStyle = 'rgba(122,84,14,0.7)'; ctx.lineWidth = 1; ctx.stroke();
+    // carriage: a candy-red trolley with rivets and a blinking go-light
+    const busy = ph !== 'idle';
+    rr(gx - 11, railY - 7, 22, 13, 4);
+    const cg = ctx.createLinearGradient(0, railY - 7, 0, railY + 6);
+    cg.addColorStop(0, '#e0524e'); cg.addColorStop(0.5, '#b23434'); cg.addColorStop(1, '#7e2222');
+    ctx.fillStyle = cg; ctx.fill();
+    ctx.strokeStyle = 'rgba(20,10,8,0.85)'; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,235,220,0.75)';
+    ctx.beginPath(); ctx.arc(gx - 6, railY - 3, 1.1, 0, 7); ctx.arc(gx + 6, railY - 3, 1.1, 0, 7); ctx.fill();
+    ctx.fillStyle = busy && (t * 4 | 0) % 2 ? '#7cf29a' : '#3f6a4c';
+    ctx.beginPath(); ctx.arc(gx, railY - 3, 1.8, 0, 7); ctx.fill();
+    // the cable pays out — doubled wire with a hint of sway
+    ctx.strokeStyle = 'rgba(200,205,215,0.9)'; ctx.lineWidth = 1.8;
+    ctx.beginPath(); ctx.moveTo(gx - 1.2, railY + 6); ctx.quadraticCurveTo(gx + sway * 0.5, (railY + hy) / 2, hx - 1.2, hy - 12 * sc); ctx.stroke();
+    ctx.strokeStyle = 'rgba(120,126,140,0.8)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(gx + 1.2, railY + 6); ctx.quadraticCurveTo(gx + sway * 0.5 + 2, (railY + hy) / 2, hx + 1.2, hy - 12 * sc); ctx.stroke();
+    // impact dust: the CHOMP kicks up a puff around the bite
+    if (ph === 'grab' && CLAW.t < CLAW_T.grab * 0.6) {
+      const q = CLAW.t / (CLAW_T.grab * 0.6);
+      const deck = w2s(CLAW.x, Math.min(CLAW.y, 84), 0);
+      const du = deck.u * 0.66;
+      ctx.save();
+      ctx.globalAlpha = 0.5 * (1 - q);
+      ctx.fillStyle = '#cbb894';
+      for (let i = 0; i < 5; i++) {
+        const a = i * 1.26 + 0.5;
+        ctx.beginPath();
+        ctx.ellipse(deck.x + Math.cos(a) * (8 + q * 26) * du, deck.y + Math.sin(a) * (3 + q * 9) * du,
+                    4.5 * du * (1 - q * 0.5), 2.6 * du * (1 - q * 0.5), 0, 0, 7);
+        ctx.fill();
       }
-      txt('+' + CLAW.haul, head.x + 24, head.y + 8, '900 12px Verdana, sans-serif', '#ffe9a3');
+      ctx.restore();
+    }
+    // ------- the claw itself: gold hub, three tapered talons -------
+    const showHaul = CLAW.haul.length > 0 &&
+      ((ph === 'grab' && k('grab') > 0.3) || ph === 'lift' || ph === 'carry');
+    const talon = (dir, back) => {                            // dir -1 left, +1 right, 0 rear
+      const o = openAmt * sc * 0.9 * (back ? 0.45 : 1);
+      const tipX = hx + dir * o + (back ? 0 : dir * 2 * sc), tipY = hy + (back ? 12 : 15) * sc;
+      ctx.strokeStyle = back ? '#8f7a4e' : '#3a2c14'; ctx.lineWidth = (back ? 3.2 : 4.6) * sc; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(hx + dir * 2.5 * sc, hy - 7 * sc);
+      ctx.quadraticCurveTo(hx + dir * (7 * sc + o * 0.8), hy + 1 * sc, tipX, tipY);
+      ctx.stroke();
+      if (!back) {                                           // bright face over the outline
+        ctx.strokeStyle = '#e8cf8a'; ctx.lineWidth = 2.5 * sc;
+        ctx.beginPath();
+        ctx.moveTo(hx + dir * 2.5 * sc, hy - 7 * sc);
+        ctx.quadraticCurveTo(hx + dir * (7 * sc + o * 0.8), hy + 1 * sc, tipX, tipY);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,250,230,0.85)'; ctx.lineWidth = 1 * sc;
+        ctx.beginPath();
+        ctx.moveTo(hx + dir * 2.5 * sc, hy - 8 * sc);
+        ctx.quadraticCurveTo(hx + dir * (6.5 * sc + o * 0.8), hy, tipX - dir * sc, tipY - 2 * sc);
+        ctx.stroke();
+        ctx.fillStyle = '#b89552';                           // knuckle joint
+        ctx.beginPath(); ctx.arc(hx + dir * (5 * sc + o * 0.55), hy - 1 * sc, 1.6 * sc, 0, 7); ctx.fill();
+      }
+      ctx.lineCap = 'butt';
+    };
+    talon(0, true);                                          // rear talon peeks between
+    // the haul sits IN the jaws — real pieces, clamped and jiggling
+    if (showHaul) {
+      ctx.beginPath(); ctx.ellipse(hx, hy + 5 * sc, 13 * sc, 10 * sc, 0, 0, 7);
+      ctx.fillStyle = 'rgba(15,10,20,0.45)'; ctx.fill();     // dark halo so the loot POPS
+      // a golden drip of sparks trails the loaded claw
+      if ((ph === 'lift' || ph === 'carry') && Math.random() < 0.35) {
+        S.parts.push({
+          x: hx + (Math.random() - 0.5) * 14 * sc, y: hy + Math.random() * 10 * sc,
+          vx: (Math.random() - 0.5) * 20, vy: 30 + Math.random() * 40,
+          g: 60, life: 0, max: 0.4, col: '#ffe066',
+          sz: 1.5 + Math.random() * 1.5, spin: Math.random() * 6, shape: 'star',
+        });
+      }
+      const spots = [[-7, 6], [7, 5], [0, 9], [-3, 1], [4, 1], [0, 4]];
+      for (let i = 0; i < Math.min(CLAW.haul.length, 6); i++) {
+        const jig = Math.sin(t * 11 + i * 2.1) * 1.1;
+        drawClawPiece(CLAW.haul[i], hx + spots[i][0] * sc + jig * 0.4, hy + spots[i][1] * sc + jig * 0.5, 5.6 * sc);
+      }
+    }
+    // dumping: the pieces tumble out of the open jaws into the tray
+    if (ph === 'open' && CLAW.haul.length) {
+      const q = k('open');
+      ctx.save();
+      for (let i = 0; i < Math.min(CLAW.haul.length, 6); i++) {
+        const fq = Math.max(0, Math.min(1, q * 1.5 - i * 0.07));
+        ctx.globalAlpha = 1 - fq * fq;
+        drawClawPiece(CLAW.haul[i], hx + (i - (CLAW.haul.length - 1) / 2) * (3 + fq * 6) * sc,
+                      hy + (6 + fq * fq * 52) * sc, 5.6 * sc);
+      }
+      ctx.restore();
+      const pop = 1 + 0.5 * Math.max(0, 1 - q * 3);
+      txt('+' + CLAW.haul.length, hx, hy - 26 * sc, '900 ' + Math.round(16 * pop) + 'px Verdana, sans-serif',
+          '#ffe9a3', 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
+    }
+    talon(-1, false); talon(1, false);                       // front talons over the haul
+    // gold hub with a glint
+    const hg = ctx.createRadialGradient(hx - 2 * sc, hy - 9 * sc, 1, hx, hy - 7 * sc, 8 * sc);
+    hg.addColorStop(0, '#ffe9a8'); hg.addColorStop(0.55, '#d3ab5c'); hg.addColorStop(1, '#7a5c26');
+    ctx.fillStyle = hg;
+    ctx.beginPath(); ctx.arc(hx, hy - 7 * sc, 5.4 * sc, 0, 7); ctx.fill();
+    ctx.strokeStyle = 'rgba(30,20,8,0.8)'; ctx.lineWidth = 1.2; ctx.stroke();
+    ctx.fillStyle = 'rgba(255,252,235,0.9)';
+    ctx.beginPath(); ctx.arc(hx - 2 * sc, hy - 9 * sc, 1.3 * sc, 0, 7); ctx.fill();
+    // '+N' rides along on the ferry home
+    if ((ph === 'lift' || ph === 'carry') && CLAW.haul.length) {
+      txt('+' + CLAW.haul.length, hx + 18 * sc, hy + 2, '900 14px Verdana, sans-serif',
+          '#ffe9a3', 'left', { w: 3, col: 'rgba(10,5,12,0.9)' });
     }
     // grabs left + the move coaching, riding the rail
     if (B) {
       const none = (B.grabs || 0) < 1;
       txt('\u{1F579} ×' + (B.grabs || 0), LW - 66, railY - 12, '900 12px Verdana, sans-serif',
           none ? '#6a5a4a' : '#ffe9a3', 'left', { w: 3, col: 'rgba(10,5,12,0.9)' });
-      const coach = none ? 'the claw is spent — END TURN'
-        : CLAW.phase === 'idle' ? 'HOLD — the claw slides ▶'
-        : CLAW.phase === 'movex' ? 'release to LOCK'
-        : CLAW.phase === 'lockx' ? 'HOLD again — it slides ▲'
-        : CLAW.phase === 'movey' ? 'release to DROP!' : '';
+      const coach = none && ph === 'idle' ? 'the claw is spent — END TURN'
+        : ph === 'idle' ? 'HOLD — the claw slides ▶'
+        : ph === 'movex' ? 'release to LOCK'
+        : ph === 'lockx' ? 'HOLD again — it slides ▲'
+        : ph === 'movey' ? 'release to DROP!'
+        : ph === 'grab' ? 'CHOMP!' : '';
       if (coach) txt(coach, LW / 2, railY - 12, '800 10px Verdana, sans-serif', '#ffe066',
                      'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
     }
