@@ -1603,8 +1603,9 @@ function scaleMult() {
   const fInAct = (S.run.floor - 1) - act * 5;
   const beyond = Math.max(0, S.run.floor - ENEMY_TIERS.length * 5);
   // per-act ramp + an act carry tuned so the hand-off to a new (stronger)
-  // roster never softens the curve; past the last act it just keeps climbing
-  return 1 + 0.075 * (S.run.depth - 1) + 0.22 * fInAct + 0.33 * act + 0.3 * beyond;
+  // roster never softens the curve; past the last act the beyond term must
+  // cover the whole in-act ramp alone (no fresh roster to lean on)
+  return 1 + 0.075 * (S.run.depth - 1) + 0.30 * fInAct + 0.50 * act + 0.7 * beyond;
 }
 function enemyPool(depth) {
   // deeper rooms unlock the meaner half of THIS act's roster
@@ -1617,8 +1618,8 @@ function mkEnemy(type, eid) {
   // bosses rotate per ACT (dragon act 1, lich act 2, demon act 3, then round
   // again) and scale by floor only — their lair sits at max depth by design
   const mult = type === 'boss'
-    ? 1 + 0.20 * ((S.run.floor - 1) % 5) + 0.45 * act
-      + 0.3 * Math.max(0, S.run.floor - ENEMY_TIERS.length * 5)
+    ? 1 + 0.26 * ((S.run.floor - 1) % 5) + 0.62 * act
+      + 0.55 * Math.max(0, S.run.floor - ENEMY_TIERS.length * 5)
     : scaleMult();
   let base, eliteK = 1;
   if (type === 'boss') {
