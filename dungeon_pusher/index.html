@@ -3407,13 +3407,19 @@ if (!HEADLESS) (function browser() {
     blue: 'coin_blue', lucky: 'coin_lucky',
     gem: 'piece_gem', bag: 'piece_bag', skull: 'piece_skull', chest: 'piece_chest',
   };
-  const ITEM_ART = ['sword', 'shield', 'vial', 'axe', 'heart', 'frost', 'hammer'];
+  const ITEM_ART = ['sword', 'shield', 'vial', 'axe', 'heart', 'frost', 'hammer',
+                    'bomb', 'razor', 'pup', 'newt', 'rat', 'horn', 'tonic', 'torch'];
   function pieceImg(name) {
     const im = art('pc_' + name, 'art/machine/pieces/' + name + '.png');
     return im._ok ? im : null;
   }
   function pieceArt(kind) { return PIECE_ART[kind] ? pieceImg(PIECE_ART[kind]) : null; }
   function itemArt(iid) { return ITEM_ART.indexOf(iid) >= 0 ? pieceImg('item_' + iid) : null; }
+  // every relic has a painted icon (art/relics/relic_<id>.png); emoji stand by
+  function relicArt(rid) {
+    const im = art('rl_' + rid, 'art/relics/relic_' + rid + '.png');
+    return im._ok ? im : null;
+  }
   function imW(im, h) { return h * ((im.naturalWidth || 1) / (im.naturalHeight || 1)); }
 
   // Frietkot floor tiles as seamless patterns (halved so the grain reads)
@@ -4119,7 +4125,9 @@ if (!HEADLESS) (function browser() {
       const pbob = Math.sin(t * 3 + pi * 1.3) * 1.5;
       ctx.beginPath(); ctx.ellipse(px2, py2 + 2, 8, 2.6, 0, 0, 7);
       ctx.fillStyle = 'rgba(6,3,8,0.5)'; ctx.fill();
-      txt(p.icon, px2, py2 - 9 + pbob, '16px serif', '#fff');
+      const pa = itemArt(p.iid);
+      if (pa) { const hh = 22, ww = imW(pa, hh); ctx.drawImage(pa, px2 - ww / 2, py2 - 19 + pbob, ww, hh); }
+      else txt(p.icon, px2, py2 - 9 + pbob, '16px serif', '#fff');
       // a sliver of a health bar under each beast
       const pf = Math.max(0, p.hp / p.maxHp);
       ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(px2 - 8, py2 + 5, 16, 3);
@@ -4946,6 +4954,8 @@ if (!HEADLESS) (function browser() {
       if (im) { const gh = rx * 2.2, gw = imW(im, gh); ctx.drawImage(im, sx - gw / 2, sy - gh * 0.6, gw, gh); return; }
     }
     if (pc.kind === 'item' || pc.kind === 'chest' || pc.kind === 'bag' || pc.kind === 'skull') {
+      const im = pc.kind === 'item' ? itemArt(pc.iid) : pieceArt(pc.kind);
+      if (im) { const hh = rx * 2.4, ww = imW(im, hh); ctx.drawImage(im, sx - ww / 2, sy - hh * 0.7, ww, hh); return; }
       const it = pc.iid ? itemById(pc.iid) : null;
       const icon = pc.kind === 'chest' ? '\u{1F9F0}' : pc.kind === 'bag' ? '\u{1F4B0}'
         : pc.kind === 'skull' ? '\u{1F480}' : (it ? it.icon : '\u{2754}');
@@ -5418,8 +5428,10 @@ if (!HEADLESS) (function browser() {
       rr(60, y, LW - 120, 54, 12);
       ctx.fillStyle = taken ? 'rgba(28,52,34,0.92)' : 'rgba(14,8,18,0.94)'; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = taken ? '#7ed6a0' : rc.col; ctx.stroke();
-      txt(rl.icon + '  ' + rl.name + '  [' + rc.name + ']', LW / 2, y + 20, '900 13px Verdana, sans-serif', taken ? '#bff0cf' : rc.col);
-      txt(rl.desc, LW / 2, y + 38, '600 9px Verdana, sans-serif', '#c8b8cc');
+      const ra2 = relicArt(id);
+      if (ra2) { const hh = 46, ww = imW(ra2, hh); ctx.drawImage(ra2, 68 + 23 - ww / 2, y + 4, ww, hh); }
+      txt((ra2 ? '' : rl.icon + '  ') + rl.name + '  [' + rc.name + ']', LW / 2 + (ra2 ? 16 : 0), y + 20, '900 13px Verdana, sans-serif', taken ? '#bff0cf' : rc.col);
+      txt(rl.desc, LW / 2 + (ra2 ? 16 : 0), y + 38, '600 9px Verdana, sans-serif', '#c8b8cc');
       ctx.restore();
       if (!taken && left > 0) uiButtons.push({ x: 60, y, w: LW - 120, h: 54, cb: () => pickWheelRelic(i) });
     });
@@ -5517,7 +5529,9 @@ if (!HEADLESS) (function browser() {
     ids.slice(0, 8).forEach((iid) => {
       const it = itemById(iid);
       if (!it) return;
-      txt(it.icon, ax, 796, '16px serif', '#fff');
+      const sa = itemArt(iid);
+      if (sa) { const hh = 24, ww = imW(sa, hh); ctx.drawImage(sa, ax - ww / 2, 780, ww, hh); }
+      else txt(it.icon, ax, 796, '16px serif', '#fff');
       txt('×' + r.arsenal[iid], ax + 15, 798, '800 10px Verdana, sans-serif', '#d8c8dc', 'left');
       ax += 46;
     });
@@ -5578,8 +5592,10 @@ if (!HEADLESS) (function browser() {
         rr(92, ry, LW - 184, 50, 12);
         ctx.fillStyle = isPick ? 'rgba(28,52,34,0.92)' : 'rgba(14,8,18,0.92)'; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = isPick ? '#7ed6a0' : rc.col; ctx.stroke();
-        txt(rl2.icon + '  ' + rl2.name + '  [' + rc.name + ']', LW / 2, ry + 19, '900 12px Verdana, sans-serif', isPick ? '#bff0cf' : rc.col);
-        txt(rl2.desc, LW / 2, ry + 36, '600 9px Verdana, sans-serif', '#c8b8cc');
+        const ra = relicArt(id);
+        if (ra) { const hh = 42, ww = imW(ra, hh); ctx.drawImage(ra, 100 + 21 - ww / 2, ry + 4, ww, hh); }
+        txt((ra ? '' : rl2.icon + '  ') + rl2.name + '  [' + rc.name + ']', LW / 2 + (ra ? 14 : 0), ry + 19, '900 12px Verdana, sans-serif', isPick ? '#bff0cf' : rc.col);
+        txt(rl2.desc, LW / 2 + (ra ? 14 : 0), ry + 36, '600 9px Verdana, sans-serif', '#c8b8cc');
         ctx.restore();
         if (!v.relicPicked) uiButtons.push({ x: 92, y: ry, w: LW - 184, h: 50, cb: () => pickRelicOffer(i) });
       });
@@ -5939,7 +5955,9 @@ if (!HEADLESS) (function browser() {
         const ry = y0 + 22 + i * 58;
         rr(x0 - 6, ry - 22, pw - 20, 52, 10);
         ctx.fillStyle = 'rgba(255,255,255,0.03)'; ctx.fill();
-        txt(rl.icon, x0 + 14, ry + 2, '22px serif', '#fff');
+        const ra = relicArt(rid);
+        if (ra) { const hh = 42, ww = imW(ra, hh); ctx.drawImage(ra, x0 + 14 - ww / 2, ry - 18, ww, hh); }
+        else txt(rl.icon, x0 + 14, ry + 2, '22px serif', '#fff');
         txt(rl.name, x0 + 40, ry - 8, '900 14px Verdana, sans-serif', RARITY[rl.rar].col, 'left');
         wrapLines(rl.desc, 50, 2).forEach((ln, li) => {
           txt(ln, x0 + 40, ry + 10 + li * 13, '600 11px Verdana, sans-serif', '#c8b8d0', 'left');
@@ -6970,9 +6988,22 @@ if (!HEADLESS) (function browser() {
         rr(54, y, rx - 54, 44, 10);
         ctx.fillStyle = it.sold ? 'rgba(20,14,20,0.9)' : 'rgba(46,32,38,0.92)'; ctx.fill();
         ctx.lineWidth = 1.5; ctx.strokeStyle = it.sold ? '#3a2f3a' : '#5a4048'; ctx.stroke();
-        txt(it.label, 66, y + (it.sub ? 16 : 25), '800 12px Verdana, sans-serif',
+        // painted ware icons when we have them; the label keeps its emoji otherwise
+        const wArt = it.kind === 'relic' && it.rid ? relicArt(it.rid)
+                   : it.kind === 'item' && it.iid ? itemArt(it.iid) : null;
+        let lx = 66, label = it.label;
+        if (wArt) {
+          const hh = 38, ww = imW(wArt, hh);
+          ctx.save(); if (it.sold) ctx.globalAlpha = 0.35;
+          ctx.drawImage(wArt, 60 + 19 - ww / 2, y + 3, ww, hh);
+          ctx.restore();
+          lx = 102;
+          const def = it.kind === 'relic' ? relicById(it.rid) : itemById(it.iid);
+          if (def) label = def.name;
+        }
+        txt(label, lx, y + (it.sub ? 16 : 25), '800 12px Verdana, sans-serif',
             it.sold ? '#5a4a5a' : '#ffe9a3', 'left');
-        if (it.sub) txt(it.sub, 66, y + 31, '600 9px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
+        if (it.sub) txt(it.sub, lx, y + 31, '600 9px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
         if (it.sold) { txt('SOLD', rx - 34, y + 26, '900 13px Verdana, sans-serif', '#5a4a5a'); return; }
         // two chips: pay GOLD or pay COINS
         const goldOk = S.run.gold >= it.price;
@@ -7003,7 +7034,9 @@ if (!HEADLESS) (function browser() {
           uiBtn(bx, by2, 42, 36, '', () => removeArsenal(iid),
                 { bg: remOk ? 'rgba(90,40,44,0.95)' : 'rgba(40,30,36,0.9)',
                   border: remOk ? '#e0707a' : '#5a4048', r: 9 });
-          txt(it2.icon, bx + 16, by2 + 17, '15px serif', '#fff');
+          const ja = itemArt(iid);
+          if (ja) { const hh = 30, ww = imW(ja, hh); ctx.drawImage(ja, bx + 16 - ww / 2, by2 + 3, ww, hh); }
+          else txt(it2.icon, bx + 16, by2 + 17, '15px serif', '#fff');
           txt('×' + S.run.arsenal[iid], bx + 34, by2 + 24, '800 9px Verdana, sans-serif', '#ffd0d4');
         });
       }
@@ -7019,7 +7052,9 @@ if (!HEADLESS) (function browser() {
     } else if (isChest) {
       const p = room.prize;
       txt('the lid lifts on…', LW / 2, py + 66, '700 12px Verdana, sans-serif', '#c8a8b0');
-      txt(p.icon, LW / 2, py + 116, '900 46px Georgia, serif', '#ffe9a3');
+      const pza = p.kind === 'item' ? itemArt(p.iid) : null;
+      if (pza) { const hh = 74, ww = imW(pza, hh); ctx.drawImage(pza, LW / 2 - ww / 2, py + 62, ww, hh); }
+      else txt(p.icon, LW / 2, py + 116, '900 46px Georgia, serif', '#ffe9a3');
       txt(p.label, LW / 2, py + 150, '900 16px Verdana, sans-serif', '#ffd75e');
       uiBtn(56, py + ph - 58, (LW - 128) / 2, 40, 'TAKE IT', () => acceptPrize(),
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 12 });
