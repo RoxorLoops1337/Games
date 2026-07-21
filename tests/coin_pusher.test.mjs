@@ -56,7 +56,10 @@ t.eq(S.wallet, C.START_WALLET, 'starts with full wallet');
 t.eq(S.money, C.START_MONEY, 'starts with pocket money');
 t.eq(S.mach, 'gold', 'starts on the gold machine');
 t.ok(S.unlocked.length === 1 && S.unlocked[0] === 'gold', 'only gold unlocked at first');
-t.ok(platCoins().length >= 40, 'initial pile is dense (' + platCoins().length + ' pieces)');
+t.ok(platCoins().length >= 80, 'initial pile is dense (' + platCoins().length + ' pieces)');
+t.ok(platCoins().some(c => c.lay === 2), 'the pile stacks three layers deep');
+t.ok(['gold', 'penny', 'neon', 'bandit'].every(id => MACHINES[id].maxCoins >= 250),
+     'every machine can hold a lot more coins than a starter pile');
 t.ok(S.coins.some(c => c.kind === 'gem'), 'initial pile contains a gem');
 t.ok(S.coins.some(c => c.kind === 'lucky'), 'initial pile contains lucky coins');
 t.eq(S.coins.filter(c => c.kind === 'tag').length, 2, 'initial pile has two point tags');
@@ -136,6 +139,42 @@ t.ok(dropped.onPush || dropped.y >= CP.pusherFront(0) + dropped.r - 0.01,
 S.wallet = 0; S.cd = 0;
 t.ok(!CP.drop(50), 'cannot drop with an empty wallet');
 t.eq(S.wallet, 0, 'wallet never goes negative');
+
+// -------- BUG FIX: a full field must never charge for a drop that never
+// happens (the counter used to go down with nothing dropping) --------
+CP.srand(7); CP.reset();
+S.wallet = 50; S.cd = 0;
+// pack the field right up to its cap
+while (S.coins.length < MACHINES.gold.maxCoins) CP.place(50, 50, 'coin', 0, 'plat');
+const walletBeforeFull = S.wallet, coinsBeforeFull = S.coins.length, spentBeforeFull = S.coinsSpent;
+t.ok(!CP.drop(50), 'a drop against a completely full field is refused');
+t.eq(S.wallet, walletBeforeFull, 'the wallet is NOT charged when nothing actually drops');
+t.eq(S.coins.length, coinsBeforeFull, 'no coin was silently added past the cap');
+t.eq(S.coinsSpent, spentBeforeFull, 'the spent counter does not move either');
+t.ok(S.uiFlash && /FULL/i.test(S.uiFlash.msg), 'the player is told the field is full');
+
+// -------- turbo button: rapid-fire dropping --------
+CP.srand(7); CP.reset(); S.wallet = 99; S.turbo = false;
+t.ok(!S.turbo, 'turbo starts off');
+CP.drop(50);
+const normalCd = S.cd;
+S.turbo = true; S.cd = 0;
+CP.drop(50);
+t.ok(S.cd < normalCd, 'turbo shortens the drop cooldown (' + S.cd.toFixed(3) + ' < ' + normalCd.toFixed(3) + ')');
+t.eq(S.cd, C.DROP_CD_TURBO, 'turbo cooldown matches the constant');
+S.turbo = false; CP.save();
+t.eq(JSON.parse(store[C.SAVE_KEY]).turbo, false, 'turbo preference is persisted');
+
+// -------- prizes sometimes drop onto the platform on their own --------
+CP.srand(7); CP.reset(); S.wallet = 999;
+let sawBonusPrizeRain = false;
+for (let i = 0; i < 400 && !sawBonusPrizeRain; i++) {
+  S.cd = 0; S.prizeDebt = 0; // isolate from the "you just won one" restock path
+  CP.drop(50);
+  if (S.rain.some(r => r.kind === 'prize')) sawBonusPrizeRain = true;
+  S.rain.length = 0;
+}
+t.ok(sawBonusPrizeRain, 'the machine sometimes drops a prize onto the platform unprompted');
 
 // -------- you only ever insert coins --------
 CP.srand(7); CP.reset(); S.wallet = 99;
@@ -440,6 +479,32 @@ t.ok(S.score > wSnap.pts || S.money > wSnap.money || S.tray.coins > 0 || S.tray.
      'every wheel segment pays something');
 t.ok(S.wheelAnim !== null && typeof S.wheelAnim.seg === 'number', 'wheel animation armed');
 S.wheelAnim = null; S.rain.length = 0;
+
+// -------- REGRESSION: every wheel segment's fx() must run without
+// throwing, and must never be mistaken for a won prize unless it truly is
+// one (a previous bug: Array.push()'s truthy return value from the GEM
+// segment was misread as "you won a prize", crashing spinWheel and
+// silently killing the whole spin — the wheel just never resolved) -------
+for (const seg2 of CP.WHEEL) {
+  S.rain.length = 0; S.tray.prizes.length = 0;
+  let threw = null;
+  try { seg2.fx(); } catch (e) { threw = e; }
+  t.ok(!threw, 'wheel segment "' + seg2.label + '" runs without throwing' + (threw ? ': ' + threw.message : ''));
+}
+// spinning many times must never crash and, whenever GEM is drawn, must
+// still resolve to a clean non-prize result
+CP.srand(2);
+let gemSpins = 0, anyThrow = null;
+for (let i = 0; i < 200; i++) {
+  try {
+    const r = CP.spinWheel();
+    if (r.label === 'GEM') { gemSpins++; t.ok(S.wheelAnim.label === 'GEM', 'a GEM spin shows the GEM label, not a crashed prize name'); }
+  } catch (e) { anyThrow = e; break; }
+}
+t.ok(!anyThrow, 'spinning the wheel repeatedly never throws' + (anyThrow ? ': ' + anyThrow.message : ''));
+t.ok(gemSpins > 0, 'sanity: the GEM segment did come up during this run (' + gemSpins + ' times)');
+S.wheelAnim = null; S.rain.length = 0;
+
 // wheel chips on the field trigger a spin when collected
 S.coins.length = 0;
 const chip = CP.place(50, C.PLAT_FRONT - 0.5, 'chip', 0, 'plat');
@@ -453,6 +518,25 @@ S.wallet = 99; S.cd = 0; S.dropped = 29; S.rain.length = 0;
 CP.drop(50);
 t.ok(S.rain.some(r => r.kind === 'chip'), 'every 30th insert the machine drops a wheel chip');
 
+// -------- the wheel's PRIZE segment must actually deliver a real prize --------
+CP.setMachine('gold');
+S.tray.prizes.length = 0;
+const prizeSeg = CP.WHEEL.find(s => s.label === 'PRIZE');
+const wonPz = prizeSeg.fx();
+t.ok(wonPz && MACHINES.gold.prizeIds.includes(wonPz.id),
+     'the PRIZE segment hands back an item that belongs to the current machine');
+t.eq(S.tray.prizes[S.tray.prizes.length - 1], wonPz.id, 'the won prize actually lands in the tray');
+// spin until we land on PRIZE and check the on-screen result names the item
+CP.srand(1);
+let wonLabel = null;
+for (let i = 0; i < 300 && !wonLabel; i++) {
+  const s2 = CP.spinWheel();
+  if (s2.label === 'PRIZE') wonLabel = S.wheelAnim.label;
+}
+t.ok(wonLabel, 'landing on PRIZE happens within a reasonable number of spins');
+t.ok(wonLabel && wonLabel !== 'PRIZE', 'the result banner names the actual prize won, not a generic "PRIZE" label');
+t.ok(S.banner && S.banner.txt.indexOf('WON') === 0, 'a "WON <item>!" banner confirms the prize on screen');
+
 // -------- mystery gift chests --------
 CP.srand(47); CP.setMachine('gold');
 t.ok(S.coins.some(c => c.kind === 'chest'), 'a gift chest hides in every pile');
@@ -465,6 +549,19 @@ step(2);
 t.ok(chest.scored, 'chest pushed over the edge opens');
 t.ok(S.score > cSnap.pts || S.tray.coins > 0 || S.tray.prizes.length > 0 || S.wheelAnim !== null,
      'the chest paid out a gift');
+// chests also draw prizes from the current machine's own catalog
+let chestGavePrize = false;
+for (let seed = 1; seed <= 60 && !chestGavePrize; seed++) {
+  CP.srand(seed); CP.setMachine('gold');
+  S.coins.length = 0; S.tray.prizes.length = 0;
+  const ch = CP.place(50, C.PLAT_FRONT - 0.5, 'chest', 0, 'plat');
+  ch.vy = 90;
+  step(2);
+  if (S.tray.prizes.length) chestGavePrize = true;
+}
+t.ok(chestGavePrize, 'gift chests do eventually pay out a real prize');
+t.ok(!chestGavePrize || MACHINES.gold.prizeIds.includes(S.tray.prizes[0]),
+     'a chest prize belongs to the current machine\'s catalog');
 
 // -------- daily gift --------
 S.wallet = 10; S.money = 200; S.wheelAnim = null;
