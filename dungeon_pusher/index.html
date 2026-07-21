@@ -780,7 +780,7 @@ function save() {
         kills: S.run.kills, goldEarned: S.run.goldEarned, map: S.run.map,
         keys: S.run.keys, goldKeys: S.run.goldKeys || 0, meter: S.meter,
         pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
-        mapFloor: S.run.mapFloor,
+        mapFloor: S.run.mapFloor, stats: S.run.stats,
       } : null,
     }));
   } catch (e) {}
@@ -824,6 +824,10 @@ function load() {
         pileFloor: d.run.pileFloor || 0,
         pending: Array.isArray(d.run.pending) ? d.run.pending : [],
         mapFloor: d.run.mapFloor || 0,
+        stats: (d.run.stats && typeof d.run.stats === 'object')
+          ? { fired: d.run.stats.fired || 0, dealt: d.run.stats.dealt || 0,
+              taken: d.run.stats.taken || 0, bestHit: d.run.stats.bestHit || 0, t: d.run.stats.t || 0 }
+          : { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0 },
       };
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
@@ -1002,6 +1006,10 @@ function dmgFoe(e, n, src, pierce) {
   if (n <= 0) { floatAnchor('BLOCKED', 'enemy', '#c8d6e8'); e.hitT = 0.15; return 0; }
   e.hp -= n;
   e.hitT = 0.3;
+  if (S.run.stats) {
+    S.run.stats.dealt += n;
+    if (!dot && n > S.run.stats.bestHit) S.run.stats.bestHit = n;
+  }
   floatAnchor('-' + n, 'enemy', dot ? DOT_COL[src] : '#ff8a6b', n >= 8);
   // Arterial Cut: a heavy blow opens a wound
   if (!dot && n >= 8 && hasRelic('arterial') && e.hp > 0) applyBleed(e, 2, true);
@@ -1242,6 +1250,7 @@ function addCoins(n) {
 function hpHit(n, cause, col) {
   if (!S.run || S.run.hp <= 0) return;
   S.run.hp -= n;
+  if (S.run.stats) S.run.stats.taken += n;
   S.hurtT = 0.45;
   S.shake += Math.min(9, 3 + n * 0.5);
   floatAnchor('-' + n + ' HP', 'hero', col || '#ff5a4e', n >= 6);
@@ -1531,6 +1540,7 @@ function drop(x, force) {
   autoSel();
   S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 / ×20 shortens the cooldown to match
   S.dropped++; S.meter++;
+  if (S.run.stats) S.run.stats.fired++;
   SND.slot();
   if (S.meter >= C.METER_MAX) frenzy();
   return true;
@@ -2407,6 +2417,8 @@ function endRun(cause) {
   S.over = {
     cause: cause || 'fell',
     floor: S.run.floor, depth: S.run.depth, kills: S.run.kills, gold: S.run.goldEarned,
+    hero: S.run.hero, relics: S.run.relics.length,
+    stats: S.run.stats || { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0 },
   };
   S.run = null;
   S.foes = [];
@@ -2440,6 +2452,7 @@ function newRun(heroId) {
     relics: [], potions: C.START_POTIONS, whet: 0, str: 0, dex: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
     pileSave: null, pileFloor: 0, pending: [], mapFloor: 0,
+    stats: { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0 },
   };
   // the chosen adventurer's signature coins
   S.run.purse[hero.coin] += 2;
@@ -3294,6 +3307,7 @@ function step(dt, quiet) {
 
 function tick(dt) {
   dt = Math.min(dt, 0.05);
+  if (S.run && S.run.stats) S.run.stats.t += dt;   // the run clock
   const n = 2, sub = dt / n;
   for (let i = 0; i < n; i++) step(sub);
 }
@@ -7508,22 +7522,33 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = lgr('overtt', 0, 245, 0, 292, [[0, '#ffb0b8'], [1, '#a8213a']]);
     ctx.fillText('THE RUN ENDS', LW / 2, 268);
     txt(o.cause, LW / 2, 310, '700 14px Verdana, sans-serif', '#c8a8b0');
+    // the REPORT CARD: the whole run, itemized
+    const st2 = o.stats || { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0 };
+    const mm = Math.floor(st2.t / 60), ss = ('0' + Math.floor(st2.t % 60)).slice(-2);
+    const hero2 = heroById(o.hero);
     const rows = [
+      ['hero', hero2 ? hero2.icon + ' ' + hero2.name : '—'],
       ['reached', 'floor ' + o.floor + ', room ' + o.depth],
       ['monsters slain', '' + o.kills],
       ['gold looted', fmt(o.gold)],
+      ['coins fired', fmt(st2.fired)],
+      ['damage dealt', fmt(st2.dealt)],
+      ['damage taken', fmt(st2.taken)],
+      ['best single hit', '' + st2.bestHit],
+      ['relics collected', '' + (o.relics || 0)],
+      ['run time', mm + ':' + ss],
     ];
     rows.forEach((rw, i) => {
-      txt(rw[0], LW / 2 - 24, 370 + i * 30, '600 13px Verdana, sans-serif', '#9a8aa0', 'right');
-      txt(rw[1], LW / 2 + 0, 370 + i * 30, '900 14px Verdana, sans-serif', '#ffe9a3', 'left');
+      txt(rw[0], LW / 2 - 24, 352 + i * 26, '600 12px Verdana, sans-serif', '#9a8aa0', 'right');
+      txt(rw[1], LW / 2 + 0, 352 + i * 26, '900 13px Verdana, sans-serif', '#ffe9a3', 'left');
     });
     if (S.best.floor > 0) {
       txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + ' • ' + S.best.kills + ' kills',
-          LW / 2, 480, '700 11px Verdana, sans-serif', '#8f6f78');
+          LW / 2, 614, '700 11px Verdana, sans-serif', '#8f6f78');
     }
-    uiBtn(LW / 2 - 120, 530, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(heroSel),
+    uiBtn(LW / 2 - 120, 638, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(heroSel),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 17px Verdana, sans-serif', r: 16 });
-    uiBtn(LW / 2 - 80, 596, 160, 38, 'TITLE', () => { S.screen = 'title'; },
+    uiBtn(LW / 2 - 80, 700, 160, 38, 'TITLE', () => { S.screen = 'title'; },
           { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 13px Verdana, sans-serif', r: 12 });
   }
 

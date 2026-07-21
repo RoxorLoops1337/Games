@@ -15,8 +15,9 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Pause/settings menu**: gear on title + dungeon → SFX volume notches,
       screen-shake / particles / sound toggles, replay-the-tale, credits + version
       (music slider arrives with the music item) (session 4)
-- [ ] **Run-end report card**: on death/victory — floors, kills, coins fired, damage
-      dealt/taken, relics collected, gold earned, best single hit, run time
+- [x] **Run-end report card**: hero, floors, kills, gold, coins fired, damage
+      dealt/taken, best single hit, relics, run clock — tracked in run.stats,
+      saved/loaded, itemized on the death screen (session 5)
 - [x] **Confirm dialogs**: generic confirm sheet; wired to abandoning a run and
       spending the last key (mid-battle exit has no UI path to guard) (session 3)
 - [ ] **Toast/float polish pass**: cap simultaneous floats, merge duplicates ("+1 ● ×6"),
