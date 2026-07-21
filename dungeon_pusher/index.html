@@ -41,6 +41,7 @@ if (ctx && typeof ctx.save !== 'function') ctx = null;
 const HEADLESS = !ctx;
 
 // ---------------------------------------------------------------- constants
+const VERSION = '1.0.0';
 const C = {
   W: 100,
   PLAT_FRONT: 84,
@@ -735,7 +736,7 @@ const S = {
   victory: null,                       // battle-won overlay {t, gold, keys, offer}
   room: null,                          // open non-battle room {type, ...}
   over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
-  best: { floor: 0, depth: 0, kills: 0, gold: 0 },
+  best: { floor: 0, depth: 0, kills: 0, gold: 0, runs: 0 },
   wheelAnim: null, pendingPick: null, relicPick: null, uiFlash: null, toast: null,
   pPois: 0, pBleed: 0, pBurn: 0,       // what the dungeon left festering on YOU
   weakT: 0,                            // WEAKNESS rounds: your damage halves
@@ -793,7 +794,7 @@ function load() {
     else if (d.turbo === true) S.turbo = 2;   // migrate the old on/off flag
     if (d.best && typeof d.best === 'object') {
       S.best = { floor: d.best.floor || 0, depth: d.best.depth || 0,
-                 kills: d.best.kills || 0, gold: d.best.gold || 0 };
+                 kills: d.best.kills || 0, gold: d.best.gold || 0, runs: d.best.runs || 0 };
     }
     if (d.heroPick && heroById(d.heroPick)) S.heroPick = d.heroPick;
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
@@ -2423,6 +2424,7 @@ function newRun(heroId) {
   let hero = heroById(heroId) || heroById(S.heroPick) || HEROES[0];
   // a still-locked hero falls back to the knight — no sneaking past the seal
   if (!heroUnlocked(hero.id)) hero = HEROES[0];
+  S.best.runs = (S.best.runs || 0) + 1;   // the lifetime run tally
   S.run = {
     hero: hero.id,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
@@ -7237,10 +7239,28 @@ if (!HEADLESS) (function browser() {
   }
 
   // ------------------------------------------------------------ title/over
+  // slow golden rain behind the title — coins tumbling out of the dark
+  const TRAIN = [];
   function drawTitle(t) {
     ctx.fillStyle = rgr('titlebg', LW / 2, 260, 80, LW / 2, 420, 640,
       [[0, '#33202e'], [1, '#140d16']]);
     ctx.fillRect(0, 0, LW, LH);
+    if (!TRAIN.length) {
+      for (let i = 0; i < 16; i++) {
+        TRAIN.push({ x: Math.random() * LW, y: Math.random() * LH, v: 26 + Math.random() * 40,
+                     r: 5 + Math.random() * 8, ph: Math.random() * 7, sp: 1.5 + Math.random() * 3 });
+      }
+    }
+    for (const c of TRAIN) {
+      c.y += c.v / 60;
+      if (c.y > LH + 14) { c.y = -14; c.x = Math.random() * LW; }
+      const sq = Math.abs(Math.cos(t * c.sp + c.ph));            // tumble
+      ctx.globalAlpha = 0.16 + 0.12 * (c.r / 13);
+      ctx.beginPath(); ctx.ellipse(c.x, c.y, c.r, Math.max(1.4, c.r * 0.55 * sq), 0, 0, 7);
+      ctx.fillStyle = '#f2c04a'; ctx.fill();
+      ctx.strokeStyle = 'rgba(122,84,14,0.7)'; ctx.lineWidth = 1; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
     // a mound of coins under the logo
     for (let i = 0; i < 26; i++) {
       const cx2 = LW / 2 + Math.sin(i * 2.399) * (30 + ((i * 17) % 150));
@@ -7251,17 +7271,31 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = '#f2c04a'; ctx.fill();
       ctx.strokeStyle = 'rgba(122,84,14,0.6)'; ctx.lineWidth = 1; ctx.stroke();
     }
+    const bob = Math.sin(t * 1.6) * 3;
     txt('⚔\u{FE0F}', LW / 2 - 168, 178 + Math.sin(t * 2) * 5, '34px serif', '#fff');
     txt('\u{1F409}', LW / 2 + 168, 178 + Math.cos(t * 2) * 5, '34px serif', '#fff');
     ctx.font = '900 52px Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 10; ctx.strokeStyle = '#2a1030';
-    ctx.strokeText('DUNGEON', LW / 2, 150);
-    ctx.strokeText('PUSHER', LW / 2, 205);
+    ctx.strokeText('DUNGEON', LW / 2, 150 + bob);
+    ctx.strokeText('PUSHER', LW / 2, 205 + bob);
     const g = lgr('logott', 0, 120, 0, 235, [[0, '#fff4d6'], [0.5, '#ffd75e'], [1, '#ff8a2a']]);
     ctx.fillStyle = g;
-    ctx.fillText('DUNGEON', LW / 2, 150);
-    ctx.fillText('PUSHER', LW / 2, 205);
+    ctx.fillText('DUNGEON', LW / 2, 150 + bob);
+    ctx.fillText('PUSHER', LW / 2, 205 + bob);
+    // the shine: a bright band sweeps the wordmark every few seconds
+    const sw = ((t * 0.45) % 1.6) * (LW + 240) - 120;
+    const shine = ctx.createLinearGradient(sw - 46, 0, sw + 46, 0);
+    shine.addColorStop(0, 'rgba(255,255,255,0)');
+    shine.addColorStop(0.5, 'rgba(255,252,235,0.85)');
+    shine.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.save();
+    ctx.beginPath(); ctx.rect(sw - 46, 100 + bob, 92, 135);
+    ctx.clip();
+    ctx.fillStyle = shine;
+    ctx.fillText('DUNGEON', LW / 2, 150 + bob);
+    ctx.fillText('PUSHER', LW / 2, 205 + bob);
+    ctx.restore();
     txt('a coin pusher roguelike', LW / 2, 330, '800 14px Verdana, sans-serif', '#c8a8b0');
     const HOW = [
       '● spend your purse each turn — the tray COLLECTS',
@@ -7317,9 +7351,11 @@ if (!HEADLESS) (function browser() {
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif', r: 16 });
     }
     if (S.best.floor > 0) {
-      txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + '  •  ' + S.best.kills + ' kills  •  ' + fmt(S.best.gold) + ' gold looted',
+      txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + '  •  ' + S.best.kills + ' kills  •  ' + fmt(S.best.gold) + ' gold looted'
+          + (S.best.runs > 0 ? '  •  ' + S.best.runs + ' run' + (S.best.runs > 1 ? 's' : '') : ''),
           LW / 2, 736, '700 11px Verdana, sans-serif', '#8f6f78');
     }
+    txt('v' + VERSION, LW - 10, LH - 10, '600 9px Verdana, sans-serif', '#5a4a5f', 'right');
     uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
   }
 
