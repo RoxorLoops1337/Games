@@ -12,8 +12,9 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       floor-best + total-runs strip, VERSION stamp in a corner (session 2)
 - [x] **Intro vignette**: five lore lines fade in before the first run, skippable,
       replayable from the 📜 title button (session 3)
-- [ ] **Pause/settings menu**: gear button → volume sliders (music/SFX separate),
-      screen-shake toggle, particle-density toggle, reset-tutorial, credits link
+- [x] **Pause/settings menu**: gear on title + dungeon → SFX volume notches,
+      screen-shake / particles / sound toggles, replay-the-tale, credits + version
+      (music slider arrives with the music item) (session 4)
 - [ ] **Run-end report card**: on death/victory — floors, kills, coins fired, damage
       dealt/taken, relics collected, gold earned, best single hit, run time
 - [x] **Confirm dialogs**: generic confirm sheet; wired to abandoning a run and
