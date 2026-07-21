@@ -8,8 +8,8 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 ## Tier 1 — first impressions & core polish
 
-- [ ] **Title screen glow-up**: game logo treatment (stacked-coins wordmark), animated
-      coin-rain backdrop, floor-best + total-runs strip, VERSION stamp in a corner
+- [x] **Title screen glow-up**: animated coin-rain backdrop, logo bob + shine sweep,
+      floor-best + total-runs strip, VERSION stamp in a corner (session 2)
 - [ ] **Intro vignette**: 4–5 line story scroll on first launch ("the dungeon is a
       rigged carnival…"), skippable, replayable from settings
 - [ ] **Pause/settings menu**: gear button → volume sliders (music/SFX separate),
