@@ -1627,15 +1627,15 @@ function mkEnemy(type, eid) {
   } else {
     const roster = curRoster();
     base = (eid && enemyById(eid)) || roster[(rng() * enemyPool(S.run.depth)) | 0];
-    if (type === 'elite') eliteK = 1.6;
+    if (type === 'elite') eliteK = 2.0;
   }
   const hp = Math.round(base.hp * mult * eliteK);
   return {
     id: base.id, icon: base.icon, name: (type === 'elite' ? 'ELITE ' : '') + base.name,
     hp, maxHp: hp,
-    atk: Math.round(base.atk * mult * (type === 'elite' ? 1.3 : 1)),
+    atk: Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1)),
     trait: base.trait, def: base.def || null,
-    gold: Math.round(base.gold * mult * (type === 'elite' ? 1.8 : 1)),
+    gold: Math.round(base.gold * mult * (type === 'elite' ? 2.2 : 1)),
     boss: type === 'boss', elite: type === 'elite',
     stunned: 0, pois: 0, bleed: 0, burn: 0, block: 0, hitT: 0, lungeT: 0,
   };
