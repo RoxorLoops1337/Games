@@ -109,7 +109,7 @@ const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42
 // GOLD RUSH pusher so the proven physics constants carry over.
 const MACH = {
   coin: { r: 4.6, style: 'gold', sym: '¢' },
-  pushPeriod: 2.83, maxCoins: 210,  // ~20% quicker slide; headroom for the floor-persistent pile
+  pushPeriod: 2.83, maxCoins: 320,  // ~20% quicker slide; deep-floor turbo pours need the headroom
   tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
   lipW: 7, lipH: 2.2,
 };
@@ -775,7 +775,7 @@ function save() {
         gold: S.run.gold, purse: S.run.purse, arsenal: S.run.arsenal,
         relics: S.run.relics, potions: S.run.potions, whet: S.run.whet, str: S.run.str, dex: S.run.dex,
         kills: S.run.kills, goldEarned: S.run.goldEarned, map: S.run.map,
-        keys: S.run.keys, meter: S.meter,
+        keys: S.run.keys, goldKeys: S.run.goldKeys || 0, meter: S.meter,
         pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
         mapFloor: S.run.mapFloor,
       } : null,
@@ -810,6 +810,7 @@ function load() {
         map: (d.run.map && d.run.map.rooms && d.run.map.rooms[d.run.map.cur]) ? d.run.map : null,
         room: null,
         keys: (typeof d.run.keys === 'number') ? d.run.keys : C.START_KEYS,
+        goldKeys: d.run.goldKeys || 0,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -819,7 +820,7 @@ function load() {
       for (const k of Object.keys(S.run.arsenal)) {
         if (!itemById(k) || !(S.run.arsenal[k] > 0)) delete S.run.arsenal[k];
       }
-      if (!S.run.map || S.run.map.v !== 2) {
+      if (!S.run.map || !(S.run.map.v >= 2)) {
         genFloor();                    // pre-corridor saves get a fresh random floor
       } else {
         S.run.room = S.run.map.rooms[S.run.map.cur];
@@ -1399,15 +1400,20 @@ function wheelRelic(rar, n) {
   S.pendingPick = { rar, picks: n || 1 };
 }
 const WHEEL = [
-  { label: '+GOLD',   col: '#f2c04a', w: 15, fx: () => addGold(14 + S.run.floor * 3 + ((rng() * 10) | 0)) },
-  { label: '+2 ●',    col: '#f2c04a', w: 14, fx: () => wheelCoins(2) },
-  { label: '+3 ●',    col: '#e8b24a', w: 11, fx: () => wheelCoins(3) },
-  { label: '+5 ●',    col: '#e0a038', w: 6,  fx: () => wheelCoins(5) },
-  { label: 'COMMON\nITEM', col: '#8fd18f', w: 12, fx: () => wheelItem('c') },
-  { label: 'RARE\nITEM',   col: '#5aa0e0', w: 7,  fx: () => wheelItem('r') },
-  { label: '2 COMMON\nRELICS', col: '#c8c8c8', w: 9, fx: () => wheelRelic('c', 2) },
-  { label: 'RARE\nRELIC',      col: '#b06be8', w: 6, fx: () => wheelRelic('r', 1) },
-  { label: '−5 HP',   col: '#ef4b5d', w: 8,  fx: () => { S.run.hp = Math.max(1, S.run.hp - 5); floatAt('−5 HP!', 50, '#ef4b5d', true); S.shake += 5; } },
+  // gold in three sizes, relics, a key — and HP as the gamble. NO coins:
+  // the pusher hands out coins; the wheel deals in everything else.
+  { label: '+GOLD',    col: '#f2c04a', w: 13, fx: () => addGold(10 + S.run.floor * 2 + ((rng() * 8) | 0)) },
+  { label: '++GOLD',   col: '#e8b24a', w: 9,  fx: () => addGold(22 + S.run.floor * 3 + ((rng() * 12) | 0)) },
+  { label: 'GOLD\nRUSH', col: '#e0a038', w: 5, fx: () => addGold(45 + S.run.floor * 5 + ((rng() * 20) | 0)) },
+  { label: 'COMMON\nRELIC', col: '#c8c8c8', w: 8, fx: () => wheelRelic('c', 1) },
+  { label: 'COMMON\nRELIC', col: '#b8bcc8', w: 8, fx: () => wheelRelic('c', 1) },
+  { label: 'RARE\nRELIC',   col: '#b06be8', w: 5, fx: () => wheelRelic('r', 1) },
+  { label: '+5 HP',   col: '#8fd18f', w: 11, fx: () => healPlayer(5) },
+  { label: '−5 HP',   col: '#ef4b5d', w: 10, fx: () => { S.run.hp = Math.max(1, S.run.hp - 5); floatAt('−5 HP!', 50, '#ef4b5d', true); S.shake += 5; } },
+  { label: '+10 HP',  col: '#7ee787', w: 8,  fx: () => healPlayer(10) },
+  { label: '−10 HP',  col: '#d63b4e', w: 7,  fx: () => { S.run.hp = Math.max(1, S.run.hp - 10); floatAt('−10 HP!', 50, '#ef4b5d', true); S.shake += 7; } },
+  { label: '+25 HP',  col: '#4ecb6a', w: 4,  fx: () => healPlayer(25) },
+  { label: '+1 KEY',  col: '#63c8ff', w: 10, fx: () => { S.run.keys++; floatAt('+1 KEY \u{1F5DD}!', 50, '#63c8ff', true); } },
 ];
 function spinWheel() {
   if (!S.run) return null;
@@ -1662,10 +1668,16 @@ function dealHand() {
   B.hand = { ...S.run.purse };
   // a thief's cut, plus the LEAD PURSE hex weighing the hand down
   let cut = (B.stolen || 0) + (S.leadT > 0 ? 3 : 0);
+  let cutDone = 0;
   for (const k of COIN_KINDS) {
-    while (cut > 0 && B.hand[k] > 0) { B.hand[k]--; cut--; }
+    while (cut > 0 && B.hand[k] > 0) { B.hand[k]--; cut--; cutDone++; }
   }
   B.stolen = 0;
+  // flash the WALLET counter red so the loss is never a mystery
+  if (cutDone > 0) {
+    S.walletHitT = 1.6;
+    floatAnchor('-' + cutDone + ' ● ' + (S.leadT > 0 ? 'lead purse!' : 'stolen!'), 'hero', '#ff5a4e', true);
+  }
   // the Minter / Rich Hand / Tollkeeper strike you bonus gold coins each round
   const bonusCoin = (hasRelic('minter') ? 1 : 0) + (hasRelic('richhand') ? 1 : 0) + (hasRelic('tollkeeper') ? 2 : 0);
   if (bonusCoin) B.hand.coin = (B.hand.coin || 0) + bonusCoin;
@@ -2325,6 +2337,11 @@ function winBattle() {
     const pick = (rar) => { const p = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && seen.indexOf(rl.id) < 0); if (!p.length) return null; const id = p[(rng() * p.length) | 0].id; seen.push(id); return id; };
     relicOffer = [pick('c'), pick('c'), pick('r')].filter(Boolean);
   }
+  // an elite's hoard hides a GOLDEN KEY — the only thing that opens a vault
+  if (anyElite) {
+    S.run.goldKeys = (S.run.goldKeys || 0) + 1;
+    floatAnchor('+1 GOLDEN KEY \u{1F511}', 'hero', '#ffd75e', true);
+  }
   S.victory = { t: 0, gold: S.battle.goldWon, keys: S.battle.keysWon, boss: anyBoss,
                 offer: anyBoss ? null : rollOffer(), picked: null,
                 relicOffer, relicPicked: null, freeSpin: anyElite };
@@ -2409,7 +2426,7 @@ function newRun(heroId) {
   S.run = {
     hero: hero.id,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
-    gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS,
+    gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS, goldKeys: 0,
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0, str: 0, dex: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
@@ -2456,13 +2473,13 @@ function toast(txt2) { S.toast = { txt: txt2, t: 2.6 }; }
 // roll the 1-3 inhabitants of a room at the given distance from the stairs
 function genEnts(dist) {
   const r = rng();
-  const n = r < 0.38 ? 1 : r < 0.82 ? 2 : 3;
+  const n = r < 0.22 ? 1 : r < 0.6 ? 2 : r < 0.92 ? 3 : 4;
   const ents = [];
   const SVC = [['chest', 30], ['shop', 22], ['smith', 16], ['shrine', 18], ['wheel', 12]];
   for (let i = 0; i < n; i++) {
     const avail = SVC.filter(s => !ents.some(e => e.kind === s[0]));
-    if (rng() < 0.55 || !avail.length) {
-      const mtype = dist >= 2 && rng() < 0.22 ? 'elite' : 'battle';
+    if (rng() < 0.66 || !avail.length) {
+      const mtype = dist >= 2 && rng() < 0.24 ? 'elite' : 'battle';
       const eid = curRoster()[(rng() * enemyPool(dist + 1)) | 0].id;
       ents.push({ kind: 'monster', mtype, eid, done: false });
     } else {
@@ -2510,8 +2527,9 @@ function rollSize() {
 }
 function genFloor() {
   if (!S.run) return null;
-  // every floor rolls its own bones: size, sprawl and loopiness all vary
-  const target = 9 + ((rng() * 4) | 0) + Math.min(3, S.run.floor - 1);
+  // every floor rolls its own bones: size, sprawl and loopiness all vary —
+  // and floors grow BIG: 13-17 rooms early, up to ~23 deep down
+  const target = 13 + ((rng() * 5) | 0) + Math.min(6, S.run.floor - 1);
   const loopP = 0.18 + rng() * 0.27;
   const rooms = { '0,0': { gx: 0, gy: 0, ents: [], visited: true, dist: 0, boss: false, size: rng() < 0.5 ? 's' : 'w' } };
   const links = {};
@@ -2537,34 +2555,74 @@ function genFloor() {
       if (!links[lk] && rng() < loopP) links[lk] = { open: false };
     }
   }
-  // distances from the start, walking the CORRIDORS
+  // distances from the start, walking the CORRIDORS (parents remembered so
+  // the boss road can be paved)
   const q = ['0,0'];
   const seen = { '0,0': true };
+  const parent = {};
   while (q.length) {
-    const r = rooms[q.shift()];
+    const rk0 = q.shift();
+    const r = rooms[rk0];
     for (const d of ['n', 's', 'e', 'w']) {
       const k = rkey(r.gx + DIRS[d][0], r.gy + DIRS[d][1]);
       if (rooms[k] && !seen[k] && links[lkey(r.gx, r.gy, rooms[k].gx, rooms[k].gy)]) {
-        seen[k] = true; rooms[k].dist = r.dist + 1; q.push(k);
+        seen[k] = true; rooms[k].dist = r.dist + 1; parent[k] = rk0; q.push(k);
       }
     }
   }
   // the boss takes the farthest room, and lairs LARGE
   let bossK = '0,0';
   for (const k of keys2) if (rooms[k].dist > rooms[bossK].dist) bossK = k;
+  // THE BOSS ROAD: every door from the entrance to the lair starts UNLOCKED
+  // — you can always reach the boss. Keys buy the side rooms: pure choice.
+  {
+    let walk = bossK;
+    while (parent[walk] !== undefined) {
+      const a = rooms[walk], b = rooms[parent[walk]];
+      links[lkey(a.gx, a.gy, b.gx, b.gy)] = { open: true, main: true };
+      walk = parent[walk];
+    }
+  }
+  // one VAULT hides off the road: a dead-end side room behind a GOLDEN LOCK
+  // — only an elite's golden key opens it, and the loot inside is princely
+  let vaultK = null;
+  {
+    const main = {};
+    for (let w = bossK; parent[w] !== undefined; w = parent[w]) main[w] = true;
+    const cands = keys2.filter(k => k !== '0,0' && k !== bossK && !main[k] && rooms[k].dist >= 2);
+    if (cands.length) vaultK = cands[(rng() * cands.length) | 0];
+  }
   for (const k of keys2) {
     const r = rooms[k];
+    // a third of the rooms keep their secret: the door reads '?' instead
+    r.myst = rng() < 0.33;
     if (k === bossK) {
       r.boss = true;
       r.size = 'b';
+      r.myst = false;                     // the lair announces itself
       r.ents = placeEnts([{ kind: 'monster', mtype: 'boss', done: false }]);
+    } else if (k === vaultK) {
+      r.vault = true;
+      r.myst = false;                     // the golden lock IS the sign
+      r.ents = placeEnts([{ kind: 'chest', done: false }, { kind: 'chest', done: false },
+                          { kind: 'wheel', done: false }]);
     } else if (k === '0,0') {
       r.ents = rng() < 0.6 ? placeEnts([{ kind: 'chest', done: false }]) : [];
     } else {
       r.ents = placeEnts(genEnts(r.dist));
     }
   }
-  S.run.map = { v: 2, rooms, links, cur: '0,0' };
+  // the vault's own doors bear the golden lock
+  if (vaultK) {
+    const vr = rooms[vaultK];
+    for (const d of ['n', 's', 'e', 'w']) {
+      const nk = rkey(vr.gx + DIRS[d][0], vr.gy + DIRS[d][1]);
+      if (!rooms[nk]) continue;
+      const lk = lkey(vr.gx, vr.gy, rooms[nk].gx, rooms[nk].gy);
+      if (links[lk]) links[lk] = { open: false, gold: true };
+    }
+  }
+  S.run.map = { v: 3, rooms, links, cur: '0,0' };
   S.run.room = rooms['0,0'];
   S.run.depth = 1;
   S.enterDir = null;
@@ -2609,6 +2667,20 @@ function tryDoor(dir) {
   const lk = lkey(r.gx, r.gy, nb.gx, nb.gy);
   const l = S.run.map.links[lk];
   if (!l.open) {
+    // the golden lock only answers to an elite's golden key
+    if (l.gold) {
+      if ((S.run.goldKeys || 0) < 1) {
+        S.uiFlash = { msg: 'THE VAULT WANTS A GOLDEN KEY \u{1F511}', t: 1.4 };
+        SND.deny();
+        return false;
+      }
+      S.run.goldKeys--;
+      S.run.map.links[lk] = { open: true };
+      SND.buy();
+      toast('the golden lock sings open');
+      save();
+      return 'unlocked';
+    }
     if (S.run.keys < 1) {
       S.uiFlash = { msg: 'YOU NEED A KEY \u{1F5DD}', t: 1.2 };
       SND.deny();
@@ -2623,6 +2695,11 @@ function tryDoor(dir) {
     return 'unlocked';
   }
   S.run.map.cur = nk;
+  // first steps into the VAULT: a rare relic waits on the pedestal
+  if (nb.vault && !nb.visited) {
+    openRelicPick('r', 1);
+    toast('the vault! treasures of a lost age…');
+  }
   nb.visited = true;
   S.run.room = nb;
   S.run.depth = nb.dist + 1;
@@ -2998,6 +3075,7 @@ function step(dt, quiet) {
   S.time += dt;
   if (S.cd > 0) S.cd -= dt;
   if (S.denyT > 0) S.denyT -= dt;
+  if (S.walletHitT > 0) S.walletHitT -= dt;
   if (S.hurtT > 0) S.hurtT -= dt;
   S.phase += dt * 2 * Math.PI / MACH.pushPeriod * pushRate();
   S.shake = Math.max(0, Math.min(8, S.shake) - dt * 16);   // hard cap + brisk decay
@@ -3420,6 +3498,24 @@ if (!HEADLESS) (function browser() {
   function relicArt(rid) {
     const im = art('rl_' + rid, 'art/relics/relic_' + rid + '.png');
     return im._ok ? im : null;
+  }
+  // coin edge + engraved face baked into one offscreen sprite per kind —
+  // drawCoin pays a single drawImage instead of a path fill + an image
+  const COIN_COMP = {};
+  function coinComposite(kind, pal) {
+    const hit = COIN_COMP[kind];
+    if (hit) return hit;
+    const face = pieceArt(kind);
+    if (!face) return null;
+    const R = 48;
+    const cv = document.createElement('canvas');
+    cv.width = R * 2; cv.height = Math.ceil(R * 1.09) + 2;
+    const g = cv.getContext('2d');
+    g.beginPath(); g.ellipse(R, R * 0.63, R, R * 0.46, 0, 0, 7);
+    g.fillStyle = pal.edge; g.fill();
+    g.drawImage(face, 0, 0, R * 2, R * 0.92);
+    COIN_COMP[kind] = cv;
+    return cv;
   }
   function imW(im, h) { return h * ((im.naturalWidth || 1) / (im.naturalHeight || 1)); }
 
@@ -4641,12 +4737,13 @@ if (!HEADLESS) (function browser() {
     const sym = COIN_SYMS[c.kind] || '⚔';
     const pop = c.popT > 0 ? 1 + 0.22 * (c.popT / 0.18) : 1;
     const drx = rx * pop, dry = ry * pop;
-    const face = pieceArt(c.kind);
-    if (face) {
-      // the engraved face from the piece sheet, resting on a painted edge
-      ctx.beginPath(); ctx.ellipse(p.x, p.y + drx * 0.17, drx, dry, 0, 0, 7);
-      ctx.fillStyle = pal.edge; ctx.fill();
-      ctx.drawImage(face, p.x - drx, p.y - dry, drx * 2, dry * 2);
+    const comp = coinComposite(c.kind, pal);
+    if (comp) {
+      // edge + engraved face pre-composed into ONE sprite: a single
+      // drawImage per coin instead of a path fill + an image (320-coin
+      // turbo piles thank us)
+      const sy = dry / 0.46;                                 // squash ratio vs the baked 0.46
+      ctx.drawImage(comp, p.x - drx, p.y - dry, drx * 2, (comp.height / (comp.width / 2)) * sy);
     } else {
       const spr = flatSprite(c.kind, pal, sym);
       const hs = dry / (drx * 0.4583);
@@ -5502,11 +5599,13 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = '#8a5f10'; ctx.fill();
     ctx.beginPath(); ctx.ellipse(126, 761, 9, 8, 0, 0, 7);
     ctx.fillStyle = '#f2c04a'; ctx.fill();
+    const stole = S.walletHitT > 0 && Math.floor(S.walletHitT * 8) % 2 === 0;
     txt(S.screen === 'battle' ? '× ' + r.wallet : '× ' + purseTotal() + ' purse',
         140, 762, '900 ' + (S.screen === 'battle' ? 18 : 13) + 'px Verdana, sans-serif',
-        flash ? '#ff5a4e' : '#fff0c0', 'left');
+        flash || stole ? '#ff5a4e' : '#fff0c0', 'left');
     txt('\u{1F5DD} × ' + r.keys, 190, 762, '900 15px Verdana, sans-serif',
         r.keys < 1 ? '#ff5a4e' : '#ffe9a3', 'left');
+    if (r.goldKeys > 0) txt('\u{1F511} × ' + r.goldKeys, 190, 780, '900 12px Verdana, sans-serif', '#ffd75e', 'left');
     // potion button
     if (r.potions > 0) {
       uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
@@ -6554,10 +6653,32 @@ if (!HEADLESS) (function browser() {
     }
   }
 
+  // the SIGN over a door: what waits in the room beyond — boss and vault
+  // announce themselves, a third of rooms keep a '?', the rest show their
+  // dwellers' icons so every locked door is an informed choice
+  function doorSign(dir) {
+    const nb = doorTo(dir);
+    if (!nb) return null;
+    if (nb.boss) return { s: BOSSES[actIdx(S.run.floor) % BOSSES.length].icon + ' BOSS', col: '#ffd75e' };
+    if (nb.vault) return { s: '\u{1F511} VAULT', col: '#ffd75e' };
+    if (nb.myst && !nb.visited) return { s: '\u{2753}', col: '#c8b8d0' };
+    const live = nb.ents.filter(e => !e.done);
+    if (!live.length) return { s: nb.visited ? '✓ cleared' : 'empty', col: '#8a7a90' };
+    const s = live.slice(0, 4).map(e =>
+      e.kind === 'monster' ? (e.mtype === 'elite' ? '\u{1F451}' : '\u{2694}\u{FE0F}')
+        : (ENT_INFO[e.kind] || {}).icon || '?').join(' ');
+    return { s, col: '#e8d0a0' };
+  }
   function drawDoorway(dir, isOpen, t) {
     const p = doorCenter(dir);
     const locked = !isOpen;
-    const kcol = S.run.keys < 1 && locked && Math.floor(t * 4) % 2 ? '#ff5a4e' : '#ffd75e';
+    const room = curRoom();
+    const nb = doorTo(dir);
+    const link = nb ? S.run.map.links[lkey(room.gx, room.gy, nb.gx, nb.gy)] : null;
+    const gold = !!(link && link.gold && !link.open);
+    const kcol = gold ? '#ffd75e'
+      : S.run.keys < 1 && locked && Math.floor(t * 4) % 2 ? '#ff5a4e' : '#ffd75e';
+    const sign = doorSign(dir);
     ctx.save();
     if (dir === 'n' || dir === 's') {
       const y0 = dir === 'n' ? ROOM.y : FR.y1;
@@ -6565,7 +6686,7 @@ if (!HEADLESS) (function browser() {
       // the opening
       ctx.fillStyle = isOpen ? '#060309' : '#1c1220';
       ctx.fillRect(p.x - DOOR_HALF, y0, DOOR_HALF * 2, hh);
-      ctx.strokeStyle = isOpen ? 'rgba(255,215,94,0.5)' : '#3a2f3a';
+      ctx.strokeStyle = isOpen ? 'rgba(255,215,94,0.5)' : gold ? '#c8a832' : '#3a2f3a';
       ctx.lineWidth = 2;
       ctx.strokeRect(p.x - DOOR_HALF, y0, DOOR_HALF * 2, hh);
       if (isOpen) {
@@ -6577,30 +6698,39 @@ if (!HEADLESS) (function browser() {
         ctx.fillRect(p.x - DOOR_HALF + 4, dir === 'n' ? y0 : y0 - 26, DOOR_HALF * 2 - 8, hh + 26);
         txt(dir === 'n' ? '▲' : '▼', p.x, y0 + hh / 2, '900 12px Verdana, sans-serif', 'rgba(255,220,140,0.8)');
       } else {
-        // barred gate
-        ctx.strokeStyle = '#4a3a50'; ctx.lineWidth = 3;
+        // barred gate (the vault's bars gleam gold)
+        ctx.strokeStyle = gold ? '#a8862a' : '#4a3a50'; ctx.lineWidth = 3;
         for (let i = -1; i <= 1; i++) {
           ctx.beginPath(); ctx.moveTo(p.x + i * 16, y0 + 3); ctx.lineTo(p.x + i * 16, y0 + hh - 3); ctx.stroke();
         }
         txt('\u{1F512}', p.x, y0 + hh / 2 - 4, '13px serif', '#fff');
-        txt('1\u{1F5DD}', p.x, y0 + hh / 2 + 10, '800 9px Verdana, sans-serif', kcol);
+        txt(gold ? '1\u{1F511}' : '1\u{1F5DD}', p.x, y0 + hh / 2 + 10, '800 9px Verdana, sans-serif', kcol);
+      }
+      if (sign) {
+        const sy = dir === 'n' ? y0 + hh + 13 : y0 - 9;
+        txt(sign.s, p.x, sy, '800 10px Verdana, sans-serif', sign.col, 'center', { w: 3, col: 'rgba(8,4,10,0.9)' });
       }
     } else {
       const x0 = dir === 'w' ? ROOM.x : FR.x1;
       ctx.fillStyle = isOpen ? '#060309' : '#1c1220';
       ctx.fillRect(x0, p.y - DOOR_HALF, ROOM.sideW, DOOR_HALF * 2);
-      ctx.strokeStyle = isOpen ? 'rgba(255,215,94,0.5)' : '#3a2f3a';
+      ctx.strokeStyle = isOpen ? 'rgba(255,215,94,0.5)' : gold ? '#c8a832' : '#3a2f3a';
       ctx.lineWidth = 2;
       ctx.strokeRect(x0, p.y - DOOR_HALF, ROOM.sideW, DOOR_HALF * 2);
       if (isOpen) {
         txt(dir === 'w' ? '◀' : '▶', x0 + ROOM.sideW / 2, p.y, '900 11px Verdana, sans-serif', 'rgba(255,220,140,0.8)');
       } else {
-        ctx.strokeStyle = '#4a3a50'; ctx.lineWidth = 3;
+        ctx.strokeStyle = gold ? '#a8862a' : '#4a3a50'; ctx.lineWidth = 3;
         for (let i = -1; i <= 1; i++) {
           ctx.beginPath(); ctx.moveTo(x0 + 2, p.y + i * 16); ctx.lineTo(x0 + ROOM.sideW - 2, p.y + i * 16); ctx.stroke();
         }
         txt('\u{1F512}', x0 + ROOM.sideW / 2, p.y - 8, '11px serif', '#fff');
-        txt('1\u{1F5DD}', x0 + ROOM.sideW / 2, p.y + 8, '800 8px Verdana, sans-serif', kcol);
+        txt(gold ? '1\u{1F511}' : '1\u{1F5DD}', x0 + ROOM.sideW / 2, p.y + 8, '800 8px Verdana, sans-serif', kcol);
+      }
+      if (sign) {
+        const sx = dir === 'w' ? x0 + ROOM.sideW + 6 : x0 - 6;
+        txt(sign.s, sx, p.y - DOOR_HALF - 8, '800 10px Verdana, sans-serif', sign.col,
+            dir === 'w' ? 'left' : 'right', { w: 3, col: 'rgba(8,4,10,0.9)' });
       }
     }
     ctx.restore();
