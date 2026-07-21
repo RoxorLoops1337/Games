@@ -2812,4 +2812,32 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.eq(D.S.run.goldKeys, 1, 'the fallen elite drops a GOLDEN KEY');
 }
 
+// -------- the RUN REPORT CARD: stats tracked from first coin to last breath --------
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(4242);
+  D.newRun('knight');
+  const st = D.S.run.stats;
+  t.ok(st && st.fired === 0 && st.dealt === 0 && st.taken === 0, 'a fresh run starts a clean sheet');
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: D.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.hp = D.S.enemy.maxHp = 500;
+  D.S.cd = 0;
+  D.drop(50);
+  t.eq(st.fired, 1, 'a dropped coin is a coin FIRED');
+  D.dmgEnemy(12);
+  t.ok(st.dealt >= 12, 'damage dealt is tallied');
+  t.ok(st.bestHit >= 12, 'and the best single hit remembered');
+  D.hpHit(7, 'test');
+  t.eq(st.taken, 7, 'damage taken is tallied');
+  for (let i = 0; i < 25; i++) D.tick(0.05);
+  t.ok(st.t > 0.9, 'the run clock runs');
+  D.S.run.relics.push('clover');
+  D.hpHit(999, 'the test reaper');
+  t.ok(D.S.over && D.S.over.stats, 'the report card rides the game-over state');
+  t.eq(D.S.over.stats.fired, 1, 'fired count survives to the card');
+  t.eq(D.S.over.relics, 1, 'relic count survives to the card');
+  t.ok(D.S.over.hero === 'knight', 'the hero is named on the card');
+}
+
 t.done();
