@@ -10,13 +10,14 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 - [x] **Title screen glow-up**: animated coin-rain backdrop, logo bob + shine sweep,
       floor-best + total-runs strip, VERSION stamp in a corner (session 2)
-- [ ] **Intro vignette**: 4–5 line story scroll on first launch ("the dungeon is a
-      rigged carnival…"), skippable, replayable from settings
+- [x] **Intro vignette**: five lore lines fade in before the first run, skippable,
+      replayable from the 📜 title button (session 3)
 - [ ] **Pause/settings menu**: gear button → volume sliders (music/SFX separate),
       screen-shake toggle, particle-density toggle, reset-tutorial, credits link
 - [ ] **Run-end report card**: on death/victory — floors, kills, coins fired, damage
       dealt/taken, relics collected, gold earned, best single hit, run time
-- [ ] **Confirm dialogs**: leaving mid-battle, abandoning a run, spending the last key
+- [x] **Confirm dialogs**: generic confirm sheet; wired to abandoning a run and
+      spending the last key (mid-battle exit has no UI path to guard) (session 3)
 - [ ] **Toast/float polish pass**: cap simultaneous floats, merge duplicates ("+1 ● ×6"),
       ease-out motion so late-battle spam stays readable
 - [ ] **Number formatting**: 1.2k / 3.4M everywhere gold and scores print

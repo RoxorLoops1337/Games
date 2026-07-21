@@ -770,6 +770,7 @@ function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
+      intro: S.introSeen ? 1 : 0,
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -797,6 +798,7 @@ function load() {
                  kills: d.best.kills || 0, gold: d.best.gold || 0, runs: d.best.runs || 0 };
     }
     if (d.heroPick && heroById(d.heroPick)) S.heroPick = d.heroPick;
+    S.introSeen = !!d.intro;
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -6519,6 +6521,19 @@ if (!HEADLESS) (function browser() {
     const inGapX = Math.abs(nx - cx) < DOOR_HALF - 8;
     const inGapY = Math.abs(ny - cy) < DOOR_HALF - 8;
     const tryStep = (dir) => {
+      // the LAST key deserves a second thought before it turns
+      const nb2 = doorTo(dir);
+      if (nb2 && S.run.keys === 1 && !S.confirm) {
+        const l2 = S.run.map.links[lkey(curRoom().gx, curRoom().gy, nb2.gx, nb2.gy)];
+        if (l2 && !l2.open && !l2.gold) {
+          S.confirm = { msg: 'Spend your LAST key?', yesLabel: 'UNLOCK',
+                        sub: 'this door stays open forever — but the other locks will wait',
+                        yes: () => { tryDoor(dir); } };
+          nx = Math.max(FR.x0 + HERO_R, Math.min(FR.x1 - HERO_R, nx));
+          ny = Math.max(FR.y0 + HERO_R, Math.min(FR.y1 - HERO_R, ny));
+          return false;
+        }
+      }
       const res = tryDoor(dir);
       if (res !== true) {
         // locked (or just unlocked): stay inside
@@ -7239,6 +7254,68 @@ if (!HEADLESS) (function browser() {
   }
 
   // ------------------------------------------------------------ title/over
+  // ---- the INTRO vignette: five lines of lore, then the machine ----
+  let INTRO = null;
+  const INTRO_LINES = [
+    'The dungeon was never a fair fight.',
+    'Long ago the deep lords rigged it — every corridor',
+    'a carnival, every battle a coin machine.',
+    'Feed it your purse. Push your luck.',
+    'The tray decides who bleeds.',
+  ];
+  function drawIntro(t) {
+    if (!INTRO) return;
+    INTRO.t += 1 / 60;
+    ctx.fillStyle = 'rgba(5,2,8,0.96)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => {} });
+    // two torches gutter over the tale
+    for (const tx of [70, LW - 70]) {
+      ctx.globalAlpha = 0.25 + 0.1 * Math.sin(t * 8 + tx);
+      ctx.beginPath(); ctx.arc(tx, 200, 26, 0, 7);
+      ctx.fillStyle = '#ff9d3c'; ctx.fill();
+      ctx.globalAlpha = 1;
+      txt('\u{1F525}', tx, 196, '22px serif', '#fff');
+    }
+    txt('— the tale —', LW / 2, 240, '900 13px Georgia, serif', '#8a7a90');
+    INTRO_LINES.forEach((ln, i) => {
+      const a = Math.max(0, Math.min(1, (INTRO.t - i * 0.9) / 0.6));
+      if (a <= 0) return;
+      ctx.save(); ctx.globalAlpha = a;
+      txt(ln, LW / 2, 300 + i * 44 + (1 - a) * 10, '700 15px Georgia, serif',
+          i >= INTRO_LINES.length - 1 ? '#ffd75e' : '#d8c8dc');
+      ctx.restore();
+    });
+    const done = INTRO.t > INTRO_LINES.length * 0.9 + 0.4;
+    uiBtn(LW / 2 - 80, 640, 160, 46, done ? '\u{2694}\u{FE0F} GO' : 'SKIP ▸', () => {
+      const then = INTRO && INTRO.then;
+      INTRO = null;
+      S.introSeen = true; save();
+      if (then) then();
+    }, { grad: done ? ['#7ed6a0', '#3f9d5a'] : ['#4a3a50', '#2c2234'],
+         border: done ? '#eaffef' : '#6a5a70', col: done ? '#123a24' : '#c8b8cc',
+         font: '900 14px Verdana, sans-serif', r: 14 });
+  }
+  // ---- the CONFIRM sheet: one question, two honest buttons ----
+  function drawConfirm(t) {
+    if (!S.confirm) return;
+    const c = S.confirm;
+    ctx.fillStyle = 'rgba(5,2,8,0.75)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => {} });
+    const py = 320, ph = 176;
+    rr(46, py, LW - 92, ph, 16);
+    ctx.fillStyle = 'rgba(26,16,28,0.98)'; ctx.fill();
+    ctx.lineWidth = 2.5; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+    txt(c.msg, LW / 2, py + 44, '900 16px Verdana, sans-serif', '#ffe9a3');
+    if (c.sub) wrapLines(c.sub, 44, 2).forEach((ln, i) =>
+      txt(ln, LW / 2, py + 72 + i * 16, '600 11px Verdana, sans-serif', '#b8a8bc'));
+    uiBtn(64, py + ph - 60, (LW - 148) / 2, 42, c.yesLabel || 'YES', () => {
+      S.confirm = null; if (c.yes) c.yes();
+    }, { grad: ['#a8433f', '#6e2320'], border: '#ffb0a8', col: '#ffe0dc', font: '900 13px Verdana, sans-serif', r: 12 });
+    uiBtn(LW / 2 + 10, py + ph - 60, (LW - 148) / 2, 42, c.noLabel || 'CANCEL', () => { S.confirm = null; },
+          { bg: 'rgba(40,34,46,0.95)', border: '#8a7a90', col: '#d8c8dc', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   // slow golden rain behind the title — coins tumbling out of the dark
   const TRAIN = [];
   function drawTitle(t) {
@@ -7343,12 +7420,16 @@ if (!HEADLESS) (function browser() {
       uiBtn(LW / 2 - 130, 620, 260, 48, '▶ CONTINUE — FLOOR ' + S.run.floor,
             () => { S.screen = 'dungeon'; save(); },
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 16 });
-      uiBtn(LW / 2 - 130, 676, 260, 40, 'NEW RUN (abandons the old)', () => newRun(heroSel),
-            { bg: 'rgba(90,40,20,0.9)', border: '#ff9d3c', col: '#ffd9b0', font: '800 12px Verdana, sans-serif', r: 14 });
+      uiBtn(LW / 2 - 130, 676, 260, 40, 'NEW RUN (abandons the old)', () => {
+        S.confirm = { msg: 'Abandon the current run?', sub: 'floor ' + S.run.floor + ' progress will be lost forever',
+                      yesLabel: 'ABANDON', yes: () => newRun(heroSel) };
+      }, { bg: 'rgba(90,40,20,0.9)', border: '#ff9d3c', col: '#ffd9b0', font: '800 12px Verdana, sans-serif', r: 14 });
     } else {
       const pulse = 1 + Math.sin(t * 4) * 0.03;
-      uiBtn(LW / 2 - 130 * pulse, 628, 260 * pulse, 52 * pulse, '▶ ENTER THE DUNGEON', () => newRun(heroSel),
-            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif', r: 16 });
+      uiBtn(LW / 2 - 130 * pulse, 628, 260 * pulse, 52 * pulse, '▶ ENTER THE DUNGEON', () => {
+        if (!S.introSeen) INTRO = { t: 0, then: () => newRun(heroSel) };
+        else newRun(heroSel);
+      }, { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif', r: 16 });
     }
     if (S.best.floor > 0) {
       txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + '  •  ' + S.best.kills + ' kills  •  ' + fmt(S.best.gold) + ' gold looted'
@@ -7357,6 +7438,7 @@ if (!HEADLESS) (function browser() {
     }
     txt('v' + VERSION, LW - 10, LH - 10, '600 9px Verdana, sans-serif', '#5a4a5f', 'right');
     uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
+    uiBtn(LW - 52, 54, 38, 36, '\u{1F4DC}', () => { INTRO = { t: 0, then: null }; }, { r: 10, font: '15px serif' });
   }
 
   function drawOver(t) {
@@ -7434,6 +7516,8 @@ if (!HEADLESS) (function browser() {
     else drawTitle(t);
     drawWheel();
     drawRelicPick(t);
+    drawIntro(t);
+    drawConfirm(t);
   }
   requestAnimationFrame(frame);
 })();
