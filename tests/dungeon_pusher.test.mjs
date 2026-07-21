@@ -110,8 +110,14 @@ t.eq(BOSSES.length, 3, 'three floor bosses');
 t.ok(RELICS.length >= 88 && RELICS.every(r => r.id && r.desc), 'the relic shelf is stocked (' + RELICS.length + ')');
 t.ok(RELICS.every(r => ['c', 'r', 'e'].indexOf(r.rar) >= 0), 'every relic carries a rarity stamp');
 t.eq(new Set(RELICS.map(r => r.id)).size, RELICS.length, 'no duplicate relic ids');
-t.eq(WHEEL.length, 9, 'the wheel of fortune has nine prize segments');
+t.eq(WHEEL.length, 12, 'the wheel of fortune has twelve prize segments');
 t.ok(WHEEL.every(s => s.label && typeof s.fx === 'function'), 'every wheel segment names a prize and an effect');
+t.ok(!WHEEL.some(s => /●/.test(s.label)), 'the wheel never pays out coins — the pusher owns those');
+t.eq(WHEEL.filter(s => /GOLD/.test(s.label)).length, 3, 'three gold prizes');
+t.eq(WHEEL.filter(s => s.label === 'COMMON\nRELIC').length, 2, 'two common-relic spots');
+t.eq(WHEEL.filter(s => s.label === 'RARE\nRELIC').length, 1, 'one rare-relic spot');
+t.eq(WHEEL.filter(s => /HP/.test(s.label)).length, 5, 'five HP gambles (+5 −5 +10 −10 +25)');
+t.eq(WHEEL.filter(s => /KEY/.test(s.label)).length, 1, 'one key spot');
 t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
@@ -191,7 +197,8 @@ t.eq(mapRooms().filter(r => r.boss).length, 1, 'exactly one boss lair per floor'
       if (ents.some(e => e.kind === 'monster')) sawMonster = true;
       if (ents.some(e => e.kind !== 'monster')) sawService = true;
       for (const k of ['chest', 'shop', 'smith', 'shrine', 'wheel']) {
-        if (ents.filter(e => e.kind === k).length > 1) dupService = true;
+        // the VAULT hoards two chests on purpose — everywhere else, no dupes
+        if (!r.vault && ents.filter(e => e.kind === k).length > 1) dupService = true;
       }
       for (const e of ents) {
         if (e.kind === 'monster' && e.mtype !== 'boss' && !ENEMIES.some(en => en.id === e.eid)) badMonster = true;
@@ -1080,18 +1087,17 @@ S.run.relics = [];
   t.ok(S.relicPick === null, 'one pick closes a single-pick menu');
   t.eq(S.run.relics.length, 1, 'exactly one relic was taken');
 
-  // the 2-COMMON segment lets you take TWO
+  // a COMMON RELIC segment defers one common pick
   S.run.relics = [];
-  const comSeg = WHEEL.find(s => s.label === '2 COMMON\nRELICS');
+  const comSeg = WHEEL.find(s => s.label === 'COMMON\nRELIC');
   comSeg.fx();
-  t.eq(S.pendingPick.picks, 2, 'two commons deferred');
+  t.eq(S.pendingPick.picks, 1, 'one common deferred');
   DP.dismissWheel();
-  t.ok(S.relicPick && S.relicPick.picks === 2 && S.relicPick.pool.length >= 3, 'a spread to pick two commons from');
+  t.ok(S.relicPick && S.relicPick.picks === 1 && S.relicPick.pool.length >= 2, 'a spread to pick a common from');
+  t.ok(S.relicPick.pool.every(id => RELICS.find(r => r.id === id).rar === 'c'), 'all choices are common');
   DP.pickWheelRelic(0);
-  t.ok(S.relicPick && S.relicPick.chosen.length === 1, 'first common taken, menu stays open');
-  DP.pickWheelRelic(1);
-  t.ok(S.relicPick === null, 'the menu closes once both are taken');
-  t.eq(S.run.relics.length, 2, 'two commons claimed');
+  t.ok(S.relicPick === null, 'the menu closes once taken');
+  t.eq(S.run.relics.length, 1, 'one common claimed');
 
   // a nearly-full shelf can't fill a menu — it just grants what's left (no overlay)
   S.run.relics = RELICS.filter(r => r.rar === 'r').slice(1).map(r => r.id);   // own all rares but one
@@ -1725,7 +1731,7 @@ t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
            }, links: {}, cur: '0,0' } },
   }) };
   const { DP: DPv1 } = loadGame(storeV1, false);
-  t.eq(DPv1.S.run.map.v, 2, 'v1 maps are re-carved to the corridor format');
+  t.ok(DPv1.S.run.map.v >= 2, 'v1 maps are re-carved to the corridor format');
   t.ok(Object.keys(DPv1.S.run.map.rooms).length >= 9, 'the fresh floor is a full random layout');
   t.eq(DPv1.S.run.floor, 2, 'run progress (floor, gold) survives the re-carve');
   t.eq(DPv1.S.run.purse.silver, DPv1.START_PURSE.silver, 'the purse falls back to the starter deck');
@@ -2712,6 +2718,98 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   const reloaded = B.S.run.map.rooms[bk2];
   t.ok(reloaded.ents.length === 1 && reloaded.ents[0].kind === 'stairs',
        'after a refresh the fallen boss lair holds the stairs down');
+}
+
+// -------- THE BOSS ROAD, big floors, the VAULT and its golden key --------
+{
+  const { DP: D } = loadGame({}, false);
+  const rk = (x, y) => x + ',' + y;
+  const lk = (x1, y1, x2, y2) => (y1 < y2 || (y1 === y2 && x1 < x2))
+    ? x1 + ',' + y1 + '~' + x2 + ',' + y2 : x2 + ',' + y2 + '~' + x1 + ',' + y1;
+  const DIRS2 = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+  let vaultsSeen = 0, minRooms = 999;
+  for (let seed = 1; seed <= 6; seed++) {
+    D.srand(seed * 313);
+    D.newRun('knight');
+    const rooms = D.S.run.map.rooms, links = D.S.run.map.links;
+    const keys = Object.keys(rooms);
+    minRooms = Math.min(minRooms, keys.length);
+    // the road: BFS over OPEN links only must reach the boss
+    const bossK = keys.find(k => rooms[k].boss);
+    const q = ['0,0']; const seen = { '0,0': true };
+    while (q.length) {
+      const r = rooms[q.shift()];
+      for (const d of ['n', 's', 'e', 'w']) {
+        const k = rk(r.gx + DIRS2[d][0], r.gy + DIRS2[d][1]);
+        const l = rooms[k] && links[lk(r.gx, r.gy, rooms[k].gx, rooms[k].gy)];
+        if (l && l.open && !seen[k]) { seen[k] = true; q.push(k); }
+      }
+    }
+    t.ok(seen[bossK], 'seed ' + seed + ': the boss is reachable through UNLOCKED doors alone');
+    const vaultK = keys.find(k => rooms[k].vault);
+    if (vaultK) {
+      vaultsSeen++;
+      const vr = rooms[vaultK];
+      let goldLinks = 0, plainLinks = 0;
+      for (const d of ['n', 's', 'e', 'w']) {
+        const k = rk(vr.gx + DIRS2[d][0], vr.gy + DIRS2[d][1]);
+        const l = rooms[k] && links[lk(vr.gx, vr.gy, rooms[k].gx, rooms[k].gy)];
+        if (!l) continue;
+        if (l.gold && !l.open) goldLinks++; else plainLinks++;
+      }
+      t.ok(goldLinks > 0 && plainLinks === 0, 'every corridor into the vault bears the golden lock');
+      t.ok(vr.ents.length >= 3, 'the vault brims with treasure ents');
+      t.ok(!vr.myst, 'the vault announces itself — no mystery mark');
+    }
+    t.ok(!rooms[bossK].myst, 'the lair is never a mystery door');
+  }
+  t.ok(minRooms >= 13, 'floors are BIG now (smallest seen: ' + minRooms + ' rooms)');
+  t.ok(vaultsSeen >= 3, 'vaults appear regularly (' + vaultsSeen + '/6 floors)');
+
+  // the golden key: gold locks refuse plain keys, elites pay out
+  D.srand(777);
+  D.newRun('knight');
+  let rooms2 = D.S.run.map.rooms, links2 = D.S.run.map.links;
+  let vk = Object.keys(rooms2).find(k => rooms2[k].vault);
+  for (let seed = 2; !vk && seed <= 30; seed++) {
+    D.srand(seed * 991); D.newRun('knight');
+    rooms2 = D.S.run.map.rooms; links2 = D.S.run.map.links;
+    vk = Object.keys(rooms2).find(k => rooms2[k].vault);
+  }
+  t.ok(!!vk, 'found a vault to test against');
+  const vr2 = rooms2[vk];
+  // stand in a neighbor with a corridor to the vault
+  let nbK = null, dirIn = null;
+  for (const d of ['n', 's', 'e', 'w']) {
+    const k = rk(vr2.gx + DIRS2[d][0], vr2.gy + DIRS2[d][1]);
+    if (rooms2[k] && links2[lk(vr2.gx, vr2.gy, rooms2[k].gx, rooms2[k].gy)]) {
+      nbK = k;
+      dirIn = { n: 's', s: 'n', e: 'w', w: 'e' }[d];  // from the neighbor, back toward the vault
+      break;
+    }
+  }
+  D.S.run.map.cur = nbK;
+  D.S.run.room = rooms2[nbK];
+  rooms2[nbK].visited = true;
+  D.S.run.keys = 5; D.S.run.goldKeys = 0;
+  t.ok(D.tryDoor(dirIn) === false, 'five plain keys cannot open the golden lock');
+  t.eq(D.S.run.keys, 5, 'and none are wasted trying');
+  D.S.run.goldKeys = 1;
+  t.eq(D.tryDoor(dirIn), 'unlocked', 'the golden key opens the vault');
+  t.eq(D.S.run.goldKeys, 0, 'and is spent');
+  D.S.relicPick = null;
+  t.ok(D.tryDoor(dirIn), 'stepping into the vault');
+  t.ok(D.S.relicPick && D.S.relicPick.rar === 'r', 'a rare relic waits on the vault pedestal');
+  // an elite kill mints a golden key
+  const back = { n: 's', s: 'n', e: 'w', w: 'e' }[dirIn];
+  D.tryDoor(back);                                     // step back out of the vault
+  D.S.relicPick = null;
+  const room = D.curRoom();
+  room.ents = [{ kind: 'monster', mtype: 'elite', eid: D.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.hp = 1;
+  D.dmgEnemy(5);
+  t.eq(D.S.run.goldKeys, 1, 'the fallen elite drops a GOLDEN KEY');
 }
 
 t.done();
