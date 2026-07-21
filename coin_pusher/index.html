@@ -60,7 +60,7 @@ const C = {
   MAX_LAY: 2,              // coins can stack three high (lay 0,1,2)
   START_WALLET: 45, START_MONEY: 700,   // money is stored in cents
   PITY_T: 4,                            // broke bailout: +1 coin per 4s
-  DROP_CD: 0.28, COMBO_WIN: 1.4, COMBO_CAP: 5,
+  DROP_CD: 0.28, DROP_CD_TURBO: 0.09, COMBO_WIN: 1.4, COMBO_CAP: 5,
   METER_MAX: 20,
   PTS: { coin: 15, lucky: 75, gem: 750 },
   PAY: { coin: 1, lucky: 2, gem: 5 },   // coins returned to the TRAY, not the wallet
@@ -91,7 +91,7 @@ const MACHINES = {
     name: 'GOLD RUSH', sub: 'CLASSIC PUSHER', unlock: 0,
     coin: { r: 4.6, val: 15, style: 'gold', sym: '¢' },
     luckyVal: 75, gemVal: 750,
-    pushPeriod: 3.4, maxCoins: 170,
+    pushPeriod: 3.4, maxCoins: 320,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
     gutY: 36, lipW: 7, lipH: 2.2,
     tags: [
@@ -107,7 +107,7 @@ const MACHINES = {
     name: 'PENNY FALLS', sub: 'SEASIDE 2p CASCADE', unlock: 1500,
     coin: { r: 3.7, val: 8, style: 'copper', sym: '2' },
     luckyVal: 40, gemVal: 400,
-    pushPeriod: 3.0, maxCoins: 210,
+    pushPeriod: 3.0, maxCoins: 420,
     // tier 0 = elevated sliding shelf; its drop edge is 'dyn' — the moving
     // face at pusherFront(1), which doubles as tier 1's pusher.
     tiers: [
@@ -128,7 +128,7 @@ const MACHINES = {
     name: 'NEON MEDAL', sub: 'TOKYO ARCADE', unlock: 6000,
     coin: { r: 4.4, val: 22, style: 'medal', sym: '★' },
     luckyVal: 110, gemVal: 1100,
-    pushPeriod: 3.2, maxCoins: 180,
+    pushPeriod: 3.2, maxCoins: 340,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 30, phase: 0, slotY: 20 }],
     gutY: 40, lipW: 7, lipH: 2.2,
     tags: [
@@ -153,7 +153,7 @@ const MACHINES = {
     name: 'HIGH ROLLER', sub: 'VEGAS QUARTER BANDIT', unlock: 20000,
     coin: { r: 4.8, val: 38, style: 'silver', sym: '25' },
     luckyVal: 190, gemVal: 1900,
-    pushPeriod: 3.8, maxCoins: 150,
+    pushPeriod: 3.8, maxCoins: 280,
     tiers: [{ z: 0, back: 0, front: 84, min: 10, max: 28, phase: 0, slotY: 20 }],
     gutY: 30, lipW: 8, lipH: 2.4,   // gutters open early: high risk, high pay
     tags: [
@@ -228,6 +228,7 @@ const S = {
   slotAnim: null,          // neon slot spin overlay
   pegFx: [],               // transient pin-impact flashes {x, z, t}
   wheelAnim: null,         // Lucky Wheel overlay {t, seg, label}
+  turbo: false,             // turbo drop mode: much shorter cooldown
   lastDaily: null,         // day key of the last claimed daily gift
   side: 0,                 // which of the machine's four sides you stand at
   sideSeen: {},            // 'mach:side' -> last visit (ms) for leftover coins
@@ -259,7 +260,7 @@ function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
       v: 3, score: S.score, best: S.best, wallet: S.wallet, money: S.money,
-      meter: S.meter, mute: S.mute, jackpots: S.jackpots, collected: S.collected,
+      meter: S.meter, mute: S.mute, turbo: S.turbo, jackpots: S.jackpots, collected: S.collected,
       coinsSpent: S.coinsSpent, coinsBack: S.coinsBack,
       mach: S.mach, unlocked: S.unlocked, prizes: S.prizes,
       listings: S.listings, slog: S.slog, sideSeen: S.sideSeen, lastDaily: S.lastDaily,
@@ -273,7 +274,7 @@ function load() {
     if (!d) return;
     S.score = d.score || 0; S.best = d.best || 0;
     S.wallet = (typeof d.wallet === 'number') ? d.wallet : C.START_WALLET;
-    S.meter = d.meter || 0; S.mute = !!d.mute;
+    S.meter = d.meter || 0; S.mute = !!d.mute; S.turbo = !!d.turbo;
     S.jackpots = d.jackpots || 0; S.collected = d.collected || 0;
     if (d.v >= 2) {
       if (MACHINES[d.mach]) S.mach = d.mach;
@@ -524,9 +525,15 @@ function spinSlot() {
 const WHEEL = [
   { label: '35 ●', w: 17, fx: () => { S.tray.coins += 35; trayAdd('coin', { x: 50 }); } },
   { label: '+450 ✦', w: 15, fx: () => addPts(450) },
-  { label: 'GEM', w: 10, fx: () => S.rain.push({ t: 0.3, x: 30 + rng() * 40, y: M().tiers[0].slotY + 6, kind: 'gem' }) },
+  { label: 'GEM', w: 10, fx: () => { S.rain.push({ t: 0.3, x: 30 + rng() * 40, y: M().tiers[0].slotY + 6, kind: 'gem' }); } },
   { label: '+$2.50', w: 13, fx: () => { S.money += 250; } },
-  { label: 'PRIZE', w: 8, fx: () => { const pz = PRIZES[(rng() * 3) | 0]; S.tray.prizes.push(pz.id); trayAdd('prize', { pid: pz.id, x: 50 }); } },
+  { label: 'PRIZE', w: 8, fx: () => {
+      const pid = M().prizeIds[(rng() * M().prizeIds.length) | 0];
+      const pz = PRIZES.find(q => q.id === pid);
+      S.tray.prizes.push(pid);
+      trayAdd('prize', { pid, x: 50 });
+      return pz;
+    } },
   { label: '+220 ✦', w: 16, fx: () => addPts(220) },
   { label: 'METER +8', w: 15, fx: () => { S.meter += 8; if (S.meter >= C.METER_MAX) jackpot(); } },
   { label: 'JACKPOT', w: 6, fx: () => jackpot() },
@@ -535,8 +542,13 @@ function spinWheel() {
   const total = WHEEL.reduce((a, s) => a + s.w, 0);
   let r = rng() * total, idx = 0;
   for (let i = 0; i < WHEEL.length; i++) { r -= WHEEL[i].w; if (r <= 0) { idx = i; break; } }
-  WHEEL[idx].fx();
-  S.wheelAnim = { t: 0, seg: idx, label: WHEEL[idx].label };
+  const result = WHEEL[idx].fx();
+  // the PRIZE segment hands back which item landed so the result banner can
+  // say exactly what you won, instead of a generic "PRIZE" label
+  const won = (result && typeof result === 'object' && typeof result.name === 'string') ? result : null;
+  const label = won ? won.name.toUpperCase() + '!' : WHEEL[idx].label;
+  S.wheelAnim = { t: 0, seg: idx, label };
+  if (won) S.banner = { txt: 'WON ' + won.name + '!', ttl: 1.6, max: 1.6 };
   SND.bill();
   save();
   return WHEEL[idx];
@@ -556,8 +568,9 @@ function openChest(c) {
     txt = 'GIFT: WHEEL SPIN!';
     spinWheel();
   } else {
-    const pz = PRIZES[(rng() * 3) | 0];
-    S.tray.prizes.push(pz.id); trayAdd('prize', { pid: pz.id, x: c.x });
+    const pid = M().prizeIds[(rng() * M().prizeIds.length) | 0];
+    const pz = PRIZES.find(q => q.id === pid);
+    S.tray.prizes.push(pid); trayAdd('prize', { pid, x: c.x });
     txt = 'GIFT: ' + pz.name + '!';
   }
   S.floats.push({ txt, wx: c.x, wy: 96, age: 0, max: 1.5, col: '#ffb0e0', big: true });
@@ -579,7 +592,6 @@ function claimDaily(dayKey) {
 function drop(x) {
   if (S.cd > 0) return false;
   if (S.wallet < 1) { S.denyT = 0.6; SND.deny(); return false; }
-  S.wallet--; S.cd = C.DROP_CD; S.dropped++; S.meter++; S.coinsSpent++;
   const Mv = M();
   // you always insert a COIN — specials are the machine's job to restock
   const kind = rng() < C.P_LUCKY ? 'lucky' : 'coin';
@@ -590,12 +602,29 @@ function drop(x) {
     Mv.slots.forEach((sx, i) => { const d = Math.abs(sx - ax); if (d < bd) { bd = d; bi = i; } });
     ax = Mv.slots[bi];
   }
-  spawnDrop(ax + (rng() - 0.5) * (Mv.slots ? 0.5 : 2), Mv.tiers[0].slotY + (rng() - 0.5) * 5, kind, null);
+  const c = spawnDrop(ax + (rng() - 0.5) * (Mv.slots ? 0.5 : 2), Mv.tiers[0].slotY + (rng() - 0.5) * 5, kind, null);
+  if (!c) {
+    // the field is completely full — refuse the drop rather than silently
+    // charging a coin for nothing (that used to happen: counter went down,
+    // nothing dropped)
+    S.cd = 0.35;
+    S.denyT = 0.4;
+    S.uiFlash = { msg: 'FIELD FULL!', t: 1 };
+    SND.deny();
+    return false;
+  }
+  S.wallet--; S.cd = S.turbo ? C.DROP_CD_TURBO : C.DROP_CD; S.dropped++; S.meter++; S.coinsSpent++;
   SND.slot();
   // machine-side events (they never eat your inserted coin)
   if (S.prizeDebt > 0 && S.dropped % 10 === 0) {
     S.prizeDebt--;
     S.rain.push({ t: 0.4, x: 20 + rng() * 60, y: Mv.tiers[0].slotY + 4 + rng() * 8,
+                  kind: 'prize', pid: Mv.prizeIds[(rng() * Mv.prizeIds.length) | 0] });
+  }
+  // sometimes the machine just drops a prize onto the platform on its own —
+  // independent of any debt owed, so the field always stays varied
+  if (rng() < 0.025) {
+    S.rain.push({ t: 0.35 + rng() * 0.3, x: 20 + rng() * 60, y: Mv.tiers[0].slotY + 4 + rng() * 8,
                   kind: 'prize', pid: Mv.prizeIds[(rng() * Mv.prizeIds.length) | 0] });
   }
   if (S.dropped % 30 === 0) {
@@ -741,9 +770,9 @@ function initPile() {
   const td = Mv.tiers[lt];
   const front = td.front === 'dyn' ? td.min : td.front;
   // dense pile on the payout tier, heaviest near the edge
-  fillRows(lt, td.back + (lt > 0 ? 14 : 42), front - 4, { lucky: 4 });
+  fillRows(lt, td.back + (lt > 0 ? 14 : 36), front - 4, { lucky: 4 });
   // penny falls: a starter spread on the upper shelf too
-  if (lt > 0) fillRows(0, 10, Mv.tiers[0].min + 16, { lucky: 1 });
+  if (lt > 0) fillRows(0, 10, Mv.tiers[0].min + 22, { lucky: 1 });
   // seeded specials: a gem and two point tags mid-pile
   place(50 + (rng() - 0.5) * 10, front - 22, 'gem', 0, 'plat', lt);
   for (let i = 0; i < 2; i++) {
@@ -762,11 +791,16 @@ function initPile() {
     const b = place(35 + rng() * 30, front - 18, 'bill', 0, 'plat', lt);
     b.val = Mv.billVal;
   }
-  // a second storey: coins resting on top of the pile
+  // extra storeys: coins piled on top of the pile, two layers deep
   const base = S.coins.filter(c => c.kind === 'coin' && c.tier === lt);
-  for (let i = 0; i < Math.min(12, base.length); i++) {
+  const lay1 = [];
+  for (let i = 0; i < Math.min(28, base.length); i++) {
     const under = base[(rng() * base.length) | 0];
-    place(under.x + (rng() - 0.5) * 2, under.y + (rng() - 0.5) * 2, 'coin', 1, 'plat', lt);
+    lay1.push(place(under.x + (rng() - 0.5) * 2, under.y + (rng() - 0.5) * 2, 'coin', 1, 'plat', lt));
+  }
+  for (let i = 0; i < Math.min(12, lay1.length); i++) {
+    const under = lay1[(rng() * lay1.length) | 0];
+    place(under.x + (rng() - 0.5) * 1.6, under.y + (rng() - 0.5) * 1.6, 'coin', 2, 'plat', lt);
   }
   // settle so nothing pops on the first frame, then sweep spillage
   for (let i = 0; i < 140; i++) step(1 / 60, true);
@@ -2321,9 +2355,22 @@ if (!HEADLESS) (function browser() {
     txt(fmt$(S.money), wx + 116, wy + 1, '800 16px Verdana, sans-serif', '#7ee787', 'left');
     uiBtn(wx + 176, wy - 14, 66, 28, '+ COINS', () => { S.buyOpen = true; },
           { grad: ['#3f9d5a', '#1d5c31'], border: '#7ee787', col: '#eaffef', font: '800 11px Verdana, sans-serif', r: 9 });
+    // turbo: hold-drop fires many times faster while it's on
+    const tpulse = S.turbo ? 0.85 + 0.15 * Math.sin(t * 14) : 1;
+    uiBtn(LW - 100, wy - 14, 66, 28, '\u26A1 TURBO', () => { S.turbo = !S.turbo; save(); },
+          S.turbo
+            ? { grad: ['#ffdf6b', '#ff9d3c'], border: '#fff3c4', col: '#4a2e06', font: '900 11px Verdana, sans-serif', r: 9 }
+            : { bg: 'rgba(40,30,36,0.85)', border: '#7a6070', col: '#c9a8b8', font: '800 11px Verdana, sans-serif', r: 9 });
+    if (S.turbo) {
+      ctx.save();
+      ctx.globalAlpha = tpulse * 0.6;
+      rr(LW - 102, wy - 16, 70, 32, 11);
+      ctx.strokeStyle = '#ffdf6b'; ctx.lineWidth = 2; ctx.stroke();
+      ctx.restore();
+    }
     txt(S.wallet < 1 ? (S.money >= C.PACKS[0].m ? 'out of coins — buy a pack!' : 'broke! the house comps you slowly…')
-                     : 'TAP TO DROP • HOLD FOR AUTO',
-        LW - 34, 826 - 12, '600 10px Verdana, sans-serif', '#8f6f78', 'right');
+                     : (S.turbo ? 'TURBO ON • HOLD FOR RAPID FIRE' : 'TAP TO DROP • HOLD FOR AUTO'),
+        LW / 2, 820, '600 10px Verdana, sans-serif', S.turbo ? '#ffdf6b' : '#8f6f78', 'center');
   }
 
   function drawBuyModal() {
@@ -2670,7 +2717,7 @@ if (!HEADLESS) (function browser() {
       tick(dt);
       if (held) {
         holdT += dt;
-        if (holdT > 0.45 && S.cd <= 0) drop(S.aimX);
+        if (holdT > (S.turbo ? 0.1 : 0.45) && S.cd <= 0) drop(S.aimX);
       }
     } else {
       // keep light UI timers alive outside the machine
