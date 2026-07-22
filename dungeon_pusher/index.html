@@ -792,7 +792,7 @@ const S = {
   dropped: 0, collected: 0,
   banner: null, trayPile: 0, denyT: 0, hurtT: 0,
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
-  opts: { sfx: 1, shake: true, parts: true },   // player settings (persisted)
+  opts: { sfx: 1, shake: true, parts: true, haptic: true },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
   life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {} },
   hist: [],                                     // the last ten runs, newest first
@@ -838,6 +838,7 @@ function rng() {
 
 // sound hooks — no-ops headless / until the browser block installs real ones
 let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() {}, fanfare() {},
+            bossHit() {}, eliteKill() {}, vaultOpen() {}, goldKey() {}, tick() {}, ratchet() {},
             slot() {}, hit() {}, hurt() {}, heal() {}, poison() {}, block() {},
             stun() {}, buy() {}, door() {}, dead() {}, winb() {}, reel() {} };
 
@@ -881,7 +882,8 @@ function load() {
     S.introSeen = !!d.intro;
     if (d.opts && typeof d.opts === 'object') {
       S.opts = { sfx: typeof d.opts.sfx === 'number' ? Math.max(0, Math.min(1, d.opts.sfx)) : 1,
-                 shake: d.opts.shake !== false, parts: d.opts.parts !== false };
+                 shake: d.opts.shake !== false, parts: d.opts.parts !== false,
+                 haptic: d.opts.haptic !== false };
     }
     if (d.ach && typeof d.ach === 'object') {
       S.ach = { u: d.ach.u || {}, heroes: d.ach.heroes || {} };
@@ -1124,6 +1126,7 @@ function dmgFoe(e, n, src, pierce) {
   if (n <= 0) { floatAnchor('BLOCKED', 'enemy', '#c8d6e8'); e.hitT = 0.15; return 0; }
   e.hp -= n;
   e.hitT = 0.3;
+  if (e.boss && n >= 5) SND.bossHit();    // a heavy blow on a LORD lands with weight
   if (S.run.stats) {
     S.run.stats.dealt += n;
     if (!dot && n > S.run.stats.bestHit) S.run.stats.bestHit = n;
@@ -1167,6 +1170,8 @@ function foeDown(e) {
   S.run.kills++;
   S.codex.foes[e.id] = (S.codex.foes[e.id] || 0) + 1;   // the bestiary remembers
   questBump('slay', 1);
+  if (e.elite) { SND.eliteKill(); buzz(50); }
+  else if (e.boss) buzz([40, 40, 90]);
   let gold = Math.round(e.gold * (mutOn('richveins') ? 1.25 : 1));
   // the wound bounties: Ashfall pays for kindling, Blood Price for red work
   if (hasRelic('ashfall') && e.burn > 0) gold += 6;
@@ -1388,6 +1393,7 @@ function addCoins(n) {
 function hpHit(n, cause, col) {
   if (!S.run || S.run.hp <= 0) return;
   S.run.hp -= n;
+  if (n >= 6) buzz(60);
   if (S.run.stats) S.run.stats.taken += n;
   S.hurtT = 0.45;
   S.shake += Math.min(9, 3 + n * 0.5);
@@ -1532,6 +1538,7 @@ function grantItem(iid, n) {
 function frenzy() {
   S.meter = 0;
   achUnlock('jackpot');
+  buzz(80);
   if (hasRelic('jackpotcharm')) { addGold(15); if (S.battle) S.battle.goldWon += 15; }
   S.banner = { txt: 'JACKPOT!', ttl: 2.2, max: 2.2 };
   S.shake += 8;
@@ -1682,6 +1689,7 @@ function craneDrop(x, y) {
   }
   // hand the renderer the ACTUAL pieces so the claw is seen holding them;
   // score quietly — the tray fanfare plays when the claw delivers, not now
+  if (caught.length) buzz(35);            // the CHOMP thumps in the palm
   if (window.__dpClaw) window.__dpClaw(x, y, caught.map(c => ({ kind: c.kind, iid: c.iid || null })), slipped.length);
   for (const c of caught) scoreCoin(c, true);
   return { caught: caught.length, slipped: slipped.length };
@@ -2604,6 +2612,7 @@ function winBattle() {
   if (anyElite) {
     S.run.goldKeys = (S.run.goldKeys || 0) + 1;
     floatAnchor('+1 GOLDEN KEY \u{1F511}', 'hero', '#ffd75e', true);
+    SND.goldKey();
   }
   // the dragon's embers cool the moment it falls
   for (const c of S.coins) c.aflame = false;
@@ -3177,7 +3186,8 @@ function tryDoor(dir) {
       S.run.goldKeys--;
       S.run.map.links[lk] = { open: true };
       achUnlock('goldenkey');
-      SND.buy();
+      SND.vaultOpen();
+      buzz([30, 30, 30]);
       toast('the golden lock sings open');
       save();
       return 'unlocked';
@@ -4395,6 +4405,13 @@ if (!HEADLESS) (function browser() {
     door() { tone(90, 0.35, 'sine', 0.3, 55); noise(0.2, 0.1, 300); },
     dead() { [400, 300, 220, 150].forEach((f, i) => setTimeout(() => tone(f, 0.32, 'triangle', 0.22), i * 160)); },
     winb() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.25, 'square', 0.16), i * 110)); },
+    // ---- the v2 stings ----
+    bossHit() { tone(90, 0.22, 'square', 0.2, 55); noise(0.12, 0.12, 300); },
+    eliteKill() { [330, 415, 495].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'sawtooth', 0.12), i * 70)); },
+    vaultOpen() { [523, 659, 784, 988, 1319].forEach((f, i) => setTimeout(() => tone(f, 0.3, 'triangle', 0.14), i * 90)); },
+    goldKey() { [1047, 1319, 1568].forEach((f, i) => setTimeout(() => tone(f, 0.14, 'sine', 0.16), i * 80)); },
+    tick() { tone(880, 0.03, 'square', 0.05); },
+    ratchet() { tone(1200, 0.02, 'square', 0.06, 900); },
     // the BOSS sting: a longer, brassier flourish with a bass drop
     fanfare() {
       [392, 523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => {
@@ -4542,6 +4559,10 @@ if (!HEADLESS) (function browser() {
     const p = w2s(wx, wy, wz);
     burstScreen(p.x, p.y, kind);
   };
+  window.__dpBuzz = function (pattern) {
+    if (!S.opts.haptic || !navigator.vibrate) return;
+    try { navigator.vibrate(pattern); } catch (e) {}
+  };
 
   const SCRATCH = [];
   {
@@ -4586,7 +4607,7 @@ if (!HEADLESS) (function browser() {
   }
   function uiBtn(x, y, w, h, label, cb, opts) {
     opts = opts || {};
-    uiButtons.push({ x, y, w, h, cb });
+    uiButtons.push({ x, y, w, h, cb: () => { SND.tick(); cb(); } });
     const r = opts.r || 12;
     // soft offset shade grounds every button (cheaper than shadowBlur)
     rr(x - 1, y + 2, w + 2, h + 2, r + 1);
@@ -6125,6 +6146,9 @@ if (!HEADLESS) (function browser() {
     const ease = 1 - Math.pow(1 - k, 3);
     const target = (Math.PI * 2) * 4 + (-Math.PI / 2) - (a.seg + 0.5) * seg;
     const rot = ease * target;
+    // the ratchet: one click per segment sweeping past the pointer
+    const notch = Math.floor(rot / seg);
+    if (a._notch !== notch) { a._notch = notch; if (k < 1) SND.ratchet(); }
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(rot);
@@ -8259,7 +8283,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(5,2,8,0.8)';
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { SETTINGS = false; } });
-    const py = 190, ph = 420;
+    const py = 175, ph = 462;
     rr(40, py, LW - 80, ph, 18);
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
@@ -8290,13 +8314,14 @@ if (!HEADLESS) (function browser() {
     toggle(py + 180, 'PARTICLES ' + (S.opts.parts ? '(full)' : '(light)'), S.opts.parts,
            () => { S.opts.parts = !S.opts.parts; });
     toggle(py + 222, 'SOUND', !S.mute, () => { S.mute = !S.mute; });
+    toggle(py + 264, 'HAPTICS (phone buzz)', S.opts.haptic, () => { S.opts.haptic = !S.opts.haptic; });
     // replay the tale
-    uiBtn(64, py + 268, LW - 128, 38, '\u{1F4DC} REPLAY THE TALE', () => {
+    uiBtn(64, py + 310, LW - 128, 38, '\u{1F4DC} REPLAY THE TALE', () => {
       SETTINGS = false; INTRO = { t: 0, then: null };
     }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 12px Verdana, sans-serif', r: 12 });
-    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 334, '700 10px Verdana, sans-serif', '#8a7a90');
-    txt('a coin pusher roguelike — painted relics by the owner,', LW / 2, py + 352, '600 9px Verdana, sans-serif', '#6a5a68');
-    txt('code forged with Claude Code', LW / 2, py + 366, '600 9px Verdana, sans-serif', '#6a5a68');
+    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 372, '700 10px Verdana, sans-serif', '#8a7a90');
+    txt('a coin pusher roguelike — painted relics by the owner,', LW / 2, py + 390, '600 9px Verdana, sans-serif', '#6a5a68');
+    txt('code forged with Claude Code', LW / 2, py + 404, '600 9px Verdana, sans-serif', '#6a5a68');
     uiBtn(LW / 2 - 70, py + ph - 34, 140, 40, 'CLOSE ✕', () => { SETTINGS = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
@@ -8588,6 +8613,10 @@ if (!HEADLESS) (function browser() {
 // particle burst — no-op headless, screen-space in the browser
 function burst(wx, wy, wz, kind) {
   if (window.__dpBurst) window.__dpBurst(wx, wy, wz, kind);
+}
+// a phone-pocket thump — no-op headless, navigator.vibrate in the browser
+function buzz(pattern) {
+  if (window.__dpBuzz) window.__dpBuzz(pattern);
 }
 </script>
 </body>

@@ -3373,4 +3373,18 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(DS.run.gold <= 80, true, '15 + 5×floor gold sank (boon may refund)');
 }
 
+// -------- SOUND v2 + HAPTICS: the buzz hook fires --------
+{
+  const { DP: D } = loadGame({}, false);
+  t.ok(D.S.opts.haptic === true, 'haptics default ON');
+  const hits = [];
+  globalThis.__dpBuzz = p => hits.push(p);
+  D.srand(3131);
+  D.newRun('knight');
+  D.frenzy ? D.frenzy() : null;
+  D.hpHit(7, 'a big test blow');
+  t.ok(hits.length >= 1, 'a heavy blow thumps the phone (' + hits.length + ' buzzes)');
+  delete globalThis.__dpBuzz;
+}
+
 t.done();
