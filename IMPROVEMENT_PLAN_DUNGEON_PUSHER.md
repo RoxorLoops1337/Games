@@ -129,8 +129,12 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       re-offered as a 📲 INSTALL title chip; painted coin icon set (session 26)
 - [ ] **Cloud saves**: reuse `functions/api/save.js` pattern (KV `BOARD`) — profile
       sync button in settings, conflict = newest wins with confirm
-- [ ] **Leaderboard**: reuse `functions/api/board.js` — daily + all-time best floor,
-      name entry (12 chars), top-50 screen
+- [x] **Leaderboard**: `functions/api/dungeon_board.js` (KV binding **DPBOARD** —
+      one dashboard step to go live; 503-graceful until then) — all-time +
+      rolling daily boards from ONE post, floor-then-kills ranking, best-per-name,
+      cap 50, per-IP throttle; 🏅 THE DEEP BOARD screen with tabs/pager/medals,
+      on-canvas name carver (12 chars, physical keys work too), CARVE IT chip on
+      the fallen-run screen; sw.js never caches /api/ (session 27)
 - [x] **Save migration hardening**: sv-versioned schema + migration ladder;
       corrupt blobs QUARANTINED under `<key>_quarantine` (never destroyed), clean
       start + title notice (session 22)

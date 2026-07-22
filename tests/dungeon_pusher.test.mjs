@@ -3572,12 +3572,39 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   }
   t.ok(sw.indexOf('./index.html') >= 0 && sw.indexOf('skipWaiting') >= 0, 'the shell is precached and the worker takes over');
   t.ok(sw.indexOf("mode === 'navigate'") >= 0, 'navigations ride network-first');
+  t.ok(sw.indexOf("indexOf('/api/') === 0") >= 0, 'the worker never caches /api/ — live boards stay live');
   // the page wires it all up
   const html = readFileSync(join(dir, 'index.html'), 'utf8');
   t.ok(html.indexOf('rel="manifest"') >= 0, 'index links the manifest');
   t.ok(html.indexOf('theme-color') >= 0, 'index carries a theme-color');
   t.ok(html.indexOf("serviceWorker.register('sw.js')") >= 0, 'index registers the worker');
   t.ok(html.indexOf('beforeinstallprompt') >= 0, 'the install offer is caught for the title chip');
+}
+
+// -------- LEADERBOARD (client side): the carved name + wiring --------
+{
+  // the carved name persists in the save blob
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.S.boardName, '', 'no name carved on a fresh profile');
+  D.S.boardName = 'Danhieux';
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.boardName, 'Danhieux', 'the carved name survives a reload');
+  // an over-long stored name is clipped on load, matching the server's cap
+  const blob = JSON.parse(st[D.C.SAVE_KEY]);
+  blob.boardName = 'ABCDEFGHIJKLMNOP';
+  st[D.C.SAVE_KEY] = JSON.stringify(blob);
+  const { DP: L } = loadGame(st, false);
+  t.eq(L.S.boardName.length, 12, 'a stored name clips to 12 characters');
+  // the page is wired to the board endpoint and its overlays
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("'/api/dungeon_board'") >= 0, 'the client points at /api/dungeon_board');
+  t.ok(src.indexOf('CARVE IT ON THE BOARD') >= 0, 'the fallen-run screen offers the carve');
+  t.ok(src.indexOf('function drawBoard') >= 0 && src.indexOf('function drawNamePad') >= 0,
+       'board + name-carver overlays exist');
+  t.ok(/if \(NAMEPAD\) \{ NAMEPAD = null; return; \}/.test(src), 'ESC backs out of the carver first');
 }
 
 t.done();
