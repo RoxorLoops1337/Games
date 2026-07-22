@@ -2877,7 +2877,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 38, 'thirty-eight trophies on the wall');
+  t.eq(D.ACH.length, 39, 'thirty-nine trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -5079,6 +5079,64 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('\\u{2694}\\u{FE0F} DUEL') >= 0, 'the run-over screen offers the DUEL button');
   t.ok(src.indexOf('WELCOME BACK') >= 0, 'the crate knocks on the title');
   t.ok(src.indexOf('is OUTDUG!') >= 0, 'the report card declares the outcome');
+}
+
+// -------- CODEX completion meters + the title MARQUEE --------
+{
+  const { DP: D } = loadGame({}, false);
+  // the shelf math
+  const a1 = D.codexTabStat('a1');
+  t.eq(a1.all, D.ENEMY_TIERS[0].length + 2, 'act 1 counts its roster plus BOTH bosses');
+  t.eq(a1.got, 0, 'a fresh ledger has met nobody');
+  const cShelf = D.codexTabStat('c');
+  t.eq(cShelf.all, D.RELICS.filter(r => r.rar === 'c').length, 'the common shelf counts its rarity');
+  t.ok(!D.codexFull(), 'a fresh codex is nowhere near full');
+  // fill everything → full → the trophy
+  for (const tier of D.ENEMY_TIERS) for (const f of tier) D.S.codex.foes[f.id] = 1;
+  for (const b of D.BOSSES) D.S.codex.foes[b.id] = 1;
+  for (const b of D.BOSSES2) D.S.codex.foes[b.id] = 1;
+  for (const rl of D.RELICS) D.S.codex.relics[rl.id] = 1;
+  t.ok(D.CODEX_TABS.every(tb => { const s = D.codexTabStat(tb); return s.got === s.all; }),
+    'every shelf reads complete');
+  t.ok(D.codexFull(), 'the ledger closes');
+  D.achPoll();
+  t.ok(D.S.ach.u.ledger, 'THE FULL LEDGER hangs on the wall');
+  // ---- the marquee: one reason, priority-ordered ----
+  const { DP: M } = loadGame({}, false);
+  const TD = '2026-07-22';
+  // fresh profile → the daily is the hook (no streak, no rival)
+  t.ok(M.marqueeLine(TD).indexOf('daily') >= 0, 'a fresh profile is pointed at the daily');
+  // a streak at stake outranks everything
+  M.S.streak = { last: '2026-07-21', days: 4 };
+  t.ok(M.marqueeLine(TD).indexOf('4-day streak') >= 0, 'a live streak leads the marquee');
+  M.S.streak.last = '2026-07-20';
+  t.ok(M.marqueeLine(TD).indexOf('grace day') >= 0, 'the grace day pleads urgency');
+  M.S.streak.last = TD;                       // played today — streak line stands down
+  // the rival outranks the daily
+  M.S.rival = { name: 'Rox', floor: 12, kills: 5 };
+  M.S.best.floor = 9;
+  t.ok(M.marqueeLine(TD).indexOf('Rox still holds floor 12') >= 0, 'the standing rival takes the line');
+  M.S.best.floor = 13;                        // toppled — rival line stands down
+  t.ok(M.marqueeLine(TD).indexOf('daily') >= 0, 'a toppled rival yields to the daily');
+  // daily spent → the thinnest codex shelf calls
+  M.S.daily = { date: TD, done: true, best: null };
+  const line = M.marqueeLine(TD);
+  t.ok(line.indexOf('unwritten') >= 0, 'a spent daily yields to the codex gap (' + line + ')');
+  // everything full → yesterday's crown, then the evergreen seed line
+  for (const tier of M.ENEMY_TIERS) for (const f of tier) M.S.codex.foes[f.id] = 1;
+  for (const b of M.BOSSES) M.S.codex.foes[b.id] = 1;
+  for (const b of M.BOSSES2) M.S.codex.foes[b.id] = 1;
+  for (const rl of M.RELICS) M.S.codex.relics[rl.id] = 1;
+  M.S.yday = { on: TD, floor: 31, name: 'Danhieux' };
+  t.ok(M.marqueeLine(TD).indexOf('floor 31 by Danhieux') >= 0, 'then yesterday’s crown');
+  M.S.yday.floor = 0;
+  t.ok(M.marqueeLine(TD).indexOf('TODAY’S MAZE') >= 0, 'and the seed line is the evergreen floor');
+  // the wiring: title draws the marquee, the codex button gilds, tabs gild
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('txt(marqueeLine(new Date()') >= 0, 'the title draws the marquee');
+  t.ok(src.indexOf("codexFull() ? { r: 10, font: '15px serif', grad:") >= 0, 'the codex button turns gold');
+  t.ok(src.indexOf("full ? '✦' + label : label") >= 0, 'finished shelves wear the star');
 }
 
 t.done();

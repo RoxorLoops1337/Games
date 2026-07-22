@@ -3347,6 +3347,54 @@ function parseDuel(search) {
   try { name = decodeURIComponent(m[3]).replace(/[^\w \-.']/g, '').trim().slice(0, 12) || 'a rival'; } catch (e) {}
   return { seed, floor, name };
 }
+// ------------------------------------------------ the CODEX completion math
+// one shelf's tally — bestiary acts count both boss rosters, relic shelves
+// count their rarity. Shared by the tab meters, the trophy and the tests.
+const CODEX_TABS = ['a1', 'a2', 'a3', 'a4', 'c', 'r', 'e'];
+function codexTabStat(tab) {
+  if (tab[0] === 'a') {
+    const act = +tab[1] - 1;
+    const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length]]);
+    return { got: foes.filter(f => S.codex.foes[f.id]).length, all: foes.length };
+  }
+  const shelf = RELICS.filter(rl => rl.rar === tab);
+  return { got: shelf.filter(rl => S.codex.relics[rl.id]).length, all: shelf.length };
+}
+function codexFull() {
+  return CODEX_TABS.every(tb => { const s = codexTabStat(tb); return s.all > 0 && s.got >= s.all; });
+}
+// --------------------------------------------------- the TITLE marquee
+// one line, the single most compelling reason to play right now —
+// priority-ordered, dateStr passed in so the tests own the clock
+function marqueeLine(dateStr) {
+  const st = S.streak || {};
+  if (st.last && st.days >= 2 && st.last !== dateStr) {
+    const gap = Math.round((Date.parse(dateStr) - Date.parse(st.last)) / 86400000);
+    if (gap === 1) return '\u{1F525} ' + st.days + '-day streak — a run today keeps it burning';
+    if (gap === 2) return '\u{1F525} the grace day — one run TODAY saves the ' + st.days + '-day streak';
+  }
+  if (S.rival && S.rival.name && (S.rival.floor | 0) >= (S.best.floor | 0)) {
+    return '\u{2694}\u{FE0F} ' + S.rival.name + ' still holds floor ' + S.rival.floor + ' over you';
+  }
+  if (!(S.daily && S.daily.date === dateStr && S.daily.done)) {
+    const plan = dailyPlan(dateStr);
+    return '\u{1F4C5} today’s daily: ' + plan.hero.name + ' under ' + plan.mod.name + ' — one attempt';
+  }
+  let thin = null;
+  for (const tb of CODEX_TABS) {
+    const s = codexTabStat(tb);
+    const left = s.all - s.got;
+    if (left > 0 && (!thin || left < thin.left)) thin = { tab: tb, left };
+  }
+  if (thin) {
+    const label = thin.tab[0] === 'a' ? 'act ' + thin.tab[1] + ' bestiary' : RARITY[thin.tab].name + ' relic';
+    return '\u{1F4D6} ' + thin.left + ' ' + label + ' entr' + (thin.left > 1 ? 'ies' : 'y') + ' still unwritten';
+  }
+  if (S.yday && S.yday.floor > 0) {
+    return '\u{26CF}\u{FE0F} yesterday’s crown: floor ' + S.yday.floor + ' by ' + S.yday.name + ' — take it';
+  }
+  return '\u{1F331} plant TODAY’S MAZE — everyone digs the same corridors';
+}
 // away a week or more? the dungeon kept your seat warm — one crate, no guilt
 function welcomeBack(todayStr) {
   const last = S.streak && S.streak.last;
@@ -3426,6 +3474,7 @@ const ACH = [
   { id: 'gardener',  icon: '\u{1F331}', name: 'Green Thumb', desc: 'grow TODAY’S MAZE from the planted seed' },
   { id: 'decreed',   icon: '\u{2696}\u{FE0F}', name: 'Above the Law', desc: 'clear floor 15 under a WEEKLY DECREE' },
   { id: 'topple',    icon: '\u{1F3AF}', name: 'Rival Toppled', desc: 'out-dig your marked rival' },
+  { id: 'ledger',    icon: '\u{1F4D6}', name: 'The Full Ledger', desc: 'meet every foe, own every relic — the codex complete' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 function achUnlock(id) {
@@ -3448,6 +3497,7 @@ function achPoll() {
   if (kf.auditor) achUnlock('audited');
   if ((S.streak.days | 0) >= 3) achUnlock('streak3');
   if ((S.streak.days | 0) >= 7) achUnlock('streak7');
+  if (codexFull()) achUnlock('ledger');
   const r = S.run;
   if (!r) return;
   for (const rid of r.relics) S.codex.relics[rid] = 1;   // the codex sweeps the shelf
@@ -4667,6 +4717,7 @@ window.DP = {
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
   duelLink, parseDuel, welcomeBack,
+  CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
@@ -9330,13 +9381,21 @@ if (!HEADLESS) (function browser() {
     txt('\u{1F4D6} CODEX', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     const tabs = [['a1', 'ACT I'], ['a2', 'ACT II'], ['a3', 'ACT III'], ['a4', 'MINT'], ['c', 'COMMON'], ['r', 'RARE'], ['e', 'EPIC']];
     const tw = (LW - 36) / tabs.length;
+    let cxGot = 0, cxAll = 0;
     tabs.forEach(([id, label], i) => {
       const on = CODEX.tab === id;
-      uiBtn(18 + i * tw, 66, tw - 4, 26, label, () => { CODEX.tab = id; CODEX.sel = null; },
-            { grad: on ? ['#8a6a2a', '#5a4014'] : ['#3a3440', '#262230'],
-              border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
+      const st = codexTabStat(id);
+      cxGot += st.got; cxAll += st.all;
+      const full = st.all > 0 && st.got >= st.all;   // a finished shelf turns gold
+      uiBtn(18 + i * tw, 66, tw - 4, 26, full ? '✦' + label : label, () => { CODEX.tab = id; CODEX.sel = null; },
+            { grad: on ? ['#8a6a2a', '#5a4014'] : full ? ['#5a4a1a', '#38290f'] : ['#3a3440', '#262230'],
+              border: on ? '#ffd75e' : full ? '#c8a86a' : '#55506a',
+              col: on || full ? '#ffe9a3' : '#9a90a8',
               font: '900 9px Verdana, sans-serif', r: 8 });
     });
+    // the ledger's own meter, gold the day it closes
+    txt(cxGot + ' / ' + cxAll, LW - 26, 46, '900 12px Verdana, sans-serif',
+        cxGot >= cxAll ? '#ffd75e' : '#9a8aa0', 'right');
     if (CODEX.tab[0] === 'a') {
       // one act's roster + its boss, kills tallied — the unmet stay shadows
       const act = +CODEX.tab[1] - 1;
@@ -10399,6 +10458,8 @@ if (!HEADLESS) (function browser() {
       txt('\u{2694}\u{FE0F} rival: ' + S.rival.name + ' — floor ' + S.rival.floor + '  (your best: ' + S.best.floor + ')',
           LW / 2, 718, '800 10px Verdana, sans-serif', '#ff9d8a');
     }
+    // the MARQUEE: the one most compelling reason to play, right now
+    txt(marqueeLine(new Date().toISOString().slice(0, 10)), LW / 2, 700, '700 10px Verdana, sans-serif', '#c8d6e8');
     txt('v' + VERSION, LW - 10, LH - 10, '600 10px Verdana, sans-serif', '#8d7d95', 'right');
     ydayFetch();
     if (S.yday && S.yday.floor > 0 && !S.saveQuarantined) {
@@ -10414,7 +10475,9 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW - 52, 54, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
     uiBtn(LW - 52, 96, 38, 36, '\u{1F3C6}', () => { TROPHIES = true; }, { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 138, 38, 36, '\u{1F4CA}', () => { RECORDS = true; }, { r: 10, font: '15px serif' });
-    uiBtn(LW - 52, 180, 38, 36, '\u{1F4D6}', () => { CODEX = { tab: 'a1', sel: null }; }, { r: 10, font: '15px serif' });
+    uiBtn(LW - 52, 180, 38, 36, '\u{1F4D6}', () => { CODEX = { tab: 'a1', sel: null }; },
+          codexFull() ? { r: 10, font: '15px serif', grad: ['#8a6a2a', '#5a4014'], border: '#ffd75e' }
+                      : { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 222, 38, 36, '\u{1F3C5}', () => openBoard('alltime'), { r: 10, font: '15px serif' });
     // the workshop: prominent, with the cog balance on the door
     uiBtn(14, 12, 108, 36, '\u{1F6E0}\u{FE0F} ⚙ ' + fmt(S.cogs), () => { WSHOP = true; },
