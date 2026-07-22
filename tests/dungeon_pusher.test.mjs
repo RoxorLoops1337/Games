@@ -4499,4 +4499,44 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(Object.keys(B.S.run.map.rooms).sort().join('|'), layout, 'two friends walk the same practice maze');
 }
 
+// -------- THE JUICE TRIO: flags at the sim source, draws in the browser --------
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(3); D.newRun('knight');
+  // the kill lands: hitstop + shatter flag
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.hp = 1;
+  D.dmgEnemy(9);
+  t.ok(D.S.hitstop >= 0.09 - 1e-9, 'a kill freezes the world for a breath');
+  t.ok(D.S.killFx && !D.S.killFx.boss, 'and flags the shatter');
+  // the jackpot flags its fireworks
+  D.S.meter = 0;
+  D.frenzy();
+  t.ok(D.S.jackFx && D.S.jackFx.t === 0, 'the jackpot flags its fireworks');
+  // a boss kill stops harder
+  D.leaveBattle();
+  D.S.run.bside = 0;
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.hitstop = 0;
+  D.S.enemy.def = null; D.S.enemy.hp = 1;
+  D.dmgEnemy(9);
+  t.ok(D.S.hitstop >= 0.14 - 1e-9, 'a boss kill stops harder');
+  t.ok(D.S.killFx && D.S.killFx.boss, 'and shatters golden');
+  // the descent raises the wipe with its nameplate
+  D.leaveBattle();
+  D.S.run.floor = 5;
+  D.nextFloor();
+  t.ok(D.S.floorFx && D.S.floorFx.floor === 6 && D.S.floorFx.newAct, 'the descent flags the wipe — a new act, named');
+  D.nextFloor();
+  t.ok(D.S.floorFx.floor === 7 && !D.S.floorFx.newAct, 'mid-act floors skip the act name');
+  // the browser side is wired
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('function drawJuice') >= 0 && src.indexOf('drawJuice(dt);') >= 0, 'the juice overlays draw each frame');
+  t.ok(src.indexOf('S.hitstop -= dt;') >= 0 && src.indexOf('dt *= 0.12;') >= 0, 'hitstop bends frame time');
+  t.ok(src.indexOf("S.opts.shake !== false") >= 0, 'reduced-motion players skip the freeze');
+}
+
 t.done();
