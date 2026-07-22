@@ -279,12 +279,14 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
 - [x] **Seed of the day**: 🌱 TODAY'S MAZE chip plants dailySeed(today) as a
       free practice run — no attempt burned, no twists, same corridors for
       everyone (session 46)
-- [ ] **Jackpot spectacle**: the frenzy deserves fireworks — meter burst flash,
-      a coin-fountain arc over the pusher, brief golden vignette, fatter shake
-- [ ] **Kill feel**: foe death gets a shatter burst + ~90ms hitstop + the panel
-      slam already half-exists — make the last hit LAND
-- [ ] **Floor transition**: descending plays a half-second iris/wipe with the
-      floor nameplate (and the act name when it changes) instead of a hard cut
+- [x] **Jackpot spectacle**: golden radial flood (lighter composite, 1.5s),
+      four confetti fountains over the pusher + one at the tray, shake 8→12
+      (session 47)
+- [x] **Kill feel**: 90ms hitstop (140ms for bosses) bending frame time ×0.12,
+      a shatter ring + burst at the foe panel, golden for bosses; reduced-motion
+      players skip the freeze (session 47)
+- [x] **Floor transition**: the descent opens from black over ~1s with the
+      FLOOR N nameplate, plus the act name on act boundaries (session 47)
 - [ ] **Endless milestones**: every 3rd floor past 21 pays a MILESTONE CHEST
       (cogs / golden key / relic pick), floors 25 + 30 add trophies
 - [ ] **Endless-only decrees**: three new MUTS deeper in the stack (GILDED AGE:

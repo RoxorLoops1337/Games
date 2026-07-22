@@ -1467,6 +1467,9 @@ function dmgAll(n, src, pierce) {
 function foeDown(e) {
   if (e.paid) return;
   e.paid = true;
+  // the KILL FEEL: a beat of hitstop + a shatter the browser draws
+  S.hitstop = Math.max(S.hitstop || 0, e.boss ? 0.14 : 0.09);
+  S.killFx = { t: 0, boss: !!e.boss };
   S.run.kills++;
   S.codex.foes[e.id] = (S.codex.foes[e.id] || 0) + 1;   // the bestiary remembers
   questBump('slay', 1);
@@ -1853,7 +1856,8 @@ function frenzy() {
   buzz(80);
   if (hasRelic('jackpotcharm')) { addGold(15); if (S.battle) S.battle.goldWon += 15; }
   S.banner = { txt: TR('JACKPOT!'), ttl: 2.2, max: 2.2 };
-  S.shake += 8;
+  S.shake += 12;
+  S.jackFx = { t: 0 };
   SND.jackpot();
   // the Double Chime rings the jackpot twice over
   if (hasRelic('dblchime')) {
@@ -3673,6 +3677,7 @@ function nextFloor() {
   if (!S.run) return false;
   const muts0 = mutCount();
   S.run.floor++;
+  S.floorFx = { t: 0, floor: S.run.floor, newAct: (S.run.floor - 1) % 5 === 0 };
   // the endless deep announces each new decree
   if (mutCount() > muts0) {
     const m = MUTS[mutCount() - 1];
@@ -9745,6 +9750,67 @@ if (!HEADLESS) (function browser() {
         '#ffd75e', '#ff8a2a');
     ctx.globalAlpha = 1;
   }
+  // ---- the JUICE overlays: jackpot fireworks, kill shatter, floor wipe ----
+  function drawJuice(dt) {
+    // JACKPOT: a golden flood + coin fountains over the pusher
+    if (S.jackFx && S.screen === 'battle') {
+      const f = S.jackFx;
+      if (!f.lit) {
+        f.lit = 1;
+        for (let i = 0; i < 4; i++) burstScreen(90 + i * 100, 230 + (i % 2) * 30, 'gem');
+        burstScreen(LW / 2, 640, 'item');
+      }
+      f.t += dt;
+      const a = Math.max(0, 0.38 * (1 - f.t / 1.5));
+      if (a > 0.01) {
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = a;
+        const g = ctx.createRadialGradient(LW / 2, 400, 80, LW / 2, 400, 520);
+        g.addColorStop(0, 'rgba(255,215,94,0.9)');
+        g.addColorStop(1, 'rgba(255,140,40,0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, LW, LH);
+        ctx.restore();
+      }
+      if (f.t > 1.5) S.jackFx = null;
+    } else if (S.jackFx && S.screen !== 'battle') S.jackFx = null;
+    // KILL: a shatter ring where the foe stood
+    if (S.killFx && S.screen === 'battle') {
+      const f = S.killFx;
+      if (!f.lit) { f.lit = 1; burstScreen(LW - 156, 70, f.boss ? 'gem' : 'item'); }
+      f.t += dt;
+      const k = f.t / 0.5;
+      if (k < 1) {
+        ctx.save();
+        ctx.globalAlpha = 0.7 * (1 - k);
+        ctx.lineWidth = 3 - 2 * k;
+        ctx.strokeStyle = f.boss ? '#ffd75e' : '#ffe9a3';
+        ctx.setLineDash([8, 6]);
+        ctx.beginPath(); ctx.arc(LW - 156, 70, 18 + 70 * k, 0, 7); ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+      } else S.killFx = null;
+    } else if (S.killFx && S.screen !== 'battle') S.killFx = null;
+    // DESCENT: the dark opens onto the new floor's nameplate
+    if (S.floorFx && S.screen === 'dungeon' && S.run) {
+      const f = S.floorFx;
+      f.t += dt;
+      const hold = 0.22, fade = 0.75;
+      const a = f.t < hold ? 1 : Math.max(0, 1 - (f.t - hold) / fade);
+      if (a > 0.005) {
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.fillStyle = '#0a060c';
+        ctx.fillRect(0, 0, LW, LH);
+        ctx.globalAlpha = Math.min(1, a * 1.4);
+        txt(TR('FLOOR') + ' ' + f.floor, LW / 2, 380, '900 40px Georgia, serif', '#ffd75e', 'center', { w: 6, col: '#2a1030' });
+        if (f.newAct) txt(theme().name, LW / 2, 424, '900 15px Georgia, serif', '#c8a8b0');
+        ctx.restore();
+      }
+      if (f.t > hold + fade) S.floorFx = null;
+    } else if (S.floorFx && S.screen !== 'dungeon') S.floorFx = null;
+  }
   // slow golden rain behind the title — coins tumbling out of the dark
   const TRAIN = [];
   function drawTitle(t) {
@@ -10080,8 +10146,13 @@ if (!HEADLESS) (function browser() {
   let last = 0;
   function frame(ts) {
     requestAnimationFrame(frame);
-    const dt = Math.min((ts - last) / 1000 || 0.016, 0.05);
+    let dt = Math.min((ts - last) / 1000 || 0.016, 0.05);
     last = ts;
+    // HITSTOP: the killing blow freezes the world for a breath
+    if (S.hitstop > 0 && S.opts.shake !== false) {
+      S.hitstop -= dt;
+      dt *= 0.12;
+    } else S.hitstop = 0;
     padTick();                            // gamepad → the same KEYS/press paths
     srWatch(); srTick(dt);                // the town crier for screen readers
     if (S.screen === 'battle') {
@@ -10124,6 +10195,7 @@ if (!HEADLESS) (function browser() {
     else if (S.screen === 'battle' && S.run) drawBattle(t, dt);
     else if (S.screen === 'over') drawOver(t);
     else drawTitle(t);
+    drawJuice(dt);
     if ((S.screen === 'battle' || S.screen === 'dungeon') && !PHOTO) drawHeartbeat(ts / 1000);
     drawWheel();
     drawRelicPick(t);
