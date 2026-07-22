@@ -4157,7 +4157,26 @@ function spendKind(k, n) {
   S.run.purse[k] -= n;
   return true;
 }
-function toast(txt2) { S.toast = { txt: txt2, t: 2.6 }; }
+// toasts QUEUE now: simultaneous announcements take turns instead of
+// silently overwriting each other (the floor-22 decree + milestone-chest
+// + skim pileup was the proof). Duplicates collapse; four wait at most;
+// anything longer than 90 chars is trimmed to keep one clean line.
+function toast(txt2) {
+  txt2 = String(txt2);
+  if (txt2.length > 90) txt2 = txt2.slice(0, 89) + '\u{2026}';
+  S.toastQ = S.toastQ || [];
+  if (S.toast && S.toast.txt === txt2) return;
+  if (S.toastQ.length && S.toastQ[S.toastQ.length - 1] === txt2) return;
+  if (!S.toast) S.toast = { txt: txt2, t: 2.6 };
+  else if (S.toastQ.length < 4) S.toastQ.push(txt2);
+}
+function toastTick(dt) {
+  if (!S.toast) return;
+  // with a queue waiting, the current line hurries along
+  if (S.toastQ && S.toastQ.length && S.toast.t > 1.7) S.toast.t = 1.7;
+  S.toast.t -= dt;
+  if (S.toast.t <= 0) S.toast = (S.toastQ && S.toastQ.length) ? { txt: S.toastQ.shift(), t: 2.4 } : null;
+}
 // roll the 1-3 inhabitants of a room at the given distance from the stairs
 function genEnts(dist) {
   const r = rng();
@@ -5306,7 +5325,7 @@ window.DP = {
   giftLink, parseGift, claimGift, boardFilter,
   petVet, petTag, legacyStamp, LEGACY_ACH,
   jarY, jarSmash,
-  tollRun, tollRefill, TOLL_KIT, TOLL_PREPAY_CAP,
+  tollRun, tollRefill, TOLL_KIT, TOLL_PREPAY_CAP, toast, toastTick,
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
@@ -9641,6 +9660,9 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(12,7,14,0.92)'; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
     txt(S.toast.txt, LW / 2, ROOM.y + ROOM.wallH + 27, '800 13px Verdana, sans-serif', '#ffe9a3');
+    if (S.toastQ && S.toastQ.length) {
+      txt('+' + S.toastQ.length, LW / 2 + w / 2 + 4, ROOM.y + ROOM.wallH + 27, '800 10px Verdana, sans-serif', '#9a8aa0', 'left');
+    }
     ctx.restore();
   }
 
@@ -11637,7 +11659,7 @@ if (!HEADLESS) (function browser() {
       if (S.uiFlash) { S.uiFlash.t -= dt; if (S.uiFlash.t <= 0) S.uiFlash = null; }
       if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > 4.6) dismissWheel(); }
       if (S.banner) { S.banner.ttl -= dt; if (S.banner.ttl <= 0) S.banner = null; }
-      if (S.toast) { S.toast.t -= dt; if (S.toast.t <= 0) S.toast = null; }
+      toastTick(dt);
       for (let i = S.floats.length - 1; i >= 0; i--) {
         const f = S.floats[i];
         f.age += dt;
