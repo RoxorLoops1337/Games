@@ -572,13 +572,18 @@ feel the game get SMOOTHER this tier, not just bigger.
       tilt/key arithmetic in words). ESC + crash net wired, TAB-ring
       reachable (live kb test), Dutch chrome (DE ALMANAK), codex-style
       row cards; Playwright-verified three tabs (session 77)
-- [ ] **Duel REMATCH links**: the duel verdict screen offers REMATCH —
-      a fresh ?duel link seeded from the JUST-FINISHED run's seed+floor
-      with YOUR name, so chains of challenges bounce back and forth;
-      the report card shows the chain depth if present (&r=N)
-- [ ] **Board seasons archive**: keep the champion plaque's last 3 months
-      client-side (S.plaques[]), shown as a small HALL OF MONTHS in the
-      board sheet under THIS MONTH
+- [x] **Duel REMATCH links**: an answered duel turns the over screen's
+      DUEL button into ⚔️ REMATCH (NL: REVANCHE) — same maze, your new
+      floor as the bar, share text names the exchange ("I answered X's
+      floor 7 with floor 9. Your dig."); chains bounce naturally since
+      each side always re-links the shared seed. Chain-depth counter
+      (&r=N) skipped as needless ceremony — the exchange reads in the
+      share text (session 78)
+- [x] **Board seasons archive**: went API-side instead of client-side —
+      the board sheet grew a LAST MONTH tab (?board=lastmonth, which the
+      API has served since the plaque shipped); four tabs at 92px,
+      TR/NL'd, ring-reachable, live-tested. A deeper S.plaques[] hall
+      can still come later if months prove worth hoarding (session 78)
 - [ ] **Motif player easter egg**: tap the version stamp 5× → a tiny OST
       sheet that plays the four act motifs + the jackpot resolve on demand
       (pure tone(), reuses SND) — a lighthearted thank-you surface

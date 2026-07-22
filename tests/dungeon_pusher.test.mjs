@@ -5460,7 +5460,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // browser wiring
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf("tabBtn(LW / 2 + 66, TR('THIS MONTH'), 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
+  t.ok(src.indexOf("tabBtn(LW / 2 - 2, TR('THIS MONTH'), 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
   t.ok(src.indexOf('?board=lastmonth') >= 0, 'the title asks for last month’s champion');
   t.ok(src.indexOf('’S DEEPEST: ') >= 0, 'and hangs the plaque');
   t.ok(src.indexOf('MAKE A WISH') >= 0, 'the birthday crate waits for its day');
@@ -6556,6 +6556,51 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(K.TR('THE ALMANAC'), 'DE ALMANAK', 'the almanac speaks Dutch');
   t.eq(K.TR('THE HOUSE'), 'HET HUIS', 'so does the house tab');
   K.setLang('en');
+}
+
+// -------- TIER 11: REMATCH + the months archive --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  // an answered duel turns the DUEL button into a REMATCH of the same maze
+  t.ok(src.indexOf("o.duel ? TR('\\u{2694}\\u{FE0F} REMATCH') : '\\u{2694}\\u{FE0F} DUEL'") >= 0,
+       'an answered duel offers a REMATCH');
+  t.ok(src.indexOf("REMATCH — I answered ' + o.duel.name") >= 0, 'and the share text tells the tale');
+  t.ok(src.indexOf('the rematch link is copied') >= 0, 'the clipboard toast too');
+  // the rematch chain keeps the maze: link(seed, myFloor) parses back whole
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  D.srand(9); D.newRun('knight');
+  D.S.run.duel = { name: 'Rox', floor: 7 };
+  D.S.run.floor = 9;
+  const seed = D.S.run.seed;
+  D.endRun('test');
+  t.ok(D.S.over.duel && D.S.over.duel.won, 'floor 9 beats the challenged floor 7');
+  const back = D.parseDuel(D.duelLink(seed, D.S.over.floor, 'Me'));
+  t.ok(back && back.seed === (seed >>> 0) && back.floor === 9, 'the rematch link carries the SAME maze at the new bar');
+  // the board grew its archive tab
+  t.ok(src.indexOf("tabBtn(LW / 2 + 94, TR('LAST MONTH'), 'lastmonth');") >= 0, 'the LAST MONTH tab stands');
+  t.ok(src.indexOf("mine.tab === 'lastmonth' ? '?board=lastmonth'") >= 0, 'and asks the API for the archive');
+  D.setLang('nl');
+  t.eq(D.TR('LAST MONTH'), 'VORIGE MAAND', 'the archive tab speaks Dutch');
+  t.eq(D.TR('\u{2694}\u{FE0F} REMATCH'), '\u{2694}\u{FE0F} REVANCHE', 'so does the rematch');
+  D.setLang('en');
+  // live: all four tabs stand on the sheet and the ring reaches them
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  t.ok(press('SKIP') || true, 'past the tale');
+  t.ok(press('\u{1F3C5}', true), 'the board chip rings');
+  for (const tab of ['ALL-TIME', 'THIS MONTH', 'LAST MONTH']) {
+    t.ok(press(tab), 'board tab reachable: ' + tab);
+  }
+  K.kb.back(); frames(2);
 }
 
 t.done();

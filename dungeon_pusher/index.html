@@ -249,6 +249,9 @@ const LANGS = {
     'a LEGEND (♛) reads the first law at floor 11': 'een LEGENDE (♛) leest de eerste wet al op verdieping 11',
     'nine ways to rob the same house': 'negen manieren om hetzelfde huis te beroven',
     'the house arithmetic, in the open': 'het rekenwerk van het huis, open en bloot',
+    // rematch + the months archive (session 78)
+    '\u{2694}\u{FE0F} REMATCH': '\u{2694}\u{FE0F} REVANCHE',
+    'LAST MONTH': 'VORIGE MAAND',
   },
 };
 let LANG = 'en';
@@ -10421,7 +10424,8 @@ if (!HEADLESS) (function browser() {
     BOARD = { tab: tab || 'alltime', state: 'loading', top: [], day: '', page: 0 };
     const mine = BOARD;
     if (typeof fetch !== 'function') { mine.state = 'err'; return; }
-    fetch(BOARD_API + (mine.tab === 'daily' ? '?board=daily' : mine.tab === 'monthly' ? '?board=monthly' : ''))
+    fetch(BOARD_API + (mine.tab === 'daily' ? '?board=daily' : mine.tab === 'monthly' ? '?board=monthly'
+                     : mine.tab === 'lastmonth' ? '?board=lastmonth' : ''))
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(j => {
         if (BOARD !== mine) return;
@@ -10514,14 +10518,15 @@ if (!HEADLESS) (function browser() {
     // tabs
     const tabBtn = (x, label, tab) => {
       const on = BOARD.tab === tab;
-      uiBtn(x, py + 54, 118, 30, label, () => { if (!on) openBoard(tab); },
+      uiBtn(x, py + 54, 92, 30, label, () => { if (!on) openBoard(tab); },
             { grad: on ? ['#7d5a24', '#4a3410'] : ['#3a3440', '#262230'],
               border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
-              font: '900 10px Verdana, sans-serif', r: 10 });
+              font: '900 9px Verdana, sans-serif', r: 10 });
     };
-    tabBtn(LW / 2 - 184, TR('ALL-TIME'), 'alltime');
-    tabBtn(LW / 2 - 59, TR('TODAY') + (BOARD.tab === 'daily' && BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
-    tabBtn(LW / 2 + 66, TR('THIS MONTH'), 'monthly');
+    tabBtn(LW / 2 - 194, TR('ALL-TIME'), 'alltime');
+    tabBtn(LW / 2 - 98, TR('TODAY') + (BOARD.tab === 'daily' && BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
+    tabBtn(LW / 2 - 2, TR('THIS MONTH'), 'monthly');
+    tabBtn(LW / 2 + 94, TR('LAST MONTH'), 'lastmonth');
     if (BOARD.state === 'loading') {
       txt(TR('consulting the deep ledger') + '.'.repeat(1 + (Math.floor(t * 2) % 3)), LW / 2, py + 300,
           '700 13px Verdana, sans-serif', '#b8a8bc');
@@ -11735,7 +11740,7 @@ if (!HEADLESS) (function browser() {
     }
     uiBtn(LW / 2 - 156, 700, 96, 38, TR('TITLE'), () => { S.screen = 'title'; },
           { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 12px Verdana, sans-serif', r: 12 });
-    uiBtn(LW / 2 - 52, 700, 100, 38, '\u{2694}\u{FE0F} DUEL', () => shareDuel(o),
+    uiBtn(LW / 2 - 52, 700, 100, 38, o.duel ? TR('\u{2694}\u{FE0F} REMATCH') : '\u{2694}\u{FE0F} DUEL', () => shareDuel(o),
           { bg: 'rgba(60,26,30,0.92)', border: '#ff9d8a', col: '#ffd9d0',
             font: '900 12px Verdana, sans-serif', r: 12 });
     uiBtn(LW / 2 + 56, 700, 100, 38, TR('\u{1F381} STAKE'), () => shareGift(),
@@ -11764,12 +11769,15 @@ if (!HEADLESS) (function browser() {
     achUnlock('emissary');            // a challenge sent into the world
     const url = location.origin + location.pathname + duelLink(o.seed, o.floor, S.boardName || 'a rival');
     if (navigator.share) {
-      navigator.share({ title: 'Dungeon Pusher', text: 'outdig me — I fell at floor ' + o.floor + ' on this maze', url }).catch(() => {});
+      navigator.share({ title: 'Dungeon Pusher', text: o.duel
+        ? '\u{2694}\u{FE0F} REMATCH — I answered ' + o.duel.name + '\u2019s floor ' + o.duel.floor + ' with floor ' + o.floor + '. Your dig.'
+        : 'outdig me — I fell at floor ' + o.floor + ' on this maze', url }).catch(() => {});
       return;
     }
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(url).then(
-        () => toast('\u{2694}\u{FE0F} challenge link copied — send it to a friend'),
+        () => toast(o.duel ? '\u{2694}\u{FE0F} the rematch link is copied — send it back'
+                           : '\u{2694}\u{FE0F} challenge link copied — send it to a friend'),
         () => toast(url));
       return;
     }
