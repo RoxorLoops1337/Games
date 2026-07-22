@@ -272,12 +272,13 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
 The game is deep and polished; this tier is about the PULL — reasons to open
 it every day, and moments worth showing someone. Ordered by impact ÷ effort.
 
-- [ ] **Daily streaks**: consecutive-day counter on the 📅 chip (played any run
-      that day), +10% cogs per streak day (cap +50%), a streak flame on the
-      title; one grace day so a miss doesn't feel like a slap
-- [ ] **Seed of the day**: the daily's date-seed offered as a FREE practice plant
-      on the title ("today's dungeon — no stakes"), so friends without the
-      one-attempt pressure can still race the same maze
+- [x] **Daily streaks**: streakTouch stamps every finished run's day; one missed
+      day forgiven, two kills the flame; 🔥N beside the DAILY chip; +10% cogs
+      per day beyond the first (cap +50%) so old cog math holds day one
+      (session 46)
+- [x] **Seed of the day**: 🌱 TODAY'S MAZE chip plants dailySeed(today) as a
+      free practice run — no attempt burned, no twists, same corridors for
+      everyone (session 46)
 - [ ] **Jackpot spectacle**: the frenzy deserves fireworks — meter burst flash,
       a coin-fountain arc over the pusher, brief golden vignette, fatter shake
 - [ ] **Kill feel**: foe death gets a shatter burst + ~90ms hitstop + the panel

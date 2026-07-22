@@ -1028,6 +1028,7 @@ const S = {
   seenVer: '',                                  // last VERSION whose patch notes were read
   boardName: '',                                // the name carved on the leaderboard
   coach: { pick: 0, drop: 0, end: 0 },          // the first-battle pointers, killed once each
+  streak: { last: '', days: 0 },                // consecutive days played (one grace day)
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
@@ -1103,7 +1104,7 @@ function save() {
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
-      coach: S.coach,
+      coach: S.coach, streak: S.streak,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1167,6 +1168,7 @@ function load() {
     S.seenVer = (typeof d.seenVer === 'string' && d.seenVer) ? d.seenVer : '1.0.0';
     if (d.coach && typeof d.coach === 'object') S.coach = { pick: d.coach.pick ? 1 : 0, drop: d.coach.drop ? 1 : 0, end: d.coach.end ? 1 : 0 };
     else if ((d.best && d.best.runs) > 0) S.coach = { pick: 1, drop: 1, end: 1 };   // veterans need no pointing
+    if (d.streak && typeof d.streak === 'object') S.streak = { last: d.streak.last || '', days: d.streak.days | 0 };
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
@@ -3131,6 +3133,25 @@ const DAILY_MODS = [
   { id: 'rain',    name: 'GOLDEN RAIN',     desc: '+4 gold coins in the purse' },
   { id: 'keyless', name: 'LOCKED OUT',      desc: 'start with no keys' },
 ];
+// the STREAK clock: any finished run stamps the day. A one-day miss is
+// forgiven (the grace day); two misses and the flame goes out.
+function streakTouch(dateStr) {
+  const st = S.streak;
+  if (!st.last) { st.last = dateStr; st.days = 1; return st.days; }
+  if (st.last === dateStr) return st.days;
+  const gap = Math.round((Date.parse(dateStr) - Date.parse(st.last)) / 86400000);
+  st.days = (gap >= 1 && gap <= 2) ? st.days + 1 : 1;
+  st.last = dateStr;
+  return st.days;
+}
+// returning players earn +10% cogs per streak day beyond the first (cap +50%)
+function streakK() { return 1 + Math.min(0.5, 0.1 * Math.max(0, (S.streak.days | 0) - 1)); }
+// SEED OF THE DAY: plant today's daily maze as a FREE practice run —
+// no attempt burned, no twists, just the same corridors everyone races
+function plantToday(dateStr) {
+  S.nextSeed = dailySeed(dateStr) >>> 0;
+  return S.nextSeed;
+}
 function dailySeed(dateStr) {
   let h = 7;
   for (const c of dateStr) h = ((h * 31) + c.charCodeAt(0)) >>> 0;
@@ -3279,7 +3300,8 @@ function endRun(cause) {
   };
   // COGS for the workshop: every run pays out, however it ends —
   // the endless deep pays a premium per mutator endured
-  const cogsWon = Math.round(Math.max(1, S.run.floor + Math.floor(S.run.kills / 8)) * (1 + 0.2 * mutCount()));
+  streakTouch(new Date().toISOString().slice(0, 10));
+  const cogsWon = Math.round(Math.max(1, S.run.floor + Math.floor(S.run.kills / 8)) * (1 + 0.2 * mutCount()) * streakK());
   S.cogs += cogsWon;
   S.over.cogsWon = cogsWon;
   // a DAILY run files its result on the calendar
@@ -4387,6 +4409,7 @@ window.DP = {
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify, floatAt, floatAnchor,
   ACH, achUnlock, achPoll, achById, WORKSHOP, wsLvl, wsBuy, tiltCount,
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
+  streakTouch, streakK, plantToday,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
@@ -9931,6 +9954,9 @@ if (!HEADLESS) (function browser() {
     // the DAILY: one seeded run, one attempt, a guest hero if fate says so
     const today = new Date().toISOString().slice(0, 10);
     const spent = S.daily && S.daily.date === today && S.daily.done;
+    if (S.streak.days >= 2) {
+      txt('\u{1F525}' + S.streak.days, 134, 70, '900 12px Verdana, sans-serif', '#ff9d3c', 'left');
+    }
     uiBtn(14, 54, 108, 32, spent ? '\u{1F4C5} done!' : '\u{1F4C5} DAILY', () => {
       if (spent) {
         toast(S.daily.best ? 'today’s daily: floor ' + S.daily.best.floor + ' — back tomorrow!'
@@ -9947,14 +9973,19 @@ if (!HEADLESS) (function browser() {
          border: spent ? '#55506a' : '#8fc8ff', col: spent ? '#9a90a8' : '#d8ecff',
          font: '900 11px Verdana, sans-serif', r: 10 });
     // the skin rack, once a milestone opens anything beyond CLASSIC
+    uiBtn(14, 92, 108, 28, '\u{1F331} TODAY\u2019S MAZE', () => {
+      plantToday(today);
+      toast('today\u2019s maze is planted — NEW RUN grows it (no stakes)');
+    }, { bg: 'rgba(40,52,40,0.95)', border: '#8ed67e', col: '#d8f0dc',
+         font: '900 9px Verdana, sans-serif', r: 10 });
     if (S.best.floor >= 5) {
-      uiBtn(14, 92, 108, 28, '\u{1F3B0} MACHINE', () => { THEMES = true; },
+      uiBtn(14, 126, 108, 28, '\u{1F3B0} MACHINE', () => { THEMES = true; },
             { bg: 'rgba(44,34,50,0.95)', border: '#9a8aa0', col: '#e8d8ec',
               font: '900 10px Verdana, sans-serif', r: 10 });
     }
     // the pocket-install chip: only appears when the browser made the offer
     if (installEvt) {
-      uiBtn(14, S.best.floor >= 5 ? 126 : 92, 108, 28, '\u{1F4F2} INSTALL', () => {
+      uiBtn(14, S.best.floor >= 5 ? 160 : 126, 108, 28, '\u{1F4F2} INSTALL', () => {
         const ev = installEvt;
         installEvt = null;
         if (ev && ev.prompt) ev.prompt();
