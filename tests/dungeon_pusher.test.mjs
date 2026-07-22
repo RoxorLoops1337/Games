@@ -2877,7 +2877,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 39, 'thirty-nine trophies on the wall');
+  t.eq(D.ACH.length, 40, 'forty trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -4255,7 +4255,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('cv.width = 960') >= 0, 'rendered @2x for crisp shares');
   t.ok(src.indexOf("SHARE.cv.toBlob") >= 0, 'the card exports through toBlob');
   t.ok(src.indexOf('navigator.canShare({ files: [f] })') >= 0, 'the native share sheet is offered where it exists');
-  t.ok(src.indexOf("a.download = 'dungeon-pusher-run.png'") >= 0, 'and a plain download everywhere else');
+  t.ok(src.indexOf('a.download = fname') >= 0, 'and a plain download everywhere else (named per card)');
   t.ok(src.indexOf('seed36(o.seed)') >= 0 && src.indexOf('can you go deeper?') >= 0, 'the card carries the seed challenge');
   t.ok(src.indexOf('games-71g.pages.dev/dungeon_pusher') >= 0, 'and the way in');
   t.ok(/if \(SHARE\) \{ SHARE = null; return; \}/.test(src), 'ESC closes the preview');
@@ -5086,7 +5086,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const { DP: D } = loadGame({}, false);
   // the shelf math
   const a1 = D.codexTabStat('a1');
-  t.eq(a1.all, D.ENEMY_TIERS[0].length + 2, 'act 1 counts its roster plus BOTH bosses');
+  t.eq(a1.all, D.ENEMY_TIERS[0].length + 3, 'act 1 counts its roster, BOTH bosses and the champion');
   t.eq(a1.got, 0, 'a fresh ledger has met nobody');
   const cShelf = D.codexTabStat('c');
   t.eq(cShelf.all, D.RELICS.filter(r => r.rar === 'c').length, 'the common shelf counts its rarity');
@@ -5095,6 +5095,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   for (const tier of D.ENEMY_TIERS) for (const f of tier) D.S.codex.foes[f.id] = 1;
   for (const b of D.BOSSES) D.S.codex.foes[b.id] = 1;
   for (const b of D.BOSSES2) D.S.codex.foes[b.id] = 1;
+  for (const c of D.CHAMPIONS) D.S.codex.foes[c.id] = 1;
   for (const rl of D.RELICS) D.S.codex.relics[rl.id] = 1;
   t.ok(D.CODEX_TABS.every(tb => { const s = D.codexTabStat(tb); return s.got === s.all; }),
     'every shelf reads complete');
@@ -5126,6 +5127,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   for (const tier of M.ENEMY_TIERS) for (const f of tier) M.S.codex.foes[f.id] = 1;
   for (const b of M.BOSSES) M.S.codex.foes[b.id] = 1;
   for (const b of M.BOSSES2) M.S.codex.foes[b.id] = 1;
+  for (const c of M.CHAMPIONS) M.S.codex.foes[c.id] = 1;
   for (const rl of M.RELICS) M.S.codex.relics[rl.id] = 1;
   M.S.yday = { on: TD, floor: 31, name: 'Danhieux' };
   t.ok(M.marqueeLine(TD).indexOf('floor 31 by Danhieux') >= 0, 'then yesterday’s crown');
@@ -5341,6 +5343,67 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('— the innkeeper') >= 0, 'the curtain credits the teller');
   t.ok(src.indexOf("['habits', '\\u{1F3B2} HABITS']") >= 0, 'records grew the HABITS tab');
   t.ok(src.indexOf('WHERE THE RUNS END') >= 0, 'with the death bars beneath');
+}
+
+// -------- NAMED CHAMPIONS + the trophy-wall share card --------
+{
+  const { DP: D } = loadGame({}, false);
+  t.eq(D.CHAMPIONS.length, 4, 'four names in the champion roll');
+  t.ok(D.CHAMPIONS.every(c => c.id && c.icon && c.name && c.trait && c.hp && c.gold),
+    'every champion is fully armed');
+  // no id collisions with the common bestiary or the lairs
+  const allIds = new Set();
+  for (const tier of D.ENEMY_TIERS) for (const f of tier) allIds.add(f.id);
+  for (const b of D.BOSSES) allIds.add(b.id);
+  for (const b of D.BOSSES2) allIds.add(b.id);
+  t.ok(D.CHAMPIONS.every(c => !allIds.has(c.id)), 'champion ids collide with nobody');
+  // one champion per act, the deep keeps the last
+  D.srand(111); D.newRun('knight');
+  const cf = (fl) => { D.S.run.floor = fl; return D.championFor(fl).id; };
+  t.eq(cf(3), 'gruk', 'act 0 belongs to Gruk');
+  t.eq(cf(8), 'velvetfang', 'act 1 to Velvetfang');
+  t.eq(cf(13), 'ninecoins', 'act 2 to Old Ninecoins');
+  t.eq(cf(18), 'ledgerlord', 'the mint to the Ledger Lord');
+  t.eq(cf(40), 'ledgerlord', 'the endless keeps the Ledger Lord');
+  // a champion in the flesh: crowned name, extra trick, double bounty + key
+  D.S.run.floor = 8;
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'velvetfang', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  const ch = D.S.enemy;
+  t.eq(ch.champ, 1, 'the wolf wears the crown flag');
+  t.ok(ch.name.indexOf('VELVETFANG') >= 0 && ch.name.indexOf('ELITE') < 0, 'named, never generic');
+  t.eq(ch.trait, 'gremlin', 'with its extra trick');
+  const g0 = D.S.battle.goldWon, k0 = D.S.battle.keysWon, eg = ch.gold;
+  ch.hp = 1; ch.mirrorSpent = true; ch.block = 0; ch.braced = false;
+  D.dmgFoe(ch, 999);
+  t.eq(D.S.battle.goldWon - g0, eg * 2, 'a champion pays DOUBLE');
+  t.eq(D.S.battle.keysWon - k0, D.C.KEY_KILL + 1, 'and never leaves you keyless');
+  t.eq(D.S.codex.foes.velvetfang, 1, 'the codex inks the champion');
+  // it actually hides in the elite pool past floor 4
+  const { DP: E } = loadGame({}, false);
+  let seen = false;
+  for (let s = 0; s < 40 && !seen; s++) {
+    E.srand(200 + s); E.newRun('knight');
+    E.S.run.floor = 8;
+    E.S.run.room.ents = [{ kind: 'monster', mtype: 'elite', eid: null, done: false, px: 0.5, py: 0.4 }];
+    E.interact(0);
+    if (E.S.enemy && E.S.enemy.champ) seen = true;
+  }
+  t.ok(seen, 'the champion turns up among the elites');
+  // all four inked → CHAMPION SLAYER
+  for (const c of D.CHAMPIONS) D.S.codex.foes[c.id] = 1;
+  D.achPoll();
+  t.ok(D.S.ach.u.champs, 'CHAMPION SLAYER hangs on the wall');
+  // the codex act tabs count their champion
+  const a2 = D.codexTabStat('a2');
+  t.eq(a2.all, D.ENEMY_TIERS[1].length + 3, 'act tabs count roster + bosses + champion');
+  // the trophy-wall card is wired
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('function buildTrophyCard()') >= 0, 'the trophy card builder exists');
+  t.ok(src.indexOf('THE TROPHY WALL') >= 0, 'and paints the wall');
+  t.ok(src.indexOf("fname: 'dungeon-pusher-trophies.png'") >= 0, 'the trophies sheet shares it under its own name');
+  t.ok(src.indexOf('ctx = main;') >= 0, 'the ctx swap still restores in finally');
 }
 
 t.done();
