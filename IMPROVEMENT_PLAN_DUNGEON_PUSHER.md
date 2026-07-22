@@ -197,6 +197,51 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       OpenGameArt (pointer to art/CREDITS.txt) / code & music / playtesting
       (session 30)
 
+## Tier 7 — the second age (authored session 36, after playing the whole board)
+
+The game is feature-complete on paper; this tier is about how it FEELS in the
+hand, whether the new systems are TUNED, whether the mint has enough LIFE in
+it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
+
+- [ ] **Trophies for the new age**: ~10 achievements covering everything tiers 4-6
+      shipped — first NG+ clear, wear a skin, wear a theme, carve the board, a
+      cloud backup, survive an AUDIT, fell each B-sider, master the mint's three
+      tricks, a photo taken, play in Dutch
+- [ ] **The aim ghost**: a faint falling-column marker under the finger while
+      aiming (touch and keys) — the single biggest mobile-feel gap
+- [ ] **Act 4 balance sweep**: headless win-rate probe with midline builds across
+      floors 14-21; tune mint statlines / the Auditor / NG+ floor-1 sting from
+      the numbers, not vibes (probe lands in the test suite as a report)
+- [ ] **Seed sharing**: every run stamps its seed on the report card; a SEEDED RUN
+      door on the title (name-pad entry) reproduces the dungeon — race a friend
+- [ ] **Share-a-run card** [big]: victory/death → a rendered trophy-card PNG
+      (hero, floor, kills, seed, painted frame) via canvas.toBlob — download +
+      navigator.share where it exists
+- [ ] **Mint strangers**: two act-4 events — THE ASSAYER (appraise: double one
+      relic's effect this floor, or he keeps it a floor) and THE DEBT COLLECTOR
+      (pay 30 gold or carry a -5 maxHP lien two floors)
+- [ ] **B-side second winds**: each B-sider gets a below-half-HP phase — the Wyrm
+      re-mirrors, the Banshee's wail also chills the pusher a step, the Aurifex
+      mints two slugs — telegraphed with a banner
+- [ ] **Five mint relics** (non-NG+): themed on slugs/audits/meters — e.g. Slug
+      Smelter (slugs collected pay 1 gold), Auditor's Stamp (bosses drop +1 key)
+- [ ] **Daily → board handshake**: a finished daily auto-offers posting to the
+      DAILY board with a 📅 flag on the row
+- [ ] **First-battle coach**: three one-time floating pointers (pick a coin, tap
+      to drop, END TURN fires) — killed forever once each is done
+- [ ] **Coin outlier pass**: blue + lucky are underpicked in victory spoils —
+      probe pick rates headless, then buff the losers one notch
+- [ ] **Relic outlier pass**: identify the 5 least-impactful relics by
+      inspection + probe, give each a small second clause
+- [ ] **NG+ ledger on the report card**: NG+ badge + act-shifted floor shown on
+      death/victory report and the run history rows
+- [ ] **Dungeon footsteps & door creaks**: two tiny SFX on the crawl (move tick,
+      door thunk) behind the existing SFX volume
+- [ ] **Mint floor quest**: one act-4-only job — BANK N SLUGS (the counterfeits
+      become the currency) paying a golden key
+- [ ] **Localization: settings + overlays complete in NL**: sweep the remaining
+      high-traffic strings (board, cloud, themes, credits) into TR()
+
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
