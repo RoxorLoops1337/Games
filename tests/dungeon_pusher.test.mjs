@@ -3717,4 +3717,49 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('const MACH_TINT = {}') >= 0, 'tinted cabinets are baked once and cached');
 }
 
+// -------- HERO SKINS + SEASONS: deep clears, alt palettes, clock windows --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  // every hero has a skin color waiting
+  t.ok(D.HEROES.every(h => D.HERO_SKINS[h.id]), 'all seven heroes have an alt palette');
+  t.ok(!D.skinWorn('knight'), 'nothing worn on a fresh profile');
+  // a floor-15 boss kill tailors the skin for that hero only
+  D.srand(77);
+  D.newRun('knight');
+  D.S.run.floor = 15;
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.foes.forEach(f => { f.hp = 1; });
+  D.dmgAll(9);
+  t.ok(D.S.victory && D.S.victory.boss, 'the floor-15 boss falls');
+  t.eq(D.S.deep15.knight, 1, 'the DEEP CLEAR is inked for the knight');
+  t.ok(!D.S.deep15.rogue, 'nobody else gets tailored');
+  // worn = earned AND toggled
+  t.ok(!D.skinWorn('knight'), 'earned but not yet worn');
+  D.S.skins.knight = 1;
+  t.ok(D.skinWorn('knight'), 'toggled on, the wash is worn');
+  D.S.skins.rogue = 1;
+  t.ok(!D.skinWorn('rogue'), 'toggling an unearned skin does nothing');
+  // both ledgers persist
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.deep15.knight, 1, 'the deep-clear ledger survives a reload');
+  t.ok(R.skinWorn('knight'), 'the worn skin survives too');
+  // a floor-14 boss earns nothing
+  const { DP: E } = loadGame({}, false);
+  E.srand(3); E.newRun('rogue');
+  E.S.run.floor = 14;
+  E.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  E.interact(0);
+  E.S.foes.forEach(f => { f.hp = 1; });
+  E.dmgAll(9);
+  t.ok(!E.S.deep15.rogue, 'a floor-14 boss is not a deep clear');
+  // the seasonal clock windows
+  t.eq(D.seasonNow(new Date('2026-10-20')), 'halloween', 'late October is pumpkin season');
+  t.eq(D.seasonNow(new Date('2026-10-10')), null, 'early October is not');
+  t.eq(D.seasonNow(new Date('2026-12-05')), 'winter', 'December snows');
+  t.eq(D.seasonNow(new Date('2026-03-14')), null, 'spring is plain');
+}
+
 t.done();

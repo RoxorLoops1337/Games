@@ -51,6 +51,15 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.2.0', notes: [
+    'HERO SKINS — fell the floor-15 boss with a hero and their ALT PALETTE is tailored; toggle it with the 🎨 chip on the card',
+    'MACHINE THEMES — BONE, GILDED and NEON cabinets earned by your best descent (🎰 on the title)',
+    'THE DEEP BOARD — daily + all-time leaderboards with medals; carve your name after a run',
+    'CLOUD SAVES — one profile on any device, keyed by a sync code (settings → ☁)',
+    'INSTALL IT — the game is a PWA now: offline after one visit, a real icon on your phone',
+    'het spel spreekt NEDERLANDS — 🌐 in de instellingen',
+    'photo mode 📷, a credits roll 🎬, seasonal sprinkles, and a frame-time budget in CI',
+  ] },
   { v: '1.1.0', notes: [
     'KEYBOARD PLAY — arrows move & aim, SPACE fires (hold it to pour; it walks the crane too), TAB + ENTER press any button, ESC backs out',
     'GAMEPAD — stick/dpad moves, A fires, B backs out, bumpers hop between buttons',
@@ -136,6 +145,28 @@ const MACH_THEMES = {
 function themeUnlocked(id) {
   const th = MACH_THEMES[id];
   return !!th && S.best.floor >= th.floor;
+}
+
+// -------------------------------------------------------------- hero skins
+// One alt palette per hero, earned by a DEEP CLEAR (felling the floor-15
+// boss with that hero). Sheeted heroes get a tint wash over their frames;
+// emoji-only heroes wear the color as an aura behind the glyph.
+const HERO_SKINS = {
+  knight: '#58b8ff', rogue: '#b45aff', wizard: '#7ee7a0', cleric: '#ff8a6b',
+  ghost: '#8ed67e', crane: '#ff6b9d', rat: '#ffd75e',
+};
+function skinWorn(hid) {
+  return !!(HERO_SKINS[hid] && S.deep15[hid] && S.skins[hid]);
+}
+
+// ----------------------------------------------------------- seasonal seeds
+// Clock-window cosmetics, no network, no assets: pass a Date in (the
+// browser hands over its clock; tests hand over fixed days).
+function seasonNow(d) {
+  const m = d.getMonth() + 1, day = d.getDate();
+  if (m === 10 && day >= 15) return 'halloween';
+  if (m === 12) return 'winter';
+  return null;
 }
 const C = {
   W: 100,
@@ -900,6 +931,8 @@ const S = {
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
+  deep15: {},                                   // heroes who felled the floor-15 boss
+  skins: {},                                    // heroes currently WEARING their alt skin
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -964,6 +997,7 @@ function save() {
       syncCode: S.syncCode || '',
       lang: S.lang || 'en',
       machTheme: S.machTheme || 'classic',
+      deep15: S.deep15, skins: S.skins,
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
@@ -1034,6 +1068,8 @@ function load() {
     }
     if (typeof d.lang === 'string' && LANGS[d.lang]) { S.lang = d.lang; setLang(d.lang); }
     if (typeof d.machTheme === 'string' && MACH_THEMES[d.machTheme]) S.machTheme = d.machTheme;
+    if (d.deep15 && typeof d.deep15 === 'object') S.deep15 = d.deep15;
+    if (d.skins && typeof d.skins === 'object') S.skins = d.skins;
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -2773,7 +2809,15 @@ function winBattle() {
   }
   // trophies earned in the heat of it
   if (!S.battle.tilted) questBump('notilt', 1);
-  if (anyBoss) { achUnlock('boss1'); S.life.bosses++; }
+  if (anyBoss) {
+    achUnlock('boss1'); S.life.bosses++;
+    // the DEEP CLEAR ledger: fell the floor-15 boss and that hero's alt
+    // skin is tailored for keeps
+    if (S.run.floor >= 15 && !S.deep15[S.run.hero]) {
+      S.deep15[S.run.hero] = 1;
+      toast('deep clear! ' + (heroById(S.run.hero) || {}).name + ' earned an ALT SKIN — toggle it on the hero card');
+    }
+  }
   if (S.run.hp === 1) achUnlock('survivor');
   if (S.run.stats && S.battle.taken0 !== undefined && S.run.stats.taken === S.battle.taken0) achUnlock('untouch');
   achPoll();
@@ -4100,6 +4144,7 @@ window.DP = {
   CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
   LANGS, TR, setLang,
   MACH_THEMES, themeUnlocked,
+  HERO_SKINS, skinWorn, seasonNow,
 };
 
 load();
@@ -4232,6 +4277,9 @@ if (!HEADLESS) (function browser() {
     } else {
       if (!sh) return false;
       im = art(key, sh.src);
+      // a worn hero skin washes the sheet (baked once, same as the kin)
+      const hid = key.split('_')[0];
+      if (im._ok && skinWorn(hid)) im = tintedArt(key, 'skin_' + key, HERO_SKINS[hid]);
     }
     if (!im._ok) return false;
     const frame = Math.floor((animT || 0) * (sh.fps || 1)) % (sh.n || 1);
@@ -9273,6 +9321,22 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = '#f2c04a'; ctx.fill();
       ctx.strokeStyle = 'rgba(122,84,14,0.6)'; ctx.lineWidth = 1; ctx.stroke();
     }
+    // seasonal sprinkles: clock-window cosmetics, nothing fetched
+    const season = seasonNow(new Date());
+    if (season === 'halloween') {
+      for (let i = 0; i < 5; i++) {
+        const px2 = LW / 2 + Math.sin(i * 2.1 + 1) * (40 + i * 30);
+        txt('\u{1F383}', px2, 270 + ((i * 19) % 40), '20px serif', '#fff');
+      }
+    } else if (season === 'winter') {
+      for (const c of TRAIN) {
+        ctx.globalAlpha = 0.55;
+        ctx.beginPath(); ctx.arc((c.x + 9) % LW, (c.y * 1.13 + 40) % LH, 2.3, 0, 7);
+        ctx.fillStyle = '#eaf4ff'; ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+      txt('\u{26C4}', 38, 300, '24px serif', '#fff');
+    }
     const bob = Math.sin(t * 1.6) * 3;
     txt('⚔\u{FE0F}', LW / 2 - 168, 178 + Math.sin(t * 2) * 5, '34px serif', '#fff');
     txt('\u{1F409}', LW / 2 + 168, 178 + Math.cos(t * 2) * 5, '34px serif', '#fff');
@@ -9332,11 +9396,27 @@ if (!HEADLESS) (function browser() {
         return;
       }
       const key = h.id + '_idle';
+      // emoji-only heroes wear their alt skin as an aura behind the glyph
+      if (skinWorn(h.id) && !SHEETS[key]) {
+        ctx.save();
+        ctx.globalAlpha = 0.4;
+        ctx.beginPath(); ctx.arc(x + w / 2, y + 48, 22, 0, 7);
+        ctx.fillStyle = HERO_SKINS[h.id]; ctx.fill();
+        ctx.restore();
+      }
       if (!(SHEETS[key] && drawArt(key, x + w / 2, y + 72, 46, 'd', t))) {
         txt(h.icon, x + w / 2, y + 48, '34px serif', '#fff');
       }
       txt(h.name, x + w / 2, y + 88, '900 11px Verdana, sans-serif', sel ? '#ffd75e' : '#c8b0cc');
       fitTxt(h.perk, x + w / 2, y + 104, w - 6, 8, sel ? '#ffe9a3' : '#8f7f92');
+      // the DEEP CLEAR tailor: toggle the earned alt skin right on the card
+      if (S.deep15[h.id] && HERO_SKINS[h.id]) {
+        uiBtn(x + w - 26, y + 4, 22, 20, '\u{1F3A8}', () => {
+          S.skins[h.id] = S.skins[h.id] ? 0 : 1;
+          save();
+        }, { bg: S.skins[h.id] ? 'rgba(140,100,30,0.95)' : 'rgba(30,24,36,0.9)',
+             border: S.skins[h.id] ? '#ffd75e' : '#5a5068', r: 7, font: '10px serif' });
+      }
       if (sel) {
         txt('▼', x + w / 2, y - 8 + Math.sin(t * 4) * 2, '900 12px Verdana, sans-serif', '#ffd75e');
       }
