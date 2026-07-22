@@ -774,6 +774,7 @@ const ENT_INFO = {
   shrine:  { icon: '⛲',    name: 'SHRINE' },
   wheel:   { icon: '\u{1F3A1}', name: 'WHEEL GHOST' },
   stairs:  { icon: '\u{1FA9C}', name: 'STAIRS DOWN' },
+  event:   { icon: '❔', name: 'A STRANGER' },
 };
 
 // ------------------------------------------------------------------- state
@@ -2952,7 +2953,7 @@ function genEnts(dist) {
   const r = rng();
   const n = r < 0.22 ? 1 : r < 0.6 ? 2 : r < 0.92 ? 3 : 4;
   const ents = [];
-  const SVC = [['chest', 30], ['shop', 22], ['smith', 16], ['shrine', 18], ['wheel', 12]];
+  const SVC = [['chest', 30], ['shop', 22], ['smith', 16], ['shrine', 18], ['wheel', 12], ['event', 16]];
   for (let i = 0; i < n; i++) {
     const avail = SVC.filter(s => !ents.some(e => e.kind === s[0]));
     if (rng() < 0.66 || !avail.length) {
@@ -2963,7 +2964,8 @@ function genEnts(dist) {
       const total = avail.reduce((a, s) => a + s[1], 0);
       let rr2 = rng() * total, pick = avail[0][0];
       for (const [kind, wt] of avail) { rr2 -= wt; if (rr2 <= 0) { pick = kind; break; } }
-      ents.push({ kind: pick, done: false });
+      if (pick === 'event') ents.push({ kind: 'event', ev: EVENTS[(rng() * EVENTS.length) | 0].id, done: false });
+      else ents.push({ kind: pick, done: false });
     }
   }
   return ents;
@@ -3266,8 +3268,94 @@ function interact(i) {
     if (!e.opts) e.opts = boonOptions();
     S.room = { type: 'forge', opts: e.opts, done: false, ent: i };
     SND.clink();
+  } else if (e.kind === 'event') {
+    S.room = { type: 'event', ev: e.ev, ent: i, result: null };
+    SND.door();
   }
   save();
+  return true;
+}
+// ---------------------------------------------------------- hallway events
+// six strangers of the deep: each is a room dweller with a one-time choice.
+// Walking away costs nothing — the stranger waits.
+const EVENTS = [
+  { id: 'gambler', icon: '\u{1F3B2}', name: 'THE GAMBLER',
+    flavor: '“Double or nothing, stranger. The dice never lie — much.”',
+    choices: [
+      { label: 'stake 30 gold', sub: '50/50 — win 60 back, or nothing',
+        can: () => S.run.gold >= 30,
+        fx: () => { S.run.gold -= 30; if (rng() < 0.5) { addGold(60); return 'the dice smile: +60 gold!'; }
+                    return 'the dice sneer. Your gold is his now.'; } },
+      { label: 'stake a key', sub: '50/50 — win 3 keys, or lose it',
+        can: () => S.run.keys >= 1,
+        fx: () => { S.run.keys--; if (rng() < 0.5) { S.run.keys += 3; return 'three keys clink into your palm!'; }
+                    return 'he pockets your key with a grin.'; } },
+    ] },
+  { id: 'fountain', icon: '⛲', name: 'THE CURSED FOUNTAIN',
+    flavor: 'The water glows faintly. It smells of copper and old wishes.',
+    choices: [
+      { label: 'toss 2 coins in', sub: 'a safe wish: +8 HP',
+        can: () => purseTotal() >= 2,
+        fx: () => { spendPurse(2); healPlayer(8); return 'the water warms you: +8 HP.'; } },
+      { label: 'drink deep', sub: 'gamble — heal 18, or the curse bites for 8',
+        can: () => true,
+        fx: () => { if (rng() < 0.5) { healPlayer(18); return 'sweet as spring rain: +18 HP!'; }
+                    hpHit(8, 'the cursed fountain', '#c86bff'); return 'it BITES going down: −8 HP.'; } },
+    ] },
+  { id: 'mimic', icon: '\u{1F4E6}', name: 'A SUSPICIOUS CHEST',
+    flavor: 'It sits alone in the dust. Was that… a breath?',
+    choices: [
+      { label: 'fling it open', sub: '60% treasure (+25 gold, +1 key) — 40% it BITES (−8 HP)',
+        can: () => true,
+        fx: () => { if (rng() < 0.6) { addGold(25); S.run.keys++; return 'treasure! +25 gold and a key.'; }
+                    hpHit(8, 'a mimic\'s teeth', '#ff5a4e'); return 'TEETH! It was a mimic: −8 HP.'; } },
+      { label: 'pry it with a key', sub: 'spend 1 key — guaranteed +18 gold, no teeth',
+        can: () => S.run.keys >= 1,
+        fx: () => { S.run.keys--; addGold(18); return 'jammed safely open: +18 gold.'; } },
+    ] },
+  { id: 'adventurer', icon: '\u{1F9DD}', name: 'A LOST ADVENTURER',
+    flavor: '“Please — I just want out. I can pay you in what I found.”',
+    choices: [
+      { label: 'escort them out (15 gold)', sub: 'provisions cost 15 gold — they pay in a RELIC',
+        can: () => S.run.gold >= 15,
+        fx: () => { S.run.gold -= 15; const id2 = grantRelic('c'); const rl = id2 && relicById(id2);
+                    return rl ? 'they press ' + rl.name + ' into your hands.' : 'they had nothing left to give.'; } },
+      { label: 'rob them', sub: '+20 gold — but the scuffle costs 3 HP',
+        can: () => true,
+        fx: () => { addGold(20); hpHit(3, 'a desperate scuffle', '#ff8a6b'); return 'you take their purse. The dark takes note.'; } },
+    ] },
+  { id: 'slime', icon: '\u{1FAE0}', name: 'A COIN-EATING SLIME',
+    flavor: 'It jiggles hopefully at your purse. Something glitters inside it.',
+    choices: [
+      { label: 'feed it 5 coins', sub: 'it burps up its hoard: +40 gold',
+        can: () => purseTotal() >= 5,
+        fx: () => { spendPurse(5); addGold(40); return 'BURP. A shower of gold: +40!'; } },
+      { label: 'poke it', sub: '50/50 — it spits 20 gold, or eats 3 of your coins',
+        can: () => true,
+        fx: () => { if (rng() < 0.5) { addGold(20); return 'it spits out +20 gold, offended.'; }
+                    spendPurse(Math.min(3, purseTotal())); return 'GULP. Three coins, gone.'; } },
+    ] },
+  { id: 'trader', icon: '⚖\u{FE0F}', name: 'THE SHRINE OF TRADES',
+    flavor: 'Two bowls on a scale: one wants blood, one wants gold.',
+    choices: [
+      { label: 'blood for gold', sub: 'bleed 10 HP into the bowl → +45 gold',
+        can: () => S.run.hp > 10,
+        fx: () => { hpHit(10, 'the trade', '#ff5a4e'); addGold(45); return 'the scale tips: +45 gold.'; } },
+      { label: 'gold for blood', sub: 'pour in 40 gold → +12 HP and +3 max HP',
+        can: () => S.run.gold >= 40,
+        fx: () => { S.run.gold -= 40; S.run.maxHp += 3; healPlayer(12); return 'the scale tips: +12 HP, and you stand taller (+3 max).'; } },
+    ] },
+];
+function eventById(id) { return EVENTS.find(e => e.id === id); }
+function eventChoose(ci) {
+  const rm = S.room;
+  if (!S.run || !rm || rm.type !== 'event' || rm.result) return false;
+  const ev = eventById(rm.ev);
+  const ch = ev && ev.choices[ci];
+  if (!ch || (ch.can && !ch.can())) { SND.deny(); return false; }
+  rm.result = ch.fx();
+  if (S.run && S.run.room && S.run.room.ents[rm.ent]) S.run.room.ents[rm.ent].done = true;
+  if (S.run) save();
   return true;
 }
 // roll a single chest prize: gold, an item, a coin, or a key
@@ -3799,7 +3887,7 @@ window.DP = {
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
-  DIFFS, diffHpK, MUTS, mutCount, mutOn,
+  DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
@@ -7351,6 +7439,9 @@ if (!HEADLESS) (function browser() {
       icon = e.mtype === 'boss' ? BOSSES[actIdx(S.run.floor) % BOSSES.length].icon : (en ? en.icon : info.icon);
       label = e.mtype === 'boss' ? 'THE BOSS' : e.mtype === 'elite' ? 'ELITE FOE' : (en ? en.name : 'MONSTER');
       col = e.mtype === 'boss' ? '#ffd75e' : e.mtype === 'elite' ? '#ff9d3c' : '#ffb4a8';
+    } else if (e.kind === 'event') {
+      const ev = eventById(e.ev);
+      if (ev) { icon = ev.icon; label = ev.name; col = '#c8a8ff'; }
     }
     ctx.save();
     if (e.done) {
@@ -7708,7 +7799,10 @@ if (!HEADLESS) (function browser() {
     if (!room) return;
     ctx.fillStyle = 'rgba(5,3,8,0.72)';
     ctx.fillRect(0, 0, LW, LH);
-    const info = MODAL_INFO[room.type] || MODAL_INFO.shop;
+    const isEvent = room.type === 'event';
+    const evDef = isEvent ? eventById(room.ev) : null;
+    const info = isEvent && evDef ? { icon: evDef.icon, name: evDef.name }
+               : MODAL_INFO[room.type] || MODAL_INFO.shop;
     const isShop = room.type === 'shop';
     const isForge = room.type === 'forge' && !room.done;
     const isChest = room.type === 'chest';
@@ -7718,7 +7812,7 @@ if (!HEADLESS) (function browser() {
     // the pack-thinning strip sizes with YOUR arsenal (up to two rows)
     const arsIds = isShop && S.run ? Object.keys(S.run.arsenal).filter(id => S.run.arsenal[id] > 0) : [];
     const arsRows = Math.min(2, Math.ceil(arsIds.length / 8)) || 0;
-    const ph = isShop ? 84 + rows * 50 + (arsRows ? 30 + arsRows * 42 : 0) + 60 : isForge ? 330 : isChest ? 250 : 220;
+    const ph = isShop ? 84 + rows * 50 + (arsRows ? 30 + arsRows * 42 : 0) + 60 : isForge ? 330 : isChest ? 250 : isEvent ? 316 : 220;
     const py = isShop ? 132 : 250;
     const mFrame = machArt('frame_tall');
     if (mFrame) {
@@ -7811,6 +7905,25 @@ if (!HEADLESS) (function browser() {
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 12 });
       uiBtn(LW / 2 + 8, py + ph - 58, (LW - 128) / 2, 40, 'LEAVE IT', () => denyPrize(),
             { bg: 'rgba(60,40,44,0.95)', border: '#a06a72', col: '#e8c8cc', font: '900 14px Verdana, sans-serif', r: 12 });
+    } else if (isEvent && evDef) {
+      // a stranger of the deep: flavor, two fateful buttons, then the tale
+      if (!room.result) {
+        wrapLines(evDef.flavor, 42, 3).forEach((ln, i) =>
+          txt(ln, LW / 2, py + 62 + i * 18, '700 11px Verdana, sans-serif', '#d8c8dc'));
+        evDef.choices.forEach((ch, i) => {
+          const ok = !ch.can || ch.can();
+          const y = py + 122 + i * 74;
+          uiBtn(56, y, LW - 112, 62, '', () => eventChoose(i),
+                { bg: ok ? 'rgba(46,32,52,0.95)' : 'rgba(26,22,30,0.9)',
+                  border: ok ? '#c8a86a' : '#4a4055', r: 12 });
+          txt(ch.label, LW / 2, y + 22, '900 13px Verdana, sans-serif', ok ? '#ffe9a3' : '#6a5f78');
+          txt(ch.sub, LW / 2, y + 42, '600 9px Verdana, sans-serif', ok ? '#b8a8bc' : '#544a60');
+        });
+      } else {
+        txt(evDef.icon, LW / 2, py + 90, '900 40px serif', '#fff');
+        wrapLines(room.result, 40, 4).forEach((ln, i) =>
+          txt(ln, LW / 2, py + 140 + i * 20, '800 12px Verdana, sans-serif', '#ffe9a3'));
+      }
     } else {
       // resolved rooms: shrine / treasure / wheel / forge-done — wrap the tale
       const words = (room.msg || '').split(' ');

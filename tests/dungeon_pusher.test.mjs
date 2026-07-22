@@ -3261,4 +3261,63 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(DS.over.muts, 4, 'the card counts the decrees endured');
 }
 
+// -------- HALLWAY EVENTS: six strangers of the deep --------
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  t.eq(D.EVENTS.length, 6, 'six strangers roam the halls');
+  t.ok(D.EVENTS.every(e => e.id && e.icon && e.name && e.flavor && e.choices.length >= 2),
+       'each fully written with at least two choices');
+  D.srand(1212);
+  D.newRun('knight');
+  const room = D.curRoom();
+  // the SLIME: feed it 5 coins -> +40 gold
+  room.ents.push({ kind: 'event', ev: 'slime', done: false, px: 0.5, py: 0.5 });
+  D.interact(room.ents.length - 1);
+  t.ok(DS.room && DS.room.type === 'event' && DS.room.ev === 'slime', 'the slime jiggles hopefully');
+  const g0 = DS.run.gold, p0 = D.purseTotal();
+  t.ok(D.eventChoose(0), 'feeding it works');
+  t.eq(D.purseTotal(), p0 - 5, 'five coins down the gullet');
+  t.eq(DS.run.gold, g0 + 40, 'BURP: +40 gold');
+  t.ok(DS.room.result, 'the tale is told');
+  t.ok(!D.eventChoose(1), 'one choice per stranger');
+  t.ok(room.ents[room.ents.length - 1].done, 'the slime is spent');
+  DS.room = null;
+  // the TRADER: blood for gold
+  room.ents.push({ kind: 'event', ev: 'trader', done: false, px: 0.5, py: 0.5 });
+  D.interact(room.ents.length - 1);
+  const hp0 = DS.run.hp, g1 = DS.run.gold;
+  t.ok(D.eventChoose(0), 'the scale accepts blood');
+  t.eq(DS.run.hp, hp0 - 10, 'ten HP into the bowl');
+  t.eq(DS.run.gold, g1 + 45, '+45 gold out the other');
+  DS.room = null;
+  // the GAMBLER refuses a pauper
+  room.ents.push({ kind: 'event', ev: 'gambler', done: false, px: 0.5, py: 0.5 });
+  D.interact(room.ents.length - 1);
+  DS.run.gold = 5;
+  t.ok(!D.eventChoose(0), 'no gold, no dice');
+  t.ok(!DS.room.result, 'and the stranger still waits');
+  // walking away leaves the stranger undone
+  DS.room = null;
+  const gEnt = room.ents[room.ents.length - 1];
+  t.ok(!gEnt.done, 'walking away keeps the gambler at his table');
+  // the ADVENTURER pays in relics
+  room.ents.push({ kind: 'event', ev: 'adventurer', done: false, px: 0.4, py: 0.5 });
+  D.interact(room.ents.length - 1);
+  DS.run.gold = 50;
+  const r0 = DS.run.relics.length;
+  t.ok(D.eventChoose(0), 'the escort sets out');
+  t.eq(DS.run.relics.length, r0 + 1, 'and pays in a RELIC');
+  // events spawn in the wild
+  let seen = false;
+  for (let s = 1; s <= 12 && !seen; s++) {
+    D.srand(s * 137);
+    D.newRun('knight');
+    for (const k of Object.keys(DS.run.map.rooms)) {
+      if (DS.run.map.rooms[k].ents.some(e => e.kind === 'event' && D.eventById(e.ev))) seen = true;
+    }
+  }
+  t.ok(seen, 'strangers appear in generated floors');
+}
+
 t.done();
