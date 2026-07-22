@@ -762,7 +762,7 @@ function rng() {
 }
 
 // sound hooks — no-ops headless / until the browser block installs real ones
-let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() {},
+let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() {}, fanfare() {},
             slot() {}, hit() {}, hurt() {}, heal() {}, poison() {}, block() {},
             stun() {}, buy() {}, door() {}, dead() {}, winb() {}, reel() {} };
 
@@ -1241,7 +1241,7 @@ function healPlayer(n) {
   const before = S.run.hp;
   S.run.hp = Math.min(S.run.maxHp, S.run.hp + n);
   const got = S.run.hp - before;
-  if (got > 0) floatAnchor('+' + got + ' HP', 'hero', '#7ee787', got >= 8);
+  if (got > 0) { floatAnchor('+' + got + ' HP', 'hero', '#7ee787', got >= 8); S.healT = 0.9; }
   // Sterling Heart: the excess hardens into a small wall
   if (hasRelic('sterling') && n > got) addBlock(Math.min(3, n - got));
   SND.heal();
@@ -3118,6 +3118,7 @@ function step(dt, quiet) {
   if (S.denyT > 0) S.denyT -= dt;
   if (S.walletHitT > 0) S.walletHitT -= dt;
   if (S.hurtT > 0) S.hurtT -= dt;
+  if (S.healT > 0) S.healT -= dt;
   S.phase += dt * 2 * Math.PI / MACH.pushPeriod * pushRate();
   S.shake = Math.max(0, Math.min(8, S.shake) - dt * 16);   // hard cap + brisk decay
 
@@ -3813,6 +3814,13 @@ if (!HEADLESS) (function browser() {
     door() { tone(90, 0.35, 'sine', 0.3, 55); noise(0.2, 0.1, 300); },
     dead() { [400, 300, 220, 150].forEach((f, i) => setTimeout(() => tone(f, 0.32, 'triangle', 0.22), i * 160)); },
     winb() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.25, 'square', 0.16), i * 110)); },
+    // the BOSS sting: a longer, brassier flourish with a bass drop
+    fanfare() {
+      [392, 523, 659, 784, 1046, 1318].forEach((f, i) => setTimeout(() => {
+        tone(f, 0.34, 'triangle', 0.18);
+        if (i === 5) { tone(f / 4, 0.7, 'square', 0.14); noise(0.4, 0.1, 900); }
+      }, i * 130));
+    },
     reel() { tone(220 + Math.random() * 80, 0.04, 'square', 0.08); },
   };
 
@@ -4231,6 +4239,17 @@ if (!HEADLESS) (function browser() {
       const low = S.run.hp / S.run.maxHp < 0.3;
       hpBar(hbx, hby, hbw, 12, Math.max(0, S.run.hp), S.run.maxHp, S.hpGhost,
             low ? ['#ff6f6f', '#b01e36'] : ['#8fe39a', '#3f9d5a']);
+      // a green ring swells off the bar while a heal lands
+      if (S.healT > 0) {
+        const hk = 1 - S.healT / 0.9;
+        ctx.save();
+        ctx.globalAlpha = (S.healT / 0.9) * 0.85;
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = '#7ee787';
+        rr(hbx - 2 - hk * 7, hby - 2 - hk * 5, hbw + 4 + hk * 14, 16 + hk * 10, 9);
+        ctx.stroke();
+        ctx.restore();
+      }
       txt(Math.max(0, S.run.hp) + ' / ' + S.run.maxHp, hx, hby + 6, '800 9px Verdana, sans-serif',
           '#f0fff0', 'center', { w: 2.5, col: 'rgba(6,26,12,0.85)' });
       // a compact status strip under the bar: block & boons first, then debuffs
@@ -5403,6 +5422,20 @@ if (!HEADLESS) (function browser() {
     }
     ctx.restore();
   }
+  // ≤25% HP: the screen edges pulse with a double heartbeat — lub-DUB
+  function drawHeartbeat(t) {
+    if (!S.run || S.run.hp > S.run.maxHp * 0.25 || S.run.hp <= 0) return;
+    const ph = (t * 1.15) % 1;
+    const thump = ph < 0.11 ? Math.sin((ph / 0.11) * Math.PI)
+                : (ph > 0.17 && ph < 0.3) ? 0.72 * Math.sin(((ph - 0.17) / 0.13) * Math.PI) : 0;
+    if (thump <= 0.01) return;
+    ctx.save();
+    ctx.globalAlpha = 0.05 + thump * 0.16;
+    ctx.fillStyle = rgr('heartbeat', LW / 2, LH / 2, LH * 0.34, LW / 2, LH / 2, LH * 0.72,
+      [[0, 'rgba(180,20,30,0)'], [1, '#b0141e']]);
+    ctx.fillRect(0, 0, LW, LH);
+    ctx.restore();
+  }
   function drawVignette(strength) {
     ctx.save();
     const g = rgr('vig', LW / 2, LH / 2, 240, LW / 2, LH / 2, 620,
@@ -5723,10 +5756,19 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
       ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
     }
-    txt(v.boss ? '\u{1F451}' : '\u{1F3C6}', LW / 2, py + 50, '44px serif', '#fff');
+    if (!v._sting) { v._sting = true; if (v.boss) SND.fanfare(); }
+    const pop2 = 1 + 0.25 * Math.max(0, 1 - (v.t - 0.5) / 0.25);
+    ctx.save();
+    ctx.translate(LW / 2, py + 50); ctx.scale(pop2, pop2);
+    txt(v.boss ? '\u{1F451}' : '\u{1F3C6}', 0, 0, '44px serif', '#fff');
+    ctx.restore();
     txt(v.boss ? 'FLOOR CLEARED!' : 'VICTORY!', LW / 2, py + 98, '900 28px Georgia, serif', '#ffd75e', 'center', { w: 5, col: '#3a1006' });
+    // the spoils cascade in one beat after the banner
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, (v.t - 0.7) / 0.3));
     txt('+' + v.gold + ' gold   •   +' + v.keys + ' \u{1F5DD} key' + (v.keys > 1 ? 's' : ''),
         LW / 2, py + 132, '800 15px Verdana, sans-serif', '#fff0c0');
+    ctx.restore();
     if (v.boss) txt('the stairs descend… +22% HP restored', LW / 2, py + 154, '600 11px Verdana, sans-serif', '#7ee787');
     else if (v.freeSpin) txt('the elite’s WHEEL OF FORTUNE spins — free!', LW / 2, py + 154, '700 11px Verdana, sans-serif', '#b06be8');
     // a BOSS lets you claim one relic from a spread of two commons + a rare
@@ -5738,7 +5780,11 @@ if (!HEADLESS) (function browser() {
         const ry = py + 200 + i * 58;
         const isPick = v.relicPicked === id;
         const dim = v.relicPicked && !isPick;
+        // each card FLIPS in, one beat apart
+        const fk2 = Math.max(0, Math.min(1, (v.t - 0.9 - i * 0.18) / 0.28));
+        if (fk2 <= 0) return;
         ctx.save(); ctx.globalAlpha = dim ? 0.32 : 1;
+        ctx.translate(0, ry + 25); ctx.scale(1, fk2); ctx.translate(0, -(ry + 25));
         rr(92, ry, LW - 184, 50, 12);
         ctx.fillStyle = isPick ? 'rgba(28,52,34,0.92)' : 'rgba(14,8,18,0.92)'; ctx.fill();
         ctx.lineWidth = 2; ctx.strokeStyle = isPick ? '#7ed6a0' : rc.col; ctx.stroke();
@@ -5760,8 +5806,13 @@ if (!HEADLESS) (function browser() {
         const cx = LW / 2 + (i - (v.offer.length - 1) / 2) * sp, cy = py + 232;
         const isPick = v.picked === ck;
         const dim = v.picked && !isPick;
+        // the spoils bounce in one by one
+        const bk = Math.max(0, Math.min(1, (v.t - 0.85 - i * 0.12) / 0.22));
+        if (bk <= 0) return;
+        const bs = bk < 1 ? 0.5 + 0.5 * bk + 0.18 * Math.sin(bk * Math.PI) : 1;
         ctx.save();
         ctx.globalAlpha = dim ? 0.3 : 1;
+        ctx.translate(cx, cy); ctx.scale(bs, bs); ctx.translate(-cx, -cy);
         if (!v.picked || isPick) {
           const pulse = isPick ? 1 : 1 + Math.sin(t * 4 + i * 2) * 0.04;
           ctx.beginPath(); ctx.arc(cx, cy, 30 * pulse, 0, 7);
@@ -7619,6 +7670,7 @@ if (!HEADLESS) (function browser() {
     else if (S.screen === 'battle' && S.run) drawBattle(t, dt);
     else if (S.screen === 'over') drawOver(t);
     else drawTitle(t);
+    if (S.screen === 'battle' || S.screen === 'dungeon') drawHeartbeat(ts / 1000);
     drawWheel();
     drawRelicPick(t);
     drawSettings(t);
