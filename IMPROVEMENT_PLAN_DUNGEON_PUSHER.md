@@ -306,9 +306,12 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
       GREEN THUMB (seed-of-the-day grown) — 36 on the wall; floor-25 +
       milestone-chest trophies already existed (s48); the weekly-decree
       trophy ships WITH the Weekly decree item (session 50)
-- [ ] **[big] THE ALCHEMIST — an eighth hero**: no potions — she BREWS: every
-      12 coins collected distills one random draught (bomb/frost/heal/gold);
-      gems are reagents (+2 draught power); unseals at 5 total deep clears
+- [x] **[big] THE ALCHEMIST — an eighth hero**: no potions — she BREWS: every
+      12 coins collected distills one random draught (blast/freeze/mend/gild,
+      via scoreCoin → brewDraught); gems are reagents (+2 draught power each,
+      spent on the next brew); granted flasks feed the still 3 brew apiece
+      (gainPotions); unseals at 5 total deep clears (deep15 keys); still
+      gauge replaces the DRINK button; v1.4.0 in the changelog (session 53)
 - [x] **Weekly decree**: five week-seeded laws (GOLD FEVER / IRON WEEK /
       IRONHIDE PARADE / BRITTLE BLADES / MARKET WEEK), ⚖️ opt-in door on the
       title, expires Sunday (weekOf → Monday key), clear floor 15 under it →
@@ -328,6 +331,12 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
+- [x] **TIER 8 IS COMPLETE** (session 53): sixteen items across eight sessions —
+      streaks and the seed of the day, jackpot/kill/floor juice, endless
+      milestones and dark decrees, three new daily twists, a talkative board,
+      yesterday's deepest, pull trophies, the weekly decree, stings and the
+      wheel's near miss, the endless records page, and THE ALCHEMIST (v1.4.0,
+      eight heroes, 37 trophies, 1701 game tests). Session 54 drafts Tier 9.
 - [x] **TIER 7 IS COMPLETE** (session 45): sixteen items across ten sessions —
       trophies, the aim ghost, a measured balance sweep, seed racing, share
       cards, mint strangers and relics, second winds, the coach, the daily
