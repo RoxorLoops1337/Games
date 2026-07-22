@@ -44,9 +44,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Stats screen (lifetime)**: 📊 RECORDS on the title — runs, kills, bosses,
       coins fired, damage, gold, time in the deep, favorite hero, best descent
       (S.life ledger fed by endRun/winBattle, persisted) (session 9)
-- [ ] **Bestiary/codex**: tap-a-foe card grows into a collection book — kill counts,
-      lore line per enemy, silhouette until first met
-- [ ] **Relic codex**: all 137 relics browsable, owned/seen/undiscovered states
+- [x] **Bestiary/codex**: 📖 CODEX act tabs — every foe with kill counts and
+      trait line, shadows + '???' until first met, boss rows gilded (session 10)
+- [x] **Relic codex**: rarity shelves in the CODEX — all 137 painted icons, owned
+      shine, undiscovered padlocked, tap-to-read strip (session 10)
 - [x] **Run history**: THE LAST RUNS in the records book — ten lines, newest first,
       hero + floor + kills + cause of death (session 9)
 
