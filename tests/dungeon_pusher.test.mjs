@@ -4596,4 +4596,51 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(M.S.ach.u.floor25 && M.S.ach.u.floor30, 'floors 25 + 30 hang their trophies');
 }
 
+// -------- THREE NEW DAILY TWISTS + the richer board rows --------
+{
+  const { DP: D } = loadGame({}, false);
+  t.eq(D.DAILY_MODS.length, 8, 'eight daily twists in the bag');
+  // GLASS CANNON: both edges of the blade
+  D.srand(4); D.newRun('knight');
+  D.S.run.dailyMod = 'cannon';
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  const foe = D.S.enemy;
+  foe.hp = foe.maxHp = 200; foe.def = null; foe.block = 0; foe.mirrorSpent = true; foe.braced = false;
+  D.dmgFoe(foe, 5);
+  t.eq(200 - foe.hp, 10, 'GLASS CANNON doubles what you deal');
+  D.S.run.block = 0; D.S.run.hp = 40;
+  D.hurtPlayer(4);
+  t.eq(D.S.run.hp, 32, 'and doubles what lands on you');
+  // COIN DROUGHT: two short, double bounty
+  D.S.run.dailyMod = 'drought';
+  D.S.battle.stolen = 0; D.S.leadT = 0;
+  D.dealHand();
+  const dealt = Object.values(D.S.battle.hand).reduce((a, b) => a + b, 0);
+  t.eq(dealt, D.purseTotal() - 2, 'COIN DROUGHT deals the hand two short');
+  const g0 = D.S.battle.goldWon;
+  const foeGold = foe.gold;
+  foe.hp = 1; D.dmgFoe(foe, 9);
+  t.eq(D.S.battle.goldWon - g0, foeGold * 2, 'and the kill pays double');
+  // PACIFIST FLOORS: every 3rd floor the blood pays nothing
+  const { DP: P } = loadGame({}, false);
+  P.srand(6); P.newRun('knight');
+  P.S.run.dailyMod = 'pacifist';
+  P.S.run.floor = 3;
+  P.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  P.interact(0);
+  const k0 = P.S.battle.keysWon, pg0 = P.S.battle.goldWon;
+  P.S.enemy.hp = 1; P.dmgEnemy(9);
+  t.eq(P.S.battle.goldWon, pg0, 'a pacifist-floor kill pays no gold');
+  t.eq(P.S.battle.keysWon, k0, 'and drops no key');
+  t.eq(P.S.run.kills, 1, 'but the kill still counts');
+  // the board rows: badges + the challenge line
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("(e.ng ? '♟ ' : '')") >= 0, 'board rows wear the prestige pawn');
+  t.ok(src.indexOf("e.diff === 'nightmare' ? '#ff5a4e' : '#7ee787'") >= 0, 'and the difficulty dot');
+  t.ok(src.indexOf('floor to beat is') >= 0, 'outsiders see the floor to beat');
+  t.ok(src.indexOf('ng: run.ng ? 1 : 0 }),') >= 0, 'the post carries the pawn');
+}
+
 t.done();
