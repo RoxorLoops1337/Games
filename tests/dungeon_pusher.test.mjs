@@ -5001,4 +5001,84 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('TOPPLED — deeper than ') >= 0, 'the report card crows the topple');
 }
 
+// -------- DUEL LINKS + the welcome-back crate --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // the link survives its own round trip
+  const link = D.duelLink(123456789, 9, 'Rox');
+  const dl = D.parseDuel(link);
+  t.eq(dl.seed, 123456789 >>> 0, 'the seed rides the link');
+  t.eq(dl.floor, 9, 'so does the floor');
+  t.eq(dl.name, 'Rox', 'and the challenger’s name');
+  t.eq(D.parseDuel('?duel=garbage'), null, 'garbage is refused');
+  t.eq(D.parseDuel(''), null, 'no search, no duel');
+  t.eq(D.parseDuel('?duel=0.5.x'), null, 'a zero seed is refused');
+  const dirty = D.parseDuel('?duel=zz.2000.' + encodeURIComponent('<img src=x>Bob!!'));
+  t.ok(dirty.name.indexOf('<') < 0 && dirty.name.length <= 12, 'the name is scrubbed');
+  t.eq(dirty.floor, 999, 'the floor clamps to 999');
+  // growing the challenger's maze arms the duel; the end screen judges it
+  D.S.duel = { seed: 777, floor: 6, name: 'Thieu' };
+  D.S.nextSeed = 777;
+  D.srand(71); D.newRun('knight');
+  t.eq(D.S.run.duel.name, 'Thieu', 'the duel rides the run');
+  t.eq(D.S.run.seed, 777, 'on the challenger’s exact maze');
+  D.S.run.floor = 7;
+  D.endRun('fell');
+  t.ok(D.S.over.duel.won && !D.S.over.duel.tied, 'floor 7 outdigs the floor-6 challenge');
+  t.eq(D.S.duel, null, 'the answered challenge is cleared');
+  // a fresh run without the seed carries no duel
+  D.srand(72); D.newRun('knight');
+  t.ok(!D.S.run.duel, 'an unplanted run owes nobody');
+  D.S.run.floor = 3; D.endRun('fell');
+  t.ok(!D.S.over.duel, 'and gets no verdict');
+  // tie and loss
+  D.S.duel = { seed: 888, floor: 5, name: 'Rox' };
+  D.S.nextSeed = 888;
+  D.srand(73); D.newRun('knight');
+  D.S.run.floor = 5; D.endRun('fell');
+  t.ok(D.S.over.duel.tied, 'matching the floor reads as a tie');
+  D.S.duel = { seed: 999, floor: 12, name: 'Rox' };
+  D.S.nextSeed = 999;
+  D.srand(74); D.newRun('knight');
+  D.S.run.floor = 4; D.endRun('fell');
+  t.ok(!D.S.over.duel.won && !D.S.over.duel.tied && D.S.over.duel.floor === 12,
+    'falling short names the floor that holds');
+  // a mid-duel run survives a reload with the challenge intact
+  D.S.duel = { seed: 555, floor: 8, name: 'Danhieux' };
+  D.S.nextSeed = 555;
+  D.srand(75); D.newRun('knight');
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.run.duel.name, 'Danhieux', 'the duel survives a reload');
+  t.eq(R.S.run.duel.floor, 8, 'with its floor to beat');
+  // ---- the welcome-back crate ----
+  const { DP: W } = loadGame({}, false);
+  const day = (off) => new Date(Date.parse('2026-07-22') - off * 86400000).toISOString().slice(0, 10);
+  W.S.streak = { last: day(10), days: 3 };
+  t.eq(W.welcomeBack('2026-07-22'), 80, 'ten days away pays 8 per day');
+  W.S.streak.last = day(30);
+  t.eq(W.welcomeBack('2026-07-22'), 120, 'a month away caps at 120');
+  W.S.streak.last = day(3);
+  t.eq(W.welcomeBack('2026-07-22'), 0, 'three days is no absence');
+  W.S.streak.last = '';
+  t.eq(W.welcomeBack('2026-07-22'), 0, 'a brand-new profile gets no crate');
+  // the armed rare pick fires at the next run's door, once
+  W.S.wbRelic = 1;
+  W.srand(76); W.newRun('knight');
+  t.ok(W.S.relicPick && W.S.relicPick.rar === 'r', 'the crate’s RARE pick waits at the door');
+  t.eq(W.S.wbRelic, 0, 'and the crate is spent');
+  W.S.relicPick = null;
+  W.srand(77); W.newRun('knight');
+  t.ok(!W.S.relicPick, 'the next run gets nothing extra');
+  // browser wiring is in the source
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('parseDuel(location.search)') >= 0, 'boot parses the duel link');
+  t.ok(src.indexOf('history.replaceState(null') >= 0, 'and cleans the URL after');
+  t.ok(src.indexOf('\\u{2694}\\u{FE0F} DUEL') >= 0, 'the run-over screen offers the DUEL button');
+  t.ok(src.indexOf('WELCOME BACK') >= 0, 'the crate knocks on the title');
+  t.ok(src.indexOf('is OUTDUG!') >= 0, 'the report card declares the outcome');
+}
+
 t.done();

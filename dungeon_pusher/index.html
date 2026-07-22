@@ -1090,6 +1090,8 @@ const S = {
   weeklyPick: false,                            // the WEEKLY DECREE is armed for new runs
   weeklyDone: '',                               // the week whose decree was already cleared
   rival: { name: '', floor: 0, kills: 0 },      // the marked name to out-dig (from the board)
+  duel: null,                                   // a pending ?duel challenge {seed, floor, name}
+  wbRelic: 0,                                   // welcome-back crate: rare pick armed for next run
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
@@ -1167,7 +1169,7 @@ function save() {
       seenVer: S.seenVer || '',
       coach: S.coach, streak: S.streak, yday: S.yday,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
-      rival: S.rival,
+      rival: S.rival, wbRelic: S.wbRelic ? 1 : 0,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1184,6 +1186,7 @@ function save() {
         ng: S.run.ng || 0, bside: S.run.bside || 0, seed: S.run.seed,
         weekly: S.run.weekly || null, week: S.run.week || null,
         brew: S.run.brew || 0, reagents: S.run.reagents || 0,
+        duel: S.run.duel || null,
       } : null,
     }));
   } catch (e) {}
@@ -1244,6 +1247,7 @@ function load() {
     if (d.rival && typeof d.rival === 'object') {
       S.rival = { name: String(d.rival.name || '').slice(0, 12), floor: d.rival.floor | 0, kills: d.rival.kills | 0 };
     }
+    S.wbRelic = d.wbRelic ? 1 : 0;
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
@@ -1275,6 +1279,8 @@ function load() {
         seed: (typeof d.run.seed === 'number') ? (d.run.seed >>> 0) : null,
         weekly: d.run.weekly || null, week: d.run.week || null,
         brew: d.run.brew | 0, reagents: d.run.reagents | 0,
+        duel: (d.run.duel && typeof d.run.duel === 'object')
+          ? { name: String(d.run.duel.name || '').slice(0, 12), floor: d.run.duel.floor | 0 } : null,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -3324,6 +3330,31 @@ function weeklyPlan(dateStr) {
 function weeklyOn(id) { return !!(S.run && S.run.weekly === id); }
 // IRONHIDE PARADE rides every enemy multiplier, like the daily's IRONCLAD
 function weeklyFoeK() { return weeklyOn('parade') ? 1.2 : 1; }
+// ------------------------------------------------------------ DUEL LINKS
+// a run becomes a challenge URL: ?duel=<seed36>.<floor>.<name>. Opening one
+// plants the same maze and the end screen declares the outcome.
+function duelLink(seed, floor, name) {
+  return '?duel=' + seed36(seed).toLowerCase() + '.' + Math.max(1, floor | 0) + '.'
+       + encodeURIComponent(String(name || 'a rival').slice(0, 12));
+}
+function parseDuel(search) {
+  const m = /[?&]duel=([a-z0-9]+)\.(\d+)\.([^&]+)/i.exec(String(search || ''));
+  if (!m) return null;
+  const seed = parseInt(m[1], 36) >>> 0;
+  if (!seed) return null;
+  const floor = Math.max(1, Math.min(999, +m[2] | 0));
+  let name = 'a rival';
+  try { name = decodeURIComponent(m[3]).replace(/[^\w \-.']/g, '').trim().slice(0, 12) || 'a rival'; } catch (e) {}
+  return { seed, floor, name };
+}
+// away a week or more? the dungeon kept your seat warm — one crate, no guilt
+function welcomeBack(todayStr) {
+  const last = S.streak && S.streak.last;
+  if (!last) return 0;
+  const gap = Math.round((Date.parse(todayStr) - Date.parse(last)) / 86400000);
+  if (!(gap >= 7)) return 0;
+  return Math.min(120, 8 * gap);
+}
 // ------------------------------------------------------------- the WORKSHOP
 // permanent meta-progression: COGS drop when a run ends (however it ends),
 // and the workshop turns them into forever-upgrades applied at newRun.
@@ -3471,6 +3502,13 @@ function endRun(cause) {
     if (S.run.floor > (S.rival.floor | 0)) { S.over.toppled = S.rival.name; achUnlock('topple'); }
     else S.over.rivalGap = (S.rival.floor | 0) - S.run.floor;   // 0 = matched
   }
+  // a DUEL run declares its outcome against the challenger
+  if (S.run.duel && S.run.duel.name) {
+    S.over.duel = { name: S.run.duel.name, floor: S.run.duel.floor | 0,
+                    won: S.run.floor > (S.run.duel.floor | 0),
+                    tied: S.run.floor === (S.run.duel.floor | 0) };
+    S.duel = null;                       // the challenge is answered
+  }
   const cogsWon = Math.round(Math.max(1, S.run.floor + Math.floor(S.run.kills / 8)) * (1 + 0.2 * mutCount()) * streakK()
                              * (S.run.weekly === 'ironweek' ? 1.4 : 1));
   S.cogs += cogsWon;
@@ -3525,6 +3563,9 @@ function newRun(heroId, force) {
   if (S.nextSeed != null && seed === (dailySeed(new Date().toISOString().slice(0, 10)) >>> 0)) {
     achUnlock('gardener');              // the planted maze, actually grown
   }
+  // growing a challenger's maze arms the DUEL — the end screen will judge
+  const duel = (S.duel && seed === (S.duel.seed >>> 0))
+    ? { name: S.duel.name, floor: S.duel.floor | 0 } : null;
   S.nextSeed = null;
   S.run = {
     hero: hero.id, ng, bside, seed,
@@ -3536,6 +3577,7 @@ function newRun(heroId, force) {
     pileSave: null, pileFloor: 0, pending: [], mapFloor: 0, diff,
     stats: { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0, bought: 0 },
   };
+  if (duel) S.run.duel = duel;
   // the chosen adventurer's signature coins
   S.run.purse[hero.coin] += 2;
   // the PRESTIGE KIT: NG+ fields act-2 kin from the first door, so the
@@ -3571,8 +3613,10 @@ function newRun(heroId, force) {
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
   genFloor();
   S.screen = 'dungeon';
-  // the HEIRLOOM: a family relic waits at the dungeon door
-  if (wsLvl('relicstart')) openRelicPick('c', 1);
+  // the HEIRLOOM: a family relic waits at the dungeon door — unless the
+  // WELCOME-BACK crate left something rarer there
+  if (S.wbRelic) { S.wbRelic = 0; openRelicPick('r', 1); }
+  else if (wsLvl('relicstart')) openRelicPick('c', 1);
   save();
   return S.run;
 }
@@ -4622,6 +4666,7 @@ window.DP = {
   streakTouch, streakK, plantToday,
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
+  duelLink, parseDuel, welcomeBack,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
@@ -8147,6 +8192,7 @@ if (!HEADLESS) (function browser() {
   }
   // the hero puppet + inputs
   let heroSel = heroById(S.heroPick) && heroUnlocked(S.heroPick) ? S.heroPick : 'knight';
+  let wbOffered = false;              // the welcome-back crate knocks once per visit
   const AV = { x: LW / 2, y: 0, stamp: -1, step: 0, moving: false, fx: 0, fy: -1, dir: 'u', animT: 0 };
   const JOY = { active: false, ox: 0, oy: 0, dx: 0, dy: 0, id: null };
   const KEYS = {};
@@ -10375,6 +10421,24 @@ if (!HEADLESS) (function browser() {
           { grad: ['#5a4a2a', '#38290f'], border: '#c8a86a', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 10 });
     // the DAILY: one seeded run, one attempt, a guest hero if fate says so
     const today = new Date().toISOString().slice(0, 10);
+    // the WELCOME-BACK crate: a week or more away, offered once per visit
+    if (!wbOffered && !S.confirm) {
+      const amt = welcomeBack(today);
+      if (amt > 0) {
+        wbOffered = true;
+        S.confirm = {
+          msg: '\u{1F381} WELCOME BACK',
+          sub: 'the deep kept your seat warm — take ' + amt + ' ⚙ cogs, and a RARE relic waits at the next run’s door',
+          yesLabel: 'TAKE THE CRATE',
+          yes: () => {
+            S.cogs += amt; S.wbRelic = 1;
+            streakTouch(today);
+            save();
+            toast('+' + amt + ' ⚙ — good to have you back');
+          },
+        };
+      }
+    }
     const spent = S.daily && S.daily.date === today && S.daily.done;
     if (S.streak.days >= 2) {
       txt('\u{1F525}' + S.streak.days, 134, 70, '900 12px Verdana, sans-serif', '#ff9d3c', 'left');
@@ -10479,6 +10543,12 @@ if (!HEADLESS) (function browser() {
       ['relics collected', '' + (o.relics || 0)],
       ['run time', mm + ':' + ss],
     ];
+    // the DUEL verdict outranks even the rivalry on the card
+    if (o.duel) {
+      rows.splice(2, 0, ['duel', o.duel.won ? '\u{1F3C6} ' + o.duel.name + ' is OUTDUG!'
+                                : o.duel.tied ? '\u{2694}\u{FE0F} tied with ' + o.duel.name
+                                : '\u{2694}\u{FE0F} ' + o.duel.name + ' holds at floor ' + o.duel.floor]);
+    }
     // the RIVALRY verdict rides the report card
     if (o.toppled) rows.splice(2, 0, ['rival', '\u{2694}\u{FE0F} TOPPLED — deeper than ' + o.toppled + '!']);
     else if (o.rivalGap === 0) rows.splice(2, 0, ['rival', '\u{2694}\u{FE0F} matched ' + (S.rival.name || '')]);
@@ -10511,8 +10581,27 @@ if (!HEADLESS) (function browser() {
             { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
               font: '900 11px Verdana, sans-serif', r: 10 });
     }
-    uiBtn(LW / 2 - 80, 700, 160, 38, TR('TITLE'), () => { S.screen = 'title'; },
+    uiBtn(LW / 2 - 120, 700, 116, 38, TR('TITLE'), () => { S.screen = 'title'; },
           { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 13px Verdana, sans-serif', r: 12 });
+    uiBtn(LW / 2 + 4, 700, 116, 38, '\u{2694}\u{FE0F} DUEL', () => shareDuel(o),
+          { bg: 'rgba(60,26,30,0.92)', border: '#ff9d8a', col: '#ffd9d0',
+            font: '900 12px Verdana, sans-serif', r: 12 });
+  }
+  // the CHALLENGE: this run's maze + floor as a link worth sending
+  function shareDuel(o) {
+    if (!o || o.seed == null) return;
+    const url = location.origin + location.pathname + duelLink(o.seed, o.floor, S.boardName || 'a rival');
+    if (navigator.share) {
+      navigator.share({ title: 'Dungeon Pusher', text: 'outdig me — I fell at floor ' + o.floor + ' on this maze', url }).catch(() => {});
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        () => toast('\u{2694}\u{FE0F} challenge link copied — send it to a friend'),
+        () => toast(url));
+      return;
+    }
+    toast(url);
   }
 
   // ------------------------------------------------------------------ loop
@@ -10598,6 +10687,17 @@ if (!HEADLESS) (function browser() {
       ctx.setLineDash([]);
     }
   }
+  // a DUEL link plants its maze before the first frame (then cleans the URL
+  // so a reload doesn't re-arm the same challenge)
+  try {
+    const dl = parseDuel(location.search);
+    if (dl) {
+      S.duel = dl;
+      S.nextSeed = dl.seed >>> 0;
+      toast('\u{2694}\u{FE0F} ' + dl.name + ' reached FLOOR ' + dl.floor + ' on this maze — NEW RUN grows it');
+      if (history.replaceState) history.replaceState(null, '', location.pathname);
+    }
+  } catch (e) {}
   requestAnimationFrame(frame);
 })();
 
