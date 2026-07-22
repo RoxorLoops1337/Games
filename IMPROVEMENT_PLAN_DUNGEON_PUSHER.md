@@ -60,9 +60,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       round (collect alight = +2 burn), Lich raises a half-HP skeleton every 3rd
       round, Pit Boss taxes the smallest tray piece every 3rd round (belly-refunded)
       (session 13)
-- [ ] **[big] Room events / NPCs**: 6 hallway encounters between rooms — gambler
-      (double-or-nothing a relic), cursed fountain, mimic chest, lost adventurer
-      (escort = reward), coin-eating slime, shrine of trades (HP↔gold)
+- [x] **[big] Room events / NPCs**: six strangers as room dwellers with a generic
+      choice-modal — Gambler (gold/key stakes), Cursed Fountain, Suspicious Chest
+      (mimic!), Lost Adventurer (escort pays a relic / rob), Coin-Eating Slime,
+      Shrine of Trades (blood↔gold); walking away keeps them waiting (session 17)
 - [x] **Floor quests**: one optional job per floor (slay N / no-tilt win / bank N),
       posted under the floor title, pays a golden key or a relic (session 14)
 - [x] **[big] Rat King hero**: no items — every item source recruits a rat (cap 8,
