@@ -4657,7 +4657,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("(e.ng >= 2 ? '♛ ' : e.ng ? '♟ ' : '')") >= 0, 'board rows wear the pawn — or the crown');
   t.ok(src.indexOf("e.diff === 'nightmare' ? '#ff5a4e' : '#7ee787'") >= 0, 'and the difficulty dot');
   t.ok(src.indexOf('floor to beat is') >= 0, 'outsiders see the floor to beat');
-  t.ok(src.indexOf('ng: run.ng | 0 }),') >= 0, 'the post carries the true prestige level');
+  t.ok(src.indexOf('ng: run.ng | 0, v: CLIENT_BOARD_V }),') >= 0, 'the post carries the prestige level and the client version');
 }
 
 // -------- TROPHIES FOR THE PULL + yesterday's deepest --------
@@ -6046,6 +6046,58 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('function drawJar(t, dt)') >= 0, 'the jar has its painter');
   t.ok(src.indexOf("S.opts.cb ? '#ffffff'") >= 0, 'with a hard outline for cb mode');
   t.ok(src.indexOf('drawJar(t, dt);') >= 0, 'drawn behind the coins');
+}
+
+// -------- BRASS PEGS: the endless machine fights back --------
+{
+  // shared seeds raise the same pegs (side instances first)
+  const { DP: A } = loadGame({}, false);
+  const { DP: B } = loadGame({}, false);
+  A.S.nextSeed = 777; A.srand(1); A.newRun('knight');
+  B.S.nextSeed = 777; B.srand(50); B.newRun('knight');
+  A.S.run.floor = 25; A.genFloor();
+  B.S.run.floor = 25; B.genFloor();
+  t.eq(JSON.stringify(A.S.run.pegs), JSON.stringify(B.S.run.pegs), 'two players, one seed, same pegs');
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  D.srand(231); D.newRun('knight');
+  // no pegs above the ledger
+  for (let f = 1; f <= 21; f++) { D.S.run.floor = f; D.genFloor(); if (D.S.run.pegs.length) { t.ok(false, 'pegs above floor 22'); break; } }
+  t.ok(true, 'the bed stays smooth through floor 21');
+  // the count climbs 1 → 2 → 3 and every peg keeps clear of the tray
+  const counts = {};
+  for (const f of [22, 28, 34, 40]) {
+    D.S.run.floor = f; D.genFloor();
+    counts[f] = D.S.run.pegs.length;
+    t.ok(D.S.run.pegs.every(pg => pg.x >= 15 && pg.x <= 85 && pg.y >= 30 && pg.y <= 55),
+      'floor ' + f + ' pegs stay off the walls and the tray mouth');
+  }
+  t.ok(counts[22] === 1 && counts[28] === 2 && counts[34] === 3 && counts[40] === 3,
+    'one stud at 22, two at 28, three at 34 — capped (' + JSON.stringify(counts) + ')');
+  // the deflection: a coin dropped straight onto a peg drifts off line
+  D.S.run.floor = 25; D.genFloor();
+  D.S.run.pegs = [{ x: 50, y: 40 }];
+  const c = D.spawnDrop(50, 40, 'coin');
+  for (let i = 0; i < 60 && c.st === 'air'; i++) D.step(1 / 60, true);
+  t.ok(Math.abs(c.x - 50) > 1.5, 'the peg shoulders the coin aside (drift ' + Math.abs(c.x - 50).toFixed(1) + ')');
+  // ...and a clear lane drops true
+  D.S.run.pegs = [];
+  const c2 = D.spawnDrop(30, 40, 'coin');
+  const x0 = c2.x;
+  for (let i = 0; i < 30 && c2.st === 'air'; i++) D.step(1 / 60, true);
+  t.ok(Math.abs(c2.x - x0) < 1.5, 'no peg, no push');
+  // pegs ride the save
+  D.S.run.pegs = [{ x: 44, y: 33 }, { x: 66, y: 51 }];
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.run.pegs.length, 2, 'the studs survive a reload');
+  t.eq(R.S.run.pegs[0].x, 44, 'in place');
+  // the painter and the announcement
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('function drawPegs(t)') >= 0, 'the pegs have their painter');
+  t.ok(src.indexOf('BRASS PEGS rise from the bed') >= 0, 'and announce themselves once');
+  t.ok(src.indexOf("CLIENT_BOARD_V = 2") >= 0, 'the client stamps its board version');
 }
 
 t.done();

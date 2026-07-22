@@ -484,18 +484,21 @@ Ordered by impact ÷ effort.
       its lane cracks it — three hits SHATTER: two gems spill + a common
       relic pick; drawn as glass with per-hit cracks, round pips and a cb
       outline; perf probe unchanged at 1.26ms/frame (session 69)
-- [ ] **[big] THE BRASS PEGS**: endless floors (22+) raise seeded brass
-      pegs from the bed that deflect falling coins — the machine itself
-      joins the decree stack; probe the pile flow so it never becomes
-      unwinnable (pegs never block the tray mouth)
+- [x] **[big] THE BRASS PEGS**: floors 22+ raise seeded studs from the
+      bed (1 → 2 at 28 → 3 at 34, floor-stream seeded so shared seeds
+      match) that shoulder FALLING coins aside — a push, not a wall;
+      pinned to y 30-55 / x 15-85 so the tray mouth stays clear; drawn as
+      raised brass domes above the pile with cb outlines; announced once
+      per run; perf 1.31ms/frame (session 70)
 - [ ] **[big] THE NINTH HERO — THE TOLLKEEPER**: plays the machine's own
       agent: coins he banks pay DOWN a floor-toll meter instead of a purse
       (no purse growth at all — a fixed 14-coin hand refills each battle);
       unseals at lifetime 1,000 coins skimmed... design pass first, the
       economy is the hero
-- [ ] **Board hygiene [server]**: entries carry v (client version) so a
-      future breaking change can filter; plus a dp:top backup key written
-      weekly (cheap insurance for the one board that never expires)
+- [x] **Board hygiene [server]**: posts stamp CLIENT_BOARD_V (clamped
+      0-99 server-side); the first post of each week lazily snapshots
+      dp:top to dp:top:bak:<monday> with a 35-day TTL — no cron, later
+      posts never rewrite the snapshot (session 70)
 
 ## Done (this loop)
 
