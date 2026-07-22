@@ -3377,6 +3377,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const { DP: D } = loadGame({}, false);
   t.ok(D.S.opts.haptic === true, 'haptics default ON');
+  t.ok(Math.abs(D.S.opts.music - 0.8) < 1e-9, 'music defaults to 80%');
   const hits = [];
   globalThis.__dpBuzz = p => hits.push(p);
   D.srand(3131);
