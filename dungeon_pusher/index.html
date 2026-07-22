@@ -1722,7 +1722,9 @@ function scoreCoin(c, quiet) {
     return;
   }
   // a corroded SLUG is worth nothing — it just clatters into the tray
+  // (unless the MINT's job wants them counted)
   if (c.kind === 'slug') {
+    questBump('slugbank', 1);
     floatAt('a worthless slug…', c.x, '#8a8a8a');
     return;
   }
@@ -2987,11 +2989,14 @@ const QUEST_DEFS = [
   { id: 'slay',   txt: n => 'slay ' + n + ' monsters',            need: f => 4 + Math.min(4, f) },
   { id: 'notilt', txt: () => 'win a battle without TILTING',      need: () => 1 },
   { id: 'bank',   txt: n => 'bank ' + n + ' pieces in the vaults', need: f => 5 + Math.min(5, f) },
+  // the MINT's own job: its counterfeits become the currency
+  { id: 'slugbank', txt: n => 'collect ' + n + ' counterfeit slugs', need: () => 3, mint: true },
 ];
 function rollQuest(floor) {
-  const q = QUEST_DEFS[(rng() * QUEST_DEFS.length) | 0];
+  const pool = QUEST_DEFS.filter(q2 => !q2.mint || actIdx(floor) >= 3);
+  const q = pool[(rng() * pool.length) | 0];
   return { id: q.id, need: q.need(floor), got: 0, done: false,
-           reward: rng() < 0.5 ? 'goldkey' : 'relic' };
+           reward: q.id === 'slugbank' ? 'goldkey' : (rng() < 0.5 ? 'goldkey' : 'relic') };
 }
 function questTxt(q) {
   const d = QUEST_DEFS.find(x => x.id === q.id);
@@ -3335,7 +3340,10 @@ function genEnts(dist) {
       const total = avail.reduce((a, s) => a + s[1], 0);
       let rr2 = rng() * total, pick = avail[0][0];
       for (const [kind, wt] of avail) { rr2 -= wt; if (rr2 <= 0) { pick = kind; break; } }
-      if (pick === 'event') ents.push({ kind: 'event', ev: EVENTS[(rng() * EVENTS.length) | 0].id, done: false });
+      if (pick === 'event') {
+        const pool = EVENTS.filter(e2 => !e2.mint || actIdx(S.run.floor) >= 3);
+        ents.push({ kind: 'event', ev: pool[(rng() * pool.length) | 0].id, done: false });
+      }
       else ents.push({ kind: pick, done: false });
     }
   }
@@ -3738,6 +3746,34 @@ const EVENTS = [
       { label: 'gold for blood', sub: 'pour in 40 gold → +12 HP and +3 max HP',
         can: () => S.run.gold >= 40,
         fx: () => { S.run.gold -= 40; S.run.maxHp += 3; healPlayer(12); return 'the scale tips: +12 HP, and you stand taller (+3 max).'; } },
+    ] },
+  // ---- the MINT's own strangers: only walk act-4 halls ----
+  { id: 'assayer', icon: '\u{2696}\u{FE0F}', name: 'THE ASSAYER', mint: true,
+    flavor: '\u201cEverything has a true worth, stranger. Even you. ESPECIALLY you.\u201d',
+    choices: [
+      { label: 'appraise the collection (10 gold)', sub: 'he values your relics: +3 gold apiece',
+        can: () => S.run.gold >= 10 && S.run.relics.length > 0,
+        fx: () => { S.run.gold -= 10; const pay = S.run.relics.length * 3; addGold(pay);
+                    return 'his loupe gleams: the collection is worth +' + pay + ' gold.'; } },
+      { label: 'sell him a relic', sub: 'a random relic leaves your pack — +60 gold',
+        can: () => S.run.relics.length >= 1,
+        fx: () => { const i = (rng() * S.run.relics.length) | 0;
+                    const rl = relicById(S.run.relics.splice(i, 1)[0]);
+                    addGold(60);
+                    return 'he wraps ' + (rl ? rl.name : 'it') + ' in silk: +60 gold.'; } },
+    ] },
+  { id: 'debtor', icon: '\u{1F4D1}', name: 'THE DEBT COLLECTOR', mint: true,
+    flavor: '\u201cThe Mint\u2019s ledger says you owe. The Mint\u2019s ledger is never wrong.\u201d',
+    choices: [
+      { label: 'settle the debt (30 gold)', sub: 'the stamp says PAID — his receipt is +1 key',
+        can: () => S.run.gold >= 30,
+        fx: () => { S.run.gold -= 30; S.run.keys++; return 'STAMPED. He bows and hands you a key.'; } },
+      { label: 'dispute the ledger', sub: '50/50 — damages of +25 gold, or a LIEN: \u22125 max HP',
+        can: () => true,
+        fx: () => { if (rng() < 0.5) { addGold(25); return 'the ledger WAS wrong — he pays damages: +25 gold.'; }
+                    S.run.maxHp = Math.max(10, S.run.maxHp - 5);
+                    S.run.hp = Math.min(S.run.hp, S.run.maxHp);
+                    return 'the lien lands with a thud: \u22125 max HP.'; } },
     ] },
 ];
 function eventById(id) { return EVENTS.find(e => e.id === id); }

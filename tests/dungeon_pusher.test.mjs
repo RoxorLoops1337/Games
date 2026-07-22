@@ -3279,7 +3279,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const { DP: D } = loadGame({}, false);
   const DS = D.S;
-  t.eq(D.EVENTS.length, 7, 'seven strangers roam the halls');
+  t.eq(D.EVENTS.length, 9, 'nine strangers roam the halls (two keep to the mint)');
   t.ok(D.EVENTS.every(e => e.id && e.icon && e.name && e.flavor && e.choices.length >= 2),
        'each fully written with at least two choices');
   D.srand(1212);
@@ -4166,6 +4166,85 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(F.S.over.ng, 1, 'the report card knows a prestige run');
   t.eq(F.S.over.seed, fsd, 'and remembers its seed');
   t.eq(F.S.hist[0].ng, 1, 'the history book wears the pawn');
+}
+
+// -------- MINT STRANGERS + the slug job --------
+{
+  const { DP: D } = loadGame({}, false);
+  t.ok(D.eventById('assayer') && D.eventById('debtor'), 'the two mint strangers exist');
+  t.ok(D.eventById('assayer').mint && D.eventById('debtor').mint, 'and keep to the mint');
+  // placement: act 1 never fields them; the mint act does (across many carves)
+  const placed = (floor) => {
+    const seen = new Set();
+    for (let sd = 1; sd <= 40; sd++) {
+      D.srand(sd); D.newRun('knight');
+      D.S.run.floor = floor; D.genFloor();
+      for (const k of Object.keys(D.S.run.map.rooms)) {
+        for (const e of D.S.run.map.rooms[k].ents) if (e.kind === 'event') seen.add(e.ev);
+      }
+    }
+    return seen;
+  };
+  const act1 = placed(2);
+  t.ok(!act1.has('assayer') && !act1.has('debtor'), 'act 1 halls never hold mint strangers');
+  const act4 = placed(17);
+  t.ok(act4.has('assayer') || act4.has('debtor'), 'the mint halls do (' + [...act4].join(',') + ')');
+  // THE ASSAYER: appraisal pays per relic; the sale takes one and pays 60
+  D.srand(9); D.newRun('knight');
+  D.S.run.relics.push('thornmail', 'petwhistle', 'deepfreeze');   // gold-neutral, so the math stays exact
+  D.S.run.gold = 50;
+  D.S.run.room.ents.push({ kind: 'event', ev: 'assayer', done: false, px: 0.5, py: 0.5 });
+  D.interact(D.S.run.room.ents.length - 1);
+  t.ok(D.eventChoose(0), 'the appraisal goes through');
+  t.eq(D.S.run.gold, 50 - 10 + 9, 'ten gold fee, +3 apiece for three relics');
+  D.closeModal();
+  D.S.run.room.ents.push({ kind: 'event', ev: 'assayer', done: false, px: 0.5, py: 0.5 });
+  D.interact(D.S.run.room.ents.length - 1);
+  const g0 = D.S.run.gold, r0 = D.S.run.relics.length;
+  t.ok(D.eventChoose(1), 'the sale goes through');
+  t.eq(D.S.run.relics.length, r0 - 1, 'one relic leaves the pack');
+  t.eq(D.S.run.gold, g0 + 60, 'sixty gold arrives');
+  D.closeModal();
+  // THE DEBT COLLECTOR: settling costs 30 and pays a key
+  D.S.run.gold = 40;
+  const k0 = D.S.run.keys;
+  D.S.run.room.ents.push({ kind: 'event', ev: 'debtor', done: false, px: 0.5, py: 0.5 });
+  D.interact(D.S.run.room.ents.length - 1);
+  t.ok(D.eventChoose(0), 'the debt is settled');
+  t.eq(D.S.run.gold, 10, 'thirty gold stamped away');
+  t.eq(D.S.run.keys, k0 + 1, 'the receipt is a key');
+  D.closeModal();
+  // the dispute: both branches reachable, the lien floors max HP at 10
+  let sawPay = false, sawLien = false;
+  for (let sd = 1; sd <= 30 && !(sawPay && sawLien); sd++) {
+    D.srand(sd * 31);
+    D.S.run.room.ents.push({ kind: 'event', ev: 'debtor', done: false, px: 0.5, py: 0.5 });
+    D.interact(D.S.run.room.ents.length - 1);
+    const mh0 = D.S.run.maxHp, gg0 = D.S.run.gold;
+    D.eventChoose(1);
+    if (D.S.run.gold > gg0) sawPay = true;
+    if (D.S.run.maxHp < mh0) sawLien = true;
+    D.closeModal();
+  }
+  t.ok(sawPay && sawLien, 'the dispute can pay damages AND land the lien');
+}
+{
+  // the slug job: only offered in the mint, counts slugs as they clatter in
+  const { DP: D } = loadGame({}, false);
+  D.srand(5); D.newRun('knight');
+  let sawEarly = false;
+  for (let i = 0; i < 120; i++) { if (D.rollQuest(3).id === 'slugbank') sawEarly = true; }
+  t.ok(!sawEarly, 'floor 3 never posts the slug job');
+  let sawMint = false;
+  for (let i = 0; i < 120 && !sawMint; i++) { if (D.rollQuest(17).id === 'slugbank') sawMint = true; }
+  t.ok(sawMint, 'floor 17 does');
+  D.S.run.quest = { id: 'slugbank', need: 3, got: 0, done: false, reward: 'goldkey' };
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  const gk0 = D.S.run.goldKeys || 0;
+  for (let i = 0; i < 3; i++) D.scoreCoin({ kind: 'slug', x: 50, y: 90, z: 0 });
+  t.ok(D.S.run.quest.done, 'three collected slugs finish the job');
+  t.eq(D.S.run.goldKeys, gk0 + 1, 'and the mint pays in a GOLDEN key');
 }
 
 t.done();

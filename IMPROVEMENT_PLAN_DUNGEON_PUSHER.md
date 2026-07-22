@@ -224,9 +224,11 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
 - [ ] **Share-a-run card** [big]: victory/death → a rendered trophy-card PNG
       (hero, floor, kills, seed, painted frame) via canvas.toBlob — download +
       navigator.share where it exists
-- [ ] **Mint strangers**: two act-4 events — THE ASSAYER (appraise: double one
-      relic's effect this floor, or he keeps it a floor) and THE DEBT COLLECTOR
-      (pay 30 gold or carry a -5 maxHP lien two floors)
+- [x] **Mint strangers**: THE ASSAYER (appraise the collection: +3 gold/relic
+      for a 10-gold fee, or sell him a random relic for 60) and THE DEBT
+      COLLECTOR (settle 30 gold for a key receipt, or dispute: 50/50 damages
+      +25 gold vs a −5 maxHP lien) — both gated to act-4 halls via the event
+      pool filter (session 40)
 - [ ] **B-side second winds**: each B-sider gets a below-half-HP phase — the Wyrm
       re-mirrors, the Banshee's wail also chills the pusher a step, the Aurifex
       mints two slugs — telegraphed with a banner
@@ -245,8 +247,9 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
 - [x] **Dungeon footsteps & door creaks**: soft noise footfalls pace the crawl
       (0.26s stride, behind SFX volume); the door thunk already lived on the
       hinge — verified and pinned (session 37)
-- [ ] **Mint floor quest**: one act-4-only job — BANK N SLUGS (the counterfeits
-      become the currency) paying a golden key
+- [x] **Mint floor quest**: COLLECT 3 COUNTERFEIT SLUGS — only posted in the
+      mint, counted as slugs clatter into the tray, always pays a GOLDEN key
+      (session 40)
 - [ ] **Localization: settings + overlays complete in NL**: sweep the remaining
       high-traffic strings (board, cloud, themes, credits) into TR()
 
