@@ -51,6 +51,13 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.4.0', notes: [
+    'THE ALCHEMIST — an eighth hero: no potions, she BREWS. Every 12 coins collected distills a draught (blast/freeze/mend/gild); gems are reagents, +2 power each. Unseals at 5 deep clears',
+    'THE WEEKLY DECREE ⚖️ — one law rules each week (opt-in on the title); clear floor 15 under it for the ledger and a trophy',
+    'RECORDS grew THE ENDLESS page — lifetime decree stack, a decree wall that unveils each law as you endure it',
+    'the wheel now teases a near miss, every staircase has its own descending sting, and the jackpot fanfare finally RESOLVES',
+    'daily twists grew to eight: GLASS CANNON, COIN DROUGHT, PACIFIST FLOORS — and the title now names yesterday’s deepest digger',
+  ] },
   { v: '1.3.0', notes: [
     'ACT IV: THE MINT — floors 16-20 turn gilded: 13 new counting-house horrors, three new tricks (magnetic armor, counterfeit slugs, jackpot siphons)',
     'THE AUDITOR — a fourth boss seals the mint: fines your gold and holds your jackpot meter for review',
@@ -197,7 +204,7 @@ function seed36(n) { return (n >>> 0).toString(36).toUpperCase(); }
 // emoji-only heroes wear the color as an aura behind the glyph.
 const HERO_SKINS = {
   knight: '#58b8ff', rogue: '#b45aff', wizard: '#7ee7a0', cleric: '#ff8a6b',
-  ghost: '#8ed67e', crane: '#ff6b9d', rat: '#ffd75e',
+  ghost: '#8ed67e', crane: '#ff6b9d', rat: '#ffd75e', alch: '#8ef0ff',
 };
 function skinWorn(hid) {
   return !!(HERO_SKINS[hid] && S.deep15[hid] && S.skins[hid]);
@@ -895,6 +902,7 @@ const HEROES = [
   { id: 'ghost',  name: 'Poltergeist', icon: '\u{1F47B}', coin: 'lucky', perk: 'purse RAINS in • TILT ×2' },
   { id: 'crane',  name: 'Crane Keeper', icon: '\u{1F579}\u{FE0F}', coin: 'coin', perk: 'a real CLAW GAME ×2' },
   { id: 'rat',    name: 'Rat King',     icon: '\u{1F400}', coin: 'green', perk: 'no items — only RATS' },
+  { id: 'alch',   name: 'Alchemist',    icon: '\u{2697}\u{FE0F}', coin: 'blue', perk: 'no potions — she BREWS' },
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
 // the Poltergeist is EARNED: it answers only to those who have carried a
@@ -907,6 +915,7 @@ const HERO_LOCKS = {
   rat:    { floor: 8,  txt: 'reach FLOOR 8' },
   crane:  { floor: 10, txt: 'reach FLOOR 10' },
   ghost:  { floor: GHOST_UNLOCK_FLOOR, txt: 'reach FLOOR ' + GHOST_UNLOCK_FLOOR },
+  alch:   { deep: 5,   txt: 'earn 5 DEEP CLEARS' },
 };
 function heroLockText(id) { return (HERO_LOCKS[id] || {}).txt || ''; }
 function heroUnlocked(id) {
@@ -915,12 +924,59 @@ function heroUnlocked(id) {
   if (S.ach && S.ach.heroes && S.ach.heroes[id]) return true;   // grandfathered
   if (lock.floor && S.best && S.best.floor >= lock.floor) return true;
   if (lock.ach && S.ach && S.ach.u[lock.ach]) return true;
+  if (lock.deep && Object.keys(S.deep15 || {}).length >= lock.deep) return true;
   return false;
 }
 // the Poltergeist's whole kit hangs off this one question
 function ghostRun() { return !!(S.run && S.run.hero === 'ghost'); }
 // ...and the Rat King's off this one: no items, only the SWARM
 function ratRun() { return !!(S.run && S.run.hero === 'rat'); }
+// ...and the ALCHEMIST's off this one: no potions — her STILL drinks the
+// tray. Every 12 coins banked distills one random draught; gems are
+// reagents, each fattening the NEXT draught by +2 power.
+function alchRun() { return !!(S.run && S.run.hero === 'alch'); }
+const ALCH_BREW_N = 12;
+const DRAUGHTS = [
+  { id: 'bomb',  name: 'BLASTING DRAUGHT' },
+  { id: 'frost', name: 'FREEZING DRAUGHT' },
+  { id: 'heal',  name: 'MENDING DRAUGHT' },
+  { id: 'gold',  name: 'GILDING DRAUGHT' },
+];
+function brewDraught(force) {
+  if (!S.run || !S.battle || !S.enemy) return null;
+  const d = force ? DRAUGHTS.find(x => x.id === force) : DRAUGHTS[(rng() * DRAUGHTS.length) | 0];
+  if (!d) return null;
+  const pow = 2 * (S.run.reagents || 0);
+  S.run.reagents = 0;
+  S.shake += 3;
+  SND.gem();
+  if (d.id === 'bomb') {
+    floatAnchor('\u{2697}\u{FE0F} BLASTING DRAUGHT — ' + (8 + pow) + ' to ALL!', 'hero', '#ff9d3c', true);
+    dmgAll(8 + pow);
+  } else if (d.id === 'frost') {
+    floatAnchor('\u{2697}\u{FE0F} FREEZING DRAUGHT — stun +' + (2 + pow) + ' to ALL!', 'hero', '#8ef0ff', true);
+    dmgAll(2 + pow);
+    stunEnemy(1);
+  } else if (d.id === 'heal') {
+    floatAnchor('\u{2697}\u{FE0F} MENDING DRAUGHT — +' + (6 + pow) + ' HP!', 'hero', '#7ee787', true);
+    healPlayer(6 + pow);
+  } else {
+    const g = 10 + pow;
+    floatAnchor('\u{2697}\u{FE0F} GILDING DRAUGHT — +' + g + ' gold!', 'hero', '#ffd75e', true);
+    addGold(g);
+    S.battle.goldWon += g;
+  }
+  return d.id;
+}
+// every potion source funnels here: the still drinks flasks as 3 brew each
+function gainPotions(n) {
+  if (alchRun()) {
+    S.run.brew = (S.run.brew || 0) + 3 * n;
+    floatAnchor('\u{2697}\u{FE0F} the flask feeds the still (+' + 3 * n + ' brew)', 'hero', '#8ef0ff');
+    return;
+  }
+  S.run.potions += n;
+}
 const RAT_CAP = 8;
 function mkRat(dire) {
   return dire ? { iid: 'direrat', icon: '\u{1F400}', name: 'Dire Rat', hp: 16, maxHp: 16, dire: true }
@@ -1125,6 +1181,7 @@ function save() {
         swarm: S.run.swarm || null, cheese: S.run.cheese || 0, diff: S.run.diff || 'normal',
         ng: S.run.ng || 0, bside: S.run.bside || 0, seed: S.run.seed,
         weekly: S.run.weekly || null, week: S.run.week || null,
+        brew: S.run.brew || 0, reagents: S.run.reagents || 0,
       } : null,
     }));
   } catch (e) {}
@@ -1212,6 +1269,7 @@ function load() {
         ng: d.run.ng ? 1 : 0, bside: d.run.bside ? 1 : 0,
         seed: (typeof d.run.seed === 'number') ? (d.run.seed >>> 0) : null,
         weekly: d.run.weekly || null, week: d.run.week || null,
+        brew: d.run.brew | 0, reagents: d.run.reagents | 0,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -1768,6 +1826,7 @@ function hurtPlayer(n, cause) {
   hpHit(n, cause);
 }
 function usePotion() {
+  if (alchRun()) return false;            // she brews — she does not drink
   if (!S.run || S.run.potions < 1 || S.run.hp >= S.run.maxHp) return false;
   S.run.potions--;
   healPlayer(C.POTION_HEAL + (hasRelic('elixir') ? 8 : 0) + (hasRelic('apothecary') ? 6 : 0));
@@ -1817,6 +1876,16 @@ function scoreCoin(c, quiet) {
     if (S.run.cheese % 3 === 0 && S.pets.length < RAT_CAP) {
       S.pets.push(mkRat(true));
       floatAnchor('\u{1F400} a DIRE RAT rises!', 'hero', '#ff9d3c', true);
+    }
+  }
+  // the ALCHEMIST'S STILL: coins feed the brew, gems are reagents
+  if (alchRun() && !S.victory) {
+    if (c.kind === 'gem') {
+      S.run.reagents = (S.run.reagents || 0) + 1;
+      floatAnchor('\u{2697}\u{FE0F} a reagent — next draught +2', 'hero', '#8ef0ff');
+    } else if (COIN_KINDS.indexOf(c.kind) >= 0) {
+      S.run.brew = (S.run.brew || 0) + 1;
+      if (S.run.brew >= ALCH_BREW_N) { S.run.brew -= ALCH_BREW_N; brewDraught(); }
     }
   }
   // a coin still ALIGHT from the dragon's breath sears the hand that takes it
@@ -3467,6 +3536,9 @@ function newRun(heroId, force) {
   S.run.purse.coin += 2 * wsLvl('purse');
   S.run.keys += wsLvl('key');
   S.run.potions += wsLvl('potion');
+  // the ALCHEMIST owns no flasks — the STILL starts cold (NG+ banks the
+  // prestige flask as brew instead)
+  if (hero.id === 'alch') { S.run.potions = 0; S.run.brew = ng ? 3 : 0; S.run.reagents = 0; }
   // the WEEKLY DECREE rides every armed run (the daily carries its own law)
   if (S.weeklyPick && !force) {
     const wp = weeklyPlan(new Date().toISOString().slice(0, 10));
@@ -4066,7 +4138,9 @@ function shopStock() {
     const it = itemById(pick);
     st.push({ kind: 'item', iid: pick, label: it.icon + ' ' + it.name, price: Math.round(it.cost * 1.4 * mult), sold: false });
   }
-  st.push({ kind: 'potion', label: '\u{1F9F4} Potion (+' + C.POTION_HEAL + ' HP)', price: Math.round(45 * mult), sold: false });
+  if (!alchRun()) {   // the keeper knows better than to sell her a flask
+    st.push({ kind: 'potion', label: '\u{1F9F4} Potion (+' + C.POTION_HEAL + ' HP)', price: Math.round(45 * mult), sold: false });
+  }
   st.push({ kind: 'pouch', label: '\u{1F45B} Coin Pouch (+' + C.POUCH_COINS + ' gold coins to your purse)', price: Math.round(60 * mult), sold: false });
   {
     const k = COIN_KINDS[1 + ((rng() * (COIN_KINDS.length - 1)) | 0)];
@@ -4111,7 +4185,7 @@ function payableKinds(n) {
 }
 function grantShopWare(it) {
   if (it.kind === 'item') grantItem(it.iid, 1);
-  else if (it.kind === 'potion') S.run.potions++;
+  else if (it.kind === 'potion') gainPotions(1);
   else if (it.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
   else if (it.kind === 'coin') S.run.purse[it.cid] = (S.run.purse[it.cid] || 0) + 1;
   else if (it.kind === 'maxhp') { S.run.maxHp += 10; S.run.hp += 10; }
@@ -4190,7 +4264,7 @@ function pickBoon(i) {
   else if (o.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
   else if (o.kind === 'str') S.run.str = (S.run.str || 0) + 1;
   else if (o.kind === 'dex') S.run.dex = (S.run.dex || 0) + 1;
-  else if (o.kind === 'potion') S.run.potions += 2;
+  else if (o.kind === 'potion') gainPotions(2);
   else if (o.kind === 'whet') S.run.whet++;
   S.room.done = true;
   S.room.msg = 'The forge hums. Boon granted.';
@@ -4529,6 +4603,7 @@ window.DP = {
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
   streakTouch, streakK, plantToday,
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
+  alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
@@ -7110,8 +7185,12 @@ if (!HEADLESS) (function browser() {
     txt('\u{1F5DD} × ' + r.keys, 190, 762, '900 15px Verdana, sans-serif',
         r.keys < 1 ? '#ff5a4e' : '#ffe9a3', 'left');
     if (r.goldKeys > 0) txt('\u{1F511} × ' + r.goldKeys, 190, 780, '900 12px Verdana, sans-serif', '#ffd75e', 'left');
-    // potion button
-    if (r.potions > 0) {
+    // potion button — or the ALCHEMIST's still gauge in its place
+    if (alchRun()) {
+      const rg = (r.reagents || 0) > 0 ? '  \u{1F4A0}+' + 2 * r.reagents : '';
+      txt('\u{2697}\u{FE0F} ' + (r.brew || 0) + '/' + ALCH_BREW_N + rg, 240, 762,
+          '900 12px Verdana, sans-serif', '#8ef0ff', 'left');
+    } else if (r.potions > 0) {
       uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
             { grad: ['#8c2f6b', '#4a1038'], border: '#ffb0e0', col: '#ffd9ee', font: '800 11px Verdana, sans-serif', r: 9 });
     }

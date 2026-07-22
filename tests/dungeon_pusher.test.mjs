@@ -122,9 +122,9 @@ t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
 
-// -------- the seven adventurers and their signature coins --------
-t.ok(DP.HEROES.length === 7 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
-     'seven heroes, each with a signature coin');
+// -------- the eight adventurers and their signature coins --------
+t.ok(DP.HEROES.length === 8 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
+     'eight heroes, each with a signature coin');
 DP.srand(41);
 DP.newRun('knight');
 t.eq(S.run.hero, 'knight', 'the knight answers the call');
@@ -3733,7 +3733,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const st = {};
   const { DP: D } = loadGame(st, false);
   // every hero has a skin color waiting
-  t.ok(D.HEROES.every(h => D.HERO_SKINS[h.id]), 'all seven heroes have an alt palette');
+  t.ok(D.HEROES.every(h => D.HERO_SKINS[h.id]), 'all eight heroes have an alt palette');
   t.ok(!D.skinWorn('knight'), 'nothing worn on a fresh profile');
   // a floor-15 boss kill tailors the skin for that hero only
   D.srand(77);
@@ -4849,6 +4849,101 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     'old openers still reach the book');
   t.ok(src.indexOf('THE DECREE WALL') >= 0, 'the endless page hangs the decree wall');
   t.ok(src.indexOf("['decree stack survived', (L.mutMax || 0) + ' deep']") >= 0, 'and reads the lifetime stack');
+}
+
+// -------- THE ALCHEMIST: she brews, she does not drink --------
+{
+  // a sealed pick falls back to the knight (own instance: localStorage rebinds)
+  const { DP: F } = loadGame({}, false);
+  F.srand(31); F.newRun('alch');
+  t.eq(F.S.run.hero, 'knight', 'no sneaking past the seal');
+  // the knight's world is untouched: flasks on the shelf, drinkable
+  const { DP: K } = loadGame({}, false);
+  K.srand(34); K.newRun('knight');
+  K.srand(35);
+  t.ok(K.shopStock().some(s => s.kind === 'potion'), 'the knight still finds potions on the shelf');
+  K.S.run.potions = 1; K.S.run.hp = 5;
+  t.ok(K.usePotion(), 'and still drinks them');
+  const kb = K.S.run.potions;
+  K.gainPotions(2);
+  t.eq(K.S.run.potions, kb + 2, 'gainPotions stays honest for drinkers');
+
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  t.eq(D.HEROES.length, 8, 'eight heroes on the bench');
+  const al = D.heroById('alch');
+  t.ok(al && /BREWS/.test(al.perk), 'the alchemist promises to brew');
+  t.eq(D.ALCH_BREW_N, 12, 'twelve coins to a draught');
+  t.eq(new Set(D.DRAUGHTS.map(d => d.id)).size, 4, 'four draughts in the book');
+  // the seal: five deep clears
+  t.ok(!D.heroUnlocked('alch'), 'sealed on a fresh profile');
+  t.eq(D.heroLockText('alch'), 'earn 5 DEEP CLEARS', 'the seal names its price');
+  D.S.deep15 = { knight: 1, rogue: 1, wizard: 1, cleric: 1 };
+  t.ok(!D.heroUnlocked('alch'), 'four clears are not five');
+  D.S.deep15.ghost = 1;
+  t.ok(D.heroUnlocked('alch'), 'five deep clears break the seal');
+  // her kit: no flasks, cold still — even with the Deep Flask bolted on
+  D.S.ws.potion = 1;
+  D.srand(31); D.newRun('alch');
+  t.eq(D.S.run.hero, 'alch', 'the unsealed alchemist answers');
+  t.eq(D.S.run.potions, 0, 'she owns no flasks (the Deep Flask feeds nobody)');
+  t.eq(D.S.run.brew, 0, 'the still starts cold');
+  // the still: twelve coins distill a draught
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  const foe = D.S.enemy;
+  foe.hp = foe.maxHp = 300; foe.def = null; foe.block = 0; foe.mirrorSpent = true; foe.braced = false;
+  for (let i = 0; i < 11; i++) D.scoreCoin({ kind: 'coin', x: 50 });
+  t.eq(D.S.run.brew, 11, 'eleven coins in the still');
+  D.S.run.hp = 1;                            // so even a MENDING draught shows
+  const hpE0 = foe.hp, hp0 = D.S.run.hp, g0 = D.S.run.gold, stun0 = foe.stunned;
+  D.srand(5);
+  D.scoreCoin({ kind: 'silver', x: 50 });
+  t.eq(D.S.run.brew, 0, 'the twelfth coin fires the still');
+  t.ok(foe.hp < hpE0 || D.S.run.hp > hp0 || D.S.run.gold > g0 || foe.stunned > stun0,
+    'something REAL came out of the flask');
+  D.scoreCoin({ kind: 'skull', x: 50 });
+  D.scoreCoin({ kind: 'bag', x: 50 });
+  t.eq(D.S.run.brew, 0, 'skulls and bags never feed the brew');
+  // each draught, forced, with clean arithmetic
+  foe.hp = 300; foe.stunned = 0;
+  D.S.run.reagents = 0;
+  D.brewDraught('bomb');
+  t.eq(300 - foe.hp, 8, 'BLASTING: 8 to all, unfattened');
+  // gems are reagents: +2 each, spent on the NEXT draught only
+  D.scoreCoin({ kind: 'gem', x: 50 });
+  D.scoreCoin({ kind: 'gem', x: 50 });
+  t.eq(D.S.run.reagents, 2, 'two reagents in the rack');
+  D.S.run.hp = 10;
+  D.brewDraught('heal');
+  t.eq(D.S.run.hp, 20, 'MENDING: 6 base + 2 per reagent');
+  t.eq(D.S.run.reagents, 0, 'the rack empties into the flask');
+  foe.hp = 200;
+  D.brewDraught('frost');
+  t.ok(foe.stunned > 0, 'FREEZING stuns');
+  t.eq(200 - foe.hp, 2, 'and chips 2, unfattened');
+  const gg = D.S.run.gold, gw = D.S.battle.goldWon;
+  D.brewDraught('gold');
+  t.eq(D.S.battle.goldWon, gw + 10, 'GILDING pours 10 gold into the pot');
+  t.ok(D.S.run.gold >= gg + 10, 'and into the purse');
+  // no drinking, ever — and the keeper knows it
+  D.S.run.potions = 3;
+  D.S.run.hp = 1;
+  t.ok(!D.usePotion(), 'she cannot drink even a smuggled flask');
+  D.S.run.potions = 0;
+  D.srand(33);
+  t.ok(!D.shopStock().some(s => s.kind === 'potion'), 'the keeper shelves no flasks for her');
+  const brew0 = D.S.run.brew;
+  D.gainPotions(2);
+  t.eq(D.S.run.brew, brew0 + 6, 'granted flasks feed the still, 3 brew each');
+  t.eq(D.S.run.potions, 0, 'and never her belt');
+  // the half-full still rides the save (no loadGame between save and reload!)
+  D.S.run.brew = 7; D.S.run.reagents = 2;
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.run.hero, 'alch', 'still the alchemist after a reload');
+  t.eq(R.S.run.brew, 7, 'the half-full still survives');
+  t.eq(R.S.run.reagents, 2, 'reagents too');
 }
 
 t.done();
