@@ -4267,4 +4267,83 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
        'the card paints on a swapped ctx inside a finally guard');
 }
 
+// -------- SECOND WINDS + the mint shelf --------
+{
+  const { DP: D } = loadGame({}, false);
+  // five mint relics, none prestige-locked
+  for (const id of ['slugsmelter', 'coinpress', 'meterspring', 'auditstamp', 'brassheart']) {
+    const rl = D.relicById(id);
+    t.ok(rl && !rl.ng, id + ' sits on the open shelf');
+  }
+  D.srand(12); D.newRun('knight');
+  D.S.run.bside = 1;
+  // the WYRM: wind2 fires below half, tightens the squeeze to every 2nd round
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  t.eq(D.S.enemy.id, 'wyrm', 'the wyrm holds the lair');
+  D.S.enemy.hp = Math.floor(D.S.enemy.maxHp * 0.4);
+  D.S.battle.round = 1;
+  D.S.leadT = 0;
+  D.newRound();                          // round 2 — wind2 triggers, cadence now %2
+  t.ok(D.S.enemy.wind2, 'below half the wyrm finds its second wind');
+  t.ok(D.S.leadT >= 1, 'and squeezes on the EVEN round it woke');
+  // the BANSHEE: +2 attack on her wind
+  D.S.enemy.hp = 0;
+  const ban = { id: 'banshee', name: 'Grave Banshee', boss: true, hp: 20, maxHp: 60, atk: 8, block: 0 };
+  D.S.foes.push(ban);
+  D.S.battle.round = 1;
+  D.newRound();
+  t.ok(ban.wind2 && ban.atk === 10, 'the banshee shrieks: +2 attack');
+  // the AURIFEX: re-gilds +12 and mints three
+  ban.hp = 0;
+  const aur = { id: 'aurifex', name: 'The Aurifex', boss: true, hp: 20, maxHp: 80, atk: 8, block: 0 };
+  D.S.foes.push(aur);
+  D.S.battle.round = 1;
+  D.newRound();                          // wind2 + heal
+  t.ok(aur.wind2 && aur.hp === 32, 'the Aurifex re-gilds himself (+12)');
+  D.S.rain.length = 0;
+  D.S.battle.round = 2;
+  D.newRound();                          // round 3: minting cadence
+  t.ok(D.S.rain.filter(r => r.kind === 'skull').length >= 3, 'three slugs a minting on the wind');
+}
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(13); D.newRun('knight');
+  // Meter Spring: the meter wakes at 5
+  D.S.run.relics.push('meterspring', 'brassheart', 'slugsmelter', 'auditstamp');
+  D.S.meter = 0;
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  t.eq(D.S.meter, 5, 'the Meter Spring winds the jackpot to 5');
+  // Brass Heart: the first blow is drunk whole, the second lands
+  D.S.run.block = 0; D.S.run.hp = 40;
+  D.hurtPlayer(9);
+  t.eq(D.S.run.hp, 40, 'the Brass Heart takes the first blow whole');
+  D.hurtPlayer(6);
+  t.eq(D.S.run.hp, 34, 'the second blow lands as usual');
+  // Slug Smelter: slugs pay 1 gold as they clatter in
+  const g0 = D.S.run.gold;
+  D.scoreCoin({ kind: 'slug', x: 50, y: 90, z: 0 });
+  t.ok(D.S.run.gold > g0, 'a smelted slug pays');
+  // Auditor's Stamp: a boss pays +1 key over the usual toll
+  const k0 = D.S.run.keys;
+  D.S.foes.forEach(f => { f.hp = 1; }); D.dmgAll(9); D.leaveBattle();
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.def = null; D.S.enemy.hp = 1; D.dmgEnemy(9);
+  t.ok(D.S.battle.keysWon >= D.C.KEY_BOSS + 1, 'the stamp notarizes +1 boss key (' + D.S.battle.keysWon + ')');
+  // Coin Press: the 25th coin fired mints gold
+  const { DP: P } = loadGame({}, false);
+  P.srand(14); P.newRun('knight');
+  P.S.run.relics.push('coinpress');
+  P.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  P.interact(0);
+  P.S.enemy.hp = P.S.enemy.maxHp = 500;
+  P.S.battle.hand.coin = 30;
+  const pg0 = P.S.run.gold;
+  for (let i = 0; i < 25; i++) { P.S.cd = 0; P.drop(20 + (i % 60), true); }
+  t.eq(P.S.battle.fired, 25, 'twenty-five coins fired');
+  t.ok(P.S.run.gold >= pg0 + 5, 'the press minted +5 on the 25th');
+}
+
 t.done();
