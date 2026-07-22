@@ -93,11 +93,13 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 ## Tier 4 — feel, sound & accessibility
 
-- [ ] **Sound pass v2**: distinct boss-hit / elite-kill / vault-open / golden-key
-      stings; UI tick on button press; wheel ratchet clicks per segment
+- [x] **Sound pass v2**: boss-hit thud, elite-kill brass, vault-open chime run,
+      golden-key dings, UI tick on every styled button, wheel ratchet per
+      segment (session 19)
 - [ ] **Music**: 3 loops (dungeon / battle / boss) via a tiny WebAudio sequencer,
       music volume slider, mute persists
-- [ ] **Haptics**: navigator.vibrate on chomp, boss hit, jackpot (behind a toggle)
+- [x] **Haptics**: navigator.vibrate on the claw CHOMP, heavy blows taken, boss/elite
+      kills, jackpot, vault-open — behind a settings toggle (session 19)
 - [ ] **Colorblind support**: palette swap option for coin kinds (shapes/symbols
       already differ — audit contrast), tested against deuteranopia sim
 - [ ] **Reduced motion**: honor prefers-reduced-motion — no shake, gentler particles
