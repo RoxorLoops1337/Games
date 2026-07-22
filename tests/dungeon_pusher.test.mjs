@@ -2877,7 +2877,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 33, 'thirty-three trophies on the wall');
+  t.eq(D.ACH.length, 36, 'thirty-six trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -4641,6 +4641,50 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("e.diff === 'nightmare' ? '#ff5a4e' : '#7ee787'") >= 0, 'and the difficulty dot');
   t.ok(src.indexOf('floor to beat is') >= 0, 'outsiders see the floor to beat');
   t.ok(src.indexOf('ng: run.ng ? 1 : 0 }),') >= 0, 'the post carries the pawn');
+}
+
+// -------- TROPHIES FOR THE PULL + yesterday's deepest --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  for (const id of ['streak3', 'streak7', 'gardener']) {
+    t.ok(D.achById(id), 'the ' + id + ' trophy hangs on the wall');
+  }
+  // the streak trophies ride the poll
+  D.S.streak = { last: '2026-07-21', days: 3 };
+  D.achPoll();
+  t.ok(D.S.ach.u.streak3, 'KINDLED lights at a three-day streak');
+  t.ok(!D.S.ach.u.streak7, 'WEEK OF FIRE waits for seven');
+  D.S.streak.days = 7;
+  D.achPoll();
+  t.ok(D.S.ach.u.streak7, 'seven days running earns WEEK OF FIRE');
+  // GREEN THUMB: plant today's maze, then actually grow it
+  const today = new Date().toISOString().slice(0, 10);
+  D.srand(3); D.newRun('knight');
+  t.ok(!D.S.ach.u.gardener, 'an unplanted run earns no green thumb');
+  D.plantToday(today);
+  D.newRun('knight');
+  t.eq(D.S.run.seed, D.dailySeed(today) >>> 0, 'the planted run wears the daily seed');
+  t.ok(D.S.ach.u.gardener, 'GREEN THUMB grows from the planted maze');
+  // YESTERDAY'S DEEPEST: the stamp survives the save round-trip
+  // (save BEFORE spawning another instance — loadGame rebinds localStorage)
+  D.S.yday = { on: today, floor: 31, name: 'Rox' };
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.yday.floor, 31, 'yesterday’s floor rides the save');
+  t.eq(R.S.yday.name, 'Rox', 'with the digger’s name');
+  t.eq(R.S.yday.on, today, 'stamped with the day it was fetched');
+  // an arbitrary planted seed is not the daily
+  const { DP: E } = loadGame({}, false);
+  E.S.nextSeed = (E.dailySeed(today) + 1) >>> 0;
+  E.srand(3); E.newRun('knight');
+  t.ok(!E.S.ach.u.gardener, 'a stranger seed earns nothing');
+  // ...and the title/fetch wiring is in the source
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("?board=yesterday") >= 0, 'the title asks the board for yesterday');
+  t.ok(src.indexOf('yesterday’s deepest: FLOOR ') >= 0, 'and stamps the answer');
+  t.ok(src.indexOf('ydayFetch();') >= 0, 'the title screen triggers the one-shot fetch');
 }
 
 t.done();

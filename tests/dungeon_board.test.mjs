@@ -116,6 +116,17 @@ r = await get(env, 'daily');
 j = await r.json();
 ok(j.top.length >= 1 && j.day === DAY, 'GET ?board=daily serves the dated board');
 
+// GET ?board=yesterday reads the previous UTC day (feeds the title stamp)
+const YDAY = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+await env.DPBOARD.put('dp:day:' + YDAY, JSON.stringify([{ name: 'Digger', floor: 31, kills: 9, hero: 'knight', diff: 'normal', t: 1 }]));
+r = await get(env, 'yesterday');
+j = await r.json();
+ok(j.top.length === 1 && j.top[0].name === 'Digger' && j.day === YDAY,
+  'GET ?board=yesterday serves the previous day, dated as such');
+r = await get(env, 'lastweek');
+j = await r.json();
+ok(j.top.some(e => e.name === 'Thieu'), 'an unknown board param falls back to all-time');
+
 // the cap holds at 50
 {
   const env2 = { DPBOARD: mockKV() };

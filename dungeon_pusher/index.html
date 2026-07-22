@@ -1029,6 +1029,7 @@ const S = {
   boardName: '',                                // the name carved on the leaderboard
   coach: { pick: 0, drop: 0, end: 0 },          // the first-battle pointers, killed once each
   streak: { last: '', days: 0 },                // consecutive days played (one grace day)
+  yday: { on: '', floor: 0, name: '' },         // yesterday's deepest (fetched once a day)
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
@@ -1104,7 +1105,7 @@ function save() {
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
-      coach: S.coach, streak: S.streak,
+      coach: S.coach, streak: S.streak, yday: S.yday,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1169,6 +1170,9 @@ function load() {
     if (d.coach && typeof d.coach === 'object') S.coach = { pick: d.coach.pick ? 1 : 0, drop: d.coach.drop ? 1 : 0, end: d.coach.end ? 1 : 0 };
     else if ((d.best && d.best.runs) > 0) S.coach = { pick: 1, drop: 1, end: 1 };   // veterans need no pointing
     if (d.streak && typeof d.streak === 'object') S.streak = { last: d.streak.last || '', days: d.streak.days | 0 };
+    if (d.yday && typeof d.yday === 'object') {
+      S.yday = { on: d.yday.on || '', floor: d.yday.floor | 0, name: String(d.yday.name || '').slice(0, 12) };
+    }
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
@@ -3264,6 +3268,10 @@ const ACH = [
   { id: 'milestone', icon: '\u{1F381}', name: 'Deep Pockets', desc: 'open a MILESTONE CHEST past floor 21' },
   { id: 'floor25',   icon: '\u{1F573}\u{FE0F}', name: 'Past the Ledger', desc: 'reach floor 25' },
   { id: 'floor30',   icon: '\u{26AB}', name: 'Where Light Retires', desc: 'reach floor 30' },
+  // ---- trophies for the pull: coming back is its own game ----
+  { id: 'streak3',   icon: '\u{1F525}', name: 'Kindled', desc: 'return three days running' },
+  { id: 'streak7',   icon: '\u{2604}\u{FE0F}', name: 'Week of Fire', desc: 'keep the streak alive seven days' },
+  { id: 'gardener',  icon: '\u{1F331}', name: 'Green Thumb', desc: 'grow TODAY’S MAZE from the planted seed' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 function achUnlock(id) {
@@ -3284,6 +3292,8 @@ function achPoll() {
   if (kf.wyrm && kf.banshee && kf.aurifex) achUnlock('bsides');
   if (kf.lodestone && kf.counterfeit && kf.meterleech) achUnlock('minted');
   if (kf.auditor) achUnlock('audited');
+  if ((S.streak.days | 0) >= 3) achUnlock('streak3');
+  if ((S.streak.days | 0) >= 7) achUnlock('streak7');
   const r = S.run;
   if (!r) return;
   for (const rid of r.relics) S.codex.relics[rid] = 1;   // the codex sweeps the shelf
@@ -3375,6 +3385,9 @@ function newRun(heroId, force) {
   // the stream. Each floor's layout re-seeds from (seed, floor), so two
   // players with the same seed walk the same dungeon whatever they fight.
   const seed = ((S.nextSeed != null ? S.nextSeed : (rng() * 0x7fffffff)) | 0) >>> 0;
+  if (S.nextSeed != null && seed === (dailySeed(new Date().toISOString().slice(0, 10)) >>> 0)) {
+    achUnlock('gardener');              // the planted maze, actually grown
+  }
   S.nextSeed = null;
   S.run = {
     hero: hero.id, ng, bside, seed,
@@ -9213,6 +9226,24 @@ if (!HEADLESS) (function browser() {
       .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; } })
       .catch(() => { if (BOARD === mine) mine.state = 'err'; });
   }
+  // YESTERDAY'S DEEPEST: one light fetch per calendar day stamps the title
+  // with who dug furthest yesterday. Cached in the save; silent offline.
+  let ydayTried = false;
+  function ydayFetch() {
+    if (ydayTried || typeof fetch !== 'function') return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (S.yday && S.yday.on === today) return;          // today's answer is in
+    ydayTried = true;
+    fetch(BOARD_API + '?board=yesterday')
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => {
+        const best = (j && j.top && j.top[0]) || null;
+        S.yday = best ? { on: today, floor: best.floor | 0, name: String(best.name || '').slice(0, 12) }
+                      : { on: today, floor: 0, name: '' };
+        save();
+      })
+      .catch(() => {});                                 // offline: the stamp stays quiet
+  }
   function postScore(run) {
     if (typeof fetch !== 'function' || !run || !(run.floor >= 1)) return;
     BOARD = { tab: 'alltime', state: 'loading', top: [], day: '', page: 0 };
@@ -10055,6 +10086,11 @@ if (!HEADLESS) (function browser() {
           LW / 2, 736, '700 11px Verdana, sans-serif', '#a08a94');
     }
     txt('v' + VERSION, LW - 10, LH - 10, '600 10px Verdana, sans-serif', '#8d7d95', 'right');
+    ydayFetch();
+    if (S.yday && S.yday.floor > 0 && !S.saveQuarantined) {
+      txt('yesterday’s deepest: FLOOR ' + S.yday.floor + ' by ' + S.yday.name,
+          LW / 2, 756, '700 10px Verdana, sans-serif', '#8fc8ff');
+    }
     drawArtBar();
     if (S.saveQuarantined) {
       txt('⚠ a damaged save was quarantined — fresh start (the old blob is kept safe)',

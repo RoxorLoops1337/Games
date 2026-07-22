@@ -32,6 +32,7 @@ const DAY_TTL = 3 * 24 * 3600;         // stale daily boards sweep themselves
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
 const utcDay = () => new Date().toISOString().slice(0, 10);
+const utcYesterday = () => new Date(Date.now() - 86400000).toISOString().slice(0, 10);
 const dayKey = () => 'dp:day:' + utcDay();
 
 // floor first, kills break the tie
@@ -53,9 +54,12 @@ export async function onRequestGet({ request, env }) {
   const KV = kv(env);
   if (!KV) return json({ error: 'not configured' }, 503);
   const which = request ? new URL(request.url).searchParams.get('board') : null;
-  const key = which === 'daily' ? dayKey() : TOP_KEY;   // whitelist — nothing else reachable
+  // whitelist — nothing else reachable ('yesterday' feeds the title stamp)
+  const key = which === 'daily' ? dayKey()
+            : which === 'yesterday' ? ('dp:day:' + utcYesterday())
+            : TOP_KEY;
   const top = JSON.parse((await KV.get(key)) || '[]');
-  return json({ top, day: utcDay() });
+  return json({ top, day: which === 'yesterday' ? utcYesterday() : utcDay() });
 }
 
 export async function onRequestPost({ request, env }) {

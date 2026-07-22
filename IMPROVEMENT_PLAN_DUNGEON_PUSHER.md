@@ -299,10 +299,13 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
       3rd floor's monsters are optional but pay nothing) (session 49)
 - [x] **Board rows tell more**: diff dot + ♟ NG+ pawn on THE DEEP BOARD rows;
       below-50 players see "the board's floor to beat is N" (session 49)
-- [ ] **Yesterday's deepest**: a light one-shot board fetch stamps the title
-      with "yesterday's deepest: FLOOR N by NAME" (cached, silent offline)
-- [ ] **Trophies for the pull**: streak 3/7, endless floor 25, a milestone
-      chest opened, a weekly decree survived, seed-of-the-day played
+- [x] **Yesterday's deepest**: a light one-shot board fetch stamps the title
+      with "yesterday's deepest: FLOOR N by NAME" (cached, silent offline;
+      `?board=yesterday` whitelisted server-side) (session 50)
+- [x] **Trophies for the pull**: KINDLED (streak 3), WEEK OF FIRE (streak 7),
+      GREEN THUMB (seed-of-the-day grown) — 36 on the wall; floor-25 +
+      milestone-chest trophies already existed (s48); the weekly-decree
+      trophy ships WITH the Weekly decree item (session 50)
 - [ ] **[big] THE ALCHEMIST — an eighth hero**: no potions — she BREWS: every
       12 coins collected distills one random draught (bomb/frost/heal/gold);
       gems are reagents (+2 draught power); unseals at 5 total deep clears
