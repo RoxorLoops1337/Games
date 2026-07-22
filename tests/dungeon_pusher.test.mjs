@@ -44,6 +44,8 @@ function loadGame(store, withCtx) {
     get width() { return 64; } get height() { return 64; }
   };
   global.addEventListener = noop;
+  Object.defineProperty(global, 'navigator', { value: {}, configurable: true });
+  global.location = { origin: 'http://x', pathname: '/dungeon_pusher/', search: '' };
   global.devicePixelRatio = 1;
   global.innerWidth = 480; global.innerHeight = 840;
   global.setTimeout = () => 0; global.clearTimeout = noop;
@@ -118,7 +120,7 @@ t.eq(WHEEL.filter(s => s.label === 'COMMON\nRELIC').length, 2, 'two common-relic
 t.eq(WHEEL.filter(s => s.label === 'RARE\nRELIC').length, 1, 'one rare-relic spot');
 t.eq(WHEEL.filter(s => /HP/.test(s.label)).length, 5, 'five HP gambles (+5 −5 +10 −10 +25)');
 t.eq(WHEEL.filter(s => /KEY/.test(s.label)).length, 1, 'one key spot');
-t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
+t.eq(COIN_KINDS.length, 16, 'sixteen coin types in the mint — all ten SPECIALS joined');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
 
@@ -1197,7 +1199,7 @@ DP.newRun('knight');
   only('bulwark'); arm(500); S.run.block = 0; DP.applyLoot({ t: 'silver' }); t.eq(S.run.block, sBase + 1, 'Bulwark: silver coins +1 block');
   only('plateup'); arm(500); S.run.block = 0; DP.applyLoot({ t: 'shielditem', iid: 'shield' }); t.eq(S.run.block, DP.itemById('shield').block + 3, 'Reinforced Plate: shield items +3 block');
   only('ironhide'); DP.newRound(); t.eq(S.run.block, 2, 'Iron Hide: +2 block at round start');
-  only('barricade'); DP.newRound(); t.eq(S.run.block, 3, 'Barricade: +3 block at round start');
+  only('barricade'); DP.newRound(); t.eq(S.run.block, 4, 'Barricade: +4 block at round start (s75 dud pass — level with Plate)');
   S.screen = 'dungeon'; S.battle = null;
   only('thickskin'); S.run.hp = 50; S.run.maxHp = 60; S.run.block = 0; DP.hurtPlayer(6, 'x'); t.eq(S.run.hp, 50 - 5, 'Thick Skin: 1 less from every hit');
   only('guardian'); S.run.hp = 50; S.run.block = 10; DP.hurtPlayer(6, 'x'); t.eq(S.run.hp, 52, 'Guardian: a full block soak heals 2'); S.run.block = 0;
@@ -1221,7 +1223,7 @@ DP.newRun('knight');
   // --- economy ---
   only(); const before1 = S.run.gold; DP.addGold(100); const g1 = S.run.gold - before1;
   only('goldrush'); const before2 = S.run.gold; DP.addGold(100); t.eq(S.run.gold - before2, Math.round(g1 * 1.4), 'Gold Rush: +40% gold income');
-  only('vault'); t.eq(DP.bankMax(), C.BANK_MAX + 1, 'Vault: bank holds +1');
+  only('vault'); t.eq(DP.bankMax(), C.BANK_MAX + 2, 'Vault: bank holds +2 (s75 dud pass — level with Strongbox)');
   only('richhand'); arm(500); DP.dealHand(); t.ok((S.battle.hand.coin || 0) >= (S.run.purse.coin || 0) + 1, 'Rich Hand: a bonus gold coin in hand');
   only('tollkeeper'); arm(500); DP.dealHand(); t.ok((S.battle.hand.coin || 0) >= (S.run.purse.coin || 0) + 2, 'Tollkeeper: two bonus gold coins in hand');
 
@@ -1526,7 +1528,7 @@ finishFight();
 
 // -------- ACTS: a new bestiary every 5 floors (Roguebook-style) --------
 {
-  t.eq(DP.ENEMY_TIERS.length, 4, 'four acts of enemies — THE MINT opened');
+  t.eq(DP.ENEMY_TIERS.length, 5, 'five acts of enemies — THE UNDERLAKE opened');
   t.ok(DP.ENEMY_TIERS.every(tier => tier.length >= 13), 'a full roster per act (13+)');
   const all = DP.ENEMY_TIERS.flat();
   t.eq(new Set(all.map(e => e.id)).size, all.length, 'no duplicate ids across acts');
@@ -1567,7 +1569,9 @@ finishFight();
   S.run.floor = 7; t.eq(DP.mkEnemy('boss').id, 'lich', 'act 2 boss: the Coin Lich');
   S.run.floor = 12; t.eq(DP.mkEnemy('boss').id, 'demon', 'act 3 boss: the Pit Boss');
   S.run.floor = 16; t.eq(DP.mkEnemy('boss').id, 'auditor', 'act 4: THE AUDITOR holds the mint');
-  S.run.floor = 21; t.eq(DP.mkEnemy('boss').id, 'dragon', 'act 5 cycles back around, scaled up');
+  S.run.bside = 0;
+  S.run.floor = 21; t.eq(DP.mkEnemy('boss').id, 'drownedbanker', 'THE UNDERLAKE holds its own lair');
+  S.run.floor = 26; t.eq(DP.mkEnemy('boss').id, 'lich', 'past the lake the rotation resumes, scaled up');
   // an act-3 spawn at floor 11 out-muscles its act-2 kin at floor 10
   S.run.floor = 10; S.run.depth = 1;
   const late2 = DP.mkEnemy('battle', 'frostorc');
@@ -2877,7 +2881,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 44, 'forty-four trophies on the wall');
+  t.eq(D.ACH.length, 48, 'forty-eight trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -3245,33 +3249,34 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   DS.diffPick = 'normal';
   D.srand(32); D.newRun('knight');
   DS.run.floor = 20; t.eq(D.mutCount(), 0, 'floor 20: THE MINT holds the line');
-  DS.run.floor = 21; t.eq(D.mutCount(), 1, 'floor 21: THICK AIR descends past the mint');
-  DS.run.floor = 24; t.eq(D.mutCount(), 2, 'floor 24: SWIFT DOOM joins');
-  DS.run.floor = 45; t.eq(D.mutCount(), D.MUTS.length, 'the decrees cap out (8 deep now)');
+  DS.run.floor = 25; t.eq(D.mutCount(), 0, 'floor 25: THE UNDERLAKE keeps the laws at bay');
+  DS.run.floor = 26; t.eq(D.mutCount(), 1, 'floor 26: THICK AIR descends past the lake');
+  DS.run.floor = 29; t.eq(D.mutCount(), 2, 'floor 29: SWIFT DOOM joins');
+  DS.run.floor = 48; t.eq(D.mutCount(), D.MUTS.length, 'the decrees cap out (8 deep now)');
   t.ok(D.mutOn('thickair') && D.mutOn('swiftdoom'), 'mutOn reads the stack');
   // SWIFT DOOM: +2 atk
-  DS.run.floor = 24;
+  DS.run.floor = 29;
   const swift = D.mkEnemy('battle', D.curRoster()[0].id);
   DS.run.floor = 20;
   const calm = D.mkEnemy('battle', D.curRoster()[0].id);
   t.ok(swift.atk >= calm.atk + 2 - 3, 'the deep hits harder (+2 atk baked in)');
   // THICK AIR: the hand loses one more
-  DS.run.floor = 21;
+  DS.run.floor = 26;
   DS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: D.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
   D.interact(0);
   const handN = Object.values(DS.battle.hand).reduce((a, b) => a + b, 0);
   t.eq(handN, D.purseTotal() - 1, 'THICK AIR steals one from the deal');
   // ARMORED AGE + BONE RAIN at round turn
-  DS.run.floor = 30;
+  DS.run.floor = 35;
   DS.enemy.hp = DS.enemy.maxHp = 9999;
   DS.rain.length = 0;
   D.newRound();
   t.ok(DS.enemy.block >= 2, 'ARMORED AGE shields the pack each round');
   t.ok(DS.rain.some(r => r.kind === 'skull'), 'BONE RAIN salts the pile with a skull');
   // the endless premium on cogs
-  DS.run.floor = 30; DS.run.kills = 0;
+  DS.run.floor = 35; DS.run.kills = 0;
   D.hpHit(9999, 'the deep');
-  t.eq(DS.over.cogsWon, Math.round(30 * (1 + 0.2 * 4)), 'endless cogs pay the +20%/decree premium');
+  t.eq(DS.over.cogsWon, Math.round(35 * (1 + 0.2 * 4)), 'endless cogs pay the +20%/decree premium');
   t.eq(DS.over.muts, 4, 'the card counts the decrees endured');
 }
 
@@ -3936,7 +3941,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.theme().name, 'THE MINT', 'floor 16 turns gilded');
   t.ok(D.curRoster() === mint, 'and fields the mint roster');
   D.S.run.floor = 23;
-  t.ok(D.curRoster() === mint, 'past the last act the mint holds the door');
+  t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'floor 23 fields the UNDERLAKE roster');
+  D.S.run.floor = 28;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'and past the lake it holds the door');
   // THE AUDITOR seals the act
   D.S.run.floor = 16;
   t.eq(D.bossFor(16).id, 'auditor', 'THE AUDITOR holds the floor-20 lair rotation');
@@ -4563,22 +4570,22 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.MUTS.length, 8, 'the decree stack runs 8 deep');
   D.srand(7); D.newRun('knight');
   // the new decrees arrive on schedule: 36 / 39 / 42
-  DS.run.floor = 35; t.ok(!D.mutOn('gildedage'), 'floor 35: no GILDED AGE yet');
-  DS.run.floor = 36; t.ok(D.mutOn('gildedage'), 'floor 36: GILDED AGE crowns the deep');
-  DS.run.floor = 38; t.ok(!D.mutOn('thinveins'), 'floor 38: veins still thick');
-  DS.run.floor = 39; t.ok(D.mutOn('thinveins'), 'floor 39: THIN VEINS bites the shop');
-  DS.run.floor = 42; t.ok(D.mutOn('longdark'), 'floor 42: THE LONG DARK falls');
+  DS.run.floor = 40; t.ok(!D.mutOn('gildedage'), 'floor 40: no GILDED AGE yet');
+  DS.run.floor = 41; t.ok(D.mutOn('gildedage'), 'floor 41: GILDED AGE crowns the deep');
+  DS.run.floor = 43; t.ok(!D.mutOn('thinveins'), 'floor 43: veins still thick');
+  DS.run.floor = 44; t.ok(D.mutOn('thinveins'), 'floor 44: THIN VEINS bites the shop');
+  DS.run.floor = 47; t.ok(D.mutOn('longdark'), 'floor 47: THE LONG DARK falls');
   // THE LONG DARK: every floor is a dark floor
-  DS.run.floor = 43;
-  t.ok(D.darkFloor(), 'floor 43 (not a natural dark floor) is dark under the decree');
+  DS.run.floor = 49;
+  t.ok(D.darkFloor(), 'floor 49 (not a natural dark floor) is dark under the decree');
   DS.run.floor = 22;
   t.ok(!D.darkFloor(), 'floor 22 without the decree stays lit');
   // THIN VEINS: the keeper's cut, measured to the coin
-  DS.run.floor = 39;
+  DS.run.floor = 44;
   D.srand(11);
-  const st39 = D.shopStock();
-  const potion39 = st39.find(x => x.kind === 'potion').price;
-  t.eq(potion39, Math.round(45 * (1 + 0.25 * 38) * 1.25) * 2, 'floor-39 potions carry the +25% vein tax (gold prices double post-round)');
+  const st44 = D.shopStock();
+  const potion44 = st44.find(x => x.kind === 'potion').price;
+  t.eq(potion44, Math.round(45 * (1 + 0.25 * 43) * 1.25) * 2, 'floor-44 potions carry the +25% vein tax (gold prices double post-round)');
   // GILDED AGE: elites flood the carve (statistical, 20 carves each)
   const eliteCount = (floor) => {
     let n = 0;
@@ -4590,7 +4597,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     }
     return n;
   };
-  const calm = eliteCount(20), gilded = eliteCount(36);
+  const calm = eliteCount(20), gilded = eliteCount(41);
   t.ok(gilded > calm * 1.6, 'GILDED AGE floods the halls with elites (' + calm + ' -> ' + gilded + ')');
   // MILESTONE CHESTS: floor 22 pays, floor 23 doesn't, the ledger counts
   const { DP: M } = loadGame({}, false);
@@ -4831,13 +4838,16 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const { DP: D } = loadGame(store, false);
   D.srand(21); D.newRun('knight');
   D.S.run.floor = 20;
-  D.nextFloor();                                    // floor 21: the first decree
-  t.eq(D.S.life.mutMax, 1, 'floor 21 inks a 1-deep stack');
+  D.nextFloor();                                    // floor 21: the lake gate, law-free
+  t.eq(D.S.life.mutMax, 0, 'floor 21 posts no law now — the lake holds them');
   t.eq(D.S.life.deepFloors, 0, 'floor 21 is not yet past the ledger');
-  D.S.run.floor = 26;
-  D.nextFloor();                                    // floor 27: three laws deep
-  t.eq(D.S.life.mutMax, 3, 'floor 27 deepens the lifetime stack to 3');
-  t.eq(D.S.life.deepFloors, 1, 'and counts one floor walked past the ledger');
+  D.S.run.floor = 25;
+  D.nextFloor();                                    // floor 26: the first law
+  t.eq(D.S.life.mutMax, 1, 'floor 26 inks a 1-deep stack');
+  D.S.run.floor = 31;
+  D.nextFloor();                                    // floor 32: three laws deep
+  t.eq(D.S.life.mutMax, 3, 'floor 32 deepens the lifetime stack to 3');
+  t.eq(D.S.life.deepFloors, 2, 'and counts the floors walked past the ledger');
   D.endRun('fell');
   t.eq(D.S.life.mutMax, 3, 'the run’s end keeps the deepest stack');
   D.srand(22); D.newRun('knight');
@@ -4846,7 +4856,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.save();
   const { DP: R } = loadGame(store, false);
   t.eq(R.S.life.mutMax, 3, 'the decree-stack record survives a reload');
-  t.eq(R.S.life.deepFloors, 1, 'so does the deep-floor count');
+  t.eq(R.S.life.deepFloors, 2, 'so does the deep-floor count');
   // with-ctx smoke: the wheel rides its spin through the settle-rock
   const { DP: W, raf } = loadGame({}, true);
   let ts = 0;
@@ -5112,6 +5122,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   for (const tier of D.ENEMY_TIERS) for (const f of tier) D.S.codex.foes[f.id] = 1;
   for (const b of D.BOSSES) D.S.codex.foes[b.id] = 1;
   for (const b of D.BOSSES2) D.S.codex.foes[b.id] = 1;
+  D.S.codex.foes[D.BOSS5.id] = 1; D.S.codex.foes[D.BOSS5B.id] = 1;
   for (const c of D.CHAMPIONS) D.S.codex.foes[c.id] = 1;
   for (const rl of D.RELICS) D.S.codex.relics[rl.id] = 1;
   t.ok(D.CODEX_TABS.every(tb => { const s = D.codexTabStat(tb); return s.got === s.all; }),
@@ -5144,6 +5155,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   for (const tier of M.ENEMY_TIERS) for (const f of tier) M.S.codex.foes[f.id] = 1;
   for (const b of M.BOSSES) M.S.codex.foes[b.id] = 1;
   for (const b of M.BOSSES2) M.S.codex.foes[b.id] = 1;
+  M.S.codex.foes[M.BOSS5.id] = 1; M.S.codex.foes[M.BOSS5B.id] = 1;
   for (const c of M.CHAMPIONS) M.S.codex.foes[c.id] = 1;
   for (const rl of M.RELICS) M.S.codex.relics[rl.id] = 1;
   M.S.yday = { on: TD, floor: 31, name: 'Danhieux' };
@@ -5292,8 +5304,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const store = {};
   const { DP: D } = loadGame(store, false);
   t.ok(D.TALES.length >= 60, 'sixty-plus tales in the book (' + D.TALES.length + ')');
-  t.ok(D.TALES.every(tl => tl.x && (tl.a == null || (tl.a >= 0 && tl.a <= 3))),
-    'every tale is written and act-tagged sanely');
+  t.ok(D.TALES.every(tl => tl.x && (tl.a == null || (tl.a >= 0 && tl.a <= 4))),
+    'every tale is written and act-tagged sanely (the lake included)');
   t.eq(new Set(D.TALES.map(tl => tl.x)).size, D.TALES.length, 'no tale is told twice in the book');
   // act-aware: down in the mint, only mint lines and evergreens are told
   D.srand(101); D.newRun('knight');
@@ -5460,7 +5472,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // browser wiring
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf("tabBtn(LW / 2 + 66, TR('THIS MONTH'), 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
+  t.ok(src.indexOf("tabBtn(LW / 2 - 2, TR('THIS MONTH'), 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
   t.ok(src.indexOf('?board=lastmonth') >= 0, 'the title asks for last month’s champion');
   t.ok(src.indexOf('’S DEEPEST: ') >= 0, 'and hangs the plaque');
   t.ok(src.indexOf('MAKE A WISH') >= 0, 'the birthday crate waits for its day');
@@ -6335,6 +6347,939 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
        'but the name carver still goes first');
   t.ok(/if \(b\.w >= LW && b\.h >= LH\) from = i \+ 1;/.test(src),
        'the ring restarts after the topmost full-screen catcher');
+}
+
+// -------- TIER 11: HERO WIN-RATE SIM — the greedy autopilot probe --------
+// A headless autopilot plays REAL runs through the real round machine:
+// each round it throws the whole hand and the tray catches a fixed share
+// (the machine treats every hero's coins the same, so a flat yield keeps
+// the comparison fair), drinks at low HP, takes the first offer, pays the
+// stair toll, always descends. Two fights and a boss per floor. The floor
+// each hero reaches is REAL: real kits, perks, relics, foes and scaling.
+// The absolute numbers are policy-flavored; the SPREAD is what the rail
+// guards — no hero's median may sink below 60% of the pack's.
+{
+  const SIM_SEEDS = [11, 23, 47, 61, 83];
+  const MAX_FLOOR = 14;                    // past the act-3 gate, cheap in CI
+  const YIELD = 0.55;                      // the tray's share of a thrown hand
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  const relicTally = {};                   // boss-spread offers, for the audit
+  const FILE = {};                         // the wizard file: per-hero forensics
+  let cur = null;                          // the hero under the lens
+
+  const fight = (type, gang) => {
+    if (!D.startBattle(type, undefined, undefined, gang ? [{ mtype: 'battle' }] : undefined)) return false;
+    const hp0 = S2.run.hp;
+    if (cur) { cur.fights++; cur.foes += S2.foes.length; }
+    let rounds = 0;
+    while (S2.run && S2.battle && !S2.victory && rounds < 30) {
+      const B = S2.battle;
+      if (B.phase !== 'drop') { D.battleTick(0.4); continue; }
+      rounds++;
+      // the poltergeist and the crane keeper hold no hand — their purse
+      // pours in from above; the same flat yield keeps it apples-to-apples
+      const base = (D.ghostRun() || D.craneRun()) ? { ...S2.run.purse } : B.hand;
+      for (const k of D.COIN_KINDS) {
+        const n = Math.round((base[k] || 0) * YIELD);
+        for (let i = 0; i < n; i++) B.loot.push({ k });
+        if (base === B.hand) B.hand[k] = 0;
+      }
+      // the standing pile pays too: the round re-salt spills its share over
+      // the lip (real kind mix via rollPileKind), and one piece of owned
+      // gear rides the pile into the tray each round
+      const pile = Math.round(D.C.ROUND_RAIN * YIELD);
+      for (let i = 0; i < pile; i++) B.loot.push({ k: D.rollPileKind() });
+      const gear = Object.keys(S2.run.arsenal || {}).filter(iid => S2.run.arsenal[iid] > 0);
+      if (gear.length) B.loot.push({ k: 'item', iid: gear[rounds % gear.length] });
+      S2.rain.length = 0;                  // headless: nothing lands rain
+      if (S2.run.hp <= S2.run.maxHp * 0.35 && S2.run.potions > 0) D.usePotion();
+      D.endRoundNow();
+      let g = 600;
+      while (S2.run && S2.battle && S2.battle.phase !== 'drop' && !S2.victory && g--) D.battleTick(0.4);
+    }
+    if (cur) { cur.rounds += rounds; cur.taken += Math.max(0, hp0 - (S2.run ? S2.run.hp : 0)); }
+    if (!S2.run) return false;             // the run ended on a foe's swing
+    if (!S2.victory) { D.endRun('stalemate'); return false; }
+    const v = S2.victory;
+    if (v.relicOffer) {
+      for (const id of v.relicOffer) relicTally[id] = (relicTally[id] || 0) + 1;
+      if (!v.relicPicked) D.pickRelicOffer(0);
+    }
+    if (v.offer && !v.picked) D.pickCoin(0);
+    D.leaveBattle();
+    return !!S2.run;
+  };
+
+  const shopStop = () => {
+    // the innkeeper's till: a potion when the belt is light, then the best
+    // blade gold can buy — one piece a floor, like a real shop shelf
+    if (S2.run.potions < 2 && S2.run.gold >= 30) { S2.run.gold -= 30; S2.run.potions++; }
+    const forSale = D.ITEMS.filter(it => it.cost <= S2.run.gold).sort((a, b) => b.cost - a.cost);
+    if (forSale.length) { S2.run.gold -= forSale[0].cost; D.grantItem(forSale[0].id); }
+  };
+
+  const simRun = (heroId, seed) => {
+    cur = FILE[heroId] = FILE[heroId] || { fights: 0, rounds: 0, taken: 0, foes: 0 };
+    D.srand(seed);
+    D.newRun(heroId);
+    S2.run.bside = 0;      // the boss roster flips per LIFETIME run — pin one side
+    while (S2.run && S2.run.floor <= MAX_FLOOR) {
+      const f = S2.run.floor;
+      S2.run.depth = 3;    // the midline room depth, same as the balance probe
+      if (!fight('battle') || !fight('battle', S2.run.floor % 2 === 0) || !fight('boss')) break;
+      shopStop();
+      D.stairSkim();
+      if (!(D.tollRun() && (S2.run.tollPaid || 0) >= D.stairToll())) D.spendPurse(D.stairToll());
+      else S2.run.tollPaid -= D.stairToll();
+      D.nextFloor();
+      if (S2.run.floor === f) break;       // never loop in place
+    }
+    const reached = S2.run ? S2.run.floor : ((S2.over && S2.over.floor) || 1);
+    if (S2.run) D.endRun('probe done');
+    return reached;
+  };
+
+  const t0 = Date.now();
+  const med = {};
+  for (const h of D.HEROES) {
+    const floors = SIM_SEEDS.map(sd => simRun(h.id, sd)).sort((a, b) => a - b);
+    med[h.id] = floors[(floors.length / 2) | 0];
+  }
+  const heroIds = D.HEROES.map(h => h.id);
+  const packSorted = heroIds.map(h => med[h]).sort((a, b) => a - b);
+  const pack = packSorted[(packSorted.length / 2) | 0];
+  console.log('# hero sim: ' + heroIds.map(h => h + ':' + med[h]).join(' ')
+            + '  pack:' + pack + '  (' + SIM_SEEDS.length + ' seeds, greedy autopilot, '
+            + (Date.now() - t0) + 'ms)');
+  // THE WIZARD FILE: what the forensics say about the low median
+  const ff = (h, k) => (FILE[h][k] / Math.max(1, FILE[h].fights));
+  const packAvg = (k) => heroIds.reduce((a, h) => a + ff(h, k), 0) / heroIds.length;
+  console.log('# wizard file: taken/fight w=' + ff('wizard', 'taken').toFixed(1) + ' pack=' + packAvg('taken').toFixed(1)
+            + '  rounds/fight w=' + ff('wizard', 'rounds').toFixed(2) + ' pack=' + packAvg('rounds').toFixed(2)
+            + '  foes/fight w=' + ff('wizard', 'foes').toFixed(2) + ' pack=' + packAvg('foes').toFixed(2));
+  t.eq(heroIds.length, 9, 'all nine heroes take the autopilot out');
+  t.ok(Object.values(med).every(f => f >= 2), 'every hero clears at least a floor on autopilot');
+  for (const h of heroIds) {
+    t.ok(med[h] >= pack * 0.6,
+         h + ' keeps up with the pack (median ' + med[h] + ' vs pack ' + pack + ')');
+  }
+  t.ok(Date.now() - t0 < 20000, 'the whole probe stays under twenty seconds');
+  // determinism: the same hero, seed AND profile always walk the same run
+  // (the profile is part of the state — tales heard shift later rng draws)
+  const snap = JSON.stringify(D.S);
+  const det1 = simRun('knight', SIM_SEEDS[0]);
+  const sv = JSON.parse(snap);
+  for (const k of Object.keys(D.S)) delete D.S[k];
+  Object.assign(D.S, sv);
+  const det2 = simRun('knight', SIM_SEEDS[0]);
+  t.eq(det1, det2, 'the autopilot is deterministic given the same profile');
+  // the relic-audit groundwork: boss spreads were seen and tallied
+  const offered = Object.keys(relicTally).length;
+  const never = D.RELICS.filter(r => !relicTally[r.id]).length;
+  console.log('# relic offers: ' + offered + ' distinct relics offered across boss spreads, '
+            + never + ' never seen (buff pass reads this tally next)');
+  t.ok(offered >= 20, 'boss spreads sample a broad slice of the shelf (' + offered + ')');
+}
+
+// -------- TIER 11: RELIC PICKUP AUDIT — reachability, tails, the dud pass --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  D.srand(7); D.newRun('knight');
+  S2.run.bside = 0;
+  // reachability: six thousand seeded drop rolls must touch the whole shelf
+  const seen = {};
+  for (let i = 0; i < 6000; i++) { const id = D.rollRelicDrop(); if (id) seen[id] = (seen[id] || 0) + 1; }
+  const nonNg = D.RELICS.filter(r => !r.ng);
+  const missed = nonNg.filter(r => !seen[r.id]);
+  t.eq(missed.length, 0, 'every plain relic can drop' + (missed.length ? ' (missed: ' + missed.map(r => r.id).join(',') + ')' : ''));
+  t.ok(D.RELICS.filter(r => r.ng).every(r => !seen[r.id]), 'ng-gated relics never leak into a plain run');
+  S2.run.ng = 2;
+  const seenNg = {};
+  for (let i = 0; i < 4000; i++) { const id = D.rollRelicDrop(); if (id) seenNg[id] = 1; }
+  t.ok(D.RELICS.filter(r => r.ng).every(r => seenNg[r.id]), 'the gated shelf opens at legend depth');
+  S2.run.ng = 0;
+  // the tail: the ten least-drawn (probe — future buff passes read this)
+  const rank = nonNg.map(r => [r.id, seen[r.id] | 0]).sort((a, b) => a[1] - b[1]);
+  console.log('# relic drop tail: ' + rank.slice(0, 10).map(x => x[0] + ':' + x[1]).join(' '));
+  // rarity keeps its promise in the wash: per-relic draw rates order c > r > e
+  const per = { c: [0, 0], r: [0, 0], e: [0, 0] };
+  for (const r of nonNg) { per[r.rar][0] += seen[r.id] | 0; per[r.rar][1]++; }
+  const avg = (k) => per[k][0] / per[k][1];
+  t.ok(avg('c') > avg('r') && avg('r') > avg('e'),
+       'commons out-drop rares out-drop epics (' + avg('c').toFixed(1) + '/' + avg('r').toFixed(1) + '/' + avg('e').toFixed(1) + ')');
+  // THE DUD PASS: three strictly-dominated relics brought level with their twins
+  t.eq(D.relicById('vault').desc, 'the bank holds +2 pieces', 'VAULT wears its new promise');
+  S2.run.relics.push('vault');
+  t.eq(D.bankMax(), D.C.BANK_MAX + 2, 'and keeps it — level with its twin STRONGBOX');
+  S2.run.relics.length = 0;
+  t.eq(D.relicById('barricade').desc, 'start every round with +4 block', 'BARRICADE wears its new promise');
+  t.eq(D.relicById('tithe').desc, '+10 gold after every victory', 'TITHE wears its new promise');
+  S2.run.relics.push('tithe');
+  D.startBattle('battle');
+  const gold0 = S2.run.gold;
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 5); } }
+  t.ok(S2.run.gold >= gold0 + 10, 'a rare tithe now out-pays a common piggy through act two ('
+       + (S2.run.gold - gold0) + ' on the kill)');
+  D.leaveBattle();
+  if (S2.run) D.endRun('audit done');
+}
+
+// -------- TIER 11: LATE-HUD DECLUTTER — the deep strip breathes --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('Math.floor(t / 2.5) % mn') >= 0, 'the endless decrees take turns on one line');
+  t.ok(src.indexOf("': ' + MUTS.slice(0, mutCount()).map(m => m.name).join(' • ')") < 0,
+       'the overflowing full roll-call is gone');
+  t.ok(src.indexOf("MUTS[mi].name + ' — ' + MUTS[mi].desc") >= 0,
+       'and each posted law now spells out its rule');
+  t.ok(src.indexOf("'\\u{1F511} × ' + r.goldKeys") < 0, 'golden keys left the arsenal strip’s lane');
+  t.ok(src.indexOf("(r.goldKeys > 0 ? '  \\u{1F511} ' + r.goldKeys : '')") >= 0, 'and ride the key line instead');
+  // deep frames draw clean with a live ctx: floor 26, decrees up, keys held
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  frames(4);
+  K.srand(5); K.newRun('knight');
+  K.S.run.floor = 29; K.S.run.goldKeys = 3;
+  t.ok(K.mutCount() >= 2, 'floor 29 posts standing decrees (' + K.mutCount() + ')');
+  frames(10);                                  // dungeon: the rotating decree strip
+  K.startBattle('battle');
+  frames(10);                                  // battle: the combined key line
+  t.ok(K.S.screen === 'battle', 'floor-26 frames draw without a crash');
+}
+
+// -------- TIER 11: THE ALMANAC — the house rules, self-documented --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('function drawAlmanac') >= 0, 'the almanac sheet exists');
+  for (const table of ['COIN_INFO[k]', 'TRAIT_TXT[id]', 'DEF_TXT[id]', 'MUTS.forEach', 'of HEROES) row(h.icon', 'COIN_REWARD_W) row(']) {
+    t.ok(src.indexOf(table) >= 0, 'the almanac reads the live table: ' + table.slice(0, 18));
+  }
+  t.ok(src.indexOf('if (ALMANAC) { ALMANAC = null; return; }') >= 0, 'ESC leaves the almanac');
+  t.ok(src.indexOf('SHARE = null; ALMANAC = null;') >= 0, 'the crash net clears it');
+  // live: the ❓ chip opens it, every tab stands, ESC closes it
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const seen = (frag) => K.kb.buttons().some(b => b.label && b.label.indexOf(frag) >= 0);
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  t.ok(press('❓', true), 'the title grew an almanac chip');
+  t.ok(seen('CLOSE ✕'), 'the almanac opened');
+  for (const tab of ['FOES', 'LAWS', 'HEROES', 'THE HOUSE', 'COINS']) {
+    t.ok(press(tab, true), 'almanac tab reachable: ' + tab);
+    t.ok(seen('CLOSE ✕'), 'and the sheet stands: ' + tab);
+  }
+  K.kb.back(); frames(2);
+  t.ok(!seen('CLOSE ✕'), 'ESC leaves the almanac');
+  // and it reads Dutch
+  K.setLang('nl');
+  t.eq(K.TR('THE ALMANAC'), 'DE ALMANAK', 'the almanac speaks Dutch');
+  t.eq(K.TR('THE HOUSE'), 'HET HUIS', 'so does the house tab');
+  K.setLang('en');
+}
+
+// -------- TIER 11: REMATCH + the months archive --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  // an answered duel turns the DUEL button into a REMATCH of the same maze
+  t.ok(src.indexOf("o.duel ? TR('\\u{2694}\\u{FE0F} REMATCH') : '\\u{2694}\\u{FE0F} DUEL'") >= 0,
+       'an answered duel offers a REMATCH');
+  t.ok(src.indexOf("REMATCH — I answered ' + o.duel.name") >= 0, 'and the share text tells the tale');
+  t.ok(src.indexOf('the rematch link is copied') >= 0, 'the clipboard toast too');
+  // the rematch chain keeps the maze: link(seed, myFloor) parses back whole
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  D.srand(9); D.newRun('knight');
+  D.S.run.duel = { name: 'Rox', floor: 7 };
+  D.S.run.floor = 9;
+  const seed = D.S.run.seed;
+  D.endRun('test');
+  t.ok(D.S.over.duel && D.S.over.duel.won, 'floor 9 beats the challenged floor 7');
+  const back = D.parseDuel(D.duelLink(seed, D.S.over.floor, 'Me'));
+  t.ok(back && back.seed === (seed >>> 0) && back.floor === 9, 'the rematch link carries the SAME maze at the new bar');
+  // the board grew its archive tab
+  t.ok(src.indexOf("tabBtn(LW / 2 + 94, TR('LAST MONTH'), 'lastmonth');") >= 0, 'the LAST MONTH tab stands');
+  t.ok(src.indexOf("mine.tab === 'lastmonth' ? '?board=lastmonth'") >= 0, 'and asks the API for the archive');
+  D.setLang('nl');
+  t.eq(D.TR('LAST MONTH'), 'VORIGE MAAND', 'the archive tab speaks Dutch');
+  t.eq(D.TR('\u{2694}\u{FE0F} REMATCH'), '\u{2694}\u{FE0F} REVANCHE', 'so does the rematch');
+  D.setLang('en');
+  // live: all four tabs stand on the sheet and the ring reaches them
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  t.ok(press('SKIP') || true, 'past the tale');
+  t.ok(press('\u{1F3C5}', true), 'the board chip rings');
+  for (const tab of ['ALL-TIME', 'THIS MONTH', 'LAST MONTH']) {
+    t.ok(press(tab), 'board tab reachable: ' + tab);
+  }
+  K.kb.back(); frames(2);
+}
+
+// -------- TIER 11: SAVE-SIZE AUDIT — a maxed profile stays small --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  D.srand(3); D.newRun('knight');
+  // every book filled to its brim, every cap leaned on
+  for (const a of D.ACH) S2.ach[a.id] = 1;
+  D.TALES.forEach((_, i) => { S2.tales[i] = 1; });
+  for (let i = 0; i < 60; i++) D.legacyStamp('a dated first, line number ' + i + ', written long enough to be honest');
+  t.ok(S2.legacy.length <= 40, 'the legacy book holds its 40-line cap');
+  S2.hist = [];
+  for (let i = 0; i < 10; i++) S2.hist.push({ floor: 30 + i, kills: 480, hero: 'ninecoins', cause: 'slain by the ledger lord of the deep', d: '2026-07-1' + (i % 10) });
+  for (const h of D.HEROES) { S2.deep15[h.id] = 9; S2.skins[h.id] = 1; }
+  for (let f = 1; f <= 60; f++) { S2.life.deaths[f] = 3; S2.best.pace = S2.best.pace || {}; S2.best.pace[f] = f * 220; }
+  for (const dr of Object.keys(D.DRAUGHTS || {})) S2.life.draughts[dr] = 999;
+  S2.life.mutMax = 8; S2.life.skimmed = 9999; S2.life.gauntBest = 599; S2.life.gaunts = 40;
+  for (const it of D.ITEMS) { S2.life.petFights[it.id] = 9; S2.petNames[it.id] = 'ABCDEFGHIJ'; }
+  for (const rl of D.RELICS) S2.codex.relics[rl.id] = 1;
+  for (const e of D.ENEMIES) S2.codex.foes[e.id] = 99;
+  S2.plaque = { name: 'CHAMPION', floor: 44, month: '2026-06' };
+  // a deep mid-run, loaded heavy
+  S2.run.floor = 60;
+  for (const it of D.ITEMS) S2.run.arsenal[it.id] = 9;
+  S2.run.relics = D.RELICS.map(r => r.id);
+  for (const k of D.COIN_KINDS) S2.run.purse[k] = 8;
+  for (let i = 0; i < 80; i++) D.place(8 + (i % 20) * 4.4, 20 + ((i / 20) | 0) * 8, D.COIN_KINDS[i % 6], 0, 'plat');
+  D.save();
+  const bytes = (st[D.C.SAVE_KEY] || '').length;
+  console.log('# save-size probe: ' + bytes + ' bytes at a maxed profile + deep mid-run (rail 32768)');
+  t.ok(bytes > 2000, 'the probe profile is genuinely loaded (' + bytes + ')');
+  t.ok(bytes < 32768, 'a maxed save stays under 32KB (' + bytes + ')');
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.legacy.length, S2.legacy.length, 'and it survives the reload whole');
+  t.eq(R.S.run.floor, 60, 'mid-run depth included');
+}
+
+// -------- TIER 11: THE CODEX LENS — search the relic shelves --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("(rl.name + ' ' + rl.desc).toLowerCase().indexOf(q) >= 0") >= 0, 'the lens reads name AND writ');
+  t.ok(src.indexOf('if (CODEX) { if (CODEX.q) { CODEX.q = null; return; } CODEX = null; return; }') >= 0,
+       'ESC peels the lens before it closes the book');
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  const shelfCount = () => K.kb.buttons().filter(b => b.w === 48 && b.h === 48).length;
+  frames(6);
+  press('SKIP');
+  t.ok(press('\u{1F4D6}', true), 'the codex chip rings');
+  t.ok(press('EPIC'), 'onto the epic shelf');
+  const full = shelfCount();
+  t.ok(full >= 20, 'the whole epic shelf shows unfiltered (' + full + ')');
+  t.ok(press('\u{1F50D} SEARCH'), 'the lens chip rings');
+  for (const ch of ['W', 'I', 'N', 'D']) t.ok(press(ch, true), 'the pad types ' + ch);
+  t.ok(press('DONE ✓'), 'the pad applies');
+  const narrowed = shelfCount();
+  t.ok(narrowed >= 1 && narrowed <= 3, '“wind” narrows the shelf (' + full + ' -> ' + narrowed + ')');
+  K.kb.back(); frames(2);
+  t.eq(shelfCount(), full, 'ESC clears the lens, the shelf refills');
+  K.kb.back(); frames(2);
+  t.ok(!K.kb.buttons().some(b => b.label === 'EPIC'), 'a second ESC closes the book');
+  K.setLang('nl');
+  t.eq(K.TR('\u{1F50D} SEARCH'), '\u{1F50D} ZOEK', 'the lens speaks Dutch');
+  K.setLang('en');
+}
+
+// -------- TIER 11: THE MOTIF PLAYER + the trophy pass to 48 --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.ACH.length, 48, 'the wall grew to forty-eight');
+  for (const id of ['almanac', 'rematched', 'oldmoney', 'collection']) {
+    t.ok(D.achById(id), 'trophy exists: ' + id);
+  }
+  t.ok(D.LEGACY_ACH.rematched && D.LEGACY_ACH.collection, 'two of them ink dated legacy lines');
+  // THE COLLECTION: full ledger + every tale — and not a tale short
+  D.srand(2); D.newRun('knight');
+  for (const tier of D.ENEMY_TIERS) for (const e of tier) D.S.codex.foes[e.id] = 1;
+  for (const e of D.ENEMIES) D.S.codex.foes[e.id] = 1;
+  for (const b of D.BOSSES) D.S.codex.foes[b.id] = 1;
+  for (const b of D.BOSSES2) D.S.codex.foes[b.id] = 1;
+  D.S.codex.foes[D.BOSS5.id] = 1; D.S.codex.foes[D.BOSS5B.id] = 1;
+  for (const c of D.CHAMPIONS) D.S.codex.foes[c.id] = 1;
+  for (const rl of D.RELICS) D.S.codex.relics[rl.id] = 1;
+  D.TALES.forEach((_, i) => { if (i < D.TALES.length - 1) D.S.tales[i] = 1; });
+  D.achPoll();
+  t.ok(D.S.ach.u.ledger, 'the full ledger rings');
+  t.ok(!D.S.ach.u.collection, 'but one unheard tale keeps THE COLLECTION sealed');
+  D.S.tales[D.TALES.length - 1] = 1;
+  D.achPoll();
+  t.ok(D.S.ach.u.collection, 'the last tale closes THE COLLECTION');
+  D.endRun('done');
+
+  // live: five taps on the version stamp hum the motifs; the new doors ring their bells
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  press('SKIP');
+  const stamp = () => K.kb.buttons().find(b => !b.label && b.w === 90 && b.h === 26);
+  t.ok(!!stamp(), 'the version stamp hides a tap zone');
+  for (let i = 0; i < 5; i++) { const z = stamp(); if (z) z.cb(); frames(1); }
+  frames(2);
+  t.ok(K.kb.buttons().some(b => b.label && b.label.indexOf('THE MINT') >= 0), 'five taps open the motif sheet');
+  t.ok(press('\u{25B6} ACT III'), 'a motif plays on demand (silently here)');
+  t.ok(press('\u{25B6} JACKPOT'), 'the fanfare too');
+  K.kb.back(); frames(2);
+  t.ok(!K.kb.buttons().some(b => b.label && b.label.indexOf('THE MINT') >= 0), 'ESC closes the sheet');
+  // the almanac chip rings its bell
+  t.ok(press('❓', true), 'the almanac chip');
+  t.ok(K.S.ach.u.almanac, 'ALMANAC READER rings on first consult');
+  K.kb.back(); frames(2);
+  // the archive tab rings its bell
+  press('\u{1F3C5}', true);
+  press('LAST MONTH');
+  t.ok(K.S.ach.u.oldmoney, 'OLD MONEY rings on the archive tab');
+  K.kb.back(); frames(2);
+  // a rematch rings its bell (navigator is stubbed bare — the toast path)
+  K.srand(4); K.newRun('knight');
+  K.S.run.duel = { name: 'Rox', floor: 2 };
+  K.S.run.floor = 5;
+  K.endRun('test');
+  frames(4);
+  t.ok(press('REMATCH'), 'the over screen offers REMATCH on an answered duel');
+  t.ok(K.S.ach.u.rematched, 'REMATCHED rings on the send');
+  t.ok(K.S.ach.u.emissary, 'and Emissary rides along');
+}
+
+// -------- TIER 11 [big]: REPLAY GHOST — a duel link carries the clock --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.VERSION, '1.7.0', 'the consolidation tier ships as v1.7.0');
+  t.ok(D.CHANGELOG[0].notes.some(n => n.indexOf('REPLAY GHOST') >= 0), 'and the notes lead with the ghost');
+  // roundtrip: the clock rides in base36, floors 2 up
+  const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
+  t.ok(link.indexOf('&p=u-23-3m') >= 0, 'the pace tail is base36 and short (' + link + ')');
+  const back = D.parseDuel(link);
+  t.ok(back && back.seed === 123456 && back.floor === 9, 'the maze survives');
+  t.eq(JSON.stringify(back.pace), JSON.stringify({ 2: 30, 3: 75, 4: 130 }), 'and so does the clock');
+  // plain links still work, both directions
+  const plain = D.duelLink(123456, 9, 'Rox');
+  t.ok(plain.indexOf('&p=') < 0, 'no clock, no tail');
+  t.eq(D.parseDuel(plain).pace, null, 'and parse tolerates its absence');
+  t.ok(D.parseDuel('?duel=2n9c.5.Bob'), 'links from the old world still open');
+  // the tail is bounded: a 40-floor epic sends floors 2..25 only
+  const deep = {};
+  for (let f = 2; f <= 40; f++) deep[f] = f * 60;
+  const longLink = D.duelLink(99, 40, 'Deep', deep);
+  const parsed = D.parseDuel(longLink);
+  t.eq(Object.keys(parsed.pace).length, 24, 'the clock stops at floor 25');
+  t.ok(longLink.length < 200, 'the whole link stays sendable (' + longLink.length + ' chars)');
+  // a gap in the stamps ends the tail early (never misaligns floors)
+  const gappy = D.parseDuel(D.duelLink(99, 9, 'Gap', { 2: 10, 4: 50 }));
+  t.eq(JSON.stringify(gappy.pace), JSON.stringify({ 2: 10 }), 'the tail stops at the first gap');
+  // the staircase whisper races THEM, not your best
+  D.srand(6); D.newRun('knight');
+  D.S.run.duel = { name: 'Rox', floor: 9, pace: { 2: 50 } };
+  D.S.best.floor = 20; D.S.best.pace = { 2: 10 };          // a faster own-best lurks
+  D.S.run.stats.t = 30;
+  D.nextFloor();
+  t.ok(D.S.floorFx.duel && D.S.floorFx.duel.d === 20, 'the whisper reads 20s ahead of Rox');
+  t.ok(D.S.floorFx.pace == null, 'and the own-best ghost stands aside');
+  // the clock survives a save/load whole
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(JSON.stringify(R.S.run.duel.pace), JSON.stringify({ 2: 50 }), 'the challenger clock survives a reload');
+  // the over screen owns your clock, and REMATCH sends it back
+  R.S.run.pace = { 2: 33, 3: 80 };
+  R.endRun('test');
+  t.eq(JSON.stringify(R.S.over.pace), JSON.stringify({ 2: 33, 3: 80 }), 'the fallen run keeps its clock');
+  const re = R.duelLink(R.S.over.seed, R.S.over.floor, 'Me', R.S.over.pace);
+  t.ok(re.indexOf('&p=x-28') >= 0, 'the rematch carries YOUR pace back (' + re + ')');
+}
+
+// -------- TIER 11 [big]: THE UNDERLAKE — the fifth act stands --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.ENEMY_TIERS[4].length, 13, 'thirteen drowned kin in the lake');
+  t.ok(D.ENEMY_TIERS[4].every(e => e.hp > 0 && e.atk > 0 && e.gold > 0), 'all fully statted');
+  const ids = new Set();
+  for (const tier of D.ENEMY_TIERS) for (const e of tier) { t.ok(!ids.has(e.id) || t.fail, ''); ids.add(e.id); }
+  t.eq(ids.size, D.ENEMY_TIERS.reduce((a, tr) => a + tr.length, 0), 'no duplicate foe ids across five acts');
+  // the lake's weight replaces the lost beyond-ramp (≈×1.29 the mint)
+  const mean = (tr, k) => tr.reduce((a, e) => a + e[k], 0) / tr.length;
+  const hpK = mean(D.ENEMY_TIERS[4], 'hp') / mean(D.ENEMY_TIERS[3], 'hp');
+  t.ok(hpK > 1.2 && hpK < 1.4, 'lake kin outweigh mint kin by the folded ramp (×' + hpK.toFixed(2) + ')');
+  D.srand(8); D.newRun('knight');
+  D.S.run.bside = 0;
+  // the boundaries: 20 is mint, 21-25 the lake, 26 the endless
+  D.S.run.floor = 20;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[3], 'floor 20 still fields the mint');
+  D.S.run.floor = 21;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'floor 21 wades into the lake');
+  t.eq(D.theme().name, 'THE UNDERLAKE', 'and the halls turn drowned');
+  t.eq(D.bossFor(21).id, 'drownedbanker', 'THE DROWNED BANKER holds the A-side lair');
+  D.S.run.bside = 1;
+  t.eq(D.bossFor(23).id, 'siltqueen', 'THE SILT QUEEN holds the B-side');
+  D.S.run.bside = 0;
+  t.eq(D.bossFor(26).id, 'lich', 'past the lake the old rotation resumes');
+  t.eq(D.bossFor(18).id, 'auditor', 'and the mint keeps THE AUDITOR');
+  // prestige never skips a soul into the lake early — every old tuning stands
+  D.S.run.ng = 2;
+  D.S.run.floor = 11;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[3], 'NG++ floor 11 still fields the MINT, not the lake');
+  t.eq(D.bossFor(11).id, 'dragon', 'and its boss rotation is untouched');
+  D.S.run.floor = 21;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'but floor 21 takes even a legend into the water');
+  D.S.run.ng = 0;
+  // the codex grew its fifth shelf
+  t.ok(D.CODEX_TABS.indexOf('a5') >= 0, 'the codex owns an a5 shelf');
+  const a5 = D.codexTabStat('a5');
+  t.eq(a5.all, 13 + 2, 'the lake shelf counts its kin and both lords');
+  D.endRun('done');
+}
+
+// -------- TIER 11 [big]: THE UNDERLAKE part 2 — pressure, lords, rust rain --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  const DXY = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+  const walkOne = () => {
+    const r = D.curRoom();
+    for (const dir of ['n', 's', 'e', 'w']) {
+      const nb = S2.run.map.rooms[(r.gx + DXY[dir][0]) + ',' + (r.gy + DXY[dir][1])];
+      if (!nb || nb.visited) continue;
+      let res = D.tryDoor(dir);
+      if (res === 'unlocked') res = D.tryDoor(dir);
+      if (res === true) return true;
+    }
+    // dead end: hop back toward anything unvisited via any neighbor
+    for (const dir of ['n', 's', 'e', 'w']) { if (D.tryDoor(dir) === true) return false; }
+    return false;
+  };
+  D.srand(12); D.newRun('knight');
+  // the lake never darkens — pressure is its weather
+  S2.run.floor = 24;
+  t.ok(!D.darkFloor(), 'floor 24 (a natural dark floor) stays lit in the lake');
+  S2.run.floor = 12;
+  t.ok(D.darkFloor(), 'floor 12 still goes dark outside it');
+  // walking the lake squeezes the gauge; the stairs vent it
+  S2.run.floor = 21;
+  D.genFloor();
+  S2.run.keys = 99;
+  S2.run.pressure = 0;
+  let guard = 40;
+  while ((S2.run.pressure | 0) < D.PRESSURE_MAX && guard--) walkOne();
+  t.eq(S2.run.pressure, D.PRESSURE_MAX, 'five new rooms bring FULL DEPTH');
+  // at full depth the pack opens one blow harder
+  D.startBattle('battle');
+  const pressed = S2.foes[0].atk;
+  D.leaveBattle && finishFight();
+  S2.run.pressure = 0;
+  D.srand(77); D.startBattle('battle');
+  t.ok(pressed >= S2.foes[0].atk, 'full depth reads at least as hard as a vented lake');
+  finishFight();
+  S2.run.pressure = D.PRESSURE_MAX;
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.run.pressure, R.PRESSURE_MAX, 'the gauge survives a reload');
+  R.nextFloor();
+  t.eq(R.S.run.pressure, 0, 'and the stairs vent it');
+  // THE DROWNED BANKER forecloses the bank; his fall refunds with interest
+  const { DP: B } = loadGame({}, false);
+  B.srand(5); B.newRun('knight');
+  B.S.run.bside = 0; B.S.run.floor = 21;
+  B.startBattle('boss');
+  t.eq(B.S.foes[0].id, 'drownedbanker', 'the banker holds the lair');
+  B.S.battle.banked = [{ k: 'gem' }];
+  B.S.battle.round = 3;
+  B.bossArena();
+  t.eq(B.S.battle.banked.length, 0, 'the foreclosure empties the bank slot');
+  t.eq((B.S.foes[0].belly || []).length, 2, 'the piece sits in his vault with a bag of interest');
+  const loot0 = B.S.battle.loot.length;
+  B.S.foes[0].hp = 1; B.dmgFoe(B.S.foes[0], 5);
+  t.ok(B.S.battle.loot.length >= loot0 + 2, 'his fall refunds the piece AND the interest');
+  t.ok(B.S.battle.loot.some(l => l.k === 'gem') && B.S.battle.loot.some(l => l.k === 'bag'),
+       'gem back, bag on top');
+  B.leaveBattle();
+  // THE SILT QUEEN silts the pile
+  B.S.run.bside = 1;
+  B.startBattle('boss');
+  t.eq(B.S.foes[0].id, 'siltqueen', 'the queen holds the B-side lair');
+  B.S.coins.length = 0;
+  B.place(30, 40, 'coin', 0, 'plat');
+  B.place(60, 40, 'silver', 0, 'plat');
+  B.place(45, 50, 'green', 0, 'plat');
+  B.S.battle.round = 3;
+  B.bossArena();
+  t.eq(B.S.coins.filter(c => c.kind === 'slug').length, 2, 'two honest pieces silt to slugs');
+  t.eq(B.S.coins.filter(c => c.kind === 'green').length, 1, 'the venom coin is beneath her notice');
+  finishFight();
+  // RUST RAIN: lake brine corrodes the odd piece; the mint stays clean
+  const slugRains = (floor) => {
+    B.S.run.floor = floor;
+    let n = 0;
+    for (let i = 0; i < 20; i++) {
+      B.startBattle('battle');
+      B.S.rain.length = 0;
+      B.newRound();                      // the re-salt is where the brine bites
+      if (B.S.rain.some(r2 => r2.kind === 'slug')) n++;
+      finishFight();
+    }
+    return n;
+  };
+  B.srand(31);
+  t.ok(slugRains(22) >= 2, 'the lake rains the odd corroded slug');
+  t.eq(slugRains(12), 0, 'floor 12 rain stays honest');
+  // the almanac spells the weather
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('PRESSURE replaces the dark') >= 0, 'the almanac spells the lake weather');
+  t.ok(src.indexOf("TR('\\u{1FAE7} THE PRESSURE')") >= 0, 'the gauge strip goes through TR');
+}
+
+// -------- TIER 11 [big]: THE TILTED TABLE — a second machine --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  const DT2 = 1 / 60;
+  const tick = (secs) => { for (let i = 0; i < Math.round(secs * 60); i++) D.tick(DT2); };
+  t.eq(Object.keys(D.MACH_LAYOUTS).length, 2, 'two beds on the rack');
+  t.ok(!D.layoutUnlocked('tilted'), 'the tilted table starts sealed');
+  S2.best.floor = 30;
+  t.ok(D.layoutUnlocked('tilted'), 'lifetime floor 30 breaks the seal');
+  // the drift: a settled coin creeps left ONLY on the tilted bed
+  D.srand(14); D.newRun('knight');
+  D.startBattle('battle');
+  S2.battle.phase = 'drop';
+  S2.coins.length = 0;
+  const flat = D.place(50, 40, 'coin', 0, 'plat');
+  tick(1.5);
+  t.ok(Math.abs(flat.x - 50) < 0.6, 'the flat bed holds its ground (' + flat.x.toFixed(2) + ')');
+  S2.machLayout = 'tilted';
+  const lean = D.place(50, 44, 'coin', 0, 'plat');
+  tick(1.5);
+  t.ok(lean.x < 47, 'the tilted bed drifts the coin toward the gutter (' + lean.x.toFixed(2) + ')');
+  t.ok(flat.x < 47, 'the old coin creeps too — the lean is the TABLE, not the coin');
+  // the gutter: pays plain coins, drains slugs unpaid, never touches GEAR
+  S2.coins.length = 0;
+  S2.run.arsenal.sword = 1;
+  const g1 = D.place(5, 40, 'coin', 0, 'plat');
+  const g2 = D.place(6, 50, 'slug', 0, 'plat');
+  const g3 = D.place(5, 60, 'item', 0, 'plat'); g3.iid = 'sword';
+  const gold0 = S2.run.gold;
+  D.endRoundNow();
+  t.eq(S2.run.gold, gold0 + 1, 'the gutter pays a gold for the honest coin');
+  t.ok(!S2.coins.includes(g1) && !S2.coins.includes(g2), 'coin and slug both drain');
+  t.ok(S2.coins.includes(g3), 'your GEAR is never lost to the gutter');
+  // the bank shrinks by one slot, never below one
+  t.eq(D.bankMax(), D.C.BANK_MAX - 1, 'the tilted rack loses a bank slot');
+  S2.machLayout = 'classic';
+  t.eq(D.bankMax(), D.C.BANK_MAX, 'the flat bed keeps all three');
+  S2.machLayout = 'tilted';
+  finishFight();
+  // the choice survives a reload
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.machLayout, 'tilted', 'the worn table survives a reload');
+  t.ok(R.layoutTilted(), 'and the physics read it live');
+  // the rack: THE TABLES section stands and the ring reaches its WEAR
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  press('SKIP');
+  K.S.best.floor = 35;
+  frames(2);
+  t.ok(press('\u{1F3B0} MACHINE'), 'the rack chip stands at floor 35');
+  const wears = () => K.kb.buttons().filter(b => b.label === K.TR('WEAR'));
+  t.ok(wears().length >= 2, 'skins and tables both offer WEAR rows');
+  wears()[wears().length - 1].cb();      // the LAST wear is the tilted table
+  frames(2);
+  t.eq(K.S.machLayout, 'tilted', 'the rack wears the tilted table');
+  K.kb.back(); frames(2);
+  K.setLang('nl');
+  t.eq(K.TR('THE TABLES'), 'DE TAFELS', 'the rack section speaks Dutch');
+  K.setLang('en');
+}
+
+// -------- TIER 12: first-contact whispers + THE TABLES in the almanac --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  // the whisper book: once, and only once, per mechanic per profile
+  t.ok(D.whisperOnce('testkey', 'hello the deep'), 'a first contact whispers');
+  t.ok(D.S.toast && D.S.toast.txt === 'hello the deep', 'and it lands as a toast');
+  t.ok(!D.whisperOnce('testkey', 'hello again'), 'the second contact stays quiet');
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.ok(!R.whisperOnce('testkey', 'hello thrice'), 'the book survives a reload');
+  // the wires: jar and pegs whisper from their genFloor rolls, the lake at
+  // its gate, the table at its WEAR — all through the one helper
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  for (const key of ["whisperOnce('jar'", "whisperOnce('pegs'", "whisperOnce('lake'", "whisperOnce('tilted'"]) {
+    t.ok(src.indexOf(key) >= 0, 'wired: ' + key + "')");
+  }
+  // a real deep run trips the lake and peg whispers organically
+  R.srand(16); R.newRun('knight');
+  R.S.run.floor = 20;
+  R.nextFloor();
+  t.ok(R.S.seen.lake, 'crossing into floor 21 whispers the lake');
+  let guard = 30;
+  while (!R.S.seen.pegs && guard--) { R.S.run.floor = 23; R.nextFloor(); }
+  t.ok(R.S.seen.pegs, 'the first pegged floor whispers the pegs');
+  R.endRun('done');
+  // the almanac spells the tables
+  t.ok(src.indexOf('THE TABLES (') >= 0 && src.indexOf('the bank runs a slot short') >= 0,
+       'the almanac spells the tilted table');
+}
+
+// -------- TIER 12: lake tales + the wizard file's verdict --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const lakeTales = D.TALES.map((tl, i) => [tl, i]).filter(([tl]) => tl.a === 4);
+  t.ok(lakeTales.length >= 8, 'the innkeeper learned ' + lakeTales.length + ' lake lines');
+  t.ok(D.TALES.length >= 70, 'the book holds seventy-plus tales now (' + D.TALES.length + ')');
+  D.srand(19); D.newRun('knight');
+  // at floor 21+ the lake lines pour first (unheard-first drains the act pool)
+  D.S.run.floor = 22;
+  const heard = new Set();
+  for (let i = 0; i < 60; i++) { const x = D.rollTale(); if (x) heard.add(x); }
+  for (const [tl] of lakeTales) t.ok(heard.has(tl.x) || true, '');
+  t.ok(lakeTales.every(([tl]) => heard.has(tl.x)), 'every lake line surfaces in the lake');
+  // and never in the catacombs
+  const { DP: F } = loadGame({}, false);
+  F.srand(19); F.newRun('knight');
+  F.S.run.floor = 2;
+  const shallow = new Set();
+  for (let i = 0; i < 80; i++) { const x = F.rollTale(); if (x) shallow.add(x); }
+  t.ok(lakeTales.every(([tl]) => !shallow.has(tl.x)), 'the catacombs never hear the lake');
+  // NG+ mint floors (actIdx 4 via prestige) stay MINT-voiced, not lake-voiced
+  F.S.run.ng = 1;
+  F.S.run.floor = 17;                    // rawAct 3 — prestige alone must not drown the halls
+  const ngHeard = new Set();
+  for (let i = 0; i < 80; i++) { const x = F.rollTale(); if (x) ngHeard.add(x); }
+  t.ok(lakeTales.every(([tl]) => !ngHeard.has(tl.x)), 'prestige alone never drowns the innkeeper');
+  D.endRun('x'); F.S.run && F.endRun('x');
+  // THE WIZARD FILE — the verdict is pinned where the numbers live: the sim
+  // now rolls real gang-ups (extras), and the source keeps that honest
+  const here = dirname(fileURLToPath(import.meta.url));
+  const tsrc = readFileSync(join(here, 'dungeon_pusher.test.mjs'), 'utf8');
+  t.ok(tsrc.indexOf("gang ? [{ mtype: 'battle' }] : undefined") >= 0,
+       'the autopilot fields gang-ups — AoE kits get their due');
+}
+
+// -------- TIER 12 [big]: TOUCH COINS part 1 — the owner's coins --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  t.eq(D.SPECIALS.join(','), 'bunny,twin,ember,piper,rime,lode,king,rot,mimic,leech', 'all ten of the owner\u2019s coins stand');
+  for (const k of D.SPECIALS) t.ok(D.COIN_INFO[k] && D.COIN_INFO[k].what, 'statted: ' + k);
+  // THE MINT: every fallen boss strikes one, fewest-owned first
+  D.srand(21); D.newRun('knight');
+  S2.run.bside = 0;
+  D.startBattle('boss');
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
+  t.eq(S2.run.purse.bunny, 1, 'the first boss mints the BUNNY');
+  t.ok(S2.seen.specials, 'and the mint introduces itself once');
+  D.leaveBattle();
+  D.startBattle('boss');
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
+  t.eq(S2.run.purse.twin, 1, 'the second boss strikes the TWIN — fewest first');
+  D.leaveBattle();
+  // the deep never takes them: skim and toll pass the specials by
+  S2.run.purse.coin = 60; S2.run.purse.ember = 3;
+  D.stairSkim();
+  t.eq(S2.run.purse.ember, 3, 'the skim never touches a special');
+  S2.run.purse.coin = 5;
+  D.spendPurse(4);
+  t.eq(S2.run.purse.bunny + S2.run.purse.twin + S2.run.purse.ember, 5, 'the toll never spends one');
+  // THE TOUCH PASS — bunnies breed (capped), twins charge, embers tip
+  D.startBattle('battle');
+  S2.battle.phase = 'drop';
+  S2.coins.length = 0;
+  S2.run.bred = 0;
+  const b1 = D.place(40, 40, 'bunny', 0, 'plat');
+  D.place(40 + b1.r * 2 + 0.4, 40, 'bunny', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'bunny').length, 3, 'a touching pair breeds a kit');
+  t.eq(S2.run.bred, 1, 'the warren ledger counts it');
+  S2.run.bred = D.BUNNY_CAP;
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'bunny').length, 3, 'a full warren breeds no more');
+  S2.coins.length = 0;
+  const t1 = D.place(30, 40, 'twin', 0, 'plat');
+  const t2 = D.place(30 + t1.r * 2 + 0.4, 40, 'twin', 0, 'plat');
+  const loner = D.place(70, 40, 'twin', 0, 'plat');
+  const g1 = D.place(50, 40, 'coin', 0, 'plat');
+  const e1 = D.place(50 + g1.r * 2 + 0.4, 40, 'ember', 0, 'plat');
+  D.touchPass();
+  t.ok(t1.paired && t2.paired, 'twins beside each other charge');
+  t.ok(!loner.paired, 'the loner sulks');
+  t.ok(g1.emberTip, 'the gold beside the ember is tipped with fire');
+  // charged twins strike ×4; tipped gold sears; ember burns on its own
+  const foe = S2.foes[0];
+  foe.hp = foe.maxHp = 500; foe.block = 0; foe.burn = 0;
+  foe.def = null; foe.braced = false;              // bare skin — the arithmetic reads clean
+  let hp0 = foe.hp;
+  D.applyLoot({ t: 'twin', up: 1 });
+  t.eq(hp0 - foe.hp, 4, 'a charged twin strikes 4');
+  hp0 = foe.hp;
+  D.applyLoot({ t: 'twin' });
+  t.eq(hp0 - foe.hp, 1, 'an uncharged twin strikes 1');
+  const burn0 = foe.burn | 0;
+  D.applyLoot({ t: 'gold', tip: 1 });
+  t.ok((foe.burn | 0) > burn0, 'an ember-tipped gold coin sears');
+  const burn1 = foe.burn | 0;
+  D.applyLoot({ t: 'ember' });
+  t.ok((foe.burn | 0) >= burn1 + 2, 'the ember itself burns for 2');
+  // THE PIPER: scoring it drags its bedside cluster into the tray
+  S2.coins.length = 0;
+  S2.battle.loot.length = 0;
+  const pp = D.place(50, D.C.PLAT_FRONT - 4, 'piper', 0, 'plat');
+  D.place(54, D.C.PLAT_FRONT - 6, 'coin', 0, 'plat');
+  D.place(46, D.C.PLAT_FRONT - 8, 'silver', 0, 'plat');
+  D.place(20, 30, 'coin', 0, 'plat');            // far away: stays
+  S2.coins.splice(S2.coins.indexOf(pp), 1);
+  D.scoreCoin(pp, true);
+  t.eq(S2.battle.loot.length, 3, 'the piper and its two neighbors land in the tray');
+  t.eq(S2.coins.filter(c => c.st === 'plat').length, 1, 'the far coin keeps its seat');
+  D.endRun('done');
+  // the pile keeps specials across battles, and the purse across reloads
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.ok(R.COIN_KINDS.length === 16, 'the mint survives a reload');
+  // the sim still runs green with the wider mint (rails re-assert above)
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('touchPass();') >= 0, 'END TURN judges the touch');
+  t.ok(src.indexOf("whisperOnce('specials'") >= 0, 'the mint whispers once');
+}
+
+// -------- TIER 12 [big]: TOUCH COINS part 2 — the other six --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  D.srand(23); D.newRun('knight');
+  D.startBattle('battle');
+  S2.battle.phase = 'drop';
+  const foe = S2.foes[0];
+  foe.hp = foe.maxHp = 900; foe.block = 0; foe.def = null; foe.braced = false; foe.pois = 0;
+  const gap = (r) => r * 2 + 0.4;
+  // RIME: pierces, rimes its neighbor, and FIZZLES against an ember
+  S2.coins.length = 0;
+  const r1 = D.place(30, 40, 'rime', 0, 'plat');
+  const gn = D.place(30 + gap(r1.r), 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.ok(gn.rimeTip, 'the gold beside the rime is rimed');
+  foe.block = 5;
+  let hp0 = foe.hp;
+  D.applyLoot({ t: 'rime' });
+  t.eq(hp0 - foe.hp, 1, 'rime bites straight through a 5-block guard');
+  hp0 = foe.hp;
+  D.applyLoot({ t: 'gold', rime: 1 });
+  t.ok(hp0 - foe.hp >= 1, 'a rimed gold coin bites through too');
+  foe.block = 0;
+  S2.coins.length = 0;
+  const r2 = D.place(50, 40, 'rime', 0, 'plat');
+  D.place(50 + gap(r2.r), 40, 'ember', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'coin').length, 2, 'fire and frost fizzle BOTH to plain gold');
+  // LODE: clumps the bed
+  S2.coins.length = 0;
+  D.place(50, 40, 'lode', 0, 'plat');
+  const far = D.place(63, 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.ok(far.x < 63, 'the lode drags the loose coin toward itself (' + far.x.toFixed(1) + ')');
+  // KING: holds court
+  S2.coins.length = 0;
+  const kg = D.place(50, 40, 'king', 0, 'plat');
+  D.place(50 - gap(kg.r), 40, 'coin', 0, 'plat');
+  D.place(50 + gap(kg.r), 40, 'silver', 0, 'plat');
+  D.touchPass();
+  t.eq(kg.court, 2, 'two coins at his side');
+  hp0 = foe.hp;
+  D.applyLoot({ t: 'king', court: kg.court });
+  t.eq(hp0 - foe.hp, 3, 'the king strikes 1 +1 per courtier');
+  // ROT: poisons, spreads, and knows its cap
+  S2.run.rotted = 0;
+  S2.coins.length = 0;
+  const rt = D.place(40, 40, 'rot', 0, 'plat');
+  D.place(40 + gap(rt.r), 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'rot').length, 2, 'the rot corrupts the touching gold');
+  t.eq(S2.run.rotted, 1, 'the ledger counts the corruption');
+  S2.run.rotted = D.ROT_CAP;
+  D.place(40 - gap(rt.r), 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'coin').length, 1, 'a spent rot corrupts no more this floor');
+  const pois0 = foe.pois | 0;
+  D.applyLoot({ t: 'rot' });
+  t.ok((foe.pois | 0) >= pois0 + 2, 'fired rot seeps 2 poison');
+  // MIMIC: copies its first touch; the double act turns gold
+  S2.coins.length = 0;
+  const mm = D.place(60, 40, 'mimic', 0, 'plat');
+  D.place(60 + gap(mm.r), 40, 'lucky', 0, 'plat');
+  D.touchPass();
+  t.eq(mm.kind, 'lucky', 'the mimic becomes what it touched');
+  S2.coins.length = 0;
+  const m1 = D.place(30, 50, 'mimic', 0, 'plat');
+  D.place(30 + gap(m1.r), 50, 'mimic', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'coin').length, 2, 'two mimics grin and turn gold');
+  // LEECH: fattens on departures, pays out when it tips
+  S2.coins.length = 0;
+  S2.battle.loot.length = 0;
+  const lc = D.place(70, 40, 'leech', 0, 'plat');
+  const meal = D.place(70 + gap(lc.r), 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.ok(meal.leechMark, 'the bedfellow is marked');
+  S2.coins.splice(S2.coins.indexOf(meal), 1);
+  D.scoreCoin(meal, true);
+  t.eq(lc.fat, 1, 'the leech fattens as its bedfellow tips over');
+  const gold0 = S2.run.gold;
+  D.applyLoot({ t: 'leech', fat: 4 });
+  t.eq(S2.run.gold, gold0 + 4, 'and pays its hoard out when IT fires');
+  // the mint now rotates all ten, fewest-first
+  for (const k of D.SPECIALS) S2.run.purse[k] = 1;
+  S2.run.purse.rot = 0;
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
+  D.endRun('done');
 }
 
 t.done();

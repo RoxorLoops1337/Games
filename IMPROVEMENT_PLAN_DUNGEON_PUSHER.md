@@ -507,7 +507,132 @@ Ordered by impact ÷ effort.
       dp:top to dp:top:bak:<monday> with a 35-day TTL — no cron, later
       posts never rewrite the snapshot (session 70)
 
+## THE LOOP IS CLOSED (owner's word, session 88)
+
+The autonomous improvement loop ran 88 sessions and stops here by the
+owner's request. No further sessions are scheduled; the standing
+trigger was deleted and the trigger ledger reads clean.
+
+**RELEASE NOTE — one PR is owed.** The GitHub MCP connection has been
+down since session 74, so branch `claude/coin-pusher-roguelike-eg8f01`
+holds 15 clean, test-green commits that never reached main: all of
+Tier 11 / v1.7.0 (the consolidation nine, THE ALMANAC, REMATCH + the
+months archive, 48 trophies, REPLAY GHOST, THE UNDERLAKE parts 1+2,
+THE TILTED TABLE) plus Tier 12's opening run (first-contact whispers,
+almanac tables, the wizard file closed, lake tales, and the owner's
+TOUCH COINS — all ten, boss-minted). `npm run check` is green at every
+commit (2489 game + 38 board + 17 save at the tip). When GitHub is
+reachable again: open a PR from that branch, squash-merge to main, and
+Cloudflare ships v1.7.0 live. Do NOT reset or force-push the branch
+before that merge.
+
+**Open threads for whoever picks this up:** Tier 12 items below remain
+unticked from "Trophy pass to 52" onward (trophies, gauntlet rotation,
+HALL OF MONTHS, lake music, pace bars, economy probe, the owner-assist
+sprite session, THE SPECTATOR CARD). Touch-coin knighting (the king
+promoting his court) was trimmed as scope. The drowned kin and the ten
+specials still wear emoji until an owner-machine ComfyUI session.
+
+## Tier 12 — the hundredth run (authored session 85)
+
+The stock-take, honestly: a player a hundred runs deep now owns five
+acts, two beds, nine heroes and 48 trophies — but the newest systems
+shipped SILENT (no onboarding, no flavor, no music of their own), the
+one balance outlier is still uninvestigated, and the freshest gameplay
+idea on the table is the OWNER'S, awaiting a nod. This tier dresses
+what Tier 11 built, and keeps a big slot warm for the touch coins.
+
+- [x] **First-contact whispers**: whisperOnce(key,msg) + S.seen book
+      (saved) — the lake gate, the first jar, the first pegged floor and
+      the first WEAR of the tilted table each introduce themselves
+      exactly once, pointing at the ❓ almanac; wired through the toast
+      queue so pileups still take turns (session 85)
+- [x] **THE TABLES in the almanac**: THE HOUSE now spells the tilted
+      bed's creep rate, the gutter's pay/never-gear rule and the
+      bank-slot price, read live off MACH_LAYOUTS/TILT_DRIFT (session 85)
+- [x] **The wizard file — VERDICT: ACQUITTED**: forensics (taken/rounds/
+      foes per fight) showed he kills FASTER than the pack and the real
+      culprit was the sim itself — foes/fight was 1.00 flat, so his
+      hits-ALL kit was structurally worthless in a world with no
+      gang-ups. The SIM was convicted and fixed: even-floor fights now
+      field real 2-packs via startBattle extras; his median reads level
+      with the pack (4=4) and his damage-taken sits BELOW it. No buff —
+      the kit was never guilty. Bonus finding: run determinism requires
+      the FULL profile snapshot (tales heard shift later rng draws) —
+      the rail now pins the true property (session 86)
+- [x] **Lake tales**: 8 drowned lines (a:4) in the innkeeper's voice;
+      rollTale now keys the lake on rawAct like the roster — floors 21+
+      hear every lake line, the catacombs never do, and PRESTIGE alone
+      never drowns the halls (NG+ mint floors stay mint-voiced); book at
+      72 tales (session 86)
+- [ ] **Lake jobs & a drowned stranger**: 2 lake-gated QUEST_DEFS (walk
+      to FULL DEPTH and win; drain N coins to the gutter—tilted only) and
+      one hallway event reskin for floors 21+ — the lake reuses act-1
+      jobs verbatim today
+- [ ] **Trophy pass to 52**: FULL DEPTH (win a pressure-stiffened fight),
+      FORECLOSED (take the banker's refund), GUTTER BARON (50 lifetime
+      gutter gold), TABLE TURNER (clear floor 25 on the tilted bed) —
+      the new systems deserve wall space
+- [ ] **Gauntlet law rotation**: the weekend gauntlet binds the SAME
+      eight decrees every week — rotate a 5-of-8 subset from the week
+      seed so regulars meet a different wall
+- [ ] **HALL OF MONTHS**: keep the last 3 champion plaques client-side
+      (S.plaques[]) under the LAST MONTH tab — months currently vanish
+      when the API's 60-day TTL sweeps them
+- [ ] **The lake hums**: a fourth sequencer mood for rawAct 4 (slower,
+      submerged intervals) — the fifth act wears act-4's music today and
+      ears notice before eyes do
+- [ ] **Pace bars on the board**: rows with a stored duel/pace render a
+      tiny spark-strip vs YOUR best pace — REPLAY GHOST's clock exists
+      but only whispers at staircases
+- [ ] **Economy probe at depth**: extend the sim harness to report the
+      gold curve and purse pressure across floors 15-25 — the owner's
+      floor-18 coin-glut complaint deserves fresh data at the new depths
+- [ ] **[owner-assist] Drowned faces**: 15 sprites (13 kin + 2 lords) +
+      a tilted-table cabinet accent via the local ComfyUI pipeline —
+      needs an owner-machine session; the loop preps the prompt list in
+      tools/comfyui/UNDERLAKE_PROMPTS.md when this item starts
+- [x] **[big] TOUCH COINS part 1** (session 87 — OWNER GREENLIT, with
+      their law: specials come from killing a boss, ON TOP of the
+      relic): the substrate + first batch shipped. TOUCH PASS judges
+      bed contacts once at END TURN (never per frame); flags ride the
+      coins until the next pass. BUNNY pairs breed a kit (cap 5/floor,
+      vented at the stairs), TWINS charge to ×4 side by side, EMBERS
+      tip every neighbor with fire (tipped ANYTHING sears +1 burn on
+      resolve) and burn 2 themselves, the PIPER drags its bedside
+      cluster into the tray when it tips over. Every fallen boss mints
+      ONE special (fewest-owned first, deterministic); the deep never
+      skims or tolls them (treasures, not tender — purseTotal counts
+      plain coins only); coinFx/BAG/almanac/hand-row all inherit via
+      COIN_KINDS; whisperOnce intro; changelog lead. PART 2 remains:
+      frost/lode/king/rot/mimic/leech
+- [x] **[big] TOUCH COINS part 2** (session 88): all ten of the owner's
+      coins now stand. RIME (renamed from chat-FROST — the blue Frost
+      coin owns that name) bites thru block, rimes its neighbors (+1
+      pierce riders) and FIZZLES both plain against an ember; LODE drags
+      loose bed coins toward itself (positional pull, reach 20); KING
+      strikes 1 +1 per courtier at his side; ROT seeps 2 poison and
+      corrupts one touching gold per turn (3/floor, vents at stairs);
+      MIMIC becomes its first touch — two mimics grin and turn GOLD;
+      LEECH fattens +1 gold whenever a marked bedfellow tips over (cap
+      15) and pays out when IT fires. Same substrate, same fewest-first
+      boss mint over all ten, 26 new assertions. Knighting (king
+      promoting his court) trimmed as scope — noted if ever missed
+- [ ] **[big] THE SPECTATOR CARD**: the share card grows act splits and
+      a pace strip (the data all exists in S.run.pace/stats) — bragging
+      is this game's only marketing, and the card still shows three
+      numbers
+
 ## Tier 11 — the deep breath (authored session 72)
+
+**TIER 11 SMALL ITEMS COMPLETE** (session 81): thirteen consolidation
+items across sessions 72-80 — the toast queue, the NL catch-up, the
+keyboard reach fixes (modal ring + confirm-first ESC), the hero
+win-rate sim harness, the relic reachability rails and dud pass, the
+deep-HUD declutter, THE ALMANAC, duel REMATCH, the LAST MONTH archive,
+the codex lens, the 32KB save rail, THE MOTIFS, and the wall at 48
+trophies. v1.7.0 ships with the first [big], REPLAY GHOST (session 81);
+THE FIFTH ACT and MACHINE LAYOUT II carry forward as the tier's tail.
 
 Ten tiers built a deep game fast. This tier consolidates: pay the polish
 debt the sprint left behind, prove the balance with simulation instead of
@@ -536,55 +661,131 @@ feel the game get SMOOTHER this tier, not just bigger.
       hook + live suite drives TAB/ENTER/ESC through trophies, records
       tabs, codex tales, the board + name carver stack, the weekly
       confirm, and settings — in English and Dutch (session 73)
-- [ ] **Hero win-rate sim harness**: a headless autopilot (greedy: fire at
-      the biggest foe, drink at low HP, always descend) run N seeded runs
-      per hero; report median floor per hero as a probe line; rail: no
-      hero's median below 60% of the pack's — data before any buffs
-- [ ] **Relic pickup audit**: instrument rollRelicPool choices offered vs
-      picked across the sim harness; list the 10 least-chosen relics in
-      the probe output; buff or rework the 3 worst (data-driven, small
-      numeric touches only)
-- [ ] **Late-HUD declutter**: at floor 25+ the battle screen carries meter,
-      decree count, jar, pegs, prepaid toll, brew gauge, quest line, pace…
-      — audit overlap at 480px, collapse the passive readouts into one
-      rotating status strip under the purse row
-- [ ] **THE ALMANAC (help sheet)**: a ❓ title button opening a compact,
-      searchable-feeling reference built from data the game already owns:
-      coin table (COIN_INFO), trait glossary (ENT_INFO/trait texts), toll/
-      skim/cap formulas in words, the decree ladder, hero perk list — no
-      wiki needed, no new prose beyond section intros
-- [ ] **Duel REMATCH links**: the duel verdict screen offers REMATCH —
-      a fresh ?duel link seeded from the JUST-FINISHED run's seed+floor
-      with YOUR name, so chains of challenges bounce back and forth;
-      the report card shows the chain depth if present (&r=N)
-- [ ] **Board seasons archive**: keep the champion plaque's last 3 months
-      client-side (S.plaques[]), shown as a small HALL OF MONTHS in the
-      board sheet under THIS MONTH
-- [ ] **Motif player easter egg**: tap the version stamp 5× → a tiny OST
-      sheet that plays the four act motifs + the jackpot resolve on demand
-      (pure tone(), reuses SND) — a lighthearted thank-you surface
-- [ ] **Relic search in the codex**: the relic shelves are 140+ deep — a
-      NAMEPAD-driven filter box on the codex relic tabs (match name/desc)
-- [ ] **Save-size audit**: the blob has grown (legacy, tales, pace, pegs…)
-      — measure serialized size in a test, assert < 32KB with a full
-      profile, and trim anything redundant found along the way
-- [ ] **[big] REPLAY GHOST for duels**: a duel link optionally carries the
-      challenger's per-floor pace (&p=csv of seconds); during the run the
-      ghost-pace whisper compares against THEM instead of your best —
-      racing a real person's clock on the same maze
-- [ ] **[big] THE FIFTH ACT — THE UNDERLAKE**: floors 21-25 stop being pure
-      endless: a water-themed act (13 foes, drowned tricks: rust rain,
-      coin-eating eels, a pressure gauge replacing darkness) with THE
-      DROWNED BANKER as its boss; decrees shift to start at 26; needs the
-      full probe treatment before ship
-- [ ] **[big] MACHINE LAYOUT II — THE TILTED TABLE**: an alternate machine
-      unlocked at lifetime floor 30: slanted bed (coins drift left), a
-      side gutter that pays gold, one fewer tray slot — chosen at the
-      MACHINE rack like a theme; the physics deltas must stay inside
-      pushRate/step and be probe-verified
-- [ ] **Trophy pass to 48**: ALMANAC READER (open it), REMATCHED (answer a
-      rematch), OLD MONEY (hold 2,000 gold), THE COLLECTION (own 60 relics
-      lifetime via codex count) — with the usual test-count bumps
+- [x] **Hero win-rate sim harness**: a greedy autopilot plays REAL runs
+      through the real round machine (flat tray yield + pile share + one
+      gear piece a round, drinks low, first offer, shop stop, toll paid,
+      2 fights + boss a floor); probe line reports median floor per hero
+      over 5 seeds, rails: determinism, ≤20s, no median under 60% of the
+      pack. First data: knight/rogue/cleric/rat 6, ghost/crane/alch/toll
+      5, WIZARD 4 — the low outlier to watch, buff only if the next
+      session's relic audit agrees. Lesson: bside flips per lifetime run —
+      pin it in any sim (session 74)
+- [x] **Relic pickup audit**: rolls are uniform within rarity, so the
+      real audit was reachability + dominance, not pick counts.
+      Reachability rails: 6000 seeded drops touch EVERY plain relic,
+      ng-gated ones never leak at ng 0 and all appear at legend depth;
+      per-relic draw rates order c > r > e; the 10 least-drawn print as a
+      probe (all epics — by weight, as designed). THE DUD PASS fixed the
+      three strictly-dominated relics: VAULT bank +1→+2 (level with
+      Strongbox), BARRICADE +3→+4 block (level with Plate), TITHE
+      +5→+10 gold (a rare no longer loses to common Piggy from act 2).
+      Wizard median 4 left alone — drop data shows no kit starvation, so
+      his low sim line needs its own look before any buff (session 75)
+- [x] **Late-HUD declutter**: audited at 480×840 with a doctored floor-26
+      save — most gauges never collide (toll/brew/potion share one slot by
+      design; jar/pegs live on the field). TWO real pileups found and
+      fixed: the endless decree line joined ALL law names and overflowed
+      past +4 (NG++ hits that by floor 23) — now ONE law at a time
+      rotates every 2.5s WITH its rule spelled out; and the golden-key
+      count sat on the arsenal strip's lane at 4+ gear pieces — it now
+      rides the key line. Playwright-verified both screens (session 76)
+- [x] **THE ALMANAC (help sheet)**: a ❓ title chip opens a five-tab
+      reference read straight off the live tables — COINS (COIN_INFO +
+      the weighted reward bag), FOES (TRAIT_TXT tricks + DEF_TXT hides),
+      LAWS (the MUTS ladder with its floor schedule + the legend note),
+      HEROES (perk list), THE HOUSE (toll/purse-cap/bank/jackpot/rain/
+      tilt/key arithmetic in words). ESC + crash net wired, TAB-ring
+      reachable (live kb test), Dutch chrome (DE ALMANAK), codex-style
+      row cards; Playwright-verified three tabs (session 77)
+- [x] **Duel REMATCH links**: an answered duel turns the over screen's
+      DUEL button into ⚔️ REMATCH (NL: REVANCHE) — same maze, your new
+      floor as the bar, share text names the exchange ("I answered X's
+      floor 7 with floor 9. Your dig."); chains bounce naturally since
+      each side always re-links the shared seed. Chain-depth counter
+      (&r=N) skipped as needless ceremony — the exchange reads in the
+      share text (session 78)
+- [x] **Board seasons archive**: went API-side instead of client-side —
+      the board sheet grew a LAST MONTH tab (?board=lastmonth, which the
+      API has served since the plaque shipped); four tabs at 92px,
+      TR/NL'd, ring-reachable, live-tested. A deeper S.plaques[] hall
+      can still come later if months prove worth hoarding (session 78)
+- [x] **Motif player easter egg**: five taps on the title's version stamp
+      open 🎼 THE MOTIFS — the four act descents (SND.descend table) and
+      the victory fanfare on demand, ESC/crash-net wired, ring-reachable,
+      NL'd (DE MOTIEVEN); the kb suite taps the hidden zone five times and
+      plays a motif silently (session 80)
+- [x] **Relic search in the codex**: a 🔍 SEARCH chip on the c/r/e
+      shelves opens the NAMEPAD; 3+ letters narrow the shelf by name OR
+      writ, the chip wears the active query with a ✕, ESC peels the
+      lens before closing the book; live kb test types "WIND" on the
+      pad and watches the epic shelf narrow and refill; NL: ZOEK
+      (session 79)
+- [x] **Save-size audit**: probe test builds a genuinely maxed profile
+      (44 trophies, 64 tales, 40 legacy lines, 10 rich hist rows, all
+      pet names/fights, 60 floors of deaths+pace, full codex, plaque)
+      PLUS a floor-60 mid-run with 18×9 arsenal, all 148 relics and an
+      80-coin pile: 17509 bytes — comfortably under the 32KB rail now
+      asserted forever. legacy(40)/hist(10) caps verified; nothing
+      unbounded found, no trims needed (session 79)
+- [x] **[big] REPLAY GHOST for duels**: duel links carry the challenger's
+      per-floor clock — &p= tail, base36 cumulative seconds, floors 2-25,
+      stops at the first gap, whole link under 200 chars; the staircase
+      whisper races THEM instead of your best ("⚔️ 20s ahead of Rox"),
+      plain links from the old world still open, the clock survives
+      save/load, and REMATCH sends YOUR pace back so the race is never
+      one-sided. Shipped with v1.7.0 (session 81)
+- [x] **[big] THE FIFTH ACT — THE UNDERLAKE** (part 1, session 82):
+      floors 21-25 are a true act. DESIGN DECISIONS (the record): the lake
+      keys on rawAct (prestige-blind) — NG ladders below 21 keep today's
+      mint cap exactly (ng probes unchanged: 25.3 / 73.3), and floor 21
+      takes EVERYONE into the water; the lost beyond-ramp is folded into
+      the roster's base stats (×1.29 the mint — probe floor 21 reads 245.5,
+      monotonic rail holds); THE DROWNED BANKER (A) / THE SILT QUEEN (B)
+      hold rawAct 4 exactly, the old rotation resumes at 26 untouched;
+      decrees move to floor 26 (legends keep floor 11); scale ramps resume
+      past the lake. Shipped: 13 drowned kin (coin eel = the tray filcher,
+      the undertow = tide pull, all on proven trait engines), both lords,
+      LAKE_FLOOR palette, ACT V name, codex a5 shelf (kin + lords),
+      almanac law schedule, changelog. PART 2 (session 83): THE PRESSURE
+      replaces the dark on lake floors — each new room walked squeezes a
+      0-5 gauge (posted on the strip, vented at every stair, saved), and
+      at FULL DEPTH the pack opens +1 atk; THE DROWNED BANKER forecloses
+      a banked piece every 3rd round (his fall refunds it through the
+      belly hook WITH a bag of interest); THE SILT QUEEN silts two honest
+      pile pieces to slugs every 3rd round; lake re-salts run a 30%
+      rust-rain chance (round 1 restores the pile, so the brine bites the
+      re-salt — by design); almanac house line + NL. Still open: sprites
+      for the drowned kin (art is graceful-fallback, emoji stand by)
+- [x] **[big] MACHINE LAYOUT II — THE TILTED TABLE** (session 84): a
+      second bed at the 🎰 rack (THE TABLES section), sealed until
+      lifetime best floor 30, composing freely with the skins
+      (S.machLayout beside S.machTheme). The physics deltas live inside
+      step()/endRoundNow and are DORMANT unless worn — the whole
+      existing physics suite stands untouched as its own regression
+      proof: (a) the bed creeps everything 2.5 u/s gutterward
+      (POSITIONAL, applied after the settle clamp — a force there gets
+      frozen out, the lesson is in the code comment); (b) the gutter
+      strip (x≤9) drinks settled bed pieces at END TURN — a gold apiece,
+      slugs/skulls drain unpaid, GEAR is never taken; (c) the bank rack
+      loses a slot (floor 1). Probe-tested drift on/off, gutter rules,
+      reload, and the rack's WEAR row by ring. Changelog under v1.7.0
+
+**TIER 11 IS COMPLETE** (session 84): sixteen items across thirteen
+sessions (72-84) — the consolidation nine (toasts, NL, keyboard, sim
+harness, relic rails + dud pass, deep HUD, save rail, lens, motifs),
+THE ALMANAC, REMATCH + the months archive, 48 trophies, and the three
+big swings: REPLAY GHOST (duel links carry the clock), THE FIFTH ACT
+(THE UNDERLAKE, parts 1+2: rawAct-keyed, pressure for darkness, the
+Banker and the Silt Queen), and THE TILTED TABLE. v1.7.0 (2407 game
+tests, 48 trophies, 5 acts, 2 tables). Session 85 authors Tier 12 with
+a fresh honest stock-take — and still owes the owner an answer on the
+touch-coins proposal.
+- [x] **Trophy pass to 48**: ALMANAC READER (first consult), REMATCHED
+      (send a rematch from an answered duel — also inks a legacy line),
+      OLD MONEY (read last month's board — truer to its name than the
+      gold-hoard draft), THE COLLECTION (full ledger + all 64 tales, the
+      one-tale-short case tested; inks a legacy line). Wall at 48, pins
+      bumped, all four unlock paths live-tested (session 80)
 
 ## Done (this loop)
 
