@@ -239,10 +239,13 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
       Coin Press (every 25 fired mints +5), Meter Spring (jackpot wakes at 5),
       Auditor's Stamp (bosses drop +1 key), Brass Heart (the battle's first
       blow fully absorbed) — all wired to real hooks (session 42)
-- [ ] **Daily → board handshake**: a finished daily auto-offers posting to the
-      DAILY board with a 📅 flag on the row
-- [ ] **First-battle coach**: three one-time floating pointers (pick a coin, tap
-      to drop, END TURN fires) — killed forever once each is done
+- [x] **Daily → board handshake**: a finished daily offers itself to the board
+      via the confirm sheet (name pad first if unnamed), the post carries
+      daily:1, entries store d:1 and board rows wear 📅 (session 43)
+- [x] **First-battle coach**: three sequential pointers (choose a coin / tap to
+      drop / END TURN fires), each killed forever by the deed it teaches at the
+      sim hooks; persisted, and veterans who predate it are grandfathered
+      (session 43)
 - [ ] **Coin outlier pass**: blue + lucky are underpicked in victory spoils —
       probe pick rates headless, then buff the losers one notch
 - [ ] **Relic outlier pass**: identify the 5 least-impactful relics by

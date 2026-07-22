@@ -100,6 +100,13 @@ j = await r.json();
 const zed = j.top.find(e => e.name === 'Zed');
 ok(zed && /^[a-z]*$/.test(zed.hero) && zed.diff === 'normal', 'hero sanitized, unknown diff falls back to normal');
 
+// a daily run carries the calendar flag; a plain run doesn't
+r = await post(env, { name: 'Cal', floor: 4, kills: 2, daily: 1 }, '10.10.10.10');
+j = await r.json();
+const cal = j.top.find(e => e.name === 'Cal');
+ok(cal && cal.d === 1, 'a daily post wears the calendar flag');
+ok(j.top.find(e => e.name === 'Thieu').d === 0, 'plain posts stay unflagged');
+
 // GET ?board=daily reads the dated board
 r = await get(env, 'daily');
 j = await r.json();

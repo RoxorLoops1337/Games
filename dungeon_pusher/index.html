@@ -998,6 +998,7 @@ const S = {
   diffPick: 'normal',                           // the door you'll take next run
   seenVer: '',                                  // last VERSION whose patch notes were read
   boardName: '',                                // the name carved on the leaderboard
+  coach: { pick: 0, drop: 0, end: 0 },          // the first-battle pointers, killed once each
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
@@ -1073,6 +1074,7 @@ function save() {
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
+      coach: S.coach,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1134,6 +1136,8 @@ function load() {
     if (DIFFS.some(x => x.id === d.diffPick)) S.diffPick = d.diffPick;
     // a pre-changelog save has read everything up to the founding
     S.seenVer = (typeof d.seenVer === 'string' && d.seenVer) ? d.seenVer : '1.0.0';
+    if (d.coach && typeof d.coach === 'object') S.coach = { pick: d.coach.pick ? 1 : 0, drop: d.coach.drop ? 1 : 0, end: d.coach.end ? 1 : 0 };
+    else if ((d.best && d.best.runs) > 0) S.coach = { pick: 1, drop: 1, end: 1 };   // veterans need no pointing
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
@@ -1916,6 +1920,7 @@ function syncWallet() {
   S.run.wallet = B && B.hand ? COIN_KINDS.reduce((a, k) => a + (B.hand[k] || 0), 0) : 0;
 }
 function selectCoin(k) {
+  S.coach.pick = 1;
   if (!S.battle || !S.battle.hand || COIN_KINDS.indexOf(k) < 0) return false;
   if ((S.battle.hand[k] || 0) < 1) return false;
   S.battle.sel = k;
@@ -1996,6 +2001,7 @@ function drop(x, force) {
   autoSel();
   S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 / ×20 shortens the cooldown to match
   S.dropped++; S.meter++;
+  S.coach.pick = 1; S.coach.drop = 1;   // a fired coin proves both lessons
   B.fired = (B.fired || 0) + 1;
   if (hasRelic('coinpress') && B.fired % 25 === 0) {
     addGold(5); B.goldWon += 5;
@@ -2381,6 +2387,7 @@ function startResolve() {
 // END TURN: the player ends their drop phase whenever they like — spent
 // purse or coins still to spend — and the tray resolves what it caught
 function endRoundNow() {
+  S.coach.end = 1;
   if (!S.battle || S.battle.phase !== 'drop' || !S.run) return false;
   return startResolve();
 }
@@ -3232,7 +3239,7 @@ function endRun(cause) {
     floor: S.run.floor, depth: S.run.depth, kills: S.run.kills, gold: S.run.goldEarned,
     hero: S.run.hero, relics: S.run.relics.length,
     diff: S.run.diff || 'normal', muts: mutCount(),
-    ng: S.run.ng || 0, seed: S.run.seed,
+    ng: S.run.ng || 0, seed: S.run.seed, daily: S.run.daily ? 1 : 0,
     stats: st,
   };
   // COGS for the workshop: every run pays out, however it ends —
@@ -6955,6 +6962,27 @@ if (!HEADLESS) (function browser() {
   }
 
   // --------------------------------------------------------- battle screen
+  // the FIRST-BATTLE COACH: three floating pointers, each killed forever by
+  // the deed it teaches (persisted on the profile; veterans grandfathered)
+  function drawCoach(t) {
+    const c = S.coach;
+    if (!c || (c.pick && c.drop && c.end)) return;
+    if (!S.battle || S.battle.phase !== 'drop' || S.victory || PHOTO) return;
+    const bob = Math.sin(t * 4) * 4;
+    const point = (x, y, msg, up) => {
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      rr(x - 92, y + (up ? 16 : -40), 184, 26, 9);
+      ctx.fillStyle = 'rgba(24,14,26,0.95)'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
+      txt(msg, x, y + (up ? 29 : -27), '800 10px Verdana, sans-serif', '#ffe9a3');
+      txt(up ? '▲' : '▼', x, y + bob, '900 14px Verdana, sans-serif', '#ffd75e');
+      ctx.restore();
+    };
+    if (!c.pick) point(LW / 2, 148, 'tap a coin face to CHOOSE it', true);
+    else if (!c.drop) point(LW / 2, 420, 'TAP the machine to DROP — hold to pour', false);
+    else point(386, 588, 'END TURN fires all the tray caught', false);
+  }
   // PHOTO MODE: strips every scrap of HUD off the battle for a clean shot
   let PHOTO = false;
   function drawVictory(t) {
@@ -7188,6 +7216,7 @@ if (!HEADLESS) (function browser() {
     }
     drawSpeedBtn(t);
     if (phase === 'drop' && !S.victory) drawTurboBtn(t);
+    drawCoach(t);
     if (PHOTO) {
       // PHOTO MODE: just the machine, the pile, and the cast — no chrome.
       // One faint corner whisper so the way back is never a mystery.
@@ -9091,7 +9120,8 @@ if (!HEADLESS) (function browser() {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: S.boardName, floor: run.floor, kills: run.kills || 0,
-                             hero: run.hero || 'knight', diff: run.diff || 'normal' }),
+                             hero: run.hero || 'knight', diff: run.diff || 'normal',
+                             daily: run.daily ? 1 : 0 }),
     })
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; achUnlock('carved'); } })
@@ -9144,7 +9174,7 @@ if (!HEADLESS) (function browser() {
         if (medal) txt(medal, 62, ry + 2, '15px serif', '#fff');
         else txt('#' + rank, 62, ry + 1, '800 11px Verdana, sans-serif', '#9a8aa0');
         const h = heroById(e.hero);
-        txt((h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
+        txt((e.d ? '\u{1F4C5} ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
             me ? '#ffe9a3' : '#d8c8dc', 'left');
         txt('floor ' + e.floor, LW - 128, ry + 1, '900 12px Verdana, sans-serif', '#ffd75e', 'right');
         txt(fmt(e.kills || 0) + ' \u{2694}\u{FE0F}', LW - 64, ry + 1, '700 10px Verdana, sans-serif', '#c8a8b0', 'right');
@@ -9911,6 +9941,19 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = lgr('overtt', 0, 245, 0, 292, [[0, '#ffb0b8'], [1, '#a8213a']]);
     ctx.fillText('THE RUN ENDS', LW / 2, 268);
     txt(o.cause, LW / 2, 310, '700 14px Verdana, sans-serif', '#c8a8b0');
+    // a finished DAILY offers itself to the daily board, once
+    if (o.daily && !o.dOffered && !o.posted) {
+      o.dOffered = 1;
+      S.confirm = {
+        msg: '\u{1F4C5} POST THE DAILY?',
+        sub: 'carve today\u2019s attempt onto the DAILY board — floor ' + o.floor + ', ' + o.kills + ' kills',
+        yesLabel: 'POST IT', yes: () => {
+          const send = () => { o.posted = true; postScore(o); };
+          if (S.boardName) send();
+          else NAMEPAD = { val: '', then: send };
+        },
+      };
+    }
     if (o.seed != null) {
       txt('seed ' + seed36(o.seed) + ' — plant it with the 🌱 chip to race this dungeon',
           LW / 2, 330, '600 10px Verdana, sans-serif', '#9a8aa0');

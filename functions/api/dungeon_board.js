@@ -78,7 +78,7 @@ export async function onRequestPost({ request, env }) {
   const kills = clamp(Math.floor(+b.kills) || 0, 0, 99999);
   const hero = String(b.hero || '').replace(/[^a-z]/g, '').slice(0, 12) || 'knight';
   const diff = ['merciful', 'normal', 'nightmare'].indexOf(b.diff) >= 0 ? b.diff : 'normal';
-  const entry = { name, floor, kills, hero, diff, t: Date.now() };
+  const entry = { name, floor, kills, hero, diff, d: b.daily ? 1 : 0, t: Date.now() };
 
   const top = JSON.parse((await KV.get(TOP_KEY)) || '[]');
   const daily = JSON.parse((await KV.get(dayKey())) || '[]');
