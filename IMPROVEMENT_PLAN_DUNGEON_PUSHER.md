@@ -587,11 +587,19 @@ feel the game get SMOOTHER this tier, not just bigger.
 - [ ] **Motif player easter egg**: tap the version stamp 5× → a tiny OST
       sheet that plays the four act motifs + the jackpot resolve on demand
       (pure tone(), reuses SND) — a lighthearted thank-you surface
-- [ ] **Relic search in the codex**: the relic shelves are 140+ deep — a
-      NAMEPAD-driven filter box on the codex relic tabs (match name/desc)
-- [ ] **Save-size audit**: the blob has grown (legacy, tales, pace, pegs…)
-      — measure serialized size in a test, assert < 32KB with a full
-      profile, and trim anything redundant found along the way
+- [x] **Relic search in the codex**: a 🔍 SEARCH chip on the c/r/e
+      shelves opens the NAMEPAD; 3+ letters narrow the shelf by name OR
+      writ, the chip wears the active query with a ✕, ESC peels the
+      lens before closing the book; live kb test types "WIND" on the
+      pad and watches the epic shelf narrow and refill; NL: ZOEK
+      (session 79)
+- [x] **Save-size audit**: probe test builds a genuinely maxed profile
+      (44 trophies, 64 tales, 40 legacy lines, 10 rich hist rows, all
+      pet names/fights, 60 floors of deaths+pace, full codex, plaque)
+      PLUS a floor-60 mid-run with 18×9 arsenal, all 148 relics and an
+      80-coin pile: 17509 bytes — comfortably under the 32KB rail now
+      asserted forever. legacy(40)/hist(10) caps verified; nothing
+      unbounded found, no trims needed (session 79)
 - [ ] **[big] REPLAY GHOST for duels**: a duel link optionally carries the
       challenger's per-floor pace (&p=csv of seconds); during the run the
       ghost-pace whisper compares against THEM instead of your best —

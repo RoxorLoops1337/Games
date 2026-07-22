@@ -6603,4 +6603,77 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   K.kb.back(); frames(2);
 }
 
+// -------- TIER 11: SAVE-SIZE AUDIT — a maxed profile stays small --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  D.srand(3); D.newRun('knight');
+  // every book filled to its brim, every cap leaned on
+  for (const a of D.ACH) S2.ach[a.id] = 1;
+  D.TALES.forEach((_, i) => { S2.tales[i] = 1; });
+  for (let i = 0; i < 60; i++) D.legacyStamp('a dated first, line number ' + i + ', written long enough to be honest');
+  t.ok(S2.legacy.length <= 40, 'the legacy book holds its 40-line cap');
+  S2.hist = [];
+  for (let i = 0; i < 10; i++) S2.hist.push({ floor: 30 + i, kills: 480, hero: 'ninecoins', cause: 'slain by the ledger lord of the deep', d: '2026-07-1' + (i % 10) });
+  for (const h of D.HEROES) { S2.deep15[h.id] = 9; S2.skins[h.id] = 1; }
+  for (let f = 1; f <= 60; f++) { S2.life.deaths[f] = 3; S2.best.pace = S2.best.pace || {}; S2.best.pace[f] = f * 220; }
+  for (const dr of Object.keys(D.DRAUGHTS || {})) S2.life.draughts[dr] = 999;
+  S2.life.mutMax = 8; S2.life.skimmed = 9999; S2.life.gauntBest = 599; S2.life.gaunts = 40;
+  for (const it of D.ITEMS) { S2.life.petFights[it.id] = 9; S2.petNames[it.id] = 'ABCDEFGHIJ'; }
+  for (const rl of D.RELICS) S2.codex.relics[rl.id] = 1;
+  for (const e of D.ENEMIES) S2.codex.foes[e.id] = 99;
+  S2.plaque = { name: 'CHAMPION', floor: 44, month: '2026-06' };
+  // a deep mid-run, loaded heavy
+  S2.run.floor = 60;
+  for (const it of D.ITEMS) S2.run.arsenal[it.id] = 9;
+  S2.run.relics = D.RELICS.map(r => r.id);
+  for (const k of D.COIN_KINDS) S2.run.purse[k] = 8;
+  for (let i = 0; i < 80; i++) D.place(8 + (i % 20) * 4.4, 20 + ((i / 20) | 0) * 8, D.COIN_KINDS[i % 6], 0, 'plat');
+  D.save();
+  const bytes = (st[D.C.SAVE_KEY] || '').length;
+  console.log('# save-size probe: ' + bytes + ' bytes at a maxed profile + deep mid-run (rail 32768)');
+  t.ok(bytes > 2000, 'the probe profile is genuinely loaded (' + bytes + ')');
+  t.ok(bytes < 32768, 'a maxed save stays under 32KB (' + bytes + ')');
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.legacy.length, S2.legacy.length, 'and it survives the reload whole');
+  t.eq(R.S.run.floor, 60, 'mid-run depth included');
+}
+
+// -------- TIER 11: THE CODEX LENS — search the relic shelves --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("(rl.name + ' ' + rl.desc).toLowerCase().indexOf(q) >= 0") >= 0, 'the lens reads name AND writ');
+  t.ok(src.indexOf('if (CODEX) { if (CODEX.q) { CODEX.q = null; return; } CODEX = null; return; }') >= 0,
+       'ESC peels the lens before it closes the book');
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  const shelfCount = () => K.kb.buttons().filter(b => b.w === 48 && b.h === 48).length;
+  frames(6);
+  press('SKIP');
+  t.ok(press('\u{1F4D6}', true), 'the codex chip rings');
+  t.ok(press('EPIC'), 'onto the epic shelf');
+  const full = shelfCount();
+  t.ok(full >= 20, 'the whole epic shelf shows unfiltered (' + full + ')');
+  t.ok(press('\u{1F50D} SEARCH'), 'the lens chip rings');
+  for (const ch of ['W', 'I', 'N', 'D']) t.ok(press(ch, true), 'the pad types ' + ch);
+  t.ok(press('DONE ✓'), 'the pad applies');
+  const narrowed = shelfCount();
+  t.ok(narrowed >= 1 && narrowed <= 3, '“wind” narrows the shelf (' + full + ' -> ' + narrowed + ')');
+  K.kb.back(); frames(2);
+  t.eq(shelfCount(), full, 'ESC clears the lens, the shelf refills');
+  K.kb.back(); frames(2);
+  t.ok(!K.kb.buttons().some(b => b.label === 'EPIC'), 'a second ESC closes the book');
+  K.setLang('nl');
+  t.eq(K.TR('\u{1F50D} SEARCH'), '\u{1F50D} ZOEK', 'the lens speaks Dutch');
+  K.setLang('en');
+}
+
 t.done();

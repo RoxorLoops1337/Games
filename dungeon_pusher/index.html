@@ -252,6 +252,8 @@ const LANGS = {
     // rematch + the months archive (session 78)
     '\u{2694}\u{FE0F} REMATCH': '\u{2694}\u{FE0F} REVANCHE',
     'LAST MONTH': 'VORIGE MAAND',
+    '\u{1F50D} SEARCH': '\u{1F50D} ZOEK',
+    'no relic answers to': 'geen relikwie luistert naar',
   },
 };
 let LANG = 'en';
@@ -9093,7 +9095,7 @@ if (!HEADLESS) (function browser() {
     if (WSHOP) { WSHOP = false; return; }
     if (TROPHIES) { TROPHIES = false; return; }
     if (RECORDS) { RECORDS = false; return; }
-    if (CODEX) { CODEX = null; return; }
+    if (CODEX) { if (CODEX.q) { CODEX.q = null; return; } CODEX = null; return; }
     kbFocus = -1;                    // nothing open: drop the ring instead
   }
   // the suite (and curious consoles) drive the ring through the same
@@ -10237,7 +10239,15 @@ if (!HEADLESS) (function browser() {
       const shelf = RELICS.filter(rl => rl.rar === rar);
       const got = shelf.filter(rl => S.codex.relics[rl.id]).length;
       txt(got + ' / ' + shelf.length + ' discovered', LW / 2, 106, '800 11px Verdana, sans-serif', RARITY[rar].col);
-      shelf.forEach((rl, i) => {
+      // the lens: 3+ letters narrow the shelf by name or writ
+      const q = String(CODEX.q || '').toLowerCase();
+      const shown = q.length >= 3
+        ? shelf.filter(rl => (rl.name + ' ' + rl.desc).toLowerCase().indexOf(q) >= 0)
+        : shelf;
+      if (q.length >= 3 && !shown.length) {
+        txt(TR('no relic answers to') + ' \u{201C}' + q + '\u{201D}', LW / 2, 300, '700 12px Verdana, sans-serif', '#b8a8bc');
+      }
+      shown.forEach((rl, i) => {
         const x = 24 + (i % 8) * 55, y = 120 + ((i / 8) | 0) * 55;
         const own = !!S.codex.relics[rl.id];
         const sel = CODEX.sel === rl.id;
@@ -10263,6 +10273,13 @@ if (!HEADLESS) (function browser() {
         txt(own ? selRl.name : '? ? ?', LW / 2, LH - 102, '900 12px Verdana, sans-serif', RARITY[selRl.rar].col);
         txt(own ? selRl.desc : 'find it in the deep to read its writ', LW / 2, LH - 84, '600 10px Verdana, sans-serif', '#c8b8cc');
       }
+    }
+    if (CODEX.tab.length === 1 && 'cre'.indexOf(CODEX.tab) >= 0) {
+      const q2 = String(CODEX.q || '');
+      uiBtn(26, LH - 58, 116, 40, q2 ? '\u{1F50D} ' + q2 + ' ✕' : TR('\u{1F50D} SEARCH'), () => {
+        if (CODEX.q) { CODEX.q = null; return; }
+        NAMEPAD = { val: '', max: 10, apply: (v) => { if (CODEX) CODEX.q = String(v || '').trim() || null; } };
+      }, { bg: 'rgba(40,40,56,0.95)', border: '#8a86b8', col: '#d8d4f0', font: '800 10px Verdana, sans-serif', r: 10 });
     }
     uiBtn(LW / 2 - 70, LH - 58, 140, 40, TR('CLOSE ✕'), () => { CODEX = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
