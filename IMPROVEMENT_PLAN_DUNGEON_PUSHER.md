@@ -166,13 +166,17 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [ ] **Act 4: THE MINT** — 13 new enemies (roster reskins + 3 new traits: magnetic
       armor, coin-clone, jackpot-thief), new floor palette, act boss: THE AUDITOR
 - [ ] **More bosses per act**: 2nd boss per act rotates in on even-numbered runs
-- [ ] **Hero skins**: 1 alt palette per hero, unlocked by floor-15 clear with that hero
+- [x] **Hero skins**: DEEP CLEAR ledger (fell the floor-15 boss with a hero) earns
+      that hero's alt palette — tint wash on sheeted heroes, aura on emoji ones,
+      🎨 toggle on the card, both ledgers persisted; VERSION bumped to 1.2.0 with
+      a real WHAT'S NEW entry (session 32)
 - [x] **Machine themes**: CLASSIC / BONE (floor 5) / GILDED (floor 10) / NEON
       (floor 15) — cached tint washes over the machine art (no new assets),
       🎰 MACHINE rack on the title once floor 5 falls, pick persisted, all
       three cabinet layer caches re-key on the theme (session 31)
-- [ ] **Seasonal seeds**: holiday-window cosmetic sprinkles (pumpkins on the pile in
-      late October, snow in December) — clock-based, no assets from network
+- [x] **Seasonal seeds**: seasonNow(date) windows — pumpkins on the title mound
+      late October, snowfall + a snowman in December; clock-based, no network,
+      date-injectable for tests (session 32)
 - [ ] **Prestige: NEW GAME+** — beat floor 15 → NG+ badge, enemies +1 act offset,
       exclusive relic pool (5 NG+-only relics)
 - [x] **Photo mode**: 📷 chip on the victory panel strips every overlay/HUD layer
