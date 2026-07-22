@@ -437,12 +437,14 @@ Ordered by impact ÷ effort.
       LEGEND (NG++ deep clear), CHRONICLER (40 tales poll), EMISSARY
       (shareDuel; the gift stake will also fire it) — 44 on the wall
       (session 64)
-- [ ] **The gift stake** (the recruiter hook, pure client): a 🎁 STAKE A
-      ROOKIE button builds ?gift=<name> onto the play URL; a fresh profile
-      opening it gets +50 cogs and "NAME staked you 50 cogs — dig well";
-      one gift per profile, giver earns the EMISSARY trophy
-- [ ] **Board filters**: hero-icon and diff chips on THE DEEP BOARD filter
-      the fifty client-side; "8 knights, 3 nightmares" reads at a glance
+- [x] **The gift stake** (the recruiter hook, pure client): 🎁 STAKE on the
+      run-over screen shares ?gift=<name>; a run-less profile opening it
+      gets +50 cogs and "NAME staked you 50 cogs — dig well" (scrubbed
+      name, URL cleaned); one claim per profile ever (S.gifted), veterans
+      politely refused; sharing fires EMISSARY (session 65)
+- [x] **Board filters**: boardFilter(top, hero, diff) + a chip row on THE
+      DEEP BOARD (heroes present, 💚/💀 diff, ✕ clear, "N of 50" tally);
+      rows keep their TRUE ranks through the sieve (session 65)
 - [ ] **Colorblind coin marks audit**: S.opts.cb exists — in cb mode stamp
       each coin kind with its letter (C/S/V/H/F/L) and gems with ◆, on the
       pile AND in the tray/purse rows; verify at 24px in a screenshot
