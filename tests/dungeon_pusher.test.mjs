@@ -5534,4 +5534,90 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('THE LEGEND DOOR unseals') >= 0, 'the unseal announces itself');
 }
 
+// -------- THE GAUNTLET: five floors, every law, the clock --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // the door keeps weekend hours (UTC)
+  t.ok(D.gauntletOpen('2026-07-24'), 'Friday opens the gauntlet');
+  t.ok(D.gauntletOpen('2026-07-25'), 'Saturday keeps it open');
+  t.ok(D.gauntletOpen('2026-07-26'), 'Sunday too');
+  t.ok(!D.gauntletOpen('2026-07-22'), 'Wednesday stays shut');
+  t.ok(!D.gauntletOpen('2026-07-27'), 'Monday locks it again');
+  t.ok(!D.newGauntlet('2026-07-22'), 'no sneaking in midweek');
+  // the run: week seed, every law, no merchants, no stacking
+  t.ok(D.newGauntlet('2026-07-24'), 'Friday lets you run');
+  t.eq(D.S.run.gauntlet, '2026-07-20', 'the run wears its week');
+  t.eq(D.mutCount(), D.MUTS.length, 'all eight laws bind from floor 1');
+  t.ok(D.mutOn('thickair') && D.mutOn('longdark'), 'first and last alike');
+  t.ok(!D.S.run.weekly, 'the weekly decree never stacks');
+  const seedA = D.S.run.seed;
+  // no shops anywhere in the five floors
+  let shops = 0, plainShops = 0;
+  for (let f = 1; f <= 5; f++) {
+    D.S.run.floor = f; D.genFloor();
+    for (const k in D.S.run.map.rooms) {
+      shops += D.S.run.map.rooms[k].ents.filter(e => e.kind === 'shop').length;
+    }
+  }
+  t.eq(shops, 0, 'the merchants flee the gauntlet');
+  // the finish line: floor-5 stairs end the run and carve the clock
+  D.S.run.floor = 5;
+  D.S.run.stats.t = 372;                     // 6:12 on the clock
+  D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  D.interact(0);
+  t.ok(D.S.over, 'the fifth-floor stairs END the gauntlet');
+  t.eq(D.S.over.gauntlet, 372, 'the clock is the score');
+  t.eq(D.S.life.gaunts, 1, 'the ledger counts the clear');
+  t.eq(D.S.life.gauntBest, 372, 'and keeps the best time');
+  t.eq(D.S.gauntlet.week, '2026-07-20', 'this week is marked run');
+  // a faster clear rewrites the best; a slower one doesn't
+  D.newGauntlet('2026-07-24');
+  D.S.run.floor = 5; D.S.run.stats.t = 300;
+  D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  D.interact(0);
+  t.eq(D.S.life.gauntBest, 300, 'a faster run takes the record');
+  D.newGauntlet('2026-07-24');
+  D.S.run.floor = 5; D.S.run.stats.t = 500;
+  D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  D.interact(0);
+  t.eq(D.S.life.gauntBest, 300, 'a slower one changes nothing');
+  t.eq(D.S.life.gaunts, 3, 'but still counts');
+  // everything rides the save
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.life.gauntBest, 300, 'the record survives a reload');
+  t.eq(R.S.gauntlet.week, '2026-07-20', 'so does the week mark');
+  // same week, either weekend day: one maze for everyone
+  const { DP: D2 } = loadGame({}, false);
+  D2.newGauntlet('2026-07-25');             // Saturday, same week
+  t.eq(D2.S.run.seed, seedA, 'the whole weekend races one maze');
+  const { DP: P } = loadGame({}, false);
+  for (let s2 = 0; s2 < 8 && !plainShops; s2++) {
+    P.srand(400 + s2); P.newRun('knight');
+    for (let f = 1; f <= 5; f++) {
+      P.S.run.floor = f; P.genFloor();
+      for (const k in P.S.run.map.rooms) {
+        plainShops += P.S.run.map.rooms[k].ents.filter(e => e.kind === 'shop').length;
+      }
+    }
+  }
+  t.ok(plainShops > 0, 'plain runs still meet the keeper (sanity)');
+  // an ordinary floor-5 stairs still charges its toll (no gauntlet, no exit)
+  const { DP: N } = loadGame({}, false);
+  N.srand(141); N.newRun('knight');
+  N.S.run.floor = 5;
+  N.S.run.purse = { coin: 10, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+  N.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  N.interact(0);
+  t.eq(N.S.run.floor, 6, 'plain runs descend as ever');
+  t.ok(!N.S.over, 'and never end at floor 5');
+  // the wiring
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('\\u{1F3C1} GAUNTLET') >= 0, 'the weekend chip hangs on the title');
+  t.ok(src.indexOf("['gauntlet best', L.gauntBest") >= 0, 'the endless records read the clock');
+  t.ok(src.indexOf('THE GAUNTLET — cleared in ') >= 0, 'the share card brags the time');
+}
+
 t.done();

@@ -51,6 +51,13 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.5.0', notes: [
+    'RIVALS & DUELS — mark any board name as your rival (topple them for a trophy), and send ?duel challenge links that race your exact maze',
+    'THE LEGEND DOOR ♛ — an NG+ deep clear unseals NG++: act-3 halls from floor 1, stacked prestige kits, decrees at floor 11, the Throne Shard',
+    'THE GAUNTLET 🏁 — weekends only: five floors, all eight decrees, no merchants, the clock is the score',
+    'NAMED CHAMPIONS hide among the elites — double bounty, guaranteed key, a codex line each',
+    'the MONTHLY BOARD + last month’s champion on the title; the innkeeper tells tales on the way down; ghost pace races your best; mastery stars, habit ledgers, welcome-back and birthday crates',
+  ] },
   { v: '1.4.0', notes: [
     'THE ALCHEMIST — an eighth hero: no potions, she BREWS. Every 12 coins collected distills a draught (blast/freeze/mend/gild); gems are reagents, +2 power each. Unseals at 5 deep clears',
     'THE WEEKLY DECREE ⚖️ — one law rules each week (opt-in on the title); clear floor 15 under it for the ledger and a trophy',
@@ -1100,7 +1107,7 @@ const S = {
   opts: { sfx: 1, music: 0.8, shake: true, parts: true, haptic: true, cb: false },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
   life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {}, chests: 0, weeklies: 0,
-          mutMax: 0, deepFloors: 0, draughts: {}, deaths: {} },
+          mutMax: 0, deepFloors: 0, draughts: {}, deaths: {}, gauntBest: 0, gaunts: 0 },
   hist: [],                                     // the last ten runs, newest first
   codex: { foes: {}, relics: {}, coins: {} },   // everything ever met, owned or fired
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
@@ -1113,6 +1120,7 @@ const S = {
   yday: { on: '', floor: 0, name: '' },         // yesterday's deepest (fetched once a day)
   plaque: { on: '', month: '', floor: 0, name: '' },  // last month's champion (fetched once a day)
   firstRun: '',                                 // the profile's first-run date (anniversaries)
+  gauntlet: { week: '', time: 0 },              // this week's gauntlet clear (best time, seconds)
   annivDone: '',                                // the year whose birthday crate was claimed
   weeklyPick: false,                            // the WEEKLY DECREE is armed for new runs
   weeklyDone: '',                               // the week whose decree was already cleared
@@ -1197,7 +1205,7 @@ function save() {
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
       coach: S.coach, streak: S.streak, yday: S.yday, plaque: S.plaque,
-      firstRun: S.firstRun || '', annivDone: S.annivDone || '',
+      firstRun: S.firstRun || '', annivDone: S.annivDone || '', gauntlet: S.gauntlet,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
       rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales,
       boardName: S.boardName || '',
@@ -1218,6 +1226,7 @@ function save() {
         brew: S.run.brew || 0, reagents: S.run.reagents || 0,
         duel: S.run.duel || null,
         pace: S.run.pace || {}, deepInked: S.run.deepInked ? 1 : 0,
+        gauntlet: S.run.gauntlet || null,
       } : null,
     }));
   } catch (e) {}
@@ -1257,7 +1266,8 @@ function load() {
                  time: d.life.time || 0, heroRuns: d.life.heroRuns || {},
                  chests: d.life.chests || 0, weeklies: d.life.weeklies || 0,
                  mutMax: d.life.mutMax || 0, deepFloors: d.life.deepFloors || 0,
-                 draughts: d.life.draughts || {}, deaths: d.life.deaths || {} };
+                 draughts: d.life.draughts || {}, deaths: d.life.deaths || {},
+                 gauntBest: d.life.gauntBest || 0, gaunts: d.life.gaunts || 0 };
     }
     if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
     if (d.codex && typeof d.codex === 'object') {
@@ -1280,6 +1290,7 @@ function load() {
                    floor: d.plaque.floor | 0, name: String(d.plaque.name || '').slice(0, 12) };
     }
     if (typeof d.firstRun === 'string') S.firstRun = d.firstRun;
+    if (d.gauntlet && typeof d.gauntlet === 'object') S.gauntlet = { week: d.gauntlet.week || '', time: d.gauntlet.time | 0 };
     if (typeof d.annivDone === 'string') S.annivDone = d.annivDone;
     // grandfather the veterans: a profile with runs but no first-run date
     // starts its calendar today
@@ -1328,6 +1339,7 @@ function load() {
           ? { name: String(d.run.duel.name || '').slice(0, 12), floor: d.run.duel.floor | 0 } : null,
         pace: (d.run.pace && typeof d.run.pace === 'object') ? d.run.pace : {},
         deepInked: d.run.deepInked ? 1 : 0,
+        gauntlet: d.run.gauntlet || null,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -3310,6 +3322,7 @@ const MUTS = [
 ];
 function mutCount() {
   if (!S.run) return 0;
+  if (S.run.gauntlet) return MUTS.length;   // the gauntlet binds every law at once
   // legends read the deep's laws early: first decree at floor 11, not 21
   const base = (S.run.ng | 0) >= 2 ? 8 : 18;
   return Math.max(0, Math.min(MUTS.length, Math.floor((S.run.floor - base) / 3)));
@@ -3379,6 +3392,27 @@ function newDaily(dateStr) {
 }
 // IRONCLAD FOES: the daily's +20% rides every enemy multiplier
 function dailyK() { return S.run && S.run.dailyMod === 'tough' ? 1.2 : 1; }
+// ------------------------------------------------------------ THE GAUNTLET
+// Friday to Sunday only: the week's seed, five floors, ALL EIGHT decrees
+// binding from the first door, no merchants — and the CLOCK is the only
+// score. The floor-5 stairs are the finish line; best time carved locally.
+function gauntletOpen(dateStr) {
+  const dow = new Date(dateStr + 'T00:00:00Z').getUTCDay();
+  return dow === 5 || dow === 6 || dow === 0;
+}
+function newGauntlet(dateStr) {
+  if (!dateStr || !gauntletOpen(dateStr)) return false;
+  const hid = heroById(S.heroPick) && heroUnlocked(S.heroPick) ? S.heroPick : 'knight';
+  S.nextSeed = dailySeed('G' + weekOf(dateStr)) >>> 0 || 1;   // one maze per weekend, for everyone
+  S.duel = null;
+  newRun(hid, true);              // force: no weekly stacking — the gauntlet IS the law
+  S.run.ng = 0;
+  S.run.weekly = null; S.run.week = null; S.run.duel = null;
+  S.run.gauntlet = weekOf(dateStr);
+  genFloor();                     // re-carve floor 1 under gauntlet rules (the merchants flee)
+  save();
+  return true;
+}
 // -------------------------------------------------------- the WEEKLY DECREE
 // one law rules the whole week (UTC, Monday through Sunday). Opt in from the
 // title: armed runs carry the decree's sting AND its reward. Clear floor 15
@@ -3923,7 +3957,8 @@ function genEnts(dist) {
   const r = rng();
   const n = r < 0.22 ? 1 : r < 0.6 ? 2 : r < 0.92 ? 3 : 4;
   const ents = [];
-  const SVC = [['chest', 30], ['shop', 22], ['smith', 16], ['shrine', 18], ['wheel', 12], ['event', 16]];
+  const SVC = [['chest', 30], ['shop', 22], ['smith', 16], ['shrine', 18], ['wheel', 12], ['event', 16]]
+    .filter(s => !(S.run && S.run.gauntlet && s[0] === 'shop'));   // no merchants in the gauntlet
   for (let i = 0; i < n; i++) {
     const avail = SVC.filter(s => !ents.some(e => e.kind === s[0]));
     if (rng() < 0.66 || !avail.length) {
@@ -4239,6 +4274,17 @@ function interact(i) {
     return true;
   }
   if (e.kind === 'stairs') {
+    // THE GAUNTLET's fifth-floor stairs are the FINISH LINE, toll-free
+    if (S.run.gauntlet && S.run.floor >= 5) {
+      const tSec = Math.round((S.run.stats && S.run.stats.t) || 0);
+      S.life.gaunts = (S.life.gaunts || 0) + 1;
+      if (!S.life.gauntBest || tSec < S.life.gauntBest) S.life.gauntBest = tSec;
+      S.gauntlet = { week: S.run.gauntlet, time: tSec };
+      endRun('\u{1F3C1} THE GAUNTLET — CLEARED');
+      S.over.gauntlet = tSec;
+      save();
+      return true;
+    }
     // the stairwell takes its toll before it lets you down — and skims
     // whatever spills over the purse's soft ceiling (2 gold a coin)
     if (!spendPurse(stairToll())) {
@@ -4948,7 +4994,7 @@ window.DP = {
   streakTouch, streakK, plantToday,
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
-  duelLink, parseDuel, welcomeBack, anniversary,
+  duelLink, parseDuel, welcomeBack, anniversary, gauntletOpen, newGauntlet,
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
@@ -9783,6 +9829,7 @@ if (!HEADLESS) (function browser() {
         ['weekly decrees', (L.weeklies || 0) + ' survived'],
         ['floors past the ledger', '' + (L.deepFloors || 0)],
         ['endless trophies', ((u.milestone ? 1 : 0) + (u.floor25 ? 1 : 0) + (u.floor30 ? 1 : 0)) + ' / 3'],
+        ['gauntlet best', L.gauntBest ? Math.floor(L.gauntBest / 60) + ':' + ('0' + (L.gauntBest % 60)).slice(-2) + '  (' + (L.gaunts || 0) + ' cleared)' : '—'],
       ];
       rows.forEach((rw, i) => {
         const x = i % 2 === 0 ? 30 : LW / 2 + 10;
@@ -9792,7 +9839,7 @@ if (!HEADLESS) (function browser() {
         txt(rw[0], x + 8, y + 10, '600 10px Verdana, sans-serif', '#9a8aa0', 'left');
         txt(rw[1], x + 8, y + 25, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
       });
-      const wy = 116 + 3 * 40 + 22;
+      const wy = 116 + Math.ceil(rows.length / 2) * 40 + 22;
       txt('— THE DECREE WALL —', LW / 2, wy, '900 12px Georgia, serif', '#c8a8b0');
       txt('past floor 21 the deep stacks one law every 3 floors', LW / 2, wy + 16, '600 9px Verdana, sans-serif', '#9a8aa0');
       MUTS.forEach((m, i) => {
@@ -10235,6 +10282,9 @@ if (!HEADLESS) (function browser() {
         ctx.beginPath(); ctx.ellipse(cx2, cy2 + 2, 12, 5.5, 0, 0, 7); ctx.fillStyle = '#7d5a14'; ctx.fill();
         ctx.beginPath(); ctx.ellipse(cx2, cy2, 12, 5.5, 0, 0, 7); ctx.fillStyle = '#f2c04a'; ctx.fill();
         ctx.strokeStyle = 'rgba(122,84,14,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      if (o.gauntlet) {
+        txt('\u{1F3C1} THE GAUNTLET — cleared in ' + Math.floor(o.gauntlet / 60) + ':' + ('0' + (o.gauntlet % 60)).slice(-2), W / 2, 578, '900 13px Verdana, sans-serif', '#ff9d8a');
       }
       if (o.seed != null) {
         txt('seed ' + seed36(o.seed) + ' — can you go deeper?', W / 2, 600, '800 12px Verdana, sans-serif', '#8ed67e');
@@ -10952,14 +11002,31 @@ if (!HEADLESS) (function browser() {
     }, { bg: S.weeklyPick ? 'rgba(72,56,18,0.95)' : 'rgba(40,40,56,0.95)',
          border: S.weeklyPick ? '#ffd75e' : '#8a86b8', col: S.weeklyPick ? '#ffe9a3' : '#d8d4f0',
          font: '900 9px Verdana, sans-serif', r: 10 });
+    let chipY = 160;
+    // THE GAUNTLET door: weekends only — five floors, every law, the clock
+    if (gauntletOpen(today)) {
+      const gDone = S.gauntlet && S.gauntlet.week === weekOf(today);
+      uiBtn(14, chipY, 108, 28, '\u{1F3C1} GAUNTLET', () => {
+        S.confirm = {
+          msg: '\u{1F3C1} THE GAUNTLET',
+          sub: 'five floors, all eight decrees, no merchants — the CLOCK is the score'
+             + (S.life.gauntBest ? '  •  best ' + Math.floor(S.life.gauntBest / 60) + ':' + ('0' + (S.life.gauntBest % 60)).slice(-2) : ''),
+          yesLabel: gDone ? 'RUN IT AGAIN' : 'RUN IT',
+          yes: () => newGauntlet(today),
+        };
+      }, { grad: ['#7d2430', '#4a1018'], border: '#ff9d8a', col: '#ffd9d0',
+           font: '900 9px Verdana, sans-serif', r: 10 });
+      chipY += 34;
+    }
     if (S.best.floor >= 5) {
-      uiBtn(14, 160, 108, 28, '\u{1F3B0} MACHINE', () => { THEMES = true; },
+      uiBtn(14, chipY, 108, 28, '\u{1F3B0} MACHINE', () => { THEMES = true; },
             { bg: 'rgba(44,34,50,0.95)', border: '#9a8aa0', col: '#e8d8ec',
               font: '900 10px Verdana, sans-serif', r: 10 });
+      chipY += 34;
     }
     // the pocket-install chip: only appears when the browser made the offer
     if (installEvt) {
-      uiBtn(14, S.best.floor >= 5 ? 194 : 160, 108, 28, '\u{1F4F2} INSTALL', () => {
+      uiBtn(14, chipY, 108, 28, '\u{1F4F2} INSTALL', () => {
         const ev = installEvt;
         installEvt = null;
         if (ev && ev.prompt) ev.prompt();

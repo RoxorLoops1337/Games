@@ -400,10 +400,12 @@ impact ÷ effort.
       ng:2 relic (+2 every blow), ♛ on board rows/history/report card,
       server clamps ng 0-2; probe measured: NG++ floor 1 = ×1.27 of the
       plain act-3 gate (rail ≤1.3, alongside NG+'s ×1.17) (session 62)
-- [ ] **[big] THE GAUNTLET**: a seeded 5-floor sprint (weekOf seed, all
-      decrees on from floor 1, no shops) raced against the CLOCK; best time
-      in records + a GAUNTLET line on the share card; the door only opens
-      Fri-Sun to make it an event
+- [x] **[big] THE GAUNTLET**: Fri-Sun only (gauntletOpen, UTC), one maze per
+      weekend (G+weekOf seed), all 8 decrees bind from floor 1 (mutCount),
+      merchants flee (genEnts filter), the floor-5 stairs are the toll-free
+      FINISH LINE — endRun with the clock as the score; S.life.gauntBest/
+      gaunts + S.gauntlet.week persisted, endless-records line, share-card
+      brag line, 🏁 weekend chip (session 63)
 - [x] **Anniversary gift**: S.firstRun stamped on the first run (veterans
       grandfathered to today on load); anniversary(date) → a 🎂 candle by
       the streak flame + a once-a-year MAKE A WISH crate (100 cogs + the
@@ -422,6 +424,14 @@ impact ÷ effort.
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
+- [x] **TIER 9 IS COMPLETE** (session 63): sixteen items + one owner-request
+      across ten sessions — rivals and the percentile carve, duel links, the
+      welcome-back crate, the marquee reason engine, ghost pace, codex
+      completion, mastery stars, the innkeeper's 64 tales, the habit ledger,
+      the trophy-wall card, four named champions, the monthly board and its
+      champion's plaque, anniversaries, THE LEGEND DOOR (NG++, probe-railed
+      at ×1.27), THE GAUNTLET, and the late-game coin sink the owner asked
+      for (v1.5.0, 1920 game tests, 40 trophies). Session 64 drafts Tier 10.
 - [x] **TIER 8 IS COMPLETE** (session 53): sixteen items across eight sessions —
       streaks and the seed of the day, jackpot/kill/floor juice, endless
       milestones and dark decrees, three new daily twists, a talkative board,
