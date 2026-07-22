@@ -1128,6 +1128,7 @@ const S = {
   tales: {},                                    // innkeeper's tales heard (TALES index → 1)
   duel: null,                                   // a pending ?duel challenge {seed, floor, name}
   wbRelic: 0,                                   // welcome-back crate: rare pick armed for next run
+  gifted: 0,                                    // the one rookie stake, claimed
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
@@ -1207,7 +1208,7 @@ function save() {
       coach: S.coach, streak: S.streak, yday: S.yday, plaque: S.plaque,
       firstRun: S.firstRun || '', annivDone: S.annivDone || '', gauntlet: S.gauntlet,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
-      rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales,
+      rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales, gifted: S.gifted ? 1 : 0,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1301,6 +1302,7 @@ function load() {
       S.rival = { name: String(d.rival.name || '').slice(0, 12), floor: d.rival.floor | 0, kills: d.rival.kills | 0 };
     }
     S.wbRelic = d.wbRelic ? 1 : 0;
+    S.gifted = d.gifted ? 1 : 0;
     if (d.tales && typeof d.tales === 'object') S.tales = d.tales;
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
@@ -3606,6 +3608,30 @@ function anniversary(dateStr) {
   const yrs = (+dateStr.slice(0, 4)) - (+S.firstRun.slice(0, 4));
   return yrs > 0 ? yrs : 0;
 }
+// ------------------------------------------------------------ the GIFT STAKE
+// a link that stakes a rookie: ?gift=<name>. A profile with no runs on the
+// books gets +50 cogs and the giver's name in lights. One stake, ever.
+function giftLink(name) {
+  return '?gift=' + encodeURIComponent(String(name || 'a friend').slice(0, 12));
+}
+function parseGift(search) {
+  const m = /[?&]gift=([^&]+)/i.exec(String(search || ''));
+  if (!m) return null;
+  let name = 'a friend';
+  try { name = decodeURIComponent(m[1]).replace(/[^\w \-.']/g, '').trim().slice(0, 12) || 'a friend'; } catch (e) {}
+  return { name };
+}
+function claimGift() {
+  if (S.gifted || (S.best.runs | 0) > 0) return false;   // rookies only, once
+  S.gifted = 1;
+  S.cogs += 50;
+  save();
+  return true;
+}
+// THE DEEP BOARD's client-side sieve: by hero, by difficulty
+function boardFilter(top, hero, diff) {
+  return (top || []).filter(e => (!hero || e.hero === hero) && (!diff || (e.diff || 'normal') === diff));
+}
 // away a week or more? the dungeon kept your seat warm — one crate, no guilt
 function welcomeBack(todayStr) {
   const last = S.streak && S.streak.last;
@@ -5010,6 +5036,7 @@ window.DP = {
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
   duelLink, parseDuel, welcomeBack, anniversary, gauntletOpen, newGauntlet,
+  giftLink, parseGift, claimGift, boardFilter,
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
@@ -10031,14 +10058,35 @@ if (!HEADLESS) (function browser() {
     } else if (!BOARD.top.length) {
       txt(TR('no descents carved here yet — be the first'), LW / 2, py + 300, '700 12px Verdana, sans-serif', '#b8a8bc');
     } else {
-      // 12 rows per page, pager below — the whole top 50 is reachable
-      const PER = 12;
-      const pages = Math.max(1, Math.ceil(BOARD.top.length / PER));
+      // the SIEVE: hero + difficulty chips filter the fifty client-side
+      const heroesIn = BOARD.top.map(e => e.hero).filter((h2, i2, a2) => a2.indexOf(h2) === i2).slice(0, 8);
+      let fx = 52;
+      const chip = (label, on, cb, w2) => {
+        uiBtn(fx, py + 86, w2 || 30, 22, label, cb,
+              { bg: on ? 'rgba(122,84,20,0.7)' : 'rgba(255,255,255,0.05)',
+                border: on ? '#ffd75e' : '#4a4458', col: '#fff', font: '11px serif', r: 7 });
+        fx += (w2 || 30) + 4;
+      };
+      heroesIn.forEach(hid => {
+        const hh = heroById(hid);
+        chip(hh ? hh.icon : '❔', BOARD.fHero === hid,
+             () => { BOARD.fHero = BOARD.fHero === hid ? null : hid; BOARD.page = 0; });
+      });
+      chip('\u{1F49A}', BOARD.fDiff === 'merciful', () => { BOARD.fDiff = BOARD.fDiff === 'merciful' ? null : 'merciful'; BOARD.page = 0; });
+      chip('\u{1F480}', BOARD.fDiff === 'nightmare', () => { BOARD.fDiff = BOARD.fDiff === 'nightmare' ? null : 'nightmare'; BOARD.page = 0; });
+      if (BOARD.fHero || BOARD.fDiff) chip('✕', true, () => { BOARD.fHero = null; BOARD.fDiff = null; BOARD.page = 0; }, 26);
+      const flt = boardFilter(BOARD.top, BOARD.fHero, BOARD.fDiff);
+      if ((BOARD.fHero || BOARD.fDiff)) {
+        txt(flt.length + ' of ' + BOARD.top.length, LW - 52, py + 97, '700 9px Verdana, sans-serif', '#9a8aa0', 'right');
+      }
+      // 11 rows per page (the chips took a line), pager below
+      const PER = 11;
+      const pages = Math.max(1, Math.ceil(flt.length / PER));
       BOARD.page = Math.max(0, Math.min(BOARD.page, pages - 1));
-      const rows = BOARD.top.slice(BOARD.page * PER, BOARD.page * PER + PER);
+      const rows = flt.slice(BOARD.page * PER, BOARD.page * PER + PER);
       rows.forEach((e, i) => {
-        const rank = BOARD.page * PER + i + 1;
-        const ry = py + 108 + i * 38;
+        const rank = BOARD.top.indexOf(e) + 1;
+        const ry = py + 124 + i * 38;
         const me = S.boardName && e.name === S.boardName;
         const rv = S.rival && S.rival.name === e.name;
         rr(44, ry - 15, LW - 88, 32, 8);
@@ -11139,11 +11187,30 @@ if (!HEADLESS) (function browser() {
             { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
               font: '900 11px Verdana, sans-serif', r: 10 });
     }
-    uiBtn(LW / 2 - 120, 700, 116, 38, TR('TITLE'), () => { S.screen = 'title'; },
-          { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 13px Verdana, sans-serif', r: 12 });
-    uiBtn(LW / 2 + 4, 700, 116, 38, '\u{2694}\u{FE0F} DUEL', () => shareDuel(o),
+    uiBtn(LW / 2 - 156, 700, 96, 38, TR('TITLE'), () => { S.screen = 'title'; },
+          { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 12px Verdana, sans-serif', r: 12 });
+    uiBtn(LW / 2 - 52, 700, 100, 38, '\u{2694}\u{FE0F} DUEL', () => shareDuel(o),
           { bg: 'rgba(60,26,30,0.92)', border: '#ff9d8a', col: '#ffd9d0',
             font: '900 12px Verdana, sans-serif', r: 12 });
+    uiBtn(LW / 2 + 56, 700, 100, 38, '\u{1F381} STAKE', () => shareGift(),
+          { bg: 'rgba(30,52,36,0.92)', border: '#8ed67e', col: '#d8f0dc',
+            font: '900 11px Verdana, sans-serif', r: 12 });
+  }
+  // the STAKE: a rookie's welcome, signed with your name
+  function shareGift() {
+    achUnlock('emissary');
+    const url = location.origin + location.pathname + giftLink(S.boardName || 'a friend');
+    if (navigator.share) {
+      navigator.share({ title: 'Dungeon Pusher', text: 'I staked you 50 cogs in Dungeon Pusher — dig well', url }).catch(() => {});
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url).then(
+        () => toast('\u{1F381} the stake link is copied — hand it to a rookie'),
+        () => toast(url));
+      return;
+    }
+    toast(url);
   }
   // the CHALLENGE: this run's maze + floor as a link worth sending
   function shareDuel(o) {
@@ -11254,6 +11321,13 @@ if (!HEADLESS) (function browser() {
       S.duel = dl;
       S.nextSeed = dl.seed >>> 0;
       toast('\u{2694}\u{FE0F} ' + dl.name + ' reached FLOOR ' + dl.floor + ' on this maze — NEW RUN grows it');
+      if (history.replaceState) history.replaceState(null, '', location.pathname);
+    }
+    // a GIFT STAKE greets a rookie before their first coin drops
+    const gf = parseGift(location.search);
+    if (gf) {
+      if (claimGift()) toast('\u{1F381} ' + gf.name + ' staked you 50 ⚙ cogs — dig well');
+      else toast('the stake is for rookies — send your own with \u{1F381} STAKE');
       if (history.replaceState) history.replaceState(null, '', location.pathname);
     }
   } catch (e) {}

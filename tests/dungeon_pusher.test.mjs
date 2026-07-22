@@ -5696,4 +5696,53 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("'⇧ REFINE'") >= 0, 'the refine slot announces itself');
 }
 
+// -------- the GIFT STAKE + board filters --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // the link and its scrubbing
+  const g = D.parseGift(D.giftLink('Danhieux'));
+  t.eq(g.name, 'Danhieux', 'the stake carries the giver’s name');
+  t.eq(D.parseGift(''), null, 'no search, no stake');
+  const dirty = D.parseGift('?gift=' + encodeURIComponent('<img>Bob!!x12345678'));
+  t.ok(dirty.name.indexOf('<') < 0 && dirty.name.length <= 12, 'the name is scrubbed and capped');
+  t.eq(D.parseGift('?gift=%3C%3E').name, 'a friend', 'a name scrubbed to nothing falls back kindly');
+  // rookies only, once
+  t.eq(D.S.best.runs | 0, 0, 'a fresh profile has no runs (sanity)');
+  t.ok(D.claimGift(), 'the rookie claims the stake');
+  t.eq(D.S.cogs, 50, 'fifty cogs, as promised');
+  t.ok(!D.claimGift(), 'never twice');
+  t.eq(D.S.cogs, 50, 'the second claim pays nothing');
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.ok(!R.claimGift(), 'the claim survives a reload');
+  // veterans get nothing
+  const { DP: V } = loadGame({}, false);
+  V.srand(181); V.newRun('knight');
+  V.endRun('fell');
+  t.ok(!V.claimGift(), 'a profile with runs on the books is no rookie');
+  // the board sieve
+  const top = [
+    { name: 'A', floor: 20, kills: 9, hero: 'knight', diff: 'nightmare' },
+    { name: 'B', floor: 15, kills: 30, hero: 'wizard', diff: 'normal' },
+    { name: 'C', floor: 12, kills: 10, hero: 'knight' },
+    { name: 'D', floor: 9, kills: 2, hero: 'rat', diff: 'merciful' },
+  ];
+  t.eq(D.boardFilter(top, 'knight', null).length, 2, 'the hero chip sieves to the knights');
+  t.eq(D.boardFilter(top, null, 'nightmare').length, 1, 'the skull chip to the brave');
+  t.eq(D.boardFilter(top, 'knight', 'nightmare')[0].name, 'A', 'chips stack');
+  t.eq(D.boardFilter(top, null, 'normal').length, 2, 'a missing diff reads as normal');
+  t.eq(D.boardFilter(top, null, null).length, 4, 'no chips, no sieve');
+  t.eq(D.boardFilter(null, 'knight', null).length, 0, 'an empty board sieves to nothing');
+  // browser wiring
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('parseGift(location.search)') >= 0, 'boot reads the stake link');
+  t.ok(src.indexOf('staked you 50 ⚙ cogs — dig well') >= 0, 'and greets the rookie by name');
+  t.ok(src.indexOf('\\u{1F381} STAKE') >= 0, 'the run-over screen offers the STAKE button');
+  t.ok(src.indexOf('const flt = boardFilter(BOARD.top, BOARD.fHero, BOARD.fDiff)') >= 0,
+    'the board rows read through the sieve');
+  t.ok(src.indexOf("chip('✕', true") >= 0, 'an active sieve offers the clear chip');
+}
+
 t.done();
