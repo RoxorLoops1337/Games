@@ -1110,6 +1110,9 @@ const S = {
   coach: { pick: 0, drop: 0, end: 0 },          // the first-battle pointers, killed once each
   streak: { last: '', days: 0 },                // consecutive days played (one grace day)
   yday: { on: '', floor: 0, name: '' },         // yesterday's deepest (fetched once a day)
+  plaque: { on: '', month: '', floor: 0, name: '' },  // last month's champion (fetched once a day)
+  firstRun: '',                                 // the profile's first-run date (anniversaries)
+  annivDone: '',                                // the year whose birthday crate was claimed
   weeklyPick: false,                            // the WEEKLY DECREE is armed for new runs
   weeklyDone: '',                               // the week whose decree was already cleared
   rival: { name: '', floor: 0, kills: 0 },      // the marked name to out-dig (from the board)
@@ -1191,7 +1194,8 @@ function save() {
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
-      coach: S.coach, streak: S.streak, yday: S.yday,
+      coach: S.coach, streak: S.streak, yday: S.yday, plaque: S.plaque,
+      firstRun: S.firstRun || '', annivDone: S.annivDone || '',
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
       rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales,
       boardName: S.boardName || '',
@@ -1269,6 +1273,15 @@ function load() {
     if (d.yday && typeof d.yday === 'object') {
       S.yday = { on: d.yday.on || '', floor: d.yday.floor | 0, name: String(d.yday.name || '').slice(0, 12) };
     }
+    if (d.plaque && typeof d.plaque === 'object') {
+      S.plaque = { on: d.plaque.on || '', month: d.plaque.month || '',
+                   floor: d.plaque.floor | 0, name: String(d.plaque.name || '').slice(0, 12) };
+    }
+    if (typeof d.firstRun === 'string') S.firstRun = d.firstRun;
+    if (typeof d.annivDone === 'string') S.annivDone = d.annivDone;
+    // grandfather the veterans: a profile with runs but no first-run date
+    // starts its calendar today
+    if (!S.firstRun && (d.best && d.best.runs) > 0) S.firstRun = new Date().toISOString().slice(0, 10);
     S.weeklyPick = !!d.weeklyPick;
     if (typeof d.weeklyDone === 'string') S.weeklyDone = d.weeklyDone;
     if (d.rival && typeof d.rival === 'object') {
@@ -3531,6 +3544,13 @@ function rollTale() {
   S.tales[i] = 1;
   return TALES[i].x;
 }
+// the ANNIVERSARY: same month-and-day as the first run, a later year —
+// returns the years served (0 when it isn't the day)
+function anniversary(dateStr) {
+  if (!S.firstRun || S.firstRun.slice(5) !== dateStr.slice(5)) return 0;
+  const yrs = (+dateStr.slice(0, 4)) - (+S.firstRun.slice(0, 4));
+  return yrs > 0 ? yrs : 0;
+}
 // away a week or more? the dungeon kept your seat warm — one crate, no guilt
 function welcomeBack(todayStr) {
   const last = S.streak && S.streak.last;
@@ -3767,6 +3787,7 @@ function newRun(heroId, force) {
   // seal (the DAILY hands out loaners, though)
   if (!force && !heroUnlocked(hero.id)) hero = HEROES[0];
   S.best.runs = (S.best.runs || 0) + 1;   // the lifetime run tally
+  if (!S.firstRun) S.firstRun = new Date().toISOString().slice(0, 10);   // the calendar starts here
   S.ach.heroes[hero.id] = 1;              // the casting-call ledger
   const diff = DIFFS.some(d => d.id === S.diffPick) ? S.diffPick : 'normal';
   const ng = (S.ngPick && ngPlusOpen()) ? 1 : 0;
@@ -4915,7 +4936,7 @@ window.DP = {
   streakTouch, streakK, plantToday,
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
-  duelLink, parseDuel, welcomeBack,
+  duelLink, parseDuel, welcomeBack, anniversary,
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
@@ -8446,6 +8467,7 @@ if (!HEADLESS) (function browser() {
   // the hero puppet + inputs
   let heroSel = heroById(S.heroPick) && heroUnlocked(S.heroPick) ? S.heroPick : 'knight';
   let wbOffered = false;              // the welcome-back crate knocks once per visit
+  let annivOffered = false;           // the birthday crate too
   const AV = { x: LW / 2, y: 0, stamp: -1, step: 0, moving: false, fx: 0, fy: -1, dir: 'u', animT: 0 };
   const JOY = { active: false, ox: 0, oy: 0, dx: 0, dy: 0, id: null };
   const KEYS = {};
@@ -9823,7 +9845,7 @@ if (!HEADLESS) (function browser() {
     BOARD = { tab: tab || 'alltime', state: 'loading', top: [], day: '', page: 0 };
     const mine = BOARD;
     if (typeof fetch !== 'function') { mine.state = 'err'; return; }
-    fetch(BOARD_API + (mine.tab === 'daily' ? '?board=daily' : ''))
+    fetch(BOARD_API + (mine.tab === 'daily' ? '?board=daily' : mine.tab === 'monthly' ? '?board=monthly' : ''))
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(j => {
         if (BOARD !== mine) return;
@@ -9856,6 +9878,25 @@ if (!HEADLESS) (function browser() {
         save();
       })
       .catch(() => {});                                 // offline: the stamp stays quiet
+  }
+  // the CHAMPION'S PLAQUE: last month's deepest name, fetched once a day
+  const MONTH_NAMES = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
+                       'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+  let plaqueTried = false;
+  function plaqueFetch() {
+    if (plaqueTried || typeof fetch !== 'function') return;
+    const today = new Date().toISOString().slice(0, 10);
+    if (S.plaque && S.plaque.on === today) return;
+    plaqueTried = true;
+    fetch(BOARD_API + '?board=lastmonth')
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => {
+        const best = (j && j.top && j.top[0]) || null;
+        S.plaque = best ? { on: today, month: j.day || '', floor: best.floor | 0, name: String(best.name || '').slice(0, 12) }
+                        : { on: today, month: j.day || '', floor: 0, name: '' };
+        save();
+      })
+      .catch(() => {});
   }
   function postScore(run) {
     if (typeof fetch !== 'function' || !run || !(run.floor >= 1)) return;
@@ -9897,13 +9938,14 @@ if (!HEADLESS) (function browser() {
     // tabs
     const tabBtn = (x, label, tab) => {
       const on = BOARD.tab === tab;
-      uiBtn(x, py + 54, 130, 30, label, () => { if (!on) openBoard(tab); },
+      uiBtn(x, py + 54, 118, 30, label, () => { if (!on) openBoard(tab); },
             { grad: on ? ['#7d5a24', '#4a3410'] : ['#3a3440', '#262230'],
               border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
-              font: '900 11px Verdana, sans-serif', r: 10 });
+              font: '900 10px Verdana, sans-serif', r: 10 });
     };
-    tabBtn(LW / 2 - 136, TR('ALL-TIME'), 'alltime');
-    tabBtn(LW / 2 + 6, TR('TODAY') + (BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
+    tabBtn(LW / 2 - 184, TR('ALL-TIME'), 'alltime');
+    tabBtn(LW / 2 - 59, TR('TODAY') + (BOARD.tab === 'daily' && BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
+    tabBtn(LW / 2 + 66, 'THIS MONTH', 'monthly');
     if (BOARD.state === 'loading') {
       txt(TR('consulting the deep ledger') + '.'.repeat(1 + (Math.floor(t * 2) % 3)), LW / 2, py + 300,
           '700 13px Verdana, sans-serif', '#b8a8bc');
@@ -10792,9 +10834,15 @@ if (!HEADLESS) (function browser() {
     txt(marqueeLine(new Date().toISOString().slice(0, 10)), LW / 2, 700, '700 10px Verdana, sans-serif', '#c8d6e8');
     txt('v' + VERSION, LW - 10, LH - 10, '600 10px Verdana, sans-serif', '#8d7d95', 'right');
     ydayFetch();
+    plaqueFetch();
     if (S.yday && S.yday.floor > 0 && !S.saveQuarantined) {
       txt('yesterday’s deepest: FLOOR ' + S.yday.floor + ' by ' + S.yday.name,
           LW / 2, 756, '700 10px Verdana, sans-serif', '#8fc8ff');
+    }
+    if (S.plaque && S.plaque.floor > 0) {
+      const mn = MONTH_NAMES[(+S.plaque.month.slice(5, 7) || 1) - 1] || '';
+      txt('\u{1F3DB}\u{FE0F} ' + mn + '’S DEEPEST: ' + S.plaque.name + ', floor ' + S.plaque.floor,
+          LW / 2, 772, '800 10px Verdana, sans-serif', '#e8c877');
     }
     drawArtBar();
     if (S.saveQuarantined) {
@@ -10814,6 +10862,24 @@ if (!HEADLESS) (function browser() {
           { grad: ['#5a4a2a', '#38290f'], border: '#c8a86a', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 10 });
     // the DAILY: one seeded run, one attempt, a guest hero if fate says so
     const today = new Date().toISOString().slice(0, 10);
+    // the ANNIVERSARY: a candle on the door and one crate a year
+    if (anniversary(today) > 0) {
+      txt('\u{1F382}', 156, 70, '14px serif', '#fff', 'left');
+      if (!annivOffered && !S.confirm && S.annivDone !== today.slice(0, 4)) {
+        const yrs = anniversary(today);
+        annivOffered = true;
+        S.confirm = {
+          msg: '\u{1F382} ' + yrs + ' YEAR' + (yrs > 1 ? 'S' : '') + ' IN THE DEEP',
+          sub: 'the innkeeper baked — take 100 ⚙ cogs, and a RARE relic waits at the next run’s door',
+          yesLabel: 'MAKE A WISH',
+          yes: () => {
+            S.cogs += 100; S.wbRelic = 1; S.annivDone = today.slice(0, 4);
+            save();
+            toast('\u{1F382} happy delve-day — dig something worthy');
+          },
+        };
+      }
+    }
     // the WELCOME-BACK crate: a week or more away, offered once per visit
     if (!wbOffered && !S.confirm) {
       const amt = welcomeBack(today);

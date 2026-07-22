@@ -11,7 +11,9 @@
 //   - a rolling DAILY under 'dp:day:<UTC date>' (three-day TTL so stale days
 //     sweep themselves; the date always comes from the SERVER clock — client
 //     input never builds a KV key)
-// ONE POST updates BOTH boards, so the per-IP throttle never forces a choice.
+//   - a MONTHLY under 'dp:month:<UTC YYYY-MM>' (sixty-day TTL, so last
+//     month's board survives long enough to crown a champion's plaque)
+// ONE POST updates ALL boards, so the per-IP throttle never forces a choice.
 //
 //   GET  /api/dungeon_board[?board=daily]      → { top:[...], day }
 //   POST /api/dungeon_board {name,floor,kills,hero,diff}
@@ -33,7 +35,15 @@ const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
 const utcDay = () => new Date().toISOString().slice(0, 10);
 const utcYesterday = () => new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+const utcMonth = () => utcDay().slice(0, 7);
+const utcLastMonth = () => {
+  const d = new Date();
+  d.setUTCDate(1); d.setUTCDate(0);            // the last day of the previous month
+  return d.toISOString().slice(0, 7);
+};
 const dayKey = () => 'dp:day:' + utcDay();
+const monthKey = () => 'dp:month:' + utcMonth();
+const MONTH_TTL = 60 * 24 * 3600;
 
 // floor first, kills break the tie
 const better = (a, b) => a.floor !== b.floor ? a.floor > b.floor : a.kills > b.kills;
@@ -54,12 +64,19 @@ export async function onRequestGet({ request, env }) {
   const KV = kv(env);
   if (!KV) return json({ error: 'not configured' }, 503);
   const which = request ? new URL(request.url).searchParams.get('board') : null;
-  // whitelist — nothing else reachable ('yesterday' feeds the title stamp)
+  // whitelist — nothing else reachable ('yesterday' feeds the title stamp,
+  // 'lastmonth' the champion's plaque)
   const key = which === 'daily' ? dayKey()
             : which === 'yesterday' ? ('dp:day:' + utcYesterday())
+            : which === 'monthly' ? monthKey()
+            : which === 'lastmonth' ? ('dp:month:' + utcLastMonth())
             : TOP_KEY;
   const top = JSON.parse((await KV.get(key)) || '[]');
-  return json({ top, day: which === 'yesterday' ? utcYesterday() : utcDay() });
+  const day = which === 'yesterday' ? utcYesterday()
+            : which === 'monthly' ? utcMonth()
+            : which === 'lastmonth' ? utcLastMonth()
+            : utcDay();
+  return json({ top, day });
 }
 
 export async function onRequestPost({ request, env }) {
@@ -86,10 +103,13 @@ export async function onRequestPost({ request, env }) {
 
   const top = JSON.parse((await KV.get(TOP_KEY)) || '[]');
   const daily = JSON.parse((await KV.get(dayKey())) || '[]');
+  const monthly = JSON.parse((await KV.get(monthKey())) || '[]');
   const grewTop = fold(top, entry);
   const grewDay = fold(daily, entry);
+  const grewMonth = fold(monthly, entry);
   if (grewTop) await KV.put(TOP_KEY, JSON.stringify(top));               // all-time: no TTL
   if (grewDay) await KV.put(dayKey(), JSON.stringify(daily), { expirationTtl: DAY_TTL });
+  if (grewMonth) await KV.put(monthKey(), JSON.stringify(monthly), { expirationTtl: MONTH_TTL });
   await KV.put('rl:' + ip, String(Date.now()), { expirationTtl: 60 });
   return json({ top, daily, day: utcDay() });
 }

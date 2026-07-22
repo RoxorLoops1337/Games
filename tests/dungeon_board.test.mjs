@@ -127,6 +127,23 @@ r = await get(env, 'lastweek');
 j = await r.json();
 ok(j.top.some(e => e.name === 'Thieu'), 'an unknown board param falls back to all-time');
 
+// one POST also feeds the MONTHLY board, under the server's own month key
+const MONTH = DAY.slice(0, 7);
+ok(env.DPBOARD._store.has('dp:month:' + MONTH), 'posts land on dp:month:<YYYY-MM> too');
+ok(env.DPBOARD._ttls.get('dp:month:' + MONTH) === 60 * 24 * 3600, 'the monthly key carries its sixty-day TTL');
+r = await get(env, 'monthly');
+j = await r.json();
+ok(j.top.length >= 1 && j.day === MONTH, 'GET ?board=monthly serves the month, dated as such');
+// last month's board serves the champion's plaque (seeded — a fresh month is empty)
+{
+  const d = new Date(); d.setUTCDate(1); d.setUTCDate(0);
+  const LAST = d.toISOString().slice(0, 7);
+  await env.DPBOARD.put('dp:month:' + LAST, JSON.stringify([{ name: 'Champ', floor: 28, kills: 400, hero: 'knight', diff: 'normal', t: 1 }]));
+  r = await get(env, 'lastmonth');
+  j = await r.json();
+  ok(j.top[0].name === 'Champ' && j.day === LAST, 'GET ?board=lastmonth crowns the previous month');
+}
+
 // the cap holds at 50
 {
   const env2 = { DPBOARD: mockKV() };
