@@ -1019,7 +1019,7 @@ const S = {
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
   opts: { sfx: 1, music: 0.8, shake: true, parts: true, haptic: true, cb: false },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
-  life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {} },
+  life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {}, chests: 0, weeklies: 0 },
   hist: [],                                     // the last ten runs, newest first
   codex: { foes: {}, relics: {}, coins: {} },   // everything ever met, owned or fired
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
@@ -1030,6 +1030,8 @@ const S = {
   coach: { pick: 0, drop: 0, end: 0 },          // the first-battle pointers, killed once each
   streak: { last: '', days: 0 },                // consecutive days played (one grace day)
   yday: { on: '', floor: 0, name: '' },         // yesterday's deepest (fetched once a day)
+  weeklyPick: false,                            // the WEEKLY DECREE is armed for new runs
+  weeklyDone: '',                               // the week whose decree was already cleared
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
@@ -1076,7 +1078,7 @@ function rng() {
 let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() {}, fanfare() {},
             bossHit() {}, eliteKill() {}, vaultOpen() {}, goldKey() {}, tick() {}, ratchet() {},
             slot() {}, hit() {}, hurt() {}, heal() {}, poison() {}, block() {},
-            stun() {}, buy() {}, door() {}, dead() {}, winb() {}, reel() {}, step() {} };
+            stun() {}, buy() {}, door() {}, dead() {}, winb() {}, reel() {}, step() {}, descend() {} };
 
 // ------------------------------------------------------------- persistence
 // the save SCHEMA version + its migration ladder: every load climbs the
@@ -1106,6 +1108,7 @@ function save() {
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
       coach: S.coach, streak: S.streak, yday: S.yday,
+      weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1120,6 +1123,7 @@ function save() {
         quest: S.run.quest || null,
         swarm: S.run.swarm || null, cheese: S.run.cheese || 0, diff: S.run.diff || 'normal',
         ng: S.run.ng || 0, bside: S.run.bside || 0, seed: S.run.seed,
+        weekly: S.run.weekly || null, week: S.run.week || null,
       } : null,
     }));
   } catch (e) {}
@@ -1155,7 +1159,8 @@ function load() {
     if (d.life && typeof d.life === 'object') {
       S.life = { fired: d.life.fired || 0, dealt: d.life.dealt || 0, taken: d.life.taken || 0,
                  kills: d.life.kills || 0, gold: d.life.gold || 0, bosses: d.life.bosses || 0,
-                 time: d.life.time || 0, heroRuns: d.life.heroRuns || {} };
+                 time: d.life.time || 0, heroRuns: d.life.heroRuns || {},
+                 chests: d.life.chests || 0, weeklies: d.life.weeklies || 0 };
     }
     if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
     if (d.codex && typeof d.codex === 'object') {
@@ -1173,6 +1178,8 @@ function load() {
     if (d.yday && typeof d.yday === 'object') {
       S.yday = { on: d.yday.on || '', floor: d.yday.floor | 0, name: String(d.yday.name || '').slice(0, 12) };
     }
+    S.weeklyPick = !!d.weeklyPick;
+    if (typeof d.weeklyDone === 'string') S.weeklyDone = d.weeklyDone;
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
@@ -1202,6 +1209,7 @@ function load() {
         swarm: d.run.swarm || null, cheese: d.run.cheese || 0, diff: d.run.diff || 'normal',
         ng: d.run.ng ? 1 : 0, bside: d.run.bside ? 1 : 0,
         seed: (typeof d.run.seed === 'number') ? (d.run.seed >>> 0) : null,
+        weekly: d.run.weekly || null, week: d.run.week || null,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -1392,6 +1400,7 @@ function dmgFoe(e, n, src, pierce) {
   if (hasRelic('crownscale') && (e.boss || e.elite)) n = n * 1.25;
   // the daily's GLASS CANNON: everything you deal doubles (as does what lands on you)
   if (S.run && S.run.dailyMod === 'cannon') n *= 2;
+  if (weeklyOn('brittle')) n *= 1.3;      // BRITTLE BLADES: both edges keen
   n = Math.max(1, Math.round(n));
   if (dot) {
     if (src === 'pois' && e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
@@ -1482,7 +1491,8 @@ function foeDown(e) {
   if (e.elite) { SND.eliteKill(); buzz(50); }
   else if (e.boss) buzz([40, 40, 90]);
   let gold = Math.round(e.gold * (mutOn('richveins') ? 1.25 : 1)
-                        * (S.run.dailyMod === 'drought' ? 2 : 1));
+                        * (S.run.dailyMod === 'drought' ? 2 : 1)
+                        * (weeklyOn('goldfever') ? 1.5 : weeklyOn('parade') ? 1.25 : weeklyOn('market') ? 0.75 : 1));
   const pacifistFloor = S.run.dailyMod === 'pacifist' && S.run.floor % 3 === 0;
   // the wound bounties: Ashfall pays for kindling, Blood Price for red work
   if (hasRelic('ashfall') && e.burn > 0) gold += 6;
@@ -1728,6 +1738,8 @@ function hpHit(n, cause, col) {
 function hurtPlayer(n, cause) {
   if (!S.run || S.run.hp <= 0) return;
   if (S.run.dailyMod === 'cannon') n *= 2;   // GLASS CANNON cuts both ways
+  if (weeklyOn('goldfever')) n = Math.round(n * 1.2);   // the fever's tax
+  if (weeklyOn('brittle')) n = Math.round(n * 1.3);     // brittle cuts back
   // the Brass Heart drinks the battle's first blow whole
   if (hasRelic('brassheart') && S.battle && !S.battle.brassSpent && n > 0) {
     S.battle.brassSpent = 1;
@@ -2149,7 +2161,7 @@ function scaleMult() {
   // per-act ramp + an act carry tuned so the hand-off to a new (stronger)
   // roster never softens the curve; past the last act the beyond term must
   // cover the whole in-act ramp alone (no fresh roster to lean on)
-  return (1 + 0.075 * (S.run.depth - 1) + 0.30 * fInAct + 0.50 * act + 0.9 * beyond) * dailyK();
+  return (1 + 0.075 * (S.run.depth - 1) + 0.30 * fInAct + 0.50 * act + 0.9 * beyond) * dailyK() * weeklyFoeK();
 }
 function enemyPool(depth) {
   // deeper rooms unlock the meaner half of THIS act's roster
@@ -2163,7 +2175,7 @@ function mkEnemy(type, eid) {
   // again) and scale by floor only — their lair sits at max depth by design
   const mult = type === 'boss'
     ? (1 + 0.26 * ((S.run.floor - 1) % 5) + 0.62 * act
-      + 0.55 * Math.max(0, S.run.floor - ENEMY_TIERS.length * 5)) * dailyK()
+      + 0.55 * Math.max(0, S.run.floor - ENEMY_TIERS.length * 5)) * dailyK() * weeklyFoeK()
     : scaleMult();
   let base, eliteK = 1;
   if (type === 'boss') {
@@ -3024,6 +3036,15 @@ function winBattle() {
       S.deep15[S.run.hero] = 1;
       toast('deep clear! ' + (heroById(S.run.hero) || {}).name + ' earned an ALT SKIN — toggle it on the hero card');
     }
+    // a deep clear under the WEEKLY DECREE: once per week, into the ledger
+    if (S.run.floor >= 15 && S.run.weekly && S.run.week === weekOf(new Date().toISOString().slice(0, 10))) {
+      if (S.weeklyDone !== S.run.week) {
+        S.weeklyDone = S.run.week;
+        S.life.weeklies = (S.life.weeklies || 0) + 1;
+        toast('\u{2696}\u{FE0F} the WEEKLY DECREE is survived — carved in the records');
+      }
+      achUnlock('decreed');
+    }
   }
   if (S.run.hp === 1) achUnlock('survivor');
   if (S.run.stats && S.battle.taken0 !== undefined && S.run.stats.taken === S.battle.taken0) achUnlock('untouch');
@@ -3203,6 +3224,30 @@ function newDaily(dateStr) {
 }
 // IRONCLAD FOES: the daily's +20% rides every enemy multiplier
 function dailyK() { return S.run && S.run.dailyMod === 'tough' ? 1.2 : 1; }
+// -------------------------------------------------------- the WEEKLY DECREE
+// one law rules the whole week (UTC, Monday through Sunday). Opt in from the
+// title: armed runs carry the decree's sting AND its reward. Clear floor 15
+// under it and the ledger remembers forever.
+const WEEKLY_DECREES = [
+  { id: 'goldfever', name: 'GOLD FEVER',      desc: 'kills pay +50% gold — foes hit +20% harder' },
+  { id: 'ironweek',  name: 'IRON WEEK',       desc: '−10 max HP — every run pays +40% cogs' },
+  { id: 'parade',    name: 'IRONHIDE PARADE', desc: 'foes come +20% tougher — kills pay +25% gold' },
+  { id: 'brittle',   name: 'BRITTLE BLADES',  desc: 'you hit +30% harder — so do they' },
+  { id: 'market',    name: 'MARKET WEEK',     desc: 'shop wares −20% — kills pay −25% gold' },
+];
+// the Monday that owns this date (UTC) — the decree expires Sunday night
+function weekOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+function weeklyPlan(dateStr) {
+  const week = weekOf(dateStr);
+  return { week, decree: WEEKLY_DECREES[dailySeed(week) % WEEKLY_DECREES.length] };
+}
+function weeklyOn(id) { return !!(S.run && S.run.weekly === id); }
+// IRONHIDE PARADE rides every enemy multiplier, like the daily's IRONCLAD
+function weeklyFoeK() { return weeklyOn('parade') ? 1.2 : 1; }
 // ------------------------------------------------------------- the WORKSHOP
 // permanent meta-progression: COGS drop when a run ends (however it ends),
 // and the workshop turns them into forever-upgrades applied at newRun.
@@ -3272,6 +3317,7 @@ const ACH = [
   { id: 'streak3',   icon: '\u{1F525}', name: 'Kindled', desc: 'return three days running' },
   { id: 'streak7',   icon: '\u{2604}\u{FE0F}', name: 'Week of Fire', desc: 'keep the streak alive seven days' },
   { id: 'gardener',  icon: '\u{1F331}', name: 'Green Thumb', desc: 'grow TODAY’S MAZE from the planted seed' },
+  { id: 'decreed',   icon: '\u{2696}\u{FE0F}', name: 'Above the Law', desc: 'clear floor 15 under a WEEKLY DECREE' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 function achUnlock(id) {
@@ -3335,7 +3381,8 @@ function endRun(cause) {
   // COGS for the workshop: every run pays out, however it ends —
   // the endless deep pays a premium per mutator endured
   streakTouch(new Date().toISOString().slice(0, 10));
-  const cogsWon = Math.round(Math.max(1, S.run.floor + Math.floor(S.run.kills / 8)) * (1 + 0.2 * mutCount()) * streakK());
+  const cogsWon = Math.round(Math.max(1, S.run.floor + Math.floor(S.run.kills / 8)) * (1 + 0.2 * mutCount()) * streakK()
+                             * (S.run.weekly === 'ironweek' ? 1.4 : 1));
   S.cogs += cogsWon;
   S.over.cogsWon = cogsWon;
   // a DAILY run files its result on the calendar
@@ -3417,6 +3464,13 @@ function newRun(heroId, force) {
   S.run.purse.coin += 2 * wsLvl('purse');
   S.run.keys += wsLvl('key');
   S.run.potions += wsLvl('potion');
+  // the WEEKLY DECREE rides every armed run (the daily carries its own law)
+  if (S.weeklyPick && !force) {
+    const wp = weeklyPlan(new Date().toISOString().slice(0, 10));
+    S.run.weekly = wp.decree.id;
+    S.run.week = wp.week;
+    if (wp.decree.id === 'ironweek') { S.run.maxHp = Math.max(30, S.run.maxHp - 10); S.run.hp = S.run.maxHp; }
+  }
   S.heroPick = hero.id;
   S.foes = []; S.pets = []; S.enemy = null; S.victory = null; S.room = null; S.over = null; S.inv = null;
   S.meter = 0; S.pPois = 0; S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
@@ -3742,6 +3796,7 @@ function nextFloor() {
     S.run.keys = C.KEY_CARRY;
   }
   S.banner = { txt: TR('FLOOR') + ' ' + S.run.floor, ttl: 1.8, max: 1.8 };
+  SND.descend(actIdx(S.run.floor));
   genFloor();
   save();
   return true;
@@ -3996,7 +4051,8 @@ function shopStock() {
   // the keeper knows what his shelf is worth now — GOLD prices are DOUBLE
   // what the wares are worth (coins stay the honest currency)
   const st = [];
-  const mult = (1 + 0.25 * (S.run.floor - 1)) * (1 - 0.10 * wsLvl('haggler')) * (mutOn('thinveins') ? 1.25 : 1);
+  const mult = (1 + 0.25 * (S.run.floor - 1)) * (1 - 0.10 * wsLvl('haggler')) * (mutOn('thinveins') ? 1.25 : 1)
+             * (weeklyOn('market') ? 0.8 : 1);
   // three distinct items
   const ids = ITEMS.map(i => i.id);
   for (let i = 0; i < 3; i++) {
@@ -4466,6 +4522,7 @@ window.DP = {
   ACH, achUnlock, achPoll, achById, WORKSHOP, wsLvl, wsBuy, tiltCount,
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
   streakTouch, streakK, plantToday,
+  WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
@@ -5039,7 +5096,15 @@ if (!HEADLESS) (function browser() {
       noise(0.03, 0.10, 4200);
     },
     gem() { [880, 1108, 1318, 1760].forEach((f, i) => setTimeout(() => tone(f, 0.35, 'sine', 0.22), i * 55)); },
-    jackpot() { [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => setTimeout(() => { tone(f, 0.22, 'square', 0.14); tone(f / 2, 0.22, 'triangle', 0.14); }, i * 110)); },
+    jackpot() {
+      // v2: the run-up lands on a proper resolve — a held C-major chord
+      // over a low root, so the frenzy OPENS instead of just stopping
+      [523, 659, 784, 1046, 1318, 1568].forEach((f, i) => setTimeout(() => { tone(f, 0.22, 'square', 0.14); tone(f / 2, 0.22, 'triangle', 0.14); }, i * 110));
+      setTimeout(() => {
+        [523, 659, 784, 1046].forEach(f => { tone(f, 0.8, 'triangle', 0.15); tone(f, 0.45, 'square', 0.05); });
+        tone(131, 0.9, 'square', 0.12); noise(0.5, 0.07, 1200);
+      }, 6 * 110 + 60);
+    },
     deny() { tone(150, 0.18, 'square', 0.14, 90); },
     thud() { tone(75, 0.1, 'sine', 0.30, 50); },
     hit() { noise(0.08, 0.2, 900); tone(180, 0.12, 'square', 0.2, 90); },
@@ -5068,6 +5133,12 @@ if (!HEADLESS) (function browser() {
       }, i * 130));
     },
     reel() { tone(220 + Math.random() * 80, 0.04, 'square', 0.08); },
+    // the DESCEND sting: two falling notes, rooted deeper with every act
+    descend(act) {
+      const base = [196, 175, 147, 131][Math.min(3, act | 0)] || 196;
+      tone(base, 0.28, 'triangle', 0.2);
+      setTimeout(() => { tone(base * 0.75, 0.42, 'triangle', 0.22, base * 0.7); noise(0.18, 0.06, 400); }, 160);
+    },
   };
 
   // --------------------------------------------------------------- viewport
@@ -9188,6 +9259,8 @@ if (!HEADLESS) (function browser() {
       ['gold looted', fmt(L.gold)], ['time in the deep', mins + ' min'],
       ['favorite hero', fav ? fav.icon + ' ' + fav.name + ' (' + hrs[0][1] + ')' : '—'],
       ['best descent', S.best.floor > 0 ? 'floor ' + S.best.floor + ', room ' + S.best.depth : '—'],
+      ['milestone chests', '' + (L.chests || 0)],
+      ['weekly decrees', '' + (L.weeklies || 0) + ' survived'],
     ];
     rows.forEach((rw, i) => {
       const x = i % 2 === 0 ? 30 : LW / 2 + 10;
@@ -9197,10 +9270,11 @@ if (!HEADLESS) (function browser() {
       txt(rw[0], x + 8, y + 10, '600 10px Verdana, sans-serif', '#9a8aa0', 'left');
       txt(rw[1], x + 8, y + 25, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
     });
-    txt('— THE LAST RUNS —', LW / 2, 312, '900 12px Georgia, serif', '#c8a8b0');
-    if (!S.hist.length) txt('no tales yet — go die gloriously', LW / 2, 344, '700 11px Verdana, sans-serif', '#a08a94');
+    const hy = 92 + Math.ceil(rows.length / 2) * 40 + 16;
+    txt('— THE LAST RUNS —', LW / 2, hy, '900 12px Georgia, serif', '#c8a8b0');
+    if (!S.hist.length) txt('no tales yet — go die gloriously', LW / 2, hy + 32, '700 11px Verdana, sans-serif', '#a08a94');
     S.hist.forEach((h, i) => {
-      const y = 328 + i * 34;
+      const y = hy + 16 + i * 34;
       const hero3 = heroById(h.hero);
       rr(30, y, LW - 60, 30, 8);
       ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
@@ -9208,7 +9282,7 @@ if (!HEADLESS) (function browser() {
           40, y + 15, '800 10px Verdana, sans-serif', '#e8d0a0', 'left');
       txt(h.cause, LW - 40, y + 15, '600 10px Verdana, sans-serif', '#a08090', 'right');
     });
-    uiBtn(LW / 2 - 70, 328 + Math.max(1, S.hist.length) * 34 + 14, 140, 40, TR('CLOSE ✕'), () => { RECORDS = false; },
+    uiBtn(LW / 2 - 70, hy + 16 + Math.max(1, S.hist.length) * 34 + 14, 140, 40, TR('CLOSE ✕'), () => { RECORDS = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the SETTINGS sheet: volume notches, comfort toggles, the tale ----
@@ -10132,14 +10206,27 @@ if (!HEADLESS) (function browser() {
       toast('today\u2019s maze is planted — NEW RUN grows it (no stakes)');
     }, { bg: 'rgba(40,52,40,0.95)', border: '#8ed67e', col: '#d8f0dc',
          font: '900 9px Verdana, sans-serif', r: 10 });
+    // the WEEKLY DECREE door: one law all week, opt in and out freely
+    const wk = weeklyPlan(today);
+    uiBtn(14, 126, 108, 28, S.weeklyPick ? '\u{2696}\u{FE0F} DECREE ON' : '\u{2696}\u{FE0F} THIS WEEK', () => {
+      if (S.weeklyPick) { S.weeklyPick = false; save(); toast('the decree is set aside'); return; }
+      S.confirm = {
+        msg: '\u{2696}\u{FE0F} THIS WEEK: ' + wk.decree.name,
+        sub: wk.decree.desc + '  •  rules every armed run until Sunday — clear floor 15 for the ledger',
+        yesLabel: 'TAKE THE LAW',
+        yes: () => { S.weeklyPick = true; save(); toast('\u{2696}\u{FE0F} ' + wk.decree.name + ' — armed until Sunday'); },
+      };
+    }, { bg: S.weeklyPick ? 'rgba(72,56,18,0.95)' : 'rgba(40,40,56,0.95)',
+         border: S.weeklyPick ? '#ffd75e' : '#8a86b8', col: S.weeklyPick ? '#ffe9a3' : '#d8d4f0',
+         font: '900 9px Verdana, sans-serif', r: 10 });
     if (S.best.floor >= 5) {
-      uiBtn(14, 126, 108, 28, '\u{1F3B0} MACHINE', () => { THEMES = true; },
+      uiBtn(14, 160, 108, 28, '\u{1F3B0} MACHINE', () => { THEMES = true; },
             { bg: 'rgba(44,34,50,0.95)', border: '#9a8aa0', col: '#e8d8ec',
               font: '900 10px Verdana, sans-serif', r: 10 });
     }
     // the pocket-install chip: only appears when the browser made the offer
     if (installEvt) {
-      uiBtn(14, S.best.floor >= 5 ? 160 : 126, 108, 28, '\u{1F4F2} INSTALL', () => {
+      uiBtn(14, S.best.floor >= 5 ? 194 : 160, 108, 28, '\u{1F4F2} INSTALL', () => {
         const ev = installEvt;
         installEvt = null;
         if (ev && ev.prompt) ev.prompt();

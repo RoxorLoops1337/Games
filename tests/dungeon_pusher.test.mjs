@@ -2877,7 +2877,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 36, 'thirty-six trophies on the wall');
+  t.eq(D.ACH.length, 37, 'thirty-seven trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -4685,6 +4685,127 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("?board=yesterday") >= 0, 'the title asks the board for yesterday');
   t.ok(src.indexOf('yesterday’s deepest: FLOOR ') >= 0, 'and stamps the answer');
   t.ok(src.indexOf('ydayFetch();') >= 0, 'the title screen triggers the one-shot fetch');
+}
+
+// -------- the WEEKLY DECREE: one law, Monday through Sunday --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // the calendar: any day maps to its Monday, the decree holds all week
+  t.eq(D.weekOf('2026-07-22'), '2026-07-20', 'Wednesday bows to its Monday');
+  t.eq(D.weekOf('2026-07-26'), '2026-07-20', 'Sunday still lives under it');
+  t.eq(D.weekOf('2026-07-27'), '2026-07-27', 'Monday opens a fresh law');
+  t.eq(D.weekOf('2026-07-20'), '2026-07-20', 'Monday owns itself');
+  t.eq(D.weeklyPlan('2026-07-22').decree.id, D.weeklyPlan('2026-07-26').decree.id,
+    'one decree rules the whole week');
+  t.ok(D.WEEKLY_DECREES.length === 5 && D.WEEKLY_DECREES.every(w => w.id && w.name && w.desc),
+    'five laws in the book, all fully written');
+  t.eq(new Set(D.WEEKLY_DECREES.map(w => w.id)).size, 5, 'no duplicate decree ids');
+  // arming: a picked decree rides the next run and knows its week
+  const today = new Date().toISOString().slice(0, 10);
+  D.S.weeklyPick = true;
+  D.srand(11); D.newRun('knight');
+  t.eq(D.S.run.weekly, D.weeklyPlan(today).decree.id, 'the armed run carries this week’s decree');
+  t.eq(D.S.run.week, D.weekOf(today), 'stamped with its Monday');
+  D.S.weeklyPick = false;
+  D.srand(11); D.newRun('knight');
+  t.ok(!D.S.run.weekly, 'disarmed runs walk free');
+  // the DAILY never stacks the weekly on top of its own law
+  D.S.weeklyPick = true;
+  D.newDaily(today);
+  t.ok(!D.S.run.weekly, 'the daily carries its own law, not the week’s');
+  // ---- each decree's teeth (pinned by id, date-independent) ----
+  const { DP: W } = loadGame({}, false);
+  W.srand(12); W.newRun('knight');
+  W.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  W.interact(0);
+  const foe = W.S.enemy;
+  foe.hp = foe.maxHp = 400; foe.def = null; foe.block = 0; foe.mirrorSpent = true; foe.braced = false;
+  W.S.run.weekly = 'brittle';
+  W.dmgFoe(foe, 10);
+  t.eq(400 - foe.hp, 13, 'BRITTLE BLADES: you hit +30%');
+  W.S.run.block = 0; W.S.run.hp = 60;
+  W.hurtPlayer(10);
+  t.eq(W.S.run.hp, 47, '...and so do they');
+  W.S.run.weekly = 'goldfever';
+  W.S.run.hp = 60;
+  W.hurtPlayer(10);
+  t.eq(W.S.run.hp, 48, 'GOLD FEVER: foes hit +20% harder');
+  const g0 = W.S.battle.goldWon, fg = foe.gold;
+  foe.hp = 1; W.dmgFoe(foe, 99);
+  t.eq(W.S.battle.goldWon - g0, Math.round(fg * 1.5), '...and kills pay +50%');
+  // IRONHIDE PARADE scales the foes, not the arithmetic
+  const { DP: P } = loadGame({}, false);
+  P.srand(13); P.newRun('knight');
+  const base = P.scaleMult();
+  P.S.run.weekly = 'parade';
+  t.ok(Math.abs(P.scaleMult() - base * 1.2) < 1e-9, 'IRONHIDE PARADE: every foe +20% tougher');
+  t.eq(P.weeklyFoeK(), 1.2, 'the parade multiplier reads back');
+  // MARKET WEEK: the keeper discounts, the kills pay less
+  P.S.run.weekly = 'market';
+  P.srand(14);
+  const shelf = P.shopStock();
+  const potion = shelf.find(s => s.kind === 'potion');
+  t.eq(potion.price, Math.round(45 * 0.8) * 2, 'MARKET WEEK: wares 20% off (before the gold doubling)');
+  // IRON WEEK: thinner blood, fatter cogs
+  const { DP: I } = loadGame({}, false);
+  I.S.weeklyPick = true;
+  I.srand(15); I.newRun('knight');
+  const plain = (() => { const { DP: J } = loadGame({}, false); J.srand(15); J.newRun('knight'); return J.S.run.maxHp; })();
+  if (I.S.run.weekly === 'ironweek') {
+    t.eq(I.S.run.maxHp, Math.max(30, plain - 10), 'IRON WEEK trims 10 max HP');
+  } else {
+    I.S.run.weekly = 'ironweek';   // not iron week on the calendar — pin it for the cogs check
+  }
+  I.S.run.floor = 10; I.S.run.kills = 0;
+  I.endRun('fell');
+  t.eq(I.S.over.cogsWon, Math.round(10 * 1.4), 'IRON WEEK pays +40% cogs');
+  // ---- the clear: floor 15, under the law, once a week ----
+  const { DP: C } = loadGame({}, false);
+  const todayC = new Date().toISOString().slice(0, 10);
+  C.srand(16); C.newRun('knight');
+  C.S.run.floor = 15;
+  C.S.run.weekly = 'brittle'; C.S.run.week = C.weekOf(todayC);
+  C.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  C.interact(0);
+  C.S.foes.forEach(f => { f.hp = 1; });
+  C.dmgAll(999);
+  t.ok(C.S.victory && C.S.victory.boss, 'the floor-15 boss falls under the decree');
+  t.eq(C.S.life.weeklies, 1, 'the ledger counts the survived week');
+  t.eq(C.S.weeklyDone, C.weekOf(todayC), 'this week is marked cleared');
+  t.ok(C.S.ach.u.decreed, 'ABOVE THE LAW hangs on the wall');
+  // a second clear in the same week doesn't double-count
+  C.srand(17); C.newRun('knight');
+  C.S.run.floor = 15;
+  C.S.run.weekly = 'brittle'; C.S.run.week = C.weekOf(todayC);
+  C.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  C.interact(0);
+  C.S.foes.forEach(f => { f.hp = 1; });
+  C.dmgAll(999);
+  t.eq(C.S.life.weeklies, 1, 'one week, one line in the ledger');
+  // ---- persistence: pick, done-mark and ledgers survive a reload ----
+  const store2 = {};
+  const { DP: S2 } = loadGame(store2, false);
+  S2.S.weeklyPick = true; S2.S.weeklyDone = '2026-07-20';
+  S2.S.life.weeklies = 3; S2.S.life.chests = 4;
+  S2.save();
+  const { DP: R2 } = loadGame(store2, false);
+  t.ok(R2.S.weeklyPick, 'the armed decree survives a reload');
+  t.eq(R2.S.weeklyDone, '2026-07-20', 'so does the cleared week');
+  t.eq(R2.S.life.weeklies, 3, 'and the weekly ledger');
+  t.eq(R2.S.life.chests, 4, 'milestone chests now ride the save too (load used to drop them)');
+  // ---- the stings: wired, act-keyed, headless-safe ----
+  const { DP: N } = loadGame({}, false);
+  N.srand(18); N.newRun('knight');
+  t.ok(N.nextFloor(), 'nextFloor still descends with the sting wired');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('SND.descend(actIdx(S.run.floor));') >= 0, 'the descend sting keys to the act');
+  t.ok(src.indexOf('descend() {} };') >= 0, 'the headless stub knows the sting');
+  t.ok(src.indexOf('a held C-major chord') >= 0, 'the jackpot fanfare resolves properly now');
+  t.ok(src.indexOf('THIS WEEK: ') >= 0, 'the title posts the decree door');
+  t.ok(src.indexOf("['weekly decrees', '' + (L.weeklies || 0) + ' survived']") >= 0,
+    'records shows the weekly line');
 }
 
 t.done();

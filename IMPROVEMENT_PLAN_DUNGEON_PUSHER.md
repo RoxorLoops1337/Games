@@ -309,11 +309,14 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
 - [ ] **[big] THE ALCHEMIST — an eighth hero**: no potions — she BREWS: every
       12 coins collected distills one random draught (bomb/frost/heal/gold);
       gems are reagents (+2 draught power); unseals at 5 total deep clears
-- [ ] **Weekly decree**: a week-seeded global modifier posted on the title
-      ("THIS WEEK: BONE RAIN everywhere, cogs +30%") — opt-in door, expires
-      Sunday, pays a weekly trophy line in records
-- [ ] **Descend sting + jackpot fanfare v2**: two-note descend motif keyed to
-      the act; the jackpot fanfare gets a proper resolve chord
+- [x] **Weekly decree**: five week-seeded laws (GOLD FEVER / IRON WEEK /
+      IRONHIDE PARADE / BRITTLE BLADES / MARKET WEEK), ⚖️ opt-in door on the
+      title, expires Sunday (weekOf → Monday key), clear floor 15 under it →
+      S.life.weeklies + records line + ABOVE THE LAW trophy (37 on the wall);
+      also fixed load() dropping S.life.chests (session 51)
+- [x] **Descend sting + jackpot fanfare v2**: SND.descend — two falling notes
+      rooted deeper per act, fired in nextFloor; jackpot run-up now lands on a
+      held C-major resolve over a low root (session 51)
 - [ ] **Wheel near-miss wobble**: the wheel settles with a tooth-by-tooth
       wobble past the winning segment — free tension, pure draw code
 - [ ] **Records: the endless page**: deepest decree stack survived, milestone
