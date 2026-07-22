@@ -3801,7 +3801,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(R.S.run.ng, 1, 'the prestige run survives a reload');
   t.ok(R.S.ngPick, 'the armed door survives too');
   // the prestige shelf: five relics, open on NG+, sealed on plain runs
-  t.eq(R.RELICS.filter(r => r.ng).length, 5, 'five NG+-only relics');
+  t.eq(R.RELICS.filter(r => r.ng === 1).length, 5, 'five NG+-only relics');
+  t.eq(R.RELICS.filter(r => r.ng === 2).length, 1, 'and ONE legend-only shard');
   const poolNg = R.rollRelicPool('r', 999);
   t.ok(poolNg.indexOf('mintvein') >= 0 && poolNg.indexOf('dblchime') >= 0, 'NG+ pools carry the prestige shelf');
   R.S.ngPick = false;
@@ -4094,6 +4095,22 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   console.log('# ng+ sting: ng1=' + ng1.toFixed(1) + ' vs plain6=' + plain6.toFixed(1));
   t.ok(ng1 <= plain6 * 1.25 && ng1 >= plain6 * 0.5,
        'NG+ floor 1 (with the prestige kit) lands near the act-2 gate (' + ng1.toFixed(1) + ' vs ' + plain6.toFixed(1) + ')');
+  // rail 3b: NG++ floor 1 lands NEAR the plain act-3 gate. BOTH kits stack
+  // (+6 coins, +2 potions, +40 gold) — worth ~6 floors, so the legend
+  // offense model starts at floor 7.
+  DS.run.floor = 1; DS.run.depth = 3; DS.run.ng = 2;
+  const ng2 = (() => {
+    const roster = D.curRoster();
+    const hp = roster.reduce((a, e) => a + e.hp, 0) / roster.length;
+    const atk = roster.reduce((a, e) => a + e.atk, 0) / roster.length;
+    const m = D.scaleMult();
+    return (hp * m / offense(7)) * (atk * m);
+  })();
+  const plain11 = threatAt(11, false);
+  DS.run.ng = 0;
+  console.log('# ng++ sting: ng2=' + ng2.toFixed(1) + ' vs plain11=' + plain11.toFixed(1));
+  t.ok(ng2 <= plain11 * 1.3 && ng2 >= plain11 * 0.5,
+       'NG++ floor 1 (with both kits) lands near the act-3 gate (' + ng2.toFixed(1) + ' vs ' + plain11.toFixed(1) + ')');
   // and the kit itself is real
   {
     const st2 = {};
@@ -4637,10 +4654,10 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the board rows: badges + the challenge line
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf("(e.ng ? '♟ ' : '')") >= 0, 'board rows wear the prestige pawn');
+  t.ok(src.indexOf("(e.ng >= 2 ? '♛ ' : e.ng ? '♟ ' : '')") >= 0, 'board rows wear the pawn — or the crown');
   t.ok(src.indexOf("e.diff === 'nightmare' ? '#ff5a4e' : '#7ee787'") >= 0, 'and the difficulty dot');
   t.ok(src.indexOf('floor to beat is') >= 0, 'outsiders see the floor to beat');
-  t.ok(src.indexOf('ng: run.ng ? 1 : 0 }),') >= 0, 'the post carries the pawn');
+  t.ok(src.indexOf('ng: run.ng | 0 }),') >= 0, 'the post carries the true prestige level');
 }
 
 // -------- TROPHIES FOR THE PULL + yesterday's deepest --------
@@ -5447,6 +5464,74 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('?board=lastmonth') >= 0, 'the title asks for last month’s champion');
   t.ok(src.indexOf('’S DEEPEST: ') >= 0, 'and hangs the plaque');
   t.ok(src.indexOf('MAKE A WISH') >= 0, 'the birthday crate waits for its day');
+}
+
+// -------- THE LEGEND DOOR: NG++ --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // the ladder: no crown without the unseal
+  D.S.deep15 = { knight: 1 };
+  D.S.ngPick = 2;                          // asks for the crown...
+  D.srand(131); D.newRun('knight');
+  t.eq(D.S.run.ng, 1, '...but without the unseal, NG+ is the ceiling');
+  // the unseal: an NG+ deep clear opens the legend door
+  D.S.run.floor = 15;
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.foes.forEach(f => { f.hp = 1; });
+  D.dmgAll(999);
+  t.eq(D.S.ng2Open, 1, 'the NG+ deep clear unseals THE LEGEND DOOR');
+  // and now the crown fits
+  D.S.ngPick = 2;
+  D.srand(132); D.newRun('knight');
+  t.eq(D.S.run.ng, 2, 'NG++ answers once unsealed');
+  t.eq(D.actIdx(1), 2, 'legend floor 1 walks act-3 halls');
+  t.eq(D.S.run.purse.coin, 5 + 6, 'both prestige kits stack their coins');
+  t.eq(D.S.run.gold, 40, 'and their gold');
+  // decrees reach up: floor 11 reads the first law
+  D.S.run.floor = 11;
+  t.eq(D.mutCount(), 1, 'a legend hears the first decree at floor 11');
+  D.S.run.floor = 20;
+  t.eq(D.mutCount(), 4, 'four laws deep by the old mint gate');
+  D.S.run.floor = 11; D.S.run.ng = 1;
+  t.eq(D.mutCount(), 0, 'NG+ still waits for floor 21');
+  D.S.run.ng = 2;
+  // the throne shard: legend-only pool, real weight
+  D.S.run.ng = 1;
+  let sawShard = false;
+  for (let i = 0; i < 80; i++) { D.srand(300 + i); if (D.rollRelicByRar('e') === 'throneshard') sawShard = true; }
+  t.ok(!sawShard, 'NG+ never rolls the Throne Shard');
+  D.S.run.ng = 2;
+  for (let i = 0; i < 80 && !sawShard; i++) { D.srand(300 + i); if (D.rollRelicByRar('e') === 'throneshard') sawShard = true; }
+  t.ok(sawShard, 'NG++ can');
+  D.S.run.relics.push('throneshard');      // grantRelic takes a rarity, not an id
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.S.screen = 'dungeon'; D.S.room = null; D.S.victory = null; D.S.enemy = null; D.S.foes = []; D.S.battle = null;
+  D.interact(0);
+  const foe = D.S.enemy;
+  foe.hp = foe.maxHp = 300; foe.def = null; foe.block = 0; foe.mirrorSpent = true; foe.braced = false;
+  D.dmgFoe(foe, 5);
+  t.eq(300 - foe.hp, 7, 'the Throne Shard lands +2 on every blow');
+  // the crown survives the save — and can't be smuggled
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.ng2Open, 1, 'the unseal survives a reload');
+  t.eq(R.S.ngPick, 2, 'so does the armed crown');
+  t.eq(R.S.run.ng, 2, 'and the live legend run');
+  const store2 = {};
+  const { DP: X } = loadGame(store2, false);
+  X.S.ngPick = 2; X.S.ng2Open = 0; X.S.deep15 = { knight: 1 };
+  X.save();
+  const { DP: X2 } = loadGame(store2, false);
+  t.eq(X2.S.ngPick, 1, 'a smuggled crown demotes to the pawn on load');
+  // the crown shows everywhere the pawn did
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("'♛NG++' : 'NG+'") >= 0, 'the difficulty row door cycles to the crown');
+  t.ok(src.indexOf("h.ng >= 2 ? ' ♛'") >= 0, 'history rows crown their legends');
+  t.ok(src.indexOf("o.ng >= 2 ? '  •  ♛ NG++'") >= 0, 'the report card too');
+  t.ok(src.indexOf('THE LEGEND DOOR unseals') >= 0, 'the unseal announces itself');
 }
 
 t.done();

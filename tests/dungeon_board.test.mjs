@@ -110,6 +110,12 @@ r = await post(env, { name: 'Pawn', floor: 6, kills: 3, ng: 1 }, '11.11.11.11');
 j = await r.json();
 ok(j.top.find(e => e.name === 'Pawn').ng === 1, 'a prestige post wears the pawn');
 ok(j.top.find(e => e.name === 'Cal').ng === 0, 'plain posts stay pawnless');
+r = await post(env, { name: 'Legend', floor: 7, kills: 3, ng: 2 }, '12.12.12.12');
+j = await r.json();
+ok(j.top.find(e => e.name === 'Legend').ng === 2, 'a legend post wears the crown');
+r = await post(env, { name: 'Cheat', floor: 7, kills: 4, ng: 9 }, '13.13.13.13');
+j = await r.json();
+ok(j.top.find(e => e.name === 'Cheat').ng === 2, 'prestige clamps at the crown');
 
 // GET ?board=daily reads the dated board
 r = await get(env, 'daily');

@@ -393,10 +393,13 @@ impact ÷ effort.
       now); the title fetches last month's winner once a day (S.plaque,
       cached like yday) and wears "🏛️ JUNE'S DEEPEST: NAME, floor N" all
       month (session 61)
-- [ ] **[big] THE LEGEND DOOR (NG++)**: an NG+ deep clear unseals a second
-      prestige: actIdx +2, both prestige kits, decrees start at floor 11,
-      LEGEND ♛ on board rows (ng:2 in the post), one legend-only relic; the
-      balance probe MUST measure the floor-1 wall before shipping
+- [x] **[big] THE LEGEND DOOR (NG++)**: an NG+ deep clear unseals it
+      (S.ng2Open, no smuggled crowns on load); the door cycles NG+ → ♛NG++;
+      actIdx now adds ng numerically (+2 at legend), BOTH prestige kits
+      stack, decrees start at floor 11 ((floor−8)/3), THRONE SHARD is the
+      ng:2 relic (+2 every blow), ♛ on board rows/history/report card,
+      server clamps ng 0-2; probe measured: NG++ floor 1 = ×1.27 of the
+      plain act-3 gate (rail ≤1.3, alongside NG+'s ×1.17) (session 62)
 - [ ] **[big] THE GAUNTLET**: a seeded 5-floor sprint (weekOf seed, all
       decrees on from floor 1, no shops) raced against the CLOCK; best time
       in records + a GAUNTLET line on the share card; the door only opens
