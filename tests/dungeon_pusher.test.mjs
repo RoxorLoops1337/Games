@@ -2877,7 +2877,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 40, 'forty trophies on the wall');
+  t.eq(D.ACH.length, 44, 'forty-four trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -5618,6 +5618,82 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('\\u{1F3C1} GAUNTLET') >= 0, 'the weekend chip hangs on the title');
   t.ok(src.indexOf("['gauntlet best', L.gauntBest") >= 0, 'the endless records read the clock');
   t.ok(src.indexOf('THE GAUNTLET — cleared in ') >= 0, 'the share card brags the time');
+}
+
+// -------- THE REFINE OFFER + the tier's four trophies --------
+{
+  const { DP: D } = loadGame({}, false);
+  const battle = (X) => {
+    X.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+    X.interact(0);
+    X.S.enemy.hp = 1; X.S.enemy.block = 0; X.S.enemy.mirrorSpent = true; X.S.enemy.braced = false;
+    X.dmgEnemy(9);
+  };
+  // act 0: offers still ADD — the purse grows
+  D.srand(151); D.newRun('knight');
+  battle(D);
+  t.ok(D.S.victory && D.S.victory.offer, 'the victory offer stands');
+  t.ok(!D.S.victory.up, 'near the sun, offers still ADD');
+  const t0 = D.purseTotal();
+  D.pickCoin(0);
+  t.eq(D.purseTotal(), t0 + 1, 'and the purse grows by one');
+  // act 3: the first slot REFINES — the purse holds its size
+  const { DP: R } = loadGame({}, false);
+  let up = null;
+  for (let s2 = 0; s2 < 30 && !up; s2++) {
+    R.srand(160 + s2); R.newRun('knight');
+    R.S.run.floor = 18;
+    R.S.screen = 'dungeon'; R.S.room = null; R.S.victory = null; R.S.enemy = null; R.S.foes = []; R.S.battle = null;
+    battle(R);
+    if (R.S.victory && R.S.victory.up) up = R.S.victory;
+  }
+  t.ok(up, 'past act 2 the refine slot appears (first slot, non-plain kind)');
+  const kind = up.offer[0];
+  t.ok(kind !== 'coin', 'nobody refines a coin into itself');
+  const plain0 = R.S.run.purse.coin, fine0 = R.S.run.purse[kind] || 0, tot0 = R.purseTotal();
+  R.pickCoin(0);
+  t.eq(R.S.run.purse.coin, plain0 - 1, 'one plain coin melts');
+  t.eq(R.S.run.purse[kind], fine0 + 1, 'into one finer coin');
+  t.eq(R.purseTotal(), tot0, 'the purse holds its SIZE — quality, not bulk');
+  // slots 1+ still add normally even when slot 0 refines
+  const { DP: R2 } = loadGame({}, false);
+  let up2 = null;
+  for (let s2 = 0; s2 < 30 && !up2; s2++) {
+    R2.srand(160 + s2); R2.newRun('knight');
+    R2.S.run.floor = 18;
+    R2.S.screen = 'dungeon'; R2.S.room = null; R2.S.victory = null; R2.S.enemy = null; R2.S.foes = []; R2.S.battle = null;
+    battle(R2);
+    if (R2.S.victory && R2.S.victory.up) up2 = R2.S.victory;
+  }
+  const tot1 = R2.purseTotal();
+  R2.pickCoin(1);
+  t.eq(R2.purseTotal(), tot1 + 1, 'the other slots still ADD');
+  // ---- the four new trophies ----
+  const { DP: T2 } = loadGame({}, false);
+  t.ok(['gauntrun', 'legend2', 'chronicler', 'emissary'].every(id => T2.achById(id)),
+    'the tier’s four trophies hang on the wall');
+  T2.S.life.gaunts = 1;
+  T2.achPoll();
+  t.ok(T2.S.ach.u.gauntrun, 'GAUNTLET RUNNER polls off the ledger');
+  for (let i = 0; i < 40; i++) T2.S.tales[i] = 1;
+  T2.achPoll();
+  t.ok(T2.S.ach.u.chronicler, 'CHRONICLER at forty tales');
+  // LIVING LEGEND: an NG++ deep clear
+  T2.S.deep15 = { knight: 1, rogue: 1, wizard: 1, cleric: 1, ghost: 1 };
+  T2.S.ng2Open = 1; T2.S.ngPick = 2;
+  T2.srand(171); T2.newRun('knight');
+  t.eq(T2.S.run.ng, 2, 'the crown holds');
+  T2.S.run.floor = 15;
+  T2.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  T2.interact(0);
+  T2.S.foes.forEach(f => { f.hp = 1; });
+  T2.dmgAll(999);
+  t.ok(T2.S.ach.u.legend2, 'LIVING LEGEND at the NG++ deep clear');
+  // EMISSARY is wired to the duel share
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("achUnlock('emissary')") >= 0, 'EMISSARY fires when a challenge is sent');
+  t.ok(src.indexOf("'⇧ REFINE'") >= 0, 'the refine slot announces itself');
 }
 
 t.done();

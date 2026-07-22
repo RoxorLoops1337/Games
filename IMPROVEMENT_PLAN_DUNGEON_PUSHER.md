@@ -428,14 +428,15 @@ machine itself learning tricks, the heroes deepening, and every sharer
 becoming a recruiter. One-file architecture stands; server touches marked.
 Ordered by impact ÷ effort.
 
-- [ ] **The upgrade offer** (the owner's economy dial, part 2): past act 2,
-      the victory coin offer's FIRST slot becomes an UPGRADE (turn one
-      plain coin into the offered kind) instead of an add — purse quality
-      over quantity; measure purse totals at floor 18 before/after in a
-      probe line
-- [ ] **Trophies for the tier**: GAUNTLET RUNNER (clear one), LIVING LEGEND
-      (an NG++ deep clear), CHRONICLER (hear 40 tales), EMISSARY (share a
-      duel link or the gift stake) — 44 on the wall
+- [x] **The upgrade offer** (the owner's economy dial, part 2): past act 2
+      the victory offer's first slot REFINES (S.victory.up) — one plain
+      coin melts into the finer kind, purse SIZE unchanged (tested); other
+      slots still add; act 0-1 untouched; ⇧ REFINE label on the victory
+      screen (session 64)
+- [x] **Trophies for the tier**: GAUNTLET RUNNER (gaunts poll), LIVING
+      LEGEND (NG++ deep clear), CHRONICLER (40 tales poll), EMISSARY
+      (shareDuel; the gift stake will also fire it) — 44 on the wall
+      (session 64)
 - [ ] **The gift stake** (the recruiter hook, pure client): a 🎁 STAKE A
       ROOKIE button builds ?gift=<name> onto the play URL; a fresh profile
       opening it gets +50 cogs and "NAME staked you 50 cogs — dig well";
