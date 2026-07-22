@@ -1139,6 +1139,7 @@ const S = {
   wbRelic: 0,                                   // welcome-back crate: rare pick armed for next run
   gifted: 0,                                    // the one rookie stake, claimed
   contract: 0,                                  // the rookie contract: 0 unoffered / 1 armed / 2 paid
+  legacy: [],                                   // the LEGACY BOOK: dated firsts, newest first
   petNames: {},                                 // veteran pets' given names (by item id)
   petNameQ: null,                               // a fresh veteran waiting for the namepad
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
@@ -1221,7 +1222,7 @@ function save() {
       firstRun: S.firstRun || '', annivDone: S.annivDone || '', gauntlet: S.gauntlet,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
       rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales, gifted: S.gifted ? 1 : 0,
-      petNames: S.petNames, contract: S.contract | 0,
+      petNames: S.petNames, contract: S.contract | 0, legacy: S.legacy,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1319,6 +1320,10 @@ function load() {
     S.gifted = d.gifted ? 1 : 0;
     if (d.petNames && typeof d.petNames === 'object') S.petNames = d.petNames;
     S.contract = Math.min(2, Math.max(0, d.contract | 0));
+    if (Array.isArray(d.legacy)) {
+      S.legacy = d.legacy.filter(e => e && typeof e.x === 'string')
+        .map(e => ({ t: String(e.t || ''), x: e.x.slice(0, 80) })).slice(0, 40);
+    }
     if (d.tales && typeof d.tales === 'object') S.tales = d.tales;
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
@@ -3234,13 +3239,17 @@ function winBattle() {
     if (S.run.floor >= 15 && S.run.ng >= 1 && !S.ng2Open) {
       S.ng2Open = 1;
       toast('♛ THE LEGEND DOOR unseals — NG++ waits by the difficulty row');
+      legacyStamp('♛ THE LEGEND DOOR unsealed');
     }
     if (S.run.floor >= 15 && !S.run.deepInked) {
       S.run.deepInked = 1;               // one ink per run, however many bosses fall past 15
       const n = (S.deep15[S.run.hero] | 0) + 1;
       S.deep15[S.run.hero] = n;
       const hn = (heroById(S.run.hero) || {}).name;
-      if (n === 1) toast('deep clear! ' + hn + ' earned an ALT SKIN — toggle it on the hero card');
+      if (n === 1) {
+        toast('deep clear! ' + hn + ' earned an ALT SKIN — toggle it on the hero card');
+        legacyStamp('the ' + hn + '’s deep clear — an alt skin tailored');
+      }
       else if (n === 3 || n === 5) toast('★ MASTERY — ' + n + ' deep clears with ' + hn + (n >= 5 ? ' — the third star' : ''));
     }
     // a deep clear under the WEEKLY DECREE: once per week, into the ledger
@@ -3771,9 +3780,31 @@ const ACH = [
   { id: 'emissary',  icon: '\u{1F4E8}', name: 'Emissary', desc: 'send a challenge into the world' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
+// the LEGACY BOOK: dated firsts, stamped as they happen (newest first)
+function legacyStamp(x) {
+  if (S.legacy.some(e => e.x === x)) return false;   // firsts only
+  S.legacy.unshift({ t: new Date().toISOString().slice(0, 10), x });
+  if (S.legacy.length > 40) S.legacy.length = 40;
+  return true;
+}
+// the trophies whose FIRST ringing deserves a dated line in the book
+const LEGACY_ACH = {
+  firstblood: 'first blood — a monster slain',
+  boss1: 'first boss felled',
+  jackpot: 'first JACKPOT — the meter filled and the sky paid out',
+  carved: 'a name carved on THE DEEP BOARD',
+  ngclear: 'a NEW GAME+ deep clear',
+  legend2: 'a deep clear at NG++ — a living legend',
+  gauntrun: 'THE GAUNTLET, cleared',
+  champs: 'all four champions felled',
+  audited: 'THE AUDITOR, audited',
+  ledger: 'the codex closed — THE FULL LEDGER',
+  topple: 'a rival toppled',
+};
 function achUnlock(id) {
   if (!achById(id) || S.ach.u[id]) return false;
   S.ach.u[id] = 1;
+  if (LEGACY_ACH[id]) legacyStamp(LEGACY_ACH[id]);
   const a = achById(id);
   S.achQ.push({ icon: a.icon, name: a.name, t: 0 });
   SND.gem();
@@ -5165,7 +5196,7 @@ window.DP = {
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
   duelLink, parseDuel, welcomeBack, anniversary, gauntletOpen, newGauntlet,
   giftLink, parseGift, claimGift, boardFilter,
-  petVet, petTag,
+  petVet, petTag, legacyStamp, LEGACY_ACH,
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
@@ -5780,11 +5811,18 @@ if (!HEADLESS) (function browser() {
       }, i * 130));
     },
     reel() { tone(220 + Math.random() * 80, 0.04, 'square', 0.08); },
-    // the DESCEND sting: two falling notes, rooted deeper with every act
+    // the DESCEND motif: four notes per act, falling home to the act's root
     descend(act) {
-      const base = [196, 175, 147, 131][Math.min(3, act | 0)] || 196;
-      tone(base, 0.28, 'triangle', 0.2);
-      setTimeout(() => { tone(base * 0.75, 0.42, 'triangle', 0.22, base * 0.7); noise(0.18, 0.06, 400); }, 160);
+      const M = [
+        [392, 330, 294, 262],   // act I — bright, homeward
+        [349, 294, 262, 220],   // act II — a shade lower
+        [330, 262, 233, 196],   // act III — a minor lean
+        [294, 247, 208, 175],   // the mint — heavy brass
+      ][Math.min(3, act | 0)] || [392, 330, 294, 262];
+      M.forEach((f, i) => setTimeout(() => {
+        tone(f, i === 3 ? 0.5 : 0.24, 'triangle', 0.2);
+        if (i === 3) { tone(f / 2, 0.55, 'square', 0.08); noise(0.18, 0.05, 400); }
+      }, i * 140));
     },
   };
 
@@ -9954,13 +9992,33 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { RECORDS = false; } });
     txt('\u{1F4CA} RECORDS', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
-    [['book', 'THE BOOK'], ['deep', '\u{1F30C} ENDLESS'], ['habits', '\u{1F3B2} HABITS']].forEach(([id, label], i) => {
+    [['book', 'THE BOOK'], ['deep', '\u{1F30C} DEEP'], ['habits', '\u{1F3B2} HABITS'], ['legacy', '\u{1F4D6} LEGACY']].forEach(([id, label], i) => {
       const on = RECORDS.tab === id;
-      uiBtn(LW / 2 - 156 + i * 106, 64, 100, 30, label, () => { RECORDS = { tab: id }; },
+      uiBtn(LW / 2 - 168 + i * 86, 64, 82, 30, label, () => { RECORDS = { tab: id }; },
             { bg: on ? 'rgba(80,60,24,0.95)' : 'rgba(34,28,42,0.9)', border: on ? '#ffd75e' : '#55506a',
-              col: on ? '#ffe9a3' : '#9a90a8', font: '900 10px Verdana, sans-serif', r: 10 });
+              col: on ? '#ffe9a3' : '#9a90a8', font: '900 9px Verdana, sans-serif', r: 10 });
     });
     const L = S.life;
+    // ---- the LEGACY BOOK: a dated history of yourself ----
+    if (RECORDS.tab === 'legacy') {
+      if (!S.legacy.length) {
+        txt('the book is blank — go make a first', LW / 2, 300, '700 12px Verdana, sans-serif', '#b8a8bc');
+      }
+      S.legacy.slice(0, 20).forEach((e, i) => {
+        const y = 116 + i * 27;
+        rr(30, y, LW - 60, 24, 7);
+        ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
+        txt(e.t || '—', 40, y + 12, '700 9px Verdana, sans-serif', '#9a8aa0', 'left');
+        fitTxt(e.x, LW / 2 + 34, y + 12, LW - 190, 10, '#ffe9a3');
+      });
+      if (S.legacy.length > 20) {
+        txt('…and ' + (S.legacy.length - 20) + ' earlier lines', LW / 2, 116 + 20 * 27 + 14,
+            '600 10px Verdana, sans-serif', '#9a8aa0');
+      }
+      uiBtn(LW / 2 - 70, 700, 140, 40, TR('CLOSE ✕'), () => { RECORDS = false; },
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+      return;
+    }
     // ---- the HABITS page: what this player actually does ----
     if (RECORDS.tab === 'habits') {
       const H = habits();
