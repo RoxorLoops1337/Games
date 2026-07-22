@@ -24,10 +24,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       at 12 (oldest small float yields), ease-out drift (session 6)
 - [x] **Number formatting**: fmt() now goes compact past 10k (12.3k / 3.4M),
       commas below — every gold/score print inherits it (session 6)
-- [ ] **HP bar juice**: chip-damage ghost trail, heal green pulse, low-HP heartbeat
-      vignette at ≤25%
-- [ ] **Victory screen upgrade**: loot cascade animation into the sheet, relic pick
-      cards flip in, boss victory gets its own fanfare sting
+- [x] **HP bar juice**: ghost trail already lived; added heal green swell-ring and
+      the ≤25% lub-DUB heartbeat vignette (battle + dungeon) (session 7)
+- [x] **Victory screen upgrade**: trophy pops, spoils cascade a beat later, relic
+      cards flip in staggered, coin spoils bounce in, boss FANFARE sting (session 7)
 
 ## Tier 2 — retention & meta-progression
 
