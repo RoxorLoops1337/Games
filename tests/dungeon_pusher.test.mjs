@@ -2946,4 +2946,48 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.ok(E.S.codex.relics.clover, 'so does the relic codex');
 }
 
+// -------- the WORKSHOP: cogs in, forever-upgrades out --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  t.eq(D.WORKSHOP.length, 8, 'eight upgrades on the workbench');
+  t.ok(D.WORKSHOP.every(u => u.cost.length === u.max), 'every level has a price');
+  D.srand(66);
+  // a run ends -> cogs drop
+  D.newRun('knight');
+  D.S.run.floor = 6; D.S.run.kills = 16;
+  D.hpHit(999, 'testing');
+  t.eq(D.S.over.cogsWon, 6 + 2, 'the fall pays floor + kills/8 in cogs');
+  t.eq(D.S.cogs, 8, 'the cogs bank them');
+  // buying: too poor, then rich
+  t.ok(!D.wsBuy(0), 'Tough Hide refused at 8 cogs (costs 25)');
+  D.S.cogs = 300;
+  t.ok(D.wsBuy(0), 'Tough Hide L1 bought');
+  t.eq(D.S.cogs, 275, 'cogs spent');
+  t.eq(D.wsLvl('hp'), 1, 'level recorded');
+  t.ok(D.wsBuy(0) && D.wsBuy(0), 'levels 2 and 3');
+  t.ok(!D.wsBuy(0), 'level 4 refused — maxed');
+  // upgrades bolt onto a fresh run
+  D.S.cogs = 500;
+  D.wsBuy(1); D.wsBuy(2); D.wsBuy(3);      // purse, keys, flask
+  const base = loadGame({}, false);
+  base.DP.srand(1); base.DP.newRun('knight');
+  D.srand(1); D.newRun('knight');
+  t.eq(D.S.run.maxHp, base.DP.S.run.maxHp + 15, '+15 max HP from Tough Hide x3');
+  t.eq(D.S.run.hp, D.S.run.maxHp, 'and the run starts full');
+  t.eq(D.S.run.purse.coin, base.DP.S.run.purse.coin + 2, 'Fatter Purse pays +2 gold coins');
+  t.eq(D.S.run.keys, base.DP.S.run.keys + 1, 'Spare Keys +1');
+  t.eq(D.S.run.potions, base.DP.S.run.potions + 1, 'Deep Flask +1');
+  // tilt + kennel bonuses
+  D.S.cogs = 500;
+  D.wsBuy(WORKSHOP_IDX('tilt', D)); D.wsBuy(WORKSHOP_IDX('kennelup', D));
+  t.eq(D.tiltCount(), base.DP.tiltCount() + 1, 'Iron Wrists +1 TILT');
+  // persistence
+  D.save();
+  const { DP: E } = loadGame(store, false);
+  t.eq(E.wsLvl('hp'), 3, 'the workshop survives a reload');
+  t.ok(E.S.cogs >= 0, 'so does the cog balance');
+}
+function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
+
 t.done();

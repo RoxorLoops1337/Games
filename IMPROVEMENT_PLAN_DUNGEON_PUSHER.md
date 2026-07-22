@@ -34,9 +34,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Achievements (v1: 20)**: ACH table + achUnlock/achPoll engine (event hooks +
       1s poll), toast cards slide in, 🏆 TROPHY HALL gallery on the title, persisted
       on the profile (session 8)
-- [ ] **[big] Meta-progression: the WORKSHOP** — permanent account-level upgrades
-      bought with a new meta-currency (cogs?) earned per run: +start key, +start
-      purse coin, +1 starting relic choice, cheaper shops, pet capacity
+- [x] **[big] Meta-progression: the WORKSHOP** — COGS drop when a run ends
+      (floor + kills/8); eight leveled forever-upgrades: Tough Hide, Fatter Purse,
+      Spare Keys, Deep Flask, Haggler, Big Kennel, Heirloom, Iron Wrists;
+      workshop door on the title with the balance (session 11)
 - [ ] **Unlockable heroes ladder**: gate remaining heroes behind milestones (Crane
       Keeper floor 10, others per achievement) with sealed-card teasers like the ghost
 - [ ] **Daily run**: seeded from the date, fixed hero + modifier, one attempt, its own
