@@ -51,6 +51,12 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.3.0', notes: [
+    'ACT IV: THE MINT — floors 16-20 turn gilded: 13 new counting-house horrors, three new tricks (magnetic armor, counterfeit slugs, jackpot siphons)',
+    'THE AUDITOR — a fourth boss seals the mint: fines your gold and holds your jackpot meter for review',
+    'THE B-SIDE — on even-numbered runs the lairs change hands: the Gilded Wyrm, the Grave Banshee, the Aurifex',
+    'the ENDLESS decrees now begin past the mint, at floor 21',
+  ] },
   { v: '1.2.0', notes: [
     'NEW GAME+ — a deep clear hangs an NG+ door by the difficulty row: kin one act deeper from floor 1, and five prestige-only relics',
     'HERO SKINS — fell the floor-15 boss with a hero and their ALT PALETTE is tailored; toggle it with the 🎨 chip on the card',
@@ -262,7 +268,14 @@ const FLOORS = [
   { name: 'THE FORGE', room: '#442a26', cabA: '#c88a6b', cabB: '#96543e', trim: '#f8dcc8',
     floorA: '#ab9490', floorB: '#dec7bc', accent: '#ff9d3c', door: '#96543e', tile: 'terracotta' },
 ];
-function theme() { return FLOORS[((S.run ? S.run.floor : 1) - 1) % FLOORS.length]; }
+// ACT IV territory (floor 16+, or one act earlier on NG+) is THE MINT —
+// one gilded palette for the whole act instead of the per-floor cycle
+const MINT_FLOOR = { name: 'THE MINT', room: '#3f331f', cabA: '#c8a84a', cabB: '#8a6a1e', trim: '#f8ecc8',
+  floorA: '#b0a382', floorB: '#decf9e', accent: '#ffd75e', door: '#8a6a1e', tile: 'marmer' };
+function theme() {
+  if (S.run && actIdx(S.run.floor) >= 3) return MINT_FLOOR;
+  return FLOORS[((S.run ? S.run.floor : 1) - 1) % FLOORS.length];
+}
 // every 3rd floor the torches are DEAD: you carry your own light and only
 // a small circle around you is lit — find the doors in the dark
 function darkFloor() { return !!(S.run && S.run.floor % 3 === 0); }
@@ -780,6 +793,23 @@ const ENEMY_TIERS = [
     { id: 'twinidol',    icon: '\u{1F5FF}', name: 'Twin Idol',      hp: 56, atk: 5, trait: 'twin',    def: null,    gold: 30 },
     { id: 'gravegardener', icon: '\u{1FAA6}', name: 'Grave Gardener', hp: 70, atk: 6, trait: 'gardener', def: 'regen', gold: 40 },
   ],
+  // ---- ACT 4 (floors 16-20): THE MINT — gilded constructs & counting-house horrors ----
+  [
+    { id: 'mintguard',    icon: '\u{1F9CC}', name: 'Mint Guard',        hp: 72,  atk: 6, trait: 'leech',   def: 'armor', gold: 34 },
+    { id: 'coinshark',    icon: '\u{1F47A}', name: 'Coin Shark',        hp: 80,  atk: 7, trait: 'thief',   def: 'armor', gold: 44 },
+    { id: 'brassidol',    icon: '\u{1F5FF}', name: 'Brass Idol',        hp: 74,  atk: 7, trait: 'curse',   def: 'ward',  gold: 42 },
+    { id: 'slagcube',     icon: '\u{1F7E1}', name: 'Slag Cube',         hp: 60,  atk: 6, trait: 'venom',   def: 'gel',   gold: 38 },
+    { id: 'vaultwarden',  icon: '\u{1F480}', name: 'Vault Warden',      hp: 86,  atk: 8, trait: 'enrage',  def: 'armor', gold: 42 },
+    { id: 'tollwraith',   icon: '\u{1F9DF}', name: 'Toll Wraith',       hp: 76,  atk: 7, trait: 'leech',   def: 'regen', gold: 42 },
+    { id: 'bullionbrute', icon: '\u{1F479}', name: 'Bullion Brute',     hp: 130, atk: 9, trait: 'enrage',  def: 'thick', gold: 56 },
+    { id: 'giltripper',   icon: '\u{1F9DF}', name: 'Gilt Ripper',       hp: 78,  atk: 7, trait: 'bleeder', def: 'thick', gold: 44 },
+    { id: 'furnacetotem', icon: '\u{1F5FF}', name: 'Furnace Totem',     hp: 72,  atk: 7, trait: 'burner',  def: 'ward',  gold: 45 },
+    // the counting-house tricksters: three traits minted just for this act
+    { id: 'lodestone',    icon: '\u{1F9F2}', name: 'Lodestone Sentinel', hp: 82, atk: 6, trait: 'magarmor', def: 'armor', gold: 44 },
+    { id: 'counterfeit',  icon: '\u{1FA99}', name: 'The Counterfeiter', hp: 78,  atk: 6, trait: 'coinclone', def: null,   gold: 46 },
+    { id: 'meterleech',   icon: '\u{1FAB1}', name: 'Meter Leech',       hp: 72,  atk: 6, trait: 'jackthief', def: null,   gold: 44 },
+    { id: 'mintgardener', icon: '\u{1FAA6}', name: 'Mint Gardener',     hp: 88,  atk: 7, trait: 'gardener', def: 'armor', gold: 52 },
+  ],
 ];
 // back-compat alias: the act-1 roster (tests and old references)
 const ENEMIES = ENEMY_TIERS[0];
@@ -801,6 +831,7 @@ const BOSSES = [
   { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 130, atk: 7, trait: 'curse', def: 'armor', gold: 70 },
   { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 138, atk: 7, trait: null,    def: 'regen', gold: 80 },
   { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 168, atk: 8, trait: 'venom', def: 'thick', gold: 100 },
+  { id: 'auditor', icon: '\u{1F9FE}', name: 'THE AUDITOR',  hp: 205, atk: 9, trait: 'thief', def: 'armor', gold: 150 },
 ]
 // the B-SIDE: a second lair-holder per act, rotating in on even-numbered
 // runs. Same scaling, different teeth — each wears a tinted kin of the
@@ -812,7 +843,8 @@ const BOSSES2 = [
 ];
 // which boss holds this floor's lair — the run's B-SIDE flag decides
 function bossFor(floor) {
-  return ((S.run && S.run.bside) ? BOSSES2 : BOSSES)[actIdx(floor) % BOSSES.length];
+  const side = (S.run && S.run.bside) ? BOSSES2 : BOSSES;
+  return side[actIdx(floor) % side.length];
 };
 // ------------------------------------------------------------------ heroes
 // Four adventurers to pick from (sprites borrowed from NRFH's hero classes);
@@ -909,6 +941,9 @@ const TRAIT_TXT = {
   chrono: 'devours a TILT when hit for 8+', coward: 'hides behind its weakest ally when targeted',
   twin: 'raises its fallen twin — fell both in one round',
   gardener: 'sows skulls — any left on the field SPROUT',
+  magarmor: 'magnetic armor — hoards +3 block every turn',
+  coinclone: 'clones a pile coin into a dead slug each turn',
+  jackthief: 'siphons 3 off your JACKPOT meter each turn',
 };
 // the defensive mechanic, spelled out on the foe's panel
 const DEF_TXT = {
@@ -2496,6 +2531,22 @@ function enemyActFoe(e) {
       floatAt('corroded…', c.x, '#c8a86a');
     }
   }
+  if (e.trait === 'magarmor') {
+    e.block = (e.block || 0) + 3;
+    floatAnchor('\u{1F9F2} stray coins cling to its armor (+3 block)', 'enemy', '#b8c8e8');
+  }
+  if (e.trait === 'coinclone') {
+    const plat = S.coins.filter(c => c.st === 'plat');
+    if (plat.length) {
+      const c = plat[(rng() * plat.length) | 0];
+      const dud = spawnDrop(Math.max(8, Math.min(92, c.x + (rng() - 0.5) * 8)), Math.min(88, c.y + 3), 'slug');
+      if (dud) floatAt('counterfeited\u{2026} a dud', c.x, '#c8a86a');
+    }
+  }
+  if (e.trait === 'jackthief' && S.meter > 0) {
+    S.meter = Math.max(0, S.meter - 3);
+    floatAnchor('\u{1FAB1} it siphons your JACKPOT meter!', 'hero', '#ffd75e', true);
+  }
   if (e.trait === 'magnet') {
     const plat = S.coins.filter(c => c.st === 'plat' && c.y > 18);
     if (plat.length) {
@@ -2721,6 +2772,11 @@ function bossArena() {
     // the banshee WAILS: your blows halve for a round
     S.weakT = Math.max(S.weakT, 1);
     floatAnchor('\u{1F47A} the banshee WAILS — your arm falters!', 'enemy', '#c86bff', true);
+  } else if (boss.id === 'auditor' && B.round > 1 && B.round % 3 === 0) {
+    // THE AUDIT: a gold fine, and the jackpot meter is halved for review
+    const fine = Math.min(S.run.gold, 6);
+    if (fine > 0) { S.run.gold -= fine; floatAnchor('\u{1F9FE} AUDITED: ' + fine + ' gold fined!', 'hero', '#ffd75e', true); }
+    if (S.meter > 1) { S.meter = Math.floor(S.meter / 2); floatAnchor('the meter is held for review', 'hero', '#c8a86a'); }
   } else if (boss.id === 'aurifex' && B.round > 1 && B.round % 3 === 0) {
     // the Aurifex MINTS cursed slugs into the rain
     for (let i = 0; i < 2; i++) {
@@ -2978,7 +3034,7 @@ const MUTS = [
   { id: 'richveins',  name: 'RICH VEINS',  desc: 'kills pay +25% gold — the one mercy' },
 ];
 function mutCount() {
-  return S.run ? Math.max(0, Math.min(MUTS.length, Math.floor((S.run.floor - 13) / 3))) : 0;
+  return S.run ? Math.max(0, Math.min(MUTS.length, Math.floor((S.run.floor - 18) / 3))) : 0;
 }
 function mutOn(id) {
   const n = mutCount();
@@ -4304,6 +4360,13 @@ if (!HEADLESS) (function browser() {
     chronophage: ['ogre', '#c8a8ff'], cowardking: ['goblin', '#ffd75e'], twinidol: ['totem', '#c86bff'],
     // the B-SIDE lair-holders wear tinted kins of the A-side sheets
     wyrm: ['dragon', '#7ee7a0'], banshee: ['lich', '#9ae8e8'], aurifex: ['demon', '#ffd75e'],
+    // ACT IV — THE MINT: everything gilded
+    mintguard: ['orc', '#e8c877'], coinshark: ['goblin', '#ffd75e'], brassidol: ['totem', '#e8b84a'],
+    slagcube: ['slime', '#c8a84a'], vaultwarden: ['skeleton', '#ffd75e'], tollwraith: ['revenant', '#e8c877'],
+    bullionbrute: ['ogre', '#e8b84a'], giltripper: ['revenant', '#ffce4a'], furnacetotem: ['totem', '#ff9d3c'],
+    lodestone: ['skeleton', '#b8c8e8'], counterfeit: ['goblin', '#c8a86a'], meterleech: ['slime', '#ffe066'],
+    mintgardener: ['skeleton', '#d8c86a'],
+    auditor: ['lich', '#e8c877'],
   };
   function tintedArt(baseKey, variantKey, tint) {
     const ck = 'tint_' + variantKey;
@@ -4566,7 +4629,7 @@ if (!HEADLESS) (function browser() {
     }
     return g;
   }
-  function fkey() { return ((S.run ? S.run.floor : 1) - 1) % FLOORS.length; }
+  function fkey() { return theme().name; }
 
   // ---------------------------------------------------- static layer cache
   // Phones choke on the per-frame stack of shadowBlur'd images and fresh
@@ -7050,6 +7113,10 @@ if (!HEADLESS) (function browser() {
     chrono: 'CHRONOPHAGE: hits of 8+ cost you a TILT charge',
     coward: 'COWARD: swaps with its weakest ally when you target it',
     twin: 'TWIN: raises its fallen partner — kill both in ONE round',
+    gardener: 'GARDENER: sows skulls — clear them or they SPROUT',
+    magarmor: 'MAGNETIC: +3 block every turn — out-pace the hoard',
+    coinclone: 'COUNTERFEIT: mints dud slugs into your pile each turn',
+    jackthief: 'SIPHON: drains 3 JACKPOT meter each turn — spend it fast',
   };
   function drawFoeInfo(t) {
     if (S.foeInfo === null || !S.foes || !S.foes[S.foeInfo]) return;
@@ -7116,7 +7183,7 @@ if (!HEADLESS) (function browser() {
   // folded into the numbers), the arsenal, the relic shelf, and the
   // run's stats. Opened from the HUD's BAG button or the 'i' key.
   const INV_TABS = [['coins', 'COINS'], ['items', 'ITEMS'], ['relics', 'RELICS'], ['stats', 'STATS']];
-  const ACT_NAMES = ['ACT I — THE CATACOMBS', 'ACT II — THE DEEP HALLS', 'ACT III — THE ABYSS'];
+  const ACT_NAMES = ['ACT I — THE CATACOMBS', 'ACT II — THE DEEP HALLS', 'ACT III — THE ABYSS', 'ACT IV — THE MINT'];
   function wrapLines(s, maxChars, maxLines) {
     const words = ('' + s).split(' ');
     const lines = [''];
@@ -8748,7 +8815,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { CODEX = null; } });
     txt('\u{1F4D6} CODEX', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
-    const tabs = [['a1', 'ACT I'], ['a2', 'ACT II'], ['a3', 'ACT III'], ['c', 'COMMON'], ['r', 'RARE'], ['e', 'EPIC']];
+    const tabs = [['a1', 'ACT I'], ['a2', 'ACT II'], ['a3', 'ACT III'], ['a4', 'MINT'], ['c', 'COMMON'], ['r', 'RARE'], ['e', 'EPIC']];
     const tw = (LW - 36) / tabs.length;
     tabs.forEach(([id, label], i) => {
       const on = CODEX.tab === id;

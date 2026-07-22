@@ -106,7 +106,7 @@ t.eq(S.screen, 'title', 'boots to the title screen');
 t.eq(S.run, null, 'no run in progress at first boot');
 t.ok(ITEMS.length === 18 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'eighteen arsenal items defined');
 t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the bestiary is populated');
-t.eq(BOSSES.length, 3, 'three floor bosses');
+t.eq(BOSSES.length, 4, 'four floor bosses — THE AUDITOR joined the rotation');
 t.ok(RELICS.length >= 88 && RELICS.every(r => r.id && r.desc), 'the relic shelf is stocked (' + RELICS.length + ')');
 t.ok(RELICS.every(r => ['c', 'r', 'e'].indexOf(r.rar) >= 0), 'every relic carries a rarity stamp');
 t.eq(new Set(RELICS.map(r => r.id)).size, RELICS.length, 'no duplicate relic ids');
@@ -1526,13 +1526,14 @@ finishFight();
 
 // -------- ACTS: a new bestiary every 5 floors (Roguebook-style) --------
 {
-  t.eq(DP.ENEMY_TIERS.length, 3, 'three acts of enemies');
+  t.eq(DP.ENEMY_TIERS.length, 4, 'four acts of enemies — THE MINT opened');
   t.ok(DP.ENEMY_TIERS.every(tier => tier.length >= 13), 'a full roster per act (13+)');
   const all = DP.ENEMY_TIERS.flat();
   t.eq(new Set(all.map(e => e.id)).size, all.length, 'no duplicate ids across acts');
   t.ok(all.every(e => e.hp > 0 && e.atk > 0 && e.icon && e.name), 'every act foe is fully statted');
   const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech', 'bleeder', 'burner',
-                    'gremlin', 'rustmite', 'magnet', 'bell', 'chrono', 'coward', 'twin', 'gardener'];
+                    'gremlin', 'rustmite', 'magnet', 'bell', 'chrono', 'coward', 'twin', 'gardener',
+                    'magarmor', 'coinclone', 'jackthief'];
   const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward', 'mirror', 'tar'];
   t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
   // act boundaries
@@ -1565,7 +1566,8 @@ finishFight();
   S.run.floor = 1; t.eq(DP.mkEnemy('boss').id, 'dragon', 'act 1 boss: the Vault Dragon');
   S.run.floor = 7; t.eq(DP.mkEnemy('boss').id, 'lich', 'act 2 boss: the Coin Lich');
   S.run.floor = 12; t.eq(DP.mkEnemy('boss').id, 'demon', 'act 3 boss: the Pit Boss');
-  S.run.floor = 16; t.eq(DP.mkEnemy('boss').id, 'dragon', 'act 4 cycles back around, scaled up');
+  S.run.floor = 16; t.eq(DP.mkEnemy('boss').id, 'auditor', 'act 4: THE AUDITOR holds the mint');
+  S.run.floor = 21; t.eq(DP.mkEnemy('boss').id, 'dragon', 'act 5 cycles back around, scaled up');
   // an act-3 spawn at floor 11 out-muscles its act-2 kin at floor 10
   S.run.floor = 10; S.run.depth = 1;
   const late2 = DP.mkEnemy('battle', 'frostorc');
@@ -3236,34 +3238,34 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the ENDLESS ladder
   DS.diffPick = 'normal';
   D.srand(32); D.newRun('knight');
-  DS.run.floor = 15; t.eq(D.mutCount(), 0, 'floor 15: the deep still pretends');
-  DS.run.floor = 16; t.eq(D.mutCount(), 1, 'floor 16: THICK AIR descends');
-  DS.run.floor = 19; t.eq(D.mutCount(), 2, 'floor 19: SWIFT DOOM joins');
+  DS.run.floor = 20; t.eq(D.mutCount(), 0, 'floor 20: THE MINT holds the line');
+  DS.run.floor = 21; t.eq(D.mutCount(), 1, 'floor 21: THICK AIR descends past the mint');
+  DS.run.floor = 24; t.eq(D.mutCount(), 2, 'floor 24: SWIFT DOOM joins');
   DS.run.floor = 40; t.eq(D.mutCount(), D.MUTS.length, 'the decrees cap out');
   t.ok(D.mutOn('thickair') && D.mutOn('swiftdoom'), 'mutOn reads the stack');
   // SWIFT DOOM: +2 atk
-  DS.run.floor = 19;
+  DS.run.floor = 24;
   const swift = D.mkEnemy('battle', D.curRoster()[0].id);
-  DS.run.floor = 15;
+  DS.run.floor = 20;
   const calm = D.mkEnemy('battle', D.curRoster()[0].id);
   t.ok(swift.atk >= calm.atk + 2 - 3, 'the deep hits harder (+2 atk baked in)');
   // THICK AIR: the hand loses one more
-  DS.run.floor = 16;
+  DS.run.floor = 21;
   DS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: D.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
   D.interact(0);
   const handN = Object.values(DS.battle.hand).reduce((a, b) => a + b, 0);
   t.eq(handN, D.purseTotal() - 1, 'THICK AIR steals one from the deal');
   // ARMORED AGE + BONE RAIN at round turn
-  DS.run.floor = 25;
+  DS.run.floor = 30;
   DS.enemy.hp = DS.enemy.maxHp = 9999;
   DS.rain.length = 0;
   D.newRound();
   t.ok(DS.enemy.block >= 2, 'ARMORED AGE shields the pack each round');
   t.ok(DS.rain.some(r => r.kind === 'skull'), 'BONE RAIN salts the pile with a skull');
   // the endless premium on cogs
-  DS.run.floor = 25; DS.run.kills = 0;
+  DS.run.floor = 30; DS.run.kills = 0;
   D.hpHit(9999, 'the deep');
-  t.eq(DS.over.cogsWon, Math.round(25 * (1 + 0.2 * 4)), 'endless cogs pay the +20%/decree premium');
+  t.eq(DS.over.cogsWon, Math.round(30 * (1 + 0.2 * 4)), 'endless cogs pay the +20%/decree premium');
   t.eq(DS.over.muts, 4, 'the card counts the decrees endured');
 }
 
@@ -3903,6 +3905,70 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   R.newRound();
   t.ok(R.S.rain.filter(r => r.kind === 'skull').length >= 2 && R.S.rain.length >= rain0 + 2,
        'the Aurifex mints cursed slugs into the rain');
+}
+
+// -------- ACT IV: THE MINT --------
+{
+  const { DP: D } = loadGame({}, false);
+  const mint = D.ENEMY_TIERS[3];
+  t.eq(mint.length, 13, 'thirteen counting-house horrors');
+  t.ok(mint.every(e => e.hp > 0 && e.atk > 0 && e.gold > 0 && e.icon && e.name), 'all fully statted');
+  // the three minted traits live here and only here
+  for (const tr of ['magarmor', 'coinclone', 'jackthief']) {
+    t.ok(mint.some(e => e.trait === tr), 'the mint fields ' + tr);
+    t.ok(!D.ENEMY_TIERS.slice(0, 3).some(tier => tier.some(e => e.trait === tr)), tr + ' is mint-exclusive');
+  }
+  // base stats out-muscle act 3 (same slot, deeper act)
+  t.ok(mint[0].hp > D.ENEMY_TIERS[2][0].hp, 'the mint out-muscles the abyss');
+  // the gilded palette holds the whole act
+  D.srand(11); D.newRun('knight');
+  D.S.run.bside = 0;
+  D.S.run.floor = 15;
+  t.ok(D.theme().name !== 'THE MINT', 'floor 15 keeps the old cycle');
+  D.S.run.floor = 16;
+  t.eq(D.theme().name, 'THE MINT', 'floor 16 turns gilded');
+  t.ok(D.curRoster() === mint, 'and fields the mint roster');
+  D.S.run.floor = 23;
+  t.ok(D.curRoster() === mint, 'past the last act the mint holds the door');
+  // THE AUDITOR seals the act
+  D.S.run.floor = 16;
+  t.eq(D.bossFor(16).id, 'auditor', 'THE AUDITOR holds the floor-20 lair rotation');
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  t.eq(D.S.enemy.id, 'auditor', 'the audit begins');
+  // his ARENA: round 3 fines gold and halves the meter
+  D.S.run.gold = 50; D.S.meter = 10;
+  D.S.battle.round = 2;
+  D.newRound();
+  t.eq(D.S.run.gold, 44, 'AUDITED: 6 gold fined');
+  t.eq(D.S.meter, 5, 'the jackpot meter is held for review');
+}
+// -------- THE MINT's three tricks, measured --------
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(21); D.newRun('knight');
+  D.S.run.floor = 16;
+  // Lodestone Sentinel: magnetic armor hoards block on its turn
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'lodestone', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  const b0 = D.S.enemy.block || 0;
+  D.enemyActFoe(D.S.enemy);
+  t.ok((D.S.enemy.block || 0) >= b0 + 3 - 2, 'the lodestone hoards block (+3, minus what its blow spent)');
+  // Meter Leech: siphons the jackpot meter
+  D.S.enemy.hp = 1; D.dmgEnemy(9); D.leaveBattle();
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'meterleech', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.meter = 10;
+  D.enemyActFoe(D.S.enemy);
+  t.eq(D.S.meter, 7, 'the meter leech siphons 3');
+  // The Counterfeiter: mints a dud slug onto the pile
+  D.S.enemy.hp = 1; D.dmgEnemy(9); D.leaveBattle();
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'counterfeit', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.place(50, 50, 'coin');
+  const slugs0 = D.S.coins.filter(c => c.kind === 'slug').length;
+  D.enemyActFoe(D.S.enemy);
+  t.ok(D.S.coins.filter(c => c.kind === 'slug').length > slugs0, 'the counterfeiter mints a dud');
 }
 
 t.done();
