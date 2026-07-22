@@ -3425,4 +3425,37 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(JSON.parse(st2[KEY]).sv, 2, 'and re-saves stamped current');
 }
 
+// -------- WHAT'S NEW: the changelog ledger --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  // the list itself is sound and VERSION is simply its top stamp
+  t.ok(Array.isArray(D.CHANGELOG) && D.CHANGELOG.length >= 2, 'the changelog has entries');
+  t.eq(D.VERSION, D.CHANGELOG[0].v, 'VERSION is the newest entry');
+  t.ok(D.CHANGELOG.every(e => e.v && Array.isArray(e.notes) && e.notes.length > 0), 'every entry carries notes');
+  t.eq(new Set(D.CHANGELOG.map(e => e.v)).size, D.CHANGELOG.length, 'version stamps are unique');
+  // a fresh profile is stamped current — its news IS the game
+  t.eq(D.S.seenVer, D.VERSION, 'a fresh profile starts read-up');
+  t.eq(D.whatsNewEntries().length, 0, 'nothing to show a newcomer');
+  // a pre-changelog save reads as the founding and gets everything since
+  D.srand(5); D.newRun('knight'); D.save();
+  const blob = JSON.parse(st[D.C.SAVE_KEY]);
+  delete blob.seenVer;
+  st[D.C.SAVE_KEY] = JSON.stringify(blob);
+  const { DP: O } = loadGame(st, false);
+  t.eq(O.S.seenVer, '1.0.0', 'an old save reads as the founding');
+  const due = O.whatsNewEntries();
+  t.ok(due.length >= 1 && due[0].v === O.VERSION, 'the unread entries lead with the newest');
+  t.ok(due.every(e => e.v !== '1.0.0'), 'the founding itself is not re-told');
+  // reading the scroll stamps the ledger AND persists it
+  O.whatsNewSeen();
+  t.eq(O.S.seenVer, O.VERSION, 'reading stamps the ledger');
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.whatsNewEntries().length, 0, 'the stamp survives a reload');
+  // an unrecognized stamp (a downgrade, a typo) shows just the latest entry
+  R.S.seenVer = '9.9.9';
+  const odd = R.whatsNewEntries();
+  t.ok(odd.length === 1 && odd[0].v === R.VERSION, 'an unknown stamp shows only the latest');
+}
+
 t.done();

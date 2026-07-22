@@ -41,7 +41,22 @@ if (ctx && typeof ctx.save !== 'function') ctx = null;
 const HEADLESS = !ctx;
 
 // ---------------------------------------------------------------- constants
-const VERSION = '1.0.0';
+// the CHANGELOG feeds the WHAT'S NEW scroll — newest entry first, and the
+// game's VERSION is simply the top entry's stamp. Add a new entry up top
+// whenever a session ships something a player would notice.
+const CHANGELOG = [
+  { v: '1.1.0', notes: [
+    'KEYBOARD PLAY — arrows move & aim, SPACE fires (hold it to pour; it walks the crane too), TAB + ENTER press any button, ESC backs out',
+    'GAMEPAD — stick/dpad moves, A fires, B backs out, bumpers hop between buttons',
+    'this WHAT’S NEW scroll — it returns after every update',
+    'the CRASH NET — a snag now saves your run and sets you back down safely',
+    'damaged saves are QUARANTINED for repair, never destroyed',
+  ] },
+  { v: '1.0.0', notes: [
+    'the founding — seven heroes, three acts, the workshop, daily runs, the trophy hall, the codex, music, and one very greedy machine',
+  ] },
+];
+const VERSION = CHANGELOG[0].v;
 const C = {
   W: 100,
   PLAT_FRONT: 84,
@@ -800,6 +815,7 @@ const S = {
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
   scurryFx: [],                                 // rats mid-dash across the pile (visual)
   diffPick: 'normal',                           // the door you'll take next run
+  seenVer: '',                                  // last VERSION whose patch notes were read
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -863,6 +879,7 @@ function save() {
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
+      seenVer: S.seenVer || '',
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -920,6 +937,8 @@ function load() {
     if (d.ws && typeof d.ws === 'object') S.ws = d.ws;
     if (d.daily && typeof d.daily === 'object') S.daily = d.daily;
     if (DIFFS.some(x => x.id === d.diffPick)) S.diffPick = d.diffPick;
+    // a pre-changelog save has read everything up to the founding
+    S.seenVer = (typeof d.seenVer === 'string' && d.seenVer) ? d.seenVer : '1.0.0';
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -971,6 +990,15 @@ function load() {
     S.saveQuarantined = true;
   }
 }
+// the WHAT'S NEW ledger: which changelog entries the player hasn't read.
+// A fresh profile is stamped current (its news IS the game); a pre-changelog
+// save reads as 1.0.0; an unrecognized stamp shows just the latest entry.
+function whatsNewEntries() {
+  if (!S.seenVer || S.seenVer === VERSION) return [];
+  const i = CHANGELOG.findIndex(e => e.v === S.seenVer);
+  return i < 0 ? CHANGELOG.slice(0, 1) : CHANGELOG.slice(0, i);
+}
+function whatsNewSeen() { S.seenVer = VERSION; save(); }
 // A boss room whose boss has fallen must always hold the stairs down. Normally
 // leaveBattle() spawns them when CONTINUE is tapped, but a browser refresh on
 // the victory screen skips that step — the save already has the boss marked
@@ -3974,9 +4002,11 @@ window.DP = {
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
+  CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
 };
 
 load();
+if (!S.seenVer) S.seenVer = VERSION;   // fresh profile: nothing is news yet
 
 // ============================================================================
 // Everything below is browser-only: audio, input, rendering.
@@ -4562,6 +4592,7 @@ if (!HEADLESS) (function browser() {
       S.confirm = null; S.inv = null; S.wheelAnim = null; S.relicPick = null;
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
+      WHATSNEW = null; WSHOP = false;
       if (S.screen === 'battle') {
         S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
         S.room = null;
@@ -4600,6 +4631,7 @@ if (!HEADLESS) (function browser() {
     ev.preventDefault();
     audioInit();
     if (AC && AC.state === 'suspended') AC.resume();
+    kbFocus = -1;                     // the pointer takes over from the ring
     const p = toLogical(ev);
     if (S.inv) {
       invDrag = { id: ev.pointerId, x0: p.x, y0: p.y, sc0: S.inv.scroll || 0, moved: 0 };
@@ -7334,14 +7366,92 @@ if (!HEADLESS) (function browser() {
   const JOY = { active: false, ox: 0, oy: 0, dx: 0, dy: 0, id: null };
   const KEYS = {};
   window.addEventListener('keydown', (ev) => {
-    KEYS[ev.key.toLowerCase()] = true;
-    // the BAG: 'i' toggles, Escape closes
-    if (ev.key === 'Escape' && S.inv) S.inv = null;
-    else if (ev.key.toLowerCase() === 'i' && S.run && (S.screen === 'dungeon' || S.screen === 'battle')) {
+    const k = ev.key.toLowerCase();
+    KEYS[k] = true;
+    if (k === 'tab' || k === ' ' || k.indexOf('arrow') === 0) ev.preventDefault();
+    if (k === 'tab') kbCycle(ev.shiftKey ? -1 : 1);
+    else if (k === ' ') { if (!ev.repeat) kbFire(); }
+    else if (k === 'enter') { if (!ev.repeat) kbPress(); }
+    else if (k === 'escape') kbBack();
+    else if (k === 'i' && S.run && (S.screen === 'dungeon' || S.screen === 'battle')) {
       S.inv = S.inv ? null : { tab: 'coins' };
     }
   });
-  window.addEventListener('keyup', (ev) => { KEYS[ev.key.toLowerCase()] = false; });
+  window.addEventListener('keyup', (ev) => {
+    const k = ev.key.toLowerCase();
+    KEYS[k] = false;
+    if (k === ' ') held = false;      // the pour (and the claw hold) lets go
+  });
+  // ---- keyboard & gamepad: the whole game without a pointer ----
+  // TAB (or the bumpers) hops a gold dashed ring across the live buttons,
+  // ENTER (or A) presses the ringed one, ESC (or B) backs out of whatever
+  // is open. SPACE is the coin finger in the machine — tap fires, holding
+  // pours, and the same hold walks the Crane Keeper's claw.
+  let kbFocus = -1;                  // index into uiButtons, -1 = free aim
+  let kbScreen = S.screen;           // focus never outlives a screen change
+  function kbTargets() {
+    // skip the huge backdrop catchers — only real buttons take the ring
+    const out = [];
+    for (let i = 0; i < uiButtons.length; i++) {
+      const b = uiButtons[i];
+      if (b.w * b.h < LW * LH * 0.45) out.push(i);
+    }
+    return out;
+  }
+  function kbCycle(dir) {
+    const tg = kbTargets();
+    if (!tg.length) { kbFocus = -1; return; }
+    let at = tg.indexOf(kbFocus);
+    at = at < 0 ? (dir > 0 ? 0 : tg.length - 1) : (at + dir + tg.length) % tg.length;
+    kbFocus = tg[at];
+  }
+  function kbPress() {
+    if (kbFocus >= 0 && kbFocus < uiButtons.length) uiButtons[kbFocus].cb();
+  }
+  function kbFire() {
+    const overlay = S.inv || S.confirm || S.victory || S.foeInfo !== null;
+    if (S.screen === 'battle' && !overlay && kbFocus < 0) {
+      audioInit();
+      if (AC && AC.state === 'suspended') AC.resume();
+      drop(S.aimX);
+      held = true; holdT = 0;
+    } else kbPress();
+  }
+  function kbBack() {
+    if (S.confirm) { S.confirm = null; return; }
+    if (S.foeInfo !== null) { S.foeInfo = null; return; }
+    if (S.inv) { S.inv = null; return; }
+    if (WHATSNEW) { if (WHATSNEW.auto) whatsNewSeen(); WHATSNEW = null; return; }
+    if (SETTINGS) { SETTINGS = false; return; }
+    if (WSHOP) { WSHOP = false; return; }
+    if (TROPHIES) { TROPHIES = false; return; }
+    if (RECORDS) { RECORDS = false; return; }
+    if (CODEX) { CODEX = null; return; }
+    kbFocus = -1;                    // nothing open: drop the ring instead
+  }
+  // gamepad, polled each frame: stick/dpad move & aim, A fires/presses,
+  // B backs out, LB/RB hop the ring
+  const PAD = { prev: {} };
+  function padTick() {
+    const pads = (typeof navigator !== 'undefined' && navigator.getGamepads) ? navigator.getGamepads() : null;
+    let p = null;
+    if (pads) for (let i = 0; i < pads.length && !p; i++) { if (pads[i] && pads[i].connected) p = pads[i]; }
+    KEYS.gpl = KEYS.gpr = KEYS.gpu = KEYS.gpd = false;
+    if (!p) return;
+    const bt = i => !!(p.buttons && p.buttons[i] && p.buttons[i].pressed);
+    const ax = (p.axes && p.axes[0]) || 0, ay = (p.axes && p.axes[1]) || 0;
+    KEYS.gpl = ax < -0.4 || bt(14); KEYS.gpr = ax > 0.4 || bt(15);
+    KEYS.gpu = ay < -0.4 || bt(12); KEYS.gpd = ay > 0.4 || bt(13);
+    const edge = (name, on, down, up) => {
+      if (on && !PAD.prev[name]) down();
+      else if (!on && PAD.prev[name] && up) up();
+      PAD.prev[name] = on;
+    };
+    edge('a', bt(0), kbFire, () => { held = false; });
+    edge('b', bt(1), kbBack);
+    edge('lb', bt(4), () => kbCycle(-1));
+    edge('rb', bt(5), () => kbCycle(1));
+  }
   const entCool = {};
   function avSpawn() {
     AV.stamp = S.roomStamp;
@@ -7369,10 +7479,10 @@ if (!HEADLESS) (function browser() {
         vx = (JOY.dx / d) * k; vy = (JOY.dy / d) * k;
       }
     }
-    if (KEYS.arrowleft || KEYS.a) vx -= 1;
-    if (KEYS.arrowright || KEYS.d) vx += 1;
-    if (KEYS.arrowup || KEYS.w) vy -= 1;
-    if (KEYS.arrowdown || KEYS.s) vy += 1;
+    if (KEYS.arrowleft || KEYS.a || KEYS.gpl) vx -= 1;
+    if (KEYS.arrowright || KEYS.d || KEYS.gpr) vx += 1;
+    if (KEYS.arrowup || KEYS.w || KEYS.gpu) vy -= 1;
+    if (KEYS.arrowdown || KEYS.s || KEYS.gpd) vy += 1;
     const mag = Math.hypot(vx, vy);
     AV.moving = mag > 0.05;
     if (!AV.moving) return;
@@ -8404,6 +8514,43 @@ if (!HEADLESS) (function browser() {
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the SETTINGS sheet: volume notches, comfort toggles, the tale ----
+  // ---- the WHAT'S NEW scroll: unread patch notes greet a returning player ----
+  // auto: true means it opened itself after a version bump — dismissing it
+  // stamps the ledger; opened from settings it shows the whole history.
+  let WHATSNEW = whatsNewEntries().length ? { auto: true } : null;
+  function drawWhatsNew(t) {
+    if (!WHATSNEW) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.82)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => {} });
+    const entries = WHATSNEW.auto ? whatsNewEntries() : CHANGELOG;
+    const py = 150, ph = 540;
+    rr(40, py, LW - 80, ph, 18);
+    ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    txt('✨ WHAT’S NEW', LW / 2, py + 34, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    let y = py + 74;
+    const yMax = py + ph - 76;
+    for (const e of entries) {
+      if (y > yMax - 20) { txt('…older tales rest in the archive', LW / 2, y, '600 10px Verdana, sans-serif', '#8a7a90'); break; }
+      txt('v' + e.v, 64, y, '900 14px Georgia, serif', '#ffe9a3', 'left');
+      y += 22;
+      for (const n of e.notes) {
+        if (y > yMax) break;
+        const lines = wrapLines(n, 54, 3);
+        for (let i = 0; i < lines.length && y <= yMax; i++) {
+          txt((i === 0 ? '★ ' : '   ') + lines[i], 68, y, '600 10px Verdana, sans-serif', '#d8c8dc', 'left');
+          y += 15;
+        }
+        y += 4;
+      }
+      y += 12;
+    }
+    uiBtn(LW / 2 - 80, py + ph - 56, 160, 42, 'ONWARD ▶', () => {
+      if (WHATSNEW.auto) whatsNewSeen();
+      WHATSNEW = null;
+    }, { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   let SETTINGS = false;
   function drawSettings(t) {
     if (!SETTINGS) return;
@@ -8455,9 +8602,12 @@ if (!HEADLESS) (function browser() {
     uiBtn(64, py + 394, LW - 128, 38, '\u{1F4DC} REPLAY THE TALE', () => {
       SETTINGS = false; INTRO = { t: 0, then: null };
     }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 12px Verdana, sans-serif', r: 12 });
-    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 456, '700 10px Verdana, sans-serif', '#8a7a90');
-    txt('a coin pusher roguelike — painted relics by the owner,', LW / 2, py + 474, '600 9px Verdana, sans-serif', '#6a5a68');
-    txt('code forged with Claude Code', LW / 2, py + 488, '600 9px Verdana, sans-serif', '#6a5a68');
+    uiBtn(64, py + 438, LW - 128, 38, '✨ WHAT’S NEW — v' + VERSION, () => {
+      SETTINGS = false; WHATSNEW = { auto: false };
+    }, { bg: 'rgba(46,38,66,0.95)', border: '#e0d0a8', col: '#fff4d6', font: '800 12px Verdana, sans-serif', r: 12 });
+    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 500, '700 10px Verdana, sans-serif', '#8a7a90');
+    txt('arrows move · SPACE fires · TAB + ENTER press · ESC backs out', LW / 2, py + 516, '600 9px Verdana, sans-serif', '#6a5a68');
+    txt('painted relics by the owner — code forged with Claude Code', LW / 2, py + 530, '600 9px Verdana, sans-serif', '#6a5a68');
     uiBtn(LW / 2 - 70, py + ph - 34, 140, 40, 'CLOSE ✕', () => { SETTINGS = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
@@ -8700,10 +8850,16 @@ if (!HEADLESS) (function browser() {
     requestAnimationFrame(frame);
     const dt = Math.min((ts - last) / 1000 || 0.016, 0.05);
     last = ts;
+    padTick();                            // gamepad → the same KEYS/press paths
     if (S.screen === 'battle') {
       tick(dt);
       if (S.victory) S.victory.t += dt;
       clawTick(dt);                       // the Crane Keeper's two-move rig
+      // arrows / stick sweep the aim across the slot
+      let kax = 0;
+      if (KEYS.arrowleft || KEYS.a || KEYS.gpl) kax -= 1;
+      if (KEYS.arrowright || KEYS.d || KEYS.gpr) kax += 1;
+      if (kax && !S.victory) S.aimX = Math.max(8, Math.min(92, S.aimX + kax * 64 * dt));
       if (held && !S.victory) {
         holdT += dt;
         // a short warm-up, then a steady pour paced by the turbo-shortened
@@ -8743,9 +8899,20 @@ if (!HEADLESS) (function browser() {
     drawCodex(t);
     drawWorkshop(t);
     drawSettings(t);
+    drawWhatsNew(t);
     drawIntro(t);
     drawConfirm(t);
     drawAchToast(dt);
+    // the keyboard's gold dashed ring rides whatever button holds focus
+    if (S.screen !== kbScreen) { kbScreen = S.screen; kbFocus = -1; }
+    if (kbFocus >= uiButtons.length) kbFocus = -1;
+    if (kbFocus >= 0) {
+      const b = uiButtons[kbFocus];
+      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = 2.5; ctx.strokeStyle = '#ffe9a3';
+      rr(b.x - 3, b.y - 3, b.w + 6, b.h + 6, 12); ctx.stroke();
+      ctx.setLineDash([]);
+    }
   }
   requestAnimationFrame(frame);
 })();
