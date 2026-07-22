@@ -3607,4 +3607,31 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(/if \(NAMEPAD\) \{ NAMEPAD = null; return; \}/.test(src), 'ESC backs out of the carver first');
 }
 
+// -------- CLOUD SAVE (client side): the code + the clock --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.S.syncCode, '', 'no sync code on a fresh profile');
+  // every save is clock-stamped so the cloud can say who's newer
+  D.save();
+  const blob = JSON.parse(st[D.C.SAVE_KEY]);
+  t.ok(blob.t > 0, 'the blob carries a write timestamp');
+  // a valid code round-trips; a mangled one is dropped on load
+  D.S.syncCode = 'AB2C-XY9Z';
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.syncCode, 'AB2C-XY9Z', 'the sync code survives a reload');
+  const blob2 = JSON.parse(st[D.C.SAVE_KEY]);
+  blob2.syncCode = 'not-a-code';
+  st[D.C.SAVE_KEY] = JSON.stringify(blob2);
+  const { DP: M } = loadGame(st, false);
+  t.eq(M.S.syncCode, '', 'a mangled stored code is dropped, not trusted');
+  // the page is wired to the save endpoint and its overlay
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("'/api/dungeon_save'") >= 0, 'the client points at /api/dungeon_save');
+  t.ok(src.indexOf('function drawCloud') >= 0 && src.indexOf('CLOUD SAVE') >= 0, 'the cloud overlay exists');
+  t.ok(src.indexOf('RESTORE THIS PROFILE?') >= 0, 'restoring always passes the confirm sheet');
+}
+
 t.done();
