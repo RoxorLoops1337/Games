@@ -507,6 +507,78 @@ Ordered by impact ÷ effort.
       dp:top to dp:top:bak:<monday> with a 35-day TTL — no cron, later
       posts never rewrite the snapshot (session 70)
 
+## Tier 11 — the deep breath (authored session 72)
+
+Ten tiers built a deep game fast. This tier consolidates: pay the polish
+debt the sprint left behind, prove the balance with simulation instead of
+faith, and only then add the two big swings. A player 50 runs in should
+feel the game get SMOOTHER this tier, not just bigger.
+
+- [ ] **Toast & float triage**: the game now toasts constantly (decrees,
+      chests, contracts, jars, skims, wagers…) — audit every toast() for
+      length and stacking; long ones split or shorten; introduce a 2-line
+      cap and a queue so simultaneous toasts never overwrite each other
+      silently (the milestone-chest + decree + skim pileup at floor 22 is
+      the test case)
+- [ ] **NL locale catch-up**: TR() covers ~73 sites but tiers 7-10 shipped
+      mostly untranslated (tabs, chips, confirms, the marquee, tales are
+      fine as-is — but UI CHROME must translate); sweep every uiBtn/label
+      since s29, add the ~60 missing LANGS.nl strings, and add a source
+      test asserting key new chrome goes through TR()
+- [ ] **Keyboard/gamepad reach audit**: TAB-ring and ESC must reach/leave
+      every sheet added since the kb pass: records tabs (endless/habits/
+      legacy), codex tales, board filter chips, the weekly/gauntlet
+      confirms, share overlays; fix the gaps, extend the kb test
+- [ ] **Hero win-rate sim harness**: a headless autopilot (greedy: fire at
+      the biggest foe, drink at low HP, always descend) run N seeded runs
+      per hero; report median floor per hero as a probe line; rail: no
+      hero's median below 60% of the pack's — data before any buffs
+- [ ] **Relic pickup audit**: instrument rollRelicPool choices offered vs
+      picked across the sim harness; list the 10 least-chosen relics in
+      the probe output; buff or rework the 3 worst (data-driven, small
+      numeric touches only)
+- [ ] **Late-HUD declutter**: at floor 25+ the battle screen carries meter,
+      decree count, jar, pegs, prepaid toll, brew gauge, quest line, pace…
+      — audit overlap at 480px, collapse the passive readouts into one
+      rotating status strip under the purse row
+- [ ] **THE ALMANAC (help sheet)**: a ❓ title button opening a compact,
+      searchable-feeling reference built from data the game already owns:
+      coin table (COIN_INFO), trait glossary (ENT_INFO/trait texts), toll/
+      skim/cap formulas in words, the decree ladder, hero perk list — no
+      wiki needed, no new prose beyond section intros
+- [ ] **Duel REMATCH links**: the duel verdict screen offers REMATCH —
+      a fresh ?duel link seeded from the JUST-FINISHED run's seed+floor
+      with YOUR name, so chains of challenges bounce back and forth;
+      the report card shows the chain depth if present (&r=N)
+- [ ] **Board seasons archive**: keep the champion plaque's last 3 months
+      client-side (S.plaques[]), shown as a small HALL OF MONTHS in the
+      board sheet under THIS MONTH
+- [ ] **Motif player easter egg**: tap the version stamp 5× → a tiny OST
+      sheet that plays the four act motifs + the jackpot resolve on demand
+      (pure tone(), reuses SND) — a lighthearted thank-you surface
+- [ ] **Relic search in the codex**: the relic shelves are 140+ deep — a
+      NAMEPAD-driven filter box on the codex relic tabs (match name/desc)
+- [ ] **Save-size audit**: the blob has grown (legacy, tales, pace, pegs…)
+      — measure serialized size in a test, assert < 32KB with a full
+      profile, and trim anything redundant found along the way
+- [ ] **[big] REPLAY GHOST for duels**: a duel link optionally carries the
+      challenger's per-floor pace (&p=csv of seconds); during the run the
+      ghost-pace whisper compares against THEM instead of your best —
+      racing a real person's clock on the same maze
+- [ ] **[big] THE FIFTH ACT — THE UNDERLAKE**: floors 21-25 stop being pure
+      endless: a water-themed act (13 foes, drowned tricks: rust rain,
+      coin-eating eels, a pressure gauge replacing darkness) with THE
+      DROWNED BANKER as its boss; decrees shift to start at 26; needs the
+      full probe treatment before ship
+- [ ] **[big] MACHINE LAYOUT II — THE TILTED TABLE**: an alternate machine
+      unlocked at lifetime floor 30: slanted bed (coins drift left), a
+      side gutter that pays gold, one fewer tray slot — chosen at the
+      MACHINE rack like a theme; the physics deltas must stay inside
+      pushRate/step and be probe-verified
+- [ ] **Trophy pass to 48**: ALMANAC READER (open it), REMATCHED (answer a
+      rematch), OLD MONEY (hold 2,000 gold), THE COLLECTION (own 60 relics
+      lifetime via codex count) — with the usual test-count bumps
+
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
