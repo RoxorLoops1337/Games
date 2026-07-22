@@ -5982,4 +5982,70 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('the book is blank — go make a first') >= 0, 'with a kind empty state');
 }
 
+// -------- THE GLASS JAR: the machine's first new trick --------
+{
+  // shared seeds face the same jar (own instances FIRST — localStorage rebinds)
+  const { DP: A } = loadGame({}, false);
+  const { DP: B } = loadGame({}, false);
+  A.S.nextSeed = 4242; A.srand(1); A.newRun('knight');
+  B.S.nextSeed = 4242; B.srand(99); B.newRun('knight');
+  for (let f = 1; f < 9; f++) { A.S.run.floor = f + 1; A.genFloor(); B.S.run.floor = f + 1; B.genFloor(); }
+  t.eq(JSON.stringify(A.S.run.jar), JSON.stringify(B.S.run.jar), 'two players, one seed, one jar');
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // act 0 never seeds one; deeper floors sometimes do, from the floor stream
+  D.srand(221); D.newRun('knight');
+  let early = false;
+  for (let f = 1; f <= 5; f++) { D.S.run.floor = f; D.genFloor(); if (D.S.run.jar) early = true; }
+  t.ok(!early, 'the first act keeps its bed bare');
+  let jar = null;
+  for (let f = 6; f <= 20 && !jar; f++) { D.S.run.floor = f; D.genFloor(); jar = D.S.run.jar; }
+  t.ok(jar, 'past act 1, a jar eventually rides the bed');
+  t.ok(jar.x >= 25 && jar.x <= 75 && jar.hp === 3 && jar.rounds === 4, 'seeded sane: mid-bed, 3 hp, 4 rounds');
+  // the smash: two cracks, then the spill
+  D.S.run.jar = { x: 50, hp: 3, rounds: 4, flashT: 0 };
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.hp = D.S.enemy.maxHp = 500;
+  t.ok(!D.jarSmash({ x: 48, vx: 0 }), 'the first hit only cracks');
+  t.eq(D.S.run.jar.hp, 2, 'two panes left');
+  D.jarSmash({ x: 52, vx: 0 });
+  const gems0 = D.S.coins.filter(c => c.kind === 'gem').length;
+  t.ok(D.jarSmash({ x: 50, vx: 0 }), 'the third hit SHATTERS');
+  t.eq(D.S.run.jar, null, 'the jar is gone');
+  t.eq(D.S.coins.filter(c => c.kind === 'gem').length, gems0 + 2, 'two gems spill out');
+  t.ok(D.S.relicPick && D.S.relicPick.rar === 'c', 'and a relic pick waits in the glass');
+  D.S.relicPick = null;
+  // the physics path: an aimed coin at the jar's lane lands the hit
+  D.S.run.jar = { x: 50, hp: 1, rounds: 4, flashT: 0 };
+  D.spawnDrop(50, 24, 'coin');
+  for (let i = 0; i < 240 && D.S.run.jar; i++) D.step(1 / 60, true);
+  t.eq(D.S.run.jar, null, 'a dropped coin on the lane smashes it for real');
+  // a wide coin misses
+  D.S.run.jar = { x: 20, hp: 3, rounds: 4, flashT: 0 };
+  D.spawnDrop(70, 24, 'coin');
+  for (let i = 0; i < 240; i++) D.step(1 / 60, true);
+  t.eq(D.S.run.jar.hp, 3, 'a coin two lanes over touches nothing');
+  // ignored, it slides off the back edge in four rounds
+  const y0 = D.jarY();
+  D.endRoundNow();
+  t.eq(D.S.run.jar.rounds, 3, 'each round slides it back a notch');
+  t.ok(D.jarY() < y0, 'visibly so');
+  D.S.run.jar.rounds = 1;
+  D.endRoundNow();
+  t.eq(D.S.run.jar, null, 'the last round takes it off the back edge');
+  // a mid-run jar survives the save
+  D.S.run.jar = { x: 61, hp: 2, rounds: 3, flashT: 0 };
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.run.jar.x, 61, 'the jar survives a reload');
+  t.eq(R.S.run.jar.hp, 2, 'cracks and all');
+  // the painter exists, cb-safe
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('function drawJar(t, dt)') >= 0, 'the jar has its painter');
+  t.ok(src.indexOf("S.opts.cb ? '#ffffff'") >= 0, 'with a hard outline for cb mode');
+  t.ok(src.indexOf('drawJar(t, dt);') >= 0, 'drawn behind the coins');
+}
+
 t.done();
