@@ -352,16 +352,17 @@ impact ÷ effort.
       confirm on the title: cogs = 8×days (cap 120) + a RARE relic pick armed
       for the next run's door (outranks the Heirloom); claiming touches the
       streak so it can't be farmed (session 55)
-- [ ] **Title marquee**: one rotating line under the hero picker cycling the
-      most compelling personal hook: streak bonus running out, rival's floor,
-      codex gaps ("2 mint foes unmet"), yesterday's deepest, seed of the day —
-      a tiny reason engine, priority-ordered, one line per visit
+- [x] **Title marquee**: marqueeLine(date) — a priority-ordered reason engine
+      on the title: streak at stake (incl. the grace-day plea) → standing
+      rival → unspent daily → thinnest codex shelf → yesterday's crown →
+      evergreen seed line (session 56)
 - [ ] **Ghost pace**: your best descent stamps per-floor cumulative times
       (S.best.pace[floor] = seconds); during a run the floor banner whispers
       "+12s ahead of your best" / "8s behind" — racing yourself, no server
-- [ ] **Codex completion meters**: each codex tab shows FOUND N / M; 100% of
-      any bestiary act → gilded tab icon; 100% of everything → THE FULL
-      LEDGER trophy + the codex button turns gold on the title
+- [x] **Codex completion meters**: codexTabStat/codexFull — finished shelves
+      wear a gold ✦ tab, the header shows the whole ledger's N/M, 100% of
+      everything hangs THE FULL LEDGER (39 on the wall) and turns the title's
+      codex button gold (session 56)
 - [ ] **Hero mastery stars**: deep15 grows from flag to COUNT (migrate 1→1);
       hero cards wear ★/★★/★★★ at 1/3/5 deep clears with that hero; three
       stars on any hero → a MASTER'S MARK by their board-row icon (client
