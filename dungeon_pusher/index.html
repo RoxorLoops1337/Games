@@ -1044,9 +1044,9 @@ const TRAIT_TXT = {
   chrono: 'devours a TILT when hit for 8+', coward: 'hides behind its weakest ally when targeted',
   twin: 'raises its fallen twin — fell both in one round',
   gardener: 'sows skulls — any left on the field SPROUT',
-  magarmor: 'magnetic armor — hoards +3 block every turn',
-  coinclone: 'clones a pile coin into a dead slug each turn',
-  jackthief: 'siphons 3 off your JACKPOT meter each turn',
+  magarmor: 'magnetic armor — hoards block every turn, more each act',
+  coinclone: 'clones pile coins into dead slugs each turn',
+  jackthief: 'siphons your JACKPOT meter each turn, harder each act',
 };
 // the defensive mechanic, spelled out on the foe's panel
 const DEF_TXT = {
@@ -1496,7 +1496,8 @@ function dmgFoe(e, n, src, pierce) {
       e.mirrorSpent = true;
       e.hitT = 0.15;
       floatAnchor('\u{1FA9E} MIRRORED!', 'enemy', '#9ae8e8', true);
-      hurtPlayer(Math.min(n, 8), 'your own blow, mirrored');
+      // the glass hardens with the acts — deep mirrors throw back more
+      hurtPlayer(Math.min(n, 8 + 2 * Math.min(6, actIdx(S.run.floor))), 'your own blow, mirrored');
       return 0;
     }
     if (e.def === 'gel') n = Math.min(n, C.GEL_CAP);            // ooze caps the hit
@@ -2724,21 +2725,27 @@ function enemyActFoe(e) {
       floatAt('corroded…', c.x, '#c8a86a');
     }
   }
+  // the mint's tricks sharpen with the acts, like the fists around them
+  const actK = Math.min(6, actIdx(S.run.floor));
   if (e.trait === 'magarmor') {
-    e.block = (e.block || 0) + 3;
-    floatAnchor('\u{1F9F2} stray coins cling to its armor (+3 block)', 'enemy', '#b8c8e8');
+    const mag = 3 + actK;
+    e.block = (e.block || 0) + mag;
+    floatAnchor('\u{1F9F2} stray coins cling to its armor (+' + mag + ' block)', 'enemy', '#b8c8e8');
   }
   if (e.trait === 'coinclone') {
-    const plat = S.coins.filter(c => c.st === 'plat');
-    if (plat.length) {
+    const duds = actK >= 4 ? 2 : 1;       // the endless mint runs two presses
+    for (let dc = 0; dc < duds; dc++) {
+      const plat = S.coins.filter(c => c.st === 'plat');
+      if (!plat.length) break;
       const c = plat[(rng() * plat.length) | 0];
       const dud = spawnDrop(Math.max(8, Math.min(92, c.x + (rng() - 0.5) * 8)), Math.min(88, c.y + 3), 'slug');
       if (dud) floatAt('counterfeited\u{2026} a dud', c.x, '#c8a86a');
     }
   }
   if (e.trait === 'jackthief' && S.meter > 0) {
-    S.meter = Math.max(0, S.meter - 3);
-    floatAnchor('\u{1FAB1} it siphons your JACKPOT meter!', 'hero', '#ffd75e', true);
+    const sip = 3 + actK;
+    S.meter = Math.max(0, S.meter - sip);
+    floatAnchor('\u{1FAB1} it siphons ' + sip + ' off your JACKPOT meter!', 'hero', '#ffd75e', true);
   }
   if (e.trait === 'magnet') {
     const plat = S.coins.filter(c => c.st === 'plat' && c.y > 18);
@@ -3693,6 +3700,29 @@ function newRun(heroId, force) {
   save();
   return S.run;
 }
+// the STAIR TOLL deepens with the acts — 2 coins near the sun, +1 per act
+function stairToll() {
+  return C.STAIR_TOLL + Math.min(6, S.run ? actIdx(S.run.floor) : 0);
+}
+// ...and the TOLLKEEPER'S SKIM is the real sink: the purse has a soft
+// ceiling that rises slower than the income curve. Every descent, the
+// overflow is confiscated at 2 gold a coin — plainest pockets first — so
+// deep hands stay tense instead of drowning the machine in coins.
+function purseCap() { return 20 + 4 * Math.min(6, S.run ? actIdx(S.run.floor) : 0); }
+function stairSkim() {
+  if (!S.run) return 0;
+  let over = purseTotal() - purseCap();
+  if (over <= 0) return 0;
+  const skimmed = over;
+  for (const k of COIN_KINDS) {           // the plain coin goes before the lucky
+    while (over > 0 && (S.run.purse[k] || 0) > 0) { S.run.purse[k]--; over--; }
+    if (over <= 0) break;
+  }
+  const pay = skimmed * 2;
+  addGold(pay);
+  toast('\u{2696}\u{FE0F} the deep skims ' + skimmed + ' coins off the top — +' + pay + ' gold');
+  return skimmed;
+}
 function purseTotal() {
   if (!S.run) return 0;
   return COIN_KINDS.reduce((a, k) => a + (S.run.purse[k] || 0), 0);
@@ -4037,12 +4067,14 @@ function interact(i) {
     return true;
   }
   if (e.kind === 'stairs') {
-    // the stairwell takes its toll before it lets you down
-    if (!spendPurse(C.STAIR_TOLL)) {
-      S.uiFlash = { msg: 'THE STAIRS DEMAND ' + C.STAIR_TOLL + ' COINS', t: 1.4 };
+    // the stairwell takes its toll before it lets you down — and skims
+    // whatever spills over the purse's soft ceiling (2 gold a coin)
+    if (!spendPurse(stairToll())) {
+      S.uiFlash = { msg: 'THE STAIRS DEMAND ' + stairToll() + ' COINS', t: 1.4 };
       SND.deny();
       return false;
     }
+    stairSkim();
     nextFloor();
     return true;
   }
@@ -4745,6 +4777,7 @@ window.DP = {
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
   duelLink, parseDuel, welcomeBack,
+  stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
@@ -7689,9 +7722,9 @@ if (!HEADLESS) (function browser() {
     coward: 'COWARD: swaps with its weakest ally when you target it',
     twin: 'TWIN: raises its fallen partner — kill both in ONE round',
     gardener: 'GARDENER: sows skulls — clear them or they SPROUT',
-    magarmor: 'MAGNETIC: +3 block every turn — out-pace the hoard',
+    magarmor: 'MAGNETIC: hoards block every turn (more each act) — out-pace it',
     coinclone: 'COUNTERFEIT: mints dud slugs into your pile each turn',
-    jackthief: 'SIPHON: drains 3 JACKPOT meter each turn — spend it fast',
+    jackthief: 'SIPHON: drains your JACKPOT meter each turn — spend it fast',
   };
   function drawFoeInfo(t) {
     if (S.foeInfo === null || !S.foes || !S.foes[S.foeInfo]) return;

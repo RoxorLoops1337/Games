@@ -3960,15 +3960,15 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const b0 = D.S.enemy.block || 0;
   D.enemyActFoe(D.S.enemy);
   t.ok((D.S.enemy.block || 0) >= b0 + 3 - 2, 'the lodestone hoards block (+3, minus what its blow spent)');
-  // Meter Leech: siphons the jackpot meter
-  D.S.enemy.hp = 1; D.dmgEnemy(9); D.leaveBattle();
+  // Meter Leech: siphons the jackpot meter (clear the scaled hoard to land the kill)
+  D.S.enemy.hp = 1; D.S.enemy.block = 0; D.S.enemy.braced = false; D.dmgEnemy(9); D.leaveBattle();
   D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'meterleech', done: false, px: 0.5, py: 0.4 }];
   D.interact(0);
   D.S.meter = 10;
   D.enemyActFoe(D.S.enemy);
-  t.eq(D.S.meter, 7, 'the meter leech siphons 3');
+  t.eq(D.S.meter, 4, 'the meter leech siphons 3 + the act (floor 16 = act 3 → 6)');
   // The Counterfeiter: mints a dud slug onto the pile
-  D.S.enemy.hp = 1; D.dmgEnemy(9); D.leaveBattle();
+  D.S.enemy.hp = 1; D.S.enemy.block = 0; D.S.enemy.braced = false; D.dmgEnemy(9); D.leaveBattle();
   D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'counterfeit', done: false, px: 0.5, py: 0.4 }];
   D.interact(0);
   D.place(50, 50, 'coin');
@@ -5208,6 +5208,64 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("'★★★'.slice(0, ms)") >= 0, 'the hero card wears its stars');
   t.ok(src.indexOf("s ahead of your best'") >= 0, 'the descent curtain whispers the pace');
   t.ok(src.indexOf("masteryPeak() >= 3 ? '★ '") >= 0, 'the master’s mark rides your board row');
+}
+
+// -------- THE LATE-GAME COIN SINK: scaling toll, the skim, sharper tricks --------
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(91); D.newRun('knight');
+  // the toll and the ceiling both deepen with the acts
+  t.eq(D.stairToll(), 2, 'act 0: the old 2-coin toll');
+  t.eq(D.purseCap(), 20, 'act 0: a 20-coin ceiling');
+  D.S.run.floor = 18;                       // act 3, the mint
+  t.eq(D.stairToll(), 5, 'act 3: the stairs demand 5');
+  t.eq(D.purseCap(), 32, 'act 3: the ceiling rises to 32');
+  D.S.run.floor = 40;                       // deep endless — both clamp
+  t.eq(D.stairToll(), 8, 'the toll caps at 2+6');
+  t.eq(D.purseCap(), 44, 'the ceiling caps at 44');
+  // the skim: overflow becomes gold, plainest pockets first
+  D.S.run.floor = 18;
+  D.S.run.purse = { coin: 20, silver: 10, green: 5, red: 3, blue: 0, lucky: 2 };   // 40 total, cap 32
+  const g0 = D.S.run.gold;
+  t.eq(D.stairSkim(), 8, 'eight coins over the ceiling are skimmed');
+  t.eq(D.purseTotal(), 32, 'the purse settles exactly at the cap');
+  t.eq(D.S.run.purse.coin, 12, 'the plain coin pays the whole levy');
+  t.eq(D.S.run.purse.lucky, 2, 'the lucky pocket is never touched first');
+  t.ok(D.S.run.gold >= g0 + 16, 'the overflow pays 2 gold apiece');
+  t.eq(D.stairSkim(), 0, 'at the cap, nothing more to skim');
+  // a lean purse is left alone
+  D.S.run.purse = { coin: 4, silver: 2, green: 0, red: 0, blue: 0, lucky: 0 };
+  t.eq(D.stairSkim(), 0, 'a lean purse descends untaxed');
+  // the descent path actually pays the scaled toll AND skims
+  const { DP: E } = loadGame({}, false);
+  E.srand(92); E.newRun('knight');
+  E.S.run.floor = 18;
+  E.S.run.purse = { coin: 30, silver: 10, green: 0, red: 0, blue: 0, lucky: 0 };   // 40
+  E.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  E.interact(0);
+  t.eq(E.S.run.floor, 19, 'the stairs still descend');
+  t.eq(E.purseTotal(), 32, '40 − 5 toll = 35, then the skim trims to the 32 cap');
+  // the mint's tricks sharpen with the acts
+  const { DP: M } = loadGame({}, false);
+  M.srand(93); M.newRun('knight');
+  M.S.run.floor = 18;
+  M.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'lodestone', done: false, px: 0.5, py: 0.4 }];
+  M.interact(0);
+  M.S.enemy.intent = { t: 'brace' };        // no blow — the hoard shows clean
+  const mb0 = M.S.enemy.block || 0;
+  M.enemyActFoe(M.S.enemy);
+  t.eq((M.S.enemy.block || 0) - mb0, 6, 'act-3 magnetic armor hoards +6, not +3');
+  // deep mirrors throw back harder
+  const { DP: X } = loadGame({}, false);
+  X.srand(94); X.newRun('knight');
+  X.S.run.floor = 18; X.S.run.hp = X.S.run.maxHp = 200;
+  X.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  X.interact(0);
+  const foe = X.S.enemy;
+  foe.hp = foe.maxHp = 500; foe.def = 'mirror'; foe.mirrorSpent = false; foe.block = 0; foe.braced = false;
+  const xh0 = X.S.run.hp;
+  X.dmgFoe(foe, 50);
+  t.eq(xh0 - X.S.run.hp, 14, 'an act-3 mirror bounces up to 14 (8 + 2·act)');
 }
 
 t.done();
