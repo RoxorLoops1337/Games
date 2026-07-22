@@ -52,6 +52,7 @@ const HEADLESS = !ctx;
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
   { v: '1.2.0', notes: [
+    'NEW GAME+ — a deep clear hangs an NG+ door by the difficulty row: kin one act deeper from floor 1, and five prestige-only relics',
     'HERO SKINS — fell the floor-15 boss with a hero and their ALT PALETTE is tailored; toggle it with the 🎨 chip on the card',
     'MACHINE THEMES — BONE, GILDED and NEON cabinets earned by your best descent (🎰 on the title)',
     'THE DEEP BOARD — daily + all-time leaderboards with medals; carve your name after a run',
@@ -146,6 +147,13 @@ function themeUnlocked(id) {
   const th = MACH_THEMES[id];
   return !!th && S.best.floor >= th.floor;
 }
+
+// -------------------------------------------------------------- NEW GAME+
+// Prestige opens the first time any hero fells the floor-15 boss (the same
+// DEEP CLEAR that tailors a skin). The NG+ door on the title arms the next
+// run: every floor fields kin one act deeper, and five NG+-only relics
+// join every pool.
+function ngPlusOpen() { return Object.keys(S.deep15 || {}).length > 0; }
 
 // -------------------------------------------------------------- hero skins
 // One alt palette per hero, earned by a DEEP CLEAR (felling the floor-15
@@ -451,11 +459,17 @@ const RELICS = [
   { id: 'beastmaster', rar: 'e', icon: '\u{1F981}', name: 'Beastmaster',   desc: 'room for +2 pets, and all pets get +2 HP' },
   { id: 'crimsonrain', rar: 'e', icon: '\u{1F327}\u{FE0F}', name: 'Crimson Rain', desc: 'heart coins also apply 1 BLEED to every foe' },
   { id: 'soulchain',   rar: 'e', icon: '\u{26D3}\u{FE0F}', name: 'Soul Chain', desc: 'while any pet lives, you take 1 less from every hit' },
+  // ---- the PRESTIGE shelf: these five only surface on a NEW GAME+ run ----
+  { id: 'mintvein',   rar: 'r', ng: 1, icon: '\u{26CF}\u{FE0F}', name: 'Mint Vein',   desc: 'NG+ — gold strikes +1 harder for every act descended' },
+  { id: 'crownscale', rar: 'e', ng: 1, icon: '\u{1F451}', name: 'Crown Scale', desc: 'NG+ — bosses and elites take +25% damage' },
+  { id: 'dblchime',   rar: 'r', ng: 1, icon: '\u{1F6CE}\u{FE0F}', name: 'Double Chime', desc: 'NG+ — every JACKPOT rains 4 bonus coins' },
+  { id: 'leadenidol', rar: 'e', ng: 1, icon: '\u{1F5FF}', name: 'Leaden Idol', desc: 'NG+ — every blow against you lands 2 lighter' },
+  { id: 'gildhour',   rar: 'c', ng: 1, icon: '\u{231B}', name: 'Gilded Hourglass', desc: 'NG+ — +1 TILT charge in every battle' },
 ];
 // weighted pull from the unowned shelf — commons far more often
 function rollRelicDrop() {
   if (!S.run) return null;
-  const pool = RELICS.filter(rl => S.run.relics.indexOf(rl.id) < 0);
+  const pool = RELICS.filter(rl => S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || S.run.ng));
   if (!pool.length) return null;
   const total = pool.reduce((a, rl) => a + RARITY[rl.rar].w, 0);
   let r = rng() * total;
@@ -467,7 +481,7 @@ function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
 // pull a random UNOWNED relic of a given rarity (null if that shelf is bare)
 function rollRelicByRar(rar) {
   if (!S.run) return null;
-  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0);
+  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || S.run.ng));
   return pool.length ? pool[(rng() * pool.length) | 0].id : null;
 }
 // grant a random unowned relic of a rarity; returns the id, or null if none
@@ -479,7 +493,7 @@ function grantRelic(rar) {
 // a spread of up to `count` DISTINCT unowned relics of a rarity, to choose from
 function rollRelicPool(rar, count) {
   if (!S.run) return [];
-  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0).map(rl => rl.id);
+  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || S.run.ng)).map(rl => rl.id);
   const out = [];
   while (out.length < count && pool.length) out.push(pool.splice((rng() * pool.length) | 0, 1)[0]);
   return out;
@@ -770,7 +784,9 @@ const ENEMY_TIERS = [
 // back-compat alias: the act-1 roster (tests and old references)
 const ENEMIES = ENEMY_TIERS[0];
 // which act a floor belongs to (0-based; acts past the last reuse its roster)
-function actIdx(floor) { return ((floor - 1) / 5) | 0; }
+// which act a floor belongs to — NEW GAME+ shifts the whole ladder one act
+// deeper, so floor 1 already fields act-2 kin and act-2 boss rotation
+function actIdx(floor) { return (((floor - 1) / 5) | 0) + ((S.run && S.run.ng) ? 1 : 0); }
 function curRoster() {
   return ENEMY_TIERS[Math.min(ENEMY_TIERS.length - 1, actIdx(S.run ? S.run.floor : 1))];
 }
@@ -931,6 +947,7 @@ const S = {
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
+  ngPick: false,                                // the NG+ door is armed for the next run
   deep15: {},                                   // heroes who felled the floor-15 boss
   skins: {},                                    // heroes currently WEARING their alt skin
   screen: 'title',                     // title | dungeon | battle | over
@@ -997,7 +1014,7 @@ function save() {
       syncCode: S.syncCode || '',
       lang: S.lang || 'en',
       machTheme: S.machTheme || 'classic',
-      deep15: S.deep15, skins: S.skins,
+      deep15: S.deep15, skins: S.skins, ngPick: S.ngPick ? 1 : 0,
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
@@ -1015,6 +1032,7 @@ function save() {
         daily: S.run.daily || null, dailyMod: S.run.dailyMod || null,
         quest: S.run.quest || null,
         swarm: S.run.swarm || null, cheese: S.run.cheese || 0, diff: S.run.diff || 'normal',
+        ng: S.run.ng || 0,
       } : null,
     }));
   } catch (e) {}
@@ -1070,6 +1088,7 @@ function load() {
     if (typeof d.machTheme === 'string' && MACH_THEMES[d.machTheme]) S.machTheme = d.machTheme;
     if (d.deep15 && typeof d.deep15 === 'object') S.deep15 = d.deep15;
     if (d.skins && typeof d.skins === 'object') S.skins = d.skins;
+    S.ngPick = !!d.ngPick;
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -1088,6 +1107,7 @@ function load() {
         daily: d.run.daily || null, dailyMod: d.run.dailyMod || null,
         quest: d.run.quest || null,
         swarm: d.run.swarm || null, cheese: d.run.cheese || 0, diff: d.run.diff || 'normal',
+        ng: d.run.ng ? 1 : 0,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -1274,6 +1294,8 @@ function dmgFoe(e, n, src, pierce) {
   const dot = src === 'pois' || src === 'bleed' || src === 'burn';
   // WEAKNESS saps your arm: direct blows halve (rounded down); rot still rots
   if (!dot && S.weakT > 0) n = Math.max(1, Math.floor(n / 2));
+  // the Crown Scale weighs heaviest on the crowned
+  if (hasRelic('crownscale') && (e.boss || e.elite)) n = n * 1.25;
   n = Math.max(1, Math.round(n));
   if (dot) {
     if (src === 'pois' && e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
@@ -1339,6 +1361,7 @@ function goldDmg() {
     if (hasRelic('warlord')) d += Math.floor((S.battle.goldFired || 0) / 3);
   }
   if (hasRelic('berserker') && S.run && S.run.hp * 2 < S.run.maxHp) d += 2;
+  if (hasRelic('mintvein') && S.run) d += actIdx(S.run.floor);
   if (hasRelic('heatwave') && S.foes && S.foes.some(f => f.hp > 0 && f.burn > 0)) d += 1;
   d += strTotal();                     // STRENGTH: +1 per point, every strike
   return d;
@@ -1600,6 +1623,7 @@ function hpHit(n, cause, col) {
 function hurtPlayer(n, cause) {
   if (!S.run || S.run.hp <= 0) return;
   if (hasRelic('thickskin')) n = Math.max(1, n - 1);   // hide turns the edge
+  if (hasRelic('leadenidol')) n = Math.max(1, n - 2);  // the idol drinks the blow
   // Soul Chain: your pack shares the pain
   if (hasRelic('soulchain') && S.pets.some(p => p.hp > 0)) n = Math.max(1, n - 1);
   const incoming = n;
@@ -1729,6 +1753,12 @@ function frenzy() {
   S.banner = { txt: TR('JACKPOT!'), ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.jackpot();
+  // the Double Chime rings the jackpot twice over
+  if (hasRelic('dblchime')) {
+    for (let i = 0; i < 4; i++) {
+      S.rain.push({ t: 0.4 + 0.18 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: rollPileKind() });
+    }
+  }
   const owned = [];
   if (S.run) {
     for (const iid of Object.keys(S.run.arsenal)) {
@@ -1956,7 +1986,7 @@ function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
 function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 1 : 0); }
 // the round-start guard from relics, stacked
 function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 3 : 0); }
-function tiltCount() { return C.TILTS * (ghostRun() ? 2 : 1) + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0) + wsLvl('tilt'); }
+function tiltCount() { return C.TILTS * (ghostRun() ? 2 : 1) + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0) + (hasRelic('gildhour') ? 1 : 0) + wsLvl('tilt'); }
 function bankLoot(key) {
   const B = S.battle;
   if (!B || B.phase !== 'drop' || B.banked.length >= bankMax()) return false;
@@ -1991,7 +2021,7 @@ function rollPileKind() {
 // big jumps between acts); acts past the last roster keep ramping instead
 function scaleMult() {
   const act = actIdx(S.run.floor);
-  const fInAct = (S.run.floor - 1) - act * 5;
+  const fInAct = (S.run.floor - 1) % 5;   // in-act step is raw — NG+ shifts act, not the step
   const beyond = Math.max(0, S.run.floor - ENEMY_TIERS.length * 5);
   // per-act ramp + an act carry tuned so the hand-off to a new (stronger)
   // roster never softens the curve; past the last act the beyond term must
@@ -2954,6 +2984,7 @@ function newDaily(dateStr) {
   const plan = dailyPlan(dateStr);
   srand(plan.seed);
   newRun(plan.hero.id, true);
+  S.run.ng = 0;
   S.run.daily = dateStr;
   S.run.dailyMod = plan.mod.id;
   if (plan.mod.id === 'rich') S.run.gold += 60;
@@ -3110,8 +3141,9 @@ function newRun(heroId, force) {
   S.best.runs = (S.best.runs || 0) + 1;   // the lifetime run tally
   S.ach.heroes[hero.id] = 1;              // the casting-call ledger
   const diff = DIFFS.some(d => d.id === S.diffPick) ? S.diffPick : 'normal';
+  const ng = (S.ngPick && ngPlusOpen()) ? 1 : 0;
   S.run = {
-    hero: hero.id,
+    hero: hero.id, ng,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
     gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS, goldKeys: 0,
     arsenal: { sword: 1, shield: 1, vial: 1 },
@@ -4144,7 +4176,7 @@ window.DP = {
   CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
   LANGS, TR, setLang,
   MACH_THEMES, themeUnlocked,
-  HERO_SKINS, skinWorn, seasonNow,
+  HERO_SKINS, skinWorn, seasonNow, ngPlusOpen,
 };
 
 load();
@@ -9432,6 +9464,14 @@ if (!HEADLESS) (function browser() {
                 border: on ? (d.id === 'hard' ? '#ff8a9a' : d.id === 'easy' ? '#7ed6a0' : '#ffd75e') : '#4a4458',
                 col: on ? '#fff0e0' : '#8a8098', font: '900 10px Verdana, sans-serif', r: 8 });
       });
+      // the PRESTIGE door: only hangs once a deep clear has been inked
+      if (ngPlusOpen()) {
+        const on = !!S.ngPick;
+        uiBtn(LW / 2 + dw * 1.5 + 16, 604, 46, 22, 'NG+', () => { S.ngPick = !S.ngPick; save(); },
+              { grad: on ? ['#6a3a8e', '#3a1a50'] : ['#2e2a38', '#1e1a26'],
+                border: on ? '#c86bff' : '#4a4458',
+                col: on ? '#f0dcff' : '#8a8098', font: '900 10px Verdana, sans-serif', r: 8 });
+      }
     }
     if (S.run) {
       uiBtn(LW / 2 - 130, 620, 260, 48, TR('▶ CONTINUE — FLOOR ') + S.run.floor,

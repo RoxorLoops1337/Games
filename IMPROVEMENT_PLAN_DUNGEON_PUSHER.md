@@ -177,8 +177,11 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Seasonal seeds**: seasonNow(date) windows — pumpkins on the title mound
       late October, snowfall + a snowman in December; clock-based, no network,
       date-injectable for tests (session 32)
-- [ ] **Prestige: NEW GAME+** — beat floor 15 → NG+ badge, enemies +1 act offset,
-      exclusive relic pool (5 NG+-only relics)
+- [x] **Prestige: NEW GAME+** — any deep clear hangs a purple NG+ door by the
+      difficulty row; armed runs shift actIdx one deeper (roster, boss rotation,
+      scale, icons all follow), daily stays plain; five NG+-only relics (Mint
+      Vein, Crown Scale, Double Chime, Leaden Idol, Gilded Hourglass) join the
+      pools only on prestige runs (session 33)
 - [x] **Photo mode**: 📷 chip on the victory panel strips every overlay/HUD layer
       (banner, victory sheet, bag, heartbeat, ach toasts) for a clean pile shot;
       tap/ESC returns, screen changes auto-exit (session 30)

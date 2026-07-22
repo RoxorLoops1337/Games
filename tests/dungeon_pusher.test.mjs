@@ -3762,4 +3762,91 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.seasonNow(new Date('2026-03-14')), null, 'spring is plain');
 }
 
+// -------- NEW GAME+: the prestige door --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.ok(!D.ngPlusOpen(), 'prestige is sealed on a fresh profile');
+  D.S.deep15.knight = 1;
+  t.ok(D.ngPlusOpen(), 'a deep clear opens the door');
+  D.srand(1); D.newRun('knight');
+  t.eq(D.S.run.ng, 0, 'unarmed: a plain run');
+  t.eq(D.actIdx(1), 0, 'plain floor 1 is act 1');
+  // armed: the whole act ladder shifts one deeper
+  D.S.ngPick = true;
+  D.srand(2); D.newRun('knight');
+  t.eq(D.S.run.ng, 1, 'armed: a prestige run');
+  t.eq(D.actIdx(1), 1, 'NG+ floor 1 fields act-2 kin');
+  t.eq(D.actIdx(6), 2, 'NG+ floor 6 fields act-3 kin');
+  t.ok(D.curRoster() === D.ENEMY_TIERS[1], 'the live roster really is act 2');
+  // the boss rotation shifts with it
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  t.eq(D.S.enemy.id, D.BOSSES[1].id, 'the first lair holds the act-2 boss');
+  // the run + the armed door persist
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.run.ng, 1, 'the prestige run survives a reload');
+  t.ok(R.S.ngPick, 'the armed door survives too');
+  // the prestige shelf: five relics, open on NG+, sealed on plain runs
+  t.eq(R.RELICS.filter(r => r.ng).length, 5, 'five NG+-only relics');
+  const poolNg = R.rollRelicPool('r', 999);
+  t.ok(poolNg.indexOf('mintvein') >= 0 && poolNg.indexOf('dblchime') >= 0, 'NG+ pools carry the prestige shelf');
+  R.S.ngPick = false;
+  R.srand(5); R.newRun('knight');
+  t.ok(R.rollRelicPool('r', 999).indexOf('mintvein') < 0, 'plain pools never see it');
+  t.ok(R.rollRelicPool('e', 999).indexOf('crownscale') < 0, 'not the epics either');
+  // the daily never runs prestige — same dungeon for everyone
+  const { DP: Y } = loadGame({}, false);
+  Y.S.deep15.knight = 1; Y.S.ngPick = true;
+  Y.newDaily('2026-07-22');
+  t.eq(Y.S.run.ng, 0, 'the daily stays a plain dungeon');
+}
+
+// -------- NEW GAME+: the five prestige effects --------
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  DS.deep15.knight = 1; DS.ngPick = true;
+  D.srand(9); D.newRun('knight');
+  // Gilded Hourglass: +1 TILT
+  const t0 = D.tiltCount();
+  DS.run.relics.push('gildhour');
+  t.eq(D.tiltCount(), t0 + 1, 'the hourglass adds a TILT charge');
+  // Mint Vein: +actIdx to gold damage (NG+ floor 1 = act 1)
+  const g0 = D.goldDmg();
+  DS.run.relics.push('mintvein');
+  t.eq(D.goldDmg(), g0 + 1, 'the vein pays +1 on NG+ floor 1');
+  DS.run.floor = 6;
+  t.eq(D.goldDmg(), g0 + 2, 'and +2 an act deeper');
+  DS.run.floor = 1;
+  // Leaden Idol: hits land 2 lighter
+  DS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  DS.run.block = 0; DS.run.hp = 30;
+  D.hurtPlayer(6);
+  t.eq(DS.run.hp, 24, 'a 6-hit lands as 6 without the idol');
+  DS.run.relics.push('leadenidol');
+  D.hurtPlayer(6);
+  t.eq(DS.run.hp, 20, 'with the idol it lands as 4');
+  // Crown Scale: +25% on elites (and bosses)
+  D.S.foes.forEach(f => { f.hp = 1; }); D.dmgAll(9); D.leaveBattle();
+  DS.run.room.ents = [{ kind: 'monster', mtype: 'elite', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  DS.enemy.hp = DS.enemy.maxHp = 500;
+  DS.enemy.block = 0; DS.enemy.def = null; DS.enemy.mirror = 0;
+  const before = DS.enemy.hp;
+  D.dmgFoe(DS.enemy, 8);
+  const plain = before - DS.enemy.hp;
+  DS.run.relics.push('crownscale');
+  const before2 = DS.enemy.hp;
+  D.dmgFoe(DS.enemy, 8);
+  t.eq(before2 - DS.enemy.hp, Math.round(plain * 1.25), 'the scale weighs +25% on the crowned');
+  // Echo Bell: the jackpot rains 4 extra
+  DS.run.relics.push('dblchime');
+  const rain0 = DS.rain.length;
+  D.frenzy();
+  t.ok(DS.rain.length >= rain0 + 4, 'the chime rings 4 bonus coins into the rain');
+}
+
 t.done();
