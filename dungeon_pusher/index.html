@@ -4753,6 +4753,15 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = col;
     ctx.fillText(s, x, y);
   }
+  // a centered label that SHRINKS to its box instead of spilling over the
+  // neighbors — for tight chip rows (hero-card perk/seal lines). Starts at
+  // the given size and scales down only as far as the string demands.
+  function fitTxt(s, cx, cy, maxW, size, col) {
+    ctx.font = '700 ' + size + 'px Verdana, sans-serif';
+    const tw = ctx.measureText(s).width;
+    if (tw > maxW && tw > 0) size = Math.max(6, size * maxW / tw);
+    txt(s, cx, cy, '700 ' + size + 'px Verdana, sans-serif', col);
+  }
   function uiBtn(x, y, w, h, label, cb, opts) {
     opts = opts || {};
     // fat fingers welcome: every button's HIT box is at least 38px square
@@ -5005,7 +5014,7 @@ if (!HEADLESS) (function browser() {
         ctx.stroke();
         ctx.restore();
       }
-      txt(Math.max(0, S.run.hp) + ' / ' + S.run.maxHp, hx, hby + 6, '800 9px Verdana, sans-serif',
+      txt(Math.max(0, S.run.hp) + ' / ' + S.run.maxHp, hx, hby + 6, '800 10px Verdana, sans-serif',
           '#f0fff0', 'center', { w: 2.5, col: 'rgba(6,26,12,0.85)' });
       // a compact status strip under the bar: block & boons first, then debuffs
       const st = [];
@@ -5028,7 +5037,7 @@ if (!HEADLESS) (function browser() {
         const gap = Math.min(0, (128 - total)) / Math.max(1, st.length);
         let sx = Math.max(6, hx - Math.min(total, 128) / 2);
         for (const s of st) {
-          txt(s[0], sx, hby + 22, '800 9px Verdana, sans-serif', s[1], 'left', { w: 2, col: 'rgba(8,5,12,0.85)' });
+          txt(s[0], sx, hby + 22, '800 10px Verdana, sans-serif', s[1], 'left', { w: 2, col: 'rgba(8,5,12,0.85)' });
           sx += wof(s) + gap;
         }
       }
@@ -5133,10 +5142,10 @@ if (!HEADLESS) (function browser() {
       if (e.bleed > 0) { txt('\u{1FA78}' + e.bleed, cx - bw / 2 - 13, sy2, '800 10px Verdana, sans-serif', '#ff5a6e'); sy2 += 11; }
       if (e.burn > 0) { txt('\u{1F525}' + e.burn, cx - bw / 2 - 13, sy2, '800 10px Verdana, sans-serif', '#ff9d3c'); }
       if (e.braced) txt('\u{1F6E1}', cx + bw / 2 + 11, by + 4, '11px serif', '#fff');
-      if (e.block > 0) txt('\u{1F6E1}' + e.block, cx + bw / 2 + 13, by + (e.braced ? 15 : 4), '800 9px Verdana, sans-serif', '#e8c877');
+      if (e.block > 0) txt('\u{1F6E1}' + e.block, cx + bw / 2 + 13, by + (e.braced ? 15 : 4), '800 10px Verdana, sans-serif', '#e8c877');
       // its defensive mechanic, badged under the bar (packs); the lone foe
       // gets the full description in its header instead
-      if (e.def && n > 1) txt(DEF_BADGE[e.def], cx, by + 13, '800 8px Verdana, sans-serif',
+      if (e.def && n > 1) txt(DEF_BADGE[e.def], cx, by + 13, '800 9px Verdana, sans-serif',
                               '#d8c8f0', 'center', { w: 2, col: 'rgba(10,5,12,0.9)' });
       const intentTxt = blackedOut() ? '❓ ???'
         : e.stunned > 0 ? '❄ skips turn'
@@ -5165,8 +5174,8 @@ if (!HEADLESS) (function browser() {
         txt(tgt.name, LW - 156, 30, '900 13px Georgia, serif', tgt.boss ? '#ffd75e' : '#e8dce8',
             'center', { w: 4, col: 'rgba(20,8,24,0.9)' });
         if (tgt.def) txt(DEF_BADGE[tgt.def] + ' ' + DEF_TXT[tgt.def], LW - 156, 43,
-                         '600 8px Verdana, sans-serif', '#c3a8e0');
-        if (tgt.trait) txt(TRAIT_TXT[tgt.trait], LW - 156, tgt.def ? 54 : 43, '600 8px Verdana, sans-serif', '#9a8aa0');
+                         '600 9px Verdana, sans-serif', '#c3a8e0');
+        if (tgt.trait) txt(TRAIT_TXT[tgt.trait], LW - 156, tgt.def ? 54 : 43, '600 9px Verdana, sans-serif', '#9a8aa0');
       } else if (tgt && tgt.hp > 0) {
         // up top, clear of the per-foe mechanic badges below the bars
         txt('\u{1F3AF} ' + tgt.name, LW / 2, 15, '800 10px Georgia, serif', '#ffd75e',
@@ -5212,7 +5221,7 @@ if (!HEADLESS) (function browser() {
         }
         ctx.restore();
       }
-      txt('JACKPOT', x0 - 8, y0 + ih / 2, '800 8px Verdana, sans-serif',
+      txt('JACKPOT', x0 - 8, y0 + ih / 2, '800 9px Verdana, sans-serif',
           fr > 0.5 ? '#8be7ff' : '#8a6f4a', 'right');
       return;
     }
@@ -5238,7 +5247,7 @@ if (!HEADLESS) (function browser() {
       const tx2 = x + (w * i) / 6;
       ctx.beginPath(); ctx.moveTo(tx2, y); ctx.lineTo(tx2, y + h); ctx.stroke();
     }
-    txt('JACKPOT', x - 12, y + h / 2 + 0.5, '800 8px Verdana, sans-serif',
+    txt('JACKPOT', x - 12, y + h / 2 + 0.5, '800 9px Verdana, sans-serif',
         fr > 0.5 ? '#ffd75e' : '#8a6f4a', 'right');
   }
 
@@ -5690,7 +5699,7 @@ if (!HEADLESS) (function browser() {
     ctx.lineWidth = 2; ctx.stroke();
     ctx.globalAlpha = 1;
     if (c.temp && c.st === 'plat') {
-      txt('FREE', p.x, p.y - rx * 1.6, '800 8px Verdana, sans-serif', '#ffe066');
+      txt('FREE', p.x, p.y - rx * 1.6, '800 9px Verdana, sans-serif', '#ffe066');
     }
   }
 
@@ -6387,7 +6396,7 @@ if (!HEADLESS) (function browser() {
       const ra2 = relicArt(id);
       if (ra2) { const hh = 46, ww = imW(ra2, hh); ctx.drawImage(ra2, 68 + 23 - ww / 2, y + 4, ww, hh); }
       txt((ra2 ? '' : rl.icon + '  ') + rl.name + '  [' + rc.name + ']', LW / 2 + (ra2 ? 16 : 0), y + 20, '900 13px Verdana, sans-serif', taken ? '#bff0cf' : rc.col);
-      txt(rl.desc, LW / 2 + (ra2 ? 16 : 0), y + 38, '600 9px Verdana, sans-serif', '#c8b8cc');
+      txt(rl.desc, LW / 2 + (ra2 ? 16 : 0), y + 38, '600 10px Verdana, sans-serif', '#c8b8cc');
       ctx.restore();
       if (!taken && left > 0) uiButtons.push({ x: 60, y, w: LW - 120, h: 54, cb: () => pickWheelRelic(i) });
     });
@@ -6448,7 +6457,7 @@ if (!HEADLESS) (function browser() {
     } else if (S.foeInfo === null && (S.foes || []).some(f => f.hp > 0)) {
       // the HP row is free in battle (the hero's card up top owns it) — a
       // quiet nudge lives here instead
-      txt('\u{1F449} tap a foe for its bestiary card', 52, 733, '600 10px Verdana, sans-serif', '#8a7a90', 'left');
+      txt('\u{1F449} tap a foe for its bestiary card', 52, 733, '600 10px Verdana, sans-serif', '#9a8aa0', 'left');
     }
     // gold + coins + keys
     txt('\u{1FA99} ' + fmt(r.gold), 34, 762, '900 18px Verdana, sans-serif', '#ffd75e', 'left');
@@ -6496,7 +6505,7 @@ if (!HEADLESS) (function browser() {
     if (!ids.length) {
       txt(ratRun() ? '\u{1F400} the SWARM: ' + ((S.run.swarm && S.run.swarm.length) || 0) + ' / 8 rats'
                    : 'arsenal empty — visit a shop!',
-          34, 796, '600 10px Verdana, sans-serif', ratRun() ? '#c8a86a' : '#8f6f78', 'left');
+          34, 796, '600 10px Verdana, sans-serif', ratRun() ? '#c8a86a' : '#a08a94', 'left');
     }
     let hint;
     if (S.screen !== 'battle') {
@@ -6510,7 +6519,7 @@ if (!HEADLESS) (function browser() {
            : r.wallet < 1 ? 'hand empty — bank loot, TILT, or END TURN'
            : r.wallet + ' ● in hand • TAP TO DROP • pick your coin up top';
     } else hint = S.battle.phase === 'resolve' ? 'the tray resolves…' : 'the foe strikes back…';
-    txt(hint, LW - 40, 806, '600 9px Verdana, sans-serif', '#9a7f88', 'right');
+    txt(hint, LW - 40, 806, '600 10px Verdana, sans-serif', '#9a7f88', 'right');
   }
 
   // --------------------------------------------------------- battle screen
@@ -6570,7 +6579,7 @@ if (!HEADLESS) (function browser() {
         const ra = relicArt(id);
         if (ra) { const hh = 42, ww = imW(ra, hh); ctx.drawImage(ra, 100 + 21 - ww / 2, ry + 4, ww, hh); }
         txt((ra ? '' : rl2.icon + '  ') + rl2.name + '  [' + rc.name + ']', LW / 2 + (ra ? 14 : 0), ry + 19, '900 12px Verdana, sans-serif', isPick ? '#bff0cf' : rc.col);
-        txt(rl2.desc, LW / 2 + (ra ? 14 : 0), ry + 36, '600 9px Verdana, sans-serif', '#c8b8cc');
+        txt(rl2.desc, LW / 2 + (ra ? 14 : 0), ry + 36, '600 10px Verdana, sans-serif', '#c8b8cc');
         ctx.restore();
         if (!v.relicPicked) uiButtons.push({ x: 92, y: ry, w: LW - 184, h: 50, cb: () => pickRelicOffer(i) });
       });
@@ -6610,7 +6619,7 @@ if (!HEADLESS) (function browser() {
           txt(COIN_SYMS[ck], cx, cy + 1, '800 19px serif', 'rgba(40,24,4,0.85)');
         }
         txt(COIN_INFO[ck].name, cx, cy + 40, '800 11px Verdana, sans-serif', dim ? '#8a7a6a' : '#ffe9a3');
-        txt(COIN_INFO[ck].what, cx, cy + 54, '600 8px Verdana, sans-serif', dim ? '#6a5a4a' : '#c0a880');
+        txt(COIN_INFO[ck].what, cx, cy + 54, '600 9px Verdana, sans-serif', dim ? '#6a5a4a' : '#c0a880');
         ctx.restore();
         if (!v.picked) uiButtons.push({ x: cx - 42, y: cy - 34, w: 84, h: 94, cb: () => pickCoin(i) });
       });
@@ -6918,7 +6927,7 @@ if (!HEADLESS) (function browser() {
         txt(fx.main, xe - 4, ry - 11, '900 13px Verdana, sans-serif', '#ffe9a3', 'right');
         wrapLines(fx.mods.join('  •  ') || 'no relics bend this coin', 46, 2).forEach((ln, li) => {
           txt(ln, x0 + 50, ry + 28 + li * 14, '600 10px Verdana, sans-serif',
-              fx.mods.length ? '#8ed67e' : '#6a5a68', 'left');
+              fx.mods.length ? '#8ed67e' : '#8d7d95', 'left');
         });
       });
       contentH = 30 + COIN_KINDS.length * 96;
@@ -6939,7 +6948,7 @@ if (!HEADLESS) (function browser() {
         txt(it.name + '  × ' + r.arsenal[iid], x0 + 50, ry - 6, '900 14px Verdana, sans-serif', '#f0e0f0', 'left');
         txt(fx.main, xe - 4, ry - 6, '900 13px Verdana, sans-serif', '#ffe9a3', 'right');
         txt(wrapLines(fx.mods.join('  •  ') || '—', 52, 1)[0], x0 + 50, ry + 15,
-            '600 10px Verdana, sans-serif', fx.mods.length ? '#8ed67e' : '#6a5a68', 'left');
+            '600 10px Verdana, sans-serif', fx.mods.length ? '#8ed67e' : '#8d7d95', 'left');
       });
       const ny = y0 + 20 + ids.length * 68;
       // potions ride along
@@ -6948,8 +6957,8 @@ if (!HEADLESS) (function browser() {
       txt('\u{1F9F4}', x0 + 19, ny + 4, '26px serif', '#fff');
       txt('Potion  × ' + r.potions, x0 + 50, ny - 6, '900 14px Verdana, sans-serif', '#ffd9ee', 'left');
       txt('heal ' + C.POTION_HEAL + ' HP', xe - 4, ny - 6, '900 13px Verdana, sans-serif', '#ffe9a3', 'right');
-      txt('drink any time from the HUD', x0 + 50, ny + 15, '600 10px Verdana, sans-serif', '#8f6f78', 'left');
-      if (!ids.length) txt('the rack is empty — visit a shop!', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#8f6f78');
+      txt('drink any time from the HUD', x0 + 50, ny + 15, '600 10px Verdana, sans-serif', '#a08a94', 'left');
+      if (!ids.length) txt('the rack is empty — visit a shop!', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#a08a94');
       contentH = 36 + (ids.length + 1) * 68;
     } else if (tab === 'relics') {
       txt('RELICS — ' + r.relics.length + ' collected', x0, y0 - 10, '800 11px Verdana, sans-serif', '#e8c877', 'left');
@@ -6967,7 +6976,7 @@ if (!HEADLESS) (function browser() {
           txt(ln, x0 + 40, ry + 10 + li * 13, '600 11px Verdana, sans-serif', '#c8b8d0', 'left');
         });
       });
-      if (!r.relics.length) txt('no relics yet — spin the wheel or fell a boss', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#8f6f78');
+      if (!r.relics.length) txt('no relics yet — spin the wheel or fell a boss', LW / 2, y0 + 40, '700 12px Verdana, sans-serif', '#a08a94');
       contentH = 40 + r.relics.length * 58;
     } else {
       // STATS: the run's vitals, then every run-wide relic bend
@@ -7069,14 +7078,14 @@ if (!HEADLESS) (function browser() {
       ctx.beginPath(); ctx.arc(bx + 5, byy, 7.5, 0, 7);
       ctx.fillStyle = 'rgba(12,6,10,0.92)'; ctx.fill();
       ctx.lineWidth = 1; ctx.strokeStyle = sel ? '#ffd75e' : 'rgba(232,200,119,0.4)'; ctx.stroke();
-      txt(B.hand[k], bx + 5, byy + 0.5, '900 9px Verdana, sans-serif', '#fff0c0');
+      txt(B.hand[k], bx + 5, byy + 0.5, '900 10px Verdana, sans-serif', '#fff0c0');
       uiButtons.push({ x: cx - 27, y: 140, w: 54, h: 48, cb: () => selectCoin(k) });
     });
     // what the chosen coin will DO, captioned inside the hand tray
     const info = COIN_INFO[B.sel];
     if (info) {
       txt(info.name.toUpperCase() + ' — ' + info.what, LW / 2, 186,
-          '700 8px Verdana, sans-serif', 'rgba(255,233,163,0.85)');
+          '700 9px Verdana, sans-serif', 'rgba(255,233,163,0.85)');
     }
   }
   // TILT! Nudge the pile — three charges a round, spend them or lose them
@@ -7298,7 +7307,7 @@ if (!HEADLESS) (function browser() {
     rr(12, 552, 292, 34, 12);
     ctx.fillStyle = 'rgba(12,7,14,0.88)'; ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,215,94,0.5)'; ctx.stroke();
-    txt('TRAY', 24, 569, '800 9px Verdana, sans-serif', '#a08a5a', 'left');
+    txt('TRAY', 24, 569, '800 10px Verdana, sans-serif', '#a08a5a', 'left');
     keys.slice(0, 5).forEach((key, i) => {
       const x = 72 + i * 48;
       lootChip(x, 569, key, counts[key]);
@@ -7313,7 +7322,7 @@ if (!HEADLESS) (function browser() {
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = canBank ? 'rgba(140,200,255,' + (0.55 + 0.25 * Math.sin(t * 4)) + ')' : 'rgba(140,180,230,0.4)';
     ctx.stroke();
-    txt('\u{1F512}' + B.banked.length + '/' + bankMax(), 324, 569, '800 9px Verdana, sans-serif', '#8fb8e0', 'left');
+    txt('\u{1F512}' + B.banked.length + '/' + bankMax(), 324, 569, '800 10px Verdana, sans-serif', '#8fb8e0', 'left');
     const bCounts = groupCounts(B.banked, lootKey);
     Object.keys(bCounts).slice(0, 3).forEach((key, i) => {
       const x = 380 + i * 34;
@@ -7321,7 +7330,7 @@ if (!HEADLESS) (function browser() {
       uiButtons.push({ x: x - 16, y: 550, w: 32, h: 38, cb: () => unbankLoot(key) });
     });
     if (!B.banked.length) {
-      txt(canBank ? 'tap tray to stash' : 'bank', 386, 569, '600 8px Verdana, sans-serif', '#5a7a9a', 'left');
+      txt(canBank ? 'tap tray to stash' : 'bank', 386, 569, '600 9px Verdana, sans-serif', '#5a7a9a', 'left');
     }
   }
   // -------------------------------------------------------- dungeon screen
@@ -7658,7 +7667,7 @@ if (!HEADLESS) (function browser() {
     if (nb.vault) return { s: '\u{1F511} VAULT', col: '#ffd75e' };
     if (nb.myst && !nb.visited) return { s: '\u{2753}', col: '#c8b8d0' };
     const live = nb.ents.filter(e => !e.done);
-    if (!live.length) return { s: nb.visited ? '✓ cleared' : 'empty', col: '#8a7a90' };
+    if (!live.length) return { s: nb.visited ? '✓ cleared' : 'empty', col: '#9a8aa0' };
     const s = live.slice(0, 4).map(e =>
       e.kind === 'monster' ? (e.mtype === 'elite' ? '\u{1F451}' : '\u{2694}\u{FE0F}')
         : (ENT_INFO[e.kind] || {}).icon || '?').join(' ');
@@ -7699,7 +7708,7 @@ if (!HEADLESS) (function browser() {
           ctx.beginPath(); ctx.moveTo(p.x + i * 16, y0 + 3); ctx.lineTo(p.x + i * 16, y0 + hh - 3); ctx.stroke();
         }
         txt('\u{1F512}', p.x, y0 + hh / 2 - 4, '13px serif', '#fff');
-        txt(gold ? '1\u{1F511}' : '1\u{1F5DD}', p.x, y0 + hh / 2 + 10, '800 9px Verdana, sans-serif', kcol);
+        txt(gold ? '1\u{1F511}' : '1\u{1F5DD}', p.x, y0 + hh / 2 + 10, '800 10px Verdana, sans-serif', kcol);
       }
       if (sign) {
         const sy = dir === 'n' ? y0 + hh + 13 : y0 - 9;
@@ -7720,7 +7729,7 @@ if (!HEADLESS) (function browser() {
           ctx.beginPath(); ctx.moveTo(x0 + 2, p.y + i * 16); ctx.lineTo(x0 + ROOM.sideW - 2, p.y + i * 16); ctx.stroke();
         }
         txt('\u{1F512}', x0 + ROOM.sideW / 2, p.y - 8, '11px serif', '#fff');
-        txt(gold ? '1\u{1F511}' : '1\u{1F5DD}', x0 + ROOM.sideW / 2, p.y + 8, '800 8px Verdana, sans-serif', kcol);
+        txt(gold ? '1\u{1F511}' : '1\u{1F5DD}', x0 + ROOM.sideW / 2, p.y + 8, '800 9px Verdana, sans-serif', kcol);
       }
       if (sign) {
         const sx = dir === 'w' ? x0 + ROOM.sideW + 6 : x0 - 6;
@@ -7751,7 +7760,7 @@ if (!HEADLESS) (function browser() {
       const gone = e.kind === 'monster' || e.kind === 'shop';
       txt(gone ? '\u{1F4A8}' : icon, p.x, p.y - 12, '30px serif', '#fff');
       txt(e.kind === 'monster' ? 'slain' : e.kind === 'shop' ? 'moved on' : 'done',
-          p.x, p.y + 14, '600 9px Verdana, sans-serif', '#9a8aa0');
+          p.x, p.y + 14, '600 10px Verdana, sans-serif', '#9a8aa0');
       ctx.restore();
       return;
     }
@@ -7792,7 +7801,7 @@ if (!HEADLESS) (function browser() {
     }
     if (!drewArt) txt(icon, p.x, p.y - 14 + bob, size + 'px serif', '#fff');
     if (e.mtype === 'elite') txt('\u{1F525}', p.x + 20, p.y - 30 + bob, '14px serif', '#fff');
-    txt(label, p.x, p.y + 18, '800 9px Verdana, sans-serif', col, 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
+    txt(label, p.x, p.y + 18, '800 10px Verdana, sans-serif', col, 'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
     // whisper when the hero is close
     const dh = Math.hypot(AV.x - p.x, AV.y - (p.y - 6));
     if (dh < 74 && dh > 34) {
@@ -7808,7 +7817,7 @@ if (!HEADLESS) (function browser() {
     // walk dust
     if (AV.moving && Math.random() < 0.25 && S.parts.length < 120) {
       S.parts.push({ x: AV.x - AV.fx * 10, y: AV.y + 4, vx: -AV.fx * 24 + (Math.random() - 0.5) * 12,
-                     vy: -6, g: -20, life: 0, max: 0.4, col: '#8a7a90', sz: 1.8, spin: 1, shape: 'sq' });
+                     vy: -6, g: -20, life: 0, max: 0.4, col: '#9a8aa0', sz: 1.8, spin: 1, shape: 'sq' });
     }
     // the chosen adventurer, striding in their true colours
     const hero = S.run.hero || 'knight';
@@ -7946,7 +7955,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(10,6,12,0.82)'; ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(232,220,232,0.35)'; ctx.stroke();
     drawMapRooms(mx + 6 - b.minX * pitch, my + 6 - b.minY * pitch, pitch, seen, false);
-    txt('tap for map', mx + mw / 2, my + mh + 8, '600 8px Verdana, sans-serif', '#8f6f78');
+    txt('tap for map', mx + mw / 2, my + mh + 8, '600 9px Verdana, sans-serif', '#a08a94');
     if (!S.room) uiButtons.push({ x: mx - 6, y: my - 6, w: mw + 12, h: mh + 24, cb: () => { mapView = true; } });
   }
   // the full blueprint, unrolled like a tabletop dungeon chart
@@ -8022,7 +8031,7 @@ if (!HEADLESS) (function browser() {
     txt('FLOOR ' + S.run.floor, LW / 2 - 30, 74, '800 12px Verdana, sans-serif', '#c8a8b0');
     if (darkFloor()) {
       txt('\u{1F56F}\u{FE0F} THE TORCHES ARE DEAD — follow your light', LW / 2 - 30, 89,
-          '700 9px Verdana, sans-serif', '#ff9d3c');
+          '700 10px Verdana, sans-serif', '#ff9d3c');
     }
     txt('\u{1F5DD} × ' + S.run.keys, LW / 2 - 30, 104, '900 16px Verdana, sans-serif',
         S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
@@ -8073,7 +8082,7 @@ if (!HEADLESS) (function browser() {
     // deep in the ENDLESS, the standing decrees are posted at the gate
     if (mutCount() > 0) {
       txt('\u{1F30C} ENDLESS +' + mutCount() + ': ' + MUTS.slice(0, mutCount()).map(m => m.name).join(' • '),
-          LW / 2, 134, '700 8px Verdana, sans-serif', '#c8a8ff', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
+          LW / 2, 134, '700 9px Verdana, sans-serif', '#c8a8ff', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
     }
     // the floor's optional JOB, posted under the floor title
     const q = S.run.quest;
@@ -8084,7 +8093,7 @@ if (!HEADLESS) (function browser() {
           LW / 2, 120, '700 10px Verdana, sans-serif', q.done ? '#7ee787' : '#e8c877',
           'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
     }
-    txt('drag to walk • WASD works too', LW / 2, 704, '600 9px Verdana, sans-serif', '#6a5a68');
+    txt('drag to walk • WASD works too', LW / 2, 704, '600 10px Verdana, sans-serif', '#8d7d95');
     drawRoomModal(t);
     drawMapView(t);
     drawInventory(t);
@@ -8149,7 +8158,7 @@ if (!HEADLESS) (function browser() {
         }
         txt(label, lx, y + (it.sub ? 16 : 25), '800 12px Verdana, sans-serif',
             it.sold ? '#5a4a5a' : '#ffe9a3', 'left');
-        if (it.sub) txt(it.sub, lx, y + 31, '600 9px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
+        if (it.sub) txt(it.sub, lx, y + 31, '600 10px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
         if (it.sold) { txt('SOLD', rx - 34, y + 26, '900 13px Verdana, sans-serif', '#5a4a5a'); return; }
         // two chips: pay GOLD or pay COINS
         const goldOk = S.run.gold >= it.price;
@@ -8183,7 +8192,7 @@ if (!HEADLESS) (function browser() {
           const ja = itemArt(iid);
           if (ja) { const hh = 30, ww = imW(ja, hh); ctx.drawImage(ja, bx + 16 - ww / 2, by2 + 3, ww, hh); }
           else txt(it2.icon, bx + 16, by2 + 17, '15px serif', '#fff');
-          txt('×' + S.run.arsenal[iid], bx + 34, by2 + 24, '800 9px Verdana, sans-serif', '#ffd0d4');
+          txt('×' + S.run.arsenal[iid], bx + 34, by2 + 24, '800 10px Verdana, sans-serif', '#ffd0d4');
         });
       }
     } else if (isForge) {
@@ -8193,7 +8202,7 @@ if (!HEADLESS) (function browser() {
         uiBtn(56, y, LW - 112, 46, '', () => pickBoon(i),
               { bg: 'rgba(60,35,20,0.9)', border: '#ff9d3c', r: 10 });
         txt(o.label, LW / 2, y + (o.sub ? 16 : 23), '800 13px Verdana, sans-serif', '#ffe9a3');
-        if (o.sub) txt(o.sub, LW / 2, y + 33, '600 9px Verdana, sans-serif', '#b09a78');
+        if (o.sub) txt(o.sub, LW / 2, y + 33, '600 10px Verdana, sans-serif', '#b09a78');
       });
     } else if (isChest) {
       const p = room.prize;
@@ -8218,7 +8227,7 @@ if (!HEADLESS) (function browser() {
                 { bg: ok ? 'rgba(46,32,52,0.95)' : 'rgba(26,22,30,0.9)',
                   border: ok ? '#c8a86a' : '#4a4055', r: 12 });
           txt(ch.label, LW / 2, y + 22, '900 13px Verdana, sans-serif', ok ? '#ffe9a3' : '#6a5f78');
-          txt(ch.sub, LW / 2, y + 42, '600 9px Verdana, sans-serif', ok ? '#b8a8bc' : '#544a60');
+          txt(ch.sub, LW / 2, y + 42, '600 10px Verdana, sans-serif', ok ? '#b8a8bc' : '#544a60');
         });
       } else {
         txt(evDef.icon, LW / 2, py + 90, '900 40px serif', '#fff');
@@ -8263,10 +8272,10 @@ if (!HEADLESS) (function browser() {
         uiBtn(kx - 31, kpy + 40, 62, 62, '', () => buyShop(cp.slot, 'coins', k),
               { bg: 'rgba(40,60,80,0.9)', border: COIN_UI[k], r: 12 });
         invCoinIcon(k, kx, kpy + 62, 14);
-        txt(COIN_INFO[k].name, kx, kpy + 84, '800 9px Verdana, sans-serif', COIN_UI[k]);
-        txt('× ' + (S.run.purse[k] || 0), kx, kpy + 95, '700 9px Verdana, sans-serif', '#d8c8dc');
+        txt(COIN_INFO[k].name, kx, kpy + 84, '800 10px Verdana, sans-serif', COIN_UI[k]);
+        txt('× ' + (S.run.purse[k] || 0), kx, kpy + 95, '700 10px Verdana, sans-serif', '#d8c8dc');
       });
-      txt('tap outside to cancel', LW / 2, kpy + 120, '600 9px Verdana, sans-serif', '#8f6f78');
+      txt('tap outside to cancel', LW / 2, kpy + 120, '600 10px Verdana, sans-serif', '#a08a94');
     }
   }
 
@@ -8294,7 +8303,7 @@ if (!HEADLESS) (function browser() {
       ctx.globalAlpha = 1;
       txt('\u{1F525}', tx, 196, '22px serif', '#fff');
     }
-    txt('— the tale —', LW / 2, 240, '900 13px Georgia, serif', '#8a7a90');
+    txt('— the tale —', LW / 2, 240, '900 13px Georgia, serif', '#9a8aa0');
     INTRO_LINES.forEach((ln, i) => {
       const a = Math.max(0, Math.min(1, (INTRO.t - i * 0.9) / 0.6));
       if (a <= 0) return;
@@ -8351,7 +8360,7 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
       txt(a.name, x + 40, y + 18, '900 10px Verdana, sans-serif', on ? '#ffe9a3' : '#6a5f78', 'left');
       wrapLines(a.desc, 26, 2).forEach((ln, li) =>
-        txt(ln, x + 40, y + 33 + li * 11, '600 8px Verdana, sans-serif', on ? '#c8b8a0' : '#544a60', 'left'));
+        txt(ln, x + 40, y + 33 + li * 11, '600 9px Verdana, sans-serif', on ? '#c8b8a0' : '#544a60', 'left'));
     });
     uiBtn(LW / 2 - 70, 110 + Math.ceil(ACH.length / 2) * 62 + 10, 140, 40, 'CLOSE ✕', () => { TROPHIES = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
@@ -8410,7 +8419,7 @@ if (!HEADLESS) (function browser() {
       uiBtn(18 + i * tw, 66, tw - 4, 26, label, () => { CODEX.tab = id; CODEX.sel = null; },
             { grad: on ? ['#8a6a2a', '#5a4014'] : ['#3a3440', '#262230'],
               border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
-              font: '900 8px Verdana, sans-serif', r: 8 });
+              font: '900 9px Verdana, sans-serif', r: 8 });
     });
     if (CODEX.tab[0] === 'a') {
       // one act's roster + its boss, kills tallied — the unmet stay shadows
@@ -8429,10 +8438,10 @@ if (!HEADLESS) (function browser() {
         if (!kills) { ctx.globalAlpha = 0.3; ctx.filter = 'grayscale(1) brightness(0.4)'; }
         txt(f.icon, x + 18, y + 19, '18px serif', '#fff');
         ctx.restore();
-        txt(kills ? f.name : '? ? ?', x + 36, y + 13, '800 9px Verdana, sans-serif',
+        txt(kills ? f.name : '? ? ?', x + 36, y + 13, '800 10px Verdana, sans-serif',
             kills ? (isBoss ? '#ffd75e' : '#e8d0a0') : '#5a4f68', 'left');
         txt(kills ? (f.trait ? f.trait : f.def ? f.def : 'no tricks') + '  •  ×' + kills : 'unmet',
-            x + 36, y + 27, '600 8px Verdana, sans-serif', kills ? '#9a8aa0' : '#4a4058', 'left');
+            x + 36, y + 27, '600 9px Verdana, sans-serif', kills ? '#9a8aa0' : '#4a4058', 'left');
       });
     } else {
       // a rarity shelf of relic icons — owned shine, the rest wait in the dark
@@ -8496,11 +8505,11 @@ if (!HEADLESS) (function browser() {
       const y = 92 + ((i / 2) | 0) * 40;
       rr(x, y, LW / 2 - 40, 34, 8);
       ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
-      txt(rw[0], x + 8, y + 10, '600 9px Verdana, sans-serif', '#9a8aa0', 'left');
+      txt(rw[0], x + 8, y + 10, '600 10px Verdana, sans-serif', '#9a8aa0', 'left');
       txt(rw[1], x + 8, y + 25, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
     });
     txt('— THE LAST RUNS —', LW / 2, 312, '900 12px Georgia, serif', '#c8a8b0');
-    if (!S.hist.length) txt('no tales yet — go die gloriously', LW / 2, 344, '700 11px Verdana, sans-serif', '#8f6f78');
+    if (!S.hist.length) txt('no tales yet — go die gloriously', LW / 2, 344, '700 11px Verdana, sans-serif', '#a08a94');
     S.hist.forEach((h, i) => {
       const y = 328 + i * 34;
       const hero3 = heroById(h.hero);
@@ -8508,7 +8517,7 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
       txt((hero3 ? hero3.icon : '❔') + '  floor ' + h.floor + ' rm ' + h.depth + '  •  ' + h.kills + ' kills',
           40, y + 15, '800 10px Verdana, sans-serif', '#e8d0a0', 'left');
-      txt(h.cause, LW - 40, y + 15, '600 9px Verdana, sans-serif', '#a08090', 'right');
+      txt(h.cause, LW - 40, y + 15, '600 10px Verdana, sans-serif', '#a08090', 'right');
     });
     uiBtn(LW / 2 - 70, 328 + Math.max(1, S.hist.length) * 34 + 14, 140, 40, 'CLOSE ✕', () => { RECORDS = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
@@ -8532,7 +8541,7 @@ if (!HEADLESS) (function browser() {
     let y = py + 74;
     const yMax = py + ph - 76;
     for (const e of entries) {
-      if (y > yMax - 20) { txt('…older tales rest in the archive', LW / 2, y, '600 10px Verdana, sans-serif', '#8a7a90'); break; }
+      if (y > yMax - 20) { txt('…older tales rest in the archive', LW / 2, y, '600 10px Verdana, sans-serif', '#9a8aa0'); break; }
       txt('v' + e.v, 64, y, '900 14px Georgia, serif', '#ffe9a3', 'left');
       y += 22;
       for (const n of e.notes) {
@@ -8605,9 +8614,9 @@ if (!HEADLESS) (function browser() {
     uiBtn(64, py + 438, LW - 128, 38, '✨ WHAT’S NEW — v' + VERSION, () => {
       SETTINGS = false; WHATSNEW = { auto: false };
     }, { bg: 'rgba(46,38,66,0.95)', border: '#e0d0a8', col: '#fff4d6', font: '800 12px Verdana, sans-serif', r: 12 });
-    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 500, '700 10px Verdana, sans-serif', '#8a7a90');
-    txt('arrows move · SPACE fires · TAB + ENTER press · ESC backs out', LW / 2, py + 516, '600 9px Verdana, sans-serif', '#6a5a68');
-    txt('painted relics by the owner — code forged with Claude Code', LW / 2, py + 530, '600 9px Verdana, sans-serif', '#6a5a68');
+    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 500, '700 10px Verdana, sans-serif', '#9a8aa0');
+    txt('arrows move · SPACE fires · TAB + ENTER press · ESC backs out', LW / 2, py + 516, '600 10px Verdana, sans-serif', '#8d7d95');
+    txt('painted relics by the owner — code forged with Claude Code', LW / 2, py + 530, '600 10px Verdana, sans-serif', '#8d7d95');
     uiBtn(LW / 2 - 70, py + ph - 34, 140, 40, 'CLOSE ✕', () => { SETTINGS = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
@@ -8629,7 +8638,7 @@ if (!HEADLESS) (function browser() {
       S.confirm = null; if (c.yes) c.yes();
     }, { grad: ['#a8433f', '#6e2320'], border: '#ffb0a8', col: '#ffe0dc', font: '900 13px Verdana, sans-serif', r: 12 });
     uiBtn(LW / 2 + 10, py + ph - 60, (LW - 148) / 2, 42, c.noLabel || 'CANCEL', () => { S.confirm = null; },
-          { bg: 'rgba(40,34,46,0.95)', border: '#8a7a90', col: '#d8c8dc', font: '900 13px Verdana, sans-serif', r: 12 });
+          { bg: 'rgba(40,34,46,0.95)', border: '#9a8aa0', col: '#d8c8dc', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // slow golden rain behind the title — coins tumbling out of the dark
   const TRAIN = [];
@@ -8717,8 +8726,8 @@ if (!HEADLESS) (function browser() {
         txt(h.icon, x + w / 2, y + 44, '34px serif', '#fff');
         ctx.restore();
         txt('\u{1F512}', x + w / 2, y + 52, '16px serif', '#fff');
-        txt('???', x + w / 2, y + 88, '900 11px Verdana, sans-serif', '#5a4a5f');
-        txt(heroLockText(h.id), x + w / 2, y + 104, '700 7px Verdana, sans-serif', '#7a6a80');
+        txt('???', x + w / 2, y + 88, '900 11px Verdana, sans-serif', '#8d7d95');
+        fitTxt(heroLockText(h.id), x + w / 2, y + 104, w - 6, 8, '#8d7d95');
         return;
       }
       const key = h.id + '_idle';
@@ -8726,7 +8735,7 @@ if (!HEADLESS) (function browser() {
         txt(h.icon, x + w / 2, y + 48, '34px serif', '#fff');
       }
       txt(h.name, x + w / 2, y + 88, '900 11px Verdana, sans-serif', sel ? '#ffd75e' : '#c8b0cc');
-      txt(h.perk, x + w / 2, y + 104, '700 7px Verdana, sans-serif', sel ? '#ffe9a3' : '#8f7f92');
+      fitTxt(h.perk, x + w / 2, y + 104, w - 6, 8, sel ? '#ffe9a3' : '#8f7f92');
       if (sel) {
         txt('▼', x + w / 2, y - 8 + Math.sin(t * 4) * 2, '900 12px Verdana, sans-serif', '#ffd75e');
       }
@@ -8740,7 +8749,7 @@ if (!HEADLESS) (function browser() {
               { grad: on ? (d.id === 'hard' ? ['#7e2a3a', '#48101c'] : d.id === 'easy' ? ['#2a6a4a', '#123a28'] : ['#8a6a2a', '#5a4014'])
                          : ['#2e2a38', '#1e1a26'],
                 border: on ? (d.id === 'hard' ? '#ff8a9a' : d.id === 'easy' ? '#7ed6a0' : '#ffd75e') : '#4a4458',
-                col: on ? '#fff0e0' : '#8a8098', font: '900 9px Verdana, sans-serif', r: 8 });
+                col: on ? '#fff0e0' : '#8a8098', font: '900 10px Verdana, sans-serif', r: 8 });
       });
     }
     if (S.run) {
@@ -8761,12 +8770,12 @@ if (!HEADLESS) (function browser() {
     if (S.best.floor > 0) {
       txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + '  •  ' + S.best.kills + ' kills  •  ' + fmt(S.best.gold) + ' gold looted'
           + (S.best.runs > 0 ? '  •  ' + S.best.runs + ' run' + (S.best.runs > 1 ? 's' : '') : ''),
-          LW / 2, 736, '700 11px Verdana, sans-serif', '#8f6f78');
+          LW / 2, 736, '700 11px Verdana, sans-serif', '#a08a94');
     }
-    txt('v' + VERSION, LW - 10, LH - 10, '600 9px Verdana, sans-serif', '#5a4a5f', 'right');
+    txt('v' + VERSION, LW - 10, LH - 10, '600 10px Verdana, sans-serif', '#8d7d95', 'right');
     if (S.saveQuarantined) {
       txt('⚠ a damaged save was quarantined — fresh start (the old blob is kept safe)',
-          LW / 2, 758, '700 9px Verdana, sans-serif', '#ff9d3c');
+          LW / 2, 758, '700 10px Verdana, sans-serif', '#ff9d3c');
     }
     uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 54, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
@@ -8836,7 +8845,7 @@ if (!HEADLESS) (function browser() {
                        '900 12px Verdana, sans-serif', '#c8d6e8');
     if (S.best.floor > 0) {
       txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + ' • ' + S.best.kills + ' kills',
-          LW / 2, 614, '700 11px Verdana, sans-serif', '#8f6f78');
+          LW / 2, 614, '700 11px Verdana, sans-serif', '#a08a94');
     }
     uiBtn(LW / 2 - 120, 638, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(heroSel),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 17px Verdana, sans-serif', r: 16 });

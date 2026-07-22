@@ -3458,4 +3458,59 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(odd.length === 1 && odd[0].v === R.VERSION, 'an unknown stamp shows only the latest');
 }
 
+// -------- READABILITY FLOOR: no microscopic canvas text --------
+{
+  // the font audit's regression guard: body text sits at >=10px, micro-labels
+  // at >=9px, and only the two hero-card chip lines may use 8px. Anything
+  // smaller is unreadable on a phone and fails here at PR time.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const tiny = src.match(/[^0-9][0-7]px (?:Verdana|Georgia|serif|sans-serif|monospace)/g) || [];
+  t.eq(tiny.length, 0, 'no canvas font below 8px' + (tiny.length ? ' — found: ' + tiny.join(', ') : ''));
+  const eights = src.match(/[^0-9]8px (?:Verdana|Georgia|serif|sans-serif|monospace)/g) || [];
+  t.ok(eights.length <= 2, 'at most the two hero-card chips use 8px (' + eights.length + ')');
+  // the contrast pass retired these too-dim body inks — keep them retired
+  for (const ink of ['#6a5a68', '#5a4a5f', '#7a6a80', '#8f6f78']) {
+    t.ok(src.indexOf(ink) < 0, 'retired low-contrast ink ' + ink + ' stays gone');
+  }
+}
+
+// -------- PERFORMANCE BUDGET: 500 packed battle frames --------
+{
+  // the frame-time probe: a deep-floor battle with a stuffed machine, pets,
+  // wounds, and a fat relic bag, driven through the REAL frame loop (sim +
+  // full draw against the stub ctx). The budget sits ~3x above a healthy
+  // run's cost here, leaving room for slow CI iron — it only trips on a
+  // real regression
+  // (an accidental O(n^2) pass, per-frame allocation storms, etc).
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  frames(5);
+  D.srand(4242);
+  D.newRun('knight');
+  for (let f = 1; f < 15; f++) D.S.run.floor++;    // floor 15: dense, decorated piles
+  D.initPile();
+  D.S.run.relics.push('midas', 'warhound', 'thornmail', 'minter', 'clover', 'serrator', 'goldedge', 'twinfangs');
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.hp = D.S.enemy.maxHp = 9999;
+  D.summonPet('pup'); D.summonPet('newt'); D.summonPet('rat');
+  D.S.enemy.burn = 5; D.S.enemy.bleed = 3; D.S.pBurn = 2;
+  frames(30);                                       // battle warm-up, hand dealt
+  for (const k of D.COIN_KINDS) D.S.battle.hand[k] = (D.S.battle.hand[k] || 0) + 40;
+  D.S.turbo = 20;                                   // the worst honest case: max pour
+  const t0 = performance.now();
+  for (let i = 0; i < 500; i++) {
+    ts += 16.7;
+    if (i % 2 === 0) { D.S.cd = 0; D.drop(10 + (i % 80)); }   // keep the field brimming
+    const cb = raf(); if (cb) cb(ts);
+  }
+  const ms = performance.now() - t0;
+  const per = ms / 500;
+  t.ok(D.S.coins.length > 60, 'the probe machine is genuinely packed (' + D.S.coins.length + ' pieces)');
+  console.log('# perf probe: ' + ms.toFixed(0) + 'ms for 500 frames (' + per.toFixed(2) + 'ms/frame)');
+  t.ok(per < 8, 'frame budget: ' + per.toFixed(2) + 'ms/frame stays under 8ms headless');
+}
+
 t.done();
