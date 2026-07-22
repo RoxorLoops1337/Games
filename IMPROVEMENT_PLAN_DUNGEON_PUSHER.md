@@ -398,6 +398,16 @@ impact ÷ effort.
 - [ ] **Anniversary gift**: the profile's first-run date (stamp it now for
       everyone) pays a yearly birthday crate + a candle on the title that
       day — the longest-loop hook in the game
+- [x] **[owner request] Late-game coin sink + scaling tricks** (session 58):
+      floor-18 purses were "ridiculous" — (1) stairToll() now climbs +1 per
+      act (2→8 cap); (2) THE TOLLKEEPER'S SKIM: purseCap() = 20+4·act (cap
+      44) — every descent confiscates the overflow at 2 gold a coin,
+      plainest pockets first, so hands stay tense and bloat converts to
+      gold; (3) the mint's tricks sharpen with the acts: magnetic armor
+      +3+act, jackpot siphon 3+act, mirror bounce cap 8+2·act, the endless
+      counterfeiter runs two presses. If purses still bloat, the next dial
+      is making victory coin-offers sometimes UPGRADE a coin instead of
+      adding one past act 2
 
 ## Done (this loop)
 
