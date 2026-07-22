@@ -106,7 +106,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       this removes color as the only cue) (session 21)
 - [x] **Reduced motion**: prefers-reduced-motion auto-calms shake + particles on
       fresh profiles; explicit settings choices always win (session 21)
-- [ ] **Font/readability audit**: minimum 10px effective, contrast ≥ 4.5:1 for body text
+- [x] **Font/readability audit**: body text floor raised to 10px, micro-labels to
+      9px; too-dim inks (#6a5a68 family) brightened past 4.5:1; hero-card chips
+      shrink-to-fit via fitTxt instead of overflowing; regression-guarded by a
+      source-scan test (session 24)
 - [x] **Touch targets**: every uiBtn hit box grows to ≥38px square (visuals
       unchanged, topmost-wins keeps tight rows precise); doors are walk-through,
       no hitbox needed (session 21)
@@ -133,8 +136,9 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Version/changelog screen**: CHANGELOG list feeds the WHAT'S NEW scroll —
       auto-opens once after a version bump (seenVer ledger, persisted), full
       history from settings; VERSION now derives from the top entry (session 23)
-- [ ] **Performance budget CI**: headless frame-time probe in tests — fail if a
-      500-frame battle sim exceeds budget (catches perf regressions at PR time)
+- [x] **Performance budget CI**: 500-frame probe through the REAL frame loop on a
+      packed floor-15 battle (turbo ×20, pets, wounds, fat relic bag) — fails at
+      8ms/frame, ~3× a healthy run's cost (session 24)
 - [ ] **Asset preload polish**: loading bar on first boot listing art packs; lazy
       relic art already ships — extend to enemy sheets
 - [ ] **Localization hooks**: wrap user-facing strings in `T()` now, ship `en` table;
