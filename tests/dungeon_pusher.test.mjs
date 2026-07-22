@@ -5745,4 +5745,87 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("chip('✕', true") >= 0, 'an active sieve offers the clear chip');
 }
 
+// -------- PET VETERANCY + four new quests + the cb audit --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  D.srand(191); D.newRun('knight');
+  // five survived battles make a veteran
+  t.eq(D.petVet('pup'), false, 'a fresh pup is no veteran');
+  const brawlWin = () => {
+    D.S.screen = 'dungeon'; D.S.room = null; D.S.victory = null; D.S.enemy = null; D.S.foes = []; D.S.battle = null;
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+    D.interact(0);
+    D.summonPet('pup');
+    D.S.enemy.hp = 1; D.S.enemy.block = 0; D.S.enemy.mirrorSpent = true; D.S.enemy.braced = false;
+    D.dmgEnemy(9);
+  };
+  for (let i = 0; i < 5; i++) brawlWin();
+  t.eq(D.S.life.petFights.pup, 5, 'five battles walked out of');
+  t.ok(D.petVet('pup'), 'the pup is a VETERAN');
+  t.eq(D.S.petNameQ, 'pup', 'and waits at the namepad');
+  // the name and the star ride every future summon, with +1 HP
+  D.S.petNames.pup = 'Biscuit';
+  D.S.petNameQ = null;
+  brawlWin();
+  const vetPup = D.S.pets.find(p => p.iid === 'pup');
+  t.eq(vetPup.name, 'Biscuit ★', 'named and starred');
+  const plainHp = D.itemById('pup').php;
+  t.eq(vetPup.maxHp, plainHp + 1, 'a veteran stands one tougher');
+  // the rat king's swarm wears names too
+  D.S.life.petFights.rat = 5;
+  D.S.petNames.rat = 'Gnaw';
+  const r = D.mkRat(false);
+  t.eq(r.name, 'Gnaw ★', 'the swarm remembers its own');
+  t.eq(r.maxHp, 9, 'one tougher in the walls');
+  // names and tallies survive a reload
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.petNames.pup, 'Biscuit', 'the name survives a reload');
+  t.ok(R.petVet('pup'), 'so does the stripe');
+  // ---- the four new quests ----
+  const { DP: Q } = loadGame({}, false);
+  t.eq(Q.QUEST_DEFS.length, 8, 'eight jobs on the floor board');
+  t.ok(['nopotion', 'bigbank', 'chests', 'tiltwin'].every(id => Q.QUEST_DEFS.some(q => q.id === id)),
+    'the four new jobs are posted');
+  Q.srand(192); Q.newRun('knight');
+  // nopotion: winning dry bumps it, drinking spoils it
+  Q.S.run.quest = { id: 'nopotion', need: 1, got: 0, done: false, reward: 'goldkey' };
+  Q.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  Q.interact(0);
+  Q.S.run.potions = 2; Q.S.run.hp = 5;
+  Q.usePotion();
+  t.ok(Q.S.battle.drank, 'the flask leaves a mark');
+  Q.S.enemy.hp = 1; Q.S.enemy.block = 0; Q.S.enemy.mirrorSpent = true; Q.S.enemy.braced = false;
+  Q.dmgEnemy(9);
+  t.ok(!Q.S.run.quest.done, 'a drunk win pays nothing');
+  Q.S.screen = 'dungeon'; Q.S.room = null; Q.S.victory = null; Q.S.enemy = null; Q.S.foes = []; Q.S.battle = null;
+  Q.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  Q.interact(0);
+  Q.S.enemy.hp = 1; Q.S.enemy.block = 0; Q.S.enemy.mirrorSpent = true; Q.S.enemy.braced = false;
+  Q.dmgEnemy(9);
+  t.ok(Q.S.run.quest.done, 'a dry win closes the job');
+  // tiltwin: three shakes and a win
+  Q.S.screen = 'dungeon'; Q.S.room = null; Q.S.victory = null; Q.S.enemy = null; Q.S.foes = []; Q.S.battle = null;
+  Q.S.run.quest = { id: 'tiltwin', need: 1, got: 0, done: false, reward: 'goldkey' };
+  Q.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  Q.interact(0);
+  Q.S.battle.tiltsUsed = 3;
+  Q.S.enemy.hp = 1; Q.S.enemy.block = 0; Q.S.enemy.mirrorSpent = true; Q.S.enemy.braced = false;
+  Q.dmgEnemy(9);
+  t.ok(Q.S.run.quest.done, 'three tilts and a win close the job');
+  // chests: openChest bumps it
+  Q.S.run.quest = { id: 'chests', need: 3, got: 0, done: false, reward: 'goldkey' };
+  Q.srand(7);
+  Q.openChest({ x: 50 }); Q.openChest({ x: 50 }); Q.openChest({ x: 50 });
+  t.ok(Q.S.run.quest.done, 'three cracked lids close the job');
+  // the cb audit: pile badges on every state, offer badges wired
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('if (S.opts.cb) {   // every state — falling coins are choices too') >= 0,
+    'pile badges no longer wait for the coin to land');
+  t.ok(src.indexOf('colorblind marks ride the offer too') >= 0, 'the victory offer wears them');
+  t.ok(src.indexOf('S.petNameQ && !NAMEPAD') >= 0, 'the namepad answers the promotion');
+}
+
 t.done();

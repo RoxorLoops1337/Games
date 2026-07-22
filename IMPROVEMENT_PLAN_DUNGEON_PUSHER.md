@@ -445,13 +445,14 @@ Ordered by impact ÷ effort.
 - [x] **Board filters**: boardFilter(top, hero, diff) + a chip row on THE
       DEEP BOARD (heroes present, 💚/💀 diff, ✕ clear, "N of 50" tally);
       rows keep their TRUE ranks through the sieve (session 65)
-- [ ] **Colorblind coin marks audit**: S.opts.cb exists — in cb mode stamp
-      each coin kind with its letter (C/S/V/H/F/L) and gems with ◆, on the
-      pile AND in the tray/purse rows; verify at 24px in a screenshot
-- [ ] **Pet names & veterancy**: a pet that survives 5 battles earns ★ and
-      the NAMEPAD (petname stored on the iid); named veterans +1 max HP;
-      the swarm keeps names across floors (rat king's roster already
-      persists)
+- [x] **Colorblind coin marks audit**: purse/hand rows already carried
+      COIN_SYMS and gems draw shape-distinct; real gaps fixed — pile badges
+      now ride EVERY coin state (falling coins were unmarked) and the
+      victory-offer coins wear the badge over their art (session 66)
+- [x] **Pet names & veterancy**: S.life.petFights counts battles each kind
+      walks out of; at 5 → ★ + the NAMEPAD asks for a name (ESC skips);
+      S.petNames rides every future summon ("Biscuit ★") with +1 max HP;
+      mkRat honors it so the swarm remembers its own (session 66)
 - [ ] **Hero signature quests**: one pool quest per specialist, gated to
       their runs — Poltergeist: win a battle firing ≤6 coins; Crane
       Keeper: deliver 12 claw catches in one run; Rat King: field the
@@ -468,9 +469,9 @@ Ordered by impact ÷ effort.
       unseal, the legend door, first gauntlet) — S.legacy[] capped 40,
       rendered as a RECORDS: LEGACY page; month-three players get a
       history of themselves
-- [ ] **Quest pool +4**: four new generic quests (win with 0 potions used,
-      bank 30 coins in one battle, open 3 chests on one floor, spend 3
-      TILTs and still win untouched)
+- [x] **Quest pool +4** (8 jobs now): NOPOTION (dry win — usePotion marks
+      the battle), BIGBANK (30 banked), CHESTS (3 cracked lids), TILTWIN
+      (3 tilts spent and still win) (session 66)
 - [ ] **The rookie contract**: after the coach retires, a one-time
       CONTRACT card: "reach floor 5 — 30 ⚙" — recruited friends get an
       immediate goal; pays once (S.contract)
