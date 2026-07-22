@@ -507,6 +507,32 @@ Ordered by impact ÷ effort.
       dp:top to dp:top:bak:<monday> with a 35-day TTL — no cron, later
       posts never rewrite the snapshot (session 70)
 
+## THE LOOP IS CLOSED (owner's word, session 88)
+
+The autonomous improvement loop ran 88 sessions and stops here by the
+owner's request. No further sessions are scheduled; the standing
+trigger was deleted and the trigger ledger reads clean.
+
+**RELEASE NOTE — one PR is owed.** The GitHub MCP connection has been
+down since session 74, so branch `claude/coin-pusher-roguelike-eg8f01`
+holds 15 clean, test-green commits that never reached main: all of
+Tier 11 / v1.7.0 (the consolidation nine, THE ALMANAC, REMATCH + the
+months archive, 48 trophies, REPLAY GHOST, THE UNDERLAKE parts 1+2,
+THE TILTED TABLE) plus Tier 12's opening run (first-contact whispers,
+almanac tables, the wizard file closed, lake tales, and the owner's
+TOUCH COINS — all ten, boss-minted). `npm run check` is green at every
+commit (2489 game + 38 board + 17 save at the tip). When GitHub is
+reachable again: open a PR from that branch, squash-merge to main, and
+Cloudflare ships v1.7.0 live. Do NOT reset or force-push the branch
+before that merge.
+
+**Open threads for whoever picks this up:** Tier 12 items below remain
+unticked from "Trophy pass to 52" onward (trophies, gauntlet rotation,
+HALL OF MONTHS, lake music, pace bars, economy probe, the owner-assist
+sprite session, THE SPECTATOR CARD). Touch-coin knighting (the king
+promoting his court) was trimmed as scope. The drowned kin and the ten
+specials still wear emoji until an owner-machine ComfyUI session.
+
 ## Tier 12 — the hundredth run (authored session 85)
 
 The stock-take, honestly: a player a hundred runs deep now owns five
