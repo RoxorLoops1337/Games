@@ -294,11 +294,11 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
 - [x] **Endless-only decrees**: GILDED AGE (elite odds 0.24→0.6, floor 36),
       THIN VEINS (shop mult ×1.25, floor 39), THE LONG DARK (darkFloor always,
       floor 42) — the stack runs 8 deep, all measured (session 48)
-- [ ] **Three new daily twists**: GLASS CANNON (double damage both ways),
+- [x] **Three new daily twists**: GLASS CANNON (double damage both ways),
       COIN DROUGHT (hand -2, kills pay double gold), PACIFIST FLOORS (every
-      3rd floor's monsters are optional but pay nothing)
-- [ ] **Board rows tell more**: diff dot + ♟ NG+ pawn on THE DEEP BOARD rows;
-      below-50 players see "the board's floor to beat is N"
+      3rd floor's monsters are optional but pay nothing) (session 49)
+- [x] **Board rows tell more**: diff dot + ♟ NG+ pawn on THE DEEP BOARD rows;
+      below-50 players see "the board's floor to beat is N" (session 49)
 - [ ] **Yesterday's deepest**: a light one-shot board fetch stamps the title
       with "yesterday's deepest: FLOOR N by NAME" (cached, silent offline)
 - [ ] **Trophies for the pull**: streak 3/7, endless floor 25, a milestone

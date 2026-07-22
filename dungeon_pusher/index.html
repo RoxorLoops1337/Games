@@ -1386,6 +1386,8 @@ function dmgFoe(e, n, src, pierce) {
   if (!dot && S.weakT > 0) n = Math.max(1, Math.floor(n / 2));
   // the Crown Scale weighs heaviest on the crowned
   if (hasRelic('crownscale') && (e.boss || e.elite)) n = n * 1.25;
+  // the daily's GLASS CANNON: everything you deal doubles (as does what lands on you)
+  if (S.run && S.run.dailyMod === 'cannon') n *= 2;
   n = Math.max(1, Math.round(n));
   if (dot) {
     if (src === 'pois' && e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
@@ -1475,13 +1477,17 @@ function foeDown(e) {
   questBump('slay', 1);
   if (e.elite) { SND.eliteKill(); buzz(50); }
   else if (e.boss) buzz([40, 40, 90]);
-  let gold = Math.round(e.gold * (mutOn('richveins') ? 1.25 : 1));
+  let gold = Math.round(e.gold * (mutOn('richveins') ? 1.25 : 1)
+                        * (S.run.dailyMod === 'drought' ? 2 : 1));
+  const pacifistFloor = S.run.dailyMod === 'pacifist' && S.run.floor % 3 === 0;
   // the wound bounties: Ashfall pays for kindling, Blood Price for red work
   if (hasRelic('ashfall') && e.burn > 0) gold += 6;
   if (hasRelic('bloodprice') && e.bleed > 0) gold += 2;
   if (hasRelic('firstblood') && S.battle && !S.battle.firstBlood) { S.battle.firstBlood = true; gold += 5; }
   let keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
   if (hasRelic('auditstamp') && e.boss) keys += 1;
+  // PACIFIST FLOORS: every 3rd floor the blood pays nothing at all
+  if (pacifistFloor) { gold = 0; keys = 0; }
   if (hasRelic('graverobber') && (e.elite || e.boss)) keys += 1;   // rob the tougher graves
   S.run.keys += keys;
   addGold(gold);
@@ -1717,6 +1723,7 @@ function hpHit(n, cause, col) {
 }
 function hurtPlayer(n, cause) {
   if (!S.run || S.run.hp <= 0) return;
+  if (S.run.dailyMod === 'cannon') n *= 2;   // GLASS CANNON cuts both ways
   // the Brass Heart drinks the battle's first blow whole
   if (hasRelic('brassheart') && S.battle && !S.battle.brassSpent && n > 0) {
     S.battle.brassSpent = 1;
@@ -2197,7 +2204,8 @@ function dealHand() {
   B.hand = { ...S.run.purse };
   // a thief's cut, plus the LEAD PURSE hex weighing the hand down
   // (and the endless deep's THICK AIR steals one more)
-  let cut = (B.stolen || 0) + (S.leadT > 0 ? 3 : 0) + (mutOn('thickair') ? 1 : 0);
+  let cut = (B.stolen || 0) + (S.leadT > 0 ? 3 : 0) + (mutOn('thickair') ? 1 : 0)
+          + (S.run.dailyMod === 'drought' ? 2 : 0);
   let cutDone = 0;
   for (const k of COIN_KINDS) {
     while (cut > 0 && B.hand[k] > 0) { B.hand[k]--; cut--; cutDone++; }
@@ -3140,6 +3148,9 @@ const DAILY_MODS = [
   { id: 'fragile', name: 'GLASS BONES',     desc: '−10 max HP' },
   { id: 'rain',    name: 'GOLDEN RAIN',     desc: '+4 gold coins in the purse' },
   { id: 'keyless', name: 'LOCKED OUT',      desc: 'start with no keys' },
+  { id: 'cannon',   name: 'GLASS CANNON',    desc: 'double damage — dealt AND taken' },
+  { id: 'drought',  name: 'COIN DROUGHT',    desc: 'hands dealt 2 short; kills pay double gold' },
+  { id: 'pacifist', name: 'PACIFIST FLOORS', desc: 'every 3rd floor, kills pay NOTHING' },
 ];
 // the STREAK clock: any finished run stamps the day. A one-day miss is
 // forgiven (the grace day); two misses and the flame goes out.
@@ -9211,7 +9222,7 @@ if (!HEADLESS) (function browser() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: S.boardName, floor: run.floor, kills: run.kills || 0,
                              hero: run.hero || 'knight', diff: run.diff || 'normal',
-                             daily: run.daily ? 1 : 0 }),
+                             daily: run.daily ? 1 : 0, ng: run.ng ? 1 : 0 }),
     })
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; achUnlock('carved'); } })
@@ -9264,11 +9275,25 @@ if (!HEADLESS) (function browser() {
         if (medal) txt(medal, 62, ry + 2, '15px serif', '#fff');
         else txt('#' + rank, 62, ry + 1, '800 11px Verdana, sans-serif', '#9a8aa0');
         const h = heroById(e.hero);
-        txt((e.d ? '\u{1F4C5} ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
+        // the difficulty dot: green mercy, red nightmare (normal stays bare)
+        if (e.diff === 'merciful' || e.diff === 'nightmare') {
+          ctx.beginPath(); ctx.arc(52, ry + 1, 3.2, 0, 7);
+          ctx.fillStyle = e.diff === 'nightmare' ? '#ff5a4e' : '#7ee787'; ctx.fill();
+        }
+        txt((e.d ? '\u{1F4C5} ' : '') + (e.ng ? '♟ ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
             me ? '#ffe9a3' : '#d8c8dc', 'left');
         txt('floor ' + e.floor, LW - 128, ry + 1, '900 12px Verdana, sans-serif', '#ffd75e', 'right');
         txt(fmt(e.kills || 0) + ' \u{2694}\u{FE0F}', LW - 64, ry + 1, '700 10px Verdana, sans-serif', '#c8a8b0', 'right');
       });
+      // the challenge line: what it takes to get on (or climb) the wall
+      if (BOARD.top.length >= 3) {
+        const worst = BOARD.top[BOARD.top.length - 1];
+        const mine = S.boardName && BOARD.top.some(e2 => e2.name === S.boardName);
+        if (!mine) {
+          txt('the board\u2019s floor to beat is ' + worst.floor, LW / 2, py + ph - 108,
+              '800 11px Verdana, sans-serif', '#e8d0a0');
+        }
+      }
       if (pages > 1) {
         uiBtn(LW / 2 - 96, py + ph - 96, 60, 28, '▲', () => { BOARD.page--; },
               { bg: 'rgba(40,34,46,0.95)', border: '#8d7d95', col: '#d8c8dc', r: 9, font: '800 12px Verdana, sans-serif' });

@@ -106,6 +106,10 @@ j = await r.json();
 const cal = j.top.find(e => e.name === 'Cal');
 ok(cal && cal.d === 1, 'a daily post wears the calendar flag');
 ok(j.top.find(e => e.name === 'Thieu').d === 0, 'plain posts stay unflagged');
+r = await post(env, { name: 'Pawn', floor: 6, kills: 3, ng: 1 }, '11.11.11.11');
+j = await r.json();
+ok(j.top.find(e => e.name === 'Pawn').ng === 1, 'a prestige post wears the pawn');
+ok(j.top.find(e => e.name === 'Cal').ng === 0, 'plain posts stay pawnless');
 
 // GET ?board=daily reads the dated board
 r = await get(env, 'daily');
