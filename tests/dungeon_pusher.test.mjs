@@ -1114,6 +1114,7 @@ S.run.relics = [];
 {
   DP.srand(46);
   S.run.relics = [];
+  S.run.bside = 0;                       // pin the A-side: the wyrm's MIRROR would bounce the kill shot
   S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: 'ogre', done: false }];
   DP.interact(0);
   t.ok(S.enemy && S.enemy.boss, 'the boss stands');
@@ -1558,7 +1559,9 @@ finishFight();
     if (!tier2.has(e.id)) break;
   }
   t.eq(DP.curRoster()[0].id, 'frostorc', 'the roster helper agrees');
-  // bosses rotate per act: dragon, lich, demon
+  // bosses rotate per act: dragon, lich, demon (the A-side — pinned, since
+  // run parity decides which side holds the lairs)
+  S.run.bside = 0;
   S.run.floor = 1; t.eq(DP.mkEnemy('boss').id, 'dragon', 'act 1 boss: the Vault Dragon');
   S.run.floor = 7; t.eq(DP.mkEnemy('boss').id, 'lich', 'act 2 boss: the Coin Lich');
   S.run.floor = 12; t.eq(DP.mkEnemy('boss').id, 'demon', 'act 3 boss: the Pit Boss');
@@ -3779,7 +3782,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.actIdx(1), 1, 'NG+ floor 1 fields act-2 kin');
   t.eq(D.actIdx(6), 2, 'NG+ floor 6 fields act-3 kin');
   t.ok(D.curRoster() === D.ENEMY_TIERS[1], 'the live roster really is act 2');
-  // the boss rotation shifts with it
+  // the boss rotation shifts with it (A-side pinned — parity is its own test)
+  D.S.run.bside = 0;
   D.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
   D.interact(0);
   t.eq(D.S.enemy.id, D.BOSSES[1].id, 'the first lair holds the act-2 boss');
@@ -3847,6 +3851,58 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const rain0 = DS.rain.length;
   D.frenzy();
   t.ok(DS.rain.length >= rain0 + 4, 'the chime rings 4 bonus coins into the rain');
+}
+
+// -------- THE B-SIDE: a second boss per act --------
+{
+  const { DP: D } = loadGame({}, false);
+  t.eq(D.BOSSES2.length, 3, 'three B-side lair-holders');
+  t.ok(D.BOSSES2.every(b => b.id && b.hp > 0 && b.atk > 0 && b.gold > 0), 'their statlines are whole');
+  t.ok(D.BOSSES2.every(b => !D.BOSSES.some(a => a.id === b.id)), 'no id collides with the A-side');
+  // parity: newRun bumps best.runs first, so even totals face the B-side
+  D.srand(1); D.newRun('knight');            // run #1 — A-side
+  t.eq(D.S.run.bside, 0, 'run 1 faces the A-side');
+  t.eq(D.bossFor(1).id, 'dragon', 'the dragon holds the first lair');
+  D.srand(2); D.newRun('knight');            // run #2 — B-side
+  t.eq(D.S.run.bside, 1, 'run 2 faces the B-SIDE');
+  t.eq(D.bossFor(1).id, 'wyrm', 'the Gilded Wyrm holds it instead');
+  t.eq(D.bossFor(6).id, 'banshee', 'act 2: the Grave Banshee');
+  t.eq(D.bossFor(11).id, 'aurifex', 'act 3: the Aurifex');
+}
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  D.srand(2); D.newRun('knight'); D.srand(3); D.newRun('knight');   // run #2: B-side
+  t.eq(D.S.run.bside, 1, 'B-side armed');
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.run.bside, 1, 'the B-side flag survives a reload');
+  t.eq(R.bossFor(1).id, 'wyrm', 'and still picks the wyrm');
+  // the wyrm fights: mirror def + the SQUEEZE arena
+  R.S.screen = 'dungeon';                    // the reload parks on the title
+  R.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  R.interact(0);
+  t.eq(R.S.enemy.id, 'wyrm', 'the lair holds the Gilded Wyrm');
+  t.ok(R.S.enemy.boss, 'and he is a true boss');
+  // drive to round 3: the constriction lands
+  R.S.battle.round = 2;
+  R.S.leadT = 0;
+  R.newRound();                              // round 3
+  t.ok(R.S.leadT >= 1, 'round 3: the wyrm SQUEEZES (lead purse)');
+  // banshee + aurifex arenas, staged directly
+  R.S.enemy.hp = 0;
+  R.S.foes.push({ id: 'banshee', name: 'Grave Banshee', boss: true, hp: 50, maxHp: 50, atk: 8, block: 0 });
+  R.S.weakT = 0;
+  R.S.battle.round = 2;
+  R.newRound();
+  t.ok(R.S.weakT >= 1, 'the banshee WAIL saps your arm');
+  R.S.foes[R.S.foes.length - 1].hp = 0;
+  R.S.foes.push({ id: 'aurifex', name: 'The Aurifex', boss: true, hp: 50, maxHp: 50, atk: 8, block: 0 });
+  const rain0 = R.S.rain.length;
+  R.S.battle.round = 2;
+  R.newRound();
+  t.ok(R.S.rain.filter(r => r.kind === 'skull').length >= 2 && R.S.rain.length >= rain0 + 2,
+       'the Aurifex mints cursed slugs into the rain');
 }
 
 t.done();
