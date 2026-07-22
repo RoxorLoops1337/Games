@@ -4346,4 +4346,45 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(P.S.run.gold >= pg0 + 5, 'the press minted +5 on the 25th');
 }
 
+// -------- THE COACH + the daily handshake --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.ok(D.S.coach && !D.S.coach.pick && !D.S.coach.drop && !D.S.coach.end, 'a fresh profile gets the coach');
+  D.srand(8); D.newRun('knight');
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.hp = D.S.enemy.maxHp = 300;
+  // each deed kills its pointer
+  D.selectCoin('coin');
+  t.eq(D.S.coach.pick, 1, 'choosing a coin kills pointer one');
+  D.S.cd = 0; D.drop(50, true);
+  t.eq(D.S.coach.drop, 1, 'a fired coin kills pointer two');
+  D.endRoundNow();
+  t.eq(D.S.coach.end, 1, 'END TURN kills pointer three');
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.ok(R.S.coach.pick && R.S.coach.drop && R.S.coach.end, 'dead pointers stay dead across reloads');
+  // veterans who predate the coach never see it
+  const st2 = {};
+  const { DP: V } = loadGame(st2, false);
+  V.S.best.runs = 9; V.save();
+  const blob = JSON.parse(st2[V.C.SAVE_KEY]);
+  delete blob.coach;
+  st2[V.C.SAVE_KEY] = JSON.stringify(blob);
+  const { DP: V2 } = loadGame(st2, false);
+  t.ok(V2.S.coach.pick && V2.S.coach.drop && V2.S.coach.end, 'veterans are grandfathered past the coach');
+  // the daily handshake: over knows, the client sends, the board shows
+  const { DP: Y } = loadGame({}, false);
+  Y.newDaily('2026-07-22');
+  Y.hpHit(9999, 'the daily took it all');
+  t.eq(Y.S.over.daily, 1, 'a finished daily marks its card');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('daily: run.daily ? 1 : 0') >= 0, 'the post carries the calendar flag');
+  t.ok(src.indexOf("e.d ? '\\u{1F4C5} ' : ''") >= 0, 'board rows wear the calendar');
+  t.ok(src.indexOf('POST THE DAILY?') >= 0, 'a finished daily offers itself to the board');
+  t.ok(src.indexOf('function drawCoach') >= 0 && src.indexOf('drawCoach(t);') >= 0, 'the coach draws in battle');
+}
+
 t.done();
