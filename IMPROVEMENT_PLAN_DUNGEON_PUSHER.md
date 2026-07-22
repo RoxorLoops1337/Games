@@ -96,8 +96,9 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Sound pass v2**: boss-hit thud, elite-kill brass, vault-open chime run,
       golden-key dings, UI tick on every styled button, wheel ratchet per
       segment (session 19)
-- [ ] **Music**: 3 loops (dungeon / battle / boss) via a tiny WebAudio sequencer,
-      music volume slider, mute persists
+- [x] **Music**: matchbox WebAudio sequencer — three moods (dungeon hums, battle
+      drives, boss stomps with hats), auto-switching on screen/boss state, own
+      MUSIC volume notches, mute-aware, all persisted (session 20)
 - [x] **Haptics**: navigator.vibrate on the claw CHOMP, heavy blows taken, boss/elite
       kills, jackpot, vault-open — behind a settings toggle (session 19)
 - [ ] **Colorblind support**: palette swap option for coin kinds (shapes/symbols
