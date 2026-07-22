@@ -378,13 +378,15 @@ impact ÷ effort.
       favorite draught (new S.life.draughts tally), deadliest floor (new
       S.life.deaths stamped every endRun) + WHERE THE RUNS END death bars
       (session 59)
-- [ ] **Trophy-wall share card**: buildShareCard variant: the 37-trophy wall
-      with earned tiles lit + "N / 37" banner — the brag image for group
-      chats; same toBlob/canShare plumbing as the run card
-- [ ] **Named champions**: past floor 5, each act's elite pool gains ONE
-      named variant ("GRUK THE UNPAID", boss-tier art tint, +1 trait, double
-      bounty + a guaranteed key); slaying each act's champion inks a codex
-      line; four champions → CHAMPION SLAYER trophy
+- [x] **Trophy-wall share card**: buildTrophyCard — the full 40-tile wall,
+      earned tiles lit gold, "N / 40" banner + owner's name; 📤 CARD on the
+      TROPHIES sheet; shareSave learned per-card filenames/text (session 60)
+- [x] **Named champions**: GRUK THE UNPAID / VELVETFANG / OLD NINECOINS /
+      THE LEDGER LORD — one per act (endless keeps the Lord), hiding in the
+      elite pool from floor 4 (1-in-4 of elites), each with an extra trick,
+      double bounty + a guaranteed key; codex act tabs count them (FULL
+      LEDGER now includes them); 4 inked → CHAMPION SLAYER (40 on the wall)
+      (session 60)
 - [ ] **[server] Monthly board + the champion's plaque**: dungeon_board.js
       adds 'dp:month:<YYYY-MM>' (one POST feeds all boards, 60-day TTL);
       BOARD gains a THIS MONTH tab; on month-end the previous winner is

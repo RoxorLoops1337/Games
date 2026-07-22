@@ -900,6 +900,16 @@ function bossFor(floor) {
   const side = (S.run && S.run.bside) ? BOSSES2 : BOSSES;
   return side[actIdx(floor) % side.length];
 };
+// NAMED CHAMPIONS: one per act, hiding in the elite pool from floor 4 on —
+// an extra trick each, double bounty, and they always drop a key. Slay all
+// four for the CHAMPION SLAYER trophy; each inks its own codex line.
+const CHAMPIONS = [
+  { id: 'gruk',       icon: '\u{1F479}', name: 'GRUK THE UNPAID', hp: 26, atk: 3, trait: 'magnet',    def: null,     gold: 26 },
+  { id: 'velvetfang', icon: '\u{1F43A}', name: 'VELVETFANG',      hp: 44, atk: 5, trait: 'gremlin',   def: 'mirror', gold: 38 },
+  { id: 'ninecoins',  icon: '\u{1F982}', name: 'OLD NINECOINS',   hp: 62, atk: 6, trait: 'rustmite',  def: 'armor',  gold: 50 },
+  { id: 'ledgerlord', icon: '\u{1F3E6}', name: 'THE LEDGER LORD', hp: 86, atk: 7, trait: 'jackthief', def: 'gel',    gold: 62 },
+];
+function championFor(floor) { return CHAMPIONS[Math.min(3, Math.max(0, actIdx(floor)))]; }
 // ------------------------------------------------------------------ heroes
 // Four adventurers to pick from (sprites borrowed from NRFH's hero classes);
 // each carries two signature coins on top of the shared 5 gold + 5 silver.
@@ -1592,6 +1602,8 @@ function foeDown(e) {
   if (hasRelic('firstblood') && S.battle && !S.battle.firstBlood) { S.battle.firstBlood = true; gold += 5; }
   let keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
   if (hasRelic('auditstamp') && e.boss) keys += 1;
+  // a CHAMPION pays double and never leaves you keyless
+  if (e.champ) { gold *= 2; keys += 1; }
   // PACIFIST FLOORS: every 3rd floor the blood pays nothing at all
   if (pacifistFloor) { gold = 0; keys = 0; }
   if (hasRelic('graverobber') && (e.elite || e.boss)) keys += 1;   // rob the tougher graves
@@ -2285,17 +2297,22 @@ function mkEnemy(type, eid) {
     base = bossFor(S.run.floor);
   } else {
     const roster = curRoster();
-    base = (eid && enemyById(eid)) || roster[(rng() * enemyPool(S.run.depth)) | 0];
+    // from floor 4 on, one elite in four is the ACT'S NAMED CHAMPION
+    base = (eid && (enemyById(eid) || CHAMPIONS.find(c2 => c2.id === eid)))
+        || ((type === 'elite' && S.run.floor >= 4 && rng() < 0.25) ? championFor(S.run.floor) : null)
+        || roster[(rng() * enemyPool(S.run.depth)) | 0];
     if (type === 'elite') eliteK = 2.0;
   }
+  const champ = CHAMPIONS.indexOf(base) >= 0;
   const hp = Math.round(base.hp * mult * eliteK * diffHpK());
   return {
-    id: base.id, icon: base.icon, name: (type === 'elite' ? 'ELITE ' : '') + base.name,
+    id: base.id, icon: base.icon,
+    name: champ ? '\u{1F451} ' + base.name : (type === 'elite' ? 'ELITE ' : '') + base.name,
     hp, maxHp: hp,
     atk: Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1)) + (mutOn('swiftdoom') ? 2 : 0),
     trait: base.trait, def: base.def || null,
     gold: Math.round(base.gold * mult * (type === 'elite' ? 2.2 : 1)),
-    boss: type === 'boss', elite: type === 'elite',
+    boss: type === 'boss', elite: type === 'elite', champ: champ ? 1 : 0,
     stunned: 0, pois: 0, bleed: 0, burn: 0, block: 0, hitT: 0, lungeT: 0,
   };
 }
@@ -3386,7 +3403,7 @@ function codexTabStat(tab) {
   if (tab === 't') return { got: Object.keys(S.tales || {}).length, all: TALES.length };
   if (tab[0] === 'a') {
     const act = +tab[1] - 1;
-    const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length]]);
+    const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length], CHAMPIONS[act % CHAMPIONS.length]]);
     return { got: foes.filter(f => S.codex.foes[f.id]).length, all: foes.length };
   }
   const shelf = RELICS.filter(rl => rl.rar === tab);
@@ -3594,6 +3611,7 @@ const ACH = [
   { id: 'decreed',   icon: '\u{2696}\u{FE0F}', name: 'Above the Law', desc: 'clear floor 15 under a WEEKLY DECREE' },
   { id: 'topple',    icon: '\u{1F3AF}', name: 'Rival Toppled', desc: 'out-dig your marked rival' },
   { id: 'ledger',    icon: '\u{1F4D6}', name: 'The Full Ledger', desc: 'meet every foe, own every relic — the codex complete' },
+  { id: 'champs',    icon: '\u{1F94A}', name: 'Champion Slayer', desc: 'fell all four named champions' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 function achUnlock(id) {
@@ -3614,6 +3632,7 @@ function achPoll() {
   if (kf.wyrm && kf.banshee && kf.aurifex) achUnlock('bsides');
   if (kf.lodestone && kf.counterfeit && kf.meterleech) achUnlock('minted');
   if (kf.auditor) achUnlock('audited');
+  if (CHAMPIONS.every(c => kf[c.id])) achUnlock('champs');
   if ((S.streak.days | 0) >= 3) achUnlock('streak3');
   if ((S.streak.days | 0) >= 7) achUnlock('streak7');
   if (codexFull()) achUnlock('ledger');
@@ -4878,7 +4897,7 @@ function tick(dt) {
 // ------------------------------------------------------------- public API
 window.DP = {
   S, C, MACH, ITEMS, ENEMIES, ENEMY_TIERS, BOSSES, RELICS, WHEEL, ENT_INFO, FLOORS,
-  actIdx, curRoster, enemyById, BOSSES2, bossFor,
+  actIdx, curRoster, enemyById, BOSSES2, bossFor, CHAMPIONS, championFor,
   HEROES, heroById,
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
@@ -9514,6 +9533,12 @@ if (!HEADLESS) (function browser() {
     }
     uiBtn(LW / 2 - 70, by, 140, 40, TR('CLOSE ✕'), () => { TROPHIES = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+    // brag in one image: the whole wall as a share card
+    uiBtn(LW - 110, by + 4, 84, 32, '\u{1F4E4} CARD', () => {
+      const cv = buildTrophyCard();
+      if (cv) SHARE = { cv, fname: 'dungeon-pusher-trophies.png', text: 'my trophy wall — how full is yours?' };
+    }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
+         font: '900 10px Verdana, sans-serif', r: 9 });
   }
   // ---- the WORKSHOP: cogs in, forever-upgrades out ----
   let WSHOP = false;
@@ -9582,13 +9607,13 @@ if (!HEADLESS) (function browser() {
     if (CODEX.tab[0] === 'a') {
       // one act's roster + its boss, kills tallied — the unmet stay shadows
       const act = +CODEX.tab[1] - 1;
-      const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length]]);
+      const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length], CHAMPIONS[act % CHAMPIONS.length]]);
       const met = foes.filter(f => S.codex.foes[f.id]).length;
       txt(met + ' / ' + foes.length + ' met', LW / 2, 106, '800 11px Verdana, sans-serif', '#c8a8b0');
       foes.forEach((f, i) => {
         const x = 22 + (i % 2) * (LW / 2 - 12), y = 118 + ((i / 2) | 0) * 44;
         const kills = S.codex.foes[f.id] || 0;
-        const isBoss = i >= foes.length - 2;
+        const isBoss = i >= foes.length - 3;   // both lair-holders + the champion
         rr(x, y, LW / 2 - 32, 38, 8);
         ctx.fillStyle = isBoss ? 'rgba(60,40,16,0.9)' : 'rgba(255,255,255,0.04)'; ctx.fill();
         if (isBoss) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffd75e'; ctx.stroke(); }
@@ -10171,19 +10196,66 @@ if (!HEADLESS) (function browser() {
     const cv = buildShareCard(S.over);
     if (cv) SHARE = { cv };
   }
+  // the TROPHY WALL as a card: every tile, earned ones lit, the tally big
+  function buildTrophyCard() {
+    const cv = document.createElement('canvas');
+    cv.width = 960; cv.height = 1344;
+    const g = cv.getContext('2d');
+    if (!g) return null;
+    const main = ctx;
+    ctx = g;
+    try {
+      ctx.setTransform(2, 0, 0, 2, 0, 0);
+      const W = 480, H = 672;
+      const bg = ctx.createRadialGradient(W / 2, 200, 60, W / 2, H / 2, 620);
+      bg.addColorStop(0, '#2e2433'); bg.addColorStop(1, '#120d16');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      rr(14, 14, W - 28, H - 28, 20); ctx.lineWidth = 4; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+      rr(22, 22, W - 44, H - 44, 16); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,215,94,0.45)'; ctx.stroke();
+      txt('DUNGEON PUSHER', W / 2, 56, '900 28px Georgia, serif', '#ffd75e', 'center', { w: 6, col: '#2a1030' });
+      txt('\u{1F3C6} THE TROPHY WALL', W / 2, 88, '900 16px Georgia, serif', '#ffe9a3');
+      const got = ACH.filter(a => S.ach.u[a.id]).length;
+      if (S.boardName) txt(S.boardName + '’s case', W / 2, 110, '800 12px Verdana, sans-serif', '#c8a8b0');
+      txt(got + ' / ' + ACH.length, W / 2, 146, '900 34px Georgia, serif',
+          got >= ACH.length ? '#ffd75e' : '#e8d0a0', 'center', { w: 5, col: '#2a1030' });
+      // the wall: eight columns of tiles, earned ones lit
+      const cols = 8, tw2 = 50, th2 = 54;
+      const x0 = (W - cols * tw2) / 2;
+      ACH.forEach((a, i) => {
+        const x = x0 + (i % cols) * tw2 + 4, y = 176 + ((i / cols) | 0) * th2;
+        const own = !!S.ach.u[a.id];
+        rr(x, y, tw2 - 8, th2 - 10, 8);
+        ctx.fillStyle = own ? 'rgba(122,84,20,0.55)' : 'rgba(255,255,255,0.04)'; ctx.fill();
+        if (own) { ctx.lineWidth = 1.2; ctx.strokeStyle = '#ffd75e'; ctx.stroke(); }
+        ctx.save();
+        if (!own) ctx.globalAlpha = 0.22;
+        txt(a.icon, x + (tw2 - 8) / 2, y + 22, '19px serif', '#fff');
+        ctx.restore();
+      });
+      const wallEnd = 176 + Math.ceil(ACH.length / cols) * th2;
+      txt(got >= ACH.length ? 'a finished wall. bow.' : 'the empty hooks are invitations',
+          W / 2, wallEnd + 16, '700 11px Verdana, sans-serif', '#9a8aa0');
+      txt('play: games-71g.pages.dev/dungeon_pusher', W / 2, H - 40, '700 11px Verdana, sans-serif', '#9a8aa0');
+    } finally {
+      ctx = main;
+    }
+    return cv;
+  }
   function shareSave() {
     if (!SHARE || !SHARE.cv || !SHARE.cv.toBlob) return;
     SHARE.cv.toBlob((blob) => {
       if (!blob) return;
       // the native share sheet where it exists; a plain download elsewhere
-      const f = (typeof File === 'function') ? new File([blob], 'dungeon-pusher-run.png', { type: 'image/png' }) : null;
+      const fname = (SHARE && SHARE.fname) || 'dungeon-pusher-run.png';
+      const text = (SHARE && SHARE.text) || 'my descent — can you go deeper?';
+      const f = (typeof File === 'function') ? new File([blob], fname, { type: 'image/png' }) : null;
       if (f && navigator.share && navigator.canShare && navigator.canShare({ files: [f] })) {
-        navigator.share({ files: [f], title: 'Dungeon Pusher', text: 'my descent — can you go deeper?' }).catch(() => {});
+        navigator.share({ files: [f], title: 'Dungeon Pusher', text }).catch(() => {});
         return;
       }
       const a = document.createElement('a');
       a.href = URL.createObjectURL(blob);
-      a.download = 'dungeon-pusher-run.png';
+      a.download = fname;
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
       toast('the card is saved — brag well');
