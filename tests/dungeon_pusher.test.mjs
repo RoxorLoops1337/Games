@@ -4021,4 +4021,21 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
        && src.indexOf("achUnlock('skyvault')") >= 0, 'photo/board/cloud hooks are wired');
 }
 
+// -------- FEEL PASS: the aim ghost + crawl footfalls --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  // the ghost: drawn on the platform each battle frame, hidden for rigs that don't aim
+  t.ok(src.indexOf('function drawAimGhost') >= 0, 'the aim ghost exists');
+  t.ok(src.indexOf('drawAimGhost(t);') >= 0, 'and is drawn in the battle pass');
+  t.ok(/craneRun\(\) \|\| ghostRun\(\)\) return;/.test(src), 'the claw and the poltergeist skip it');
+  t.ok(src.indexOf('C.COIN_R * ap.u') >= 0, 'the ring is sized to a real coin at that depth');
+  // footfalls: the stub carries step(), the walk paces it
+  const { DP: D } = loadGame({}, false);
+  t.eq(typeof D.S, 'object', 'game loads');
+  t.ok(src.indexOf('step() {}') >= 0, 'headless SND stubs step()');
+  t.ok(src.indexOf('AV.stepAcc') >= 0 && src.indexOf('SND.step();') >= 0, 'the crawl paces footfalls');
+  t.ok(src.indexOf('SND.door();') >= 0, 'the door thunk was already on the hinge');
+}
+
 t.done();

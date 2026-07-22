@@ -208,8 +208,9 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
       B-SIDE COLLECTOR, COUNTING HOUSE, SHUTTERBUG, TWEETALIG — profile watches
       in achPoll + event hooks in winBattle/postScore/cloudBackup/photo; the
       trophy hall now pages (session 36)
-- [ ] **The aim ghost**: a faint falling-column marker under the finger while
-      aiming (touch and keys) — the single biggest mobile-feel gap
+- [x] **The aim ghost**: pulsing dashed landing ring + falling chevron on the
+      platform, sized to a real coin at that depth; hidden for the claw and the
+      poltergeist (session 37)
 - [ ] **Act 4 balance sweep**: headless win-rate probe with midline builds across
       floors 14-21; tune mint statlines / the Auditor / NG+ floor-1 sting from
       the numbers, not vibes (probe lands in the test suite as a report)
@@ -236,8 +237,9 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
       inspection + probe, give each a small second clause
 - [ ] **NG+ ledger on the report card**: NG+ badge + act-shifted floor shown on
       death/victory report and the run history rows
-- [ ] **Dungeon footsteps & door creaks**: two tiny SFX on the crawl (move tick,
-      door thunk) behind the existing SFX volume
+- [x] **Dungeon footsteps & door creaks**: soft noise footfalls pace the crawl
+      (0.26s stride, behind SFX volume); the door thunk already lived on the
+      hinge — verified and pinned (session 37)
 - [ ] **Mint floor quest**: one act-4-only job — BANK N SLUGS (the counterfeits
       become the currency) paying a golden key
 - [ ] **Localization: settings + overlays complete in NL**: sweep the remaining

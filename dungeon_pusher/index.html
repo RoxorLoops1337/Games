@@ -1037,7 +1037,7 @@ function rng() {
 let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() {}, fanfare() {},
             bossHit() {}, eliteKill() {}, vaultOpen() {}, goldKey() {}, tick() {}, ratchet() {},
             slot() {}, hit() {}, hurt() {}, heal() {}, poison() {}, block() {},
-            stun() {}, buy() {}, door() {}, dead() {}, winb() {}, reel() {} };
+            stun() {}, buy() {}, door() {}, dead() {}, winb() {}, reel() {}, step() {} };
 
 // ------------------------------------------------------------- persistence
 // the save SCHEMA version + its migration ladder: every load climbs the
@@ -4847,6 +4847,7 @@ if (!HEADLESS) (function browser() {
     stun() { [1600, 1200, 900].forEach((f, i) => setTimeout(() => tone(f, 0.15, 'sine', 0.18), i * 70)); },
     buy() { tone(660, 0.1, 'square', 0.15); setTimeout(() => tone(990, 0.16, 'square', 0.15), 90); noise(0.05, 0.1, 3000); },
     door() { tone(90, 0.35, 'sine', 0.3, 55); noise(0.2, 0.1, 300); },
+    step() { noise(0.03, 0.05, 900 + Math.random() * 500); },
     dead() { [400, 300, 220, 150].forEach((f, i) => setTimeout(() => tone(f, 0.32, 'triangle', 0.22), i * 160)); },
     winb() { [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.25, 'square', 0.16), i * 110)); },
     // ---- the v2 stings ----
@@ -5680,6 +5681,28 @@ if (!HEADLESS) (function browser() {
     rr(gx - 10, 184, 20, 15, 4); ctx.fill();
     ctx.fillStyle = '#12151a';
     ctx.fillRect(gx - 5, 187, 10, 9);
+    ctx.restore();
+  }
+
+  // the AIM GHOST: a pulsing dashed ring on the platform where the next
+  // coin will land, with a falling chevron above it — the beam says which
+  // lane, the ghost says exactly where. Hidden for rigs that don't aim
+  // (the crane's claw, the poltergeist's self-raining purse).
+  function drawAimGhost(t) {
+    if (!S.battle || S.battle.phase !== 'drop' || S.victory || craneRun() || ghostRun()) return;
+    const slotY = MACH.tiers[0].slotY;
+    const ap = w2s(S.aimX, slotY, 0);
+    const pulse = 1 + 0.14 * Math.sin(t * 5);
+    const rx = Math.max(9, C.COIN_R * ap.u * 1.5) * pulse;
+    ctx.save();
+    ctx.globalAlpha = 0.42;
+    ctx.strokeStyle = '#ffe9a3';
+    ctx.lineWidth = 1.6;
+    ctx.setLineDash([5, 4]);
+    ctx.beginPath(); ctx.ellipse(ap.x, ap.y, rx, rx * 0.46, 0, 0, 7); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 0.5;
+    txt('▼', ap.x, ap.y - 15 - 3 * Math.sin(t * 5), '900 10px Verdana, sans-serif', '#ffe9a3');
     ctx.restore();
   }
 
@@ -6988,6 +7011,7 @@ if (!HEADLESS) (function browser() {
     drawBackWall(t);
     drawMeter(t);
     drawPusherBlock(t);
+    drawAimGhost(t);
     const onPlat = [], offEdge = [];
     for (const c of S.coins) {
       (c.st === 'fall' || c.st === 'tray' ? offEdge : onPlat).push(c);
@@ -7923,6 +7947,9 @@ if (!HEADLESS) (function browser() {
     AV.dir = Math.abs(vx) > Math.abs(vy) ? (vx > 0 ? 'r' : 'l') : (vy > 0 ? 'd' : 'u');
     AV.step += dt * 13;
     AV.animT += dt;
+    // soft footfalls pace the walk (two per stride of the sheet)
+    AV.stepAcc = (AV.stepAcc || 0) + dt;
+    if (AV.stepAcc >= 0.26) { AV.stepAcc = 0; SND.step(); }
     const SPD = 195;
     let nx = AV.x + vx * SPD * dt;
     let ny = AV.y + vy * SPD * dt;
