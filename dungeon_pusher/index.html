@@ -7965,9 +7965,8 @@ if (!HEADLESS) (function browser() {
     txt(S.screen === 'battle' ? '× ' + r.wallet : '× ' + purseTotal() + ' purse',
         140, 762, '900 ' + (S.screen === 'battle' ? 18 : 13) + 'px Verdana, sans-serif',
         flash || stole ? '#ff5a4e' : '#fff0c0', 'left');
-    txt('\u{1F5DD} × ' + r.keys, 190, 762, '900 15px Verdana, sans-serif',
-        r.keys < 1 ? '#ff5a4e' : '#ffe9a3', 'left');
-    if (r.goldKeys > 0) txt('\u{1F511} × ' + r.goldKeys, 190, 780, '900 12px Verdana, sans-serif', '#ffd75e', 'left');
+    txt('\u{1F5DD} ' + r.keys + (r.goldKeys > 0 ? '  \u{1F511} ' + r.goldKeys : ''), 190, 762,
+        '900 13px Verdana, sans-serif', r.keys < 1 ? '#ff5a4e' : '#ffe9a3', 'left');
     // potion button — or the specialist gauges in its place
     if (tollRun()) {
       txt(TR('\u{1F9FF} toll prepaid: ') + (r.tollPaid | 0) + ' / ' + stairToll(), 240, 762,
@@ -9796,7 +9795,9 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW - 52, 12, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
     // deep in the ENDLESS, the standing decrees are posted at the gate
     if (mutCount() > 0) {
-      txt('\u{1F30C} ENDLESS +' + mutCount() + ': ' + MUTS.slice(0, mutCount()).map(m => m.name).join(' • '),
+      const mn = mutCount();
+      const mi = Math.floor(t / 2.5) % mn;         // the posted laws take turns
+      txt('\u{1F30C} ENDLESS +' + mn + ' • ' + MUTS[mi].name + ' — ' + MUTS[mi].desc,
           LW / 2, 134, '700 9px Verdana, sans-serif', '#c8a8ff', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
     }
     // the floor's optional JOB, posted under the floor title

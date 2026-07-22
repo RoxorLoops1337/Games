@@ -6497,4 +6497,29 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   if (S2.run) D.endRun('audit done');
 }
 
+// -------- TIER 11: LATE-HUD DECLUTTER — the deep strip breathes --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('Math.floor(t / 2.5) % mn') >= 0, 'the endless decrees take turns on one line');
+  t.ok(src.indexOf("': ' + MUTS.slice(0, mutCount()).map(m => m.name).join(' • ')") < 0,
+       'the overflowing full roll-call is gone');
+  t.ok(src.indexOf("MUTS[mi].name + ' — ' + MUTS[mi].desc") >= 0,
+       'and each posted law now spells out its rule');
+  t.ok(src.indexOf("'\\u{1F511} × ' + r.goldKeys") < 0, 'golden keys left the arsenal strip’s lane');
+  t.ok(src.indexOf("(r.goldKeys > 0 ? '  \\u{1F511} ' + r.goldKeys : '')") >= 0, 'and ride the key line instead');
+  // deep frames draw clean with a live ctx: floor 26, decrees up, keys held
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  frames(4);
+  K.srand(5); K.newRun('knight');
+  K.S.run.floor = 26; K.S.run.goldKeys = 3;
+  t.ok(K.mutCount() >= 2, 'floor 26 posts standing decrees (' + K.mutCount() + ')');
+  frames(10);                                  // dungeon: the rotating decree strip
+  K.startBattle('battle');
+  frames(10);                                  // battle: the combined key line
+  t.ok(K.S.screen === 'battle', 'floor-26 frames draw without a crash');
+}
+
 t.done();

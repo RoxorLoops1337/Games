@@ -556,10 +556,14 @@ feel the game get SMOOTHER this tier, not just bigger.
       +5→+10 gold (a rare no longer loses to common Piggy from act 2).
       Wizard median 4 left alone — drop data shows no kit starvation, so
       his low sim line needs its own look before any buff (session 75)
-- [ ] **Late-HUD declutter**: at floor 25+ the battle screen carries meter,
-      decree count, jar, pegs, prepaid toll, brew gauge, quest line, pace…
-      — audit overlap at 480px, collapse the passive readouts into one
-      rotating status strip under the purse row
+- [x] **Late-HUD declutter**: audited at 480×840 with a doctored floor-26
+      save — most gauges never collide (toll/brew/potion share one slot by
+      design; jar/pegs live on the field). TWO real pileups found and
+      fixed: the endless decree line joined ALL law names and overflowed
+      past +4 (NG++ hits that by floor 23) — now ONE law at a time
+      rotates every 2.5s WITH its rule spelled out; and the golden-key
+      count sat on the arsenal strip's lane at 4+ gear pieces — it now
+      rides the key line. Playwright-verified both screens (session 76)
 - [ ] **THE ALMANAC (help sheet)**: a ❓ title button opening a compact,
       searchable-feeling reference built from data the game already owns:
       coin table (COIN_INFO), trait glossary (ENT_INFO/trait texts), toll/
