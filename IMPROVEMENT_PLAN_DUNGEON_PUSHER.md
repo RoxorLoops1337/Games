@@ -545,12 +545,17 @@ feel the game get SMOOTHER this tier, not just bigger.
       5, WIZARD 4 — the low outlier to watch, buff only if the next
       session's relic audit agrees. Lesson: bside flips per lifetime run —
       pin it in any sim (session 74)
-- [ ] **Relic pickup audit**: instrument rollRelicPool choices offered vs
-      picked across the sim harness; list the 10 least-chosen relics in
-      the probe output; buff or rework the 3 worst (data-driven, small
-      numeric touches only). Groundwork shipped with the sim harness
-      (s74): boss-spread offers are tallied (104 distinct seen, 44 never)
-      — extend the tally, then judge
+- [x] **Relic pickup audit**: rolls are uniform within rarity, so the
+      real audit was reachability + dominance, not pick counts.
+      Reachability rails: 6000 seeded drops touch EVERY plain relic,
+      ng-gated ones never leak at ng 0 and all appear at legend depth;
+      per-relic draw rates order c > r > e; the 10 least-drawn print as a
+      probe (all epics — by weight, as designed). THE DUD PASS fixed the
+      three strictly-dominated relics: VAULT bank +1→+2 (level with
+      Strongbox), BARRICADE +3→+4 block (level with Plate), TITHE
+      +5→+10 gold (a rare no longer loses to common Piggy from act 2).
+      Wizard median 4 left alone — drop data shows no kit starvation, so
+      his low sim line needs its own look before any buff (session 75)
 - [ ] **Late-HUD declutter**: at floor 25+ the battle screen carries meter,
       decree count, jar, pegs, prepaid toll, brew gauge, quest line, pace…
       — audit overlap at 480px, collapse the passive readouts into one

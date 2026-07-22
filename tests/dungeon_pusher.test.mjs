@@ -1197,7 +1197,7 @@ DP.newRun('knight');
   only('bulwark'); arm(500); S.run.block = 0; DP.applyLoot({ t: 'silver' }); t.eq(S.run.block, sBase + 1, 'Bulwark: silver coins +1 block');
   only('plateup'); arm(500); S.run.block = 0; DP.applyLoot({ t: 'shielditem', iid: 'shield' }); t.eq(S.run.block, DP.itemById('shield').block + 3, 'Reinforced Plate: shield items +3 block');
   only('ironhide'); DP.newRound(); t.eq(S.run.block, 2, 'Iron Hide: +2 block at round start');
-  only('barricade'); DP.newRound(); t.eq(S.run.block, 3, 'Barricade: +3 block at round start');
+  only('barricade'); DP.newRound(); t.eq(S.run.block, 4, 'Barricade: +4 block at round start (s75 dud pass — level with Plate)');
   S.screen = 'dungeon'; S.battle = null;
   only('thickskin'); S.run.hp = 50; S.run.maxHp = 60; S.run.block = 0; DP.hurtPlayer(6, 'x'); t.eq(S.run.hp, 50 - 5, 'Thick Skin: 1 less from every hit');
   only('guardian'); S.run.hp = 50; S.run.block = 10; DP.hurtPlayer(6, 'x'); t.eq(S.run.hp, 52, 'Guardian: a full block soak heals 2'); S.run.block = 0;
@@ -1221,7 +1221,7 @@ DP.newRun('knight');
   // --- economy ---
   only(); const before1 = S.run.gold; DP.addGold(100); const g1 = S.run.gold - before1;
   only('goldrush'); const before2 = S.run.gold; DP.addGold(100); t.eq(S.run.gold - before2, Math.round(g1 * 1.4), 'Gold Rush: +40% gold income');
-  only('vault'); t.eq(DP.bankMax(), C.BANK_MAX + 1, 'Vault: bank holds +1');
+  only('vault'); t.eq(DP.bankMax(), C.BANK_MAX + 2, 'Vault: bank holds +2 (s75 dud pass — level with Strongbox)');
   only('richhand'); arm(500); DP.dealHand(); t.ok((S.battle.hand.coin || 0) >= (S.run.purse.coin || 0) + 1, 'Rich Hand: a bonus gold coin in hand');
   only('tollkeeper'); arm(500); DP.dealHand(); t.ok((S.battle.hand.coin || 0) >= (S.run.purse.coin || 0) + 2, 'Tollkeeper: two bonus gold coins in hand');
 
@@ -6450,6 +6450,51 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   console.log('# relic offers: ' + offered + ' distinct relics offered across boss spreads, '
             + never + ' never seen (buff pass reads this tally next)');
   t.ok(offered >= 20, 'boss spreads sample a broad slice of the shelf (' + offered + ')');
+}
+
+// -------- TIER 11: RELIC PICKUP AUDIT — reachability, tails, the dud pass --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  D.srand(7); D.newRun('knight');
+  S2.run.bside = 0;
+  // reachability: six thousand seeded drop rolls must touch the whole shelf
+  const seen = {};
+  for (let i = 0; i < 6000; i++) { const id = D.rollRelicDrop(); if (id) seen[id] = (seen[id] || 0) + 1; }
+  const nonNg = D.RELICS.filter(r => !r.ng);
+  const missed = nonNg.filter(r => !seen[r.id]);
+  t.eq(missed.length, 0, 'every plain relic can drop' + (missed.length ? ' (missed: ' + missed.map(r => r.id).join(',') + ')' : ''));
+  t.ok(D.RELICS.filter(r => r.ng).every(r => !seen[r.id]), 'ng-gated relics never leak into a plain run');
+  S2.run.ng = 2;
+  const seenNg = {};
+  for (let i = 0; i < 4000; i++) { const id = D.rollRelicDrop(); if (id) seenNg[id] = 1; }
+  t.ok(D.RELICS.filter(r => r.ng).every(r => seenNg[r.id]), 'the gated shelf opens at legend depth');
+  S2.run.ng = 0;
+  // the tail: the ten least-drawn (probe — future buff passes read this)
+  const rank = nonNg.map(r => [r.id, seen[r.id] | 0]).sort((a, b) => a[1] - b[1]);
+  console.log('# relic drop tail: ' + rank.slice(0, 10).map(x => x[0] + ':' + x[1]).join(' '));
+  // rarity keeps its promise in the wash: per-relic draw rates order c > r > e
+  const per = { c: [0, 0], r: [0, 0], e: [0, 0] };
+  for (const r of nonNg) { per[r.rar][0] += seen[r.id] | 0; per[r.rar][1]++; }
+  const avg = (k) => per[k][0] / per[k][1];
+  t.ok(avg('c') > avg('r') && avg('r') > avg('e'),
+       'commons out-drop rares out-drop epics (' + avg('c').toFixed(1) + '/' + avg('r').toFixed(1) + '/' + avg('e').toFixed(1) + ')');
+  // THE DUD PASS: three strictly-dominated relics brought level with their twins
+  t.eq(D.relicById('vault').desc, 'the bank holds +2 pieces', 'VAULT wears its new promise');
+  S2.run.relics.push('vault');
+  t.eq(D.bankMax(), D.C.BANK_MAX + 2, 'and keeps it — level with its twin STRONGBOX');
+  S2.run.relics.length = 0;
+  t.eq(D.relicById('barricade').desc, 'start every round with +4 block', 'BARRICADE wears its new promise');
+  t.eq(D.relicById('tithe').desc, '+10 gold after every victory', 'TITHE wears its new promise');
+  S2.run.relics.push('tithe');
+  D.startBattle('battle');
+  const gold0 = S2.run.gold;
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 5); } }
+  t.ok(S2.run.gold >= gold0 + 10, 'a rare tithe now out-pays a common piggy through act two ('
+       + (S2.run.gold - gold0) + ' on the kill)');
+  D.leaveBattle();
+  if (S2.run) D.endRun('audit done');
 }
 
 t.done();

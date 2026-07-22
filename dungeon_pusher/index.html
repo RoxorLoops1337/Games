@@ -491,7 +491,7 @@ const RELICS = [
   { id: 'mending',    rar: 'c', icon: '\u{1F33F}', name: 'Mending',       desc: 'heal 2 HP at the start of each round' },
   { id: 'saltpile',   rar: 'c', icon: '\u{1F9C2}', name: 'Salt Pile',     desc: '+2 extra pieces rain in each round' },
   { id: 'prybar',     rar: 'c', icon: '\u{1F529}', name: 'Prybar',        desc: '+1 TILT charge every round' },
-  { id: 'vault',      rar: 'c', icon: '\u{1F5DD}\u{FE0F}', name: 'Vault',   desc: 'the bank holds +1 piece' },
+  { id: 'vault',      rar: 'c', icon: '\u{1F5DD}\u{FE0F}', name: 'Vault',   desc: 'the bank holds +2 pieces' },
   { id: 'prospector', rar: 'c', icon: '\u{26CF}\u{FE0F}', name: 'Prospector', desc: '+2 gold for every kill' },
   { id: 'luckypenny', rar: 'c', icon: '\u{1FA99}', name: 'Lucky Penny',   desc: '+3 gold at the start of each round' },
   { id: 'cloverfield',rar: 'c', icon: '\u{2618}\u{FE0F}', name: 'Clover Field', desc: 'lucky coins turn up even more often' },
@@ -512,14 +512,14 @@ const RELICS = [
   { id: 'assassin',   rar: 'r', icon: '\u{1F5E1}\u{FE0F}', name: 'Assassin', desc: 'lucky coins pierce guards and deal +2' },
   { id: 'heavyarms',  rar: 'r', icon: '\u{1F4AA}', name: 'Heavy Arms',    desc: 'weapons deal +30% damage' },
   { id: 'deepfreeze', rar: 'r', icon: '\u{1F328}\u{FE0F}', name: 'Deep Freeze', desc: 'frost runes stun +1 round' },
-  { id: 'barricade',  rar: 'r', icon: '\u{1F9F1}', name: 'Barricade',     desc: 'start every round with +3 block' },
+  { id: 'barricade',  rar: 'r', icon: '\u{1F9F1}', name: 'Barricade',     desc: 'start every round with +4 block' },
   { id: 'retribution',rar: 'r', icon: '\u{1F335}', name: 'Retribution',   desc: 'attackers take 2 back whenever they hit you' },
   { id: 'guardian',   rar: 'r', icon: '\u{1F47C}', name: 'Guardian',      desc: 'when your block fully soaks a hit, heal 2' },
   { id: 'overdrive',  rar: 'r', icon: '\u{26A1}', name: 'Overdrive',      desc: 'the resolve ramps up speed twice as fast' },
   { id: 'reverb',     rar: 'r', icon: '\u{1F515}', name: 'Reverb',        desc: 'the first piece of every resolve fires twice' },
   { id: 'tollkeeper', rar: 'r', icon: '\u{1F9F3}', name: 'Tollkeeper',    desc: 'your hand holds two bonus gold coins each round' },
   { id: 'graverobber',rar: 'r', icon: '\u{26B0}\u{FE0F}', name: 'Grave Robber', desc: '+1 key for every elite or boss slain' },
-  { id: 'tithe',      rar: 'r', icon: '\u{26EA}', name: 'Tithe',          desc: '+5 gold after every victory' },
+  { id: 'tithe',      rar: 'r', icon: '\u{26EA}', name: 'Tithe',          desc: '+10 gold after every victory' },
   { id: 'secondbreath',rar: 'r', icon: '\u{1F32C}\u{FE0F}', name: 'Second Breath', desc: 'heal 8 HP after every victory' },
   { id: 'emberhoard', rar: 'r', icon: '\u{1FA94}', name: 'Ember Hoard',   desc: 'gold coins also singe ALL foes for 1' },
   { id: 'contagion',  rar: 'r', icon: '\u{1F578}\u{FE0F}', name: 'Contagion', desc: 'venom coins also seep 1 stack to every foe' },
@@ -2407,9 +2407,9 @@ function tilt(dir) {
 }
 // hold a caught piece back for next round (up to 3)
 function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
-function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 1 : 0); }
+function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 2 : 0); }
 // the round-start guard from relics, stacked
-function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 3 : 0); }
+function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 4 : 0); }
 function tiltCount() { return C.TILTS * (ghostRun() ? 2 : 1) + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0) + (hasRelic('gildhour') ? 1 : 0) + wsLvl('tilt'); }
 function bankLoot(key) {
   const B = S.battle;
@@ -3316,7 +3316,7 @@ function winBattle() {
   const anyBoss = S.foes.some(f => f.boss);
   const anyElite = S.foes.some(f => f.elite);
   if (hasRelic('piggy')) { const pg = 4 + 2 * actIdx(S.run.floor); addGold(pg); S.battle.goldWon += pg; }
-  if (hasRelic('tithe')) { addGold(5); S.battle.goldWon += 5; }
+  if (hasRelic('tithe')) { addGold(10); S.battle.goldWon += 10; }
   if (hasRelic('secondbreath')) healPlayer(8);
   // A BOSS lets you choose one relic from a spread of two commons + a rare.
   let relicOffer = null;
