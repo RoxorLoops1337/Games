@@ -15,15 +15,20 @@
 <script>
 'use strict';
 // ============================================================================
-// THE CROUPIER — a slot-machine battle prototype for Dungeon Pusher.
-// Standalone sandbox: no save, no dungeon — just the reel fight, so the
-// owner can feel the loop before it moves into the real game.
+// THE CROUPIER v2 — a slot-machine battle prototype for Dungeon Pusher.
+// Standalone sandbox: no save, no dungeon — just the reel fight.
 //   SPIN → each press STOPS the next reel → NUDGE (3) → RESOLVE.
-//   Your purse composition IS the odds. Rows can carry ×2/×3 markers.
-//   The window can widen 3 → 4 → 5 reels.
-// Juice layer: synth SFX with rising pitch per payout, accelerating resolve
-// cascade, hitstop, particles, payline sweeps, banners. Addiction layer:
-// HEAT streaks, FEVER stuns, near-miss anticipation + nudge hints.
+//   Your purse composition IS the odds. Rows carry ×2/×3 markers.
+// v2, on the owner's orders:
+//   • the battle is STAGED like the coin pusher: foes on a stone stage with
+//     HP bars and telegraphed INTENTS, the hero at the bottom, the machine
+//     a brass-and-wood cabinet between them
+//   • every payout FLIES: damage streaks from the window to the foe it
+//     strikes, block and heals sail down to the hero — nothing is abstract
+//   • the LUCK-BE-A-LANDLORD layer: a pick-1-of-3 COIN DRAFT after every
+//     spin, growth coins (egg→whelp→drake, coal→diamond), the rat cult,
+//     the glutton pig, slug dilution, THE DEBT (an enrage fuse), and a
+//     TURBO toggle for when the ceremony is learned
 // ============================================================================
 const LW = 480, LH = 840;
 const canvas = document.getElementById('c');
@@ -42,8 +47,6 @@ function resize() {
 window.addEventListener('resize', resize); resize();
 
 // -------------------------------------------------------------------- sound
-// all synthesized — no assets. Chings climb a semitone per payout in the
-// cascade, reel stops thunk deeper per reel, jackpot gets a real fanfare.
 const AC = window.AudioContext || window.webkitAudioContext;
 let ac = null;
 function audio() { if (!ac && AC) ac = new AC(); if (ac && ac.state === 'suspended') ac.resume(); return ac; }
@@ -59,12 +62,13 @@ function tone(f, dur, type, vol, when, bend) {
   o.connect(g); g.connect(ac.destination);
   o.start(t0); o.stop(t0 + dur + 0.02);
 }
-const ST = Math.pow(2, 1 / 12);                       // one semitone
+const ST = Math.pow(2, 1 / 12);
 const SND = {
   tick() { tone(1500 + Math.random() * 500, 0.025, 'square', 0.015); },
   stop(i) { tone(170 + i * 45, 0.1, 'square', 0.16); tone(85 + i * 25, 0.16, 'triangle', 0.2, 0, 0.6); },
   ching(n) { const f = 880 * Math.pow(ST, Math.min(n, 30)); tone(f, 0.08, 'square', 0.11); tone(f * 2, 0.14, 'sine', 0.09, 0.02); },
   clink(n) { tone(500 * Math.pow(ST, Math.min(n, 30) / 2), 0.05, 'triangle', 0.09); },
+  whoosh() { tone(900, 0.12, 'sawtooth', 0.03, 0, 0.3); },
   line() { [0, 4, 7].forEach((st, i) => tone(660 * Math.pow(ST, st), 0.12, 'square', 0.11, i * 0.055)); },
   bigline() { [0, 4, 7, 12].forEach((st, i) => tone(660 * Math.pow(ST, st), 0.14, 'square', 0.12, i * 0.05)); },
   jackpot() { [0, 4, 7, 12, 16, 19, 24, 28, 31].forEach((st, i) => tone(523 * Math.pow(ST, st), 0.22, 'square', 0.13, i * 0.07)); },
@@ -74,73 +78,90 @@ const SND = {
   ding() { tone(1320, 0.1, 'sine', 0.1); tone(1980, 0.16, 'sine', 0.07, 0.05); },
   heart() { tone(66, 0.09, 'sine', 0.22); tone(52, 0.11, 'sine', 0.16, 0.12); },
   nudge() { tone(230, 0.05, 'square', 0.11); tone(460, 0.05, 'square', 0.08, 0.035); },
+  hatch() { tone(880, 0.08, 'sine', 0.1); tone(1320, 0.12, 'sine', 0.1, 0.07); tone(1760, 0.14, 'sine', 0.08, 0.15); },
+  diamond() { [0, 7, 12, 16, 24].forEach((st, i) => tone(1046 * Math.pow(ST, st), 0.16, 'sine', 0.1, i * 0.06)); },
+  debt() { tone(92, 0.5, 'sawtooth', 0.16, 0, 0.7); tone(61, 0.7, 'sawtooth', 0.13, 0.1, 0.7); },
+  draft() { tone(660, 0.07, 'triangle', 0.1); tone(990, 0.1, 'triangle', 0.08, 0.05); },
   win() { [0, 4, 7, 12, 7, 12, 16, 24].forEach((st, i) => tone(523 * Math.pow(ST, st), 0.18, 'square', 0.11, i * 0.09)); },
   lose() { [12, 7, 4, 0].forEach((st, i) => tone(311 * Math.pow(ST, st - 12), 0.3, 'sawtooth', 0.11, i * 0.17, 0.8)); },
 };
 
 // ------------------------------------------------------------------- symbols
+// dmg/blk/heal are per-symbol bases; growth coins carry their own rules
 const KINDS = {
-  coin:   { sym: '\u{1FA99}', col: '#f2c04a', name: 'Gold',   what: '1 dmg' },
-  silver: { sym: '\u{1F6E1}\u{FE0F}', col: '#c3ccd6', name: 'Silver', what: '1 block' },
-  green:  { sym: '\u{2620}\u{FE0F}', col: '#8ed67e', name: 'Venom',  what: '1 poison' },
-  red:    { sym: '\u{2764}\u{FE0F}', col: '#e87a8a', name: 'Heart',  what: 'heal 1' },
-  blue:   { sym: '\u{2744}\u{FE0F}', col: '#7ab0e8', name: 'Frost',  what: '1 dmg ALL, thru block' },
-  lucky:  { sym: '7\u{FE0F}\u{20E3}', col: '#ffdf6b', name: 'Lucky',  what: '4 dmg' },
-  bunny:  { sym: '\u{1F407}', col: '#f0e0c8', name: 'Bunny',  what: 'pairs BREED a ticket' },
-  twin:   { sym: '\u{264A}',  col: '#c8a2ff', name: 'Twin',   what: '4 dmg beside its twin' },
-  ember:  { sym: '\u{1F525}', col: '#ff8a4a', name: 'Ember',  what: '2 dmg — spin burns +1' },
-  king:   { sym: '\u{1F451}', col: '#ffcf7a', name: 'King',   what: '1 + 1 per rowmate' },
-  item:   { sym: '\u{1F5E1}\u{FE0F}', col: '#e8e0d0', name: 'Blade',  what: '6 dmg (gear ticket)' },
+  coin:    { sym: '\u{1FA99}', col: '#f2c04a', name: 'Gold',    what: '1 dmg' },
+  silver:  { sym: '\u{1F6E1}\u{FE0F}', col: '#c3ccd6', name: 'Silver',  what: '1 block' },
+  green:   { sym: '\u{2620}\u{FE0F}', col: '#8ed67e', name: 'Venom',   what: '1 poison' },
+  red:     { sym: '\u{2764}\u{FE0F}', col: '#e87a8a', name: 'Heart',   what: 'heal 1' },
+  blue:    { sym: '\u{2744}\u{FE0F}', col: '#7ab0e8', name: 'Frost',   what: '1 dmg ALL, thru block' },
+  lucky:   { sym: '7\u{FE0F}\u{20E3}', col: '#ffdf6b', name: 'Lucky',   what: '4 dmg' },
+  bunny:   { sym: '\u{1F407}', col: '#f0e0c8', name: 'Bunny',   what: 'pairs BREED a ticket' },
+  twin:    { sym: '\u{264A}',  col: '#c8a2ff', name: 'Twin',    what: '4 dmg beside its twin' },
+  ember:   { sym: '\u{1F525}', col: '#ff8a4a', name: 'Ember',   what: '2 dmg — spin burns +1' },
+  king:    { sym: '\u{1F451}', col: '#ffcf7a', name: 'King',    what: '1 + 1 per rowmate' },
+  item:    { sym: '\u{1F5E1}\u{FE0F}', col: '#e8e0d0', name: 'Blade',   what: '6 dmg (gear ticket)' },
+  egg:     { sym: '\u{1F95A}', col: '#f0e8d0', name: 'Egg',     what: '0 dmg — may HATCH each spin' },
+  whelp:   { sym: '\u{1F423}', col: '#ffd9a0', name: 'Whelp',   what: '2 dmg — grows into a DRAKE' },
+  drake:   { sym: '\u{1F409}', col: '#8ee89a', name: 'Drake',   what: '5 dmg — lays eggs on the reels' },
+  coal:    { sym: '\u{26AB}',  col: '#8a8a92', name: 'Coal',    what: '0 dmg — 10 spins of pressure…' },
+  diamond: { sym: '\u{1F48E}', col: '#a8ecff', name: 'Diamond', what: '4 dmg +2 per other diamond showing' },
+  rat:     { sym: '\u{1F400}', col: '#b8a8c0', name: 'Rat',     what: '+1 per other rat showing; 3+ SWARM ×2' },
+  pig:     { sym: '\u{1F437}', col: '#f0b8c8', name: 'Glutton', what: 'eats a gold neighbor: +1 dmg FOREVER' },
+  slug:    { sym: '\u{1F40C}', col: '#6a6272', name: 'Slug',    what: 'a dud — thin purses breed them' },
 };
-const PICKABLE = ['coin', 'silver', 'green', 'red', 'blue', 'lucky', 'bunny', 'twin', 'ember', 'king'];
-const DAMAGE_KINDS = { coin: 1, blue: 1, lucky: 1, bunny: 1, twin: 1, ember: 1, king: 1, item: 1 };
+const PICKABLE = ['coin', 'silver', 'green', 'red', 'blue', 'lucky', 'bunny', 'twin', 'ember', 'king', 'egg', 'coal', 'rat', 'pig'];
+const DAMAGE_KINDS = { coin: 1, blue: 1, lucky: 1, bunny: 1, twin: 1, ember: 1, king: 1, item: 1, whelp: 1, drake: 1, diamond: 1, rat: 1, pig: 1 };
+// the after-spin draft pool: [kind, weight]
+const DRAFT_POOL = [['coin', 16], ['silver', 12], ['green', 6], ['red', 6], ['blue', 6], ['lucky', 4],
+                    ['bunny', 4], ['twin', 4], ['ember', 4], ['king', 3],
+                    ['egg', 6], ['coal', 5], ['rat', 6], ['pig', 3]];
 
 // ------------------------------------------------------------------ enemies
 const SETUPS = [
-  { id: 'pack',  name: 'ORC PACK',    foes: [
+  { id: 'pack',  name: 'ORC PACK', debt: 7, foes: [
     { name: 'Orc Grunt', sym: '\u{1F9CC}', hp: 42, atk: 3, def: null },
     { name: 'Gutter Rat', sym: '\u{1F400}', hp: 30, atk: 2, def: null }] },
-  { id: 'wall',  name: 'SHIELD WALL', foes: [
+  { id: 'wall',  name: 'SHIELD WALL', debt: 8, foes: [
     { name: 'Skeleton Guard', sym: '\u{1F480}', hp: 55, atk: 4, def: 'armor' },
     { name: 'War Totem', sym: '\u{1F5FF}', hp: 40, atk: 3, def: 'ward' }] },
-  { id: 'slime', name: 'GEL & HIDE',  foes: [
+  { id: 'slime', name: 'GEL & HIDE', debt: 7, foes: [
     { name: 'Gel Cube', sym: '\u{1F7E2}', hp: 46, atk: 3, def: 'gel' },
     { name: 'Ogre Brute', sym: '\u{1F479}', hp: 80, atk: 5, def: 'thick' }] },
-  { id: 'boss',  name: 'THE DRAGON',  foes: [
+  { id: 'boss',  name: 'THE DRAGON', debt: 0, foes: [
     { name: 'Vault Dragon', sym: '\u{1F409}', hp: 200, atk: 7, def: 'armor', boss: true }] },
 ];
 const DEF_TXT = { armor: 'absorbs 2/hit', gel: 'hits capped at 2', ward: 'pack −2 dmg', thick: 'poison immune' };
 
 // -------------------------------------------------------------------- state
 const G = {
-  purse: { coin: 8, silver: 6, green: 2, red: 2, blue: 2, lucky: 1, bunny: 2, twin: 2, ember: 1, king: 1 },
-  bredTickets: 0,                       // bunny breeding grows the strip
-  gearTickets: 1,                       // arsenal presence on the reels
-  w: 3,                                 // reels (3 → 4 → 5)
-  rowMul: [1, 1, 1],                    // the owner's row markers ×1/×2/×3
-  setup: 0,
+  purse: { coin: 8, silver: 6, green: 2, red: 2, blue: 2, lucky: 1, bunny: 2, twin: 2, ember: 1, king: 1,
+           egg: 1, coal: 1, rat: 2, pig: 0, whelp: 0, drake: 0, diamond: 0, slug: 0 },
+  bredTickets: 0, gearTickets: 1,
+  w: 3, rowMul: [1, 1, 1], setup: 0,
   screen: 'setup',                      // setup | battle | won | lost
   hp: 60, maxHp: 60, block: 0,
   foes: [], round: 0, nudges: 3,
-  reels: [],                            // per reel: { strip, pos, vel, stopped }
-  phase: 'idle',                        // idle | spin | nudge | resolving
-  queue: [], qt: 0, qn: 0,              // resolve queue; qn = cascade counter (pitch + tempo)
+  reels: [], phase: 'idle',             // idle | spin | nudge | resolving | draft
+  queue: [], qt: 0, qn: 0,
   log: [], floats: [], shake: 0, t: 0,
   spins: 0, dmgDone: 0,
-  // juice + addiction layer
-  heat: 0,                              // streak of paying spins (0..5) → bonus fire
-  stun: false,                          // FEVER: this spin stuns the house
-  spinDmg: 0, spinHits: 0,
+  heat: 0, stun: false, spinDmg: 0, spinHits: 0,
   antic: false, hints: [],
-  parts: [], pops: [], lineFx: [],
+  parts: [], pops: [], lineFx: [], shots: [],
   banner: null, flash: null, freeze: 0, feverGlow: 0, hb: 0, lastTick: 0,
+  // the LANDLORD layer
+  draft: null,                          // {offers:[k,k,k]} after every spin
+  debt: 0, debtMax: 0,                  // the enrage fuse (spins until THE CALL)
+  coalAge: 0, pigFat: 0,
+  turbo: false, smelted: false,
 };
+function spd() { return G.turbo ? 0.35 : 1; }
 function logLine(s, col) { G.log.unshift({ s, col: col || '#c8b8cc' }); if (G.log.length > 6) G.log.pop(); }
 function float(x, y, s, col, big) { G.floats.push({ x, y, s, col: col || '#ffe9a3', t: 0, big }); }
 function banner(s, col, big, sub) { G.banner = { s, col: col || '#ffd75e', t: 0, big, sub }; }
-function burst(x, y, col, n, spd) {
+function burst(x, y, col, n, sp2) {
   for (let i = 0; i < n; i++) {
-    const a = Math.random() * 6.283, v = (spd || 90) * (0.4 + Math.random() * 0.9);
+    const a = Math.random() * 6.283, v = (sp2 || 90) * (0.4 + Math.random() * 0.9);
     G.parts.push({ x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 50, t: 0, life: 0.45 + Math.random() * 0.35, col });
   }
   while (G.parts.length > 260) G.parts.shift();
@@ -150,16 +171,29 @@ function shower() {
     x: Math.random() * LW, y: -30 - Math.random() * 420, vx: (Math.random() - 0.5) * 40,
     vy: 50 + Math.random() * 130, t: 0, life: 3.2, sym: '\u{1FA99}' });
 }
+// ---- the flying payout: everything the machine does STREAKS to its target
+function shot(x0, y0, x1, y1, icon, label, col, onHit, big) {
+  G.shots.push({ x0, y0, x1, y1, icon, label, col, onHit, big,
+                 t: 0, dur: (big ? 0.34 : 0.26) * spd(), lift: 40 + Math.random() * 50 });
+  SND.whoosh();
+}
+
+// ------------------------------------------------------------------- layout
+const CELL = 84;
+function gridY() { return 262; }
+function reelX(i) { return LW / 2 - (G.w * CELL) / 2 + i * CELL; }
+const HERO = { x: 74, y: 660 };
+function foePos(i, n) { return { x: LW / 2 - (n * 150) / 2 + i * 150 + 75, y: 140 }; }
 
 // ------------------------------------------------------------------- strips
-// every coin you own is one ticket — your purse IS the odds
+// every coin you own is one ticket — your purse IS the odds; a thin purse
+// pads out with worthless SLUGS (dilution is real, the landlord taught us)
 function buildStrip(seedShift) {
   const t = [];
-  for (const k of PICKABLE) for (let i = 0; i < (G.purse[k] | 0); i++) t.push(k);
+  for (const k of Object.keys(G.purse)) for (let i = 0; i < (G.purse[k] | 0); i++) t.push(k);
   for (let i = 0; i < G.bredTickets; i++) t.push('bunny');
   for (let i = 0; i < G.gearTickets; i++) t.push('item');
-  while (t.length < 10) t.push('coin');           // a thin purse still spins
-  // fisher-yates with a cheap per-reel jiggle so reels differ
+  while (t.length < 10) t.push('slug');
   let s = 1234567 + seedShift * 99991 + G.spins * 7919;
   const rnd = () => { s = (s * 1103515245 + 12345) & 0x7fffffff; return s / 0x7fffffff; };
   for (let i = t.length - 1; i > 0; i--) { const j = (rnd() * (i + 1)) | 0; const q = t[i]; t[i] = t[j]; t[j] = q; }
@@ -167,23 +201,57 @@ function buildStrip(seedShift) {
 }
 function startBattle() {
   const su = SETUPS[G.setup];
-  G.foes = su.foes.map(f => ({ ...f, maxHp: f.hp, block: 0, pois: 0, burn: 0, brace: false, hitT: 0 }));
+  G.foes = su.foes.map(f => ({ ...f, maxHp: f.hp, pois: 0, burn: 0, brace: false, hitT: 0, lungeT: 0, intent: null }));
   G.hp = G.maxHp = 60; G.block = 0; G.round = 0; G.heat = 0; G.stun = false;
+  G.debtMax = su.debt; G.debt = su.debt;
   G.screen = 'battle'; G.phase = 'idle'; G.log = []; G.spins = 0; G.dmgDone = 0;
-  G.parts = []; G.pops = []; G.lineFx = []; G.banner = null;
+  G.parts = []; G.pops = []; G.lineFx = []; G.shots = []; G.banner = null; G.draft = null; G.smelted = false;
+  // the window never sits empty: the reels rest on a face-up spread
+  G.reels = [];
+  for (let r = 0; r < G.w; r++) {
+    const strip = buildStrip(r);
+    G.reels.push({ strip, pos: Math.floor(Math.random() * strip.length), vel: 0, stopped: true, bT: 0, flashT: 0 });
+  }
+  rollIntents();
   logLine('the house opens: ' + su.name, '#ffd75e');
+}
+// telegraphed intents, pusher-style: you SEE what is coming before you spin
+function rollIntents() {
+  for (const f of liveFoes()) {
+    if (f.boss && (G.round + 1) % 3 === 0) { f.intent = { t: 'breath', n: f.atk + 2 }; continue; }
+    const r = Math.random();
+    f.intent = r < 0.2 ? { t: 'brace' } : r > 0.85 ? { t: 'heavy', n: f.atk * 2 } : { t: 'hit', n: f.atk };
+  }
 }
 function startSpin() {
   if (G.screen !== 'battle' || G.phase !== 'idle') return;
   G.round++; G.spins++;
   G.block = 0; G.nudges = 3;
   G.reels = []; G.antic = false; G.hints = []; G.spinDmg = 0; G.spinHits = 0; G.stun = false;
+  // ---- the growth coins tick BETWEEN spins (the landlord's planted seeds)
+  growthTick();
   for (let r = 0; r < G.w; r++) {
     const strip = buildStrip(r);
     G.reels.push({ strip, pos: Math.random() * strip.length, vel: 34 + r * 7 + Math.random() * 8, stopped: false, bT: 0, flashT: 0 });
   }
   G.phase = 'spin';
   logLine('round ' + G.round + ' — the reels sing');
+}
+function growthTick() {
+  // eggs hatch, whelps grow — each ticket rolls alone
+  let hatched = 0, grown = 0;
+  for (let i = 0; i < (G.purse.egg | 0); i++) if (Math.random() < 0.12) hatched++;
+  if (hatched) { G.purse.egg -= hatched; G.purse.whelp = (G.purse.whelp | 0) + hatched; SND.hatch(); banner('\u{1F423} ' + (hatched > 1 ? hatched + ' EGGS HATCH!' : 'AN EGG HATCHES!'), '#ffd9a0'); logLine('a shell cracks in the purse\u{2026}', '#ffd9a0'); }
+  for (let i = 0; i < (G.purse.whelp | 0); i++) if (Math.random() < 0.10) grown++;
+  if (grown) { G.purse.whelp -= grown; G.purse.drake = (G.purse.drake | 0) + grown; SND.hatch(); banner('\u{1F409} A WHELP BECOMES A DRAKE!', '#8ee89a'); }
+  // coal matures under pressure — all at once, a mine-collapse of riches
+  if ((G.purse.coal | 0) > 0) {
+    G.coalAge++;
+    if (G.coalAge >= 10) {
+      const n = G.purse.coal; G.purse.coal = 0; G.purse.diamond = (G.purse.diamond | 0) + n; G.coalAge = 0;
+      SND.diamond(); banner('\u{1F48E} THE PRESSURE HOLDS \u{2014} ' + n + ' DIAMOND' + (n > 1 ? 'S' : '') + '!', '#a8ecff', true);
+    }
+  }
 }
 function lineDefs() {
   const lines = [];
@@ -206,14 +274,12 @@ function stopNext() {
   if (G.reels.every(x => x.stopped)) { G.phase = 'nudge'; computeHints(); if (G.hints.length) SND.ding(); }
   else checkAnticipation();
 }
-// the classic slot tease: two of a kind already showing on a line whose last
-// cell is still rolling → the remaining reels slow to a crawl and glow hot
 function checkAnticipation() {
   if (G.antic) return;
   for (const ln of lineDefs()) {
     const ks = ln.cells.map(([row, c]) => G.reels[c].stopped ? cellKind(c, row) : null);
     const shown = ks.filter(Boolean);
-    if (ks.filter(k => k === null).length === 1 && shown.length === 2 && shown[0] === shown[1]) {
+    if (ks.filter(k => k === null).length === 1 && shown.length === 2 && shown[0] === shown[1] && shown[0] !== 'slug') {
       G.antic = true;
       for (const rl of G.reels) if (!rl.stopped) rl.vel = Math.max(7, rl.vel * 0.28);
       SND.ding();
@@ -221,7 +287,6 @@ function checkAnticipation() {
     }
   }
 }
-// after the reels lock: is a 3-of-a-kind exactly ONE nudge away? tell them.
 function computeHints() {
   G.hints = [];
   const seen = {};
@@ -229,7 +294,7 @@ function computeHints() {
     const ks = ln.cells.map(([row, c]) => cellKind(c, row));
     for (let miss = 0; miss < 3; miss++) {
       const others = ks.filter((_, i) => i !== miss);
-      if (!others[0] || others[0] !== others[1] || ks[miss] === others[0]) continue;
+      if (!others[0] || others[0] !== others[1] || others[0] === 'slug' || ks[miss] === others[0]) continue;
       const [r3, c3] = ln.cells[miss];
       const rl = G.reels[c3];
       for (const dir of [1, -1]) {
@@ -255,22 +320,19 @@ function cellKind(ri, row) {
 }
 
 // ------------------------------------------------------------------ resolve
-// the paytable: 3-of-a-kind triples its line; the named recipes; specials.
-// HEAT: every paying spin stokes the streak (+2 fire dmg per level, cap 5);
-// a blank spin cools it. FEVER: jackpot or a 3-combo spin stuns the house.
 function resolveSpin() {
   if (G.phase !== 'nudge') return;
-  const grid = [];                                 // grid[row][col]
+  const grid = [];
   for (let row = 0; row < 3; row++) { grid.push([]); for (let c = 0; c < G.w; c++) grid[row].push(cellKind(c, row)); }
   const q = [];
   const emberUp = grid.flat().includes('ember');
-  const lineBoost = {};                            // "r,c" → extra multiplier
+  const lineBoost = {};
   const recipes = [];
   for (const ln of lineDefs()) {
     const ks = ln.cells.map(([r2, c2]) => grid[r2][c2]);
     const key3 = ks[0] === ks[1] && ks[1] === ks[2];
     if (key3 && ks[0] === 'lucky') { recipes.push({ label: '\u{1F3B0} JACKPOT 7-7-7!', fx: 'jackpot', cells: ln.cells }); }
-    else if (key3 && ks[0] !== 'bunny') {
+    else if (key3 && ks[0] !== 'bunny' && ks[0] !== 'slug') {
       for (const [r2, c2] of ln.cells) lineBoost[r2 + ',' + c2] = (lineBoost[r2 + ',' + c2] || 1) * 3;
       recipes.push({ label: 'three ' + (KINDS[ks[0]] ? KINDS[ks[0]].name : ks[0]) + 's \u{2014} \u{D7}3 (' + ln.label + ')', fx: 'three', kind: ks[0], cells: ln.cells });
     }
@@ -279,16 +341,43 @@ function resolveSpin() {
     if (sorted === 'green,green,red') recipes.push({ label: '\u{2697}\u{FE0F} APOTHECARY \u{2014} poison 4, heal 4', fx: 'apothecary', cells: ln.cells });
     if (ks[0] === 'blue' && ks[1] === 'blue') recipes.push({ label: '\u{2744}\u{FE0F} COLD SNAP \u{2014} 2 to ALL', fx: 'coldsnap', cells: ln.cells });
   }
-  // ---- specials judged on the window (TOUCH = grid adjacency) ----
-  let bunnies = 0;
-  for (let row = 0; row < 3; row++) for (let c = 0; c < G.w; c++) if (grid[row][c] === 'bunny') bunnies++;
+  // ---- specials & the landlord coins, judged on the window ----
+  let bunnies = 0, rats = 0, diamonds = 0;
+  for (let row = 0; row < 3; row++) for (let c = 0; c < G.w; c++) {
+    if (grid[row][c] === 'bunny') bunnies++;
+    if (grid[row][c] === 'rat') rats++;
+    if (grid[row][c] === 'diamond') diamonds++;
+  }
   if (bunnies >= 2 && G.bredTickets < 6) {
     G.bredTickets++;
     recipes.push({ label: '\u{1F407} the bunnies breed \u{2014} +1 ticket (' + G.bredTickets + '/6)', fx: 'breed' });
   }
+  if (rats >= 3) recipes.push({ label: '\u{1F400} THE SWARM \u{2014} rats bite DOUBLE', fx: 'swarm' });
   const twinPaid = {};
   for (let row = 0; row < 3; row++) for (let c = 0; c + 1 < G.w; c++) {
     if (grid[row][c] === 'twin' && grid[row][c + 1] === 'twin') { twinPaid[row + ',' + c] = 1; twinPaid[row + ',' + (c + 1)] = 1; }
+  }
+  // the GLUTTON eats an orthogonal gold neighbor: that coin never fires,
+  // the pig grows permanently fatter (Mrs. Fruit sends her regards)
+  const eaten = {};
+  for (let row = 0; row < 3; row++) for (let c = 0; c < G.w; c++) {
+    if (grid[row][c] !== 'pig') continue;
+    const near = [[row - 1, c], [row + 1, c], [row, c - 1], [row, c + 1]];
+    for (const [r2, c2] of near) {
+      if (r2 < 0 || r2 > 2 || c2 < 0 || c2 >= G.w) continue;
+      if (grid[r2][c2] === 'coin' && !eaten[r2 + ',' + c2]) {
+        eaten[r2 + ',' + c2] = 1; G.pigFat++;
+        recipes.push({ label: '\u{1F437} the glutton FEEDS \u{2014} +1 dmg forever (' + G.pigFat + ')', fx: 'feed', cells: [[row, c], [r2, c2]] });
+        break;
+      }
+    }
+  }
+  // drakes lay eggs right on the reels
+  for (let row = 0; row < 3; row++) for (let c = 0; c < G.w; c++) {
+    if (grid[row][c] === 'drake' && Math.random() < 0.25) {
+      G.purse.egg = (G.purse.egg | 0) + 1;
+      recipes.push({ label: '\u{1F95A} the drake LAYS \u{2014} an egg joins the purse', fx: 'lay' });
+    }
   }
   // ---- the streak & the fever ----
   G.spinHits = recipes.length;
@@ -296,10 +385,11 @@ function resolveSpin() {
   else if (G.heat > 0) { G.heat = 0; logLine('the streak cools\u{2026}', '#9a8aa0'); }
   const jack = recipes.some(r => r.fx === 'jackpot');
   if (jack || G.spinHits >= 3) G.stun = true;
-  // ---- fire every symbol, column by column — the machine pays left to right ----
+  // ---- queue every symbol, column by column ----
   for (let c = 0; c < G.w; c++) for (let row = 0; row < 3; row++) {
     const k = grid[row][c];
     let mul = G.rowMul[row] * (lineBoost[row + ',' + c] || 1);
+    if (eaten[row + ',' + c]) { q.push({ kind: 'eaten', row, col: c }); continue; }
     if (k === 'king') {
       let court = 0;
       for (let c2 = 0; c2 < G.w; c2++) if (c2 !== c && grid[row][c2] !== 'king') court++;
@@ -307,19 +397,21 @@ function resolveSpin() {
       continue;
     }
     if (k === 'twin') { q.push({ kind: 'twin', row, col: c, mul, paired: !!twinPaid[row + ',' + c], ember: emberUp }); continue; }
+    if (k === 'rat') { q.push({ kind: 'rat', row, col: c, mul, pack: rats, ember: emberUp }); continue; }
+    if (k === 'diamond') { q.push({ kind: 'diamond', row, col: c, mul, shine: diamonds, ember: emberUp }); continue; }
     q.push({ kind: k, row, col: c, mul, ember: emberUp });
   }
   for (const rc of recipes) q.push({ recipe: rc });
   if (G.heat > 0) q.push({ heatFx: G.heat });
   if (G.stun) q.push({ feverFx: 1 });
-  G.queue = q; G.qt = 0.3; G.qn = 0;
+  G.queue = q; G.qt = 0.3 * spd(); G.qn = 0;
   G.phase = 'resolving';
 }
 function liveFoes() { return G.foes.filter(f => f.hp > 0); }
 function target() { return liveFoes()[0] || null; }
-function foePos(f) {
+function foeXY(f) {
   const i = G.foes.indexOf(f);
-  return { x: LW / 2 - (G.foes.length * 150) / 2 + i * 150 + 75, y: 116 };
+  return foePos(i, G.foes.length);
 }
 function dmgFoe(f, n, pierce) {
   if (!f || f.hp <= 0 || n <= 0) return 0;
@@ -328,47 +420,88 @@ function dmgFoe(f, n, pierce) {
   if (f.def === 'armor' && !pierce) d = Math.max(0, d - 2);
   if (liveFoes().some(x => x.def === 'ward' && x !== f)) d = Math.max(0, d - 2);
   if (f.brace && !pierce) d = Math.max(0, d - 3);
-  f.hp -= d; f.hitT = 0.3; G.dmgDone += d;
-  if (G.phase === 'resolving') G.spinDmg += d;
-  if (d > 0) { const p = foePos(f); burst(p.x, p.y, '#ff7a6a', Math.min(14, 3 + d), 70 + d * 8); G.shake += Math.min(3, d / 2); }
-  if (f.hp <= 0 && !f.dead) { f.dead = 1; logLine(f.name + ' falls!', '#7ee787'); G.shake += 8; const p = foePos(f); burst(p.x, p.y, '#ffe9a3', 26, 150); }
+  f.hp -= d; f.hitT = 0.3; G.dmgDone += d; G.spinDmg += d;
+  if (d > 0) { const p = foeXY(f); burst(p.x, p.y, '#ff7a6a', Math.min(14, 3 + d), 70 + d * 8); G.shake += Math.min(3, d / 2); }
+  if (f.hp <= 0 && !f.dead) { f.dead = 1; logLine(f.name + ' falls!', '#7ee787'); G.shake += 8; const p = foeXY(f); burst(p.x, p.y, '#ffe9a3', 26, 150); }
   return d;
 }
+function cellCenter(s) { return { cx: reelX(s.col) + CELL / 2, cy: gridY() + s.row * CELL + CELL / 2 }; }
 function cellFx(s, col, big) {
-  const cx = reelX(s.col) + CELL / 2, cy = gridY() + s.row * CELL + CELL / 2;
+  const { cx, cy } = cellCenter(s);
   G.pops.push({ col: s.col, row: s.row, t: 0, c: col });
   burst(cx, cy, col, big ? 14 : 6, big ? 130 : 80);
   return { cx, cy };
 }
+// fire one symbol: the payout LEAVES the window and FLIES to whom it concerns
 function fireSymbol(s) {
   const f = target();
-  const kc = KINDS[s.kind] ? KINDS[s.kind].col : '#fff';
-  const { cx, cy } = cellFx(s, kc, s.mul > 1 || s.kind === 'lucky' || s.kind === 'item' || s.kind === 'king');
-  const burnRider = s.ember ? 1 : 0;
-  const times = s.mul;
+  const kk = KINDS[s.kind] || KINDS.slug;
+  const times = s.mul || 1;
+  const burn = s.ember ? 1 : 0;
+  if (s.kind === 'eaten') { const { cx, cy } = cellFx({ ...s }, '#f0b8c8', false); float(cx, cy, 'GULP!', '#f0b8c8'); return; }
+  if (s.kind === 'slug') { const { cx, cy } = cellCenter(s); float(cx, cy, '\u{2026}', '#6a6272'); SND.clink(0); return; }
   const dmgKind = DAMAGE_KINDS[s.kind];
   if (dmgKind) SND.ching(G.qn); else SND.clink(G.qn);
-  if (s.kind === 'coin') { const d = dmgFoe(f, 1 * times); float(cx, cy, '-' + d, '#f2c04a'); if (burnRider && f) f.burn += 1; }
-  else if (s.kind === 'silver') { G.block += 1 * times; float(cx, cy, '+' + times + '\u{1F6E1}', '#c3ccd6'); }
-  else if (s.kind === 'green') { if (f && f.def !== 'thick') { f.pois += 1 * times; float(cx, cy, '☠+' + times, '#8ed67e'); } else float(cx, cy, 'immune', '#8a8a8a'); }
-  else if (s.kind === 'red') { G.hp = Math.min(G.maxHp, G.hp + 1 * times); float(cx, cy, '+' + times + '\u{2764}', '#e87a8a'); }
-  else if (s.kind === 'blue') { for (const x of liveFoes()) { x.hp -= 1 * times; x.hitT = 0.3; G.dmgDone += times; G.spinDmg += times; const p = foePos(x); burst(p.x, p.y, '#7ab0e8', 5, 80); } float(cx, cy, '-' + times + ' ALL', '#7ab0e8'); G.foes.forEach(x => { if (x.hp <= 0 && !x.dead) { x.dead = 1; logLine(x.name + ' falls!', '#7ee787'); } }); }
-  else if (s.kind === 'lucky') { const d = dmgFoe(f, 4 * times); float(cx, cy, '-' + d + '!', '#ffdf6b', true); G.freeze = Math.max(G.freeze, 0.05); if (burnRider && f) f.burn += 1; }
-  else if (s.kind === 'bunny') { const d = dmgFoe(f, 1 * times); float(cx, cy, '-' + d, '#f0e0c8'); }
-  else if (s.kind === 'twin') { const d = dmgFoe(f, (s.paired ? 4 : 1) * times); float(cx, cy, '-' + d + (s.paired ? ' \u{264A}!' : ''), '#c8a2ff', s.paired); if (s.paired) G.freeze = Math.max(G.freeze, 0.05); }
-  else if (s.kind === 'ember') { const d = dmgFoe(f, 2 * times); if (f) f.burn += 2; float(cx, cy, '-' + d + ' \u{1F525}', '#ff8a4a'); }
-  else if (s.kind === 'king') { const d = dmgFoe(f, (1 + s.court) * times); float(cx, cy, '-' + d + ' \u{1F451}', '#ffcf7a', true); G.freeze = Math.max(G.freeze, 0.05); if (burnRider && f) f.burn += 1; }
-  else if (s.kind === 'item') { const d = dmgFoe(f, 6 * times); float(cx, cy, '-' + d + ' \u{1F5E1}', '#e8e0d0', true); G.freeze = Math.max(G.freeze, 0.05); }
+  const { cx, cy } = cellFx(s, kk.col, times > 1 || s.kind === 'lucky' || s.kind === 'item' || s.kind === 'king' || s.kind === 'diamond');
+  const hitFoe = (n, pierce, lbl, big) => {
+    if (!f) return;
+    const p = foeXY(f);
+    shot(cx, cy, p.x, p.y + 10, kk.sym, lbl, kk.col, () => {
+      const d = dmgFoe(f, n, pierce);
+      float(p.x, p.y - 14, '-' + d, kk.col, big);
+      if (burn && f.hp > 0) f.burn += 1;
+      if (big) G.freeze = Math.max(G.freeze, 0.05);
+    }, big);
+  };
+  const toHero = (lbl, cb) => {
+    shot(cx, cy, HERO.x, HERO.y - 10, kk.sym, lbl, kk.col, () => { cb(); float(HERO.x, HERO.y - 34, lbl, kk.col); });
+  };
+  if (s.kind === 'coin') hitFoe(1 * times, false, times > 1 ? times + ' DMG' : '1 DMG');
+  else if (s.kind === 'silver') toHero('+' + times + ' \u{1F6E1}', () => { G.block += 1 * times; });
+  else if (s.kind === 'green') {
+    if (f && f.def !== 'thick') { const p = foeXY(f); shot(cx, cy, p.x, p.y + 10, kk.sym, '\u{2620} +' + times, kk.col, () => { f.pois += 1 * times; float(p.x, p.y - 14, '\u{2620}+' + times, kk.col); }); }
+    else { float(cx, cy, 'immune', '#8a8a8a'); }
+  }
+  else if (s.kind === 'red') toHero('+' + times + ' \u{2764}', () => { G.hp = Math.min(G.maxHp, G.hp + 1 * times); });
+  else if (s.kind === 'blue') {
+    for (const x of liveFoes()) {
+      const p = foeXY(x);
+      shot(cx, cy, p.x, p.y + 10, kk.sym, times + ' ALL', kk.col, () => {
+        x.hp -= 1 * times; x.hitT = 0.3; G.dmgDone += times; G.spinDmg += times;
+        burst(p.x, p.y, kk.col, 5, 80); float(p.x, p.y - 14, '-' + times, kk.col);
+        if (x.hp <= 0 && !x.dead) { x.dead = 1; logLine(x.name + ' falls!', '#7ee787'); }
+      });
+    }
+  }
+  else if (s.kind === 'lucky') hitFoe(4 * times, false, (4 * times) + ' DMG!', true);
+  else if (s.kind === 'bunny') hitFoe(1 * times, false, '1 DMG');
+  else if (s.kind === 'twin') hitFoe((s.paired ? 4 : 1) * times, false, s.paired ? '\u{264A} \u{D7}4!' : '1 DMG', s.paired);
+  else if (s.kind === 'ember') {
+    if (f) { const p = foeXY(f); shot(cx, cy, p.x, p.y + 10, kk.sym, '2 + \u{1F525}', kk.col, () => { const d = dmgFoe(f, 2 * times); if (f.hp > 0) f.burn += 2; float(p.x, p.y - 14, '-' + d + ' \u{1F525}', kk.col); }); }
+  }
+  else if (s.kind === 'king') hitFoe((1 + s.court) * times, true, '\u{1F451} ' + ((1 + s.court) * times), true);
+  else if (s.kind === 'item') hitFoe(6 * times, true, '\u{1F5E1} 6!', true);
+  else if (s.kind === 'egg') { float(cx, cy, 'tick\u{2026}', '#f0e8d0'); }
+  else if (s.kind === 'whelp') hitFoe(2 * times, false, '2 DMG');
+  else if (s.kind === 'drake') hitFoe(5 * times, false, '5 DMG!', true);
+  else if (s.kind === 'coal') { float(cx, cy, (10 - G.coalAge) + ' spins\u{2026}', '#8a8a92'); }
+  else if (s.kind === 'diamond') hitFoe((4 + 2 * Math.max(0, (s.shine || 1) - 1)) * times, false, '\u{1F48E} ' + ((4 + 2 * Math.max(0, (s.shine || 1) - 1)) * times) + '!', true);
+  else if (s.kind === 'rat') {
+    const bite = Math.max(0, ((s.pack || 1) - 1)) * (s.pack >= 3 ? 2 : 1) * times;
+    if (bite > 0) hitFoe(bite, false, '\u{1F400} ' + bite, s.pack >= 3);
+    else float(cx, cy, 'squeak', '#b8a8c0');
+  }
+  else if (s.kind === 'pig') hitFoe((2 + G.pigFat) * times, false, '\u{1F437} ' + (2 + G.pigFat), G.pigFat >= 4);
 }
 function fireRecipe(rc) {
   const f = target();
   if (rc.cells) {
     const col = rc.fx === 'jackpot' ? '#ffdf6b' : rc.fx === 'three' ? (KINDS[rc.kind] || {}).col || '#ffd75e'
-      : rc.fx === 'coldsnap' ? '#7ab0e8' : rc.fx === 'apothecary' ? '#8ed67e' : '#c3ccd6';
+      : rc.fx === 'coldsnap' ? '#7ab0e8' : rc.fx === 'apothecary' ? '#8ed67e' : rc.fx === 'feed' ? '#f0b8c8' : '#c3ccd6';
     G.lineFx.push({ cells: rc.cells, t: 0, c: col });
   }
   if (rc.fx === 'jackpot') {
-    for (const x of liveFoes()) dmgFoe(x, 24, true);
+    for (const x of liveFoes()) { const p = foeXY(x); shot(LW / 2, gridY() + CELL * 1.5, p.x, p.y + 10, '7\u{FE0F}\u{20E3}', '24!!', '#ffdf6b', () => { dmgFoe(x, 24, true); }, true); }
     G.nudges = 3; G.shake += 18; G.freeze = Math.max(G.freeze, 0.15);
     G.flash = { c: '255,223,107', a: 0.5 };
     banner('\u{1F3B0} JACKPOT 7\u{2022}7\u{2022}7', '#ffdf6b', true, '24 to ALL \u{2014} nudges refilled');
@@ -377,18 +510,33 @@ function fireRecipe(rc) {
     return;
   }
   if (rc.fx === 'three') { banner('\u{2728} ' + rc.label.toUpperCase(), (KINDS[rc.kind] || {}).col); SND.bigline(); G.shake += 6; logLine(rc.label, '#ffe9a3'); return; }
-  if (rc.fx === 'swordboard') { G.block += 3; banner('\u{2694}\u{FE0F} SWORD & BOARD', '#c3ccd6'); SND.line(); logLine(rc.label, '#c3ccd6'); return; }
-  if (rc.fx === 'apothecary') { if (f && f.def !== 'thick') f.pois += 4; G.hp = Math.min(G.maxHp, G.hp + 4); banner('\u{2697}\u{FE0F} APOTHECARY', '#8ed67e'); SND.line(); logLine(rc.label, '#8ed67e'); return; }
-  if (rc.fx === 'coldsnap') { for (const x of liveFoes()) dmgFoe(x, 2, true); banner('\u{2744}\u{FE0F} COLD SNAP', '#7ab0e8'); SND.line(); logLine(rc.label, '#7ab0e8'); return; }
+  if (rc.fx === 'swordboard') { shot(LW / 2, gridY() + CELL, HERO.x, HERO.y - 10, '\u{1F6E1}\u{FE0F}', '+3 \u{1F6E1}', '#c3ccd6', () => { G.block += 3; }); banner('\u{2694}\u{FE0F} SWORD & BOARD', '#c3ccd6'); SND.line(); logLine(rc.label, '#c3ccd6'); return; }
+  if (rc.fx === 'apothecary') {
+    if (f && f.def !== 'thick') { const p = foeXY(f); shot(LW / 2, gridY() + CELL, p.x, p.y + 10, '\u{2697}\u{FE0F}', '\u{2620}+4', '#8ed67e', () => { f.pois += 4; }); }
+    shot(LW / 2, gridY() + CELL, HERO.x, HERO.y - 10, '\u{2764}\u{FE0F}', '+4 \u{2764}', '#8ed67e', () => { G.hp = Math.min(G.maxHp, G.hp + 4); });
+    banner('\u{2697}\u{FE0F} APOTHECARY', '#8ed67e'); SND.line(); logLine(rc.label, '#8ed67e'); return;
+  }
+  if (rc.fx === 'coldsnap') {
+    for (const x of liveFoes()) { const p = foeXY(x); shot(LW / 2, gridY() + CELL, p.x, p.y + 10, '\u{2744}\u{FE0F}', '2', '#7ab0e8', () => { dmgFoe(x, 2, true); }); }
+    banner('\u{2744}\u{FE0F} COLD SNAP', '#7ab0e8'); SND.line(); logLine(rc.label, '#7ab0e8'); return;
+  }
   if (rc.fx === 'breed') { banner('\u{1F407} THE BUNNIES BREED', '#f0e0c8'); SND.line(); logLine(rc.label, '#f0e0c8'); return; }
+  if (rc.fx === 'swarm') { banner('\u{1F400} THE SWARM RISES', '#b8a8c0', false, 'rats bite double'); SND.line(); logLine(rc.label, '#b8a8c0'); return; }
+  if (rc.fx === 'feed') { banner('\u{1F437} THE GLUTTON FEEDS', '#f0b8c8', false, '+1 dmg, forever'); SND.line(); logLine(rc.label, '#f0b8c8'); return; }
+  if (rc.fx === 'lay') { SND.hatch(); logLine(rc.label, '#f0e8d0'); return; }
   logLine(rc.label, '#ffe9a3');
 }
 function fireHeat(n) {
   const f = target();
-  const d = dmgFoe(f, n * 2, true);
-  banner('\u{1F525} HEAT \u{D7}' + n, '#ff8a4a', false, '+' + d + ' streak fire');
+  if (f) {
+    const p = foeXY(f);
+    shot(LW / 2, gridY() + CELL * 1.5, p.x, p.y + 10, '\u{1F525}', 'HEAT ' + (n * 2), '#ff8a4a', () => {
+      const d = dmgFoe(f, n * 2, true);
+      logLine('the streak burns for ' + d, '#ff8a4a');
+    }, true);
+  }
+  banner('\u{1F525} HEAT \u{D7}' + n, '#ff8a4a', false, '+' + (n * 2) + ' streak fire');
   SND.heat(n); G.shake += 4 + n;
-  logLine('the streak burns for ' + d, '#ff8a4a');
 }
 function fireFever() {
   G.feverGlow = 1.6;
@@ -396,37 +544,93 @@ function fireFever() {
   SND.fever(); G.shake += 8;
   logLine('FEVER \u{2014} the house cannot answer!', '#ffe36b');
 }
+// ---- the foes answer: their blows FLY at the hero, pusher-style
 function foeTurn(stunned) {
-  // dots first — they tick even through a stun
   for (const f of liveFoes()) {
-    if (f.pois > 0) { f.hp -= f.pois; G.dmgDone += f.pois; logLine(f.name + ' suffers ☠' + f.pois, '#8ed67e'); f.pois = Math.max(0, f.pois - 1); }
+    if (f.pois > 0) { f.hp -= f.pois; G.dmgDone += f.pois; logLine(f.name + ' suffers \u{2620}' + f.pois, '#8ed67e'); f.pois = Math.max(0, f.pois - 1); }
     if (f.burn > 0) { f.hp -= f.burn; G.dmgDone += f.burn; logLine(f.name + ' burns \u{1F525}' + f.burn, '#ff8a4a'); f.burn = Math.max(0, f.burn - 2); }
-    if (f.hp <= 0 && !f.dead) { f.dead = 1; logLine(f.name + ' falls!', '#7ee787'); const p = foePos(f); burst(p.x, p.y, '#ffe9a3', 22, 140); }
+    if (f.hp <= 0 && !f.dead) { f.dead = 1; logLine(f.name + ' falls!', '#7ee787'); const p = foeXY(f); burst(p.x, p.y, '#ffe9a3', 22, 140); }
   }
   if (!liveFoes().length) { winNow(); return; }
-  if (stunned) return;                    // FEVER — the house holds its fists
+  if (stunned) { rollIntents(); afterFoes(); return; }
+  // THE DEBT: the fuse burns down one spin per round; at zero, every foe
+  // strikes TWICE — the landlord's rent, dressed for the dungeon
+  let debtCall = false;
+  if (G.debtMax > 0) {
+    G.debt--;
+    if (G.debt <= 0) { debtCall = true; G.debt = G.debtMax; banner('\u{1F4B0} THE HOUSE CALLS ITS DEBT', '#ff6b5e', true, 'every foe strikes twice!'); SND.debt(); G.flash = { c: '255,90,70', a: 0.35 }; }
+  }
+  let delay = 0.15;
   let took = 0;
+  const swings = [];
   for (const f of liveFoes()) {
     f.brace = false;
-    const roll = Math.random();
-    if (f.boss && G.round % 3 === 0) { const d = Math.max(0, f.atk + 2 - G.block); G.hp -= d; took += d; G.block = 0; logLine('the dragon BREATHES \u{2014} ' + (f.atk + 2) + ' fire!', '#ff9d3c'); continue; }
-    if (roll < 0.2) { f.brace = true; logLine(f.name + ' braces', '#9a8aa0'); }
-    else {
-      const raw = roll > 0.85 ? f.atk * 2 : f.atk;
-      const d = Math.max(0, raw - G.block);
-      G.block = Math.max(0, G.block - raw);
-      G.hp -= d; took += d;
-      logLine(f.name + ' hits for ' + d + (raw !== d ? ' (' + (raw - d) + ' blocked)' : ''), d ? '#ff8a8a' : '#c3ccd6');
-    }
+    const it = f.intent || { t: 'hit', n: f.atk };
+    const times = debtCall && it.t !== 'brace' ? 2 : 1;
+    if (it.t === 'brace') { f.brace = true; logLine(f.name + ' braces', '#9a8aa0'); continue; }
+    for (let s2 = 0; s2 < times; s2++) swings.push({ f, n: it.n, breath: it.t === 'breath' });
   }
-  G.shake += 4;
-  if (took > 0) { G.flash = { c: '255,70,70', a: Math.min(0.45, 0.15 + took * 0.03) }; SND.hurt(); }
-  if (G.hp <= 0) { G.screen = 'lost'; SND.lose(); G.flash = { c: '160,20,30', a: 0.6 }; }
+  for (const sw of swings) {
+    const p = foeXY(sw.f);
+    setTimeout(() => {
+      if (G.screen !== 'battle') return;
+      sw.f.lungeT = 0.3;
+      shot(p.x, p.y + 16, HERO.x, HERO.y - 8, sw.breath ? '\u{1F525}' : '\u{1F4A5}', sw.n + '', '#ff8a8a', () => {
+        const d = Math.max(0, sw.n - G.block);
+        const blocked = sw.n - d;
+        G.block = Math.max(0, G.block - sw.n);
+        G.hp -= d; took += d;
+        if (d > 0) { G.flash = { c: '255,70,70', a: Math.min(0.4, 0.12 + d * 0.03) }; SND.hurt(); G.shake += Math.min(8, 2 + d); float(HERO.x, HERO.y - 34, '-' + d, '#ff8a8a', d >= 6); }
+        else { float(HERO.x, HERO.y - 34, 'BLOCKED', '#c3ccd6'); SND.clink(4); }
+        if (blocked > 0 && d > 0) float(HERO.x + 40, HERO.y - 20, blocked + ' blocked', '#c3ccd6');
+        logLine(sw.f.name + (sw.breath ? ' BREATHES for ' : ' hits for ') + d + (blocked ? ' (' + blocked + ' blocked)' : ''), d ? '#ff8a8a' : '#c3ccd6');
+        if (G.hp <= 0 && G.screen === 'battle') { G.screen = 'lost'; SND.lose(); G.flash = { c: '160,20,30', a: 0.6 }; }
+      });
+    }, delay * 1000 * spd());
+    delay += 0.28;
+  }
+  setTimeout(() => { if (G.screen === 'battle') { rollIntents(); afterFoes(); } }, (delay + 0.3) * 1000 * spd());
+}
+// ---- after the house answers: the DRAFT — pick 1 of 3, every single spin
+function afterFoes() {
+  if (G.screen !== 'battle') return;
+  const offers = [];
+  const bag = DRAFT_POOL.slice();
+  for (let i = 0; i < 3 && bag.length; i++) {
+    const total = bag.reduce((a, w) => a + w[1], 0);
+    let r = Math.random() * total, idx = 0;
+    for (let j = 0; j < bag.length; j++) { r -= bag[j][1]; if (r <= 0) { idx = j; break; } }
+    offers.push(bag.splice(idx, 1)[0][0]);
+  }
+  G.draft = { offers };
+  G.phase = 'draft';
+  SND.draft();
+}
+function draftPick(i) {
+  if (G.phase !== 'draft' || !G.draft) return;
+  const k = G.draft.offers[i];
+  if (k) {
+    G.purse[k] = (G.purse[k] | 0) + 1;
+    logLine('drafted: ' + KINDS[k].name + ' \u{2014} the odds shift', KINDS[k].col);
+    SND.ding();
+  }
+  G.draft = null; G.phase = 'idle';
+}
+function draftSkip() {
+  if (G.phase !== 'draft') return;
+  G.draft = null; G.phase = 'idle';
+  logLine('the draft passes \u{2014} discipline', '#9a8aa0');
 }
 function winNow() {
   if (G.screen === 'won') return;
-  G.screen = 'won'; G.phase = 'idle';
+  G.screen = 'won'; G.phase = 'idle'; G.draft = null;
   SND.win(); shower();
+}
+// the victory smelter: remove ONE coin — LBAL's scarce removal token
+function smelt(k) {
+  if (G.smelted || (G.purse[k] | 0) <= 0) return;
+  G.purse[k]--; G.smelted = true;
+  SND.diamond();
 }
 
 // -------------------------------------------------------------------- ticks
@@ -434,7 +638,7 @@ let last = 0;
 function frame(ts) {
   const dt = Math.min(0.05, (ts - last) / 1000 || 0.016);
   last = ts;
-  if (G.freeze > 0) { G.freeze -= dt; draw(); requestAnimationFrame(frame); return; }   // hitstop
+  if (G.freeze > 0) { G.freeze -= dt; draw(); requestAnimationFrame(frame); return; }
   G.t += dt;
   if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 30);
   if (G.feverGlow > 0) G.feverGlow -= dt;
@@ -447,32 +651,41 @@ function frame(ts) {
     if (r.bT > 0) r.bT -= dt;
     if (r.flashT > 0) r.flashT -= dt;
   }
+  for (const f of G.foes) { if (f.hitT > 0) f.hitT -= dt; if (f.lungeT > 0) f.lungeT -= dt; }
   if (G.antic && G.phase === 'spin' && G.t - G.hb > 0.5) { G.hb = G.t; SND.heart(); }
+  // the payout shots fly; their effects land ON ARRIVAL
+  for (let i = G.shots.length - 1; i >= 0; i--) {
+    const sh = G.shots[i];
+    sh.t += dt;
+    if (sh.t >= sh.dur) { G.shots.splice(i, 1); if (sh.onHit) sh.onHit(); }
+  }
   if (G.phase === 'resolving') {
     G.qt -= dt;
     if (G.qt <= 0) {
       const s = G.queue.shift();
       if (s) {
-        if (s.recipe) { fireRecipe(s.recipe); G.qt = 0.5; }
-        else if (s.heatFx) { fireHeat(s.heatFx); G.qt = 0.5; }
-        else if (s.feverFx) { fireFever(); G.qt = 0.5; }
+        if (s.recipe) { fireRecipe(s.recipe); G.qt = 0.5 * spd(); }
+        else if (s.heatFx) { fireHeat(s.heatFx); G.qt = 0.5 * spd(); }
+        else if (s.feverFx) { fireFever(); G.qt = 0.5 * spd(); }
         else {
           fireSymbol(s);
           G.qn++;
-          // the cascade accelerates — chu, chu-chu, chuchuchu
-          G.qt = Math.max(0.07, 0.26 * Math.pow(0.9, G.qn));
+          G.qt = Math.max(0.07, 0.26 * Math.pow(0.9, G.qn)) * spd();
         }
       }
-      if (!s || !G.queue.length) {
-        if (!liveFoes().length) { winNow(); }
-        else {
-          G.phase = 'idle'; G.qt = 0;
-          if (G.spinDmg >= 20) { banner('\u{1F4A5} MEGA WIN \u{2014} ' + G.spinDmg, '#ffdf6b', true); G.shake += 10; }
-          else if (G.spinDmg >= 12) { banner('\u{1F4B0} BIG WIN \u{2014} ' + G.spinDmg, '#ffe9a3'); G.shake += 6; }
-          const st = G.stun; G.stun = false;
-          setTimeout(() => { if (G.screen === 'battle') foeTurn(st); }, st ? 650 : 420);
-        }
+      if ((!s || !G.queue.length)) {
+        G.phase = 'settling';    // wait for the last shots to land
       }
+    }
+  }
+  if (G.phase === 'settling' && !G.shots.length) {
+    if (!liveFoes().length) { winNow(); }
+    else if (G.screen === 'battle') {
+      G.phase = 'foes';
+      if (G.spinDmg >= 20) { banner('\u{1F4A5} MEGA WIN \u{2014} ' + G.spinDmg, '#ffdf6b', true); G.shake += 10; }
+      else if (G.spinDmg >= 12) { banner('\u{1F4B0} BIG WIN \u{2014} ' + G.spinDmg, '#ffe9a3'); G.shake += 6; }
+      const st = G.stun; G.stun = false;
+      setTimeout(() => { if (G.screen === 'battle') foeTurn(st); }, (st ? 0.65 : 0.42) * 1000 * spd());
     }
   }
   for (let i = G.floats.length - 1; i >= 0; i--) { const f = G.floats[i]; f.t += dt; if (f.t > 1.1) G.floats.splice(i, 1); }
@@ -490,9 +703,6 @@ function frame(ts) {
 }
 
 // --------------------------------------------------------------------- draw
-const CELL = 84;
-function gridY() { return 268; }
-function reelX(i) { return LW / 2 - (G.w * CELL) / 2 + i * CELL; }
 const BTNS = [];
 function btn(x, y, w, h, label, cb, o) {
   o = o || {};
@@ -518,64 +728,168 @@ function draw() {
   ctx.setTransform(scale, 0, 0, scale, offX, offY);
   if (G.shake > 0.1) ctx.translate((Math.random() - 0.5) * G.shake, (Math.random() - 0.5) * G.shake);
   ctx.fillStyle = '#1c1220'; ctx.fillRect(0, 0, LW, LH);
-  txt('\u{1F3B0} THE CROUPIER', LW / 2, 34, '900 24px Georgia, serif', '#ffd75e');
-  txt('slot-battle sandbox — nothing here is saved', LW / 2, 58, '600 10px Verdana, sans-serif', '#9a8aa0');
+  txt('\u{1F3B0} THE CROUPIER', LW / 2, 30, '900 22px Georgia, serif', '#ffd75e');
+  txt('slot-battle sandbox — nothing here is saved', LW / 2, 52, '600 9px Verdana, sans-serif', '#9a8aa0');
   if (G.screen === 'setup') return drawSetup();
   drawBattle();
 }
 function drawSetup() {
-  txt('PICK YOUR PURSE — every coin is a ticket on every reel', LW / 2, 92, '800 11px Verdana, sans-serif', '#e8c877');
+  txt('PICK YOUR PURSE — every coin is a ticket on every reel', LW / 2, 78, '800 11px Verdana, sans-serif', '#e8c877');
   PICKABLE.forEach((k, i) => {
-    const x = 34 + (i % 2) * 216, y = 112 + ((i / 2) | 0) * 46;
-    rr(x, y, 200, 38, 9); ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
-    txt(KINDS[k].sym, x + 18, y + 19, '15px serif', '#fff');
-    txt(KINDS[k].name, x + 36, y + 13, '900 11px Verdana, sans-serif', KINDS[k].col, 'left');
-    txt(KINDS[k].what, x + 36, y + 27, '600 8px Verdana, sans-serif', '#9a8aa0', 'left');
-    btn(x + 116, y + 3, 26, 32, '−', () => { if (G.purse[k] > 0) G.purse[k]--; }, { bg: '#2a222e', border: '#9a8aa0', font: '900 14px Verdana' });
-    txt('' + G.purse[k], x + 156, y + 19, '900 13px Verdana, sans-serif', '#ffe9a3');
-    btn(x + 170, y + 3, 26, 32, '+', () => { G.purse[k]++; }, { border: '#ffd75e', font: '900 14px Verdana' });
+    const x = 30 + (i % 2) * 216, y = 92 + ((i / 2) | 0) * 44;
+    rr(x, y, 204, 37, 9); ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+    txt(KINDS[k].sym, x + 17, y + 18, '14px serif', '#fff');
+    txt(KINDS[k].name, x + 33, y + 12, '900 10px Verdana, sans-serif', KINDS[k].col, 'left');
+    txt(KINDS[k].what, x + 33, y + 26, '600 7px Verdana, sans-serif', '#9a8aa0', 'left');
+    btn(x + 122, y + 3, 25, 31, '−', () => { if (G.purse[k] > 0) G.purse[k]--; }, { bg: '#2a222e', border: '#9a8aa0', font: '900 13px Verdana' });
+    txt('' + (G.purse[k] | 0), x + 160, y + 18, '900 12px Verdana, sans-serif', '#ffe9a3');
+    btn(x + 173, y + 3, 25, 31, '+', () => { G.purse[k]++; }, { border: '#ffd75e', font: '900 13px Verdana' });
   });
-  const uy = 112 + 5 * 46 + 10;
-  txt('THE WINDOW & THE MARKERS — your per-floor scaling picks', LW / 2, uy, '800 11px Verdana, sans-serif', '#e8c877');
-  btn(34, uy + 14, 130, 38, 'REELS: ' + G.w + (G.w < 5 ? '  (+1)' : ' MAX'), () => { if (G.w < 5) G.w++; }, { border: '#7ee7e0', col: '#c8f4f0' });
-  btn(174, uy + 14, 130, 38, 'RESET REELS', () => { G.w = 3; }, { bg: '#2a222e', border: '#9a8aa0', col: '#d8c8dc' });
-  btn(314, uy + 14, 132, 38, 'GEAR: ' + G.gearTickets + ' \u{1F5E1}', () => { G.gearTickets = (G.gearTickets + 1) % 4; }, { border: '#e8e0d0', col: '#e8e0d0' });
+  const grown = (G.purse.whelp | 0) + (G.purse.drake | 0) + (G.purse.diamond | 0) + (G.purse.slug | 0);
+  const uy = 92 + 7 * 44 + 6;
+  if (grown) txt('grown in the machine: ' + ['whelp', 'drake', 'diamond', 'slug'].filter(k => G.purse[k]).map(k => KINDS[k].sym + '\u{D7}' + G.purse[k]).join('  '), LW / 2, uy, '700 10px Verdana, sans-serif', '#8ee89a');
+  txt('THE WINDOW & THE MARKERS — your per-floor scaling picks', LW / 2, uy + 18, '800 11px Verdana, sans-serif', '#e8c877');
+  btn(30, uy + 30, 128, 37, 'REELS: ' + G.w + (G.w < 5 ? ' (+1)' : ' MAX'), () => { if (G.w < 5) G.w++; }, { border: '#7ee7e0', col: '#c8f4f0', font: '900 11px Verdana' });
+  btn(166, uy + 30, 128, 37, 'RESET REELS', () => { G.w = 3; }, { bg: '#2a222e', border: '#9a8aa0', col: '#d8c8dc', font: '900 11px Verdana' });
+  btn(302, uy + 30, 148, 37, 'GEAR: ' + G.gearTickets + ' \u{1F5E1}', () => { G.gearTickets = (G.gearTickets + 1) % 4; }, { border: '#e8e0d0', col: '#e8e0d0', font: '900 11px Verdana' });
   for (let r = 0; r < 3; r++) {
-    btn(34 + r * 146, uy + 60, 136, 38, 'ROW ' + (r + 1) + ': \u{D7}' + G.rowMul[r],
-      () => { G.rowMul[r] = G.rowMul[r] >= 3 ? 1 : G.rowMul[r] + 1; }, { border: '#c8a2ff', col: '#e8d8ff' });
+    btn(30 + r * 144, uy + 74, 134, 37, 'ROW ' + (r + 1) + ': \u{D7}' + G.rowMul[r],
+      () => { G.rowMul[r] = G.rowMul[r] >= 3 ? 1 : G.rowMul[r] + 1; }, { border: '#c8a2ff', col: '#e8d8ff', font: '900 11px Verdana' });
   }
-  const ey = uy + 116;
+  const ey = uy + 124;
   txt('THE OPPOSITION', LW / 2, ey, '800 11px Verdana, sans-serif', '#e8c877');
   SETUPS.forEach((su, i) => {
-    btn(34 + (i % 2) * 216, ey + 14 + ((i / 2) | 0) * 46, 200, 38,
+    btn(30 + (i % 2) * 216, ey + 12 + ((i / 2) | 0) * 44, 204, 37,
       su.foes.map(f => f.sym).join(' ') + ' ' + su.name,
       () => { G.setup = i; },
-      { bg: G.setup === i ? '#4a3410' : '#2a222e', border: G.setup === i ? '#ffd75e' : '#55506a' });
+      { bg: G.setup === i ? '#4a3410' : '#2a222e', border: G.setup === i ? '#ffd75e' : '#55506a', font: '900 11px Verdana' });
   });
-  btn(LW / 2 - 110, ey + 118, 220, 52, '\u{25B6} DEAL ME IN', startBattle,
+  btn(LW / 2 - 110, ey + 106, 220, 50, '\u{25B6} DEAL ME IN', startBattle,
       { bg: '#3f9d5a', border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif' });
+  txt('after every spin: DRAFT a coin (pick 1 of 3, or pass) — your purse is a living deck', LW / 2, ey + 172, '600 9px Verdana, sans-serif', '#9a8aa0');
+}
+// ---- the coin-pusher stage: stone hall, torches, foes on the boards ----
+function drawStage() {
+  // back wall
+  const wg = ctx.createLinearGradient(0, 60, 0, 224);
+  wg.addColorStop(0, '#241426'); wg.addColorStop(1, '#170e1c');
+  ctx.fillStyle = wg; ctx.fillRect(0, 60, LW, 164);
+  // stone courses
+  ctx.strokeStyle = 'rgba(255,255,255,0.045)'; ctx.lineWidth = 1;
+  for (let y = 84; y < 216; y += 26) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(LW, y); ctx.stroke(); }
+  for (let y = 84, r2 = 0; y < 216; y += 26, r2++) {
+    for (let x = (r2 % 2) * 30; x < LW; x += 60) { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + 26); ctx.stroke(); }
+  }
+  // the arch glow behind the pack
+  const ag = ctx.createRadialGradient(LW / 2, 150, 20, LW / 2, 150, 200);
+  ag.addColorStop(0, 'rgba(255,160,80,0.10)'); ag.addColorStop(1, 'rgba(255,160,80,0)');
+  ctx.fillStyle = ag; ctx.fillRect(0, 60, LW, 164);
+  // torches
+  for (const tx of [30, LW - 30]) {
+    txt('\u{1F56F}\u{FE0F}', tx, 96, '18px serif', '#fff');
+    const fl = 0.5 + 0.5 * Math.sin(G.t * 9 + tx);
+    const tg = ctx.createRadialGradient(tx, 88, 2, tx, 88, 30 + fl * 8);
+    tg.addColorStop(0, 'rgba(255,190,90,' + (0.18 + fl * 0.1) + ')'); tg.addColorStop(1, 'rgba(255,190,90,0)');
+    ctx.fillStyle = tg; ctx.beginPath(); ctx.arc(tx, 88, 40, 0, 7); ctx.fill();
+  }
+  // the stage boards
+  const bg2 = ctx.createLinearGradient(0, 196, 0, 232);
+  bg2.addColorStop(0, '#3a2618'); bg2.addColorStop(1, '#241610');
+  ctx.fillStyle = bg2; ctx.fillRect(0, 196, LW, 36);
+  ctx.strokeStyle = 'rgba(0,0,0,0.35)'; ctx.lineWidth = 2;
+  for (let x = 20; x < LW; x += 52) { ctx.beginPath(); ctx.moveTo(x, 196); ctx.lineTo(x - 8, 232); ctx.stroke(); }
+  ctx.fillStyle = 'rgba(255,215,94,0.25)'; ctx.fillRect(0, 196, LW, 2);
+}
+function drawFoes() {
+  const n = G.foes.length;
+  G.foes.forEach((f, i) => {
+    const p = foePos(i, n);
+    const lunge = f.lungeT > 0 ? Math.sin((0.3 - f.lungeT) / 0.3 * Math.PI) * 16 : 0;
+    const fx = p.x + (f.hitT > 0 ? (Math.random() - 0.5) * 6 : 0);
+    const fy = p.y + lunge * 0.6 + Math.sin(G.t * 2 + i * 2) * (f.boss ? 3 : 1.5);
+    if (f.hp > 0) {
+      ctx.beginPath(); ctx.ellipse(p.x, 208, f.boss ? 44 : 30, 7, 0, 0, 7);
+      ctx.fillStyle = 'rgba(4,2,6,0.55)'; ctx.fill();
+      if (f.hitT > 0.12) { ctx.save(); ctx.globalAlpha = 0.7; txt('\u{1F4A5}', fx + 14, fy - 12, '20px serif', '#fff'); ctx.restore(); }
+      txt(f.sym, fx, fy + 34, (f.boss ? '56px' : '40px') + ' serif', '#fff');
+      // intent chip, pusher-style: you always know what is coming
+      if (f.intent) {
+        const it = f.intent;
+        const chip = it.t === 'brace' ? '\u{1F6E1}' : it.t === 'breath' ? '\u{1F525} ' + it.n : it.t === 'heavy' ? '\u{1F4A2} ' + it.n : '\u{2694}\u{FE0F} ' + it.n;
+        rr(p.x - 26, fy - 52, 52, 20, 8); ctx.fillStyle = 'rgba(10,5,12,0.8)'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = it.t === 'heavy' || it.t === 'breath' ? '#ff8a6b' : '#6a5a72'; ctx.stroke();
+        txt(chip, p.x, fy - 41, '800 11px Verdana, sans-serif', it.t === 'brace' ? '#c3ccd6' : '#ffd0c0');
+      }
+      txt(f.name, p.x, 204, '800 10px Verdana, sans-serif', '#ffe9a3');
+      rr(p.x - 52, 211, 104, 7, 3); ctx.fillStyle = '#33202e'; ctx.fill();
+      rr(p.x - 52, 211, 104 * Math.max(0, f.hp / f.maxHp), 7, 3); ctx.fillStyle = '#e05a5a'; ctx.fill();
+      let dots = f.hp + (f.def ? ' \u{2022} ' + DEF_TXT[f.def] : '');
+      let st = '';
+      if (f.pois) st += '  \u{2620}' + f.pois;
+      if (f.burn) st += '  \u{1F525}' + f.burn;
+      if (f.brace) st += '  \u{1F6E1}';
+      txt(dots + st, p.x, 224, '700 8px Verdana, sans-serif', '#c8a8b0');
+    } else {
+      ctx.save(); ctx.globalAlpha = 0.3;
+      txt('\u{1F4AB}', p.x, p.y + 20, '30px serif', '#fff');
+      txt(f.name + ' — felled', p.x, 204, '700 9px Verdana, sans-serif', '#5a5062');
+      ctx.restore();
+    }
+  });
+}
+function drawHero() {
+  const hx = HERO.x, hy = HERO.y;
+  ctx.beginPath(); ctx.ellipse(hx, hy + 16, 24, 6, 0, 0, 7);
+  ctx.fillStyle = 'rgba(4,2,6,0.55)'; ctx.fill();
+  const bob = Math.sin(G.t * 2.4) * 2;
+  txt('\u{1F9DD}', hx, hy - 8 + bob, '38px serif', '#fff');
+  // the guard shimmers when block stands
+  if (G.block > 0) {
+    const pulse = 0.55 + 0.25 * Math.sin(G.t * 6);
+    ctx.beginPath(); ctx.arc(hx, hy - 8, 30, 0, 7);
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(195,204,214,' + pulse + ')'; ctx.stroke();
+    txt('\u{1F6E1}\u{FE0F} ' + G.block, hx + 46, hy - 26, '900 13px Verdana, sans-serif', '#c3ccd6', 'left');
+  }
+  txt('THE CROUPIER', hx, hy + 30, '800 9px Verdana, sans-serif', '#ffe9a3');
+  rr(hx - 30, hy + 38, 60, 7, 3); ctx.fillStyle = '#33202e'; ctx.fill();
+  rr(hx - 30, hy + 38, 60 * Math.max(0, G.hp / G.maxHp), 7, 3);
+  ctx.fillStyle = G.hp <= 15 ? '#ff5a4e' : '#7ee787'; ctx.fill();
+  txt(Math.max(0, G.hp) + ' / ' + G.maxHp, hx, hy + 54, '800 9px Verdana, sans-serif', G.hp <= 15 ? '#ff8a8a' : '#c8b8cc');
+}
+function drawCabinet() {
+  const gy = gridY();
+  const x0 = reelX(0) - 22, w0 = G.w * CELL + 44;
+  // wooden cabinet with brass trim, like the pusher's machine
+  rr(x0, gy - 34, w0, 3 * CELL + 66, 20);
+  const cg = ctx.createLinearGradient(0, gy - 34, 0, gy + 3 * CELL + 32);
+  cg.addColorStop(0, '#4a3020'); cg.addColorStop(0.5, '#38241a'); cg.addColorStop(1, '#241610');
+  ctx.fillStyle = cg; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; rr(x0, gy - 34, w0, 3 * CELL + 66, 20); ctx.stroke();
+  // marquee dots — they chase during resolve, blaze during fever
+  const dots = Math.floor(w0 / 22);
+  for (let i = 0; i < dots; i++) {
+    const on = G.feverGlow > 0 ? true : (G.phase === 'resolving' || G.phase === 'settling') ? ((i + Math.floor(G.t * 10)) % 3 === 0) : ((i + Math.floor(G.t * 2)) % 4 === 0);
+    ctx.beginPath(); ctx.arc(x0 + 14 + i * 22, gy - 22, 3, 0, 7);
+    ctx.fillStyle = on ? (G.feverGlow > 0 ? '#ffe36b' : '#ffb84a') : '#3a2a1a'; ctx.fill();
+  }
+  // brass corner studs
+  for (const [sx, sy] of [[x0 + 10, gy + 3 * CELL + 22], [x0 + w0 - 10, gy + 3 * CELL + 22]]) {
+    ctx.beginPath(); ctx.arc(sx, sy, 4, 0, 7); ctx.fillStyle = '#c8963e'; ctx.fill();
+  }
 }
 function drawBattle() {
-  // foes
-  const fy = 96;
-  G.foes.forEach((f, i) => {
-    const fx = LW / 2 - (G.foes.length * 150) / 2 + i * 150 + 75;
-    if (f.hitT > 0) f.hitT -= 0.016;
-    txt(f.sym, fx + (f.hitT > 0 ? (Math.random() - 0.5) * 6 : 0), fy + 20, (f.boss ? '44px' : '34px') + ' serif', '#fff');
-    txt(f.name, fx, fy + 52, '800 10px Verdana, sans-serif', f.hp > 0 ? '#ffe9a3' : '#5a5062');
-    if (f.hp > 0) {
-      rr(fx - 55, fy + 62, 110, 9, 4); ctx.fillStyle = '#33202e'; ctx.fill();
-      rr(fx - 55, fy + 62, 110 * Math.max(0, f.hp / f.maxHp), 9, 4); ctx.fillStyle = '#e05a5a'; ctx.fill();
-      txt(f.hp + (f.def ? '  \u{2022} ' + DEF_TXT[f.def] : ''), fx, fy + 84, '700 9px Verdana, sans-serif', '#c8a8b0');
-      let dots = '';
-      if (f.pois) dots += '☠' + f.pois + ' ';
-      if (f.burn) dots += '\u{1F525}' + f.burn + ' ';
-      if (f.brace) dots += '\u{1F6E1} ';
-      if (dots) txt(dots, fx, fy + 100, '800 10px Verdana, sans-serif', '#b8f26b');
-    } else txt('felled', fx, fy + 70, '700 10px Verdana, sans-serif', '#5a5062');
-  });
-  // the window
+  drawStage();
+  drawFoes();
+  // THE DEBT fuse, top-left, always burning
+  if (G.debtMax > 0) {
+    const hot = G.debt <= 2;
+    rr(16, 62, 116, 24, 9); ctx.fillStyle = 'rgba(10,5,12,0.75)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = hot ? 'rgba(255,110,80,' + (0.6 + 0.4 * Math.sin(G.t * 8)) + ')' : '#6a5a72'; rr(16, 62, 116, 24, 9); ctx.stroke();
+    txt('\u{1F4B0} THE CALL: ' + G.debt, 74, 75, '800 10px Verdana, sans-serif', hot ? '#ff9d8a' : '#c8b8cc');
+  }
   const gy = gridY();
+  drawCabinet();
+  // the window
   rr(reelX(0) - 12, gy - 12, G.w * CELL + 24, 3 * CELL + 24, 16);
   ctx.fillStyle = '#241826'; ctx.fill();
   ctx.lineWidth = 4;
@@ -583,9 +897,7 @@ function drawBattle() {
   ctx.strokeStyle = fever ? 'rgba(255,227,107,' + (0.6 + 0.4 * Math.sin(G.t * 14)) + ')' : '#7d5a24';
   rr(reelX(0) - 12, gy - 12, G.w * CELL + 24, 3 * CELL + 24, 16); ctx.stroke();
   for (let r = 0; r < 3; r++) {
-    if (G.rowMul[r] > 1) {
-      txt('\u{D7}' + G.rowMul[r], reelX(0) - 26, gy + r * CELL + CELL / 2, '900 14px Verdana, sans-serif', '#c8a2ff');
-    }
+    if (G.rowMul[r] > 1) txt('\u{D7}' + G.rowMul[r], reelX(0) - 26, gy + r * CELL + CELL / 2, '900 14px Verdana, sans-serif', '#c8a2ff');
   }
   for (let c = 0; c < G.w; c++) {
     const reel = G.reels[c];
@@ -608,24 +920,21 @@ function drawBattle() {
     }
     ctx.restore();
     if (reel && !reel.stopped) {
-      // rolling — golden haze; red-hot pulse when the tease is on
       const hot = G.antic;
       ctx.fillStyle = hot ? 'rgba(255,120,60,' + (0.1 + 0.09 * Math.sin(G.t * 11)) + ')' : 'rgba(255,215,94,0.08)';
       ctx.fillRect(reelX(c) + 2, gy, CELL - 4, 3 * CELL);
       if (hot) { ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,150,60,' + (0.5 + 0.4 * Math.sin(G.t * 11)) + ')'; ctx.strokeRect(reelX(c) + 2, gy, CELL - 4, 3 * CELL); }
     }
-    // nudge chips (with SO CLOSE hint glow)
     if (G.phase === 'nudge') {
       const hintUp = G.hints.some(h => h.col === c && h.dir === 1);
       const hintDn = G.hints.some(h => h.col === c && h.dir === -1);
       const pulse = 0.5 + 0.5 * Math.sin(G.t * 9);
-      btn(reelX(c) + CELL / 2 - 38, gy + 3 * CELL + 18, 34, 30, '\u{25B2}', () => nudge(c, 1),
+      btn(reelX(c) + CELL / 2 - 38, gy + 3 * CELL + 30, 34, 28, '\u{25B2}', () => nudge(c, 1),
         { bg: hintUp ? '#4a3410' : '#2a222e', border: hintUp ? 'rgba(255,215,94,' + (0.5 + 0.5 * pulse) + ')' : '#8a86b8', font: '900 12px Verdana' });
-      btn(reelX(c) + CELL / 2 + 4, gy + 3 * CELL + 18, 34, 30, '\u{25BC}', () => nudge(c, -1),
+      btn(reelX(c) + CELL / 2 + 4, gy + 3 * CELL + 30, 34, 28, '\u{25BC}', () => nudge(c, -1),
         { bg: hintDn ? '#4a3410' : '#2a222e', border: hintDn ? 'rgba(255,215,94,' + (0.5 + 0.5 * pulse) + ')' : '#8a86b8', font: '900 12px Verdana' });
     }
   }
-  // cell pops (payout flashes)
   for (const p of G.pops) {
     const a = 1 - p.t / 0.35;
     const cx = reelX(p.col) + CELL / 2, cy = gy + p.row * CELL + CELL / 2;
@@ -634,7 +943,6 @@ function drawBattle() {
     ctx.beginPath(); ctx.arc(cx, cy, 14 + p.t * 90, 0, 6.283); ctx.stroke();
     ctx.globalAlpha = 1;
   }
-  // payline sweeps
   for (const l of G.lineFx) {
     const a = 1 - l.t / 0.9;
     ctx.globalAlpha = a;
@@ -648,29 +956,38 @@ function drawBattle() {
     ctx.globalAlpha = 1;
   }
   ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,215,94,0.5)';
-  ctx.strokeRect(reelX(0) - 4, gy + CELL, G.w * CELL + 8, CELL);   // the payline glow (middle row)
-  if (G.phase === 'spin' && G.antic) txt('\u{1F525} TWO OF A KIND\u{2026}', LW / 2, gy - 26, '900 13px Verdana, sans-serif', 'rgba(255,150,60,' + (0.6 + 0.4 * Math.sin(G.t * 11)) + ')');
-  if (G.phase === 'nudge' && G.hints.length) txt('\u{2728} SO CLOSE \u{2014} NUDGE IT!', LW / 2, gy - 26, '900 13px Verdana, sans-serif', 'rgba(255,215,94,' + (0.6 + 0.4 * Math.sin(G.t * 9)) + ')');
+  ctx.strokeRect(reelX(0) - 4, gy + CELL, G.w * CELL + 8, CELL);
+  if (G.phase === 'spin' && G.antic) txt('\u{1F525} TWO OF A KIND\u{2026}', LW / 2, gy - 44, '900 13px Verdana, sans-serif', 'rgba(255,150,60,' + (0.6 + 0.4 * Math.sin(G.t * 11)) + ')');
+  if (G.phase === 'nudge' && G.hints.length) txt('\u{2728} SO CLOSE \u{2014} NUDGE IT!', LW / 2, gy - 44, '900 13px Verdana, sans-serif', 'rgba(255,215,94,' + (0.6 + 0.4 * Math.sin(G.t * 9)) + ')');
+  // the payout shots in flight — icon + its number, streaking to the target
+  for (const sh of G.shots) {
+    const p2 = Math.min(1, sh.t / sh.dur);
+    const e = 1 - Math.pow(1 - p2, 2);
+    const x = sh.x0 + (sh.x1 - sh.x0) * e;
+    const y = sh.y0 + (sh.y1 - sh.y0) * e - Math.sin(p2 * Math.PI) * sh.lift;
+    if (Math.random() < 0.5) G.parts.push({ x, y, vx: (Math.random() - 0.5) * 20, vy: 20, t: 0.25, life: 0.45, col: sh.col });
+    txt(sh.icon, x, y, (sh.big ? '26px' : '20px') + ' serif', '#fff');
+    if (sh.label) txt(sh.label, x, y - (sh.big ? 22 : 17), '900 ' + (sh.big ? 13 : 11) + 'px Verdana, sans-serif', sh.col);
+  }
   // the big lever
-  const by = gy + 3 * CELL + 58;
-  if (G.phase === 'idle') btn(LW / 2 - 110, by, 220, 52, '\u{1F3B0} SPIN  (round ' + (G.round + 1) + ')', startSpin, { bg: '#3f9d5a', border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif' });
-  else if (G.phase === 'spin') btn(LW / 2 - 110, by, 220, 52, '\u{270B} STOP REEL ' + (G.reels.filter(r => r.stopped).length + 1), stopNext, { bg: '#7d2430', border: '#ff9d8a', col: '#ffd9d0', font: '900 16px Verdana, sans-serif' });
+  const by = gy + 3 * CELL + 64;
+  if (G.phase === 'idle') btn(LW / 2 - 110, by, 220, 50, '\u{1F3B0} SPIN  (round ' + (G.round + 1) + ')', startSpin, { bg: '#3f9d5a', border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif' });
+  else if (G.phase === 'spin') btn(LW / 2 - 110, by, 220, 50, '\u{270B} STOP REEL ' + (G.reels.filter(r => r.stopped).length + 1), stopNext, { bg: '#7d2430', border: '#ff9d8a', col: '#ffd9d0', font: '900 16px Verdana, sans-serif' });
   else if (G.phase === 'nudge') {
-    btn(LW / 2 - 150, by, 180, 52, '\u{2696}\u{FE0F} RESOLVE', resolveSpin, { bg: '#3f9d5a', border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif' });
-    txt('nudges: ' + G.nudges, LW / 2 + 90, by + 26, '900 13px Verdana, sans-serif', G.nudges ? '#ffe9a3' : '#5a5062');
-  } else txt('\u{2728} the window pays\u{2026}', LW / 2, by + 26, '900 14px Georgia, serif', '#ffd75e');
-  // player strip
-  const py = by + 70;
-  rr(24, py, LW - 48, 46, 12); ctx.fillStyle = 'rgba(255,255,255,0.05)'; ctx.fill();
-  txt('\u{2764}\u{FE0F} ' + Math.max(0, G.hp) + ' / ' + G.maxHp, 88, py + 23, '900 14px Verdana, sans-serif', G.hp <= 15 ? '#ff8a8a' : '#ffe9a3');
-  txt('\u{1F6E1}\u{FE0F} ' + G.block, 178, py + 23, '900 14px Verdana, sans-serif', '#c3ccd6');
+    btn(LW / 2 - 150, by, 180, 50, '\u{2696}\u{FE0F} RESOLVE', resolveSpin, { bg: '#3f9d5a', border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif' });
+    txt('nudges: ' + G.nudges, LW / 2 + 92, by + 25, '900 13px Verdana, sans-serif', G.nudges ? '#ffe9a3' : '#5a5062');
+  } else if (G.phase === 'draft') { /* the draft overlay draws below */ }
+  else txt('\u{2728} the window pays\u{2026}', LW / 2, by + 25, '900 14px Georgia, serif', '#ffd75e');
+  // hero + stats strip
+  drawHero();
   if (G.heat > 0) {
     const hcol = G.heat >= 4 ? '#ff6b3a' : '#ff9d5e';
-    txt('\u{1F525}' + G.heat, 246, py + 23, '900 ' + (13 + G.heat) + 'px Verdana, sans-serif', hcol);
+    txt('\u{1F525}' + G.heat, 168, HERO.y + 6, '900 ' + (13 + G.heat) + 'px Verdana, sans-serif', hcol);
   }
-  txt('spins ' + G.spins + ' \u{2022} dealt ' + G.dmgDone, 350, py + 23, '700 11px Verdana, sans-serif', '#9a8aa0');
+  txt('spins ' + G.spins + ' \u{2022} dealt ' + G.dmgDone + ' \u{2022} purse ' + Object.values(G.purse).reduce((a, b) => a + (b | 0), 0), 300, HERO.y + 6, '700 10px Verdana, sans-serif', '#9a8aa0');
+  btn(LW - 62, HERO.y - 6, 44, 34, G.turbo ? '\u{26A1}!' : '\u{26A1}', () => { G.turbo = !G.turbo; }, { bg: G.turbo ? '#4a3410' : '#2a222e', border: G.turbo ? '#ffe36b' : '#6a5a72', col: G.turbo ? '#ffe36b' : '#9a8aa0', font: '900 13px Verdana' });
   // log
-  G.log.forEach((l, i) => txt(l.s, LW / 2, py + 66 + i * 15, '700 9px Verdana, sans-serif', i ? '#8d7d95' : l.col, 'center'));
+  G.log.forEach((l, i) => txt(l.s, LW / 2, HERO.y + 66 + i * 14, '700 9px Verdana, sans-serif', i ? '#8d7d95' : l.col, 'center'));
   // particles
   for (const p of G.parts) {
     const a = Math.max(0, 1 - p.t / p.life);
@@ -679,7 +996,6 @@ function drawBattle() {
     else { ctx.fillStyle = p.col; ctx.beginPath(); ctx.arc(p.x, p.y, 3 * a + 1, 0, 6.283); ctx.fill(); }
     ctx.globalAlpha = 1;
   }
-  // floats — pop in big, settle, drift up
   for (const f of G.floats) {
     ctx.globalAlpha = Math.max(0, 1 - f.t);
     const punch = 1 + Math.max(0, 0.18 - f.t) * 5;
@@ -687,14 +1003,40 @@ function drawBattle() {
     txt(f.s, f.x, f.y - f.t * 34, '900 ' + size + 'px Verdana, sans-serif', f.col);
     ctx.globalAlpha = 1;
   }
-  btn(LW - 116, 74, 92, 34, '\u{2699} SETUP', () => { G.screen = 'setup'; G.phase = 'idle'; G.reels = []; }, { bg: '#2a222e', border: '#9a8aa0', col: '#d8c8dc', font: '800 11px Verdana' });
-  // banner — slams in, holds, fades
+  btn(LW - 108, 62, 92, 30, '\u{2699} SETUP', () => { G.screen = 'setup'; G.phase = 'idle'; G.reels = []; G.shots = []; G.draft = null; }, { bg: '#2a222e', border: '#9a8aa0', col: '#d8c8dc', font: '800 10px Verdana' });
+  // THE DRAFT: pick 1 of 3, every spin — the landlord's engine, in a dungeon
+  if (G.phase === 'draft' && G.draft) {
+    ctx.fillStyle = 'rgba(8,4,10,0.7)'; ctx.fillRect(0, 0, LW, LH);
+    txt('\u{1FA99} THE DRAFT', LW / 2, 300, '900 22px Georgia, serif', '#ffd75e');
+    txt('one coin joins your purse — or pass, and keep the odds clean', LW / 2, 328, '700 10px Verdana, sans-serif', '#c8b8cc');
+    G.draft.offers.forEach((k, i) => {
+      const cx = LW / 2 + (i - 1) * 140, cy = 420;
+      const kk = KINDS[k];
+      rr(cx - 62, cy - 58, 124, 128, 14);
+      ctx.fillStyle = 'rgba(24,14,26,0.96)'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = kk.col; rr(cx - 62, cy - 58, 124, 128, 14); ctx.stroke();
+      txt(kk.sym, cx, cy - 22, '38px serif', '#fff');
+      txt(kk.name, cx, cy + 16, '900 12px Verdana, sans-serif', kk.col);
+      ctx.font = '600 8px Verdana, sans-serif'; ctx.fillStyle = '#c0b0c4'; ctx.textAlign = 'center';
+      const words = kk.what.split(' ');
+      let line = '', ly = cy + 32;
+      for (const w2 of words) {
+        if ((line + ' ' + w2).length > 20) { ctx.fillText(line, cx, ly); line = w2; ly += 11; }
+        else line = line ? line + ' ' + w2 : w2;
+      }
+      ctx.fillText(line, cx, ly);
+      txt('owned: ' + (G.purse[k] | 0), cx, cy + 62, '700 9px Verdana, sans-serif', '#9a8aa0');
+      BTNS.push({ x: cx - 62, y: cy - 58, w: 124, h: 128, cb: () => draftPick(i), label: 'draft:' + k });
+    });
+    btn(LW / 2 - 70, 510, 140, 40, 'PASS \u{2715}', draftSkip, { bg: '#2a222e', border: '#9a8aa0', col: '#d8c8dc' });
+  }
+  // banner
   if (G.banner) {
     const b = G.banner;
     const p = Math.min(1, b.t / 0.14);
     const sc = 1 + (1 - p) * 1.2;
     const alpha = b.t > 1.2 ? Math.max(0, (1.6 - b.t) / 0.4) : 1;
-    const by2 = b.big ? gy + CELL * 1.5 : 226;
+    const by2 = b.big ? gy + CELL * 1.5 : 236;
     ctx.save();
     ctx.globalAlpha = alpha;
     ctx.translate(LW / 2, by2); ctx.scale(sc, sc);
@@ -705,16 +1047,26 @@ function drawBattle() {
     if (b.sub) txt(b.sub, 0, 20, '800 11px Verdana, sans-serif', '#e8d8c8');
     ctx.restore();
   }
-  // full-screen flash (gold on jackpot, red on pain)
   if (G.flash) { ctx.fillStyle = 'rgba(' + G.flash.c + ',' + Math.max(0, G.flash.a) + ')'; ctx.fillRect(0, 0, LW, LH); }
   if (G.screen === 'won' || G.screen === 'lost') {
-    ctx.fillStyle = 'rgba(8,4,10,0.75)'; ctx.fillRect(0, 0, LW, LH);
-    txt(G.screen === 'won' ? '\u{1F3C6} THE HOUSE PAYS OUT' : '\u{1F480} THE HOUSE WINS', LW / 2, 360, '900 26px Georgia, serif', G.screen === 'won' ? '#7ee787' : '#ff8a8a');
-    txt(G.spins + ' spins \u{2022} ' + G.dmgDone + ' damage dealt', LW / 2, 396, '800 12px Verdana, sans-serif', '#c8b8cc');
-    // the shower still rains over the overlay
-    if (G.screen === 'won') for (const p of G.parts) if (p.sym) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); txt(p.sym, p.x, p.y, '18px serif', '#fff'); ctx.globalAlpha = 1; }
-    btn(LW / 2 - 150, 430, 140, 46, '\u{21BB} REMATCH', startBattle, { bg: '#3f9d5a', border: '#eaffef', col: '#123a24' });
-    btn(LW / 2 + 10, 430, 140, 46, '\u{2699} SETUP', () => { G.screen = 'setup'; G.reels = []; }, { bg: '#2a222e', border: '#9a8aa0', col: '#d8c8dc' });
+    ctx.fillStyle = 'rgba(8,4,10,0.78)'; ctx.fillRect(0, 0, LW, LH);
+    txt(G.screen === 'won' ? '\u{1F3C6} THE HOUSE PAYS OUT' : '\u{1F480} THE HOUSE WINS', LW / 2, 330, '900 26px Georgia, serif', G.screen === 'won' ? '#7ee787' : '#ff8a8a');
+    txt(G.spins + ' spins \u{2022} ' + G.dmgDone + ' damage dealt', LW / 2, 364, '800 12px Verdana, sans-serif', '#c8b8cc');
+    if (G.screen === 'won') {
+      // LBAL's scarce removal: ONE smelt per victory — thin the deck
+      txt(G.smelted ? 'the smelter cools' : '\u{2692}\u{FE0F} SMELT ONE — remove a coin, sharpen the odds:', LW / 2, 400, '800 11px Verdana, sans-serif', G.smelted ? '#9a8aa0' : '#e8d0a0');
+      if (!G.smelted) {
+        const owned = Object.keys(G.purse).filter(k => (G.purse[k] | 0) > 0).sort((a, b) => G.purse[b] - G.purse[a]).slice(0, 4);
+        owned.forEach((k, i) => {
+          const cx = LW / 2 + (i - (owned.length - 1) / 2) * 100;
+          btn(cx - 44, 418, 88, 44, KINDS[k].sym + ' \u{D7}' + G.purse[k], () => smelt(k), { bg: '#2a222e', border: KINDS[k].col, col: '#e8d8dc', font: '800 11px Verdana' });
+        });
+      }
+      for (const p of G.parts) if (p.sym) { ctx.globalAlpha = Math.max(0, 1 - p.t / p.life); txt(p.sym, p.x, p.y, '18px serif', '#fff'); ctx.globalAlpha = 1; }
+    }
+    btn(LW / 2 - 150, 490, 140, 46, '\u{21BB} REMATCH', startBattle, { bg: '#3f9d5a', border: '#eaffef', col: '#123a24' });
+    btn(LW / 2 + 10, 490, 140, 46, '\u{2699} SETUP', () => { G.screen = 'setup'; G.reels = []; G.shots = []; }, { bg: '#2a222e', border: '#9a8aa0', col: '#d8c8dc' });
+    if (G.screen === 'won') txt('your purse KEEPS its drafts, breeds and growths — rematch to run it deeper', LW / 2, 556, '600 9px Verdana, sans-serif', '#9a8aa0');
   }
 }
 
@@ -731,7 +1083,6 @@ function hit(px, py) {
 canvas.addEventListener('pointerdown', (ev) => {
   audio();
   if (!hit(ev.clientX, ev.clientY)) {
-    // anywhere else: the lever — spin or stop
     if (G.screen === 'battle') { if (G.phase === 'idle') startSpin(); else if (G.phase === 'spin') stopNext(); else if (G.phase === 'nudge') resolveSpin(); }
   }
 });
@@ -739,11 +1090,17 @@ window.addEventListener('keydown', (ev) => {
   if (ev.key === ' ') {
     ev.preventDefault();
     audio();
-    if (G.screen === 'battle') { if (G.phase === 'idle') startSpin(); else if (G.phase === 'spin') stopNext(); else if (G.phase === 'nudge') resolveSpin(); }
+    if (G.screen === 'battle') {
+      if (G.phase === 'idle') startSpin();
+      else if (G.phase === 'spin') stopNext();
+      else if (G.phase === 'nudge') resolveSpin();
+      else if (G.phase === 'draft') draftSkip();
+    }
   }
 });
 // debug/test handles
-window.G = G; window.BTNS = BTNS; window.startSpin = startSpin; window.stopNext = stopNext; window.resolveSpin = resolveSpin;
+window.G = G; window.BTNS = BTNS; window.startSpin = startSpin; window.stopNext = stopNext;
+window.resolveSpin = resolveSpin; window.draftPick = draftPick; window.draftSkip = draftSkip;
 requestAnimationFrame(frame);
 </script>
 </body>
