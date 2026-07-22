@@ -221,9 +221,11 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
       from (seed, floor) so shared seeds walk identical dungeons whatever the
       battles burned; 🌱 chip by the difficulty row plants one via the name pad,
       the report card prints it (session 39)
-- [ ] **Share-a-run card** [big]: victory/death → a rendered trophy-card PNG
-      (hero, floor, kills, seed, painted frame) via canvas.toBlob — download +
-      navigator.share where it exists
+- [x] **Share-a-run card** [big]: 📤 on the fallen-run screen builds a framed
+      trophy card @2x (hero sprite in their worn skin, REACHED FLOOR huge,
+      stat rows, coin mound, the seed as a challenge, the play link) — preview
+      overlay with SAVE PNG (toBlob download) or the native share sheet where
+      navigator.canShare allows files (session 41)
 - [x] **Mint strangers**: THE ASSAYER (appraise the collection: +3 gold/relic
       for a 10-gold fee, or sell him a random relic for 60) and THE DEBT
       COLLECTOR (settle 30 gold for a key receipt, or dispute: 50/50 damages

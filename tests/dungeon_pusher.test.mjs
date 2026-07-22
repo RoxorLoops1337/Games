@@ -3612,7 +3612,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
   t.ok(src.indexOf("'/api/dungeon_board'") >= 0, 'the client points at /api/dungeon_board');
-  t.ok(src.indexOf('CARVE IT ON THE BOARD') >= 0, 'the fallen-run screen offers the carve');
+  t.ok(src.indexOf('CARVE IT') >= 0, 'the fallen-run screen offers the carve');
   t.ok(src.indexOf('function drawBoard') >= 0 && src.indexOf('function drawNamePad') >= 0,
        'board + name-carver overlays exist');
   t.ok(/if \(NAMEPAD\) \{ NAMEPAD = null; return; \}/.test(src), 'ESC backs out of the carver first');
@@ -4245,6 +4245,26 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   for (let i = 0; i < 3; i++) D.scoreCoin({ kind: 'slug', x: 50, y: 90, z: 0 });
   t.ok(D.S.run.quest.done, 'three collected slugs finish the job');
   t.eq(D.S.run.goldKeys, gk0 + 1, 'and the mint pays in a GOLDEN key');
+}
+
+// -------- SHARE-A-RUN: the trophy card wiring --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('function buildShareCard') >= 0, 'the card renderer exists');
+  t.ok(src.indexOf('cv.width = 960') >= 0, 'rendered @2x for crisp shares');
+  t.ok(src.indexOf("SHARE.cv.toBlob") >= 0, 'the card exports through toBlob');
+  t.ok(src.indexOf('navigator.canShare({ files: [f] })') >= 0, 'the native share sheet is offered where it exists');
+  t.ok(src.indexOf("a.download = 'dungeon-pusher-run.png'") >= 0, 'and a plain download everywhere else');
+  t.ok(src.indexOf('seed36(o.seed)') >= 0 && src.indexOf('can you go deeper?') >= 0, 'the card carries the seed challenge');
+  t.ok(src.indexOf('games-71g.pages.dev/dungeon_pusher') >= 0, 'and the way in');
+  t.ok(/if \(SHARE\) \{ SHARE = null; return; \}/.test(src), 'ESC closes the preview');
+  t.ok(src.indexOf('THEMES = false; SHARE = null;') >= 0, 'the crash net clears it');
+  t.ok(src.indexOf("'\\u{1F4E4} CARD'") >= 0 || src.indexOf('📤 CARD') >= 0, 'the fallen-run screen offers the card');
+  // the renderer swaps the global ctx in and ALWAYS swaps it back
+  const body = src.slice(src.indexOf('function buildShareCard'), src.indexOf('function openShare'));
+  t.ok(body.indexOf('const main = ctx;') >= 0 && body.indexOf('} finally {') >= 0 && body.indexOf('ctx = main;') >= 0,
+       'the card paints on a swapped ctx inside a finally guard');
 }
 
 t.done();

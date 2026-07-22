@@ -4972,7 +4972,7 @@ if (!HEADLESS) (function browser() {
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
       WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null; CLOUD = null;
-      CREDITS = false; PHOTO = false; THEMES = false;
+      CREDITS = false; PHOTO = false; THEMES = false; SHARE = null;
       if (S.screen === 'battle') {
         S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
         S.room = null;
@@ -7859,6 +7859,7 @@ if (!HEADLESS) (function browser() {
   function kbBack() {
     if (NAMEPAD) { NAMEPAD = null; return; }
     if (PHOTO) { PHOTO = false; return; }
+    if (SHARE) { SHARE = null; return; }
     if (BOARD) { BOARD = null; return; }
     if (CLOUD) { CLOUD = null; return; }
     if (CREDITS) { CREDITS = false; return; }
@@ -9290,6 +9291,102 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, TR('CLOSE ✕'), () => { CLOUD = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
+  // ---- SHARE-A-RUN: a trophy card rendered to a PNG worth bragging with ----
+  let SHARE = null;                    // { cv } — the built card, previewing
+  function buildShareCard(o) {
+    const cv = document.createElement('canvas');
+    cv.width = 960; cv.height = 1344;              // 480×672 @2x for crisp shares
+    const g = cv.getContext('2d');
+    if (!g) return null;
+    const main = ctx;
+    ctx = g;
+    try {
+      ctx.setTransform(2, 0, 0, 2, 0, 0);
+      const W = 480, H = 672;
+      const bg = ctx.createRadialGradient(W / 2, 220, 60, W / 2, H / 2, 620);
+      bg.addColorStop(0, '#33202e'); bg.addColorStop(1, '#140d16');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+      // the painted frame: bronze outer, gold whisper inner
+      rr(14, 14, W - 28, H - 28, 20); ctx.lineWidth = 4; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+      rr(22, 22, W - 44, H - 44, 16); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(255,215,94,0.45)'; ctx.stroke();
+      txt('DUNGEON PUSHER', W / 2, 58, '900 30px Georgia, serif', '#ffd75e', 'center', { w: 6, col: '#2a1030' });
+      txt('a coin pusher roguelike', W / 2, 86, '700 11px Verdana, sans-serif', '#c8a8b0');
+      // the fallen hero, in their worn skin
+      const h = heroById(o.hero);
+      const key = o.hero + '_idle';
+      if (!(SHEETS[key] && drawArt(key, W / 2, 214, 92, 'd', 0))) {
+        txt(h ? h.icon : '❔', W / 2, 182, '62px serif', '#fff');
+      }
+      txt((h ? h.name : '—') + (o.ng ? '  ♟ NG+' : ''), W / 2, 248, '900 16px Verdana, sans-serif', '#ffe9a3');
+      txt(o.cause || 'the run ended', W / 2, 270, '600 11px Verdana, sans-serif', '#b8a8bc');
+      // the number that matters
+      txt('REACHED FLOOR', W / 2, 312, '900 13px Georgia, serif', '#9a8aa0');
+      txt('' + o.floor, W / 2, 366, '900 68px Georgia, serif', '#ffd75e', 'center', { w: 8, col: '#3a1006' });
+      const row = (y, a, b) => {
+        txt(a, 124, y, '800 12px Verdana, sans-serif', '#9a8aa0', 'left');
+        txt(b, W - 124, y, '900 12px Verdana, sans-serif', '#ffe9a3', 'right');
+      };
+      row(428, 'monsters slain', '' + o.kills);
+      row(452, 'gold looted', fmt(o.gold));
+      row(476, 'relics carried', '' + (o.relics || 0));
+      row(500, 'best single hit', fmt((o.stats && o.stats.bestHit) || 0));
+      // a mound of coins to sit on
+      for (let i = 0; i < 16; i++) {
+        const cx2 = W / 2 + Math.sin(i * 2.399) * (24 + ((i * 23) % 150));
+        const cy2 = 536 + ((i * 13) % 26);
+        ctx.beginPath(); ctx.ellipse(cx2, cy2 + 2, 12, 5.5, 0, 0, 7); ctx.fillStyle = '#7d5a14'; ctx.fill();
+        ctx.beginPath(); ctx.ellipse(cx2, cy2, 12, 5.5, 0, 0, 7); ctx.fillStyle = '#f2c04a'; ctx.fill();
+        ctx.strokeStyle = 'rgba(122,84,14,0.6)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      if (o.seed != null) {
+        txt('seed ' + seed36(o.seed) + ' — can you go deeper?', W / 2, 600, '800 12px Verdana, sans-serif', '#8ed67e');
+      }
+      txt('play: games-71g.pages.dev/dungeon_pusher', W / 2, 628, '700 11px Verdana, sans-serif', '#9a8aa0');
+    } finally {
+      ctx = main;
+    }
+    return cv;
+  }
+  function openShare() {
+    if (!S.over) return;
+    const cv = buildShareCard(S.over);
+    if (cv) SHARE = { cv };
+  }
+  function shareSave() {
+    if (!SHARE || !SHARE.cv || !SHARE.cv.toBlob) return;
+    SHARE.cv.toBlob((blob) => {
+      if (!blob) return;
+      // the native share sheet where it exists; a plain download elsewhere
+      const f = (typeof File === 'function') ? new File([blob], 'dungeon-pusher-run.png', { type: 'image/png' }) : null;
+      if (f && navigator.share && navigator.canShare && navigator.canShare({ files: [f] })) {
+        navigator.share({ files: [f], title: 'Dungeon Pusher', text: 'my descent — can you go deeper?' }).catch(() => {});
+        return;
+      }
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'dungeon-pusher-run.png';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      toast('the card is saved — brag well');
+    }, 'image/png');
+  }
+  function drawShare(t) {
+    if (!SHARE) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.88)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { SHARE = null; } });
+    const cw = 372, ch = cw * (672 / 480);
+    const cx2 = (LW - cw) / 2, cy2 = 64;
+    ctx.save();
+    ctx.shadowColor = 'rgba(0,0,0,0.6)'; ctx.shadowBlur = 18; ctx.shadowOffsetY = 6;
+    ctx.drawImage(SHARE.cv, cx2, cy2, cw, ch);
+    ctx.restore();
+    uiButtons.push({ x: cx2, y: cy2, w: cw, h: ch, cb: () => {} });
+    uiBtn(LW / 2 - 150, cy2 + ch + 16, 140, 40, '\u{1F4BE} SAVE PNG', shareSave,
+          { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 12 });
+    uiBtn(LW / 2 + 10, cy2 + ch + 16, 140, 40, TR('CLOSE ✕'), () => { SHARE = null; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 12px Verdana, sans-serif', r: 12 });
+  }
   // ---- MACHINE THEMES: the cabinet skin rack ----
   let THEMES = false;
   function drawThemes(t) {
@@ -9820,14 +9917,21 @@ if (!HEADLESS) (function browser() {
     }
     uiBtn(LW / 2 - 120, 638, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(heroSel),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 17px Verdana, sans-serif', r: 16 });
-    // carve the fallen run onto the deep board (once per run)
+    // carve the fallen run onto the deep board (once per run) + the card
     if (o.floor >= 1 && !o.posted) {
-      uiBtn(LW / 2 - 110, 748, 220, 34, '\u{1F3C5} CARVE IT ON THE BOARD', () => {
+      uiBtn(LW / 2 - 115, 748, 148, 34, '\u{1F3C5} CARVE IT', () => {
         const send = () => { o.posted = true; postScore(o); };
         if (S.boardName) send();
         else NAMEPAD = { val: '', then: send };
       }, { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3',
            font: '900 11px Verdana, sans-serif', r: 10 });
+      uiBtn(LW / 2 + 41, 748, 74, 34, '\u{1F4E4} CARD', openShare,
+            { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
+              font: '900 11px Verdana, sans-serif', r: 10 });
+    } else {
+      uiBtn(LW / 2 - 55, 748, 110, 34, '\u{1F4E4} THE CARD', openShare,
+            { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
+              font: '900 11px Verdana, sans-serif', r: 10 });
     }
     uiBtn(LW / 2 - 80, 700, 160, 38, 'TITLE', () => { S.screen = 'title'; },
           { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 13px Verdana, sans-serif', r: 12 });
@@ -9894,6 +9998,7 @@ if (!HEADLESS) (function browser() {
     drawCloud(t);
     drawCredits(t);
     drawThemes(t);
+    drawShare(t);
     drawNamePad(t);
     drawIntro(t);
     drawConfirm(t);
