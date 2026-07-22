@@ -421,6 +421,73 @@ impact ÷ effort.
       is making victory coin-offers sometimes UPGRADE a coin instead of
       adding one past act 2
 
+## Tier 10 — the third month & the recruiters (authored session 64)
+
+Tier 9 gave players people to chase. This tier is about STAYING POWER — the
+machine itself learning tricks, the heroes deepening, and every sharer
+becoming a recruiter. One-file architecture stands; server touches marked.
+Ordered by impact ÷ effort.
+
+- [ ] **The upgrade offer** (the owner's economy dial, part 2): past act 2,
+      the victory coin offer's FIRST slot becomes an UPGRADE (turn one
+      plain coin into the offered kind) instead of an add — purse quality
+      over quantity; measure purse totals at floor 18 before/after in a
+      probe line
+- [ ] **Trophies for the tier**: GAUNTLET RUNNER (clear one), LIVING LEGEND
+      (an NG++ deep clear), CHRONICLER (hear 40 tales), EMISSARY (share a
+      duel link or the gift stake) — 44 on the wall
+- [ ] **The gift stake** (the recruiter hook, pure client): a 🎁 STAKE A
+      ROOKIE button builds ?gift=<name> onto the play URL; a fresh profile
+      opening it gets +50 cogs and "NAME staked you 50 cogs — dig well";
+      one gift per profile, giver earns the EMISSARY trophy
+- [ ] **Board filters**: hero-icon and diff chips on THE DEEP BOARD filter
+      the fifty client-side; "8 knights, 3 nightmares" reads at a glance
+- [ ] **Colorblind coin marks audit**: S.opts.cb exists — in cb mode stamp
+      each coin kind with its letter (C/S/V/H/F/L) and gems with ◆, on the
+      pile AND in the tray/purse rows; verify at 24px in a screenshot
+- [ ] **Pet names & veterancy**: a pet that survives 5 battles earns ★ and
+      the NAMEPAD (petname stored on the iid); named veterans +1 max HP;
+      the swarm keeps names across floors (rat king's roster already
+      persists)
+- [ ] **Hero signature quests**: one pool quest per specialist, gated to
+      their runs — Poltergeist: win a battle firing ≤6 coins; Crane
+      Keeper: deliver 12 claw catches in one run; Rat King: field the
+      full swarm of 8; Alchemist: 3 draughts in one battle — cogs + a
+      quest-log line each
+- [ ] **Events grow to 14**: five new act-aware events (an escaped
+      champion's bounty, a tollkeeper's rebate, a mirror merchant, a
+      gremlin auction, the innkeeper's wager on your next floor time)
+- [ ] **Act motifs**: the descend sting grows into a per-act 4-note motif
+      (same tone() plumbing, no assets); WHAT'S NEW mentions it; respects
+      the music volume slider
+- [ ] **THE LEGACY BOOK**: dated lifetime firsts stamped as they happen
+      (first jackpot, first deep clear, first champion slain, each hero's
+      unseal, the legend door, first gauntlet) — S.legacy[] capped 40,
+      rendered as a RECORDS: LEGACY page; month-three players get a
+      history of themselves
+- [ ] **Quest pool +4**: four new generic quests (win with 0 potions used,
+      bank 30 coins in one battle, open 3 chests on one floor, spend 3
+      TILTs and still win untouched)
+- [ ] **The rookie contract**: after the coach retires, a one-time
+      CONTRACT card: "reach floor 5 — 30 ⚙" — recruited friends get an
+      immediate goal; pays once (S.contract)
+- [ ] **[big] GLASS JARS on the bed**: past act 1, some floors seed a glass
+      jar riding the pusher (layout-seeded): three direct coin hits crack
+      it for a gem+relic spill; it slides off the back edge in ~4 rounds —
+      a real machine mechanic, aimed shots finally matter mid-round
+- [ ] **[big] THE BRASS PEGS**: endless floors (22+) raise seeded brass
+      pegs from the bed that deflect falling coins — the machine itself
+      joins the decree stack; probe the pile flow so it never becomes
+      unwinnable (pegs never block the tray mouth)
+- [ ] **[big] THE NINTH HERO — THE TOLLKEEPER**: plays the machine's own
+      agent: coins he banks pay DOWN a floor-toll meter instead of a purse
+      (no purse growth at all — a fixed 14-coin hand refills each battle);
+      unseals at lifetime 1,000 coins skimmed... design pass first, the
+      economy is the hero
+- [ ] **Board hygiene [server]**: entries carry v (client version) so a
+      future breaking change can filter; plus a dp:top backup key written
+      weekly (cheap insurance for the one board that never expires)
+
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
