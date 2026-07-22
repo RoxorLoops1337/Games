@@ -463,14 +463,14 @@ Ordered by impact ÷ effort.
       and doubles it — expires at the stairs), THE MIRROR MERCHANT (mint:
       −5 maxHp for a rare pick), THE GREMLIN AUCTION, THE INNKEEPER'S
       WAGER (unhurt to the stairs → +35) (session 67)
-- [ ] **Act motifs**: the descend sting grows into a per-act 4-note motif
-      (same tone() plumbing, no assets); WHAT'S NEW mentions it; respects
-      the music volume slider
-- [ ] **THE LEGACY BOOK**: dated lifetime firsts stamped as they happen
-      (first jackpot, first deep clear, first champion slain, each hero's
-      unseal, the legend door, first gauntlet) — S.legacy[] capped 40,
-      rendered as a RECORDS: LEGACY page; month-three players get a
-      history of themselves
+- [x] **Act motifs**: SND.descend grew a 4×4 motif table — act I bright,
+      act II lower, act III minor, the mint heavy brass with a sub-octave
+      resolve; same tone() plumbing, headless stub untouched (session 68)
+- [x] **THE LEGACY BOOK**: legacyStamp (dated, deduped, capped 40, newest
+      first) + LEGACY_ACH — eleven curated trophies write their own dated
+      lines via achUnlock, deep clears and the legend-door unseal stamp
+      directly; RECORDS grew a 4th 📖 LEGACY tab (newest 20 shown)
+      (session 68)
 - [x] **Quest pool +4** (8 jobs now): NOPOTION (dry win — usePotion marks
       the battle), BIGBANK (30 banked), CHESTS (3 cracked lids), TILTWIN
       (3 tilts spent and still win) (session 66)

@@ -5932,4 +5932,54 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(V.S.contract, 0, 'a floor-9 veteran signs no rookie paper');
 }
 
+// -------- THE LEGACY BOOK + act motifs --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // the stamp: dated, deduped, capped, newest first
+  t.ok(D.legacyStamp('a test of firsts'), 'a first is stamped');
+  t.ok(!D.legacyStamp('a test of firsts'), 'a second telling is refused');
+  t.eq(D.S.legacy.length, 1, 'one line in the book');
+  t.eq(D.S.legacy[0].t, new Date().toISOString().slice(0, 10), 'dated today');
+  for (let i = 0; i < 45; i++) D.legacyStamp('line ' + i);
+  t.eq(D.S.legacy.length, 40, 'the book caps at forty lines');
+  t.eq(D.S.legacy[0].x, 'line 44', 'newest first');
+  // the book survives a reload (saved before any other instance rebinds)
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.legacy.length, 40, 'the book survives a reload');
+  t.eq(R.S.legacy[0].x, 'line 44', 'in order');
+  // curated trophies write their own lines
+  const { DP: A } = loadGame({}, false);
+  A.srand(211); A.newRun('knight');
+  A.S.run.gold = 600;
+  A.achPoll();                              // DRAGON HOARD — not curated
+  t.ok(A.S.ach.u.rich && !A.S.legacy.some(e => /HOARD/i.test(e.x)), 'plain trophies stay out of the book');
+  A.achUnlock('jackpot');
+  t.ok(A.S.legacy.some(e => e.x.indexOf('first JACKPOT') >= 0), 'the first jackpot is history');
+  t.ok(Object.keys(A.LEGACY_ACH).every(id => A.achById(id)), 'every curated id is a real trophy');
+  // the deep clear and the legend door stamp themselves
+  const { DP: C } = loadGame({}, false);
+  C.S.deep15 = {};
+  C.srand(212); C.newRun('knight');
+  C.S.run.floor = 15; C.S.run.ng = 1;
+  C.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  C.interact(0);
+  C.S.foes.forEach(f => { f.hp = 1; });
+  C.dmgAll(999);
+  t.ok(C.S.legacy.some(e => e.x.indexOf('deep clear — an alt skin') >= 0), 'the tailor’s visit is history');
+  t.ok(C.S.legacy.some(e => e.x.indexOf('LEGEND DOOR unsealed') >= 0), 'so is the unseal');
+  // the motifs: four notes, four acts, headless-safe
+  const { DP: N } = loadGame({}, false);
+  N.srand(213); N.newRun('knight');
+  t.ok(N.nextFloor(), 'the staircase still descends with the motif wired');
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('the DESCEND motif: four notes per act') >= 0, 'the motif table exists');
+  t.ok(src.indexOf('[392, 330, 294, 262],   // act I') >= 0, 'act I sings bright');
+  t.ok(src.indexOf('[294, 247, 208, 175],   // the mint') >= 0, 'the mint sings brass');
+  t.ok(src.indexOf("['legacy', '\\u{1F4D6} LEGACY']") >= 0, 'records grew the LEGACY tab');
+  t.ok(src.indexOf('the book is blank — go make a first') >= 0, 'with a kind empty state');
+}
+
 t.done();
