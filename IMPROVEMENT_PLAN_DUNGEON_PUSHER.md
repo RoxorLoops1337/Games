@@ -81,12 +81,15 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Difficulty modes**: MERCIFUL (−20% HP) / NORMAL / NIGHTMARE (+30% HP, elites
       hex 3× as often) — three door chips on the title, stamped on the run and the
       report card (session 16)
-- [ ] **Coin mastery**: fire 500 of a kind lifetime → its +1 upgraded face (visual +
-      tiny stat bump), tracked in the codex
-- [ ] **More pets**: owl (reveals intents through blackout), tortoise (taunts, high
-      HP), fire beetle (burns attacker) — pet art via item pipeline
-- [ ] **Economy sink**: the WELL — throw gold in for a random small blessing, prices
-      scale with floor (late-game gold has somewhere to go)
+- [x] **Coin mastery**: 500 lifetime fires of a kind → MASTERED ★, its effect +1
+      forever (gold dmg, silver block, green pois, red heal, blue dmg, lucky dmg) —
+      ledger in the codex, noted in the inventory coin rows (session 18)
+- [x] **More pets**: Watch Owl (sees through BLACKOUT), Tortoise (20 HP wall, +2
+      block/round), Fire Beetle (scorches whatever strikes it) — in shops/chests via
+      the item pipeline (session 18)
+- [x] **Economy sink**: the WISHING WELL — a seventh hallway stranger; toll is
+      15 + 5×floor gold for a rolled boon (heal / keys / relic / nothing, wells do
+      that), plus a free wish that rarely listens (session 18)
 
 ## Tier 4 — feel, sound & accessibility
 

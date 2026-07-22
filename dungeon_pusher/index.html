@@ -159,6 +159,10 @@ const ITEMS = [
   // battle-long war paints: temporary STRENGTH / DEXTERITY for ONE fight
   { id: 'horn',   icon: '\u{1F4EF}',      name: 'War Horn',    kind: 'buff', str: 2, cost: 38 },
   { id: 'tonic',  icon: '\u{1F964}',      name: 'Grip Tonic',  kind: 'buff', dex: 2, cost: 38 },
+  // the second wave of beasts
+  { id: 'owl',      icon: '\u{1F989}', name: 'Watch Owl',   kind: 'pet', php: 6,  cost: 46 },
+  { id: 'tortoise', icon: '\u{1F422}', name: 'Tortoise',    kind: 'pet', php: 20, cost: 44 },
+  { id: 'beetle',   icon: '\u{1FAB2}', name: 'Fire Beetle', kind: 'pet', php: 10, cost: 42 },
 ];
 function itemById(id) { return ITEMS.find(i => i.id === id); }
 
@@ -397,6 +401,7 @@ function coinFx(k) {
   const mods = [];
   let main = '';
   const M = (id, txt2) => { if (hasRelic(id)) { const rl = relicById(id); mods.push((rl ? rl.name : id) + ': ' + txt2); return true; } return false; };
+  if (masteryLvl(k)) mods.push('MASTERED ★: +1 (500 fired, forever)');
   if (k === 'coin') {
     let d = C.DMG.gold;
     if (strTotal() > 0) { d += strTotal(); mods.push('Strength: +' + strTotal() + ' dmg'); }
@@ -791,7 +796,7 @@ const S = {
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
   life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {} },
   hist: [],                                     // the last ten runs, newest first
-  codex: { foes: {}, relics: {} },              // everything ever met or owned
+  codex: { foes: {}, relics: {}, coins: {} },   // everything ever met, owned or fired
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
   scurryFx: [],                                 // rats mid-dash across the pile (visual)
   diffPick: 'normal',                           // the door you'll take next run
@@ -888,7 +893,7 @@ function load() {
     }
     if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
     if (d.codex && typeof d.codex === 'object') {
-      S.codex = { foes: d.codex.foes || {}, relics: d.codex.relics || {} };
+      S.codex = { foes: d.codex.foes || {}, relics: d.codex.relics || {}, coins: d.codex.coins || {} };
     }
     if (typeof d.cogs === 'number') S.cogs = Math.max(0, d.cogs);
     if (d.ws && typeof d.ws === 'object') S.ws = d.ws;
@@ -1136,8 +1141,10 @@ function dmgFoe(e, n, src, pierce) {
 }
 function dmgEnemy(n, src, pierce) { return dmgFoe(S.enemy, n, src, pierce); }
 // what one gold coin hits for, relics included (momentum counts fired gold)
+// COIN MASTERY: fire 500 of a kind, lifetime, and its face upgrades (+1)
+function masteryLvl(k) { return (((S.codex && S.codex.coins) || {})[k] || 0) >= 500 ? 1 : 0; }
 function goldDmg() {
-  let d = C.DMG.gold + (hasRelic('goldedge') ? 1 : 0) + (hasRelic('keenedge') ? 1 : 0);
+  let d = C.DMG.gold + (hasRelic('goldedge') ? 1 : 0) + (hasRelic('keenedge') ? 1 : 0) + masteryLvl('coin');
   if (S.battle) {
     if (hasRelic('momentum')) d += Math.floor((S.battle.goldFired || 0) / 5);
     if (hasRelic('warlord')) d += Math.floor((S.battle.goldFired || 0) / 3);
@@ -1295,9 +1302,18 @@ function petSoak(dmg, attacker) {
     p.hp -= soak;
     dmg -= soak;
     floatAnchor(p.icon + ' -' + soak, 'hero', '#c8d6e8');
+    // the FIRE BEETLE's shell scorches whatever strikes it
+    if (p.iid === 'beetle' && soak > 0 && attacker && attacker.hp > 0) {
+      applyBurn(attacker, 1);
+      floatAnchor('\u{1FAB2} the shell SCORCHES it!', 'enemy', '#ff9d3c');
+    }
     if (p.hp <= 0) petDies(p, attacker);
   }
   return dmg;
+}
+// the WATCH OWL sees through the blackout hex
+function blackedOut() {
+  return S.blackT > 0 && !S.pets.some(p => p.hp > 0 && p.iid === 'owl');
 }
 // every pet acts once per round (the Pack Leader drills them twice)
 function petsAct() {
@@ -1308,6 +1324,7 @@ function petsAct() {
     if (p.hp <= 0) continue;
     for (let a = 0; a < acts && S.run && !S.victory; a++) {
       if (p.iid === 'pup') addBlock(1);
+      else if (p.iid === 'tortoise') addBlock(2);
       else if (p.iid === 'newt') { if (S.enemy && S.enemy.hp > 0) applyBurn(S.enemy, 1 * dmul); }
       else if (p.iid === 'rat') {
         if (S.enemy && S.enemy.hp > 0) {
@@ -1691,6 +1708,9 @@ function drop(x, force) {
   S.dropped++; S.meter++;
   B.fired = (B.fired || 0) + 1;
   if (S.run.stats) S.run.stats.fired++;
+  // the mastery ledger: 500 lifetime fires of a kind upgrade its face
+  S.codex.coins = S.codex.coins || {};
+  S.codex.coins[kind] = (S.codex.coins[kind] || 0) + 1;
   SND.slot();
   if (S.meter >= C.METER_MAX) frenzy();
   return true;
@@ -2087,7 +2107,7 @@ function applyLoot(q) {
   if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0));
   else if (q.t === 'bag') addGold(8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
   else if (q.t === 'silver') {
-    addBlock(1 + dexTotal() + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0));
+    addBlock(1 + dexTotal() + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0) + masteryLvl('silver'));
     if (hasRelic('spikeshield')) dmgEnemy(1);
     if (hasRelic('retort')) dmgEnemy(2);
     // the Alloy fuses every third silver into a plate
@@ -2107,7 +2127,7 @@ function applyLoot(q) {
     SND.buy();
   }
   else if (q.t === 'red') {
-    healPlayer(C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0) + (hasRelic('greensprig') ? 1 : 0));
+    healPlayer(C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0) + (hasRelic('greensprig') ? 1 : 0) + masteryLvl('red'));
     if (hasRelic('phoenixember')) addBlock(1);
     // Crimson Rain: mercy for you, misery for them
     if (hasRelic('crimsonrain')) for (const f of S.foes) if (f.hp > 0) applyBleed(f, 1, true);
@@ -2126,7 +2146,7 @@ function applyLoot(q) {
     SND.collect(2);
   }
   else if (q.t === 'lucky') {
-    let ld = C.DMG.lucky + strTotal()
+    let ld = C.DMG.lucky + strTotal() + masteryLvl('lucky')
            + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0);
     // Lucky Streak: the dice heat up as they roll
     if (S.battle && hasRelic('luckystreak')) {
@@ -2139,7 +2159,7 @@ function applyLoot(q) {
     SND.gem();
   }
   else if (q.t === 'blue') {
-    let bd = C.DMG.blue + (hasRelic('frostshard') ? 1 : 0) + (hasRelic('permafrost') ? 1 : 0);
+    let bd = C.DMG.blue + (hasRelic('frostshard') ? 1 : 0) + (hasRelic('permafrost') ? 1 : 0) + masteryLvl('blue');
     if (hasRelic('sparkstone') && S.foes.filter(f => f.hp > 0).length >= 2) bd += 1;
     if (hasRelic('hailstorm')) bd += Math.max(0, S.foes.filter(f => f.hp > 0).length - 1);
     dmgAll(bd);
@@ -2167,7 +2187,7 @@ function applyLoot(q) {
     S.shake += it.splash ? 8 : 5;
     SND.hit();
   } else if (q.t === 'green') {
-    poisonEnemy((1 + (hasRelic('venomtip') ? 1 : 0) + (hasRelic('toxicology') ? 1 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
+    poisonEnemy((1 + (hasRelic('venomtip') ? 1 : 0) + (hasRelic('toxicology') ? 1 : 0) + masteryLvl('green')) * (hasRelic('twinfangs') ? 2 : 1));
     if (hasRelic('rustfang') && S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
     if (hasRelic('blightlord')) dmgEnemy(1);
     if (hasRelic('contagion')) for (const f of S.foes) { if (f.hp > 0 && f !== S.enemy) f.pois += 1; }
@@ -3335,6 +3355,25 @@ const EVENTS = [
         fx: () => { if (rng() < 0.5) { addGold(20); return 'it spits out +20 gold, offended.'; }
                     spendPurse(Math.min(3, purseTotal())); return 'GULP. Three coins, gone.'; } },
     ] },
+  { id: 'well', icon: '\u{1FAA3}', name: 'THE WISHING WELL',
+    flavor: 'Coins glitter far below. The water hums, expectant. The toll grows with the depth.',
+    choices: [
+      { label: 'pour in the toll', sub: '15 + 5×floor gold — the well grants a boon',
+        can: () => S.run.gold >= 15 + 5 * S.run.floor,
+        fx: () => {
+          S.run.gold -= 15 + 5 * S.run.floor;
+          const r = rng();
+          if (r < 0.4) { healPlayer(15); return 'the water rises warm: +15 HP.'; }
+          if (r < 0.7) { S.run.keys += 2; return 'two keys surface, dripping: +2 keys.'; }
+          if (r < 0.9) { const id2 = grantRelic('c'); const rl = id2 && relicById(id2);
+                         return rl ? 'the well offers up ' + rl.name + '!' : 'the well gurgles, embarrassed.'; }
+          return 'the well keeps your gold. Wells do that.';
+        } },
+      { label: 'whisper a wish', sub: 'free — wells rarely listen',
+        can: () => true,
+        fx: () => { if (rng() < 0.45) { addGold(5); return 'a stray coin blows back up: +5 gold.'; }
+                    return 'the well says nothing. It never does.'; } },
+    ] },
   { id: 'trader', icon: '⚖\u{FE0F}', name: 'THE SHRINE OF TRADES',
     flavor: 'Two bowls on a scale: one wants blood, one wants gold.',
     choices: [
@@ -3888,6 +3927,7 @@ window.DP = {
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
+  masteryLvl, blackedOut,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
@@ -4924,7 +4964,7 @@ if (!HEADLESS) (function browser() {
       // gets the full description in its header instead
       if (e.def && n > 1) txt(DEF_BADGE[e.def], cx, by + 13, '800 8px Verdana, sans-serif',
                               '#d8c8f0', 'center', { w: 2, col: 'rgba(10,5,12,0.9)' });
-      const intentTxt = S.blackT > 0 ? '❓ ???'
+      const intentTxt = blackedOut() ? '❓ ???'
         : e.stunned > 0 ? '❄ skips turn'
         : it.t === 'heavy' ? '\u{1F4A5} ' + (e.atk * 2) + (e.trait === 'fast' ? '×2' : '')
         : it.t === 'brace' ? '\u{1F6E1} braces'
@@ -6606,7 +6646,7 @@ if (!HEADLESS) (function browser() {
     }
     // what it's about to do
     const it = e.intent || {};
-    const plan = S.blackT > 0 ? 'unknowable — the BLACKOUT swallows its plan'
+    const plan = blackedOut() ? 'unknowable — the BLACKOUT swallows its plan'
       : e.stunned > 0 ? 'frozen — it skips its next turn'
       : it.t === 'heavy' ? 'winding up a HEAVY blow (' + (e.atk * 2) + ')'
       : it.t === 'brace' ? 'bracing — it will take half damage'

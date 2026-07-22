@@ -104,7 +104,7 @@ const finishFight = () => {
 t.ok(DP.HEADLESS, 'headless mode detected');
 t.eq(S.screen, 'title', 'boots to the title screen');
 t.eq(S.run, null, 'no run in progress at first boot');
-t.ok(ITEMS.length === 15 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'fifteen arsenal items defined');
+t.ok(ITEMS.length === 18 && ITEMS.every(i => i.id && i.icon && i.name && i.cost > 0), 'eighteen arsenal items defined');
 t.ok(ENEMIES.length >= 8 && ENEMIES.every(e => e.hp > 0 && e.atk > 0), 'the bestiary is populated');
 t.eq(BOSSES.length, 3, 'three floor bosses');
 t.ok(RELICS.length >= 88 && RELICS.every(r => r.id && r.desc), 'the relic shelf is stocked (' + RELICS.length + ')');
@@ -462,6 +462,7 @@ step(1.5);
 // full pipeline: the tray NEVER resolves itself — END TURN is yours to press
 drainHand();
 S.run.block = 0;
+S.codex.coins = {};              // mastery (500 lifetime fires) would skew the exact math
 const g0 = S.run.gold;
 step(3);
 t.eq(S.battle.phase, 'drop', 'hand spent + field settled — still waiting for YOU');
@@ -1266,6 +1267,7 @@ S.run.room.ents = [mkMonster('orc')];
 DP.interact(0);
 S.enemy.hp = S.enemy.maxHp = 500; S.enemy.braced = false; S.enemy.trait = null;
 S.run.hp = 100; S.run.maxHp = 200;
+S.codex.coins = {};              // a long suite can MASTER gold — clean slate here
 S.run.relics = ['goldedge'];
 t.eq(DP.goldDmg(), C.DMG.gold + 1, 'Gilded Edge: gold coins +1 damage');
 S.run.relics = ['momentum'];
@@ -1273,6 +1275,7 @@ S.battle.goldFired = 10;
 t.eq(DP.goldDmg(), C.DMG.gold + 2, 'Momentum: +1 per 5 gold already fired');
 S.battle.goldFired = 0;
 S.run.relics = ['twinstrike'];
+S.codex.coins = {};              // mastery would skew the exact double-hit math
 {
   const h0 = S.enemy.hp;
   DP.applyLoot({ t: 'gold' });
@@ -3265,7 +3268,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const { DP: D } = loadGame({}, false);
   const DS = D.S;
-  t.eq(D.EVENTS.length, 6, 'six strangers roam the halls');
+  t.eq(D.EVENTS.length, 7, 'seven strangers roam the halls');
   t.ok(D.EVENTS.every(e => e.id && e.icon && e.name && e.flavor && e.choices.length >= 2),
        'each fully written with at least two choices');
   D.srand(1212);
@@ -3318,6 +3321,56 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     }
   }
   t.ok(seen, 'strangers appear in generated floors');
+}
+
+// -------- COIN MASTERY + the new beasts + the WISHING WELL --------
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  D.srand(2222);
+  D.newRun('knight');
+  // mastery: 500 lifetime fires upgrade the face
+  t.eq(D.masteryLvl('coin'), 0, 'a fresh purse has no mastery');
+  const base = D.goldDmg();
+  DS.codex.coins.coin = 500;
+  t.eq(D.masteryLvl('coin'), 1, '500 gold coins fired: MASTERED');
+  t.eq(D.goldDmg(), base + 1, 'the mastered face hits +1');
+  // firing counts the ledger
+  DS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: D.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  DS.enemy.hp = DS.enemy.maxHp = 500;
+  const c0 = DS.codex.coins.coin;
+  D.S.cd = 0; D.drop(50);
+  t.eq(DS.codex.coins.coin, c0 + 1, 'every fire notches the ledger');
+  // the WATCH OWL sees through blackout
+  DS.blackT = 3;
+  t.ok(D.blackedOut(), 'the blackout blinds');
+  DS.pets.push({ iid: 'owl', icon: 'o', name: 'Watch Owl', hp: 6, maxHp: 6 });
+  t.ok(!D.blackedOut(), '…until the owl watches');
+  // the TORTOISE shields, the BEETLE scorches
+  DS.pets.length = 0;
+  DS.pets.push({ iid: 'tortoise', icon: 't', name: 'Tortoise', hp: 20, maxHp: 20 });
+  const b0 = DS.run.block;
+  D.petsAct();
+  t.eq(DS.run.block, b0 + 2, 'the tortoise adds 2 block a round');
+  DS.pets.length = 0;
+  DS.pets.push({ iid: 'beetle', icon: 'b', name: 'Fire Beetle', hp: 10, maxHp: 10 });
+  const foe = DS.enemy;
+  foe.burn = 0;
+  D.petSoak(4, foe);
+  t.ok(foe.burn >= 1, 'striking the beetle SCORCHES the striker');
+  // the WISHING WELL takes its toll (win the fight to get back to the crawl)
+  DS.enemy.hp = 1;
+  D.dmgEnemy(5);
+  D.leaveBattle();
+  const room = D.curRoom();
+  room.ents.push({ kind: 'event', ev: 'well', done: false, px: 0.5, py: 0.5 });
+  D.interact(room.ents.length - 1);
+  DS.run.gold = 10;
+  t.ok(!D.eventChoose(0), 'a floor-1 toll of 20 refuses 10 gold');
+  DS.run.gold = 100;
+  t.ok(D.eventChoose(0), 'the toll paid, the well answers');
+  t.eq(DS.run.gold <= 80, true, '15 + 5×floor gold sank (boon may refund)');
 }
 
 t.done();
