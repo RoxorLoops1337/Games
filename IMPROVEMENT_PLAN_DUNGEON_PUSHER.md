@@ -154,8 +154,12 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       unpacking (per-pack tally in loadImg) and fades on the ✓; act 2/3 tint
       bakes now happen lazily on first appearance instead of all at boot;
       relic icons stay lazy and off the bar (session 25)
-- [ ] **Localization hooks**: wrap user-facing strings in `T()` now, ship `en` table;
-      NL translation as the proof pass
+- [x] **Localization hooks**: `TR()` lookup keyed on the English strings themselves
+      (named TR — T is the theme handle in draw scopes), en = pure pass-through so
+      unwrapped strings stay English; 🌐 language chip in settings, choice
+      persisted; NL proof pass covers 35+ high-visibility strings (title, hints,
+      the tale, settings, banners, HUD) — grow coverage by wrapping more call
+      sites (session 29)
 
 ## Tier 6 — content stretch
 
