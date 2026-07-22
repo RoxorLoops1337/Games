@@ -167,8 +167,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       armor, coin-clone, jackpot-thief), new floor palette, act boss: THE AUDITOR
 - [ ] **More bosses per act**: 2nd boss per act rotates in on even-numbered runs
 - [ ] **Hero skins**: 1 alt palette per hero, unlocked by floor-15 clear with that hero
-- [ ] **Machine themes**: unlockable cabinet skins (bone, gilded, neon) — pure CSS/draw
-      palette swaps
+- [x] **Machine themes**: CLASSIC / BONE (floor 5) / GILDED (floor 10) / NEON
+      (floor 15) — cached tint washes over the machine art (no new assets),
+      🎰 MACHINE rack on the title once floor 5 falls, pick persisted, all
+      three cabinet layer caches re-key on the theme (session 31)
 - [ ] **Seasonal seeds**: holiday-window cosmetic sprinkles (pumpkins on the pile in
       late October, snow in December) — clock-based, no assets from network
 - [ ] **Prestige: NEW GAME+** — beat floor 15 → NG+ badge, enemies +1 act offset,

@@ -123,6 +123,20 @@ const LANGS = {
 let LANG = 'en';
 function TR(s) { return LANGS[LANG][s] || s; }
 function setLang(l) { LANG = LANGS[l] ? l : 'en'; return LANG; }
+
+// ---------------------------------------------------------- machine themes
+// Cabinet skins as pure draw-palette washes over the machine art — no new
+// assets. Each unlocks at a best-descent milestone; CLASSIC is the raw art.
+const MACH_THEMES = {
+  classic: { name: 'CLASSIC', desc: 'oak, iron and honest rust', tint: null, alpha: 0, floor: 0 },
+  bone:    { name: 'BONE',    desc: 'bleached by the deep', tint: '#d8d0be', alpha: 0.42, floor: 5 },
+  gilded:  { name: 'GILDED',  desc: 'the house always wins', tint: '#ffce4a', alpha: 0.4, floor: 10 },
+  neon:    { name: 'NEON',    desc: 'the dungeon after dark', tint: '#b45aff', alpha: 0.44, floor: 15 },
+};
+function themeUnlocked(id) {
+  const th = MACH_THEMES[id];
+  return !!th && S.best.floor >= th.floor;
+}
 const C = {
   W: 100,
   PLAT_FRONT: 84,
@@ -885,6 +899,7 @@ const S = {
   boardName: '',                                // the name carved on the leaderboard
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
+  machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -948,6 +963,7 @@ function save() {
       t: Date.now(),                 // when this blob was written — cloud sync compares clocks
       syncCode: S.syncCode || '',
       lang: S.lang || 'en',
+      machTheme: S.machTheme || 'classic',
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
@@ -1017,6 +1033,7 @@ function load() {
       S.syncCode = d.syncCode;
     }
     if (typeof d.lang === 'string' && LANGS[d.lang]) { S.lang = d.lang; setLang(d.lang); }
+    if (typeof d.machTheme === 'string' && MACH_THEMES[d.machTheme]) S.machTheme = d.machTheme;
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -4082,6 +4099,7 @@ window.DP = {
   coinFx, itemFx, runMods,
   CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
   LANGS, TR, setLang,
+  MACH_THEMES, themeUnlocked,
 };
 
 load();
@@ -4263,9 +4281,32 @@ if (!HEADLESS) (function browser() {
     pusher_face: 'art/machine/pusher_face.png',
     rail_run: 'art/machine/rail_run.png',
   };
+  // the active MACHINE THEME washes every cabinet piece once into a cached
+  // canvas (same trick as the enemy palette-swaps); CLASSIC passes raw art
+  const MACH_TINT = {};
   function machArt(key) {
     const im = art('mach_' + key, MACH_ART[key]);
-    return im._ok ? im : null;
+    if (!im._ok) return null;
+    const th = MACH_THEMES[S.machTheme];
+    if (!th || !th.tint) return im;
+    const ck = S.machTheme + ':' + key;
+    let cv = MACH_TINT[ck];
+    if (!cv) {
+      cv = document.createElement('canvas');
+      const w = im.naturalWidth || im.width || 1, h = im.naturalHeight || im.height || 1;
+      cv.width = w; cv.height = h;
+      const g = cv.getContext('2d');
+      if (!g) return im;
+      g.drawImage(im, 0, 0);
+      g.globalCompositeOperation = 'source-atop';
+      g.globalAlpha = th.alpha;
+      g.fillStyle = th.tint;
+      g.fillRect(0, 0, w, h);
+      // imAspect reads naturalWidth/Height — carry them onto the canvas
+      cv.naturalWidth = w; cv.naturalHeight = h;
+      MACH_TINT[ck] = cv;
+    }
+    return cv;
   }
   function imAspect(im, fallback) {
     return (im.naturalHeight || 0) > 0 ? im.naturalHeight / im.naturalWidth : fallback;
@@ -4686,7 +4727,7 @@ if (!HEADLESS) (function browser() {
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
       WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null; CLOUD = null;
-      CREDITS = false; PHOTO = false;
+      CREDITS = false; PHOTO = false; THEMES = false;
       if (S.screen === 'battle') {
         S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
         S.room = null;
@@ -5870,7 +5911,7 @@ if (!HEADLESS) (function browser() {
     const front = tierFront(0);
     const l = w2s(0, front, 0), r = w2s(100, front, 0);
     layer('front', 0, l.y - 14, LW, 716 - (l.y - 14),
-      ['f' + fkey(), machArt('fascia') ? 1 : 0, machArt('tray') ? 1 : 0],
+      ['f' + fkey(), S.machTheme, machArt('fascia') ? 1 : 0, machArt('tray') ? 1 : 0],
       frontStatic);
     // hazard chevrons, slowly marching toward the tray
     ctx.save();
@@ -6525,7 +6566,7 @@ if (!HEADLESS) (function browser() {
     const r = S.run;
     if (!r) return;
     layer('hud', 0, 682, LW, LH - 682,
-      [machArt('frame_wide') ? 1 : 0], hudChrome);
+      [S.machTheme, machArt('frame_wide') ? 1 : 0], hudChrome);
     // HP + status ribbon — only DOWN IN THE DUNGEON. In battle the hero's
     // card up top (beside the foe he faces) owns his health and status.
     if (S.screen !== 'battle') {
@@ -6734,7 +6775,7 @@ if (!HEADLESS) (function browser() {
   // backdrop, stage chrome, cabinet, back wall, platform, rails, lip
   function battleBase() {
     layer('battle', 0, 0, LW, LH, [
-      'f' + fkey(),
+      'f' + fkey(), S.machTheme,
       machArt('frame_stage') ? 1 : 0, machArt('torch_l') ? 1 : 0,
       machArt('rail') ? 1 : 0, machArt('cab') ? 1 : 0,
       machArt('backwall') ? 1 : 0, machArt('jackpot') ? 1 : 0,
@@ -7549,6 +7590,7 @@ if (!HEADLESS) (function browser() {
     if (BOARD) { BOARD = null; return; }
     if (CLOUD) { CLOUD = null; return; }
     if (CREDITS) { CREDITS = false; return; }
+    if (THEMES) { THEMES = false; return; }
     if (S.confirm) { S.confirm = null; return; }
     if (S.foeInfo !== null) { S.foeInfo = null; return; }
     if (S.inv) { S.inv = null; return; }
@@ -8959,6 +9001,54 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, TR('CLOSE ✕'), () => { CLOUD = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
+  // ---- MACHINE THEMES: the cabinet skin rack ----
+  let THEMES = false;
+  function drawThemes(t) {
+    if (!THEMES) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.85)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { THEMES = false; } });
+    const py = 170, ph = 470;
+    rr(36, py, LW - 72, ph, 18);
+    ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    uiButtons.push({ x: 36, y: py, w: LW - 72, h: ph, cb: () => {} });
+    txt('\u{1F3B0} MACHINE THEMES', LW / 2, py + 34, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt('cabinet skins earned by your best descent', LW / 2, py + 60, '600 10px Verdana, sans-serif', '#b8a8bc');
+    Object.keys(MACH_THEMES).forEach((id, i) => {
+      const th = MACH_THEMES[id];
+      const open = themeUnlocked(id);
+      const on = S.machTheme === id;
+      const ry = py + 84 + i * 74;
+      rr(52, ry, LW - 104, 64, 12);
+      ctx.fillStyle = on ? 'rgba(66,50,26,0.6)' : 'rgba(255,255,255,0.03)'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = on ? '#ffd75e' : open ? '#5a5068' : '#3a3442'; ctx.stroke();
+      // the swatch: a slice of cabinet in that wash
+      ctx.save();
+      ctx.globalAlpha = open ? 1 : 0.35;
+      rr(64, ry + 12, 40, 40, 8);
+      ctx.fillStyle = '#6b4a26'; ctx.fill();
+      if (th.tint) {
+        rr(64, ry + 12, 40, 40, 8);
+        ctx.globalAlpha *= th.alpha + 0.25;
+        ctx.fillStyle = th.tint; ctx.fill();
+      }
+      ctx.restore();
+      txt(th.name, 118, ry + 22, '900 13px Verdana, sans-serif', open ? (on ? '#ffe9a3' : '#e8d8ec') : '#7a7086', 'left');
+      txt(open ? th.desc : 'sealed — reach floor ' + th.floor, 118, ry + 42,
+          '600 10px Verdana, sans-serif', open ? '#b8a8bc' : '#8d7d95', 'left');
+      if (open && !on) {
+        uiBtn(LW - 148, ry + 15, 84, 32, 'WEAR', () => { S.machTheme = id; save(); },
+              { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3', font: '900 11px Verdana, sans-serif', r: 10 });
+      } else if (on) {
+        txt('WORN ✓', LW - 106, ry + 32, '900 11px Verdana, sans-serif', '#8ed67e');
+      } else {
+        txt('\u{1F512}', LW - 106, ry + 32, '15px serif', '#fff');
+      }
+    });
+    uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, TR('CLOSE ✕'), () => { THEMES = false; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   // ---- the CREDITS: who forged what, reachable from settings ----
   let CREDITS = false;
   function drawCredits(t) {
@@ -9316,9 +9406,15 @@ if (!HEADLESS) (function browser() {
     }, { grad: spent ? ['#3a3440', '#262230'] : ['#3a5a7e', '#1c3048'],
          border: spent ? '#55506a' : '#8fc8ff', col: spent ? '#9a90a8' : '#d8ecff',
          font: '900 11px Verdana, sans-serif', r: 10 });
+    // the skin rack, once a milestone opens anything beyond CLASSIC
+    if (S.best.floor >= 5) {
+      uiBtn(14, 92, 108, 28, '\u{1F3B0} MACHINE', () => { THEMES = true; },
+            { bg: 'rgba(44,34,50,0.95)', border: '#9a8aa0', col: '#e8d8ec',
+              font: '900 10px Verdana, sans-serif', r: 10 });
+    }
     // the pocket-install chip: only appears when the browser made the offer
     if (installEvt) {
-      uiBtn(14, 92, 108, 28, '\u{1F4F2} INSTALL', () => {
+      uiBtn(14, S.best.floor >= 5 ? 126 : 92, 108, 28, '\u{1F4F2} INSTALL', () => {
         const ev = installEvt;
         installEvt = null;
         if (ev && ev.prompt) ev.prompt();
@@ -9444,6 +9540,7 @@ if (!HEADLESS) (function browser() {
     drawBoard(t);
     drawCloud(t);
     drawCredits(t);
+    drawThemes(t);
     drawNamePad(t);
     drawIntro(t);
     drawConfirm(t);
