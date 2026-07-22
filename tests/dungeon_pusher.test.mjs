@@ -3683,4 +3683,38 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('CREDITS = false; PHOTO = false;') >= 0, 'the crash net clears both');
 }
 
+// -------- MACHINE THEMES: the skin rack --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const ids = Object.keys(D.MACH_THEMES);
+  t.eq(ids.length, 4, 'four cabinet themes on the rack');
+  t.eq(ids[0], 'classic', 'CLASSIC leads the rack');
+  t.ok(ids.every(id => D.MACH_THEMES[id].name && typeof D.MACH_THEMES[id].floor === 'number'),
+       'every theme carries a name and a milestone');
+  t.ok(!D.MACH_THEMES.classic.tint && D.MACH_THEMES.neon.tint, 'classic is raw art, the others wash');
+  // unlocks follow the best descent
+  t.eq(D.S.machTheme, 'classic', 'a fresh profile wears CLASSIC');
+  t.ok(D.themeUnlocked('classic') && !D.themeUnlocked('bone'), 'only CLASSIC opens at floor 0');
+  D.S.best.floor = 10;
+  t.ok(D.themeUnlocked('bone') && D.themeUnlocked('gilded') && !D.themeUnlocked('neon'),
+       'floor 10 opens BONE + GILDED, NEON stays sealed');
+  t.ok(!D.themeUnlocked('nosuch'), 'an unknown theme never unlocks');
+  // the pick persists; a mangled pick is dropped on load
+  D.S.machTheme = 'gilded';
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.machTheme, 'gilded', 'the worn theme survives a reload');
+  const blob = JSON.parse(st[D.C.SAVE_KEY]);
+  blob.machTheme = 'chrome-hell';
+  st[D.C.SAVE_KEY] = JSON.stringify(blob);
+  const { DP: M } = loadGame(st, false);
+  t.eq(M.S.machTheme, 'classic', 'an unknown stored theme falls back to CLASSIC');
+  // the render caches re-key on the theme
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.eq((src.match(/S\.machTheme,/g) || []).length >= 3, true, 'all three machArt layers re-key on the theme');
+  t.ok(src.indexOf('const MACH_TINT = {}') >= 0, 'tinted cabinets are baked once and cached');
+}
+
 t.done();
