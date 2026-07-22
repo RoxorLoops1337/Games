@@ -584,9 +584,11 @@ feel the game get SMOOTHER this tier, not just bigger.
       API has served since the plaque shipped); four tabs at 92px,
       TR/NL'd, ring-reachable, live-tested. A deeper S.plaques[] hall
       can still come later if months prove worth hoarding (session 78)
-- [ ] **Motif player easter egg**: tap the version stamp 5× → a tiny OST
-      sheet that plays the four act motifs + the jackpot resolve on demand
-      (pure tone(), reuses SND) — a lighthearted thank-you surface
+- [x] **Motif player easter egg**: five taps on the title's version stamp
+      open 🎼 THE MOTIFS — the four act descents (SND.descend table) and
+      the victory fanfare on demand, ESC/crash-net wired, ring-reachable,
+      NL'd (DE MOTIEVEN); the kb suite taps the hidden zone five times and
+      plays a motif silently (session 80)
 - [x] **Relic search in the codex**: a 🔍 SEARCH chip on the c/r/e
       shelves opens the NAMEPAD; 3+ letters narrow the shelf by name OR
       writ, the chip wears the active query with a ✕, ESC peels the
@@ -614,9 +616,12 @@ feel the game get SMOOTHER this tier, not just bigger.
       side gutter that pays gold, one fewer tray slot — chosen at the
       MACHINE rack like a theme; the physics deltas must stay inside
       pushRate/step and be probe-verified
-- [ ] **Trophy pass to 48**: ALMANAC READER (open it), REMATCHED (answer a
-      rematch), OLD MONEY (hold 2,000 gold), THE COLLECTION (own 60 relics
-      lifetime via codex count) — with the usual test-count bumps
+- [x] **Trophy pass to 48**: ALMANAC READER (first consult), REMATCHED
+      (send a rematch from an answered duel — also inks a legacy line),
+      OLD MONEY (read last month's board — truer to its name than the
+      gold-hoard draft), THE COLLECTION (full ledger + all 64 tales, the
+      one-tale-short case tested; inks a legacy line). Wall at 48, pins
+      bumped, all four unlock paths live-tested (session 80)
 
 ## Done (this loop)
 

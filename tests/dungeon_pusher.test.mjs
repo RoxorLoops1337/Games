@@ -44,6 +44,8 @@ function loadGame(store, withCtx) {
     get width() { return 64; } get height() { return 64; }
   };
   global.addEventListener = noop;
+  Object.defineProperty(global, 'navigator', { value: {}, configurable: true });
+  global.location = { origin: 'http://x', pathname: '/dungeon_pusher/', search: '' };
   global.devicePixelRatio = 1;
   global.innerWidth = 480; global.innerHeight = 840;
   global.setTimeout = () => 0; global.clearTimeout = noop;
@@ -2877,7 +2879,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 44, 'forty-four trophies on the wall');
+  t.eq(D.ACH.length, 48, 'forty-eight trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -6674,6 +6676,72 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   K.setLang('nl');
   t.eq(K.TR('\u{1F50D} SEARCH'), '\u{1F50D} ZOEK', 'the lens speaks Dutch');
   K.setLang('en');
+}
+
+// -------- TIER 11: THE MOTIF PLAYER + the trophy pass to 48 --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.ACH.length, 48, 'the wall grew to forty-eight');
+  for (const id of ['almanac', 'rematched', 'oldmoney', 'collection']) {
+    t.ok(D.achById(id), 'trophy exists: ' + id);
+  }
+  t.ok(D.LEGACY_ACH.rematched && D.LEGACY_ACH.collection, 'two of them ink dated legacy lines');
+  // THE COLLECTION: full ledger + every tale — and not a tale short
+  D.srand(2); D.newRun('knight');
+  for (const tier of D.ENEMY_TIERS) for (const e of tier) D.S.codex.foes[e.id] = 1;
+  for (const e of D.ENEMIES) D.S.codex.foes[e.id] = 1;
+  for (const b of D.BOSSES) D.S.codex.foes[b.id] = 1;
+  for (const b of D.BOSSES2) D.S.codex.foes[b.id] = 1;
+  for (const c of D.CHAMPIONS) D.S.codex.foes[c.id] = 1;
+  for (const rl of D.RELICS) D.S.codex.relics[rl.id] = 1;
+  D.TALES.forEach((_, i) => { if (i < D.TALES.length - 1) D.S.tales[i] = 1; });
+  D.achPoll();
+  t.ok(D.S.ach.u.ledger, 'the full ledger rings');
+  t.ok(!D.S.ach.u.collection, 'but one unheard tale keeps THE COLLECTION sealed');
+  D.S.tales[D.TALES.length - 1] = 1;
+  D.achPoll();
+  t.ok(D.S.ach.u.collection, 'the last tale closes THE COLLECTION');
+  D.endRun('done');
+
+  // live: five taps on the version stamp hum the motifs; the new doors ring their bells
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  press('SKIP');
+  const stamp = () => K.kb.buttons().find(b => !b.label && b.w === 90 && b.h === 26);
+  t.ok(!!stamp(), 'the version stamp hides a tap zone');
+  for (let i = 0; i < 5; i++) { const z = stamp(); if (z) z.cb(); frames(1); }
+  frames(2);
+  t.ok(K.kb.buttons().some(b => b.label && b.label.indexOf('THE MINT') >= 0), 'five taps open the motif sheet');
+  t.ok(press('\u{25B6} ACT III'), 'a motif plays on demand (silently here)');
+  t.ok(press('\u{25B6} JACKPOT'), 'the fanfare too');
+  K.kb.back(); frames(2);
+  t.ok(!K.kb.buttons().some(b => b.label && b.label.indexOf('THE MINT') >= 0), 'ESC closes the sheet');
+  // the almanac chip rings its bell
+  t.ok(press('❓', true), 'the almanac chip');
+  t.ok(K.S.ach.u.almanac, 'ALMANAC READER rings on first consult');
+  K.kb.back(); frames(2);
+  // the archive tab rings its bell
+  press('\u{1F3C5}', true);
+  press('LAST MONTH');
+  t.ok(K.S.ach.u.oldmoney, 'OLD MONEY rings on the archive tab');
+  K.kb.back(); frames(2);
+  // a rematch rings its bell (navigator is stubbed bare — the toast path)
+  K.srand(4); K.newRun('knight');
+  K.S.run.duel = { name: 'Rox', floor: 2 };
+  K.S.run.floor = 5;
+  K.endRun('test');
+  frames(4);
+  t.ok(press('REMATCH'), 'the over screen offers REMATCH on an answered duel');
+  t.ok(K.S.ach.u.rematched, 'REMATCHED rings on the send');
+  t.ok(K.S.ach.u.emissary, 'and Emissary rides along');
 }
 
 t.done();

@@ -254,6 +254,8 @@ const LANGS = {
     'LAST MONTH': 'VORIGE MAAND',
     '\u{1F50D} SEARCH': '\u{1F50D} ZOEK',
     'no relic answers to': 'geen relikwie luistert naar',
+    'THE MOTIFS': 'DE MOTIEVEN',
+    'the four descents, and the fanfare': 'de vier afdalingen, en de fanfare',
   },
 };
 let LANG = 'en';
@@ -3922,6 +3924,10 @@ const ACH = [
   { id: 'legend2',   icon: '\u{265A}', name: 'Living Legend', desc: 'a deep clear at NG++' },
   { id: 'chronicler', icon: '\u{1F4DC}', name: 'Chronicler', desc: 'hear forty of the innkeeper’s tales' },
   { id: 'emissary',  icon: '\u{1F4E8}', name: 'Emissary', desc: 'send a challenge into the world' },
+  { id: 'almanac',   icon: '❓', name: 'Almanac Reader', desc: 'consult the house rules' },
+  { id: 'rematched', icon: '\u{1F501}', name: 'Rematched', desc: 'answer a duel, then send the maze straight back' },
+  { id: 'oldmoney',  icon: '\u{1F3DB}\u{FE0F}', name: 'Old Money', desc: 'read last month\u2019s board' },
+  { id: 'collection', icon: '\u{2728}', name: 'The Collection', desc: 'the full ledger AND every tale — nothing left unheard' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 // the LEGACY BOOK: dated firsts, stamped as they happen (newest first)
@@ -3933,6 +3939,8 @@ function legacyStamp(x) {
 }
 // the trophies whose FIRST ringing deserves a dated line in the book
 const LEGACY_ACH = {
+  rematched: 'first rematch — a maze sent straight back',
+  collection: 'THE COLLECTION — every foe, relic and tale, inked',
   firstblood: 'first blood — a monster slain',
   boss1: 'first boss felled',
   jackpot: 'first JACKPOT — the meter filled and the sky paid out',
@@ -3970,6 +3978,7 @@ function achPoll() {
   if ((S.streak.days | 0) >= 3) achUnlock('streak3');
   if ((S.streak.days | 0) >= 7) achUnlock('streak7');
   if (codexFull()) achUnlock('ledger');
+  if (codexFull() && Object.keys(S.tales || {}).length >= TALES.length) achUnlock('collection');
   const r = S.run;
   if (!r) return;
   for (const rid of r.relics) S.codex.relics[rid] = 1;   // the codex sweeps the shelf
@@ -6078,7 +6087,7 @@ if (!HEADLESS) (function browser() {
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
       WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null; CLOUD = null;
-      CREDITS = false; PHOTO = false; THEMES = false; SHARE = null; ALMANAC = null;
+      CREDITS = false; PHOTO = false; THEMES = false; SHARE = null; ALMANAC = null; OST = false;
       if (S.screen === 'battle') {
         S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
         S.room = null;
@@ -9087,6 +9096,7 @@ if (!HEADLESS) (function browser() {
     if (CLOUD) { CLOUD = null; return; }
     if (CREDITS) { CREDITS = false; return; }
     if (THEMES) { THEMES = false; return; }
+    if (OST) { OST = false; return; }
     if (ALMANAC) { ALMANAC = null; return; }
     if (S.foeInfo !== null) { S.foeInfo = null; return; }
     if (S.inv) { S.inv = null; return; }
@@ -10438,6 +10448,7 @@ if (!HEADLESS) (function browser() {
   let BOARD = null;
   let NAMEPAD = null;                 // { val, then } — the on-canvas name carver
   function openBoard(tab) {
+    if (tab === 'lastmonth') achUnlock('oldmoney');
     BOARD = { tab: tab || 'alltime', state: 'loading', top: [], day: '', page: 0 };
     const mine = BOARD;
     if (typeof fetch !== 'function') { mine.state = 'err'; return; }
@@ -11036,6 +11047,25 @@ if (!HEADLESS) (function browser() {
   // ---- the WHAT'S NEW scroll: unread patch notes greet a returning player ----
   // auto: true means it opened itself after a version bump — dismissing it
   // stamps the ledger; opened from settings it shows the whole history.
+  // ---- the OST easter egg: five taps on the version stamp open a tiny
+  // sheet that plays the four act motifs and the victory fanfare on demand
+  let OST = false, verTaps = 0;
+  function drawOst(t) {
+    if (!OST) return;
+    ctx.fillStyle = 'rgba(7,3,10,0.94)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { OST = false; } });
+    txt('\u{1F3BC} ' + TR('THE MOTIFS'), LW / 2, 250, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt(TR('the four descents, and the fanfare'), LW / 2, 280, '700 10px Verdana, sans-serif', '#9a8aa0');
+    ['ACT I', 'ACT II', 'ACT III', 'THE MINT'].forEach((label, i) => {
+      uiBtn(LW / 2 - 110, 316 + i * 52, 220, 40, '\u{25B6} ' + label, () => { audioInit(); if (AC && AC.state === 'suspended') AC.resume(); SND.descend(i); },
+            { grad: ['#3a3440', '#262230'], border: '#8a86b8', col: '#d8d4f0', font: '900 12px Verdana, sans-serif', r: 12 });
+    });
+    uiBtn(LW / 2 - 110, 316 + 4 * 52, 220, 40, '\u{25B6} JACKPOT', () => { audioInit(); if (AC && AC.state === 'suspended') AC.resume(); SND.winb(); },
+          { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 12 });
+    uiBtn(LW / 2 - 70, 316 + 5 * 52 + 8, 140, 40, TR('CLOSE ✕'), () => { OST = false; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   // ---- THE ALMANAC: the house rules, read straight off the data that
   // runs them — coin table, trait glossary, the decree ladder, hero perks
   // and the house's own arithmetic. No prose that can drift out of date.
@@ -11530,6 +11560,10 @@ if (!HEADLESS) (function browser() {
     // the MARQUEE: the one most compelling reason to play, right now
     txt(marqueeLine(new Date().toISOString().slice(0, 10)), LW / 2, 700, '700 10px Verdana, sans-serif', '#c8d6e8');
     txt('v' + VERSION, LW - 10, LH - 10, '600 10px Verdana, sans-serif', '#8d7d95', 'right');
+    // five taps on the stamp and the machine hums its own tunes
+    uiButtons.push({ x: LW - 94, y: LH - 28, w: 90, h: 26, cb: () => {
+      if (++verTaps >= 5) { verTaps = 0; OST = true; }
+    } });
     ydayFetch();
     plaqueFetch();
     if (S.yday && S.yday.floor > 0 && !S.saveQuarantined) {
@@ -11554,7 +11588,7 @@ if (!HEADLESS) (function browser() {
           codexFull() ? { r: 10, font: '15px serif', grad: ['#8a6a2a', '#5a4014'], border: '#ffd75e' }
                       : { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 222, 38, 36, '\u{1F3C5}', () => openBoard('alltime'), { r: 10, font: '15px serif' });
-    uiBtn(LW - 52, 264, 38, 36, '❓', () => { ALMANAC = { tab: 'coins' }; }, { r: 10, font: '15px serif' });
+    uiBtn(LW - 52, 264, 38, 36, '❓', () => { ALMANAC = { tab: 'coins' }; achUnlock('almanac'); }, { r: 10, font: '15px serif' });
     // the workshop: prominent, with the cog balance on the door
     uiBtn(14, 12, 108, 36, '\u{1F6E0}\u{FE0F} ⚙ ' + fmt(S.cogs), () => { WSHOP = true; },
           { grad: ['#5a4a2a', '#38290f'], border: '#c8a86a', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 10 });
@@ -11784,6 +11818,7 @@ if (!HEADLESS) (function browser() {
   function shareDuel(o) {
     if (!o || o.seed == null) return;
     achUnlock('emissary');            // a challenge sent into the world
+    if (o.duel) achUnlock('rematched');   // and this one answers an answer
     const url = location.origin + location.pathname + duelLink(o.seed, o.floor, S.boardName || 'a rival');
     if (navigator.share) {
       navigator.share({ title: 'Dungeon Pusher', text: o.duel
@@ -11869,6 +11904,7 @@ if (!HEADLESS) (function browser() {
     drawCredits(t);
     drawThemes(t);
     drawAlmanac(t);
+    drawOst(t);
     drawShare(t);
     drawNamePad(t);
     drawIntro(t);
