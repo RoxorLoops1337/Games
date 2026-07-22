@@ -209,6 +209,17 @@ const HERO_SKINS = {
 function skinWorn(hid) {
   return !!(HERO_SKINS[hid] && S.deep15[hid] && S.skins[hid]);
 }
+// HERO MASTERY: deep15 counts every deep-cleared run (old saves' flag of 1
+// reads as one clear) — the card wears ★ / ★★ / ★★★ at 1 / 3 / 5
+function masteryStars(hid) {
+  const n = S.deep15[hid] | 0;
+  return n >= 5 ? 3 : n >= 3 ? 2 : n >= 1 ? 1 : 0;
+}
+function masteryPeak() {
+  let m = 0;
+  for (const h of HEROES) m = Math.max(m, masteryStars(h.id));
+  return m;
+}
 
 // ----------------------------------------------------------- seasonal seeds
 // Clock-window cosmetics, no network, no assets: pass a Date in (the
@@ -1110,7 +1121,7 @@ const S = {
   victory: null,                       // battle-won overlay {t, gold, keys, offer}
   room: null,                          // open non-battle room {type, ...}
   over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
-  best: { floor: 0, depth: 0, kills: 0, gold: 0, runs: 0 },
+  best: { floor: 0, depth: 0, kills: 0, gold: 0, runs: 0, pace: {} },
   wheelAnim: null, pendingPick: null, relicPick: null, uiFlash: null, toast: null,
   pPois: 0, pBleed: 0, pBurn: 0,       // what the dungeon left festering on YOU
   weakT: 0,                            // WEAKNESS rounds: your damage halves
@@ -1187,6 +1198,7 @@ function save() {
         weekly: S.run.weekly || null, week: S.run.week || null,
         brew: S.run.brew || 0, reagents: S.run.reagents || 0,
         duel: S.run.duel || null,
+        pace: S.run.pace || {}, deepInked: S.run.deepInked ? 1 : 0,
       } : null,
     }));
   } catch (e) {}
@@ -1205,7 +1217,8 @@ function load() {
     else if (d.turbo === true) S.turbo = 2;   // migrate the old on/off flag
     if (d.best && typeof d.best === 'object') {
       S.best = { floor: d.best.floor || 0, depth: d.best.depth || 0,
-                 kills: d.best.kills || 0, gold: d.best.gold || 0, runs: d.best.runs || 0 };
+                 kills: d.best.kills || 0, gold: d.best.gold || 0, runs: d.best.runs || 0,
+                 pace: (d.best.pace && typeof d.best.pace === 'object') ? d.best.pace : {} };
     }
     if (d.heroPick && heroById(d.heroPick)) S.heroPick = d.heroPick;
     S.introSeen = !!d.intro;
@@ -1281,6 +1294,8 @@ function load() {
         brew: d.run.brew | 0, reagents: d.run.reagents | 0,
         duel: (d.run.duel && typeof d.run.duel === 'object')
           ? { name: String(d.run.duel.name || '').slice(0, 12), floor: d.run.duel.floor | 0 } : null,
+        pace: (d.run.pace && typeof d.run.pace === 'object') ? d.run.pace : {},
+        deepInked: d.run.deepInked ? 1 : 0,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -3114,9 +3129,13 @@ function winBattle() {
     // the DEEP CLEAR ledger: fell the floor-15 boss and that hero's alt
     // skin is tailored for keeps
     if (S.run.floor >= 15 && S.run.ng) achUnlock('ngclear');
-    if (S.run.floor >= 15 && !S.deep15[S.run.hero]) {
-      S.deep15[S.run.hero] = 1;
-      toast('deep clear! ' + (heroById(S.run.hero) || {}).name + ' earned an ALT SKIN — toggle it on the hero card');
+    if (S.run.floor >= 15 && !S.run.deepInked) {
+      S.run.deepInked = 1;               // one ink per run, however many bosses fall past 15
+      const n = (S.deep15[S.run.hero] | 0) + 1;
+      S.deep15[S.run.hero] = n;
+      const hn = (heroById(S.run.hero) || {}).name;
+      if (n === 1) toast('deep clear! ' + hn + ' earned an ALT SKIN — toggle it on the hero card');
+      else if (n === 3 || n === 5) toast('★ MASTERY — ' + n + ' deep clears with ' + hn + (n >= 5 ? ' — the third star' : ''));
     }
     // a deep clear under the WEEKLY DECREE: once per week, into the ledger
     if (S.run.floor >= 15 && S.run.weekly && S.run.week === weekOf(new Date().toISOString().slice(0, 10))) {
@@ -3528,7 +3547,10 @@ function boardPct(top, floor, kills) {
 function bestify() {
   const b = S.best, r = S.run;
   if (!r) return;
-  if (r.floor > b.floor || (r.floor === b.floor && r.depth > b.depth)) { b.floor = r.floor; b.depth = r.depth; }
+  if (r.floor > b.floor || (r.floor === b.floor && r.depth > b.depth)) {
+    b.floor = r.floor; b.depth = r.depth;
+    b.pace = { ...(r.pace || {}) };     // the new best descent leaves its ghost
+  }
   if (r.kills > b.kills) b.kills = r.kills;
   if (r.goldEarned > b.gold) b.gold = r.goldEarned;
 }
@@ -3625,6 +3647,7 @@ function newRun(heroId, force) {
     relics: [], potions: C.START_POTIONS, whet: 0, str: 0, dex: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
     pileSave: null, pileFloor: 0, pending: [], mapFloor: 0, diff,
+    pace: { 1: 0 },                     // cumulative seconds at each floor's door
     stats: { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0, bought: 0 },
   };
   if (duel) S.run.duel = duel;
@@ -3952,6 +3975,11 @@ function nextFloor() {
   const muts0 = mutCount();
   S.run.floor++;
   S.floorFx = { t: 0, floor: S.run.floor, newAct: (S.run.floor - 1) % 5 === 0 };
+  // GHOST PACE: stamp this door's clock and whisper it against your best
+  if (!S.run.pace) S.run.pace = {};
+  S.run.pace[S.run.floor] = Math.round((S.run.stats && S.run.stats.t) || 0);
+  const gp = S.best.pace && S.best.pace[S.run.floor];
+  if (gp != null && S.best.floor > 0) S.floorFx.pace = Math.round(gp - S.run.pace[S.run.floor]);
   // the endless deep announces each new decree
   if (mutCount() > muts0) {
     const m = MUTS[mutCount() - 1];
@@ -4718,6 +4746,7 @@ window.DP = {
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
   duelLink, parseDuel, welcomeBack,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
+  masteryStars, masteryPeak,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
@@ -9676,7 +9705,7 @@ if (!HEADLESS) (function browser() {
           ctx.beginPath(); ctx.arc(52, ry + 1, 3.2, 0, 7);
           ctx.fillStyle = e.diff === 'nightmare' ? '#ff5a4e' : '#7ee787'; ctx.fill();
         }
-        txt((rv ? '\u{2694}\u{FE0F} ' : '') + (e.d ? '\u{1F4C5} ' : '') + (e.ng ? '♟ ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
+        txt((me && masteryPeak() >= 3 ? '★ ' : '') + (rv ? '\u{2694}\u{FE0F} ' : '') + (e.d ? '\u{1F4C5} ' : '') + (e.ng ? '♟ ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
             me ? '#ffe9a3' : rv ? '#ffb0a0' : '#d8c8dc', 'left');
         txt('floor ' + e.floor, LW - 128, ry + 1, '900 12px Verdana, sans-serif', '#ffd75e', 'right');
         txt(fmt(e.kills || 0) + ' \u{2694}\u{FE0F}', LW - 64, ry + 1, '700 10px Verdana, sans-serif', '#c8a8b0', 'right');
@@ -10258,6 +10287,11 @@ if (!HEADLESS) (function browser() {
         ctx.globalAlpha = Math.min(1, a * 1.4);
         txt(TR('FLOOR') + ' ' + f.floor, LW / 2, 380, '900 40px Georgia, serif', '#ffd75e', 'center', { w: 6, col: '#2a1030' });
         if (f.newAct) txt(theme().name, LW / 2, 424, '900 15px Georgia, serif', '#c8a8b0');
+        // the GHOST whispers how this descent runs against your best
+        if (f.pace != null) {
+          txt(f.pace >= 0 ? '\u{1F47B} ' + f.pace + 's ahead of your best' : '\u{1F47B} ' + (-f.pace) + 's behind your best',
+              LW / 2, f.newAct ? 450 : 424, '800 12px Verdana, sans-serif', f.pace >= 0 ? '#7ee787' : '#ff9d8a');
+        }
         ctx.restore();
       }
       if (f.t > hold + fade) S.floorFx = null;
@@ -10383,6 +10417,9 @@ if (!HEADLESS) (function browser() {
       }
       txt(h.name, x + w / 2, y + 88, '900 11px Verdana, sans-serif', sel ? '#ffd75e' : '#c8b0cc');
       fitTxt(h.perk, x + w / 2, y + 104, w - 6, 8, sel ? '#ffe9a3' : '#8f7f92');
+      // MASTERY: one star per milestone of deep clears (1 / 3 / 5)
+      const ms = masteryStars(h.id);
+      if (ms) txt('★★★'.slice(0, ms), x + 5, y + 12, '900 9px Verdana, sans-serif', '#ffd75e', 'left');
       // the DEEP CLEAR tailor: toggle the earned alt skin right on the card
       if (S.deep15[h.id] && HERO_SKINS[h.id]) {
         uiBtn(x + w - 26, y + 4, 22, 20, '\u{1F3A8}', () => {

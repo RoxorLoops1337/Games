@@ -5139,4 +5139,75 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("full ? '✦' + label : label") >= 0, 'finished shelves wear the star');
 }
 
+// -------- GHOST PACE + hero mastery stars --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  D.srand(81); D.newRun('knight');
+  t.eq(D.S.run.pace[1], 0, 'floor 1 opens the clock at zero');
+  D.S.run.stats.t = 65;
+  D.nextFloor();
+  t.eq(D.S.run.pace[2], 65, 'each door stamps the cumulative clock');
+  t.ok(D.S.floorFx.pace == null, 'no best yet — the ghost stays silent');
+  D.endRun('fell');
+  t.eq(D.S.best.pace[2], 65, 'the best descent leaves its ghost');
+  D.srand(82); D.newRun('knight');
+  D.S.run.stats.t = 50;
+  D.nextFloor();
+  t.eq(D.S.floorFx.pace, 15, '15 seconds ahead of the ghost');
+  D.S.run.stats.t = 200;
+  D.nextFloor();
+  t.ok(D.S.floorFx.pace == null, 'past the ghost’s grave it goes quiet');
+  D.endRun('fell');
+  t.eq(D.S.best.pace[3], 200, 'the deeper run rewrites the ghost');
+  t.eq(D.S.best.pace[2], 50, 'including its earlier splits');
+  D.srand(83); D.newRun('knight');
+  D.S.run.stats.t = 62;
+  D.nextFloor();
+  t.eq(D.S.floorFx.pace, -12, '12 seconds behind the ghost');
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.best.pace[3], 200, 'the ghost rides the save');
+  t.eq(R.S.run.pace[2], 62, 'and the live run’s splits too');
+  // ---- mastery stars ----
+  t.eq(R.masteryStars('knight'), 0, 'no deep clears, no stars');
+  R.S.deep15 = { knight: 1, rogue: 3, wizard: 5 };
+  t.eq(R.masteryStars('knight'), 1, 'one clear, one star');
+  t.eq(R.masteryStars('rogue'), 2, 'three clears, two stars');
+  t.eq(R.masteryStars('wizard'), 3, 'five clears, the third star');
+  t.eq(R.masteryPeak(), 3, 'the peak reads the wizard');
+  R.S.skins.rogue = 1;
+  t.ok(R.skinWorn('rogue'), 'counts stay truthy for the skin system');
+  // deep clears COUNT now — but only once per run
+  const { DP: C } = loadGame({}, false);
+  C.srand(84); C.newRun('knight');
+  C.S.run.floor = 15;
+  C.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  C.interact(0);
+  C.S.foes.forEach(f => { f.hp = 1; });
+  C.dmgAll(999);
+  t.eq(C.S.deep15.knight, 1, 'the first deep clear inks one');
+  C.S.victory = null; C.S.enemy = null; C.S.foes = []; C.S.battle = null;
+  C.S.screen = 'dungeon'; C.S.room = null;
+  C.S.run.floor = 16;
+  C.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  C.interact(0);
+  C.S.foes.forEach(f => { f.hp = 1; });
+  C.dmgAll(999);
+  t.eq(C.S.deep15.knight, 1, 'one run, one ink — a second boss past 15 adds nothing');
+  C.srand(85); C.newRun('knight');
+  C.S.run.floor = 15;
+  C.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  C.interact(0);
+  C.S.foes.forEach(f => { f.hp = 1; });
+  C.dmgAll(999);
+  t.eq(C.S.deep15.knight, 2, 'the next run inks a second clear');
+  // wiring
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("'★★★'.slice(0, ms)") >= 0, 'the hero card wears its stars');
+  t.ok(src.indexOf("s ahead of your best'") >= 0, 'the descent curtain whispers the pace');
+  t.ok(src.indexOf("masteryPeak() >= 3 ? '★ '") >= 0, 'the master’s mark rides your board row');
+}
+
 t.done();
