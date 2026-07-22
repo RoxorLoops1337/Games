@@ -203,10 +203,11 @@ The game is feature-complete on paper; this tier is about how it FEELS in the
 hand, whether the new systems are TUNED, whether the mint has enough LIFE in
 it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
 
-- [ ] **Trophies for the new age**: ~10 achievements covering everything tiers 4-6
-      shipped — first NG+ clear, wear a skin, wear a theme, carve the board, a
-      cloud backup, survive an AUDIT, fell each B-sider, master the mint's three
-      tricks, a photo taken, play in Dutch
+- [x] **Trophies for the new age**: ten trophies (30 total) — TWICE AROUND (NG+
+      clear), TAILORED, HOUSE STYLE, SET IN STONE, SKY VAULT, CLEAN BOOKS,
+      B-SIDE COLLECTOR, COUNTING HOUSE, SHUTTERBUG, TWEETALIG — profile watches
+      in achPoll + event hooks in winBattle/postScore/cloudBackup/photo; the
+      trophy hall now pages (session 36)
 - [ ] **The aim ghost**: a faint falling-column marker under the finger while
       aiming (touch and keys) — the single biggest mobile-feel gap
 - [ ] **Act 4 balance sweep**: headless win-rate probe with midline builds across

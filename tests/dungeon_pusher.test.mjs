@@ -2871,9 +2871,9 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 20, 'twenty trophies on the wall');
+  t.eq(D.ACH.length, 30, 'thirty trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
-  t.eq(new Set(D.ACH.map(a => a.id)).size, 20, 'no duplicate trophy ids');
+  t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
   D.newRun('knight');
   t.ok(D.S.ach.heroes.knight === 1, 'the casting-call ledger notes the knight');
@@ -3969,6 +3969,56 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const slugs0 = D.S.coins.filter(c => c.kind === 'slug').length;
   D.enemyActFoe(D.S.enemy);
   t.ok(D.S.coins.filter(c => c.kind === 'slug').length > slugs0, 'the counterfeiter mints a dud');
+}
+
+// -------- TROPHIES FOR THE NEW AGE --------
+{
+  const { DP: D } = loadGame({}, false);
+  t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'trophy ids stay unique');
+  const newIds = ['ngclear', 'tailored', 'housestyle', 'carved', 'skyvault',
+                  'audited', 'bsides', 'minted', 'shutterbug', 'tweetalig'];
+  for (const id of newIds) t.ok(D.achById(id), 'the wall holds ' + id);
+  // the profile watches: theme, language, worn skin
+  t.ok(!D.S.ach.u.housestyle, 'HOUSE STYLE waits');
+  D.S.best.floor = 6; D.S.machTheme = 'bone';
+  D.achPoll();
+  t.ok(D.S.ach.u.housestyle, 'a worn theme earns HOUSE STYLE');
+  D.S.lang = 'nl';
+  D.achPoll();
+  t.ok(D.S.ach.u.tweetalig, 'Nederlands earns TWEETALIG');
+  D.S.deep15.knight = 1; D.S.skins.knight = 1;
+  D.achPoll();
+  t.ok(D.S.ach.u.tailored, 'a worn alt skin earns TAILORED');
+  // the kill ledgers: B-sides and the mint tricksters
+  D.S.codex.foes.wyrm = 1; D.S.codex.foes.banshee = 1;
+  D.achPoll();
+  t.ok(!D.S.ach.u.bsides, 'two of three B-siders is not the set');
+  D.S.codex.foes.aurifex = 1;
+  D.achPoll();
+  t.ok(D.S.ach.u.bsides, 'the full B-side earns the trophy');
+  D.S.codex.foes.lodestone = 1; D.S.codex.foes.counterfeit = 1; D.S.codex.foes.meterleech = 2;
+  D.achPoll();
+  t.ok(D.S.ach.u.minted, 'the three mint tricksters earn COUNTING HOUSE');
+  D.S.codex.foes.auditor = 1;
+  D.achPoll();
+  t.ok(D.S.ach.u.audited, 'felling THE AUDITOR earns CLEAN BOOKS');
+  // TWICE AROUND: the floor-15 boss on a prestige run
+  const { DP: N } = loadGame({}, false);
+  N.S.deep15.rogue = 1; N.S.ngPick = true;
+  N.srand(6); N.newRun('knight');
+  t.eq(N.S.run.ng, 1, 'prestige armed');
+  N.S.run.floor = 15;
+  N.S.run.room.ents = [{ kind: 'monster', mtype: 'boss', eid: null, done: false, px: 0.5, py: 0.4 }];
+  N.interact(0);
+  N.S.foes.forEach(f => { f.hp = 1; f.def = null; });
+  N.dmgAll(9);
+  t.ok(N.S.ach.u.ngclear, 'the NG+ floor-15 boss earns TWICE AROUND');
+  // the hall paginates rather than overflowing the screen
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('ACH.slice(TROPHIES.page * PER') >= 0, 'the trophy wall pages instead of overflowing');
+  t.ok(src.indexOf("achUnlock('shutterbug')") >= 0 && src.indexOf("achUnlock('carved')") >= 0
+       && src.indexOf("achUnlock('skyvault')") >= 0, 'photo/board/cloud hooks are wired');
 }
 
 t.done();
