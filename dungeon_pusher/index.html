@@ -10,7 +10,9 @@
 </style>
 </head>
 <body>
-<canvas id="c"></canvas>
+<canvas id="c" role="img" aria-label="Dungeon Pusher — a coin pusher roguelike. Game view."></canvas>
+<div id="sr" role="status" aria-live="polite"
+     style="position:absolute; left:-10000px; top:auto; width:1px; height:1px; overflow:hidden;"></div>
 <script>
 'use strict';
 // ============================================================================
@@ -4018,17 +4020,37 @@ if (!HEADLESS) (function browser() {
   // Sprites from No Room For Heroes, floors from Frietkot Tycoon (see
   // art/CREDITS.txt). All optional: emoji and flat fills stand by whenever
   // a file is missing — art must never break the game.
-  function loadImg(src) {
+  // every fetch is tallied per PACK so the boot bar can name what's still
+  // unpacking; lazy packs (relic icons, tint bakes) never hold the bar up
+  const ART_LOAD = { total: 0, done: 0, packs: {} };
+  function packOf(key) {
+    if (key.indexOf('mach_') === 0) return 'the machine';
+    if (key.indexOf('pc_') === 0) return 'coin & item faces';
+    if (key.indexOf('floor_') === 0) return 'floor tiles';
+    if (key.indexOf('rl_') === 0) return 'relic icons';
+    return 'heroes & beasts';
+  }
+  function loadImg(src, pack) {
     const im = new Image();
     im._ok = false;
-    im.onload = () => { im._ok = true; };
-    im.onerror = () => {};
+    if (pack) {
+      ART_LOAD.total++;
+      ART_LOAD.packs[pack] = (ART_LOAD.packs[pack] || 0) + 1;
+    }
+    const settle = () => { if (pack) { ART_LOAD.done++; ART_LOAD.packs[pack]--; } };
+    im.onload = () => { im._ok = true; settle(); };
+    im.onerror = settle;
     im.src = src;
     return im;
   }
+  window.__dpArtLoad = ART_LOAD;         // the boot-bar tally, visible to tests
   const ART_IMG = {};
   function art(key, src) {
-    if (!ART_IMG[key]) ART_IMG[key] = loadImg(src);
+    if (!ART_IMG[key]) {
+      const pack = packOf(key);
+      // relic icons stream in lazily — they don't gate the boot bar
+      ART_IMG[key] = loadImg(src, pack === 'relic icons' ? null : pack);
+    }
     return ART_IMG[key];
   }
   // sheet metadata: 4-row LPC sheets face up/left/down/right; 1-row strips
@@ -4227,23 +4249,17 @@ if (!HEADLESS) (function browser() {
     return FLOOR_PATS[tile];
   }
 
-  // warm the ENTIRE art cache at startup so nothing streams in mid-run:
-  // every character/enemy/boss sheet, all the machine dressing, the coin &
-  // item faces, the floor tiles, and the act 2/3 palette-swaps.
+  // warm the art cache at startup: every base character/enemy/boss sheet,
+  // the machine dressing, the coin & item faces, and the floor tiles. The
+  // act 2/3 palette-swaps are NOT baked here — tintedArt() bakes each kin
+  // lazily on its first appearance (relic icons stream lazily too), so
+  // boot does only the work act 1 actually needs.
   function preloadArt() {
     for (const k of Object.keys(SHEETS)) art(k, SHEETS[k].src);
     for (const k of Object.keys(MACH_ART)) art('mach_' + k, MACH_ART[k]);
     const pieces = Object.values(PIECE_ART).concat(ITEM_ART.map(i => 'item_' + i));
     for (const name of pieces) art('pc_' + name, 'art/machine/pieces/' + name + '.png');
     for (const f of FLOORS) if (f.tile) art('floor_' + f.tile, 'art/floor_' + f.tile + '.png');
-    // bake each palette-swapped kin as soon as its base sheet has loaded
-    for (const variant of Object.keys(TIER_SKINS)) {
-      const [baseKey, tint] = TIER_SKINS[variant];
-      const base = art(baseKey, SHEETS[baseKey].src);
-      const bake = () => { base._ok = true; tintedArt(baseKey, variant, tint); };
-      if (base._ok) bake();
-      else if (base.addEventListener) base.addEventListener('load', bake);
-    }
   }
   preloadArt();
 
@@ -7461,6 +7477,56 @@ if (!HEADLESS) (function browser() {
     edge('lb', bt(4), () => kbCycle(-1));
     edge('rb', bt(5), () => kbCycle(1));
   }
+  // ---- the TOWN CRIER: a hidden aria-live region narrates the game ----
+  // Screen readers can't see the canvas, so a crier calls out what matters:
+  // screen changes, every banner and toast (the game's own event language),
+  // victory spoils, and a low-health warning. Batched so it never firehoses.
+  const srEl = document.getElementById('sr');
+  const srQ = [];
+  let srT = 0;
+  function announce(msg) {
+    if (!msg) return;
+    if (window.__dpSay) window.__dpSay(msg);
+    if (srQ.length < 8) srQ.push(msg);
+  }
+  function srTick(dt) {
+    srT -= dt;
+    if (srT > 0 || !srQ.length) return;
+    srT = 1.4;
+    const line = srQ.splice(0, 3).join('. ');
+    if (srEl) srEl.textContent = line;
+  }
+  const SRW = { screen: '', floor: 0, banner: '', toast: '', victory: false, low: false };
+  function srWatch() {
+    if (S.screen !== SRW.screen) {
+      SRW.screen = S.screen;
+      if (S.screen === 'title') announce('Title screen');
+      else if (S.screen === 'dungeon' && S.run) {
+        announce('The dungeon, floor ' + S.run.floor + '. Health ' + S.run.hp + ' of ' + S.run.maxHp);
+      } else if (S.screen === 'battle') {
+        announce('Battle!' + (S.enemy ? ' Facing ' + S.enemy.name : ''));
+      } else if (S.screen === 'over') announce('The run has ended');
+    }
+    if (S.run && S.run.floor !== SRW.floor) {
+      const fresh = SRW.floor === 0;
+      SRW.floor = S.run.floor;
+      if (!fresh) announce('Descending to floor ' + S.run.floor);
+    } else if (!S.run) SRW.floor = 0;
+    if (S.banner && S.banner.txt !== SRW.banner) { SRW.banner = S.banner.txt; announce(S.banner.txt); }
+    else if (!S.banner) SRW.banner = '';
+    if (S.toast && S.toast.txt !== SRW.toast) { SRW.toast = S.toast.txt; announce(S.toast.txt); }
+    else if (!S.toast) SRW.toast = '';
+    const v = !!S.victory;
+    if (v !== SRW.victory) {
+      SRW.victory = v;
+      if (v) announce('Victory! ' + (S.victory.gold || 0) + ' gold looted');
+    }
+    const low = !!(S.run && S.run.hp > 0 && S.run.hp <= S.run.maxHp * 0.25);
+    if (low !== SRW.low) {
+      SRW.low = low;
+      if (low) announce('Health low: ' + S.run.hp + ' of ' + S.run.maxHp);
+    }
+  }
   const entCool = {};
   function avSpawn() {
     AV.stamp = S.roomStamp;
@@ -8640,6 +8706,24 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 + 10, py + ph - 60, (LW - 148) / 2, 42, c.noLabel || 'CANCEL', () => { S.confirm = null; },
           { bg: 'rgba(40,34,46,0.95)', border: '#9a8aa0', col: '#d8c8dc', font: '900 13px Verdana, sans-serif', r: 12 });
   }
+  // the boot strip: a slim bar naming whichever art pack is still unpacking,
+  // then a green tick that fades — the title stays fully playable throughout
+  let artBarT = 0;
+  function drawArtBar() {
+    const loading = ART_LOAD.total > 0 && ART_LOAD.done < ART_LOAD.total;
+    if (loading) artBarT = 1;
+    else if (artBarT > 0) artBarT = Math.max(0, artBarT - 0.02);
+    if (artBarT <= 0) return;
+    ctx.globalAlpha = Math.min(1, artBarT);
+    let cur = '';
+    for (const p of Object.keys(ART_LOAD.packs)) { if (ART_LOAD.packs[p] > 0) { cur = p; break; } }
+    txt(loading ? 'unpacking ' + (cur || 'the art') + ' — ' + ART_LOAD.done + ' / ' + ART_LOAD.total
+                : 'all art unpacked ✓',
+        LW / 2, 794, '700 10px Verdana, sans-serif', '#9a8aa0');
+    bar(110, 804, LW - 220, 7, ART_LOAD.total ? ART_LOAD.done / ART_LOAD.total : 1,
+        '#ffd75e', '#ff8a2a');
+    ctx.globalAlpha = 1;
+  }
   // slow golden rain behind the title — coins tumbling out of the dark
   const TRAIN = [];
   function drawTitle(t) {
@@ -8773,6 +8857,7 @@ if (!HEADLESS) (function browser() {
           LW / 2, 736, '700 11px Verdana, sans-serif', '#a08a94');
     }
     txt('v' + VERSION, LW - 10, LH - 10, '600 10px Verdana, sans-serif', '#8d7d95', 'right');
+    drawArtBar();
     if (S.saveQuarantined) {
       txt('⚠ a damaged save was quarantined — fresh start (the old blob is kept safe)',
           LW / 2, 758, '700 10px Verdana, sans-serif', '#ff9d3c');
@@ -8860,6 +8945,7 @@ if (!HEADLESS) (function browser() {
     const dt = Math.min((ts - last) / 1000 || 0.016, 0.05);
     last = ts;
     padTick();                            // gamepad → the same KEYS/press paths
+    srWatch(); srTick(dt);                // the town crier for screen readers
     if (S.screen === 'battle') {
       tick(dt);
       if (S.victory) S.victory.t += dt;

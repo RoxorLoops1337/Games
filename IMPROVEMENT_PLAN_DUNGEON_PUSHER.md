@@ -117,7 +117,9 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       and it walks the crane), TAB/ENTER ring-and-press any button, ESC backs
       out of everything; gamepad polled onto the same paths (stick/dpad move,
       A fires, B backs, bumpers cycle) (session 23)
-- [ ] **Screen-reader labels**: aria-live region announcing phase changes and results
+- [x] **Screen-reader labels**: the TOWN CRIER — a hidden aria-live region relays
+      screen changes, every banner/toast, victory spoils, and a low-health
+      warning, batched against firehosing; canvas carries a role+label (session 25)
 
 ## Tier 5 — platform & robustness
 
@@ -139,8 +141,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Performance budget CI**: 500-frame probe through the REAL frame loop on a
       packed floor-15 battle (turbo ×20, pets, wounds, fat relic bag) — fails at
       8ms/frame, ~3× a healthy run's cost (session 24)
-- [ ] **Asset preload polish**: loading bar on first boot listing art packs; lazy
-      relic art already ships — extend to enemy sheets
+- [x] **Asset preload polish**: boot strip on the title names the art pack still
+      unpacking (per-pack tally in loadImg) and fades on the ✓; act 2/3 tint
+      bakes now happen lazily on first appearance instead of all at boot;
+      relic icons stay lazy and off the bar (session 25)
 - [ ] **Localization hooks**: wrap user-facing strings in `T()` now, ship `en` table;
       NL translation as the proof pass
 

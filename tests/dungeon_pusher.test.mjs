@@ -3513,4 +3513,39 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(per < 8, 'frame budget: ' + per.toFixed(2) + 'ms/frame stays under 8ms headless');
 }
 
+// -------- BOOT BAR + TOWN CRIER: the art tally & aria narration --------
+{
+  const said = [];
+  globalThis.__dpSay = m => said.push(m);
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  frames(4);
+  // the boot bar's ledger: everything counted, everything settled (the test
+  // Image stub "loads" instantly), and the lazy packs never gate it
+  const AL = globalThis.__dpArtLoad;
+  t.ok(AL && AL.total > 40, 'the boot tally counts the eager art (' + (AL && AL.total) + ' images)');
+  t.eq(AL.done, AL.total, 'every counted image settles the bar');
+  t.ok(Object.values(AL.packs).every(n => n === 0), 'no pack left pending');
+  t.ok(!('relic icons' in AL.packs), 'relic icons stay off the boot bar — they stream lazily');
+  // the town crier narrates the run for screen readers
+  t.ok(said.some(m => /title/i.test(m)), 'the crier announces the title screen');
+  D.srand(31);
+  D.newRun('knight');
+  frames(6);
+  t.ok(said.some(m => /floor 1/i.test(m) && /health/i.test(m)), 'the crier announces the dungeon floor + health');
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  frames(100);                                     // through the intro, into round 1
+  t.ok(said.some(m => /^Battle!/.test(m)), 'the crier announces the battle and the foe');
+  D.S.run.hp = Math.max(1, Math.floor(D.S.run.maxHp * 0.2));
+  frames(4);
+  t.ok(said.some(m => /health low/i.test(m)), 'the crier warns at low health');
+  D.S.enemy.hp = 1; D.dmgEnemy(5);
+  frames(12);
+  t.ok(said.some(m => /victory/i.test(m)), 'the crier announces victory');
+  t.ok(said.some(m => m === 'VICTORY!'), 'banners are relayed (the VICTORY! call)');
+  delete globalThis.__dpSay;
+}
+
 t.done();
