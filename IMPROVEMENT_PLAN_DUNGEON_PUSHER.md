@@ -267,6 +267,50 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
       button, and the death knell all wrapped in TR(); NL table at 60+ strings
       (session 45)
 
+## Tier 8 — come back tomorrow, bring a friend (authored session 46)
+
+The game is deep and polished; this tier is about the PULL — reasons to open
+it every day, and moments worth showing someone. Ordered by impact ÷ effort.
+
+- [ ] **Daily streaks**: consecutive-day counter on the 📅 chip (played any run
+      that day), +10% cogs per streak day (cap +50%), a streak flame on the
+      title; one grace day so a miss doesn't feel like a slap
+- [ ] **Seed of the day**: the daily's date-seed offered as a FREE practice plant
+      on the title ("today's dungeon — no stakes"), so friends without the
+      one-attempt pressure can still race the same maze
+- [ ] **Jackpot spectacle**: the frenzy deserves fireworks — meter burst flash,
+      a coin-fountain arc over the pusher, brief golden vignette, fatter shake
+- [ ] **Kill feel**: foe death gets a shatter burst + ~90ms hitstop + the panel
+      slam already half-exists — make the last hit LAND
+- [ ] **Floor transition**: descending plays a half-second iris/wipe with the
+      floor nameplate (and the act name when it changes) instead of a hard cut
+- [ ] **Endless milestones**: every 3rd floor past 21 pays a MILESTONE CHEST
+      (cogs / golden key / relic pick), floors 25 + 30 add trophies
+- [ ] **Endless-only decrees**: three new MUTS deeper in the stack (GILDED AGE:
+      elites everywhere; THIN VEINS: shops cost +25%; THE LONG DARK: every
+      floor is a dark floor) — the stack now reads 8 long
+- [ ] **Three new daily twists**: GLASS CANNON (double damage both ways),
+      COIN DROUGHT (hand -2, kills pay double gold), PACIFIST FLOORS (every
+      3rd floor's monsters are optional but pay nothing)
+- [ ] **Board rows tell more**: diff dot + ♟ NG+ pawn on THE DEEP BOARD rows;
+      below-50 players see "the board's floor to beat is N"
+- [ ] **Yesterday's deepest**: a light one-shot board fetch stamps the title
+      with "yesterday's deepest: FLOOR N by NAME" (cached, silent offline)
+- [ ] **Trophies for the pull**: streak 3/7, endless floor 25, a milestone
+      chest opened, a weekly decree survived, seed-of-the-day played
+- [ ] **[big] THE ALCHEMIST — an eighth hero**: no potions — she BREWS: every
+      12 coins collected distills one random draught (bomb/frost/heal/gold);
+      gems are reagents (+2 draught power); unseals at 5 total deep clears
+- [ ] **Weekly decree**: a week-seeded global modifier posted on the title
+      ("THIS WEEK: BONE RAIN everywhere, cogs +30%") — opt-in door, expires
+      Sunday, pays a weekly trophy line in records
+- [ ] **Descend sting + jackpot fanfare v2**: two-note descend motif keyed to
+      the act; the jackpot fanfare gets a proper resolve chord
+- [ ] **Wheel near-miss wobble**: the wheel settles with a tooth-by-tooth
+      wobble past the winning segment — free tension, pure draw code
+- [ ] **Records: the endless page**: deepest decree stack survived, milestone
+      chests opened, weekly decrees cleared — a second RECORDS tab
+
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
