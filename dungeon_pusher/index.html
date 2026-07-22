@@ -160,6 +160,7 @@ function themeUnlocked(id) {
 // run: every floor fields kin one act deeper, and five NG+-only relics
 // join every pool.
 function ngPlusOpen() { return Object.keys(S.deep15 || {}).length > 0; }
+function seed36(n) { return (n >>> 0).toString(36).toUpperCase(); }
 
 // -------------------------------------------------------------- hero skins
 // One alt palette per hero, earned by a DEEP CLEAR (felling the floor-15
@@ -1079,7 +1080,7 @@ function save() {
         daily: S.run.daily || null, dailyMod: S.run.dailyMod || null,
         quest: S.run.quest || null,
         swarm: S.run.swarm || null, cheese: S.run.cheese || 0, diff: S.run.diff || 'normal',
-        ng: S.run.ng || 0, bside: S.run.bside || 0,
+        ng: S.run.ng || 0, bside: S.run.bside || 0, seed: S.run.seed,
       } : null,
     }));
   } catch (e) {}
@@ -1155,6 +1156,7 @@ function load() {
         quest: d.run.quest || null,
         swarm: d.run.swarm || null, cheese: d.run.cheese || 0, diff: d.run.diff || 'normal',
         ng: d.run.ng ? 1 : 0, bside: d.run.bside ? 1 : 0,
+        seed: (typeof d.run.seed === 'number') ? (d.run.seed >>> 0) : null,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -3195,6 +3197,7 @@ function endRun(cause) {
     floor: S.run.floor, depth: S.run.depth, kills: S.run.kills, gold: S.run.goldEarned,
     hero: S.run.hero, relics: S.run.relics.length,
     diff: S.run.diff || 'normal', muts: mutCount(),
+    ng: S.run.ng || 0, seed: S.run.seed,
     stats: st,
   };
   // COGS for the workshop: every run pays out, however it ends —
@@ -3214,7 +3217,7 @@ function endRun(cause) {
   S.life.heroRuns[S.run.hero] = (S.life.heroRuns[S.run.hero] || 0) + 1;
   // ...and the HISTORY book gets one line (newest first, ten kept)
   S.hist.unshift({ hero: S.run.hero, floor: S.run.floor, depth: S.run.depth,
-                   kills: S.run.kills, cause: cause || 'fell', t: Math.round(st.t) });
+                   kills: S.run.kills, cause: cause || 'fell', t: Math.round(st.t), ng: S.run.ng || 0 });
   if (S.hist.length > 10) S.hist.length = 10;
   S.run = null;
   S.foes = [];
@@ -3245,8 +3248,13 @@ function newRun(heroId, force) {
   const diff = DIFFS.some(d => d.id === S.diffPick) ? S.diffPick : 'normal';
   const ng = (S.ngPick && ngPlusOpen()) ? 1 : 0;
   const bside = (S.best.runs % 2 === 0) ? 1 : 0;   // even-numbered runs face the B-SIDE
+  // every run carries a SEED: planted by hand (the 🌱 chip) or drawn from
+  // the stream. Each floor's layout re-seeds from (seed, floor), so two
+  // players with the same seed walk the same dungeon whatever they fight.
+  const seed = ((S.nextSeed != null ? S.nextSeed : (rng() * 0x7fffffff)) | 0) >>> 0;
+  S.nextSeed = null;
   S.run = {
-    hero: hero.id, ng, bside,
+    hero: hero.id, ng, bside, seed,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
     gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS, goldKeys: 0,
     arsenal: { sword: 1, shield: 1, vial: 1 },
@@ -3369,6 +3377,9 @@ function rollSize() {
 }
 function genFloor() {
   if (!S.run) return null;
+  // the layout draws from its own seeded stream — battles may burn any
+  // amount of rng, the maps still come out identical for a shared seed
+  if (S.run.seed != null) srand(((S.run.seed ^ (S.run.floor * 2654435761)) >>> 0) || 1);
   // every floor rolls its own bones: size, sprawl and loopiness all vary —
   // and floors grow BIG: 13-17 rooms early, up to ~23 deep down
   const target = 13 + ((rng() * 5) | 0) + Math.min(6, S.run.floor - 1);
@@ -4284,7 +4295,7 @@ window.DP = {
   CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
   LANGS, TR, setLang,
   MACH_THEMES, themeUnlocked,
-  HERO_SKINS, skinWorn, seasonNow, ngPlusOpen,
+  HERO_SKINS, skinWorn, seasonNow, ngPlusOpen, seed36,
 };
 
 load();
@@ -8983,7 +8994,7 @@ if (!HEADLESS) (function browser() {
       const hero3 = heroById(h.hero);
       rr(30, y, LW - 60, 30, 8);
       ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
-      txt((hero3 ? hero3.icon : '❔') + '  floor ' + h.floor + ' rm ' + h.depth + '  •  ' + h.kills + ' kills',
+      txt((hero3 ? hero3.icon : '❔') + (h.ng ? ' ♟' : '') + '  floor ' + h.floor + ' rm ' + h.depth + '  •  ' + h.kills + ' kills',
           40, y + 15, '800 10px Verdana, sans-serif', '#e8d0a0', 'left');
       txt(h.cause, LW - 40, y + 15, '600 10px Verdana, sans-serif', '#a08090', 'right');
     });
@@ -9626,6 +9637,25 @@ if (!HEADLESS) (function browser() {
                 border: on ? (d.id === 'hard' ? '#ff8a9a' : d.id === 'easy' ? '#7ed6a0' : '#ffd75e') : '#4a4458',
                 col: on ? '#fff0e0' : '#8a8098', font: '900 10px Verdana, sans-serif', r: 8 });
       });
+      // the SEED chip: plant a friend's seed and NEW RUN grows their dungeon
+      {
+        const planted = S.nextSeed != null;
+        uiBtn(LW / 2 - dw * 1.5 - 52, 604, 34, 22, '\u{1F331}', () => {
+          NAMEPAD = {
+            title: 'PLANT A SEED', max: 8,
+            val: planted ? seed36(S.nextSeed) : '',
+            apply: (v) => {
+              const c = v.replace(/[^A-Z0-9]/g, '');
+              if (!c) { S.nextSeed = null; toast('the seed bed is cleared'); return; }
+              const n = parseInt(c, 36);
+              if (!(n >= 0)) { toast('that seed refuses to sprout'); return; }
+              S.nextSeed = n >>> 0;
+              toast('seed ' + seed36(S.nextSeed) + ' planted — NEW RUN grows it');
+            },
+          };
+        }, { bg: planted ? 'rgba(46,74,40,0.95)' : 'rgba(30,26,38,0.9)',
+             border: planted ? '#7ed6a0' : '#4a4458', r: 8, font: '12px serif' });
+      }
       // the PRESTIGE door: only hangs once a deep clear has been inked
       if (ngPlusOpen()) {
         const on = !!S.ngPick;
@@ -9718,6 +9748,10 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = lgr('overtt', 0, 245, 0, 292, [[0, '#ffb0b8'], [1, '#a8213a']]);
     ctx.fillText('THE RUN ENDS', LW / 2, 268);
     txt(o.cause, LW / 2, 310, '700 14px Verdana, sans-serif', '#c8a8b0');
+    if (o.seed != null) {
+      txt('seed ' + seed36(o.seed) + ' — plant it with the 🌱 chip to race this dungeon',
+          LW / 2, 330, '600 10px Verdana, sans-serif', '#9a8aa0');
+    }
     // the REPORT CARD: the whole run, itemized
     const st2 = o.stats || { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0 };
     const mm = Math.floor(st2.t / 60), ss = ('0' + Math.floor(st2.t % 60)).slice(-2);
@@ -9725,6 +9759,7 @@ if (!HEADLESS) (function browser() {
     const dinfo = DIFFS.find(d => d.id === o.diff);
     const rows = [
       ['hero', (hero2 ? hero2.icon + ' ' + hero2.name : '—')
+        + (o.ng ? '  •  ♟ NG+' : '')
         + (dinfo && dinfo.id !== 'normal' ? '  •  ' + dinfo.name : '')
         + (o.muts > 0 ? '  •  ENDLESS +' + o.muts : '')],
       ['reached', 'floor ' + o.floor + ', room ' + o.depth],

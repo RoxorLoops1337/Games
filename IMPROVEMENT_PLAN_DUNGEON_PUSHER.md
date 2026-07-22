@@ -217,8 +217,10 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
       +1 atk → ×1.11 sting), floor 21 dipped (beyond-term 0.7 → 0.9), and NG+
       floor 1 ran ×1.58 hot (new PRESTIGE KIT: +3 gold coins, +1 potion,
       +20 gold). The Auditor measured ×1.95 over the Pit Boss — kept (session 38)
-- [ ] **Seed sharing**: every run stamps its seed on the report card; a SEEDED RUN
-      door on the title (name-pad entry) reproduces the dungeon — race a friend
+- [x] **Seed sharing**: every run carries a base36 seed; floor layouts re-seed
+      from (seed, floor) so shared seeds walk identical dungeons whatever the
+      battles burned; 🌱 chip by the difficulty row plants one via the name pad,
+      the report card prints it (session 39)
 - [ ] **Share-a-run card** [big]: victory/death → a rendered trophy-card PNG
       (hero, floor, kills, seed, painted frame) via canvas.toBlob — download +
       navigator.share where it exists
@@ -238,8 +240,8 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
       probe pick rates headless, then buff the losers one notch
 - [ ] **Relic outlier pass**: identify the 5 least-impactful relics by
       inspection + probe, give each a small second clause
-- [ ] **NG+ ledger on the report card**: NG+ badge + act-shifted floor shown on
-      death/victory report and the run history rows
+- [x] **NG+ ledger on the report card**: ♟ NG+ on the hero row of the card and
+      on the run-history rows; over/hist carry ng + seed (session 39)
 - [x] **Dungeon footsteps & door creaks**: soft noise footfalls pace the crawl
       (0.26s stride, behind SFX volume); the door thunk already lived on the
       hinge — verified and pinned (session 37)

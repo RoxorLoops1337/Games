@@ -1744,15 +1744,21 @@ t.ok(saved2.best.floor >= 1, 'best stats outlive the run');
   t.eq(DPv1.S.run.floor, 2, 'run progress (floor, gold) survives the re-carve');
   t.eq(DPv1.S.run.purse.silver, DPv1.START_PURSE.silver, 'the purse falls back to the starter deck');
 }
-// randomness: consecutive floors carve different dungeons
+// randomness: consecutive floors carve different dungeons (layouts are
+// seeded per (run seed, floor) now — the SAME floor re-carves identically
+// by design, so step the floor between carves like the game does)
 {
   DP.srand(20260713);
   const layout = () => Object.keys(S.run.map.rooms).sort().join('|')
     + '#' + Object.values(S.run.map.rooms).map(r => r.size).join('');
+  const f0 = S.run.floor;
   DP.genFloor(); const fA = layout();
-  DP.genFloor(); const fB = layout();
-  DP.genFloor(); const fC = layout();
+  S.run.floor = f0 + 1; DP.genFloor(); const fB = layout();
+  S.run.floor = f0 + 2; DP.genFloor(); const fC = layout();
+  S.run.floor = f0; DP.genFloor();
+  const fA2 = layout();
   t.ok(fA !== fB && fB !== fC && fA !== fC, 'every carved floor is a different dungeon');
+  t.eq(fA2, fA, 'and re-carving the same floor reproduces it exactly (seeded)');
 }
 
 // -------- determinism --------
@@ -4114,6 +4120,52 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   }
   t.ok(bp[3].p / bp[2].p >= 1.1 && bp[3].p / bp[2].p <= 2.6,
        'THE AUDITOR crowns the curve without walling it (×' + (bp[3].p / bp[2].p).toFixed(2) + ')');
+}
+
+// -------- SEED SHARING + the NG+ ledger --------
+{
+  const layoutOf = (D2) => {
+    const m = D2.S.run.map;
+    return Object.keys(m.rooms).sort().map(k =>
+      k + '<' + (m.rooms[k].ents || []).map(e => e.kind + (e.eid || '')).join(',') + '>').join('|');
+  };
+  // a planted seed takes root, and two players grow the SAME dungeon
+  const { DP: A } = loadGame({}, false);
+  A.srand(1); A.S.nextSeed = parseInt('COIN', 36); A.newRun('knight');
+  t.eq(A.S.run.seed, parseInt('COIN', 36) >>> 0, 'the planted seed takes root');
+  t.eq(A.S.nextSeed, null, 'and the seed bed empties');
+  const l1 = layoutOf(A);
+  for (let i = 0; i < 137; i++) A.rollPileKind();     // burn a battle's worth of rng
+  A.S.run.floor = 2; A.genFloor();
+  const l2 = layoutOf(A);
+  const { DP: B } = loadGame({}, false);
+  B.srand(999); B.S.nextSeed = parseInt('COIN', 36); B.newRun('rogue');
+  t.eq(layoutOf(B), l1, 'floor 1 is the same dungeon for both players');
+  for (let i = 0; i < 5; i++) B.rollPileKind();       // a different amount burned
+  B.S.run.floor = 2; B.genFloor();
+  t.eq(layoutOf(B), l2, 'floor 2 still matches despite divergent battles');
+  // a different seed grows a different dungeon
+  const { DP: C2 } = loadGame({}, false);
+  C2.srand(1); C2.S.nextSeed = parseInt('SLUG', 36); C2.newRun('knight');
+  t.ok(layoutOf(C2) !== l1, 'a different seed grows a different dungeon');
+  // unplanted runs still stamp a seed, and it survives a reload
+  const st = {};
+  const { DP: E } = loadGame(st, false);
+  E.srand(77); E.newRun('knight');
+  const sd = E.S.run.seed;
+  t.ok(typeof sd === 'number' && E.seed36(sd).length >= 1, 'every run carries a base36 seed');
+  E.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.run.seed, sd, 'the seed survives a reload');
+  // the report card + the history book carry the prestige ledger
+  const { DP: F } = loadGame({}, false);
+  F.S.deep15.knight = 1; F.S.ngPick = true;
+  F.srand(3); F.newRun('knight');
+  const fsd = F.S.run.seed;
+  F.hpHit(9999, 'the probe');
+  t.eq(F.S.over.ng, 1, 'the report card knows a prestige run');
+  t.eq(F.S.over.seed, fsd, 'and remembers its seed');
+  t.eq(F.S.hist[0].ng, 1, 'the history book wears the pawn');
 }
 
 t.done();
