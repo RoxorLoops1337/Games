@@ -211,7 +211,7 @@ const C = {
   POUCH_COINS: 2,                       // shop pouch: +2 gold coins to the purse
   ROUND_RAIN: 5,                        // fresh pieces rained onto the pile each round
   MIX: { silver: 0.20, green: 0.10, lucky: 0.05 },   // machine pile composition
-  DMG: { gold: 1, lucky: 3, blue: 1 },  // per coin at resolve (blue hits ALL foes)
+  DMG: { gold: 1, lucky: 4, blue: 1 },  // per coin at resolve (blue hits ALL foes, thru block)
   RED_HEAL: 1,                          // red coins mend 1 HP each
   SKULL_DMG: 4,                         // + floor scaling on top; bypasses block
   TILTS: 3,                             // machine tilts per round
@@ -232,8 +232,8 @@ const COIN_INFO = {
   silver: { name: 'Silver', what: '1 block' },
   green:  { name: 'Venom',  what: '1 poison' },
   red:    { name: 'Heart',  what: 'heal 1' },
-  blue:   { name: 'Frost',  what: '1 dmg to ALL foes' },
-  lucky:  { name: 'Lucky',  what: '3 dmg' },
+  blue:   { name: 'Frost',  what: '1 dmg to ALL, thru block' },
+  lucky:  { name: 'Lucky',  what: '4 dmg' },
 };
 // the after-battle coin offer draws from this bag
 const COIN_REWARD_W = [['coin', 24], ['silver', 22], ['green', 18], ['red', 16], ['blue', 12], ['lucky', 8]];
@@ -330,7 +330,7 @@ const RELICS = [
   { id: 'aegis',   rar: 'r', icon: '\u{1F530}', name: 'Aegis',       desc: 'unspent block carries into the next round' },
   { id: 'clover',  rar: 'c', icon: '\u{1F340}', name: 'Clover',      desc: 'lucky coins twice as often' },
   { id: 'wind',    rar: 'e', icon: '\u{1F4A8}', name: 'Second Wind', desc: 'survive a killing blow at 1 HP (once per fight)' },
-  { id: 'piggy',   rar: 'c', icon: '\u{1F437}', name: 'Piggy Bank',  desc: '+4 gold after every victory' },
+  { id: 'piggy',   rar: 'c', icon: '\u{1F437}', name: 'Piggy Bank',  desc: '+4 gold after every victory, +2 more per act descended' },
   { id: 'plate',   rar: 'r', icon: '\u{1F6E1}\u{FE0F}', name: 'Battle Plate', desc: 'start every round with +4 block' },
   // coin-benders: COMMON
   { id: 'goldedge',   rar: 'c', icon: '⚔\u{FE0F}',  name: 'Gilded Edge',   desc: 'gold coins deal +1 damage' },
@@ -371,7 +371,7 @@ const RELICS = [
   { id: 'bulwark',    rar: 'c', icon: '\u{1F6E1}\u{FE0F}', name: 'Bulwark',     desc: 'silver coins give +1 block' },
   { id: 'greensprig', rar: 'c', icon: '\u{1F49A}', name: 'Green Sprig',   desc: 'heart coins heal +1 HP' },
   { id: 'permafrost', rar: 'c', icon: '\u{2744}\u{FE0F}', name: 'Permafrost', desc: 'frost coins deal +1 to every foe' },
-  { id: 'horseshoe',  rar: 'c', icon: '\u{1F9F2}', name: 'Horseshoe',     desc: 'lucky coins deal +1 damage' },
+  { id: 'horseshoe',  rar: 'c', icon: '\u{1F9F2}', name: 'Horseshoe',     desc: 'lucky coins deal +1 damage and turn up more often' },
   { id: 'toxicology', rar: 'c', icon: '\u{2697}\u{FE0F}', name: 'Toxicology', desc: 'venom coins apply +1 stack' },
   { id: 'armory',     rar: 'c', icon: '\u{1F5C4}\u{FE0F}', name: 'Armory',    desc: 'weapons deal +2 damage' },
   { id: 'fieldmedic', rar: 'c', icon: '\u{1FA79}', name: 'Field Medic',   desc: 'heart items heal +4 HP' },
@@ -384,15 +384,15 @@ const RELICS = [
   { id: 'prospector', rar: 'c', icon: '\u{26CF}\u{FE0F}', name: 'Prospector', desc: '+2 gold for every kill' },
   { id: 'luckypenny', rar: 'c', icon: '\u{1FA99}', name: 'Lucky Penny',   desc: '+3 gold at the start of each round' },
   { id: 'cloverfield',rar: 'c', icon: '\u{2618}\u{FE0F}', name: 'Clover Field', desc: 'lucky coins turn up even more often' },
-  { id: 'blessing',   rar: 'c', icon: '\u{271D}\u{FE0F}', name: 'Blessing', desc: 'cursed skulls bite for 2 less' },
+  { id: 'blessing',   rar: 'c', icon: '\u{271D}\u{FE0F}', name: 'Blessing', desc: 'skulls bite 2 less and leave a 1 HP blessing behind' },
   { id: 'elixir',     rar: 'c', icon: '\u{1F9F4}', name: 'Elixir',        desc: 'potions heal +8 HP' },
   { id: 'richhand',   rar: 'c', icon: '\u{1F4B0}', name: 'Rich Hand',     desc: 'your hand holds a bonus gold coin each round' },
   { id: 'glimmergem', rar: 'c', icon: '\u{1F4A0}', name: 'Glimmer Gem',   desc: 'gems pay +8 gold' },
   { id: 'taxman',     rar: 'c', icon: '\u{1F9FE}', name: 'Taxman',        desc: '+1 gold each time a gold coin fires' },
-  { id: 'scavenger',  rar: 'c', icon: '\u{1F526}', name: 'Scavenger',     desc: 'gold bags pay +5 gold' },
+  { id: 'scavenger',  rar: 'c', icon: '\u{1F526}', name: 'Scavenger',     desc: 'gold bags pay +5 gold and shake out a key' },
   { id: 'thickskin',  rar: 'c', icon: '\u{1F9F1}', name: 'Thick Skin',    desc: 'take 1 less from every enemy hit' },
   { id: 'sparkstone', rar: 'c', icon: '\u{2728}', name: 'Spark Stone',    desc: 'frost coins deal +1 more when 2+ foes stand' },
-  { id: 'deadeye',    rar: 'c', icon: '\u{1F441}\u{FE0F}', name: 'Dead Eye', desc: 'lucky coins pierce a braced guard' },
+  { id: 'deadeye',    rar: 'c', icon: '\u{1F441}\u{FE0F}', name: 'Dead Eye', desc: 'lucky coins pierce a braced guard and hit +1' },
   // RARE — build-shapers
   { id: 'berserker',  rar: 'r', icon: '\u{1F620}', name: 'Berserker',     desc: 'gold coins deal +2 while you are below half HP' },
   { id: 'retort',     rar: 'r', icon: '\u{1F994}', name: 'Retort',        desc: 'silver coins also deal 2 damage' },
@@ -613,7 +613,7 @@ function coinFx(k) {
     let d = C.DMG.blue;
     if (M('frostshard', '+1 dmg')) d++;
     if (M('permafrost', '+1 dmg')) d++;
-    main = d + ' dmg to ALL foes';
+    main = d + ' dmg to ALL foes, thru block';
     M('sparkstone', '+1 dmg against packs of 2+');
     M('hailstorm', '+1 dmg per other foe standing');
     M('dragonbreath', 'also 1 BURN to every foe');
@@ -707,7 +707,7 @@ function runMods() {
   ];
   if (handB) rows.push(['hand bonus', '+' + handB + ' gold coin' + (handB > 1 ? 's' : '') + ' every round']);
   if (hasRelic('midas')) rows.push(['gold income', '+30% (Midas Touch)']);
-  if (hasRelic('piggy')) rows.push(['victory bounty', '+4 gold (Piggy Bank)']);
+  if (hasRelic('piggy')) rows.push(['victory bounty', '+' + (4 + 2 * actIdx(S.run ? S.run.floor : 1)) + ' gold (Piggy Bank)']);
   if (hasRelic('luckypenny')) rows.push(['round start', '+3 gold (Lucky Penny)']);
   if (hasRelic('plate')) rows.push(['round start', '+4 block (Battle Plate)']);
   if (hasRelic('thornmail')) rows.push(['thorns', 'half your block bites back']);
@@ -1372,8 +1372,9 @@ function dmgFoe(e, n, src, pierce) {
     if (absorb) n -= absorb;                                    // armour / ward soak
     if (e.braced && !pierce) n = Math.ceil(n / 2);              // its round-stance
     if (e.stunned > 0 && hasRelic('frostbite')) n += 2;         // Frostbite: brittle ice
-    // a shielded foe (the Bell Keeper's toll) soaks with its block first
-    if (n > 0 && e.block > 0) {
+    // a shielded foe (the Bell Keeper's toll) soaks with its block first —
+    // unless the blow PIERCES (frost seeps, dead-eye luckies thread it)
+    if (n > 0 && e.block > 0 && !pierce) {
       const soak = Math.min(e.block, n);
       e.block -= soak; n -= soak;
       if (soak > 0) floatAnchor('\u{1F6E1} ' + soak + ' soaked', 'enemy', '#c8d6e8');
@@ -1426,9 +1427,9 @@ function goldDmg() {
   return d;
 }
 // blue coins: the frost bites EVERY foe at once
-function dmgAll(n) {
+function dmgAll(n, src, pierce) {
   for (const f of S.foes) {
-    if (f.hp > 0) dmgFoe(f, n);
+    if (f.hp > 0) dmgFoe(f, n, src, pierce);
   }
 }
 // a foe falls: its bounty pays out on the spot, its room dweller is gone
@@ -2085,7 +2086,7 @@ function unbankLoot(key) {
 // the FIELD carries the silver and venom coins you push for)
 function rollPileKind() {
   const r = rng();
-  const luckyP = C.MIX.lucky * (hasRelic('clover') ? 2 : 1) * (hasRelic('cloverfield') ? 1.5 : 1);
+  const luckyP = C.MIX.lucky * (hasRelic('clover') ? 2 : 1) * (hasRelic('cloverfield') ? 1.5 : 1) * (hasRelic('horseshoe') ? 1.25 : 1);
   if (r < C.MIX.silver) return 'silver';
   if (r < C.MIX.silver + C.MIX.green) return 'green';
   if (r < C.MIX.silver + C.MIX.green + luckyP) return 'lucky';
@@ -2407,7 +2408,10 @@ function applyLoot(q) {
   }
   const rusted = (v) => Math.max(1, Math.floor(v * rustK));
   if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0));
-  else if (q.t === 'bag') addGold(8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
+  else if (q.t === 'bag') {
+    addGold(8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
+    if (hasRelic('scavenger') && S.run) { S.run.keys++; floatAnchor('a key shakes out of the bag! \u{1F5DD}', 'hero', '#ffd75e'); }
+  }
   else if (q.t === 'silver') {
     addBlock(1 + dexTotal() + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0) + masteryLvl('silver'));
     if (hasRelic('spikeshield')) dmgEnemy(1);
@@ -2449,7 +2453,8 @@ function applyLoot(q) {
   }
   else if (q.t === 'lucky') {
     let ld = C.DMG.lucky + strTotal() + masteryLvl('lucky')
-           + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0);
+           + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0)
+           + (hasRelic('deadeye') ? 1 : 0);
     // Lucky Streak: the dice heat up as they roll
     if (S.battle && hasRelic('luckystreak')) {
       ld += S.battle.luckyFired || 0;
@@ -2464,7 +2469,7 @@ function applyLoot(q) {
     let bd = C.DMG.blue + (hasRelic('frostshard') ? 1 : 0) + (hasRelic('permafrost') ? 1 : 0) + masteryLvl('blue');
     if (hasRelic('sparkstone') && S.foes.filter(f => f.hp > 0).length >= 2) bd += 1;
     if (hasRelic('hailstorm')) bd += Math.max(0, S.foes.filter(f => f.hp > 0).length - 1);
-    dmgAll(bd);
+    dmgAll(bd, null, true);   // frost seeps straight through block
     // Dragon Breath: the frost ignites
     if (hasRelic('dragonbreath') && S.run && !S.victory) {
       for (const f of S.foes) if (f.hp > 0) applyBurn(f, 1);
@@ -2507,6 +2512,7 @@ function applyLoot(q) {
     floatAnchor('CURSED!', 'hero', '#c86bff', true);
     const ward = (hasRelic('wardcandle') ? 3 : 0) + (hasRelic('blessing') ? 2 : 0);
     hpHit(Math.max(1, C.SKULL_DMG + S.run.floor - 1 - ward), 'a cursed skull', '#c86bff');
+    if (hasRelic('blessing') && S.run && S.run.hp > 0) healPlayer(1);   // the blessing lingers
   }
   // the MISER'S CURSE: every coin you fire burns 1 HP, straight through block
   if (S.taxT > 0 && S.run && !S.victory &&
@@ -2937,7 +2943,7 @@ function pickCoin(i) {
 function winBattle() {
   const anyBoss = S.foes.some(f => f.boss);
   const anyElite = S.foes.some(f => f.elite);
-  if (hasRelic('piggy')) { addGold(4); S.battle.goldWon += 4; }
+  if (hasRelic('piggy')) { const pg = 4 + 2 * actIdx(S.run.floor); addGold(pg); S.battle.goldWon += pg; }
   if (hasRelic('tithe')) { addGold(5); S.battle.goldWon += 5; }
   if (hasRelic('secondbreath')) healPlayer(8);
   // A BOSS lets you choose one relic from a spread of two commons + a rare.
