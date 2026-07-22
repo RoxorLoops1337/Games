@@ -3548,4 +3548,36 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   delete globalThis.__dpSay;
 }
 
+// -------- PWA: manifest, worker, icons, wiring --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const dir = join(here, '..', 'dungeon_pusher');
+  // the manifest is sound
+  const man = JSON.parse(readFileSync(join(dir, 'manifest.webmanifest'), 'utf8'));
+  t.eq(man.short_name, 'Dungeon Pusher', 'manifest short_name');
+  t.ok(man.start_url === './' && man.scope === './', 'manifest scoped to the game folder');
+  t.eq(man.display, 'standalone', 'installs as a standalone app');
+  t.ok(Array.isArray(man.icons) && man.icons.length >= 3, 'manifest lists the icon set');
+  t.ok(man.icons.some(i => i.purpose === 'maskable'), 'a maskable icon is declared');
+  // the declared icons exist and really are PNGs
+  for (const src of new Set(man.icons.map(i => i.src))) {
+    const buf = readFileSync(join(dir, src));
+    t.ok(buf.length > 1000 && buf[0] === 0x89 && buf[1] === 0x50, src + ' is a real PNG');
+  }
+  // the worker covers install / activate / fetch with the right strategies
+  const sw = readFileSync(join(dir, 'sw.js'), 'utf8');
+  t.ok(/const CACHE = 'dp-/.test(sw), 'the worker versions its cache under dp-');
+  for (const evName of ['install', 'activate', 'fetch']) {
+    t.ok(sw.indexOf("addEventListener('" + evName + "'") >= 0, 'worker handles ' + evName);
+  }
+  t.ok(sw.indexOf('./index.html') >= 0 && sw.indexOf('skipWaiting') >= 0, 'the shell is precached and the worker takes over');
+  t.ok(sw.indexOf("mode === 'navigate'") >= 0, 'navigations ride network-first');
+  // the page wires it all up
+  const html = readFileSync(join(dir, 'index.html'), 'utf8');
+  t.ok(html.indexOf('rel="manifest"') >= 0, 'index links the manifest');
+  t.ok(html.indexOf('theme-color') >= 0, 'index carries a theme-color');
+  t.ok(html.indexOf("serviceWorker.register('sw.js')") >= 0, 'index registers the worker');
+  t.ok(html.indexOf('beforeinstallprompt') >= 0, 'the install offer is caught for the title chip');
+}
+
 t.done();

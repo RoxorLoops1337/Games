@@ -123,8 +123,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 ## Tier 5 — platform & robustness
 
-- [ ] **PWA**: manifest + service worker (offline after first load), install prompt,
-      icon set from cover art
+- [x] **PWA**: manifest (standalone, portrait, maskable icons) + service worker —
+      shell network-first, everything else cache-first with backfill, offline
+      after one visit (Playwright-verified); beforeinstallprompt caught and
+      re-offered as a 📲 INSTALL title chip; painted coin icon set (session 26)
 - [ ] **Cloud saves**: reuse `functions/api/save.js` pattern (KV `BOARD`) — profile
       sync button in settings, conflict = newest wins with confirm
 - [ ] **Leaderboard**: reuse `functions/api/board.js` — daily + all-time best floor,

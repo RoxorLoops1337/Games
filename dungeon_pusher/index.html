@@ -4,6 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Dungeon Pusher — Coin Pusher Roguelike</title>
+<meta name="theme-color" content="#140d16">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon_192.png">
+<link rel="apple-touch-icon" href="icon_192.png">
 <style>
   html, body { margin: 0; padding: 0; background: #0b0609; height: 100%; overflow: hidden; }
   canvas { display: block; touch-action: none; -webkit-user-select: none; user-select: none; }
@@ -7477,6 +7481,19 @@ if (!HEADLESS) (function browser() {
     edge('lb', bt(4), () => kbCycle(-1));
     edge('rb', bt(5), () => kbCycle(1));
   }
+  // ---- the PWA rig: offline worker + the pocket-install prompt ----
+  // the worker makes the game survive airplane mode after one visit; the
+  // browser's install offer is caught and re-offered as a title chip
+  let installEvt = null;
+  if (typeof navigator !== 'undefined' && navigator.serviceWorker
+      && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+  window.addEventListener('beforeinstallprompt', (ev) => {
+    ev.preventDefault();
+    installEvt = ev;
+  });
+  window.addEventListener('appinstalled', () => { installEvt = null; toast('welcome to the pocket dungeon!'); });
   // ---- the TOWN CRIER: a hidden aria-live region narrates the game ----
   // Screen readers can't see the canvas, so a crier calls out what matters:
   // screen changes, every banner and toast (the game's own event language),
@@ -8888,6 +8905,15 @@ if (!HEADLESS) (function browser() {
     }, { grad: spent ? ['#3a3440', '#262230'] : ['#3a5a7e', '#1c3048'],
          border: spent ? '#55506a' : '#8fc8ff', col: spent ? '#9a90a8' : '#d8ecff',
          font: '900 11px Verdana, sans-serif', r: 10 });
+    // the pocket-install chip: only appears when the browser made the offer
+    if (installEvt) {
+      uiBtn(14, 92, 108, 28, '\u{1F4F2} INSTALL', () => {
+        const ev = installEvt;
+        installEvt = null;
+        if (ev && ev.prompt) ev.prompt();
+      }, { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24',
+           font: '900 10px Verdana, sans-serif', r: 10 });
+    }
   }
 
   function drawOver(t) {
