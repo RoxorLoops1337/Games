@@ -669,8 +669,21 @@ function heroById(id) { return HEROES.find(h => h.id === id); }
 // the Poltergeist is EARNED: it answers only to those who have carried a
 // run down to floor 20 (best-run depth, persisted across runs)
 const GHOST_UNLOCK_FLOOR = 20;
+// the LADDER: the four founding heroes are always open — the SPECIALISTS
+// unseal as the profile earns its scars. Anyone who already ran a hero
+// keeps it (the casting ledger grandfathers them in).
+const HERO_LOCKS = {
+  crane:  { floor: 10, txt: 'reach FLOOR 10' },
+  ghost:  { floor: GHOST_UNLOCK_FLOOR, txt: 'reach FLOOR ' + GHOST_UNLOCK_FLOOR },
+};
+function heroLockText(id) { return (HERO_LOCKS[id] || {}).txt || ''; }
 function heroUnlocked(id) {
-  return id !== 'ghost' || !!(S.best && S.best.floor >= GHOST_UNLOCK_FLOOR);
+  const lock = HERO_LOCKS[id];
+  if (!lock) return true;
+  if (S.ach && S.ach.heroes && S.ach.heroes[id]) return true;   // grandfathered
+  if (lock.floor && S.best && S.best.floor >= lock.floor) return true;
+  if (lock.ach && S.ach && S.ach.u[lock.ach]) return true;
+  return false;
 }
 // the Poltergeist's whole kit hangs off this one question
 function ghostRun() { return !!(S.run && S.run.hero === 'ghost'); }
@@ -777,7 +790,7 @@ function save() {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
-      codex: S.codex, cogs: S.cogs, ws: S.ws,
+      codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily,
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -787,6 +800,7 @@ function save() {
         keys: S.run.keys, goldKeys: S.run.goldKeys || 0, meter: S.meter,
         pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
         mapFloor: S.run.mapFloor, stats: S.run.stats,
+        daily: S.run.daily || null, dailyMod: S.run.dailyMod || null,
       } : null,
     }));
   } catch (e) {}
@@ -824,6 +838,7 @@ function load() {
     }
     if (typeof d.cogs === 'number') S.cogs = Math.max(0, d.cogs);
     if (d.ws && typeof d.ws === 'object') S.ws = d.ws;
+    if (d.daily && typeof d.daily === 'object') S.daily = d.daily;
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -839,6 +854,7 @@ function load() {
         room: null,
         keys: (typeof d.run.keys === 'number') ? d.run.keys : C.START_KEYS,
         goldKeys: d.run.goldKeys || 0,
+        daily: d.run.daily || null, dailyMod: d.run.dailyMod || null,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -1673,7 +1689,7 @@ function scaleMult() {
   // per-act ramp + an act carry tuned so the hand-off to a new (stronger)
   // roster never softens the curve; past the last act the beyond term must
   // cover the whole in-act ramp alone (no fresh roster to lean on)
-  return 1 + 0.075 * (S.run.depth - 1) + 0.30 * fInAct + 0.50 * act + 0.7 * beyond;
+  return (1 + 0.075 * (S.run.depth - 1) + 0.30 * fInAct + 0.50 * act + 0.7 * beyond) * dailyK();
 }
 function enemyPool(depth) {
   // deeper rooms unlock the meaner half of THIS act's roster
@@ -1686,8 +1702,8 @@ function mkEnemy(type, eid) {
   // bosses rotate per ACT (dragon act 1, lich act 2, demon act 3, then round
   // again) and scale by floor only — their lair sits at max depth by design
   const mult = type === 'boss'
-    ? 1 + 0.26 * ((S.run.floor - 1) % 5) + 0.62 * act
-      + 0.55 * Math.max(0, S.run.floor - ENEMY_TIERS.length * 5)
+    ? (1 + 0.26 * ((S.run.floor - 1) % 5) + 0.62 * act
+      + 0.55 * Math.max(0, S.run.floor - ENEMY_TIERS.length * 5)) * dailyK()
     : scaleMult();
   let base, eliteK = 1;
   if (type === 'boss') {
@@ -2455,6 +2471,43 @@ function leaveBattle() {
   save();
   return true;
 }
+// -------------------------------------------------------------- the DAILY
+// one seeded run a day: the date picks the hero (locked ones make guest
+// appearances) and one twist. One attempt — spent the moment it starts.
+const DAILY_MODS = [
+  { id: 'rich',    name: 'RICH START',      desc: '+60 gold at the door' },
+  { id: 'tough',   name: 'IRONCLAD FOES',   desc: 'enemies hit the gym: +20%' },
+  { id: 'fragile', name: 'GLASS BONES',     desc: '−10 max HP' },
+  { id: 'rain',    name: 'GOLDEN RAIN',     desc: '+4 gold coins in the purse' },
+  { id: 'keyless', name: 'LOCKED OUT',      desc: 'start with no keys' },
+];
+function dailySeed(dateStr) {
+  let h = 7;
+  for (const c of dateStr) h = ((h * 31) + c.charCodeAt(0)) >>> 0;
+  return h;
+}
+function dailyPlan(dateStr) {
+  const seed = dailySeed(dateStr);
+  return { seed, hero: HEROES[seed % HEROES.length], mod: DAILY_MODS[(seed >> 3) % DAILY_MODS.length] };
+}
+function newDaily(dateStr) {
+  if (!dateStr) return false;
+  if (S.daily && S.daily.date === dateStr && S.daily.done) return false;   // one try a day
+  const plan = dailyPlan(dateStr);
+  srand(plan.seed);
+  newRun(plan.hero.id, true);
+  S.run.daily = dateStr;
+  S.run.dailyMod = plan.mod.id;
+  if (plan.mod.id === 'rich') S.run.gold += 60;
+  else if (plan.mod.id === 'fragile') { S.run.maxHp = Math.max(30, S.run.maxHp - 10); S.run.hp = S.run.maxHp; }
+  else if (plan.mod.id === 'rain') S.run.purse.coin += 4;
+  else if (plan.mod.id === 'keyless') S.run.keys = 0;
+  S.daily = { date: dateStr, done: true, best: S.daily && S.daily.best ? S.daily.best : null };
+  save();
+  return true;
+}
+// IRONCLAD FOES: the daily's +20% rides every enemy multiplier
+function dailyK() { return S.run && S.run.dailyMod === 'tough' ? 1.2 : 1; }
 // ------------------------------------------------------------- the WORKSHOP
 // permanent meta-progression: COGS drop when a run ends (however it ends),
 // and the workshop turns them into forever-upgrades applied at newRun.
@@ -2556,6 +2609,12 @@ function endRun(cause) {
   const cogsWon = Math.max(1, S.run.floor + Math.floor(S.run.kills / 8));
   S.cogs += cogsWon;
   S.over.cogsWon = cogsWon;
+  // a DAILY run files its result on the calendar
+  if (S.run.daily && S.daily && S.daily.date === S.run.daily) {
+    if (!S.daily.best || S.run.floor > S.daily.best.floor) {
+      S.daily.best = { floor: S.run.floor, kills: S.run.kills };
+    }
+  }
   // the LIFETIME ledger swallows the run whole
   S.life.fired += st.fired; S.life.dealt += st.dealt; S.life.taken += st.taken;
   S.life.kills += S.run.kills; S.life.gold += S.run.goldEarned; S.life.time += st.t;
@@ -2583,10 +2642,11 @@ function endRun(cause) {
 // exit doors. Unlocking a door EATS A KEY (once — then it stays open for
 // backtracking); slain monsters cough keys up. The floor is a real MAP:
 // rooms persist, and the minimap uncovers as you explore.
-function newRun(heroId) {
+function newRun(heroId, force) {
   let hero = heroById(heroId) || heroById(S.heroPick) || HEROES[0];
-  // a still-locked hero falls back to the knight — no sneaking past the seal
-  if (!heroUnlocked(hero.id)) hero = HEROES[0];
+  // a still-locked hero falls back to the knight — no sneaking past the
+  // seal (the DAILY hands out loaners, though)
+  if (!force && !heroUnlocked(hero.id)) hero = HEROES[0];
   S.best.runs = (S.best.runs || 0) + 1;   // the lifetime run tally
   S.ach.heroes[hero.id] = 1;              // the casting-call ledger
   S.run = {
@@ -3486,6 +3546,7 @@ window.DP = {
   bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap, strTotal, dexTotal,
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify, floatAt, floatAnchor,
   ACH, achUnlock, achPoll, achById, WORKSHOP, wsLvl, wsBuy, tiltCount,
+  DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
@@ -7886,7 +7947,7 @@ if (!HEADLESS) (function browser() {
         ctx.restore();
         txt('\u{1F512}', x + w / 2, y + 52, '16px serif', '#fff');
         txt('???', x + w / 2, y + 88, '900 11px Verdana, sans-serif', '#5a4a5f');
-        txt('reach FLOOR ' + GHOST_UNLOCK_FLOOR, x + w / 2, y + 104, '700 7px Verdana, sans-serif', '#7a6a80');
+        txt(heroLockText(h.id), x + w / 2, y + 104, '700 7px Verdana, sans-serif', '#7a6a80');
         return;
       }
       const key = h.id + '_idle';
@@ -7928,6 +7989,24 @@ if (!HEADLESS) (function browser() {
     // the workshop: prominent, with the cog balance on the door
     uiBtn(14, 12, 108, 36, '\u{1F6E0}\u{FE0F} ⚙ ' + fmt(S.cogs), () => { WSHOP = true; },
           { grad: ['#5a4a2a', '#38290f'], border: '#c8a86a', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 10 });
+    // the DAILY: one seeded run, one attempt, a guest hero if fate says so
+    const today = new Date().toISOString().slice(0, 10);
+    const spent = S.daily && S.daily.date === today && S.daily.done;
+    uiBtn(14, 54, 108, 32, spent ? '\u{1F4C5} done!' : '\u{1F4C5} DAILY', () => {
+      if (spent) {
+        toast(S.daily.best ? 'today’s daily: floor ' + S.daily.best.floor + ' — back tomorrow!'
+                           : 'the daily is spent — back tomorrow!');
+        return;
+      }
+      const plan = dailyPlan(today);
+      S.confirm = {
+        msg: '\u{1F4C5} THE DAILY — ' + plan.hero.name,
+        sub: plan.mod.name + ': ' + plan.mod.desc + '  •  ONE attempt, everyone gets the same dungeon',
+        yesLabel: 'BEGIN', yes: () => newDaily(today),
+      };
+    }, { grad: spent ? ['#3a3440', '#262230'] : ['#3a5a7e', '#1c3048'],
+         border: spent ? '#55506a' : '#8fc8ff', col: spent ? '#9a90a8' : '#d8ecff',
+         font: '900 11px Verdana, sans-serif', r: 10 });
   }
 
   function drawOver(t) {

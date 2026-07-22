@@ -2390,8 +2390,9 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   const { DP: K } = loadGame(cstore, false);
   const KS = K.S;
   K.srand(2424);
+  KS.best.floor = 10;                      // the keeper unseals at floor 10 now
   K.newRun('crane');
-  t.eq(KS.run.hero, 'crane', 'the Crane Keeper answers the call (no unlock gate)');
+  t.eq(KS.run.hero, 'crane', 'the Crane Keeper answers the call once unsealed');
   t.eq(KS.run.purse.coin, DP.START_PURSE.coin + 2, 'its signature: +2 GOLD');
   const purseN = K.purseTotal();
   KS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
@@ -2989,5 +2990,45 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.ok(E.S.cogs >= 0, 'so does the cog balance');
 }
 function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
+
+// -------- the HERO LADDER + the DAILY --------
+{
+  const { DP: D } = loadGame({}, false);
+  // a fresh profile: the founding four are open, the specialists sealed
+  t.ok(D.heroUnlocked('knight') && D.heroUnlocked('rogue') && D.heroUnlocked('wizard') && D.heroUnlocked('cleric'),
+       'the founding four are always ready');
+  t.ok(!D.heroUnlocked('crane') && !D.heroUnlocked('ghost'), 'the specialists wait behind their seals');
+  D.S.best.floor = 10;
+  t.ok(D.heroUnlocked('crane'), 'floor 10 unseals the crane keeper');
+  t.ok(!D.heroUnlocked('ghost'), 'the poltergeist wants floor 20');
+  D.S.best.floor = 20;
+  t.ok(D.heroUnlocked('ghost'), 'floor 20 frees the poltergeist');
+  D.S.best.floor = 0;
+  // grandfathering: whoever already ran a hero keeps it
+  const { DP: G } = loadGame({}, false);
+  G.S.ach.heroes.crane = 1;
+  t.ok(G.heroUnlocked('crane'), 'the casting ledger grandfathers old mains');
+  t.ok(D.heroLockText('ghost').indexOf('20') >= 0, 'the ghost seal names its price');
+
+  // the DAILY: same date, same plan, one attempt
+  const p1 = D.dailyPlan('2026-07-22'), p2 = D.dailyPlan('2026-07-22');
+  t.ok(p1.hero.id === p2.hero.id && p1.mod.id === p2.mod.id, 'the date fixes hero and twist');
+  t.ok(D.dailyPlan('2026-07-23').seed !== p1.seed, 'tomorrow rolls new bones');
+  t.ok(D.newDaily('2026-07-22'), 'the daily begins');
+  t.eq(D.S.run.daily, '2026-07-22', 'the run is stamped');
+  t.eq(D.S.run.dailyMod, p1.mod.id, 'the twist is on');
+  t.ok(!D.newDaily('2026-07-22'), 'one attempt only');
+  t.ok(D.newDaily('2026-07-23'), 'tomorrow is a fresh coin');
+  // the twist actually bites
+  const { DP: T2 } = loadGame({}, false);
+  let toughDate = null;
+  for (let day = 1; day <= 60 && !toughDate; day++) {
+    const ds = '2026-08-' + ('0' + ((day % 28) + 1)).slice(-2) + (day > 28 ? 'x' + day : '');
+    if (T2.dailyPlan(ds).mod.id === 'tough') toughDate = ds;
+  }
+  t.ok(!!toughDate, 'found an IRONCLAD day');
+  T2.newDaily(toughDate);
+  t.ok(Math.abs(T2.dailyK() - 1.2) < 1e-9, 'IRONCLAD FOES: +20% on every multiplier');
+}
 
 t.done();

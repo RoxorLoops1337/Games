@@ -38,10 +38,12 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       (floor + kills/8); eight leveled forever-upgrades: Tough Hide, Fatter Purse,
       Spare Keys, Deep Flask, Haggler, Big Kennel, Heirloom, Iron Wrists;
       workshop door on the title with the balance (session 11)
-- [ ] **Unlockable heroes ladder**: gate remaining heroes behind milestones (Crane
-      Keeper floor 10, others per achievement) with sealed-card teasers like the ghost
-- [ ] **Daily run**: seeded from the date, fixed hero + modifier, one attempt, its own
-      leaderboard entry kind
+- [x] **Unlockable heroes ladder**: HERO_LOCKS data-driven — founding four open,
+      Crane Keeper seals at floor 10, Poltergeist at 20; casting-ledger
+      grandfathering; per-hero seal text on the cards (session 12)
+- [x] **Daily run**: 📅 DAILY on the title — date-seeded dungeon, fate-picked hero
+      (locked ones guest-star) + one of five twists, ONE attempt/day, result filed
+      on the calendar; leaderboard hookup waits for the leaderboard item (session 12)
 - [x] **Stats screen (lifetime)**: 📊 RECORDS on the title — runs, kills, bosses,
       coins fired, damage, gold, time in the deep, favorite hero, best descent
       (S.life ledger fed by endRun/winBattle, persisted) (session 9)
