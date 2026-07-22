@@ -343,14 +343,15 @@ impact ÷ effort.
 - [x] **Percentile on the carve**: boardPct(top, floor, kills) → postScore
       toasts "deeper than N% of the board" (≥50) or "the board's midpoint
       is floor N — climb" (below); pure client math (session 54)
-- [ ] **Duel links**: a CHALLENGE button on the run-over screen builds
-      ?duel=<seed36>.<floor>.<name> onto the play URL (clipboard/share like
-      the share card). Opening one plants the seed, banners "NAME reached
-      FLOOR N on this maze — outdig them", and the end screen declares the
-      duel's outcome. Pure client: parse location.search at boot
-- [ ] **Welcome-back crate**: away 7+ days (streak.last vs today) → a one-time
-      crate on the title: cogs = 8×days-missed (cap 120) + a free rare-relic
-      pick armed for the next run; copy warm, never guilt-tripping
+- [x] **Duel links**: ⚔️ DUEL button on the run-over screen shares/copies
+      ?duel=<seed36>.<floor>.<name>; boot parses it (scrubbed name, clamped
+      floor, URL cleaned via replaceState), plants the seed, and the report
+      card declares OUTDUG / tied / holds-at-floor; duel state rides the run
+      save (session 55)
+- [x] **Welcome-back crate**: away 7+ days (streak.last) → a once-per-visit
+      confirm on the title: cogs = 8×days (cap 120) + a RARE relic pick armed
+      for the next run's door (outranks the Heirloom); claiming touches the
+      streak so it can't be farmed (session 55)
 - [ ] **Title marquee**: one rotating line under the hero picker cycling the
       most compelling personal hook: streak bonus running out, rival's floor,
       codex gaps ("2 mint foes unmet"), yesterday's deepest, seed of the day —
