@@ -356,17 +356,18 @@ impact ÷ effort.
       on the title: streak at stake (incl. the grace-day plea) → standing
       rival → unspent daily → thinnest codex shelf → yesterday's crown →
       evergreen seed line (session 56)
-- [ ] **Ghost pace**: your best descent stamps per-floor cumulative times
-      (S.best.pace[floor] = seconds); during a run the floor banner whispers
-      "+12s ahead of your best" / "8s behind" — racing yourself, no server
+- [x] **Ghost pace**: every door stamps S.run.pace[floor] (cumulative run
+      seconds); a new best descent copies its splits to S.best.pace; the
+      descent curtain whispers "👻 Ns ahead/behind your best", silent past
+      the ghost's grave; both paces ride the save (session 57)
 - [x] **Codex completion meters**: codexTabStat/codexFull — finished shelves
       wear a gold ✦ tab, the header shows the whole ledger's N/M, 100% of
       everything hangs THE FULL LEDGER (39 on the wall) and turns the title's
       codex button gold (session 56)
-- [ ] **Hero mastery stars**: deep15 grows from flag to COUNT (migrate 1→1);
-      hero cards wear ★/★★/★★★ at 1/3/5 deep clears with that hero; three
-      stars on any hero → a MASTER'S MARK by their board-row icon (client
-      cosmetic only)
+- [x] **Hero mastery stars**: deep15 counts clears now (old flag saves read
+      as 1; one ink per run via S.run.deepInked); masteryStars → ★/★★/★★★
+      at 1/3/5 on the hero card, mastery toasts at 3 and 5, and a ★ MASTER'S
+      MARK on your own board rows once any hero hits three stars (session 57)
 - [ ] **The innkeeper's tales**: on the floor-transition curtain, ~1 in 3
       descents drops a one-line tale or true tip (act-aware pool of 60+);
       heard tales collect in a CODEX: TALES tab — month-two texture that
