@@ -792,7 +792,7 @@ const S = {
   dropped: 0, collected: 0,
   banner: null, trayPile: 0, denyT: 0, hurtT: 0,
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
-  opts: { sfx: 1, music: 0.8, shake: true, parts: true, haptic: true },   // player settings (persisted)
+  opts: { sfx: 1, music: 0.8, shake: true, parts: true, haptic: true, cb: false },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
   life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {} },
   hist: [],                                     // the last ten runs, newest first
@@ -884,7 +884,8 @@ function load() {
       S.opts = { sfx: typeof d.opts.sfx === 'number' ? Math.max(0, Math.min(1, d.opts.sfx)) : 1,
                  music: typeof d.opts.music === 'number' ? Math.max(0, Math.min(1, d.opts.music)) : 0.8,
                  shake: d.opts.shake !== false, parts: d.opts.parts !== false,
-                 haptic: d.opts.haptic !== false };
+                 haptic: d.opts.haptic !== false, cb: d.opts.cb === true };
+      S.optsSaved = true;               // the player has spoken — RM won't override
     }
     if (d.ach && typeof d.ach === 'object') {
       S.ach = { u: d.ach.u || {}, heroes: d.ach.heroes || {} };
@@ -4518,6 +4519,12 @@ if (!HEADLESS) (function browser() {
 
   // ------------------------------------------------------------------ input
   let uiButtons = [];   // rebuilt by every draw pass
+  // honor prefers-reduced-motion on a fresh profile: calm shake + particles
+  // (the settings toggles still override once the player picks)
+  if (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches && !S.optsSaved) {
+    S.opts.shake = false;
+    S.opts.parts = false;
+  }
   function hit(px, py) {
     for (let i = uiButtons.length - 1; i >= 0; i--) {
       const b = uiButtons[i];
@@ -4669,7 +4676,12 @@ if (!HEADLESS) (function browser() {
   }
   function uiBtn(x, y, w, h, label, cb, opts) {
     opts = opts || {};
-    uiButtons.push({ x, y, w, h, cb: () => { SND.tick(); cb(); } });
+    // fat fingers welcome: every button's HIT box is at least 38px square
+    // (visuals unchanged; overlaps resolve topmost-first, so tight rows of
+    // small buttons still pick the nearest)
+    const hw = Math.max(w, 38), hh = Math.max(h, 38);
+    uiButtons.push({ x: x - (hw - w) / 2, y: y - (hh - h) / 2, w: hw, h: hh,
+                     cb: () => { SND.tick(); cb(); } });
     const r = opts.r || 12;
     // soft offset shade grounds every button (cheaper than shadowBlur)
     rr(x - 1, y + 2, w + 2, h + 2, r + 1);
@@ -5498,6 +5510,12 @@ if (!HEADLESS) (function browser() {
     ctx.ellipse(p.x, p.y, drx * 0.9, dry * 0.9, 0, gph, gph + 0.9);
     ctx.strokeStyle = 'rgba(255,252,230,0.85)'; ctx.lineWidth = 1.6;
     ctx.stroke();
+    // COLORBLIND MARKS: every kind wears its symbol on a dark badge
+    if (S.opts.cb && c.st === 'plat') {
+      ctx.beginPath(); ctx.arc(p.x, p.y - dry * 0.2, drx * 0.42, 0, 7);
+      ctx.fillStyle = 'rgba(10,6,14,0.75)'; ctx.fill();
+      txt(sym, p.x, p.y - dry * 0.2, '900 ' + Math.max(7, Math.round(drx * 0.62)) + 'px serif', '#fff');
+    }
     if (lucky && (t * 0.9 + c.glint) % 2.3 < 0.12) {
       ctx.strokeStyle = 'rgba(255,255,255,0.95)'; ctx.lineWidth = 1.4;
       const sx2 = p.x + drx * 0.4, sy2 = p.y - dry * 0.4;
@@ -8345,7 +8363,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(5,2,8,0.8)';
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { SETTINGS = false; } });
-    const py = 150, ph = 540;
+    const py = 130, ph = 580;
     rr(40, py, LW - 80, ph, 18);
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
@@ -8385,13 +8403,14 @@ if (!HEADLESS) (function browser() {
            () => { S.opts.parts = !S.opts.parts; });
     toggle(py + 266, 'SOUND', !S.mute, () => { S.mute = !S.mute; });
     toggle(py + 308, 'HAPTICS (phone buzz)', S.opts.haptic, () => { S.opts.haptic = !S.opts.haptic; });
+    toggle(py + 350, 'COLORBLIND MARKS', S.opts.cb, () => { S.opts.cb = !S.opts.cb; });
     // replay the tale
-    uiBtn(64, py + 352, LW - 128, 38, '\u{1F4DC} REPLAY THE TALE', () => {
+    uiBtn(64, py + 394, LW - 128, 38, '\u{1F4DC} REPLAY THE TALE', () => {
       SETTINGS = false; INTRO = { t: 0, then: null };
     }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 12px Verdana, sans-serif', r: 12 });
-    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 414, '700 10px Verdana, sans-serif', '#8a7a90');
-    txt('a coin pusher roguelike — painted relics by the owner,', LW / 2, py + 432, '600 9px Verdana, sans-serif', '#6a5a68');
-    txt('code forged with Claude Code', LW / 2, py + 446, '600 9px Verdana, sans-serif', '#6a5a68');
+    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 456, '700 10px Verdana, sans-serif', '#8a7a90');
+    txt('a coin pusher roguelike — painted relics by the owner,', LW / 2, py + 474, '600 9px Verdana, sans-serif', '#6a5a68');
+    txt('code forged with Claude Code', LW / 2, py + 488, '600 9px Verdana, sans-serif', '#6a5a68');
     uiBtn(LW / 2 - 70, py + ph - 34, 140, 40, 'CLOSE ✕', () => { SETTINGS = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
