@@ -801,7 +801,19 @@ const BOSSES = [
   { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 130, atk: 7, trait: 'curse', def: 'armor', gold: 70 },
   { id: 'lich',   icon: '\u{1F9DF}', name: 'Coin Lich',    hp: 138, atk: 7, trait: null,    def: 'regen', gold: 80 },
   { id: 'demon',  icon: '\u{1F608}', name: 'Pit Boss',     hp: 168, atk: 8, trait: 'venom', def: 'thick', gold: 100 },
+]
+// the B-SIDE: a second lair-holder per act, rotating in on even-numbered
+// runs. Same scaling, different teeth — each wears a tinted kin of the
+// A-side sheet (emoji stands by when the art is missing, as always).
+const BOSSES2 = [
+  { id: 'wyrm',    icon: '\u{1F40D}', name: 'Gilded Wyrm',   hp: 126, atk: 7, trait: null,    def: 'mirror', gold: 75 },
+  { id: 'banshee', icon: '\u{1F47A}', name: 'Grave Banshee', hp: 132, atk: 8, trait: 'curse', def: null,     gold: 85 },
+  { id: 'aurifex', icon: '\u{1F9DE}', name: 'The Aurifex',   hp: 160, atk: 8, trait: 'thief', def: 'armor',  gold: 110 },
 ];
+// which boss holds this floor's lair — the run's B-SIDE flag decides
+function bossFor(floor) {
+  return ((S.run && S.run.bside) ? BOSSES2 : BOSSES)[actIdx(floor) % BOSSES.length];
+};
 // ------------------------------------------------------------------ heroes
 // Four adventurers to pick from (sprites borrowed from NRFH's hero classes);
 // each carries two signature coins on top of the shared 5 gold + 5 silver.
@@ -1032,7 +1044,7 @@ function save() {
         daily: S.run.daily || null, dailyMod: S.run.dailyMod || null,
         quest: S.run.quest || null,
         swarm: S.run.swarm || null, cheese: S.run.cheese || 0, diff: S.run.diff || 'normal',
-        ng: S.run.ng || 0,
+        ng: S.run.ng || 0, bside: S.run.bside || 0,
       } : null,
     }));
   } catch (e) {}
@@ -1107,7 +1119,7 @@ function load() {
         daily: d.run.daily || null, dailyMod: d.run.dailyMod || null,
         quest: d.run.quest || null,
         swarm: d.run.swarm || null, cheese: d.run.cheese || 0, diff: d.run.diff || 'normal',
-        ng: d.run.ng ? 1 : 0,
+        ng: d.run.ng ? 1 : 0, bside: d.run.bside ? 1 : 0,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -2044,7 +2056,7 @@ function mkEnemy(type, eid) {
     : scaleMult();
   let base, eliteK = 1;
   if (type === 'boss') {
-    base = BOSSES[act % BOSSES.length];
+    base = bossFor(S.run.floor);
   } else {
     const roster = curRoster();
     base = (eid && enemyById(eid)) || roster[(rng() * enemyPool(S.run.depth)) | 0];
@@ -2701,6 +2713,20 @@ function bossArena() {
     if (idx < 0) idx = 0;
     (boss.belly = boss.belly || []).push(B.loot.splice(idx, 1)[0]);
     floatAnchor('\u{1F608} the PIT BOSS taxes the tray!', 'enemy', '#ff9d3c', true);
+  } else if (boss.id === 'wyrm' && B.round > 1 && B.round % 3 === 0) {
+    // the wyrm CONSTRICTS: next hand is dealt 3 coins short
+    S.leadT = Math.max(S.leadT, 1);
+    floatAnchor('\u{1F40D} the wyrm SQUEEZES your purse arm!', 'enemy', '#7ee7a0', true);
+  } else if (boss.id === 'banshee' && B.round > 1 && B.round % 3 === 0) {
+    // the banshee WAILS: your blows halve for a round
+    S.weakT = Math.max(S.weakT, 1);
+    floatAnchor('\u{1F47A} the banshee WAILS — your arm falters!', 'enemy', '#c86bff', true);
+  } else if (boss.id === 'aurifex' && B.round > 1 && B.round % 3 === 0) {
+    // the Aurifex MINTS cursed slugs into the rain
+    for (let i = 0; i < 2; i++) {
+      S.rain.push({ t: 0.5 + 0.3 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: 'skull' });
+    }
+    floatAnchor('\u{1F9DE} the AURIFEX mints cursed coin!', 'enemy', '#ffd75e', true);
   }
 }
 function newRound() {
@@ -3142,8 +3168,9 @@ function newRun(heroId, force) {
   S.ach.heroes[hero.id] = 1;              // the casting-call ledger
   const diff = DIFFS.some(d => d.id === S.diffPick) ? S.diffPick : 'normal';
   const ng = (S.ngPick && ngPlusOpen()) ? 1 : 0;
+  const bside = (S.best.runs % 2 === 0) ? 1 : 0;   // even-numbered runs face the B-SIDE
   S.run = {
-    hero: hero.id, ng,
+    hero: hero.id, ng, bside,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
     gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS, goldKeys: 0,
     arsenal: { sword: 1, shield: 1, vial: 1 },
@@ -4145,7 +4172,7 @@ function tick(dt) {
 // ------------------------------------------------------------- public API
 window.DP = {
   S, C, MACH, ITEMS, ENEMIES, ENEMY_TIERS, BOSSES, RELICS, WHEEL, ENT_INFO, FLOORS,
-  actIdx, curRoster, enemyById,
+  actIdx, curRoster, enemyById, BOSSES2, bossFor,
   HEROES, heroById,
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
@@ -4275,6 +4302,8 @@ if (!HEADLESS) (function browser() {
     traygremlin: ['goblin', '#5ad0c8'], rustmite: ['slime', '#c88a4a'], tarcube: ['slime', '#4a4a52'],
     magnetwraith: ['revenant', '#b8b8ff'], bellkeeper: ['totem', '#e8c877'], mirrorshell: ['skeleton', '#9ae8e8'],
     chronophage: ['ogre', '#c8a8ff'], cowardking: ['goblin', '#ffd75e'], twinidol: ['totem', '#c86bff'],
+    // the B-SIDE lair-holders wear tinted kins of the A-side sheets
+    wyrm: ['dragon', '#7ee7a0'], banshee: ['lich', '#9ae8e8'], aurifex: ['demon', '#ffd75e'],
   };
   function tintedArt(baseKey, variantKey, tint) {
     const ck = 'tint_' + variantKey;
@@ -4331,7 +4360,7 @@ if (!HEADLESS) (function browser() {
     const has = (k) => !!(SHEETS[k] || TIER_SKINS[k]);
     if (typeof idOrEnt === 'string') return has(idOrEnt) ? idOrEnt : null;
     const e = idOrEnt;
-    if (e.mtype === 'boss' || e.boss) return BOSSES[actIdx(S.run.floor) % BOSSES.length].id;
+    if (e.mtype === 'boss' || e.boss) return bossFor(S.run.floor).id;
     return has(e.eid || e.id) ? (e.eid || e.id) : null;
   }
   // machine dressing cut from the owner's AI-rendered cabinet concept
@@ -7970,7 +7999,7 @@ if (!HEADLESS) (function browser() {
   function doorSign(dir) {
     const nb = doorTo(dir);
     if (!nb) return null;
-    if (nb.boss) return { s: BOSSES[actIdx(S.run.floor) % BOSSES.length].icon + ' BOSS', col: '#ffd75e' };
+    if (nb.boss) return { s: bossFor(S.run.floor).icon + ' BOSS', col: '#ffd75e' };
     if (nb.vault) return { s: '\u{1F511} VAULT', col: '#ffd75e' };
     if (nb.myst && !nb.visited) return { s: '\u{2753}', col: '#c8b8d0' };
     const live = nb.ents.filter(e => !e.done);
@@ -8053,7 +8082,7 @@ if (!HEADLESS) (function browser() {
     let icon = info.icon, label = info.name, col = '#e8dce8';
     if (e.kind === 'monster') {
       const en = enemyById(e.eid);
-      icon = e.mtype === 'boss' ? BOSSES[actIdx(S.run.floor) % BOSSES.length].icon : (en ? en.icon : info.icon);
+      icon = e.mtype === 'boss' ? bossFor(S.run.floor).icon : (en ? en.icon : info.icon);
       label = e.mtype === 'boss' ? 'THE BOSS' : e.mtype === 'elite' ? 'ELITE FOE' : (en ? en.name : 'MONSTER');
       col = e.mtype === 'boss' ? '#ffd75e' : e.mtype === 'elite' ? '#ff9d3c' : '#ffb4a8';
     } else if (e.kind === 'event') {
@@ -8731,13 +8760,13 @@ if (!HEADLESS) (function browser() {
     if (CODEX.tab[0] === 'a') {
       // one act's roster + its boss, kills tallied — the unmet stay shadows
       const act = +CODEX.tab[1] - 1;
-      const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length]]);
+      const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length]]);
       const met = foes.filter(f => S.codex.foes[f.id]).length;
       txt(met + ' / ' + foes.length + ' met', LW / 2, 106, '800 11px Verdana, sans-serif', '#c8a8b0');
       foes.forEach((f, i) => {
         const x = 22 + (i % 2) * (LW / 2 - 12), y = 118 + ((i / 2) | 0) * 44;
         const kills = S.codex.foes[f.id] || 0;
-        const isBoss = i === foes.length - 1;
+        const isBoss = i >= foes.length - 2;
         rr(x, y, LW / 2 - 32, 38, 8);
         ctx.fillStyle = isBoss ? 'rgba(60,40,16,0.9)' : 'rgba(255,255,255,0.04)'; ctx.fill();
         if (isBoss) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffd75e'; ctx.stroke(); }

@@ -165,7 +165,11 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 - [ ] **Act 4: THE MINT** — 13 new enemies (roster reskins + 3 new traits: magnetic
       armor, coin-clone, jackpot-thief), new floor palette, act boss: THE AUDITOR
-- [ ] **More bosses per act**: 2nd boss per act rotates in on even-numbered runs
+- [x] **More bosses per act**: the B-SIDE — Gilded Wyrm (mirror + SQUEEZE hand),
+      Grave Banshee (glass cannon + WAIL weakness), The Aurifex (thief/armor +
+      mints cursed slugs); even-numbered runs face them (bside on the run,
+      persisted), tinted kins of the A-side sheets, both lair-holders in the
+      codex (session 34)
 - [x] **Hero skins**: DEEP CLEAR ledger (fell the floor-15 boss with a hero) earns
       that hero's alt palette — tint wash on sheeted heroes, aura on emoji ones,
       🎨 toggle on the card, both ledgers persisted; VERSION bumped to 1.2.0 with
