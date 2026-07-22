@@ -3149,6 +3149,8 @@ function pickCoin(i) {
   if (!S.run || !S.victory || !S.victory.offer || S.victory.picked) return false;
   const k = S.victory.offer[i];
   if (!k) return false;
+  // the REFINE slot melts one plain coin into the finer kind
+  if (i === 0 && S.victory.up && (S.run.purse.coin || 0) > 0) S.run.purse.coin--;
   S.run.purse[k] = (S.run.purse[k] || 0) + 1;
   S.victory.picked = k;
   SND.buy();
@@ -3188,6 +3190,7 @@ function winBattle() {
     // the DEEP CLEAR ledger: fell the floor-15 boss and that hero's alt
     // skin is tailored for keeps
     if (S.run.floor >= 15 && S.run.ng) achUnlock('ngclear');
+    if (S.run.floor >= 15 && S.run.ng >= 2) achUnlock('legend2');
     if (S.run.floor >= 15 && S.run.ng >= 1 && !S.ng2Open) {
       S.ng2Open = 1;
       toast('♛ THE LEGEND DOOR unseals — NG++ waits by the difficulty row');
@@ -3216,6 +3219,12 @@ function winBattle() {
   S.victory = { t: 0, gold: S.battle.goldWon, keys: S.battle.keysWon, boss: anyBoss,
                 offer: anyBoss ? null : rollOffer(), picked: null,
                 relicOffer, relicPicked: null, freeSpin: anyElite };
+  // the owner's economy dial, part 2: past act 2 the offer's first slot
+  // REFINES — one plain coin melts into the finer kind. Quality, not bulk.
+  if (S.victory.offer && S.victory.offer[0] && S.victory.offer[0] !== 'coin'
+      && actIdx(S.run.floor) >= 2 && (S.run.purse.coin || 0) > 0) {
+    S.victory.up = 1;
+  }
   S.banner = { txt: TR('VICTORY!'), ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.winb();
@@ -3678,6 +3687,10 @@ const ACH = [
   { id: 'topple',    icon: '\u{1F3AF}', name: 'Rival Toppled', desc: 'out-dig your marked rival' },
   { id: 'ledger',    icon: '\u{1F4D6}', name: 'The Full Ledger', desc: 'meet every foe, own every relic — the codex complete' },
   { id: 'champs',    icon: '\u{1F94A}', name: 'Champion Slayer', desc: 'fell all four named champions' },
+  { id: 'gauntrun',  icon: '\u{1F3C1}', name: 'Gauntlet Runner', desc: 'clear THE GAUNTLET' },
+  { id: 'legend2',   icon: '\u{265A}', name: 'Living Legend', desc: 'a deep clear at NG++' },
+  { id: 'chronicler', icon: '\u{1F4DC}', name: 'Chronicler', desc: 'hear forty of the innkeeper’s tales' },
+  { id: 'emissary',  icon: '\u{1F4E8}', name: 'Emissary', desc: 'send a challenge into the world' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 function achUnlock(id) {
@@ -3699,6 +3712,8 @@ function achPoll() {
   if (kf.lodestone && kf.counterfeit && kf.meterleech) achUnlock('minted');
   if (kf.auditor) achUnlock('audited');
   if (CHAMPIONS.every(c => kf[c.id])) achUnlock('champs');
+  if ((S.life.gaunts | 0) >= 1) achUnlock('gauntrun');
+  if (Object.keys(S.tales || {}).length >= 40) achUnlock('chronicler');
   if ((S.streak.days | 0) >= 3) achUnlock('streak3');
   if ((S.streak.days | 0) >= 7) achUnlock('streak7');
   if (codexFull()) achUnlock('ledger');
@@ -7752,8 +7767,9 @@ if (!HEADLESS) (function browser() {
           ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(60,40,10,0.75)'; ctx.stroke();
           txt(COIN_SYMS[ck], cx, cy + 1, '800 19px serif', 'rgba(40,24,4,0.85)');
         }
-        txt(COIN_INFO[ck].name, cx, cy + 40, '800 11px Verdana, sans-serif', dim ? '#8a7a6a' : '#ffe9a3');
-        txt(COIN_INFO[ck].what, cx, cy + 54, '600 9px Verdana, sans-serif', dim ? '#6a5a4a' : '#c0a880');
+        const refine = i === 0 && v.up;
+        txt(refine ? '⇧ REFINE' : COIN_INFO[ck].name, cx, cy + 40, '800 11px Verdana, sans-serif', dim ? '#8a7a6a' : refine ? '#8ef0ff' : '#ffe9a3');
+        txt(refine ? '1 ● → 1 ' + COIN_INFO[ck].name : COIN_INFO[ck].what, cx, cy + 54, '600 9px Verdana, sans-serif', dim ? '#6a5a4a' : '#c0a880');
         ctx.restore();
         if (!v.picked) uiButtons.push({ x: cx - 42, y: cy - 34, w: 84, h: 94, cb: () => pickCoin(i) });
       });
@@ -11132,6 +11148,7 @@ if (!HEADLESS) (function browser() {
   // the CHALLENGE: this run's maze + floor as a link worth sending
   function shareDuel(o) {
     if (!o || o.seed == null) return;
+    achUnlock('emissary');            // a challenge sent into the world
     const url = location.origin + location.pathname + duelLink(o.seed, o.floor, S.boardName || 'a rival');
     if (navigator.share) {
       navigator.share({ title: 'Dungeon Pusher', text: 'outdig me — I fell at floor ' + o.floor + ' on this maze', url }).catch(() => {});
