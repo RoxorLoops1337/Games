@@ -477,10 +477,13 @@ Ordered by impact ÷ effort.
 - [x] **The rookie contract**: first run of any profile with best < 5
       arms it (toast); reaching floor 5 pays 30 ⚙ once ever (S.contract
       0/1/2, persisted); veterans never see the paper (session 67)
-- [ ] **[big] GLASS JARS on the bed**: past act 1, some floors seed a glass
-      jar riding the pusher (layout-seeded): three direct coin hits crack
-      it for a gem+relic spill; it slides off the back edge in ~4 rounds —
-      a real machine mechanic, aimed shots finally matter mid-round
+- [x] **[big] GLASS JARS on the bed**: past act 1, ~40% of floors seed a
+      jar from the floor stream's LAST draw (shared seeds face the same
+      jar, old-maze layouts untouched); it sits in the landing lane and
+      slides back a notch each round (gone in 4); a dropped coin within
+      its lane cracks it — three hits SHATTER: two gems spill + a common
+      relic pick; drawn as glass with per-hit cracks, round pips and a cb
+      outline; perf probe unchanged at 1.26ms/frame (session 69)
 - [ ] **[big] THE BRASS PEGS**: endless floors (22+) raise seeded brass
       pegs from the bed that deflect falling coins — the machine itself
       joins the decree stack; probe the pile flow so it never becomes
