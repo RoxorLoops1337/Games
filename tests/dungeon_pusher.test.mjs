@@ -2858,4 +2858,41 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.ok(D.S.floats.length <= 12, 'the float stack is capped (' + D.S.floats.length + ')');
 }
 
+// -------- ACHIEVEMENTS: twenty trophies, earned forever --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  t.eq(D.ACH.length, 20, 'twenty trophies on the wall');
+  t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
+  t.eq(new Set(D.ACH.map(a => a.id)).size, 20, 'no duplicate trophy ids');
+  D.srand(31);
+  D.newRun('knight');
+  t.ok(D.S.ach.heroes.knight === 1, 'the casting-call ledger notes the knight');
+  // poll-driven unlocks
+  D.S.run.gold = 600;
+  D.achPoll();
+  t.ok(D.S.ach.u.rich, 'DRAGON HOARD unlocks at 500 gold');
+  t.eq(D.S.achQ.length, 1, 'one toast queued');
+  t.ok(!D.achUnlock('rich'), 'a trophy never unlocks twice');
+  t.eq(D.S.achQ.length, 1, 'and queues no second toast');
+  D.S.run.keys = 6;
+  D.achPoll();
+  t.ok(D.S.ach.u.keymaster, 'KEYMASTER at 5 keys');
+  // event-driven: a boss falls
+  const bossK = Object.keys(D.S.run.map.rooms).find(k => D.S.run.map.rooms[k].boss);
+  D.S.run.map.cur = bossK; D.S.run.room = D.S.run.map.rooms[bossK];
+  D.S.run.room.visited = true;
+  D.interact(0);
+  D.S.enemy.hp = 1;
+  D.dmgEnemy(5);
+  t.ok(D.S.ach.u.boss1, 'CROWN TAKER unlocks on the first boss kill');
+  t.ok(D.S.ach.u.firstblood, 'FIRST BLOOD rode along via the victory poll');
+  t.ok(D.S.ach.u.untouch, 'UNTOUCHABLE: not a scratch taken this battle');
+  // persistence: a reload keeps the wall
+  D.save();
+  const { DP: E } = loadGame(store, false);
+  t.ok(E.S.ach.u.rich && E.S.ach.u.boss1, 'the trophy wall survives a reload');
+  t.ok(E.S.ach.heroes.knight === 1, 'so does the casting ledger');
+}
+
 t.done();
