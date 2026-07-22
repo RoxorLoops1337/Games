@@ -3378,6 +3378,14 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const { DP: D } = loadGame({}, false);
   t.ok(D.S.opts.haptic === true, 'haptics default ON');
   t.ok(Math.abs(D.S.opts.music - 0.8) < 1e-9, 'music defaults to 80%');
+  t.ok(D.S.opts.cb === false, 'colorblind marks default off');
+  // a saved profile marks its choices so reduced-motion never overrides them
+  const st2 = {};
+  const { DP: P2 } = loadGame(st2, false);
+  P2.S.opts.shake = true;
+  P2.save();
+  const { DP: P3 } = loadGame(st2, false);
+  t.ok(P3.S.optsSaved === true, 'loaded options carry the player-has-spoken flag');
   const hits = [];
   globalThis.__dpBuzz = p => hits.push(p);
   D.srand(3131);

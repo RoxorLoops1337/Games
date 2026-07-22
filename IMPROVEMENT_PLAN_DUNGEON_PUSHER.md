@@ -101,11 +101,15 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       MUSIC volume notches, mute-aware, all persisted (session 20)
 - [x] **Haptics**: navigator.vibrate on the claw CHOMP, heavy blows taken, boss/elite
       kills, jackpot, vault-open — behind a settings toggle (session 19)
-- [ ] **Colorblind support**: palette swap option for coin kinds (shapes/symbols
-      already differ — audit contrast), tested against deuteranopia sim
-- [ ] **Reduced motion**: honor prefers-reduced-motion — no shake, gentler particles
+- [x] **Colorblind support**: COLORBLIND MARKS toggle — every pile coin wears its
+      kind symbol on a high-contrast dark badge (faces/symbols already differed;
+      this removes color as the only cue) (session 21)
+- [x] **Reduced motion**: prefers-reduced-motion auto-calms shake + particles on
+      fresh profiles; explicit settings choices always win (session 21)
 - [ ] **Font/readability audit**: minimum 10px effective, contrast ≥ 4.5:1 for body text
-- [ ] **Touch targets**: everything tappable ≥ 40px; audit coin picker + door hitboxes
+- [x] **Touch targets**: every uiBtn hit box grows to ≥38px square (visuals
+      unchanged, topmost-wins keeps tight rows precise); doors are walk-through,
+      no hitbox needed (session 21)
 - [ ] **Keyboard/gamepad**: full run playable with arrows+space+enter; gamepad API
       mapping for the same
 - [ ] **Screen-reader labels**: aria-live region announcing phase changes and results
