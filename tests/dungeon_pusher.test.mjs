@@ -1215,7 +1215,7 @@ DP.newRun('knight');
   only(); S.run.hp = 60; S.run.maxHp = 60; S.run.floor = 1;
   only('blessing'); arm(500); S.screen = 'battle'; S.run.hp = 60; DP.applyLoot({ t: 'skull' }); const withBless = 60 - S.run.hp;
   only(); arm(500); S.run.hp = 60; DP.applyLoot({ t: 'skull' }); const noBless = 60 - S.run.hp;
-  t.eq(withBless, noBless - 2, 'Blessing: cursed skulls bite 2 less');
+  t.eq(withBless, noBless - 3, 'Blessing: 2 less bite + a 1 HP blessing behind');
   S.screen = 'dungeon'; S.battle = null; S.run.hp = S.run.maxHp = 100;
 
   // --- economy ---
@@ -2527,7 +2527,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.eq(I.coinFx('coin').main, '1 dmg', 'bare gold coin reads 1 dmg');
   t.eq(I.coinFx('coin').mods.length, 0, 'no relic mods on a bare coin');
   t.eq(I.coinFx('red').main, 'heal 1 HP', 'bare heart coin heals 1');
-  t.eq(I.coinFx('lucky').main, '3 dmg', 'bare lucky coin reads 3 dmg');
+  t.eq(I.coinFx('lucky').main, '4 dmg', 'bare lucky coin reads 4 dmg');
   // relics bend the sheet
   I.S.run.relics.push('goldedge', 'twinstrike', 'twinfangs', 'venomtip', 'warmheart', 'silvercore', 'spikeshield');
   t.eq(I.coinFx('coin').main, '2 dmg ×2', 'Gilded Edge + Twin Strike fold into gold');
@@ -4385,6 +4385,52 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("e.d ? '\\u{1F4C5} ' : ''") >= 0, 'board rows wear the calendar');
   t.ok(src.indexOf('POST THE DAILY?') >= 0, 'a finished daily offers itself to the board');
   t.ok(src.indexOf('function drawCoach') >= 0 && src.indexOf('drawCoach(t);') >= 0, 'the coach draws in battle');
+}
+
+// -------- COIN & RELIC OUTLIERS: measured, buffed, railed --------
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  // rails on the coin value board: gold with average relic support runs
+  // ~1.6/fire, so the specialists must justify their slots
+  t.eq(D.C.DMG.lucky, 4, 'LUCKY pays 4 — the rarest coin out-hits stacked gold');
+  t.ok(D.C.DMG.lucky >= 3 * D.C.DMG.gold, 'and stays >= 3x gold base');
+  D.srand(6); D.newRun('knight');
+  DS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  const foe = DS.enemy;
+  foe.hp = foe.maxHp = 100; foe.def = null; foe.block = 50; foe.mirrorSpent = true;
+  // FROST seeps through block; gold still gets soaked
+  D.applyLoot({ t: 'gold' });
+  t.eq(foe.hp, 100, 'a gold coin is soaked by 50 block');
+  D.applyLoot({ t: 'blue' });
+  t.ok(foe.hp < 100, 'FROST seeps straight through the block');
+  // DEAD EYE: pierce AND +1 now
+  foe.hp = 100; foe.block = 0; foe.braced = false;
+  D.applyLoot({ t: 'lucky' });
+  const bare = 100 - foe.hp;
+  DS.run.relics.push('deadeye');
+  foe.hp = 100;
+  D.applyLoot({ t: 'lucky' });
+  t.eq(100 - foe.hp, bare + 1, 'Dead Eye hits +1 on top of its pierce');
+  DS.run.relics.length = 0;
+  // SCAVENGER shakes a key out of the bag
+  DS.run.relics.push('scavenger');
+  const k0 = DS.run.keys;
+  D.applyLoot({ t: 'bag' });
+  t.eq(DS.run.keys, k0 + 1, 'the Scavenger shakes a key out of every bag');
+  DS.run.relics.length = 0;
+  // PIGGY BANK grows with the descent: +4 at act 1, +10 in the mint
+  DS.run.relics.push('piggy');
+  DS.run.floor = 16;
+  const foeGold = foe.gold;
+  foe.hp = 1; D.dmgFoe(foe, 9);
+  t.eq(DS.battle.goldWon, foeGold + 4 + 2 * 3, 'the Piggy pays +10 in the mint (act 4)');
+  // HORSESHOE raises the lucky odds at the source
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("hasRelic('horseshoe') ? 1.25 : 1") >= 0, 'the Horseshoe tilts the lucky roll');
+  t.ok(src.indexOf('thru block') >= 0, 'the frost coin advertises its new edge');
 }
 
 t.done();

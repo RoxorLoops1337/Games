@@ -246,10 +246,14 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
       drop / END TURN fires), each killed forever by the deed it teaches at the
       sim hooks; persisted, and veterans who predate it are grandfathered
       (session 43)
-- [ ] **Coin outlier pass**: blue + lucky are underpicked in victory spoils —
-      probe pick rates headless, then buff the losers one notch
-- [ ] **Relic outlier pass**: identify the 5 least-impactful relics by
-      inspection + probe, give each a small second clause
+- [x] **Coin outlier pass**: LUCKY 3→4 dmg (the rarest coin now out-hits
+      relic-stacked gold); FROST pierces block (dmgFoe pierce now skips the
+      soak too, so dead-eye luckies thread it as advertised) — both railed
+      in the suite (session 44)
+- [x] **Relic outlier pass**: five weakest commons got honest second clauses —
+      Piggy Bank +2/act, Horseshoe tilts the lucky roll ×1.25, Blessing leaves
+      a 1 HP mend behind the bite, Dead Eye hits +1, Scavenger shakes a key
+      out of every bag — each measured (session 44)
 - [x] **NG+ ledger on the report card**: ♟ NG+ on the hero row of the card and
       on the run-history rows; over/hist carry ng + seed (session 39)
 - [x] **Dungeon footsteps & door creaks**: soft noise footfalls pace the crawl
