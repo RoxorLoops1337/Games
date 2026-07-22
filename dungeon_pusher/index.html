@@ -52,6 +52,7 @@ const HEADLESS = !ctx;
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
   { v: '1.7.0', notes: [
+    'SPECIAL COINS \u{1FA99} — every fallen boss mints one, on top of the relic: BUNNY pairs breed kits on the bed, TWINS strike ×4 side by side, EMBERS set their neighbors alight, and the PIPER tips its whole cluster into the tray. Touch is judged at END TURN; the deep never skims or tolls them away',
     'THE UNDERLAKE \u{1F30A} — floors 21-25 are a true FIFTH ACT: thirteen drowned kin, THE DROWNED BANKER (and the SILT QUEEN on the B-side) hold the lair, PRESSURE replaces the dark, and the decrees move out past floor 25',
     'THE TILTED TABLE \u{1FAA3} — a second machine at the \u{1F3B0} rack (best floor 30): the bed leans left, the gutter pays a gold per settled coin, the bank loses a slot',
     'REPLAY GHOST \u{2694}\u{FE0F} — duel links now carry the challenger\u2019s per-floor CLOCK; every staircase whispers how you run against THEIR pace, and REMATCH sends yours back',
@@ -387,8 +388,15 @@ const C = {
   PET_CAP: 5,                           // how many pets can crowd the stage at once
 };
 // your purse starts here; heroes add their signature pair on top
-const START_PURSE = { coin: 5, silver: 5, green: 0, red: 0, blue: 0, lucky: 0 };
-const COIN_KINDS = ['coin', 'silver', 'green', 'red', 'blue', 'lucky'];
+const START_PURSE = { coin: 5, silver: 5, green: 0, red: 0, blue: 0, lucky: 0,
+                      bunny: 0, twin: 0, ember: 0, piper: 0 };
+const COIN_KINDS = ['coin', 'silver', 'green', 'red', 'blue', 'lucky', 'bunny', 'twin', 'ember', 'piper'];
+// SPECIAL coins (the owner's design): minted ONLY by fallen bosses, on top
+// of the relic — they work by TOUCH on the bed, and the deep never skims
+// or tolls them away. Touch is judged at END TURN (the touch pass).
+const SPECIALS = ['bunny', 'twin', 'ember', 'piper'];
+const SPECIAL_COINS = { bunny: 1, twin: 1, ember: 1, piper: 1 };
+const BUNNY_CAP = 5;                      // kits bred per floor, at most
 const COIN_INFO = {
   coin:   { name: 'Gold',   what: '1 dmg' },
   silver: { name: 'Silver', what: '1 block' },
@@ -396,13 +404,17 @@ const COIN_INFO = {
   red:    { name: 'Heart',  what: 'heal 1' },
   blue:   { name: 'Frost',  what: '1 dmg to ALL, thru block' },
   lucky:  { name: 'Lucky',  what: '4 dmg' },
+  bunny:  { name: 'Bunny',  what: '1 dmg — a touching pair BREEDS a kit' },
+  twin:   { name: 'Twin',   what: '4 dmg beside its twin, 1 alone' },
+  ember:  { name: 'Ember',  what: '2 dmg + 2 burn — sets its neighbors alight' },
+  piper:  { name: 'Piper',  what: '2 dmg — tips its whole cluster into the tray' },
 };
 // the after-battle coin offer draws from this bag
 const COIN_REWARD_W = [['coin', 24], ['silver', 22], ['green', 18], ['red', 16], ['blue', 12], ['lucky', 8]];
 // the order the tray resolves in: bank the loot, raise the guard, mend,
 // then unleash — curses always land last
 const RESOLVE_ORDER = ['gem', 'bag', 'buffitem', 'silver', 'shielditem', 'red', 'heartitem', 'petitem',
-                       'gold', 'lucky', 'blue', 'weapon', 'bleeditem', 'green', 'vial',
+                       'gold', 'bunny', 'twin', 'piper', 'lucky', 'blue', 'ember', 'weapon', 'bleeditem', 'green', 'vial',
                        'burnitem', 'frost', 'skull'];
 // deliberately UNHURRIED: each piece gets its moment so the damage reads
 const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42, lucky: 0.7, blue: 0.75, green: 0.5,
@@ -802,6 +814,10 @@ function coinFx(k) {
     M('deadeye', 'pierces braced guards');
     M('bloodthirst', 'heals 1 HP on strike');
     M('clover', 'minted twice as often');
+  } else if (SPECIAL_COINS[k]) {
+    main = COIN_INFO[k].what;
+    mods.push('boss-minted — the deep never skims or tolls it');
+    mods.push('touch is judged at END TURN, on the bed');
   }
   return { main, mods };
 }
@@ -2216,8 +2232,19 @@ function scoreCoin(c, quiet) {
     S.pBurn = (S.pBurn || 0) + 2;
     floatAnchor('\u{1F525} SEARED! +2 burn', 'hero', '#ff9d3c', true);
   }
-  S.battle.loot.push({ k: c.kind, iid: c.iid });
+  S.battle.loot.push({ k: c.kind, iid: c.iid, up: c.paired ? 1 : 0, tip: c.emberTip ? 1 : 0 });
   trayAdd(c.kind, { iid: c.iid, x: c.x });
+  // THE PIPER: whatever rested near it on the bed follows it over the edge
+  if (c.kind === 'piper') {
+    const pulled = S.coins.filter(n => n !== c && n.st === 'plat'
+      && Math.abs(n.x - c.x) <= 10 && n.y >= C.PLAT_FRONT - 16);
+    for (const n of pulled) {
+      const ni = S.coins.indexOf(n);
+      if (ni >= 0) S.coins.splice(ni, 1);
+      scoreCoin(n, true);
+    }
+    if (pulled.length) floatAt('\u{1FA88} the piper leads ' + pulled.length + ' over!', c.x, '#ffd0e8', true);
+  }
   if (quiet) return;                      // the CLAW celebrates on delivery instead
   S.shake += c.kind === 'item' ? 3 : 1;
   if (c.kind === 'skull') SND.poison();
@@ -2798,7 +2825,7 @@ function retarget() {
 function buildQueue(loot) {
   const q = [];
   for (const l of loot) {
-    if (l.k === 'coin') q.push({ t: 'gold' });
+    if (l.k === 'coin') q.push({ t: 'gold', tip: l.tip });
     else if (l.k === 'item') {
       const it = itemById(l.iid);
       if (!it) continue;
@@ -2807,7 +2834,7 @@ function buildQueue(loot) {
               : it.kind === 'burn' ? 'burnitem' : it.kind === 'bleed' ? 'bleeditem'
               : it.kind === 'pet' ? 'petitem' : it.kind === 'buff' ? 'buffitem' : 'frost';
       q.push({ t, iid: l.iid });
-    } else q.push({ t: l.k });
+    } else q.push({ t: l.k, up: l.up, tip: l.tip });
   }
   q.sort((a, b) => RESOLVE_ORDER.indexOf(a.t) - RESOLVE_ORDER.indexOf(b.t));
   // the Echo Bell / Reverb ring the opening piece twice
@@ -2867,6 +2894,7 @@ function endRoundNow() {
   }
   S.coach.end = 1;
   if (!S.battle || S.battle.phase !== 'drop' || !S.run) return false;
+  touchPass();
   // THE TILTED TABLE: the gutter drinks what settled against the left wall —
   // a gold apiece (slugs drain unpaid; your GEAR is never lost to it)
   if (layoutTilted()) {
@@ -2884,6 +2912,35 @@ function endRoundNow() {
   }
   return startResolve();
 }
+// the TOUCH PASS: who rests against whom on the bed, judged ONCE at END
+// TURN — twins charge, embers tip their neighbors, bunny pairs breed a kit.
+// Flags ride the coins until the next pass, so a charged twin fires charged
+// whenever it finally tips.
+function touchPass() {
+  if (!S.battle || !S.run) return;
+  const plats = S.coins.filter(c => c.st === 'plat');
+  for (const c of plats) { c.paired = false; c.emberTip = false; c.bredThis = false; }
+  for (let i = 0; i < plats.length; i++) {
+    for (let j = i + 1; j < plats.length; j++) {
+      const a = plats[i], b = plats[j];
+      if (a.lay !== b.lay) continue;
+      const dx = a.x - b.x, dy = a.y - b.y, reach = a.r + b.r + 0.8;
+      if (dx * dx + dy * dy > reach * reach) continue;
+      if (a.kind === 'twin' && b.kind === 'twin') { a.paired = true; b.paired = true; }
+      if (a.kind === 'ember') b.emberTip = true;
+      if (b.kind === 'ember') a.emberTip = true;
+      if (a.kind === 'bunny' && b.kind === 'bunny' && !a.bredThis && !b.bredThis
+          && (S.run.bred | 0) < BUNNY_CAP) {
+        a.bredThis = true; b.bredThis = true;
+        S.run.bred = (S.run.bred | 0) + 1;
+        const kx = Math.max(8, Math.min(92, (a.x + b.x) / 2 + 4));
+        const ky = Math.max(14, Math.min(60, (a.y + b.y) / 2 - 4));
+        place(kx, ky, 'bunny', a.lay, 'plat');
+        floatAt('\u{1F407} a kit! (' + S.run.bred + '/' + BUNNY_CAP + ' this floor)', kx, '#f0e0c8', true);
+      }
+    }
+  }
+}
 function applyLoot(q) {
   if (!S.run) return;
   const B = S.battle;
@@ -2899,6 +2956,17 @@ function applyLoot(q) {
     floatAnchor('\u{1F9A0} RUSTED — half effect', 'hero', '#c8a86a');
   }
   const rusted = (v) => Math.max(1, Math.floor(v * rustK));
+  // an EMBER-TIPPED piece (any kind) sears the target as it lands
+  if (q.tip && S.enemy && S.enemy.hp > 0 && !S.victory) applyBurn(S.enemy, 1);
+  if (q.t === 'bunny') { dmgEnemy(1); SND.collect(2); return; }
+  if (q.t === 'twin') { dmgEnemy(q.up ? 4 : 1); SND.collect(2); return; }
+  if (q.t === 'ember') {
+    dmgEnemy(2);
+    if (S.run && !S.victory && S.enemy && S.enemy.hp > 0) applyBurn(S.enemy, 2);
+    SND.hit();
+    return;
+  }
+  if (q.t === 'piper') { dmgEnemy(2); SND.gem(); return; }
   if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0));
   else if (q.t === 'bag') {
     addGold(8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
@@ -3469,6 +3537,14 @@ function winBattle() {
     const seen = [];
     const pick = (rar) => { const p = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && seen.indexOf(rl.id) < 0); if (!p.length) return null; const id = p[(rng() * p.length) | 0].id; seen.push(id); return id; };
     relicOffer = [pick('c'), pick('c'), pick('r')].filter(Boolean);
+  }
+  // THE SPECIAL MINT (the owner's law): every fallen boss strikes ONE touch
+  // coin on top of the relic spread — always the kind you hold fewest of
+  if (anyBoss) {
+    const struck = SPECIALS.slice().sort((a, b) => (S.run.purse[a] | 0) - (S.run.purse[b] | 0))[0];
+    S.run.purse[struck] = (S.run.purse[struck] | 0) + 1;
+    floatAnchor('\u{1FA99} the boss minted a ' + COIN_INFO[struck].name.toUpperCase() + ' coin!', 'hero', '#ffd75e', true);
+    whisperOnce('specials', '\u{1FA99} SPECIAL COINS — bosses mint them, and they work by TOUCH on the bed (❓ the almanac knows)');
   }
   // an elite's hoard hides a GOLDEN KEY — the only thing that opens a vault
   if (anyElite) {
@@ -4361,6 +4437,7 @@ function stairSkim() {
   if (over <= 0) return 0;
   const skimmed = over;
   for (const k of COIN_KINDS) {           // the plain coin goes before the lucky
+    if (SPECIAL_COINS[k]) continue;       // boss-minted coins are beneath the skim
     while (over > 0 && (S.run.purse[k] || 0) > 0) { S.run.purse[k]--; over--; }
     if (over <= 0) break;
   }
@@ -4370,8 +4447,8 @@ function stairSkim() {
   toast('\u{2696}\u{FE0F} the deep skims ' + skimmed + ' coins off the top — +' + pay + ' gold');
   return skimmed;
 }
-function purseTotal() {
-  if (!S.run) return 0;
+function purseTotal() {                   // plain coins only — the specials
+  if (!S.run) return 0;                    // are treasures, not tender
   return COIN_KINDS.reduce((a, k) => a + (S.run.purse[k] || 0), 0);
 }
 // spend N coins of any kind from the purse — richest kinds first. Returns
@@ -4379,7 +4456,8 @@ function purseTotal() {
 function spendPurse(n) {
   if (!S.run || purseTotal() < n) return false;
   let owed = n;
-  const kinds = COIN_KINDS.slice().sort((a, b) => (S.run.purse[b] || 0) - (S.run.purse[a] || 0));
+  const kinds = COIN_KINDS.filter(k => !SPECIAL_COINS[k])
+    .sort((a, b) => (S.run.purse[b] || 0) - (S.run.purse[a] || 0));
   for (const k of kinds) {
     if (owed <= 0) break;
     const take = Math.min(owed, S.run.purse[k] || 0);
@@ -4697,6 +4775,7 @@ function nextFloor() {
   S.run.tollDouble = 0;
   S.run.floor++;
   S.run.pressure = 0;                    // the stairs vent the lake's squeeze
+  S.run.bred = 0;                        // and the warren starts fresh
   if (rawAct(S.run.floor) === 4) {
     whisperOnce('lake', '\u{1F30A} THE UNDERLAKE — no dark down here: PRESSURE builds as you walk, and FULL DEPTH stiffens the packs (❓ the almanac knows)');
   }
@@ -5598,7 +5677,7 @@ window.DP = {
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
   darkFloor, PRESSURE_MAX, payableKinds, coinKindWith, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
-  COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
+  COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT, SPECIALS, SPECIAL_COINS, BUNNY_CAP, touchPass,
   coinFx, itemFx, runMods,
   CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
   LANGS, TR, setLang,
@@ -5941,6 +6020,7 @@ if (!HEADLESS) (function browser() {
   const COIN_UI = {
     coin: '#f2c04a', silver: '#c3ccd6', green: '#8ed67e', red: '#e87a8a', blue: '#7ab0e8', lucky: '#ffdf6b',
     slug: '#8a8a8a',
+    bunny: '#f0e0c8', twin: '#c8a2ff', ember: '#ff8a4a', piper: '#ffd0e8',
   };
   function flatSprite(styleKey, pal, sym) {
     return sprite('cf_' + styleKey + '_' + sym, 96, 66, (g) => {

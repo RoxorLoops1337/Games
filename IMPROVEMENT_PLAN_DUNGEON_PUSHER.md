@@ -566,12 +566,27 @@ what Tier 11 built, and keeps a big slot warm for the touch coins.
       a tilted-table cabinet accent via the local ComfyUI pipeline —
       needs an owner-machine session; the loop preps the prompt list in
       tools/comfyui/UNDERLAKE_PROMPTS.md when this item starts
-- [ ] **[big] TOUCH COINS** (reserved — implement ONLY on the owner's
-      go): the chat-designed ten (bunny/twin/ember/piper/frost/lode/
-      king/rot/mimic/leech) on one touch-pass substrate (contacts
-      evaluated at round end + fire time, never per frame); first batch
-      bunny/twin/ember/piper, second batch the rest — the owner asked,
-      and it is the best gameplay idea on the table
+- [x] **[big] TOUCH COINS part 1** (session 87 — OWNER GREENLIT, with
+      their law: specials come from killing a boss, ON TOP of the
+      relic): the substrate + first batch shipped. TOUCH PASS judges
+      bed contacts once at END TURN (never per frame); flags ride the
+      coins until the next pass. BUNNY pairs breed a kit (cap 5/floor,
+      vented at the stairs), TWINS charge to ×4 side by side, EMBERS
+      tip every neighbor with fire (tipped ANYTHING sears +1 burn on
+      resolve) and burn 2 themselves, the PIPER drags its bedside
+      cluster into the tray when it tips over. Every fallen boss mints
+      ONE special (fewest-owned first, deterministic); the deep never
+      skims or tolls them (treasures, not tender — purseTotal counts
+      plain coins only); coinFx/BAG/almanac/hand-row all inherit via
+      COIN_KINDS; whisperOnce intro; changelog lead. PART 2 remains:
+      frost/lode/king/rot/mimic/leech
+- [ ] **[big] TOUCH COINS part 2**: the remaining six of the owner's
+      ten — FROST (chills neighbors' hits; annihilates with EMBER to
+      plain), LODE (clumps the pile each round), KING (+N dmg per
+      touching coin, knights his court), ROT (spreads worthlessness,
+      poisons on fire), MIMIC (copies its neighbor; two mimics turn
+      gold), LEECH (fattens on bedside bankings) — same substrate, same
+      boss mint, batch-tested like part 1
 - [ ] **[big] THE SPECTATOR CARD**: the share card grows act splits and
       a pace strip (the data all exists in S.run.pace/stats) — bragging
       is this game's only marketing, and the card still shows three

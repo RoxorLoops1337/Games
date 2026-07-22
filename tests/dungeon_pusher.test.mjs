@@ -120,7 +120,7 @@ t.eq(WHEEL.filter(s => s.label === 'COMMON\nRELIC').length, 2, 'two common-relic
 t.eq(WHEEL.filter(s => s.label === 'RARE\nRELIC').length, 1, 'one rare-relic spot');
 t.eq(WHEEL.filter(s => /HP/.test(s.label)).length, 5, 'five HP gambles (+5 −5 +10 −10 +25)');
 t.eq(WHEEL.filter(s => /KEY/.test(s.label)).length, 1, 'one key spot');
-t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
+t.eq(COIN_KINDS.length, 10, 'ten coin types in the mint — the four SPECIALS joined');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
 
@@ -7100,6 +7100,94 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const tsrc = readFileSync(join(here, 'dungeon_pusher.test.mjs'), 'utf8');
   t.ok(tsrc.indexOf("gang ? [{ mtype: 'battle' }] : undefined") >= 0,
        'the autopilot fields gang-ups — AoE kits get their due');
+}
+
+// -------- TIER 12 [big]: TOUCH COINS part 1 — the owner's coins --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  t.eq(D.SPECIALS.join(','), 'bunny,twin,ember,piper', 'the first batch stands');
+  for (const k of D.SPECIALS) t.ok(D.COIN_INFO[k] && D.COIN_INFO[k].what, 'statted: ' + k);
+  // THE MINT: every fallen boss strikes one, fewest-owned first
+  D.srand(21); D.newRun('knight');
+  S2.run.bside = 0;
+  D.startBattle('boss');
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
+  t.eq(S2.run.purse.bunny, 1, 'the first boss mints the BUNNY');
+  t.ok(S2.seen.specials, 'and the mint introduces itself once');
+  D.leaveBattle();
+  D.startBattle('boss');
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
+  t.eq(S2.run.purse.twin, 1, 'the second boss strikes the TWIN — fewest first');
+  D.leaveBattle();
+  // the deep never takes them: skim and toll pass the specials by
+  S2.run.purse.coin = 60; S2.run.purse.ember = 3;
+  D.stairSkim();
+  t.eq(S2.run.purse.ember, 3, 'the skim never touches a special');
+  S2.run.purse.coin = 5;
+  D.spendPurse(4);
+  t.eq(S2.run.purse.bunny + S2.run.purse.twin + S2.run.purse.ember, 5, 'the toll never spends one');
+  // THE TOUCH PASS — bunnies breed (capped), twins charge, embers tip
+  D.startBattle('battle');
+  S2.battle.phase = 'drop';
+  S2.coins.length = 0;
+  S2.run.bred = 0;
+  const b1 = D.place(40, 40, 'bunny', 0, 'plat');
+  D.place(40 + b1.r * 2 + 0.4, 40, 'bunny', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'bunny').length, 3, 'a touching pair breeds a kit');
+  t.eq(S2.run.bred, 1, 'the warren ledger counts it');
+  S2.run.bred = D.BUNNY_CAP;
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'bunny').length, 3, 'a full warren breeds no more');
+  S2.coins.length = 0;
+  const t1 = D.place(30, 40, 'twin', 0, 'plat');
+  const t2 = D.place(30 + t1.r * 2 + 0.4, 40, 'twin', 0, 'plat');
+  const loner = D.place(70, 40, 'twin', 0, 'plat');
+  const g1 = D.place(50, 40, 'coin', 0, 'plat');
+  const e1 = D.place(50 + g1.r * 2 + 0.4, 40, 'ember', 0, 'plat');
+  D.touchPass();
+  t.ok(t1.paired && t2.paired, 'twins beside each other charge');
+  t.ok(!loner.paired, 'the loner sulks');
+  t.ok(g1.emberTip, 'the gold beside the ember is tipped with fire');
+  // charged twins strike ×4; tipped gold sears; ember burns on its own
+  const foe = S2.foes[0];
+  foe.hp = foe.maxHp = 500; foe.block = 0; foe.burn = 0;
+  foe.def = null; foe.braced = false;              // bare skin — the arithmetic reads clean
+  let hp0 = foe.hp;
+  D.applyLoot({ t: 'twin', up: 1 });
+  t.eq(hp0 - foe.hp, 4, 'a charged twin strikes 4');
+  hp0 = foe.hp;
+  D.applyLoot({ t: 'twin' });
+  t.eq(hp0 - foe.hp, 1, 'an uncharged twin strikes 1');
+  const burn0 = foe.burn | 0;
+  D.applyLoot({ t: 'gold', tip: 1 });
+  t.ok((foe.burn | 0) > burn0, 'an ember-tipped gold coin sears');
+  const burn1 = foe.burn | 0;
+  D.applyLoot({ t: 'ember' });
+  t.ok((foe.burn | 0) >= burn1 + 2, 'the ember itself burns for 2');
+  // THE PIPER: scoring it drags its bedside cluster into the tray
+  S2.coins.length = 0;
+  S2.battle.loot.length = 0;
+  const pp = D.place(50, D.C.PLAT_FRONT - 4, 'piper', 0, 'plat');
+  D.place(54, D.C.PLAT_FRONT - 6, 'coin', 0, 'plat');
+  D.place(46, D.C.PLAT_FRONT - 8, 'silver', 0, 'plat');
+  D.place(20, 30, 'coin', 0, 'plat');            // far away: stays
+  S2.coins.splice(S2.coins.indexOf(pp), 1);
+  D.scoreCoin(pp, true);
+  t.eq(S2.battle.loot.length, 3, 'the piper and its two neighbors land in the tray');
+  t.eq(S2.coins.filter(c => c.st === 'plat').length, 1, 'the far coin keeps its seat');
+  D.endRun('done');
+  // the pile keeps specials across battles, and the purse across reloads
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.ok(R.COIN_KINDS.length === 10, 'the mint survives a reload');
+  // the sim still runs green with the wider mint (rails re-assert above)
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('touchPass();') >= 0, 'END TURN judges the touch');
+  t.ok(src.indexOf("whisperOnce('specials'") >= 0, 'the mint whispers once');
 }
 
 t.done();
