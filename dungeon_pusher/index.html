@@ -234,6 +234,21 @@ const LANGS = {
     'ON': 'AAN',
     'OFF': 'UIT',
     '\u{1F9FF} toll prepaid: ': '\u{1F9FF} tol vooruitbetaald: ',
+    // THE ALMANAC (session 77)
+    'THE ALMANAC': 'DE ALMANAK',
+    'COINS': 'MUNTEN',
+    'FOES': 'VIJANDEN',
+    'LAWS': 'WETTEN',
+    'HEROES': 'HELDEN',
+    'THE HOUSE': 'HET HUIS',
+    'every coin the machine takes': 'elke munt die de machine aanneemt',
+    'the after-battle offer draws from a weighted bag': 'het aanbod na de strijd trekt uit een gewogen zak',
+    'tricks — what a foe DOES': 'streken — wat een vijand DOET',
+    'hides — what a foe WEARS': 'huiden — wat een vijand DRAAGT',
+    'past floor 20 the deep posts a law every third floor': 'na verdieping 20 hangt de diepte elke derde verdieping een wet op',
+    'a LEGEND (♛) reads the first law at floor 11': 'een LEGENDE (♛) leest de eerste wet al op verdieping 11',
+    'nine ways to rob the same house': 'negen manieren om hetzelfde huis te beroven',
+    'the house arithmetic, in the open': 'het rekenwerk van het huis, open en bloot',
   },
 };
 let LANG = 'en';
@@ -6058,7 +6073,7 @@ if (!HEADLESS) (function browser() {
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
       WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null; CLOUD = null;
-      CREDITS = false; PHOTO = false; THEMES = false; SHARE = null;
+      CREDITS = false; PHOTO = false; THEMES = false; SHARE = null; ALMANAC = null;
       if (S.screen === 'battle') {
         S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
         S.room = null;
@@ -9067,6 +9082,7 @@ if (!HEADLESS) (function browser() {
     if (CLOUD) { CLOUD = null; return; }
     if (CREDITS) { CREDITS = false; return; }
     if (THEMES) { THEMES = false; return; }
+    if (ALMANAC) { ALMANAC = null; return; }
     if (S.foeInfo !== null) { S.foeInfo = null; return; }
     if (S.inv) { S.inv = null; return; }
     if (WHATSNEW) { if (WHATSNEW.auto) whatsNewSeen(); WHATSNEW = null; return; }
@@ -10998,6 +11014,77 @@ if (!HEADLESS) (function browser() {
   // ---- the WHAT'S NEW scroll: unread patch notes greet a returning player ----
   // auto: true means it opened itself after a version bump — dismissing it
   // stamps the ledger; opened from settings it shows the whole history.
+  // ---- THE ALMANAC: the house rules, read straight off the data that
+  // runs them — coin table, trait glossary, the decree ladder, hero perks
+  // and the house's own arithmetic. No prose that can drift out of date.
+  let ALMANAC = null;
+  const ALM_TABS = [['coins', 'COINS'], ['foes', 'FOES'], ['laws', 'LAWS'], ['heroes', 'HEROES'], ['house', 'THE HOUSE']];
+  function drawAlmanac(t) {
+    if (!ALMANAC) return;
+    ctx.fillStyle = 'rgba(7,3,10,0.96)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { ALMANAC = null; } });
+    txt('❓ ' + TR('THE ALMANAC'), LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    const tw = (LW - 36) / ALM_TABS.length;
+    ALM_TABS.forEach(([id, label], i) => {
+      const on = ALMANAC.tab === id;
+      uiBtn(18 + i * tw, 66, tw - 4, 26, TR(label), () => { ALMANAC = { tab: id }; },
+            { grad: on ? ['#8a6a2a', '#5a4014'] : ['#3a3440', '#262230'],
+              border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
+              font: '900 9px Verdana, sans-serif', r: 8 });
+    });
+    let y = 130;
+    const row = (a, b, col) => {
+      rr(28, y - 10, LW - 56, 19, 6);
+      ctx.fillStyle = 'rgba(255,255,255,0.045)'; ctx.fill();
+      txt(a, 40, y, '800 11px Verdana, sans-serif', col || '#ffe9a3', 'left');
+      fitTxt(b, 306, y, 256, 9, '#c8b8cc');
+      y += 21;
+    };
+    const head = (s) => { y += 6; txt(s, 40, y, '900 10px Verdana, sans-serif', '#9a8aa0', 'left'); y += 19; };
+    if (ALMANAC.tab === 'coins') {
+      head(TR('every coin the machine takes'));
+      for (const k of COIN_KINDS) row(COIN_INFO[k].name, COIN_INFO[k].what);
+      row('Skull', 'cursed — bites YOU when it fires', '#c8a8ff');
+      row('Gem / Bag', '+15 / +8 gold on resolve', '#8be7ff');
+      head(TR('the after-battle offer draws from a weighted bag'));
+      for (const [k, w] of COIN_REWARD_W) row(COIN_INFO[k].name, 'weight ' + w);
+    } else if (ALMANAC.tab === 'foes') {
+      head(TR('tricks — what a foe DOES'));
+      for (const id of Object.keys(TRAIT_TXT)) row(id, TRAIT_TXT[id]);
+      head(TR('hides — what a foe WEARS'));
+      for (const id of Object.keys(DEF_TXT)) row(id, DEF_TXT[id]);
+    } else if (ALMANAC.tab === 'laws') {
+      head(TR('past floor 20 the deep posts a law every third floor'));
+      MUTS.forEach((m, i) => row('floor ' + (21 + i * 3) + '+', m.name + ' — ' + m.desc,
+                                 i % 2 ? '#c8a8ff' : '#ffe9a3'));
+      y += 8;
+      txt(TR('a LEGEND (♛) reads the first law at floor 11'), LW / 2, y, '700 10px Verdana, sans-serif', '#c8a8ff');
+    } else if (ALMANAC.tab === 'heroes') {
+      head(TR('nine ways to rob the same house'));
+      for (const h of HEROES) row(h.icon + ' ' + h.name, h.perk);
+    } else {
+      head(TR('the house arithmetic, in the open'));
+      const lines = [
+        'the STAIRS demand 2 coins +1 per act (cap 8) — doubled under a toll decree',
+        'the PURSE holds 20 +4 per act (cap 44); overflow melts 2 ● → 1 gold at the stairs',
+        'the BANK stashes ' + C.BANK_MAX + ' tray pieces for next round',
+        'the JACKPOT meter fills at ' + C.METER_MAX + ' drops and catapults one piece of YOUR gear',
+        'the pile re-salts ' + C.ROUND_RAIN + ' fresh pieces every round',
+        C.TILTS + ' TILT charges a round — shove the pile, spend them or lose them',
+        'every slain monster drops a KEY; elites carry GOLDEN keys, and only those open vaults',
+      ];
+      for (const s of lines) {
+        for (const ln of wrapLines(s, 56, 3)) {
+          txt(ln, 40, y, '700 10px Verdana, sans-serif', '#d8c8dc', 'left');
+          y += 16;
+        }
+        y += 9;
+      }
+    }
+    uiBtn(LW / 2 - 70, LH - 58, 140, 40, TR('CLOSE ✕'), () => { ALMANAC = null; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   let WHATSNEW = whatsNewEntries().length ? { auto: true } : null;
   function drawWhatsNew(t) {
     if (!WHATSNEW) return;
@@ -11445,6 +11532,7 @@ if (!HEADLESS) (function browser() {
           codexFull() ? { r: 10, font: '15px serif', grad: ['#8a6a2a', '#5a4014'], border: '#ffd75e' }
                       : { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 222, 38, 36, '\u{1F3C5}', () => openBoard('alltime'), { r: 10, font: '15px serif' });
+    uiBtn(LW - 52, 264, 38, 36, '❓', () => { ALMANAC = { tab: 'coins' }; }, { r: 10, font: '15px serif' });
     // the workshop: prominent, with the cog balance on the door
     uiBtn(14, 12, 108, 36, '\u{1F6E0}\u{FE0F} ⚙ ' + fmt(S.cogs), () => { WSHOP = true; },
           { grad: ['#5a4a2a', '#38290f'], border: '#c8a86a', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 10 });
@@ -11755,6 +11843,7 @@ if (!HEADLESS) (function browser() {
     drawCloud(t);
     drawCredits(t);
     drawThemes(t);
+    drawAlmanac(t);
     drawShare(t);
     drawNamePad(t);
     drawIntro(t);

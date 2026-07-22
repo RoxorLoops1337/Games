@@ -6522,4 +6522,40 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(K.S.screen === 'battle', 'floor-26 frames draw without a crash');
 }
 
+// -------- TIER 11: THE ALMANAC — the house rules, self-documented --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('function drawAlmanac') >= 0, 'the almanac sheet exists');
+  for (const table of ['COIN_INFO[k]', 'TRAIT_TXT[id]', 'DEF_TXT[id]', 'MUTS.forEach', 'of HEROES) row(h.icon', 'COIN_REWARD_W) row(']) {
+    t.ok(src.indexOf(table) >= 0, 'the almanac reads the live table: ' + table.slice(0, 18));
+  }
+  t.ok(src.indexOf('if (ALMANAC) { ALMANAC = null; return; }') >= 0, 'ESC leaves the almanac');
+  t.ok(src.indexOf('SHARE = null; ALMANAC = null;') >= 0, 'the crash net clears it');
+  // live: the ❓ chip opens it, every tab stands, ESC closes it
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const seen = (frag) => K.kb.buttons().some(b => b.label && b.label.indexOf(frag) >= 0);
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  t.ok(press('❓', true), 'the title grew an almanac chip');
+  t.ok(seen('CLOSE ✕'), 'the almanac opened');
+  for (const tab of ['FOES', 'LAWS', 'HEROES', 'THE HOUSE', 'COINS']) {
+    t.ok(press(tab, true), 'almanac tab reachable: ' + tab);
+    t.ok(seen('CLOSE ✕'), 'and the sheet stands: ' + tab);
+  }
+  K.kb.back(); frames(2);
+  t.ok(!seen('CLOSE ✕'), 'ESC leaves the almanac');
+  // and it reads Dutch
+  K.setLang('nl');
+  t.eq(K.TR('THE ALMANAC'), 'DE ALMANAK', 'the almanac speaks Dutch');
+  t.eq(K.TR('THE HOUSE'), 'HET HUIS', 'so does the house tab');
+  K.setLang('en');
+}
+
 t.done();

@@ -564,11 +564,14 @@ feel the game get SMOOTHER this tier, not just bigger.
       rotates every 2.5s WITH its rule spelled out; and the golden-key
       count sat on the arsenal strip's lane at 4+ gear pieces — it now
       rides the key line. Playwright-verified both screens (session 76)
-- [ ] **THE ALMANAC (help sheet)**: a ❓ title button opening a compact,
-      searchable-feeling reference built from data the game already owns:
-      coin table (COIN_INFO), trait glossary (ENT_INFO/trait texts), toll/
-      skim/cap formulas in words, the decree ladder, hero perk list — no
-      wiki needed, no new prose beyond section intros
+- [x] **THE ALMANAC (help sheet)**: a ❓ title chip opens a five-tab
+      reference read straight off the live tables — COINS (COIN_INFO +
+      the weighted reward bag), FOES (TRAIT_TXT tricks + DEF_TXT hides),
+      LAWS (the MUTS ladder with its floor schedule + the legend note),
+      HEROES (perk list), THE HOUSE (toll/purse-cap/bank/jackpot/rain/
+      tilt/key arithmetic in words). ESC + crash net wired, TAB-ring
+      reachable (live kb test), Dutch chrome (DE ALMANAK), codex-style
+      row cards; Playwright-verified three tabs (session 77)
 - [ ] **Duel REMATCH links**: the duel verdict screen offers REMATCH —
       a fresh ?duel link seeded from the JUST-FINISHED run's seed+floor
       with YOUR name, so chains of challenges bounce back and forth;
