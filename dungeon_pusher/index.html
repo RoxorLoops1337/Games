@@ -822,6 +822,7 @@ const S = {
   scurryFx: [],                                 // rats mid-dash across the pile (visual)
   diffPick: 'normal',                           // the door you'll take next run
   seenVer: '',                                  // last VERSION whose patch notes were read
+  boardName: '',                                // the name carved on the leaderboard
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -886,6 +887,7 @@ function save() {
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
+      boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -945,6 +947,7 @@ function load() {
     if (DIFFS.some(x => x.id === d.diffPick)) S.diffPick = d.diffPick;
     // a pre-changelog save has read everything up to the founding
     S.seenVer = (typeof d.seenVer === 'string' && d.seenVer) ? d.seenVer : '1.0.0';
+    if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -4612,7 +4615,7 @@ if (!HEADLESS) (function browser() {
       S.confirm = null; S.inv = null; S.wheelAnim = null; S.relicPick = null;
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
-      WHATSNEW = null; WSHOP = false;
+      WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null;
       if (S.screen === 'battle') {
         S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
         S.room = null;
@@ -7398,6 +7401,14 @@ if (!HEADLESS) (function browser() {
     const k = ev.key.toLowerCase();
     KEYS[k] = true;
     if (k === 'tab' || k === ' ' || k.indexOf('arrow') === 0) ev.preventDefault();
+    // the name carver eats the keyboard whole while it's open
+    if (NAMEPAD) {
+      if (/^[a-z0-9]$/.test(k)) { if (NAMEPAD.val.length < 12) NAMEPAD.val += ev.key.toUpperCase(); }
+      else if (k === 'backspace') NAMEPAD.val = NAMEPAD.val.slice(0, -1);
+      else if (k === 'enter') namePadDone();
+      else if (k === 'escape') NAMEPAD = null;
+      return;
+    }
     if (k === 'tab') kbCycle(ev.shiftKey ? -1 : 1);
     else if (k === ' ') { if (!ev.repeat) kbFire(); }
     else if (k === 'enter') { if (!ev.repeat) kbPress(); }
@@ -7447,6 +7458,8 @@ if (!HEADLESS) (function browser() {
     } else kbPress();
   }
   function kbBack() {
+    if (NAMEPAD) { NAMEPAD = null; return; }
+    if (BOARD) { BOARD = null; return; }
     if (S.confirm) { S.confirm = null; return; }
     if (S.foeInfo !== null) { S.foeInfo = null; return; }
     if (S.inv) { S.inv = null; return; }
@@ -8606,6 +8619,145 @@ if (!HEADLESS) (function browser() {
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the SETTINGS sheet: volume notches, comfort toggles, the tale ----
+  // ---- the LEADERBOARD: daily + all-time best descents, top 50 ----
+  // BOARD = { tab, state: 'loading'|'ok'|'err', top: [], day, page }
+  const BOARD_API = '/api/dungeon_board';
+  let BOARD = null;
+  let NAMEPAD = null;                 // { val, then } — the on-canvas name carver
+  function openBoard(tab) {
+    BOARD = { tab: tab || 'alltime', state: 'loading', top: [], day: '', page: 0 };
+    const mine = BOARD;
+    if (typeof fetch !== 'function') { mine.state = 'err'; return; }
+    fetch(BOARD_API + (mine.tab === 'daily' ? '?board=daily' : ''))
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; } })
+      .catch(() => { if (BOARD === mine) mine.state = 'err'; });
+  }
+  function postScore(run) {
+    if (typeof fetch !== 'function' || !run || !(run.floor >= 1)) return;
+    BOARD = { tab: 'alltime', state: 'loading', top: [], day: '', page: 0 };
+    const mine = BOARD;
+    fetch(BOARD_API, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: S.boardName, floor: run.floor, kills: run.kills || 0,
+                             hero: run.hero || 'knight', diff: run.diff || 'normal' }),
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; } })
+      .catch(() => { if (BOARD === mine) mine.state = 'err'; });
+  }
+  const HERO_ICON = {};
+  function drawBoard(t) {
+    if (!BOARD) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.85)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { BOARD = null; } });
+    const py = 96, ph = 648;
+    rr(28, py, LW - 56, ph, 18);
+    ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    uiButtons.push({ x: 28, y: py, w: LW - 56, h: ph, cb: () => {} });
+    txt('\u{1F3C5} THE DEEP BOARD', LW / 2, py + 32, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    // tabs
+    const tabBtn = (x, label, tab) => {
+      const on = BOARD.tab === tab;
+      uiBtn(x, py + 54, 130, 30, label, () => { if (!on) openBoard(tab); },
+            { grad: on ? ['#7d5a24', '#4a3410'] : ['#3a3440', '#262230'],
+              border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
+              font: '900 11px Verdana, sans-serif', r: 10 });
+    };
+    tabBtn(LW / 2 - 136, 'ALL-TIME', 'alltime');
+    tabBtn(LW / 2 + 6, 'TODAY' + (BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
+    if (BOARD.state === 'loading') {
+      txt('consulting the deep ledger' + '.'.repeat(1 + (Math.floor(t * 2) % 3)), LW / 2, py + 300,
+          '700 13px Verdana, sans-serif', '#b8a8bc');
+    } else if (BOARD.state === 'err') {
+      txt('the board is unreachable from here', LW / 2, py + 290, '800 13px Verdana, sans-serif', '#ff9d3c');
+      txt('(it lives on the real site — offline and local play can’t see it)', LW / 2, py + 312,
+          '600 10px Verdana, sans-serif', '#9a8aa0');
+    } else if (!BOARD.top.length) {
+      txt('no descents carved here yet — be the first', LW / 2, py + 300, '700 12px Verdana, sans-serif', '#b8a8bc');
+    } else {
+      // 12 rows per page, pager below — the whole top 50 is reachable
+      const PER = 12;
+      const pages = Math.max(1, Math.ceil(BOARD.top.length / PER));
+      BOARD.page = Math.max(0, Math.min(BOARD.page, pages - 1));
+      const rows = BOARD.top.slice(BOARD.page * PER, BOARD.page * PER + PER);
+      rows.forEach((e, i) => {
+        const rank = BOARD.page * PER + i + 1;
+        const ry = py + 108 + i * 38;
+        const me = S.boardName && e.name === S.boardName;
+        rr(44, ry - 15, LW - 88, 32, 8);
+        ctx.fillStyle = me ? 'rgba(140,100,30,0.35)' : 'rgba(255,255,255,0.03)'; ctx.fill();
+        const medal = rank === 1 ? '\u{1F947}' : rank === 2 ? '\u{1F948}' : rank === 3 ? '\u{1F949}' : null;
+        if (medal) txt(medal, 62, ry + 2, '15px serif', '#fff');
+        else txt('#' + rank, 62, ry + 1, '800 11px Verdana, sans-serif', '#9a8aa0');
+        const h = heroById(e.hero);
+        txt((h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
+            me ? '#ffe9a3' : '#d8c8dc', 'left');
+        txt('floor ' + e.floor, LW - 128, ry + 1, '900 12px Verdana, sans-serif', '#ffd75e', 'right');
+        txt(fmt(e.kills || 0) + ' \u{2694}\u{FE0F}', LW - 64, ry + 1, '700 10px Verdana, sans-serif', '#c8a8b0', 'right');
+      });
+      if (pages > 1) {
+        uiBtn(LW / 2 - 96, py + ph - 96, 60, 28, '▲', () => { BOARD.page--; },
+              { bg: 'rgba(40,34,46,0.95)', border: '#8d7d95', col: '#d8c8dc', r: 9, font: '800 12px Verdana, sans-serif' });
+        txt((BOARD.page + 1) + ' / ' + pages, LW / 2, py + ph - 82, '800 11px Verdana, sans-serif', '#9a8aa0');
+        uiBtn(LW / 2 + 36, py + ph - 96, 60, 28, '▼', () => { BOARD.page++; },
+              { bg: 'rgba(40,34,46,0.95)', border: '#8d7d95', col: '#d8c8dc', r: 9, font: '800 12px Verdana, sans-serif' });
+      }
+    }
+    // rename + close
+    uiBtn(48, py + ph - 50, 150, 36, '\u{270F}\u{FE0F} ' + (S.boardName || 'carve a name'), () => {
+      NAMEPAD = { val: S.boardName || '', then: () => openBoard(BOARD ? BOARD.tab : 'alltime') };
+    }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 10px Verdana, sans-serif', r: 10 });
+    uiBtn(LW - 48 - 130, py + ph - 50, 130, 36, 'CLOSE ✕', () => { BOARD = null; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 12px Verdana, sans-serif', r: 10 });
+  }
+  // the name carver: a stone tablet of keys, no browser prompt in sight
+  function drawNamePad(t) {
+    if (!NAMEPAD) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.88)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => {} });
+    const py = 170, ph = 470;
+    rr(30, py, LW - 60, ph, 18);
+    ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    txt('CARVE YOUR NAME', LW / 2, py + 34, '900 18px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    // the carving so far
+    rr(70, py + 58, LW - 140, 40, 10);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = '#9a8aa0'; ctx.stroke();
+    const cursor = Math.floor(t * 2) % 2 ? '_' : ' ';
+    txt(NAMEPAD.val + (NAMEPAD.val.length < 12 ? cursor : ''), LW / 2, py + 79,
+        '900 18px Verdana, sans-serif', '#ffe9a3');
+    const KEYROWS = ['ABCDEFGH', 'IJKLMNOP', 'QRSTUVWX', 'YZ012345', '6789'];
+    const kw = 44, kh = 42, gap = 6;
+    KEYROWS.forEach((row, ri) => {
+      const x0 = LW / 2 - (row.length * (kw + gap) - gap) / 2;
+      for (let ci = 0; ci < row.length; ci++) {
+        const chr = row[ci];
+        uiBtn(x0 + ci * (kw + gap), py + 116 + ri * (kh + gap), kw, kh, chr, () => {
+          if (NAMEPAD.val.length < 12) NAMEPAD.val += chr;
+        }, { bg: 'rgba(36,30,42,0.95)', border: '#5a5068', col: '#e8d8ec', font: '900 15px Verdana, sans-serif', r: 9 });
+      }
+    });
+    // the last row shares its line with the wide keys
+    const ly = py + 116 + 5 * (kh + gap);
+    uiBtn(LW / 2 - 55, ly, 52, kh, '←', () => { NAMEPAD.val = NAMEPAD.val.slice(0, -1); },
+          { bg: 'rgba(90,64,72,0.95)', border: '#b08a90', col: '#ffd8dc', font: '900 15px Verdana, sans-serif', r: 9 });
+    uiBtn(LW / 2 + 5, ly, 118, kh, 'DONE ✓', namePadDone,
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 9 });
+  }
+  function namePadDone() {
+    if (!NAMEPAD) return;
+    S.boardName = (NAMEPAD.val || '').trim().slice(0, 12);
+    save();
+    const then = NAMEPAD.then;
+    NAMEPAD = null;
+    if (S.boardName && then) then();
+  }
   // ---- the WHAT'S NEW scroll: unread patch notes greet a returning player ----
   // auto: true means it opened itself after a version bump — dismissing it
   // stamps the ledger; opened from settings it shows the whole history.
@@ -8884,6 +9036,7 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW - 52, 96, 38, 36, '\u{1F3C6}', () => { TROPHIES = true; }, { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 138, 38, 36, '\u{1F4CA}', () => { RECORDS = true; }, { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 180, 38, 36, '\u{1F4D6}', () => { CODEX = { tab: 'a1', sel: null }; }, { r: 10, font: '15px serif' });
+    uiBtn(LW - 52, 222, 38, 36, '\u{1F3C5}', () => openBoard('alltime'), { r: 10, font: '15px serif' });
     // the workshop: prominent, with the cog balance on the door
     uiBtn(14, 12, 108, 36, '\u{1F6E0}\u{FE0F} ⚙ ' + fmt(S.cogs), () => { WSHOP = true; },
           { grad: ['#5a4a2a', '#38290f'], border: '#c8a86a', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 10 });
@@ -8960,6 +9113,15 @@ if (!HEADLESS) (function browser() {
     }
     uiBtn(LW / 2 - 120, 638, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(heroSel),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 17px Verdana, sans-serif', r: 16 });
+    // carve the fallen run onto the deep board (once per run)
+    if (o.floor >= 1 && !o.posted) {
+      uiBtn(LW / 2 - 110, 748, 220, 34, '\u{1F3C5} CARVE IT ON THE BOARD', () => {
+        const send = () => { o.posted = true; postScore(o); };
+        if (S.boardName) send();
+        else NAMEPAD = { val: '', then: send };
+      }, { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3',
+           font: '900 11px Verdana, sans-serif', r: 10 });
+    }
     uiBtn(LW / 2 - 80, 700, 160, 38, 'TITLE', () => { S.screen = 'title'; },
           { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 13px Verdana, sans-serif', r: 12 });
   }
@@ -9021,6 +9183,8 @@ if (!HEADLESS) (function browser() {
     drawWorkshop(t);
     drawSettings(t);
     drawWhatsNew(t);
+    drawBoard(t);
+    drawNamePad(t);
     drawIntro(t);
     drawConfirm(t);
     drawAchToast(dt);

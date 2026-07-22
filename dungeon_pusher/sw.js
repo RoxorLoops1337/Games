@@ -31,6 +31,9 @@ self.addEventListener('fetch', (e) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== location.origin) return;
+  // live data (the leaderboard, cloud saves) must NEVER come from a cache —
+  // let those requests hit the network untouched
+  if (url.pathname.indexOf('/api/') === 0) return;
 
   // the shell: network-first, cache fallback
   if (req.mode === 'navigate' || url.pathname.endsWith('/index.html')) {
