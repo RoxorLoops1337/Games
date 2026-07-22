@@ -1291,6 +1291,7 @@ const S = {
   scurryFx: [],                                 // rats mid-dash across the pile (visual)
   diffPick: 'normal',                           // the door you'll take next run
   seenVer: '',                                  // last VERSION whose patch notes were read
+  seen: {},                                     // first-contact whispers already given
   boardName: '',                                // the name carved on the leaderboard
   coach: { pick: 0, drop: 0, end: 0 },          // the first-battle pointers, killed once each
   streak: { last: '', days: 0 },                // consecutive days played (one grace day)
@@ -1388,6 +1389,7 @@ function save() {
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
+      seen: S.seen || {},
       coach: S.coach, streak: S.streak, yday: S.yday, plaque: S.plaque,
       firstRun: S.firstRun || '', annivDone: S.annivDone || '', gauntlet: S.gauntlet,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
@@ -1469,6 +1471,7 @@ function load() {
     if (DIFFS.some(x => x.id === d.diffPick)) S.diffPick = d.diffPick;
     // a pre-changelog save has read everything up to the founding
     S.seenVer = (typeof d.seenVer === 'string' && d.seenVer) ? d.seenVer : '1.0.0';
+    S.seen = (d.seen && typeof d.seen === 'object') ? d.seen : {};
     if (d.coach && typeof d.coach === 'object') S.coach = { pick: d.coach.pick ? 1 : 0, drop: d.coach.drop ? 1 : 0, end: d.coach.end ? 1 : 0 };
     else if ((d.best && d.best.runs) > 0) S.coach = { pick: 1, drop: 1, end: 1 };   // veterans need no pointing
     if (d.streak && typeof d.streak === 'object') S.streak = { last: d.streak.last || '', days: d.streak.days | 0 };
@@ -1660,6 +1663,16 @@ function place(x, y, kind, lay, st, tier) {
 // shared seeds face the same jar). Three direct hits shatter it for a
 // gem spill + a relic pick; ignored, it slides off the back in 4 rounds.
 // rounds 4 → y 24 (square in the landing lane); each round it slides back
+// a one-time whisper the first time a run meets a mechanic — the almanac
+// carries the details, the whisper just points at the door
+function whisperOnce(key, msg) {
+  if (!S.seen) S.seen = {};
+  if (S.seen[key]) return false;
+  S.seen[key] = 1;
+  toast(msg);
+  save();
+  return true;
+}
 function jarY() { return S.run && S.run.jar ? 8 + S.run.jar.rounds * 4 : 0; }
 function jarSmash(c) {
   const j = S.run && S.run.jar;
@@ -4561,6 +4574,7 @@ function genFloor() {
   // (rolled at the very end so the maze itself matches older shared seeds)
   S.run.jar = (actIdx(S.run.floor) >= 1 && rng() < 0.4)
     ? { x: 25 + rng() * 50, hp: 3, rounds: 4, flashT: 0 } : null;
+  if (S.run.jar) whisperOnce('jar', '\u{1FAD9} a GLASS JAR rides the bed — crack it in three for the spill (❓ the almanac knows)');
   // deeper still, BRASS PEGS rise from the bed — the machine joins the
   // decree stack. One at floor 22, two at 28, three at 34; never near
   // the tray mouth (y 30-55) and never on the walls (x 15-85)
@@ -4568,6 +4582,7 @@ function genFloor() {
   if (S.run.floor >= 22) {
     const npg = 1 + Math.min(2, ((S.run.floor - 22) / 6) | 0);
     for (let i = 0; i < npg; i++) S.run.pegs.push({ x: 15 + rng() * 70, y: 30 + rng() * 25 });
+    whisperOnce('pegs', '\u{1F529} BRASS PEGS rise from the bed — they shoulder falling coins aside');
   }
   return S.run.map;
 }
@@ -4671,6 +4686,9 @@ function nextFloor() {
   S.run.tollDouble = 0;
   S.run.floor++;
   S.run.pressure = 0;                    // the stairs vent the lake's squeeze
+  if (rawAct(S.run.floor) === 4) {
+    whisperOnce('lake', '\u{1F30A} THE UNDERLAKE — no dark down here: PRESSURE builds as you walk, and FULL DEPTH stiffens the packs (❓ the almanac knows)');
+  }
   S.floorFx = { t: 0, floor: S.run.floor, newAct: (S.run.floor - 1) % 5 === 0 };
   // GHOST PACE: stamp this door's clock and whisper it against your best
   if (!S.run.pace) S.run.pace = {};
@@ -5553,7 +5571,7 @@ window.DP = {
   giftLink, parseGift, claimGift, boardFilter,
   petVet, petTag, legacyStamp, LEGACY_ACH,
   jarY, jarSmash,
-  tollRun, tollRefill, TOLL_KIT, TOLL_PREPAY_CAP, toast, toastTick,
+  tollRun, tollRefill, TOLL_KIT, TOLL_PREPAY_CAP, toast, toastTick, whisperOnce,
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
@@ -11179,7 +11197,10 @@ if (!HEADLESS) (function browser() {
       txt(lo.name, 68, ry + 16, '900 12px Verdana, sans-serif', open ? (on ? '#c8f4f0' : '#e8d8ec') : '#7a7086', 'left');
       fitTxt(open ? lo.desc : TR('sealed — reach floor') + ' ' + lo.floor, 200, ry + 34, 250, 9, open ? '#b8a8bc' : '#8d7d95');
       if (open && !on) {
-        uiBtn(LW - 148, ry + 9, 84, 32, TR('WEAR'), () => { S.machLayout = id; save(); },
+        uiBtn(LW - 148, ry + 9, 84, 32, TR('WEAR'), () => {
+          S.machLayout = id; save();
+          if (id === 'tilted') whisperOnce('tilted', '\u{1FAA3} THE TILTED TABLE — the bed leans left, the gutter pays at END TURN, the bank runs a slot short');
+        },
               { grad: ['#1e4a58', '#16303a'], border: '#7ee7e0', col: '#c8f4f0', font: '900 11px Verdana, sans-serif', r: 10 });
       } else if (on) {
         txt(TR('WORN ✓'), LW - 106, ry + 26, '900 11px Verdana, sans-serif', '#8ed67e');
@@ -11315,6 +11336,7 @@ if (!HEADLESS) (function browser() {
         C.TILTS + ' TILT charges a round — shove the pile, spend them or lose them',
         'every slain monster drops a KEY; elites carry GOLDEN keys, and only those open vaults',
         'in THE UNDERLAKE (floors 21-25) PRESSURE replaces the dark: every room walked adds 1, and at ' + PRESSURE_MAX + ' the foes strike +1 harder',
+        'THE TABLES (\u{1F3B0} rack, best floor ' + MACH_LAYOUTS.tilted.floor + '): the TILTED bed creeps everything ' + TILT_DRIFT + ' u/s toward a gutter that pays 1 gold per settled coin at END TURN — gear is never taken, and the bank runs a slot short',
       ];
       for (const s of lines) {
         for (const ln of wrapLines(s, 56, 3)) {

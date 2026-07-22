@@ -507,6 +507,68 @@ Ordered by impact ÷ effort.
       dp:top to dp:top:bak:<monday> with a 35-day TTL — no cron, later
       posts never rewrite the snapshot (session 70)
 
+## Tier 12 — the hundredth run (authored session 85)
+
+The stock-take, honestly: a player a hundred runs deep now owns five
+acts, two beds, nine heroes and 48 trophies — but the newest systems
+shipped SILENT (no onboarding, no flavor, no music of their own), the
+one balance outlier is still uninvestigated, and the freshest gameplay
+idea on the table is the OWNER'S, awaiting a nod. This tier dresses
+what Tier 11 built, and keeps a big slot warm for the touch coins.
+
+- [x] **First-contact whispers**: whisperOnce(key,msg) + S.seen book
+      (saved) — the lake gate, the first jar, the first pegged floor and
+      the first WEAR of the tilted table each introduce themselves
+      exactly once, pointing at the ❓ almanac; wired through the toast
+      queue so pileups still take turns (session 85)
+- [x] **THE TABLES in the almanac**: THE HOUSE now spells the tilted
+      bed's creep rate, the gutter's pay/never-gear rule and the
+      bank-slot price, read live off MACH_LAYOUTS/TILT_DRIFT (session 85)
+- [ ] **The wizard file**: instrument the sim (per-hero damage source
+      breakdown, draught luck, policy fit) to find WHY his median reads
+      4 vs pack 5 — kit, sim bias, or truth; buff only what the file
+      convicts
+- [ ] **Lake tales**: ~8 UNDERLAKE lines in TALES (unheard-first engine
+      already exists) — the fifth act is mechanically real and
+      narratively mute
+- [ ] **Lake jobs & a drowned stranger**: 2 lake-gated QUEST_DEFS (walk
+      to FULL DEPTH and win; drain N coins to the gutter—tilted only) and
+      one hallway event reskin for floors 21+ — the lake reuses act-1
+      jobs verbatim today
+- [ ] **Trophy pass to 52**: FULL DEPTH (win a pressure-stiffened fight),
+      FORECLOSED (take the banker's refund), GUTTER BARON (50 lifetime
+      gutter gold), TABLE TURNER (clear floor 25 on the tilted bed) —
+      the new systems deserve wall space
+- [ ] **Gauntlet law rotation**: the weekend gauntlet binds the SAME
+      eight decrees every week — rotate a 5-of-8 subset from the week
+      seed so regulars meet a different wall
+- [ ] **HALL OF MONTHS**: keep the last 3 champion plaques client-side
+      (S.plaques[]) under the LAST MONTH tab — months currently vanish
+      when the API's 60-day TTL sweeps them
+- [ ] **The lake hums**: a fourth sequencer mood for rawAct 4 (slower,
+      submerged intervals) — the fifth act wears act-4's music today and
+      ears notice before eyes do
+- [ ] **Pace bars on the board**: rows with a stored duel/pace render a
+      tiny spark-strip vs YOUR best pace — REPLAY GHOST's clock exists
+      but only whispers at staircases
+- [ ] **Economy probe at depth**: extend the sim harness to report the
+      gold curve and purse pressure across floors 15-25 — the owner's
+      floor-18 coin-glut complaint deserves fresh data at the new depths
+- [ ] **[owner-assist] Drowned faces**: 15 sprites (13 kin + 2 lords) +
+      a tilted-table cabinet accent via the local ComfyUI pipeline —
+      needs an owner-machine session; the loop preps the prompt list in
+      tools/comfyui/UNDERLAKE_PROMPTS.md when this item starts
+- [ ] **[big] TOUCH COINS** (reserved — implement ONLY on the owner's
+      go): the chat-designed ten (bunny/twin/ember/piper/frost/lode/
+      king/rot/mimic/leech) on one touch-pass substrate (contacts
+      evaluated at round end + fire time, never per frame); first batch
+      bunny/twin/ember/piper, second batch the rest — the owner asked,
+      and it is the best gameplay idea on the table
+- [ ] **[big] THE SPECTATOR CARD**: the share card grows act splits and
+      a pace strip (the data all exists in S.run.pace/stats) — bragging
+      is this game's only marketing, and the card still shows three
+      numbers
+
 ## Tier 11 — the deep breath (authored session 72)
 
 **TIER 11 SMALL ITEMS COMPLETE** (session 81): thirteen consolidation

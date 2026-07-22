@@ -7015,4 +7015,36 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   K.setLang('en');
 }
 
+// -------- TIER 12: first-contact whispers + THE TABLES in the almanac --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  // the whisper book: once, and only once, per mechanic per profile
+  t.ok(D.whisperOnce('testkey', 'hello the deep'), 'a first contact whispers');
+  t.ok(D.S.toast && D.S.toast.txt === 'hello the deep', 'and it lands as a toast');
+  t.ok(!D.whisperOnce('testkey', 'hello again'), 'the second contact stays quiet');
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.ok(!R.whisperOnce('testkey', 'hello thrice'), 'the book survives a reload');
+  // the wires: jar and pegs whisper from their genFloor rolls, the lake at
+  // its gate, the table at its WEAR — all through the one helper
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  for (const key of ["whisperOnce('jar'", "whisperOnce('pegs'", "whisperOnce('lake'", "whisperOnce('tilted'"]) {
+    t.ok(src.indexOf(key) >= 0, 'wired: ' + key + "')");
+  }
+  // a real deep run trips the lake and peg whispers organically
+  R.srand(16); R.newRun('knight');
+  R.S.run.floor = 20;
+  R.nextFloor();
+  t.ok(R.S.seen.lake, 'crossing into floor 21 whispers the lake');
+  let guard = 30;
+  while (!R.S.seen.pegs && guard--) { R.S.run.floor = 23; R.nextFloor(); }
+  t.ok(R.S.seen.pegs, 'the first pegged floor whispers the pegs');
+  R.endRun('done');
+  // the almanac spells the tables
+  t.ok(src.indexOf('THE TABLES (') >= 0 && src.indexOf('the bank runs a slot short') >= 0,
+       'the almanac spells the tilted table');
+}
+
 t.done();
