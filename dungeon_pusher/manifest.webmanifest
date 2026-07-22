@@ -1,0 +1,16 @@
+{
+  "name": "Dungeon Pusher — Coin Pusher Roguelike",
+  "short_name": "Dungeon Pusher",
+  "description": "The coin pusher IS the combat system. Crawl the dungeon, spend your purse, push your luck.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#140d16",
+  "theme_color": "#140d16",
+  "icons": [
+    { "src": "icon_192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon_512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
