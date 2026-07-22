@@ -2840,4 +2840,22 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.ok(D.S.over.hero === 'knight', 'the hero is named on the card');
 }
 
+// -------- float polish: duplicates merge, the stack is capped --------
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(11);
+  D.newRun('knight');
+  D.S.floats.length = 0;
+  D.floatAnchor('-3', 'enemy', '#fff');
+  D.floatAnchor('-3', 'enemy', '#fff');
+  D.floatAnchor('-3', 'enemy', '#fff');
+  t.eq(D.S.floats.length, 1, 'three identical floats merge into one');
+  t.eq(D.S.floats[0].n, 3, '…carrying a ×3 counter');
+  D.floatAnchor('-5', 'enemy', '#fff');
+  t.eq(D.S.floats.length, 2, 'a different text stays its own float');
+  D.S.floats.length = 0;
+  for (let i = 0; i < 20; i++) D.floatAnchor('hit ' + i, 'enemy', '#fff');
+  t.ok(D.S.floats.length <= 12, 'the float stack is capped (' + D.S.floats.length + ')');
+}
+
 t.done();
