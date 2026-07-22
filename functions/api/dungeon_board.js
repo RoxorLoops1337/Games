@@ -42,6 +42,12 @@ const utcLastMonth = () => {
   return d.toISOString().slice(0, 7);
 };
 const dayKey = () => 'dp:day:' + utcDay();
+const utcWeek = () => {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));   // this week's Monday
+  return d.toISOString().slice(0, 10);
+};
+const BAK_TTL = 35 * 24 * 3600;
 const monthKey = () => 'dp:month:' + utcMonth();
 const MONTH_TTL = 60 * 24 * 3600;
 
@@ -100,7 +106,9 @@ export async function onRequestPost({ request, env }) {
   const hero = String(b.hero || '').replace(/[^a-z]/g, '').slice(0, 12) || 'knight';
   const diff = ['merciful', 'normal', 'nightmare'].indexOf(b.diff) >= 0 ? b.diff : 'normal';
   const entry = { name, floor, kills, hero, diff, d: b.daily ? 1 : 0,
-                  ng: clamp(b.ng | 0, 0, 2), t: Date.now() };   // 0 plain, 1 NG+ ♟, 2 LEGEND ♛
+                  ng: clamp(b.ng | 0, 0, 2),                    // 0 plain, 1 NG+ ♟, 2 LEGEND ♛
+                  v: clamp(b.v | 0, 0, 99),                     // client version — future filters key on it
+                  t: Date.now() };
 
   const top = JSON.parse((await KV.get(TOP_KEY)) || '[]');
   const daily = JSON.parse((await KV.get(dayKey())) || '[]');
@@ -111,6 +119,10 @@ export async function onRequestPost({ request, env }) {
   if (grewTop) await KV.put(TOP_KEY, JSON.stringify(top));               // all-time: no TTL
   if (grewDay) await KV.put(dayKey(), JSON.stringify(daily), { expirationTtl: DAY_TTL });
   if (grewMonth) await KV.put(monthKey(), JSON.stringify(monthly), { expirationTtl: MONTH_TTL });
+  // lazy weekly backup of the one board that never expires: first write of
+  // each week snapshots dp:top (cheap insurance, no cron needed)
+  const bakKey = 'dp:top:bak:' + utcWeek();
+  if (!(await KV.get(bakKey))) await KV.put(bakKey, JSON.stringify(top), { expirationTtl: BAK_TTL });
   await KV.put('rl:' + ip, String(Date.now()), { expirationTtl: 60 });
   return json({ top, daily, day: utcDay() });
 }

@@ -150,6 +150,25 @@ ok(j.top.length >= 1 && j.day === MONTH, 'GET ?board=monthly serves the month, d
   ok(j.top[0].name === 'Champ' && j.day === LAST, 'GET ?board=lastmonth crowns the previous month');
 }
 
+// hygiene: entries carry a clamped client version, and the first post of
+// each week lazily snapshots dp:top as a backup
+r = await post(env, { name: 'Verse', floor: 8, kills: 1, v: 2 }, '14.14.14.14');
+j = await r.json();
+ok(j.top.find(e => e.name === 'Verse').v === 2, 'entries carry the client version');
+r = await post(env, { name: 'Hax', floor: 8, kills: 2, v: 5000 }, '15.15.15.15');
+j = await r.json();
+ok(j.top.find(e => e.name === 'Hax').v === 99, 'the version clamps at 99');
+{
+  const wk = (() => { const d = new Date(); d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7)); return d.toISOString().slice(0, 10); })();
+  const bak = env.DPBOARD._store.get('dp:top:bak:' + wk);
+  ok(!!bak, 'the weekly backup exists after a post');
+  ok(env.DPBOARD._ttls.get('dp:top:bak:' + wk) === 35 * 24 * 3600, 'with its 35-day TTL');
+  const lenBefore = JSON.parse(bak).length;
+  await post(env, { name: 'Later', floor: 9, kills: 9 }, '16.16.16.16');
+  ok(JSON.parse(env.DPBOARD._store.get('dp:top:bak:' + wk)).length === lenBefore,
+    'later posts never rewrite the week’s snapshot');
+}
+
 // the cap holds at 50
 {
   const env2 = { DPBOARD: mockKV() };
