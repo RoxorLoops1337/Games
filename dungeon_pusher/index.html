@@ -793,6 +793,7 @@ const S = {
   codex: { foes: {}, relics: {} },              // everything ever met or owned
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
   scurryFx: [],                                 // rats mid-dash across the pile (visual)
+  diffPick: 'normal',                           // the door you'll take next run
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -840,7 +841,7 @@ function save() {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
-      codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily,
+      codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -852,7 +853,7 @@ function save() {
         mapFloor: S.run.mapFloor, stats: S.run.stats,
         daily: S.run.daily || null, dailyMod: S.run.dailyMod || null,
         quest: S.run.quest || null,
-        swarm: S.run.swarm || null, cheese: S.run.cheese || 0,
+        swarm: S.run.swarm || null, cheese: S.run.cheese || 0, diff: S.run.diff || 'normal',
       } : null,
     }));
   } catch (e) {}
@@ -891,6 +892,7 @@ function load() {
     if (typeof d.cogs === 'number') S.cogs = Math.max(0, d.cogs);
     if (d.ws && typeof d.ws === 'object') S.ws = d.ws;
     if (d.daily && typeof d.daily === 'object') S.daily = d.daily;
+    if (DIFFS.some(x => x.id === d.diffPick)) S.diffPick = d.diffPick;
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -908,7 +910,7 @@ function load() {
         goldKeys: d.run.goldKeys || 0,
         daily: d.run.daily || null, dailyMod: d.run.dailyMod || null,
         quest: d.run.quest || null,
-        swarm: d.run.swarm || null, cheese: d.run.cheese || 0,
+        swarm: d.run.swarm || null, cheese: d.run.cheese || 0, diff: d.run.diff || 'normal',
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -1157,7 +1159,7 @@ function foeDown(e) {
   S.run.kills++;
   S.codex.foes[e.id] = (S.codex.foes[e.id] || 0) + 1;   // the bestiary remembers
   questBump('slay', 1);
-  let gold = e.gold;
+  let gold = Math.round(e.gold * (mutOn('richveins') ? 1.25 : 1));
   // the wound bounties: Ashfall pays for kindling, Blood Price for red work
   if (hasRelic('ashfall') && e.burn > 0) gold += 6;
   if (hasRelic('bloodprice') && e.bleed > 0) gold += 2;
@@ -1803,11 +1805,11 @@ function mkEnemy(type, eid) {
     base = (eid && enemyById(eid)) || roster[(rng() * enemyPool(S.run.depth)) | 0];
     if (type === 'elite') eliteK = 2.0;
   }
-  const hp = Math.round(base.hp * mult * eliteK);
+  const hp = Math.round(base.hp * mult * eliteK * diffHpK());
   return {
     id: base.id, icon: base.icon, name: (type === 'elite' ? 'ELITE ' : '') + base.name,
     hp, maxHp: hp,
-    atk: Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1)),
+    atk: Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1)) + (mutOn('swiftdoom') ? 2 : 0),
     trait: base.trait, def: base.def || null,
     gold: Math.round(base.gold * mult * (type === 'elite' ? 2.2 : 1)),
     boss: type === 'boss', elite: type === 'elite',
@@ -1823,7 +1825,8 @@ function rollIntent(e) {
   if (e.boss && (!e.intent || e.intent.t !== 'hex') && rng() < 0.22) { e.intent = { t: 'hex' }; return; }
   // elites dabble in lesser hexes: frostbitten hands / lead purse /
   // blackout / rust — one in seven turns
-  if (e.elite && (!e.intent || e.intent.t !== 'hex') && rng() < 0.15) { e.intent = { t: 'hex' }; return; }
+  if (e.elite && (!e.intent || e.intent.t !== 'hex') &&
+      rng() < (S.run && S.run.diff === 'hard' ? 0.45 : 0.15)) { e.intent = { t: 'hex' }; return; }
   if (e.trait === 'curse' && rng() < 0.4) { e.intent = { t: 'curse' }; return; }
   if (e.trait === 'gardener' && rng() < 0.45) { e.intent = { t: 'sow' }; return; }
   const r = rng();
@@ -1836,7 +1839,8 @@ function dealHand() {
   const B = S.battle;
   B.hand = { ...S.run.purse };
   // a thief's cut, plus the LEAD PURSE hex weighing the hand down
-  let cut = (B.stolen || 0) + (S.leadT > 0 ? 3 : 0);
+  // (and the endless deep's THICK AIR steals one more)
+  let cut = (B.stolen || 0) + (S.leadT > 0 ? 3 : 0) + (mutOn('thickair') ? 1 : 0);
   let cutDone = 0;
   for (const k of COIN_KINDS) {
     while (cut > 0 && B.hand[k] > 0) { B.hand[k]--; cut--; cutDone++; }
@@ -2478,6 +2482,9 @@ function newRound() {
   for (let i = 0; i < rainN; i++) {
     S.rain.push({ t: 0.15 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: rollPileKind() });
   }
+  // the endless deep's decrees
+  if (mutOn('armoredage')) for (const f of S.foes) if (f.hp > 0) f.block = (f.block || 0) + 2;
+  if (mutOn('bonerain')) S.rain.push({ t: 0.8, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: 'skull' });
   S.banner = { txt: 'ROUND ' + B.round, ttl: 1.3, max: 1.3 };
   bossArena();
   ratScurry();
@@ -2669,6 +2676,35 @@ function questBump(id, n) {
     save();
   }
 }
+// ------------------------------------------------- difficulty & the ENDLESS
+// three doors into the dungeon: MERCIFUL (-20% enemy HP), NORMAL, and
+// NIGHTMARE (+30% HP, elites hex three times as often)
+const DIFFS = [
+  { id: 'easy',   name: 'MERCIFUL',  desc: 'enemies −20% HP' },
+  { id: 'normal', name: 'NORMAL',    desc: 'the honest machine' },
+  { id: 'hard',   name: 'NIGHTMARE', desc: 'enemies +30% HP, elites hex relentlessly' },
+];
+function diffHpK() {
+  const d = S.run && S.run.diff;
+  return d === 'easy' ? 0.8 : d === 'hard' ? 1.3 : 1;
+}
+// past floor 15 the dungeon stops pretending: a MUTATOR stacks on every
+// third floor, in a fixed order the deep never varies
+const MUTS = [
+  { id: 'thickair',   name: 'THICK AIR',   desc: 'your hand deals 1 fewer coin' },
+  { id: 'swiftdoom',  name: 'SWIFT DOOM',  desc: 'every foe hits +2 harder' },
+  { id: 'armoredage', name: 'ARMORED AGE', desc: 'foes start each round with 2 block' },
+  { id: 'bonerain',   name: 'BONE RAIN',   desc: 'a skull rides every round\'s rain' },
+  { id: 'richveins',  name: 'RICH VEINS',  desc: 'kills pay +25% gold — the one mercy' },
+];
+function mutCount() {
+  return S.run ? Math.max(0, Math.min(MUTS.length, Math.floor((S.run.floor - 13) / 3))) : 0;
+}
+function mutOn(id) {
+  const n = mutCount();
+  for (let i = 0; i < n; i++) if (MUTS[i].id === id) return true;
+  return false;
+}
 // -------------------------------------------------------------- the DAILY
 // one seeded run a day: the date picks the hero (locked ones make guest
 // appearances) and one twist. One attempt — spent the moment it starts.
@@ -2801,10 +2837,12 @@ function endRun(cause) {
     cause: cause || 'fell',
     floor: S.run.floor, depth: S.run.depth, kills: S.run.kills, gold: S.run.goldEarned,
     hero: S.run.hero, relics: S.run.relics.length,
+    diff: S.run.diff || 'normal', muts: mutCount(),
     stats: st,
   };
-  // COGS for the workshop: every run pays out, however it ends
-  const cogsWon = Math.max(1, S.run.floor + Math.floor(S.run.kills / 8));
+  // COGS for the workshop: every run pays out, however it ends —
+  // the endless deep pays a premium per mutator endured
+  const cogsWon = Math.round(Math.max(1, S.run.floor + Math.floor(S.run.kills / 8)) * (1 + 0.2 * mutCount()));
   S.cogs += cogsWon;
   S.over.cogsWon = cogsWon;
   // a DAILY run files its result on the calendar
@@ -2847,6 +2885,7 @@ function newRun(heroId, force) {
   if (!force && !heroUnlocked(hero.id)) hero = HEROES[0];
   S.best.runs = (S.best.runs || 0) + 1;   // the lifetime run tally
   S.ach.heroes[hero.id] = 1;              // the casting-call ledger
+  const diff = DIFFS.some(d => d.id === S.diffPick) ? S.diffPick : 'normal';
   S.run = {
     hero: hero.id,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
@@ -2854,7 +2893,7 @@ function newRun(heroId, force) {
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0, str: 0, dex: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
-    pileSave: null, pileFloor: 0, pending: [], mapFloor: 0,
+    pileSave: null, pileFloor: 0, pending: [], mapFloor: 0, diff,
     stats: { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0, bought: 0 },
   };
   // the chosen adventurer's signature coins
@@ -3153,7 +3192,13 @@ function tryDoor(dir) {
 // the stairs after the boss falls: new floor, new MACHINE (fresh pile)
 function nextFloor() {
   if (!S.run) return false;
+  const muts0 = mutCount();
   S.run.floor++;
+  // the endless deep announces each new decree
+  if (mutCount() > muts0) {
+    const m = MUTS[mutCount() - 1];
+    toast('\u{1F30C} ENDLESS DECREE — ' + m.name + ': ' + m.desc);
+  }
   S.run.pileSave = null;
   S.run.pending = [];
   // only a small ring of keys survives the descent
@@ -3754,6 +3799,7 @@ window.DP = {
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
+  DIFFS, diffHpK, MUTS, mutCount, mutOn,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
@@ -7632,6 +7678,11 @@ if (!HEADLESS) (function browser() {
     }
     uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'title'; save(); }, { r: 10, font: '20px serif' });
     uiBtn(LW - 52, 12, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
+    // deep in the ENDLESS, the standing decrees are posted at the gate
+    if (mutCount() > 0) {
+      txt('\u{1F30C} ENDLESS +' + mutCount() + ': ' + MUTS.slice(0, mutCount()).map(m => m.name).join(' • '),
+          LW / 2, 134, '700 8px Verdana, sans-serif', '#c8a8ff', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
+    }
     // the floor's optional JOB, posted under the floor title
     const q = S.run.quest;
     if (q) {
@@ -8216,6 +8267,18 @@ if (!HEADLESS) (function browser() {
         txt('▼', x + w / 2, y - 8 + Math.sin(t * 4) * 2, '900 12px Verdana, sans-serif', '#ffd75e');
       }
     });
+    // the three doors: pick your poison for the NEXT run
+    {
+      const dw = 88;
+      DIFFS.forEach((d, i) => {
+        const on = S.diffPick === d.id;
+        uiBtn(LW / 2 - (dw * 1.5 + 8) + i * (dw + 8), 604, dw, 22, d.name, () => { S.diffPick = d.id; save(); },
+              { grad: on ? (d.id === 'hard' ? ['#7e2a3a', '#48101c'] : d.id === 'easy' ? ['#2a6a4a', '#123a28'] : ['#8a6a2a', '#5a4014'])
+                         : ['#2e2a38', '#1e1a26'],
+                border: on ? (d.id === 'hard' ? '#ff8a9a' : d.id === 'easy' ? '#7ed6a0' : '#ffd75e') : '#4a4458',
+                col: on ? '#fff0e0' : '#8a8098', font: '900 9px Verdana, sans-serif', r: 8 });
+      });
+    }
     if (S.run) {
       uiBtn(LW / 2 - 130, 620, 260, 48, '▶ CONTINUE — FLOOR ' + S.run.floor,
             () => { S.screen = 'dungeon'; save(); },
@@ -8282,8 +8345,11 @@ if (!HEADLESS) (function browser() {
     const st2 = o.stats || { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0 };
     const mm = Math.floor(st2.t / 60), ss = ('0' + Math.floor(st2.t % 60)).slice(-2);
     const hero2 = heroById(o.hero);
+    const dinfo = DIFFS.find(d => d.id === o.diff);
     const rows = [
-      ['hero', hero2 ? hero2.icon + ' ' + hero2.name : '—'],
+      ['hero', (hero2 ? hero2.icon + ' ' + hero2.name : '—')
+        + (dinfo && dinfo.id !== 'normal' ? '  •  ' + dinfo.name : '')
+        + (o.muts > 0 ? '  •  ENDLESS +' + o.muts : '')],
       ['reached', 'floor ' + o.floor + ', room ' + o.depth],
       ['monsters slain', '' + o.kills],
       ['gold looted', fmt(o.gold)],
