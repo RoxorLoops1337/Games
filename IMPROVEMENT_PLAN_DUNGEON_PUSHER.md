@@ -453,14 +453,16 @@ Ordered by impact ÷ effort.
       walks out of; at 5 → ★ + the NAMEPAD asks for a name (ESC skips);
       S.petNames rides every future summon ("Biscuit ★") with +1 max HP;
       mkRat honors it so the swarm remembers its own (session 66)
-- [ ] **Hero signature quests**: one pool quest per specialist, gated to
-      their runs — Poltergeist: win a battle firing ≤6 coins; Crane
-      Keeper: deliver 12 claw catches in one run; Rat King: field the
-      full swarm of 8; Alchemist: 3 draughts in one battle — cogs + a
-      quest-log line each
-- [ ] **Events grow to 14**: five new act-aware events (an escaped
-      champion's bounty, a tollkeeper's rebate, a mirror merchant, a
-      gremlin auction, the innkeeper's wager on your next floor time)
+- [x] **Hero signature quests**: QUEST_DEFS grew a hero gate (rollQuest
+      filters) — GHOSTLEAN (win firing ≤6), CLAWCATCH (12 claw catches),
+      FULLSWARM (all 8 rats fielded), TRIPLEDRAUGHT (3 brews, one battle);
+      12 jobs on the board, signature work never leaks to other heroes
+      (session 67)
+- [x] **Events grow to 14**: THE BOUNTY BOARD (+40 on your next champion
+      kill), THE TOLLKEEPER'S CLERK (toll waived, or the audit backfires
+      and doubles it — expires at the stairs), THE MIRROR MERCHANT (mint:
+      −5 maxHp for a rare pick), THE GREMLIN AUCTION, THE INNKEEPER'S
+      WAGER (unhurt to the stairs → +35) (session 67)
 - [ ] **Act motifs**: the descend sting grows into a per-act 4-note motif
       (same tone() plumbing, no assets); WHAT'S NEW mentions it; respects
       the music volume slider
@@ -472,9 +474,9 @@ Ordered by impact ÷ effort.
 - [x] **Quest pool +4** (8 jobs now): NOPOTION (dry win — usePotion marks
       the battle), BIGBANK (30 banked), CHESTS (3 cracked lids), TILTWIN
       (3 tilts spent and still win) (session 66)
-- [ ] **The rookie contract**: after the coach retires, a one-time
-      CONTRACT card: "reach floor 5 — 30 ⚙" — recruited friends get an
-      immediate goal; pays once (S.contract)
+- [x] **The rookie contract**: first run of any profile with best < 5
+      arms it (toast); reaching floor 5 pays 30 ⚙ once ever (S.contract
+      0/1/2, persisted); veterans never see the paper (session 67)
 - [ ] **[big] GLASS JARS on the bed**: past act 1, some floors seed a glass
       jar riding the pusher (layout-seeded): three direct coin hits crack
       it for a gem+relic spill; it slides off the back edge in ~4 rounds —

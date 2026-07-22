@@ -3279,7 +3279,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const { DP: D } = loadGame({}, false);
   const DS = D.S;
-  t.eq(D.EVENTS.length, 9, 'nine strangers roam the halls (two keep to the mint)');
+  t.eq(D.EVENTS.length, 14, 'fourteen strangers roam the halls (three keep to the mint)');
   t.ok(D.EVENTS.every(e => e.id && e.icon && e.name && e.flavor && e.choices.length >= 2),
        'each fully written with at least two choices');
   D.srand(1212);
@@ -5785,7 +5785,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(R.petVet('pup'), 'so does the stripe');
   // ---- the four new quests ----
   const { DP: Q } = loadGame({}, false);
-  t.eq(Q.QUEST_DEFS.length, 8, 'eight jobs on the floor board');
+  t.eq(Q.QUEST_DEFS.length, 12, 'twelve jobs on the floor board (four are signature work)');
   t.ok(['nopotion', 'bigbank', 'chests', 'tiltwin'].every(id => Q.QUEST_DEFS.some(q => q.id === id)),
     'the four new jobs are posted');
   Q.srand(192); Q.newRun('knight');
@@ -5826,6 +5826,110 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     'pile badges no longer wait for the coin to land');
   t.ok(src.indexOf('colorblind marks ride the offer too') >= 0, 'the victory offer wears them');
   t.ok(src.indexOf('S.petNameQ && !NAMEPAD') >= 0, 'the namepad answers the promotion');
+}
+
+// -------- SIGNATURE QUESTS + five new strangers + the rookie contract --------
+{
+  const { DP: D } = loadGame({}, false);
+  // signature quests only post on their own hero's runs
+  D.srand(201); D.newRun('knight');
+  let leaked = null;
+  for (let i = 0; i < 60 && !leaked; i++) {
+    const q = D.rollQuest(3);
+    if (['ghostlean', 'clawcatch', 'fullswarm', 'tripledraught'].indexOf(q.id) >= 0) leaked = q.id;
+  }
+  t.ok(!leaked, 'sixty knight rolls, no signature work leaked' + (leaked ? ' (' + leaked + ')' : ''));
+  D.S.deep15 = { knight: 1, rogue: 1, wizard: 1, cleric: 1, ghost: 1 };
+  D.srand(202); D.newRun('alch');
+  let sawSig = false;
+  for (let i = 0; i < 80 && !sawSig; i++) sawSig = D.rollQuest(3).id === 'tripledraught';
+  t.ok(sawSig, 'the alchemist is offered her own work');
+  // tripledraught: three brews in one battle close it
+  D.S.run.quest = { id: 'tripledraught', need: 1, got: 0, done: false, reward: 'goldkey' };
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.hp = D.S.enemy.maxHp = 500;
+  D.brewDraught('heal'); D.brewDraught('heal');
+  t.ok(!D.S.run.quest.done, 'two brews are not three');
+  D.brewDraught('heal');
+  t.ok(D.S.run.quest.done, 'the third brew closes the job');
+  // ghostlean: a lean win bumps only under the ghost
+  const { DP: G } = loadGame({}, false);
+  G.S.deep15 = { a: 1, b: 1, c: 1, d: 1, e: 1 };
+  G.S.best = { ...G.S.best, floor: 20 };
+  G.srand(203); G.newRun('ghost');
+  t.eq(G.S.run.hero, 'ghost', 'the poltergeist answers (floor 20 unseal)');
+  G.S.run.quest = { id: 'ghostlean', need: 1, got: 0, done: false, reward: 'goldkey' };
+  G.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  G.interact(0);
+  G.S.battle.fired = 5;
+  G.S.enemy.hp = 1; G.S.enemy.block = 0; G.S.enemy.mirrorSpent = true; G.S.enemy.braced = false;
+  G.dmgEnemy(9);
+  t.ok(G.S.run.quest.done, 'five coins fired, battle won — lean as promised');
+  // ---- the five new strangers ----
+  t.ok(['bounty', 'rebate', 'mirrorman', 'auction', 'wager'].every(id => D.eventById(id)),
+    'five new strangers stand in the halls');
+  t.ok(D.eventById('mirrorman').mint, 'the mirror merchant keeps to the mint');
+  // the bounty pays on the next champion kill
+  const { DP: B } = loadGame({}, false);
+  B.srand(204); B.newRun('knight');
+  B.S.run.floor = 8;
+  B.S.run.bountyChamp = 1;
+  B.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'velvetfang', done: false, px: 0.5, py: 0.4 }];
+  B.interact(0);
+  const ch = B.S.enemy;
+  const bg0 = B.S.run.gold;
+  ch.hp = 1; ch.mirrorSpent = true; ch.block = 0; ch.braced = false;
+  B.dmgFoe(ch, 999);
+  t.ok(B.S.run.gold >= bg0 + 40, 'the bounty pays its +40 on the champion');
+  t.eq(B.S.run.bountyChamp, 0, 'and the poster is spent');
+  // the clerk's forms: toll-free descends free, the audit doubles the toll
+  const { DP: C } = loadGame({}, false);
+  C.srand(205); C.newRun('knight');
+  C.S.run.tollDouble = 1;
+  t.eq(C.stairToll(), 4, 'a spiteful audit doubles the toll');
+  C.S.run.tollFree = 1;
+  C.S.run.purse = { coin: 1, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+  C.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  C.interact(0);
+  t.eq(C.S.run.floor, 2, 'a misfiled toll still descends');
+  t.eq(C.purseTotal(), 1, 'without touching the purse');
+  t.eq(C.S.run.tollDouble, 0, 'the audit’s spite expires at the stairs');
+  // the wager settles on the way down
+  const { DP: W } = loadGame({}, false);
+  W.srand(206); W.newRun('knight');
+  W.S.run.purse.coin += 10;
+  W.S.run.wager = { hp: W.S.run.hp };
+  const wg0 = W.S.run.gold;
+  W.nextFloor();
+  t.ok(W.S.run.gold >= wg0 + 35, 'unhurt to the stairs — the innkeeper pays 35');
+  t.eq(W.S.run.wager, null, 'the bet is settled');
+  W.S.run.wager = { hp: W.S.run.hp + 5 };
+  const wg1 = W.S.run.gold;
+  W.nextFloor();
+  t.eq(W.S.run.gold, wg1, 'bleeding at the stairs pays nothing');
+  // ---- the rookie contract ----
+  const store = {};
+  const { DP: K } = loadGame(store, false);
+  K.srand(207); K.newRun('knight');
+  t.eq(K.S.contract, 1, 'a rookie’s first run arms the contract');
+  const kc0 = K.S.cogs;
+  K.S.run.floor = 4;
+  K.nextFloor();
+  t.eq(K.S.contract, 2, 'floor 5 delivers');
+  t.eq(K.S.cogs, kc0 + 30, 'and pays its 30 cogs');
+  K.srand(208); K.newRun('knight');
+  K.S.run.floor = 4; K.S.cogs = 0;
+  K.nextFloor();
+  t.eq(K.S.cogs, 0, 'the contract never pays twice');
+  K.save();
+  const { DP: K2 } = loadGame(store, false);
+  t.eq(K2.S.contract, 2, 'the paid contract survives a reload');
+  // veterans are never offered it
+  const { DP: V } = loadGame({}, false);
+  V.S.best.floor = 9;
+  V.srand(209); V.newRun('knight');
+  t.eq(V.S.contract, 0, 'a floor-9 veteran signs no rookie paper');
 }
 
 t.done();

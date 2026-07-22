@@ -977,6 +977,8 @@ function brewDraught(force) {
   if (!d) return null;
   const pow = 2 * (S.run.reagents || 0);
   S.run.reagents = 0;
+  S.battle.brews = (S.battle.brews || 0) + 1;
+  if (S.battle.brews >= 3) questBump('tripledraught', 1);
   S.life.draughts = S.life.draughts || {};
   S.life.draughts[d.id] = (S.life.draughts[d.id] || 0) + 1;   // the habit ledger sips too
   S.shake += 3;
@@ -1136,6 +1138,7 @@ const S = {
   duel: null,                                   // a pending ?duel challenge {seed, floor, name}
   wbRelic: 0,                                   // welcome-back crate: rare pick armed for next run
   gifted: 0,                                    // the one rookie stake, claimed
+  contract: 0,                                  // the rookie contract: 0 unoffered / 1 armed / 2 paid
   petNames: {},                                 // veteran pets' given names (by item id)
   petNameQ: null,                               // a fresh veteran waiting for the namepad
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
@@ -1218,7 +1221,7 @@ function save() {
       firstRun: S.firstRun || '', annivDone: S.annivDone || '', gauntlet: S.gauntlet,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
       rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales, gifted: S.gifted ? 1 : 0,
-      petNames: S.petNames,
+      petNames: S.petNames, contract: S.contract | 0,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1315,6 +1318,7 @@ function load() {
     S.wbRelic = d.wbRelic ? 1 : 0;
     S.gifted = d.gifted ? 1 : 0;
     if (d.petNames && typeof d.petNames === 'object') S.petNames = d.petNames;
+    S.contract = Math.min(2, Math.max(0, d.contract | 0));
     if (d.tales && typeof d.tales === 'object') S.tales = d.tales;
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
@@ -1647,7 +1651,10 @@ function foeDown(e) {
   let keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
   if (hasRelic('auditstamp') && e.boss) keys += 1;
   // a CHAMPION pays double and never leaves you keyless
-  if (e.champ) { gold *= 2; keys += 1; }
+  if (e.champ) {
+    gold *= 2; keys += 1;
+    if (S.run.bountyChamp) { S.run.bountyChamp = 0; addGold(40); floatAnchor('\u{1F4CB} BOUNTY COLLECTED: +40 gold', 'hero', '#ffd75e', true); }
+  }
   // PACIFIST FLOORS: every 3rd floor the blood pays nothing at all
   if (pacifistFloor) { gold = 0; keys = 0; }
   if (hasRelic('graverobber') && (e.elite || e.boss)) keys += 1;   // rob the tougher graves
@@ -2180,6 +2187,7 @@ function craneDrop(x, y) {
     if (rng() < 0.35) slipped.push(o.c);
     else caught.push(o.c);
   }
+  if (caught.length) questBump('clawcatch', caught.length);
   // the escapees tumble back down around the grab point, stirring the pile
   for (const c of slipped) {
     const back = spawnDrop(Math.max(6, Math.min(94, x + (rng() - 0.5) * 14)),
@@ -3246,6 +3254,8 @@ function winBattle() {
     }
   }
   if (!S.battle.drank) questBump('nopotion', 1);
+  if (ghostRun() && (S.battle.fired | 0) <= 6) questBump('ghostlean', 1);
+  if (ratRun() && S.pets.filter(p => p.hp > 0).length >= 8) questBump('fullswarm', 1);
   if ((S.battle.tiltsUsed | 0) >= 3) questBump('tiltwin', 1);
   if (S.run.hp === 1) achUnlock('survivor');
   if (S.run.stats && S.battle.taken0 !== undefined && S.run.stats.taken === S.battle.taken0) achUnlock('untouch');
@@ -3313,9 +3323,15 @@ const QUEST_DEFS = [
   { id: 'bigbank',  txt: n => 'bank ' + n + ' pieces (a hoarder’s floor)', need: () => 30 },
   { id: 'chests',   txt: n => 'crack open ' + n + ' chests',      need: () => 3 },
   { id: 'tiltwin',  txt: () => 'spend 3 TILTs in one battle — and WIN', need: () => 1 },
+  // the specialists' signature work — each only posted on their own runs
+  { id: 'ghostlean',     hero: 'ghost', txt: () => 'win a battle firing 6 coins or fewer', need: () => 1 },
+  { id: 'clawcatch',     hero: 'crane', txt: n => 'catch ' + n + ' pieces with the CLAW',  need: () => 12 },
+  { id: 'fullswarm',     hero: 'rat',   txt: () => 'field the full swarm of eight',        need: () => 1 },
+  { id: 'tripledraught', hero: 'alch',  txt: () => 'brew three draughts in one battle',    need: () => 1 },
 ];
 function rollQuest(floor) {
-  const pool = QUEST_DEFS.filter(q2 => !q2.mint || actIdx(floor) >= 3);
+  const pool = QUEST_DEFS.filter(q2 => (!q2.mint || actIdx(floor) >= 3)
+    && (!q2.hero || (S.run && S.run.hero === q2.hero)));
   const q = pool[(rng() * pool.length) | 0];
   return { id: q.id, need: q.need(floor), got: 0, done: false,
            reward: q.id === 'slugbank' ? 'goldkey' : (rng() < 0.5 ? 'goldkey' : 'relic') };
@@ -3911,6 +3927,11 @@ function newRun(heroId, force) {
   if (!force && !heroUnlocked(hero.id)) hero = HEROES[0];
   S.best.runs = (S.best.runs || 0) + 1;   // the lifetime run tally
   if (!S.firstRun) S.firstRun = new Date().toISOString().slice(0, 10);   // the calendar starts here
+  // the ROOKIE CONTRACT: one clear first goal, one payout, ever
+  if (!S.contract && S.best.floor < 5) {
+    S.contract = 1;
+    toast('\u{1F4DC} the innkeeper’s CONTRACT: reach FLOOR 5 — 30 ⚙ on delivery');
+  }
   S.ach.heroes[hero.id] = 1;              // the casting-call ledger
   const diff = DIFFS.some(d => d.id === S.diffPick) ? S.diffPick : 'normal';
   const ng = !ngPlusOpen() ? 0 : Math.min(S.ngPick | 0, S.ng2Open ? 2 : 1);
@@ -3982,7 +4003,7 @@ function newRun(heroId, force) {
 }
 // the STAIR TOLL deepens with the acts — 2 coins near the sun, +1 per act
 function stairToll() {
-  return C.STAIR_TOLL + Math.min(6, S.run ? actIdx(S.run.floor) : 0);
+  return (C.STAIR_TOLL + Math.min(6, S.run ? actIdx(S.run.floor) : 0)) * ((S.run && S.run.tollDouble) ? 2 : 1);
 }
 // ...and the TOLLKEEPER'S SKIM is the real sink: the purse has a soft
 // ceiling that rises slower than the income curve. Every descent, the
@@ -4284,6 +4305,13 @@ function tryDoor(dir) {
 function nextFloor() {
   if (!S.run) return false;
   const muts0 = mutCount();
+  // the innkeeper's wager settles at the staircase; the clerk's forms expire
+  if (S.run.wager) {
+    if (S.run.hp >= S.run.wager.hp) { addGold(35); toast('\u{1F37A} the innkeeper pays up: +35 gold'); }
+    else toast('\u{1F37A} the innkeeper grins and keeps your stake');
+    S.run.wager = null;
+  }
+  S.run.tollDouble = 0;
   S.run.floor++;
   S.floorFx = { t: 0, floor: S.run.floor, newAct: (S.run.floor - 1) % 5 === 0 };
   // GHOST PACE: stamp this door's clock and whisper it against your best
@@ -4298,6 +4326,12 @@ function nextFloor() {
   if (mutCount() > muts0) {
     const m = MUTS[mutCount() - 1];
     toast('\u{1F30C} ENDLESS DECREE — ' + m.name + ': ' + m.desc);
+  }
+  // the ROOKIE CONTRACT pays on delivery
+  if (S.contract === 1 && S.run.floor >= 5) {
+    S.contract = 2;
+    S.cogs += 30;
+    toast('\u{1F4DC} CONTRACT PAID — floor 5: +30 ⚙ for the workshop');
   }
   // the ENDLESS ledger: deepest decree stack + floors walked past the ledger
   S.life.mutMax = Math.max(S.life.mutMax || 0, mutCount());
@@ -4364,7 +4398,10 @@ function interact(i) {
     }
     // the stairwell takes its toll before it lets you down — and skims
     // whatever spills over the purse's soft ceiling (2 gold a coin)
-    if (!spendPurse(stairToll())) {
+    if (S.run.tollFree) {
+      S.run.tollFree = 0;                     // the clerk's misfiled form, spent
+      toast('the stairs look the other way — toll waived');
+    } else if (!spendPurse(stairToll())) {
       S.uiFlash = { msg: 'THE STAIRS DEMAND ' + stairToll() + ' COINS', t: 1.4 };
       SND.deny();
       return false;
@@ -4524,6 +4561,61 @@ const EVENTS = [
                     S.run.maxHp = Math.max(10, S.run.maxHp - 5);
                     S.run.hp = Math.min(S.run.hp, S.run.maxHp);
                     return 'the lien lands with a thud: \u22125 max HP.'; } },
+    ] },
+  { id: 'bounty', icon: '\u{1F4CB}', name: 'THE BOUNTY BOARD',
+    flavor: 'A fresh poster: the act’s CHAMPION, wanted — alive or otherwise.',
+    choices: [
+      { label: 'take the bounty', sub: 'your next champion kill pays +40 gold on top',
+        can: () => !S.run.bountyChamp,
+        fx: () => { S.run.bountyChamp = 1; return 'the poster folds into your pack. Go collect.'; } },
+      { label: 'tear it down', sub: 'the paper is worth 2 gold to a collector',
+        can: () => true,
+        fx: () => { addGold(2); return 'ripped. Somewhere, a champion sighs in relief.'; } },
+    ] },
+  { id: 'rebate', icon: '\u{1FAAA}', name: 'THE TOLLKEEPER’S CLERK',
+    flavor: '\u201cForms, forms. For a fee I can… misfile this floor’s toll.\u201d',
+    choices: [
+      { label: 'pay 10 gold', sub: 'this floor’s stairs go toll-free',
+        can: () => S.run.gold >= 10 && !S.run.tollFree,
+        fx: () => { S.run.gold -= 10; S.run.tollFree = 1; return 'misfiled. The stairs won’t say a word.'; } },
+      { label: 'audit HIM', sub: '50/50 — recover +15 gold, or the toll DOUBLES this floor',
+        can: () => true,
+        fx: () => { if (rng() < 0.5) { addGold(15); return 'his books were crooked: +15 gold recovered.'; }
+                    S.run.tollDouble = 1; return 'his books were clean. The toll doubles, out of spite.'; } },
+    ] },
+  { id: 'auction', icon: '\u{1F528}', name: 'THE GREMLIN AUCTION',
+    flavor: 'Three gremlins on a crate, hammering junk into “LOTS”.',
+    choices: [
+      { label: 'bid 20 gold', sub: '60% a fine lot (an item) — 40% pocket lint',
+        can: () => S.run.gold >= 20,
+        fx: () => { S.run.gold -= 20;
+                    if (rng() < 0.6) { const it2 = ITEMS[(rng() * ITEMS.length) | 0]; grantItem(it2.id, 1); return 'SOLD! A fine lot: ' + it2.name + '.'; }
+                    S.run.purse.coin += 1; return 'a box of lint. And one honest coin under it.'; } },
+      { label: 'heckle the auctioneer', sub: '30% they throw a lot AT you — else −3 HP of thrown junk',
+        can: () => true,
+        fx: () => { if (rng() < 0.3) { const it2 = ITEMS[(rng() * ITEMS.length) | 0]; grantItem(it2.id, 1); return 'they hurl a ' + it2.name + ' at your head. Keep it.'; }
+                    hpHit(3, 'thrown auction junk', '#c8a86a'); return 'a boot bounces off your ear: −3 HP.'; } },
+    ] },
+  { id: 'mirrorman', icon: '\u{1FA9E}', name: 'THE MIRROR MERCHANT', mint: true,
+    flavor: 'He sells only reflections. Yours looks… valuable.',
+    choices: [
+      { label: 'trade your reflection', sub: '−5 max HP — choose a RARE relic',
+        can: () => S.run.maxHp > 20,
+        fx: () => { S.run.maxHp -= 5; S.run.hp = Math.min(S.run.hp, S.run.maxHp);
+                    openRelicPick('r', 1); return 'the glass drinks you in. Choose your price.'; } },
+      { label: 'decline politely', sub: 'he polishes you anyway: +2 HP',
+        can: () => true,
+        fx: () => { healPlayer(2); return 'buffed to a shine: +2 HP.'; } },
+    ] },
+  { id: 'wager', icon: '\u{1F37A}', name: 'THE INNKEEPER’S WAGER', 
+    flavor: '\u201cFifteen gold says the next staircase takes a bite out of you.\u201d',
+    choices: [
+      { label: 'take the bet (15 gold)', sub: 'descend with no less HP than now → +35 gold',
+        can: () => S.run.gold >= 15 && !S.run.wager,
+        fx: () => { S.run.gold -= 15; S.run.wager = { hp: S.run.hp }; return 'shaken on. Keep your skin whole to the stairs.'; } },
+      { label: 'drink instead', sub: 'the house ale: +3 HP, no stakes',
+        can: () => true,
+        fx: () => { healPlayer(3); return 'warm, flat, and free: +3 HP.'; } },
     ] },
 ];
 function eventById(id) { return EVENTS.find(e => e.id === id); }
