@@ -726,6 +726,8 @@ const S = {
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
   opts: { sfx: 1, shake: true, parts: true },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
+  life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {} },
+  hist: [],                                     // the last ten runs, newest first
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -772,7 +774,7 @@ function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
-      intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach,
+      intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -808,6 +810,12 @@ function load() {
     if (d.ach && typeof d.ach === 'object') {
       S.ach = { u: d.ach.u || {}, heroes: d.ach.heroes || {} };
     }
+    if (d.life && typeof d.life === 'object') {
+      S.life = { fired: d.life.fired || 0, dealt: d.life.dealt || 0, taken: d.life.taken || 0,
+                 kills: d.life.kills || 0, gold: d.life.gold || 0, bosses: d.life.bosses || 0,
+                 time: d.life.time || 0, heroRuns: d.life.heroRuns || {} };
+    }
+    if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -2389,7 +2397,7 @@ function winBattle() {
     floatAnchor('+1 GOLDEN KEY \u{1F511}', 'hero', '#ffd75e', true);
   }
   // trophies earned in the heat of it
-  if (anyBoss) achUnlock('boss1');
+  if (anyBoss) { achUnlock('boss1'); S.life.bosses++; }
   if (S.run.hp === 1) achUnlock('survivor');
   if (S.run.stats && S.battle.taken0 !== undefined && S.run.stats.taken === S.battle.taken0) achUnlock('untouch');
   achPoll();
@@ -2500,12 +2508,21 @@ function bestify() {
 }
 function endRun(cause) {
   bestify();
+  const st = S.run.stats || { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0 };
   S.over = {
     cause: cause || 'fell',
     floor: S.run.floor, depth: S.run.depth, kills: S.run.kills, gold: S.run.goldEarned,
     hero: S.run.hero, relics: S.run.relics.length,
-    stats: S.run.stats || { fired: 0, dealt: 0, taken: 0, bestHit: 0, t: 0 },
+    stats: st,
   };
+  // the LIFETIME ledger swallows the run whole
+  S.life.fired += st.fired; S.life.dealt += st.dealt; S.life.taken += st.taken;
+  S.life.kills += S.run.kills; S.life.gold += S.run.goldEarned; S.life.time += st.t;
+  S.life.heroRuns[S.run.hero] = (S.life.heroRuns[S.run.hero] || 0) + 1;
+  // ...and the HISTORY book gets one line (newest first, ten kept)
+  S.hist.unshift({ hero: S.run.hero, floor: S.run.floor, depth: S.run.depth,
+                   kills: S.run.kills, cause: cause || 'fell', t: Math.round(st.t) });
+  if (S.hist.length > 10) S.hist.length = 10;
   S.run = null;
   S.foes = [];
   S.pets = [];
@@ -7509,6 +7526,49 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 - 70, 110 + Math.ceil(ACH.length / 2) * 62 + 10, 140, 40, 'CLOSE ✕', () => { TROPHIES = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
+  // ---- the RECORDS book: lifetime totals + the last ten runs ----
+  let RECORDS = false;
+  function drawRecords(t) {
+    if (!RECORDS) return;
+    ctx.fillStyle = 'rgba(7,3,10,0.96)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { RECORDS = false; } });
+    txt('\u{1F4CA} RECORDS', LW / 2, 58, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    const L = S.life;
+    const hrs = Object.entries(L.heroRuns);
+    hrs.sort((a, b) => b[1] - a[1]);
+    const fav = hrs.length ? heroById(hrs[0][0]) : null;
+    const mins = Math.round(L.time / 60);
+    const rows = [
+      ['runs', '' + (S.best.runs || 0)], ['monsters slain', fmt(L.kills)],
+      ['bosses felled', '' + L.bosses], ['coins fired', fmt(L.fired)],
+      ['damage dealt', fmt(L.dealt)], ['damage taken', fmt(L.taken)],
+      ['gold looted', fmt(L.gold)], ['time in the deep', mins + ' min'],
+      ['favorite hero', fav ? fav.icon + ' ' + fav.name + ' (' + hrs[0][1] + ')' : '—'],
+      ['best descent', S.best.floor > 0 ? 'floor ' + S.best.floor + ', room ' + S.best.depth : '—'],
+    ];
+    rows.forEach((rw, i) => {
+      const x = i % 2 === 0 ? 30 : LW / 2 + 10;
+      const y = 92 + ((i / 2) | 0) * 40;
+      rr(x, y, LW / 2 - 40, 34, 8);
+      ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+      txt(rw[0], x + 8, y + 10, '600 9px Verdana, sans-serif', '#9a8aa0', 'left');
+      txt(rw[1], x + 8, y + 25, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
+    });
+    txt('— THE LAST RUNS —', LW / 2, 312, '900 12px Georgia, serif', '#c8a8b0');
+    if (!S.hist.length) txt('no tales yet — go die gloriously', LW / 2, 344, '700 11px Verdana, sans-serif', '#8f6f78');
+    S.hist.forEach((h, i) => {
+      const y = 328 + i * 34;
+      const hero3 = heroById(h.hero);
+      rr(30, y, LW - 60, 30, 8);
+      ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
+      txt((hero3 ? hero3.icon : '❔') + '  floor ' + h.floor + ' rm ' + h.depth + '  •  ' + h.kills + ' kills',
+          40, y + 15, '800 10px Verdana, sans-serif', '#e8d0a0', 'left');
+      txt(h.cause, LW - 40, y + 15, '600 9px Verdana, sans-serif', '#a08090', 'right');
+    });
+    uiBtn(LW / 2 - 70, 328 + Math.max(1, S.hist.length) * 34 + 14, 140, 40, 'CLOSE ✕', () => { RECORDS = false; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   // ---- the SETTINGS sheet: volume notches, comfort toggles, the tale ----
   let SETTINGS = false;
   function drawSettings(t) {
@@ -7701,6 +7761,7 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 54, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
     uiBtn(LW - 52, 96, 38, 36, '\u{1F3C6}', () => { TROPHIES = true; }, { r: 10, font: '15px serif' });
+    uiBtn(LW - 52, 138, 38, 36, '\u{1F4CA}', () => { RECORDS = true; }, { r: 10, font: '15px serif' });
   }
 
   function drawOver(t) {
@@ -7791,6 +7852,7 @@ if (!HEADLESS) (function browser() {
     drawWheel();
     drawRelicPick(t);
     drawTrophies(t);
+    drawRecords(t);
     drawSettings(t);
     drawIntro(t);
     drawConfirm(t);
