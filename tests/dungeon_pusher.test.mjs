@@ -6386,19 +6386,27 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
       rounds++;
       // the poltergeist and the crane keeper hold no hand — their purse
       // pours in from above; the same flat yield keeps it apples-to-apples
+      // every catch goes through the REAL tray gate (scoreCoin), so the
+      // engines that live there run: the Rat King's CHEESE, the
+      // Alchemist's still, pets leaping from the tray
+      const catchIt = (kind, iid) => D.scoreCoin({ kind, iid: iid || null, x: 50 }, true);
       const base = (D.ghostRun() || D.craneRun()) ? { ...S2.run.purse } : B.hand;
       for (const k of D.COIN_KINDS) {
         const n = Math.round((base[k] || 0) * YIELD);
-        for (let i = 0; i < n; i++) B.loot.push({ k });
+        for (let i = 0; i < n; i++) catchIt(k);
         if (base === B.hand) B.hand[k] = 0;
       }
       // the standing pile pays too: the round re-salt spills its share over
       // the lip (real kind mix via rollPileKind), and one piece of owned
       // gear rides the pile into the tray each round
       const pile = Math.round(D.C.ROUND_RAIN * YIELD);
-      for (let i = 0; i < pile; i++) B.loot.push({ k: D.rollPileKind() });
+      for (let i = 0; i < pile; i++) catchIt(D.rollPileKind());
+      // the bed's gem inserts, which the flat model above omits: every
+      // other round one gem rides the tray (the Rat King's whole engine
+      // — CHEESE — starves without this real-game flow)
+      if (rounds % 2 === 0) catchIt('gem');
       const gear = Object.keys(S2.run.arsenal || {}).filter(iid => S2.run.arsenal[iid] > 0);
-      if (gear.length) B.loot.push({ k: 'item', iid: gear[rounds % gear.length] });
+      if (gear.length) catchIt('item', gear[rounds % gear.length]);
       S2.rain.length = 0;                  // headless: nothing lands rain
       if (S2.run.hp <= S2.run.maxHp * 0.35 && S2.run.potions > 0) D.usePotion();
       D.endRoundNow();
@@ -6429,7 +6437,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const simRun = (heroId, seed) => {
     cur = FILE[heroId] = FILE[heroId] || { fights: 0, rounds: 0, taken: 0, foes: 0 };
     D.srand(seed);
-    D.newRun(heroId);
+    D.newRun(heroId, true); // FORCE the hero: sealed ones must not silently
+                            // fall back to the knight and fake their medians
     S2.run.bside = 0;      // the boss roster flips per LIFETIME run — pin one side
     while (S2.run && S2.run.floor <= MAX_FLOOR) {
       const f = S2.run.floor;
@@ -6784,7 +6793,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.1', 'the ledger patch ships as v1.7.1');
+  t.eq(D.VERSION, '1.7.2', 'the truth patch ships as v1.7.2');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REPLAY GHOST') >= 0)), 'and the notes carry the ghost');
   // roundtrip: the clock rides in base36, floors 2 up
   const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
@@ -7115,18 +7124,23 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const S2 = D.S;
   t.eq(D.SPECIALS.join(','), 'bunny,twin,ember,piper,rime,lode,king,rot,mimic,leech,spikey', 'the owner\u2019s coins stand, spikey included');
   for (const k of D.SPECIALS) t.ok(D.COIN_INFO[k] && D.COIN_INFO[k].what, 'statted: ' + k);
-  // THE MINT: every fallen boss strikes one, fewest-owned first
+  // THE MINT: every fallen boss offers a CHOICE of the three scarcest
   D.srand(21); D.newRun('knight');
   S2.run.bside = 0;
   D.startBattle('boss');
   for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
-  t.eq(S2.run.purse.bunny, 1, 'the first boss mints the BUNNY');
+  t.ok(S2.victory && S2.victory.specialOffer && S2.victory.specialOffer.length === 3, 'a fallen boss OFFERS three specials');
+  t.eq(S2.victory.specialOffer[0], 'bunny', 'scarcest first in the spread');
   t.ok(S2.seen.specials, 'and the mint introduces itself once');
+  t.ok(D.pickSpecialOffer(0), 'the choice is yours now');
+  t.eq(S2.run.purse.bunny, 1, 'the first boss mints the BUNNY');
+  t.ok(!D.pickSpecialOffer(1), 'but only one strike per boss');
   D.leaveBattle();
+  t.eq(S2.run.purse.twin | 0, 0, 'a made choice never double-mints on the way out');
   D.startBattle('boss');
   for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
-  t.eq(S2.run.purse.twin, 1, 'the second boss strikes the TWIN — fewest first');
-  D.leaveBattle();
+  D.leaveBattle();                      // descend WITHOUT choosing —
+  t.eq(S2.run.purse.twin, 1, 'a skipped choice still strikes the scarcest (TWIN)');
   // the deep never takes them: skim and toll pass the specials by
   S2.run.purse.coin = 60; S2.run.purse.ember = 3;
   D.stairSkim();
@@ -7374,6 +7388,42 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.setLang('nl');
   t.eq(D.TR('THE STAIRS LEDGER'), 'HET TRAPGROOTBOEK', 'the ledger speaks Dutch');
   D.setLang('en');
+}
+
+// -------- v1.7.2: pets LEAP from the tray, the dead queue settles --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  D.srand(31); D.newRun('knight');
+  // LIVING GEAR LEAPS: a tortoise caught by the tray joins the stage NOW,
+  // not at END TURN — the owner watched turtles idle in the tray
+  D.startBattle('battle');
+  S2.battle.phase = 'drop';
+  const tort = D.place(50, 40, 'item', 0, 'plat');
+  tort.iid = 'tortoise';
+  S2.coins.splice(S2.coins.indexOf(tort), 1);
+  D.scoreCoin(tort, true);
+  t.eq(S2.pets.filter(p => p.iid === 'tortoise').length, 1, 'the tortoise leaps from the tray onto the stage');
+  t.eq(S2.battle.loot.filter(l => l.k === 'item').length, 0, 'and no longer idles in the loot queue');
+  // a second turtle piece is a second turtle (no whistle, room in the pack)
+  const tort2 = D.place(60, 40, 'item', 0, 'plat');
+  tort2.iid = 'tortoise';
+  S2.coins.splice(S2.coins.indexOf(tort2), 1);
+  D.scoreCoin(tort2, true);
+  t.eq(S2.pets.filter(p => p.iid === 'tortoise').length, 2, 'two pieces caught, two shells on stage');
+  // THE DEAD QUEUE: a victory mid-resolve settles the unfired remainder
+  // instead of swallowing it (gems cash, specials walk home, plain 2-for-1)
+  S2.battle.queue = D.buildQueue([{ k: 'gem' }, { k: 'bunny' }, { k: 'coin' }, { k: 'coin' }]);
+  S2.battle.qi = 0;
+  S2.battle.loot = []; S2.battle.banked = [];
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
+  t.ok(S2.victory, 'the pack falls mid-resolve');
+  const g0 = S2.run.gold, bun0 = S2.run.purse.bunny | 0;
+  D.leaveBattle();
+  t.eq(S2.run.purse.bunny, bun0 + 1, 'a special stuck in the dead queue walks home to the purse');
+  t.eq(S2.run.gold, g0 + 15 + 1, 'the dead gem cashes 15, two dead plain sweep 2-for-1');
+  D.endRun('done');
 }
 
 t.done();

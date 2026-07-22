@@ -51,6 +51,12 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.2', notes: [
+    'THE BOSS MINT is a CHOICE now \u{1FA99} — every fallen boss spreads the three specials you hold fewest of and YOU pick one (skip, and the house strikes the scarcest for you); no more invisible mints',
+    'pets LEAP \u{1F422} — living gear joins your side the moment the tray catches it, no more waiting for END TURN while the turtles idle',
+    'the DEAD QUEUE settles — a kill mid-resolve used to swallow everything still queued in the tray; now gems cash in, specials walk home and plain pieces sweep 2-for-1, same as the settlement',
+    'a truth pass over every tooltip: eleven descriptions now say exactly what the code does (Twin Fangs, Blood Thirst, Contagion, Lucky Streak, Alloy, the Gilded Hourglass, pet deeds, the mirror ward, the melt rate, the freezing draught) — and every flying piece announces its REAL number, relics included',
+  ] },
   { v: '1.7.1', notes: [
     'THE STAIRS LEDGER \u{2696}\u{FE0F} — the toll and the over-cap melt are posted at every staircase and YOU pick which coins pay them (AUTO fills the old way); nothing leaves the purse unseen anymore',
     'thieves play fair now: muggers pocket REAL coins and give every one back when you cut them down — and the victory screen SETTLES the tray instead of swallowing it (gems and bags cash in, specials walk home, plain pieces sweep 2-for-1)',
@@ -553,7 +559,7 @@ const RELICS = [
   { id: 'crowbar',    rar: 'c', icon: '\u{1F527}', name: 'Crowbar',       desc: '+1 TILT charge every round' },
   { id: 'minter',     rar: 'c', icon: '\u{1FA99}', name: 'Minter',        desc: 'your hand holds a bonus gold coin each round' },
   // coin-benders: RARE
-  { id: 'twinfangs',  rar: 'r', icon: '\u{1F9B7}', name: 'Twin Fangs',    desc: 'poison you apply is DOUBLED' },
+  { id: 'twinfangs',  rar: 'r', icon: '\u{1F9B7}', name: 'Twin Fangs',    desc: 'venom coins and vials apply DOUBLE poison' },
   { id: 'spikeshield',rar: 'r', icon: '\u{1F994}', name: 'Spiked Shield', desc: 'silver coins also deal 1 damage' },
   { id: 'bloodgold',  rar: 'r', icon: '\u{1FA78}', name: 'Blood Gold',    desc: 'gold coins heal 1 HP as they strike' },
   { id: 'bulwarkram', rar: 'r', icon: '\u{1F3F0}', name: 'Bulwark Ram',   desc: 'each resolve ends with a strike equal to your block' },
@@ -618,12 +624,12 @@ const RELICS = [
   { id: 'tithe',      rar: 'r', icon: '\u{26EA}', name: 'Tithe',          desc: '+10 gold after every victory' },
   { id: 'secondbreath',rar: 'r', icon: '\u{1F32C}\u{FE0F}', name: 'Second Breath', desc: 'heal 8 HP after every victory' },
   { id: 'emberhoard', rar: 'r', icon: '\u{1FA94}', name: 'Ember Hoard',   desc: 'gold coins also singe ALL foes for 1' },
-  { id: 'contagion',  rar: 'r', icon: '\u{1F578}\u{FE0F}', name: 'Contagion', desc: 'venom coins also seep 1 stack to every foe' },
+  { id: 'contagion',  rar: 'r', icon: '\u{1F578}\u{FE0F}', name: 'Contagion', desc: 'venom coins also seep 1 stack to every OTHER foe' },
   { id: 'jackpotcharm',rar: 'r', icon: '\u{1F3B0}', name: 'Jackpot Charm', desc: 'filling the JACKPOT meter also pays +15 gold' },
   // EPIC — run-defining
   { id: 'goldrush',   rar: 'e', icon: '\u{1F911}', name: 'Gold Rush',     desc: 'all gold income +40%' },
   { id: 'finale',     rar: 'e', icon: '\u{1F386}', name: 'Finale',        desc: 'the last piece of every resolve fires twice' },
-  { id: 'bloodthirst',rar: 'e', icon: '\u{1F9DB}\u{200D}\u{2642}\u{FE0F}', name: 'Blood Thirst', desc: 'every coin and weapon heals you 1 on hit' },
+  { id: 'bloodthirst',rar: 'e', icon: '\u{1F9DB}\u{200D}\u{2642}\u{FE0F}', name: 'Blood Thirst', desc: 'gold and lucky coins and weapons heal you 1 on hit' },
   { id: 'revenant',   rar: 'e', icon: '\u{1FAB6}', name: 'Revenant',      desc: 'survive TWO killing blows at 1 HP each fight' },
   { id: 'warlord',    rar: 'e', icon: '\u{1F396}\u{FE0F}', name: 'Warlord', desc: 'gold coins hit harder for every 3 gold already fired' },
   // ---- the ember shelf: BURN, BLEED and the menagerie (50 more) ----
@@ -663,12 +669,12 @@ const RELICS = [
   { id: 'gritcollar',  rar: 'r', icon: '\u{1F9B4}', name: 'Grit Collar',   desc: 'each pet survives its first death at 1 HP' },
   { id: 'sterling',    rar: 'r', icon: '\u{1F948}', name: 'Sterling Heart', desc: 'overhealing becomes block (up to 3 a pop)' },
   { id: 'frostbite',   rar: 'r', icon: '\u{1F976}', name: 'Frostbite',     desc: 'FROZEN foes take +2 from every hit' },
-  { id: 'luckystreak', rar: 'r', icon: '\u{1F3B2}', name: 'Lucky Streak',  desc: 'lucky coins deal +1 per lucky already fired this resolve' },
+  { id: 'luckystreak', rar: 'r', icon: '\u{1F3B2}', name: 'Lucky Streak',  desc: 'lucky coins deal +1 per lucky already fired this battle' },
   { id: 'hailstorm',   rar: 'r', icon: '\u{1F328}\u{FE0F}', name: 'Hailstorm', desc: 'frost coins deal +1 for each OTHER foe standing' },
   { id: 'quartermaster', rar: 'r', icon: '\u{1F4E6}', name: 'Quartermaster', desc: 'the first item to fire each battle fires twice' },
   { id: 'bombardier',  rar: 'r', icon: '\u{1F9E8}', name: 'Bombardier',    desc: 'bombs also apply 4 BURN' },
   { id: 'shieldwall',  rar: 'r', icon: '\u{1F6E1}\u{FE0F}', name: 'Shield Wall', desc: 'shield items grant +2 block per living pet' },
-  { id: 'alloy',       rar: 'r', icon: '\u{2699}\u{FE0F}', name: 'Alloy',   desc: 'every 3rd silver coin in a resolve gives +3 block' },
+  { id: 'alloy',       rar: 'r', icon: '\u{2699}\u{FE0F}', name: 'Alloy',   desc: 'every 3rd silver coin in a battle gives +3 block' },
   // EPIC
   { id: 'hemorrhage',  rar: 'e', icon: '\u{1FA78}', name: 'Hemorrhage',    desc: 'BLEED never fades — the wound stays open' },
   { id: 'infernolord', rar: 'e', icon: '\u{1F608}', name: 'Inferno Lord',  desc: 'BURN never fades — the fire keeps eating' },
@@ -691,7 +697,7 @@ const RELICS = [
   { id: 'crownscale', rar: 'e', ng: 1, icon: '\u{1F451}', name: 'Crown Scale', desc: 'NG+ — bosses and elites take +25% damage' },
   { id: 'dblchime',   rar: 'r', ng: 1, icon: '\u{1F6CE}\u{FE0F}', name: 'Double Chime', desc: 'NG+ — every JACKPOT rains 4 bonus coins' },
   { id: 'leadenidol', rar: 'e', ng: 1, icon: '\u{1F5FF}', name: 'Leaden Idol', desc: 'NG+ — every blow against you lands 2 lighter' },
-  { id: 'gildhour',   rar: 'c', ng: 1, icon: '\u{231B}', name: 'Gilded Hourglass', desc: 'NG+ — +1 TILT charge in every battle' },
+  { id: 'gildhour',   rar: 'c', ng: 1, icon: '\u{231B}', name: 'Gilded Hourglass', desc: 'NG+ — +1 TILT charge every round' },
   { id: 'throneshard', rar: 'e', ng: 2, icon: '\u{265A}', name: 'Throne Shard', desc: 'LEGEND — every blow you land strikes +2 harder' },
 ];
 // weighted pull from the unowned shelf — commons far more often
@@ -894,7 +900,9 @@ function itemFx(iid) {
     main = it.str ? '+' + it.str + ' STRENGTH for one battle' : '+' + it.dex + ' DEXTERITY for one battle';
   } else if (it.kind === 'pet') {
     const hp = it.php + (hasRelic('kennel') ? 4 : 0) + (hasRelic('beastmaster') ? 2 : 0);
-    const deed = it.id === 'pup' ? 'growls +1 block' : it.id === 'newt' ? 'spits 1 BURN' : 'gnaws 1 dmg + 1 BLEED';
+    const deed = it.id === 'pup' ? 'growls +1 block' : it.id === 'newt' ? 'spits 1 BURN'
+               : it.id === 'owl' ? 'sees through the blackout hex' : it.id === 'tortoise' ? 'shells up +2 block'
+               : it.id === 'beetle' ? 'scorches whatever strikes it (1 burn)' : 'gnaws 1 dmg + 1 BLEED';
     main = hp + ' HP pet';
     mods.push('soaks blows for you • ' + deed + ' each round');
     M('kennel', '+4 max HP');
@@ -1195,7 +1203,7 @@ function brewDraught(force) {
     floatAnchor('\u{2697}\u{FE0F} BLASTING DRAUGHT — ' + (8 + pow) + ' to ALL!', 'hero', '#ff9d3c', true);
     dmgAll(8 + pow);
   } else if (d.id === 'frost') {
-    floatAnchor('\u{2697}\u{FE0F} FREEZING DRAUGHT — stun +' + (2 + pow) + ' to ALL!', 'hero', '#8ef0ff', true);
+    floatAnchor('\u{2697}\u{FE0F} FREEZING DRAUGHT — ' + (2 + pow) + ' to ALL, target frozen!', 'hero', '#8ef0ff', true);
     dmgAll(2 + pow);
     stunEnemy(1);
   } else if (d.id === 'heal') {
@@ -1290,7 +1298,7 @@ const DEF_TXT = {
   gel: 'gelatinous — every hit capped at ' + 2, armor: 'armoured — absorbs ' + 2 + ' off each hit',
   thick: 'thick hide — IMMUNE to poison', regen: 'regenerates each round',
   ward: 'warded — protects the pack (−' + 2 + ' dmg)',
-  mirror: 'mirrored — reflects the first hit each round (up to 8)',
+  mirror: 'mirrored — reflects the first hit each round (8, +2 per act)',
   tar: 'tarred — every 3rd piece STICKS (returned on its death)',
 };
 // a compact badge for each foe so its mechanic reads at a glance
@@ -2269,6 +2277,17 @@ function scoreCoin(c, quiet) {
   if (c.leechMark && S.battle) {
     const lch = S.coins.find(n => n.st === 'plat' && n.kind === 'leech');
     if (lch) lch.fat = Math.min(LEECH_FAT_CAP, (lch.fat | 0) + 1);
+  }
+  // LIVING GEAR LEAPS: a caught pet never waits for END TURN — the beast
+  // bounds from the tray straight onto the stage, where you can see it
+  if (c.kind === 'item' && c.iid && !S.victory) {
+    const pit = itemById(c.iid);
+    if (pit && pit.kind === 'pet') {
+      summonPet(c.iid);
+      trayAdd(c.kind, { iid: c.iid, x: c.x });
+      if (!quiet) { S.shake += 3; SND.collect(3); burst(c.x, 96, C.TRAY_Z, c.kind); }
+      return;
+    }
   }
   S.battle.loot.push({ k: c.kind, iid: c.iid, up: c.paired ? 1 : 0, tip: c.emberTip ? 1 : 0,
                        rime: c.rimeTip ? 1 : 0, court: c.court | 0, fat: c.fat | 0, sp: c.spiked ? 1 : 0 });
@@ -3660,11 +3679,12 @@ function winBattle() {
     relicOffer = [pick('c'), pick('c'), pick('r')].filter(Boolean);
   }
   // THE SPECIAL MINT (the owner's law): every fallen boss strikes ONE touch
-  // coin on top of the relic spread — always the kind you hold fewest of
+  // coin on top of the relic spread — now YOUR CHOICE from the three kinds
+  // you hold fewest of. Skipping the choice never loses the mint: the house
+  // strikes the scarcest for you when you descend (see leaveBattle).
+  let specialOffer = null;
   if (anyBoss) {
-    const struck = SPECIALS.slice().sort((a, b) => (S.run.purse[a] | 0) - (S.run.purse[b] | 0))[0];
-    S.run.purse[struck] = (S.run.purse[struck] | 0) + 1;
-    floatAnchor('\u{1FA99} the boss minted a ' + COIN_INFO[struck].name.toUpperCase() + ' coin!', 'hero', '#ffd75e', true);
+    specialOffer = SPECIALS.slice().sort((a, b) => (S.run.purse[a] | 0) - (S.run.purse[b] | 0)).slice(0, 3);
     whisperOnce('specials', '\u{1FA99} SPECIAL COINS — bosses mint them, and they work by TOUCH on the bed (❓ the almanac knows)');
   }
   // an elite's hoard hides a GOLDEN KEY — the only thing that opens a vault
@@ -3737,7 +3757,7 @@ function winBattle() {
   achPoll();
   S.victory = { t: 0, gold: S.battle.goldWon, keys: S.battle.keysWon, boss: anyBoss,
                 offer: anyBoss ? null : rollOffer(), picked: null,
-                relicOffer, relicPicked: null, freeSpin: anyElite };
+                relicOffer, relicPicked: null, specialOffer, specialPicked: null, freeSpin: anyElite };
   // the owner's economy dial, part 2: past act 2 the offer's first slot
   // REFINES — one plain coin melts into the finer kind. Quality, not bulk.
   if (S.victory.offer && S.victory.offer[0] && S.victory.offer[0] !== 'coin'
@@ -3767,15 +3787,43 @@ function pickRelicOffer(i) {
   save();
   return true;
 }
+// take one special coin from the boss's mint (once). The mint is a right,
+// not a gamble: leaveBattle strikes the scarcest if the choice was skipped.
+function pickSpecialOffer(i) {
+  if (!S.run || !S.victory || !S.victory.specialOffer || S.victory.specialPicked) return false;
+  const k = S.victory.specialOffer[i];
+  if (!k) return false;
+  S.run.purse[k] = (S.run.purse[k] | 0) + 1;
+  S.victory.specialPicked = k;
+  floatAnchor('\u{1FA99} the boss minted a ' + COIN_INFO[k].name.toUpperCase() + ' coin!', 'hero', '#ffd75e', true);
+  SND.buy();
+  save();
+  return true;
+}
 // tap CONTINUE on the victory overlay: back to the top-down room
 function leaveBattle() {
   if (!S.run || S.screen !== 'battle' || !S.victory) return false;
   const boss = S.victory.boss;
+  // an unchosen boss mint never evaporates — the house strikes the scarcest
+  if (S.victory.specialOffer && !S.victory.specialPicked) {
+    const mk = S.victory.specialOffer[0];
+    S.run.purse[mk] = (S.run.purse[mk] | 0) + 1;
+    toast('\u{1FA99} the boss minted a ' + COIN_INFO[mk].name.toUpperCase() + ' coin');
+  }
   // THE SETTLEMENT: whatever the victory left in the tray or the bank is
   // paid out, never discarded — gems and bags cash in, boss-minted specials
-  // walk back into the purse, and the house sweeps plain pieces 2-for-1
+  // walk back into the purse, and the house sweeps plain pieces 2-for-1.
+  // The DEAD QUEUE too: a victory mid-resolve abandons the rest of the
+  // tray's queue, so its unfired remainder settles like tray loot.
   if (S.battle) {
     const left = [].concat(S.battle.loot || [], S.battle.banked || []);
+    if (S.battle.queue && (S.battle.qi | 0) < S.battle.queue.length) {
+      for (const q of S.battle.queue.slice(S.battle.qi | 0)) {
+        if (q.t === 'gold') left.push({ k: 'coin' });
+        else if (q.iid) left.push({ k: 'item', iid: q.iid });
+        else left.push({ k: q.t, up: q.up, tip: q.tip, rime: q.rime, court: q.court, fat: q.fat, sp: q.sp });
+      }
+    }
     let gold = 0, plain = 0, backS = 0;
     for (const l of left) {
       if (l.k === 'gem') gold += 15;
@@ -5869,7 +5917,7 @@ window.DP = {
   masteryLvl, blackedOut,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
-  bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
+  bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer, pickSpecialOffer,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
   darkFloor, PRESSURE_MAX, payableKinds, coinKindWith, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
@@ -8542,8 +8590,10 @@ if (!HEADLESS) (function browser() {
     if (k < 1) return;
     const hasCoinOffer = v.offer && v.offer.length > 0;
     const hasRelicOffer = v.boss && v.relicOffer && v.relicOffer.length > 0;
-    const hasOffer = hasCoinOffer || hasRelicOffer;
-    const py = hasOffer ? 200 : 300, ph = hasRelicOffer ? 470 : hasCoinOffer ? 404 : 250;
+    const hasSpecialOffer = v.boss && v.specialOffer && v.specialOffer.length > 0;
+    const hasOffer = hasCoinOffer || hasRelicOffer || hasSpecialOffer;
+    const py = hasOffer ? (hasSpecialOffer ? 168 : 200) : 300;
+    const ph = hasRelicOffer ? (hasSpecialOffer ? 588 : 470) : hasCoinOffer ? 404 : hasSpecialOffer ? 420 : 250;
     const vFrame = machArt('frame_tall');
     if (vFrame) {
       // stretched WELL past the content box, so the art's ornate rune
@@ -8593,6 +8643,46 @@ if (!HEADLESS) (function browser() {
         ctx.restore();
         if (!v.relicPicked) uiButtons.push({ x: 92, y: ry, w: LW - 184, h: 50, cb: () => pickRelicOffer(i) });
       });
+    }
+    // THE BOSS MINT: pick ONE special coin — the choice the owner asked for
+    if (hasSpecialOffer) {
+      const my = py + (hasRelicOffer ? 388 : 180);
+      txt(v.specialPicked ? 'the ' + COIN_INFO[v.specialPicked].name.toUpperCase() + ' joins your purse!'
+                          : '\u{1FA99} THE BOSS MINT — take a special coin:',
+          LW / 2, my, '800 11px Verdana, sans-serif', v.specialPicked ? '#7ee787' : '#e8d0a0');
+      v.specialOffer.forEach((ck, i) => {
+        const cx = LW / 2 + (i - (v.specialOffer.length - 1) / 2) * 116, cy = my + 50;
+        const isPick = v.specialPicked === ck;
+        const dim = v.specialPicked && !isPick;
+        const bk = Math.max(0, Math.min(1, (v.t - 1.4 - i * 0.12) / 0.22));
+        if (bk <= 0) return;
+        const bs = bk < 1 ? 0.5 + 0.5 * bk + 0.18 * Math.sin(bk * Math.PI) : 1;
+        ctx.save();
+        ctx.globalAlpha = dim ? 0.3 : 1;
+        ctx.translate(cx, cy); ctx.scale(bs, bs); ctx.translate(-cx, -cy);
+        if (!v.specialPicked || isPick) {
+          const pulse = isPick ? 1 : 1 + Math.sin(t * 4 + i * 2) * 0.04;
+          ctx.beginPath(); ctx.arc(cx, cy, 28 * pulse, 0, 7);
+          ctx.fillStyle = isPick ? 'rgba(126,214,160,0.25)' : 'rgba(255,240,190,0.12)'; ctx.fill();
+          ctx.lineWidth = 2; ctx.strokeStyle = isPick ? '#7ed6a0' : 'rgba(255,215,94,0.5)'; ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(cx, cy + 2, 21, 0, 7);
+        ctx.fillStyle = 'rgba(20,10,4,0.6)'; ctx.fill();
+        const face3 = pieceArt(ck);
+        if (face3) {
+          ctx.drawImage(face3, cx - 22, cy - 22, 44, 44);
+        } else {
+          ctx.beginPath(); ctx.arc(cx, cy, 21, 0, 7);
+          ctx.fillStyle = COIN_UI[ck]; ctx.fill();
+          ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(60,40,10,0.75)'; ctx.stroke();
+          txt(COIN_SYMS[ck], cx, cy + 1, '800 18px serif', 'rgba(40,24,4,0.85)');
+        }
+        txt(COIN_INFO[ck].name, cx, cy + 38, '800 10px Verdana, sans-serif', dim ? '#8a7a6a' : '#ffe9a3');
+        txt(COIN_INFO[ck].what, cx, cy + 51, '600 8px Verdana, sans-serif', dim ? '#6a5a4a' : '#c0a880');
+        ctx.restore();
+        if (!v.specialPicked) uiButtons.push({ x: cx - 50, y: cy - 32, w: 100, h: 90, cb: () => pickSpecialOffer(i) });
+      });
+      if (!v.specialPicked) txt('skip, and the house strikes the scarcest for you', LW / 2, my + 112, '600 9px Verdana, sans-serif', '#9a8aa0');
     }
     // the spoils: pick ONE coin to join your purse for the rest of the run
     if (hasCoinOffer) {
@@ -8644,7 +8734,7 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW - 110, py - 18, 40, 34, '\u{1F4F7}', () => { PHOTO = true; achUnlock('shutterbug'); },
           { bg: 'rgba(24,14,26,0.9)', border: '#9a8aa0', r: 10, font: '15px serif' });
     const pulse = 1 + Math.sin(t * 5) * 0.03;
-    const label = v.boss ? (hasRelicOffer && !v.relicPicked ? TR('SKIP ▼') : TR('DESCEND ▼'))
+    const label = v.boss ? ((hasRelicOffer && !v.relicPicked) || (hasSpecialOffer && !v.specialPicked) ? TR('SKIP ▼') : TR('DESCEND ▼'))
                 : hasCoinOffer && !v.picked ? TR('SKIP ▶') : TR('CONTINUE ▶');
     uiBtn(LW / 2 - 90 * pulse, py + ph - 62, 180 * pulse, 40, label, () => leaveBattle(),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 14 });
@@ -9251,23 +9341,50 @@ if (!HEADLESS) (function browser() {
     }
     return LOOT_ICON[q.t] || '●';
   }
-  // every piece announces WHAT it is about to do while it flies
+  // every piece announces WHAT it is about to do while it flies — the
+  // numbers MIRROR the applyLoot arithmetic, relics and all (audited)
   function fxLabel(q) {
     if (q.t === 'gold') return goldDmg() + ' DMG';
-    if (q.t === 'lucky') return (C.DMG.lucky + (hasRelic('starmetal') ? 2 : 0)) + ' DMG!';
-    if (q.t === 'blue') return (C.DMG.blue + (hasRelic('frostshard') ? 1 : 0)) + ' TO ALL!';
-    if (q.t === 'green') return 'POISON' + (hasRelic('twinfangs') || hasRelic('venomtip') ? ' ×' + ((1 + (hasRelic('venomtip') ? 1 : 0)) * (hasRelic('twinfangs') ? 2 : 1)) : '');
-    if (q.t === 'silver') return '+' + (1 + (hasRelic('silvercore') ? 1 : 0)) + ' BLOCK';
-    if (q.t === 'red') return '+' + (C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0)) + ' HP';
-    if (q.t === 'gem') return '+15 GOLD';
-    if (q.t === 'bag') return '+8 GOLD';
+    if (q.t === 'lucky') {
+      return (C.DMG.lucky + strTotal() + masteryLvl('lucky')
+        + (hasRelic('starmetal') ? 2 : 0) + (hasRelic('horseshoe') ? 1 : 0) + (hasRelic('assassin') ? 2 : 0)
+        + (hasRelic('deadeye') ? 1 : 0)
+        + (S.battle && hasRelic('luckystreak') ? (S.battle.luckyFired || 0) : 0)) + ' DMG!';
+    }
+    if (q.t === 'blue') {
+      let bd = C.DMG.blue + (hasRelic('frostshard') ? 1 : 0) + (hasRelic('permafrost') ? 1 : 0) + masteryLvl('blue');
+      if (hasRelic('sparkstone') && S.foes.filter(f => f.hp > 0).length >= 2) bd += 1;
+      if (hasRelic('hailstorm')) bd += Math.max(0, S.foes.filter(f => f.hp > 0).length - 1);
+      return bd + ' TO ALL!';
+    }
+    if (q.t === 'green') {
+      const pn = (1 + (hasRelic('venomtip') ? 1 : 0) + (hasRelic('toxicology') ? 1 : 0) + masteryLvl('green'))
+               * (hasRelic('twinfangs') ? 2 : 1);
+      return 'POISON' + (pn > 1 ? ' ×' + pn : '');
+    }
+    if (q.t === 'silver') {
+      return '+' + (1 + dexTotal() + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0)
+        + masteryLvl('silver') + (q.sp ? 1 : 0)) + ' BLOCK';
+    }
+    if (q.t === 'red') return '+' + (C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0) + (hasRelic('greensprig') ? 1 : 0) + masteryLvl('red')) + ' HP';
+    if (q.t === 'gem') return '+' + (15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0)) + ' GOLD';
+    if (q.t === 'bag') return '+' + (8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0)) + ' GOLD';
     if (q.t === 'skull') return 'CURSE!';
     const it = itemById(q.iid);
     if (!it) return '';
-    if (q.t === 'weapon') return weaponDmg(it.dmg) + ' DMG!';
-    if (q.t === 'shielditem') return '+' + it.block + ' BLOCK';
-    if (q.t === 'heartitem') return '+' + it.heal + ' HP';
-    if (q.t === 'vial') return 'POISON ×' + (it.pois + (hasRelic('venom') ? 2 : 0));
+    if (q.t === 'weapon') {
+      let wd = weaponDmg(it.dmg) + (hasRelic('armory') ? 2 : 0);
+      if (hasRelic('balancedblade') && q.iid === 'sword') wd += 4;
+      if (hasRelic('butcher') && S.enemy && S.enemy.bleed > 0) wd += 3;
+      if (hasRelic('heavyarms')) wd = Math.round(wd * 1.3);
+      return wd + ' DMG!';
+    }
+    if (q.t === 'shielditem') {
+      return '+' + (it.block + (hasRelic('plateup') ? 3 : 0)
+        + (hasRelic('shieldwall') ? 2 * S.pets.filter(p => p.hp > 0).length : 0)) + ' BLOCK';
+    }
+    if (q.t === 'heartitem') return '+' + (it.heal + (hasRelic('fieldmedic') ? 4 : 0)) + ' HP';
+    if (q.t === 'vial') return 'POISON ×' + ((it.pois + (hasRelic('venom') ? 2 : 0)) * (hasRelic('twinfangs') ? 2 : 1));
     if (q.t === 'frost') return 'FREEZE!';
     if (q.t === 'burnitem') return 'BURN ×' + (it.burn + (hasRelic('arsonist') ? 3 : 0));
     if (q.t === 'bleeditem') return 'BLEED ×' + (it.bleed + (hasRelic('scalpel') ? 2 : 0));
@@ -11666,7 +11783,7 @@ if (!HEADLESS) (function browser() {
       head(TR('the house arithmetic, in the open'));
       const lines = [
         'the STAIRS demand 2 coins +1 per act (cap 8) — doubled under a toll decree',
-        'the PURSE holds 20 +4 per act (cap 44); overflow melts 2 ● → 1 gold at the stairs',
+        'the PURSE holds 20 +4 per act (cap 44); overflow melts 1 ● → 2 gold at the stairs',
         'the BANK stashes ' + C.BANK_MAX + ' tray pieces for next round',
         'the JACKPOT meter fills at ' + C.METER_MAX + ' drops and catapults one piece of YOUR gear',
         'the pile re-salts ' + C.ROUND_RAIN + ' fresh pieces every round',
