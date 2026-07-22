@@ -473,6 +473,12 @@ const RELICS = [
   { id: 'beastmaster', rar: 'e', icon: '\u{1F981}', name: 'Beastmaster',   desc: 'room for +2 pets, and all pets get +2 HP' },
   { id: 'crimsonrain', rar: 'e', icon: '\u{1F327}\u{FE0F}', name: 'Crimson Rain', desc: 'heart coins also apply 1 BLEED to every foe' },
   { id: 'soulchain',   rar: 'e', icon: '\u{26D3}\u{FE0F}', name: 'Soul Chain', desc: 'while any pet lives, you take 1 less from every hit' },
+  // ---- the MINT shelf: counting-house tools for any run ----
+  { id: 'slugsmelter', rar: 'c', icon: '\u{1F9F1}', name: 'Slug Smelter',  desc: 'collected slugs smelt down for 1 gold apiece' },
+  { id: 'coinpress',   rar: 'r', icon: '\u{1F3ED}', name: 'Coin Press',    desc: 'every 25 coins fired in a battle mint +5 gold' },
+  { id: 'meterspring', rar: 'r', icon: '\u{1F4A0}', name: 'Meter Spring',  desc: 'the JACKPOT meter starts every battle at 5' },
+  { id: 'auditstamp',  rar: 'r', icon: '\u{1F4CB}', name: 'Auditor\u2019s Stamp', desc: 'felled bosses drop +1 key, notarized' },
+  { id: 'brassheart',  rar: 'e', icon: '\u{1F49B}', name: 'Brass Heart',   desc: 'the first blow of every battle is fully absorbed' },
   // ---- the PRESTIGE shelf: these five only surface on a NEW GAME+ run ----
   { id: 'mintvein',   rar: 'r', ng: 1, icon: '\u{26CF}\u{FE0F}', name: 'Mint Vein',   desc: 'NG+ — gold strikes +1 harder for every act descended' },
   { id: 'crownscale', rar: 'e', ng: 1, icon: '\u{1F451}', name: 'Crown Scale', desc: 'NG+ — bosses and elites take +25% damage' },
@@ -1436,6 +1442,7 @@ function foeDown(e) {
   if (hasRelic('bloodprice') && e.bleed > 0) gold += 2;
   if (hasRelic('firstblood') && S.battle && !S.battle.firstBlood) { S.battle.firstBlood = true; gold += 5; }
   let keys = e.boss ? C.KEY_BOSS : e.elite ? C.KEY_ELITE : C.KEY_KILL;
+  if (hasRelic('auditstamp') && e.boss) keys += 1;
   if (hasRelic('graverobber') && (e.elite || e.boss)) keys += 1;   // rob the tougher graves
   S.run.keys += keys;
   addGold(gold);
@@ -1671,6 +1678,13 @@ function hpHit(n, cause, col) {
 }
 function hurtPlayer(n, cause) {
   if (!S.run || S.run.hp <= 0) return;
+  // the Brass Heart drinks the battle's first blow whole
+  if (hasRelic('brassheart') && S.battle && !S.battle.brassSpent && n > 0) {
+    S.battle.brassSpent = 1;
+    floatAnchor('\u{1F49B} the Brass Heart takes it (' + n + ')', 'hero', '#ffd75e', true);
+    SND.block();
+    return;
+  }
   if (hasRelic('thickskin')) n = Math.max(1, n - 1);   // hide turns the edge
   if (hasRelic('leadenidol')) n = Math.max(1, n - 2);  // the idol drinks the blow
   // Soul Chain: your pack shares the pain
@@ -1725,7 +1739,8 @@ function scoreCoin(c, quiet) {
   // (unless the MINT's job wants them counted)
   if (c.kind === 'slug') {
     questBump('slugbank', 1);
-    floatAt('a worthless slug…', c.x, '#8a8a8a');
+    if (hasRelic('slugsmelter')) { addGold(1); floatAt('smelted: +1 gold', c.x, '#ffd75e'); }
+    else floatAt('a worthless slug…', c.x, '#8a8a8a');
     return;
   }
   if (!S.battle) return;
@@ -1982,6 +1997,10 @@ function drop(x, force) {
   S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 / ×20 shortens the cooldown to match
   S.dropped++; S.meter++;
   B.fired = (B.fired || 0) + 1;
+  if (hasRelic('coinpress') && B.fired % 25 === 0) {
+    addGold(5); B.goldWon += 5;
+    floatAnchor('\u{1F3ED} the press mints +5 gold', 'hero', '#ffd75e');
+  }
   if (S.run.stats) S.run.stats.fired++;
   // the mastery ledger: 500 lifetime fires of a kind upgrade its face
   S.codex.coins = S.codex.coins || {};
@@ -2201,6 +2220,7 @@ function startBattle(type, entIdx, eid, extras) {
                taken0: S.run.stats ? S.run.stats.taken : 0,
                hand: null, sel: 'coin', goldWon: 0, keysWon: 0 };
   S.enemy = S.foes[0];
+  if (hasRelic('meterspring')) S.meter = Math.max(S.meter, 5);
   S.screen = 'battle';
   S.victory = null;
   S.foeInfo = null;
@@ -2746,6 +2766,16 @@ function bossArena() {
   if (!B) return;
   const boss = S.foes.find(f => f.boss && f.hp > 0);
   if (!boss) return;
+  // SECOND WINDS: below half HP each B-sider finds another gear, once,
+  // telegraphed loudly the round it happens
+  if (!boss.wind2 && boss.hp * 2 < boss.maxHp
+      && (boss.id === 'wyrm' || boss.id === 'banshee' || boss.id === 'aurifex')) {
+    boss.wind2 = true;
+    S.banner = { txt: 'SECOND WIND!', ttl: 1.8, max: 1.8 };
+    if (boss.id === 'wyrm') floatAnchor('\u{1F40D} the wyrm coils TIGHTER — it squeezes every other round!', 'enemy', '#7ee7a0', true);
+    else if (boss.id === 'banshee') { boss.atk += 2; floatAnchor('\u{1F47A} the banshee SHRIEKS — +2 attack, wailing faster!', 'enemy', '#c86bff', true); }
+    else { boss.hp = Math.min(boss.maxHp, boss.hp + 12); floatAnchor('\u{1F9DE} the Aurifex RE-GILDS himself (+12) — three slugs a minting!', 'enemy', '#ffd75e', true); }
+  }
   if (boss.id === 'dragon') {
     for (const c of S.coins) c.aflame = false;            // last round's embers cool
     const golds = S.coins.filter(c => c.st === 'plat' && c.kind === 'coin');
@@ -2768,11 +2798,11 @@ function bossArena() {
     if (idx < 0) idx = 0;
     (boss.belly = boss.belly || []).push(B.loot.splice(idx, 1)[0]);
     floatAnchor('\u{1F608} the PIT BOSS taxes the tray!', 'enemy', '#ff9d3c', true);
-  } else if (boss.id === 'wyrm' && B.round > 1 && B.round % 3 === 0) {
+  } else if (boss.id === 'wyrm' && B.round > 1 && B.round % (boss.wind2 ? 2 : 3) === 0) {
     // the wyrm CONSTRICTS: next hand is dealt 3 coins short
     S.leadT = Math.max(S.leadT, 1);
     floatAnchor('\u{1F40D} the wyrm SQUEEZES your purse arm!', 'enemy', '#7ee7a0', true);
-  } else if (boss.id === 'banshee' && B.round > 1 && B.round % 3 === 0) {
+  } else if (boss.id === 'banshee' && B.round > 1 && B.round % (boss.wind2 ? 2 : 3) === 0) {
     // the banshee WAILS: your blows halve for a round
     S.weakT = Math.max(S.weakT, 1);
     floatAnchor('\u{1F47A} the banshee WAILS — your arm falters!', 'enemy', '#c86bff', true);
@@ -2782,8 +2812,8 @@ function bossArena() {
     if (fine > 0) { S.run.gold -= fine; floatAnchor('\u{1F9FE} AUDITED: ' + fine + ' gold fined!', 'hero', '#ffd75e', true); }
     if (S.meter > 1) { S.meter = Math.floor(S.meter / 2); floatAnchor('the meter is held for review', 'hero', '#c8a86a'); }
   } else if (boss.id === 'aurifex' && B.round > 1 && B.round % 3 === 0) {
-    // the Aurifex MINTS cursed slugs into the rain
-    for (let i = 0; i < 2; i++) {
+    // the Aurifex MINTS cursed slugs into the rain (three on his second wind)
+    for (let i = 0; i < (boss.wind2 ? 3 : 2); i++) {
       S.rain.push({ t: 0.5 + 0.3 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: 'skull' });
     }
     floatAnchor('\u{1F9DE} the AURIFEX mints cursed coin!', 'enemy', '#ffd75e', true);
