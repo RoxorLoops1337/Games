@@ -1009,9 +1009,16 @@ function gainPotions(n) {
   S.run.potions += n;
 }
 const RAT_CAP = 8;
+// PET VETERANCY: five battles survived (lifetime, per kind) earns the ★,
+// a given name, and +1 max HP on every future summon
+function petVet(iid) { return (((S.life && S.life.petFights) || {})[iid] | 0) >= 5; }
+function petTag(iid, base) {
+  return ((S.petNames && S.petNames[iid]) || base) + (petVet(iid) ? ' ★' : '');
+}
 function mkRat(dire) {
-  return dire ? { iid: 'direrat', icon: '\u{1F400}', name: 'Dire Rat', hp: 16, maxHp: 16, dire: true }
-              : { iid: 'rat', icon: '\u{1F401}', name: 'Rat', hp: 8, maxHp: 8 };
+  const iid = dire ? 'direrat' : 'rat';
+  const hp = (dire ? 16 : 8) + (petVet(iid) ? 1 : 0);
+  return { iid, icon: dire ? '\u{1F400}' : '\u{1F401}', name: petTag(iid, dire ? 'Dire Rat' : 'Rat'), hp, maxHp: hp, dire: !!dire };
 }
 // a new recruit scurries in (any item source feeds the swarm instead).
 // Mid-battle it joins the FIGHT (the victory sync writes it home);
@@ -1107,7 +1114,7 @@ const S = {
   opts: { sfx: 1, music: 0.8, shake: true, parts: true, haptic: true, cb: false },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
   life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {}, chests: 0, weeklies: 0,
-          mutMax: 0, deepFloors: 0, draughts: {}, deaths: {}, gauntBest: 0, gaunts: 0 },
+          mutMax: 0, deepFloors: 0, draughts: {}, deaths: {}, gauntBest: 0, gaunts: 0, petFights: {} },
   hist: [],                                     // the last ten runs, newest first
   codex: { foes: {}, relics: {}, coins: {} },   // everything ever met, owned or fired
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
@@ -1129,6 +1136,8 @@ const S = {
   duel: null,                                   // a pending ?duel challenge {seed, floor, name}
   wbRelic: 0,                                   // welcome-back crate: rare pick armed for next run
   gifted: 0,                                    // the one rookie stake, claimed
+  petNames: {},                                 // veteran pets' given names (by item id)
+  petNameQ: null,                               // a fresh veteran waiting for the namepad
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
@@ -1209,6 +1218,7 @@ function save() {
       firstRun: S.firstRun || '', annivDone: S.annivDone || '', gauntlet: S.gauntlet,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
       rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales, gifted: S.gifted ? 1 : 0,
+      petNames: S.petNames,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1268,7 +1278,8 @@ function load() {
                  chests: d.life.chests || 0, weeklies: d.life.weeklies || 0,
                  mutMax: d.life.mutMax || 0, deepFloors: d.life.deepFloors || 0,
                  draughts: d.life.draughts || {}, deaths: d.life.deaths || {},
-                 gauntBest: d.life.gauntBest || 0, gaunts: d.life.gaunts || 0 };
+                 gauntBest: d.life.gauntBest || 0, gaunts: d.life.gaunts || 0,
+                 petFights: d.life.petFights || {} };
     }
     if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
     if (d.codex && typeof d.codex === 'object') {
@@ -1303,6 +1314,7 @@ function load() {
     }
     S.wbRelic = d.wbRelic ? 1 : 0;
     S.gifted = d.gifted ? 1 : 0;
+    if (d.petNames && typeof d.petNames === 'object') S.petNames = d.petNames;
     if (d.tales && typeof d.tales === 'object') S.tales = d.tales;
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
@@ -1730,15 +1742,15 @@ function summonPet(iid) {
     floatAnchor('the pack is full — snacks all round', 'hero', '#c8b89a');
     return null;
   }
-  const hp = it.php + (hasRelic('kennel') ? 4 : 0) + (hasRelic('beastmaster') ? 2 : 0);
-  const pet = { iid, icon: it.icon, name: it.name, hp, maxHp: hp };
+  const hp = it.php + (petVet(iid) ? 1 : 0) + (hasRelic('kennel') ? 4 : 0) + (hasRelic('beastmaster') ? 2 : 0);
+  const pet = { iid, icon: it.icon, name: petTag(iid, it.name), hp, maxHp: hp };
   S.pets.push(pet);
   floatAnchor(it.icon + ' ' + it.name + ' joins!', 'hero', '#ffd75e', true);
   // Alpha Bond: your first companion each battle brings its twin
   if (hasRelic('alphabond') && S.battle && !S.battle.alphaUsed) {
     S.battle.alphaUsed = true;
     if (S.pets.filter(p => p.hp > 0).length < petCap()) {
-      S.pets.push({ iid, icon: it.icon, name: it.name, hp, maxHp: hp });
+      S.pets.push({ iid, icon: it.icon, name: pet.name, hp, maxHp: hp });
       floatAnchor('\u{1F43E} its twin follows!', 'hero', '#ffd75e');
     }
   }
@@ -1905,6 +1917,7 @@ function usePotion() {
   if (alchRun()) return false;            // she brews — she does not drink
   if (!S.run || S.run.potions < 1 || S.run.hp >= S.run.maxHp) return false;
   S.run.potions--;
+  if (S.battle) S.battle.drank = true;    // the no-potion job notices
   healPlayer(C.POTION_HEAL + (hasRelic('elixir') ? 8 : 0) + (hasRelic('apothecary') ? 6 : 0));
   // the Mender splits the draught with the pack
   if (hasRelic('mender')) for (const p of S.pets) if (p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + 5);
@@ -1979,6 +1992,7 @@ function scoreCoin(c, quiet) {
   burst(c.x, 96, C.TRAY_Z, c.kind);
 }
 function openChest(c) {
+  questBump('chests', 1);
   const r = rng();
   let txt2;
   if (r < 0.35) {
@@ -2248,6 +2262,7 @@ function tilt(dir) {
     return false;
   }
   B.tilts--;
+  B.tiltsUsed = (B.tiltsUsed || 0) + 1;
   B.tilted = true;                        // the no-tilt quest saw that
   if (B.tilts === 0) achUnlock('tilt3');
   // a gentler nudge — enough to shift the pile, not to fling it
@@ -2276,6 +2291,7 @@ function bankLoot(key) {
   if (i < 0) return false;
   B.banked.push(B.loot.splice(i, 1)[0]);
   questBump('bank', 1);
+  questBump('bigbank', 1);
   SND.clink();
   return true;
 }
@@ -3187,6 +3203,20 @@ function winBattle() {
   }
   // trophies earned in the heat of it
   if (!S.battle.tilted) questBump('notilt', 1);
+  // the pack remembers: every battle a pet walks out of makes it saltier
+  {
+    const seen2 = {};
+    S.life.petFights = S.life.petFights || {};
+    for (const p of S.pets) if (p.hp > 0 && p.iid && !seen2[p.iid]) {
+      seen2[p.iid] = 1;
+      const n2 = (S.life.petFights[p.iid] || 0) + 1;
+      S.life.petFights[p.iid] = n2;
+      if (n2 === 5) {
+        toast('★ ' + ((itemById(p.iid) || p).name || 'your pet') + ' is a VETERAN — it earned a name');
+        S.petNameQ = p.iid;
+      }
+    }
+  }
   if (anyBoss) {
     achUnlock('boss1'); S.life.bosses++;
     // the DEEP CLEAR ledger: fell the floor-15 boss and that hero's alt
@@ -3215,6 +3245,8 @@ function winBattle() {
       achUnlock('decreed');
     }
   }
+  if (!S.battle.drank) questBump('nopotion', 1);
+  if ((S.battle.tiltsUsed | 0) >= 3) questBump('tiltwin', 1);
   if (S.run.hp === 1) achUnlock('survivor');
   if (S.run.stats && S.battle.taken0 !== undefined && S.run.stats.taken === S.battle.taken0) achUnlock('untouch');
   achPoll();
@@ -3277,6 +3309,10 @@ const QUEST_DEFS = [
   { id: 'bank',   txt: n => 'bank ' + n + ' pieces in the vaults', need: f => 5 + Math.min(5, f) },
   // the MINT's own job: its counterfeits become the currency
   { id: 'slugbank', txt: n => 'collect ' + n + ' counterfeit slugs', need: () => 3, mint: true },
+  { id: 'nopotion', txt: () => 'win a battle without drinking',   need: () => 1 },
+  { id: 'bigbank',  txt: n => 'bank ' + n + ' pieces (a hoarder’s floor)', need: () => 30 },
+  { id: 'chests',   txt: n => 'crack open ' + n + ' chests',      need: () => 3 },
+  { id: 'tiltwin',  txt: () => 'spend 3 TILTs in one battle — and WIN', need: () => 1 },
 ];
 function rollQuest(floor) {
   const pool = QUEST_DEFS.filter(q2 => !q2.mint || actIdx(floor) >= 3);
@@ -5037,6 +5073,7 @@ window.DP = {
   alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
   duelLink, parseDuel, welcomeBack, anniversary, gauntletOpen, newGauntlet,
   giftLink, parseGift, claimGift, boardFilter,
+  petVet, petTag,
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
@@ -6741,7 +6778,7 @@ if (!HEADLESS) (function browser() {
     ctx.strokeStyle = 'rgba(255,252,230,0.85)'; ctx.lineWidth = 1.6;
     ctx.stroke();
     // COLORBLIND MARKS: every kind wears its symbol on a dark badge
-    if (S.opts.cb && c.st === 'plat') {
+    if (S.opts.cb) {   // every state — falling coins are choices too
       ctx.beginPath(); ctx.arc(p.x, p.y - dry * 0.2, drx * 0.42, 0, 7);
       ctx.fillStyle = 'rgba(10,6,14,0.75)'; ctx.fill();
       txt(sym, p.x, p.y - dry * 0.2, '900 ' + Math.max(7, Math.round(drx * 0.62)) + 'px serif', '#fff');
@@ -7793,6 +7830,11 @@ if (!HEADLESS) (function browser() {
           ctx.fillStyle = COIN_UI[ck]; ctx.fill();
           ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(60,40,10,0.75)'; ctx.stroke();
           txt(COIN_SYMS[ck], cx, cy + 1, '800 19px serif', 'rgba(40,24,4,0.85)');
+        }
+        if (S.opts.cb) {   // colorblind marks ride the offer too
+          ctx.beginPath(); ctx.arc(cx, cy + 2, 9, 0, 7);
+          ctx.fillStyle = 'rgba(10,6,14,0.75)'; ctx.fill();
+          txt(COIN_SYMS[ck], cx, cy + 2, '900 11px serif', '#fff');
         }
         const refine = i === 0 && v.up;
         txt(refine ? '⇧ REFINE' : COIN_INFO[ck].name, cx, cy + 40, '800 11px Verdana, sans-serif', dim ? '#8a7a6a' : refine ? '#8ef0ff' : '#ffe9a3');
@@ -11304,6 +11346,16 @@ if (!HEADLESS) (function browser() {
     if (!PHOTO) drawAchToast(dt);
     // the keyboard's gold dashed ring rides whatever button holds focus
     if (S.screen !== kbScreen) { kbScreen = S.screen; kbFocus = -1; PHOTO = false; }
+    // a freshly-promoted VETERAN pet asks for its name (ESC skips politely)
+    if (S.petNameQ && !NAMEPAD && !S.confirm) {
+      const iid2 = S.petNameQ;
+      S.petNameQ = null;
+      NAMEPAD = { val: '', max: 10, apply: (v) => {
+        const nm = String(v || '').replace(/[^\w \-.']/g, '').trim().slice(0, 10);
+        if (nm) S.petNames[iid2] = nm;
+        save();
+      } };
+    }
     if (kbFocus >= uiButtons.length) kbFocus = -1;
     if (kbFocus >= 0) {
       const b = uiButtons[kbFocus];
