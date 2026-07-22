@@ -163,8 +163,12 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 ## Tier 6 — content stretch
 
-- [ ] **Act 4: THE MINT** — 13 new enemies (roster reskins + 3 new traits: magnetic
-      armor, coin-clone, jackpot-thief), new floor palette, act boss: THE AUDITOR
+- [x] **Act 4: THE MINT** — floors 16-20 gilded (one MINT palette for the act,
+      fkey re-keyed on theme), 13 new enemies with three mint-exclusive traits
+      (magarmor +3 block/turn, coinclone dud slugs, jackthief meter siphon),
+      THE AUDITOR seals the act (fines gold + holds the meter for review, 4th
+      slot in the A-side rotation), ENDLESS decrees pushed to floor 21,
+      codex MINT tab; v1.3.0 (session 35)
 - [x] **More bosses per act**: the B-SIDE — Gilded Wyrm (mirror + SQUEEZE hand),
       Grave Banshee (glass cannon + WAIL weakness), The Aurifex (thief/armor +
       mints cursed slugs); even-numbered runs face them (bside on the run,
@@ -196,3 +200,7 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
+- [x] **THE PLAN IS COMPLETE** (session 35): all six tiers shipped across 35
+      autonomous sessions — 1411 game tests + 38 API tests green, v1.3.0 live.
+      Session 36 drafts Tier 7 (polish, balance, content, virality) and the
+      loop rolls on.
