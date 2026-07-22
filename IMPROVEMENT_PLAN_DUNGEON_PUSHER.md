@@ -526,6 +526,18 @@ reachable again: open a PR from that branch, squash-merge to main, and
 Cloudflare ships v1.7.0 live. Do NOT reset or force-push the branch
 before that merge.
 
+**Post-loop owner session (v1.7.1)**: the owner reported vanished coins
+and called three plays. Delivered: thieves now pocket REAL purse coins
+and return every one on death (the old hand-cut read as theft and the
+belly-spill-on-killing-blow genuinely evaporated); the victory screen
+SETTLES the tray (gems/bags cash in, specials walk home, plain sweeps
+2-for-1) and descending rescues bed-stranded specials; THE STAIRS
+LEDGER posts toll + melt at every staircase and the player picks which
+coins pay (AUTO = old hand); SPIKEY joins as the 11th special; chests/
+wheel/shops can no longer mint specials (boss-only law enforced);
+purseTotal counts plain coins only, and the melt correctly applies
+AFTER the toll.
+
 **Open threads for whoever picks this up:** Tier 12 items below remain
 unticked from "Trophy pass to 52" onward (trophies, gauntlet rotation,
 HALL OF MONTHS, lake music, pace bars, economy probe, the owner-assist
