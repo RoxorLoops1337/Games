@@ -132,6 +132,35 @@ const LANGS = {
     'ROUND': 'RONDE',
     'FLOOR': 'VERDIEPING',
     'tap for map': 'tik voor kaart',
+    // overlays (the second sweep)
+    '\u{1F3C6} TROPHY HALL': '\u{1F3C6} TROFEEENZAAL',
+    '\u{1F3C5} THE DEEP BOARD': '\u{1F3C5} HET DIEPTEBORD',
+    'ALL-TIME': 'ALLERTIJDEN',
+    'TODAY': 'VANDAAG',
+    'consulting the deep ledger': 'het dieptegrootboek wordt geraadpleegd',
+    'the board is unreachable from here': 'het bord is hiervandaan onbereikbaar',
+    'no descents carved here yet — be the first': 'nog geen afdalingen gekerfd — wees de eerste',
+    'carve a name': 'kerf een naam',
+    'one profile, any device — the CODE is the key,': 'één profiel, elk apparaat — de CODE is de sleutel,',
+    'so treat it like one (a year unused and it fades)': 'behandel hem ook zo (een jaar ongebruikt en hij vervaagt)',
+    'no code yet — back up first': 'nog geen code — maak eerst een back-up',
+    '⬆ BACK UP THIS DEVICE': '⬆ DIT APPARAAT BACK-UPPEN',
+    '⬇ RESTORE WITH A CODE': '⬇ HERSTEL MET EEN CODE',
+    '\u{1F3B0} MACHINE THEMES': '\u{1F3B0} MACHINETHEMA\u2019S',
+    'cabinet skins earned by your best descent': 'kastjasjes verdiend met je beste afdaling',
+    'WEAR': 'DRAAG',
+    'WORN ✓': 'GEDRAGEN ✓',
+    'sealed — reach floor': 'verzegeld — haal verdieping',
+    '\u{1F3AC} CREDITS': '\u{1F3AC} AFTITELING',
+    'ONWARD ▶': 'VERDER ▶',
+    'CARVE YOUR NAME': 'KERF JE NAAM',
+    'PLANT A SEED': 'PLANT EEN ZAADJE',
+    'ENTER SYNC CODE': 'VOER SYNCCODE IN',
+    'DONE ✓': 'KLAAR ✓',
+    '\u{1F4BE} SAVE PNG': '\u{1F4BE} PNG OPSLAAN',
+    'THE RUN ENDS': 'DE RUN EINDIGT',
+    '⚔\u{FE0F} AGAIN!': '⚔\u{FE0F} OPNIEUW!',
+    'TITLE': 'TITEL',
     '\u{1F392} BAG': '\u{1F392} TAS',
     'END TURN ▶': 'EINDE BEURT ▶',
   },
@@ -8913,7 +8942,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { TROPHIES = false; } });
     const got = ACH.filter(a => S.ach.u[a.id]).length;
-    txt('\u{1F3C6} TROPHY HALL', LW / 2, 64, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt(TR('\u{1F3C6} TROPHY HALL'), LW / 2, 64, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     txt(got + ' / ' + ACH.length + ' earned', LW / 2, 90, '800 12px Verdana, sans-serif', '#c8a8b0');
     // the wall grew past one screen — ten rows a page, ▲▼ to walk it
     const PER = 20;
@@ -9144,7 +9173,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
     uiButtons.push({ x: 28, y: py, w: LW - 56, h: ph, cb: () => {} });
-    txt('\u{1F3C5} THE DEEP BOARD', LW / 2, py + 32, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt(TR('\u{1F3C5} THE DEEP BOARD'), LW / 2, py + 32, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     // tabs
     const tabBtn = (x, label, tab) => {
       const on = BOARD.tab === tab;
@@ -9153,17 +9182,17 @@ if (!HEADLESS) (function browser() {
               border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
               font: '900 11px Verdana, sans-serif', r: 10 });
     };
-    tabBtn(LW / 2 - 136, 'ALL-TIME', 'alltime');
-    tabBtn(LW / 2 + 6, 'TODAY' + (BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
+    tabBtn(LW / 2 - 136, TR('ALL-TIME'), 'alltime');
+    tabBtn(LW / 2 + 6, TR('TODAY') + (BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
     if (BOARD.state === 'loading') {
-      txt('consulting the deep ledger' + '.'.repeat(1 + (Math.floor(t * 2) % 3)), LW / 2, py + 300,
+      txt(TR('consulting the deep ledger') + '.'.repeat(1 + (Math.floor(t * 2) % 3)), LW / 2, py + 300,
           '700 13px Verdana, sans-serif', '#b8a8bc');
     } else if (BOARD.state === 'err') {
-      txt('the board is unreachable from here', LW / 2, py + 290, '800 13px Verdana, sans-serif', '#ff9d3c');
+      txt(TR('the board is unreachable from here'), LW / 2, py + 290, '800 13px Verdana, sans-serif', '#ff9d3c');
       txt('(it lives on the real site — offline and local play can’t see it)', LW / 2, py + 312,
           '600 10px Verdana, sans-serif', '#9a8aa0');
     } else if (!BOARD.top.length) {
-      txt('no descents carved here yet — be the first', LW / 2, py + 300, '700 12px Verdana, sans-serif', '#b8a8bc');
+      txt(TR('no descents carved here yet — be the first'), LW / 2, py + 300, '700 12px Verdana, sans-serif', '#b8a8bc');
     } else {
       // 12 rows per page, pager below — the whole top 50 is reachable
       const PER = 12;
@@ -9194,7 +9223,7 @@ if (!HEADLESS) (function browser() {
       }
     }
     // rename + close
-    uiBtn(48, py + ph - 50, 150, 36, '\u{270F}\u{FE0F} ' + (S.boardName || 'carve a name'), () => {
+    uiBtn(48, py + ph - 50, 150, 36, '\u{270F}\u{FE0F} ' + (S.boardName || TR('carve a name')), () => {
       NAMEPAD = { val: S.boardName || '', then: () => openBoard(BOARD ? BOARD.tab : 'alltime') };
     }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 10px Verdana, sans-serif', r: 10 });
     uiBtn(LW - 48 - 130, py + ph - 50, 130, 36, TR('CLOSE ✕'), () => { BOARD = null; },
@@ -9210,7 +9239,7 @@ if (!HEADLESS) (function browser() {
     rr(30, py, LW - 60, ph, 18);
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
-    txt(NAMEPAD.title || 'CARVE YOUR NAME', LW / 2, py + 34, '900 18px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt(TR(NAMEPAD.title || 'CARVE YOUR NAME'), LW / 2, py + 34, '900 18px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     // the carving so far
     rr(70, py + 58, LW - 140, 40, 10);
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
@@ -9233,7 +9262,7 @@ if (!HEADLESS) (function browser() {
     const ly = py + 116 + 5 * (kh + gap);
     uiBtn(LW / 2 - 55, ly, 52, kh, '←', () => { NAMEPAD.val = NAMEPAD.val.slice(0, -1); },
           { bg: 'rgba(90,64,72,0.95)', border: '#b08a90', col: '#ffd8dc', font: '900 15px Verdana, sans-serif', r: 9 });
-    uiBtn(LW / 2 + 5, ly, 118, kh, 'DONE ✓', namePadDone,
+    uiBtn(LW / 2 + 5, ly, 118, kh, TR('DONE ✓'), namePadDone,
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 9 });
   }
   function namePadDone() {
@@ -9327,18 +9356,18 @@ if (!HEADLESS) (function browser() {
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
     uiButtons.push({ x: 36, y: py, w: LW - 72, h: ph, cb: () => {} });
     txt('☁ CLOUD SAVE', LW / 2, py + 34, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
-    txt('one profile, any device — the CODE is the key,', LW / 2, py + 64, '600 10px Verdana, sans-serif', '#b8a8bc');
-    txt('so treat it like one (a year unused and it fades)', LW / 2, py + 80, '600 10px Verdana, sans-serif', '#b8a8bc');
+    txt(TR('one profile, any device — the CODE is the key,'), LW / 2, py + 64, '600 10px Verdana, sans-serif', '#b8a8bc');
+    txt(TR('so treat it like one (a year unused and it fades)'), LW / 2, py + 80, '600 10px Verdana, sans-serif', '#b8a8bc');
     // the code, carved big
     rr(76, py + 100, LW - 152, 44, 10);
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = S.syncCode ? '#ffd75e' : '#5a5068'; ctx.stroke();
-    txt(S.syncCode || 'no code yet — back up first', LW / 2, py + 123,
+    txt(S.syncCode || TR('no code yet — back up first'), LW / 2, py + 123,
         S.syncCode ? '900 20px Verdana, sans-serif' : '700 11px Verdana, sans-serif',
         S.syncCode ? '#ffe9a3' : '#9a8aa0');
-    uiBtn(76, py + 168, LW - 152, 42, '⬆ BACK UP THIS DEVICE', cloudBackup,
+    uiBtn(76, py + 168, LW - 152, 42, TR('⬆ BACK UP THIS DEVICE'), cloudBackup,
           { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 12 });
-    uiBtn(76, py + 220, LW - 152, 42, '⬇ RESTORE WITH A CODE', () => {
+    uiBtn(76, py + 220, LW - 152, 42, TR('⬇ RESTORE WITH A CODE'), () => {
       NAMEPAD = {
         title: 'ENTER SYNC CODE', max: 8,
         val: (S.syncCode || '').replace('-', ''),
@@ -9448,7 +9477,7 @@ if (!HEADLESS) (function browser() {
     ctx.drawImage(SHARE.cv, cx2, cy2, cw, ch);
     ctx.restore();
     uiButtons.push({ x: cx2, y: cy2, w: cw, h: ch, cb: () => {} });
-    uiBtn(LW / 2 - 150, cy2 + ch + 16, 140, 40, '\u{1F4BE} SAVE PNG', shareSave,
+    uiBtn(LW / 2 - 150, cy2 + ch + 16, 140, 40, TR('\u{1F4BE} SAVE PNG'), shareSave,
           { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 12 });
     uiBtn(LW / 2 + 10, cy2 + ch + 16, 140, 40, TR('CLOSE ✕'), () => { SHARE = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 12px Verdana, sans-serif', r: 12 });
@@ -9465,8 +9494,8 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
     uiButtons.push({ x: 36, y: py, w: LW - 72, h: ph, cb: () => {} });
-    txt('\u{1F3B0} MACHINE THEMES', LW / 2, py + 34, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
-    txt('cabinet skins earned by your best descent', LW / 2, py + 60, '600 10px Verdana, sans-serif', '#b8a8bc');
+    txt(TR('\u{1F3B0} MACHINE THEMES'), LW / 2, py + 34, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt(TR('cabinet skins earned by your best descent'), LW / 2, py + 60, '600 10px Verdana, sans-serif', '#b8a8bc');
     Object.keys(MACH_THEMES).forEach((id, i) => {
       const th = MACH_THEMES[id];
       const open = themeUnlocked(id);
@@ -9487,13 +9516,13 @@ if (!HEADLESS) (function browser() {
       }
       ctx.restore();
       txt(th.name, 118, ry + 22, '900 13px Verdana, sans-serif', open ? (on ? '#ffe9a3' : '#e8d8ec') : '#7a7086', 'left');
-      txt(open ? th.desc : 'sealed — reach floor ' + th.floor, 118, ry + 42,
+      txt(open ? th.desc : TR('sealed — reach floor') + ' ' + th.floor, 118, ry + 42,
           '600 10px Verdana, sans-serif', open ? '#b8a8bc' : '#8d7d95', 'left');
       if (open && !on) {
-        uiBtn(LW - 148, ry + 15, 84, 32, 'WEAR', () => { S.machTheme = id; save(); },
+        uiBtn(LW - 148, ry + 15, 84, 32, TR('WEAR'), () => { S.machTheme = id; save(); },
               { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3', font: '900 11px Verdana, sans-serif', r: 10 });
       } else if (on) {
-        txt('WORN ✓', LW - 106, ry + 32, '900 11px Verdana, sans-serif', '#8ed67e');
+        txt(TR('WORN ✓'), LW - 106, ry + 32, '900 11px Verdana, sans-serif', '#8ed67e');
       } else {
         txt('\u{1F512}', LW - 106, ry + 32, '15px serif', '#fff');
       }
@@ -9513,7 +9542,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
     uiButtons.push({ x: 40, y: py, w: LW - 80, h: ph, cb: () => {} });
-    txt('\u{1F3AC} CREDITS', LW / 2, py + 36, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt(TR('\u{1F3AC} CREDITS'), LW / 2, py + 36, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 66, '800 11px Verdana, sans-serif', '#c8a8b0');
     const section = (y, head, lines) => {
       txt(head, LW / 2, y, '900 12px Georgia, serif', '#ffe9a3');
@@ -9576,7 +9605,7 @@ if (!HEADLESS) (function browser() {
       }
       y += 12;
     }
-    uiBtn(LW / 2 - 80, py + ph - 56, 160, 42, 'ONWARD ▶', () => {
+    uiBtn(LW / 2 - 80, py + ph - 56, 160, 42, TR('ONWARD ▶'), () => {
       if (WHATSNEW.auto) whatsNewSeen();
       WHATSNEW = null;
     }, { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
@@ -9943,9 +9972,9 @@ if (!HEADLESS) (function browser() {
     ctx.font = '900 40px Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 8; ctx.strokeStyle = '#2a1030';
-    ctx.strokeText('THE RUN ENDS', LW / 2, 268);
+    ctx.strokeText(TR('THE RUN ENDS'), LW / 2, 268);
     ctx.fillStyle = lgr('overtt', 0, 245, 0, 292, [[0, '#ffb0b8'], [1, '#a8213a']]);
-    ctx.fillText('THE RUN ENDS', LW / 2, 268);
+    ctx.fillText(TR('THE RUN ENDS'), LW / 2, 268);
     txt(o.cause, LW / 2, 310, '700 14px Verdana, sans-serif', '#c8a8b0');
     // a finished DAILY offers itself to the daily board, once
     if (o.daily && !o.dOffered && !o.posted) {
@@ -9994,7 +10023,7 @@ if (!HEADLESS) (function browser() {
       txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + ' • ' + S.best.kills + ' kills',
           LW / 2, 614, '700 11px Verdana, sans-serif', '#a08a94');
     }
-    uiBtn(LW / 2 - 120, 638, 240, 52, '⚔\u{FE0F} AGAIN!', () => newRun(heroSel),
+    uiBtn(LW / 2 - 120, 638, 240, 52, TR('⚔\u{FE0F} AGAIN!'), () => newRun(heroSel),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 17px Verdana, sans-serif', r: 16 });
     // carve the fallen run onto the deep board (once per run) + the card
     if (o.floor >= 1 && !o.posted) {
@@ -10012,7 +10041,7 @@ if (!HEADLESS) (function browser() {
             { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
               font: '900 11px Verdana, sans-serif', r: 10 });
     }
-    uiBtn(LW / 2 - 80, 700, 160, 38, 'TITLE', () => { S.screen = 'title'; },
+    uiBtn(LW / 2 - 80, 700, 160, 38, TR('TITLE'), () => { S.screen = 'title'; },
           { bg: 'rgba(20,10,14,0.9)', border: '#7d5a24', font: '800 13px Verdana, sans-serif', r: 12 });
   }
 

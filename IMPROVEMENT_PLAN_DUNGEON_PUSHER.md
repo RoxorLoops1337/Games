@@ -262,12 +262,18 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
 - [x] **Mint floor quest**: COLLECT 3 COUNTERFEIT SLUGS — only posted in the
       mint, counted as slugs clatter into the tray, always pays a GOLDEN key
       (session 40)
-- [ ] **Localization: settings + overlays complete in NL**: sweep the remaining
-      high-traffic strings (board, cloud, themes, credits) into TR()
+- [x] **Localization: settings + overlays complete in NL**: second sweep — the
+      board, cloud, theme rack, credits, trophy hall, name pads, share card
+      button, and the death knell all wrapped in TR(); NL table at 60+ strings
+      (session 45)
 
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
+- [x] **TIER 7 IS COMPLETE** (session 45): sixteen items across ten sessions —
+      trophies, the aim ghost, a measured balance sweep, seed racing, share
+      cards, mint strangers and relics, second winds, the coach, the daily
+      handshake, outlier tuning, and a bilingual UI. Session 46 drafts Tier 8.
 - [x] **THE PLAN IS COMPLETE** (session 35): all six tiers shipped across 35
       autonomous sessions — 1411 game tests + 38 API tests green, v1.3.0 live.
       Session 36 drafts Tier 7 (polish, balance, content, virality) and the

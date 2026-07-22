@@ -4433,4 +4433,25 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('thru block') >= 0, 'the frost coin advertises its new edge');
 }
 
+// -------- NL SWEEP: the overlays speak Dutch too --------
+{
+  const { DP: D } = loadGame({}, false);
+  t.ok(Object.keys(D.LANGS.nl).length >= 60, 'the NL table covers 60+ strings (' + Object.keys(D.LANGS.nl).length + ')');
+  D.setLang('nl');
+  t.eq(D.TR('\u{1F3C5} THE DEEP BOARD'), '\u{1F3C5} HET DIEPTEBORD', 'the board speaks Dutch');
+  t.eq(D.TR('⬆ BACK UP THIS DEVICE'), '⬆ DIT APPARAAT BACK-UPPEN', 'the cloud speaks Dutch');
+  t.eq(D.TR('WEAR'), 'DRAAG', 'the theme rack speaks Dutch');
+  t.eq(D.TR('THE RUN ENDS'), 'DE RUN EINDIGT', 'the death knell tolls in Dutch');
+  t.eq(D.TR('CARVE YOUR NAME'), 'KERF JE NAAM', 'the name pad speaks Dutch');
+  t.eq(D.TR('PLANT A SEED'), 'PLANT EEN ZAADJE', 'the seed pad too');
+  D.setLang('en');
+  // the call sites really are wrapped
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  for (const k of ["TR('\\u{1F3C6} TROPHY HALL')", "TR('ALL-TIME')", "TR('WEAR')",
+                   "TR('⚔\\u{FE0F} AGAIN!')", "TR(NAMEPAD.title || 'CARVE YOUR NAME')"]) {
+    t.ok(src.indexOf(k) >= 0, 'wrapped: ' + k);
+  }
+}
+
 t.done();
