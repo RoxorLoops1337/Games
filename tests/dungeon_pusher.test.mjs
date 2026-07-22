@@ -4454,4 +4454,49 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   }
 }
 
+// -------- STREAKS + the seed of the day --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  // the streak clock, day by day
+  t.eq(D.streakTouch('2026-07-20'), 1, 'the first day lights the flame');
+  t.eq(D.streakTouch('2026-07-20'), 1, 'a second run the same day changes nothing');
+  t.eq(D.streakTouch('2026-07-21'), 2, 'the next day feeds it');
+  t.eq(D.streakTouch('2026-07-23'), 3, 'one missed day is FORGIVEN (the grace day)');
+  t.eq(D.streakTouch('2026-07-27'), 1, 'two missed days and the flame goes out');
+  // the cog flame: +10% per day beyond the first, capped at +50%
+  D.S.streak.days = 1;
+  t.eq(D.streakK(), 1, 'day one pays no bonus (old cog math holds)');
+  D.S.streak.days = 3;
+  t.ok(Math.abs(D.streakK() - 1.2) < 1e-9, 'day three pays +20%');
+  D.S.streak.days = 12;
+  t.ok(Math.abs(D.streakK() - 1.5) < 1e-9, 'the flame caps at +50%');
+  // it persists
+  D.S.streak = { last: '2026-07-21', days: 4 };
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.streak.days, 4, 'the flame survives a reload');
+  t.eq(R.S.streak.last, '2026-07-21', 'and remembers its day');
+  // endRun stamps the day and pays the flame
+  const { DP: E } = loadGame({}, false);
+  E.srand(2); E.newRun('knight');
+  E.S.streak = { last: '', days: 0 };
+  E.S.run.floor = 10; E.S.run.kills = 0;
+  E.hpHit(9999, 'the probe');
+  t.eq(E.S.streak.days, 1, 'a finished run stamps the day');
+  t.eq(E.S.over.cogsWon, 10, 'day one cogs stay unboosted');
+  // the seed of the day: same maze for everyone, no stakes
+  const { DP: A } = loadGame({}, false);
+  A.plantToday('2026-07-22');
+  t.eq(A.S.nextSeed, A.dailySeed('2026-07-22') >>> 0, 'the plant IS the daily seed');
+  A.srand(5); A.newRun('knight');
+  t.eq(A.S.run.seed, A.dailySeed('2026-07-22') >>> 0, 'the run grows today’s maze');
+  t.ok(!A.S.run.daily, 'but burns NO daily attempt');
+  const layout = Object.keys(A.S.run.map.rooms).sort().join('|');
+  const { DP: B } = loadGame({}, false);
+  B.plantToday('2026-07-22');
+  B.srand(999); B.newRun('rogue');
+  t.eq(Object.keys(B.S.run.map.rooms).sort().join('|'), layout, 'two friends walk the same practice maze');
+}
+
 t.done();
