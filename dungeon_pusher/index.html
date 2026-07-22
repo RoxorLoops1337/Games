@@ -52,6 +52,7 @@ const HEADLESS = !ctx;
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
   { v: '1.7.0', notes: [
+    'THE UNDERLAKE \u{1F30A} — floors 21-25 are a true FIFTH ACT: thirteen drowned kin, THE DROWNED BANKER (and the SILT QUEEN on the B-side) hold the lair, and the endless decrees move out past floor 25',
     'REPLAY GHOST \u{2694}\u{FE0F} — duel links now carry the challenger\u2019s per-floor CLOCK; every staircase whispers how you run against THEIR pace, and REMATCH sends yours back',
     'THE ALMANAC ❓ — the house rules read straight off the live tables: coins, foes, laws, heroes and the house arithmetic',
     'an answered duel offers \u{2694}\u{FE0F} REMATCH; the deep board grew a LAST MONTH archive tab; the relic shelves grew a \u{1F50D} search lens',
@@ -253,7 +254,7 @@ const LANGS = {
     'the after-battle offer draws from a weighted bag': 'het aanbod na de strijd trekt uit een gewogen zak',
     'tricks — what a foe DOES': 'streken — wat een vijand DOET',
     'hides — what a foe WEARS': 'huiden — wat een vijand DRAAGT',
-    'past floor 20 the deep posts a law every third floor': 'na verdieping 20 hangt de diepte elke derde verdieping een wet op',
+    'past floor 25 the deep posts a law every third floor': 'na verdieping 25 hangt de diepte elke derde verdieping een wet op',
     'a LEGEND (♛) reads the first law at floor 11': 'een LEGENDE (♛) leest de eerste wet al op verdieping 11',
     'nine ways to rob the same house': 'negen manieren om hetzelfde huis te beroven',
     'the house arithmetic, in the open': 'het rekenwerk van het huis, open en bloot',
@@ -262,6 +263,7 @@ const LANGS = {
     'LAST MONTH': 'VORIGE MAAND',
     '\u{1F50D} SEARCH': '\u{1F50D} ZOEK',
     'no relic answers to': 'geen relikwie luistert naar',
+    'LAKE': 'MEER',
     'THE MOTIFS': 'DE MOTIEVEN',
     'the four descents, and the fanfare': 'de vier afdalingen, en de fanfare',
   },
@@ -414,7 +416,10 @@ const FLOORS = [
 // one gilded palette for the whole act instead of the per-floor cycle
 const MINT_FLOOR = { name: 'THE MINT', room: '#3f331f', cabA: '#c8a84a', cabB: '#8a6a1e', trim: '#f8ecc8',
   floorA: '#b0a382', floorB: '#decf9e', accent: '#ffd75e', door: '#8a6a1e', tile: 'marmer' };
+const LAKE_FLOOR = { name: 'THE UNDERLAKE', room: '#16303a', cabA: '#3a7a8a', cabB: '#1e4a58', trim: '#c8ecf0',
+  floorA: '#5a8a92', floorB: '#8ec4c8', accent: '#7ee7e0', door: '#1e4a58', tile: 'marmer' };
 function theme() {
+  if (S.run && rawAct(S.run.floor) >= 4) return LAKE_FLOOR;
   if (S.run && actIdx(S.run.floor) >= 3) return MINT_FLOOR;
   return FLOORS[((S.run ? S.run.floor : 1) - 1) % FLOORS.length];
 }
@@ -959,6 +964,24 @@ const ENEMY_TIERS = [
     { id: 'meterleech',   icon: '\u{1FAB1}', name: 'Meter Leech',       hp: 79,  atk: 7, trait: 'jackthief', def: null,   gold: 44 },
     { id: 'mintgardener', icon: '\u{1FAA6}', name: 'Mint Gardener',     hp: 97,  atk: 8, trait: 'gardener', def: 'armor', gold: 52 },
   ],
+  // ---- ACT 5 (floors 21-25): THE UNDERLAKE — the drowned vaults. The old
+  // beyond-ramp used to carry these floors; it now lives in the base stats
+  // (≈×1.29 the mint) so the threat curve never softens at the shoreline ----
+  [
+    { id: 'drownedgrunt', icon: '\u{1F9DF}', name: 'Drowned Grunt',   hp: 101, atk: 9,  trait: 'leech',    def: 'armor', gold: 44 },
+    { id: 'tidesmasher',  icon: '\u{1F988}', name: 'Tide Smasher',    hp: 112, atk: 10, trait: 'fast',     def: 'gel',   gold: 55 },
+    { id: 'pearlmugger',  icon: '\u{1F991}', name: 'Pearl Mugger',    hp: 112, atk: 10, trait: 'thief',    def: 'armor', gold: 56 },
+    { id: 'brinecube',    icon: '\u{1FAE7}', name: 'Brine Cube',      hp: 84,  atk: 9,  trait: 'venom',    def: 'gel',   gold: 48 },
+    { id: 'coraltotem',   icon: '\u{1FAB8}', name: 'Coral Totem',     hp: 104, atk: 10, trait: 'curse',    def: 'ward',  gold: 54 },
+    { id: 'trenchguard',  icon: '\u{1F480}', name: 'Trench Guard',    hp: 122, atk: 11, trait: 'enrage',   def: 'armor', gold: 54 },
+    { id: 'saltwraith',   icon: '\u{1F9DF}', name: 'Salt Wraith',     hp: 108, atk: 10, trait: 'leech',    def: 'regen', gold: 54 },
+    { id: 'abyssalmaw',   icon: '\u{1F419}', name: 'Abyssal Maw',     hp: 183, atk: 13, trait: 'enrage',   def: 'thick', gold: 72 },
+    { id: 'reefripper',   icon: '\u{1F99E}', name: 'Reef Ripper',     hp: 110, atk: 10, trait: 'bleeder',  def: 'thick', gold: 56 },
+    { id: 'venttotem',    icon: '\u{1F30B}', name: 'Vent Totem',      hp: 101, atk: 10, trait: 'burner',   def: 'ward',  gold: 58 },
+    { id: 'undertow',     icon: '\u{1F30A}', name: 'The Undertow',    hp: 115, atk: 9,  trait: 'magnet',   def: null,    gold: 56 },
+    { id: 'coineel',      icon: '\u{1F40D}', name: 'Coin Eel',        hp: 110, atk: 9,  trait: 'gremlin',  def: null,    gold: 59 },
+    { id: 'siltgardener', icon: '\u{1FAA6}', name: 'Silt Gardener',   hp: 124, atk: 10, trait: 'gardener', def: 'regen', gold: 66 },
+  ],
 ];
 // back-compat alias: the act-1 roster (tests and old references)
 const ENEMIES = ENEMY_TIERS[0];
@@ -966,8 +989,13 @@ const ENEMIES = ENEMY_TIERS[0];
 // which act a floor belongs to — NEW GAME+ shifts the whole ladder one act
 // deeper, so floor 1 already fields act-2 kin and act-2 boss rotation
 function actIdx(floor) { return (((floor - 1) / 5) | 0) + (((S.run && S.run.ng) | 0)); }
+// the raw, prestige-blind act of a floor — THE UNDERLAKE (floors 21-25)
+// keys on THIS, so NG shifts never skip a soul into the lake early
+function rawAct(floor) { return ((floor - 1) / 5) | 0; }
 function curRoster() {
-  return ENEMY_TIERS[Math.min(ENEMY_TIERS.length - 1, actIdx(S.run ? S.run.floor : 1))];
+  const f = S.run ? S.run.floor : 1;
+  if (rawAct(f) >= 4) return ENEMY_TIERS[4];             // the lake takes everyone
+  return ENEMY_TIERS[Math.min(3, actIdx(f))];            // prestige ladders as tuned
 }
 function enemyById(id) {
   for (const tier of ENEMY_TIERS) {
@@ -990,8 +1018,12 @@ const BOSSES2 = [
   { id: 'banshee', icon: '\u{1F47A}', name: 'Grave Banshee', hp: 132, atk: 8, trait: 'curse', def: null,     gold: 85 },
   { id: 'aurifex', icon: '\u{1F9DE}', name: 'The Aurifex',   hp: 160, atk: 8, trait: 'thief', def: 'armor',  gold: 110 },
 ];
+// THE UNDERLAKE's lair-holders — floors 21-25 only, both sides of the coin
+const BOSS5  = { id: 'drownedbanker', icon: '\u{1F9DC}', name: 'THE DROWNED BANKER', hp: 165, atk: 8, trait: 'gremlin', def: 'gel',   gold: 140 };
+const BOSS5B = { id: 'siltqueen',     icon: '\u{1F419}', name: 'THE SILT QUEEN',     hp: 158, atk: 8, trait: 'curse',   def: 'regen', gold: 130 };
 // which boss holds this floor's lair — the run's B-SIDE flag decides
 function bossFor(floor) {
+  if (rawAct(floor) === 4) return (S.run && S.run.bside) ? BOSS5B : BOSS5;
   const side = (S.run && S.run.bside) ? BOSSES2 : BOSSES;
   return side[actIdx(floor) % side.length];
 };
@@ -3536,7 +3568,7 @@ function diffHpK() {
   const d = S.run && S.run.diff;
   return d === 'easy' ? 0.8 : d === 'hard' ? 1.3 : 1;
 }
-// past floor 15 the dungeon stops pretending: a MUTATOR stacks on every
+// past floor 25 the dungeon stops pretending: a MUTATOR stacks on every
 // third floor, in a fixed order the deep never varies
 const MUTS = [
   { id: 'thickair',   name: 'THICK AIR',   desc: 'your hand deals 1 fewer coin' },
@@ -3553,7 +3585,7 @@ function mutCount() {
   if (!S.run) return 0;
   if (S.run.gauntlet) return MUTS.length;   // the gauntlet binds every law at once
   // legends read the deep's laws early: first decree at floor 11, not 21
-  const base = (S.run.ng | 0) >= 2 ? 8 : 18;
+  const base = (S.run.ng | 0) >= 2 ? 8 : 23;   // plain decrees start at 26, past the lake
   return Math.max(0, Math.min(MUTS.length, Math.floor((S.run.floor - base) / 3)));
 }
 function mutOn(id) {
@@ -3708,12 +3740,14 @@ function parseDuel(search) {
 // ------------------------------------------------ the CODEX completion math
 // one shelf's tally — bestiary acts count both boss rosters, relic shelves
 // count their rarity. Shared by the tab meters, the trophy and the tests.
-const CODEX_TABS = ['a1', 'a2', 'a3', 'a4', 'c', 'r', 'e'];
+const CODEX_TABS = ['a1', 'a2', 'a3', 'a4', 'a5', 'c', 'r', 'e'];
 function codexTabStat(tab) {
   if (tab === 't') return { got: Object.keys(S.tales || {}).length, all: TALES.length };
   if (tab[0] === 'a') {
     const act = +tab[1] - 1;
-    const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length], CHAMPIONS[act % CHAMPIONS.length]]);
+    const foes = (ENEMY_TIERS[act] || []).concat(act === 4
+      ? [BOSS5, BOSS5B]
+      : [BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length], CHAMPIONS[act % CHAMPIONS.length]]);
     return { got: foes.filter(f => S.codex.foes[f.id]).length, all: foes.length };
   }
   const shelf = RELICS.filter(rl => rl.rar === tab);
@@ -5422,7 +5456,7 @@ function tick(dt) {
 // ------------------------------------------------------------- public API
 window.DP = {
   S, C, MACH, ITEMS, ENEMIES, ENEMY_TIERS, BOSSES, RELICS, WHEEL, ENT_INFO, FLOORS,
-  actIdx, curRoster, enemyById, BOSSES2, bossFor, CHAMPIONS, championFor,
+  actIdx, rawAct, curRoster, enemyById, BOSSES2, BOSS5, BOSS5B, bossFor, CHAMPIONS, championFor,
   HEROES, heroById,
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
@@ -8541,7 +8575,7 @@ if (!HEADLESS) (function browser() {
   // folded into the numbers), the arsenal, the relic shelf, and the
   // run's stats. Opened from the HUD's BAG button or the 'i' key.
   const INV_TABS = [['coins', 'COINS'], ['items', 'ITEMS'], ['relics', 'RELICS'], ['stats', 'STATS']];
-  const ACT_NAMES = ['ACT I — THE CATACOMBS', 'ACT II — THE DEEP HALLS', 'ACT III — THE ABYSS', 'ACT IV — THE MINT'];
+  const ACT_NAMES = ['ACT I — THE CATACOMBS', 'ACT II — THE DEEP HALLS', 'ACT III — THE ABYSS', 'ACT IV — THE MINT', 'ACT V — THE UNDERLAKE'];
   function wrapLines(s, maxChars, maxLines) {
     const words = ('' + s).split(' ');
     const lines = [''];
@@ -10218,7 +10252,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { CODEX = null; } });
     txt('\u{1F4D6} CODEX', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
-    const tabs = [['a1', 'ACT I'], ['a2', 'ACT II'], ['a3', 'ACT III'], ['a4', 'MINT'], ['c', 'COMMON'], ['r', 'RARE'], ['e', 'EPIC'], ['t', 'TALES']];
+    const tabs = [['a1', 'ACT I'], ['a2', 'ACT II'], ['a3', 'ACT III'], ['a4', 'MINT'], ['a5', 'LAKE'], ['c', 'COMMON'], ['r', 'RARE'], ['e', 'EPIC'], ['t', 'TALES']];
     const tw = (LW - 36) / tabs.length;
     let cxGot = 0, cxAll = 0;
     tabs.forEach(([id, label], i) => {
@@ -10238,7 +10272,9 @@ if (!HEADLESS) (function browser() {
     if (CODEX.tab[0] === 'a') {
       // one act's roster + its boss, kills tallied — the unmet stay shadows
       const act = +CODEX.tab[1] - 1;
-      const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length], CHAMPIONS[act % CHAMPIONS.length]]);
+      const foes = (ENEMY_TIERS[act] || []).concat(act === 4
+      ? [BOSS5, BOSS5B]
+      : [BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length], CHAMPIONS[act % CHAMPIONS.length]]);
       const met = foes.filter(f => S.codex.foes[f.id]).length;
       txt(met + ' / ' + foes.length + ' met', LW / 2, 106, '800 11px Verdana, sans-serif', '#c8a8b0');
       foes.forEach((f, i) => {
@@ -11147,8 +11183,8 @@ if (!HEADLESS) (function browser() {
       head(TR('hides — what a foe WEARS'));
       for (const id of Object.keys(DEF_TXT)) row(id, DEF_TXT[id]);
     } else if (ALMANAC.tab === 'laws') {
-      head(TR('past floor 20 the deep posts a law every third floor'));
-      MUTS.forEach((m, i) => row('floor ' + (21 + i * 3) + '+', m.name + ' — ' + m.desc,
+      head(TR('past floor 25 the deep posts a law every third floor'));
+      MUTS.forEach((m, i) => row('floor ' + (26 + i * 3) + '+', m.name + ' — ' + m.desc,
                                  i % 2 ? '#c8a8ff' : '#ffe9a3'));
       y += 8;
       txt(TR('a LEGEND (♛) reads the first law at floor 11'), LW / 2, y, '700 10px Verdana, sans-serif', '#c8a8ff');

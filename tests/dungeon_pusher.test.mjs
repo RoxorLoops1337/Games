@@ -1528,7 +1528,7 @@ finishFight();
 
 // -------- ACTS: a new bestiary every 5 floors (Roguebook-style) --------
 {
-  t.eq(DP.ENEMY_TIERS.length, 4, 'four acts of enemies — THE MINT opened');
+  t.eq(DP.ENEMY_TIERS.length, 5, 'five acts of enemies — THE UNDERLAKE opened');
   t.ok(DP.ENEMY_TIERS.every(tier => tier.length >= 13), 'a full roster per act (13+)');
   const all = DP.ENEMY_TIERS.flat();
   t.eq(new Set(all.map(e => e.id)).size, all.length, 'no duplicate ids across acts');
@@ -1569,7 +1569,9 @@ finishFight();
   S.run.floor = 7; t.eq(DP.mkEnemy('boss').id, 'lich', 'act 2 boss: the Coin Lich');
   S.run.floor = 12; t.eq(DP.mkEnemy('boss').id, 'demon', 'act 3 boss: the Pit Boss');
   S.run.floor = 16; t.eq(DP.mkEnemy('boss').id, 'auditor', 'act 4: THE AUDITOR holds the mint');
-  S.run.floor = 21; t.eq(DP.mkEnemy('boss').id, 'dragon', 'act 5 cycles back around, scaled up');
+  S.run.bside = 0;
+  S.run.floor = 21; t.eq(DP.mkEnemy('boss').id, 'drownedbanker', 'THE UNDERLAKE holds its own lair');
+  S.run.floor = 26; t.eq(DP.mkEnemy('boss').id, 'lich', 'past the lake the rotation resumes, scaled up');
   // an act-3 spawn at floor 11 out-muscles its act-2 kin at floor 10
   S.run.floor = 10; S.run.depth = 1;
   const late2 = DP.mkEnemy('battle', 'frostorc');
@@ -3247,33 +3249,34 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   DS.diffPick = 'normal';
   D.srand(32); D.newRun('knight');
   DS.run.floor = 20; t.eq(D.mutCount(), 0, 'floor 20: THE MINT holds the line');
-  DS.run.floor = 21; t.eq(D.mutCount(), 1, 'floor 21: THICK AIR descends past the mint');
-  DS.run.floor = 24; t.eq(D.mutCount(), 2, 'floor 24: SWIFT DOOM joins');
-  DS.run.floor = 45; t.eq(D.mutCount(), D.MUTS.length, 'the decrees cap out (8 deep now)');
+  DS.run.floor = 25; t.eq(D.mutCount(), 0, 'floor 25: THE UNDERLAKE keeps the laws at bay');
+  DS.run.floor = 26; t.eq(D.mutCount(), 1, 'floor 26: THICK AIR descends past the lake');
+  DS.run.floor = 29; t.eq(D.mutCount(), 2, 'floor 29: SWIFT DOOM joins');
+  DS.run.floor = 48; t.eq(D.mutCount(), D.MUTS.length, 'the decrees cap out (8 deep now)');
   t.ok(D.mutOn('thickair') && D.mutOn('swiftdoom'), 'mutOn reads the stack');
   // SWIFT DOOM: +2 atk
-  DS.run.floor = 24;
+  DS.run.floor = 29;
   const swift = D.mkEnemy('battle', D.curRoster()[0].id);
   DS.run.floor = 20;
   const calm = D.mkEnemy('battle', D.curRoster()[0].id);
   t.ok(swift.atk >= calm.atk + 2 - 3, 'the deep hits harder (+2 atk baked in)');
   // THICK AIR: the hand loses one more
-  DS.run.floor = 21;
+  DS.run.floor = 26;
   DS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: D.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
   D.interact(0);
   const handN = Object.values(DS.battle.hand).reduce((a, b) => a + b, 0);
   t.eq(handN, D.purseTotal() - 1, 'THICK AIR steals one from the deal');
   // ARMORED AGE + BONE RAIN at round turn
-  DS.run.floor = 30;
+  DS.run.floor = 35;
   DS.enemy.hp = DS.enemy.maxHp = 9999;
   DS.rain.length = 0;
   D.newRound();
   t.ok(DS.enemy.block >= 2, 'ARMORED AGE shields the pack each round');
   t.ok(DS.rain.some(r => r.kind === 'skull'), 'BONE RAIN salts the pile with a skull');
   // the endless premium on cogs
-  DS.run.floor = 30; DS.run.kills = 0;
+  DS.run.floor = 35; DS.run.kills = 0;
   D.hpHit(9999, 'the deep');
-  t.eq(DS.over.cogsWon, Math.round(30 * (1 + 0.2 * 4)), 'endless cogs pay the +20%/decree premium');
+  t.eq(DS.over.cogsWon, Math.round(35 * (1 + 0.2 * 4)), 'endless cogs pay the +20%/decree premium');
   t.eq(DS.over.muts, 4, 'the card counts the decrees endured');
 }
 
@@ -3938,7 +3941,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.theme().name, 'THE MINT', 'floor 16 turns gilded');
   t.ok(D.curRoster() === mint, 'and fields the mint roster');
   D.S.run.floor = 23;
-  t.ok(D.curRoster() === mint, 'past the last act the mint holds the door');
+  t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'floor 23 fields the UNDERLAKE roster');
+  D.S.run.floor = 28;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'and past the lake it holds the door');
   // THE AUDITOR seals the act
   D.S.run.floor = 16;
   t.eq(D.bossFor(16).id, 'auditor', 'THE AUDITOR holds the floor-20 lair rotation');
@@ -4565,22 +4570,22 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.MUTS.length, 8, 'the decree stack runs 8 deep');
   D.srand(7); D.newRun('knight');
   // the new decrees arrive on schedule: 36 / 39 / 42
-  DS.run.floor = 35; t.ok(!D.mutOn('gildedage'), 'floor 35: no GILDED AGE yet');
-  DS.run.floor = 36; t.ok(D.mutOn('gildedage'), 'floor 36: GILDED AGE crowns the deep');
-  DS.run.floor = 38; t.ok(!D.mutOn('thinveins'), 'floor 38: veins still thick');
-  DS.run.floor = 39; t.ok(D.mutOn('thinveins'), 'floor 39: THIN VEINS bites the shop');
-  DS.run.floor = 42; t.ok(D.mutOn('longdark'), 'floor 42: THE LONG DARK falls');
+  DS.run.floor = 40; t.ok(!D.mutOn('gildedage'), 'floor 40: no GILDED AGE yet');
+  DS.run.floor = 41; t.ok(D.mutOn('gildedage'), 'floor 41: GILDED AGE crowns the deep');
+  DS.run.floor = 43; t.ok(!D.mutOn('thinveins'), 'floor 43: veins still thick');
+  DS.run.floor = 44; t.ok(D.mutOn('thinveins'), 'floor 44: THIN VEINS bites the shop');
+  DS.run.floor = 47; t.ok(D.mutOn('longdark'), 'floor 47: THE LONG DARK falls');
   // THE LONG DARK: every floor is a dark floor
-  DS.run.floor = 43;
-  t.ok(D.darkFloor(), 'floor 43 (not a natural dark floor) is dark under the decree');
+  DS.run.floor = 49;
+  t.ok(D.darkFloor(), 'floor 49 (not a natural dark floor) is dark under the decree');
   DS.run.floor = 22;
   t.ok(!D.darkFloor(), 'floor 22 without the decree stays lit');
   // THIN VEINS: the keeper's cut, measured to the coin
-  DS.run.floor = 39;
+  DS.run.floor = 44;
   D.srand(11);
-  const st39 = D.shopStock();
-  const potion39 = st39.find(x => x.kind === 'potion').price;
-  t.eq(potion39, Math.round(45 * (1 + 0.25 * 38) * 1.25) * 2, 'floor-39 potions carry the +25% vein tax (gold prices double post-round)');
+  const st44 = D.shopStock();
+  const potion44 = st44.find(x => x.kind === 'potion').price;
+  t.eq(potion44, Math.round(45 * (1 + 0.25 * 43) * 1.25) * 2, 'floor-44 potions carry the +25% vein tax (gold prices double post-round)');
   // GILDED AGE: elites flood the carve (statistical, 20 carves each)
   const eliteCount = (floor) => {
     let n = 0;
@@ -4592,7 +4597,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     }
     return n;
   };
-  const calm = eliteCount(20), gilded = eliteCount(36);
+  const calm = eliteCount(20), gilded = eliteCount(41);
   t.ok(gilded > calm * 1.6, 'GILDED AGE floods the halls with elites (' + calm + ' -> ' + gilded + ')');
   // MILESTONE CHESTS: floor 22 pays, floor 23 doesn't, the ledger counts
   const { DP: M } = loadGame({}, false);
@@ -4833,13 +4838,16 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const { DP: D } = loadGame(store, false);
   D.srand(21); D.newRun('knight');
   D.S.run.floor = 20;
-  D.nextFloor();                                    // floor 21: the first decree
-  t.eq(D.S.life.mutMax, 1, 'floor 21 inks a 1-deep stack');
+  D.nextFloor();                                    // floor 21: the lake gate, law-free
+  t.eq(D.S.life.mutMax, 0, 'floor 21 posts no law now — the lake holds them');
   t.eq(D.S.life.deepFloors, 0, 'floor 21 is not yet past the ledger');
-  D.S.run.floor = 26;
-  D.nextFloor();                                    // floor 27: three laws deep
-  t.eq(D.S.life.mutMax, 3, 'floor 27 deepens the lifetime stack to 3');
-  t.eq(D.S.life.deepFloors, 1, 'and counts one floor walked past the ledger');
+  D.S.run.floor = 25;
+  D.nextFloor();                                    // floor 26: the first law
+  t.eq(D.S.life.mutMax, 1, 'floor 26 inks a 1-deep stack');
+  D.S.run.floor = 31;
+  D.nextFloor();                                    // floor 32: three laws deep
+  t.eq(D.S.life.mutMax, 3, 'floor 32 deepens the lifetime stack to 3');
+  t.eq(D.S.life.deepFloors, 2, 'and counts the floors walked past the ledger');
   D.endRun('fell');
   t.eq(D.S.life.mutMax, 3, 'the run’s end keeps the deepest stack');
   D.srand(22); D.newRun('knight');
@@ -4848,7 +4856,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.save();
   const { DP: R } = loadGame(store, false);
   t.eq(R.S.life.mutMax, 3, 'the decree-stack record survives a reload');
-  t.eq(R.S.life.deepFloors, 1, 'so does the deep-floor count');
+  t.eq(R.S.life.deepFloors, 2, 'so does the deep-floor count');
   // with-ctx smoke: the wheel rides its spin through the settle-rock
   const { DP: W, raf } = loadGame({}, true);
   let ts = 0;
@@ -5114,6 +5122,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   for (const tier of D.ENEMY_TIERS) for (const f of tier) D.S.codex.foes[f.id] = 1;
   for (const b of D.BOSSES) D.S.codex.foes[b.id] = 1;
   for (const b of D.BOSSES2) D.S.codex.foes[b.id] = 1;
+  D.S.codex.foes[D.BOSS5.id] = 1; D.S.codex.foes[D.BOSS5B.id] = 1;
   for (const c of D.CHAMPIONS) D.S.codex.foes[c.id] = 1;
   for (const rl of D.RELICS) D.S.codex.relics[rl.id] = 1;
   t.ok(D.CODEX_TABS.every(tb => { const s = D.codexTabStat(tb); return s.got === s.all; }),
@@ -5146,6 +5155,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   for (const tier of M.ENEMY_TIERS) for (const f of tier) M.S.codex.foes[f.id] = 1;
   for (const b of M.BOSSES) M.S.codex.foes[b.id] = 1;
   for (const b of M.BOSSES2) M.S.codex.foes[b.id] = 1;
+  M.S.codex.foes[M.BOSS5.id] = 1; M.S.codex.foes[M.BOSS5B.id] = 1;
   for (const c of M.CHAMPIONS) M.S.codex.foes[c.id] = 1;
   for (const rl of M.RELICS) M.S.codex.relics[rl.id] = 1;
   M.S.yday = { on: TD, floor: 31, name: 'Danhieux' };
@@ -6516,8 +6526,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
   frames(4);
   K.srand(5); K.newRun('knight');
-  K.S.run.floor = 26; K.S.run.goldKeys = 3;
-  t.ok(K.mutCount() >= 2, 'floor 26 posts standing decrees (' + K.mutCount() + ')');
+  K.S.run.floor = 29; K.S.run.goldKeys = 3;
+  t.ok(K.mutCount() >= 2, 'floor 29 posts standing decrees (' + K.mutCount() + ')');
   frames(10);                                  // dungeon: the rotating decree strip
   K.startBattle('battle');
   frames(10);                                  // battle: the combined key line
@@ -6693,6 +6703,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   for (const e of D.ENEMIES) D.S.codex.foes[e.id] = 1;
   for (const b of D.BOSSES) D.S.codex.foes[b.id] = 1;
   for (const b of D.BOSSES2) D.S.codex.foes[b.id] = 1;
+  D.S.codex.foes[D.BOSS5.id] = 1; D.S.codex.foes[D.BOSS5B.id] = 1;
   for (const c of D.CHAMPIONS) D.S.codex.foes[c.id] = 1;
   for (const rl of D.RELICS) D.S.codex.relics[rl.id] = 1;
   D.TALES.forEach((_, i) => { if (i < D.TALES.length - 1) D.S.tales[i] = 1; });
@@ -6789,6 +6800,48 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(JSON.stringify(R.S.over.pace), JSON.stringify({ 2: 33, 3: 80 }), 'the fallen run keeps its clock');
   const re = R.duelLink(R.S.over.seed, R.S.over.floor, 'Me', R.S.over.pace);
   t.ok(re.indexOf('&p=x-28') >= 0, 'the rematch carries YOUR pace back (' + re + ')');
+}
+
+// -------- TIER 11 [big]: THE UNDERLAKE — the fifth act stands --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.ENEMY_TIERS[4].length, 13, 'thirteen drowned kin in the lake');
+  t.ok(D.ENEMY_TIERS[4].every(e => e.hp > 0 && e.atk > 0 && e.gold > 0), 'all fully statted');
+  const ids = new Set();
+  for (const tier of D.ENEMY_TIERS) for (const e of tier) { t.ok(!ids.has(e.id) || t.fail, ''); ids.add(e.id); }
+  t.eq(ids.size, D.ENEMY_TIERS.reduce((a, tr) => a + tr.length, 0), 'no duplicate foe ids across five acts');
+  // the lake's weight replaces the lost beyond-ramp (≈×1.29 the mint)
+  const mean = (tr, k) => tr.reduce((a, e) => a + e[k], 0) / tr.length;
+  const hpK = mean(D.ENEMY_TIERS[4], 'hp') / mean(D.ENEMY_TIERS[3], 'hp');
+  t.ok(hpK > 1.2 && hpK < 1.4, 'lake kin outweigh mint kin by the folded ramp (×' + hpK.toFixed(2) + ')');
+  D.srand(8); D.newRun('knight');
+  D.S.run.bside = 0;
+  // the boundaries: 20 is mint, 21-25 the lake, 26 the endless
+  D.S.run.floor = 20;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[3], 'floor 20 still fields the mint');
+  D.S.run.floor = 21;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'floor 21 wades into the lake');
+  t.eq(D.theme().name, 'THE UNDERLAKE', 'and the halls turn drowned');
+  t.eq(D.bossFor(21).id, 'drownedbanker', 'THE DROWNED BANKER holds the A-side lair');
+  D.S.run.bside = 1;
+  t.eq(D.bossFor(23).id, 'siltqueen', 'THE SILT QUEEN holds the B-side');
+  D.S.run.bside = 0;
+  t.eq(D.bossFor(26).id, 'lich', 'past the lake the old rotation resumes');
+  t.eq(D.bossFor(18).id, 'auditor', 'and the mint keeps THE AUDITOR');
+  // prestige never skips a soul into the lake early — every old tuning stands
+  D.S.run.ng = 2;
+  D.S.run.floor = 11;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[3], 'NG++ floor 11 still fields the MINT, not the lake');
+  t.eq(D.bossFor(11).id, 'dragon', 'and its boss rotation is untouched');
+  D.S.run.floor = 21;
+  t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'but floor 21 takes even a legend into the water');
+  D.S.run.ng = 0;
+  // the codex grew its fifth shelf
+  t.ok(D.CODEX_TABS.indexOf('a5') >= 0, 'the codex owns an a5 shelf');
+  const a5 = D.codexTabStat('a5');
+  t.eq(a5.all, 13 + 2, 'the lake shelf counts its kin and both lords');
+  D.endRun('done');
 }
 
 t.done();

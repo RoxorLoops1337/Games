@@ -618,11 +618,21 @@ feel the game get SMOOTHER this tier, not just bigger.
       plain links from the old world still open, the clock survives
       save/load, and REMATCH sends YOUR pace back so the race is never
       one-sided. Shipped with v1.7.0 (session 81)
-- [ ] **[big] THE FIFTH ACT — THE UNDERLAKE**: floors 21-25 stop being pure
-      endless: a water-themed act (13 foes, drowned tricks: rust rain,
-      coin-eating eels, a pressure gauge replacing darkness) with THE
-      DROWNED BANKER as its boss; decrees shift to start at 26; needs the
-      full probe treatment before ship
+- [x] **[big] THE FIFTH ACT — THE UNDERLAKE** (part 1, session 82):
+      floors 21-25 are a true act. DESIGN DECISIONS (the record): the lake
+      keys on rawAct (prestige-blind) — NG ladders below 21 keep today's
+      mint cap exactly (ng probes unchanged: 25.3 / 73.3), and floor 21
+      takes EVERYONE into the water; the lost beyond-ramp is folded into
+      the roster's base stats (×1.29 the mint — probe floor 21 reads 245.5,
+      monotonic rail holds); THE DROWNED BANKER (A) / THE SILT QUEEN (B)
+      hold rawAct 4 exactly, the old rotation resumes at 26 untouched;
+      decrees move to floor 26 (legends keep floor 11); scale ramps resume
+      past the lake. Shipped: 13 drowned kin (coin eel = the tray filcher,
+      the undertow = tide pull, all on proven trait engines), both lords,
+      LAKE_FLOOR palette, ACT V name, codex a5 shelf (kin + lords),
+      almanac law schedule, changelog. DEFERRED to part 2: the pressure
+      gauge (dark-floor replacement), rust-rain arena beats, bossArena
+      mechanics for the banker, sprites
 - [ ] **[big] MACHINE LAYOUT II — THE TILTED TABLE**: an alternate machine
       unlocked at lifetime floor 30: slanted bed (coins drift left), a
       side gutter that pays gold, one fewer tray slot — chosen at the
