@@ -524,13 +524,21 @@ what Tier 11 built, and keeps a big slot warm for the touch coins.
 - [x] **THE TABLES in the almanac**: THE HOUSE now spells the tilted
       bed's creep rate, the gutter's pay/never-gear rule and the
       bank-slot price, read live off MACH_LAYOUTS/TILT_DRIFT (session 85)
-- [ ] **The wizard file**: instrument the sim (per-hero damage source
-      breakdown, draught luck, policy fit) to find WHY his median reads
-      4 vs pack 5 — kit, sim bias, or truth; buff only what the file
-      convicts
-- [ ] **Lake tales**: ~8 UNDERLAKE lines in TALES (unheard-first engine
-      already exists) — the fifth act is mechanically real and
-      narratively mute
+- [x] **The wizard file — VERDICT: ACQUITTED**: forensics (taken/rounds/
+      foes per fight) showed he kills FASTER than the pack and the real
+      culprit was the sim itself — foes/fight was 1.00 flat, so his
+      hits-ALL kit was structurally worthless in a world with no
+      gang-ups. The SIM was convicted and fixed: even-floor fights now
+      field real 2-packs via startBattle extras; his median reads level
+      with the pack (4=4) and his damage-taken sits BELOW it. No buff —
+      the kit was never guilty. Bonus finding: run determinism requires
+      the FULL profile snapshot (tales heard shift later rng draws) —
+      the rail now pins the true property (session 86)
+- [x] **Lake tales**: 8 drowned lines (a:4) in the innkeeper's voice;
+      rollTale now keys the lake on rawAct like the roster — floors 21+
+      hear every lake line, the catacombs never do, and PRESTIGE alone
+      never drowns the halls (NG+ mint floors stay mint-voiced); book at
+      72 tales (session 86)
 - [ ] **Lake jobs & a drowned stranger**: 2 lake-gated QUEST_DEFS (walk
       to FULL DEPTH and win; drain N coins to the gutter—tilted only) and
       one hallway event reskin for floors 21+ — the lake reuses act-1

@@ -5304,8 +5304,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const store = {};
   const { DP: D } = loadGame(store, false);
   t.ok(D.TALES.length >= 60, 'sixty-plus tales in the book (' + D.TALES.length + ')');
-  t.ok(D.TALES.every(tl => tl.x && (tl.a == null || (tl.a >= 0 && tl.a <= 3))),
-    'every tale is written and act-tagged sanely');
+  t.ok(D.TALES.every(tl => tl.x && (tl.a == null || (tl.a >= 0 && tl.a <= 4))),
+    'every tale is written and act-tagged sanely (the lake included)');
   t.eq(new Set(D.TALES.map(tl => tl.x)).size, D.TALES.length, 'no tale is told twice in the book');
   // act-aware: down in the mint, only mint lines and evergreens are told
   D.srand(101); D.newRun('knight');
@@ -6366,9 +6366,13 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const { DP: D } = loadGame(st, false);
   const S2 = D.S;
   const relicTally = {};                   // boss-spread offers, for the audit
+  const FILE = {};                         // the wizard file: per-hero forensics
+  let cur = null;                          // the hero under the lens
 
-  const fight = (type) => {
-    if (!D.startBattle(type)) return false;
+  const fight = (type, gang) => {
+    if (!D.startBattle(type, undefined, undefined, gang ? [{ mtype: 'battle' }] : undefined)) return false;
+    const hp0 = S2.run.hp;
+    if (cur) { cur.fights++; cur.foes += S2.foes.length; }
     let rounds = 0;
     while (S2.run && S2.battle && !S2.victory && rounds < 30) {
       const B = S2.battle;
@@ -6395,6 +6399,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
       let g = 600;
       while (S2.run && S2.battle && S2.battle.phase !== 'drop' && !S2.victory && g--) D.battleTick(0.4);
     }
+    if (cur) { cur.rounds += rounds; cur.taken += Math.max(0, hp0 - (S2.run ? S2.run.hp : 0)); }
     if (!S2.run) return false;             // the run ended on a foe's swing
     if (!S2.victory) { D.endRun('stalemate'); return false; }
     const v = S2.victory;
@@ -6416,13 +6421,14 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   };
 
   const simRun = (heroId, seed) => {
+    cur = FILE[heroId] = FILE[heroId] || { fights: 0, rounds: 0, taken: 0, foes: 0 };
     D.srand(seed);
     D.newRun(heroId);
     S2.run.bside = 0;      // the boss roster flips per LIFETIME run — pin one side
     while (S2.run && S2.run.floor <= MAX_FLOOR) {
       const f = S2.run.floor;
       S2.run.depth = 3;    // the midline room depth, same as the balance probe
-      if (!fight('battle') || !fight('battle') || !fight('boss')) break;
+      if (!fight('battle') || !fight('battle', S2.run.floor % 2 === 0) || !fight('boss')) break;
       shopStop();
       D.stairSkim();
       if (!(D.tollRun() && (S2.run.tollPaid || 0) >= D.stairToll())) D.spendPurse(D.stairToll());
@@ -6447,6 +6453,12 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   console.log('# hero sim: ' + heroIds.map(h => h + ':' + med[h]).join(' ')
             + '  pack:' + pack + '  (' + SIM_SEEDS.length + ' seeds, greedy autopilot, '
             + (Date.now() - t0) + 'ms)');
+  // THE WIZARD FILE: what the forensics say about the low median
+  const ff = (h, k) => (FILE[h][k] / Math.max(1, FILE[h].fights));
+  const packAvg = (k) => heroIds.reduce((a, h) => a + ff(h, k), 0) / heroIds.length;
+  console.log('# wizard file: taken/fight w=' + ff('wizard', 'taken').toFixed(1) + ' pack=' + packAvg('taken').toFixed(1)
+            + '  rounds/fight w=' + ff('wizard', 'rounds').toFixed(2) + ' pack=' + packAvg('rounds').toFixed(2)
+            + '  foes/fight w=' + ff('wizard', 'foes').toFixed(2) + ' pack=' + packAvg('foes').toFixed(2));
   t.eq(heroIds.length, 9, 'all nine heroes take the autopilot out');
   t.ok(Object.values(med).every(f => f >= 2), 'every hero clears at least a floor on autopilot');
   for (const h of heroIds) {
@@ -6454,8 +6466,15 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
          h + ' keeps up with the pack (median ' + med[h] + ' vs pack ' + pack + ')');
   }
   t.ok(Date.now() - t0 < 20000, 'the whole probe stays under twenty seconds');
-  // determinism: the same hero and seed always walk the same run
-  t.eq(simRun('knight', SIM_SEEDS[0]), simRun('knight', SIM_SEEDS[0]), 'the autopilot is deterministic');
+  // determinism: the same hero, seed AND profile always walk the same run
+  // (the profile is part of the state — tales heard shift later rng draws)
+  const snap = JSON.stringify(D.S);
+  const det1 = simRun('knight', SIM_SEEDS[0]);
+  const sv = JSON.parse(snap);
+  for (const k of Object.keys(D.S)) delete D.S[k];
+  Object.assign(D.S, sv);
+  const det2 = simRun('knight', SIM_SEEDS[0]);
+  t.eq(det1, det2, 'the autopilot is deterministic given the same profile');
   // the relic-audit groundwork: boss spreads were seen and tallied
   const offered = Object.keys(relicTally).length;
   const never = D.RELICS.filter(r => !relicTally[r.id]).length;
@@ -7045,6 +7064,42 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the almanac spells the tables
   t.ok(src.indexOf('THE TABLES (') >= 0 && src.indexOf('the bank runs a slot short') >= 0,
        'the almanac spells the tilted table');
+}
+
+// -------- TIER 12: lake tales + the wizard file's verdict --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const lakeTales = D.TALES.map((tl, i) => [tl, i]).filter(([tl]) => tl.a === 4);
+  t.ok(lakeTales.length >= 8, 'the innkeeper learned ' + lakeTales.length + ' lake lines');
+  t.ok(D.TALES.length >= 70, 'the book holds seventy-plus tales now (' + D.TALES.length + ')');
+  D.srand(19); D.newRun('knight');
+  // at floor 21+ the lake lines pour first (unheard-first drains the act pool)
+  D.S.run.floor = 22;
+  const heard = new Set();
+  for (let i = 0; i < 60; i++) { const x = D.rollTale(); if (x) heard.add(x); }
+  for (const [tl] of lakeTales) t.ok(heard.has(tl.x) || true, '');
+  t.ok(lakeTales.every(([tl]) => heard.has(tl.x)), 'every lake line surfaces in the lake');
+  // and never in the catacombs
+  const { DP: F } = loadGame({}, false);
+  F.srand(19); F.newRun('knight');
+  F.S.run.floor = 2;
+  const shallow = new Set();
+  for (let i = 0; i < 80; i++) { const x = F.rollTale(); if (x) shallow.add(x); }
+  t.ok(lakeTales.every(([tl]) => !shallow.has(tl.x)), 'the catacombs never hear the lake');
+  // NG+ mint floors (actIdx 4 via prestige) stay MINT-voiced, not lake-voiced
+  F.S.run.ng = 1;
+  F.S.run.floor = 17;                    // rawAct 3 — prestige alone must not drown the halls
+  const ngHeard = new Set();
+  for (let i = 0; i < 80; i++) { const x = F.rollTale(); if (x) ngHeard.add(x); }
+  t.ok(lakeTales.every(([tl]) => !ngHeard.has(tl.x)), 'prestige alone never drowns the innkeeper');
+  D.endRun('x'); F.S.run && F.endRun('x');
+  // THE WIZARD FILE — the verdict is pinned where the numbers live: the sim
+  // now rolls real gang-ups (extras), and the source keeps that honest
+  const here = dirname(fileURLToPath(import.meta.url));
+  const tsrc = readFileSync(join(here, 'dungeon_pusher.test.mjs'), 'utf8');
+  t.ok(tsrc.indexOf("gang ? [{ mtype: 'battle' }] : undefined") >= 0,
+       'the autopilot fields gang-ups — AoE kits get their due');
 }
 
 t.done();

@@ -3943,10 +3943,21 @@ const TALES = [
   { a: 3, x: 'milestone chests pace the endless: twenty-two, twenty-five, and on' },
   { a: 3, x: 'the mint relics buy back their own price, if you live to collect' },
   { a: 3, x: 'nobody audits the Auditor. somebody should' },
+  // the lake (rawAct 4): what the innkeeper says about the drowned vaults
+  { a: 4, x: 'the lake? the mint flooded its own basement to hide the books' },
+  { a: 4, x: 'don\u2019t trust the quiet down there. quiet is just pressure saving up' },
+  { a: 4, x: 'the banker forecloses politely. the interest is the insult' },
+  { a: 4, x: 'coins don\u2019t rust in the lake. coins WERE the lake, once' },
+  { a: 4, x: 'the silt queen counts her subjects in slugs. loyal, but worthless' },
+  { a: 4, x: 'full depth does things to a purse. and to the arm holding it' },
+  { a: 4, x: 'eels eat trays. trays, tills, banks — anything with a slot' },
+  { a: 4, x: 'nobody drowns in the underlake. they just stop coming up for gold' },
 ];
 function rollTale() {
   if (!S.run) return null;
-  const act = Math.min(3, actIdx(S.run.floor));
+  // tales follow the halls you SEE: the lake keys on the raw floor, like
+  // the roster — everything shallower flavors by the scaling act
+  const act = rawAct(S.run.floor) >= 4 ? 4 : Math.min(3, actIdx(S.run.floor));
   const pool = [];
   TALES.forEach((tl, i) => { if (tl.a == null || tl.a === act) pool.push(i); });
   const unheard = pool.filter(i => !S.tales[i]);
