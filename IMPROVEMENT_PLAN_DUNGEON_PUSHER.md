@@ -31,9 +31,9 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 ## Tier 2 — retention & meta-progression
 
-- [ ] **Achievements (v1: 20)**: stored in `bm_` profile; toast on unlock; gallery
-      screen behind a 🏆 button (first boss, floor 10/20, 6 heroes tried, vault
-      opened, 100 coins one round, pacifist floor, etc.)
+- [x] **Achievements (v1: 20)**: ACH table + achUnlock/achPoll engine (event hooks +
+      1s poll), toast cards slide in, 🏆 TROPHY HALL gallery on the title, persisted
+      on the profile (session 8)
 - [ ] **[big] Meta-progression: the WORKSHOP** — permanent account-level upgrades
       bought with a new meta-currency (cogs?) earned per run: +start key, +start
       purse coin, +1 starting relic choice, cheaper shops, pet capacity
