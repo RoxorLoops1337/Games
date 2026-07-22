@@ -122,10 +122,12 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       sync button in settings, conflict = newest wins with confirm
 - [ ] **Leaderboard**: reuse `functions/api/board.js` — daily + all-time best floor,
       name entry (12 chars), top-50 screen
-- [ ] **Save migration hardening**: versioned migrations table, corrupt-save quarantine
-      (keep bad blob under `bm_backup_*`, start fresh, offer restore)
-- [ ] **Error recovery**: window.onerror → toast + auto-save + safe return to title
-      instead of a dead canvas
+- [x] **Save migration hardening**: sv-versioned schema + migration ladder;
+      corrupt blobs QUARANTINED under `<key>_quarantine` (never destroyed), clean
+      start + title notice (session 22)
+- [x] **Error recovery**: the CRASH NET — uncaught errors save the run, close every
+      overlay, bail battle→dungeon (or title), toast the player; rate-limited
+      against crash loops (session 22)
 - [ ] **Version/changelog screen**: "what's new" on first launch after a version bump,
       fed from a CHANGELOG list in the file
 - [ ] **Performance budget CI**: headless frame-time probe in tests — fail if a

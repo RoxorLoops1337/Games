@@ -3396,4 +3396,33 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   delete globalThis.__dpBuzz;
 }
 
+// -------- SAVE HARDENING: quarantine, never destroy --------
+{
+  // a corrupt blob is quarantined and the game starts clean
+  const store = {};
+  store[Object.keys(store)[0] || 'x'] = undefined;
+  const { DP: Z } = loadGame(store, false);
+  const KEY = Z.C.SAVE_KEY;
+  store[KEY] = '{"v":1, this is not json';
+  const { DP: D } = loadGame(store, false);
+  t.ok(!D.S.run, 'the broken save yields a clean start');
+  t.eq(D.S.screen, 'title', 'safely at the title');
+  t.eq(store[KEY + '_quarantine'], '{"v":1, this is not json', 'the blob is kept for surgery');
+  t.ok(!store[KEY], 'the main slot is cleared');
+  t.ok(D.S.saveQuarantined, 'the title will say so');
+  // a healthy save round-trips and gets the schema stamp
+  const st2 = {};
+  const { DP: A } = loadGame(st2, false);
+  A.srand(9); A.newRun('knight'); A.save();
+  const blob = JSON.parse(st2[KEY]);
+  t.eq(blob.sv, 2, 'saves carry schema version 2');
+  // a v1 blob (no sv) climbs the migration ladder without complaint
+  delete blob.sv;
+  st2[KEY] = JSON.stringify(blob);
+  const { DP: B } = loadGame(st2, false);
+  t.ok(B.S.run && B.S.run.hero === 'knight', 'a version-less v1 save loads whole');
+  B.save();
+  t.eq(JSON.parse(st2[KEY]).sv, 2, 'and re-saves stamped current');
+}
+
 t.done();

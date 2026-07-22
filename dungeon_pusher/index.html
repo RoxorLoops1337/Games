@@ -843,9 +843,23 @@ let SND = { clink() {}, collect() {}, gem() {}, jackpot() {}, deny() {}, thud() 
             stun() {}, buy() {}, door() {}, dead() {}, winb() {}, reel() {} };
 
 // ------------------------------------------------------------- persistence
+// the save SCHEMA version + its migration ladder: every load climbs the
+// rungs it's missing, one at a time, so old blobs always arrive current
+const SAVE_V = 2;
+function migrateSave(d) {
+  let v = d.sv || 1;
+  if (v === 1) {
+    // v1 -> v2: the versioned era begins — no structural changes, the
+    // per-field guards below already tolerated everything older
+    v = 2;
+  }
+  d.sv = v;
+  return d;
+}
 function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
+      sv: SAVE_V,
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
@@ -866,9 +880,12 @@ function save() {
   } catch (e) {}
 }
 function load() {
+  let raw = null;
+  try { raw = localStorage.getItem(C.SAVE_KEY); } catch (e) {}
+  if (!raw) return;
   try {
-    const d = JSON.parse(localStorage.getItem(C.SAVE_KEY));
-    if (!d) return;
+    const d = migrateSave(JSON.parse(raw));
+    if (!d || typeof d !== 'object') throw new Error('not a save');
     S.mute = !!d.mute;
     if (d.resolveMul === 2 || d.resolveMul === 3) S.resolveMul = d.resolveMul;
     if (d.turbo === 2 || d.turbo === 5 || d.turbo === 10 || d.turbo === 20) S.turbo = d.turbo;
@@ -944,7 +961,15 @@ function load() {
       reconcileStairs();   // a boss felled just before a refresh still gets its stairs
       S.meter = d.run.meter || 0;
     }
-  } catch (e) {}
+  } catch (e) {
+    // a broken save is QUARANTINED, never destroyed — the blob is kept
+    // under a side key for surgery, and the game starts clean
+    try { localStorage.setItem(C.SAVE_KEY + '_quarantine', raw); } catch (e2) {}
+    try { localStorage.removeItem(C.SAVE_KEY); } catch (e2) {}
+    S.run = null;
+    S.screen = 'title';
+    S.saveQuarantined = true;
+  }
 }
 // A boss room whose boss has fallen must always hold the stairs down. Normally
 // leaveBattle() spawns them when CONTINUE is tapped, but a browser refresh on
@@ -4525,6 +4550,28 @@ if (!HEADLESS) (function browser() {
     S.opts.shake = false;
     S.opts.parts = false;
   }
+  // the CRASH NET: an uncaught error saves the run and bails to safe ground
+  // instead of leaving a dead canvas (rate-limited so a crash loop can't spin)
+  let lastCrash = 0;
+  window.addEventListener('error', () => {
+    const now = Date.now();
+    if (now - lastCrash < 4000) return;
+    lastCrash = now;
+    try { save(); } catch (e) {}
+    try {
+      S.confirm = null; S.inv = null; S.wheelAnim = null; S.relicPick = null;
+      S.coinPick = null; S.foeInfo = null;
+      SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
+      if (S.screen === 'battle') {
+        S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
+        S.room = null;
+        S.screen = S.run ? 'dungeon' : 'title';
+      }
+      toast('something snapped — your run is saved and you\'re back on solid ground');
+    } catch (e) {
+      S.screen = 'title';
+    }
+  });
   function hit(px, py) {
     for (let i = uiButtons.length - 1; i >= 0; i--) {
       const b = uiButtons[i];
@@ -8567,6 +8614,10 @@ if (!HEADLESS) (function browser() {
           LW / 2, 736, '700 11px Verdana, sans-serif', '#8f6f78');
     }
     txt('v' + VERSION, LW - 10, LH - 10, '600 9px Verdana, sans-serif', '#5a4a5f', 'right');
+    if (S.saveQuarantined) {
+      txt('⚠ a damaged save was quarantined — fresh start (the old blob is kept safe)',
+          LW / 2, 758, '700 9px Verdana, sans-serif', '#ff9d3c');
+    }
     uiBtn(LW - 52, 12, 38, 36, S.mute ? '\u{1F507}' : '\u{1F50A}', () => { S.mute = !S.mute; save(); }, { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 54, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
     uiBtn(LW - 52, 96, 38, 36, '\u{1F3C6}', () => { TROPHIES = true; }, { r: 10, font: '15px serif' });
