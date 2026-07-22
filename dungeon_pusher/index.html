@@ -63,6 +63,66 @@ const CHANGELOG = [
   ] },
 ];
 const VERSION = CHANGELOG[0].v;
+
+// ---------------------------------------------------------------- languages
+// TR() looks the ENGLISH string itself up in the active language table — en
+// is a pass-through, so any unwrapped string simply stays English. To grow
+// coverage: wrap the call site in TR(...) and add the key to LANGS.nl (and
+// any future table). Keys are the exact English strings. (Named TR because
+// T is the theme handle inside the draw scopes.)
+const LANGS = {
+  en: {},
+  nl: {
+    // title
+    'a coin pusher roguelike': 'een muntenschuiver-roguelike',
+    '● spend your purse each turn — the tray COLLECTS': '● besteed elke beurt je beurs — het bakje VANGT',
+    'END TURN fires it: gold strikes ⚔ silver shields \u{1F6E1} green poisons ☠':
+      'EINDE BEURT vuurt alles af: goud slaat ⚔ zilver schildt \u{1F6E1} groen vergiftigt ☠',
+    '\u{1F6AA} crawl the dungeon: monsters, chests, shopkeepers…':
+      '\u{1F6AA} doorkruip de kerker: monsters, kisten, winkeliers…',
+    '\u{1F5DD} doors need KEYS — every monster slain drops one':
+      '\u{1F5DD} deuren vragen SLEUTELS — elk verslagen monster laat er één vallen',
+    '— CHOOSE YOUR HERO —': '— KIES JE HELD —',
+    '▶ ENTER THE DUNGEON': '▶ DE KERKER IN',
+    '▶ CONTINUE — FLOOR ': '▶ VERDER — VERDIEPING ',
+    'NEW RUN (abandons the old)': 'NIEUWE RUN (de oude vervalt)',
+    // settings
+    '⚙ SETTINGS': '⚙ INSTELLINGEN',
+    'SFX VOLUME': 'SFX-VOLUME',
+    'MUSIC VOLUME': 'MUZIEKVOLUME',
+    'SCREEN SHAKE': 'SCHERMSCHUDDEN',
+    'SOUND': 'GELUID',
+    'HAPTICS (phone buzz)': 'HAPTIEK (telefoontril)',
+    'COLORBLIND MARKS': 'KLEURENBLIND-TEKENS',
+    '\u{1F4DC} THE TALE': '\u{1F4DC} HET VERHAAL',
+    '✨ WHAT’S NEW': '✨ WAT IS NIEUW',
+    '☁ CLOUD SAVE': '☁ CLOUD-SAVE',
+    'CLOSE ✕': 'SLUITEN ✕',
+    'arrows move · SPACE fires · TAB + ENTER press · ESC backs out':
+      'pijltjes bewegen · SPATIE vuurt · TAB + ENTER drukt · ESC gaat terug',
+    // the tale
+    'The dungeon was never a fair fight.': 'De kerker was nooit een eerlijk gevecht.',
+    'Long ago the deep lords rigged it — every corridor': 'Lang geleden vervalsten de dieptevorsten hem — elke gang',
+    'a carnival, every battle a coin machine.': 'een kermis, elk gevecht een muntmachine.',
+    'Feed it your purse. Push your luck.': 'Voer hem je beurs. Tart je geluk.',
+    'The tray decides who bleeds.': 'Het bakje beslist wie bloedt.',
+    '— the tale —': '— het verhaal —',
+    'SKIP ▸': 'OVERSLAAN ▸',
+    // common HUD + banners
+    'END TURN': 'EINDE BEURT',
+    'VICTORY!': 'OVERWINNING!',
+    'JACKPOT!': 'JACKPOT!',
+    'YOUR TURN!': 'JOUW BEURT!',
+    'ROUND': 'RONDE',
+    'FLOOR': 'VERDIEPING',
+    'tap for map': 'tik voor kaart',
+    '\u{1F392} BAG': '\u{1F392} TAS',
+    'END TURN ▶': 'EINDE BEURT ▶',
+  },
+};
+let LANG = 'en';
+function TR(s) { return LANGS[LANG][s] || s; }
+function setLang(l) { LANG = LANGS[l] ? l : 'en'; return LANG; }
 const C = {
   W: 100,
   PLAT_FRONT: 84,
@@ -824,6 +884,7 @@ const S = {
   seenVer: '',                                  // last VERSION whose patch notes were read
   boardName: '',                                // the name carved on the leaderboard
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
+  lang: 'en',                                   // interface language (LANGS key)
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -886,6 +947,7 @@ function save() {
       sv: SAVE_V,
       t: Date.now(),                 // when this blob was written — cloud sync compares clocks
       syncCode: S.syncCode || '',
+      lang: S.lang || 'en',
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
@@ -954,6 +1016,7 @@ function load() {
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
     }
+    if (typeof d.lang === 'string' && LANGS[d.lang]) { S.lang = d.lang; setLang(d.lang); }
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -1610,7 +1673,7 @@ function frenzy() {
   achUnlock('jackpot');
   buzz(80);
   if (hasRelic('jackpotcharm')) { addGold(15); if (S.battle) S.battle.goldWon += 15; }
-  S.banner = { txt: 'JACKPOT!', ttl: 2.2, max: 2.2 };
+  S.banner = { txt: TR('JACKPOT!'), ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.jackpot();
   const owned = [];
@@ -2158,7 +2221,7 @@ function startResolve() {
   B.rampN = 0; B.rampType = null;       // the per-type acceleration counter
   B.qt = 0.9 / (S.resolveMul || 1);     // a breath before the first piece flies
   S.tray.items.length = 0;
-  if (B.queue.length) S.banner = { txt: 'YOUR TURN!', ttl: 1.0, max: 1.0 };
+  if (B.queue.length) S.banner = { txt: TR('YOUR TURN!'), ttl: 1.0, max: 1.0 };
   return true;
 }
 // END TURN: the player ends their drop phase whenever they like — spent
@@ -2584,7 +2647,7 @@ function newRound() {
   // the endless deep's decrees
   if (mutOn('armoredage')) for (const f of S.foes) if (f.hp > 0) f.block = (f.block || 0) + 2;
   if (mutOn('bonerain')) S.rain.push({ t: 0.8, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: 'skull' });
-  S.banner = { txt: 'ROUND ' + B.round, ttl: 1.3, max: 1.3 };
+  S.banner = { txt: TR('ROUND') + ' ' + B.round, ttl: 1.3, max: 1.3 };
   bossArena();
   ratScurry();
   save();
@@ -2700,7 +2763,7 @@ function winBattle() {
   S.victory = { t: 0, gold: S.battle.goldWon, keys: S.battle.keysWon, boss: anyBoss,
                 offer: anyBoss ? null : rollOffer(), picked: null,
                 relicOffer, relicPicked: null, freeSpin: anyElite };
-  S.banner = { txt: 'VICTORY!', ttl: 2.2, max: 2.2 };
+  S.banner = { txt: TR('VICTORY!'), ttl: 2.2, max: 2.2 };
   S.shake += 8;
   SND.winb();
   if (anyBoss) {
@@ -3308,7 +3371,7 @@ function nextFloor() {
     toast('the deep swallows all but ' + C.KEY_CARRY + ' keys');
     S.run.keys = C.KEY_CARRY;
   }
-  S.banner = { txt: 'FLOOR ' + S.run.floor, ttl: 1.8, max: 1.8 };
+  S.banner = { txt: TR('FLOOR') + ' ' + S.run.floor, ttl: 1.8, max: 1.8 };
   genFloor();
   save();
   return true;
@@ -4018,6 +4081,7 @@ window.DP = {
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
   CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
+  LANGS, TR, setLang,
 };
 
 load();
@@ -6516,7 +6580,7 @@ if (!HEADLESS) (function browser() {
       txt('+' + (r.relics.length - 3), 434, 726, '800 10px Verdana, sans-serif', '#c8a8b0', 'left');
     }
     // the BAG: coins, arsenal, relics and stats — everything you carry
-    uiBtn(354, 742, 112, 30, '\u{1F392} BAG', () => { S.inv = S.inv ? null : { tab: 'coins' }; },
+    uiBtn(354, 742, 112, 30, TR('\u{1F392} BAG'), () => { S.inv = S.inv ? null : { tab: 'coins' }; },
           { grad: ['#5a4a7e', '#332448'], border: '#c8b8e0', col: '#f0e8ff',
             font: '900 12px Verdana, sans-serif', r: 10 });
     // arsenal strip
@@ -6758,7 +6822,7 @@ if (!HEADLESS) (function browser() {
         ctx.drawImage(sp, bx2 - pad2, by2 - pad2, bw + pad2 * 2, bh2 + pad2 * 2);
         uiButtons.push({ x: bx2, y: by2, w: bw, h: bh2, cb: () => endRoundNow() });
       } else {
-        uiBtn(bx2, 596, bw, 40, 'END TURN ▶', () => endRoundNow(),
+        uiBtn(bx2, 596, bw, 40, TR('END TURN ▶'), () => endRoundNow(),
               { grad: empty ? ['#ffd75e', '#c98f2a'] : ['#c8a05a', '#8a6a2a'],
                 border: '#fff0c0', col: '#3a2406', font: '900 15px Verdana, sans-serif', r: 15 });
       }
@@ -7043,7 +7107,7 @@ if (!HEADLESS) (function browser() {
       rr(px + pw - 10, ty, 4, thumbH, 2);
       ctx.fillStyle = 'rgba(232,200,119,0.5)'; ctx.fill();
     }
-    uiBtn(LW / 2 - 80, py + ph - 46, 160, 34, 'CLOSE ✕', () => { S.inv = null; },
+    uiBtn(LW / 2 - 80, py + ph - 46, 160, 34, TR('CLOSE ✕'), () => { S.inv = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
 
@@ -8058,7 +8122,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(10,6,12,0.82)'; ctx.fill();
     ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(232,220,232,0.35)'; ctx.stroke();
     drawMapRooms(mx + 6 - b.minX * pitch, my + 6 - b.minY * pitch, pitch, seen, false);
-    txt('tap for map', mx + mw / 2, my + mh + 8, '600 9px Verdana, sans-serif', '#a08a94');
+    txt(TR('tap for map'), mx + mw / 2, my + mh + 8, '600 9px Verdana, sans-serif', '#a08a94');
     if (!S.room) uiButtons.push({ x: mx - 6, y: my - 6, w: mw + 12, h: mh + 24, cb: () => { mapView = true; } });
   }
   // the full blueprint, unrolled like a tabletop dungeon chart
@@ -8406,17 +8470,17 @@ if (!HEADLESS) (function browser() {
       ctx.globalAlpha = 1;
       txt('\u{1F525}', tx, 196, '22px serif', '#fff');
     }
-    txt('— the tale —', LW / 2, 240, '900 13px Georgia, serif', '#9a8aa0');
+    txt(TR('— the tale —'), LW / 2, 240, '900 13px Georgia, serif', '#9a8aa0');
     INTRO_LINES.forEach((ln, i) => {
       const a = Math.max(0, Math.min(1, (INTRO.t - i * 0.9) / 0.6));
       if (a <= 0) return;
       ctx.save(); ctx.globalAlpha = a;
-      txt(ln, LW / 2, 300 + i * 44 + (1 - a) * 10, '700 15px Georgia, serif',
+      txt(TR(ln), LW / 2, 300 + i * 44 + (1 - a) * 10, '700 15px Georgia, serif',
           i >= INTRO_LINES.length - 1 ? '#ffd75e' : '#d8c8dc');
       ctx.restore();
     });
     const done = INTRO.t > INTRO_LINES.length * 0.9 + 0.4;
-    uiBtn(LW / 2 - 80, 640, 160, 46, done ? '\u{2694}\u{FE0F} GO' : 'SKIP ▸', () => {
+    uiBtn(LW / 2 - 80, 640, 160, 46, done ? '\u{2694}\u{FE0F} GO' : TR('SKIP ▸'), () => {
       const then = INTRO && INTRO.then;
       INTRO = null;
       S.introSeen = true; save();
@@ -8465,7 +8529,7 @@ if (!HEADLESS) (function browser() {
       wrapLines(a.desc, 26, 2).forEach((ln, li) =>
         txt(ln, x + 40, y + 33 + li * 11, '600 9px Verdana, sans-serif', on ? '#c8b8a0' : '#544a60', 'left'));
     });
-    uiBtn(LW / 2 - 70, 110 + Math.ceil(ACH.length / 2) * 62 + 10, 140, 40, 'CLOSE ✕', () => { TROPHIES = false; },
+    uiBtn(LW / 2 - 70, 110 + Math.ceil(ACH.length / 2) * 62 + 10, 140, 40, TR('CLOSE ✕'), () => { TROPHIES = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the WORKSHOP: cogs in, forever-upgrades out ----
@@ -8504,7 +8568,7 @@ if (!HEADLESS) (function browser() {
                 font: '900 13px Verdana, sans-serif', r: 10 });
       }
     });
-    uiBtn(LW / 2 - 70, 104 + WORKSHOP.length * 74 + 8, 140, 40, 'CLOSE ✕', () => { WSHOP = false; },
+    uiBtn(LW / 2 - 70, 104 + WORKSHOP.length * 74 + 8, 140, 40, TR('CLOSE ✕'), () => { WSHOP = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the CODEX: every foe met, every relic ever owned ----
@@ -8579,7 +8643,7 @@ if (!HEADLESS) (function browser() {
         txt(own ? selRl.desc : 'find it in the deep to read its writ', LW / 2, LH - 84, '600 10px Verdana, sans-serif', '#c8b8cc');
       }
     }
-    uiBtn(LW / 2 - 70, LH - 58, 140, 40, 'CLOSE ✕', () => { CODEX = null; },
+    uiBtn(LW / 2 - 70, LH - 58, 140, 40, TR('CLOSE ✕'), () => { CODEX = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the RECORDS book: lifetime totals + the last ten runs ----
@@ -8622,7 +8686,7 @@ if (!HEADLESS) (function browser() {
           40, y + 15, '800 10px Verdana, sans-serif', '#e8d0a0', 'left');
       txt(h.cause, LW - 40, y + 15, '600 10px Verdana, sans-serif', '#a08090', 'right');
     });
-    uiBtn(LW / 2 - 70, 328 + Math.max(1, S.hist.length) * 34 + 14, 140, 40, 'CLOSE ✕', () => { RECORDS = false; },
+    uiBtn(LW / 2 - 70, 328 + Math.max(1, S.hist.length) * 34 + 14, 140, 40, TR('CLOSE ✕'), () => { RECORDS = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the SETTINGS sheet: volume notches, comfort toggles, the tale ----
@@ -8718,7 +8782,7 @@ if (!HEADLESS) (function browser() {
     uiBtn(48, py + ph - 50, 150, 36, '\u{270F}\u{FE0F} ' + (S.boardName || 'carve a name'), () => {
       NAMEPAD = { val: S.boardName || '', then: () => openBoard(BOARD ? BOARD.tab : 'alltime') };
     }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 10px Verdana, sans-serif', r: 10 });
-    uiBtn(LW - 48 - 130, py + ph - 50, 130, 36, 'CLOSE ✕', () => { BOARD = null; },
+    uiBtn(LW - 48 - 130, py + ph - 50, 130, 36, TR('CLOSE ✕'), () => { BOARD = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 12px Verdana, sans-serif', r: 10 });
   }
   // the name carver: a stone tablet of keys, no browser prompt in sight
@@ -8874,7 +8938,7 @@ if (!HEADLESS) (function browser() {
         txt(ln, LW / 2, py + 292 + i * 16, '800 11px Verdana, sans-serif',
             CLOUD.state === 'busy' ? '#b8a8bc' : '#8ed67e'));
     }
-    uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, 'CLOSE ✕', () => { CLOUD = null; },
+    uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, TR('CLOSE ✕'), () => { CLOUD = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the WHAT'S NEW scroll: unread patch notes greet a returning player ----
@@ -8925,7 +8989,14 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
     uiButtons.push({ x: 40, y: py, w: LW - 80, h: ph, cb: () => {} });
-    txt('⚙ SETTINGS', LW / 2, py + 34, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt(TR('⚙ SETTINGS'), LW / 2, py + 34, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    // the language chip: cycles the LANGS tables, persists at once
+    uiBtn(52, py + 18, 64, 28, '\u{1F310} ' + LANG.toUpperCase(), () => {
+      const keys = Object.keys(LANGS);
+      S.lang = keys[(keys.indexOf(LANG) + 1) % keys.length];
+      setLang(S.lang);
+      save();
+    }, { bg: 'rgba(36,30,42,0.95)', border: '#8d7d95', col: '#e8d8ec', font: '900 11px Verdana, sans-serif', r: 9 });
     // volume rows: ten tap-notches each
     const volRow = (y, label, get, set) => {
       txt(label, 64, y, '800 11px Verdana, sans-serif', '#c8a8b0', 'left');
@@ -8938,12 +9009,12 @@ if (!HEADLESS) (function browser() {
       }
       txt(Math.round(get() * 100) + '%', LW - 64, y, '800 11px Verdana, sans-serif', '#ffe9a3', 'right');
     };
-    volRow(py + 70, 'SFX VOLUME', () => S.opts.sfx, lv => {
+    volRow(py + 70, TR('SFX VOLUME'), () => S.opts.sfx, lv => {
       S.opts.sfx = lv;
       if (master) master.gain.value = 0.5 * lv;
       SND.clink();
     });
-    volRow(py + 122, 'MUSIC VOLUME', () => S.opts.music, lv => {
+    volRow(py + 122, TR('MUSIC VOLUME'), () => S.opts.music, lv => {
       S.opts.music = lv;
       if (musicGain) musicGain.gain.value = musicVol();
     });
@@ -8955,27 +9026,27 @@ if (!HEADLESS) (function browser() {
               border: val ? '#eaffef' : '#7a5a62', col: val ? '#123a24' : '#d8b8c0',
               font: '900 12px Verdana, sans-serif', r: 10 });
     };
-    toggle(py + 182, 'SCREEN SHAKE', S.opts.shake, () => { S.opts.shake = !S.opts.shake; });
+    toggle(py + 182, TR('SCREEN SHAKE'), S.opts.shake, () => { S.opts.shake = !S.opts.shake; });
     toggle(py + 224, 'PARTICLES ' + (S.opts.parts ? '(full)' : '(light)'), S.opts.parts,
            () => { S.opts.parts = !S.opts.parts; });
-    toggle(py + 266, 'SOUND', !S.mute, () => { S.mute = !S.mute; });
-    toggle(py + 308, 'HAPTICS (phone buzz)', S.opts.haptic, () => { S.opts.haptic = !S.opts.haptic; });
-    toggle(py + 350, 'COLORBLIND MARKS', S.opts.cb, () => { S.opts.cb = !S.opts.cb; });
+    toggle(py + 266, TR('SOUND'), !S.mute, () => { S.mute = !S.mute; });
+    toggle(py + 308, TR('HAPTICS (phone buzz)'), S.opts.haptic, () => { S.opts.haptic = !S.opts.haptic; });
+    toggle(py + 350, TR('COLORBLIND MARKS'), S.opts.cb, () => { S.opts.cb = !S.opts.cb; });
     // the tale + the patch notes share a row; the cloud gets its own
     const half = (LW - 128 - 8) / 2;
-    uiBtn(64, py + 394, half, 38, '\u{1F4DC} THE TALE', () => {
+    uiBtn(64, py + 394, half, 38, TR('\u{1F4DC} THE TALE'), () => {
       SETTINGS = false; INTRO = { t: 0, then: null };
     }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 11px Verdana, sans-serif', r: 12 });
-    uiBtn(64 + half + 8, py + 394, half, 38, '✨ WHAT’S NEW', () => {
+    uiBtn(64 + half + 8, py + 394, half, 38, TR('✨ WHAT’S NEW'), () => {
       SETTINGS = false; WHATSNEW = { auto: false };
     }, { bg: 'rgba(46,38,66,0.95)', border: '#e0d0a8', col: '#fff4d6', font: '800 11px Verdana, sans-serif', r: 12 });
-    uiBtn(64, py + 438, LW - 128, 38, '☁ CLOUD SAVE' + (S.syncCode ? ' — ' + S.syncCode : ''), () => {
+    uiBtn(64, py + 438, LW - 128, 38, TR('☁ CLOUD SAVE') + (S.syncCode ? ' — ' + S.syncCode : ''), () => {
       SETTINGS = false; CLOUD = { state: 'idle', msg: '' };
     }, { bg: 'rgba(34,44,66,0.95)', border: '#8fc8ff', col: '#d8ecff', font: '800 11px Verdana, sans-serif', r: 12 });
     txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 500, '700 10px Verdana, sans-serif', '#9a8aa0');
-    txt('arrows move · SPACE fires · TAB + ENTER press · ESC backs out', LW / 2, py + 516, '600 10px Verdana, sans-serif', '#8d7d95');
+    txt(TR('arrows move · SPACE fires · TAB + ENTER press · ESC backs out'), LW / 2, py + 516, '600 10px Verdana, sans-serif', '#8d7d95');
     txt('painted relics by the owner — code forged with Claude Code', LW / 2, py + 530, '600 10px Verdana, sans-serif', '#8d7d95');
-    uiBtn(LW / 2 - 70, py + ph - 34, 140, 40, 'CLOSE ✕', () => { SETTINGS = false; },
+    uiBtn(LW / 2 - 70, py + ph - 34, 140, 40, TR('CLOSE ✕'), () => { SETTINGS = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the CONFIRM sheet: one question, two honest buttons ----
@@ -9073,18 +9144,18 @@ if (!HEADLESS) (function browser() {
     ctx.fillText('DUNGEON', LW / 2, 150 + bob);
     ctx.fillText('PUSHER', LW / 2, 205 + bob);
     ctx.restore();
-    txt('a coin pusher roguelike', LW / 2, 330, '800 14px Verdana, sans-serif', '#c8a8b0');
+    txt(TR('a coin pusher roguelike'), LW / 2, 330, '800 14px Verdana, sans-serif', '#c8a8b0');
     const HOW = [
       '● spend your purse each turn — the tray COLLECTS',
       'END TURN fires it: gold strikes ⚔ silver shields \u{1F6E1} green poisons ☠',
       '\u{1F6AA} crawl the dungeon: monsters, chests, shopkeepers…',
       '\u{1F5DD} doors need KEYS — every monster slain drops one',
     ];
-    HOW.forEach((h, i) => txt(h, LW / 2, 372 + i * 22, '600 11px Verdana, sans-serif', '#9a8aa0'));
+    HOW.forEach((h, i) => txt(TR(h), LW / 2, 372 + i * 22, '600 11px Verdana, sans-serif', '#9a8aa0'));
     drawMotes(1 / 60, 1);
     drawVignette(0.4);
     // choose your adventurer
-    txt('— CHOOSE YOUR HERO —', LW / 2, 472, '900 12px Georgia, serif', '#ffd75e');
+    txt(TR('— CHOOSE YOUR HERO —'), LW / 2, 472, '900 12px Georgia, serif', '#ffd75e');
     const hw = Math.floor((LW - 24 - (HEROES.length - 1) * 6) / HEROES.length);
     HEROES.forEach((h, i) => {
       const x = 12 + i * (hw + 6), y = 484, w = hw, hh = 118;
@@ -9129,16 +9200,16 @@ if (!HEADLESS) (function browser() {
       });
     }
     if (S.run) {
-      uiBtn(LW / 2 - 130, 620, 260, 48, '▶ CONTINUE — FLOOR ' + S.run.floor,
+      uiBtn(LW / 2 - 130, 620, 260, 48, TR('▶ CONTINUE — FLOOR ') + S.run.floor,
             () => { S.screen = 'dungeon'; save(); },
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 16 });
-      uiBtn(LW / 2 - 130, 676, 260, 40, 'NEW RUN (abandons the old)', () => {
+      uiBtn(LW / 2 - 130, 676, 260, 40, TR('NEW RUN (abandons the old)'), () => {
         S.confirm = { msg: 'Abandon the current run?', sub: 'floor ' + S.run.floor + ' progress will be lost forever',
                       yesLabel: 'ABANDON', yes: () => newRun(heroSel) };
       }, { bg: 'rgba(90,40,20,0.9)', border: '#ff9d3c', col: '#ffd9b0', font: '800 12px Verdana, sans-serif', r: 14 });
     } else {
       const pulse = 1 + Math.sin(t * 4) * 0.03;
-      uiBtn(LW / 2 - 130 * pulse, 628, 260 * pulse, 52 * pulse, '▶ ENTER THE DUNGEON', () => {
+      uiBtn(LW / 2 - 130 * pulse, 628, 260 * pulse, 52 * pulse, TR('▶ ENTER THE DUNGEON'), () => {
         if (!S.introSeen) INTRO = { t: 0, then: () => newRun(heroSel) };
         else newRun(heroSel);
       }, { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 16px Verdana, sans-serif', r: 16 });

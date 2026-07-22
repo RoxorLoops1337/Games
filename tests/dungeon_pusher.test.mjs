@@ -3634,4 +3634,34 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('RESTORE THIS PROFILE?') >= 0, 'restoring always passes the confirm sheet');
 }
 
+// -------- LOCALIZATION: TR() + the NL proof pass --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.TR('END TURN ▶'), 'END TURN ▶', 'en is a pass-through');
+  t.eq(D.TR('a string nobody translated'), 'a string nobody translated', 'unknown keys fall through untouched');
+  D.setLang('nl');
+  t.eq(D.TR('END TURN ▶'), 'EINDE BEURT ▶', 'nl translates a wrapped key');
+  t.eq(D.TR('VICTORY!'), 'OVERWINNING!', 'banners speak Dutch too');
+  t.eq(D.TR('a string nobody translated'), 'a string nobody translated', 'nl falls back to English for gaps');
+  t.eq(D.setLang('klingon'), 'en', 'an unknown language falls back to en');
+  const nl = D.LANGS.nl;
+  t.ok(Object.keys(nl).length >= 30, 'the NL proof pass covers 30+ strings (' + Object.keys(nl).length + ')');
+  t.ok(Object.values(nl).every(v => typeof v === 'string' && v.length > 0), 'no empty NL entries');
+  t.ok(Object.keys(D.LANGS.en).length === 0, 'en stays a pure pass-through table');
+  // the choice persists and is live straight after load
+  D.S.lang = 'nl'; D.setLang('nl'); D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.lang, 'nl', 'the language survives a reload');
+  t.eq(R.TR('CLOSE ✕'), 'SLUITEN ✕', 'and the table is live after load');
+  // the sim's banners flow through TR
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  for (const key of ["TR('VICTORY!')", "TR('JACKPOT!')", "TR('YOUR TURN!')", "TR('ROUND')", "TR('FLOOR')"]) {
+    t.ok(src.indexOf(key) >= 0, 'banner site wrapped: ' + key);
+  }
+  t.ok(src.indexOf("uiBtn(52, py + 18, 64, 28, '\\u{1F310} '") >= 0 || /LANG\.toUpperCase/.test(src),
+       'the settings language chip exists');
+}
+
 t.done();
