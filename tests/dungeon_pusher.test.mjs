@@ -2925,4 +2925,25 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.eq(E.S.hist.length, 10, 'so does the history book');
 }
 
+// -------- the CODEX: foes met, relics owned, remembered forever --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  D.srand(55);
+  D.newRun('knight');
+  const eid = D.curRoster()[0].id;
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  D.S.enemy.hp = 1;
+  D.dmgEnemy(5);
+  t.eq(D.S.codex.foes[eid], 1, 'the bestiary counts the first kill');
+  D.S.run.relics.push('clover', 'midas');
+  D.achPoll();
+  t.ok(D.S.codex.relics.clover && D.S.codex.relics.midas, 'the codex sweeps owned relics');
+  D.save();
+  const { DP: E } = loadGame(store, false);
+  t.eq(E.S.codex.foes[eid], 1, 'the bestiary survives a reload');
+  t.ok(E.S.codex.relics.clover, 'so does the relic codex');
+}
+
 t.done();

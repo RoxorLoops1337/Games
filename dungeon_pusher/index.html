@@ -728,6 +728,7 @@ const S = {
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
   life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {} },
   hist: [],                                     // the last ten runs, newest first
+  codex: { foes: {}, relics: {} },              // everything ever met or owned
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -775,6 +776,7 @@ function save() {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
+      codex: S.codex,
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -816,6 +818,9 @@ function load() {
                  time: d.life.time || 0, heroRuns: d.life.heroRuns || {} };
     }
     if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
+    if (d.codex && typeof d.codex === 'object') {
+      S.codex = { foes: d.codex.foes || {}, relics: d.codex.relics || {} };
+    }
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -1077,6 +1082,7 @@ function foeDown(e) {
   if (e.paid) return;
   e.paid = true;
   S.run.kills++;
+  S.codex.foes[e.id] = (S.codex.foes[e.id] || 0) + 1;   // the bestiary remembers
   let gold = e.gold;
   // the wound bounties: Ashfall pays for kindling, Blood Price for red work
   if (hasRelic('ashfall') && e.burn > 0) gold += 6;
@@ -2484,6 +2490,7 @@ function achUnlock(id) {
 function achPoll() {
   const r = S.run;
   if (!r) return;
+  for (const rid of r.relics) S.codex.relics[rid] = 1;   // the codex sweeps the shelf
   if (r.kills >= 1) achUnlock('firstblood');
   if (r.kills >= 50) achUnlock('rampage');
   if (r.floor >= 5) achUnlock('floor5');
@@ -7526,6 +7533,81 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 - 70, 110 + Math.ceil(ACH.length / 2) * 62 + 10, 140, 40, 'CLOSE ✕', () => { TROPHIES = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
+  // ---- the CODEX: every foe met, every relic ever owned ----
+  let CODEX = null;
+  function drawCodex(t) {
+    if (!CODEX) return;
+    ctx.fillStyle = 'rgba(7,3,10,0.96)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { CODEX = null; } });
+    txt('\u{1F4D6} CODEX', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    const tabs = [['a1', 'ACT I'], ['a2', 'ACT II'], ['a3', 'ACT III'], ['c', 'COMMON'], ['r', 'RARE'], ['e', 'EPIC']];
+    const tw = (LW - 36) / tabs.length;
+    tabs.forEach(([id, label], i) => {
+      const on = CODEX.tab === id;
+      uiBtn(18 + i * tw, 66, tw - 4, 26, label, () => { CODEX.tab = id; CODEX.sel = null; },
+            { grad: on ? ['#8a6a2a', '#5a4014'] : ['#3a3440', '#262230'],
+              border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
+              font: '900 8px Verdana, sans-serif', r: 8 });
+    });
+    if (CODEX.tab[0] === 'a') {
+      // one act's roster + its boss, kills tallied — the unmet stay shadows
+      const act = +CODEX.tab[1] - 1;
+      const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length]]);
+      const met = foes.filter(f => S.codex.foes[f.id]).length;
+      txt(met + ' / ' + foes.length + ' met', LW / 2, 106, '800 11px Verdana, sans-serif', '#c8a8b0');
+      foes.forEach((f, i) => {
+        const x = 22 + (i % 2) * (LW / 2 - 12), y = 118 + ((i / 2) | 0) * 44;
+        const kills = S.codex.foes[f.id] || 0;
+        const isBoss = i === foes.length - 1;
+        rr(x, y, LW / 2 - 32, 38, 8);
+        ctx.fillStyle = isBoss ? 'rgba(60,40,16,0.9)' : 'rgba(255,255,255,0.04)'; ctx.fill();
+        if (isBoss) { ctx.lineWidth = 1.5; ctx.strokeStyle = '#ffd75e'; ctx.stroke(); }
+        ctx.save();
+        if (!kills) { ctx.globalAlpha = 0.3; ctx.filter = 'grayscale(1) brightness(0.4)'; }
+        txt(f.icon, x + 18, y + 19, '18px serif', '#fff');
+        ctx.restore();
+        txt(kills ? f.name : '? ? ?', x + 36, y + 13, '800 9px Verdana, sans-serif',
+            kills ? (isBoss ? '#ffd75e' : '#e8d0a0') : '#5a4f68', 'left');
+        txt(kills ? (f.trait ? f.trait : f.def ? f.def : 'no tricks') + '  •  ×' + kills : 'unmet',
+            x + 36, y + 27, '600 8px Verdana, sans-serif', kills ? '#9a8aa0' : '#4a4058', 'left');
+      });
+    } else {
+      // a rarity shelf of relic icons — owned shine, the rest wait in the dark
+      const rar = CODEX.tab;
+      const shelf = RELICS.filter(rl => rl.rar === rar);
+      const got = shelf.filter(rl => S.codex.relics[rl.id]).length;
+      txt(got + ' / ' + shelf.length + ' discovered', LW / 2, 106, '800 11px Verdana, sans-serif', RARITY[rar].col);
+      shelf.forEach((rl, i) => {
+        const x = 24 + (i % 8) * 55, y = 120 + ((i / 8) | 0) * 55;
+        const own = !!S.codex.relics[rl.id];
+        const sel = CODEX.sel === rl.id;
+        rr(x, y, 48, 48, 9);
+        ctx.fillStyle = own ? 'rgba(52,38,16,0.9)' : 'rgba(20,16,26,0.9)'; ctx.fill();
+        if (sel) { ctx.lineWidth = 2; ctx.strokeStyle = '#ffd75e'; ctx.stroke(); }
+        ctx.save();
+        if (!own) ctx.globalAlpha = 0.22;
+        const ra = relicArt(rl.id);
+        if (ra) { const hh = 40, ww = imW(ra, hh); ctx.drawImage(ra, x + 24 - ww / 2, y + 4, ww, hh); }
+        else txt(rl.icon, x + 24, y + 25, '20px serif', '#fff');
+        ctx.restore();
+        if (!own) txt('\u{1F512}', x + 24, y + 26, '11px serif', '#fff');
+        uiButtons.push({ x, y, w: 48, h: 48, cb: () => { CODEX.sel = rl.id; } });
+      });
+      // the reading strip: whatever's tapped, spelled out
+      const selRl = CODEX.sel && relicById(CODEX.sel);
+      if (selRl) {
+        const own = !!S.codex.relics[selRl.id];
+        rr(24, LH - 118, LW - 48, 52, 10);
+        ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = RARITY[selRl.rar].col; ctx.stroke();
+        txt(own ? selRl.name : '? ? ?', LW / 2, LH - 102, '900 12px Verdana, sans-serif', RARITY[selRl.rar].col);
+        txt(own ? selRl.desc : 'find it in the deep to read its writ', LW / 2, LH - 84, '600 10px Verdana, sans-serif', '#c8b8cc');
+      }
+    }
+    uiBtn(LW / 2 - 70, LH - 58, 140, 40, 'CLOSE ✕', () => { CODEX = null; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   // ---- the RECORDS book: lifetime totals + the last ten runs ----
   let RECORDS = false;
   function drawRecords(t) {
@@ -7762,6 +7844,7 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW - 52, 54, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
     uiBtn(LW - 52, 96, 38, 36, '\u{1F3C6}', () => { TROPHIES = true; }, { r: 10, font: '15px serif' });
     uiBtn(LW - 52, 138, 38, 36, '\u{1F4CA}', () => { RECORDS = true; }, { r: 10, font: '15px serif' });
+    uiBtn(LW - 52, 180, 38, 36, '\u{1F4D6}', () => { CODEX = { tab: 'a1', sel: null }; }, { r: 10, font: '15px serif' });
   }
 
   function drawOver(t) {
@@ -7853,6 +7936,7 @@ if (!HEADLESS) (function browser() {
     drawRelicPick(t);
     drawTrophies(t);
     drawRecords(t);
+    drawCodex(t);
     drawSettings(t);
     drawIntro(t);
     drawConfirm(t);
