@@ -317,10 +317,13 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
 - [x] **Descend sting + jackpot fanfare v2**: SND.descend — two falling notes
       rooted deeper per act, fired in nextFloor; jackpot run-up now lands on a
       held C-major resolve over a low root (session 51)
-- [ ] **Wheel near-miss wobble**: the wheel settles with a tooth-by-tooth
-      wobble past the winning segment — free tension, pure draw code
-- [ ] **Records: the endless page**: deepest decree stack survived, milestone
-      chests opened, weekly decrees cleared — a second RECORDS tab
+- [x] **Wheel near-miss wobble**: fully eased, the wheel coasts most of a
+      tooth past the prize and rocks back (damped sin·exp), ratchet clicking
+      tooth-by-tooth on the way; reduced-motion skips it (session 52)
+- [x] **Records: the endless page**: RECORDS grew tabs — THE BOOK + 🌌 THE
+      ENDLESS: deepest descent, lifetime decree stack (S.life.mutMax),
+      milestone chests, weeklies, floors past the ledger, and a DECREE WALL
+      that unveils each law only once endured (session 52)
 
 ## Done (this loop)
 
