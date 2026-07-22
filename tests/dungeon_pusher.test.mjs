@@ -120,7 +120,7 @@ t.eq(WHEEL.filter(s => s.label === 'COMMON\nRELIC').length, 2, 'two common-relic
 t.eq(WHEEL.filter(s => s.label === 'RARE\nRELIC').length, 1, 'one rare-relic spot');
 t.eq(WHEEL.filter(s => /HP/.test(s.label)).length, 5, 'five HP gambles (+5 −5 +10 −10 +25)');
 t.eq(WHEEL.filter(s => /KEY/.test(s.label)).length, 1, 'one key spot');
-t.eq(COIN_KINDS.length, 16, 'sixteen coin types in the mint — all ten SPECIALS joined');
+t.eq(COIN_KINDS.length, 17, 'seventeen coin types — SPIKEY joined the specials');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
 
@@ -646,13 +646,15 @@ S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
 const hpFast = S.run.hp;
 DP.enemyActFoe(S.enemy);
 t.eq(S.run.hp, hpFast - S.enemy.atk * 2, 'a fast foe strikes twice in its turn');
-// thief: cuts the NEXT round's hand
-S.enemy.trait = 'thief'; S.battle.stolen = 0; S.run.hp = 150;
+// thief: pockets REAL purse coins — returned when it falls (owner's law)
+S.enemy.trait = 'thief'; S.run.hp = 150;
+const pursePre = DP.purseTotal();
 S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
 DP.enemyActFoe(S.enemy);
-t.eq(S.battle.stolen, 2, 'a thief cuts your purse');
+t.eq(DP.purseTotal(), pursePre - 2, 'a mugger pockets two real coins');
+t.eq(Object.values(S.enemy.pocket).reduce((a, b) => a + b, 0), 2, 'they sit in its pocket, not the void');
+S.enemy.pocket = null; S.run.purse.coin += 2;   // hand them back; the refund is tested at the ledger block
 DP.newRound();
-t.eq(S.run.wallet, DP.purseTotal() - 2, 'the stolen coins are missing from the new hand');
 // venom: poisons you
 S.enemy.trait = 'venom'; S.pPois = 0; S.run.hp = 150;
 S.enemy.intent = { t: 'hit', dmg: S.enemy.atk };
@@ -1657,6 +1659,7 @@ t.ok(S.run.room.ents.length === 1 && S.run.room.ents[0].kind === 'stairs',
 }
 const purseBefore = DP.purseTotal();
 DP.interact(0);
+DP.stairsAuto(); DP.stairsConfirm();          // the ledger posts; AUTO is the old hand
 t.eq(DP.purseTotal(), purseBefore - C.STAIR_TOLL, 'descending pays the ' + C.STAIR_TOLL + '-coin toll');
 t.eq(S.run.floor, 2, 'stepping onto the stairs descends');
 t.ok(S.run.map && S.run.map.cur === '0,0', 'a fresh floor map is carved');
@@ -5274,6 +5277,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   E.S.run.purse = { coin: 30, silver: 10, green: 0, red: 0, blue: 0, lucky: 0 };   // 40
   E.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   E.interact(0);
+  E.stairsAuto(); E.stairsConfirm();
   t.eq(E.S.run.floor, 19, 'the stairs still descend');
   t.eq(E.purseTotal(), 32, '40 − 5 toll = 35, then the skim trims to the 32 cap');
   // the mint's tricks sharpen with the acts
@@ -5622,6 +5626,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   N.S.run.purse = { coin: 10, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
   N.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   N.interact(0);
+  N.stairsAuto(); N.stairsConfirm();
   t.eq(N.S.run.floor, 6, 'plain runs descend as ever');
   t.ok(!N.S.over, 'and never end at floor 5');
   // the wiring
@@ -6169,6 +6174,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.S.run.tollPaid = 0;
   D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   D.interact(0);
+  D.stairsAuto(); D.stairsConfirm();
   t.eq(D.S.run.floor, 3, 'an empty meter still descends the honest way');
   t.ok(D.purseTotal() < 14, 'paid from the hand this time');
   // the prepaid meter rides the save
@@ -6778,8 +6784,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.0', 'the consolidation tier ships as v1.7.0');
-  t.ok(D.CHANGELOG[0].notes.some(n => n.indexOf('REPLAY GHOST') >= 0), 'and the notes lead with the ghost');
+  t.eq(D.VERSION, '1.7.1', 'the ledger patch ships as v1.7.1');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REPLAY GHOST') >= 0)), 'and the notes carry the ghost');
   // roundtrip: the clock rides in base36, floors 2 up
   const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
   t.ok(link.indexOf('&p=u-23-3m') >= 0, 'the pace tail is base36 and short (' + link + ')');
@@ -7107,7 +7113,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const st = {};
   const { DP: D } = loadGame(st, false);
   const S2 = D.S;
-  t.eq(D.SPECIALS.join(','), 'bunny,twin,ember,piper,rime,lode,king,rot,mimic,leech', 'all ten of the owner\u2019s coins stand');
+  t.eq(D.SPECIALS.join(','), 'bunny,twin,ember,piper,rime,lode,king,rot,mimic,leech,spikey', 'the owner\u2019s coins stand, spikey included');
   for (const k of D.SPECIALS) t.ok(D.COIN_INFO[k] && D.COIN_INFO[k].what, 'statted: ' + k);
   // THE MINT: every fallen boss strikes one, fewest-owned first
   D.srand(21); D.newRun('knight');
@@ -7182,7 +7188,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the pile keeps specials across battles, and the purse across reloads
   D.save();
   const { DP: R } = loadGame(st, false);
-  t.ok(R.COIN_KINDS.length === 16, 'the mint survives a reload');
+  t.ok(R.COIN_KINDS.length === 17, 'the mint survives a reload');
   // the sim still runs green with the wider mint (rails re-assert above)
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
@@ -7280,6 +7286,94 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   S2.run.purse.rot = 0;
   for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
   D.endRun('done');
+}
+
+// -------- v1.7.1: fair thieves, the settlement, SPIKEY, the stairs ledger --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  // a felled mugger returns every pocketed coin to the PURSE
+  D.srand(27); D.newRun('knight');
+  D.startBattle('battle', undefined, 'goblin');
+  const foe = S2.foes[0];
+  foe.trait = 'thief'; foe.def = null;
+  const purse0 = D.purseTotal();
+  foe.intent = { t: 'hit', dmg: 1 };
+  D.enemyActFoe(foe);
+  t.eq(D.purseTotal(), purse0 - 2, 'the mugger takes two real coins');
+  foe.hp = 1; D.dmgFoe(foe, 9);
+  t.eq(D.purseTotal(), purse0, 'and its fall returns them — kept, but ALWAYS given back');
+  // THE SETTLEMENT: the victory pays out the tray instead of swallowing it
+  const gold0 = S2.run.gold;
+  S2.battle.loot = [{ k: 'gem' }, { k: 'bag' }, { k: 'coin' }, { k: 'coin' }, { k: 'bunny' }];
+  S2.battle.banked = [{ k: 'gem' }];
+  const bunny0 = S2.run.purse.bunny | 0;
+  D.leaveBattle();
+  t.eq(S2.run.gold, gold0 + 15 + 8 + 1 + 15, 'gems and bags cash in, plain pieces sweep 2-for-1');
+  t.eq(S2.run.purse.bunny, bunny0 + 1, 'a special in the tray walks home to the purse');
+  // a special left on the BED climbs back at the stairs
+  S2.run.pileSave = [{ k: 'twin', x: 40, y: 40, lay: 0 }, { k: 'coin', x: 50, y: 40, lay: 0 }];
+  S2.run.pileFloor = S2.run.floor;
+  const twin0 = S2.run.purse.twin | 0;
+  D.nextFloor();
+  t.eq(S2.run.purse.twin, twin0 + 1, 'a special on the abandoned bed climbs back into the purse');
+  // (the old floor's plain pile is discarded with the floor, as ever)
+  // SPIKEY: silver it touches grows spikes
+  D.startBattle('battle');
+  S2.battle.phase = 'drop';
+  S2.coins.length = 0;
+  const sp = D.place(40, 40, 'spikey', 0, 'plat');
+  const ag = D.place(40 + sp.r * 2 + 0.4, 40, 'silver', 0, 'plat');
+  D.touchPass();
+  t.ok(ag.spiked, 'the silver beside the spikey is spiked');
+  const foe2 = S2.foes[0];
+  foe2.hp = foe2.maxHp = 400; foe2.block = 0; foe2.def = null; foe2.braced = false;
+  const hpA = foe2.hp, blockA = S2.run.block;
+  D.applyLoot({ t: 'silver', sp: 1 });
+  t.ok(S2.run.block > blockA + 1, 'spiked silver blocks one harder');
+  t.eq(hpA - foe2.hp, 2, 'and the guard bites back for 2');
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
+  D.leaveBattle();
+  // THE STAIRS LEDGER: posted, picked, paid — by MY choice
+  S2.run.floor = 18;
+  S2.run.purse = { ...D.START_PURSE, coin: 30, silver: 10, lucky: 2, ember: 1 };
+  S2.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  D.interact(0);
+  const ask = S2.stairsAsk;
+  t.ok(ask, 'the ledger posts instead of auto-billing');
+  t.eq(ask.toll, 5, 'floor 18 demands its five');
+  t.eq(ask.over, 5, 'toll first, then the cap: 42 − 5 − 32 = 5 to melt');
+  t.ok(!D.stairsConfirm(), 'nothing picked, nothing descends');
+  t.eq(S2.run.floor, 18, 'still on 18');
+  // pick BY HAND: keep the luckies, spend the silvers first
+  ask.pick.silver = 8;
+  t.ok(!D.stairsConfirm(), 'eight of ten owed is not enough');
+  t.ok(D.stairsAuto(), 'AUTO tops up the rest plainest-first');
+  t.eq(D.stairsPicked(), 10, 'ten picked for ten owed');
+  const g1 = S2.run.gold;
+  t.ok(D.stairsConfirm(), 'the ledger settles');
+  t.eq(S2.run.floor, 19, 'and the stairs descend');
+  t.eq(S2.run.purse.silver, 2, 'MY silvers paid first — my choice');
+  t.eq(S2.run.purse.lucky, 2, 'MY luckies stayed — my choice');
+  t.eq(S2.run.purse.ember, 1, 'the special never even appears on the ledger');
+  t.eq(S2.run.gold, g1 + 10, 'the five melted coins pay 2 gold apiece');
+  // STAY backs out with nothing spent
+  S2.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  D.interact(0);
+  const total1 = D.purseTotal();
+  D.stairsCancel();
+  t.ok(!S2.stairsAsk && S2.run.floor === 19 && D.purseTotal() === total1, 'STAY spends nothing, descends nowhere');
+  D.endRun('done');
+  // the sheet is wired: draw, ESC, crash net
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('function drawStairsAsk') >= 0 && src.indexOf('drawStairsAsk(t);') >= 0, 'the ledger sheet draws');
+  t.ok(src.indexOf('if (S.stairsAsk) { stairsCancel(); return; }') >= 0, 'ESC stays on the floor');
+  t.ok(src.indexOf('S.relicPick = null; S.stairsAsk = null;') >= 0, 'the crash net clears it');
+  D.setLang('nl');
+  t.eq(D.TR('THE STAIRS LEDGER'), 'HET TRAPGROOTBOEK', 'the ledger speaks Dutch');
+  D.setLang('en');
 }
 
 t.done();

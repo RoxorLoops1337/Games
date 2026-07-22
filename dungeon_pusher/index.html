@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.1', notes: [
+    'THE STAIRS LEDGER \u{2696}\u{FE0F} — the toll and the over-cap melt are posted at every staircase and YOU pick which coins pay them (AUTO fills the old way); nothing leaves the purse unseen anymore',
+    'thieves play fair now: muggers pocket REAL coins and give every one back when you cut them down — and the victory screen SETTLES the tray instead of swallowing it (gems and bags cash in, specials walk home, plain pieces sweep 2-for-1)',
+    'SPIKEY \u{1F994} joins the boss mint: silver it touches grows spikes — +1 block, and the guard bites back',
+  ] },
   { v: '1.7.0', notes: [
     'SPECIAL COINS \u{1FA99} — every fallen boss mints one, on top of the relic: ALL TEN now — bunnies breed, twins pair, embers ignite, the piper parades, rime pierces (and fizzles against ember!), the lode clumps, the king holds court, the rot spreads, mimics copy, and the leech grows fat on its bedfellows. Touch is judged at END TURN; the deep never skims or tolls them away',
     'THE UNDERLAKE \u{1F30A} — floors 21-25 are a true FIFTH ACT: thirteen drowned kin, THE DROWNED BANKER (and the SILT QUEEN on the B-side) hold the lair, PRESSURE replaces the dark, and the decrees move out past floor 25',
@@ -268,6 +273,14 @@ const LANGS = {
     'LAKE': 'MEER',
     '\u{1FAE7} THE PRESSURE': '\u{1FAE7} DE DRUK',
     'THE TABLES': 'DE TAFELS',
+    'THE STAIRS LEDGER': 'HET TRAPGROOTBOEK',
+    'toll': 'tol',
+    'toll waived': 'tol kwijtgescholden',
+    'toll prepaid': 'tol vooruitbetaald',
+    'melt': 'omsmelten',
+    'pick the coins that go — the specials never do': 'kies de munten die gaan — de specials nooit',
+    'AUTO': 'AUTO',
+    'STAY': 'BLIJF',
     'foes strike +1 at full depth': 'vijanden slaan +1 op volle diepte',
     'THE MOTIFS': 'DE MOTIEVEN',
     'the four descents, and the fanfare': 'de vier afdalingen, en de fanfare',
@@ -390,14 +403,14 @@ const C = {
 // your purse starts here; heroes add their signature pair on top
 const START_PURSE = { coin: 5, silver: 5, green: 0, red: 0, blue: 0, lucky: 0,
                       bunny: 0, twin: 0, ember: 0, piper: 0,
-                      rime: 0, lode: 0, king: 0, rot: 0, mimic: 0, leech: 0 };
+                      rime: 0, lode: 0, king: 0, rot: 0, mimic: 0, leech: 0, spikey: 0 };
 const COIN_KINDS = ['coin', 'silver', 'green', 'red', 'blue', 'lucky',
-                    'bunny', 'twin', 'ember', 'piper', 'rime', 'lode', 'king', 'rot', 'mimic', 'leech'];
+                    'bunny', 'twin', 'ember', 'piper', 'rime', 'lode', 'king', 'rot', 'mimic', 'leech', 'spikey'];
 // SPECIAL coins (the owner's design): minted ONLY by fallen bosses, on top
 // of the relic — they work by TOUCH on the bed, and the deep never skims
 // or tolls them away. Touch is judged at END TURN (the touch pass).
-const SPECIALS = ['bunny', 'twin', 'ember', 'piper', 'rime', 'lode', 'king', 'rot', 'mimic', 'leech'];
-const SPECIAL_COINS = { bunny: 1, twin: 1, ember: 1, piper: 1, rime: 1, lode: 1, king: 1, rot: 1, mimic: 1, leech: 1 };
+const SPECIALS = ['bunny', 'twin', 'ember', 'piper', 'rime', 'lode', 'king', 'rot', 'mimic', 'leech', 'spikey'];
+const SPECIAL_COINS = { bunny: 1, twin: 1, ember: 1, piper: 1, rime: 1, lode: 1, king: 1, rot: 1, mimic: 1, leech: 1, spikey: 1 };
 const BUNNY_CAP = 5;                      // kits bred per floor, at most
 const ROT_CAP = 3;                        // gold corrupted per floor, at most
 const LEECH_FAT_CAP = 15;                 // the leech can only hold so much
@@ -418,13 +431,14 @@ const COIN_INFO = {
   rot:    { name: 'Rot',    what: '2 poison — corrupts a touching gold coin each turn (3 a floor)' },
   mimic:  { name: 'Mimic',  what: 'becomes whatever it touches first — two mimics grin and turn GOLD' },
   leech:  { name: 'Leech',  what: '1 dmg — fattens +1 gold whenever a bedfellow tips over; pays out when IT does' },
+  spikey: { name: 'Spikey', what: '1 dmg + 1 block — silver it touches grows SPIKES (blocks +1 and bites back 2)' },
 };
 // the after-battle coin offer draws from this bag
 const COIN_REWARD_W = [['coin', 24], ['silver', 22], ['green', 18], ['red', 16], ['blue', 12], ['lucky', 8]];
 // the order the tray resolves in: bank the loot, raise the guard, mend,
 // then unleash — curses always land last
 const RESOLVE_ORDER = ['gem', 'bag', 'buffitem', 'silver', 'shielditem', 'red', 'heartitem', 'petitem',
-                       'gold', 'bunny', 'twin', 'piper', 'king', 'lode', 'mimic', 'leech', 'lucky', 'blue', 'rime', 'ember', 'weapon', 'bleeditem', 'green', 'rot', 'vial',
+                       'gold', 'bunny', 'twin', 'piper', 'king', 'lode', 'mimic', 'leech', 'spikey', 'lucky', 'blue', 'rime', 'ember', 'weapon', 'bleeditem', 'green', 'rot', 'vial',
                        'burnitem', 'frost', 'skull'];
 // deliberately UNHURRIED: each piece gets its moment so the damage reads
 const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42, lucky: 0.7, blue: 0.75, green: 0.5,
@@ -1935,6 +1949,16 @@ function foeDown(e) {
     floatAnchor('its stash spills back into your tray!', 'enemy', '#ffd75e', true);
     e.belly = [];
   }
+  // and a thief's pocket walks straight back into your PURSE
+  if (e.pocket && S.run) {
+    let back = 0;
+    for (const k of Object.keys(e.pocket)) {
+      S.run.purse[k] = (S.run.purse[k] || 0) + e.pocket[k];
+      back += e.pocket[k];
+    }
+    e.pocket = null;
+    if (back) floatAnchor('\u{1F4B0} your ' + back + ' stolen coins return!', 'hero', '#ffd75e', true);
+  }
   retarget();
   if (!S.foes.some(f => f.hp > 0)) winBattle();
 }
@@ -2247,7 +2271,7 @@ function scoreCoin(c, quiet) {
     if (lch) lch.fat = Math.min(LEECH_FAT_CAP, (lch.fat | 0) + 1);
   }
   S.battle.loot.push({ k: c.kind, iid: c.iid, up: c.paired ? 1 : 0, tip: c.emberTip ? 1 : 0,
-                       rime: c.rimeTip ? 1 : 0, court: c.court | 0, fat: c.fat | 0 });
+                       rime: c.rimeTip ? 1 : 0, court: c.court | 0, fat: c.fat | 0, sp: c.spiked ? 1 : 0 });
   trayAdd(c.kind, { iid: c.iid, x: c.x });
   // THE PIPER: whatever rested near it on the bed follows it over the edge
   if (c.kind === 'piper') {
@@ -2356,7 +2380,8 @@ function frenzy() {
 // ghost); a free spin is granted after every ELITE. Prizes: gold, a wad of
 // coins, relics, a stab of lost HP, or an item — common or rare.
 function wheelCoins(n) {
-  const k = COIN_KINDS[(rng() * COIN_KINDS.length) | 0];
+  const plain = COIN_KINDS.filter(k2 => !SPECIAL_COINS[k2]);
+  const k = plain[(rng() * plain.length) | 0];
   S.run.purse[k] = (S.run.purse[k] || 0) + n;
   floatAt('+' + n + ' ' + COIN_INFO[k].name + '!', 50, '#ffe066', true);
 }
@@ -2849,7 +2874,7 @@ function buildQueue(loot) {
               : it.kind === 'burn' ? 'burnitem' : it.kind === 'bleed' ? 'bleeditem'
               : it.kind === 'pet' ? 'petitem' : it.kind === 'buff' ? 'buffitem' : 'frost';
       q.push({ t, iid: l.iid });
-    } else q.push({ t: l.k, up: l.up, tip: l.tip, rime: l.rime, court: l.court, fat: l.fat });
+    } else q.push({ t: l.k, up: l.up, tip: l.tip, rime: l.rime, court: l.court, fat: l.fat, sp: l.sp });
   }
   q.sort((a, b) => RESOLVE_ORDER.indexOf(a.t) - RESOLVE_ORDER.indexOf(b.t));
   // the Echo Bell / Reverb ring the opening piece twice
@@ -2936,7 +2961,7 @@ function touchPass() {
   const plats = S.coins.filter(c => c.st === 'plat');
   for (const c of plats) {
     c.paired = false; c.emberTip = false; c.bredThis = false;
-    c.rimeTip = false; c.court = 0; c.rotSpent = false; c.leechMark = false;
+    c.rimeTip = false; c.court = 0; c.rotSpent = false; c.leechMark = false; c.spiked = false;
   }
   for (let i = 0; i < plats.length; i++) {
     for (let j = i + 1; j < plats.length; j++) {
@@ -2963,6 +2988,8 @@ function touchPass() {
       if (b.kind === 'ember') a.emberTip = true;
       if (a.kind === 'rime') b.rimeTip = true;
       if (b.kind === 'rime') a.rimeTip = true;
+      if (a.kind === 'spikey' && b.kind === 'silver') b.spiked = true;
+      if (b.kind === 'spikey' && a.kind === 'silver') a.spiked = true;
       if (a.kind === 'king') a.court++;
       if (b.kind === 'king') b.court++;
       if (a.kind === 'leech') b.leechMark = true;
@@ -3028,6 +3055,7 @@ function applyLoot(q) {
   if (q.rime && S.enemy && S.enemy.hp > 0 && !S.victory) dmgEnemy(1, null, true);
   if (q.t === 'rime') { dmgEnemy(1, null, true); SND.stun(); return; }
   if (q.t === 'lode') { dmgEnemy(1); SND.collect(2); return; }
+  if (q.t === 'spikey') { dmgEnemy(1); addBlock(1); SND.hit(); return; }
   if (q.t === 'king') { dmgEnemy(1 + (q.court | 0)); SND.hit(); return; }
   if (q.t === 'rot') { if (S.enemy && S.enemy.hp > 0) poisonEnemy(2); SND.gem(); return; }
   if (q.t === 'mimic') { dmgEnemy(1); SND.collect(2); return; }
@@ -3052,7 +3080,10 @@ function applyLoot(q) {
     if (hasRelic('scavenger') && S.run) { S.run.keys++; floatAnchor('a key shakes out of the bag! \u{1F5DD}', 'hero', '#ffd75e'); }
   }
   else if (q.t === 'silver') {
-    addBlock(1 + dexTotal() + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0) + masteryLvl('silver'));
+    addBlock(1 + dexTotal() + (hasRelic('silvercore') ? 1 : 0) + (hasRelic('bulwark') ? 1 : 0) + masteryLvl('silver')
+           + (q.sp ? 1 : 0));
+    // SPIKED silver (a Spikey stood beside it): the guard bites back
+    if (q.sp && S.enemy && S.enemy.hp > 0 && !S.victory) dmgEnemy(2);
     if (hasRelic('spikeshield')) dmgEnemy(1);
     if (hasRelic('retort')) dmgEnemy(2);
     // the Alloy fuses every third silver into a plate
@@ -3281,8 +3312,19 @@ function enemyActFoe(e) {
     const preBlock = S.run.block;
     for (let h = 0; h < hits && S.run; h++) {
       if (e.trait === 'thief') {
-        S.battle.stolen += 2;
-        floatAnchor('purse cut! -2 coins next round', 'hero', '#ff9d3c', true);
+        // the mugger pockets REAL purse coins — cut it down and they return;
+        // let it stand and they are gone for good (specials are safe)
+        let took = 0;
+        e.pocket = e.pocket || {};
+        for (const k of COIN_KINDS) {
+          if (SPECIAL_COINS[k]) continue;
+          while (took < 2 && (S.run.purse[k] || 0) > 0) {
+            S.run.purse[k]--;
+            e.pocket[k] = (e.pocket[k] || 0) + 1;
+            took++;
+          }
+        }
+        if (took) floatAnchor('\u{1F4B0} it pockets ' + took + ' of your coins — cut it down!', 'hero', '#ff9d3c', true);
       }
       // your pack stands in the way: pets chew the blow down before it
       // reaches you — and a fully-soaked hit spares you its venom too
@@ -3729,6 +3771,25 @@ function pickRelicOffer(i) {
 function leaveBattle() {
   if (!S.run || S.screen !== 'battle' || !S.victory) return false;
   const boss = S.victory.boss;
+  // THE SETTLEMENT: whatever the victory left in the tray or the bank is
+  // paid out, never discarded — gems and bags cash in, boss-minted specials
+  // walk back into the purse, and the house sweeps plain pieces 2-for-1
+  if (S.battle) {
+    const left = [].concat(S.battle.loot || [], S.battle.banked || []);
+    let gold = 0, plain = 0, backS = 0;
+    for (const l of left) {
+      if (l.k === 'gem') gold += 15;
+      else if (l.k === 'bag') gold += 8;
+      else if (SPECIAL_COINS[l.k]) { S.run.purse[l.k] = (S.run.purse[l.k] || 0) + 1; backS++; }
+      else if (COIN_KINDS.indexOf(l.k) >= 0) plain++;
+    }
+    gold += (plain / 2) | 0;
+    if (gold) { addGold(gold); }
+    if (gold || backS) {
+      toast('\u{1F9FE} the tray settles: ' + (gold ? '+' + gold + ' gold' : '')
+          + (gold && backS ? ', ' : '') + (backS ? backS + ' special' + (backS > 1 ? 's' : '') + ' pocketed' : ''));
+    }
+  }
   // the machine remembers this floor's pile — stash wisely
   S.run.pileSave = serializePile();
   S.run.pileFloor = S.run.floor;
@@ -4510,6 +4571,48 @@ function stairToll() {
 // overflow is confiscated at 2 gold a coin — plainest pockets first — so
 // deep hands stay tense instead of drowning the machine in coins.
 function purseCap() { return 20 + 4 * Math.min(6, S.run ? actIdx(S.run.floor) : 0); }
+// ---- the ledger's little arithmetic ----
+function stairsPicked() {
+  const a = S.stairsAsk;
+  return a ? COIN_KINDS.reduce((n, k) => n + (a.pick[k] | 0), 0) : 0;
+}
+// AUTO fills the remaining owed count plainest-first — the old hand, visible
+function stairsAuto() {
+  const a = S.stairsAsk;
+  if (!a || !S.run) return false;
+  let need = a.toll + a.over - stairsPicked();
+  for (const k of COIN_KINDS) {
+    if (SPECIAL_COINS[k]) continue;
+    while (need > 0 && ((S.run.purse[k] | 0) - (a.pick[k] | 0)) > 0) {
+      a.pick[k] = (a.pick[k] | 0) + 1;
+      need--;
+    }
+    if (need <= 0) break;
+  }
+  return need <= 0;
+}
+function stairsCancel() { S.stairsAsk = null; }
+function stairsConfirm() {
+  const a = S.stairsAsk;
+  if (!a || !S.run) return false;
+  if (stairsPicked() !== a.toll + a.over) return false;
+  for (const k of COIN_KINDS) {
+    const n = a.pick[k] | 0;
+    if (n > (S.run.purse[k] | 0)) return false;   // the purse moved — repick
+  }
+  if (a.waived) { S.run.tollFree = 0; toast('the stairs look the other way — toll waived'); }
+  else if (a.prepaid) { S.run.tollPaid -= stairToll(); toast('\u{1F9FF} toll prepaid — ' + S.run.tollPaid + ' banked ahead'); }
+  for (const k of COIN_KINDS) { const n = a.pick[k] | 0; if (n) S.run.purse[k] -= n; }
+  if (a.over > 0) {
+    const pay = a.over * 2;
+    addGold(pay);
+    S.life.skimmed = (S.life.skimmed || 0) + a.over;
+    toast('\u{2696}\u{FE0F} ' + a.over + ' coins melt — +' + pay + ' gold, your pick');
+  }
+  S.stairsAsk = null;
+  nextFloor();
+  return true;
+}
 function stairSkim() {
   if (!S.run) return 0;
   let over = purseTotal() - purseCap();
@@ -4528,7 +4631,7 @@ function stairSkim() {
 }
 function purseTotal() {                   // plain coins only — the specials
   if (!S.run) return 0;                    // are treasures, not tender
-  return COIN_KINDS.reduce((a, k) => a + (S.run.purse[k] || 0), 0);
+  return COIN_KINDS.reduce((a, k) => a + (SPECIAL_COINS[k] ? 0 : (S.run.purse[k] || 0)), 0);
 }
 // spend N coins of any kind from the purse — richest kinds first. Returns
 // false (and touches nothing) if the purse is too thin to cover it.
@@ -4852,6 +4955,15 @@ function nextFloor() {
     S.run.wager = null;
   }
   S.run.tollDouble = 0;
+  // boss-minted specials left on the OLD floor's bed find their way home
+  if (S.run.pileSave && S.run.pileFloor === S.run.floor) {
+    let home = 0;
+    S.run.pileSave = S.run.pileSave.filter(p => {
+      if (SPECIAL_COINS[p.k]) { S.run.purse[p.k] = (S.run.purse[p.k] || 0) + 1; home++; return false; }
+      return true;
+    });
+    if (home) toast('\u{1FA99} ' + home + ' special coin' + (home > 1 ? 's' : '') + ' climb back into your purse');
+  }
   S.run.floor++;
   S.run.pressure = 0;                    // the stairs vent the lake's squeeze
   S.run.bred = 0;                        // and the warren starts fresh
@@ -4952,20 +5064,23 @@ function interact(i) {
       save();
       return true;
     }
-    // the stairwell takes its toll before it lets you down — and skims
-    // whatever spills over the purse's soft ceiling (2 gold a coin)
-    if (S.run.tollFree) {
-      S.run.tollFree = 0;                     // the clerk's misfiled form, spent
-      toast('the stairs look the other way — toll waived');
-    } else if (tollRun() && (S.run.tollPaid || 0) >= stairToll()) {
-      S.run.tollPaid -= stairToll();          // prepaid in full by honest banking
-      toast('\u{1F9FF} toll prepaid — ' + S.run.tollPaid + ' banked ahead');
-    } else if (!spendPurse(stairToll())) {
+    // THE STAIRS LEDGER: the toll and the over-cap melt are posted, and
+    // YOU pick which coins pay them (the old auto-fill is one button away)
+    const waived = !!S.run.tollFree;
+    const prepaid = !waived && tollRun() && (S.run.tollPaid || 0) >= stairToll();
+    const toll = (waived || prepaid) ? 0 : stairToll();
+    const over = Math.max(0, purseTotal() - toll - purseCap());   // toll first, THEN the cap
+    if (purseTotal() < toll) {
       S.uiFlash = { msg: 'THE STAIRS DEMAND ' + stairToll() + ' COINS', t: 1.4 };
       SND.deny();
       return false;
     }
-    stairSkim();
+    if (toll + over > 0) {
+      S.stairsAsk = { toll, over, waived, prepaid, pick: {} };
+      return true;                            // the ledger takes it from here
+    }
+    if (waived) { S.run.tollFree = 0; toast('the stairs look the other way — toll waived'); }
+    else if (prepaid) { S.run.tollPaid -= stairToll(); toast('\u{1F9FF} toll prepaid — ' + S.run.tollPaid + ' banked ahead'); }
     nextFloor();
     return true;
   }
@@ -5195,7 +5310,8 @@ function rollChestPrize() {
   if (r < C.P_CHEST_KEY) {
     return { kind: 'key', n: 1, icon: '\u{1F5DD}', label: 'a KEY' };
   } else if (r < 0.5) {
-    const k = COIN_KINDS[(rng() * COIN_KINDS.length) | 0];
+    const plain = COIN_KINDS.filter(k2 => !SPECIAL_COINS[k2]);
+    const k = plain[(rng() * plain.length) | 0];
     return { kind: 'coin', coin: k, n: 1, icon: '\u{1FA99}',
              label: 'a ' + COIN_INFO[k].name.toUpperCase() + ' coin' };
   } else if (r < 0.75) {
@@ -5261,7 +5377,8 @@ function shopStock() {
   }
   st.push({ kind: 'pouch', label: '\u{1F45B} Coin Pouch (+' + C.POUCH_COINS + ' gold coins to your purse)', price: Math.round(60 * mult), sold: false });
   {
-    const k = COIN_KINDS[1 + ((rng() * (COIN_KINDS.length - 1)) | 0)];
+    const plain = COIN_KINDS.filter(k2 => !SPECIAL_COINS[k2]);
+    const k = plain[1 + ((rng() * (plain.length - 1)) | 0)];
     st.push({ kind: 'coin', cid: k, label: '\u{1FA99} ' + COIN_INFO[k].name + ' Coin (' + COIN_INFO[k].what + ')', price: Math.round(34 * mult), sold: false });
   }
   st.push({ kind: 'maxhp', label: '❤\u{FE0F} Max HP +10', price: Math.round(65 * mult), sold: false });
@@ -5742,7 +5859,7 @@ window.DP = {
   petVet, petTag, legacyStamp, LEGACY_ACH,
   jarY, jarSmash,
   tollRun, tollRefill, TOLL_KIT, TOLL_PREPAY_CAP, toast, toastTick, whisperOnce,
-  stairToll, purseCap, stairSkim,
+  stairToll, purseCap, stairSkim, stairsAuto, stairsConfirm, stairsCancel, stairsPicked,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
   TALES, rollTale, habits,
@@ -6102,6 +6219,7 @@ if (!HEADLESS) (function browser() {
     slug: '#8a8a8a',
     bunny: '#f0e0c8', twin: '#c8a2ff', ember: '#ff8a4a', piper: '#ffd0e8',
     rime: '#a8e8f0', lode: '#b0a090', king: '#ffcf7a', rot: '#8aa04a', mimic: '#d0d0d0', leech: '#a04a5a',
+    spikey: '#9ab8a0',
   };
   function flatSprite(styleKey, pal, sym) {
     return sprite('cf_' + styleKey + '_' + sym, 96, 66, (g) => {
@@ -6422,7 +6540,7 @@ if (!HEADLESS) (function browser() {
     lastCrash = now;
     try { save(); } catch (e) {}
     try {
-      S.confirm = null; S.inv = null; S.wheelAnim = null; S.relicPick = null;
+      S.confirm = null; S.inv = null; S.wheelAnim = null; S.relicPick = null; S.stairsAsk = null;
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
       WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null; CLOUD = null;
@@ -9441,6 +9559,7 @@ if (!HEADLESS) (function browser() {
     if (NAMEPAD) { NAMEPAD = null; return; }
     if (PHOTO) { PHOTO = false; return; }
     if (S.confirm) { S.confirm = null; return; }   // draws topmost, closes first
+    if (S.stairsAsk) { stairsCancel(); return; }
     if (SHARE) { SHARE = null; return; }
     if (BOARD) { BOARD = null; return; }
     if (CLOUD) { CLOUD = null; return; }
@@ -10196,6 +10315,7 @@ if (!HEADLESS) (function browser() {
           'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
     }
     txt('drag to walk • WASD works too', LW / 2, 704, '600 10px Verdana, sans-serif', '#8d7d95');
+    drawStairsAsk(t);
     drawRoomModal(t);
     drawMapView(t);
     drawInventory(t);
@@ -10650,6 +10770,51 @@ if (!HEADLESS) (function browser() {
     }
     uiBtn(LW / 2 - 70, LH - 58, 140, 40, TR('CLOSE ✕'), () => { CODEX = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
+  // ---- THE STAIRS LEDGER: pick which coins pay the toll and the melt ----
+  function drawStairsAsk(t) {
+    const a = S.stairsAsk;
+    if (!a) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.9)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => {} });
+    const kinds = COIN_KINDS.filter(k => !SPECIAL_COINS[k] && (S.run.purse[k] | 0) > 0);
+    const py = 150, ph = 200 + kinds.length * 46;
+    rr(40, py, LW - 80, ph, 16);
+    ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    txt('\u{2696}\u{FE0F} ' + TR('THE STAIRS LEDGER'), LW / 2, py + 30, '900 18px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    const owed = a.toll + a.over;
+    txt((a.toll > 0 ? TR('toll') + ': ' + a.toll + ' ●' : a.waived ? TR('toll waived') : TR('toll prepaid'))
+      + (a.over > 0 ? '   •   ' + TR('melt') + ': ' + a.over + ' ● \u{2192} +' + (a.over * 2) + ' \u{1FA99}' : ''),
+        LW / 2, py + 56, '800 12px Verdana, sans-serif', '#e8c877');
+    txt(TR('pick the coins that go — the specials never do'), LW / 2, py + 76, '600 10px Verdana, sans-serif', '#9a8aa0');
+    kinds.forEach((k, i) => {
+      const ry = py + 96 + i * 46;
+      const have = S.run.purse[k] | 0, picked = a.pick[k] | 0;
+      rr(56, ry, LW - 112, 38, 9);
+      ctx.fillStyle = picked ? 'rgba(80,60,24,0.5)' : 'rgba(255,255,255,0.04)'; ctx.fill();
+      ctx.beginPath(); ctx.ellipse(78, ry + 19, 9, 8, 0, 0, 7);
+      ctx.fillStyle = COIN_UI[k] || '#fff'; ctx.fill();
+      txt(COIN_INFO[k].name, 96, ry + 19, '900 12px Verdana, sans-serif', '#ffe9a3', 'left');
+      txt('× ' + have, 170, ry + 19, '800 11px Verdana, sans-serif', '#c8b8cc', 'left');
+      uiBtn(LW - 196, ry + 3, 32, 32, '−', () => { if ((a.pick[k] | 0) > 0) a.pick[k]--; },
+            { bg: 'rgba(40,34,46,0.95)', border: '#9a8aa0', col: '#d8c8dc', font: '900 15px Verdana, sans-serif', r: 9 });
+      txt('' + picked, LW - 148, ry + 19, '900 14px Verdana, sans-serif', picked ? '#ffd75e' : '#7a7086');
+      uiBtn(LW - 128, ry + 3, 32, 32, '+', () => {
+        if ((a.pick[k] | 0) < have && stairsPicked() < owed) a.pick[k] = (a.pick[k] | 0) + 1;
+      }, { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3', font: '900 15px Verdana, sans-serif', r: 9 });
+    });
+    const by = py + 96 + kinds.length * 46 + 8;
+    txt(stairsPicked() + ' / ' + owed, LW / 2, by + 6, '900 14px Verdana, sans-serif',
+        stairsPicked() === owed ? '#7ee787' : '#ff9d8a');
+    uiBtn(56, by + 20, 96, 40, TR('AUTO'), () => { stairsAuto(); },
+          { bg: 'rgba(40,40,56,0.95)', border: '#8a86b8', col: '#d8d4f0', font: '900 12px Verdana, sans-serif', r: 12 });
+    uiBtn(160, by + 20, 150, 40, TR('DESCEND ▼'), () => {
+      if (!stairsConfirm()) { S.uiFlash = { msg: 'PICK ' + (owed - stairsPicked()) + ' MORE', t: 1.2 }; SND.deny(); }
+    }, { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+    uiBtn(318, by + 20, 106, 40, TR('STAY'), () => stairsCancel(),
+          { bg: 'rgba(60,40,44,0.95)', border: '#a06a72', col: '#e8c8cc', font: '900 12px Verdana, sans-serif', r: 12 });
   }
   // ---- the RECORDS book: lifetime totals + the last ten runs ----
   let RECORDS = false;
