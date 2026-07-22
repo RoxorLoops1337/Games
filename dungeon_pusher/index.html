@@ -532,11 +532,12 @@ const RELICS = [
   { id: 'dblchime',   rar: 'r', ng: 1, icon: '\u{1F6CE}\u{FE0F}', name: 'Double Chime', desc: 'NG+ — every JACKPOT rains 4 bonus coins' },
   { id: 'leadenidol', rar: 'e', ng: 1, icon: '\u{1F5FF}', name: 'Leaden Idol', desc: 'NG+ — every blow against you lands 2 lighter' },
   { id: 'gildhour',   rar: 'c', ng: 1, icon: '\u{231B}', name: 'Gilded Hourglass', desc: 'NG+ — +1 TILT charge in every battle' },
+  { id: 'throneshard', rar: 'e', ng: 2, icon: '\u{265A}', name: 'Throne Shard', desc: 'LEGEND — every blow you land strikes +2 harder' },
 ];
 // weighted pull from the unowned shelf — commons far more often
 function rollRelicDrop() {
   if (!S.run) return null;
-  const pool = RELICS.filter(rl => S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || S.run.ng));
+  const pool = RELICS.filter(rl => S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || (S.run.ng | 0) >= rl.ng));
   if (!pool.length) return null;
   const total = pool.reduce((a, rl) => a + RARITY[rl.rar].w, 0);
   let r = rng() * total;
@@ -548,7 +549,7 @@ function hasRelic(id) { return !!(S.run && S.run.relics.indexOf(id) >= 0); }
 // pull a random UNOWNED relic of a given rarity (null if that shelf is bare)
 function rollRelicByRar(rar) {
   if (!S.run) return null;
-  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || S.run.ng));
+  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || (S.run.ng | 0) >= rl.ng));
   return pool.length ? pool[(rng() * pool.length) | 0].id : null;
 }
 // grant a random unowned relic of a rarity; returns the id, or null if none
@@ -560,7 +561,7 @@ function grantRelic(rar) {
 // a spread of up to `count` DISTINCT unowned relics of a rarity, to choose from
 function rollRelicPool(rar, count) {
   if (!S.run) return [];
-  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || S.run.ng)).map(rl => rl.id);
+  const pool = RELICS.filter(rl => rl.rar === rar && S.run.relics.indexOf(rl.id) < 0 && (!rl.ng || (S.run.ng | 0) >= rl.ng)).map(rl => rl.id);
   const out = [];
   while (out.length < count && pool.length) out.push(pool.splice((rng() * pool.length) | 0, 1)[0]);
   return out;
@@ -870,7 +871,7 @@ const ENEMIES = ENEMY_TIERS[0];
 // which act a floor belongs to (0-based; acts past the last reuse its roster)
 // which act a floor belongs to — NEW GAME+ shifts the whole ladder one act
 // deeper, so floor 1 already fields act-2 kin and act-2 boss rotation
-function actIdx(floor) { return (((floor - 1) / 5) | 0) + ((S.run && S.run.ng) ? 1 : 0); }
+function actIdx(floor) { return (((floor - 1) / 5) | 0) + (((S.run && S.run.ng) | 0)); }
 function curRoster() {
   return ENEMY_TIERS[Math.min(ENEMY_TIERS.length - 1, actIdx(S.run ? S.run.floor : 1))];
 }
@@ -1122,7 +1123,8 @@ const S = {
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
-  ngPick: false,                                // the NG+ door is armed for the next run
+  ngPick: 0,                                    // the prestige door armed: 0 / 1 (NG+) / 2 (NG++)
+  ng2Open: 0,                                   // THE LEGEND DOOR: unsealed by an NG+ deep clear
   deep15: {},                                   // heroes who felled the floor-15 boss
   skins: {},                                    // heroes currently WEARING their alt skin
   screen: 'title',                     // title | dungeon | battle | over
@@ -1189,7 +1191,7 @@ function save() {
       syncCode: S.syncCode || '',
       lang: S.lang || 'en',
       machTheme: S.machTheme || 'classic',
-      deep15: S.deep15, skins: S.skins, ngPick: S.ngPick ? 1 : 0,
+      deep15: S.deep15, skins: S.skins, ngPick: S.ngPick | 0, ng2Open: S.ng2Open ? 1 : 0,
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
@@ -1297,7 +1299,9 @@ function load() {
     if (typeof d.machTheme === 'string' && MACH_THEMES[d.machTheme]) S.machTheme = d.machTheme;
     if (d.deep15 && typeof d.deep15 === 'object') S.deep15 = d.deep15;
     if (d.skins && typeof d.skins === 'object') S.skins = d.skins;
-    S.ngPick = !!d.ngPick;
+    S.ngPick = Math.min(2, Math.max(0, d.ngPick | 0));   // old saves' true reads as 1
+    S.ng2Open = d.ng2Open ? 1 : 0;
+    if (S.ngPick === 2 && !S.ng2Open) S.ngPick = 1;          // no smuggled crowns
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -1316,7 +1320,7 @@ function load() {
         daily: d.run.daily || null, dailyMod: d.run.dailyMod || null,
         quest: d.run.quest || null,
         swarm: d.run.swarm || null, cheese: d.run.cheese || 0, diff: d.run.diff || 'normal',
-        ng: d.run.ng ? 1 : 0, bside: d.run.bside ? 1 : 0,
+        ng: Math.min(2, Math.max(0, d.run.ng | 0)), bside: d.run.bside ? 1 : 0,
         seed: (typeof d.run.seed === 'number') ? (d.run.seed >>> 0) : null,
         weekly: d.run.weekly || null, week: d.run.week || null,
         brew: d.run.brew | 0, reagents: d.run.reagents | 0,
@@ -1512,6 +1516,7 @@ function dmgFoe(e, n, src, pierce) {
   if (!dot && S.weakT > 0) n = Math.max(1, Math.floor(n / 2));
   // the Crown Scale weighs heaviest on the crowned
   if (hasRelic('crownscale') && (e.boss || e.elite)) n = n * 1.25;
+  if (!dot && hasRelic('throneshard')) n += 2;   // the Throne Shard: legend's weight
   // the daily's GLASS CANNON: everything you deal doubles (as does what lands on you)
   if (S.run && S.run.dailyMod === 'cannon') n *= 2;
   if (weeklyOn('brittle')) n *= 1.3;      // BRITTLE BLADES: both edges keen
@@ -3171,6 +3176,10 @@ function winBattle() {
     // the DEEP CLEAR ledger: fell the floor-15 boss and that hero's alt
     // skin is tailored for keeps
     if (S.run.floor >= 15 && S.run.ng) achUnlock('ngclear');
+    if (S.run.floor >= 15 && S.run.ng >= 1 && !S.ng2Open) {
+      S.ng2Open = 1;
+      toast('♛ THE LEGEND DOOR unseals — NG++ waits by the difficulty row');
+    }
     if (S.run.floor >= 15 && !S.run.deepInked) {
       S.run.deepInked = 1;               // one ink per run, however many bosses fall past 15
       const n = (S.deep15[S.run.hero] | 0) + 1;
@@ -3300,7 +3309,10 @@ const MUTS = [
   { id: 'longdark',   name: 'THE LONG DARK', desc: 'every floor is a dark floor' },
 ];
 function mutCount() {
-  return S.run ? Math.max(0, Math.min(MUTS.length, Math.floor((S.run.floor - 18) / 3))) : 0;
+  if (!S.run) return 0;
+  // legends read the deep's laws early: first decree at floor 11, not 21
+  const base = (S.run.ng | 0) >= 2 ? 8 : 18;
+  return Math.max(0, Math.min(MUTS.length, Math.floor((S.run.floor - base) / 3)));
 }
 function mutOn(id) {
   const n = mutCount();
@@ -3790,7 +3802,7 @@ function newRun(heroId, force) {
   if (!S.firstRun) S.firstRun = new Date().toISOString().slice(0, 10);   // the calendar starts here
   S.ach.heroes[hero.id] = 1;              // the casting-call ledger
   const diff = DIFFS.some(d => d.id === S.diffPick) ? S.diffPick : 'normal';
-  const ng = (S.ngPick && ngPlusOpen()) ? 1 : 0;
+  const ng = !ngPlusOpen() ? 0 : Math.min(S.ngPick | 0, S.ng2Open ? 2 : 1);
   const bside = (S.best.runs % 2 === 0) ? 1 : 0;   // even-numbered runs face the B-SIDE
   // every run carries a SEED: planted by hand (the 🌱 chip) or drawn from
   // the stream. Each floor's layout re-seeds from (seed, floor), so two
@@ -3821,7 +3833,7 @@ function newRun(heroId, force) {
   // veteran walks in with ~three floors of growth already banked
   // (measured by the balance probe: without it, floor 1 lands x1.6 past
   // the act-2 gate; with it, just alongside)
-  if (ng) { S.run.purse.coin += 3; S.run.potions += 1; S.run.gold += 20; }
+  if (ng) { S.run.purse.coin += 3 * ng; S.run.potions += ng; S.run.gold += 20 * ng; }   // both kits stack at NG++
   // the RAT KING trades his arsenal for a starting swarm
   if (hero.id === 'rat') {
     S.run.arsenal = {};
@@ -3835,7 +3847,7 @@ function newRun(heroId, force) {
   S.run.potions += wsLvl('potion');
   // the ALCHEMIST owns no flasks — the STILL starts cold (NG+ banks the
   // prestige flask as brew instead)
-  if (hero.id === 'alch') { S.run.potions = 0; S.run.brew = ng ? 3 : 0; S.run.reagents = 0; }
+  if (hero.id === 'alch') { S.run.potions = 0; S.run.brew = 3 * ng; S.run.reagents = 0; }
   // the WEEKLY DECREE rides every armed run (the daily carries its own law)
   if (S.weeklyPick && !force) {
     const wp = weeklyPlan(new Date().toISOString().slice(0, 10));
@@ -9828,7 +9840,7 @@ if (!HEADLESS) (function browser() {
       const hero3 = heroById(h.hero);
       rr(30, y, LW - 60, 30, 8);
       ctx.fillStyle = 'rgba(255,255,255,0.035)'; ctx.fill();
-      txt((hero3 ? hero3.icon : '❔') + (h.ng ? ' ♟' : '') + '  floor ' + h.floor + ' rm ' + h.depth + '  •  ' + h.kills + ' kills',
+      txt((hero3 ? hero3.icon : '❔') + (h.ng >= 2 ? ' ♛' : h.ng ? ' ♟' : '') + '  floor ' + h.floor + ' rm ' + h.depth + '  •  ' + h.kills + ' kills',
           40, y + 15, '800 10px Verdana, sans-serif', '#e8d0a0', 'left');
       txt(h.cause, LW - 40, y + 15, '600 10px Verdana, sans-serif', '#a08090', 'right');
     });
@@ -9907,7 +9919,7 @@ if (!HEADLESS) (function browser() {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: S.boardName, floor: run.floor, kills: run.kills || 0,
                              hero: run.hero || 'knight', diff: run.diff || 'normal',
-                             daily: run.daily ? 1 : 0, ng: run.ng ? 1 : 0 }),
+                             daily: run.daily ? 1 : 0, ng: run.ng | 0 }),
     })
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(j => {
@@ -9987,7 +9999,7 @@ if (!HEADLESS) (function browser() {
           ctx.beginPath(); ctx.arc(52, ry + 1, 3.2, 0, 7);
           ctx.fillStyle = e.diff === 'nightmare' ? '#ff5a4e' : '#7ee787'; ctx.fill();
         }
-        txt((me && masteryPeak() >= 3 ? '★ ' : '') + (rv ? '\u{2694}\u{FE0F} ' : '') + (e.d ? '\u{1F4C5} ' : '') + (e.ng ? '♟ ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
+        txt((me && masteryPeak() >= 3 ? '★ ' : '') + (rv ? '\u{2694}\u{FE0F} ' : '') + (e.d ? '\u{1F4C5} ' : '') + (e.ng >= 2 ? '♛ ' : e.ng ? '♟ ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
             me ? '#ffe9a3' : rv ? '#ffb0a0' : '#d8c8dc', 'left');
         txt('floor ' + e.floor, LW - 128, ry + 1, '900 12px Verdana, sans-serif', '#ffd75e', 'right');
         txt(fmt(e.kills || 0) + ' \u{2694}\u{FE0F}', LW - 64, ry + 1, '700 10px Verdana, sans-serif', '#c8a8b0', 'right');
@@ -10799,11 +10811,15 @@ if (!HEADLESS) (function browser() {
       }
       // the PRESTIGE door: only hangs once a deep clear has been inked
       if (ngPlusOpen()) {
-        const on = !!S.ngPick;
-        uiBtn(LW / 2 + dw * 1.5 + 16, 604, 46, 22, 'NG+', () => { S.ngPick = !S.ngPick; save(); },
-              { grad: on ? ['#6a3a8e', '#3a1a50'] : ['#2e2a38', '#1e1a26'],
-                border: on ? '#c86bff' : '#4a4458',
-                col: on ? '#f0dcff' : '#8a8098', font: '900 10px Verdana, sans-serif', r: 8 });
+        const pick = S.ngPick | 0;
+        uiBtn(LW / 2 + dw * 1.5 + 16, 604, 46, 22, pick >= 2 ? '♛NG++' : 'NG+', () => {
+          // tap to climb the prestige ladder; past the top it closes again
+          S.ngPick = pick === 0 ? 1 : (pick === 1 && S.ng2Open) ? 2 : 0;
+          save();
+        }, { grad: pick >= 2 ? ['#8a6a2a', '#5a4014'] : pick ? ['#6a3a8e', '#3a1a50'] : ['#2e2a38', '#1e1a26'],
+             border: pick >= 2 ? '#ffd75e' : pick ? '#c86bff' : '#4a4458',
+             col: pick >= 2 ? '#ffe9a3' : pick ? '#f0dcff' : '#8a8098',
+             font: '900 9px Verdana, sans-serif', r: 8 });
       }
     }
     if (S.run) {
@@ -10989,7 +11005,7 @@ if (!HEADLESS) (function browser() {
     const dinfo = DIFFS.find(d => d.id === o.diff);
     const rows = [
       ['hero', (hero2 ? hero2.icon + ' ' + hero2.name : '—')
-        + (o.ng ? '  •  ♟ NG+' : '')
+        + (o.ng >= 2 ? '  •  ♛ NG++' : o.ng ? '  •  ♟ NG+' : '')
         + (dinfo && dinfo.id !== 'normal' ? '  •  ' + dinfo.name : '')
         + (o.muts > 0 ? '  •  ENDLESS +' + o.muts : '')],
       ['reached', 'floor ' + o.floor + ', room ' + o.depth],
