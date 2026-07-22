@@ -1019,7 +1019,8 @@ const S = {
   tray: { items: [] },                 // cosmetic: recent pickups shown in the tray
   opts: { sfx: 1, music: 0.8, shake: true, parts: true, haptic: true, cb: false },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
-  life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {}, chests: 0, weeklies: 0 },
+  life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {}, chests: 0, weeklies: 0,
+          mutMax: 0, deepFloors: 0 },
   hist: [],                                     // the last ten runs, newest first
   codex: { foes: {}, relics: {}, coins: {} },   // everything ever met, owned or fired
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
@@ -1160,7 +1161,8 @@ function load() {
       S.life = { fired: d.life.fired || 0, dealt: d.life.dealt || 0, taken: d.life.taken || 0,
                  kills: d.life.kills || 0, gold: d.life.gold || 0, bosses: d.life.bosses || 0,
                  time: d.life.time || 0, heroRuns: d.life.heroRuns || {},
-                 chests: d.life.chests || 0, weeklies: d.life.weeklies || 0 };
+                 chests: d.life.chests || 0, weeklies: d.life.weeklies || 0,
+                 mutMax: d.life.mutMax || 0, deepFloors: d.life.deepFloors || 0 };
     }
     if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
     if (d.codex && typeof d.codex === 'object') {
@@ -3381,6 +3383,7 @@ function endRun(cause) {
   // COGS for the workshop: every run pays out, however it ends —
   // the endless deep pays a premium per mutator endured
   streakTouch(new Date().toISOString().slice(0, 10));
+  S.life.mutMax = Math.max(S.life.mutMax || 0, mutCount());
   const cogsWon = Math.round(Math.max(1, S.run.floor + Math.floor(S.run.kills / 8)) * (1 + 0.2 * mutCount()) * streakK()
                              * (S.run.weekly === 'ironweek' ? 1.4 : 1));
   S.cogs += cogsWon;
@@ -3770,6 +3773,9 @@ function nextFloor() {
     const m = MUTS[mutCount() - 1];
     toast('\u{1F30C} ENDLESS DECREE — ' + m.name + ': ' + m.desc);
   }
+  // the ENDLESS ledger: deepest decree stack + floors walked past the ledger
+  S.life.mutMax = Math.max(S.life.mutMax || 0, mutCount());
+  if (S.run.floor >= 22) S.life.deepFloors = (S.life.deepFloors || 0) + 1;
   // MILESTONE CHESTS pace the truly endless: floors 22, 25, 28… (the
   // off-beat between decree floors) pay cogs, a golden key, or a relic pick
   if (S.run.floor >= 22 && (S.run.floor - 22) % 3 === 0) {
@@ -6937,10 +6943,17 @@ if (!HEADLESS) (function browser() {
     const k = Math.min(1, a.t / 2.6);
     const ease = 1 - Math.pow(1 - k, 3);
     const target = (Math.PI * 2) * 4 + (-Math.PI / 2) - (a.seg + 0.5) * seg;
-    const rot = ease * target;
-    // the ratchet: one click per segment sweeping past the pointer
+    // the NEAR MISS: fully eased, the wheel still coasts most of a tooth
+    // past the prize, hangs on the pawl, and rocks back — the damped
+    // boardwalk settle (skipped with reduced motion, like the shake)
+    const st = Math.max(0, a.t - 2.6);
+    const wob = (S.opts.shake === false || k < 1) ? 0
+              : seg * 0.85 * Math.exp(-st * 2.1) * Math.sin(st * 6.5);
+    const rot = ease * target + wob;
+    // the ratchet: one click per segment sweeping past the pointer — and
+    // again, tooth by tooth, as the settle-rock rides back over the pawl
     const notch = Math.floor(rot / seg);
-    if (a._notch !== notch) { a._notch = notch; if (k < 1) SND.ratchet(); }
+    if (a._notch !== notch) { a._notch = notch; if (k < 1 || st < 1.2) SND.ratchet(); }
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(rot);
@@ -9243,11 +9256,55 @@ if (!HEADLESS) (function browser() {
   let RECORDS = false;
   function drawRecords(t) {
     if (!RECORDS) return;
+    if (RECORDS === true) RECORDS = { tab: 'book' };   // old openers still work
     ctx.fillStyle = 'rgba(7,3,10,0.96)';
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { RECORDS = false; } });
-    txt('\u{1F4CA} RECORDS', LW / 2, 58, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt('\u{1F4CA} RECORDS', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    [['book', 'THE BOOK'], ['deep', '\u{1F30C} THE ENDLESS']].forEach(([id, label], i) => {
+      const on = RECORDS.tab === id;
+      uiBtn(LW / 2 - 152 + i * 157, 64, 147, 30, label, () => { RECORDS = { tab: id }; },
+            { bg: on ? 'rgba(80,60,24,0.95)' : 'rgba(34,28,42,0.9)', border: on ? '#ffd75e' : '#55506a',
+              col: on ? '#ffe9a3' : '#9a90a8', font: '900 11px Verdana, sans-serif', r: 10 });
+    });
     const L = S.life;
+    // ---- the ENDLESS page: what the deep past floor 21 remembers ----
+    if (RECORDS.tab === 'deep') {
+      const u = (S.ach && S.ach.u) || {};
+      const rows = [
+        ['deepest descent', S.best.floor > 0 ? 'floor ' + S.best.floor : '—'],
+        ['decree stack survived', (L.mutMax || 0) + ' deep'],
+        ['milestone chests', '' + (L.chests || 0)],
+        ['weekly decrees', (L.weeklies || 0) + ' survived'],
+        ['floors past the ledger', '' + (L.deepFloors || 0)],
+        ['endless trophies', ((u.milestone ? 1 : 0) + (u.floor25 ? 1 : 0) + (u.floor30 ? 1 : 0)) + ' / 3'],
+      ];
+      rows.forEach((rw, i) => {
+        const x = i % 2 === 0 ? 30 : LW / 2 + 10;
+        const y = 116 + ((i / 2) | 0) * 40;
+        rr(x, y, LW / 2 - 40, 34, 8);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+        txt(rw[0], x + 8, y + 10, '600 10px Verdana, sans-serif', '#9a8aa0', 'left');
+        txt(rw[1], x + 8, y + 25, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
+      });
+      const wy = 116 + 3 * 40 + 22;
+      txt('— THE DECREE WALL —', LW / 2, wy, '900 12px Georgia, serif', '#c8a8b0');
+      txt('past floor 21 the deep stacks one law every 3 floors', LW / 2, wy + 16, '600 9px Verdana, sans-serif', '#9a8aa0');
+      MUTS.forEach((m, i) => {
+        const y = wy + 30 + i * 36;
+        const met = (L.mutMax || 0) > i;
+        rr(30, y, LW - 60, 32, 8);
+        ctx.fillStyle = met ? 'rgba(126,231,135,0.07)' : 'rgba(255,255,255,0.03)'; ctx.fill();
+        txt(met ? '✓' : '\u{1F512}', 44, y + 16, '900 13px Verdana, sans-serif', met ? '#7ee787' : '#55506a', 'left');
+        txt(m.name, 66, y + 9, '900 11px Verdana, sans-serif', met ? '#ffe9a3' : '#9a90a8', 'left');
+        txt(met ? m.desc : 'endure floor ' + (21 + i * 3) + ' to read this law',
+            66, y + 22, '600 9px Verdana, sans-serif', met ? '#c8b8a0' : '#7a7088', 'left');
+        txt('floor ' + (21 + i * 3), LW - 44, y + 16, '700 9px Verdana, sans-serif', '#8a86b8', 'right');
+      });
+      uiBtn(LW / 2 - 70, wy + 30 + MUTS.length * 36 + 14, 140, 40, TR('CLOSE ✕'), () => { RECORDS = false; },
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+      return;
+    }
     const hrs = Object.entries(L.heroRuns);
     hrs.sort((a, b) => b[1] - a[1]);
     const fav = hrs.length ? heroById(hrs[0][0]) : null;
@@ -9264,13 +9321,13 @@ if (!HEADLESS) (function browser() {
     ];
     rows.forEach((rw, i) => {
       const x = i % 2 === 0 ? 30 : LW / 2 + 10;
-      const y = 92 + ((i / 2) | 0) * 40;
+      const y = 116 + ((i / 2) | 0) * 40;
       rr(x, y, LW / 2 - 40, 34, 8);
       ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
       txt(rw[0], x + 8, y + 10, '600 10px Verdana, sans-serif', '#9a8aa0', 'left');
       txt(rw[1], x + 8, y + 25, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
     });
-    const hy = 92 + Math.ceil(rows.length / 2) * 40 + 16;
+    const hy = 116 + Math.ceil(rows.length / 2) * 40 + 16;
     txt('— THE LAST RUNS —', LW / 2, hy, '900 12px Georgia, serif', '#c8a8b0');
     if (!S.hist.length) txt('no tales yet — go die gloriously', LW / 2, hy + 32, '700 11px Verdana, sans-serif', '#a08a94');
     S.hist.forEach((h, i) => {

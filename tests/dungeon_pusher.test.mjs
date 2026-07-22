@@ -4808,4 +4808,47 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     'records shows the weekly line');
 }
 
+// -------- the ENDLESS ledger + wheel near-miss + records tabs --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  D.srand(21); D.newRun('knight');
+  D.S.run.floor = 20;
+  D.nextFloor();                                    // floor 21: the first decree
+  t.eq(D.S.life.mutMax, 1, 'floor 21 inks a 1-deep stack');
+  t.eq(D.S.life.deepFloors, 0, 'floor 21 is not yet past the ledger');
+  D.S.run.floor = 26;
+  D.nextFloor();                                    // floor 27: three laws deep
+  t.eq(D.S.life.mutMax, 3, 'floor 27 deepens the lifetime stack to 3');
+  t.eq(D.S.life.deepFloors, 1, 'and counts one floor walked past the ledger');
+  D.endRun('fell');
+  t.eq(D.S.life.mutMax, 3, 'the run’s end keeps the deepest stack');
+  D.srand(22); D.newRun('knight');
+  D.S.run.floor = 4; D.nextFloor();
+  t.eq(D.S.life.mutMax, 3, 'a shallow run cannot shrink the record');
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.life.mutMax, 3, 'the decree-stack record survives a reload');
+  t.eq(R.S.life.deepFloors, 1, 'so does the deep-floor count');
+  // with-ctx smoke: the wheel rides its spin through the settle-rock
+  const { DP: W, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = n => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  frames(3);
+  W.srand(23); W.newRun('knight');
+  W.S.wheelAnim = { t: 0, seg: 2, label: 'x' };
+  frames(220);                                      // ≈3.7s: deep into the wobble
+  t.ok(W.S.wheelAnim && W.S.wheelAnim.t > 3.2, 'the wheel survives its own wobble');
+  // source truth for the pure-draw bits
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('the NEAR MISS: fully eased') >= 0, 'the near-miss wobble lives in the draw code');
+  t.ok(src.indexOf('Math.exp(-st * 2.1) * Math.sin(st * 6.5)') >= 0, 'a damped rock, not a snap');
+  t.ok(src.indexOf('S.opts.shake === false || k < 1) ? 0') >= 0, 'reduced motion skips the wobble');
+  t.ok(src.indexOf("if (RECORDS === true) RECORDS = { tab: 'book' };   // old openers still work") >= 0,
+    'old openers still reach the book');
+  t.ok(src.indexOf('THE DECREE WALL') >= 0, 'the endless page hangs the decree wall');
+  t.ok(src.indexOf("['decree stack survived', (L.mutMax || 0) + ' deep']") >= 0, 'and reads the lifetime stack');
+}
+
 t.done();
