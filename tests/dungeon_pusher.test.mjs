@@ -6944,4 +6944,75 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("TR('\\u{1FAE7} THE PRESSURE')") >= 0, 'the gauge strip goes through TR');
 }
 
+// -------- TIER 11 [big]: THE TILTED TABLE — a second machine --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  const DT2 = 1 / 60;
+  const tick = (secs) => { for (let i = 0; i < Math.round(secs * 60); i++) D.tick(DT2); };
+  t.eq(Object.keys(D.MACH_LAYOUTS).length, 2, 'two beds on the rack');
+  t.ok(!D.layoutUnlocked('tilted'), 'the tilted table starts sealed');
+  S2.best.floor = 30;
+  t.ok(D.layoutUnlocked('tilted'), 'lifetime floor 30 breaks the seal');
+  // the drift: a settled coin creeps left ONLY on the tilted bed
+  D.srand(14); D.newRun('knight');
+  D.startBattle('battle');
+  S2.battle.phase = 'drop';
+  S2.coins.length = 0;
+  const flat = D.place(50, 40, 'coin', 0, 'plat');
+  tick(1.5);
+  t.ok(Math.abs(flat.x - 50) < 0.6, 'the flat bed holds its ground (' + flat.x.toFixed(2) + ')');
+  S2.machLayout = 'tilted';
+  const lean = D.place(50, 44, 'coin', 0, 'plat');
+  tick(1.5);
+  t.ok(lean.x < 47, 'the tilted bed drifts the coin toward the gutter (' + lean.x.toFixed(2) + ')');
+  t.ok(flat.x < 47, 'the old coin creeps too — the lean is the TABLE, not the coin');
+  // the gutter: pays plain coins, drains slugs unpaid, never touches GEAR
+  S2.coins.length = 0;
+  S2.run.arsenal.sword = 1;
+  const g1 = D.place(5, 40, 'coin', 0, 'plat');
+  const g2 = D.place(6, 50, 'slug', 0, 'plat');
+  const g3 = D.place(5, 60, 'item', 0, 'plat'); g3.iid = 'sword';
+  const gold0 = S2.run.gold;
+  D.endRoundNow();
+  t.eq(S2.run.gold, gold0 + 1, 'the gutter pays a gold for the honest coin');
+  t.ok(!S2.coins.includes(g1) && !S2.coins.includes(g2), 'coin and slug both drain');
+  t.ok(S2.coins.includes(g3), 'your GEAR is never lost to the gutter');
+  // the bank shrinks by one slot, never below one
+  t.eq(D.bankMax(), D.C.BANK_MAX - 1, 'the tilted rack loses a bank slot');
+  S2.machLayout = 'classic';
+  t.eq(D.bankMax(), D.C.BANK_MAX, 'the flat bed keeps all three');
+  S2.machLayout = 'tilted';
+  finishFight();
+  // the choice survives a reload
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.machLayout, 'tilted', 'the worn table survives a reload');
+  t.ok(R.layoutTilted(), 'and the physics read it live');
+  // the rack: THE TABLES section stands and the ring reaches its WEAR
+  const { DP: K, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  press('SKIP');
+  K.S.best.floor = 35;
+  frames(2);
+  t.ok(press('\u{1F3B0} MACHINE'), 'the rack chip stands at floor 35');
+  const wears = () => K.kb.buttons().filter(b => b.label === K.TR('WEAR'));
+  t.ok(wears().length >= 2, 'skins and tables both offer WEAR rows');
+  wears()[wears().length - 1].cb();      // the LAST wear is the tilted table
+  frames(2);
+  t.eq(K.S.machLayout, 'tilted', 'the rack wears the tilted table');
+  K.kb.back(); frames(2);
+  K.setLang('nl');
+  t.eq(K.TR('THE TABLES'), 'DE TAFELS', 'the rack section speaks Dutch');
+  K.setLang('en');
+}
+
 t.done();

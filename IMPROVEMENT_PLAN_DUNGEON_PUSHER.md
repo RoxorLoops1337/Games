@@ -640,11 +640,30 @@ feel the game get SMOOTHER this tier, not just bigger.
       rust-rain chance (round 1 restores the pile, so the brine bites the
       re-salt — by design); almanac house line + NL. Still open: sprites
       for the drowned kin (art is graceful-fallback, emoji stand by)
-- [ ] **[big] MACHINE LAYOUT II — THE TILTED TABLE**: an alternate machine
-      unlocked at lifetime floor 30: slanted bed (coins drift left), a
-      side gutter that pays gold, one fewer tray slot — chosen at the
-      MACHINE rack like a theme; the physics deltas must stay inside
-      pushRate/step and be probe-verified
+- [x] **[big] MACHINE LAYOUT II — THE TILTED TABLE** (session 84): a
+      second bed at the 🎰 rack (THE TABLES section), sealed until
+      lifetime best floor 30, composing freely with the skins
+      (S.machLayout beside S.machTheme). The physics deltas live inside
+      step()/endRoundNow and are DORMANT unless worn — the whole
+      existing physics suite stands untouched as its own regression
+      proof: (a) the bed creeps everything 2.5 u/s gutterward
+      (POSITIONAL, applied after the settle clamp — a force there gets
+      frozen out, the lesson is in the code comment); (b) the gutter
+      strip (x≤9) drinks settled bed pieces at END TURN — a gold apiece,
+      slugs/skulls drain unpaid, GEAR is never taken; (c) the bank rack
+      loses a slot (floor 1). Probe-tested drift on/off, gutter rules,
+      reload, and the rack's WEAR row by ring. Changelog under v1.7.0
+
+**TIER 11 IS COMPLETE** (session 84): sixteen items across thirteen
+sessions (72-84) — the consolidation nine (toasts, NL, keyboard, sim
+harness, relic rails + dud pass, deep HUD, save rail, lens, motifs),
+THE ALMANAC, REMATCH + the months archive, 48 trophies, and the three
+big swings: REPLAY GHOST (duel links carry the clock), THE FIFTH ACT
+(THE UNDERLAKE, parts 1+2: rawAct-keyed, pressure for darkness, the
+Banker and the Silt Queen), and THE TILTED TABLE. v1.7.0 (2407 game
+tests, 48 trophies, 5 acts, 2 tables). Session 85 authors Tier 12 with
+a fresh honest stock-take — and still owes the owner an answer on the
+touch-coins proposal.
 - [x] **Trophy pass to 48**: ALMANAC READER (first consult), REMATCHED
       (send a rematch from an answered duel — also inks a legacy line),
       OLD MONEY (read last month's board — truer to its name than the

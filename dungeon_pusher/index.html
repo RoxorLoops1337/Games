@@ -52,7 +52,8 @@ const HEADLESS = !ctx;
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
   { v: '1.7.0', notes: [
-    'THE UNDERLAKE \u{1F30A} — floors 21-25 are a true FIFTH ACT: thirteen drowned kin, THE DROWNED BANKER (and the SILT QUEEN on the B-side) hold the lair, and the endless decrees move out past floor 25',
+    'THE UNDERLAKE \u{1F30A} — floors 21-25 are a true FIFTH ACT: thirteen drowned kin, THE DROWNED BANKER (and the SILT QUEEN on the B-side) hold the lair, PRESSURE replaces the dark, and the decrees move out past floor 25',
+    'THE TILTED TABLE \u{1FAA3} — a second machine at the \u{1F3B0} rack (best floor 30): the bed leans left, the gutter pays a gold per settled coin, the bank loses a slot',
     'REPLAY GHOST \u{2694}\u{FE0F} — duel links now carry the challenger\u2019s per-floor CLOCK; every staircase whispers how you run against THEIR pace, and REMATCH sends yours back',
     'THE ALMANAC ❓ — the house rules read straight off the live tables: coins, foes, laws, heroes and the house arithmetic',
     'an answered duel offers \u{2694}\u{FE0F} REMATCH; the deep board grew a LAST MONTH archive tab; the relic shelves grew a \u{1F50D} search lens',
@@ -265,6 +266,7 @@ const LANGS = {
     'no relic answers to': 'geen relikwie luistert naar',
     'LAKE': 'MEER',
     '\u{1FAE7} THE PRESSURE': '\u{1FAE7} DE DRUK',
+    'THE TABLES': 'DE TAFELS',
     'foes strike +1 at full depth': 'vijanden slaan +1 op volle diepte',
     'THE MOTIFS': 'DE MOTIEVEN',
     'the four descents, and the fanfare': 'de vier afdalingen, en de fanfare',
@@ -283,6 +285,21 @@ const MACH_THEMES = {
   gilded:  { name: 'GILDED',  desc: 'the house always wins', tint: '#ffce4a', alpha: 0.4, floor: 10 },
   neon:    { name: 'NEON',    desc: 'the dungeon after dark', tint: '#b45aff', alpha: 0.44, floor: 15 },
 };
+// MACHINE LAYOUTS: the bed itself, separate from the skins — they compose.
+// THE TILTED TABLE unseals at lifetime best floor 30: the bed leans LEFT
+// (a constant drift fights your aim), a side gutter pays a gold for every
+// coin that settles against it, and the bank rack loses a slot.
+const MACH_LAYOUTS = {
+  classic: { name: 'FLAT',   desc: 'the honest bed', floor: 0 },
+  tilted:  { name: 'TILTED', desc: 'coins drift left — the gutter pays, the bank shrinks', floor: 30 },
+};
+const TILT_DRIFT = 2.5;                  // leftward creep of the whole bed, u/s
+const GUTTER_X = 9;                      // the paying strip hugs the left wall
+function layoutTilted() { return S.machLayout === 'tilted'; }
+function layoutUnlocked(id) {
+  const l = MACH_LAYOUTS[id];
+  return !!l && S.best.floor >= l.floor;
+}
 function themeUnlocked(id) {
   const th = MACH_THEMES[id];
   return !!th && S.best.floor >= th.floor;
@@ -1296,6 +1313,7 @@ const S = {
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
+  machLayout: 'classic',                        // the bed itself (MACH_LAYOUTS key)
   ngPick: 0,                                    // the prestige door armed: 0 / 1 (NG+) / 2 (NG++)
   ng2Open: 0,                                   // THE LEGEND DOOR: unsealed by an NG+ deep clear
   deep15: {},                                   // heroes who felled the floor-15 boss
@@ -1364,6 +1382,7 @@ function save() {
       syncCode: S.syncCode || '',
       lang: S.lang || 'en',
       machTheme: S.machTheme || 'classic',
+      machLayout: S.machLayout || 'classic',
       deep15: S.deep15, skins: S.skins, ngPick: S.ngPick | 0, ng2Open: S.ng2Open ? 1 : 0,
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
@@ -1486,6 +1505,7 @@ function load() {
     }
     if (typeof d.lang === 'string' && LANGS[d.lang]) { S.lang = d.lang; setLang(d.lang); }
     if (typeof d.machTheme === 'string' && MACH_THEMES[d.machTheme]) S.machTheme = d.machTheme;
+    if (typeof d.machLayout === 'string' && MACH_LAYOUTS[d.machLayout]) S.machLayout = d.machLayout;
     if (d.deep15 && typeof d.deep15 === 'object') S.deep15 = d.deep15;
     if (d.skins && typeof d.skins === 'object') S.skins = d.skins;
     S.ngPick = Math.min(2, Math.max(0, d.ngPick | 0));   // old saves' true reads as 1
@@ -2482,7 +2502,7 @@ function tilt(dir) {
 }
 // hold a caught piece back for next round (up to 3)
 function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
-function bankMax() { return C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 2 : 0); }
+function bankMax() { return Math.max(1, C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 2 : 0) - (layoutTilted() ? 1 : 0)); }
 // the round-start guard from relics, stacked
 function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 4 : 0); }
 function tiltCount() { return C.TILTS * (ghostRun() ? 2 : 1) + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0) + (hasRelic('gildhour') ? 1 : 0) + wsLvl('tilt'); }
@@ -2834,6 +2854,21 @@ function endRoundNow() {
   }
   S.coach.end = 1;
   if (!S.battle || S.battle.phase !== 'drop' || !S.run) return false;
+  // THE TILTED TABLE: the gutter drinks what settled against the left wall —
+  // a gold apiece (slugs drain unpaid; your GEAR is never lost to it)
+  if (layoutTilted()) {
+    let paid = 0, drained = 0;
+    for (let i = S.coins.length - 1; i >= 0; i--) {
+      const c = S.coins[i];
+      if (c.st === 'plat' && c.lay === 0 && c.kind !== 'item' && c.x <= GUTTER_X) {
+        if (c.kind !== 'slug' && c.kind !== 'skull') paid++;
+        drained++;
+        S.coins.splice(i, 1);
+      }
+    }
+    if (paid) { addGold(paid); S.battle.goldWon += paid; }
+    if (drained) floatAt('\u{1FAA3} the gutter drinks ' + drained + (paid ? ' — +' + paid + ' gold' : ''), 8, '#ffd75e', true);
+  }
   return startResolve();
 }
 function applyLoot(q) {
@@ -5359,6 +5394,9 @@ function step(dt, quiet) {
       c.vx *= fr; c.vy *= fr;
       if (Math.abs(c.vx) < C.SETTLE) c.vx = 0;
       if (Math.abs(c.vy) < C.SETTLE) c.vy = 0;
+      // THE TILTED TABLE: the whole bed leans — everything creeps gutterward
+      // (positional, so the settle clamp can never freeze the lean out)
+      if (layoutTilted()) c.x -= TILT_DRIFT * dt;
       const front = tierFront(c.tier);
       // the incline lip: coins stall teetering at the brink until shoved
       if (c.lay === 0 && c.vy > 0 && c.y > front - MACH.lipW && c.y <= front) {
@@ -5535,7 +5573,7 @@ window.DP = {
   coinFx, itemFx, runMods,
   CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
   LANGS, TR, setLang,
-  MACH_THEMES, themeUnlocked,
+  MACH_THEMES, themeUnlocked, MACH_LAYOUTS, layoutTilted, layoutUnlocked,
   HERO_SKINS, skinWorn, seasonNow, ngPlusOpen, seed36,
 };
 
@@ -8402,6 +8440,17 @@ if (!HEADLESS) (function browser() {
     const byDepth = (a, b) => (a.y + a.lay * 0.5) - (b.y + b.lay * 0.5);
     onPlat.sort(byDepth); offEdge.sort(byDepth);
     for (const c of onPlat) drawCoin(c, t);
+    if (layoutTilted()) {
+      // the gutter's glow: a slim paying strip along the left wall
+      const g0 = w2s(GUTTER_X, 18, 0), g1 = w2s(GUTTER_X, C.PLAT_FRONT, 0);
+      ctx.save();
+      ctx.globalAlpha = 0.4 + 0.12 * Math.sin(t * 3);
+      ctx.strokeStyle = '#ffd75e'; ctx.lineWidth = 2;
+      ctx.setLineDash([5, 6]);
+      ctx.beginPath(); ctx.moveTo(g0.x, g0.y); ctx.lineTo(g1.x, g1.y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
     drawPegs(t);                          // the studs stand PROUD of the pile
     drawFrontAndTray();
     for (const c of offEdge) drawCoin(c, t);
@@ -11078,7 +11127,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(5,2,8,0.85)';
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { THEMES = false; } });
-    const py = 170, ph = 470;
+    const py = 128, ph = 640;
     rr(36, py, LW - 72, ph, 18);
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
@@ -11114,6 +11163,28 @@ if (!HEADLESS) (function browser() {
         txt(TR('WORN ✓'), LW - 106, ry + 32, '900 11px Verdana, sans-serif', '#8ed67e');
       } else {
         txt('\u{1F512}', LW - 106, ry + 32, '15px serif', '#fff');
+      }
+    });
+    // ---- THE TABLES: the bed itself, one seal deep ----
+    const ly = py + 84 + Object.keys(MACH_THEMES).length * 74 + 10;
+    txt(TR('THE TABLES'), LW / 2, ly, '900 13px Georgia, serif', '#c8d6e8');
+    Object.keys(MACH_LAYOUTS).forEach((id, i) => {
+      const lo = MACH_LAYOUTS[id];
+      const open = layoutUnlocked(id);
+      const on = (S.machLayout || 'classic') === id;
+      const ry = ly + 14 + i * 58;
+      rr(52, ry, LW - 104, 50, 10);
+      ctx.fillStyle = on ? 'rgba(30,58,66,0.6)' : 'rgba(255,255,255,0.03)'; ctx.fill();
+      ctx.lineWidth = 2; ctx.strokeStyle = on ? '#7ee7e0' : open ? '#5a5068' : '#3a3442'; ctx.stroke();
+      txt(lo.name, 68, ry + 16, '900 12px Verdana, sans-serif', open ? (on ? '#c8f4f0' : '#e8d8ec') : '#7a7086', 'left');
+      fitTxt(open ? lo.desc : TR('sealed — reach floor') + ' ' + lo.floor, 200, ry + 34, 250, 9, open ? '#b8a8bc' : '#8d7d95');
+      if (open && !on) {
+        uiBtn(LW - 148, ry + 9, 84, 32, TR('WEAR'), () => { S.machLayout = id; save(); },
+              { grad: ['#1e4a58', '#16303a'], border: '#7ee7e0', col: '#c8f4f0', font: '900 11px Verdana, sans-serif', r: 10 });
+      } else if (on) {
+        txt(TR('WORN ✓'), LW - 106, ry + 26, '900 11px Verdana, sans-serif', '#8ed67e');
+      } else {
+        txt('\u{1F512}', LW - 106, ry + 26, '15px serif', '#fff');
       }
     });
     uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, TR('CLOSE ✕'), () => { THEMES = false; },
