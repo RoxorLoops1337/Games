@@ -5406,4 +5406,47 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('ctx = main;') >= 0, 'the ctx swap still restores in finally');
 }
 
+// -------- the MONTHLY plaque + the anniversary --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // the first run stamps the calendar, once
+  t.eq(D.S.firstRun, '', 'a fresh profile has no first-run date yet');
+  D.srand(121); D.newRun('knight');
+  const today = new Date().toISOString().slice(0, 10);
+  t.eq(D.S.firstRun, today, 'the first run stamps the calendar');
+  D.S.firstRun = '2020-03-14';
+  D.srand(122); D.newRun('knight');
+  t.eq(D.S.firstRun, '2020-03-14', 'later runs never restamp it');
+  // anniversary math
+  t.eq(D.anniversary('2026-03-14'), 6, 'six years on the day');
+  t.eq(D.anniversary('2026-03-15'), 0, 'the day after is nothing');
+  t.eq(D.anniversary('2020-03-14'), 0, 'the first day itself is no anniversary');
+  D.S.firstRun = '';
+  t.eq(D.anniversary('2026-03-14'), 0, 'no calendar, no candles');
+  // the plaque + calendar ride the save
+  D.S.firstRun = '2020-03-14'; D.S.annivDone = '2026';
+  D.S.plaque = { on: today, month: '2026-06', floor: 28, name: 'Champ' };
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.firstRun, '2020-03-14', 'the calendar survives a reload');
+  t.eq(R.S.annivDone, '2026', 'so does the claimed year');
+  t.eq(R.S.plaque.name, 'Champ', 'and the champion’s plaque');
+  t.eq(R.S.plaque.month, '2026-06', 'with its month');
+  // veterans are grandfathered: runs on the books, no date → stamped today
+  const store2 = {};
+  const { DP: G } = loadGame(store2, false);
+  G.S.best.runs = 12;
+  G.save();
+  const { DP: G2 } = loadGame(store2, false);
+  t.eq(G2.S.firstRun, today, 'a veteran save starts its calendar on load');
+  // browser wiring
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("tabBtn(LW / 2 + 66, 'THIS MONTH', 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
+  t.ok(src.indexOf('?board=lastmonth') >= 0, 'the title asks for last month’s champion');
+  t.ok(src.indexOf('’S DEEPEST: ') >= 0, 'and hangs the plaque');
+  t.ok(src.indexOf('MAKE A WISH') >= 0, 'the birthday crate waits for its day');
+}
+
 t.done();

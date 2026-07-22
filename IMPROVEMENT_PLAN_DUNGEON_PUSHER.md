@@ -387,11 +387,12 @@ impact ÷ effort.
       double bounty + a guaranteed key; codex act tabs count them (FULL
       LEDGER now includes them); 4 inked → CHAMPION SLAYER (40 on the wall)
       (session 60)
-- [ ] **[server] Monthly board + the champion's plaque**: dungeon_board.js
-      adds 'dp:month:<YYYY-MM>' (one POST feeds all boards, 60-day TTL);
-      BOARD gains a THIS MONTH tab; on month-end the previous winner is
-      fetched once (?board=lastmonth) and the title wears "JULY'S DEEPEST:
-      NAME, floor N" for the whole next month
+- [x] **[server] Monthly board + the champion's plaque**: dp:month:<YYYY-MM>
+      (one POST feeds all three boards, 60-day TTL); ?board=monthly +
+      ?board=lastmonth whitelisted; BOARD grew a THIS MONTH tab (three tabs
+      now); the title fetches last month's winner once a day (S.plaque,
+      cached like yday) and wears "🏛️ JUNE'S DEEPEST: NAME, floor N" all
+      month (session 61)
 - [ ] **[big] THE LEGEND DOOR (NG++)**: an NG+ deep clear unseals a second
       prestige: actIdx +2, both prestige kits, decrees start at floor 11,
       LEGEND ♛ on board rows (ng:2 in the post), one legend-only relic; the
@@ -400,9 +401,10 @@ impact ÷ effort.
       decrees on from floor 1, no shops) raced against the CLOCK; best time
       in records + a GAUNTLET line on the share card; the door only opens
       Fri-Sun to make it an event
-- [ ] **Anniversary gift**: the profile's first-run date (stamp it now for
-      everyone) pays a yearly birthday crate + a candle on the title that
-      day — the longest-loop hook in the game
+- [x] **Anniversary gift**: S.firstRun stamped on the first run (veterans
+      grandfathered to today on load); anniversary(date) → a 🎂 candle by
+      the streak flame + a once-a-year MAKE A WISH crate (100 cogs + the
+      rare-pick door, S.annivDone guards the year) (session 61)
 - [x] **[owner request] Late-game coin sink + scaling tricks** (session 58):
       floor-18 purses were "ridiculous" — (1) stairToll() now climbs +1 per
       act (2→8 cap); (2) THE TOLLKEEPER'S SKIM: purseCap() = 20+4·act (cap
