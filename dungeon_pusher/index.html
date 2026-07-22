@@ -2925,6 +2925,7 @@ function winBattle() {
     achUnlock('boss1'); S.life.bosses++;
     // the DEEP CLEAR ledger: fell the floor-15 boss and that hero's alt
     // skin is tailored for keeps
+    if (S.run.floor >= 15 && S.run.ng) achUnlock('ngclear');
     if (S.run.floor >= 15 && !S.deep15[S.run.hero]) {
       S.deep15[S.run.hero] = 1;
       toast('deep clear! ' + (heroById(S.run.hero) || {}).name + ' earned an ALT SKIN — toggle it on the hero card');
@@ -3130,6 +3131,17 @@ const ACH = [
   { id: 'survivor',  icon: '\u{2764}\u{FE0F}', name: 'On One Knee', desc: 'win a battle at exactly 1 HP' },
   { id: 'hoarder',   icon: '\u{1FA99}', name: 'Full House', desc: '300 pieces on the machine at once' },
   { id: 'volley',    icon: '\u{26A1}', name: 'Speed Demon', desc: 'fire 100 coins in one battle' },
+  // ---- the second age: trophies for everything tiers 4-6 built ----
+  { id: 'ngclear',   icon: '\u{265F}\u{FE0F}', name: 'Twice Around', desc: 'fell the floor-15 boss on a NEW GAME+ run' },
+  { id: 'tailored',  icon: '\u{1F3A8}', name: 'Tailored', desc: 'wear a hero\u2019s deep-clear alt skin' },
+  { id: 'housestyle', icon: '\u{1F3B0}', name: 'House Style', desc: 'dress the machine in any unlocked theme' },
+  { id: 'carved',    icon: '\u{1F3C5}', name: 'Set in Stone', desc: 'carve a run onto THE DEEP BOARD' },
+  { id: 'skyvault',  icon: '\u{2601}\u{FE0F}', name: 'Sky Vault', desc: 'back your profile up to the cloud' },
+  { id: 'audited',   icon: '\u{1F9FE}', name: 'Clean Books', desc: 'fell THE AUDITOR' },
+  { id: 'bsides',    icon: '\u{1F4BF}', name: 'B-Side Collector', desc: 'fell the Wyrm, the Banshee AND the Aurifex' },
+  { id: 'minted',    icon: '\u{1FA99}', name: 'Counting House', desc: 'fell the Lodestone, the Counterfeiter and the Meter Leech' },
+  { id: 'shutterbug', icon: '\u{1F4F7}', name: 'Shutterbug', desc: 'step into photo mode for a clean shot' },
+  { id: 'tweetalig', icon: '\u{1F310}', name: 'Tweetalig', desc: 'speel het spel in het Nederlands' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 function achUnlock(id) {
@@ -3142,6 +3154,14 @@ function achUnlock(id) {
   return true;
 }
 function achPoll() {
+  // profile-level watches (no run needed)
+  if (S.machTheme && S.machTheme !== 'classic') achUnlock('housestyle');
+  if (S.lang === 'nl') achUnlock('tweetalig');
+  if (Object.keys(HERO_SKINS).some(h => skinWorn(h))) achUnlock('tailored');
+  const kf = (S.codex && S.codex.foes) || {};
+  if (kf.wyrm && kf.banshee && kf.aurifex) achUnlock('bsides');
+  if (kf.lodestone && kf.counterfeit && kf.meterleech) achUnlock('minted');
+  if (kf.auditor) achUnlock('audited');
   const r = S.run;
   if (!r) return;
   for (const rid of r.relics) S.codex.relics[rid] = 1;   // the codex sweeps the shelf
@@ -6934,7 +6954,7 @@ if (!HEADLESS) (function browser() {
       });
     }
     // the photographer's chip: hide everything for a clean trophy shot
-    uiBtn(LW - 110, py - 18, 40, 34, '\u{1F4F7}', () => { PHOTO = true; },
+    uiBtn(LW - 110, py - 18, 40, 34, '\u{1F4F7}', () => { PHOTO = true; achUnlock('shutterbug'); },
           { bg: 'rgba(24,14,26,0.9)', border: '#9a8aa0', r: 10, font: '15px serif' });
     const pulse = 1 + Math.sin(t * 5) * 0.03;
     const label = v.boss ? (hasRelicOffer && !v.relicPicked ? 'SKIP ▼' : 'DESCEND ▼')
@@ -8750,8 +8770,13 @@ if (!HEADLESS) (function browser() {
     const got = ACH.filter(a => S.ach.u[a.id]).length;
     txt('\u{1F3C6} TROPHY HALL', LW / 2, 64, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     txt(got + ' / ' + ACH.length + ' earned', LW / 2, 90, '800 12px Verdana, sans-serif', '#c8a8b0');
+    // the wall grew past one screen — ten rows a page, ▲▼ to walk it
+    const PER = 20;
+    const pages = Math.ceil(ACH.length / PER);
+    TROPHIES = (typeof TROPHIES === 'object') ? TROPHIES : { page: 0 };
+    TROPHIES.page = Math.max(0, Math.min(TROPHIES.page, pages - 1));
     const cw = (LW - 52) / 2;
-    ACH.forEach((a, i) => {
+    ACH.slice(TROPHIES.page * PER, TROPHIES.page * PER + PER).forEach((a, i) => {
       const x = 20 + (i % 2) * (cw + 12), y = 110 + ((i / 2) | 0) * 62;
       const on = !!S.ach.u[a.id];
       rr(x, y, cw, 54, 10);
@@ -8765,7 +8790,15 @@ if (!HEADLESS) (function browser() {
       wrapLines(a.desc, 26, 2).forEach((ln, li) =>
         txt(ln, x + 40, y + 33 + li * 11, '600 9px Verdana, sans-serif', on ? '#c8b8a0' : '#544a60', 'left'));
     });
-    uiBtn(LW / 2 - 70, 110 + Math.ceil(ACH.length / 2) * 62 + 10, 140, 40, TR('CLOSE ✕'), () => { TROPHIES = false; },
+    const by = 110 + Math.ceil(Math.min(PER, ACH.length) / 2) * 62 + 10;
+    if (pages > 1) {
+      uiBtn(LW / 2 - 166, by, 60, 32, '▲', () => { TROPHIES.page--; },
+            { bg: 'rgba(40,34,46,0.95)', border: '#8d7d95', col: '#d8c8dc', r: 9, font: '800 13px Verdana, sans-serif' });
+      txt((TROPHIES.page + 1) + ' / ' + pages, LW / 2 - 106, by + 46, '800 10px Verdana, sans-serif', '#9a8aa0');
+      uiBtn(LW / 2 + 106, by, 60, 32, '▼', () => { TROPHIES.page++; },
+            { bg: 'rgba(40,34,46,0.95)', border: '#8d7d95', col: '#d8c8dc', r: 9, font: '800 13px Verdana, sans-serif' });
+    }
+    uiBtn(LW / 2 - 70, by, 140, 40, TR('CLOSE ✕'), () => { TROPHIES = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the WORKSHOP: cogs in, forever-upgrades out ----
@@ -8951,7 +8984,7 @@ if (!HEADLESS) (function browser() {
                              hero: run.hero || 'knight', diff: run.diff || 'normal' }),
     })
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; } })
+      .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; achUnlock('carved'); } })
       .catch(() => { if (BOARD === mine) mine.state = 'err'; });
   }
   const HERO_ICON = {};
@@ -9086,6 +9119,7 @@ if (!HEADLESS) (function browser() {
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(j => {
         S.syncCode = j.code; save();
+        achUnlock('skyvault');
         if (CLOUD === mine) { mine.state = 'idle'; mine.msg = 'backed up ✓ — your code: ' + j.code; }
       })
       .catch(e => {
