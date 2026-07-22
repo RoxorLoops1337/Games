@@ -1188,7 +1188,7 @@ DP.newRun('knight');
   only(); const lBase = hpOf(() => DP.applyLoot({ t: 'lucky' }));
   only('horseshoe'); t.eq(hpOf(() => DP.applyLoot({ t: 'lucky' })), lBase + 1, 'Horseshoe: lucky coins +1 damage');
   only('armory'); arm(500); { const b = S.enemy.hp; DP.applyLoot({ t: 'weapon', iid: 'sword' }); t.eq(b - S.enemy.hp, DP.weaponDmg(DP.itemById('sword').dmg) + 2, 'Armory: weapons +2 damage'); }
-  only('emberhoard'); arm(500); S.foes = [S.enemy, DP.mkEnemy('battle')]; S.foes[1].hp = 50; { const b = S.foes[1].hp; DP.applyLoot({ t: 'gold' }); t.ok(S.foes[1].hp < b, 'Ember Hoard: gold also singes all foes'); }
+  only('emberhoard'); arm(500); S.foes = [S.enemy, DP.mkEnemy('battle')]; S.foes[1].hp = 50; S.foes[1].def = null; S.foes[1].block = 0; { const b = S.foes[1].hp; DP.applyLoot({ t: 'gold' }); t.ok(S.foes[1].hp < b, 'Ember Hoard: gold also singes all foes'); }
 
   // --- block / defense ---
   only(); arm(500); S.run.block = 0; DP.applyLoot({ t: 'silver' }); const sBase = S.run.block;
@@ -1523,12 +1523,12 @@ finishFight();
 // -------- ACTS: a new bestiary every 5 floors (Roguebook-style) --------
 {
   t.eq(DP.ENEMY_TIERS.length, 3, 'three acts of enemies');
-  t.ok(DP.ENEMY_TIERS.every(tier => tier.length === 13), 'thirteen foes per act');
+  t.ok(DP.ENEMY_TIERS.every(tier => tier.length >= 13), 'a full roster per act (13+)');
   const all = DP.ENEMY_TIERS.flat();
   t.eq(new Set(all.map(e => e.id)).size, all.length, 'no duplicate ids across acts');
   t.ok(all.every(e => e.hp > 0 && e.atk > 0 && e.icon && e.name), 'every act foe is fully statted');
   const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech', 'bleeder', 'burner',
-                    'gremlin', 'rustmite', 'magnet', 'bell', 'chrono', 'coward', 'twin'];
+                    'gremlin', 'rustmite', 'magnet', 'bell', 'chrono', 'coward', 'twin', 'gardener'];
   const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward', 'mirror', 'tar'];
   t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
   // act boundaries
@@ -3093,6 +3093,57 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(P.S.battle.loot.length, 1, 'round 3: the Pit Boss taxes one piece');
   t.eq(P.S.foes[0].belly.length, 1, 'it sits in his belly');
   t.eq(P.S.foes[0].belly[0].k, 'coin', 'he takes the smallest — the plain coin');
+}
+
+// -------- the SKULL GARDENER + floor QUESTS --------
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  t.ok(D.ENEMY_TIERS[1].some(e => e.trait === 'gardener'), 'a gardener tends act II');
+  t.ok(D.ENEMY_TIERS[2].some(e => e.trait === 'gardener'), 'and a meaner one act III');
+  D.srand(818);
+  D.newRun('knight');
+  DS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'skullgardener', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  DS.enemy.hp = DS.enemy.maxHp = 9999;
+  // plant two skulls, run the round ticks — the crop SPROUTS
+  DS.coins.length = 0;
+  D.place(30, 50, 'skull', 0, 'plat', 0);
+  D.place(60, 50, 'skull', 0, 'plat', 0);
+  D.endRoundTicks();
+  const skulls = DS.coins.filter(c => c.kind === 'skull');
+  t.eq(skulls.length, 4, 'two skulls sprout two twins');
+  // the cap: a full crop stops sprouting
+  DS.coins.length = 0;
+  for (let i = 0; i < 6; i++) D.place(15 + i * 12, 50, 'skull', 0, 'plat', 0);
+  D.endRoundTicks();
+  t.eq(DS.coins.filter(c => c.kind === 'skull').length, 6, 'the crop caps at six');
+  // the gardener sows on its turn
+  DS.rain.length = 0;
+  DS.enemy.intent = { t: 'sow' };
+  D.enemyActFoe(DS.enemy);
+  t.eq(DS.rain.filter(r => r.kind === 'skull').length, 2, 'a SOW turn plants two skulls');
+
+  // QUESTS: the slay job
+  const { DP: Q } = loadGame({}, false);
+  Q.srand(919);
+  Q.newRun('knight');
+  t.ok(Q.S.run.quest && Q.S.run.quest.need > 0, 'every floor posts a job');
+  Q.S.run.quest = { id: 'slay', need: 2, got: 0, done: false, reward: 'goldkey' };
+  const gk0 = Q.S.run.goldKeys;
+  Q.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: Q.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
+  Q.interact(0); Q.S.enemy.hp = 1; Q.dmgEnemy(5); Q.leaveBattle();
+  t.eq(Q.S.run.quest.got, 1, 'one kill tallied');
+  Q.S.run.room.ents.push({ kind: 'monster', mtype: 'battle', eid: Q.curRoster()[0].id, done: false, px: 0.3, py: 0.3 });
+  Q.interact(Q.S.run.room.ents.length - 1); Q.S.enemy.hp = 1; Q.dmgEnemy(5);
+  t.ok(Q.S.run.quest.done, 'two kills complete the job');
+  t.eq(Q.S.run.goldKeys, gk0 + 1, 'and the GOLDEN KEY is paid');
+  // the relic reward path
+  Q.S.run.quest = { id: 'bank', need: 1, got: 0, done: false, reward: 'relic' };
+  const rel0 = Q.S.run.relics.length;
+  Q.questBump('bank', 1);
+  t.ok(Q.S.run.quest.done, 'the bank job closes');
+  t.eq(Q.S.run.relics.length, rel0 + 1, 'and pays a relic');
 }
 
 t.done();

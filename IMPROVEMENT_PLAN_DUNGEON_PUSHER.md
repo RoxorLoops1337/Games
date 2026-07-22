@@ -63,12 +63,13 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [ ] **[big] Room events / NPCs**: 6 hallway encounters between rooms — gambler
       (double-or-nothing a relic), cursed fountain, mimic chest, lost adventurer
       (escort = reward), coin-eating slime, shrine of trades (HP↔gold)
-- [ ] **Floor quests**: one optional objective per floor ("clear 3 rooms without
-      tilting", "bank 15 loot") → bonus golden key or relic
+- [x] **Floor quests**: one optional job per floor (slay N / no-tilt win / bank N),
+      posted under the floor title, pays a golden key or a relic (session 14)
 - [ ] **[big] Rat King hero** (design approved in chat): items become rats, rats
       scurry on the pile jostling coins, swarm persists between battles, cheese heals
-- [ ] **Skull Gardener enemy** (user: "great"): uncollected skulls on the pile
-      duplicate each round it lives
+- [x] **Skull Gardener enemy**: act II (+ Grave Gardener act III) — SOWS skulls on
+      its turn, and every skull left on the field SPROUTS a twin each round
+      (crop capped at 6) (session 14)
 - [ ] **Endless mode proper**: after floor 15 — mutators stack every 3 floors,
       score multiplier, separate leaderboard flag
 - [ ] **Difficulty modes**: EASY (−20% enemy HP) / NORMAL / NIGHTMARE (+30%, elites
