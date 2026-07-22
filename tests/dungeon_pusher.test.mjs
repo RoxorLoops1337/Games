@@ -122,9 +122,9 @@ t.eq(COIN_KINDS.length, 6, 'six coin types in the mint');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
 
-// -------- the six adventurers and their signature coins --------
-t.ok(DP.HEROES.length === 6 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
-     'six heroes, each with a signature coin');
+// -------- the seven adventurers and their signature coins --------
+t.ok(DP.HEROES.length === 7 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
+     'seven heroes, each with a signature coin');
 DP.srand(41);
 DP.newRun('knight');
 t.eq(S.run.hero, 'knight', 'the knight answers the call');
@@ -3144,6 +3144,72 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   Q.questBump('bank', 1);
   t.ok(Q.S.run.quest.done, 'the bank job closes');
   t.eq(Q.S.run.relics.length, rel0 + 1, 'and pays a relic');
+}
+
+// -------- THE RAT KING: no items, only the SWARM --------
+{
+  const { DP: R } = loadGame({}, false);
+  const RS = R.S;
+  RS.best.floor = 8;                        // the king unseals at floor 8
+  R.srand(4001);
+  R.newRun('rat');
+  t.eq(RS.run.hero, 'rat', 'the Rat King takes the crown');
+  t.eq(Object.keys(RS.run.arsenal).length, 0, 'he owns NO gear');
+  t.eq(RS.run.swarm.length, 2, 'two loyal rats at the door');
+  // any item source feeds the swarm instead
+  R.grantItem('sword', 1);
+  t.eq(RS.run.swarm.length, 3, 'a granted sword becomes a RAT');
+  t.eq(Object.keys(RS.run.arsenal).length, 0, 'the arsenal stays bare');
+  // the swarm caps at eight, then feasts
+  while (RS.run.swarm.length < 8) R.ratRecruit(false);
+  RS.run.swarm[0].hp = 3;
+  t.ok(!R.ratRecruit(false), 'recruit nine refused — the swarm is full');
+  t.eq(RS.run.swarm[0].hp, 5, 'the meal is shared instead (+2 HP)');
+  t.eq(RS.run.swarm.length, 8, 'still eight');
+  // battle: the swarm pours in, fights, and marches out with its scars
+  RS.run.swarm = [R.mkRat(false), R.mkRat(false), R.mkRat(true)];
+  RS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: R.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
+  R.interact(0);
+  t.eq(RS.pets.length, 3, 'the swarm pours onto the stage');
+  t.ok(RS.pets.some(p => p.iid === 'direrat'), 'the dire rat among them');
+  // the scurry jostles the pile
+  RS.coins.length = 0;
+  for (let i = 0; i < 10; i++) R.place(10 + i * 8, 40, 'coin', 0, 'plat', 0);
+  for (const c of RS.coins) { c.vx = 0; c.vy = 0; }
+  R.srand(11);
+  R.ratScurry();
+  t.ok(RS.coins.some(c => c.vy !== 0 || c.vx !== 0), 'the scurry jostles coins in its lanes');
+  t.ok(RS.scurryFx.length > 0, 'and rats dash the board (visual lanes queued)');
+  // CHEESE: gems feed the swarm; the third grows a DIRE RAT
+  RS.pets.forEach(p => { p.hp = 1; });
+  const gem = R.place(50, 50, 'gem', 0, 'plat', 0);
+  R.scoreCoin(gem);
+  t.ok(RS.pets.every(p => p.hp === 4 || p.iid === 'direrat' && p.hp === 4), 'CHEESE heals the swarm +3');
+  RS.run.cheese = 2;
+  const n0 = RS.pets.length;
+  R.scoreCoin(R.place(52, 50, 'gem', 0, 'plat', 0));
+  t.eq(RS.pets.length, n0 + 1, 'the third cheese grows a DIRE RAT');
+  t.ok(RS.pets[RS.pets.length - 1].dire, 'and dire it is');
+  // victory: survivors persist, the fallen stay fallen
+  RS.pets[0].hp = 0;
+  const alive = RS.pets.filter(p => p.hp > 0).length;
+  RS.enemy.hp = 1;
+  R.dmgEnemy(5);
+  t.eq(RS.run.swarm.length, alive, 'the swarm marches out with the survivors only');
+  // dire rats bite harder: 2 dmg + 1 bleed
+  const { DP: R2 } = loadGame({}, false);
+  R2.S.best.floor = 8;
+  R2.srand(4002);
+  R2.newRun('rat');
+  R2.S.run.swarm = [R2.mkRat(true)];
+  R2.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: R2.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
+  R2.interact(0);
+  R2.S.enemy.hp = R2.S.enemy.maxHp = 100;
+  R2.S.enemy.def = null; R2.S.enemy.block = 0;
+  const hp0 = R2.S.enemy.hp;
+  R2.petsAct();
+  t.ok(hp0 - R2.S.enemy.hp >= 2, 'the dire rat bites for 2');
+  t.ok(R2.S.enemy.bleed >= 1, 'and leaves it BLEEDING');
 }
 
 t.done();
