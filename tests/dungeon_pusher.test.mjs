@@ -2877,7 +2877,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 30, 'thirty trophies on the wall');
+  t.eq(D.ACH.length, 33, 'thirty-three trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -3247,7 +3247,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   DS.run.floor = 20; t.eq(D.mutCount(), 0, 'floor 20: THE MINT holds the line');
   DS.run.floor = 21; t.eq(D.mutCount(), 1, 'floor 21: THICK AIR descends past the mint');
   DS.run.floor = 24; t.eq(D.mutCount(), 2, 'floor 24: SWIFT DOOM joins');
-  DS.run.floor = 40; t.eq(D.mutCount(), D.MUTS.length, 'the decrees cap out');
+  DS.run.floor = 45; t.eq(D.mutCount(), D.MUTS.length, 'the decrees cap out (8 deep now)');
   t.ok(D.mutOn('thickair') && D.mutOn('swiftdoom'), 'mutOn reads the stack');
   // SWIFT DOOM: +2 atk
   DS.run.floor = 24;
@@ -4537,6 +4537,63 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('function drawJuice') >= 0 && src.indexOf('drawJuice(dt);') >= 0, 'the juice overlays draw each frame');
   t.ok(src.indexOf('S.hitstop -= dt;') >= 0 && src.indexOf('dt *= 0.12;') >= 0, 'hitstop bends frame time');
   t.ok(src.indexOf("S.opts.shake !== false") >= 0, 'reduced-motion players skip the freeze');
+}
+
+// -------- THE DEEP ENDLESS: three new decrees + milestone chests --------
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  t.eq(D.MUTS.length, 8, 'the decree stack runs 8 deep');
+  D.srand(7); D.newRun('knight');
+  // the new decrees arrive on schedule: 36 / 39 / 42
+  DS.run.floor = 35; t.ok(!D.mutOn('gildedage'), 'floor 35: no GILDED AGE yet');
+  DS.run.floor = 36; t.ok(D.mutOn('gildedage'), 'floor 36: GILDED AGE crowns the deep');
+  DS.run.floor = 38; t.ok(!D.mutOn('thinveins'), 'floor 38: veins still thick');
+  DS.run.floor = 39; t.ok(D.mutOn('thinveins'), 'floor 39: THIN VEINS bites the shop');
+  DS.run.floor = 42; t.ok(D.mutOn('longdark'), 'floor 42: THE LONG DARK falls');
+  // THE LONG DARK: every floor is a dark floor
+  DS.run.floor = 43;
+  t.ok(D.darkFloor(), 'floor 43 (not a natural dark floor) is dark under the decree');
+  DS.run.floor = 22;
+  t.ok(!D.darkFloor(), 'floor 22 without the decree stays lit');
+  // THIN VEINS: the keeper's cut, measured to the coin
+  DS.run.floor = 39;
+  D.srand(11);
+  const st39 = D.shopStock();
+  const potion39 = st39.find(x => x.kind === 'potion').price;
+  t.eq(potion39, Math.round(45 * (1 + 0.25 * 38) * 1.25) * 2, 'floor-39 potions carry the +25% vein tax (gold prices double post-round)');
+  // GILDED AGE: elites flood the carve (statistical, 20 carves each)
+  const eliteCount = (floor) => {
+    let n = 0;
+    for (let sd = 1; sd <= 20; sd++) {
+      D.srand(sd * 7); DS.run.floor = floor; D.genFloor();
+      for (const k of Object.keys(DS.run.map.rooms)) {
+        for (const e of DS.run.map.rooms[k].ents) if (e.mtype === 'elite') n++;
+      }
+    }
+    return n;
+  };
+  const calm = eliteCount(20), gilded = eliteCount(36);
+  t.ok(gilded > calm * 1.6, 'GILDED AGE floods the halls with elites (' + calm + ' -> ' + gilded + ')');
+  // MILESTONE CHESTS: floor 22 pays, floor 23 doesn't, the ledger counts
+  const { DP: M } = loadGame({}, false);
+  M.srand(9); M.newRun('knight');
+  M.S.run.floor = 21;
+  const cogs0 = M.S.cogs, keys0 = M.S.run.goldKeys || 0;
+  M.nextFloor();
+  t.eq(M.S.run.floor, 22, 'descended to 22');
+  const paid = (M.S.cogs > cogs0) || ((M.S.run.goldKeys || 0) > keys0) || !!M.S.relicPick || !!M.S.pendingPick;
+  t.ok(paid, 'the first milestone chest pays (cogs, key or relic)');
+  t.eq(M.S.life.chests, 1, 'the ledger counts the chest');
+  t.ok(M.S.ach.u.milestone, 'DEEP POCKETS is earned');
+  M.S.relicPick = null; M.S.pendingPick = null;
+  const chests1 = M.S.life.chests;
+  M.nextFloor();
+  t.eq(M.S.life.chests, chests1, 'floor 23 is not a milestone');
+  // the floor trophies poll
+  M.S.run.floor = 30;
+  M.achPoll();
+  t.ok(M.S.ach.u.floor25 && M.S.ach.u.floor30, 'floors 25 + 30 hang their trophies');
 }
 
 t.done();

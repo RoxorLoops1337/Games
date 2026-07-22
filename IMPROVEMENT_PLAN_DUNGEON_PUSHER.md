@@ -287,11 +287,13 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
       players skip the freeze (session 47)
 - [x] **Floor transition**: the descent opens from black over ~1s with the
       FLOOR N nameplate, plus the act name on act boundaries (session 47)
-- [ ] **Endless milestones**: every 3rd floor past 21 pays a MILESTONE CHEST
-      (cogs / golden key / relic pick), floors 25 + 30 add trophies
-- [ ] **Endless-only decrees**: three new MUTS deeper in the stack (GILDED AGE:
-      elites everywhere; THIN VEINS: shops cost +25%; THE LONG DARK: every
-      floor is a dark floor) — the stack now reads 8 long
+- [x] **Endless milestones**: floors 22/25/28… (off-beat between decree floors)
+      pay a MILESTONE CHEST — cogs (15+floor) / golden key / rare-relic pick;
+      S.life.chests ledger; DEEP POCKETS + floor-25/30 trophies (33 on the
+      wall) (session 48)
+- [x] **Endless-only decrees**: GILDED AGE (elite odds 0.24→0.6, floor 36),
+      THIN VEINS (shop mult ×1.25, floor 39), THE LONG DARK (darkFloor always,
+      floor 42) — the stack runs 8 deep, all measured (session 48)
 - [ ] **Three new daily twists**: GLASS CANNON (double damage both ways),
       COIN DROUGHT (hand -2, kills pay double gold), PACIFIST FLOORS (every
       3rd floor's monsters are optional but pay nothing)
