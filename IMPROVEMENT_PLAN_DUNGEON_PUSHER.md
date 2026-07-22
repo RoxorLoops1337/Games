@@ -335,14 +335,14 @@ a link to send, a reason the game still surprises in week five. Everything
 stays in the one-file architecture; server touches are marked. Ordered by
 impact ÷ effort.
 
-- [ ] **Mark your rival**: tap any DEEP BOARD row → ⚔ MARK RIVAL. The title
-      then carries "rival: NAME — floor N (you: M)" and the run-over screen
-      scores every run against them ("3 floors short of NAME" / "RIVAL
-      TOPPLED ⚔"). Local only (S.rival {name, floor, kills}), refreshed
-      from the board on open; topple pays a trophy (38)
-- [ ] **Percentile on the carve**: after postScore lands, toast "deeper than
-      N% of the board" (computed from the returned top array — zero server
-      work); below-median gets "the board's midpoint is floor N" instead
+- [x] **Mark your rival**: tap any DEEP BOARD row → ⚔ MARK RIVAL. The title
+      then carries "rival: NAME — floor N (you: M)" and the run-over report
+      card scores every run against them (gap / matched / RIVAL TOPPLED);
+      S.rival persisted, refreshed from the all-time board on open; topple
+      pays the RIVAL TOPPLED trophy (38 on the wall) (session 54)
+- [x] **Percentile on the carve**: boardPct(top, floor, kills) → postScore
+      toasts "deeper than N% of the board" (≥50) or "the board's midpoint
+      is floor N — climb" (below); pure client math (session 54)
 - [ ] **Duel links**: a CHALLENGE button on the run-over screen builds
       ?duel=<seed36>.<floor>.<name> onto the play URL (clipboard/share like
       the share card). Opening one plants the seed, banners "NAME reached

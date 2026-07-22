@@ -2877,7 +2877,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
 {
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.ACH.length, 37, 'thirty-seven trophies on the wall');
+  t.eq(D.ACH.length, 38, 'thirty-eight trophies on the wall');
   t.ok(D.ACH.every(a => a.id && a.icon && a.name && a.desc), 'every trophy is fully engraved');
   t.eq(new Set(D.ACH.map(a => a.id)).size, D.ACH.length, 'no duplicate trophy ids');
   D.srand(31);
@@ -4944,6 +4944,61 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(R.S.run.hero, 'alch', 'still the alchemist after a reload');
   t.eq(R.S.run.brew, 7, 'the half-full still survives');
   t.eq(R.S.run.reagents, 2, 'reagents too');
+}
+
+// -------- THE RIVALRY + the percentile carve --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  // boardPct: pure math over a board
+  const top = [
+    { name: 'A', floor: 20, kills: 9 }, { name: 'B', floor: 15, kills: 30 },
+    { name: 'C', floor: 15, kills: 10 }, { name: 'D', floor: 9, kills: 2 },
+    { name: 'E', floor: 4, kills: 1 },
+  ];
+  t.eq(D.boardPct(top, 15, 30).pct, 80, 'floor 15/30 kills sits above 80% of five');
+  t.eq(D.boardPct(top, 15, 30).deeper, 1, 'only the floor-20 run digs deeper');
+  t.eq(D.boardPct(top, 2, 0).pct, 0, 'a floor-2 run beats nobody');
+  t.eq(D.boardPct(top, 99, 0).pct, 100, 'the new king beats everybody');
+  t.eq(D.boardPct(top, 9, 2).median, 15, 'the midpoint reads the median floor');
+  t.eq(D.boardPct([], 5, 0), null, 'an empty board says nothing');
+  // the rivalry: endRun scores every run against the marked name
+  D.S.rival = { name: 'Rox', floor: 8, kills: 40 };
+  D.srand(61); D.newRun('knight');
+  D.S.run.floor = 5;
+  D.endRun('fell');
+  t.eq(D.S.over.rivalGap, 3, 'three floors short of the rival');
+  t.ok(!D.S.ach.u.topple, 'no trophy for falling short');
+  D.srand(62); D.newRun('knight');
+  D.S.run.floor = 8;
+  D.endRun('fell');
+  t.eq(D.S.over.rivalGap, 0, 'a matched floor reads as a tie');
+  D.srand(63); D.newRun('knight');
+  D.S.run.floor = 9;
+  D.endRun('fell');
+  t.eq(D.S.over.toppled, 'Rox', 'floor 9 topples the floor-8 rival');
+  t.ok(D.S.ach.u.topple, 'RIVAL TOPPLED hangs on the wall');
+  // no rival marked → no verdict fields at all
+  D.S.rival = { name: '', floor: 0, kills: 0 };
+  D.srand(64); D.newRun('knight');
+  D.S.run.floor = 9;
+  D.endRun('fell');
+  t.ok(D.S.over.toppled === undefined && D.S.over.rivalGap === undefined,
+    'no rival, no verdict');
+  // the mark survives a reload
+  D.S.rival = { name: 'Thieu', floor: 12, kills: 7 };
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.rival.name, 'Thieu', 'the rivalry survives a reload');
+  t.eq(R.S.rival.floor, 12, 'with the floor to beat');
+  // the browser-side wiring is in the source
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('is your RIVAL — out-dig floor ') >= 0, 'tapping a board row marks the rival');
+  t.ok(src.indexOf("'the rivalry is buried'") >= 0, 'tapping again buries it');
+  t.ok(src.indexOf('deeper than ' + "' + p.pct + '" + '% of the board') >= 0, 'the carve toasts its percentile');
+  t.ok(src.indexOf('rival: ' + "' + S.rival.name + '" + ' — floor ') >= 0, 'the title carries the rivalry');
+  t.ok(src.indexOf('TOPPLED — deeper than ') >= 0, 'the report card crows the topple');
 }
 
 t.done();
