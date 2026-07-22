@@ -4038,4 +4038,82 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('SND.door();') >= 0, 'the door thunk was already on the hinge');
 }
 
+// -------- THE BALANCE PROBE: acts 3-5 threat curve, measured --------
+// A cheap analytic sweep over the REAL scaling code: for each floor it takes
+// the live roster's mean statline, runs it through mkEnemy's own multipliers,
+// and divides by a fixed midline offense model (calibrated once at floor 1).
+// The absolute numbers are arbitrary; the CURVE is what the rails guard —
+// act hand-offs may sting but never wall, and NG+ floor 1 lands near the
+// act-2 gate, not past it.
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  D.srand(4242); D.newRun('knight');
+  DS.run.bside = 0;
+  const offense = (f) => 14 * (1 + 0.115 * (f - 1));   // midline player growth/floor
+  const threatAt = (f, ng) => {
+    DS.run.floor = f; DS.run.depth = 3; DS.run.ng = ng ? 1 : 0;
+    const roster = D.curRoster();
+    const hp = roster.reduce((a, e) => a + e.hp, 0) / roster.length;
+    const atk = roster.reduce((a, e) => a + e.atk, 0) / roster.length;
+    const m = D.scaleMult();
+    // rounds to clear × damage eaten per round, in midline units
+    return (hp * m / offense(f)) * (atk * m);
+  };
+  const curve = [];
+  for (let f = 13; f <= 21; f++) curve.push({ f, th: threatAt(f, false) });
+  DS.run.ng = 0;
+  console.log('# balance probe: ' + curve.map(c => c.f + ':' + c.th.toFixed(1)).join(' '));
+  // rail 1: the deep never gets EASIER floor over floor
+  for (let i = 1; i < curve.length; i++) {
+    t.ok(curve[i].th >= curve[i - 1].th * 0.98,
+         'floor ' + curve[i].f + ' never softens (' + curve[i - 1].th.toFixed(1) + ' -> ' + curve[i].th.toFixed(1) + ')');
+  }
+  // rail 2: the mint hand-off stings but never walls
+  const jump = curve.find(c => c.f === 16).th / curve.find(c => c.f === 15).th;
+  t.ok(jump >= 1.02 && jump <= 1.9, 'the act-4 hand-off is a sting, not a wall (×' + jump.toFixed(2) + ')');
+  // rail 3: NG+ floor 1 lands NEAR the plain act-2 gate. The PRESTIGE KIT
+  // (+3 gold coins, +1 potion, +20 gold at the door) is worth ~3 floors of
+  // midline growth, so the NG+ offense model starts at floor 4.
+  DS.run.floor = 1; DS.run.depth = 3; DS.run.ng = 1;
+  const ng1 = (() => {
+    const roster = D.curRoster();
+    const hp = roster.reduce((a, e) => a + e.hp, 0) / roster.length;
+    const atk = roster.reduce((a, e) => a + e.atk, 0) / roster.length;
+    const m = D.scaleMult();
+    return (hp * m / offense(4)) * (atk * m);
+  })();
+  const plain6 = threatAt(6, false);
+  DS.run.ng = 0;
+  console.log('# ng+ sting: ng1=' + ng1.toFixed(1) + ' vs plain6=' + plain6.toFixed(1));
+  t.ok(ng1 <= plain6 * 1.25 && ng1 >= plain6 * 0.5,
+       'NG+ floor 1 (with the prestige kit) lands near the act-2 gate (' + ng1.toFixed(1) + ' vs ' + plain6.toFixed(1) + ')');
+  // and the kit itself is real
+  {
+    const st2 = {};
+    const { DP: K } = loadGame(st2, false);
+    K.S.deep15.knight = 1;
+    K.srand(3); K.newRun('knight');
+    const plainCoin = K.S.run.purse.coin, plainPot = K.S.run.potions;
+    K.S.ngPick = true;
+    K.srand(3); K.newRun('knight');
+    t.eq(K.S.run.purse.coin, plainCoin + 3, 'the kit banks +3 gold coins');
+    t.eq(K.S.run.potions, plainPot + 1, 'and +1 potion');
+    t.eq(K.S.run.gold, 20, 'and 20 gold for the first shop');
+  }
+  // rail 4: the bosses climb in order, and THE AUDITOR crowns them sanely
+  const bossPow = (f) => {
+    DS.run.floor = f;
+    const b = D.mkEnemy('boss');
+    return b.hp * b.atk;
+  };
+  const bp = [5, 10, 15, 20].map(f => ({ f, p: bossPow(f) }));
+  console.log('# boss curve: ' + bp.map(x => x.f + ':' + x.p).join(' '));
+  for (let i = 1; i < bp.length; i++) {
+    t.ok(bp[i].p > bp[i - 1].p, 'the floor-' + bp[i].f + ' boss outguns the last');
+  }
+  t.ok(bp[3].p / bp[2].p >= 1.1 && bp[3].p / bp[2].p <= 2.6,
+       'THE AUDITOR crowns the curve without walling it (×' + (bp[3].p / bp[2].p).toFixed(2) + ')');
+}
+
 t.done();

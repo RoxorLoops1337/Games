@@ -795,20 +795,20 @@ const ENEMY_TIERS = [
   ],
   // ---- ACT 4 (floors 16-20): THE MINT — gilded constructs & counting-house horrors ----
   [
-    { id: 'mintguard',    icon: '\u{1F9CC}', name: 'Mint Guard',        hp: 72,  atk: 6, trait: 'leech',   def: 'armor', gold: 34 },
-    { id: 'coinshark',    icon: '\u{1F47A}', name: 'Coin Shark',        hp: 80,  atk: 7, trait: 'thief',   def: 'armor', gold: 44 },
-    { id: 'brassidol',    icon: '\u{1F5FF}', name: 'Brass Idol',        hp: 74,  atk: 7, trait: 'curse',   def: 'ward',  gold: 42 },
-    { id: 'slagcube',     icon: '\u{1F7E1}', name: 'Slag Cube',         hp: 60,  atk: 6, trait: 'venom',   def: 'gel',   gold: 38 },
-    { id: 'vaultwarden',  icon: '\u{1F480}', name: 'Vault Warden',      hp: 86,  atk: 8, trait: 'enrage',  def: 'armor', gold: 42 },
-    { id: 'tollwraith',   icon: '\u{1F9DF}', name: 'Toll Wraith',       hp: 76,  atk: 7, trait: 'leech',   def: 'regen', gold: 42 },
-    { id: 'bullionbrute', icon: '\u{1F479}', name: 'Bullion Brute',     hp: 130, atk: 9, trait: 'enrage',  def: 'thick', gold: 56 },
-    { id: 'giltripper',   icon: '\u{1F9DF}', name: 'Gilt Ripper',       hp: 78,  atk: 7, trait: 'bleeder', def: 'thick', gold: 44 },
-    { id: 'furnacetotem', icon: '\u{1F5FF}', name: 'Furnace Totem',     hp: 72,  atk: 7, trait: 'burner',  def: 'ward',  gold: 45 },
+    { id: 'mintguard',    icon: '\u{1F9CC}', name: 'Mint Guard',        hp: 79,  atk: 7, trait: 'leech',   def: 'armor', gold: 34 },
+    { id: 'coinshark',    icon: '\u{1F47A}', name: 'Coin Shark',        hp: 88,  atk: 8, trait: 'thief',   def: 'armor', gold: 44 },
+    { id: 'brassidol',    icon: '\u{1F5FF}', name: 'Brass Idol',        hp: 81,  atk: 8, trait: 'curse',   def: 'ward',  gold: 42 },
+    { id: 'slagcube',     icon: '\u{1F7E1}', name: 'Slag Cube',         hp: 66,  atk: 7, trait: 'venom',   def: 'gel',   gold: 38 },
+    { id: 'vaultwarden',  icon: '\u{1F480}', name: 'Vault Warden',      hp: 95,  atk: 9, trait: 'enrage',  def: 'armor', gold: 42 },
+    { id: 'tollwraith',   icon: '\u{1F9DF}', name: 'Toll Wraith',       hp: 84,  atk: 8, trait: 'leech',   def: 'regen', gold: 42 },
+    { id: 'bullionbrute', icon: '\u{1F479}', name: 'Bullion Brute',     hp: 143, atk: 10, trait: 'enrage',  def: 'thick', gold: 56 },
+    { id: 'giltripper',   icon: '\u{1F9DF}', name: 'Gilt Ripper',       hp: 86,  atk: 8, trait: 'bleeder', def: 'thick', gold: 44 },
+    { id: 'furnacetotem', icon: '\u{1F5FF}', name: 'Furnace Totem',     hp: 79,  atk: 8, trait: 'burner',  def: 'ward',  gold: 45 },
     // the counting-house tricksters: three traits minted just for this act
-    { id: 'lodestone',    icon: '\u{1F9F2}', name: 'Lodestone Sentinel', hp: 82, atk: 6, trait: 'magarmor', def: 'armor', gold: 44 },
-    { id: 'counterfeit',  icon: '\u{1FA99}', name: 'The Counterfeiter', hp: 78,  atk: 6, trait: 'coinclone', def: null,   gold: 46 },
-    { id: 'meterleech',   icon: '\u{1FAB1}', name: 'Meter Leech',       hp: 72,  atk: 6, trait: 'jackthief', def: null,   gold: 44 },
-    { id: 'mintgardener', icon: '\u{1FAA6}', name: 'Mint Gardener',     hp: 88,  atk: 7, trait: 'gardener', def: 'armor', gold: 52 },
+    { id: 'lodestone',    icon: '\u{1F9F2}', name: 'Lodestone Sentinel', hp: 90, atk: 7, trait: 'magarmor', def: 'armor', gold: 44 },
+    { id: 'counterfeit',  icon: '\u{1FA99}', name: 'The Counterfeiter', hp: 86,  atk: 7, trait: 'coinclone', def: null,   gold: 46 },
+    { id: 'meterleech',   icon: '\u{1FAB1}', name: 'Meter Leech',       hp: 79,  atk: 7, trait: 'jackthief', def: null,   gold: 44 },
+    { id: 'mintgardener', icon: '\u{1FAA6}', name: 'Mint Gardener',     hp: 97,  atk: 8, trait: 'gardener', def: 'armor', gold: 52 },
   ],
 ];
 // back-compat alias: the act-1 roster (tests and old references)
@@ -2073,7 +2073,7 @@ function scaleMult() {
   // per-act ramp + an act carry tuned so the hand-off to a new (stronger)
   // roster never softens the curve; past the last act the beyond term must
   // cover the whole in-act ramp alone (no fresh roster to lean on)
-  return (1 + 0.075 * (S.run.depth - 1) + 0.30 * fInAct + 0.50 * act + 0.7 * beyond) * dailyK();
+  return (1 + 0.075 * (S.run.depth - 1) + 0.30 * fInAct + 0.50 * act + 0.9 * beyond) * dailyK();
 }
 function enemyPool(depth) {
   // deeper rooms unlock the meaner half of THIS act's roster
@@ -3257,6 +3257,11 @@ function newRun(heroId, force) {
   };
   // the chosen adventurer's signature coins
   S.run.purse[hero.coin] += 2;
+  // the PRESTIGE KIT: NG+ fields act-2 kin from the first door, so the
+  // veteran walks in with ~three floors of growth already banked
+  // (measured by the balance probe: without it, floor 1 lands x1.6 past
+  // the act-2 gate; with it, just alongside)
+  if (ng) { S.run.purse.coin += 3; S.run.potions += 1; S.run.gold += 20; }
   // the RAT KING trades his arsenal for a starting swarm
   if (hero.id === 'rat') {
     S.run.arsenal = {};

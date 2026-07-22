@@ -211,9 +211,12 @@ it, and whether a great run can leave the phone. Ordered by impact ÷ effort.
 - [x] **The aim ghost**: pulsing dashed landing ring + falling chevron on the
       platform, sized to a real coin at that depth; hidden for the claw and the
       poltergeist (session 37)
-- [ ] **Act 4 balance sweep**: headless win-rate probe with midline builds across
-      floors 14-21; tune mint statlines / the Auditor / NG+ floor-1 sting from
-      the numbers, not vibes (probe lands in the test suite as a report)
+- [x] **Act 4 balance sweep**: analytic threat probe over the REAL scaling code
+      (floors 13-21 + NG+ + bosses) now lives in the suite with rails. It caught
+      three real faults: the mint hand-off SOFTENED (×0.88 → statlines +10% hp,
+      +1 atk → ×1.11 sting), floor 21 dipped (beyond-term 0.7 → 0.9), and NG+
+      floor 1 ran ×1.58 hot (new PRESTIGE KIT: +3 gold coins, +1 potion,
+      +20 gold). The Auditor measured ×1.95 over the Pit Boss — kept (session 38)
 - [ ] **Seed sharing**: every run stamps its seed on the report card; a SEEDED RUN
       door on the title (name-pad entry) reproduces the dungeon — race a friend
 - [ ] **Share-a-run card** [big]: victory/death → a rendered trophy-card PNG
