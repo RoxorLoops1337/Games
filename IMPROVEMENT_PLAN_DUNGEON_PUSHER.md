@@ -328,6 +328,74 @@ it every day, and moments worth showing someone. Ordered by impact ÷ effort.
       milestone chests, weeklies, floors past the ledger, and a DECREE WALL
       that unveils each law only once endured (session 52)
 
+## Tier 9 — rivals & the second month (authored session 54)
+
+Tier 8 built the daily pull. This tier is about PEOPLE — a name to chase,
+a link to send, a reason the game still surprises in week five. Everything
+stays in the one-file architecture; server touches are marked. Ordered by
+impact ÷ effort.
+
+- [ ] **Mark your rival**: tap any DEEP BOARD row → ⚔ MARK RIVAL. The title
+      then carries "rival: NAME — floor N (you: M)" and the run-over screen
+      scores every run against them ("3 floors short of NAME" / "RIVAL
+      TOPPLED ⚔"). Local only (S.rival {name, floor, kills}), refreshed
+      from the board on open; topple pays a trophy (38)
+- [ ] **Percentile on the carve**: after postScore lands, toast "deeper than
+      N% of the board" (computed from the returned top array — zero server
+      work); below-median gets "the board's midpoint is floor N" instead
+- [ ] **Duel links**: a CHALLENGE button on the run-over screen builds
+      ?duel=<seed36>.<floor>.<name> onto the play URL (clipboard/share like
+      the share card). Opening one plants the seed, banners "NAME reached
+      FLOOR N on this maze — outdig them", and the end screen declares the
+      duel's outcome. Pure client: parse location.search at boot
+- [ ] **Welcome-back crate**: away 7+ days (streak.last vs today) → a one-time
+      crate on the title: cogs = 8×days-missed (cap 120) + a free rare-relic
+      pick armed for the next run; copy warm, never guilt-tripping
+- [ ] **Title marquee**: one rotating line under the hero picker cycling the
+      most compelling personal hook: streak bonus running out, rival's floor,
+      codex gaps ("2 mint foes unmet"), yesterday's deepest, seed of the day —
+      a tiny reason engine, priority-ordered, one line per visit
+- [ ] **Ghost pace**: your best descent stamps per-floor cumulative times
+      (S.best.pace[floor] = seconds); during a run the floor banner whispers
+      "+12s ahead of your best" / "8s behind" — racing yourself, no server
+- [ ] **Codex completion meters**: each codex tab shows FOUND N / M; 100% of
+      any bestiary act → gilded tab icon; 100% of everything → THE FULL
+      LEDGER trophy + the codex button turns gold on the title
+- [ ] **Hero mastery stars**: deep15 grows from flag to COUNT (migrate 1→1);
+      hero cards wear ★/★★/★★★ at 1/3/5 deep clears with that hero; three
+      stars on any hero → a MASTER'S MARK by their board-row icon (client
+      cosmetic only)
+- [ ] **The innkeeper's tales**: on the floor-transition curtain, ~1 in 3
+      descents drops a one-line tale or true tip (act-aware pool of 60+);
+      heard tales collect in a CODEX: TALES tab — month-two texture that
+      also teaches the deep systems
+- [ ] **Ledger of habits**: RECORDS book gains a HABITS row pair — favorite
+      coin (mastery fire counts exist), favorite draught (alch), most-slain
+      foe (codex kill counts), deadliest floor (deaths by floor, new tally)
+- [ ] **Trophy-wall share card**: buildShareCard variant: the 37-trophy wall
+      with earned tiles lit + "N / 37" banner — the brag image for group
+      chats; same toBlob/canShare plumbing as the run card
+- [ ] **Named champions**: past floor 5, each act's elite pool gains ONE
+      named variant ("GRUK THE UNPAID", boss-tier art tint, +1 trait, double
+      bounty + a guaranteed key); slaying each act's champion inks a codex
+      line; four champions → CHAMPION SLAYER trophy
+- [ ] **[server] Monthly board + the champion's plaque**: dungeon_board.js
+      adds 'dp:month:<YYYY-MM>' (one POST feeds all boards, 60-day TTL);
+      BOARD gains a THIS MONTH tab; on month-end the previous winner is
+      fetched once (?board=lastmonth) and the title wears "JULY'S DEEPEST:
+      NAME, floor N" for the whole next month
+- [ ] **[big] THE LEGEND DOOR (NG++)**: an NG+ deep clear unseals a second
+      prestige: actIdx +2, both prestige kits, decrees start at floor 11,
+      LEGEND ♛ on board rows (ng:2 in the post), one legend-only relic; the
+      balance probe MUST measure the floor-1 wall before shipping
+- [ ] **[big] THE GAUNTLET**: a seeded 5-floor sprint (weekOf seed, all
+      decrees on from floor 1, no shops) raced against the CLOCK; best time
+      in records + a GAUNTLET line on the share card; the door only opens
+      Fri-Sun to make it an event
+- [ ] **Anniversary gift**: the profile's first-run date (stamp it now for
+      everyone) pays a yearly birthday crate + a candle on the title that
+      day — the longest-loop hook in the game
+
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
