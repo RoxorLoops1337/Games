@@ -65,8 +65,11 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       (escort = reward), coin-eating slime, shrine of trades (HP↔gold)
 - [x] **Floor quests**: one optional job per floor (slay N / no-tilt win / bank N),
       posted under the floor title, pays a golden key or a relic (session 14)
-- [ ] **[big] Rat King hero** (design approved in chat): items become rats, rats
-      scurry on the pile jostling coins, swarm persists between battles, cheese heals
+- [x] **[big] Rat King hero**: no items — every item source recruits a rat (cap 8,
+      full swarm feasts +2 HP); the swarm persists across battles with its scars;
+      rats SCURRY laden pile lanes each round (painted dash animation); gems are
+      CHEESE (+3 HP swarm, every 3rd grows a 16-HP Dire Rat: 2 dmg + bleed);
+      jackpot rains a recruit; unseals at floor 8 (session 15)
 - [x] **Skull Gardener enemy**: act II (+ Grave Gardener act III) — SOWS skulls on
       its turn, and every skull left on the field SPROUTS a twin each round
       (crop capped at 6) (session 14)

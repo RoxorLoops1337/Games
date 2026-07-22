@@ -667,6 +667,7 @@ const HEROES = [
   // by SHAKING THE WORLD, and a keeper whose CLAW plucks the pile clean
   { id: 'ghost',  name: 'Poltergeist', icon: '\u{1F47B}', coin: 'lucky', perk: 'purse RAINS in • TILT ×2' },
   { id: 'crane',  name: 'Crane Keeper', icon: '\u{1F579}\u{FE0F}', coin: 'coin', perk: 'a real CLAW GAME ×2' },
+  { id: 'rat',    name: 'Rat King',     icon: '\u{1F400}', coin: 'green', perk: 'no items — only RATS' },
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
 // the Poltergeist is EARNED: it answers only to those who have carried a
@@ -676,6 +677,7 @@ const GHOST_UNLOCK_FLOOR = 20;
 // unseal as the profile earns its scars. Anyone who already ran a hero
 // keeps it (the casting ledger grandfathers them in).
 const HERO_LOCKS = {
+  rat:    { floor: 8,  txt: 'reach FLOOR 8' },
   crane:  { floor: 10, txt: 'reach FLOOR 10' },
   ghost:  { floor: GHOST_UNLOCK_FLOOR, txt: 'reach FLOOR ' + GHOST_UNLOCK_FLOOR },
 };
@@ -690,6 +692,49 @@ function heroUnlocked(id) {
 }
 // the Poltergeist's whole kit hangs off this one question
 function ghostRun() { return !!(S.run && S.run.hero === 'ghost'); }
+// ...and the Rat King's off this one: no items, only the SWARM
+function ratRun() { return !!(S.run && S.run.hero === 'rat'); }
+const RAT_CAP = 8;
+function mkRat(dire) {
+  return dire ? { iid: 'direrat', icon: '\u{1F400}', name: 'Dire Rat', hp: 16, maxHp: 16, dire: true }
+              : { iid: 'rat', icon: '\u{1F401}', name: 'Rat', hp: 8, maxHp: 8 };
+}
+// a new recruit scurries in (any item source feeds the swarm instead).
+// Mid-battle it joins the FIGHT (the victory sync writes it home);
+// in the crawl it joins the swarm roster directly.
+function ratRecruit(dire) {
+  if (!S.run || !S.run.swarm) return false;
+  const roster = S.battle ? S.pets : S.run.swarm;
+  if (roster.length >= RAT_CAP) {
+    // a full swarm shares the meal instead: +2 HP across the pack
+    for (const r of roster) r.hp = Math.min(r.maxHp, r.hp + 2);
+    floatAnchor('\u{1F400} the swarm feasts (+2 HP)', 'hero', '#c8a86a');
+    return false;
+  }
+  roster.push(mkRat(dire));
+  floatAnchor(dire ? '\u{1F400} a DIRE RAT rises!' : '\u{1F401} a rat joins the swarm!', 'hero', '#c8a86a', dire);
+  return true;
+}
+// the swarm SCURRIES across the pile between rounds, jostling the coins —
+// the king's rats do his tilting for him
+function ratScurry() {
+  if (!ratRun() || !S.battle) return;
+  const n = Math.min(3, S.pets.filter(p => p.hp > 0).length);
+  if (!n) return;
+  S.scurryFx = [];
+  const plats = S.coins.filter(c => c.st === 'plat');
+  for (let i = 0; i < n; i++) {
+    // a rat runs where the coins ARE — it picks a laden lane
+    const laneY = plats.length ? plats[(rng() * plats.length) | 0].y : 18 + rng() * 58;
+    S.scurryFx.push({ y: laneY, t: 0, dir: rng() < 0.5 ? 1 : -1 });
+    for (const c of S.coins) {
+      if (c.st !== 'plat' || Math.abs(c.y - laneY) > 6) continue;
+      c.vy += 3 + rng() * 5;
+      c.vx += (rng() - 0.5) * 8;
+    }
+  }
+  floatAt('\u{1F401} the swarm SCURRIES the pile!', 50, '#c8a86a');
+}
 // ...and the Crane Keeper's off this one
 function craneRun() { return !!(S.run && S.run.hero === 'crane'); }
 // claw drops per round: two, plus one per act survived (capped at four —
@@ -747,6 +792,7 @@ const S = {
   hist: [],                                     // the last ten runs, newest first
   codex: { foes: {}, relics: {} },              // everything ever met or owned
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
+  scurryFx: [],                                 // rats mid-dash across the pile (visual)
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -806,6 +852,7 @@ function save() {
         mapFloor: S.run.mapFloor, stats: S.run.stats,
         daily: S.run.daily || null, dailyMod: S.run.dailyMod || null,
         quest: S.run.quest || null,
+        swarm: S.run.swarm || null, cheese: S.run.cheese || 0,
       } : null,
     }));
   } catch (e) {}
@@ -861,6 +908,7 @@ function load() {
         goldKeys: d.run.goldKeys || 0,
         daily: d.run.daily || null, dailyMod: d.run.dailyMod || null,
         quest: d.run.quest || null,
+        swarm: d.run.swarm || null, cheese: d.run.cheese || 0,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -1265,6 +1313,12 @@ function petsAct() {
           if (S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
         }
       }
+      else if (p.iid === 'direrat') {
+        if (S.enemy && S.enemy.hp > 0) {
+          dmgFoe(S.enemy, 2 * dmul);
+          if (S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
+        }
+      }
     }
   }
   if (!S.run || S.victory) return;
@@ -1388,6 +1442,17 @@ function scoreCoin(c, quiet) {
     return;
   }
   if (!S.battle) return;
+  // CHEESE! for the Rat King every gem is a feast: +3 HP across the
+  // swarm, and every third wheel a DIRE RAT rises from the crumbs
+  if (ratRun() && c.kind === 'gem' && !S.victory) {
+    for (const p of S.pets) if (p.hp > 0) p.hp = Math.min(p.maxHp, p.hp + 3);
+    S.run.cheese = (S.run.cheese || 0) + 1;
+    floatAnchor('\u{1F9C0} CHEESE! the swarm feeds', 'hero', '#ffd75e');
+    if (S.run.cheese % 3 === 0 && S.pets.length < RAT_CAP) {
+      S.pets.push(mkRat(true));
+      floatAnchor('\u{1F400} a DIRE RAT rises!', 'hero', '#ff9d3c', true);
+    }
+  }
   // a coin still ALIGHT from the dragon's breath sears the hand that takes it
   if (c.aflame && !S.victory) {
     S.pBurn = (S.pBurn || 0) + 2;
@@ -1429,6 +1494,12 @@ function openChest(c) {
 }
 function grantItem(iid, n) {
   if (!S.run || !itemById(iid)) return;
+  // the RAT KING owns no gear: every item that would reach his hands
+  // scurries into the swarm instead
+  if (ratRun()) {
+    for (let k = 0; k < (n || 1); k++) ratRecruit(false);
+    return;
+  }
   S.run.arsenal[iid] = (S.run.arsenal[iid] || 0) + (n || 1);
   // this floor's machine is already racked: the new gear drops in next fight
   if (S.run.pileFloor === S.run.floor) {
@@ -1450,6 +1521,11 @@ function frenzy() {
     for (const iid of Object.keys(S.run.arsenal)) {
       for (let k = 0; k < S.run.arsenal[iid]; k++) owned.push(iid);
     }
+  }
+  if (!owned.length && ratRun()) {
+    // the Rat King's jackpot rains a recruit instead of gear
+    ratRecruit(false);
+    return;
   }
   if (owned.length) {
     // ONE echo of your gear, CATAPULTED to a random spot on the board —
@@ -1833,6 +1909,13 @@ function startBattle(type, entIdx, eid, extras) {
   S.noTiltT = 0; S.leadT = 0; S.blackT = 0; S.rustT = 0;
   S.tempStr = 0; S.tempDex = 0;
   S.pets = [];
+  // the RAT KING's swarm pours onto the stage — the same rats every fight,
+  // scars and all; the ones that fall here fall forever
+  if (ratRun() && S.run.swarm) {
+    for (const r of S.run.swarm) {
+      S.pets.push({ iid: r.iid, icon: r.icon, name: r.name, hp: r.hp, maxHp: r.maxHp, dire: !!r.dire });
+    }
+  }
   // TWIN IDOLS: met alone, the idol splits into a bonded pair — fell them
   // in the same round or watch one raise the other
   if (S.foes.length === 1 && S.foes[0].trait === 'twin') {
@@ -1871,6 +1954,7 @@ function startBattle(type, entIdx, eid, extras) {
     S.run.pileFloor = S.run.floor;
   }
   bossArena();                            // round 1: the lord sets its stage
+  ratScurry();                            // ...and the swarm hits the pile
   // gear bought since the rack was set drops in now
   for (let i = 0; i < (S.run.pending || []).length; i++) {
     S.rain.push({ t: 0.3 + i * 0.25, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6,
@@ -2396,6 +2480,7 @@ function newRound() {
   }
   S.banner = { txt: 'ROUND ' + B.round, ttl: 1.3, max: 1.3 };
   bossArena();
+  ratScurry();
   save();
 }
 function battleTick(dt) {
@@ -2494,6 +2579,11 @@ function winBattle() {
   }
   // the dragon's embers cool the moment it falls
   for (const c of S.coins) c.aflame = false;
+  // the SWARM marches out with the king — survivors keep their wounds
+  if (ratRun() && S.run.swarm) {
+    S.run.swarm = S.pets.filter(p => p.hp > 0)
+      .map(p => ({ iid: p.iid, icon: p.icon, name: p.name, hp: p.hp, maxHp: p.maxHp, dire: !!p.dire }));
+  }
   // trophies earned in the heat of it
   if (!S.battle.tilted) questBump('notilt', 1);
   if (anyBoss) { achUnlock('boss1'); S.life.bosses++; }
@@ -2769,6 +2859,12 @@ function newRun(heroId, force) {
   };
   // the chosen adventurer's signature coins
   S.run.purse[hero.coin] += 2;
+  // the RAT KING trades his arsenal for a starting swarm
+  if (hero.id === 'rat') {
+    S.run.arsenal = {};
+    S.run.swarm = [mkRat(false), mkRat(false)];
+    S.run.cheese = 0;
+  }
   // the WORKSHOP's forever-upgrades bolt on
   S.run.maxHp += 5 * wsLvl('hp'); S.run.hp = S.run.maxHp;
   S.run.purse.coin += 2 * wsLvl('purse');
@@ -3657,6 +3753,7 @@ window.DP = {
   ACH, achUnlock, achPoll, achById, WORKSHOP, wsLvl, wsBuy, tiltCount,
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
+  ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
@@ -6039,7 +6136,11 @@ if (!HEADLESS) (function browser() {
       txt('×' + r.arsenal[iid], ax + 15, 798, '800 10px Verdana, sans-serif', '#d8c8dc', 'left');
       ax += 46;
     });
-    if (!ids.length) txt('arsenal empty — visit a shop!', 34, 796, '600 10px Verdana, sans-serif', '#8f6f78', 'left');
+    if (!ids.length) {
+      txt(ratRun() ? '\u{1F400} the SWARM: ' + ((S.run.swarm && S.run.swarm.length) || 0) + ' / 8 rats'
+                   : 'arsenal empty — visit a shop!',
+          34, 796, '600 10px Verdana, sans-serif', ratRun() ? '#c8a86a' : '#8f6f78', 'left');
+    }
     let hint;
     if (S.screen !== 'battle') {
       const rooms = r.map ? Object.keys(r.map.rooms) : [];
@@ -6200,6 +6301,29 @@ if (!HEADLESS) (function browser() {
     for (const c of offEdge) drawCoin(c, t);
     // the Crane Keeper's rig hangs over the pile during the drop phase
     if (craneRun() && (!S.battle || S.battle.phase === 'drop') && !S.victory) drawClaw(t);
+    // the Rat King's scurry: painted rats dash the pile lanes they just shook
+    if (S.scurryFx && S.scurryFx.length) {
+      const ra2 = itemArt('rat');
+      for (let i = S.scurryFx.length - 1; i >= 0; i--) {
+        const fx = S.scurryFx[i];
+        fx.t += dt;
+        if (fx.t > 1.1) { S.scurryFx.splice(i, 1); continue; }
+        const k2 = fx.t / 1.1;
+        const wx2 = fx.dir > 0 ? 4 + k2 * 92 : 96 - k2 * 92;
+        const p2 = w2s(wx2, fx.y, 2);
+        const hop = Math.abs(Math.sin(fx.t * 18)) * 4 * p2.u;
+        if (ra2) {
+          const hh = 13 * p2.u, ww = imW(ra2, hh);
+          ctx.save();
+          ctx.translate(p2.x, p2.y - hop);
+          if (fx.dir < 0) ctx.scale(-1, 1);
+          ctx.drawImage(ra2, -ww / 2, -hh, ww, hh);
+          ctx.restore();
+        } else {
+          txt('\u{1F401}', p2.x, p2.y - hop - 4, Math.round(10 * p2.u) + 'px serif', '#fff');
+        }
+      }
+    }
     drawGlass(t);
     drawMotes(dt, 1);
     drawParticles(dt);
