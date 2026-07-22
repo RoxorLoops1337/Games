@@ -41,12 +41,14 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       Keeper floor 10, others per achievement) with sealed-card teasers like the ghost
 - [ ] **Daily run**: seeded from the date, fixed hero + modifier, one attempt, its own
       leaderboard entry kind
-- [ ] **Stats screen (lifetime)**: totals across runs — coins fired, bosses slain,
-      favorite hero, best floor per hero
+- [x] **Stats screen (lifetime)**: 📊 RECORDS on the title — runs, kills, bosses,
+      coins fired, damage, gold, time in the deep, favorite hero, best descent
+      (S.life ledger fed by endRun/winBattle, persisted) (session 9)
 - [ ] **Bestiary/codex**: tap-a-foe card grows into a collection book — kill counts,
       lore line per enemy, silhouette until first met
 - [ ] **Relic codex**: all 137 relics browsable, owned/seen/undiscovered states
-- [ ] **Run history**: last 10 runs, one line each (hero, floor, cause of death)
+- [x] **Run history**: THE LAST RUNS in the records book — ten lines, newest first,
+      hero + floor + kills + cause of death (session 9)
 
 ## Tier 3 — gameplay depth
 

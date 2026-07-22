@@ -2895,4 +2895,34 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.ok(E.S.ach.heroes.knight === 1, 'so does the casting ledger');
 }
 
+// -------- the LIFETIME ledger + the HISTORY book --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  D.srand(77);
+  D.newRun('rogue');
+  Object.assign(D.S.run.stats, { fired: 120, dealt: 400, taken: 60, t: 300 });
+  D.S.run.kills = 9; D.S.run.goldEarned = 250;
+  D.hpHit(999, 'test doom');
+  t.eq(D.S.life.fired, 120, 'the ledger swallows the coins fired');
+  t.eq(D.S.life.kills, 9, '…and the kills');
+  t.eq(D.S.life.gold, 250, '…and the gold');
+  t.eq(D.S.life.heroRuns.rogue, 1, '…and notes who ran');
+  t.eq(D.S.hist.length, 1, 'one line in the history book');
+  t.eq(D.S.hist[0].cause, 'test doom', 'with the cause of death');
+  // ten lines max, newest first
+  for (let i = 0; i < 12; i++) {
+    D.newRun('knight');
+    D.S.run.floor = i + 2;
+    D.hpHit(999, 'again');
+  }
+  t.eq(D.S.hist.length, 10, 'the book keeps only ten tales');
+  t.eq(D.S.hist[0].floor, 13, 'newest first');
+  // persistence
+  const lifeKills = D.S.life.kills;
+  const { DP: E } = loadGame(store, false);
+  t.eq(E.S.life.kills, lifeKills, 'the ledger survives a reload');
+  t.eq(E.S.hist.length, 10, 'so does the history book');
+}
+
 t.done();
