@@ -5155,7 +5155,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
   t.ok(src.indexOf('txt(marqueeLine(new Date()') >= 0, 'the title draws the marquee');
   t.ok(src.indexOf("codexFull() ? { r: 10, font: '15px serif', grad:") >= 0, 'the codex button turns gold');
-  t.ok(src.indexOf("full ? '✦' + label : label") >= 0, 'finished shelves wear the star');
+  t.ok(src.indexOf("full ? '✦' + TR(label) : TR(label)") >= 0, 'finished shelves wear the star');
 }
 
 // -------- GHOST PACE + hero mastery stars --------
@@ -5460,7 +5460,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // browser wiring
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf("tabBtn(LW / 2 + 66, 'THIS MONTH', 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
+  t.ok(src.indexOf("tabBtn(LW / 2 + 66, TR('THIS MONTH'), 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
   t.ok(src.indexOf('?board=lastmonth') >= 0, 'the title asks for last month’s champion');
   t.ok(src.indexOf('’S DEEPEST: ') >= 0, 'and hangs the plaque');
   t.ok(src.indexOf('MAKE A WISH') >= 0, 'the birthday crate waits for its day');
@@ -6209,6 +6209,132 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
   t.ok(src.indexOf("'+' + S.toastQ.length") >= 0, 'the queued count rides the toast');
   t.ok(src.indexOf('toastTick(dt);') >= 0, 'the browser loop uses the shared ticker');
+}
+
+// -------- TIER 11: the NL catch-up — tiers 7-10 chrome speaks Dutch --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const nl = D.LANGS.nl;
+  t.ok(Object.keys(nl).length >= 100, 'the NL table covers 100+ strings (' + Object.keys(nl).length + ')');
+  t.ok(Object.values(nl).every(v => typeof v === 'string' && v.length > 0), 'still no empty NL entries');
+  D.setLang('nl');
+  t.eq(D.TR('CONTINUE ▶'), 'VERDER ▶', 'the victory door speaks Dutch');
+  t.eq(D.TR('DESCEND ▼'), 'DAAL AF ▼', 'so does the boss stair');
+  t.eq(D.TR('YES'), 'JA', 'the confirm sheet defaults translate');
+  t.eq(D.TR('CANCEL'), 'ANNULEER', 'both of them');
+  t.eq(D.TR('TAKE THE LAW'), 'AANVAARD DE WET', 'the weekly decree button translates');
+  t.eq(D.TR('THE BOOK'), 'HET BOEK', 'the records tabs translate');
+  t.eq(D.TR('TALES'), 'VERHALEN', 'the codex tales shelf translates');
+  t.eq(D.TR('THIS MONTH'), 'DEZE MAAND', 'the monthly board tab translates');
+  t.eq(D.TR('\u{1F4C5} DAILY'), '\u{1F4C5} DAGRUN', 'the daily chip translates');
+  t.eq(D.TR('\u{1F381} STAKE'), '\u{1F381} INZET', 'the gift stake translates');
+  t.eq(D.TR('Abandon the current run?'), 'De huidige run opgeven?', 'static confirm messages translate');
+  t.eq(D.TR('ON'), 'AAN', 'the settings toggles translate');
+  t.eq(D.TR('\u{1F9FF} toll prepaid: '), '\u{1F9FF} tol vooruitbetaald: ', 'the tollkeeper gauge translates');
+  t.eq(D.TR('\u{1F4C5} THE DAILY — Knight'), '\u{1F4C5} THE DAILY — Knight', 'dynamic confirm titles fall through untouched');
+  // the call sites are truly wrapped (source proof, escaped emoji forms)
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  for (const site of [
+    "TR('SKIP ▼') : TR('DESCEND ▼')",
+    "TR('GOT IT ▶')",
+    "TR(c.yesLabel || 'YES')",
+    "TR(c.noLabel || 'CANCEL')",
+    "txt(TR(c.msg)",
+    "full ? '✦' + TR(label) : TR(label)",
+    "82, 30, TR(label)",
+    "TR('THIS MONTH'), 'monthly'",
+    "TR(spent ? '\\u{1F4C5} done!' : '\\u{1F4C5} DAILY')",
+    "TR(S.weeklyPick ? '\\u{2696}\\u{FE0F} DECREE ON' : '\\u{2696}\\u{FE0F} THIS WEEK')",
+    "TR('\\u{1F331} TODAY\\u2019S MAZE')",
+    "TR('\\u{1F3C5} CARVE IT')",
+    "TR('\\u{1F381} STAKE')",
+    "TR(val ? 'ON' : 'OFF')",
+    "TR('\\u{1F9FF} toll prepaid: ')",
+  ]) t.ok(src.indexOf(site) >= 0, 'chrome site wrapped: ' + site.slice(0, 44));
+  // the s29 lesson, enforced: the LANGS table itself never calls TR()
+  const table = src.slice(src.indexOf('const LANGS = {'), src.indexOf("let LANG = 'en';"));
+  t.ok(table.length > 2000 && table.indexOf('TR(') < 0, 'no LANGS key is wrapped in TR()');
+}
+
+// -------- TIER 11: keyboard reach — TAB/ESC drive every sheet, live --------
+{
+  const st = {};
+  const { DP: K, raf } = loadGame(st, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < (n || 2); i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  const labels = () => K.kb.buttons().map(b => b.label).filter(Boolean);
+  const seen = (frag) => labels().some(l => l.indexOf(frag) >= 0);
+  const press = (label, exact) => {
+    const b = K.kb.buttons().find(b2 => b2.label && (exact ? b2.label === label : b2.label.indexOf(label) >= 0));
+    if (!b) return false;
+    b.cb(); frames(2); return true;
+  };
+  frames(6);
+  t.ok(K.kb && K.kb.targets().length > 0, 'the title offers ring targets');
+  // trophy hall: reach, then ESC out
+  t.ok(press('\u{1F3C6}', true), 'the trophy chip is a ringable button');
+  t.ok(seen('CLOSE ✕'), 'the trophy hall opened');
+  t.ok(!K.kb.targets().some(i => K.kb.buttons()[i].label === '\u{1F4CA}'),
+       'the ring cannot reach title chips through an open sheet');
+  K.kb.back(); frames(2);
+  t.ok(!seen('CLOSE ✕'), 'ESC leaves the trophy hall');
+  // records: every tab reachable, ESC out
+  t.ok(press('\u{1F4CA}', true), 'the records chip rings');
+  for (const tab of ['THE BOOK', 'DEEP', 'HABITS', 'LEGACY']) {
+    t.ok(press(tab), 'records tab reachable: ' + tab);
+    t.ok(seen('CLOSE ✕'), 'and the sheet stands: ' + tab);
+  }
+  K.kb.back(); frames(2);
+  t.ok(!seen('CLOSE ✕'), 'ESC leaves the records');
+  // codex: the tales shelf included
+  t.ok(press('\u{1F4D6}', true), 'the codex chip rings');
+  t.ok(press('TALES'), 'the tales tab is reachable');
+  K.kb.back(); frames(2);
+  t.ok(!seen('CLOSE ✕'), 'ESC leaves the codex');
+  // the deep board (offline err path) + the name carver on top of it
+  t.ok(press('\u{1F3C5}', true), 'the board chip rings');
+  t.ok(seen('carve a name'), 'the board sheet stands (offline)');
+  t.ok(press('carve a name'), 'the carver door rings');
+  t.ok(seen('DONE ✓'), 'the name pad opened over the board');
+  K.kb.back(); frames(2);
+  t.ok(!seen('DONE ✓') && seen('carve a name'), 'ESC pops the pad but keeps the board');
+  K.kb.back(); frames(2);
+  t.ok(!seen('carve a name'), 'a second ESC leaves the board');
+  // the weekly confirm: modal ring holds only YES/NO, ESC pops it first
+  t.ok(press('THIS WEEK'), 'the weekly chip rings');
+  t.ok(seen('TAKE THE LAW'), 'the decree confirm stands');
+  const tg = K.kb.targets();
+  t.ok(tg.length === 2 && tg.every(i => ['TAKE THE LAW', 'CANCEL'].indexOf(K.kb.buttons()[i].label) >= 0),
+       'a confirm narrows the ring to its two buttons');
+  K.kb.cycle(1);
+  t.ok(K.kb.focus() >= 0, 'TAB rings the first of them');
+  while (K.kb.buttons()[K.kb.focus()].label !== 'CANCEL') K.kb.cycle(1);
+  K.kb.press(); frames(2);
+  t.ok(!seen('TAKE THE LAW'), 'ENTER on CANCEL dismisses the confirm');
+  t.eq(K.S.weeklyPick, false, 'and no law was taken');
+  // settings: reach and leave
+  t.ok(press('⚙', true), 'the settings gear rings');
+  t.ok(seen('CLOSE ✕'), 'the settings sheet stands');
+  K.kb.back(); frames(2);
+  t.ok(!seen('CLOSE ✕'), 'ESC leaves the settings');
+  // the wraps hold LIVE in Dutch: real buttons carry translated labels
+  K.S.lang = 'nl'; K.setLang('nl'); frames(2);
+  t.ok(seen('▶ DE KERKER IN'), 'the title door reads Dutch on the live canvas');
+  press('\u{1F4CA}', true);
+  t.ok(seen('HET BOEK'), 'the records tabs read Dutch live');
+  K.kb.back(); frames(2);
+  // ESC priority is source-ordered: the confirm closes before the sheets
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const kbBackBody = src.slice(src.indexOf('function kbBack()'), src.indexOf('function padTick'));
+  t.ok(kbBackBody.indexOf('if (S.confirm)') < kbBackBody.indexOf('if (SHARE)'),
+       'ESC pops the confirm before any sheet under it');
+  t.ok(kbBackBody.indexOf('if (NAMEPAD)') < kbBackBody.indexOf('if (S.confirm)'),
+       'but the name carver still goes first');
+  t.ok(/if \(b\.w >= LW && b\.h >= LH\) from = i \+ 1;/.test(src),
+       'the ring restarts after the topmost full-screen catcher');
 }
 
 t.done();

@@ -520,15 +520,22 @@ feel the game get SMOOTHER this tier, not just bigger.
       toastTick shared between sim and browser — the floor-22 decree +
       chest + skim pileup takes turns instead of silently overwriting
       (session 72)
-- [ ] **NL locale catch-up**: TR() covers ~73 sites but tiers 7-10 shipped
-      mostly untranslated (tabs, chips, confirms, the marquee, tales are
-      fine as-is — but UI CHROME must translate); sweep every uiBtn/label
-      since s29, add the ~60 missing LANGS.nl strings, and add a source
-      test asserting key new chrome goes through TR()
-- [ ] **Keyboard/gamepad reach audit**: TAB-ring and ESC must reach/leave
-      every sheet added since the kb pass: records tabs (endless/habits/
-      legacy), codex tales, board filter chips, the weekly/gauntlet
-      confirms, share overlays; fix the gaps, extend the kb test
+- [x] **NL locale catch-up**: ~50 new LANGS.nl strings + TR() wraps across
+      every tier 7-10 button — victory doors, foe card, chest/shop/confirm
+      buttons (msg + yes/no now flow through TR, dynamic titles fall
+      through), codex + records tab rails, THIS MONTH, title chips
+      (DAGRUN/DAGDOOLHOF/DEZE WEEK), CARVE/CARD/STAKE, ON/OFF toggles,
+      the tollkeeper gauge; table at 100+, source tests pin the wraps and
+      the s29 no-TR-in-LANGS rule; Playwright-verified live (session 73)
+- [x] **Keyboard/gamepad reach audit**: audited every sheet — all buttons
+      are uiBtns so the ring reaches them; TWO real gaps found and fixed:
+      ESC now pops the confirm FIRST (it draws topmost — before, it closed
+      the cloud sheet under a RESTORE confirm), and the ring is now
+      modal-aware (targets restart after the topmost full-screen catcher,
+      so TAB can't press title chips through an open sheet); new DP.kb
+      hook + live suite drives TAB/ENTER/ESC through trophies, records
+      tabs, codex tales, the board + name carver stack, the weekly
+      confirm, and settings — in English and Dutch (session 73)
 - [ ] **Hero win-rate sim harness**: a headless autopilot (greedy: fire at
       the biggest foe, drink at low HP, always descend) run N seeded runs
       per hero; report median floor per hero as a probe line; rail: no

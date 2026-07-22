@@ -184,6 +184,56 @@ const LANGS = {
     'TITLE': 'TITEL',
     '\u{1F392} BAG': '\u{1F392} TAS',
     'END TURN ▶': 'EINDE BEURT ▶',
+    // the tiers 7-10 catch-up (session 73): every button and tab since s29
+    'SKIP ▼': 'SLA OVER ▼',
+    'DESCEND ▼': 'DAAL AF ▼',
+    'SKIP ▶': 'SLA OVER ▶',
+    'CONTINUE ▶': 'VERDER ▶',
+    'GOT IT ▶': 'BEGREPEN ▶',
+    'TAKE IT': 'PAK HET',
+    'LEAVE IT': 'LAAT HET',
+    'LEAVE': 'VERTREK',
+    '\u{2694}\u{FE0F} GO': '\u{2694}\u{FE0F} GA',
+    '\u{1F4E4} CARD': '\u{1F4E4} KAART',
+    '\u{1F4E4} THE CARD': '\u{1F4E4} DE KAART',
+    'MINT': 'MUNT',
+    'COMMON': 'GEWOON',
+    'RARE': 'ZELDZAAM',
+    'EPIC': 'EPISCH',
+    'TALES': 'VERHALEN',
+    'THE BOOK': 'HET BOEK',
+    '\u{1F30C} DEEP': '\u{1F30C} DIEP',
+    '\u{1F3B2} HABITS': '\u{1F3B2} GEWOONTES',
+    '\u{1F4D6} LEGACY': '\u{1F4D6} ERFENIS',
+    'THIS MONTH': 'DEZE MAAND',
+    '(it lives on the real site — offline and local play can’t see it)':
+      '(het bord leeft op de echte site — offline of lokaal spel ziet het niet)',
+    'YES': 'JA',
+    'CANCEL': 'ANNULEER',
+    'UNLOCK': 'ONTGRENDEL',
+    'RESTORE': 'HERSTEL',
+    'ABANDON': 'GEEF OP',
+    'MAKE A WISH': 'DOE EEN WENS',
+    'TAKE THE CRATE': 'PAK DE KRAT',
+    'TAKE THE LAW': 'AANVAARD DE WET',
+    'RUN IT': 'START',
+    'RUN IT AGAIN': 'NOG EEN KEER',
+    'POST IT': 'PLAATS HET',
+    'Spend your LAST key?': 'Je LAATSTE sleutel gebruiken?',
+    'Abandon the current run?': 'De huidige run opgeven?',
+    '\u{1F381} WELCOME BACK': '\u{1F381} WELKOM TERUG',
+    '\u{1F4C5} POST THE DAILY?': '\u{1F4C5} DAGRUN PLAATSEN?',
+    '\u{1F4C5} done!': '\u{1F4C5} klaar!',
+    '\u{1F4C5} DAILY': '\u{1F4C5} DAGRUN',
+    '\u{1F331} TODAY\u2019S MAZE': '\u{1F331} DAGDOOLHOF',
+    '\u{2696}\u{FE0F} DECREE ON': '\u{2696}\u{FE0F} DECREET AAN',
+    '\u{2696}\u{FE0F} THIS WEEK': '\u{2696}\u{FE0F} DEZE WEEK',
+    '\u{1F4F2} INSTALL': '\u{1F4F2} INSTALLEER',
+    '\u{1F3C5} CARVE IT': '\u{1F3C5} KERF HET',
+    '\u{1F381} STAKE': '\u{1F381} INZET',
+    'ON': 'AAN',
+    'OFF': 'UIT',
+    '\u{1F9FF} toll prepaid: ': '\u{1F9FF} tol vooruitbetaald: ',
   },
 };
 let LANG = 'en';
@@ -6185,7 +6235,7 @@ if (!HEADLESS) (function browser() {
     // small buttons still pick the nearest)
     const hw = Math.max(w, 38), hh = Math.max(h, 38);
     uiButtons.push({ x: x - (hw - w) / 2, y: y - (hh - h) / 2, w: hw, h: hh,
-                     cb: () => { SND.tick(); cb(); } });
+                     label, cb: () => { SND.tick(); cb(); } });
     const r = opts.r || 12;
     // soft offset shade grounds every button (cheaper than shadowBlur)
     rr(x - 1, y + 2, w + 2, h + 2, r + 1);
@@ -7920,7 +7970,7 @@ if (!HEADLESS) (function browser() {
     if (r.goldKeys > 0) txt('\u{1F511} × ' + r.goldKeys, 190, 780, '900 12px Verdana, sans-serif', '#ffd75e', 'left');
     // potion button — or the specialist gauges in its place
     if (tollRun()) {
-      txt('\u{1F9FF} toll prepaid: ' + (r.tollPaid | 0) + ' / ' + stairToll(), 240, 762,
+      txt(TR('\u{1F9FF} toll prepaid: ') + (r.tollPaid | 0) + ' / ' + stairToll(), 240, 762,
           '900 12px Verdana, sans-serif', '#8fc8ff', 'left');
     } else if (alchRun()) {
       const rg = (r.reagents || 0) > 0 ? '  \u{1F4A0}+' + 2 * r.reagents : '';
@@ -8109,8 +8159,8 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW - 110, py - 18, 40, 34, '\u{1F4F7}', () => { PHOTO = true; achUnlock('shutterbug'); },
           { bg: 'rgba(24,14,26,0.9)', border: '#9a8aa0', r: 10, font: '15px serif' });
     const pulse = 1 + Math.sin(t * 5) * 0.03;
-    const label = v.boss ? (hasRelicOffer && !v.relicPicked ? 'SKIP ▼' : 'DESCEND ▼')
-                : hasCoinOffer && !v.picked ? 'SKIP ▶' : 'CONTINUE ▶';
+    const label = v.boss ? (hasRelicOffer && !v.relicPicked ? TR('SKIP ▼') : TR('DESCEND ▼'))
+                : hasCoinOffer && !v.picked ? TR('SKIP ▶') : TR('CONTINUE ▶');
     uiBtn(LW / 2 - 90 * pulse, py + ph - 62, 180 * pulse, 40, label, () => leaveBattle(),
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 15px Verdana, sans-serif', r: 14 });
   }
@@ -8414,7 +8464,7 @@ if (!HEADLESS) (function browser() {
       : 'a plain strike for ' + e.atk;
     txt('this turn: ' + plan, cx, yy, '700 10px Verdana, sans-serif', '#c8b8a0');
     const pulse = 1 + Math.sin(t * 5) * 0.03;
-    uiBtn(cx - 80 * pulse, cy + ch - 44, 160 * pulse, 34, 'GOT IT ▶', () => { S.foeInfo = null; },
+    uiBtn(cx - 80 * pulse, cy + ch - 44, 160 * pulse, 34, TR('GOT IT ▶'), () => { S.foeInfo = null; },
       { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
 
@@ -8975,9 +9025,16 @@ if (!HEADLESS) (function browser() {
   let kbFocus = -1;                  // index into uiButtons, -1 = free aim
   let kbScreen = S.screen;           // focus never outlives a screen change
   function kbTargets() {
-    // skip the huge backdrop catchers — only real buttons take the ring
-    const out = [];
+    // a full-screen catcher marks a modal sheet: only buttons drawn ON the
+    // topmost one take the ring (TAB can't press chips through a sheet).
+    // Elsewhere, skip the huge backdrop catchers — only real buttons ring.
+    let from = 0;
     for (let i = 0; i < uiButtons.length; i++) {
+      const b = uiButtons[i];
+      if (b.w >= LW && b.h >= LH) from = i + 1;
+    }
+    const out = [];
+    for (let i = from; i < uiButtons.length; i++) {
       const b = uiButtons[i];
       if (b.w * b.h < LW * LH * 0.45) out.push(i);
     }
@@ -9005,12 +9062,12 @@ if (!HEADLESS) (function browser() {
   function kbBack() {
     if (NAMEPAD) { NAMEPAD = null; return; }
     if (PHOTO) { PHOTO = false; return; }
+    if (S.confirm) { S.confirm = null; return; }   // draws topmost, closes first
     if (SHARE) { SHARE = null; return; }
     if (BOARD) { BOARD = null; return; }
     if (CLOUD) { CLOUD = null; return; }
     if (CREDITS) { CREDITS = false; return; }
     if (THEMES) { THEMES = false; return; }
-    if (S.confirm) { S.confirm = null; return; }
     if (S.foeInfo !== null) { S.foeInfo = null; return; }
     if (S.inv) { S.inv = null; return; }
     if (WHATSNEW) { if (WHATSNEW.auto) whatsNewSeen(); WHATSNEW = null; return; }
@@ -9021,6 +9078,12 @@ if (!HEADLESS) (function browser() {
     if (CODEX) { CODEX = null; return; }
     kbFocus = -1;                    // nothing open: drop the ring instead
   }
+  // the suite (and curious consoles) drive the ring through the same
+  // functions the key handler calls — plus a peek at the live buttons
+  if (window.DP) window.DP.kb = {
+    cycle: kbCycle, press: kbPress, back: kbBack, fire: kbFire,
+    targets: kbTargets, focus: () => kbFocus, buttons: () => uiButtons,
+  };
   // gamepad, polled each frame: stick/dpad move & aim, A fires/presses,
   // B backs out, LB/RB hop the ring
   const PAD = { prev: {} };
@@ -9863,9 +9926,9 @@ if (!HEADLESS) (function browser() {
       if (pza) { const hh = 74, ww = imW(pza, hh); ctx.drawImage(pza, LW / 2 - ww / 2, py + 62, ww, hh); }
       else txt(p.icon, LW / 2, py + 116, '900 46px Georgia, serif', '#ffe9a3');
       txt(p.label, LW / 2, py + 150, '900 16px Verdana, sans-serif', '#ffd75e');
-      uiBtn(56, py + ph - 58, (LW - 128) / 2, 40, 'TAKE IT', () => acceptPrize(),
+      uiBtn(56, py + ph - 58, (LW - 128) / 2, 40, TR('TAKE IT'), () => acceptPrize(),
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 12 });
-      uiBtn(LW / 2 + 8, py + ph - 58, (LW - 128) / 2, 40, 'LEAVE IT', () => denyPrize(),
+      uiBtn(LW / 2 + 8, py + ph - 58, (LW - 128) / 2, 40, TR('LEAVE IT'), () => denyPrize(),
             { bg: 'rgba(60,40,44,0.95)', border: '#a06a72', col: '#e8c8cc', font: '900 14px Verdana, sans-serif', r: 12 });
     } else if (isEvent && evDef) {
       // a stranger of the deep: flavor, two fateful buttons, then the tale
@@ -9898,7 +9961,7 @@ if (!HEADLESS) (function browser() {
         txt(ln, LW / 2, py + 70 + i * 20, '700 12px Verdana, sans-serif', '#e8dce8'));
     }
     if (!isForge && !isChest) {
-      uiBtn(LW / 2 - 90, py + ph - 52, 180, 38, 'LEAVE', () => closeModal(),
+      uiBtn(LW / 2 - 90, py + ph - 52, 180, 38, TR('LEAVE'), () => closeModal(),
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 13 });
     }
     if (S.uiFlash) {
@@ -9965,7 +10028,7 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
     });
     const done = INTRO.t > INTRO_LINES.length * 0.9 + 0.4;
-    uiBtn(LW / 2 - 80, 640, 160, 46, done ? '\u{2694}\u{FE0F} GO' : TR('SKIP ▸'), () => {
+    uiBtn(LW / 2 - 80, 640, 160, 46, done ? TR('\u{2694}\u{FE0F} GO') : TR('SKIP ▸'), () => {
       const then = INTRO && INTRO.then;
       INTRO = null;
       S.introSeen = true; save();
@@ -10030,7 +10093,7 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 - 70, by, 140, 40, TR('CLOSE ✕'), () => { TROPHIES = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
     // brag in one image: the whole wall as a share card
-    uiBtn(LW - 110, by + 4, 84, 32, '\u{1F4E4} CARD', () => {
+    uiBtn(LW - 110, by + 4, 84, 32, TR('\u{1F4E4} CARD'), () => {
       const cv = buildTrophyCard();
       if (cv) SHARE = { cv, fname: 'dungeon-pusher-trophies.png', text: 'my trophy wall — how full is yours?' };
     }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
@@ -10091,7 +10154,7 @@ if (!HEADLESS) (function browser() {
       const st = codexTabStat(id);
       cxGot += st.got; cxAll += st.all;
       const full = st.all > 0 && st.got >= st.all;   // a finished shelf turns gold
-      uiBtn(18 + i * tw, 66, tw - 4, 26, full ? '✦' + label : label, () => { CODEX.tab = id; CODEX.sel = null; },
+      uiBtn(18 + i * tw, 66, tw - 4, 26, full ? '✦' + TR(label) : TR(label), () => { CODEX.tab = id; CODEX.sel = null; },
             { grad: on ? ['#8a6a2a', '#5a4014'] : full ? ['#5a4a1a', '#38290f'] : ['#3a3440', '#262230'],
               border: on ? '#ffd75e' : full ? '#c8a86a' : '#55506a',
               col: on || full ? '#ffe9a3' : '#9a90a8',
@@ -10195,7 +10258,7 @@ if (!HEADLESS) (function browser() {
     txt('\u{1F4CA} RECORDS', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     [['book', 'THE BOOK'], ['deep', '\u{1F30C} DEEP'], ['habits', '\u{1F3B2} HABITS'], ['legacy', '\u{1F4D6} LEGACY']].forEach(([id, label], i) => {
       const on = RECORDS.tab === id;
-      uiBtn(LW / 2 - 168 + i * 86, 64, 82, 30, label, () => { RECORDS = { tab: id }; },
+      uiBtn(LW / 2 - 168 + i * 86, 64, 82, 30, TR(label), () => { RECORDS = { tab: id }; },
             { bg: on ? 'rgba(80,60,24,0.95)' : 'rgba(34,28,42,0.9)', border: on ? '#ffd75e' : '#55506a',
               col: on ? '#ffe9a3' : '#9a90a8', font: '900 9px Verdana, sans-serif', r: 10 });
     });
@@ -10441,13 +10504,13 @@ if (!HEADLESS) (function browser() {
     };
     tabBtn(LW / 2 - 184, TR('ALL-TIME'), 'alltime');
     tabBtn(LW / 2 - 59, TR('TODAY') + (BOARD.tab === 'daily' && BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
-    tabBtn(LW / 2 + 66, 'THIS MONTH', 'monthly');
+    tabBtn(LW / 2 + 66, TR('THIS MONTH'), 'monthly');
     if (BOARD.state === 'loading') {
       txt(TR('consulting the deep ledger') + '.'.repeat(1 + (Math.floor(t * 2) % 3)), LW / 2, py + 300,
           '700 13px Verdana, sans-serif', '#b8a8bc');
     } else if (BOARD.state === 'err') {
       txt(TR('the board is unreachable from here'), LW / 2, py + 290, '800 13px Verdana, sans-serif', '#ff9d3c');
-      txt('(it lives on the real site — offline and local play can’t see it)', LW / 2, py + 312,
+      txt(TR('(it lives on the real site — offline and local play can’t see it)'), LW / 2, py + 312,
           '600 10px Verdana, sans-serif', '#9a8aa0');
     } else if (!BOARD.top.length) {
       txt(TR('no descents carved here yet — be the first'), LW / 2, py + 300, '700 12px Verdana, sans-serif', '#b8a8bc');
@@ -11011,7 +11074,7 @@ if (!HEADLESS) (function browser() {
     // toggles
     const toggle = (y, label, val, cb) => {
       txt(label, 64, y + 15, '800 11px Verdana, sans-serif', '#c8a8b0', 'left');
-      uiBtn(LW - 64 - 92, y, 92, 30, val ? 'ON' : 'OFF', () => { cb(); save(); },
+      uiBtn(LW - 64 - 92, y, 92, 30, TR(val ? 'ON' : 'OFF'), () => { cb(); save(); },
             { grad: val ? ['#7ed6a0', '#3f9d5a'] : ['#5a4048', '#38282e'],
               border: val ? '#eaffef' : '#7a5a62', col: val ? '#123a24' : '#d8b8c0',
               font: '900 12px Verdana, sans-serif', r: 10 });
@@ -11033,7 +11096,7 @@ if (!HEADLESS) (function browser() {
     uiBtn(64, py + 438, half, 38, TR('☁ CLOUD SAVE'), () => {
       SETTINGS = false; CLOUD = { state: 'idle', msg: '' };
     }, { bg: 'rgba(34,44,66,0.95)', border: '#8fc8ff', col: '#d8ecff', font: '800 11px Verdana, sans-serif', r: 12 });
-    uiBtn(64 + half + 8, py + 438, half, 38, '\u{1F3AC} CREDITS', () => {
+    uiBtn(64 + half + 8, py + 438, half, 38, TR('\u{1F3AC} CREDITS'), () => {
       SETTINGS = false; CREDITS = true;
     }, { bg: 'rgba(44,34,50,0.95)', border: '#c8a8b0', col: '#f0dce2', font: '800 11px Verdana, sans-serif', r: 12 });
     txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 500, '700 10px Verdana, sans-serif', '#9a8aa0');
@@ -11053,13 +11116,13 @@ if (!HEADLESS) (function browser() {
     rr(46, py, LW - 92, ph, 16);
     ctx.fillStyle = 'rgba(26,16,28,0.98)'; ctx.fill();
     ctx.lineWidth = 2.5; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
-    txt(c.msg, LW / 2, py + 44, '900 16px Verdana, sans-serif', '#ffe9a3');
+    txt(TR(c.msg), LW / 2, py + 44, '900 16px Verdana, sans-serif', '#ffe9a3');
     if (c.sub) wrapLines(c.sub, 44, 2).forEach((ln, i) =>
       txt(ln, LW / 2, py + 72 + i * 16, '600 11px Verdana, sans-serif', '#b8a8bc'));
-    uiBtn(64, py + ph - 60, (LW - 148) / 2, 42, c.yesLabel || 'YES', () => {
+    uiBtn(64, py + ph - 60, (LW - 148) / 2, 42, TR(c.yesLabel || 'YES'), () => {
       S.confirm = null; if (c.yes) c.yes();
     }, { grad: ['#a8433f', '#6e2320'], border: '#ffb0a8', col: '#ffe0dc', font: '900 13px Verdana, sans-serif', r: 12 });
-    uiBtn(LW / 2 + 10, py + ph - 60, (LW - 148) / 2, 42, c.noLabel || 'CANCEL', () => { S.confirm = null; },
+    uiBtn(LW / 2 + 10, py + ph - 60, (LW - 148) / 2, 42, TR(c.noLabel || 'CANCEL'), () => { S.confirm = null; },
           { bg: 'rgba(40,34,46,0.95)', border: '#9a8aa0', col: '#d8c8dc', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // the boot strip: a slim bar naming whichever art pack is still unpacking,
@@ -11426,7 +11489,7 @@ if (!HEADLESS) (function browser() {
     if (S.streak.days >= 2) {
       txt('\u{1F525}' + S.streak.days, 134, 70, '900 12px Verdana, sans-serif', '#ff9d3c', 'left');
     }
-    uiBtn(14, 54, 108, 32, spent ? '\u{1F4C5} done!' : '\u{1F4C5} DAILY', () => {
+    uiBtn(14, 54, 108, 32, TR(spent ? '\u{1F4C5} done!' : '\u{1F4C5} DAILY'), () => {
       if (spent) {
         toast(S.daily.best ? 'today’s daily: floor ' + S.daily.best.floor + ' — back tomorrow!'
                            : 'the daily is spent — back tomorrow!');
@@ -11442,14 +11505,14 @@ if (!HEADLESS) (function browser() {
          border: spent ? '#55506a' : '#8fc8ff', col: spent ? '#9a90a8' : '#d8ecff',
          font: '900 11px Verdana, sans-serif', r: 10 });
     // the skin rack, once a milestone opens anything beyond CLASSIC
-    uiBtn(14, 92, 108, 28, '\u{1F331} TODAY\u2019S MAZE', () => {
+    uiBtn(14, 92, 108, 28, TR('\u{1F331} TODAY\u2019S MAZE'), () => {
       plantToday(today);
       toast('today\u2019s maze is planted — NEW RUN grows it (no stakes)');
     }, { bg: 'rgba(40,52,40,0.95)', border: '#8ed67e', col: '#d8f0dc',
          font: '900 9px Verdana, sans-serif', r: 10 });
     // the WEEKLY DECREE door: one law all week, opt in and out freely
     const wk = weeklyPlan(today);
-    uiBtn(14, 126, 108, 28, S.weeklyPick ? '\u{2696}\u{FE0F} DECREE ON' : '\u{2696}\u{FE0F} THIS WEEK', () => {
+    uiBtn(14, 126, 108, 28, TR(S.weeklyPick ? '\u{2696}\u{FE0F} DECREE ON' : '\u{2696}\u{FE0F} THIS WEEK'), () => {
       if (S.weeklyPick) { S.weeklyPick = false; save(); toast('the decree is set aside'); return; }
       S.confirm = {
         msg: '\u{2696}\u{FE0F} THIS WEEK: ' + wk.decree.name,
@@ -11484,7 +11547,7 @@ if (!HEADLESS) (function browser() {
     }
     // the pocket-install chip: only appears when the browser made the offer
     if (installEvt) {
-      uiBtn(14, chipY, 108, 28, '\u{1F4F2} INSTALL', () => {
+      uiBtn(14, chipY, 108, 28, TR('\u{1F4F2} INSTALL'), () => {
         const ev = installEvt;
         installEvt = null;
         if (ev && ev.prompt) ev.prompt();
@@ -11567,17 +11630,17 @@ if (!HEADLESS) (function browser() {
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 17px Verdana, sans-serif', r: 16 });
     // carve the fallen run onto the deep board (once per run) + the card
     if (o.floor >= 1 && !o.posted) {
-      uiBtn(LW / 2 - 115, 748, 148, 34, '\u{1F3C5} CARVE IT', () => {
+      uiBtn(LW / 2 - 115, 748, 148, 34, TR('\u{1F3C5} CARVE IT'), () => {
         const send = () => { o.posted = true; postScore(o); };
         if (S.boardName) send();
         else NAMEPAD = { val: '', then: send };
       }, { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3',
            font: '900 11px Verdana, sans-serif', r: 10 });
-      uiBtn(LW / 2 + 41, 748, 74, 34, '\u{1F4E4} CARD', openShare,
+      uiBtn(LW / 2 + 41, 748, 74, 34, TR('\u{1F4E4} CARD'), openShare,
             { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
               font: '900 11px Verdana, sans-serif', r: 10 });
     } else {
-      uiBtn(LW / 2 - 55, 748, 110, 34, '\u{1F4E4} THE CARD', openShare,
+      uiBtn(LW / 2 - 55, 748, 110, 34, TR('\u{1F4E4} THE CARD'), openShare,
             { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff',
               font: '900 11px Verdana, sans-serif', r: 10 });
     }
@@ -11586,7 +11649,7 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 - 52, 700, 100, 38, '\u{2694}\u{FE0F} DUEL', () => shareDuel(o),
           { bg: 'rgba(60,26,30,0.92)', border: '#ff9d8a', col: '#ffd9d0',
             font: '900 12px Verdana, sans-serif', r: 12 });
-    uiBtn(LW / 2 + 56, 700, 100, 38, '\u{1F381} STAKE', () => shareGift(),
+    uiBtn(LW / 2 + 56, 700, 100, 38, TR('\u{1F381} STAKE'), () => shareGift(),
           { bg: 'rgba(30,52,36,0.92)', border: '#8ed67e', col: '#d8f0dc',
             font: '900 11px Verdana, sans-serif', r: 12 });
   }
