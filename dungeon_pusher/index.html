@@ -51,6 +51,14 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.0', notes: [
+    'REPLAY GHOST \u{2694}\u{FE0F} — duel links now carry the challenger\u2019s per-floor CLOCK; every staircase whispers how you run against THEIR pace, and REMATCH sends yours back',
+    'THE ALMANAC ❓ — the house rules read straight off the live tables: coins, foes, laws, heroes and the house arithmetic',
+    'an answered duel offers \u{2694}\u{FE0F} REMATCH; the deep board grew a LAST MONTH archive tab; the relic shelves grew a \u{1F50D} search lens',
+    'the deep breathes: standing decrees post ONE law at a time (with its rule), golden keys ride the key line, announcements queue instead of overwriting',
+    'balance, proven: a greedy autopilot now plays real runs per hero in the test suite; three strictly-worse relics (Vault, Barricade, Tithe) were leveled with their twins',
+    'the wall grows to 48 trophies, the whole tiers-7-10 UI speaks Dutch, and five taps on the version stamp hum \u{1F3BC} THE MOTIFS',
+  ] },
   { v: '1.6.0', notes: [
     'THE TOLLKEEPER 🧿 — a ninth hero who IS the economy: a fixed 14-coin hand refilled every battle, windfalls converted to gold at 2:1, and every BANKED piece prepays the stair toll. Unseals once the deep has skimmed 150 of your coins',
     'the machine fights back — GLASS JARS ride the bed (crack them in 3 for a spill) and BRASS PEGS rise past floor 21 to shoulder your coins aside',
@@ -1465,7 +1473,10 @@ function load() {
         weekly: d.run.weekly || null, week: d.run.week || null,
         brew: d.run.brew | 0, reagents: d.run.reagents | 0,
         duel: (d.run.duel && typeof d.run.duel === 'object')
-          ? { name: String(d.run.duel.name || '').slice(0, 12), floor: d.run.duel.floor | 0 } : null,
+          ? { name: String(d.run.duel.name || '').slice(0, 12), floor: d.run.duel.floor | 0,
+              pace: (d.run.duel.pace && typeof d.run.duel.pace === 'object')
+                ? Object.keys(d.run.duel.pace).reduce((o, k) => { o[k | 0] = d.run.duel.pace[k] | 0; return o; }, {})
+                : null } : null,
         pace: (d.run.pace && typeof d.run.pace === 'object') ? d.run.pace : {},
         deepInked: d.run.deepInked ? 1 : 0,
         gauntlet: d.run.gauntlet || null,
@@ -3658,9 +3669,20 @@ function weeklyFoeK() { return weeklyOn('parade') ? 1.2 : 1; }
 // ------------------------------------------------------------ DUEL LINKS
 // a run becomes a challenge URL: ?duel=<seed36>.<floor>.<name>. Opening one
 // plants the same maze and the end screen declares the outcome.
-function duelLink(seed, floor, name) {
+function duelLink(seed, floor, name, pace) {
+  let p = '';
+  if (pace) {
+    // the challenger's clock, floors 2..25: cumulative seconds in base36,
+    // dash-joined, stopping at the first gap — a bounded, human-short tail
+    const fl = [];
+    for (let f = 2; f <= 25; f++) {
+      if (pace[f] == null) break;
+      fl.push(Math.max(0, Math.min(999999, pace[f] | 0)).toString(36));
+    }
+    if (fl.length) p = '&p=' + fl.join('-');
+  }
   return '?duel=' + seed36(seed).toLowerCase() + '.' + Math.max(1, floor | 0) + '.'
-       + encodeURIComponent(String(name || 'a rival').slice(0, 12));
+       + encodeURIComponent(String(name || 'a rival').slice(0, 12)) + p;
 }
 function parseDuel(search) {
   const m = /[?&]duel=([a-z0-9]+)\.(\d+)\.([^&]+)/i.exec(String(search || ''));
@@ -3670,7 +3692,18 @@ function parseDuel(search) {
   const floor = Math.max(1, Math.min(999, +m[2] | 0));
   let name = 'a rival';
   try { name = decodeURIComponent(m[3]).replace(/[^\w \-.']/g, '').trim().slice(0, 12) || 'a rival'; } catch (e) {}
-  return { seed, floor, name };
+  // the optional clock: old links simply arrive without one
+  let pace = null;
+  const pm = /[?&]p=([0-9a-z-]+)/i.exec(String(search || ''));
+  if (pm) {
+    pace = {};
+    pm[1].split('-').slice(0, 24).forEach((s, i) => {
+      const v = parseInt(s, 36);
+      if (Number.isFinite(v) && v >= 0) pace[i + 2] = Math.min(999999, v);
+    });
+    if (!Object.keys(pace).length) pace = null;
+  }
+  return { seed, floor, name, pace };
 }
 // ------------------------------------------------ the CODEX completion math
 // one shelf's tally — bestiary acts count both boss rosters, relic shelves
@@ -4046,6 +4079,7 @@ function endRun(cause) {
     hero: S.run.hero, relics: S.run.relics.length,
     diff: S.run.diff || 'normal', muts: mutCount(),
     ng: S.run.ng || 0, seed: S.run.seed, daily: S.run.daily ? 1 : 0,
+    pace: S.run.pace || null,
     stats: st,
   };
   // COGS for the workshop: every run pays out, however it ends —
@@ -4535,8 +4569,14 @@ function nextFloor() {
   // GHOST PACE: stamp this door's clock and whisper it against your best
   if (!S.run.pace) S.run.pace = {};
   S.run.pace[S.run.floor] = Math.round((S.run.stats && S.run.stats.t) || 0);
-  const gp = S.best.pace && S.best.pace[S.run.floor];
-  if (gp != null && S.best.floor > 0) S.floorFx.pace = Math.round(gp - S.run.pace[S.run.floor]);
+  const dp = S.run.duel && S.run.duel.pace && S.run.duel.pace[S.run.floor];
+  if (dp != null) {
+    // a real person's clock outranks your own ghost on this maze
+    S.floorFx.duel = { name: S.run.duel.name, d: Math.round(dp - S.run.pace[S.run.floor]) };
+  } else {
+    const gp = S.best.pace && S.best.pace[S.run.floor];
+    if (gp != null && S.best.floor > 0) S.floorFx.pace = Math.round(gp - S.run.pace[S.run.floor]);
+  }
   // the INNKEEPER: roughly every third staircase, a line for the road
   // (rolled before genFloor reseeds — shared seeds stay identical mazes)
   if (rng() < 0.34) S.floorFx.tale = rollTale();
@@ -11339,8 +11379,13 @@ if (!HEADLESS) (function browser() {
         ctx.globalAlpha = Math.min(1, a * 1.4);
         txt(TR('FLOOR') + ' ' + f.floor, LW / 2, 380, '900 40px Georgia, serif', '#ffd75e', 'center', { w: 6, col: '#2a1030' });
         if (f.newAct) txt(theme().name, LW / 2, 424, '900 15px Georgia, serif', '#c8a8b0');
-        // the GHOST whispers how this descent runs against your best
-        if (f.pace != null) {
+        // the GHOST whispers how this descent runs against your best —
+        // unless a challenger's clock rides the run: then you race THEM
+        if (f.duel) {
+          txt(f.duel.d >= 0 ? '\u{2694}\u{FE0F} ' + f.duel.d + 's ahead of ' + f.duel.name
+                            : '\u{2694}\u{FE0F} ' + (-f.duel.d) + 's behind ' + f.duel.name,
+              LW / 2, f.newAct ? 450 : 424, '800 12px Verdana, sans-serif', f.duel.d >= 0 ? '#7ee787' : '#ff9d8a');
+        } else if (f.pace != null) {
           txt(f.pace >= 0 ? '\u{1F47B} ' + f.pace + 's ahead of your best' : '\u{1F47B} ' + (-f.pace) + 's behind your best',
               LW / 2, f.newAct ? 450 : 424, '800 12px Verdana, sans-serif', f.pace >= 0 ? '#7ee787' : '#ff9d8a');
         }
@@ -11819,7 +11864,7 @@ if (!HEADLESS) (function browser() {
     if (!o || o.seed == null) return;
     achUnlock('emissary');            // a challenge sent into the world
     if (o.duel) achUnlock('rematched');   // and this one answers an answer
-    const url = location.origin + location.pathname + duelLink(o.seed, o.floor, S.boardName || 'a rival');
+    const url = location.origin + location.pathname + duelLink(o.seed, o.floor, S.boardName || 'a rival', o.pace);
     if (navigator.share) {
       navigator.share({ title: 'Dungeon Pusher', text: o.duel
         ? '\u{2694}\u{FE0F} REMATCH — I answered ' + o.duel.name + '\u2019s floor ' + o.duel.floor + ' with floor ' + o.floor + '. Your dig.'

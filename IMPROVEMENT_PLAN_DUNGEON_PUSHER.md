@@ -509,6 +509,15 @@ Ordered by impact ÷ effort.
 
 ## Tier 11 — the deep breath (authored session 72)
 
+**TIER 11 SMALL ITEMS COMPLETE** (session 81): thirteen consolidation
+items across sessions 72-80 — the toast queue, the NL catch-up, the
+keyboard reach fixes (modal ring + confirm-first ESC), the hero
+win-rate sim harness, the relic reachability rails and dud pass, the
+deep-HUD declutter, THE ALMANAC, duel REMATCH, the LAST MONTH archive,
+the codex lens, the 32KB save rail, THE MOTIFS, and the wall at 48
+trophies. v1.7.0 ships with the first [big], REPLAY GHOST (session 81);
+THE FIFTH ACT and MACHINE LAYOUT II carry forward as the tier's tail.
+
 Ten tiers built a deep game fast. This tier consolidates: pay the polish
 debt the sprint left behind, prove the balance with simulation instead of
 faith, and only then add the two big swings. A player 50 runs in should
@@ -602,10 +611,13 @@ feel the game get SMOOTHER this tier, not just bigger.
       80-coin pile: 17509 bytes — comfortably under the 32KB rail now
       asserted forever. legacy(40)/hist(10) caps verified; nothing
       unbounded found, no trims needed (session 79)
-- [ ] **[big] REPLAY GHOST for duels**: a duel link optionally carries the
-      challenger's per-floor pace (&p=csv of seconds); during the run the
-      ghost-pace whisper compares against THEM instead of your best —
-      racing a real person's clock on the same maze
+- [x] **[big] REPLAY GHOST for duels**: duel links carry the challenger's
+      per-floor clock — &p= tail, base36 cumulative seconds, floors 2-25,
+      stops at the first gap, whole link under 200 chars; the staircase
+      whisper races THEM instead of your best ("⚔️ 20s ahead of Rox"),
+      plain links from the old world still open, the clock survives
+      save/load, and REMATCH sends YOUR pace back so the race is never
+      one-sided. Shipped with v1.7.0 (session 81)
 - [ ] **[big] THE FIFTH ACT — THE UNDERLAKE**: floors 21-25 stop being pure
       endless: a water-themed act (13 foes, drowned tricks: rust rain,
       coin-eating eels, a pressure gauge replacing darkness) with THE

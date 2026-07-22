@@ -6744,4 +6744,51 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(K.S.ach.u.emissary, 'and Emissary rides along');
 }
 
+// -------- TIER 11 [big]: REPLAY GHOST — a duel link carries the clock --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  t.eq(D.VERSION, '1.7.0', 'the consolidation tier ships as v1.7.0');
+  t.ok(D.CHANGELOG[0].notes.some(n => n.indexOf('REPLAY GHOST') >= 0), 'and the notes lead with the ghost');
+  // roundtrip: the clock rides in base36, floors 2 up
+  const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
+  t.ok(link.indexOf('&p=u-23-3m') >= 0, 'the pace tail is base36 and short (' + link + ')');
+  const back = D.parseDuel(link);
+  t.ok(back && back.seed === 123456 && back.floor === 9, 'the maze survives');
+  t.eq(JSON.stringify(back.pace), JSON.stringify({ 2: 30, 3: 75, 4: 130 }), 'and so does the clock');
+  // plain links still work, both directions
+  const plain = D.duelLink(123456, 9, 'Rox');
+  t.ok(plain.indexOf('&p=') < 0, 'no clock, no tail');
+  t.eq(D.parseDuel(plain).pace, null, 'and parse tolerates its absence');
+  t.ok(D.parseDuel('?duel=2n9c.5.Bob'), 'links from the old world still open');
+  // the tail is bounded: a 40-floor epic sends floors 2..25 only
+  const deep = {};
+  for (let f = 2; f <= 40; f++) deep[f] = f * 60;
+  const longLink = D.duelLink(99, 40, 'Deep', deep);
+  const parsed = D.parseDuel(longLink);
+  t.eq(Object.keys(parsed.pace).length, 24, 'the clock stops at floor 25');
+  t.ok(longLink.length < 200, 'the whole link stays sendable (' + longLink.length + ' chars)');
+  // a gap in the stamps ends the tail early (never misaligns floors)
+  const gappy = D.parseDuel(D.duelLink(99, 9, 'Gap', { 2: 10, 4: 50 }));
+  t.eq(JSON.stringify(gappy.pace), JSON.stringify({ 2: 10 }), 'the tail stops at the first gap');
+  // the staircase whisper races THEM, not your best
+  D.srand(6); D.newRun('knight');
+  D.S.run.duel = { name: 'Rox', floor: 9, pace: { 2: 50 } };
+  D.S.best.floor = 20; D.S.best.pace = { 2: 10 };          // a faster own-best lurks
+  D.S.run.stats.t = 30;
+  D.nextFloor();
+  t.ok(D.S.floorFx.duel && D.S.floorFx.duel.d === 20, 'the whisper reads 20s ahead of Rox');
+  t.ok(D.S.floorFx.pace == null, 'and the own-best ghost stands aside');
+  // the clock survives a save/load whole
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(JSON.stringify(R.S.run.duel.pace), JSON.stringify({ 2: 50 }), 'the challenger clock survives a reload');
+  // the over screen owns your clock, and REMATCH sends it back
+  R.S.run.pace = { 2: 33, 3: 80 };
+  R.endRun('test');
+  t.eq(JSON.stringify(R.S.over.pace), JSON.stringify({ 2: 33, 3: 80 }), 'the fallen run keeps its clock');
+  const re = R.duelLink(R.S.over.seed, R.S.over.floor, 'Me', R.S.over.pace);
+  t.ok(re.indexOf('&p=x-28') >= 0, 'the rematch carries YOUR pace back (' + re + ')');
+}
+
 t.done();
