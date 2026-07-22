@@ -490,11 +490,18 @@ Ordered by impact ÷ effort.
       pinned to y 30-55 / x 15-85 so the tray mouth stays clear; drawn as
       raised brass domes above the pile with cb outlines; announced once
       per run; perf 1.31ms/frame (session 70)
-- [ ] **[big] THE NINTH HERO — THE TOLLKEEPER**: plays the machine's own
-      agent: coins he banks pay DOWN a floor-toll meter instead of a purse
-      (no purse growth at all — a fixed 14-coin hand refills each battle);
-      unseals at lifetime 1,000 coins skimmed... design pass first, the
-      economy is the hero
+- [x] **[big] THE NINTH HERO — THE TOLLKEEPER** (design pass resolved +
+      shipped, session 71): DESIGN — (1) no purse growth: TOLL_KIT is a
+      fixed 14-coin hand (6c/4s/2g/2r) restored by tollRefill at newRun and
+      every battle start; any surplus (picks, pouches, wheel wads, bolt-ons)
+      converts to gold at the skim's own 2:1, so all coin-gain sites stay
+      untouched — one choke point; (2) the toll meter is PREPAID STAIRS:
+      every banked piece adds 1 to S.run.tollPaid (cap 30), the stairs
+      draw on it before the purse; (3) the purse cap never binds at 14 so
+      stairSkim is a no-op for him; (4) unseal at lifetime 150 coins
+      skimmed (1,000 was ~40 deep runs — too steep), tallied NOW in
+      stairSkim as S.life.skimmed so every player accrues; HUD shows
+      '🧿 toll prepaid N / toll' in the potion slot (session 71)
 - [x] **Board hygiene [server]**: posts stamp CLIENT_BOARD_V (clamped
       0-99 server-side); the first post of each week lazily snapshots
       dp:top to dp:top:bak:<monday> with a 35-day TTL — no cron, later
@@ -503,6 +510,13 @@ Ordered by impact ÷ effort.
 ## Done (this loop)
 
 - [x] Plan authored (session 1)
+- [x] **TIER 10 IS COMPLETE** (session 71): sixteen items across eight
+      sessions — the refine offer, four tier trophies, the gift stake,
+      board filters, the cb audit, pet names & veterancy, hero signature
+      quests, fourteen strangers, act motifs, THE LEGACY BOOK, four more
+      quests, the rookie contract, GLASS JARS, BRASS PEGS, board hygiene,
+      and THE TOLLKEEPER (v1.6.0 — nine heroes, 44 trophies, 2080 game
+      tests). Session 72 drafts Tier 11.
 - [x] **TIER 9 IS COMPLETE** (session 63): sixteen items + one owner-request
       across ten sessions — rivals and the percentile carve, duel links, the
       welcome-back crate, the marquee reason engine, ghost pace, codex

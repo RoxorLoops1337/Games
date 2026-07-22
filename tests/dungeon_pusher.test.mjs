@@ -123,8 +123,8 @@ t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_IN
      'every coin type is described');
 
 // -------- the eight adventurers and their signature coins --------
-t.ok(DP.HEROES.length === 8 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
-     'eight heroes, each with a signature coin');
+t.ok(DP.HEROES.length === 9 && DP.HEROES.every(h => h.id && h.name && h.perk && h.coin),
+     'nine heroes, each with a signature coin');
 DP.srand(41);
 DP.newRun('knight');
 t.eq(S.run.hero, 'knight', 'the knight answers the call');
@@ -4887,7 +4887,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 
   const store = {};
   const { DP: D } = loadGame(store, false);
-  t.eq(D.HEROES.length, 8, 'eight heroes on the bench');
+  t.eq(D.HEROES.length, 9, 'nine heroes on the bench');
   const al = D.heroById('alch');
   t.ok(al && /BREWS/.test(al.perk), 'the alchemist promises to brew');
   t.eq(D.ALCH_BREW_N, 12, 'twelve coins to a draught');
@@ -6098,6 +6098,78 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('function drawPegs(t)') >= 0, 'the pegs have their painter');
   t.ok(src.indexOf('BRASS PEGS rise from the bed') >= 0, 'and announce themselves once');
   t.ok(src.indexOf("CLIENT_BOARD_V = 2") >= 0, 'the client stamps its board version');
+}
+
+// -------- THE TOLLKEEPER: the ninth hero, the economy as a kit --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  const kitTotal = Object.values(D.TOLL_KIT).reduce((a, b) => a + b, 0);
+  t.eq(kitTotal, 14, 'the fixed kit holds fourteen coins');
+  // the seal: 150 coins skimmed, lifetime
+  t.ok(!D.heroUnlocked('toll'), 'sealed on a fresh profile');
+  t.eq(D.heroLockText('toll'), 'let the deep skim 150 coins', 'the seal names its price');
+  D.S.life.skimmed = 149;
+  t.ok(!D.heroUnlocked('toll'), '149 is not 150');
+  D.S.life.skimmed = 150;
+  t.ok(D.heroUnlocked('toll'), 'the deep has skimmed enough');
+  // the skim feeds the tally for everyone
+  D.srand(241); D.newRun('knight');
+  D.S.run.floor = 18;
+  D.S.run.purse = { coin: 40, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+  const sk0 = D.S.life.skimmed;
+  D.stairSkim();
+  t.eq(D.S.life.skimmed, sk0 + 8, 'every skimmed coin counts toward the seal');
+  // his kit: fixed hand, bolt-ons converted to gold at 2:1
+  D.S.ws.purse = 2;                          // +4 coins that he will NOT keep
+  D.srand(242); D.newRun('toll');
+  t.eq(D.S.run.hero, 'toll', 'the tollkeeper answers');
+  t.eq(D.purseTotal(), 14, 'his purse is the kit, nothing more');
+  t.eq(D.S.run.purse.silver, 4, 'four silver, as issued');
+  t.ok(D.S.run.gold >= 2, 'the surplus paid out as gold (' + D.S.run.gold + ')');
+  // gains melt at the next battle's refill
+  D.S.run.purse.lucky += 3;
+  const tg0 = D.S.run.gold;
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  t.eq(D.purseTotal(), 14, 'the battle refill resets the hand');
+  t.eq(D.S.run.purse.lucky, 0, 'windfall luckies melt');
+  t.eq(D.S.run.gold, tg0 + 6, 'at the skim’s honest 2:1');
+  // banking prepays the toll (lootKey is the kind for plain pieces)
+  D.S.battle.loot = [{ k: 'coin' }, { k: 'coin' }, { k: 'silver' }];
+  D.S.run.tollPaid = 0;
+  t.ok(D.bankLoot('coin'), 'a piece banks');
+  t.ok(D.bankLoot('silver'), 'and another');
+  t.eq(D.S.run.tollPaid, 2, 'every banked piece prepays the toll');
+  D.S.run.tollPaid = D.TOLL_PREPAY_CAP;
+  D.bankLoot('coin');
+  t.eq(D.S.run.tollPaid, D.TOLL_PREPAY_CAP, 'the meter caps at ' + D.TOLL_PREPAY_CAP);
+  D.S.run.tollPaid = 5;
+  D.S.screen = 'dungeon'; D.S.room = null; D.S.victory = null; D.S.enemy = null; D.S.foes = []; D.S.battle = null;
+  D.S.run.floor = 1;
+  const pt0 = D.purseTotal();
+  D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  D.interact(0);
+  t.eq(D.S.run.floor, 2, 'the prepaid stairs descend');
+  t.eq(D.S.run.tollPaid, 3, 'two of the five prepaid pieces spent');
+  t.eq(D.purseTotal(), pt0, 'the purse untouched');
+  // short prepay falls back to the purse
+  D.S.run.tollPaid = 0;
+  D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
+  D.interact(0);
+  t.eq(D.S.run.floor, 3, 'an empty meter still descends the honest way');
+  t.ok(D.purseTotal() < 14, 'paid from the hand this time');
+  // the prepaid meter rides the save
+  D.S.run.tollPaid = 7;
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(R.S.run.tollPaid, 7, 'the meter survives a reload');
+  t.eq(R.S.run.hero, 'toll', 'still the keeper');
+  // the wiring
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('toll prepaid: ') >= 0, 'the battle HUD shows the meter');
+  t.ok(src.indexOf('S.run.tollPaid = Math.min(TOLL_PREPAY_CAP') >= 0, 'banking feeds it, capped');
 }
 
 t.done();
