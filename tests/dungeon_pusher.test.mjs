@@ -6337,4 +6337,119 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
        'the ring restarts after the topmost full-screen catcher');
 }
 
+// -------- TIER 11: HERO WIN-RATE SIM — the greedy autopilot probe --------
+// A headless autopilot plays REAL runs through the real round machine:
+// each round it throws the whole hand and the tray catches a fixed share
+// (the machine treats every hero's coins the same, so a flat yield keeps
+// the comparison fair), drinks at low HP, takes the first offer, pays the
+// stair toll, always descends. Two fights and a boss per floor. The floor
+// each hero reaches is REAL: real kits, perks, relics, foes and scaling.
+// The absolute numbers are policy-flavored; the SPREAD is what the rail
+// guards — no hero's median may sink below 60% of the pack's.
+{
+  const SIM_SEEDS = [11, 23, 47, 61, 83];
+  const MAX_FLOOR = 14;                    // past the act-3 gate, cheap in CI
+  const YIELD = 0.55;                      // the tray's share of a thrown hand
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  const relicTally = {};                   // boss-spread offers, for the audit
+
+  const fight = (type) => {
+    if (!D.startBattle(type)) return false;
+    let rounds = 0;
+    while (S2.run && S2.battle && !S2.victory && rounds < 30) {
+      const B = S2.battle;
+      if (B.phase !== 'drop') { D.battleTick(0.4); continue; }
+      rounds++;
+      // the poltergeist and the crane keeper hold no hand — their purse
+      // pours in from above; the same flat yield keeps it apples-to-apples
+      const base = (D.ghostRun() || D.craneRun()) ? { ...S2.run.purse } : B.hand;
+      for (const k of D.COIN_KINDS) {
+        const n = Math.round((base[k] || 0) * YIELD);
+        for (let i = 0; i < n; i++) B.loot.push({ k });
+        if (base === B.hand) B.hand[k] = 0;
+      }
+      // the standing pile pays too: the round re-salt spills its share over
+      // the lip (real kind mix via rollPileKind), and one piece of owned
+      // gear rides the pile into the tray each round
+      const pile = Math.round(D.C.ROUND_RAIN * YIELD);
+      for (let i = 0; i < pile; i++) B.loot.push({ k: D.rollPileKind() });
+      const gear = Object.keys(S2.run.arsenal || {}).filter(iid => S2.run.arsenal[iid] > 0);
+      if (gear.length) B.loot.push({ k: 'item', iid: gear[rounds % gear.length] });
+      S2.rain.length = 0;                  // headless: nothing lands rain
+      if (S2.run.hp <= S2.run.maxHp * 0.35 && S2.run.potions > 0) D.usePotion();
+      D.endRoundNow();
+      let g = 600;
+      while (S2.run && S2.battle && S2.battle.phase !== 'drop' && !S2.victory && g--) D.battleTick(0.4);
+    }
+    if (!S2.run) return false;             // the run ended on a foe's swing
+    if (!S2.victory) { D.endRun('stalemate'); return false; }
+    const v = S2.victory;
+    if (v.relicOffer) {
+      for (const id of v.relicOffer) relicTally[id] = (relicTally[id] || 0) + 1;
+      if (!v.relicPicked) D.pickRelicOffer(0);
+    }
+    if (v.offer && !v.picked) D.pickCoin(0);
+    D.leaveBattle();
+    return !!S2.run;
+  };
+
+  const shopStop = () => {
+    // the innkeeper's till: a potion when the belt is light, then the best
+    // blade gold can buy — one piece a floor, like a real shop shelf
+    if (S2.run.potions < 2 && S2.run.gold >= 30) { S2.run.gold -= 30; S2.run.potions++; }
+    const forSale = D.ITEMS.filter(it => it.cost <= S2.run.gold).sort((a, b) => b.cost - a.cost);
+    if (forSale.length) { S2.run.gold -= forSale[0].cost; D.grantItem(forSale[0].id); }
+  };
+
+  const simRun = (heroId, seed) => {
+    D.srand(seed);
+    D.newRun(heroId);
+    S2.run.bside = 0;      // the boss roster flips per LIFETIME run — pin one side
+    while (S2.run && S2.run.floor <= MAX_FLOOR) {
+      const f = S2.run.floor;
+      S2.run.depth = 3;    // the midline room depth, same as the balance probe
+      if (!fight('battle') || !fight('battle') || !fight('boss')) break;
+      shopStop();
+      D.stairSkim();
+      if (!(D.tollRun() && (S2.run.tollPaid || 0) >= D.stairToll())) D.spendPurse(D.stairToll());
+      else S2.run.tollPaid -= D.stairToll();
+      D.nextFloor();
+      if (S2.run.floor === f) break;       // never loop in place
+    }
+    const reached = S2.run ? S2.run.floor : ((S2.over && S2.over.floor) || 1);
+    if (S2.run) D.endRun('probe done');
+    return reached;
+  };
+
+  const t0 = Date.now();
+  const med = {};
+  for (const h of D.HEROES) {
+    const floors = SIM_SEEDS.map(sd => simRun(h.id, sd)).sort((a, b) => a - b);
+    med[h.id] = floors[(floors.length / 2) | 0];
+  }
+  const heroIds = D.HEROES.map(h => h.id);
+  const packSorted = heroIds.map(h => med[h]).sort((a, b) => a - b);
+  const pack = packSorted[(packSorted.length / 2) | 0];
+  console.log('# hero sim: ' + heroIds.map(h => h + ':' + med[h]).join(' ')
+            + '  pack:' + pack + '  (' + SIM_SEEDS.length + ' seeds, greedy autopilot, '
+            + (Date.now() - t0) + 'ms)');
+  t.eq(heroIds.length, 9, 'all nine heroes take the autopilot out');
+  t.ok(Object.values(med).every(f => f >= 2), 'every hero clears at least a floor on autopilot');
+  for (const h of heroIds) {
+    t.ok(med[h] >= pack * 0.6,
+         h + ' keeps up with the pack (median ' + med[h] + ' vs pack ' + pack + ')');
+  }
+  t.ok(Date.now() - t0 < 20000, 'the whole probe stays under twenty seconds');
+  // determinism: the same hero and seed always walk the same run
+  t.eq(simRun('knight', SIM_SEEDS[0]), simRun('knight', SIM_SEEDS[0]), 'the autopilot is deterministic');
+  // the relic-audit groundwork: boss spreads were seen and tallied
+  const offered = Object.keys(relicTally).length;
+  const never = D.RELICS.filter(r => !relicTally[r.id]).length;
+  console.log('# relic offers: ' + offered + ' distinct relics offered across boss spreads, '
+            + never + ' never seen (buff pass reads this tally next)');
+  t.ok(offered >= 20, 'boss spreads sample a broad slice of the shelf (' + offered + ')');
+}
+
 t.done();

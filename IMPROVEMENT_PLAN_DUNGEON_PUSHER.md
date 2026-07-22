@@ -536,14 +536,21 @@ feel the game get SMOOTHER this tier, not just bigger.
       hook + live suite drives TAB/ENTER/ESC through trophies, records
       tabs, codex tales, the board + name carver stack, the weekly
       confirm, and settings — in English and Dutch (session 73)
-- [ ] **Hero win-rate sim harness**: a headless autopilot (greedy: fire at
-      the biggest foe, drink at low HP, always descend) run N seeded runs
-      per hero; report median floor per hero as a probe line; rail: no
-      hero's median below 60% of the pack's — data before any buffs
+- [x] **Hero win-rate sim harness**: a greedy autopilot plays REAL runs
+      through the real round machine (flat tray yield + pile share + one
+      gear piece a round, drinks low, first offer, shop stop, toll paid,
+      2 fights + boss a floor); probe line reports median floor per hero
+      over 5 seeds, rails: determinism, ≤20s, no median under 60% of the
+      pack. First data: knight/rogue/cleric/rat 6, ghost/crane/alch/toll
+      5, WIZARD 4 — the low outlier to watch, buff only if the next
+      session's relic audit agrees. Lesson: bside flips per lifetime run —
+      pin it in any sim (session 74)
 - [ ] **Relic pickup audit**: instrument rollRelicPool choices offered vs
       picked across the sim harness; list the 10 least-chosen relics in
       the probe output; buff or rework the 3 worst (data-driven, small
-      numeric touches only)
+      numeric touches only). Groundwork shipped with the sim harness
+      (s74): boss-spread offers are tallied (104 distinct seen, 44 never)
+      — extend the tally, then judge
 - [ ] **Late-HUD declutter**: at floor 25+ the battle screen carries meter,
       decree count, jar, pegs, prepaid toll, brew gauge, quest line, pace…
       — audit overlap at 480px, collapse the passive readouts into one
