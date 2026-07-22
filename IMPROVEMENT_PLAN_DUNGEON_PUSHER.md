@@ -20,9 +20,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       saved/loaded, itemized on the death screen (session 5)
 - [x] **Confirm dialogs**: generic confirm sheet; wired to abandoning a run and
       spending the last key (mid-battle exit has no UI path to guard) (session 3)
-- [ ] **Toast/float polish pass**: cap simultaneous floats, merge duplicates ("+1 ● ×6"),
-      ease-out motion so late-battle spam stays readable
-- [ ] **Number formatting**: 1.2k / 3.4M everywhere gold and scores print
+- [x] **Toast/float polish pass**: duplicates merge into ×N counters, stack capped
+      at 12 (oldest small float yields), ease-out drift (session 6)
+- [x] **Number formatting**: fmt() now goes compact past 10k (12.3k / 3.4M),
+      commas below — every gold/score print inherits it (session 6)
 - [ ] **HP bar juice**: chip-damage ghost trail, heal green pulse, low-HP heartbeat
       vignette at ≤25%
 - [ ] **Victory screen upgrade**: loot cascade animation into the sheet, relic pick

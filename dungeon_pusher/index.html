@@ -938,11 +938,30 @@ function tierFront(ti) { return MACH.tiers[ti].front; }
 // ---------------------------------------------------------- combat effects
 // floats can pin to a world x (the machine) or to a named screen anchor
 // ('enemy' | 'hero' | 'gold') — the browser maps anchors to screen spots
+// floats keep late-battle spam readable: a fresh duplicate MERGES into a
+// '×N' counter, and the stack is capped — the oldest small float yields
+const FLOAT_CAP = 12;
+function pushFloat(f) {
+  for (let i = S.floats.length - 1; i >= 0; i--) {
+    const o = S.floats[i];
+    if (o.txt === f.txt && o.anchor === f.anchor && o.age < 0.55 &&
+        (f.anchor || Math.abs((o.wx || 0) - (f.wx || 0)) < 12)) {
+      o.n = (o.n || 1) + 1;
+      o.age = Math.min(o.age, 0.15);
+      return;
+    }
+  }
+  if (S.floats.length >= FLOAT_CAP) {
+    const idx = S.floats.findIndex(o => !o.big);
+    S.floats.splice(idx >= 0 ? idx : 0, 1);
+  }
+  S.floats.push(f);
+}
 function floatAt(txt2, wx, col, big) {
-  S.floats.push({ txt: txt2, wx: wx === undefined ? 50 : wx, wy: 96, age: 0, max: 1.3, col: col || '#ffd24a', big: !!big });
+  pushFloat({ txt: txt2, wx: wx === undefined ? 50 : wx, wy: 96, age: 0, max: 1.3, col: col || '#ffd24a', big: !!big });
 }
 function floatAnchor(txt2, anchor, col, big) {
-  S.floats.push({ txt: txt2, anchor, age: 0, max: 1.2, col: col || '#ffd24a', big: !!big });
+  pushFloat({ txt: txt2, anchor, age: 0, max: 1.2, col: col || '#ffd24a', big: !!big });
 }
 // effective STRENGTH / DEXTERITY: the rare permanent stat plus this
 // battle's war paints
@@ -3327,7 +3346,7 @@ window.DP = {
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
   bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap, strTotal, dexTotal,
-  addGold, addCoins, weaponDmg, theme, scaleMult, bestify,
+  addGold, addCoins, weaponDmg, theme, scaleMult, bestify, floatAt, floatAnchor,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
@@ -3961,7 +3980,13 @@ if (!HEADLESS) (function browser() {
     for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
     ctx.closePath();
   }
-  function fmt(n) { return ('' + Math.floor(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  // pretty numbers: commas up to 9,999 — then 12.3k / 3.4M compact
+  function fmt(n) {
+    n = Math.floor(n);
+    if (n >= 1e6) return (n / 1e6).toFixed(n >= 1e7 ? 0 : 1).replace(/\.0$/, '') + 'M';
+    if (n >= 1e4) return (n / 1e3).toFixed(n >= 1e5 ? 0 : 1).replace(/\.0$/, '') + 'k';
+    return ('' + n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  }
   function txt(s, x, y, font, col, align, stroke) {
     ctx.font = font;
     ctx.textAlign = align || 'center';
@@ -5398,12 +5423,13 @@ if (!HEADLESS) (function browser() {
       const p = f.anchor ? ANCHORS[f.anchor] || ANCHORS.hero : w2s(f.wx, f.wy, C.TRAY_Z);
       const k = f.age / f.max;
       const pop = k < 0.18 ? k / 0.18 : 1;
-      const scl = (f.big ? 1.5 : 1) * (0.6 + 0.4 * pop);
+      const scl = (f.big ? 1.5 : 1) * (0.6 + 0.4 * pop) * (f.n > 1 ? Math.min(1.35, 1 + f.n * 0.06) : 1);
+      const rise = 1 - (1 - k) * (1 - k);                  // ease-out drift
       ctx.save();
       ctx.globalAlpha = Math.min(1, (1 - k) * 2);
-      ctx.translate(p.x, p.y - 12 - k * (f.anchor ? 32 : 46));
+      ctx.translate(p.x, p.y - 12 - rise * (f.anchor ? 32 : 46));
       ctx.scale(scl, scl);
-      txt(f.txt, 0, 0, '900 22px Verdana, sans-serif', f.col, 'center', { w: 5, col: 'rgba(30,10,5,0.9)' });
+      txt(f.txt + (f.n > 1 ? ' ×' + f.n : ''), 0, 0, '900 22px Verdana, sans-serif', f.col, 'center', { w: 5, col: 'rgba(30,10,5,0.9)' });
       ctx.restore();
     }
   }
