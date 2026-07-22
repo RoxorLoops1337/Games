@@ -127,8 +127,11 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       shell network-first, everything else cache-first with backfill, offline
       after one visit (Playwright-verified); beforeinstallprompt caught and
       re-offered as a 📲 INSTALL title chip; painted coin icon set (session 26)
-- [ ] **Cloud saves**: reuse `functions/api/save.js` pattern (KV `BOARD`) — profile
-      sync button in settings, conflict = newest wins with confirm
+- [x] **Cloud saves**: `functions/api/dungeon_save.js` on the SAME DPBOARD binding
+      (dpsave: prefix — the board's one dashboard step covers this too) — bearer
+      sync codes (XXXX-XXXX, year TTL refreshed on touch), ☁ CLOUD SAVE overlay
+      from settings with BACK UP / RESTORE, restore always passes the confirm
+      sheet and says which side is newer (save blobs now clock-stamped) (session 28)
 - [x] **Leaderboard**: `functions/api/dungeon_board.js` (KV binding **DPBOARD** —
       one dashboard step to go live; 503-graceful until then) — all-time +
       rolling daily boards from ONE post, floor-then-kills ranking, best-per-name,

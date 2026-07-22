@@ -823,6 +823,7 @@ const S = {
   diffPick: 'normal',                           // the door you'll take next run
   seenVer: '',                                  // last VERSION whose patch notes were read
   boardName: '',                                // the name carved on the leaderboard
+  syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   screen: 'title',                     // title | dungeon | battle | over
   run: null,                           // the current roguelike run (see newRun)
   foes: [],                            // the battle pack (1-3 monsters gang up)
@@ -883,6 +884,8 @@ function save() {
   try {
     localStorage.setItem(C.SAVE_KEY, JSON.stringify({
       sv: SAVE_V,
+      t: Date.now(),                 // when this blob was written — cloud sync compares clocks
+      syncCode: S.syncCode || '',
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
       codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
@@ -948,6 +951,9 @@ function load() {
     // a pre-changelog save has read everything up to the founding
     S.seenVer = (typeof d.seenVer === 'string' && d.seenVer) ? d.seenVer : '1.0.0';
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
+    if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
+      S.syncCode = d.syncCode;
+    }
     if (d.run && typeof d.run === 'object' && d.run.hp > 0) {
       S.run = {
         hero: heroById(d.run.hero) ? d.run.hero : 'knight',
@@ -4615,7 +4621,7 @@ if (!HEADLESS) (function browser() {
       S.confirm = null; S.inv = null; S.wheelAnim = null; S.relicPick = null;
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
-      WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null;
+      WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null; CLOUD = null;
       if (S.screen === 'battle') {
         S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
         S.room = null;
@@ -7403,7 +7409,7 @@ if (!HEADLESS) (function browser() {
     if (k === 'tab' || k === ' ' || k.indexOf('arrow') === 0) ev.preventDefault();
     // the name carver eats the keyboard whole while it's open
     if (NAMEPAD) {
-      if (/^[a-z0-9]$/.test(k)) { if (NAMEPAD.val.length < 12) NAMEPAD.val += ev.key.toUpperCase(); }
+      if (/^[a-z0-9]$/.test(k)) { if (NAMEPAD.val.length < (NAMEPAD.max || 12)) NAMEPAD.val += ev.key.toUpperCase(); }
       else if (k === 'backspace') NAMEPAD.val = NAMEPAD.val.slice(0, -1);
       else if (k === 'enter') namePadDone();
       else if (k === 'escape') NAMEPAD = null;
@@ -7460,6 +7466,7 @@ if (!HEADLESS) (function browser() {
   function kbBack() {
     if (NAMEPAD) { NAMEPAD = null; return; }
     if (BOARD) { BOARD = null; return; }
+    if (CLOUD) { CLOUD = null; return; }
     if (S.confirm) { S.confirm = null; return; }
     if (S.foeInfo !== null) { S.foeInfo = null; return; }
     if (S.inv) { S.inv = null; return; }
@@ -8724,13 +8731,13 @@ if (!HEADLESS) (function browser() {
     rr(30, py, LW - 60, ph, 18);
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
-    txt('CARVE YOUR NAME', LW / 2, py + 34, '900 18px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt(NAMEPAD.title || 'CARVE YOUR NAME', LW / 2, py + 34, '900 18px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     // the carving so far
     rr(70, py + 58, LW - 140, 40, 10);
     ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = '#9a8aa0'; ctx.stroke();
     const cursor = Math.floor(t * 2) % 2 ? '_' : ' ';
-    txt(NAMEPAD.val + (NAMEPAD.val.length < 12 ? cursor : ''), LW / 2, py + 79,
+    txt(NAMEPAD.val + (NAMEPAD.val.length < (NAMEPAD.max || 12) ? cursor : ''), LW / 2, py + 79,
         '900 18px Verdana, sans-serif', '#ffe9a3');
     const KEYROWS = ['ABCDEFGH', 'IJKLMNOP', 'QRSTUVWX', 'YZ012345', '6789'];
     const kw = 44, kh = 42, gap = 6;
@@ -8739,7 +8746,7 @@ if (!HEADLESS) (function browser() {
       for (let ci = 0; ci < row.length; ci++) {
         const chr = row[ci];
         uiBtn(x0 + ci * (kw + gap), py + 116 + ri * (kh + gap), kw, kh, chr, () => {
-          if (NAMEPAD.val.length < 12) NAMEPAD.val += chr;
+          if (NAMEPAD.val.length < (NAMEPAD.max || 12)) NAMEPAD.val += chr;
         }, { bg: 'rgba(36,30,42,0.95)', border: '#5a5068', col: '#e8d8ec', font: '900 15px Verdana, sans-serif', r: 9 });
       }
     });
@@ -8752,11 +8759,123 @@ if (!HEADLESS) (function browser() {
   }
   function namePadDone() {
     if (!NAMEPAD) return;
-    S.boardName = (NAMEPAD.val || '').trim().slice(0, 12);
-    save();
-    const then = NAMEPAD.then;
+    const val = (NAMEPAD.val || '').trim();
+    const pad = NAMEPAD;
     NAMEPAD = null;
-    if (S.boardName && then) then();
+    if (pad.apply) { pad.apply(val); return; }   // custom consumers (sync codes)
+    S.boardName = val.slice(0, 12);
+    save();
+    if (S.boardName && pad.then) pad.then();
+  }
+  // ---- CLOUD SAVE: one profile, any device — the code is the key ----
+  const SAVE_API = '/api/dungeon_save';
+  let CLOUD = null;                    // { state: 'idle'|'busy', msg }
+  function cloudBackup() {
+    if (!CLOUD || CLOUD.state === 'busy') return;
+    if (typeof fetch !== 'function') { CLOUD.msg = 'no network here'; return; }
+    save();
+    let data = null;
+    try { data = JSON.parse(localStorage.getItem(C.SAVE_KEY)); } catch (e) {}
+    if (!data) { CLOUD.msg = 'nothing to back up yet'; return; }
+    CLOUD.state = 'busy'; CLOUD.msg = 'sending the profile up…';
+    const mine = CLOUD;
+    fetch(SAVE_API, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ code: S.syncCode || undefined, data }),
+    })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => {
+        S.syncCode = j.code; save();
+        if (CLOUD === mine) { mine.state = 'idle'; mine.msg = 'backed up ✓ — your code: ' + j.code; }
+      })
+      .catch(e => {
+        if (CLOUD === mine) {
+          mine.state = 'idle';
+          mine.msg = e === 429 ? 'easy now — one backup per 10 seconds' : 'the cloud is unreachable from here';
+        }
+      });
+  }
+  function cloudRestore(code) {
+    if (!CLOUD || CLOUD.state === 'busy') return;
+    if (typeof fetch !== 'function') { CLOUD.msg = 'no network here'; return; }
+    CLOUD.state = 'busy'; CLOUD.msg = 'reaching for the cloud…';
+    const mine = CLOUD;
+    fetch(SAVE_API + '?code=' + encodeURIComponent(code))
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => {
+        if (CLOUD !== mine) return;
+        mine.state = 'idle';
+        let localT = 0;
+        try { localT = (JSON.parse(localStorage.getItem(C.SAVE_KEY) || 'null') || {}).t || 0; } catch (e) {}
+        const ago = (ms) => {
+          if (!(ms > 0)) return 'long ago';
+          const m = Math.round((Date.now() - ms) / 60000);
+          return m < 1 ? 'moments ago' : m < 60 ? m + ' min ago'
+            : m < 60 * 48 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' days ago';
+        };
+        // newest wins — but overwriting is ALWAYS confirmed, and the sheet
+        // says which side is fresher so nothing is lost by accident
+        const cloudNewer = (j.t || 0) >= localT;
+        S.confirm = {
+          msg: '☁ RESTORE THIS PROFILE?',
+          sub: 'cloud: ' + ago(j.t) + '  •  this device: ' + (localT ? ago(localT) : 'empty')
+             + (cloudNewer ? '  —  the cloud copy is newer' : '  —  CAREFUL: this device is newer'),
+          yesLabel: 'RESTORE', yes: () => {
+            try { localStorage.setItem(C.SAVE_KEY, JSON.stringify(j.data)); } catch (e) {}
+            S.run = null; S.screen = 'title';
+            load();
+            S.syncCode = code; save();
+            if (CLOUD) CLOUD.msg = 'restored ✓ — welcome back';
+            toast('the cloud profile has landed');
+          },
+        };
+      })
+      .catch(e => {
+        if (CLOUD !== mine) return;
+        mine.state = 'idle';
+        mine.msg = e === 404 ? 'no profile lives under that code' : 'the cloud is unreachable from here';
+      });
+  }
+  function drawCloud(t) {
+    if (!CLOUD) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.85)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { CLOUD = null; } });
+    const py = 200, ph = 420;
+    rr(36, py, LW - 72, ph, 18);
+    ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    uiButtons.push({ x: 36, y: py, w: LW - 72, h: ph, cb: () => {} });
+    txt('☁ CLOUD SAVE', LW / 2, py + 34, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt('one profile, any device — the CODE is the key,', LW / 2, py + 64, '600 10px Verdana, sans-serif', '#b8a8bc');
+    txt('so treat it like one (a year unused and it fades)', LW / 2, py + 80, '600 10px Verdana, sans-serif', '#b8a8bc');
+    // the code, carved big
+    rr(76, py + 100, LW - 152, 44, 10);
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = S.syncCode ? '#ffd75e' : '#5a5068'; ctx.stroke();
+    txt(S.syncCode || 'no code yet — back up first', LW / 2, py + 123,
+        S.syncCode ? '900 20px Verdana, sans-serif' : '700 11px Verdana, sans-serif',
+        S.syncCode ? '#ffe9a3' : '#9a8aa0');
+    uiBtn(76, py + 168, LW - 152, 42, '⬆ BACK UP THIS DEVICE', cloudBackup,
+          { grad: ['#7d5a24', '#4a3410'], border: '#ffd75e', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 12 });
+    uiBtn(76, py + 220, LW - 152, 42, '⬇ RESTORE WITH A CODE', () => {
+      NAMEPAD = {
+        title: 'ENTER SYNC CODE', max: 8,
+        val: (S.syncCode || '').replace('-', ''),
+        apply: (v) => {
+          const c = v.replace(/[^A-Z2-9]/g, '');
+          if (c.length !== 8) { if (CLOUD) CLOUD.msg = 'a code is 8 characters (no dash needed)'; return; }
+          cloudRestore(c.slice(0, 4) + '-' + c.slice(4));
+        },
+      };
+    }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '900 12px Verdana, sans-serif', r: 12 });
+    if (CLOUD.msg) {
+      wrapLines(CLOUD.msg, 44, 2).forEach((ln, i) =>
+        txt(ln, LW / 2, py + 292 + i * 16, '800 11px Verdana, sans-serif',
+            CLOUD.state === 'busy' ? '#b8a8bc' : '#8ed67e'));
+    }
+    uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, 'CLOSE ✕', () => { CLOUD = null; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
   // ---- the WHAT'S NEW scroll: unread patch notes greet a returning player ----
   // auto: true means it opened itself after a version bump — dismissing it
@@ -8842,13 +8961,17 @@ if (!HEADLESS) (function browser() {
     toggle(py + 266, 'SOUND', !S.mute, () => { S.mute = !S.mute; });
     toggle(py + 308, 'HAPTICS (phone buzz)', S.opts.haptic, () => { S.opts.haptic = !S.opts.haptic; });
     toggle(py + 350, 'COLORBLIND MARKS', S.opts.cb, () => { S.opts.cb = !S.opts.cb; });
-    // replay the tale
-    uiBtn(64, py + 394, LW - 128, 38, '\u{1F4DC} REPLAY THE TALE', () => {
+    // the tale + the patch notes share a row; the cloud gets its own
+    const half = (LW - 128 - 8) / 2;
+    uiBtn(64, py + 394, half, 38, '\u{1F4DC} THE TALE', () => {
       SETTINGS = false; INTRO = { t: 0, then: null };
-    }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 12px Verdana, sans-serif', r: 12 });
-    uiBtn(64, py + 438, LW - 128, 38, '✨ WHAT’S NEW — v' + VERSION, () => {
+    }, { bg: 'rgba(58,44,72,0.95)', border: '#c8b8e0', col: '#f0e8ff', font: '800 11px Verdana, sans-serif', r: 12 });
+    uiBtn(64 + half + 8, py + 394, half, 38, '✨ WHAT’S NEW', () => {
       SETTINGS = false; WHATSNEW = { auto: false };
-    }, { bg: 'rgba(46,38,66,0.95)', border: '#e0d0a8', col: '#fff4d6', font: '800 12px Verdana, sans-serif', r: 12 });
+    }, { bg: 'rgba(46,38,66,0.95)', border: '#e0d0a8', col: '#fff4d6', font: '800 11px Verdana, sans-serif', r: 12 });
+    uiBtn(64, py + 438, LW - 128, 38, '☁ CLOUD SAVE' + (S.syncCode ? ' — ' + S.syncCode : ''), () => {
+      SETTINGS = false; CLOUD = { state: 'idle', msg: '' };
+    }, { bg: 'rgba(34,44,66,0.95)', border: '#8fc8ff', col: '#d8ecff', font: '800 11px Verdana, sans-serif', r: 12 });
     txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 500, '700 10px Verdana, sans-serif', '#9a8aa0');
     txt('arrows move · SPACE fires · TAB + ENTER press · ESC backs out', LW / 2, py + 516, '600 10px Verdana, sans-serif', '#8d7d95');
     txt('painted relics by the owner — code forged with Claude Code', LW / 2, py + 530, '600 10px Verdana, sans-serif', '#8d7d95');
@@ -9184,6 +9307,7 @@ if (!HEADLESS) (function browser() {
     drawSettings(t);
     drawWhatsNew(t);
     drawBoard(t);
+    drawCloud(t);
     drawNamePad(t);
     drawIntro(t);
     drawConfirm(t);
