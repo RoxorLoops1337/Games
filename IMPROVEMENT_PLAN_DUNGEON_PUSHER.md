@@ -110,8 +110,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Touch targets**: every uiBtn hit box grows to ≥38px square (visuals
       unchanged, topmost-wins keeps tight rows precise); doors are walk-through,
       no hitbox needed (session 21)
-- [ ] **Keyboard/gamepad**: full run playable with arrows+space+enter; gamepad API
-      mapping for the same
+- [x] **Keyboard/gamepad**: arrows/WASD move & aim, SPACE fires (hold = pour,
+      and it walks the crane), TAB/ENTER ring-and-press any button, ESC backs
+      out of everything; gamepad polled onto the same paths (stick/dpad move,
+      A fires, B backs, bumpers cycle) (session 23)
 - [ ] **Screen-reader labels**: aria-live region announcing phase changes and results
 
 ## Tier 5 — platform & robustness
@@ -128,8 +130,9 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Error recovery**: the CRASH NET — uncaught errors save the run, close every
       overlay, bail battle→dungeon (or title), toast the player; rate-limited
       against crash loops (session 22)
-- [ ] **Version/changelog screen**: "what's new" on first launch after a version bump,
-      fed from a CHANGELOG list in the file
+- [x] **Version/changelog screen**: CHANGELOG list feeds the WHAT'S NEW scroll —
+      auto-opens once after a version bump (seenVer ledger, persisted), full
+      history from settings; VERSION now derives from the top entry (session 23)
 - [ ] **Performance budget CI**: headless frame-time probe in tests — fail if a
       500-frame battle sim exceeds budget (catches perf regressions at PR time)
 - [ ] **Asset preload polish**: loading bar on first boot listing art packs; lazy
