@@ -6172,4 +6172,43 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('S.run.tollPaid = Math.min(TOLL_PREPAY_CAP') >= 0, 'banking feeds it, capped');
 }
 
+// -------- TOAST TRIAGE: announcements take turns now --------
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(251); D.newRun('knight');
+  D.S.toast = null; D.S.toastQ = [];
+  D.toast('first');
+  D.toast('second');
+  D.toast('third');
+  t.eq(D.S.toast.txt, 'first', 'the first line shows at once');
+  t.eq(D.S.toastQ.join(','), 'second,third', 'the rest wait their turn in order');
+  // the floor-22 pileup, no longer silent
+  D.toastTick(3.0);
+  t.eq(D.S.toast.txt, 'second', 'expiry brings up the next line');
+  D.toastTick(3.0);
+  t.eq(D.S.toast.txt, 'third', 'and the next');
+  D.toastTick(3.0);
+  t.eq(D.S.toast, null, 'then quiet');
+  // duplicates collapse, the queue caps at four
+  D.toast('same'); D.toast('same');
+  t.eq(D.S.toastQ.length, 0, 'a repeated line is said once');
+  for (let i = 0; i < 9; i++) D.toast('line ' + i);
+  t.eq(D.S.toastQ.length, 4, 'four wait at most');
+  D.S.toast = null; D.S.toastQ = [];
+  // with a queue waiting, the current line hurries
+  D.toast('slow');
+  D.toast('waiting');
+  D.toastTick(0.01);
+  t.ok(D.S.toast.t <= 1.7, 'a crowded stage shortens each turn');
+  // long lines are trimmed to one clean line
+  D.S.toast = null; D.S.toastQ = [];
+  D.toast('x'.repeat(140));
+  t.ok(D.S.toast.txt.length <= 90, 'ninety chars and an ellipsis, no more');
+  // the screen shows how many wait
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("'+' + S.toastQ.length") >= 0, 'the queued count rides the toast');
+  t.ok(src.indexOf('toastTick(dt);') >= 0, 'the browser loop uses the shared ticker');
+}
+
 t.done();

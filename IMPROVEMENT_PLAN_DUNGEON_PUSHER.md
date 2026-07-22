@@ -514,12 +514,12 @@ debt the sprint left behind, prove the balance with simulation instead of
 faith, and only then add the two big swings. A player 50 runs in should
 feel the game get SMOOTHER this tier, not just bigger.
 
-- [ ] **Toast & float triage**: the game now toasts constantly (decrees,
-      chests, contracts, jars, skims, wagers…) — audit every toast() for
-      length and stacking; long ones split or shorten; introduce a 2-line
-      cap and a queue so simultaneous toasts never overwrite each other
-      silently (the milestone-chest + decree + skim pileup at floor 22 is
-      the test case)
+- [x] **Toast & float triage**: toast() queues now (4 deep, consecutive
+      dupes collapse, >90 chars trimmed to one line); the current line
+      hurries to 1.7s when others wait; a +N tag shows the backlog;
+      toastTick shared between sim and browser — the floor-22 decree +
+      chest + skim pileup takes turns instead of silently overwriting
+      (session 72)
 - [ ] **NL locale catch-up**: TR() covers ~73 sites but tiers 7-10 shipped
       mostly untranslated (tabs, chips, confirms, the marquee, tales are
       fine as-is — but UI CHROME must translate); sweep every uiBtn/label
