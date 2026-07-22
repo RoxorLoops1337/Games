@@ -3212,4 +3212,53 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(R2.S.enemy.bleed >= 1, 'and leaves it BLEEDING');
 }
 
+// -------- DIFFICULTY DOORS + the ENDLESS decrees --------
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  t.eq(D.DIFFS.length, 3, 'three doors into the dungeon');
+  // MERCIFUL: -20% HP
+  DS.diffPick = 'easy';
+  D.srand(31); D.newRun('knight');
+  t.eq(DS.run.diff, 'easy', 'the door is stamped on the run');
+  const soft = D.mkEnemy('battle', D.curRoster()[0].id);
+  DS.diffPick = 'hard';
+  D.srand(31); D.newRun('knight');
+  const cruel = D.mkEnemy('battle', D.curRoster()[0].id);
+  t.ok(cruel.maxHp > soft.maxHp, 'NIGHTMARE foes out-muscle MERCIFUL ones');
+  t.ok(Math.abs(soft.maxHp / cruel.maxHp - 0.8 / 1.3) < 0.06, 'by the promised 0.8 vs 1.3');
+  // the ENDLESS ladder
+  DS.diffPick = 'normal';
+  D.srand(32); D.newRun('knight');
+  DS.run.floor = 15; t.eq(D.mutCount(), 0, 'floor 15: the deep still pretends');
+  DS.run.floor = 16; t.eq(D.mutCount(), 1, 'floor 16: THICK AIR descends');
+  DS.run.floor = 19; t.eq(D.mutCount(), 2, 'floor 19: SWIFT DOOM joins');
+  DS.run.floor = 40; t.eq(D.mutCount(), D.MUTS.length, 'the decrees cap out');
+  t.ok(D.mutOn('thickair') && D.mutOn('swiftdoom'), 'mutOn reads the stack');
+  // SWIFT DOOM: +2 atk
+  DS.run.floor = 19;
+  const swift = D.mkEnemy('battle', D.curRoster()[0].id);
+  DS.run.floor = 15;
+  const calm = D.mkEnemy('battle', D.curRoster()[0].id);
+  t.ok(swift.atk >= calm.atk + 2 - 3, 'the deep hits harder (+2 atk baked in)');
+  // THICK AIR: the hand loses one more
+  DS.run.floor = 16;
+  DS.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: D.curRoster()[0].id, done: false, px: 0.5, py: 0.4 }];
+  D.interact(0);
+  const handN = Object.values(DS.battle.hand).reduce((a, b) => a + b, 0);
+  t.eq(handN, D.purseTotal() - 1, 'THICK AIR steals one from the deal');
+  // ARMORED AGE + BONE RAIN at round turn
+  DS.run.floor = 25;
+  DS.enemy.hp = DS.enemy.maxHp = 9999;
+  DS.rain.length = 0;
+  D.newRound();
+  t.ok(DS.enemy.block >= 2, 'ARMORED AGE shields the pack each round');
+  t.ok(DS.rain.some(r => r.kind === 'skull'), 'BONE RAIN salts the pile with a skull');
+  // the endless premium on cogs
+  DS.run.floor = 25; DS.run.kills = 0;
+  D.hpHit(9999, 'the deep');
+  t.eq(DS.over.cogsWon, Math.round(25 * (1 + 0.2 * 4)), 'endless cogs pay the +20%/decree premium');
+  t.eq(DS.over.muts, 4, 'the card counts the decrees endured');
+}
+
 t.done();

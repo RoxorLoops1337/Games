@@ -73,10 +73,13 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 - [x] **Skull Gardener enemy**: act II (+ Grave Gardener act III) — SOWS skulls on
       its turn, and every skull left on the field SPROUTS a twin each round
       (crop capped at 6) (session 14)
-- [ ] **Endless mode proper**: after floor 15 — mutators stack every 3 floors,
-      score multiplier, separate leaderboard flag
-- [ ] **Difficulty modes**: EASY (−20% enemy HP) / NORMAL / NIGHTMARE (+30%, elites
-      always hexed) chosen at run start, stamped on the leaderboard
+- [x] **Endless mode proper**: floor 16+ stacks a DECREE every 3 floors (THICK AIR /
+      SWIFT DOOM / ARMORED AGE / BONE RAIN / RICH VEINS), announced on descent,
+      posted at the gate, cogs pay +20% per decree; leaderboard flag waits for the
+      leaderboard item (session 16)
+- [x] **Difficulty modes**: MERCIFUL (−20% HP) / NORMAL / NIGHTMARE (+30% HP, elites
+      hex 3× as often) — three door chips on the title, stamped on the run and the
+      report card (session 16)
 - [ ] **Coin mastery**: fire 500 of a kind lifetime → its +1 upgraded face (visual +
       tiny stat bump), tracked in the codex
 - [ ] **More pets**: owl (reveals intents through blackout), tortoise (taunts, high
