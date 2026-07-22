@@ -3664,4 +3664,23 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
        'the settings language chip exists');
 }
 
+// -------- PHOTO MODE + CREDITS: the wiring --------
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  // photo mode: camera chip on victory, HUD branch, every way back out
+  t.ok(src.indexOf('let PHOTO = false;') >= 0, 'the PHOTO flag exists');
+  t.ok(/uiBtn\(LW - 110, py - 18, 40, 34, '\\u\{1F4F7\}'/.test(src), 'the camera chip sits on the victory panel');
+  t.ok(src.indexOf('if (PHOTO) {') >= 0 && src.indexOf('tap to return') >= 0,
+       'photo mode strips the HUD and leaves a way back');
+  t.ok(/if \(PHOTO\) \{ PHOTO = false; return; \}/.test(src), 'ESC leaves photo mode first');
+  t.ok(src.indexOf('kbFocus = -1; PHOTO = false;') >= 0, 'a screen change drops photo mode');
+  t.ok(src.indexOf("&& !PHOTO) drawHeartbeat") >= 0, 'the heartbeat vignette stays out of the shot');
+  // credits: overlay + settings door + crash-net coverage
+  t.ok(src.indexOf('function drawCredits') >= 0, 'the credits overlay exists');
+  t.ok(src.indexOf('art/CREDITS.txt') >= 0, 'credits point at the full attribution file');
+  t.ok(src.indexOf("CREDITS = true;") >= 0, 'settings opens the credits');
+  t.ok(src.indexOf('CREDITS = false; PHOTO = false;') >= 0, 'the crash net clears both');
+}
+
 t.done();

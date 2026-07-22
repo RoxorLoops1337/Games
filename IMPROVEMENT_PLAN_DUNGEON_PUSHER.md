@@ -173,8 +173,12 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       late October, snow in December) — clock-based, no assets from network
 - [ ] **Prestige: NEW GAME+** — beat floor 15 → NG+ badge, enemies +1 act offset,
       exclusive relic pool (5 NG+-only relics)
-- [ ] **Photo mode**: hide HUD button on victory screen for clean screenshots
-- [ ] **Credits screen**: art, code, playtesters — reachable from settings
+- [x] **Photo mode**: 📷 chip on the victory panel strips every overlay/HUD layer
+      (banner, victory sheet, bag, heartbeat, ach toasts) for a clean pile shot;
+      tap/ESC returns, screen changes auto-exit (session 30)
+- [x] **Credits screen**: 🎬 from settings — painted art / LPC sprites via
+      OpenGameArt (pointer to art/CREDITS.txt) / code & music / playtesting
+      (session 30)
 
 ## Done (this loop)
 

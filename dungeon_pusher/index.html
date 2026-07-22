@@ -4686,6 +4686,7 @@ if (!HEADLESS) (function browser() {
       S.coinPick = null; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
       WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null; CLOUD = null;
+      CREDITS = false; PHOTO = false;
       if (S.screen === 'battle') {
         S.battle = null; S.victory = null; S.foes = []; S.enemy = null; S.pets = [];
         S.room = null;
@@ -6616,6 +6617,8 @@ if (!HEADLESS) (function browser() {
   }
 
   // --------------------------------------------------------- battle screen
+  // PHOTO MODE: strips every scrap of HUD off the battle for a clean shot
+  let PHOTO = false;
   function drawVictory(t) {
     const v = S.victory;
     if (!v) return;
@@ -6717,6 +6720,9 @@ if (!HEADLESS) (function browser() {
         if (!v.picked) uiButtons.push({ x: cx - 42, y: cy - 34, w: 84, h: 94, cb: () => pickCoin(i) });
       });
     }
+    // the photographer's chip: hide everything for a clean trophy shot
+    uiBtn(LW - 110, py - 18, 40, 34, '\u{1F4F7}', () => { PHOTO = true; },
+          { bg: 'rgba(24,14,26,0.9)', border: '#9a8aa0', r: 10, font: '15px serif' });
     const pulse = 1 + Math.sin(t * 5) * 0.03;
     const label = v.boss ? (hasRelicOffer && !v.relicPicked ? 'SKIP ▼' : 'DESCEND ▼')
                 : hasCoinOffer && !v.picked ? 'SKIP ▶' : 'CONTINUE ▶';
@@ -6843,6 +6849,16 @@ if (!HEADLESS) (function browser() {
     }
     drawSpeedBtn(t);
     if (phase === 'drop' && !S.victory) drawTurboBtn(t);
+    if (PHOTO) {
+      // PHOTO MODE: just the machine, the pile, and the cast — no chrome.
+      // One faint corner whisper so the way back is never a mystery.
+      drawVignette(0.55);
+      uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { PHOTO = false; } });
+      ctx.globalAlpha = 0.5;
+      txt('\u{1F4F7} tap to return', LW - 14, LH - 16, '600 10px Verdana, sans-serif', '#d8c8dc', 'right');
+      ctx.globalAlpha = 1;
+      return;
+    }
     drawHUD(t);
     drawVignette(0.55);
     // hurt vignette
@@ -7529,8 +7545,10 @@ if (!HEADLESS) (function browser() {
   }
   function kbBack() {
     if (NAMEPAD) { NAMEPAD = null; return; }
+    if (PHOTO) { PHOTO = false; return; }
     if (BOARD) { BOARD = null; return; }
     if (CLOUD) { CLOUD = null; return; }
+    if (CREDITS) { CREDITS = false; return; }
     if (S.confirm) { S.confirm = null; return; }
     if (S.foeInfo !== null) { S.foeInfo = null; return; }
     if (S.inv) { S.inv = null; return; }
@@ -8941,6 +8959,49 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, TR('CLOSE ✕'), () => { CLOUD = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
+  // ---- the CREDITS: who forged what, reachable from settings ----
+  let CREDITS = false;
+  function drawCredits(t) {
+    if (!CREDITS) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.85)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { CREDITS = false; } });
+    const py = 150, ph = 540;
+    rr(40, py, LW - 80, ph, 18);
+    ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
+    uiButtons.push({ x: 40, y: py, w: LW - 80, h: ph, cb: () => {} });
+    txt('\u{1F3AC} CREDITS', LW / 2, py + 36, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 66, '800 11px Verdana, sans-serif', '#c8a8b0');
+    const section = (y, head, lines) => {
+      txt(head, LW / 2, y, '900 12px Georgia, serif', '#ffe9a3');
+      lines.forEach((ln, i) => txt(ln, LW / 2, y + 20 + i * 16, '600 10px Verdana, sans-serif', '#c8b8cc'));
+      return y + 20 + lines.length * 16 + 18;
+    };
+    let y = py + 104;
+    y = section(y, '— PAINTED ART —', [
+      'relics, coins, items & the machine dressing',
+      'painted by the dungeon’s owner',
+    ]);
+    y = section(y, '— SPRITES & TILES —', [
+      'LPC heroes and monsters via OpenGameArt',
+      '(CC0/CC-BY — full list in art/CREDITS.txt),',
+      'borrowed through No Room For Heroes;',
+      'floor tiles from Frietkot Tycoon',
+    ]);
+    y = section(y, '— CODE, MUSIC & NOISE —', [
+      'forged with Claude Code across an',
+      'autonomous improvement loop (30 sessions',
+      'and counting); chiptunes + clinks from the',
+      'matchbox WebAudio sequencer inside',
+    ]);
+    y = section(y, '— PLAYTESTING —', [
+      'Danhieux, relentlessly',
+    ]);
+    txt('made with one very greedy machine \u{1FA99}', LW / 2, y + 4, '700 10px Verdana, sans-serif', '#9a8aa0');
+    uiBtn(LW / 2 - 70, py + ph - 56, 140, 40, TR('CLOSE ✕'), () => { CREDITS = false; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   // ---- the WHAT'S NEW scroll: unread patch notes greet a returning player ----
   // auto: true means it opened itself after a version bump — dismissing it
   // stamps the ledger; opened from settings it shows the whole history.
@@ -9040,9 +9101,12 @@ if (!HEADLESS) (function browser() {
     uiBtn(64 + half + 8, py + 394, half, 38, TR('✨ WHAT’S NEW'), () => {
       SETTINGS = false; WHATSNEW = { auto: false };
     }, { bg: 'rgba(46,38,66,0.95)', border: '#e0d0a8', col: '#fff4d6', font: '800 11px Verdana, sans-serif', r: 12 });
-    uiBtn(64, py + 438, LW - 128, 38, TR('☁ CLOUD SAVE') + (S.syncCode ? ' — ' + S.syncCode : ''), () => {
+    uiBtn(64, py + 438, half, 38, TR('☁ CLOUD SAVE'), () => {
       SETTINGS = false; CLOUD = { state: 'idle', msg: '' };
     }, { bg: 'rgba(34,44,66,0.95)', border: '#8fc8ff', col: '#d8ecff', font: '800 11px Verdana, sans-serif', r: 12 });
+    uiBtn(64 + half + 8, py + 438, half, 38, '\u{1F3AC} CREDITS', () => {
+      SETTINGS = false; CREDITS = true;
+    }, { bg: 'rgba(44,34,50,0.95)', border: '#c8a8b0', col: '#f0dce2', font: '800 11px Verdana, sans-serif', r: 12 });
     txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 500, '700 10px Verdana, sans-serif', '#9a8aa0');
     txt(TR('arrows move · SPACE fires · TAB + ENTER press · ESC backs out'), LW / 2, py + 516, '600 10px Verdana, sans-serif', '#8d7d95');
     txt('painted relics by the owner — code forged with Claude Code', LW / 2, py + 530, '600 10px Verdana, sans-serif', '#8d7d95');
@@ -9368,7 +9432,7 @@ if (!HEADLESS) (function browser() {
     else if (S.screen === 'battle' && S.run) drawBattle(t, dt);
     else if (S.screen === 'over') drawOver(t);
     else drawTitle(t);
-    if (S.screen === 'battle' || S.screen === 'dungeon') drawHeartbeat(ts / 1000);
+    if ((S.screen === 'battle' || S.screen === 'dungeon') && !PHOTO) drawHeartbeat(ts / 1000);
     drawWheel();
     drawRelicPick(t);
     drawTrophies(t);
@@ -9379,12 +9443,13 @@ if (!HEADLESS) (function browser() {
     drawWhatsNew(t);
     drawBoard(t);
     drawCloud(t);
+    drawCredits(t);
     drawNamePad(t);
     drawIntro(t);
     drawConfirm(t);
-    drawAchToast(dt);
+    if (!PHOTO) drawAchToast(dt);
     // the keyboard's gold dashed ring rides whatever button holds focus
-    if (S.screen !== kbScreen) { kbScreen = S.screen; kbFocus = -1; }
+    if (S.screen !== kbScreen) { kbScreen = S.screen; kbFocus = -1; PHOTO = false; }
     if (kbFocus >= uiButtons.length) kbFocus = -1;
     if (kbFocus >= 0) {
       const b = uiButtons[kbFocus];
