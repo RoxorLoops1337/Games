@@ -56,9 +56,10 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
 
 ## Tier 3 — gameplay depth
 
-- [ ] **Boss mechanics v2**: each boss gets one signature ARENA twist (Dragon: gold
-      coins ignite randomly; Lich: raises a slain foe at half HP; Pit Boss: tray tax
-      every 3rd round)
+- [x] **Boss mechanics v2**: arena twists — Dragon breathes on 2 gold coins each
+      round (collect alight = +2 burn), Lich raises a half-HP skeleton every 3rd
+      round, Pit Boss taxes the smallest tray piece every 3rd round (belly-refunded)
+      (session 13)
 - [ ] **[big] Room events / NPCs**: 6 hallway encounters between rooms — gambler
       (double-or-nothing a relic), cursed fountain, mimic chest, lost adventurer
       (escort = reward), coin-eating slime, shrine of trades (HP↔gold)

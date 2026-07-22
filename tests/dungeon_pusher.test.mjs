@@ -3031,4 +3031,68 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(Math.abs(T2.dailyK() - 1.2) < 1e-9, 'IRONCLAD FOES: +20% on every multiplier');
 }
 
+// -------- BOSS ARENAS: each lord bends the machine --------
+{
+  const { DP: D } = loadGame({}, false);
+  const DS = D.S;
+  // the VAULT DRAGON breathes on the hoard
+  D.srand(505);
+  D.newRun('knight');
+  DS.run.floor = 5;
+  const bossK = Object.keys(DS.run.map.rooms).find(k => DS.run.map.rooms[k].boss);
+  DS.run.map.cur = bossK; DS.run.room = DS.run.map.rooms[bossK];
+  DS.run.room.visited = true;
+  DS.run.pileSave = null; DS.run.pileFloor = 0;
+  D.interact(0);
+  t.eq(DS.foes[0].id, 'dragon', 'act I lair: the Vault Dragon');
+  const lit = DS.coins.filter(c => c.aflame);
+  t.eq(lit.length, 2, 'two coins of the hoard burn (round 1)');
+  t.ok(lit.every(c => c.kind === 'coin'), 'only GOLD catches the breath');
+  // collecting an alight coin sears the hand
+  const pb0 = DS.pPois === undefined ? 0 : (DS.pBurn || 0);
+  D.scoreCoin(lit[0]);
+  t.eq((DS.pBurn || 0) - pb0, 2, 'the alight coin SEARS: +2 burn');
+  DS.enemy.hp = 1;
+  D.dmgEnemy(5);
+  t.ok(DS.coins.every(c => !c.aflame), 'the embers cool when the dragon falls');
+  D.leaveBattle();
+
+  // the COIN LICH raises the dead on round 3
+  const { DP: L } = loadGame({}, false);
+  L.srand(606);
+  L.newRun('knight');
+  L.S.run.floor = 10;
+  const bk2 = Object.keys(L.S.run.map.rooms).find(k => L.S.run.map.rooms[k].boss);
+  L.S.run.map.cur = bk2; L.S.run.room = L.S.run.map.rooms[bk2];
+  L.S.run.room.visited = true;
+  L.interact(0);
+  t.eq(L.S.foes[0].id, 'lich', 'act II lair: the Coin Lich');
+  L.S.enemy.hp = L.S.enemy.maxHp = 9999;
+  L.S.battle.round = 2;                     // newRound() -> round 3
+  L.newRound();
+  t.eq(L.S.foes.length, 2, 'round 3: the lich raises a servant');
+  t.eq(L.S.foes[1].id, 'skeleton', 'a skeleton claws out of the till');
+  t.eq(L.S.foes[1].hp, L.S.foes[1].maxHp, 'raised whole…');
+  const fresh = L.mkEnemy('battle', 'skeleton');
+  t.ok(L.S.foes[1].maxHp < fresh.maxHp, '…but at HALF a living skeleton\'s strength');
+
+  // the PIT BOSS taxes the tray on round 3
+  const { DP: P } = loadGame({}, false);
+  P.srand(707);
+  P.newRun('knight');
+  P.S.run.floor = 15;
+  const bk3 = Object.keys(P.S.run.map.rooms).find(k => P.S.run.map.rooms[k].boss);
+  P.S.run.map.cur = bk3; P.S.run.room = P.S.run.map.rooms[bk3];
+  P.S.run.room.visited = true;
+  P.interact(0);
+  t.eq(P.S.foes[0].id, 'demon', 'act III lair: the Pit Boss');
+  P.S.enemy.hp = P.S.enemy.maxHp = 9999;
+  P.S.battle.round = 2;
+  P.S.battle.banked = [{ k: 'coin' }, { k: 'gem' }];   // carried into next round's loot
+  P.newRound();
+  t.eq(P.S.battle.loot.length, 1, 'round 3: the Pit Boss taxes one piece');
+  t.eq(P.S.foes[0].belly.length, 1, 'it sits in his belly');
+  t.eq(P.S.foes[0].belly[0].k, 'coin', 'he takes the smallest — the plain coin');
+}
+
 t.done();

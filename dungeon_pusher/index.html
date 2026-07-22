@@ -1381,6 +1381,11 @@ function scoreCoin(c, quiet) {
     return;
   }
   if (!S.battle) return;
+  // a coin still ALIGHT from the dragon's breath sears the hand that takes it
+  if (c.aflame && !S.victory) {
+    S.pBurn = (S.pBurn || 0) + 2;
+    floatAnchor('\u{1F525} SEARED! +2 burn', 'hero', '#ff9d3c', true);
+  }
   S.battle.loot.push({ k: c.kind, iid: c.iid });
   trayAdd(c.kind, { iid: c.iid, x: c.x });
   if (quiet) return;                      // the CLAW celebrates on delivery instead
@@ -1855,6 +1860,7 @@ function startBattle(type, entIdx, eid, extras) {
     initPile();
     S.run.pileFloor = S.run.floor;
   }
+  bossArena();                            // round 1: the lord sets its stage
   // gear bought since the rack was set drops in now
   for (let i = 0; i < (S.run.pending || []).length; i++) {
     S.rain.push({ t: 0.3 + i * 0.25, x: 20 + rng() * 60, y: MACH.tiers[0].slotY + 6,
@@ -2300,6 +2306,41 @@ function endRoundTicks() {
   // mirror stances re-polish and tolled shields melt between rounds
   for (const f of S.foes) { f.mirrorSpent = false; f.block = 0; }
 }
+// ---- BOSS ARENAS: each lord bends the MACHINE itself ----
+//   Vault Dragon -> breathes on the hoard: 2 gold coins burn; collect one
+//                   while it's alight and it SEARS your hand (+2 burn)
+//   Coin Lich    -> every 3rd round it RAISES a half-HP skeleton
+//   Pit Boss     -> every 3rd round it TAXES the smallest tray piece
+//                   (into its belly — killing it refunds the take)
+function bossArena() {
+  const B = S.battle;
+  if (!B) return;
+  const boss = S.foes.find(f => f.boss && f.hp > 0);
+  if (!boss) return;
+  if (boss.id === 'dragon') {
+    for (const c of S.coins) c.aflame = false;            // last round's embers cool
+    const golds = S.coins.filter(c => c.st === 'plat' && c.kind === 'coin');
+    let lit = 0;
+    while (lit < 2 && golds.length) {
+      const c = golds.splice((rng() * golds.length) | 0, 1)[0];
+      c.aflame = true; lit++;
+    }
+    if (lit) floatAt('\u{1F525} the dragon breathes on the hoard!', 50, '#ff9d3c', true);
+  } else if (boss.id === 'lich' && B.round > 1 && B.round % 3 === 0 &&
+             S.foes.filter(f => f.hp > 0).length < 3) {
+    const sk = mkEnemy('battle', 'skeleton');
+    sk.hp = sk.maxHp = Math.max(1, Math.floor(sk.maxHp / 2));
+    sk.entIdx = null;
+    rollIntent(sk);
+    S.foes.push(sk);
+    floatAnchor('\u{1F9B4} the lich RAISES THE DEAD!', 'enemy', '#c86bff', true);
+  } else if (boss.id === 'demon' && B.round > 1 && B.round % 3 === 0 && B.loot.length) {
+    let idx = B.loot.findIndex(l => l.k === 'coin');
+    if (idx < 0) idx = 0;
+    (boss.belly = boss.belly || []).push(B.loot.splice(idx, 1)[0]);
+    floatAnchor('\u{1F608} the PIT BOSS taxes the tray!', 'enemy', '#ff9d3c', true);
+  }
+}
 function newRound() {
   const B = S.battle;
   B.round++;
@@ -2325,6 +2366,7 @@ function newRound() {
     S.rain.push({ t: 0.15 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: rollPileKind() });
   }
   S.banner = { txt: 'ROUND ' + B.round, ttl: 1.3, max: 1.3 };
+  bossArena();
   save();
 }
 function battleTick(dt) {
@@ -2421,6 +2463,8 @@ function winBattle() {
     S.run.goldKeys = (S.run.goldKeys || 0) + 1;
     floatAnchor('+1 GOLDEN KEY \u{1F511}', 'hero', '#ffd75e', true);
   }
+  // the dragon's embers cool the moment it falls
+  for (const c of S.coins) c.aflame = false;
   // trophies earned in the heat of it
   if (anyBoss) { achUnlock('boss1'); S.life.bosses++; }
   if (S.run.hp === 1) achUnlock('survivor');
@@ -3547,6 +3591,7 @@ window.DP = {
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify, floatAt, floatAnchor,
   ACH, achUnlock, achPoll, achById, WORKSHOP, wsLvl, wsBuy, tiltCount,
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
+  bossArena,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
@@ -5016,6 +5061,16 @@ if (!HEADLESS) (function browser() {
       const hs = dry / (drx * 0.4583);
       const w = drx * (96 / 44), h = (66 / 96) * w * hs;
       ctx.drawImage(spr, p.x - w / 2, p.y - (24 / 66) * h, w, h);
+    }
+    // the dragon's breath: an alight coin flickers with living flame
+    if (c.aflame) {
+      ctx.save();
+      ctx.globalAlpha = 0.35 + 0.2 * Math.sin(t * 9 + c.glint * 7);
+      ctx.beginPath(); ctx.ellipse(p.x, p.y - dry, drx * 0.9, drx * 0.8, 0, 0, 7);
+      ctx.fillStyle = '#ff9d3c'; ctx.fill();
+      ctx.restore();
+      txt('\u{1F525}', p.x, p.y - dry - 5 + Math.sin(t * 7 + c.glint) * 1.5,
+          Math.round(10 + drx * 0.4) + 'px serif', '#fff');
     }
     const gph = (t * 0.5 + c.glint) % (Math.PI * 2);
     ctx.beginPath();
