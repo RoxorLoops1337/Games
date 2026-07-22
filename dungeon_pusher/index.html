@@ -51,6 +51,13 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.6.0', notes: [
+    'THE TOLLKEEPER 🧿 — a ninth hero who IS the economy: a fixed 14-coin hand refilled every battle, windfalls converted to gold at 2:1, and every BANKED piece prepays the stair toll. Unseals once the deep has skimmed 150 of your coins',
+    'the machine fights back — GLASS JARS ride the bed (crack them in 3 for a spill) and BRASS PEGS rise past floor 21 to shoulder your coins aside',
+    'REFINE offers past act 2: coin picks melt a plain coin into a finer one — quality over bulk',
+    'THE LEGACY BOOK 📖 — a dated history of your firsts, in RECORDS; the descend sting grew four-note act motifs',
+    'signature quests for the specialists, five new hallway strangers, pet names & veterancy ★, board filters, the gift stake 🎁 and the rookie contract',
+  ] },
   { v: '1.5.0', notes: [
     'RIVALS & DUELS — mark any board name as your rival (topple them for a trophy), and send ?duel challenge links that race your exact maze',
     'THE LEGEND DOOR ♛ — an NG+ deep clear unseals NG++: act-3 halls from floor 1, stacked prestige kits, decrees at floor 11, the Throne Shard',
@@ -211,7 +218,7 @@ function seed36(n) { return (n >>> 0).toString(36).toUpperCase(); }
 // emoji-only heroes wear the color as an aura behind the glyph.
 const HERO_SKINS = {
   knight: '#58b8ff', rogue: '#b45aff', wizard: '#7ee7a0', cleric: '#ff8a6b',
-  ghost: '#8ed67e', crane: '#ff6b9d', rat: '#ffd75e', alch: '#8ef0ff',
+  ghost: '#8ed67e', crane: '#ff6b9d', rat: '#ffd75e', alch: '#8ef0ff', toll: '#c8a86a',
 };
 function skinWorn(hid) {
   return !!(HERO_SKINS[hid] && S.deep15[hid] && S.skins[hid]);
@@ -932,6 +939,7 @@ const HEROES = [
   { id: 'crane',  name: 'Crane Keeper', icon: '\u{1F579}\u{FE0F}', coin: 'coin', perk: 'a real CLAW GAME ×2' },
   { id: 'rat',    name: 'Rat King',     icon: '\u{1F400}', coin: 'green', perk: 'no items — only RATS' },
   { id: 'alch',   name: 'Alchemist',    icon: '\u{2697}\u{FE0F}', coin: 'blue', perk: 'no potions — she BREWS' },
+  { id: 'toll',   name: 'Tollkeeper',   icon: '\u{1F9FF}', coin: 'silver', perk: 'no purse — the TOLL pays itself' },
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
 // the Poltergeist is EARNED: it answers only to those who have carried a
@@ -945,6 +953,7 @@ const HERO_LOCKS = {
   crane:  { floor: 10, txt: 'reach FLOOR 10' },
   ghost:  { floor: GHOST_UNLOCK_FLOOR, txt: 'reach FLOOR ' + GHOST_UNLOCK_FLOOR },
   alch:   { deep: 5,   txt: 'earn 5 DEEP CLEARS' },
+  toll:   { skim: 150, txt: 'let the deep skim 150 coins' },
 };
 function heroLockText(id) { return (HERO_LOCKS[id] || {}).txt || ''; }
 function heroUnlocked(id) {
@@ -954,6 +963,7 @@ function heroUnlocked(id) {
   if (lock.floor && S.best && S.best.floor >= lock.floor) return true;
   if (lock.ach && S.ach && S.ach.u[lock.ach]) return true;
   if (lock.deep && Object.keys(S.deep15 || {}).length >= lock.deep) return true;
+  if (lock.skim && ((S.life && S.life.skimmed) | 0) >= lock.skim) return true;
   return false;
 }
 // the Poltergeist's whole kit hangs off this one question
@@ -964,6 +974,27 @@ function ratRun() { return !!(S.run && S.run.hero === 'rat'); }
 // tray. Every 12 coins banked distills one random draught; gems are
 // reagents, each fattening the NEXT draught by +2 power.
 function alchRun() { return !!(S.run && S.run.hero === 'alch'); }
+// ...and the TOLLKEEPER's off this one: no purse growth, ever. His kit is a
+// fixed 14-coin hand refilled before every battle (surplus converts to gold
+// at the skim's own 2:1), and every piece he BANKS prepays the stair toll.
+function tollRun() { return !!(S.run && S.run.hero === 'toll'); }
+const TOLL_KIT = { coin: 6, silver: 4, green: 2, red: 2, blue: 0, lucky: 0 };
+const TOLL_PREPAY_CAP = 30;
+function tollRefill() {
+  if (!tollRun()) return 0;
+  let surplus = 0;
+  for (const k of COIN_KINDS) {
+    const have = S.run.purse[k] || 0, want = TOLL_KIT[k] || 0;
+    if (have > want) surplus += have - want;
+    S.run.purse[k] = want;
+  }
+  if (surplus > 0) {
+    const pay = surplus * 2;
+    addGold(pay);
+    floatAnchor('\u{1F9FF} the keeper converts ' + surplus + ' coins \u{2192} +' + pay + ' gold', 'hero', '#ffd75e');
+  }
+  return surplus;
+}
 const ALCH_BREW_N = 12;
 const DRAUGHTS = [
   { id: 'bomb',  name: 'BLASTING DRAUGHT' },
@@ -1116,7 +1147,7 @@ const S = {
   opts: { sfx: 1, music: 0.8, shake: true, parts: true, haptic: true, cb: false },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
   life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {}, chests: 0, weeklies: 0,
-          mutMax: 0, deepFloors: 0, draughts: {}, deaths: {}, gauntBest: 0, gaunts: 0, petFights: {} },
+          mutMax: 0, deepFloors: 0, draughts: {}, deaths: {}, gauntBest: 0, gaunts: 0, petFights: {}, skimmed: 0 },
   hist: [],                                     // the last ten runs, newest first
   codex: { foes: {}, relics: {}, coins: {} },   // everything ever met, owned or fired
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
@@ -1244,6 +1275,7 @@ function save() {
         gauntlet: S.run.gauntlet || null,
         jar: S.run.jar || null,
         pegs: S.run.pegs || [], pegSeen: S.run.pegSeen ? 1 : 0,
+        tollPaid: S.run.tollPaid | 0,
       } : null,
     }));
   } catch (e) {}
@@ -1285,7 +1317,7 @@ function load() {
                  mutMax: d.life.mutMax || 0, deepFloors: d.life.deepFloors || 0,
                  draughts: d.life.draughts || {}, deaths: d.life.deaths || {},
                  gauntBest: d.life.gauntBest || 0, gaunts: d.life.gaunts || 0,
-                 petFights: d.life.petFights || {} };
+                 petFights: d.life.petFights || {}, skimmed: d.life.skimmed || 0 };
     }
     if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
     if (d.codex && typeof d.codex === 'object') {
@@ -1370,6 +1402,7 @@ function load() {
           : null,
         pegs: Array.isArray(d.run.pegs) ? d.run.pegs.filter(pg => pg && isFinite(pg.x)).map(pg => ({ x: +pg.x, y: +pg.y })).slice(0, 3) : [],
         pegSeen: d.run.pegSeen ? 1 : 0,
+        tollPaid: Math.min(30, Math.max(0, d.run.tollPaid | 0)),
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -2334,6 +2367,7 @@ function bankLoot(key) {
   const i = B.loot.findIndex(l => lootKey(l) === key);
   if (i < 0) return false;
   B.banked.push(B.loot.splice(i, 1)[0]);
+  if (tollRun()) S.run.tollPaid = Math.min(TOLL_PREPAY_CAP, (S.run.tollPaid || 0) + 1);
   questBump('bank', 1);
   questBump('bigbank', 1);
   SND.clink();
@@ -2492,6 +2526,7 @@ function startBattle(type, entIdx, eid, extras) {
     S.foes.push(f);
   }
   for (const f of S.foes) rollIntent(f);
+  if (tollRun()) tollRefill();          // the keeper's hand resets before every battle
   S.battle = { round: 1, phase: 'drop', loot: [], banked: [], queue: [], qi: 0, qt: 0,
                stolen: 0, actList: [], actPtr: 0, actT: 0, target: 0,
                tilts: tiltCount(), grabs: grabCount(), fired: 0,
@@ -4050,6 +4085,8 @@ function newRun(heroId, force) {
   // the ALCHEMIST owns no flasks — the STILL starts cold (NG+ banks the
   // prestige flask as brew instead)
   if (hero.id === 'alch') { S.run.potions = 0; S.run.brew = 3 * ng; S.run.reagents = 0; }
+  // the TOLLKEEPER walks in with his fixed kit — bolt-ons convert to gold
+  if (hero.id === 'toll') { S.run.tollPaid = 0; tollRefill(); }
   // the WEEKLY DECREE rides every armed run (the daily carries its own law)
   if (S.weeklyPick && !force) {
     const wp = weeklyPlan(new Date().toISOString().slice(0, 10));
@@ -4091,6 +4128,7 @@ function stairSkim() {
   }
   const pay = skimmed * 2;
   addGold(pay);
+  S.life.skimmed = (S.life.skimmed || 0) + skimmed;   // the Tollkeeper's seal counts these
   toast('\u{2696}\u{FE0F} the deep skims ' + skimmed + ' coins off the top — +' + pay + ' gold');
   return skimmed;
 }
@@ -4487,6 +4525,9 @@ function interact(i) {
     if (S.run.tollFree) {
       S.run.tollFree = 0;                     // the clerk's misfiled form, spent
       toast('the stairs look the other way — toll waived');
+    } else if (tollRun() && (S.run.tollPaid || 0) >= stairToll()) {
+      S.run.tollPaid -= stairToll();          // prepaid in full by honest banking
+      toast('\u{1F9FF} toll prepaid — ' + S.run.tollPaid + ' banked ahead');
     } else if (!spendPurse(stairToll())) {
       S.uiFlash = { msg: 'THE STAIRS DEMAND ' + stairToll() + ' COINS', t: 1.4 };
       SND.deny();
@@ -5265,6 +5306,7 @@ window.DP = {
   giftLink, parseGift, claimGift, boardFilter,
   petVet, petTag, legacyStamp, LEGACY_ACH,
   jarY, jarSmash,
+  tollRun, tollRefill, TOLL_KIT, TOLL_PREPAY_CAP,
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
@@ -7857,8 +7899,11 @@ if (!HEADLESS) (function browser() {
     txt('\u{1F5DD} × ' + r.keys, 190, 762, '900 15px Verdana, sans-serif',
         r.keys < 1 ? '#ff5a4e' : '#ffe9a3', 'left');
     if (r.goldKeys > 0) txt('\u{1F511} × ' + r.goldKeys, 190, 780, '900 12px Verdana, sans-serif', '#ffd75e', 'left');
-    // potion button — or the ALCHEMIST's still gauge in its place
-    if (alchRun()) {
+    // potion button — or the specialist gauges in its place
+    if (tollRun()) {
+      txt('\u{1F9FF} toll prepaid: ' + (r.tollPaid | 0) + ' / ' + stairToll(), 240, 762,
+          '900 12px Verdana, sans-serif', '#8fc8ff', 'left');
+    } else if (alchRun()) {
       const rg = (r.reagents || 0) > 0 ? '  \u{1F4A0}+' + 2 * r.reagents : '';
       txt('\u{2697}\u{FE0F} ' + (r.brew || 0) + '/' + ALCH_BREW_N + rg, 240, 762,
           '900 12px Verdana, sans-serif', '#8ef0ff', 'left');
