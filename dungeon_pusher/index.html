@@ -959,6 +959,8 @@ function brewDraught(force) {
   if (!d) return null;
   const pow = 2 * (S.run.reagents || 0);
   S.run.reagents = 0;
+  S.life.draughts = S.life.draughts || {};
+  S.life.draughts[d.id] = (S.life.draughts[d.id] || 0) + 1;   // the habit ledger sips too
   S.shake += 3;
   SND.gem();
   if (d.id === 'bomb') {
@@ -1087,7 +1089,7 @@ const S = {
   opts: { sfx: 1, music: 0.8, shake: true, parts: true, haptic: true, cb: false },   // player settings (persisted)
   ach: { u: {}, heroes: {} }, achQ: [],         // trophies + the unlock toast queue
   life: { fired: 0, dealt: 0, taken: 0, kills: 0, gold: 0, bosses: 0, time: 0, heroRuns: {}, chests: 0, weeklies: 0,
-          mutMax: 0, deepFloors: 0 },
+          mutMax: 0, deepFloors: 0, draughts: {}, deaths: {} },
   hist: [],                                     // the last ten runs, newest first
   codex: { foes: {}, relics: {}, coins: {} },   // everything ever met, owned or fired
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
@@ -1101,6 +1103,7 @@ const S = {
   weeklyPick: false,                            // the WEEKLY DECREE is armed for new runs
   weeklyDone: '',                               // the week whose decree was already cleared
   rival: { name: '', floor: 0, kills: 0 },      // the marked name to out-dig (from the board)
+  tales: {},                                    // innkeeper's tales heard (TALES index → 1)
   duel: null,                                   // a pending ?duel challenge {seed, floor, name}
   wbRelic: 0,                                   // welcome-back crate: rare pick armed for next run
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
@@ -1180,7 +1183,7 @@ function save() {
       seenVer: S.seenVer || '',
       coach: S.coach, streak: S.streak, yday: S.yday,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
-      rival: S.rival, wbRelic: S.wbRelic ? 1 : 0,
+      rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1237,7 +1240,8 @@ function load() {
                  kills: d.life.kills || 0, gold: d.life.gold || 0, bosses: d.life.bosses || 0,
                  time: d.life.time || 0, heroRuns: d.life.heroRuns || {},
                  chests: d.life.chests || 0, weeklies: d.life.weeklies || 0,
-                 mutMax: d.life.mutMax || 0, deepFloors: d.life.deepFloors || 0 };
+                 mutMax: d.life.mutMax || 0, deepFloors: d.life.deepFloors || 0,
+                 draughts: d.life.draughts || {}, deaths: d.life.deaths || {} };
     }
     if (Array.isArray(d.hist)) S.hist = d.hist.slice(0, 10);
     if (d.codex && typeof d.codex === 'object') {
@@ -1261,6 +1265,7 @@ function load() {
       S.rival = { name: String(d.rival.name || '').slice(0, 12), floor: d.rival.floor | 0, kills: d.rival.kills | 0 };
     }
     S.wbRelic = d.wbRelic ? 1 : 0;
+    if (d.tales && typeof d.tales === 'object') S.tales = d.tales;
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
@@ -3378,6 +3383,7 @@ function parseDuel(search) {
 // count their rarity. Shared by the tab meters, the trophy and the tests.
 const CODEX_TABS = ['a1', 'a2', 'a3', 'a4', 'c', 'r', 'e'];
 function codexTabStat(tab) {
+  if (tab === 't') return { got: Object.keys(S.tales || {}).length, all: TALES.length };
   if (tab[0] === 'a') {
     const act = +tab[1] - 1;
     const foes = (ENEMY_TIERS[act] || []).concat([BOSSES[act % BOSSES.length], BOSSES2[act % BOSSES2.length]]);
@@ -3420,6 +3426,93 @@ function marqueeLine(dateStr) {
     return '\u{26CF}\u{FE0F} yesterday’s crown: floor ' + S.yday.floor + ' by ' + S.yday.name + ' — take it';
   }
   return '\u{1F331} plant TODAY’S MAZE — everyone digs the same corridors';
+}
+// ---------------------------------------------- the INNKEEPER'S TALES
+// one line for the road, roughly every third staircase — half true tips,
+// half tavern lore, act-aware. Heard tales collect in the codex. (a = act
+// 0-3, null = told anywhere; rolled BEFORE genFloor reseeds, so seeds stay
+// reproducible.)
+const TALES = [
+  // any act: the machine's honest truths
+  { a: null, x: 'the tray forgives nothing it never caught — aim before you pour' },
+  { a: null, x: 'three TILTs a round; the machine remembers a fourth' },
+  { a: null, x: 'the deep swallows all but a ring of keys — spend before you descend' },
+  { a: null, x: 'a golden key opens a golden vault; neither is ever wasted' },
+  { a: null, x: 'the keeper doubles every GOLD tag — coins stay the honest currency' },
+  { a: null, x: 'slugs are worthless. the Slugsmelter begs to differ' },
+  { a: null, x: 'elites spin the wheel for free — pick your fights rich' },
+  { a: null, x: 'a full jackpot is not luck; it is planning wearing luck’s coat' },
+  { a: null, x: 'pets stand between you and the blow — feed them fights, not funerals' },
+  { a: null, x: 'the purse spent is the turn ended; the tray settles all accounts' },
+  { a: null, x: 'bleed answers armor; burn answers crowds; frost answers everything, once' },
+  { a: null, x: 'the ale waters down on Sundays. the decree changes Mondays' },
+  { a: null, x: 'two players, one seed, one dungeon — the coins alone choose sides' },
+  { a: null, x: 'your best run leaves a ghost on every staircase. it is patient' },
+  { a: null, x: 'the board’s midpoint is a door, not a wall' },
+  { a: null, x: 'streaks forgive one lazy day. never two' },
+  { a: null, x: 'a rival marked is a floor remembered' },
+  { a: null, x: 'the daily loans you a hero. return them dented' },
+  { a: null, x: 'carve your name, or the deep forgets you by morning' },
+  { a: null, x: 'the stairs charge what the depth is worth — travel light' },
+  { a: null, x: 'a purse over the ceiling pays the tollkeeper in its plainest coin' },
+  { a: null, x: 'the alchemist never drinks. ask her still why' },
+  { a: null, x: 'the rat king pays his court in cheese and gets rich on it' },
+  { a: null, x: 'gems are worth more than gold to the right hands' },
+  // act I: the upper halls
+  { a: 0, x: 'floor five keeps a crown. bring more sword than pride' },
+  { a: 0, x: 'spend gold early — dead adventurers tip poorly' },
+  { a: 0, x: 'the first vault you skip is the run you will mourn' },
+  { a: 0, x: 'orcs brace. wait out the shield, or thread a lucky through it' },
+  { a: 0, x: 'silver raises a wall; the wall remembers your dexterity' },
+  { a: 0, x: 'venom does its work while you do yours' },
+  { a: 0, x: 'the shopkeeper up here still smiles. enjoy that' },
+  { a: 0, x: 'skulls in the rain are the house’s tax — push them wide' },
+  { a: 0, x: 'the wheel ghost takes five coins and owes you nothing' },
+  { a: 0, x: 'even floor one has heard of you. make floor five believe it' },
+  // act II: the mid-dark
+  { a: 1, x: 'mirror shells spend their spite once a round — knock first, hit second' },
+  { a: 1, x: 'the gel cannot be hurt badly, only often' },
+  { a: 1, x: 'gremlins filch from the tray. bills are settled at their funeral' },
+  { a: 1, x: 'rustmites eat the shine off your best coins. squash them early' },
+  { a: 1, x: 'the second act’s shops mark up what the first act gave away' },
+  { a: 1, x: 'a brace held too long is an invitation carved in bronze' },
+  { a: 1, x: 'the lich taxes every coin you touch. touch fewer, hit harder' },
+  { a: 1, x: 'down here the dark floors begin. the map seller knows it' },
+  { a: 1, x: 'burn stacks; patience stacks higher' },
+  { a: 1, x: 'floor ten is a door the board remembers' },
+  // act III: the low dark
+  { a: 2, x: 'the demon halves your blows — bring twice the blows' },
+  { a: 2, x: 'freezing a thing twice teaches it to shrug. space your frost' },
+  { a: 2, x: 'the third act’s elites travel in worse company' },
+  { a: 2, x: 'oaths sworn on floor eleven are collected on floor fifteen' },
+  { a: 2, x: 'a cleric’s heart coin outheals any potion the keeper sells' },
+  { a: 2, x: 'the wizard’s ward is rude to your poisons. be ruder' },
+  { a: 2, x: 'the deep clear at fifteen tailors a coat no gold can buy' },
+  { a: 2, x: 'even the B-side lairs keep the rent paid. every other run, new landlords' },
+  { a: 2, x: 'save a golden key for the low dark; the vaults grow prouder' },
+  { a: 2, x: 'what the wheel gives at floor twelve, floor fourteen takes back' },
+  // act IV: THE MINT
+  { a: 3, x: 'the mint stamps its own — magnetic armor drinks stray coins' },
+  { a: 3, x: 'counterfeit slugs ring false. the real coins ring truer — listen' },
+  { a: 3, x: 'the meter leech drinks your jackpot — spend the meter, starve the leech' },
+  { a: 3, x: 'the Auditor holds your frenzy for review. file it before his door' },
+  { a: 3, x: 'the mint’s strangers pay in gold for honest appraisals. mostly honest' },
+  { a: 3, x: 'gild is a promise the mint keeps to itself' },
+  { a: 3, x: 'past floor twenty-one, the deep writes its own laws — one every third floor' },
+  { a: 3, x: 'milestone chests pace the endless: twenty-two, twenty-five, and on' },
+  { a: 3, x: 'the mint relics buy back their own price, if you live to collect' },
+  { a: 3, x: 'nobody audits the Auditor. somebody should' },
+];
+function rollTale() {
+  if (!S.run) return null;
+  const act = Math.min(3, actIdx(S.run.floor));
+  const pool = [];
+  TALES.forEach((tl, i) => { if (tl.a == null || tl.a === act) pool.push(i); });
+  const unheard = pool.filter(i => !S.tales[i]);
+  const from = unheard.length ? unheard : pool;   // fresh lines first, then reruns
+  const i = from[(rng() * from.length) | 0];
+  S.tales[i] = 1;
+  return TALES[i].x;
 }
 // away a week or more? the dungeon kept your seat warm — one crate, no guilt
 function welcomeBack(todayStr) {
@@ -3544,6 +3637,27 @@ function achPoll() {
   if (Object.keys(S.ach.heroes || {}).length >= 4) achUnlock('heroes4');
   if (S.battle && (S.battle.fired || 0) >= 100) achUnlock('volley');
 }
+// the LEDGER OF HABITS: what this player actually does, distilled — the
+// records page reads it, the tests pin it
+function habits() {
+  const top = (obj) => {
+    let k = null, n = 0;
+    for (const key in obj) if (obj[key] > n) { n = obj[key]; k = key; }
+    return k != null ? { k, n } : null;
+  };
+  const coin = top((S.codex && S.codex.coins) || {});
+  const foe = top((S.codex && S.codex.foes) || {});
+  const dr = top((S.life && S.life.draughts) || {});
+  const df = top((S.life && S.life.deaths) || {});
+  const foeDef = foe && (enemyById(foe.k)
+    || BOSSES.find(b => b.id === foe.k) || BOSSES2.find(b => b.id === foe.k));
+  return {
+    coin: coin ? { name: (COIN_INFO[coin.k] || { name: coin.k }).name, n: coin.n } : null,
+    foe: foeDef ? { name: foeDef.name, icon: foeDef.icon, n: foe.n } : null,
+    draught: dr ? { name: (DRAUGHTS.find(x => x.id === dr.k) || { name: dr.k }).name, n: dr.n } : null,
+    death: df ? { floor: +df.k, n: df.n } : null,
+  };
+}
 // where a carve lands among the board's top — pure math, shared with tests
 function boardPct(top, floor, kills) {
   if (!Array.isArray(top) || !top.length) return null;
@@ -3576,6 +3690,9 @@ function endRun(cause) {
   // the endless deep pays a premium per mutator endured
   streakTouch(new Date().toISOString().slice(0, 10));
   S.life.mutMax = Math.max(S.life.mutMax || 0, mutCount());
+  // the death ledger: which floor did the killing (every end is a death here)
+  S.life.deaths = S.life.deaths || {};
+  S.life.deaths[S.run.floor] = (S.life.deaths[S.run.floor] || 0) + 1;
   // the RIVALRY: every run is scored against the marked name
   if (S.rival && S.rival.name) {
     if (S.run.floor > (S.rival.floor | 0)) { S.over.toppled = S.rival.name; achUnlock('topple'); }
@@ -4010,6 +4127,9 @@ function nextFloor() {
   S.run.pace[S.run.floor] = Math.round((S.run.stats && S.run.stats.t) || 0);
   const gp = S.best.pace && S.best.pace[S.run.floor];
   if (gp != null && S.best.floor > 0) S.floorFx.pace = Math.round(gp - S.run.pace[S.run.floor]);
+  // the INNKEEPER: roughly every third staircase, a line for the road
+  // (rolled before genFloor reseeds — shared seeds stay identical mazes)
+  if (rng() < 0.34) S.floorFx.tale = rollTale();
   // the endless deep announces each new decree
   if (mutCount() > muts0) {
     const m = MUTS[mutCount() - 1];
@@ -4780,6 +4900,7 @@ window.DP = {
   stairToll, purseCap, stairSkim,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
+  TALES, rollTale, habits,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
@@ -9441,7 +9562,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { CODEX = null; } });
     txt('\u{1F4D6} CODEX', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
-    const tabs = [['a1', 'ACT I'], ['a2', 'ACT II'], ['a3', 'ACT III'], ['a4', 'MINT'], ['c', 'COMMON'], ['r', 'RARE'], ['e', 'EPIC']];
+    const tabs = [['a1', 'ACT I'], ['a2', 'ACT II'], ['a3', 'ACT III'], ['a4', 'MINT'], ['c', 'COMMON'], ['r', 'RARE'], ['e', 'EPIC'], ['t', 'TALES']];
     const tw = (LW - 36) / tabs.length;
     let cxGot = 0, cxAll = 0;
     tabs.forEach(([id, label], i) => {
@@ -9480,6 +9601,32 @@ if (!HEADLESS) (function browser() {
         txt(kills ? (f.trait ? f.trait : f.def ? f.def : 'no tricks') + '  •  ×' + kills : 'unmet',
             x + 36, y + 27, '600 9px Verdana, sans-serif', kills ? '#9a8aa0' : '#4a4058', 'left');
       });
+    } else if (CODEX.tab === 't') {
+      // the TALES shelf: every line the innkeeper has told you, re-readable
+      const heard = Object.keys(S.tales).length;
+      txt(heard + ' / ' + TALES.length + ' heard', LW / 2, 106, '800 11px Verdana, sans-serif', '#d8c8b0');
+      TALES.forEach((tl, i) => {
+        const x = 24 + (i % 8) * 55, y = 120 + ((i / 8) | 0) * 55;
+        const own = !!S.tales[i];
+        const sel = CODEX.sel === 'tale' + i;
+        rr(x, y, 48, 48, 9);
+        ctx.fillStyle = own ? 'rgba(52,44,24,0.9)' : 'rgba(20,16,26,0.9)'; ctx.fill();
+        if (sel) { ctx.lineWidth = 2; ctx.strokeStyle = '#ffd75e'; ctx.stroke(); }
+        ctx.save();
+        if (!own) ctx.globalAlpha = 0.22;
+        txt('\u{1F4DC}', x + 24, y + 25, '20px serif', '#fff');
+        ctx.restore();
+        if (!own) txt('\u{1F512}', x + 24, y + 26, '11px serif', '#fff');
+        uiButtons.push({ x, y, w: 48, h: 48, cb: () => { CODEX.sel = 'tale' + i; } });
+      });
+      const si = (typeof CODEX.sel === 'string' && CODEX.sel.slice(0, 4) === 'tale') ? +CODEX.sel.slice(4) : -1;
+      if (si >= 0 && TALES[si]) {
+        rr(24, LH - 118, LW - 48, 52, 10);
+        ctx.fillStyle = 'rgba(24,14,26,0.97)'; ctx.fill();
+        ctx.lineWidth = 1.5; ctx.strokeStyle = '#c8a86a'; ctx.stroke();
+        fitTxt(S.tales[si] ? '“' + TALES[si].x + '”' : 'the innkeeper hasn’t told this one yet',
+               LW / 2, LH - 92, LW - 72, 10, S.tales[si] ? '#e8d8c0' : '#9a8aa0');
+      }
     } else {
       // a rarity shelf of relic icons — owned shine, the rest wait in the dark
       const rar = CODEX.tab;
@@ -9525,13 +9672,48 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(0, 0, LW, LH);
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { RECORDS = false; } });
     txt('\u{1F4CA} RECORDS', LW / 2, 46, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
-    [['book', 'THE BOOK'], ['deep', '\u{1F30C} THE ENDLESS']].forEach(([id, label], i) => {
+    [['book', 'THE BOOK'], ['deep', '\u{1F30C} ENDLESS'], ['habits', '\u{1F3B2} HABITS']].forEach(([id, label], i) => {
       const on = RECORDS.tab === id;
-      uiBtn(LW / 2 - 152 + i * 157, 64, 147, 30, label, () => { RECORDS = { tab: id }; },
+      uiBtn(LW / 2 - 156 + i * 106, 64, 100, 30, label, () => { RECORDS = { tab: id }; },
             { bg: on ? 'rgba(80,60,24,0.95)' : 'rgba(34,28,42,0.9)', border: on ? '#ffd75e' : '#55506a',
-              col: on ? '#ffe9a3' : '#9a90a8', font: '900 11px Verdana, sans-serif', r: 10 });
+              col: on ? '#ffe9a3' : '#9a90a8', font: '900 10px Verdana, sans-serif', r: 10 });
     });
     const L = S.life;
+    // ---- the HABITS page: what this player actually does ----
+    if (RECORDS.tab === 'habits') {
+      const H = habits();
+      const rows = [
+        ['favorite coin', H.coin ? H.coin.name + ' — ' + fmt(H.coin.n) + ' fired' : '—'],
+        ['most-slain foe', H.foe ? H.foe.icon + ' ' + H.foe.name + '  ×' + fmt(H.foe.n) : '—'],
+        ['favorite draught', H.draught ? H.draught.name + '  ×' + H.draught.n : '— (ask the alchemist)'],
+        ['deadliest floor', H.death ? 'floor ' + H.death.floor + ' — ×' + H.death.n : '—'],
+        ['weekly decrees', (L.weeklies || 0) + ' survived'],
+        ['tales heard', Object.keys(S.tales).length + ' / ' + TALES.length],
+      ];
+      rows.forEach((rw, i) => {
+        const x = i % 2 === 0 ? 30 : LW / 2 + 10;
+        const y = 116 + ((i / 2) | 0) * 40;
+        rr(x, y, LW / 2 - 40, 34, 8);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)'; ctx.fill();
+        txt(rw[0], x + 8, y + 10, '600 10px Verdana, sans-serif', '#9a8aa0', 'left');
+        txt(rw[1], x + 8, y + 25, '900 11px Verdana, sans-serif', '#ffe9a3', 'left');
+      });
+      const dy = 116 + 3 * 40 + 26;
+      txt('— WHERE THE RUNS END —', LW / 2, dy, '900 12px Georgia, serif', '#c8a8b0');
+      const ds = Object.entries(L.deaths || {}).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      if (!ds.length) txt('no deaths on the books — suspicious', LW / 2, dy + 30, '700 10px Verdana, sans-serif', '#9a8aa0');
+      const maxD = ds.length ? ds[0][1] : 1;
+      ds.forEach(([fl, n], i) => {
+        const y = dy + 16 + i * 30;
+        rr(96, y, (LW - 220) * (n / maxD) + 4, 22, 6);
+        ctx.fillStyle = 'rgba(255,90,78,0.25)'; ctx.fill();
+        txt('floor ' + fl, 88, y + 11, '800 10px Verdana, sans-serif', '#e8d0a0', 'right');
+        txt('×' + n, 106 + (LW - 220) * (n / maxD), y + 11, '800 10px Verdana, sans-serif', '#ff9d8a', 'left');
+      });
+      uiBtn(LW / 2 - 70, dy + 16 + Math.max(1, ds.length) * 30 + 18, 140, 40, TR('CLOSE ✕'), () => { RECORDS = false; },
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+      return;
+    }
     // ---- the ENDLESS page: what the deep past floor 21 remembers ----
     if (RECORDS.tab === 'deep') {
       const u = (S.ach && S.ach.u) || {};
@@ -10324,6 +10506,12 @@ if (!HEADLESS) (function browser() {
         if (f.pace != null) {
           txt(f.pace >= 0 ? '\u{1F47B} ' + f.pace + 's ahead of your best' : '\u{1F47B} ' + (-f.pace) + 's behind your best',
               LW / 2, f.newAct ? 450 : 424, '800 12px Verdana, sans-serif', f.pace >= 0 ? '#7ee787' : '#ff9d8a');
+        }
+        // ...and the INNKEEPER gets the last word on the way down
+        if (f.tale) {
+          const ty = f.newAct ? 482 : 456;
+          fitTxt('“' + f.tale + '”', LW / 2, ty, LW - 56, 11, '#d8c8b0');
+          txt('— the innkeeper', LW / 2, ty + 18, '600 9px Verdana, sans-serif', '#9a8aa0');
         }
         ctx.restore();
       }

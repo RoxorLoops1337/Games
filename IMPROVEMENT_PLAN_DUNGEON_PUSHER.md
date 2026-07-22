@@ -368,13 +368,16 @@ impact ÷ effort.
       as 1; one ink per run via S.run.deepInked); masteryStars → ★/★★/★★★
       at 1/3/5 on the hero card, mastery toasts at 3 and 5, and a ★ MASTER'S
       MARK on your own board rows once any hero hits three stars (session 57)
-- [ ] **The innkeeper's tales**: on the floor-transition curtain, ~1 in 3
-      descents drops a one-line tale or true tip (act-aware pool of 60+);
-      heard tales collect in a CODEX: TALES tab — month-two texture that
-      also teaches the deep systems
-- [ ] **Ledger of habits**: RECORDS book gains a HABITS row pair — favorite
-      coin (mastery fire counts exist), favorite draught (alch), most-slain
-      foe (codex kill counts), deadliest floor (deaths by floor, new tally)
+- [x] **The innkeeper's tales**: 64 act-aware lines (24 evergreen + 10/act),
+      ~1 in 3 descents via rollTale() (unheard-first, rolled before genFloor
+      so seeds stay reproducible), quoted on the curtain with the innkeeper's
+      credit; heard tales collect in a CODEX: TALES tab (8th, display-only —
+      never gates THE FULL LEDGER) (session 59)
+- [x] **Ledger of habits**: RECORDS grew a third 🎲 HABITS tab — favorite
+      coin (codex fire counts), most-slain foe (boss lookup incl. B-sides),
+      favorite draught (new S.life.draughts tally), deadliest floor (new
+      S.life.deaths stamped every endRun) + WHERE THE RUNS END death bars
+      (session 59)
 - [ ] **Trophy-wall share card**: buildShareCard variant: the 37-trophy wall
       with earned tiles lit + "N / 37" banner — the brag image for group
       chats; same toBlob/canShare plumbing as the run card

@@ -5268,4 +5268,79 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(xh0 - X.S.run.hp, 14, 'an act-3 mirror bounces up to 14 (8 + 2·act)');
 }
 
+// -------- THE INNKEEPER'S TALES + the ledger of habits --------
+{
+  const store = {};
+  const { DP: D } = loadGame(store, false);
+  t.ok(D.TALES.length >= 60, 'sixty-plus tales in the book (' + D.TALES.length + ')');
+  t.ok(D.TALES.every(tl => tl.x && (tl.a == null || (tl.a >= 0 && tl.a <= 3))),
+    'every tale is written and act-tagged sanely');
+  t.eq(new Set(D.TALES.map(tl => tl.x)).size, D.TALES.length, 'no tale is told twice in the book');
+  // act-aware: down in the mint, only mint lines and evergreens are told
+  D.srand(101); D.newRun('knight');
+  D.S.run.floor = 18;
+  for (let i = 0; i < 40; i++) D.rollTale();
+  t.ok(Object.keys(D.S.tales).every(i => D.TALES[i].a == null || D.TALES[i].a === 3),
+    'the mint innkeeper never tells act-one gossip');
+  // unheard-first: with one line left in the pool, that line is next
+  const eligible = [];
+  D.TALES.forEach((tl, i) => { if (tl.a == null || tl.a === 3) eligible.push(i); });
+  D.S.tales = {};
+  for (const i of eligible.slice(1)) D.S.tales[i] = 1;
+  t.eq(D.rollTale(), D.TALES[eligible[0]].x, 'the last unheard line is told next');
+  // ...and once all are heard, the innkeeper repeats himself rather than mute
+  t.ok(typeof D.rollTale() === 'string', 'a full book still pours reruns');
+  // the staircase actually tells them (~1 in 3), before the maze is carved
+  D.S.tales = {};
+  D.srand(7);
+  let told = 0;
+  for (let i = 0; i < 12; i++) { D.nextFloor(); if (D.S.floorFx.tale) told++; }
+  t.ok(told >= 2 && told < 12, 'roughly a third of descents get a line (' + told + '/12)');
+  t.ok(Object.keys(D.S.tales).length >= told, 'every told line is remembered');
+  // heard tales survive a reload; the ledger's trophy math ignores them
+  D.save();
+  const { DP: R } = loadGame(store, false);
+  t.eq(Object.keys(R.S.tales).length, Object.keys(D.S.tales).length, 'the heard shelf rides the save');
+  t.ok(R.CODEX_TABS.indexOf('t') < 0, 'TALES never gate THE FULL LEDGER');
+  t.eq(R.codexTabStat('t').all, R.TALES.length, 'but the tab still counts itself');
+  // ---- the ledger of habits ----
+  const { DP: H } = loadGame({}, false);
+  H.srand(102); H.newRun('knight');
+  const empty = H.habits();
+  t.ok(!empty.coin && !empty.foe && !empty.draught && !empty.death, 'a silent ledger names no favorites');
+  H.S.codex.coins = { silver: 900, coin: 200 };
+  H.S.codex.foes = { orc: 40, wyrm: 3 };
+  H.S.life.draughts = { heal: 4, bomb: 2 };
+  H.S.life.deaths = { 8: 5, 3: 2 };
+  const hb = H.habits();
+  t.eq(hb.coin.name, H.COIN_INFO.silver.name, 'the favorite coin is the most-fired');
+  t.eq(hb.coin.n, 900, 'with its count');
+  t.ok(hb.foe && hb.foe.n === 40, 'the most-slain foe tops the bestiary tally');
+  t.eq(hb.draught.name, 'MENDING DRAUGHT', 'the favorite draught reads its proper name');
+  t.eq(hb.death.floor, 8, 'the deadliest floor is the one with the bodies');
+  H.S.codex.foes = { wyrm: 9 };
+  t.ok(H.habits().foe && H.habits().foe.n === 9, 'B-side bosses resolve by name too');
+  // deaths stamp at every run's end; draughts tally on every brew
+  const { DP: E } = loadGame({}, false);
+  E.srand(103); E.newRun('knight');
+  E.S.run.floor = 7; E.endRun('fell');
+  E.srand(104); E.newRun('knight');
+  E.S.run.floor = 7; E.endRun('fell');
+  t.eq(E.S.life.deaths[7], 2, 'floor 7 owns both bodies');
+  E.srand(105); E.newRun('knight');
+  E.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: 0.5, py: 0.4 }];
+  E.interact(0);
+  E.S.enemy.hp = E.S.enemy.maxHp = 500;
+  E.brewDraught('heal');
+  E.brewDraught('heal');
+  t.eq(E.S.life.draughts.heal, 2, 'the habit ledger sips with every brew');
+  // the pages exist
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf("['t', 'TALES']") >= 0, 'the codex grew a TALES tab');
+  t.ok(src.indexOf('— the innkeeper') >= 0, 'the curtain credits the teller');
+  t.ok(src.indexOf("['habits', '\\u{1F3B2} HABITS']") >= 0, 'records grew the HABITS tab');
+  t.ok(src.indexOf('WHERE THE RUNS END') >= 0, 'with the death bars beneath');
+}
+
 t.done();
