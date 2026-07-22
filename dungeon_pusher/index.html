@@ -308,7 +308,7 @@ function theme() {
 }
 // every 3rd floor the torches are DEAD: you carry your own light and only
 // a small circle around you is lit — find the doors in the dark
-function darkFloor() { return !!(S.run && S.run.floor % 3 === 0); }
+function darkFloor() { return !!(S.run && (S.run.floor % 3 === 0 || mutOn('longdark'))); }
 
 // ------------------------------------------------------------------- items
 // Your arsenal: bought in shops, won from boons and wheels. Every battle the
@@ -3118,6 +3118,10 @@ const MUTS = [
   { id: 'armoredage', name: 'ARMORED AGE', desc: 'foes start each round with 2 block' },
   { id: 'bonerain',   name: 'BONE RAIN',   desc: 'a skull rides every round\'s rain' },
   { id: 'richveins',  name: 'RICH VEINS',  desc: 'kills pay +25% gold — the one mercy' },
+  // the stack deepens: only the truly endless ever read these
+  { id: 'gildedage',  name: 'GILDED AGE',  desc: 'the deep crowns its own — elites everywhere' },
+  { id: 'thinveins',  name: 'THIN VEINS',  desc: 'every shop price +25%' },
+  { id: 'longdark',   name: 'THE LONG DARK', desc: 'every floor is a dark floor' },
 ];
 function mutCount() {
   return S.run ? Math.max(0, Math.min(MUTS.length, Math.floor((S.run.floor - 18) / 3))) : 0;
@@ -3246,6 +3250,9 @@ const ACH = [
   { id: 'minted',    icon: '\u{1FA99}', name: 'Counting House', desc: 'fell the Lodestone, the Counterfeiter and the Meter Leech' },
   { id: 'shutterbug', icon: '\u{1F4F7}', name: 'Shutterbug', desc: 'step into photo mode for a clean shot' },
   { id: 'tweetalig', icon: '\u{1F310}', name: 'Tweetalig', desc: 'speel het spel in het Nederlands' },
+  { id: 'milestone', icon: '\u{1F381}', name: 'Deep Pockets', desc: 'open a MILESTONE CHEST past floor 21' },
+  { id: 'floor25',   icon: '\u{1F573}\u{FE0F}', name: 'Past the Ledger', desc: 'reach floor 25' },
+  { id: 'floor30',   icon: '\u{26AB}', name: 'Where Light Retires', desc: 'reach floor 30' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 function achUnlock(id) {
@@ -3274,6 +3281,8 @@ function achPoll() {
   if (r.floor >= 5) achUnlock('floor5');
   if (r.floor >= 10) achUnlock('floor10');
   if (r.floor >= 20) achUnlock('floor20');
+  if (r.floor >= 25) achUnlock('floor25');
+  if (r.floor >= 30) achUnlock('floor30');
   if (r.gold >= 500) achUnlock('rich');
   if (r.keys >= 5) achUnlock('keymaster');
   if (r.relics.length >= 10) achUnlock('relic10');
@@ -3431,7 +3440,7 @@ function genEnts(dist) {
   for (let i = 0; i < n; i++) {
     const avail = SVC.filter(s => !ents.some(e => e.kind === s[0]));
     if (rng() < 0.66 || !avail.length) {
-      const mtype = dist >= 2 && rng() < 0.24 ? 'elite' : 'battle';
+      const mtype = dist >= 2 && rng() < (mutOn('gildedage') ? 0.6 : 0.24) ? 'elite' : 'battle';
       const eid = curRoster()[(rng() * enemyPool(dist + 1)) | 0].id;
       ents.push({ kind: 'monster', mtype, eid, done: false });
     } else {
@@ -3682,6 +3691,24 @@ function nextFloor() {
   if (mutCount() > muts0) {
     const m = MUTS[mutCount() - 1];
     toast('\u{1F30C} ENDLESS DECREE — ' + m.name + ': ' + m.desc);
+  }
+  // MILESTONE CHESTS pace the truly endless: floors 22, 25, 28… (the
+  // off-beat between decree floors) pay cogs, a golden key, or a relic pick
+  if (S.run.floor >= 22 && (S.run.floor - 22) % 3 === 0) {
+    S.life.chests = (S.life.chests || 0) + 1;
+    const r = rng();
+    if (r < 0.4) {
+      const c = 15 + S.run.floor;
+      S.cogs += c;
+      toast('\u{1F381} MILESTONE CHEST — +' + c + ' ⚙ cogs for the workshop');
+    } else if (r < 0.7) {
+      S.run.goldKeys = (S.run.goldKeys || 0) + 1;
+      toast('\u{1F381} MILESTONE CHEST — a GOLDEN KEY \u{1F511}');
+    } else {
+      toast('\u{1F381} MILESTONE CHEST — choose a rare relic');
+      openRelicPick('r', 1);
+    }
+    achUnlock('milestone');
   }
   S.run.pileSave = null;
   S.run.pending = [];
@@ -3945,7 +3972,7 @@ function shopStock() {
   // the keeper knows what his shelf is worth now — GOLD prices are DOUBLE
   // what the wares are worth (coins stay the honest currency)
   const st = [];
-  const mult = (1 + 0.25 * (S.run.floor - 1)) * (1 - 0.10 * wsLvl('haggler'));
+  const mult = (1 + 0.25 * (S.run.floor - 1)) * (1 - 0.10 * wsLvl('haggler')) * (mutOn('thinveins') ? 1.25 : 1);
   // three distinct items
   const ids = ITEMS.map(i => i.id);
   for (let i = 0; i < 3; i++) {
