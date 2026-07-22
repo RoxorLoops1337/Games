@@ -1089,6 +1089,7 @@ const S = {
   yday: { on: '', floor: 0, name: '' },         // yesterday's deepest (fetched once a day)
   weeklyPick: false,                            // the WEEKLY DECREE is armed for new runs
   weeklyDone: '',                               // the week whose decree was already cleared
+  rival: { name: '', floor: 0, kills: 0 },      // the marked name to out-dig (from the board)
   syncCode: '',                                 // cloud-save bearer code (XXXX-XXXX)
   lang: 'en',                                   // interface language (LANGS key)
   machTheme: 'classic',                         // cabinet skin (MACH_THEMES key)
@@ -1166,6 +1167,7 @@ function save() {
       seenVer: S.seenVer || '',
       coach: S.coach, streak: S.streak, yday: S.yday,
       weeklyPick: S.weeklyPick ? 1 : 0, weeklyDone: S.weeklyDone || '',
+      rival: S.rival,
       boardName: S.boardName || '',
       run: S.run ? {
         hero: S.run.hero,
@@ -1239,6 +1241,9 @@ function load() {
     }
     S.weeklyPick = !!d.weeklyPick;
     if (typeof d.weeklyDone === 'string') S.weeklyDone = d.weeklyDone;
+    if (d.rival && typeof d.rival === 'object') {
+      S.rival = { name: String(d.rival.name || '').slice(0, 12), floor: d.rival.floor | 0, kills: d.rival.kills | 0 };
+    }
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
@@ -3389,6 +3394,7 @@ const ACH = [
   { id: 'streak7',   icon: '\u{2604}\u{FE0F}', name: 'Week of Fire', desc: 'keep the streak alive seven days' },
   { id: 'gardener',  icon: '\u{1F331}', name: 'Green Thumb', desc: 'grow TODAY’S MAZE from the planted seed' },
   { id: 'decreed',   icon: '\u{2696}\u{FE0F}', name: 'Above the Law', desc: 'clear floor 15 under a WEEKLY DECREE' },
+  { id: 'topple',    icon: '\u{1F3AF}', name: 'Rival Toppled', desc: 'out-dig your marked rival' },
 ];
 function achById(id) { return ACH.find(a => a.id === id); }
 function achUnlock(id) {
@@ -3431,6 +3437,13 @@ function achPoll() {
   if (Object.keys(S.ach.heroes || {}).length >= 4) achUnlock('heroes4');
   if (S.battle && (S.battle.fired || 0) >= 100) achUnlock('volley');
 }
+// where a carve lands among the board's top — pure math, shared with tests
+function boardPct(top, floor, kills) {
+  if (!Array.isArray(top) || !top.length) return null;
+  const deeper = top.filter(e => e.floor > floor || (e.floor === floor && (e.kills | 0) > (kills | 0))).length;
+  return { pct: Math.round(100 * (top.length - deeper) / top.length),
+           deeper, median: top[Math.floor((top.length - 1) / 2)].floor };
+}
 function bestify() {
   const b = S.best, r = S.run;
   if (!r) return;
@@ -3453,6 +3466,11 @@ function endRun(cause) {
   // the endless deep pays a premium per mutator endured
   streakTouch(new Date().toISOString().slice(0, 10));
   S.life.mutMax = Math.max(S.life.mutMax || 0, mutCount());
+  // the RIVALRY: every run is scored against the marked name
+  if (S.rival && S.rival.name) {
+    if (S.run.floor > (S.rival.floor | 0)) { S.over.toppled = S.rival.name; achUnlock('topple'); }
+    else S.over.rivalGap = (S.rival.floor | 0) - S.run.floor;   // 0 = matched
+  }
   const cogsWon = Math.round(Math.max(1, S.run.floor + Math.floor(S.run.kills / 8)) * (1 + 0.2 * mutCount()) * streakK()
                              * (S.run.weekly === 'ironweek' ? 1.4 : 1));
   S.cogs += cogsWon;
@@ -4603,7 +4621,7 @@ window.DP = {
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
   streakTouch, streakK, plantToday,
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
-  alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N,
+  alchRun, brewDraught, gainPotions, DRAUGHTS, ALCH_BREW_N, boardPct,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
   DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
@@ -9433,7 +9451,18 @@ if (!HEADLESS) (function browser() {
     if (typeof fetch !== 'function') { mine.state = 'err'; return; }
     fetch(BOARD_API + (mine.tab === 'daily' ? '?board=daily' : ''))
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; } })
+      .then(j => {
+        if (BOARD !== mine) return;
+        mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok';
+        // the rival's row is the freshest truth about them
+        if (mine.tab === 'alltime' && S.rival && S.rival.name) {
+          const e = mine.top.find(e2 => e2.name === S.rival.name);
+          if (e && (e.floor !== S.rival.floor || (e.kills | 0) !== S.rival.kills)) {
+            S.rival = { name: e.name, floor: e.floor, kills: e.kills | 0 };
+            save();
+          }
+        }
+      })
       .catch(() => { if (BOARD === mine) mine.state = 'err'; });
   }
   // YESTERDAY'S DEEPEST: one light fetch per calendar day stamps the title
@@ -9466,7 +9495,17 @@ if (!HEADLESS) (function browser() {
                              daily: run.daily ? 1 : 0, ng: run.ng ? 1 : 0 }),
     })
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(j => { if (BOARD === mine) { mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok'; achUnlock('carved'); } })
+      .then(j => {
+        if (BOARD !== mine) return;
+        mine.top = j.top || []; mine.day = j.day || ''; mine.state = 'ok';
+        achUnlock('carved');
+        // the percentile toast: where this carve landed among the fifty
+        const p = boardPct(mine.top, run.floor, run.kills | 0);
+        if (p) {
+          toast(p.pct >= 50 ? '\u{1F3C5} deeper than ' + p.pct + '% of the board'
+                            : 'the board’s midpoint is floor ' + p.median + ' — climb');
+        }
+      })
       .catch(() => { if (BOARD === mine) mine.state = 'err'; });
   }
   const HERO_ICON = {};
@@ -9510,8 +9549,19 @@ if (!HEADLESS) (function browser() {
         const rank = BOARD.page * PER + i + 1;
         const ry = py + 108 + i * 38;
         const me = S.boardName && e.name === S.boardName;
+        const rv = S.rival && S.rival.name === e.name;
         rr(44, ry - 15, LW - 88, 32, 8);
-        ctx.fillStyle = me ? 'rgba(140,100,30,0.35)' : 'rgba(255,255,255,0.03)'; ctx.fill();
+        ctx.fillStyle = me ? 'rgba(140,100,30,0.35)' : rv ? 'rgba(150,44,44,0.30)' : 'rgba(255,255,255,0.03)'; ctx.fill();
+        // tap a name to mark (or bury) the RIVALRY — your own row stays yours
+        uiButtons.push({ x: 44, y: ry - 15, w: LW - 88, h: 32, cb: () => {
+          if (me) return;
+          if (rv) { S.rival = { name: '', floor: 0, kills: 0 }; toast('the rivalry is buried'); }
+          else {
+            S.rival = { name: e.name, floor: e.floor, kills: e.kills | 0 };
+            toast('\u{2694}\u{FE0F} ' + e.name + ' is your RIVAL — out-dig floor ' + e.floor);
+          }
+          save();
+        } });
         const medal = rank === 1 ? '\u{1F947}' : rank === 2 ? '\u{1F948}' : rank === 3 ? '\u{1F949}' : null;
         if (medal) txt(medal, 62, ry + 2, '15px serif', '#fff');
         else txt('#' + rank, 62, ry + 1, '800 11px Verdana, sans-serif', '#9a8aa0');
@@ -9521,8 +9571,8 @@ if (!HEADLESS) (function browser() {
           ctx.beginPath(); ctx.arc(52, ry + 1, 3.2, 0, 7);
           ctx.fillStyle = e.diff === 'nightmare' ? '#ff5a4e' : '#7ee787'; ctx.fill();
         }
-        txt((e.d ? '\u{1F4C5} ' : '') + (e.ng ? '♟ ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
-            me ? '#ffe9a3' : '#d8c8dc', 'left');
+        txt((rv ? '\u{2694}\u{FE0F} ' : '') + (e.d ? '\u{1F4C5} ' : '') + (e.ng ? '♟ ' : '') + (h ? h.icon + ' ' : '') + e.name, 86, ry + 1, '800 12px Verdana, sans-serif',
+            me ? '#ffe9a3' : rv ? '#ffb0a0' : '#d8c8dc', 'left');
         txt('floor ' + e.floor, LW - 128, ry + 1, '900 12px Verdana, sans-serif', '#ffd75e', 'right');
         txt(fmt(e.kills || 0) + ' \u{2694}\u{FE0F}', LW - 64, ry + 1, '700 10px Verdana, sans-serif', '#c8a8b0', 'right');
       });
@@ -9534,6 +9584,10 @@ if (!HEADLESS) (function browser() {
           txt('the board\u2019s floor to beat is ' + worst.floor, LW / 2, py + ph - 108,
               '800 11px Verdana, sans-serif', '#e8d0a0');
         }
+      }
+      if (!(S.rival && S.rival.name)) {
+        txt('tap a name to mark your RIVAL \u{2694}\u{FE0F}', LW / 2, py + ph - 88,
+            '600 10px Verdana, sans-serif', '#9a8aa0');
       }
       if (pages > 1) {
         uiBtn(LW / 2 - 96, py + ph - 96, 60, 28, '▲', () => { BOARD.page--; },
@@ -10295,6 +10349,10 @@ if (!HEADLESS) (function browser() {
           + (S.best.runs > 0 ? '  •  ' + S.best.runs + ' run' + (S.best.runs > 1 ? 's' : '') : ''),
           LW / 2, 736, '700 11px Verdana, sans-serif', '#a08a94');
     }
+    if (S.rival && S.rival.name) {
+      txt('\u{2694}\u{FE0F} rival: ' + S.rival.name + ' — floor ' + S.rival.floor + '  (your best: ' + S.best.floor + ')',
+          LW / 2, 718, '800 10px Verdana, sans-serif', '#ff9d8a');
+    }
     txt('v' + VERSION, LW - 10, LH - 10, '600 10px Verdana, sans-serif', '#8d7d95', 'right');
     ydayFetch();
     if (S.yday && S.yday.floor > 0 && !S.saveQuarantined) {
@@ -10421,6 +10479,10 @@ if (!HEADLESS) (function browser() {
       ['relics collected', '' + (o.relics || 0)],
       ['run time', mm + ':' + ss],
     ];
+    // the RIVALRY verdict rides the report card
+    if (o.toppled) rows.splice(2, 0, ['rival', '\u{2694}\u{FE0F} TOPPLED — deeper than ' + o.toppled + '!']);
+    else if (o.rivalGap === 0) rows.splice(2, 0, ['rival', '\u{2694}\u{FE0F} matched ' + (S.rival.name || '')]);
+    else if (o.rivalGap > 0) rows.splice(2, 0, ['rival', '\u{2694}\u{FE0F} ' + o.rivalGap + ' floor' + (o.rivalGap > 1 ? 's' : '') + ' short of ' + (S.rival.name || '')]);
     rows.forEach((rw, i) => {
       txt(rw[0], LW / 2 - 24, 352 + i * 26, '600 12px Verdana, sans-serif', '#9a8aa0', 'right');
       txt(rw[1], LW / 2 + 0, 352 + i * 26, '900 13px Verdana, sans-serif', '#ffe9a3', 'left');
