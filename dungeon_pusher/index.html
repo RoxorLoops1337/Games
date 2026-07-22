@@ -52,7 +52,7 @@ const HEADLESS = !ctx;
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
   { v: '1.7.0', notes: [
-    'SPECIAL COINS \u{1FA99} — every fallen boss mints one, on top of the relic: BUNNY pairs breed kits on the bed, TWINS strike ×4 side by side, EMBERS set their neighbors alight, and the PIPER tips its whole cluster into the tray. Touch is judged at END TURN; the deep never skims or tolls them away',
+    'SPECIAL COINS \u{1FA99} — every fallen boss mints one, on top of the relic: ALL TEN now — bunnies breed, twins pair, embers ignite, the piper parades, rime pierces (and fizzles against ember!), the lode clumps, the king holds court, the rot spreads, mimics copy, and the leech grows fat on its bedfellows. Touch is judged at END TURN; the deep never skims or tolls them away',
     'THE UNDERLAKE \u{1F30A} — floors 21-25 are a true FIFTH ACT: thirteen drowned kin, THE DROWNED BANKER (and the SILT QUEEN on the B-side) hold the lair, PRESSURE replaces the dark, and the decrees move out past floor 25',
     'THE TILTED TABLE \u{1FAA3} — a second machine at the \u{1F3B0} rack (best floor 30): the bed leans left, the gutter pays a gold per settled coin, the bank loses a slot',
     'REPLAY GHOST \u{2694}\u{FE0F} — duel links now carry the challenger\u2019s per-floor CLOCK; every staircase whispers how you run against THEIR pace, and REMATCH sends yours back',
@@ -389,14 +389,18 @@ const C = {
 };
 // your purse starts here; heroes add their signature pair on top
 const START_PURSE = { coin: 5, silver: 5, green: 0, red: 0, blue: 0, lucky: 0,
-                      bunny: 0, twin: 0, ember: 0, piper: 0 };
-const COIN_KINDS = ['coin', 'silver', 'green', 'red', 'blue', 'lucky', 'bunny', 'twin', 'ember', 'piper'];
+                      bunny: 0, twin: 0, ember: 0, piper: 0,
+                      rime: 0, lode: 0, king: 0, rot: 0, mimic: 0, leech: 0 };
+const COIN_KINDS = ['coin', 'silver', 'green', 'red', 'blue', 'lucky',
+                    'bunny', 'twin', 'ember', 'piper', 'rime', 'lode', 'king', 'rot', 'mimic', 'leech'];
 // SPECIAL coins (the owner's design): minted ONLY by fallen bosses, on top
 // of the relic — they work by TOUCH on the bed, and the deep never skims
 // or tolls them away. Touch is judged at END TURN (the touch pass).
-const SPECIALS = ['bunny', 'twin', 'ember', 'piper'];
-const SPECIAL_COINS = { bunny: 1, twin: 1, ember: 1, piper: 1 };
+const SPECIALS = ['bunny', 'twin', 'ember', 'piper', 'rime', 'lode', 'king', 'rot', 'mimic', 'leech'];
+const SPECIAL_COINS = { bunny: 1, twin: 1, ember: 1, piper: 1, rime: 1, lode: 1, king: 1, rot: 1, mimic: 1, leech: 1 };
 const BUNNY_CAP = 5;                      // kits bred per floor, at most
+const ROT_CAP = 3;                        // gold corrupted per floor, at most
+const LEECH_FAT_CAP = 15;                 // the leech can only hold so much
 const COIN_INFO = {
   coin:   { name: 'Gold',   what: '1 dmg' },
   silver: { name: 'Silver', what: '1 block' },
@@ -408,13 +412,19 @@ const COIN_INFO = {
   twin:   { name: 'Twin',   what: '4 dmg beside its twin, 1 alone' },
   ember:  { name: 'Ember',  what: '2 dmg + 2 burn — sets its neighbors alight' },
   piper:  { name: 'Piper',  what: '2 dmg — tips its whole cluster into the tray' },
+  rime:   { name: 'Rime',   what: '1 dmg thru block — rimes its neighbors (+1 pierce); an EMBER touch fizzles BOTH to plain gold' },
+  lode:   { name: 'Lode',   what: '1 dmg — drags the bed\u2019s loose coins toward itself' },
+  king:   { name: 'King',   what: '1 dmg, +1 per coin at his side' },
+  rot:    { name: 'Rot',    what: '2 poison — corrupts a touching gold coin each turn (3 a floor)' },
+  mimic:  { name: 'Mimic',  what: 'becomes whatever it touches first — two mimics grin and turn GOLD' },
+  leech:  { name: 'Leech',  what: '1 dmg — fattens +1 gold whenever a bedfellow tips over; pays out when IT does' },
 };
 // the after-battle coin offer draws from this bag
 const COIN_REWARD_W = [['coin', 24], ['silver', 22], ['green', 18], ['red', 16], ['blue', 12], ['lucky', 8]];
 // the order the tray resolves in: bank the loot, raise the guard, mend,
 // then unleash — curses always land last
 const RESOLVE_ORDER = ['gem', 'bag', 'buffitem', 'silver', 'shielditem', 'red', 'heartitem', 'petitem',
-                       'gold', 'bunny', 'twin', 'piper', 'lucky', 'blue', 'ember', 'weapon', 'bleeditem', 'green', 'vial',
+                       'gold', 'bunny', 'twin', 'piper', 'king', 'lode', 'mimic', 'leech', 'lucky', 'blue', 'rime', 'ember', 'weapon', 'bleeditem', 'green', 'rot', 'vial',
                        'burnitem', 'frost', 'skull'];
 // deliberately UNHURRIED: each piece gets its moment so the damage reads
 const RESOLVE_DELAY = { gem: 0.55, bag: 0.55, silver: 0.45, red: 0.5, gold: 0.42, lucky: 0.7, blue: 0.75, green: 0.5,
@@ -2232,7 +2242,12 @@ function scoreCoin(c, quiet) {
     S.pBurn = (S.pBurn || 0) + 2;
     floatAnchor('\u{1F525} SEARED! +2 burn', 'hero', '#ff9d3c', true);
   }
-  S.battle.loot.push({ k: c.kind, iid: c.iid, up: c.paired ? 1 : 0, tip: c.emberTip ? 1 : 0 });
+  if (c.leechMark && S.battle) {
+    const lch = S.coins.find(n => n.st === 'plat' && n.kind === 'leech');
+    if (lch) lch.fat = Math.min(LEECH_FAT_CAP, (lch.fat | 0) + 1);
+  }
+  S.battle.loot.push({ k: c.kind, iid: c.iid, up: c.paired ? 1 : 0, tip: c.emberTip ? 1 : 0,
+                       rime: c.rimeTip ? 1 : 0, court: c.court | 0, fat: c.fat | 0 });
   trayAdd(c.kind, { iid: c.iid, x: c.x });
   // THE PIPER: whatever rested near it on the bed follows it over the edge
   if (c.kind === 'piper') {
@@ -2825,7 +2840,7 @@ function retarget() {
 function buildQueue(loot) {
   const q = [];
   for (const l of loot) {
-    if (l.k === 'coin') q.push({ t: 'gold', tip: l.tip });
+    if (l.k === 'coin') q.push({ t: 'gold', tip: l.tip, rime: l.rime });
     else if (l.k === 'item') {
       const it = itemById(l.iid);
       if (!it) continue;
@@ -2834,7 +2849,7 @@ function buildQueue(loot) {
               : it.kind === 'burn' ? 'burnitem' : it.kind === 'bleed' ? 'bleeditem'
               : it.kind === 'pet' ? 'petitem' : it.kind === 'buff' ? 'buffitem' : 'frost';
       q.push({ t, iid: l.iid });
-    } else q.push({ t: l.k, up: l.up, tip: l.tip });
+    } else q.push({ t: l.k, up: l.up, tip: l.tip, rime: l.rime, court: l.court, fat: l.fat });
   }
   q.sort((a, b) => RESOLVE_ORDER.indexOf(a.t) - RESOLVE_ORDER.indexOf(b.t));
   // the Echo Bell / Reverb ring the opening piece twice
@@ -2919,16 +2934,48 @@ function endRoundNow() {
 function touchPass() {
   if (!S.battle || !S.run) return;
   const plats = S.coins.filter(c => c.st === 'plat');
-  for (const c of plats) { c.paired = false; c.emberTip = false; c.bredThis = false; }
+  for (const c of plats) {
+    c.paired = false; c.emberTip = false; c.bredThis = false;
+    c.rimeTip = false; c.court = 0; c.rotSpent = false; c.leechMark = false;
+  }
   for (let i = 0; i < plats.length; i++) {
     for (let j = i + 1; j < plats.length; j++) {
       const a = plats[i], b = plats[j];
       if (a.lay !== b.lay) continue;
       const dx = a.x - b.x, dy = a.y - b.y, reach = a.r + b.r + 0.8;
       if (dx * dx + dy * dy > reach * reach) continue;
+      // the old feud: rime and ember touching fizzle BOTH to plain gold
+      if ((a.kind === 'rime' && b.kind === 'ember') || (a.kind === 'ember' && b.kind === 'rime')) {
+        a.kind = 'coin'; b.kind = 'coin';
+        floatAt('\u{1F4A8} hisss — fire and frost fizzle plain', (a.x + b.x) / 2, '#c8ecf0', true);
+        continue;
+      }
+      // two mimics grin at each other and both turn gold
+      if (a.kind === 'mimic' && b.kind === 'mimic') {
+        a.kind = 'coin'; b.kind = 'coin';
+        floatAt('\u{1F3AD} the mimics grin — GOLD', (a.x + b.x) / 2, '#f2c04a', true);
+        continue;
+      }
+      if (a.kind === 'mimic' && !a.mimicTo) a.mimicTo = b.kind;
+      if (b.kind === 'mimic' && !b.mimicTo) b.mimicTo = a.kind;
       if (a.kind === 'twin' && b.kind === 'twin') { a.paired = true; b.paired = true; }
       if (a.kind === 'ember') b.emberTip = true;
       if (b.kind === 'ember') a.emberTip = true;
+      if (a.kind === 'rime') b.rimeTip = true;
+      if (b.kind === 'rime') a.rimeTip = true;
+      if (a.kind === 'king') a.court++;
+      if (b.kind === 'king') b.court++;
+      if (a.kind === 'leech') b.leechMark = true;
+      if (b.kind === 'leech') a.leechMark = true;
+      // the rot corrupts one honest gold coin per turn, three a floor
+      const rotPair = a.kind === 'rot' && b.kind === 'coin' ? [a, b]
+                    : b.kind === 'rot' && a.kind === 'coin' ? [b, a] : null;
+      if (rotPair && !rotPair[0].rotSpent && (S.run.rotted | 0) < ROT_CAP) {
+        rotPair[0].rotSpent = true;
+        rotPair[1].kind = 'rot';
+        S.run.rotted = (S.run.rotted | 0) + 1;
+        floatAt('\u{2620}\u{FE0F} the rot spreads (' + S.run.rotted + '/' + ROT_CAP + ')', rotPair[1].x, '#8aa04a', true);
+      }
       if (a.kind === 'bunny' && b.kind === 'bunny' && !a.bredThis && !b.bredThis
           && (S.run.bred | 0) < BUNNY_CAP) {
         a.bredThis = true; b.bredThis = true;
@@ -2937,6 +2984,25 @@ function touchPass() {
         const ky = Math.max(14, Math.min(60, (a.y + b.y) / 2 - 4));
         place(kx, ky, 'bunny', a.lay, 'plat');
         floatAt('\u{1F407} a kit! (' + S.run.bred + '/' + BUNNY_CAP + ' this floor)', kx, '#f0e0c8', true);
+      }
+    }
+  }
+  // late verdicts: mimics copy their first touch; lodes clump the bed
+  for (const c of plats) {
+    if (c.kind === 'mimic' && c.mimicTo && c.mimicTo !== 'mimic') {
+      const to = c.mimicTo;
+      c.kind = to; c.mimicTo = null;
+      floatAt('\u{1F3AD} the mimic becomes ' + (COIN_INFO[to] ? COIN_INFO[to].name.toUpperCase() : to) + '!', c.x, '#d0d0d0', true);
+    }
+    if (c.kind === 'lode') {
+      for (const n of plats) {
+        if (n === c || n.kind === 'item' || n.lay !== c.lay) continue;
+        const dx = n.x - c.x, dy = n.y - c.y;
+        const d = Math.sqrt(dx * dx + dy * dy);
+        if (d > c.r + n.r + 1 && d < 20) {
+          n.x -= (dx / d) * 2;             // positional, like the tilt — the
+          n.y -= (dy / d) * 2;             // settle clamp can't freeze it out
+        }
       }
     }
   }
@@ -2958,6 +3024,19 @@ function applyLoot(q) {
   const rusted = (v) => Math.max(1, Math.floor(v * rustK));
   // an EMBER-TIPPED piece (any kind) sears the target as it lands
   if (q.tip && S.enemy && S.enemy.hp > 0 && !S.victory) applyBurn(S.enemy, 1);
+  // a RIME-TIPPED piece bites once more, straight through the guard
+  if (q.rime && S.enemy && S.enemy.hp > 0 && !S.victory) dmgEnemy(1, null, true);
+  if (q.t === 'rime') { dmgEnemy(1, null, true); SND.stun(); return; }
+  if (q.t === 'lode') { dmgEnemy(1); SND.collect(2); return; }
+  if (q.t === 'king') { dmgEnemy(1 + (q.court | 0)); SND.hit(); return; }
+  if (q.t === 'rot') { if (S.enemy && S.enemy.hp > 0) poisonEnemy(2); SND.gem(); return; }
+  if (q.t === 'mimic') { dmgEnemy(1); SND.collect(2); return; }
+  if (q.t === 'leech') {
+    dmgEnemy(1);
+    if (q.fat) { addGold(q.fat); if (S.battle) S.battle.goldWon += q.fat; floatAnchor('\u{1F9DB} the leech pays out +' + q.fat + ' gold', 'hero', '#ffd75e', true); }
+    SND.collect(2);
+    return;
+  }
   if (q.t === 'bunny') { dmgEnemy(1); SND.collect(2); return; }
   if (q.t === 'twin') { dmgEnemy(q.up ? 4 : 1); SND.collect(2); return; }
   if (q.t === 'ember') {
@@ -4776,6 +4855,7 @@ function nextFloor() {
   S.run.floor++;
   S.run.pressure = 0;                    // the stairs vent the lake's squeeze
   S.run.bred = 0;                        // and the warren starts fresh
+  S.run.rotted = 0;                      // the rot's patience resets too
   if (rawAct(S.run.floor) === 4) {
     whisperOnce('lake', '\u{1F30A} THE UNDERLAKE — no dark down here: PRESSURE builds as you walk, and FULL DEPTH stiffens the packs (❓ the almanac knows)');
   }
@@ -5677,7 +5757,7 @@ window.DP = {
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
   darkFloor, PRESSURE_MAX, payableKinds, coinKindWith, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
-  COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT, SPECIALS, SPECIAL_COINS, BUNNY_CAP, touchPass,
+  COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT, SPECIALS, SPECIAL_COINS, BUNNY_CAP, ROT_CAP, LEECH_FAT_CAP, touchPass,
   coinFx, itemFx, runMods,
   CHANGELOG, VERSION, whatsNewEntries, whatsNewSeen,
   LANGS, TR, setLang,
@@ -6021,6 +6101,7 @@ if (!HEADLESS) (function browser() {
     coin: '#f2c04a', silver: '#c3ccd6', green: '#8ed67e', red: '#e87a8a', blue: '#7ab0e8', lucky: '#ffdf6b',
     slug: '#8a8a8a',
     bunny: '#f0e0c8', twin: '#c8a2ff', ember: '#ff8a4a', piper: '#ffd0e8',
+    rime: '#a8e8f0', lode: '#b0a090', king: '#ffcf7a', rot: '#8aa04a', mimic: '#d0d0d0', leech: '#a04a5a',
   };
   function flatSprite(styleKey, pal, sym) {
     return sprite('cf_' + styleKey + '_' + sym, 96, 66, (g) => {

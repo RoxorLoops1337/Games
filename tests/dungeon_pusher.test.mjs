@@ -120,7 +120,7 @@ t.eq(WHEEL.filter(s => s.label === 'COMMON\nRELIC').length, 2, 'two common-relic
 t.eq(WHEEL.filter(s => s.label === 'RARE\nRELIC').length, 1, 'one rare-relic spot');
 t.eq(WHEEL.filter(s => /HP/.test(s.label)).length, 5, 'five HP gambles (+5 −5 +10 −10 +25)');
 t.eq(WHEEL.filter(s => /KEY/.test(s.label)).length, 1, 'one key spot');
-t.eq(COIN_KINDS.length, 10, 'ten coin types in the mint — the four SPECIALS joined');
+t.eq(COIN_KINDS.length, 16, 'sixteen coin types in the mint — all ten SPECIALS joined');
 t.ok(COIN_KINDS.every(k => DP.COIN_INFO[k] && DP.COIN_INFO[k].name && DP.COIN_INFO[k].what),
      'every coin type is described');
 
@@ -7107,7 +7107,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const st = {};
   const { DP: D } = loadGame(st, false);
   const S2 = D.S;
-  t.eq(D.SPECIALS.join(','), 'bunny,twin,ember,piper', 'the first batch stands');
+  t.eq(D.SPECIALS.join(','), 'bunny,twin,ember,piper,rime,lode,king,rot,mimic,leech', 'all ten of the owner\u2019s coins stand');
   for (const k of D.SPECIALS) t.ok(D.COIN_INFO[k] && D.COIN_INFO[k].what, 'statted: ' + k);
   // THE MINT: every fallen boss strikes one, fewest-owned first
   D.srand(21); D.newRun('knight');
@@ -7182,12 +7182,104 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the pile keeps specials across battles, and the purse across reloads
   D.save();
   const { DP: R } = loadGame(st, false);
-  t.ok(R.COIN_KINDS.length === 10, 'the mint survives a reload');
+  t.ok(R.COIN_KINDS.length === 16, 'the mint survives a reload');
   // the sim still runs green with the wider mint (rails re-assert above)
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
   t.ok(src.indexOf('touchPass();') >= 0, 'END TURN judges the touch');
   t.ok(src.indexOf("whisperOnce('specials'") >= 0, 'the mint whispers once');
+}
+
+// -------- TIER 12 [big]: TOUCH COINS part 2 — the other six --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  D.srand(23); D.newRun('knight');
+  D.startBattle('battle');
+  S2.battle.phase = 'drop';
+  const foe = S2.foes[0];
+  foe.hp = foe.maxHp = 900; foe.block = 0; foe.def = null; foe.braced = false; foe.pois = 0;
+  const gap = (r) => r * 2 + 0.4;
+  // RIME: pierces, rimes its neighbor, and FIZZLES against an ember
+  S2.coins.length = 0;
+  const r1 = D.place(30, 40, 'rime', 0, 'plat');
+  const gn = D.place(30 + gap(r1.r), 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.ok(gn.rimeTip, 'the gold beside the rime is rimed');
+  foe.block = 5;
+  let hp0 = foe.hp;
+  D.applyLoot({ t: 'rime' });
+  t.eq(hp0 - foe.hp, 1, 'rime bites straight through a 5-block guard');
+  hp0 = foe.hp;
+  D.applyLoot({ t: 'gold', rime: 1 });
+  t.ok(hp0 - foe.hp >= 1, 'a rimed gold coin bites through too');
+  foe.block = 0;
+  S2.coins.length = 0;
+  const r2 = D.place(50, 40, 'rime', 0, 'plat');
+  D.place(50 + gap(r2.r), 40, 'ember', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'coin').length, 2, 'fire and frost fizzle BOTH to plain gold');
+  // LODE: clumps the bed
+  S2.coins.length = 0;
+  D.place(50, 40, 'lode', 0, 'plat');
+  const far = D.place(63, 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.ok(far.x < 63, 'the lode drags the loose coin toward itself (' + far.x.toFixed(1) + ')');
+  // KING: holds court
+  S2.coins.length = 0;
+  const kg = D.place(50, 40, 'king', 0, 'plat');
+  D.place(50 - gap(kg.r), 40, 'coin', 0, 'plat');
+  D.place(50 + gap(kg.r), 40, 'silver', 0, 'plat');
+  D.touchPass();
+  t.eq(kg.court, 2, 'two coins at his side');
+  hp0 = foe.hp;
+  D.applyLoot({ t: 'king', court: kg.court });
+  t.eq(hp0 - foe.hp, 3, 'the king strikes 1 +1 per courtier');
+  // ROT: poisons, spreads, and knows its cap
+  S2.run.rotted = 0;
+  S2.coins.length = 0;
+  const rt = D.place(40, 40, 'rot', 0, 'plat');
+  D.place(40 + gap(rt.r), 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'rot').length, 2, 'the rot corrupts the touching gold');
+  t.eq(S2.run.rotted, 1, 'the ledger counts the corruption');
+  S2.run.rotted = D.ROT_CAP;
+  D.place(40 - gap(rt.r), 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'coin').length, 1, 'a spent rot corrupts no more this floor');
+  const pois0 = foe.pois | 0;
+  D.applyLoot({ t: 'rot' });
+  t.ok((foe.pois | 0) >= pois0 + 2, 'fired rot seeps 2 poison');
+  // MIMIC: copies its first touch; the double act turns gold
+  S2.coins.length = 0;
+  const mm = D.place(60, 40, 'mimic', 0, 'plat');
+  D.place(60 + gap(mm.r), 40, 'lucky', 0, 'plat');
+  D.touchPass();
+  t.eq(mm.kind, 'lucky', 'the mimic becomes what it touched');
+  S2.coins.length = 0;
+  const m1 = D.place(30, 50, 'mimic', 0, 'plat');
+  D.place(30 + gap(m1.r), 50, 'mimic', 0, 'plat');
+  D.touchPass();
+  t.eq(S2.coins.filter(c => c.kind === 'coin').length, 2, 'two mimics grin and turn gold');
+  // LEECH: fattens on departures, pays out when it tips
+  S2.coins.length = 0;
+  S2.battle.loot.length = 0;
+  const lc = D.place(70, 40, 'leech', 0, 'plat');
+  const meal = D.place(70 + gap(lc.r), 40, 'coin', 0, 'plat');
+  D.touchPass();
+  t.ok(meal.leechMark, 'the bedfellow is marked');
+  S2.coins.splice(S2.coins.indexOf(meal), 1);
+  D.scoreCoin(meal, true);
+  t.eq(lc.fat, 1, 'the leech fattens as its bedfellow tips over');
+  const gold0 = S2.run.gold;
+  D.applyLoot({ t: 'leech', fat: 4 });
+  t.eq(S2.run.gold, gold0 + 4, 'and pays its hoard out when IT fires');
+  // the mint now rotates all ten, fewest-first
+  for (const k of D.SPECIALS) S2.run.purse[k] = 1;
+  S2.run.purse.rot = 0;
+  for (const f of S2.foes) { if (f.hp > 0) { f.hp = 1; D.dmgFoe(f, 9); } }
+  D.endRun('done');
 }
 
 t.done();

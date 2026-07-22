@@ -580,13 +580,18 @@ what Tier 11 built, and keeps a big slot warm for the touch coins.
       plain coins only); coinFx/BAG/almanac/hand-row all inherit via
       COIN_KINDS; whisperOnce intro; changelog lead. PART 2 remains:
       frost/lode/king/rot/mimic/leech
-- [ ] **[big] TOUCH COINS part 2**: the remaining six of the owner's
-      ten — FROST (chills neighbors' hits; annihilates with EMBER to
-      plain), LODE (clumps the pile each round), KING (+N dmg per
-      touching coin, knights his court), ROT (spreads worthlessness,
-      poisons on fire), MIMIC (copies its neighbor; two mimics turn
-      gold), LEECH (fattens on bedside bankings) — same substrate, same
-      boss mint, batch-tested like part 1
+- [x] **[big] TOUCH COINS part 2** (session 88): all ten of the owner's
+      coins now stand. RIME (renamed from chat-FROST — the blue Frost
+      coin owns that name) bites thru block, rimes its neighbors (+1
+      pierce riders) and FIZZLES both plain against an ember; LODE drags
+      loose bed coins toward itself (positional pull, reach 20); KING
+      strikes 1 +1 per courtier at his side; ROT seeps 2 poison and
+      corrupts one touching gold per turn (3/floor, vents at stairs);
+      MIMIC becomes its first touch — two mimics grin and turn GOLD;
+      LEECH fattens +1 gold whenever a marked bedfellow tips over (cap
+      15) and pays out when IT fires. Same substrate, same fewest-first
+      boss mint over all ten, 26 new assertions. Knighting (king
+      promoting his court) trimmed as scope — noted if ever missed
 - [ ] **[big] THE SPECTATOR CARD**: the share card grows act splits and
       a pace strip (the data all exists in S.run.pace/stats) — bragging
       is this game's only marketing, and the card still shows three
