@@ -630,9 +630,16 @@ feel the game get SMOOTHER this tier, not just bigger.
       past the lake. Shipped: 13 drowned kin (coin eel = the tray filcher,
       the undertow = tide pull, all on proven trait engines), both lords,
       LAKE_FLOOR palette, ACT V name, codex a5 shelf (kin + lords),
-      almanac law schedule, changelog. DEFERRED to part 2: the pressure
-      gauge (dark-floor replacement), rust-rain arena beats, bossArena
-      mechanics for the banker, sprites
+      almanac law schedule, changelog. PART 2 (session 83): THE PRESSURE
+      replaces the dark on lake floors — each new room walked squeezes a
+      0-5 gauge (posted on the strip, vented at every stair, saved), and
+      at FULL DEPTH the pack opens +1 atk; THE DROWNED BANKER forecloses
+      a banked piece every 3rd round (his fall refunds it through the
+      belly hook WITH a bag of interest); THE SILT QUEEN silts two honest
+      pile pieces to slugs every 3rd round; lake re-salts run a 30%
+      rust-rain chance (round 1 restores the pile, so the brine bites the
+      re-salt — by design); almanac house line + NL. Still open: sprites
+      for the drowned kin (art is graceful-fallback, emoji stand by)
 - [ ] **[big] MACHINE LAYOUT II — THE TILTED TABLE**: an alternate machine
       unlocked at lifetime floor 30: slanted bed (coins drift left), a
       side gutter that pays gold, one fewer tray slot — chosen at the

@@ -6844,4 +6844,104 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.endRun('done');
 }
 
+// -------- TIER 11 [big]: THE UNDERLAKE part 2 — pressure, lords, rust rain --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  const DXY = { n: [0, -1], s: [0, 1], e: [1, 0], w: [-1, 0] };
+  const walkOne = () => {
+    const r = D.curRoom();
+    for (const dir of ['n', 's', 'e', 'w']) {
+      const nb = S2.run.map.rooms[(r.gx + DXY[dir][0]) + ',' + (r.gy + DXY[dir][1])];
+      if (!nb || nb.visited) continue;
+      let res = D.tryDoor(dir);
+      if (res === 'unlocked') res = D.tryDoor(dir);
+      if (res === true) return true;
+    }
+    // dead end: hop back toward anything unvisited via any neighbor
+    for (const dir of ['n', 's', 'e', 'w']) { if (D.tryDoor(dir) === true) return false; }
+    return false;
+  };
+  D.srand(12); D.newRun('knight');
+  // the lake never darkens — pressure is its weather
+  S2.run.floor = 24;
+  t.ok(!D.darkFloor(), 'floor 24 (a natural dark floor) stays lit in the lake');
+  S2.run.floor = 12;
+  t.ok(D.darkFloor(), 'floor 12 still goes dark outside it');
+  // walking the lake squeezes the gauge; the stairs vent it
+  S2.run.floor = 21;
+  D.genFloor();
+  S2.run.keys = 99;
+  S2.run.pressure = 0;
+  let guard = 40;
+  while ((S2.run.pressure | 0) < D.PRESSURE_MAX && guard--) walkOne();
+  t.eq(S2.run.pressure, D.PRESSURE_MAX, 'five new rooms bring FULL DEPTH');
+  // at full depth the pack opens one blow harder
+  D.startBattle('battle');
+  const pressed = S2.foes[0].atk;
+  D.leaveBattle && finishFight();
+  S2.run.pressure = 0;
+  D.srand(77); D.startBattle('battle');
+  t.ok(pressed >= S2.foes[0].atk, 'full depth reads at least as hard as a vented lake');
+  finishFight();
+  S2.run.pressure = D.PRESSURE_MAX;
+  D.save();
+  const { DP: R } = loadGame(st, false);
+  t.eq(R.S.run.pressure, R.PRESSURE_MAX, 'the gauge survives a reload');
+  R.nextFloor();
+  t.eq(R.S.run.pressure, 0, 'and the stairs vent it');
+  // THE DROWNED BANKER forecloses the bank; his fall refunds with interest
+  const { DP: B } = loadGame({}, false);
+  B.srand(5); B.newRun('knight');
+  B.S.run.bside = 0; B.S.run.floor = 21;
+  B.startBattle('boss');
+  t.eq(B.S.foes[0].id, 'drownedbanker', 'the banker holds the lair');
+  B.S.battle.banked = [{ k: 'gem' }];
+  B.S.battle.round = 3;
+  B.bossArena();
+  t.eq(B.S.battle.banked.length, 0, 'the foreclosure empties the bank slot');
+  t.eq((B.S.foes[0].belly || []).length, 2, 'the piece sits in his vault with a bag of interest');
+  const loot0 = B.S.battle.loot.length;
+  B.S.foes[0].hp = 1; B.dmgFoe(B.S.foes[0], 5);
+  t.ok(B.S.battle.loot.length >= loot0 + 2, 'his fall refunds the piece AND the interest');
+  t.ok(B.S.battle.loot.some(l => l.k === 'gem') && B.S.battle.loot.some(l => l.k === 'bag'),
+       'gem back, bag on top');
+  B.leaveBattle();
+  // THE SILT QUEEN silts the pile
+  B.S.run.bside = 1;
+  B.startBattle('boss');
+  t.eq(B.S.foes[0].id, 'siltqueen', 'the queen holds the B-side lair');
+  B.S.coins.length = 0;
+  B.place(30, 40, 'coin', 0, 'plat');
+  B.place(60, 40, 'silver', 0, 'plat');
+  B.place(45, 50, 'green', 0, 'plat');
+  B.S.battle.round = 3;
+  B.bossArena();
+  t.eq(B.S.coins.filter(c => c.kind === 'slug').length, 2, 'two honest pieces silt to slugs');
+  t.eq(B.S.coins.filter(c => c.kind === 'green').length, 1, 'the venom coin is beneath her notice');
+  finishFight();
+  // RUST RAIN: lake brine corrodes the odd piece; the mint stays clean
+  const slugRains = (floor) => {
+    B.S.run.floor = floor;
+    let n = 0;
+    for (let i = 0; i < 20; i++) {
+      B.startBattle('battle');
+      B.S.rain.length = 0;
+      B.newRound();                      // the re-salt is where the brine bites
+      if (B.S.rain.some(r2 => r2.kind === 'slug')) n++;
+      finishFight();
+    }
+    return n;
+  };
+  B.srand(31);
+  t.ok(slugRains(22) >= 2, 'the lake rains the odd corroded slug');
+  t.eq(slugRains(12), 0, 'floor 12 rain stays honest');
+  // the almanac spells the weather
+  const here = dirname(fileURLToPath(import.meta.url));
+  const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(src.indexOf('PRESSURE replaces the dark') >= 0, 'the almanac spells the lake weather');
+  t.ok(src.indexOf("TR('\\u{1FAE7} THE PRESSURE')") >= 0, 'the gauge strip goes through TR');
+}
+
 t.done();

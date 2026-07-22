@@ -264,6 +264,8 @@ const LANGS = {
     '\u{1F50D} SEARCH': '\u{1F50D} ZOEK',
     'no relic answers to': 'geen relikwie luistert naar',
     'LAKE': 'MEER',
+    '\u{1FAE7} THE PRESSURE': '\u{1FAE7} DE DRUK',
+    'foes strike +1 at full depth': 'vijanden slaan +1 op volle diepte',
     'THE MOTIFS': 'DE MOTIEVEN',
     'the four descents, and the fanfare': 'de vier afdalingen, en de fanfare',
   },
@@ -425,7 +427,13 @@ function theme() {
 }
 // every 3rd floor the torches are DEAD: you carry your own light and only
 // a small circle around you is lit — find the doors in the dark
-function darkFloor() { return !!(S.run && (S.run.floor % 3 === 0 || mutOn('longdark'))); }
+const PRESSURE_MAX = 5;                 // rooms walked before the lake leans on you
+function darkFloor() {
+  if (!S.run) return false;
+  // THE UNDERLAKE never darkens — the PRESSURE is its weather
+  if (rawAct(S.run.floor) === 4) return mutOn('longdark');
+  return S.run.floor % 3 === 0 || mutOn('longdark');
+}
 
 // ------------------------------------------------------------------- items
 // Your arsenal: bought in shops, won from boons and wheels. Every battle the
@@ -1384,6 +1392,7 @@ function save() {
         brew: S.run.brew || 0, reagents: S.run.reagents || 0,
         duel: S.run.duel || null,
         pace: S.run.pace || {}, deepInked: S.run.deepInked ? 1 : 0,
+        pressure: S.run.pressure | 0,
         gauntlet: S.run.gauntlet || null,
         jar: S.run.jar || null,
         pegs: S.run.pegs || [], pegSeen: S.run.pegSeen ? 1 : 0,
@@ -1510,6 +1519,7 @@ function load() {
                 ? Object.keys(d.run.duel.pace).reduce((o, k) => { o[k | 0] = d.run.duel.pace[k] | 0; return o; }, {})
                 : null } : null,
         pace: (d.run.pace && typeof d.run.pace === 'object') ? d.run.pace : {},
+        pressure: d.run.pressure | 0,
         deepInked: d.run.deepInked ? 1 : 0,
         gauntlet: d.run.gauntlet || null,
         jar: (d.run.jar && typeof d.run.jar === 'object')
@@ -2673,6 +2683,11 @@ function startBattle(type, entIdx, eid, extras) {
     const b = { ...a };
     S.foes.push(b);
   }
+  // FULL DEPTH: the lake's pressure stiffens whatever meets you down here
+  if (rawAct(S.run.floor) === 4 && (S.run.pressure | 0) >= PRESSURE_MAX) {
+    for (const f of S.foes) f.atk += 1;
+    floatAnchor('\u{1FAE7} the PRESSURE stiffens the pack (+1 atk)', 'enemy', '#7ee7e0', true);
+  }
   // the Eternal Flame greets every pack with kindling
   if (hasRelic('eternalflame')) {
     for (const f of S.foes) f.burn = f.def === 'gel' ? 1 : 2;
@@ -3265,6 +3280,19 @@ function bossArena() {
       S.rain.push({ t: 0.5 + 0.3 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: 'skull' });
     }
     floatAnchor('\u{1F9DE} the AURIFEX mints cursed coin!', 'enemy', '#ffd75e', true);
+  } else if (boss.id === 'drownedbanker' && B.round > 1 && B.round % 3 === 0 && B.banked.length) {
+    // FORECLOSURE: the banker seizes a banked piece — the belly hook pays
+    // it back on his fall, with a bag of interest riding along
+    (boss.belly = boss.belly || []).push(B.banked.shift(), { k: 'bag' });
+    floatAnchor('\u{1F9DC} the banker FORECLOSES your bank!', 'enemy', '#7ee7e0', true);
+  } else if (boss.id === 'siltqueen' && B.round > 1 && B.round % 3 === 0) {
+    // the queen SILTS the pile: two honest pieces become dead slugs
+    let silted = 0;
+    for (const c of S.coins) {
+      if (silted >= 2) break;
+      if (c.st === 'plat' && (c.kind === 'coin' || c.kind === 'silver')) { c.kind = 'slug'; silted++; }
+    }
+    if (silted) floatAnchor('\u{1F419} the SILT QUEEN silts the pile (' + silted + ' \u{2192} slugs)!', 'enemy', '#9a8aa0', true);
   }
 }
 function newRound() {
@@ -3290,6 +3318,10 @@ function newRound() {
   const rainN = C.ROUND_RAIN + (hasRelic('loadstone') ? 3 : 0) + (hasRelic('saltpile') ? 2 : 0);
   for (let i = 0; i < rainN; i++) {
     S.rain.push({ t: 0.15 * i, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: rollPileKind() });
+  }
+  // the lake's RUST RAIN: brine corrodes the odd piece before it lands
+  if (rawAct(S.run.floor) === 4 && S.rain.length && rng() < 0.3) {
+    S.rain[S.rain.length - 1].kind = 'slug';
   }
   // the endless deep's decrees
   if (mutOn('armoredage')) for (const f of S.foes) if (f.hp > 0) f.block = (f.block || 0) + 2;
@@ -4577,6 +4609,10 @@ function tryDoor(dir) {
     openRelicPick('r', 1);
     toast('the vault! treasures of a lost age…');
   }
+  if (!nb.visited && rawAct(S.run.floor) === 4) {
+    S.run.pressure = Math.min(PRESSURE_MAX, (S.run.pressure | 0) + 1);
+    if (S.run.pressure === PRESSURE_MAX) toast('\u{1FAE7} FULL DEPTH — the lake leans on every blade down here');
+  }
   nb.visited = true;
   S.run.room = nb;
   S.run.depth = nb.dist + 1;
@@ -4599,6 +4635,7 @@ function nextFloor() {
   }
   S.run.tollDouble = 0;
   S.run.floor++;
+  S.run.pressure = 0;                    // the stairs vent the lake's squeeze
   S.floorFx = { t: 0, floor: S.run.floor, newAct: (S.run.floor - 1) % 5 === 0 };
   // GHOST PACE: stamp this door's clock and whisper it against your best
   if (!S.run.pace) S.run.pace = {};
@@ -5492,7 +5529,7 @@ window.DP = {
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
-  darkFloor, payableKinds, coinKindWith, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
+  darkFloor, PRESSURE_MAX, payableKinds, coinKindWith, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT,
   coinFx, itemFx, runMods,
@@ -9851,6 +9888,11 @@ if (!HEADLESS) (function browser() {
     if (darkFloor()) {
       txt('\u{1F56F}\u{FE0F} THE TORCHES ARE DEAD — follow your light', LW / 2 - 30, 89,
           '700 10px Verdana, sans-serif', '#ff9d3c');
+    } else if (rawAct(S.run.floor) === 4) {
+      const pr = S.run.pressure | 0;
+      txt(TR('\u{1FAE7} THE PRESSURE') + ': ' + pr + ' / ' + PRESSURE_MAX
+          + (pr >= PRESSURE_MAX ? ' — ' + TR('foes strike +1 at full depth') : ''),
+          LW / 2 - 30, 89, '700 10px Verdana, sans-serif', pr >= PRESSURE_MAX ? '#7ee7e0' : '#8ab8c0');
     }
     txt('\u{1F5DD} × ' + S.run.keys, LW / 2 - 30, 104, '900 16px Verdana, sans-serif',
         S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
@@ -11201,6 +11243,7 @@ if (!HEADLESS) (function browser() {
         'the pile re-salts ' + C.ROUND_RAIN + ' fresh pieces every round',
         C.TILTS + ' TILT charges a round — shove the pile, spend them or lose them',
         'every slain monster drops a KEY; elites carry GOLDEN keys, and only those open vaults',
+        'in THE UNDERLAKE (floors 21-25) PRESSURE replaces the dark: every room walked adds 1, and at ' + PRESSURE_MAX + ' the foes strike +1 harder',
       ];
       for (const s of lines) {
         for (const ln of wrapLines(s, 56, 3)) {
