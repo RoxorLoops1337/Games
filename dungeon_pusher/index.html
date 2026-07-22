@@ -615,6 +615,8 @@ const ENEMY_TIERS = [
     { id: 'magnetwraith', icon: '\u{1F9DF}', name: 'Magnet Wraith', hp: 48, atk: 3, trait: 'magnet', def: null,   gold: 22 },
     { id: 'bellkeeper',   icon: '\u{1F514}', name: 'Bell Keeper',   hp: 46, atk: 3, trait: 'bell',   def: null,   gold: 24 },
     { id: 'mirrorshell',  icon: '\u{1FA9E}', name: 'Mirror Shell',  hp: 44, atk: 4, trait: null,     def: 'mirror', gold: 24 },
+    // sows cursed skulls — every skull left on the field SPROUTS a twin
+    { id: 'skullgardener', icon: '\u{1F480}', name: 'Skull Gardener', hp: 52, atk: 4, trait: 'gardener', def: null, gold: 30 },
   ],
   // ---- ACT 3 (floors 11+): the Abyss — ember-wreathed horrors ----
   [
@@ -631,6 +633,7 @@ const ENEMY_TIERS = [
     { id: 'chronophage', icon: '\u{231B}', name: 'Chronophage',    hp: 62, atk: 6, trait: 'chrono',  def: null,    gold: 34 },
     { id: 'cowardking',  icon: '\u{1F451}', name: 'Coward King',    hp: 66, atk: 5, trait: 'coward',  def: 'armor', gold: 40 },
     { id: 'twinidol',    icon: '\u{1F5FF}', name: 'Twin Idol',      hp: 56, atk: 5, trait: 'twin',    def: null,    gold: 30 },
+    { id: 'gravegardener', icon: '\u{1FAA6}', name: 'Grave Gardener', hp: 70, atk: 6, trait: 'gardener', def: 'regen', gold: 40 },
   ],
 ];
 // back-compat alias: the act-1 roster (tests and old references)
@@ -701,6 +704,7 @@ const TRAIT_TXT = {
   magnet: 'drags your pile away from the edge', bell: 'tolls every 10th piece: the pack shields',
   chrono: 'devours a TILT when hit for 8+', coward: 'hides behind its weakest ally when targeted',
   twin: 'raises its fallen twin — fell both in one round',
+  gardener: 'sows skulls — any left on the field SPROUT',
 };
 // the defensive mechanic, spelled out on the foe's panel
 const DEF_TXT = {
@@ -801,6 +805,7 @@ function save() {
         pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
         mapFloor: S.run.mapFloor, stats: S.run.stats,
         daily: S.run.daily || null, dailyMod: S.run.dailyMod || null,
+        quest: S.run.quest || null,
       } : null,
     }));
   } catch (e) {}
@@ -855,6 +860,7 @@ function load() {
         keys: (typeof d.run.keys === 'number') ? d.run.keys : C.START_KEYS,
         goldKeys: d.run.goldKeys || 0,
         daily: d.run.daily || null, dailyMod: d.run.dailyMod || null,
+        quest: d.run.quest || null,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -1102,6 +1108,7 @@ function foeDown(e) {
   e.paid = true;
   S.run.kills++;
   S.codex.foes[e.id] = (S.codex.foes[e.id] || 0) + 1;   // the bestiary remembers
+  questBump('slay', 1);
   let gold = e.gold;
   // the wound bounties: Ashfall pays for kindling, Blood Price for red work
   if (hasRelic('ashfall') && e.burn > 0) gold += 6;
@@ -1636,6 +1643,7 @@ function tilt(dir) {
     return false;
   }
   B.tilts--;
+  B.tilted = true;                        // the no-tilt quest saw that
   if (B.tilts === 0) achUnlock('tilt3');
   // a gentler nudge — enough to shift the pile, not to fling it
   // (the Poltergeist shakes half again as hard: the machine IS its hands)
@@ -1662,6 +1670,7 @@ function bankLoot(key) {
   const i = B.loot.findIndex(l => lootKey(l) === key);
   if (i < 0) return false;
   B.banked.push(B.loot.splice(i, 1)[0]);
+  questBump('bank', 1);
   SND.clink();
   return true;
 }
@@ -1740,6 +1749,7 @@ function rollIntent(e) {
   // blackout / rust — one in seven turns
   if (e.elite && (!e.intent || e.intent.t !== 'hex') && rng() < 0.15) { e.intent = { t: 'hex' }; return; }
   if (e.trait === 'curse' && rng() < 0.4) { e.intent = { t: 'curse' }; return; }
+  if (e.trait === 'gardener' && rng() < 0.45) { e.intent = { t: 'sow' }; return; }
   const r = rng();
   if (r < 0.2 && e.intent && e.intent.t !== 'heavy') e.intent = { t: 'heavy', dmg: e.atk * 2 };
   else if (r < 0.36) e.intent = { t: 'brace' };
@@ -2183,6 +2193,11 @@ function enemyActFoe(e) {
       S.rain.push({ t: 0.3 + h * 0.25, x: 15 + rng() * 70, y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
     }
     floatAnchor('skulls rain onto the field!', 'hero', '#c86bff', true);
+  } else if (it.t === 'sow') {
+    for (let h = 0; h < 2; h++) {
+      S.rain.push({ t: 0.3 + h * 0.25, x: 15 + rng() * 70, y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
+    }
+    floatAnchor('\u{1F480} the gardener SOWS its crop!', 'hero', '#c86bff', true);
   } else {
     const hits = e.trait === 'fast' ? 2 : 1;
     const preBlock = S.run.block;
@@ -2302,6 +2317,20 @@ function endRoundTicks() {
         floatAnchor('the idol RAISES its twin!', 'enemy', '#c86bff', true);
       }
     }
+  }
+  // the GARDENER's harvest: every skull left on the field sprouts a twin
+  // (the crop is capped so the machine never chokes on bone)
+  if (S.foes.some(f => f.hp > 0 && f.trait === 'gardener')) {
+    const skulls = S.coins.filter(c => c.st === 'plat' && c.kind === 'skull');
+    let room = Math.max(0, 6 - skulls.length);
+    let sprouted = 0;
+    for (const c of skulls) {
+      if (room <= 0) break;
+      const twin = spawnDrop(Math.max(6, Math.min(94, c.x + (rng() - 0.5) * 16)),
+                             Math.max(6, Math.min(78, c.y + (rng() - 0.5) * 10)), 'skull');
+      if (twin) { room--; sprouted++; }
+    }
+    if (sprouted) floatAnchor('\u{1F480} the skulls SPROUT!', 'enemy', '#c86bff', true);
   }
   // mirror stances re-polish and tolled shields melt between rounds
   for (const f of S.foes) { f.mirrorSpent = false; f.block = 0; }
@@ -2466,6 +2495,7 @@ function winBattle() {
   // the dragon's embers cool the moment it falls
   for (const c of S.coins) c.aflame = false;
   // trophies earned in the heat of it
+  if (!S.battle.tilted) questBump('notilt', 1);
   if (anyBoss) { achUnlock('boss1'); S.life.bosses++; }
   if (S.run.hp === 1) achUnlock('survivor');
   if (S.run.stats && S.battle.taken0 !== undefined && S.run.stats.taken === S.battle.taken0) achUnlock('untouch');
@@ -2514,6 +2544,40 @@ function leaveBattle() {
   S.screen = 'dungeon';
   save();
   return true;
+}
+// ------------------------------------------------------------ floor quests
+// one optional job per floor; finishing it pays a GOLDEN KEY or a relic
+const QUEST_DEFS = [
+  { id: 'slay',   txt: n => 'slay ' + n + ' monsters',            need: f => 4 + Math.min(4, f) },
+  { id: 'notilt', txt: () => 'win a battle without TILTING',      need: () => 1 },
+  { id: 'bank',   txt: n => 'bank ' + n + ' pieces in the vaults', need: f => 5 + Math.min(5, f) },
+];
+function rollQuest(floor) {
+  const q = QUEST_DEFS[(rng() * QUEST_DEFS.length) | 0];
+  return { id: q.id, need: q.need(floor), got: 0, done: false,
+           reward: rng() < 0.5 ? 'goldkey' : 'relic' };
+}
+function questTxt(q) {
+  const d = QUEST_DEFS.find(x => x.id === q.id);
+  return d ? d.txt(q.need) : '';
+}
+function questBump(id, n) {
+  const q = S.run && S.run.quest;
+  if (!q || q.done || q.id !== id) return;
+  q.got += n;
+  if (q.got >= q.need) {
+    q.done = true;
+    if (q.reward === 'goldkey') {
+      S.run.goldKeys = (S.run.goldKeys || 0) + 1;
+      floatAnchor('QUEST DONE! +1 GOLDEN KEY \u{1F511}', 'hero', '#ffd75e', true);
+    } else {
+      const got2 = grantRelic('c');
+      const rl = got2 && relicById(got2);
+      floatAnchor('QUEST DONE! ' + (rl ? rl.name + '!' : '+1 relic'), 'hero', '#b06be8', true);
+    }
+    SND.gem();
+    save();
+  }
 }
 // -------------------------------------------------------------- the DAILY
 // one seeded run a day: the date picks the hero (locked ones make guest
@@ -2900,6 +2964,7 @@ function genFloor() {
       if (links[lk]) links[lk] = { open: false, gold: true };
     }
   }
+  S.run.quest = rollQuest(S.run.floor);   // one optional job per floor
   S.run.map = { v: 3, rooms, links, cur: '0,0' };
   S.run.room = rooms['0,0'];
   S.run.depth = 1;
@@ -3591,7 +3656,7 @@ window.DP = {
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify, floatAt, floatAnchor,
   ACH, achUnlock, achPoll, achById, WORKSHOP, wsLvl, wsBuy, tiltCount,
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
-  bossArena,
+  bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer,
@@ -3670,6 +3735,7 @@ if (!HEADLESS) (function browser() {
     plaguecube: ['slime', '#d0ff4a'], doomtotem: ['totem', '#ff9d3c'], abyssguard: ['skeleton', '#ff5a4e'],
     duskwraith: ['revenant', '#c86bff'], infernogre: ['ogre', '#ff6b4a'],
     // the wound-dealers (bleed/burn), one pair per act
+    skullgardener: ['skeleton', '#c8b8e0'], gravegardener: ['skeleton', '#8fd18f'],
     gutterrat: ['goblin', '#a8784a'], emberimp: ['smasher', '#ff9d3c'],
     fleshripper: ['revenant', '#ff8a6b'], pyretotem: ['totem', '#ff6b4a'],
     bloodfiend: ['revenant', '#ff4a6e'], ashogre: ['ogre', '#9a9aa8'],
@@ -4632,6 +4698,7 @@ if (!HEADLESS) (function browser() {
         : it.t === 'heavy' ? '\u{1F4A5} ' + (e.atk * 2) + (e.trait === 'fast' ? '×2' : '')
         : it.t === 'brace' ? '\u{1F6E1} braces'
         : it.t === 'curse' ? '\u{1F480} skulls'
+        : it.t === 'sow' ? '\u{1F480} sows'
         : it.t === 'hex' ? '\u{1F52E} HEX'
         : '⚔ ' + e.atk + (e.trait === 'fast' ? '×2' : '');
       // the telegraph: over its head in a pack, under the bar when alone
@@ -6286,6 +6353,7 @@ if (!HEADLESS) (function browser() {
       : it.t === 'heavy' ? 'winding up a HEAVY blow (' + (e.atk * 2) + ')'
       : it.t === 'brace' ? 'bracing — it will take half damage'
       : it.t === 'curse' ? 'about to hurl a skull volley'
+      : it.t === 'sow' ? 'about to SOW skulls into the pile'
       : it.t === 'hex' ? 'weaving its signature HEX on you'
       : 'a plain strike for ' + e.atk;
     txt('this turn: ' + plan, cx, yy, '700 10px Verdana, sans-serif', '#c8b8a0');
@@ -7440,6 +7508,15 @@ if (!HEADLESS) (function browser() {
     }
     uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'title'; save(); }, { r: 10, font: '20px serif' });
     uiBtn(LW - 52, 12, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
+    // the floor's optional JOB, posted under the floor title
+    const q = S.run.quest;
+    if (q) {
+      const rIcon = q.reward === 'goldkey' ? '\u{1F511}' : '\u{1F4FF}';
+      txt(q.done ? '✓ quest done — ' + rIcon + ' claimed'
+                 : '\u{1F4DC} ' + questTxt(q) + '  (' + Math.min(q.got, q.need) + '/' + q.need + ')  →  ' + rIcon,
+          LW / 2, 120, '700 10px Verdana, sans-serif', q.done ? '#7ee787' : '#e8c877',
+          'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
+    }
     txt('drag to walk • WASD works too', LW / 2, 704, '600 9px Verdana, sans-serif', '#6a5a68');
     drawRoomModal(t);
     drawMapView(t);
