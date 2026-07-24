@@ -1,0 +1,43 @@
+{
+  "name": "roblox-obby",
+  "tree": {
+    "$className": "DataModel",
+
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "ObbyGenerator": {
+        "$path": "src/server/ObbyGenerator.server.luau"
+      },
+      "CheckpointService": {
+        "$path": "src/server/CheckpointService.server.luau"
+      }
+    },
+
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "StageGui": {
+          "$path": "src/client/StageGui.client.luau"
+        }
+      }
+    },
+
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "Gravity": 196.2,
+        "FallenPartsDestroyHeight": -50
+      }
+    },
+
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "Ambient": [70, 70, 80],
+        "OutdoorAmbient": [140, 150, 170],
+        "Brightness": 2
+      }
+    }
+  }
+}
