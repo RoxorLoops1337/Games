@@ -886,10 +886,15 @@ t.ok(S.wheelAnim === null, 'no spin without paying');
 t.ok(!S.run.room.ents[0].done, 'the ghost lingers until paid');
 S.run.purse.coin = 8;
 const wheelPurse = DP.purseTotal();
-t.ok(DP.interact(0), 'paying the fee spins the wheel');
-t.ok(S.wheelAnim !== null, 'the wheel of fortune turns');
+t.ok(DP.interact(0), 'the ghost now NAMES his price');
+t.ok(S.confirm && S.confirm.yes, 'a confirm sheet stands between tap and fee');
+t.eq(DP.purseTotal(), wheelPurse, 'not a coin moves before you agree');
+t.ok(!S.wheelAnim, 'and no spin either');
+S.confirm.yes(); S.confirm = null;
+t.ok(S.wheelAnim !== null, 'agreed — the wheel of fortune turns');
 t.ok(DP.purseTotal() <= wheelPurse - C.WHEEL_COST, 'the ghost pockets ' + C.WHEEL_COST + ' coins');
 t.ok(S.run.room.ents[0].done, 'the ghost vanishes after the spin');
+t.ok(S.run.ledger.length > 0 && S.run.ledger[0].n === -C.WHEEL_COST, 'and the LEDGER wrote the fee down');
 
 // -------- the shopkeeper (pouches and single coins for the purse) --------
 DP.srand(23);
@@ -6794,7 +6799,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.4', 'the schooling ships as v1.7.4');
+  t.eq(D.VERSION, '1.7.5', 'the ledger patch ships as v1.7.5');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REPLAY GHOST') >= 0)), 'and the notes carry the ghost');
   // roundtrip: the clock rides in base36, floors 2 up
   const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
@@ -7535,6 +7540,44 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(S2.victory, 'the fight resolves as a victory all the same');
   D.leaveBattle();
   D.endRun('done');
+}
+
+// -------- v1.7.5: THE PURSE LEDGER — no coin vanishes unexplained --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  D.srand(53); D.newRun('knight');
+  t.ok(Array.isArray(S2.run.ledger), 'every run opens its books');
+  // spendPurse writes a line with its reason
+  const t0 = D.purseTotal();
+  t.ok(D.spendPurse(3, 'a probe'), 'the purse pays three');
+  t.eq(D.purseTotal(), t0 - 3, 'three coins left');
+  t.eq(S2.run.ledger[0].n, -3, 'the ledger says minus three');
+  t.eq(S2.run.ledger[0].why, 'a probe', 'and names the taker');
+  // the mugger's pocket writes both directions
+  D.startBattle('battle', undefined, 'goblin');
+  const mug = S2.foes[0];
+  mug.trait = 'thief'; mug.def = null;
+  mug.intent = { t: 'hit', dmg: 1 };
+  D.enemyActFoe(mug);
+  t.ok(S2.run.ledger.some(en => en.n < 0 && /pocketed/.test(en.why)), 'the pocketing is written down');
+  mug.hp = 1; D.dmgFoe(mug, 9);
+  t.ok(S2.run.ledger.some(en => en.n > 0 && /returned/.test(en.why)), 'and so is the return');
+  // the victory spoil writes a line
+  if (S2.victory && S2.victory.offer) {
+    D.pickCoin(0);
+    t.ok(S2.run.ledger.some(en => en.n === 1 && /victory spoil/.test(en.why)), 'the spoil is written down');
+  }
+  D.leaveBattle();
+  // the ledger survives a save + load
+  D.save();
+  const { DP: E } = loadGame(st, false);
+  E.load();
+  t.ok(E.S.run && Array.isArray(E.S.run.ledger) && E.S.run.ledger.length > 0, 'the books survive a reload');
+  t.ok(E.S.run.ledger.some(en => /probe/.test(en.why)), 'old lines intact');
+  E.endRun('done');
+  D.endRun && 0;
 }
 
 t.done();
