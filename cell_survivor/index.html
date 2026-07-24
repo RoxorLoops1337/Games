@@ -34,6 +34,15 @@
     text-shadow:0 0 18px rgba(57,240,255,.55),0 2px 6px #000}
   #rstats{display:flex;gap:12px;font-size:12px;color:var(--dim)}
   #rstats b{color:var(--ink);font-weight:700}
+  #objwrap{margin:8px auto 0;max-width:min(520px,90vw)}
+  #objline{display:flex;justify-content:space-between;align-items:baseline;gap:10px;font-size:11.5px;
+    letter-spacing:.12em;text-transform:uppercase;color:var(--dim);text-shadow:0 2px 8px #000}
+  #objname{color:var(--lime);font-weight:700}
+  #objval{font-family:ui-monospace,Menlo,monospace;color:var(--ink);font-weight:700}
+  #objbar{height:5px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:3px;
+    box-shadow:inset 0 0 0 1px rgba(157,255,109,.25)}
+  #objfill{height:100%;width:0%;background:linear-gradient(90deg,#9dff6d,#ffcf4d);
+    box-shadow:0 0 12px rgba(157,255,109,.7);transition:width .18s}
   #bosswrap{margin:10px auto 0;max-width:min(560px,86vw);opacity:0;transition:opacity .3s}
   #bosswrap.on{opacity:1}
   #bossname{font-size:11px;letter-spacing:.28em;text-align:center;color:var(--mag);margin-bottom:4px;
@@ -98,6 +107,13 @@
   .spec .nm{font-weight:800;font-size:14px;display:flex;align-items:center;gap:7px}
   .spec .ds{font-size:11px;color:var(--dim);margin-top:3px;line-height:1.35}
   .spec .pk{font-size:10px;color:var(--lime);margin-top:5px;letter-spacing:.08em}
+  #diffs{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px;margin:4px 0 14px}
+  .diff{text-align:left;padding:10px 12px;border-radius:14px;cursor:pointer;transition:.15s;
+    background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.1)}
+  .diff:hover{background:rgba(255,207,77,.08)}
+  .diff.sel{border-color:var(--amber);background:rgba(255,207,77,.12);box-shadow:0 0 20px rgba(255,207,77,.2)}
+  .diff .nm{font-weight:800;font-size:13px}
+  .diff .ds{font-size:10.5px;color:var(--dim);margin-top:3px;line-height:1.35}
   .spec.lock .pk{color:var(--amber)}
 
   /* level-up cards */
@@ -173,6 +189,10 @@
     <span id="clock" class="mono">0:00</span>
     <span id="rstats"><span>☠ <b id="kills">0</b></span><span>🧬 <b id="dna">0</b></span></span>
   </div>
+  <div id="objwrap">
+    <div id="objline"><span id="objname">Stage 1 · Colonisation</span><span id="objval">70s left</span></div>
+    <div id="objbar"><div id="objfill"></div></div>
+  </div>
   <div id="bosswrap"><div id="bossname">—</div><div id="bossbar"><div id="bossfill"></div></div></div>
   <div id="kit"></div>
   <div id="abil">
@@ -188,6 +208,9 @@
   <div class="panel">
     <div class="ttl">Choose your strain</div>
     <div id="species"></div>
+    <div class="ttl" style="margin-top:4px">Culture strength</div>
+    <div id="diffs"></div>
+    <div class="hint" id="best" style="margin:0 0 12px"></div>
     <div class="row">
       <button class="btn big" id="play">Incubate</button>
       <button class="btn ghost" id="tolab">🧪 Lab</button>
@@ -195,6 +218,8 @@
     </div>
   </div>
   <p class="hint" style="margin-top:16px">
+    <b style="color:var(--lime)">12 stages, one objective each</b> — survive, purge, hunt the marked host, kill the boss.<br>
+    Clear a stage, take a reward, face a nastier one. Kill The Culture in stage 12 to win the dish.<br>
     <kbd>WASD</kbd>/<kbd>◀▶</kbd> swim &nbsp;·&nbsp; <kbd>Space</kbd> dash &nbsp;·&nbsp; <kbd>E</kbd> mitosis &nbsp;·&nbsp; <kbd>Esc</kbd> pause<br>
     Touch: drag anywhere to swim, tap the buttons for dash &amp; mitosis.
   </p>
@@ -226,6 +251,14 @@
   </div>
 </div>
 
+<div class="screen" id="clear">
+  <div class="flash" id="clearttl">Stage clear</div>
+  <h2 id="clearnm" style="margin:0 0 6px;font-size:clamp(24px,6vw,40px);font-weight:900;letter-spacing:.06em">—</h2>
+  <div class="hint" id="clearsub" style="margin-bottom:18px">—</div>
+  <div id="rewards" style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;max-width:min(820px,97vw)"></div>
+  <div class="cardfoot" id="nextline">Next: —</div>
+</div>
+
 <div class="screen" id="pause">
   <div class="panel" style="max-width:520px;text-align:center">
     <div class="ttl">Paused</div>
@@ -244,6 +277,7 @@
   <div class="panel" style="max-width:560px">
     <div class="stats">
       <div class="st"><div class="k">Survived</div><div class="v mono" id="rTime">0:00</div></div>
+      <div class="st"><div class="k">Stage</div><div class="v mono" id="rStage">1/12</div></div>
       <div class="st"><div class="k">Level</div><div class="v mono" id="rLvl">1</div></div>
       <div class="st"><div class="k">Kills</div><div class="v mono" id="rKills">0</div></div>
       <div class="st"><div class="k">DNA</div><div class="v mono" id="rDna">0</div></div>
@@ -326,7 +360,7 @@ const WEAPONS = {
   pseudo: {
     nm: 'Pseudopod Spines', ic: '🦴', kind: 'w',
     ds: 'Fires bone-hard spines at the nearest pathogen.',
-    st: l => ({ cd: .95 - .06 * l, dmg: 9 + 4.2 * l, n: 1 + (l >= 3) + (l >= 5) + (l >= 7), spd: 620,
+    st: l => ({ cd: .95 - .06 * l, dmg: 12 + 4.4 * l, n: 1 + (l >= 3) + (l >= 5) + (l >= 7), spd: 620,
                 pierce: (l >= 4 ? 1 : 0) + (l >= 8 ? 1 : 0), r: 6 }),
     evo: { into: 'harpoon', wth: 'ribo' },
     fire(s, o, m){
@@ -568,24 +602,79 @@ const SPECIES = [
 // ----------------------------------------------------------------- pathogens
 // `from` = minute the type enters the spawn table, `w` = relative weight.
 const ENEMIES = [
-  { id: 'cocci',  nm: 'Coccus',        hp: 12,  spd: 56,  dmg: 7,  r: 13, xp: 1, col: '#8fffb0', from: 0,  w: 10 },
-  { id: 'bacil',  nm: 'Bacillus',      hp: 21,  spd: 74,  dmg: 8,  r: 12, xp: 2, col: '#7fe0ff', from: 1.5, w: 9 },
-  { id: 'virion', nm: 'Virion',        hp: 17,  spd: 108, dmg: 9,  r: 11, xp: 2, col: '#ff9de0', from: 3,  w: 8, zig: 1 },
-  { id: 'sac',    nm: 'Spore Sac',     hp: 48,  spd: 38,  dmg: 12, r: 20, xp: 4, col: '#d7ff6d', from: 4.5, w: 6, split: 2 },
-  { id: 'phage',  nm: 'Phage',         hp: 32,  spd: 44,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 6,  w: 6, ranged: 2.4 },
-  { id: 'swarm',  nm: 'Swarmer',       hp: 9,   spd: 124, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 7,  w: 7, pack: 8 },
-  { id: 'leech',  nm: 'Leech',         hp: 40,  spd: 92,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 9,  w: 6, latch: 1 },
-  { id: 'blob',   nm: 'Amoeboid',      hp: 140, spd: 32,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 11, w: 4, heavy: 1 },
-  { id: 'prion',  nm: 'Prion',         hp: 76,  spd: 68,  dmg: 14, r: 16, xp: 7, col: '#ff4d6d', from: 13, w: 6, armor: 4 },
-  { id: 'macro',  nm: 'Rogue Macrophage', hp: 280, spd: 52, dmg: 22, r: 34, xp: 18, col: '#ff8a3d', from: 16, w: 3, charge: 1, heavy: 1 },
+  { id: 'cocci',  nm: 'Coccus',        hp: 9,   spd: 58,  dmg: 7,  r: 13, xp: 1, col: '#8fffb0', from: 0, w: 10 },
+  { id: 'bacil',  nm: 'Bacillus',      hp: 17,  spd: 78,  dmg: 8,  r: 12, xp: 2, col: '#7fe0ff', from: 1, w: 9 },
+  { id: 'virion', nm: 'Virion',        hp: 17,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9de0', from: 2, w: 8, zig: 1 },
+  { id: 'sac',    nm: 'Spore Sac',     hp: 48,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#d7ff6d', from: 3, w: 6, split: 2 },
+  { id: 'phage',  nm: 'Phage',         hp: 32,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
+  { id: 'swarm',  nm: 'Swarmer',       hp: 9,   spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
+  { id: 'leech',  nm: 'Leech',         hp: 40,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
+  { id: 'blob',   nm: 'Amoeboid',      hp: 140, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
+  { id: 'prion',  nm: 'Prion',         hp: 76,  spd: 72,  dmg: 14, r: 16, xp: 7, col: '#ff4d6d', from: 8, w: 6, armor: 4 },
+  { id: 'macro',  nm: 'Rogue Macrophage', hp: 280, spd: 54, dmg: 22, r: 34, xp: 18, col: '#ff8a3d', from: 9, w: 3, charge: 1, heavy: 1 },
 ];
 const EDEF = {}; for (const e of ENEMIES) EDEF[e.id] = e;
 
 const BOSSES = [
-  { id: 'engulfer', nm: 'The Engulfer',   at: 5,  hp: 2400,  spd: 54, r: 54, dmg: 26, col: '#ff8a3d', xp: 140, dna: 60,  pat: ['charge', 'spray'] },
-  { id: 'mother',   nm: 'Mother Spore',   at: 10, hp: 7200,  spd: 34, r: 64, dmg: 28, col: '#d7ff6d', xp: 260, dna: 110, pat: ['spawn', 'rings'] },
-  { id: 'colossus', nm: 'Prion Colossus', at: 15, hp: 17000, spd: 46, r: 72, dmg: 32, col: '#ff4d6d', xp: 420, dna: 190, pat: ['rings', 'charge', 'spawn'] },
-  { id: 'culture',  nm: 'The Culture',    at: 20, hp: 42000, spd: 42, r: 88, dmg: 38, col: '#ff4dd2', xp: 900, dna: 400, pat: ['rings', 'spawn', 'charge', 'spray'], last: true },
+  { id: 'engulfer', nm: 'The Engulfer',   hp: 2600,  spd: 56, r: 54, dmg: 28, col: '#ff8a3d', xp: 140, dna: 60,  pat: ['charge', 'spray'] },
+  { id: 'mother',   nm: 'Mother Spore',   hp: 9000,  spd: 36, r: 64, dmg: 32, col: '#d7ff6d', xp: 260, dna: 110, pat: ['spawn', 'rings'] },
+  { id: 'colossus', nm: 'Prion Colossus', hp: 23000, spd: 48, r: 72, dmg: 38, col: '#ff4d6d', xp: 420, dna: 190, pat: ['rings', 'charge', 'spawn'] },
+  { id: 'culture',  nm: 'The Culture',    hp: 58000, spd: 44, r: 88, dmg: 46, col: '#ff4dd2', xp: 900, dna: 400, pat: ['rings', 'spawn', 'charge', 'spray'], last: true },
+];
+
+// ---------------------------------------------------------------- the stages
+// A run is twelve short stages, each with one stated objective and a clear
+// end. Difficulty is driven by stage progress, not the wall clock, so the
+// pressure steps up visibly every time you finish one.
+const MODS = {
+  frenzy:   { nm: 'FRENZY',   ic: '💢', ds: 'Pathogens swim 25% faster',      spd: 1.25 },
+  armoured: { nm: 'ARMOURED', ic: '🛡️', ds: 'Pathogens carry 45% more health', hp: 1.45 },
+  swarm:    { nm: 'SWARM',    ic: '🐝', ds: 'Twice the spawns, weaker hosts',  rate: 1.95, hp: .6 },
+  venom:    { nm: 'VENOM',    ic: '☠️', ds: 'Contact damage +35%',             dmg: 1.35 },
+  starve:   { nm: 'STARVE',   ic: '🥀', ds: 'No health drops — survive on skill', nohp: 1 },
+};
+const STAGES = [
+  { nm: 'Colonisation', obj: { t: 'survive', n: 70 } },
+  { nm: 'Bloom',        obj: { t: 'kill',    n: 120 } },
+  { nm: 'First Contact', obj: { t: 'boss' }, boss: 0 },
+  { nm: 'Fever',        obj: { t: 'survive', n: 85 },  mod: 'frenzy' },
+  { nm: 'Sporulation',  obj: { t: 'elite',   n: 1 } },
+  { nm: 'Incubation',   obj: { t: 'boss' }, boss: 1, mod: 'swarm' },
+  { nm: 'Necrosis',     obj: { t: 'survive', n: 95 },  mod: 'armoured' },
+  { nm: 'Outbreak',     obj: { t: 'kill',    n: 320 }, mod: 'swarm' },
+  { nm: 'Cascade',      obj: { t: 'boss' }, boss: 2, mod: 'frenzy' },
+  { nm: 'Sepsis',       obj: { t: 'survive', n: 105 }, mod: 'venom' },
+  { nm: 'Bloomfall',    obj: { t: 'elite',   n: 2 },   mod: 'starve' },
+  { nm: 'The Culture',  obj: { t: 'boss' }, boss: 3, mod: 'venom', last: true },
+];
+// Culture strength — picked on the menu. Harder dishes pay more DNA.
+const DIFFS = [
+  { id: 'std', nm: 'Standard', ic: '🧫', ds: 'The dish as designed.',
+    hp: 1, dmg: 1, rate: 1, dna: 1 },
+  { id: 'vir', nm: 'Virulent', ic: '🔥', ds: '+45% pathogen health, +25% damage, thicker spawns. ×1.6 DNA',
+    hp: 1.45, dmg: 1.25, rate: 1.22, dna: 1.6 },
+  { id: 'let', nm: 'Lethal',   ic: '☠️', ds: 'Double health, +55% damage, relentless spawns. ×2.5 DNA',
+    hp: 2.1, dmg: 1.55, rate: 1.45, dna: 2.5 },
+];
+const curDiff = () => DIFFS.find(d => d.id === meta.diff) || DIFFS[0];
+
+const STAGE_NOMINAL = 90;      // assumed length of a non-timed stage, for pacing
+const objText = st => {
+  const o = st.obj;
+  if (o.t === 'survive') return 'Survive ' + o.n + 's';
+  if (o.t === 'kill')    return 'Purge ' + o.n + ' pathogens';
+  if (o.t === 'elite')   return o.n > 1 ? 'Hunt ' + o.n + ' marked hosts' : 'Hunt the marked host';
+  return 'Destroy the boss';
+};
+
+// Stage-clear rewards — a real payoff for finishing, chosen from three.
+const REWARDS = [
+  { id: 'heal',  ic: '🫀', nm: 'Reinforce',  ds: '+12% max health, and top it all up.' },
+  { id: 'power', ic: '⚡', nm: 'Overclock',  ds: '+2 levels on one of your organelles.' },
+  { id: 'splice',ic: '✨', nm: 'Free Splice', ds: 'An extra level-up pick, right now.' },
+  { id: 'dna',   ic: '🧬', nm: 'Harvest',    ds: 'A fat DNA payout for the lab.' },
+  { id: 'might', ic: '🔥', nm: 'Hot Mitochondria', ds: '+12% damage for the rest of the run.' },
+  { id: 'guard', ic: '🛡️', nm: 'Hardened Wall', ds: '+2 armour for the rest of the run.' },
 ];
 
 // -------------------------------------------------------------- the gene lab
@@ -610,7 +699,7 @@ const META_UPS = [
 const SAVE_KEY = 'cell_survivor_meta_v1';
 const freshMeta = () => ({
   dna: 0, dnaTotal: 0, kills: 0, bestT: 0, bestLvl: 1, bosses: 0, runs: 0, wins: 0,
-  ups: {}, seen: {}, spec: 'amoeba', mute: 0,
+  ups: {}, seen: {}, spec: 'amoeba', diff: 'std', mute: 0, bestStage: 0,
 });
 let meta = freshMeta();
 
@@ -651,7 +740,9 @@ const G = {
   t: 0, at: 0, kills: 0, dna: 0, dmgDealt: 0, best: 0,
   en: [], proj: [], eproj: [], orbs: [], pools: [], parts: [], texts: [], decals: [],
   waves: [], swipes: [], zaps: [], bombs: [], clones: [], syms: [],
-  boss: null, bossIdx: 0, spawnAcc: 0, eliteT: 55, hazT: 24,
+  boss: null, bossIdx: 0, spawnAcc: 0, eliteT: 45, surgeT: 34,
+  stage: 0, stageT: 0, stageKills: 0, marks: 0, marked: 0, bossDown: 0, grace: 0,
+  rewards: [], stageDna: 0,
   cam: { x: 0, y: 0, sh: 0, z: 1 },
   hitstop: 0, slowmo: 0, flash: 0, vw: 1280, vh: 720,
   choices: [], rerolls: 0, banishes: 0, banned: {}, pending: 0,
@@ -674,7 +765,7 @@ function makePlayer(spec){
 
 function recalc(healDelta){
   const m = P.spec.mods || {}, L = id => P.pas[id] || 0, s = P.s;
-  s.dmg    = (1 + .12 * L('mito')) * (1 + .06 * up('might')) * (m.dmg || 1);
+  s.dmg    = (1 + .12 * L('mito')) * (1 + .06 * up('might')) * (m.dmg || 1) * (1 + (P.bonusDmg || 0));
   s.area   = (1 + .14 * L('golgi')) * (m.area || 1);
   s.cd     = Math.max(.32, (1 - .07 * L('nucleus')) * (1 - .03 * up('cool')) * (m.cd || 1));
   s.spd    = 212 * (1 + .09 * L('flagellum')) * (1 + .04 * up('speed')) * (m.spd || 1);
@@ -683,16 +774,16 @@ function recalc(healDelta){
   s.crit   = Math.min(.85, .05 + .07 * L('spike'));
   s.critM  = 2;
   s.thorns = 7 * L('spike');
-  s.armor  = L('membrane') + up('armor') + (m.armor || 0);
+  s.armor  = L('membrane') + up('armor') + (m.armor || 0) + (P.bonusArmor || 0);
   s.regen  = .45 * L('regen');
   s.magnet = 135 * (1 + .30 * L('vacuole')) * (1 + .22 * up('magnet'));
   s.xp     = (1 + .09 * L('vacuole')) * (1 + .08 * up('growth')) * (m.xp || 1);
   s.luck   = (1 + .12 * L('plasmid')) * (1 + .08 * up('luck')) * (m.luck || 1);
   s.dur    = 1 + .15 * L('plasmid');
-  s.dnaM   = (1 + .15 * up('greed')) * (m.dna || 1);
+  s.dnaM   = (1 + .15 * up('greed')) * (m.dna || 1) * curDiff().dna;
   s.leech  = m.leech || 0;
   s.dashCd = DASH_CD * (1 - .06 * L('flagellum')) * (1 - .08 * up('dash'));
-  const mhp = Math.round((120 + 10 * up('vita')) * (1 + .14 * L('membrane')) * (m.hp || 1));
+  const mhp = Math.round((120 + 10 * up('vita')) * (1 + .14 * L('membrane') + (P.bonusHp || 0)) * (m.hp || 1));
   const gained = mhp - P.mhp;
   P.mhp = mhp;
   if (healDelta && gained > 0) P.hp += gained;
@@ -709,13 +800,16 @@ function startRun(specId, sd){
   G.en.length = G.proj.length = G.eproj.length = G.orbs.length = G.pools.length = 0;
   G.parts.length = G.texts.length = G.decals.length = G.waves.length = 0;
   G.swipes.length = G.zaps.length = G.bombs.length = G.clones.length = G.syms.length = 0;
-  G.boss = null; G.bossIdx = 0; G.spawnAcc = 0; G.eliteT = 55; G.hazT = 24;
+  G.boss = null; G.bossIdx = 0; G.spawnAcc = 0; G.eliteT = 45; G.surgeT = 34;
+  G.stage = 0; G.stageT = 0; G.stageKills = 0; G.marks = 0; G.marked = 0;
+  G.bossDown = 0; G.grace = 0; G.rewards = []; G.stageDna = 0;
   G.cam.x = P.x; G.cam.y = P.y; G.cam.sh = 0;
   G.hitstop = 0; G.slowmo = 0; G.flash = 0; G.pending = 0; G.choices = [];
   G.banned = {}; G.rerolls = 1 + up('reroll'); G.banishes = up('banish');
   G.revives = up('revive'); G.unlocked = []; G.won = false; G.ended = false;
   addWeapon(spec.start);
   recalc(false); P.hp = P.mhp;
+  beginStage();
   const head = up('start');
   for (let i = 0; i < head; i++) { P.lvl++; G.pending++; }
   if (head) P.xpN = xpNeed(P.lvl);
@@ -904,15 +998,26 @@ function shake(v){ G.cam.sh = Math.min(26, G.cam.sh + v); }
 // ENEMIES
 // ============================================================================
 const minute = () => G.t / 60;
-const hpMul  = () => { const m = minute(); return 1 + .14 * m + .018 * m * m; };
-const dmgMul = () => 1 + .095 * minute();
-const spdMul = () => 1 + .014 * minute();
-const spawnRate = () => Math.min(24, 1.2 + minute() * 1.15);
+const stage  = () => STAGES[Math.min(G.stage, STAGES.length - 1)];
+const smod   = () => (stage().mod ? MODS[stage().mod] : null);
+// continuous difficulty index: whole stages cleared + progress through this one
+function prog(){
+  const st = stage();
+  const span = st.obj.t === 'survive' ? st.obj.n : STAGE_NOMINAL;
+  return G.stage + clamp(G.stageT / span, 0, 1);
+}
+const hpMul  = () => { const q = prog(), m = smod(); return (1 + .30 * q + .075 * q * q) * ((m && m.hp) || 1) * curDiff().hp; };
+const dmgMul = () => { const q = prog(), m = smod(); return (1 + .16 * q) * ((m && m.dmg) || 1) * curDiff().dmg; };
+const spdMul = () => { const q = prog(), m = smod(); return (1 + .022 * q) * ((m && m.spd) || 1); };
+const spawnRate = () => {
+  const q = prog(), m = smod();
+  return Math.min(38, (1.4 + q * 2.1) * ((m && m.rate) || 1) * curDiff().rate * (G.boss ? .55 : 1));
+};
 
 function spawnTable(){
-  const m = minute(), out = [];
-  for (const e of ENEMIES) if (m >= e.from) out.push(e);
-  return out;
+  const q = G.stage, out = [];
+  for (const e of ENEMIES) if (q >= e.from) out.push(e);
+  return out.length ? out : [ENEMIES[0]];
 }
 function ringPoint(pad){
   const R = Math.max(G.vw, G.vh) * .62 + (pad || 40);
@@ -940,6 +1045,7 @@ function spawnEnemy(kind, x, y, opt){
   return e;
 }
 function spawnWaveTick(dt){
+  if (G.grace > 0){ G.grace -= dt; return; }
   G.spawnAcc += spawnRate() * dt;
   const table = spawnTable();
   while (G.spawnAcc >= 1){
@@ -955,13 +1061,42 @@ function spawnWaveTick(dt){
   // elites arrive on a timer and always carry a chest
   G.eliteT -= dt;
   if (G.eliteT <= 0){
-    G.eliteT = 72;
-    const t2 = spawnTable();
-    const D = t2[Math.min(t2.length - 1, ri(Math.max(0, t2.length - 4), t2.length - 1))];
-    const p = ringPoint(120);
-    const e = spawnEnemy(D.id, p.x, p.y, { elite: 1 });
-    if (e) { e.chest = 1; toast('⚡ An elite strain approaches'); }
+    G.eliteT = 48;
+    spawnElite(0);
   }
+  // surges: a wall of pathogens from one side, with a beat of warning
+  G.surgeT -= dt;
+  if (G.surgeT <= 0){
+    G.surgeT = 30 + rr(-6, 8);
+    const t2 = spawnTable();
+    const a = rnd() * TAU, n = Math.round(10 + prog() * 3.5);
+    const R = Math.max(G.vw, G.vh) * .62 + 60;
+    for (let i = 0; i < n; i++){
+      const aa = a + rr(-.5, .5);
+      spawnEnemy(pick(t2).id, P.x + Math.cos(aa) * R + rr(-40, 40), P.y + Math.sin(aa) * R + rr(-40, 40));
+    }
+    toast('🌊 Surge incoming', 1.4);
+  }
+  // stages that ask for a hunt keep a marked host on the board
+  const st = stage();
+  if (st.obj.t === 'elite' && G.marks < st.obj.n && !G.marked){
+    G.markT = (G.markT || 0) - dt;
+    if (G.markT <= 0){
+      const e = spawnElite(1);
+      if (e) G.marked = 1;
+    }
+  }
+}
+function spawnElite(marked){
+  const t2 = spawnTable();
+  const D = t2[Math.min(t2.length - 1, ri(Math.max(0, t2.length - 4), t2.length - 1))];
+  const p = ringPoint(140);
+  const e = spawnEnemy(D.id, p.x, p.y, { elite: 1 });
+  if (!e) return null;
+  e.chest = 1;
+  if (marked){ e.mark = 1; e.hp = e.mhp = e.mhp * 1.6; toast('🎯 A marked host surfaced — hunt it down', 2.4); }
+  else toast('⚡ An elite strain approaches', 1.6);
+  return e;
 }
 function spawnBoss(i){
   const B = BOSSES[i]; if (!B) return null;
@@ -1001,7 +1136,9 @@ function hurtEnemy(e, dmg, opt){
 function killEnemy(e, opt){
   if (e.dead) return;
   e.dead = 1;
-  G.kills++; P.kills++;
+  G.kills++; P.kills++; G.stageKills++;
+  if (e.mark){ G.marks++; G.marked = 0; G.markT = 3; }
+  if (e.boss) G.bossDown = 1;
   goo(e.x, e.y, e.col, e.boss ? 40 : e.elite ? 18 : 7);
   if (e.boss || e.elite) shake(e.boss ? 20 : 7);
   // biomass
@@ -1010,7 +1147,8 @@ function killEnemy(e, opt){
     dropOrb(e.x + rr(-14, 14), e.y + rr(-14, 14), 'xp', Math.max(1, Math.round(e.xp / orbs)));
   if (rnd() < .06 * P.s.luck || e.elite || e.boss)
     dropOrb(e.x, e.y, 'dna', Math.round((e.boss ? e.D.dna : e.elite ? 12 : 1) * P.s.dnaM));
-  if (rnd() < .022) dropOrb(e.x, e.y, 'hp', 0);
+  const md = smod();
+  if (rnd() < .022 && !(md && md.nohp)) dropOrb(e.x, e.y, 'hp', 0);
   if (rnd() < .004) dropOrb(e.x, e.y, 'magnet', 0);
   if (rnd() < .0025) dropOrb(e.x, e.y, 'nuke', 0);
   if (e.chest) dropOrb(e.x, e.y, 'chest', 0);
@@ -1030,8 +1168,7 @@ function killEnemy(e, opt){
   if (e.boss){
     G.boss = null;
     meta.bosses++;
-    if (e.B && e.B.last){ G.won = true; endRun(true); }
-    else toast('🏆 ' + e.B.nm + ' dissolved', 2.2);
+    toast('🏆 ' + e.B.nm + ' dissolved', 2.2);
     for (let i = 0; i < 26; i++) spark(e.x, e.y, e.col, rr(80, 420), 1.1);
   }
   // mitosis charge + lifesteal
@@ -1556,6 +1693,92 @@ function skipLevel(){
 // ============================================================================
 // RUN FLOW
 // ============================================================================
+// ============================================================================
+// STAGES — begin, check the objective, clear, reward, next
+// ============================================================================
+function beginStage(){
+  const st = stage();
+  G.stageT = 0; G.stageKills = 0; G.marks = 0; G.marked = 0; G.markT = 4;
+  G.bossDown = 0; G.grace = 2.6; G.spawnAcc = 0;
+  G.eliteT = st.obj.t === 'elite' ? 999 : 48;
+  G.surgeT = 26;
+  G.eproj.length = 0;
+  if (st.boss !== undefined) spawnBoss(st.boss);
+  toast('STAGE ' + (G.stage + 1) + ' · ' + st.nm.toUpperCase(), 2.6);
+  toast('🎯 ' + objText(st), 3.2);
+  if (st.mod) toast(MODS[st.mod].ic + ' ' + MODS[st.mod].nm + ' — ' + MODS[st.mod].ds, 3.6);
+}
+function objProgress(){
+  const st = stage(), o = st.obj;
+  if (o.t === 'survive') return clamp(G.stageT / o.n, 0, 1);
+  if (o.t === 'kill')    return clamp(G.stageKills / o.n, 0, 1);
+  if (o.t === 'elite')   return clamp(G.marks / o.n, 0, 1);
+  return G.boss ? 1 - clamp(G.boss.hp / G.boss.mhp, 0, 1) : (G.bossDown ? 1 : 0);
+}
+function objLabel(){
+  const st = stage(), o = st.obj;
+  if (o.t === 'survive') return Math.max(0, Math.ceil(o.n - G.stageT)) + 's left';
+  if (o.t === 'kill')    return Math.min(G.stageKills, o.n) + ' / ' + o.n;
+  if (o.t === 'elite')   return G.marks + ' / ' + o.n + ' hunted';
+  return G.boss ? Math.ceil(clamp(G.boss.hp / G.boss.mhp, 0, 1) * 100) + '% left' : 'incoming';
+}
+function objDone(){
+  const o = stage().obj;
+  if (o.t === 'survive') return G.stageT >= o.n;
+  if (o.t === 'kill')    return G.stageKills >= o.n;
+  if (o.t === 'elite')   return G.marks >= o.n;
+  return !!G.bossDown;
+}
+function rollRewards(){
+  const pool = REWARDS.filter(r => {
+    if (r.id === 'power') return P.weapons.some(w => w.lvl < WEP_MAX && !def(w.id).evolved);
+    return true;
+  });
+  return shuffle(pool.slice()).slice(0, 3);
+}
+function clearStage(){
+  if (G.state !== 'play') return;
+  // everything left on the board dissolves — and still pays out
+  for (const e of G.en.slice()) if (!e.boss) killEnemy(e);
+  G.eproj.length = 0;
+  G.stageDna = Math.round((30 + G.stage * 14) * P.s.dnaM);
+  G.dna += G.stageDna;
+  if (stage().last){ endRun(true); return; }   // clearing stage 12 is the win
+  G.rewards = rollRewards();
+  G.state = 'clear';
+  shake(10); G.flash = .25;
+  sfx('win');
+  syncUI();
+}
+function takeReward(i){
+  if (G.state !== 'clear') return false;
+  const r = G.rewards[i];
+  let splice = false;
+  if (r){
+    if (r.id === 'heal'){ P.bonusHp = (P.bonusHp || 0) + .12; recalc(true); P.hp = P.mhp; }
+    else if (r.id === 'power'){
+      const cand = P.weapons.filter(w => w.lvl < WEP_MAX && !def(w.id).evolved);
+      if (cand.length){ const w = pick(cand); w.lvl = Math.min(WEP_MAX, w.lvl + 2); toast('⚡ ' + def(w.id).nm + ' → Lv' + w.lvl, 2); }
+      else { heal(P.mhp * .5); }
+    }
+    else if (r.id === 'splice') splice = true;
+    else if (r.id === 'dna'){ const d = Math.round((80 + G.stage * 40) * P.s.dnaM); G.dna += d; toast('🧬 +' + d + ' DNA', 2); }
+    else if (r.id === 'might'){ P.bonusDmg = (P.bonusDmg || 0) + .12; recalc(true); }
+    else if (r.id === 'guard'){ P.bonusArmor = (P.bonusArmor || 0) + 2; recalc(true); }
+  }
+  nextStage(splice);
+  return true;
+}
+function nextStage(splice){
+  G.stage++;
+  if (G.stage >= STAGES.length){ endRun(true); return; }
+  G.state = 'play';
+  beginStage();
+  if (splice) G.pending++;
+  if (G.pending > 0) openLevelUp();   // levels banked during the clear resolve now
+  else syncUI();
+}
+
 function endRun(won){
   if (G.ended) return;
   G.ended = true; G.won = !!won;
@@ -1566,6 +1789,7 @@ function endRun(won){
   meta.kills += G.kills;
   meta.bestT = Math.max(meta.bestT, G.t);
   meta.bestLvl = Math.max(meta.bestLvl, P.lvl);
+  meta.bestStage = Math.max(meta.bestStage || 0, G.stage + 1);
   if (won) meta.wins++;
   G.best = Math.max(G.best, G.t);
   // unlock sweep — anything newly available gets announced on the results card
@@ -1604,10 +1828,9 @@ function update(dt){
   updatePools(dt);
   updateOrbs(dt);
   updateFx(dt);
-  // bosses on the five-minute chimes
-  const B = BOSSES[G.bossIdx];
-  if (B && G.t >= B.at * 60){ G.bossIdx++; spawnBoss(G.bossIdx - 1); }
-  if (G.t >= RUN_LEN && !G.boss && !G.ended) endRun(true);
+  // stage objective
+  G.stageT += dt;
+  if (objDone()) clearStage();
   // camera
   G.cam.x = lerp(G.cam.x, P.x, 1 - Math.pow(.0002, dt));
   G.cam.y = lerp(G.cam.y, P.y, 1 - Math.pow(.0002, dt));
@@ -2209,7 +2432,7 @@ function sfx(k){
 // DOM UI
 // ============================================================================
 const $ = id => document.getElementById(id);
-const SCREENS = ['menu', 'lab', 'lvlup', 'pause', 'over'];
+const SCREENS = ['menu', 'lab', 'lvlup', 'pause', 'over', 'clear'];
 let curScreen = 'menu';
 
 function show(id){
@@ -2229,9 +2452,10 @@ function toast(msg, dur){
 }
 function syncUI(){
   if (HEADLESS) return;
-  if (G.state === 'menu') { show('menu'); renderSpecies(); }
+  if (G.state === 'menu') { show('menu'); renderSpecies(); renderDiffs(); renderBest(); }
   else if (G.state === 'play') show(null);
   else if (G.state === 'levelup'){ show('lvlup'); renderCards(); }
+  else if (G.state === 'clear'){ show('clear'); renderClear(); }
   else if (G.state === 'pause'){ show('pause'); $('pkit').innerHTML = kitText(); }
   else if (G.state === 'over') renderOver();
 }
@@ -2239,6 +2463,28 @@ function kitText(){
   const w = P.weapons.map(x => def(x.id).ic + ' ' + def(x.id).nm + ' Lv' + x.lvl).join(' · ');
   const p = Object.keys(P.pas).map(k => PASSIVES[k].ic + ' ' + PASSIVES[k].nm + ' Lv' + P.pas[k]).join(' · ');
   return w + (p ? '<br>' + p : '');
+}
+function renderDiffs(){
+  if (HEADLESS) return;
+  const host = $('diffs');
+  host.innerHTML = '';
+  for (const d of DIFFS){
+    const el = document.createElement('div');
+    el.className = 'diff' + (curDiff().id === d.id ? ' sel' : '');
+    el.innerHTML = '<div class="nm">' + d.ic + ' ' + d.nm + '</div><div class="ds">' + d.ds + '</div>';
+    el.onclick = () => { meta.diff = d.id; saveMeta(); renderDiffs(); sfx('orb'); };
+    host.appendChild(el);
+  }
+}
+function renderBest(){
+  if (HEADLESS) return;
+  const b = meta.bestStage || 0;
+  $('best').innerHTML = meta.runs
+    ? 'Best run: <b style="color:var(--lime)">Stage ' + Math.max(1, b) + '/' + STAGES.length + '</b>' +
+      ' &nbsp;·&nbsp; level ' + meta.bestLvl + ' &nbsp;·&nbsp; ' + fmtN(meta.kills) + ' purged' +
+      (meta.wins ? ' &nbsp;·&nbsp; <b style="color:var(--amber)">' + meta.wins + ' dish' + (meta.wins > 1 ? 'es' : '') + ' dominated</b>' : '') +
+      ' &nbsp;·&nbsp; 🧬 ' + fmtN(meta.dna) + ' banked'
+    : 'First culture. Clear stage 1 and the dish opens up.';
 }
 function renderSpecies(){
   const host = $('species');
@@ -2276,6 +2522,28 @@ function renderCards(){
   $('banish').style.borderColor = banishMode ? 'var(--red)' : '';
 }
 let banishMode = false;
+function renderClear(){
+  const st = STAGES[Math.min(G.stage, STAGES.length - 1)];
+  $('clearnm').textContent = 'Stage ' + (G.stage + 1) + ' — ' + st.nm;
+  $('clearsub').innerHTML = '🧬 +' + fmtN(G.stageDna) + ' DNA banked &nbsp;·&nbsp; ☠ ' + fmtN(G.stageKills) +
+    ' purged &nbsp;·&nbsp; ⏱ ' + fmtT(G.t) + ' total<br>Take one reward and push on.';
+  const nx = STAGES[G.stage + 1];
+  $('nextline').innerHTML = nx
+    ? 'Next: <b style="color:var(--ink);margin:0 6px">Stage ' + (G.stage + 2) + ' · ' + nx.nm + '</b> — ' + objText(nx) +
+      (nx.mod ? ' &nbsp;' + MODS[nx.mod].ic + ' ' + MODS[nx.mod].nm : '')
+    : 'Next: the run is yours to finish.';
+  const host = $('rewards');
+  host.innerHTML = '';
+  G.rewards.forEach((r, i) => {
+    const el = document.createElement('div');
+    el.className = 'card r1';
+    el.style.animationDelay = (i * .06) + 's';
+    el.innerHTML = '<div class="rar"></div><div class="ic">' + r.ic + '</div><div class="nm">' + r.nm +
+      '</div><div class="lv">Stage reward</div><div class="ds">' + r.ds + '</div>';
+    el.onclick = () => { takeReward(i); sfx('chest'); };
+    host.appendChild(el);
+  });
+}
 function renderLab(){
   if (HEADLESS) return;
   $('dnaval').textContent = '🧬 ' + fmtN(meta.dna);
@@ -2300,6 +2568,7 @@ function renderOver(){
   $('over').className = 'screen on ' + (G.won ? 'win' : 'lose');
   $('overttl').textContent = G.won ? 'CULTURE DOMINATED' : 'CULTURE COLLAPSED';
   $('rTime').textContent = fmtT(G.t);
+  $('rStage').textContent = G.won ? '12/12' : (G.stage + 1) + '/' + STAGES.length;
   $('rLvl').textContent = P.lvl;
   $('rKills').textContent = fmtN(G.kills);
   $('rDna').textContent = '+' + fmtN(G.earned || 0);
@@ -2313,6 +2582,11 @@ function hudTick(){
   $('clock').textContent = fmtT(G.t);
   $('kills').textContent = fmtN(G.kills);
   $('dna').textContent = fmtN(G.dna);
+  const st = STAGES[Math.min(G.stage, STAGES.length - 1)];
+  $('objname').textContent = 'Stage ' + (G.stage + 1) + '/' + STAGES.length + ' · ' + st.nm +
+    (st.mod ? ' ' + MODS[st.mod].ic : '');
+  $('objval').textContent = objLabel();
+  $('objfill').style.width = (objProgress() * 100).toFixed(1) + '%';
   const bw = $('bosswrap');
   if (G.boss){
     bw.classList.add('on');
@@ -2358,6 +2632,7 @@ function bindInput(){
     if (k === 'e') tryUlt();
     if (k === 'escape') togglePause();
     if (G.state === 'levelup' && k >= '1' && k <= '4'){ const i = +k - 1; if (G.choices[i]) choose(i); }
+    if (G.state === 'clear' && k >= '1' && k <= '3'){ const i = +k - 1; if (G.rewards[i]) takeReward(i); }
     if (G.state === 'levelup' && k === 'r') reroll();
   });
   addEventListener('keyup', ev => { keys[ev.key.toLowerCase()] = 0; });
@@ -2428,6 +2703,8 @@ if (!HEADLESS){
   fit();
   bindInput();
   renderSpecies();
+  renderDiffs();
+  renderBest();
   show('menu');
   let last = 0;
   function frame(now){
@@ -2449,9 +2726,12 @@ window.CS = {
   update, draw, fit, startRun, endRun, spawnEnemy, spawnBoss, spawnWaveTick, spawnTable,
   hurtEnemy, killEnemy, hurtPlayer, heal, gainXp, xpNeed, recalc, addWeapon, ownedW, wLevel,
   rollChoices, choose, reroll, banish, skipLevel, openLevelUp, evoReady,
+  STAGES, MODS, REWARDS, beginStage, clearStage, takeReward, nextStage, objDone,
+  objProgress, objLabel, objText, prog, stage, spawnElite,
   tryDash, tryUlt, nuke, dropOrb, collect, openChest, infect, chain, wave, boom, addPool, shoot,
   loadMeta, saveMeta, buyUp, up, freshMeta, specUnlocked, setMeta(m){ meta = m; },
-  input, reseed, rnd, hpMul, spawnRate, nearest, nearList, fmtT, fmtN, playerDown,
+  input, reseed, rnd, hpMul, dmgMul, spawnRate, nearest, nearList, fmtT, fmtN, playerDown,
+  DIFFS, curDiff,
   hudTick, syncUI, show, toast, sfx, SAVE_KEY,
 };
 
