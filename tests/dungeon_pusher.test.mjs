@@ -472,7 +472,7 @@ t.ok(DP.endRoundNow(), 'pressing END TURN starts the show');
 t.eq(S.battle.phase, 'resolve', 'and only then does the tray fire');
 t.ok(untilPhase('enemy', 8), 'the whole queue plays out');
 t.eq(S.enemy.hp, hp0 - 2 * C.DMG.gold, 'two gold coins each smacked for ' + C.DMG.gold);
-t.eq(S.run.gold, g0 + 15, 'the gem banked 15 gold');
+t.eq(S.run.gold, g0 + C.GEM_GOLD, 'the gem banked ' + C.GEM_GOLD + ' gold');
 t.eq(S.enemy.pois, 1, 'the green coin left a poison stack');
 // silver gave 1 block, the skull then bit for 4 (bypassing block)
 t.eq(S.run.block, 1, 'the silver coin raised 1 block — and curses ignored it');
@@ -527,7 +527,7 @@ t.eq(S.enemy.pois, DP.itemById('vial').pois, 'venom vial applies its stacks');
 DP.applyLoot({ t: 'frost', iid: 'frost' });
 t.eq(S.enemy.stunned, 1, 'frost rune freezes the next enemy turn');
 DP.applyLoot({ t: 'bag' });
-t.ok(S.run.gold >= 8, 'gold bag banks gold');
+t.ok(S.run.gold >= C.BAG_GOLD, 'gold bag banks gold');
 
 // -------- the frozen foe skips its turn --------
 S.enemy.stunned = 1;
@@ -1326,7 +1326,7 @@ S.run.relics = ['gemcutter', 'fatpouch'];
   const g0 = S.run.gold;
   DP.applyLoot({ t: 'gem' });
   DP.applyLoot({ t: 'bag' });
-  t.eq(S.run.gold, g0 + 25 + 15, 'Gem Cutter + Fat Pouch fatten the payouts');
+  t.eq(S.run.gold, g0 + (C.GEM_GOLD + 10) + (C.BAG_GOLD + 7), 'Gem Cutter + Fat Pouch fatten the payouts');
 }
 S.run.relics = ['vampblade'];
 S.run.hp = 50;
@@ -1915,7 +1915,7 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   t.eq(PS.run.block - blk0, 1, 'the pup growls up +1 block');
   t.eq(PS.enemy.burn, 1, 'the newt spits 1 burn');
   t.eq(PS.enemy.bleed, 1, 'the rat opens 1 bleed');
-  t.eq(ehp0 - PS.enemy.hp, 1, 'the rat gnaws for 1');
+  t.eq(ehp0 - PS.enemy.hp, 2, 'the rat gnaws for 2 (the lean-years fang)');
 
   // the pack soaks the blow: orc atk vs pup first
   PS.run.block = 0;
@@ -6793,7 +6793,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.2', 'the truth patch ships as v1.7.2');
+  t.eq(D.VERSION, '1.7.3', 'the lean years ship as v1.7.3');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REPLAY GHOST') >= 0)), 'and the notes carry the ghost');
   // roundtrip: the clock rides in base36, floors 2 up
   const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
@@ -7324,7 +7324,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   S2.battle.banked = [{ k: 'gem' }];
   const bunny0 = S2.run.purse.bunny | 0;
   D.leaveBattle();
-  t.eq(S2.run.gold, gold0 + 15 + 8 + 1 + 15, 'gems and bags cash in, plain pieces sweep 2-for-1');
+  t.eq(S2.run.gold, gold0 + D.C.GEM_GOLD + D.C.BAG_GOLD + 1 + D.C.GEM_GOLD, 'gems and bags cash in, plain pieces sweep 2-for-1');
   t.eq(S2.run.purse.bunny, bunny0 + 1, 'a special in the tray walks home to the purse');
   // a special left on the BED climbs back at the stairs
   S2.run.pileSave = [{ k: 'twin', x: 40, y: 40, lay: 0 }, { k: 'coin', x: 50, y: 40, lay: 0 }];
@@ -7422,7 +7422,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const g0 = S2.run.gold, bun0 = S2.run.purse.bunny | 0;
   D.leaveBattle();
   t.eq(S2.run.purse.bunny, bun0 + 1, 'a special stuck in the dead queue walks home to the purse');
-  t.eq(S2.run.gold, g0 + 15 + 1, 'the dead gem cashes 15, two dead plain sweep 2-for-1');
+  t.eq(S2.run.gold, g0 + D.C.GEM_GOLD + 1, 'the dead gem cashes in, two dead plain sweep 2-for-1');
   D.endRun('done');
 }
 
