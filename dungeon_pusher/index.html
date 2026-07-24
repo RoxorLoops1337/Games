@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.3', notes: [
+    'THE LEAN YEARS \u{1FA99} — the owner tightens the table: every foe’s gold drop is cut to 65%, gems bank 10 (was 15), bags 6 (was 8)',
+    'THE THICKENING DEEP \u{1F9CC} — monsters gain +6% health per floor and bosses +9%, compounding on top of the act curve; blades and purses stay on the old ramp — the deep grows tough faster than it grows rich',
+    'the vermin sharpen their teeth \u{1F400} — rats gnaw 2 (dire 3), +1 every three floors, so the swarm keeps pace with the fattened deep (the balance rail caught the Rat King falling behind)',
+  ] },
   { v: '1.7.2', notes: [
     'THE BOSS MINT is a CHOICE now \u{1FA99} — every fallen boss spreads the three specials you hold fewest of and YOU pick one (skip, and the house strikes the scarcest for you); no more invisible mints',
     'pets LEAP \u{1F422} — living gear joins your side the moment the tray catches it, no more waiting for END TURN while the turtles idle',
@@ -405,6 +410,14 @@ const C = {
   WARD: 2,                              // totem ward: flat DR over the whole pack
   REGEN_HP: 3,                          // knit back per round
   PET_CAP: 5,                           // how many pets can crowd the stage at once
+  // v1.7.3, the owner's law: the deep grows TOUGH faster than it grows rich.
+  // HP_RAMP compounds per floor ON TOP of the act ramp (hp only — blades
+  // and purses stay on the old curve); GOLD_DROP_K thins every foe's drop
+  HP_RAMP: 0.06,                        // +6% foe HP per floor, on top of scaleMult
+  BOSS_HP_RAMP: 0.09,                   // bosses fatten faster still
+  GOLD_DROP_K: 0.65,                    // every foe's gold drop, cut to 65%
+  GEM_GOLD: 10,                         // a banked gem (was 15)
+  BAG_GOLD: 6,                          // a banked gold bag (was 8)
 };
 // your purse starts here; heroes add their signature pair on top
 const START_PURSE = { coin: 5, silver: 5, green: 0, red: 0, blue: 0, lucky: 0,
@@ -2089,6 +2102,9 @@ function petsAct() {
   if (!S.run || !S.pets.length) return;
   const acts = hasRelic('packleader') ? 2 : 1;
   const dmul = hasRelic('warhound') ? 2 : 1;
+  // the swarm grows bolder in the deep: rats gnaw +1 every three floors,
+  // so flat chip damage keeps pace with the v1.7.3 health ramp
+  const deepFang = Math.floor(S.run.floor / 3);
   for (const p of S.pets.slice()) {
     if (p.hp <= 0) continue;
     for (let a = 0; a < acts && S.run && !S.victory; a++) {
@@ -2098,13 +2114,13 @@ function petsAct() {
       else if (p.iid === 'rat') {
         if (S.enemy && S.enemy.hp > 0) {
           const bonus = hasRelic('bloodscent') && S.enemy.bleed > 0 ? 1 : 0;
-          dmgFoe(S.enemy, 1 * dmul + bonus);
+          dmgFoe(S.enemy, (2 + deepFang) * dmul + bonus);
           if (S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
         }
       }
       else if (p.iid === 'direrat') {
         if (S.enemy && S.enemy.hp > 0) {
-          dmgFoe(S.enemy, 2 * dmul);
+          dmgFoe(S.enemy, (3 + deepFang) * dmul);
           if (S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
         }
       }
@@ -2674,14 +2690,16 @@ function mkEnemy(type, eid) {
     if (type === 'elite') eliteK = 2.0;
   }
   const champ = CHAMPIONS.indexOf(base) >= 0;
-  const hp = Math.round(base.hp * mult * eliteK * diffHpK());
+  // the owner's ramp: health compounds per floor beyond the act curve
+  const hpRamp = 1 + (type === 'boss' ? C.BOSS_HP_RAMP : C.HP_RAMP) * (S.run.floor - 1);
+  const hp = Math.round(base.hp * mult * eliteK * diffHpK() * hpRamp);
   return {
     id: base.id, icon: base.icon,
     name: champ ? '\u{1F451} ' + base.name : (type === 'elite' ? 'ELITE ' : '') + base.name,
     hp, maxHp: hp,
     atk: Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1)) + (mutOn('swiftdoom') ? 2 : 0),
     trait: base.trait, def: base.def || null,
-    gold: Math.round(base.gold * mult * (type === 'elite' ? 2.2 : 1)),
+    gold: Math.round(base.gold * mult * (type === 'elite' ? 2.2 : 1) * C.GOLD_DROP_K),
     boss: type === 'boss', elite: type === 'elite', champ: champ ? 1 : 0,
     stunned: 0, pois: 0, bleed: 0, burn: 0, block: 0, hitT: 0, lungeT: 0,
   };
@@ -3093,9 +3111,9 @@ function applyLoot(q) {
     return;
   }
   if (q.t === 'piper') { dmgEnemy(2); SND.gem(); return; }
-  if (q.t === 'gem') addGold(15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0));
+  if (q.t === 'gem') addGold(C.GEM_GOLD + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0));
   else if (q.t === 'bag') {
-    addGold(8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
+    addGold(C.BAG_GOLD + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0));
     if (hasRelic('scavenger') && S.run) { S.run.keys++; floatAnchor('a key shakes out of the bag! \u{1F5DD}', 'hero', '#ffd75e'); }
   }
   else if (q.t === 'silver') {
@@ -3826,8 +3844,8 @@ function leaveBattle() {
     }
     let gold = 0, plain = 0, backS = 0;
     for (const l of left) {
-      if (l.k === 'gem') gold += 15;
-      else if (l.k === 'bag') gold += 8;
+      if (l.k === 'gem') gold += C.GEM_GOLD;
+      else if (l.k === 'bag') gold += C.BAG_GOLD;
       else if (SPECIAL_COINS[l.k]) { S.run.purse[l.k] = (S.run.purse[l.k] || 0) + 1; backS++; }
       else if (COIN_KINDS.indexOf(l.k) >= 0) plain++;
     }
@@ -9367,8 +9385,8 @@ if (!HEADLESS) (function browser() {
         + masteryLvl('silver') + (q.sp ? 1 : 0)) + ' BLOCK';
     }
     if (q.t === 'red') return '+' + (C.RED_HEAL + (hasRelic('warmheart') ? 1 : 0) + (hasRelic('greensprig') ? 1 : 0) + masteryLvl('red')) + ' HP';
-    if (q.t === 'gem') return '+' + (15 + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0)) + ' GOLD';
-    if (q.t === 'bag') return '+' + (8 + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0)) + ' GOLD';
+    if (q.t === 'gem') return '+' + (C.GEM_GOLD + (hasRelic('gemcutter') ? 10 : 0) + (hasRelic('glimmergem') ? 8 : 0)) + ' GOLD';
+    if (q.t === 'bag') return '+' + (C.BAG_GOLD + (hasRelic('fatpouch') ? 7 : 0) + (hasRelic('scavenger') ? 5 : 0)) + ' GOLD';
     if (q.t === 'skull') return 'CURSE!';
     const it = itemById(q.iid);
     if (!it) return '';
@@ -11762,7 +11780,7 @@ if (!HEADLESS) (function browser() {
       head(TR('every coin the machine takes'));
       for (const k of COIN_KINDS) row(COIN_INFO[k].name, COIN_INFO[k].what);
       row('Skull', 'cursed — bites YOU when it fires', '#c8a8ff');
-      row('Gem / Bag', '+15 / +8 gold on resolve', '#8be7ff');
+      row('Gem / Bag', '+' + C.GEM_GOLD + ' / +' + C.BAG_GOLD + ' gold on resolve', '#8be7ff');
       head(TR('the after-battle offer draws from a weighted bag'));
       for (const [k, w] of COIN_REWARD_W) row(COIN_INFO[k].name, 'weight ' + w);
     } else if (ALMANAC.tab === 'foes') {
