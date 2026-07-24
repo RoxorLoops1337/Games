@@ -55,6 +55,7 @@ const STATIC_PATHS = [
   'the_collection',
   'ballistic',
   'coin_pusher',
+  'cell_survivor',
   'dungeon_pusher',
   'carmanager',
   'tools',
