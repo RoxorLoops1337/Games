@@ -51,6 +51,9 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.4', notes: [
+    'THE SPIRE\u2019S SCHOOLING \u{1F5FC} — ten new monsters with real mechanics: the Ash Cultist chants its blade sharp, the Vault Louse curls at first blood, the Mitosis Gel tears in two, the Thorn Husk pricks back, the Wax Golem hardens under small blows, the Slumbering Hulk wakes furious, the Grudge Nob feeds on your shields, the Marrow Piper pipes in lackeys, the Vault Creeper squeezes through block, and Fleeting Fortune flits off with its bounty in five turns',
+  ] },
   { v: '1.7.3', notes: [
     'THE LEAN YEARS \u{1FA99} — the owner tightens the table: every foe’s gold drop is cut to 65%, gems bank 10 (was 15), bags 6 (was 8)',
     'THE THICKENING DEEP \u{1F9CC} — monsters gain +6% health per floor and bosses +9%, compounding on top of the act curve; blades and purses stay on the old ramp — the deep grows tough faster than it grows rich',
@@ -994,6 +997,10 @@ const ENEMY_TIERS = [
     { id: 'emberimp',  icon: '\u{1F47A}', name: 'Ember Imp',      hp: 22, atk: 2, trait: 'burner',  def: null,  gold: 11 },
     // the machine-warpers: their tricks bend the PUSHER, not your HP bar
     { id: 'traygremlin', icon: '\u{1F47A}', name: 'Tray Gremlin', hp: 36, atk: 2, trait: 'gremlin', def: null,  gold: 16 },
+    // the Spire's schooling (v1.7.4): gimmick-bearers, lean of HP
+    { id: 'ashcultist', icon: '\u{1F9D9}', name: 'Ash Cultist',   hp: 30, atk: 2, trait: 'ritual', def: null,  gold: 12 },
+    { id: 'vaultlouse', icon: '\u{1FAB3}', name: 'Vault Louse',   hp: 26, atk: 2, trait: 'curl',   def: null,  gold: 10 },
+    { id: 'mitosisgel', icon: '\u{1F9A0}', name: 'Mitosis Gel',   hp: 30, atk: 2, trait: 'split',  def: 'gel', gold: 14 },
     { id: 'rustmite',    icon: '\u{1FAB2}', name: 'Rust Mite',    hp: 30, atk: 2, trait: 'rustmite', def: null, gold: 13 },
     { id: 'tarcube',     icon: '\u{2B1B}', name: 'Tar Cube',      hp: 34, atk: 2, trait: null,      def: 'tar', gold: 15 },
   ],
@@ -1015,6 +1022,9 @@ const ENEMY_TIERS = [
     { id: 'mirrorshell',  icon: '\u{1FA9E}', name: 'Mirror Shell',  hp: 44, atk: 4, trait: null,     def: 'mirror', gold: 24 },
     // sows cursed skulls — every skull left on the field SPROUTS a twin
     { id: 'skullgardener', icon: '\u{1F480}', name: 'Skull Gardener', hp: 52, atk: 4, trait: 'gardener', def: null, gold: 30 },
+    { id: 'thornhusk',   icon: '\u{1F335}', name: 'Thorn Husk',      hp: 46, atk: 3, trait: 'thorns',    def: null, gold: 24 },
+    { id: 'waxgolem',    icon: '\u{1F56F}\u{FE0F}', name: 'Wax Golem', hp: 48, atk: 4, trait: 'malleable', def: null, gold: 25 },
+    { id: 'slumberhulk', icon: '\u{1F43B}', name: 'Slumbering Hulk', hp: 62, atk: 5, trait: 'dormant',   def: null, gold: 30 },
   ],
   // ---- ACT 3 (floors 11+): the Abyss — ember-wreathed horrors ----
   [
@@ -1032,6 +1042,8 @@ const ENEMY_TIERS = [
     { id: 'cowardking',  icon: '\u{1F451}', name: 'Coward King',    hp: 66, atk: 5, trait: 'coward',  def: 'armor', gold: 40 },
     { id: 'twinidol',    icon: '\u{1F5FF}', name: 'Twin Idol',      hp: 56, atk: 5, trait: 'twin',    def: null,    gold: 30 },
     { id: 'gravegardener', icon: '\u{1FAA6}', name: 'Grave Gardener', hp: 70, atk: 6, trait: 'gardener', def: 'regen', gold: 40 },
+    { id: 'grudgenob',   icon: '\u{1F47F}', name: 'Grudge Nob',   hp: 72, atk: 5, trait: 'nob',      def: null, gold: 36 },
+    { id: 'marrowpiper', icon: '\u{1F9B4}', name: 'Marrow Piper', hp: 60, atk: 4, trait: 'summoner', def: null, gold: 38 },
   ],
   // ---- ACT 4 (floors 16-20): THE MINT — gilded constructs & counting-house horrors ----
   [
@@ -1049,6 +1061,7 @@ const ENEMY_TIERS = [
     { id: 'counterfeit',  icon: '\u{1FA99}', name: 'The Counterfeiter', hp: 86,  atk: 7, trait: 'coinclone', def: null,   gold: 46 },
     { id: 'meterleech',   icon: '\u{1FAB1}', name: 'Meter Leech',       hp: 79,  atk: 7, trait: 'jackthief', def: null,   gold: 44 },
     { id: 'mintgardener', icon: '\u{1FAA6}', name: 'Mint Gardener',     hp: 97,  atk: 8, trait: 'gardener', def: 'armor', gold: 52 },
+    { id: 'vaultcreeper', icon: '\u{1F33F}', name: 'Vault Creeper',     hp: 92,  atk: 6, trait: 'constrict', def: 'regen', gold: 46 },
   ],
   // ---- ACT 5 (floors 21-25): THE UNDERLAKE — the drowned vaults. The old
   // beyond-ramp used to carry these floors; it now lives in the base stats
@@ -1067,6 +1080,7 @@ const ENEMY_TIERS = [
     { id: 'undertow',     icon: '\u{1F30A}', name: 'The Undertow',    hp: 115, atk: 9,  trait: 'magnet',   def: null,    gold: 56 },
     { id: 'coineel',      icon: '\u{1F40D}', name: 'Coin Eel',        hp: 110, atk: 9,  trait: 'gremlin',  def: null,    gold: 59 },
     { id: 'siltgardener', icon: '\u{1FAA6}', name: 'Silt Gardener',   hp: 124, atk: 10, trait: 'gardener', def: 'regen', gold: 66 },
+    { id: 'fleetingfortune', icon: '\u{1F4B8}', name: 'Fleeting Fortune', hp: 150, atk: 8, trait: 'fading', def: null, gold: 95 },
   ],
 ];
 // back-compat alias: the act-1 roster (tests and old references)
@@ -1305,6 +1319,17 @@ const TRAIT_TXT = {
   magarmor: 'magnetic armor — hoards block every turn, more each act',
   coinclone: 'clones pile coins into dead slugs each turn',
   jackthief: 'siphons your JACKPOT meter each turn, harder each act',
+  // the Spire's schooling (v1.7.4)
+  ritual: 'chants +3 attack per turn — then the knives come out',
+  curl: 'curls at first blood: +8 block (+2 per act)',
+  split: 'tears in two at half health',
+  thorns: 'every hit it takes pricks you for 1',
+  malleable: 'hardens +1 block per hit taken; slumps on its turn',
+  dormant: 'sleeps 2 turns (+6 block each) — damage WAKES it (+3 atk)',
+  nob: 'your every block feeds its grudge: +1 attack (cap +8)',
+  summoner: 'pipes a lackey onto the stage every other turn',
+  constrict: 'squeezes you every turn — unblockable while it lives',
+  fading: 'flits away after 5 turns, bounty and all',
 };
 // the defensive mechanic, spelled out on the foe's panel
 const DEF_TXT = {
@@ -1891,6 +1916,39 @@ function dmgFoe(e, n, src, pierce) {
     S.battle.tilts--;
     floatAnchor('⌛ it devours a TILT', 'enemy', '#c8a8ff');
   }
+  // the Spire's schooling (v1.7.4): how the new blood answers a blow
+  if (e.hp > 0) {
+    // VAULT LOUSE: first blood makes it curl tight
+    if (!dot && e.trait === 'curl' && !e.curled) {
+      e.curled = 1;
+      const shell = 8 + 2 * Math.min(6, actIdx(S.run.floor));
+      e.block = (e.block || 0) + shell;
+      floatAnchor('\u{1F300} it CURLS UP (+' + shell + ' block)', 'enemy', '#c8d6e8', true);
+    }
+    // THORN HUSK: every hit you land pricks you back
+    if (!dot && e.trait === 'thorns' && S.run && S.battle && !S.victory) {
+      hpHit(1, 'pricked by thorns', '#8ed67e');
+    }
+    // WAX GOLEM: each blow hardens it a little (it slumps on its turn)
+    if (!dot && e.trait === 'malleable') e.block = (e.block || 0) + 1;
+    // SLUMBERING HULK: damage snaps it awake, furious
+    if ((e.sleep | 0) > 0) {
+      e.sleep = 0;
+      e.atk += 3;
+      floatAnchor('\u{1F4A2} IT WAKES FURIOUS — +3 ATK', 'enemy', '#ff9d3c', true);
+      rollIntent(e);
+    }
+    // MITOSIS GEL: half health tears it in two
+    if (e.trait === 'split' && !e.splitDone && e.hp <= ((e.maxHp / 2) | 0)
+        && S.foes.filter(f => f.hp > 0).length < 4) {
+      e.splitDone = 1;
+      e.maxHp = Math.max(1, e.hp);
+      const kin2 = { ...e, hp: e.hp, maxHp: e.maxHp, block: 0, belly: [], pocket: null, intent: null, entIdx: null };
+      S.foes.push(kin2);
+      rollIntent(kin2);
+      floatAnchor('\u{1F9A0} it SPLITS in two!', 'enemy', '#8ed67e', true);
+    }
+  }
   if (e.hp <= 0) foeDown(e);
   return n;
 }
@@ -2137,6 +2195,16 @@ function petsAct() {
 function addBlock(n) {
   if (!S.run) return;
   S.run.block += n;
+  // GRUDGE NOB: every shield you raise stokes it (+1 atk, cap +8)
+  if (S.battle && !S.victory) {
+    for (const f2 of S.foes) {
+      if (f2.hp > 0 && f2.trait === 'nob' && (f2.nobStacks | 0) < 8) {
+        f2.nobStacks = (f2.nobStacks | 0) + 1;
+        f2.atk++;
+        floatAnchor('\u{1F4A2} your shield feeds its grudge (+1 ATK)', 'enemy', '#ff9d3c');
+      }
+    }
+  }
   floatAnchor('\u{1F6E1} +' + n, 'hero', '#c8d6e8', n >= 4);
   SND.block();
 }
@@ -2702,6 +2770,9 @@ function mkEnemy(type, eid) {
     gold: Math.round(base.gold * mult * (type === 'elite' ? 2.2 : 1) * C.GOLD_DROP_K),
     boss: type === 'boss', elite: type === 'elite', champ: champ ? 1 : 0,
     stunned: 0, pois: 0, bleed: 0, burn: 0, block: 0, hitT: 0, lungeT: 0,
+    chants: base.trait === 'ritual' ? 2 : 0,     // the cultist's wind-up
+    sleep: base.trait === 'dormant' ? 2 : 0,     // the hulk's slumber
+    fade: base.trait === 'fading' ? 5 : 0,       // the fortune's patience
   };
 }
 // its plan for the round, telegraphed on its panel
@@ -2715,6 +2786,8 @@ function rollIntent(e) {
   // blackout / rust — one in seven turns
   if (e.elite && (!e.intent || e.intent.t !== 'hex') &&
       rng() < (S.run && S.run.diff === 'hard' ? 0.45 : 0.15)) { e.intent = { t: 'hex' }; return; }
+  if (e.trait === 'ritual' && (e.chants | 0) > 0) { e.intent = { t: 'chant' }; return; }
+  if ((e.sleep | 0) > 0) { e.intent = { t: 'sleep' }; return; }
   if (e.trait === 'curse' && rng() < 0.4) { e.intent = { t: 'curse' }; return; }
   if (e.trait === 'gardener' && rng() < 0.45) { e.intent = { t: 'sow' }; return; }
   const r = rng();
@@ -3257,6 +3330,46 @@ function enemyActFoe(e) {
     rollIntent(e);
     return;
   }
+  // FLEETING FORTUNE: five turns, then it flits — bounty and all
+  if (e.trait === 'fading') {
+    e.fade = (e.fade | 0) - 1;
+    if (e.fade <= 0) {
+      e.gold = 0;
+      floatAnchor('\u{1F4B8} it flits away — bounty and all!', 'enemy', '#ffd75e', true);
+      e.hp = 0;
+      foeDown(e);
+      return;
+    }
+    floatAnchor('\u{1F4B8} ' + e.fade + ' turn' + (e.fade > 1 ? 's' : '') + ' before it flits', 'enemy', '#c8b8cc');
+  }
+  // WAX GOLEM: the hardened wax slumps as it moves
+  if (e.trait === 'malleable' && (e.block | 0) > 0) {
+    e.block = 0;
+    floatAnchor('\u{1F56F}\u{FE0F} the wax slumps', 'enemy', '#c8b8a0');
+  }
+  // VAULT CREEPER: an unblockable squeeze while it lives
+  if (e.trait === 'constrict' && S.run) {
+    const squeeze = 2 + ((Math.min(6, actIdx(S.run.floor)) / 2) | 0);
+    floatAnchor('\u{1F33F} it TIGHTENS — ' + squeeze + ' through everything', 'hero', '#8ed67e', true);
+    hpHit(squeeze, 'crushed in its coils', '#8ed67e');
+    if (!S.run) return;
+  }
+  // MARROW PIPER: every other turn it pipes a lackey onto the stage
+  if (e.trait === 'summoner') {
+    e.pipeT = (e.pipeT | 0) + 1;
+    if (e.pipeT % 2 === 1 && S.foes.filter(f => f.hp > 0).length < 3) {
+      const kin = curRoster()[0];
+      const m = mkEnemy('battle', kin.id);
+      m.hp = m.maxHp = Math.max(8, m.maxHp >> 1);
+      m.atk = Math.max(1, m.atk - 1);
+      m.gold = (m.gold / 3) | 0;
+      m.name = 'Piped ' + m.name;
+      m.entIdx = null;
+      S.foes.push(m);
+      rollIntent(m);
+      floatAnchor('\u{1F9B4} it pipes a lackey onto the stage!', 'enemy', '#c8a8ff', true);
+    }
+  }
   // the machine-warpers work their mischief on top of their blow
   if (e.trait === 'gremlin' && S.battle && S.battle.loot.length) {
     // it filches the SMALLEST piece from your tray — kill it to get it back
@@ -3312,6 +3425,16 @@ function enemyActFoe(e) {
   if (it.t === 'brace') {
     e.braced = true;
     floatAnchor(e.name + ' braces', 'enemy', '#c8d6e8');
+  } else if (it.t === 'chant') {
+    e.chants = (e.chants | 0) - 1;
+    e.atk += 3;
+    floatAnchor('\u{1F56F} the chant swells — +3 ATK', 'enemy', '#c86bff', true);
+    SND.poison();
+  } else if (it.t === 'sleep') {
+    e.sleep = (e.sleep | 0) - 1;
+    e.block = (e.block || 0) + 6;
+    floatAnchor('\u{1F4A4} it slumbers on (+6 block)', 'enemy', '#c8d6e8');
+    if (e.sleep <= 0) { e.atk += 3; floatAnchor('\u{1F4A2} IT WAKES — +3 ATK', 'enemy', '#ff9d3c', true); }
   } else if (it.t === 'hex') {
     if (e.boss) {
       // the boss's signature hex lands on YOU
@@ -7169,6 +7292,8 @@ if (!HEADLESS) (function browser() {
         : e.stunned > 0 ? '❄ skips turn'
         : it.t === 'heavy' ? '\u{1F4A5} ' + (e.atk * 2) + (e.trait === 'fast' ? '×2' : '')
         : it.t === 'brace' ? '\u{1F6E1} braces'
+        : it.t === 'chant' ? '\u{1F56F} chants'
+        : it.t === 'sleep' ? '\u{1F4A4} sleeps'
         : it.t === 'curse' ? '\u{1F480} skulls'
         : it.t === 'sow' ? '\u{1F480} sows'
         : it.t === 'hex' ? '\u{1F52E} HEX'
@@ -7177,7 +7302,8 @@ if (!HEADLESS) (function browser() {
       // (the lone foe's name owns the headline spot)
       txt(intentTxt, cx, n === 1 ? by + 18 : Math.max(26, footY - sz - 20 * scl),
           '800 ' + (n === 1 ? 11 : 9) + 'px Verdana, sans-serif',
-          e.stunned > 0 ? '#8be7ff' : it.t === 'heavy' ? '#ff5a4e' : it.t === 'brace' ? '#c8d6e8' : it.t === 'curse' ? '#c86bff' : '#ffb4a8',
+          e.stunned > 0 ? '#8be7ff' : it.t === 'heavy' ? '#ff5a4e' : it.t === 'brace' ? '#c8d6e8'
+            : it.t === 'chant' ? '#c86bff' : it.t === 'sleep' ? '#c8d6e8' : it.t === 'curse' ? '#c86bff' : '#ffb4a8',
           'center', { w: 3, col: 'rgba(10,5,12,0.9)' });
       // tap a foe to inspect it (and, in a pack, aim your gold at it)
       if (S.battle && !S.victory) {
@@ -9011,6 +9137,16 @@ if (!HEADLESS) (function browser() {
     magarmor: 'MAGNETIC: hoards block every turn (more each act) — out-pace it',
     coinclone: 'COUNTERFEIT: mints dud slugs into your pile each turn',
     jackthief: 'SIPHON: drains your JACKPOT meter each turn — spend it fast',
+    ritual: 'RITUAL: chants +3 attack per turn until the knives come out',
+    curl: 'CURL UP: first blood grants it a thick shell of block',
+    split: 'SPLIT: tears in two at half health — burst it down',
+    thorns: 'THORNS: every hit you land pricks you back for 1',
+    malleable: 'MALLEABLE: +1 block per hit — few BIG blows beat many small',
+    dormant: 'DORMANT: sleeps and shells up; damage WAKES it furious (+3 atk)',
+    nob: 'GRUDGE: +1 attack every time you gain block (cap +8)',
+    summoner: 'PIPER: pipes a lackey in every other turn — cut the piper first',
+    constrict: 'CONSTRICT: an unblockable squeeze every turn — kill it to breathe',
+    fading: 'FLEETING: five turns and it VANISHES with its whole bounty',
   };
   function drawFoeInfo(t) {
     if (S.foeInfo === null || !S.foes || !S.foes[S.foeInfo]) return;
@@ -9062,6 +9198,8 @@ if (!HEADLESS) (function browser() {
       : e.stunned > 0 ? 'frozen — it skips its next turn'
       : it.t === 'heavy' ? 'winding up a HEAVY blow (' + (e.atk * 2) + ')'
       : it.t === 'brace' ? 'bracing — it will take half damage'
+      : it.t === 'chant' ? 'chanting — +3 attack when the verse lands'
+      : it.t === 'sleep' ? 'slumbering (+6 block) — damage WAKES it furious'
       : it.t === 'curse' ? 'about to hurl a skull volley'
       : it.t === 'sow' ? 'about to SOW skulls into the pile'
       : it.t === 'hex' ? 'weaving its signature HEX on you'
