@@ -51,6 +51,10 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.5', notes: [
+    'THE PURSE LEDGER \u{1F9FE} — every coin that enters or leaves the purse writes a line, readable at the bottom of the INVENTORY\u2019s coins tab: tolls, melts, skims, wheel fees, mugger pockets (and their returns), spoils, mints and pouches — no coin vanishes unexplained again',
+    'the wheel ghost NAMES HIS PRICE \u{1F3A1} — a confirm sheet quotes the ' + 5 + '-coin fee before a single coin moves (he used to swallow five on a tap, richest stack first — that was the owner\u2019s \u{201C}disappearing coins\u{201D})',
+  ] },
   { v: '1.7.4', notes: [
     'THE SPIRE\u2019S SCHOOLING \u{1F5FC} — ten new monsters with real mechanics: the Ash Cultist chants its blade sharp, the Vault Louse curls at first blood, the Mitosis Gel tears in two, the Thorn Husk pricks back, the Wax Golem hardens under small blows, the Slumbering Hulk wakes furious, the Grudge Nob feeds on your shields, the Marrow Piper pipes in lackeys, the Vault Creeper squeezes through block, and Fleeting Fortune flits off with its bounty in five turns',
   ] },
@@ -1488,7 +1492,7 @@ function save() {
         gold: S.run.gold, purse: S.run.purse, arsenal: S.run.arsenal,
         relics: S.run.relics, potions: S.run.potions, whet: S.run.whet, str: S.run.str, dex: S.run.dex,
         kills: S.run.kills, goldEarned: S.run.goldEarned, map: S.run.map,
-        keys: S.run.keys, goldKeys: S.run.goldKeys || 0, meter: S.meter,
+        keys: S.run.keys, goldKeys: S.run.goldKeys || 0, meter: S.meter, ledger: S.run.ledger || [],
         pileSave: S.run.pileSave, pileFloor: S.run.pileFloor, pending: S.run.pending,
         mapFloor: S.run.mapFloor, stats: S.run.stats,
         daily: S.run.daily || null, dailyMod: S.run.dailyMod || null,
@@ -1615,6 +1619,10 @@ function load() {
         room: null,
         keys: (typeof d.run.keys === 'number') ? d.run.keys : C.START_KEYS,
         goldKeys: d.run.goldKeys || 0,
+        ledger: Array.isArray(d.run.ledger)
+          ? d.run.ledger.filter(en => en && typeof en.n === 'number')
+              .map(en => ({ n: en.n | 0, why: String(en.why || '').slice(0, 48) })).slice(0, 14)
+          : [],
         daily: d.run.daily || null, dailyMod: d.run.dailyMod || null,
         quest: d.run.quest || null,
         swarm: d.run.swarm || null, cheese: d.run.cheese || 0, diff: d.run.diff || 'normal',
@@ -2036,7 +2044,10 @@ function foeDown(e) {
       back += e.pocket[k];
     }
     e.pocket = null;
-    if (back) floatAnchor('\u{1F4B0} your ' + back + ' stolen coins return!', 'hero', '#ffd75e', true);
+    if (back) {
+      purseLog(back, 'the ' + (e.name || 'mugger') + '\u2019s pocket returned');
+      floatAnchor('\u{1F4B0} your ' + back + ' stolen coins return!', 'hero', '#ffd75e', true);
+    }
   }
   retarget();
   if (!S.foes.some(f => f.hp > 0)) winBattle();
@@ -3484,7 +3495,10 @@ function enemyActFoe(e) {
             took++;
           }
         }
-        if (took) floatAnchor('\u{1F4B0} it pockets ' + took + ' of your coins — cut it down!', 'hero', '#ff9d3c', true);
+        if (took) {
+          purseLog(-took, 'pocketed by the ' + (e.name || 'mugger') + ' (dies \u{2192} returned)');
+          floatAnchor('\u{1F4B0} it pockets ' + took + ' of your coins — cut it down!', 'hero', '#ff9d3c', true);
+        }
       }
       // your pack stands in the way: pets chew the blow down before it
       // reaches you — and a fully-soaked hit spares you its venom too
@@ -3799,8 +3813,9 @@ function pickCoin(i) {
   const k = S.victory.offer[i];
   if (!k) return false;
   // the REFINE slot melts one plain coin into the finer kind
-  if (i === 0 && S.victory.up && (S.run.purse.coin || 0) > 0) S.run.purse.coin--;
+  if (i === 0 && S.victory.up && (S.run.purse.coin || 0) > 0) { S.run.purse.coin--; purseLog(-1, 'refined into ' + COIN_INFO[k].name); }
   S.run.purse[k] = (S.run.purse[k] || 0) + 1;
+  purseLog(1, 'victory spoil (' + COIN_INFO[k].name + ')');
   S.victory.picked = k;
   SND.buy();
   save();
@@ -3935,6 +3950,7 @@ function pickSpecialOffer(i) {
   const k = S.victory.specialOffer[i];
   if (!k) return false;
   S.run.purse[k] = (S.run.purse[k] | 0) + 1;
+  purseLog(1, 'the boss mint (' + COIN_INFO[k].name + ')');
   S.victory.specialPicked = k;
   floatAnchor('\u{1FA99} the boss minted a ' + COIN_INFO[k].name.toUpperCase() + ' coin!', 'hero', '#ffd75e', true);
   SND.buy();
@@ -3949,6 +3965,7 @@ function leaveBattle() {
   if (S.victory.specialOffer && !S.victory.specialPicked) {
     const mk = S.victory.specialOffer[0];
     S.run.purse[mk] = (S.run.purse[mk] | 0) + 1;
+    purseLog(1, 'the boss mint (' + COIN_INFO[mk].name + ')');
     toast('\u{1FA99} the boss minted a ' + COIN_INFO[mk].name.toUpperCase() + ' coin');
   }
   // THE SETTLEMENT: whatever the victory left in the tray or the bank is
@@ -3969,7 +3986,7 @@ function leaveBattle() {
     for (const l of left) {
       if (l.k === 'gem') gold += C.GEM_GOLD;
       else if (l.k === 'bag') gold += C.BAG_GOLD;
-      else if (SPECIAL_COINS[l.k]) { S.run.purse[l.k] = (S.run.purse[l.k] || 0) + 1; backS++; }
+      else if (SPECIAL_COINS[l.k]) { S.run.purse[l.k] = (S.run.purse[l.k] || 0) + 1; purseLog(1, 'special pocketed from the tray'); backS++; }
       else if (COIN_KINDS.indexOf(l.k) >= 0) plain++;
     }
     gold += (plain / 2) | 0;
@@ -4698,7 +4715,7 @@ function newRun(heroId, force) {
   S.run = {
     hero: hero.id, ng, bside, seed,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
-    gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS, goldKeys: 0,
+    gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS, goldKeys: 0, ledger: [],
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0, str: 0, dex: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
@@ -4791,10 +4808,13 @@ function stairsConfirm() {
   }
   if (a.waived) { S.run.tollFree = 0; toast('the stairs look the other way — toll waived'); }
   else if (a.prepaid) { S.run.tollPaid -= stairToll(); toast('\u{1F9FF} toll prepaid — ' + S.run.tollPaid + ' banked ahead'); }
-  for (const k of COIN_KINDS) { const n = a.pick[k] | 0; if (n) S.run.purse[k] -= n; }
+  let picked = 0;
+  for (const k of COIN_KINDS) { const n = a.pick[k] | 0; if (n) { S.run.purse[k] -= n; picked += n; } }
+  if (picked - a.over > 0) purseLog(-(picked - a.over), 'the stair toll');
   if (a.over > 0) {
     const pay = a.over * 2;
     addGold(pay);
+    purseLog(-a.over, 'melted at the stairs (+' + pay + ' gold)');
     S.life.skimmed = (S.life.skimmed || 0) + a.over;
     toast('\u{2696}\u{FE0F} ' + a.over + ' coins melt — +' + pay + ' gold, your pick');
   }
@@ -4814,6 +4834,7 @@ function stairSkim() {
   }
   const pay = skimmed * 2;
   addGold(pay);
+  purseLog(-skimmed, 'the deep\u2019s skim (+' + pay + ' gold)');
   S.life.skimmed = (S.life.skimmed || 0) + skimmed;   // the Tollkeeper's seal counts these
   toast('\u{2696}\u{FE0F} the deep skims ' + skimmed + ' coins off the top — +' + pay + ' gold');
   return skimmed;
@@ -4822,9 +4843,17 @@ function purseTotal() {                   // plain coins only — the specials
   if (!S.run) return 0;                    // are treasures, not tender
   return COIN_KINDS.reduce((a, k) => a + (SPECIAL_COINS[k] ? 0 : (S.run.purse[k] || 0)), 0);
 }
+// THE PURSE LEDGER: every coin that enters or leaves the purse writes a
+// line the player can read — the owner asked twice where his coins
+// went; the books answer now, forever
+function purseLog(n, why) {
+  if (!S.run || !n) return;
+  (S.run.ledger = S.run.ledger || []).unshift({ n, why: String(why || '').slice(0, 48) });
+  if (S.run.ledger.length > 14) S.run.ledger.length = 14;
+}
 // spend N coins of any kind from the purse — richest kinds first. Returns
 // false (and touches nothing) if the purse is too thin to cover it.
-function spendPurse(n) {
+function spendPurse(n, why) {
   if (!S.run || purseTotal() < n) return false;
   let owed = n;
   const kinds = COIN_KINDS.filter(k => !SPECIAL_COINS[k])
@@ -4835,13 +4864,15 @@ function spendPurse(n) {
     S.run.purse[k] -= take;
     owed -= take;
   }
+  purseLog(-n, why || 'spent');
   return true;
 }
 // spend N coins of ONE chosen kind (used by coin-priced shop buys). Returns
 // false if that kind can't cover it.
-function spendKind(k, n) {
+function spendKind(k, n, why) {
   if (!S.run || (S.run.purse[k] || 0) < n) return false;
   S.run.purse[k] -= n;
+  purseLog(-n, why || ('spent (' + (COIN_INFO[k] ? COIN_INFO[k].name : k) + ')'));
   return true;
 }
 // toasts QUEUE now: simultaneous announcements take turns instead of
@@ -5284,15 +5315,25 @@ function interact(i) {
     e.done = true;
     SND.heal();
   } else if (e.kind === 'wheel') {
-    // the carnival ghost charges 5 coins of any kind for a spin
-    if (!spendPurse(C.WHEEL_COST)) {
+    // the carnival ghost NAMES his price up front now — the owner
+    // watched five coins vanish on a tap; no more silent gulps
+    if (purseTotal() < C.WHEEL_COST) {
       S.uiFlash = { msg: 'THE GHOST WANTS ' + C.WHEEL_COST + ' COINS', t: 1.4 };
       SND.deny();
       return false;
     }
-    spinWheel();
-    toast('you feed the ghost ' + C.WHEEL_COST + ' coins and spin the wheel');
-    e.done = true;
+    S.confirm = {
+      msg: '\u{1F3A1} THE WHEEL GHOST',
+      sub: 'a spin costs ' + C.WHEEL_COST + ' coins from your purse — richest stacks pay first',
+      yesLabel: 'SPIN (' + C.WHEEL_COST + ' \u{25CF})',
+      yes: () => {
+        if (!spendPurse(C.WHEEL_COST, 'the wheel ghost\u2019s fee')) return;
+        spinWheel();
+        toast('you feed the ghost ' + C.WHEEL_COST + ' coins and spin the wheel');
+        e.done = true;
+      },
+    };
+    SND.clink();
   } else if (e.kind === 'shop') {
     if (!e.stock) e.stock = shopStock();
     S.room = { type: 'shop', stock: e.stock, ent: i };
@@ -5329,7 +5370,7 @@ const EVENTS = [
     choices: [
       { label: 'toss 2 coins in', sub: 'a safe wish: +8 HP',
         can: () => purseTotal() >= 2,
-        fx: () => { spendPurse(2); healPlayer(8); return 'the water warms you: +8 HP.'; } },
+        fx: () => { spendPurse(2, 'tossed in the fountain'); healPlayer(8); return 'the water warms you: +8 HP.'; } },
       { label: 'drink deep', sub: 'gamble — heal 18, or the curse bites for 8',
         can: () => true,
         fx: () => { if (rng() < 0.5) { healPlayer(18); return 'sweet as spring rain: +18 HP!'; }
@@ -5362,11 +5403,11 @@ const EVENTS = [
     choices: [
       { label: 'feed it 5 coins', sub: 'it burps up its hoard: +40 gold',
         can: () => purseTotal() >= 5,
-        fx: () => { spendPurse(5); addGold(40); return 'BURP. A shower of gold: +40!'; } },
+        fx: () => { spendPurse(5, 'fed to the slime (+40 gold)'); addGold(40); return 'BURP. A shower of gold: +40!'; } },
       { label: 'poke it', sub: '50/50 — it spits 20 gold, or eats 3 of your coins',
         can: () => true,
         fx: () => { if (rng() < 0.5) { addGold(20); return 'it spits out +20 gold, offended.'; }
-                    spendPurse(Math.min(3, purseTotal())); return 'GULP. Three coins, gone.'; } },
+                    spendPurse(Math.min(3, purseTotal()), 'eaten by the slime'); return 'GULP. Three coins, gone.'; } },
     ] },
   { id: 'well', icon: '\u{1FAA3}', name: 'THE WISHING WELL',
     flavor: 'Coins glitter far below. The water hums, expectant. The toll grows with the depth.',
@@ -5645,7 +5686,7 @@ function removeArsenal(iid) {
   if (!S.run || !S.room || S.room.type !== 'shop') return false;
   const it = itemById(iid);
   if (!it || !(S.run.arsenal[iid] > 0)) return false;
-  if (!spendPurse(C.SHOP_REMOVE)) { S.uiFlash = { msg: 'REMOVING COSTS ' + C.SHOP_REMOVE + ' COINS', t: 1.2 }; SND.deny(); return false; }
+  if (!spendPurse(C.SHOP_REMOVE, 'the keeper\u2019s removal fee')) { S.uiFlash = { msg: 'REMOVING COSTS ' + C.SHOP_REMOVE + ' COINS', t: 1.2 }; SND.deny(); return false; }
   S.run.arsenal[iid]--;
   if (S.run.arsenal[iid] <= 0) delete S.run.arsenal[iid];
   // scrub one copy from wherever it waits: the drop-in queue first,
@@ -5685,7 +5726,7 @@ function pickBoon(i) {
   if (!o) return false;
   if (o.kind === 'item') grantItem(o.iid, 1);
   else if (o.kind === 'maxhp') { S.run.maxHp += 12; S.run.hp = Math.min(S.run.maxHp, S.run.hp + 12); }
-  else if (o.kind === 'pouch') S.run.purse.coin += C.POUCH_COINS;
+  else if (o.kind === 'pouch') { S.run.purse.coin += C.POUCH_COINS; purseLog(C.POUCH_COINS, 'the forge\u2019s pouch'); }
   else if (o.kind === 'str') S.run.str = (S.run.str || 0) + 1;
   else if (o.kind === 'dex') S.run.dex = (S.run.dex || 0) + 1;
   else if (o.kind === 'potion') gainPotions(2);
@@ -9288,7 +9329,20 @@ if (!HEADLESS) (function browser() {
               fx.mods.length ? '#8ed67e' : '#8d7d95', 'left');
         });
       });
-      contentH = 30 + COIN_KINDS.length * 96;
+      // THE PURSE LEDGER — where every coin went, newest first
+      const ledY = y0 + 18 + COIN_KINDS.length * 96 + 12;
+      txt('THE PURSE LEDGER — every coin, accounted', x0, ledY, '800 11px Verdana, sans-serif', '#e8c877', 'left');
+      const led = r.ledger || [];
+      if (!led.length) {
+        txt('no movements yet this run', x0, ledY + 22, '600 10px Verdana, sans-serif', '#8d7d95', 'left');
+      } else {
+        led.forEach((en, li) => {
+          txt((en.n > 0 ? '+' + en.n : '' + en.n) + ' \u{25CF}', x0 + 30, ledY + 22 + li * 17,
+              '800 10px Verdana, sans-serif', en.n > 0 ? '#7ee787' : '#ff9d8a', 'right');
+          txt(en.why, x0 + 40, ledY + 22 + li * 17, '600 10px Verdana, sans-serif', '#c8b8cc', 'left');
+        });
+      }
+      contentH = 30 + COIN_KINDS.length * 96 + 50 + Math.max(1, (r.ledger || []).length) * 17;
     } else if (tab === 'items') {
       txt('ARSENAL — racked onto the pile every battle, each fires once',
           x0, y0 - 10, '800 10px Verdana, sans-serif', '#e8c877', 'left');
