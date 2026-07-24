@@ -1537,7 +1537,8 @@ finishFight();
   t.ok(all.every(e => e.hp > 0 && e.atk > 0 && e.icon && e.name), 'every act foe is fully statted');
   const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech', 'bleeder', 'burner',
                     'gremlin', 'rustmite', 'magnet', 'bell', 'chrono', 'coward', 'twin', 'gardener',
-                    'magarmor', 'coinclone', 'jackthief'];
+                    'magarmor', 'coinclone', 'jackthief',
+                    'ritual', 'curl', 'split', 'thorns', 'malleable', 'dormant', 'nob', 'summoner', 'constrict', 'fading'];
   const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward', 'mirror', 'tar'];
   t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
   // act boundaries
@@ -3926,7 +3927,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const { DP: D } = loadGame({}, false);
   const mint = D.ENEMY_TIERS[3];
-  t.eq(mint.length, 13, 'thirteen counting-house horrors');
+  t.eq(mint.length, 14, 'fourteen counting-house horrors (the creeper moved in)');
   t.ok(mint.every(e => e.hp > 0 && e.atk > 0 && e.gold > 0 && e.icon && e.name), 'all fully statted');
   // the three minted traits live here and only here
   for (const tr of ['magarmor', 'coinclone', 'jackthief']) {
@@ -6793,7 +6794,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.3', 'the lean years ship as v1.7.3');
+  t.eq(D.VERSION, '1.7.4', 'the schooling ships as v1.7.4');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REPLAY GHOST') >= 0)), 'and the notes carry the ghost');
   // roundtrip: the clock rides in base36, floors 2 up
   const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
@@ -6840,7 +6841,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.ENEMY_TIERS[4].length, 13, 'thirteen drowned kin in the lake');
+  t.eq(D.ENEMY_TIERS[4].length, 14, 'fourteen drowned kin in the lake (fortune floats through)');
   t.ok(D.ENEMY_TIERS[4].every(e => e.hp > 0 && e.atk > 0 && e.gold > 0), 'all fully statted');
   const ids = new Set();
   for (const tier of D.ENEMY_TIERS) for (const e of tier) { t.ok(!ids.has(e.id) || t.fail, ''); ids.add(e.id); }
@@ -6874,7 +6875,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the codex grew its fifth shelf
   t.ok(D.CODEX_TABS.indexOf('a5') >= 0, 'the codex owns an a5 shelf');
   const a5 = D.codexTabStat('a5');
-  t.eq(a5.all, 13 + 2, 'the lake shelf counts its kin and both lords');
+  t.eq(a5.all, 14 + 2, 'the lake shelf counts its kin and both lords');
   D.endRun('done');
 }
 
@@ -7423,6 +7424,116 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.leaveBattle();
   t.eq(S2.run.purse.bunny, bun0 + 1, 'a special stuck in the dead queue walks home to the purse');
   t.eq(S2.run.gold, g0 + D.C.GEM_GOLD + 1, 'the dead gem cashes in, two dead plain sweep 2-for-1');
+  D.endRun('done');
+}
+
+// -------- v1.7.4: THE SPIRE'S SCHOOLING — ten monsters, ten mechanics --------
+{
+  const st = {};
+  const { DP: D } = loadGame(st, false);
+  const S2 = D.S;
+  const NEW_IDS = ['ashcultist', 'vaultlouse', 'mitosisgel', 'thornhusk', 'waxgolem',
+                   'slumberhulk', 'grudgenob', 'marrowpiper', 'vaultcreeper', 'fleetingfortune'];
+  for (const id of NEW_IDS) t.ok(D.enemyById(id), 'enrolled: ' + id);
+  D.srand(41); D.newRun('knight');
+  // RITUAL: two chants of +3, then the knives
+  D.startBattle('battle', undefined, 'ashcultist');
+  let f = S2.foes[0];
+  t.eq(f.intent.t, 'chant', 'the cultist opens with a chant');
+  const atk0 = f.atk;
+  D.enemyActFoe(f);
+  t.eq(f.atk, atk0 + 3, 'the first verse: +3 attack');
+  D.enemyActFoe(f);
+  t.eq(f.atk, atk0 + 6, 'the second verse: +6 total');
+  t.ok(f.intent.t !== 'chant', 'and then the knives come out');
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  // CURL UP: first blood only
+  D.startBattle('battle', undefined, 'vaultlouse');
+  f = S2.foes[0];
+  D.dmgFoe(f, 3);
+  t.eq(f.block, 8, 'first blood: the louse curls for 8 (act 1)');
+  D.dmgFoe(f, 3);
+  t.ok(f.block < 8, 'it never curls twice');
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  // SPLIT: half health tears it in two
+  D.startBattle('battle', undefined, 'mitosisgel');
+  f = S2.foes[0];
+  const n0 = S2.foes.length;
+  let guard = 60;
+  while (S2.foes.length === n0 && guard--) D.dmgFoe(f, 2);
+  t.eq(S2.foes.length, n0 + 1, 'the gel tears in two at half health');
+  t.eq(S2.foes[S2.foes.length - 1].hp, f.hp, 'both halves carry the torn hp');
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  // THORNS: every hit pricks back
+  D.startBattle('battle', undefined, 'thornhusk');
+  f = S2.foes[0];
+  const hp0 = S2.run.hp;
+  D.dmgFoe(f, 3);
+  t.eq(S2.run.hp, hp0 - 1, 'the husk pricks back for 1');
+  // MALLEABLE bolted onto the same fight via a fresh foe
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  D.startBattle('battle', undefined, 'waxgolem');
+  f = S2.foes[0];
+  D.dmgFoe(f, 3, null, true); D.dmgFoe(f, 3, null, true);
+  t.eq(f.block, 2, 'the wax hardens +1 per hit (piercing blows to see it plainly)');
+  f.intent = { t: 'brace' };
+  D.enemyActFoe(f);
+  t.eq(f.block, 0, 'and slumps on its turn');
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  // DORMANT: slumbers, shells, wakes furious on damage
+  D.startBattle('battle', undefined, 'slumberhulk');
+  f = S2.foes[0];
+  t.eq(f.intent.t, 'sleep', 'the hulk sleeps');
+  D.enemyActFoe(f);
+  t.eq(f.block, 6, 'it shells up +6 asleep');
+  const watk = f.atk;
+  D.dmgFoe(f, 9);
+  t.eq(f.sleep, 0, 'damage snaps it awake');
+  t.eq(f.atk, watk + 3, 'and it wakes FURIOUS (+3 atk)');
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  // NOB: every block you raise stokes it, capped
+  D.startBattle('battle', undefined, 'grudgenob');
+  f = S2.foes[0];
+  const natk = f.atk;
+  for (let i = 0; i < 10; i++) D.addBlock(1);
+  t.eq(f.atk, natk + 8, 'ten shields, eight grudge (cap +8)');
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  // SUMMONER: a lackey every other turn, capped at 3 on stage
+  D.startBattle('battle', undefined, 'marrowpiper');
+  f = S2.foes[0];
+  f.intent = { t: 'brace' };
+  D.enemyActFoe(f);
+  t.eq(S2.foes.length, 2, 'the piper pipes a lackey in');
+  t.ok(S2.foes[1].name.indexOf('Piped') === 0, 'and it wears its master\u2019s mark');
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  // CONSTRICT: unblockable squeeze on its turn
+  D.startBattle('battle', undefined, 'vaultcreeper');
+  f = S2.foes[0];
+  S2.run.block = 99;
+  const chp0 = S2.run.hp;
+  f.intent = { t: 'brace' };
+  D.enemyActFoe(f);
+  t.eq(S2.run.hp, chp0 - 2, 'the creeper squeezes 2 straight through 99 block (act 1)');
+  for (const x of S2.foes) { if (x.hp > 0) { x.hp = 1; D.dmgFoe(x, 9); } }
+  D.leaveBattle();
+  // FADING: five turns and the bounty walks
+  D.startBattle('battle', undefined, 'fleetingfortune');
+  f = S2.foes[0];
+  f.fade = 1;
+  const fg0 = S2.run.gold;
+  D.enemyActFoe(f);
+  t.ok(f.hp <= 0, 'the fortune flits away');
+  t.eq(S2.run.gold, fg0, 'and not a coin of its bounty stays');
+  t.ok(S2.victory, 'the fight resolves as a victory all the same');
+  D.leaveBattle();
   D.endRun('done');
 }
 
