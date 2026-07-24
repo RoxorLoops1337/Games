@@ -416,13 +416,19 @@ const WEAPONS = {
     ds: 'Leaks digestive acid in your wake. It keeps eating.',
     st: l => ({ cd: 1.05 - .06 * l, dps: 9 + 3.6 * l, r: 40 + 7 * l, life: 3 + .35 * l }),
     evo: { into: 'necro', wth: 'golgi' },
-    fire(s, o, m){ addPool(o.x, o.y, s.r * P.s.area, s.dps * m, s.life, '#9dff6d'); },
+    fire(s, o, m){
+      if (m >= 1 && len(P.vx, P.vy) < 45) { o.w.t = .12; return; }   // no swimming, no trail
+      addPool(o.x, o.y, s.r * P.s.area, s.dps * m, s.life, '#9dff6d');
+    },
   },
   necro: {
     nm: 'Necrotic Bloom', ic: '☣️', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: the acid blooms outward and slows everything in it.',
     st: () => ({ cd: .7, dps: 62, r: 105, life: 5.5 }),
-    fire(s, o, m){ addPool(o.x, o.y, s.r * P.s.area, s.dps * m, s.life, '#c9ff4d', { grow: 22, slow: .45 }); },
+    fire(s, o, m){
+      if (m >= 1 && len(P.vx, P.vy) < 45) { o.w.t = .12; return; }
+      addPool(o.x, o.y, s.r * P.s.area, s.dps * m, s.life, '#c9ff4d', { grow: 22, slow: .45 });
+    },
   },
 
   ion: {
@@ -607,6 +613,7 @@ const ENEMIES = [
   { id: 'virion', nm: 'Virion',        hp: 17,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9de0', from: 2, w: 8, zig: 1 },
   { id: 'sac',    nm: 'Spore Sac',     hp: 48,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#d7ff6d', from: 3, w: 6, split: 2 },
   { id: 'phage',  nm: 'Phage',         hp: 32,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
+  { id: 'zoner',  nm: 'Spitter',       hp: 46,  spd: 54,  dmg: 22, r: 16, xp: 5, col: '#c8a1ff', from: 3, w: 6, zone: 3.4 },
   { id: 'swarm',  nm: 'Swarmer',       hp: 9,   spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
   { id: 'leech',  nm: 'Leech',         hp: 40,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
   { id: 'blob',   nm: 'Amoeboid',      hp: 140, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
@@ -739,7 +746,7 @@ const G = {
   state: 'menu',            // menu | play | levelup | pause | over
   t: 0, at: 0, kills: 0, dna: 0, dmgDealt: 0, best: 0,
   en: [], proj: [], eproj: [], orbs: [], pools: [], parts: [], texts: [], decals: [],
-  waves: [], swipes: [], zaps: [], bombs: [], clones: [], syms: [],
+  waves: [], swipes: [], zaps: [], bombs: [], clones: [], syms: [], zones: [],
   boss: null, bossIdx: 0, spawnAcc: 0, eliteT: 45, surgeT: 34,
   stage: 0, stageT: 0, stageKills: 0, marks: 0, marked: 0, bossDown: 0, grace: 0,
   rewards: [], stageDna: 0,
@@ -776,7 +783,7 @@ function recalc(healDelta){
   s.thorns = 7 * L('spike');
   s.armor  = L('membrane') + up('armor') + (m.armor || 0) + (P.bonusArmor || 0);
   s.regen  = .45 * L('regen');
-  s.magnet = 135 * (1 + .30 * L('vacuole')) * (1 + .22 * up('magnet'));
+  s.magnet = 90 * (1 + .30 * L('vacuole')) * (1 + .22 * up('magnet'));
   s.xp     = (1 + .09 * L('vacuole')) * (1 + .08 * up('growth')) * (m.xp || 1);
   s.luck   = (1 + .12 * L('plasmid')) * (1 + .08 * up('luck')) * (m.luck || 1);
   s.dur    = 1 + .15 * L('plasmid');
@@ -800,6 +807,7 @@ function startRun(specId, sd){
   G.en.length = G.proj.length = G.eproj.length = G.orbs.length = G.pools.length = 0;
   G.parts.length = G.texts.length = G.decals.length = G.waves.length = 0;
   G.swipes.length = G.zaps.length = G.bombs.length = G.clones.length = G.syms.length = 0;
+  G.zones.length = 0;
   G.boss = null; G.bossIdx = 0; G.spawnAcc = 0; G.eliteT = 45; G.surgeT = 34;
   G.stage = 0; G.stageT = 0; G.stageKills = 0; G.marks = 0; G.marked = 0;
   G.bossDown = 0; G.grace = 0; G.rewards = []; G.stageDna = 0;
@@ -1218,9 +1226,21 @@ function updateEnemies(dt){
       if (e.chargeT <= -1.1){ e.chargeT = rr(2.4, 4); e.tele = .55; }
       if (e.tele > 0){ e.tele -= dt; if (e.tele <= 0){ e.vx = dx / d * 560; e.vy = dy / d * 560; } }
       else { e.vx += dx / d * spd * dt * 3.2; e.vy += dy / d * spd * dt * 3.2; }
+    } else if (e.D.zone){
+      // hangs back and drops a shell where you are standing
+      const want = 300;
+      const push = d > want + 50 ? 1 : d < want - 50 ? -.8 : 0;
+      e.vx += dx / d * spd * push * dt * 6; e.vy += dy / d * spd * push * dt * 6;
+      e.atkT -= dt;
+      if (e.atkT <= 0 && d < 640){
+        e.atkT = e.D.zone;
+        G.zones.push({ x: P.x, y: P.y, r: 74 + prog() * 3, t: 1.15, max: 1.15, dmg: e.dmg, uid: uid++ });
+      }
     } else if (e.D.zig){
-      const a = Math.atan2(dy, dx) + Math.sin(G.t * 6 + e.phase) * .7;
-      e.vx += Math.cos(a) * spd * dt * 7; e.vy += Math.sin(a) * spd * dt * 7;
+      // circles in and darts, rather than walking politely into your guns
+      const ang = Math.atan2(dy, dx);
+      const orbit = d < 150 ? ang + (e.phase > Math.PI ? 1.15 : -1.15) : ang + Math.sin(G.t * 5 + e.phase) * .6;
+      e.vx += Math.cos(orbit) * spd * dt * 7; e.vy += Math.sin(orbit) * spd * dt * 7;
     } else if (e.D.latch && e.latched){
       e.x = px + Math.cos(e.phase + G.t) * (P.r + e.r * .6);
       e.y = py + Math.sin(e.phase + G.t) * (P.r + e.r * .6);
@@ -1247,8 +1267,8 @@ function updateEnemies(dt){
     const rr2 = (e.r + P.r);
     if (d < rr2 && e.hitT <= 0){
       if (e.D.latch && !e.latched){ e.latched = 1; e.phase = Math.atan2(-dy, -dx) - G.t; }
-      e.hitT = .65;
-      hurtPlayer(e.dmg, e);
+      e.hitT = .55;
+      hurtPlayer(e.dmg * crowdMul(), e);
       if (P.s.thorns) hurtEnemy(e, P.s.thorns, { kb: 120, kx: -dx, ky: -dy });
     }
   }
@@ -1320,11 +1340,18 @@ function bossAI(e, dt, dx, dy, d){
 const input = { x: 0, y: 0, dash: 0, ult: 0, mx: 0, my: 0 };
 
 function heal(v){ P.hp = Math.min(P.mhp, P.hp + v); }
+// how boxed in you are right now: one pathogen brushing you is nothing, being
+// buried in a dozen is fatal. This is what makes standing still a bad idea.
+function crowdMul(){
+  let n = 0;
+  around(P.x, P.y, P.r + 40, e => { if (!e.dead && (e.x - P.x) ** 2 + (e.y - P.y) ** 2 < (e.r + P.r + 26) ** 2) n++; });
+  return Math.min(2.8, 1 + .13 * Math.max(0, n - 1));
+}
 function hurtPlayer(dmg, src){
   if (P.iT > 0 || G.state !== 'play') return;
   const d = Math.max(1, dmg - P.s.armor);
   P.hp -= d;
-  P.hurtT = .35; P.iT = Math.max(P.iT, .3);   // brief recovery window vs. swarm stacking
+  P.hurtT = .35; P.iT = Math.max(P.iT, .26);
   G.flash = Math.min(.6, G.flash + .22);
   shake(Math.min(10, 2 + d * .18));
   text(P.x, P.y - P.r - 6, '-' + Math.round(d), '#ff4d6d', 1.1);
@@ -1497,6 +1524,17 @@ function updateProj(dt){
     }
     if (gone || Math.hypot(p.x, p.y) > DISH_R + 200) G.proj.splice(i, 1);
   }
+  // spitter shells: a marked circle that detonates where you were standing
+  for (let i = G.zones.length - 1; i >= 0; i--){
+    const z = G.zones[i];
+    z.t -= dt;
+    if (z.t <= 0){
+      G.waves.push({ x: z.x, y: z.y, r: z.r * .4, max: z.r, life: .45, t: 0, col: '#c8a1ff', hits: [] });
+      for (let k = 0; k < 10; k++) spark(z.x, z.y, '#c8a1ff', rr(60, 220));
+      if ((P.x - z.x) ** 2 + (P.y - z.y) ** 2 < (z.r + P.r) ** 2){ hurtPlayer(z.dmg); shake(6); }
+      G.zones.splice(i, 1);
+    }
+  }
   // enemy shots
   for (let i = G.eproj.length - 1; i >= 0; i--){
     const p = G.eproj[i];
@@ -1530,8 +1568,26 @@ function updatePools(dt){
     });
   }
 }
+// Loose biomass clumps together into fewer, fatter globules: the field stays
+// readable, and a pile you swim back for is worth the trip.
+function mergeOrbs(){
+  const cell = 46, map = new Map();
+  for (let i = G.orbs.length - 1; i >= 0; i--){
+    const o = G.orbs[i];
+    if (o.type !== 'xp' || o.pull || o.val >= 40) continue;
+    const k = (o.x / cell | 0) + ':' + (o.y / cell | 0);
+    const host = map.get(k);
+    if (!host){ map.set(k, o); continue; }
+    if (host.val >= 40) continue;
+    host.x = (host.x + o.x) / 2; host.y = (host.y + o.y) / 2;
+    host.val += o.val;
+    G.orbs.splice(i, 1);
+  }
+}
 function updateOrbs(dt){
   const mag = P.s.magnet;
+  G.mergeT = (G.mergeT || 0) - dt;
+  if (G.mergeT <= 0 && G.orbs.length > 40){ G.mergeT = .5; mergeOrbs(); }
   for (let i = G.orbs.length - 1; i >= 0; i--){
     const o = G.orbs[i];
     o.t += dt;
@@ -1543,8 +1599,6 @@ function updateOrbs(dt){
     } else {
       o.x += o.vx * dt; o.y += o.vy * dt;
       o.vx *= Math.pow(.02, dt); o.vy *= Math.pow(.02, dt);
-      // biomass you swam past starts creeping after you — nothing is ever lost
-      if (o.t > 5){ const c = Math.min(150, 26 + (o.t - 5) * 26); o.x += dx / d * c * dt; o.y += dy / d * c * dt; }
     }
     if (d < P.r + 12){ collect(o); G.orbs.splice(i, 1); }
   }
@@ -1852,6 +1906,7 @@ function updateFx(dt){
   for (let i = G.waves.length - 1; i >= 0; i--){ const w = G.waves[i]; w.t += dt; w.life -= dt; w.r = lerp(w.r, w.max, 1 - Math.pow(.0005, dt)); if (w.life <= 0) G.waves.splice(i, 1); }
   for (let i = G.swipes.length - 1; i >= 0; i--){ const s = G.swipes[i]; s.t += dt; s.life -= dt; if (s.life <= 0) G.swipes.splice(i, 1); }
   for (let i = G.zaps.length - 1; i >= 0; i--){ const z = G.zaps[i]; z.life -= dt; if (z.life <= 0) G.zaps.splice(i, 1); }
+  if (G.state !== 'play') G.zones.length = 0;
 }
 
 // ============================================================================
@@ -1932,6 +1987,7 @@ function draw(){
   drawPools();
   drawOrbs();
   drawEnemies();
+  drawZones();
   drawEProj();
   drawPlayer();
   drawProj();
@@ -2112,6 +2168,16 @@ function drawBody(e, col, ang){
     ctx.closePath(); ctx.fill(); ctx.stroke();
     return;
   }
+  if (k === 'zoner'){
+    ctx.rotate(w * .4);
+    blobPath(0, 0, r, w, .16, 12); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = col;
+    for (let i = 0; i < 3; i++){
+      const a = i / 3 * TAU + w;
+      ctx.beginPath(); ctx.arc(Math.cos(a) * r * .95, Math.sin(a) * r * .95, r * .22, 0, TAU); ctx.fill();
+    }
+    return;
+  }
   if (k === 'phage'){
     ctx.rotate(ang + Math.PI / 2);
     ctx.beginPath();
@@ -2275,6 +2341,22 @@ function drawProj(){
     ctx.globalCompositeOperation = 'lighter';
   }
   ctx.globalCompositeOperation = 'source-over';
+}
+function drawZones(){
+  for (const z of G.zones){
+    const k = 1 - clamp(z.t / z.max, 0, 1);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = .16 + .18 * k;
+    ctx.fillStyle = '#c8a1ff';
+    ctx.beginPath(); ctx.arc(z.x, z.y, z.r * k, 0, TAU); ctx.fill();
+    ctx.globalAlpha = .55 + .45 * Math.sin(G.t * 22);
+    ctx.strokeStyle = '#e0c8ff'; ctx.lineWidth = 3;
+    ctx.setLineDash([12, 10]);
+    ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, TAU); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
 }
 function drawEProj(){
   ctx.globalCompositeOperation = 'lighter';
@@ -2730,7 +2812,7 @@ window.CS = {
   objProgress, objLabel, objText, prog, stage, spawnElite,
   tryDash, tryUlt, nuke, dropOrb, collect, openChest, infect, chain, wave, boom, addPool, shoot,
   loadMeta, saveMeta, buyUp, up, freshMeta, specUnlocked, setMeta(m){ meta = m; },
-  input, reseed, rnd, hpMul, dmgMul, spawnRate, nearest, nearList, fmtT, fmtN, playerDown,
+  input, reseed, rnd, hpMul, dmgMul, spawnRate, nearest, nearList, fmtT, fmtN, playerDown, updatePlayer, crowdMul,
   DIFFS, curDiff,
   hudTick, syncUI, show, toast, sfx, SAVE_KEY,
 };

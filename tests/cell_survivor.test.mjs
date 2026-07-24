@@ -260,6 +260,7 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
     CS.startRun('amoeba', 99);
     const w = CS.ownedW('pseudo');
     w.id = id; w.lvl = 3; w.t = 0;
+    CS.input.x = 1; CS.input.y = 0;                 // weapons are exercised while swimming
     clearField();
     const targets = [];
     for (let i = 0; i < 12; i++) targets.push(CS.spawnEnemy('cocci', CS.P.x + 40 + i * 12, CS.P.y + (i % 3) * 10));
@@ -268,7 +269,55 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
     const dealt = G.dmgDealt;
     step(4);
     t.ok(G.dmgDealt > dealt, id + ' deals damage');
+    CS.input.x = 0; CS.input.y = 0;
   }
+}
+{
+  // the enzyme trail is a trail: it only drips while you are actually moving
+  CS.startRun('amoeba', 98);
+  const w = CS.ownedW('pseudo'); w.id = 'enzyme'; w.lvl = 3; w.t = 0;
+  CS.input.x = 0; CS.input.y = 0; CS.P.vx = 0; CS.P.vy = 0;
+  step(2);
+  t.ok(G.pools.length === 0, 'a parked cell leaves no enzyme trail');
+  CS.input.x = 1; CS.input.y = 0;
+  step(2);
+  t.ok(G.pools.length > 0, 'swimming lays the trail down');
+  CS.input.x = 0; CS.input.y = 0;
+}
+{
+  // spitters shell the ground you are standing on
+  CS.startRun('amoeba', 97);
+  G.grace = 0;
+  const z = CS.spawnEnemy('zoner', CS.P.x + 320, CS.P.y);
+  t.ok(!!z && z.D.zone > 0, 'the spitter is a zoner');
+  z.atkT = 0;
+  step(.1);
+  t.ok(G.zones.length > 0, 'it marks a circle on the floor');
+  t.ok(Math.hypot(G.zones[0].x - CS.P.x, G.zones[0].y - CS.P.y) < 6, 'the mark lands where you stand');
+  const hp0 = CS.P.hp;
+  CS.P.iT = 0;
+  step(1.4);
+  t.ok(CS.P.hp < hp0, 'standing in the mark hurts');
+  z.atkT = 0; step(.05);
+  const m2 = G.zones[G.zones.length - 1];
+  CS.P.x = m2.x + 500; CS.P.y = m2.y; CS.P.hp = CS.P.mhp; CS.P.iT = 0;
+  const hp1 = CS.P.hp;
+  step(1.4);
+  t.ok(CS.P.hp === hp1, 'stepping off the mark avoids it entirely');
+}
+{
+  // biomass stays where it dropped — you have to go and get it
+  CS.startRun('amoeba', 96);
+  clearField();
+  CS.input.x = 0; CS.input.y = 0;
+  const far = CS.P.s.magnet + 220;
+  CS.dropOrb(CS.P.x + far, CS.P.y, 'xp', 5);
+  const orb = G.orbs[G.orbs.length - 1];
+  const d0 = Math.hypot(orb.x - CS.P.x, orb.y - CS.P.y);
+  step(12);
+  const d1 = Math.hypot(orb.x - CS.P.x, orb.y - CS.P.y);
+  t.ok(Math.abs(d1 - d0) < 12, 'a distant orb never drifts over to a parked cell');
+  t.ok(CS.P.s.magnet < 110, 'the pickup radius is tight enough to demand movement');
 }
 {
   CS.startRun('amoeba', 5);
@@ -512,6 +561,25 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   CS.meta.ups.start = 0;
 }
 
+// ---------------------------------------------------------------- camping is fatal
+function clk(sec){ return Math.floor(sec / 60) + ':' + String(Math.floor(sec % 60)).padStart(2, '0'); }
+{
+  // the whole point of the design: parking in one spot has to get you killed
+  CS.meta.ups = {}; CS.meta.diff = 'std';
+  CS.startRun('amoeba', 777);
+  CS.input.x = 0; CS.input.y = 0;
+  let survived = 0;
+  for (let i = 0; i < 60 * 60 * 6; i++){
+    CS.update(1 / 60);
+    if (G.state === 'levelup') while (G.pending > 0) CS.choose(0);
+    if (G.state === 'clear') CS.takeReward(0);
+    if (G.state === 'over') break;
+    survived = G.t;
+  }
+  t.ok(G.state === 'over', 'a cell that never moves gets overrun (died at ' + clk(survived) + ')');
+  t.ok(survived < 5 * 60, 'and it does not take all day about it (' + clk(survived) + ')');
+}
+
 // ---------------------------------------------------------------- culture strength
 {
   t.ok(CS.DIFFS.length === 3, 'three culture strengths');
@@ -534,12 +602,14 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
 // ---------------------------------------------------------------- endurance
 {
   CS.startRun('plasmo', 4242);
-  CS.input.x = 0; CS.input.y = 0;
-  CS.P.mhp = 1e7; CS.P.hp = 1e7;
   let ok = true, maxEn = 0;
-  for (let i = 0; i < 60 * 60 * 3; i++){          // three minutes at 60fps
+  for (let i = 0; i < 60 * 60 * 3; i++){          // three minutes at 60fps, swimming a wide arc
+    const a = i / 60 * .6;
+    CS.input.x = Math.cos(a); CS.input.y = Math.sin(a);
+    CS.P.hp = CS.P.mhp;                           // immortal, so this measures the sim, not skill
     CS.update(1 / 60);
     if (G.state === 'levelup') while (G.pending > 0) CS.choose(0);
+    if (G.state === 'clear') CS.takeReward(0);     // keep the run rolling through stage clears
     if (i % 600 === 0){
       CS.draw();
       maxEn = Math.max(maxEn, G.en.length);
@@ -551,7 +621,7 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   t.ok(G.state === 'play' || G.state === 'clear' || G.state === 'levelup', 'and the run is still going');
   t.ok(G.en.length <= C.MAX_ENEMY, 'the enemy cap holds (peak ' + maxEn + ')');
   t.ok(G.kills > 100, 'a lot of pathogens died along the way (' + G.kills + ')');
-  t.ok(CS.P.lvl > 5, 'and you levelled up plenty (lv ' + CS.P.lvl + ')');
+  t.ok(CS.P.lvl > 5, 'and a moving cell levels up plenty (lv ' + CS.P.lvl + ')');
   t.ok(G.proj.length < 500 && G.parts.length <= 701 && G.orbs.length <= 701, 'entity pools stay bounded');
 }
 {
