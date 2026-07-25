@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
-<meta name="theme-color" content="#efe6d4">
+<meta name="theme-color" content="#fdf4ec">
 <title>Leviathan Press — a risograph deep dive</title>
 <meta name="description" content="Harpoon a segmented abyssal leviathan, draft upgrades, cut the worm in half. Printed in three inks on cheap paper.">
 <style>
@@ -15,9 +15,9 @@
      borders, a hard offset colour shadow where the second pass slipped.
   ------------------------------------------------------------------ */
   :root{
-    --paper:#efe6d4; --paper2:#e4d9c3; --key:#17171c;
-    --pink:#ff3d87; --teal:#009ea3; --sun:#ff9a1f; --kelp:#2f8f6b; --tide:#2b6be0;
-    --chalk:#8d8a80;
+    --paper:#fdf4ec; --paper2:#f7e9e3; --key:#48395f;
+    --pink:#ff7fb5; --teal:#57cfc6; --sun:#ffc46b; --kelp:#7fd6a6; --tide:#8fb8ff;
+    --chalk:#bdb4cb;
     --slip:6px;                 /* misregistration offset */
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -30,7 +30,7 @@
 
   /* ---------------------------------------------------------- helpers */
   .halftone{
-    background-image:radial-gradient(var(--dot,rgba(23,23,28,.20)) 32%, transparent 33%);
+    background-image:radial-gradient(var(--dot,rgba(72,57,95,.16)) 32%, transparent 33%);
     background-size:6px 6px;
   }
   .panel{
@@ -46,8 +46,8 @@
     transition:transform .05s ease, box-shadow .05s ease;
   }
   .btn:active{transform:translate(4px,4px);box-shadow:1px 1px 0 var(--key)}
-  .btn.pink{background:var(--pink);color:var(--paper)}
-  .btn.teal{background:var(--teal);color:var(--paper)}
+  .btn.pink{background:var(--pink);color:var(--key)}
+  .btn.teal{background:var(--teal);color:var(--key)}
   .btn.sun{background:var(--sun);color:var(--key)}
   .btn.ghost{box-shadow:none;border-width:2px;background:transparent;padding:8px 12px;font-size:13px}
   .btn[disabled]{opacity:.42;pointer-events:none}
@@ -63,7 +63,7 @@
   .screen.on{display:flex}
   .screen::before{                     /* paper grain over every menu */
     content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;
-    background-image:radial-gradient(rgba(23,23,28,.13) 32%, transparent 33%);
+    background-image:radial-gradient(rgba(72,57,95,.10) 32%, transparent 33%);
     background-size:5px 5px;
   }
   .sheet{width:min(560px,100%);position:relative;z-index:1}
@@ -71,9 +71,9 @@
   .rule.thin{height:2px;opacity:.45}
 
   /* ---------------------------------------------------------- title */
-  #title{background:rgba(239,230,212,.72);justify-content:center}
-  #stagesel,#depot,#results,#stats,#help,#pause{background:rgba(239,230,212,.93)}
-  #down{background:rgba(239,230,212,.86);justify-content:center}
+  #title{background:rgba(253,244,236,.72);justify-content:center}
+  #stagesel,#depot,#results,#stats,#help,#pause{background:rgba(253,244,236,.93)}
+  #down{background:rgba(253,244,236,.86);justify-content:center}
   #brevive span{background:var(--key);color:var(--paper);padding:2px 5px;font-size:11px;border-radius:2px}
   #title .logo{position:relative;text-align:center;margin:6px 0 2px}
   #title .logo h1{
@@ -85,7 +85,7 @@
   #title .logo::after{                 /* the pink pass, printed 5px off */
     content:'LEVIATHAN\A PRESS';white-space:pre;position:absolute;inset:0;color:var(--pink);
     font-size:clamp(38px,13vw,74px);line-height:.86;letter-spacing:-.02em;
-    transform:translate(6px,5px);z-index:-1;text-transform:uppercase;
+    transform:translate(4px,3px);z-index:-1;text-transform:uppercase;opacity:.85;
   }
   #title .sub{text-align:center;font-size:12px;letter-spacing:.34em;text-transform:uppercase;
     color:var(--key);opacity:.75;margin:14px 0 0}
@@ -136,13 +136,13 @@
   }
 
   /* ---------------------------------------------------------- draft */
-  #draft{background:rgba(239,230,212,.90);justify-content:center}
+  #draft{background:rgba(253,244,236,.90);justify-content:center}
   #drafthead{text-align:center;margin:2px 0 8px}
   #drafthead .kicker{font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.7}
   #drafthead h2{margin:2px 0 0;font-size:clamp(22px,7vw,32px);text-transform:uppercase;letter-spacing:-.01em}
   #rarityramp{display:flex;gap:3px;justify-content:center;margin:8px 0 4px;flex-wrap:wrap}
   .rchip{padding:3px 9px;border:2px solid var(--key);font-size:10px;letter-spacing:.1em;
-    text-transform:uppercase;color:var(--paper);position:relative;clip-path:polygon(0 0,calc(100% - 6px) 0,100% 50%,calc(100% - 6px) 100%,0 100%)}
+    text-transform:uppercase;color:var(--key);position:relative;clip-path:polygon(0 0,calc(100% - 6px) 0,100% 50%,calc(100% - 6px) 100%,0 100%)}
   .rchip.dim{opacity:.36}
   #cards{display:flex;gap:9px;justify-content:center;align-items:stretch;margin:8px 0 0;flex-wrap:nowrap}
   .card{
@@ -152,13 +152,13 @@
   }
   .card:active{transform:translate(4px,4px);box-shadow:1px 1px 0 var(--cc,var(--pink))}
   .card .crown{position:absolute;top:-11px;left:50%;transform:translateX(-50%);
-    background:var(--cc);color:var(--paper);border:2px solid var(--key);padding:2px 8px;
+    background:var(--cc);color:var(--key);border:2px solid var(--key);padding:2px 8px;
     font-size:9px;letter-spacing:.14em;white-space:nowrap}
   .card .art{height:78px;border-bottom:3px solid var(--key);display:grid;place-items:center;
     background:var(--cc);position:relative;overflow:hidden}
   .card .art canvas{width:66px;height:66px;image-rendering:pixelated}
   .card .art::after{content:'';position:absolute;inset:0;
-    background-image:radial-gradient(rgba(23,23,28,.34) 32%,transparent 33%);background-size:5px 5px;opacity:.6}
+    background-image:radial-gradient(rgba(72,57,95,.26) 32%,transparent 33%);background-size:5px 5px;opacity:.55}
   .card .nm{padding:12px 7px 3px;text-align:center;font-size:13px;line-height:1.06;text-transform:uppercase}
   .card .lv{text-align:center;font-size:9px;letter-spacing:.14em;opacity:.66}
   .card .ds{padding:5px 8px 0;text-align:center;font-size:11px;line-height:1.35}
@@ -187,7 +187,7 @@
   .hull{display:flex;gap:10px;align-items:center;background:var(--paper);border:3px solid var(--key);
     padding:8px;box-shadow:4px 4px 0 var(--pink);cursor:pointer}
   .hull.sel{background:var(--paper2);box-shadow:4px 4px 0 var(--teal)}
-  .hull.lock{border-style:dashed;box-shadow:4px 4px 0 rgba(23,23,28,.25)}
+  .hull.lock{border-style:dashed;box-shadow:4px 4px 0 rgba(72,57,95,.22)}
   .hull canvas{width:56px;height:56px;flex:0 0 auto;border:2px solid var(--key);background:var(--paper2)}
   .hull .txt{flex:1 1 auto;min-width:0}
   .hull .nm{font-size:14px;text-transform:uppercase}
@@ -209,7 +209,7 @@
   /* ---------------------------------------------------------- panels */
   #pause .sheet,#results .sheet,#stats .sheet{margin:auto}
   .statrow{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;
-    border-bottom:2px dotted rgba(23,23,28,.28)}
+    border-bottom:2px dotted rgba(72,57,95,.26)}
   .statrow b{font-weight:900}
   .kitlist{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
   .kitpill{display:flex;align-items:center;gap:4px;border:2px solid var(--key);padding:3px 7px;font-size:11px}
@@ -482,11 +482,11 @@ const pick = arr => arr[Math.floor(rnd() * arr.length) % arr.length];
 
 /* ============================ rarity ============================== */
 const RARITY = [
-  { id:'chalk', nm:'Chalk', col:'#8d8a80', w:54, mul:1.00 },
-  { id:'kelp',  nm:'Kelp',  col:'#2f8f6b', w:25, mul:1.50 },
-  { id:'tide',  nm:'Tide',  col:'#2b6be0', w:13, mul:2.10 },
-  { id:'coral', nm:'Coral', col:'#ff3d87', w:6,  mul:3.00 },
-  { id:'solar', nm:'Solar', col:'#ff9a1f', w:2,  mul:4.30 },
+  { id:'chalk', nm:'Chalk', col:'#bdb4cb', w:54, mul:1.00 },
+  { id:'kelp',  nm:'Kelp',  col:'#7fd6a6', w:25, mul:1.50 },
+  { id:'tide',  nm:'Tide',  col:'#8fb8ff', w:13, mul:2.10 },
+  { id:'coral', nm:'Coral', col:'#ff7fb5', w:6,  mul:3.00 },
+  { id:'solar', nm:'Solar', col:'#ffc46b', w:2,  mul:4.30 },
 ];
 const RAR = {}; RARITY.forEach((r, i) => { RAR[r.id] = r; r.tier = i; });
 // luck (0..) tilts the sheet upward: every point of luck moves weight from the
@@ -747,22 +747,31 @@ function tierOpen(t){
    INK and a COVERAGE (alpha). Overlap of pink+teal makes the deep blacks,
    which is why the abyss reads as printed rather than lit.
    ================================================================== */
+// Pastel three-ink set: soft mint water, bubblegum meat, and a warm plum
+// key that reads as "dark" without ever going to black.
 const INKS = {
-  teal: '#009ea3',
-  pink: '#ff3d87',
-  key:  '#17171c',
+  teal: '#57cfc6',
+  pink: '#ff7fb5',
+  key:  '#48395f',
 };
 const INK_ORDER = ['teal', 'pink', 'key'];
 const INK_ANGLE = { teal: 0.26, pink: 1.31, key: 0.79 };  // screen angles, radians
-const PAPER = '#efe6d4', DESK = '#cdc2a8';
+const PAPER = '#fdf4ec', DESK = '#e6d9d2';
 
 const cv = document.getElementById('cv');
 const X = cv.getContext('2d');
 let cw = 720, ch = 1280, dpr = 1;
-let pageX = 0, pageY = 0, pageW = 720, pageH = 1280, SC = 1, RS = 0.72;
+let pageX = 0, pageY = 0, pageW = 720, pageH = 1280, SC = 1;
+// Two render scales. The KEY pass — every outline, face and number — is
+// drawn at full device resolution and blitted 1:1, so line art is crisp.
+// The COLOUR passes ride at a fraction of that and are scaled up, which is
+// both cheap and exactly how a riso colour pass behaves: soft, slightly
+// off-register flats under sharp black line work.
+let SS = 1, CS = 0.62, RS = 0.62;
+const inkScale = ink => (ink === 'key' ? SS : SS * CS);
 const LAY = {};      // ink -> {cv, ctx}
 let dotPat = null, grainPat = null, grainCv = null, grainSheet = null;
-let sheetCv = null, sheetX = null;   // inks are combined here, then upscaled once
+let colCv = null, colX = null;      // the colour passes, combined at CS
 let paperCv = null;                 // paper + grain + roller streaks, baked once
 let streaks = [];
 
@@ -776,15 +785,12 @@ function mkCanvas(w, h){
 function bakeTextures(){
   // dot cell: a soft dot we punch *out* of solid ink, which is what gives
   // flat fills that printed, slightly starved texture.
-  const d = 5;
+  const d = 4;
   const c = mkCanvas(d, d), g = c.getContext('2d');
   if (g && g.clearRect){
     g.clearRect(0, 0, d, d);
-    g.fillStyle = 'rgba(0,0,0,0.85)';
-    g.beginPath(); g.arc(d * 0.5, d * 0.5, d * 0.29, 0, TAU); g.fill();
-    g.fillStyle = 'rgba(0,0,0,0.35)';
-    g.beginPath(); g.arc(0, 0, d * 0.2, 0, TAU); g.fill();
-    g.beginPath(); g.arc(d, d, d * 0.2, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.75)';
+    g.beginPath(); g.arc(d * 0.5, d * 0.5, d * 0.24, 0, TAU); g.fill();
   }
   dotPat = X.createPattern ? X.createPattern(c, 'repeat') : null;
 
@@ -793,14 +799,14 @@ function bakeTextures(){
   const gg = grainCv.getContext('2d');
   if (gg && gg.fillRect){
     gg.clearRect(0, 0, gs, gs);
-    for (let i = 0; i < 2600; i++){
-      const a = 0.03 + rnd() * 0.16;
-      gg.fillStyle = 'rgba(23,23,28,' + a.toFixed(3) + ')';
+    for (let i = 0; i < 1500; i++){
+      const a = 0.02 + rnd() * 0.09;
+      gg.fillStyle = 'rgba(72,57,95,' + a.toFixed(3) + ')';
       const s = rnd() < 0.08 ? 2 : 1;
       gg.fillRect(Math.floor(rnd() * gs), Math.floor(rnd() * gs), s, s);
     }
     for (let i = 0; i < 60; i++){       // paper fibres
-      gg.fillStyle = 'rgba(23,23,28,0.05)';
+      gg.fillStyle = 'rgba(72,57,95,0.035)';
       gg.fillRect(Math.floor(rnd() * gs), Math.floor(rnd() * gs), rnd() < 0.5 ? 6 : 1, rnd() < 0.5 ? 1 : 6);
     }
   }
@@ -814,7 +820,7 @@ function bakeTextures(){
   }
 
   streaks = [];
-  for (let i = 0; i < 4; i++) streaks.push({ x: rnd(), w: 0.01 + rnd() * 0.05, a: 0.02 + rnd() * 0.05 });
+  for (let i = 0; i < 3; i++) streaks.push({ x: rnd(), w: 0.01 + rnd() * 0.04, a: 0.012 + rnd() * 0.025 });
 }
 
 function quality(){ return META.opts.quality == null ? 1 : META.opts.quality; }
@@ -822,19 +828,19 @@ function quality(){ return META.opts.quality == null ? 1 : META.opts.quality; }
 // The stock: paper, its grain, and the roller streaks. None of it changes
 // between frames, so it is printed once and stamped down as a single image.
 function bakePaper(){
-  paperCv = mkCanvas(sheetCv.width, sheetCv.height);
+  paperCv = mkCanvas(colCv.width, colCv.height);
   const g = paperCv.getContext('2d');
   if (!g || !g.fillRect) return;
   const w = paperCv.width, h = paperCv.height;
   g.fillStyle = PAPER; g.fillRect(0, 0, w, h);
   if (grainPat && quality() > 0){
     g.globalCompositeOperation = 'multiply';
-    g.globalAlpha = 0.55;
+    g.globalAlpha = 0.42;
     g.fillStyle = grainPat;
     g.fillRect(0, 0, w, h);
     g.globalAlpha = 1;
   }
-  g.fillStyle = '#17171c';
+  g.fillStyle = INKS.key;
   for (const s of streaks){
     g.globalAlpha = s.a;
     g.fillRect(s.x * w, 0, Math.max(1, s.w * w), h);
@@ -844,7 +850,12 @@ function bakePaper(){
 }
 
 function fit(){
-  dpr = Math.min(1.5, (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1) || 1);
+  // The key pass is blitted 1:1 with the backing store, so the canvas
+  // resolution and the line-art resolution are the same number. Pushing it
+  // higher costs two full-page writes a frame, which is the whole budget.
+  const q0 = quality();
+  const dprCap = q0 >= 2 ? 2 : (q0 === 1 ? 1.35 : 1);
+  dpr = Math.min(dprCap, (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1) || 1);
   cw = Math.max(240, (typeof innerWidth === 'number' ? innerWidth : 720));
   ch = Math.max(320, (typeof innerHeight === 'number' ? innerHeight : 1280));
   cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
@@ -860,13 +871,18 @@ function fit(){
   SC = pageW / C.VW;
 
   const q = quality();
-  RS = q >= 2 ? 0.85 : (q === 1 ? 0.56 : 0.42);
+  SS = dpr;
+  CS = q >= 2 ? 0.8 : (q === 1 ? 0.62 : 0.5);
+  RS = SS;
   for (const ink of INK_ORDER){
-    const c = mkCanvas(pageW * RS, pageH * RS);
-    LAY[ink] = { cv: c, ctx: c.getContext('2d') };
+    const sc = inkScale(ink);
+    const c = mkCanvas(pageW * sc, pageH * sc);
+    const g = c.getContext('2d');
+    if (g) g.__key = (ink === 'key');
+    LAY[ink] = { cv: c, ctx: g };
   }
-  sheetCv = mkCanvas(pageW * RS, pageH * RS);
-  sheetX = sheetCv.getContext('2d');
+  colCv = mkCanvas(pageW * SS * CS, pageH * SS * CS);
+  colX = colCv.getContext('2d');
   bakeTextures();
   bakeScreens();
   const hud = document.getElementById('hud');
@@ -882,7 +898,8 @@ function beginFrame(){
     const g = l.ctx;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.clearRect(0, 0, l.cv.width, l.cv.height);
-    g.setTransform(RS * SC, 0, 0, RS * SC, 0, 0);
+    const sc = inkScale(ink) * SC;
+    g.setTransform(sc, 0, 0, sc, 0, 0);
     g.lineJoin = 'round'; g.lineCap = 'round';
     g.textAlign = 'center'; g.textBaseline = 'middle';
   }
@@ -895,6 +912,7 @@ function beginFrame(){
 const SCREENS_CV = {};
 function bakeScreens(){
   for (const ink of INK_ORDER){
+    if (ink === 'key'){ SCREENS_CV[ink] = null; continue; }   // line art stays solid
     const l = LAY[ink]; if (!l) continue;
     const c = mkCanvas(l.cv.width, l.cv.height);
     const g = c.getContext('2d');
@@ -902,7 +920,7 @@ function bakeScreens(){
       g.save();
       g.translate(c.width / 2, c.height / 2);
       g.rotate(INK_ANGLE[ink]);
-      g.globalAlpha = quality() === 0 ? 0.26 : 0.36;
+      g.globalAlpha = quality() === 0 ? 0.18 : 0.24;
       g.fillStyle = dotPat;
       const r = Math.hypot(c.width, c.height);
       g.fillRect(-r, -r, r * 2, r * 2);
@@ -923,49 +941,53 @@ function screenInk(ink){
 
 let regT = 0;
 function endFrame(){
-  // The three passes are combined on a small sheet at layer resolution and
-  // blown up once. Full-screen `multiply` is the single most expensive thing
-  // a canvas game can do; doing it at 60% scale, three times, then one plain
-  // upscale, is roughly three times cheaper and looks identical once the
-  // halftone is on top of it.
-  if (!sheetX){ return; }
-  const sw = sheetCv.width, sh = sheetCv.height;
-  sheetX.setTransform(1, 0, 0, 1, 0, 0);
-  sheetX.globalCompositeOperation = 'source-over';
-  sheetX.globalAlpha = 1;
-  if (paperCv) sheetX.drawImage(paperCv, 0, 0);
-  else { sheetX.fillStyle = PAPER; sheetX.fillRect(0, 0, sw, sh); }
+  // Two-stage composite, and only two full-resolution writes.
+  // The colour passes multiply together with the paper and its grain on a
+  // small sheet — that is where the ink behaviour lives and it is cheap at
+  // 60% scale. That sheet is blown up straight onto the page, and the KEY
+  // pass goes over it at 1:1, so every outline, digit and face edge lands on
+  // a real device pixel instead of being smeared by an upscale.
+  if (!colX) return;
+  const cwid = colCv.width, chei = colCv.height;
+
+  colX.setTransform(1, 0, 0, 1, 0, 0);
+  colX.globalCompositeOperation = 'source-over';
+  colX.globalAlpha = 1;
+  if (paperCv) colX.drawImage(paperCv, 0, 0, cwid, chei);
+  else { colX.fillStyle = PAPER; colX.fillRect(0, 0, cwid, chei); }
 
   regT += 0.016;
   for (const ink of INK_ORDER){
     const l = LAY[ink]; if (!l || !l.ctx) continue;
+    if (ink === 'key') continue;                 // painted in its own colour
     screenInk(ink);
-    // colour the coverage in place — no second buffer, one pass per ink
     const g = l.ctx;
     g.setTransform(1, 0, 0, 1, 0, 0);
     g.globalCompositeOperation = 'source-in';
     g.fillStyle = INKS[ink];
     g.fillRect(0, 0, l.cv.width, l.cv.height);
     g.globalCompositeOperation = 'source-over';
-    // registration slip: each pass lands a hair off, and drifts
-    const k = ink === 'pink' ? 1 : (ink === 'teal' ? -1 : 0.3);
-    const ox = k * (1.1 + Math.sin(regT * 0.7 + k) * 0.5) * RS;
-    const oy = k * (0.8 + Math.cos(regT * 0.5 + k) * 0.4) * RS;
-    sheetX.globalCompositeOperation = 'multiply';
-    sheetX.drawImage(l.cv, ox, oy);
+    // registration slip: each colour pass lands a hair off, and drifts
+    const k = ink === 'pink' ? 1 : -1;
+    const ox = k * (0.7 + Math.sin(regT * 0.7 + k) * 0.3) * SS * CS;
+    const oy = k * (0.5 + Math.cos(regT * 0.5 + k) * 0.25) * SS * CS;
+    colX.globalCompositeOperation = 'multiply';
+    colX.drawImage(l.cv, ox, oy);
   }
-
+  colX.globalCompositeOperation = 'source-over';
 
   X.setTransform(dpr, 0, 0, dpr, 0, 0);
   X.globalCompositeOperation = 'source-over';
   X.globalAlpha = 1;
   if (pageX > 1){ X.fillStyle = DESK; X.fillRect(0, 0, cw, ch); }
-  X.drawImage(sheetCv, pageX, pageY, pageW, pageH);
+  X.drawImage(colCv, pageX, pageY, pageW, pageH);
+  const kl = LAY.key;
+  if (kl) X.drawImage(kl.cv, pageX, pageY, pageW, pageH);
   // the page sits on a desk: hard edge, hard shadow, no gradient nonsense
   if (pageX > 1){
-    X.fillStyle = 'rgba(23,23,28,0.30)';
+    X.fillStyle = 'rgba(72,57,95,0.16)';
     X.fillRect(pageX + pageW, 0, Math.min(10, pageX), ch);
-    X.strokeStyle = '#17171c'; X.lineWidth = 2;
+    X.strokeStyle = INKS.key; X.lineWidth = 2;
     X.strokeRect(pageX - 1, -2, pageW + 2, ch + 4);
   }
 }
@@ -973,8 +995,16 @@ function endFrame(){
 /* ------------------------- ink primitives ------------------------- */
 // Every shape helper takes the layer ctx first. Alpha is COVERAGE: 1 is a
 // solid pass of that ink, 0.3 is a light screen of it.
-function inkFill(g, a){ if (!g) return; g.fillStyle = 'rgba(0,0,0,' + a + ')'; }
-function inkStroke(g, a, w){ if (!g) return; g.strokeStyle = 'rgba(0,0,0,' + a + ')'; g.lineWidth = w; }
+const KEY_RGB = '72,57,95';
+function inkFill(g, a){
+  if (!g) return;
+  g.fillStyle = g.__key ? 'rgba(' + KEY_RGB + ',' + a + ')' : 'rgba(0,0,0,' + a + ')';
+}
+function inkStroke(g, a, w){
+  if (!g) return;
+  g.strokeStyle = g.__key ? 'rgba(' + KEY_RGB + ',' + a + ')' : 'rgba(0,0,0,' + a + ')';
+  g.lineWidth = w;
+}
 
 function blobPath(g, x, y, r, seed, wob, n, sub){
   if (!g) return;
@@ -2584,10 +2614,10 @@ function drawBackdrop(){
     const u = i / (bands - 1);
     // heavy at the trench, thin through the middle where you actually play,
     // then heavy again toward the deck
-    const a = 0.30 + deep * 0.14 + Math.pow(Math.abs(u - 0.46) / 0.54, 1.6) * (0.30 + deep * 0.16);
+    const a = 0.26 + deep * 0.12 + Math.pow(Math.abs(u - 0.46) / 0.54, 1.6) * (0.26 + deep * 0.14);
     rectF(t, 0, H * i / bands, W, H / bands + 1, a);
   }
-  rectF(p, 0, 0, W, H, 0.05 + deep * 0.07);
+  rectF(p, 0, 0, W, H, 0.04 + deep * 0.05);
 
   // --- current rules: long thin dashes drifting sideways
   const tt = G.t;
@@ -2603,7 +2633,7 @@ function drawBackdrop(){
     const g = r.blot ? p : t;
     const cx = r.x * W, cy = r.y * H, sc = W;
     const pts = r.pts.map(q => [cx + q[0] * sc, cy + q[1] * sc]);
-    poly(g, pts, 0.5 + r.s * 0.25);
+    poly(g, pts, 0.42 + r.s * 0.22);
     poly(k, pts.map(q => [q[0] + 5, q[1] + 5]), 0.16);
     if (k){
       k.beginPath(); k.moveTo(pts[0][0], pts[0][1]);
@@ -2626,9 +2656,9 @@ function drawBackdrop(){
   // --- the trench mouth the leviathan comes out of
   const mh = H * (0.16 + deep * 0.16);
   const seed = (stage.id || 1) * 1.7;
-  mouthPath(t, mh, seed); inkFill(t, 0.95); t && t.fill();
-  mouthPath(p, mh * 0.94, seed); inkFill(p, 0.75); p && p.fill();
-  mouthPath(k, mh, seed); inkStroke(k, 0.9, 5); k && k.stroke();
+  mouthPath(t, mh, seed); inkFill(t, 0.9); t && t.fill();
+  mouthPath(p, mh * 0.94, seed); inkFill(p, 0.5); p && p.fill();
+  mouthPath(k, mh, seed); inkStroke(k, 0.85, 5); k && k.stroke();
   // drips from the lip
   for (let i = 0; i < 9; i++){
     const u = (i + 0.5) / 9;
@@ -2647,10 +2677,10 @@ function drawBackdrop(){
 
   // --- the press deck the hull rides over
   const deckY = H - C.DECK;
-  rectF(k, 0, deckY, W, C.DECK, 0.72);
-  rectF(t, 0, deckY + 8, W, C.DECK, 0.5);
-  for (let x = 0; x < W; x += 34) rectF(p, x + 5, deckY + 12, 22, 7, 0.85);
-  line(k, 0, deckY, W, deckY, 6, 0.95);
+  rectF(t, 0, deckY, W, C.DECK, 0.85);
+  rectF(p, 0, deckY, W, C.DECK, 0.35);
+  for (let x = 0; x < W; x += 34) rectF(p, x + 5, deckY + 14, 22, 7, 0.7);
+  line(k, 0, deckY, W, deckY, 6, 0.9);
   // rivets along the lip
   for (let x = 16; x < W; x += 46) disc(k, x, deckY + 26, 3.5, 0.8);
 
@@ -2705,7 +2735,7 @@ function drawWorm(w){
     t.beginPath();
     t.moveTo(segs[0].x, segs[0].y);
     for (let i = 1; i < segs.length; i++) t.lineTo(segs[i].x, segs[i].y);
-    inkStroke(t, 0.5, C.SEG_R * 0.9);
+    inkStroke(t, 0.62, C.SEG_R * 0.9);
     t.stroke();
   }
 
@@ -2716,7 +2746,7 @@ function drawWorm(w){
     if (!s || s.dead || s.y < -90 || s.y > C.H + 90) continue;
     (vis[(SEGT[s.type] || SEGT.flesh).ink] || vis.pink).push(i);
   }
-  const rOf = s => s.r * (1 + Math.sin(s.pulse) * 0.035);
+  const rOf = s => s.r * (1 + Math.sin(s.pulse) * 0.035) * (s === segs[0] ? 1.16 : 1);
 
   for (const ink in vis){
     const list = vis[ink];
@@ -2735,7 +2765,7 @@ function drawWorm(w){
         g.lineTo(s.x + Math.cos(a + 0.14) * l2, s.y + Math.sin(a + 0.14) * l2);
       }
     }
-    inkStroke(g, 0.55, 3);
+    inkStroke(g, 0.8, 3.2);
     g.stroke();
 
     // 2. trap the water out from under the meat so it always reads
@@ -2744,7 +2774,7 @@ function drawWorm(w){
       t.globalCompositeOperation = 'destination-out';
       t.fillStyle = 'rgba(0,0,0,1)';
       t.beginPath();
-      for (const i of list) blobPath(t, segs[i].x, segs[i].y, rOf(segs[i]) * 1.14, i * 1.7 + w.id, 0.075, 12, true);
+      for (const i of list) blobPath(t, segs[i].x, segs[i].y, rOf(segs[i]) * 1.06, i * 1.7 + w.id, 0.075, 12, true);
       t.fill();
       t.restore();
     }
@@ -2757,12 +2787,12 @@ function drawWorm(w){
       g.moveTo(segs[i].x + rOf(segs[i]) * 1.2, segs[i].y);
       g.arc(segs[i].x, segs[i].y, rOf(segs[i]) * 1.2, 0, TAU);
     }
-    if (halo){ inkFill(g, 0.22); g.fill(); }
+    if (halo){ inkFill(g, 0.3); g.fill(); }
 
     // 3. bodies — flashed ones are drawn on top at full coverage
     g.beginPath();
     for (const i of list) blobPath(g, segs[i].x, segs[i].y, rOf(segs[i]), i * 1.7 + w.id, 0.075, 12, true);
-    inkFill(g, 0.82);
+    inkFill(g, 0.96);
     g.fill();
     let flashed = false;
     g.beginPath();
@@ -2779,7 +2809,7 @@ function drawWorm(w){
       const s = segs[i], r = rOf(s);
       blobPath(g, s.x - r * 0.18, s.y - r * 0.2, r * 0.55, i * 2.3, 0.16, 12, true);
     }
-    inkFill(g, 0.28);
+    inkFill(g, 0.30);
     g.fill();
   }
 
@@ -2823,7 +2853,7 @@ function drawWorm(w){
     const s = segs[i], r = rOf(s);
     const hpShown = s.armor > 0 ? s.armor : s.hp;
     labels.push([fmt(Math.ceil(hpShown)), s.x, s.y + (i === 0 ? r * 0.56 : 1),
-      i === 0 ? 16 : (s.carrier ? 17 : 15)]);
+      i === 0 ? 16 : (s.carrier ? 16 : 14)]);
   }
   if (labels.length) stampNums(labels);
   flushKO();
@@ -2866,22 +2896,17 @@ function drawSegDetail(w, i, s, r){
   if (s.type === 'plate'){
     const armFrac = s.marmor > 0 ? clamp(s.armor / s.marmor, 0, 1) : 0;
     if (armFrac > 0){
-      if (t){
-        t.save();
-        t.translate(s.x, s.y);
-        inkFill(t, 0.9);
-        roundRectPath(t, -r * 0.86, -r * 0.7, r * 1.72, r * 1.4 * (0.35 + armFrac * 0.65), 6);
-        t.fill();
-        t.restore();
-      }
+      const bw = r * 1.46, bh = r * 1.16 * (0.35 + armFrac * 0.65);
+      // the plate is knocked back to bare paper, so it reads white and hard
+      // against the meat instead of muddying into it
+      knockOut(gg => { roundRectPath(gg, s.x - bw / 2, s.y - r * 0.66, bw, bh, 7); gg.fill(); });
       if (k){
-        k.save(); k.translate(s.x, s.y);
-        inkStroke(k, 0.85, 3);
-        roundRectPath(k, -r * 0.86, -r * 0.7, r * 1.72, r * 1.4 * (0.35 + armFrac * 0.65), 6);
+        roundRectPath(k, s.x - bw / 2, s.y - r * 0.66, bw, bh, 7);
+        inkStroke(k, 0.9, 3);
         k.stroke();
-        for (const rx of [-r * 0.6, 0, r * 0.6]) disc(k, rx, -r * 0.44, 2.4, 0.8);
-        k.restore();
+        for (const rx of [-r * 0.5, r * 0.5]) disc(k, s.x + rx, s.y - r * 0.44, 2.6, 0.85);
       }
+      if (t) ring(t, s.x, s.y, r * 1.05, 3, 0.55);
     }
   } else if (s.type === 'spit'){
     const a = Math.atan2(P.y - s.y, P.x - s.x);
@@ -2942,38 +2967,60 @@ function drawSegDetail(w, i, s, r){
     };
     knockOut(gg => { rose(gg); gg.fill(); });
     if (k){ rose(k); inkStroke(k, 0.92, 2.8); k.stroke(); }
+    // sparkles
+    for (let c = 0; c < 3; c++){
+      const a = s.pulse * 0.7 + c * 2.1;
+      const sx = s.x + Math.cos(a) * r * 1.5, sy = s.y + Math.sin(a) * r * 1.5;
+      const sz = 4 + Math.sin(s.pulse * 3 + c) * 2.2;
+      if (sz <= 1) continue;
+      poly(k, [[sx, sy - sz], [sx + sz * 0.32, sy - sz * 0.32], [sx + sz, sy],
+               [sx + sz * 0.32, sy + sz * 0.32], [sx, sy + sz], [sx - sz * 0.32, sy + sz * 0.32],
+               [sx - sz, sy], [sx - sz * 0.32, sy - sz * 0.32]], 0.85);
+    }
   }
   if (isHead) drawFace(s, r, w);
 }
 
 function drawFace(s, r, w){
-  const k = L('key');
+  const k = L('key'), p = L('pink');
   if (!k) return;
   const angry = w.rage > 0;
-  const ex = r * 0.34, ey = -r * 0.16;
-  // eyes: two hard wedges, tilted in
+  const ex = r * 0.36, ey = -r * 0.12;
+  // big round eyes with a highlight knocked back to bare paper
   for (const sgn of [-1, 1]){
-    k.save();
-    k.translate(s.x + sgn * ex, s.y + ey);
-    k.rotate(sgn * (angry ? 0.55 : 0.34));
-    inkFill(k, 0.95);
+    const x = s.x + sgn * ex, y = s.y + ey;
+    disc(k, x, y, r * 0.19, 0.95);
+    knockOut(gg => {
+      gg.beginPath();
+      gg.arc(x - sgn * r * 0.06, y - r * 0.07, r * 0.075, 0, TAU);
+      gg.fill();
+    });
+    if (angry){
+      // a cross eyebrow, tilted in
+      line(k, x - sgn * r * 0.22, y - r * 0.3, x + sgn * r * 0.18, y - r * 0.16, 3.4, 0.95);
+    }
+  }
+  // blush
+  for (const sgn of [-1, 1]) disc(p, s.x + sgn * r * 0.62, s.y + r * 0.16, r * 0.16, 0.55);
+  // mouth: a small smile, or a jagged one when it is cross
+  const my = s.y + r * 0.34;
+  if (angry){
     k.beginPath();
-    k.moveTo(-6, -7); k.lineTo(7, -2); k.lineTo(-6, 6);
-    k.closePath(); k.fill();
-    k.restore();
+    const mw = r * 0.42;
+    k.moveTo(s.x - mw, my);
+    for (let i = 0; i < 4; i++){
+      const x0 = s.x - mw + (i * 2 * mw) / 4;
+      k.lineTo(x0 + mw / 4, my + 6);
+      k.lineTo(x0 + (2 * mw) / 4, my);
+    }
+    inkStroke(k, 0.95, 3);
+    k.stroke();
+  } else {
+    k.beginPath();
+    k.arc(s.x, my - r * 0.12, r * 0.24, 0.35, Math.PI - 0.35);
+    inkStroke(k, 0.95, 3.2);
+    k.stroke();
   }
-  // mouth: a jagged printed slot
-  const mw = r * 0.62, my = s.y + r * 0.18;
-  k.beginPath();
-  k.moveTo(s.x - mw, my);
-  const teeth = 5;
-  for (let i = 0; i < teeth; i++){
-    const x0 = s.x - mw + (i * 2 * mw) / teeth;
-    k.lineTo(x0 + mw / teeth, my + (i % 2 ? 8 : 4));
-    k.lineTo(x0 + (2 * mw) / teeth, my);
-  }
-  inkStroke(k, 0.95, 3);
-  k.stroke();
 }
 
 /* ---------------------------- the core ---------------------------- */
@@ -3075,10 +3122,10 @@ function drawPlayer(){
       const b = (P.bob * 0.6 + i * 0.33) % 1;
       ring(t, -22 - b * 8, 14 - b * 30, 3 + b * 3, 2, 0.5 * (1 - b));
     }
-    inkFill(t, 0.9);
+    inkFill(t, 0.95);
     roundRectPath(t, -30, -25, 60, 50, 20);
     t.fill();
-    inkFill(p, 0.65);
+    inkFill(p, 0.8);
     roundRectPath(p, -22, -19, 30, 22, 12);
     p.fill();
     inkStroke(k, 0.95, 4.4);
@@ -3261,12 +3308,14 @@ function drawAttract(){
       if (x < -60 || x > C.W + 60) continue;
       const r = c.r * (i === 0 ? 1.15 : 1);
       blobPath(p, x, y, r, i, 0.08);
-      inkFill(p, 0.5); p && p.fill();
+      inkFill(p, 0.85); p && p.fill();
       blobPath(k, x, y, r, i, 0.08);
-      inkStroke(k, 0.55, 2.6); k && k.stroke();
+      inkStroke(k, 0.75, 3); k && k.stroke();
       if (i === 0){
-        disc(k, x + r * 0.3, y - r * 0.2, 3.4, 0.7);
-        disc(k, x - r * 0.3, y - r * 0.2, 3.4, 0.7);
+        disc(k, x + r * 0.3, y - r * 0.2, 4, 0.9);
+        disc(k, x - r * 0.3, y - r * 0.2, 4, 0.9);
+        const t2 = L('teal');
+        if (t2){ t2.beginPath(); t2.arc(x, y + r * 0.3, r * 0.22, 0.35, Math.PI - 0.35); inkStroke(t2, 0.7, 2.6); t2.stroke(); }
       }
     }
   }
@@ -3380,7 +3429,7 @@ function icon(g, key, s){
   const u = s / 32;                        // icons are authored on a 32 grid
   g.save();
   g.scale(u, u);
-  g.strokeStyle = '#17171c'; g.fillStyle = '#17171c';
+  g.strokeStyle = INKS.key; g.fillStyle = INKS.key;
   g.lineWidth = 2.6; g.lineJoin = 'round'; g.lineCap = 'round';
   const P2 = (pts, fill) => {
     g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
@@ -3405,7 +3454,7 @@ function icon(g, key, s){
     case 'luck': circ(11, 12, 6); circ(21, 12, 6); circ(16, 21, 6); ln(16, 25, 16, 30); break;
     case 'claw': ln(16, 2, 16, 14); P2([[16, 14], [6, 26], [11, 27], [16, 18], [21, 27], [26, 26]]); break;
     case 'acid': P2([[16, 3], [26, 20], [16, 29], [6, 20]]); break;
-    case 'skull': circ(16, 14, 10); P2([[10, 22], [22, 22], [20, 29], [12, 29]]); g.fillStyle = '#efe6d4'; circ(12, 13, 3); circ(20, 13, 3); g.fillStyle = '#17171c'; break;
+    case 'skull': circ(16, 14, 10); P2([[10, 22], [22, 22], [20, 29], [12, 29]]); g.fillStyle = PAPER; circ(12, 13, 3); circ(20, 13, 3); g.fillStyle = INKS.key; break;
     case 'siphon': ln(8, 28, 8, 10); ln(24, 28, 24, 16); g.beginPath(); g.arc(16, 10, 8, Math.PI, 0); g.stroke(); circ(8, 28, 3); circ(24, 28, 3); break;
     case 'cleave': P2([[6, 26], [20, 6], [26, 12], [12, 30]]); ln(20, 6, 26, 12); break;
     case 'sonar': for (let i = 1; i <= 3; i++) circ(16, 16, i * 5, false); circ(16, 16, 2.6); break;
@@ -3413,7 +3462,7 @@ function icon(g, key, s){
     case 'drone': circ(16, 16, 5); circ(16, 16, 12, false); circ(27, 16, 3); break;
     case 'volt': P2([[18, 2], [8, 17], [15, 17], [12, 30], [24, 14], [17, 14]]); break;
     case 'frost': for (let i = 0; i < 3; i++){ const a = i * Math.PI / 3; ln(16 - Math.cos(a) * 13, 16 - Math.sin(a) * 13, 16 + Math.cos(a) * 13, 16 + Math.sin(a) * 13); } circ(16, 16, 3); break;
-    case 'venom': P2([[16, 3], [25, 19], [16, 28], [7, 19]]); g.fillStyle = '#efe6d4'; circ(13, 17, 2.4); circ(19, 17, 2.4); g.fillStyle = '#17171c'; break;
+    case 'venom': P2([[16, 3], [25, 19], [16, 28], [7, 19]]); g.fillStyle = PAPER; circ(13, 17, 2.4); circ(19, 17, 2.4); g.fillStyle = INKS.key; break;
     case 'anchor': circ(16, 6, 4, false); ln(16, 10, 16, 27); ln(9, 17, 23, 17); g.beginPath(); g.arc(16, 20, 10, 0.35, Math.PI - 0.35); g.stroke(); break;
     case 'bomb': circ(15, 20, 9); ln(20, 12, 26, 5); P2([[24, 3], [29, 6], [25, 8]]); break;
     case 'bubble': circ(16, 16, 11, false); circ(16, 16, 7, false); circ(12, 11, 2.4); break;
