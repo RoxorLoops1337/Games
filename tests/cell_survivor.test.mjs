@@ -609,6 +609,56 @@ function clk(sec){ return Math.floor(sec / 60) + ':' + String(Math.floor(sec % 6
   t.ok(survived < 5 * 60, 'and it does not take all day about it (' + clk(survived) + ')');
 }
 
+// ---------------------------------------------------------------- screen shake
+{
+  // a late-game build throws a dozen explosions a second; shake must not stack
+  CS.startRun('amoeba', 71);
+  CS.meta.shake = 1;
+  G.cam.sh = 0; G.shakeCd = 0;
+  CS.shake(4);
+  const one = G.cam.sh;
+  for (let i = 0; i < 40; i++) CS.shake(4);
+  t.ok(G.cam.sh <= one + .001, 'repeated equal impulses never stack up');
+  CS.shake(9);
+  t.ok(G.cam.sh > one, 'a bigger impulse still takes over');
+  for (let i = 0; i < 200; i++) CS.shake(99);
+  t.ok(G.cam.sh <= CS.SHAKE_CAP, 'and the cap holds at ' + CS.SHAKE_CAP);
+  G.cam.sh = 0; G.shakeCd = 0;
+  CS.shake(5, 1);
+  const minor = G.cam.sh;
+  CS.shake(5, 1);
+  t.ok(G.cam.sh === minor && G.shakeCd > 0, 'chattery sources are rate limited');
+  step(1);
+  t.ok(G.cam.sh < .2, 'and the shake settles once the noise stops');
+}
+{
+  // a full second of continuous explosions stays a rumble, not a seizure
+  CS.startRun('amoeba', 72);
+  CS.meta.shake = 1;
+  G.cam.sh = 0; G.shakeCd = 0;
+  let peak = 0;
+  for (let i = 0; i < 60; i++){
+    CS.boom(CS.P.x + 40, CS.P.y, 120, 10, '#ffcf4d', 0);
+    CS.update(1 / 60);
+    peak = Math.max(peak, G.cam.sh);
+  }
+  t.ok(peak < 4, 'sixty explosions in a second peak below 4px (' + peak.toFixed(2) + ')');
+}
+{
+  // the player can turn it down or off, and it sticks
+  CS.meta.shake = 1;
+  t.ok(CS.cycleShake() === .5 && CS.shakeLabel().indexOf('Light') > 0, 'the toggle steps to Light');
+  G.cam.sh = 0; CS.shake(10);
+  t.ok(G.cam.sh > 4 && G.cam.sh < 6, 'Light halves the impulse');
+  t.ok(CS.cycleShake() === 0, 'and then to Off');
+  G.cam.sh = 0; CS.shake(99);
+  t.ok(G.cam.sh === 0, 'Off means no camera movement at all');
+  CS.saveMeta();
+  t.ok(CS.loadMeta().shake === 0, 'the setting survives a reload');
+  t.ok(CS.cycleShake() === 1, 'and cycles back around to Full');
+  CS.meta.dna = 1e9;
+}
+
 // ---------------------------------------------------------------- culture strength
 {
   t.ok(CS.DIFFS.length === 3, 'three culture strengths');
