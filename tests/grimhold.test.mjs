@@ -19,14 +19,31 @@ function loadGame(store){
   const code = html.match(/<script>([\s\S]*)<\/script>/)[1];
 
   const noop = () => {};
+  // A real canvas throws on a malformed colour, and a throw inside draw() kills
+  // the frame loop. The stub has to be just as fussy or that bug ships.
+  const okColour = (c) => typeof c !== 'string' ? true : (
+    /^#[0-9a-f]{3}$/i.test(c) || /^#[0-9a-f]{4}$/i.test(c) ||
+    /^#[0-9a-f]{6}$/i.test(c) || /^#[0-9a-f]{8}$/i.test(c) ||
+    /^rgb\(\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*\)$/.test(c) ||
+    /^rgba\(\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*,\s*-?[\d.]+\s*\)$/.test(c) ||
+    /^[a-z]+$/i.test(c)
+  );
+  const checkColour = (where) => (c) => {
+    if (!okColour(c)) throw new SyntaxError(`${where}: '${c}' is not a valid colour`);
+  };
+  const stopCheck = checkColour('addColorStop');
   const ctx = new Proxy({}, { get(_t, k){
-    if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop: noop });
+    if (k === 'createLinearGradient' || k === 'createRadialGradient')
+      return () => ({ addColorStop: (_pos, col) => stopCheck(col) });
     if (k === 'measureText') return () => ({ width: 10 });
     if (k === 'getImageData') return (a,b,w,h) => ({ data:new Uint8ClampedArray(w*h*4), width:w, height:h });
     if (k === 'createImageData') return (w,h) => ({ data:new Uint8ClampedArray(w*h*4), width:w, height:h });
     if (k === 'canvas') return { width: 800, height: 1400 };
     return noop;
-  }, set(){ return true; } });
+  }, set(_t, k, v){
+    if (k === 'fillStyle' || k === 'strokeStyle' || k === 'shadowColor') checkColour(k)(v);
+    return true;
+  } });
   const mkEl = () => new Proxy({
     style: {}, dataset: {}, children: [],
     classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
@@ -535,6 +552,30 @@ t.test('spells: each hero knows their elements, and each spell fires once', () =
   w.acted = false;
   t.ok(!HQ.spellReady(w, 'healbody'), 'it is spent for the quest');
   t.ok(!HQ.castSpell(w, 'healbody', w), 'and cannot be cast again');
+});
+
+t.test('spells: every spell in the book can be cast and drawn without killing the frame', () => {
+  // The particles a spell throws off carry colours built at runtime. A bad one
+  // used to throw inside draw() and freeze the board mid-cast.
+  for (const key in HQ.SPELLS){
+    fresh(0);
+    const sp = HQ.SPELLS[key];
+    const caster = HQ.heroes().find(h => HQ.knownSpells(h).includes(key));
+    t.ok(caster, `${key} is in somebody's book`);
+    if (!caster) continue;
+    use(caster);
+    put(caster, 11, 8);
+    HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+    const m = HQ.monstersOf()[0];
+    m.x = 11; m.y = 7; m.alive = true; m.mind = 2;
+    HQ.recomputeVision();
+    const target = sp.target === 'enemy' ? m
+                 : sp.target === 'tile' ? { tile:[12, 8] }
+                 : caster;
+    t.ok(HQ.castSpell(caster, key, target), `${key} goes off`);
+    HQ.update(16); HQ.draw();          // the frame the particles are alive for
+    HQ.update(16); HQ.draw();
+  }
 });
 
 t.test('spells: ball of flame ignores defence, sleep only takes a weak mind', () => {
