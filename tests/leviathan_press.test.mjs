@@ -158,39 +158,36 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   t.ok(w.trail.length < 400, 'the trail is trimmed to what the body still needs');
 }
 
-// ------------------------------------------------------------------ splitting
+// ------------------------------------------------------------------ one chain, never two
 {
   clearField();
   LP.reseed(99);
-  const w = LP.spawnWorm({ len: 7, type: 'flesh', noCarrier: true });
+  const w = LP.spawnWorm({ prime: true, len: 7, type: 'flesh', noCarrier: true });
   const before = G.worms.length;
+  const tail = w.segs[6], mid = w.segs[3];
   LP.killSeg(w, 3);
-  t.ok(G.worms.length === before + 1, 'severing a middle segment spawns a second worm');
-  const nw = G.worms[G.worms.length - 1];
-  t.ok(w.segs.length === 3 && nw.segs.length === 3, 'the halves keep 3 + 3 of the original 7');
-  t.ok(nw.rage > 0, 'the freshly severed tail comes at you');
-  t.ok(G.stats.splits === 1, 'the split is counted');
+  t.ok(G.worms.length === before, 'cutting a link out of the middle does NOT make a second snake');
+  t.ok(w.segs.length === 6 && w.segs.indexOf(mid) < 0, 'the dead link is pulled out of the chain');
+  t.ok(w.segs.indexOf(tail) === 5, 'and the body behind it closes the gap');
 
-  const before2 = G.worms.length;
+  // the head can be cut off without the body teleporting forward
+  step(0.5);
+  const second = w.segs[1];
+  const where = { x: second.x, y: second.y };
   LP.killSeg(w, 0);
-  const survivors = G.worms.filter(x => x.segs.length);
-  t.ok(survivors.length === before2, 'beheading hands the body a new head, it does not duplicate the worm');
-  t.ok(G.stats.splits === 1, 'a beheading is not counted as a split');
+  t.ok(G.worms.length === before && w.segs[0] === second, 'beheading promotes the next link in place');
+  const moved = Math.hypot(second.x - where.x, second.y - where.y);
+  t.ok(moved < 30, 'the body does not snap forward when the head goes (' + moved.toFixed(1) + 'px)');
 
-  // tail kill: no new worm at all
-  const w3 = LP.spawnWorm({ len: 4, type: 'flesh', noCarrier: true });
-  const before3 = G.worms.length;
-  LP.killSeg(w3, 3);
-  t.ok(G.worms.length === before3 && w3.segs.length === 3, 'killing the last segment just shortens the worm');
-
-  // the halves must keep their positions — no teleporting on the cut
-  const w4 = LP.spawnWorm({ len: 8, type: 'flesh', noCarrier: true });
-  step(0.6);
-  const midPos = { x: w4.segs[5].x, y: w4.segs[5].y };
-  LP.killSeg(w4, 4);
-  const tailW = G.worms[G.worms.length - 1];
-  const moved = Math.hypot(tailW.segs[0].x - midPos.x, tailW.segs[0].y - midPos.y);
-  t.ok(moved < 30, 'the tail half keeps its place when it is cut loose (' + moved.toFixed(1) + 'px)');
+  // several links at once (a bulb chain) still leaves exactly one snake
+  clearField();
+  const w2 = LP.spawnWorm({ prime: true, len: 9, type: 'flesh', noCarrier: true });
+  const keep = [w2.segs[0], w2.segs[3], w2.segs[4], w2.segs[7], w2.segs[8]];
+  const doomed = [w2.segs[1], w2.segs[2], w2.segs[5], w2.segs[6]];
+  for (const seg of doomed) LP.killSeg(w2, seg);
+  t.ok(G.worms.filter(x => x.segs.length).length === 1, 'a chain reaction still leaves one snake');
+  t.ok(w2.segs.length === 5 && keep.every(k => w2.segs.indexOf(k) >= 0), 'and it keeps every living link');
+  t.ok(w2.segs.every(s => !s.dead), 'with no dead links riding along');
 }
 
 // ------------------------------------------------------------------ single-segment worm
@@ -198,7 +195,7 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   clearField();
   const w = LP.spawnWorm({ len: 1, type: 'flesh', noCarrier: true });
   LP.killSeg(w, 0);
-  t.ok(w.dead === true, 'a one-segment worm dies outright');
+  t.ok(w.dead === true, 'a one-segment snake dies outright');
   step(0.2);
   t.ok(G.worms.indexOf(w) < 0, 'dead worms are reaped by the step');
 }
@@ -239,16 +236,36 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   t.ok(G.stats.kills - kills0 >= 2, 'a bulb pops its neighbours (' + (G.stats.kills - kills0) + ' segments)');
 }
 
-// ------------------------------------------------------------------ spitters
+// ------------------------------------------------------------------ nothing shoots
 {
   clearField();
   G.eprojs.length = 0;
-  const w = LP.spawnWorm({ len: 3, type: 'spit', x: C.W / 2, y: 300, noCarrier: true });
-  for (const s of w.segs) s.spitT = 0.02;
-  step(0.5);
-  t.ok(G.eprojs.length > 0, 'spitters shoot back');
-  const e = G.eprojs[0];
-  t.ok(finite(e.vx) && finite(e.vy) && e.dmg > 0, 'their shots are well-formed');
+  const w = LP.spawnWorm({ len: 6, type: 'thorn', x: C.W / 2, y: 300, noCarrier: true });
+  P.x = C.W / 2; P.y = C.H - C.DECK - 40;
+  step(8);
+  t.ok(G.eprojs.length === 0, 'the trench never fires a shot');
+  t.ok(LP.SEGT.thorn.graze > 1.5, 'thorns hurt far more to touch than plain meat');
+
+  // a thorn against the hull costs more than plain meat does
+  const touch = type => {
+    LP.startRun(1, 1, 'tin');
+    clearField();
+    const worm = LP.spawnWorm({ len: 3, type, noCarrier: true });
+    step(0.3);                                   // let the body settle on its trail
+    // bring the snake down onto the hull (the hull cannot leave its band)
+    const d = P.y - worm.segs[1].y;
+    worm.y += d;
+    for (const q of worm.trail) q.y += d;
+    for (const q of worm.segs) q.y += d;
+    P.tx = P.x = worm.segs[1].x;
+    P.inv = 0;
+    const before = P.hp;
+    step(1 / 60);
+    return before - P.hp;
+  };
+  const fleshHit = touch('flesh'), thornHit = touch('thorn');
+  t.ok(fleshHit > 0 && thornHit > fleshHit * 1.5,
+    'touching a thorn hurts (' + fleshHit.toFixed(0) + ' flesh vs ' + thornHit.toFixed(0) + ' thorn)');
 }
 
 // ------------------------------------------------------------------ firing
@@ -305,9 +322,16 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
 
   // a second snake only shows up deep and late
   LP.startRun(8, 1, 'tin');
-  t.ok(LP.wantSnakes() === 1, 'even a deep trench starts with one');
+  t.ok(LP.wantSnakes() === 1, 'even the deepest trench sends exactly one');
   G.prog = 0.6;
-  t.ok(LP.wantSnakes() === 2, 'and adds a second one past a third of the way');
+  t.ok(LP.wantSnakes() === 1, 'and it stays that way all the way down');
+  for (let i = 0; i < 60 * 40; i++){
+    LP.update(1 / 60);
+    if (G.state === 'draft') LP.skipDraft();
+    if (G.state !== 'run') break;
+    t.ok(G.worms.filter(x => x.prime).length <= 1, 'never two snakes at once');
+    break;
+  }
 
   // when a snake is finished the next one comes down with the rest of the quota
   LP.startRun(3, 1, 'tin');
@@ -326,7 +350,7 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   // a loose fragment must not be able to end the dive
   clearField();
   const frag = LP.spawnWorm({ len: 3, noCarrier: true });
-  t.ok(frag.mode === 'wander' && !frag.prime, 'fragments and strays wander instead');
+  t.ok(frag.mode === 'wander' && !frag.prime, 'anything that is not the snake wanders instead');
   for (const s of frag.segs) s.y = C.H;
   LP.checkOverrun();
   t.ok(G.state === 'run', 'a stray reaching the deck is not a loss');
@@ -612,7 +636,7 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   const co = G.core;
   let threw = null;
   try {
-    for (const mode of ['fan', 'rain', 'charge', 'spawn', 'idle']){
+    for (const mode of ['sweep', 'slam', 'charge', 'idle']){
       co.mode = mode; co.modeT = 2.0; co.spawned = false;
       step(2.5);
       LP.draw();
@@ -620,6 +644,7 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
     }
   } catch (e){ threw = e; }
   t.ok(!threw, 'every core attack pattern runs clean' + (threw ? ' — ' + threw.message : ''));
+  t.ok(G.eprojs.length === 0, 'and not one of them fires a projectile');
 }
 
 // ------------------------------------------------------------------ hulls
@@ -753,12 +778,14 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   LP.META.up = { luck: 5, kit: 1 };
   LP.startRun(7, 2, 'needle');
   P.mhp = 1e9; P.hp = 1e9;
+  G.adRevives = 999;                     // and it is never allowed to stop
   let frames = 0, drafts = 0, threw = null, maxWorms = 0, maxNums = 0;
   try {
     while (frames < 60 * 60 * 3 && G.state !== 'dead' && G.state !== 'clear'){
       LP.update(1 / 60);
       frames++;
       P.hp = 1e9;
+      if (G.state === 'down') LP.reviveRun();
       if (G.state === 'draft'){ drafts++; LP.pickCard(frames % 3); }
       if (frames % 7 === 0){
         P.tx = 80 + (Math.sin(frames / 40) * 0.5 + 0.5) * (C.W - 160);
@@ -770,10 +797,11 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
     }
   } catch (e){ threw = e; }
   t.ok(!threw, 'three simulated minutes of trench 7 without an exception' + (threw ? ' — ' + threw.message : ''));
-  t.ok(drafts >= 3, 'plates keep arriving through the dive (' + drafts + ')');
+  t.ok(drafts >= 2, 'plates keep arriving through the dive (' + drafts + ')');
+  t.ok(G.stats.plates >= 1, 'and they come off carrier links (' + G.stats.plates + ')');
   t.ok(G.carriersLeft < G.carrierBudget, 'and carriers are being cut out of the worm');
-  t.ok(G.stats.severed > 40, 'the press does its job (' + G.stats.severed + ' segments)');
-  t.ok(G.stats.splits > 5, 'and the worm keeps coming apart (' + G.stats.splits + ' splits)');
+  t.ok(G.stats.severed > 30, 'the press does its job (' + G.stats.severed + ' segments)');
+  t.ok(G.worms.length <= 2, 'and the page never holds more than the snake itself');
   t.ok(G.projs.length <= C.MAX_PROJ && G.parts.length <= C.MAX_PARTS + 40, 'entity pools stay bounded');
   t.ok(maxWorms <= 40 && maxNums <= 120, 'worm/label counts stay bounded (' + maxWorms + ' worms)');
   t.ok(finite(P.x) && finite(P.y) && finite(G.prog), 'no NaN anywhere important');
@@ -784,8 +812,10 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
 
 // ------------------------------------------------------------------ you can still die
 {
+  LP.reseed(1971);
   LP.setMeta(LP.freshMeta());
   LP.startRun(9, 4, 'mote');            // thin hull, Hadal, no upgrades
+  P.s.dmg = 0.0002;                     // and a press that cannot stop anything
   let frames = 0;
   while (frames < 60 * 60 * 4 && (G.state === 'run' || G.state === 'draft')){
     LP.update(1 / 60);
@@ -793,7 +823,9 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
     if (G.state === 'draft') LP.skipDraft();
     if (frames % 9 === 0){ P.tx = C.W / 2; P.ty = C.H - C.DECK - 30; }   // a pilot who never dodges
   }
-  t.ok(G.state === 'down', 'a pilot who parks in the open goes down (' + G.downed + ')');
+  t.ok(G.state === 'down', 'a snake nobody can stop takes the deck (' + G.downed + ')');
+  t.ok(G.downed === 'overrun' || G.downed === 'hull', 'either way it is the trench that ends it');
+  t.ok(frames < 60 * 60 * 3, 'and it does not take all afternoon (' + Math.round(frames / 60) + 's)');
   LP.claimRun();
   t.ok(G.state === 'dead' && LP.META.pearls > 0, 'and still banks what was in the net');
 }

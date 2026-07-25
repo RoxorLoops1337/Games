@@ -262,9 +262,10 @@
     <div class="logo"><h1><span class="a">Leviathan</span><span class="a">Press</span></h1></div>
     <div class="sub">Three inks · one harpoon · a very long worm</div>
     <div class="blurb thin">
-      Something segmented is coming up out of the trench. You have a hand-cranked
-      harpoon press and a hull held together by optimism. Cut it apart — every
-      segment you sever splits the thing into two smaller, angrier things.
+      Something segmented is coming up out of the trench, weaving its way down
+      the page one slow row at a time. You have a hand-cranked harpoon press
+      and a hull held together by optimism. Nothing down there shoots — but if
+      it reaches the deck, the dive is over.
     </div>
     <div class="menucol">
       <div class="btn pink" id="bdive">Dive ▼</div>
@@ -427,14 +428,13 @@ const C = {
   SEG_R: 34,             // segment radius
   SEG_GAP: 52,           // spacing along the trail
   WORM_SPD: 78,          // px/s base crawl (loose fragments)
-  SNAKE_SPD: 62,         // the pattern snake takes its time
-  SNAKE_MAX: 26,         // longest single snake, +3 per trench
+  SNAKE_SPD: 66,         // the pattern snake takes its time (but not all day)
+  SNAKE_MAX: 22,         // longest single snake, and it grows slowly with depth
   PRIME_MIN: 5,          // a cut piece this long is still a snake, and still descends
   TRAIL: 2200,           // trail samples kept per worm
 
   IFRAME: 0.85,
-  CONTACT_DMG: 12,
-  SPIT_DMG: 9,
+  CONTACT_DMG: 16,
 
   DROP_LIFE: 9,
   MAX_PROJ: 420,
@@ -443,7 +443,7 @@ const C = {
   // Plates come off CARRIER segments, not off a progress bar. The clock is
   // only a starvation guard for a player who keeps missing them.
   DRAFT_SECS: 85,
-  CARRIERS: 4,           // carrier segments per trench, +1 every four trenches
+  CARRIERS: 5,           // carrier segments per trench, +1 every four trenches
   CARRIER_HP: 1.7,       // they are worth killing, so they take some killing
   SEG_HP: 34,            // base hit points of one segment at trench 1
   SYS_MAX: 5,
@@ -548,7 +548,7 @@ const UPGRADES = [
   { id:'vamp', nm:'Siphon Line', kind:'stat', art:'siphon', base:0.8,
     ds:v => `Sever a segment, mend <b>${v.toFixed(1)}</b> hull`, apply:(P, v) => { P.s.vamp += v; } },
   { id:'cleave', nm:'Cleaver', kind:'stat', art:'cleave', base:0.40,
-    ds:v => `Severed segments spit shrapnel — <b>${pct(v)}</b> damage`,
+    ds:v => `Severed segments throw shrapnel — <b>${pct(v)}</b> damage`,
     apply:(P, v) => { P.s.cleave += v; } },
   { id:'gimbal', nm:'Gimbal Mount', kind:'stat', art:'gimbal', base:1, int:true, cap:3, late:true,
     ds:v => `The rail comes off its bolts — the press tracks targets in a <b>${
@@ -561,7 +561,7 @@ const UPGRADES = [
   { id:'mines', nm:'Ink Mines', kind:'sys', art:'mine',
     ds:l => `Drops a drifting mine every <b>${SYS.mines.cd(l).toFixed(1)}s</b>` },
   { id:'drones', nm:'Bloom Drones', kind:'sys', art:'drone', late:true,
-    ds:l => `<b>${SYS.drones.count(l)}</b> drone${SYS.drones.count(l) > 1 ? 's' : ''} orbit and spit` },
+    ds:l => `<b>${SYS.drones.count(l)}</b> drone${SYS.drones.count(l) > 1 ? 's' : ''} orbit and fire` },
   { id:'chain', nm:'Voltbloom', kind:'sys', art:'volt',
     ds:l => `Hits arc to <b>${SYS.chain.jumps(l)}</b> nearby segments` },
   { id:'frost', nm:'Cold Current', kind:'sys', art:'frost',
@@ -623,28 +623,28 @@ const STAGES = [
   { id:2,  nm:'Sunken Barge',     boss:'Rust Eel',        depth:140,  quota:34,  hp:1.26, spd:1.05,
     mix:{ flesh:10, plate:3 } },
   { id:3,  nm:'Ink Shelf',        boss:'Blot Serpent',    depth:240,  quota:46,  hp:1.55, spd:1.10,
-    mix:{ flesh:10, plate:3, spit:3 } },
+    mix:{ flesh:10, plate:3, thorn:3 } },
   { id:4,  nm:'Bone Reef',        boss:'Chalk Nautilid',  depth:380,  quota:56,  hp:1.90, spd:1.14,
     mix:{ flesh:10, plate:5, bulb:3 } },
   { id:5,  nm:'The Thermocline',  boss:'Glass Ribbon',    depth:540,  quota:64,  hp:2.35, spd:1.20,
-    mix:{ flesh:10, plate:4, spit:4, bulb:3 } },
+    mix:{ flesh:10, plate:4, thorn:4, bulb:3 } },
   { id:6,  nm:'Drowned Press',    boss:'Paper Wyrm',      depth:720,  quota:72,  hp:2.90, spd:1.24,
-    mix:{ flesh:10, plate:5, spit:4, knot:3 } },
+    mix:{ flesh:10, plate:5, thorn:4, knot:3 } },
   { id:7,  nm:'Midnight Terrace', boss:'Lantern Coil',    depth:980,  quota:82,  hp:3.55, spd:1.30,
-    mix:{ flesh:10, plate:5, spit:5, bulb:4, knot:3 } },
+    mix:{ flesh:10, plate:5, thorn:5, bulb:4, knot:3 } },
   { id:8,  nm:'The Gyre',         boss:'Twine Leviathan', depth:1300, quota:92, hp:4.35, spd:1.36,
-    mix:{ flesh:10, plate:6, spit:5, bulb:4, knot:4 } },
+    mix:{ flesh:10, plate:6, thorn:5, bulb:4, knot:4 } },
   { id:9,  nm:'Cold Seep',        boss:'Frost Annelid',   depth:1700, quota:102, hp:5.30, spd:1.42,
-    mix:{ flesh:10, plate:7, spit:6, bulb:4, knot:4 } },
+    mix:{ flesh:10, plate:7, thorn:6, bulb:4, knot:4 } },
   { id:10, nm:'The Trench Mouth', boss:'Maw Chain',       depth:2300, quota:114, hp:6.50, spd:1.48,
-    mix:{ flesh:10, plate:7, spit:7, bulb:5, knot:5 } },
+    mix:{ flesh:10, plate:7, thorn:7, bulb:5, knot:5 } },
   { id:11, nm:'Hadal Fold',       boss:'Fold Leviathan',  depth:3100, quota:126, hp:7.90, spd:1.55,
-    mix:{ flesh:10, plate:8, spit:7, bulb:6, knot:5 } },
+    mix:{ flesh:10, plate:8, thorn:7, bulb:6, knot:5 } },
   { id:12, nm:'The Press',        boss:'PRIME LEVIATHAN', depth:4200, quota:140, hp:9.60, spd:1.62,
-    mix:{ flesh:10, plate:8, spit:8, bulb:6, knot:6 } },
+    mix:{ flesh:10, plate:8, thorn:8, bulb:6, knot:6 } },
 ];
 const ENDLESS = { id:99, nm:'The Long Column', boss:'It Keeps Going', depth:5000, quota:180, hp:11.5, spd:1.68,
-  mix:{ flesh:10, plate:8, spit:8, bulb:7, knot:7 }, endless:true };
+  mix:{ flesh:10, plate:8, thorn:8, bulb:7, knot:7 }, endless:true };
 const STAGE = {}; STAGES.forEach(s => { STAGE[s.id] = s; }); STAGE[99] = ENDLESS;
 
 const TIERS = [
@@ -1069,7 +1069,7 @@ const G = {
   cards: [], rerolls: 0, takealls: 0, draftStep: 0, pendingDrafts: 0,
   shake: 0, flash: 0, hitStop: 0,
   pearls: 0,
-  stats: { dmg: 0, kills: 0, severed: 0, splits: 0, crits: 0, best: 0, taken: 0, cards: 0, time: 0, src: {} },
+  stats: { dmg: 0, kills: 0, severed: 0, splits: 0, plates: 0, crits: 0, best: 0, taken: 0, cards: 0, time: 0, src: {} },
 };
 
 const P = {
@@ -1162,7 +1162,7 @@ function startRun(stageId, tier, hullId){
   G.rerolls = 1 + mlvl('reroll') + (hullMod(hullId).reroll || 0);
   G.takealls = mlvl('takeall') + (hullMod(hullId).takeall || 0);
   G.shake = 0; G.flash = 0; G.hitStop = 0; G.pearls = 0;
-  G.stats = { dmg: 0, kills: 0, severed: 0, splits: 0, crits: 0, best: 0, taken: 0, cards: 0, time: 0, src: {} };
+  G.stats = { dmg: 0, kills: 0, severed: 0, splits: 0, plates: 0, crits: 0, best: 0, taken: 0, cards: 0, time: 0, src: {} };
   TAKEN = {};
   buildPlayer(hullId || META.hull || 'tin');
   spawnWorm({ prime: true, len: Math.max(6, Math.min(G.segBudget, snakeMax())), dir: 1 });
@@ -1264,7 +1264,7 @@ function endRun(win){
 const SEGT = {
   flesh: { hp: 1.00, r: 1.00, ink: 'pink' },
   plate: { hp: 1.15, r: 1.06, ink: 'teal', armor: 0.9 },
-  spit:  { hp: 0.85, r: 1.00, ink: 'pink' },
+  thorn: { hp: 0.95, r: 1.04, ink: 'pink', graze: 1.9 },  // no spit — it just hurts to touch
   bulb:  { hp: 0.70, r: 1.02, ink: 'teal' },
   knot:  { hp: 1.30, r: 1.08, ink: 'pink' },
 };
@@ -1291,7 +1291,7 @@ function newSeg(type, idx){
   const s = {
     type, x: 0, y: 0, r: C.SEG_R * d.r, hp: mhp, mhp,
     armor: 0, marmor: 0, chill: 0, chillT: 0, ven: 0, venT: 0, venSrc: 0,
-    hitT: 0, spitT: rr(1.4, 3.6), pulse: rnd() * TAU, dead: false,
+    hitT: 0, pulse: rnd() * TAU, dead: false,
   };
   if (d.armor){ s.marmor = Math.round(mhp * d.armor); s.armor = s.marmor; }
   return s;
@@ -1324,8 +1324,11 @@ function spawnWorm(opt){
     ang: Math.PI / 2 + rr(-0.5, 0.5),
     wob: rnd() * TAU,
     wobSpd: rr(0.7, 1.35),
-    spd: (prime ? C.SNAKE_SPD : C.WORM_SPD) * spdMul() * rr(0.9, 1.1) * (opt.spd || 1),
-    turn: prime ? 0.88 : 2.6,
+    // The descent IS the level clock, so it has to scale against the meat
+    // it is carrying: a deep trench walks down slowly because its links take
+    // so much longer to cut. Difficulty tier still winds it up directly.
+    spd: (prime ? snakeSpeed() : C.WORM_SPD * spdMul()) * rr(0.9, 1.1) * (opt.spd || 1),
+    turn: prime ? clamp(snakeSpeed() * (opt.spd || 1) / 84, 0.5, 2) : 2.6,
     mode: prime ? 'path' : 'wander',
     kind, dir, wp: 0, path: null, prime,
     x: opt.x != null ? opt.x : (prime ? (dir > 0 ? 120 : C.W - 120) : rr(120, C.W - 120)),
@@ -1448,7 +1451,7 @@ function buildPath(kind, startY, dir){
   let d = dir || 1;
   for (let r = 0; r < 24; r++){
     pts.push({ x: d > 0 ? W - m : m, y });
-    y += 152;
+    y += 142;
     pts.push({ x: d > 0 ? W - m : m, y });
     d = -d;
   }
@@ -1461,15 +1464,53 @@ function stepWorm(w, dt){
   let want;
   let sp = w.spd * (1 - wormChill(w));
 
+  // Nothing in the trench shoots. The snake's one active move is a lunge:
+  // every few seconds the head breaks off the pattern, dives at the hull,
+  // and then picks the pattern back up where it left it.
+  if (w.mode === 'path'){
+    w.lungeT = (w.lungeT == null ? rr(3, 6) : w.lungeT) - dt;
+    // it only bothers once it is low enough for the dive to mean something
+    if (w.lungeT <= 0 && w.rage <= 0 && w.y > C.H * 0.34){
+      w.lungeT = rr(4.5, 7.5) / (1 + G.prog * 0.6);
+      w.rage = 1.1;
+      w.lunged = 0.5;
+      sfx('lunge');
+    }
+  }
+  if (w.lunged > 0) w.lunged -= dt;
+
   if (w.rage > 0){
-    // a piece that was just cut loose lunges at the hull for a moment
+    // committed: it is coming for the hull, fast
     w.rage -= dt;
+    w.wasRaging = true;
     want = Math.atan2(P.y - w.y, P.x - w.x);
-    sp *= 1.3;
+    sp *= 2.6;
   } else if (w.mode === 'path' && w.path){
-    // follow the pattern; the turn-rate cap is what rounds the corners
+    if (w.wasRaging){
+      // the dive is over: pick the weave back up from just above where the
+      // lunge left it, so diving is a threat and not a shortcut downward
+      w.wasRaging = false;
+      w.path = buildPath(w.kind, w.y - 70, w.dir);
+      w.wp = 0;
+    }
+    // Follow the pattern; the turn-rate cap is what rounds the corners. The
+    // capture radius has to be wider than the head's turning circle or a
+    // fast snake orbits its own waypoint forever instead of descending —
+    // and a waypoint that ends up behind it is simply done with.
+    const turnR = sp / Math.max(0.2, w.turn);
+    const capture = Math.max(60, turnR * 1.3);
     let wp = w.path[w.wp];
-    while (wp && dist2(w.x, w.y, wp.x, wp.y) < 46 * 46){
+    let guard = 0;
+    while (wp && guard++ < 8){
+      const dx = wp.x - w.x, dy = wp.y - w.y;
+      const d2 = dx * dx + dy * dy;
+      // passed it: close enough to count, or just behind the head. The
+      // distance test on the second case matters — without it a lunge that
+      // leaves the pattern behind would eat the whole rest of the path.
+      const passed = d2 < capture * capture ||
+        (d2 < (capture * 1.8) * (capture * 1.8) &&
+         dx * Math.cos(w.ang) + dy * Math.sin(w.ang) < 0);
+      if (!passed) break;
       w.wp++;
       wp = w.path[w.wp];
     }
@@ -1515,13 +1556,6 @@ function stepWorm(w, dt){
       s.venT -= dt;
       hurtSeg(w, s, s.ven * dt, { silent: true, dot: true });
     }
-    if (s.type === 'spit' && s.y > -20){
-      s.spitT -= dt;
-      if (s.spitT <= 0){
-        s.spitT = rr(2.6, 4.4) / (1 + G.prog * 0.35);
-        spitAt(s.x, s.y);
-      }
-    }
     if (s.type === 'knot'){
       // a knot stitches its neighbours back together
       const heal = 5.5 * hpMul() * dt;
@@ -1535,14 +1569,6 @@ function stepWorm(w, dt){
     }
     s.pulse += dt * 3;
   }
-}
-
-function spitAt(x, y){
-  const a = Math.atan2(P.y - y, P.x - x) + rr(-0.14, 0.14);
-  const sp = 290 * (0.9 + G.prog * 0.3);
-  G.eprojs.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 9, life: 6,
-                  dmg: C.SPIT_DMG * (1 + G.tier * 0.28), spin: rnd() * TAU });
-  sfx('spit');
 }
 
 /* ---------------------------- damage ------------------------------ */
@@ -1589,6 +1615,7 @@ function killSeg(w, which, opt){
     // the whole reason to look at the worm: cut the plate out of it
     G.pendingDrafts++;
     G.draftLuck = 22;               // a recovered plate prints on better stock
+    G.stats.plates++;
     P.hp = Math.min(P.mhp, P.hp + P.mhp * 0.08);   // and patches the hull a little
     G.pearls += 8;
     popTag(s.x, s.y - 34, 'PLATE!');
@@ -1630,70 +1657,28 @@ function ownerOf(s, hint){
   return hint;
 }
 
-// Rebuild a worm after one or more of its segments died. Every contiguous
-// run of live segments becomes a worm of its own, riding the same trail at
-// its own arc offset — so a single cut splits the thing in two, and a bulb
-// that pops three segments at once leaves four independent worms behind.
+// Rebuild the snake after one or more of its segments died. It stays ONE
+// snake: the dead links are pulled out and the body behind them closes the
+// gap by sliding forward along the trail it is already riding. Killing the
+// head just hands the job to the next segment, without the body snapping
+// forward to meet it.
 function resegment(w){
-  const old = w.segs, cum0 = w.cum, trail0 = w.trail;
-  const runs = [];
-  let cur = null;
-  for (let i = 0; i < old.length; i++){
-    const s = old[i];
-    if (!s || s.dead){ cur = null; continue; }
-    if (!cur){ cur = { start: i, list: [] }; runs.push(cur); }
-    cur.list.push(s);
-  }
-  if (!runs.length){ w.segs = []; w.dead = true; return; }
-
-  // every run after the first wakes up as its own worm
-  for (let r = 1; r < runs.length; r++){
-    const run = runs[r];
-    const head = run.list[0];
-    const a1 = cum0 - run.start * C.SEG_GAP;
-    const nt = [];
-    for (const p of trail0) if (p.d <= a1) nt.push({ x: p.x, y: p.y, d: p.d });
-    if (!nt.length || nt[nt.length - 1].d < a1) nt.push({ x: head.x, y: head.y, d: a1 });
-    const prev = nt.length > 1 ? nt[nt.length - 2] : null;
-    // A substantial piece of the snake is still the snake: it picks the
-    // pattern back up and keeps coming down. Only short scraps lose the plot
-    // and start wandering.
-    const keepsGoing = w.prime && run.list.length >= C.PRIME_MIN;
-    const nw = {
-      id: ++G.wormSeq, segs: run.list, trail: nt, cum: a1,
-      ang: prev ? Math.atan2(head.y - prev.y, head.x - prev.x) : Math.PI / 2,
-      wob: rnd() * TAU, wobSpd: rr(0.8, 1.5),
-      spd: keepsGoing ? w.spd
-        : Math.min(Math.max(w.spd, C.WORM_SPD * spdMul()) * 1.06, C.WORM_SPD * spdMul() * 2),
-      turn: keepsGoing ? w.turn : 2.6,
-      mode: keepsGoing ? 'path' : 'wander',
-      kind: w.kind, dir: -w.dir, wp: 0, path: null, prime: keepsGoing,
-      x: head.x, y: head.y, dead: false, t: 0,
-      rage: 0.8 + rnd() * 0.9,              // a freshly cut worm lunges, briefly
-    };
-    if (keepsGoing) nw.path = buildPath(w.kind, head.y + 110, -w.dir);
-    G.worms.push(nw);
-    G.stats.splits++;
-    popTag(head.x, head.y - 30, 'SPLIT');
-  }
-
-  // the first run keeps the original worm; if its head died, the body
-  // shuffles forward along its own trail instead of snapping
-  const first = runs[0];
-  w.segs = first.list;
-  // whittled down to a scrap, the parent stops being a snake too
-  if (w.prime && first.list.length < C.PRIME_MIN){
-    w.prime = false; w.mode = 'wander'; w.turn = 2.6;
-    w.spd = Math.max(w.spd, C.WORM_SPD * spdMul());
-  }
-  if (first.start > 0){
-    w.cum = cum0 - first.start * C.SEG_GAP;
+  const old = w.segs;
+  let lead = 0;
+  while (lead < old.length && (!old[lead] || old[lead].dead)) lead++;
+  const live = [];
+  for (const seg of old) if (seg && !seg.dead) live.push(seg);
+  if (!live.length){ w.segs = []; w.dead = true; return; }
+  if (lead > 0){
+    // the head is gone: wind the arc back so the new head keeps its place
+    w.cum -= lead * C.SEG_GAP;
     while (w.trail.length && w.trail[w.trail.length - 1].d > w.cum) w.trail.pop();
-    const h = first.list[0];
+    const h = live[0];
     if (!w.trail.length) w.trail.push({ x: h.x, y: h.y, d: w.cum });
     w.x = h.x; w.y = h.y;
-    w.rage = Math.max(w.rage || 0, 0.9);
+    w.lungeT = Math.min(w.lungeT == null ? 99 : w.lungeT, 1.4);  // it takes that personally
   }
+  w.segs = live;
 }
 
 // area damage against every segment (and the core) in range. Targets are
@@ -2003,19 +1988,6 @@ function stepProjectiles(dt){
       else G.projs.splice(i, 1);
     }
   }
-  // enemy fire
-  for (let i = G.eprojs.length - 1; i >= 0; i--){
-    const e = G.eprojs[i];
-    e.life -= dt; e.spin += dt * 6;
-    e.x += e.vx * dt; e.y += e.vy * dt;
-    if (e.life <= 0 || e.y > C.H + 40 || e.y < -80 || e.x < -60 || e.x > C.W + 60){
-      G.eprojs.splice(i, 1); continue;
-    }
-    if (dist2(e.x, e.y, P.x, P.y) <= (e.r + P.r) * (e.r + P.r)){
-      G.eprojs.splice(i, 1);
-      hitPlayer(e.dmg, 'spit');
-    }
-  }
 }
 
 function zone(x, y, r, kind, life){
@@ -2176,7 +2148,6 @@ function hurtCore(dmg, opt){
     banner(co.phase === 1 ? 'IT UNSPOOLS' : 'IT COMES APART');
     G.shake = 22;
     burst(co.x, co.y, 'pink', 26);
-    for (let i = 0; i < 2; i++) spawnWorm({ len: 4 + i, y: -40, spd: 1.15 });
     sfx('phase');
   }
   if (co.hp <= 0){
@@ -2213,44 +2184,48 @@ function stepCore(dt){
     co.modeT -= dt;
     if (co.modeT <= 0){
       const roll = rnd();
-      if (roll < 0.34) { co.mode = 'fan'; co.modeT = 1.6; co.sweep = 0; }
-      else if (roll < 0.62) { co.mode = 'rain'; co.modeT = 1.9; co.shots = 0; }
-      else if (roll < 0.84) { co.mode = 'charge'; co.modeT = 2.4; co.cx = P.x; co.cy = P.y; }
-      else { co.mode = 'spawn'; co.modeT = 1.1; }
+      if (roll < 0.36) { co.mode = 'charge'; co.modeT = 2.4; co.cx = P.x; co.cy = P.y; }
+      else if (roll < 0.72) { co.mode = 'sweep'; co.modeT = 2.2; co.swDir = P.x > co.x ? 1 : -1; }
+      else { co.mode = 'slam'; co.modeT = 2.2; co.slammed = false; }
     }
     return;
   }
-  if (co.mode === 'fan'){
+  if (co.mode === 'sweep'){
+    // rakes sideways along the page, low enough to be a real problem
     co.modeT -= dt;
-    co.sweep += dt;
-    if (co.sweep > 0.16){
-      co.sweep = 0;
-      const n = 6 + co.phase * 2;
-      const base = co.t * 1.4;
-      for (let i = 0; i < n; i++){
-        const a = base + i * TAU / n;
-        const s = 260 + co.phase * 40;
-        G.eprojs.push({ x: co.x, y: co.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: 10, life: 7,
-          dmg: C.SPIT_DMG * 1.2 * (1 + G.tier * 0.25), spin: 0 });
-      }
-      sfx('spit');
-    }
-    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.1 - co.phase * 0.25; }
+    co.y = lerp(co.y, co.ty + 90, 1 - Math.pow(0.2, dt));
+    co.x += (co.swDir || 1) * 320 * sp * dt;
+    if (co.x < 120){ co.x = 120; co.swDir = 1; }
+    if (co.x > C.W - 120){ co.x = C.W - 120; co.swDir = -1; }
+    if (dist2(co.x, co.y, P.x, P.y) < (co.r + P.r) * (co.r + P.r)) hitPlayer(C.CONTACT_DMG * 1.8, 'core');
+    if (rnd() < dt * 18) puff(co.x + rr(-co.r, co.r), co.y + co.r * 0.5, 'teal', 1);
+    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.1 - co.phase * 0.2; }
     return;
   }
-  if (co.mode === 'rain'){
+  if (co.mode === 'slam'){
+    // rises, then drops on the deck like a hammer
     co.modeT -= dt;
-    if ((co.shots || 0) < 5 && co.modeT < 1.9 - (co.shots || 0) * 0.32){
-      co.shots = (co.shots || 0) + 1;
-      const a = Math.atan2(P.y - co.y, P.x - co.x);
-      for (let i = -1; i <= 1; i++){
-        const aa = a + i * 0.16;
-        G.eprojs.push({ x: co.x, y: co.y, vx: Math.cos(aa) * 380, vy: Math.sin(aa) * 380, r: 11, life: 6,
-          dmg: C.SPIT_DMG * 1.4 * (1 + G.tier * 0.25), spin: 0 });
+    const k = 1 - co.modeT / 2.2;
+    if (k < 0.35){
+      co.y = lerp(co.y, co.ty - 70, 1 - Math.pow(0.08, dt));
+      co.x = lerp(co.x, P.x, 1 - Math.pow(0.4, dt));
+    } else if (k < 0.62){
+      co.y += 1500 * dt;
+      if (co.y > C.H - C.DECK - 60){
+        co.y = C.H - C.DECK - 60;
+        if (!co.slammed){
+          co.slammed = true;
+          zone(co.x, co.y, 260, 'boom', 0.4);
+          G.shake = 26;
+          sfx('boom');
+          if (dist2(co.x, co.y, P.x, P.y) < 260 * 260) hitPlayer(C.CONTACT_DMG * 2.4, 'core');
+        }
       }
-      sfx('spit');
+      if (dist2(co.x, co.y, P.x, P.y) < (co.r + P.r) * (co.r + P.r)) hitPlayer(C.CONTACT_DMG * 2.2, 'core');
+    } else {
+      co.y = lerp(co.y, co.ty, 1 - Math.pow(0.1, dt));
     }
-    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.2 - co.phase * 0.25; }
+    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.3 - co.phase * 0.25; co.slammed = false; }
     return;
   }
   if (co.mode === 'charge'){
@@ -2274,19 +2249,6 @@ function stepCore(dt){
     if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.3 - co.phase * 0.3; }
     return;
   }
-  if (co.mode === 'spawn'){
-    co.modeT -= dt;
-    if (!co.spawned){
-      co.spawned = true;
-      // never let the escort become a shield: a couple of short worms, and
-      // only while the page is fairly clear
-      const room = clamp(3 - G.worms.length, 0, 2);
-      for (let i = 0; i < room; i++) spawnWorm({ len: 4 + i + co.phase, x: co.x + rr(-80, 80), y: co.y, spd: 1.1 });
-      if (room) sfx('spawn');
-    }
-    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.2; co.spawned = false; }
-    return;
-  }
 }
 
 /* ==================================================================
@@ -2295,8 +2257,13 @@ function stepCore(dt){
 // One long snake at a time — two once the trenches get deep. The trench's
 // whole quota is parcelled out into those snakes, so the page holds a single
 // weaving ribbon plus whatever pieces you have cut off it.
-function snakeMax(){ return C.SNAKE_MAX + G.stage.id * 3; }
-function wantSnakes(){ return (G.stage.id >= 6 && G.prog >= 0.35) ? 2 : 1; }
+function snakeMax(){ return Math.round(C.SNAKE_MAX + G.stage.id * 1.3); }
+// how fast the snake walks down the page — the whole level timer in one line
+function snakeSpeed(){
+  const t = TIERS[G.tier] || TIERS[1];
+  return C.SNAKE_SPD * t.spd / Math.pow(G.stage.hp * (1 + G.loop * 0.85), 0.42);
+}
+function wantSnakes(){ return 1; }        // always exactly one snake on the page
 
 function stepSpawns(dt){
   if (G.phase !== 'swarm') return;
@@ -2484,7 +2451,8 @@ function stepRun(dt){
       for (const s of w.segs){
         if (s.dead) continue;
         if (dist2(s.x, s.y, P.x, P.y) < (s.r + P.r) * (s.r + P.r)){
-          hitPlayer(C.CONTACT_DMG * (1 + G.tier * 0.22), 'contact');
+          const graze = (SEGT[s.type] || SEGT.flesh).graze || 1;
+          hitPlayer(C.CONTACT_DMG * graze * (1 + G.tier * 0.22), s.type === 'thorn' ? 'thorn' : 'contact');
           break;
         }
       }
@@ -2896,26 +2864,32 @@ function drawSegDetail(w, i, s, r){
   if (s.type === 'plate'){
     const armFrac = s.marmor > 0 ? clamp(s.armor / s.marmor, 0, 1) : 0;
     if (armFrac > 0){
-      const bw = r * 1.46, bh = r * 1.16 * (0.35 + armFrac * 0.65);
+      const bw = r * 1.18, bh = r * 0.86 * (0.4 + armFrac * 0.6);
       // the plate is knocked back to bare paper, so it reads white and hard
       // against the meat instead of muddying into it
-      knockOut(gg => { roundRectPath(gg, s.x - bw / 2, s.y - r * 0.66, bw, bh, 7); gg.fill(); });
+      knockOut(gg => { roundRectPath(gg, s.x - bw / 2, s.y - r * 0.74, bw, bh, 6); gg.fill(); });
       if (k){
-        roundRectPath(k, s.x - bw / 2, s.y - r * 0.66, bw, bh, 7);
-        inkStroke(k, 0.9, 3);
+        roundRectPath(k, s.x - bw / 2, s.y - r * 0.74, bw, bh, 6);
+        inkStroke(k, 0.9, 2.8);
         k.stroke();
-        for (const rx of [-r * 0.5, r * 0.5]) disc(k, s.x + rx, s.y - r * 0.44, 2.6, 0.85);
+        for (const rx of [-r * 0.4, r * 0.4]) disc(k, s.x + rx, s.y - r * 0.52, 2.2, 0.85);
       }
       if (t) ring(t, s.x, s.y, r * 1.05, 3, 0.55);
     }
-  } else if (s.type === 'spit'){
-    const a = Math.atan2(P.y - s.y, P.x - s.x);
-    const nx = s.x + Math.cos(a) * r * 0.9, ny = s.y + Math.sin(a) * r * 0.9;
-    poly(k, [[nx - Math.cos(a + 1.4) * 9, ny - Math.sin(a + 1.4) * 9],
-             [nx - Math.cos(a - 1.4) * 9, ny - Math.sin(a - 1.4) * 9],
-             [nx + Math.cos(a) * 15, ny + Math.sin(a) * 15]], 0.85);
-    const warm = clamp(1 - s.spitT / 1.2, 0, 1);
-    if (warm > 0.4) disc(p, nx + Math.cos(a) * 12, ny + Math.sin(a) * 12, 4 * warm, 0.9);
+  } else if (s.type === 'thorn'){
+    // a crown of spikes — the part of the snake you really do not want to touch
+    if (k){
+      k.beginPath();
+      for (let c = 0; c < 7; c++){
+        const a = c / 7 * TAU + s.pulse * 0.5;
+        const x0 = s.x + Math.cos(a) * r * 0.86, y0 = s.y + Math.sin(a) * r * 0.86;
+        k.moveTo(x0, y0);
+        k.lineTo(s.x + Math.cos(a) * r * 1.36, s.y + Math.sin(a) * r * 1.36);
+      }
+      inkStroke(k, 0.9, 4);
+      k.stroke();
+    }
+    disc(p, s.x, s.y, r * 0.3, 0.6);
   } else if (s.type === 'bulb'){
     knockOut(gg => { gg.beginPath(); gg.arc(s.x, s.y, r * 0.52, 0, TAU); gg.fill(); });
     ring(k, s.x, s.y, r * 0.52, 3, 0.9);
@@ -2978,7 +2952,15 @@ function drawSegDetail(w, i, s, r){
                [sx - sz, sy], [sx - sz * 0.32, sy - sz * 0.32]], 0.85);
     }
   }
-  if (isHead) drawFace(s, r, w);
+  if (isHead){
+    if (w.rage > 0){
+      ring(L('pink'), s.x, s.y, r * (1.25 + (1.1 - w.rage) * 0.5), 4, clamp(w.rage, 0, 0.8));
+      const a = Math.atan2(P.y - s.y, P.x - s.x);
+      line(k, s.x + Math.cos(a) * r, s.y + Math.sin(a) * r,
+              s.x + Math.cos(a) * r * 1.7, s.y + Math.sin(a) * r * 1.7, 4, 0.6);
+    }
+    drawFace(s, r, w);
+  }
 }
 
 function drawFace(s, r, w){
@@ -3178,15 +3160,6 @@ function drawShots(){
     line(k, x2, y2, x2 + Math.cos(a - 2.4) * 9, y2 + Math.sin(a - 2.4) * 9, 3, 0.8);
     if (pr.crit) ring(p, pr.x, pr.y, 14, 2.4, 0.6);
   }
-  for (const e of G.eprojs){
-    disc(p, e.x, e.y, e.r, 0.85);
-    ring(k, e.x, e.y, e.r, 2.6, 0.9);
-    for (let i = 0; i < 4; i++){
-      const a = e.spin + i * TAU / 4;
-      line(k, e.x + Math.cos(a) * e.r, e.y + Math.sin(a) * e.r,
-              e.x + Math.cos(a) * (e.r + 6), e.y + Math.sin(a) * (e.r + 6), 2, 0.8);
-    }
-  }
 }
 
 function drawZones(){
@@ -3379,7 +3352,7 @@ const SFX = {
   plate:   [900, 420, 'square',   0.07,  0.07],
   boom:    [150, 40,  'sawtooth', 0.26,  0.13],
   hurt:    [220, 70,  'sawtooth', 0.20,  0.16],
-  spit:    [420, 240, 'triangle', 0.09,  0.05],
+  lunge:   [300, 120, 'sawtooth', 0.22,  0.09],
   sonar:   [880, 220, 'sine',     0.30,  0.09],
   pick:    [700, 1200,'square',   0.07,  0.07],
   pick2:   [520, 990, 'square',   0.13,  0.10],
@@ -3710,7 +3683,7 @@ function syncStats(){
   $('statbody').innerHTML =
     row('Depth', fmt(depthNow()) + ' m') +
     row('Segments severed', s.severed) +
-    row('Worms split', s.splits) +
+    row('Plates recovered', s.plates) +
     row('Damage printed', fmt(s.dmg)) +
     row('Biggest single hit', fmt(s.best)) +
     row('Damage per second', fmt(s.dmg / t)) +
@@ -3752,7 +3725,7 @@ function syncResults(){
     row('Pearls earned', '◈ ' + fmt(G.lastPay || 0)) +
     row('Depth reached', fmt(depthNow()) + ' m') +
     row('Segments severed', s.severed) +
-    row('Worms split', s.splits) +
+    row('Plates recovered', s.plates) +
     row('Damage printed', fmt(s.dmg)) +
     row('Time down', Math.floor(G.time / 60) + 'm ' + Math.floor(G.time % 60) + 's') +
     '<div class="rule thin"></div>' + kitHtml();
@@ -3762,11 +3735,11 @@ const HELP = [
   'The press is bolted down: it fires <b>straight up</b>. Lining the hull up under a segment <i>is</i> the aiming.',
   'Segments with a <b>plate bolted on</b> — ringed, ticking, flagged — are where upgrades come from. Cut those out.',
   'Anything that tracks a target (drones, depth charges, the <b>Gimbal Mount</b>) only reaches the sheet once you are a few plates in.',
-  '<b>Sever a middle segment</b> and the worm splits into two. Two heads, two problems, twice the meat.',
+  'The snake is <b>one chain</b>. Cut a link out of the middle and the body behind it closes the gap — it never becomes two snakes.',
   '<b>Numbers on the meat</b> are hit points. Teal numbers mean plating: chew through that first, or fit <b>Etching Acid</b>.',
   '<b>Bulbs</b> pop when killed and take their neighbours with them. Chain them.',
   '<b>Knots</b> stitch the segments beside them back together. Kill knots first.',
-  '<b>Spitters</b> shoot back. Nothing else in the worm does.',
+  '<b>Thorns</b> are the spiked links — nothing in the trench shoots, but touching one of those really costs.',
   'A trench sends <b>one long snake</b> (two, deep down) that weaves its way down the page. Cut it in half and both halves keep coming.',
   'If it <b>reaches the deck</b>, the dive is over — you can run the press again once, or take the pearls you have.',
   'Fill the progress bar and the <b>core</b> surfaces — that is the trench boss, in three phases.',
