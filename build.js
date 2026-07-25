@@ -57,6 +57,7 @@ const STATIC_PATHS = [
   'coin_pusher',
   'cell_survivor',
   'dungeon_pusher',
+  'grimhold',
   'carmanager',
   'tools',
 ];

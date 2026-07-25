@@ -26,7 +26,8 @@
     "test:pusher": "node tests/coin_pusher.test.mjs",
     "test:dungeon": "node tests/dungeon_pusher.test.mjs",
     "test:cells": "node tests/cell_survivor.test.mjs",
-    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot && npm run test:horse && npm run test:wildwalk && npm run test:wwboard && npm run test:collection && npm run test:ballistic && npm run test:pusher && npm run test:dungeon && npm run test:dpboard && npm run test:dpsave && npm run test:cells"
+    "test:grimhold": "node tests/grimhold.test.mjs",
+    "check": "node build.js && npm run test:boss && npm run test:kingshot && npm run test:headliner && npm run test:horde && npm run test:spijker && npm run test:cars && npm run test:frietkot && npm run test:horse && npm run test:wildwalk && npm run test:wwboard && npm run test:collection && npm run test:ballistic && npm run test:pusher && npm run test:dungeon && npm run test:dpboard && npm run test:dpsave && npm run test:cells && npm run test:grimhold"
   },
   "dependencies": {
     "lucide-react": "^0.300.0",
