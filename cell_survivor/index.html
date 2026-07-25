@@ -360,7 +360,7 @@ const WEAPONS = {
   pseudo: {
     nm: 'Pseudopod Spines', ic: '🦴', kind: 'w',
     ds: 'Fires bone-hard spines at the nearest pathogen.',
-    st: l => ({ cd: .95 - .06 * l, dmg: 12 + 4.4 * l, n: 1 + (l >= 3) + (l >= 5) + (l >= 7), spd: 620,
+    st: l => ({ cd: .95 - .06 * l, dmg: 14 + 7 * l, n: 1 + (l >= 3) + (l >= 5) + (l >= 7), spd: 620,
                 pierce: (l >= 4 ? 1 : 0) + (l >= 8 ? 1 : 0), r: 6 }),
     evo: { into: 'harpoon', wth: 'ribo' },
     fire(s, o, m){
@@ -376,7 +376,7 @@ const WEAPONS = {
   harpoon: {
     nm: 'Harpoon Cluster', ic: '🔱', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: barbed harpoons rip clean through the culture.',
-    st: () => ({ cd: .42, dmg: 62, n: 5, spd: 760, pierce: 99, r: 9 }),
+    st: () => ({ cd: .42, dmg: 82, n: 5, spd: 760, pierce: 99, r: 9 }),
     fire(s, o, m){
       const tgt = nearest(o.x, o.y, 1100);
       const base = tgt ? Math.atan2(tgt.y - o.y, tgt.x - o.x) : o.face;
@@ -391,7 +391,7 @@ const WEAPONS = {
   cilia: {
     nm: 'Cilia Whip', ic: '🌾', kind: 'w',
     ds: 'Lashes a sweeping arc of cilia, knocking pathogens back.',
-    st: l => ({ cd: 1.2 - .075 * l, dmg: 13 + 6.5 * l, arc: .95 + .05 * l, r: 62 + 9 * l, kb: 210 }),
+    st: l => ({ cd: 1.2 - .075 * l, dmg: 15 + 9.5 * l, arc: .95 + .05 * l, r: 62 + 9 * l, kb: 210 }),
     evo: { into: 'corona', wth: 'mito' },
     fire(s, o, m){
       const w = o.w;
@@ -404,7 +404,7 @@ const WEAPONS = {
   corona: {
     nm: 'Razor Corona', ic: '🌀', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: a full ring of razor cilia, every sweep, every side.',
-    st: () => ({ cd: .62, dmg: 78, arc: Math.PI, r: 150, kb: 320 }),
+    st: () => ({ cd: .62, dmg: 102, arc: Math.PI, r: 150, kb: 320 }),
     fire(s, o, m){
       swipe(o, 0, Math.PI, s.r * P.s.area, s.dmg * m, s.kb, true);
       swipe(o, Math.PI, Math.PI, s.r * P.s.area, s.dmg * m, s.kb, true);
@@ -414,7 +414,7 @@ const WEAPONS = {
   enzyme: {
     nm: 'Enzyme Trail', ic: '🧪', kind: 'w',
     ds: 'Leaks digestive acid in your wake. It keeps eating.',
-    st: l => ({ cd: 1.05 - .06 * l, dps: 9 + 3.6 * l, r: 40 + 7 * l, life: 3 + .35 * l }),
+    st: l => ({ cd: 1.05 - .06 * l, dps: 10 + 5.2 * l, r: 40 + 7 * l, life: 3 + .35 * l }),
     evo: { into: 'necro', wth: 'golgi' },
     fire(s, o, m){
       if (m >= 1 && len(P.vx, P.vy) < 45) { o.w.t = .12; return; }   // no swimming, no trail
@@ -424,7 +424,7 @@ const WEAPONS = {
   necro: {
     nm: 'Necrotic Bloom', ic: '☣️', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: the acid blooms outward and slows everything in it.',
-    st: () => ({ cd: .7, dps: 62, r: 105, life: 5.5 }),
+    st: () => ({ cd: .7, dps: 80, r: 105, life: 5.5 }),
     fire(s, o, m){
       if (m >= 1 && len(P.vx, P.vy) < 45) { o.w.t = .12; return; }
       addPool(o.x, o.y, s.r * P.s.area, s.dps * m, s.life, '#c9ff4d', { grow: 22, slow: .45 });
@@ -434,21 +434,21 @@ const WEAPONS = {
   ion: {
     nm: 'Ion Orbitals', ic: '⚛️', kind: 'w',
     ds: 'Charged nodes orbit your membrane and shred what touches them.',
-    st: l => ({ n: 2 + Math.floor(l / 2), dmg: 8 + 3.6 * l, r: 76 + 7 * l, spd: 2.0 + .12 * l, hitcd: .55 }),
+    st: l => ({ n: 2 + Math.floor(l / 2), dmg: 9 + 5.2 * l, r: 76 + 7 * l, spd: 2.0 + .12 * l, hitcd: .55 }),
     evo: { into: 'shell', wth: 'nucleus' },
     tick(s, o, m, dt, w){ orbitals(w, s, o, m, dt, 1); },
   },
   shell: {
     nm: 'Electron Shell', ic: '💫', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: two counter-spinning rings that arc lightning on contact.',
-    st: () => ({ n: 5, dmg: 48, r: 118, spd: 3.1, hitcd: .38, zap: 26 }),
+    st: () => ({ n: 5, dmg: 62, r: 118, spd: 3.1, hitcd: .38, zap: 34 }),
     tick(s, o, m, dt, w){ orbitals(w, s, o, m, dt, 2); },
   },
 
   spore: {
     nm: 'Spore Burst', ic: '🍄', kind: 'w',
     ds: 'Bursts a ring of drifting spores in every direction.',
-    st: l => ({ cd: 2.7 - .18 * l, n: 6 + 2 * l, dmg: 10 + 4.4 * l, spd: 215, life: 1.6, r: 8 }),
+    st: l => ({ cd: 2.7 - .18 * l, n: 6 + 2 * l, dmg: 11 + 6.4 * l, spd: 215, life: 1.6, r: 8 }),
     evo: { into: 'fungal', wth: 'vacuole' },
     fire(s, o, m){
       const n = s.n + P.s.proj * 2;
@@ -461,7 +461,7 @@ const WEAPONS = {
   fungal: {
     nm: 'Fungal Nova', ic: '🌸', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: seeking spores that rot the ground where they land.',
-    st: () => ({ cd: 1.5, n: 18, dmg: 46, spd: 250, life: 2.6, r: 10 }),
+    st: () => ({ cd: 1.5, n: 18, dmg: 60, spd: 250, life: 2.6, r: 10 }),
     fire(s, o, m){
       const off = rnd() * TAU;
       const n = s.n + P.s.proj * 2;
@@ -474,49 +474,49 @@ const WEAPONS = {
   arc: {
     nm: 'Neural Arc', ic: '⚡', kind: 'w',
     ds: 'A charge that leaps from pathogen to pathogen.',
-    st: l => ({ cd: 1.6 - .1 * l, dmg: 15 + 7 * l, chains: 2 + Math.floor(l * .8), range: 270 + 16 * l }),
+    st: l => ({ cd: 1.6 - .1 * l, dmg: 17 + 10.5 * l, chains: 2 + Math.floor(l * .8), range: 270 + 16 * l }),
     evo: { into: 'storm', wth: 'flagellum' },
     fire(s, o, m){ chain(o, s.dmg * m, s.chains, s.range * P.s.area, 0); },
   },
   storm: {
     nm: 'Synaptic Storm', ic: '🌩️', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: the charge never stops jumping, and it stuns.',
-    st: () => ({ cd: .8, dmg: 74, chains: 12, range: 430, stun: .45 }),
+    st: () => ({ cd: .8, dmg: 96, chains: 12, range: 430, stun: .45 }),
     fire(s, o, m){ chain(o, s.dmg * m, s.chains, s.range * P.s.area, s.stun); },
   },
 
   cryo: {
     nm: 'Cryo Vacuole', ic: '❄️', kind: 'w',
     ds: 'Vents a freezing pulse that chills everything nearby.',
-    st: l => ({ cd: 3.1 - .18 * l, dmg: 8 + 4.5 * l, r: 118 + 20 * l, slow: .42, dur: 2 + .2 * l }),
+    st: l => ({ cd: 3.1 - .18 * l, dmg: 9 + 6.5 * l, r: 118 + 20 * l, slow: .42, dur: 2 + .2 * l }),
     evo: { into: 'zero', wth: 'membrane' },
     fire(s, o, m){ wave(o, s.r * P.s.area, s.dmg * m, { slow: s.slow, dur: s.dur * P.s.dur, col: '#7fe0ff' }); },
   },
   zero: {
     nm: 'Absolute Zero', ic: '🧊', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: freezes solid — and frozen things shatter for double.',
-    st: () => ({ cd: 2.2, dmg: 60, r: 330, slow: 1, dur: 2.4, freeze: 1 }),
+    st: () => ({ cd: 2.2, dmg: 78, r: 330, slow: 1, dur: 2.4, freeze: 1 }),
     fire(s, o, m){ wave(o, s.r * P.s.area, s.dmg * m, { slow: 1, dur: s.dur * P.s.dur, freeze: true, col: '#bff3ff' }); },
   },
 
   symb: {
     nm: 'Symbiote', ic: '🐟', kind: 'w',
     ds: 'A friendly cell tags along and fires on its own.',
-    st: l => ({ n: 1 + (l >= 5 ? 1 : 0), dmg: 8 + 3.4 * l, cd: .9 - .05 * l, spd: 540 }),
+    st: l => ({ n: 1 + (l >= 5 ? 1 : 0), dmg: 9 + 4.8 * l, cd: .9 - .05 * l, spd: 540 }),
     evo: { into: 'hive', wth: 'regen' },
     tick(s, o, m, dt, w){ symbiotes(w, s, m); },
   },
   hive: {
     nm: 'Hive Symbiont', ic: '🐠', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: three symbiotes, and every kill they land feeds you.',
-    st: () => ({ n: 3, dmg: 44, cd: .34, spd: 660, leech: 1 }),
+    st: () => ({ n: 3, dmg: 57, cd: .34, spd: 660, leech: 1 }),
     tick(s, o, m, dt, w){ symbiotes(w, s, m); },
   },
 
   lyso: {
     nm: 'Lysosome Bomb', ic: '💣', kind: 'w',
     ds: 'Lobs a sac of enzymes that detonates on arrival.',
-    st: l => ({ cd: 2.3 - .14 * l, dmg: 24 + 10 * l, r: 74 + 8 * l, n: 1 + (l >= 4) + (l >= 7) }),
+    st: l => ({ cd: 2.3 - .14 * l, dmg: 26 + 14.5 * l, r: 74 + 8 * l, n: 1 + (l >= 4) + (l >= 7) }),
     evo: { into: 'detona', wth: 'spike' },
     fire(s, o, m){
       const n = s.n + (P.s.proj > 1 ? 1 : 0);
@@ -531,7 +531,7 @@ const WEAPONS = {
   detona: {
     nm: 'Chain Detonation', ic: '🧨', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: every blast kicks off two more.',
-    st: () => ({ cd: 1.15, dmg: 88, r: 130, n: 3 }),
+    st: () => ({ cd: 1.15, dmg: 115, r: 130, n: 3 }),
     fire(s, o, m){
       for (let i = 0; i < s.n; i++){
         const t = nearest(o.x, o.y, 800, i);
@@ -545,7 +545,7 @@ const WEAPONS = {
   virus: {
     nm: 'Viral Payload', ic: '🦠', kind: 'w',
     ds: 'Infects a host. It rots, dies, and infects its neighbours.',
-    st: l => ({ cd: 2.5 - .15 * l, dps: 7 + 3.2 * l, dur: 4 + .4 * l, spread: 2 + Math.floor(l / 2), n: 1 + (l >= 6 ? 1 : 0) }),
+    st: l => ({ cd: 2.5 - .15 * l, dps: 8 + 4.6 * l, dur: 4 + .4 * l, spread: 2 + Math.floor(l / 2), n: 1 + (l >= 6 ? 1 : 0) }),
     evo: { into: 'pandemic', wth: 'plasmid' },
     fire(s, o, m){
       for (let i = 0; i < s.n; i++){
@@ -557,7 +557,7 @@ const WEAPONS = {
   pandemic: {
     nm: 'Pandemic', ic: '☠️', kind: 'w', hidden: true, evolved: true,
     ds: 'Evolved: an outbreak that never runs out of hosts.',
-    st: () => ({ cd: 1.1, dps: 42, dur: 8, spread: 6, n: 3 }),
+    st: () => ({ cd: 1.1, dps: 55, dur: 8, spread: 6, n: 3 }),
     fire(s, o, m){
       for (let i = 0; i < s.n; i++){
         const t = nearest(o.x, o.y, 900, i, e => !e.inf);
@@ -608,17 +608,17 @@ const SPECIES = [
 // ----------------------------------------------------------------- pathogens
 // `from` = minute the type enters the spawn table, `w` = relative weight.
 const ENEMIES = [
-  { id: 'cocci',  nm: 'Coccus',        hp: 9,   spd: 58,  dmg: 7,  r: 13, xp: 1, col: '#8fffb0', from: 0, w: 10 },
-  { id: 'bacil',  nm: 'Bacillus',      hp: 17,  spd: 78,  dmg: 8,  r: 12, xp: 2, col: '#7fe0ff', from: 1, w: 9 },
-  { id: 'virion', nm: 'Virion',        hp: 17,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9de0', from: 2, w: 8, zig: 1 },
-  { id: 'sac',    nm: 'Spore Sac',     hp: 48,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#d7ff6d', from: 3, w: 6, split: 2 },
-  { id: 'phage',  nm: 'Phage',         hp: 32,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
-  { id: 'zoner',  nm: 'Spitter',       hp: 46,  spd: 54,  dmg: 22, r: 16, xp: 5, col: '#c8a1ff', from: 3, w: 6, zone: 3.4 },
-  { id: 'swarm',  nm: 'Swarmer',       hp: 9,   spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
-  { id: 'leech',  nm: 'Leech',         hp: 40,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
-  { id: 'blob',   nm: 'Amoeboid',      hp: 140, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
-  { id: 'prion',  nm: 'Prion',         hp: 76,  spd: 72,  dmg: 14, r: 16, xp: 7, col: '#ff4d6d', from: 8, w: 6, armor: 4 },
-  { id: 'macro',  nm: 'Rogue Macrophage', hp: 280, spd: 54, dmg: 22, r: 34, xp: 18, col: '#ff8a3d', from: 9, w: 3, charge: 1, heavy: 1 },
+  { id: 'cocci',  nm: 'Coccus',        hp: 12,  spd: 58,  dmg: 7,  r: 13, xp: 1, col: '#8fffb0', from: 0, w: 10 },
+  { id: 'bacil',  nm: 'Bacillus',      hp: 22,  spd: 78,  dmg: 8,  r: 12, xp: 2, col: '#7fe0ff', from: 1, w: 9 },
+  { id: 'virion', nm: 'Virion',        hp: 23,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9de0', from: 2, w: 8, zig: 1 },
+  { id: 'sac',    nm: 'Spore Sac',     hp: 64,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#d7ff6d', from: 3, w: 6, split: 2 },
+  { id: 'phage',  nm: 'Phage',         hp: 44,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
+  { id: 'zoner',  nm: 'Spitter',       hp: 60,  spd: 54,  dmg: 22, r: 16, xp: 5, col: '#c8a1ff', from: 3, w: 6, zone: 3.4 },
+  { id: 'swarm',  nm: 'Swarmer',       hp: 13,  spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
+  { id: 'leech',  nm: 'Leech',         hp: 54,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
+  { id: 'blob',   nm: 'Amoeboid',      hp: 185, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
+  { id: 'prion',  nm: 'Prion',         hp: 100, spd: 72,  dmg: 14, r: 16, xp: 7, col: '#ff4d6d', from: 8, w: 6, armor: 4 },
+  { id: 'macro',  nm: 'Rogue Macrophage', hp: 350, spd: 54, dmg: 22, r: 34, xp: 18, col: '#ff8a3d', from: 9, w: 3, charge: 1, heavy: 1 },
 ];
 const EDEF = {}; for (const e of ENEMIES) EDEF[e.id] = e;
 
@@ -658,12 +658,17 @@ const STAGES = [
 const DIFFS = [
   { id: 'std', nm: 'Standard', ic: '🧫', ds: 'The dish as designed.',
     hp: 1, dmg: 1, rate: 1, dna: 1 },
-  { id: 'vir', nm: 'Virulent', ic: '🔥', ds: '+45% pathogen health, +25% damage, thicker spawns. ×1.6 DNA',
+  { id: 'vir', nm: 'Virulent', ic: '🔥', ds: 'Up to +45% pathogen health and +25% damage, thicker spawns. ×1.6 DNA',
     hp: 1.45, dmg: 1.25, rate: 1.22, dna: 1.6 },
-  { id: 'let', nm: 'Lethal',   ic: '☠️', ds: 'Double health, +55% damage, relentless spawns. ×2.5 DNA',
+  { id: 'let', nm: 'Lethal',   ic: '☠️', ds: 'Up to double health and +55% damage, relentless spawns. ×2.5 DNA',
     hp: 2.1, dmg: 1.55, rate: 1.45, dna: 2.5 },
 ];
 const curDiff = () => DIFFS.find(d => d.id === meta.diff) || DIFFS[0];
+// Harder cultures ramp their bonus in over the opening stages — a flat +45%
+// health from second one just gates the first minute instead of testing you.
+const diffRamp = () => Math.min(1, .4 + prog() * .11);
+const diffHp  = () => 1 + (curDiff().hp  - 1) * diffRamp();
+const diffDmg = () => 1 + (curDiff().dmg - 1) * diffRamp();
 
 const STAGE_NOMINAL = 90;      // assumed length of a non-timed stage, for pacing
 const objText = st => {
@@ -758,7 +763,7 @@ const G = {
 let P = null;
 let uid = 1;
 
-const xpNeed = l => Math.floor(8 + 5 * l + l * l * .35);
+const xpNeed = l => Math.floor(10 + 6 * l + l * l * .6);
 
 function makePlayer(spec){
   const p = {
@@ -1014,8 +1019,8 @@ function prog(){
   const span = st.obj.t === 'survive' ? st.obj.n : STAGE_NOMINAL;
   return G.stage + clamp(G.stageT / span, 0, 1);
 }
-const hpMul  = () => { const q = prog(), m = smod(); return (1 + .30 * q + .075 * q * q) * ((m && m.hp) || 1) * curDiff().hp; };
-const dmgMul = () => { const q = prog(), m = smod(); return (1 + .16 * q) * ((m && m.dmg) || 1) * curDiff().dmg; };
+const hpMul  = () => { const q = prog(), m = smod(); return (1 + .30 * q + .075 * q * q) * ((m && m.hp) || 1) * diffHp(); };
+const dmgMul = () => { const q = prog(), m = smod(); return (1 + .16 * q) * ((m && m.dmg) || 1) * diffDmg(); };
 const spdMul = () => { const q = prog(), m = smod(); return (1 + .022 * q) * ((m && m.spd) || 1); };
 const spawnRate = () => {
   const q = prog(), m = smod();
@@ -1684,7 +1689,7 @@ function rollChoices(){
     // rarity = how many levels the card hands you at once
     let rar = 0;
     const luck = P.s.luck;
-    if (rnd() < .1 * luck) rar = 2; else if (rnd() < .26 * luck) rar = 1;
+    if (rnd() < .06 * luck) rar = 2; else if (rnd() < .18 * luck) rar = 1;
     const maxL = c.t === 'w' ? WEP_MAX : PAS_MAX;
     while (lv + rar + 1 > maxL && rar > 0) rar--;
     out.push({ t: c.t, id: c.id, rar, nm: D.nm, ic: D.ic, ds: D.ds,
@@ -1756,7 +1761,8 @@ function beginStage(){
   G.bossDown = 0; G.grace = 2.6; G.spawnAcc = 0;
   G.eliteT = st.obj.t === 'elite' ? 999 : 48;
   G.surgeT = 26;
-  G.eproj.length = 0;
+  G.eproj.length = 0; G.zones.length = 0;
+  P.iT = Math.max(P.iT, 1.4);   // you resume inside whatever you didn't kill; don't get chewed on frame one
   if (st.boss !== undefined) spawnBoss(st.boss);
   toast('STAGE ' + (G.stage + 1) + ' · ' + st.nm.toUpperCase(), 2.6);
   toast('🎯 ' + objText(st), 3.2);
@@ -1792,9 +1798,20 @@ function rollRewards(){
 }
 function clearStage(){
   if (G.state !== 'play') return;
-  // everything left on the board dissolves — and still pays out
-  for (const e of G.en.slice()) if (!e.boss) killEnemy(e);
-  G.eproj.length = 0;
+  // A pressure wave scatters the culture — nothing dies for free, and no
+  // free pile of biomass lands in your lap. What you didn't kill is still
+  // out there when the next stage starts.
+  G.waves.push({ x: P.x, y: P.y, r: 40, max: 900, life: .7, t: 0, col: '#9dff6d', hits: [] });
+  for (let i = G.en.length - 1; i >= 0; i--){
+    const e = G.en[i];
+    if (e.boss) continue;
+    const dx = e.x - P.x, dy = e.y - P.y, d = len(dx, dy);
+    if (d > Math.max(G.vw, G.vh) * .95){ G.en.splice(i, 1); continue; }  // offscreen stragglers wander off
+    const kb = 520 * (1 - clamp(d / 900, 0, 1));
+    e.vx += dx / d * kb; e.vy += dy / d * kb;
+    e.slow = Math.max(e.slow, .5); e.slowT = Math.max(e.slowT, 3);
+  }
+  G.eproj.length = 0; G.zones.length = 0;
   G.stageDna = Math.round((30 + G.stage * 14) * P.s.dnaM);
   G.dna += G.stageDna;
   if (stage().last){ endRun(true); return; }   // clearing stage 12 is the win
@@ -2813,7 +2830,7 @@ window.CS = {
   tryDash, tryUlt, nuke, dropOrb, collect, openChest, infect, chain, wave, boom, addPool, shoot,
   loadMeta, saveMeta, buyUp, up, freshMeta, specUnlocked, setMeta(m){ meta = m; },
   input, reseed, rnd, hpMul, dmgMul, spawnRate, nearest, nearList, fmtT, fmtN, playerDown, updatePlayer, crowdMul,
-  DIFFS, curDiff,
+  DIFFS, curDiff, diffHp, diffDmg,
   hudTick, syncUI, show, toast, sfx, SAVE_KEY,
 };
 
