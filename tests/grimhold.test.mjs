@@ -948,6 +948,57 @@ t.test('objectives: a collect quest counts every strongbox', () => {
   t.ok(HQ.objectiveReady(), 'three of three');
 });
 
+t.test('rescue: the prisoner you are escorting never seals you in', () => {
+  // Reported: freed the prisoner in a one-wide corridor, and could not get
+  // back past them. The way out must never be blocked by the person you came
+  // down here to save.
+  fresh(1);
+  const h = use(hero('barbarian'));
+  const npc = HQ.G.q.actors.find(a => a.kind === 'npc');
+  for (const o of HQ.heroes()) if (o !== h){ o.x = 1; o.y = 1; }
+  put(h, 8, 12);
+  npc.x = 8; npc.y = 13; npc.follow = h.id;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1); HQ.recomputeVision();
+  h.rolled = true; h.moveLeft = 5;
+  HQ.refreshField();
+
+  t.ok(HQ.bodyPassable(h, npc), 'a hero may squeeze past the prisoner');
+  t.ok(!HQ.bodyPassable(HQ.monstersOf()[0], npc), 'a monster may not');
+  t.ok(!HQ.G.q.field.d.has(HQ.idx(8, 13)), 'you still cannot stand on them');
+  t.ok(HQ.G.q.field.d.has(HQ.idx(8, 14)), 'but the square beyond them is reachable');
+  t.ok(HQ.G.q.field.d.has(HQ.idx(8, 15)), 'and so is the one after that');
+
+  HQ.tapTile(8, 15);
+  t.eq([h.x, h.y].join(), '8,15', 'the hero walks out past them');
+  t.eq([npc.x, npc.y].join(), '8,14', 'and the prisoner ends up right behind, not left behind');
+
+  // and all the way to the stair, which is what the quest actually needs
+  h.rolled = true; h.moveLeft = 4; HQ.refreshField();
+  HQ.G.q.npcFreed = true; HQ.G.q.carrier = h.id;
+  HQ.tapTile(HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  t.ok(HQ.onStairs(h), 'and reaches the stair');
+  t.eq(HQ.G.q.over, 1, 'which finishes the rescue');
+});
+
+t.test('rescue: a hero is never left with nowhere to go because of a friendly', () => {
+  fresh(1);
+  const h = use(hero('barbarian'));
+  const npc = HQ.G.q.actors.find(a => a.kind === 'npc');
+  const others = HQ.heroes().filter(o => o !== h);
+  // the worst case: dead end, prisoner behind you, companions behind them
+  put(h, 8, 17);
+  npc.x = 8; npc.y = 16; npc.follow = h.id;
+  others[0].x = 8; others[0].y = 15;
+  others[1].x = 8; others[1].y = 14;
+  others[2].x = 1; others[2].y = 1;
+  HQ.G.q.seen.fill(1); HQ.recomputeVision();
+  h.rolled = true; h.moveLeft = 6;
+  HQ.refreshField();
+  const reach = [...HQ.G.q.field.d.entries()].filter(([, c]) => c > 0);
+  t.ok(reach.length > 0, 'there is somewhere to go');
+  t.ok(HQ.G.q.field.d.has(HQ.idx(8, 13)), 'straight up the corridor past all of them');
+});
+
 t.test('objectives: a rescue needs the prisoner freed and the stair reached', () => {
   fresh(1);
   const h = hero('barbarian');
