@@ -204,7 +204,8 @@
 <div class="screen on" id="scTitle">
   <h1>GRIMHOLD</h1>
   <div class="sub">Quest of the Four</div>
-  <button class="btn big" id="btnPlay">Enter the Keep</button>
+  <button class="btn big" id="btnDescend">The Descent</button>
+  <button class="btn" id="btnPlay">Quest Book</button>
   <button class="btn ghost" id="btnContinue">Continue</button>
   <button class="btn ghost" id="btnHow">How to Play</button>
   <div class="foot">A dungeon board game · tap to move</div>
@@ -725,9 +726,15 @@ const weaponOf = (h) => WEAPONS[h.weapon] || WEAPONS.fists;
 function attackDice(h, target){
   const w = weaponOf(h);
   let n = w.dice;
-  if (h.quests && h.quests.includes("Orc's Bane")) { /* carried, not wielded */ }
   if (w.name === "Orc's Bane" && target && (target.mt==='orc'||target.mt==='goblin')) n += 1;
   if (h.buffs && h.buffs.courage) n += 2;
+  if (target){
+    const def = MONSTERS[target.mt];
+    if (boonHas('banegreen') && (target.mt === 'orc' || target.mt === 'goblin')) n += 1;
+    if (boonHas('keeneye') && def && def.undead) n += 1;
+    if (boonHas('executioner') && target.bp <= 1) n += 2;
+  }
+  if (boonHas('bloodprice')) n += 2;
   return n;
 }
 function defendDice(h){
@@ -735,6 +742,7 @@ function defendDice(h){
   if (h.armour && ARMOURS[h.armour]) n += ARMOURS[h.armour].def;
   for (const g in h.gear) if (h.gear[g] && GEAR[g] && GEAR[g].def) n += GEAR[g].def;
   if (h.buffs && h.buffs.rockskin) n += 2;
+  if (boonHas('ironskin')) n += 1;
   return n;
 }
 function moveSlow(h){
@@ -746,11 +754,17 @@ const heroes = () => G.q.actors.filter(a => a.kind === 'hero');
 const livingHeroes = () => G.q.actors.filter(a => a.kind === 'hero' && a.alive);
 const monstersOf = () => G.q.actors.filter(a => a.kind === 'monster' && a.alive);
 
-function startQuest(qi){
-  const q = QUESTS[qi];
-  const R = mkRng(9001 + qi*7717);
+// The quest being played and the heroes playing it. Descent mode generates its
+// quests on the spot and fields its own roster, so nothing may assume the
+// campaign's arrays.
+const questDef = () => (G.q && G.q.def) || QUESTS[G.q.qi];
+const partyHeroes = () => (G.run ? G.run.heroes : G.camp.heroes);
+
+function startQuest(qi, def, seed){
+  const q = def || QUESTS[qi];
+  const R = mkRng(seed === undefined ? 9001 + qi*7717 : seed);
   const Q = {
-    qi, turn:1, phase:'hero', over:0, actors:[], furn:[], doors:{}, traps:[],
+    qi, def:q, turn:1, phase:'hero', over:0, actors:[], furn:[], doors:{}, traps:[],
     seen: new Array(W*H).fill(0), roomSeen: new Array(ROOMS.length).fill(0),
     searched: new Array(ROOMS.length).fill(0), trapSearched: new Array(ROOMS.length).fill(0),
     deck: TREASURE_DECK.map((_,i)=>i), deckAt:0,
@@ -805,10 +819,12 @@ function startQuest(qi){
   // --- the party ---------------------------------------------------------
   // The barbarian takes the front of the stair and the wizard the back, so the
   // hero who acts first always has open corridor in front of him.
-  G.camp.heroes.forEach((h, i) => {
+  partyHeroes().forEach((h, i) => {
     const spot = STAIRS[STAIRS.length - 1 - i] || STAIRS[0];
     h.x = spot[0]; h.y = spot[1];
-    h.alive = h.bp > 0; h.bp = h.bpMax; h.mp = h.mpMax;
+    if (G.run){ h.alive = h.bp > 0; }              // Descent: they stay as they fell
+    else { h.alive = true; h.bp = h.bpMax; }
+    h.mp = h.mpMax;
     h.moveLeft = 0; h.rolled = false; h.acted = false; h.done = false;
     h.spent = []; h.buffs = {}; h.quests = []; h.facing = 1; h.kind = 'hero';
     Q.actors.push(h);
@@ -890,6 +906,12 @@ function freeTile(rid, R){
 // comes off when the door opens. In a corridor you see as far as your torch
 // throws and no further.
 const TORCH = 7;
+function torchRadius(){
+  let r = TORCH;
+  if (boonHas('torchbearer')) r += 3;
+  if (modHas('dark')) r = Math.max(2, r - 4);
+  return r;
+}
 
 function recomputeVision(){
   const Q = G.q;
@@ -905,10 +927,11 @@ function recomputeVision(){
         if (d.rid === rid && d.open) vis[idx(d.cx,d.cy)] = 1;
       }
     } else {
-      for (let y = Math.max(0,h.y-TORCH); y <= Math.min(H-1,h.y+TORCH); y++)
-        for (let x = Math.max(0,h.x-TORCH); x <= Math.min(W-1,h.x+TORCH); x++){
+      const RAD = torchRadius();
+      for (let y = Math.max(0,h.y-RAD); y <= Math.min(H-1,h.y+RAD); y++)
+        for (let x = Math.max(0,h.x-RAD); x <= Math.min(W-1,h.x+RAD); x++){
           if (!isFloor(x,y)) continue;
-          if (dist2(x,y,h.x,h.y) > TORCH + 2) continue;
+          if (dist2(x,y,h.x,h.y) > RAD + 2) continue;
           if (roomAt(x,y) >= 0 && !Q.roomSeen[roomAt(x,y)]) continue;
           if (hasLOS(h.x,h.y,x,y)) vis[idx(x,y)] = 1;
         }
@@ -2423,7 +2446,8 @@ function viewBox(){
 function camApply(g){
   const v = viewBox();
   g.translate(v.x + v.w/2, v.y + v.h/2);
-  g.scale(G.cam.z, G.cam.z);
+  const punch = G.cam.z * (1 + (G.camPunch || 0)*0.10);
+  g.scale(punch, punch);
   g.translate(-G.cam.x, -G.cam.y);
 }
 function worldOf(sx, sy){
@@ -2440,6 +2464,13 @@ function clampCam(){
   const mw = W*TS, mh = H*TS;
   G.cam.x = mw < halfW*2 ? mw/2 : clamp(G.cam.x, halfW - TS*.6, mw - halfW + TS*.6);
   G.cam.y = mh < halfH*2 ? mh/2 : clamp(G.cam.y, halfH - TS*.6, mh - halfH + TS*.6);
+}
+// A door opening is the game's biggest beat; the camera should lean into it.
+function pushIn(rid){
+  if (rid < 0 || rid === undefined) return;
+  const r = ROOMS[rid];
+  focusOn(r.x + (r.w-1)/2, r.y + (r.h-1)/2);
+  G.camPunch = 1;
 }
 function focusOn(x, y, snap){
   const tx = (x+.5)*TS, ty = (y+.5)*TS;
@@ -2582,10 +2613,14 @@ function drawActor(g, a, t){
   const u = TS * (a.kind === 'hero' ? .96 : (MONSTERS[a.mt] ? MONSTERS[a.mt].size : .9));
   const bob = a.walking ? Math.abs(Math.sin(t*.016))*TS*.05 : Math.sin(t*.0022 + (a.bob||0))*TS*.014;
   g.save();
-  g.translate(px, py - bob);
+  const lk = a.lt > 0 ? Math.sin(a.lt*Math.PI) : 0;
+  g.translate(px + (a.lx||0)*lk*TS*.34, py - bob + (a.ly||0)*lk*TS*.34);
   if (a.deathT !== undefined && a.deathT > 0){
-    const k = a.deathT/600;
-    g.globalAlpha = k; g.scale(1 + (1-k)*.3, 1 - (1-k)*.5); g.rotate((1-k)*.7);
+    const k = a.deathT/620;
+    g.globalAlpha = k*k;                       // going up in ash
+    g.translate(0, -(1-k)*TS*.30);
+    g.scale(1 + (1-k)*.20, 1 + (1-k)*.12);
+    g.rotate((1-k)*.35);
   }
   g.save();
   g.shadowColor = 'rgba(0,0,0,.62)'; g.shadowBlur = u*.10; g.shadowOffsetY = u*.035;
@@ -2787,6 +2822,18 @@ function drawVignette(g){
   const gr = g.createRadialGradient(cw/2, ch*.46, Math.min(cw,ch)*.28, cw/2, ch*.46, Math.max(cw,ch)*.78);
   gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(0,0,0,.72)');
   g.fillStyle = gr; g.fillRect(0,0,cw,ch);
+  // somebody is nearly gone: the edges of the world start beating
+  if (G && G.q){
+    const worst = livingHeroes().reduce((w, h) => Math.min(w, h.bp/h.bpMax), 9);
+    if (worst <= .34){
+      const beat = .5 + Math.sin(TT0*.006)*.5;
+      const a = (1 - worst/.34)*(.16 + beat*.20);
+      const rg = g.createRadialGradient(cw/2, ch*.46, Math.min(cw,ch)*.22, cw/2, ch*.46, Math.max(cw,ch)*.72);
+      rg.addColorStop(0,'rgba(120,10,6,0)');
+      rg.addColorStop(1, `rgba(140,12,8,${a.toFixed(3)})`);
+      g.fillStyle = rg; g.fillRect(0,0,cw,ch);
+    }
+  }
   if (grainCan){
     g.save(); g.globalAlpha = .045; g.globalCompositeOperation = 'overlay';
     const ox = (Math.random()*96)|0, oy = (Math.random()*96)|0;
@@ -2808,16 +2855,19 @@ function spark(x, y, n, col, opt){
   opt = opt || {};
   for (let i=0;i<n;i++){
     const a = Math.random()*6.284, s = (opt.spd || .012)*(.4 + Math.random());
+    const d = opt.dir;
     G.fx.push({
       x:x+.5 + (Math.random()-.5)*.3, y:y+.5 + (Math.random()-.5)*.3,
-      vx:Math.cos(a)*s, vy:Math.sin(a)*s - (opt.up||0),
+      vx:Math.cos(a)*s*(d?.45:1) + (d ? d[0]*s*1.7 : 0),
+      vy:Math.sin(a)*s*(d?.45:1) + (d ? d[1]*s*1.7 : 0) - (opt.up||0),
       life:opt.life || 520, max:opt.life || 520, col, size:opt.size || 3,
       grav:opt.grav === undefined ? .00004 : opt.grav, glow:opt.glow, r:opt.r || .8,
     });
   }
 }
-function floatText(x, y, text, col){
-  G.fx.push({ x:x+.5, y:y+.2, vx:0, vy:-.0016, life:1000, max:1000, text, col, size:0, grav:0 });
+function floatText(x, y, text, col, big){
+  G.fx.push({ x:x+.5, y:y+.2, vx:(Math.random()-.5)*.0006, vy:-.0019,
+              life:1050, max:1050, text, col, size:0, grav:.0000009, big:big?1:0 });
 }
 function drawParticles(g, t){
   for (const p of G.fx){
@@ -2825,7 +2875,9 @@ function drawParticles(g, t){
     if (p.text){
       g.save();
       g.globalAlpha = Math.min(1, k*1.6);
-      g.font = `700 ${TS*.42}px Georgia,serif`;
+      const pop = 1 + Math.max(0, (k - .82))*2.4;         // a punch as it appears
+      g.translate(p.x*TS, p.y*TS); g.scale(pop, pop); g.translate(-p.x*TS, -p.y*TS);
+      g.font = `700 ${TS*(p.big ? .58 : .42)}px Georgia,serif`;
       g.textAlign = 'center'; g.textBaseline = 'middle';
       g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.8)';
       g.strokeText(p.text, p.x*TS, p.y*TS);
@@ -2964,10 +3016,18 @@ function setMood(m){
 // One timer list drives all pacing. In headless the callback fires at once, so
 // the tests walk the same code path the game does, only instantly.
 function later(ms, fn){
-  if (HEADLESS){ fn(); return; }
-  G.timers.push({ t:ms, fn });
+  if (HEADLESS){ fn(); return null; }
+  const T = { t:ms, fn };
+  G.timers.push(T);
+  return T;
 }
-function clearTimers(){ if (G) G.timers.length = 0; }
+// A blow lands better if the world stops for a tenth of a second.
+function hitStop(ms){ if (!HEADLESS) G.freeze = Math.max(G.freeze || 0, ms); }
+function lungeAt(a, tx, ty){
+  const dx = tx - a.x, dy = ty - a.y, d = Math.hypot(dx, dy) || 1;
+  a.lx = dx/d; a.ly = dy/d; a.lt = 1;
+}
+function clearTimers(){ if (G){ G.timers.length = 0; G.timerGen = (G.timerGen || 0) + 1; } }
 
 const SKULL = 0, WHITE = 1, BLACK = 2;
 function combatDie(){ const r = ri(6); return r < 3 ? SKULL : r < 5 ? WHITE : BLACK; }
@@ -2984,13 +3044,13 @@ function showDice(kind, atk, def, label, sub, done){
   const total = base + items.length*per + 520;
   G.dice = { kind, items, t:0, total, label, sub };
   sfx('dice');
-  later(total, () => { G.dice = null; if (done) done(); });
+  G.dice.timer = later(total, () => { G.dice = null; if (done) done(); });
 }
 function showMoveDice(a, b, done){
   G.dice = { kind:'move', items:[{side:'pip',face:a,settle:380},{side:'pip',face:b,settle:470}],
              t:0, total:1150, label:'MOVEMENT', sub:(a+b)+' squares' };
   sfx('dice');
-  later(1150, () => { G.dice = null; if (done) done(); });
+  G.dice.timer = later(1150, () => { G.dice = null; if (done) done(); });
 }
 
 function drawDice(g, t){
@@ -3281,17 +3341,28 @@ function doAttack(h, m){
   const immune = m.spirit && !weaponOf(h).spirit;
   let dmg = Math.max(0, skulls - blocks);
   if (immune) dmg = 0;
+  const savage = n >= 2 && skulls === n && !immune && dmg > 0;
   const sub = immune ? 'The blow passes through him'
+            : savage ? `SAVAGE — ${dmg} Body Point${dmg>1?'s':''}`
             : dmg > 0 ? `${dmg} Body Point${dmg>1?'s':''}` : 'Turned aside';
   if (h.buffs.courage) delete h.buffs.courage;
   showDice('attack', atk, def, `${h.name} vs ${m.name}`, sub, () => {
+    lungeAt(h, m.x, m.y);
+    const dir = [Math.sign(m.x - h.x), Math.sign(m.y - h.y)];
     if (immune){
       say(`Your steel passes through ${m.name} like smoke. Only the Spirit Blade will bite.`, 'magic');
       spark(m.x, m.y, 14, '#9a86e0', { glow:'rgba(154,134,224,.4)', r:1.2 });
       sfx('block');
     } else if (dmg > 0){
-      sfx('hit'); G.shake = 7 + dmg*3;
+      sfx('hit');
+      G.shake = (savage ? 16 : 7) + dmg*3;
+      hitStop(savage ? 150 : 70);
       m.sleep = 0;
+      spark(m.x, m.y, savage ? 22 : 12, '#a01d14', { spd:.026, dir, up:.002, life:640 });
+      if (savage){
+        banner('SAVAGE', `${h.name} opens up the ${m.name}`);
+        spark(m.x, m.y, 16, '#ffd07a', { spd:.03, dir, glow:'rgba(255,190,90,.45)', r:1.6, life:700 });
+      }
       hurt(m, dmg, null);
     } else {
       sfx('block');
@@ -3316,7 +3387,13 @@ function monsterAttack(m, h, done){
   const dmg = Math.max(0, skulls - blocks);
   const sub = dmg > 0 ? `${h.name} loses ${dmg}` : `${h.name} holds`;
   showDice('defend', atk, def, `${m.name} vs ${h.name}`, sub, () => {
-    if (dmg > 0){ sfx('hit'); G.shake = 8 + dmg*3; hurt(h, dmg, null); }
+    lungeAt(m, h.x, h.y);
+    if (dmg > 0){
+      sfx('hit'); G.shake = 8 + dmg*3; hitStop(60 + dmg*24);
+      spark(h.x, h.y, 10 + dmg*4, '#a01d14',
+            { spd:.024, dir:[Math.sign(h.x-m.x), Math.sign(h.y-m.y)], life:640 });
+      hurt(h, dmg, null);
+    }
     else { sfx('block'); spark(h.x, h.y, 8, '#dfe4ea', { spd:.012 }); }
     renderHUD();
     later(220, done);
@@ -3326,7 +3403,13 @@ function monsterAttack(m, h, done){
 function hurt(a, n, done){
   a.bp -= n;
   a.hurtT = 280;
-  floatText(a.x, a.y, '−' + n, a.kind === 'hero' ? '#ff7a6a' : '#ffd06a');
+  if (a.bp <= 0 && a.kind === 'hero' && boonHas('secondwind') && !G.q.secondWindUsed){
+    G.q.secondWindUsed = 1; a.bp = 1;
+    say(`${a.name} should be dead — and is not. Second wind.`, 'good');
+    spark(a.x, a.y, 26, '#f3d488', { spd:.02, up:.005, glow:'rgba(243,212,136,.5)', r:1.8 });
+    sfx('heal');
+  }
+  floatText(a.x, a.y, '−' + n, a.kind === 'hero' ? '#ff7a6a' : '#ffd06a', n >= 3);
   spark(a.x, a.y, 10 + n*4, a.kind === 'hero' ? '#c0392b' : '#8a1f1f', { spd:.016, up:.004 });
   if (a.bp <= 0){ kill(a); }
   renderHUD();
@@ -3338,7 +3421,15 @@ function kill(a){
     sfx('die');
     G.q.pot = (G.q.pot || 0) + (MONSTERS[a.mt] ? MONSTERS[a.mt].gold : 10);
     spark(a.x, a.y, 24, '#6a1f14', { spd:.02, up:.003 });
+    spark(a.x, a.y, 18, '#ffb457', { spd:.007, up:.012, life:1000, grav:-.000012,
+                                     glow:'rgba(255,170,80,.28)', r:.9 });
+    hitStop(60);
     say(`${a.name} falls.`, 'good');
+    G.q.kills = (G.q.kills || 0) + 1;
+    if (boonHas('vampiric')){
+      const near = livingHeroes().sort((p,q2) => dist2(p.x,p.y,a.x,a.y) - dist2(q2.x,q2.y,a.x,a.y))[0];
+      if (near && near.bp < near.bpMax){ near.bp++; floatText(near.x, near.y, '+1', '#7de8a0'); }
+    }
     if (a.boss){
       G.q.bossDead = true;
       sfx('boss'); G.shake = 26;
@@ -3370,7 +3461,7 @@ function beginHeroActivation(h){
   focusOn(h.x, h.y);
   if (!h.rolled){
     const a = 1+ri(6), b = 1+ri(6);
-    const total = Math.max(1, a + b - moveSlow(h));
+    const total = Math.max(1, a + b - moveSlow(h) + (boonHas('swiftboots') ? 1 : 0));
     showMoveDice(a, b, () => {
       h.rolled = true; h.moveLeft = total;
       refreshField(); renderHUD();
@@ -3475,7 +3566,14 @@ function monsterAct(m, done){
 function endZargonTurn(){
   if (G.q.over) return;
   G.q.turn++;
-  const q = QUESTS[G.q.qi];
+  if (modHas('hunted') && G.q.turn % 4 === 0){
+    const hs = livingHeroes();
+    if (hs.length){
+      say('Something new comes down the corridor. The Warlock is watching.', 'bad');
+      spawnWanderer(hs[ri(hs.length)]);
+    }
+  }
+  const q = questDef();
   if (q.turnLimit && G.q.turn > q.turnLimit){ questOver(false, 'The working completes. Grimhold seals itself with you inside.'); return; }
   G.q.phase = 'hero';
   for (const h of heroes()){
@@ -3497,10 +3595,14 @@ function openDoorAt(h, d){
   d.open = true;
   sfx('door');
   say('The door swings open.', '');
+  if (boonHas('doorward')){
+    for (const x of livingHeroes()) if (x.bp < x.bpMax){ x.bp++; floatText(x.x, x.y, '+1', '#7de8a0'); }
+  }
+  pushIn(d.rid);
   revealRoom(d.rid);
   recomputeVision();
   refreshField();
-  const q = QUESTS[G.q.qi];
+  const q = questDef();
   const room = ROOMS[d.rid];
   if (!G.q.announced) G.q.announced = {};
   if (!G.q.announced[d.rid]){
@@ -3539,8 +3641,12 @@ function searchTreasure(){
 }
 function applyTreasure(card, h){
   if (card.k === 'gold'){
-    G.q.pot = (G.q.pot || 0) + card.n;
-    sfx('gold'); floatText(h.x, h.y, '+' + card.n, '#f3d488');
+    let n = card.n;
+    if (boonHas('luckyfind')) n = Math.round(n*1.5);
+    if (modHas('wealthy')) n *= 2;
+    card = Object.assign({}, card, { n });
+    G.q.pot = (G.q.pot || 0) + n;
+    sfx('gold'); floatText(h.x, h.y, '+' + n, '#f3d488');
     spark(h.x, h.y, 16, '#d8a83c', { spd:.014, up:.004 });
     say(`${card.t}: ${card.d}`, 'good');
   } else if (card.k === 'item'){
@@ -3550,8 +3656,12 @@ function applyTreasure(card, h){
     say(`${card.t}! ${card.d}`, 'bad');
     hurt(h, card.n, null);
   } else if (card.k === 'wander'){
-    say(`${card.t} — ${card.d}`, 'bad');
-    spawnWanderer(h);
+    if (boonHas('quietstep')){
+      say('Something stirs in the dark — and settles again. You were quiet enough.', 'good');
+    } else {
+      say(`${card.t} — ${card.d}`, 'bad');
+      spawnWanderer(h);
+    }
   } else {
     say(`${card.t}. ${card.d}`, '');
   }
@@ -3564,6 +3674,18 @@ function spawnWanderer(h){
   for (const [dx,dy] of DIRS8){
     const x = h.x+dx, y = h.y+dy;
     if (isFloor(x,y) && !blocked(x,y) && linked(h.x,h.y,x,y)) spots.push([x,y]);
+  }
+  if (!spots.length){
+    // boxed in — widen the search so the Warlock's reinforcements always land
+    for (let r = 2; r <= 6 && !spots.length; r++){
+      for (let dy=-r; dy<=r; dy++) for (let dx=-r; dx<=r; dx++){
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const x = h.x+dx, y = h.y+dy;
+        if (!isFloor(x,y) || blocked(x,y) || trapBlocks(x,y)) continue;
+        if (roomAt(x,y) !== roomAt(h.x,h.y)) continue;      // same side of the walls
+        spots.push([x,y]);
+      }
+    }
   }
   if (!spots.length) return;
   const [x,y] = pick(spots);
@@ -3671,7 +3793,9 @@ function spellReady(h, key){ return knownSpells(h).includes(key) && !h.spent.inc
 function castSpell(h, key, target){
   if (!spellReady(h, key) || h.acted) return false;
   const sp = SPELLS[key];
-  h.acted = true; h.spent.push(key);
+  h.acted = true;
+  if (boonHas('spellecho') && !h.echoed){ h.echoed = 1; say(`The weave holds — ${sp.name} is not spent.`, 'magic'); }
+  else h.spent.push(key);
   sfx('spell');
   const el = ELEMENTS[sp.el];
   spark(h.x, h.y, 22, el.col, { spd:.016, up:.004, glow:hexA(el.col, .4) });
@@ -3749,16 +3873,17 @@ function giveQuestItem(name, h){
   renderHUD(); checkQuestState();
 }
 function objectiveReady(){
-  const o = QUESTS[G.q.qi].objective;
+  const o = questDef().objective;
   if (o.type === 'slay') return G.q.bossDead;
   if (o.type === 'fetch') return G.q.itemsFound.includes(o.item);
   if (o.type === 'collect') return G.q.collected >= o.count;
   if (o.type === 'rescue') return G.q.npcFreed;
   if (o.type === 'fetchslay') return G.q.itemsFound.includes(o.item) && G.q.bossDead;
+  if (o.type === 'clear') return !monstersOf().length;
   return false;
 }
 function needsEscape(){
-  const t = QUESTS[G.q.qi].objective.type;
+  const t = questDef().objective.type;
   return t === 'fetch' || t === 'collect' || t === 'rescue';
 }
 function onStairs(h){ return STAIRS.some(s => s[0]===h.x && s[1]===h.y); }
@@ -3783,7 +3908,7 @@ function questOver(won, why){
   clearTimers(); G.dice = null;
   sfx(won ? 'win' : 'lose');
   setMood('explore');
-  later(HEADLESS ? 0 : 700, () => showQuestEnd(won, why));
+  later(HEADLESS ? 0 : 700, () => (G.run ? descentFloorEnd(won, why) : showQuestEnd(won, why)));
 }
 
 function banner(a, b){
@@ -3820,17 +3945,21 @@ function heroPortrait(id, w, h){
 
 function renderHUD(){
   if (HEADLESS || !G || !G.q) return;
-  const q = QUESTS[G.q.qi];
-  $('qname').innerHTML = `${q.name}<b>${q.sub}</b>`;
-  $('goldn').textContent = G.camp.gold + (G.q.pot ? ' +' + G.q.pot : '');
+  const q = questDef();
+  const mods = (q.mods || []).map(m => MOD(m).ic).join('');
+  $('qname').innerHTML = `${q.name}${mods ? ' ' + mods : ''}<b>${q.sub}${
+    G.run && G.run.boons.length ? ' · ' + G.run.boons.map(b => BOON(b).ic).join('') : ''}</b>`;
+  $('goldn').textContent = (G.run ? G.run.gold : G.camp.gold) + (G.q.pot ? ' +' + G.q.pot : '');
   $('turnn').textContent = G.q.turn + (q.turnLimit ? '/' + q.turnLimit : '');
   $('turnpill').classList.toggle('gold', !!q.turnLimit && G.q.turn > q.turnLimit - 6);
 
   // --- party ------------------------------------------------------------
   const party = $('party');
-  if (party.children.length !== G.camp.heroes.length){
+  const roster = partyHeroes();
+  if (party.children.length !== roster.length || party._for !== roster.map(h=>h.id).join()){
+    party._for = roster.map(h=>h.id).join();
     party.innerHTML = '';
-    for (const h of G.camp.heroes){
+    for (const h of roster){
       const c = document.createElement('div');
       c.className = 'hcard'; c.dataset.id = h.id;
       c.innerHTML = `<div class="top"><span class="st"></span><span class="nm">${h.name}</span><span class="num"></span></div>
@@ -3845,7 +3974,8 @@ function renderHUD(){
     }
   }
   [...party.children].forEach(c => {
-    const h = G.camp.heroes.find(x => x.id === c.dataset.id);
+    const h = roster.find(x => x.id === c.dataset.id);
+    if (!h) return;
     c.classList.toggle('act', G.q.activeId === h.id && G.q.phase === 'hero');
     c.classList.toggle('done', h.done && h.alive);
     c.classList.toggle('dead', !h.alive);
@@ -4037,7 +4167,7 @@ function openPack(){
 /* ----------------------------------------------------------- quest ending */
 
 function showQuestEnd(won, why){
-  const q = QUESTS[G.q.qi];
+  const q = questDef();
   const pot = G.q.pot || 0;
   const bonus = won ? q.reward : 0;
   const total = pot + bonus;
@@ -4202,6 +4332,7 @@ function showHow(){
     <p><b>Fighting.</b> Tap a monster you can reach. Combat dice show three <b>skulls</b>, two white shields and one black shield. Skulls that the defender does not shield become lost Body Points.</p>
     <p><b>Searching.</b> Ransack a room once for treasure — but only with no monster in it, and the deck holds poison and wandering monsters as well as coin. Hunting for traps reveals traps <i>and</i> hidden doors nearby.</p>
     <p><b>Dying.</b> A hero at zero Body Points is out for the rest of the quest. Between quests everyone recovers, and the gold you carried out stays yours.</p>
+    <p><b>The Descent.</b> The endless mode. Each floor rolls its own objective, garrison and hazards, and a hero who falls is gone for the whole run. Between floors you draft one boon and may buy from the pedlar on the stair. However deep you get, you carry Mentor's Favour back out and spend it on things that last.</p>
     <div class="rule"></div>
     <div style="text-align:center"><button class="btn" id="mClose">Understood</button></div>`);
   bindModal('#mClose', () => { closeModal(); showTitle(); });
@@ -4218,6 +4349,7 @@ function showTitle(){
 /* ------------------------------------------------------------ 11. LAUNCH */
 
 function launchQuest(qi){
+  G.run = null;
   clearTimers();
   G.fx = []; G.dice = null; G.aim = null; G.shake = 0;
   G.cam = { x:0, y:0, z:1, tx:null, ty:null };
@@ -4289,6 +4421,7 @@ function bindInput(){
     clampCam();
   }, { passive:false });
 
+  $('btnDescend').addEventListener('click', () => { audioInit(); $('scTitle').classList.remove('on'); showDescentSetup(); });
   $('btnPlay').addEventListener('click', () => { audioInit(); $('scTitle').classList.remove('on'); showQuestSelect(); });
   $('btnContinue').addEventListener('click', () => { audioInit(); resumeRun(); });
   $('btnHow').addEventListener('click', () => { audioInit(); $('scTitle').classList.remove('on'); showHow(); });
@@ -4300,22 +4433,37 @@ function openMenu(){
   modal(`<h2>Grimhold</h2><div class="rule"></div>
     <div class="row"><div class="ic">🎵</div><div class="tx"><b>Sound</b><s>Drone, dice and steel</s></div>
       <button class="bu" id="mSnd">${audioOn ? 'On' : 'Off'}</button></div>
-    <div class="row"><div class="ic">📜</div><div class="tx"><b>This quest</b><s>${QUESTS[G.q.qi].objective.label}</s></div></div>
+    <div class="row"><div class="ic">📜</div><div class="tx"><b>This quest</b><s>${questDef().objective.label}</s></div></div>
     <div class="rule"></div>
     <div style="text-align:center">
       <button class="btn" id="mResume">Back to the Dungeon</button>
       <button class="btn ghost" id="mHow">How to Play</button>
-      <button class="btn red" id="mQuit">Abandon Quest</button>
+      <button class="btn red" id="mQuit">${G.run ? 'Abandon the Descent' : 'Abandon Quest'}</button>
     </div>`);
   bindModal('#mSnd', () => { audioOn = !audioOn; closeModal(); openMenu(); });
   bindModal('#mResume', closeModal);
   bindModal('#mHow', () => { closeModal(); showHow(); });
-  bindModal('#mQuit', () => { closeModal(); clearRun(); showQuestSelect(); if (!HEADLESS) $('hud').classList.remove('on'); });
+  bindModal('#mQuit', () => {
+    closeModal();
+    if (!HEADLESS) $('hud').classList.remove('on');
+    if (G.run){ endRun('You turned back. The keep lets you go, this once.'); return; }
+    clearRun(); showQuestSelect();
+  });
 }
 
 function onTap(sx, sy){
   if (!G || !G.q || modalOpen) return;
-  if (G.dice){ return; }
+  if (G.dice){
+    // slam them down rather than making the player wait out the animation
+    const left = G.dice.total - G.dice.t;
+    if (left > 420){
+      G.dice.t = G.dice.total - 400;
+      if (G.dice.timer) G.dice.timer.t = Math.min(G.dice.timer.t, 400);
+      for (const it of G.dice.items) it.settle = Math.min(it.settle, G.dice.t - 40);
+      sfx('block');
+    }
+    return;
+  }
   if (G.q.over) return;
   const [x,y] = tileOf(sx, sy);
   tapTile(x, y);
@@ -4440,6 +4588,459 @@ function walkFieldOpen(sx, sy, maxSteps, mover){
   return { d, from };
 }
 
+/* ------------------------------------------------------- 12b. THE DESCENT */
+// The campaign is eleven authored quests on a fixed board. The Descent takes
+// the same board and drops you down it forever: each floor rolls its own
+// objective, garrison and hazards, a fallen hero is gone for the whole run,
+// and between floors you draft the boon that makes this run yours.
+
+const BOONS = [
+  { id:'banegreen',  ic:'🗡', name:"Greenskin's Bane",  desc:'+1 attack die against goblins and orcs.' },
+  { id:'keeneye',    ic:'✝',  name:'Consecrated Steel', desc:'+1 attack die against the undead.' },
+  { id:'executioner',ic:'🪓', name:'Executioner',       desc:'+2 attack dice against anything down to its last Body Point.' },
+  { id:'ironskin',   ic:'🛡', name:'Iron Skin',         desc:'+1 defend die for every hero.' },
+  { id:'swiftboots', ic:'👟', name:'Swift Boots',       desc:'+1 to every movement roll.' },
+  { id:'luckyfind',  ic:'◈',  name:"Prospector's Luck", desc:'Coin you find is worth half again as much.' },
+  { id:'quietstep',  ic:'🤫', name:'Quiet Hands',       desc:'Searching a room never wakes a wandering monster.' },
+  { id:'doorward',   ic:'🚪', name:'Ward of Thresholds',desc:'Every door you open restores 1 Body Point to the party.' },
+  { id:'secondwind', ic:'💨', name:'Second Wind',       desc:'Once a floor, the first hero who would fall survives on 1 Body Point.' },
+  { id:'vampiric',   ic:'🩸', name:'Red Thirst',        desc:'Killing a monster restores 1 Body Point to the nearest hero.' },
+  { id:'trapsense',  ic:'⚠',  name:"Sapper's Eye",      desc:'Every trap on the floor is revealed the moment you arrive.' },
+  { id:'mapsense',   ic:'🗺', name:'Stolen Plans',      desc:'Every hidden door on the floor is already found.' },
+  { id:'alchemist',  ic:'🧪', name:"Alchemist's Round", desc:'Every hero begins each floor with a healing potion.' },
+  { id:'hoard',      ic:'💰', name:'Deep Pockets',      desc:'Begin each floor with 100 gold in the purse.' },
+  { id:'stoutheart', ic:'❤',  name:'Stout Heart',       desc:'+1 maximum Body Point for every hero, healed at once.' },
+  { id:'torchbearer',ic:'🔥', name:'Torchbearer',       desc:'Your torches throw light 3 squares further.' },
+  { id:'spellecho',  ic:'✨', name:'Echoing Weave',     desc:"Each hero's first spell on a floor is not spent." },
+  { id:'bloodprice', ic:'☠',  name:'Blood Price',       desc:'+2 attack dice for everyone — and −1 maximum Body Point.', curse:true },
+];
+const BOON = (id) => BOONS.find(b => b.id === id);
+
+const MODIFIERS = [
+  { id:'dark',    from:1, ic:'🌑', name:'Lightless',  desc:'Your torches barely reach. Sight cut to a stride.' },
+  { id:'swarm',   from:1, ic:'🐀', name:'Overrun',    desc:'Half again as many bodies, and most of them small.' },
+  { id:'wealthy', from:1, ic:'💎', name:'Hoarded',    desc:'Somebody has been stashing coin here. Treasure pays double.' },
+  { id:'haunted', from:3, ic:'👻', name:'Haunted',    desc:'Nothing on this floor is still breathing.' },
+  { id:'hunted',  from:2, ic:'👁', name:'Hunted',     desc:'The Warlock knows where you are. Something new arrives every fourth turn.' },
+  { id:'brittle', from:1, ic:'⚙',  name:'Undermined', desc:'Twice the traps — but you can see all of them.' },
+];
+const MOD = (id) => MODIFIERS.find(m => m.id === id);
+
+const META_UNLOCKS = [
+  { id:'leather',   ic:'🦺', cost:2, name:'Standard Issue',  desc:'Every hero starts a run in leather armour.' },
+  { id:'potionbelt',ic:'🧪', cost:2, name:'Potion Belt',     desc:'Every hero starts a run with a healing potion.' },
+  { id:'warchest',  ic:'◈',  cost:3, name:'War Chest',       desc:'Start every run with 250 gold in the purse.' },
+  { id:'extradraft',ic:'🃏', cost:4, name:'Wider Counsel',   desc:'Draft from four boons instead of three.' },
+  { id:'veteran',   ic:'❤',  cost:4, name:'Veterans',        desc:'+1 maximum Body Point for every hero, always.' },
+  { id:'revive',    ic:'⚱',  cost:5, name:'Mentor’s Bargain',desc:'Once a run, a fallen hero returns at the next floor with 1 Body Point.' },
+];
+
+const boonHas = (id) => !!(G && G.run && G.run.boons && G.run.boons.includes(id));
+const modHas  = (id) => !!(G && G.q && G.q.def && G.q.def.mods && G.q.def.mods.includes(id));
+const metaHas = (id) => !!(G && G.meta && G.meta.unlocks && G.meta.unlocks.includes(id));
+
+/* ------------------------------------------------------- floor generation */
+
+const FLOOR_A = ['Weeping','Ashen','Hollow','Rusted','Bleeding','Silent','Broken','Gilded',
+                 'Drowned','Hungry','Cold','Burnt','Forgotten','Sunken','Whispering','Split'];
+const FLOOR_B = ['Stair','Gallery','Warren','Vault','Cloister','Shambles','Undercroft',
+                 'Reliquary','Kennel','Pit','Reach','Gate','Larder','Choir'];
+
+// cost, and the depth at which a thing starts turning up
+const SPAWN_TABLE = [
+  { t:'goblin',  cost:1, from:1 }, { t:'orc',      cost:2, from:1 },
+  { t:'skeleton',cost:2, from:2 }, { t:'zombie',   cost:2, from:3 },
+  { t:'fimir',   cost:3, from:3 }, { t:'mummy',    cost:4, from:5 },
+  { t:'chaos',   cost:5, from:5 }, { t:'gargoyle', cost:6, from:7 },
+  { t:'sorcerer',cost:6, from:7 }, { t:'ogre',     cost:7, from:9 },
+];
+const BOSS_TABLE = [
+  { t:'gargoyle', from:1 }, { t:'chaos', from:3 }, { t:'ogre', from:5 },
+  { t:'sorcerer', from:5 },
+];
+const BOSS_NAMES = ['Verag','Gulthor','Ulag','Karlen','Balur','Torvin','Vess','Gorag','Skarn','Malgrim'];
+
+function makeFloor(depth, R){
+  const pick1 = (arr) => arr[Math.floor(R()*arr.length)];
+  const name = `The ${pick1(FLOOR_A)} ${pick1(FLOOR_B)}`;
+  const bossFloor = depth % 5 === 0;
+
+  // --- modifiers ---------------------------------------------------------
+  const mods = [];
+  const modChance = Math.min(.85, .18 + depth*.07);
+  const pool = MODIFIERS.filter(m => (m.from || 1) <= depth).map(m => m.id);
+  if (R() < modChance) mods.push(pool.splice(Math.floor(R()*pool.length),1)[0]);
+  if (depth >= 4 && R() < modChance*.5) mods.push(pool.splice(Math.floor(R()*pool.length),1)[0]);
+
+  // --- objective ---------------------------------------------------------
+  const kinds = bossFloor ? ['slay']
+    : depth <= 4 ? ['slay','clear','fetch','rescue','collect']
+    : ['slay','slay','fetch','collect','rescue'];        // clearing a deep floor is a grind
+  const type = pick1(kinds);
+  const rooms = ROOMS.map(r => r.id);
+  const far = rooms.filter(id => {
+    const r = ROOMS[id];
+    return Math.abs(r.x - 8) + Math.abs(r.y - 15) > 8;
+  });
+  const goalRoom = pick1(far.length ? far : rooms);
+
+  let objective, keepItem = null;
+  if (type === 'slay')       objective = { type:'slay',  label:'Slay the master of this floor' };
+  else if (type === 'clear') objective = { type:'clear', label:'Kill everything on this floor' };
+  else if (type === 'fetch') objective = { type:'fetch', item:'Black Key', label:'Find the Black Key and take the stair' };
+  else if (type === 'collect') objective = { type:'collect', count:2 + (depth > 6 ? 1 : 0), item:'Reliquary',
+                                             label:`Recover ${2 + (depth > 6 ? 1 : 0)} reliquaries and take the stair` };
+  else objective = { type:'rescue', npc:'A Prisoner', room:goalRoom, label:'Free the prisoner and take the stair' };
+
+  // --- the garrison ------------------------------------------------------
+  let budget = 9 + depth*4;
+  if (mods.includes('swarm')) budget = Math.round(budget*1.5);
+  let table = SPAWN_TABLE.filter(e => e.from <= depth);
+  if (mods.includes('swarm')) table = table.filter(e => e.cost <= 2).concat(table.slice(0,2));
+  if (mods.includes('haunted')){
+    // never past the depth gate — a mummy on floor one is not a modifier, it is a bug
+    const undead = SPAWN_TABLE.filter(e => MONSTERS[e.t].undead && e.from <= depth);
+    if (undead.length) table = undead;
+  }
+  if (!table.length) table = [SPAWN_TABLE[0]];
+
+  const monsters = [];
+  const roomOrder = rooms.slice();
+  for (let i = roomOrder.length - 1; i > 0; i--){ const j = Math.floor(R()*(i+1)); const t = roomOrder[i]; roomOrder[i] = roomOrder[j]; roomOrder[j] = t; }
+  const useRooms = roomOrder.slice(0, Math.min(rooms.length, 5 + Math.min(depth, 5)));
+  let guard = 0;
+  while (budget > 0 && guard++ < 200){
+    const e = pick1(table);
+    if (e.cost > budget + 1) { if (table.every(x => x.cost > budget + 1)) break; continue; }
+    const r = pick1(useRooms);
+    const found = monsters.find(m => m.r === r && m.t === e.t);
+    if (found) found.n++; else monsters.push({ r, t:e.t, n:1 });
+    budget -= e.cost;
+  }
+
+  // the thing in charge
+  if (type === 'slay'){
+    const bossPool = BOSS_TABLE.filter(b => b.from <= depth);
+    const bt = pick1(bossPool.length ? bossPool : [BOSS_TABLE[0]]);
+    const bp = MONSTERS[bt.t].bp + Math.floor(depth/2) + (bossFloor ? 2 : 0);
+    monsters.push({ r:goalRoom, t:bt.t, n:1, boss:true, bp,
+                    name:(bossFloor ? '' : '') + pick1(BOSS_NAMES) + (bossFloor ? ' the Deep' : '') });
+  }
+
+  // --- furniture and the prize ------------------------------------------
+  const FTYPES = ['table','chest','bookcase','rack','alchemy','tomb','fireplace','cupboard','altar','sorcerer','cage','throne'];
+  const furn = [];
+  const nf = 5 + Math.floor(R()*4);
+  for (let i=0;i<nf;i++) furn.push({ r:pick1(rooms), t:pick1(FTYPES) });
+  if (type === 'fetch') furn.push({ r:goalRoom, t:pick1(['chest','tomb','bookcase','altar']), quest:objective.item });
+  if (type === 'collect'){
+    const spread = roomOrder.slice(0, objective.count);
+    for (const r of spread) furn.push({ r, t:'chest', quest:objective.item });
+  }
+
+  let traps = 2 + Math.floor(depth*.8);
+  if (mods.includes('brittle')) traps *= 2;
+  return {
+    name, sub:`Depth ${depth}`, depth, mods,
+    intro:'', objective, monsters, furn,
+    traps:Math.min(14, traps), secrets: depth >= 3 ? 2 : 1,
+    reward: 60 + depth*40, keepItem,
+  };
+}
+
+/* ---------------------------------------------------------- the run itself */
+
+function newRun(partyIds){
+  const heroes = HERO_DEFS.filter(d => partyIds.includes(d.id)).map(mkHero);
+  for (const h of heroes){
+    if (metaHas('leather')) h.armour = 'leather';
+    if (metaHas('potionbelt')) h.items.potion = (h.items.potion||0) + 1;
+    if (metaHas('veteran')){ h.bpMax++; h.bp = h.bpMax; }
+  }
+  return {
+    heroes, party:partyIds.slice(), depth:0, boons:[], gold: metaHas('warchest') ? 250 : 0,
+    kills:0, floorsCleared:0, revived:false, over:false, seed: (Math.random()*1e9)|0,
+  };
+}
+function runAlive(){ return G.run ? G.run.heroes.filter(h => h.alive) : []; }
+
+function beginFloor(){
+  const R = mkRng(G.run.seed + G.run.depth*7717);
+  const def = makeFloor(G.run.depth, R);
+  clearTimers();
+  G.fx = []; G.dice = null; G.aim = null; G.shake = 0;
+  G.cam = { x:0, y:0, z:1, tx:null, ty:null };
+
+  // Mentor's bargain: one fallen hero comes back before the floor is entered
+  if (metaHas('revive') && !G.run.revived && G.run.heroes.some(h => !h.alive) && runAlive().length){
+    const back = G.run.heroes.find(h => !h.alive);
+    back.alive = true; back.bp = 1; G.run.revived = true;
+    say(`${back.name} is dragged back from the dark. Mentor's bargain is spent.`, 'good');
+  }
+  for (const h of G.run.heroes){
+    if (!h.alive) continue;
+    h.bp = Math.min(h.bpMax, h.bp + 2);                  // a breather between floors
+    h.echoed = 0;
+    if (boonHas('alchemist')) h.items.potion = (h.items.potion||0) + 1;
+  }
+  if (boonHas('hoard')) G.run.gold += 100;
+
+  startQuest(-1, def, G.run.seed + G.run.depth*104729);
+  G.q.runDepth = G.run.depth;
+  if (boonHas('trapsense') || modHas('brittle')) for (const tr of G.q.traps) tr.found = true;
+  if (boonHas('mapsense')) for (const k in G.q.doors) G.q.doors[k].found = true;
+  recomputeVision();
+
+  bakeDungeon(4242 + G.run.depth*991);
+  const v = viewBox();
+  G.cam.z = HEADLESS ? 1 : clamp(Math.min(v.w, v.h) / (TS*8.6), .42, 1.4);
+  focusOn(STAIRS[0][0], STAIRS[0][1] - 2, true);
+  if (!HEADLESS){ $('scTitle').classList.remove('on'); $('hud').classList.add('on'); }
+  setMood('explore');
+  say(`Depth ${G.run.depth}: ${def.name}.`, '');
+  for (const m of def.mods) say(`${MOD(m).ic} ${MOD(m).name} — ${MOD(m).desc}`, 'bad');
+  banner('DEPTH ' + G.run.depth, def.name);
+  renderHUD(); renderLog();
+  saveRun();
+}
+
+function startRun(partyIds){
+  G.run = newRun(partyIds);
+  G.run.depth = 1;
+  beginFloor();
+}
+
+// Called instead of showQuestEnd when a Descent floor resolves.
+function descentFloorEnd(won, why){
+  const pot = G.q.pot || 0;
+  G.run.kills += (G.q.kills || 0);
+  if (won){
+    G.run.gold += pot + questDef().reward;
+    G.run.floorsCleared++;
+  }
+  saveRun();
+  if (!won || !runAlive().length){ endRun(why); return; }
+  showDraft();
+}
+
+function endRun(why){
+  G.run.over = true;
+  const depth = G.run.depth;
+  const favour = depth + G.run.floorsCleared + Math.floor(G.run.gold/300)
+                 + Math.max(0, 5 - G.run.heroes.length)*Math.floor(depth/3);
+  G.meta.favour += favour;
+  G.meta.best = Math.max(G.meta.best || 0, depth);
+  G.meta.runs = (G.meta.runs || 0) + 1;
+  G.meta.deepestKills = Math.max(G.meta.deepestKills || 0, G.run.kills);
+  saveMeta(); clearRun();
+  const lost = G.run.heroes.filter(h => !h.alive).length;
+  modal(`
+    <h2 style="color:#b03a2c">The Descent Ends</h2>
+    <div class="sub" style="margin:2px 0 0">Depth ${depth}</div>
+    <div class="rule"></div>
+    <p class="flavor">${why || 'The keep keeps what it takes. Somewhere above, Mentor writes another name down.'}</p>
+    <div class="row"><div class="ic">⬇</div><div class="tx"><b>Depth reached</b><s>Floors cleared: ${G.run.floorsCleared}</s></div><div style="color:#f3d488">${depth}</div></div>
+    <div class="row"><div class="ic">☠</div><div class="tx"><b>Things killed</b><s>Heroes lost: ${lost} of ${G.run.heroes.length}</s></div><div>${G.run.kills}</div></div>
+    <div class="row"><div class="ic">◈</div><div class="tx"><b>Gold carried</b><s>Coin counts toward favour</s></div><div style="color:#f3d488">${G.run.gold}</div></div>
+    <div class="row"><div class="ic">🕯</div><div class="tx"><b>Mentor’s Favour earned</b><s>Spend it before the next descent</s></div><div style="color:#f3d488">+${favour}</div></div>
+    ${G.run.boons.length ? `<div class="rule"></div><div style="font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:8px">Boons taken</div>
+      <div style="text-align:center;font-size:13px;color:#ddd0b4">${G.run.boons.map(b => BOON(b).ic + ' ' + BOON(b).name).join(' · ')}</div>` : ''}
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mAgain">Descend Again</button>
+      <button class="btn ghost" id="mFavour">Mentor’s Table</button>
+      <button class="btn ghost" id="mTitle">Title Screen</button>
+    </div>`);
+  bindModal('#mAgain', () => { closeModal(); G.run = null; showDescentSetup(); });
+  bindModal('#mFavour', () => { closeModal(); showMentor(); });
+  bindModal('#mTitle', () => { closeModal(); G.run = null; showTitle(); });
+  if (!HEADLESS) $('hud').classList.remove('on');
+}
+
+/* --------------------------------------------------------------- the draft */
+
+function draftOptions(){
+  const n = metaHas('extradraft') ? 4 : 3;
+  const taken = G.run.boons;
+  const pool = BOONS.filter(b => !taken.includes(b.id));
+  const out = [];
+  while (out.length < n && pool.length) out.push(pool.splice(ri(pool.length), 1)[0]);
+  return out;
+}
+function takeBoon(id){
+  if (!G.run || G.run.boons.includes(id)) return false;
+  G.run.boons.push(id);
+  if (id === 'stoutheart') for (const h of G.run.heroes){ h.bpMax++; h.bp = Math.min(h.bpMax, h.bp + 1); }
+  if (id === 'bloodprice') for (const h of G.run.heroes){ h.bpMax = Math.max(1, h.bpMax - 1); h.bp = Math.min(h.bp, h.bpMax); }
+  saveRun();
+  return true;
+}
+
+const PEDLAR = [
+  { id:'potion', ic:'🧪', name:'Healing Potion', cost:120, desc:'Restores 4 Body Points. To whoever needs it most.' },
+  { id:'holy',   ic:'⚱',  name:'Holy Water',     cost:170, desc:'Three dice against one undead thing.' },
+  { id:'mend',   ic:'✚',  name:'Field Surgery',  cost:200, desc:'Restore 3 Body Points to every living hero, now.' },
+  { id:'leather',ic:'🦺', name:'Leather Armour', cost:260, desc:'+1 defend die for one hero who has none.' },
+];
+function buyPedlar(id){
+  if (!G.run) return false;
+  const it = PEDLAR.find(p => p.id === id);
+  if (!it || G.run.gold < it.cost) return false;
+  const alive = runAlive();
+  if (!alive.length) return false;
+  if (id === 'potion' || id === 'holy'){
+    const who = alive.slice().sort((a,b) => (a.bp/a.bpMax) - (b.bp/b.bpMax))[0];
+    who.items[id] = (who.items[id]||0) + 1;
+  } else if (id === 'mend'){
+    for (const h of alive) h.bp = Math.min(h.bpMax, h.bp + 3);
+  } else {
+    const who = alive.find(h => !h.armour && h.id !== 'wizard');
+    if (!who) return false;
+    who.armour = 'leather';
+  }
+  G.run.gold -= it.cost;
+  sfx('gold'); saveRun();
+  return true;
+}
+
+function showDraft(){
+  const opts = draftOptions();
+  G.q.draft = opts.map(o => o.id);
+  const next = G.run.depth + 1;
+  const rows = opts.map(b => `<div class="row">
+      <div class="ic">${b.ic}</div>
+      <div class="tx"><b>${b.name}</b><s>${b.desc}</s></div>
+      <button class="bu" data-boon="${b.id}">Take</button>
+    </div>`).join('');
+  const alive = runAlive();
+  const ped = PEDLAR.map(p => `<div class="row">
+      <div class="ic">${p.ic}</div>
+      <div class="tx"><b>${p.name}</b><s>${p.desc}</s></div>
+      <button class="bu" data-ped="${p.id}" ${G.run.gold < p.cost ? 'disabled' : ''}>◈ ${p.cost}</button>
+    </div>`).join('');
+  modal(`
+    <h2>Between Floors</h2>
+    <div class="sub" style="margin:2px 0 0">Depth ${G.run.depth} cleared · ${next} below</div>
+    <div class="rule"></div>
+    <div style="text-align:center;font-size:12.5px;color:#ddd0b4;margin-bottom:6px">
+      ${alive.map(h => `${h.name} ${h.bp}/${h.bpMax}`).join(' · ')}
+      ${G.run.heroes.length > alive.length ? `<div style="color:#b03a2c;font-size:11px;margin-top:4px">Lost: ${G.run.heroes.filter(h=>!h.alive).map(h=>h.name).join(', ')}</div>` : ''}
+    </div>
+    <div class="goldline">◈ ${G.run.gold}</div>
+    <div class="rule"></div>
+    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">Take one boon</div>
+    ${rows}
+    <div class="rule"></div>
+    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">The pedlar on the stair</div>
+    ${ped}
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn ghost" id="mSkip">Take nothing, go down</button>
+    </div>`, 'draft');
+  bindAll('.bu[data-boon]', el => {
+    takeBoon(el.dataset.boon);
+    closeModal();
+    G.run.depth++;
+    beginFloor();
+  });
+  bindAll('.bu[data-ped]', el => { if (buyPedlar(el.dataset.ped)) showDraft(); });
+  bindModal('#mSkip', () => { closeModal(); G.run.depth++; beginFloor(); });
+  if (!HEADLESS) $('hud').classList.remove('on');
+}
+
+/* ------------------------------------------------------ favour and setup */
+
+const K_META = 'grimhold_meta_v1';
+function newMeta(){ return { v:1, favour:0, unlocks:[], best:0, runs:0, deepestKills:0 }; }
+function saveMeta(){ try { localStorage.setItem(K_META, JSON.stringify(G.meta)); } catch(e){} }
+function loadMeta(){
+  try {
+    const raw = JSON.parse(localStorage.getItem(K_META));
+    if (raw && typeof raw.favour === 'number'){
+      const m = newMeta();
+      m.favour = Math.max(0, raw.favour|0);
+      m.unlocks = Array.isArray(raw.unlocks) ? raw.unlocks.filter(u => META_UNLOCKS.some(x => x.id === u)) : [];
+      m.best = raw.best|0; m.runs = raw.runs|0; m.deepestKills = raw.deepestKills|0;
+      return m;
+    }
+  } catch(e){}
+  return newMeta();
+}
+function buyUnlock(id){
+  const u = META_UNLOCKS.find(x => x.id === id);
+  if (!u || metaHas(id) || G.meta.favour < u.cost) return false;
+  G.meta.favour -= u.cost;
+  G.meta.unlocks.push(id);
+  sfx('gold'); saveMeta();
+  return true;
+}
+function showMentor(){
+  const rows = META_UNLOCKS.map(u => `<div class="row">
+      <div class="ic">${u.ic}</div>
+      <div class="tx"><b>${u.name}</b><s>${u.desc}</s></div>
+      <button class="bu ${metaHas(u.id)?'own':''}" data-un="${u.id}"
+        ${(metaHas(u.id) || G.meta.favour < u.cost) ? 'disabled' : ''}>${metaHas(u.id) ? 'Held' : '🕯 ' + u.cost}</button>
+    </div>`).join('');
+  modal(`<h2>Mentor’s Table</h2>
+    <div class="goldline">🕯 ${G.meta.favour} favour</div>
+    <div class="rule"></div>
+    <p class="flavor">“You keep going down there. I keep writing names in the book. Let me at least send you better prepared.”</p>
+    ${rows}
+    <div class="rule"></div>
+    <div class="row"><div class="ic">⬇</div><div class="tx"><b>Deepest descent</b><s>${G.meta.runs} run${G.meta.runs===1?'':'s'} attempted</s></div><div style="color:#f3d488">${G.meta.best}</div></div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mGo">Descend</button>
+      <button class="btn ghost" id="mTitle">Title Screen</button>
+    </div>`);
+  bindAll('.bu[data-un]', el => { buyUnlock(el.dataset.un); showMentor(); });
+  bindModal('#mGo', () => { closeModal(); showDescentSetup(); });
+  bindModal('#mTitle', () => { closeModal(); showTitle(); });
+}
+
+let descentPick = ['barbarian','dwarf','elf','wizard'];
+function showDescentSetup(){
+  const cards = HERO_DEFS.map(d => {
+    const on = descentPick.includes(d.id);
+    return `<div class="hpick ${on?'on':''}" data-hp="${d.id}">
+      <canvas data-por="${d.id}"></canvas>
+      <div class="tx"><b>${d.name}</b><s>${d.bp} Body · ${d.mp} Mind<br>${d.blurb}</s></div>
+    </div>`;
+  }).join('');
+  const n = descentPick.length;
+  modal(`<h2>The Descent</h2>
+    <div class="sub" style="margin:2px 0 0">Endless · a fallen hero is gone for the run</div>
+    <div class="rule"></div>
+    <p class="flavor">No quest board, no way back up until you fall. Each floor rolls its own objective and its own hazards; between floors you take one boon. Take fewer heroes and the favour runs deeper.</p>
+    <div class="heroes">${cards}</div>
+    <div class="obj"><b>Party of ${n}</b>${n <= 2 ? 'Lean and dangerous — favour bonus at depth.' : n === 3 ? 'A working band.' : 'The full four. Safest, and the least favour.'}</div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mGo" ${n < 1 ? 'disabled' : ''}>Descend</button>
+      <button class="btn ghost" id="mFavour">Mentor’s Table</button>
+      <button class="btn ghost" id="mTitle">Back</button>
+    </div>`);
+  if (!HEADLESS){
+    for (const d of HERO_DEFS){
+      const c = $('modalBody').querySelector(`canvas[data-por="${d.id}"]`);
+      if (!c) continue;
+      c.width = 88; c.height = 104;
+      c.getContext('2d').drawImage(heroPortrait(d.id, 44, 52), 0, 0, 88, 104);
+    }
+  }
+  bindAll('.hpick[data-hp]', el => {
+    const id = el.dataset.hp;
+    if (descentPick.includes(id)){
+      if (descentPick.length > 1) descentPick = descentPick.filter(x => x !== id);
+    } else descentPick.push(id);
+    descentPick = HERO_DEFS.map(d => d.id).filter(x => descentPick.includes(x));
+    showDescentSetup();
+  });
+  bindModal('#mGo', () => { audioInit(); closeModal(); startRun(descentPick); });
+  bindModal('#mFavour', () => { closeModal(); showMentor(); });
+  bindModal('#mTitle', () => { closeModal(); showTitle(); });
+}
+
 /* --------------------------------------------------------- 13. PERSISTENCE */
 
 const K_CAMP = 'grimhold_camp_v1', K_RUN = 'grimhold_run_v1';
@@ -4477,7 +5078,7 @@ function saveRun(){
     const q = Object.assign({}, G.q);
     delete q.vis; delete q.field;
     q.actors = G.q.actors.map(a => a.kind === 'hero' ? { ref:a.id } : a);
-    localStorage.setItem(K_RUN, JSON.stringify({ q, camp:G.camp, cam:G.cam }));
+    localStorage.setItem(K_RUN, JSON.stringify({ q, camp:G.camp, cam:G.cam, run:G.run || null }));
   } catch(e){}
 }
 function hasRun(){ try { return !!localStorage.getItem(K_RUN); } catch(e){ return false; } }
@@ -4487,9 +5088,15 @@ function resumeRun(){
   try { s = JSON.parse(localStorage.getItem(K_RUN)); } catch(e){}
   if (!s || !s.q){ showQuestSelect(); return false; }
   G.camp = migrateCamp(s.camp);
+  G.run = s.run && Array.isArray(s.run.heroes) && s.run.heroes.length ? s.run : null;
+  if (G.run){
+    // a run carries its own roster, saved whole — nothing to reconcile
+    G.run.heroes = G.run.heroes.map(h => Object.assign(mkHero(HERO_DEFS.find(d => d.id === h.id) || HERO_DEFS[0]), h));
+    G.run.boons = (G.run.boons || []).filter(b => BOONS.some(x => x.id === b));
+  }
   // the saved heroes hold their in-quest condition; put it back on the roster
   const savedHeroes = (s.camp && s.camp.heroes) || [];
-  for (const h of G.camp.heroes){
+  for (const h of (G.run ? [] : G.camp.heroes)){
     const old = savedHeroes.find(x => x && x.id === h.id);
     if (!old) continue;
     h.bp = old.bp === undefined ? h.bpMax : old.bp;
@@ -4506,10 +5113,10 @@ function resumeRun(){
     h.kind = 'hero';
   }
   G.q = s.q;
-  G.q.actors = s.q.actors.map(a => a.ref ? G.camp.heroes.find(h => h.id === a.ref) : a).filter(Boolean);
+  G.q.actors = s.q.actors.map(a => a.ref ? partyHeroes().find(h => h.id === a.ref) : a).filter(Boolean);
   G.cam = s.cam || { x:0, y:0, z:1 };
   G.fx = []; G.timers = []; G.dice = null; G.aim = null; G.shake = 0;
-  bakeDungeon(1234 + G.q.qi*991);
+  bakeDungeon(G.run ? 4242 + G.run.depth*991 : 1234 + G.q.qi*991);
   recomputeVision(); refreshField();
   if (!HEADLESS){
     $('scTitle').classList.remove('on');
@@ -4524,15 +5131,27 @@ function resumeRun(){
 /* ------------------------------------------------------------ 14. THE LOOP */
 
 function update(dt){
+  if (G && G.freeze > 0){ G.freeze -= dt; TT0 += dt*.15; return; }
   TT0 += dt;
   if (!G) return;
+  // Collect what is due *before* running any of it: a callback may call
+  // clearTimers (questOver does), and mutating the list mid-walk used to read
+  // past the end of it and kill the frame.
+  const due = [];
   for (let i = G.timers.length - 1; i >= 0; i--){
     const T = G.timers[i];
+    if (!T){ G.timers.splice(i,1); continue; }
     T.t -= dt;
-    if (T.t <= 0){ G.timers.splice(i,1); T.fn(); }
+    if (T.t <= 0){ G.timers.splice(i,1); due.push(T); }
+  }
+  const gen = G.timerGen || 0;
+  for (const T of due){
+    if ((G.timerGen || 0) !== gen) break;    // something cleared the queue; respect it
+    T.fn();
   }
   if (G.dice) G.dice.t += dt;
   if (G.shake > 0) G.shake = Math.max(0, G.shake - dt*.055);
+  if (G.camPunch > 0) G.camPunch = Math.max(0, G.camPunch - dt*.0022);
   if (!G.q) return;
   let dropped = false;
   for (let i = G.q.log.length - 1; i >= 0; i--){
@@ -4545,6 +5164,7 @@ function update(dt){
     tickSlide(a, dt);
     if (a.hurtT > 0) a.hurtT -= dt;
     if (a.deathT > 0) a.deathT -= dt;
+    if (a.lt > 0) a.lt = Math.max(0, a.lt - dt*.006);
   }
   for (let i = G.fx.length - 1; i >= 0; i--){
     const p = G.fx[i];
@@ -4615,14 +5235,16 @@ function frame(ts){
 /* -------------------------------------------------------------- 15. BOOT */
 
 function newG(){
-  return { camp:newCampaign(), q:null, fx:[], timers:[], dice:null, aim:null,
-           shake:0, cam:{ x:0, y:0, z:1, tx:null, ty:null }, busy };
+  return { camp:newCampaign(), meta:newMeta(), run:null, q:null, fx:[], timers:[],
+           dice:null, aim:null, shake:0, camPunch:0,
+           cam:{ x:0, y:0, z:1, tx:null, ty:null }, busy };
 }
 function setRng(f){ rnd = f || Math.random; }
 
 function boot(){
   G = newG();
   G.camp = loadCampaign();
+  G.meta = loadMeta();
   initCanvas();
   bindInput();
   showTitle();
@@ -4645,6 +5267,10 @@ globalThis.HQ = {
   idx, inB, isFloor, isRock, roomAt, roomTiles, dkey, doorAt, doorBetween, linked, linkedIgnoringDoors,
   hasLOS, walkField, walkFieldOpen, tracePath, actorAt, furnAt, blocked, trapAt, trapBlocks,
   newG, newCampaign, mkHero, startQuest, launchQuest, boot, setRng,
+  BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes,
+  makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
+  draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
+  newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius,
   activeHero, heroes, livingHeroes, monstersOf, busy, hudState, syncHUD, renderHUD,
   strikeBlocker, strikeReason,
   tapTile, selectHero, endHeroTurn, zargonTurn, monsterAct, heroWalk, refreshField,
