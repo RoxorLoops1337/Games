@@ -1,0 +1,3525 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#efe6d4">
+<title>Leviathan Press — a risograph deep dive</title>
+<meta name="description" content="Harpoon a segmented abyssal leviathan, draft upgrades, cut the worm in half. Printed in three inks on cheap paper.">
+<style>
+  /* ------------------------------------------------------------------
+     LEVIATHAN PRESS — art direction: RISOGRAPH.
+     Three spot inks (fluoro pink, teal, black key) mis-registered on warm
+     paper stock, everything screened with halftone dots. The DOM chrome
+     follows the same rules as the canvas: paper panels, thick key-line
+     borders, a hard offset colour shadow where the second pass slipped.
+  ------------------------------------------------------------------ */
+  :root{
+    --paper:#efe6d4; --paper2:#e4d9c3; --key:#17171c;
+    --pink:#ff3d87; --teal:#009ea3; --sun:#ff9a1f; --kelp:#2f8f6b; --tide:#2b6be0;
+    --chalk:#8d8a80;
+    --slip:6px;                 /* misregistration offset */
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--paper);color:var(--key);
+    font-family:"Arial Black","Arial Bold",Haettenschweiler,"Franklin Gothic Heavy",Impact,system-ui,sans-serif;
+    touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+  canvas#cv{display:block;position:fixed;inset:0;width:100%;height:100%}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  .thin{font-family:"Helvetica Neue",Arial,system-ui,sans-serif;font-weight:700}
+
+  /* ---------------------------------------------------------- helpers */
+  .halftone{
+    background-image:radial-gradient(var(--dot,rgba(23,23,28,.20)) 32%, transparent 33%);
+    background-size:6px 6px;
+  }
+  .panel{
+    position:relative;background:var(--paper);border:3px solid var(--key);border-radius:2px;
+    box-shadow:var(--slip) var(--slip) 0 var(--pink);
+  }
+  .panel.teal{box-shadow:var(--slip) var(--slip) 0 var(--teal)}
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    padding:12px 18px;background:var(--paper);color:var(--key);border:3px solid var(--key);
+    border-radius:2px;box-shadow:5px 5px 0 var(--key);cursor:pointer;
+    text-transform:uppercase;letter-spacing:.06em;font-size:15px;line-height:1;
+    transition:transform .05s ease, box-shadow .05s ease;
+  }
+  .btn:active{transform:translate(4px,4px);box-shadow:1px 1px 0 var(--key)}
+  .btn.pink{background:var(--pink);color:var(--paper)}
+  .btn.teal{background:var(--teal);color:var(--paper)}
+  .btn.sun{background:var(--sun);color:var(--key)}
+  .btn.ghost{box-shadow:none;border-width:2px;background:transparent;padding:8px 12px;font-size:13px}
+  .btn[disabled]{opacity:.42;pointer-events:none}
+  .stamp{
+    display:inline-block;padding:3px 8px;border:2px solid var(--key);border-radius:2px;
+    font-size:11px;letter-spacing:.14em;text-transform:uppercase;
+  }
+
+  /* ---------------------------------------------------------- screens */
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;
+    padding:calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+    overflow:auto;overscroll-behavior:contain;z-index:20}
+  .screen.on{display:flex}
+  .screen::before{                     /* paper grain over every menu */
+    content:'';position:fixed;inset:0;pointer-events:none;opacity:.5;
+    background-image:radial-gradient(rgba(23,23,28,.13) 32%, transparent 33%);
+    background-size:5px 5px;
+  }
+  .sheet{width:min(560px,100%);position:relative;z-index:1}
+  .rule{height:3px;background:var(--key);margin:10px 0}
+  .rule.thin{height:2px;opacity:.45}
+
+  /* ---------------------------------------------------------- title */
+  #title{background:rgba(239,230,212,.72);justify-content:center}
+  #stagesel,#depot,#results,#stats,#help,#pause{background:rgba(239,230,212,.93)}
+  #title .logo{position:relative;text-align:center;margin:6px 0 2px}
+  #title .logo h1{
+    margin:0;font-size:clamp(38px,13vw,74px);line-height:.86;letter-spacing:-.02em;
+    text-transform:uppercase;position:relative;color:var(--key);
+  }
+  #title .logo h1 span{display:block}
+  #title .logo h1 .a{color:var(--key)}
+  #title .logo::after{                 /* the pink pass, printed 5px off */
+    content:'LEVIATHAN\A PRESS';white-space:pre;position:absolute;inset:0;color:var(--pink);
+    font-size:clamp(38px,13vw,74px);line-height:.86;letter-spacing:-.02em;
+    transform:translate(6px,5px);z-index:-1;text-transform:uppercase;
+  }
+  #title .sub{text-align:center;font-size:12px;letter-spacing:.34em;text-transform:uppercase;
+    color:var(--key);opacity:.75;margin:14px 0 0}
+  #title .blurb{margin:16px auto 0;max-width:430px;text-align:center;font-size:13px;line-height:1.55;
+    letter-spacing:.01em}
+  .menucol{display:flex;flex-direction:column;gap:10px;align-items:stretch;margin:18px auto 0;max-width:330px}
+  .menucol .btn{width:100%;padding:15px;font-size:17px}
+  #titlefoot{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:14px;font-size:11px}
+
+  /* ---------------------------------------------------------- HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;z-index:10;opacity:0;transition:opacity .2s;
+    padding:calc(8px + env(safe-area-inset-top)) 10px 10px;display:flex;flex-direction:column;gap:6px}
+  #hud.on{opacity:1}
+  #hudtop{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+  .hudbtn{pointer-events:auto;width:40px;height:40px;display:grid;place-items:center;
+    background:var(--paper);border:3px solid var(--key);border-radius:2px;box-shadow:3px 3px 0 var(--key);
+    font-size:15px;cursor:pointer}
+  .hudbtn.wide{width:auto;padding:0 10px;height:34px;font-size:11px;letter-spacing:.08em}
+  #hudmid{flex:1 1 auto;min-height:0}
+  #stagebar{flex:1 1 auto;max-width:min(430px,64vw);margin:0 auto;text-align:center;
+    background:rgba(239,230,212,.86);border:3px solid var(--key);padding:4px 8px 6px}
+  #stagename{font-size:13px;letter-spacing:.06em;text-transform:uppercase;line-height:1.1}
+  #stagesub{font-size:10px;letter-spacing:.22em;text-transform:uppercase;opacity:.8;margin-top:1px}
+  #progwrap{margin-top:5px;height:13px;border:3px solid var(--key);background:var(--paper);position:relative;overflow:hidden}
+  #progfill{position:absolute;inset:0;width:0%;background:var(--pink);transition:width .18s linear}
+  #progtxt{position:absolute;inset:0;display:grid;place-items:center;font-size:9px;letter-spacing:.16em}
+  #hudleft{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+  #hudright{display:flex;flex-direction:column;gap:6px;align-items:flex-end}
+  #hpwrap{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));
+    display:flex;align-items:center;gap:8px}
+  #hpbar{flex:1 1 auto;height:15px;border:3px solid var(--key);background:var(--paper);position:relative;overflow:hidden}
+  #hpfill{position:absolute;inset:0;width:100%;background:var(--teal);transition:width .12s linear}
+  #hptxt{font-size:11px;letter-spacing:.08em;min-width:66px;text-align:right}
+  #kitrow{position:absolute;left:10px;bottom:calc(34px + env(safe-area-inset-bottom));display:flex;gap:4px;flex-wrap:wrap;max-width:70vw}
+  .kitchip{display:flex;align-items:center;gap:3px;padding:2px 6px;background:var(--paper);
+    border:2px solid var(--key);font-size:10px;letter-spacing:.04em}
+  .kitchip b{color:var(--pink)}
+  #banner{position:fixed;left:0;right:0;top:34%;text-align:center;pointer-events:none;z-index:14;opacity:0}
+  #banner .big{display:inline-block;padding:10px 20px;background:var(--paper);border:4px solid var(--key);
+    box-shadow:8px 8px 0 var(--pink);font-size:clamp(20px,7vw,34px);letter-spacing:.02em;text-transform:uppercase}
+  #banner.show{animation:bannerpop 1.9s ease forwards}
+  @keyframes bannerpop{
+    0%{opacity:0;transform:scale(.7) rotate(-3deg)}
+    12%{opacity:1;transform:scale(1.06) rotate(1.2deg)}
+    22%{transform:scale(1) rotate(-.6deg)}
+    78%{opacity:1;transform:scale(1) rotate(-.6deg)}
+    100%{opacity:0;transform:scale(1.04) rotate(-.6deg)}
+  }
+
+  /* ---------------------------------------------------------- draft */
+  #draft{background:rgba(239,230,212,.90);justify-content:center}
+  #drafthead{text-align:center;margin:2px 0 8px}
+  #drafthead .kicker{font-size:11px;letter-spacing:.3em;text-transform:uppercase;opacity:.7}
+  #drafthead h2{margin:2px 0 0;font-size:clamp(22px,7vw,32px);text-transform:uppercase;letter-spacing:-.01em}
+  #rarityramp{display:flex;gap:3px;justify-content:center;margin:8px 0 4px;flex-wrap:wrap}
+  .rchip{padding:3px 9px;border:2px solid var(--key);font-size:10px;letter-spacing:.1em;
+    text-transform:uppercase;color:var(--paper);position:relative;clip-path:polygon(0 0,calc(100% - 6px) 0,100% 50%,calc(100% - 6px) 100%,0 100%)}
+  .rchip.dim{opacity:.36}
+  #cards{display:flex;gap:9px;justify-content:center;align-items:stretch;margin:8px 0 0;flex-wrap:nowrap}
+  .card{
+    flex:1 1 0;min-width:0;max-width:200px;background:var(--paper);border:3px solid var(--key);
+    cursor:pointer;display:flex;flex-direction:column;position:relative;padding-bottom:8px;
+    box-shadow:5px 5px 0 var(--cc,var(--pink));transition:transform .07s ease, box-shadow .07s ease;
+  }
+  .card:active{transform:translate(4px,4px);box-shadow:1px 1px 0 var(--cc,var(--pink))}
+  .card .crown{position:absolute;top:-11px;left:50%;transform:translateX(-50%);
+    background:var(--cc);color:var(--paper);border:2px solid var(--key);padding:2px 8px;
+    font-size:9px;letter-spacing:.14em;white-space:nowrap}
+  .card .art{height:78px;border-bottom:3px solid var(--key);display:grid;place-items:center;
+    background:var(--cc);position:relative;overflow:hidden}
+  .card .art canvas{width:66px;height:66px;image-rendering:pixelated}
+  .card .art::after{content:'';position:absolute;inset:0;
+    background-image:radial-gradient(rgba(23,23,28,.34) 32%,transparent 33%);background-size:5px 5px;opacity:.6}
+  .card .nm{padding:12px 7px 3px;text-align:center;font-size:13px;line-height:1.06;text-transform:uppercase}
+  .card .lv{text-align:center;font-size:9px;letter-spacing:.14em;opacity:.66}
+  .card .ds{padding:5px 8px 0;text-align:center;font-size:11px;line-height:1.35}
+  .card .ds b{color:var(--cc)}
+  .card.taken{opacity:.35;pointer-events:none}
+  #draftfoot{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:14px;flex-wrap:wrap}
+  #draftnote{text-align:center;font-size:10px;letter-spacing:.1em;margin-top:10px;opacity:.7;text-transform:uppercase}
+
+  /* ---------------------------------------------------------- depot */
+  #depot h2,#stagesel h2,#results h2,#stats h2{margin:0;font-size:clamp(22px,7vw,32px);text-transform:uppercase}
+  .subhead{font-size:11px;letter-spacing:.28em;text-transform:uppercase;opacity:.7;margin-top:2px}
+  .purse{display:flex;align-items:center;gap:6px;font-size:15px}
+  .purse .p{color:var(--pink)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  @media(max-width:430px){.grid2{grid-template-columns:1fr}}
+  .up{background:var(--paper);border:3px solid var(--key);padding:9px 10px;display:flex;flex-direction:column;gap:4px;
+    box-shadow:4px 4px 0 var(--teal)}
+  .up .r1{display:flex;justify-content:space-between;align-items:baseline;gap:6px}
+  .up .nm{font-size:13px;text-transform:uppercase}
+  .up .pips{display:flex;gap:2px}
+  .up .pip{width:8px;height:8px;border:2px solid var(--key);background:var(--paper)}
+  .up .pip.on{background:var(--pink)}
+  .up .ds{font-size:11px;line-height:1.35;opacity:.85}
+  .up .buy{align-self:flex-end;margin-top:2px}
+  .hulls{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+  .hull{display:flex;gap:10px;align-items:center;background:var(--paper);border:3px solid var(--key);
+    padding:8px;box-shadow:4px 4px 0 var(--pink);cursor:pointer}
+  .hull.sel{background:var(--paper2);box-shadow:4px 4px 0 var(--teal)}
+  .hull.lock{border-style:dashed;box-shadow:4px 4px 0 rgba(23,23,28,.25)}
+  .hull canvas{width:56px;height:56px;flex:0 0 auto;border:2px solid var(--key);background:var(--paper2)}
+  .hull .txt{flex:1 1 auto;min-width:0}
+  .hull .nm{font-size:14px;text-transform:uppercase}
+  .hull .ds{font-size:11px;line-height:1.35;opacity:.85;margin-top:2px}
+  .hull .tag{font-size:10px;letter-spacing:.1em;color:var(--teal);margin-top:3px;text-transform:uppercase}
+
+  /* ---------------------------------------------------------- stage select */
+  .stagelist{display:flex;flex-direction:column;gap:7px;margin-top:10px}
+  .st{display:flex;align-items:center;gap:9px;background:var(--paper);border:3px solid var(--key);
+    padding:9px 10px;cursor:pointer;box-shadow:4px 4px 0 var(--key)}
+  .st.lock{opacity:.45;pointer-events:none}
+  .st .no{font-size:19px;min-width:30px;text-align:center}
+  .st .txt{flex:1 1 auto;min-width:0}
+  .st .nm{font-size:13px;text-transform:uppercase}
+  .st .ds{font-size:10px;letter-spacing:.08em;opacity:.72;text-transform:uppercase;margin-top:2px}
+  .st .depth{font-size:10px;letter-spacing:.1em;padding:3px 7px;border:2px solid var(--key);white-space:nowrap}
+  .diffrow{display:flex;gap:6px;justify-content:center;margin-top:10px;flex-wrap:wrap}
+
+  /* ---------------------------------------------------------- panels */
+  #pause .sheet,#results .sheet,#stats .sheet{margin:auto}
+  .statrow{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:4px 0;
+    border-bottom:2px dotted rgba(23,23,28,.28)}
+  .statrow b{font-weight:900}
+  .kitlist{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+  .kitpill{display:flex;align-items:center;gap:4px;border:2px solid var(--key);padding:3px 7px;font-size:11px}
+  .kitpill i{font-style:normal;color:var(--pink)}
+  #toast{position:fixed;left:50%;bottom:24%;transform:translateX(-50%);z-index:40;pointer-events:none;
+    display:flex;flex-direction:column;gap:6px;align-items:center}
+  .toast{background:var(--key);color:var(--paper);padding:7px 13px;font-size:12px;letter-spacing:.06em;
+    text-transform:uppercase;box-shadow:4px 4px 0 var(--pink);animation:tfade 1.8s ease forwards}
+  @keyframes tfade{0%{opacity:0;transform:translateY(8px)}12%{opacity:1;transform:none}
+    72%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+  .scrollcap{max-height:min(52vh,420px);overflow:auto;overscroll-behavior:contain;padding-right:2px}
+  .row{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+  .center{text-align:center}
+  .tiny{font-size:10px;letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<!-- ------------------------------------------------------------- HUD -->
+<div id="hud">
+  <div id="hudtop">
+    <div id="hudleft">
+      <div class="hudbtn" id="bpause">II</div>
+      <div class="hudbtn wide" id="bspeed">1×</div>
+    </div>
+    <div id="stagebar">
+      <div id="stagename">—</div>
+      <div id="stagesub">—</div>
+      <div id="progwrap"><div id="progfill"></div><div id="progtxt">0%</div></div>
+    </div>
+    <div id="hudright">
+      <div class="hudbtn" id="bstats">▤</div>
+      <div class="hudbtn wide" id="bdepth">0 M</div>
+    </div>
+  </div>
+  <div id="hudmid"></div>
+  <div id="kitrow"></div>
+  <div id="hpwrap">
+    <div id="hpbar"><div id="hpfill"></div></div>
+    <div id="hptxt" class="mono">100/100</div>
+  </div>
+</div>
+<div id="banner"><div class="big" id="bannertxt">—</div></div>
+<div id="toast"></div>
+
+<!-- ------------------------------------------------------------- title -->
+<div id="title" class="screen on">
+  <div class="sheet">
+    <div class="logo"><h1><span class="a">Leviathan</span><span class="a">Press</span></h1></div>
+    <div class="sub">Three inks · one harpoon · a very long worm</div>
+    <div class="blurb thin">
+      Something segmented is coming up out of the trench. You have a hand-cranked
+      harpoon press and a hull held together by optimism. Cut it apart — every
+      segment you sever splits the thing into two smaller, angrier things.
+    </div>
+    <div class="menucol">
+      <div class="btn pink" id="bdive">Dive ▼</div>
+      <div class="btn" id="bdepot">The Depot</div>
+      <div class="btn ghost" id="bhelp">How it prints</div>
+    </div>
+    <div id="titlefoot" class="thin">
+      <span class="stamp" id="tbest">Best — none</span>
+      <span class="stamp" id="tpearls">0 Pearls</span>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- stage select -->
+<div id="stagesel" class="screen">
+  <div class="sheet">
+    <div class="row">
+      <div><h2>Choose a trench</h2><div class="subhead">Deeper pays better</div></div>
+      <div class="btn ghost" id="bstageback">◀ Back</div>
+    </div>
+    <div class="rule"></div>
+    <div class="diffrow" id="diffrow"></div>
+    <div class="stagelist scrollcap" id="stagelist"></div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- depot -->
+<div id="depot" class="screen">
+  <div class="sheet">
+    <div class="row">
+      <div><h2>The Depot</h2><div class="subhead">Spend what you dredged up</div></div>
+      <div class="row" style="gap:8px">
+        <div class="purse"><span class="p">◈</span><span id="dpearls" class="mono">0</span></div>
+        <div class="btn ghost" id="bdepotback">◀ Back</div>
+      </div>
+    </div>
+    <div class="rule"></div>
+    <div class="subhead">Hulls</div>
+    <div class="hulls" id="hulllist"></div>
+    <div class="rule thin"></div>
+    <div class="subhead">Standing orders</div>
+    <div class="grid2" id="upgrid"></div>
+    <div class="rule thin"></div>
+    <div class="row" style="margin-top:6px">
+      <div class="btn ghost" id="bwipe">Wipe the plate (reset)</div>
+      <div class="btn ghost" id="bsound">Sound: on</div>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- draft -->
+<div id="draft" class="screen">
+  <div class="sheet">
+    <div id="drafthead">
+      <div class="kicker">Retool the press</div>
+      <h2>Pick a plate</h2>
+    </div>
+    <div id="rarityramp"></div>
+    <div id="cards"></div>
+    <div id="draftfoot">
+      <div class="btn" id="breroll">Re-ink ⟳ <span class="mono" id="rerollN">0</span></div>
+      <div class="btn sun" id="btakeall">Take all <span class="mono" id="takeN">0</span></div>
+      <div class="btn ghost" id="bskip">Skip → +HULL</div>
+    </div>
+    <div id="draftnote">Re-inking rolls a fresh sheet — better odds on the top inks</div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- pause -->
+<div id="pause" class="screen">
+  <div class="sheet panel" style="padding:16px">
+    <h2>Press halted</h2>
+    <div class="subhead" id="pausesub">—</div>
+    <div class="rule"></div>
+    <div class="menucol">
+      <div class="btn pink" id="bresume">Resume</div>
+      <div class="btn" id="bpstats">Run sheet</div>
+      <div class="btn ghost" id="bquit">Scuttle the dive</div>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- stats -->
+<div id="stats" class="screen">
+  <div class="sheet panel teal" style="padding:16px">
+    <div class="row"><h2>Run sheet</h2><div class="btn ghost" id="bstatsback">Close</div></div>
+    <div class="rule"></div>
+    <div class="scrollcap" id="statbody"></div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- results -->
+<div id="results" class="screen">
+  <div class="sheet panel" style="padding:16px">
+    <h2 id="resttl">Pressed flat</h2>
+    <div class="subhead" id="ressub">—</div>
+    <div class="rule"></div>
+    <div id="resbody"></div>
+    <div class="rule thin"></div>
+    <div class="menucol">
+      <div class="btn pink" id="bagain">Dive again</div>
+      <div class="btn ghost" id="bresmenu">Back to the dock</div>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------- help -->
+<div id="help" class="screen">
+  <div class="sheet panel teal" style="padding:16px">
+    <div class="row"><h2>How it prints</h2><div class="btn ghost" id="bhelpback">Close</div></div>
+    <div class="rule"></div>
+    <div class="thin" style="font-size:13px;line-height:1.6" id="helpbody"></div>
+  </div>
+</div>
+
+<script>
+/* ==================================================================
+   LEVIATHAN PRESS
+   A one-file canvas game. Vertical arena, auto-firing harpoon press at
+   the bottom, a segmented leviathan coiling down from the top. Sever a
+   middle segment and the worm splits in two — that is the whole game.
+   Rendered through a fake three-ink risograph pipeline (see RISO).
+   Headless suite: tests/leviathan_press.test.mjs drives window.LP.
+   ================================================================== */
+const HEADLESS = typeof __LP_HEADLESS__ !== 'undefined';
+const now = () => (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+
+/* ============================ tuning ============================== */
+const C = {
+  // logical play field, recomputed on fit(). The sim is written against a
+  // 720-wide virtual page so a phone and a desktop play identically.
+  VW: 720, VH: 1280, W: 720, H: 1280,
+  FLOOR: 240,            // how tall the player's water column is, from bottom
+  DECK: 120,             // the deck (and the HUD strip) eats the very bottom
+  PLAY_PAD: 24,
+
+  BASE_HP: 100,
+  BASE_DMG: 11,
+  BASE_FIRE: 0.40,       // seconds per volley
+  BASE_PSPD: 900,
+  BASE_SPEED: 620,       // px/s the hull chases the pointer
+  BASE_MAGNET: 78,
+
+  SEG_R: 34,             // segment radius
+  SEG_GAP: 52,           // spacing along the trail
+  WORM_SPD: 78,          // px/s base crawl
+  TRAIL: 2200,           // trail samples kept per worm
+
+  IFRAME: 0.85,
+  CONTACT_DMG: 12,
+  SPIT_DMG: 9,
+
+  DROP_LIFE: 9,
+  MAX_PROJ: 420,
+  MAX_PARTS: 460,
+
+  DRAFT_STEPS: [0.10, 0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.92], // marks that open a draft
+  DRAFT_SECS: 38,        // ...and one on the clock, so long trenches still build
+  SYS_MAX: 5,
+  PIERCE_CAP: 12,
+  SPREAD_CAP: 7,
+  BURST_CAP: 6,
+};
+
+/* ============================ helpers ============================= */
+const clamp = (v, a, b) => v < a ? a : (v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+const dist2 = (ax, ay, bx, by) => { const dx = ax - bx, dy = ay - by; return dx * dx + dy * dy; };
+const dist = (ax, ay, bx, by) => Math.sqrt(dist2(ax, ay, bx, by));
+const TAU = Math.PI * 2;
+const fmt = n => {
+  n = Math.round(n);
+  if (n >= 1e9) return (n / 1e9).toFixed(1) + 'B';
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e4) return (n / 1e3).toFixed(1) + 'k';
+  return '' + n;
+};
+const pct = v => Math.round(v * 100) + '%';
+
+// xorshift so runs can be replayed / tests are deterministic
+let _seed = 123456789;
+function reseed(s){ _seed = (s >>> 0) || 1; }
+function rnd(){
+  _seed ^= _seed << 13; _seed >>>= 0;
+  _seed ^= _seed >> 17;
+  _seed ^= _seed << 5;  _seed >>>= 0;
+  return _seed / 4294967296;
+}
+const rr = (a, b) => a + rnd() * (b - a);
+const ri = (a, b) => Math.floor(rr(a, b + 1));
+const pick = arr => arr[Math.floor(rnd() * arr.length) % arr.length];
+
+/* ============================ rarity ============================== */
+const RARITY = [
+  { id:'chalk', nm:'Chalk', col:'#8d8a80', w:54, mul:1.00 },
+  { id:'kelp',  nm:'Kelp',  col:'#2f8f6b', w:25, mul:1.50 },
+  { id:'tide',  nm:'Tide',  col:'#2b6be0', w:13, mul:2.10 },
+  { id:'coral', nm:'Coral', col:'#ff3d87', w:6,  mul:3.00 },
+  { id:'solar', nm:'Solar', col:'#ff9a1f', w:2,  mul:4.30 },
+];
+const RAR = {}; RARITY.forEach((r, i) => { RAR[r.id] = r; r.tier = i; });
+// luck (0..) tilts the sheet upward: every point of luck moves weight from the
+// bottom of the ramp toward the top. 100 luck ≈ Chalk is no longer the default.
+function rarityWeights(luck){
+  const k = clamp(luck, 0, 400) / 100;
+  return RARITY.map((r, i) => Math.max(0.02, r.w * Math.pow(1 + k, i * 0.9 - 0.55)));
+}
+function rollRarity(luck){
+  const w = rarityWeights(luck);
+  let tot = 0; for (const x of w) tot += x;
+  let n = rnd() * tot;
+  for (let i = 0; i < w.length; i++){ n -= w[i]; if (n <= 0) return RARITY[i]; }
+  return RARITY[0];
+}
+// a system card at higher rarity is simply worth more levels at once
+const SYS_LEVELS = [1, 1, 2, 2, 3];
+
+/* ============================ upgrades ============================ */
+// kind 'stat': apply(P, v) with v already scaled by rarity.
+// kind 'sys' : grants levels in a subsystem (see SYS below).
+const UPGRADES = [
+  { id:'dmg', nm:'Heavier Barb', kind:'stat', art:'barb', base:0.14, int:false,
+    ds:v => `Harpoon damage <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.dmg += v; } },
+  { id:'fire', nm:'Faster Crank', kind:'stat', art:'crank', base:0.15,
+    ds:v => `Fire rate <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.fire += v; } },
+  { id:'pspd', nm:'Tight Spring', kind:'stat', art:'spring', base:0.22,
+    ds:v => `Harpoon flight speed <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.pspd += v; } },
+  { id:'pierce', nm:'Needle Point', kind:'stat', art:'pierce', base:1, int:true,
+    ds:v => `Punches through <b>+${v}</b> more segment${v > 1 ? 's' : ''}`,
+    apply:(P, v) => { P.s.pierce = Math.min(C.PIERCE_CAP, P.s.pierce + v); } },
+  { id:'spread', nm:'Twin Rail', kind:'stat', art:'spread', base:1, int:true, cap:1,
+    ds:v => `<b>+${v}</b> harpoon per volley (fanned)`,
+    apply:(P, v) => { P.s.spread = Math.min(C.SPREAD_CAP, P.s.spread + v); } },
+  { id:'burst', nm:'Rapid Press', kind:'stat', art:'burst', base:1, int:true, cap:1,
+    ds:v => `<b>+${v}</b> follow-up shot in the volley`,
+    apply:(P, v) => { P.s.burst = Math.min(C.BURST_CAP, P.s.burst + v); } },
+  { id:'crit', nm:'Weak Seam', kind:'stat', art:'crit', base:0.07,
+    ds:v => `Critical chance <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.crit += v; } },
+  { id:'critx', nm:'Hammer Blow', kind:'stat', art:'hammer', base:0.35,
+    ds:v => `Critical damage <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.critx += v; } },
+  { id:'hp', nm:'Plate Hull', kind:'stat', art:'hull', base:18, int:true,
+    ds:v => `Max hull <b>+${v}</b>, repaired on fitting`,
+    apply:(P, v) => { P.s.hpAdd += v; P.mhp += v; P.hp += v; } },
+  { id:'regen', nm:'Patch Kit', kind:'stat', art:'patch', base:0.7,
+    ds:v => `Repairs <b>${v.toFixed(1)}</b> hull per second`, apply:(P, v) => { P.s.regen += v; } },
+  { id:'speed', nm:'Trim Ballast', kind:'stat', art:'ballast', base:0.16,
+    ds:v => `Move speed <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.speed += v; } },
+  { id:'magnet', nm:'Ink Magnet', kind:'stat', art:'magnet', base:0.35,
+    ds:v => `Pickup reach <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.magnet += v; } },
+  { id:'luck', nm:'Lucky Print', kind:'stat', art:'luck', base:14, int:true,
+    ds:v => `Luck <b>+${v}</b> — richer inks on the draft sheet`, apply:(P, v) => { P.s.luck += v; } },
+  { id:'salvage', nm:'Salvage Claw', kind:'stat', art:'claw', base:0.20,
+    ds:v => `Pearls from this dive <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.salvage += v; } },
+  { id:'etch', nm:'Etching Acid', kind:'stat', art:'acid', base:0.45,
+    ds:v => `<b>+${pct(v)}</b> damage to plating`, apply:(P, v) => { P.s.etch += v; } },
+  { id:'headhunt', nm:'Ill Will', kind:'stat', art:'skull', base:0.28,
+    ds:v => `<b>+${pct(v)}</b> damage to heads &amp; cores`, apply:(P, v) => { P.s.head += v; } },
+  { id:'vamp', nm:'Siphon Line', kind:'stat', art:'siphon', base:0.6,
+    ds:v => `Sever a segment, mend <b>${v.toFixed(1)}</b> hull`, apply:(P, v) => { P.s.vamp += v; } },
+  { id:'cleave', nm:'Cleaver', kind:'stat', art:'cleave', base:0.30,
+    ds:v => `Severed segments spit shrapnel — <b>${pct(v)}</b> damage`,
+    apply:(P, v) => { P.s.cleave += v; } },
+
+  // ---- subsystems -------------------------------------------------
+  { id:'sonar', nm:'Sonar Pulse', kind:'sys', art:'sonar',
+    ds:l => `Ring of pressure every <b>${SYS.sonar.cd(l).toFixed(1)}s</b> — ${Math.round(SYS.sonar.dmg(l))} damage` },
+  { id:'mines', nm:'Ink Mines', kind:'sys', art:'mine',
+    ds:l => `Drops a drifting mine every <b>${SYS.mines.cd(l).toFixed(1)}s</b>` },
+  { id:'drones', nm:'Bloom Drones', kind:'sys', art:'drone',
+    ds:l => `<b>${SYS.drones.count(l)}</b> drone${SYS.drones.count(l) > 1 ? 's' : ''} orbit and spit` },
+  { id:'chain', nm:'Voltbloom', kind:'sys', art:'volt',
+    ds:l => `Hits arc to <b>${SYS.chain.jumps(l)}</b> nearby segments` },
+  { id:'frost', nm:'Cold Current', kind:'sys', art:'frost',
+    ds:l => `Hits chill the worm <b>${pct(SYS.frost.slow(l))}</b> slower` },
+  { id:'venom', nm:'Venom Barb', kind:'sys', art:'venom',
+    ds:l => `Hits leak venom — <b>${Math.round(SYS.venom.dps(l))}</b> damage per second` },
+  { id:'flail', nm:'Anchor Flail', kind:'sys', art:'anchor',
+    ds:l => `<b>${SYS.flail.count(l)}</b> anchor${SYS.flail.count(l) > 1 ? 's' : ''} swing around the hull` },
+  { id:'bombs', nm:'Depth Charges', kind:'sys', art:'bomb',
+    ds:l => `Lobs a charge every <b>${SYS.bombs.cd(l).toFixed(1)}s</b> — splash ${Math.round(SYS.bombs.dmg(l))}` },
+  { id:'shield', nm:'Bubble Shield', kind:'sys', art:'bubble',
+    ds:l => `A bubble reforms every <b>${SYS.shield.cd(l).toFixed(0)}s</b> and eats one hit` },
+];
+const UP = {}; UPGRADES.forEach(u => { UP[u.id] = u; });
+
+// subsystem scaling — one place, so the card text and the sim never disagree
+const SYS = {
+  sonar:  { nm:'Sonar Pulse', cd:l => 3.4 - 0.42 * l, dmg:l => 16 + 13 * l, rad:l => 150 + 26 * l },
+  mines:  { nm:'Ink Mines',   cd:l => 3.2 - 0.4 * l,  dmg:l => 24 + 20 * l, rad:l => 74 + 10 * l },
+  drones: { nm:'Bloom Drones',count:l => Math.min(6, 1 + Math.floor(l * 0.9)), cd:l => 1.15 - 0.1 * l, dmg:l => 7 + 5 * l },
+  chain:  { nm:'Voltbloom',   jumps:l => l, dmg:l => 0.42 + 0.1 * l, rad:l => 130 + 14 * l },
+  frost:  { nm:'Cold Current',slow:l => Math.min(0.62, 0.13 * l), dur:l => 1.4 + 0.3 * l },
+  venom:  { nm:'Venom Barb',  dps:l => 5 + 5.5 * l, dur:l => 3 + 0.5 * l },
+  flail:  { nm:'Anchor Flail',count:l => Math.min(4, 1 + Math.floor((l - 1) / 2)), dmg:l => 12 + 11 * l,
+            rad:l => 96 + 12 * l, spd:l => 2.1 + 0.22 * l },
+  bombs:  { nm:'Depth Charges',cd:l => 3.6 - 0.44 * l, dmg:l => 34 + 26 * l, rad:l => 96 + 14 * l },
+  shield: { nm:'Bubble Shield',cd:l => 15 - 2.1 * l },
+};
+const SYS_IDS = Object.keys(SYS);
+
+/* ============================ hulls =============================== */
+const HULLS = [
+  { id:'tin', nm:'Tin Kettle', cost:0, art:'tin',
+    ds:'Honest, dented, unremarkable. Does exactly what the manual says.',
+    tag:'Balanced', mod:{} },
+  { id:'needle', nm:'The Needle', cost:140, art:'needle',
+    ds:'A crank geared for speed and a barb ground to a point. Made of foil.',
+    tag:'+45% fire rate · +1 pierce · 70% hull', mod:{ fire:0.45, pierce:1, hp:-0.30 } },
+  { id:'anvil', nm:'Anvil', cost:230, art:'anvil',
+    ds:'Slow, mean, and heavy enough to sit still while something bites it.',
+    tag:'+55% hull · +30% damage · −20% fire rate · sluggish', mod:{ hp:0.55, dmg:0.30, fire:-0.20, speed:-0.18 } },
+  { id:'mote', nm:'Mote', cost:340, art:'mote',
+    ds:'Barely a hull. Mostly a fin with opinions.',
+    tag:'+45% speed · +1 fan shot · 60% hull · +40% reach', mod:{ speed:0.45, spread:1, hp:-0.40, magnet:0.40 } },
+  { id:'bloom', nm:'Bloomjar', cost:420, art:'bloom',
+    ds:'A jar of stolen lightning wired to the firing pin.',
+    tag:'Starts with Voltbloom II · −15% damage', mod:{ dmg:-0.15, sys:{ chain:2 } } },
+  { id:'press', nm:'Hand Press', cost:560, art:'press',
+    ds:'The old shop press. Prints better plates than anything on the dock.',
+    tag:'+2 re-inks · +1 take-all · +40 luck · 75% hull', mod:{ hp:-0.25, luck:40, reroll:2, takeall:1 } },
+];
+const HULL = {}; HULLS.forEach(h => { HULL[h.id] = h; });
+
+/* ============================ stages ============================== */
+// quota = segments to sever before the core surfaces. mix = spawn weights.
+const STAGES = [
+  { id:1,  nm:'The Shelf',        boss:'Kelp Wyrm',       depth:60,   quota:34,  hp:1.00, spd:1.00,
+    mix:{ flesh:10 } },
+  { id:2,  nm:'Sunken Barge',     boss:'Rust Eel',        depth:140,  quota:44,  hp:1.26, spd:1.05,
+    mix:{ flesh:10, plate:3 } },
+  { id:3,  nm:'Ink Shelf',        boss:'Blot Serpent',    depth:240,  quota:54,  hp:1.55, spd:1.10,
+    mix:{ flesh:10, plate:3, spit:3 } },
+  { id:4,  nm:'Bone Reef',        boss:'Chalk Nautilid',  depth:380,  quota:64,  hp:1.90, spd:1.14,
+    mix:{ flesh:10, plate:5, bulb:3 } },
+  { id:5,  nm:'The Thermocline',  boss:'Glass Ribbon',    depth:540,  quota:74,  hp:2.35, spd:1.20,
+    mix:{ flesh:10, plate:4, spit:4, bulb:3 } },
+  { id:6,  nm:'Drowned Press',    boss:'Paper Wyrm',      depth:720,  quota:84,  hp:2.90, spd:1.24,
+    mix:{ flesh:10, plate:5, spit:4, knot:3 } },
+  { id:7,  nm:'Midnight Terrace', boss:'Lantern Coil',    depth:980,  quota:96,  hp:3.55, spd:1.30,
+    mix:{ flesh:10, plate:5, spit:5, bulb:4, knot:3 } },
+  { id:8,  nm:'The Gyre',         boss:'Twine Leviathan', depth:1300, quota:108, hp:4.35, spd:1.36,
+    mix:{ flesh:10, plate:6, spit:5, bulb:4, knot:4 } },
+  { id:9,  nm:'Cold Seep',        boss:'Frost Annelid',   depth:1700, quota:120, hp:5.30, spd:1.42,
+    mix:{ flesh:10, plate:7, spit:6, bulb:4, knot:4 } },
+  { id:10, nm:'The Trench Mouth', boss:'Maw Chain',       depth:2300, quota:134, hp:6.50, spd:1.48,
+    mix:{ flesh:10, plate:7, spit:7, bulb:5, knot:5 } },
+  { id:11, nm:'Hadal Fold',       boss:'Fold Leviathan',  depth:3100, quota:148, hp:7.90, spd:1.55,
+    mix:{ flesh:10, plate:8, spit:7, bulb:6, knot:5 } },
+  { id:12, nm:'The Press',        boss:'PRIME LEVIATHAN', depth:4200, quota:164, hp:9.60, spd:1.62,
+    mix:{ flesh:10, plate:8, spit:8, bulb:6, knot:6 } },
+];
+const ENDLESS = { id:99, nm:'The Long Column', boss:'It Keeps Going', depth:5000, quota:180, hp:11.5, spd:1.68,
+  mix:{ flesh:10, plate:8, spit:8, bulb:7, knot:7 }, endless:true };
+const STAGE = {}; STAGES.forEach(s => { STAGE[s.id] = s; }); STAGE[99] = ENDLESS;
+
+const TIERS = [
+  { id:0, nm:'Shallows', hp:0.72, spd:0.90, pay:0.7 },
+  { id:1, nm:'Twilight', hp:1.00, spd:1.00, pay:1.0 },
+  { id:2, nm:'Midnight', hp:1.45, spd:1.10, pay:1.5 },
+  { id:3, nm:'Abyssal',  hp:2.10, spd:1.20, pay:2.2 },
+  { id:4, nm:'Hadal',    hp:3.10, spd:1.32, pay:3.2 },
+];
+
+/* ============================ meta ================================ */
+const META_UPS = [
+  { id:'hull',    nm:'Thicker Plate',  max:6, cost:l => 40 + l * 45,  ds:l => `Max hull +${8 * l}` },
+  { id:'barb',    nm:'Ground Barb',    max:6, cost:l => 45 + l * 50,  ds:l => `Harpoon damage +${8 * l}%` },
+  { id:'crank',   nm:'Oiled Crank',    max:5, cost:l => 50 + l * 55,  ds:l => `Fire rate +${5 * l}%` },
+  { id:'reroll',  nm:'Spare Ink',      max:3, cost:l => 70 + l * 90,  ds:l => `+${l} re-ink per draft` },
+  { id:'takeall', nm:'Full Sheet',     max:2, cost:l => 160 + l * 180,ds:l => `+${l} take-all per dive` },
+  { id:'salvage', nm:'Deeper Nets',    max:5, cost:l => 45 + l * 48,  ds:l => `Pearls +${12 * l}%` },
+  { id:'luck',    nm:'Printer’s Luck', max:5, cost:l => 55 + l * 60,  ds:l => `Luck +${8 * l}` },
+  { id:'magnet',  nm:'Long Gaff',      max:3, cost:l => 40 + l * 40,  ds:l => `Pickup reach +${20 * l}%` },
+  { id:'lifeboat',nm:'Lifeboat',       max:1, cost:() => 300,         ds:() => 'Once per dive, come back at half hull' },
+  { id:'kit',     nm:'Loaded Bay',     max:1, cost:() => 260,         ds:() => 'Start every dive with a random subsystem' },
+];
+const MUP = {}; META_UPS.forEach(m => { MUP[m.id] = m; });
+
+const SAVE_KEY = 'lp_save_v1';
+function freshMeta(){
+  return { pearls:0, up:{}, hulls:['tin'], hull:'tin', cleared:{}, best:{ depth:0, kills:0, stage:0, tier:0 },
+           opts:{ sound:true, quality:1 }, runs:0, tier:1 };
+}
+let META = freshMeta();
+function loadMeta(){
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw){
+      const m = JSON.parse(raw);
+      META = Object.assign(freshMeta(), m);
+      META.up = Object.assign({}, m.up || {});
+      META.best = Object.assign(freshMeta().best, m.best || {});
+      META.opts = Object.assign(freshMeta().opts, m.opts || {});
+      META.cleared = Object.assign({}, m.cleared || {});
+      if (!Array.isArray(META.hulls) || !META.hulls.length) META.hulls = ['tin'];
+      if (!HULL[META.hull] || META.hulls.indexOf(META.hull) < 0) META.hull = 'tin';
+    }
+  } catch (e){ META = freshMeta(); }
+  return META;
+}
+function saveMeta(){
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(META)); } catch (e){}
+}
+const mlvl = id => META.up[id] || 0;
+function metaCost(id){
+  const m = MUP[id], l = mlvl(id);
+  if (l >= m.max) return Infinity;
+  return Math.round(m.cost(l + 1));
+}
+function buyMeta(id){
+  const m = MUP[id]; if (!m) return false;
+  const c = metaCost(id);
+  if (!isFinite(c) || META.pearls < c) return false;
+  META.pearls -= c;
+  META.up[id] = mlvl(id) + 1;
+  saveMeta();
+  return true;
+}
+function buyHull(id){
+  const h = HULL[id]; if (!h) return false;
+  if (META.hulls.indexOf(id) >= 0){ META.hull = id; saveMeta(); return true; }
+  if (META.pearls < h.cost) return false;
+  META.pearls -= h.cost;
+  META.hulls.push(id);
+  META.hull = id;
+  saveMeta();
+  return true;
+}
+// a trench is open once the one before it has been cleared on any tier
+function stageOpen(id){
+  if (id === 1) return true;
+  // tier 0 (Shallows) is a legitimate clear, so test for presence not truth
+  if (id === 99) return META.cleared[12] != null;
+  return META.cleared[id - 1] != null;
+}
+function tierOpen(t){
+  if (t <= 1) return true;
+  // clearing anything on tier t-1 unlocks tier t
+  for (const k in META.cleared) if ((META.cleared[k] | 0) >= t - 1) return true;
+  return false;
+}
+/* ==================================================================
+   RISO — the art style.
+
+   Nothing is drawn straight to the screen. Every shape goes onto one of
+   three alpha-coverage layers: TEAL, PINK, KEY (black). At the end of the
+   frame each layer is screened with a rotated halftone dot grid, tinted
+   with its ink, and stamped onto the paper with `multiply` at a slightly
+   wrong offset — the way a cheap duplicator slips between passes. Then a
+   sheet of paper grain and a roller streak or two go over the top.
+
+   The consequence for the game code: you never pick a colour, you pick an
+   INK and a COVERAGE (alpha). Overlap of pink+teal makes the deep blacks,
+   which is why the abyss reads as printed rather than lit.
+   ================================================================== */
+const INKS = {
+  teal: '#009ea3',
+  pink: '#ff3d87',
+  key:  '#17171c',
+};
+const INK_ORDER = ['teal', 'pink', 'key'];
+const INK_ANGLE = { teal: 0.26, pink: 1.31, key: 0.79 };  // screen angles, radians
+const PAPER = '#efe6d4', DESK = '#cdc2a8';
+
+const cv = document.getElementById('cv');
+const X = cv.getContext('2d');
+let cw = 720, ch = 1280, dpr = 1;
+let pageX = 0, pageY = 0, pageW = 720, pageH = 1280, SC = 1, RS = 0.72;
+const LAY = {};      // ink -> {cv, ctx}
+let dotPat = null, grainPat = null, grainCv = null, grainSheet = null;
+let sheetCv = null, sheetX = null;   // inks are combined here, then upscaled once
+let streaks = [];
+
+function mkCanvas(w, h){
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h));
+  return c;
+}
+
+// ---- the halftone screen + the paper grain, baked once -------------
+function bakeTextures(){
+  // dot cell: a soft dot we punch *out* of solid ink, which is what gives
+  // flat fills that printed, slightly starved texture.
+  const d = 5;
+  const c = mkCanvas(d, d), g = c.getContext('2d');
+  if (g && g.clearRect){
+    g.clearRect(0, 0, d, d);
+    g.fillStyle = 'rgba(0,0,0,0.85)';
+    g.beginPath(); g.arc(d * 0.5, d * 0.5, d * 0.29, 0, TAU); g.fill();
+    g.fillStyle = 'rgba(0,0,0,0.35)';
+    g.beginPath(); g.arc(0, 0, d * 0.2, 0, TAU); g.fill();
+    g.beginPath(); g.arc(d, d, d * 0.2, 0, TAU); g.fill();
+  }
+  dotPat = X.createPattern ? X.createPattern(c, 'repeat') : null;
+
+  const gs = 128;
+  grainCv = mkCanvas(gs, gs);
+  const gg = grainCv.getContext('2d');
+  if (gg && gg.fillRect){
+    gg.clearRect(0, 0, gs, gs);
+    for (let i = 0; i < 2600; i++){
+      const a = 0.03 + rnd() * 0.16;
+      gg.fillStyle = 'rgba(23,23,28,' + a.toFixed(3) + ')';
+      const s = rnd() < 0.08 ? 2 : 1;
+      gg.fillRect(Math.floor(rnd() * gs), Math.floor(rnd() * gs), s, s);
+    }
+    for (let i = 0; i < 60; i++){       // paper fibres
+      gg.fillStyle = 'rgba(23,23,28,0.05)';
+      gg.fillRect(Math.floor(rnd() * gs), Math.floor(rnd() * gs), rnd() < 0.5 ? 6 : 1, rnd() < 0.5 ? 1 : 6);
+    }
+  }
+  grainPat = X.createPattern ? X.createPattern(grainCv, 'repeat') : null;
+  // one pre-inked sheet of grain, tiled at bake time
+  grainSheet = mkCanvas(Math.max(2, pageW * 0.5), Math.max(2, pageH * 0.5));
+  const sg = grainSheet.getContext('2d');
+  if (sg && grainPat && sg.fillRect){
+    sg.fillStyle = grainPat;
+    sg.fillRect(0, 0, grainSheet.width, grainSheet.height);
+  }
+
+  streaks = [];
+  for (let i = 0; i < 4; i++) streaks.push({ x: rnd(), w: 0.01 + rnd() * 0.05, a: 0.02 + rnd() * 0.05 });
+}
+
+function quality(){ return META.opts.quality == null ? 1 : META.opts.quality; }
+
+function fit(){
+  dpr = Math.min(1.5, (typeof devicePixelRatio === 'number' ? devicePixelRatio : 1) || 1);
+  cw = Math.max(240, (typeof innerWidth === 'number' ? innerWidth : 720));
+  ch = Math.max(320, (typeof innerHeight === 'number' ? innerHeight : 1280));
+  cv.width = Math.round(cw * dpr); cv.height = Math.round(ch * dpr);
+  cv.style.width = cw + 'px'; cv.style.height = ch + 'px';
+
+  // The play field is a printed page: portrait, centred, with the desk
+  // showing on either side when the window is wide.
+  pageH = ch;
+  pageW = Math.min(cw, ch * 0.63);
+  pageX = (cw - pageW) / 2; pageY = 0;
+  C.W = C.VW;
+  C.H = Math.round(C.VW * pageH / pageW);
+  SC = pageW / C.VW;
+
+  const q = quality();
+  RS = q >= 2 ? 0.85 : (q === 1 ? 0.62 : 0.45);
+  for (const ink of INK_ORDER){
+    const c = mkCanvas(pageW * RS, pageH * RS);
+    LAY[ink] = { cv: c, ctx: c.getContext('2d') };
+  }
+  sheetCv = mkCanvas(pageW * RS, pageH * RS);
+  sheetX = sheetCv.getContext('2d');
+  bakeTextures();
+  bakeScreens();
+  const hud = document.getElementById('hud');
+  if (hud && hud.style){ hud.style.left = pageX + 'px'; hud.style.right = pageX + 'px'; }
+}
+
+// draw context for an ink, already in game coordinates
+function L(ink){ return LAY[ink] ? LAY[ink].ctx : null; }
+
+function beginFrame(){
+  for (const ink of INK_ORDER){
+    const l = LAY[ink]; if (!l || !l.ctx) continue;
+    const g = l.ctx;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, l.cv.width, l.cv.height);
+    g.setTransform(RS * SC, 0, 0, RS * SC, 0, 0);
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+  }
+}
+
+// The rotated dot screen is identical every frame, so it is painted once
+// into a per-ink texture at resize time. Punching it out is then a single
+// drawImage instead of a multi-megapixel rotated pattern fill — that one
+// change is the difference between 14fps and 60.
+const SCREENS_CV = {};
+function bakeScreens(){
+  for (const ink of INK_ORDER){
+    const l = LAY[ink]; if (!l) continue;
+    const c = mkCanvas(l.cv.width, l.cv.height);
+    const g = c.getContext('2d');
+    if (g && dotPat && g.save){
+      g.save();
+      g.translate(c.width / 2, c.height / 2);
+      g.rotate(INK_ANGLE[ink]);
+      g.globalAlpha = quality() === 0 ? 0.26 : 0.36;
+      g.fillStyle = dotPat;
+      const r = Math.hypot(c.width, c.height);
+      g.fillRect(-r, -r, r * 2, r * 2);
+      g.restore();
+    }
+    SCREENS_CV[ink] = c;
+  }
+}
+function screenInk(ink){
+  const l = LAY[ink], sc = SCREENS_CV[ink];
+  if (!l || !l.ctx || !sc || !dotPat) return;
+  const g = l.ctx;
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.globalCompositeOperation = 'destination-out';
+  g.drawImage(sc, 0, 0);
+  g.globalCompositeOperation = 'source-over';
+}
+
+let regT = 0;
+function endFrame(){
+  // The three passes are combined on a small sheet at layer resolution and
+  // blown up once. Full-screen `multiply` is the single most expensive thing
+  // a canvas game can do; doing it at 60% scale, three times, then one plain
+  // upscale, is roughly three times cheaper and looks identical once the
+  // halftone is on top of it.
+  if (!sheetX){ return; }
+  const sw = sheetCv.width, sh = sheetCv.height;
+  sheetX.setTransform(1, 0, 0, 1, 0, 0);
+  sheetX.globalCompositeOperation = 'source-over';
+  sheetX.globalAlpha = 1;
+  sheetX.fillStyle = PAPER; sheetX.fillRect(0, 0, sw, sh);
+
+  regT += 0.016;
+  for (const ink of INK_ORDER){
+    const l = LAY[ink]; if (!l || !l.ctx) continue;
+    screenInk(ink);
+    // colour the coverage in place — no second buffer, one pass per ink
+    const g = l.ctx;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = INKS[ink];
+    g.fillRect(0, 0, l.cv.width, l.cv.height);
+    g.globalCompositeOperation = 'source-over';
+    // registration slip: each pass lands a hair off, and drifts
+    const k = ink === 'pink' ? 1 : (ink === 'teal' ? -1 : 0.3);
+    const ox = k * (1.1 + Math.sin(regT * 0.7 + k) * 0.5) * RS;
+    const oy = k * (0.8 + Math.cos(regT * 0.5 + k) * 0.4) * RS;
+    sheetX.globalCompositeOperation = 'multiply';
+    sheetX.drawImage(l.cv, ox, oy);
+  }
+
+  if (grainSheet && quality() > 0){
+    sheetX.globalAlpha = 0.55;
+    sheetX.drawImage(grainSheet, 0, 0, sw, sh);
+    sheetX.globalAlpha = 1;
+  }
+  // roller streaks — the duplicator never quite inks evenly
+  sheetX.fillStyle = '#17171c';
+  for (const s of streaks){
+    sheetX.globalAlpha = s.a;
+    sheetX.fillRect(s.x * sw, 0, Math.max(1, s.w * sw), sh);
+  }
+  sheetX.globalAlpha = 1;
+  sheetX.globalCompositeOperation = 'source-over';
+
+  X.setTransform(dpr, 0, 0, dpr, 0, 0);
+  X.globalCompositeOperation = 'source-over';
+  X.globalAlpha = 1;
+  if (pageX > 1){ X.fillStyle = DESK; X.fillRect(0, 0, cw, ch); }
+  X.drawImage(sheetCv, pageX, pageY, pageW, pageH);
+  // the page sits on a desk: hard edge, hard shadow, no gradient nonsense
+  if (pageX > 1){
+    X.fillStyle = 'rgba(23,23,28,0.30)';
+    X.fillRect(pageX + pageW, 0, Math.min(10, pageX), ch);
+    X.strokeStyle = '#17171c'; X.lineWidth = 2;
+    X.strokeRect(pageX - 1, -2, pageW + 2, ch + 4);
+  }
+}
+
+/* ------------------------- ink primitives ------------------------- */
+// Every shape helper takes the layer ctx first. Alpha is COVERAGE: 1 is a
+// solid pass of that ink, 0.3 is a light screen of it.
+function inkFill(g, a){ if (!g) return; g.fillStyle = 'rgba(0,0,0,' + a + ')'; }
+function inkStroke(g, a, w){ if (!g) return; g.strokeStyle = 'rgba(0,0,0,' + a + ')'; g.lineWidth = w; }
+
+function blobPath(g, x, y, r, seed, wob, n){
+  if (!g) return;
+  n = n || 12; wob = wob == null ? 0.13 : wob;
+  g.beginPath();
+  for (let i = 0; i <= n; i++){
+    const a = (i / n) * TAU;
+    const w = 1 + Math.sin(a * 3 + seed) * wob + Math.sin(a * 5 - seed * 1.7) * wob * 0.6;
+    const px = x + Math.cos(a) * r * w, py = y + Math.sin(a) * r * w;
+    if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
+  }
+  g.closePath();
+}
+function disc(g, x, y, r, a){ if (!g) return; inkFill(g, a); g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
+function ring(g, x, y, r, w, a){ if (!g) return; inkStroke(g, a, w); g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); }
+function line(g, x1, y1, x2, y2, w, a){
+  if (!g) return; inkStroke(g, a, w); g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke();
+}
+function rectF(g, x, y, w, h, a){ if (!g) return; inkFill(g, a); g.fillRect(x, y, w, h); }
+function poly(g, pts, a, close){
+  if (!g || !pts.length) return;
+  g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+  if (close !== false) g.closePath();
+  inkFill(g, a); g.fill();
+}
+function txt(g, s, x, y, size, a, weight){
+  if (!g) return;
+  g.font = (weight || '900') + ' ' + size + 'px "Arial Black","Arial Bold",Impact,system-ui,sans-serif';
+  inkFill(g, a);
+  g.fillText(s, x, y);
+}
+// A number stamped like a price on a label. The colour passes get an
+// ellipse punched out of them so the digits sit on bare paper — cheaper
+// than a text-shaped knock-out and it reads more like a real label.
+function stampNum(s, x, y, size, ink){
+  const k = L('key');
+  if (!k) return;
+  const w = ('' + s).length * size * 0.33 + size * 0.24;
+  const h = size * 0.66;
+  for (const id of ['pink', 'teal']){
+    const g = L(id); if (!g) continue;
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = 'rgba(0,0,0,1)';
+    g.beginPath();
+    if (g.ellipse) g.ellipse(x, y, w, h, 0, 0, TAU);
+    else g.arc(x, y, w, 0, TAU);
+    g.fill();
+    g.restore();
+  }
+  txt(k, s, x, y, size, ink == null ? 0.95 : ink);
+}
+/* ==================================================================
+   RUN STATE
+   ================================================================== */
+const G = {
+  state: 'title',            // title | stagesel | depot | run | draft | pause | dead | clear
+  stage: STAGES[0], tier: 1, loop: 0,
+  t: 0, time: 0, speed: 1, paused: false,
+  quota: 0, killed: 0, prog: 0, phase: 'swarm',   // swarm | core | done
+  worms: [], projs: [], eprojs: [], parts: [], drops: [], zones: [], nums: [],
+  core: null, wormSeq: 0,
+  spawnT: 0, spawnGap: 4.2, aliveTarget: 2,
+  cards: [], rerolls: 0, takealls: 0, draftStep: 0, pendingDrafts: 0,
+  shake: 0, flash: 0, hitStop: 0,
+  pearls: 0,
+  stats: { dmg: 0, kills: 0, severed: 0, splits: 0, crits: 0, best: 0, taken: 0, cards: 0, time: 0, src: {} },
+};
+
+const P = {
+  x: 360, y: 1100, tx: 360, ty: 1100, r: 30,
+  hp: 100, mhp: 100, inv: 0, hurtT: 0,
+  fireT: 0, burstLeft: 0, burstT: 0, aim: -Math.PI / 2,
+  hull: 'tin', sys: {}, drones: [], flails: [], shield: 0, shieldT: 0, revived: false,
+  sysT: {}, kills: 0, bob: 0,
+  s: null,
+};
+
+function freshStats(){
+  return {
+    dmg: 1, fire: 1, pspd: 1, pierce: 0, spread: 1, burst: 1,
+    crit: 0.04, critx: 1.6, hpAdd: 0, regen: 0, speed: 1, magnet: 1,
+    luck: 0, salvage: 0, etch: 0, head: 0, vamp: 0, cleave: 0,
+  };
+}
+
+// every level of every card taken this run, for the run sheet
+let TAKEN = {};
+
+function hullMod(id){ return (HULL[id] && HULL[id].mod) || {}; }
+
+function buildPlayer(hullId){
+  const h = hullMod(hullId);
+  const s = freshStats();
+  s.dmg += (h.dmg || 0) + 0.08 * mlvl('barb');
+  s.fire += (h.fire || 0) + 0.05 * mlvl('crank');
+  s.speed += (h.speed || 0);
+  s.pierce += (h.pierce || 0);
+  s.spread += (h.spread || 0);
+  s.magnet += (h.magnet || 0) + 0.20 * mlvl('magnet');
+  s.luck += (h.luck || 0) + 8 * mlvl('luck');
+  s.salvage += 0.12 * mlvl('salvage');
+  P.s = s;
+  P.hull = hullId;
+  P.mhp = Math.round((C.BASE_HP + 8 * mlvl('hull')) * (1 + (h.hp || 0)));
+  P.hp = P.mhp;
+  P.sys = {};
+  P.sysT = {};
+  P.drones = []; P.flails = [];
+  P.shield = 0; P.shieldT = 0;
+  P.revived = !mlvl('lifeboat');   // true = already used / not owned
+  P.inv = 0; P.hurtT = 0; P.kills = 0;
+  P.fireT = 0; P.burstLeft = 0; P.burstT = 0;
+  P.x = P.tx = C.W / 2;
+  P.y = P.ty = C.H - C.DECK - 60;
+  if (h.sys) for (const k in h.sys) addSys(k, h.sys[k]);
+  if (mlvl('kit')) addSys(pick(SYS_IDS), 1);
+  syncSys();
+}
+
+function addSys(id, lv){
+  if (!SYS[id]) return;
+  P.sys[id] = Math.min(C.SYS_MAX, (P.sys[id] || 0) + (lv || 1));
+  if (P.sysT[id] == null) P.sysT[id] = 0.5;
+  syncSys();
+}
+// drones and flails are physical, so their count follows the level
+function syncSys(){
+  const dl = P.sys.drones || 0;
+  const dn = dl ? SYS.drones.count(dl) : 0;
+  while (P.drones.length > dn) P.drones.pop();
+  while (P.drones.length < dn) P.drones.push({ a: rnd() * TAU, t: rnd() * 0.6, x: P.x, y: P.y });
+  const fl = P.sys.flail || 0;
+  const fn = fl ? SYS.flail.count(fl) : 0;
+  while (P.flails.length > fn) P.flails.pop();
+  while (P.flails.length < fn) P.flails.push({ a: rnd() * TAU, x: P.x, y: P.y });
+}
+
+/* ---------------------------- start / end ------------------------- */
+function startRun(stageId, tier, hullId){
+  const st = STAGE[stageId] || STAGES[0];
+  G.stage = st;
+  G.tier = clamp(tier == null ? META.tier : tier, 0, TIERS.length - 1);
+  G.loop = 0;
+  G.t = 0; G.time = 0; G.speed = 1; G.paused = false;
+  G.quota = st.quota; G.killed = 0; G.prog = 0; G.phase = 'swarm';
+  G.worms.length = 0; G.projs.length = 0; G.eprojs.length = 0;
+  G.parts.length = 0; G.drops.length = 0; G.zones.length = 0; G.nums.length = 0;
+  G.core = null; G.wormSeq = 0;
+  G.spawnT = 0.8; G.spawnGap = 4.4; G.aliveTarget = 2;
+  G.cards = []; G.draftStep = 0; G.pendingDrafts = 0; G.draftT = 0; G.lastDt = 0;
+  G.rerolls = 1 + mlvl('reroll') + (hullMod(hullId).reroll || 0);
+  G.takealls = mlvl('takeall') + (hullMod(hullId).takeall || 0);
+  G.shake = 0; G.flash = 0; G.hitStop = 0; G.pearls = 0;
+  G.stats = { dmg: 0, kills: 0, severed: 0, splits: 0, crits: 0, best: 0, taken: 0, cards: 0, time: 0, src: {} };
+  TAKEN = {};
+  buildPlayer(hullId || META.hull || 'tin');
+  spawnWorm();
+  G.state = 'run';
+  return G;
+}
+
+function hpMul(){
+  const t = TIERS[G.tier] || TIERS[1];
+  return G.stage.hp * t.hp * (1 + G.loop * 0.85);
+}
+function spdMul(){
+  const t = TIERS[G.tier] || TIERS[1];
+  return G.stage.spd * t.spd * (1 + G.loop * 0.06);
+}
+function depthNow(){
+  const base = G.stage.depth;
+  const nxt = G.stage.endless ? base * 1.6 : (STAGE[G.stage.id + 1] ? STAGE[G.stage.id + 1].depth : base * 1.4);
+  return Math.round(base + (nxt - base) * G.prog + G.loop * 900);
+}
+function payout(){
+  const t = TIERS[G.tier] || TIERS[1];
+  // a wasted dive still pays a little for the depth reached, so throwing
+  // yourself at a trench that is currently too deep is never pure loss
+  const base = G.pearls + Math.round(4 + G.prog * 14 * (1 + G.stage.id * 0.25));
+  return Math.round(base * t.pay * (1 + P.s.salvage) * (1 + G.loop * 0.5));
+}
+
+function endRun(win){
+  G.stats.time = G.time;
+  const pearls = payout();
+  META.pearls += pearls;
+  META.runs++;
+  const d = depthNow();
+  if (d > (META.best.depth || 0)) META.best.depth = d;
+  if (G.stats.kills > (META.best.kills || 0)) META.best.kills = G.stats.kills;
+  if (win){
+    const id = G.stage.id;
+    const prev = META.cleared[id] == null ? -1 : META.cleared[id];
+    if (G.tier > prev) META.cleared[id] = G.tier;
+    if (id > (META.best.stage || 0)) META.best.stage = id;
+    if (G.tier > (META.best.tier || 0)) META.best.tier = G.tier;
+  }
+  G.lastPay = pearls;
+  G.state = win ? 'clear' : 'dead';
+  saveMeta();
+  return pearls;
+}
+
+/* ==================================================================
+   THE WORM
+   A worm is a head that steers and a chain of segments that ride its
+   own trail. Severing a middle segment slices the trail in two and the
+   back half wakes up as its own worm — which is the entire hook.
+   ================================================================== */
+const SEGT = {
+  flesh: { hp: 1.00, r: 1.00, ink: 'pink' },
+  plate: { hp: 1.15, r: 1.06, ink: 'teal', armor: 0.9 },
+  spit:  { hp: 0.85, r: 1.00, ink: 'pink' },
+  bulb:  { hp: 0.70, r: 1.02, ink: 'teal' },
+  knot:  { hp: 1.30, r: 1.08, ink: 'pink' },
+};
+const SEG_IDS = Object.keys(SEGT);
+
+function segHp(idx){
+  // later segments of a worm are meatier, and the whole trench thickens as
+  // the plate fills — but nothing scales off the running kill count, or a
+  // long stage would quietly become unkillable
+  const base = 26 * hpMul() * (1 + G.prog * 1.15) * (1 + Math.min(12, idx) * 0.02);
+  return Math.max(6, Math.round(base));
+}
+
+function rollSegType(mix){
+  let tot = 0; for (const k in mix) tot += mix[k];
+  let n = rnd() * tot;
+  for (const k in mix){ n -= mix[k]; if (n <= 0) return k; }
+  return 'flesh';
+}
+
+function newSeg(type, idx){
+  const d = SEGT[type] || SEGT.flesh;
+  const mhp = Math.round(segHp(idx) * d.hp);
+  const s = {
+    type, x: 0, y: 0, r: C.SEG_R * d.r, hp: mhp, mhp,
+    armor: 0, marmor: 0, chill: 0, chillT: 0, ven: 0, venT: 0, venSrc: 0,
+    hitT: 0, spitT: rr(1.4, 3.6), pulse: rnd() * TAU, dead: false,
+  };
+  if (d.armor){ s.marmor = Math.round(mhp * d.armor); s.armor = s.marmor; }
+  return s;
+}
+
+function spawnWorm(opt){
+  opt = opt || {};
+  const st = G.stage;
+  const len = opt.len || Math.max(4, Math.round(rr(6, 11) + G.prog * 7));
+  const w = {
+    id: ++G.wormSeq,
+    segs: [],
+    trail: [],
+    cum: 0,
+    ang: Math.PI / 2 + rr(-0.5, 0.5),
+    wob: rnd() * TAU,
+    wobSpd: rr(0.7, 1.35),
+    spd: C.WORM_SPD * spdMul() * rr(0.86, 1.16) * (opt.spd || 1),
+    x: opt.x != null ? opt.x : rr(120, C.W - 120),
+    y: opt.y != null ? opt.y : -60,
+    dead: false, t: 0, ang2: 0, rage: opt.rage || 0,
+  };
+  for (let i = 0; i < len; i++){
+    const type = opt.type || rollSegType(st.mix);
+    w.segs.push(newSeg(type, i));
+  }
+  // seed the trail straight up from the spawn point so the body has
+  // something to ride on frame one (and enters the page properly spaced)
+  for (let i = 0; i < len + 3; i++){
+    w.trail.push({ x: w.x, y: w.y - i * C.SEG_GAP, d: 0 });
+  }
+  w.trail.reverse();
+  for (let i = 0; i < w.trail.length; i++) w.trail[i].d = i * C.SEG_GAP;
+  w.cum = w.trail[w.trail.length - 1].d;
+  layoutWorm(w);
+  G.worms.push(w);
+  return w;
+}
+
+function pushTrail(w, x, y){
+  const last = w.trail[w.trail.length - 1];
+  const d = last ? dist(x, y, last.x, last.y) : 0;
+  if (!last || d > 2){
+    w.cum += d;
+    w.trail.push({ x, y, d: w.cum });
+    // keep only what the body still rides on
+    const need = w.cum - (w.segs.length + 2) * C.SEG_GAP - 40;
+    let cut = 0;
+    while (cut < w.trail.length - 2 && w.trail[cut].d < need) cut++;
+    if (cut > 0) w.trail.splice(0, cut);
+  }
+}
+
+function sampleTrail(w, d){
+  const T = w.trail;
+  if (!T.length) return { x: w.x, y: w.y };
+  if (d >= T[T.length - 1].d) return T[T.length - 1];
+  if (d <= T[0].d) return T[0];
+  let lo = 0, hi = T.length - 1;
+  while (hi - lo > 1){
+    const mid = (lo + hi) >> 1;
+    if (T[mid].d < d) lo = mid; else hi = mid;
+  }
+  const a = T[lo], b = T[hi];
+  const span = b.d - a.d || 1;
+  const k = (d - a.d) / span;
+  return { x: lerp(a.x, b.x, k), y: lerp(a.y, b.y, k) };
+}
+
+// Places every segment on the trail. Deliberately does NOT write back to
+// w.x/w.y: those are the steering head, which runs slightly ahead of the
+// drawn body between trail samples.
+function layoutWorm(w){
+  for (let i = 0; i < w.segs.length; i++){
+    const p = sampleTrail(w, w.cum - i * C.SEG_GAP);
+    const s = w.segs[i];
+    s.px = s.x; s.py = s.y;
+    s.x = p.x; s.y = p.y;
+  }
+}
+
+function wormChill(w){
+  let c = 0;
+  for (const s of w.segs) if (s.chillT > 0 && s.chill > c) c = s.chill;
+  return c;
+}
+
+function stepWorm(w, dt){
+  w.t += dt;
+  const floorY = C.H - C.FLOOR;
+  // steering: a serpentine sweep that creeps down the page, turns at the
+  // walls, and climbs back up when it reaches the player's water
+  w.wob += dt * w.wobSpd;
+  let want = Math.PI / 2 + Math.sin(w.wob) * 1.15;
+  const marginX = 70;
+  if (w.x < marginX) want = Math.abs(Math.cos(w.wob)) * 0.9 + 0.2;
+  else if (w.x > C.W - marginX) want = Math.PI - Math.abs(Math.cos(w.wob)) * 0.9 - 0.2;
+  if (w.y > floorY - 20) want = -Math.PI / 2 + Math.sin(w.wob) * 0.9;
+  else if (w.y < 50) want = Math.PI / 2 + Math.sin(w.wob) * 0.6;
+  // rage: a worm whose head was severed lunges at the hull for a while
+  if (w.rage > 0){
+    w.rage -= dt;
+    const a = Math.atan2(P.y - w.y, P.x - w.x);
+    want = a;
+  }
+  let d = want - w.ang;
+  while (d > Math.PI) d -= TAU;
+  while (d < -Math.PI) d += TAU;
+  w.ang += clamp(d, -2.6 * dt, 2.6 * dt);
+  const sp = w.spd * (1 - wormChill(w)) * (w.rage > 0 ? 1.3 : 1);
+  w.x += Math.cos(w.ang) * sp * dt;
+  w.y += Math.sin(w.ang) * sp * dt;
+  w.x = clamp(w.x, 26, C.W - 26);
+  w.y = clamp(w.y, -220, w.rage > 0 ? floorY + 14 : floorY - 8);
+  pushTrail(w, w.x, w.y);
+  layoutWorm(w);
+
+  // iterate the array we started with: venom can resegment the worm mid-loop
+  const segs = w.segs;
+  for (let i = 0; i < segs.length; i++){
+    const s = segs[i];
+    if (!s || s.dead) continue;
+    if (s.hitT > 0) s.hitT -= dt;
+    if (s.chillT > 0) s.chillT -= dt;
+    if (s.venT > 0){
+      s.venT -= dt;
+      hurtSeg(w, s, s.ven * dt, { silent: true, dot: true });
+    }
+    if (s.type === 'spit' && s.y > -20){
+      s.spitT -= dt;
+      if (s.spitT <= 0){
+        s.spitT = rr(2.4, 4.2) / (1 + G.prog * 0.5);
+        spitAt(s.x, s.y);
+      }
+    }
+    if (s.type === 'knot'){
+      // a knot stitches its neighbours back together
+      const heal = 5.5 * hpMul() * dt;
+      for (const j of [i - 1, i + 1]){
+        const n = segs[j];
+        if (n && n.hp < n.mhp && !n.dead){
+          n.hp = Math.min(n.mhp, n.hp + heal);
+          if (rnd() < dt * 3) puff(n.x, n.y, 'teal', 1);
+        }
+      }
+    }
+    s.pulse += dt * 3;
+  }
+}
+
+function spitAt(x, y){
+  const a = Math.atan2(P.y - y, P.x - x) + rr(-0.14, 0.14);
+  const sp = 320 * (0.9 + G.prog * 0.35);
+  G.eprojs.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 9, life: 6,
+                  dmg: C.SPIT_DMG * (1 + G.tier * 0.28), spin: rnd() * TAU });
+  sfx('spit');
+}
+
+/* ---------------------------- damage ------------------------------ */
+// `which` is an index or the segment itself — explosions resolve by
+// reference because a chain reaction reshuffles the array underneath them
+function hurtSeg(w, which, dmg, opt){
+  opt = opt || {};
+  const s = typeof which === 'number' ? w.segs[which] : which;
+  if (!s || s.dead) return 0;
+  let d = dmg;
+  if (s.marmor > 0 && s.armor > 0 && !opt.dot){
+    const toArmor = d * (1 + P.s.etch);
+    const used = Math.min(s.armor, toArmor);
+    s.armor -= used;
+    d -= used / (1 + P.s.etch);
+    if (s.armor <= 0 && !opt.silent){ puff(s.x, s.y, 'teal', 6); sfx('plate'); }
+    if (d <= 0){
+      s.hitT = 0.12;
+      if (!opt.silent) popNum(s.x, s.y - 12, Math.round(used), 'teal', false);
+      G.stats.dmg += used;
+      return used;
+    }
+  }
+  s.hp -= d;
+  s.hitT = 0.14;
+  G.stats.dmg += d;
+  if (d > G.stats.best) G.stats.best = d;
+  if (!opt.silent) popNum(s.x, s.y - 14, Math.round(d), opt.crit ? 'pink' : 'key', !!opt.crit);
+  if (s.hp <= 0) killSeg(w, s, opt);
+  return d;
+}
+
+function killSeg(w, which, opt){
+  const s = typeof which === 'number' ? w.segs[which] : which;
+  if (!s || s.dead) return;
+  s.dead = true;
+  G.killed++;
+  G.stats.kills++; G.stats.severed++;
+  P.kills++;
+  if (P.s.vamp > 0) P.hp = Math.min(P.mhp, P.hp + P.s.vamp);
+  const worth = 1 + Math.floor(G.stage.id * 0.3);
+  G.pearls += worth;
+  burst(s.x, s.y, s.type === 'plate' ? 'teal' : 'pink', 9);
+  sfx('pop');
+  G.shake = Math.min(16, G.shake + 3);
+  if (rnd() < 0.19) dropAt(s.x, s.y, 'pearl');
+  else if (rnd() < 0.055) dropAt(s.x, s.y, 'patch');
+  else if (rnd() < 0.04) dropAt(s.x, s.y, 'spark');
+
+  if (s.type === 'bulb'){
+    // bioluminescent bloom: pops everything close, chains through the worm
+    const r = 132;
+    zone(s.x, s.y, r, 'bloom', 0.34);
+    hitArea(s.x, s.y, r, 34 * hpMul() * 0.5 + 26, { silent: false, from: 'bulb' });
+    sfx('boom');
+    G.shake = Math.min(20, G.shake + 6);
+  }
+  if (P.s.cleave > 0){
+    const n = 3;
+    for (let k = 0; k < n; k++){
+      const a = rr(0, TAU);
+      G.projs.push(mkProj(s.x, s.y, Math.cos(a) * 520, Math.sin(a) * 520,
+        baseDamage() * P.s.cleave, 0, false, 'shard'));
+    }
+  }
+  // a chain reaction may already have moved this segment into a new worm
+  resegment(ownerOf(s, w));
+}
+
+function ownerOf(s, hint){
+  if (hint && hint.segs.indexOf(s) >= 0) return hint;
+  for (const w of G.worms) if (w.segs.indexOf(s) >= 0) return w;
+  return hint;
+}
+
+// Rebuild a worm after one or more of its segments died. Every contiguous
+// run of live segments becomes a worm of its own, riding the same trail at
+// its own arc offset — so a single cut splits the thing in two, and a bulb
+// that pops three segments at once leaves four independent worms behind.
+function resegment(w){
+  const old = w.segs, cum0 = w.cum, trail0 = w.trail;
+  const runs = [];
+  let cur = null;
+  for (let i = 0; i < old.length; i++){
+    const s = old[i];
+    if (!s || s.dead){ cur = null; continue; }
+    if (!cur){ cur = { start: i, list: [] }; runs.push(cur); }
+    cur.list.push(s);
+  }
+  if (!runs.length){ w.segs = []; w.dead = true; return; }
+
+  // every run after the first wakes up as its own worm
+  for (let r = 1; r < runs.length; r++){
+    const run = runs[r];
+    const head = run.list[0];
+    const a1 = cum0 - run.start * C.SEG_GAP;
+    const nt = [];
+    for (const p of trail0) if (p.d <= a1) nt.push({ x: p.x, y: p.y, d: p.d });
+    if (!nt.length || nt[nt.length - 1].d < a1) nt.push({ x: head.x, y: head.y, d: a1 });
+    const prev = nt.length > 1 ? nt[nt.length - 2] : null;
+    G.worms.push({
+      id: ++G.wormSeq, segs: run.list, trail: nt, cum: a1,
+      ang: prev ? Math.atan2(head.y - prev.y, head.x - prev.x) : Math.PI / 2,
+      wob: rnd() * TAU, wobSpd: rr(0.8, 1.5),
+      spd: Math.min(w.spd * 1.06, C.WORM_SPD * spdMul() * 2),
+      x: head.x, y: head.y, dead: false, t: 0,
+      rage: 0.8 + rnd() * 0.9,              // a freshly cut worm lunges, briefly
+    });
+    G.stats.splits++;
+    popTag(head.x, head.y - 30, 'SPLIT');
+  }
+
+  // the first run keeps the original worm; if its head died, the body
+  // shuffles forward along its own trail instead of snapping
+  const first = runs[0];
+  w.segs = first.list;
+  if (first.start > 0){
+    w.cum = cum0 - first.start * C.SEG_GAP;
+    while (w.trail.length && w.trail[w.trail.length - 1].d > w.cum) w.trail.pop();
+    const h = first.list[0];
+    if (!w.trail.length) w.trail.push({ x: h.x, y: h.y, d: w.cum });
+    w.x = h.x; w.y = h.y;
+    w.rage = Math.max(w.rage || 0, 0.9);
+  }
+}
+
+// area damage against every segment (and the core) in range. Targets are
+// snapshotted first: the damage itself may resegment worms mid-sweep.
+function hitArea(x, y, r, dmg, opt){
+  opt = opt || {};
+  const r2 = r * r;
+  const targets = [];
+  for (const w of G.worms){
+    for (const s of w.segs){
+      if (!s || s.dead) continue;
+      if (dist2(x, y, s.x, s.y) <= r2 + s.r * s.r) targets.push([w, s]);
+    }
+  }
+  for (const [w, s] of targets) hurtSeg(w, s, dmg, opt);
+  let hits = targets.length;
+  if (G.core && dist2(x, y, G.core.x, G.core.y) <= (r + G.core.r) * (r + G.core.r)){
+    hurtCore(dmg, opt);
+    hits++;
+  }
+  return hits;
+}
+
+function baseDamage(){ return C.BASE_DMG * P.s.dmg * (1 + G.stage.id * 0.05); }
+
+function mkProj(x, y, vx, vy, dmg, pierce, crit, kind){
+  return { x, y, vx, vy, dmg, pierce: pierce || 0, crit: !!crit, kind: kind || 'barb',
+           r: kind === 'shard' ? 6 : 8, life: 3.2, hit: [], t: 0, ang: Math.atan2(vy, vx) };
+}
+/* ==================================================================
+   PLAYER · WEAPONS · SUBSYSTEMS
+   ================================================================== */
+function nearestSeg(x, y, maxD, coneUp){
+  let best = null, bd = maxD * maxD;
+  for (const w of G.worms){
+    for (const s of w.segs){
+      if (s.dead || s.y < -40) continue;
+      if (coneUp && s.y > y + 40) continue;
+      const d = dist2(x, y, s.x, s.y);
+      if (d < bd){ bd = d; best = s; }
+    }
+  }
+  if (G.core && !G.core.dead){
+    const d = dist2(x, y, G.core.x, G.core.y);
+    if (d < bd){ bd = d; best = G.core; }
+  }
+  return best;
+}
+
+function aimAngle(){
+  const t = nearestSeg(P.x, P.y, 1400, true);
+  if (!t) return -Math.PI / 2;
+  let a = Math.atan2(t.y - P.y, t.x - P.x);
+  // never fire below the horizon — the press only points up
+  const up = -Math.PI / 2;
+  let d = a - up;
+  while (d > Math.PI) d -= TAU;
+  while (d < -Math.PI) d += TAU;
+  return up + clamp(d, -1.05, 1.05);
+}
+
+function volley(){
+  const a0 = aimAngle();
+  P.aim = a0;
+  const n = Math.max(1, Math.round(P.s.spread));
+  const sp = C.BASE_PSPD * P.s.pspd;
+  const fan = 0.085;
+  for (let i = 0; i < n; i++){
+    const off = (i - (n - 1) / 2) * fan;
+    const a = a0 + off;
+    const crit = rnd() < P.s.crit;
+    let dmg = baseDamage();
+    if (crit){ dmg *= P.s.critx; G.stats.crits++; }
+    const p = mkProj(P.x + Math.cos(a) * 20, P.y + Math.sin(a) * 20,
+      Math.cos(a) * sp, Math.sin(a) * sp, dmg, P.s.pierce, crit, 'barb');
+    if (G.projs.length < C.MAX_PROJ) G.projs.push(p);
+  }
+  P.recoil = 1;
+  sfx('shoot');
+}
+
+function stepPlayer(dt){
+  // hull chases the pointer with a bit of lag so it feels like water
+  const sp = C.BASE_SPEED * P.s.speed;
+  const dx = P.tx - P.x, dy = P.ty - P.y;
+  const d = Math.hypot(dx, dy);
+  if (d > 0.5){
+    const step = Math.min(d, sp * dt);
+    P.x += dx / d * step; P.y += dy / d * step;
+  }
+  P.x = clamp(P.x, 30, C.W - 30);
+  P.y = clamp(P.y, C.H - C.FLOOR - 40, C.H - C.DECK - 30);
+  P.bob += dt * 2.4;
+  if (P.inv > 0) P.inv -= dt;
+  if (P.hurtT > 0) P.hurtT -= dt;
+  if (P.recoil > 0) P.recoil -= dt * 6;
+  if (P.buffT > 0) P.buffT -= dt;
+  if (P.s.regen > 0 && P.hp < P.mhp) P.hp = Math.min(P.mhp, P.hp + P.s.regen * dt);
+
+  // firing
+  const rate = C.BASE_FIRE / Math.max(0.15, P.s.fire * (P.buffT > 0 ? 2 : 1));
+  P.fireT -= dt;
+  if (P.burstLeft > 0){
+    P.burstT -= dt;
+    if (P.burstT <= 0){ volley(); P.burstLeft--; P.burstT = 0.085; }
+  }
+  if (P.fireT <= 0){
+    P.fireT = rate;
+    P.burstLeft = Math.max(1, Math.round(P.s.burst));
+    P.burstT = 0;
+  }
+  stepSystems(dt);
+}
+
+function sysT(id, dt, cd){
+  P.sysT[id] = (P.sysT[id] == null ? cd : P.sysT[id]) - dt;
+  if (P.sysT[id] <= 0){ P.sysT[id] = cd; return true; }
+  return false;
+}
+
+function stepSystems(dt){
+  const S = P.sys;
+  if (S.sonar){
+    const l = S.sonar;
+    if (sysT('sonar', dt, Math.max(0.5, SYS.sonar.cd(l)))){
+      const r = SYS.sonar.rad(l);
+      zone(P.x, P.y, r, 'sonar', 0.5);
+      hitArea(P.x, P.y, r, SYS.sonar.dmg(l) * P.s.dmg, {});
+      sfx('sonar');
+    }
+  }
+  if (S.mines){
+    const l = S.mines;
+    if (sysT('mines', dt, Math.max(0.5, SYS.mines.cd(l)))){
+      G.zones.push({ kind:'mine', x: P.x + rr(-40, 40), y: P.y - 30, r: 13, life: 9, maxLife: 9,
+        vx: rr(-30, 30), vy: -rr(50, 90), dmg: SYS.mines.dmg(l) * P.s.dmg, rad: SYS.mines.rad(l), t: 0 });
+    }
+  }
+  if (S.bombs){
+    const l = S.bombs;
+    if (sysT('bombs', dt, Math.max(0.6, SYS.bombs.cd(l)))){
+      const t = nearestSeg(P.x, P.y, 1600, true);
+      const tx = t ? t.x : P.x, ty = t ? t.y : P.y - 500;
+      G.zones.push({ kind:'bomb', x: P.x, y: P.y - 20, sx: P.x, sy: P.y - 20, tx, ty, t: 0, life: 1.05,
+        dmg: SYS.bombs.dmg(l) * P.s.dmg, rad: SYS.bombs.rad(l) });
+      sfx('lob');
+    }
+  }
+  if (S.drones){
+    const l = S.drones;
+    for (let i = 0; i < P.drones.length; i++){
+      const dr = P.drones[i];
+      dr.a += dt * 1.5;
+      const rad = 74 + i * 6;
+      dr.x = P.x + Math.cos(dr.a + i * TAU / Math.max(1, P.drones.length)) * rad;
+      dr.y = P.y + Math.sin(dr.a + i * TAU / Math.max(1, P.drones.length)) * rad * 0.6 - 18;
+      dr.t -= dt;
+      if (dr.t <= 0){
+        dr.t = Math.max(0.2, SYS.drones.cd(l));
+        const tg = nearestSeg(dr.x, dr.y, 900, true);
+        const a = tg ? Math.atan2(tg.y - dr.y, tg.x - dr.x) : -Math.PI / 2;
+        G.projs.push(mkProj(dr.x, dr.y, Math.cos(a) * 700, Math.sin(a) * 700,
+          SYS.drones.dmg(l) * P.s.dmg, 0, false, 'spark'));
+      }
+    }
+  }
+  if (S.flail){
+    const l = S.flail;
+    const rad = SYS.flail.rad(l), spin = SYS.flail.spd(l);
+    for (let i = 0; i < P.flails.length; i++){
+      const f = P.flails[i];
+      f.a += dt * spin;
+      const off = i * TAU / Math.max(1, P.flails.length);
+      f.x = P.x + Math.cos(f.a + off) * rad;
+      f.y = P.y + Math.sin(f.a + off) * rad * 0.75;
+      f.cool = (f.cool || 0) - dt;
+      if (f.cool <= 0){
+        const hits = hitArea(f.x, f.y, 26, SYS.flail.dmg(l) * P.s.dmg * dt * 6, { silent: true });
+        if (hits) f.spark = 0.12;
+      }
+      if (f.spark > 0) f.spark -= dt;
+    }
+  }
+  if (S.shield){
+    const l = S.shield;
+    if (P.shield <= 0){
+      P.shieldT -= dt;
+      if (P.shieldT <= 0){ P.shield = 1; sfx('bubble'); }
+    }
+  }
+}
+
+function hitPlayer(dmg, src){
+  if (G.state !== 'run') return;
+  if (P.inv > 0) return;
+  if (P.shield > 0){
+    P.shield = 0;
+    P.shieldT = SYS.shield.cd(P.sys.shield || 1);
+    P.inv = 0.5;
+    puff(P.x, P.y, 'teal', 12);
+    popTag(P.x, P.y - 40, 'POP');
+    sfx('shieldpop');
+    return;
+  }
+  P.hp -= dmg;
+  P.inv = C.IFRAME;
+  P.hurtT = 0.4;
+  G.stats.taken += dmg;
+  G.stats.src[src || 'other'] = (G.stats.src[src || 'other'] || 0) + dmg;
+  G.shake = Math.min(24, G.shake + 8);
+  G.flash = 0.35;
+  sfx('hurt');
+  popNum(P.x, P.y - 30, Math.round(dmg), 'pink', false);
+  if (P.hp <= 0){
+    if (!P.revived){
+      P.revived = true;
+      P.hp = Math.round(P.mhp * 0.5);
+      P.inv = 2.4;
+      hitArea(P.x, P.y, 420, 60 * hpMul(), {});
+      zone(P.x, P.y, 420, 'sonar', 0.7);
+      banner('LIFEBOAT');
+      sfx('revive');
+      return;
+    }
+    P.hp = 0;
+    endRun(false);
+    sfx('dead');
+  }
+}
+
+/* ==================================================================
+   PROJECTILES · ZONES · DROPS · PARTICLES
+   ================================================================== */
+function onHit(s, w, p){
+  const opt = { crit: p.crit };
+  const dealt = hurtSeg(w, s, p.dmg, opt);
+  const S = P.sys;
+  if (S.frost){
+    s.chill = Math.max(s.chill, SYS.frost.slow(S.frost));
+    s.chillT = SYS.frost.dur(S.frost);
+  }
+  if (S.venom && !s.dead){
+    s.ven = Math.max(s.ven, SYS.venom.dps(S.venom) * P.s.dmg);
+    s.venT = SYS.venom.dur(S.venom);
+  }
+  if (S.chain){
+    const jumps = SYS.chain.jumps(S.chain), rad = SYS.chain.rad(S.chain);
+    let fx = s.x, fy = s.y;
+    const seen = [s];
+    for (let j = 0; j < jumps; j++){
+      let best = null, bw = null, bd = rad * rad;
+      for (const w2 of G.worms){
+        for (const s2 of w2.segs){
+          if (!s2 || s2.dead || seen.indexOf(s2) >= 0) continue;
+          const d = dist2(fx, fy, s2.x, s2.y);
+          if (d < bd){ bd = d; best = s2; bw = w2; }
+        }
+      }
+      if (!best) break;
+      seen.push(best);
+      G.zones.push({ kind:'arc', x: fx, y: fy, x2: best.x, y2: best.y, life: 0.18, maxLife: 0.18 });
+      hurtSeg(bw, best, p.dmg * SYS.chain.dmg(S.chain), { silent: false });
+      fx = best.x; fy = best.y;
+    }
+  }
+  return dealt;
+}
+
+function stepProjectiles(dt){
+  for (let i = G.projs.length - 1; i >= 0; i--){
+    const p = G.projs[i];
+    p.t += dt;
+    p.life -= dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    if (p.kind === 'shard') p.vy += 420 * dt;
+    if (p.life <= 0 || p.y < -60 || p.y > C.H + 60 || p.x < -60 || p.x > C.W + 60){
+      G.projs.splice(i, 1); continue;
+    }
+    let gone = false;
+    for (let wi = 0; wi < G.worms.length && !gone; wi++){
+      const w = G.worms[wi];
+      const segs = w.segs;
+      for (let si = 0; si < segs.length; si++){
+        const s = segs[si];
+        if (!s || s.dead || p.hit.indexOf(s) >= 0) continue;
+        const rr2 = (s.r + p.r) * (s.r + p.r);
+        if (dist2(p.x, p.y, s.x, s.y) <= rr2){
+          p.hit.push(s);
+          onHit(s, w, p);
+          if (p.pierce > 0){ p.pierce--; p.dmg *= 0.86; }
+          else { G.projs.splice(i, 1); gone = true; }
+          break;
+        }
+      }
+    }
+    if (gone) continue;
+    const co = G.core;
+    if (co && !co.dead && p.hit.indexOf(co) < 0 &&
+        dist2(p.x, p.y, co.x, co.y) <= (co.r + p.r) * (co.r + p.r)){
+      p.hit.push(co);
+      hurtCore(p.dmg, { crit: p.crit });
+      if (p.pierce > 0){ p.pierce--; p.dmg *= 0.86; }
+      else G.projs.splice(i, 1);
+    }
+  }
+  // enemy fire
+  for (let i = G.eprojs.length - 1; i >= 0; i--){
+    const e = G.eprojs[i];
+    e.life -= dt; e.spin += dt * 6;
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    if (e.life <= 0 || e.y > C.H + 40 || e.y < -80 || e.x < -60 || e.x > C.W + 60){
+      G.eprojs.splice(i, 1); continue;
+    }
+    if (dist2(e.x, e.y, P.x, P.y) <= (e.r + P.r) * (e.r + P.r)){
+      G.eprojs.splice(i, 1);
+      hitPlayer(e.dmg, 'spit');
+    }
+  }
+}
+
+function zone(x, y, r, kind, life){
+  G.zones.push({ kind, x, y, r, life, maxLife: life, t: 0 });
+}
+
+function stepZones(dt){
+  for (let i = G.zones.length - 1; i >= 0; i--){
+    const z = G.zones[i];
+    z.t += dt;
+    if (z.kind === 'mine'){
+      z.life -= dt;
+      z.x += (z.vx || 0) * dt; z.y += (z.vy || 0) * dt;
+      z.vy = (z.vy || 0) * 0.985; z.vx = (z.vx || 0) * 0.99;
+      z.x = clamp(z.x, 20, C.W - 20);
+      const t = nearestSeg(z.x, z.y, 46, false);
+      if (t || z.life <= 0){
+        hitArea(z.x, z.y, z.rad, z.dmg, {});
+        zone(z.x, z.y, z.rad, 'boom', 0.32);
+        sfx('boom');
+        G.shake = Math.min(18, G.shake + 4);
+        G.zones.splice(i, 1);
+      }
+      continue;
+    }
+    if (z.kind === 'bomb'){
+      z.life -= dt;
+      const k = 1 - Math.max(0, z.life) / 1.05;
+      z.x = lerp(z.sx, z.tx, k);
+      z.y = lerp(z.sy, z.ty, k) - Math.sin(k * Math.PI) * 190;
+      if (z.life <= 0){
+        hitArea(z.x, z.y, z.rad, z.dmg, {});
+        zone(z.x, z.y, z.rad, 'boom', 0.36);
+        sfx('boom');
+        G.shake = Math.min(20, G.shake + 6);
+        G.zones.splice(i, 1);
+      }
+      continue;
+    }
+    z.life -= dt;
+    if (z.life <= 0) G.zones.splice(i, 1);
+  }
+}
+
+function dropAt(x, y, kind){
+  if (G.drops.length > 90) return;
+  G.drops.push({ x, y, vx: rr(-70, 70), vy: rr(-120, -40), kind, life: C.DROP_LIFE, t: rnd() * TAU });
+}
+
+function stepDrops(dt){
+  const mag = C.BASE_MAGNET * P.s.magnet;
+  for (let i = G.drops.length - 1; i >= 0; i--){
+    const d = G.drops[i];
+    d.life -= dt; d.t += dt * 4;
+    const dd = dist(d.x, d.y, P.x, P.y);
+    if (dd < mag){
+      const k = 1 - dd / mag;
+      const a = Math.atan2(P.y - d.y, P.x - d.x);
+      d.vx += Math.cos(a) * 1500 * k * dt;
+      d.vy += Math.sin(a) * 1500 * k * dt;
+    } else {
+      d.vy += 190 * dt;
+    }
+    d.vx *= 0.98; d.vy *= 0.985;
+    d.x += d.vx * dt; d.y += d.vy * dt;
+    d.x = clamp(d.x, 14, C.W - 14);
+    if (d.y > C.H - 20){ d.y = C.H - 20; d.vy *= -0.35; }
+    if (dd < P.r + 16){
+      G.drops.splice(i, 1);
+      if (d.kind === 'pearl'){ G.pearls += 3; popTag(d.x, d.y - 10, '+3◈'); }
+      else if (d.kind === 'patch'){
+        P.hp = Math.min(P.mhp, P.hp + P.mhp * 0.08);
+        popTag(d.x, d.y - 10, 'PATCH');
+      } else {
+        P.buffT = 5; popTag(d.x, d.y - 10, 'OVERPRINT');
+        for (const k in P.sysT) P.sysT[k] = 0.05;
+      }
+      sfx('pick');
+      continue;
+    }
+    if (d.life <= 0) G.drops.splice(i, 1);
+  }
+}
+
+function puff(x, y, ink, n){
+  for (let i = 0; i < n; i++){
+    if (G.parts.length > C.MAX_PARTS) return;
+    G.parts.push({ x, y, vx: rr(-70, 70), vy: rr(-70, 70), r: rr(2, 6), life: rr(0.3, 0.8),
+      maxLife: 0.8, ink, spin: rnd() * TAU });
+  }
+}
+function burst(x, y, ink, n){
+  for (let i = 0; i < n; i++){
+    if (G.parts.length > C.MAX_PARTS) return;
+    const a = rr(0, TAU), sp = rr(60, 340);
+    G.parts.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: rr(3, 11),
+      life: rr(0.4, 1.1), maxLife: 1.1, ink, spin: rnd() * TAU, blot: rnd() < 0.5 });
+  }
+}
+function stepParts(dt){
+  for (let i = G.parts.length - 1; i >= 0; i--){
+    const p = G.parts[i];
+    p.life -= dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= 0.93; p.vy = p.vy * 0.93 + 120 * dt;
+    p.spin += dt * 4;
+    if (p.life <= 0) G.parts.splice(i, 1);
+  }
+  for (let i = G.nums.length - 1; i >= 0; i--){
+    const n = G.nums[i];
+    n.life -= dt;
+    n.y += n.vy * dt; n.x += n.vx * dt;
+    n.vy += 150 * dt;
+    if (n.life <= 0) G.nums.splice(i, 1);
+  }
+}
+function popNum(x, y, v, ink, crit){
+  if (v < 1 || G.nums.length > 90) return;
+  G.nums.push({ x, y, v: fmt(v), ink, crit, life: crit ? 0.85 : 0.6, maxLife: crit ? 0.85 : 0.6,
+    vy: -110, vx: rr(-30, 30), size: crit ? 26 : 19 });
+}
+function popTag(x, y, s){
+  if (G.nums.length > 90) return;
+  G.nums.push({ x, y, v: s, ink: 'key', tag: true, life: 0.9, maxLife: 0.9, vy: -70, vx: 0, size: 17 });
+}
+
+/* ==================================================================
+   THE CORE — what surfaces once the swarm quota is met
+   ================================================================== */
+function surfaceCore(){
+  const st = G.stage;
+  const mhp = Math.round(560 * hpMul() * (1 + st.id * 0.05));
+  G.core = {
+    x: C.W / 2, y: -200, ty: Math.max(300, C.H * 0.30), r: 92, hp: mhp, mhp, t: 0, phase: 0,
+    atkT: 2.4, mode: 'enter', modeT: 0, ang: 0, hitT: 0, dead: false,
+    chill: 0, chillT: 0, ven: 0, venT: 0, wob: 0, vx: 0, vy: 0, sweep: 0,
+  };
+  G.phase = 'core';
+  banner(st.boss);
+  sfx('boss');
+  return G.core;
+}
+
+function hurtCore(dmg, opt){
+  const co = G.core;
+  if (!co || co.dead) return 0;
+  const d = dmg * (1 + P.s.head);
+  co.hp -= d;
+  co.hitT = 0.12;
+  G.stats.dmg += d;
+  if (d > G.stats.best) G.stats.best = d;
+  if (!(opt && opt.silent)) popNum(co.x + rr(-30, 30), co.y - co.r * 0.6, Math.round(d),
+    (opt && opt.crit) ? 'pink' : 'key', !!(opt && opt.crit));
+  const before = co.phase;
+  const frac = co.hp / co.mhp;
+  co.phase = frac < 0.34 ? 2 : (frac < 0.67 ? 1 : 0);
+  if (co.phase > before){
+    banner(co.phase === 1 ? 'IT UNSPOOLS' : 'IT COMES APART');
+    G.shake = 22;
+    burst(co.x, co.y, 'pink', 26);
+    for (let i = 0; i < 2; i++) spawnWorm({ len: 4 + i, y: -40, spd: 1.15 });
+    sfx('phase');
+  }
+  if (co.hp <= 0){
+    co.hp = 0; co.dead = true;
+    burst(co.x, co.y, 'pink', 60);
+    burst(co.x, co.y, 'teal', 40);
+    G.shake = 30;
+    G.pearls += 40 + G.stage.id * 12;
+    G.phase = 'done';
+    sfx('kill');
+    banner('THE PRESS WINS');
+    endRun(true);
+  }
+  return d;
+}
+
+function stepCore(dt){
+  const co = G.core;
+  if (!co || co.dead) return;
+  co.t += dt; co.wob += dt;
+  if (co.hitT > 0) co.hitT -= dt;
+  if (co.venT > 0){ co.venT -= dt; hurtCore(co.ven * dt, { silent: true }); }
+  const sp = 1 + co.phase * 0.35;
+
+  if (co.mode === 'enter'){
+    co.y = lerp(co.y, co.ty, 1 - Math.pow(0.05, dt));
+    if (co.y > co.ty - 6){ co.mode = 'idle'; co.modeT = 1.2; }
+    return;
+  }
+  if (co.mode === 'idle'){
+    co.x += Math.cos(co.wob * 0.8) * 46 * dt * sp;
+    co.y = co.ty + Math.sin(co.wob * 1.1) * 26;
+    co.x = clamp(co.x, 110, C.W - 110);
+    co.modeT -= dt;
+    if (co.modeT <= 0){
+      const roll = rnd();
+      if (roll < 0.34) { co.mode = 'fan'; co.modeT = 1.6; co.sweep = 0; }
+      else if (roll < 0.62) { co.mode = 'rain'; co.modeT = 1.9; co.shots = 0; }
+      else if (roll < 0.84) { co.mode = 'charge'; co.modeT = 2.4; co.cx = P.x; co.cy = P.y; }
+      else { co.mode = 'spawn'; co.modeT = 1.1; }
+    }
+    return;
+  }
+  if (co.mode === 'fan'){
+    co.modeT -= dt;
+    co.sweep += dt;
+    if (co.sweep > 0.16){
+      co.sweep = 0;
+      const n = 7 + co.phase * 3;
+      const base = co.t * 1.4;
+      for (let i = 0; i < n; i++){
+        const a = base + i * TAU / n;
+        const s = 260 + co.phase * 40;
+        G.eprojs.push({ x: co.x, y: co.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, r: 10, life: 7,
+          dmg: C.SPIT_DMG * 1.2 * (1 + G.tier * 0.25), spin: 0 });
+      }
+      sfx('spit');
+    }
+    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.1 - co.phase * 0.25; }
+    return;
+  }
+  if (co.mode === 'rain'){
+    co.modeT -= dt;
+    if ((co.shots || 0) < 5 && co.modeT < 1.9 - (co.shots || 0) * 0.32){
+      co.shots = (co.shots || 0) + 1;
+      const a = Math.atan2(P.y - co.y, P.x - co.x);
+      for (let i = -1; i <= 1; i++){
+        const aa = a + i * 0.16;
+        G.eprojs.push({ x: co.x, y: co.y, vx: Math.cos(aa) * 380, vy: Math.sin(aa) * 380, r: 11, life: 6,
+          dmg: C.SPIT_DMG * 1.4 * (1 + G.tier * 0.25), spin: 0 });
+      }
+      sfx('spit');
+    }
+    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.2 - co.phase * 0.25; }
+    return;
+  }
+  if (co.mode === 'charge'){
+    co.modeT -= dt;
+    const k = 1 - co.modeT / 2.4;
+    if (k < 0.32){
+      co.y = lerp(co.y, co.ty - 42, 1 - Math.pow(0.1, dt));   // wind up
+      co.cx = P.x; co.cy = P.y;
+    } else if (k < 0.66){
+      const a = Math.atan2(co.cy - co.y, co.cx - co.x);
+      const s = 720 * sp;
+      co.x += Math.cos(a) * s * dt; co.y += Math.sin(a) * s * dt;
+      co.x = clamp(co.x, 90, C.W - 90);
+      if (co.y > C.H - 150) co.y = C.H - 150;
+      if (dist2(co.x, co.y, P.x, P.y) < (co.r + P.r) * (co.r + P.r)) hitPlayer(C.CONTACT_DMG * 2.2, 'core');
+      if (rnd() < dt * 30) puff(co.x, co.y + co.r * 0.6, 'pink', 2);
+    } else {
+      co.y = lerp(co.y, co.ty, 1 - Math.pow(0.08, dt));
+      co.x = lerp(co.x, clamp(co.x, 140, C.W - 140), 1 - Math.pow(0.2, dt));
+    }
+    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.3 - co.phase * 0.3; }
+    return;
+  }
+  if (co.mode === 'spawn'){
+    co.modeT -= dt;
+    if (!co.spawned){
+      co.spawned = true;
+      // never let the escort become a shield: a couple of short worms, and
+      // only while the page is fairly clear
+      const room = clamp(3 - G.worms.length, 0, 2);
+      for (let i = 0; i < room; i++) spawnWorm({ len: 4 + i + co.phase, x: co.x + rr(-80, 80), y: co.y, spd: 1.1 });
+      if (room) sfx('spawn');
+    }
+    if (co.modeT <= 0){ co.mode = 'idle'; co.modeT = 1.2; co.spawned = false; }
+    return;
+  }
+}
+
+/* ==================================================================
+   SPAWNING · PROGRESS · DRAFTS
+   ================================================================== */
+function stepSpawns(dt){
+  if (G.phase !== 'swarm') return;
+  const alive = G.worms.length;
+  const want = Math.min(7, 2 + Math.floor(G.prog * 5));
+  if (alive >= want) return;                 // the page is full enough
+  G.spawnT -= dt * (alive === 0 ? 3 : 1);
+  if (G.spawnT <= 0){
+    G.spawnT = Math.max(1.4, G.spawnGap - G.prog * 2.4);
+    spawnWorm();
+  }
+}
+
+function stepProgress(){
+  G.prog = G.quota > 0 ? clamp(G.killed / G.quota, 0, 1) : 0;
+  // a deep trench is long: hand out a sheet on the clock too, or the build
+  // starves exactly where it needs to grow
+  G.draftT = (G.draftT || 0) + G.lastDt;
+  if (G.draftT >= C.DRAFT_SECS){ G.draftT = 0; G.pendingDrafts++; }
+  if (G.phase === 'swarm' && G.killed >= G.quota) surfaceCore();
+  // drafts fire on progress marks, and one is always granted when the core dies
+  while (G.draftStep < C.DRAFT_STEPS.length && G.prog >= C.DRAFT_STEPS[G.draftStep]){
+    G.draftStep++;
+    G.pendingDrafts++;
+  }
+  if (G.pendingDrafts > 0 && G.state === 'run'){
+    G.pendingDrafts--;
+    openDraft();
+  }
+}
+
+function cardValue(u, rar){
+  if (u.kind === 'sys') return SYS_LEVELS[rar.tier];
+  let v = u.base * rar.mul;
+  if (u.int) v = Math.max(1, Math.floor(v + 0.0001));
+  if (u.cap) v = Math.min(u.cap, v);
+  return u.int ? Math.round(v) : v;
+}
+
+function cardPool(){
+  const out = [];
+  for (const u of UPGRADES){
+    if (u.kind === 'sys'){
+      const lv = P.sys[u.id] || 0;
+      if (lv >= C.SYS_MAX) continue;
+      // a fresh subsystem is a little rarer than levelling one you own
+      out.push({ u, w: lv > 0 ? 1.25 : 0.85 });
+    } else {
+      if (u.id === 'spread' && P.s.spread >= C.SPREAD_CAP) continue;
+      if (u.id === 'burst' && P.s.burst >= C.BURST_CAP) continue;
+      if (u.id === 'pierce' && P.s.pierce >= C.PIERCE_CAP) continue;
+      out.push({ u, w: 1 });
+    }
+  }
+  return out;
+}
+
+function rollCards(n){
+  n = n || 3;
+  const pool = cardPool();
+  const cards = [];
+  const used = {};
+  let guard = 0;
+  while (cards.length < n && pool.length && guard++ < 200){
+    let tot = 0;
+    for (const e of pool) if (!used[e.u.id]) tot += e.w;
+    if (tot <= 0) break;
+    let x = rnd() * tot, chosen = null;
+    for (const e of pool){
+      if (used[e.u.id]) continue;
+      x -= e.w;
+      if (x <= 0){ chosen = e.u; break; }
+    }
+    if (!chosen) break;
+    used[chosen.id] = 1;
+    const rar = rollRarity(P.s.luck);
+    const val = cardValue(chosen, rar);
+    cards.push({ id: chosen.id, u: chosen, rar, val,
+      lv: chosen.kind === 'sys' ? Math.min(C.SYS_MAX, (P.sys[chosen.id] || 0) + val) : 0 });
+  }
+  return cards;
+}
+
+function openDraft(){
+  if (G.state === 'dead' || G.state === 'clear') return;
+  G.cards = rollCards(3);
+  if (!G.cards.length) return;
+  G.state = 'draft';
+  syncDraft();
+  show('draft');
+  sfx('draft');
+}
+
+function applyCard(card){
+  if (!card) return;
+  const u = card.u || UP[card.id];
+  if (!u) return;
+  if (u.kind === 'sys') addSys(u.id, card.val);
+  else u.apply(P, card.val);
+  TAKEN[u.id] = TAKEN[u.id] || { nm: u.nm, n: 0, rar: 0, val: 0 };
+  TAKEN[u.id].n++;
+  TAKEN[u.id].rar = Math.max(TAKEN[u.id].rar, card.rar.tier);
+  TAKEN[u.id].val += card.val;
+  G.stats.cards++;
+  syncSys();
+}
+
+function pickCard(i){
+  const c = G.cards[i];
+  if (!c) return false;
+  applyCard(c);
+  closeDraft();
+  sfx('pick2');
+  return true;
+}
+
+function reroll(){
+  if (G.rerolls <= 0) return false;
+  G.rerolls--;
+  // re-inking bumps the odds a touch, so it never feels like a pure coin flip
+  const keep = P.s.luck;
+  P.s.luck += 26;
+  G.cards = rollCards(3);
+  P.s.luck = keep;
+  syncDraft();
+  sfx('reroll');
+  return true;
+}
+
+function takeAll(){
+  if (G.takealls <= 0) return false;
+  G.takealls--;
+  for (const c of G.cards) applyCard(c);
+  closeDraft();
+  sfx('takeall');
+  return true;
+}
+
+function skipDraft(){
+  P.s.hpAdd += 6; P.mhp += 6;
+  P.hp = Math.min(P.mhp, P.hp + P.mhp * 0.25);
+  closeDraft();
+  popTag(P.x, P.y - 40, 'PATCHED');
+  return true;
+}
+
+function closeDraft(){
+  G.cards = [];
+  if (G.state === 'draft') G.state = 'run';
+  show(null);
+  syncHud();
+}
+
+/* ==================================================================
+   MAIN STEP
+   ================================================================== */
+function stepRun(dt){
+  G.time += dt;
+  G.lastDt = dt;
+  if (G.hitStop > 0){ G.hitStop -= dt; return; }
+  stepPlayer(dt);
+  stepProjectiles(dt);
+  for (let i = G.worms.length - 1; i >= 0; i--){
+    const w = G.worms[i];
+    if (w.dead || !w.segs.length){ G.worms.splice(i, 1); continue; }
+    stepWorm(w, dt);
+    // contact
+    if (P.inv <= 0){
+      for (const s of w.segs){
+        if (s.dead) continue;
+        if (dist2(s.x, s.y, P.x, P.y) < (s.r + P.r) * (s.r + P.r)){
+          hitPlayer(C.CONTACT_DMG * (1 + G.tier * 0.22), 'contact');
+          break;
+        }
+      }
+    }
+  }
+  stepCore(dt);
+  stepZones(dt);
+  stepDrops(dt);
+  stepParts(dt);
+  stepSpawns(dt);
+  stepProgress();
+  if (G.shake > 0) G.shake = Math.max(0, G.shake - dt * 44);
+  if (G.flash > 0) G.flash = Math.max(0, G.flash - dt * 1.6);
+}
+
+function update(dt){
+  dt = Math.min(0.05, dt);
+  G.t += dt;
+  if (G.state === 'run'){
+    const s = G.speed;
+    // fast-forward runs the same sim twice rather than doubling dt, so
+    // collisions stay honest
+    if (s >= 2){ stepRun(dt); if (G.state === 'run') stepRun(dt); }
+    else stepRun(dt);
+  } else if (G.state === 'title' || G.state === 'stagesel' || G.state === 'depot'){
+    stepAttract(dt);
+  }
+}
+/* ==================================================================
+   DRAWING
+   Rule of the house: pick an INK and a COVERAGE. Teal is water, rock and
+   armour. Pink is meat. Key is line work, faces and numbers. Anything
+   that needs to read as bright gets *knocked out* — punched back to bare
+   paper — instead of being painted white.
+   ================================================================== */
+function knockOut(fn){
+  // run a path-drawing fn against both colour layers in erase mode
+  for (const id of ['pink', 'teal']){
+    const g = L(id); if (!g) continue;
+    g.save();
+    g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = 'rgba(0,0,0,1)'; g.strokeStyle = 'rgba(0,0,0,1)';
+    fn(g);
+    g.restore();
+  }
+}
+function shakeAll(ox, oy){
+  for (const ink of INK_ORDER){ const g = L(ink); if (g) g.translate(ox, oy); }
+}
+
+/* ---------------------------- backdrop ----------------------------
+   Composition, top to bottom: the trench mouth (a solid two-ink shape the
+   worm crawls out of, taller the deeper you dive), open water screened in
+   teal with drifting current rules, rock shelves clamped to the margins so
+   the middle stays readable, and the press deck the hull rides on.
+   ------------------------------------------------------------------ */
+const ROCKS = [], KELP = [];
+function seedRocks(){
+  ROCKS.length = 0; KELP.length = 0;
+  reseedKeep(() => {
+    for (let i = 0; i < 16; i++){
+      const left = i % 2 === 0;
+      const pts = [];
+      const n = ri(6, 9), rr0 = rr(0.05, 0.13);
+      for (let k = 0; k < n; k++){
+        const a = (k / n) * TAU;
+        const rad = rr0 * rr(0.5, 1.1);
+        pts.push([Math.cos(a) * rad, Math.sin(a) * rad * rr(0.4, 0.7)]);
+      }
+      ROCKS.push({ x: left ? rr(-0.04, 0.19) : rr(0.81, 1.04), y: rr(0.05, 0.95),
+        pts, blot: rnd() < 0.35, s: rr(0.55, 1) });
+    }
+    for (let i = 0; i < 22; i++){
+      ROCKS.push({ pebble: true, x: rnd(), y: rnd(), r: rr(0.004, 0.012), s: rr(0.5, 1) });
+    }
+    for (let i = 0; i < 6; i++){
+      KELP.push({ x: rnd() < 0.5 ? rr(0.02, 0.12) : rr(0.88, 0.98), h: rr(0.07, 0.17),
+        w: rr(3, 9), ph: rnd() * TAU, sway: rr(10, 34) });
+    }
+  });
+}
+// keep the deterministic run RNG unpolluted by decoration
+function reseedKeep(fn){ const s = _seed; reseed(0xC0FFEE); fn(); _seed = s; }
+
+let snow = [];
+function seedSnow(){
+  snow = [];
+  reseedKeep(() => {
+    for (let i = 0; i < 64; i++) snow.push({ x: rnd(), y: rnd(), r: rr(1, 3.6), v: rr(7, 30), p: rnd() * TAU });
+  });
+}
+
+// the jagged lower edge of the trench mouth, deterministic per trench
+function mouthPath(g, h, seed){
+  if (!g) return;
+  const W = C.W, n = 11;
+  g.beginPath();
+  g.moveTo(-6, -6);
+  g.lineTo(W + 6, -6);
+  g.lineTo(W + 6, h * 0.72);
+  for (let i = n; i >= 0; i--){
+    const u = i / n;
+    const x = u * W;
+    const y = h * (0.62 + Math.sin(u * 9.1 + seed) * 0.20 + Math.sin(u * 21 + seed * 2) * 0.09);
+    g.lineTo(x, y);
+  }
+  g.lineTo(-6, h * 0.72);
+  g.closePath();
+}
+
+function drawBackdrop(){
+  const t = L('teal'), k = L('key'), p = L('pink');
+  const H = C.H, W = C.W;
+  const stage = G.state === 'run' ? G.stage : STAGES[2];
+  const deep = clamp((stage.id === 99 ? 12 : stage.id) / 12, 0, 1);
+
+  // --- open water: a screened teal ramp, heavier the further from the deck
+  const bands = 16;
+  for (let i = 0; i < bands; i++){
+    const u = i / (bands - 1);
+    // heavy at the trench, thin through the middle where you actually play,
+    // then heavy again toward the deck
+    const a = 0.30 + deep * 0.14 + Math.pow(Math.abs(u - 0.46) / 0.54, 1.6) * (0.30 + deep * 0.16);
+    rectF(t, 0, H * i / bands, W, H / bands + 1, a);
+  }
+  rectF(p, 0, 0, W, H, 0.05 + deep * 0.07);
+
+  // --- current rules: long thin dashes drifting sideways
+  const tt = G.t;
+  for (let i = 0; i < 12; i++){
+    const y = ((i * 0.0833 + tt * 0.012 * (i % 3 + 1)) % 1) * H;
+    const x = ((i * 0.37 + tt * 0.02 * (i % 2 ? 1 : -1)) % 1.4 - 0.2) * W;
+    line(t, x, y, x + W * 0.16, y - 4, 3, 0.22);
+  }
+
+  // --- rock shelves, hugging the margins
+  for (const r of ROCKS){
+    if (r.pebble){ disc(k, r.x * W, r.y * H, r.r * W, 0.35 * r.s); continue; }
+    const g = r.blot ? p : t;
+    const cx = r.x * W, cy = r.y * H, sc = W;
+    const pts = r.pts.map(q => [cx + q[0] * sc, cy + q[1] * sc]);
+    poly(g, pts, 0.5 + r.s * 0.25);
+    poly(k, pts.map(q => [q[0] + 5, q[1] + 5]), 0.16);
+    if (k){
+      k.beginPath(); k.moveTo(pts[0][0], pts[0][1]);
+      for (let i = 1; i < pts.length; i++) k.lineTo(pts[i][0], pts[i][1]);
+      k.closePath(); inkStroke(k, 0.8, 3); k.stroke();
+    }
+  }
+  // --- kelp, swaying
+  for (const kl of KELP){
+    const x = kl.x * W, h = kl.h * H, sw = Math.sin(tt * 0.7 + kl.ph) * kl.sway;
+    if (t){
+      t.beginPath();
+      t.moveTo(x, H - C.DECK + 10);
+      t.quadraticCurveTo(x + sw * 0.6, H - C.DECK - h * 0.55, x + sw, H - C.DECK - h);
+      inkStroke(t, 0.55, kl.w); t.stroke();
+      inkStroke(k, 0.35, kl.w * 0.4); k && k.stroke();
+    }
+  }
+
+  // --- the trench mouth the leviathan comes out of
+  const mh = H * (0.16 + deep * 0.16);
+  const seed = (stage.id || 1) * 1.7;
+  mouthPath(t, mh, seed); inkFill(t, 0.95); t && t.fill();
+  mouthPath(p, mh * 0.94, seed); inkFill(p, 0.75); p && p.fill();
+  mouthPath(k, mh, seed); inkStroke(k, 0.9, 5); k && k.stroke();
+  // drips from the lip
+  for (let i = 0; i < 9; i++){
+    const u = (i + 0.5) / 9;
+    const x = u * W;
+    const y = mh * (0.62 + Math.sin(u * 9.1 + seed) * 0.20 + Math.sin(u * 21 + seed * 2) * 0.09);
+    const dl = 10 + ((i * 37) % 40);
+    line(t, x, y, x, y + dl, 9, 0.9);
+    disc(t, x, y + dl, 5, 0.9);
+  }
+
+  // --- marine snow
+  for (const s of snow){
+    const y = ((s.y + (tt * s.v) / H) % 1) * H;
+    disc(k, s.x * W, y, s.r, 0.3);
+  }
+
+  // --- the press deck the hull rides over
+  const deckY = H - C.DECK;
+  rectF(k, 0, deckY, W, C.DECK, 0.72);
+  rectF(t, 0, deckY + 8, W, C.DECK, 0.5);
+  for (let x = 0; x < W; x += 34) rectF(p, x + 5, deckY + 12, 22, 7, 0.85);
+  line(k, 0, deckY, W, deckY, 6, 0.95);
+  // rivets along the lip
+  for (let x = 16; x < W; x += 46) disc(k, x, deckY + 26, 3.5, 0.8);
+
+  // --- printer's furniture: crop marks, plate number, registration target
+  const m = 14, len = 20;
+  inkStroke(k, 0.55, 2);
+  for (const c of [[m, m, 1, 1], [W - m, m, -1, 1], [m, H - m, 1, -1], [W - m, H - m, -1, -1]]){
+    if (!k) break;
+    k.beginPath();
+    k.moveTo(c[0], c[1] - c[3] * len); k.lineTo(c[0], c[1]);
+    k.moveTo(c[0] - c[2] * len, c[1]); k.lineTo(c[0], c[1]);
+    k.stroke();
+  }
+  const plate = G.state === 'run'
+    ? 'PLATE ' + String(G.stage.id).padStart(2, '0') + ' / ' + (TIERS[G.tier] || TIERS[1]).nm.toUpperCase()
+    : 'LEVIATHAN PRESS';
+  if (k){
+    k.save(); k.textAlign = 'left';
+    txt(k, plate, 26, H - 12, 11, 0.5);
+    k.restore();
+  }
+  const rx = W - 38, ry = H - 58;
+  ring(k, rx, ry, 9, 2, 0.6); line(k, rx - 13, ry, rx + 13, ry, 1.6, 0.6);
+  line(k, rx, ry - 13, rx, ry + 13, 1.6, 0.6);
+  disc(p, rx, ry, 5, 0.7); disc(t, rx + 3, ry + 2, 5, 0.6);
+}
+
+function roundRectPath(g, x, y, w, h, r){
+  if (!g) return;
+  r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.lineTo(x + w - r, y); g.quadraticCurveTo(x + w, y, x + w, y + r);
+  g.lineTo(x + w, y + h - r); g.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  g.lineTo(x + r, y + h); g.quadraticCurveTo(x, y + h, x, y + h - r);
+  g.lineTo(x, y + r); g.quadraticCurveTo(x, y, x + r, y);
+  g.closePath();
+}
+
+/* ---------------------------- the worm ---------------------------- */
+function drawWorm(w){
+  const k = L('key');
+  // the connective tissue first, so segments print on top of it
+  const t = L('teal');
+  if (t && w.segs.length > 1){
+    t.beginPath();
+    t.moveTo(w.segs[0].x, w.segs[0].y);
+    for (let i = 1; i < w.segs.length; i++) t.lineTo(w.segs[i].x, w.segs[i].y);
+    inkStroke(t, 0.5, C.SEG_R * 0.9);
+    t.stroke();
+  }
+  for (let i = w.segs.length - 1; i >= 0; i--) drawSeg(w, i, w.segs[i]);
+}
+
+function drawSeg(w, i, s){
+  if (s.y < -80 || s.y > C.H + 80) return;
+  const d = SEGT[s.type] || SEGT.flesh;
+  const g = L(d.ink), k = L('key'), t = L('teal'), p = L('pink');
+  const pulse = 1 + Math.sin(s.pulse) * 0.035;
+  const r = s.r * pulse;
+  const isHead = i === 0;
+
+  // cilia — the fuzzy fringe that makes it read as alive
+  const n = 9;
+  inkStroke(g, 0.55, 3);
+  if (g){
+    g.beginPath();
+    for (let c = 0; c < n; c++){
+      const a = (c / n) * TAU + s.pulse * 0.35 + i;
+      const l = r * (1.02 + Math.sin(s.pulse * 1.7 + c) * 0.12);
+      const l2 = l + r * 0.34;
+      g.moveTo(s.x + Math.cos(a) * l, s.y + Math.sin(a) * l);
+      g.lineTo(s.x + Math.cos(a + 0.14) * l2, s.y + Math.sin(a + 0.14) * l2);
+    }
+    g.stroke();
+  }
+
+  // trap: knock the water out from under the body so the worm always reads
+  const tg = L('teal');
+  if (tg && d.ink !== 'teal'){
+    tg.save();
+    tg.globalCompositeOperation = 'destination-out';
+    tg.fillStyle = 'rgba(0,0,0,1)';
+    blobPath(tg, s.x, s.y, r * 1.14, i * 1.7 + w.id, 0.075);
+    tg.fill();
+    tg.restore();
+  }
+
+  // body
+  blobPath(g, s.x, s.y, r, i * 1.7 + w.id, 0.075);
+  inkFill(g, s.hitT > 0 ? 0.98 : 0.82);
+  g && g.fill();
+  // inner tone, offset like a second pass
+  blobPath(g, s.x - r * 0.18, s.y - r * 0.2, r * 0.55, i * 2.3, 0.16);
+  inkFill(g, 0.28);
+  g && g.fill();
+
+  if (s.hitT > 0){
+    knockOut(gg => {
+      gg.lineWidth = 7;
+      blobPath(gg, s.x, s.y, r * 0.86, i * 1.7 + w.id, 0.075);
+      gg.stroke();
+    });
+  }
+
+  if (s.type === 'plate'){
+    // riveted armour plate, drawn as a hard shape over the meat
+    const armFrac = s.marmor > 0 ? clamp(s.armor / s.marmor, 0, 1) : 0;
+    if (armFrac > 0){
+      if (t){
+        t.save();
+        t.translate(s.x, s.y);
+        inkFill(t, 0.9);
+        roundRectPath(t, -r * 0.86, -r * 0.7, r * 1.72, r * 1.4 * (0.35 + armFrac * 0.65), 6);
+        t.fill();
+        t.restore();
+      }
+      if (k){
+        k.save(); k.translate(s.x, s.y);
+        inkStroke(k, 0.85, 3);
+        roundRectPath(k, -r * 0.86, -r * 0.7, r * 1.72, r * 1.4 * (0.35 + armFrac * 0.65), 6);
+        k.stroke();
+        for (const rx of [-r * 0.6, 0, r * 0.6]) disc(k, rx, -r * 0.44, 2.4, 0.8);
+        k.restore();
+      }
+    }
+  } else if (s.type === 'spit'){
+    const a = Math.atan2(P.y - s.y, P.x - s.x);
+    const nx = s.x + Math.cos(a) * r * 0.9, ny = s.y + Math.sin(a) * r * 0.9;
+    poly(k, [[nx - Math.cos(a + 1.4) * 9, ny - Math.sin(a + 1.4) * 9],
+             [nx - Math.cos(a - 1.4) * 9, ny - Math.sin(a - 1.4) * 9],
+             [nx + Math.cos(a) * 15, ny + Math.sin(a) * 15]], 0.85);
+    const warm = clamp(1 - s.spitT / 1.2, 0, 1);
+    if (warm > 0.4) disc(p, nx + Math.cos(a) * 12, ny + Math.sin(a) * 12, 4 * warm, 0.9);
+  } else if (s.type === 'bulb'){
+    knockOut(gg => { gg.beginPath(); gg.arc(s.x, s.y, r * 0.52, 0, TAU); gg.fill(); });
+    ring(k, s.x, s.y, r * 0.52, 3, 0.9);
+    const flick = 0.5 + Math.sin(s.pulse * 2.2) * 0.5;
+    disc(p, s.x, s.y, r * 0.3 * (0.7 + flick * 0.5), 0.7);
+    for (let c = 0; c < 5; c++){
+      const a = c / 5 * TAU + s.pulse * 0.4;
+      line(k, s.x + Math.cos(a) * r * 0.6, s.y + Math.sin(a) * r * 0.6,
+              s.x + Math.cos(a) * r * 0.95, s.y + Math.sin(a) * r * 0.95, 2, 0.5);
+    }
+  } else if (s.type === 'knot'){
+    // stitching across the segment: it is sewing its neighbours up
+    inkStroke(k, 0.8, 2.6);
+    if (k){
+      k.beginPath();
+      for (let c = -2; c <= 2; c++){
+        k.moveTo(s.x - r * 0.7, s.y + c * r * 0.3);
+        k.lineTo(s.x + r * 0.7, s.y + c * r * 0.3 + (c % 2 ? 4 : -4));
+      }
+      k.stroke();
+    }
+  }
+
+  // outline last, always key
+  blobPath(k, s.x, s.y, r, i * 1.7 + w.id, 0.075);
+  inkStroke(k, 0.92, isHead ? 4.4 : 3.2);
+  k && k.stroke();
+
+  if (s.chillT > 0){
+    ring(t, s.x, s.y, r * 1.12, 3, 0.75);
+    for (let c = 0; c < 4; c++){
+      const a = c / 4 * TAU + s.pulse * 0.2;
+      line(t, s.x + Math.cos(a) * r, s.y + Math.sin(a) * r,
+              s.x + Math.cos(a) * r * 1.3, s.y + Math.sin(a) * r * 1.3, 2.4, 0.8);
+    }
+  }
+  if (s.venT > 0){
+    for (let c = 0; c < 3; c++){
+      const a = s.pulse * 1.4 + c * 2.1;
+      disc(t, s.x + Math.cos(a) * r * 0.8, s.y + Math.sin(a) * r * 0.8 - (s.venT * 9) % 14, 3.2, 0.7);
+    }
+  }
+
+  if (isHead) drawFace(s, r, w);
+  // the number, stamped on the meat
+  const hpShown = s.armor > 0 ? s.armor : s.hp;
+  stampNum(fmt(Math.ceil(hpShown)), s.x, s.y + (isHead ? r * 0.56 : 1), isHead ? 16 : 15, 0.95);
+}
+
+function drawFace(s, r, w){
+  const k = L('key');
+  if (!k) return;
+  const angry = w.rage > 0;
+  const ex = r * 0.34, ey = -r * 0.16;
+  // eyes: two hard wedges, tilted in
+  for (const sgn of [-1, 1]){
+    k.save();
+    k.translate(s.x + sgn * ex, s.y + ey);
+    k.rotate(sgn * (angry ? 0.55 : 0.34));
+    inkFill(k, 0.95);
+    k.beginPath();
+    k.moveTo(-6, -7); k.lineTo(7, -2); k.lineTo(-6, 6);
+    k.closePath(); k.fill();
+    k.restore();
+  }
+  // mouth: a jagged printed slot
+  const mw = r * 0.62, my = s.y + r * 0.18;
+  k.beginPath();
+  k.moveTo(s.x - mw, my);
+  const teeth = 5;
+  for (let i = 0; i < teeth; i++){
+    const x0 = s.x - mw + (i * 2 * mw) / teeth;
+    k.lineTo(x0 + mw / teeth, my + (i % 2 ? 8 : 4));
+    k.lineTo(x0 + (2 * mw) / teeth, my);
+  }
+  inkStroke(k, 0.95, 3);
+  k.stroke();
+}
+
+/* ---------------------------- the core ---------------------------- */
+function drawCore(){
+  const co = G.core;
+  if (!co || co.dead) return;
+  const k = L('key'), p = L('pink'), t = L('teal');
+  const r = co.r * (1 + Math.sin(co.wob * 2) * 0.02);
+  // tendrils
+  inkStroke(t, 0.55, 9);
+  if (t){
+    t.beginPath();
+    for (let i = 0; i < 9; i++){
+      const a = i / 9 * TAU + co.wob * 0.3;
+      const l = r * (1.15 + Math.sin(co.wob * 2 + i) * 0.22);
+      t.moveTo(co.x + Math.cos(a) * r * 0.8, co.y + Math.sin(a) * r * 0.8);
+      t.quadraticCurveTo(
+        co.x + Math.cos(a + 0.4) * l * 1.25, co.y + Math.sin(a + 0.4) * l * 1.25,
+        co.x + Math.cos(a + 0.1) * l * 1.6, co.y + Math.sin(a + 0.1) * l * 1.6);
+    }
+    t.stroke();
+  }
+  const tg2 = L('teal');
+  if (tg2){
+    tg2.save();
+    tg2.globalCompositeOperation = 'destination-out';
+    tg2.fillStyle = 'rgba(0,0,0,1)';
+    blobPath(tg2, co.x, co.y, r * 1.1, co.wob, 0.06, 18);
+    tg2.fill();
+    tg2.restore();
+  }
+  blobPath(p, co.x, co.y, r, co.wob, 0.06, 18);
+  inkFill(p, co.hitT > 0 ? 1 : 0.86);
+  p && p.fill();
+  blobPath(t, co.x - r * 0.2, co.y - r * 0.22, r * 0.6, co.wob * 1.3, 0.14, 16);
+  inkFill(t, 0.35);
+  t && t.fill();
+  if (co.hitT > 0) knockOut(gg => { gg.lineWidth = 10; blobPath(gg, co.x, co.y, r * 0.86, co.wob, 0.06, 18); gg.stroke(); });
+  blobPath(k, co.x, co.y, r, co.wob, 0.06, 18);
+  inkStroke(k, 0.95, 5.5);
+  k && k.stroke();
+
+  // face: one hard eye per phase, plus the maw
+  const eyes = 1 + co.phase;
+  for (let i = 0; i < eyes; i++){
+    const off = (i - (eyes - 1) / 2) * r * 0.5;
+    knockOut(gg => { gg.beginPath(); gg.arc(co.x + off, co.y - r * 0.2, r * 0.19, 0, TAU); gg.fill(); });
+    ring(k, co.x + off, co.y - r * 0.2, r * 0.19, 4, 0.95);
+    const look = Math.atan2(P.y - co.y, P.x - co.x);
+    disc(k, co.x + off + Math.cos(look) * r * 0.07, co.y - r * 0.2 + Math.sin(look) * r * 0.07, r * 0.085, 0.95);
+  }
+  const mw = r * 0.55, my = co.y + r * 0.36;
+  if (k){
+    k.beginPath();
+    k.moveTo(co.x - mw, my);
+    for (let i = 0; i < 6; i++){
+      const x0 = co.x - mw + (i * 2 * mw) / 6;
+      k.lineTo(x0 + mw / 6, my + (i % 2 ? 14 : 6));
+      k.lineTo(x0 + (2 * mw) / 6, my);
+    }
+    inkStroke(k, 0.95, 4);
+    k.stroke();
+  }
+  if (co.mode === 'charge'){
+    ring(p, co.x, co.y, r * 1.25 + Math.sin(co.t * 20) * 6, 4, 0.6);
+  }
+}
+
+/* ---------------------------- the hull ---------------------------- */
+function drawPlayer(){
+  const k = L('key'), t = L('teal'), p = L('pink');
+  const bob = Math.sin(P.bob) * 3;
+  const x = P.x, y = P.y + bob;
+  const flash = P.hurtT > 0 && Math.floor(P.hurtT * 20) % 2 === 0;
+
+  for (const f of P.flails){
+    line(k, x, y, f.x, f.y, 2.5, 0.55);
+    disc(k, f.x, f.y, 12, 0.9);
+    disc(p, f.x, f.y, 8, 0.8);
+    if (f.spark > 0) ring(p, f.x, f.y, 18, 3, 0.8);
+  }
+  for (const d of P.drones){
+    disc(t, d.x, d.y, 9, 0.85);
+    ring(k, d.x, d.y, 9, 2.6, 0.9);
+    disc(k, d.x, d.y - 2, 3, 0.8);
+  }
+
+  // harpoon rail, pointing where the press is aimed
+  const a = P.aim;
+  const rl = 44 - (P.recoil > 0 ? P.recoil * 10 : 0);
+  line(k, x, y, x + Math.cos(a) * rl, y + Math.sin(a) * rl, 10, 0.9);
+  line(t, x, y, x + Math.cos(a) * (rl - 5), y + Math.sin(a) * (rl - 5), 4.5, 0.9);
+
+  // hull: a diving bell with a hand crank bolted to the side
+  if (k){
+    k.save(); k.translate(x, y);
+    // exhaust bubbles
+    for (let i = 0; i < 3; i++){
+      const b = (P.bob * 0.6 + i * 0.33) % 1;
+      ring(t, -22 - b * 8, 14 - b * 30, 3 + b * 3, 2, 0.5 * (1 - b));
+    }
+    inkFill(t, 0.9);
+    roundRectPath(t, -30, -25, 60, 50, 20);
+    t.fill();
+    inkFill(p, 0.65);
+    roundRectPath(p, -22, -19, 30, 22, 12);
+    p.fill();
+    inkStroke(k, 0.95, 4.4);
+    roundRectPath(k, -30, -25, 60, 50, 20);
+    k.stroke();
+    // porthole, knocked back to bare paper
+    knockOut(gg => { gg.beginPath(); gg.arc(-6, -4, 11, 0, TAU); gg.fill(); });
+    ring(k, -6, -4, 11, 3.4, 0.95);
+    disc(k, -3, -4, 4, 0.9);
+    // tail fin
+    poly(k, [[24, -6], [40, -19], [37, 10], [24, 9]], 0.9);
+    poly(t, [[25, -4], [36, -15], [34, 6], [25, 6]], 0.7);
+    // the crank, turning as it fires
+    ring(k, 16, 16, 9, 3, 0.9);
+    line(k, 16, 16, 16 + Math.cos(P.bob * 3) * 9, 16 + Math.sin(P.bob * 3) * 9, 3.2, 0.95);
+    k.restore();
+  }
+  if (flash) knockOut(gg => { gg.beginPath(); gg.arc(x, y, 38, 0, TAU); gg.fill(); });
+  if (P.inv > 0 && !flash) ring(k, x, y, 42, 2, 0.35);
+  if (P.shield > 0){
+    ring(t, x, y, 54 + Math.sin(G.t * 4) * 3, 6, 0.7);
+    ring(k, x, y, 54 + Math.sin(G.t * 4) * 3, 2, 0.5);
+  }
+  if (P.buffT > 0) ring(p, x, y, 46, 3.4, 0.6 * Math.min(1, P.buffT));
+}
+
+/* ------------------------- shots and effects ---------------------- */
+function drawShots(){
+  const k = L('key'), p = L('pink'), t = L('teal');
+  for (const pr of G.projs){
+    const a = Math.atan2(pr.vy, pr.vx);
+    const len = pr.kind === 'barb' ? 38 : 14;
+    const x2 = pr.x - Math.cos(a) * len, y2 = pr.y - Math.sin(a) * len;
+    if (pr.kind === 'spark'){
+      disc(t, pr.x, pr.y, 5, 0.9); ring(k, pr.x, pr.y, 5, 2, 0.9);
+      continue;
+    }
+    if (pr.kind === 'shard'){
+      poly(k, [[pr.x, pr.y], [x2 + 4, y2], [x2 - 4, y2]], 0.85);
+      continue;
+    }
+    line(k, pr.x, pr.y, x2, y2, pr.crit ? 9 : 7, 0.92);
+    line(p, pr.x, pr.y, x2 + Math.cos(a) * 4, y2 + Math.sin(a) * 4, pr.crit ? 6 : 4.5, 0.95);
+    // barb head
+    poly(k, [[pr.x + Math.cos(a) * 13, pr.y + Math.sin(a) * 13],
+             [pr.x + Math.cos(a + 2.4) * 13, pr.y + Math.sin(a + 2.4) * 13],
+             [pr.x + Math.cos(a - 2.4) * 13, pr.y + Math.sin(a - 2.4) * 13]], 0.95);
+    // fletching
+    line(k, x2, y2, x2 + Math.cos(a + 2.4) * 9, y2 + Math.sin(a + 2.4) * 9, 3, 0.8);
+    line(k, x2, y2, x2 + Math.cos(a - 2.4) * 9, y2 + Math.sin(a - 2.4) * 9, 3, 0.8);
+    if (pr.crit) ring(p, pr.x, pr.y, 14, 2.4, 0.6);
+  }
+  for (const e of G.eprojs){
+    disc(p, e.x, e.y, e.r, 0.85);
+    ring(k, e.x, e.y, e.r, 2.6, 0.9);
+    for (let i = 0; i < 4; i++){
+      const a = e.spin + i * TAU / 4;
+      line(k, e.x + Math.cos(a) * e.r, e.y + Math.sin(a) * e.r,
+              e.x + Math.cos(a) * (e.r + 6), e.y + Math.sin(a) * (e.r + 6), 2, 0.8);
+    }
+  }
+}
+
+function drawZones(){
+  const k = L('key'), p = L('pink'), t = L('teal');
+  for (const z of G.zones){
+    const f = z.maxLife ? clamp(z.life / z.maxLife, 0, 1) : 1;
+    if (z.kind === 'sonar'){
+      const r = z.r * (1.05 - f * 0.55);
+      ring(t, z.x, z.y, r, 8 * f + 2, 0.55 * f);
+      ring(k, z.x, z.y, r, 2, 0.5 * f);
+    } else if (z.kind === 'bloom'){
+      disc(t, z.x, z.y, z.r * (1 - f * 0.4), 0.35 * f);
+      ring(k, z.x, z.y, z.r * (1 - f * 0.4), 3, 0.6 * f);
+    } else if (z.kind === 'boom'){
+      const r = z.r * (1.1 - f * 0.5);
+      knockOut(gg => { gg.beginPath(); gg.arc(z.x, z.y, r * 0.7, 0, TAU); gg.fill(); });
+      ring(p, z.x, z.y, r, 9 * f + 2, 0.75 * f);
+      ring(k, z.x, z.y, r, 3, 0.7 * f);
+    } else if (z.kind === 'arc'){
+      // lightning drawn as a jagged two-ink stroke
+      const seg = 5;
+      if (k){
+        k.beginPath();
+        k.moveTo(z.x, z.y);
+        for (let i = 1; i <= seg; i++){
+          const u = i / seg;
+          const jx = lerp(z.x, z.x2, u) + (i < seg ? rr(-10, 10) : 0);
+          const jy = lerp(z.y, z.y2, u) + (i < seg ? rr(-10, 10) : 0);
+          k.lineTo(jx, jy);
+        }
+        inkStroke(k, 0.9, 3.4); k.stroke();
+        inkStroke(t, 0.8, 1.6);
+        t && t.stroke();
+      }
+    } else if (z.kind === 'mine'){
+      disc(k, z.x, z.y, z.r, 0.9);
+      disc(p, z.x, z.y, z.r * 0.6, 0.9);
+      for (let i = 0; i < 8; i++){
+        const a = i / 8 * TAU + z.t * 1.4;
+        line(k, z.x + Math.cos(a) * z.r, z.y + Math.sin(a) * z.r,
+                z.x + Math.cos(a) * (z.r + 7), z.y + Math.sin(a) * (z.r + 7), 2.4, 0.85);
+      }
+      if (Math.floor(z.t * 6) % 2 === 0) disc(t, z.x, z.y, 3, 0.9);
+    } else if (z.kind === 'bomb'){
+      disc(k, z.x, z.y, 11, 0.9);
+      ring(p, z.x, z.y, 14, 2.4, 0.7);
+      line(k, z.x, z.y - 11, z.x + 5, z.y - 20, 2, 0.8);
+    }
+  }
+}
+
+function drawDrops(){
+  const k = L('key'), p = L('pink'), t = L('teal');
+  for (const d of G.drops){
+    const y = d.y + Math.sin(d.t) * 2;
+    const fade = d.life < 2 && Math.floor(d.life * 8) % 2 === 0 ? 0.35 : 1;
+    if (d.kind === 'pearl'){
+      disc(t, d.x, y, 7, 0.8 * fade);
+      ring(k, d.x, y, 7, 2.4, 0.9 * fade);
+      knockOut(gg => { gg.beginPath(); gg.arc(d.x - 2, y - 2, 2.4, 0, TAU); gg.fill(); });
+    } else if (d.kind === 'patch'){
+      rectF(p, d.x - 8, y - 3, 16, 6, 0.85 * fade);
+      rectF(p, d.x - 3, y - 8, 6, 16, 0.85 * fade);
+      inkStroke(k, 0.9 * fade, 2.4);
+      if (k){ k.strokeRect(d.x - 8, y - 3, 16, 6); k.strokeRect(d.x - 3, y - 8, 6, 16); }
+    } else {
+      poly(p, [[d.x, y - 10], [d.x + 5, y - 1], [d.x + 1, y - 1], [d.x + 3, y + 10],
+               [d.x - 5, y + 1], [d.x - 1, y + 1]], 0.9 * fade);
+      poly(k, [[d.x, y - 10], [d.x + 5, y - 1], [d.x + 1, y - 1], [d.x + 3, y + 10],
+               [d.x - 5, y + 1], [d.x - 1, y + 1]], 0.0);
+    }
+  }
+}
+
+function drawParts(){
+  const k = L('key');
+  for (const p of G.parts){
+    const f = clamp(p.life / p.maxLife, 0, 1);
+    const g = L(p.ink) || k;
+    if (p.blot){
+      blobPath(g, p.x, p.y, p.r * (0.6 + f * 0.8), p.spin, 0.3, 8);
+      inkFill(g, 0.8 * f);
+      g && g.fill();
+    } else {
+      disc(g, p.x, p.y, p.r * f, 0.85 * f);
+    }
+  }
+  for (const n of G.nums){
+    const f = clamp(n.life / n.maxLife, 0, 1);
+    const g = L(n.ink) || k;
+    if (n.tag){
+      txt(g, n.v, n.x, n.y, n.size, 0.9 * f);
+    } else {
+      txt(g, n.v, n.x, n.y, n.size * (n.crit ? 1 + (1 - f) * 0.25 : 1), 0.95 * f);
+    }
+  }
+}
+
+/* ---------------------------- attract ----------------------------- */
+const ATT = { t: 0, coils: [] };
+function stepAttract(dt){
+  ATT.t += dt;
+  if (!ATT.coils.length){
+    reseedKeep(() => {
+      for (let i = 0; i < 3; i++){
+        ATT.coils.push({ y: rr(0.1, 0.85), amp: rr(60, 150), ph: rnd() * TAU,
+          spd: rr(0.14, 0.3) * (rnd() < 0.5 ? -1 : 1), n: ri(6, 12), r: rr(18, 30) });
+      }
+    });
+  }
+}
+function drawAttract(){
+  const k = L('key'), p = L('pink'), t = L('teal');
+  for (const c of ATT.coils){
+    const baseX = ((ATT.t * c.spd * 120 + c.ph * 100) % (C.W + 400)) - 200;
+    for (let i = c.n - 1; i >= 0; i--){
+      const x = baseX - i * 40 * Math.sign(c.spd || 1);
+      const y = c.y * C.H + Math.sin(ATT.t * 0.8 + i * 0.5 + c.ph) * c.amp;
+      if (x < -60 || x > C.W + 60) continue;
+      const r = c.r * (i === 0 ? 1.15 : 1);
+      blobPath(p, x, y, r, i, 0.08);
+      inkFill(p, 0.5); p && p.fill();
+      blobPath(k, x, y, r, i, 0.08);
+      inkStroke(k, 0.55, 2.6); k && k.stroke();
+      if (i === 0){
+        disc(k, x + r * 0.3, y - r * 0.2, 3.4, 0.7);
+        disc(k, x - r * 0.3, y - r * 0.2, 3.4, 0.7);
+      }
+    }
+  }
+}
+
+/* ---------------------------- frame ------------------------------- */
+function draw(){
+  beginFrame();
+  const sh = G.shake;
+  if (sh > 0.2) shakeAll(rr(-sh, sh) * 0.6, rr(-sh, sh) * 0.6);
+  drawBackdrop();
+  if (G.state === 'run' || G.state === 'draft' || G.state === 'pause' ||
+      G.state === 'dead' || G.state === 'clear'){
+    drawZones();
+    for (const w of G.worms) drawWorm(w);
+    drawCore();
+    drawDrops();
+    drawShots();
+    drawPlayer();
+    drawParts();
+  } else {
+    drawAttract();
+  }
+  if (G.flash > 0){
+    const p = L('pink');
+    rectF(p, 0, 0, C.W, C.H, 0.35 * G.flash);
+  }
+  endFrame();
+}
+/* ==================================================================
+   SOUND — one oscillator, a pitch slide, no samples.
+   ================================================================== */
+let AC = null;
+const SFX = {
+  shoot:   [640, 300, 'square',   0.055, 0.055],
+  pop:     [300, 90,  'square',   0.11,  0.09],
+  plate:   [900, 420, 'square',   0.07,  0.07],
+  boom:    [150, 40,  'sawtooth', 0.26,  0.13],
+  hurt:    [220, 70,  'sawtooth', 0.20,  0.16],
+  spit:    [420, 240, 'triangle', 0.09,  0.05],
+  sonar:   [880, 220, 'sine',     0.30,  0.09],
+  pick:    [700, 1200,'square',   0.07,  0.07],
+  pick2:   [520, 990, 'square',   0.13,  0.10],
+  draft:   [330, 660, 'triangle', 0.20,  0.09],
+  reroll:  [560, 780, 'square',   0.10,  0.08],
+  takeall: [400, 1100,'square',   0.24,  0.11],
+  boss:    [90,  50,  'sawtooth', 0.85,  0.16],
+  phase:   [140, 60,  'sawtooth', 0.45,  0.14],
+  kill:    [200, 900, 'square',   0.5,   0.13],
+  dead:    [260, 40,  'sawtooth', 0.9,   0.15],
+  revive:  [180, 880, 'sine',     0.6,   0.12],
+  bubble:  [500, 900, 'sine',     0.16,  0.06],
+  shieldpop:[900,180, 'square',   0.14,  0.10],
+  lob:     [300, 520, 'triangle', 0.10,  0.06],
+  spawn:   [120, 300, 'sawtooth', 0.24,  0.09],
+};
+function audioOn(){
+  if (AC || HEADLESS) return;
+  const A = (typeof AudioContext !== 'undefined') ? AudioContext
+          : (typeof webkitAudioContext !== 'undefined' ? webkitAudioContext : null);
+  if (!A) return;
+  try { AC = new A(); } catch (e){ AC = null; }
+}
+function sfx(name){
+  if (HEADLESS || !META.opts.sound) return;
+  if (!AC) return;
+  const d = SFX[name];
+  if (!d) return;
+  try {
+    const t = AC.currentTime;
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = d[2];
+    o.frequency.setValueAtTime(d[0], t);
+    o.frequency.exponentialRampToValueAtTime(Math.max(20, d[1]), t + d[3]);
+    g.gain.setValueAtTime(d[4], t);
+    g.gain.exponentialRampToValueAtTime(0.0008, t + d[3]);
+    o.connect(g); g.connect(AC.destination);
+    o.start(t); o.stop(t + d[3] + 0.02);
+  } catch (e){}
+}
+
+/* ==================================================================
+   ICONS — tiny vector stamps for the cards and the depot
+   ================================================================== */
+function icon(g, key, s){
+  if (!g || !g.beginPath) return;
+  const u = s / 32;                        // icons are authored on a 32 grid
+  g.save();
+  g.scale(u, u);
+  g.strokeStyle = '#17171c'; g.fillStyle = '#17171c';
+  g.lineWidth = 2.6; g.lineJoin = 'round'; g.lineCap = 'round';
+  const P2 = (pts, fill) => {
+    g.beginPath(); g.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) g.lineTo(pts[i][0], pts[i][1]);
+    g.closePath(); fill === false ? g.stroke() : g.fill();
+  };
+  const circ = (x, y, r, fill) => { g.beginPath(); g.arc(x, y, r, 0, TAU); fill === false ? g.stroke() : g.fill(); };
+  const ln = (x1, y1, x2, y2) => { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); };
+  switch (key){
+    case 'barb': ln(16, 30, 16, 8); P2([[16, 2], [23, 14], [9, 14]]); break;
+    case 'crank': circ(16, 18, 8, false); ln(16, 18, 24, 10); circ(24, 10, 3); ln(16, 26, 16, 30); break;
+    case 'spring': for (let i = 0; i < 5; i++) ln(9, 6 + i * 5, 23, 8.5 + i * 5); ln(16, 2, 16, 6); break;
+    case 'pierce': ln(4, 16, 28, 16); P2([[30, 16], [22, 21], [22, 11]]); circ(14, 16, 5, false); break;
+    case 'spread': for (const a of [-0.5, 0, 0.5]){ ln(16, 28, 16 + Math.sin(a) * 20, 28 - Math.cos(a) * 20); } P2([[16, 4], [20, 12], [12, 12]]); break;
+    case 'burst': circ(16, 6, 3.4); circ(16, 16, 3.4); circ(16, 26, 3.4); ln(16, 9, 16, 13); ln(16, 19, 16, 23); break;
+    case 'crit': P2([[16, 2], [20, 12], [30, 13], [22, 19], [25, 29], [16, 23], [7, 29], [10, 19], [2, 13], [12, 12]]); break;
+    case 'hammer': P2([[6, 6], [18, 6], [18, 14], [6, 14]]); ln(12, 14, 12, 29); ln(20, 10, 28, 10); break;
+    case 'hull': P2([[16, 2], [28, 8], [28, 18], [16, 30], [4, 18], [4, 8]], false); P2([[16, 8], [23, 11], [23, 18], [16, 24], [9, 18], [9, 11]]); break;
+    case 'patch': P2([[13, 4], [19, 4], [19, 13], [28, 13], [28, 19], [19, 19], [19, 28], [13, 28], [13, 19], [4, 19], [4, 13], [13, 13]]); break;
+    case 'ballast': P2([[16, 2], [26, 26], [16, 21], [6, 26]]); break;
+    case 'magnet': g.lineWidth = 6; g.beginPath(); g.arc(16, 18, 10, Math.PI, 0); g.stroke(); g.lineWidth = 2.6; ln(6, 18, 6, 26); ln(26, 18, 26, 26); break;
+    case 'luck': circ(11, 12, 6); circ(21, 12, 6); circ(16, 21, 6); ln(16, 25, 16, 30); break;
+    case 'claw': ln(16, 2, 16, 14); P2([[16, 14], [6, 26], [11, 27], [16, 18], [21, 27], [26, 26]]); break;
+    case 'acid': P2([[16, 3], [26, 20], [16, 29], [6, 20]]); break;
+    case 'skull': circ(16, 14, 10); P2([[10, 22], [22, 22], [20, 29], [12, 29]]); g.fillStyle = '#efe6d4'; circ(12, 13, 3); circ(20, 13, 3); g.fillStyle = '#17171c'; break;
+    case 'siphon': ln(8, 28, 8, 10); ln(24, 28, 24, 16); g.beginPath(); g.arc(16, 10, 8, Math.PI, 0); g.stroke(); circ(8, 28, 3); circ(24, 28, 3); break;
+    case 'cleave': P2([[6, 26], [20, 6], [26, 12], [12, 30]]); ln(20, 6, 26, 12); break;
+    case 'sonar': for (let i = 1; i <= 3; i++) circ(16, 16, i * 5, false); circ(16, 16, 2.6); break;
+    case 'mine': circ(16, 16, 8); for (let i = 0; i < 8; i++){ const a = i / 8 * TAU; ln(16 + Math.cos(a) * 8, 16 + Math.sin(a) * 8, 16 + Math.cos(a) * 14, 16 + Math.sin(a) * 14); } break;
+    case 'drone': circ(16, 16, 5); circ(16, 16, 12, false); circ(27, 16, 3); break;
+    case 'volt': P2([[18, 2], [8, 17], [15, 17], [12, 30], [24, 14], [17, 14]]); break;
+    case 'frost': for (let i = 0; i < 3; i++){ const a = i * Math.PI / 3; ln(16 - Math.cos(a) * 13, 16 - Math.sin(a) * 13, 16 + Math.cos(a) * 13, 16 + Math.sin(a) * 13); } circ(16, 16, 3); break;
+    case 'venom': P2([[16, 3], [25, 19], [16, 28], [7, 19]]); g.fillStyle = '#efe6d4'; circ(13, 17, 2.4); circ(19, 17, 2.4); g.fillStyle = '#17171c'; break;
+    case 'anchor': circ(16, 6, 4, false); ln(16, 10, 16, 27); ln(9, 17, 23, 17); g.beginPath(); g.arc(16, 20, 10, 0.35, Math.PI - 0.35); g.stroke(); break;
+    case 'bomb': circ(15, 20, 9); ln(20, 12, 26, 5); P2([[24, 3], [29, 6], [25, 8]]); break;
+    case 'bubble': circ(16, 16, 11, false); circ(16, 16, 7, false); circ(12, 11, 2.4); break;
+    // hulls
+    case 'tin': P2([[6, 20], [16, 8], [26, 20], [16, 27]]); circ(16, 18, 3); break;
+    case 'needle': P2([[16, 2], [21, 26], [16, 30], [11, 26]]); circ(16, 20, 2.6); break;
+    case 'anvil': P2([[4, 12], [28, 12], [24, 18], [20, 18], [20, 26], [12, 26], [12, 18], [8, 18]]); break;
+    case 'mote': circ(13, 16, 7); P2([[19, 10], [29, 16], [19, 22]]); break;
+    case 'bloom': circ(16, 16, 9, false); P2([[17, 8], [11, 18], [16, 18], [14, 25], [21, 15], [16, 15]]); break;
+    case 'press': P2([[5, 5], [27, 5], [27, 11], [5, 11]]); ln(16, 11, 16, 20); P2([[6, 20], [26, 20], [26, 27], [6, 27]]); break;
+    default: circ(16, 16, 9, false);
+  }
+  g.restore();
+}
+
+/* ==================================================================
+   DOM
+   ================================================================== */
+const $ = id => document.getElementById(id);
+const SCREENS = ['title', 'stagesel', 'depot', 'draft', 'pause', 'stats', 'results', 'help'];
+let curScreen = 'title';
+function show(name){
+  curScreen = name;
+  for (const s of SCREENS){
+    const el = $(s);
+    if (el && el.classList) el.classList.toggle('on', s === name);
+  }
+  const hud = $('hud');
+  if (hud && hud.classList){
+    const inRun = G.state === 'run' || G.state === 'pause' || G.state === 'draft';
+    hud.classList.toggle('on', inRun && (name === null || name === 'draft' || name === 'stats' || name === 'pause'));
+  }
+}
+function toast(msg){
+  const wrap = $('toast');
+  if (!wrap || !wrap.appendChild || HEADLESS) return;
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  wrap.appendChild(el);
+  setTimeout(() => { if (el.remove) el.remove(); }, 1900);
+}
+function banner(msg){
+  const b = $('banner'), t = $('bannertxt');
+  if (!b || !t || HEADLESS) return;
+  t.textContent = msg;
+  b.classList.remove('show');
+  void (b.offsetWidth);
+  b.classList.add('show');
+}
+
+/* ---------------------------- HUD --------------------------------- */
+let hudTick = 0;
+function syncHud(){
+  if (HEADLESS) return;
+  const st = G.stage, tier = TIERS[G.tier] || TIERS[1];
+  $('stagename').textContent = st.id === 99 ? st.nm : ('Trench ' + st.id + ': ' + st.boss);
+  $('stagesub').textContent = tier.nm + (G.loop ? ' · loop ' + (G.loop + 1) : '') +
+    (G.phase === 'core' ? ' · THE CORE' : '');
+  const pf = $('progfill');
+  const shown = G.phase === 'core' && G.core
+    ? clamp(1 - G.core.hp / G.core.mhp, 0, 1)
+    : G.prog;
+  pf.style.width = (shown * 100).toFixed(1) + '%';
+  pf.style.background = G.phase === 'core' ? 'var(--teal)' : 'var(--pink)';
+  $('progtxt').textContent = G.phase === 'core'
+    ? 'CORE ' + Math.round(shown * 100) + '%'
+    : Math.round(G.prog * 100) + '%';
+  const hp = clamp(P.hp / P.mhp, 0, 1);
+  $('hpfill').style.width = (hp * 100).toFixed(1) + '%';
+  $('hpfill').style.background = hp < 0.3 ? 'var(--pink)' : 'var(--teal)';
+  $('hptxt').textContent = Math.max(0, Math.ceil(P.hp)) + '/' + Math.round(P.mhp);
+  $('bdepth').textContent = fmt(depthNow()) + ' M';
+  $('bspeed').textContent = G.speed >= 2 ? '2×' : '1×';
+  // kit chips
+  const kit = $('kitrow');
+  let html = '';
+  for (const id in P.sys){
+    if (!P.sys[id]) continue;
+    html += '<div class="kitchip">' + SYS[id].nm.split(' ')[0] + ' <b>' + P.sys[id] + '</b></div>';
+  }
+  if (G.pearls) html += '<div class="kitchip">◈ <b>' + G.pearls + '</b></div>';
+  kit.innerHTML = html;
+}
+
+/* ---------------------------- draft ------------------------------- */
+function syncDraft(){
+  if (HEADLESS) return;
+  const ramp = $('rarityramp');
+  const present = {};
+  for (const c of G.cards) present[c.rar.id] = 1;
+  ramp.innerHTML = RARITY.map(r =>
+    '<span class="rchip' + (present[r.id] ? '' : ' dim') + '" style="background:' + r.col + '">' + r.nm + '</span>'
+  ).join('');
+  const wrap = $('cards');
+  wrap.innerHTML = G.cards.map((c, i) => {
+    const u = c.u;
+    const lvTxt = u.kind === 'sys'
+      ? (P.sys[u.id] ? 'LVL ' + (P.sys[u.id]) + ' → ' + c.lv : 'NEW · LVL ' + c.lv)
+      : c.rar.nm.toUpperCase() + ' PLATE';
+    const ds = u.kind === 'sys' ? u.ds(c.lv) : u.ds(c.val);
+    return '<div class="card" data-i="' + i + '" style="--cc:' + c.rar.col + '">' +
+      '<div class="crown">' + c.rar.nm + '</div>' +
+      '<div class="art"><canvas width="66" height="66" data-icon="' + u.art + '"></canvas></div>' +
+      '<div class="nm">' + u.nm + '</div>' +
+      '<div class="lv">' + lvTxt + '</div>' +
+      '<div class="ds thin">' + ds + '</div>' +
+    '</div>';
+  }).join('');
+  const cards = wrap.querySelectorAll('.card');
+  for (let i = 0; i < cards.length; i++){
+    cards[i].addEventListener('click', () => { pickCard(+cards[i].dataset.i); });
+  }
+  const cvs = wrap.querySelectorAll('canvas[data-icon]');
+  for (let i = 0; i < cvs.length; i++){
+    const c = cvs[i], g = c.getContext('2d');
+    if (!g) continue;
+    g.clearRect(0, 0, 66, 66);
+    g.save(); g.translate(1, 1); icon(g, c.dataset.icon, 64); g.restore();
+  }
+  $('rerollN').textContent = G.rerolls;
+  $('takeN').textContent = G.takealls;
+  $('breroll').classList.toggle('ghost', G.rerolls <= 0);
+  if (G.rerolls <= 0) $('breroll').setAttribute('disabled', '1'); else $('breroll').removeAttribute('disabled');
+  if (G.takealls <= 0) $('btakeall').setAttribute('disabled', '1'); else $('btakeall').removeAttribute('disabled');
+}
+
+/* ---------------------------- title ------------------------------- */
+function syncTitle(){
+  if (HEADLESS) return;
+  const b = META.best;
+  $('tbest').textContent = b.depth ? ('Best — ' + fmt(b.depth) + ' m') : 'Best — none';
+  $('tpearls').textContent = fmt(META.pearls) + ' Pearls';
+}
+
+/* ---------------------------- stages ------------------------------ */
+let selTier = 1;
+function syncStages(){
+  if (HEADLESS) return;
+  selTier = clamp(META.tier == null ? 1 : META.tier, 0, TIERS.length - 1);
+  while (selTier > 0 && !tierOpen(selTier)) selTier--;
+  $('diffrow').innerHTML = TIERS.map(t =>
+    '<div class="btn ' + (t.id === selTier ? 'pink' : 'ghost') +
+    '" data-t="' + t.id + '"' + (tierOpen(t.id) ? '' : ' disabled') + '>' +
+    (tierOpen(t.id) ? '' : '✕ ') + t.nm + ' <span class="tiny">×' + t.pay + '</span></div>'
+  ).join('');
+  const tb = $('diffrow').querySelectorAll('[data-t]');
+  for (let i = 0; i < tb.length; i++){
+    tb[i].addEventListener('click', () => {
+      const t = +tb[i].dataset.t;
+      if (!tierOpen(t)) return;
+      selTier = t; META.tier = t; saveMeta(); syncStages();
+    });
+  }
+  const list = STAGES.concat(META.cleared[12] != null ? [ENDLESS] : []);
+  $('stagelist').innerHTML = list.map(s => {
+    const open = stageOpen(s.id);
+    const cl = META.cleared[s.id];
+    return '<div class="st' + (open ? '' : ' lock') + '" data-s="' + s.id + '">' +
+      '<div class="no">' + (s.id === 99 ? '∞' : s.id) + '</div>' +
+      '<div class="txt"><div class="nm">' + (open ? s.boss : '— sealed —') + '</div>' +
+      '<div class="ds">' + s.nm + ' · ' + s.quota + ' segments' +
+      (cl != null ? ' · cleared ' + TIERS[cl].nm : '') + '</div></div>' +
+      '<div class="depth">' + fmt(s.depth) + ' m</div></div>';
+  }).join('');
+  const rows = $('stagelist').querySelectorAll('[data-s]');
+  for (let i = 0; i < rows.length; i++){
+    rows[i].addEventListener('click', () => {
+      const id = +rows[i].dataset.s;
+      if (!stageOpen(id)) return;
+      beginRun(id, selTier);
+    });
+  }
+}
+
+/* ---------------------------- depot ------------------------------- */
+function syncDepot(){
+  if (HEADLESS) return;
+  $('dpearls').textContent = fmt(META.pearls);
+  $('hulllist').innerHTML = HULLS.map(h => {
+    const owned = META.hulls.indexOf(h.id) >= 0;
+    const sel = META.hull === h.id;
+    return '<div class="hull' + (sel ? ' sel' : '') + (owned ? '' : ' lock') + '" data-h="' + h.id + '">' +
+      '<canvas width="56" height="56" data-icon="' + h.art + '"></canvas>' +
+      '<div class="txt"><div class="nm">' + h.nm + (sel ? ' ✓' : '') + '</div>' +
+      '<div class="ds thin">' + h.ds + '</div>' +
+      '<div class="tag">' + h.tag + '</div></div>' +
+      '<div class="btn ghost">' + (owned ? (sel ? 'In use' : 'Use') : '◈ ' + h.cost) + '</div></div>';
+  }).join('');
+  const hs = $('hulllist').querySelectorAll('[data-h]');
+  for (let i = 0; i < hs.length; i++){
+    hs[i].addEventListener('click', () => {
+      const id = hs[i].dataset.h;
+      const owned = META.hulls.indexOf(id) >= 0;
+      if (buyHull(id)) { toast(owned ? HULL[id].nm + ' readied' : 'Bought ' + HULL[id].nm); sfx('pick'); }
+      else toast('Not enough pearls');
+      syncDepot();
+    });
+  }
+  const hc = $('hulllist').querySelectorAll('canvas[data-icon]');
+  for (let i = 0; i < hc.length; i++){
+    const g = hc[i].getContext('2d');
+    if (!g) continue;
+    g.clearRect(0, 0, 56, 56);
+    g.save(); g.translate(4, 4); icon(g, hc[i].dataset.icon, 48); g.restore();
+  }
+  $('upgrid').innerHTML = META_UPS.map(m => {
+    const l = mlvl(m.id), cost = metaCost(m.id), maxed = l >= m.max;
+    let pips = '';
+    for (let i = 0; i < m.max; i++) pips += '<div class="pip' + (i < l ? ' on' : '') + '"></div>';
+    return '<div class="up"><div class="r1"><div class="nm">' + m.nm + '</div><div class="pips">' + pips + '</div></div>' +
+      '<div class="ds thin">' + m.ds(Math.min(m.max, l + (maxed ? 0 : 1))) + '</div>' +
+      '<div class="btn ghost buy" data-u="' + m.id + '"' + (maxed || META.pearls < cost ? ' disabled' : '') + '>' +
+      (maxed ? 'Maxed' : '◈ ' + cost) + '</div></div>';
+  }).join('');
+  const ub = $('upgrid').querySelectorAll('[data-u]');
+  for (let i = 0; i < ub.length; i++){
+    ub[i].addEventListener('click', () => {
+      if (buyMeta(ub[i].dataset.u)){ sfx('pick'); toast('Fitted'); }
+      else toast('Not enough pearls');
+      syncDepot();
+    });
+  }
+  $('bsound').textContent = 'Sound: ' + (META.opts.sound ? 'on' : 'off');
+}
+
+/* ---------------------------- panels ------------------------------ */
+function kitHtml(){
+  let h = '';
+  const keys = Object.keys(TAKEN);
+  if (!keys.length) return '<div class="tiny">No plates fitted yet</div>';
+  for (const id of keys){
+    const t = TAKEN[id];
+    h += '<span class="kitpill">' + t.nm + ' <i>×' + t.n + '</i></span>';
+  }
+  return '<div class="kitlist">' + h + '</div>';
+}
+function row(a, b){ return '<div class="statrow"><span>' + a + '</span><b>' + b + '</b></div>'; }
+function syncStats(){
+  if (HEADLESS) return;
+  const s = G.stats;
+  const t = Math.max(0.001, G.time);
+  $('statbody').innerHTML =
+    row('Depth', fmt(depthNow()) + ' m') +
+    row('Segments severed', s.severed) +
+    row('Worms split', s.splits) +
+    row('Damage printed', fmt(s.dmg)) +
+    row('Biggest single hit', fmt(s.best)) +
+    row('Damage per second', fmt(s.dmg / t)) +
+    row('Criticals', s.crits) +
+    row('Damage taken', fmt(s.taken)) +
+    row('Pearls in the net', G.pearls + ' ◈') +
+    row('Plates fitted', s.cards) +
+    row('Time down', Math.floor(G.time / 60) + 'm ' + Math.floor(G.time % 60) + 's') +
+    '<div class="rule thin"></div>' + kitHtml();
+}
+function syncResults(){
+  if (HEADLESS) return;
+  const win = G.state === 'clear';
+  $('resttl').textContent = win ? 'Plate cleared' : 'Pressed flat';
+  $('ressub').textContent = win
+    ? G.stage.boss + ' severed on ' + (TIERS[G.tier] || TIERS[1]).nm
+    : 'The ' + G.stage.boss + ' kept going without you';
+  const s = G.stats;
+  $('resbody').innerHTML =
+    row('Pearls earned', '◈ ' + fmt(G.lastPay || 0)) +
+    row('Depth reached', fmt(depthNow()) + ' m') +
+    row('Segments severed', s.severed) +
+    row('Worms split', s.splits) +
+    row('Damage printed', fmt(s.dmg)) +
+    row('Time down', Math.floor(G.time / 60) + 'm ' + Math.floor(G.time % 60) + 's') +
+    '<div class="rule thin"></div>' + kitHtml();
+}
+const HELP = [
+  '<b>Drag anywhere</b> to steer the hull. The press fires on its own — it always has.',
+  '<b>Sever a middle segment</b> and the worm splits into two. Two heads, two problems, twice the meat.',
+  '<b>Numbers on the meat</b> are hit points. Teal numbers mean plating: chew through that first, or fit <b>Etching Acid</b>.',
+  '<b>Bulbs</b> pop when killed and take their neighbours with them. Chain them.',
+  '<b>Knots</b> stitch the segments beside them back together. Kill knots first.',
+  '<b>Spitters</b> shoot back. Nothing else in the worm does.',
+  'Fill the progress bar and the <b>core</b> surfaces — that is the trench boss, in three phases.',
+  'Every draft is a <b>sheet of three plates</b>. Ink quality runs Chalk → Kelp → Tide → Coral → Solar. Luck tilts the sheet.',
+  'Pearls are banked whether you win or die. Spend them at <b>The Depot</b> on hulls and standing orders.',
+].map(s => '<p>' + s + '</p>').join('');
+
+/* ==================================================================
+   FLOW
+   ================================================================== */
+function beginRun(stageId, tier){
+  audioOn();
+  if (!HEADLESS) reseed((Date.now() ^ (Math.random() * 1e9)) >>> 0);
+  startRun(stageId, tier, META.hull);
+  META.tier = G.tier;
+  saveMeta();
+  show(null);
+  syncHud();
+  banner((STAGE[stageId] || STAGES[0]).nm.toUpperCase());
+}
+function toTitle(){
+  G.state = 'title';
+  show('title');
+  syncTitle();
+}
+function pauseRun(){
+  if (G.state !== 'run') return;
+  G.state = 'pause';
+  $('pausesub').textContent = G.stage.boss + ' · ' + Math.round(G.prog * 100) + '% pressed';
+  show('pause');
+}
+function resumeRun(){
+  if (G.state !== 'pause') return;
+  G.state = 'run';
+  show(null);
+}
+
+let lastShown = null;
+function watchState(){
+  if ((G.state === 'dead' || G.state === 'clear') && lastShown !== G.state){
+    lastShown = G.state;
+    syncResults();
+    show('results');
+    syncTitle();
+  }
+  if (G.state !== 'dead' && G.state !== 'clear') lastShown = null;
+}
+
+/* ==================================================================
+   INPUT
+   ================================================================== */
+const keys = {};
+function toGame(cx, cy){
+  return { x: (cx - pageX) / SC, y: (cy - pageY) / SC };
+}
+let dragging = false;
+function pointerAt(cx, cy){
+  const g = toGame(cx, cy);
+  P.tx = clamp(g.x, 30, C.W - 30);
+  P.ty = clamp(g.y - 60, C.H - C.FLOOR - 40, C.H - C.DECK - 30);
+}
+function bindInput(){
+  if (HEADLESS) return;
+  const dn = e => {
+    audioOn();
+    if (G.state !== 'run') return;
+    dragging = true;
+    const t = e.touches ? e.touches[0] : e;
+    pointerAt(t.clientX, t.clientY);
+    if (e.cancelable) e.preventDefault();
+  };
+  const mv = e => {
+    if (!dragging || G.state !== 'run') return;
+    const t = e.touches ? e.touches[0] : e;
+    pointerAt(t.clientX, t.clientY);
+    if (e.cancelable) e.preventDefault();
+  };
+  const up = () => { dragging = false; };
+  cv.addEventListener('mousedown', dn);
+  cv.addEventListener('mousemove', mv);
+  window.addEventListener('mouseup', up);
+  cv.addEventListener('touchstart', dn, { passive: false });
+  cv.addEventListener('touchmove', mv, { passive: false });
+  window.addEventListener('touchend', up);
+  window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if (e.key === 'Escape'){ if (G.state === 'run') pauseRun(); else if (G.state === 'pause') resumeRun(); }
+    if (e.key === ' ' && G.state === 'run'){ toggleSpeed(); e.preventDefault(); }
+    if (G.state === 'draft'){
+      if (e.key === '1') pickCard(0);
+      if (e.key === '2') pickCard(1);
+      if (e.key === '3') pickCard(2);
+      if (e.key.toLowerCase() === 'r') reroll();
+    }
+  });
+  window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+  window.addEventListener('resize', () => { fit(); seedRocks(); seedSnow(); });
+  window.addEventListener('blur', () => { if (G.state === 'run') pauseRun(); });
+}
+function stepKeys(dt){
+  if (G.state !== 'run') return;
+  let dx = 0, dy = 0;
+  if (keys.a || keys.arrowleft) dx -= 1;
+  if (keys.d || keys.arrowright) dx += 1;
+  if (keys.w || keys.arrowup) dy -= 1;
+  if (keys.s || keys.arrowdown) dy += 1;
+  if (dx || dy){
+    const sp = C.BASE_SPEED * P.s.speed * dt;
+    P.tx = clamp(P.tx + dx * sp, 30, C.W - 30);
+    P.ty = clamp(P.ty + dy * sp, C.H - C.FLOOR - 40, C.H - C.DECK - 30);
+  }
+}
+function toggleSpeed(){
+  G.speed = G.speed >= 2 ? 1 : 2;
+  syncHud();
+}
+
+function bindUI(){
+  if (HEADLESS) return;
+  const on = (id, fn) => { const el = $(id); if (el && el.addEventListener) el.addEventListener('click', fn); };
+  on('bdive', () => { audioOn(); G.state = 'stagesel'; syncStages(); show('stagesel'); });
+  on('bdepot', () => { audioOn(); G.state = 'depot'; syncDepot(); show('depot'); });
+  on('bhelp', () => { $('helpbody').innerHTML = HELP; show('help'); });
+  on('bhelpback', () => show(G.state === 'run' ? null : 'title'));
+  on('bstageback', () => toTitle());
+  on('bdepotback', () => toTitle());
+  on('bpause', () => pauseRun());
+  on('bresume', () => resumeRun());
+  on('bquit', () => { endRun(false); watchState(); });
+  on('bstats', () => { syncStats(); show('stats'); if (G.state === 'run') G.state = 'pause'; });
+  on('bpstats', () => { syncStats(); show('stats'); });
+  on('bstatsback', () => { if (G.state === 'pause') show('pause'); else show(null); });
+  on('bspeed', () => toggleSpeed());
+  on('breroll', () => { if (reroll()) syncDraft(); });
+  on('btakeall', () => takeAll());
+  on('bskip', () => skipDraft());
+  on('bagain', () => beginRun(G.stage.id, G.tier));
+  on('bresmenu', () => toTitle());
+  on('bsound', () => { META.opts.sound = !META.opts.sound; saveMeta(); syncDepot(); if (META.opts.sound){ audioOn(); sfx('pick'); } });
+  on('bwipe', () => {
+    if (!confirmWipe()) return;
+    META = freshMeta();
+    saveMeta();
+    syncDepot(); syncTitle();
+    toast('Plate wiped');
+  });
+}
+let wipeArm = 0;
+function confirmWipe(){
+  const t = now();
+  if (t - wipeArm < 3000){ wipeArm = 0; return true; }
+  wipeArm = t;
+  toast('Tap again to wipe everything');
+  return false;
+}
+
+/* ==================================================================
+   LOOP
+   ================================================================== */
+let lastT = 0, acc = 0;
+function frame(ts){
+  requestAnimationFrame(frame);
+  if (!lastT) lastT = ts;
+  let dt = (ts - lastT) / 1000;
+  lastT = ts;
+  if (dt > 0.25) dt = 0.25;
+  stepKeys(dt);
+  update(dt);
+  draw();
+  watchState();
+  hudTick += dt;
+  if (G.state === 'run' && hudTick > 0.08){ hudTick = 0; syncHud(); }
+}
+
+function boot(){
+  loadMeta();
+  fit();
+  seedRocks();
+  seedSnow();
+  bindInput();
+  bindUI();
+  syncTitle();
+  show('title');
+  if (!HEADLESS) requestAnimationFrame(frame);
+}
+if (!HEADLESS) boot();
+else { loadMeta(); fit(); seedRocks(); seedSnow(); }
+
+/* ==================================================================
+   headless hooks — tests/leviathan_press.test.mjs drives all of this
+   ================================================================== */
+window.LP = {
+  C, G, P, SYS, SEGT, UPGRADES, UP, RARITY, RAR, HULLS, HULL, STAGES, STAGE, ENDLESS, TIERS, META_UPS, SAVE_KEY,
+  get META(){ return META; }, setMeta(m){ META = m; },
+  update, draw, fit, startRun, endRun, beginRun,
+  spawnWorm, stepWorm, layoutWorm, sampleTrail, resegment, hurtSeg, killSeg, hitArea, newSeg,
+  surfaceCore, hurtCore, stepCore, hitPlayer, volley, aimAngle, nearestSeg, stepSystems, addSys, syncSys,
+  rollCards, cardValue, cardPool, openDraft, pickCard, reroll, takeAll, skipDraft, applyCard, closeDraft,
+  rollRarity, rarityWeights, buildPlayer, freshStats, baseDamage, hpMul, spdMul, depthNow, payout,
+  loadMeta, saveMeta, freshMeta, buyMeta, buyHull, metaCost, mlvl, stageOpen, tierOpen,
+  reseed, rnd, fmt, clamp, dropAt, zone, stepZones, stepDrops, stepProjectiles, stepProgress, stepSpawns,
+  get TAKEN(){ return TAKEN; },
+  toGame, pauseRun, resumeRun, toggleSpeed, show, sfx, icon,
+  beginFrame, endFrame, drawBackdrop, drawWorm, drawPlayer, drawParts, L, screenInk,
+};
+
+</script>
+</body>
+</html>
