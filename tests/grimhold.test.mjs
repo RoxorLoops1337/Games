@@ -232,6 +232,42 @@ t.test('quests: the same quest always builds the same board', () => {
   t.eq(fa, fb, 'furniture lands in the same squares');
 });
 
+t.test('art: every room has a floor tone and a litter table of its own', () => {
+  t.eq(HQ.ROOM_FLOOR.length, HQ.ROOMS.length, 'one floor palette per room');
+  for (const r of HQ.ROOMS){
+    const col = HQ.ROOM_FLOOR[r.id];
+    t.ok(Array.isArray(col) && col.length === 3, `room ${r.id} has an rgb triple`);
+    t.ok(col.every(c => c >= 0 && c <= 255), `room ${r.id}'s tone is in range`);
+    const decor = HQ.ROOM_DECOR[r.id];
+    t.ok(Array.isArray(decor) && decor.length > 0, `room ${r.id} has litter to scatter`);
+  }
+  // corridors must not read as any room
+  for (const col of HQ.ROOM_FLOOR){
+    const d = Math.abs(col[0]-HQ.CORR_FLOOR[0]) + Math.abs(col[1]-HQ.CORR_FLOOR[1]) + Math.abs(col[2]-HQ.CORR_FLOOR[2]);
+    t.ok(d >= 18, `room tone ${col.join(',')} is distinguishable from corridor stone`);
+  }
+});
+
+t.test('art: a dividing wall is drawn on every room-to-corridor edge without a door', () => {
+  fresh(0);
+  let edges = 0, doors = 0;
+  for (let y = 0; y < HQ.H; y++) for (let x = 0; x < HQ.W; x++){
+    if (!HQ.isFloor(x, y)) continue;
+    for (const [dx, dy] of [[1,0],[0,1]]){
+      const nx = x+dx, ny = y+dy;
+      if (!HQ.isFloor(nx, ny)) continue;
+      const sameRegion = HQ.roomAt(x,y) === HQ.roomAt(nx,ny);
+      if (sameRegion) continue;
+      // rooms never touch rooms, so this is always a room against a corridor
+      if (HQ.doorAt(x, y, nx, ny)) { doors++; continue; }
+      edges++;
+      t.ok(!HQ.linked(x, y, nx, ny), `no walking across the wall at ${x},${y}`);
+    }
+  }
+  t.ok(edges > 100, `the rooms are walled in (${edges} wall edges)`);
+  t.eq(doors, HQ.DOOR_SLOTS.length, 'and every doorway is a gap in that wall');
+});
+
 t.test('render: draw() survives every quest with the party on the board', () => {
   for (let i = 0; i < HQ.QUESTS.length; i++){
     fresh(i);
