@@ -215,6 +215,7 @@
       <button class="btn big" id="play">Incubate</button>
       <button class="btn ghost" id="tolab">🧪 Lab</button>
       <button class="btn ghost" id="mute">🔊</button>
+      <button class="btn ghost" id="shakebtn">🎥 Shake: Full</button>
     </div>
   </div>
   <p class="hint" style="margin-top:16px">
@@ -266,6 +267,7 @@
     <div class="row">
       <button class="btn" id="resume">Resume</button>
       <button class="btn ghost" id="pmute">🔊</button>
+      <button class="btn ghost" id="pshake">🎥 Shake: Full</button>
       <button class="btn ghost" id="quit">Abandon</button>
     </div>
   </div>
@@ -711,7 +713,7 @@ const META_UPS = [
 const SAVE_KEY = 'cell_survivor_meta_v1';
 const freshMeta = () => ({
   dna: 0, dnaTotal: 0, kills: 0, bestT: 0, bestLvl: 1, bosses: 0, runs: 0, wins: 0,
-  ups: {}, seen: {}, spec: 'amoeba', diff: 'std', mute: 0, bestStage: 0,
+  ups: {}, seen: {}, spec: 'amoeba', diff: 'std', mute: 0, shake: 1, bestStage: 0,
 });
 let meta = freshMeta();
 
@@ -756,7 +758,7 @@ const G = {
   stage: 0, stageT: 0, stageKills: 0, marks: 0, marked: 0, bossDown: 0, grace: 0,
   rewards: [], stageDna: 0,
   cam: { x: 0, y: 0, sh: 0, z: 1 },
-  hitstop: 0, slowmo: 0, flash: 0, vw: 1280, vh: 720,
+  hitstop: 0, slowmo: 0, flash: 0, shakeCd: 0, vw: 1280, vh: 720,
   choices: [], rerolls: 0, banishes: 0, banned: {}, pending: 0,
   revives: 0, unlocked: [], won: false, ended: false,
 };
@@ -970,7 +972,7 @@ function lob(o, ang, d, dmg, r, chainsLeft){
 }
 function boom(x, y, r, dmg, col, chainsLeft){
   G.waves.push({ x, y, r: r * .3, max: r, life: .4, t: 0, col: col || '#ffcf4d', hits: [] });
-  shake(Math.min(9, r * .04));
+  shake(Math.min(4, r * .02), 1);
   for (let i = 0; i < 12; i++) spark(x, y, col || '#ffcf4d', rr(60, 240));
   around(x, y, r, e => {
     if (e.dead) return;
@@ -1005,7 +1007,34 @@ function text(x, y, str, col, scale){
   if (G.texts.length > 90) G.texts.shift();
   G.texts.push({ x, y, s: str, col, life: .8, max: .8, vy: -46, sc: scale || 1 });
 }
-function shake(v){ G.cam.sh = Math.min(26, G.cam.sh + v); }
+// Screen shake used to SUM every impulse, so a late-game build throwing a
+// dozen explosions a second pinned the camera at maximum and never let go.
+// It now takes the strongest recent impulse, rate-limits the chattery sources
+// (weapon blasts, contact hits), and honours the player's shake setting.
+const SHAKE_CAP = 13;
+function shake(v, minor){
+  v *= shakeAmt();
+  if (v <= 0) return;
+  if (minor){
+    if (G.shakeCd > 0) return;      // weapon chatter gets at most one kick per 180ms
+    G.shakeCd = .18;
+  }
+  G.cam.sh = Math.min(SHAKE_CAP, Math.max(G.cam.sh, v));
+}
+const SHAKE_STEPS = [
+  { v: 1,  nm: 'Full' },
+  { v: .5, nm: 'Light' },
+  { v: 0,  nm: 'Off' },
+];
+const shakeAmt = () => (meta.shake === undefined ? 1 : meta.shake);
+function cycleShake(){
+  const i = SHAKE_STEPS.findIndex(s => s.v === shakeAmt());
+  meta.shake = SHAKE_STEPS[(i + 1) % SHAKE_STEPS.length].v;
+  if (!meta.shake) G.cam.sh = 0;
+  saveMeta();
+  return meta.shake;
+}
+const shakeLabel = () => '🎥 Shake: ' + (SHAKE_STEPS.find(s => s.v === shakeAmt()) || SHAKE_STEPS[0]).nm;
 
 // ============================================================================
 // ENEMIES
@@ -1124,7 +1153,7 @@ function spawnBoss(i){
   e.mhp = e.hp;
   G.en.push(e); G.boss = e;
   toast('☣️ ' + B.nm.toUpperCase(), 2.4);
-  shake(16);
+  shake(10);
   return e;
 }
 
@@ -1153,7 +1182,7 @@ function killEnemy(e, opt){
   if (e.mark){ G.marks++; G.marked = 0; G.markT = 3; }
   if (e.boss) G.bossDown = 1;
   goo(e.x, e.y, e.col, e.boss ? 40 : e.elite ? 18 : 7);
-  if (e.boss || e.elite) shake(e.boss ? 20 : 7);
+  if (e.boss || e.elite) shake(e.boss ? 12 : 5);
   // biomass
   const orbs = e.boss ? 12 : e.elite ? 5 : 1;
   for (let i = 0; i < orbs; i++)
@@ -1311,7 +1340,7 @@ function bossAI(e, dt, dx, dy, d){
     if (p === 'rings'){
       const n = 22, off = rnd() * TAU;
       for (let k = 0; k < n; k++) eshoot(e, off + k / n * TAU, 190, e.dmg * .55);
-      shake(8);
+      shake(6);
     } else if (p === 'spawn'){
       const t = spawnTable();
       for (let k = 0; k < 7; k++){
@@ -1332,7 +1361,7 @@ function bossAI(e, dt, dx, dy, d){
   }
   if (e.tele > 0){
     e.tele -= dt;
-    if (e.tele <= 0){ e.vx = dx / d * 700; e.vy = dy / d * 700; shake(10); }
+    if (e.tele <= 0){ e.vx = dx / d * 700; e.vy = dy / d * 700; shake(8); }
     return;
   }
   const spd = e.spd * (1 - (e.slow || 0)) * (e.frozen > 0 || e.stun > 0 ? 0 : 1);
@@ -1358,7 +1387,7 @@ function hurtPlayer(dmg, src){
   P.hp -= d;
   P.hurtT = .35; P.iT = Math.max(P.iT, .26);
   G.flash = Math.min(.6, G.flash + .22);
-  shake(Math.min(10, 2 + d * .18));
+  shake(Math.min(6, 1.4 + d * .10), 1);
   text(P.x, P.y - P.r - 6, '-' + Math.round(d), '#ff4d6d', 1.1);
   if (P.hp <= 0) playerDown();
 }
@@ -1374,7 +1403,7 @@ function playerDown(){
 }
 function nuke(r, dmg){
   G.waves.push({ x: P.x, y: P.y, r: 20, max: r, life: .6, t: 0, col: '#ffffff', hits: [] });
-  shake(18); G.flash = .5;
+  shake(11); G.flash = .5;
   for (const e of G.en.slice()) {
     if (!e.boss && (e.x - P.x) ** 2 + (e.y - P.y) ** 2 < r * r) hurtEnemy(e, dmg, { col: '#fff' });
   }
@@ -1402,7 +1431,7 @@ function tryUlt(){
     });
   }
   wave(P, 300 * P.s.area, 60, { slow: .6, dur: 2, col: '#ff4dd2' });
-  G.slowmo = .45; shake(16); G.flash = .3;
+  G.slowmo = .45; shake(10); G.flash = .3;
   toast('🧬 MITOSIS', 1.4);
   sfx('ult');
   return true;
@@ -1536,7 +1565,7 @@ function updateProj(dt){
     if (z.t <= 0){
       G.waves.push({ x: z.x, y: z.y, r: z.r * .4, max: z.r, life: .45, t: 0, col: '#c8a1ff', hits: [] });
       for (let k = 0; k < 10; k++) spark(z.x, z.y, '#c8a1ff', rr(60, 220));
-      if ((P.x - z.x) ** 2 + (P.y - z.y) ** 2 < (z.r + P.r) ** 2){ hurtPlayer(z.dmg); shake(6); }
+      if ((P.x - z.x) ** 2 + (P.y - z.y) ** 2 < (z.r + P.r) ** 2){ hurtPlayer(z.dmg); shake(5); }
       G.zones.splice(i, 1);
     }
   }
@@ -1817,7 +1846,7 @@ function clearStage(){
   if (stage().last){ endRun(true); return; }   // clearing stage 12 is the win
   G.rewards = rollRewards();
   G.state = 'clear';
-  shake(10); G.flash = .25;
+  shake(8); G.flash = .25;
   sfx('win');
   syncUI();
 }
@@ -1909,6 +1938,7 @@ function update(dt){
   if (G.flash > 0) G.flash -= dt * 1.6;
 }
 function updateFx(dt){
+  if (G.shakeCd > 0) G.shakeCd -= dt;
   for (let i = G.parts.length - 1; i >= 0; i--){
     const p = G.parts[i];
     p.life -= dt; p.x += p.vx * dt; p.y += p.vy * dt;
@@ -2764,6 +2794,10 @@ function bindInput(){
   $('labback').onclick = () => { show(G.state === 'over' ? 'over' : 'menu'); if (G.state === 'over') renderOver(); };
   $('wipe').onclick = () => { if (confirm('Erase all lab progress and DNA?')){ meta = freshMeta(); saveMeta(); renderLab(); renderSpecies(); } };
   $('mute').onclick = () => { meta.mute = meta.mute ? 0 : 1; saveMeta(); if (master) master.gain.value = meta.mute ? 0 : .26; $('mute').textContent = meta.mute ? '🔇' : '🔊'; };
+  const syncShake = () => { $('shakebtn').textContent = shakeLabel(); $('pshake').textContent = shakeLabel(); };
+  $('shakebtn').onclick = () => { cycleShake(); syncShake(); sfx('orb'); };
+  $('pshake').onclick = () => { cycleShake(); syncShake(); };
+  syncShake();
   $('pmute').onclick = () => { $('mute').onclick(); $('pmute').textContent = meta.mute ? '🔇' : '🔊'; };
   $('resume').onclick = togglePause;
   $('quit').onclick = () => { endRun(false); };
@@ -2832,6 +2866,7 @@ window.CS = {
   input, reseed, rnd, hpMul, dmgMul, spawnRate, nearest, nearList, fmtT, fmtN, playerDown, updatePlayer, crowdMul,
   DIFFS, curDiff, diffHp, diffDmg,
   hudTick, syncUI, show, toast, sfx, SAVE_KEY,
+  shake, shakeAmt, cycleShake, shakeLabel, SHAKE_CAP, SHAKE_STEPS,
 };
 
 </script>
