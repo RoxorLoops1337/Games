@@ -422,8 +422,8 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   step(.05);
   t.ok(G.state === 'clear', 'completing the objective clears the stage');
   t.ok(G.rewards.length === 3, 'three rewards are offered');
-  t.ok(G.en.length === 0 || G.en.every(e => e.boss), 'the board dissolves on a clear');
-  t.ok(G.stageDna > 0 && G.dna >= G.stageDna, 'the clear pays DNA');
+  t.ok(G.stageDna > 0, 'the clear pays DNA');
+  t.ok(G.dna >= G.stageDna, 'and it lands in your DNA');
 }
 {
   const hp0 = CS.P.mhp;
@@ -504,7 +504,7 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   CS.startRun('amoeba', 31);
   G.dna = 100;
   G.revives = 0;
-  CS.P.hp = 1;
+  CS.P.hp = 1; CS.P.iT = 0;        // stage start hands you i-frames; drop them to test dying
   CS.hurtPlayer(999);
   t.ok(G.state === 'over', 'running out of health ends the run');
   t.ok(CS.meta.dna > before, 'collected DNA is banked into the lab');
@@ -513,7 +513,7 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
 {
   CS.startRun('amoeba', 32);
   G.revives = 1;
-  CS.P.hp = 1;
+  CS.P.hp = 1; CS.P.iT = 0;
   CS.hurtPlayer(999);
   t.ok(G.state === 'play' && CS.P.hp === CS.P.mhp, 'apoptosis block revives you at full health');
   t.ok(G.revives === 0, 'the revive is spent');
@@ -561,6 +561,35 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   CS.meta.ups.start = 0;
 }
 
+// ------------------------------------------------- a clear scatters, it does not wipe
+{
+  CS.startRun('amoeba', 60);
+  G.grace = 0;
+  CS.P.x = 0; CS.P.y = 0;
+  const near = [], far = [];
+  for (let i = 0; i < 8; i++) near.push(CS.spawnEnemy('cocci', 120 + i * 12, 40));
+  for (let i = 0; i < 5; i++) far.push(CS.spawnEnemy('cocci', 2000, 900));
+  const kills0 = G.kills, xp0 = CS.P.xp, orbs0 = G.orbs.length;
+  G.stageT = CS.STAGES[0].obj.n + 1;
+  step(.05);
+  t.ok(G.state === 'clear', 'the stage still clears');
+  t.ok(G.kills === kills0, 'clearing a stage kills nothing for free');
+  t.ok(G.orbs.length === orbs0 && CS.P.xp === xp0, 'and hands out no free biomass');
+  t.ok(near.every(e => G.en.indexOf(e) >= 0), 'pathogens near you survive the clear');
+  t.ok(near.some(e => Math.hypot(e.vx, e.vy) > 100), 'they get blown outward instead');
+  t.ok(far.every(e => G.en.indexOf(e) < 0), 'far-off stragglers wander off the board');
+  CS.takeReward(0);
+  t.ok(G.state === 'play' && G.en.length > 0, 'the next stage starts with the swarm you left alive');
+}
+{
+  // levelling pace: the curve has to bite, or every kill is a level-up
+  t.ok(CS.xpNeed(10) > 120, 'level 10 costs a real amount of biomass (' + CS.xpNeed(10) + ')');
+  t.ok(CS.xpNeed(30) > 600, 'and level 30 costs a lot more (' + CS.xpNeed(30) + ')');
+  let steep = true;
+  for (let l = 2; l <= 40; l++) if (CS.xpNeed(l) - CS.xpNeed(l - 1) < CS.xpNeed(l - 1) - CS.xpNeed(l - 2)) steep = false;
+  t.ok(steep, 'the cost per level never gets cheaper as you climb');
+}
+
 // ---------------------------------------------------------------- camping is fatal
 function clk(sec){ return Math.floor(sec / 60) + ':' + String(Math.floor(sec % 60)).padStart(2, '0'); }
 {
@@ -591,8 +620,13 @@ function clk(sec){ return Math.floor(sec / 60) + ':' + String(Math.floor(sec % 6
   const hpStd = CS.hpMul(), dmgStd = CS.dmgMul(), rateStd = CS.spawnRate(), dnaStd = CS.P.s.dnaM;
   CS.meta.diff = 'let';
   CS.startRun('amoeba', 51);
-  t.ok(CS.hpMul() > hpStd * 1.9, 'lethal pathogens carry far more health');
-  t.ok(CS.dmgMul() > dmgStd * 1.4, 'lethal pathogens hit far harder');
+  t.ok(CS.hpMul() > hpStd * 1.3, 'lethal pathogens carry more health from the off');
+  t.ok(CS.dmgMul() > dmgStd * 1.15, 'and hit harder from the off');
+  G.stage = 9;
+  t.ok(CS.diffHp() > 2.05 && CS.diffDmg() > 1.5, 'and the full lethal multiplier lands by the late stages');
+  G.stage = 0;
+  t.ok(CS.diffHp() < curHpFull(), 'the bonus ramps in rather than gating stage 1');
+  function curHpFull(){ return CS.curDiff().hp; }
   t.ok(CS.spawnRate() > rateStd, 'lethal spawns come thicker');
   t.ok(CS.P.s.dnaM > dnaStd * 2, 'and lethal pays out properly');
   CS.meta.diff = 'std';
