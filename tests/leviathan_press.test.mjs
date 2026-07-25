@@ -153,7 +153,9 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
     const d = Math.hypot(w.segs[i].x - w.segs[i - 1].x, w.segs[i].y - w.segs[i - 1].y);
     worst = Math.max(worst, Math.abs(d - C.SEG_GAP));
   }
-  t.ok(worst < 8, 'segments ride the trail at even spacing (worst drift ' + worst.toFixed(1) + 'px)');
+  // spacing is arc length along the trail, so segments legitimately sit
+  // closer together where the snake has just turned a corner
+  t.ok(worst < 18, 'segments ride the trail at even spacing (worst drift ' + worst.toFixed(1) + 'px)');
   t.ok(w.segs.every(s => finite(s.x) && finite(s.y)), 'no NaN crept into the body');
   t.ok(w.trail.length < 400, 'the trail is trimmed to what the body still needs');
 }
@@ -333,8 +335,10 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
     break;
   }
 
-  // when a snake is finished the next one comes down with the rest of the quota
-  LP.startRun(3, 1, 'tin');
+  // when a snake is finished the next one comes down with the rest of the
+  // quota (a shallow trench is one snake; a deep one takes several)
+  LP.startRun(12, 1, 'tin');
+  t.ok(G.segBudget > 0, 'a deep trench holds more than one snake back');
   const budget0 = G.segBudget;
   G.worms.length = 0;
   for (let i = 0; i < 60 * 8; i++) LP.update(1 / 60);

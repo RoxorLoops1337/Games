@@ -428,10 +428,11 @@ const C = {
   SEG_R: 34,             // segment radius
   SEG_GAP: 52,           // spacing along the trail
   WORM_SPD: 78,          // px/s base crawl (loose fragments)
-  SNAKE_SPD: 66,         // the pattern snake takes its time (but not all day)
-  SNAKE_MAX: 22,         // longest single snake, and it grows slowly with depth
+  SNAKE_SPD: 132,        // how briskly the snake travels along its pattern
+  CLOCK: 52,             // seconds a trench-1 snake gets before it makes the deck
+  SNAKE_MAX: 40,         // longest single snake, and it grows with depth
   PRIME_MIN: 5,          // a cut piece this long is still a snake, and still descends
-  TRAIL: 2200,           // trail samples kept per worm
+  TRAIL: 4200,           // trail samples kept per worm
 
   IFRAME: 0.85,
   CONTACT_DMG: 16,
@@ -1328,14 +1329,14 @@ function spawnWorm(opt){
     // it is carrying: a deep trench walks down slowly because its links take
     // so much longer to cut. Difficulty tier still winds it up directly.
     spd: (prime ? snakeSpeed() : C.WORM_SPD * spdMul()) * rr(0.9, 1.1) * (opt.spd || 1),
-    turn: prime ? clamp(snakeSpeed() * (opt.spd || 1) / 84, 0.5, 2) : 2.6,
+    turn: prime ? clamp(snakeSpeed() * (opt.spd || 1) / 60, 0.5, 2.4) : 2.6,
     mode: prime ? 'path' : 'wander',
     kind, dir, wp: 0, path: null, prime,
     x: opt.x != null ? opt.x : (prime ? (dir > 0 ? 120 : C.W - 120) : rr(120, C.W - 120)),
     y: opt.y != null ? opt.y : -60,
     dead: false, t: 0, ang2: 0, rage: opt.rage || 0,
   };
-  if (prime) w.path = buildPath(kind, w.y + 150, dir);
+  if (prime) w.path = buildPath(kind, opt.y != null ? opt.y : -Math.min(520, len * 7 + 60), dir);
   for (let i = 0; i < len; i++){
     const type = opt.type || rollSegType(st.mix);
     w.segs.push(newSeg(type, i));
@@ -1354,17 +1355,77 @@ function spawnWorm(opt){
     }
     G.carriersLeft -= n;
   }
-  // seed the trail straight up from the spawn point so the body has
-  // something to ride on frame one (and enters the page properly spaced)
-  for (let i = 0; i < len + 3; i++){
-    w.trail.push({ x: w.x, y: w.y - i * C.SEG_GAP, d: 0 });
+  if (w.path){
+    prewind(w);
+    // the descent line: the pattern may weave as wildly as it likes, but the
+    // body is never allowed below this, and it creeps down on the clock
+    w.limitY = w.y;
+    w.rate = Math.max(4, (deckLine() - w.limitY) / snakeClock());
   }
-  w.trail.reverse();
-  for (let i = 0; i < w.trail.length; i++) w.trail[i].d = i * C.SEG_GAP;
-  w.cum = w.trail[w.trail.length - 1].d;
+  else {
+    // a loose worm just needs something to ride on for frame one
+    for (let i = 0; i < len + 3; i++){
+      w.trail.push({ x: w.x, y: w.y - i * C.SEG_GAP, d: 0 });
+    }
+    w.trail.reverse();
+    for (let i = 0; i < w.trail.length; i++) w.trail[i].d = i * C.SEG_GAP;
+    w.cum = w.trail[w.trail.length - 1].d;
+  }
   layoutWorm(w);
   G.worms.push(w);
   return w;
+}
+
+// Lay the snake out along the first stretch of its own path, so the moment it
+// appears it is already weaving instead of being a single file of segments
+// dragging in from somewhere far above the page.
+function prewind(w){
+  const pts = w.path;
+  const need = (w.segs.length + 2) * C.SEG_GAP;
+  const tr = [{ x: pts[0].x, y: pts[0].y, d: 0 }];
+  let d = 0;
+  const push = (x, y) => {
+    const last = tr[tr.length - 1];
+    const step = Math.hypot(x - last.x, y - last.y);
+    if (step < 0.5) return;
+    d += step;
+    tr.push({ x, y, d });
+  };
+  // Walk the path, but round every corner the way the head's turn-rate limit
+  // would round it, so the body that arrives is spaced like a body that has
+  // been swimming rather than one folded flat at the corners.
+  const R = 62;
+  let i = 1;
+  while (i < pts.length && d < need){
+    const a = tr[tr.length - 1], b = pts[i], c = pts[i + 1];
+    const ab = Math.hypot(b.x - a.x, b.y - a.y);
+    if (!c || ab < R * 1.3){
+      const n = Math.max(1, Math.ceil(ab / 12));
+      for (let k = 1; k <= n; k++) push(lerp(a.x, b.x, k / n), lerp(a.y, b.y, k / n));
+      i++;
+      continue;
+    }
+    // straight up to the corner cut, then a quadratic through it
+    const t0 = (ab - R) / ab;
+    const sx = lerp(a.x, b.x, t0), sy = lerp(a.y, b.y, t0);
+    const n1 = Math.max(1, Math.ceil((ab - R) / 12));
+    for (let k = 1; k <= n1; k++) push(lerp(a.x, sx, k / n1), lerp(a.y, sy, k / n1));
+    const bc = Math.hypot(c.x - b.x, c.y - b.y);
+    const t1 = Math.min(0.5, R / Math.max(1, bc));
+    const ex = lerp(b.x, c.x, t1), ey = lerp(b.y, c.y, t1);
+    for (let k = 1; k <= 10; k++){
+      const u = k / 10, iu = 1 - u;
+      push(iu * iu * sx + 2 * iu * u * b.x + u * u * ex,
+           iu * iu * sy + 2 * iu * u * b.y + u * u * ey);
+    }
+    i++;
+  }
+  w.trail = tr;
+  w.cum = d;
+  const last = tr[tr.length - 1], prev = tr[Math.max(0, tr.length - 3)];
+  w.x = last.x; w.y = last.y;
+  w.ang = Math.atan2(last.y - prev.y, last.x - prev.x) || Math.PI / 2;
+  w.wp = Math.min(i, pts.length - 1);
 }
 
 function pushTrail(w, x, y){
@@ -1423,35 +1484,59 @@ function wormChill(w){
    turn-rate limit is what rounds the corners into that ribbon shape.
    Pieces you cut off leave the pattern and come at you instead.
    ------------------------------------------------------------------ */
-const PATTERNS = ['weave', 'sine', 'spiral'];
+const PATTERNS = ['rows', 'rows', 'columns', 'columns', 'spiral', 'sine'];
 
 function buildPath(kind, startY, dir){
   const pts = [];
-  const m = 96, W = C.W;
+  const m = 84, W = C.W;
   let y = startY;
-  if (kind === 'sine'){
-    const amp = W * 0.34, cx = W / 2;
-    for (let i = 0; i < 60; i++){
-      pts.push({ x: cx + Math.sin(i * 0.9) * amp, y });
-      y += 52;
+
+  if (kind === 'columns'){
+    // Vertical strokes: down a column, across a pitch, back up, across
+    // again — sweeping the page sideways while the whole band creeps down.
+    const H = 520, pitch = 118, drop = 96;
+    let d = dir || 1;
+    let x = d > 0 ? m : W - m;
+    let down = true;
+    for (let c = 0; c < 26; c++){
+      pts.push({ x, y: down ? y : y + H });
+      pts.push({ x, y: down ? y + H : y });
+      y += drop;
+      x += d * pitch;
+      if (x > W - m){ x = W - m; d = -1; }
+      else if (x < m){ x = m; d = 1; }
+      down = !down;
     }
     return pts;
   }
+
+  if (kind === 'sine'){
+    const amp = W * 0.42, cx = W / 2;
+    for (let i = 0; i < 80; i++){
+      pts.push({ x: cx + Math.sin(i * 0.7) * amp, y });
+      y += 40;
+    }
+    return pts;
+  }
+
   if (kind === 'spiral'){
     let rad = W * 0.40, a = 0, cy = startY + W * 0.36;
-    for (let i = 0; i < 70; i++){
+    for (let i = 0; i < 90; i++){
       pts.push({ x: W / 2 + Math.cos(a) * rad, y: cy + Math.sin(a) * rad * 0.62 });
-      a += 0.55;
-      rad = Math.max(W * 0.13, rad - W * 0.0075);
-      cy += 26;
+      a += 0.5;
+      rad = Math.max(W * 0.12, rad - W * 0.006);
+      cy += 15;
     }
     return pts;
   }
-  // weave: rows across the page, dropping a row at each wall
+
+  // rows: across the page and back, one tight row at a time. The row pitch
+  // is barely wider than the body, so a long snake stacks up the page in
+  // bands the way it should.
   let d = dir || 1;
-  for (let r = 0; r < 24; r++){
+  for (let r = 0; r < 34; r++){
     pts.push({ x: d > 0 ? W - m : m, y });
-    y += 142;
+    y += 122;
     pts.push({ x: d > 0 ? W - m : m, y });
     d = -d;
   }
@@ -1474,6 +1559,7 @@ function stepWorm(w, dt){
       w.lungeT = rr(4.5, 7.5) / (1 + G.prog * 0.6);
       w.rage = 1.1;
       w.lunged = 0.5;
+      w.preY = w.y;                 // it has to climb back to this afterwards
       sfx('lunge');
     }
   }
@@ -1487,10 +1573,10 @@ function stepWorm(w, dt){
     sp *= 2.6;
   } else if (w.mode === 'path' && w.path){
     if (w.wasRaging){
-      // the dive is over: pick the weave back up from just above where the
-      // lunge left it, so diving is a threat and not a shortcut downward
+      // the dive is over: pick the weave back up at the row it left, so a
+      // lunge is a threat and never a shortcut down the page
       w.wasRaging = false;
-      w.path = buildPath(w.kind, w.y - 70, w.dir);
+      w.path = buildPath(w.kind, Math.min(w.y, (w.preY == null ? w.y : w.preY) + 30), w.dir);
       w.wp = 0;
     }
     // Follow the pattern; the turn-rate cap is what rounds the corners. The
@@ -1538,9 +1624,16 @@ function stepWorm(w, dt){
   w.x += Math.cos(w.ang) * sp * dt;
   w.y += Math.sin(w.ang) * sp * dt;
   w.x = clamp(w.x, 26, C.W - 26);
-  // only the pattern snake is allowed to reach the deck — that is the clock
+  if (w.mode === 'path' && w.limitY != null){
+    // hold the whole chain above the descent line, which only the clock moves
+    w.limitY += (w.rate || 8) * dt;
+    if (w.rage <= 0 && w.y > w.limitY) w.y = w.limitY;
+  }
+  // Only the pattern's own descent is allowed to reach the deck — that is the
+  // level clock. A lunge can dive right into the hull's water but is pulled up
+  // short of the line, so diving is never a way to end the dive early.
   w.y = w.mode === 'path'
-    ? clamp(w.y, -260, C.H - C.DECK + 10)
+    ? clamp(w.y, -260, w.rage > 0 ? deckLine() - 70 : C.H - C.DECK + 10)
     : clamp(w.y, -220, w.rage > 0 ? floorY + 14 : floorY - 46);
   pushTrail(w, w.x, w.y);
   layoutWorm(w);
@@ -2257,11 +2350,23 @@ function stepCore(dt){
 // One long snake at a time — two once the trenches get deep. The trench's
 // whole quota is parcelled out into those snakes, so the page holds a single
 // weaving ribbon plus whatever pieces you have cut off it.
-function snakeMax(){ return Math.round(C.SNAKE_MAX + G.stage.id * 1.3); }
-// how fast the snake walks down the page — the whole level timer in one line
+function snakeMax(){ return Math.round(C.SNAKE_MAX + G.stage.id * 2); }
+// How fast the snake travels ALONG its pattern. This is a look-and-feel
+// number: it decides how briskly the thing weaves, not how quickly it gets
+// down the page.
 function snakeSpeed(){
   const t = TIERS[G.tier] || TIERS[1];
-  return C.SNAKE_SPD * t.spd / Math.pow(G.stage.hp * (1 + G.loop * 0.85), 0.42);
+  return C.SNAKE_SPD * (0.9 + 0.1 * t.spd);
+}
+
+// How long a snake gets to live before it reaches the deck — the level clock,
+// stated in seconds instead of being an accident of the pattern's geometry.
+// It scales with the meat the chain is carrying, so a deeper trench gives you
+// proportionally longer to cut through it, and the tier winds it back down.
+function snakeClock(){
+  const t = TIERS[G.tier] || TIERS[1];
+  const meat = Math.pow(G.stage.hp * (1 + G.loop * 0.85), 0.35) * (snakeMax() / C.SNAKE_MAX);
+  return Math.max(24, C.CLOCK * meat / t.spd);
 }
 function wantSnakes(){ return 1; }        // always exactly one snake on the page
 
@@ -3740,7 +3845,7 @@ const HELP = [
   '<b>Bulbs</b> pop when killed and take their neighbours with them. Chain them.',
   '<b>Knots</b> stitch the segments beside them back together. Kill knots first.',
   '<b>Thorns</b> are the spiked links — nothing in the trench shoots, but touching one of those really costs.',
-  'A trench sends <b>one long snake</b> (two, deep down) that weaves its way down the page. Cut it in half and both halves keep coming.',
+  'A trench sends <b>one long snake</b> that lays itself down the page in tight <b>rows</b>, <b>columns</b> or coils. It only ever gets one row lower at a time — but it never stops.',
   'If it <b>reaches the deck</b>, the dive is over — you can run the press again once, or take the pearls you have.',
   'Fill the progress bar and the <b>core</b> surfaces — that is the trench boss, in three phases.',
   'Every draft is a <b>sheet of three plates</b>. Ink quality runs Chalk → Kelp → Tide → Coral → Solar. Luck tilts the sheet.',
