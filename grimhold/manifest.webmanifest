@@ -1,0 +1,10 @@
+{
+  "name": "Grimhold — Quest of the Four",
+  "short_name": "Grimhold",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0a0908",
+  "theme_color": "#0a0908",
+  "description": "A torchlit dungeon board game for phones. Four heroes, combat dice, spells and the Witch Lord."
+}
