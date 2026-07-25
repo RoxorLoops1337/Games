@@ -86,18 +86,20 @@
   /* ----------------------------------------------------------- actions */
   #actions{position:absolute;left:0;right:0;bottom:calc(8px + env(safe-area-inset-bottom));
     display:flex;gap:6px;justify-content:center;align-items:flex-end;padding:0 8px;pointer-events:auto}
-  .act{flex:1 1 0;max-width:88px;min-height:62px;border-radius:12px;border:1px solid var(--line);
+  .actbtn{flex:1 1 0;max-width:88px;min-height:62px;border-radius:12px;border:1px solid var(--line);
     background:linear-gradient(180deg,rgba(38,31,23,.95),rgba(18,15,11,.95));color:var(--ink);
     display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px 2px;
     font-family:var(--serif);cursor:pointer;transition:transform .1s,box-shadow .2s,opacity .2s}
-  .act .ic{font-size:19px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
-  .act .lb{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim);text-align:center;line-height:1.15}
-  .act:active{transform:scale(.94)}
-  .act.hot{border-color:var(--gold);box-shadow:0 0 18px rgba(216,168,60,.3)}
-  .act.hot .lb{color:var(--gold2)}
-  .act.off{opacity:.32}
-  .act.end{background:linear-gradient(180deg,rgba(60,28,22,.95),rgba(28,13,10,.95));border-color:rgba(176,58,44,.5)}
-  .act.end .lb{color:#e8a99f}
+  .actbtn .ic{font-size:19px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+  .actbtn .lb{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim);text-align:center;line-height:1.15}
+  .actbtn:active{transform:scale(.94)}
+  .actbtn.hot{border-color:var(--gold);box-shadow:0 0 18px rgba(216,168,60,.3)}
+  .actbtn.hot .lb{color:var(--gold2)}
+  .actbtn.off{opacity:.32}
+  .actbtn.end{background:linear-gradient(180deg,rgba(60,28,22,.95),rgba(28,13,10,.95));border-color:rgba(176,58,44,.5)}
+  .actbtn.end .lb{color:#e8a99f}
+  .actbtn.end.hot{border-color:rgba(232,169,159,.75);box-shadow:0 0 20px rgba(176,58,44,.45)}
+  .actbtn.end.hot .lb{color:#ffd9d1}
   #movepill{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(190px + env(safe-area-inset-bottom));
     background:rgba(12,10,8,.9);border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:11px;
     letter-spacing:.1em;color:var(--gold2);pointer-events:none;white-space:nowrap;display:none}
@@ -3232,16 +3234,38 @@ function adjacentMonster(h){
   }
   return null;
 }
-function canStrike(h, m){
-  if (!h || !m || h.acted || !h.alive || !m.alive) return false;
+// Why this hero cannot hit that monster — null when they can. Everything that
+// refuses an attack goes through here, so the player is told the real reason
+// rather than the first guess.
+function strikeBlocker(h, m){
+  if (!h || !h.alive) return 'nohero';
+  if (!m || !m.alive) return 'gone';
+  if (h.acted) return 'acted';
   const w = weaponOf(h);
   const dx = Math.abs(h.x-m.x), dy = Math.abs(h.y-m.y);
   const orth = (dx+dy) === 1 && linked(h.x,h.y,m.x,m.y);
   const diag = dx <= 1 && dy <= 1 && (dx+dy) > 0;
-  if (w.ranged) return !adjacentMonster(h) && tileVisible(m.x,m.y) && hasLOS(h.x,h.y,m.x,m.y);
-  if (w.thrown && !orth) return tileVisible(m.x,m.y) && hasLOS(h.x,h.y,m.x,m.y);
-  if (w.diag) return orth || (diag && hasLOS(h.x,h.y,m.x,m.y));
-  return orth;
+  const seen = tileVisible(m.x,m.y) && hasLOS(h.x,h.y,m.x,m.y);
+  if (w.ranged){
+    if (adjacentMonster(h)) return 'crowded';
+    return seen ? null : 'sight';
+  }
+  if (w.thrown && !orth) return seen ? null : 'sight';
+  if (w.diag) return (orth || (diag && hasLOS(h.x,h.y,m.x,m.y))) ? null : 'range';
+  return orth ? null : 'range';
+}
+function canStrike(h, m){ return !strikeBlocker(h, m); }
+
+function strikeReason(h, m, code){
+  const w = weaponOf(h);
+  switch (code){
+    case 'acted':   return `${h.name} has already taken an action this turn.`;
+    case 'crowded': return `The ${w.name.toLowerCase()} cannot be fired with something this close.`;
+    case 'sight':   return `${h.name} has no clear shot at the ${m.name}.`;
+    case 'range':   return `The ${m.name} is out of reach.`;
+    case 'gone':    return 'It is already down.';
+    default:        return 'Nothing to strike there.';
+  }
 }
 
 function doAttack(h, m){
@@ -3852,21 +3876,55 @@ function renderHUD(){
   const trap = disarmTarget();
   const spells = h ? knownSpells(h).filter(k => spellReady(h,k)) : [];
   const packN = h ? (h.items.potion||0) + (h.items.holy||0) : 0;
+  const rid = h ? roomAt(h.x,h.y) : -1;
+  const roomHasMonsters = rid >= 0 && monstersOf().some(m => roomAt(m.x,m.y) === rid);
+  const monsterNear = !!h && monstersOf().some(m => tileVisible(m.x,m.y) && dist2(m.x,m.y,h.x,h.y) <= 5);
+  const spent = () => h ? `${h.name} has already taken an action this turn.` : 'Nobody is up.';
+  const dicing = () => 'Hold on — the dice are still rolling.';
+  const guard = (fn) => () => busy() ? dicing() : (!h ? 'Nobody is up.' : fn());
+  const canSearch = !!h && !h.acted && rid >= 0 && !G.q.searched[rid] && !roomHasMonsters;
   const defs = [
-    { ic:'🔦', lb:'Search<br>Room', on:!!h && !h.acted && roomAt(h.x,h.y)>=0, fn:searchTreasure },
+    { ic:'🔦', lb:'Search<br>Room', on:canSearch, fn:searchTreasure, why: guard(() => {
+        if (h.acted) return spent();
+        if (rid < 0) return 'You can only ransack a room, not a corridor.';
+        if (G.q.searched[rid]) return `${ROOMS[rid].name} has been picked over already.`;
+        if (roomHasMonsters) return 'Not with monsters still in the room.';
+        return null;
+      }) },
     trap
-      ? { ic:'🧰', lb:'Disarm<br>Trap', on:!!h && !h.acted, fn:disarmTrap, hot:true }
-      : { ic:'🔍', lb:'Find<br>Traps', on:!!h && !h.acted, fn:searchTraps },
-    { ic:'✨', lb:'Cast<br>Spell', on:spells.length>0 && !!h && !h.acted, fn:openSpellbook, hot:spells.length>0 && !!h && !h.acted },
-    { ic:'🎒', lb:'Pack<br>' + (packN?packN:''), on:packN>0, fn:openPack },
-    { ic:'✔', lb:'End<br>Turn', on:!!h, fn:endHeroTurn, end:true },
+      ? { ic:'🧰', lb:'Disarm<br>Trap', on:!!h && !h.acted, fn:disarmTrap, hot:!!h && !h.acted,
+          why: guard(() => h.acted ? spent() : null) }
+      : { ic:'🔍', lb:'Find<br>Traps', on:!!h && !h.acted && !monsterNear, fn:searchTraps, why: guard(() => {
+          if (h.acted) return spent();
+          if (monsterNear) return 'Too dangerous to search with a monster this close.';
+          return null;
+        }) },
+    { ic:'✨', lb:'Cast<br>Spell', on:spells.length>0 && !!h && !h.acted, fn:openSpellbook,
+      hot:spells.length>0 && !!h && !h.acted, why: guard(() => {
+        if (!knownSpells(h).length) return `${h.name} knows no magic.`;
+        if (h.acted) return spent();
+        if (!spells.length) return `${h.name} has spent every spell this quest.`;
+        return null;
+      }) },
+    { ic:'🎒', lb:'Pack<br>' + (packN?packN:''), on:packN>0, fn:openPack,
+      why: guard(() => packN ? null : `${h.name} is carrying nothing to use.`) },
+    { ic:'✔', lb:'End<br>Turn', on:!!h, fn:endHeroTurn, end:true,
+      hot:!!h && h.acted && h.moveLeft <= 0, why: guard(() => null) },
   ];
   if (acts.children.length !== defs.length){
     acts.innerHTML = '';
     defs.forEach((d,i) => {
       const b = document.createElement('div');
-      b.className = 'act'; b.innerHTML = `<div class="ic"></div><div class="lb"></div>`;
-      b.addEventListener('click', () => { const dd = acts._defs[i]; if (dd.on){ audioInit(); dd.fn(); } });
+      b.className = 'actbtn'; b.innerHTML = `<div class="ic"></div><div class="lb"></div>`;
+      // A greyed button still answers when you press it — silence is the worst
+      // possible response to "why can't I do this?"
+      b.addEventListener('click', () => {
+        const dd = acts._defs[i];
+        audioInit();
+        if (dd.on && !busy()) { dd.fn(); return; }
+        const r = dd.why && dd.why();
+        if (r) say(r, 'bad');
+      });
       acts.appendChild(b);
     });
   }
@@ -4307,8 +4365,16 @@ function tapTile(x, y){
 
   // strike, or close the distance and strike
   if (target && target.kind === 'monster' && target.alive && tileVisible(x,y)){
-    if (canStrike(h, target)) return doAttack(h, target);
-    if (h.acted || h.moveLeft <= 0){ say('Too far to reach.', 'bad'); return false; }
+    const block = strikeBlocker(h, target);
+    if (!block) return doAttack(h, target);
+    // only distance is worth walking off; everything else is a flat refusal
+    if (block !== 'range'){ say(strikeReason(h, target, block), 'bad'); return false; }
+    if (h.moveLeft <= 0){
+      say(h.rolled
+        ? `The ${target.name} is out of reach, and ${h.name} has no movement left.`
+        : `The ${target.name} is out of reach.`, 'bad');
+      return false;
+    }
     const f = G.q.field;
     let bestT = null, bestC = 1e9;
     for (const [dx,dy] of DIRS){
@@ -4318,7 +4384,7 @@ function tapTile(x, y){
       const c = f.d.get(k);
       if (c < bestC){ bestC = c; bestT = [target.x+dx, target.y+dy]; }
     }
-    if (!bestT){ say('No way through to it.', 'bad'); return false; }
+    if (!bestT){ say(`There is no way through to the ${target.name} from here.`, 'bad'); return false; }
     const path = tracePath(f, bestT[0], bestT[1]);
     heroWalk(h, path || [], () => { if (canStrike(h, target)) doAttack(h, target); });
     return true;
@@ -4505,6 +4571,30 @@ function update(dt){
     clampCam();
   }
   if (AC) musicTick(AC.currentTime);
+  syncHUD();
+}
+
+// The HUD used to be repainted only at the points somebody remembered to call
+// renderHUD. A timer draining after a kill left the buttons greyed with nothing
+// scheduled to un-grey them. Now the frame loop watches the state that the HUD
+// actually shows and repaints when any of it moves.
+let hudSig = '';
+function hudState(){
+  if (!G || !G.q) return '';
+  const h = activeHero();
+  const p = [G.q.phase, G.q.turn, G.q.activeId, busy()?1:0, G.q.over,
+             G.aim ? (G.aim.key || G.aim.kind) : '', G.camp.gold, G.q.pot|0];
+  if (h) p.push(h.acted?1:0, h.moveLeft, h.rolled?1:0, roomAt(h.x,h.y),
+                disarmTarget()?1:0, knownSpells(h).filter(k => spellReady(h,k)).length,
+                (h.items.potion||0) + (h.items.holy||0));
+  for (const x of heroes()) p.push(x.bp, x.alive?1:0, x.done?1:0, Object.keys(x.buffs).sort().join('.'));
+  return p.join('|');
+}
+function syncHUD(){
+  const sig = hudState();
+  if (sig === hudSig) return false;
+  hudSig = sig; renderHUD();
+  return true;
 }
 
 let lastT = 0, frameErrs = 0;
@@ -4555,7 +4645,8 @@ globalThis.HQ = {
   idx, inB, isFloor, isRock, roomAt, roomTiles, dkey, doorAt, doorBetween, linked, linkedIgnoringDoors,
   hasLOS, walkField, walkFieldOpen, tracePath, actorAt, furnAt, blocked, trapAt, trapBlocks,
   newG, newCampaign, mkHero, startQuest, launchQuest, boot, setRng,
-  activeHero, heroes, livingHeroes, monstersOf, busy,
+  activeHero, heroes, livingHeroes, monstersOf, busy, hudState, syncHUD, renderHUD,
+  strikeBlocker, strikeReason,
   tapTile, selectHero, endHeroTurn, zargonTurn, monsterAct, heroWalk, refreshField,
   doAttack, canStrike, monsterAttack, hurt, kill, attackDice, defendDice, moveSlow,
   rollCombat, combatDie, countSkulls, countShields,

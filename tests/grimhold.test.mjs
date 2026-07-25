@@ -516,6 +516,115 @@ t.test('combat: reach — orthogonal by default, diagonal with a spear, ranged w
   h.weapon = 'shortsword';
 });
 
+t.test('combat: a refused attack says why it was refused', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.alive = true; m.name = 'Goblin';
+  HQ.recomputeVision(); HQ.refreshField();
+
+  // in reach and unspent: no complaint at all
+  t.eq(HQ.strikeBlocker(h, m), null, 'the blow is legal');
+
+  // the reported bug: a spent action was reported as "too far to reach"
+  h.acted = true;
+  t.eq(HQ.strikeBlocker(h, m), 'acted', 'the blocker is the spent action, not the distance');
+  HQ.G.q.log.length = 0;
+  HQ.tapTile(m.x, m.y);
+  const said = HQ.G.q.log.map(l => l.text).join(' ');
+  t.ok(/already taken an action/.test(said), `the message names the action, got: "${said}"`);
+  t.ok(!/reach/.test(said), 'and does not blame the distance');
+
+  // genuinely out of reach reads as distance
+  h.acted = false; m.x = 15; m.y = 10;
+  HQ.recomputeVision();
+  t.eq(HQ.strikeBlocker(h, m), 'range', 'now it really is the distance');
+  HQ.G.q.log.length = 0;
+  h.moveLeft = 0; h.rolled = true;
+  HQ.tapTile(m.x, m.y);
+  t.ok(/out of reach/.test(HQ.G.q.log.map(l => l.text).join(' ')), 'and says so');
+
+  // a crossbow with something breathing on it is its own reason
+  h.acted = false; h.weapon = 'crossbow';
+  m.x = 11; m.y = 7;
+  HQ.recomputeVision();
+  t.eq(HQ.strikeBlocker(h, m), 'crowded', 'the crossbow is jammed up close');
+  t.ok(/cannot be fired/.test(HQ.strikeReason(h, m, 'crowded')), 'and the wording says so');
+  h.weapon = 'broadsword';
+});
+
+t.test('search: a monster that wanders in mid-turn cannot be hit, and says why', () => {
+  // exactly the reported sequence: search a room, something turns up, tap it
+  fresh(0);
+  const h = use(hero('barbarian'));
+  const rid = 4;
+  const [x, y] = HQ.roomTiles(rid).find(([a, b]) => !HQ.furnAt(a, b) && !HQ.actorAt(a, b));
+  put(h, x, y);
+  for (const m of HQ.monstersOf()) if (HQ.roomAt(m.x, m.y) === rid) m.alive = false;
+  HQ.G.q.roomSeen.fill(1); HQ.recomputeVision();
+  const before = HQ.monstersOf().length;
+  HQ.spawnWanderer(h);
+  t.eq(HQ.monstersOf().length, before + 1, 'something wandered in');
+  h.acted = true;                                     // the search was the action
+  const w = HQ.monstersOf()[HQ.monstersOf().length - 1];
+  HQ.recomputeVision();
+  HQ.G.q.log.length = 0;
+  HQ.tapTile(w.x, w.y);
+  const said = HQ.G.q.log.map(l => l.text).join(' ');
+  t.ok(/already taken an action/.test(said), `told the truth, got: "${said}"`);
+  t.eq(w.bp, w.bpMax, 'and no attack went in');
+});
+
+t.test('the action bar and the hero cards do not share a class name', () => {
+  // `.act` marked both the selected hero card and every action button, so the
+  // active card silently inherited button sizing.
+  const here = dirname(fileURLToPath(import.meta.url));
+  const html = readFileSync(join(here, '..', 'grimhold', 'index.html'), 'utf8');
+  const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+  t.ok(/\.hcard\.act\{/.test(css), 'the selected hero card is still marked');
+  t.ok(/\.actbtn\{/.test(css), 'the action buttons have their own class');
+  t.ok(!/(^|[^d])\.act\{/m.test(css), 'and nothing styles a bare .act any more');
+  t.ok(html.includes("b.className = 'actbtn'"), 'the buttons are built with it');
+});
+
+t.test('the HUD repaints itself whenever anything it shows moves', () => {
+  fresh(0);
+  const h = use(hero('elf'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1); HQ.recomputeVision();
+  const a = HQ.hudState();
+  t.ok(a.length > 0, 'there is a state to watch');
+  t.eq(HQ.hudState(), a, 'and it is stable while nothing happens');
+
+  // casting a spell must move it — this is what left End Turn greyed
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = m.bpMax = 9;
+  HQ.recomputeVision();
+  HQ.castSpell(h, 'genie', m);
+  t.ok(HQ.hudState() !== a, 'the spell changed it');
+
+  // and a kill, whose cleanup timer used to drain with nothing repainting after
+  const b = use(hero('barbarian'));
+  put(b, 11, 8);
+  const c = HQ.hudState();
+  m.bp = 1;
+  ALL_SKULLS();
+  HQ.doAttack(b, m);
+  t.ok(!m.alive, 'the monster is down');
+  t.eq(HQ.busy(), false, 'and nothing is left pending');
+  t.ok(HQ.hudState() !== c, 'the HUD state moved with it');
+
+  // and the frame loop, not a scattered call site, is what keeps it current
+  b.acted = !b.acted;
+  t.eq(HQ.syncHUD(), true, 'a dirty state wants a repaint');
+  t.eq(HQ.syncHUD(), false, 'a clean state does not');
+  b.acted = !b.acted;
+  HQ.update(16);
+  t.eq(HQ.syncHUD(), false, 'one frame of update() is enough to have repainted it');
+});
+
 t.test('combat: the Witch Lord shrugs off anything but the Spirit Blade', () => {
   fresh(10);
   const h = hero('barbarian');
