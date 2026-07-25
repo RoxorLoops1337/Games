@@ -162,7 +162,7 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
 {
   clearField();
   LP.reseed(99);
-  const w = LP.spawnWorm({ len: 7, type: 'flesh' });
+  const w = LP.spawnWorm({ len: 7, type: 'flesh', noCarrier: true });
   const before = G.worms.length;
   LP.killSeg(w, 3);
   t.ok(G.worms.length === before + 1, 'severing a middle segment spawns a second worm');
@@ -178,13 +178,13 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   t.ok(G.stats.splits === 1, 'a beheading is not counted as a split');
 
   // tail kill: no new worm at all
-  const w3 = LP.spawnWorm({ len: 4, type: 'flesh' });
+  const w3 = LP.spawnWorm({ len: 4, type: 'flesh', noCarrier: true });
   const before3 = G.worms.length;
   LP.killSeg(w3, 3);
   t.ok(G.worms.length === before3 && w3.segs.length === 3, 'killing the last segment just shortens the worm');
 
   // the halves must keep their positions — no teleporting on the cut
-  const w4 = LP.spawnWorm({ len: 8, type: 'flesh' });
+  const w4 = LP.spawnWorm({ len: 8, type: 'flesh', noCarrier: true });
   step(0.6);
   const midPos = { x: w4.segs[5].x, y: w4.segs[5].y };
   LP.killSeg(w4, 4);
@@ -196,7 +196,7 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
 // ------------------------------------------------------------------ single-segment worm
 {
   clearField();
-  const w = LP.spawnWorm({ len: 1, type: 'flesh' });
+  const w = LP.spawnWorm({ len: 1, type: 'flesh', noCarrier: true });
   LP.killSeg(w, 0);
   t.ok(w.dead === true, 'a one-segment worm dies outright');
   step(0.2);
@@ -206,7 +206,7 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
 // ------------------------------------------------------------------ plating
 {
   clearField();
-  const w = LP.spawnWorm({ len: 3, type: 'plate' });
+  const w = LP.spawnWorm({ len: 3, type: 'plate', noCarrier: true });
   const s = w.segs[1];
   t.ok(s.marmor > 0 && s.armor === s.marmor, 'plated segments start fully plated');
   s.marmor = 500; s.armor = 500; s.mhp = 200; s.hp = 200;
@@ -225,14 +225,14 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
 // ------------------------------------------------------------------ knots and bulbs
 {
   clearField();
-  const w = LP.spawnWorm({ len: 3, type: 'knot' });
+  const w = LP.spawnWorm({ len: 3, type: 'knot', noCarrier: true });
   w.segs[1].hp = 5;
   const before = w.segs[1].hp;
   step(1);
   t.ok(w.segs[1].hp > before, 'knots stitch their neighbours back up');
 
   clearField();
-  const wb = LP.spawnWorm({ len: 5, type: 'bulb' });
+  const wb = LP.spawnWorm({ len: 5, type: 'bulb', noCarrier: true });
   for (const s of wb.segs) s.hp = 1;               // a bloom should chain through them
   const kills0 = G.stats.kills;
   LP.hurtSeg(wb, 2, 5);
@@ -243,7 +243,7 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
 {
   clearField();
   G.eprojs.length = 0;
-  const w = LP.spawnWorm({ len: 3, type: 'spit', x: C.W / 2, y: 300 });
+  const w = LP.spawnWorm({ len: 3, type: 'spit', x: C.W / 2, y: 300, noCarrier: true });
   for (const s of w.segs) s.spitT = 0.02;
   step(0.5);
   t.ok(G.eprojs.length > 0, 'spitters shoot back');
@@ -268,11 +268,108 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   P.s.crit = 0;
 }
 
+// ------------------------------------------------------------------ the press points up
+{
+  LP.startRun(1, 1, 'tin');
+  clearField();
+  G.projs.length = 0;
+  P.s.spread = 1; P.s.crit = 0; P.s.gimbal = 0;
+  // a segment parked far off to the side must not bend the shot toward it
+  LP.spawnWorm({ len: 4, x: 80, y: 300, noCarrier: true });
+  P.x = C.W - 90;
+  t.ok(Math.abs(LP.aimAngle() + Math.PI / 2) < 1e-9, 'with no gimbal the rail points dead up');
+  LP.volley();
+  t.ok(G.projs.length === 1 && Math.abs(G.projs[0].vx) < 1e-6 && G.projs[0].vy < 0,
+    'and the harpoon flies straight up — no auto-aim');
+
+  // a fan still fans, symmetrically, around vertical
+  G.projs.length = 0;
+  P.s.spread = 3;
+  LP.volley();
+  const vx = G.projs.map(p => p.vx);
+  t.ok(G.projs.length === 3 && Math.abs(vx[0] + vx[2]) < 1e-6 && Math.abs(vx[1]) < 1e-6,
+    'a fan spreads evenly either side of vertical');
+  P.s.spread = 1;
+
+  // the Gimbal Mount is the only thing that ever tracks, and only in a cone
+  P.s.gimbal = 1;
+  const a1 = LP.aimAngle();
+  P.s.gimbal = 3;
+  const a3 = LP.aimAngle();
+  t.ok(a1 !== -Math.PI / 2 && Math.abs(a1 + Math.PI / 2) < Math.abs(a3 + Math.PI / 2),
+    'the gimbal tracks, and a wider cone tracks further');
+  t.ok(Math.abs(a3 + Math.PI / 2) <= 1.0001, 'even at level 3 the cone is bounded');
+  P.s.gimbal = 0;
+}
+
+// ------------------------------------------------------------------ late plates
+{
+  LP.startRun(1, 1, 'tin');
+  const early = LP.cardPool().map(e => e.u.id);
+  t.ok(early.indexOf('gimbal') < 0 && early.indexOf('drones') < 0 && early.indexOf('bombs') < 0,
+    'nothing that tracks a target is on the sheet at the start of a dive');
+  t.ok(early.indexOf('sonar') >= 0 && early.indexOf('dmg') >= 0, 'the dumb plates are');
+  G.stats.cards = 4;
+  const late = LP.cardPool().map(e => e.u.id);
+  t.ok(late.indexOf('gimbal') >= 0 && late.indexOf('drones') >= 0 && late.indexOf('bombs') >= 0,
+    'four plates in, the guided gear shows up');
+  G.stats.cards = 0;
+  G.prog = 0.5;
+  t.ok(LP.cardPool().map(e => e.u.id).indexOf('gimbal') >= 0, 'half way down works too');
+  G.prog = 0;
+  for (let i = 0; i < 6; i++) LP.applyCard({ id:'gimbal', u: LP.UP.gimbal, rar: LP.RAR.solar, val: 3 });
+  t.ok(P.s.gimbal === 3, 'the gimbal caps at three');
+  G.stats.cards = 9;
+  t.ok(LP.cardPool().map(e => e.u.id).indexOf('gimbal') < 0, 'and leaves the sheet when maxed');
+}
+
+// ------------------------------------------------------------------ carrier segments
+{
+  LP.startRun(4, 1, 'tin');
+  t.ok(G.carrierBudget >= C.CARRIERS, 'a trench is stocked with carriers (' + G.carrierBudget + ')');
+  t.ok(G.worms[0].segs.some(s => s.carrier), 'the first worm always brings one');
+  t.ok(G.carriersLeft === G.carrierBudget - 1, 'and it comes out of the budget');
+
+  const car = G.worms[0].segs.find(s => s.carrier);
+  const plain = G.worms[0].segs.find(s => !s.carrier);
+  t.ok(car.mhp > plain.mhp, 'a carrier takes more killing (' + car.mhp + ' vs ' + plain.mhp + ')');
+
+  G.pendingDrafts = 0;
+  P.hp = P.mhp * 0.5;
+  const pearls0 = G.pearls;
+  const hp0 = P.hp;
+  LP.killSeg(G.worms[0], G.worms[0].segs.indexOf(car));
+  t.ok(G.pendingDrafts === 1, 'cutting the plate out is what hands you an upgrade');
+  t.ok(G.pearls >= pearls0 + 8, 'and pays a bonus');
+  t.ok(P.hp > hp0, 'and patches the hull');
+  t.ok(G.draftLuck > 0, 'a recovered plate prints on better stock');
+  LP.stepProgress();
+  t.ok(G.state === 'draft', 'the sheet opens straight away');
+  LP.pickCard(0);
+  t.ok(G.draftLuck === 0, 'the bonus does not carry to the next sheet');
+
+  // progress alone no longer hands out plates
+  LP.startRun(4, 1, 'tin');
+  G.pendingDrafts = 0;
+  G.carriersLeft = 0;
+  G.draftT = 0;
+  for (let i = 0; i < 12; i++){
+    G.killed = Math.round(G.quota * (i + 1) / 12);
+    LP.stepProgress();
+  }
+  t.ok(G.state === 'run' && G.pendingDrafts === 0, 'filling the bar on its own never opens a sheet');
+  // ...but the starvation clock still exists
+  G.lastDt = C.DRAFT_SECS + 1;
+  LP.stepProgress();
+  t.ok(G.state === 'draft', 'the starvation clock is still there as a backstop');
+  LP.closeDraft();
+}
+
 // ------------------------------------------------------------------ projectile hits + pierce
 {
   clearField();
   G.projs.length = 0;
-  const w = LP.spawnWorm({ len: 6, type: 'flesh', x: C.W / 2, y: 260 });
+  const w = LP.spawnWorm({ len: 6, type: 'flesh', x: C.W / 2, y: 260, noCarrier: true });
   for (const s of w.segs){ s.mhp = 20; s.hp = 20; }
   P.x = w.segs[0].x; P.y = C.H - 120;
   P.s.pierce = 2; P.s.dmg = 20;                    // one shot should thread several
@@ -576,7 +673,8 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
     }
   } catch (e){ threw = e; }
   t.ok(!threw, 'three simulated minutes of trench 7 without an exception' + (threw ? ' — ' + threw.message : ''));
-  t.ok(drafts >= 4, 'drafts keep arriving through the dive (' + drafts + ')');
+  t.ok(drafts >= 3, 'plates keep arriving through the dive (' + drafts + ')');
+  t.ok(G.carriersLeft < G.carrierBudget, 'and carriers are being cut out of the worm');
   t.ok(G.stats.severed > 40, 'the press does its job (' + G.stats.severed + ' segments)');
   t.ok(G.stats.splits > 5, 'and the worm keeps coming apart (' + G.stats.splits + ' splits)');
   t.ok(G.projs.length <= C.MAX_PROJ && G.parts.length <= C.MAX_PARTS + 40, 'entity pools stay bounded');

@@ -419,8 +419,12 @@ const C = {
   MAX_PROJ: 420,
   MAX_PARTS: 460,
 
-  DRAFT_STEPS: [0.10, 0.22, 0.34, 0.46, 0.58, 0.70, 0.82, 0.92], // marks that open a draft
-  DRAFT_SECS: 38,        // ...and one on the clock, so long trenches still build
+  // Plates come off CARRIER segments, not off a progress bar. The clock is
+  // only a starvation guard for a player who keeps missing them.
+  DRAFT_SECS: 85,
+  CARRIERS: 4,           // carrier segments per trench, +1 every four trenches
+  CARRIER_HP: 1.7,       // they are worth killing, so they take some killing
+  SEG_HP: 34,            // base hit points of one segment at trench 1
   SYS_MAX: 5,
   PIERCE_CAP: 12,
   SPREAD_CAP: 7,
@@ -478,17 +482,17 @@ function rollRarity(luck){
   return RARITY[0];
 }
 // a system card at higher rarity is simply worth more levels at once
-const SYS_LEVELS = [1, 1, 2, 2, 3];
+const SYS_LEVELS = [1, 2, 2, 3, 3];
 
 /* ============================ upgrades ============================ */
 // kind 'stat': apply(P, v) with v already scaled by rarity.
 // kind 'sys' : grants levels in a subsystem (see SYS below).
 const UPGRADES = [
-  { id:'dmg', nm:'Heavier Barb', kind:'stat', art:'barb', base:0.14, int:false,
+  { id:'dmg', nm:'Heavier Barb', kind:'stat', art:'barb', base:0.18, int:false,
     ds:v => `Harpoon damage <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.dmg += v; } },
-  { id:'fire', nm:'Faster Crank', kind:'stat', art:'crank', base:0.15,
+  { id:'fire', nm:'Faster Crank', kind:'stat', art:'crank', base:0.19,
     ds:v => `Fire rate <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.fire += v; } },
-  { id:'pspd', nm:'Tight Spring', kind:'stat', art:'spring', base:0.22,
+  { id:'pspd', nm:'Tight Spring', kind:'stat', art:'spring', base:0.28,
     ds:v => `Harpoon flight speed <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.pspd += v; } },
   { id:'pierce', nm:'Needle Point', kind:'stat', art:'pierce', base:1, int:true,
     ds:v => `Punches through <b>+${v}</b> more segment${v > 1 ? 's' : ''}`,
@@ -499,39 +503,43 @@ const UPGRADES = [
   { id:'burst', nm:'Rapid Press', kind:'stat', art:'burst', base:1, int:true, cap:1,
     ds:v => `<b>+${v}</b> follow-up shot in the volley`,
     apply:(P, v) => { P.s.burst = Math.min(C.BURST_CAP, P.s.burst + v); } },
-  { id:'crit', nm:'Weak Seam', kind:'stat', art:'crit', base:0.07,
+  { id:'crit', nm:'Weak Seam', kind:'stat', art:'crit', base:0.09,
     ds:v => `Critical chance <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.crit += v; } },
-  { id:'critx', nm:'Hammer Blow', kind:'stat', art:'hammer', base:0.35,
+  { id:'critx', nm:'Hammer Blow', kind:'stat', art:'hammer', base:0.45,
     ds:v => `Critical damage <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.critx += v; } },
-  { id:'hp', nm:'Plate Hull', kind:'stat', art:'hull', base:18, int:true,
+  { id:'hp', nm:'Plate Hull', kind:'stat', art:'hull', base:24, int:true,
     ds:v => `Max hull <b>+${v}</b>, repaired on fitting`,
     apply:(P, v) => { P.s.hpAdd += v; P.mhp += v; P.hp += v; } },
-  { id:'regen', nm:'Patch Kit', kind:'stat', art:'patch', base:0.7,
+  { id:'regen', nm:'Patch Kit', kind:'stat', art:'patch', base:0.9,
     ds:v => `Repairs <b>${v.toFixed(1)}</b> hull per second`, apply:(P, v) => { P.s.regen += v; } },
-  { id:'speed', nm:'Trim Ballast', kind:'stat', art:'ballast', base:0.16,
+  { id:'speed', nm:'Trim Ballast', kind:'stat', art:'ballast', base:0.20,
     ds:v => `Move speed <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.speed += v; } },
-  { id:'magnet', nm:'Ink Magnet', kind:'stat', art:'magnet', base:0.35,
+  { id:'magnet', nm:'Ink Magnet', kind:'stat', art:'magnet', base:0.45,
     ds:v => `Pickup reach <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.magnet += v; } },
-  { id:'luck', nm:'Lucky Print', kind:'stat', art:'luck', base:14, int:true,
+  { id:'luck', nm:'Lucky Print', kind:'stat', art:'luck', base:18, int:true,
     ds:v => `Luck <b>+${v}</b> — richer inks on the draft sheet`, apply:(P, v) => { P.s.luck += v; } },
-  { id:'salvage', nm:'Salvage Claw', kind:'stat', art:'claw', base:0.20,
+  { id:'salvage', nm:'Salvage Claw', kind:'stat', art:'claw', base:0.26,
     ds:v => `Pearls from this dive <b>+${pct(v)}</b>`, apply:(P, v) => { P.s.salvage += v; } },
-  { id:'etch', nm:'Etching Acid', kind:'stat', art:'acid', base:0.45,
+  { id:'etch', nm:'Etching Acid', kind:'stat', art:'acid', base:0.60,
     ds:v => `<b>+${pct(v)}</b> damage to plating`, apply:(P, v) => { P.s.etch += v; } },
-  { id:'headhunt', nm:'Ill Will', kind:'stat', art:'skull', base:0.28,
+  { id:'headhunt', nm:'Ill Will', kind:'stat', art:'skull', base:0.36,
     ds:v => `<b>+${pct(v)}</b> damage to heads &amp; cores`, apply:(P, v) => { P.s.head += v; } },
-  { id:'vamp', nm:'Siphon Line', kind:'stat', art:'siphon', base:0.6,
+  { id:'vamp', nm:'Siphon Line', kind:'stat', art:'siphon', base:0.8,
     ds:v => `Sever a segment, mend <b>${v.toFixed(1)}</b> hull`, apply:(P, v) => { P.s.vamp += v; } },
-  { id:'cleave', nm:'Cleaver', kind:'stat', art:'cleave', base:0.30,
+  { id:'cleave', nm:'Cleaver', kind:'stat', art:'cleave', base:0.40,
     ds:v => `Severed segments spit shrapnel — <b>${pct(v)}</b> damage`,
     apply:(P, v) => { P.s.cleave += v; } },
+  { id:'gimbal', nm:'Gimbal Mount', kind:'stat', art:'gimbal', base:1, int:true, cap:3, late:true,
+    ds:v => `The rail comes off its bolts — the press tracks targets in a <b>${
+      Math.round(GIMBAL_CONE[Math.min(3, v)] * 114)}°</b> cone`,
+    apply:(P, v) => { P.s.gimbal = Math.min(3, P.s.gimbal + v); } },
 
   // ---- subsystems -------------------------------------------------
   { id:'sonar', nm:'Sonar Pulse', kind:'sys', art:'sonar',
     ds:l => `Ring of pressure every <b>${SYS.sonar.cd(l).toFixed(1)}s</b> — ${Math.round(SYS.sonar.dmg(l))} damage` },
   { id:'mines', nm:'Ink Mines', kind:'sys', art:'mine',
     ds:l => `Drops a drifting mine every <b>${SYS.mines.cd(l).toFixed(1)}s</b>` },
-  { id:'drones', nm:'Bloom Drones', kind:'sys', art:'drone',
+  { id:'drones', nm:'Bloom Drones', kind:'sys', art:'drone', late:true,
     ds:l => `<b>${SYS.drones.count(l)}</b> drone${SYS.drones.count(l) > 1 ? 's' : ''} orbit and spit` },
   { id:'chain', nm:'Voltbloom', kind:'sys', art:'volt',
     ds:l => `Hits arc to <b>${SYS.chain.jumps(l)}</b> nearby segments` },
@@ -541,7 +549,7 @@ const UPGRADES = [
     ds:l => `Hits leak venom — <b>${Math.round(SYS.venom.dps(l))}</b> damage per second` },
   { id:'flail', nm:'Anchor Flail', kind:'sys', art:'anchor',
     ds:l => `<b>${SYS.flail.count(l)}</b> anchor${SYS.flail.count(l) > 1 ? 's' : ''} swing around the hull` },
-  { id:'bombs', nm:'Depth Charges', kind:'sys', art:'bomb',
+  { id:'bombs', nm:'Depth Charges', kind:'sys', art:'bomb', late:true,
     ds:l => `Lobs a charge every <b>${SYS.bombs.cd(l).toFixed(1)}s</b> — splash ${Math.round(SYS.bombs.dmg(l))}` },
   { id:'shield', nm:'Bubble Shield', kind:'sys', art:'bubble',
     ds:l => `A bubble reforms every <b>${SYS.shield.cd(l).toFixed(0)}s</b> and eats one hit` },
@@ -589,29 +597,29 @@ const HULL = {}; HULLS.forEach(h => { HULL[h.id] = h; });
 /* ============================ stages ============================== */
 // quota = segments to sever before the core surfaces. mix = spawn weights.
 const STAGES = [
-  { id:1,  nm:'The Shelf',        boss:'Kelp Wyrm',       depth:60,   quota:34,  hp:1.00, spd:1.00,
+  { id:1,  nm:'The Shelf',        boss:'Kelp Wyrm',       depth:60,   quota:26,  hp:1.00, spd:1.00,
     mix:{ flesh:10 } },
-  { id:2,  nm:'Sunken Barge',     boss:'Rust Eel',        depth:140,  quota:44,  hp:1.26, spd:1.05,
+  { id:2,  nm:'Sunken Barge',     boss:'Rust Eel',        depth:140,  quota:34,  hp:1.26, spd:1.05,
     mix:{ flesh:10, plate:3 } },
-  { id:3,  nm:'Ink Shelf',        boss:'Blot Serpent',    depth:240,  quota:54,  hp:1.55, spd:1.10,
+  { id:3,  nm:'Ink Shelf',        boss:'Blot Serpent',    depth:240,  quota:46,  hp:1.55, spd:1.10,
     mix:{ flesh:10, plate:3, spit:3 } },
-  { id:4,  nm:'Bone Reef',        boss:'Chalk Nautilid',  depth:380,  quota:64,  hp:1.90, spd:1.14,
+  { id:4,  nm:'Bone Reef',        boss:'Chalk Nautilid',  depth:380,  quota:56,  hp:1.90, spd:1.14,
     mix:{ flesh:10, plate:5, bulb:3 } },
-  { id:5,  nm:'The Thermocline',  boss:'Glass Ribbon',    depth:540,  quota:74,  hp:2.35, spd:1.20,
+  { id:5,  nm:'The Thermocline',  boss:'Glass Ribbon',    depth:540,  quota:64,  hp:2.35, spd:1.20,
     mix:{ flesh:10, plate:4, spit:4, bulb:3 } },
-  { id:6,  nm:'Drowned Press',    boss:'Paper Wyrm',      depth:720,  quota:84,  hp:2.90, spd:1.24,
+  { id:6,  nm:'Drowned Press',    boss:'Paper Wyrm',      depth:720,  quota:72,  hp:2.90, spd:1.24,
     mix:{ flesh:10, plate:5, spit:4, knot:3 } },
-  { id:7,  nm:'Midnight Terrace', boss:'Lantern Coil',    depth:980,  quota:96,  hp:3.55, spd:1.30,
+  { id:7,  nm:'Midnight Terrace', boss:'Lantern Coil',    depth:980,  quota:82,  hp:3.55, spd:1.30,
     mix:{ flesh:10, plate:5, spit:5, bulb:4, knot:3 } },
-  { id:8,  nm:'The Gyre',         boss:'Twine Leviathan', depth:1300, quota:108, hp:4.35, spd:1.36,
+  { id:8,  nm:'The Gyre',         boss:'Twine Leviathan', depth:1300, quota:92, hp:4.35, spd:1.36,
     mix:{ flesh:10, plate:6, spit:5, bulb:4, knot:4 } },
-  { id:9,  nm:'Cold Seep',        boss:'Frost Annelid',   depth:1700, quota:120, hp:5.30, spd:1.42,
+  { id:9,  nm:'Cold Seep',        boss:'Frost Annelid',   depth:1700, quota:102, hp:5.30, spd:1.42,
     mix:{ flesh:10, plate:7, spit:6, bulb:4, knot:4 } },
-  { id:10, nm:'The Trench Mouth', boss:'Maw Chain',       depth:2300, quota:134, hp:6.50, spd:1.48,
+  { id:10, nm:'The Trench Mouth', boss:'Maw Chain',       depth:2300, quota:114, hp:6.50, spd:1.48,
     mix:{ flesh:10, plate:7, spit:7, bulb:5, knot:5 } },
-  { id:11, nm:'Hadal Fold',       boss:'Fold Leviathan',  depth:3100, quota:148, hp:7.90, spd:1.55,
+  { id:11, nm:'Hadal Fold',       boss:'Fold Leviathan',  depth:3100, quota:126, hp:7.90, spd:1.55,
     mix:{ flesh:10, plate:8, spit:7, bulb:6, knot:5 } },
-  { id:12, nm:'The Press',        boss:'PRIME LEVIATHAN', depth:4200, quota:164, hp:9.60, spd:1.62,
+  { id:12, nm:'The Press',        boss:'PRIME LEVIATHAN', depth:4200, quota:140, hp:9.60, spd:1.62,
     mix:{ flesh:10, plate:8, spit:8, bulb:6, knot:6 } },
 ];
 const ENDLESS = { id:99, nm:'The Long Column', boss:'It Keeps Going', depth:5000, quota:180, hp:11.5, spd:1.68,
@@ -997,6 +1005,7 @@ const G = {
   worms: [], projs: [], eprojs: [], parts: [], drops: [], zones: [], nums: [],
   core: null, wormSeq: 0,
   spawnT: 0, spawnGap: 4.2, aliveTarget: 2,
+  carrierBudget: 4, carriersLeft: 4, nextCarrier: 0,
   cards: [], rerolls: 0, takealls: 0, draftStep: 0, pendingDrafts: 0,
   shake: 0, flash: 0, hitStop: 0,
   pearls: 0,
@@ -1016,7 +1025,7 @@ function freshStats(){
   return {
     dmg: 1, fire: 1, pspd: 1, pierce: 0, spread: 1, burst: 1,
     crit: 0.04, critx: 1.6, hpAdd: 0, regen: 0, speed: 1, magnet: 1,
-    luck: 0, salvage: 0, etch: 0, head: 0, vamp: 0, cleave: 0,
+    luck: 0, salvage: 0, etch: 0, head: 0, vamp: 0, cleave: 0, gimbal: 0,
   };
 }
 
@@ -1085,6 +1094,9 @@ function startRun(stageId, tier, hullId){
   G.core = null; G.wormSeq = 0;
   G.spawnT = 0.8; G.spawnGap = 4.4; G.aliveTarget = 2;
   G.cards = []; G.draftStep = 0; G.pendingDrafts = 0; G.draftT = 0; G.lastDt = 0;
+  G.carrierBudget = C.CARRIERS + Math.floor(st.id / 4);
+  G.carriersLeft = G.carrierBudget;
+  G.nextCarrier = 0;
   G.rerolls = 1 + mlvl('reroll') + (hullMod(hullId).reroll || 0);
   G.takealls = mlvl('takeall') + (hullMod(hullId).takeall || 0);
   G.shake = 0; G.flash = 0; G.hitStop = 0; G.pearls = 0;
@@ -1157,7 +1169,7 @@ function segHp(idx){
   // later segments of a worm are meatier, and the whole trench thickens as
   // the plate fills — but nothing scales off the running kill count, or a
   // long stage would quietly become unkillable
-  const base = 26 * hpMul() * (1 + G.prog * 1.15) * (1 + Math.min(12, idx) * 0.02);
+  const base = C.SEG_HP * hpMul() * (1 + G.prog * 1.15) * (1 + Math.min(12, idx) * 0.02);
   return Math.max(6, Math.round(base));
 }
 
@@ -1177,6 +1189,18 @@ function newSeg(type, idx){
     hitT: 0, spitT: rr(1.4, 3.6), pulse: rnd() * TAU, dead: false,
   };
   if (d.armor){ s.marmor = Math.round(mhp * d.armor); s.armor = s.marmor; }
+  return s;
+}
+
+// Turn a segment into a carrier: it is visibly bolted with a printing plate,
+// it takes more killing, and cutting it out is what hands you an upgrade.
+function makeCarrier(s){
+  if (!s || s.carrier) return s;
+  s.carrier = true;
+  s.r *= 1.26;
+  s.mhp = Math.round(s.mhp * C.CARRIER_HP);
+  s.hp = s.mhp;
+  if (s.marmor){ s.marmor = Math.round(s.marmor * C.CARRIER_HP); s.armor = s.marmor; }
   return s;
 }
 
@@ -1200,6 +1224,12 @@ function spawnWorm(opt){
   for (let i = 0; i < len; i++){
     const type = opt.type || rollSegType(st.mix);
     w.segs.push(newSeg(type, i));
+  }
+  // spread the trench's carriers evenly across its quota
+  if (!opt.noCarrier && G.carriersLeft > 0 && G.killed >= G.nextCarrier && w.segs.length > 1){
+    makeCarrier(w.segs[ri(1, w.segs.length - 1)]);
+    G.carriersLeft--;
+    G.nextCarrier += G.quota / (G.carrierBudget + 1);
   }
   // seed the trail straight up from the spawn point so the body has
   // something to ride on frame one (and enters the page properly spaced)
@@ -1272,7 +1302,7 @@ function stepWorm(w, dt){
   const marginX = 70;
   if (w.x < marginX) want = Math.abs(Math.cos(w.wob)) * 0.9 + 0.2;
   else if (w.x > C.W - marginX) want = Math.PI - Math.abs(Math.cos(w.wob)) * 0.9 - 0.2;
-  if (w.y > floorY - 20) want = -Math.PI / 2 + Math.sin(w.wob) * 0.9;
+  if (w.y > floorY - 60) want = -Math.PI / 2 + Math.sin(w.wob) * 0.9;
   else if (w.y < 50) want = Math.PI / 2 + Math.sin(w.wob) * 0.6;
   // rage: a worm whose head was severed lunges at the hull for a while
   if (w.rage > 0){
@@ -1288,7 +1318,7 @@ function stepWorm(w, dt){
   w.x += Math.cos(w.ang) * sp * dt;
   w.y += Math.sin(w.ang) * sp * dt;
   w.x = clamp(w.x, 26, C.W - 26);
-  w.y = clamp(w.y, -220, w.rage > 0 ? floorY + 14 : floorY - 8);
+  w.y = clamp(w.y, -220, w.rage > 0 ? floorY + 14 : floorY - 46);
   pushTrail(w, w.x, w.y);
   layoutWorm(w);
 
@@ -1306,7 +1336,7 @@ function stepWorm(w, dt){
     if (s.type === 'spit' && s.y > -20){
       s.spitT -= dt;
       if (s.spitT <= 0){
-        s.spitT = rr(2.4, 4.2) / (1 + G.prog * 0.5);
+        s.spitT = rr(2.6, 4.4) / (1 + G.prog * 0.35);
         spitAt(s.x, s.y);
       }
     }
@@ -1327,7 +1357,7 @@ function stepWorm(w, dt){
 
 function spitAt(x, y){
   const a = Math.atan2(P.y - y, P.x - x) + rr(-0.14, 0.14);
-  const sp = 320 * (0.9 + G.prog * 0.35);
+  const sp = 290 * (0.9 + G.prog * 0.3);
   G.eprojs.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, r: 9, life: 6,
                   dmg: C.SPIT_DMG * (1 + G.tier * 0.28), spin: rnd() * TAU });
   sfx('spit');
@@ -1373,11 +1403,23 @@ function killSeg(w, which, opt){
   if (P.s.vamp > 0) P.hp = Math.min(P.mhp, P.hp + P.s.vamp);
   const worth = 1 + Math.floor(G.stage.id * 0.3);
   G.pearls += worth;
+  if (s.carrier){
+    // the whole reason to look at the worm: cut the plate out of it
+    G.pendingDrafts++;
+    G.draftLuck = 22;               // a recovered plate prints on better stock
+    P.hp = Math.min(P.mhp, P.hp + P.mhp * 0.08);   // and patches the hull a little
+    G.pearls += 8;
+    popTag(s.x, s.y - 34, 'PLATE!');
+    burst(s.x, s.y, 'teal', 18);
+    zone(s.x, s.y, 120, 'sonar', 0.5);
+    G.shake = Math.min(22, G.shake + 8);
+    sfx('draft');
+  }
   burst(s.x, s.y, s.type === 'plate' ? 'teal' : 'pink', 9);
   sfx('pop');
   G.shake = Math.min(16, G.shake + 3);
   if (rnd() < 0.19) dropAt(s.x, s.y, 'pearl');
-  else if (rnd() < 0.055) dropAt(s.x, s.y, 'patch');
+  else if (rnd() < 0.09) dropAt(s.x, s.y, 'patch');
   else if (rnd() < 0.04) dropAt(s.x, s.y, 'spark');
 
   if (s.type === 'bulb'){
@@ -1504,16 +1546,21 @@ function nearestSeg(x, y, maxD, coneUp){
   return best;
 }
 
+// The press is bolted to the deck: it fires straight up, and lining the hull
+// up under a segment is the aiming. A Gimbal Mount (a late plate) is the only
+// thing that ever lets the main rail track a target, and even then only
+// within a cone that widens per level.
+const GIMBAL_CONE = [0, 0.30, 0.62, 1.00];
 function aimAngle(){
-  const t = nearestSeg(P.x, P.y, 1400, true);
-  if (!t) return -Math.PI / 2;
-  let a = Math.atan2(t.y - P.y, t.x - P.x);
-  // never fire below the horizon — the press only points up
   const up = -Math.PI / 2;
-  let d = a - up;
+  const g = Math.min(3, Math.round(P.s.gimbal || 0));
+  if (g <= 0) return up;
+  const t = nearestSeg(P.x, P.y, 1400, true);
+  if (!t) return up;
+  let d = Math.atan2(t.y - P.y, t.x - P.x) - up;
   while (d > Math.PI) d -= TAU;
   while (d < -Math.PI) d += TAU;
-  return up + clamp(d, -1.05, 1.05);
+  return up + clamp(d, -GIMBAL_CONE[g], GIMBAL_CONE[g]);
 }
 
 function volley(){
@@ -1844,7 +1891,7 @@ function stepDrops(dt){
       G.drops.splice(i, 1);
       if (d.kind === 'pearl'){ G.pearls += 3; popTag(d.x, d.y - 10, '+3◈'); }
       else if (d.kind === 'patch'){
-        P.hp = Math.min(P.mhp, P.hp + P.mhp * 0.08);
+        P.hp = Math.min(P.mhp, P.hp + P.mhp * 0.10);
         popTag(d.x, d.y - 10, 'PATCH');
       } else {
         P.buffT = 5; popTag(d.x, d.y - 10, 'OVERPRINT');
@@ -1904,7 +1951,7 @@ function popTag(x, y, s){
    ================================================================== */
 function surfaceCore(){
   const st = G.stage;
-  const mhp = Math.round(560 * hpMul() * (1 + st.id * 0.05));
+  const mhp = Math.round(410 * hpMul() * (1 + st.id * 0.05));
   G.core = {
     x: C.W / 2, y: -200, ty: Math.max(300, C.H * 0.30), r: 92, hp: mhp, mhp, t: 0, phase: 0,
     atkT: 2.4, mode: 'enter', modeT: 0, ang: 0, hitT: 0, dead: false,
@@ -1982,7 +2029,7 @@ function stepCore(dt){
     co.sweep += dt;
     if (co.sweep > 0.16){
       co.sweep = 0;
-      const n = 7 + co.phase * 3;
+      const n = 6 + co.phase * 2;
       const base = co.t * 1.4;
       for (let i = 0; i < n; i++){
         const a = base + i * TAU / n;
@@ -2063,18 +2110,13 @@ function stepSpawns(dt){
 
 function stepProgress(){
   G.prog = G.quota > 0 ? clamp(G.killed / G.quota, 0, 1) : 0;
-  // a deep trench is long: hand out a sheet on the clock too, or the build
-  // starves exactly where it needs to grow
+  // plates come off carrier segments; this clock is only a starvation guard
   G.draftT = (G.draftT || 0) + G.lastDt;
   if (G.draftT >= C.DRAFT_SECS){ G.draftT = 0; G.pendingDrafts++; }
   if (G.phase === 'swarm' && G.killed >= G.quota) surfaceCore();
-  // drafts fire on progress marks, and one is always granted when the core dies
-  while (G.draftStep < C.DRAFT_STEPS.length && G.prog >= C.DRAFT_STEPS[G.draftStep]){
-    G.draftStep++;
-    G.pendingDrafts++;
-  }
   if (G.pendingDrafts > 0 && G.state === 'run'){
     G.pendingDrafts--;
+    G.draftT = 0;
     openDraft();
   }
 }
@@ -2087,9 +2129,16 @@ function cardValue(u, rar){
   return u.int ? Math.round(v) : v;
 }
 
+// Guided weapons are a late-dive luxury: nothing that tracks a target can
+// appear on the sheet until you are a few plates in, or half way down.
+function lateOpen(){ return G.stats.cards >= 4 || G.prog >= 0.45; }
+
 function cardPool(){
   const out = [];
+  const late = lateOpen();
   for (const u of UPGRADES){
+    if (u.late && !late) continue;
+    if (u.id === 'gimbal' && P.s.gimbal >= 3) continue;
     if (u.kind === 'sys'){
       const lv = P.sys[u.id] || 0;
       if (lv >= C.SYS_MAX) continue;
@@ -2123,7 +2172,7 @@ function rollCards(n){
     }
     if (!chosen) break;
     used[chosen.id] = 1;
-    const rar = rollRarity(P.s.luck);
+    const rar = rollRarity(P.s.luck + (G.draftLuck || 0));
     const val = cardValue(chosen, rar);
     cards.push({ id: chosen.id, u: chosen, rar, val,
       lv: chosen.kind === 'sys' ? Math.min(C.SYS_MAX, (P.sys[chosen.id] || 0) + val) : 0 });
@@ -2168,10 +2217,10 @@ function reroll(){
   if (G.rerolls <= 0) return false;
   G.rerolls--;
   // re-inking bumps the odds a touch, so it never feels like a pure coin flip
-  const keep = P.s.luck;
-  P.s.luck += 26;
+  const keep = G.draftLuck || 0;
+  G.draftLuck = keep + 26;
   G.cards = rollCards(3);
-  P.s.luck = keep;
+  G.draftLuck = keep;
   syncDraft();
   sfx('reroll');
   return true;
@@ -2196,6 +2245,7 @@ function skipDraft(){
 
 function closeDraft(){
   G.cards = [];
+  G.draftLuck = 0;
   if (G.state === 'draft') G.state = 'run';
   show(null);
   syncHud();
@@ -2497,6 +2547,8 @@ function drawSeg(w, i, s){
     tg.restore();
   }
 
+  if (s.carrier) disc(p, s.x, s.y, r * 1.2, 0.22);
+
   // body
   blobPath(g, s.x, s.y, r, i * 1.7 + w.id, 0.075);
   inkFill(g, s.hitT > 0 ? 0.98 : 0.82);
@@ -2586,10 +2638,38 @@ function drawSeg(w, i, s){
     }
   }
 
+  if (s.carrier){
+    // A segment with a printing plate bolted to it. It is fatter than its
+    // neighbours, ringed, and carries a rosette knocked back to bare paper —
+    // the plate itself — with the hit points stamped on it.
+    const puls = 0.5 + Math.sin(s.pulse * 1.7) * 0.5;
+    const rr1 = r * 1.04 + puls * 2.5;
+    ring(k, s.x, s.y, rr1, 3.6, 0.92);
+    for (let c = 0; c < 4; c++){
+      const a = c / 4 * TAU + Math.PI / 4 + s.pulse * 0.3;
+      line(k, s.x + Math.cos(a) * rr1, s.y + Math.sin(a) * rr1,
+              s.x + Math.cos(a) * (rr1 + 8), s.y + Math.sin(a) * (rr1 + 8), 3.4, 0.9);
+    }
+    ring(p, s.x, s.y, rr1 + 5, 2.4, 0.5 + puls * 0.35);
+    const rose = gg => {
+      const n = 16;
+      gg.beginPath();
+      for (let c = 0; c <= n; c++){
+        const a = c / n * TAU + s.pulse * 0.25;
+        const rad = r * (c % 2 ? 0.44 : 0.68);
+        const px = s.x + Math.cos(a) * rad, py = s.y + Math.sin(a) * rad;
+        if (c === 0) gg.moveTo(px, py); else gg.lineTo(px, py);
+      }
+      gg.closePath();
+    };
+    knockOut(gg => { rose(gg); gg.fill(); });
+    if (k){ rose(k); inkStroke(k, 0.92, 2.8); k.stroke(); }
+  }
   if (isHead) drawFace(s, r, w);
   // the number, stamped on the meat
   const hpShown = s.armor > 0 ? s.armor : s.hp;
-  stampNum(fmt(Math.ceil(hpShown)), s.x, s.y + (isHead ? r * 0.56 : 1), isHead ? 16 : 15, 0.95);
+  stampNum(fmt(Math.ceil(hpShown)), s.x, s.y + (isHead ? r * 0.56 : 1),
+    isHead ? 16 : (s.carrier ? 17 : 15), 0.95);
 }
 
 function drawFace(s, r, w){
@@ -3039,6 +3119,7 @@ function icon(g, key, s){
     case 'anchor': circ(16, 6, 4, false); ln(16, 10, 16, 27); ln(9, 17, 23, 17); g.beginPath(); g.arc(16, 20, 10, 0.35, Math.PI - 0.35); g.stroke(); break;
     case 'bomb': circ(15, 20, 9); ln(20, 12, 26, 5); P2([[24, 3], [29, 6], [25, 8]]); break;
     case 'bubble': circ(16, 16, 11, false); circ(16, 16, 7, false); circ(12, 11, 2.4); break;
+    case 'gimbal': circ(16, 16, 9, false); ln(16, 2, 16, 8); ln(16, 24, 16, 30); ln(2, 16, 8, 16); ln(24, 16, 30, 16); circ(16, 16, 3); break;
     // hulls
     case 'tin': P2([[6, 20], [16, 8], [26, 20], [16, 27]]); circ(16, 18, 3); break;
     case 'needle': P2([[16, 2], [21, 26], [16, 30], [11, 26]]); circ(16, 20, 2.6); break;
@@ -3117,6 +3198,7 @@ function syncHud(){
     if (!P.sys[id]) continue;
     html += '<div class="kitchip">' + SYS[id].nm.split(' ')[0] + ' <b>' + P.sys[id] + '</b></div>';
   }
+  if (G.phase === 'swarm') html += '<div class="kitchip">Plates <b>' + G.carriersLeft + '</b></div>';
   if (G.pearls) html += '<div class="kitchip">◈ <b>' + G.pearls + '</b></div>';
   kit.innerHTML = html;
 }
@@ -3311,6 +3393,9 @@ function syncResults(){
 }
 const HELP = [
   '<b>Drag anywhere</b> to steer the hull. The press fires on its own — it always has.',
+  'The press is bolted down: it fires <b>straight up</b>. Lining the hull up under a segment <i>is</i> the aiming.',
+  'Segments with a <b>plate bolted on</b> — ringed, ticking, flagged — are where upgrades come from. Cut those out.',
+  'Anything that tracks a target (drones, depth charges, the <b>Gimbal Mount</b>) only reaches the sheet once you are a few plates in.',
   '<b>Sever a middle segment</b> and the worm splits into two. Two heads, two problems, twice the meat.',
   '<b>Numbers on the meat</b> are hit points. Teal numbers mean plating: chew through that first, or fit <b>Etching Acid</b>.',
   '<b>Bulbs</b> pop when killed and take their neighbours with them. Chain them.',
@@ -3510,7 +3595,7 @@ window.LP = {
   get META(){ return META; }, setMeta(m){ META = m; },
   update, draw, fit, startRun, endRun, beginRun,
   spawnWorm, stepWorm, layoutWorm, sampleTrail, resegment, hurtSeg, killSeg, hitArea, newSeg,
-  surfaceCore, hurtCore, stepCore, hitPlayer, volley, aimAngle, nearestSeg, stepSystems, addSys, syncSys,
+  surfaceCore, hurtCore, stepCore, hitPlayer, volley, aimAngle, makeCarrier, lateOpen, GIMBAL_CONE, nearestSeg, stepSystems, addSys, syncSys,
   rollCards, cardValue, cardPool, openDraft, pickCard, reroll, takeAll, skipDraft, applyCard, closeDraft,
   rollRarity, rarityWeights, buildPlayer, freshStats, baseDamage, hpMul, spdMul, depthNow, payout,
   loadMeta, saveMeta, freshMeta, buyMeta, buyHull, metaCost, mlvl, stageOpen, tierOpen,
