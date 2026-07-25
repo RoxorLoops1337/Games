@@ -1148,4 +1148,362 @@ t.test('a full quest can be played from the stair to the boss', () => {
   HQ.update(16); HQ.draw();
 });
 
+/* ------------------------------------------------------------ the Descent */
+
+function runFresh(party){
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.startRun(party || ['barbarian','dwarf','elf','wizard']);
+  return HQ.G;
+}
+const rhero = (id) => HQ.G.run.heroes.find(h => h.id === id);
+
+t.test('descent: a floor is generated whole and legal at every depth', () => {
+  const seenObj = {}, seenMon = {};
+  for (let depth = 1; depth <= 16; depth++){
+    const def = HQ.makeFloor(depth, (() => { let a = depth*7919 + 13; return () => {
+      a = (a*1664525 + 1013904223) >>> 0; return a/4294967296; }; })());
+    t.ok(typeof def.name === 'string' && def.name.length > 4, `depth ${depth} is named`);
+    t.eq(def.depth, depth, 'and knows its depth');
+    seenObj[def.objective.type] = 1;
+    t.ok(['slay','clear','fetch','collect','rescue'].includes(def.objective.type),
+         `depth ${depth} objective ${def.objective.type} is one we can resolve`);
+    t.ok(def.objective.label && def.objective.label.length > 8, 'and is described');
+    t.ok(def.monsters.length > 0, `depth ${depth} is garrisoned`);
+    for (const m of def.monsters){
+      t.ok(HQ.MONSTERS[m.t], `depth ${depth} spawns a real monster (${m.t})`);
+      t.ok(m.r >= 0 && m.r < HQ.ROOMS.length, 'in a real room');
+      t.ok(m.n >= 1, 'in a real number');
+      seenMon[m.t] = 1;
+      const entry = HQ.SPAWN_TABLE.find(e => e.t === m.t);
+      if (entry && !m.boss) t.ok(entry.from <= depth, `${m.t} is not spawned above its depth`);
+    }
+    if (def.objective.type === 'slay')
+      t.ok(def.monsters.some(m => m.boss), `depth ${depth} has something in charge`);
+    if (def.objective.type === 'fetch')
+      t.ok(def.furn.some(f => f.quest === def.objective.item), 'the prize is hidden somewhere');
+    if (def.objective.type === 'collect')
+      t.eq(def.furn.filter(f => f.quest).length, def.objective.count, 'every reliquary is placed');
+    if (def.objective.type === 'rescue')
+      t.ok(def.objective.room >= 0 && def.objective.room < HQ.ROOMS.length, 'the prisoner has a cell');
+    t.ok(def.traps >= 2 && def.traps <= 14, `depth ${depth} trap count is sane (${def.traps})`);
+    t.ok(def.secrets >= 1 && def.secrets <= 2, 'and its hidden doors');
+    for (const m of def.mods) t.ok(HQ.MODIFIERS.some(x => x.id === m), `modifier ${m} is real`);
+    t.ok(def.mods.length <= 2, 'no more than two modifiers on a floor');
+    if (depth % 5 === 0) t.eq(def.objective.type, 'slay', `depth ${depth} is a boss floor`);
+  }
+  t.ok(Object.keys(seenObj).length >= 3, 'the objectives vary with depth');
+  t.ok(Object.keys(seenMon).length >= 5, 'and so does what lives down there');
+});
+
+t.test('descent: depth decides what can live there, and how much of it', () => {
+  const roll = (seed) => { let a = seed; return () => { a = (a*1664525 + 1013904223) >>> 0; return a/4294967296; }; };
+  const weight = (def) => def.monsters.reduce((n, m) => {
+    const e = HQ.SPAWN_TABLE.find(x => x.t === m.t);
+    return n + (e ? e.cost : 4)*m.n;
+  }, 0);
+  const shallow = HQ.makeFloor(1, roll(11));
+  const deep = HQ.makeFloor(12, roll(11));
+  t.ok(weight(deep) > weight(shallow)*2, `depth 12 is much heavier than depth 1 (${weight(shallow)} → ${weight(deep)})`);
+  for (let i = 0; i < 20; i++){
+    const d1 = HQ.makeFloor(1, roll(100 + i));
+    t.ok(!d1.monsters.some(m => !m.boss && ['ogre','gargoyle','sorcerer','mummy','chaos'].includes(m.t)),
+         'nothing from the deep turns up on the first floor');
+  }
+});
+
+t.test('descent: the same seed builds the same floor', () => {
+  const roll = () => { let a = 777; return () => { a = (a*1664525 + 1013904223) >>> 0; return a/4294967296; }; };
+  const a = JSON.stringify(HQ.makeFloor(6, roll()));
+  const b = JSON.stringify(HQ.makeFloor(6, roll()));
+  t.eq(a, b, 'floor generation is deterministic');
+});
+
+t.test('descent: you take only the heroes you chose', () => {
+  runFresh(['barbarian','elf']);
+  t.eq(HQ.G.run.heroes.length, 2, 'a party of two');
+  t.eq(HQ.partyHeroes().length, 2, 'and that is the roster in play');
+  t.eq(HQ.livingHeroes().length, 2, 'both on the board');
+  t.ok(!HQ.G.q.actors.some(a => a.kind === 'hero' && a.id === 'wizard'), 'nobody else came along');
+  t.ok(HQ.G.run.heroes.every(h => h !== HQ.G.camp.heroes.find(c => c.id === h.id)),
+       'and the run roster is its own, so the campaign is untouched');
+});
+
+t.test('descent: a fallen hero is gone for the whole run', () => {
+  runFresh();
+  const w = rhero('wizard');
+  HQ.hurt(w, 99, null);
+  t.ok(!w.alive, 'the wizard is down');
+  // clear the floor and go down
+  HQ.G.q.pot = 100;
+  HQ.questOver(true);
+  t.eq(HQ.G.run.floorsCleared, 1, 'the floor counted');
+  t.ok(HQ.G.run.gold >= 100, 'and paid');
+  HQ.G.run.depth++;
+  HQ.beginFloor();
+  t.eq(HQ.G.run.depth, 2, 'a floor deeper');
+  t.ok(!rhero('wizard').alive, 'and the wizard is still dead');
+  t.eq(HQ.livingHeroes().length, 3, 'three walk onto the new floor');
+  t.ok(HQ.livingHeroes().every(h => h.bp > 0), 'and they got a breather between floors');
+});
+
+t.test('descent: losing everybody ends the run and pays favour', () => {
+  runFresh(['barbarian','elf']);
+  HQ.G.run.depth = 4;
+  HQ.G.run.gold = 900;
+  const before = HQ.G.meta.favour;
+  for (const h of HQ.runAlive().slice()) HQ.hurt(h, 99, null);
+  t.eq(HQ.runAlive().length, 0, 'the party is gone');
+  t.ok(HQ.G.run.over, 'the run is over');
+  t.ok(HQ.G.meta.favour > before, `favour was earned (${before} → ${HQ.G.meta.favour})`);
+  t.ok(HQ.G.meta.best >= 4, 'and the depth was recorded');
+});
+
+t.test('descent: boons are drafted once and actually bite', () => {
+  runFresh();
+  const h = rhero('barbarian');
+  const orc = { mt:'orc', bp:3 }, skel = { mt:'skeleton', bp:3 };
+  const base = HQ.attackDice(h, orc);
+  t.ok(HQ.takeBoon('banegreen'), "Greenskin's Bane taken");
+  t.eq(HQ.attackDice(h, orc), base + 1, 'and it sharpens the blow against orcs');
+  t.eq(HQ.attackDice(h, skel), base, 'but not against bones');
+  t.ok(HQ.takeBoon('keeneye'), 'consecrated steel taken');
+  t.eq(HQ.attackDice(h, skel), base + 1, 'which does bite the undead');
+  t.ok(!HQ.takeBoon('keeneye'), 'a boon is never taken twice');
+
+  const d = HQ.defendDice(h);
+  HQ.takeBoon('ironskin');
+  t.eq(HQ.defendDice(h), d + 1, 'iron skin is a defend die');
+
+  const bpMax = h.bpMax;
+  HQ.takeBoon('stoutheart');
+  t.eq(h.bpMax, bpMax + 1, 'stout heart raises the ceiling');
+  HQ.takeBoon('bloodprice');
+  t.eq(h.bpMax, bpMax, 'and the blood price takes it back');
+  t.eq(HQ.attackDice(h, skel), base + 1 + 2, 'in exchange for two dice');
+
+  const r = HQ.torchRadius();
+  HQ.takeBoon('torchbearer');
+  t.eq(HQ.torchRadius(), r + 3, 'the torch reaches further');
+});
+
+t.test('descent: the draft never offers what you already hold', () => {
+  runFresh();
+  for (let i = 0; i < 6; i++){
+    const opts = HQ.draftOptions();
+    t.ok(opts.length >= 1, 'there is something to draft');
+    for (const o of opts) t.ok(!HQ.G.run.boons.includes(o.id), `${o.id} is not already held`);
+    t.eq(new Set(opts.map(o => o.id)).size, opts.length, 'and no duplicates in one draft');
+    HQ.takeBoon(opts[0].id);
+  }
+  t.eq(HQ.G.run.boons.length, 6, 'six boons in');
+  HQ.G.meta.unlocks.push('extradraft');
+  t.eq(HQ.draftOptions().length, 4, 'wider counsel draws four');
+});
+
+t.test('descent: quiet hands, red thirst and the ward of thresholds', () => {
+  runFresh();
+  const h = rhero('barbarian');
+  h.x = 3; h.y = 7; HQ.recomputeVision();
+  HQ.takeBoon('quietstep');
+  const n = HQ.monstersOf().length;
+  HQ.applyTreasure({ k:'wander', t:'Wandering Monster', d:'' }, h);
+  t.eq(HQ.monstersOf().length, n, 'nothing wandered in');
+
+  HQ.G.q.pot = 0;
+  HQ.takeBoon('luckyfind');
+  HQ.applyTreasure({ k:'gold', n:100, t:'purse', d:'' }, h);
+  t.eq(HQ.G.q.pot, 150, "prospector's luck is worth half again");
+
+  HQ.takeBoon('vampiric');
+  const m = HQ.monstersOf()[0];
+  m.x = h.x; m.y = h.y - 1;
+  h.bp = 2;
+  HQ.hurt(m, 99, null);
+  t.eq(h.bp, 3, 'the red thirst pays out on a kill');
+
+  HQ.takeBoon('doorward');
+  h.bp = 2;
+  const door = Object.values(HQ.G.q.doors).find(d => !d.open && (!d.secret || d.found));
+  HQ.openDoorAt(h, door);
+  t.eq(h.bp, 3, 'and a door opened is a Body Point back');
+});
+
+t.test('descent: second wind catches the first hero who would fall, once', () => {
+  runFresh();
+  HQ.takeBoon('secondwind');
+  const a = rhero('barbarian'), b = rhero('dwarf');
+  HQ.hurt(a, 99, null);
+  t.ok(a.alive, 'the barbarian is caught');
+  t.eq(a.bp, 1, 'on his last point');
+  HQ.hurt(b, 99, null);
+  t.ok(!b.alive, 'the dwarf is not — it is once a floor');
+});
+
+t.test('descent: modifiers change how a floor plays', () => {
+  runFresh();
+  HQ.G.q.def.mods = [];                            // the rolled floor may already be dark
+  const base = HQ.torchRadius();
+  HQ.G.q.def.mods = ['dark'];
+  t.ok(HQ.torchRadius() < base, 'a lightless floor cuts your sight');
+  t.ok(HQ.modHas('dark') && !HQ.modHas('wealthy'), 'modHas reads the floor it is on');
+
+  HQ.G.q.def.mods = ['wealthy'];
+  HQ.G.q.pot = 0;
+  HQ.applyTreasure({ k:'gold', n:100, t:'purse', d:'' }, rhero('barbarian'));
+  t.eq(HQ.G.q.pot, 200, 'a hoarded floor pays double');
+
+  // hunted: something arrives on the fourth turn
+  HQ.G.q.def.mods = ['hunted'];
+  HQ.G.q.turn = 3;
+  for (const h of HQ.heroes()) h.done = true;
+  const n = HQ.monstersOf().length;
+  HQ.zargonTurn();
+  t.eq(HQ.G.q.turn, 4, 'the fourth turn');
+  t.ok(HQ.monstersOf().length > n, 'and the Warlock sent something');
+});
+
+t.test('descent: brittle floors show their traps, stolen plans show the doors', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian','dwarf']);
+  HQ.G.run.depth = 3;
+  HQ.G.run.boons = ['trapsense','mapsense'];
+  HQ.beginFloor();
+  t.ok(HQ.G.q.traps.length > 0, 'the floor is trapped');
+  t.ok(HQ.G.q.traps.every(tr => tr.found), "the sapper's eye found all of them");
+  t.ok(Object.values(HQ.G.q.doors).every(d => d.found), 'and the stolen plans found every door');
+});
+
+t.test('descent: the pedlar on the stair takes gold and gives goods', () => {
+  runFresh();
+  HQ.G.run.gold = 500;
+  const h = HQ.runAlive()[0];
+  for (const x of HQ.runAlive()) x.bp = 1;
+  t.ok(HQ.buyPedlar('mend'), 'field surgery bought');
+  t.eq(HQ.G.run.gold, 300, 'and paid for');
+  t.ok(HQ.runAlive().every(x => x.bp > 1), 'everyone is patched up');
+  const potions = HQ.runAlive().reduce((n,x) => n + (x.items.potion||0), 0);
+  t.ok(HQ.buyPedlar('potion'), 'a potion bought');
+  t.eq(HQ.runAlive().reduce((n,x) => n + (x.items.potion||0), 0), potions + 1, 'and handed over');
+  HQ.G.run.gold = 10;
+  t.ok(!HQ.buyPedlar('holy'), 'and you cannot buy what you cannot afford');
+});
+
+t.test('descent: favour buys things that outlast the run', () => {
+  HQ.G = HQ.newG();
+  HQ.G.meta.favour = 3;
+  t.ok(!HQ.buyUnlock('revive'), 'five favour is five favour');
+  t.ok(HQ.buyUnlock('leather'), 'standard issue is affordable');
+  t.eq(HQ.G.meta.favour, 1, 'and costs two');
+  t.ok(!HQ.buyUnlock('leather'), 'you only buy it once');
+  HQ.G.meta.favour = 20;
+  HQ.buyUnlock('potionbelt'); HQ.buyUnlock('warchest'); HQ.buyUnlock('veteran');
+  const run = HQ.newRun(['barbarian','wizard']);
+  t.ok(run.heroes.every(h => h.armour === 'leather'), 'every hero starts armoured');
+  t.ok(run.heroes.every(h => h.items.potion >= 1), 'and with a potion');
+  t.eq(run.gold, 250, 'and a war chest');
+  t.eq(run.heroes[0].bpMax, HQ.HERO_DEFS[0].bp + 1, 'veterans carry an extra Body Point');
+});
+
+t.test('descent: a run in progress survives being put down and picked up', () => {
+  const store = {};
+  const A = loadGame(store);
+  A.G = A.newG();
+  A.startRun(['barbarian','elf']);
+  A.takeBoon('ironskin'); A.takeBoon('swiftboots');
+  A.G.run.depth = 3; A.G.run.gold = 640; A.G.run.kills = 11;
+  A.beginFloor();
+  const elf = A.G.run.heroes.find(h => h.id === 'elf');
+  elf.bp = 2; elf.x = 8; elf.y = 10;
+  A.saveRun();
+
+  const B = loadGame(store);
+  B.G = B.newG();
+  t.ok(B.resumeRun(), 'the run comes back');
+  t.ok(B.G.run, 'as a run, not a quest');
+  t.eq(B.G.run.depth, 3, 'at the same depth');
+  t.eq(B.G.run.gold, 640, 'with the same purse');
+  t.eq(B.G.run.boons.join(), 'ironskin,swiftboots', 'and the same boons');
+  t.eq(B.G.run.heroes.length, 2, 'and the same party');
+  const e2 = B.G.run.heroes.find(h => h.id === 'elf');
+  t.eq(e2.bp, 2, 'as hurt as we left them');
+  t.eq(B.G.q.actors.find(a => a.kind === 'hero' && a.id === 'elf'), e2,
+       'and the board and the roster share one object');
+  t.eq(B.defendDice(e2), B.HERO_DEFS[2].def + 1, 'the boons are still doing their work');
+  B.update(16); B.draw();
+});
+
+t.test('descent: every floor of a long run draws without complaint', () => {
+  runFresh(['barbarian','dwarf','elf','wizard']);
+  for (let d = 1; d <= 14; d++){
+    HQ.G.run.depth = d;
+    if (d % 3 === 0){
+      const opts = HQ.draftOptions();
+      if (opts.length) HQ.takeBoon(opts[0].id);
+    }
+    HQ.beginFloor();
+    t.ok(HQ.monstersOf().length > 0, `depth ${d} is populated`);
+    t.ok(HQ.livingHeroes().length > 0, `depth ${d} has a party`);
+    for (const m of HQ.monstersOf()) m.awake = true;
+    HQ.G.q.traps.forEach(tr => { tr.found = true; });
+    HQ.update(16); HQ.draw();
+  }
+  t.ok(true, 'fourteen floors, no render or generation errors');
+});
+
+/* ----------------------------------------------------------------- juice */
+
+t.test('juice: a blow lunges, throws blood the way it landed, and stops the world', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = m.bpMax = 9; m.def = 0;
+  HQ.recomputeVision();
+  const fx = HQ.G.fx.length;
+  ALL_SKULLS();
+  HQ.doAttack(h, m);
+  t.ok(h.lt > 0, 'the attacker lunged');
+  t.eq([h.lx, h.ly].join(), '0,-1', 'toward the thing it hit');
+  t.ok(HQ.G.fx.length > fx, 'and threw something');
+  t.ok(HQ.G.shake > 10, 'a full skull roll shakes hard');
+  t.eq(HQ.G.freeze || 0, 0, 'hit-stop stays out of headless so the sim never stalls');
+  HQ.update(16); HQ.draw();
+});
+
+t.test('juice: damage numbers, ash and the low-health beat all survive a frame', () => {
+  fresh(0);
+  const h = use(hero('wizard'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1); HQ.recomputeVision();
+  h.bp = 1;                                        // trips the heartbeat vignette
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7;
+  HQ.hurt(m, 99, null);
+  t.ok(!m.alive, 'it is down');
+  t.ok(m.deathT > 0, 'and dissolving');
+  t.ok(HQ.G.fx.some(p => p.text), 'a damage number is up');
+  t.ok(HQ.G.fx.some(p => p.glow), 'and embers with it');
+  for (let i = 0; i < 30; i++){ HQ.update(16); HQ.draw(); }
+  t.ok(true, 'thirty frames of it, no errors');
+});
+
+t.test('a timer that ends the quest does not take the frame loop with it', () => {
+  // clearTimers() inside a firing callback used to leave update() walking off
+  // the end of the list it was iterating.
+  fresh(0);
+  HQ.G.timers.length = 0;
+  let ran = 0;
+  HQ.G.timers.push({ t:1, fn: () => { ran++; HQ.questOver(false, 'test'); } });
+  HQ.G.timers.push({ t:1, fn: () => { ran++; } });
+  HQ.G.timers.push({ t:1, fn: () => { ran++; } });
+  HQ.update(16);
+  t.ok(ran >= 1, 'the first callback ran');
+  t.eq(HQ.G.timers.length, 0, 'and the queue was cleared, not corrupted');
+  HQ.update(16); HQ.update(16);
+  t.ok(true, 'and the frames after it are fine');
+});
+
 t.run();
