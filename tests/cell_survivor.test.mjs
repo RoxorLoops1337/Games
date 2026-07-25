@@ -285,25 +285,35 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   CS.input.x = 0; CS.input.y = 0;
 }
 {
-  // spitters shell the ground you are standing on
+  // ground marks belong to bosses only — no ordinary pathogen dictates where you may stand
+  t.ok(CS.ENEMIES.every(e => !e.zone), 'no regular pathogen shells the ground');
+  t.ok(!CS.ENEMIES.some(e => e.id === 'zoner'), 'the Spitter is gone from the spawn table');
+  const markers = CS.BOSSES.filter(b => b.pat.indexOf('mark') >= 0);
+  t.ok(markers.length === 2, 'two late bosses have the ground-mark pattern');
+  t.ok(CS.BOSSES[0].pat.indexOf('mark') < 0, 'the first boss does not');
+
   CS.startRun('amoeba', 97);
-  G.grace = 0;
-  const z = CS.spawnEnemy('zoner', CS.P.x + 320, CS.P.y);
-  t.ok(!!z && z.D.zone > 0, 'the spitter is a zoner');
-  z.atkT = 0;
+  G.stage = 8; CS.beginStage(); G.grace = 0;   // Cascade — Prion Colossus
+  const b = G.boss;
+  t.ok(!!b, 'the boss is here');
+  G.zones.length = 0;
+  b.pat = b.B.pat.indexOf('mark') - 1; b.patT = 0;
   step(.1);
-  t.ok(G.zones.length > 0, 'it marks a circle on the floor');
-  t.ok(Math.hypot(G.zones[0].x - CS.P.x, G.zones[0].y - CS.P.y) < 6, 'the mark lands where you stand');
+  t.ok(G.zones.length > 0, 'the boss marks the ground you are standing on');
+  t.ok(G.zones.some(z => Math.hypot(z.x - CS.P.x, z.y - CS.P.y) < 130), 'the marks land around you');
   const hp0 = CS.P.hp;
   CS.P.iT = 0;
-  step(1.4);
-  t.ok(CS.P.hp < hp0, 'standing in the mark hurts');
-  z.atkT = 0; step(.05);
-  const m2 = G.zones[G.zones.length - 1];
-  CS.P.x = m2.x + 500; CS.P.y = m2.y; CS.P.hp = CS.P.mhp; CS.P.iT = 0;
+  step(1.8);
+  t.ok(CS.P.hp < hp0, 'standing in one hurts');
+  G.zones.length = 0;
+  b.pat = b.B.pat.indexOf('mark') - 1; b.patT = 0;
+  step(.1);
+  const far = G.zones[0];
+  CS.P.x = far.x + 600; CS.P.y = far.y; CS.P.hp = CS.P.mhp; CS.P.iT = 0;
+  G.en.length = 0; G.boss = null;
   const hp1 = CS.P.hp;
-  step(1.4);
-  t.ok(CS.P.hp === hp1, 'stepping off the mark avoids it entirely');
+  step(2);
+  t.ok(CS.P.hp === hp1, 'stepping out of the marks avoids them entirely');
 }
 {
   // biomass stays where it dropped — you have to go and get it
