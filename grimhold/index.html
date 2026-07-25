@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#0a0908">
 <meta name="description" content="Grimhold — a torchlit dungeon-crawl board game for your phone. Four heroes, combat dice, spells and the Witch Lord.">
 <link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230a0908'/%3E%3Cpath d='M16 5l7 4v7c0 5-3 9-7 11-4-2-7-6-7-11V9z' fill='%23d8a83c'/%3E%3Cpath d='M16 9v14M11 13h10' stroke='%230a0908' stroke-width='2.4'/%3E%3C/svg%3E">
 <title>Grimhold — Quest of the Four</title>
 <style>
   :root{
@@ -935,9 +936,14 @@ function hash2(x, y, s){
   h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
+// Headless still goes through document.createElement when the harness provides
+// one, so the test's context — which is as fussy about colours as a browser —
+// sees every call the real game makes.
 function mkCan(w, h){
-  if (HEADLESS) return { width:w, height:h, getContext(){ return stubCtx(); } };
-  const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
+  if (typeof document !== 'undefined' && document.createElement){
+    const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
+  }
+  return { width:w, height:h, getContext(){ return stubCtx(); } };
 }
 function stubCtx(){
   const noop = () => {};
@@ -1872,11 +1878,15 @@ const FOGQ = 2;                                     // fog texels per square
 let fogTmp = null;                                  // per-square darkness, reused
 
 function initCanvas(){
-  if (HEADLESS){ ctx = stubCtx(); cw = 800; ch = 1400; return; }
-  cv = document.getElementById('cv');
-  ctx = cv.getContext('2d');
-  resize();
-  addEventListener('resize', resize);
+  if (HEADLESS){
+    ctx = mkCan(800, 1400).getContext('2d');
+    cw = 800; ch = 1400;
+  } else {
+    cv = document.getElementById('cv');
+    ctx = cv.getContext('2d');
+    resize();
+    addEventListener('resize', resize);
+  }
   fogCan = mkCan(W*FOGQ, H*FOGQ); fogCtx = fogCan.getContext('2d');
   fogImg = fogCtx.createImageData(W*FOGQ, H*FOGQ);
   grainCan = mkCan(96, 96);
@@ -2277,6 +2287,13 @@ function drawVignette(g){
 }
 
 /* -------------------------------------------------------------- particles */
+
+// #rrggbb → rgba(r,g,b,a). Canvas throws on a malformed colour stop, and a
+// throw inside draw() takes the whole frame loop with it.
+function hexA(hex, a){
+  const n = parseInt(String(hex).slice(1), 16) || 0;
+  return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+}
 
 function spark(x, y, n, col, opt){
   opt = opt || {};
@@ -3126,7 +3143,7 @@ function castSpell(h, key, target){
   h.acted = true; h.spent.push(key);
   sfx('spell');
   const el = ELEMENTS[sp.el];
-  spark(h.x, h.y, 22, el.col, { spd:.016, up:.004, glow:el.col.replace(')',',.4)').replace('#','rgba(') });
+  spark(h.x, h.y, 22, el.col, { spd:.016, up:.004, glow:hexA(el.col, .4) });
   if (sp.dice && target){
     const atk = rollCombat(sp.dice);
     const skulls = countSkulls(atk);
@@ -3983,12 +4000,18 @@ function update(dt){
   if (AC) musicTick(AC.currentTime);
 }
 
-let lastT = 0;
+let lastT = 0, frameErrs = 0;
 function frame(ts){
   const dt = Math.min(48, ts - lastT || 16);
   lastT = ts;
-  update(dt);
-  draw();
+  // A slip in update or draw must never end the loop — a frozen board is the
+  // one failure a player cannot recover from. Log it once and carry on.
+  try { update(dt); draw(); }
+  catch (e){
+    if (frameErrs++ === 0 && typeof console !== 'undefined' && console.error)
+      console.error('Grimhold: frame error', e);
+    if (frameErrs === 1) G.fx.length = 0;      // most often a bad particle
+  }
   requestAnimationFrame(frame);
 }
 
