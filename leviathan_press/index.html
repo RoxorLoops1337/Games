@@ -1357,10 +1357,27 @@ function spawnWorm(opt){
   }
   if (w.path){
     prewind(w);
+    // However tightly the pattern ended up squashed, the snake enters across
+    // the top of the page with its body in formation — measured from its
+    // LOWEST link, since a pattern with up-strokes hangs part of the body
+    // below the head.
+    const entry = opt.y != null ? opt.y : 0;
+    let low = -1e9;
+    for (const seg of w.segs) if (seg.y > low) low = seg.y;
+    const shift = low - (entry + 300);
+    if (shift > 0){
+      for (const q of w.trail) q.y -= shift;
+      for (const q of w.path) q.y -= shift;
+      for (const seg of w.segs) seg.y -= shift;
+      w.y -= shift;
+      low -= shift;
+    }
     // the descent line: the pattern may weave as wildly as it likes, but the
-    // body is never allowed below this, and it creeps down on the clock
+    // body is never allowed far below this, and it creeps down on the clock —
+    // which is set against the lowest link, because that is what ends the dive
     w.limitY = w.y;
-    w.rate = Math.max(4, (deckLine() - w.limitY) / snakeClock());
+    w.lowOff = Math.max(0, low - w.y);
+    w.rate = Math.max(3, (deckLine() - low) / snakeClock());
   }
   else {
     // a loose worm just needs something to ride on for frame one
@@ -1486,7 +1503,7 @@ function wormChill(w){
    ------------------------------------------------------------------ */
 const PATTERNS = ['rows', 'rows', 'columns', 'columns', 'spiral', 'sine'];
 
-function buildPath(kind, startY, dir){
+function rawPath(kind, startY, dir){
   const pts = [];
   const m = 84, W = C.W;
   let y = startY;
@@ -1494,7 +1511,7 @@ function buildPath(kind, startY, dir){
   if (kind === 'columns'){
     // Vertical strokes: down a column, across a pitch, back up, across
     // again — sweeping the page sideways while the whole band creeps down.
-    const H = 520, pitch = 118, drop = 96;
+    const H = 470, pitch = 118, drop = 150;
     let d = dir || 1;
     let x = d > 0 ? m : W - m;
     let down = true;
@@ -1514,7 +1531,7 @@ function buildPath(kind, startY, dir){
     const amp = W * 0.42, cx = W / 2;
     for (let i = 0; i < 80; i++){
       pts.push({ x: cx + Math.sin(i * 0.7) * amp, y });
-      y += 40;
+      y += 58;
     }
     return pts;
   }
@@ -1525,7 +1542,7 @@ function buildPath(kind, startY, dir){
       pts.push({ x: W / 2 + Math.cos(a) * rad, y: cy + Math.sin(a) * rad * 0.62 });
       a += 0.5;
       rad = Math.max(W * 0.12, rad - W * 0.006);
-      cy += 15;
+      cy += 26;
     }
     return pts;
   }
@@ -1536,11 +1553,66 @@ function buildPath(kind, startY, dir){
   let d = dir || 1;
   for (let r = 0; r < 34; r++){
     pts.push({ x: d > 0 ? W - m : m, y });
-    y += 122;
+    y += 190;
     pts.push({ x: d > 0 ? W - m : m, y });
     d = -d;
   }
   return pts;
+}
+
+// The snake travels along its pattern at a constant speed, so the only way to
+// control how quickly it gets down the page is the SHAPE of the pattern: the
+// steeper the path, the faster the descent. Clamping its position instead
+// (which is what this used to do) made it stall against an invisible line
+// every time the pattern wanted to drop a row, which read as the snake
+// randomly speeding up and slowing down.
+//
+// So: build the pattern, measure how much of its travel is downward, and
+// squash it vertically until that ratio matches the clock exactly.
+function buildPath(kind, startY, dir, target){
+  const raw = rawPath(kind, startY, dir);
+  if (target == null) target = descentRatio();
+  target = clamp(target, 0.02, 0.9);
+
+  // travel and descent of the un-squashed path, split into components
+  const dxs = [], dys = [];
+  for (let i = 1; i < raw.length; i++){
+    dxs.push(raw[i].x - raw[i - 1].x);
+    dys.push(raw[i].y - raw[i - 1].y);
+  }
+  const ratioAt = k => {
+    let len = 0, down = 0;
+    for (let i = 0; i < dxs.length; i++){
+      const dy = dys[i] * k;
+      len += Math.hypot(dxs[i], dy);
+      down += dy;
+    }
+    return len > 0 ? down / len : 1;
+  };
+  // bisect the squash factor — cheap, and it runs a handful of times a dive.
+  // It never goes below 0.45, or a deep trench would squash its rows tighter
+  // than the body is wide; past that point the descent line does the holding
+  // back and the head spends the refused travel weaving sideways instead.
+  let lo = 0.45, hi = 4, k = 1;
+  if (ratioAt(hi) > target){
+    for (let it = 0; it < 26; it++){
+      k = (lo + hi) / 2;
+      if (ratioAt(k) > target) hi = k; else lo = k;
+    }
+    k = (lo + hi) / 2;
+  } else k = hi;
+
+  const out = [];
+  for (const q of raw) out.push({ x: q.x, y: startY + (q.y - startY) * k });
+  return out;
+}
+
+// how much of the snake's travel should be downward, from the level clock
+function descentRatio(){
+  const rate = (C.H + 300) / snakeClock();
+  // the head cuts every corner, so the path it actually follows descends
+  // faster than the one that was built — aim under the target
+  return clamp(0.72 * rate / Math.max(20, snakeSpeed()), 0.02, 0.9);
 }
 
 function stepWorm(w, dt){
@@ -1572,6 +1644,20 @@ function stepWorm(w, dt){
     want = Math.atan2(P.y - w.y, P.x - w.x);
     sp *= 2.6;
   } else if (w.mode === 'path' && w.path){
+    // Closed loop on the clock: every few seconds, compare where the snake
+    // actually is against where the descent line says it should be and rebuild
+    // the pattern a little steeper or shallower. Corner-cutting means no fixed
+    // geometry hits the clock for every pattern, so it is measured instead.
+    w.tune = (w.tune || 0) + dt;
+    if (w.tune > 3.5 && w.rage <= 0){
+      w.tune = 0;
+      const behind = w.limitY - w.y;
+      if (behind > 140 || behind < -190){
+        w.ratioFix = clamp((w.ratioFix || 1) * (behind > 0 ? 1.22 : 0.86), 0.35, 4);
+        w.path = buildPath(w.kind, w.y, w.dir, descentRatio() * w.ratioFix);
+        w.wp = 0;
+      }
+    }
     if (w.wasRaging){
       // the dive is over: pick the weave back up at the row it left, so a
       // lunge is a threat and never a shortcut down the page
@@ -1621,22 +1707,48 @@ function stepWorm(w, dt){
   while (d > Math.PI) d -= TAU;
   while (d < -Math.PI) d += TAU;
   w.ang += clamp(d, -w.turn * dt, w.turn * dt);
-  w.x += Math.cos(w.ang) * sp * dt;
-  w.y += Math.sin(w.ang) * sp * dt;
-  w.x = clamp(w.x, 26, C.W - 26);
+
+  // Movement is always a full step at the current speed. When the descent
+  // backstop refuses part of the vertical travel, the leftover is spent
+  // sideways instead of being thrown away — the snake slides along its line
+  // at full pace rather than stalling against it, which is what used to make
+  // it look like it kept speeding up and slowing down.
+  const stepLen = sp * dt;
+  let nx = w.x + Math.cos(w.ang) * stepLen;
+  let ny = w.y + Math.sin(w.ang) * stepLen;
   if (w.mode === 'path' && w.limitY != null){
-    // hold the whole chain above the descent line, which only the clock moves
     w.limitY += (w.rate || 8) * dt;
-    if (w.rage <= 0 && w.y > w.limitY) w.y = w.limitY;
+    const cap = w.limitY + 90;
+    if (w.rage <= 0 && (ny > cap || w.y > cap)){
+      // Hold the head at the descent line — and haul it back up to the line if
+      // a dive left it below. Whatever vertical travel is refused becomes
+      // horizontal travel, so the step is always exactly one step long and the
+      // snake never appears to stall or surge.
+      const targetY = w.y > cap ? Math.max(cap, w.y - 130 * dt) : cap;
+      const ay = targetY - w.y;
+      const remain = Math.sqrt(Math.max(0, stepLen * stepLen - ay * ay));
+      const sx = Math.cos(w.ang);
+      let dirX = Math.abs(sx) > 0.2 ? (sx > 0 ? 1 : -1) : (w.sideDir || w.dir || 1);
+      if ((dirX > 0 && w.x > C.W - 90) || (dirX < 0 && w.x < 90)) dirX = -dirX;
+      w.sideDir = dirX;
+      ny = targetY;
+      nx = w.x + dirX * remain;
+    }
   }
+  w.x = clamp(nx, 26, C.W - 26);
   // Only the pattern's own descent is allowed to reach the deck — that is the
   // level clock. A lunge can dive right into the hull's water but is pulled up
   // short of the line, so diving is never a way to end the dive early.
   w.y = w.mode === 'path'
-    ? clamp(w.y, -260, w.rage > 0 ? deckLine() - 70 : C.H - C.DECK + 10)
-    : clamp(w.y, -220, w.rage > 0 ? floorY + 14 : floorY - 46);
+    ? clamp(ny, -260, w.rage > 0 ? deckLine() - 70 : C.H - C.DECK + 10)
+    : clamp(ny, -220, w.rage > 0 ? floorY + 14 : floorY - 46);
   pushTrail(w, w.x, w.y);
   layoutWorm(w);
+  if (w.mode === 'path'){
+    let low = -1e9;
+    for (const seg of w.segs) if (!seg.dead && seg.y > low) low = seg.y;
+    w.lowOff = low > -1e8 ? low - w.y : 0;
+  }
 
   // iterate the array we started with: venom can resegment the worm mid-loop
   const segs = w.segs;
@@ -4049,7 +4161,8 @@ window.LP = {
   update, draw, fit, startRun, endRun, beginRun,
   spawnWorm, stepWorm, layoutWorm, sampleTrail, resegment, hurtSeg, drawSegDetail, stampNums, killSeg, hitArea, newSeg,
   surfaceCore, hurtCore, stepCore, hitPlayer, volley, aimAngle, makeCarrier, lateOpen, GIMBAL_CONE,
-  downRun, reviveRun, claimRun, checkOverrun, deckLine, buildPath, PATTERNS, snakeMax, wantSnakes, nearestSeg, stepSystems, addSys, syncSys,
+  downRun, reviveRun, claimRun, checkOverrun, deckLine, buildPath, rawPath, prewind, PATTERNS,
+  snakeMax, wantSnakes, snakeSpeed, snakeClock, descentRatio, nearestSeg, stepSystems, addSys, syncSys,
   rollCards, cardValue, cardPool, openDraft, pickCard, reroll, takeAll, skipDraft, applyCard, closeDraft,
   rollRarity, rarityWeights, buildPlayer, freshStats, baseDamage, hpMul, spdMul, depthNow, payout,
   loadMeta, saveMeta, freshMeta, buyMeta, buyHull, metaCost, mlvl, stageOpen, tierOpen,
