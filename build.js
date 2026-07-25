@@ -58,6 +58,7 @@ const STATIC_PATHS = [
   'cell_survivor',
   'leviathan_press',
   'dungeon_pusher',
+  'grimhold',
   'carmanager',
   'tools',
 ];

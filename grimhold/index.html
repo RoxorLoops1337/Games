@@ -1,0 +1,4042 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0908">
+<meta name="description" content="Grimhold — a torchlit dungeon-crawl board game for your phone. Four heroes, combat dice, spells and the Witch Lord.">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Grimhold — Quest of the Four</title>
+<style>
+  :root{
+    --bg:#0a0908; --ink:#efe3c6; --dim:#9c8d75; --faint:#6b5f4e;
+    --gold:#d8a83c; --gold2:#f3d488; --blood:#b03a2c; --emerald:#63bf7d;
+    --arcane:#9a86e0; --stone:#221e1a; --stone2:#171410;
+    --panel:rgba(24,20,16,.94); --line:rgba(216,168,60,.26); --line2:rgba(216,168,60,.5);
+    --serif:Georgia,"Iowan Old Style","Palatino Linotype",Palatino,"Times New Roman",serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--bg);color:var(--ink);
+    font-family:var(--serif);touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+  canvas{display:block;position:fixed;inset:0;width:100%;height:100%}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-variant-numeric:tabular-nums}
+  .cap{text-transform:uppercase;letter-spacing:.18em}
+
+  /* ---------------------------------------------------------------- HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;opacity:0;transition:opacity .3s;z-index:3}
+  #hud.on{opacity:1}
+
+  #topbar{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;gap:8px;
+    padding:calc(6px + env(safe-area-inset-top)) 10px 8px;
+    background:linear-gradient(180deg,rgba(8,7,6,.92),rgba(8,7,6,0))}
+  #qname{flex:1;min-width:0;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);
+    text-shadow:0 2px 8px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #qname b{display:block;color:var(--dim);font-size:9.5px;font-weight:400;letter-spacing:.22em;margin-top:1px}
+  .pill{pointer-events:auto;background:rgba(20,17,13,.85);border:1px solid var(--line);border-radius:999px;
+    padding:4px 10px;font-size:11.5px;letter-spacing:.08em;display:flex;align-items:center;gap:5px;color:var(--ink)}
+  .pill.gold{color:var(--gold2);border-color:rgba(216,168,60,.45)}
+  #menubtn{pointer-events:auto;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
+    font-size:15px;background:rgba(20,17,13,.85);border:1px solid var(--line);color:var(--ink)}
+
+  /* turn banner */
+  #turnband{position:absolute;left:0;right:0;top:38%;text-align:center;opacity:0;pointer-events:none;
+    transition:opacity .25s;font-size:clamp(24px,8vw,44px);font-weight:700;letter-spacing:.2em;
+    text-transform:uppercase;color:var(--ink);text-shadow:0 0 30px rgba(0,0,0,.9),0 4px 0 rgba(0,0,0,.5)}
+  #turnband.on{opacity:1}
+  #turnband small{display:block;font-size:11px;letter-spacing:.34em;color:var(--dim);margin-top:8px;font-weight:400}
+
+  /* ----------------------------------------------------------- log */
+  #log{position:absolute;left:8px;right:8px;top:calc(46px + env(safe-area-inset-top));
+    display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
+  .logline{background:rgba(12,10,8,.82);border:1px solid rgba(216,168,60,.18);border-left:2px solid var(--gold);
+    border-radius:4px;padding:4px 10px;font-size:12px;color:var(--ink);max-width:min(430px,94vw);
+    animation:logIn .3s ease-out;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+  .logline.bad{border-left-color:var(--blood);color:#f0c2ba}
+  .logline.good{border-left-color:var(--emerald);color:#c6ecce}
+  .logline.magic{border-left-color:var(--arcane);color:#ddd4f7}
+  @keyframes logIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+
+  /* ----------------------------------------------------------- party */
+  #party{position:absolute;left:0;right:0;bottom:calc(84px + env(safe-area-inset-bottom));
+    display:flex;gap:6px;justify-content:center;padding:0 8px;pointer-events:auto}
+  .hcard{flex:1 1 0;max-width:104px;background:linear-gradient(180deg,rgba(30,25,19,.94),rgba(16,13,10,.94));
+    border:1px solid rgba(216,168,60,.2);border-radius:10px;padding:4px 5px 5px;position:relative;overflow:hidden;
+    transition:transform .16s,border-color .2s,box-shadow .2s}
+  .hcard.act{border-color:var(--gold);box-shadow:0 0 0 1px rgba(216,168,60,.35),0 0 22px rgba(216,168,60,.28);
+    transform:translateY(-4px)}
+  .hcard.done{opacity:.45;filter:saturate(.4)}
+  .hcard.dead{opacity:.34;filter:grayscale(1)}
+  .hcard .top{display:flex;align-items:center;justify-content:space-between;gap:2px;min-height:12px}
+  .hcard .nm{font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;flex:1;text-align:center}
+  .hcard.act .nm{color:var(--gold2)}
+  .hcard canvas{position:static;width:100%;height:34px;display:block;margin:1px 0 2px}
+  .bar{height:5px;border-radius:3px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:2px;
+    box-shadow:inset 0 0 0 1px rgba(0,0,0,.5)}
+  .bar i{display:block;height:100%;transition:width .3s}
+  .bar.bp i{background:linear-gradient(90deg,#8d2a20,#e0503c)}
+  .bar.mp i{background:linear-gradient(90deg,#3f4fa0,#7f9ce8)}
+  .hcard .num{font-size:9px;color:var(--ink);opacity:.85;flex:none}
+  .hcard .st{font-size:9px;flex:none;min-width:8px;color:var(--gold2)}
+
+  /* ----------------------------------------------------------- actions */
+  #actions{position:absolute;left:0;right:0;bottom:calc(8px + env(safe-area-inset-bottom));
+    display:flex;gap:6px;justify-content:center;align-items:flex-end;padding:0 8px;pointer-events:auto}
+  .act{flex:1 1 0;max-width:88px;min-height:62px;border-radius:12px;border:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(38,31,23,.95),rgba(18,15,11,.95));color:var(--ink);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;padding:6px 2px;
+    font-family:var(--serif);cursor:pointer;transition:transform .1s,box-shadow .2s,opacity .2s}
+  .act .ic{font-size:19px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.6))}
+  .act .lb{font-size:8.5px;letter-spacing:.11em;text-transform:uppercase;color:var(--dim);text-align:center;line-height:1.15}
+  .act:active{transform:scale(.94)}
+  .act.hot{border-color:var(--gold);box-shadow:0 0 18px rgba(216,168,60,.3)}
+  .act.hot .lb{color:var(--gold2)}
+  .act.off{opacity:.32}
+  .act.end{background:linear-gradient(180deg,rgba(60,28,22,.95),rgba(28,13,10,.95));border-color:rgba(176,58,44,.5)}
+  .act.end .lb{color:#e8a99f}
+  #movepill{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(190px + env(safe-area-inset-bottom));
+    background:rgba(12,10,8,.9);border:1px solid var(--line);border-radius:999px;padding:3px 12px;font-size:11px;
+    letter-spacing:.1em;color:var(--gold2);pointer-events:none;white-space:nowrap;display:none}
+  #movepill.on{display:block}
+
+  /* ----------------------------------------------------------- screens */
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    padding:calc(18px + env(safe-area-inset-top)) 14px calc(18px + env(safe-area-inset-bottom));z-index:8;
+    background:radial-gradient(120% 80% at 50% 10%,rgba(28,22,15,.9),rgba(5,4,3,.97));overflow:auto}
+  .screen.on{display:flex}
+  /* the title screen is a window onto the canvas behind it, not a curtain */
+  #scTitle{background:radial-gradient(120% 80% at 50% 24%,rgba(22,15,8,.22),rgba(3,2,2,.74))}
+  #scTitle::before{opacity:.28}
+  .screen::before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.5;
+    background:repeating-linear-gradient(0deg,rgba(0,0,0,.22) 0 1px,transparent 1px 3px)}
+  h1{margin:0;font-size:clamp(40px,13vw,80px);font-weight:700;letter-spacing:.12em;line-height:.92;
+    background:linear-gradient(180deg,#fff3d4,#d8a83c 46%,#8a5f18);-webkit-background-clip:text;background-clip:text;
+    color:transparent;filter:drop-shadow(0 4px 18px rgba(216,168,60,.35));text-align:center}
+  .sub{color:var(--dim);letter-spacing:.36em;font-size:10.5px;text-transform:uppercase;margin:10px 0 26px;text-align:center}
+  .btn{appearance:none;border:1px solid var(--line2);border-radius:10px;padding:13px 28px;font-size:14px;
+    letter-spacing:.16em;text-transform:uppercase;color:var(--ink);cursor:pointer;font-family:var(--serif);
+    background:linear-gradient(180deg,rgba(216,168,60,.2),rgba(216,168,60,.04));margin:5px;
+    transition:transform .1s,box-shadow .25s,background .25s;min-width:190px}
+  .btn:active{transform:scale(.97)}
+  .btn.big{font-size:16px;padding:16px 34px;box-shadow:0 0 26px rgba(216,168,60,.22)}
+  .btn.ghost{border-color:rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:var(--dim);min-width:150px}
+  .btn.red{border-color:rgba(176,58,44,.55);background:linear-gradient(180deg,rgba(176,58,44,.24),rgba(176,58,44,.05));color:#f0c2ba}
+  .btn[disabled]{opacity:.35;pointer-events:none}
+
+  /* parchment sheet used by quest scroll / shop / spellbook */
+  .sheet{position:relative;width:min(520px,96vw);max-height:82vh;overflow:auto;border-radius:8px;
+    padding:20px 18px;background:
+      radial-gradient(120% 60% at 20% 0%,rgba(90,72,44,.35),transparent 60%),
+      linear-gradient(180deg,#231d15,#15110d);
+    border:1px solid rgba(216,168,60,.3);box-shadow:0 24px 60px rgba(0,0,0,.7),inset 0 0 60px rgba(0,0,0,.5)}
+  .sheet h2{margin:0 0 4px;font-size:20px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold2);text-align:center}
+  .sheet .rule{height:1px;background:linear-gradient(90deg,transparent,var(--line2),transparent);margin:10px 0 14px}
+  .sheet p{margin:0 0 12px;font-size:14px;line-height:1.62;color:#ddd0b4}
+  .flavor{font-style:italic;color:#bda98a}
+  .obj{border:1px solid rgba(216,168,60,.26);border-radius:6px;padding:9px 12px;margin:10px 0 4px;
+    background:rgba(216,168,60,.07);font-size:13px;color:var(--gold2)}
+  .obj b{display:block;font-size:9.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);margin-bottom:3px;font-weight:400}
+
+  .row{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .row:last-child{border-bottom:0}
+  .row .ic{width:30px;text-align:center;font-size:19px;flex:none}
+  .row .tx{flex:1;min-width:0}
+  .row .tx b{display:block;font-size:13.5px;color:var(--ink);font-weight:600}
+  .row .tx s{display:block;font-size:11px;color:var(--dim);text-decoration:none;line-height:1.4}
+  .row .bu{flex:none;border:1px solid var(--line2);background:rgba(216,168,60,.12);color:var(--gold2);
+    border-radius:7px;padding:7px 11px;font-size:11.5px;letter-spacing:.09em;font-family:var(--serif);cursor:pointer}
+  .row .bu[disabled]{opacity:.3}
+  .row .bu.own{border-color:rgba(99,191,125,.5);color:var(--emerald);background:rgba(99,191,125,.1)}
+  .tabs{display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;justify-content:center}
+  .tab{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:var(--dim);border-radius:999px;
+    padding:5px 12px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-family:var(--serif);cursor:pointer}
+  .tab.on{border-color:var(--line2);color:var(--gold2);background:rgba(216,168,60,.12)}
+
+  /* hero picker */
+  .heroes{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;width:min(470px,94vw);margin:6px 0 14px}
+  .hpick{border:1px solid rgba(216,168,60,.2);border-radius:10px;padding:8px;background:rgba(20,17,12,.7);
+    display:flex;gap:8px;align-items:center;cursor:pointer;transition:border-color .2s,box-shadow .2s}
+  .hpick.on{border-color:var(--gold);box-shadow:0 0 18px rgba(216,168,60,.25)}
+  .hpick canvas{position:static;width:44px;height:52px;flex:none}
+  .hpick .tx b{display:block;font-size:12.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold2)}
+  .hpick .tx s{display:block;text-decoration:none;font-size:10.5px;color:var(--dim);line-height:1.45;margin-top:2px}
+
+  /* quest select list */
+  .qlist{width:min(520px,96vw);max-height:66vh;overflow:auto}
+  .qrow{display:flex;gap:11px;align-items:center;padding:10px 12px;margin-bottom:7px;border-radius:8px;
+    border:1px solid rgba(255,255,255,.08);background:linear-gradient(180deg,rgba(28,23,17,.85),rgba(14,12,9,.85));cursor:pointer}
+  .qrow.lock{opacity:.4;pointer-events:none}
+  .qrow.done{border-color:rgba(99,191,125,.35)}
+  .qrow .n{width:26px;height:26px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:11.5px;
+    border:1px solid var(--line);color:var(--gold2);background:rgba(216,168,60,.1)}
+  .qrow.done .n{border-color:rgba(99,191,125,.5);color:var(--emerald);background:rgba(99,191,125,.1)}
+  .qrow .tx b{display:block;font-size:13.5px;letter-spacing:.06em}
+  .qrow .tx s{display:block;text-decoration:none;font-size:11px;color:var(--dim);margin-top:2px;line-height:1.4}
+
+  .goldline{display:flex;align-items:center;justify-content:center;gap:6px;color:var(--gold2);font-size:15px;margin:2px 0 12px}
+  .foot{color:var(--faint);font-size:10px;letter-spacing:.2em;text-transform:uppercase;margin-top:16px;text-align:center}
+  .toastwrap{position:fixed;left:0;right:0;bottom:24%;display:flex;justify-content:center;pointer-events:none;z-index:9}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="hud">
+  <div id="topbar">
+    <div id="qname">Grimhold<b>The Trial</b></div>
+    <div class="pill gold" id="goldpill">◈ <span id="goldn">0</span></div>
+    <div class="pill" id="turnpill">Turn <span id="turnn">1</span></div>
+    <div id="menubtn">☰</div>
+  </div>
+  <div id="log"></div>
+  <div id="turnband"></div>
+  <div id="movepill"></div>
+  <div id="party"></div>
+  <div id="actions"></div>
+</div>
+
+<div class="screen on" id="scTitle">
+  <h1>GRIMHOLD</h1>
+  <div class="sub">Quest of the Four</div>
+  <button class="btn big" id="btnPlay">Enter the Keep</button>
+  <button class="btn ghost" id="btnContinue">Continue</button>
+  <button class="btn ghost" id="btnHow">How to Play</button>
+  <div class="foot">A dungeon board game · tap to move</div>
+</div>
+
+<div class="screen" id="scModal"><div class="sheet" id="modalBody"></div></div>
+
+<script>
+/* ============================================================================
+   GRIMHOLD — Quest of the Four
+   A torchlit, turn-based dungeon board game for phones. One file: no engine,
+   no assets — the dungeon, the heroes and the monsters are all drawn from code.
+
+   Rules lineage: the classic 1989 tabletop dungeon crawl. Combat dice with
+   three skulls, two white shields and one black shield. Body Points and Mind
+   Points. Four heroes against the Warlock's keep.
+
+   Layout of this file:
+     1. Board + rules data      2. State + RNG
+     3. Geometry / LOS / paths  4. Procedural dungeon art
+     5. Actor art               6. Render loop
+     7. Audio                   8. Turn + combat logic
+     9. UI screens             10. Save + boot
+   ========================================================================== */
+'use strict';
+
+const HEADLESS = typeof globalThis.__HQ_HEADLESS__ !== 'undefined';
+
+/* ---------------------------------------------------------------- 1. DATA */
+
+const W = 26, H = 19;            // board squares, classic proportions
+const TS = 64;                   // pixels per square in the baked art layer
+
+// Rooms are fixed furniture of the keep — quests change who and what is inside,
+// never the walls. Same as the printed board.
+const ROOMS = [
+  { id:0,  x:1,  y:1,  w:7, h:4, name:'Hall of Bones' },
+  { id:1,  x:9,  y:1,  w:3, h:4, name:'The Scriptorium' },
+  { id:2,  x:13, y:1,  w:4, h:4, name:'Torture Chamber' },
+  { id:3,  x:18, y:1,  w:7, h:4, name:'The Great Hall' },
+  { id:4,  x:1,  y:6,  w:7, h:3, name:'Guard Room' },
+  { id:5,  x:1,  y:10, w:7, h:2, name:'Storeroom' },
+  { id:6,  x:9,  y:6,  w:8, h:6, name:'Chamber of Chaos' },
+  { id:7,  x:18, y:6,  w:7, h:3, name:"Alchemist's Study" },
+  { id:8,  x:18, y:10, w:7, h:2, name:'The Oubliette' },
+  { id:9,  x:1,  y:13, w:7, h:5, name:'The Crypt' },
+  { id:10, x:9,  y:13, w:3, h:5, name:'Cell Block' },
+  { id:11, x:13, y:13, w:4, h:5, name:'Armoury' },
+  { id:12, x:18, y:13, w:7, h:5, name:'Throne of Ash' },
+];
+
+// Corridors: two spines across, two down. Everything else is living rock.
+const CORRIDORS = [
+  { x:1, y:5,  w:24, h:1 },
+  { x:1, y:12, w:24, h:1 },
+  { x:8, y:1,  w:1,  h:17 },
+  { x:17,y:1,  w:1,  h:17 },
+];
+
+// The stair the heroes descend. Party starts here, and escapes here.
+const STAIRS = [[8,17],[8,16],[8,15],[8,14]];
+
+// Every door slot on the board: [roomId, roomTileX, roomTileY, corridorX, corridorY].
+// A quest chooses which of these exist and which are hidden.
+const DOOR_SLOTS = [
+  [0,  5,4,  5,5 ], [0,  7,2,  8,2 ],
+  [1,  10,4, 10,5], [1,  9,2,  8,2 ],
+  [2,  14,4, 14,5], [2,  16,2, 17,2],
+  [3,  18,3, 17,3], [3,  21,4, 21,5],
+  [4,  3,6,  3,5 ], [4,  7,7,  8,7 ],
+  [5,  3,11, 3,12], [5,  7,10, 8,10],
+  [6,  11,6, 11,5], [6,  9,8,  8,8 ], [6, 16,9, 17,9], [6, 14,11, 14,12],
+  [7,  21,6, 21,5], [7,  18,7, 17,7],
+  [8,  21,11,21,12],[8,  18,10,17,10],
+  [9,  3,13, 3,12], [9,  7,15, 8,15],
+  [10, 10,13,10,12],[10, 9,16, 8,16],
+  [11, 14,13,14,12],[11, 16,15,17,15],
+  [12, 21,13,21,12],[12, 18,15,17,15],
+];
+
+/* ------------------------------------------------------------- the heroes */
+
+const HERO_DEFS = [
+  { id:'barbarian', name:'Barbarian', title:'Ragnar of the North',
+    bp:8, mp:2, def:2, weapon:'broadsword', armour:null, elements:[],
+    blurb:'Eight Body Points and a broadsword. Nothing in the keep hits harder.',
+    skin:'#c88f5e', hair:'#3c2a1c', cloth:'#7a3a22', trim:'#c9a227' },
+  { id:'dwarf', name:'Dwarf', title:'Grim Ironbeard',
+    bp:7, mp:3, def:2, weapon:'shortsword', armour:null, elements:[], toolkit:true,
+    blurb:'Carries a toolkit — disarms any trap he can see without a roll.',
+    skin:'#d8a273', hair:'#8a4a20', cloth:'#3f5a72', trim:'#b8b0a0' },
+  { id:'elf', name:'Elf', title:'Sylwen Greenshadow',
+    bp:6, mp:4, def:2, weapon:'shortsword', armour:null, elements:['air'],
+    blurb:'Sword in one hand, one element of magic in the other.',
+    skin:'#e3c39a', hair:'#e9dfb0', cloth:'#2f6a44', trim:'#9fd8a8' },
+  { id:'wizard', name:'Wizard', title:'Aldric the Grey',
+    bp:4, mp:6, def:2, weapon:'dagger', armour:null, elements:['earth','water','fire'],
+    blurb:'Frail as parchment, but nine spells answer to him.',
+    skin:'#e8d3b4', hair:'#d8d2c6', cloth:'#4a4470', trim:'#9a86e0' },
+];
+
+/* ------------------------------------------------------------ the enemies */
+
+const MONSTERS = {
+  goblin:  { name:'Goblin',        move:10, atk:2, def:1, bp:1, mind:1, gold:15,  col:'#6f8f3e', col2:'#4a6128', size:.72 },
+  orc:     { name:'Orc',           move:8,  atk:3, def:2, bp:1, mind:2, gold:25,  col:'#8a7a4a', col2:'#5c4f2c', size:.86 },
+  fimir:   { name:'Fimir',         move:6,  atk:3, def:3, bp:2, mind:3, gold:40,  col:'#5d6b74', col2:'#39434a', size:.98 },
+  skeleton:{ name:'Skeleton',      move:6,  atk:2, def:2, bp:1, mind:0, gold:20,  col:'#ddd6c0', col2:'#9a917c', size:.8, undead:true },
+  zombie:  { name:'Zombie',        move:4,  atk:2, def:3, bp:1, mind:0, gold:20,  col:'#7d8f6a', col2:'#4e5b41', size:.84, undead:true },
+  mummy:   { name:'Mummy',         move:4,  atk:3, def:4, bp:2, mind:0, gold:45,  col:'#c9bb93', col2:'#8b7f5e', size:.9, undead:true },
+  chaos:   { name:'Chaos Warrior', move:6,  atk:4, def:4, bp:3, mind:3, gold:70,  col:'#3a3340', col2:'#211d26', size:.94 },
+  gargoyle:{ name:'Gargoyle',      move:6,  atk:4, def:5, bp:3, mind:4, gold:110, col:'#6a6459', col2:'#403c34', size:1.06 },
+  sorcerer:{ name:'Chaos Sorcerer',move:6,  atk:3, def:3, bp:3, mind:4, gold:90,  col:'#5a2f5e', col2:'#331a36', size:.9, caster:true },
+  ogre:    { name:'Ogre Champion', move:6,  atk:4, def:5, bp:4, mind:2, gold:130, col:'#9a7357', col2:'#63472f', size:1.14 },
+};
+
+/* ------------------------------------------------------------- the market */
+
+const WEAPONS = {
+  fists:      { name:'Bare Hands',  dice:1, cost:0,   ic:'✊', desc:'One combat die. Better than nothing.' },
+  dagger:     { name:'Dagger',      dice:1, cost:25,  ic:'🗡', desc:'One die. May be thrown at any visible foe.', thrown:true },
+  shortsword: { name:'Short Sword', dice:2, cost:150, ic:'⚔', desc:'Two combat dice.' },
+  handaxe:    { name:'Hand Axe',    dice:2, cost:200, ic:'🪓', desc:'Two dice, and it flies true when thrown.', thrown:true },
+  staff:      { name:'Quarterstaff',dice:1, cost:100, ic:'🥢', desc:'One die, but strikes on the diagonal.', diag:true },
+  spear:      { name:'Spear',       dice:2, cost:250, ic:'🔱', desc:'Two dice and reach — strikes diagonally.', diag:true },
+  broadsword: { name:'Broadsword',  dice:3, cost:250, ic:'🗡', desc:'Three dice. The soldier’s answer.' },
+  battleaxe:  { name:'Battle Axe',  dice:4, cost:350, ic:'🪓', desc:'Four dice. Needs both hands — no shield.', twoH:true },
+  crossbow:   { name:'Crossbow',    dice:3, cost:350, ic:'🏹', desc:'Three dice at any range you can see. Not while adjacent.', ranged:true, twoH:true },
+  orcsbane:   { name:"Orc's Bane",  dice:4, cost:0,   ic:'✨', desc:'Four dice, five against greenskins. Not for sale.', quest:true },
+  spirit:     { name:'Spirit Blade',dice:3, cost:0,   ic:'🌟', desc:'Three dice. The only steel that bites the Witch Lord.', quest:true, spirit:true },
+};
+
+const ARMOURS = {
+  leather:  { name:'Leather Armour', def:1, cost:100, ic:'🦺', desc:'+1 defend die.' },
+  chain:    { name:'Chain Mail',     def:2, cost:500, ic:'🛡', desc:'+2 defend dice, −1 to every movement roll.', slow:1 },
+  plate:    { name:'Plate Mail',     def:3, cost:850, ic:'🛡', desc:'+3 defend dice, −2 to every movement roll.', slow:2 },
+};
+
+const GEAR = {
+  helmet:  { name:'Helmet',       def:1, cost:125, ic:'⛑', desc:'+1 defend die.' },
+  shield:  { name:'Shield',       def:1, cost:150, ic:'🛡', desc:'+1 defend die. Not with a two-handed weapon.', hand:true },
+  cloak:   { name:'Cloak of Dusk',def:1, cost:300, ic:'🧥', desc:'+1 defend die. Woven in the deep dark.' },
+  toolkit: { name:'Tool Kit',     cost:250, ic:'🧰', desc:'Disarm any trap you have found, no roll needed.' },
+  rope:    { name:'Rope',         cost:75,  ic:'🪢', desc:'Climb out of a pit the moment you fall in.' },
+  potion:  { name:'Healing Potion',cost:150, ic:'🧪', desc:'Restore 4 Body Points. Consumed.', stack:true },
+  holy:    { name:'Holy Water',   cost:200, ic:'⚱', desc:'Three dice against one undead thing. Consumed.', stack:true },
+};
+
+/* -------------------------------------------------------------- the spells */
+
+const ELEMENTS = {
+  air:   { name:'Air',   col:'#9fd8e8', ic:'🌪' },
+  water: { name:'Water', col:'#7fb0e8', ic:'💧' },
+  earth: { name:'Earth', col:'#8fbf6f', ic:'🌿' },
+  fire:  { name:'Fire',  col:'#f0904a', ic:'🔥' },
+};
+
+const SPELLS = {
+  genie:      { el:'air',   name:'Genie',            target:'enemy', range:'sight', desc:'A spirit of the air strikes one visible foe with 4 combat dice.', dice:4 },
+  swiftwind:  { el:'air',   name:'Swift Wind',       target:'hero',  desc:'That hero may move again this turn, and moves 6 squares further.' },
+  tempest:    { el:'air',   name:'Tempest',          target:'self',  desc:'Every monster you can see loses its next turn.' },
+  sleep:      { el:'water', name:'Sleep',            target:'enemy', range:'sight', desc:'One foe with 4 Mind Points or fewer falls asleep until it is struck.' },
+  veil:       { el:'water', name:'Veil of Mist',     target:'hero',  desc:'That hero cannot be attacked until their next turn.' },
+  healing:    { el:'water', name:'Water of Healing', target:'hero',  desc:'Restore 4 Body Points.', heal:4 },
+  healbody:   { el:'earth', name:'Heal Body',        target:'hero',  desc:'Restore 4 Body Points.', heal:4 },
+  rockskin:   { el:'earth', name:'Rock Skin',        target:'hero',  desc:'+2 defend dice until that hero’s next turn.' },
+  passrock:   { el:'earth', name:'Pass Through Rock',target:'tile',  desc:'Step through stone to any revealed square within 5.' },
+  ballflame:  { el:'fire',  name:'Ball of Flame',    target:'enemy', range:'sight', desc:'Hurl fire at one visible foe: 3 combat dice, no defence.', dice:3, noDef:true },
+  courage:    { el:'fire',  name:'Courage',          target:'hero',  desc:'+2 attack dice on that hero’s next attack.' },
+  firewrath:  { el:'fire',  name:'Fire of Wrath',    target:'enemy', range:'sight', desc:'A lance of flame: 2 combat dice at any visible foe.', dice:2 },
+};
+const ELEMENT_SPELLS = {
+  air:['genie','swiftwind','tempest'], water:['sleep','veil','healing'],
+  earth:['healbody','rockskin','passrock'], fire:['ballflame','courage','firewrath'],
+};
+
+/* ------------------------------------------------------------ the treasure */
+// Drawn when a hero searches a room for treasure. Hazards are in the deck too —
+// that is what makes searching a decision instead of a habit.
+const TREASURE_DECK = [
+  { k:'gold', n:25,  t:'Loose coin', d:'25 gold coins in the dust.' },
+  { k:'gold', n:25,  t:'Loose coin', d:'25 gold coins under a flagstone.' },
+  { k:'gold', n:50,  t:'A small purse', d:'50 gold coins.' },
+  { k:'gold', n:50,  t:'A small purse', d:'50 gold coins, still warm.' },
+  { k:'gold', n:100, t:'A heavy purse', d:'100 gold coins.' },
+  { k:'gold', n:150, t:'Gemstone', d:'A cut gem worth 150 gold.' },
+  { k:'gold', n:250, t:'Jewelled circlet', d:'Worth 250 gold to the right buyer.' },
+  { k:'item', n:'potion', t:'Potion of Healing', d:'A flask of red glass. Restores 4 Body Points.' },
+  { k:'item', n:'potion', t:'Potion of Healing', d:'Someone left it, and did not come back for it.' },
+  { k:'item', n:'holy',   t:'Vial of Holy Water', d:'Three dice against the walking dead.' },
+  { k:'hazard', n:1, t:'Poison', d:'The coins were dusted with something. Lose 1 Body Point.' },
+  { k:'hazard', n:1, t:'A rusted needle', d:'It bites your thumb. Lose 1 Body Point.' },
+  { k:'wander', t:'Wandering Monster', d:'Something heard you rummaging.' },
+  { k:'wander', t:'Wandering Monster', d:'A shape peels away from the dark.' },
+  { k:'none', t:'Dust and bones', d:'Nothing here worth carrying.' },
+  { k:'none', t:'Empty', d:'Rags, rat bones, an old boot.' },
+  { k:'none', t:'Cobwebs', d:'Nothing but cobwebs.' },
+];
+
+/* ------------------------------------------------------------- furnishings */
+
+const FURN = {
+  table:     { name:'Table',        w:2, h:1, search:false },
+  chest:     { name:'Chest',        w:1, h:1, search:true },
+  throne:    { name:'Throne',       w:1, h:1, search:false },
+  bookcase:  { name:'Bookcase',     w:2, h:1, search:true },
+  rack:      { name:'Weapon Rack',  w:1, h:1, search:true },
+  alchemy:   { name:"Alchemist's Bench", w:2, h:1, search:true },
+  tomb:      { name:'Tomb',         w:2, h:1, search:true },
+  fireplace: { name:'Fireplace',    w:2, h:1, search:false },
+  cupboard:  { name:'Cupboard',     w:2, h:1, search:true },
+  altar:     { name:'Altar',        w:2, h:1, search:true },
+  sorcerer:  { name:"Sorcerer's Table", w:2, h:1, search:true },
+  cage:      { name:'Iron Cage',    w:1, h:1, search:false },
+};
+
+/* --------------------------------------------------------------- the book */
+// Eleven quests. The walls never change; the doors, the dark and what waits
+// behind them do. Monster and furniture placement is seeded per quest, so a
+// quest always plays out on the same map — a printed board, not a shuffle.
+
+const QUESTS = [
+  {
+    name:'The Trial', sub:'Quest I',
+    intro:'Mentor speaks: “Before you may call yourselves heroes of the Empire you must pass a trial. Deep in the keep of Grimhold squats Verag, a gargoyle of the Warlock’s making. Go down, find it, and break it.”',
+    objective:{ type:'slay', label:'Slay Verag the Gargoyle' },
+    monsters:[ {r:0,t:'goblin',n:3}, {r:4,t:'orc',n:2}, {r:1,t:'goblin',n:2},
+               {r:6,t:'orc',n:3}, {r:9,t:'skeleton',n:2}, {r:11,t:'orc',n:2},
+               {r:12,t:'gargoyle',n:1,name:'Verag',boss:true,bp:4}, {r:12,t:'orc',n:2} ],
+    furn:[ {r:0,t:'tomb'}, {r:3,t:'table'}, {r:6,t:'fireplace'}, {r:11,t:'rack'},
+           {r:12,t:'throne'}, {r:9,t:'tomb'}, {r:4,t:'table'} ],
+    traps:3, secrets:1, reward:100,
+  },
+  {
+    name:'The Rescue of Sir Ragnar', sub:'Quest II',
+    intro:'Mentor speaks: “Sir Ragnar, the Emperor’s finest knight, has been taken. He is held in the cell block beneath Grimhold. Reach him, cut him loose, and bring him up the stair alive. He will not fight — he can barely stand.”',
+    objective:{ type:'rescue', npc:'Sir Ragnar', room:10, label:'Free Sir Ragnar and escape by the stair' },
+    monsters:[ {r:10,t:'orc',n:2}, {r:10,t:'goblin',n:2}, {r:6,t:'orc',n:3},
+               {r:9,t:'skeleton',n:3}, {r:4,t:'goblin',n:3}, {r:11,t:'orc',n:2},
+               {r:1,t:'fimir',n:1}, {r:12,t:'chaos',n:1,name:'Gorag',boss:true} ],
+    furn:[ {r:10,t:'cage'}, {r:10,t:'table'}, {r:11,t:'rack'}, {r:0,t:'cupboard'},
+           {r:6,t:'table'}, {r:12,t:'throne'}, {r:2,t:'table'} ],
+    traps:4, secrets:1, reward:150,
+  },
+  {
+    name:'Lair of the Orc Warlord', sub:'Quest III',
+    intro:'Mentor speaks: “Ulag, warlord of the greenskins, has taken the great hall for his feasting. Every raid on the border villages was ordered from that table. Cut the head off and the raids stop.”',
+    objective:{ type:'slay', label:'Slay Ulag the Orc Warlord' },
+    monsters:[ {r:3,t:'ogre',n:1,name:'Ulag',boss:true,bp:5}, {r:3,t:'orc',n:3},
+               {r:2,t:'orc',n:3}, {r:6,t:'goblin',n:4}, {r:7,t:'fimir',n:2},
+               {r:0,t:'orc',n:2}, {r:4,t:'goblin',n:2}, {r:12,t:'chaos',n:1} ],
+    furn:[ {r:3,t:'table'}, {r:3,t:'throne'}, {r:3,t:'fireplace'}, {r:2,t:'rack'},
+           {r:7,t:'alchemy'}, {r:6,t:'table'}, {r:0,t:'chest'} ],
+    traps:4, secrets:2, reward:200,
+  },
+  {
+    name:"Prince Magnus' Gold", sub:'Quest IV',
+    intro:'Mentor speaks: “The ransom raised for Prince Magnus never reached his captors. Three strongboxes of Imperial gold sit somewhere in Grimhold. Find all three and carry them back up the stair — the Empire wants its coin, and so, I suspect, do you.”',
+    objective:{ type:'collect', count:3, item:'Strongbox', label:'Recover 3 strongboxes and escape by the stair' },
+    monsters:[ {r:5,t:'orc',n:2}, {r:7,t:'orc',n:3}, {r:11,t:'chaos',n:1},
+               {r:6,t:'fimir',n:2}, {r:9,t:'zombie',n:3}, {r:0,t:'goblin',n:3},
+               {r:12,t:'orc',n:3}, {r:2,t:'fimir',n:1} ],
+    furn:[ {r:5,t:'chest',quest:'Strongbox'}, {r:7,t:'chest',quest:'Strongbox'},
+           {r:12,t:'chest',quest:'Strongbox'}, {r:5,t:'cupboard'}, {r:11,t:'rack'},
+           {r:9,t:'tomb'}, {r:6,t:'table'} ],
+    traps:5, secrets:2, reward:250,
+  },
+  {
+    name:"Melar's Maze", sub:'Quest V',
+    intro:'Mentor speaks: “Melar the mage kept his life’s work in one book, and hid it here before Grimhold fell. Fire is in that tome, and so is the map of the lower keep. The Warlock’s people have been looking for it for eleven years. Beat them to it.”',
+    objective:{ type:'fetch', item:"Melar's Tome", label:"Find Melar's Tome and escape by the stair" },
+    monsters:[ {r:1,t:'skeleton',n:3}, {r:6,t:'chaos',n:2}, {r:2,t:'mummy',n:1},
+               {r:9,t:'zombie',n:3}, {r:4,t:'orc',n:3}, {r:7,t:'fimir',n:2},
+               {r:8,t:'skeleton',n:2}, {r:12,t:'sorcerer',n:1,name:'Vess',boss:true} ],
+    furn:[ {r:1,t:'bookcase',quest:"Melar's Tome"}, {r:1,t:'table'}, {r:7,t:'alchemy'},
+           {r:9,t:'tomb'}, {r:6,t:'sorcerer'}, {r:12,t:'throne'}, {r:2,t:'table'} ],
+    traps:6, secrets:2, reward:300,
+  },
+  {
+    name:'Legacy of the Orc Warlord', sub:'Quest VI',
+    intro:'Mentor speaks: “When Ulag fell, his sword was taken back to Grimhold’s armoury. It is called Orc’s Bane, and it hates greenskins the way fire hates rain. Take it. Then take Gulthor’s head with it.”',
+    objective:{ type:'fetchslay', item:"Orc's Bane", label:"Claim Orc's Bane, then slay Gulthor" },
+    monsters:[ {r:11,t:'orc',n:3}, {r:11,t:'chaos',n:1}, {r:6,t:'orc',n:4},
+               {r:0,t:'goblin',n:4}, {r:3,t:'fimir',n:2}, {r:4,t:'orc',n:2},
+               {r:12,t:'chaos',n:1,name:'Gulthor',boss:true,bp:5}, {r:12,t:'orc',n:3} ],
+    furn:[ {r:11,t:'rack',quest:"Orc's Bane"}, {r:11,t:'table'}, {r:0,t:'tomb'},
+           {r:6,t:'fireplace'}, {r:3,t:'table'}, {r:12,t:'throne'}, {r:7,t:'alchemy'} ],
+    traps:5, secrets:2, reward:300, keepItem:'orcsbane',
+  },
+  {
+    name:'The Stone Hunter', sub:'Quest VII',
+    intro:'Mentor speaks: “Karlen the stone hunter turns living men to statues and stands them along his walls like trophies. The corridors of Grimhold are lined with his work now. Some of those faces I knew. End him.”',
+    objective:{ type:'slay', label:'Slay Karlen the Stone Hunter' },
+    monsters:[ {r:12,t:'sorcerer',n:1,name:'Karlen',boss:true,bp:5}, {r:12,t:'gargoyle',n:1},
+               {r:12,t:'mummy',n:2}, {r:9,t:'skeleton',n:3}, {r:0,t:'zombie',n:3},
+               {r:8,t:'skeleton',n:3}, {r:2,t:'chaos',n:2}, {r:6,t:'zombie',n:4},
+               {r:6,t:'mummy',n:1} ],
+    furn:[ {r:6,t:'sorcerer'}, {r:6,t:'altar'}, {r:9,t:'tomb'}, {r:0,t:'tomb'},
+           {r:8,t:'cage'}, {r:2,t:'table'}, {r:12,t:'altar'}, {r:12,t:'throne'} ],
+    traps:6, secrets:2, reward:350,
+  },
+  {
+    name:'The Fire Mage', sub:'Quest VIII',
+    intro:'Mentor speaks: “Balur has been burning villages from a distance, which is a coward’s way to burn a village. His workshop is the alchemist’s study. Mind the floor — he has been busy with it.”',
+    objective:{ type:'slay', label:'Slay Balur the Fire Mage' },
+    monsters:[ {r:7,t:'sorcerer',n:1,name:'Balur',boss:true,bp:5}, {r:7,t:'chaos',n:2},
+               {r:3,t:'orc',n:3}, {r:6,t:'fimir',n:3}, {r:2,t:'chaos',n:2},
+               {r:8,t:'orc',n:2}, {r:11,t:'goblin',n:4}, {r:12,t:'gargoyle',n:1} ],
+    furn:[ {r:7,t:'alchemy'}, {r:7,t:'fireplace'}, {r:7,t:'bookcase'}, {r:3,t:'table'},
+           {r:6,t:'table'}, {r:11,t:'rack'}, {r:12,t:'throne'} ],
+    traps:8, secrets:2, reward:400,
+  },
+  {
+    name:'Race Against Time', sub:'Quest IX',
+    intro:'Mentor speaks: “The Warlock has begun a working that will seal Grimhold for a hundred years. There is a talisman in the crypt that will break it — but you have until the working completes, and no longer. Thirty turns. Run.”',
+    objective:{ type:'fetch', item:'Talisman of Lore', label:'Take the Talisman and escape before turn 30' },
+    turnLimit:30,
+    monsters:[ {r:9,t:'mummy',n:1}, {r:9,t:'skeleton',n:3}, {r:6,t:'chaos',n:3},
+               {r:4,t:'orc',n:3}, {r:10,t:'zombie',n:2}, {r:0,t:'fimir',n:2},
+               {r:11,t:'gargoyle',n:1} ],
+    furn:[ {r:9,t:'tomb',quest:'Talisman of Lore'}, {r:9,t:'altar'}, {r:6,t:'sorcerer'},
+           {r:4,t:'table'}, {r:10,t:'cage'}, {r:0,t:'tomb'} ],
+    traps:5, secrets:1, reward:400,
+  },
+  {
+    name:'The Lost Wizard', sub:'Quest X',
+    intro:'Mentor speaks: “Sirien went into Grimhold alone, six months ago, to do exactly what you are about to do. She is in the oubliette and she is still alive — I would know if she were not. Bring her out and she will owe you a favour worth having.”',
+    objective:{ type:'rescue', npc:'Sirien the Grey', room:8, label:'Free Sirien and escape by the stair' },
+    monsters:[ {r:8,t:'chaos',n:2}, {r:8,t:'gargoyle',n:1}, {r:7,t:'sorcerer',n:1,name:'Torvin',boss:true},
+               {r:6,t:'chaos',n:3}, {r:3,t:'mummy',n:2}, {r:12,t:'ogre',n:1},
+               {r:9,t:'zombie',n:3}, {r:11,t:'orc',n:3} ],
+    furn:[ {r:8,t:'cage'}, {r:8,t:'table'}, {r:7,t:'alchemy'}, {r:6,t:'altar'},
+           {r:3,t:'fireplace'}, {r:12,t:'throne'}, {r:9,t:'tomb'} ],
+    traps:6, secrets:2, reward:450,
+  },
+  {
+    name:'Bastion of Malgrim', sub:'Quest XI · The Last Door',
+    intro:'Mentor speaks: “Malgrim the Witch Lord sits in the throne of ash and no ordinary steel will touch him. The Spirit Blade lies in the crypt below. Take it up first. Then go and finish what your trial began. I can give you nothing else — the rest is yours.”',
+    objective:{ type:'fetchslay', item:'Spirit Blade', label:'Take the Spirit Blade, then slay the Witch Lord' },
+    monsters:[ {r:9,t:'mummy',n:2}, {r:9,t:'skeleton',n:4}, {r:12,t:'sorcerer',n:1,name:'Malgrim the Witch Lord',boss:true,bp:6,spirit:true},
+               {r:12,t:'chaos',n:3}, {r:12,t:'gargoyle',n:1}, {r:6,t:'chaos',n:3},
+               {r:7,t:'ogre',n:1}, {r:3,t:'mummy',n:2}, {r:11,t:'chaos',n:2}, {r:0,t:'zombie',n:3} ],
+    furn:[ {r:9,t:'tomb',quest:'Spirit Blade'}, {r:9,t:'altar'}, {r:12,t:'throne'},
+           {r:12,t:'altar'}, {r:6,t:'sorcerer'}, {r:7,t:'alchemy'}, {r:3,t:'fireplace'}, {r:11,t:'rack'} ],
+    traps:7, secrets:2, reward:1000, keepItem:'spirit',
+  },
+];
+
+/* -------------------------------------------------------- 2. STATE + RNG */
+
+let G = null;                    // the whole world; plain data, so it saves as JSON
+let TR = null;                   // tile region: -1 rock, 100 corridor, else room id
+const ROCK = -1, CORR = 100;
+
+const idx = (x,y) => y*W + x;
+const inB = (x,y) => x>=0 && y>=0 && x<W && y<H;
+const clamp = (v,a,b) => v<a?a:v>b?b:v;
+const lerp = (a,b,t) => a + (b-a)*t;
+const dist2 = (a,b,c,d) => Math.abs(a-c) + Math.abs(b-d);
+
+// Seeded RNG (mulberry32). Everything that shapes a quest runs through this so
+// a quest is the same board every time you sit down to it.
+function mkRng(seed){
+  let a = seed >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let rnd = Math.random;          // live rolls: genuinely random
+const ri = (n) => Math.floor(rnd()*n);
+const pick = (a) => a[ri(a.length)];
+
+/* -------------------------------------------------- 3. GEOMETRY / THE MAP */
+
+function buildTiles(){
+  TR = new Array(W*H).fill(ROCK);
+  for (const c of CORRIDORS)
+    for (let y=c.y; y<c.y+c.h; y++) for (let x=c.x; x<c.x+c.w; x++) TR[idx(x,y)] = CORR;
+  for (const r of ROOMS)
+    for (let y=r.y; y<r.y+r.h; y++) for (let x=r.x; x<r.x+r.w; x++) TR[idx(x,y)] = r.id;
+}
+buildTiles();
+
+const isFloor = (x,y) => inB(x,y) && TR[idx(x,y)] !== ROCK;
+const isRock  = (x,y) => !inB(x,y) || TR[idx(x,y)] === ROCK;
+const roomAt  = (x,y) => { if (!inB(x,y)) return ROCK; const r = TR[idx(x,y)]; return r===CORR||r===ROCK ? -1 : r; };
+
+function roomTiles(rid){
+  const r = ROOMS[rid], out = [];
+  for (let y=r.y; y<r.y+r.h; y++) for (let x=r.x; x<r.x+r.w; x++) out.push([x,y]);
+  return out;
+}
+
+// Doors live on the edge between two squares; the key is order-independent.
+const dkey = (x1,y1,x2,y2) => {
+  const a = idx(x1,y1), b = idx(x2,y2);
+  return a < b ? a+'_'+b : b+'_'+a;
+};
+const doorAt = (x1,y1,x2,y2) => G && G.q ? G.q.doors[dkey(x1,y1,x2,y2)] : null;
+
+// Can a body step from one square to the neighbouring one? Rooms only connect
+// to corridors through doors; corridors always connect to corridors.
+function linked(x1,y1,x2,y2){
+  if (!isFloor(x1,y1) || !isFloor(x2,y2)) return false;
+  const a = TR[idx(x1,y1)], b = TR[idx(x2,y2)];
+  if (a === b) return true;                          // same room, or both corridor
+  const d = doorAt(x1,y1,x2,y2);
+  return !!(d && d.open);
+}
+// Same, but a closed door still counts as "there is a way through here".
+function linkedIgnoringDoors(x1,y1,x2,y2){
+  if (!isFloor(x1,y1) || !isFloor(x2,y2)) return false;
+  if (TR[idx(x1,y1)] === TR[idx(x2,y2)]) return true;
+  return !!doorAt(x1,y1,x2,y2);
+}
+
+const DIRS = [[0,-1],[1,0],[0,1],[-1,0]];
+const DIRS8 = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
+
+function actorAt(x,y){
+  if (!G || !G.q) return null;
+  for (const a of G.q.actors) if (a.alive && a.x===x && a.y===y) return a;
+  return null;
+}
+function furnAt(x,y){
+  if (!G || !G.q) return null;
+  for (const f of G.q.furn){
+    if (x>=f.x && x<f.x+f.w && y>=f.y && y<f.y+f.h) return f;
+  }
+  return null;
+}
+const blocked = (x,y) => !isFloor(x,y) || !!furnAt(x,y) || !!actorAt(x,y);
+
+// Breadth-first walk out from a square, respecting doors, bodies and furniture.
+// Returns {d:Map(idx->steps), from:Map(idx->idx)} for path reconstruction.
+function walkField(sx, sy, maxSteps, mover){
+  const d = new Map(), from = new Map();
+  d.set(idx(sx,sy), 0);
+  let frontier = [[sx,sy]];
+  while (frontier.length){
+    const next = [];
+    for (const [x,y] of frontier){
+      const cost = d.get(idx(x,y));
+      if (cost >= maxSteps) continue;
+      for (const [dx,dy] of DIRS){
+        const nx = x+dx, ny = y+dy, ni = idx(nx,ny);
+        if (!inB(nx,ny) || d.has(ni)) continue;
+        if (!linked(x,y,nx,ny)) continue;
+        if (furnAt(nx,ny)) continue;
+        const occ = actorAt(nx,ny);
+        // companions can be squeezed past, monsters and the dead cannot
+        if (occ && occ !== mover && !(mover && mover.kind === 'hero' && occ.kind === 'hero')) continue;
+        d.set(ni, cost+1); from.set(ni, idx(x,y));
+        next.push([nx,ny]);
+      }
+    }
+    frontier = next;
+  }
+  return { d, from };
+}
+function tracePath(field, tx, ty){
+  const path = []; let cur = idx(tx,ty);
+  if (!field.d.has(cur)) return null;
+  while (field.from.has(cur)){ path.push([cur%W, (cur/W)|0]); cur = field.from.get(cur); }
+  path.reverse();
+  return path;
+}
+
+// Sight line between two squares. Rock stops it; so does a shut door. Furniture
+// does not — you can see over a table.
+function hasLOS(x0,y0,x1,y1){
+  if (!isFloor(x0,y0) || !isFloor(x1,y1)) return false;
+  let x = x0, y = y0;
+  const dx = Math.abs(x1-x0), dy = Math.abs(y1-y0);
+  const sx = Math.sign(x1-x0), sy = Math.sign(y1-y0);
+  let err = dx - dy, guard = 0;
+  // Bresenham, but forced to take one orthogonal step at a time so a sight line
+  // can never slip diagonally between two wall corners.
+  while ((x !== x1 || y !== y1) && guard++ < 256){
+    const e2 = 2*err;
+    let nx = x, ny = y;
+    if (e2 > -dy && x !== x1){ nx = x + sx; err -= dy; }
+    else if (y !== y1){ ny = y + sy; err += dx; }
+    else { nx = x + sx; err -= dy; }
+    if (!linkedIgnoringDoors(x,y,nx,ny)) return false;
+    const dr = doorAt(x,y,nx,ny);
+    if (dr && !dr.open) return false;
+    x = nx; y = ny;
+  }
+  return true;
+}
+
+/* ------------------------------------------------- campaign + quest setup */
+
+function mkHero(def){
+  return {
+    kind:'hero', id:def.id, name:def.name, title:def.title,
+    bpMax:def.bp, bp:def.bp, mpMax:def.mp, mp:def.mp, baseDef:def.def,
+    weapon:def.weapon, armour:def.armour, gear:{}, items:{ potion:0, holy:0 },
+    elements:def.elements.slice(), toolkit:!!def.toolkit,
+    x:0, y:0, alive:true, facing:1,
+    moveLeft:0, rolled:false, acted:false, done:false,
+    spent:[],           // spells used this quest
+    buffs:{},           // rockskin / veil / courage / swift, values are turn stamps
+    quests:[],          // quest items carried
+  };
+}
+function newCampaign(){
+  return { v:1, gold:300, done:[], heroes: HERO_DEFS.map(mkHero), unlocked:1 };
+}
+
+const heroDef = (h) => HERO_DEFS.find(d => d.id === h.id);
+const weaponOf = (h) => WEAPONS[h.weapon] || WEAPONS.fists;
+function attackDice(h, target){
+  const w = weaponOf(h);
+  let n = w.dice;
+  if (h.quests && h.quests.includes("Orc's Bane")) { /* carried, not wielded */ }
+  if (w.name === "Orc's Bane" && target && (target.mt==='orc'||target.mt==='goblin')) n += 1;
+  if (h.buffs && h.buffs.courage) n += 2;
+  return n;
+}
+function defendDice(h){
+  let n = h.baseDef;
+  if (h.armour && ARMOURS[h.armour]) n += ARMOURS[h.armour].def;
+  for (const g in h.gear) if (h.gear[g] && GEAR[g] && GEAR[g].def) n += GEAR[g].def;
+  if (h.buffs && h.buffs.rockskin) n += 2;
+  return n;
+}
+function moveSlow(h){
+  let s = 0;
+  if (h.armour && ARMOURS[h.armour]) s += ARMOURS[h.armour].slow || 0;
+  return s;
+}
+const heroes = () => G.q.actors.filter(a => a.kind === 'hero');
+const livingHeroes = () => G.q.actors.filter(a => a.kind === 'hero' && a.alive);
+const monstersOf = () => G.q.actors.filter(a => a.kind === 'monster' && a.alive);
+
+function startQuest(qi){
+  const q = QUESTS[qi];
+  const R = mkRng(9001 + qi*7717);
+  const Q = {
+    qi, turn:1, phase:'hero', over:0, actors:[], furn:[], doors:{}, traps:[],
+    seen: new Array(W*H).fill(0), roomSeen: new Array(ROOMS.length).fill(0),
+    searched: new Array(ROOMS.length).fill(0), trapSearched: new Array(ROOMS.length).fill(0),
+    deck: TREASURE_DECK.map((_,i)=>i), deckAt:0,
+    itemsFound:[], collected:0, npcFreed:false, bossDead:false, carrier:null, pot:0,
+    log:[], activeId:null, escaped:false,
+  };
+  // shuffle the treasure deck with the quest seed
+  for (let i=Q.deck.length-1; i>0; i--){ const j = Math.floor(R()*(i+1)); const t=Q.deck[i]; Q.deck[i]=Q.deck[j]; Q.deck[j]=t; }
+
+  // --- doors -------------------------------------------------------------
+  const perRoom = {};
+  for (const [rid,rx,ry,cx,cy] of DOOR_SLOTS){
+    const k = dkey(rx,ry,cx,cy);
+    Q.doors[k] = { rid, rx, ry, cx, cy, open:false, secret:false, found:true, anim:0 };
+    (perRoom[rid] = perRoom[rid] || []).push(k);
+  }
+  // hide a few — but never a room's only way in
+  const hideable = [];
+  for (const rid in perRoom) if (perRoom[rid].length > 1) hideable.push(...perRoom[rid].slice(1));
+  for (let i=0; i<(q.secrets||0) && hideable.length; i++){
+    const k = hideable.splice(Math.floor(R()*hideable.length), 1)[0];
+    Q.doors[k].secret = true; Q.doors[k].found = false;
+  }
+
+  G.q = Q;   // furnAt/actorAt need it live from here on
+
+  // --- furniture ---------------------------------------------------------
+  for (const f of (q.furn||[])){
+    const spot = freeFurnSpot(f.r, FURN[f.t].w, FURN[f.t].h, R);
+    if (!spot) continue;
+    Q.furn.push({ t:f.t, r:f.r, x:spot[0], y:spot[1], w:spot[2], h:spot[3], rot:spot[4],
+                  quest:f.quest || null, taken:false, searched:false });
+  }
+
+  // --- monsters ----------------------------------------------------------
+  let uid = 1;
+  for (const m of (q.monsters||[])){
+    for (let i=0; i<(m.n||1); i++){
+      // a boss stands at the back of his hall, not in the doorway
+      const spot = m.boss ? deepTile(m.r) : freeTile(m.r, R);
+      if (!spot) continue;
+      const def = MONSTERS[m.t];
+      Q.actors.push({
+        kind:'monster', uid:uid++, mt:m.t, name:m.name || def.name,
+        x:spot[0], y:spot[1], alive:true, facing:-1,
+        bpMax:(m.bp||def.bp), bp:(m.bp||def.bp), atk:def.atk, def:def.def, mind:def.mind,
+        mv:def.move, boss:!!m.boss, spirit:!!m.spirit, awake:false, sleep:0, stun:0, bob:R()*6.28,
+      });
+    }
+  }
+
+  // --- the party ---------------------------------------------------------
+  // The barbarian takes the front of the stair and the wizard the back, so the
+  // hero who acts first always has open corridor in front of him.
+  G.camp.heroes.forEach((h, i) => {
+    const spot = STAIRS[STAIRS.length - 1 - i] || STAIRS[0];
+    h.x = spot[0]; h.y = spot[1];
+    h.alive = h.bp > 0; h.bp = h.bpMax; h.mp = h.mpMax;
+    h.moveLeft = 0; h.rolled = false; h.acted = false; h.done = false;
+    h.spent = []; h.buffs = {}; h.quests = []; h.facing = 1; h.kind = 'hero';
+    Q.actors.push(h);
+  });
+
+  // --- the prisoner, if this quest has one -------------------------------
+  if (q.objective.type === 'rescue'){
+    const spot = freeTile(q.objective.room, R);
+    if (spot) Q.actors.push({ kind:'npc', uid:5000, name:q.objective.npc, x:spot[0], y:spot[1],
+      alive:true, facing:1, follow:null, bp:1, bpMax:1, bob:R()*6.28 });
+  }
+
+  // --- traps -------------------------------------------------------------
+  const trapSpots = [];
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    if (!isFloor(x,y) || furnAt(x,y) || actorAt(x,y)) continue;
+    if (STAIRS.some(s => s[0]===x && s[1]===y)) continue;
+    if (Math.abs(x-8) + Math.abs(y-17) < 4) continue;   // not on the doorstep
+    trapSpots.push([x,y]);
+  }
+  const TT = ['pit','spear','block'];
+  for (let i=0; i<(q.traps||0) && trapSpots.length; i++){
+    const [[x,y]] = trapSpots.splice(Math.floor(R()*trapSpots.length), 1);
+    Q.traps.push({ x, y, t:TT[Math.floor(R()*TT.length)], found:false, sprung:false, disarmed:false });
+  }
+
+  // stairs and the corridor around them start lit
+  for (const [x,y] of STAIRS) Q.seen[idx(x,y)] = 1;
+  recomputeVision();
+  Q.activeId = 'barbarian';
+  const first = heroes().find(h => h.alive);
+  if (first) beginHeroActivation(first);
+  return Q;
+}
+
+// A spot inside a room big enough for a piece of furniture, against a wall if
+// we can manage it — that is where furniture wants to live.
+function freeFurnSpot(rid, w, h, R){
+  const r = ROOMS[rid], cands = [];
+  for (const [ww,hh] of [[w,h],[h,w]]){
+    for (let y=r.y; y<=r.y+r.h-hh; y++) for (let x=r.x; x<=r.x+r.w-ww; x++){
+      let ok = true;
+      for (let j=0;j<hh && ok;j++) for (let i=0;i<ww && ok;i++){
+        if (furnAt(x+i,y+j)) ok = false;
+        // keep the squares in front of doors clear
+        for (const k in G.q.doors){ const d = G.q.doors[k]; if (d.rx===x+i && d.ry===y+j) ok = false; }
+      }
+      if (!ok) continue;
+      const wall = (y===r.y || y+hh-1===r.y+r.h-1 || x===r.x || x+ww-1===r.x+r.w-1) ? 1 : 0;
+      cands.push([x,y,ww,hh, ww>w?1:0, wall]);
+    }
+  }
+  if (!cands.length) return null;
+  const walls = cands.filter(c => c[5]);
+  const pool = walls.length ? walls : cands;
+  return pool[Math.floor(R()*pool.length)];
+}
+// The square of a room furthest from the stair — where the thing you came for
+// is waiting, with the whole room between you and it.
+function deepTile(rid){
+  const t = roomTiles(rid).filter(([x,y]) => !furnAt(x,y) && !actorAt(x,y));
+  if (!t.length) return null;
+  let best = t[0], bestD = -1;
+  for (const [x,y] of t){
+    let d = 1e9;
+    for (const [sx,sy] of STAIRS) d = Math.min(d, dist2(x,y,sx,sy));
+    if (d > bestD){ bestD = d; best = [x,y]; }
+  }
+  return best;
+}
+function freeTile(rid, R){
+  const t = roomTiles(rid).filter(([x,y]) => !furnAt(x,y) && !actorAt(x,y));
+  if (!t.length) return null;
+  return t[Math.floor(R()*t.length)];
+}
+
+/* -------------------------------------------------------------- the light */
+// Inside a room you see the whole room — that is how the board works, the lid
+// comes off when the door opens. In a corridor you see as far as your torch
+// throws and no further.
+const TORCH = 7;
+
+function recomputeVision(){
+  const Q = G.q;
+  const vis = new Uint8Array(W*H);
+  for (const h of livingHeroes()){
+    const rid = roomAt(h.x, h.y);
+    if (rid >= 0){
+      Q.roomSeen[rid] = 1;
+      for (const [x,y] of roomTiles(rid)) vis[idx(x,y)] = 1;
+      // and a glance out of any open door
+      for (const k in Q.doors){
+        const d = Q.doors[k];
+        if (d.rid === rid && d.open) vis[idx(d.cx,d.cy)] = 1;
+      }
+    } else {
+      for (let y = Math.max(0,h.y-TORCH); y <= Math.min(H-1,h.y+TORCH); y++)
+        for (let x = Math.max(0,h.x-TORCH); x <= Math.min(W-1,h.x+TORCH); x++){
+          if (!isFloor(x,y)) continue;
+          if (dist2(x,y,h.x,h.y) > TORCH + 2) continue;
+          if (roomAt(x,y) >= 0 && !Q.roomSeen[roomAt(x,y)]) continue;
+          if (hasLOS(h.x,h.y,x,y)) vis[idx(x,y)] = 1;
+        }
+      // a lit room next door still spills its light through an open door
+      for (const k in Q.doors){
+        const d = Q.doors[k];
+        if (d.open && Math.abs(d.cx-h.x) + Math.abs(d.cy-h.y) <= 1) revealRoom(d.rid);
+      }
+    }
+  }
+  for (let i=0;i<W*H;i++) if (vis[i]) Q.seen[i] = 1;
+  Q.vis = vis;
+}
+function revealRoom(rid){
+  if (rid < 0 || G.q.roomSeen[rid]) return;
+  G.q.roomSeen[rid] = 1;
+  for (const [x,y] of roomTiles(rid)) G.q.seen[idx(x,y)] = 1;
+  for (const m of monstersOf()) if (roomAt(m.x,m.y) === rid) m.awake = true;
+}
+const tileVisible = (x,y) => !!(G.q.vis && G.q.vis[idx(x,y)]);
+const tileSeen = (x,y) => !!G.q.seen[idx(x,y)];
+
+/* -------------------------------------------------- 4. THE DUNGEON'S FACE */
+// The floor, the walls and the stairs are baked once into a big offscreen
+// canvas. Everything that moves — light, doors, bodies, dust — is painted over
+// it every frame. One bake per quest keeps a phone comfortable.
+
+function hash2(x, y, s){
+  let h = (x*374761393 + y*668265263 + (s|0)*1442695040888963407) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function mkCan(w, h){
+  if (HEADLESS) return { width:w, height:h, getContext(){ return stubCtx(); } };
+  const c = document.createElement('canvas'); c.width = w; c.height = h; return c;
+}
+function stubCtx(){
+  const noop = () => {};
+  return new Proxy({}, { get(_t,k){
+    if (k==='createLinearGradient'||k==='createRadialGradient') return () => ({ addColorStop:noop });
+    if (k==='measureText') return () => ({ width:8 });
+    if (k==='getImageData') return (a,b,w,h) => ({ data:new Uint8ClampedArray(w*h*4), width:w, height:h });
+    if (k==='createImageData') return (w,h) => ({ data:new Uint8ClampedArray(w*h*4), width:w, height:h });
+    return noop;
+  }, set(){ return true; } });
+}
+
+let BAKE = null, TORCHES = [];
+
+const FACE = 18;                                   // how tall a south-facing wall reads
+
+function bakeDungeon(seed){
+  const can = mkCan(W*TS, H*TS);
+  const g = can.getContext('2d');
+  g.fillStyle = '#08070a'; g.fillRect(0,0,W*TS,H*TS);
+
+  // ---- rock mass -------------------------------------------------------
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    if (!isRock(x,y)) continue;
+    if (!nearFloor(x,y)) { g.fillStyle = '#0b0a0c'; g.fillRect(x*TS,y*TS,TS,TS); continue; }
+    const southOpen = isFloor(x, y+1);
+    const topH = southOpen ? TS - FACE : TS;
+    rockTop(g, x*TS, y*TS, TS, topH, seed + x*31 + y*17);
+    if (southOpen) wallFace(g, x*TS, y*TS + topH, TS, FACE, seed + x*7 + y*13);
+  }
+
+  // ---- floors ----------------------------------------------------------
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    if (!isFloor(x,y)) continue;
+    flagstone(g, x, y, seed);
+  }
+
+  // ---- contact shadow where stone meets floor --------------------------
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    if (!isFloor(x,y)) continue;
+    const px = x*TS, py = y*TS;
+    if (isRock(x,y-1)) shadeEdge(g, px, py, TS, 22, 'v');
+    if (isRock(x,y+1)) shadeEdge(g, px, py+TS, TS, -16, 'v');
+    if (isRock(x-1,y)) shadeEdge(g, px, py, 18, TS, 'h');
+    if (isRock(x+1,y)) shadeEdge(g, px+TS, py, -14, TS, 'h');
+  }
+
+  // ---- the stair down --------------------------------------------------
+  drawStairsArt(g, seed);
+
+  // ---- grime, cracks, old blood ---------------------------------------
+  for (let i=0;i<180;i++){
+    const x = hash2(i,1,seed)*W, y = hash2(i,2,seed)*H;
+    if (!isFloor(Math.floor(x), Math.floor(y))) continue;
+    const r = 12 + hash2(i,3,seed)*46;
+    const a = .04 + hash2(i,4,seed)*.07;
+    const dark = hash2(i,5,seed) > .78;
+    const gr = g.createRadialGradient(x*TS,y*TS,0,x*TS,y*TS,r);
+    gr.addColorStop(0, dark ? `rgba(48,14,10,${a*1.5})` : `rgba(0,0,0,${a})`);
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(x*TS,y*TS,r,0,6.284); g.fill();
+  }
+
+  BAKE = can;
+  bakeTorches(seed);
+  return can;
+}
+function nearFloor(x,y){
+  for (const [dx,dy] of DIRS8) if (isFloor(x+dx,y+dy)) return true;
+  return false;
+}
+
+function rockTop(g, px, py, w, h, s){
+  const v = hash2(px,py,s);
+  const base = 26 + v*10;
+  g.fillStyle = `rgb(${base+6},${base+2},${base-2})`;
+  g.fillRect(px,py,w,h);
+  // masonry: two or three courses of rough block
+  const rows = 2 + Math.floor(hash2(px,py,s+9)*2);
+  const rh = h/rows;
+  for (let r=0;r<rows;r++){
+    const off = hash2(px,py+r,s+3)*w*0.5;
+    const cols = 2;
+    for (let c=0;c<cols;c++){
+      const bx = px + ((c*w/cols + off) % w);
+      const bw = w/cols - 3;
+      const t = hash2(bx,py+r,s+5);
+      g.fillStyle = `rgba(${t>.5?70:14},${t>.5?64:12},${t>.5?58:12},${.16+t*.14})`;
+      g.fillRect(bx+1, py + r*rh + 1, Math.min(bw, px+w-bx-1), rh-2);
+    }
+    g.fillStyle = 'rgba(0,0,0,.34)';
+    g.fillRect(px, py + r*rh, w, 1.4);
+  }
+  // speckle
+  for (let i=0;i<10;i++){
+    const a = hash2(px+i,py,s+11), b = hash2(px,py+i,s+13);
+    g.fillStyle = `rgba(${a>.5?110:0},${a>.5?102:0},${a>.5?92:0},${.05+b*.09})`;
+    g.fillRect(px + a*w, py + b*h, 1+b*2, 1+a*2);
+  }
+}
+function wallFace(g, px, py, w, h, s){
+  const grd = g.createLinearGradient(0,py,0,py+h);
+  grd.addColorStop(0, '#3a342c');
+  grd.addColorStop(.45,'#241f1a');
+  grd.addColorStop(1, '#100d0b');
+  g.fillStyle = grd; g.fillRect(px,py,w,h);
+  g.fillStyle = 'rgba(150,138,116,.20)'; g.fillRect(px,py,w,1.6);     // lit lip
+  for (let i=0;i<5;i++){
+    const a = hash2(px+i,py,s+21);
+    g.fillStyle = `rgba(0,0,0,${.10+a*.18})`;
+    g.fillRect(px + a*w, py+2, 1.5, h-3);
+  }
+  g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(px,py+h-2,w,2);
+}
+
+function flagstone(g, x, y, s){
+  const px = x*TS, py = y*TS, m = 2.5;
+  const room = roomAt(x,y) >= 0;
+  const v = hash2(x,y,s), v2 = hash2(x,y,s+101);
+  const base = room ? 46 + v*14 : 38 + v*12;
+  const r = base + (room ? 6 : 2), gg = base - 1, b = base - (room ? 9 : 5);
+  g.fillStyle = `rgb(${r|0},${gg|0},${b|0})`;
+  rr(g, px+m, py+m, TS-m*2, TS-m*2, 3); g.fill();
+  // bevel
+  g.strokeStyle = `rgba(255,236,200,${.045+v2*.05})`; g.lineWidth = 1.4;
+  g.beginPath(); g.moveTo(px+m+2, py+TS-m-1); g.lineTo(px+m+2, py+m+2); g.lineTo(px+TS-m-2, py+m+2); g.stroke();
+  g.strokeStyle = 'rgba(0,0,0,.34)';
+  g.beginPath(); g.moveTo(px+TS-m-1, py+m+2); g.lineTo(px+TS-m-1, py+TS-m-1); g.lineTo(px+m+2, py+TS-m-1); g.stroke();
+  // grain
+  for (let i=0;i<14;i++){
+    const a = hash2(px+i,py,s+7), c = hash2(px,py+i,s+8);
+    g.fillStyle = `rgba(${a>.5?255:0},${a>.5?240:0},${a>.5?214:0},${.018+c*.032})`;
+    g.fillRect(px+6 + a*(TS-14), py+6 + c*(TS-14), 1+c*3, 1+a*2);
+  }
+  // the odd crack
+  if (v2 > .72){
+    g.strokeStyle = 'rgba(0,0,0,.30)'; g.lineWidth = 1.1;
+    g.beginPath();
+    let cx = px + 8 + v*(TS-18), cy = py + 6;
+    g.moveTo(cx, cy);
+    for (let i=0;i<4;i++){ cx += (hash2(x+i,y,s+3)-.5)*13; cy += (TS-12)/4; g.lineTo(cx, cy); }
+    g.stroke();
+  }
+  // pebbles and bone chips
+  if (hash2(x,y,s+55) > .84){
+    for (let i=0;i<3;i++){
+      const a = hash2(x+i,y,s+57), c = hash2(x,y+i,s+59);
+      g.fillStyle = `rgba(190,178,152,${.12+a*.16})`;
+      g.beginPath(); g.ellipse(px+10+a*(TS-20), py+10+c*(TS-20), 1.6+a*2, 1.2+c*1.4, a*3, 0, 6.284); g.fill();
+    }
+  }
+}
+function shadeEdge(g, px, py, w, h, dir){
+  let grd;
+  if (dir === 'v'){
+    grd = g.createLinearGradient(0, py, 0, py + h);
+    grd.addColorStop(0,'rgba(0,0,0,.52)'); grd.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.fillRect(px, Math.min(py, py+h), w, Math.abs(h));
+  } else {
+    grd = g.createLinearGradient(px, 0, px + w, 0);
+    grd.addColorStop(0,'rgba(0,0,0,.44)'); grd.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle = grd; g.fillRect(Math.min(px, px+w), py, Math.abs(w), h);
+  }
+}
+function rr(g,x,y,w,h,r){
+  g.beginPath();
+  g.moveTo(x+r,y); g.lineTo(x+w-r,y); g.quadraticCurveTo(x+w,y,x+w,y+r);
+  g.lineTo(x+w,y+h-r); g.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  g.lineTo(x+r,y+h); g.quadraticCurveTo(x,y+h,x,y+h-r);
+  g.lineTo(x,y+r); g.quadraticCurveTo(x,y,x+r,y);
+  g.closePath();
+}
+
+function drawStairsArt(g, s){
+  const xs = STAIRS.map(p => p[0]), ys = STAIRS.map(p => p[1]);
+  const x0 = Math.min(...xs)*TS, y0 = Math.min(...ys)*TS;
+  const wpx = TS, hpx = (Math.max(...ys) - Math.min(...ys) + 1)*TS;
+  const grd = g.createLinearGradient(0, y0, 0, y0+hpx);
+  grd.addColorStop(0,'#0a0908'); grd.addColorStop(1,'#3a332a');
+  g.fillStyle = grd; g.fillRect(x0, y0, wpx, hpx);
+  const steps = 9;
+  for (let i=0;i<steps;i++){
+    const t = i/steps, yy = y0 + t*hpx, hh = hpx/steps;
+    const l = 20 + t*36;
+    g.fillStyle = `rgb(${l+8},${l+4},${l-2})`;
+    g.fillRect(x0+2, yy, wpx-4, hh-2);
+    g.fillStyle = 'rgba(0,0,0,.55)';
+    g.fillRect(x0+2, yy+hh-3, wpx-4, 3);
+    g.fillStyle = `rgba(255,230,190,${.05 + t*.06})`;
+    g.fillRect(x0+2, yy, wpx-4, 1.2);
+  }
+  g.strokeStyle = 'rgba(0,0,0,.6)'; g.lineWidth = 3;
+  g.strokeRect(x0+1.5, y0+1.5, wpx-3, hpx-3);
+}
+
+// Sconces: one or two per room on a wall, and a scattering down the corridors.
+function bakeTorches(seed){
+  TORCHES = [];
+  const add = (x,y,dx,dy) => TORCHES.push({ x:x+.5+dx*.42, y:y+.5+dy*.42, ph:hash2(x,y,seed)*6.28 });
+  for (const r of ROOMS){
+    let n = r.w*r.h > 20 ? 3 : 2;
+    for (let i=0;i<n;i++){
+      const t = hash2(r.id, i, seed);
+      const side = Math.floor(hash2(r.id, i+40, seed)*4);
+      let x, y, dx=0, dy=0;
+      if (side===0){ x = r.x + Math.floor(t*r.w); y = r.y;          dy = -1; }
+      else if (side===1){ x = r.x + r.w-1;        y = r.y + Math.floor(t*r.h); dx = 1; }
+      else if (side===2){ x = r.x + Math.floor(t*r.w); y = r.y+r.h-1; dy = 1; }
+      else { x = r.x; y = r.y + Math.floor(t*r.h); dx = -1; }
+      if (isRock(x+dx, y+dy)) add(x,y,dx,dy);
+    }
+  }
+  for (const c of CORRIDORS){
+    const len = Math.max(c.w, c.h), horiz = c.w > c.h;
+    for (let i=3; i<len; i+=6){
+      const x = horiz ? c.x+i : c.x, y = horiz ? c.y : c.y+i;
+      if (!isFloor(x,y)) continue;
+      if (horiz){ if (isRock(x,y-1)) add(x,y,0,-1); else if (isRock(x,y+1)) add(x,y,0,1); }
+      else { if (isRock(x-1,y)) add(x,y,-1,0); else if (isRock(x+1,y)) add(x,y,1,0); }
+    }
+  }
+  if (!BAKE || HEADLESS) return;
+  const g = BAKE.getContext('2d');
+  for (const t of TORCHES){
+    const px = t.x*TS, py = t.y*TS;
+    g.fillStyle = '#1a1512';
+    g.beginPath(); g.ellipse(px, py+4, 8, 5, 0, 0, 6.284); g.fill();
+    g.fillStyle = '#4a4038';
+    g.fillRect(px-2.5, py-2, 5, 12);
+    g.fillStyle = '#2a231d';
+    g.beginPath(); g.moveTo(px-7, py-2); g.lineTo(px+7, py-2); g.lineTo(px+4, py+5); g.lineTo(px-4, py+5); g.closePath(); g.fill();
+    g.fillStyle = 'rgba(255,210,140,.18)';
+    g.beginPath(); g.ellipse(px, py-4, 6, 4, 0, 0, 6.284); g.fill();
+  }
+}
+
+/* ----------------------------------------------------- 5. BODIES AND GEAR */
+// Every figure is drawn from paths, in local coordinates: origin at the centre
+// of the square, feet around +0.34, head around −0.30. Silhouette first — on a
+// phone you read the shape long before you read the detail.
+
+function shadow(g, u, w){
+  g.fillStyle = 'rgba(0,0,0,.42)';
+  g.beginPath(); g.ellipse(0, u*.36, u*(w||.30), u*.11, 0, 0, 6.284); g.fill();
+}
+function limb(g, x1,y1,x2,y2, w, col){
+  g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(x1,y1); g.lineTo(x2,y2); g.stroke();
+}
+function headBall(g, u, y, r, skin, shade){
+  g.fillStyle = skin;
+  g.beginPath(); g.arc(0, y, r, 0, 6.284); g.fill();
+  g.fillStyle = shade || 'rgba(0,0,0,.20)';
+  g.beginPath(); g.arc(r*.34, y+r*.18, r*.82, -0.5, 2.1); g.fill();
+}
+function torso(g, u, topW, botW, top, bot, col, col2){
+  const grd = g.createLinearGradient(0, top, 0, bot);
+  grd.addColorStop(0, col); grd.addColorStop(1, col2 || col);
+  g.fillStyle = grd;
+  g.beginPath();
+  g.moveTo(-topW, top); g.lineTo(topW, top);
+  g.quadraticCurveTo(botW*1.15, (top+bot)/2, botW, bot);
+  g.lineTo(-botW, bot);
+  g.quadraticCurveTo(-botW*1.15, (top+bot)/2, -topW, top);
+  g.closePath(); g.fill();
+}
+function cloak(g, u, col, w){
+  g.fillStyle = col;
+  g.beginPath();
+  g.moveTo(-u*.20, -u*.16);
+  g.quadraticCurveTo(-u*(w||.34), u*.10, -u*(w||.30)*.92, u*.34);
+  g.lineTo(u*(w||.30)*.92, u*.34);
+  g.quadraticCurveTo(u*(w||.34), u*.10, u*.20, -u*.16);
+  g.closePath(); g.fill();
+}
+
+/* ------------------------------------------------------------- the heroes */
+
+function drawBarbarian(g, u, t){
+  const d = HERO_DEFS[0];
+  shadow(g, u, .32);
+  cloak(g, u, '#5c2a18', .33);
+  limb(g, -u*.10, u*.12, -u*.12, u*.33, u*.10, '#6b4a30');
+  limb(g,  u*.10, u*.12,  u*.12, u*.33, u*.10, '#6b4a30');
+  // greatsword, held over the shoulder
+  g.save(); g.rotate(-.42);
+  g.fillStyle = '#6b6255'; g.fillRect(u*.20, -u*.60, u*.055, u*.62);
+  g.fillStyle = '#cfd4d8';
+  g.beginPath(); g.moveTo(u*.20, -u*.58); g.lineTo(u*.275, -u*.58);
+  g.lineTo(u*.275, -u*.10); g.lineTo(u*.2375, -u*.03); g.lineTo(u*.20, -u*.10); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.4)'; g.fillRect(u*.205, -u*.56, u*.018, u*.44);
+  g.fillStyle = d.trim; g.fillRect(u*.145, -u*.09, u*.185, u*.045);
+  g.restore();
+  torso(g, u, u*.20, u*.155, -u*.18, u*.16, '#8a4324', '#5e2c17');
+  g.fillStyle = d.skin;                                          // bare arms
+  g.beginPath(); g.ellipse(-u*.21, -u*.02, u*.055, u*.13, .3, 0, 6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.21, -u*.02, u*.055, u*.13, -.3, 0, 6.284); g.fill();
+  g.fillStyle = d.trim; g.fillRect(-u*.20, u*.09, u*.40, u*.05);  // belt
+  headBall(g, u, -u*.30, u*.145, d.skin);
+  g.fillStyle = d.hair;                                           // mane
+  g.beginPath(); g.arc(0, -u*.31, u*.155, Math.PI*1.06, Math.PI*2.0); g.fill();
+  g.fillStyle = '#e8dfcc';                                        // horned helm band
+  g.beginPath(); g.moveTo(-u*.15,-u*.33); g.quadraticCurveTo(-u*.26,-u*.45,-u*.20,-u*.50);
+  g.quadraticCurveTo(-u*.11,-u*.42,-u*.09,-u*.35); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(u*.15,-u*.33); g.quadraticCurveTo(u*.26,-u*.45,u*.20,-u*.50);
+  g.quadraticCurveTo(u*.11,-u*.42,u*.09,-u*.35); g.closePath(); g.fill();
+  g.fillStyle = '#6b5a3c'; g.fillRect(-u*.155, -u*.365, u*.31, u*.055);
+}
+
+function drawDwarf(g, u, t){
+  const d = HERO_DEFS[1];
+  shadow(g, u, .30);
+  limb(g, -u*.09, u*.16, -u*.10, u*.33, u*.095, '#4a4038');
+  limb(g,  u*.09, u*.16,  u*.10, u*.33, u*.095, '#4a4038');
+  // axe
+  g.save(); g.translate(u*.24, -u*.06); g.rotate(.12);
+  g.fillStyle = '#6b4a2c'; g.fillRect(-u*.022, -u*.20, u*.045, u*.46);
+  g.fillStyle = '#b9c0c6';
+  g.beginPath(); g.moveTo(u*.01,-u*.22); g.quadraticCurveTo(u*.20,-u*.16,u*.16,u*.01);
+  g.quadraticCurveTo(u*.10,-u*.04,u*.01,-u*.03); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.35)';
+  g.beginPath(); g.moveTo(u*.03,-u*.20); g.quadraticCurveTo(u*.16,-u*.15,u*.13,-u*.05);
+  g.lineTo(u*.06,-u*.09); g.closePath(); g.fill();
+  g.restore();
+  torso(g, u, u*.21, u*.19, -u*.14, u*.18, d.cloth, '#2b3f52');
+  g.fillStyle = '#8a8578';                                        // chain skirt
+  for (let i=0;i<3;i++) g.fillRect(-u*.19, u*.06 + i*u*.045, u*.38, u*.028);
+  headBall(g, u, -u*.26, u*.135, d.skin);
+  g.fillStyle = d.hair;                                           // the beard
+  g.beginPath(); g.moveTo(-u*.14,-u*.26); g.quadraticCurveTo(-u*.17, u*.02, 0, u*.09);
+  g.quadraticCurveTo(u*.17, u*.02, u*.14,-u*.26); g.closePath(); g.fill();
+  g.fillStyle = d.skin;
+  g.beginPath(); g.ellipse(0,-u*.285, u*.10, u*.075, 0, 0, 6.284); g.fill();
+  g.fillStyle = '#8f9298';                                        // iron helm
+  g.beginPath(); g.arc(0,-u*.30, u*.155, Math.PI, 0); g.fill();
+  g.fillRect(-u*.155,-u*.31, u*.31, u*.05);
+  g.fillStyle = '#c8ccd2'; g.fillRect(-u*.02,-u*.46, u*.04, u*.16);
+}
+
+function drawElf(g, u, t){
+  const d = HERO_DEFS[2];
+  shadow(g, u, .27);
+  cloak(g, u, '#1f4a30', .30);
+  limb(g, -u*.08, u*.14, -u*.09, u*.33, u*.075, '#3f5a44');
+  limb(g,  u*.08, u*.14,  u*.09, u*.33, u*.075, '#3f5a44');
+  g.save(); g.rotate(.22);                                        // slim blade
+  g.fillStyle = '#dfe6ea'; g.fillRect(u*.21, -u*.40, u*.035, u*.44);
+  g.fillStyle = d.trim; g.fillRect(u*.175, u*.02, u*.105, u*.035);
+  g.fillStyle = '#4a3b28'; g.fillRect(u*.205, u*.05, u*.045, u*.10);
+  g.restore();
+  torso(g, u, u*.165, u*.135, -u*.17, u*.15, d.cloth, '#1d4a2d');
+  g.fillStyle = d.trim; g.globalAlpha = .8;                       // leaf brooch
+  g.beginPath(); g.ellipse(0,-u*.10, u*.035, u*.055, 0, 0, 6.284); g.fill();
+  g.globalAlpha = 1;
+  g.fillStyle = d.skin;
+  g.beginPath(); g.ellipse(-u*.175,-u*.03, u*.045, u*.10, .25, 0, 6.284); g.fill();
+  headBall(g, u, -u*.29, u*.13, d.skin);
+  g.fillStyle = d.skin;                                           // pointed ears
+  g.beginPath(); g.moveTo(-u*.12,-u*.31); g.lineTo(-u*.19,-u*.40); g.lineTo(-u*.10,-u*.27); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo(u*.12,-u*.31); g.lineTo(u*.19,-u*.40); g.lineTo(u*.10,-u*.27); g.closePath(); g.fill();
+  g.fillStyle = d.hair;
+  g.beginPath(); g.arc(0,-u*.30, u*.14, Math.PI*1.02, Math.PI*2.02); g.fill();
+  g.beginPath(); g.moveTo(-u*.14,-u*.30); g.quadraticCurveTo(-u*.17,-u*.10,-u*.10,-u*.06);
+  g.lineTo(-u*.07,-u*.24); g.closePath(); g.fill();
+}
+
+function drawWizard(g, u, t){
+  const d = HERO_DEFS[3];
+  shadow(g, u, .28);
+  cloak(g, u, '#2f2b48', .32);
+  // staff with a lit crystal
+  g.fillStyle = '#6b5330'; g.fillRect(u*.215, -u*.44, u*.04, u*.78);
+  const glow = .6 + Math.sin(t*.004)*.4;
+  g.fillStyle = `rgba(154,134,224,${.28*glow})`;
+  g.beginPath(); g.arc(u*.235, -u*.47, u*.13, 0, 6.284); g.fill();
+  g.fillStyle = d.trim;
+  g.beginPath(); g.moveTo(u*.235,-u*.56); g.lineTo(u*.30,-u*.47); g.lineTo(u*.235,-u*.38);
+  g.lineTo(u*.17,-u*.47); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.55)';
+  g.beginPath(); g.arc(u*.215,-u*.49, u*.022, 0, 6.284); g.fill();
+  torso(g, u, u*.145, u*.24, -u*.19, u*.34, d.cloth, '#2a2544');   // long robe
+  g.fillStyle = 'rgba(0,0,0,.28)';
+  g.beginPath(); g.moveTo(-u*.05,-u*.19); g.lineTo(u*.05,-u*.19); g.lineTo(u*.09,u*.34); g.lineTo(-u*.09,u*.34); g.closePath(); g.fill();
+  g.fillStyle = d.trim;
+  g.fillRect(-u*.16, u*.30, u*.32, u*.035);
+  headBall(g, u, -u*.28, u*.12, d.skin);
+  g.fillStyle = '#d8d2c6';                                          // beard
+  g.beginPath(); g.moveTo(-u*.09,-u*.25); g.quadraticCurveTo(-u*.06, u*.00, 0, u*.06);
+  g.quadraticCurveTo(u*.06, u*.00, u*.09,-u*.25); g.closePath(); g.fill();
+  g.fillStyle = d.cloth;                                            // pointed hat
+  g.beginPath(); g.moveTo(-u*.19,-u*.34); g.lineTo(u*.19,-u*.34);
+  g.quadraticCurveTo(u*.06,-u*.44, u*.015,-u*.62);
+  g.quadraticCurveTo(-u*.10,-u*.46,-u*.19,-u*.34); g.closePath(); g.fill();
+  g.fillStyle = d.trim; g.globalAlpha = .55;
+  g.beginPath(); g.moveTo(-u*.19,-u*.34); g.lineTo(u*.19,-u*.34); g.lineTo(u*.16,-u*.38); g.lineTo(-u*.16,-u*.38); g.closePath(); g.fill();
+  g.globalAlpha = 1;
+}
+
+const HERO_ART = { barbarian:drawBarbarian, dwarf:drawDwarf, elf:drawElf, wizard:drawWizard };
+
+/* ------------------------------------------------------------ the enemies */
+
+function drawGoblin(g, u, m, t){
+  const d = MONSTERS.goblin;
+  shadow(g, u, .24);
+  limb(g, -u*.07, u*.12, -u*.09, u*.30, u*.07, d.col2);
+  limb(g,  u*.07, u*.12,  u*.09, u*.30, u*.07, d.col2);
+  g.save(); g.rotate(-.3);                                     // jagged knife
+  g.fillStyle = '#9aa2a8';
+  g.beginPath(); g.moveTo(u*.20,-u*.30); g.lineTo(u*.26,-u*.24); g.lineTo(u*.235,-u*.02);
+  g.lineTo(u*.19,-u*.03); g.closePath(); g.fill();
+  g.fillStyle = '#3a2c1e'; g.fillRect(u*.19, -u*.02, u*.06, u*.10);
+  g.restore();
+  torso(g, u, u*.15, u*.13, -u*.13, u*.14, d.col, d.col2);
+  g.fillStyle = '#4a3a24'; g.fillRect(-u*.15, u*.02, u*.30, u*.05);
+  headBall(g, u, -u*.24, u*.125, d.col);
+  g.fillStyle = d.col;                                          // big ears
+  g.beginPath(); g.moveTo(-u*.11,-u*.28); g.lineTo(-u*.25,-u*.36); g.lineTo(-u*.10,-u*.18); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo( u*.11,-u*.28); g.lineTo( u*.25,-u*.36); g.lineTo( u*.10,-u*.18); g.closePath(); g.fill();
+  eyes(g, u, -u*.26, u*.045, '#ffd24a');
+  g.fillStyle = '#f0ead8';                                      // tusk
+  g.beginPath(); g.moveTo(-u*.03,-u*.17); g.lineTo(u*.005,-u*.12); g.lineTo(u*.03,-u*.17); g.closePath(); g.fill();
+}
+function drawOrc(g, u, m, t){
+  const d = MONSTERS.orc;
+  shadow(g, u, .30);
+  limb(g, -u*.10, u*.14, -u*.12, u*.32, u*.095, d.col2);
+  limb(g,  u*.10, u*.14,  u*.12, u*.32, u*.095, d.col2);
+  g.save(); g.rotate(.18);                                      // cleaver
+  g.fillStyle = '#4a3a26'; g.fillRect(u*.21,-u*.10, u*.045, u*.34);
+  g.fillStyle = '#a8aeb4';
+  g.beginPath(); g.moveTo(u*.185,-u*.34); g.lineTo(u*.32,-u*.30); g.lineTo(u*.30,-u*.06);
+  g.lineTo(u*.20,-u*.08); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(u*.20,-u*.32, u*.03, u*.24);
+  g.restore();
+  torso(g, u, u*.22, u*.17, -u*.15, u*.16, d.col, d.col2);
+  g.fillStyle = '#5e4a2e';                                      // strapping
+  g.save(); g.rotate(-.4); g.fillRect(-u*.24,-u*.03, u*.48, u*.06); g.restore();
+  g.fillStyle = '#77664a';
+  g.beginPath(); g.ellipse(-u*.20,-u*.10, u*.075, u*.055, -.4, 0, 6.284); g.fill();
+  headBall(g, u, -u*.27, u*.15, d.col);
+  g.fillStyle = d.col2;
+  g.beginPath(); g.arc(0,-u*.30, u*.15, Math.PI*1.05, Math.PI*1.95); g.fill();
+  eyes(g, u, -u*.28, u*.05, '#ff8a3a');
+  g.fillStyle = '#efe6cc';                                      // under-tusks
+  g.beginPath(); g.moveTo(-u*.06,-u*.20); g.lineTo(-u*.035,-u*.12); g.lineTo(-u*.01,-u*.20); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo( u*.06,-u*.20); g.lineTo( u*.035,-u*.12); g.lineTo( u*.01,-u*.20); g.closePath(); g.fill();
+}
+function drawFimir(g, u, m, t){
+  const d = MONSTERS.fimir;
+  shadow(g, u, .32);
+  g.fillStyle = d.col2;                                          // tail
+  g.beginPath(); g.moveTo(-u*.10, u*.24);
+  g.quadraticCurveTo(-u*.36, u*.30, -u*.30, u*.06);
+  g.quadraticCurveTo(-u*.26, u*.22, -u*.06, u*.30); g.closePath(); g.fill();
+  limb(g, -u*.09, u*.16, -u*.11, u*.32, u*.09, d.col2);
+  limb(g,  u*.09, u*.16,  u*.11, u*.32, u*.09, d.col2);
+  g.save(); g.rotate(.2);                                        // mace
+  g.fillStyle = '#4a4038'; g.fillRect(u*.22,-u*.14, u*.04, u*.40);
+  g.fillStyle = '#7f8890';
+  g.beginPath(); g.arc(u*.24,-u*.20, u*.085, 0, 6.284); g.fill();
+  g.fillStyle = '#5a6168';
+  for (let i=0;i<5;i++){ const a = i/5*6.284; g.beginPath();
+    g.moveTo(u*.24+Math.cos(a)*u*.07, -u*.20+Math.sin(a)*u*.07);
+    g.lineTo(u*.24+Math.cos(a)*u*.13, -u*.20+Math.sin(a)*u*.13);
+    g.lineTo(u*.24+Math.cos(a+.5)*u*.07, -u*.20+Math.sin(a+.5)*u*.07); g.closePath(); g.fill(); }
+  g.restore();
+  torso(g, u, u*.20, u*.19, -u*.16, u*.18, d.col, d.col2);
+  g.fillStyle = 'rgba(255,255,255,.07)';
+  for (let i=0;i<4;i++) g.fillRect(-u*.18, -u*.12 + i*u*.07, u*.36, u*.022);
+  headBall(g, u, -u*.30, u*.155, d.col);
+  g.fillStyle = d.col2;                                          // crest
+  g.beginPath(); g.moveTo(0,-u*.46); g.lineTo(u*.06,-u*.30); g.lineTo(-u*.06,-u*.30); g.closePath(); g.fill();
+  g.fillStyle = '#f5e04a';                                       // the one eye
+  g.beginPath(); g.ellipse(0,-u*.30, u*.062, u*.05, 0, 0, 6.284); g.fill();
+  g.fillStyle = '#1a1206';
+  g.beginPath(); g.ellipse(0,-u*.30, u*.018, u*.042, 0, 0, 6.284); g.fill();
+}
+function drawSkeleton(g, u, m, t){
+  const d = MONSTERS.skeleton;
+  shadow(g, u, .24);
+  g.strokeStyle = d.col; g.lineWidth = u*.055; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(-u*.06, u*.10); g.lineTo(-u*.10, u*.32); g.stroke();
+  g.beginPath(); g.moveTo( u*.06, u*.10); g.lineTo( u*.10, u*.32); g.stroke();
+  g.save(); g.rotate(-.15);                                      // rusted sword
+  g.fillStyle = '#8a8578'; g.fillRect(u*.21,-u*.34, u*.035, u*.40);
+  g.fillStyle = '#5a4a34'; g.fillRect(u*.175, u*.04, u*.10, u*.03);
+  g.restore();
+  g.fillStyle = d.col;                                           // ribcage
+  g.beginPath(); g.moveTo(-u*.13,-u*.14); g.lineTo(u*.13,-u*.14);
+  g.quadraticCurveTo(u*.10, u*.10, 0, u*.14);
+  g.quadraticCurveTo(-u*.10, u*.10, -u*.13,-u*.14); g.closePath(); g.fill();
+  g.fillStyle = d.col2;
+  for (let i=0;i<3;i++){ g.fillRect(-u*.11, -u*.09 + i*u*.055, u*.22, u*.02); }
+  g.fillStyle = 'rgba(0,0,0,.5)'; g.fillRect(-u*.012,-u*.14, u*.024, u*.26);
+  headBall(g, u, -u*.27, u*.125, d.col, 'rgba(0,0,0,.10)');
+  g.fillStyle = '#141210';                                       // sockets
+  g.beginPath(); g.ellipse(-u*.048,-u*.285, u*.036, u*.042, 0,0,6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.048,-u*.285, u*.036, u*.042, 0,0,6.284); g.fill();
+  g.fillStyle = '#ff5a3a';
+  g.beginPath(); g.arc(-u*.048,-u*.285, u*.015, 0, 6.284); g.fill();
+  g.beginPath(); g.arc( u*.048,-u*.285, u*.015, 0, 6.284); g.fill();
+  g.fillStyle = '#1a1614';
+  for (let i=0;i<4;i++) g.fillRect(-u*.055 + i*u*.03, -u*.20, u*.016, u*.035);
+}
+function drawZombie(g, u, m, t){
+  const d = MONSTERS.zombie;
+  shadow(g, u, .27);
+  const sway = Math.sin(t*.0016 + (m.bob||0))*u*.03;
+  g.save(); g.rotate(sway*.12);
+  limb(g, -u*.08, u*.14, -u*.11, u*.32, u*.085, d.col2);
+  limb(g,  u*.08, u*.14,  u*.10, u*.32, u*.085, d.col2);
+  torso(g, u, u*.18, u*.155, -u*.14, u*.16, d.col, d.col2);
+  g.fillStyle = 'rgba(30,20,14,.55)';                            // torn flesh
+  g.beginPath(); g.ellipse(-u*.06,-u*.02, u*.05, u*.07, .4, 0, 6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.07, u*.06, u*.04, u*.05, -.2, 0, 6.284); g.fill();
+  limb(g, -u*.15,-u*.08, -u*.28,-u*.14, u*.075, d.col);          // arms out front
+  limb(g,  u*.15,-u*.08,  u*.28,-u*.10, u*.075, d.col);
+  headBall(g, u, -u*.26, u*.13, d.col);
+  g.save(); g.rotate(.18);
+  g.fillStyle = '#2a1c14';
+  g.beginPath(); g.ellipse(-u*.05,-u*.27, u*.03, u*.024, 0,0,6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.05,-u*.27, u*.03, u*.024, 0,0,6.284); g.fill();
+  g.fillStyle = '#3a2a1e';
+  g.beginPath(); g.ellipse(0,-u*.19, u*.05, u*.035, 0,0,6.284); g.fill();
+  g.restore();
+  g.restore();
+}
+function drawMummy(g, u, m, t){
+  const d = MONSTERS.mummy;
+  shadow(g, u, .30);
+  limb(g, -u*.09, u*.14, -u*.11, u*.32, u*.095, d.col2);
+  limb(g,  u*.09, u*.14,  u*.11, u*.32, u*.095, d.col2);
+  limb(g, -u*.16,-u*.08, -u*.30,-u*.16, u*.085, d.col);
+  limb(g,  u*.16,-u*.08,  u*.30,-u*.12, u*.085, d.col);
+  torso(g, u, u*.20, u*.17, -u*.15, u*.17, d.col, d.col2);
+  g.strokeStyle = 'rgba(60,48,30,.45)'; g.lineWidth = u*.022;    // wrappings
+  for (let i=0;i<7;i++){
+    g.beginPath(); g.moveTo(-u*.20, -u*.13 + i*u*.045);
+    g.lineTo(u*.20, -u*.15 + i*u*.045 + Math.sin(i)*u*.012); g.stroke();
+  }
+  g.fillStyle = d.col;
+  g.beginPath(); g.arc(0,-u*.27, u*.14, 0, 6.284); g.fill();
+  g.strokeStyle = 'rgba(60,48,30,.5)'; g.lineWidth = u*.02;
+  for (let i=0;i<4;i++){ g.beginPath(); g.moveTo(-u*.14,-u*.34 + i*u*.05); g.lineTo(u*.14,-u*.32 + i*u*.05); g.stroke(); }
+  g.fillStyle = '#0d0906';
+  g.beginPath(); g.ellipse(-u*.05,-u*.28, u*.032, u*.026, 0,0,6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.05,-u*.28, u*.032, u*.026, 0,0,6.284); g.fill();
+  g.fillStyle = 'rgba(120,220,180,.55)';
+  g.beginPath(); g.arc(-u*.05,-u*.28, u*.013, 0, 6.284); g.fill();
+  g.beginPath(); g.arc( u*.05,-u*.28, u*.013, 0, 6.284); g.fill();
+}
+function drawChaos(g, u, m, t){
+  const d = MONSTERS.chaos;
+  shadow(g, u, .32);
+  cloak(g, u, '#4a1420', .34);
+  limb(g, -u*.10, u*.14, -u*.12, u*.32, u*.10, d.col2);
+  limb(g,  u*.10, u*.14,  u*.12, u*.32, u*.10, d.col2);
+  g.save(); g.rotate(-.34);                                      // black blade
+  g.fillStyle = '#2a2530'; g.fillRect(u*.21,-u*.52, u*.05, u*.58);
+  g.fillStyle = '#585064';
+  g.beginPath(); g.moveTo(u*.205,-u*.50); g.lineTo(u*.275,-u*.50); g.lineTo(u*.275,-u*.06);
+  g.lineTo(u*.24, u*.00); g.lineTo(u*.205,-u*.06); g.closePath(); g.fill();
+  g.fillStyle = '#a03a4a'; g.fillRect(u*.155,-u*.05, u*.17, u*.04);
+  g.restore();
+  torso(g, u, u*.23, u*.175, -u*.17, u*.17, d.col, d.col2);
+  g.fillStyle = '#5a5266';                                       // pauldrons
+  g.beginPath(); g.ellipse(-u*.23,-u*.13, u*.085, u*.065, -.3, 0, 6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.23,-u*.13, u*.085, u*.065,  .3, 0, 6.284); g.fill();
+  g.fillStyle = '#a03a4a';
+  g.beginPath(); g.moveTo(0,-u*.10); g.lineTo(u*.05, u*.00); g.lineTo(0, u*.10); g.lineTo(-u*.05, u*.00); g.closePath(); g.fill();
+  g.fillStyle = d.col2;
+  g.beginPath(); g.arc(0,-u*.29, u*.15, 0, 6.284); g.fill();
+  g.fillStyle = '#0a0810';
+  g.beginPath(); g.moveTo(-u*.10,-u*.30); g.lineTo(u*.10,-u*.30); g.lineTo(u*.06,-u*.22); g.lineTo(-u*.06,-u*.22); g.closePath(); g.fill();
+  g.fillStyle = '#ff5a3a';
+  g.fillRect(-u*.075,-u*.29, u*.055, u*.022); g.fillRect(u*.02,-u*.29, u*.055, u*.022);
+  g.fillStyle = '#6b6070';                                       // horns
+  g.beginPath(); g.moveTo(-u*.13,-u*.36); g.quadraticCurveTo(-u*.30,-u*.46,-u*.24,-u*.56);
+  g.quadraticCurveTo(-u*.16,-u*.44,-u*.08,-u*.38); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo( u*.13,-u*.36); g.quadraticCurveTo( u*.30,-u*.46, u*.24,-u*.56);
+  g.quadraticCurveTo( u*.16,-u*.44, u*.08,-u*.38); g.closePath(); g.fill();
+}
+function drawGargoyle(g, u, m, t){
+  const d = MONSTERS.gargoyle;
+  shadow(g, u, .36);
+  const flap = Math.sin(t*.0022 + (m.bob||0))*.16;
+  g.fillStyle = d.col2;                                          // wings
+  for (const s of [-1,1]){
+    g.save(); g.scale(s,1); g.rotate(flap*s*0 + 0);
+    g.beginPath(); g.moveTo(u*.14,-u*.24);
+    g.quadraticCurveTo(u*.50,-u*.46 + flap*u*.2, u*.46,-u*.02);
+    g.quadraticCurveTo(u*.34,-u*.14, u*.28, u*.02);
+    g.quadraticCurveTo(u*.26,-u*.14, u*.14,-u*.06); g.closePath(); g.fill();
+    g.restore();
+  }
+  limb(g, -u*.11, u*.14, -u*.14, u*.32, u*.11, d.col2);
+  limb(g,  u*.11, u*.14,  u*.14, u*.32, u*.11, d.col2);
+  torso(g, u, u*.24, u*.19, -u*.16, u*.18, d.col, d.col2);
+  g.fillStyle = 'rgba(255,255,255,.08)';
+  g.beginPath(); g.moveTo(-u*.16,-u*.12); g.lineTo(u*.16,-u*.12); g.lineTo(u*.10, u*.10); g.lineTo(-u*.10, u*.10); g.closePath(); g.fill();
+  limb(g, -u*.20,-u*.06, -u*.32, u*.06, u*.09, d.col);           // claws
+  limb(g,  u*.20,-u*.06,  u*.32, u*.06, u*.09, d.col);
+  headBall(g, u, -u*.30, u*.155, d.col);
+  g.fillStyle = d.col;                                           // jaw
+  g.beginPath(); g.moveTo(-u*.10,-u*.26); g.lineTo(u*.10,-u*.26); g.lineTo(u*.06,-u*.14); g.lineTo(-u*.06,-u*.14); g.closePath(); g.fill();
+  g.fillStyle = '#e8e0d0';
+  for (let i=0;i<4;i++){ g.beginPath();
+    g.moveTo(-u*.075 + i*u*.05, -u*.16); g.lineTo(-u*.055 + i*u*.05, -u*.115);
+    g.lineTo(-u*.035 + i*u*.05, -u*.16); g.closePath(); g.fill(); }
+  eyes(g, u, -u*.32, u*.05, '#ff3a2a');
+  g.fillStyle = d.col2;
+  g.beginPath(); g.moveTo(-u*.12,-u*.40); g.lineTo(-u*.22,-u*.56); g.lineTo(-u*.05,-u*.42); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo( u*.12,-u*.40); g.lineTo( u*.22,-u*.56); g.lineTo( u*.05,-u*.42); g.closePath(); g.fill();
+}
+function drawSorcerer(g, u, m, t){
+  const d = MONSTERS.sorcerer;
+  shadow(g, u, .29);
+  cloak(g, u, '#2a1230', .33);
+  const orb = .5 + Math.sin(t*.005 + (m.bob||0))*.5;
+  g.fillStyle = `rgba(190,90,220,${.16 + orb*.22})`;             // floating orb
+  g.beginPath(); g.arc(-u*.26,-u*.34, u*.15, 0, 6.284); g.fill();
+  g.fillStyle = `rgba(240,190,255,${.55 + orb*.4})`;
+  g.beginPath(); g.arc(-u*.26,-u*.34, u*.055, 0, 6.284); g.fill();
+  torso(g, u, u*.15, u*.25, -u*.18, u*.34, d.col, d.col2);
+  g.fillStyle = 'rgba(255,255,255,.07)';
+  for (let i=0;i<5;i++){ g.beginPath();
+    g.arc(0, u*.34, u*(.10+i*.045), Math.PI*1.15, Math.PI*1.85); g.lineWidth = u*.012;
+    g.strokeStyle = 'rgba(220,170,255,.10)'; g.stroke(); }
+  g.fillStyle = '#0c0810';                                       // hood, empty
+  g.beginPath(); g.moveTo(-u*.17,-u*.20);
+  g.quadraticCurveTo(-u*.19,-u*.48, 0,-u*.50);
+  g.quadraticCurveTo(u*.19,-u*.48, u*.17,-u*.20); g.closePath(); g.fill();
+  g.fillStyle = d.col;
+  g.beginPath(); g.moveTo(-u*.17,-u*.20);
+  g.quadraticCurveTo(-u*.22,-u*.50, 0,-u*.54);
+  g.quadraticCurveTo(u*.22,-u*.50, u*.17,-u*.20);
+  g.lineTo(u*.12,-u*.22); g.quadraticCurveTo(u*.15,-u*.44, 0,-u*.46);
+  g.quadraticCurveTo(-u*.15,-u*.44,-u*.12,-u*.22); g.closePath(); g.fill();
+  eyes(g, u, -u*.32, u*.045, '#c86bff');
+}
+function drawOgre(g, u, m, t){
+  const d = MONSTERS.ogre;
+  shadow(g, u, .38);
+  limb(g, -u*.13, u*.14, -u*.16, u*.32, u*.13, d.col2);
+  limb(g,  u*.13, u*.14,  u*.16, u*.32, u*.13, d.col2);
+  g.save(); g.rotate(.3);                                        // tree-trunk club
+  g.fillStyle = '#5a4028';
+  g.beginPath(); g.moveTo(u*.20, u*.24); g.lineTo(u*.26, u*.24);
+  g.lineTo(u*.34,-u*.36); g.lineTo(u*.14,-u*.36); g.closePath(); g.fill();
+  g.fillStyle = '#3f2c1c';
+  for (let i=0;i<4;i++) g.fillRect(u*(.17+i*.04), -u*.34, u*.03, u*.10);
+  g.restore();
+  torso(g, u, u*.28, u*.22, -u*.15, u*.18, d.col, d.col2);
+  g.fillStyle = 'rgba(0,0,0,.22)';
+  g.beginPath(); g.ellipse(0, u*.06, u*.16, u*.10, 0, 0, 6.284); g.fill();
+  g.fillStyle = '#6b5240';                                       // shoulder plate
+  g.beginPath(); g.ellipse(-u*.26,-u*.11, u*.10, u*.075, -.3, 0, 6.284); g.fill();
+  headBall(g, u, -u*.26, u*.16, d.col);
+  g.fillStyle = d.col2;
+  g.beginPath(); g.arc(0,-u*.29, u*.16, Math.PI*1.03, Math.PI*1.97); g.fill();
+  eyes(g, u, -u*.27, u*.045, '#f0d060');
+  g.fillStyle = '#efe6cc';
+  g.beginPath(); g.moveTo(-u*.07,-u*.19); g.lineTo(-u*.04,-u*.09); g.lineTo(-u*.01,-u*.19); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo( u*.07,-u*.19); g.lineTo( u*.04,-u*.09); g.lineTo( u*.01,-u*.19); g.closePath(); g.fill();
+}
+function eyes(g, u, y, r, col){
+  g.fillStyle = col;
+  g.beginPath(); g.ellipse(-u*.055, y, r, r*.72, 0, 0, 6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.055, y, r, r*.72, 0, 0, 6.284); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.7)';
+  g.fillRect(-u*.10, y - r*1.1, u*.20, r*.6);
+}
+const MON_ART = {
+  goblin:drawGoblin, orc:drawOrc, fimir:drawFimir, skeleton:drawSkeleton, zombie:drawZombie,
+  mummy:drawMummy, chaos:drawChaos, gargoyle:drawGargoyle, sorcerer:drawSorcerer, ogre:drawOgre,
+};
+
+function drawNPC(g, u, t){
+  shadow(g, u, .26);
+  torso(g, u, u*.15, u*.20, -u*.16, u*.30, '#8a8070', '#5a5246');
+  limb(g, -u*.16,-u*.06, -u*.24, u*.06, u*.06, '#c8a882');
+  limb(g,  u*.16,-u*.06,  u*.24, u*.06, u*.06, '#c8a882');
+  headBall(g, u, -u*.27, u*.12, '#c8a882');
+  g.fillStyle = '#5a5246';
+  g.beginPath(); g.arc(0,-u*.29, u*.125, Math.PI, 0); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.5)';
+  g.beginPath(); g.arc(0,-u*.44, u*.10, 0, 6.284); g.fill();
+}
+
+/* --------------------------------------------------------- the furnishings */
+
+function drawFurniture(g, f, t){
+  const px = (f.x + f.w/2)*TS, py = (f.y + f.h/2)*TS;
+  const w = f.w*TS, h = f.h*TS;
+  g.save(); g.translate(px, py);
+  g.fillStyle = 'rgba(0,0,0,.45)';
+  g.beginPath(); g.ellipse(0, h*.30, w*.40, h*.16, 0, 0, 6.284); g.fill();
+  const F = f.t;
+  if (F==='table'){
+    g.fillStyle = '#4a3524';
+    rr(g, -w*.42, -h*.28, w*.84, h*.56, 5); g.fill();
+    g.fillStyle = '#6b4d33'; rr(g, -w*.40, -h*.30, w*.80, h*.52, 5); g.fill();
+    g.strokeStyle = 'rgba(0,0,0,.3)'; g.lineWidth = 1.5;
+    for (let i=1;i<4;i++){ g.beginPath(); g.moveTo(-w*.40 + i*w*.20, -h*.30); g.lineTo(-w*.40 + i*w*.20, h*.22); g.stroke(); }
+    g.fillStyle = 'rgba(255,220,170,.10)'; rr(g, -w*.38, -h*.28, w*.76, h*.10, 3); g.fill();
+  } else if (F==='chest'){
+    g.fillStyle = '#59401f';
+    rr(g, -w*.34, -h*.20, w*.68, h*.44, 4); g.fill();
+    g.fillStyle = '#7a5a2c'; rr(g, -w*.34, -h*.30, w*.68, h*.24, 7); g.fill();
+    g.fillStyle = '#c8a24a'; g.fillRect(-w*.34, -h*.10, w*.68, h*.07);
+    g.fillStyle = '#d8b85a';
+    g.beginPath(); g.arc(0, -h*.04, w*.07, 0, 6.284); g.fill();
+    g.fillStyle = '#2a1c0c'; g.fillRect(-w*.02, -h*.05, w*.04, h*.09);
+    if (f.taken){ g.fillStyle = 'rgba(0,0,0,.5)'; rr(g,-w*.34,-h*.30,w*.68,h*.30,6); g.fill(); }
+  } else if (F==='throne'){
+    g.fillStyle = '#3a3238'; rr(g, -w*.30, -h*.44, w*.60, h*.74, 6); g.fill();
+    g.fillStyle = '#4f4550'; rr(g, -w*.26, -h*.40, w*.52, h*.44, 5); g.fill();
+    g.fillStyle = '#7a2a34'; rr(g, -w*.22, -h*.06, w*.44, h*.30, 4); g.fill();
+    g.fillStyle = '#c8a24a';
+    g.beginPath(); g.moveTo(0,-h*.52); g.lineTo(w*.08,-h*.40); g.lineTo(-w*.08,-h*.40); g.closePath(); g.fill();
+  } else if (F==='bookcase'){
+    g.fillStyle = '#3a2a1c'; rr(g, -w*.44, -h*.34, w*.88, h*.66, 3); g.fill();
+    const cols = ['#7a2a2a','#2a4a6a','#4a6a2a','#6a5a2a','#5a2a5a'];
+    for (let r=0;r<2;r++) for (let i=0;i<9;i++){
+      const bh = h*.20 + (i%3)*h*.04;
+      g.fillStyle = cols[(i+r)%cols.length];
+      g.fillRect(-w*.40 + i*w*.088, -h*.28 + r*h*.32, w*.062, bh);
+    }
+    g.fillStyle = 'rgba(0,0,0,.4)'; g.fillRect(-w*.44, -h*.04, w*.88, 3);
+  } else if (F==='rack'){
+    g.fillStyle = '#3f2e1e';
+    g.fillRect(-w*.30, -h*.36, w*.60, h*.10);
+    g.fillRect(-w*.30, h*.20, w*.60, h*.10);
+    for (let i=0;i<3;i++){
+      const x = -w*.20 + i*w*.20;
+      g.fillStyle = '#8a9298'; g.fillRect(x-w*.018, -h*.30, w*.036, h*.50);
+      g.fillStyle = '#c8ccd2'; g.beginPath();
+      g.moveTo(x, -h*.42); g.lineTo(x+w*.035,-h*.30); g.lineTo(x-w*.035,-h*.30); g.closePath(); g.fill();
+    }
+    if (f.taken){ g.fillStyle = 'rgba(0,0,0,.45)'; g.fillRect(-w*.34,-h*.44,w*.68,h*.80); }
+  } else if (F==='alchemy'){
+    g.fillStyle = '#3a3428'; rr(g, -w*.42, -h*.16, w*.84, h*.44, 4); g.fill();
+    const cols = ['#6bd8a8','#d86b8a','#6b9ad8','#d8c86b'];
+    for (let i=0;i<5;i++){
+      const x = -w*.34 + i*w*.17;
+      g.fillStyle = cols[i%4];
+      g.beginPath(); g.arc(x, -h*.24, w*.045, 0, 6.284); g.fill();
+      g.fillStyle = 'rgba(255,255,255,.28)'; g.fillRect(x-w*.012, -h*.36, w*.024, h*.10);
+    }
+    g.fillStyle = 'rgba(140,255,200,.10)';
+    g.beginPath(); g.ellipse(0,-h*.30, w*.42, h*.22, 0,0,6.284); g.fill();
+  } else if (F==='tomb'){
+    g.fillStyle = '#4a463c'; rr(g, -w*.42, -h*.32, w*.84, h*.66, 4); g.fill();
+    g.fillStyle = '#5e594c'; rr(g, -w*.38, -h*.36, w*.76, h*.58, 4); g.fill();
+    g.fillStyle = 'rgba(0,0,0,.35)';
+    g.beginPath(); g.ellipse(0,-h*.06, w*.20, h*.26, 0,0,6.284); g.fill();
+    g.fillStyle = '#7e786a';
+    g.beginPath(); g.arc(0,-h*.14, w*.075, 0, 6.284); g.fill();
+    g.fillRect(-w*.05, -h*.10, w*.10, h*.26);
+    if (f.taken){ g.fillStyle = 'rgba(20,10,30,.55)'; rr(g,-w*.38,-h*.36,w*.76,h*.58,4); g.fill(); }
+  } else if (F==='fireplace'){
+    g.fillStyle = '#2e2a26'; rr(g, -w*.44, -h*.40, w*.88, h*.74, 4); g.fill();
+    g.fillStyle = '#120e0a'; rr(g, -w*.32, -h*.24, w*.64, h*.56, 5); g.fill();
+    const fl = .6 + Math.sin(t*.008)*.4;
+    g.fillStyle = `rgba(255,150,50,${.55*fl+.3})`;
+    g.beginPath(); g.moveTo(-w*.16, h*.26);
+    g.quadraticCurveTo(-w*.14,-h*.06, 0,-h*.20 - fl*h*.08);
+    g.quadraticCurveTo(w*.14,-h*.06, w*.16, h*.26); g.closePath(); g.fill();
+    g.fillStyle = `rgba(255,230,140,${.5*fl+.2})`;
+    g.beginPath(); g.moveTo(-w*.07, h*.26);
+    g.quadraticCurveTo(-w*.05,-h*.02, 0,-h*.10 - fl*h*.05);
+    g.quadraticCurveTo(w*.05,-h*.02, w*.07, h*.26); g.closePath(); g.fill();
+  } else if (F==='cupboard'){
+    g.fillStyle = '#54401f'; rr(g, -w*.42, -h*.40, w*.84, h*.74, 3); g.fill();
+    g.fillStyle = '#6b5228'; rr(g, -w*.38, -h*.36, w*.36, h*.66, 3); g.fill();
+    rr(g, w*.02, -h*.36, w*.36, h*.66, 3); g.fill();
+    g.fillStyle = '#c8a24a';
+    g.beginPath(); g.arc(-w*.05, 0, w*.02, 0, 6.284); g.fill();
+    g.beginPath(); g.arc( w*.05, 0, w*.02, 0, 6.284); g.fill();
+  } else if (F==='altar'){
+    g.fillStyle = '#3e3a44'; rr(g, -w*.40, -h*.20, w*.80, h*.50, 3); g.fill();
+    g.fillStyle = '#4e4a58'; rr(g, -w*.44, -h*.30, w*.88, h*.18, 3); g.fill();
+    g.fillStyle = 'rgba(160,60,60,.5)';
+    g.beginPath(); g.ellipse(0,-h*.22, w*.16, h*.06, 0,0,6.284); g.fill();
+    const pulse = .5 + Math.sin(t*.003)*.5;
+    g.fillStyle = `rgba(200,90,255,${.2 + pulse*.25})`;
+    g.beginPath(); g.arc(0,-h*.34, w*.09, 0, 6.284); g.fill();
+  } else if (F==='sorcerer'){
+    g.fillStyle = '#2e2838'; rr(g, -w*.42, -h*.22, w*.84, h*.50, 4); g.fill();
+    g.fillStyle = '#3e3650'; rr(g, -w*.40, -h*.28, w*.80, h*.44, 4); g.fill();
+    const pulse = .5 + Math.sin(t*.004)*.5;
+    g.fillStyle = `rgba(150,110,240,${.25 + pulse*.35})`;
+    g.beginPath(); g.arc(-w*.16,-h*.22, w*.075, 0, 6.284); g.fill();
+    g.fillStyle = '#c8b88a';
+    g.fillRect(w*.02, -h*.28, w*.24, h*.16);
+    g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 1;
+    g.beginPath(); g.moveTo(w*.14,-h*.28); g.lineTo(w*.14,-h*.12); g.stroke();
+  } else if (F==='cage'){
+    g.fillStyle = 'rgba(10,8,6,.75)'; rr(g, -w*.36, -h*.40, w*.72, h*.74, 3); g.fill();
+    g.strokeStyle = '#6a6258'; g.lineWidth = Math.max(2, w*.035);
+    for (let i=0;i<5;i++){
+      const x = -w*.30 + i*w*.15;
+      g.beginPath(); g.moveTo(x,-h*.40); g.lineTo(x, h*.32); g.stroke();
+    }
+    g.beginPath(); g.moveTo(-w*.36,-h*.38); g.lineTo(w*.36,-h*.38); g.stroke();
+    g.beginPath(); g.moveTo(-w*.36, h*.30); g.lineTo(w*.36, h*.30); g.stroke();
+  }
+  g.restore();
+}
+
+/* --------------------------------------------------- doors, traps, markers */
+
+function doorMid(d){ return [ (d.rx + d.cx)/2 + .5, (d.ry + d.cy)/2 + .5 ]; }
+
+function drawDoor(g, d, t){
+  if (d.secret && !d.found) return;
+  const [mx,my] = doorMid(d);
+  const vert = d.rx !== d.cx;                       // door leaf runs north–south
+  const px = mx*TS, py = my*TS;
+  g.save(); g.translate(px, py);
+  if (vert) g.rotate(Math.PI/2);
+  const w = TS*.92, h = TS*.30;
+  if (d.open){
+    g.globalAlpha = .95;
+    g.fillStyle = '#1a1310';
+    g.fillRect(-w/2, -h/2, w, h);                   // the empty frame
+    g.fillStyle = '#3a2f24';
+    g.fillRect(-w/2, -h/2, w*.10, h);
+    g.fillRect( w/2 - w*.10, -h/2, w*.10, h);
+    g.save();                                        // the leaf, swung aside
+    g.translate(-w*.42, 0); g.rotate(-1.15);
+    g.fillStyle = '#4a3320'; g.fillRect(0, -h*.42, w*.78, h*.84);
+    g.fillStyle = '#5e422a'; g.fillRect(0, -h*.42, w*.78, h*.40);
+    g.fillStyle = '#2a1e14'; g.fillRect(w*.10, -h*.42, w*.05, h*.84);
+    g.restore();
+    g.globalAlpha = 1;
+  } else {
+    g.fillStyle = '#2a2018';
+    g.fillRect(-w/2 - 2, -h/2 - 2, w + 4, h + 4);
+    const grd = g.createLinearGradient(0, -h/2, 0, h/2);
+    grd.addColorStop(0,'#6b4b2e'); grd.addColorStop(.5,'#4e3520'); grd.addColorStop(1,'#33220f');
+    g.fillStyle = grd; g.fillRect(-w/2, -h/2, w, h);
+    g.fillStyle = 'rgba(0,0,0,.32)';
+    for (let i=1;i<5;i++) g.fillRect(-w/2 + i*w/5, -h/2, 1.6, h);
+    g.fillStyle = '#4a4750';                        // iron bands
+    g.fillRect(-w/2, -h*.34, w, h*.13);
+    g.fillRect(-w/2,  h*.20, w, h*.13);
+    g.fillStyle = 'rgba(190,190,205,.30)';
+    g.fillRect(-w/2, -h*.34, w, 1.2); g.fillRect(-w/2, h*.20, w, 1.2);
+    g.fillStyle = '#2b2830';                        // rivets
+    for (let i=0;i<5;i++){
+      g.beginPath(); g.arc(-w*.38 + i*w*.19, -h*.275, h*.045, 0, 6.284); g.fill();
+      g.beginPath(); g.arc(-w*.38 + i*w*.19,  h*.265, h*.045, 0, 6.284); g.fill();
+    }
+    g.fillStyle = '#c8a24a';                        // ring handle
+    g.beginPath(); g.arc(w*.30, 0, h*.16, 0, 6.284); g.fill();
+    g.fillStyle = '#33220f';
+    g.beginPath(); g.arc(w*.30, 0, h*.09, 0, 6.284); g.fill();
+    if (d.secret){
+      g.fillStyle = `rgba(200,150,255,${.25 + Math.sin(t*.004)*.15})`;
+      g.beginPath(); g.arc(-w*.28, 0, h*.16, 0, 6.284); g.fill();
+    }
+  }
+  g.restore();
+}
+
+function trapBlocks(x,y){
+  for (const tr of G.q.traps) if (tr.x===x && tr.y===y && tr.t==='block' && tr.sprung) return true;
+  return false;
+}
+function trapAt(x,y){
+  for (const tr of G.q.traps) if (tr.x===x && tr.y===y && !tr.disarmed && !tr.sprung) return tr;
+  return null;
+}
+function drawTrap(g, tr, t){
+  if (!tr.found && !tr.sprung) return;
+  const px = (tr.x+.5)*TS, py = (tr.y+.5)*TS;
+  g.save(); g.translate(px, py);
+  if (tr.t === 'pit'){
+    if (tr.sprung){
+      g.fillStyle = '#040303';
+      g.beginPath(); g.ellipse(0,0, TS*.40, TS*.36, 0, 0, 6.284); g.fill();
+      g.strokeStyle = 'rgba(120,105,85,.5)'; g.lineWidth = 3;
+      g.beginPath(); g.ellipse(0,0, TS*.40, TS*.36, 0, 0, 6.284); g.stroke();
+      g.fillStyle = 'rgba(160,140,110,.25)';
+      for (let i=0;i<7;i++){ const a = i/7*6.284;
+        g.beginPath(); g.moveTo(Math.cos(a)*TS*.40, Math.sin(a)*TS*.36);
+        g.lineTo(Math.cos(a+.3)*TS*.28, Math.sin(a+.3)*TS*.26);
+        g.lineTo(Math.cos(a+.55)*TS*.40, Math.sin(a+.55)*TS*.36); g.closePath(); g.fill(); }
+    } else { trapMark(g, '#e8b63c', t, 'pit'); }
+  } else if (tr.t === 'spear'){
+    if (tr.sprung){
+      g.fillStyle = '#8a8f96';
+      for (let i=0;i<4;i++){
+        const a = i/4*6.284 + .4, r = TS*.26;
+        g.save(); g.translate(Math.cos(a)*r*.5, Math.sin(a)*r*.5); g.rotate(a);
+        g.beginPath(); g.moveTo(0,-TS*.05); g.lineTo(TS*.22,0); g.lineTo(0,TS*.05); g.closePath(); g.fill();
+        g.restore();
+      }
+      g.fillStyle = 'rgba(120,20,14,.5)';
+      g.beginPath(); g.arc(0,0, TS*.14, 0, 6.284); g.fill();
+    } else { trapMark(g, '#e8b63c', t, 'spear'); }
+  } else {
+    if (tr.sprung){
+      g.fillStyle = '#3a352e'; rr(g, -TS*.42, -TS*.40, TS*.84, TS*.80, 6); g.fill();
+      g.fillStyle = '#4e483e'; rr(g, -TS*.38, -TS*.44, TS*.76, TS*.72, 6); g.fill();
+      g.fillStyle = 'rgba(0,0,0,.4)';
+      for (let i=0;i<3;i++) g.fillRect(-TS*.34, -TS*.30 + i*TS*.22, TS*.68, 2.5);
+      g.fillStyle = 'rgba(220,200,170,.10)'; g.fillRect(-TS*.38,-TS*.44, TS*.76, 3);
+    } else { trapMark(g, '#e8b63c', t, 'block'); }
+  }
+  g.restore();
+}
+function trapMark(g, col, t, kind){
+  const p = .55 + Math.sin(t*.005)*.45;
+  g.strokeStyle = `rgba(232,182,60,${.35 + p*.4})`; g.lineWidth = 2.4;
+  g.setLineDash([6,5]); g.lineDashOffset = -t*.012;
+  rr(g, -TS*.34, -TS*.34, TS*.68, TS*.68, 6); g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = `rgba(232,182,60,${.55 + p*.35})`;
+  g.font = `${TS*.34}px ${'Georgia,serif'}`; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(kind==='pit' ? '⌷' : kind==='spear' ? '⁘' : '⬓', 0, 0);
+}
+
+/* --------------------------------------------------------- 6. RENDER LOOP */
+
+let cv, ctx, cw = 0, ch = 0, DPR = 1;
+let fogCan = null, fogCtx = null, fogImg = null, grainCan = null;
+let TT0 = 0;                                        // ms since boot
+const FOGQ = 2;                                     // fog texels per square
+let fogTmp = null;                                  // per-square darkness, reused
+
+function initCanvas(){
+  if (HEADLESS){ ctx = stubCtx(); cw = 800; ch = 1400; return; }
+  cv = document.getElementById('cv');
+  ctx = cv.getContext('2d');
+  resize();
+  addEventListener('resize', resize);
+  fogCan = mkCan(W*FOGQ, H*FOGQ); fogCtx = fogCan.getContext('2d');
+  fogImg = fogCtx.createImageData(W*FOGQ, H*FOGQ);
+  grainCan = mkCan(96, 96);
+  const gg = grainCan.getContext('2d');
+  const im = gg.createImageData(96,96);
+  for (let i=0;i<96*96;i++){
+    const v = 118 + Math.random()*70;
+    im.data[i*4] = v; im.data[i*4+1] = v; im.data[i*4+2] = v; im.data[i*4+3] = 255;
+  }
+  gg.putImageData(im, 0, 0);
+}
+function resize(){
+  if (HEADLESS) return;
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  cw = innerWidth; ch = innerHeight;
+  cv.width = Math.floor(cw*DPR); cv.height = Math.floor(ch*DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+
+// The board sits in the space the HUD is not using.
+function viewBox(){
+  const top = 54, bot = G && G.q ? 190 : 20;
+  return { x:0, y:top, w:cw, h:Math.max(120, ch - top - bot) };
+}
+function camApply(g){
+  const v = viewBox();
+  g.translate(v.x + v.w/2, v.y + v.h/2);
+  g.scale(G.cam.z, G.cam.z);
+  g.translate(-G.cam.x, -G.cam.y);
+}
+function worldOf(sx, sy){
+  const v = viewBox();
+  return [ (sx - v.x - v.w/2)/G.cam.z + G.cam.x, (sy - v.y - v.h/2)/G.cam.z + G.cam.y ];
+}
+function tileOf(sx, sy){
+  const [wx,wy] = worldOf(sx,sy);
+  return [ Math.floor(wx/TS), Math.floor(wy/TS) ];
+}
+function clampCam(){
+  const v = viewBox();
+  const halfW = v.w/(2*G.cam.z), halfH = v.h/(2*G.cam.z);
+  const mw = W*TS, mh = H*TS;
+  G.cam.x = mw < halfW*2 ? mw/2 : clamp(G.cam.x, halfW - TS*.6, mw - halfW + TS*.6);
+  G.cam.y = mh < halfH*2 ? mh/2 : clamp(G.cam.y, halfH - TS*.6, mh - halfH + TS*.6);
+}
+function focusOn(x, y, snap){
+  const tx = (x+.5)*TS, ty = (y+.5)*TS;
+  if (snap){ G.cam.x = tx; G.cam.y = ty; } else { G.cam.tx = tx; G.cam.ty = ty; }
+  clampCam();
+}
+
+// Runs headless too — against a no-op context — so the test suite catches
+// render-time mistakes the logic suites never touch.
+function draw(){
+  const t = TT0;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle = '#050404'; ctx.fillRect(0,0,cw,ch);
+  if (!G || !G.q){ drawAntechamber(t); return; }
+
+  const v = viewBox();
+  ctx.save();
+  ctx.beginPath(); ctx.rect(v.x, v.y, v.w, v.h); ctx.clip();
+  ctx.save();
+  if (G.shake > 0){
+    ctx.translate((Math.random()-.5)*G.shake, (Math.random()-.5)*G.shake);
+  }
+  camApply(ctx);
+
+  if (BAKE) ctx.drawImage(BAKE, 0, 0);
+
+  // furniture, doors, traps
+  for (const f of G.q.furn) if (G.q.seen[idx(f.x,f.y)]) drawFurniture(ctx, f, t);
+  for (const k in G.q.doors){
+    const d = G.q.doors[k];
+    if (G.q.seen[idx(d.cx,d.cy)] || G.q.seen[idx(d.rx,d.ry)]) drawDoor(ctx, d, t);
+  }
+  for (const tr of G.q.traps) if (G.q.seen[idx(tr.x,tr.y)]) drawTrap(ctx, tr, t);
+
+  drawMarkers(ctx, t);
+
+  // bodies, back to front so southern figures overlap northern ones
+  const order = G.q.actors.filter(a => a.alive || a.deathT > 0)
+    .sort((a,b) => (a.py||a.y) - (b.py||b.y));
+  for (const a of order) drawActor(ctx, a, t);
+
+  drawParticles(ctx, t);
+  ctx.restore();
+
+  drawFog(ctx, t);
+  drawLights(ctx, t);
+  ctx.restore();
+
+  drawVignette(ctx);
+  drawDice(ctx, t);
+}
+// The title screen is not a black rectangle: it is a wall, two torches and the
+// dust that never settles in a place like this.
+let wallBake = null;
+function bakeWall(){
+  const c = mkCan(320, 320);
+  const g = c.getContext('2d');
+  g.fillStyle = '#17130f'; g.fillRect(0,0,320,320);
+  for (let r=0;r<8;r++){
+    const off = (r % 2) * 40;
+    for (let i=-1;i<5;i++){
+      const x = i*80 + off, y = r*40, v = hash2(i,r,7);
+      const l = 24 + v*14;
+      g.fillStyle = `rgb(${l+7},${l+3},${l-2})`;
+      rr(g, x+2, y+2, 76, 36, 3); g.fill();
+      g.fillStyle = `rgba(255,232,196,${.02 + v*.035})`;
+      g.fillRect(x+4, y+4, 72, 2);
+      g.fillStyle = 'rgba(0,0,0,.30)';
+      g.fillRect(x+4, y+34, 72, 3);
+      for (let k=0;k<5;k++){
+        const a = hash2(x+k,y,11), b = hash2(x,y+k,13);
+        g.fillStyle = `rgba(${a>.5?120:0},${a>.5?110:0},${a>.5?96:0},${.03+b*.06})`;
+        g.fillRect(x + 6 + a*66, y + 6 + b*28, 1+b*3, 1+a*2);
+      }
+    }
+  }
+  wallBake = c;
+}
+let embers = [];
+function drawAntechamber(t){
+  if (HEADLESS) return;
+  if (!wallBake) bakeWall();
+  const g = ctx;
+  for (let y=0;y<ch;y+=320) for (let x=0;x<cw;x+=320) g.drawImage(wallBake, x, y);
+  g.fillStyle = 'rgba(4,3,3,.38)'; g.fillRect(0,0,cw,ch);
+
+  const tx = [cw*.16, cw*.84], ty = ch*.26;
+  g.save(); g.globalCompositeOperation = 'lighter';
+  for (let i=0;i<2;i++){
+    const fl = .74 + Math.sin(t*.008 + i*2.1)*.16 + Math.sin(t*.029 + i)*.10;
+    const R0 = Math.min(cw,ch)*.72*fl;
+    const gr = g.createRadialGradient(tx[i], ty, 0, tx[i], ty, R0);
+    gr.addColorStop(0, `rgba(255,186,102,${.34*fl})`);
+    gr.addColorStop(.4, `rgba(210,116,44,${.11*fl})`);
+    gr.addColorStop(1, 'rgba(60,20,0,0)');
+    g.fillStyle = gr; g.beginPath(); g.arc(tx[i], ty, R0, 0, 6.284); g.fill();
+    const top = ty - 24 - fl*10;
+    const fg = g.createLinearGradient(0, top, 0, ty + 12);
+    fg.addColorStop(0,   `rgba(255,236,180,${.85*fl})`);
+    fg.addColorStop(.45, `rgba(255,160,52,${.72*fl})`);
+    fg.addColorStop(1,   `rgba(190,60,10,${.18*fl})`);
+    g.fillStyle = fg;
+    g.beginPath(); g.moveTo(tx[i]-10, ty+12);
+    g.bezierCurveTo(tx[i]-12, ty-6, tx[i]-4, ty-14, tx[i], top);
+    g.bezierCurveTo(tx[i]+4, ty-14, tx[i]+12, ty-6, tx[i]+10, ty+12);
+    g.closePath(); g.fill();
+    g.fillStyle = `rgba(255,248,214,${.55*fl})`;
+    g.beginPath(); g.ellipse(tx[i], ty-2, 3.6, 8, 0, 0, 6.284); g.fill();
+  }
+  g.restore();
+  for (let i=0;i<2;i++){
+    g.fillStyle = '#241d17';
+    g.beginPath(); g.moveTo(tx[i]-13, ty+10); g.lineTo(tx[i]+13, ty+10);
+    g.lineTo(tx[i]+7, ty+26); g.lineTo(tx[i]-7, ty+26); g.closePath(); g.fill();
+    g.fillStyle = '#3d332a'; g.fillRect(tx[i]-4, ty+22, 8, 26);
+  }
+  if (embers.length < 44 && Math.random() < .5){
+    const i = Math.random() < .5 ? 0 : 1;
+    embers.push({ x:tx[i] + (Math.random()-.5)*16, y:ty, vx:(Math.random()-.5)*.012,
+                  vy:-.02 - Math.random()*.03, life:3200, max:3200 });
+  }
+  for (let i=embers.length-1;i>=0;i--){
+    const p = embers[i];
+    p.life -= 16; if (p.life <= 0){ embers.splice(i,1); continue; }
+    p.x += p.vx*16; p.y += p.vy*16; p.vx += (Math.random()-.5)*.0016;
+    const k = p.life/p.max;
+    g.globalAlpha = k*.8;
+    g.fillStyle = k > .5 ? '#ffc878' : '#a85a24';
+    g.beginPath(); g.arc(p.x, p.y, 2.1*k + .8, 0, 6.284); g.fill();
+  }
+  g.globalAlpha = 1;
+  drawVignette(g);
+}
+
+function drawActor(g, a, t){
+  if (a.kind !== 'hero' && !tileVisible(a.x, a.y) && a.deathT === undefined) return;
+  if (a.kind === 'monster' && !tileVisible(a.x, a.y)) return;
+  const px = (a.px !== undefined ? a.px : a.x + .5)*TS;
+  const py = (a.py !== undefined ? a.py : a.y + .5)*TS;
+  const u = TS * (a.kind === 'hero' ? .96 : (MONSTERS[a.mt] ? MONSTERS[a.mt].size : .9));
+  const bob = a.walking ? Math.abs(Math.sin(t*.016))*TS*.05 : Math.sin(t*.0022 + (a.bob||0))*TS*.014;
+  g.save();
+  g.translate(px, py - bob);
+  if (a.deathT !== undefined && a.deathT > 0){
+    const k = a.deathT/600;
+    g.globalAlpha = k; g.scale(1 + (1-k)*.3, 1 - (1-k)*.5); g.rotate((1-k)*.7);
+  }
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,.62)'; g.shadowBlur = u*.10; g.shadowOffsetY = u*.035;
+  if (a.facing < 0) g.scale(-1, 1);
+  if (a.kind === 'hero') HERO_ART[a.id](g, u, t);
+  else if (a.kind === 'npc') drawNPC(g, u, t);
+  else (MON_ART[a.mt] || drawGoblin)(g, u, a, t);
+  g.restore();
+  if (a.hurtT > 0){                                     // white flash on a hit
+    g.globalAlpha = Math.min(.75, a.hurtT/180);
+    g.globalCompositeOperation = 'lighter';
+    g.fillStyle = '#ff9a80';
+    g.beginPath(); g.arc(0, -u*.10, u*.36, 0, 6.284); g.fill();
+    g.globalCompositeOperation = 'source-over'; g.globalAlpha = 1;
+  }
+  g.restore();
+  if (a.alive) drawActorTag(g, a, px, py, u, t);
+}
+function drawActorTag(g, a, px, py, u, t){
+  if (a.kind === 'monster'){
+    if (a.bp < a.bpMax || a.boss){
+      const w = u*.56, y = py - u*.62;
+      g.fillStyle = 'rgba(0,0,0,.65)'; rr(g, px-w/2, y, w, 5.5, 2.5); g.fill();
+      g.fillStyle = a.boss ? '#e0b040' : '#c0392b';
+      rr(g, px-w/2+1, y+1, (w-2)*(a.bp/a.bpMax), 3.5, 1.7); g.fill();
+    }
+    if (a.sleep > 0){
+      g.fillStyle = '#9fd8e8'; g.font = `${u*.28}px Georgia,serif`; g.textAlign = 'center';
+      g.fillText('z', px + u*.22, py - u*.52 + Math.sin(t*.004)*3);
+    }
+    if (a.stun > 0){
+      g.fillStyle = '#e8d060'; g.font = `${u*.26}px Georgia,serif`; g.textAlign = 'center';
+      g.fillText('✦', px - u*.24, py - u*.52);
+    }
+  } else if (a.kind === 'hero'){
+    const act = activeHero();
+    if (act === a && G.q.phase === 'hero'){
+      const p = .5 + Math.sin(t*.005)*.5;
+      g.strokeStyle = `rgba(216,168,60,${.45 + p*.4})`; g.lineWidth = 2.4;
+      g.beginPath(); g.ellipse(px, py + u*.36, u*.36, u*.14, 0, 0, 6.284); g.stroke();
+      g.fillStyle = `rgba(216,168,60,${.6 + p*.4})`;
+      g.beginPath();
+      const ay = py - u*.72 - p*3;
+      g.moveTo(px, ay + 9); g.lineTo(px - 6, ay); g.lineTo(px + 6, ay); g.closePath(); g.fill();
+    }
+    if (a.buffs.veil){
+      g.fillStyle = `rgba(160,200,255,${.10 + Math.sin(t*.003)*.05})`;
+      g.beginPath(); g.arc(px, py - u*.08, u*.42, 0, 6.284); g.fill();
+    }
+    if (a.buffs.rockskin){
+      g.strokeStyle = 'rgba(150,200,120,.4)'; g.lineWidth = 2;
+      g.beginPath(); g.arc(px, py - u*.08, u*.40, 0, 6.284); g.stroke();
+    }
+  }
+}
+
+function drawMarkers(g, t){
+  const h = activeHero();
+  if (!h || G.q.phase !== 'hero' || G.busy()) return;
+  const f = G.q.field;
+  if (!f) return;
+  const p = .5 + Math.sin(t*.004)*.5;
+  g.lineWidth = 2;
+  for (const [k, cost] of f.d){
+    if (cost === 0) continue;
+    const x = k % W, y = (k/W)|0;
+    if (!tileSeen(x,y)) continue;
+    const px = x*TS, py = y*TS;
+    g.fillStyle = `rgba(232,190,90,${.075 + p*.045})`;
+    rr(g, px+5, py+5, TS-10, TS-10, 5); g.fill();
+    g.strokeStyle = `rgba(232,190,90,${.26 + p*.14})`;
+    rr(g, px+5, py+5, TS-10, TS-10, 5); g.stroke();
+  }
+  // once the prize is in hand, the stair is the objective — say so
+  if (objectiveReady() && needsEscape()){
+    for (const [sx,sy] of STAIRS){
+      const px = sx*TS, py = sy*TS;
+      g.fillStyle = `rgba(120,220,150,${.10 + p*.10})`;
+      rr(g, px+4, py+4, TS-8, TS-8, 6); g.fill();
+      g.strokeStyle = `rgba(120,220,150,${.45 + p*.35})`; g.lineWidth = 2.5;
+      rr(g, px+4, py+4, TS-8, TS-8, 6); g.stroke();
+    }
+  }
+  // squares you could strike from where you stand
+  for (const m of monstersOf()){
+    if (!tileVisible(m.x,m.y)) continue;
+    if (!canStrike(h, m)) continue;
+    const px = m.x*TS, py = m.y*TS;
+    g.strokeStyle = `rgba(200,60,44,${.5 + p*.3})`; g.lineWidth = 3;
+    rr(g, px+4, py+4, TS-8, TS-8, 6); g.stroke();
+  }
+}
+
+/* ------------------------------------------------------------- the dark */
+
+function drawFog(g, t){
+  if (!fogCan) return;
+  const d = fogImg.data, Q = G.q, FW = W*FOGQ;
+
+  // where the light actually comes from: the party's torches, and any sconce
+  // close enough to matter. A lit room still falls off into its corners.
+  const lights = [];
+  const hs = livingHeroes();
+  for (const h of hs) lights.push([h.px !== undefined ? h.px : h.x+.5, h.py !== undefined ? h.py : h.y+.5, 3.3]);
+  for (const tr of TORCHES){
+    for (const h of hs){
+      if (Math.abs(tr.x - h.x) < 11 && Math.abs(tr.y - h.y) < 11){ lights.push([tr.x, tr.y, 2.9]); break; }
+    }
+  }
+  const A = fogTmp || (fogTmp = new Uint8Array(W*H));
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const i = idx(x,y);
+    if (!isFloor(x,y)){ A[i] = 252; continue; }
+    if (!(Q.vis && Q.vis[i])){ A[i] = Q.seen[i] ? 150 : 252; continue; }
+    let best = 99;
+    for (let k=0;k<lights.length;k++){
+      const L = lights[k];
+      const dx = x + .5 - L[0], dy = y + .5 - L[1];
+      const dd = Math.sqrt(dx*dx + dy*dy) - L[2];
+      if (dd < best) best = dd;
+    }
+    A[i] = best <= 0 ? 0 : Math.min(104, best*27)|0;
+  }
+  // stone borrows the light of the brightest floor square beside it
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const i = idx(x,y);
+    let a = A[i];
+    if (!isFloor(x,y)){
+      let best = 252;
+      for (const [dx,dy] of DIRS8){
+        const nx = x+dx, ny = y+dy;
+        if (!isFloor(nx,ny)) continue;
+        const va = Math.min(252, A[idx(nx,ny)] + 26);
+        if (va < best) best = va;
+      }
+      a = best;
+    }
+    for (let sy=0; sy<FOGQ; sy++) for (let sx=0; sx<FOGQ; sx++){
+      const j = ((y*FOGQ + sy)*FW + x*FOGQ + sx)*4;
+      d[j] = 2; d[j+1] = 2; d[j+2] = 4; d[j+3] = a;
+    }
+  }
+  fogCtx.putImageData(fogImg, 0, 0);
+  g.save(); camApply(g);
+  g.imageSmoothingEnabled = true;
+  g.drawImage(fogCan, 0, 0, W*TS, H*TS);
+  g.restore();
+}
+
+function drawLights(g, t){
+  g.save(); camApply(g);
+  g.globalCompositeOperation = 'lighter';
+  for (const tr of TORCHES){
+    const tx = Math.floor(tr.x), ty = Math.floor(tr.y);
+    let lit = false;
+    for (const [dx,dy] of DIRS8) if (isFloor(tx+dx,ty+dy) && tileVisible(tx+dx,ty+dy)) lit = true;
+    if (isFloor(tx,ty) && tileVisible(tx,ty)) lit = true;
+    if (!lit) continue;
+    const fl = .72 + Math.sin(t*.009 + tr.ph)*.16 + Math.sin(t*.031 + tr.ph*2)*.09;
+    const R0 = TS*2.5*fl;
+    const gr = g.createRadialGradient(tr.x*TS, tr.y*TS, 0, tr.x*TS, tr.y*TS, R0);
+    gr.addColorStop(0,   `rgba(255,186,96,${.30*fl})`);
+    gr.addColorStop(.35, `rgba(220,130,50,${.12*fl})`);
+    gr.addColorStop(1,   'rgba(120,50,10,0)');
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(tr.x*TS, tr.y*TS, R0, 0, 6.284); g.fill();
+    // the flame itself
+    const fx = tr.x*TS, fy = tr.y*TS - 6;
+    g.fillStyle = `rgba(255,170,60,${.55*fl})`;
+    g.beginPath(); g.moveTo(fx-5, fy+5);
+    g.quadraticCurveTo(fx-4, fy-4, fx, fy-11-fl*4);
+    g.quadraticCurveTo(fx+4, fy-4, fx+5, fy+5); g.closePath(); g.fill();
+    g.fillStyle = `rgba(255,240,190,${.5*fl})`;
+    g.beginPath(); g.ellipse(fx, fy-3, 2.4, 4.4, 0, 0, 6.284); g.fill();
+  }
+  for (const h of livingHeroes()){
+    const px = (h.px !== undefined ? h.px : h.x+.5)*TS, py = (h.py !== undefined ? h.py : h.y+.5)*TS;
+    const fl = .86 + Math.sin(t*.006 + h.x)*.08;
+    const R0 = TS*3.1*fl;
+    const gr = g.createRadialGradient(px, py, 0, px, py, R0);
+    gr.addColorStop(0,   `rgba(255,196,120,${.20*fl})`);
+    gr.addColorStop(.45, `rgba(190,120,60,${.07*fl})`);
+    gr.addColorStop(1,   'rgba(60,30,10,0)');
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(px, py, R0, 0, 6.284); g.fill();
+  }
+  for (const p of G.fx){
+    if (!p.glow) continue;
+    const gr = g.createRadialGradient(p.x*TS, p.y*TS, 0, p.x*TS, p.y*TS, p.r*TS);
+    gr.addColorStop(0, p.glow); gr.addColorStop(1,'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.beginPath(); g.arc(p.x*TS, p.y*TS, p.r*TS, 0, 6.284); g.fill();
+  }
+  g.globalCompositeOperation = 'source-over';
+  g.restore();
+}
+
+function drawVignette(g){
+  const gr = g.createRadialGradient(cw/2, ch*.46, Math.min(cw,ch)*.28, cw/2, ch*.46, Math.max(cw,ch)*.78);
+  gr.addColorStop(0,'rgba(0,0,0,0)'); gr.addColorStop(1,'rgba(0,0,0,.72)');
+  g.fillStyle = gr; g.fillRect(0,0,cw,ch);
+  if (grainCan){
+    g.save(); g.globalAlpha = .045; g.globalCompositeOperation = 'overlay';
+    const ox = (Math.random()*96)|0, oy = (Math.random()*96)|0;
+    for (let y=-oy; y<ch; y+=96) for (let x=-ox; x<cw; x+=96) g.drawImage(grainCan, x, y);
+    g.restore();
+  }
+}
+
+/* -------------------------------------------------------------- particles */
+
+function spark(x, y, n, col, opt){
+  opt = opt || {};
+  for (let i=0;i<n;i++){
+    const a = Math.random()*6.284, s = (opt.spd || .012)*(.4 + Math.random());
+    G.fx.push({
+      x:x+.5 + (Math.random()-.5)*.3, y:y+.5 + (Math.random()-.5)*.3,
+      vx:Math.cos(a)*s, vy:Math.sin(a)*s - (opt.up||0),
+      life:opt.life || 520, max:opt.life || 520, col, size:opt.size || 3,
+      grav:opt.grav === undefined ? .00004 : opt.grav, glow:opt.glow, r:opt.r || .8,
+    });
+  }
+}
+function floatText(x, y, text, col){
+  G.fx.push({ x:x+.5, y:y+.2, vx:0, vy:-.0016, life:1000, max:1000, text, col, size:0, grav:0 });
+}
+function drawParticles(g, t){
+  for (const p of G.fx){
+    const k = p.life / p.max;
+    if (p.text){
+      g.save();
+      g.globalAlpha = Math.min(1, k*1.6);
+      g.font = `700 ${TS*.42}px Georgia,serif`;
+      g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.8)';
+      g.strokeText(p.text, p.x*TS, p.y*TS);
+      g.fillStyle = p.col; g.fillText(p.text, p.x*TS, p.y*TS);
+      g.restore();
+      continue;
+    }
+    g.globalAlpha = k;
+    g.fillStyle = p.col;
+    g.beginPath(); g.arc(p.x*TS, p.y*TS, p.size*k, 0, 6.284); g.fill();
+  }
+  g.globalAlpha = 1;
+}
+
+/* ------------------------------------------------------------- 7. SOUND */
+// Small WebAudio kit: a breathing drone under everything, a handful of hits,
+// and a slow modal loop that changes when steel comes out.
+
+let AC = null, masterG = null, musicG = null, droneNodes = null, audioOn = true;
+
+function audioInit(){
+  if (AC || HEADLESS) return;
+  try {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return;
+    AC = new C();
+    masterG = AC.createGain(); masterG.gain.value = .9; masterG.connect(AC.destination);
+    musicG = AC.createGain(); musicG.gain.value = .34; musicG.connect(masterG);
+    startDrone();
+  } catch(e){ AC = null; }
+}
+function startDrone(){
+  if (!AC) return;
+  const g = AC.createGain(); g.gain.value = .055; g.connect(masterG);
+  const f = AC.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 260; f.Q.value = 3;
+  f.connect(g);
+  const oscs = [];
+  for (const [freq, det] of [[55,0],[55.4,7],[82.5,-6]]){
+    const o = AC.createOscillator(); o.type = 'sawtooth';
+    o.frequency.value = freq; o.detune.value = det;
+    const og = AC.createGain(); og.gain.value = .5;
+    o.connect(og); og.connect(f); o.start(); oscs.push(o);
+  }
+  const lfo = AC.createOscillator(); lfo.frequency.value = .07;
+  const lg = AC.createGain(); lg.gain.value = 90;
+  lfo.connect(lg); lg.connect(f.frequency); lfo.start();
+  droneNodes = { g, f };
+}
+function tone(freq, dur, type, vol, when, slide){
+  if (!AC || !audioOn) return;
+  const t0 = AC.currentTime + (when || 0);
+  const o = AC.createOscillator(); o.type = type || 'triangle';
+  o.frequency.setValueAtTime(freq, t0);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(30, slide), t0 + dur);
+  const g = AC.createGain();
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol || .12, t0 + .012);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g); g.connect(masterG); o.start(t0); o.stop(t0 + dur + .03);
+}
+function noise(dur, vol, freq, type){
+  if (!AC || !audioOn) return;
+  const n = Math.floor(AC.sampleRate * dur);
+  const buf = AC.createBuffer(1, n, AC.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i=0;i<n;i++) d[i] = (Math.random()*2-1) * (1 - i/n);
+  const s = AC.createBufferSource(); s.buffer = buf;
+  const f = AC.createBiquadFilter(); f.type = type || 'bandpass';
+  f.frequency.value = freq || 900; f.Q.value = 1.1;
+  const g = AC.createGain(); g.gain.value = vol || .16;
+  s.connect(f); f.connect(g); g.connect(masterG); s.start();
+}
+function sfx(k){
+  if (!AC || !audioOn) return;
+  switch(k){
+    case 'step':   noise(.07, .045, 480, 'lowpass'); break;
+    case 'door':   noise(.34, .13, 320, 'bandpass'); tone(90, .5, 'sawtooth', .07, 0, 62); break;
+    case 'hit':    noise(.14, .30, 2000, 'bandpass'); tone(160, .16, 'square', .13, 0, 70); break;
+    case 'block':  noise(.10, .20, 3400, 'bandpass'); tone(320, .09, 'square', .07); break;
+    case 'miss':   noise(.13, .12, 1400, 'highpass'); break;
+    case 'dice':   for (let i=0;i<5;i++) noise(.05, .10, 1600 + Math.random()*1800, 'bandpass'); break;
+    case 'die':    tone(200, .5, 'sawtooth', .13, 0, 48); noise(.3, .16, 500, 'lowpass'); break;
+    case 'heroDie':tone(150, 1.1, 'sawtooth', .16, 0, 40); tone(75, 1.3, 'sine', .12, .05, 32); break;
+    case 'spell':  tone(520, .5, 'sine', .10, 0, 1500); tone(780, .45, 'triangle', .07, .04, 2100); break;
+    case 'heal':   [523,659,784,1046].forEach((f,i) => tone(f, .35, 'sine', .09, i*.06)); break;
+    case 'gold':   [880,1175,1568].forEach((f,i) => tone(f, .18, 'square', .06, i*.05)); break;
+    case 'trap':   noise(.22, .28, 700, 'bandpass'); tone(110, .35, 'sawtooth', .14, 0, 55); break;
+    case 'search': noise(.30, .07, 2600, 'bandpass'); break;
+    case 'win':    [392,523,659,784,1046].forEach((f,i) => tone(f, .6, 'triangle', .11, i*.11)); break;
+    case 'lose':   [392,349,294,220].forEach((f,i) => tone(f, .8, 'sawtooth', .11, i*.18)); break;
+    case 'ui':     tone(660, .06, 'square', .045); break;
+    case 'boss':   tone(58, 1.6, 'sawtooth', .2, 0, 40); noise(1.0, .12, 200, 'lowpass'); break;
+  }
+}
+
+// --- the loop ------------------------------------------------------------
+const SCALE_EXPLORE = [0,2,3,5,7,8,10];      // D aeolian
+const SCALE_FIGHT   = [0,1,3,5,6,8,10];      // D phrygian, meaner
+let musicStep = 0, musicNext = 0, musicMood = 'explore';
+
+function musicTick(now){
+  if (!AC || !audioOn || !G || !G.q) return;
+  const bpm = musicMood === 'fight' ? 104 : 74;
+  const beat = 60/bpm;
+  if (now < musicNext) return;
+  musicNext = (musicNext || now) + beat/2;
+  if (musicNext < now) musicNext = now + beat/2;
+  const s = musicStep++;
+  const root = 36.71;                        // D1
+  const sc = musicMood === 'fight' ? SCALE_FIGHT : SCALE_EXPLORE;
+  const bar = (s >> 3) % 4;
+  const bassDeg = [0,0,5,3][bar];
+  if (s % 4 === 0){
+    tone(root*Math.pow(2, bassDeg/12), beat*1.6, 'sawtooth', .075);
+  }
+  if (musicMood === 'fight'){
+    if (s % 2 === 0) noise(.06, .06, 5200, 'highpass');
+    if (s % 8 === 4) noise(.20, .12, 240, 'lowpass');
+    const deg = sc[(s*3) % sc.length];
+    tone(root*4*Math.pow(2, (deg + bassDeg)/12), beat*.42, 'square', .045);
+  } else {
+    if (s % 8 === 0){
+      const deg = sc[(s>>3) % sc.length];
+      tone(root*4*Math.pow(2, (deg + bassDeg)/12), beat*2.4, 'triangle', .04);
+      tone(root*6*Math.pow(2, (deg + bassDeg)/12), beat*2.0, 'sine', .022);
+    }
+    if (s % 16 === 9) noise(.5, .03, 3000, 'bandpass');   // a drip somewhere
+  }
+}
+function setMood(m){
+  if (m !== musicMood){ musicMood = m; musicStep = 0; }
+}
+
+/* ------------------------------------------------------- 8. TIME AND DICE */
+
+// One timer list drives all pacing. In headless the callback fires at once, so
+// the tests walk the same code path the game does, only instantly.
+function later(ms, fn){
+  if (HEADLESS){ fn(); return; }
+  G.timers.push({ t:ms, fn });
+}
+function clearTimers(){ if (G) G.timers.length = 0; }
+
+const SKULL = 0, WHITE = 1, BLACK = 2;
+function combatDie(){ const r = ri(6); return r < 3 ? SKULL : r < 5 ? WHITE : BLACK; }
+function rollCombat(n){ const out = []; for (let i=0;i<n;i++) out.push(combatDie()); return out; }
+const countSkulls = (f) => f.filter(v => v === SKULL).length;
+const countShields = (f, hero) => f.filter(v => v === (hero ? WHITE : BLACK)).length;
+
+function showDice(kind, atk, def, label, sub, done){
+  const items = [];
+  for (const f of atk) items.push({ side:'atk', face:f, settle:0 });
+  for (const f of def) items.push({ side:'def', face:f, settle:0 });
+  const per = 90, base = 380;
+  items.forEach((it,i) => { it.settle = base + i*per; });
+  const total = base + items.length*per + 520;
+  G.dice = { kind, items, t:0, total, label, sub };
+  sfx('dice');
+  later(total, () => { G.dice = null; if (done) done(); });
+}
+function showMoveDice(a, b, done){
+  G.dice = { kind:'move', items:[{side:'pip',face:a,settle:380},{side:'pip',face:b,settle:470}],
+             t:0, total:1150, label:'MOVEMENT', sub:(a+b)+' squares' };
+  sfx('dice');
+  later(1150, () => { G.dice = null; if (done) done(); });
+}
+
+function drawDice(g, t){
+  if (!G.dice) return;
+  const D = G.dice, n = D.items.length;
+  const size = Math.min(46, (cw - 60) / Math.max(4, n) - 8);
+  const gap = size + 8;
+  const totalW = n*gap - 8;
+  const cx0 = cw/2 - totalW/2;
+  const cy = ch*.40;
+  g.save();
+  g.fillStyle = 'rgba(6,5,4,.72)';
+  rr(g, cw/2 - totalW/2 - 22, cy - size/2 - 40, totalW + 44, size + 78, 12); g.fill();
+  g.strokeStyle = 'rgba(216,168,60,.35)'; g.lineWidth = 1;
+  rr(g, cw/2 - totalW/2 - 22, cy - size/2 - 40, totalW + 44, size + 78, 12); g.stroke();
+  g.fillStyle = '#9c8d75'; g.font = '600 10px Georgia,serif';
+  g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.save(); g.translate(cw/2, cy - size/2 - 22);
+  g.letterSpacing = '3px';
+  g.fillText(D.label, 0, 0);
+  g.restore();
+  D.items.forEach((it, i) => {
+    const x = cx0 + i*gap + size/2;
+    const settled = D.t >= it.settle;
+    const face = settled ? it.face : ri(6);
+    let yy = cy, sc = 1, rot = 0;
+    if (!settled){
+      const k = D.t / it.settle;
+      yy = cy - Math.abs(Math.sin(D.t*.02))*22*(1-k);
+      rot = D.t*.02; sc = 1.08;
+    } else {
+      const k = Math.min(1, (D.t - it.settle)/160);
+      sc = 1 + (1-k)*.28;
+    }
+    g.save(); g.translate(x, yy); g.rotate(rot); g.scale(sc, sc);
+    dieFace(g, size, it.side, settled ? it.face : (D.kind === 'move' ? 1+ri(6) : face), D.kind);
+    g.restore();
+  });
+  if (D.sub && D.t > D.total - 620){
+    g.globalAlpha = Math.min(1, (D.t - (D.total-620))/180);
+    g.fillStyle = '#f3d488'; g.font = '700 15px Georgia,serif';
+    g.letterSpacing = '2px';
+    g.fillText(D.sub, cw/2, cy + size/2 + 22);
+    g.globalAlpha = 1;
+  }
+  g.restore();
+}
+function dieFace(g, s, side, face, kind){
+  const r = s*.18;
+  g.save();
+  g.shadowColor = 'rgba(0,0,0,.7)'; g.shadowBlur = 10; g.shadowOffsetY = 4;
+  if (kind === 'move'){
+    g.fillStyle = '#a8231d';
+    rr(g, -s/2, -s/2, s, s, r); g.fill();
+    g.shadowBlur = 0;
+    g.fillStyle = 'rgba(255,255,255,.22)'; rr(g, -s/2+2, -s/2+2, s-4, s*.34, r*.7); g.fill();
+    g.fillStyle = '#fff4e0';
+    const P = [[0,0]], pip = s*.10;
+    const layouts = { 1:[[0,0]], 2:[[-.24,-.24],[.24,.24]], 3:[[-.26,-.26],[0,0],[.26,.26]],
+      4:[[-.24,-.24],[.24,-.24],[-.24,.24],[.24,.24]],
+      5:[[-.26,-.26],[.26,-.26],[0,0],[-.26,.26],[.26,.26]],
+      6:[[-.25,-.28],[.25,-.28],[-.25,0],[.25,0],[-.25,.28],[.25,.28]] };
+    for (const [dx,dy] of (layouts[face] || P)){
+      g.beginPath(); g.arc(dx*s, dy*s, pip, 0, 6.284); g.fill();
+    }
+    g.restore(); return;
+  }
+  const atk = side === 'atk';
+  g.fillStyle = atk ? '#e6ddc6' : '#2b2c31';
+  rr(g, -s/2, -s/2, s, s, r); g.fill();
+  g.shadowBlur = 0;
+  g.fillStyle = atk ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.10)';
+  rr(g, -s/2+2, -s/2+2, s-4, s*.32, r*.7); g.fill();
+  g.strokeStyle = atk ? 'rgba(90,74,50,.45)' : 'rgba(200,200,220,.20)'; g.lineWidth = 1.2;
+  rr(g, -s/2, -s/2, s, s, r); g.stroke();
+  const ink = atk ? '#2a2018' : '#dfe4ea';
+  if (face === SKULL) glyphSkull(g, s*.60, ink);
+  else if (face === WHITE) glyphShield(g, s*.56, atk ? '#c8c2ae' : '#eef2f6', ink);
+  else glyphShield(g, s*.56, atk ? '#4a4238' : '#6a6f78', ink);
+  g.restore();
+}
+function glyphSkull(g, s, col){
+  g.fillStyle = col;
+  g.beginPath(); g.arc(0, -s*.10, s*.34, 0, 6.284); g.fill();
+  g.fillRect(-s*.18, s*.14, s*.36, s*.20);
+  g.fillStyle = 'rgba(255,255,255,.85)';
+  g.beginPath(); g.arc(-s*.13, -s*.12, s*.11, 0, 6.284); g.fill();
+  g.beginPath(); g.arc( s*.13, -s*.12, s*.11, 0, 6.284); g.fill();
+  g.fillStyle = col;
+  g.beginPath(); g.moveTo(0, -s*.02); g.lineTo(s*.06, s*.10); g.lineTo(-s*.06, s*.10); g.closePath(); g.fill();
+  g.fillStyle = 'rgba(255,255,255,.75)';
+  for (let i=0;i<3;i++) g.fillRect(-s*.15 + i*s*.11, s*.17, s*.05, s*.14);
+}
+function glyphShield(g, s, fill, edge){
+  g.fillStyle = fill;
+  g.beginPath();
+  g.moveTo(-s*.34, -s*.36); g.lineTo(s*.34, -s*.36);
+  g.lineTo(s*.34, s*.04); g.quadraticCurveTo(s*.30, s*.34, 0, s*.44);
+  g.quadraticCurveTo(-s*.30, s*.34, -s*.34, s*.04);
+  g.closePath(); g.fill();
+  g.strokeStyle = edge; g.lineWidth = Math.max(1.2, s*.07); g.stroke();
+  g.strokeStyle = edge; g.lineWidth = Math.max(1, s*.05);
+  g.beginPath(); g.moveTo(0, -s*.30); g.lineTo(0, s*.30); g.stroke();
+}
+
+/* ------------------------------------------------------- 9. THE TURN LOOP */
+
+function activeHero(){
+  if (!G.q) return null;
+  return G.q.actors.find(a => a.kind === 'hero' && a.id === G.q.activeId && a.alive) || null;
+}
+function busy(){
+  return !!(G.dice || G.timers.length || G.q.actors.some(a => a.walking) || G.q.over);
+}
+
+function say(text, cls){
+  if (!G.q) return;
+  G.q.log.push({ text, cls, t:0 });
+  if (G.q.log.length > 4) G.q.log.shift();
+  renderLog();
+}
+
+/* --------------------------------------------------------------- movement */
+
+function slide(a, tx, ty, ms, done){
+  a.px = a.x + .5; a.py = a.y + .5;
+  a.sx = a.px; a.sy = a.py;
+  a.x = tx; a.y = ty;
+  a.gx = tx + .5; a.gy = ty + .5;
+  if (HEADLESS || ms <= 0){ a.px = a.gx; a.py = a.gy; a.walking = false; if (done) done(); return; }
+  a.slideT = 0; a.slideMs = ms; a.walking = true; a.slideDone = done;
+}
+function tickSlide(a, dt){
+  if (!a.walking) return;
+  a.slideT += dt;
+  const k = Math.min(1, a.slideT / a.slideMs);
+  const e = k*k*(3-2*k);
+  a.px = lerp(a.sx, a.gx, e); a.py = lerp(a.sy, a.gy, e);
+  if (k >= 1){
+    a.walking = false;
+    const f = a.slideDone; a.slideDone = null;
+    if (f) f();
+  }
+}
+
+function heroWalk(h, path, done){
+  let k = 0;
+  const step = () => {
+    if (k >= path.length || h.moveLeft <= 0 || !h.alive){ finishStep(); return; }
+    const [nx,ny] = path[k];
+    // a shut door stops you where you stand — opening it is free, walking on is not
+    const dr = doorBetween(h.x, h.y, nx, ny);
+    if (dr && !dr.open){ openDoorAt(h, dr); finishStep(); return; }
+    const occ = actorAt(nx,ny);
+    const last = k === path.length - 1;
+    if (furnAt(nx,ny) || trapBlocks(nx,ny) || (occ && (occ.kind !== 'hero' || last))){ finishStep(); return; }
+    k++;
+    const ox = h.x, oy = h.y;
+    h.facing = nx > ox ? 1 : nx < ox ? -1 : h.facing;
+    sfx('step');
+    slide(h, nx, ny, 150, () => {
+      h.moveLeft--;
+      const npc = G.q.actors.find(a => a.kind === 'npc' && a.follow === h.id && a.alive);
+      if (npc) slide(npc, ox, oy, 150, null);
+      recomputeVision();
+      focusOn(h.x, h.y);
+      const tr = trapAt(h.x, h.y);
+      if (tr){ springTrap(h, tr, step); return; }
+      later(30, step);
+    });
+  };
+  const finishStep = () => {
+    recomputeVision();
+    refreshField();
+    checkQuestState();
+    renderHUD();
+    if (done) done();
+  };
+  step();
+}
+
+function refreshField(){
+  const h = activeHero();
+  G.q.field = h && h.alive && h.moveLeft > 0 ? walkFieldSafe(h.x, h.y, h.moveLeft, h) : { d:new Map(), from:new Map() };
+}
+// The field you may *end* on: squeezing past a companion is fine, standing on
+// one is not, and a fallen block is not a square at all.
+function walkFieldSafe(x, y, n, mover){
+  const f = walkField(x, y, n, mover);
+  for (const [k] of [...f.d]){
+    const tx = k % W, ty = (k/W)|0;
+    const occ = actorAt(tx,ty);
+    if (trapBlocks(tx,ty) || (occ && occ !== mover)) f.d.delete(k);
+  }
+  return f;
+}
+
+/* ------------------------------------------------------------------ traps */
+
+function springTrap(h, tr, cont){
+  tr.sprung = true; tr.found = true;
+  sfx('trap'); G.shake = 14;
+  if (tr.t === 'pit'){
+    if (h.gear.rope){
+      say(`${h.name} drops into a pit — and is out again on the rope.`, 'bad');
+      spark(h.x, h.y, 14, '#6b5a3c');
+      hurt(h, 1, () => later(220, cont));
+      return;
+    }
+    say(`${h.name} falls into a pit! −1 Body Point, and there the movement ends.`, 'bad');
+    spark(h.x, h.y, 18, '#4a3a28');
+    h.moveLeft = 0;
+    hurt(h, 1, () => later(260, cont));
+  } else if (tr.t === 'spear'){
+    say(`Spears burst from the wall! ${h.name} loses 2 Body Points.`, 'bad');
+    spark(h.x, h.y, 20, '#c8ccd2', { spd:.02 });
+    hurt(h, 2, () => later(260, cont));
+  } else {
+    say(`A block of stone crashes down — 3 Body Points, and the way is shut.`, 'bad');
+    spark(h.x, h.y, 26, '#6a6258', { spd:.018 });
+    const back = lastFreeNeighbour(h);
+    h.moveLeft = 0;
+    if (back) slide(h, back[0], back[1], 130, null);
+    hurt(h, 3, () => later(280, cont));
+  }
+}
+function lastFreeNeighbour(h){
+  for (const [dx,dy] of DIRS){
+    const nx = h.x+dx, ny = h.y+dy;
+    if (linked(h.x,h.y,nx,ny) && !blocked(nx,ny) && !trapBlocks(nx,ny)) return [nx,ny];
+  }
+  return null;
+}
+
+/* ----------------------------------------------------------------- combat */
+
+function adjacentMonster(h){
+  for (const [dx,dy] of DIRS){
+    const m = actorAt(h.x+dx, h.y+dy);
+    if (m && m.kind === 'monster' && m.alive && linked(h.x,h.y,h.x+dx,h.y+dy)) return m;
+  }
+  return null;
+}
+function canStrike(h, m){
+  if (!h || !m || h.acted || !h.alive || !m.alive) return false;
+  const w = weaponOf(h);
+  const dx = Math.abs(h.x-m.x), dy = Math.abs(h.y-m.y);
+  const orth = (dx+dy) === 1 && linked(h.x,h.y,m.x,m.y);
+  const diag = dx <= 1 && dy <= 1 && (dx+dy) > 0;
+  if (w.ranged) return !adjacentMonster(h) && tileVisible(m.x,m.y) && hasLOS(h.x,h.y,m.x,m.y);
+  if (w.thrown && !orth) return tileVisible(m.x,m.y) && hasLOS(h.x,h.y,m.x,m.y);
+  if (w.diag) return orth || (diag && hasLOS(h.x,h.y,m.x,m.y));
+  return orth;
+}
+
+function doAttack(h, m){
+  if (!canStrike(h, m)) return false;
+  h.acted = true;
+  h.facing = m.x > h.x ? 1 : m.x < h.x ? -1 : h.facing;
+  setMood('fight');
+  const n = attackDice(h, m);
+  const atk = rollCombat(n);
+  const def = rollCombat(m.def);
+  const skulls = countSkulls(atk);
+  const blocks = countShields(def, false);
+  const immune = m.spirit && !weaponOf(h).spirit;
+  let dmg = Math.max(0, skulls - blocks);
+  if (immune) dmg = 0;
+  const sub = immune ? 'The blow passes through him'
+            : dmg > 0 ? `${dmg} Body Point${dmg>1?'s':''}` : 'Turned aside';
+  if (h.buffs.courage) delete h.buffs.courage;
+  showDice('attack', atk, def, `${h.name} vs ${m.name}`, sub, () => {
+    if (immune){
+      say(`Your steel passes through ${m.name} like smoke. Only the Spirit Blade will bite.`, 'magic');
+      spark(m.x, m.y, 14, '#9a86e0', { glow:'rgba(154,134,224,.4)', r:1.2 });
+      sfx('block');
+    } else if (dmg > 0){
+      sfx('hit'); G.shake = 7 + dmg*3;
+      m.sleep = 0;
+      hurt(m, dmg, null);
+    } else {
+      sfx('block');
+      say(`${m.name} turns the blow aside.`, '');
+      spark(m.x, m.y, 8, '#c8ccd2', { spd:.014 });
+    }
+    refreshField(); renderHUD(); checkQuestState();
+  });
+  return true;
+}
+
+function monsterAttack(m, h, done){
+  if (h.buffs.veil){
+    say(`The mist swallows ${h.name} — ${m.name} strikes at nothing.`, 'magic');
+    later(300, done); return;
+  }
+  m.facing = h.x > m.x ? 1 : h.x < m.x ? -1 : m.facing;
+  const atk = rollCombat(m.atk);
+  const def = rollCombat(defendDice(h));
+  const skulls = countSkulls(atk);
+  const blocks = countShields(def, true);
+  const dmg = Math.max(0, skulls - blocks);
+  const sub = dmg > 0 ? `${h.name} loses ${dmg}` : `${h.name} holds`;
+  showDice('defend', atk, def, `${m.name} vs ${h.name}`, sub, () => {
+    if (dmg > 0){ sfx('hit'); G.shake = 8 + dmg*3; hurt(h, dmg, null); }
+    else { sfx('block'); spark(h.x, h.y, 8, '#dfe4ea', { spd:.012 }); }
+    renderHUD();
+    later(220, done);
+  });
+}
+
+function hurt(a, n, done){
+  a.bp -= n;
+  a.hurtT = 280;
+  floatText(a.x, a.y, '−' + n, a.kind === 'hero' ? '#ff7a6a' : '#ffd06a');
+  spark(a.x, a.y, 10 + n*4, a.kind === 'hero' ? '#c0392b' : '#8a1f1f', { spd:.016, up:.004 });
+  if (a.bp <= 0){ kill(a); }
+  renderHUD();
+  if (done) done();
+}
+function kill(a){
+  a.alive = false; a.deathT = 620;
+  if (a.kind === 'monster'){
+    sfx('die');
+    G.q.pot = (G.q.pot || 0) + (MONSTERS[a.mt] ? MONSTERS[a.mt].gold : 10);
+    spark(a.x, a.y, 24, '#6a1f14', { spd:.02, up:.003 });
+    say(`${a.name} falls.`, 'good');
+    if (a.boss){
+      G.q.bossDead = true;
+      sfx('boss'); G.shake = 26;
+      spark(a.x, a.y, 46, '#e0b040', { spd:.03, glow:'rgba(224,176,64,.5)', r:2.2, life:900 });
+      say(`${a.name} is destroyed!`, 'good');
+    }
+    const npc = null;
+  } else if (a.kind === 'hero'){
+    sfx('heroDie');
+    say(`${a.name} falls, and does not get up.`, 'bad');
+    spark(a.x, a.y, 30, '#7a1f14', { spd:.02, life:800 });
+    a.done = true;
+    const npc = G.q.actors.find(x => x.kind === 'npc' && x.follow === a.id);
+    if (npc){
+      const other = livingHeroes()[0];
+      npc.follow = other ? other.id : null;
+    }
+  }
+  later(40, checkQuestState);
+}
+
+/* ------------------------------------------------------------- activation */
+
+function beginHeroActivation(h){
+  G.q.activeId = h.id;
+  h.buffs.rockskin = 0; delete h.buffs.rockskin;
+  h.buffs.veil = 0; delete h.buffs.veil;
+  h.acted = false;
+  focusOn(h.x, h.y);
+  if (!h.rolled){
+    const a = 1+ri(6), b = 1+ri(6);
+    const total = Math.max(1, a + b - moveSlow(h));
+    showMoveDice(a, b, () => {
+      h.rolled = true; h.moveLeft = total;
+      refreshField(); renderHUD();
+      if (G.q.field && G.q.field.d.size <= 1) say(`${h.name} is hemmed in — move somebody else first.`, 'bad');
+      else say(`${h.name} may move ${total} squares.`, '');
+    });
+  } else { refreshField(); renderHUD(); }
+  if (h.rolled && h.moveLeft > 0 && G.q.field && G.q.field.d.size <= 1)
+    say(`${h.name} is hemmed in — move somebody else first.`, 'bad');
+}
+function selectHero(id){
+  const h = G.q.actors.find(a => a.kind === 'hero' && a.id === id);
+  if (!h || !h.alive || h.done || busy() || G.q.phase !== 'hero') return;
+  if (G.q.activeId === id) { focusOn(h.x, h.y); return; }
+  sfx('ui');
+  beginHeroActivation(h);
+}
+function endHeroTurn(){
+  const h = activeHero();
+  if (!h || busy()) return;
+  h.done = true; h.moveLeft = 0;
+  sfx('ui');
+  const next = G.q.actors.find(a => a.kind === 'hero' && a.alive && !a.done);
+  if (next) beginHeroActivation(next);
+  else zargonTurn();
+  renderHUD();
+}
+
+/* ------------------------------------------------------------ the Warlock */
+
+function zargonTurn(){
+  G.q.phase = 'monster';
+  G.q.field = null;
+  renderHUD();
+  banner('THE WARLOCK', 'moves his pieces');
+  // anything that can see a hero is awake now
+  for (const m of monstersOf()){
+    if (m.awake) continue;
+    for (const h of livingHeroes())
+      if (tileVisible(m.x,m.y) || hasLOS(m.x,m.y,h.x,h.y) && dist2(m.x,m.y,h.x,h.y) <= 8) { m.awake = true; break; }
+  }
+  const queue = monstersOf().filter(m => m.awake);
+  let i = 0;
+  const next = () => {
+    if (G.q.over) return;
+    if (i >= queue.length){ endZargonTurn(); return; }
+    const m = queue[i++];
+    if (!m.alive){ next(); return; }
+    monsterAct(m, () => later(60, next));
+  };
+  later(HEADLESS ? 0 : 620, next);
+}
+
+function monsterAct(m, done){
+  if (m.sleep > 0){ done(); return; }
+  if (m.stun > 0){ m.stun--; done(); return; }
+  const targets = livingHeroes();
+  if (!targets.length){ done(); return; }
+  // A monster holds its room until it can actually see somebody. Without this
+  // leash a revealed dungeon turns into one rolling mob a dozen rooms deep.
+  const engaged = targets.some(h => dist2(m.x,m.y,h.x,h.y) <= 12 && hasLOS(m.x,m.y,h.x,h.y));
+  if (!engaged && roomAt(m.x,m.y) >= 0){ done(); return; }
+  // closest hero we can actually reach or see
+  let best = null, bestD = 1e9;
+  for (const h of targets){
+    const d = dist2(m.x,m.y,h.x,h.y);
+    if (d < bestD){ bestD = d; best = h; }
+  }
+  if (!best){ done(); return; }
+  const strike = () => {
+    const adj = DIRS.some(([dx,dy]) => m.x+dx===best.x && m.y+dy===best.y && linked(m.x,m.y,best.x,best.y));
+    if (adj){ focusOn(m.x,m.y); monsterAttack(m, best, done); }
+    else done();
+  };
+  // already next to someone? hit them
+  for (const h of targets){
+    if (dist2(m.x,m.y,h.x,h.y) === 1 && linked(m.x,m.y,h.x,h.y)){
+      focusOn(m.x,m.y); monsterAttack(m, h, done); return;
+    }
+  }
+  const f = walkFieldSafe(m.x, m.y, m.mv, m);
+  let goal = null, goalD = dist2(m.x,m.y,best.x,best.y), goalCost = 0;
+  for (const [k, cost] of f.d){
+    const x = k % W, y = (k/W)|0;
+    if (blocked(x,y) && !(x===m.x&&y===m.y)) continue;
+    const d = dist2(x,y,best.x,best.y);
+    if (d < goalD || (d === goalD && cost < goalCost)){ goalD = d; goal = [x,y]; goalCost = cost; }
+  }
+  if (!goal){ strike(); return; }
+  const path = tracePath(f, goal[0], goal[1]);
+  if (!path || !path.length){ strike(); return; }
+  let k = 0;
+  const step = () => {
+    if (k >= path.length){ strike(); return; }
+    const [nx,ny] = path[k++];
+    m.facing = nx > m.x ? 1 : nx < m.x ? -1 : m.facing;
+    slide(m, nx, ny, 130, () => later(20, step));
+  };
+  step();
+}
+
+function endZargonTurn(){
+  if (G.q.over) return;
+  G.q.turn++;
+  const q = QUESTS[G.q.qi];
+  if (q.turnLimit && G.q.turn > q.turnLimit){ questOver(false, 'The working completes. Grimhold seals itself with you inside.'); return; }
+  G.q.phase = 'hero';
+  for (const h of heroes()){
+    h.done = !h.alive; h.acted = false; h.rolled = false; h.moveLeft = 0;
+  }
+  setMood(monstersOf().some(m => m.awake && tileVisible(m.x,m.y)) ? 'fight' : 'explore');
+  const first = heroes().find(h => h.alive && !h.done);
+  if (!first){ questOver(false, 'The party is destroyed.'); return; }
+  banner('YOUR TURN', 'turn ' + G.q.turn);
+  beginHeroActivation(first);
+  renderHUD();
+}
+
+/* ---------------------------------------------------------------- actions */
+
+function openDoorAt(h, d){
+  if (d.open) return false;
+  if (d.secret && !d.found) return false;
+  d.open = true;
+  sfx('door');
+  say('The door swings open.', '');
+  revealRoom(d.rid);
+  recomputeVision();
+  refreshField();
+  const q = QUESTS[G.q.qi];
+  const room = ROOMS[d.rid];
+  if (!G.q.announced) G.q.announced = {};
+  if (!G.q.announced[d.rid]){
+    G.q.announced[d.rid] = 1;
+    const n = monstersOf().filter(m => roomAt(m.x,m.y) === d.rid).length;
+    say(`${room.name}${n ? ' — ' + n + ' hostile' + (n>1?'s':'') : ' — empty'}`, n ? 'bad' : '');
+    if (n) setMood('fight');
+  }
+  renderHUD();
+  return true;
+}
+function doorBetween(x1,y1,x2,y2){
+  const d = doorAt(x1,y1,x2,y2);
+  return d && (!d.secret || d.found) ? d : null;
+}
+
+function searchTreasure(){
+  const h = activeHero();
+  if (!h || h.acted || busy()) return;
+  const rid = roomAt(h.x, h.y);
+  if (rid < 0){ say('You can only ransack a room, not a corridor.', 'bad'); return; }
+  if (monstersOf().some(m => roomAt(m.x,m.y) === rid)){ say('Not with monsters in the room.', 'bad'); return; }
+  if (G.q.searched[rid]){ say('This room has been picked over already.', 'bad'); return; }
+  h.acted = true; G.q.searched[rid] = 1;
+  sfx('search');
+  const qf = G.q.furn.find(f => f.r === rid && f.quest && !f.taken);
+  if (qf){
+    qf.taken = true;
+    later(260, () => giveQuestItem(qf.quest, h));
+    renderHUD();
+    return;
+  }
+  const card = TREASURE_DECK[G.q.deck[G.q.deckAt++ % G.q.deck.length]];
+  later(260, () => applyTreasure(card, h));
+  renderHUD();
+}
+function applyTreasure(card, h){
+  if (card.k === 'gold'){
+    G.q.pot = (G.q.pot || 0) + card.n;
+    sfx('gold'); floatText(h.x, h.y, '+' + card.n, '#f3d488');
+    spark(h.x, h.y, 16, '#d8a83c', { spd:.014, up:.004 });
+    say(`${card.t}: ${card.d}`, 'good');
+  } else if (card.k === 'item'){
+    h.items[card.n] = (h.items[card.n] || 0) + 1;
+    sfx('gold'); say(`${card.t} — ${h.name} takes it.`, 'good');
+  } else if (card.k === 'hazard'){
+    say(`${card.t}! ${card.d}`, 'bad');
+    hurt(h, card.n, null);
+  } else if (card.k === 'wander'){
+    say(`${card.t} — ${card.d}`, 'bad');
+    spawnWanderer(h);
+  } else {
+    say(`${card.t}. ${card.d}`, '');
+  }
+  renderHUD(); checkQuestState();
+}
+function spawnWanderer(h){
+  const pool = ['goblin','orc','skeleton','fimir','zombie'];
+  const t = pool[Math.min(pool.length-1, Math.floor(G.q.qi/2.4) + ri(2))] || 'goblin';
+  const spots = [];
+  for (const [dx,dy] of DIRS8){
+    const x = h.x+dx, y = h.y+dy;
+    if (isFloor(x,y) && !blocked(x,y) && linked(h.x,h.y,x,y)) spots.push([x,y]);
+  }
+  if (!spots.length) return;
+  const [x,y] = pick(spots);
+  const def = MONSTERS[t];
+  G.q.actors.push({ kind:'monster', uid:9000 + ri(9999), mt:t, name:def.name, x, y, alive:true, facing:-1,
+    bpMax:def.bp, bp:def.bp, atk:def.atk, def:def.def, mind:def.mind, mv:def.move,
+    boss:false, awake:true, sleep:0, stun:0, bob:Math.random()*6.28 });
+  spark(x, y, 20, '#6a1f7a', { spd:.02, glow:'rgba(150,60,200,.4)', r:1.4 });
+  setMood('fight');
+}
+
+function searchTraps(){
+  const h = activeHero();
+  if (!h || h.acted || busy()) return;
+  const rid = roomAt(h.x, h.y);
+  if (monstersOf().some(m => tileVisible(m.x,m.y) && dist2(m.x,m.y,h.x,h.y) <= 5)){
+    say('Too dangerous to search with a monster this close.', 'bad'); return;
+  }
+  h.acted = true; sfx('search');
+  let found = 0;
+  for (const tr of G.q.traps){
+    if (tr.found || tr.sprung) continue;
+    const inRoom = rid >= 0 && roomAt(tr.x,tr.y) === rid;
+    const near = dist2(tr.x,tr.y,h.x,h.y) <= 5 && hasLOS(h.x,h.y,tr.x,tr.y);
+    if (inRoom || near){ tr.found = true; found++; }
+  }
+  let doors = 0;
+  for (const k in G.q.doors){
+    const d = G.q.doors[k];
+    if (!d.secret || d.found) continue;
+    const near = dist2(d.rx,d.ry,h.x,h.y) <= 5 || dist2(d.cx,d.cy,h.x,h.y) <= 5;
+    if ((rid >= 0 && d.rid === rid) || near){ d.found = true; doors++; }
+  }
+  if (G.q.trapSearchedTiles === undefined) G.q.trapSearchedTiles = 1;
+  say(found || doors
+    ? `${h.name} finds ${found ? found + ' trap' + (found>1?'s':'') : ''}${found&&doors?' and ':''}${doors ? doors + ' hidden door' + (doors>1?'s':'') : ''}.`
+    : `${h.name} finds nothing hidden here.`, found||doors ? 'good' : '');
+  recomputeVision(); renderHUD();
+}
+
+function disarmTarget(){
+  const h = activeHero();
+  if (!h) return null;
+  for (const [dx,dy] of [[0,0],...DIRS]){
+    const tr = trapAt(h.x+dx, h.y+dy);
+    if (tr && tr.found && !tr.sprung && (dx===0&&dy===0 ? true : linked(h.x,h.y,h.x+dx,h.y+dy))) return tr;
+  }
+  return null;
+}
+function disarmTrap(){
+  const h = activeHero();
+  const tr = disarmTarget();
+  if (!h || !tr || h.acted || busy()) return;
+  h.acted = true;
+  if (h.toolkit || h.gear.toolkit){
+    tr.disarmed = true; sfx('search');
+    say(`${h.name} pulls the mechanism apart. The trap is dead.`, 'good');
+    spark(tr.x, tr.y, 10, '#9c8d75');
+    renderHUD(); return;
+  }
+  const f = rollCombat(1);
+  showDice('attack', f, [], `${h.name} works the trap`, f[0]===SKULL ? 'Disarmed' : f[0]===BLACK ? 'It goes off!' : 'No luck', () => {
+    if (f[0] === SKULL){ tr.disarmed = true; say('The trap is disarmed.', 'good'); }
+    else if (f[0] === BLACK){ if (dist2(tr.x,tr.y,h.x,h.y) === 0) springTrap(h, tr, ()=>{}); else { tr.sprung = true; say('It springs harmlessly.', ''); } }
+    else say('The mechanism will not budge.', '');
+    renderHUD();
+  });
+}
+
+function quaffPotion(){
+  const h = activeHero();
+  if (!h || busy() || !h.items.potion) return;
+  h.items.potion--;
+  const before = h.bp;
+  h.bp = Math.min(h.bpMax, h.bp + 4);
+  sfx('heal');
+  floatText(h.x, h.y, '+' + (h.bp - before), '#7de8a0');
+  spark(h.x, h.y, 18, '#7de8a0', { spd:.012, up:.006 });
+  say(`${h.name} drinks. +${h.bp - before} Body Points.`, 'good');
+  renderHUD();
+}
+function useHolyWater(m){
+  const h = activeHero();
+  if (!h || h.acted || !h.items.holy || !m || !MONSTERS[m.mt].undead) return false;
+  h.items.holy--; h.acted = true;
+  const atk = rollCombat(3);
+  const skulls = countSkulls(atk);
+  showDice('attack', atk, [], `Holy water on ${m.name}`, skulls ? `${skulls} Body Points` : 'It only steams', () => {
+    if (skulls > 0){ sfx('hit'); hurt(m, skulls, null); }
+    spark(m.x, m.y, 20, '#e8f0ff', { spd:.016, glow:'rgba(220,240,255,.45)', r:1.4 });
+    renderHUD(); checkQuestState();
+  });
+  return true;
+}
+
+/* ----------------------------------------------------------------- spells */
+
+function knownSpells(h){
+  const out = [];
+  for (const el of h.elements) for (const k of ELEMENT_SPELLS[el]) out.push(k);
+  return out;
+}
+function spellReady(h, key){ return knownSpells(h).includes(key) && !h.spent.includes(key); }
+
+function castSpell(h, key, target){
+  if (!spellReady(h, key) || h.acted) return false;
+  const sp = SPELLS[key];
+  h.acted = true; h.spent.push(key);
+  sfx('spell');
+  const el = ELEMENTS[sp.el];
+  spark(h.x, h.y, 22, el.col, { spd:.016, up:.004, glow:el.col.replace(')',',.4)').replace('#','rgba(') });
+  if (sp.dice && target){
+    const atk = rollCombat(sp.dice);
+    const skulls = countSkulls(atk);
+    const def = sp.noDef ? [] : rollCombat(target.def);
+    const blocks = sp.noDef ? 0 : countShields(def, false);
+    const dmg = Math.max(0, skulls - blocks);
+    spark(target.x, target.y, 26, el.col, { spd:.022, glow:'rgba(255,180,90,.45)', r:1.6 });
+    showDice('attack', atk, def, `${sp.name} → ${target.name}`, dmg ? `${dmg} Body Point${dmg>1?'s':''}` : 'No effect', () => {
+      if (dmg > 0){ G.shake = 12; target.sleep = 0; hurt(target, dmg, null); }
+      renderHUD(); checkQuestState();
+    });
+    say(`${h.name} casts ${sp.name}.`, 'magic');
+    return true;
+  }
+  switch(key){
+    case 'sleep':
+      if (target.mind <= 4){ target.sleep = 1; say(`${target.name} slumps into sleep.`, 'magic'); }
+      else say(`${target.name} shrugs off the spell.`, 'bad');
+      break;
+    case 'veil':
+      target.buffs.veil = 1; say(`Mist closes around ${target.name}.`, 'magic'); break;
+    case 'rockskin':
+      target.buffs.rockskin = 1; say(`${target.name}'s skin turns to stone.`, 'magic'); break;
+    case 'courage':
+      target.buffs.courage = 1; say(`${target.name} burns with courage — +2 attack dice.`, 'magic'); break;
+    case 'swiftwind':
+      target.rolled = true; target.moveLeft += 6;
+      say(`The wind takes ${target.name} — 6 more squares.`, 'magic'); break;
+    case 'healing': case 'healbody': {
+      const before = target.bp;
+      target.bp = Math.min(target.bpMax, target.bp + sp.heal);
+      floatText(target.x, target.y, '+' + (target.bp - before), '#7de8a0');
+      sfx('heal');
+      say(`${target.name} recovers ${target.bp - before} Body Points.`, 'good');
+      break;
+    }
+    case 'tempest': {
+      let n = 0;
+      for (const m of monstersOf()) if (tileVisible(m.x,m.y)){ m.stun = 1; n++;
+        spark(m.x, m.y, 12, '#9fd8e8', { spd:.02 }); }
+      say(n ? `The tempest halts ${n} of them.` : 'The wind finds nothing to blow at.', 'magic');
+      break;
+    }
+    case 'passrock':
+      if (target && target.tile){
+        slide(h, target.tile[0], target.tile[1], 200, () => { recomputeVision(); refreshField(); });
+        say(`${h.name} walks through the stone.`, 'magic');
+      }
+      break;
+  }
+  refreshField(); renderHUD(); checkQuestState();
+  return true;
+}
+
+/* -------------------------------------------------------------- objective */
+
+function giveQuestItem(name, h){
+  G.q.itemsFound.push(name);
+  G.q.collected++;
+  if (h) G.q.carrier = h.id;   // this one has to make it back up
+  sfx('win');
+  spark(h.x, h.y, 34, '#f3d488', { spd:.02, up:.004, glow:'rgba(243,212,136,.5)', r:2 });
+  const wk = name === "Orc's Bane" ? 'orcsbane' : name === 'Spirit Blade' ? 'spirit' : null;
+  if (wk){
+    const old = h.weapon;
+    h.weapon = wk;
+    say(`${h.name} takes up the ${name}. (${WEAPONS[wk].dice} attack dice)`, 'good');
+    if (old && WEAPONS[old] && !WEAPONS[old].quest) h.stowed = old;
+  } else {
+    say(`Found: ${name}.`, 'good');
+  }
+  renderHUD(); checkQuestState();
+}
+function objectiveReady(){
+  const o = QUESTS[G.q.qi].objective;
+  if (o.type === 'slay') return G.q.bossDead;
+  if (o.type === 'fetch') return G.q.itemsFound.includes(o.item);
+  if (o.type === 'collect') return G.q.collected >= o.count;
+  if (o.type === 'rescue') return G.q.npcFreed;
+  if (o.type === 'fetchslay') return G.q.itemsFound.includes(o.item) && G.q.bossDead;
+  return false;
+}
+function needsEscape(){
+  const t = QUESTS[G.q.qi].objective.type;
+  return t === 'fetch' || t === 'collect' || t === 'rescue';
+}
+function onStairs(h){ return STAIRS.some(s => s[0]===h.x && s[1]===h.y); }
+
+function checkQuestState(){
+  if (!G.q || G.q.over) return;
+  if (!livingHeroes().length){ questOver(false, 'The party is destroyed. Grimhold keeps what it takes.'); return; }
+  const ready = objectiveReady();
+  if (!ready) return;
+  if (!needsEscape()){ questOver(true); return; }
+  // the hero holding the prize has to walk it out; if they fall, anyone may
+  const c = G.q.carrier ? livingHeroes().find(x => x.id === G.q.carrier) : null;
+  if (c ? onStairs(c) : livingHeroes().some(onStairs)){ questOver(true); return; }
+  if (!G.q.escapeHinted){
+    G.q.escapeHinted = 1;
+    say(`It is done — now get ${c ? c.name : 'out'} back to the stair.`, 'good');
+  }
+}
+function questOver(won, why){
+  if (G.q.over) return;
+  G.q.over = won ? 1 : 2;
+  clearTimers(); G.dice = null;
+  sfx(won ? 'win' : 'lose');
+  setMood('explore');
+  later(HEADLESS ? 0 : 700, () => showQuestEnd(won, why));
+}
+
+function banner(a, b){
+  if (HEADLESS) return;
+  const el = document.getElementById('turnband');
+  el.innerHTML = a + (b ? '<small>' + b + '</small>' : '');
+  el.classList.add('on');
+  setTimeout(() => el.classList.remove('on'), 1050);
+}
+
+/* ------------------------------------------------------------- 10. THE UI */
+
+const $ = (id) => document.getElementById(id);
+let portraitCache = {};
+
+function renderLog(){
+  if (HEADLESS) return;
+  const el = $('log');
+  el.innerHTML = G.q.log.map(l => `<div class="logline ${l.cls||''}">${l.text}</div>`).join('');
+}
+
+function heroPortrait(id, w, h){
+  const key = id + '_' + w + '_' + h;
+  if (portraitCache[key]) return portraitCache[key];
+  const c = mkCan(w*2, h*2);
+  const g = c.getContext('2d');
+  g.scale(2,2);
+  g.save(); g.translate(w/2, h*.62);
+  HERO_ART[id](g, Math.min(w, h)*1.35, 0);
+  g.restore();
+  portraitCache[key] = c;
+  return c;
+}
+
+function renderHUD(){
+  if (HEADLESS || !G || !G.q) return;
+  const q = QUESTS[G.q.qi];
+  $('qname').innerHTML = `${q.name}<b>${q.sub}</b>`;
+  $('goldn').textContent = G.camp.gold + (G.q.pot ? ' +' + G.q.pot : '');
+  $('turnn').textContent = G.q.turn + (q.turnLimit ? '/' + q.turnLimit : '');
+  $('turnpill').classList.toggle('gold', !!q.turnLimit && G.q.turn > q.turnLimit - 6);
+
+  // --- party ------------------------------------------------------------
+  const party = $('party');
+  if (party.children.length !== G.camp.heroes.length){
+    party.innerHTML = '';
+    for (const h of G.camp.heroes){
+      const c = document.createElement('div');
+      c.className = 'hcard'; c.dataset.id = h.id;
+      c.innerHTML = `<div class="top"><span class="st"></span><span class="nm">${h.name}</span><span class="num"></span></div>
+        <canvas></canvas>
+        <div class="bar bp"><i></i></div><div class="bar mp"><i></i></div>`;
+      c.addEventListener('click', () => selectHero(h.id));
+      party.appendChild(c);
+      const cv2 = c.querySelector('canvas');
+      cv2.width = 120; cv2.height = 68;
+      const g2 = cv2.getContext('2d');
+      g2.drawImage(heroPortrait(h.id, 60, 34), 0, 0, 120, 68);
+    }
+  }
+  [...party.children].forEach(c => {
+    const h = G.camp.heroes.find(x => x.id === c.dataset.id);
+    c.classList.toggle('act', G.q.activeId === h.id && G.q.phase === 'hero');
+    c.classList.toggle('done', h.done && h.alive);
+    c.classList.toggle('dead', !h.alive);
+    c.querySelector('.bar.bp i').style.width = Math.max(0, h.bp/h.bpMax*100) + '%';
+    c.querySelector('.bar.mp i').style.width = (h.mp/h.mpMax*100) + '%';
+    c.querySelector('.num').textContent = h.alive ? h.bp + '/' + h.bpMax : '✝';
+    const st = [];
+    if (h.buffs.rockskin) st.push('🪨');
+    if (h.buffs.veil) st.push('🌫');
+    if (h.buffs.courage) st.push('🔥');
+    if (h.moveLeft > 0 && G.q.activeId === h.id) st.push(h.moveLeft + '▸');
+    c.querySelector('.st').textContent = st.join(' ');
+  });
+
+  // --- movement pill ----------------------------------------------------
+  const h = activeHero();
+  const pill = $('movepill');
+  if (h && G.q.phase === 'hero' && !busy()){
+    const bits = [];
+    if (h.moveLeft > 0) bits.push(`${h.moveLeft} squares left`);
+    if (!h.acted) bits.push('1 action');
+    pill.textContent = bits.join(' · ') || 'nothing left — end the turn';
+    pill.classList.add('on');
+  } else pill.classList.remove('on');
+
+  // --- actions ----------------------------------------------------------
+  const acts = $('actions');
+  const trap = disarmTarget();
+  const spells = h ? knownSpells(h).filter(k => spellReady(h,k)) : [];
+  const packN = h ? (h.items.potion||0) + (h.items.holy||0) : 0;
+  const defs = [
+    { ic:'🔦', lb:'Search<br>Room', on:!!h && !h.acted && roomAt(h.x,h.y)>=0, fn:searchTreasure },
+    trap
+      ? { ic:'🧰', lb:'Disarm<br>Trap', on:!!h && !h.acted, fn:disarmTrap, hot:true }
+      : { ic:'🔍', lb:'Find<br>Traps', on:!!h && !h.acted, fn:searchTraps },
+    { ic:'✨', lb:'Cast<br>Spell', on:spells.length>0 && !!h && !h.acted, fn:openSpellbook, hot:spells.length>0 && !!h && !h.acted },
+    { ic:'🎒', lb:'Pack<br>' + (packN?packN:''), on:packN>0, fn:openPack },
+    { ic:'✔', lb:'End<br>Turn', on:!!h, fn:endHeroTurn, end:true },
+  ];
+  if (acts.children.length !== defs.length){
+    acts.innerHTML = '';
+    defs.forEach((d,i) => {
+      const b = document.createElement('div');
+      b.className = 'act'; b.innerHTML = `<div class="ic"></div><div class="lb"></div>`;
+      b.addEventListener('click', () => { const dd = acts._defs[i]; if (dd.on){ audioInit(); dd.fn(); } });
+      acts.appendChild(b);
+    });
+  }
+  acts._defs = defs;
+  [...acts.children].forEach((b, i) => {
+    const d = defs[i];
+    b.querySelector('.ic').textContent = d.ic;
+    b.querySelector('.lb').innerHTML = d.lb;
+    b.classList.toggle('off', !d.on || busy());
+    b.classList.toggle('hot', !!d.hot && !busy());
+    b.classList.toggle('end', !!d.end);
+  });
+}
+
+/* ----------------------------------------------------------------- modals */
+
+let modalOpen = false;
+function modal(html, cls){
+  if (HEADLESS) return;
+  modalOpen = true;
+  $('modalBody').className = 'sheet ' + (cls||'');
+  $('modalBody').innerHTML = html;
+  $('scModal').classList.add('on');
+}
+function closeModal(){
+  modalOpen = false;
+  if (!HEADLESS) $('scModal').classList.remove('on');
+}
+function bindModal(sel, fn){
+  if (HEADLESS) return;
+  const el = $('modalBody').querySelector(sel);
+  if (el) el.addEventListener('click', fn);
+}
+function bindAll(sel, fn){
+  if (HEADLESS) return;
+  [...$('modalBody').querySelectorAll(sel)].forEach(el => el.addEventListener('click', () => fn(el)));
+}
+
+function showQuestScroll(qi, onGo){
+  const q = QUESTS[qi];
+  modal(`
+    <h2>${q.name}</h2>
+    <div class="sub" style="margin:2px 0 0">${q.sub}</div>
+    <div class="rule"></div>
+    <p class="flavor">${q.intro}</p>
+    <div class="obj"><b>Your task</b>${q.objective.label}</div>
+    ${q.turnLimit ? `<div class="obj" style="border-color:rgba(176,58,44,.4);background:rgba(176,58,44,.08);color:#f0c2ba"><b>The clock</b>${q.turnLimit} turns, then the keep seals.</div>` : ''}
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mGo">Descend</button>
+      <button class="btn ghost" id="mBack">Not yet</button>
+    </div>`);
+  bindModal('#mGo', () => { audioInit(); closeModal(); onGo(); });
+  bindModal('#mBack', () => { closeModal(); showQuestSelect(); });
+}
+
+function openSpellbook(){
+  const h = activeHero();
+  if (!h) return;
+  const list = knownSpells(h).map(k => {
+    const sp = SPELLS[k], el = ELEMENTS[sp.el], used = h.spent.includes(k);
+    return `<div class="row">
+      <div class="ic" style="color:${el.col}">${el.ic}</div>
+      <div class="tx"><b>${sp.name}</b><s>${sp.desc}</s></div>
+      <button class="bu ${used?'':''}" data-k="${k}" ${used?'disabled':''}>${used?'Spent':'Cast'}</button>
+    </div>`;
+  }).join('');
+  modal(`<h2>Spellbook</h2><div class="sub" style="margin:2px 0 0">${h.name}</div>
+    <div class="rule"></div>${list}
+    <div class="rule"></div>
+    <div style="text-align:center"><button class="btn ghost" id="mClose">Close</button></div>`);
+  bindModal('#mClose', closeModal);
+  bindAll('.bu[data-k]', (el) => {
+    const k = el.dataset.k;
+    closeModal();
+    beginAim(k);
+  });
+}
+function beginAim(key){
+  const sp = SPELLS[key], h = activeHero();
+  if (sp.target === 'self'){ castSpell(h, key, h); return; }
+  G.aim = { key, kind:'spell' };
+  say(sp.target === 'enemy' ? 'Choose a target you can see.'
+     : sp.target === 'hero' ? 'Choose a hero.' : 'Choose a square you have seen.', 'magic');
+  renderHUD();
+}
+
+function openPack(){
+  const h = activeHero();
+  if (!h) return;
+  const rows = [];
+  if (h.items.potion) rows.push(`<div class="row"><div class="ic">🧪</div>
+    <div class="tx"><b>Healing Potion ×${h.items.potion}</b><s>Restore 4 Body Points.</s></div>
+    <button class="bu" data-u="potion">Drink</button></div>`);
+  if (h.items.holy) rows.push(`<div class="row"><div class="ic">⚱</div>
+    <div class="tx"><b>Holy Water ×${h.items.holy}</b><s>Three dice against one undead thing you can reach.</s></div>
+    <button class="bu" data-u="holy" ${h.acted?'disabled':''}>Throw</button></div>`);
+  modal(`<h2>${h.name}'s Pack</h2><div class="rule"></div>
+    ${rows.join('') || '<p class="flavor">Nothing but lint and courage.</p>'}
+    <div class="rule"></div>
+    <div style="text-align:center"><button class="btn ghost" id="mClose">Close</button></div>`);
+  bindModal('#mClose', closeModal);
+  bindAll('.bu[data-u]', (el) => {
+    closeModal();
+    if (el.dataset.u === 'potion') quaffPotion();
+    else { G.aim = { kind:'holy' }; say('Choose an undead thing to douse.', 'magic'); renderHUD(); }
+  });
+}
+
+/* ----------------------------------------------------------- quest ending */
+
+function showQuestEnd(won, why){
+  const q = QUESTS[G.q.qi];
+  const pot = G.q.pot || 0;
+  const bonus = won ? q.reward : 0;
+  const total = pot + bonus;
+  if (won){
+    G.camp.gold += total;
+    if (!G.camp.done.includes(G.q.qi)) G.camp.done.push(G.q.qi);
+    G.camp.unlocked = Math.max(G.camp.unlocked, Math.min(QUESTS.length, G.q.qi + 2));
+    // the blade and the bane are kept; everything else quest-bound is not
+    for (const h of G.camp.heroes){
+      if (WEAPONS[h.weapon] && WEAPONS[h.weapon].quest && q.keepItem !== h.weapon){
+        h.weapon = h.stowed || heroDef(h).weapon;
+      }
+      delete h.stowed;
+    }
+  } else {
+    G.camp.gold += Math.floor(pot/2);
+  }
+  for (const h of G.camp.heroes){ h.bp = h.bpMax; h.alive = true; h.buffs = {}; h.spent = []; }
+  saveCampaign(); clearRun();
+  const dead = G.q.actors.filter(a => a.kind === 'hero' && !a.alive).length;
+  modal(`
+    <h2 style="color:${won?'#63bf7d':'#b03a2c'}">${won ? 'Quest Complete' : 'Quest Failed'}</h2>
+    <div class="sub" style="margin:2px 0 0">${q.name}</div>
+    <div class="rule"></div>
+    <p class="flavor">${won
+      ? 'You come back up the stair with the dust of Grimhold on you, and Mentor is waiting.'
+      : (why || 'Grimhold closes over you.')}</p>
+    <div class="row"><div class="ic">◈</div><div class="tx"><b>Plunder carried out</b><s>Coin found in the dark</s></div><div style="color:#f3d488">${won?pot:Math.floor(pot/2)}</div></div>
+    ${won?`<div class="row"><div class="ic">🏅</div><div class="tx"><b>Quest reward</b><s>Paid by the Empire</s></div><div style="color:#f3d488">${bonus}</div></div>`:''}
+    <div class="row"><div class="ic">☠</div><div class="tx"><b>Heroes lost</b><s>They are back on their feet by morning — mostly</s></div><div>${dead}</div></div>
+    <div class="rule"></div>
+    <div class="goldline">Treasury: ◈ ${G.camp.gold}</div>
+    <div style="text-align:center">
+      <button class="btn big" id="mNext">${won ? 'To the Armoury' : 'Try Again'}</button>
+      <button class="btn ghost" id="mMap">Quest Board</button>
+    </div>`);
+  bindModal('#mNext', () => { closeModal(); if (won) showArmoury(); else showQuestScroll(G.q.qi, () => launchQuest(G.q.qi)); });
+  bindModal('#mMap', () => { closeModal(); showQuestSelect(); });
+  if (!HEADLESS) $('hud').classList.remove('on');
+}
+
+/* -------------------------------------------------------------- the shop */
+
+let shopTab = 'weapon', shopHero = 0;
+function showArmoury(){
+  const h = G.camp.heroes[shopHero];
+  const tabs = [['weapon','Weapons'],['armour','Armour'],['gear','Gear']];
+  let rows = '';
+  const own = (k) => h.weapon === k || h.armour === k || h.gear[k] || (h.items[k] > 0);
+  if (shopTab === 'weapon'){
+    for (const k in WEAPONS){
+      const w = WEAPONS[k];
+      if (w.quest || k === 'fists') continue;
+      const has = h.weapon === k;
+      const cant = h.id === 'wizard' && w.dice > 1;
+      rows += shopRow(k, w.ic, w.name, `${w.dice} attack ${w.dice===1?'die':'dice'} · ${w.desc}`, w.cost, has, cant ? 'The wizard cannot wield it' : '');
+    }
+  } else if (shopTab === 'armour'){
+    for (const k in ARMOURS){
+      const a = ARMOURS[k];
+      const cant = h.id === 'wizard';
+      rows += shopRow(k, a.ic, a.name, a.desc, a.cost, h.armour === k, cant ? 'The wizard wears only robes' : '');
+    }
+  } else {
+    for (const k in GEAR){
+      const g = GEAR[k];
+      const stack = g.stack;
+      const has = stack ? false : !!h.gear[k];
+      const cant = (k === 'shield' && WEAPONS[h.weapon] && WEAPONS[h.weapon].twoH) ? 'Both hands are busy' : '';
+      rows += shopRow(k, g.ic, g.name + (stack && h.items[k] ? ` ×${h.items[k]}` : ''), g.desc, g.cost, has, cant);
+    }
+  }
+  modal(`
+    <h2>The Armoury</h2>
+    <div class="goldline">◈ ${G.camp.gold}</div>
+    <div class="tabs">${G.camp.heroes.map((x,i) =>
+      `<button class="tab ${i===shopHero?'on':''}" data-h="${i}">${x.name}</button>`).join('')}</div>
+    <div class="tabs">${tabs.map(([k,n]) =>
+      `<button class="tab ${k===shopTab?'on':''}" data-t="${k}">${n}</button>`).join('')}</div>
+    <div class="rule"></div>
+    <div class="row" style="border-bottom:1px solid rgba(216,168,60,.2)">
+      <div class="ic">${WEAPONS[h.weapon].ic}</div>
+      <div class="tx"><b>${h.name} — ${h.title}</b>
+      <s>${h.bpMax} Body · ${h.mpMax} Mind · ${attackDice(h)} attack · ${defendDice(h)} defend</s></div>
+    </div>
+    ${rows}
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mGo">To the Quest Board</button>
+    </div>`);
+  bindAll('.tab[data-h]', el => { shopHero = +el.dataset.h; showArmoury(); });
+  bindAll('.tab[data-t]', el => { shopTab = el.dataset.t; showArmoury(); });
+  bindAll('.bu[data-buy]', el => { buy(el.dataset.buy); showArmoury(); });
+  bindModal('#mGo', () => { closeModal(); showQuestSelect(); });
+}
+function shopRow(k, ic, name, desc, cost, owned, cant){
+  const afford = G.camp.gold >= cost;
+  const label = owned ? 'Equipped' : cant ? '—' : `◈ ${cost}`;
+  return `<div class="row"><div class="ic">${ic}</div>
+    <div class="tx"><b>${name}</b><s>${cant || desc}</s></div>
+    <button class="bu ${owned?'own':''}" data-buy="${k}"
+      ${(owned||cant||!afford)?'disabled':''}>${label}</button></div>`;
+}
+function buy(k){
+  const h = G.camp.heroes[shopHero];
+  let cost = 0, kind = null;
+  if (WEAPONS[k]){ cost = WEAPONS[k].cost; kind = 'w'; }
+  else if (ARMOURS[k]){ cost = ARMOURS[k].cost; kind = 'a'; }
+  else if (GEAR[k]){ cost = GEAR[k].cost; kind = 'g'; }
+  if (!kind || G.camp.gold < cost) return false;
+  if (kind === 'w'){
+    if (h.id === 'wizard' && WEAPONS[k].dice > 1) return false;
+    h.weapon = k;
+    if (WEAPONS[k].twoH) h.gear.shield = false;
+  } else if (kind === 'a'){
+    if (h.id === 'wizard') return false;
+    h.armour = k;
+  } else {
+    if (k === 'shield' && WEAPONS[h.weapon].twoH) return false;
+    if (GEAR[k].stack) h.items[k] = (h.items[k]||0) + 1;
+    else h.gear[k] = true;
+  }
+  G.camp.gold -= cost;
+  sfx('gold');
+  saveCampaign();
+  return true;
+}
+
+/* ------------------------------------------------------------ quest board */
+
+function showQuestSelect(){
+  const rows = QUESTS.map((q,i) => {
+    const done = G.camp.done.includes(i);
+    const lock = i >= G.camp.unlocked;
+    return `<div class="qrow ${done?'done':''} ${lock?'lock':''}" data-q="${i}">
+      <div class="n">${lock?'🔒':done?'✓':i+1}</div>
+      <div class="tx"><b>${q.name}</b><s>${lock ? 'Finish the quest before it.' : q.objective.label}</s></div>
+    </div>`;
+  }).join('');
+  modal(`<h2>The Quest Board</h2>
+    <div class="goldline">◈ ${G.camp.gold}</div>
+    <div class="rule"></div>
+    <div class="qlist">${rows}</div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn ghost" id="mShop">Armoury</button>
+      <button class="btn ghost" id="mTitle">Title Screen</button>
+    </div>`);
+  bindAll('.qrow[data-q]', el => {
+    const i = +el.dataset.q;
+    if (i >= G.camp.unlocked) return;
+    closeModal(); showQuestScroll(i, () => launchQuest(i));
+  });
+  bindModal('#mShop', () => { closeModal(); showArmoury(); });
+  bindModal('#mTitle', () => { closeModal(); showTitle(); });
+}
+
+function showHow(){
+  modal(`<h2>How to Play</h2><div class="rule"></div>
+    <p><b>Your turn.</b> Each hero rolls two dice for movement, and may take one action: attack, cast a spell, search a room, hunt for traps, or use something from the pack.</p>
+    <p><b>Moving.</b> Tap a lit square to walk there. Tap a closed door beside you to open it — that costs nothing. Opening a door lights the whole room, and whatever is standing in it.</p>
+    <p><b>Fighting.</b> Tap a monster you can reach. Combat dice show three <b>skulls</b>, two white shields and one black shield. Skulls that the defender does not shield become lost Body Points.</p>
+    <p><b>Searching.</b> Ransack a room once for treasure — but only with no monster in it, and the deck holds poison and wandering monsters as well as coin. Hunting for traps reveals traps <i>and</i> hidden doors nearby.</p>
+    <p><b>Dying.</b> A hero at zero Body Points is out for the rest of the quest. Between quests everyone recovers, and the gold you carried out stays yours.</p>
+    <div class="rule"></div>
+    <div style="text-align:center"><button class="btn" id="mClose">Understood</button></div>`);
+  bindModal('#mClose', () => { closeModal(); showTitle(); });
+}
+
+function showTitle(){
+  if (HEADLESS) return;
+  closeModal();
+  $('hud').classList.remove('on');
+  $('scTitle').classList.add('on');
+  $('btnContinue').style.display = (hasRun() || (G && G.camp.done.length)) ? '' : 'none';
+}
+
+/* ------------------------------------------------------------ 11. LAUNCH */
+
+function launchQuest(qi){
+  clearTimers();
+  G.fx = []; G.dice = null; G.aim = null; G.shake = 0;
+  G.cam = { x:0, y:0, z:1, tx:null, ty:null };
+  startQuest(qi);
+  bakeDungeon(1234 + qi*991);
+  const v = viewBox();
+  G.cam.z = HEADLESS ? 1 : clamp(Math.min(v.w, v.h) / (TS*8.6), .42, 1.4);
+  focusOn(STAIRS[0][0], STAIRS[0][1] - 2, true);
+  if (!HEADLESS){
+    $('scTitle').classList.remove('on');
+    $('hud').classList.add('on');
+  }
+  setMood('explore');
+  say(`You descend into ${QUESTS[qi].name}.`, '');
+  banner('GRIMHOLD', QUESTS[qi].sub);
+  renderHUD(); renderLog();
+  saveRun();
+}
+
+/* ------------------------------------------------------------- 12. INPUT */
+
+let ptrs = new Map(), dragged = false, downT = 0, pinchD = 0, pinchZ = 1;
+
+function bindInput(){
+  if (HEADLESS) return;
+  const el = cv;
+  el.addEventListener('pointerdown', e => {
+    audioInit();
+    el.setPointerCapture(e.pointerId);
+    ptrs.set(e.pointerId, { x:e.clientX, y:e.clientY, ox:e.clientX, oy:e.clientY });
+    if (ptrs.size === 1){ dragged = false; downT = performance.now(); }
+    if (ptrs.size === 2){
+      const [a,b] = [...ptrs.values()];
+      pinchD = Math.hypot(a.x-b.x, a.y-b.y); pinchZ = G.cam.z;
+    }
+  });
+  el.addEventListener('pointermove', e => {
+    const p = ptrs.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (Math.hypot(e.clientX - p.ox, e.clientY - p.oy) > 9) dragged = true;
+    if (!G || !G.q) return;
+    if (ptrs.size === 2){
+      const [a,b] = [...ptrs.values()];
+      const d = Math.hypot(a.x-b.x, a.y-b.y);
+      if (pinchD > 0) G.cam.z = clamp(pinchZ * d/pinchD, .34, 2.2);
+      G.cam.tx = G.cam.ty = null;
+      clampCam();
+    } else if (dragged){
+      G.cam.x -= dx/G.cam.z; G.cam.y -= dy/G.cam.z;
+      G.cam.tx = G.cam.ty = null;
+      clampCam();
+    }
+  });
+  const up = e => {
+    const p = ptrs.get(e.pointerId);
+    ptrs.delete(e.pointerId);
+    if (!p) return;
+    if (ptrs.size === 0 && !dragged && performance.now() - downT < 500) onTap(e.clientX, e.clientY);
+    if (ptrs.size < 2) pinchD = 0;
+  };
+  el.addEventListener('pointerup', up);
+  el.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); pinchD = 0; });
+  el.addEventListener('wheel', e => {
+    if (!G || !G.q) return;
+    e.preventDefault();
+    G.cam.z = clamp(G.cam.z * (e.deltaY > 0 ? .9 : 1.11), .34, 2.2);
+    clampCam();
+  }, { passive:false });
+
+  $('btnPlay').addEventListener('click', () => { audioInit(); $('scTitle').classList.remove('on'); showQuestSelect(); });
+  $('btnContinue').addEventListener('click', () => { audioInit(); resumeRun(); });
+  $('btnHow').addEventListener('click', () => { audioInit(); $('scTitle').classList.remove('on'); showHow(); });
+  $('menubtn').addEventListener('click', openMenu);
+  $('scModal').addEventListener('click', e => { if (e.target.id === 'scModal' && modalOpen) { /* stay put */ } });
+}
+
+function openMenu(){
+  modal(`<h2>Grimhold</h2><div class="rule"></div>
+    <div class="row"><div class="ic">🎵</div><div class="tx"><b>Sound</b><s>Drone, dice and steel</s></div>
+      <button class="bu" id="mSnd">${audioOn ? 'On' : 'Off'}</button></div>
+    <div class="row"><div class="ic">📜</div><div class="tx"><b>This quest</b><s>${QUESTS[G.q.qi].objective.label}</s></div></div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn" id="mResume">Back to the Dungeon</button>
+      <button class="btn ghost" id="mHow">How to Play</button>
+      <button class="btn red" id="mQuit">Abandon Quest</button>
+    </div>`);
+  bindModal('#mSnd', () => { audioOn = !audioOn; closeModal(); openMenu(); });
+  bindModal('#mResume', closeModal);
+  bindModal('#mHow', () => { closeModal(); showHow(); });
+  bindModal('#mQuit', () => { closeModal(); clearRun(); showQuestSelect(); if (!HEADLESS) $('hud').classList.remove('on'); });
+}
+
+function onTap(sx, sy){
+  if (!G || !G.q || modalOpen) return;
+  if (G.dice){ return; }
+  if (G.q.over) return;
+  const [x,y] = tileOf(sx, sy);
+  tapTile(x, y);
+}
+
+function tapTile(x, y){
+  const h = activeHero();
+  if (!h || G.q.phase !== 'hero' || busy()) return false;
+  if (!inB(x,y)) return false;
+  const target = actorAt(x,y);
+
+  // aiming a spell or a vial
+  if (G.aim){
+    const a = G.aim;
+    if (a.kind === 'holy'){
+      if (target && target.kind === 'monster' && MONSTERS[target.mt].undead && tileVisible(x,y)){
+        G.aim = null; useHolyWater(target); return true;
+      }
+      G.aim = null; say('Not a target for holy water.', 'bad'); renderHUD(); return false;
+    }
+    const sp = SPELLS[a.key];
+    if (sp.target === 'enemy' && target && target.kind === 'monster' && target.alive
+        && tileVisible(x,y) && hasLOS(h.x,h.y,x,y)){
+      G.aim = null; castSpell(h, a.key, target); return true;
+    }
+    if (sp.target === 'hero' && target && target.kind === 'hero' && target.alive){
+      G.aim = null; castSpell(h, a.key, target); return true;
+    }
+    if (sp.target === 'tile' && tileSeen(x,y) && !blocked(x,y) && dist2(x,y,h.x,h.y) <= 5){
+      G.aim = null; castSpell(h, a.key, { tile:[x,y] }); return true;
+    }
+    G.aim = null; say('Nothing there to aim at.', 'bad'); renderHUD();
+    return false;
+  }
+
+  // free the prisoner
+  if (target && target.kind === 'npc' && dist2(x,y,h.x,h.y) <= 1 && linked(h.x,h.y,x,y)){
+    if (!target.follow){
+      target.follow = h.id; G.q.npcFreed = true; G.q.carrier = h.id;
+      sfx('gold');
+      say(`${target.name} is free — get them to the stair.`, 'good');
+      spark(x, y, 18, '#f3d488', { spd:.014, up:.004 });
+      checkQuestState(); renderHUD();
+    }
+    return true;
+  }
+
+  // strike, or close the distance and strike
+  if (target && target.kind === 'monster' && target.alive && tileVisible(x,y)){
+    if (canStrike(h, target)) return doAttack(h, target);
+    if (h.acted || h.moveLeft <= 0){ say('Too far to reach.', 'bad'); return false; }
+    const f = G.q.field;
+    let bestT = null, bestC = 1e9;
+    for (const [dx,dy] of DIRS){
+      const k = idx(target.x+dx, target.y+dy);
+      if (!inB(target.x+dx, target.y+dy) || !f.d.has(k)) continue;
+      if (!linked(target.x+dx, target.y+dy, target.x, target.y)) continue;
+      const c = f.d.get(k);
+      if (c < bestC){ bestC = c; bestT = [target.x+dx, target.y+dy]; }
+    }
+    if (!bestT){ say('No way through to it.', 'bad'); return false; }
+    const path = tracePath(f, bestT[0], bestT[1]);
+    heroWalk(h, path || [], () => { if (canStrike(h, target)) doAttack(h, target); });
+    return true;
+  }
+
+  // a door next to us
+  const near = dist2(x,y,h.x,h.y) === 1;
+  if (near){
+    const d = doorBetween(h.x, h.y, x, y);
+    if (d && !d.open){ openDoorAt(h, d); renderHUD(); return true; }
+  }
+
+  // walk
+  if (h.moveLeft <= 0){ say(h.rolled ? 'No movement left this turn.' : '', 'bad'); return false; }
+  const f = G.q.field;
+  if (f && f.d.has(idx(x,y)) && f.d.get(idx(x,y)) > 0){
+    heroWalk(h, tracePath(f, x, y) || []);
+    return true;
+  }
+  // walking toward a closed door: route to it, and open it when we arrive
+  const open = walkFieldOpen(h.x, h.y, h.moveLeft + 1, h);
+  if (open.d.has(idx(x,y))){
+    const path = tracePath(open, x, y);
+    if (path && path.length){ heroWalk(h, path); return true; }
+  }
+  return false;
+}
+function walkFieldOpen(sx, sy, maxSteps, mover){
+  const d = new Map(), from = new Map();
+  d.set(idx(sx,sy), 0);
+  let frontier = [[sx,sy]];
+  while (frontier.length){
+    const next = [];
+    for (const [x,y] of frontier){
+      const cost = d.get(idx(x,y));
+      if (cost >= maxSteps) continue;
+      for (const [dx,dy] of DIRS){
+        const nx = x+dx, ny = y+dy, ni = idx(nx,ny);
+        if (!inB(nx,ny) || d.has(ni)) continue;
+        if (!linkedIgnoringDoors(x,y,nx,ny)) continue;
+        const dr = doorAt(x,y,nx,ny);
+        if (dr && dr.secret && !dr.found) continue;
+        if (!dr && TR[idx(x,y)] !== TR[ni]) continue;
+        if (furnAt(nx,ny) || trapBlocks(nx,ny)) continue;
+        const occ = actorAt(nx,ny);
+        if (occ && occ !== mover && !(mover && mover.kind === 'hero' && occ.kind === 'hero')) continue;
+        d.set(ni, cost+1); from.set(ni, idx(x,y));
+        next.push([nx,ny]);
+      }
+    }
+    frontier = next;
+  }
+  return { d, from };
+}
+
+/* --------------------------------------------------------- 13. PERSISTENCE */
+
+const K_CAMP = 'grimhold_camp_v1', K_RUN = 'grimhold_run_v1';
+
+function saveCampaign(){
+  try { localStorage.setItem(K_CAMP, JSON.stringify(G.camp)); } catch(e){}
+}
+function migrateCamp(c){
+  if (!c || !Array.isArray(c.heroes) || c.heroes.length !== HERO_DEFS.length) return newCampaign();
+  const fresh = newCampaign();
+  fresh.gold = c.gold|0;
+  fresh.done = Array.isArray(c.done) ? c.done.filter(n => n >= 0 && n < QUESTS.length) : [];
+  fresh.unlocked = clamp(c.unlocked|0 || 1, 1, QUESTS.length);
+  fresh.heroes = fresh.heroes.map(h => {
+    const old = c.heroes.find(x => x && x.id === h.id);
+    if (!old) return h;
+    if (WEAPONS[old.weapon]) h.weapon = old.weapon;
+    if (ARMOURS[old.armour]) h.armour = old.armour;
+    h.gear = Object.assign({}, old.gear || {});
+    h.items = Object.assign({ potion:0, holy:0 }, old.items || {});
+    return h;
+  });
+  return fresh;
+}
+function loadCampaign(){
+  try {
+    const s = localStorage.getItem(K_CAMP);
+    if (s) return migrateCamp(JSON.parse(s));
+  } catch(e){}
+  return newCampaign();
+}
+function saveRun(){
+  if (!G.q || G.q.over) return;
+  try {
+    const q = Object.assign({}, G.q);
+    delete q.vis; delete q.field;
+    q.actors = G.q.actors.map(a => a.kind === 'hero' ? { ref:a.id } : a);
+    localStorage.setItem(K_RUN, JSON.stringify({ q, camp:G.camp, cam:G.cam }));
+  } catch(e){}
+}
+function hasRun(){ try { return !!localStorage.getItem(K_RUN); } catch(e){ return false; } }
+function clearRun(){ try { localStorage.removeItem(K_RUN); } catch(e){} }
+function resumeRun(){
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(K_RUN)); } catch(e){}
+  if (!s || !s.q){ showQuestSelect(); return false; }
+  G.camp = migrateCamp(s.camp);
+  // the saved heroes hold their in-quest condition; put it back on the roster
+  const savedHeroes = (s.camp && s.camp.heroes) || [];
+  for (const h of G.camp.heroes){
+    const old = savedHeroes.find(x => x && x.id === h.id);
+    if (!old) continue;
+    h.bp = old.bp === undefined ? h.bpMax : old.bp;
+    h.mp = old.mp === undefined ? h.mpMax : old.mp;
+    h.alive = old.alive !== false;
+    h.x = old.x|0; h.y = old.y|0;
+    h.moveLeft = old.moveLeft|0; h.rolled = !!old.rolled;
+    h.acted = !!old.acted; h.done = !!old.done;
+    h.spent = Array.isArray(old.spent) ? old.spent.slice() : [];
+    h.buffs = Object.assign({}, old.buffs || {});
+    h.quests = Array.isArray(old.quests) ? old.quests.slice() : [];
+    if (old.stowed) h.stowed = old.stowed;
+    if (WEAPONS[old.weapon]) h.weapon = old.weapon;
+    h.kind = 'hero';
+  }
+  G.q = s.q;
+  G.q.actors = s.q.actors.map(a => a.ref ? G.camp.heroes.find(h => h.id === a.ref) : a).filter(Boolean);
+  G.cam = s.cam || { x:0, y:0, z:1 };
+  G.fx = []; G.timers = []; G.dice = null; G.aim = null; G.shake = 0;
+  bakeDungeon(1234 + G.q.qi*991);
+  recomputeVision(); refreshField();
+  if (!HEADLESS){
+    $('scTitle').classList.remove('on');
+    closeModal();
+    $('hud').classList.add('on');
+  }
+  setMood('explore');
+  renderHUD(); renderLog();
+  return true;
+}
+
+/* ------------------------------------------------------------ 14. THE LOOP */
+
+function update(dt){
+  TT0 += dt;
+  if (!G) return;
+  for (let i = G.timers.length - 1; i >= 0; i--){
+    const T = G.timers[i];
+    T.t -= dt;
+    if (T.t <= 0){ G.timers.splice(i,1); T.fn(); }
+  }
+  if (G.dice) G.dice.t += dt;
+  if (G.shake > 0) G.shake = Math.max(0, G.shake - dt*.055);
+  if (!G.q) return;
+  let dropped = false;
+  for (let i = G.q.log.length - 1; i >= 0; i--){
+    G.q.log[i].t += dt;
+    if (G.q.log[i].t > 5200){ G.q.log.splice(i,1); dropped = true; }
+  }
+  if (dropped) renderLog();
+
+  for (const a of G.q.actors){
+    tickSlide(a, dt);
+    if (a.hurtT > 0) a.hurtT -= dt;
+    if (a.deathT > 0) a.deathT -= dt;
+  }
+  for (let i = G.fx.length - 1; i >= 0; i--){
+    const p = G.fx[i];
+    p.life -= dt;
+    if (p.life <= 0){ G.fx.splice(i,1); continue; }
+    p.x += p.vx*dt; p.y += p.vy*dt;
+    p.vy += (p.grav||0)*dt;
+  }
+  // dust in the torchlight
+  if (!HEADLESS && G.fx.length < 90 && Math.random() < .22){
+    const hs = livingHeroes();
+    if (hs.length){
+      const h = hs[(Math.random()*hs.length)|0];
+      G.fx.push({ x:h.x + .5 + (Math.random()-.5)*5, y:h.y + .5 + (Math.random()-.5)*5,
+        vx:(Math.random()-.5)*.0006, vy:-.0004 - Math.random()*.0006,
+        life:2600, max:2600, col:'rgba(255,220,170,.30)', size:1.5, grav:0 });
+    }
+  }
+  // camera drift toward its mark
+  if (G.cam.tx !== null && G.cam.tx !== undefined){
+    G.cam.x = lerp(G.cam.x, G.cam.tx, Math.min(1, dt*.006));
+    G.cam.y = lerp(G.cam.y, G.cam.ty, Math.min(1, dt*.006));
+    if (Math.abs(G.cam.x - G.cam.tx) < .6 && Math.abs(G.cam.y - G.cam.ty) < .6){ G.cam.tx = G.cam.ty = null; }
+    clampCam();
+  }
+  if (AC) musicTick(AC.currentTime);
+}
+
+let lastT = 0;
+function frame(ts){
+  const dt = Math.min(48, ts - lastT || 16);
+  lastT = ts;
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+
+/* -------------------------------------------------------------- 15. BOOT */
+
+function newG(){
+  return { camp:newCampaign(), q:null, fx:[], timers:[], dice:null, aim:null,
+           shake:0, cam:{ x:0, y:0, z:1, tx:null, ty:null }, busy };
+}
+function setRng(f){ rnd = f || Math.random; }
+
+function boot(){
+  G = newG();
+  G.camp = loadCampaign();
+  initCanvas();
+  bindInput();
+  showTitle();
+  requestAnimationFrame(frame);
+}
+
+if (HEADLESS){
+  G = newG();
+  initCanvas();
+} else {
+  boot();
+}
+
+globalThis.HQ = {
+  get G(){ return G; }, set G(v){ G = v; },
+  get TORCHES(){ return TORCHES; },
+  W, H, TS, ROOMS, CORRIDORS, STAIRS, DOOR_SLOTS, QUESTS, MONSTERS, WEAPONS, ARMOURS, GEAR,
+  SPELLS, ELEMENTS, ELEMENT_SPELLS, TREASURE_DECK, HERO_DEFS, FURN, SKULL, WHITE, BLACK,
+  idx, inB, isFloor, isRock, roomAt, roomTiles, dkey, doorAt, doorBetween, linked, linkedIgnoringDoors,
+  hasLOS, walkField, walkFieldOpen, tracePath, actorAt, furnAt, blocked, trapAt, trapBlocks,
+  newG, newCampaign, mkHero, startQuest, launchQuest, boot, setRng,
+  activeHero, heroes, livingHeroes, monstersOf, busy,
+  tapTile, selectHero, endHeroTurn, zargonTurn, monsterAct, heroWalk, refreshField,
+  doAttack, canStrike, monsterAttack, hurt, kill, attackDice, defendDice, moveSlow,
+  rollCombat, combatDie, countSkulls, countShields,
+  castSpell, knownSpells, spellReady, searchTreasure, searchTraps, disarmTrap, disarmTarget,
+  quaffPotion, useHolyWater, applyTreasure, spawnWanderer, openDoorAt, springTrap, giveQuestItem,
+  objectiveReady, needsEscape, onStairs, checkQuestState, questOver, showQuestEnd,
+  recomputeVision, revealRoom, tileVisible, tileSeen, bakeDungeon, freeTile, freeFurnSpot,
+  buy, showArmoury, showQuestSelect, showQuestScroll, saveCampaign, loadCampaign, migrateCamp,
+  saveRun, resumeRun, hasRun, clearRun, update, draw, beginHeroActivation, weaponOf,
+  get shopHero(){ return shopHero; }, set shopHero(v){ shopHero = v; },
+};
+
+</script>
+</body>
+</html>

@@ -3,8 +3,9 @@
 // The game is one self-contained file drawing to a canvas. This harness stubs a
 // DOM + no-op 2d context, evals the inline <script> with __CS_HEADLESS__ set (so
 // it boots without rAF/UI), and drives the real simulation through window.CS:
-// run start → spawns → weapons → level-ups → evolutions → bosses → death,
-// revives, chests, the DNA lab and the save file.
+// run start → spawns → weapons → level-ups → evolutions → the twelve stages
+// (objectives, modifiers, clear rewards) → bosses → death, revives, chests,
+// culture strength, the DNA lab and the save file.
 //
 // Run: node tests/cell_survivor.test.mjs
 import { readFileSync } from 'node:fs';
@@ -114,12 +115,13 @@ t.ok(G.en.length > 5, 'pathogens spawn over time (' + G.en.length + ')');
 t.ok(G.en.every(e => finite(e.x) && finite(e.y) && e.hp > 0), 'spawned pathogens are well formed');
 t.ok(G.en.every(e => Math.hypot(e.x, e.y) <= C.DISH_R + 1), 'spawns stay inside the dish');
 {
-  const early = CS.hpMul();
-  const wasT = G.t; G.t = 15 * 60;
-  t.ok(CS.hpMul() > early * 2, 'pathogens toughen up as the clock runs');
-  t.ok(CS.spawnRate() > 8, 'spawn pressure climbs with the clock');
-  t.ok(CS.spawnTable().length > 5, 'later minutes unlock more pathogen types');
-  G.t = wasT;
+  const early = CS.hpMul(), rate0 = CS.spawnRate(), table0 = CS.spawnTable().length;
+  const wasStage = G.stage; G.stage = 9;
+  t.ok(CS.hpMul() > early * 3, 'pathogens toughen up stage by stage');
+  t.ok(CS.spawnRate() > rate0 * 2, 'spawn pressure climbs stage by stage');
+  t.ok(CS.spawnTable().length > table0, 'later stages unlock more pathogen types');
+  t.ok(CS.prog() >= 9 && CS.prog() <= 10, 'the difficulty index tracks the stage');
+  G.stage = wasStage;
 }
 t.ok(G.kills > 0, 'the starting weapon actually kills things');
 
@@ -258,6 +260,7 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
     CS.startRun('amoeba', 99);
     const w = CS.ownedW('pseudo');
     w.id = id; w.lvl = 3; w.t = 0;
+    CS.input.x = 1; CS.input.y = 0;                 // weapons are exercised while swimming
     clearField();
     const targets = [];
     for (let i = 0; i < 12; i++) targets.push(CS.spawnEnemy('cocci', CS.P.x + 40 + i * 12, CS.P.y + (i % 3) * 10));
@@ -266,7 +269,55 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
     const dealt = G.dmgDealt;
     step(4);
     t.ok(G.dmgDealt > dealt, id + ' deals damage');
+    CS.input.x = 0; CS.input.y = 0;
   }
+}
+{
+  // the enzyme trail is a trail: it only drips while you are actually moving
+  CS.startRun('amoeba', 98);
+  const w = CS.ownedW('pseudo'); w.id = 'enzyme'; w.lvl = 3; w.t = 0;
+  CS.input.x = 0; CS.input.y = 0; CS.P.vx = 0; CS.P.vy = 0;
+  step(2);
+  t.ok(G.pools.length === 0, 'a parked cell leaves no enzyme trail');
+  CS.input.x = 1; CS.input.y = 0;
+  step(2);
+  t.ok(G.pools.length > 0, 'swimming lays the trail down');
+  CS.input.x = 0; CS.input.y = 0;
+}
+{
+  // spitters shell the ground you are standing on
+  CS.startRun('amoeba', 97);
+  G.grace = 0;
+  const z = CS.spawnEnemy('zoner', CS.P.x + 320, CS.P.y);
+  t.ok(!!z && z.D.zone > 0, 'the spitter is a zoner');
+  z.atkT = 0;
+  step(.1);
+  t.ok(G.zones.length > 0, 'it marks a circle on the floor');
+  t.ok(Math.hypot(G.zones[0].x - CS.P.x, G.zones[0].y - CS.P.y) < 6, 'the mark lands where you stand');
+  const hp0 = CS.P.hp;
+  CS.P.iT = 0;
+  step(1.4);
+  t.ok(CS.P.hp < hp0, 'standing in the mark hurts');
+  z.atkT = 0; step(.05);
+  const m2 = G.zones[G.zones.length - 1];
+  CS.P.x = m2.x + 500; CS.P.y = m2.y; CS.P.hp = CS.P.mhp; CS.P.iT = 0;
+  const hp1 = CS.P.hp;
+  step(1.4);
+  t.ok(CS.P.hp === hp1, 'stepping off the mark avoids it entirely');
+}
+{
+  // biomass stays where it dropped — you have to go and get it
+  CS.startRun('amoeba', 96);
+  clearField();
+  CS.input.x = 0; CS.input.y = 0;
+  const far = CS.P.s.magnet + 220;
+  CS.dropOrb(CS.P.x + far, CS.P.y, 'xp', 5);
+  const orb = G.orbs[G.orbs.length - 1];
+  const d0 = Math.hypot(orb.x - CS.P.x, orb.y - CS.P.y);
+  step(12);
+  const d1 = Math.hypot(orb.x - CS.P.x, orb.y - CS.P.y);
+  t.ok(Math.abs(d1 - d0) < 12, 'a distant orb never drifts over to a parked cell');
+  t.ok(CS.P.s.magnet < 110, 'the pickup radius is tight enough to demand movement');
 }
 {
   CS.startRun('amoeba', 5);
@@ -349,14 +400,59 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   t.ok(CS.P.s.spd > 212, 'flagella make you faster');
 }
 
-// ---------------------------------------------------------------- bosses
+// ---------------------------------------------------------------- stages
 {
+  t.ok(CS.STAGES.length === 12, 'a run is twelve stages');
+  t.ok(CS.STAGES.filter(s => s.boss !== undefined).length === 4, 'four of them are boss stages');
+  t.ok(CS.STAGES[11].last && CS.STAGES[11].boss === 3, 'the last stage is the final boss');
+  t.ok(CS.STAGES.every(s => ['survive', 'kill', 'elite', 'boss'].indexOf(s.obj.t) >= 0), 'every stage has a known objective');
+  t.ok(CS.STAGES.every(s => !s.mod || CS.MODS[s.mod]), 'every stage modifier is real');
+  t.ok(CS.STAGES.every(s => CS.objText(s).length > 4), 'every objective reads as a sentence');
+}
+{
+  CS.startRun('amoeba', 20);
+  t.ok(G.stage === 0 && G.stageT === 0, 'a run opens on stage 1');
+  t.ok(G.grace > 0, 'stage 1 opens with a breather before the first spawns');
+  const first = CS.STAGES[0];
+  t.ok(first.obj.t === 'survive', 'stage 1 just asks you to survive');
+  t.ok(!CS.objDone(), 'the objective starts unmet');
+  G.stageT = first.obj.n + 1;
+  t.ok(CS.objDone(), 'surviving the clock completes it');
+  t.ok(CS.objProgress() === 1, 'the objective bar reads full');
+  step(.05);
+  t.ok(G.state === 'clear', 'completing the objective clears the stage');
+  t.ok(G.rewards.length === 3, 'three rewards are offered');
+  t.ok(G.en.length === 0 || G.en.every(e => e.boss), 'the board dissolves on a clear');
+  t.ok(G.stageDna > 0 && G.dna >= G.stageDna, 'the clear pays DNA');
+}
+{
+  const hp0 = CS.P.mhp;
+  G.rewards = [CS.REWARDS.find(r => r.id === 'heal')];
+  CS.P.hp = 1;
+  CS.takeReward(0);
+  t.ok(CS.P.mhp > hp0 && CS.P.hp === CS.P.mhp, 'Reinforce raises max health and tops you up');
+  t.ok(G.stage === 1 && G.state === 'play', 'taking a reward starts the next stage');
+  t.ok(G.stageKills === 0 && G.stageT === 0, 'stage counters reset');
+}
+{
+  // the kill objective counts only this stage's kills
+  const st = CS.STAGES[1];
+  t.ok(st.obj.t === 'kill', 'stage 2 is a purge quota');
+  G.stageKills = st.obj.n - 1;
+  t.ok(!CS.objDone(), 'one short is not enough');
+  const e = CS.spawnEnemy('cocci', CS.P.x + 300, CS.P.y);
+  CS.killEnemy(e);
+  t.ok(CS.objDone(), 'the last kill completes the quota');
+  t.ok(CS.objLabel().indexOf('/') > 0, 'the label shows the count');
+}
+{
+  // boss stage
   CS.startRun('amoeba', 21);
-  G.t = 5 * 60 - .1;
-  step(.5);
-  t.ok(!!G.boss, 'the first boss arrives on the five-minute mark');
+  G.stage = 2; CS.beginStage();
+  t.ok(!!G.boss, 'a boss stage spawns its boss immediately');
   const b = G.boss;
   t.ok(b.hp > 1000 && b.boss === 1, 'bosses are chunky');
+  t.ok(!CS.objDone(), 'the stage is not done while it lives');
   b.patT = 0;
   step(1);
   t.ok(finite(b.x) && finite(b.y), 'boss patterns keep it on the board');
@@ -364,15 +460,42 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   CS.hurtEnemy(b, 1e9);
   t.ok(G.kills === k0 + 1 && !G.boss, 'killing the boss clears the health bar');
   t.ok(G.orbs.some(o => o.type === 'dna'), 'bosses drop a DNA payout');
+  t.ok(CS.objDone(), 'and completes the stage objective');
 }
 {
+  // marked-host hunt
+  CS.startRun('amoeba', 23);
+  G.stage = 4; CS.beginStage();
+  G.grace = 0; G.markT = 0;
+  step(.1);
+  const mark = G.en.find(e => e.mark);
+  t.ok(!!mark, 'a hunt stage puts a marked host on the board');
+  t.ok(mark.elite === 1 && mark.hp > 50, 'the marked host is an elite');
+  t.ok(!CS.objDone(), 'the hunt is open while it lives');
+  CS.hurtEnemy(mark, 1e9);
+  t.ok(CS.objDone(), 'killing it finishes the hunt');
+}
+{
+  // stage modifiers actually bite
+  CS.startRun('amoeba', 24);
+  G.stage = 6;                       // Necrosis — ARMOURED
+  const armoured = CS.hpMul();
+  G.stage = 0;
+  t.ok(armoured > CS.hpMul(), 'the ARMOURED stage really does toughen pathogens');
+  G.stage = 9;                       // Sepsis — VENOM
+  const venom = CS.dmgMul ? 1 : 1;
+  t.ok(CS.MODS.venom.dmg > 1 && CS.MODS.swarm.rate > 1 && venom === 1, 'modifiers carry real multipliers');
+  G.stage = 0;
+}
+{
+  // finishing stage 12 wins the run
   CS.startRun('amoeba', 22);
-  G.t = 20 * 60 - .1;
-  G.bossIdx = 3;
-  step(.5);
-  t.ok(!!G.boss && G.boss.B.last, 'the final boss spawns at twenty minutes');
+  G.stage = 11; CS.beginStage();
+  t.ok(!!G.boss && G.boss.B.last, 'stage 12 is The Culture');
   CS.hurtEnemy(G.boss, 1e9);
-  t.ok(G.won === true && G.state === 'over', 'killing the final boss wins the run');
+  step(.05);
+  t.ok(G.won === true && G.state === 'over', 'clearing stage 12 wins the run outright');
+  t.ok(CS.meta.wins > 0, 'the win is recorded in the lab');
 }
 
 // ---------------------------------------------------------------- death & meta
@@ -438,15 +561,55 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
   CS.meta.ups.start = 0;
 }
 
+// ---------------------------------------------------------------- camping is fatal
+function clk(sec){ return Math.floor(sec / 60) + ':' + String(Math.floor(sec % 60)).padStart(2, '0'); }
+{
+  // the whole point of the design: parking in one spot has to get you killed
+  CS.meta.ups = {}; CS.meta.diff = 'std';
+  CS.startRun('amoeba', 777);
+  CS.input.x = 0; CS.input.y = 0;
+  let survived = 0;
+  for (let i = 0; i < 60 * 60 * 6; i++){
+    CS.update(1 / 60);
+    if (G.state === 'levelup') while (G.pending > 0) CS.choose(0);
+    if (G.state === 'clear') CS.takeReward(0);
+    if (G.state === 'over') break;
+    survived = G.t;
+  }
+  t.ok(G.state === 'over', 'a cell that never moves gets overrun (died at ' + clk(survived) + ')');
+  t.ok(survived < 5 * 60, 'and it does not take all day about it (' + clk(survived) + ')');
+}
+
+// ---------------------------------------------------------------- culture strength
+{
+  t.ok(CS.DIFFS.length === 3, 'three culture strengths');
+  t.ok(CS.DIFFS[0].id === 'std' && CS.DIFFS[0].hp === 1, 'standard is the baseline');
+  t.ok(CS.DIFFS.every((d, i) => i === 0 || d.hp > CS.DIFFS[i - 1].hp), 'each step is tougher than the last');
+  t.ok(CS.DIFFS.every((d, i) => i === 0 || d.dna > CS.DIFFS[i - 1].dna), 'and pays more DNA');
+  CS.meta.diff = 'std';
+  CS.startRun('amoeba', 51);
+  const hpStd = CS.hpMul(), dmgStd = CS.dmgMul(), rateStd = CS.spawnRate(), dnaStd = CS.P.s.dnaM;
+  CS.meta.diff = 'let';
+  CS.startRun('amoeba', 51);
+  t.ok(CS.hpMul() > hpStd * 1.9, 'lethal pathogens carry far more health');
+  t.ok(CS.dmgMul() > dmgStd * 1.4, 'lethal pathogens hit far harder');
+  t.ok(CS.spawnRate() > rateStd, 'lethal spawns come thicker');
+  t.ok(CS.P.s.dnaM > dnaStd * 2, 'and lethal pays out properly');
+  CS.meta.diff = 'std';
+  t.ok(CS.curDiff().id === 'std', 'the mode round-trips through meta');
+}
+
 // ---------------------------------------------------------------- endurance
 {
   CS.startRun('plasmo', 4242);
-  CS.input.x = 0; CS.input.y = 0;
-  CS.P.mhp = 1e7; CS.P.hp = 1e7;
   let ok = true, maxEn = 0;
-  for (let i = 0; i < 60 * 60 * 3; i++){          // three minutes at 60fps
+  for (let i = 0; i < 60 * 60 * 3; i++){          // three minutes at 60fps, swimming a wide arc
+    const a = i / 60 * .6;
+    CS.input.x = Math.cos(a); CS.input.y = Math.sin(a);
+    CS.P.hp = CS.P.mhp;                           // immortal, so this measures the sim, not skill
     CS.update(1 / 60);
     if (G.state === 'levelup') while (G.pending > 0) CS.choose(0);
+    if (G.state === 'clear') CS.takeReward(0);     // keep the run rolling through stage clears
     if (i % 600 === 0){
       CS.draw();
       maxEn = Math.max(maxEn, G.en.length);
@@ -455,10 +618,10 @@ t.ok(G.kills > 0, 'the starting weapon actually kills things');
     }
   }
   t.ok(ok, 'three simulated minutes stay numerically sane');
-  t.ok(G.state === 'play', 'and the run is still going');
+  t.ok(G.state === 'play' || G.state === 'clear' || G.state === 'levelup', 'and the run is still going');
   t.ok(G.en.length <= C.MAX_ENEMY, 'the enemy cap holds (peak ' + maxEn + ')');
   t.ok(G.kills > 100, 'a lot of pathogens died along the way (' + G.kills + ')');
-  t.ok(CS.P.lvl > 5, 'and you levelled up plenty (lv ' + CS.P.lvl + ')');
+  t.ok(CS.P.lvl > 5, 'and a moving cell levels up plenty (lv ' + CS.P.lvl + ')');
   t.ok(G.proj.length < 500 && G.parts.length <= 701 && G.orbs.length <= 701, 'entity pools stay bounded');
 }
 {
