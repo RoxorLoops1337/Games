@@ -140,7 +140,7 @@ t.ok(G.state === 'title', 'drawing/updating the attract screen is harmless');
 LP.reseed(1234);
 LP.startRun(1, 1, 'tin');
 t.ok(G.state === 'run', 'startRun enters the run');
-t.ok(G.worms.length === 1 && G.worms[0].segs.length >= 4, 'the first worm is on the page');
+t.ok(G.worms.length === 1 && G.worms[0].segs.length >= 4, 'the first snake is on the page');
 t.ok(P.hp === P.mhp && P.mhp >= 100, 'hull starts full');
 t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the trench');
 
@@ -268,6 +268,93 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   P.s.crit = 0;
 }
 
+// ------------------------------------------------------------------ the snake and its pattern
+{
+  LP.reseed(808);
+  LP.startRun(3, 1, 'tin');
+  t.ok(G.worms.length === 1 && G.worms[0].prime, 'a trench opens with exactly one snake');
+  t.ok(G.worms[0].segs.length >= 20, 'and it is long (' + G.worms[0].segs.length + ' segments)');
+  t.ok(G.segBudget === G.quota - G.worms[0].segs.length, 'the rest of the quota is held back');
+  t.ok(LP.wantSnakes() === 1, 'shallow trenches only ever field one');
+
+  for (const kind of LP.PATTERNS){
+    const path = LP.buildPath(kind, 0, 1);
+    t.ok(path.length > 10 && path.every(p => finite(p.x) && finite(p.y)), kind + ' builds a usable path');
+    t.ok(path[path.length - 1].y > path[0].y + 200, kind + ' works its way down the page');
+    t.ok(path.every(p => p.x > -20 && p.x < C.W + 20), kind + ' stays on the page');
+  }
+
+  // it weaves: horizontal direction reverses, and it keeps descending
+  const w = G.worms[0];
+  w.kind = 'weave';
+  w.path = LP.buildPath('weave', w.y + 150, 1);
+  w.wp = 0;
+  const y0 = w.y;
+  let minX = 1e9, maxX = -1e9, prevX = w.x, flips = 0, dir = 0;
+  for (let i = 0; i < 60 * 60; i++){
+    LP.stepWorm(w, 1 / 60);
+    minX = Math.min(minX, w.x); maxX = Math.max(maxX, w.x);
+    const d = Math.sign(w.x - prevX);
+    if (d && dir && d !== dir) flips++;
+    if (d) dir = d;
+    prevX = w.x;
+  }
+  t.ok(w.y > y0 + 200, 'the snake descends as it weaves (' + Math.round(w.y - y0) + 'px in 60s)');
+  t.ok(maxX - minX > C.W * 0.5, 'and sweeps most of the width');
+  t.ok(flips >= 2, 'reversing at the walls — that is the weave (' + flips + ' turns)');
+
+  // a second snake only shows up deep and late
+  LP.startRun(8, 1, 'tin');
+  t.ok(LP.wantSnakes() === 1, 'even a deep trench starts with one');
+  G.prog = 0.6;
+  t.ok(LP.wantSnakes() === 2, 'and adds a second one past a third of the way');
+
+  // when a snake is finished the next one comes down with the rest of the quota
+  LP.startRun(3, 1, 'tin');
+  const budget0 = G.segBudget;
+  G.worms.length = 0;
+  for (let i = 0; i < 60 * 8; i++) LP.update(1 / 60);
+  t.ok(G.worms.some(x => x.prime), 'a fresh snake enters once the page is clear');
+  t.ok(G.segBudget < budget0, 'and it is drawn from the trench budget');
+}
+
+// ------------------------------------------------------------------ overrun
+{
+  LP.startRun(2, 1, 'tin');
+  const w = G.worms[0];
+  t.ok(w.mode === 'path', 'the snake follows its pattern');
+  // a loose fragment must not be able to end the dive
+  clearField();
+  const frag = LP.spawnWorm({ len: 3, noCarrier: true });
+  t.ok(frag.mode === 'wander' && !frag.prime, 'fragments and strays wander instead');
+  for (const s of frag.segs) s.y = C.H;
+  LP.checkOverrun();
+  t.ok(G.state === 'run', 'a stray reaching the deck is not a loss');
+  for (let i = 0; i < 60 * 6; i++) LP.stepWorm(frag, 1 / 60);
+  t.ok(frag.segs.every(s => s.y < LP.deckLine()), 'strays are held off the deck entirely');
+
+  // the snake reaching the deck is
+  clearField();
+  const snake = LP.spawnWorm({ prime: true, len: 6, noCarrier: true });
+  snake.segs[0].y = LP.deckLine() + 5;
+  LP.checkOverrun();
+  t.ok(G.state === 'down' && G.downed === 'overrun', 'the snake making the deck ends the dive');
+  t.ok(LP.payout() > 0, 'and there are pearls on the table');
+
+  // the revive lifts the trench back up and puts you back in
+  const y0 = snake.segs[0].y;
+  P.hp = 1;
+  t.ok(LP.reviveRun() === true, 'the revive is available once');
+  t.ok(G.state === 'run' && P.hp === P.mhp, 'you come back at full hull');
+  t.ok(snake.segs[0].y < y0 - 200, 'and the snake is shoved back up the page');
+  t.ok(P.inv > 1, 'with a moment of grace');
+  t.ok(LP.reviveRun() === false, 'but only the once');
+  LP.downRun('overrun');
+  const bank0 = LP.META.pearls;
+  LP.claimRun();
+  t.ok(G.state === 'dead' && LP.META.pearls > bank0, 'taking the pearls ends the dive and banks them');
+}
+
 // ------------------------------------------------------------------ the press points up
 {
   LP.startRun(1, 1, 'tin');
@@ -327,8 +414,10 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
 {
   LP.startRun(4, 1, 'tin');
   t.ok(G.carrierBudget >= C.CARRIERS, 'a trench is stocked with carriers (' + G.carrierBudget + ')');
-  t.ok(G.worms[0].segs.some(s => s.carrier), 'the first worm always brings one');
-  t.ok(G.carriersLeft === G.carrierBudget - 1, 'and it comes out of the budget');
+  const carriersOnSnake = G.worms[0].segs.filter(s => s.carrier).length;
+  t.ok(carriersOnSnake >= 1, 'the snake comes down with plates bolted into it (' + carriersOnSnake + ')');
+  t.ok(G.carriersLeft === G.carrierBudget - carriersOnSnake, 'and they come out of the trench budget');
+  t.ok(G.worms[0].segs.length > 8, 'and it is a long snake, not a short worm');
 
   const car = G.worms[0].segs.find(s => s.carrier);
   const plain = G.worms[0].segs.find(s => !s.carrier);
@@ -419,7 +508,15 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   P.inv = 0; LP.hitPlayer(9999);
   t.ok(G.state === 'run' && P.hp > 0, 'the lifeboat brings you back');
   P.inv = 0; LP.hitPlayer(9999);
-  t.ok(G.state === 'dead', 'the second death sticks');
+  t.ok(G.state === 'down' && G.downed === 'hull', 'the second death puts you on the offer screen');
+  t.ok(LP.reviveRun() === true && G.state === 'run' && P.hp === P.mhp,
+    'the ad revive puts you back in the water at full hull');
+  t.ok(G.adRevives === 0, 'and it is the only one');
+  P.inv = 0; LP.hitPlayer(9999);
+  t.ok(G.state === 'down' && LP.reviveRun() === false, 'the second time down there is no revive left');
+  const bank0 = LP.META.pearls;
+  t.ok(LP.claimRun() === true && G.state === 'dead', 'claiming ends the dive');
+  t.ok(LP.META.pearls > bank0, 'and banks the pearls');
 }
 
 // ------------------------------------------------------------------ draft sheet
@@ -690,14 +787,15 @@ t.ok(G.quota === LP.STAGES[0].quota && G.killed === 0, 'quota comes from the tre
   LP.setMeta(LP.freshMeta());
   LP.startRun(9, 4, 'mote');            // thin hull, Hadal, no upgrades
   let frames = 0;
-  while (frames < 60 * 60 * 4 && G.state === 'run'){
+  while (frames < 60 * 60 * 4 && (G.state === 'run' || G.state === 'draft')){
     LP.update(1 / 60);
     frames++;
     if (G.state === 'draft') LP.skipDraft();
     if (frames % 9 === 0){ P.tx = C.W / 2; P.ty = C.H - C.DECK - 30; }   // a pilot who never dodges
   }
-  t.ok(G.state === 'dead', 'a pilot who parks in the open dies down there');
-  t.ok(LP.META.pearls > 0, 'and still banks what was in the net');
+  t.ok(G.state === 'down', 'a pilot who parks in the open goes down (' + G.downed + ')');
+  LP.claimRun();
+  t.ok(G.state === 'dead' && LP.META.pearls > 0, 'and still banks what was in the net');
 }
 
 // ------------------------------------------------------------------ draw in every state
