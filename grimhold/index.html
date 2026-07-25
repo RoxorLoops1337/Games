@@ -629,6 +629,14 @@ function linkedIgnoringDoors(x1,y1,x2,y2){
 const DIRS = [[0,-1],[1,0],[0,1],[-1,0]];
 const DIRS8 = [[0,-1],[1,-1],[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1]];
 
+// A hero squeezes past a companion, and past the prisoner they are escorting —
+// nobody squeezes past a monster, and nobody may finish a move standing on
+// anyone. Without the prisoner in this rule, escorting them down a one-wide
+// corridor seals the way back out.
+function bodyPassable(mover, occ){
+  if (!occ || occ === mover) return true;
+  return !!(mover && mover.kind === 'hero' && (occ.kind === 'hero' || occ.kind === 'npc'));
+}
 function actorAt(x,y){
   if (!G || !G.q) return null;
   for (const a of G.q.actors) if (a.alive && a.x===x && a.y===y) return a;
@@ -659,9 +667,7 @@ function walkField(sx, sy, maxSteps, mover){
         if (!inB(nx,ny) || d.has(ni)) continue;
         if (!linked(x,y,nx,ny)) continue;
         if (furnAt(nx,ny)) continue;
-        const occ = actorAt(nx,ny);
-        // companions can be squeezed past, monsters and the dead cannot
-        if (occ && occ !== mover && !(mover && mover.kind === 'hero' && occ.kind === 'hero')) continue;
+        if (!bodyPassable(mover, actorAt(nx,ny))) continue;
         d.set(ni, cost+1); from.set(ni, idx(x,y));
         next.push([nx,ny]);
       }
@@ -3206,7 +3212,7 @@ function heroWalk(h, path, done){
     if (dr && !dr.open){ openDoorAt(h, dr); finishStep(); return; }
     const occ = actorAt(nx,ny);
     const last = k === path.length - 1;
-    if (furnAt(nx,ny) || trapBlocks(nx,ny) || (occ && (occ.kind !== 'hero' || last))){ finishStep(); return; }
+    if (furnAt(nx,ny) || trapBlocks(nx,ny) || (occ && (!bodyPassable(h, occ) || last))){ finishStep(); return; }
     k++;
     const ox = h.x, oy = h.y;
     h.facing = nx > ox ? 1 : nx < ox ? -1 : h.facing;
@@ -3214,7 +3220,11 @@ function heroWalk(h, path, done){
     slide(h, nx, ny, 150, () => {
       h.moveLeft--;
       const npc = G.q.actors.find(a => a.kind === 'npc' && a.follow === h.id && a.alive);
-      if (npc) slide(npc, ox, oy, 150, null);
+      // they take the square you just left — which is how you swap past them
+      if (npc){
+        const there = actorAt(ox, oy);
+        if (!there || there === npc) slide(npc, ox, oy, 150, null);
+      }
       recomputeVision();
       focusOn(h.x, h.y);
       const tr = trapAt(h.x, h.y);
@@ -4577,8 +4587,7 @@ function walkFieldOpen(sx, sy, maxSteps, mover){
         if (dr && dr.secret && !dr.found) continue;
         if (!dr && TR[idx(x,y)] !== TR[ni]) continue;
         if (furnAt(nx,ny) || trapBlocks(nx,ny)) continue;
-        const occ = actorAt(nx,ny);
-        if (occ && occ !== mover && !(mover && mover.kind === 'hero' && occ.kind === 'hero')) continue;
+        if (!bodyPassable(mover, actorAt(nx,ny))) continue;
         d.set(ni, cost+1); from.set(ni, idx(x,y));
         next.push([nx,ny]);
       }
@@ -5265,7 +5274,7 @@ globalThis.HQ = {
   ROOM_FLOOR, CORR_FLOOR, ROOM_DECOR, CORR_DECOR,
   SPELLS, ELEMENTS, ELEMENT_SPELLS, TREASURE_DECK, HERO_DEFS, FURN, SKULL, WHITE, BLACK,
   idx, inB, isFloor, isRock, roomAt, roomTiles, dkey, doorAt, doorBetween, linked, linkedIgnoringDoors,
-  hasLOS, walkField, walkFieldOpen, tracePath, actorAt, furnAt, blocked, trapAt, trapBlocks,
+  hasLOS, walkField, walkFieldOpen, tracePath, actorAt, furnAt, blocked, trapAt, trapBlocks, bodyPassable,
   newG, newCampaign, mkHero, startQuest, launchQuest, boot, setRng,
   BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes,
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
