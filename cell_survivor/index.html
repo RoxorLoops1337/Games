@@ -615,7 +615,6 @@ const ENEMIES = [
   { id: 'virion', nm: 'Virion',        hp: 23,  spd: 112, dmg: 9,  r: 11, xp: 2, col: '#ff9de0', from: 2, w: 8, zig: 1 },
   { id: 'sac',    nm: 'Spore Sac',     hp: 64,  spd: 40,  dmg: 12, r: 20, xp: 4, col: '#d7ff6d', from: 3, w: 6, split: 2 },
   { id: 'phage',  nm: 'Phage',         hp: 44,  spd: 46,  dmg: 10, r: 15, xp: 4, col: '#ffb44d', from: 4, w: 6, ranged: 2.2 },
-  { id: 'zoner',  nm: 'Spitter',       hp: 60,  spd: 54,  dmg: 22, r: 16, xp: 5, col: '#c8a1ff', from: 3, w: 6, zone: 3.4 },
   { id: 'swarm',  nm: 'Swarmer',       hp: 13,  spd: 128, dmg: 5,  r: 8,  xp: 1, col: '#ffe08a', from: 4, w: 7, pack: 8 },
   { id: 'leech',  nm: 'Leech',         hp: 54,  spd: 96,  dmg: 6,  r: 13, xp: 4, col: '#ff6d8a', from: 6, w: 6, latch: 1 },
   { id: 'blob',   nm: 'Amoeboid',      hp: 185, spd: 34,  dmg: 16, r: 29, xp: 9, col: '#b28aff', from: 7, w: 4, heavy: 1 },
@@ -627,8 +626,8 @@ const EDEF = {}; for (const e of ENEMIES) EDEF[e.id] = e;
 const BOSSES = [
   { id: 'engulfer', nm: 'The Engulfer',   hp: 2600,  spd: 56, r: 54, dmg: 28, col: '#ff8a3d', xp: 140, dna: 60,  pat: ['charge', 'spray'] },
   { id: 'mother',   nm: 'Mother Spore',   hp: 9000,  spd: 36, r: 64, dmg: 32, col: '#d7ff6d', xp: 260, dna: 110, pat: ['spawn', 'rings'] },
-  { id: 'colossus', nm: 'Prion Colossus', hp: 23000, spd: 48, r: 72, dmg: 38, col: '#ff4d6d', xp: 420, dna: 190, pat: ['rings', 'charge', 'spawn'] },
-  { id: 'culture',  nm: 'The Culture',    hp: 58000, spd: 44, r: 88, dmg: 46, col: '#ff4dd2', xp: 900, dna: 400, pat: ['rings', 'spawn', 'charge', 'spray'], last: true },
+  { id: 'colossus', nm: 'Prion Colossus', hp: 23000, spd: 48, r: 72, dmg: 38, col: '#ff4d6d', xp: 420, dna: 190, pat: ['rings', 'mark', 'charge', 'spawn'] },
+  { id: 'culture',  nm: 'The Culture',    hp: 58000, spd: 44, r: 88, dmg: 46, col: '#ff4dd2', xp: 900, dna: 400, pat: ['rings', 'spawn', 'mark', 'charge', 'spray'], last: true },
 ];
 
 // ---------------------------------------------------------------- the stages
@@ -1260,16 +1259,6 @@ function updateEnemies(dt){
       if (e.chargeT <= -1.1){ e.chargeT = rr(2.4, 4); e.tele = .55; }
       if (e.tele > 0){ e.tele -= dt; if (e.tele <= 0){ e.vx = dx / d * 560; e.vy = dy / d * 560; } }
       else { e.vx += dx / d * spd * dt * 3.2; e.vy += dy / d * spd * dt * 3.2; }
-    } else if (e.D.zone){
-      // hangs back and drops a shell where you are standing
-      const want = 300;
-      const push = d > want + 50 ? 1 : d < want - 50 ? -.8 : 0;
-      e.vx += dx / d * spd * push * dt * 6; e.vy += dy / d * spd * push * dt * 6;
-      e.atkT -= dt;
-      if (e.atkT <= 0 && d < 640){
-        e.atkT = e.D.zone;
-        G.zones.push({ x: P.x, y: P.y, r: 74 + prog() * 3, t: 1.15, max: 1.15, dmg: e.dmg, uid: uid++ });
-      }
     } else if (e.D.zig){
       // circles in and darts, rather than walking politely into your guns
       const ang = Math.atan2(dy, dx);
@@ -1352,6 +1341,11 @@ function bossAI(e, dt, dx, dy, d){
       e.tele = .8;
     } else if (p === 'spray'){
       e.spray = 1.6;
+    } else if (p === 'mark'){
+      // the one thing that shells the ground you're standing on — a boss, telegraphed
+      for (let k = 0; k < 3; k++)
+        G.zones.push({ x: P.x + rr(-90, 90), y: P.y + rr(-90, 90), r: 96, t: 1.35 + k * .18, max: 1.35 + k * .18,
+                       dmg: e.dmg * .8, uid: uid++ });
     }
   }
   if (e.spray > 0){
@@ -2213,16 +2207,6 @@ function drawBody(e, col, ang){
       if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
     }
     ctx.closePath(); ctx.fill(); ctx.stroke();
-    return;
-  }
-  if (k === 'zoner'){
-    ctx.rotate(w * .4);
-    blobPath(0, 0, r, w, .16, 12); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = col;
-    for (let i = 0; i < 3; i++){
-      const a = i / 3 * TAU + w;
-      ctx.beginPath(); ctx.arc(Math.cos(a) * r * .95, Math.sin(a) * r * .95, r * .22, 0, TAU); ctx.fill();
-    }
     return;
   }
   if (k === 'phage'){
