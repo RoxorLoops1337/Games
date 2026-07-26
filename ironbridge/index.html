@@ -28,6 +28,7 @@
   .res b{ font-weight:700; letter-spacing:.3px; }
   .res .rate{ color:var(--dim2); font-size:11px; }
   #rGold b{ color:var(--gold); } #rIron b{ color:var(--iron); } #rWood b{ color:var(--wood); }
+  #rFood b{ color:#e8d36a; }
   #rPop b{ color:var(--pop); } #rPop.full b{ color:var(--red); }
   #clock{ margin-left:auto; display:flex; align-items:center; gap:8px; }
   #waveBox{ padding:4px 10px; background:#0e1421; border:1px solid var(--line); border-radius:8px;
@@ -41,8 +42,10 @@
   /* ---------------- one world, one camera ---------------- */
   #stage{ flex:1 1 auto; position:relative; min-height:0; overflow:hidden; }
   canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
-  #viewbtns{ position:absolute; top:8px; right:10px; display:flex; gap:5px; z-index:6; }
-  .vbtn{ padding:4px 9px; font-size:11px; letter-spacing:1px; background:rgba(20,26,38,.85);
+  #viewbtns{ position:absolute; top:8px; left:10px; right:10px; display:flex; gap:5px; z-index:6;
+    flex-wrap:wrap; justify-content:flex-end; pointer-events:none; }
+  #viewbtns .vbtn{ pointer-events:auto; }
+  .vbtn{ padding:7px 11px; font-size:11px; letter-spacing:1px; background:rgba(20,26,38,.85);
     border:1px solid var(--line); border-radius:6px; color:var(--dim); backdrop-filter:blur(2px); }
   .vbtn:hover{ color:var(--ink); }
   .vbtn.on{ background:var(--blue); color:#08111f; border-color:var(--blue); }
@@ -60,17 +63,18 @@
   .prow{ display:flex; align-items:center; gap:5px; }
   .pcol{ display:flex; flex-direction:column; gap:4px; }
   .pgrid{ display:grid; grid-template-columns:repeat(2,minmax(96px,1fr)); gap:4px; }
-  .job{ display:flex; align-items:center; gap:5px; padding:3px 6px; background:#0e1421;
+  .job{ display:flex; align-items:center; gap:5px; padding:4px 6px; background:#0e1421;
     border:1px solid var(--line); border-radius:8px; min-width:0; }
   .job .nm{ font-size:11px; color:var(--dim); flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .job .ct{ font-weight:700; font-variant-numeric:tabular-nums; flex:0 0 auto; text-align:right;
     white-space:nowrap; }
-  .sq{ width:22px; height:22px; padding:0; font-size:14px; line-height:1; background:var(--panel2);
-    border:1px solid var(--line); border-radius:6px; font-weight:700; }
+  .sq{ width:30px; height:30px; padding:0; font-size:17px; line-height:1; background:var(--panel2);
+    border:1px solid var(--line); border-radius:7px; font-weight:700; flex:0 0 auto; }
   .sq:hover{ background:#28324a; }
   .sq:disabled{ opacity:.32; cursor:not-allowed; }
-  .abtn{ display:flex; flex-direction:column; align-items:flex-start; gap:1px; padding:5px 8px; text-align:left;
-    background:var(--panel2); border:1px solid var(--line); border-radius:8px; min-width:0; flex:1 1 0; }
+  .abtn{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:7px 10px; text-align:left;
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px; min-width:0; flex:1 1 0;
+    min-height:44px; justify-content:center; }
   .abtn:hover:not(:disabled){ background:#28324a; border-color:#3c4a66; }
   .abtn:disabled{ opacity:.4; cursor:not-allowed; }
   .abtn .t{ font-size:12px; font-weight:700; white-space:nowrap; }
@@ -180,11 +184,21 @@
     .tier{ grid-template-columns:1fr; }
   }
 
+  .dtabs{ display:none; }
+  body.narrow #dock{ flex-direction:column; gap:6px; overflow-x:hidden; overflow-y:auto; max-height:44vh; }
+  body.narrow .dtabs{ display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; }
+  body.narrow .dtab{ flex:1 1 0; padding:8px 6px; font-size:11px; font-weight:700; letter-spacing:1px;
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px; color:var(--dim);
+    white-space:nowrap; position:relative; }
+  body.narrow .dtab.on{ background:var(--blue); border-color:var(--blue); color:#08111f; }
+  body.narrow .dtab .dot{ position:absolute; top:3px; right:5px; width:7px; height:7px; border-radius:50%;
+    background:var(--gold); }
+  body.narrow .dsec{ border-right:none; padding-right:0; }
+  body.narrow .pgrid{ grid-template-columns:repeat(2,minmax(120px,1fr)); }
   @media (max-width:900px){
     #top{ flex-wrap:wrap; gap:6px; }
     .res{ padding:3px 7px; font-size:12px; }
-    #dock{ max-height:172px; }
-    .pgrid{ grid-template-columns:repeat(2,minmax(84px,1fr)); }
+    .vbtn{ padding:6px 9px; }
   }
 </style>
 </head>
@@ -194,6 +208,7 @@
     <div class="res" id="rGold"><span class="ic">🪙</span><b>0</b><span class="rate"></span></div>
     <div class="res" id="rIron"><span class="ic">⛏️</span><b>0</b><span class="rate"></span></div>
     <div class="res" id="rWood"><span class="ic">🪵</span><b>0</b><span class="rate"></span></div>
+    <div class="res" id="rFood"><span class="ic">🌾</span><b>0</b><span class="rate"></span></div>
     <div class="res" id="rPop"><span class="ic">👥</span><b>0</b></div>
     <div id="clock">
       <div id="waveBox">Wave <b>0</b> · <span id="waveT">0:00</span></div>
@@ -260,6 +275,9 @@ const C = {
   RANK_LEVELS: [15, 18, 21, 24],
   GATHER: { gold: 0.85, iron: 0.62, wood: 1.15, food: 0.9 },
   NODE_CAP: { gold: 6, iron: 6, wood: 8, food: 0 },   // food cap comes from farms
+  NODE_CAP_PER_LVL: 2,
+  NODE_RATE_PER_LVL: .28,
+  NODE_MAX_LVL: 4,
   FARM_SLOTS: 3,
   WORKER_COST: { gold: 25, food: 20 },
   WORKER_TIME: 7,
@@ -654,6 +672,7 @@ function makeSide(i, ai){
     workers:{ idle:4, gold:0, iron:0, wood:0, food:0 },
     plot:new Array(PLOT_W * PLOT_H).fill(null),
     trainQ:[], muster:[], heroes:[],
+    nodeLvl:{ gold:1, iron:1, wood:1 },
     towerUp:{ hp:0, armor:0, atk:0, as:0, regen:0 },
     troopUp:{ tad:0, tarm:0, thp:0 },
     structs:[], superT:0, aiT:0, aiBuild:0,
@@ -691,8 +710,8 @@ function newMatch(opt){
   const r = G.sides[1].res;
   r.gold = Math.round(r.gold * e); r.iron = Math.round(r.iron * e);
   r.wood = Math.round(r.wood * e); r.food = Math.round(r.food * e);
-  sel.tile = -1; sel.build = null;
-  cam.x = HOLD_X + 14; cam.follow = false; cam.z = cam.tz = clamp(LW / 1500, .45, .85);
+  sel.tile = -1; sel.node = null; sel.build = null;
+  cam.x = HOLD_X + 14; cam.follow = false; cam.z = cam.tz = clamp(LW / 1100, .55, .95);
   return G;
 }
 
@@ -701,7 +720,24 @@ const bList = (s, type) => s.plot.filter(b => b && b.type === type);
 const bLvl = (s, type) => bList(s, type).reduce((a, b) => a + b.lvl, 0);
 const popCap = (s) => C.POP_BASE + bLvl(s, 'farm') * C.POP_PER_FARM;
 const fieldSlots = (s) => bLvl(s, 'farm') * C.FARM_SLOTS;
-const nodeCap = (s, node) => node === 'food' ? fieldSlots(s) : C.NODE_CAP[node];
+const NODE_UPGRADABLE = ['gold','iron','wood'];
+const nodeLvl = (s, node) => (s.nodeLvl && s.nodeLvl[node]) || 1;
+const nodeCap = (s, node) => node === 'food' ? fieldSlots(s)
+  : C.NODE_CAP[node] + C.NODE_CAP_PER_LVL * (nodeLvl(s, node) - 1);
+const nodeRate = (s, node) => C.GATHER[node] * (1 + C.NODE_RATE_PER_LVL * (nodeLvl(s, node) - 1));
+const nodeUpCost = (s, node) => {
+  const l = nodeLvl(s, node);
+  return { wood: Math.round(70 * Math.pow(1.65, l - 1)), gold: Math.round(50 * Math.pow(1.65, l - 1)) };
+};
+function upgradeNode(s, node){
+  if (!NODE_UPGRADABLE.includes(node)) return 'the fields are grown by building farms';
+  if (nodeLvl(s, node) >= C.NODE_MAX_LVL) return 'already dug as deep as it goes';
+  const cost = nodeUpCost(s, node);
+  if (!canPay(s, cost)) return 'not enough resources';
+  pay(s, cost);
+  s.nodeLvl[node]++;
+  return null;
+}
 const workerCount = (s) => s.workers.idle + s.workers.gold + s.workers.iron + s.workers.wood + s.workers.food;
 const fielded = (s) => G.units.reduce((a, u) => a + ((u.side === s.i && !u.dead && u.paid) ? 1 : 0), 0);
 const popUsed = (s) => workerCount(s) + s.muster.length + fielded(s)
@@ -817,7 +853,7 @@ function ecoStep(s, dt){
   for (const node of ['gold','iron','wood','food']){
     const n = Math.min(s.workers[node], nodeCap(s, node));
     if (n <= 0) continue;
-    const amt = n * C.GATHER[node] * m * dt;
+    const amt = n * nodeRate(s, node) * m * dt;
     s.res[node] += amt; got += amt;
   }
   s.gathered += got;
@@ -1948,6 +1984,9 @@ function resize(){
   lcv.width = Math.round(LW * dpr); lcv.height = Math.round(LH * dpr);
   lctx = lcv.getContext('2d');
   lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const wasNarrow = document.body.classList.contains('narrow');
+  document.body.classList.toggle('narrow', window.innerWidth < 760);
+  if (wasNarrow !== document.body.classList.contains('narrow')) syncUI();
 }
 
 const shade = (hex, f) => {
@@ -2410,11 +2449,11 @@ function drawMinimap(c){
 /* =====================================================================
    RENDERING — your hold
    ===================================================================== */
-const sel = { tile:-1, build:null, hero:null };
+const sel = { tile:-1, node:null, build:null, hero:null };
 // The hold lives in the same world as the bridge, just off to one side of it,
 // so one camera covers your farms, the whole span and their gates. Everything
 // below is written in hold-grid units and projected through the world.
-const HOLD_X = -58, TILE = 6.0;
+const HOLD_X = -58, TILE = 7.2;
 let holdSide = 0, BSC = 1;
 function holdWorld(gx, gy){
   const d = holdSide === 0 ? 1 : -1;
@@ -2532,7 +2571,7 @@ function drawBuilding(c, b){
   if (t === 'farm') sub = '+' + (C.POP_PER_FARM * b.lvl) + ' pop';
   if (t === 'barracks') sub = 'Lv ' + b.lvl + (b.lvl >= 3 ? ' · cannons' : b.lvl >= 2 ? ' · casters' : '');
   if (t === 'tavern') sub = heroCap(s) + ' hero slot' + (heroCap(s) === 1 ? '' : 's');
-  if (holdSide === 0){
+  if (holdSide === 0 && (cam.z > .72 || b.tile === sel.tile)){
     const lp0 = bp(gx, gy, 1.55 + z);
     labelQ.push({ x:lp0[0], y:lp0[1], txt:BUILDINGS[t].n + '  ' + sub, col:'#d8dee9', hot:b.tile === sel.tile });
   }
@@ -2735,7 +2774,7 @@ function drawHold(c, side){
   const s = G.sides[side];
   for (let t = 0; t < s.plot.length; t++){
     const gx = tileGX(t), gy = tileGY(t);
-    const hot = !fog && t === sel.tile;
+    const hot = !fog && t === sel.tile && !sel.node;
     drawTile(c, gx, gy, s.plot[t] ? '#4d4739' : (hot ? 'rgba(78,163,255,.30)' : 'rgba(46,52,40,.55)'),
       hot ? '#4ea3ff' : 'rgba(0,0,0,.35)');
     if (!s.plot[t] && !fog){
@@ -2745,6 +2784,11 @@ function drawHold(c, side){
       c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText('+', p[0], p[1]); c.textBaseline = 'alphabetic';
     }
+  }
+  if (!fog && sel.node && NODES[sel.node]){
+    const q = bp(NODES[sel.node].gx, NODES[sel.node].gy);
+    c.strokeStyle = '#4ea3ff'; c.lineWidth = Math.max(1.5, 2.4 * cam.z);
+    c.beginPath(); c.ellipse(q[0], q[1], BSC * .62, BSC * .32, 0, 0, 6.2832); c.stroke();
   }
   const items = [];
   items.push({ y:bp(KEEP.gx, KEEP.gy)[1], f:() => drawKeep(c) });
@@ -2822,7 +2866,7 @@ function syncHud(){
     const el = $('r' + k[0].toUpperCase() + k.slice(1));
     if (!el) continue;
     el.querySelector('b').textContent = fmt(s.res[k]);
-    const rate = Math.min(s.workers[k], nodeCap(s, k)) * C.GATHER[k] * m;
+    const rate = Math.min(s.workers[k], nodeCap(s, k)) * nodeRate(s, k) * m;
     el.querySelector('.rate').textContent = rate > 0 ? '+' + rate.toFixed(1) : '';
   }
   const pop = $('rPop');
@@ -2835,11 +2879,16 @@ function syncHud(){
 
 // The dock is one row of columns under the world: jobs, training, whatever plot
 // you have selected, the forge, and your heroes.
+let dockTab = 'jobs';
+const NARROW = () => !HEADLESS && document.body.classList.contains('narrow');
+
 function dockHtml(){
   const s = G.sides[0];
-  let h = '';
+  const narrow = NARROW();
+  const sec = {};
 
-  h += '<div class="dsec"><div class="ptitle">Workers — ' + s.workers.idle + ' idle</div><div class="pgrid">';
+  // ---- jobs
+  let h = '<div class="ptitle">Workers — ' + s.workers.idle + ' idle</div><div class="pgrid">';
   for (const k of ['gold','iron','wood','food']){
     const cap = nodeCap(s, k);
     h += '<div class="job"><span>' + RES_ICON[k] + '</span>' +
@@ -2847,9 +2896,10 @@ function dockHtml(){
       '<button class="sq" data-act="job" data-node="' + k + '" data-d="-1"' + (s.workers[k] ? '' : ' disabled') + '>−</button>' +
       '<button class="sq" data-act="job" data-node="' + k + '" data-d="1"' + (s.workers.idle && s.workers[k] < cap ? '' : ' disabled') + '>+</button></div>';
   }
-  h += '</div></div>';
+  sec.jobs = h + '</div>';
 
-  h += '<div class="dsec"><div class="ptitle">Train</div><div class="pgrid">';
+  // ---- training
+  h = '<div class="ptitle">Train</div><div class="pgrid">';
   h += '<button class="abtn" data-act="worker"><span class="t">Worker</span><span class="c">' + costHtml(C.WORKER_COST) + '</span></button>';
   for (const k in TRAIN){
     const d = TRAIN[k], ok = barracksLvl(s) >= d.barracks;
@@ -2864,14 +2914,30 @@ function dockHtml(){
   const cnt = {};
   for (const m of s.muster) cnt[m.type] = (cnt[m.type] || 0) + 1;
   const mus = Object.keys(cnt).map(k => '<span class="mchip">' + TRAIN[k].n + ' ×' + cnt[k] + '</span>').join('');
-  h += '</div><div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>' +
+  sec.train = h + '</div><div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>' +
     '<div class="ptitle">Next wave' + (s.superT > 0 ? ' — OGRES ' + Math.ceil(s.superT) + 's' : '') + '</div>' +
-    '<div id="musterRow">' + (mus || '<span class="mchip">levies only</span>') + '</div></div>';
+    '<div id="musterRow">' + (mus || '<span class="mchip">levies only</span>') + '</div>';
 
-  // whatever is selected out on the plot
+  // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
-  h += '<div class="dsec grow">';
-  if (sel.tile >= 0 && !b){
+  h = '';
+  if (sel.node){
+    const N = NODES[sel.node], lv = nodeLvl(s, sel.node), maxed = lv >= C.NODE_MAX_LVL;
+    const cost = nodeUpCost(s, sel.node);
+    h += '<div class="ptitle">' + N.n + ' — level ' + lv + '</div>' +
+      '<div style="font-size:11px;color:var(--dim);max-width:260px">Working ' +
+      s.workers[sel.node] + ' of ' + nodeCap(s, sel.node) + ' places at ' +
+      nodeRate(s, sel.node).toFixed(2) + '/s each. Digging deeper adds ' + C.NODE_CAP_PER_LVL +
+      ' places and ' + Math.round(C.NODE_RATE_PER_LVL * 100) + '% output.</div><div class="prow">' +
+      '<button class="abtn" data-act="nodeup" data-node="' + sel.node + '"' +
+      (!maxed && canPay(s, cost) ? '' : ' disabled') + '><span class="t">' +
+      (maxed ? 'Fully dug' : 'Dig deeper — level ' + (lv + 1)) + '</span><span class="c">' +
+      (maxed ? 'at the bottom' : costHtml(cost)) + '</span></button>' +
+      '<button class="sq" data-act="job" data-node="' + sel.node + '" data-d="-1"' + (s.workers[sel.node] ? '' : ' disabled') + '>−</button>' +
+      '<button class="sq" data-act="job" data-node="' + sel.node + '" data-d="1"' +
+      (s.workers.idle && s.workers[sel.node] < nodeCap(s, sel.node) ? '' : ' disabled') + '>+</button>' +
+      '</div>';
+  } else if (sel.tile >= 0 && !b){
     h += '<div class="ptitle">Build on plot ' + (sel.tile + 1) + '</div><div class="pgrid">';
     for (const t of BUILD_ORDER){
       const cost = buildCost(t, 1);
@@ -2891,12 +2957,12 @@ function dockHtml(){
     h += '</div>';
   } else {
     h += '<div class="ptitle">Your hold</div><div style="font-size:12px;color:var(--dim);max-width:250px;line-height:1.5">' +
-      'Click an empty plot out on the grass to build, or a building to upgrade it. Drag the world to look around.</div>';
+      'Click a plot to build, a building to upgrade it, or a mine to dig it deeper. Drag to look around, pinch or scroll to zoom.</div>';
   }
-  h += '</div>';
+  sec.sel = h;
 
   if (bLvl(s, 'forge') > 0){
-    h += '<div class="dsec"><div class="ptitle">Forge — rank cap ' + upCap(s) + '</div><div class="pgrid">';
+    h = '<div class="ptitle">Forge — rank cap ' + upCap(s) + '</div><div class="pgrid">';
     for (const u of [...TOWER_UPS, ...TROOP_UPS]){
       const bag = TOWER_UPS.includes(u) ? s.towerUp : s.troopUp;
       const lv = bag[u.id], maxed = lv >= upCap(s);
@@ -2905,11 +2971,22 @@ function dockHtml(){
         '<span class="t">' + u.n + ' <span style="color:var(--gold)">' + lv + '/' + upCap(s) + '</span></span>' +
         '<span class="c">' + (maxed ? 'at the cap' : costHtml(cost)) + '</span></button>';
     }
-    h += '</div></div>';
+    sec.forge = h + '</div>';
   }
 
-  h += '<div class="dsec"><div class="ptitle">Heroes</div><div id="heroBar">' + heroBarHtml() + '</div></div>';
-  return h;
+  sec.heroes = '<div class="ptitle">Heroes</div><div id="heroBar">' + heroBarHtml() + '</div>';
+
+  const order = ['jobs','train','sel','forge','heroes'].filter(k => sec[k] !== undefined);
+  if (!narrow)
+    return order.map(k => '<div class="dsec' + (k === 'sel' ? ' grow' : '') + '">' + sec[k] + '</div>').join('');
+
+  // Narrow: one section at a time behind tabs, so nothing needs a sideways scroll.
+  if (!sec[dockTab]) dockTab = 'jobs';
+  const label = { jobs:'JOBS', train:'TRAIN', sel:'BUILD', forge:'FORGE', heroes:'HEROES' };
+  const alert = { sel:sel.tile >= 0 || !!sel.node, heroes:s.heroes.some(x => x.pend.length) };
+  const tabs = order.map(k => '<button class="dtab' + (k === dockTab ? ' on' : '') + '" data-tab="' + k + '">' +
+    label[k] + (alert[k] && k !== dockTab ? '<span class="dot"></span>' : '') + '</button>').join('');
+  return '<div class="dtabs">' + tabs + '</div><div class="dsec">' + sec[dockTab] + '</div>';
 }
 
 function heroBarHtml(){
@@ -2937,7 +3014,7 @@ function heroBarHtml(){
 
 let uiT = 0;
 function syncUI(){
-  if (HEADLESS) return;
+  if (HEADLESS || !G.sides.length) return;      // resize can fire before the first match exists
   syncHud();
   $('dock').innerHTML = dockHtml();
 }
@@ -3107,27 +3184,73 @@ function unproject(sx, sy){
   return [ (A * .60 + .52 * B) / det + cam.x, (.96 * B - .12 * A) / det ];
 }
 
-// A click either grabs one of your plots or opens a hero standing under it.
-function pickAt(clientX, clientY){
-  const r = lcv.getBoundingClientRect();
-  const sx = clientX - r.left, sy = clientY - r.top;
+// What you click is what you see. A building is drawn standing UP from its
+// ground cell, so testing the cell under the cursor misses the thing you
+// actually aimed at — every clickable is tested against its drawn box first,
+// nearest-to-camera first, and only then do we fall back to the bare ground.
+function clickTargets(){
+  const s = G.sides[0], out = [];
+  holdSide = 0;
+  // Each clickable is an ellipse around the middle of the shape you can SEE —
+  // for a building that is up the screen from its ground cell, not on it.
+  const at = (gx, gy, lift, rx, ry) => {
+    const p = bp(gx, gy);
+    return { cx:p[0], cy:p[1] - lift * BSC, rx:rx * BSC, ry:ry * BSC, sy:p[1] };
+  };
   for (const h of G.sides[0].heroes){
     if (h.dead) continue;
-    const q = lp(h.x, h.y);
-    if (Math.abs(q[0] - sx) < 22 * cam.z && sy < q[1] + 8 * cam.z && sy > q[1] - 46 * cam.z){
-      sel.hero = h; showHeroSheet(h); return;
-    }
+    const p = lp(h.x, h.y);
+    out.push({ kind:'hero', hero:h, cx:p[0], cy:p[1] - 18 * cam.z, rx:16 * cam.z, ry:26 * cam.z, sy:p[1], pri:3 });
   }
+  for (let t = 0; t < s.plot.length; t++){
+    const b = s.plot[t];
+    out.push(Object.assign(b ? at(tileGX(t), tileGY(t), .32, .52, .46) : at(tileGX(t), tileGY(t), 0, .5, .34),
+      b ? { kind:'build', tile:t, pri:2 } : { kind:'plot', tile:t, pri:1 }));
+  }
+  for (const k in NODES)
+    out.push(Object.assign(at(NODES[k].gx, NODES[k].gy, .26, .62, .44), { kind:'node', node:k, pri:2 }));
+  return out;
+}
+
+// Pure: given a point on the canvas, what did the player mean? Split out from
+// the event handler so the tests can aim at things the way a thumb does.
+function resolvePick(sx, sy){
+  BSC = LS() * TILE;
+  let best = null, bd = Infinity;
+  for (const t of clickTargets()){
+    const dx = (sx - t.cx) / t.rx, dy = (sy - t.cy) / t.ry;
+    const d = dx * dx + dy * dy;
+    if (d > 1) continue;                       // outside its own footprint
+    const score = d - t.pri * .02;             // heroes and buildings edge out bare ground
+    if (score < bd){ bd = score; best = t; }
+  }
+  if (best) return best;
+  // nothing under the finger — fall back to the plot cell on the ground
   const w = unproject(sx, sy);
   const gx = (w[0] - HOLD_X) / TILE, gy = w[1] / TILE;
   const col = Math.round(gx + (PLOT_W - 1) / 2), row = Math.round(gy + (PLOT_H - 1) / 2);
-  sel.tile = (col >= 0 && col < PLOT_W && row >= 0 && row < PLOT_H) ? row * PLOT_W + col : -1;
+  const near = Math.abs(gx - (col - (PLOT_W - 1) / 2)) < .8 && Math.abs(gy - (row - (PLOT_H - 1) / 2)) < .8;
+  if (near && col >= 0 && col < PLOT_W && row >= 0 && row < PLOT_H)
+    return { kind:s0Plot(row * PLOT_W + col) ? 'build' : 'plot', tile:row * PLOT_W + col };
+  return { kind:'none' };
+}
+const s0Plot = (t) => G.sides[0].plot[t];
+
+function pickAt(clientX, clientY){
+  const r = lcv.getBoundingClientRect();
+  const t = resolvePick(clientX - r.left, clientY - r.top);
+  if (t.kind === 'hero'){ sel.hero = t.hero; showHeroSheet(t.hero); return; }
+  sel.node = t.kind === 'node' ? t.node : null;
+  sel.tile = (t.kind === 'build' || t.kind === 'plot') ? t.tile : -1;
+  if (NARROW() && (sel.node || sel.tile >= 0)) dockTab = 'sel';
   syncUI();
 }
 
 function wire(){
   const s0 = () => G.sides[0];
   $('dock').addEventListener('click', (e) => {
+    const tab = e.target.closest('[data-tab]');
+    if (tab){ dockTab = tab.dataset.tab; syncUI(); return; }
     const b = e.target.closest('[data-hero],[data-act]');
     if (!b || b.disabled) return;
     if (b.dataset.hero){
@@ -3142,6 +3265,7 @@ function wire(){
     else if (a === 'build') say(build(s, sel.tile, b.dataset.type));
     else if (a === 'upgrade') say(upgradeBuilding(s, sel.tile));
     else if (a === 'up') say(buyUp(s, b.dataset.up));
+    else if (a === 'nodeup') say(upgradeNode(s, b.dataset.node));
     else if (a === 'newhero'){ showHeroCreate(); return; }
     syncUI();
   });
@@ -3282,6 +3406,7 @@ window.IB = {
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
+  resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
 };
 
 </script>

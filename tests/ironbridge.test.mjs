@@ -555,6 +555,66 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(w0[0] < 0, 'your hold sits off the left end of the bridge');
   t.ok(typeof IB.dockHtml() === 'string' && IB.dockHtml().includes('Worker'), 'the command dock renders');
 }
+/* ---------------------------------------------------------------- clicking */
+{
+  // A building is drawn standing UP from its cell, so aiming at the thing you
+  // can see used to select the cell behind it — or nothing at all.
+  IB.newMatch({ diff:'veteran', seed:83 });
+  const s = P();
+  rich(s);
+  IB.cam.follow = false; IB.cam.x = IB.HOLD_X + 10; IB.cam.z = IB.cam.tz = .8;
+  IB.draw();
+  let missed = 0, wrong = 0;
+  for (const b of s.plot){
+    if (!b) continue;
+    const w = IB.holdWorld(IB.tileGX(b.tile), IB.tileGY(b.tile));
+    const foot = IB.lp(w[0], w[1]);
+    // aim at the middle of the drawn body, well above the ground cell
+    const hit = IB.resolvePick(foot[0], foot[1] - IB.TILE * 9.4 * IB.cam.z * .45);
+    if (hit.kind === 'none') missed++;
+    else if (hit.tile !== b.tile) wrong++;
+  }
+  t.ok(missed === 0, 'clicking the body of a building always hits something');
+  t.ok(wrong === 0, 'and always hits that building, not the cell behind it');
+  for (const k of IB.NODE_UPGRADABLE){
+    const N = IB.NODES[k];
+    const w = IB.holdWorld(N.gx, N.gy);
+    const foot = IB.lp(w[0], w[1]);
+    const hit = IB.resolvePick(foot[0], foot[1] - 6);
+    t.ok(hit.kind === 'node' && hit.node === k, 'the ' + N.n + ' is clickable');
+  }
+  const empty = s.plot.indexOf(null);
+  if (empty >= 0){
+    const w = IB.holdWorld(IB.tileGX(empty), IB.tileGY(empty));
+    const foot = IB.lp(w[0], w[1]);
+    const hit = IB.resolvePick(foot[0], foot[1]);
+    t.ok(hit.tile === empty, 'an empty plot still selects from its ground cell');
+  }
+  t.ok(IB.resolvePick(-500, -500).kind === 'none', 'clicking empty sky selects nothing');
+}
+
+/* ---------------------------------------------------------------- mines */
+{
+  IB.newMatch({ diff:'veteran', seed:89 });
+  const s = P();
+  rich(s);
+  const cap0 = IB.nodeCap(s, 'gold'), rate0 = IB.nodeRate(s, 'gold');
+  t.ok(IB.nodeLvl(s, 'gold') === 1, 'mines start at level 1');
+  t.ok(IB.upgradeNode(s, 'gold') === null, 'a mine can be dug deeper');
+  t.ok(IB.nodeCap(s, 'gold') > cap0, 'digging adds working places (' + cap0 + '→' + IB.nodeCap(s, 'gold') + ')');
+  t.ok(IB.nodeRate(s, 'gold') > rate0, 'and raises output per worker');
+  t.ok(typeof IB.upgradeNode(s, 'food') === 'string', 'fields are grown with farms, not dug');
+  let guard = 0;
+  while (IB.upgradeNode(s, 'wood') === null && guard++ < 20);
+  t.ok(IB.nodeLvl(s, 'wood') === C.NODE_MAX_LVL, 'mines stop at the level cap');
+  // the extra places are real: workers can actually be put in them
+  IB.assign(s, 'gold', 99);
+  t.ok(s.workers.gold <= IB.nodeCap(s, 'gold'), 'the upgraded cap is what the job accepts');
+  const g0 = s.res.gold;
+  step(5);
+  t.ok(s.res.gold > g0, 'and the deeper mine still pays out');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
