@@ -2286,6 +2286,101 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(cast.mhp === Math.round(IB.UNITS.caster.hp * (1 + .055 * G.wave)), 'but leaves casters alone');
 }
 
+/* -------------------------------------------------- the ultimates you actually meet */
+{
+  // Every class has exactly three ultimates and the offer always shows all
+  // three, so an ultimate the Host never takes is one the player never faces.
+  // Driving 400 ultimate offers per class through the real chooser, FIVE of
+  // the eighteen came up zero times and two classes were locked to one apiece:
+  //
+  //   Fighter   Bladestorm 100%  Champion's Edge 0%  War Banner 0%
+  //   Marksman  Arrow Rain 100%  Headhunter 1%       Trueshot 0%
+  //   Mage      Cataclysm 67%    Arcane Torrent 34%  Frost Prison 0%
+  //   Support   Sanctuary 81%    Hymn of Valour 19%  Chain of Dawn 0%
+  //
+  // The cause: autoPick scored a skill by skRate, which measures DAMAGE, and
+  // then rescued five hand-picked class/tag pairs. A summon, a stun, a shield
+  // or a heal outside those pairs was scored on damage it does not do. The
+  // chooser adds a die roll in [0,1), so anything more than 1.0 behind the
+  // best in its menu can never win however often it is shown.
+  IB.newMatch({ diff:'veteran', seed:1451 });
+  const s = P();
+  // Fallback so a revert reports assertions instead of throwing — but assert
+  // the scorer is there, or the reachability count below would pass vacuously
+  // on a build where every option scores a flat zero.
+  t.ok(typeof IB.skillWorth === 'function', "the chooser's scoring can be read from outside");
+  const worth = (h, d) => (IB.skillWorth ? IB.skillWorth(h, d) : 0);
+  const mk = (cls) => {
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    s.heroes.length = 0;
+    IB.createHero(s, cls);
+    return s.heroes[0];
+  };
+  // a skill is scored for the job it does, not only for the damage it deals
+  {
+    const h = mk('fighter');
+    const banner = IB.SKILL.warbanner, storm = IB.SKILL.bladestorm;
+    const bare = (d) => IB.skRate(d, 1, IB.CLS.fighter.b.ad + IB.CLS.fighter.g.ad * 8,
+      IB.CLS.fighter.b.ap + IB.CLS.fighter.g.ap * 8) / 30;
+    t.ok(worth(h, banner) > bare(banner) + .3,
+      'a summon is worth more than the damage it deals (' + worth(h, banner).toFixed(2) +
+      ' vs a bare rate of ' + bare(banner).toFixed(2) + ')');
+    t.ok(worth(h, storm) - worth(h, banner) < 1,
+      'so it is within a die roll of the class favourite and can actually be chosen (' +
+      (worth(h, storm) - worth(h, banner)).toFixed(2) + ')');
+  }
+  // and a skill that heals is support work whatever its tag says
+  {
+    const h = mk('support');
+    const dawn = IB.SKILL.dawnchain;
+    t.ok(dawn.tag !== 'heal' && dawn.healAlly > 0, 'Chain of Dawn heals an ally but is not tagged as a heal');
+    const fighter = mk('fighter');
+    t.ok(worth(mk('support'), dawn) > worth(fighter, dawn) + .5,
+      'and a support values it above what a fighter would (' +
+      worth(mk('support'), dawn).toFixed(2) + ' vs ' + worth(fighter, dawn).toFixed(2) + ')');
+  }
+  // how many ultimates are inside a die roll of their class favourite
+  {
+    let reachable = 0, total = 0, spread = 0;
+    const locked = [];
+    for (const c of IB.CLASSES){
+      const h = mk(c.id), ults = IB.ultPool(c.id);
+      const sc = ults.map(u => ({ n:u.n, w:worth(h, u) })).sort((a, b) => b.w - a.w);
+      spread = Math.max(spread, sc[0].w - sc[sc.length - 1].w);
+      for (const x of sc){ total++; if (sc[0].w - x.w < 1) reachable++; else locked.push(c.name + ': ' + x.n); }
+    }
+    t.ok(total === 18, 'six classes, three ultimates each (' + total + ')');
+    t.ok(spread > 0, 'and the scorer tells them apart at all (best-worst ' + spread.toFixed(2) + ')');
+    t.ok(reachable >= 16, 'at least sixteen of the eighteen can be chosen at all (' +
+      reachable + '; locked out: ' + (locked.join(', ') || 'none') + ')');
+  }
+  // and in play: every class fields more than one ultimate
+  {
+    // 150 draws per class. The rarest second option measured 7%, so the chance
+    // of a class showing only one ultimate by luck is 0.93^150, about two in a
+    // hundred thousand — and seeds and dt are fixed here anyway, so this count
+    // is exact. The margin is for later balance work, not for noise.
+    const thin = [];
+    for (const c of IB.CLASSES){
+      const took = new Set();
+      for (let i = 0; i < 150; i++){
+        const h = mk(c.id);
+        if (!h) break;
+        h.lvl = 6;
+        const p = IB.offer(h, 'ult');
+        if (!p) continue;
+        const n0 = h.skills.length;
+        IB.autoPick(h);
+        if (h.skills.length > n0) took.add(h.skills[n0].id);
+      }
+      if (took.size < 2) thin.push(c.name + ' (' + took.size + ')');
+    }
+    t.ok(thin.length === 0, 'every class is seen fielding more than one ultimate' +
+      (thin.length ? ' — stuck on one: ' + thin.join(', ') : ''));
+  }
+}
+
 /* ---------------------------------------------------------------- skill value */
 {
   // Every skill has to be worth picking. Second Wind was dead last for all six
