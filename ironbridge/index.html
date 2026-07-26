@@ -916,7 +916,7 @@ function makeSide(i, ai){
 
     towerUp:{ hp:0, armor:0, atk:0, as:0, regen:0 },
     troopUp:{ tad:0, tarm:0, thp:0 },
-    structs:[], superT:0, aiT:0, aiBuild:0,
+    structs:[], superT:0, aiT:0, aiBuild:0, waveKind:'levy',
     kills:0, structsKilled:0, gathered:0, spent:0, heroKills:0,
   };
   // Every hold opens with a pit and a farm already standing.
@@ -3837,6 +3837,23 @@ function syncHud(){
 
 // The dock is one row of columns under the world: jobs, training, whatever plot
 // you have selected, the forge, and your heroes.
+// What the Host put on the bridge this wave, and the one thing that answers
+// it. Reads the shape that already spawned — nothing is rolled here, so this
+// panel cannot move a single thing in the simulation.
+const WAVE_ANSWER = {
+  levy:   'A quiet wave — spend it on your hold.',
+  shield: 'Tougher bodies. Turret damage cuts through.',
+  volley: 'Casters at range. Bodies smother them.',
+  siege:  'It tears at stone. Reinforced Stone holds.',
+  ogres:  'Heavy and slow. Worth everything you have.',
+};
+function foeWarning(){
+  const f = G.sides[1];
+  const k = WAVE_KINDS.find(x => x.id === (f.waveKind || 'levy')) || WAVE_KINDS[0];
+  // (no countdown here: the top bar already prints the wave clock)
+  return '<b>' + k.n.replace(/^an? /, '') + '</b> — ' + (WAVE_ANSWER[k.id] || '');
+}
+
 let dockTab = 'jobs';
 const NARROW = () => !HEADLESS && document.body.classList.contains('narrow');
 
@@ -3887,7 +3904,11 @@ function dockHtml(){
   const mus = Object.keys(cnt).map(k => '<span class="mchip">' + TRAIN[k].n + ' ×' + cnt[k] + '</span>').join('');
   sec.train = h + '</div><div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>' +
     '<div class="ptitle">Next wave' + (s.superT > 0 ? ' — OGRES ' + Math.ceil(s.superT) + 's' : '') + '</div>' +
-    '<div id="musterRow">' + (mus || '<span class="mchip">levies only</span>') + '</div>';
+    '<div id="musterRow">' + (mus || '<span class="mchip">levies only</span>') + '</div>' +
+    // ...and what the Host has on the bridge right now, with the one thing
+    // that answers it. The shape of a wave was announced by a toast that slid
+    // past in three seconds and never mentioned again.
+    '';
 
   // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
@@ -3962,6 +3983,8 @@ function dockHtml(){
   } else {
     h += '<div class="ptitle">Your hold</div><div style="font-size:12px;color:var(--dim);max-width:250px;line-height:1.5">' +
       'Click a plot to build, a building to upgrade it, or a mine to dig it deeper. Drag to look around, pinch or scroll to zoom.</div>';
+    h += '<div class="ptitle" style="margin-top:8px">On the bridge</div>' +
+      '<div class="insp note" style="margin-top:2px">' + foeWarning() + '</div>';
   }
   sec.sel = h;
 
@@ -4867,7 +4890,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
-  WAVE_KINDS, waveKindFor, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
+  WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   seenIntro, markSeen, SEEN_KEY, pruneSel,
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
