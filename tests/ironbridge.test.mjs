@@ -3475,6 +3475,68 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* ------------------------ the warning has to reach the player who needs it */
+{
+  // There was already a test for this warning and it passed for a year while
+  // the warning could not fire. It reached the branch by assigning every
+  // worker to a job first — 'no idle-worker note' — which is exactly the state
+  // a player in trouble is NOT in. A player who is losing is losing because
+  // they are not managing their hold, so they always have an idle worker and
+  // there is always a job below its cap, and the idle-worker note returned
+  // before the front-structure block was ever reached.
+  //
+  // So this block asserts the opposite setup: the idle workers STAY. First
+  // establish from the simulation that the awkward state is the normal one,
+  // then require the bar to handle it.
+  let danger = 0, dangerIdle = 0, named = 0, samples = 0;
+  for (const seed of [101, 113, 139]){
+    IB.newMatch({ diff:'veteran', seed });
+    const s = P();                                    // no input at all, ever
+    let next = 0;
+    for (let i = 0; i < 30 * 620 && G.state === 'play'; i++){
+      if (G.t >= next){
+        next += 1; samples++;
+        const f = IB.frontStruct(0);
+        if (f && f.hp < f.mhp * .35){
+          danger++;
+          if (s.workers.idle > 0) dangerIdle++;
+          const a = IB.adviceFor(s);
+          if (a && a.txt.includes(IB.STRUCT_SHORT[f.key] || ' ') && /\d+%/.test(a.txt)) named++;
+        }
+      }
+      IB.update(1 / 30);
+    }
+  }
+  t.ok(samples > 900 && danger > 100,
+    'a passive hold really does spend a long stretch with its front under a third (' +
+    danger + ' of ' + samples + ' seconds)');
+  t.ok(dangerIdle === danger,
+    'and it has an idle worker for every one of those seconds, which is why the ' +
+    'old setup could not see this (' + dangerIdle + ' of ' + danger + ')');
+  t.ok(named === danger,
+    'while the front is about to break the bar names it (' + named + ' of ' + danger + ' seconds)');
+
+  // The same thing built by hand, so a failure says which of the two rules
+  // broke rather than only that a sweep moved. The idle worker is left alone.
+  IB.newMatch({ diff:'veteran', seed:1609 });
+  {
+    const s = P();
+    const front = IB.frontStruct(0);
+    t.ok(s.workers.idle > 0, 'a fresh hold has an idle worker (' + s.workers.idle + ')');
+    const idleTxt = (IB.adviceFor(s) || { txt:'' }).txt;
+    t.ok(/standing around/.test(idleTxt),
+      'and with the front healthy that is what the bar says (' + idleTxt + ')');
+    front.hp = front.mhp * .2;
+    const alarm = (IB.adviceFor(s) || { txt:'' }).txt;
+    t.ok(s.workers.idle > 0, 'the idle worker is still there — nothing was assigned (' + s.workers.idle + ')');
+    t.ok(alarm.includes(IB.STRUCT_SHORT[front.key] || ' ') && /\d+%/.test(alarm),
+      'a dying front outranks it anyway (' + alarm + ')');
+    front.hp = front.mhp;
+    t.ok(/standing around/.test((IB.adviceFor(s) || { txt:'' }).txt),
+      'and the economy note comes back once the front is safe');
+  }
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
