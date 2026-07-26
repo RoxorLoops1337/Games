@@ -143,7 +143,7 @@ t.ok(G.state === 'menu', 'boots into the menu without starting a match');
 {
   const ids = new Set(IB.SKILLS.map(s => s.id));
   t.ok(ids.size === IB.SKILLS.length, 'every skill id is unique');
-  const kinds = new Set(['strike','bolt','nova','dash','heal','shield','buff','teambuff','regen','dot','summon','chain','volley','mark','taunt','storm','teamheal']);
+  const kinds = new Set(['strike','bolt','nova','dash','heal','shield','buff','teambuff','regen','dot','summon','chain','volley','mark','taunt','storm','teamheal','hook']);
   t.ok(IB.SKILLS.every(s => kinds.has(s.k)), 'every skill uses an effect kind the sim implements');
   t.ok(IB.SKILLS.every(s => s.cd > 0 && s.mana >= 0 && s.f), 'every skill has a cooldown, a cost and flavour');
   // A summon skill once carried its count in `n`, which is the name field —
@@ -536,6 +536,78 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.castSkill(su, { id:'shadowlegion', rank:1, cdT:0 }, null);
   t.ok(G.units.length > n0, 'a summon puts bodies on the bridge');
   t.ok(G.units.filter(u => u.kind === 'shade').every(u => u.life > 0), 'summons are on a timer');
+}
+{
+  // The hook. Its whole reason to exist is that the target ENDS UP SOMEWHERE
+  // ELSE, which no other skill in the game does to a body that is not the
+  // caster — so damage landing is not enough to call it working.
+  IB.newMatch({ diff:'veteran', seed:71 });
+  const h = IB.makeHero(0, 'tank', 'Chain');
+  h.pend.length = 0; h.passive = 'ironhide'; h.lvl = 10; IB.recalcHero(h);
+  IB.enterLane(h); h.x = 60; h.y = 0;
+  const foe = IB.spawnUnit(1, 'melee', { x:67, y:1.5 });
+  IB.rebuildGrid();
+  const d0 = Math.hypot(foe.x - h.x, foe.y - h.y), hp0 = foe.hp;
+  IB.castSkill(h, { id:'ironhook', rank:2, cdT:0 }, foe);
+  t.ok(G.projs.length === 1 && G.projs[0].kind === 'hook', 'a hook puts a chain in the air');
+  // the chain has to fly before anything happens — this is not an instant
+  t.ok(Math.hypot(foe.x - h.x, foe.y - h.y) === d0, 'and nothing moves until it lands');
+  step(2);
+  const d1 = Math.hypot(foe.x - h.x, foe.y - h.y);
+  t.ok(foe.hp < hp0, 'the hook hurts what it catches');
+  t.ok(d1 < d0 - 3, 'and drags it most of the way in (' + d0.toFixed(1) + ' -> ' + d1.toFixed(1) + ')');
+  t.ok(d1 >= h.r + foe.r - .2, 'without burying it inside the caster');
+  t.ok(foe.pullT === 0 && foe.pullBy === null, 'the pull lets go when it is done');
+  t.ok(finite(foe.x) && finite(foe.y) && Math.abs(foe.y) <= C.LANE_W / 2, 'and leaves it on the bridge');
+
+  // A hook aimed at a turret is a wasted cast — the sim must not try to drag
+  // masonry, and the Host must not want to.
+  IB.newMatch({ diff:'veteran', seed:72 });
+  const h2 = IB.makeHero(0, 'tank', 'Chain2');
+  h2.pend.length = 0; h2.passive = 'ironhide'; h2.lvl = 10; IB.recalcHero(h2);
+  IB.enterLane(h2);
+  const st = IB.frontStruct(1);
+  h2.x = st.x - 6; h2.y = 0; IB.rebuildGrid();
+  const sx = st.x, sy = st.y;
+  IB.castSkill(h2, { id:'ironhook', rank:1, cdT:0 }, st);
+  step(1.5);
+  t.ok(st.x === sx && st.y === sy, 'a hooked turret does not budge');
+  t.ok(!st.pullT, 'and never gets a pull put on it');
+  const hookDef = IB.SKILL.ironhook;
+  t.ok(!IB.wantCast(h2, hookDef, st), 'the Host will not throw a hook at a structure');
+  const close = IB.spawnUnit(1, 'melee', { x:h2.x + 1, y:0 });
+  IB.rebuildGrid();
+  t.ok(!IB.wantCast(h2, hookDef, close), 'nor at somebody already standing on it');
+  const far = IB.spawnUnit(1, 'melee', { x:h2.x + 6, y:0 });
+  IB.rebuildGrid();
+  t.ok(IB.wantCast(h2, hookDef, far), 'but will throw it at somebody worth reeling in');
+
+  // Being dragged is not a moment to keep fighting: the body owes its whole
+  // tick to the chain.
+  IB.newMatch({ diff:'veteran', seed:73 });
+  const h3 = IB.makeHero(0, 'tank', 'Chain3');
+  h3.pend.length = 0; h3.passive = 'ironhide'; h3.lvl = 10; IB.recalcHero(h3);
+  IB.enterLane(h3); h3.x = 60; h3.y = 0;
+  const mv = IB.spawnUnit(1, 'melee', { x:68, y:0 });
+  IB.rebuildGrid();
+  IB.applyPull(mv, 61, 0, .45, h3);
+  const was = mv.x;
+  IB.update(1 / 30);
+  t.ok(mv.x < was, 'a pulled body travels toward the chain, not away down the lane');
+  t.ok(mv.pullT > 0 && mv.pullT < .45, 'and the pull is on a clock');
+  step(1);
+  t.ok(Math.abs(mv.x - 61) < .8 && mv.pullT === 0, 'it arrives where the chain ended and is let go');
+
+  // A hero that dies mid-drag must not come back still being pulled.
+  const h4 = IB.makeHero(1, 'fighter', 'Caught');
+  h4.pend.length = 0; h4.passive = 'whetstone'; IB.recalcHero(h4);
+  G.sides[1].heroes.push(h4);              // so heroStep runs its respawn
+  IB.enterLane(h4);
+  IB.applyPull(h4, h4.x - 5, 0, .5, h3);
+  h4.hp = 1; IB.dealDmg(h3, h4, 9999, {});
+  t.ok(h4.dead, 'the caught hero died');
+  h4.respawnT = .05; step(.4);
+  t.ok(h4.pullT === 0 && h4.pullBy === null, 'and respawns free of the chain');
 }
 
 /* ------------------------------------------------------------ the render path */
