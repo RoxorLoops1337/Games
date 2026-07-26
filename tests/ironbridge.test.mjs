@@ -4313,6 +4313,73 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'the dock is still rebuilt wholesale — which is exactly why the guard is needed');
 }
 
+/* ============================ the clock must survive being in the background
+   A browser throttles requestAnimationFrame to about 1fps in a window that is
+   not in front, and stops it in one that is covered. Harmless on your own. In
+   lockstep it is fatal: neither machine may pass a tick the other has not
+   published, so a backgrounded window drags its opponent down to its own frame
+   rate. Measured before the fix, with the second window at 1fps: forty seconds
+   of real time produced four seconds of match, both screens reading "Waiting
+   for the other player…". After: 102%. */
+{
+  IB.netEnd();
+  IB.netStart({ me:0, seed:7700 });
+  // Plenty of orders in hand, so the CLOCK is the only thing limiting progress.
+  for (let t = 0; t < 400; t++){ IB.netDeliver(t, 0, []); IB.netDeliver(t, 1, []); }
+
+  t.ok(typeof IB.netPump === 'function', 'the network clock is a thing that can be pumped');
+
+  // One second of arrears has to buy about a second of match. The old loop
+  // clamped the accumulator to 0.25s and ran at most 8 ticks per frame, so a
+  // one-second gap bought 8 ticks and the match fell behind for good.
+  IB.acc = 0; IB.netLast = 0;
+  IB.netPump();                                  // first call only starts the clock
+  const t0 = IB.NET.tick;
+  IB.netLast = IB.netLast - 1000;                // pretend a full second passed
+  IB.netPump();
+  const ran = IB.NET.tick - t0;
+  t.ok(ran >= 26 && ran <= 34, 'a one-second gap runs about thirty ticks (' + ran + ')');
+  t.ok(ran > 8, 'which is more than the old per-frame cap of 8 — the regression this guards');
+
+  // ...but a window that was away for a minute owes 1800 ticks and is not
+  // going to pay them. The debt is dropped, not hoarded.
+  const t1 = IB.NET.tick;
+  IB.netLast = IB.netLast - 60000;
+  IB.netPump();
+  const ran2 = IB.NET.tick - t1;
+  t.ok(ran2 <= IB.NET_BUDGET, 'a minute away does not stampede (' + ran2 + ' ticks, budget ' + IB.NET_BUDGET + ')');
+  t.ok(IB.acc <= IB.NET_ARREARS + .001,
+    'and the unpaid remainder is capped rather than accumulating forever (' + IB.acc.toFixed(2) + 's)');
+
+  // The clock takes its own time, so it does not matter who calls it or how
+  // often — two callers cannot double-count the elapsed seconds.
+  const t2 = IB.NET.tick;
+  IB.netPump(); IB.netPump(); IB.netPump();
+  t.ok(IB.NET.tick - t2 <= 2, 'three pumps back to back advance almost nothing — elapsed time is measured, not counted');
+
+  t.ok(IB.NET_BUDGET >= 35, 'the per-pump budget can cover a second of real time (' + IB.NET_BUDGET + ' ticks)');
+  t.ok(IB.NET_ARREARS >= 1 && IB.NET_ARREARS <= 3, 'and the arrears cap is a second or two (' + IB.NET_ARREARS + 's)');
+
+  // The clock must not be rAF alone, which is the whole point.
+  const loop = SRC.slice(SRC.indexOf('function netPump()'), SRC.indexOf('function frame(ts)'));
+  t.ok(/new Worker/.test(loop), 'a worker timer drives it, which a background page does not throttle');
+  t.ok(/setInterval/.test(loop), 'with a plain interval as the fallback if a worker cannot be made');
+  const frameFn = SRC.slice(SRC.indexOf('function frame(ts)'), SRC.indexOf('function frame(ts)') + 300);
+  t.ok(/if \(NET\.on\)\{?\s*\n?\s*netPump\(\);/.test(frameFn) || /netPump\(\);/.test(frameFn),
+    'and the animation frame just pumps the same clock rather than owning it');
+  t.ok(!/ran < 8/.test(SRC), 'the old eight-ticks-per-frame cap is gone');
+  t.ok(!/acc \+= Math\.min\(\.25, raw\)/.test(SRC), 'and so is the quarter-second accumulator clamp');
+
+  // Starting and stopping is tied to the match, not left running forever.
+  const start = SRC.slice(SRC.indexOf('function netStart(opt)'), SRC.indexOf('function netStart(opt)') + 600);
+  t.ok(/netClockStart\(\)/.test(start), 'a network match starts the clock');
+  const end = SRC.slice(SRC.indexOf('function netEnd()'), SRC.indexOf('function netEnd()') + 500);
+  t.ok(/netClockStop\(\)/.test(end), 'and leaving one stops it');
+
+  IB.netEnd();
+  t.ok(IB.acc === 0 && IB.netLast === 0, 'which also clears the arrears, so the next match starts level');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
