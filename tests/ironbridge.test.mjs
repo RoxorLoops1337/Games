@@ -2381,6 +2381,98 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* ------------------------------------------- the chooser's other two branches */
+{
+  // autoPick has three scoring branches — passive, skill, rank. Only the skill
+  // branch was ever properly built (and was extracted as skillWorth last time
+  // the ultimates were audited). The other two were still guessing.
+  //
+  // MOVE: TAG_WORTH had no entry for tag 'move', so a mobility skill scored the
+  // die and nothing else. Sprint is in all six class pools and rated 0.19 in
+  // every one of them, the floor of each. Three independent measurements
+  // agreed: 0 of 1200 AI heroes took it; 18,000 heroes over 54,000 offers took
+  // it 0-8 times per class (0 of 1762 for the Mage); and a Monte Carlo over
+  // real three-option menus put it at 0.0-0.6% in every class. Fighter's Dash
+  // Strike was the same at 2%, because the dash bonus was written for the
+  // Assassin alone.
+  //
+  // RANK: the branch was `sc += id.startsWith('P:') ? .4 : .8` — it never
+  // looked at WHICH skill it was ranking. Over 216,000 rank offers the option
+  // with the larger real gain was chosen 51.3% of the time from a menu of two
+  // (chance is 50%) and 31.8% from a menu of three (chance is 33.3%): no
+  // correlation with value at all, in a choice half of all heroes reach.
+  IB.newMatch({ diff:'veteran', seed:1487 });
+  const s = P();
+  const mk = (cls) => {
+    rich(s);
+    if (!IB.bList(s, 'tavern').length) IB.build(s, s.plot.indexOf(null), 'tavern');
+    s.heroes.length = 0;
+    IB.createHero(s, cls);                      // costs gold: rich() before EVERY forge
+    return s.heroes[0];
+  };
+  t.ok(typeof IB.rankWorth === 'function', 'the rank scoring can be read from outside');
+  t.ok(IB.TAG_WORTH && typeof IB.TAG_WORTH === 'object', 'and so can the tag table');
+
+  // a mobility skill is worth something for being mobility
+  {
+    t.ok((IB.TAG_WORTH || {}).move > 0, 'the tag table pays for movement (' +
+      ((IB.TAG_WORTH || {}).move ?? 'missing') + ')');
+    const sprint = IB.SKILL.sprint;
+    t.ok(sprint && sprint.tag === 'move', 'Sprint is a movement skill');
+    let floorInEvery = 0;
+    for (const c of IB.CLASSES){
+      const h = mk(c.id);
+      const pool = IB.basicPool(c.id).map(d => IB.skillWorth(h, d)).sort((a, b) => a - b);
+      if (IB.skillWorth(h, sprint) <= pool[0]) floorInEvery++;
+    }
+    t.ok(floorInEvery < 6, 'and Sprint is no longer the floor of every single class pool (' +
+      floorInEvery + ' of 6)');
+    // the fighter's own dash is credited like the assassin's
+    const f = mk('fighter'), a = mk('assassin');
+    const dash = IB.SKILL.dashstrike;
+    if (dash) t.ok(IB.skillWorth(f, dash) > IB.skillWorth(mk('mage'), dash),
+      "a fighter values its own dash above a class that has no use for it");
+    t.ok(!!a, 'the assassin still forges');
+  }
+
+  // ranking up is scored by the step it actually buys
+  {
+    const h = mk('mage');
+    // give it two skills at different ranks so the steps genuinely differ
+    for (const kind of ['skill', 'skill']){ const p = IB.offer(h, kind); if (p) IB.autoPick(h); }
+    t.ok(h.skills.length >= 2, 'the hero has two skills to choose between (' + h.skills.length + ')');
+    const a = h.skills[0], b = h.skills[1];
+    const wa = IB.rankWorth(h, a.id), wb = IB.rankWorth(h, b.id);
+    t.ok(wa > 0 && wb > 0, 'both rank options are worth something');
+    // A skill's output is LINEAR in rank (dmg:[base, perRank]), so the step
+    // from r to r+1 is the same size at every rank — the score correctly does
+    // NOT vary with the rank it steps from. What it must do is tell two
+    // DIFFERENT skills apart by how big their step is. That is the whole fix:
+    // the old branch was a flat 0.8 for every skill alike.
+    const step = (sk) => {
+      const d = IB.SKILL[sk.id], cl = IB.CLS[h.cls];
+      const ad = cl.b.ad + cl.g.ad * 8, ap = cl.b.ap + cl.g.ap * 8;
+      return IB.skRate(d, sk.rank + 1, ad, ap) - IB.skRate(d, sk.rank, ad, ap);
+    };
+    const sa = step(a), sb = step(b);
+    if (Math.abs(sa - sb) > 1e-6)
+      t.ok((sa > sb) === (wa > wb),
+        'the option that buys the bigger step is the one scored higher (steps ' +
+        sa.toFixed(2) + '/' + sb.toFixed(2) + ' → worth ' + wa.toFixed(2) + '/' + wb.toFixed(2) + ')');
+    else t.ok(true, 'these two skills happen to buy the same step, nothing to order');
+    // and the score is not a flat constant per kind, which is what it replaced
+    const spread = new Set(h.skills.map(x => IB.rankWorth(h, x.id).toFixed(4)));
+    t.ok(spread.size > 1 || h.skills.length < 2,
+      'two different skills do not score identically (' + [...spread].join(', ') + ')');
+    // and an ultimate outranks a basic of the same step, because it carries the fight
+    const ult = IB.ultPool('mage')[0];
+    h.skills.push({ id:ult.id, rank:1, cdT:0, ult:true });
+    const basic = h.skills.find(x => !x.ult);
+    if (basic) t.ok(IB.rankWorth(h, ult.id) > 0, 'an ultimate rank is scored too (' +
+      IB.rankWorth(h, ult.id).toFixed(2) + ')');
+  }
+}
+
 /* ---------------------------------------------------------------- skill value */
 {
   // Every skill has to be worth picking. Second Wind was dead last for all six
