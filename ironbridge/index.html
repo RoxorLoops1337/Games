@@ -4174,7 +4174,7 @@ function holdOnScreen(side){
 function drawHold(c, side){
   if (!holdOnScreen(side)) return;
   holdSide = side;
-  const fog = side !== 0;
+  const fog = side !== MY;              // the OTHER hold reads as distant, whichever it is
   drawPlateau(c);
   drawGround(c);
   const s = G.sides[side];
@@ -4216,7 +4216,7 @@ function drawHold(c, side){
   // full-height translucent wash the width of their mesa — 8ms of fill-rate a
   // frame, most of it over empty sky.
   c.globalAlpha = 1;
-  holdSide = 0;
+  holdSide = MY;
 }
 
 /* ------------------------------------------------------------------ camera + frame */
@@ -4328,7 +4328,7 @@ const WAVE_ANSWER = {
   ogres:  'Heavy and slow. Worth everything you have.',
 };
 function foeWarning(){
-  const f = G.sides[1];
+  const f = G.sides[foe()];        // what is coming AT me, not what side 1 happens to be sending
   const k = WAVE_KINDS.find(x => x.id === (f.waveKind || 'levy')) || WAVE_KINDS[0];
   // (no countdown here: the top bar already prints the wave clock)
   return '<b>' + k.n.replace(/^an? /, '') + '</b> — ' + (WAVE_ANSWER[k.id] || '');
@@ -4399,7 +4399,7 @@ function dockHtml(){
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
   h = '';
   if (sel.struct){
-    const st = sel.struct, mine = st.side === 0;
+    const st = sel.struct, mine = st.side === MY;
     const owner = SIDE_NAME[st.side];
     const front = frontStruct(st.side);
     const armour = Math.round(effArmor(st, false)), plate = UP_EFFECT.armor * G.sides[st.side].towerUp.armor;
@@ -4975,6 +4975,13 @@ function heroDoing(h){
 // not freeze anything — the match would stop with nothing on screen to explain
 // why — and the Host's own picks are resolved by autoPick in the same tick.
 function holdsBoard(h){
+  // A two-player match belongs to two people and cannot stop for one of them
+  // reading three cards. This is not merely a courtesy: update() returns early
+  // on G.held, while netStep() advances the tick and publishes orders either
+  // way — so a held board meant one machine stopped simulating while its clock
+  // and its opponent carried on. Every match desynced the first time anybody
+  // levelled a hero, which is to say every match.
+  if (NET.on) return false;
   return !!(h && h.pend && h.pend.length && h.side === MY && !me().ai && G.state === 'play');
 }
 
@@ -5049,7 +5056,7 @@ function timelineHtml(){
     // "Yours" read as "walls you broke"; the marks are walls that FELL, so it
     // has to say whose walls they were.
     return '<div class="tl-row"><span class="tl-lbl" style="color:' + SIDE_COL[side] + '">' +
-      (side === 0 ? 'You lost' : 'They lost') + '</span><span class="tl-track">' + marks + '</span></div>';
+      (side === MY ? 'You lost' : 'They lost') + '</span><span class="tl-track">' + marks + '</span></div>';
   }).join('');
   return '<div class="tl">' + rows +
     '<div class="tl-axis"><span>0:00</span><span>' + mmss(end) + '</span></div>' +
@@ -5368,7 +5375,12 @@ function unproject(sx, sy){
 // nearest-to-camera first, and only then do we fall back to the bare ground.
 function clickTargets(){
   const s = me(), out = [];
-  holdSide = 0;
+  // Every position below is computed through bp() -> holdWorld(), which reads
+  // holdSide. This said 0, so for the player who joined the clickable regions
+  // were laid out over the LEFT hold while their actual buildings stood on the
+  // right — their own plot could not be clicked at all, because nothing was
+  // where the game thought it was.
+  holdSide = MY;
   // Each clickable is an ellipse around the middle of the shape you can SEE —
   // for a building that is up the screen from its ground cell, not on it.
   const at = (gx, gy, lift, rx, ry) => {
@@ -5418,7 +5430,11 @@ function resolvePick(sx, sy){
   if (best) return best;
   // nothing under the finger — fall back to the plot cell on the ground
   const w = unproject(sx, sy);
-  const gx = (w[0] - HOLD_X) / TILE, gy = w[1] / TILE;
+  // The inverse of holdWorld(), which places the grid at myHoldX() and runs it
+  // in -x for the right-hand hold. Hardcoding HOLD_X here meant the fallback
+  // landed on the wrong end of the map for the joiner.
+  const dir = MY === 0 ? 1 : -1;
+  const gx = (w[0] - myHoldX()) / (TILE * dir), gy = w[1] / TILE;
   const col = Math.round(gx + (PLOT_W - 1) / 2), row = Math.round(gy + (PLOT_H - 1) / 2);
   const near = Math.abs(gx - (col - (PLOT_W - 1) / 2)) < .8 && Math.abs(gy - (row - (PLOT_H - 1) / 2)) < .8;
   if (near && col >= 0 && col < PLOT_W && row >= 0 && row < PLOT_H)
@@ -5743,9 +5759,20 @@ const CMD = {
 // The single door every player action goes through. In one-player it runs the
 // action immediately, exactly as before — so single-player behaviour, and every
 // existing test, is untouched. In multiplayer it schedules instead.
-function sendCmd(type, args){
-  const c = Object.assign({ type }, args);
-  if (!NET.on) return CMD[type](me(), c) || '';
+// The command's own kind lives under `k`, not `type`.
+//
+// It used to be `Object.assign({ type }, args)` — and exactly one command
+// carries an argument of its own called `type`: build, whose `type` is the
+// BUILDING. So `sendCmd('build', { tile:3, type:'pit' })` produced a command
+// whose kind was "pit". CMD has no "pit", so netStep looked it up, found
+// nothing, and dropped the order without a word. Nobody could build anything
+// in a two-player match, in either seat, and it failed silently — the button
+// worked, the resources were never spent, and no message was ever printed.
+//
+// `k` cannot collide with a game noun, which is the point of choosing it.
+function sendCmd(kind, args){
+  const c = Object.assign({}, args, { k:kind });
+  if (!NET.on) return CMD[kind](me(), c) || '';
   c.side = NET.me; c.seq = NET.seq++;
   NET.pending.push(c);
   return '';                      // no feedback yet: it has not happened yet
@@ -5846,6 +5873,12 @@ function netCheckHash(tick){
   if (mine !== theirs) NET.desyncAt = tick;
 }
 
+// Nothing may quietly skip a tick's simulation. update() bails out on G.paused
+// and G.held, and this function advances the clock regardless — so if anything
+// ever sets either of them during a network match, the two machines stop
+// agreeing without a single line of the simulation being wrong. holdsBoard and
+// setPaused both refuse in multiplayer; this makes it impossible rather than
+// merely refused, because the cost of being wrong here is the whole match.
 function netStep(){
   // Two machines that have stopped agreeing are playing two different games,
   // and every tick after the first disagreement widens it. Detecting that and
@@ -5858,9 +5891,10 @@ function netStep(){
   // Sorted by side then seq — never by arrival order, which differs per machine.
   const all = [...slot[0], ...slot[1]].sort((p, q) => p.side - q.side || p.seq - q.seq);
   for (const c of all){
-    const fn = CMD[c.type];
+    const fn = CMD[c.k];
     if (fn) fn(G.sides[c.side], c);
   }
+  G.paused = false; G.held = false;
   update(1 / 30);
   NET.box.delete(NET.tick);
   NET.tick++;
@@ -5912,7 +5946,7 @@ function netEnd(){
 function netRecv(m){
   if (!m || typeof m !== 'object') return;
   if (m.k === 'cmd' && typeof m.tick === 'number' && (m.side === 0 || m.side === 1) && Array.isArray(m.cmds))
-    netDeliver(m.tick, m.side, m.cmds.filter(c => c && CMD[c.type] && (c.side === 0 || c.side === 1)));
+    netDeliver(m.tick, m.side, m.cmds.filter(c => c && CMD[c.k] && (c.side === 0 || c.side === 1)));
   else if (m.k === 'hash' && typeof m.tick === 'number' && typeof m.h === 'number'){
     NET.peerHashes.set(m.tick, m.h);
     netCheckHash(m.tick);
@@ -6054,7 +6088,9 @@ window.IB = {
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
-  netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS,
+  netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
+  get BSC(){ return BSC; }, set BSC(v){ BSC = v; },
+  get holdSide(){ return holdSide; }, set holdSide(v){ holdSide = v; },
   get acc(){ return acc; }, set acc(v){ acc = v; },
   get netLast(){ return netLast; }, set netLast(v){ netLast = v; },
   get uiWaited(){ return uiWaited; }, set uiWaited(v){ uiWaited = v; },
