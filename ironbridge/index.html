@@ -1402,6 +1402,7 @@ function onStructDown(st, src){
     ringFx(st.x, st.y, st.key === 'gate' ? 7 : 4.5, '#ffd9a0');
     shake(st.key === 'gate' ? 14 : st.key === 'inhib' ? 9 : 7, st.x);
     sfx('fall', st.x);
+    if (st.key === 'inhib') sfx('inhib', st.x);
   }
   G.timeline.push({ t:G.t, side:st.side, key:st.key, n:st.n });
   if (st.key === 'inhib'){ foe.superT = C.SUPER_DUR; st.downT = C.INHIB_RESPAWN; }
@@ -1909,6 +1910,7 @@ function onHeroDeath(h, src){
     awardXp(src, 130 + h.lvl * 11, h.x);
   }
   fxToast(h.name + ' has fallen.', h.side === 0 ? 'bad' : 'good');
+  sfx('heroDown', h.x);
   if (!HEADLESS){
     burstFx(h.x, h.y, SIDE_COL[h.side], 22);
     ringFx(h.x, h.y, 3.2, SIDE_COL[h.side]);
@@ -2461,6 +2463,14 @@ const SFX = {
   win:    [1.0,  () => { [392, 523, 659, 784].forEach((f, i) => tone({ f, dur:.42, v:.15, type:'triangle', at:i * .13 })); }, 1],
   lose:   [1.0,  () => { [392, 311, 262, 196].forEach((f, i) => tone({ f, dur:.5, v:.15, type:'sawtooth', at:i * .15 })); }, 1],
   click:  [.03,  () => noiseHit({ v:.06, dur:.03, cut:3200, hp:true })],
+  // A hero falling is the loudest thing that happens in a match and it used to
+  // make no noise at all — a toast slid past and that was the whole event.
+  heroDown:[.5, () => { tone({ f:330, f2:98, dur:.55, v:.17, type:'sawtooth' });
+                        tone({ f:165, f2:60, dur:.7, v:.13, type:'triangle', at:.06 });
+                        noiseHit({ v:.16, dur:.3, cut:900, at:.02 }); }, 1],
+  // An inhibitor is not just another wall: it puts Siege Ogres on the bridge.
+  inhib:  [.8,   () => { [262, 349, 523].forEach((f, i) => tone({ f, f2:f * .5, dur:.5, v:.14, type:'sawtooth', at:i * .11 }));
+                         noiseHit({ v:.24, dur:.5, cut:520, at:.1 }); }, 1],
 };
 
 // worldX is optional: a sound from off the edge of the screen is not played.
