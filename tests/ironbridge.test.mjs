@@ -516,6 +516,60 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(G.units.filter(u => u.kind === 'shade').every(u => u.life > 0), 'summons are on a timer');
 }
 
+/* ------------------------------------------------ a hero is not its own cover */
+{
+  // heroStep asked alliesNear whether anyone was standing under the enemy
+  // turret, and handed it a fresh {x,y,side} literal to measure from.
+  // alliesNear's only exclusion is `o !== u`, and a literal is never identical
+  // to any real unit, so the hero counted ITSELF. Alone under a turret it read
+  // cover = 1 against a true 0, and the `frac < .58` withdrawal that reads this
+  // flag — along with the `finishing` guard and the do-not-walk-past-turret-range
+  // clamp — became unreachable. Measured: the hero turned around at 0.279, the
+  // unconditional floor, still inside a turret that reaches 11.
+  IB.newMatch({ diff:'veteran', seed:911 });
+  const h = IB.makeHero(0, 'fighter', 'Diver');
+  h.pend.length = 0; h.passive = 'whetstone'; h.lvl = 8; IB.recalcHero(h, true);
+  P().heroes.push(h); IB.enterLane(h);
+  const tur = E().structs.find(x => x.key === 't1');
+  G.units.length = 0; G.units.push(h);              // nobody else anywhere
+  h.x = tur.x - 1.5; h.y = tur.y; h.hp = h.mhp * .5; h.retreat = false;
+  IB.rebuildGrid();
+  t.ok(Math.hypot(h.x - tur.x, h.y - tur.y) < tur.rng, 'the hero really is under the turret');
+  // Fallbacks so a revert reports assertions instead of throwing — and they
+  // return values that FAIL rather than pass, or the block would go quiet on
+  // exactly the build it exists to catch. The two assertions that actually
+  // matter (does the hero withdraw, does it hold when covered) do not touch
+  // the export at all.
+  t.ok(typeof IB.towerCover === 'function', 'the cover count can be read from outside');
+  const cover = () => (IB.towerCover ? IB.towerCover(tur, 0) : -1);
+  const NEED = IB.COVERED || 2;
+  t.ok(cover() === 0, 'a hero standing alone counts nobody as cover (' + cover() + ')');
+  IB.heroStep(h, 1 / 30);
+  t.ok(h.retreat, 'and a half-health hero alone under a turret withdraws');
+
+  // ...and it is not simply "always retreat": with bodies soaking, it holds.
+  h.retreat = false; h.hp = h.mhp * .5;
+  for (let i = 0; i < NEED; i++) IB.spawnUnit(0, 'melee', { x:tur.x - 1, y:tur.y + i - .5 });
+  IB.rebuildGrid();
+  t.ok(cover() === NEED, 'minions under the turret are cover (' + cover() + ')');
+  IB.heroStep(h, 1 / 30);
+  t.ok(!h.retreat, 'and with them soaking for it the same hero holds the dive');
+
+  // the distance filter. nearby() bins by x in width-6 cells and never re-checks
+  // x, so a body nine units out lands in a scanned bin. It is still not cover.
+  const far = IB.spawnUnit(0, 'melee', { x:tur.x + 9, y:tur.y });
+  IB.rebuildGrid();
+  t.ok(Math.abs(far.x - tur.x) > 7, 'the extra body is genuinely out of range (' +
+    Math.abs(far.x - tur.x).toFixed(1) + ')');
+  t.ok(cover() === NEED,
+    'a body nine units away is not cover, whatever bin it lands in (' + cover() + ')');
+
+  // the same question, asked the other way round, must give the same answer
+  G.units.length = 0; G.units.push(h);
+  IB.rebuildGrid();
+  t.ok(IB.towerCovered(h, h) === true, 'and walking in alone reads as uncovered too');
+}
+
 /* ------------------------------------------ what a hero brings back from the dead */
 {
   // The other half of the same mistake. A hero's timed state does not decay
@@ -635,7 +689,13 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(mm.rng > r0, 'Trueshot lengthens the shot (' + r0.toFixed(1) + ' -> ' + mm.rng.toFixed(1) + ')');
     step((IB.SKILL.trueshot.dur || 10) + 2);
     t.ok(Math.abs(mm.rng - r0) < .01, 'and it goes back to normal (' + mm.rng.toFixed(1) + ')');
-    t.ok(Math.abs(baseRng - baseRng) < 1, 'and the tank is untouched by the marksman');
+    // This line read `Math.abs(baseRng - baseRng) < 1` when it shipped, which is
+    // 0 < 1 — a literal tautology, caught by a mutation audit rather than by
+    // anything failing. The tank is the one whose range was captured as
+    // baseRng; the marksman's buff must not have reached it.
+    t.ok(Math.abs(h.rng - baseRng) < .01,
+      'and the tank is untouched by the marksman (' + h.rng.toFixed(1) + ' against ' +
+      baseRng.toFixed(1) + ')');
     G.units.length = 0; G.sides[0].heroes.length = 0;
   }
 
@@ -1615,8 +1675,20 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // Twelve minutes rather than nine, because that is the window where the
     // third level is decidable at all. Before: level 3 in 0 of 12 side-holds,
     // a Cannon armed in 0. After: 9 and 5.
+    //
+    // Sixteen seeds rather than six, because six could not carry the second
+    // assertion. Measured over 36 seeds, a hold reaches tier 3 in 71% of cases
+    // and arms a Cannon in 25% — and the old bar was 3 of 12, which IS 25%. A
+    // threshold sitting exactly on the population rate fails about two runs in
+    // five whatever the code does, and it duly went red on a change that leaves
+    // the rate untouched (18 of 72 holds before and 18 of 72 after). The bars
+    // below are 14 of 32 against an expected 23, and 3 of 32 against an
+    // expected 8. If you widen the window or change the AI, re-measure the rate
+    // before touching the bar.
     const lv3 = [], cannon = [];
-    for (const seed of [5031, 5062, 5093, 5124, 5155, 5186]){
+    for (const seed of [5031, 5062, 5093, 5124, 5155, 5186,
+                        5217, 5248, 5279, 5310, 5341, 5372,
+                        5403, 5434, 5465, 5496]){
       IB.newMatch({ diff:'veteran', seed });
       G.sides[0].ai = true;
       const gun = [0, 0];
@@ -1628,7 +1700,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
       for (const sd of [0, 1]){ lv3.push(IB.barracksLvl(G.sides[sd])); cannon.push(gun[sd] > 0); }
     }
     const top = lv3.filter(l => l >= 3).length, guns = cannon.filter(Boolean).length;
-    t.ok(top >= 6, 'a hold reaches the barracks level that unlocks Cannons (' +
+    t.ok(top >= 14, 'a hold reaches the barracks level that unlocks Cannons (' +
       top + ' of ' + lv3.length + ': ' + lv3.join(',') + ')');
     t.ok(guns >= 3, 'and it arms a Cannon with it (' + guns + ' of ' + cannon.length + ' holds)');
   }
@@ -2566,6 +2638,33 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(structsNow.join('|') === before.structs.join('|'), 'every turret, inhibitor and gate keeps its damage');
   t.ok(Math.abs(G.units.filter(u => !u.isHero).length - before.units) <= 1, 'the wave standing on the bridge comes back');
   t.ok(now.kills === before.kills && Math.round(now.gathered) === before.gathered, 'and the running totals');
+  // A hero that has decided to pull back holds that decision between 28% and
+  // 66% health — the flag is the whole memory of it. Dropped from the save, a
+  // wounded hero mid-withdrawal turned round on resume and walked back into
+  // what it was leaving. Set it by hand and put the hero inside the band, so
+  // the assertion cannot be satisfied by heroStep simply deciding it again.
+  {
+    const hr = now.heroes.find(x => !x.dead) || now.heroes[0];
+    if (hr){
+      hr.retreat = true; hr.hp = hr.mhp * .45;
+      t.ok(hr.hp / hr.mhp > .28 && hr.hp / hr.mhp < .66,
+        'the hero sits in the band where only the flag remembers (' + (hr.hp / hr.mhp).toFixed(2) + ')');
+      IB.saveMatch();
+      const p2 = IB.savedMatch();
+      IB.newMatch({ diff:'recruit', seed:3 });
+      t.ok(IB.loadMatch(p2) === null, 'it saves and loads again');
+      const back = P().heroes.find(x => x.name === hr.name);
+      t.ok(!!back, 'the withdrawing hero comes back (' + hr.name + ')');
+      t.ok(back && back.retreat === true, 'still pulling back, not turned round by the reload');
+      // and the flag is not simply always true after a load
+      back.retreat = false; back.hp = back.mhp * .45;
+      IB.saveMatch();
+      IB.newMatch({ diff:'recruit', seed:4 });
+      IB.loadMatch(IB.savedMatch());
+      const back2 = P().heroes.find(x => x.name === hr.name);
+      t.ok(back2 && back2.retreat === false, 'and a hero that was holding its ground still is');
+    }
+  }
   // and it is a live match, not a museum piece
   const wave0 = G.wave;
   for (let i = 0; i < 30 * 60 * 3 && G.state === 'play'; i++) IB.update(1 / 30);
@@ -2900,9 +2999,18 @@ t.ok(true, 'drawing an empty bridge is harmless');
       Math.round((sup.lifebinder || 0) / 4) + '% of 400, chance is 33%)');
     // and it reads the hero: an aura heal is a support's own fantasy, and the
     // old branch gave every class byte-identical numbers here
-    t.ok((sup.lifebinder || 0) > (mm.lifebinder || 0),
-      'a support wants the healing aura more than a marksman does (' +
-      Math.round((sup.lifebinder || 0) / 4) + '% vs ' + Math.round((mm.lifebinder || 0) / 4) + '%)');
+    // This compared the two counts with no margin when it shipped, and a
+    // mutation audit found it passing 296 to 293 out of 400 on a build where
+    // classPassiveBonus returned zero and the scorer was byte-identical for
+    // every class — a 0.75% gap against a binomial sd of about 8.8, i.e. pure
+    // stream noise. Ask the scorer directly, and give the sampled rate a margin
+    // wide enough that noise cannot supply it. The real gap is around 90 of 400.
+    t.ok((IB.passiveWorth ? IB.passiveWorth({ cls:'support' }, IB.PASS.lifebinder) : 0) >
+         (IB.passiveWorth ? IB.passiveWorth({ cls:'marksman' }, IB.PASS.lifebinder) : 1) * 1.15,
+      'a support prices the healing aura well above a marksman');
+    t.ok((sup.lifebinder || 0) - (mm.lifebinder || 0) > 40,
+      'and takes it far more often in play (' + (sup.lifebinder || 0) + ' vs ' +
+      (mm.lifebinder || 0) + ' of 400)');
   }
 
   // 4. a passive that is a strict superset of another's numbers must never

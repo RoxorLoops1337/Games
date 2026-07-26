@@ -2193,13 +2193,27 @@ function onHeroDeath(h, src){
 /* ------------------------------------------------------------------ hero brain */
 // Would chasing this target put us under an enemy turret with nobody to soak
 // for us? Measured at the target, not at the hunter.
+// How many real bodies of `side` are standing under this turret taking shots
+// that would otherwise land on a hero. Two things this has to get right and
+// the two places that used to count it separately did not. A hero is never its
+// own cover — and nearby() bins purely by x into width-6 cells and applies no
+// distance test of its own, so without the check below a minion nine units from
+// the turret, further out than some turrets can even shoot, counted as a shield.
+function towerCover(st, side){
+  let n = 0;
+  nearby(st.x, 7, (u) => {
+    if (u.dead || u.side !== side || u.isHero) return;
+    if (Math.hypot(u.x - st.x, u.y - st.y) > 7) return;
+    n++;
+  });
+  return n;
+}
+const COVERED = 2;                  // fewer than two bodies is not cover
 function towerCovered(h, tgt){
   for (const st of G.sides[enemyOf(h.side)].structs){
     if (st.dead || !st.ad) continue;
     if (Math.hypot(st.x - tgt.x, st.y - tgt.y) > st.rng + 1) continue;
-    let cover = 0;
-    nearby(st.x, 7, (u) => { if (!u.dead && u.side === h.side && !u.isHero) cover++; });
-    if (cover < 2) return true;
+    if (towerCover(st, h.side) < COVERED) return true;
   }
   return false;
 }
@@ -2283,7 +2297,19 @@ function heroStep(h, dt){
 
   const frac = h.hp / h.mhp;
   const tower = inTowerFire(h);
-  const cover = tower ? alliesNear({ x:tower.x, y:tower.y, side:h.side, r:0 }, 6) : 0;
+  // This asked alliesNear whether anyone was standing under the turret, and
+  // handed it a fresh {x,y,side} literal to measure from. alliesNear's only
+  // exclusion is `o !== u`, and a literal is never identical to any real unit,
+  // so the hero counted ITSELF. Alone under an enemy turret at half health it
+  // read cover = 1 against a true 0, which made the frac < .58 withdrawal below
+  // unreachable — and with it the `finishing` guard and the "do not walk past
+  // turret range with nothing to hit" clamp, all three of which read this one
+  // flag. The hero coasted to the unconditional .28 floor instead and turned
+  // around at 0.279, well inside a turret that reaches 11, which is why nearly
+  // every hero death in the game happens with the retreat flag already set.
+  // It now asks the same question, the same way, as towerCovered's "is it safe
+  // to walk in" — those two decisions disagreeing was its own bug.
+  const cover = tower && towerCover(tower, h.side) >= COVERED ? 1 : 0;
   // A wounded enemy hero within reach is worth finishing — heroes used to
   // break off every duel the moment either side dipped, so they traded for
   // twenty minutes and nobody ever died to a hero.
@@ -4911,6 +4937,13 @@ const packHero = (h) => ({
   skills:h.skills.map(s => ({ id:s.id, rank:s.rank, cdT:s.cdT, ult:!!s.ult })),
   pend:h.pend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
   x:h.x, y:h.y, hp:h.hp, mana:h.mana, dead:h.dead, inLane:h.inLane, respawnT:h.respawnT,
+  // A hero that has decided to pull back stays pulled back until it is either
+  // healthy again or has something worth finishing — the two thresholds are 66%
+  // and 28%, and between them the flag is the only thing holding the decision.
+  // Dropped from the save, a wounded hero mid-withdrawal turned round on resume
+  // and walked back into whatever it was leaving. That was rare while the
+  // uncovered-under-a-turret branch above could never fire; it is not rare now.
+  retreat:!!h.retreat,
 });
 const packUnit = (u) => ({
   kind:u.kind, side:u.side, x:u.x, y:u.y, hp:u.hp, mhp:u.mhp, ad:u.ad, armor:u.armor, mr:u.mr,
@@ -4984,7 +5017,7 @@ function loadMatch(pack){
       h.pend = ph.pend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl }));
       recalcHero(h, true);
       h.x = ph.x; h.y = ph.y; h.hp = Math.min(ph.hp, h.mhp); h.mana = Math.min(ph.mana, h.mmana);
-      h.dead = ph.dead; h.respawnT = ph.respawnT; h.inLane = false;
+      h.dead = ph.dead; h.respawnT = ph.respawnT; h.inLane = false; h.retreat = !!ph.retreat;
       if (!ph.dead){ h.inLane = true; G.units.push(h); }
       return h;
     });
@@ -5347,6 +5380,7 @@ window.IB = {
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
   structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH, AI_BUILD_PLAN, holdsBoard, paintHeld,
+  towerCover, towerCovered, COVERED,
   passiveWorth, PASSIVE_W, CLASS_KEY_BOOST,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
