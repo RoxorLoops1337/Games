@@ -3678,6 +3678,247 @@ t.ok(true, 'drawing an empty bridge is harmless');
     powLines.map(([i]) => i).join(', ') + ')');
 }
 
+/* ------------------------------------------- two machines, one match */
+{
+  // The thing that makes lockstep trustworthy rather than mysteriously flaky:
+  // stand up two INDEPENDENT simulations, wire each one's transport to the
+  // other's receiver, give them different players issuing different commands at
+  // different moments, and require them to agree on every tick of a long match.
+  //
+  // Neither sim can see the other's state — only its command batches — so if
+  // they still agree at the end, the simulation really is a pure function of
+  // (seed, inputs), which is the whole premise.
+  const storeA = {}, storeB = {};
+  const A = loadGame(storeA), B = loadGame(storeB);
+  global.localStorage = {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = '' + v; },
+    removeItem: k => { delete store[k]; },
+  };
+  t.ok(A !== B && A.G !== B.G, 'two independent simulations loaded');
+
+  // The relay, modelled honestly: it does not deliver instantly, and it does
+  // not deliver in a fixed order. Batches are held for a random-ish number of
+  // frames and flushed, so arrival order differs between the two machines —
+  // which is exactly the property the (side, seq) sort has to survive.
+  const wire = [];
+  let now = 0;
+  const link = (from, to, lag) => { from.NET.send = (m) => wire.push({ to, m, at:now + lag }); };
+  link(A, B, 2); link(B, A, 3);   // asymmetric on purpose: the two links differ
+  const pump = (n) => { now = n; for (let i = wire.length - 1; i >= 0; i--) if (wire[i].at <= n){ wire[i].to.netRecv(wire[i].m); wire.splice(i, 1); } };
+
+  const SEED = 8419;
+  A.netStart({ me:0, seed:SEED, diff:'veteran' });
+  B.netStart({ me:1, seed:SEED, diff:'veteran' });
+  t.ok(A.NET.on && B.NET.on && A.NET.me === 0 && B.NET.me === 1, 'both sides started, one each');
+
+  // The difficulty dial is a handicap the HOST gets, not a property of the
+  // world — on Warlord side 1 starts with a third more of everything, gathers a
+  // third faster and its heroes hit 14% harder. Against the computer that is
+  // the point. Against a person it would hand player two the AI's buffs for no
+  // reason but joining second, so PvP has to read every one of them as 1.
+  {
+    const W = loadGame({});
+    global.localStorage = {
+      getItem: k => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = '' + v; },
+      removeItem: k => { delete store[k]; },
+    };
+    // First prove the handicap is real and one-sided in a single-player match,
+    // so the equality below is not just two zeroes agreeing.
+    W.newMatch({ diff:'warlord', seed:404 });
+    const solo = [0, 1].map(i => W.G.sides[i].res.gold + W.G.sides[i].res.iron +
+      W.G.sides[i].res.wood + W.G.sides[i].res.food);
+    t.ok(solo[1] > solo[0], 'on Warlord the Host really does start ahead (' + solo.join(' vs ') + ')');
+    t.ok(W.heroMul(1) > W.heroMul(0), 'and its heroes really do hit harder (' +
+      W.heroMul(0) + ' vs ' + W.heroMul(1) + ')');
+    const soloRate = [0, 1].map(i => W.gatherRate(W.G.sides[i], 'gold'));
+
+    W.netStart({ me:0, seed:404, diff:'warlord' });
+    const pvp = [0, 1].map(i => W.G.sides[i].res.gold + W.G.sides[i].res.iron +
+      W.G.sides[i].res.wood + W.G.sides[i].res.food);
+    t.ok(pvp[0] === pvp[1], 'but in multiplayer both holds start with the same (' + pvp.join(' vs ') + ')');
+    t.ok(W.heroMul(0) === 1 && W.heroMul(1) === 1, 'and neither side hits harder than the other');
+    for (const s of W.G.sides){ s.workers.idle = 0; W.assign(s, 'gold', 2); }
+    t.ok(W.gatherRate(W.G.sides[0], 'gold') === W.gatherRate(W.G.sides[1], 'gold'),
+      'and the same workers on the same node gather the same (' +
+      W.gatherRate(W.G.sides[0], 'gold') + ' vs ' + W.gatherRate(W.G.sides[1], 'gold') + ')');
+    t.ok(soloRate[1] !== soloRate[0] || solo[1] > solo[0],
+      'the single-player asymmetry this removes was measurable to begin with');
+  }
+  t.ok(A.G.sides[0].ai === false && A.G.sides[1].ai === false, 'and neither hold is played by the AI any more');
+
+  const fp = (g) => g.units.map(u => u.kind + ':' + u.side + ':' + u.hp.toFixed(9) + ':' +
+      u.x.toFixed(9) + ':' + u.y.toFixed(9) + ':' + (u.target ? (u.target.kind || u.target.key || 'h') : '-')).join(' ') +
+    '|' + g.sides.map(s => s.res.gold.toFixed(9) + ',' + s.res.iron.toFixed(9) + ',' + s.res.wood.toFixed(9) +
+      ',' + s.res.food.toFixed(9) + ',' + s.heroes.map(h => h.cls + h.lvl + ':' + h.hp.toFixed(6)).join('+') +
+      ',' + s.structs.map(st => st.hp.toFixed(6)).join('.')).join('/') +
+    '|' + g.wave + ':' + g.t.toFixed(6);
+
+  // Two different players, playing differently, at moments that do not line up.
+  const PLAN = [
+    [  4, 0, 'job',    { node:'gold', d:2 }],
+    [  9, 1, 'job',    { node:'iron', d:2 }],
+    [ 21, 0, 'worker', {}],
+    [ 34, 1, 'worker', {}],
+    [ 55, 1, 'job',    { node:'wood', d:1 }],
+    [ 70, 0, 'job',    { node:'food', d:1 }],
+    [140, 0, 'build',  { tile:0, type:'barracks' }],
+    [163, 1, 'build',  { tile:0, type:'farm' }],
+    [200, 1, 'build',  { tile:1, type:'barracks' }],
+    [255, 0, 'unit',   { unit:'melee' }],
+    [290, 1, 'unit',   { unit:'melee' }],
+    [330, 0, 'unit',   { unit:'melee' }],
+    [420, 0, 'nodeup', { node:'gold' }],
+    [470, 1, 'nodeup', { node:'iron' }],
+  ];
+
+  const TICKS = 30 * 150;
+  let diverged = -1, stalls = 0, applied = 0;
+  for (let n = 0; n < TICKS * 3 && (A.NET.tick < TICKS || B.NET.tick < TICKS); n++){
+    pump(n);
+    // Issue each planned command exactly once, on the machine that owns it,
+    // when that machine reaches the tick.
+    for (const p of PLAN){
+      if (p.done) continue;
+      const sim = p[1] === 0 ? A : B;
+      if (sim.NET.tick >= p[0]){ sim.sendCmd(p[2], p[3]); p.done = true; applied++; }
+    }
+    const beforeA = A.NET.tick, beforeB = B.NET.tick;
+    A.netStep(); B.netStep();
+    if (A.NET.tick === beforeA && B.NET.tick === beforeB) stalls++;
+    // Compare only where both machines have simulated the same number of ticks.
+    if (diverged < 0 && A.NET.tick === B.NET.tick && fp(A.G) !== fp(B.G)) diverged = A.NET.tick;
+  }
+
+  // The run has to have been a real match, or agreement is worthless.
+  t.ok(applied === PLAN.length, 'every planned command was issued (' + applied + ' of ' + PLAN.length + ')');
+  t.ok(A.NET.tick >= TICKS && B.NET.tick >= TICKS,
+    'both machines simulated the whole match (' + A.NET.tick + ' / ' + B.NET.tick + ' of ' + TICKS + ')');
+  t.ok(A.G.units.length > 4 && A.G.wave >= 2,
+    'and it was a real one (' + A.G.units.length + ' units, wave ' + A.G.wave + ' at ' + Math.round(A.G.t) + 's)');
+  t.ok(A.G.sides[0].heroes.length + A.G.sides[0].plot.filter(Boolean).length > 0,
+    'with the commands actually taking effect on the board (' +
+    A.G.sides[0].plot.filter(Boolean).length + ' buildings on side 0)');
+  // A link slower than the input delay is SUPPOSED to be absorbed silently —
+  // that is what the delay is for — so incidental stalls prove nothing either
+  // way. What must be true is that a link slower than the delay stops the
+  // simulation rather than letting it run ahead into a state the peer will
+  // never reach. Tested directly: starve one machine and watch it refuse.
+  t.ok(stalls === 0, 'a link faster than the input delay never stalls the match (' + stalls + ')');
+  {
+    const S = loadGame({});
+    global.localStorage = {
+      getItem: k => (k in store ? store[k] : null),
+      setItem: (k, v) => { store[k] = '' + v; },
+      removeItem: k => { delete store[k]; },
+    };
+    S.netStart({ me:0, seed:611, diff:'veteran' });    // no transport: the peer never speaks
+    let ran = 0;
+    while (S.netStep()) ran++;
+    t.ok(ran === S.NET.delay,
+      'with no peer at all it runs exactly the primed ticks and then holds (' + ran +
+      ' of ' + S.NET.delay + ')');
+    t.ok(!S.netReady(S.NET.tick), 'and it knows it is not ready to go further');
+    const held = S.G.t;
+    for (let i = 0; i < 50; i++) S.netStep();
+    t.ok(S.G.t === held, 'and no amount of asking moves the world while it waits');
+    // ...until the missing side finally arrives, at which point it resumes.
+    S.netDeliver(S.NET.tick, 1, []);
+    t.ok(S.netStep() && S.G.t > held, 'the peer arriving lets it move again');
+  }
+  t.ok(diverged < 0, 'two machines trading only inputs stay bit-identical for ' + TICKS + ' ticks' +
+    (diverged < 0 ? '' : ' — diverged at tick ' + diverged));
+  t.ok(A.NET.desyncAt < 0 && B.NET.desyncAt < 0,
+    'and the running hash exchange agrees too (' + A.NET.desyncAt + ' / ' + B.NET.desyncAt + ')');
+
+  // The desync detector has to be able to fire, or it is decoration. Feed one
+  // machine a hash its own state cannot produce.
+  const anyTick = [...A.NET.hashes.keys()][0];
+  t.ok(anyTick !== undefined, 'hashes were being exchanged at all');
+  A.netRecv({ k:'hash', tick:anyTick, h:(A.NET.hashes.get(anyTick) ^ 0xffff) >>> 0 });
+  t.ok(A.NET.desyncAt === anyTick, 'a hash that does not match is reported as a desync');
+
+  // Ordering is not arrival order. Two commands delivered to one machine in one
+  // order and to the other in the opposite order must still apply the same way.
+  const C1 = loadGame({}), C2 = loadGame({});
+  global.localStorage = {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = '' + v; },
+    removeItem: k => { delete store[k]; },
+  };
+  C1.netStart({ me:0, seed:5150, diff:'veteran' }); C2.netStart({ me:1, seed:5150, diff:'veteran' });
+  // Identical setup on both machines — a hero needs a Hero Factory and gold, and
+  // the point here is the ordering of the two forge commands, not whether they
+  // can be paid for. Applied the same way to both, so it is not an asymmetry.
+  for (const sim of [C1, C2]) for (const s of sim.G.sides){
+    s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000;
+    sim.build(s, s.plot.indexOf(null), 'tavern');
+  }
+  // Both sides forge a hero on the SAME tick. That is the order-sensitive case:
+  // hero names are drawn with pick(HERO_NAMES) off the shared simulation RNG,
+  // so whoever is applied first takes the first name. Two commands on different
+  // sides touching nothing in common would agree even with the ordering broken,
+  // and would prove nothing.
+  const a0 = { type:'hero', cls:'fighter', side:0, seq:0 };
+  const b0 = { type:'hero', cls:'marksman', side:1, seq:0 };
+  const at = C1.NET.delay + 4;
+  // Fill every tick up to the shared one, or they stall before reaching it and
+  // the comparison below would be two identical un-run matches — which would
+  // pass while proving nothing.
+  for (let k = 0; k <= at + 1; k++)
+    for (const [sim, side] of [[C1, 0], [C1, 1], [C2, 0], [C2, 1]]) sim.netDeliver(k, side, []);
+  C1.NET.box.set(at, {}); C2.NET.box.set(at, {});
+  C1.netDeliver(at, 0, [a0]); C1.netDeliver(at, 1, [b0]);      // one order
+  C2.netDeliver(at, 1, [b0]); C2.netDeliver(at, 0, [a0]);      // the other
+  while (C1.NET.tick <= at && C1.netStep()) ;
+  while (C2.NET.tick <= at && C2.netStep()) ;
+  t.ok(C1.NET.tick > at && C2.NET.tick > at, 'both stepped past the shared tick');
+  const names = (g) => g.sides.map(s => s.heroes.map(h => h.cls + '/' + h.name).join('+')).join(' | ');
+  t.ok(C1.G.sides[0].heroes.length === 1 && C1.G.sides[1].heroes.length === 1,
+    'both heroes were actually forged, so there is something to order (' + names(C1.G) + ')');
+  t.ok((C1.G.sides[0].heroes[0] || {}).name !== (C1.G.sides[1].heroes[0] || {}).name,
+    'and they drew different names off the shared stream, so order is observable');
+  t.ok(names(C1.G) === names(C2.G),
+    'delivery order does not change who got which name (' + names(C1.G) + '  vs  ' + names(C2.G) + ')');
+  t.ok(fp(C1.G) === fp(C2.G), 'nor anything else about the two worlds');
+
+  // That assertion is only worth having if the scenario could have failed. The
+  // shipped rule buckets commands by side and walks the sides in a fixed order,
+  // so it is arrival-independent BY CONSTRUCTION — which means a passing result
+  // above proves nothing on its own. Build the mistake on purpose: a copy that
+  // applies commands in the order they arrived. If that one also agrees, the
+  // scenario is not order-sensitive and the test above is decoration.
+  const ARRIVAL = SRC
+    .replace('  if (slot[side]) return;                       // a duplicate delivery is not a second batch\n  slot[side] = cmds;',
+             '  if (slot[side]) return;\n  slot[side] = cmds; (slot.arr || (slot.arr = [])).push(cmds);')
+    .replace('  const all = [...slot[0], ...slot[1]].sort((p, q) => p.side - q.side || p.seq - q.seq);',
+             '  const all = slot.arr ? slot.arr.flat() : [...slot[0], ...slot[1]];');
+  t.ok(ARRIVAL !== SRC && !ARRIVAL.includes('p.side - q.side || p.seq - q.seq'),
+    'the arrival-ordered build really was built');
+  const D1 = loadGame({}, ARRIVAL), D2 = loadGame({}, ARRIVAL);
+  global.localStorage = {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = '' + v; },
+    removeItem: k => { delete store[k]; },
+  };
+  D1.netStart({ me:0, seed:5150, diff:'veteran' }); D2.netStart({ me:1, seed:5150, diff:'veteran' });
+  for (const sim of [D1, D2]) for (const s of sim.G.sides){
+    s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000;
+    sim.build(s, s.plot.indexOf(null), 'tavern');
+  }
+  for (let k = 0; k <= at + 1; k++)
+    for (const [sim, side] of [[D1, 0], [D1, 1], [D2, 0], [D2, 1]]) sim.netDeliver(k, side, []);
+  D1.NET.box.set(at, {}); D2.NET.box.set(at, {});
+  D1.netDeliver(at, 0, [a0]); D1.netDeliver(at, 1, [b0]);
+  D2.netDeliver(at, 1, [b0]); D2.netDeliver(at, 0, [a0]);
+  while (D1.NET.tick <= at && D1.netStep()) ;
+  while (D2.NET.tick <= at && D2.netStep()) ;
+  t.ok(names(D1.G) !== names(D2.G),
+    'ordering by arrival really does break this exact case, so the check above has teeth (' +
+    names(D1.G) + '  vs  ' + names(D2.G) + ')');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 

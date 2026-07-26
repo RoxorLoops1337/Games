@@ -394,6 +394,18 @@
    ===================================================================== */
 const HEADLESS = typeof __IB_HEADLESS__ !== 'undefined';
 
+// Player versus player. The difficulty dial is a HANDICAP THE HOST GETS, not a
+// property of the world: on Warlord side 1 starts with 34% more of everything,
+// gathers 34% faster and its heroes hit 14% harder. That is the right shape
+// when side 1 is the computer and quite wrong when it is a person, who would
+// silently inherit the AI's buffs by virtue of being second to join. When this
+// is set, every one of those multipliers reads 1 and the two holds are equal.
+//
+// A plain flag rather than NET.on because `newMatch` is called once while the
+// file is still being evaluated, long before `const NET` exists — reading NET
+// from here would be a temporal-dead-zone error at load.
+let PVP = false;
+
 /* ------------------------------------------------------------------ rng */
 let _seed = 12345;
 const reseed = (s) => { _seed = (s >>> 0) || 1; };
@@ -1013,10 +1025,11 @@ function newMatch(opt){
   G.frame = 0;
   G.units.length = 0; G.projs.length = 0; G.fx.length = 0; G.floats.length = 0; G.zones.length = 0;
   G.log.length = 0; G.timeline.length = 0; G.paused = false; G.held = false; G.speed = 1; G.demo = false;
+  PVP = !!opt.pvp;
   G.sides = [makeSide(0, false), makeSide(1, true)];
   // The Host gets its handicap as a straight resource multiplier, not as
   // cheating in the sim — everything it does, you can also do.
-  const e = G.diff.eco;
+  const e = PVP ? 1 : G.diff.eco;
   const r = G.sides[1].res;
   r.gold = Math.round(r.gold * e); r.iron = Math.round(r.iron * e);
   r.wood = Math.round(r.wood * e); r.food = Math.round(r.food * e);
@@ -1078,7 +1091,7 @@ const gatherMul = (s) => {
   for (const h of s.heroes) m += passVal(h, 'gatherM');
   return m;
 };
-const heroMul = (side) => side === 1 ? G.diff.hero : 1;
+const heroMul = (side) => (PVP || side !== 1) ? 1 : G.diff.hero;
 // Slots came from the BEST tavern, not from all of them, so a second Hero
 // Factory was sixteen plots' worth of nothing — and the Host's build plan
 // asks for two. Every level of every tavern counts now, up to the cap of 3.
@@ -1184,7 +1197,7 @@ function ecoStep(s, dt){
   // The Host's handicap is an open, ongoing resource multiplier — the same
   // levers you have, just more of them. A one-off opening purse was noise
   // across a fifteen-minute match, which made the difficulties identical.
-  const m = gatherMul(s) * (s.i === 1 ? G.diff.eco : 1);
+  const m = gatherMul(s) * ((PVP || s.i !== 1) ? 1 : G.diff.eco);
   let got = 0;
   for (const node of ['gold','iron','wood','food']){
     const n = Math.min(s.workers[node], nodeCap(s, node));
@@ -5294,13 +5307,15 @@ function wire(){
       return;
     }
     const s = s0(), a = b.dataset.act;
-    if (a === 'job') say(assign(s, b.dataset.node, +b.dataset.d));
-    else if (a === 'worker') say(trainWorker(s));
-    else if (a === 'unit') say(trainUnit(s, b.dataset.unit));
-    else if (a === 'build') say(build(s, sel.tile, b.dataset.type));
-    else if (a === 'upgrade') say(upgradeBuilding(s, sel.tile));
-    else if (a === 'up') say(buyUp(s, b.dataset.up));
-    else if (a === 'nodeup') say(upgradeNode(s, b.dataset.node));
+    // Every one of these goes through sendCmd, which runs it immediately in
+    // one-player and schedules it for an agreed tick in multiplayer.
+    if (a === 'job') say(sendCmd('job', { node:b.dataset.node, d:+b.dataset.d }));
+    else if (a === 'worker') say(sendCmd('worker', {}));
+    else if (a === 'unit') say(sendCmd('unit', { unit:b.dataset.unit }));
+    else if (a === 'build') say(sendCmd('build', { tile:sel.tile, type:b.dataset.type }));
+    else if (a === 'upgrade') say(sendCmd('upgrade', { tile:sel.tile }));
+    else if (a === 'up') say(sendCmd('up', { up:b.dataset.up }));
+    else if (a === 'nodeup') say(sendCmd('nodeup', { node:b.dataset.node }));
     else if (a === 'newhero'){ showHeroCreate(); return; }
     syncUI();
   });
@@ -5330,14 +5345,21 @@ function wire(){
     else if (a === 'menu'){ setPaused(false); startDemo(); showMenu(); }
     else if (a === 'again'){ clearSave(); newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
     else if (a === 'mkhero'){
-      const err = createHero(s0(), b.dataset.cls);
+      // In multiplayer the hero does not exist yet — it is forged on an agreed
+      // tick a fraction of a second from now — so there is nothing to select
+      // and nothing to open. The hero card appears on its own when it lands.
+      if (NET.on){ sendCmd('hero', { cls:b.dataset.cls }); closeModal(); syncUI(); return; }
+      const err = sendCmd('hero', { cls:b.dataset.cls });
       if (err){ say(err); return; }
       const h = s0().heroes[s0().heroes.length - 1];
       sel.hero = h; showHeroSheet(h); syncUI();
     } else if (a === 'pick'){
       const h = sel.hero;
       if (!h) return;
-      say(pickOption(h, +b.dataset.i));
+      // Keyed by hero id, not by the selection, because the two machines do not
+      // share a selection — and by the time this runs on the other one, `sel`
+      // there is pointing at whatever that player was looking at.
+      say(sendCmd('pick', { hero:h.id, opt:+b.dataset.i }));
       showHeroSheet(h); syncUI();
     }
   });
@@ -5420,10 +5442,173 @@ function wire(){
 }
 
 let last = 0, lastDraw = 0;
+/* =====================================================================
+   LOCKSTEP
+   =====================================================================
+   Two machines run the same match from the same seed and trade only inputs.
+   Nothing about the world is ever sent — no positions, no health — so the
+   traffic is a few dozen bytes a second and the relay never has to understand
+   the game.
+
+   That only works if the simulation is a pure function of (seed, inputs), so
+   three rules hold this together and each one is a test:
+
+     1. ONE STEP SIZE. update() is called with exactly 1/30, never a partial
+        remainder. The old loop ran `Math.min(1/30, left)` and fed the leftover
+        through as a short tick, so the step size depended on the frame rate.
+        Time left over is banked in `acc` and spent on the next whole tick.
+     2. INPUTS ARE SCHEDULED, NOT APPLIED. Pressing a button does not change
+        the world. It appends a command to the batch for tick + NET.delay,
+        which is far enough ahead that the other machine has it before that
+        tick comes up. Both machines then apply the same commands on the same
+        tick.
+     3. ORDER IS FIXED. Commands are applied sorted by (side, seq), never in
+        arrival order, because arrival order is a property of the network.
+
+   A tick is simulated only when BOTH sides' batches for it have arrived —
+   including the empty ones, which is why a batch is published every tick even
+   when the player did nothing. That is what makes the stall visible rather
+   than silent: if the peer's batch is late, the game holds still instead of
+   running ahead into a state the peer will never reach.
+   ===================================================================== */
+const NET = {
+  on:false,           // multiplayer running
+  me:0,               // the side this machine controls
+  delay:6,            // ticks of input delay — 200ms at 30Hz
+  tick:0,             // next tick to simulate
+  seq:0,              // per-command counter, for a total order within a side
+  box:new Map(),      // tick -> { 0:[cmds] | undefined, 1:[cmds] | undefined }
+  pending:[],         // commands issued since the last publish
+  send:null,          // transport, injected by the lobby
+  stallT:0,           // seconds spent waiting on the peer
+  hashes:new Map(),   // tick -> my own state hash, for desync detection
+  desyncAt:-1,
+};
+
+// Every player action that can change the world, and nothing that cannot.
+// Camera, zoom, speed and pause are deliberately absent: they are per-machine
+// view state, and routing them through here would let one player's zoom desync
+// the other's match.
+const CMD = {
+  job:     (s, c) => assign(s, c.node, c.d),
+  worker:  (s)    => trainWorker(s),
+  unit:    (s, c) => trainUnit(s, c.unit),
+  build:   (s, c) => build(s, c.tile, c.type),
+  upgrade: (s, c) => upgradeBuilding(s, c.tile),
+  up:      (s, c) => buyUp(s, c.up),
+  nodeup:  (s, c) => upgradeNode(s, c.node),
+  hero:    (s, c) => createHero(s, c.cls, c.name),
+  pick:    (s, c) => { const h = s.heroes.find(x => x.id === c.hero); return h ? pickOption(h, c.opt) : ''; },
+};
+
+// The single door every player action goes through. In one-player it runs the
+// action immediately, exactly as before — so single-player behaviour, and every
+// existing test, is untouched. In multiplayer it schedules instead.
+function sendCmd(type, args){
+  const c = Object.assign({ type }, args);
+  if (!NET.on) return CMD[type](G.sides[0], c) || '';
+  c.side = NET.me; c.seq = NET.seq++;
+  NET.pending.push(c);
+  return '';                      // no feedback yet: it has not happened yet
+}
+
+// Publish this machine's batch for a tick NET.delay ahead, every tick, empty or
+// not. The empty ones are not waste — they are how the other machine learns it
+// is safe to proceed.
+function netPublish(){
+  const at = NET.tick + NET.delay;
+  const batch = NET.pending; NET.pending = [];
+  netDeliver(at, NET.me, batch);
+  if (NET.send) NET.send({ k:'cmd', tick:at, side:NET.me, cmds:batch });
+}
+
+function netDeliver(tick, side, cmds){
+  let slot = NET.box.get(tick);
+  if (!slot){ slot = {}; NET.box.set(tick, slot); }
+  if (slot[side]) return;                       // a duplicate delivery is not a second batch
+  slot[side] = cmds;
+}
+
+const netReady = (tick) => { const s = NET.box.get(tick); return !!(s && s[0] && s[1]); };
+
+// A cheap fingerprint of simulation state. Exchanged every second or so; if the
+// two disagree the match has already diverged and saying so beats letting the
+// two players watch different games and argue about who won.
+function netHash(){
+  let a = 2166136261 >>> 0;
+  const mix = (n) => { a ^= n | 0; a = Math.imul(a, 16777619) >>> 0; };
+  mix(G.wave); mix(Math.round(G.t * 30));
+  for (const u of G.units){ mix(u.side); mix(Math.round(u.x * 4096)); mix(Math.round(u.y * 4096)); mix(Math.round(u.hp * 64)); }
+  for (const s of G.sides){
+    mix(Math.round(s.res.gold * 64)); mix(Math.round(s.res.iron * 64));
+    mix(Math.round(s.res.wood * 64)); mix(Math.round(s.res.food * 64));
+    for (const st of s.structs) mix(Math.round(st.hp * 64));
+  }
+  return a >>> 0;
+}
+
+// One simulated tick, or nothing at all. Returns false when the peer's batch
+// has not arrived, which the caller shows as a stall.
+function netStep(){
+  if (!netReady(NET.tick)) return false;
+  const slot = NET.box.get(NET.tick);
+  // Sorted by side then seq — never by arrival order, which differs per machine.
+  const all = [...slot[0], ...slot[1]].sort((p, q) => p.side - q.side || p.seq - q.seq);
+  for (const c of all){
+    const fn = CMD[c.type];
+    if (fn) fn(G.sides[c.side], c);
+  }
+  update(1 / 30);
+  NET.box.delete(NET.tick);
+  NET.tick++;
+  netPublish();
+  if (NET.tick % 30 === 0){
+    const h = netHash();
+    NET.hashes.set(NET.tick, h);
+    if (NET.send) NET.send({ k:'hash', tick:NET.tick, h });
+  }
+  return true;
+}
+
+// Start a networked match. Both machines call this with the same seed and the
+// same difficulty; the only thing that differs is `me`.
+function netStart(opt){
+  NET.on = true; NET.me = opt.me | 0; NET.tick = 0; NET.seq = 0;
+  NET.box.clear(); NET.pending.length = 0; NET.hashes.clear();
+  NET.desyncAt = -1; NET.stallT = 0;
+  newMatch({ diff:opt.diff || 'veteran', seed:opt.seed, pvp:true });
+  G.sides[0].ai = false; G.sides[1].ai = false;      // both holds are people now
+  // Prime the pipe: the first NET.delay ticks have no player input by
+  // definition, so publish empty batches for them or nothing can ever start.
+  for (let i = 0; i < NET.delay; i++){ netDeliver(i, 0, []); netDeliver(i, 1, []); }
+  netPublish();
+}
+
+// Incoming from the relay. Anything malformed is dropped rather than trusted.
+function netRecv(m){
+  if (!m || typeof m !== 'object') return;
+  if (m.k === 'cmd' && typeof m.tick === 'number' && (m.side === 0 || m.side === 1) && Array.isArray(m.cmds))
+    netDeliver(m.tick, m.side, m.cmds.filter(c => c && CMD[c.type] && (c.side === 0 || c.side === 1)));
+  else if (m.k === 'hash' && NET.hashes.has(m.tick) && NET.desyncAt < 0 && NET.hashes.get(m.tick) !== m.h)
+    NET.desyncAt = m.tick;
+}
+
+let acc = 0;
 function frame(ts){
   const raw = Math.min(.1, (ts - last) / 1000 || 0);
   last = ts;
-  if (G.state === 'play' && !G.paused && !G.held){
+  if (NET.on){
+    // Fixed steps only, and never more than a handful in one frame — a machine
+    // that fell behind catches up over several frames rather than freezing for
+    // one long one.
+    acc += Math.min(.25, raw);
+    let ran = 0, blocked = false;
+    while (acc >= 1 / 30 && ran < 8){
+      if (!netStep()){ blocked = true; break; }
+      acc -= 1 / 30; ran++;
+    }
+    NET.stallT = blocked ? NET.stallT + raw : 0;
+  } else if (G.state === 'play' && !G.paused && !G.held){
     let left = raw * G.speed;
     let guard = 0;
     while (left > 0 && guard++ < 12){ const st = Math.min(1 / 30, left); update(st); left -= st; }
@@ -5481,6 +5666,7 @@ window.IB = {
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
+  NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   hyp, ipow, fxRnd,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   seenIntro, markSeen, SEEN_KEY, pruneSel,
