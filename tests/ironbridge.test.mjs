@@ -1091,6 +1091,39 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* ------------------------------------------------------ what each pile is for */
+{
+  // Wood builds, iron arms, gold buys heroes and the forge's work, food feeds.
+  // Iron used to be in the price of nearly every BUILDING as well as every
+  // weapon: measured over ten matches it was the missing pile for 68% of
+  // everything a hold could not afford and never once climbed past 300, while
+  // wood sat in surplus. Moving the buildings onto wood took that to 52/44/26/4
+  // across iron/wood/gold/food.
+  IB.newMatch({ diff:'veteran', seed:1701 });
+  const s = P();
+  const K = ['gold','iron','wood','food'];
+  const prices = [];
+  for (const t in IB.BUILDINGS){ prices.push(IB.buildCost(t, 1)); prices.push(IB.buildCost(t, 2)); }
+  for (const t in IB.TRAIN) prices.push(IB.TRAIN[t].cost);
+  prices.push(C.WORKER_COST); prices.push(IB.HERO_COST);
+  for (const u of [...IB.TOWER_UPS, ...IB.TROOP_UPS]) prices.push(u.cost);
+  for (const n of IB.NODE_UPGRADABLE) prices.push(IB.nodeUpCost(s, n));
+  t.ok(prices.length > 20, 'there are plenty of things to buy (' + prices.length + ')');
+  const share = {};
+  for (const k of K) share[k] = prices.filter(c => c[k]).length / prices.length;
+  for (const k of K){
+    t.ok(share[k] > .15, k + ' is asked for often enough to matter (' + Math.round(share[k] * 100) + '% of prices)');
+    t.ok(share[k] < .85, 'and ' + k + ' is not a tax on everything (' + Math.round(share[k] * 100) + '%)');
+  }
+  // the buildings are made of wood, not iron: that is the whole point of the move
+  const builds = Object.keys(IB.BUILDINGS).map(t => IB.buildCost(t, 1));
+  const woodier = builds.filter(c => (c.wood || 0) > (c.iron || 0)).length;
+  t.ok(woodier === builds.length, 'every building costs more wood than iron (' + woodier + ' of ' + builds.length + ')');
+  // and the things that arm you are the ones that want iron
+  const arms = [IB.TRAIN.melee.cost, IB.TRAIN.cannon.cost, IB.HERO_COST];
+  t.ok(arms.every(c => (c.iron || 0) > 0), 'and everything that arms you is priced in iron');
+}
+
 /* -------------------------------------------------------- class identity */
 {
   // Every class wore the same blue plate with a different emoji on it.

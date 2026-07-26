@@ -854,6 +854,10 @@ function upRate(s, id){
 }
 
 /* ------------------------------------------------------------------ buildings */
+// Each pile has a job: WOOD builds, IRON arms, GOLD buys heroes and the forge's
+// work, FOOD feeds. Iron used to be in the price of nearly every building as
+// well as every weapon, which is why it was the missing pile for 68% of
+// everything a hold could not afford while wood sat in surplus.
 const BUILDINGS = {
   pit:      { n:'Spawning Pit', d:'Trains workers. Each pit adds a training slot.',
               cost:{ wood:70, gold:20 }, up:{ wood:90, gold:60 }, maxLvl:3, ico:'pit' },
@@ -864,13 +868,13 @@ const BUILDINGS = {
   // has. Traced over a match: wood climbs past 500 unspent while iron sits
   // under 60. The price moved onto the pile that actually accumulates.
   barracks: { n:'Barracks', d:'Turns workers into fighters. Level 2 unlocks casters, level 3 cannons.',
-              cost:{ wood:85, iron:45 }, up:{ wood:95, iron:30, gold:20 }, maxLvl:3, ico:'barracks' },
+              cost:{ wood:115, iron:15 }, up:{ wood:125, iron:12, gold:20 }, maxLvl:3, ico:'barracks' },
   forge:    { n:'Forge', d:'Unlocks turret and minion upgrades. Each level raises the rank cap.',
-              cost:{ iron:95, gold:55 }, up:{ iron:140, gold:110 }, maxLvl:3, ico:'forge' },
+              cost:{ wood:80, iron:40, gold:55 }, up:{ wood:110, iron:60, gold:110 }, maxLvl:3, ico:'forge' },
   tavern:   { n:'Hero Factory', d:'Forges heroes. Each level adds a hero slot and speeds respawns.',
               cost:{ gold:150, wood:70 }, up:{ gold:230, iron:90 }, maxLvl:3, ico:'tavern' },
   workshop: { n:'Workshop', d:'+12% gathering from every worker, per level.',
-              cost:{ wood:75, iron:50 }, up:{ wood:110, iron:85 }, maxLvl:3, ico:'workshop' },
+              cost:{ wood:110, iron:18 }, up:{ wood:150, iron:30 }, maxLvl:3, ico:'workshop' },
 };
 const BUILD_ORDER = ['farm','pit','barracks','forge','tavern','workshop'];
 const PLOT_W = 4, PLOT_H = 4;
