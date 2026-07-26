@@ -1079,6 +1079,34 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* ------------------------------------------------------ the attract screen */
+{
+  // The battle behind the menu is the first thing anybody sees. It used to sit
+  // at one fixed wide zoom with the fighting a few pixels tall in the middle
+  // of the panel; it sweeps the length of the world now.
+  IB.startDemo();
+  t.ok(G.demo === true && G.state === 'play', 'the menu has a live battle behind it');
+  const xs = [];
+  for (let i = 0; i < 30 * 90; i++){
+    IB.update(1 / 30);
+    IB.camStep(1 / 30);
+    if (i % 60 === 0) xs.push(IB.cam.x);
+  }
+  const lo = Math.min(...xs), hi = Math.max(...xs);
+  t.ok(hi - lo > 100, 'the camera actually travels (' + Math.round(lo) + ' → ' + Math.round(hi) + ')');
+  t.ok(lo < IB.HOLD_X + 30, 'as far back as your hold (' + Math.round(lo) + ')');
+  t.ok(hi > C.LANE_LEN - 20, 'and as far forward as theirs (' + Math.round(hi) + ')');
+  t.ok(xs.every(x => x >= IB.CAM_MIN - 1 && x <= IB.CAM_MAX + 1), 'and never past the end of the world');
+  t.ok(IB.cam.z >= IB.ZOOM_MIN && IB.cam.z <= IB.ZOOM_MAX, 'at a zoom the game would allow (' + IB.cam.z.toFixed(2) + ')');
+  // a real match is not swept: the camera is yours
+  IB.newMatch({ diff:'veteran', seed:1401 });
+  t.ok(G.demo === false, 'starting a match ends the attract battle');
+  IB.cam.follow = false;
+  const was = IB.cam.x;
+  for (let i = 0; i < 30 * 20; i++){ IB.update(1 / 30); IB.camStep(1 / 30); }
+  t.ok(IB.cam.x === was, 'and then the camera stays exactly where you left it');
+}
+
 /* ------------------------------------------------- reaching the unit tiers */
 {
   // Casters need a level-2 barracks and Cannons a level-3 one, so the price of
