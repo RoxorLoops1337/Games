@@ -3836,8 +3836,12 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // machine a hash its own state cannot produce.
   const anyTick = [...A.NET.hashes.keys()][0];
   t.ok(anyTick !== undefined, 'hashes were being exchanged at all');
-  A.netRecv({ k:'hash', tick:anyTick, h:(A.NET.hashes.get(anyTick) ^ 0xffff) >>> 0 });
-  t.ok(A.NET.desyncAt === anyTick, 'a hash that does not match is reported as a desync');
+  // B is the JOINER, so it records the drift and waits to be told what the
+  // board looks like. (The host does not sit still — it ships a snapshot and
+  // clears the flag, which is the next block.)
+  B.netRecv({ k:'hash', tick:anyTick, h:(B.NET.hashes.get(anyTick) ^ 0xffff) >>> 0 });
+  t.ok(B.NET.desyncAt === anyTick, 'a hash that does not match is reported as a desync');
+  t.ok(!B.netStep(), 'and the joiner holds still rather than playing on alone');
 
   // Ordering is not arrival order. Two commands delivered to one machine in one
   // order and to the other in the opposite order must still apply the same way.
@@ -4085,8 +4089,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
    Detection that only fires half the time, or that notices and carries on, is
    not a safety net. */
 {
+  // Driven from seat 1 throughout: the JOINER records a drift and waits. The
+  // host does not sit still — it ships a snapshot and clears the flag — so it
+  // is the wrong seat to watch the flag on. That behaviour has its own block.
   IB.netEnd();
-  IB.netStart({ me:0, seed:9100 });
+  IB.netStart({ me:1, seed:9100 });
 
   // 1. A hash arriving BEFORE this machine has computed its own must still be
   //    compared. Lockstep keeps the two within a few ticks, so whichever
@@ -4100,7 +4107,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.NET.desyncAt === 30, 'and it is compared as soon as ours exists (desyncAt ' + IB.NET.desyncAt + ')');
 
   // 2. The other order round.
-  IB.netEnd(); IB.netStart({ me:0, seed:9101 });
+  IB.netEnd(); IB.netStart({ me:1, seed:9101 });
   IB.NET.hashes.set(60, 4444);
   IB.netRecv({ k:'hash', tick:60, h:4444 });
   t.ok(IB.NET.desyncAt === -1, 'two machines that agree are left alone');
@@ -4735,6 +4742,147 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.fxStep(.1);
     t.ok(G.fx.every((f, i) => f.z > z0[i]), 'motes rise');
   }
+}
+
+/* ==================================== a drifted match puts itself back together
+   A desync used to end the match. It is recoverable: the host packs its board,
+   the joiner adopts it, and both restart their order pipeline from the same
+   tick. */
+{
+  // A snapshot has to be COMPLETE. Not "close enough to look right" — a machine
+  // that restored has to produce a bit-identical future to one that never
+  // drifted, or the resync just buys a few seconds before the next desync.
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:9800 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[0], 'mage'); IB.createHero(G.sides[1], 'fighter');
+  for (const s of G.sides) for (const h of s.heroes){ h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h); }
+  step(70);
+  t.ok(G.state === 'play', 'the match under test is still running');
+  t.ok(G.units.length > 3, 'with bodies on the bridge (' + G.units.length + ')');
+
+  const at = IB.netHash();
+  const json = JSON.stringify(IB.netSnap());
+  t.ok(json.length > 2000, 'a snapshot is a substantial thing (' + json.length + ' bytes)');
+
+  step(10);
+  t.ok(IB.netHash() !== at, 'the board really moves on from there');
+  t.ok(IB.netLoad(JSON.parse(json)), 'the snapshot loads');
+  t.ok(IB.netHash() === at, 'and puts the board back exactly where it was');
+
+  // The part that matters: identical FUTURES, not just an identical moment.
+  const runOn = () => { const out = []; for (let i = 0; i < 300; i++){ IB.update(1 / 30); if (i % 75 === 0) out.push(IB.netHash()); } return out.join(','); };
+  IB.netLoad(JSON.parse(json)); const r1 = runOn();
+  IB.netLoad(JSON.parse(json)); const r2 = runOn();
+  t.ok(r1 === r2, 'two runs from one snapshot are identical');
+
+  // ...and identical to a machine that never drifted at all.
+  IB.newMatch({ diff:'veteran', seed:9800 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[0], 'mage'); IB.createHero(G.sides[1], 'fighter');
+  for (const s of G.sides) for (const h of s.heroes){ h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h); }
+  step(70);
+  const clean = runOn();
+  t.ok(clean === r1, 'and indistinguishable from a run that never drifted — which is the whole point');
+
+  // Object references survive the trip. A unit whose target became null, or a
+  // hero pointing at a body that no longer exists, is a desync a few ticks later.
+  {
+    IB.netLoad(JSON.parse(json));
+    const bodies = IB.netBodies();
+    t.ok(bodies.length === G.units.length + G.sides.reduce((a, s) => a + s.heroes.filter(h => !G.units.includes(h)).length, 0),
+      'every body is accounted for exactly once');
+    const withTarget = G.units.filter(u => u.target);
+    t.ok(withTarget.every(u => u.target === null || bodies.includes(u.target) || u.target.struct),
+      'and every target points at something that is actually on the board');
+    const heroes = G.sides.flatMap(s => s.heroes);
+    t.ok(heroes.every(h => G.sides[h.side].heroes.includes(h)), 'heroes are still owned by their own side');
+    t.ok(heroes.filter(h => !h.dead).every(h => G.units.includes(h) || !h.inLane),
+      'and a living hero in the lane is still one of the bodies on the bridge');
+  }
+
+  // Two machines, one drifts, the host puts it right.
+  {
+    const H = loadGame({}), J = loadGame({});
+    // The wire has to exist BEFORE the match starts: netStart publishes its
+    // first batch on the way out, and a machine that never heard that batch
+    // stalls at the end of the primed ticks and never moves again.
+    const wire = [];
+    H.NET.send = (o) => wire.push(['J', o]);
+    J.NET.send = (o) => wire.push(['H', o]);
+    H.netStart({ me:0, seed:9801, diff:'veteran' });
+    J.netStart({ me:1, seed:9801, diff:'veteran' });
+    const pump = (n) => {
+      for (let i = 0; i < n; i++){
+        while (wire.length){ const [to, o] = wire.shift(); (to === 'H' ? H : J).netRecv(JSON.parse(JSON.stringify(o))); }
+        H.netStep(); J.netStep();
+      }
+    };
+    pump(120);
+    t.ok(H.NET.tick > 60 && J.NET.tick > 60, 'both machines got going (' + H.NET.tick + '/' + J.NET.tick + ')');
+    t.ok(H.netHash() === J.netHash(), 'and agree before anything is broken');
+
+    // Break the joiner on purpose, the way a real drift would.
+    J.G.sides[0].res.gold += 5;
+    pump(90);
+    t.ok(J.NET.resyncs > 0 || H.NET.resyncs > 0, 'the drift was noticed and a resync was attempted');
+    t.ok(H.netHash() === J.netHash(),
+      'and the two boards agree again afterwards (' + H.netHash() + ' / ' + J.netHash() + ')');
+    t.ok(J.NET.desyncAt === -1, 'with the joiner no longer flagged as desynced');
+
+    // And it keeps running from there rather than limping.
+    const before = J.NET.tick;
+    pump(60);
+    t.ok(J.NET.tick > before, 'the match carries on afterwards (' + before + ' -> ' + J.NET.tick + ')');
+    t.ok(H.netHash() === J.netHash(), 'still in step a couple of seconds later');
+
+    // A drift that will not stay fixed must eventually stop, not loop forever.
+    for (let i = 0; i < IB.SYNC_MAX + 3; i++){ J.G.sides[0].res.gold += 5; pump(70); }
+    t.ok(H.NET.resyncs <= IB.SYNC_MAX + 1,
+      'a match that keeps drifting gives up rather than resyncing forever (' + H.NET.resyncs + ')');
+  }
+}
+
+/* ============================================== and it says what happened
+   A desync or a dead socket used to leave one sentence in the advice bar and
+   nothing to work from. */
+{
+  IB.netEnd();
+  IB.netStart({ me:1, seed:9900 });
+  t.ok(Array.isArray(IB.NET.diary) && IB.NET.diary.length > 0, 'starting a match writes the first line');
+  t.ok(IB.NET.diary.some(e => e.kind === 'start' && /seat 1/.test(e.detail)), 'which records the seat and the seed');
+
+  // The most useful line in the whole log: what disagreed, and by how much.
+  IB.NET.hashes.set(30, 111); IB.netRecv({ k:'hash', tick:30, h:222 });
+  const d = IB.NET.diary.find(e => e.kind === 'DESYNC');
+  t.ok(!!d, 'a drift is written down');
+  t.ok(/mine 111/.test(d.detail) && /theirs 222/.test(d.detail),
+    'with BOTH hashes, so the two reports can be compared (' + d.detail + ')');
+  t.ok(/tick 30/.test(d.detail), 'and the tick it happened on');
+
+  // A losing socket has to say which kind of losing.
+  IB.netRecv({ k:'peerGone', side:0 });
+  t.ok(IB.NET.diary.some(e => e.kind === 'PEER GONE'), 'a peer going away is written down');
+
+  const rep = IB.netReport();
+  t.ok(/seat\s+1/.test(rep), 'the report names the seat');
+  t.ok(/DESYNCED at tick 30/.test(rep), 'and says the match desynced, and where');
+  t.ok(/PEER LOST/.test(rep), 'and that the other player went');
+  t.ok(/seed\s+\d/.test(rep) && /tick\s+\d/.test(rep), 'and carries the seed and the tick');
+  t.ok(/mine 111/.test(rep), 'and contains the log itself');
+  t.ok(rep.split('\n').length > 12, 'it is a report rather than a sentence (' + rep.split('\n').length + ' lines)');
+
+  // It must not grow without limit — this is left on for the whole match.
+  for (let i = 0; i < IB.DIARY_MAX + 120; i++) IB.netDiary('noise', 'x');
+  t.ok(IB.NET.diary.length <= IB.DIARY_MAX, 'the log is capped (' + IB.NET.diary.length + '/' + IB.DIARY_MAX + ')');
+  t.ok(IB.NET.diary[IB.NET.diary.length - 1].kind === 'noise', 'and keeps the most recent');
+
+  // And it is reachable without a console.
+  IB.showNetReport();
+  t.ok(/Network report/.test(G.sheet) && /netcopy/.test(G.sheet), 'there is a sheet for it with a copy button');
+  const wiring = SRC.slice(SRC.indexOf('function wire()'));
+  t.ok(/dataset\.net === '1'/.test(wiring), 'and the advice bar opens it when the match is in trouble');
+  IB.netEnd();
 }
 
 IB.draw();
