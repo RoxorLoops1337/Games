@@ -1523,7 +1523,16 @@ function killThing(t, src){
   if (t.isHero) onHeroDeath(t, src);
   else {
     shareXp(t.x, 36 + 3.6 * G.wave, src);
-    if (!HEADLESS){ burstFx(t.x, t.y, SIDE_COL[t.side], 7); sfx('die', t.x); }
+    if (!HEADLESS){
+      // Bodies used to vanish between frames. Something that died should leave
+      // a mark on the ground and a puff going up, or a wave wiping out four
+      // minions looks like a rendering glitch.
+      burstFx(t.x, t.y, SIDE_COL[t.side], t.isHero ? 16 : 9);
+      waveFx(t.x, t.y, t.isHero ? 2.4 : 1.3, SIDE_COL[t.side], .45);
+      moteFx(t.x, t.y, SIDE_COL2[t.side] || '#ffffff', t.isHero ? 8 : 4, .7);
+      if (t.isHero) shake(1.4, t.x);
+      sfx('die', t.x);
+    }
     const i = G.units.indexOf(t); if (i >= 0) G.units.splice(i, 1);
   }
 }
@@ -1629,16 +1638,25 @@ function basicAttack(u, tgt){
       const ch = passVal(u, 'chainHit');
       if (ch && u.atkN % 5 === 0) chainHit(u, tgt, ch, 2);
     }
-    if (crit && !HEADLESS) burstFx(tgt.x, tgt.y, '#ffcf4d', 5);
+    if (crit && !HEADLESS){
+      // A crit was five extra sparks, indistinguishable from an ordinary hit.
+      burstFx(tgt.x, tgt.y, '#ffcf4d', 10);
+      arcFx(tgt.x, tgt.y, Math.atan2(tgt.y - u.y, tgt.x - u.x), 2.2, '#ffe08a');
+      shake(.8, tgt.x);
+    }
     return done;
   };
   if (ranged) shoot(u, tgt, land, magic ? '#c69bff' : (u.struct ? '#ffd98a' : SIDE_COL2[u.side]));
   else land();
 }
 
-function shoot(u, tgt, onHit, col){
+// `kind` is for the renderer only: 'bolt' is a spell, anything else is a shaft.
+// A volley of arrows and a mage's bolt used to be the same two circles, which
+// is a large part of why a fight was hard to read.
+function shoot(u, tgt, onHit, col, kind){
   sfx('shot', u.x);
-  G.projs.push({ x:u.x, y:u.y, z:u.struct ? 2.6 : .8, tgt, onHit, col, sp:tgt.struct ? 34 : 26, dead:false, tr:[] });
+  G.projs.push({ x:u.x, y:u.y, z:u.struct ? 2.6 : .8, tgt, onHit, col, sp:tgt.struct ? 34 : 26,
+    dead:false, tr:[], kind:kind || (u.magic ? 'bolt' : 'shaft'), ax:0, ay:0 });
 }
 
 function areaHit(src, x, y, rad, amt, o){
@@ -1821,8 +1839,13 @@ function projStep(dt){
     const dx = t.x - p.x, dy = t.y - p.y, d = hyp(dx, dy);
     const step = p.sp * dt;
     if (d <= step + .3){ p.onHit(); G.projs.splice(i, 1); continue; }
+    p.ax = dx / d; p.ay = dy / d;                 // which way it is pointing
     p.x += dx / d * step; p.y += dy / d * step;
     p.z = Math.max(.6, p.z - dt * 2);
+    // Where it has just been. Deterministic — these are simulation positions —
+    // so both machines draw the same streak, and nothing reads it back.
+    p.tr.push(p.x, p.y, p.z);
+    if (p.tr.length > 18) p.tr.splice(0, 3);
   }
 }
 
@@ -2544,12 +2567,12 @@ function castSkill(h, sk, tgt){
         if (s.slow) applySlow(tgt, s.slow, s.slowT || 2);
         if (s.pierce) areaHit(h, tgt.x + dirOf(h.side) * 2, tgt.y, 1.6, pw * .5, { magic:s.magic, ability:true });
       };
-      shoot(h, tgt, land, s.magic ? '#c69bff' : '#ffe08a');
+      shoot(h, tgt, land, s.magic ? '#c69bff' : '#ffe08a', s.magic ? 'bolt' : 'shaft');
       break;
     }
     case 'volley': {
       if (!tgt) break;
-      for (let i = 0; i < (s.shots || 3); i++) shoot(h, tgt, () => { if (!tgt.dead) abilityDmg(h, tgt, pw, s.magic); }, '#ffe08a');
+      for (let i = 0; i < (s.shots || 3); i++) shoot(h, tgt, () => { if (!tgt.dead) abilityDmg(h, tgt, pw, s.magic); }, '#ffe08a', 'shaft');
       break;
     }
     case 'nova': {
@@ -2583,6 +2606,7 @@ function castSkill(h, sk, tgt){
       const t = s.ally ? (lowAlly(h, s.rng || 6) || h) : h;
       healUnit(t, skVal(s.heal, r) + (s.apR || 0) * apBase(h, s));
       healFx(t.x, t.y);
+      if (t !== h) linkFx(h.x, h.y, t.x, t.y, '#7fdc8a');
       break;
     }
     case 'regen': {
@@ -2591,6 +2615,7 @@ function castSkill(h, sk, tgt){
     }
     case 'shield': {
       const t = s.ally ? (lowAlly(h, s.rng || 6) || h) : h;
+      if (t !== h && !HEADLESS) linkFx(h.x, h.y, t.x, t.y, '#cfe6ff');
       t.shield = Math.max(t.shield, skVal(s.shield, r) + (s.apR || 0) * apBase(h, s));
       t.shT = dur || 6;
       if (s.barm && t.isHero) addBuff(t, { t:dur || 6, barm:s.barm, bmr:s.bmr || 0, tag:'fort' });
@@ -2606,8 +2631,10 @@ function castSkill(h, sk, tgt){
       const aoe = s.aoe || 8;
       for (const a of G.sides[h.side].heroes)
         if (!a.dead && Math.abs(a.x - h.x) < aoe) addBuff(a, { t:dur, tag:s.id, bas:s.bas || 0, bad:s.bad || 0, bms:s.bms || 0, barm:s.barm || 0 });
-      for (const u of teamTargets(h, aoe))
+      for (const u of teamTargets(h, aoe)){
         u.mb = { t:dur, ad:(s.bad || 0) / 40 + (s.bas || 0), ms:s.bms || 0 };
+        if (!HEADLESS) linkFx(h.x, h.y, u.x, u.y, '#ffcf4d');
+      }
       break;
     }
     case 'teamheal': {
@@ -2616,9 +2643,13 @@ function castSkill(h, sk, tgt){
       for (const a of G.sides[h.side].heroes){
         if (a.dead || Math.abs(a.x - h.x) >= aoe) continue;
         healUnit(a, amt); healFx(a.x, a.y);
+        if (a !== h && !HEADLESS) linkFx(h.x, h.y, a.x, a.y, '#7fdc8a');
         if (s.shield){ a.shield = Math.max(a.shield, skVal(s.shield, r)); a.shT = 6; }
       }
-      for (const u of teamTargets(h, aoe)){ healUnit(u, amt); healFx(u.x, u.y); }
+      for (const u of teamTargets(h, aoe)){
+        healUnit(u, amt); healFx(u.x, u.y);
+        if (!HEADLESS) linkFx(h.x, h.y, u.x, u.y, '#7fdc8a');
+      }
       break;
     }
     case 'dot': case 'storm': {
@@ -3017,11 +3048,15 @@ function castCol(s){ return s.magic ? '#b98bff' : (CAST_COL[s.tag] || '#ffa96a')
    simulation's, and how much of it gets made depends on how busy the frame is —
    which is precisely why it must not share a generator with the game. */
 const FX_CAP = 300;
-// Capacity only, deliberately not gated on HEADLESS: castFx is already only
-// reached from a real page, and leaving these callable under the harness is
-// what lets the suite drive every cast shape through the strict canvas — which
-// is where a bad colour string or a bad context call actually gets caught.
-const fxRoom = (n) => G.fx.length + n < FX_CAP;
+// Decoration must cost NOTHING when nobody is watching — the headless suite
+// plays hundreds of matches and every spark it does not make is time it does
+// not spend. But the suite also has to be able to look at what a cast draws,
+// because the strict stub context is where a bad colour string gets caught.
+//
+// So it is off under HEADLESS and the suite opts in around the block that
+// inspects it, rather than one of those two needs losing to the other.
+let fxForce = false;
+const fxRoom = (n) => (fxForce || !HEADLESS) && G.fx.length + n < FX_CAP;
 
 function beamFx(x, y, x2, y2, col, w, life){
   if (!fxRoom(1)) return;
@@ -3137,12 +3172,29 @@ function castFx(h, s, tgt){
       t:1.4, dur:1.4, sc:1, vy:-.55, cast:true, ult });
 }
 // A blur of where the hero came from, so a dash reads as movement.
+// A dash is the most physical thing a hero does and it looked like five faint
+// copies. It now leaves a streak along the whole path, afterimages that fade
+// back along it, and a puff at both ends — so you can see WHERE FROM and WHERE
+// TO, which is the entire point of a gap-closer.
 function dashFx(h, x0, y0){
-  if (HEADLESS || G.fx.length > 220) return;
-  for (let i = 1; i <= 5; i++)
-    G.fx.push({ k:'ghost', x:lerp(x0, h.x, i / 6), y:lerp(y0, h.y, i / 6),
-      col:SIDE_COL[h.side], t:.16 + i * .03, dur:.34, r:1 });
+  if (!fxRoom(10)) return;
+  const col = SIDE_COL[h.side];
+  beamFx(x0, y0, h.x, h.y, col, 6, .26);
+  for (let i = 1; i <= 7; i++)
+    G.fx.push({ k:'ghost', x:lerp(x0, h.x, i / 8), y:lerp(y0, h.y, i / 8),
+      col, t:.10 + i * .035, dur:.4, r:1 });
+  waveFx(x0, y0, 1.6, col, .3);            // the ground it pushed off
+  burstFx(h.x, h.y, col, 7);               // and where it arrived
 }
+// Who did that to whom. A heal landed on somebody four bodies away with
+// nothing connecting the two, so the only way to know a support had done
+// anything was to watch a health bar and guess. A line that lives for a third
+// of a second answers it.
+function linkFx(x, y, x2, y2, col){
+  if (!fxRoom(1)) return;
+  G.fx.push({ k:'link', x, y, x2, y2, col, t:.38, dur:.38 });
+}
+
 function healFx(x, y, col){
   if (HEADLESS || G.fx.length > 240) return;
   for (let i = 0; i < 6; i++)
@@ -3751,6 +3803,11 @@ function drawUnit(c, u){
   // brightening pool of their skill's colour. Without it the effects all happen
   // somewhere ELSE — at the target, in the air, on the ground — and the hero
   // that did the thing is the one part of it you cannot see.
+  // Getting hit knocks you back. hitT already existed and only ever changed the
+  // body's COLOUR for a frame — so twenty bodies trading blows read as twenty
+  // bodies standing still, occasionally flashing. A flinch away from the enemy
+  // costs nothing and makes a brawl look like one.
+  const flinch = u.hitT > 0 ? (u.hitT / .18) * 2.6 * sc * -dirOf(u.side) : 0;
   let cast = 0;
   if (u.castT > 0){
     cast = clamp(u.castT / .32, 0, 1);
@@ -3759,7 +3816,7 @@ function drawUnit(c, u){
     ell(c, p[0], p[1] + 1, gr, gr * .45, u.castCol || '#ffe08a');
     c.globalAlpha = 1;
   }
-  const bx = p[0], by = p[1] - 2 * sc + bob - cast * 3.2 * sc;
+  const bx = p[0] + flinch, by = p[1] - 2 * sc + bob - cast * 3.2 * sc;
   if (u.kind === 'cannon'){ drawCannon(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   if (u.kind === 'super'){ drawOgre(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   // legs + body
@@ -3822,10 +3879,55 @@ function drawUnit(c, u){
 // by the three silhouettes so a cannon can catch fire like anybody else.
 function drawUnitMarks(c, u, bx, by, p, sc){
   const col = SIDE_COL[u.side];
+  // A shield is a thing that BREAKS, so it reads as a surface rather than a
+  // smudge — and it flickers harder as it runs out of time.
   if (u.shield > 0){
-    c.globalAlpha = .3; ell(c, bx, by - 6 * sc, 9 * sc, 11 * sc, '#cfe6ff'); c.globalAlpha = 1;
+    const fade = u.shT > 0 ? clamp(u.shT / 2, .35, 1) : 1;
+    c.globalAlpha = .18 * fade;
+    ell(c, bx, by - 6 * sc, 9.5 * sc, 11.5 * sc, '#cfe6ff');
+    c.globalAlpha = (.5 + .25 * Math.sin(G.t * 9)) * fade;
+    c.strokeStyle = '#dceaff'; c.lineWidth = Math.max(1, 1.5 * cam.z);
+    c.beginPath(); c.ellipse(bx, by - 6 * sc, 9.5 * sc, 11.5 * sc, 0, 0, 6.2832); c.stroke();
+    c.globalAlpha = 1;
   }
-  if (u.burn){ c.globalAlpha = .5; ell(c, bx, by - 6 * sc, 5 * sc, 8 * sc, '#ff8a3d'); c.globalAlpha = 1; }
+  if (u.burn){
+    c.globalAlpha = .45; ell(c, bx, by - 6 * sc, 5 * sc, 8 * sc, '#ff8a3d');
+    // flames rather than a wash, so burning reads as burning
+    for (let i = 0; i < 3; i++){
+      const a = G.t * 9 + i * 2.1, lift = (Math.sin(a) * .5 + .5);
+      c.globalAlpha = .5 - lift * .3;
+      ell(c, bx + Math.cos(a * .7 + i) * 3 * sc, by - (7 + lift * 7) * sc, 1.9 * sc, 2.8 * sc, i & 1 ? '#ffd06a' : '#ff8a3d');
+    }
+    c.globalAlpha = 1;
+  }
+  // Slowed. There was no sign of this at all, and it is half of what crowd
+  // control does — a body walking at 40% looked exactly like one walking.
+  if (u.slowT > 0 && u.slowP > 0){
+    c.globalAlpha = .35 + .2 * Math.sin(G.t * 4);
+    c.strokeStyle = '#9ad8ff'; c.lineWidth = Math.max(1, 1.4 * cam.z);
+    c.beginPath(); c.ellipse(bx, p[1], 8 * sc, 3.6 * sc, 0, 0, 6.2832); c.stroke();
+    for (let i = 0; i < 3; i++){
+      const a = -G.t * 2 + i * 2.1;
+      c.globalAlpha = .5;
+      ell(c, bx + Math.cos(a) * 7 * sc, p[1] + Math.sin(a) * 3 * sc, 1.1 * sc, 1.1 * sc, '#9ad8ff');
+    }
+    c.globalAlpha = 1;
+  }
+  // Marked for extra damage — the reason a hero suddenly evaporates.
+  if (u.markT > 0){
+    const puls = .6 + .4 * Math.sin(G.t * 8);
+    c.globalAlpha = puls;
+    c.strokeStyle = '#ff7ad9'; c.lineWidth = Math.max(1.2, 2 * cam.z);
+    const my = by - 26 * sc, r = 4 * sc;
+    c.beginPath(); c.arc(bx, my, r, 0, 6.2832); c.stroke();
+    c.beginPath();
+    c.moveTo(bx - r * 1.8, my); c.lineTo(bx - r * .6, my);
+    c.moveTo(bx + r * .6, my); c.lineTo(bx + r * 1.8, my);
+    c.moveTo(bx, my - r * 1.8); c.lineTo(bx, my - r * .6);
+    c.moveTo(bx, my + r * .6); c.lineTo(bx, my + r * 1.8);
+    c.stroke();
+    c.globalAlpha = 1;
+  }
   if (u.stunT > 0){
     c.fillStyle = '#ffcf4d';
     for (let i = 0; i < 3; i++){
@@ -3855,8 +3957,26 @@ function drawLane(c){
   // zones under everyone
   for (const z of G.zones){
     const p = lp(z.x, z.y);
-    c.globalAlpha = .22 + .1 * Math.sin(G.t * 6);
-    ell(c, p[0], p[1], z.r * LS() * .96, z.r * LS() * .55, z.magic ? '#a06bff' : '#ff8a3d');
+    const rx = z.r * LS() * .96, ry = z.r * LS() * .55;
+    const col = z.magic ? '#a06bff' : '#ff8a3d', hot = z.magic ? '#d9b6ff' : '#ffd06a';
+    // A lingering zone is one of the few things on this board that keeps
+    // hurting after the cast is over, and it was a flat pulsing disc. It now
+    // has an edge you can stand outside of, a churn inside it, and it visibly
+    // runs down — the three things a player needs to decide whether to walk in.
+    const life = clamp(z.t / Math.max(.1, z.dur), 0, 1);
+    c.globalAlpha = (.16 + .07 * Math.sin(G.t * 6)) * (.35 + .65 * life);
+    ell(c, p[0], p[1], rx, ry, col);
+    c.globalAlpha = (.45 + .2 * Math.sin(G.t * 6)) * (.35 + .65 * life);
+    c.strokeStyle = hot; c.lineWidth = Math.max(1, 2 * cam.z);
+    c.beginPath(); c.ellipse(p[0], p[1], rx, ry, 0, 0, 6.2832); c.stroke();
+    // the churn: a few motes turning inside the circle, keyed off the clock so
+    // it costs nothing and stays put
+    for (let i = 0; i < 5; i++){
+      const a = G.t * (z.magic ? 1.6 : 2.2) + i * 1.257;
+      const rr2 = .45 + .45 * ((i * 7 % 5) / 5);
+      c.globalAlpha = (.3 + .3 * Math.sin(G.t * 5 + i)) * life;
+      ell(c, p[0] + Math.cos(a) * rx * rr2, p[1] + Math.sin(a) * ry * rr2, 2.2 * cam.z, 2.2 * cam.z, hot);
+    }
     c.globalAlpha = 1;
   }
   const draws = [];
@@ -3867,8 +3987,32 @@ function drawLane(c){
   // projectiles
   for (const p of G.projs){
     const q = lp(p.x, p.y, p.z);
-    c.globalAlpha = .55; ell(c, q[0], q[1], 4.5 * cam.z, 4.5 * cam.z, p.col); c.globalAlpha = 1;
-    ell(c, q[0], q[1], 2.2 * cam.z, 2.2 * cam.z, '#ffffff');
+    // the streak it has just cut through the air
+    if (p.tr.length >= 6){
+      c.lineCap = 'round';
+      for (let i = 0; i + 5 < p.tr.length; i += 3){
+        const a = lp(p.tr[i], p.tr[i + 1], p.tr[i + 2]);
+        const b = lp(p.tr[i + 3], p.tr[i + 4], p.tr[i + 5]);
+        c.globalAlpha = .10 + .5 * (i / p.tr.length);
+        c.strokeStyle = p.col; c.lineWidth = (p.kind === 'bolt' ? 3.2 : 1.9) * cam.z * (.4 + i / p.tr.length);
+        c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+      }
+      c.lineCap = 'butt';
+    }
+    c.globalAlpha = 1;
+    if (p.kind === 'bolt'){
+      // a spell: a soft body around a hot core
+      c.globalAlpha = .5; ell(c, q[0], q[1], 5.2 * cam.z, 5.2 * cam.z, p.col); c.globalAlpha = 1;
+      ell(c, q[0], q[1], 2.4 * cam.z, 2.4 * cam.z, '#ffffff');
+    } else {
+      // a shaft: drawn along the direction it is travelling, not as a dot
+      const nx = p.ax || 1, ny = (p.ay || 0) * .55;
+      const L = 7 * cam.z;
+      c.strokeStyle = p.col; c.lineWidth = 2 * cam.z; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(q[0] - nx * L, q[1] - ny * L); c.lineTo(q[0] + nx * L * .5, q[1] + ny * L * .5); c.stroke();
+      c.lineCap = 'butt';
+      ell(c, q[0] + nx * L * .5, q[1] + ny * L * .5, 1.7 * cam.z, 1.7 * cam.z, '#ffffff');
+    }
   }
   // particles
   for (const p of G.fx){
@@ -3913,6 +4057,17 @@ function drawLane(c){
       c.globalAlpha = a * .75; c.strokeStyle = p.col;
       c.lineWidth = Math.max(1, (1 + a * 3) * cam.z);
       c.beginPath(); c.ellipse(q[0], q[1], p.r * LS() * g, p.r * LS() * .5 * g, 0, 0, 6.2832); c.stroke();
+    } else if (p.k === 'link'){
+      const q = lp(p.x, p.y, 1.1), q2 = lp(p.x2, p.y2, 1.1);
+      const g = 1 - a;                                  // it draws itself ON over its life
+      const mx = q[0] + (q2[0] - q[0]) * Math.min(1, g * 1.6);
+      const my = q[1] + (q2[1] - q[1]) * Math.min(1, g * 1.6);
+      c.lineCap = 'round';
+      c.globalAlpha = a * .55; c.strokeStyle = p.col; c.lineWidth = 4.5 * cam.z;
+      c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
+      c.globalAlpha = a; c.lineWidth = 1.6 * cam.z;
+      c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
+      c.lineCap = 'butt';
     } else if (p.k === 'mote'){
       const q = lp(p.x, p.y, p.z);
       c.globalAlpha = a * .9; ell(c, q[0], q[1], p.r * cam.z, p.r * cam.z, p.col);
@@ -6614,7 +6769,8 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
-  beamFx, arcFx, waveFx, moteFx, ultFlourish, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
+  beamFx, arcFx, waveFx, moteFx, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
+  get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
   netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,
   get BSC(){ return BSC; }, set BSC(v){ BSC = v; },

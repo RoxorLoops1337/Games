@@ -4639,6 +4639,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
    the name floating up. Seventeen distinct shapes, one picture between them. */
 {
   IB.netEnd();
+  IB.fxForce = true;
   IB.newMatch({ diff:'veteran', seed:7000 });
   rich(P());
   P().plot[2] = { type:'tavern', lvl:3, tile:2 };
@@ -4743,6 +4744,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.fxStep(.1);
     t.ok(G.fx.every((f, i) => f.z > z0[i]), 'motes rise');
   }
+  IB.fxForce = false;
 }
 
 /* ==================================== a drifted match puts itself back together
@@ -4969,6 +4971,141 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(/role === 'staying'/.test(rj) && /netSendSnap\(true\)/.test(rj),
     'the one that stayed hands the board over');
   t.ok(/awaitSync = true/.test(rj), 'and the one returning waits for it rather than playing a phantom match');
+}
+
+/* ============================================ you can see what is happening
+   The fight was legible only if you already knew the rules: projectiles were
+   two circles whatever they were, a heal landed on somebody four bodies away
+   with nothing connecting the two, and being slowed or marked looked exactly
+   like being fine. */
+{
+  IB.netEnd();
+  IB.fxForce = true;               // look at the decoration, which is off by default here
+  IB.newMatch({ diff:'veteran', seed:7300 });
+  for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+  IB.createHero(G.sides[0], 'marksman'); IB.createHero(G.sides[1], 'fighter');
+  for (const s of G.sides) for (const h of s.heroes){ h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h); }
+  step(45);
+
+  // --- an arrow is not a spell
+  {
+    const a = G.sides[0].heroes[0], b = G.sides[1].heroes[0];
+    G.projs.length = 0;
+    IB.shoot(a, b, () => {}, '#ffe08a', 'shaft');
+    IB.shoot(a, b, () => {}, '#c69bff', 'bolt');
+    t.ok(G.projs.length === 2, 'two projectiles in the air');
+    t.ok(G.projs[0].kind === 'shaft' && G.projs[1].kind === 'bolt',
+      'and they know which of them is a shaft and which is a spell');
+    t.ok(G.projs.every(p => Array.isArray(p.tr)), 'each carries a trail');
+    // ...and the trail actually fills, which is the part that never worked:
+    // `tr` was allocated on every projectile since the beginning and never
+    // written to, so a volley of arrows was a scatter of dots.
+    for (let i = 0; i < 6; i++) IB.projStep(1 / 30);
+    const live = G.projs.filter(p => p.tr.length);
+    t.ok(live.length > 0 && live.every(p => p.tr.length >= 3),
+      'and it fills as the thing flies (' + (live[0] ? live[0].tr.length / 3 : 0) + ' points)');
+    t.ok(live.every(p => Math.abs(p.ax) + Math.abs(p.ay) > 0),
+      'and each knows which way it is pointing, so a shaft can be drawn along its flight');
+    // it must not grow without bound over a long flight
+    for (let i = 0; i < 200; i++) IB.projStep(1 / 30);
+    t.ok(G.projs.every(p => p.tr.length <= 18), 'the trail is capped rather than growing forever');
+  }
+
+  // --- a heal has a visible source and a visible recipient
+  {
+    G.fx.length = 0;
+    IB.linkFx(0, 0, 6, 1, '#7fdc8a');
+    const link = G.fx.find(f => f.k === 'link');
+    t.ok(!!link, 'a heal across a gap draws a line between the two');
+    t.ok(link.x2 === 6 && link.y2 === 1, 'that actually reaches the recipient');
+  }
+
+  // --- the status a body is under is on the body
+  {
+    const u = G.units.find(x => !x.isHero) || G.sides[0].heroes[0];
+    for (const [field, what] of [['slowT', 'slowed'], ['markT', 'marked'], ['stunT', 'stunned']]){
+      const before = u[field];
+      u[field] = 3; if (field === 'slowT') u.slowP = .4;
+      IB.draw();
+      t.ok(true, 'a ' + what + ' body draws clean');
+      u[field] = before;
+    }
+    u.shield = 40; u.shT = 1.2; IB.draw();
+    u.burn = { dps:5, t:3, src:null }; IB.draw();
+    t.ok(true, 'and so do a shielded and a burning one');
+    u.shield = 0; u.burn = null;
+  }
+
+  // --- a dash shows where from and where to
+  {
+    G.fx.length = 0;
+    const h = G.sides[0].heroes[0];
+    IB.dashFx(h, h.x - 6, h.y);
+    const kinds = new Set(G.fx.map(f => f.k));
+    t.ok(kinds.has('ghost'), 'a dash leaves afterimages');
+    t.ok(kinds.has('beam'), 'and a streak along the whole path, so the gap it closed is visible');
+    t.ok(G.fx.some(f => f.k === 'wave'), 'with a push-off where it started');
+  }
+
+  /* ---- and NONE of it may touch the simulation ---------------------------- */
+  {
+    const before = IB.seedNow();
+    IB.linkFx(0, 0, 3, 3, '#7fdc8a');
+    IB.dashFx(G.sides[0].heroes[0], 1, 1);
+    IB.moteFx(0, 0, '#ffffff', 8, 1);
+    IB.waveFx(0, 0, 3, '#ffffff', .4);
+    IB.beamFx(0, 0, 4, 4, '#ffffff', 3, .2);
+    IB.arcFx(0, 0, .5, 2, '#ffffff');
+    for (let i = 0; i < 40; i++) IB.projStep(1 / 30);
+    t.ok(IB.seedNow() === before,
+      'no effect, trail or flourish advances the simulation’s random stream by a single step');
+  }
+
+  // The whole point, stated once: two runs of one seed still land on the same
+  // number after all of the above. Effects that could change the match would be
+  // a desync in a two-player game, and this is the assertion that would catch it.
+  {
+    const run = () => {
+      IB.newMatch({ diff:'veteran', seed:7301 });
+      for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+      IB.createHero(G.sides[0], 'mage'); IB.createHero(G.sides[1], 'marksman');
+      for (const s of G.sides) for (const h of s.heroes){ h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h); }
+      const out = [];
+      for (let i = 0; i < 30 * 60; i++){ IB.update(1 / 30); if (i % 300 === 0) out.push(IB.netHash()); }
+      return out.join(',');
+    };
+    const a = run(), b = run();
+    t.ok(a === b, 'a minute of the same seed still hashes identically, twice');
+    t.ok(a.split(',').length > 3 && new Set(a.split(',')).size > 1,
+      'and the match really was moving while it did (' + new Set(a.split(',')).size + ' distinct hashes)');
+  }
+
+  // A frame with everything on it at once, through the strict context.
+  {
+    IB.newMatch({ diff:'veteran', seed:7302 });
+    for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
+    IB.createHero(G.sides[0], 'mage'); IB.createHero(G.sides[1], 'fighter');
+    for (const s of G.sides) for (const h of s.heroes){ h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h); }
+    step(60);
+    const h = G.sides[0].heroes[0];
+    G.zones.push({ x:h.x + 2, y:0, r:3, dps:10, t:4, dur:5, tick:0, side:0, src:h, magic:true, slow:0, follow:null });
+    G.zones.push({ x:h.x - 2, y:1, r:2, dps:8, t:1, dur:5, tick:0, side:0, src:h, magic:false, slow:.3, follow:null });
+    for (const u of G.units.slice(0, 6)){
+      u.shield = 30; u.shT = 1.4; u.slowT = 2; u.slowP = .4; u.markT = 2;
+      u.burn = { dps:4, t:2, src:null }; u.hitT = .12; u.stunT = 1;
+    }
+    IB.shoot(h, G.units[0] || h, () => {}, '#c69bff', 'bolt');
+    IB.shoot(h, G.units[0] || h, () => {}, '#ffe08a', 'shaft');
+    for (let i = 0; i < 5; i++) IB.projStep(1 / 30);
+    IB.linkFx(h.x, h.y, h.x + 5, h.y + 1, '#7fdc8a');
+    IB.dashFx(h, h.x - 5, h.y);
+    for (const k of [...new Set(IB.SKILLS.map(x => x.k))]) IB.castFx(h, IB.SKILLS.find(x => x.k === k), G.units[0] || h);
+    IB.draw();
+    IB.fxStep(.1); IB.draw();
+    IB.fxStep(.2); IB.draw();
+    t.ok(true, 'a frame carrying every effect, status, zone and projectile at once draws clean');
+  }
+  IB.fxForce = false;
 }
 
 IB.draw();
