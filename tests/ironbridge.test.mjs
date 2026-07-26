@@ -225,9 +225,14 @@ t.ok(true, 'drawing an empty bridge is harmless');
   const x0 = u.x;
   step(6);
   t.ok(u.x > x0 + 5, 'minions march up the bridge');
-  step(40);
-  const contact = G.units.some(a => G.units.some(b => b.side !== a.side && Math.abs(a.x - b.x) < 3));
-  t.ok(contact || G.units.length < 8, 'the two waves meet and start trading');
+  let contact = false, traded = false;
+  for (let i = 0; i < 40; i++){
+    step(1);
+    if (G.units.some(a => G.units.some(b => b.side !== a.side && Math.abs(a.x - b.x) < 3))) contact = true;
+    if (G.sides[0].kills + G.sides[1].kills > 0) traded = true;
+  }
+  t.ok(contact, 'the two waves meet in the middle');
+  t.ok(traded, 'and start killing each other');
 }
 
 /* ---------------------------------------------------------------- damage model */
