@@ -3860,8 +3860,8 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // so whoever is applied first takes the first name. Two commands on different
   // sides touching nothing in common would agree even with the ordering broken,
   // and would prove nothing.
-  const a0 = { type:'hero', cls:'fighter', side:0, seq:0 };
-  const b0 = { type:'hero', cls:'marksman', side:1, seq:0 };
+  const a0 = { k:'hero', cls:'fighter', side:0, seq:0 };
+  const b0 = { k:'hero', cls:'marksman', side:1, seq:0 };
   const at = C1.NET.delay + 4;
   // Fill every tick up to the shared one, or they stall before reaching it and
   // the comparison below would be two identical un-run matches — which would
@@ -4179,7 +4179,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.netEnd();
   IB.netStart({ me:1, seed:9200 });
   t.ok(IB.NET.on === true && IB.NET.me === 1, 'in a network match as side 1');
-  IB.NET.pending.push({ type:'worker', side:1, seq:0 });
+  IB.NET.pending.push({ k:'worker', side:1, seq:0 });
   IB.netDeliver(50, 0, []); IB.NET.hashes.set(30, 7); IB.NET.peerHashes.set(30, 8);
 
   IB.netEnd();
@@ -4378,6 +4378,252 @@ t.ok(true, 'drawing an empty bridge is harmless');
 
   IB.netEnd();
   t.ok(IB.acc === 0 && IB.netLast === 0, 'which also clears the arrears, so the next match starts level');
+}
+
+/* ================================ everything works the same in either seat
+   The joiner could not click its own plot: clickTargets() laid every clickable
+   region out with holdSide = 0, so for seat 1 the boxes sat over the LEFT hold
+   while its buildings stood on the right. Nothing was where the game thought.
+
+   Rather than test that one path, run the same battery in BOTH seats and
+   require them to agree. Anything that works for the host and not the joiner
+   fails here, including things nobody has thought of yet. */
+{
+  const inSeat = (seat, fn) => {
+    IB.netEnd();
+    if (seat === 0){ IB.newMatch({ diff:'veteran', seed:8800 }); }
+    else { IB.netStart({ me:1, seed:8800 }); }
+    IB.MY = seat;
+    const r = fn(IB.G.sides[seat], seat);
+    IB.netEnd();
+    return r;
+  };
+
+  // --- the reported bug, as a round trip: put my own plot tile on screen,
+  //     then ask the game what is at that point. It must be that tile.
+  for (const seat of [0, 1]){
+    const got = inSeat(seat, () => {
+      IB.resize && IB.resize();
+      const hits = [];
+      for (const tile of [0, 5, 6, 15]){
+        // where the game DRAWS my tile
+        IB.BSC = 1;
+        const targets = IB.clickTargets().filter(t => (t.kind === 'plot' || t.kind === 'build') && t.tile === tile);
+        if (!targets.length){ hits.push(tile + ':not-drawn'); continue; }
+        const t0 = targets[0];
+        const back = IB.resolvePick(t0.cx, t0.cy);
+        hits.push(tile + ':' + (back && back.tile === tile ? 'ok' : 'got-' + (back && back.tile)));
+      }
+      return hits;
+    });
+    t.ok(got.every(h => h.endsWith(':ok')),
+      'seat ' + seat + ' can click every one of its own plot tiles (' + got.join(' ') + ')');
+  }
+
+  // --- and the clickable regions must be over MY hold, not the other one
+  for (const seat of [0, 1]){
+    const side = inSeat(seat, () => {
+      IB.clickTargets();
+      return IB.holdWorld(0, 0)[0];       // where the grid origin ended up in world x
+    });
+    const expect = seat === 0 ? IB.HOLD_X : C.LANE_LEN - IB.HOLD_X;
+    t.ok(Math.abs(side - expect) < 1,
+      'seat ' + seat + ' lays its clickables over its own hold (x=' + Math.round(side) + ', expected ' + Math.round(expect) + ')');
+  }
+
+  // --- the same battery, both seats, must not throw and must talk about ME
+  const battery = (s, seat) => {
+    const out = {};
+    rich(s);
+    out.dock = IB.dockHtml();
+    out.advice = IB.adviceFor(s);
+    out.over = (() => { G.winner = seat; return IB.overHtml(); })();
+    out.pause = IB.pauseHtml();
+    // the timeline only draws rows for walls that actually fell
+    G.timeline.push({ side:seat, key:'t1', n:'Outer Turret', t:10 });
+    G.timeline.push({ side:seat === 0 ? 1 : 0, key:'t1', n:'Outer Turret', t:12 });
+    out.timeline = IB.timelineHtml();
+    out.foe = IB.foeWarning();
+    out.plot0 = IB.s0Plot(5);
+    out.clicks = IB.clickTargets().length;
+    out.holdX = IB.myHoldX();
+    out.foeSide = IB.foe();
+    out.holds = IB.holdsBoard({ pend:[{}], side:seat, hp:1, mhp:1 });
+    IB.draw();
+    return out;
+  };
+  const r0 = inSeat(0, battery), r1 = inSeat(1, battery);
+
+  t.ok(r0.clicks === r1.clicks, 'both seats offer the same number of clickable things (' + r0.clicks + ' / ' + r1.clicks + ')');
+  t.ok(r0.foeSide === 1 && r1.foeSide === 0, 'each seat knows who its enemy is');
+  t.ok(r0.holdX !== r1.holdX, 'and the two seats look at opposite ends of the bridge');
+  t.ok(!!r0.plot0 && !!r1.plot0, 'both read their own starting buildings off the plot');
+  for (const k of ['dock', 'over', 'pause', 'timeline', 'foe'])
+    t.ok(typeof r0[k] === 'string' && typeof r1[k] === 'string' && r1[k].length > 0,
+      'the ' + k + ' renders in both seats');
+
+  // The result card must call each seat's OWN victory a win.
+  t.ok(/gates are down/.test(r0.over) && /gates are down/.test(r1.over), 'the result card renders for both seats');
+  t.ok(r0.over.indexOf(IB.SIDE_NAME[0]) < r0.over.indexOf(IB.SIDE_NAME[1]),
+    'seat 0 sees its own hold named first in the tally');
+  t.ok(r1.over.indexOf(IB.SIDE_NAME[1]) < r1.over.indexOf(IB.SIDE_NAME[0]),
+    'seat 1 sees its own hold named first in the tally');
+
+  // The timeline says whose walls fell, from the reader's point of view.
+  t.ok(/You lost/.test(r0.timeline) && /You lost/.test(r1.timeline),
+    'the timeline says "You lost" about the reader’s own walls in both seats');
+
+  // Level-up cards freeze the board only outside a network match, and only for
+  // the hold the reader is playing.
+  t.ok(r0.holds === true, 'a one-player match still holds the board for a level-up choice');
+  t.ok(r1.holds === false, 'a network match never does');
+
+  // --- selecting the enemy's structure must not be labelled as mine
+  {
+    IB.netEnd(); IB.netStart({ me:1, seed:8801 }); IB.MY = 1;
+    IB.sel.struct = G.sides[0].structs[0];       // the OTHER hold's turret
+    const html = IB.dockHtml();
+    t.ok(html.includes(IB.SIDE_NAME[0]), 'seat 1 selecting side 0’s turret sees it named as side 0’s');
+    IB.sel.struct = G.sides[1].structs[0];       // its own
+    const own = IB.dockHtml();
+    t.ok(own.includes(IB.SIDE_NAME[1]), 'and its own named as its own');
+    t.ok(html !== own, 'the two read differently — ownership is not hardcoded');
+    IB.sel.struct = null;
+    IB.netEnd();
+  }
+
+  // --- and the "what is coming at you" briefing must be about the enemy
+  {
+    IB.netEnd(); IB.netStart({ me:1, seed:8802 }); IB.MY = 1;
+    G.sides[0].waveKind = 'ogres'; G.sides[1].waveKind = 'levy';
+    const warn = IB.foeWarning();
+    t.ok(/Ogre/i.test(warn), 'seat 1 is warned about side 0’s wave, not its own (' + warn.slice(0, 60) + ')');
+    IB.MY = 0;
+    const warn0 = IB.foeWarning();
+    t.ok(/Levy|levy/i.test(warn0) || warn0 !== warn, 'and seat 0 about side 1’s');
+    IB.netEnd();
+  }
+  IB.MY = 0;
+}
+
+/* ============================ a held or paused board must never skip a tick
+   update() returns early on G.paused and G.held. netStep() advances the tick
+   and publishes orders either way. So anything that sets either flag during a
+   network match stops one machine simulating while its clock and its opponent
+   carry on — a desync with no wrong line of simulation anywhere in it.
+
+   A level-up choice set G.held. Every match desynced the first time anybody
+   levelled a hero, which is to say every match. */
+{
+  IB.netEnd();
+  IB.netStart({ me:0, seed:9500 });
+  for (let n = 0; n < 200; n++){ IB.netDeliver(n, 0, []); IB.netDeliver(n, 1, []); }
+
+  // A pending choice must not hold the board in a network match.
+  const pretend = { pend:[{ kind:'passive', opts:['a'], lvl:3 }], side:0, hp:1, mhp:1 };
+  t.ok(IB.holdsBoard(pretend) === false, 'a level-up choice does not hold a shared board');
+
+  // And even if something sets the flags anyway, the tick must still simulate.
+  for (const [flag, name] of [['held', 'G.held'], ['paused', 'G.paused']]){
+    G[flag] = true;
+    const t0 = G.t, tick0 = IB.NET.tick;
+    IB.netStep();
+    t.ok(IB.NET.tick === tick0 + 1, 'the clock advances with ' + name + ' set');
+    t.ok(G.t > t0, 'and the simulation advances with it (' + name + ' cannot skip a tick)');
+    t.ok(G[flag] === false, 'and the flag is cleared rather than left to bite later');
+  }
+
+  // The pair of them together, which is what a player pressing pause during a
+  // level-up choice would have produced.
+  G.held = true; G.paused = true;
+  const t1 = G.t;
+  IB.netStep();
+  t.ok(G.t > t1, 'both flags at once still cannot stop a network tick');
+
+  // One machine holding while the other does not IS the divergence. Two
+  // network matches from one seed — one left alone, one with a card opened and
+  // pause pressed on top of it — must end on the same number, because holding
+  // is not allowed to skip anything. (Compared against another NETWORK match,
+  // not a solo one: netStart takes the Host out of side 1, so a one-player run
+  // of the same seed is a genuinely different match.)
+  const runNet = (poke) => {
+    IB.netEnd();
+    IB.netStart({ me:0, seed:9501 });
+    for (let n = 0; n < 600; n++){ IB.netDeliver(n, 0, []); IB.netDeliver(n, 1, []); }
+    for (let n = 0; n < 15 * 30; n++){ if (poke) poke(n); IB.netStep(); }
+    const h = IB.netHash();
+    IB.netEnd();
+    return h;
+  };
+  const clean = runNet(null);
+  const held = runNet((n) => {
+    if (n === 100) G.held = true;          // a card opens mid-match
+    if (n === 200) G.paused = true;        // and pause is pressed on top of it
+    if (n === 300){ G.held = true; G.paused = true; }
+  });
+  t.ok(held === clean,
+    'a network match poked with held and paused still ends on the same number as a clean one (' + held + ' vs ' + clean + ')');
+}
+
+/* ================== a command's own arguments must not overwrite its kind
+   sendCmd built its command as Object.assign({ type }, args). Exactly one
+   command carries an argument called `type`: build, whose type is the
+   BUILDING. So sendCmd('build', { tile:3, type:'pit' }) produced a command
+   whose kind was "pit", CMD had no "pit", and netStep dropped it without a
+   word. Nobody could build anything in a two-player match, in either seat, and
+   it failed silently — the button worked, no resources were spent, no message
+   was printed. */
+{
+  // Only the PEER's batches are pre-filled. netDeliver ignores a second batch
+  // for a slot that already has one, so filling our own side's slots in advance
+  // would leave netPublish nowhere to put the orders under test — which is a
+  // fine way to write a test that passes for the wrong reason.
+  const netMatch = (seed) => {
+    IB.netEnd();
+    IB.netStart({ me:0, seed });
+    for (let n = 0; n < 400; n++) IB.netDeliver(n, 1, []);   // the other player, idle
+    rich(G.sides[0]);
+  };
+  const settle = () => { for (let n = 0; n < IB.NET.delay + 8; n++) IB.netStep(); };
+
+  netMatch(9600);
+  IB.NET.pending.length = 0;
+  IB.sendCmd('build', { tile:0, type:'farm' });
+  const c = IB.NET.pending[0];
+  t.ok(!!c, 'a build order is queued');
+  t.ok(c.k === 'build', 'its KIND survives an argument called type (kind=' + c.k + ')');
+  t.ok(c.type === 'farm', 'and the building it names is still there (type=' + c.type + ')');
+  t.ok(!!IB.CMD[c.k], 'so the dispatch table can find it — this is the lookup that silently failed');
+
+  const before = G.sides[0].plot.filter(Boolean).length;
+  settle();
+  t.ok(G.sides[0].plot.filter(Boolean).length > before,
+    'the building actually goes up (' + before + ' -> ' + G.sides[0].plot.filter(Boolean).length + ')');
+  t.ok(G.sides[0].plot[0] && G.sides[0].plot[0].type === 'farm', 'and it is the building that was ordered');
+
+  // The key changed for every command, so every command has to be re-checked —
+  // each against a value that was NOT already true before it was sent.
+  const cases = [
+    ['worker',  {},                    (s) => s.trainQ.filter(q => q.type === 'worker').length],
+    ['job',     { node:'iron', d:1 },  (s) => s.workers.iron],
+    ['nodeup',  { node:'gold' },       (s) => s.nodeLvl.gold],
+    ['upgrade', { tile:5 },            (s) => s.plot[5].lvl],
+    ['up',      { up:'hp' },           (s) => s.towerUp.hp],
+    ['unit',    { unit:'melee' },      (s) => s.trainQ.filter(q => q.type !== 'worker').length],
+  ];
+  for (const [kind, args, read] of cases){
+    netMatch(9601);
+    G.sides[0].plot[1] = { type:'forge', lvl:2, tile:1 };
+    G.sides[0].plot[2] = { type:'barracks', lvl:1, tile:2 };
+    const was = read(G.sides[0]);
+    IB.NET.pending.length = 0;
+    IB.sendCmd(kind, args);
+    const q = IB.NET.pending[0];
+    t.ok(q && q.k === kind, "'" + kind + "' keeps its kind on the wire (" + (q && q.k) + ')');
+    settle();
+    t.ok(read(G.sides[0]) > was, "'" + kind + "' actually lands (" + was + ' -> ' + read(G.sides[0]) + ')');
+  }
+  IB.netEnd();
 }
 
 IB.draw();
