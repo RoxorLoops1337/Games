@@ -298,9 +298,13 @@
   }
 
   .dtabs{ display:none; }
-  body.narrow #dock{ flex-direction:column; gap:6px; overflow-x:hidden; overflow-y:auto; max-height:44vh; }
-  body.narrow .dtabs{ display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; }
-  body.narrow .dtab{ flex:1 1 0; padding:8px 6px; font-size:11px; font-weight:700; letter-spacing:1px;
+  body.narrow #dock{ flex-direction:column; gap:6px; overflow-x:hidden; overflow-y:hidden; max-height:44vh; }
+  /* the panel scrolls inside the dock; the dock itself does not grow past it */
+  body.narrow #dock .dsec{ flex:1 1 0; min-height:0; overflow-y:auto; }
+  /* the tab row is the way out of a tab — it must never be the thing that
+     gets squashed when the panel below it grows */
+  body.narrow .dtabs{ display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; flex:0 0 auto; }
+  body.narrow .dtab{ flex:1 1 0; min-height:34px; padding:8px 6px; font-size:11px; font-weight:700; letter-spacing:1px;
     background:var(--panel2); border:1px solid var(--line); border-radius:8px; color:var(--dim);
     white-space:nowrap; position:relative; }
   body.narrow .dtab.on{ background:var(--blue); border-color:var(--blue); color:#08111f; }
@@ -3787,7 +3791,20 @@ function dockHtml(){
       '<button class="sq" data-act="job" data-node="' + k + '" data-d="-1"' + (s.workers[k] ? '' : ' disabled') + '>−</button>' +
       '<button class="sq" data-act="job" data-node="' + k + '" data-d="1"' + (s.workers.idle && s.workers[k] < cap ? '' : ' disabled') + '>+</button></div>';
   }
-  sec.jobs = h + '</div>';
+  h += '</div>';
+  // What each pile is actually earning you, and what the hold is short of.
+  // On a phone this tab was four rows and a lot of empty panel.
+  {
+    // (no per-job rate row here: the top bar already prints those, and this
+    // panel has to fit a phone without scrolling)
+    const why = s.workers.idle > 0
+      ? s.workers.idle + ' worker' + (s.workers.idle === 1 ? '' : 's') + ' standing about — put them on a job, or arm them at the barracks.'
+      : popUsed(s) >= popCap(s) ? 'Population is full. A farm raises the cap and opens three field jobs.'
+      : barracksLvl(s) === 0 ? 'Every worker is busy. A Barracks turns one into a fighter that marches with the wave.'
+      : 'Every worker is busy. Pull one off a job with − to arm it.';
+    h += '<div class="insp note">' + why + '</div>';
+  }
+  sec.jobs = h;
 
   // ---- training
   h = '<div class="ptitle">Train</div><div class="pgrid">';
