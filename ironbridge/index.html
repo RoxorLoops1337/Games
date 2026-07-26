@@ -142,6 +142,16 @@
   #modal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px;
     background:rgba(5,8,14,.42); backdrop-filter:blur(1px); z-index:40; overflow-y:auto; }
   #modal.solid{ background:rgba(5,8,14,.86); backdrop-filter:blur(4px); }
+  .heldbar{ margin:-4px 0 10px; padding:6px 10px; border-radius:8px; font-size:12px; font-weight:600;
+    color:#1c2431; background:rgba(255,214,140,.85); border:1px solid rgba(120,90,40,.45); text-align:center; }
+  /* Every upgrade explains itself, but where depends on what the device can do.
+     Printing the line on the desktop dock grew the forge panel from 184px to
+     232px inside a 200px dock, pushing the last two upgrades below the fold —
+     worse than not explaining them. A desktop has hover, so it gets the full
+     text in the title attribute; a phone has no hover, so it gets the line. */
+  .abtn .d{ display:none; font-size:9px; line-height:1.15; opacity:.7; margin:0; font-weight:400;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  body.narrow .abtn .d{ display:block; }
   #modal.on{ display:flex; }
   .sheet{ width:min(860px,100%); max-height:92vh; overflow-y:auto; padding:18px 18px 16px; background:var(--panel);
     border:2px solid var(--line); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.6); }
@@ -4175,8 +4185,14 @@ function dockHtml(){
       const bag = TOWER_UPS.includes(u) ? s.towerUp : s.troopUp;
       const lv = bag[u.id], maxed = lv >= upCap(s);
       const cost = upCostFor(u, lv);
-      h += '<button class="abtn" data-act="up" data-up="' + u.id + '"' + (!maxed && canPay(s, cost) ? '' : ' disabled') + '>' +
+      h += '<button class="abtn" data-act="up" data-up="' + u.id + '" title="' + u.n + ' — ' + u.d + '"' +
+        (!maxed && canPay(s, cost) ? '' : ' disabled') + '>' +
+        // Every upgrade carries a `d` describing exactly what a rank buys, and
+        // it was read nowhere outside its own definition: the Forge was the one
+        // purchase in the game with no explanation at all, so a player had to
+        // spend a rank to find out that Arcane Sockets means attack speed.
         '<span class="t">' + u.n + ' <span style="color:var(--gold)">' + lv + '/' + upCap(s) + '</span></span>' +
+        '<span class="d">' + u.d + '</span>' +
         '<span class="c">' + (maxed ? 'at the cap' : costHtml(cost)) + '</span></button>';
     }
     sec.forge = h + '</div>';
@@ -4276,6 +4292,30 @@ function adviceFor(s){
     return { tab:'jobs', txt:n + ' worker' + (n > 1 ? 's are' : ' is') + ' standing around. Put ' +
       (n > 1 ? 'them' : 'one') + ' on ' + idleJob + '.' };
   }
+  // Nothing in here used to look at the bridge at all. Simulated a player who
+  // does nothing: their outer turret crossed 50% health at t=200s, 25% at
+  // t=296s and fell at t=300s, and at every one of those instants this bar
+  // said the same thing — '1 worker is standing around. Put one on gold.'
+  // Damage to an off-screen structure deliberately produces no shake, the
+  // minimap draws a dying turret exactly like a healthy one, and the only
+  // signal is a toast that fires AFTER it is gone and lasts 2.2 seconds. A
+  // player following this bar could lose the front of the bridge and never
+  // learn why. A structure in real trouble outranks any economy note.
+  // Only the FRONT structure though: everything behind it is shielded and
+  // cannot be attacked at all, so a battered turret two ranks back is not news.
+  // Restricting it to the one in play barely moved the share, as it turns out
+  // (29% vs 28%) — in practice the front structure IS the one being ground
+  // down — but it is still the right rule, because a battered turret behind
+  // the front cannot be attacked at all. The threshold is what made it mean
+  // something: at half health this line held the bar for 29% of a match, at a
+  // third it holds it for 14%, at a quarter 9%. A third is the point where the
+  // front is genuinely about to break.
+  {
+    const front = frontStruct(s.i);
+    if (front && front.hp < front.mhp * .35)
+      return { tab:'sel', txt:(STRUCT_SHORT[front.key] || front.n) + ' is down to ' +
+        Math.max(1, Math.round(front.hp / front.mhp * 100)) + '% — they are on it now.' };
+  }
   if (popUsed(s) >= popCap(s) - 1)
     return buildAdvice('farm', 'Population is full at ' + popCap(s) + '. Build a Farm on an empty plot.');
   if (bl === 0)
@@ -4334,8 +4374,21 @@ function uiTick(dt){
 }
 
 /* ------------------------------------------------------------------ modals */
-function closeModal(){ G.held = false; $('modal').classList.remove('on'); }
-function openModal(html){ $('sheet').innerHTML = html; $('modal').classList.add('on'); $('modal').classList.remove('solid'); }
+function closeModal(){ G.held = false; $('modal').classList.remove('on'); paintHeld(); }
+function openModal(html, blocking){
+  $('sheet').innerHTML = html;
+  $('modal').classList.add('on');
+  $('modal').classList.toggle('solid', !!blocking);
+  paintHeld();
+}
+// The pause button is the one place on screen that always says whether the
+// board is moving, so it has to tell the truth while a pick is held too.
+function paintHeld(){
+  if (HEADLESS) return;
+  const stopped = G.paused || G.held;
+  $('btnPause').textContent = stopped ? '▶' : '❚❚';
+  $('btnPause').classList.toggle('on', stopped);
+}
 
 function showMenu(){
   const meta = loadMeta();
@@ -4438,6 +4491,13 @@ function holdsBoard(h){
 }
 
 function showHeroSheet(h){
+  // A held sheet used to look exactly like an idle peek at a hero: the same
+  // 42%-opacity 1px-blur backdrop, and the pause button still reading the
+  // 'currently running' icon. A player who had once opened this sheet mid-fight
+  // out of curiosity — which correctly does NOT hold — had no way to tell that
+  // this time the whole match had stopped for them, so they might panic-pick,
+  // or tab away believing their hero was still out there undefended. A real
+  // pause looks like a pause; so does this now.
   G.held = holdsBoard(h);
   const pend = h.pend[0];
   const passRow = (() => {
@@ -4460,6 +4520,7 @@ function showHeroSheet(h){
         (C.RANK_LEVELS.find(l => l > h.lvl) || 'max') + '.</div>') + '</div></div>';
 
   openModal('<div class="parch"><h2>Hero Profile</h2>' +
+    (G.held ? '<div class="heldbar">The match is held while you choose.</div>' : '') +
     '<div class="hp-grid"><div class="hp-left">' +
     '<div class="portrait" data-cls="' + h.cls + '"><span>' + classGlyph(h.cls) + '</span>' +
     '<span class="pcls">' + CLS[h.cls].name + '</span></div>' +
@@ -4477,7 +4538,7 @@ function showHeroSheet(h){
     '</div><div class="hp-doing">' + heroDoing(h) + '</div>' +
     '<div class="hp-blurb">' + CLS[h.cls].blurb + '</div></div>' +
     '<div class="hp-right"><div class="grid-title">Skill Selection Grid</div>' + rows + '</div></div>' +
-    '<div class="rowbtn"><button class="big ghost" data-act="close">Back to the bridge</button></div></div>');
+    '<div class="rowbtn"><button class="big ghost" data-act="close">Back to the bridge</button></div></div>', G.held);
 }
 const classGlyph = (cls) => ({ tank:'🛡️', fighter:'⚔️', marksman:'🏹', mage:'🔮', assassin:'🗡️', support:'✨' })[cls] || '⚔️';
 
@@ -4562,9 +4623,8 @@ const bsumUp = (sd) => Object.values(sd.towerUp).reduce((a, v) => a + v, 0) +
 function setPaused(v){
   G.paused = v;
   if (HEADLESS) return;
-  $('btnPause').textContent = v ? '▶' : '❚❚';
-  $('btnPause').classList.toggle('on', v);
-  if (v) openModal(pauseHtml()); else closeModal();
+  paintHeld();
+  if (v) openModal(pauseHtml(), true); else closeModal();
 }
 
 // What your hero actually became. The build is the whole point of the hero
@@ -4680,7 +4740,7 @@ const packUnit = (u) => ({
 const packSide = (s) => ({
   res:Object.assign({}, s.res), workers:Object.assign({}, s.workers),
   nodeLvl:Object.assign({}, s.nodeLvl), towerUp:Object.assign({}, s.towerUp),
-  troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs,
+  troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs, waveKind:s.waveKind,
   kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
   plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
   trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
@@ -4720,6 +4780,11 @@ function loadMatch(pack){
     Object.assign(s.nodeLvl, ps.nodeLvl); Object.assign(s.towerUp, ps.towerUp);
     Object.assign(s.troopUp, ps.troopUp);
     s.superT = ps.superT; s.aiT = ps.aiT; s.rs = ps.rs;
+    // Without this a resumed match reported the quiet wave for up to a full
+    // 22-second period, however heavy the wave actually on the bridge was —
+    // the briefing reads sides[1].waveKind and it was falling back to the
+    // makeSide default of 'levy'.
+    s.waveKind = ps.waveKind || 'levy';
     s.kills = ps.kills; s.structsKilled = ps.structsKilled;
     s.gathered = ps.gathered; s.spent = ps.spent; s.heroKills = ps.heroKills;
     s.plot = ps.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile, raise:0 } : null);
@@ -5102,7 +5167,7 @@ window.IB = {
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
-  structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH, AI_BUILD_PLAN, holdsBoard,
+  structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH, AI_BUILD_PLAN, holdsBoard, paintHeld,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
