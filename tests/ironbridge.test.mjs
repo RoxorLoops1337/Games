@@ -664,6 +664,54 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(guard < 40, 'and it converges');
 }
 
+/* ---------------------------------------------------------------- effects */
+{
+  IB.newMatch({ diff:'veteran', seed:101 });
+  // The countryside is laid out once per hold, not re-rolled every frame.
+  t.ok(IB.scatterCache[0] === null, 'a new match forgets the old countryside');
+  const a = IB.scatterFor(0);
+  t.ok(a.length > 20 && IB.scatterFor(0) === a, 'the scatter is built once and reused');
+  t.ok(IB.scatterFor(1) !== a, 'each hold gets its own');
+  let off = 0;
+  for (const it of a){
+    const w = IB.holdWorld(it.gx, it.gy);
+    if (w[1] < IB.PLAT.far || w[1] > IB.PLAT.near || w[0] > 0) off++;
+  }
+  t.ok(off === 0, 'nothing is scattered off the mesa or over the cliff (' + off + ')');
+  IB.newMatch({ diff:'veteran', seed:101 });
+  t.ok(IB.scatterCache[0] === null, 'and it is dropped again on the next match');
+}
+{
+  // Camera shake is bounded and ignores anything happening off screen.
+  IB.newMatch({ diff:'veteran', seed:103 });
+  IB.cam.shake = 0;
+  IB.shake(50, IB.cam.x);
+  t.ok(IB.cam.shake <= 14, 'shake is capped no matter how big the hit');
+  IB.cam.shake = 0;
+  IB.shake(10, IB.cam.x + 4000);
+  t.ok(IB.cam.shake === 0, 'a blow off the edge of the screen does not rattle the camera');
+}
+{
+  // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
+  IB.newMatch({ diff:'veteran', seed:107 });
+  G.sides[0].ai = true;
+  let peakFx = 0, peakFloat = 0, peakProj = 0;
+  for (let i = 0; i < 30 * 60 * 9 && G.state === 'play'; i++){
+    IB.update(1 / 30);
+    if (i % 40 === 0){
+      peakFx = Math.max(peakFx, G.fx.length);
+      peakFloat = Math.max(peakFloat, G.floats.length);
+      peakProj = Math.max(peakProj, G.projs.length);
+    }
+  }
+  t.ok(G.wave > 20, 'the fight ran deep into the match (wave ' + G.wave + ')');
+  t.ok(peakFx <= 300, 'the particle pool stays bounded in a real fight (peak ' + peakFx + ')');
+  t.ok(peakFloat <= 100, 'so does the damage-number pool (peak ' + peakFloat + ')');
+  t.ok(peakProj < 200, 'and projectiles do not pile up (peak ' + peakProj + ')');
+  IB.draw();
+  t.ok(true, 'and it still draws');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 

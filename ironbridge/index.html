@@ -64,9 +64,9 @@
     background:linear-gradient(180deg,#151c2b,#0c111b); border-top:2px solid var(--line);
     overflow-x:auto; overflow-y:hidden; height:200px; }
   .dsec{ flex:0 0 auto; display:flex; flex-direction:column; gap:4px; padding:0 9px 0 0;
-    border-right:1px solid #1e2736; min-width:0; overflow-y:auto; overflow-x:hidden; }
+    border-right:1px solid #1e2736; min-width:150px; overflow-y:auto; overflow-x:hidden; }
   .dsec:last-child{ border-right:none; padding-right:0; }
-  .dsec.grow{ flex:1 1 auto; }
+  .dsec.grow{ flex:1 1 260px; min-width:240px; }
   .ptitle{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--dim2);
     white-space:nowrap; }
   .prow{ display:flex; align-items:center; gap:5px; }
@@ -100,7 +100,7 @@
   .mchip{ padding:2px 7px; font-size:11px; border-radius:999px; border:1px solid var(--line); background:#0e1421; }
 
   /* ---------------- hero cards ---------------- */
-  #heroBar{ display:flex; gap:6px; }
+  #heroBar{ display:flex; gap:6px; flex-wrap:wrap; }
   .hcard{ flex:0 0 auto; width:150px; padding:5px 7px; background:#0e1421; border:1px solid var(--line);
     border-radius:9px; text-align:left; position:relative; }
   .hcard:hover{ border-color:#43536f; }
@@ -148,11 +148,12 @@
   .legend{ display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; font-size:11px; color:var(--dim2); }
 
   /* ---------------- toast / narrator ---------------- */
-  #toast{ position:absolute; left:50%; top:52px; transform:translateX(-50%); display:flex; flex-direction:column;
-    gap:5px; align-items:center; pointer-events:none; z-index:20; }
-  .tst{ padding:5px 13px; font-size:12px; font-weight:600; letter-spacing:.4px; border-radius:999px;
-    background:rgba(10,14,22,.9); border:1px solid var(--line); animation:tin .28s ease; }
-  @keyframes tin{ from{ opacity:0; transform:translateY(-7px); } }
+  #toast{ position:absolute; left:10px; top:52px; display:flex; flex-direction:column;
+    gap:4px; align-items:flex-start; pointer-events:none; z-index:20; max-width:min(46%,340px); }
+  .tst{ padding:4px 11px; font-size:12px; font-weight:600; letter-spacing:.4px; border-radius:999px;
+    background:rgba(10,14,22,.86); border:1px solid var(--line); animation:tin .28s ease;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+  @keyframes tin{ from{ opacity:0; transform:translateX(-10px); } }
   .tst.good{ color:#7fdc8a; border-color:#2f5c3c; } .tst.bad{ color:#ff8a84; border-color:#5c2f2f; }
 
   /* ---------------- hero profile (parchment) ---------------- */
@@ -721,6 +722,8 @@ function newMatch(opt){
   r.gold = Math.round(r.gold * e); r.iron = Math.round(r.iron * e);
   r.wood = Math.round(r.wood * e); r.food = Math.round(r.food * e);
   sel.tile = -1; sel.node = null; sel.build = null;
+  scatterCache[0] = scatterCache[1] = null;
+  cam.shake = 0; cam.sx = 0; cam.sy = 0;
   cam.x = HOLD_X + 14; cam.follow = false; cam.z = cam.tz = clamp(LW / 1100, .55, .95);
   return G;
 }
@@ -1024,6 +1027,20 @@ function dealDmg(src, tgt, amt, o){
     tgt.shield -= ab; dmg -= ab;
   }
   tgt.hp -= dmg; tgt.hitT = .18; tgt.dmgTaken = G.t;
+  // A spark where the blow lands. Capped hard so a wave-on-wave brawl cannot
+  // bury the frame in particles.
+  if (!HEADLESS && dmg > 0 && G.fx.length < 150){
+    const big = tgt.isHero || tgt.struct || dmg > 60;
+    if (big || rnd() < .4){
+      const col = magic ? '#c9a6ff' : tgt.struct ? '#e8d9b4' : '#ffd08a';
+      for (let i = 0, n = big ? 4 : 2; i < n; i++){
+        const a = rnd() * 6.283, sp = rr(1.5, big ? 6 : 3.5);
+        G.fx.push({ k:'p', x:tgt.x, y:tgt.y, z:rr(.5, 1.4), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5,
+          vz:rr(1, 4), t:rr(.16, .34), dur:.34, col, r:rr(.9, big ? 2.4 : 1.5) });
+      }
+    }
+    if (tgt.struct && dmg > 40) shake(Math.min(3, dmg / 90), tgt.x);
+  }
   if (dmg > 0 && !HEADLESS) addFloat(tgt.x, tgt.y, Math.round(dmg), magic ? '#c69bff' : (src && src.isHero ? '#ffe08a' : '#ffffff'), tgt.isHero || tgt.struct ? 1 : .8);
   if (src && src.isHero && dmg > 0){
     const vamp = o.ability ? passVal(src, 'spellVamp') + bsum(src, 'bvamp') : passVal(src, 'ls') + bsum(src, 'bls');
@@ -1095,7 +1112,11 @@ function onStructDown(st, src){
   foe.res.gold += g; foe.structsKilled++;
   awardXp(src, 70, st.x);
   fxToast(SIDE_NAME[st.side] + ' loses ' + st.n + '.', st.side === 0 ? 'bad' : 'good');
-  if (!HEADLESS) burstFx(st.x, st.y, '#d8c49a', 26);
+  if (!HEADLESS){
+    burstFx(st.x, st.y, '#d8c49a', 30);
+    ringFx(st.x, st.y, st.key === 'gate' ? 7 : 4.5, '#ffd9a0');
+    shake(st.key === 'gate' ? 14 : st.key === 'inhib' ? 9 : 7, st.x);
+  }
   if (st.key === 'inhib'){ foe.superT = C.SUPER_DUR; st.downT = C.INHIB_RESPAWN; }
   if (st.key === 'gate'){ endMatch(enemyOf(st.side)); }
 }
@@ -1556,7 +1577,11 @@ function onHeroDeath(h, src){
     awardXp(src, 110 + h.lvl * 9, h.x);
   }
   fxToast(h.name + ' has fallen.', h.side === 0 ? 'bad' : 'good');
-  if (!HEADLESS) burstFx(h.x, h.y, SIDE_COL[h.side], 20);
+  if (!HEADLESS){
+    burstFx(h.x, h.y, SIDE_COL[h.side], 22);
+    ringFx(h.x, h.y, 3.2, SIDE_COL[h.side]);
+    shake(6, h.x);
+  }
 }
 
 /* ------------------------------------------------------------------ hero brain */
@@ -1937,6 +1962,7 @@ function update(dt){
    ===================================================================== */
 function burstFx(x, y, col, n){
   if (HEADLESS) return;
+  if (G.fx.length > 260) return;
   for (let i = 0; i < n; i++){
     const a = rnd() * 6.283, sp = rr(1, 6);
     G.fx.push({ k:'p', x, y, z:rr(.2, 1.2), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5, vz:rr(1, 5),
@@ -1976,19 +2002,19 @@ function fxToast(msg, kind){
   el.textContent = msg;
   const box = document.getElementById('toast');
   box.appendChild(el);
-  setTimeout(() => el.remove(), 2600);
-  while (box.children.length > 4) box.firstChild.remove();
+  setTimeout(() => el.remove(), 2200);
+  while (box.children.length > 3) box.firstChild.remove();
 }
 
 /* =====================================================================
    RENDERING — shared
    ===================================================================== */
-const cam = { x:26, z:1, follow:true, tz:1 };
+const cam = { x:26, z:1, follow:true, tz:1, shake:0, sx:0, sy:0 };
 let lcv, lctx, LW = 900, LH = 560;
 
 function resize(){
   if (HEADLESS) return;
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const dpr = Math.min(window.innerWidth < 760 ? 1.6 : 2, window.devicePixelRatio || 1);
   const r = lcv.getBoundingClientRect();
   LW = Math.max(80, r.width); LH = Math.max(80, r.height);
   lcv.width = Math.round(LW * dpr); lcv.height = Math.round(LH * dpr);
@@ -2028,9 +2054,17 @@ const LS = () => 9.4 * cam.z;
 function lp(x, y, z){
   const S = LS();
   return [
-    (x - cam.x) * S * .96 - y * S * .52 + LW * .5,
-    (x - cam.x) * S * .07 + y * S * .60 + LH * .60 - (z || 0) * S * .95,
+    (x - cam.x) * S * .96 - y * S * .52 + LW * .5 + cam.sx,
+    (x - cam.x) * S * .07 + y * S * .60 + LH * .60 - (z || 0) * S * .95 + cam.sy,
   ];
+}
+// A knock felt through the camera. Capped, and only when the hit is on screen,
+// so a brawl at the far end of the world never rattles the hold you are in.
+function shake(amount, worldX){
+  if (HEADLESS) return;
+  const p = (worldX - cam.x) * LS() * .96 + LW * .5;
+  if (p < -120 || p > LW + 120) return;
+  cam.shake = Math.min(14, cam.shake + amount);
 }
 const DECK = { top:'#938b79', top2:'#a09884', side:'#544c42', edge:'#3f3931', rail:'#7a7060' };
 
@@ -2149,7 +2183,7 @@ function drawEnds(c){
       c.fillStyle = STONE.line; c.fillRect(tx - 3 * z, wallY - 56 * z, 6 * z, 14 * z);
     }
     pennant(c, kp[0] + dir * 20 * z, wallY - 76 * z, z, col, dir);
-    c.fillStyle = '#e7ecf6'; c.font = 'bold ' + (11 * z) + 'px system-ui'; c.textAlign = 'center';
+    c.fillStyle = '#e7ecf6'; c.font = 'bold ' + Math.max(9, Math.round(11 * z)) + 'px system-ui'; c.textAlign = 'center';
     c.fillText(SIDE_NAME[s.i], kp[0], wallY - 118 * z);
   }
 }
@@ -2308,7 +2342,7 @@ function drawStructure(c, st){
   }
   if (!dead) hpBar(c, X, Y - (st.key === 'gate' ? 116 : st.key === 'inhib' ? 72 : 84) * cam.z, st, 44 * cam.z, true);
   else if (st.downT > 0){
-    c.fillStyle = '#d8c49a'; c.font = (11 * cam.z) + 'px system-ui'; c.textAlign = 'center';
+    c.fillStyle = '#d8c49a'; c.font = Math.max(9, Math.round(11 * cam.z)) + 'px system-ui'; c.textAlign = 'center';
     c.fillText(Math.ceil(st.downT) + 's', p[0], p[1] - 18 * cam.z);
   }
   if (st.hitT > 0 && !dead){
@@ -2387,7 +2421,7 @@ function drawUnit(c, u){
   if (u.isHero){
     c.fillStyle = '#0b0f18'; c.strokeStyle = col; c.lineWidth = 1.4;
     c.beginPath(); c.arc(bx - 20 * sc, by - 20 * sc, 6.5 * sc, 0, 6.2832); c.fill(); c.stroke();
-    c.fillStyle = '#ffcf4d'; c.font = 'bold ' + (7.5 * sc) + 'px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = '#ffcf4d'; c.font = 'bold ' + Math.max(7, Math.round(7.5 * sc)) + 'px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(String(u.lvl), bx - 20 * sc, by - 19.6 * sc);
     labelQ.push({ x:bx, y:by - 26 * sc, txt:u.name, col:u.side === 0 ? '#bfe0ff' : '#ffc4bd', small:true });
     c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 1;
@@ -2436,7 +2470,7 @@ function drawLane(c){
   for (const f of G.floats){
     const q = lp(f.x, f.y, 1.4);
     c.globalAlpha = clamp(f.t / f.dur, 0, 1);
-    c.fillStyle = f.col; c.font = 'bold ' + (11 * f.sc * cam.z) + 'px system-ui';
+    c.fillStyle = f.col; c.font = 'bold ' + Math.max(9, Math.round(11 * f.sc * cam.z)) + 'px system-ui';
     c.fillText(String(f.txt), q[0], q[1] - (1 - f.t / f.dur) * 22);
     c.globalAlpha = 1;
   }
@@ -2694,7 +2728,15 @@ const sideCol = () => SIDE_COL[holdSide];
 // Deterministic countryside so the corners of the isometric diamond read as
 // land instead of empty felt. Nothing here touches the simulation.
 const hash2 = (i, j) => { const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return n - Math.floor(n); };
-function drawGround(c){
+
+// The countryside never changes, so it is laid out once per hold and then only
+// culled — it used to be re-rolled every single frame, for both holds.
+const scatterCache = [null, null];
+function scatterFor(side){
+  if (scatterCache[side]) return scatterCache[side];
+  const was = holdSide;
+  holdSide = side;
+  const out = [];
   const busy = (gx, gy) => {
     const wy = gy * TILE;
     if (wy < PLAT.far + 4 || wy > PLAT.near - 3) return true;          // off the mesa
@@ -2707,6 +2749,19 @@ function drawGround(c){
     for (const k in NODES) if (Math.hypot(gx - NODES[k].gx, gy - NODES[k].gy) < 1.9) return true;
     return false;
   };
+  for (let gx = -14; gx <= 13; gx++) for (let gy = -16; gy <= 8; gy++){
+    const r = hash2(gx, gy);
+    if (r > .40 || busy(gx, gy)) continue;
+    const ox = (hash2(gx + 31, gy) - .5) * .8, oy = (hash2(gx, gy + 17) - .5) * .8;
+    out.push({ gx:gx + ox, gy:gy + oy, r });
+  }
+  out.sort((a, b) => (a.gx + a.gy) - (b.gx + b.gy));
+  holdSide = was;
+  scatterCache[side] = out;
+  return out;
+}
+
+function drawGround(c){
   // trodden paths from the hall out to every job
   const home = bp(KEEP.gx + .6, KEEP.gy + .7);
   c.strokeStyle = 'rgba(120,98,62,.30)'; c.lineCap = 'round';
@@ -2718,13 +2773,12 @@ function drawGround(c){
     c.stroke();
   }
   c.lineCap = 'butt';
-  for (let gx = -14; gx <= 13; gx++) for (let gy = -16; gy <= 8; gy++){
-    const r = hash2(gx, gy);
-    if (r > .40 || busy(gx, gy)) continue;
-    const ox = (hash2(gx + 31, gy) - .5) * .8, oy = (hash2(gx, gy + 17) - .5) * .8;
-    const p = bp(gx + ox, gy + oy);
-    if (p[0] < -60 || p[0] > LW + 60 || p[1] < -60 || p[1] > LH + 60) continue;
-    const s = BSC / 34;
+  const s = BSC / 34;
+  for (const it of scatterFor(holdSide)){
+    const r = it.r;
+    const p = bp(it.gx, it.gy);
+    if (p[0] < -60 || p[0] > LW + 60) continue;
+    if (p[1] < -60 || p[1] > LH + 60) continue;
     if (r < .16){                                     // tree
       ell(c, p[0], p[1] + 2, 9 * s, 4 * s, 'rgba(0,0,0,.20)');
       c.fillStyle = '#57431f'; c.fillRect(p[0] - 1.6 * s, p[1] - 9 * s, 3.2 * s, 9 * s);
@@ -2770,12 +2824,11 @@ function drawPlateau(c){
   }
   c.globalAlpha = 1;
   // and the bottom of the cliff dissolving into the dark of the chasm
-  for (let i = 0; i < 5; i++){
-    const z0 = -DROP * (.5 + i * .1), z1 = z0 - DROP * .1;
-    c.globalAlpha = .16 + i * .17;
+  for (let i = 0; i < 3; i++){
+    const z0 = -DROP * (.55 + i * .15), z1 = z0 - DROP * .15;
+    c.globalAlpha = .22 + i * .26;
     poly(c, [e(outer, N, z0), e(inner, N, z0), e(inner, N, z1), e(outer, N, z1)], '#0c1414');
     poly(c, [e(inner, F, z0), e(inner, N, z0), e(inner, N, z1), e(inner, F, z1)], '#0c1414');
-    poly(c, [e(outer, F, z0), e(outer, N, z0), e(outer, N, z1), e(outer, F, z1)], '#0c1414');
   }
   c.globalAlpha = 1;
   // grass top
@@ -2785,9 +2838,9 @@ function drawPlateau(c){
   poly(c, [e(inner - d * 9, F), e(inner, F), e(inner, N), e(inner - d * 9, N)], '#43663a');
   c.globalAlpha = 1;
   // the far edge fades into the valley haze instead of ending on a hard line
-  for (let i = 0; i < 4; i++){
-    c.globalAlpha = .16 - i * .04;
-    poly(c, [e(outer, F + i * 3), e(inner, F + i * 3), e(inner, F + i * 3 + 3), e(outer, F + i * 3 + 3)], '#8ea9ac');
+  for (let i = 0; i < 3; i++){
+    c.globalAlpha = .15 - i * .045;
+    poly(c, [e(outer, F + i * 4), e(inner, F + i * 4), e(inner, F + i * 4 + 4), e(outer, F + i * 4 + 4)], '#8ea9ac');
   }
   c.globalAlpha = 1;
   // the road out to the gates
@@ -2796,10 +2849,19 @@ function drawPlateau(c){
   c.globalAlpha = 1;
 }
 
+// Is any part of this hold's mesa on screen? Both mesas are ~80 world units
+// wide, so drawing the far one while you watch the fight is pure fill-rate.
+function holdOnScreen(side){
+  const inner = side === 0 ? 3 : C.LANE_LEN - 3;
+  const outer = inner - (side === 0 ? 1 : -1) * (PLAT.back + 34);
+  const a = lp(Math.min(inner, outer), PLAT.near)[0], b = lp(Math.max(inner, outer), PLAT.far)[0];
+  return Math.max(a, b) > -80 && Math.min(a, b) < LW + 80;
+}
+
 function drawHold(c, side){
+  if (!holdOnScreen(side)) return;
   holdSide = side;
   const fog = side !== 0;
-  if (fog) c.globalAlpha = .82;
   drawPlateau(c);
   drawGround(c);
   const s = G.sides[side];
@@ -2836,14 +2898,11 @@ function drawHold(c, side){
       const q = bp(tileGX(f.tile) + Math.cos(a) * .34, tileGY(f.tile) + .1 + Math.sin(a) * .3, .05);
       drawWorkerFig(c, q[0], q[1], '#7fdc8a', (Math.sin(a) > 0), .85);
     }
-  } else {
-    // haze over their hold — you can see they are building, not what they hold
-    const a = lp(C.LANE_LEN - HOLD_X + 34, -30), b2 = lp(3 + C.LANE_LEN - 6, 30);
-    c.globalAlpha = .20;
-    c.fillStyle = '#7f9aa8';
-    c.fillRect(Math.min(a[0], b2[0]), 0, Math.abs(b2[0] - a[0]), LH);
-    c.globalAlpha = 1;
   }
+  // Their hold reads as distant through the alpha above. It used to also get a
+  // full-height translucent wash the width of their mesa — 8ms of fill-rate a
+  // frame, most of it over empty sky.
+  c.globalAlpha = 1;
   holdSide = 0;
 }
 
@@ -2857,6 +2916,11 @@ function camStep(dt){
     cam.x = lerp(cam.x, clamp(fx, CAM_MIN, CAM_MAX), 1 - Math.pow(.02, dt));
   }
   cam.z = lerp(cam.z, cam.tz, 1 - Math.pow(.005, dt));
+  if (cam.shake > 0){
+    cam.shake = Math.max(0, cam.shake - dt * 26);
+    const a = G.t * 47;
+    cam.sx = Math.sin(a) * cam.shake; cam.sy = Math.cos(a * 1.7) * cam.shake * .6;
+  } else { cam.sx = 0; cam.sy = 0; }
 }
 
 const CAM_MIN = HOLD_X - 26, CAM_MAX = C.LANE_LEN - HOLD_X + 26;
@@ -3007,13 +3071,13 @@ function dockHtml(){
 
   sec.heroes = '<div class="ptitle">Heroes</div><div id="heroBar">' + heroBarHtml() + '</div>';
 
-  const order = ['jobs','train','sel','forge','heroes'].filter(k => sec[k] !== undefined);
+  const order = ['jobs','train','sel','heroes','forge'].filter(k => sec[k] !== undefined);
   if (!narrow)
     return order.map(k => '<div class="dsec' + (k === 'sel' ? ' grow' : '') + '">' + sec[k] + '</div>').join('');
 
   // Narrow: one section at a time behind tabs, so nothing needs a sideways scroll.
   if (!sec[dockTab]) dockTab = 'jobs';
-  const label = { jobs:'JOBS', train:'TRAIN', sel:'BUILD', forge:'FORGE', heroes:'HEROES' };
+  const label = { jobs:'JOBS', train:'TRAIN', sel:'BUILD', heroes:'HEROES', forge:'FORGE' };
   const alert = { sel:sel.tile >= 0 || !!sel.node, heroes:s.heroes.some(x => x.pend.length) };
   const tabs = order.map(k => '<button class="dtab' + (k === dockTab ? ' on' : '') + '" data-tab="' + k + '">' +
     label[k] + (alert[k] && k !== dockTab ? '<span class="dot"></span>' : '') + '</button>').join('');
@@ -3492,7 +3556,8 @@ window.IB = {
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
-  adviceFor, drawPlateau, PLAT,
+  adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen,
+  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };
 
 </script>
