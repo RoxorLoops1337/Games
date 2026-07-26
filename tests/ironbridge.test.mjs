@@ -721,7 +721,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.newMatch({ diff, seed:5 });
     const host = E(), you = P();
     for (const sd of [host, you]){ sd.workers.idle = 0; sd.workers.gold = 4; }
-    host.aiT = 9999;                       // keep the .ai handicap, take away its decisions
+    host.aiT = 9999;                       // keep the Host's handicap, take away its decisions
     const h0 = host.gathered, y0 = you.gathered;
     step(10);
     return { host:host.gathered - h0, you:you.gathered - y0 };
@@ -779,6 +779,101 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.minimapWorldX(m.x0 - 500) === left, 'a tap outside the strip clamps instead of flying off');
   const mid = IB.minimapWorldX(m.x0 + m.w / 2);
   t.ok(mid > left && mid < right, 'and the middle of the strip is the middle of the world');
+}
+
+/* ---------------------------------------------------------------- hero brain */
+{
+  // Heroes used to trade for twenty minutes and never finish each other, and
+  // spent a third of the match walking home to heal.
+  IB.newMatch({ diff:'veteran', seed:151 });
+  const h = IB.makeHero(0, 'fighter', 'Wound');
+  h.pend.length = 0; h.passive = 'whetstone'; h.lvl = 10; IB.recalcHero(h);
+  IB.enterLane(h); h.x = 60; h.y = 0;
+  h.hp = h.mhp * .45; h.dmgTaken = G.t - 30;      // long out of combat
+  const hp0 = h.hp;
+  step(4);
+  t.ok(h.hp > hp0 + 20, 'a hero out of combat mends where it stands (' + Math.round(h.hp - hp0) + ' hp in 4s)');
+  h.dmgTaken = G.t;                                // just been hit
+  const hp1 = h.hp;
+  step(2);
+  t.ok(h.hp - hp1 < (hp0 > 0 ? 40 : 1e9), 'and mends far slower while it is being fought');
+}
+{
+  // A wounded enemy hero in reach is worth finishing.
+  IB.newMatch({ diff:'veteran', seed:157 });
+  const me = IB.makeHero(0, 'assassin', 'Hunter');
+  me.pend.length = 0; me.passive = 'whetstone'; me.lvl = 10; IB.recalcHero(me);
+  IB.enterLane(me); me.x = 60; me.y = 0; me.hp = me.mhp * .5;
+  const prey = IB.makeHero(1, 'mage', 'Prey');
+  prey.pend.length = 0; prey.passive = 'whetstone'; prey.lvl = 10; IB.recalcHero(prey);
+  IB.enterLane(prey); prey.x = 64; prey.y = 0; prey.hp = prey.mhp * .2;
+  IB.rebuildGrid();
+  IB.heroStep(me, 1 / 30);
+  t.ok(!me.retreat, 'a half-health hero does not run from a nearly-dead one');
+  t.ok(me.target === prey, 'and it commits to the kill');
+  // but a hero that is itself nearly dead still leaves
+  me.hp = me.mhp * .2;
+  IB.heroStep(me, 1 / 30);
+  t.ok(me.retreat, 'a hero that is itself nearly dead still withdraws');
+}
+
+/* ---------------------------------------------------------------- fairness */
+{
+  // Both holds used to draw AI decisions from one shared stream, so whichever
+  // acted first each tick got first pick of it — worth ~13 points of win rate.
+  IB.newMatch({ diff:'veteran', seed:163 });
+  const a = G.sides[0], b = G.sides[1];
+  t.ok(a.rs !== b.rs, 'each hold starts with its own decision stream');
+  const seqA = [], seqB = [];
+  for (let i = 0; i < 8; i++){ seqA.push(IB.arnd(a)); seqB.push(IB.arnd(b)); }
+  t.ok(seqA.every(v => v >= 0 && v < 1) && seqB.every(v => v >= 0 && v < 1), 'both streams are well formed');
+  t.ok(seqA.join() !== seqB.join(), 'and they do not run in lockstep');
+  // the handicap belongs to the Host, whoever is driving the other hold
+  IB.newMatch({ diff:'warlord', seed:163 });
+  G.sides[0].ai = true;
+  const you = P(), host = E();
+  you.workers.idle = 0; you.workers.gold = 4; host.workers.idle = 0; host.workers.gold = 4;
+  you.aiT = host.aiT = 9999;
+  const y0 = you.gathered, h0 = host.gathered;
+  step(10);
+  t.ok(host.gathered > you.gathered + 1,
+    'automating your own hold does not hand it the Host\'s handicap');
+  t.ok(you.gathered - y0 > 0 && host.gathered - h0 > 0, 'and both still gather');
+}
+
+/* ---------------------------------------------------------------- screens */
+{
+  // The menu sits over a live battle, which must never touch the save file.
+  const before = IB.loadMeta();
+  IB.startDemo();
+  t.ok(G.demo === true && G.state === 'play', 'the attract battle runs like a real match');
+  t.ok(G.sides[0].ai && G.sides[1].ai, 'with both holds played by the brain');
+  for (const st of E().structs) st.dead = true;
+  IB.endMatch(0);
+  t.ok(G.state === 'play' && G.demo, 'winning the attract battle just starts another');
+  const after = IB.loadMeta();
+  t.ok(after.wins === before.wins && after.losses === before.losses, 'and it never writes to the save file');
+  IB.newMatch({ diff:'veteran', seed:167 });
+  t.ok(G.demo === false, 'starting a real match leaves the attract mode');
+}
+{
+  // The result card shows how the match went, not just that it ended.
+  IB.newMatch({ diff:'veteran', seed:173 });
+  t.ok(G.timeline.length === 0, 'a fresh match has an empty timeline');
+  const foe = E().structs;
+  const u = IB.spawnUnit(0, 'cannon', { x:60 });
+  for (const st of foe){
+    if (st.key === 'gate') continue;
+    G.t += 30;
+    IB.dealDmg(u, st, 999999, { pure:true });
+  }
+  t.ok(G.timeline.length === 4, 'every structure that falls is recorded (' + G.timeline.length + ')');
+  t.ok(G.timeline.every(e => e.side === 1 && e.n && finite(e.t)), 'with its side, name and time');
+  const times = G.timeline.map(e => e.t);
+  t.ok(times.every((v, i) => i === 0 || v >= times[i - 1]), 'in the order they fell');
+  const html = IB.timelineHtml();
+  t.ok(html.includes('tl-track') && (html.match(/tl-m/g) || []).length >= 4, 'and it renders a mark for each');
+  t.ok(IB.timelineHtml().indexOf('NaN') === -1, 'with no NaN anywhere in it');
 }
 
 IB.draw();
