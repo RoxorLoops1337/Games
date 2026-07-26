@@ -125,7 +125,8 @@
 
   /* ---------------- modal ---------------- */
   #modal{ position:fixed; inset:0; display:none; align-items:center; justify-content:center; padding:16px;
-    background:rgba(5,8,14,.82); backdrop-filter:blur(3px); z-index:40; overflow-y:auto; }
+    background:rgba(5,8,14,.62); backdrop-filter:blur(2px); z-index:40; overflow-y:auto; }
+  #modal.solid{ background:rgba(5,8,14,.86); backdrop-filter:blur(4px); }
   #modal.on{ display:flex; }
   .sheet{ width:min(860px,100%); max-height:92vh; overflow-y:auto; padding:18px 18px 16px; background:var(--panel);
     border:2px solid var(--line); border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,.6); }
@@ -145,6 +146,19 @@
   .big.ghost{ background:var(--panel2); border:1px solid var(--line); color:var(--ink); }
   .big:hover{ filter:brightness(1.08); }
   .statline{ display:flex; flex-wrap:wrap; gap:8px 16px; margin:10px 0 0; font-size:12px; color:var(--dim); }
+  .tl{ margin:12px 0 4px; padding:10px 12px; background:#0e1421; border:1px solid var(--line); border-radius:10px; }
+  .tl-row{ display:flex; align-items:center; gap:9px; margin-bottom:7px; }
+  .tl-lbl{ flex:0 0 46px; font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:700; }
+  .tl-track{ position:relative; flex:1 1 auto; height:12px; background:#1a2231; border-radius:6px; }
+  .tl-m{ position:absolute; top:1px; width:5px; height:10px; margin-left:-2px; border-radius:2px;
+    background:#8d99b0; }
+  .tl-m.inhib{ background:#5fa8ff; width:7px; margin-left:-3px; }
+  .tl-m.gate{ background:var(--gold); width:9px; margin-left:-4px; }
+  .tl-m.dot{ position:relative; display:inline-block; top:2px; margin:0 3px 0 0; }
+  .tl-axis{ display:flex; justify-content:space-between; font-size:10px; color:var(--dim2);
+    padding-left:55px; }
+  .tl-empty{ margin:12px 0; padding:10px 12px; background:#0e1421; border:1px solid var(--line);
+    border-radius:10px; font-size:12px; color:var(--dim); }
   .statline b{ color:var(--ink); }
   .legend{ display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; font-size:11px; color:var(--dim2); }
 
@@ -675,7 +689,7 @@ const DIFFS = [
 const G = {
   state:'menu', t:0, dt:0, wave:0, waveT:C.FIRST_WAVE, speed:1, paused:false,
   sides:[], units:[], projs:[], fx:[], floats:[], zones:[],
-  winner:null, diff:DIFFS[1], uid:1, toasts:[], log:[],
+  winner:null, diff:DIFFS[1], uid:1, toasts:[], log:[], timeline:[], demo:false,
 };
 
 function makeSide(i, ai){
@@ -686,6 +700,8 @@ function makeSide(i, ai){
     plot:new Array(PLOT_W * PLOT_H).fill(null),
     trainQ:[], muster:[], heroes:[],
     nodeLvl:{ gold:1, iron:1, wood:1 },
+    rs:(i + 1) * 0x9E3779B1,                 // its own decision stream, see arnd
+
     towerUp:{ hp:0, armor:0, atk:0, as:0, regen:0 },
     troopUp:{ tad:0, tarm:0, thp:0 },
     structs:[], superT:0, aiT:0, aiBuild:0,
@@ -715,7 +731,7 @@ function newMatch(opt){
   G.diff = DIFFS.find(d => d.id === (opt.diff || 'veteran')) || DIFFS[1];
   G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null;
   G.units.length = 0; G.projs.length = 0; G.fx.length = 0; G.floats.length = 0; G.zones.length = 0;
-  G.log.length = 0; G.paused = false; G.speed = 1;
+  G.log.length = 0; G.timeline.length = 0; G.paused = false; G.speed = 1; G.demo = false;
   G.sides = [makeSide(0, false), makeSide(1, true)];
   // The Host gets its handicap as a straight resource multiplier, not as
   // cheating in the sim — everything it does, you can also do.
@@ -727,6 +743,18 @@ function newMatch(opt){
   scatterCache[0] = scatterCache[1] = null;
   cam.shake = 0; cam.sx = 0; cam.sy = 0;
   cam.x = HOLD_X + 14; cam.follow = false; cam.z = cam.tz = clamp(LW / 1100, .55, .95);
+  return G;
+}
+
+// The menu sits over a live battle rather than a dark sheet. It is a real
+// match with both holds played by the AI; it never touches the save file and
+// simply starts again when someone wins.
+function startDemo(){
+  newMatch({ diff:'veteran' });
+  G.demo = true;
+  G.sides[0].ai = true;
+  G.speed = 1;
+  cam.follow = true; cam.tz = cam.z = .8;
   return G;
 }
 
@@ -764,7 +792,7 @@ const gatherMul = (s) => {
   for (const h of s.heroes) m += passVal(h, 'gatherM');
   return m;
 };
-const heroMul = (side) => (G.sides[side] && G.sides[side].ai) ? G.diff.hero : 1;
+const heroMul = (side) => side === 1 ? G.diff.hero : 1;
 const heroCap = (s) => bLvl(s, 'tavern') > 0 ? Math.min(3, bList(s, 'tavern').reduce((a, b) => Math.max(a, b.lvl), 0)) : 0;
 const upCap = (s) => Math.min(MAX_UP, bLvl(s, 'forge') * 2);
 const barracksLvl = (s) => bList(s, 'barracks').reduce((a, b) => Math.max(a, b.lvl), 0);
@@ -867,7 +895,7 @@ function ecoStep(s, dt){
   // The Host's handicap is an open, ongoing resource multiplier — the same
   // levers you have, just more of them. A one-off opening purse was noise
   // across a fifteen-minute match, which made the difficulties identical.
-  const m = gatherMul(s) * (s.ai ? G.diff.eco : 1);
+  const m = gatherMul(s) * (s.i === 1 ? G.diff.eco : 1);
   let got = 0;
   for (const node of ['gold','iron','wood','food']){
     const n = Math.min(s.workers[node], nodeCap(s, node));
@@ -1087,7 +1115,7 @@ function killThing(t, src){
   }
   if (t.isHero) onHeroDeath(t, src);
   else {
-    shareXp(t.x, 22 + 1.9 * G.wave, src);
+    shareXp(t.x, 26 + 2.4 * G.wave, src);
     if (!HEADLESS){ burstFx(t.x, t.y, SIDE_COL[t.side], 7); sfx('die', t.x); }
     const i = G.units.indexOf(t); if (i >= 0) G.units.splice(i, 1);
   }
@@ -1127,12 +1155,14 @@ function onStructDown(st, src){
     shake(st.key === 'gate' ? 14 : st.key === 'inhib' ? 9 : 7, st.x);
     sfx('fall', st.x);
   }
+  G.timeline.push({ t:G.t, side:st.side, key:st.key, n:st.n });
   if (st.key === 'inhib'){ foe.superT = C.SUPER_DUR; st.downT = C.INHIB_RESPAWN; }
   if (st.key === 'gate'){ endMatch(enemyOf(st.side)); }
 }
 
 function endMatch(winner){
   if (G.state !== 'play') return;
+  if (G.demo){ startDemo(); return; }          // the attract battle just starts over
   G.state = 'over'; G.winner = winner;
   sfx(winner === 0 ? 'win' : 'lose');
   saveMeta(winner === 0);
@@ -1640,9 +1670,14 @@ function heroStep(h, dt){
   statusTick(h, dt);
   const homeX = gateX(h.side), dir = dirOf(h.side);
   const atHome = Math.abs(h.x - homeX) < 7;
-  h.hp = Math.min(h.mhp, h.hp + (1.5 + h.lvl * .25 + passVal(h, 'hreg') + (atHome ? 34 : 0)) * dt);
-  h.mana = Math.min(h.mmana, h.mana + (3.5 + h.lvl * .35 + passVal(h, 'mreg') + (atHome ? 22 : 0)) * dt);
-  gainXp(h, 3 * dt);                       // standing in the lane is worth something
+  // Out of combat a hero mends where it stands. Without this they spend a
+  // third of the match walking the length of the bridge to heal and back.
+  const calm = G.t - h.dmgTaken > 6 ? 1 : 0;
+  h.hp = Math.min(h.mhp, h.hp + (1.5 + h.lvl * .25 + passVal(h, 'hreg')
+    + (atHome ? 34 : 0) + calm * (6 + h.lvl * .9)) * dt);
+  h.mana = Math.min(h.mmana, h.mana + (3.5 + h.lvl * .35 + passVal(h, 'mreg')
+    + (atHome ? 22 : 0) + calm * 4) * dt);
+  gainXp(h, 4.5 * dt);                       // standing in the lane is worth something
   for (let i = h.buffs.length - 1; i >= 0; i--){ h.buffs[i].t -= dt; if (h.buffs[i].t <= 0) h.buffs.splice(i, 1); }
   if (h.rage > 0 && G.t - h.dmgTaken > 3) h.rage = Math.max(0, h.rage - dt * .05);
   const shieldLow = passVal(h, 'shieldLow');
@@ -1656,10 +1691,15 @@ function heroStep(h, dt){
   const frac = h.hp / h.mhp;
   const tower = inTowerFire(h);
   const cover = tower ? alliesNear({ x:tower.x, y:tower.y, side:h.side, r:0 }, 6) : 0;
-  if (h.retreat && frac > .78) h.retreat = false;
-  if (frac < .3 || (tower && !cover && frac < .62)) h.retreat = true;
+  // A wounded enemy hero within reach is worth finishing — heroes used to
+  // break off every duel the moment either side dipped, so they traded for
+  // twenty minutes and nobody ever died to a hero.
+  const prey = nearestFoe(h, 11, true);
+  const finishing = prey && prey.hp / prey.mhp < .35 && frac > .32 && !(tower && !cover);
+  if (h.retreat && (frac > .66 || finishing)) h.retreat = false;
+  if (!finishing && (frac < .28 || (tower && !cover && frac < .58))) h.retreat = true;
 
-  const tgt = h.target = h.retreat ? null : heroTarget(h);
+  const tgt = h.target = h.retreat ? null : (finishing ? prey : heroTarget(h));
   castLoop(h, tgt, dt);
 
   let gx, gy = 0;
@@ -1872,6 +1912,16 @@ function castSkill(h, sk, tgt){
    THE EMBER HOST — the opposing hold, run by the same public actions the
    player uses. If the AI can do it, so can you.
    ===================================================================== */
+// Both holds used to draw from one shared random stream, and whichever acted
+// first each tick got first pick of it. Each hold now rolls its own.
+function arnd(s){
+  s.rs = (s.rs + 0x6D2B79F5) | 0;
+  let t = Math.imul(s.rs ^ (s.rs >>> 15), 1 | s.rs);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+}
+const apick = (s, arr) => arr[Math.floor(arnd(s) * arr.length)];
+
 const AI_BUILD_PLAN = ['farm','barracks','farm','pit','tavern','forge','workshop','farm','barracks','farm','pit','workshop','forge','farm','tavern','farm'];
 
 function aiStep(s, dt){
@@ -1903,7 +1953,7 @@ function aiStep(s, dt){
     if (free >= 0 && canPay(s, buildCost(next, 1))) build(s, free, next);
   }
   // --- level the important buildings once the plot is full
-  if (built >= s.plot.length - 1 && rnd() < .5){
+  if (built >= s.plot.length - 1 && arnd(s) < .5){
     const pri = ['barracks','tavern','forge','farm','workshop','pit'];
     for (const type of pri){
       const b = bList(s, type).find(o => o.lvl < BUILDINGS[type].maxLvl);
@@ -1913,22 +1963,22 @@ function aiStep(s, dt){
   // --- arm the workers
   const bl = barracksLvl(s);
   if (bl > 0){
-    const roll = rnd();
+    const roll = arnd(s);
     const order = bl >= 3 ? (roll < .45 ? ['melee','cannon','caster'] : roll < .8 ? ['cannon','caster','melee'] : ['caster','melee','cannon'])
       : bl === 2 ? (roll < .6 ? ['melee','caster'] : ['caster','melee']) : ['melee'];
     for (const t of order) if (!trainUnit(s, t)) break;
   }
   // --- forge work
-  if (bLvl(s, 'forge') > 0 && rnd() < .7){
+  if (bLvl(s, 'forge') > 0 && arnd(s) < .7){
     const all = [...TOWER_UPS, ...TROOP_UPS];
     const pool = all.filter(u => (TOWER_UPS.includes(u) ? s.towerUp : s.troopUp)[u.id] < upCap(s));
-    if (pool.length){ const u = pick(pool); buyUp(s, u.id); }
+    if (pool.length){ const u = apick(s, pool); buyUp(s, u.id); }
   }
   // --- heroes
   if (s.heroes.length < heroCap(s) && canPay(s, HERO_COST)){
     const roster = ['tank','fighter','marksman','mage','assassin','support'];
     const taken = new Set(s.heroes.map(h => h.cls));
-    const cls = pick(roster.filter(c => !taken.has(c))) || pick(roster);
+    const cls = apick(s, roster.filter(c => !taken.has(c))) || apick(s, roster);
     createHero(s, cls);
   }
   for (const h of s.heroes) if (h.pend.length) autoPick(h);
@@ -1941,7 +1991,12 @@ function update(dt){
   if (G.state !== 'play' || G.paused) return;
   dt = Math.min(dt, .05);
   G.dt = dt; G.t += dt;
-  for (const s of G.sides){
+  // Every per-side loop below swaps which hold goes first each tick: acting
+  // first is a small edge that compounds into a measurable win-rate bias.
+  G.frame = (G.frame || 0) + 1;
+  const order = G.frame % 2 ? [1, 0] : [0, 1];
+  for (const i of order){
+    const s = G.sides[i];
     ecoStep(s, dt);
     if (s.ai) aiStep(s, dt);
   }
@@ -1949,17 +2004,16 @@ function update(dt){
   if (G.waveT <= 0){ G.waveT = C.WAVE_PERIOD; spawnWave(); }
   rebuildGrid();
   const list = G.units.slice();
-  // Acting first is a real advantage over thousands of ticks, and waves are
-  // always appended side 0 then side 1 — so flip the order every tick.
-  G.frame = (G.frame || 0) + 1;
-  if (G.frame % 2) list.reverse();
-  for (const u of list){
-    if (u.dead) continue;
+  // Acting first is a real advantage over thousands of ticks. Reversing the
+  // list only alternated cleanly while it was still grouped by side, so walk
+  // it once per side instead, swapping which side moves first each tick.
+  for (const sd of order) for (const u of list){
+    if (u.dead || u.side !== sd) continue;
     if (u.isHero) heroStep(u, dt); else unitStep(u, dt);
   }
-  for (const s of G.sides) for (const h of s.heroes) if (h.dead) heroStep(h, dt);
+  for (const sd of order) for (const h of G.sides[sd].heroes) if (h.dead) heroStep(h, dt);
   separate();
-  for (const s of G.sides) for (const st of s.structs) structStep(st, dt);
+  for (const i of order) for (const st of G.sides[i].structs) structStep(st, dt);
   projStep(dt); zoneStep(dt);
   fxStep(dt);
   // heal-over-time buffs and expiring minion buffs
@@ -3282,7 +3336,7 @@ let uiT = 0;
 function syncAdvice(){
   const el = $('advice');
   if (!el) return;
-  const a = G.state === 'play' ? adviceFor(G.sides[0]) : null;
+  const a = (G.state === 'play' && !G.demo) ? adviceFor(G.sides[0]) : null;
   el.classList.toggle('hide', !a);
   if (a){ el.querySelector('.at').textContent = a.txt; el.dataset.tab = a.tab; }
 }
@@ -3300,7 +3354,7 @@ function uiTick(dt){
 
 /* ------------------------------------------------------------------ modals */
 function closeModal(){ $('modal').classList.remove('on'); }
-function openModal(html){ $('sheet').innerHTML = html; $('modal').classList.add('on'); }
+function openModal(html){ $('sheet').innerHTML = html; $('modal').classList.add('on'); $('modal').classList.remove('solid'); }
 
 function showMenu(){
   const meta = loadMeta();
@@ -3406,17 +3460,46 @@ function showHeroSheet(h){
 }
 const classGlyph = (cls) => ({ tank:'🛡️', fighter:'⚔️', marksman:'🏹', mage:'🔮', assassin:'🗡️', support:'✨' })[cls] || '⚔️';
 
+// How the match actually went: every structure that fell, in order, on a
+// shared time axis. A win that was never in doubt looks nothing like one that
+// turned at the twelfth minute, and the card should show which you had.
+function timelineHtml(){
+  if (!G.timeline.length) return '<div class="tl-empty">Not a single wall came down.</div>';
+  const end = Math.max(G.t, 1);
+  const rows = [0, 1].map(side => {
+    const marks = G.timeline.filter(e => e.side === side).map(e => {
+      const left = clamp(e.t / end, 0, 1) * 100;
+      const cls = e.key === 'gate' ? ' gate' : e.key === 'inhib' ? ' inhib' : '';
+      return '<i class="tl-m' + cls + '" style="left:' + left.toFixed(2) + '%" title="' +
+        e.n + ' — ' + mmss(e.t) + '"></i>';
+    }).join('');
+    return '<div class="tl-row"><span class="tl-lbl" style="color:' + SIDE_COL[side] + '">' +
+      (side === 0 ? 'Yours' : 'Theirs') + '</span><span class="tl-track">' + marks + '</span></div>';
+  }).join('');
+  return '<div class="tl">' + rows +
+    '<div class="tl-axis"><span>0:00</span><span>' + mmss(end) + '</span></div>' +
+    '<div class="legend"><span><i class="tl-m dot"></i> turret</span>' +
+    '<span><i class="tl-m inhib dot"></i> inhibitor</span>' +
+    '<span><i class="tl-m gate dot"></i> gates</span></div></div>';
+}
+
 function showOver(){
   const win = G.winner === 0;
   const s = G.sides[0], f = G.sides[1];
+  const best = s.heroes.slice().sort((a, b) => (b.kills - b.deaths) - (a.kills - a.deaths))[0];
   openModal('<h2>' + (win ? 'The Ember gates are down.' : 'Your gates are down.') + '</h2>' +
     '<p class="sub">' + (win ? 'Ironbridge is yours.' : 'The Host walks across your bridge.') + '</p>' +
+    timelineHtml() +
     '<div class="statline"><span>Time <b>' + mmss(G.t) + '</b></span><span>Waves <b>' + G.wave + '</b></span>' +
     '<span>Your kills <b>' + s.kills + '</b></span><span>Structures taken <b>' + s.structsKilled + '</b></span>' +
-    '<span>Their kills <b>' + f.kills + '</b></span></div>' +
-    '<div class="statline">' + s.heroes.map(h => '<span>' + h.name + ' <b>Lv ' + h.lvl + ' · ' + h.kills + '/' + h.deaths + '</b></span>').join('') + '</div>' +
+    '<span>Theirs <b>' + f.structsKilled + '</b></span>' +
+    '<span>Gathered <b>' + Math.round(s.gathered) + '</b></span></div>' +
+    (s.heroes.length ? '<div class="statline">' + s.heroes.map(h =>
+      '<span>' + (best === h && h.kills ? '★ ' : '') + h.name + ' <b>Lv ' + h.lvl + ' · ' +
+      h.kills + '/' + h.deaths + '</b></span>').join('') + '</div>' : '') +
     '<div class="rowbtn"><button class="big" data-act="again">Fight again</button>' +
     '<button class="big ghost" data-act="menu">Menu</button></div>');
+  $('modal').classList.add('solid');
 }
 
 function showHelp(){
@@ -3561,7 +3644,7 @@ function wire(){
     const a = b.dataset.act;
     if (a === 'start'){ audioStart(); newMatch({ diff:b.dataset.diff }); closeModal(); syncUI(); }
     else if (a === 'close') closeModal();
-    else if (a === 'menu'){ G.state = 'menu'; showMenu(); }
+    else if (a === 'menu'){ startDemo(); showMenu(); }
     else if (a === 'again'){ newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
     else if (a === 'mkhero'){
       const err = createHero(s0(), b.dataset.cls);
@@ -3680,8 +3763,7 @@ function boot(){
   lcv = $('wcv');
   resize();
   wire();
-  newMatch({ diff:'veteran' });
-  G.state = 'menu';
+  startDemo();
   showMenu();
   syncUI();
   requestAnimationFrame(frame);
@@ -3702,7 +3784,7 @@ window.IB = {
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
-  adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen,
+  adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };
