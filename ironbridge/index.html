@@ -5879,6 +5879,8 @@ function netStep(){
 function netStart(opt){
   NET.on = true; NET.me = opt.me | 0; NET.tick = 0; NET.seq = 0;
   MY = NET.me;                                       // the interface follows the seat
+  netLast = 0; acc = 0;
+  netClockStart();                                   // a clock that survives being in the background
   NET.box.clear(); NET.pending.length = 0; NET.hashes.clear(); NET.peerHashes.clear();
   NET.desyncAt = -1; NET.stallT = 0;
   newMatch({ diff:opt.diff || 'veteran', seed:opt.seed, pvp:true });
@@ -5899,6 +5901,7 @@ function netStart(opt){
 function netEnd(){
   NET.on = false; NET.peerLost = false;
   MY = 0;                                            // back to the left-hand hold
+  netClockStop();
   NET.tick = 0; NET.seq = 0; NET.desyncAt = -1; NET.stallT = 0;
   NET.box.clear(); NET.peerHashes.clear(); NET.hashes.clear(); NET.pending.length = 0;
   acc = 0;
@@ -5916,21 +5919,80 @@ function netRecv(m){
   }
 }
 
-let acc = 0;
+let acc = 0, netLast = 0;
+
+// The network clock, deliberately NOT on requestAnimationFrame.
+//
+// A browser throttles rAF to about one frame a second in a window that is not
+// in front, and stops it entirely in one that is fully covered. On your own
+// that is harmless — the game simply waits while you are not looking at it. In
+// a network match it is fatal, because the two machines advance in lockstep and
+// neither may pass a tick the other has not published. A backgrounded window
+// therefore drags its opponent down to its own frame rate.
+//
+// Two windows on one computer is the ordinary way to try two-player out, and
+// exactly what this does to it, measured: forty seconds of real time produced
+// four seconds of match — a tenth of speed — with "Waiting for the other
+// player…" on both screens the whole time. It reads as the game being frozen
+// and the other player being unable to do anything, which is precisely what it
+// was reported as.
+//
+// So a timer drives this as well as rAF, and takes its elapsed time from its
+// own clock rather than being handed a frame delta — that way it does not
+// matter which of the two calls it, or how often, and neither can double-count
+// the time. The per-pump budget is big enough to pay off well over a second of
+// arrears in one go, so a coarse pump still keeps real-time pace.
+const NET_BUDGET = 50;           // ticks one pump may run — 1.67s of catch-up
+const NET_ARREARS = 1.5;         // seconds of debt worth paying; older than this is dropped
+
+function netPump(){
+  if (!NET.on) return;
+  const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+  if (!netLast){ netLast = now; return; }
+  const raw = Math.min(NET_ARREARS, (now - netLast) / 1000);
+  netLast = now;
+  acc += raw;
+  let ran = 0, blocked = false;
+  while (acc >= 1 / 30 && ran < NET_BUDGET){
+    if (!netStep()){ blocked = true; break; }
+    acc -= 1 / 30; ran++;
+  }
+  // Never hoard arrears. A window that was away for five minutes owes nine
+  // thousand ticks and is not going to pay them.
+  if (acc > NET_ARREARS) acc = NET_ARREARS;
+  NET.stallT = blocked ? NET.stallT + raw : 0;
+}
+
+// A dedicated worker's timer keeps running at full rate in a backgrounded page,
+// where the page's own setInterval is clamped to once a second and, after a few
+// minutes of being hidden, considerably worse than that. If a worker cannot be
+// created — an unusual CSP, an old browser — fall back to setInterval, which is
+// still far better than rAF alone.
+let netClock = null;
+function netClockStart(){
+  if (netClock || HEADLESS) return;
+  try {
+    const src = 'let h=0;onmessage=function(e){if(e.data===1&&!h){h=setInterval(function(){postMessage(0);},40);}' +
+                'else if(e.data===0){clearInterval(h);h=0;}};';
+    const w = new Worker(URL.createObjectURL(new Blob([src], { type:'text/javascript' })));
+    w.onmessage = netPump;
+    w.postMessage(1);
+    netClock = { stop(){ try { w.postMessage(0); w.terminate(); } catch (e){} } };
+  } catch (e){
+    const id = setInterval(netPump, 40);
+    netClock = { stop(){ clearInterval(id); } };
+  }
+}
+function netClockStop(){
+  if (netClock){ netClock.stop(); netClock = null; }
+  netLast = 0; acc = 0;
+}
+
 function frame(ts){
   const raw = Math.min(.1, (ts - last) / 1000 || 0);
   last = ts;
   if (NET.on){
-    // Fixed steps only, and never more than a handful in one frame — a machine
-    // that fell behind catches up over several frames rather than freezing for
-    // one long one.
-    acc += Math.min(.25, raw);
-    let ran = 0, blocked = false;
-    while (acc >= 1 / 30 && ran < 8){
-      if (!netStep()){ blocked = true; break; }
-      acc -= 1 / 30; ran++;
-    }
-    NET.stallT = blocked ? NET.stallT + raw : 0;
+    netPump();
   } else if (G.state === 'play' && !G.paused && !G.held){
     let left = raw * G.speed;
     let guard = 0;
@@ -5992,6 +6054,9 @@ window.IB = {
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
+  netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS,
+  get acc(){ return acc; }, set acc(v){ acc = v; },
+  get netLast(){ return netLast; }, set netLast(v){ netLast = v; },
   get uiWaited(){ return uiWaited; }, set uiWaited(v){ uiWaited = v; },
   get MY(){ return MY; }, set MY(v){ MY = v; },
   get uiDown(){ return uiDown; }, set uiDown(v){ uiDown = v; },
