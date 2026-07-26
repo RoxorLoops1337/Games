@@ -1415,6 +1415,63 @@ t.ok(true, 'drawing an empty bridge is harmless');
       ', queued ' + JSON.stringify(q.map(o => o.type)) + ')');
     t.ok(held >= 0, 'the hold had workers to bring home (' + held + ')');
   }
+  {
+    // The Cannon sits behind a THIRD barracks level, and that level was
+    // unreachable for a different reason than the second one. Priced from the
+    // game's own cost functions over twelve matches, a hold spent 741 wood
+    // levelling farms — and 423 food, for population it was nowhere near
+    // using — while never saving the 188 the barracks wanted. The upgrade list
+    // is in priority order, but it only meant priority while its top was
+    // affordable: a farm level is cheap and a hold owns five farms, so every
+    // tick fell through to a farm and ate the wood in small bites.
+    //
+    // Twelve minutes rather than nine, because that is the window where the
+    // third level is decidable at all. Before: level 3 in 0 of 12 side-holds,
+    // a Cannon armed in 0. After: 9 and 5.
+    const lv3 = [], cannon = [];
+    for (const seed of [5031, 5062, 5093, 5124, 5155, 5186]){
+      IB.newMatch({ diff:'veteran', seed });
+      G.sides[0].ai = true;
+      const gun = [0, 0];
+      for (let i = 0; i < 30 * 60 * 12 && G.state === 'play'; i++){
+        IB.update(1 / 30);
+        for (const sd of [0, 1]) for (const q of G.sides[sd].trainQ)
+          if (q.type === 'cannon') gun[sd]++;
+      }
+      for (const sd of [0, 1]){ lv3.push(IB.barracksLvl(G.sides[sd])); cannon.push(gun[sd] > 0); }
+    }
+    const top = lv3.filter(l => l >= 3).length, guns = cannon.filter(Boolean).length;
+    t.ok(top >= 6, 'a hold reaches the barracks level that unlocks Cannons (' +
+      top + ' of ' + lv3.length + ': ' + lv3.join(',') + ')');
+    t.ok(guns >= 3, 'and it arms a Cannon with it (' + guns + ' of ' + cannon.length + ' holds)');
+  }
+  {
+    // The save-up rule on its own: a cheap upgrade near the bottom of the list
+    // must not be bought while the top of the list is within about half a
+    // minute of digging. Nothing here is statistical — one hold, one state,
+    // constructed by hand.
+    IB.newMatch({ diff:'veteran', seed:5233 });
+    const s = P();
+    rich(s);
+    for (let i = s.plot.indexOf(null); i >= 0; i = s.plot.indexOf(null))
+      IB.build(s, i, i % 2 ? 'farm' : 'barracks');            // a full plot, both types on it
+    const bar = IB.bList(s, 'barracks')[0];
+    IB.upgradeBuilding(s, bar.tile);
+    const farm = IB.bList(s, 'farm')[0];
+    t.ok(bar.lvl === 2 && farm.lvl === 1, 'a level-2 barracks and a level-1 farm are standing');
+    const want = IB.buildCost('barracks', 3), cheap = IB.buildCost('farm', 2);
+    t.ok(want.wood > cheap.wood, 'the barracks level is the dearer of the two in wood (' +
+      want.wood + ' vs ' + cheap.wood + ')');
+    IB.assign(s, 'wood', 2);
+    for (const k of ['gold','iron','food']) s.res[k] = 9000;
+    s.res.wood = want.wood - 8;                                // eight short, seconds away
+    t.ok(!IB.canPay(s, want) && IB.canPay(s, cheap), 'it can afford the farm but not the barracks');
+    t.ok(8 <= IB.gatherRate(s, 'wood') * 30,
+      'and the shortfall is inside the save-up window (' + Math.round(IB.gatherRate(s, 'wood') * 30) + ' wood in 30s)');
+    for (let i = 0; i < 20; i++){ s.aiT = 0; IB.aiStep(s, .1); }
+    t.ok(farm.lvl === 1, 'so it holds the wood instead of levelling the farm (farm at level ' + farm.lvl + ')');
+    t.ok(s.res.wood >= cheap.wood, 'and the pile is still there to spend (' + Math.round(s.res.wood) + ')');
+  }
 }
 
 /* --------------------------------------------------- what a plot buys you */
