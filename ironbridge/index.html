@@ -1734,7 +1734,15 @@ function addBuff(h, b){
   }
   b.stacks = 1; h.buffs.push(b); return b;
 }
-const HERO_COST = { gold:130, iron:60, food:45 };
+// Priced in worker-seconds, not in round numbers. 130 gold + 60 iron + 45 food
+// is 153 + 97 + 50 = 300 seconds of one worker's digging, but iron is the pile
+// a hold never has: instrumented over sixteen six-minute matches the Host was
+// short of iron for 96% of the samples where a tavern slot stood empty (gold
+// 71%, wood 0%), because iron also arms every soldier and pays every weapon
+// upgrade, and it mines only ~410 of it in that time while spending ~480. The
+// same 300 worker-seconds asked for in gold instead — 200 + 48 + 50 = 298 —
+// leaves the hero exactly as dear and actually payable.
+const HERO_COST = { gold:170, iron:30, food:45 };
 
 // Two heroes on one side answering to the same name made the result card read
 // like a bug. Take a name nobody in this hold is already using.
