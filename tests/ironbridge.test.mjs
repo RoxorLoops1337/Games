@@ -1156,6 +1156,58 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(arms.every(c => (c.iron || 0) > 0), 'and everything that arms you is priced in iron');
 }
 
+/* --------------------------------------------------- a hero is actually reachable */
+{
+  // The tavern was decoration. Playing the player's own side with the same
+  // assigner the Host uses, on veteran (so no difficulty eco multiplier is
+  // flattering the result), NOT ONE of twelve seeds forged a hero inside seven
+  // minutes: the price asked for 60 iron, and iron is also what arms every
+  // soldier and buys every weapon upgrade, so a hold mines ~410 of it in six
+  // minutes while spending ~480. Sampling every five seconds while a tavern
+  // slot stood empty, it was short of iron 86% of the time.
+  //
+  // The fix was not to make the hero cheaper. Costed in worker-seconds at the
+  // base gather rates, 130 gold + 60 iron + 45 food is 153 + 97 + 50 = 300
+  // seconds of digging; 170 + 30 + 45 is 200 + 48 + 50 = 298. The same price,
+  // asked for in the pile a hold actually accumulates.
+  //
+  // No statistical band here on purpose: seeds, dt and the whole simulation are
+  // deterministic, so this count is exact and repeats byte for byte. The margin
+  // (8 of 12 required, 10 measured) is there to survive unrelated balance work,
+  // not noise. Reverting only HERO_COST takes it to 0 of 12.
+  const K = ['gold','iron','wood','food'];
+  let forged = 0, open = 0; const shortOf = { gold:0, iron:0, wood:0, food:0 };
+  for (let n = 0; n < 12; n++){
+    IB.newMatch({ diff:'veteran', seed: 900 + n * 53 });
+    const s = P();
+    s.ai = true;                                  // let the assigner play it out
+    let got = false;
+    for (let i = 0; i < 30 * 60 * 7 && G.state === 'play'; i++){
+      IB.update(1 / 30);
+      if (s.heroes.length > 0) got = true;
+      if (i % 150 || got) continue;
+      if (IB.heroCap(s) > s.heroes.length){       // a slot stood empty: why?
+        open++;
+        for (const k of K) if ((IB.HERO_COST[k] || 0) > s.res[k]) shortOf[k]++;
+      }
+    }
+    if (got) forged++;
+  }
+  t.ok(forged >= 8, 'a hold that plays well forges a hero inside seven minutes (' +
+    forged + ' of 12 seeds)');
+  // and the pile it waits on is gold — the one the tavern is supposed to want
+  t.ok(open === 0 || shortOf.gold >= shortOf.iron,
+    'while the slot is empty it is waiting on gold, not iron (gold ' +
+    Math.round(shortOf.gold / Math.max(1, open) * 100) + '%, iron ' +
+    Math.round(shortOf.iron / Math.max(1, open) * 100) + '%)');
+  // the worker-seconds arithmetic the price is built on, so a later edit that
+  // quietly doubles the hero has to argue with this number
+  const ws = K.reduce((a, k) => a + (IB.HERO_COST[k] || 0) / C.GATHER[k], 0);
+  t.ok(ws > 250 && ws < 350, 'a hero costs about five worker-minutes (' + Math.round(ws) + 's)');
+  t.ok((IB.HERO_COST.iron || 0) / C.GATHER.iron < (IB.HERO_COST.gold || 0) / C.GATHER.gold * .4,
+    'and most of that is gold, not iron');
+}
+
 /* -------------------------------------------------------- class identity */
 {
   // Every class wore the same blue plate with a different emoji on it.
