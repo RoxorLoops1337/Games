@@ -4020,6 +4020,192 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'closing the lobby lets go of everything');
 }
 
+/* ============================================ typing is not playing
+   Every shortcut in this game is a single character, and the room-code
+   alphabet contains B, F, G, H, M and P. A join box and a keymap cannot share
+   a window without this. */
+{
+  t.ok(typeof IB.typingInto === 'function', 'there is a test for whether the player is typing');
+  for (const tag of ['INPUT', 'TEXTAREA', 'SELECT'])
+    t.ok(IB.typingInto({ tagName:tag }), 'a ' + tag + ' counts as typing');
+  t.ok(IB.typingInto({ tagName:'input' }), 'and the tag name is matched case-insensitively');
+  t.ok(IB.typingInto({ tagName:'DIV', isContentEditable:true }), 'so does anything contenteditable');
+  t.ok(!IB.typingInto({ tagName:'DIV' }), 'an ordinary element does not');
+  t.ok(!IB.typingInto({ tagName:'BUTTON' }), 'nor does a button');
+  t.ok(!IB.typingInto(null) && !IB.typingInto(undefined) && !IB.typingInto({}),
+    'and nothing missing or malformed is mistaken for a text field');
+
+  // The letters that actually collide. Every one of these is in the room-code
+  // alphabet AND bound to a shortcut, which is why typing a code set the camera
+  // swinging and opened the pause sheet.
+  const collide = ['b', 'f', 'g', 'h', 'm', 'p'];
+  const bound = collide.filter(c => IB.keyAction(c));
+  t.ok(bound.length === collide.length,
+    'every one of B F G H M P is a live shortcut (' + bound.join('') + ')');
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  t.ok(collide.every(c => ALPHABET.includes(c.toUpperCase())),
+    'and every one of them is also a letter a room code can contain');
+  // The guard is in the handler, not in keyAction — keyAction must keep working
+  // for the real key presses.
+  t.ok(IB.keyAction('p') === 'pause' && IB.keyAction('m') === 'camMid',
+    'the keymap itself is untouched — the guard belongs in the listener');
+  const kd = SRC.indexOf("addEventListener('keydown'");
+  const listener = SRC.slice(kd, SRC.indexOf('});', kd));
+  t.ok(/typingInto\(e\.target\)/.test(listener),
+    'and the listener checks it before acting on anything');
+}
+
+/* ======================================= a shared match cannot be paused
+   The network loop never read G.paused, so pausing did not stop the board —
+   it put a blocking opaque sheet over a match that was still being fought. */
+{
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:8801 });
+  IB.setPaused(true);
+  t.ok(G.paused === true, 'a one-player match still pauses');
+  IB.setPaused(false);
+  t.ok(G.paused === false, 'and unpauses');
+
+  IB.netStart({ me:0, seed:8802 });
+  t.ok(IB.NET.on === true, 'in a network match');
+  IB.setPaused(true);
+  t.ok(G.paused === false, 'pause is refused outright');
+  const loop = SRC.slice(SRC.indexOf('function frame(ts)'), SRC.indexOf('function boot()'));
+  const netBranch = loop.slice(loop.indexOf('if (NET.on)'), loop.indexOf('} else if'));
+  t.ok(!/G\.paused/.test(netBranch),
+    'because the network loop does not read G.paused — pausing never stopped it, it only hid it');
+  // Unpausing must still work, or a match paused before it started could never
+  // be released.
+  IB.setPaused(false);
+  t.ok(G.paused === false, 'and clearing the flag is always allowed');
+  IB.netEnd();
+}
+
+/* ================================================ the desync check works
+   Detection that only fires half the time, or that notices and carries on, is
+   not a safety net. */
+{
+  IB.netEnd();
+  IB.netStart({ me:0, seed:9100 });
+
+  // 1. A hash arriving BEFORE this machine has computed its own must still be
+  //    compared. Lockstep keeps the two within a few ticks, so whichever
+  //    machine is trailing hits this case nearly every time.
+  IB.NET.hashes.clear(); IB.NET.peerHashes.clear(); IB.NET.desyncAt = -1;
+  IB.netRecv({ k:'hash', tick:30, h:12345 });
+  t.ok(IB.NET.peerHashes.get(30) === 12345, 'a hash that arrives early is kept, not dropped');
+  t.ok(IB.NET.desyncAt === -1, 'and nothing is concluded from it on its own');
+  IB.NET.hashes.set(30, 999);            // ours turns out to differ
+  IB.netCheckHash(30);
+  t.ok(IB.NET.desyncAt === 30, 'and it is compared as soon as ours exists (desyncAt ' + IB.NET.desyncAt + ')');
+
+  // 2. The other order round.
+  IB.netEnd(); IB.netStart({ me:0, seed:9101 });
+  IB.NET.hashes.set(60, 4444);
+  IB.netRecv({ k:'hash', tick:60, h:4444 });
+  t.ok(IB.NET.desyncAt === -1, 'two machines that agree are left alone');
+  IB.netRecv({ k:'hash', tick:90, h:1 });
+  IB.NET.hashes.set(90, 2); IB.netCheckHash(90);
+  t.ok(IB.NET.desyncAt === 90, 'and a later disagreement is still caught');
+
+  // 3. A detected desync STOPS the match. Carrying on means both players give
+  //    orders to a board the other cannot see, and whoever wins did not.
+  IB.netEnd(); IB.netStart({ me:0, seed:9102 });
+  IB.netDeliver(IB.NET.tick, 0, []); IB.netDeliver(IB.NET.tick, 1, []);
+  t.ok(IB.netStep() === true, 'a healthy match steps');
+  const at = IB.NET.tick;
+  IB.NET.desyncAt = at;
+  IB.netDeliver(IB.NET.tick, 0, []); IB.netDeliver(IB.NET.tick, 1, []);
+  t.ok(IB.netStep() === false, 'a desynced one does not, even with both sides’ orders in hand');
+  t.ok(IB.NET.tick === at, 'and the clock does not move (' + IB.NET.tick + ')');
+  const banner = IB.netBanner();
+  t.ok(/drifted apart/.test(banner), 'and the player is told why (' + banner + ')');
+
+  // 4. The hash must actually cover the things that diverge, or none of the
+  //    above means anything. Floats are quantised on purpose (1/64 on money and
+  //    health, 1/4096 on positions), so the probes move by more than that.
+  IB.netEnd(); IB.newMatch({ diff:'veteran', seed:9103 });
+  step(10);
+  const h0 = IB.netHash();
+  t.ok(IB.netHash() === h0, 'an unchanged board hashes the same twice');
+  const probes = [
+    ['the shared random cursor', () => IB.reseed(4242)],
+    ['a hold’s own decision stream', () => { P().rs = (P().rs ^ 99) | 0; }],
+    ['gold', () => { P().res.gold += 1; }],
+    ['a worker moving job', () => { P().workers.idle += 1; P().workers.gold -= 1; }],
+    ['a node level', () => { P().nodeLvl.gold++; }],
+    ['a forge rank', () => { P().towerUp.hp++; }],
+    ['a troop rank', () => { P().troopUp.tad++; }],
+    ['a building appearing', () => { P().plot[0] = { type:'farm', lvl:1, tile:0 }; }],
+    ['a building levelling', () => { P().plot[5].lvl++; }],
+    ['the training queue', () => { P().trainQ.push({ type:'worker', t:5, dur:5 }); }],
+    ['the wave clock', () => { G.waveT += 1; }],
+    ['a structure taking damage', () => { P().structs[0].hp -= 1; }],
+  ];
+  for (const [what, poke] of probes){
+    IB.newMatch({ diff:'veteran', seed:9103 });
+    step(10);
+    poke();
+    t.ok(IB.netHash() !== h0, 'the hash notices ' + what);
+  }
+  // Hero progression: two machines disagreeing about a level, a passive or the
+  // three cards on offer used to be completely silent.
+  {
+    IB.newMatch({ diff:'veteran', seed:9103 });
+    step(10);
+    rich(P());
+    P().plot[2] = { type:'tavern', lvl:1, tile:2 };
+    IB.createHero(P(), 'fighter');
+    const hh = P().heroes[0];
+    const withHero = IB.netHash();
+    t.ok(withHero !== h0, 'the hash notices a hero existing at all');
+    hh.lvl++;
+    t.ok(IB.netHash() !== withHero, 'and a hero levelling');
+    const lvled = IB.netHash();
+    hh.passRank++;
+    t.ok(IB.netHash() !== lvled, 'and a passive ranking up');
+    const ranked = IB.netHash();
+    if (hh.skills.length){ hh.skills[0].rank++; t.ok(IB.netHash() !== ranked, 'and a skill ranking up'); }
+    else t.ok(true, 'and a skill ranking up (no skill yet at this level)');
+    const before = IB.netHash();
+    hh.pend.push({ kind:'passive', opts:['a', 'b', 'c'], lvl:3 });
+    t.ok(IB.netHash() !== before, 'and which cards a hero is being offered');
+  }
+  IB.netEnd();
+}
+
+/* ================================================ leaving a network match */
+{
+  IB.netEnd();
+  IB.netStart({ me:1, seed:9200 });
+  t.ok(IB.NET.on === true && IB.NET.me === 1, 'in a network match as side 1');
+  IB.NET.pending.push({ type:'worker', side:1, seq:0 });
+  IB.netDeliver(50, 0, []); IB.NET.hashes.set(30, 7); IB.NET.peerHashes.set(30, 8);
+
+  IB.netEnd();
+  t.ok(IB.NET.on === false, 'leaving clears the multiplayer flag');
+  t.ok(IB.NET.tick === 0 && IB.NET.seq === 0, 'and the clock and sequence go back to zero');
+  t.ok(IB.NET.box.size === 0 && IB.NET.pending.length === 0,
+    'and no orders from the finished match are left in the box');
+  t.ok(IB.NET.hashes.size === 0 && IB.NET.peerHashes.size === 0, 'nor any of its hashes');
+  t.ok(IB.NET.desyncAt === -1 && IB.NET.peerLost === false, 'and its failure flags are cleared');
+
+  // The bug this guards: NET.on was set in netStart and cleared NOWHERE, so the
+  // frame loop kept taking its network branch against whatever match came next.
+  t.ok(/NET\.on = false/.test(SRC), 'something in the game actually clears NET.on');
+  const wiring = SRC.slice(SRC.indexOf('function wire()'));
+  for (const path of ['start', 'introgo', 'resume', 'menu', 'again'])
+    t.ok(new RegExp("a === '" + path + "'[\\s\\S]{0,200}?netEnd\\(\\)").test(wiring),
+      "'" + path + "' ends the network match before starting a different one");
+
+  // A one-player match started after a network one must actually run.
+  IB.newMatch({ diff:'veteran', seed:9201 });
+  const t0 = G.t;
+  step(3);
+  t.ok(G.t > t0, 'and the one-player match that follows runs normally (' + t0.toFixed(2) + ' -> ' + G.t.toFixed(2) + 's)');
+  t.ok(G.sides[1].ai === true, 'with the Host back in it');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
