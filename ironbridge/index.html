@@ -873,7 +873,12 @@ function makeSide(i, ai){
   const s = {
     i, ai, name:SIDE_NAME[i], col:SIDE_COL[i],
     res:{ gold:200, iron:110, wood:170, food:130 },
-    workers:{ idle:4, gold:0, iron:0, wood:0, food:0 },
+    // Four workers standing idle is where this game used to open, and a player
+    // who spent a minute reading the screen came back to an economy that had
+    // earned nothing while the Host — which assigns on its first tick — was
+    // three waves in. Three of them start on a job; the fourth is left for you
+    // to place, which is the first thing the game asks you to do.
+    workers:{ idle:1, gold:1, iron:0, wood:1, food:1 },
     plot:new Array(PLOT_W * PLOT_H).fill(null),
     trainQ:[], muster:[], heroes:[],
     nodeLvl:{ gold:1, iron:1, wood:1 },
@@ -2273,7 +2278,10 @@ function aiStep(s, dt){
   // to arm.
   const canArm = barracksLvl(s) > 0 && Object.keys(TRAIN).some(k =>
     TRAIN[k].barracks <= barracksLvl(s) && canPay(s, TRAIN[k].cost));
-  const want = { wood:.30, gold:.30, iron:.25, food:.15 };
+  // Every worker costs 20 food to train, so a hold that under-staffs the
+  // fields throttles its own growth and then cannot afford a hero (45 food).
+  // Traced: food sat under 35 all match while iron piled up unspent.
+  const want = { wood:.28, gold:.30, iron:.18, food:.24 };
   if (s.workers.idle > (canArm ? 1 : 0)){
     let bestNode = 'wood', bestGap = -9;
     for (const n of ['gold','iron','wood','food']){
