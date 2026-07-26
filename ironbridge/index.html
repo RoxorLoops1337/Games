@@ -57,7 +57,8 @@
   #advice.hide{ display:none; }
   #advice .ah{ font-size:9px; letter-spacing:2px; color:var(--gold); font-weight:800; }
   #advice .at{ font-size:12px; color:var(--ink); line-height:1.35; }
-  @media (max-width:760px){ #advice{ max-width:calc(100% - 20px); bottom:8px; } }
+  @media (max-width:760px){ #advice{ max-width:calc(100% - 20px); bottom:8px; }
+    #toast{ top:84px; } }
 
   /* ---------------- command dock ---------------- */
   #dock{ flex:0 0 auto; display:flex; gap:8px; align-items:stretch; padding:7px 9px;
@@ -222,6 +223,7 @@
     <div class="res" id="rPop"><span class="ic">👥</span><b>0</b></div>
     <div id="clock">
       <div id="waveBox">Wave <b>0</b> · <span id="waveT">0:00</span></div>
+      <button class="tbtn" id="btnSound">🔊</button>
       <button class="tbtn" id="btnSpeed">1×</button>
       <button class="tbtn" id="btnPause">❚❚</button>
       <button class="tbtn" id="btnMenu">☰</button>
@@ -665,9 +667,9 @@ const PLOT_W = 4, PLOT_H = 4;
    STATE
    ===================================================================== */
 const DIFFS = [
-  { id:'recruit', n:'Recruit',  d:'The Ember Host takes its time.',    eco:.80, ai:.75, hero:.85 },
-  { id:'veteran', n:'Veteran',  d:'An even fight, decided on the bridge.', eco:1.0, ai:1.0, hero:1.0 },
-  { id:'warlord', n:'Warlord',  d:'They out-produce you. Out-play them.',  eco:1.28, ai:1.25, hero:1.15 },
+  { id:'recruit', n:'Recruit',  d:'The Host gathers slower and its heroes hit softer.', eco:.74, ai:.8, hero:.85 },
+  { id:'veteran', n:'Veteran',  d:'Same economy, same heroes. An even fight.',           eco:1.0, ai:1.0, hero:1.0 },
+  { id:'warlord', n:'Warlord',  d:'They out-gather you by a third. Out-play them.',      eco:1.34, ai:1.2, hero:1.14 },
 ];
 
 const G = {
@@ -762,6 +764,7 @@ const gatherMul = (s) => {
   for (const h of s.heroes) m += passVal(h, 'gatherM');
   return m;
 };
+const heroMul = (side) => (G.sides[side] && G.sides[side].ai) ? G.diff.hero : 1;
 const heroCap = (s) => bLvl(s, 'tavern') > 0 ? Math.min(3, bList(s, 'tavern').reduce((a, b) => Math.max(a, b.lvl), 0)) : 0;
 const upCap = (s) => Math.min(MAX_UP, bLvl(s, 'forge') * 2);
 const barracksLvl = (s) => bList(s, 'barracks').reduce((a, b) => Math.max(a, b.lvl), 0);
@@ -861,7 +864,10 @@ const structMaxHp = (s, st) => Math.round(st.base.hp * (1 + .14 * s.towerUp.hp))
 
 /* ------------------------------------------------------------------ economy tick */
 function ecoStep(s, dt){
-  const m = gatherMul(s);
+  // The Host's handicap is an open, ongoing resource multiplier — the same
+  // levers you have, just more of them. A one-off opening purse was noise
+  // across a fifteen-minute match, which made the difficulties identical.
+  const m = gatherMul(s) * (s.ai ? G.diff.eco : 1);
   let got = 0;
   for (const node of ['gold','iron','wood','food']){
     const n = Math.min(s.workers[node], nodeCap(s, node));
@@ -885,6 +891,7 @@ function ecoStep(s, dt){
       s.trainQ.splice(i, 1);
       if (q.type === 'worker') s.workers.idle++;
       else s.muster.push({ type:q.type });
+      if (s.i === 0) sfx('build');
     }
   }
   for (const b of s.plot) if (b && b.raise > 0) b.raise = Math.max(0, b.raise - dt * 1.6);
@@ -933,6 +940,7 @@ function spawnWave(){
     if (s.superT > 0) for (let i = 0; i < 2; i++) spawnUnit(s.i, 'super', { y:i ? 1.6 : -1.6 });
   }
   fxToast('Wave ' + G.wave + ' marches out.');
+  sfx('wave');
 }
 
 /* ------------------------------------------------------------------ lookup grid */
@@ -1040,6 +1048,7 @@ function dealDmg(src, tgt, amt, o){
       }
     }
     if (tgt.struct && dmg > 40) shake(Math.min(3, dmg / 90), tgt.x);
+    sfx(tgt.struct ? 'stone' : (big ? 'hitBig' : 'hit'), tgt.x);
   }
   if (dmg > 0 && !HEADLESS) addFloat(tgt.x, tgt.y, Math.round(dmg), magic ? '#c69bff' : (src && src.isHero ? '#ffe08a' : '#ffffff'), tgt.isHero || tgt.struct ? 1 : .8);
   if (src && src.isHero && dmg > 0){
@@ -1079,7 +1088,7 @@ function killThing(t, src){
   if (t.isHero) onHeroDeath(t, src);
   else {
     shareXp(t.x, 22 + 1.9 * G.wave, src);
-    if (!HEADLESS) burstFx(t.x, t.y, SIDE_COL[t.side], 7);
+    if (!HEADLESS){ burstFx(t.x, t.y, SIDE_COL[t.side], 7); sfx('die', t.x); }
     const i = G.units.indexOf(t); if (i >= 0) G.units.splice(i, 1);
   }
 }
@@ -1116,6 +1125,7 @@ function onStructDown(st, src){
     burstFx(st.x, st.y, '#d8c49a', 30);
     ringFx(st.x, st.y, st.key === 'gate' ? 7 : 4.5, '#ffd9a0');
     shake(st.key === 'gate' ? 14 : st.key === 'inhib' ? 9 : 7, st.x);
+    sfx('fall', st.x);
   }
   if (st.key === 'inhib'){ foe.superT = C.SUPER_DUR; st.downT = C.INHIB_RESPAWN; }
   if (st.key === 'gate'){ endMatch(enemyOf(st.side)); }
@@ -1124,6 +1134,7 @@ function onStructDown(st, src){
 function endMatch(winner){
   if (G.state !== 'play') return;
   G.state = 'over'; G.winner = winner;
+  sfx(winner === 0 ? 'win' : 'lose');
   saveMeta(winner === 0);
   if (!HEADLESS) showOver();
 }
@@ -1185,6 +1196,7 @@ function basicAttack(u, tgt){
 }
 
 function shoot(u, tgt, onHit, col){
+  sfx('shot', u.x);
   G.projs.push({ x:u.x, y:u.y, z:u.struct ? 2.6 : .8, tgt, onHit, col, sp:tgt.struct ? 34 : 26, dead:false, tr:[] });
 }
 
@@ -1451,9 +1463,10 @@ function createHero(s, cls, name){
 function recalcHero(h, fresh){
   const cl = CLS[h.cls], L = h.lvl - 1;
   const hpFrac = fresh ? 1 : h.hp / h.mhp;
-  h.mhp = Math.round((cl.b.hp + cl.g.hp * L + passVal(h, 'hp')) * (1 + passVal(h, 'hpPct')));
-  h.ad = cl.b.ad + cl.g.ad * L + passVal(h, 'ad');
-  h.ap = (cl.b.ap + cl.g.ap * L + passVal(h, 'ap')) * (1 + passVal(h, 'apPct'));
+  const dm = heroMul(h.side);
+  h.mhp = Math.round((cl.b.hp + cl.g.hp * L + passVal(h, 'hp')) * (1 + passVal(h, 'hpPct')) * dm);
+  h.ad = (cl.b.ad + cl.g.ad * L + passVal(h, 'ad')) * dm;
+  h.ap = (cl.b.ap + cl.g.ap * L + passVal(h, 'ap')) * (1 + passVal(h, 'apPct')) * dm;
   h.armor = cl.b.armor + cl.g.armor * L + passVal(h, 'armor') + bsum(h, 'barm')
     + (h.hp / h.mhp < .5 ? passVal(h, 'armorLow') : 0);
   h.mr = cl.b.mr + cl.g.mr * L + passVal(h, 'mr') + bsum(h, 'bmr');
@@ -1484,7 +1497,7 @@ function gainXp(h, amt){
     if (C.SKILL_TIERS.includes(h.lvl)) offer(h, 'skill');
     else if (h.lvl === C.ULT_LEVEL) offer(h, 'ult');
     else if (C.RANK_LEVELS.includes(h.lvl)) offer(h, 'rank');
-    if (h.side === 0 && !HEADLESS) fxToast(h.name + ' reaches level ' + h.lvl + '.', 'good');
+    if (h.side === 0 && !HEADLESS){ fxToast(h.name + ' reaches level ' + h.lvl + '.', 'good'); sfx('level'); }
     if (G.sides[h.side].ai) autoPick(h);
   }
   if (h.lvl >= C.MAX_LEVEL) h.xp = 0;
@@ -1581,6 +1594,7 @@ function onHeroDeath(h, src){
     burstFx(h.x, h.y, SIDE_COL[h.side], 22);
     ringFx(h.x, h.y, 3.2, SIDE_COL[h.side]);
     shake(6, h.x);
+    sfx('hero', h.x);
   }
 }
 
@@ -1724,7 +1738,7 @@ function castSkill(h, sk, tgt){
   const pw = skPower(h, s, r);
   const dur = s.dur || 0;
   h.swing = .3;
-  if (!HEADLESS) castFx(h, s);
+  if (!HEADLESS){ castFx(h, s); sfx('cast', h.x); }
   switch (s.k){
     case 'strike': {
       if (!tgt) break;
@@ -1955,6 +1969,109 @@ function update(dt){
     if (hps) healUnit(h, hps * dt);
   }
   for (const u of G.units) if (u.mb){ u.mb.t -= dt; if (u.mb.t <= 0) u.mb = null; }
+}
+
+/* =====================================================================
+   SOUND — everything is synthesised, so there is nothing to download and
+   nothing to go stale. Silent under HEADLESS, silent until the first tap
+   (browsers require a gesture), and hard-throttled so a wave-on-wave brawl
+   cannot turn into a wall of noise.
+   ===================================================================== */
+const MUTE_KEY = 'ib_mute';
+const AU = { ctx:null, master:null, noise:null, muted:false, last:{}, voices:0 };
+try { AU.muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e){}
+
+function audioStart(){
+  if (HEADLESS || AU.ctx) return AU.ctx;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return null;
+  AU.ctx = new AC();
+  AU.master = AU.ctx.createGain();
+  AU.master.gain.value = AU.muted ? 0 : .5;
+  AU.master.connect(AU.ctx.destination);
+  // one shared noise buffer for every percussive sound
+  const n = AU.ctx.sampleRate * .5;
+  AU.noise = AU.ctx.createBuffer(1, n, AU.ctx.sampleRate);
+  const d = AU.noise.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  return AU.ctx;
+}
+function setMuted(m){
+  AU.muted = m;
+  try { localStorage.setItem(MUTE_KEY, m ? '1' : '0'); } catch (e){}
+  if (AU.master) AU.master.gain.value = m ? 0 : .5;
+}
+
+function tone(o){
+  const c = AU.ctx;
+  const osc = c.createOscillator(), g = c.createGain();
+  osc.type = o.type || 'sine';
+  const t = c.currentTime + (o.at || 0);
+  osc.frequency.setValueAtTime(o.f, t);
+  if (o.f2) osc.frequency.exponentialRampToValueAtTime(Math.max(1, o.f2), t + o.dur);
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(o.v, t + Math.min(.02, o.dur * .3));
+  g.gain.exponentialRampToValueAtTime(.0001, t + o.dur);
+  osc.connect(g); g.connect(AU.master);
+  osc.start(t); osc.stop(t + o.dur + .02);
+  AU.voices++;
+  osc.onended = () => { AU.voices = Math.max(0, AU.voices - 1); };
+}
+function noiseHit(o){
+  const c = AU.ctx;
+  const src = c.createBufferSource(), g = c.createGain(), f = c.createBiquadFilter();
+  src.buffer = AU.noise;
+  f.type = o.hp ? 'highpass' : 'lowpass';
+  f.frequency.value = o.cut || 900;
+  const t = c.currentTime + (o.at || 0);
+  g.gain.setValueAtTime(o.v, t);
+  g.gain.exponentialRampToValueAtTime(.0001, t + o.dur);
+  src.connect(f); f.connect(g); g.connect(AU.master);
+  src.start(t); src.stop(t + o.dur + .02);
+  AU.voices++;
+  src.onended = () => { AU.voices = Math.max(0, AU.voices - 1); };
+}
+
+// key -> [minimum gap in seconds, player, important?]
+// An important sound is never dropped by the voice cap: it is already rare by
+// its own gap, and going deaf to a falling gate because six swords are
+// swinging is exactly backwards.
+const SFX = {
+  hit:    [.055, () => noiseHit({ v:.14, dur:.05, cut:2600, hp:true })],
+  hitBig: [.09,  () => { noiseHit({ v:.22, dur:.09, cut:1400 }); tone({ f:180, f2:90, dur:.09, v:.10, type:'square' }); }],
+  stone:  [.10,  () => noiseHit({ v:.16, dur:.13, cut:700 })],
+  die:    [.07,  () => tone({ f:340, f2:120, dur:.13, v:.10, type:'square' })],
+  shot:   [.06,  () => tone({ f:900, f2:420, dur:.07, v:.06, type:'triangle' })],
+  cast:   [.10,  () => { tone({ f:520, f2:1180, dur:.16, v:.09, type:'triangle' }); }],
+  fall:   [.35,  () => { noiseHit({ v:.34, dur:.75, cut:420 }); tone({ f:110, f2:44, dur:.7, v:.24, type:'sine' });
+                         tone({ f:70, f2:32, dur:.9, v:.18, type:'triangle', at:.05 }); }, 1],
+  wave:   [1.0,  () => { tone({ f:196, dur:.34, v:.16, type:'sawtooth' }); tone({ f:262, dur:.42, v:.15, type:'sawtooth', at:.16 }); }, 1],
+  level:  [.30,  () => { [523, 659, 784].forEach((f, i) => tone({ f, dur:.16, v:.11, type:'triangle', at:i * .06 })); }, 1],
+  build:  [.20,  () => { tone({ f:660, dur:.10, v:.10, type:'sine' }); tone({ f:880, dur:.16, v:.09, type:'sine', at:.08 }); }, 1],
+  hero:   [.40,  () => { [392, 330, 262].forEach((f, i) => tone({ f, dur:.22, v:.12, type:'sawtooth', at:i * .1 })); }, 1],
+  win:    [1.0,  () => { [392, 523, 659, 784].forEach((f, i) => tone({ f, dur:.42, v:.15, type:'triangle', at:i * .13 })); }, 1],
+  lose:   [1.0,  () => { [392, 311, 262, 196].forEach((f, i) => tone({ f, dur:.5, v:.15, type:'sawtooth', at:i * .15 })); }, 1],
+  click:  [.03,  () => noiseHit({ v:.06, dur:.03, cut:3200, hp:true })],
+};
+
+// worldX is optional: a sound from off the edge of the screen is not played.
+function sfx(key, worldX){
+  if (HEADLESS || AU.muted || !AU.ctx) return false;
+  const d = SFX[key];
+  if (!d) return false;
+  const now = AU.ctx.currentTime;
+  // If nothing has been asked for in a while the counter cannot legitimately
+  // be high — reset it, so one lost onended callback cannot mute the session.
+  if (now - (AU.lastAny || 0) > 1.5) AU.voices = 0;
+  if ((AU.last[key] || -9) + d[0] > now) return false;
+  if (!d[2] && AU.voices > 20) return false;
+  if (worldX !== undefined){
+    const p = (worldX - cam.x) * LS() * .96 + LW * .5;
+    if (p < -140 || p > LW + 140) return false;
+  }
+  AU.last[key] = now; AU.lastAny = now;
+  try { d[1](); } catch (e){ return false; }
+  return true;
 }
 
 /* =====================================================================
@@ -2477,11 +2594,24 @@ function drawLane(c){
 }
 
 // One strip covering the whole world: your hold, the span, their hold.
-function drawMinimap(c){
+// One rect, used by both the drawing and the hit test, so a tap always lands
+// where the strip actually is.
+function minimapRect(){
   const narrow = LW < 760;
-  const w = Math.min(340, LW - 24), h = narrow ? 26 : 34;
-  const x0 = LW - w - 12, y0 = LH - h - (narrow ? 74 : 10);
-  const W0 = CAM_MIN - 10, W1 = CAM_MAX + 10;
+  // On a phone the strip is nearly as wide as the screen, so it goes up into
+  // the empty sky under the camera buttons rather than across the battlefield.
+  const w = Math.min(340, LW - 24), h = narrow ? 24 : 34;
+  return { x0:LW - w - 12, y0:narrow ? 46 : LH - h - 10, w, h,
+    W0:CAM_MIN - 10, W1:CAM_MAX + 10 };
+}
+function minimapWorldX(sx){
+  const m = minimapRect();
+  return m.W0 + clamp((sx - m.x0 - 6) / (m.w - 12), 0, 1) * (m.W1 - m.W0);
+}
+function drawMinimap(c){
+  const m = minimapRect();
+  const w = m.w, h = m.h, x0 = m.x0, y0 = m.y0;
+  const W0 = m.W0, W1 = m.W1;
   c.fillStyle = 'rgba(8,12,18,.76)'; c.fillRect(x0, y0, w, h);
   c.strokeStyle = '#2a3446'; c.lineWidth = 1; c.strokeRect(x0 + .5, y0 + .5, w - 1, h - 1);
   const mx = (x) => x0 + 6 + ((x - W0) / (W1 - W0)) * (w - 12);
@@ -3383,7 +3513,17 @@ const s0Plot = (t) => G.sides[0].plot[t];
 
 function pickAt(clientX, clientY){
   const r = lcv.getBoundingClientRect();
-  const t = resolvePick(clientX - r.left, clientY - r.top);
+  const sx = clientX - r.left, sy = clientY - r.top;
+  const m = minimapRect();
+  if (sx >= m.x0 && sx <= m.x0 + m.w && sy >= m.y0 && sy <= m.y0 + m.h){
+    cam.follow = false;
+    const fb = $('camFollow'); if (fb) fb.classList.remove('on');
+    cam.x = clamp(minimapWorldX(sx), CAM_MIN, CAM_MAX);
+    sfx('click');
+    return;
+  }
+  const t = resolvePick(sx, sy);
+  if (t.kind !== 'none') sfx('click');
   if (t.kind === 'hero'){ sel.hero = t.hero; showHeroSheet(t.hero); return; }
   sel.node = t.kind === 'node' ? t.node : null;
   sel.tile = (t.kind === 'build' || t.kind === 'plot') ? t.tile : -1;
@@ -3419,7 +3559,7 @@ function wire(){
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const a = b.dataset.act;
-    if (a === 'start'){ newMatch({ diff:b.dataset.diff }); closeModal(); syncUI(); }
+    if (a === 'start'){ audioStart(); newMatch({ diff:b.dataset.diff }); closeModal(); syncUI(); }
     else if (a === 'close') closeModal();
     else if (a === 'menu'){ G.state = 'menu'; showMenu(); }
     else if (a === 'again'){ newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
@@ -3439,6 +3579,12 @@ function wire(){
     const t = $('advice').dataset.tab;
     if (t){ dockTab = t; syncUI(); }
   });
+  const paintSound = () => { $('btnSound').textContent = AU.muted ? '🔇' : '🔊'; $('btnSound').classList.toggle('on', !AU.muted); };
+  $('btnSound').addEventListener('click', () => { audioStart(); setMuted(!AU.muted); paintSound(); sfx('click'); });
+  paintSound();
+  // browsers will not make a sound until the player has touched the page
+  const kick = () => { audioStart(); window.removeEventListener('pointerdown', kick); };
+  window.addEventListener('pointerdown', kick);
   $('btnMenu').addEventListener('click', () => { showMenu(); });
   $('btnHelpBase').addEventListener('click', showHelp);
   $('btnPause').addEventListener('click', () => {
@@ -3557,6 +3703,7 @@ window.IB = {
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen,
+  sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };
 

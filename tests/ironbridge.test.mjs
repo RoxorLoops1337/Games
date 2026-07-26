@@ -712,6 +712,75 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'and it still draws');
 }
 
+/* ---------------------------------------------------------------- difficulty */
+{
+  // Difficulty used to be a one-off opening purse, which is noise across a
+  // fifteen-minute match — every setting played identically. It has to keep
+  // applying, and it must only ever apply to the Host.
+  const gather = (diff) => {
+    IB.newMatch({ diff, seed:5 });
+    const host = E(), you = P();
+    for (const sd of [host, you]){ sd.workers.idle = 0; sd.workers.gold = 4; }
+    host.aiT = 9999;                       // keep the .ai handicap, take away its decisions
+    const h0 = host.gathered, y0 = you.gathered;
+    step(10);
+    return { host:host.gathered - h0, you:you.gathered - y0 };
+  };
+  const easy = gather('recruit'), even = gather('veteran'), hard = gather('warlord');
+  t.ok(hard.host > even.host && even.host > easy.host,
+    'the Host gathers faster the harder the setting (' + [easy, even, hard].map(g => Math.round(g.host)).join(' < ') + ')');
+  t.ok(Math.abs(easy.you - hard.you) < .5, 'your own gathering is identical on every setting');
+  t.ok(Math.abs(even.host - even.you) < .5, 'on Veteran the two holds gather at exactly the same rate');
+  // and the Host's heroes scale too
+  const heroAt = (diff) => {
+    IB.newMatch({ diff, seed:5 });
+    const h = IB.makeHero(1, 'fighter', 'X'); IB.pickOption(h, 0);
+    const mine = IB.makeHero(0, 'fighter', 'Y'); IB.pickOption(mine, 0);
+    return { host:h.mhp, you:mine.mhp };
+  };
+  const he = heroAt('recruit'), hh = heroAt('warlord');
+  t.ok(hh.host > he.host, 'Host heroes are tougher on Warlord than on Recruit');
+  t.ok(he.you === hh.you, 'your heroes are the same on every setting');
+}
+
+/* ---------------------------------------------------------------- sound */
+{
+  // Everything is synthesised and must stay completely silent (and cheap) in
+  // headless — no AudioContext is ever created here.
+  t.ok(IB.AU.ctx === null, 'no audio context is created without a player gesture');
+  t.ok(IB.sfx('hit') === false, 'sfx is a no-op while there is no context');
+  t.ok(Object.keys(IB.SFX).length >= 10, 'the kit covers the events worth hearing');
+  let bad = 0;
+  for (const k in IB.SFX){
+    const d = IB.SFX[k];
+    if (!Array.isArray(d) || typeof d[0] !== 'number' || d[0] <= 0 || typeof d[1] !== 'function') bad++;
+  }
+  t.ok(bad === 0, 'every sound has a positive minimum gap and a player');
+  t.ok(IB.SFX.hit[0] < IB.SFX.fall[0], 'a sword hit may repeat far more often than a collapsing gate');
+  for (const k of ['fall','wave','level','hero','win','lose'])
+    t.ok(IB.SFX[k][2] === 1, k + ' is important enough to never be starved by sword chatter');
+  t.ok(!IB.SFX.hit[2] && !IB.SFX.shot[2], 'and the chatter itself is droppable');
+  // the whole sim runs with sound wired in and nothing throws
+  IB.newMatch({ diff:'veteran', seed:113 });
+  G.sides[0].ai = true;
+  for (let i = 0; i < 30 * 60 * 3; i++) IB.update(1 / 30);
+  t.ok(G.wave > 5 && IB.AU.ctx === null, 'three minutes of battle stays silent under headless');
+}
+
+/* ---------------------------------------------------------------- minimap */
+{
+  IB.newMatch({ diff:'veteran', seed:127 });
+  IB.draw();
+  const m = IB.minimapRect();
+  t.ok(m.w > 40 && m.h > 10, 'the minimap has a real rect');
+  t.ok(m.W0 <= IB.CAM_MIN && m.W1 >= IB.CAM_MAX, 'and it spans the whole world, both holds included');
+  const left = IB.minimapWorldX(m.x0 + 6), right = IB.minimapWorldX(m.x0 + m.w - 6);
+  t.ok(left < IB.HOLD_X + 20 && right > C.LANE_LEN, 'tapping either end reaches either hold');
+  t.ok(IB.minimapWorldX(m.x0 - 500) === left, 'a tap outside the strip clamps instead of flying off');
+  const mid = IB.minimapWorldX(m.x0 + m.w / 2);
+  t.ok(mid > left && mid < right, 'and the middle of the strip is the middle of the world');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
