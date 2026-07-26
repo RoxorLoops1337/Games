@@ -616,6 +616,98 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.resolvePick(-500, -500).kind === 'none', 'clicking empty sky selects nothing');
 }
 
+/* ------------------------------------------------- inspecting the bridge */
+{
+  // Everything standing out on the lane is a question the player can ask:
+  // what is that, whose is it, and can my wave even touch it yet?
+  IB.newMatch({ diff:'veteran', seed:311 });
+  IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+  IB.spawnWave();
+  step(6);
+  let missedS = 0, wrongS = 0, checked = 0;
+  for (const sd of G.sides) for (const st of sd.structs){
+    if (st.dead) continue;
+    IB.cam.x = st.x;                       // look at it the way the player would
+    IB.draw();
+    const p = IB.lp(st.x, st.y);
+    const tall = st.key === 'gate' ? 60 : st.key === 'inhib' ? 34 : 44;
+    const hit = IB.resolvePick(p[0], p[1] - tall * .5 * IB.cam.z);
+    checked++;
+    if (hit.kind !== 'struct') missedS++;
+    else if (hit.struct !== st) wrongS++;
+  }
+  t.ok(checked >= 10, 'both sides put turrets, inhibitors and gates on the bridge (' + checked + ')');
+  t.ok(missedS === 0, 'clicking a turret, inhibitor or gate hits a structure');
+  t.ok(wrongS === 0, 'and hits the one you aimed at');
+
+  const lane = G.units.filter(u => !u.dead && !u.isHero);
+  t.ok(lane.length > 0, 'there are minions marching to click on');
+  {
+    const u = lane[0];
+    IB.cam.x = u.x;
+    IB.draw();
+    const p = IB.lp(u.x, u.y);
+    const hit = IB.resolvePick(p[0], p[1] - 9 * IB.cam.z);
+    t.ok(hit.kind === 'unit' && hit.unit === u, 'clicking a marching minion selects that minion');
+  }
+
+  // The panel has to answer those questions in words, for either side.
+  const mine = IB.frontStruct(0), theirs = IB.frontStruct(1);
+  IB.sel.tile = -1; IB.sel.node = null; IB.sel.unit = null;
+  IB.sel.struct = theirs;
+  let h = IB.dockHtml();
+  t.ok(h.includes(theirs.n), 'the dock names the enemy structure you picked');
+  t.ok(/your wave can attack/i.test(h), 'and says the front one is what your wave can attack');
+  const behind = G.sides[1].structs.filter(st => !st.dead && st !== theirs);
+  if (behind.length){
+    IB.sel.struct = behind[behind.length - 1];
+    h = IB.dockHtml();
+    t.ok(/cannot be touched until/i.test(h), 'and that anything behind it is untouchable for now');
+  }
+  IB.sel.struct = mine;
+  h = IB.dockHtml();
+  t.ok(/Health/.test(h) && /Armour/.test(h), 'a structure reads out its health and armour');
+  t.ok(/have to break next/i.test(h), 'and your own front line says what they must break next');
+  {
+    // armour plating bought at the forge shows up in the number you are shown
+    const s = P();
+    const before = IB.dockHtml().match(/Armour<b>(\d+)/);
+    rich(s); IB.build(s, s.plot.indexOf(null), 'forge');
+    for (let i = 0; i < 3; i++){ rich(s); IB.buyUp(s, 'armor'); }
+    const after = IB.dockHtml().match(/Armour<b>(\d+)/);
+    t.ok(before && after && +after[1] > +before[1],
+      'plating bought at the forge shows in the turret panel (' + before[1] + ' → ' + after[1] + ')');
+    t.ok(/\(\+\d+\)/.test(IB.dockHtml()), 'and is called out as the part you paid for');
+  }
+  IB.sel.struct = null;
+  IB.sel.unit = lane[0];
+  h = IB.dockHtml();
+  t.ok(h.includes(IB.UNITS[lane[0].kind].n), 'a selected minion is named by its kind');
+  t.ok(/Health/.test(h) && /Damage/.test(h) && /Range/.test(h), 'with the numbers that decide the fight');
+
+  // and a selection that dies out from under you clears itself
+  lane[0].dead = true;
+  IB.pruneSel();
+  t.ok(IB.sel.unit === null, 'a minion that dies mid-inspection drops out of the selection');
+  IB.sel.unit = null;
+  t.ok(!/Range<b>/.test(IB.dockHtml()), 'and the panel goes quiet again');
+}
+
+/* ---------------------------------------------------------------- the intro */
+{
+  // Shown once, on the very first match, and never again.
+  t.ok(IB.SEEN_KEY === 'ib_seen', 'the intro remembers itself under a stable key');
+  delete store[IB.SEEN_KEY];
+  t.ok(IB.seenIntro() === false, 'a fresh browser has not seen the intro');
+  IB.markSeen();
+  t.ok(IB.seenIntro() === true, 'once shown, it is remembered');
+  t.ok(store[IB.SEEN_KEY] === '1', 'and remembered in localStorage, so it survives a reload');
+  // starting a match must not quietly forget it
+  IB.newMatch({ diff:'recruit', seed:313 });
+  t.ok(IB.seenIntro() === true, 'a new match does not re-arm the intro');
+  t.ok(/data-act="replay"/.test(SRC), 'and it can still be replayed from the help sheet');
+}
+
 /* ---------------------------------------------------------------- mines */
 {
   IB.newMatch({ diff:'veteran', seed:89 });

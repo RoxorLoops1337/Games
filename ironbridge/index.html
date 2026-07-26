@@ -160,6 +160,11 @@
   .big.ghost{ background:var(--panel2); border:1px solid var(--line); color:var(--ink); }
   .big:hover{ filter:brightness(1.08); }
   .statline{ display:flex; flex-wrap:wrap; gap:8px 16px; margin:10px 0 0; font-size:12px; color:var(--dim); }
+  .insp{ display:flex; flex-wrap:wrap; gap:2px 14px; font-size:11px; color:var(--dim); max-width:270px;
+    margin-top:4px; }
+  .insp span{ display:flex; gap:5px; }
+  .insp b{ color:var(--ink); }
+  .insp.note{ color:var(--dim2); font-style:italic; display:block; line-height:1.4; }
   .tl{ margin:12px 0 4px; padding:10px 12px; background:#0e1421; border:1px solid var(--line); border-radius:10px; }
   .tl-row{ display:flex; align-items:center; gap:9px; margin-bottom:7px; }
   .tl-lbl{ flex:0 0 46px; font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:700; }
@@ -175,6 +180,11 @@
     border-radius:10px; font-size:12px; color:var(--dim); }
   .statline b{ color:var(--ink); }
   .legend{ display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; font-size:11px; color:var(--dim2); }
+  .intro{ display:flex; flex-direction:column; gap:9px; }
+  .ib{ display:flex; gap:11px; align-items:flex-start; padding:10px 12px; background:var(--panel2);
+    border:1px solid var(--line); border-radius:10px; font-size:13px; line-height:1.5; color:var(--dim); }
+  .ib .ic{ font-size:20px; line-height:1.2; flex:0 0 auto; }
+  .ib b{ color:var(--ink); }
 
   /* ---------------- toast / narrator ---------------- */
   #toast{ position:absolute; left:10px; top:52px; display:flex; flex-direction:column;
@@ -827,7 +837,7 @@ function newMatch(opt){
   const r = G.sides[1].res;
   r.gold = Math.round(r.gold * e); r.iron = Math.round(r.iron * e);
   r.wood = Math.round(r.wood * e); r.food = Math.round(r.food * e);
-  sel.tile = -1; sel.node = null; sel.build = null;
+  sel.tile = -1; sel.node = null; sel.build = null; sel.struct = null; sel.unit = null;
   scatterCache[0] = scatterCache[1] = null;
   cam.shake = 0; cam.sx = 0; cam.sy = 0;
   cam.x = HOLD_X + 14; cam.follow = false; cam.z = cam.tz = clamp(LW / 1100, .55, .95);
@@ -2220,6 +2230,7 @@ function update(dt){
     if (hps) healUnit(h, hps * dt);
   }
   for (const u of G.units) if (u.mb){ u.mb.t -= dt; if (u.mb.t <= 0) u.mb = null; }
+  pruneSel();
 }
 
 /* =====================================================================
@@ -2934,7 +2945,7 @@ function drawMinimap(c){
 /* =====================================================================
    RENDERING — your hold
    ===================================================================== */
-const sel = { tile:-1, node:null, build:null, hero:null };
+const sel = { tile:-1, node:null, build:null, hero:null, struct:null, unit:null };
 // The hold lives in the same world as the bridge, just off to one side of it,
 // so one camera covers your farms, the whole span and their gates. Everything
 // below is written in hold-grid units and projected through the world.
@@ -3356,6 +3367,17 @@ function draw(){
   drawEnds(c);
   drawDeck(c);
   drawLane(c);
+  if (sel.struct && !sel.struct.dead){
+    const q = lp(sel.struct.x, sel.struct.y);
+    c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.5, 2.2 * cam.z);
+    c.beginPath(); c.ellipse(q[0], q[1], (sel.struct.key === 'gate' ? 52 : 20) * cam.z, 11 * cam.z, 0, 0, 6.2832);
+    c.stroke();
+  }
+  if (sel.unit && !sel.unit.dead){
+    const q = lp(sel.unit.x, sel.unit.y);
+    c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.2, 1.8 * cam.z);
+    c.beginPath(); c.ellipse(q[0], q[1], 9 * cam.z, 4.5 * cam.z, 0, 0, 6.2832); c.stroke();
+  }
   flushLabels(c);
   drawMinimap(c);
   c.restore();
@@ -3437,7 +3459,40 @@ function dockHtml(){
   // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
   h = '';
-  if (sel.node){
+  if (sel.struct){
+    const st = sel.struct, mine = st.side === 0;
+    const owner = SIDE_NAME[st.side];
+    const front = frontStruct(st.side);
+    const armour = Math.round(effArmor(st, false)), plate = UP_EFFECT.armor * G.sides[st.side].towerUp.armor;
+    h += '<div class="ptitle">' + st.n + ' — ' + owner + '</div>';
+    if (st.dead){
+      h += '<div class="insp">Broken.' + (st.downT > 0 ? ' Rebuilds in ' + Math.ceil(st.downT) + 's.' : '') + '</div>';
+    } else {
+      h += '<div class="bar hp" style="max-width:250px"><i style="width:' +
+        Math.round(clamp(st.hp / st.mhp, 0, 1) * 100) + '%"></i></div>' +
+        '<div class="insp"><span>Health<b>' + Math.round(st.hp) + ' / ' + Math.round(st.mhp) + '</b></span>' +
+        '<span>Armour<b>' + armour + (plate ? ' (+' + plate + ')' : '') + '</b></span>' +
+        (st.ad ? '<span>Damage<b>' + Math.round(attackDamage(st)) + '</b></span>' +
+                 '<span>Shots<b>' + attackSpeedOf(st).toFixed(2) + '/s</b></span>' : '') +
+        '</div>';
+      h += '<div class="insp note">' + (st === front
+        ? (mine ? 'This is what they have to break next.' : 'This is what your wave can attack.')
+        : (mine ? 'Shielded until ' + front.n.toLowerCase() + ' falls.'
+                : 'Cannot be touched until their ' + front.n.toLowerCase() + ' falls.')) + '</div>';
+    }
+  } else if (sel.unit){
+    const u = sel.unit, d = UNITS[u.kind];
+    h += '<div class="ptitle">' + d.n + ' — ' + SIDE_NAME[u.side] + '</div>' +
+      '<div class="bar hp" style="max-width:250px"><i style="width:' +
+      Math.round(clamp(u.hp / u.mhp, 0, 1) * 100) + '%"></i></div>' +
+      '<div class="insp"><span>Health<b>' + Math.round(u.hp) + ' / ' + Math.round(u.mhp) + '</b></span>' +
+      '<span>Damage<b>' + Math.round(attackDamage(u)) + (u.magic ? ' magic' : '') + '</b></span>' +
+      '<span>Armour<b>' + Math.round(effArmor(u, false)) + '</b></span>' +
+      '<span>Range<b>' + u.rng.toFixed(1) + '</b></span></div>' +
+      '<div class="insp note">' + (u.target
+        ? (u.target.struct ? 'Attacking ' + u.target.n.toLowerCase() + '.' : 'Fighting.')
+        : 'Marching.') + (u.life > 0 ? ' Summoned — fades in ' + Math.ceil(u.life) + 's.' : '') + '</div>';
+  } else if (sel.node){
     const N = NODES[sel.node], lv = nodeLvl(s, sel.node), maxed = lv >= C.NODE_MAX_LVL;
     const cost = nodeUpCost(s, sel.node);
     h += '<div class="ptitle">' + N.n + ' — level ' + lv + '</div>' +
@@ -3596,6 +3651,11 @@ function syncAdvice(){
   if (a){ el.querySelector('.at').textContent = a.txt; el.dataset.tab = a.tab; }
 }
 
+// A selection can go stale on its own — the minion you were reading about
+// takes an arrow. Logic, not rendering, so it runs headless too.
+function pruneSel(){
+  if (sel.unit && sel.unit.dead) sel.unit = null;
+}
 function syncUI(){
   if (HEADLESS || !G.sides.length) return;      // resize can fire before the first match exists
   syncHud();
@@ -3766,6 +3826,32 @@ function showOver(){
   $('modal').classList.add('solid');
 }
 
+// Shown once, before the first match. Four beats: what you are looking at,
+// what your hold is for, what wins, and what heroes are.
+const SEEN_KEY = 'ib_seen';
+function seenIntro(){ try { return localStorage.getItem(SEEN_KEY) === '1'; } catch (e){ return false; } }
+function markSeen(){ try { localStorage.setItem(SEEN_KEY, '1'); } catch (e){} }
+
+function showIntro(diff){
+  openModal('<h2>How Ironbridge works</h2>' +
+    '<p class="sub">Thirty seconds, then you can play.</p>' +
+    '<div class="intro">' +
+    '<div class="ib"><span class="ic">🏰</span><div><b>One world, one camera.</b> Your hold is at the near end, the ' +
+    'Ember Host at the far end, the bridge between. Drag to look along it, pinch or scroll to zoom, ' +
+    'or use HOLD · GATES · MID · FOE.</div></div>' +
+    '<div class="ib"><span class="ic">⛏️</span><div><b>Your hold pays for the war.</b> Workers gather gold, iron, wood ' +
+    'and food. Farms raise your population. A Barracks turns an idle worker into a fighter, and everything ' +
+    'you arm marches out with the next wave.</div></div>' +
+    '<div class="ib"><span class="ic">🚪</span><div><b>Break their gates to win.</b> Outer turret, mid, inner, ' +
+    'inhibitor, then the gates — in that order, and the same for them. Take an inhibitor and Siege Ogres ' +
+    'march for you for ' + C.SUPER_DUR + ' seconds.</div></div>' +
+    '<div class="ib"><span class="ic">⚔️</span><div><b>Heroes fight on their own.</b> You choose the build: a class, ' +
+    'then one passive out of a hundred, a skill at levels 3, 6 and 9, an ultimate at 12. Tap a hero card ' +
+    'to choose.</div></div>' +
+    '</div>' +
+    '<div class="rowbtn"><button class="big" data-act="introgo" data-diff="' + diff + '">Start the match</button></div>');
+}
+
 function showHelp(){
   openModal('<h2>How the hold works</h2>' +
     '<div class="pd" style="font-size:13px;line-height:1.6">' +
@@ -3775,7 +3861,8 @@ function showHelp(){
     '<p><b>The Forge</b> unlocks turret and minion upgrades; its level sets how high a rank you can buy.</p>' +
     '<p><b>The Hero Factory</b> forges heroes. They fight on their own — you choose the build.</p>' +
     '<p>Break the outer turret, then the mid, then the inner, then the inhibitor, then the gates. Taking an inhibitor sends Siege Ogres for ' + C.SUPER_DUR + 's.</p>' + '<p>It is all one place: drag to look along the world, pinch or scroll to zoom, and use HOLD / GATES / MID / FOE to jump. Click a plot to build on it, or a hero to open its profile.</p>' +
-    '</div><div class="rowbtn"><button class="big ghost" data-act="close">Got it</button></div>');
+    '</div><div class="rowbtn"><button class="big ghost" data-act="close">Got it</button>' +
+    '<button class="big ghost" data-act="replay">Show the introduction again</button></div>');
 }
 
 /* ------------------------------------------------------------------ meta */
@@ -3928,6 +4015,19 @@ function clickTargets(){
   }
   for (const k in NODES)
     out.push(Object.assign(at(NODES[k].gx, NODES[k].gy, .26, .62, .44), { kind:'node', node:k, pri:2 }));
+  // ...and everything standing on the bridge, so you can ask what it is
+  for (const sd of G.sides) for (const st of sd.structs){
+    if (st.dead && !st.downT) continue;
+    const p = lp(st.x, st.y);
+    const tall = st.key === 'gate' ? 60 : st.key === 'inhib' ? 34 : 44;
+    out.push({ kind:'struct', struct:st, cx:p[0], cy:p[1] - tall * .5 * cam.z,
+      rx:(st.key === 'gate' ? 56 : 20) * cam.z, ry:tall * .6 * cam.z, sy:p[1], pri:2 });
+  }
+  for (const u of G.units){
+    if (u.dead || u.isHero) continue;
+    const p = lp(u.x, u.y);
+    out.push({ kind:'unit', unit:u, cx:p[0], cy:p[1] - 9 * cam.z, rx:9 * cam.z, ry:14 * cam.z, sy:p[1], pri:1 });
+  }
   return out;
 }
 
@@ -3971,7 +4071,9 @@ function pickAt(clientX, clientY){
   if (t.kind === 'hero'){ sel.hero = t.hero; showHeroSheet(t.hero); return; }
   sel.node = t.kind === 'node' ? t.node : null;
   sel.tile = (t.kind === 'build' || t.kind === 'plot') ? t.tile : -1;
-  if (NARROW() && (sel.node || sel.tile >= 0)) dockTab = 'sel';
+  sel.struct = t.kind === 'struct' ? t.struct : null;
+  sel.unit = t.kind === 'unit' ? t.unit : null;
+  if (NARROW() && (sel.node || sel.struct || sel.unit || sel.tile >= 0)) dockTab = 'sel';
   syncUI();
 }
 
@@ -4003,7 +4105,15 @@ function wire(){
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const a = b.dataset.act;
-    if (a === 'start'){ audioStart(); clearSave(); newMatch({ diff:b.dataset.diff }); closeModal(); syncUI(); }
+    if (a === 'start'){
+      audioStart(); clearSave();
+      if (!seenIntro()){ showIntro(b.dataset.diff); return; }   // first time: explain it once
+      newMatch({ diff:b.dataset.diff }); closeModal(); syncUI();
+    }
+    else if (a === 'introgo'){
+      markSeen();
+      newMatch({ diff:b.dataset.diff }); closeModal(); syncUI();
+    }
     else if (a === 'resume'){
       audioStart();
       const err = loadMatch();
@@ -4011,6 +4121,7 @@ function wire(){
       closeModal(); syncUI();
     }
     else if (a === 'close') closeModal();
+    else if (a === 'replay') showIntro(G.diff.id);
     else if (a === 'menu'){ startDemo(); showMenu(); }
     else if (a === 'again'){ clearSave(); newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
     else if (a === 'mkhero'){
@@ -4159,6 +4270,7 @@ window.IB = {
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
+  seenIntro, markSeen, SEEN_KEY, pruneSel,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };
