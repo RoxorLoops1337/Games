@@ -527,6 +527,34 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(G.t === t0 && u.x === x0, 'pausing freezes the simulation');
   G.paused = false;
 }
+/* ---------------------------------------------------------------- one world */
+{
+  // The hold and the bridge share a single camera, so the screen→world inverse
+  // has to be exact or clicking a plot lands on the wrong one.
+  IB.newMatch({ diff:'veteran', seed:79 });
+  let worst = 0;
+  for (const [wx, wy] of [[0,0],[64,3],[-58,-12],[-40,20],[C.LANE_LEN,0],[C.LANE_LEN+40,-8]]){
+    const sc = IB.lp(wx, wy);
+    const back = IB.unproject(sc[0], sc[1]);
+    worst = Math.max(worst, Math.abs(back[0] - wx), Math.abs(back[1] - wy));
+  }
+  t.ok(worst < 1e-6, 'screen→world is the exact inverse of world→screen (' + worst.toExponential(1) + ')');
+  // every plot of your hold maps back to itself through the projection
+  let bad = 0;
+  for (let tile = 0; tile < IB.PLOT_W * IB.PLOT_H; tile++){
+    const w = IB.holdWorld(IB.tileGX(tile), IB.tileGY(tile));
+    const sc = IB.lp(w[0], w[1]);
+    const back = IB.unproject(sc[0], sc[1]);
+    const gx = (back[0] - IB.HOLD_X) / IB.TILE, gy = back[1] / IB.TILE;
+    const col = Math.round(gx + (IB.PLOT_W - 1) / 2), row = Math.round(gy + (IB.PLOT_H - 1) / 2);
+    if (row * IB.PLOT_W + col !== tile) bad++;
+  }
+  t.ok(bad === 0, 'every plot round-trips through the projection to itself');
+  t.ok(IB.CAM_MIN < IB.HOLD_X && IB.CAM_MAX > C.LANE_LEN, 'the camera can reach both holds and the whole bridge');
+  const w0 = IB.holdWorld(0, 0);
+  t.ok(w0[0] < 0, 'your hold sits off the left end of the bridge');
+  t.ok(typeof IB.dockHtml() === 'string' && IB.dockHtml().includes('Worker'), 'the command dock renders');
+}
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 

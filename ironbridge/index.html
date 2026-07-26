@@ -38,28 +38,29 @@
   .tbtn:hover{ background:#26314a; }
   .tbtn.on{ background:var(--blue); border-color:var(--blue); color:#08111f; }
 
-  /* ---------------- main split ---------------- */
-  #main{ flex:1 1 auto; display:flex; min-height:0; }
-  #left{ flex:0 0 40%; min-width:320px; display:flex; flex-direction:column; border-right:2px solid var(--line);
-    background:#0c111b; min-height:0; }
-  #right{ flex:1 1 auto; display:flex; flex-direction:column; min-width:0; min-height:0; position:relative; }
-  .viewhead{ flex:0 0 auto; display:flex; align-items:center; gap:8px; padding:4px 10px; font-size:11px;
-    letter-spacing:2px; text-transform:uppercase; color:var(--dim); background:#0f1520;
-    border-bottom:1px solid var(--line); }
-  .viewhead .sp{ margin-left:auto; display:flex; gap:5px; }
-  .vbtn{ padding:3px 8px; font-size:11px; letter-spacing:1px; background:var(--panel2);
-    border:1px solid var(--line); border-radius:6px; color:var(--dim); }
+  /* ---------------- one world, one camera ---------------- */
+  #stage{ flex:1 1 auto; position:relative; min-height:0; overflow:hidden; }
+  canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #viewbtns{ position:absolute; top:8px; right:10px; display:flex; gap:5px; z-index:6; }
+  .vbtn{ padding:4px 9px; font-size:11px; letter-spacing:1px; background:rgba(20,26,38,.85);
+    border:1px solid var(--line); border-radius:6px; color:var(--dim); backdrop-filter:blur(2px); }
   .vbtn:hover{ color:var(--ink); }
   .vbtn.on{ background:var(--blue); color:#08111f; border-color:var(--blue); }
-  .cwrap{ position:relative; flex:1 1 auto; min-height:0; }
-  canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
 
-  /* ---------------- base panel ---------------- */
-  #basePanel{ flex:0 0 auto; max-height:46%; overflow-y:auto; padding:7px 8px 9px;
-    background:linear-gradient(180deg,#121826,#0d121d); border-top:2px solid var(--line); }
-  .prow{ display:flex; align-items:center; gap:6px; margin-bottom:5px; }
-  .ptitle{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--dim2); margin:6px 0 4px; }
-  .job{ flex:1 1 0; display:flex; align-items:center; gap:5px; padding:4px 6px; background:#0e1421;
+  /* ---------------- command dock ---------------- */
+  #dock{ flex:0 0 auto; display:flex; gap:8px; align-items:stretch; padding:7px 9px;
+    background:linear-gradient(180deg,#151c2b,#0c111b); border-top:2px solid var(--line);
+    overflow-x:auto; overflow-y:hidden; max-height:194px; }
+  .dsec{ flex:0 0 auto; display:flex; flex-direction:column; gap:4px; padding:0 9px 0 0;
+    border-right:1px solid #1e2736; min-width:0; }
+  .dsec:last-child{ border-right:none; padding-right:0; }
+  .dsec.grow{ flex:1 1 auto; }
+  .ptitle{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--dim2);
+    white-space:nowrap; }
+  .prow{ display:flex; align-items:center; gap:5px; }
+  .pcol{ display:flex; flex-direction:column; gap:4px; }
+  .pgrid{ display:grid; grid-template-columns:repeat(2,minmax(96px,1fr)); gap:4px; }
+  .job{ display:flex; align-items:center; gap:5px; padding:3px 6px; background:#0e1421;
     border:1px solid var(--line); border-radius:8px; min-width:0; }
   .job .nm{ font-size:11px; color:var(--dim); flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .job .ct{ font-weight:700; font-variant-numeric:tabular-nums; flex:0 0 auto; text-align:right;
@@ -85,10 +86,9 @@
   #musterRow{ display:flex; flex-wrap:wrap; gap:4px; min-height:20px; }
   .mchip{ padding:2px 7px; font-size:11px; border-radius:999px; border:1px solid var(--line); background:#0e1421; }
 
-  /* ---------------- hero bar ---------------- */
-  #heroBar{ flex:0 0 auto; display:flex; gap:6px; padding:6px 8px; overflow-x:auto;
-    background:linear-gradient(180deg,#121826,#0d121d); border-top:2px solid var(--line); min-height:56px; }
-  .hcard{ flex:0 0 auto; width:154px; padding:5px 7px; background:#0e1421; border:1px solid var(--line);
+  /* ---------------- hero cards ---------------- */
+  #heroBar{ display:flex; gap:6px; }
+  .hcard{ flex:0 0 auto; width:150px; padding:5px 7px; background:#0e1421; border:1px solid var(--line);
     border-radius:9px; text-align:left; position:relative; }
   .hcard:hover{ border-color:#43536f; }
   .hcard.dead{ opacity:.55; }
@@ -104,8 +104,8 @@
     background:var(--gold); color:#20180a; font-size:11px; font-weight:800; line-height:19px; text-align:center;
     box-shadow:0 0 0 2px #0d121d; animation:pulse 1.1s infinite; }
   @keyframes pulse{ 50%{ transform:scale(1.13); } }
-  .hnew{ flex:0 0 auto; width:104px; border:1px dashed var(--line); border-radius:9px; background:#0c1120;
-    color:var(--dim); font-size:12px; font-weight:600; }
+  .hnew{ flex:0 0 auto; width:104px; padding:4px; border:1px dashed var(--line); border-radius:9px;
+    background:#0c1120; color:var(--dim); font-size:12px; font-weight:600; }
   .hnew:hover:not(:disabled){ color:var(--ink); border-color:var(--blue); }
   .hnew:disabled{ opacity:.4; cursor:not-allowed; }
 
@@ -180,15 +180,11 @@
     .tier{ grid-template-columns:1fr; }
   }
 
-  #tabs{ display:none; }
-  body.narrow #main{ flex-direction:column; }
-  body.narrow #left{ flex:1 1 auto; min-width:0; border-right:none; }
-  body.narrow #left.hide, body.narrow #right.hide{ display:none; }
-  body.narrow #tabs{ display:flex; gap:6px; }
-  body.narrow #basePanel{ max-height:52%; }
   @media (max-width:900px){
     #top{ flex-wrap:wrap; gap:6px; }
     .res{ padding:3px 7px; font-size:12px; }
+    #dock{ max-height:172px; }
+    .pgrid{ grid-template-columns:repeat(2,minmax(84px,1fr)); }
   }
 </style>
 </head>
@@ -200,10 +196,6 @@
     <div class="res" id="rWood"><span class="ic">🪵</span><b>0</b><span class="rate"></span></div>
     <div class="res" id="rPop"><span class="ic">👥</span><b>0</b></div>
     <div id="clock">
-      <div id="tabs">
-        <button class="tbtn" id="tabBase">BASE</button>
-        <button class="tbtn on" id="tabLane">BRIDGE</button>
-      </div>
       <div id="waveBox">Wave <b>0</b> · <span id="waveT">0:00</span></div>
       <button class="tbtn" id="btnSpeed">1×</button>
       <button class="tbtn" id="btnPause">❚❚</button>
@@ -211,27 +203,21 @@
     </div>
   </div>
 
-  <div id="main">
-    <div id="left">
-      <div class="viewhead">Your Hold
-        <div class="sp"><button class="vbtn" id="btnHelpBase">?</button></div>
-      </div>
-      <div class="cwrap"><canvas id="bcv"></canvas></div>
-      <div id="basePanel"></div>
+  <div id="stage">
+    <canvas id="wcv"></canvas>
+    <div id="viewbtns">
+      <button class="vbtn" id="camHold">HOLD</button>
+      <button class="vbtn" id="camGate">GATES</button>
+      <button class="vbtn" id="camMid">MID</button>
+      <button class="vbtn" id="camFoe">FOE</button>
+      <button class="vbtn" id="camFollow">FOLLOW</button>
+      <button class="vbtn" id="camOut">−</button>
+      <button class="vbtn" id="camIn">＋</button>
+      <button class="vbtn" id="btnHelpBase">?</button>
     </div>
-    <div id="right">
-      <div class="viewhead">The Ironbridge
-        <div class="sp">
-          <button class="vbtn" id="camHome">HOLD</button>
-          <button class="vbtn" id="camMid">MID</button>
-          <button class="vbtn" id="camFoe">FOE</button>
-          <button class="vbtn on" id="camFollow">FOLLOW</button>
-        </div>
-      </div>
-      <div class="cwrap"><canvas id="lcv"></canvas><div id="toast"></div></div>
-      <div id="heroBar"></div>
-    </div>
+    <div id="toast"></div>
   </div>
+  <div id="dock"></div>
 </div>
 <div id="modal"><div class="sheet" id="sheet"></div></div>
 <script>
@@ -706,7 +692,7 @@ function newMatch(opt){
   r.gold = Math.round(r.gold * e); r.iron = Math.round(r.iron * e);
   r.wood = Math.round(r.wood * e); r.food = Math.round(r.food * e);
   sel.tile = -1; sel.build = null;
-  cam.x = 26; cam.follow = true;
+  cam.x = HOLD_X + 14; cam.follow = false; cam.z = cam.tz = clamp(LW / 1500, .45, .85);
   return G;
 }
 
@@ -1952,24 +1938,16 @@ function fxToast(msg, kind){
    RENDERING — shared
    ===================================================================== */
 const cam = { x:26, z:1, follow:true, tz:1 };
-let lcv, lctx, bcv, bctx, LW = 800, LH = 500, BW = 400, BH = 400;
+let lcv, lctx, LW = 900, LH = 560;
 
-function fit(cv){
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const r = cv.getBoundingClientRect();
-  const w = Math.max(80, r.width), h = Math.max(80, r.height);
-  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
-  const c = cv.getContext('2d');
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return [w, h, c];
-}
 function resize(){
   if (HEADLESS) return;
-  [LW, LH, lctx] = fit(lcv);
-  [BW, BH, bctx] = fit(bcv);
-  document.body.classList.toggle('narrow', window.innerWidth < 860);
-  if (document.body.classList.contains('narrow')) applyTab();
-  else { document.getElementById('left').classList.remove('hide'); document.getElementById('right').classList.remove('hide'); }
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const r = lcv.getBoundingClientRect();
+  LW = Math.max(80, r.width); LH = Math.max(80, r.height);
+  lcv.width = Math.round(LW * dpr); lcv.height = Math.round(LH * dpr);
+  lctx = lcv.getContext('2d');
+  lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 const shade = (hex, f) => {
@@ -1999,7 +1977,7 @@ function lp(x, y, z){
   const S = LS();
   return [
     (x - cam.x) * S * .96 - y * S * .52 + LW * .5,
-    (x - cam.x) * S * .12 + y * S * .60 + LH * .60 - (z || 0) * S * .95,
+    (x - cam.x) * S * .12 + y * S * .60 + LH * .52 - (z || 0) * S * .95,
   ];
 }
 const DECK = { top:'#938b79', top2:'#a09884', side:'#544c42', edge:'#3f3931', rail:'#7a7060' };
@@ -2084,10 +2062,6 @@ function drawEnds(c){
     const p = lp(bx, 0);
     if (p[0] < -420 || p[0] > LW + 420) continue;
     const z = cam.z;
-    // grassy shoulder the bridge is anchored into, with the rock face below
-    poly(c, [lp(bx - dir * 16, -16), lp(bx + dir * 2.5, -16), lp(bx + dir * 2.5, 16), lp(bx - dir * 16, 16)], '#4c7040');
-    poly(c, [lp(bx + dir * 2.5, -16), lp(bx + dir * 2.5, 16), lp(bx + dir * 2.5, 16, -9), lp(bx + dir * 2.5, -16, -9)], '#40382e');
-    poly(c, [lp(bx + dir * 2.5, -16, -9), lp(bx + dir * 2.5, 16, -9), lp(bx + dir * 1, 12, -16), lp(bx + dir * 1, -12, -16)], '#2c2620');
     // the keep behind the gates, in the same masonry as everything else
     const col = SIDE_COL[s.i];
     const kp = lp(bx - dir * 11, 0);
@@ -2354,13 +2328,7 @@ function drawUnit(c, u){
   }
 }
 
-function drawLane(){
-  const c = lctx;
-  if (!c) return;
-  c.save();
-  drawSky(c);
-  drawEnds(c);
-  drawDeck(c);
+function drawLane(c){
   // zones under everyone
   for (const z of G.zones){
     const p = lp(z.x, z.y);
@@ -2405,16 +2373,22 @@ function drawLane(){
     c.fillText(String(f.txt), q[0], q[1] - (1 - f.t / f.dur) * 22);
     c.globalAlpha = 1;
   }
-  drawMinimap(c);
-  c.restore();
 }
 
+// One strip covering the whole world: your hold, the span, their hold.
 function drawMinimap(c){
-  const w = Math.min(300, LW - 24), h = 30, x0 = LW - w - 12, y0 = LH - h - 10;
-  c.fillStyle = 'rgba(8,12,18,.72)'; c.fillRect(x0, y0, w, h);
+  const w = Math.min(340, LW - 24), h = 34, x0 = LW - w - 12, y0 = LH - h - 10;
+  const W0 = CAM_MIN - 10, W1 = CAM_MAX + 10;
+  c.fillStyle = 'rgba(8,12,18,.76)'; c.fillRect(x0, y0, w, h);
   c.strokeStyle = '#2a3446'; c.lineWidth = 1; c.strokeRect(x0 + .5, y0 + .5, w - 1, h - 1);
-  const mx = (x) => x0 + 6 + (x / C.LANE_LEN) * (w - 12);
-  c.fillStyle = '#3d4658'; c.fillRect(x0 + 6, y0 + h / 2 - 2, w - 12, 4);
+  const mx = (x) => x0 + 6 + ((x - W0) / (W1 - W0)) * (w - 12);
+  // the two holds, then the span between them
+  for (const i of [0, 1]){
+    const hx = i === 0 ? HOLD_X : C.LANE_LEN - HOLD_X;
+    c.fillStyle = i === 0 ? 'rgba(76,112,64,.85)' : 'rgba(112,76,64,.85)';
+    c.fillRect(mx(hx - 22), y0 + 5, Math.max(6, mx(hx + 22) - mx(hx - 22)), h - 10);
+  }
+  c.fillStyle = '#3d4658'; c.fillRect(mx(0), y0 + h / 2 - 2, mx(C.LANE_LEN) - mx(0), 4);
   for (const s of G.sides) for (const st of s.structs){
     if (st.dead) continue;
     c.fillStyle = SIDE_COL[s.i];
@@ -2430,36 +2404,30 @@ function drawMinimap(c){
   // camera window
   const halfW = (LW * .5) / (LS() * .96);
   c.strokeStyle = 'rgba(255,255,255,.5)';
-  c.strokeRect(mx(cam.x - halfW), y0 + 3, Math.max(4, (halfW * 2 / C.LANE_LEN) * (w - 12)), h - 6);
+  c.strokeRect(mx(cam.x - halfW), y0 + 3, Math.max(4, mx(cam.x + halfW) - mx(cam.x - halfW)), h - 6);
 }
 
 /* =====================================================================
    RENDERING — your hold
    ===================================================================== */
 const sel = { tile:-1, build:null, hero:null };
-let BSC = 30, BOX = { cx:0, cy:0 };
+// The hold lives in the same world as the bridge, just off to one side of it,
+// so one camera covers your farms, the whole span and their gates. Everything
+// below is written in hold-grid units and projected through the world.
+const HOLD_X = -58, TILE = 6.0;
+let holdSide = 0, BSC = 1;
+function holdWorld(gx, gy){
+  const d = holdSide === 0 ? 1 : -1;
+  const ox = holdSide === 0 ? HOLD_X : C.LANE_LEN - HOLD_X;
+  return [ ox + gx * TILE * d, gy * TILE ];
+}
 function bp(gx, gy, z){
-  const S = BSC;
-  return [ (gx - gy - BOX.cx) * S * .88 + BW * .5,
-           (gx + gy - BOX.cy) * S * .50 + BH * .54 - (z || 0) * S * .82 ];
+  const w = holdWorld(gx, gy);
+  return lp(w[0], w[1], (z || 0) * TILE * .62);
 }
-// Fit the whole hold — plot, mines, woodland, hall — into whatever space the
-// panel leaves us, so the view never drifts into a corner of empty grass.
-function baseFit(){
-  let minA = 1e9, maxA = -1e9, minB = 1e9, maxB = -1e9;
-  const add = (gx, gy, pad) => {
-    const a = gx - gy, b = gx + gy;
-    minA = Math.min(minA, a - pad); maxA = Math.max(maxA, a + pad);
-    minB = Math.min(minB, b - pad); maxB = Math.max(maxB, b + pad);
-  };
-  for (let t = 0; t < PLOT_W * PLOT_H; t++) add(tileGX(t), tileGY(t), .8);
-  for (const k in NODES) add(NODES[k].gx, NODES[k].gy, 1.3);
-  add(KEEP.gx, KEEP.gy, 1.2);
-  const sx = (BW - 14) / ((maxA - minA) * .88);
-  const sy = (BH - 26) / ((maxB - minB) * .50 + 3.2 * .82);
-  BSC = clamp(Math.min(sx, sy), 12, 64);
-  BOX.cx = (minA + maxA) / 2; BOX.cy = (minB + maxB) / 2;
-}
+// Old base art was tuned against a ~45px grid cell; keep those numbers honest
+// at any zoom by expressing them in cells too.
+const bu = () => LS() * TILE / 45;
 const tileGX = (t) => (t % PLOT_W) - (PLOT_W - 1) / 2;
 const tileGY = (t) => Math.floor(t / PLOT_W) - (PLOT_H - 1) / 2;
 const NODES = {
@@ -2489,7 +2457,7 @@ function drawHouse(c, gx, gy, w, d, wh, rh, wall, roof){
 }
 
 function drawBuilding(c, b){
-  const gx = tileGX(b.tile), gy = tileGY(b.tile);
+  const gx = tileGX(b.tile), gy = tileGY(b.tile), B = bu();
   const raise = (b.raise || 0);
   const z = raise * 1.2;
   const t = b.type;
@@ -2513,15 +2481,15 @@ function drawBuilding(c, b){
     ell(c, ...bp(gx, gy, z + .04), BSC * .3, BSC * .15, '#6b3a2c');
     for (const s of [-1, 1]){
       const p0 = bp(gx + s * .42, gy - .35, z), p1 = bp(gx + s * .42, gy - .35, z + .9);
-      c.strokeStyle = '#6a5540'; c.lineWidth = 3; c.beginPath(); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke();
-      c.fillStyle = SIDE_COL[0]; c.fillRect(p1[0] - 2, p1[1], 8 * (s > 0 ? 1 : -1), 9);
+      c.strokeStyle = '#6a5540'; c.lineWidth = 3 * B; c.beginPath(); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke();
+      c.fillStyle = sideCol(); c.fillRect(p1[0] - 2 * B, p1[1], 8 * B * (s > 0 ? 1 : -1), 9 * B);
     }
   } else if (t === 'barracks'){
     drawTile(c, gx, gy, '#5e5748');
     drawHouse(c, gx, gy, .42, .34, .62 + z, .40, '#b08a5e', '#a34438');
     const p = bp(gx - .5, gy + .1, z + .95);
-    c.fillStyle = SIDE_COL[0]; c.fillRect(p[0], p[1], 7, 12);
-    c.strokeStyle = '#d8dbe2'; c.lineWidth = 2;
+    c.fillStyle = sideCol(); c.fillRect(p[0], p[1], 7 * B, 12 * B);
+    c.strokeStyle = '#d8dbe2'; c.lineWidth = 2 * B;
     for (let i = 0; i < 3; i++){
       const a = bp(gx + .5, gy - .3 + i * .3, z), e = bp(gx + .55, gy - .3 + i * .3, z + .55);
       c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(e[0], e[1]); c.stroke();
@@ -2530,42 +2498,44 @@ function drawBuilding(c, b){
     drawTile(c, gx, gy, '#4f4a44');
     drawHouse(c, gx, gy, .40, .32, .55 + z, .3, '#8d8579', '#5c5750');
     const ch = bp(gx + .22, gy - .22, z + 1.15);
-    c.fillStyle = '#6d6459'; c.fillRect(ch[0] - 4, ch[1], 9, 16);
+    c.fillStyle = '#6d6459'; c.fillRect(ch[0] - 4 * B, ch[1], 9 * B, 16 * B);
     const glow = .45 + .25 * Math.sin(G.t * 4);
     c.globalAlpha = glow * (raise > 0 ? .4 : 1);
-    ell(c, ch[0], ch[1] - 4, 7, 6, '#ff8a3d');
+    ell(c, ch[0], ch[1] - 4 * B, 7 * B, 6 * B, '#ff8a3d');
     ell(c, ...bp(gx, gy + .3, z + .2), BSC * .18, BSC * .1, '#ff8a3d');
     c.globalAlpha = 1;
   } else if (t === 'tavern'){
     drawTile(c, gx, gy, '#575044');
     drawHouse(c, gx, gy, .40, .32, .95 + z, .38, '#c49a68', '#3f6b8c');
     const s0 = bp(gx + .5, gy + .1, z + .7);
-    c.strokeStyle = '#6a5540'; c.lineWidth = 2;
-    c.beginPath(); c.moveTo(s0[0], s0[1]); c.lineTo(s0[0] + 10, s0[1] - 3); c.stroke();
-    c.fillStyle = '#e2c88a'; c.fillRect(s0[0] + 6, s0[1] - 2, 11, 8);
-    c.fillStyle = '#4b3a22'; c.fillRect(s0[0] + 9, s0[1] + 1, 5, 2);
+    c.strokeStyle = '#6a5540'; c.lineWidth = 2 * B;
+    c.beginPath(); c.moveTo(s0[0], s0[1]); c.lineTo(s0[0] + 10 * B, s0[1] - 3 * B); c.stroke();
+    c.fillStyle = '#e2c88a'; c.fillRect(s0[0] + 6 * B, s0[1] - 2 * B, 11 * B, 8 * B);
+    c.fillStyle = '#4b3a22'; c.fillRect(s0[0] + 9 * B, s0[1] + 1 * B, 5 * B, 2 * B);
   } else {
     drawTile(c, gx, gy, '#514b42');
     drawHouse(c, gx, gy, .38, .3, .48 + z, .26, '#9a8f7d', '#6f6455');
     const g = bp(gx + .1, gy - .05, z + .82);
-    c.strokeStyle = '#c8a24a'; c.lineWidth = 2.4;
-    c.beginPath(); c.arc(g[0], g[1], 7, 0, 6.2832); c.stroke();
+    c.strokeStyle = '#c8a24a'; c.lineWidth = 2.4 * B;
+    c.beginPath(); c.arc(g[0], g[1], 7 * B, 0, 6.2832); c.stroke();
     for (let i = 0; i < 6; i++){
       const a = G.t * .8 + i * 1.047;
-      c.beginPath(); c.moveTo(g[0] + Math.cos(a) * 7, g[1] + Math.sin(a) * 7);
-      c.lineTo(g[0] + Math.cos(a) * 10, g[1] + Math.sin(a) * 10); c.stroke();
+      c.beginPath(); c.moveTo(g[0] + Math.cos(a) * 7 * B, g[1] + Math.sin(a) * 7 * B);
+      c.lineTo(g[0] + Math.cos(a) * 10 * B, g[1] + Math.sin(a) * 10 * B); c.stroke();
     }
   }
   c.globalAlpha = 1;
   // Labels are queued and laid out after every building is drawn, so a packed
   // plot does not turn into a pile of overlapping text.
-  const s = G.sides[0];
+  const s = G.sides[holdSide];
   let sub = 'Lv ' + b.lvl;
   if (t === 'farm') sub = '+' + (C.POP_PER_FARM * b.lvl) + ' pop';
   if (t === 'barracks') sub = 'Lv ' + b.lvl + (b.lvl >= 3 ? ' · cannons' : b.lvl >= 2 ? ' · casters' : '');
   if (t === 'tavern') sub = heroCap(s) + ' hero slot' + (heroCap(s) === 1 ? '' : 's');
-  const lp0 = bp(gx, gy, 1.55 + z);
-  labelQ.push({ x:lp0[0], y:lp0[1], txt:BUILDINGS[t].n + '  ' + sub, col:'#d8dee9', hot:b.tile === sel.tile });
+  if (holdSide === 0){
+    const lp0 = bp(gx, gy, 1.55 + z);
+    labelQ.push({ x:lp0[0], y:lp0[1], txt:BUILDINGS[t].n + '  ' + sub, col:'#d8dee9', hot:b.tile === sel.tile });
+  }
 }
 
 let labelQ = [];
@@ -2592,7 +2562,7 @@ function flushLabels(c){
 }
 
 function drawWorkerFig(c, x, y, col, carry, sc){
-  sc = sc || 1;
+  sc = (sc || 1) * bu();
   ell(c, x, y + 1, 3.2 * sc, 1.6 * sc, 'rgba(0,0,0,.25)');
   c.fillStyle = '#3f6f9e';
   c.fillRect(x - 2 * sc, y - 7 * sc, 4 * sc, 6 * sc);
@@ -2601,60 +2571,67 @@ function drawWorkerFig(c, x, y, col, carry, sc){
 }
 
 function drawNode(c, key){
-  const N = NODES[key], s = G.sides[0];
+  const N = NODES[key], s = G.sides[holdSide], B = bu();
   const p = bp(N.gx, N.gy);
   if (key === 'wood'){
     for (let i = 0; i < 5; i++){
       const q = bp(N.gx + (i % 3 - 1) * .55, N.gy + (i > 2 ? .55 : 0) - .2);
-      c.fillStyle = '#5c4326'; c.fillRect(q[0] - 2, q[1] - 12, 4, 12);
-      poly(c, [[q[0] - 11, q[1] - 10], [q[0], q[1] - 30], [q[0] + 11, q[1] - 10]], i % 2 ? '#3f7a3a' : '#4c8c42');
-      poly(c, [[q[0] - 8, q[1] - 17], [q[0], q[1] - 34], [q[0] + 8, q[1] - 17]], i % 2 ? '#4c8c42' : '#5aa04c');
+      c.fillStyle = '#5c4326'; c.fillRect(q[0] - 2 * B, q[1] - 12 * B, 4 * B, 12 * B);
+      poly(c, [[q[0] - 11 * B, q[1] - 10 * B], [q[0], q[1] - 30 * B], [q[0] + 11 * B, q[1] - 10 * B]], i % 2 ? '#3f7a3a' : '#4c8c42');
+      poly(c, [[q[0] - 8 * B, q[1] - 17 * B], [q[0], q[1] - 34 * B], [q[0] + 8 * B, q[1] - 17 * B]], i % 2 ? '#4c8c42' : '#5aa04c');
     }
   } else {
-    poly(c, [[p[0] - 34, p[1] + 4], [p[0] - 14, p[1] - 24], [p[0] + 12, p[1] - 20], [p[0] + 34, p[1] + 4]],
+    poly(c, [[p[0] - 34 * B, p[1] + 4 * B], [p[0] - 14 * B, p[1] - 24 * B], [p[0] + 12 * B, p[1] - 20 * B], [p[0] + 34 * B, p[1] + 4 * B]],
       key === 'gold' ? '#8c7a52' : '#6a7382');
-    poly(c, [[p[0] - 12, p[1] + 4], [p[0] - 8, p[1] - 13], [p[0] + 8, p[1] - 13], [p[0] + 12, p[1] + 4]], '#241f1b');
+    poly(c, [[p[0] - 12 * B, p[1] + 4 * B], [p[0] - 8 * B, p[1] - 13 * B], [p[0] + 8 * B, p[1] - 13 * B], [p[0] + 12 * B, p[1] + 4 * B]], '#241f1b');
     c.fillStyle = '#4a4038';
-    c.fillRect(p[0] - 13, p[1] - 15, 26, 3);
+    c.fillRect(p[0] - 13 * B, p[1] - 15 * B, 26 * B, 3 * B);
     for (let i = 0; i < 4; i++){
-      const q = [p[0] - 24 + i * 15, p[1] + 2];
-      ell(c, q[0], q[1], 5, 3, key === 'gold' ? '#e8b53d' : '#93a1b3');
-      ell(c, q[0] - 2, q[1] - 2, 2.4, 1.6, key === 'gold' ? '#ffe08a' : '#c3cede');
+      const q = [p[0] - 24 * B + i * 15 * B, p[1] + 2 * B];
+      ell(c, q[0], q[1], 5 * B, 3 * B, key === 'gold' ? '#e8b53d' : '#93a1b3');
+      ell(c, q[0] - 2 * B, q[1] - 2 * B, 2.4 * B, 1.6 * B, key === 'gold' ? '#ffe08a' : '#c3cede');
     }
   }
-  // workers on the job, shuttling to the keep
+  if (holdSide !== 0) return;                      // their crews are their business
   const n = Math.min(s.workers[key], nodeCap(s, key));
   const home = bp(KEEP.gx + .6, KEEP.gy + .5);
   for (let i = 0; i < n; i++){
     const ph = (G.t * .22 + i * .19) % 1;
     const tri = ph < .5 ? ph * 2 : 2 - ph * 2;
-    const x = lerp(p[0], home[0], tri), y = lerp(p[1] - 6, home[1], tri);
+    const x = lerp(p[0], home[0], tri), y = lerp(p[1] - 6 * B, home[1], tri);
     drawWorkerFig(c, x, y, N.col, ph >= .5, .9);
   }
-  labelQ.push({ x:p[0], y:p[1] + 26, txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col });
+  labelQ.push({ x:p[0], y:p[1] + 26 * B, txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col });
 }
 
 function drawKeep(c){
-  const s = G.sides[0];
+  const s = G.sides[holdSide], B = bu();
   drawHouse(c, KEEP.gx, KEEP.gy, .52, .42, 1.0, .48, '#b9a17c', '#7a4a3c');
   const p = bp(KEEP.gx, KEEP.gy, 1.9);
-  c.fillStyle = SIDE_COL[0]; c.fillRect(p[0] - 2, p[1] - 20, 4, 20);
-  poly(c, [[p[0] + 2, p[1] - 20], [p[0] + 18, p[1] - 15], [p[0] + 2, p[1] - 10]], SIDE_COL[0]);
+  c.fillStyle = sideCol(); c.fillRect(p[0] - 2 * B, p[1] - 20 * B, 4 * B, 20 * B);
+  poly(c, [[p[0] + 2 * B, p[1] - 20 * B], [p[0] + 18 * B, p[1] - 15 * B], [p[0] + 2 * B, p[1] - 10 * B]], sideCol());
+  if (holdSide !== 0) return;
   const lb = bp(KEEP.gx, KEEP.gy, 2.5);
   labelQ.push({ x:lb[0], y:lb[1], txt:'Town Hall · ' + s.workers.idle + ' idle', col:'#ffe7b0' });
-  // idle workers milling about the hall
   for (let i = 0; i < Math.min(6, s.workers.idle); i++){
     const a = G.t * .3 + i * 1.1;
     const q = bp(KEEP.gx + Math.cos(a) * .9, KEEP.gy + .9 + Math.sin(a) * .35);
     drawWorkerFig(c, q[0], q[1], '#8d99b0', false, .85);
   }
 }
+const sideCol = () => SIDE_COL[holdSide];
 
 // Deterministic countryside so the corners of the isometric diamond read as
 // land instead of empty felt. Nothing here touches the simulation.
 const hash2 = (i, j) => { const n = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return n - Math.floor(n); };
 function drawGround(c){
   const busy = (gx, gy) => {
+    const wy = gy * TILE;
+    if (wy < PLAT.far + 4 || wy > PLAT.near - 3) return true;          // off the mesa
+    const wx = holdWorld(gx, gy)[0];
+    const inner = holdSide === 0 ? 3 : C.LANE_LEN - 3;
+    const outer = inner - (holdSide === 0 ? 1 : -1) * (PLAT.back + 34);
+    if (holdSide === 0 ? (wx > inner - 4 || wx < outer + 4) : (wx < inner + 4 || wx > outer - 4)) return true;
     if (Math.abs(gx) < (PLOT_W - 1) / 2 + 1.1 && Math.abs(gy) < (PLOT_H - 1) / 2 + 1.1) return true;
     if (Math.hypot(gx - KEEP.gx, gy - KEEP.gy) < 1.9) return true;
     for (const k in NODES) if (Math.hypot(gx - NODES[k].gx, gy - NODES[k].gy) < 1.9) return true;
@@ -2671,12 +2648,12 @@ function drawGround(c){
     c.stroke();
   }
   c.lineCap = 'butt';
-  for (let gx = -9; gx <= 9; gx++) for (let gy = -9; gy <= 9; gy++){
+  for (let gx = -14; gx <= 13; gx++) for (let gy = -16; gy <= 8; gy++){
     const r = hash2(gx, gy);
     if (r > .40 || busy(gx, gy)) continue;
     const ox = (hash2(gx + 31, gy) - .5) * .8, oy = (hash2(gx, gy + 17) - .5) * .8;
     const p = bp(gx + ox, gy + oy);
-    if (p[0] < -60 || p[0] > BW + 60 || p[1] < -60 || p[1] > BH + 60) continue;
+    if (p[0] < -60 || p[0] > LW + 60 || p[1] < -60 || p[1] > LH + 60) continue;
     const s = BSC / 34;
     if (r < .16){                                     // tree
       ell(c, p[0], p[1] + 2, 9 * s, 4 * s, 'rgba(0,0,0,.20)');
@@ -2699,25 +2676,73 @@ function drawGround(c){
   }
 }
 
-function drawBase(){
-  const c = bctx;
-  if (!c) return;
-  baseFit();
-  const g = c.createLinearGradient(0, 0, 0, BH);
-  g.addColorStop(0, '#3d5b3c'); g.addColorStop(.55, '#33502f'); g.addColorStop(1, '#22381f');
-  c.fillStyle = g; c.fillRect(0, 0, BW, BH);
+// The mesa your hold stands on: grass on top, rock walls falling into the
+// chasm on every side you can actually see.
+const PLAT = { far:-54, near:38, back:48 };
+function drawPlateau(c){
+  const d = holdSide === 0 ? 1 : -1;
+  const inner = holdSide === 0 ? 3 : C.LANE_LEN - 3;         // where it meets the bridge
+  const outer = inner - d * (PLAT.back + 34);
+  const F = PLAT.far, N = PLAT.near;
+  const e = (x, y, z) => lp(x, y, z);
+  const DROP = 46;
+  // rock walls first, so the grass caps them cleanly
+  poly(c, [e(outer, N), e(inner, N), e(inner, N, -DROP), e(outer, N, -DROP)], '#4a4038');
+  poly(c, [e(outer, N, -DROP * .45), e(inner, N, -DROP * .45), e(inner, N, -DROP), e(outer, N, -DROP)], '#39322b');
+  poly(c, [e(inner, F), e(inner, N), e(inner, N, -DROP), e(inner, F, -DROP)], '#40382e');
+  poly(c, [e(inner, F, -DROP * .4), e(inner, N, -DROP * .4), e(inner, N, -DROP), e(inner, F, -DROP)], '#2f2922');
+  poly(c, [e(outer, F), e(outer, N), e(outer, N, -DROP), e(outer, F, -DROP)], '#453c33');
+  // strata across the face
+  c.globalAlpha = .35;
+  for (let i = 1; i < 4; i++){
+    const z = -DROP * (i / 4);
+    poly(c, [e(outer, N, z), e(inner, N, z), e(inner, N, z - 1.6), e(outer, N, z - 1.6)], '#6a5c4c');
+  }
+  c.globalAlpha = 1;
+  // and the bottom of the cliff dissolving into the dark of the chasm
+  for (let i = 0; i < 5; i++){
+    const z0 = -DROP * (.5 + i * .1), z1 = z0 - DROP * .1;
+    c.globalAlpha = .16 + i * .17;
+    poly(c, [e(outer, N, z0), e(inner, N, z0), e(inner, N, z1), e(outer, N, z1)], '#0c1414');
+    poly(c, [e(inner, F, z0), e(inner, N, z0), e(inner, N, z1), e(inner, F, z1)], '#0c1414');
+    poly(c, [e(outer, F, z0), e(outer, N, z0), e(outer, N, z1), e(outer, F, z1)], '#0c1414');
+  }
+  c.globalAlpha = 1;
+  // grass top
+  poly(c, [e(outer, F), e(inner, F), e(inner, N), e(outer, N)], '#4c7040');
+  c.globalAlpha = .35;
+  poly(c, [e(outer, N - 8), e(inner, N - 8), e(inner, N), e(outer, N)], '#3d5c33');
+  poly(c, [e(inner - d * 9, F), e(inner, F), e(inner, N), e(inner - d * 9, N)], '#43663a');
+  c.globalAlpha = 1;
+  // the far edge fades into the valley haze instead of ending on a hard line
+  for (let i = 0; i < 4; i++){
+    c.globalAlpha = .16 - i * .04;
+    poly(c, [e(outer, F + i * 3), e(inner, F + i * 3), e(inner, F + i * 3 + 3), e(outer, F + i * 3 + 3)], '#8ea9ac');
+  }
+  c.globalAlpha = 1;
+  // the road out to the gates
+  c.globalAlpha = .5;
+  poly(c, [e(inner, -5), e(inner - d * 30, -5), e(inner - d * 30, 5), e(inner, 5)], '#7d6a44');
+  c.globalAlpha = 1;
+}
+
+function drawHold(c, side){
+  holdSide = side;
+  const fog = side !== 0;
+  if (fog) c.globalAlpha = .82;
+  drawPlateau(c);
   drawGround(c);
-  // plot floor
-  const s = G.sides[0];
+  const s = G.sides[side];
   for (let t = 0; t < s.plot.length; t++){
     const gx = tileGX(t), gy = tileGY(t);
-    const hot = t === sel.tile;
+    const hot = !fog && t === sel.tile;
     drawTile(c, gx, gy, s.plot[t] ? '#4d4739' : (hot ? 'rgba(78,163,255,.30)' : 'rgba(46,52,40,.55)'),
       hot ? '#4ea3ff' : 'rgba(0,0,0,.35)');
-    if (!s.plot[t]){
+    if (!s.plot[t] && !fog){
       const p = bp(gx, gy, .12);
       c.fillStyle = hot ? '#9ad0ff' : 'rgba(200,215,190,.35)';
-      c.font = 'bold 15px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.font = 'bold ' + Math.round(15 * bu()) + 'px system-ui';
+      c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText('+', p[0], p[1]); c.textBaseline = 'alphabetic';
     }
   }
@@ -2727,16 +2752,24 @@ function drawBase(){
   for (const b of s.plot) if (b) items.push({ y:bp(tileGX(b.tile), tileGY(b.tile))[1], f:() => drawBuilding(c, b) });
   items.sort((a, b) => a.y - b.y);
   for (const it of items) it.f();
-  // food workers tending the farms
-  const farms = bList(s, 'farm');
-  const nf = Math.min(s.workers.food, fieldSlots(s));
-  flushLabels(c);
-  for (let i = 0; i < nf && farms.length; i++){
-    const f = farms[i % farms.length];
-    const a = G.t * .5 + i * 1.7;
-    const q = bp(tileGX(f.tile) + Math.cos(a) * .34, tileGY(f.tile) + .1 + Math.sin(a) * .3, .05);
-    drawWorkerFig(c, q[0], q[1], '#7fdc8a', (Math.sin(a) > 0), .85);
+  if (!fog){
+    const farms = bList(s, 'farm');
+    const nf = Math.min(s.workers.food, fieldSlots(s));
+    for (let i = 0; i < nf && farms.length; i++){
+      const f = farms[i % farms.length];
+      const a = G.t * .5 + i * 1.7;
+      const q = bp(tileGX(f.tile) + Math.cos(a) * .34, tileGY(f.tile) + .1 + Math.sin(a) * .3, .05);
+      drawWorkerFig(c, q[0], q[1], '#7fdc8a', (Math.sin(a) > 0), .85);
+    }
+  } else {
+    // haze over their hold — you can see they are building, not what they hold
+    const a = lp(C.LANE_LEN - HOLD_X + 34, -30), b2 = lp(3 + C.LANE_LEN - 6, 30);
+    c.globalAlpha = .20;
+    c.fillStyle = '#7f9aa8';
+    c.fillRect(Math.min(a[0], b2[0]), 0, Math.abs(b2[0] - a[0]), LH);
+    c.globalAlpha = 1;
   }
+  holdSide = 0;
 }
 
 /* ------------------------------------------------------------------ camera + frame */
@@ -2746,14 +2779,26 @@ function camStep(dt){
     const mine = G.sides[0].heroes.filter(h => !h.dead);
     if (mine.length) fx = mine.reduce((a, h) => a + h.x, 0) / mine.length;
     else fx = frontlineX(0);
-    cam.x = lerp(cam.x, clamp(fx, 8, C.LANE_LEN - 8), 1 - Math.pow(.02, dt));
+    cam.x = lerp(cam.x, clamp(fx, CAM_MIN, CAM_MAX), 1 - Math.pow(.02, dt));
   }
   cam.z = lerp(cam.z, cam.tz, 1 - Math.pow(.005, dt));
 }
 
+const CAM_MIN = HOLD_X - 26, CAM_MAX = C.LANE_LEN - HOLD_X + 26;
 function draw(){
-  drawLane();
-  drawBase();
+  const c = lctx;
+  if (!c) return;
+  BSC = LS() * TILE;
+  c.save();
+  drawSky(c);
+  drawHold(c, 0);
+  drawHold(c, 1);
+  drawEnds(c);
+  drawDeck(c);
+  drawLane(c);
+  flushLabels(c);
+  drawMinimap(c);
+  c.restore();
 }
 
 /* =====================================================================
@@ -2788,75 +2833,82 @@ function syncHud(){
   $('waveT').textContent = Math.floor(G.waveT / 60) + ':' + String(Math.floor(G.waveT % 60)).padStart(2, '0');
 }
 
-function basePanelHtml(){
+// The dock is one row of columns under the world: jobs, training, whatever plot
+// you have selected, the forge, and your heroes.
+function dockHtml(){
   const s = G.sides[0];
   let h = '';
-  h += '<div class="ptitle">Workers — ' + s.workers.idle + ' idle</div><div class="prow">';
+
+  h += '<div class="dsec"><div class="ptitle">Workers — ' + s.workers.idle + ' idle</div><div class="pgrid">';
   for (const k of ['gold','iron','wood','food']){
     const cap = nodeCap(s, k);
-    h += '<div class="job"><span>' + RES_ICON[k] + '</span><span class="nm">' + k + '</span>' +
+    h += '<div class="job"><span>' + RES_ICON[k] + '</span>' +
       '<span class="ct">' + s.workers[k] + '/' + cap + '</span>' +
       '<button class="sq" data-act="job" data-node="' + k + '" data-d="-1"' + (s.workers[k] ? '' : ' disabled') + '>−</button>' +
       '<button class="sq" data-act="job" data-node="' + k + '" data-d="1"' + (s.workers.idle && s.workers[k] < cap ? '' : ' disabled') + '>+</button></div>';
   }
-  h += '</div>';
+  h += '</div></div>';
 
-  h += '<div class="ptitle">Train</div><div class="prow">';
+  h += '<div class="dsec"><div class="ptitle">Train</div><div class="pgrid">';
   h += '<button class="abtn" data-act="worker"><span class="t">Worker</span><span class="c">' + costHtml(C.WORKER_COST) + '</span></button>';
   for (const k in TRAIN){
     const d = TRAIN[k], ok = barracksLvl(s) >= d.barracks;
     h += '<button class="abtn" data-act="unit" data-unit="' + k + '"' + (ok ? '' : ' disabled') + '>' +
       '<span class="t">' + d.n + '</span><span class="c">' + (ok ? costHtml(d.cost) + ' +1👥' : 'barracks Lv' + d.barracks) + '</span></button>';
   }
-  h += '</div>';
-
   const q = s.trainQ.map(x => {
     const pc = Math.round(clamp(x.t / x.dur, 0, 1) * 100);
     const nm = x.type === 'worker' ? 'Worker' : TRAIN[x.type].n;
     return '<span class="qchip"><i class="fill" style="width:' + pc + '%"></i><span>' + nm + '</span></span>';
   }).join('');
-  h += '<div class="ptitle">In training</div><div id="queue">' + (q || '<span class="qchip"><span>idle</span></span>') + '</div>';
-
   const cnt = {};
   for (const m of s.muster) cnt[m.type] = (cnt[m.type] || 0) + 1;
   const mus = Object.keys(cnt).map(k => '<span class="mchip">' + TRAIN[k].n + ' ×' + cnt[k] + '</span>').join('');
-  h += '<div class="ptitle">Next wave' + (s.superT > 0 ? ' — SIEGE OGRES ' + Math.ceil(s.superT) + 's' : '') + '</div>' +
-    '<div id="musterRow">' + (mus || '<span class="mchip">levies only</span>') + '</div>';
+  h += '</div><div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>' +
+    '<div class="ptitle">Next wave' + (s.superT > 0 ? ' — OGRES ' + Math.ceil(s.superT) + 's' : '') + '</div>' +
+    '<div id="musterRow">' + (mus || '<span class="mchip">levies only</span>') + '</div></div>';
 
-  // selected plot
+  // whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
+  h += '<div class="dsec grow">';
   if (sel.tile >= 0 && !b){
-    h += '<div class="ptitle">Build on plot ' + (sel.tile + 1) + '</div><div class="prow" style="flex-wrap:wrap">';
+    h += '<div class="ptitle">Build on plot ' + (sel.tile + 1) + '</div><div class="pgrid">';
     for (const t of BUILD_ORDER){
       const cost = buildCost(t, 1);
-      h += '<button class="abtn" data-act="build" data-type="' + t + '" style="flex:1 1 44%"' + (canPay(s, cost) ? '' : ' disabled') + '>' +
+      h += '<button class="abtn" data-act="build" data-type="' + t + '"' + (canPay(s, cost) ? '' : ' disabled') + '>' +
         '<span class="t">' + BUILDINGS[t].n + '</span><span class="c">' + costHtml(cost) + '</span></button>';
     }
     h += '</div>';
   } else if (b){
     const B = BUILDINGS[b.type];
-    h += '<div class="ptitle">' + B.n + ' — level ' + b.lvl + '</div>';
-    h += '<div style="font-size:11px;color:var(--dim);margin-bottom:5px">' + B.d + '</div><div class="prow">';
+    h += '<div class="ptitle">' + B.n + ' — level ' + b.lvl + '</div>' +
+      '<div style="font-size:11px;color:var(--dim);max-width:250px">' + B.d + '</div><div class="prow">';
     if (b.lvl < B.maxLvl){
       const cost = buildCost(b.type, b.lvl + 1);
       h += '<button class="abtn" data-act="upgrade"' + (canPay(s, cost) ? '' : ' disabled') + '>' +
         '<span class="t">Upgrade to Lv ' + (b.lvl + 1) + '</span><span class="c">' + costHtml(cost) + '</span></button>';
     } else h += '<div class="job"><span class="nm">Fully upgraded.</span></div>';
     h += '</div>';
+  } else {
+    h += '<div class="ptitle">Your hold</div><div style="font-size:12px;color:var(--dim);max-width:250px;line-height:1.5">' +
+      'Click an empty plot out on the grass to build, or a building to upgrade it. Drag the world to look around.</div>';
   }
+  h += '</div>';
 
   if (bLvl(s, 'forge') > 0){
-    h += '<div class="ptitle">Forge — rank cap ' + upCap(s) + '</div><div class="prow" style="flex-wrap:wrap">';
+    h += '<div class="dsec"><div class="ptitle">Forge — rank cap ' + upCap(s) + '</div><div class="pgrid">';
     for (const u of [...TOWER_UPS, ...TROOP_UPS]){
       const bag = TOWER_UPS.includes(u) ? s.towerUp : s.troopUp;
       const lv = bag[u.id], maxed = lv >= upCap(s);
       const cost = upCostFor(u, lv);
-      h += '<button class="abtn" data-act="up" data-up="' + u.id + '" style="flex:1 1 44%"' + (!maxed && canPay(s, cost) ? '' : ' disabled') + '>' +
+      h += '<button class="abtn" data-act="up" data-up="' + u.id + '"' + (!maxed && canPay(s, cost) ? '' : ' disabled') + '>' +
         '<span class="t">' + u.n + ' <span style="color:var(--gold)">' + lv + '/' + upCap(s) + '</span></span>' +
         '<span class="c">' + (maxed ? 'at the cap' : costHtml(cost)) + '</span></button>';
     }
-    h += '</div>';
+    h += '</div></div>';
   }
+
+  h += '<div class="dsec"><div class="ptitle">Heroes</div><div id="heroBar">' + heroBarHtml() + '</div></div>';
   return h;
 }
 
@@ -2887,8 +2939,7 @@ let uiT = 0;
 function syncUI(){
   if (HEADLESS) return;
   syncHud();
-  $('basePanel').innerHTML = basePanelHtml();
-  $('heroBar').innerHTML = heroBarHtml();
+  $('dock').innerHTML = dockHtml();
 }
 function uiTick(dt){
   uiT -= dt;
@@ -3024,7 +3075,7 @@ function showHelp(){
     '<p><b>Barracks</b> arm an idle worker into a Footman, and at level 2 and 3 into Casters and Cannons. Everything you arm marches out with the next wave.</p>' +
     '<p><b>The Forge</b> unlocks turret and minion upgrades; its level sets how high a rank you can buy.</p>' +
     '<p><b>The Hero Factory</b> forges heroes. They fight on their own — you choose the build.</p>' +
-    '<p>Break the outer turret, then the mid, then the inner, then the inhibitor, then the gates. Taking an inhibitor sends Siege Ogres for ' + C.SUPER_DUR + 's.</p>' +
+    '<p>Break the outer turret, then the mid, then the inner, then the inhibitor, then the gates. Taking an inhibitor sends Siege Ogres for ' + C.SUPER_DUR + 's.</p>' + '<p>It is all one place: drag to look along the world, pinch or scroll to zoom, and use HOLD / GATES / MID / FOE to jump. Click a plot to build on it, or a hero to open its profile.</p>' +
     '</div><div class="rowbtn"><button class="big ghost" data-act="close">Got it</button></div>');
 }
 
@@ -3043,25 +3094,47 @@ function saveMeta(won){
 /* =====================================================================
    INPUT + BOOT
    ===================================================================== */
-let tab = 'lane';
-function applyTab(){
-  if (!document.body.classList.contains('narrow')) return;
-  $('left').classList.toggle('hide', tab !== 'base');
-  $('right').classList.toggle('hide', tab !== 'lane');
-  $('tabBase').classList.toggle('on', tab === 'base');
-  $('tabLane').classList.toggle('on', tab === 'lane');
-  resizeSoon();
-}
 let rsT = 0;
 function resizeSoon(){ clearTimeout(rsT); rsT = setTimeout(resize, 30); }
 
 function say(msg){ if (msg) fxToast(msg, 'bad'); }
 
+// Screen point → world ground point (the inverse of lp with z = 0).
+function unproject(sx, sy){
+  const S = LS();
+  const A = (sx - LW * .5) / S, B = (sy - LH * .52) / S;
+  const det = .96 * .60 + .52 * .12;
+  return [ (A * .60 + .52 * B) / det + cam.x, (.96 * B - .12 * A) / det ];
+}
+
+// A click either grabs one of your plots or opens a hero standing under it.
+function pickAt(clientX, clientY){
+  const r = lcv.getBoundingClientRect();
+  const sx = clientX - r.left, sy = clientY - r.top;
+  for (const h of G.sides[0].heroes){
+    if (h.dead) continue;
+    const q = lp(h.x, h.y);
+    if (Math.abs(q[0] - sx) < 22 * cam.z && sy < q[1] + 8 * cam.z && sy > q[1] - 46 * cam.z){
+      sel.hero = h; showHeroSheet(h); return;
+    }
+  }
+  const w = unproject(sx, sy);
+  const gx = (w[0] - HOLD_X) / TILE, gy = w[1] / TILE;
+  const col = Math.round(gx + (PLOT_W - 1) / 2), row = Math.round(gy + (PLOT_H - 1) / 2);
+  sel.tile = (col >= 0 && col < PLOT_W && row >= 0 && row < PLOT_H) ? row * PLOT_W + col : -1;
+  syncUI();
+}
+
 function wire(){
   const s0 = () => G.sides[0];
-  $('basePanel').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-act]');
+  $('dock').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-hero],[data-act]');
     if (!b || b.disabled) return;
+    if (b.dataset.hero){
+      const h = s0().heroes.find(x => x.id === +b.dataset.hero);
+      if (h){ sel.hero = h; showHeroSheet(h); }
+      return;
+    }
     const s = s0(), a = b.dataset.act;
     if (a === 'job') say(assign(s, b.dataset.node, +b.dataset.d));
     else if (a === 'worker') say(trainWorker(s));
@@ -3069,15 +3142,8 @@ function wire(){
     else if (a === 'build') say(build(s, sel.tile, b.dataset.type));
     else if (a === 'upgrade') say(upgradeBuilding(s, sel.tile));
     else if (a === 'up') say(buyUp(s, b.dataset.up));
+    else if (a === 'newhero'){ showHeroCreate(); return; }
     syncUI();
-  });
-  $('heroBar').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-hero],[data-act]');
-    if (!b || b.disabled) return;
-    if (b.dataset.hero){
-      const h = s0().heroes.find(x => x.id === +b.dataset.hero);
-      if (h){ sel.hero = h; showHeroSheet(h); }
-    } else if (b.dataset.act === 'newhero') showHeroCreate();
   });
   $('modal').addEventListener('click', (e) => {
     if (e.target === $('modal')){ if (G.state === 'play') closeModal(); return; }
@@ -3112,43 +3178,60 @@ function wire(){
     $('btnSpeed').textContent = G.speed + '×';
     $('btnSpeed').classList.toggle('on', G.speed > 1);
   });
-  $('tabBase').addEventListener('click', () => { tab = 'base'; applyTab(); });
-  $('tabLane').addEventListener('click', () => { tab = 'lane'; applyTab(); });
   const camTo = (x) => { cam.follow = false; cam.x = x; $('camFollow').classList.remove('on'); };
-  $('camHome').addEventListener('click', () => camTo(14));
+  $('camHold').addEventListener('click', () => camTo(HOLD_X));
+  $('camGate').addEventListener('click', () => camTo(12));
   $('camMid').addEventListener('click', () => camTo(C.LANE_LEN / 2));
-  $('camFoe').addEventListener('click', () => camTo(C.LANE_LEN - 14));
+  $('camFoe').addEventListener('click', () => camTo(C.LANE_LEN - 12));
   $('camFollow').addEventListener('click', () => { cam.follow = !cam.follow; $('camFollow').classList.toggle('on', cam.follow); });
+  const zoomBy = (f) => { cam.tz = clamp(cam.tz * f, .42, 2.2); };
+  $('camOut').addEventListener('click', () => zoomBy(.8));
+  $('camIn').addEventListener('click', () => zoomBy(1.25));
 
-  // base canvas — pick a plot
-  bcv.addEventListener('pointerdown', (e) => {
-    const r = bcv.getBoundingClientRect();
-    const sx = e.clientX - r.left, sy = e.clientY - r.top;
-    const a = (sx - BW * .5) / (BSC * .88), b = (sy - BH * .30) / (BSC * .50);
-    const gx = (a + b) / 2, gy = (b - a) / 2;
-    const col = Math.round(gx + (PLOT_W - 1) / 2), row = Math.round(gy + (PLOT_H - 1) / 2);
-    sel.tile = (col >= 0 && col < PLOT_W && row >= 0 && row < PLOT_H) ? row * PLOT_W + col : -1;
-    syncUI();
-  });
-
-  // lane canvas — drag to pan, wheel to zoom
+  // one canvas: drag to pan, wheel to zoom, click to select a plot or a hero
   let drag = null;
-  lcv.addEventListener('pointerdown', (e) => { drag = { x:e.clientX, cx:cam.x }; lcv.setPointerCapture(e.pointerId); });
+  lcv.addEventListener('pointerdown', (e) => {
+    drag = { x:e.clientX, y:e.clientY, cx:cam.x, moved:false };
+    lcv.setPointerCapture(e.pointerId);
+  });
   lcv.addEventListener('pointermove', (e) => {
     if (!drag) return;
     const dx = (e.clientX - drag.x) / (LS() * .96);
-    if (Math.abs(e.clientX - drag.x) > 4){ cam.follow = false; $('camFollow').classList.remove('on'); }
-    cam.x = clamp(drag.cx - dx, 0, C.LANE_LEN);
+    if (Math.abs(e.clientX - drag.x) + Math.abs(e.clientY - drag.y) > 5){
+      drag.moved = true; cam.follow = false; $('camFollow').classList.remove('on');
+    }
+    if (drag.moved) cam.x = clamp(drag.cx - dx, CAM_MIN, CAM_MAX);
   });
-  lcv.addEventListener('pointerup', () => { drag = null; });
+  lcv.addEventListener('pointerup', (e) => {
+    if (drag && !drag.moved) pickAt(e.clientX, e.clientY);
+    drag = null;
+  });
   lcv.addEventListener('pointercancel', () => { drag = null; });
+  // two-finger pinch, for the screens with no wheel
+  const touches = new Map();
+  let pinch = 0;
+  lcv.addEventListener('pointerdown', (e) => { touches.set(e.pointerId, e); });
+  lcv.addEventListener('pointermove', (e) => {
+    if (!touches.has(e.pointerId)) return;
+    touches.set(e.pointerId, e);
+    if (touches.size !== 2) return;
+    drag = null;
+    const [a, b2] = [...touches.values()];
+    const d = Math.hypot(a.clientX - b2.clientX, a.clientY - b2.clientY);
+    if (pinch) cam.tz = cam.z = clamp(cam.z * (d / pinch), .42, 2.2);
+    pinch = d;
+  });
+  const drop = (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = 0; };
+  lcv.addEventListener('pointerup', drop);
+  lcv.addEventListener('pointercancel', drop);
   lcv.addEventListener('dblclick', () => { cam.follow = true; $('camFollow').classList.add('on'); });
   lcv.addEventListener('wheel', (e) => {
     e.preventDefault();
-    cam.tz = clamp(cam.tz * (e.deltaY > 0 ? .88 : 1.14), .55, 2.2);
+    cam.tz = clamp(cam.tz * (e.deltaY > 0 ? .88 : 1.14), .42, 2.2);
   }, { passive:false });
 
   window.addEventListener('resize', resizeSoon);
+  window.addEventListener('orientationchange', resizeSoon);
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape'){ if (G.state === 'play') closeModal(); }
     else if (e.key === ' '){ e.preventDefault(); $('btnPause').click(); }
@@ -3175,7 +3258,7 @@ function frame(ts){
 }
 
 function boot(){
-  lcv = $('lcv'); bcv = $('bcv');
+  lcv = $('wcv');
   resize();
   wire();
   newMatch({ diff:'veteran' });
@@ -3198,6 +3281,7 @@ window.IB = {
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
+  lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
 };
 
 </script>
