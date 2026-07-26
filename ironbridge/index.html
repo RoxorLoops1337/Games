@@ -2311,13 +2311,22 @@ function aiStep(s, dt){
   // seven minutes of play produced a single Footman out of an army of levies.
   // Hold one back when there is a barracks standing and something it can pay
   // to arm.
-  const canArm = barracksLvl(s) > 0 && Object.keys(TRAIN).some(k =>
+  // A Footman takes one worker off the piles; a Caster and a Cannon take TWO.
+  // This reserve used to be a flat 1, so the second idle worker was shovelled
+  // into a mine the instant it appeared and `s.workers.idle < d.need` refused
+  // every Caster and every Cannon the hold ever tried to arm — at any barracks
+  // level. Measured over sixteen eight-minute matches: 218 Footmen armed, zero
+  // of anything else. Hold back as many as the dearest thing it could actually
+  // pay for right now needs.
+  const armable = Object.keys(TRAIN).filter(k =>
     TRAIN[k].barracks <= barracksLvl(s) && canPay(s, TRAIN[k].cost));
+  const armNeed = barracksLvl(s) > 0 && armable.length
+    ? Math.max(...armable.map(k => TRAIN[k].need)) : 0;
   // Every worker costs 20 food to train, so a hold that under-staffs the
   // fields throttles its own growth and then cannot afford a hero (45 food).
   // Traced: food sat under 35 all match while iron piled up unspent.
   const want = { wood:.28, gold:.30, iron:.18, food:.24 };
-  if (s.workers.idle > (canArm ? 1 : 0)){
+  if (s.workers.idle > armNeed){
     let bestNode = 'wood', bestGap = -9;
     for (const n of ['gold','iron','wood','food']){
       const room = nodeCap(s, n) - s.workers[n];
@@ -2336,7 +2345,16 @@ function aiStep(s, dt){
   if (built < s.plot.length){
     const next = tight ? 'farm' : AI_BUILD_PLAN[Math.min(built - 2, AI_BUILD_PLAN.length - 1)] || 'farm';
     const free = s.plot.indexOf(null);
-    if (free >= 0 && canPay(s, buildCost(next, 1))) build(s, free, next);
+    // For most buildings a copy and a level are the same thing — bLvl SUMS the
+    // levels standing — but the Caster and Cannon gate reads barracksLvl, the
+    // HIGHEST level, so a second level-1 barracks unlocks nothing. Sampling
+    // once a second over sixteen matches, the Host could not pay the barracks
+    // upgrade 99% of the time and 99% of those were short of wood — the wood
+    // the plan was spending on the duplicate. When the plan calls for
+    // something that already stands, level it instead of copying it.
+    const dup = next === 'barracks' && bList(s, next).find(o => o.lvl < BUILDINGS[next].maxLvl);
+    if (dup && canPay(s, buildCost(next, dup.lvl + 1))) upgradeBuilding(s, dup.tile);
+    else if (free >= 0 && canPay(s, buildCost(next, 1))) build(s, free, next);
   }
   // --- level the important buildings once the plot is full
   if (built >= s.plot.length - 1 && arnd(s) < .5){
@@ -2352,7 +2370,15 @@ function aiStep(s, dt){
     const roll = arnd(s);
     const order = bl >= 3 ? (roll < .45 ? ['melee','cannon','caster'] : roll < .8 ? ['cannon','caster','melee'] : ['caster','melee','cannon'])
       : bl === 2 ? (roll < .6 ? ['melee','caster'] : ['caster','melee']) : ['melee'];
-    for (const t of order) if (!trainUnit(s, t)) break;
+    for (const t of order){
+      // A Footman is always affordable, so it won every race for the pair of
+      // workers the hold was banking for a Caster: measured, a Caster was
+      // never once clear to arm at a one-second sample even after the tier
+      // was up — idle workers blocked it 100% of the time. Leave the pair
+      // alone unless there is a spare worker beyond it.
+      if (TRAIN[t].need < armNeed && s.workers.idle <= armNeed) break;
+      if (!trainUnit(s, t)) break;
+    }
   }
   // --- forge work
   if (bLvl(s, 'forge') > 0 && arnd(s) < .7){
@@ -3900,7 +3926,12 @@ function dockHtml(){
   for (const k in TRAIN){
     const d = TRAIN[k], ok = barracksLvl(s) >= d.barracks;
     h += '<button class="abtn" data-act="unit" data-unit="' + k + '"' + (ok ? '' : ' disabled') + '>' +
-      '<span class="t">' + d.n + '</span><span class="c">' + (ok ? costHtml(d.cost) + ' +1👥' : 'barracks Lv' + d.barracks) + '</span></button>';
+      // A Caster and a Cannon each take TWO workers off the piles, not one.
+      // This printed a flat '+1👥' for all three, so the two that cost a pair
+      // said they cost one — on a button that then refuses with 'no idle
+      // worker to arm' and no explanation of how many it wanted.
+      '<span class="t">' + d.n + '</span><span class="c">' +
+      (ok ? costHtml(d.cost) + ' +' + d.need + '👥' : 'barracks Lv' + d.barracks) + '</span></button>';
   }
   const q = s.trainQ.map(x => {
     const pc = Math.round(clamp(x.t / x.dur, 0, 1) * 100);
