@@ -3919,6 +3919,68 @@ t.ok(true, 'drawing an empty bridge is harmless');
     names(D1.G) + '  vs  ' + names(D2.G) + ')');
 }
 
+/* -------------------------------------------------- the lobby, and saying so */
+{
+  // A lockstep match that is waiting on the other machine looks EXACTLY like a
+  // frozen game, and a desync looks like nothing at all — the two players just
+  // quietly play different matches and argue afterwards. Both have to be said
+  // out loud, and both have to outrank the coaching, because there is no point
+  // advising someone about their economy in a match that has stopped being the
+  // same match.
+  IB.newMatch({ diff:'veteran', seed:3300 });
+  IB.NET.on = false; IB.NET.peerLost = false; IB.NET.desyncAt = -1; IB.NET.stallT = 0;
+  t.ok(IB.netBanner() === '', 'single-player says nothing about the network');
+
+  IB.NET.on = true;
+  t.ok(IB.netBanner() === '', 'and a healthy multiplayer match says nothing either');
+  IB.NET.stallT = 1.2;
+  t.ok(/waiting/i.test(IB.netBanner()), 'a stall is named (' + IB.netBanner() + ')');
+  IB.NET.peerLost = true;
+  t.ok(/lost/i.test(IB.netBanner()), 'a dropped peer outranks a stall (' + IB.netBanner() + ')');
+  IB.NET.desyncAt = 900;
+  t.ok(/drift|sync/i.test(IB.netBanner()), 'and a desync outranks everything (' + IB.netBanner() + ')');
+  // The banner has to reach the one line the player actually reads.
+  const advSrc = SRC.slice(SRC.indexOf('function syncAdvice'), SRC.indexOf('function syncAdvice') + 900);
+  t.ok(advSrc.includes('netBanner()'), 'and the advice bar shows it rather than coaching through a desync');
+  IB.NET.on = false; IB.NET.peerLost = false; IB.NET.desyncAt = -1; IB.NET.stallT = 0;
+
+  // The lobby is reachable from the menu, and every screen it can be in offers
+  // a way back — a dead end in a modal is a reload.
+  IB.showMenu();
+  t.ok(/data-act="mp"/.test(G.sheet), 'the menu offers a two-player match');
+  for (const st of ['idle', 'hosting', 'joining', 'connecting', 'ready', 'error']){
+    IB.lobbySet(st);
+    const h = IB.lobbyHtml();
+    t.ok(h.includes('data-act="mpback"'), 'the lobby in "' + st + '" has a way back');
+    t.ok(h.length > 60 && /<h2>/.test(h), 'and says something (' + st + ')');
+  }
+  IB.lobbySet('idle');
+  t.ok(/data-act="mphost"/.test(IB.lobbyHtml()) && /data-act="mpjoin"/.test(IB.lobbyHtml()),
+    'and offers both starting and joining');
+
+  // A code the player typed is a person typing, not an attack.
+  for (const [given, why] of [['', 'nothing'], ['AB', 'too short'], ['ABCDE', 'too long'], ['12__', 'no letters']]){
+    IB.lobbySet('joining');
+    IB.lobbyJoin(given);
+    t.ok(IB.LOBBY.state === 'error', 'a code that is ' + why + ' is refused with a message, not a hang');
+  }
+  t.ok(/four letters/i.test(IB.LOBBY.err), 'and the message says what a code looks like (' + IB.LOBBY.err + ')');
+
+  // The relay host is overridable without editing the game, so a preview
+  // deployment can be tested. Falls back when nothing is set.
+  const host = IB.relayHost();
+  t.ok(typeof host === 'string' && host.length > 4 && !/^https?:/.test(host),
+    'the relay host is a bare host, not a URL (' + host + ')');
+  localStorage.setItem('ib_relay', 'example.test');
+  t.ok(IB.relayHost() === 'example.test', 'and can be pointed elsewhere for testing');
+  localStorage.removeItem('ib_relay');
+  t.ok(IB.relayHost() === host, 'and goes back to the default when that is cleared');
+
+  IB.lobbyClose();
+  t.ok(IB.LOBBY.state === 'idle' && !IB.LOBBY.sock && IB.LOBBY.code === '',
+    'closing the lobby lets go of everything');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
