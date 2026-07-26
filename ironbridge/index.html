@@ -4146,6 +4146,31 @@ function heroBarHtml(){
 // and it goes quiet once the hold is running itself.
 function adviceFor(s){
   const bl = barracksLvl(s);
+  // Sampled once a second across eight twelve-minute matches, this bar spent
+  // 40% of the whole match on one line — 'Every worker is busy, so there is
+  // nobody to arm. Train one more.' — because it never looked at what was
+  // already in the training queue, so it kept asking for a worker while three
+  // were on the way. And 'Build a Hero Factory' held it for an unbroken 152
+  // seconds, because it repeated an instruction the hold could not yet pay
+  // for and gave no sign of progress toward it.
+  //
+  // Two rules now: never ask for something already queued, and never ask for
+  // something unaffordable without naming what is missing.
+  const queued = (type) => s.trainQ.some(q => q.type === type);
+  const shortOf = (cost) => {
+    const k = ['gold','iron','wood','food']
+      .filter(x => (cost[x] || 0) > s.res[x])
+      .sort((a, b) => (cost[b] - s.res[b]) - (cost[a] - s.res[a]))[0];
+    return k ? { k, n:Math.ceil(cost[k] - s.res[k]) } : null;
+  };
+  // 'Build X' when you can pay, 'X needs N more wood' when you cannot, so the
+  // line moves as the pile fills instead of sitting there for two minutes.
+  const buildAdvice = (type, blurb) => {
+    const miss = shortOf(buildCost(type, 1));
+    return { tab:'sel', txt:miss
+      ? BUILDINGS[type].n + ': ' + miss.n + ' more ' + miss.k + ' and you can put one up.'
+      : blurb };
+  };
   // Arming a fighter eats an idle worker, so once a barracks stands, keep one
   // spare rather than telling you to staff every job and then to arm nobody.
   const spare = bl > 0 ? 1 : 0;
@@ -4156,13 +4181,13 @@ function adviceFor(s){
       (n > 1 ? 'them' : 'one') + ' on ' + idleJob + '.' };
   }
   if (popUsed(s) >= popCap(s) - 1)
-    return { tab:'sel', txt:'Population is full at ' + popCap(s) + '. Build a Farm on an empty plot.' };
+    return buildAdvice('farm', 'Population is full at ' + popCap(s) + '. Build a Farm on an empty plot.');
   if (bl === 0)
-    return { tab:'sel', txt:'Nothing is armed yet. Build a Barracks to turn workers into fighters.' };
+    return buildAdvice('barracks', 'Nothing is armed yet. Build a Barracks to turn workers into fighters.');
   const pend = s.heroes.find(h => h.pend.length);
   if (pend) return { tab:'heroes', txt:pend.name + ' has a choice waiting — tap the hero card.' };
   if (heroCap(s) === 0)
-    return { tab:'sel', txt:'Build a Hero Factory. Heroes fight on their own, and they carry a push.' };
+    return buildAdvice('tavern', 'Build a Hero Factory. Heroes fight on their own, and they carry a push.');
   if (s.heroes.length < heroCap(s) && canPay(s, HERO_COST))
     return { tab:'heroes', txt:'You can afford another hero. Forge one.' };
   const armable = Object.keys(TRAIN).filter(k => bl >= TRAIN[k].barracks && canPay(s, TRAIN[k].cost));
@@ -4171,14 +4196,16 @@ function adviceFor(s){
     if (s.workers.idle > 0 && armable.length)
       return { tab:'train', txt:'Nothing is mustering. Arm a ' + TRAIN[armable[0]].n +
         ' before wave ' + (G.wave + 1) + ' leaves.' };
-    if (s.workers.idle === 0 && popUsed(s) < popCap(s))
+    // ...unless one is already on the way, which is what made this the single
+    // most-repeated line in the game.
+    if (s.workers.idle === 0 && popUsed(s) < popCap(s) && !queued('worker'))
       return { tab:'train', txt:'Every worker is busy, so there is nobody to arm. Train one more.' };
     if (armable.length === 0)
       return { tab:'jobs', txt:'You cannot afford a fighter. Put more workers on iron and wood.' };
   }
   if (bLvl(s, 'forge') === 0 && s.res.iron > 120)
-    return { tab:'sel', txt:'You have iron spare. A Forge unlocks turret and minion upgrades.' };
-  if (workerCount(s) < 10 && popUsed(s) < popCap(s) - 1)
+    return buildAdvice('forge', 'You have iron spare. A Forge unlocks turret and minion upgrades.');
+  if (workerCount(s) < 10 && popUsed(s) < popCap(s) - 1 && !queued('worker'))
     return { tab:'train', txt:'More workers means more of everything. Train another.' };
   return null;
 }
