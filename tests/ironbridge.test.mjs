@@ -1228,6 +1228,80 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(hurtHero.hp > hurtHero.mhp * .5 || hurt.hp > before, 'and the heal actually lands on somebody');
 }
 
+/* ---------------------------------------------------------------- the forge */
+{
+  // Armour Plating was purchasable, priced and described, and read by nothing.
+  // Every upgrade now has to prove it changes the simulation.
+  const probe = (id, measure) => {
+    IB.newMatch({ diff:'veteran', seed:239 });
+    const s = P();
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'forge');
+    IB.upgradeBuilding(s, s.plot.findIndex(b => b && b.type === 'forge'));
+    const before = measure(s);
+    for (let i = 0; i < 3; i++) rich(s), IB.buyUp(s, id);
+    const bag = IB.TOWER_UPS.some(u => u.id === id) ? s.towerUp : s.troopUp;
+    return { rank:bag[id], before, after:measure(s) };
+  };
+  const turret = (s) => s.structs.find(x => x.key === 't1');
+  const checks = {
+    hp:    (s) => IB.structMaxHp(s, turret(s)),
+    armor: (s) => IB.effArmor(turret(s), false),
+    atk:   (s) => IB.attackDamage(turret(s)),
+    as:    (s) => IB.attackSpeedOf(turret(s)),
+    tad:   (s) => { const u = IB.spawnUnit(s.i, 'melee', { x:60 }); return u.ad; },
+    tarm:  (s) => { const u = IB.spawnUnit(s.i, 'melee', { x:60 }); return u.armor; },
+    thp:   (s) => { const u = IB.spawnUnit(s.i, 'melee', { x:60 }); return u.mhp; },
+  };
+  for (const id in checks){
+    const r = probe(id, checks[id]);
+    t.ok(r.rank >= 2, id + ' can actually be bought (rank ' + r.rank + ')');
+    t.ok(r.after > r.before, id + ' measurably changes the game (' +
+      Math.round(r.before) + ' → ' + Math.round(r.after) + ')');
+  }
+  // regen has to be watched over time rather than read off a stat
+  {
+    const recover = (ranks) => {
+      IB.newMatch({ diff:'veteran', seed:241 });
+      const s = P();
+      rich(s);
+      IB.build(s, s.plot.indexOf(null), 'forge');
+      IB.upgradeBuilding(s, s.plot.findIndex(b => b && b.type === 'forge'));
+      for (let i = 0; i < ranks; i++) rich(s), IB.buyUp(s, 'regen');
+      const st = turret(s);
+      st.hp = st.mhp * .5; st.dmgTaken = -999;
+      const h0 = st.hp;
+      step(20);
+      return st.hp - h0;
+    };
+    const none = recover(0), some = recover(3);
+    t.ok(some > none, 'Repair Crews measurably mends a turret (' +
+      Math.round(none) + ' → ' + Math.round(some) + ' hp in 20s)');
+  }
+  // and no upgrade may be a trap next to the others
+  {
+    IB.newMatch({ diff:'veteran', seed:243 });
+    const s = P();
+    const rates = [...IB.TOWER_UPS, ...IB.TROOP_UPS].map(u => ({ n:u.n, r:IB.upRate(s, u.id) }));
+    t.ok(rates.every(x => x.r > 0), 'every upgrade is worth something');
+    const lo = Math.min(...rates.map(x => x.r)), hi = Math.max(...rates.map(x => x.r));
+    t.ok(hi / lo < 2.5, 'and none is worth more than 2.5x another (' +
+      rates.sort((a, b) => b.r - a.r).map(x => x.n + ' ' + x.r.toFixed(1)).join(', ') + ')');
+    t.ok(Object.keys(IB.UP_EFFECT).length === IB.TOWER_UPS.length + IB.TROOP_UPS.length,
+      'every upgrade has an entry in the effect table');
+  }
+  // the Host shops for value instead of rolling dice
+  {
+    IB.newMatch({ diff:'veteran', seed:247 });
+    const e = E();
+    G.sides[0].ai = true;
+    for (let i = 0; i < 30 * 60 * 12 && G.state === 'play'; i++) IB.update(1 / 30);
+    const bought = Object.values(e.towerUp).reduce((a, v) => a + v, 0) +
+      Object.values(e.troopUp).reduce((a, v) => a + v, 0);
+    t.ok(bought > 0, 'the Host actually spends at the forge (' + bought + ' ranks)');
+  }
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
