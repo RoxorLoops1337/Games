@@ -129,7 +129,7 @@ export class Room {
     server.serializeAttachment({ side });
 
     server.send(JSON.stringify({ k:'hello', side, seed:meta.seed, code:null }));
-    await this.announce();
+    await this.announce(server);
 
     return new Response(null, { status:101, webSocket:client });
   }
@@ -137,7 +137,7 @@ export class Room {
   // Tell everyone how many are here, and start the match the moment both are.
   // The start message carries the seed again so a client that missed `hello`
   // (or reconnected) still has it.
-  async announce(){
+  async announce(fresh){
     const meta = await this.meta();
     const socks = this.state.getWebSockets();
     const n = socks.length;
@@ -151,6 +151,22 @@ export class Room {
       for (const ws of socks){
         const a = ws.deserializeAttachment() || {};
         this.tell(ws, { k:'start', seed:meta.seed, side:a.side });
+      }
+      return;
+    }
+    // The room was ALREADY playing and somebody has come back to it. `start`
+    // must not be sent again — it would reset the player who never left back to
+    // the first tick — so the two are told apart instead: one of them is
+    // returning and one of them stayed, and the one who stayed is the only one
+    // that still knows what the board looks like.
+    //
+    // Which is which is decided here rather than by the two clients guessing,
+    // because from inside a browser "I have a match and you do not" is exactly
+    // the thing a returning player cannot tell.
+    if (n === 2 && meta.started && fresh){
+      for (const ws of socks){
+        const a = ws.deserializeAttachment() || {};
+        this.tell(ws, { k:'rejoin', seed:meta.seed, side:a.side, role: ws === fresh ? 'returning' : 'staying' });
       }
     }
   }
