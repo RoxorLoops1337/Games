@@ -1091,6 +1091,33 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* -------------------------------------------------------- class identity */
+{
+  // Every class wore the same blue plate with a different emoji on it.
+  IB.newMatch({ diff:'veteran', seed:1611 });
+  const s = P();
+  rich(s);
+  IB.build(s, s.plot.indexOf(null), 'tavern');
+  const glyphs = new Set(), fields = new Set();
+  for (const c of IB.CLASSES){
+    const g = IB.classGlyph(c.id);
+    t.ok(!!g && g.length <= 4, c.name + ' has a glyph');
+    glyphs.add(g);
+    const m = SRC.match(new RegExp('portrait\\[data-cls=' + c.id + '\\]\\s*\\{[^}]*background:([^;}]+)'));
+    t.ok(!!m, c.name + ' has its own portrait field');
+    if (m) fields.add(m[1].trim());
+  }
+  t.ok(glyphs.size === IB.CLASSES.length, 'no two classes share a glyph');
+  t.ok(fields.size === IB.CLASSES.length, 'and no two share a portrait (' + fields.size + ' distinct)');
+  // the sheet names the class on the portrait itself
+  IB.createHero(s, 'mage');
+  const h = s.heroes[0];
+  IB.autoPick(h);
+  IB.showHeroSheet(h);
+  t.ok(SRC.includes('class="pcls"'), 'and the portrait carries the class name');
+  t.ok(IB.CLS[h.cls].name === 'Mage', 'which is the class it was forged as');
+}
+
 /* ------------------------------------------------------------------ sound */
 {
   // Sounds are synthesised, so a table entry nobody plays is silent dead
