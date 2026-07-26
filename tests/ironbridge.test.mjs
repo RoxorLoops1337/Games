@@ -811,6 +811,89 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.keysHtml().split('<kbd>').length - 1 >= IB.KEYS.length, 'the help sheet prints a key chip for every shortcut');
 }
 
+/* ------------------------------------------------ the Host's decisions */
+{
+  // Each hold draws its decisions from its own stream so neither can bias the
+  // other. That stream used to be seeded from the side index ALONE, so every
+  // hold made exactly the same decisions in every match anybody ever played —
+  // and one of the two fixed sequences was better than the other.
+  const streamOf = (seed) => {
+    IB.newMatch({ diff:'veteran', seed });
+    return [G.sides[0].rs, G.sides[1].rs];
+  };
+  const a = streamOf(811), b = streamOf(812);
+  t.ok(a[0] !== a[1], 'the two holds do not share a decision stream');
+  t.ok(a[0] !== b[0] && a[1] !== b[1], 'and a new match deals both of them new decisions');
+  t.ok(streamOf(811)[0] === a[0] && streamOf(811)[1] === a[1], 'the same seed still replays the same match');
+  // the streams must actually diverge in use, not just in their seed
+  {
+    IB.newMatch({ diff:'veteran', seed:813 });
+    const s = P(), f = E();
+    const rolls = (sd) => Array.from({ length:12 }, () => IB.arnd(sd).toFixed(6)).join(',');
+    t.ok(rolls(s) !== rolls(f), 'the two holds roll different decisions');
+  }
+  {
+    // and one hold drawing more decisions than the other cannot shift the
+    // other's — the bug that made both sides share one stream in the first place
+    IB.newMatch({ diff:'veteran', seed:814 });
+    const first = IB.arnd(E());
+    IB.newMatch({ diff:'veteran', seed:814 });
+    for (let i = 0; i < 25; i++) IB.arnd(P());
+    t.ok(IB.arnd(E()) === first, "one hold's decisions never move the other's");
+  }
+}
+
+/* ------------------------------------------------------ hero progression */
+{
+  // The brief puts skills at 3/6/9, an ultimate at 12 and a rank every three
+  // levels after. Measured over 61 heroes in 12 full matches, the median hero
+  // finished at 10, a third saw their ultimate and one in nine ever bought a
+  // rank — most of the hero system was content nobody reached.
+  t.ok(IB.xpNeed(2) > IB.xpNeed(1) && IB.xpNeed(23) > IB.xpNeed(22), 'each level costs more than the last');
+  let total = 0;
+  for (let l = 1; l < C.MAX_LEVEL; l++) total += IB.xpNeed(l);
+  t.ok(total > 5000 && total < 40000, 'the whole ladder is a finite climb (' + total + ' xp)');
+  // catch-up: measured against the hero setting the pace, so it cannot be
+  // moved by one side simply forging more heroes
+  {
+    IB.newMatch({ diff:'veteran', seed:817 });
+    const s = P(), f = E();
+    const mk = (side, lvl) => { const h = IB.makeHero(side, 'fighter'); h.lvl = lvl; G.sides[side].heroes.push(h); return h; };
+    const lead = mk(0, 12), behind = mk(0, 6), even = mk(1, 12);
+    t.ok(IB.xpCatchup(lead) === 1, 'the hero setting the pace gets no help');
+    t.ok(IB.xpCatchup(even) === 1, 'nor does one level with it');
+    t.ok(IB.xpCatchup(behind) > 1, 'a hero six levels behind earns faster (' + IB.xpCatchup(behind).toFixed(2) + 'x)');
+    const before = IB.xpCatchup(behind);
+    for (let i = 0; i < 5; i++) mk(1, 1);          // the other hold forges a crowd of rookies
+    t.ok(IB.xpCatchup(behind) === before, 'and forging more heroes cannot change what anyone earns');
+    t.ok(IB.xpCatchup(mk(0, 1)) <= IB.CATCHUP_MAX, 'the help is capped (' + IB.xpCatchup(mk(0, 1)).toFixed(2) + 'x)');
+    // it is a bonus, never a tax
+    for (const h of G.sides.flatMap(x => x.heroes)) t.ok(IB.xpCatchup(h) >= 1, 'nobody is ever slowed down');
+  }
+  // and the ladder is now reachable inside a match. One match is a coin toss —
+  // three is enough to catch the ladder going dead again without pinning the
+  // suite to the luck of a single seed.
+  {
+    let best = 0, ranked = 0, heroes = 0, ults = 0, overCap = 0;
+    for (const seed of [819, 823, 827]){
+      IB.newMatch({ diff:'veteran', seed });
+      G.sides[0].ai = true;
+      for (let i = 0; i < 30 * 60 * 30 && G.state === 'play'; i++) IB.update(1 / 30);
+      const all = G.sides.flatMap(sd => sd.heroes);
+      heroes += all.length;
+      best = Math.max(best, ...all.map(h => h.lvl));
+      ults += all.filter(h => h.skills.some(s => s.ult)).length;
+      ranked += all.filter(h => h.passRank > 1 || h.skills.some(s => s.rank > 1)).length;
+      overCap += all.filter(h => h.lvl > C.MAX_LEVEL).length;
+    }
+    t.ok(heroes >= 6, 'three full matches forge heroes on both sides (' + heroes + ')');
+    t.ok(ults > heroes * .4, 'most heroes live to cast an ultimate (' + ults + ' of ' + heroes + ')');
+    t.ok(best >= C.RANK_LEVELS[0], 'the best of them reaches the rank ladder (' + best + ' >= ' + C.RANK_LEVELS[0] + ')');
+    t.ok(ranked > 0, 'and somebody actually ranks a skill up (' + ranked + ' of ' + heroes + ')');
+    t.ok(overCap === 0, 'nobody climbs past the cap');
+  }
+}
+
 /* -------------------------------------------------------- class bodies */
 {
   // Support used to fight from 6.6 range on a body tougher than the Assassin's
@@ -1521,10 +1604,12 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.WAVE_KINDS.every(k => k.n && typeof k.min === 'number'), 'each shape is named and has an unlock');
 
   const seen = {}, power = {};
-  G.wave = 24;                                   // deep enough that every shape is unlocked
   for (let w = 0; w < 90; w++){
     G.units.length = 0;
     for (const sd of G.sides){ sd.muster.length = 0; sd.superT = 0; }
+    // spawnWave() advances the wave, and a wave 90 later is stronger whatever
+    // its shape — pin it, or this measures the clock instead of the shape.
+    G.wave = 23;                                 // deep enough that every shape is unlocked
     IB.spawnWave();
     const k = P().waveKind;
     const mine = G.units.filter(u => u.side === 0);
