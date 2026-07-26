@@ -970,7 +970,10 @@ const gatherMul = (s) => {
   return m;
 };
 const heroMul = (side) => side === 1 ? G.diff.hero : 1;
-const heroCap = (s) => bLvl(s, 'tavern') > 0 ? Math.min(3, bList(s, 'tavern').reduce((a, b) => Math.max(a, b.lvl), 0)) : 0;
+// Slots came from the BEST tavern, not from all of them, so a second Hero
+// Factory was sixteen plots' worth of nothing — and the Host's build plan
+// asks for two. Every level of every tavern counts now, up to the cap of 3.
+const heroCap = (s) => Math.min(3, bLvl(s, 'tavern'));
 const upCap = (s) => Math.min(MAX_UP, bLvl(s, 'forge') * 2);
 const barracksLvl = (s) => bList(s, 'barracks').reduce((a, b) => Math.max(a, b.lvl), 0);
 
