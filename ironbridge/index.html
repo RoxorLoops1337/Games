@@ -2358,10 +2358,25 @@ function aiStep(s, dt){
   }
   // --- level the important buildings once the plot is full
   if (built >= s.plot.length - 1 && arnd(s) < .5){
+    // This list only meant "priority" while the top of it was affordable. A
+    // farm level is cheap and a hold has five farms, so every tick the loop
+    // fell through to a farm and ate the wood in small bites: measured over
+    // twelve matches it spent 741 wood levelling farms — and 423 food, for
+    // population it was nowhere near using — while never once saving the 188
+    // the barracks wanted for the level that unlocks Cannons. It finished at
+    // level 3 in 1 match of 12.
+    //
+    // So: walk the list in order, and if something near the top is close
+    // enough to pay for within about half a minute of digging, hold the pile
+    // for it instead of spending it further down.
     const pri = ['barracks','tavern','forge','farm','workshop','pit'];
     for (const type of pri){
       const b = bList(s, type).find(o => o.lvl < BUILDINGS[type].maxLvl);
-      if (b && canPay(s, buildCost(type, b.lvl + 1))){ upgradeBuilding(s, b.tile); break; }
+      if (!b) continue;
+      const cost = buildCost(type, b.lvl + 1);
+      if (canPay(s, cost)){ upgradeBuilding(s, b.tile); break; }
+      if (Object.keys(cost).every(k => s.res[k] >= cost[k] ||
+          cost[k] - s.res[k] <= gatherRate(s, k) * 30)) break;      // nearly there — save up
     }
   }
   // --- arm the workers
@@ -2375,8 +2390,11 @@ function aiStep(s, dt){
       // workers the hold was banking for a Caster: measured, a Caster was
       // never once clear to arm at a one-second sample even after the tier
       // was up — idle workers blocked it 100% of the time. Leave the pair
-      // alone unless there is a spare worker beyond it.
-      if (TRAIN[t].need < armNeed && s.workers.idle <= armNeed) break;
+      // alone unless there is a spare worker beyond it — and step OVER the
+      // Footman rather than stopping, or the pass never reaches the Cannon
+      // and the Caster it is being kept for. (This was a `break`, which is
+      // why a level-3 barracks armed a Cannon in only 3 holds of 12.)
+      if (TRAIN[t].need < armNeed && s.workers.idle <= armNeed) continue;
       if (!trainUnit(s, t)) break;
     }
   }
