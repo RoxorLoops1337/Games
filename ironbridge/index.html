@@ -955,6 +955,14 @@ function newMatch(opt){
   reseed(opt.seed || (HEADLESS ? 1337 : (Date.now() & 0x7fffffff)));
   G.diff = DIFFS.find(d => d.id === (opt.diff || 'veteran')) || DIFFS[1];
   G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null;
+  // update() alternates which hold acts first on the parity of G.frame, and
+  // this line was missing: the counter ran on across matches, so the SAME seed
+  // replayed differently depending on how many frames the tab had already
+  // simulated. Two runs of seed 5031 in one process diverged at t=36.43s —
+  // identical hp, positions, gold and RNG state on the tick before, opposite
+  // side order on the tick after. Every before/after measurement this game has
+  // ever been tuned with was quietly reading that as noise.
+  G.frame = 0;
   G.units.length = 0; G.projs.length = 0; G.fx.length = 0; G.floats.length = 0; G.zones.length = 0;
   G.log.length = 0; G.timeline.length = 0; G.paused = false; G.held = false; G.speed = 1; G.demo = false;
   G.sides = [makeSide(0, false), makeSide(1, true)];
@@ -1942,12 +1950,9 @@ function skillWorth(h, d){
 // from its current rank to the next, not a flat number per kind.
 function rankWorth(h, id){
   if (id.startsWith('P:')){
-    // the passive's own scoring is still the nine-key sum autoPick has always
-    // used, so a rank of it is valued at a share of that
-    const m = (PASS[h.passive] || { m:{} }).m;
-    const v = (m.ad || 0) * .04 + (m.ap || 0) * .03 + (m.hpPct || 0) * 8 + (m.armor || 0) * .04
-      + (m.as || 0) * 4 + (m.ls || 0) * 5 + (m.hp || 0) * .004 + (m.mdmg || 0) * 2 + (m.tdmg || 0) * 2;
-    return .3 + v * .35;
+    // a rank of the passive is valued at a share of its own full worth
+    const p = PASS[h.passive];
+    return .3 + (p ? passiveWorth(h, p) : 0) * .35;
   }
   const s = h.skills.find(o => o.id === id), d = SKILL[id];
   if (!s || !d) return .4;
@@ -1961,6 +1966,134 @@ function rankWorth(h, id){
 const ad0 = (h) => CLS[h.cls].b.ad + CLS[h.cls].g.ad * 8;
 const ap0 = (h) => CLS[h.cls].b.ap + CLS[h.cls].g.ap * 8;
 
+// What one passive is worth to one hero, without the die. Replaces the old
+// hand sum that read only 9 of the 69 modifier keys the 100 PASSIVES use —
+// measured over 300k offers, the other 60 keys sat in a flat 0.58-0.65% pick
+// band (uniform is 1.00%), i.e. the die alone decided them. Coefficients are
+// anchored to the nine that were already load-bearing (ad:.04 ap:.03
+// hpPct:8 armor:.04 as:4 ls:5 hp:.004 mdmg:2 tdmg:2 — UNCHANGED below) so the
+// old and new keys sit on one scale instead of two. Where a key mirrors one
+// of the nine exactly (same formula, same mechanic) it gets the same or a
+// derived fraction of that coefficient; where there is no clean anchor the
+// value is a reasoned guess, called out inline.
+const PASSIVE_W = {
+  // ---- the original nine — load-bearing, do not change ------------------
+  ad:.04, ap:.03, hpPct:8, armor:.04, as:4, ls:5, hp:.004, mdmg:2, tdmg:2,
+  // ---- direct mechanical mirrors -----------------------------------------
+  mr:.04,        // mitigate() treats magic and physical identically — exact mirror of armor
+  hdmg:2,        // same dealDmg %-vs-target-category multiplier as mdmg/tdmg, gated on tgt.isHero
+  gateDmg:1.0,   // stacks on tdmg but only on 1 of 5 structures — GUESS, half of tdmg's coefficient
+  // ---- fractional stats without a raw-point anchor -----------------------
+  crit:3,        // dps-equivalent ~= crit*.75 (base 1.75x crit mult in basicAttack); 4*.75~=3, anchored off 'as'
+  critD:1,       // only pays off if the SAME hero also has crit chance from elsewhere (a skill buff, mid-run) —
+                 // a hero gets exactly one passive ever, so this is a conditional stat. GUESS, deliberately low
+  tenacity:3, cdr:3, ms:3,                 // no clean anchor for any of these three — GUESS
+  xpM:2,         // a %-of-a-flow stat like mdmg/tdmg, same order
+  gatherM:5,     // hold-wide economy multiplier that compounds for the whole match — GUESS, deliberately high
+  goldM:2.5,     // %  bonus but only on this hero's own kills, narrower than gatherM — GUESS
+  spellVamp:3,   // mirrors ls(5) but only triggers on ability damage (cooldown-gated, lands less often) — discounted
+  dmgAll:3,      // unconditional, always-on version of mdmg/tdmg/hdmg at once — GUESS, above the restricted 2's
+  takeLess:3,    // defensive mirror of dmgAll — GUESS
+  takeMore:-3,   // THE ONE INVERTED KEY: a bigger number here is worse (more damage taken), so it is penalized,
+                 // not rewarded — mirrors takeLess's magnitude as a matching drawback
+  // ---- same mechanic as an anchor, but only active part of the time ------
+  armorLow:.02,  // half of armor's .04 — active only under 50% hp
+  asLow:2,       // half of as's 4 — active only under 50% hp
+  dmgLow:1.5,    // half of dmgAll's 3 — active only under 40% hp
+  dmgHigh:1.2,   // discounted further than dmgLow — the "above 80% hp" band sees less uptime in a real fight
+  crowd:1.5, lone:1.5, pack:1.5,   // conditional multi-target / isolation / peel bonuses — GUESS
+  asDuel:2.2,    // half-ish of as's 4 — only active near an enemy hero
+  exec:1.2,      // ramps 0 -> full only as the target's hp falls toward the threshold; ~40% average uptime of a
+                 // dmgAll-level(3) bonus
+  // ---- on-hit / proc effects, converted through the same "dps" lens ------
+  truOn:.045,    // flat TRUE damage every hit, bypasses armor entirely — slightly above ad's .04 since armor never mitigates it
+  burn:.016,     // proc DoT (bn/3 over ~3s, pure) that REFRESHES rather than stacks (applyBurn takes max()), so its
+                 // steady-state value does not scale with attack speed the way truOn's flat add does — discounted hard
+  burnDur:.05,   // extends how long an un-refreshed burn coasts through a gap between hits; small utility, not extra dps
+  slowOn:1.2,    // per-hit % slow — a control stat with no raw-point anchor. GUESS
+  everyFourth:.01,  // flat aoe proc every 4th attack, converted at ~dps-equivalent/4 then discounted for target availability
+  chainHit:.011,    // flat chain proc every 5th attack hitting 2 more targets — similar conversion, slightly higher
+  firstHit:.008,    // once-per-UNIQUE-TARGET bonus, but minions are constantly freshly spawned so it recurs often — GUESS
+  killHeal:.006, killMana:.004, killGold:.05,   // small per-point, but kills are frequent for an active hero — GUESS
+  structGold:1.5,   // % bonus but only on the rarer, far-more-valuable structure kills — GUESS
+  killAd:.12,       // stacking (x5, 30s) +ad proc after a kill — coefficient assumes ~2-2.5 average stacks in a fight
+  killAs:2.5,       // temporary (12s) +as proc after a kill — as's 4, discounted for partial uptime
+  shieldLow:.003, spawnShield:.003,  // one-shot shields that DO retrigger (shieldLow every 45s under 30% hp,
+                                     // spawnShield on every respawn) but are not a permanent stat — GUESS
+  deathHeal:.003,   // one-shot team heal on this hero's own death — GUESS
+  respawn:-3,       // INVERTED like takeMore: a NEGATIVE value here is good (shorter respawn), so the coefficient
+                     // must be negative too, for the signs to net out positive on the one passive that uses it
+  towerRes:1.5,     // % less damage taken, but only from structures specifically — narrower than takeLess — GUESS
+  // ---- flat resource pools -------------------------------------------------
+  hreg:.1, mreg:.08, mana:.0015,   // sustain/pool stats with no combat-output anchor — GUESS
+  rage:25,          // per-STACK fraction (.02, caps at .20 over 10 stacks); anchored off 'as'(4) assuming ~70% of
+                     // max stacks (.14) is realistic mid-fight: 4*.14/.02 ~= 28, rounded down for the ramp-up time
+  rng:.25,          // flat attack-range bonus — no anchor; marksman/mage get an extra push in the class bonus below
+  thorns:3,         // % of melee damage taken reflected back — GUESS, no direct anchor
+  grudge:1.5,       // conditional %dmg vs your last killer — narrower than hdmg — GUESS
+  echo:1.5,         // abilities repeat 12% of their own damage — scales with the hero's whole kit — GUESS
+  // ---- army-composition auras: these buff LANE UNITS, not the hero itself,
+  // so their value is roughly constant regardless of which class is holding
+  // them (positioning matters more than class — see classPassiveBonus).
+  // NOTE units: auraDmg/auraMs/auraHp/meleeHp/cannonDmg/casterDmg are all
+  // FRACTIONS (same dimension as as/ms/mdmg); auraArm and auraHeal are FLAT
+  // POINTS (same dimension as armor/hreg) — do not give them the same scale.
+  auraDmg:2,      // fraction, mirrors mdmg/tdmg's order — nearby allied minions hit harder
+  auraArm:.05,    // FLAT armor points (armor's own .04/pt), slightly bumped since it lands on several bodies at once
+  auraHeal:.08,   // FLAT hp/s (hreg's .1/pt order), again landing on several allies at once
+  auraMs:2,       // fraction, minions-only and proximity-gated — narrower than a personal ms
+  auraHp:5,       // fraction, but UNCONDITIONAL and army-wide (every minion the hold ever spawns, no
+                  // proximity check at all) — priced close to hpPct's own 8
+  meleeHp:2.5,    // mirrors auraHp exactly, just kind-restricted to footman spawns (~half as broad)
+  cannonDmg:1.5, casterDmg:1.5,   // fraction, kind-restricted AND proximity-gated (narrower than auraDmg)
+  // onHitAp and apPct are intentionally NOT listed here — see below, they are
+  // priced off the hero's own ap0(h) instead of a flat per-point coefficient,
+  // because the modifier itself multiplies against the hero's live ap stat.
+};
+
+// A hero's class fantasy nudges a handful of situational keys the same way
+// skillWorth nudges skill picks. Each entry is a KEY -> BOOST FRACTION: the
+// bonus is that fraction of the key's own PASSIVE_W-priced value, never an
+// independently-guessed raw number — so it can never be dimensionally wrong
+// (a flat-point key like auraArm and a fraction key like auraMs cannot
+// accidentally end up on the same scale here, because both ride on top of
+// the already-correctly-scaled base term). None of this can invert an
+// ordering PASSIVE_W already set: every term is added independently per
+// key, so a passive that is a strict superset of another's keys/values
+// still scores at least as high, for every class.
+const CLASS_KEY_BOOST = {
+  // front-liners are the ones usually standing in range of their own lane army
+  tank:     { auraDmg:.3, auraArm:.3, auraHeal:.3, auraMs:.3, auraHp:.3, meleeHp:.3, cannonDmg:.3, casterDmg:.3,
+              armorLow:1, tenacity:.5, thorns:.75 },
+  support:  { auraDmg:.3, auraArm:.3, auraHeal:.5, auraMs:.3, auraHp:.3, meleeHp:.3, cannonDmg:.3, casterDmg:.3,
+              tenacity:.5, mreg:.5, mana:.3, spellVamp:.3 },
+  // a Marksman's whole kit (per its blurb) is range and turret damage
+  marksman: { tdmg:.5, hdmg:.5, rng:1, crit:.5 },
+  mage:     { mana:.5, mreg:.5, spellVamp:.5 },
+  assassin: { exec:.5, firstHit:.5, lone:.5, crit:.5 },
+  fighter:  { crowd:.5, pack:.5, ls:.3 },
+};
+function classPassiveBonus(h, m){
+  const boosts = CLASS_KEY_BOOST[h.cls];
+  if (!boosts) return 0;
+  let b = 0;
+  for (const k in boosts) if (m[k]) b += m[k] * (PASSIVE_W[k] || 0) * boosts[k];
+  return b;
+}
+
+function passiveWorth(h, p){
+  const m = p.m;
+  let sc = 0;
+  for (const k in m) sc += (m[k] || 0) * (PASSIVE_W[k] || 0);
+  // these two literally multiply against the hero's own live ap stat
+  // (recalcHero / basicAttack), so price them off ap0(h) at ap's own rate
+  // instead of guessing a flat number that would be wrong for 5 of 6 classes
+  sc += (m.onHitAp || 0) * ap0(h) * .03;
+  sc += (m.apPct || 0) * ap0(h) * .03;
+  sc += classPassiveBonus(h, m);
+  return sc;
+}
+
 // The Host picks with a light preference for its class fantasy, then at random.
 function autoPick(h){
   const side = G.sides[h.side];
@@ -1972,9 +2105,7 @@ function autoPick(h){
       // its own stream, so the two holds cannot draw off each other
       let sc = side ? arnd(side) : rnd();
       if (p.kind === 'passive'){
-        const m = PASS[id].m;
-        sc += (m.ad || 0) * .04 + (m.ap || 0) * .03 + (m.hpPct || 0) * 8 + (m.armor || 0) * .04
-            + (m.as || 0) * 4 + (m.ls || 0) * 5 + (m.hp || 0) * .004 + (m.mdmg || 0) * 2 + (m.tdmg || 0) * 2;
+        sc += passiveWorth(h, PASS[id]);
       } else if (p.kind === 'rank'){
         // This was a flat constant that never looked at WHICH skill it was
         // ranking: 0.8 for any skill, 0.4 for the passive. Driving 216,000
@@ -5168,6 +5299,7 @@ window.IB = {
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
   structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH, AI_BUILD_PLAN, holdsBoard, paintHeld,
+  passiveWorth, PASSIVE_W, CLASS_KEY_BOOST,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,

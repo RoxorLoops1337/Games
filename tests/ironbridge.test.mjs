@@ -159,6 +159,37 @@ t.ok(P().structs.length === 5 && E().structs.length === 5, 'both holds have all 
 IB.draw();
 t.ok(true, 'drawing an empty bridge is harmless');
 
+/* ------------------------------------------------------------ seed = the match */
+{
+  // A seed has to name a match, or nothing in this file that compares a before
+  // to an after means anything. It did not: update() alternates which hold acts
+  // first on the parity of G.frame, and newMatch reset G.t, G.wave, G.units and
+  // the RNG but never that counter — so the same seed played out differently
+  // depending on how many frames the process had already simulated. Two runs of
+  // seed 5031 diverged at t=36.43s with byte-identical hp, positions, gold and
+  // RNG state on the tick before. Play one seed, play a different one, play the
+  // first again: all three must agree.
+  const play = (seed, ticks) => {
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[0].ai = true;
+    for (let i = 0; i < ticks && G.state === 'play'; i++) IB.update(1 / 30);
+    return G.units.map(u => u.kind + ':' + u.side + ':' + u.hp.toFixed(6) + ':' + u.x.toFixed(6)).join(' ') +
+      '|' + G.sides.map(s => s.res.gold.toFixed(6) + ',' + s.rs + ',' +
+        s.structs.map(st => st.hp.toFixed(4)).join('.')).join('/');
+  };
+  // an ODD number of ticks in the middle, deliberately: the counter decides the
+  // side order by its parity, so an even-length match in between leaves the
+  // parity untouched and this check would pass on the broken code too
+  const a = play(5031, 3000);
+  const other = play(5062, 3001);
+  const b = play(5031, 3000);
+  t.ok(a === b, 'the same seed replays the same match after another match has been played');
+  t.ok(a !== other, 'and two different seeds really are two different matches');
+  // and the counter itself is back to zero, which is what makes that true
+  IB.newMatch({ diff:'veteran', seed:5031 });
+  t.ok(!G.frame, 'newMatch resets the tick counter the side order rides on (' + G.frame + ')');
+}
+
 /* ---------------------------------------------------------------- economy */
 {
   const s = P();
@@ -2637,6 +2668,116 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const basic = h.skills.find(x => !x.ult);
     if (basic) t.ok(IB.rankWorth(h, ult.id) > 0, 'an ultimate rank is scored too (' +
       IB.rankWorth(h, ult.id).toFixed(2) + ')');
+  }
+}
+
+/* -------------------------------------------------------------- passive value */
+{
+  // The passive branch of the chooser used to be a hand-written sum over nine
+  // modifier keys. The 100 passives between them use 69, so 60 keys were
+  // invisible and 67 of the 100 passives had NO scored key at all — the die
+  // alone decided them, and every class got the identical distribution because
+  // nothing in the branch looked at the hero.
+  IB.newMatch({ diff:'veteran', seed:8801 });
+  t.ok(typeof IB.passiveWorth === 'function', 'a passive can be scored from outside');
+  t.ok(IB.PASSIVE_W && typeof IB.PASSIVE_W === 'object', 'and the coefficient table is readable');
+
+  // 1. every key the content actually uses has a price
+  {
+    const W = IB.PASSIVE_W || {};
+    const used = new Set();
+    for (const p of IB.PASSIVES) for (const k in p.m) used.add(k);
+    // onHitAp and apPct multiply against the hero's own live power, so they are
+    // priced off ap0(h) inside passiveWorth rather than by a flat coefficient
+    const priced = [...used].filter(k => k in W || k === 'onHitAp' || k === 'apPct');
+    t.ok(used.size >= 60, 'the passives use a wide spread of modifier keys (' + used.size + ')');
+    t.ok(priced.length === used.size, 'every key a passive uses has a price (' +
+      [...used].filter(k => !priced.includes(k)).join(', ') + ')');
+  }
+
+  // 2. the units trap. auraArm and auraHeal carry FLAT POINTS (14 armour,
+  // 6 hp/s at the call site) while auraDmg/auraMs/auraHp/meleeHp/cannonDmg/
+  // casterDmg carry FRACTIONS (.12, .25). Priced on one scale the flat pair is
+  // multiplied by a 14 where the others get a .12, and Banner of Iron alone
+  // scores ~36 against a table whose real maximum is under 1.5. Nothing else in
+  // here would notice — the ordering assertions below would all still pass —
+  // so bound the whole table instead.
+  {
+    let worst = null;
+    for (const c of IB.CLASSES) for (const p of IB.PASSIVES){
+      const v = IB.passiveWorth ? IB.passiveWorth({ cls:c.id }, p) : 0;
+      if (!worst || v > worst.v) worst = { v, n:p.n, c:c.id };
+    }
+    t.ok(worst.v <= 3, 'no passive scores off the scale — the highest is ' +
+      worst.n + ' at ' + worst.v.toFixed(2) + ' for a ' + worst.c);
+    let anyNeg = false;
+    for (const c of IB.CLASSES) for (const p of IB.PASSIVES)
+      if ((IB.passiveWorth ? IB.passiveWorth({ cls:c.id }, p) : 0) < -1) anyNeg = true;
+    t.ok(!anyNeg, 'and none scores absurdly negative either');
+  }
+
+  // 3. the behaviour, through the real chooser, with no export involved: a menu
+  // of three passives that touch NONE of the nine old keys. The old branch
+  // scored all three at a flat zero, so the die decided and each won ~33%.
+  // A fresh hero per trial is the only way to sample this — the passive offer
+  // fires once inside makeHero and never again, so looping gainXp on one hero
+  // would test nothing.
+  {
+    const NINE = ['ad', 'ap', 'hpPct', 'armor', 'as', 'ls', 'hp', 'mdmg', 'tdmg'];
+    const menu = ['lifebinder', 'quickmind', 'marchboots'];
+    t.ok(menu.every(id => IB.PASS[id]), 'the three probe passives still exist');
+    t.ok(menu.every(id => !NINE.some(k => IB.PASS[id].m[k] !== undefined)),
+      'and none of them is visible to the nine keys the old sum read');
+    const run = (cls) => {
+      const win = {};
+      for (let i = 0; i < 400; i++){
+        const h = IB.makeHero(0, cls, 'Probe');
+        h.pend = [{ kind:'passive', opts:menu.slice(), lvl:1 }];
+        IB.autoPick(h);
+        win[h.passive] = (win[h.passive] || 0) + 1;
+      }
+      return win;
+    };
+    const sup = run('support'), mm = run('marksman');
+    t.ok((sup.lifebinder || 0) / 400 > .6,
+      'the chooser can tell three unscored passives apart (Lifebinder took ' +
+      Math.round((sup.lifebinder || 0) / 4) + '% of 400, chance is 33%)');
+    // and it reads the hero: an aura heal is a support's own fantasy, and the
+    // old branch gave every class byte-identical numbers here
+    t.ok((sup.lifebinder || 0) > (mm.lifebinder || 0),
+      'a support wants the healing aura more than a marksman does (' +
+      Math.round((sup.lifebinder || 0) / 4) + '% vs ' + Math.round((mm.lifebinder || 0) / 4) + '%)');
+  }
+
+  // 4. a passive that is a strict superset of another's numbers must never
+  // score below it, for any class — the boosts are added per key on top of the
+  // already-scaled base term, so they cannot invert an ordering.
+  {
+    const pairs = [['silkrobes', 'wardweave'], ['bloodmoney', 'looter'], ['mystic', 'arcanefont'],
+                   ['reaper', 'headsman'], ['inferno', 'venomtip'], ['lifebinder', 'fieldmedic'],
+                   ['trickster', 'quickmind'], ['trickster', 'marchboots']];
+    let bad = null;
+    for (const c of IB.CLASSES) for (const [win, lose] of pairs){
+      if (!IB.PASS[win] || !IB.PASS[lose]) continue;
+      const a = IB.passiveWorth ? IB.passiveWorth({ cls:c.id }, IB.PASS[win]) : 0;
+      const b = IB.passiveWorth ? IB.passiveWorth({ cls:c.id }, IB.PASS[lose]) : 1;
+      if (a < b) bad = c.id + ': ' + win + ' ' + a.toFixed(2) + ' < ' + lose + ' ' + b.toFixed(2);
+    }
+    t.ok(!bad, 'the stronger of a dominated pair always scores at least as high (' + (bad || 'all 48 checked') + ')');
+  }
+
+  // 5. and the rank branch reads the same worth, so ranking a passive up is
+  // valued by which passive it is
+  {
+    const h = IB.makeHero(0, 'tank', 'Rank');
+    IB.autoPick(h);
+    const spread = new Set();
+    for (const id of ['lifebinder', 'skirmisher', 'ironwill']){
+      if (!IB.PASS[id]) continue;
+      h.passive = id;
+      spread.add(IB.rankWorth(h, 'P:' + id).toFixed(4));
+    }
+    t.ok(spread.size > 1, 'a rank of the passive is priced by which passive it is (' + [...spread].join(', ') + ')');
   }
 }
 
