@@ -1,0 +1,13 @@
+{
+  "name": "ironbridge-relay",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Two-socket relay for Ironbridge network matches. Deployed separately from the Pages site.",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  }
+}

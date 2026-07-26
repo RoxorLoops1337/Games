@@ -173,6 +173,12 @@
     background:linear-gradient(180deg,#5ab0ff,#2f7fd8); border:none; border-radius:10px; color:#08111f; }
   .big.ghost{ background:var(--panel2); border:1px solid var(--line); color:var(--ink); }
   .big:hover{ filter:brightness(1.08); }
+  /* the room code — the one thing on screen somebody has to read out loud */
+  .codebig{ margin:14px 0 4px; text-align:center; font-size:52px; font-weight:800; letter-spacing:14px;
+    text-indent:14px; color:var(--gold); font-variant-numeric:tabular-nums; }
+  .codein{ flex:1 1 160px; padding:11px 16px; font-size:26px; font-weight:800; letter-spacing:10px;
+    text-align:center; text-transform:uppercase; background:#0e1421; border:1px solid var(--line);
+    border-radius:10px; color:var(--ink); font-family:inherit; }
   .statline{ display:flex; flex-wrap:wrap; gap:8px 16px; margin:10px 0 0; font-size:12px; color:var(--dim); }
   .insp{ display:flex; flex-wrap:wrap; gap:2px 14px; font-size:11px; color:var(--dim); max-width:270px;
     margin-top:4px; }
@@ -409,6 +415,41 @@ const ri = (a, b) => Math.floor(rr(a, b + 1));
 const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
+
+// Sparks, floating numbers and cast banners draw from their OWN stream, and
+// nothing in here may ever touch the simulation. They used to call rnd(), and
+// HOW MANY of them get made depends on things that are not the same on two
+// machines: G.fx is capped at 150 so a busy frame makes fewer, and the whole
+// block is skipped under HEADLESS. Two browsers playing one match therefore
+// drew a DIFFERENT NUMBER of values out of the shared stream and were running
+// different matches within seconds. Sharing a generator with the simulation is
+// the bug; a second generator is the fix.
+let _fxseed = 1;
+const fxrnd = () => {
+  _fxseed = (_fxseed + 0x6D2B79F5) | 0;
+  let t = Math.imul(_fxseed ^ (_fxseed >>> 15), 1 | _fxseed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const frr = (a, b) => a + fxrnd() * (b - a);
+
+// Distance, but with a guarantee. Math.hypot's precision is left to the
+// implementation, so Chrome and Safari are allowed to disagree in the last
+// bit — and one bit of disagreement about whether a unit is in range is a
+// different match. Math.sqrt IS exactly specified by IEEE 754, so this returns
+// the same double in every engine. Rendering can keep using Math.hypot; only
+// the simulation has to agree.
+const hyp = (dx, dy) => Math.sqrt(dx * dx + dy * dy);
+
+// Math.pow is not bit-specified either, and it prices every building, upgrade
+// and node level in the game. Repeated multiplication is exactly specified, and
+// every exponent here is a small integer.
+const ipow = (base, n) => {
+  if (n < 0) return 1 / ipow(base, -n);
+  let r = 1;
+  for (let i = 0; i < n; i++) r *= base;
+  return r;
+};
 
 /* ------------------------------------------------------------------ tuning */
 const C = {
@@ -904,6 +945,15 @@ const G = {
   winner:null, diff:DIFFS[1], uid:1, toasts:[], log:[], timeline:[], demo:false, held:false,
 };
 
+// Which of the two holds this browser is playing. It is 0 in every solo match
+// and stays 0 for whoever starts a network match; the player who joins gets 1.
+// The simulation must never read this — both machines run BOTH holds, and a
+// hold that behaved differently depending on who was watching would be the
+// end of lockstep. It is for the interface only: which hold the dock talks
+// about, which one the camera opens on, whose crews get drawn.
+let MY = 0;
+const me = () => G.sides[MY] || G.sides[0];
+
 function makeSide(i, ai){
   const s = {
     i, ai, name:SIDE_NAME[i], col:SIDE_COL[i],
@@ -954,6 +1004,12 @@ function newMatch(opt){
   opt = opt || {};
   reseed(opt.seed || (HEADLESS ? 1337 : (Date.now() & 0x7fffffff)));
   G.diff = DIFFS.find(d => d.id === (opt.diff || 'veteran')) || DIFFS[1];
+  // A network match is always an even one. Every difficulty other than Veteran
+  // is a handicap applied to side 1 alone — the resource multiplier below, the
+  // AI's think rate, and heroMul — and side 1 in a network match is a person.
+  // Left alone, whoever joined would silently get the Host's cheat.
+  G.mp = !!opt.mp;
+  if (G.mp) G.diff = DIFFS.find(d => d.id === 'veteran');
   G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null;
   // update() alternates which hold acts first on the parity of G.frame, and
   // this line was missing: the counter ran on across matches, so the SAME seed
@@ -962,10 +1018,10 @@ function newMatch(opt){
   // identical hp, positions, gold and RNG state on the tick before, opposite
   // side order on the tick after. Every before/after measurement this game has
   // ever been tuned with was quietly reading that as noise.
-  G.frame = 0;
+  G.frame = 0; G.tick = 0;
   G.units.length = 0; G.projs.length = 0; G.fx.length = 0; G.floats.length = 0; G.zones.length = 0;
   G.log.length = 0; G.timeline.length = 0; G.paused = false; G.held = false; G.speed = 1; G.demo = false;
-  G.sides = [makeSide(0, false), makeSide(1, true)];
+  G.sides = [makeSide(0, false), makeSide(1, !G.mp)];
   // The Host gets its handicap as a straight resource multiplier, not as
   // cheating in the sim — everything it does, you can also do.
   const e = G.diff.eco;
@@ -978,8 +1034,10 @@ function newMatch(opt){
   cam.follow = false; cam.z = cam.tz = startZoom(LW);
   // Sit the hold a touch left of centre so the bridge is in shot too. In world
   // units that offset depends on how much world the screen is showing, or a
-  // zoomed-in phone opens with half the plot grid off the left edge.
-  cam.x = HOLD_X + .10 * (LW / (LS() * .96));
+  // zoomed-in phone opens with half the plot grid off the left edge. The
+  // player who joined a network match is looking at the far hold, so the shove
+  // toward the bridge goes the other way for them.
+  cam.x = myHoldX() + (MY === 0 ? .10 : -.10) * (LW / (LS() * .96));
   return G;
 }
 
@@ -1007,7 +1065,7 @@ const nodeCap = (s, node) => node === 'food' ? fieldSlots(s)
 const nodeRate = (s, node) => C.GATHER[node] * (1 + C.NODE_RATE_PER_LVL * (nodeLvl(s, node) - 1));
 const nodeUpCost = (s, node) => {
   const l = nodeLvl(s, node);
-  return { wood: Math.round(70 * Math.pow(1.65, l - 1)), gold: Math.round(50 * Math.pow(1.65, l - 1)) };
+  return { wood: Math.round(70 * ipow(1.65, l - 1)), gold: Math.round(50 * ipow(1.65, l - 1)) };
 };
 function upgradeNode(s, node){
   if (!NODE_UPGRADABLE.includes(node)) return 'the fields are grown by building farms';
@@ -1082,7 +1140,7 @@ function assign(s, node, delta){
 
 function buildCost(type, lvl){
   const B = BUILDINGS[type];
-  return lvl <= 1 ? B.cost : scaleCost(B.up, Math.pow(1.5, lvl - 2));
+  return lvl <= 1 ? B.cost : scaleCost(B.up, ipow(1.5, lvl - 2));
 }
 
 function build(s, tile, type){
@@ -1109,7 +1167,7 @@ function upgradeBuilding(s, tile){
   return null;
 }
 
-function upCostFor(def, lvl){ return scaleCost(def.cost, Math.pow(def.step, lvl)); }
+function upCostFor(def, lvl){ return scaleCost(def.cost, ipow(def.step, lvl)); }
 
 function buyUp(s, id){
   const def = TOWER_UPS.find(u => u.id === id) || TROOP_UPS.find(u => u.id === id);
@@ -1375,12 +1433,12 @@ function dealDmg(src, tgt, amt, o){
   // bury the frame in particles.
   if (!HEADLESS && dmg > 0 && G.fx.length < 150){
     const big = tgt.isHero || tgt.struct || dmg > 60;
-    if (big || rnd() < .4){
+    if (big || fxrnd() < .4){
       const col = magic ? '#c9a6ff' : tgt.struct ? '#e8d9b4' : '#ffd08a';
       for (let i = 0, n = big ? 4 : 2; i < n; i++){
-        const a = rnd() * 6.283, sp = rr(1.5, big ? 6 : 3.5);
-        G.fx.push({ k:'p', x:tgt.x, y:tgt.y, z:rr(.5, 1.4), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5,
-          vz:rr(1, 4), t:rr(.16, .34), dur:.34, col, r:rr(.9, big ? 2.4 : 1.5) });
+        const a = fxrnd() * 6.283, sp = frr(1.5, big ? 6 : 3.5);
+        G.fx.push({ k:'p', x:tgt.x, y:tgt.y, z:frr(.5, 1.4), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5,
+          vz:frr(1, 4), t:frr(.16, .34), dur:.34, col, r:frr(.9, big ? 2.4 : 1.5) });
       }
     }
     if (tgt.struct && dmg > 40) shake(Math.min(3, dmg / 90), tgt.x);
@@ -1473,9 +1531,11 @@ function endMatch(winner){
   if (G.state !== 'play') return;
   if (G.demo){ startDemo(); return; }          // the attract battle just starts over
   G.state = 'over'; G.winner = winner;
-  sfx(winner === 0 ? 'win' : 'lose');
+  sfx(winner === MY ? 'win' : 'lose');
   clearSave();
-  saveMeta(winner === 0);
+  // Wins and losses on the menu are a record against the Host. A match against
+  // a person is not the same thing and does not belong in that column.
+  if (!NET.on) saveMeta(winner === MY);
   if (!HEADLESS) showOver();
 }
 
@@ -1545,10 +1605,10 @@ function areaHit(src, x, y, rad, amt, o){
   const hits = [];
   nearby(x, rad + 2, (u) => {
     if (u.dead || u.side !== foe) return;
-    if (Math.hypot(u.x - x, u.y - y) <= rad + u.r) hits.push(u);
+    if (hyp(u.x - x, u.y - y) <= rad + u.r) hits.push(u);
   });
   for (const st of G.sides[foe].structs)
-    if (!st.dead && st === frontStruct(foe) && Math.hypot(st.x - x, st.y - y) <= rad + st.r) hits.push(st);
+    if (!st.dead && st === frontStruct(foe) && hyp(st.x - x, st.y - y) <= rad + st.r) hits.push(st);
   for (const h of hits) dealDmg(src, h, amt, o);
   if (!HEADLESS) ringFx(x, y, rad, o && o.magic ? '#a98bff' : '#ffbe6a');
   return hits.length;
@@ -1618,7 +1678,7 @@ function acquire(u){
   const foe = enemyOf(u.side);
   if (u.taunt > 0 && u.target && !u.target.dead) return u.target;
   if (u.target && !u.target.dead){
-    const d = Math.hypot(u.target.x - u.x, u.target.y - u.y);
+    const d = hyp(u.target.x - u.x, u.target.y - u.y);
     if (d < 13 && (!u.target.struct || u.target === frontStruct(foe))) return u.target;
   }
   const f = nearestFoe(u, 9.5);
@@ -1640,7 +1700,7 @@ function unitStep(u, dt){
   let mx = dir, my = 0, moving = true;
   if (tgt){
     const dx = tgt.x - u.x, dy = tgt.y - u.y;
-    const dist = Math.hypot(dx, dy) || .001;
+    const dist = hyp(dx, dy) || .001;
     const reach = u.rng + (tgt.r || .4) + u.r;
     if (dist <= reach){
       moving = false;
@@ -1717,7 +1777,7 @@ function projStep(dt){
     const p = G.projs[i];
     const t = p.tgt;
     if (!t || t.dead){ G.projs.splice(i, 1); continue; }
-    const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy);
+    const dx = t.x - p.x, dy = t.y - p.y, d = hyp(dx, dy);
     const step = p.sp * dt;
     if (d <= step + .3){ p.onHit(); G.projs.splice(i, 1); continue; }
     p.x += dx / d * step; p.y += dy / d * step;
@@ -1735,12 +1795,12 @@ function zoneStep(dt){
       const foe = enemyOf(z.side);
       nearby(z.x, z.r + 2, (u) => {
         if (u.dead || u.side !== foe) return;
-        if (Math.hypot(u.x - z.x, u.y - z.y) > z.r + u.r) return;
+        if (hyp(u.x - z.x, u.y - z.y) > z.r + u.r) return;
         dealDmg(src, u, z.dps * .5, { magic:z.magic, ability:true });
         if (z.slow) applySlow(u, z.slow, 1);
       });
       const st = frontStruct(foe);
-      if (st && Math.hypot(st.x - z.x, st.y - z.y) <= z.r + st.r) dealDmg(src, st, z.dps * .5, { magic:z.magic, ability:true });
+      if (st && hyp(st.x - z.x, st.y - z.y) <= z.r + st.r) dealDmg(src, st, z.dps * .5, { magic:z.magic, ability:true });
     }
     if (z.t <= 0) G.zones.splice(i, 1);
   }
@@ -2203,7 +2263,7 @@ function towerCover(st, side){
   let n = 0;
   nearby(st.x, 7, (u) => {
     if (u.dead || u.side !== side || u.isHero) return;
-    if (Math.hypot(u.x - st.x, u.y - st.y) > 7) return;
+    if (hyp(u.x - st.x, u.y - st.y) > 7) return;
     n++;
   });
   return n;
@@ -2212,7 +2272,7 @@ const COVERED = 2;                  // fewer than two bodies is not cover
 function towerCovered(h, tgt){
   for (const st of G.sides[enemyOf(h.side)].structs){
     if (st.dead || !st.ad) continue;
-    if (Math.hypot(st.x - tgt.x, st.y - tgt.y) > st.rng + 1) continue;
+    if (hyp(st.x - tgt.x, st.y - tgt.y) > st.rng + 1) continue;
     if (towerCover(st, h.side) < COVERED) return true;
   }
   return false;
@@ -2221,7 +2281,7 @@ function towerCovered(h, tgt){
 function inTowerFire(h){
   for (const st of G.sides[enemyOf(h.side)].structs){
     if (st.dead || !st.ad) continue;
-    if (Math.hypot(st.x - h.x, st.y - h.y) < st.rng + 1.5) return st;
+    if (hyp(st.x - h.x, st.y - h.y) < st.rng + 1.5) return st;
   }
   return null;
 }
@@ -2329,7 +2389,7 @@ function heroStep(h, dt){
     gx = fl + dir * 2.5; gy = h.y * .5;
     if (tower && !cover) gx = Math.min(gx * dir, (tower.x - dir * (tower.rng + 2)) * dir) * dir;
   }
-  const dx = gx - h.x, dy = gy - h.y, dist = Math.hypot(dx, dy) || .001;
+  const dx = gx - h.x, dy = gy - h.y, dist = hyp(dx, dy) || .001;
   const reach = tgt ? h.rng + (tgt.r || .4) + h.r : 0;
   if (tgt && dist <= reach){
     h.cd -= dt;
@@ -2382,7 +2442,7 @@ function wantCast(h, s, tgt){
   if (s.tag === 'buff' && (s.shield || s.barm)) return frac < .8 && (tgt || h.retreat);
   if (s.tag === 'move' && h.retreat) return true;
   if (!tgt) return false;
-  const d = Math.hypot(tgt.x - h.x, tgt.y - h.y);
+  const d = hyp(tgt.x - h.x, tgt.y - h.y);
   if (s.ult){
     const worth = tgt.isHero || foesNear(h, 6) >= 3 || (tgt.struct && tgt.hp / tgt.mhp < .7);
     if (!worth) return false;
@@ -2455,7 +2515,7 @@ function castSkill(h, sk, tgt){
       areaHit(h, h.x, h.y, s.aoe, pw, { magic:s.magic, ability:true });
       if (s.stun || s.slow) nearby(h.x, s.aoe + 2, (u) => {
         if (u.dead || u.side !== foe) return;
-        if (Math.hypot(u.x - h.x, u.y - h.y) > s.aoe + u.r) return;
+        if (hyp(u.x - h.x, u.y - h.y) > s.aoe + u.r) return;
         if (s.stun) applyStun(u, s.stun);
         if (s.slow) applySlow(u, s.slow, s.slowT || 2);
       });
@@ -2466,7 +2526,7 @@ function castSkill(h, sk, tgt){
       const dist = s.dist || 5;
       const dx0 = h.x, dy0 = h.y;
       if (tgt){
-        const dx = tgt.x - h.x, dy = tgt.y - h.y, d = Math.hypot(dx, dy) || 1;
+        const dx = tgt.x - h.x, dy = tgt.y - h.y, d = hyp(dx, dy) || 1;
         const go = Math.min(dist, Math.max(0, d - (h.rng * .6)));
         h.x += dx / d * go; h.y += dy / d * go;
         abilityDmg(h, tgt, pw, s.magic);
@@ -2540,7 +2600,7 @@ function castSkill(h, sk, tgt){
     case 'taunt': {
       nearby(h.x, s.aoe, (u) => {
         if (u.dead || u.side === h.side) return;
-        if (Math.hypot(u.x - h.x, u.y - h.y) > s.aoe) return;
+        if (hyp(u.x - h.x, u.y - h.y) > s.aoe) return;
         u.target = h; u.taunt = s.dur;
         if (s.dmg) abilityDmg(h, u, pw, s.magic);
       });
@@ -2726,6 +2786,9 @@ function update(dt){
   if (G.state !== 'play' || G.paused || G.held) return;
   dt = Math.min(dt, .05);
   G.dt = dt; G.t += dt;
+  // The tick number, not the wall clock, is what the two sides of a network
+  // match agree on. Everything scheduled across the wire is stamped with it.
+  G.tick = (G.tick || 0) + 1;
   // Every per-side loop below swaps which hold goes first each tick: acting
   // first is a small edge that compounds into a measurable win-rate bias.
   G.frame = (G.frame || 0) + 1;
@@ -2879,9 +2942,9 @@ function burstFx(x, y, col, n){
   if (HEADLESS) return;
   if (G.fx.length > 260) return;
   for (let i = 0; i < n; i++){
-    const a = rnd() * 6.283, sp = rr(1, 6);
-    G.fx.push({ k:'p', x, y, z:rr(.2, 1.2), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5, vz:rr(1, 5),
-      t:rr(.35, .8), dur:.8, col, r:rr(1.4, 3.2) });
+    const a = fxrnd() * 6.283, sp = frr(1, 6);
+    G.fx.push({ k:'p', x, y, z:frr(.2, 1.2), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5, vz:frr(1, 5),
+      t:frr(.35, .8), dur:.8, col, r:frr(1.4, 3.2) });
   }
 }
 function ringFx(x, y, r, col){ if (!HEADLESS) G.fx.push({ k:'ring', x, y, r, t:.42, dur:.42, col }); }
@@ -2898,7 +2961,7 @@ function addFloat(x, y, txt, col, sc){
     ox = (Math.abs(ox) + .55) * (ox > 0 ? -1 : 1);
     oy -= .28;
   }
-  G.floats.push({ x:x + ox, y:y + oy + rr(-.15, .15), txt, col, t:.95, dur:.95, sc:sc || 1, vy:rr(-.5, -.9) });
+  G.floats.push({ x:x + ox, y:y + oy + frr(-.15, .15), txt, col, t:.95, dur:.95, sc:sc || 1, vy:frr(-.5, -.9) });
 }
 const CAST_COL = { dmg:'#ffa96a', heal:'#7fdc8a', buff:'#ffcf4d', cc:'#9ad8ff', move:'#bfe0ff', summon:'#c9a6ff' };
 function castCol(s){ return s.magic ? '#b98bff' : (CAST_COL[s.tag] || '#ffa96a'); }
@@ -2910,7 +2973,7 @@ function castFx(h, s){
   ringFx(h.x, h.y, s.aoe || 2, col);
   burstFx(h.x, h.y, col, 8);
   if (G.floats.length < 80)
-    G.floats.push({ x:h.x + rr(-.8, .8), y:h.y + rr(-.3, .3), txt:s.n.toUpperCase(), col,
+    G.floats.push({ x:h.x + frr(-.8, .8), y:h.y + frr(-.3, .3), txt:s.n.toUpperCase(), col,
       t:1.4, dur:1.4, sc:1, vy:-.55, cast:true, ult:!!s.ult });
 }
 // A blur of where the hero came from, so a dash reads as movement.
@@ -2923,8 +2986,8 @@ function dashFx(h, x0, y0){
 function healFx(x, y, col){
   if (HEADLESS || G.fx.length > 240) return;
   for (let i = 0; i < 6; i++)
-    G.fx.push({ k:'p', x:x + rr(-.6, .6), y:y + rr(-.4, .4), z:rr(.3, 1),
-      vx:0, vy:0, vz:rr(3, 5.5), t:rr(.4, .7), dur:.7, col:col || '#7fdc8a', r:rr(1, 2) });
+    G.fx.push({ k:'p', x:x + frr(-.6, .6), y:y + frr(-.4, .4), z:frr(.3, 1),
+      vx:0, vy:0, vz:frr(3, 5.5), t:frr(.4, .7), dur:.7, col:col || '#7fdc8a', r:frr(1, 2) });
 }
 function fxStep(dt){
   for (let i = G.fx.length - 1; i >= 0; i--){
@@ -3723,6 +3786,9 @@ const sel = { tile:-1, node:null, build:null, hero:null, struct:null, unit:null 
 // so one camera covers your farms, the whole span and their gates. Everything
 // below is written in hold-grid units and projected through the world.
 const HOLD_X = -58, TILE = 7.2;
+// Where MY hold stands. Both are drawn either way; this is only about where
+// the camera opens and what the HOLD button means.
+const myHoldX = () => MY === 0 ? HOLD_X : C.LANE_LEN - HOLD_X;
 let holdSide = 0, BSC = 1;
 function holdWorld(gx, gy){
   const d = holdSide === 0 ? 1 : -1;
@@ -3840,7 +3906,7 @@ function drawBuilding(c, b){
   if (t === 'farm') sub = '+' + (C.POP_PER_FARM * b.lvl) + ' pop';
   if (t === 'barracks') sub = 'Lv ' + b.lvl + (b.lvl >= 3 ? ' · cannons' : b.lvl >= 2 ? ' · casters' : '');
   if (t === 'tavern') sub = heroCap(s) + ' hero slot' + (heroCap(s) === 1 ? '' : 's');
-  if (holdSide === 0 && (cam.z > .72 || b.tile === sel.tile)){
+  if (holdSide === MY && (cam.z > .72 || b.tile === sel.tile)){
     const lp0 = bp(gx, gy, 1.55 + z);
     // A packed hold is six labels in a hand's width, so only the one you have
     // selected spells itself out; the rest carry a name and a level digit.
@@ -3911,7 +3977,7 @@ function drawNode(c, key){
       ell(c, q[0] - 2 * B, q[1] - 2 * B, 2.4 * B, 1.6 * B, key === 'gold' ? '#ffe08a' : '#c3cede');
     }
   }
-  if (holdSide !== 0) return;                      // their crews are their business
+  if (holdSide !== MY) return;                     // their crews are their business
   const n = Math.min(s.workers[key], nodeCap(s, key));
   const home = bp(KEEP.gx + .6, KEEP.gy + .5);
   for (let i = 0; i < n; i++){
@@ -3929,7 +3995,7 @@ function drawKeep(c){
   const p = bp(KEEP.gx, KEEP.gy, 1.9);
   c.fillStyle = sideCol(); c.fillRect(p[0] - 2 * B, p[1] - 20 * B, 4 * B, 20 * B);
   poly(c, [[p[0] + 2 * B, p[1] - 20 * B], [p[0] + 18 * B, p[1] - 15 * B], [p[0] + 2 * B, p[1] - 10 * B]], sideCol());
-  if (holdSide !== 0) return;
+  if (holdSide !== MY) return;
   const lb = bp(KEEP.gx, KEEP.gy, 2.5);
   labelQ.push({ x:lb[0], y:lb[1], txt:'Town Hall · ' + s.workers.idle + ' idle', col:'#ffe7b0' });
   for (let i = 0; i < Math.min(6, s.workers.idle); i++){
@@ -4137,7 +4203,7 @@ function camStep(dt){
   if (G.demo && G.state === 'play'){ demoCam(dt); }
   else if (cam.follow){
     let fx = null;
-    const mine = G.sides[0].heroes.filter(h => !h.dead);
+    const mine = me().heroes.filter(h => !h.dead);
     if (mine.length) fx = mine.reduce((a, h) => a + h.x, 0) / mine.length;
     else fx = frontlineX(0);
     cam.x = lerp(cam.x, clamp(fx, CAM_MIN, CAM_MAX), 1 - Math.pow(.02, dt));
@@ -4186,7 +4252,7 @@ const RES_CLASS = { gold:'g', iron:'i', wood:'w', food:'f' };
 const RES_ICON = { gold:'🪙', iron:'⛏️', wood:'🪵', food:'🌾' };
 
 function costHtml(cost){
-  const s = G.sides[0];
+  const s = me();
   return '<span class="cost">' + Object.keys(cost).map(k =>
     '<i class="' + RES_CLASS[k] + (s.res[k] < cost[k] ? ' bad' : '') + '">' + RES_ICON[k] + cost[k] + '</i>'
   ).join(' ') + '</span>';
@@ -4201,7 +4267,7 @@ function gatherRate(s, k){
 const laneArmy = (side) => G.units.filter(u => !u.dead && !u.isHero && u.side === side).length;
 
 function syncHud(){
-  const s = G.sides[0];
+  const s = me();
   for (const k of ['gold','iron','wood','food']){
     const el = $('r' + k[0].toUpperCase() + k.slice(1));
     if (!el) continue;
@@ -4240,7 +4306,7 @@ let dockTab = 'jobs';
 const NARROW = () => !HEADLESS && document.body.classList.contains('narrow');
 
 function dockHtml(){
-  const s = G.sides[0];
+  const s = me();
   const narrow = NARROW();
   const sec = {};
 
@@ -4427,7 +4493,7 @@ function skillPipsHtml(h){
 }
 
 function heroBarHtml(){
-  const s = G.sides[0];
+  const s = me();
   let h = '';
   for (const hero of s.heroes){
     const need = xpNeed(hero.lvl);
@@ -4546,7 +4612,9 @@ let uiT = 0, saveT = 0;
 function syncAdvice(){
   const el = $('advice');
   if (!el) return;
-  const a = (G.state === 'play' && !G.demo) ? adviceFor(G.sides[0]) : null;
+  // What the link is doing outranks the coaching line: none of the advice
+  // matters if the other player has gone.
+  const a = netAdvice() || ((G.state === 'play' && !G.demo) ? adviceFor(me()) : null);
   el.classList.toggle('hide', !a);
   if (a){ el.querySelector('.at').textContent = a.txt; el.dataset.tab = a.tab; }
 }
@@ -4607,6 +4675,10 @@ function showMenu(){
     '<div class="picks">' + DIFFS.map((d, i) =>
       '<button class="pick" data-act="start" data-diff="' + d.id + '"><div class="pk">' + (i === 0 ? 'easy' : i === 1 ? 'even' : 'hard') + '</div>' +
       '<div class="pt">' + d.n + '</div><div class="pd">' + d.d + '</div></button>').join('') + '</div>' +
+    '<div class="picks" style="margin-top:10px"><button class="pick" data-act="mp">' +
+    '<div class="pk">two players</div><div class="pt">Play a friend</div>' +
+    '<div class="pd">Both holds played by hand, on one shared bridge. One of you hosts and reads out a code.</div>' +
+    '</button></div>' +
     '<div class="statline"><span>Won <b>' + meta.wins + '</b></span><span>Lost <b>' + meta.losses + '</b></span>' +
     '<span>Best <b>' + (meta.best ? mmss(meta.best) : '—') + '</b></span></div>' +
     '<div class="legend"><span>Workers gather · farms raise population · barracks arm workers into the wave</span>' +
@@ -4614,6 +4686,58 @@ function showMenu(){
   );
 }
 const mmss = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
+
+// Every sheet in this game is built as a string and assigned to innerHTML. The
+// room code is the first text on any of them that did not come from the game
+// itself — it came off the wire — so it gets escaped on the way in.
+const esc = (v) => ('' + (v == null ? '' : v)).replace(/[&<>"']/g,
+  (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+// The lobby is one sheet that redraws itself as the connection moves through
+// its states, so there is only ever one thing on screen to read.
+function showLobby(){
+  const back = '<div class="rowbtn"><button class="big ghost" data-act="mpquit">Back</button></div>';
+  if (NET.status === 'error' || NET.status === 'full'){
+    openModal('<h2>Play a friend</h2>' +
+      '<p class="sub">' + esc(NET.err || 'Something went wrong.') + '</p>' +
+      '<div class="rowbtn"><button class="big" data-act="mp">Try again</button>' +
+      '<button class="big ghost" data-act="mpquit">Back</button></div>');
+    return;
+  }
+  if (NET.status === 'ask'){
+    openModal('<h2>Join a match</h2>' +
+      '<p class="sub">Type the four letters the other player read out.</p>' +
+      '<div class="rowbtn"><input id="mpcode" class="codein" maxlength="4" autocomplete="off" ' +
+      'autocapitalize="characters" spellcheck="false" placeholder="ABCD"></div>' +
+      '<div class="rowbtn"><button class="big" data-act="mpgo">Join</button>' +
+      '<button class="big ghost" data-act="mpquit">Back</button></div>');
+    const el = $('mpcode'); if (el && el.focus) el.focus();
+    return;
+  }
+  if (NET.status === 'dial'){
+    openModal('<h2>Connecting…</h2><p class="sub">Reaching the relay.</p>' + back);
+    return;
+  }
+  if (NET.status === 'wait'){
+    openModal('<h2>Your code is</h2>' +
+      '<div class="codebig">' + esc(NET.code) + '</div>' +
+      '<p class="sub">Read those four letters to the other player. The match starts the moment they join.</p>' +
+      back);
+    return;
+  }
+  // the front door
+  openModal('<h2>Play a friend</h2>' +
+    '<p class="sub">Two people, one bridge. One of you starts a match and reads out the code; the other joins with it. ' +
+    'Both holds are played by hand and the fight is dead even — no difficulty, no handicap.</p>' +
+    (RELAY_UNSET() ? '<p class="sub" style="color:var(--gold)">No relay is set up yet, so this will not connect. ' +
+      'ironbridge-relay/README.md has the one command that fixes it.</p>' : '') +
+    '<div class="picks">' +
+    '<button class="pick" data-act="mphost"><div class="pk">host</div><div class="pt">Start a match</div>' +
+    '<div class="pd">You get a four-letter code to read out.</div></button>' +
+    '<button class="pick" data-act="mpjoin"><div class="pk">join</div><div class="pt">Join with a code</div>' +
+    '<div class="pd">You have four letters from the other player.</div></button>' +
+    '</div>' + back);
+}
 
 function showHeroCreate(){
   openModal(
@@ -4689,7 +4813,11 @@ function heroDoing(h){
 // not freeze anything — the match would stop with nothing on screen to explain
 // why — and the Host's own picks are resolved by autoPick in the same tick.
 function holdsBoard(h){
-  return !!(h && h.pend && h.pend.length && h.side === 0 && !G.sides[0].ai && G.state === 'play');
+  // In a network match the board belongs to two people. One of them reading
+  // their level-up cards cannot be allowed to stop the other one's game, so
+  // nothing freezes and the cards wait in the hero sheet instead.
+  if (NET.on) return false;
+  return !!(h && h.pend && h.pend.length && h.side === MY && !me().ai && G.state === 'play');
 }
 
 function showHeroSheet(h){
@@ -4798,7 +4926,7 @@ function wrRow(label, mine, theirs, better){
 }
 
 function pauseHtml(){
-  const s = G.sides[0], f = G.sides[1];
+  const s = me(), f = G.sides[enemyOf(MY)];
   const row = wrRow;
   const inc = (sd) => ['gold','iron','wood','food'].reduce((a, k) => a + gatherRate(sd, k), 0).toFixed(1);
   const heroLine = (sd) => sd.heroes.length
@@ -4806,13 +4934,13 @@ function pauseHtml(){
   return '<h2>Paused</h2>' +
     '<p class="sub">Wave ' + G.wave + ' · ' + mmss(G.t) + ' · ' + G.diff.n + '</p>' +
     '<div class="wr">' +
-    '<div class="wr-head"><b style="color:' + SIDE_COL[0] + '">' + SIDE_NAME[0] + '</b>' +
-    '<span>line of battle</span><b style="color:' + SIDE_COL[1] + '">' + SIDE_NAME[1] + '</b></div>' +
-    '<div class="wr-lob">' + lineOfBattle(0) + lineOfBattle(1) + '</div>' +
-    row('structures standing', liveStructs(0).length, liveStructs(1).length, true) +
+    '<div class="wr-head"><b style="color:' + SIDE_COL[MY] + '">' + SIDE_NAME[MY] + '</b>' +
+    '<span>line of battle</span><b style="color:' + SIDE_COL[enemyOf(MY)] + '">' + SIDE_NAME[enemyOf(MY)] + '</b></div>' +
+    '<div class="wr-lob">' + lineOfBattle(MY) + lineOfBattle(enemyOf(MY)) + '</div>' +
+    row('structures standing', liveStructs(MY).length, liveStructs(enemyOf(MY)).length, true) +
     row('walls broken', s.structsKilled, f.structsKilled, true) +
     row('kills', s.kills, f.kills, true) +
-    row('on the bridge', laneArmy(0), laneArmy(1), true) +
+    row('on the bridge', laneArmy(MY), laneArmy(enemyOf(MY)), true) +
     row('population', popUsed(s) + '/' + popCap(s), popUsed(f) + '/' + popCap(f)) +
     row('gathering /s', inc(s), inc(f), true) +
     row('forge ranks', bsumUp(s), bsumUp(f), true) +
@@ -4848,8 +4976,8 @@ function heroCard(h, star){
 }
 
 function overHtml(){
-  const win = G.winner === 0;
-  const s = G.sides[0], f = G.sides[1];
+  const win = G.winner === MY;
+  const s = me(), f = G.sides[enemyOf(MY)];
   const meta = loadMeta();
   const record = win && meta.best && G.t <= meta.best;
   const star = s.heroes.slice().sort((a, b) => (b.kills - b.deaths) - (a.kills - a.deaths))[0];
@@ -4862,8 +4990,8 @@ function overHtml(){
     (record ? ' <b style="color:var(--gold)">Your fastest win yet.</b>' : '') + '</p>' +
     timelineHtml() +
     '<div class="wr">' +
-    '<div class="wr-head"><b style="color:' + SIDE_COL[0] + '">' + SIDE_NAME[0] + '</b>' +
-    '<span>final tally</span><b style="color:' + SIDE_COL[1] + '">' + SIDE_NAME[1] + '</b></div>' +
+    '<div class="wr-head"><b style="color:' + SIDE_COL[MY] + '">' + SIDE_NAME[MY] + '</b>' +
+    '<span>final tally</span><b style="color:' + SIDE_COL[enemyOf(MY)] + '">' + SIDE_NAME[enemyOf(MY)] + '</b></div>' +
     wrRow('walls broken', s.structsKilled, f.structsKilled, true) +
     wrRow('kills', s.kills, f.kills, true) +
     wrRow('gathered', Math.round(s.gathered), Math.round(f.gathered), true) +
@@ -4963,6 +5091,10 @@ const packSide = (s) => ({
 
 function saveMatch(){
   if (G.state !== 'play' || G.demo) return false;
+  // There is nothing useful to save in a network match — the other half of it
+  // is in somebody else's browser, and resuming would put you in a match with
+  // an opponent who is not there.
+  if (NET.on) return false;
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       v:SAVE_VER, at:Date.now(), diff:G.diff.id, t:G.t, wave:G.wave, waveT:G.waveT,
@@ -5045,6 +5177,295 @@ function saveMeta(won){
 }
 
 /* =====================================================================
+   TWO PLAYERS — turn-based lockstep.
+
+   Nothing about the board crosses the wire. Both browsers run the whole
+   simulation from one shared seed, and the only thing they exchange is the
+   short list of orders each player gave — the same nine verbs the dock has
+   always called. The relay in ironbridge-relay/ does not know what any of them
+   mean; it holds two sockets and copies bytes.
+
+   Time is cut into TURNS of six ticks (200ms). An order you give during turn N
+   is stamped for turn N+2 and runs on both machines on that exact tick, which
+   is why the two games stay identical without anyone sending a position. The
+   cost is that your own orders take two turns to happen — this is how every
+   RTS since the nineties has done it, and 400ms on a build click is invisible
+   in a game where a Barracks takes twenty seconds.
+
+   The board may not advance into a turn until BOTH players' orders for it have
+   arrived. Stalling is correct. Running ahead and guessing is the one thing
+   that cannot be repaired.
+   ===================================================================== */
+const RELAY_HOST = 'ironbridge-relay.example.workers.dev';
+// Until the Worker is deployed and the line above says where it lives, the
+// menu offers the button but explains that it will not connect.
+const RELAY_UNSET = () => /\.example\.workers\.dev$/.test(relayHost());
+const RELAY_KEY = 'ib_relay';
+// A per-origin override, so a deployed relay can be pointed somewhere else
+// from the console without a rebuild.
+function relayHost(){
+  try { return localStorage.getItem(RELAY_KEY) || RELAY_HOST; } catch (e){ return RELAY_HOST; }
+}
+// A deployed relay is always https. A relay on this machine — `wrangler dev`,
+// or the stand-in used by the tests — is not, and asking for wss:// on a plain
+// http port fails in a way that looks exactly like the relay being down.
+const relayLocal = () => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(relayHost());
+const relayHttp = () => (relayLocal() ? 'http://' : 'https://') + relayHost();
+const relayWs = () => (relayLocal() ? 'ws://' : 'wss://') + relayHost();
+
+const TURN_TICKS = 6;      // 200ms at 30 ticks a second
+const TURN_DELAY = 2;      // orders land two turns out — one round trip of headroom
+
+const NET = {
+  on:false, ws:null, code:'', me:-1, seed:0,
+  status:'off',            // off | dial | wait | play | gone | full | error
+  queued:[],               // my orders not yet sent
+  plan:new Map(),          // turn -> [ordersFromSide0, ordersFromSide1]
+  mine:new Map(),          // turn -> my hash of the state before that turn
+  theirs:new Map(),        // turn -> their hash of the same
+  ran:-1,                  // last turn whose orders have been applied
+  turn:0, tick:0, desyncAt:-1, lost:false, stalled:false, err:'',
+};
+
+function netReset(){
+  NET.on = false; NET.ws = null; NET.code = ''; NET.me = -1; NET.seed = 0;
+  NET.status = 'off'; NET.queued = []; NET.plan = new Map();
+  NET.mine = new Map(); NET.theirs = new Map();
+  NET.ran = -1; NET.turn = 0; NET.tick = 0;
+  NET.desyncAt = -1; NET.lost = false; NET.stalled = false; NET.err = '';
+}
+
+/* ------------------------------------------------------------------ orders */
+// The nine things a player can do. Every one of them already existed as a
+// function the AI calls too; none of them learned anything new for the network.
+const CMDS = {
+  job:    (s, c) => assign(s, c[1], c[2]),
+  worker: (s) => trainWorker(s),
+  unit:   (s, c) => trainUnit(s, c[1]),
+  build:  (s, c) => build(s, c[1], c[2]),
+  upg:    (s, c) => upgradeBuilding(s, c[1]),
+  up:     (s, c) => buyUp(s, c[1]),
+  nodeup: (s, c) => upgradeNode(s, c[1]),
+  hero:   (s, c) => createHero(s, c[1]),
+  // A hero is named by its INDEX in the side's list, not by its id — ids come
+  // off a counter that both machines advance identically, but an index is the
+  // same on both by construction and survives being read from a message.
+  pick:   (s, c) => { const h = s.heroes[c[1]]; return h ? pickOption(h, c[2]) : 'no such hero'; },
+};
+
+function applyCmd(side, c){
+  const fn = c && CMDS[c[0]];
+  const s = G.sides[side];
+  if (!fn || !s) return null;
+  const err = fn(s, c);
+  // An order that cannot be paid for is refused on BOTH machines, from the
+  // same state, by the same function — so a refusal is not a divergence. It is
+  // only worth SAYING on the machine whose player asked for it.
+  if (err && side === MY && !HEADLESS) say(err);
+  return err || null;
+}
+
+// Every player order in the game goes through here. On your own it happens at
+// once, exactly as it always did. In a network match it is queued for a turn
+// two turns out and sent to the other browser, which runs the identical order
+// on the identical tick.
+function order(c){
+  if (!NET.on) return applyCmd(MY, c);
+  if (NET.lost) return 'the other player is gone';
+  if (NET.desyncAt >= 0) return 'the match has stopped';
+  NET.queued.push(c);
+  return null;
+}
+
+/* ------------------------------------------------------------------ the hash */
+// FNV-1a over the exact bits of everything the simulation owns.
+//
+// Exact, not rounded. A hash that rounded first would hide a one-bit drift for
+// the thirty seconds it takes to grow into a dead hero, and then report a
+// desync a long way from the line that caused it. The whole value of this
+// number is that it goes wrong on the tick the divergence happens.
+function netHash(){
+  let h = 0x811c9dc5;
+  const dv = new DataView(new ArrayBuffer(8));
+  const byte = (b) => { h ^= b & 255; h = Math.imul(h, 0x01000193) >>> 0; };
+  const num = (v) => {
+    dv.setFloat64(0, typeof v === 'number' && isFinite(v) ? v : 0);
+    for (let i = 0; i < 8; i++) byte(dv.getUint8(i));
+  };
+  const str = (v) => { const s = '' + (v == null ? '' : v); for (let i = 0; i < s.length; i++) byte(s.charCodeAt(i)); byte(0); };
+  const flag = (v) => byte(v ? 1 : 0);
+
+  num(G.tick); num(G.t); num(G.wave); num(G.waveT); str(G.state); num(seedNow());
+  for (const s of G.sides){
+    num(s.rs); num(s.superT); num(s.aiT); num(s.kills); num(s.structsKilled);
+    num(s.gathered); num(s.spent); num(s.heroKills); str(s.waveKind);
+    for (const k of ['gold', 'iron', 'wood', 'food']) num(s.res[k]);
+    for (const k of ['idle', 'gold', 'iron', 'wood', 'food']) num(s.workers[k]);
+    for (const k of ['gold', 'iron', 'wood']) num(s.nodeLvl[k]);
+    for (const k of ['hp', 'armor', 'atk', 'as', 'regen']) num(s.towerUp[k]);
+    for (const k of ['tad', 'tarm', 'thp']) num(s.troopUp[k]);
+    for (const b of s.plot){ if (!b){ byte(0); continue; } str(b.type); num(b.lvl); }
+    for (const q of s.trainQ){ str(q.type); num(q.t); }
+    num(s.muster.length);
+    for (const m of s.muster) str(m.type);
+    for (const st of s.structs){ num(st.hp); flag(st.dead); num(st.downT); num(st.cd); }
+    num(s.heroes.length);
+    for (const x of s.heroes){
+      str(x.cls); str(x.name); num(x.lvl); num(x.xp); num(x.hp); num(x.mana);
+      num(x.x); num(x.y); flag(x.dead); flag(x.inLane); num(x.respawnT);
+      str(x.passive); num(x.passRank); num(x.kills); num(x.deaths); flag(x.retreat);
+      num(x.skills.length);
+      for (const sk of x.skills){ str(sk.id); num(sk.rank); num(sk.cdT); }
+      num(x.pend.length);
+      for (const p of x.pend){ str(p.kind); num(p.lvl); for (const o of p.opts) str(o); }
+    }
+  }
+  num(G.units.length);
+  for (const u of G.units){ str(u.kind); num(u.side); num(u.x); num(u.y); num(u.hp); num(u.cd); num(u.life); }
+  num(G.projs.length); num(G.zones.length);
+  return h >>> 0;
+}
+
+/* ------------------------------------------------------------------ the clock */
+// Called before every tick. Returns false to hold the board still.
+function netMayStep(){
+  if (!NET.on) return true;
+  if (NET.lost || NET.desyncAt >= 0) return false;
+  if (G.tick % TURN_TICKS !== 0){ NET.stalled = false; return true; }
+  const n = G.tick / TURN_TICKS;                 // the turn about to run
+  const p = NET.plan.get(n);
+  if (!p || !p[0] || !p[1]){ NET.stalled = true; return false; }
+  NET.stalled = false;
+  if (NET.ran !== n){ netRunTurn(n, p); NET.ran = n; }
+  return true;
+}
+function netAfterTick(){ if (NET.on) NET.tick = G.tick; }
+
+function netRunTurn(n, p){
+  NET.turn = n;
+  // The state BEFORE this turn's orders is the thing both machines must agree
+  // on, and both label it with the same turn number.
+  const h = netHash();
+  NET.mine.set(n, h);
+  const t = NET.theirs.get(n);
+  if (t !== undefined && t !== h && NET.desyncAt < 0) NET.desyncAt = n;
+  netSend({ t:'h', n, h });
+  // Side 0's orders then side 1's — a fixed order, never the order they
+  // happened to arrive in.
+  for (const side of [0, 1]) for (const c of p[side]) applyCmd(side, c);
+  netSend({ t:'c', n:n + TURN_DELAY, c:NET.queued });
+  netPlan(NET.me, n + TURN_DELAY, NET.queued);
+  NET.queued = [];
+  // Turns already run are never looked at again.
+  NET.plan.delete(n - 4); NET.mine.delete(n - 40); NET.theirs.delete(n - 40);
+}
+
+function netPlan(side, n, cmds){
+  let p = NET.plan.get(n);
+  if (!p){ p = [null, null]; NET.plan.set(n, p); }
+  p[side] = cmds || [];
+}
+
+/* ------------------------------------------------------------------ the wire */
+function netSend(m){
+  const ws = NET.ws;
+  if (!ws || ws.readyState !== 1) return false;
+  try { ws.send(JSON.stringify(m)); return true; } catch (e){ return false; }
+}
+
+function netMsg(m){
+  if (!m || typeof m !== 'object') return;
+  if (m.t === 'seat'){
+    NET.me = m.me | 0; NET.seed = m.seed >>> 0; NET.code = m.code || NET.code;
+    NET.status = 'wait';
+    if (!HEADLESS) showLobby();
+    return;
+  }
+  if (m.t === 'go'){ netStart(); return; }
+  if (m.t === 'c'){ netPlan(NET.me === 0 ? 1 : 0, m.n | 0, Array.isArray(m.c) ? m.c : []); return; }
+  if (m.t === 'h'){
+    const n = m.n | 0;
+    NET.theirs.set(n, m.h >>> 0);
+    const mine = NET.mine.get(n);
+    if (mine !== undefined && mine !== (m.h >>> 0) && NET.desyncAt < 0) NET.desyncAt = n;
+    return;
+  }
+  if (m.t === 'bye'){ NET.lost = true; NET.status = 'gone'; if (!HEADLESS) syncUI(); return; }
+  if (m.t === 'full'){ NET.status = 'full'; NET.err = 'That match already has two players.'; if (!HEADLESS) showLobby(); return; }
+}
+
+// Both seats are filled: start the identical match on both machines.
+function netStart(){
+  NET.on = true; NET.status = 'play';
+  MY = NET.me;
+  NET.plan = new Map(); NET.mine = new Map(); NET.theirs = new Map();
+  NET.ran = -1; NET.turn = 0; NET.tick = 0; NET.queued = [];
+  NET.desyncAt = -1; NET.lost = false; NET.stalled = false;
+  // The first TURN_DELAY turns have nobody's orders in them and never could —
+  // they are what buys the delay. Prime them empty on both sides.
+  for (let n = 0; n < TURN_DELAY; n++){ netPlan(0, n, []); netPlan(1, n, []); }
+  newMatch({ diff:'veteran', seed:NET.seed, mp:true });
+  acc = 0;
+  if (!HEADLESS){ closeModal(); syncUI(); }
+}
+
+function netQuit(){
+  const ws = NET.ws;
+  netReset(); MY = 0;
+  if (ws){ try { ws.close(); } catch (e){} }
+}
+
+function netOpen(code){
+  if (typeof WebSocket === 'undefined'){ NET.status = 'error'; NET.err = 'This browser has no WebSocket.'; return; }
+  netReset();
+  NET.code = code; NET.status = 'dial';
+  if (!HEADLESS) showLobby();
+  let ws;
+  try { ws = new WebSocket(relayWs() + '/room/' + encodeURIComponent(code)); }
+  catch (e){ NET.status = 'error'; NET.err = 'Could not reach the relay.'; if (!HEADLESS) showLobby(); return; }
+  NET.ws = ws;
+  ws.onmessage = (e) => { let m = null; try { m = JSON.parse(e.data); } catch (x){ return; } netMsg(m); };
+  ws.onerror = () => { if (NET.status === 'dial'){ NET.status = 'error'; NET.err = 'Could not reach the relay.'; if (!HEADLESS) showLobby(); } };
+  ws.onclose = () => {
+    if (NET.status === 'play' || NET.on){ NET.lost = true; NET.status = 'gone'; if (!HEADLESS) syncUI(); }
+    else if (NET.status === 'dial'){ NET.status = 'error'; NET.err = NET.err || 'The relay closed the connection.'; if (!HEADLESS) showLobby(); }
+  };
+}
+
+async function netHost(){
+  netReset();
+  NET.status = 'dial';
+  if (!HEADLESS) showLobby();
+  try {
+    const r = await fetch(relayHttp() + '/new', { method:'POST' });
+    if (!r.ok) throw new Error('relay said ' + r.status);
+    const j = await r.json();
+    if (!j || !j.code) throw new Error('no code');
+    netOpen(j.code);
+  } catch (e){
+    NET.status = 'error';
+    NET.err = RELAY_UNSET() ? 'No relay is set up yet — see ironbridge-relay/README.md.' : 'Could not reach the relay.';
+    if (!HEADLESS) showLobby();
+  }
+}
+function netJoin(code){
+  const c = ('' + (code || '')).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+  if (c.length !== 4){ NET.status = 'error'; NET.err = 'A code is four letters.'; if (!HEADLESS) showLobby(); return; }
+  netOpen(c);
+}
+
+// What the advice bar says while a network match is going on. It outranks the
+// ordinary coaching line, because none of that matters if the link is down.
+function netAdvice(){
+  if (!NET.on && NET.status === 'off') return null;
+  if (NET.desyncAt >= 0)
+    return { txt:'The two games have drifted apart (turn ' + NET.desyncAt + '). The match has stopped — neither side is real any more.', tab:'jobs' };
+  if (NET.lost) return { txt:'Lost the connection to the other player.', tab:'jobs' };
+  if (NET.on && NET.stalled) return { txt:'Waiting for the other player…', tab:'jobs' };
+  return null;
+}
+
+/* =====================================================================
    INPUT + BOOT
    ===================================================================== */
 let rsT = 0;
@@ -5065,7 +5486,7 @@ function unproject(sx, sy){
 // actually aimed at — every clickable is tested against its drawn box first,
 // nearest-to-camera first, and only then do we fall back to the bare ground.
 function clickTargets(){
-  const s = G.sides[0], out = [];
+  const s = me(), out = [];
   holdSide = 0;
   // Each clickable is an ellipse around the middle of the shape you can SEE —
   // for a building that is up the screen from its ground cell, not on it.
@@ -5073,7 +5494,7 @@ function clickTargets(){
     const p = bp(gx, gy);
     return { cx:p[0], cy:p[1] - lift * BSC, rx:rx * BSC, ry:ry * BSC, sy:p[1] };
   };
-  for (const h of G.sides[0].heroes){
+  for (const h of me().heroes){
     if (h.dead) continue;
     const p = lp(h.x, h.y);
     out.push({ kind:'hero', hero:h, cx:p[0], cy:p[1] - 18 * cam.z, rx:16 * cam.z, ry:26 * cam.z, sy:p[1], pri:3 });
@@ -5123,7 +5544,7 @@ function resolvePick(sx, sy){
     return { kind:s0Plot(row * PLOT_W + col) ? 'build' : 'plot', tile:row * PLOT_W + col };
   return { kind:'none' };
 }
-const s0Plot = (t) => G.sides[0].plot[t];
+const s0Plot = (t) => me().plot[t];
 
 function pickAt(clientX, clientY){
   const r = lcv.getBoundingClientRect();
@@ -5188,10 +5609,10 @@ function doAction(a){
     paint('btnSpeed', G.speed > 1);
     return;
   }
-  if (a === 'camHold') return camTo(HOLD_X);
-  if (a === 'camGate') return camTo(12);
+  if (a === 'camHold') return camTo(myHoldX());
+  if (a === 'camGate') return camTo(MY === 0 ? 12 : C.LANE_LEN - 12);
   if (a === 'camMid') return camTo(C.LANE_LEN / 2);
-  if (a === 'camFoe') return camTo(C.LANE_LEN - 12);
+  if (a === 'camFoe') return camTo(MY === 0 ? C.LANE_LEN - 12 : 12);
   if (a === 'follow'){ cam.follow = !cam.follow; paint('camFollow', cam.follow); return; }
   if (a === 'zoomIn') { cam.tz = clamp(cam.tz * 1.25, ZOOM_MIN, ZOOM_MAX); return; }
   if (a === 'zoomOut'){ cam.tz = clamp(cam.tz * .8, ZOOM_MIN, ZOOM_MAX); return; }
@@ -5200,7 +5621,7 @@ function doAction(a){
 }
 
 function wire(){
-  const s0 = () => G.sides[0];
+  const s0 = () => me();
   $('dock').addEventListener('click', (e) => {
     const tab = e.target.closest('[data-tab]');
     if (tab){ dockTab = tab.dataset.tab; syncUI(); return; }
@@ -5211,14 +5632,17 @@ function wire(){
       if (h){ sel.hero = h; showHeroSheet(h); }
       return;
     }
-    const s = s0(), a = b.dataset.act;
-    if (a === 'job') say(assign(s, b.dataset.node, +b.dataset.d));
-    else if (a === 'worker') say(trainWorker(s));
-    else if (a === 'unit') say(trainUnit(s, b.dataset.unit));
-    else if (a === 'build') say(build(s, sel.tile, b.dataset.type));
-    else if (a === 'upgrade') say(upgradeBuilding(s, sel.tile));
-    else if (a === 'up') say(buyUp(s, b.dataset.up));
-    else if (a === 'nodeup') say(upgradeNode(s, b.dataset.node));
+    // Every one of these used to call the game function directly. They now go
+    // through order(), which on your own is the same call and in a network
+    // match sends the order to the other browser to run on the same tick.
+    const a = b.dataset.act;
+    if (a === 'job') say(order(['job', b.dataset.node, +b.dataset.d]));
+    else if (a === 'worker') say(order(['worker']));
+    else if (a === 'unit') say(order(['unit', b.dataset.unit]));
+    else if (a === 'build') say(order(['build', sel.tile, b.dataset.type]));
+    else if (a === 'upgrade') say(order(['upg', sel.tile]));
+    else if (a === 'up') say(order(['up', b.dataset.up]));
+    else if (a === 'nodeup') say(order(['nodeup', b.dataset.node]));
     else if (a === 'newhero'){ showHeroCreate(); return; }
     syncUI();
   });
@@ -5245,18 +5669,39 @@ function wire(){
     else if (a === 'close') doAction('close');
     else if (a === 'unpause') setPaused(false);
     else if (a === 'replay') showIntro(G.diff.id);
-    else if (a === 'menu'){ setPaused(false); startDemo(); showMenu(); }
-    else if (a === 'again'){ clearSave(); newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
+    else if (a === 'menu'){ setPaused(false); netQuit(); startDemo(); showMenu(); }
+    else if (a === 'again'){ clearSave(); netQuit(); newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
+    else if (a === 'mp'){ audioStart(); showLobby(); }
+    else if (a === 'mphost'){ audioStart(); netHost(); }
+    else if (a === 'mpjoin'){ NET.status = 'ask'; NET.err = ''; showLobby(); }
+    else if (a === 'mpgo'){
+      audioStart();
+      const el = $('mpcode');
+      const v = el && typeof el.value === 'string' ? el.value : '';
+      netJoin(v);
+    }
+    else if (a === 'mpquit'){ netQuit(); startDemo(); showMenu(); }
     else if (a === 'mkhero'){
-      const err = createHero(s0(), b.dataset.cls);
+      const err = order(['hero', b.dataset.cls]);
       if (err){ say(err); return; }
-      const h = s0().heroes[s0().heroes.length - 1];
-      sel.hero = h; showHeroSheet(h); syncUI();
+      // On your own the hero exists the instant you ask for it, so open its
+      // sheet. Across the wire it does not exist for another two turns; the
+      // dock will show it when it arrives.
+      if (NET.on) closeModal();
+      else { const h = s0().heroes[s0().heroes.length - 1]; sel.hero = h; showHeroSheet(h); }
+      syncUI();
     } else if (a === 'pick'){
       const h = sel.hero;
       if (!h) return;
-      say(pickOption(h, +b.dataset.i));
-      showHeroSheet(h); syncUI();
+      const idx = s0().heroes.indexOf(h);
+      if (idx < 0) return;
+      say(order(['pick', idx, +b.dataset.i]));
+      // Re-rendering the sheet in a network match would redraw the SAME three
+      // cards — the choice has not landed yet — and a second click would spend
+      // the next pick too. Close it; the sheet reopens with the pick applied.
+      if (NET.on) closeModal();
+      else showHeroSheet(h);
+      syncUI();
     }
   });
   $('advice').addEventListener('click', () => {
@@ -5337,14 +5782,34 @@ function wire(){
   });
 }
 
-let last = 0, lastDraw = 0;
+// One tick is 1/30 of a second and never anything else. This used to cut the
+// leftover time into whatever slice was left over — `Math.min(1/30, left)` — so
+// the LAST step of every frame was a different length on every machine, and a
+// 144Hz desktop and a 60Hz phone fed different numbers into the same physics.
+// Alone that only made replays fuzzy. Over a network it is fatal: two browsers
+// stepping by different amounts are not playing the same match, however
+// carefully everything else agrees. Real time now goes into an accumulator and
+// only whole ticks come out; the remainder waits for the next frame.
+const TICK = 1 / 30;
+let last = 0, lastDraw = 0, acc = 0;
 function frame(ts){
   const raw = Math.min(.1, (ts - last) / 1000 || 0);
   last = ts;
   if (G.state === 'play' && !G.paused && !G.held){
-    let left = raw * G.speed;
+    acc += raw * G.speed;
     let guard = 0;
-    while (left > 0 && guard++ < 12){ const st = Math.min(1 / 30, left); update(st); left -= st; }
+    while (acc >= TICK && guard++ < 12){
+      // In a network match the board may not move past a turn whose commands
+      // have not arrived yet. Stalling is correct — running ahead and guessing
+      // is what desyncs.
+      if (!netMayStep()) break;
+      update(TICK);
+      acc -= TICK;
+      netAfterTick();
+    }
+    // A tab that was in the background comes back owing minutes of simulation.
+    // Paying that debt is neither possible nor wanted — drop it.
+    if (guard >= 12) acc = 0;
   }
   camStep(raw);
   // Nothing on the board moves while the result card or the pause report is
@@ -5389,6 +5854,11 @@ window.IB = {
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
+  NET, netHash, netMayStep, netRunTurn, netPlan, netMsg, netStart, netReset, netQuit, netAdvice,
+  order, applyCmd, CMDS, TURN_TICKS, TURN_DELAY, RELAY_HOST, RELAY_UNSET, relayHost, showLobby,
+  relayWs, relayHttp, relayLocal, netHost, netJoin, netOpen,
+  fxrnd, hyp, ipow, esc, TICK, myHoldX,
+  get MY(){ return MY; }, set MY(v){ MY = v; },
   seenIntro, markSeen, SEEN_KEY, pruneSel,
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
   startZoom, ZOOM_MIN, ZOOM_MAX, camStep, demoCam, clouds, FLOCKS, drawClouds, drawBirds, heroMeters, heroDoing, showHeroSheet,

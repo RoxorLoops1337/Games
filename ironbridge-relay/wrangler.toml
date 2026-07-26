@@ -1,0 +1,21 @@
+name = "ironbridge-relay"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+
+# One Durable Object per match. The name is the four-letter room code, so both
+# players reach the same object without anything having to be looked up.
+[[durable_objects.bindings]]
+name = "ROOMS"
+class_name = "Room"
+
+# new_sqlite_classes, NOT new_classes.
+#
+# new_classes is the original key-value Durable Object backend and it is only
+# available on the paid Workers plan. new_sqlite_classes is the SQLite-backed
+# one that Cloudflare put on the FREE plan in April 2025, which is the whole
+# reason this relay costs nothing to run. Switching this key is the single
+# easiest way to turn a free deployment into one that will not deploy at all
+# on a free account — tests/ironbridge_relay.test.mjs asserts it stays put.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Room"]

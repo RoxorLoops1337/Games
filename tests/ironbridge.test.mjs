@@ -3285,6 +3285,334 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* ================================================================ determinism
+   Lockstep only works if two browsers running the same seed compute the same
+   numbers. Three things used to make that false, and each has a guard here. */
+{
+  const simStart = SRC.indexOf('   THE BRIDGE — units, waves, damage');
+  const simEnd = SRC.indexOf('   MAIN LOOP');
+  const sim = SRC.slice(simStart, simEnd);
+  t.ok(simStart > 0 && simEnd > simStart, 'the audit below found the simulation section');
+
+  // 1. Engine calls whose precision is left to the implementation. Chrome and
+  //    Safari are both allowed to return different last bits from these, and
+  //    one bit of disagreement about a distance is a different match.
+  t.ok(!/Math\.hypot\(/.test(sim), 'the simulation never calls Math.hypot (precision is implementation-defined)');
+  t.ok(!/Math\.pow\(/.test(sim), 'and never calls Math.pow');
+  const pricing = SRC.slice(SRC.indexOf('   STATE\n'), simEnd);
+  t.ok(!/Math\.pow\(/.test(pricing), 'nor does anything that prices a building, upgrade or node level');
+  t.ok(IB.hyp(3, 4) === 5 && IB.hyp(0, 0) === 0, 'the replacement distance is exact on the cases that have exact answers');
+  t.ok(IB.ipow(1.5, 3) === 3.375 && IB.ipow(2, 10) === 1024 && IB.ipow(7, 0) === 1,
+    'and integer powers come out of repeated multiplication, which IS specified');
+  t.ok(IB.ipow(1.65, 4) === 1.65 * 1.65 * 1.65 * 1.65, 'exactly as if written out longhand');
+
+  // 2. Wall-clock and frame counters inside the tick. The tick number is the
+  //    only clock two machines can agree on.
+  t.ok(!/Date\.now|performance\.now/.test(sim), 'nothing in the simulation reads the wall clock');
+
+  // 3. The particle stream. How many sparks get made depends on how busy the
+  //    frame is and on whether this is a browser at all — so a simulation that
+  //    drew from the same generator consumed a different number of values on
+  //    every machine. This is the guard that would have caught it.
+  {
+    IB.newMatch({ diff:'veteran', seed:4242 });
+    const before = IB.seedNow();
+    for (let i = 0; i < 5000; i++) IB.fxrnd();
+    t.ok(IB.seedNow() === before, 'ten thousand particles do not advance the simulation’s random stream by one step');
+    const a = IB.fxrnd(), b = IB.fxrnd();
+    t.ok(a !== b && a >= 0 && a < 1 && b >= 0 && b < 1, 'and the particle stream is itself a working generator');
+    const fxUsers = SRC.slice(SRC.indexOf('   EFFECTS\n'), SRC.indexOf('   RENDERING — shared'));
+    t.ok(!/(?<![A-Za-z_$.])rnd\(\)/.test(fxUsers) && !/(?<![A-Za-z_$.])rr\(/.test(fxUsers),
+      'no effect draws from the simulation stream any more');
+  }
+
+  // 4. The step size itself. This used to be "whatever time is left over",
+  //    which is a different number on a 144Hz desktop and a 60Hz phone.
+  t.ok(IB.TICK === 1 / 30, 'one tick is 1/30 of a second');
+  const loop = SRC.slice(SRC.indexOf('function frame(ts)'), SRC.indexOf('function boot()'));
+  t.ok(/acc \+= raw \* G\.speed/.test(loop) && /while \(acc >= TICK/.test(loop),
+    'the main loop accumulates real time and only ever takes whole ticks out of it');
+  t.ok(!/Math\.min\(1 \/ 30, left\)/.test(loop), 'and never cuts a short final step to use up the remainder');
+
+  // The whole point, stated as one assertion: same seed, same numbers.
+  {
+    IB.newMatch({ diff:'veteran', seed:99001 });
+    for (let i = 0; i < 30 * 90; i++) IB.update(1 / 30);
+    const h1 = IB.netHash(), t1 = G.tick;
+    IB.newMatch({ diff:'veteran', seed:99001 });
+    for (let i = 0; i < 30 * 90; i++) IB.update(1 / 30);
+    t.ok(IB.netHash() === h1 && G.tick === t1,
+      'ninety seconds of the same seed hashes to the same number twice running');
+    IB.newMatch({ diff:'veteran', seed:99002 });
+    for (let i = 0; i < 30 * 90; i++) IB.update(1 / 30);
+    t.ok(IB.netHash() !== h1, 'and a different seed does not — the hash is reading the match, not a constant');
+  }
+}
+
+/* ---------------------------------------------------------------- the hash */
+{
+  IB.newMatch({ diff:'veteran', seed:31337 });
+  step(20);
+  const base = IB.netHash();
+  t.ok(IB.netHash() === base, 'the hash of an unchanged board is stable');
+  const probes = [
+    ['a resource',        () => { P().res.gold += 1; }],
+    ['a fraction of one', () => { P().res.wood += 1e-9; }],
+    ['a worker',          () => { P().workers.idle += 1; }],
+    ['a structure’s health', () => { P().structs[0].hp -= 1; }],
+    ['the wave clock',    () => { G.waveT -= 1e-6; }],
+    ['the shared rng',    () => { IB.reseed(777); }],
+    ['a unit position',   () => { if (G.units.length) G.units[0].x += 1e-9; else G.waveT -= 1; }],
+  ];
+  for (const [what, poke] of probes){
+    IB.newMatch({ diff:'veteran', seed:31337 });
+    step(20);
+    poke();
+    t.ok(IB.netHash() !== base, 'the hash notices ' + what);
+  }
+  // Rounding before hashing would hide the drift that matters most: the small
+  // one, on the tick it happens, before it has grown into a dead hero.
+  t.ok(!/toFixed|Math\.round/.test(SRC.slice(SRC.indexOf('function netHash()'), SRC.indexOf('the clock */'))),
+    'the hash rounds nothing off on its way in');
+}
+
+/* ================================================================= lockstep
+   Two separate game instances, one relay between them, playing one match.
+   Everything above is a proxy for this. */
+{
+  // Two full evaluations of the game. They share no state: separate G, separate
+  // seeds, separate everything — which is the point.
+  const A = loadGame({}), B = loadGame({});
+  t.ok(A.G !== B.G && A !== B, 'two independent instances of the game can be loaded side by side');
+
+  // A relay that does exactly what the Worker does: copy bytes across, after a
+  // configurable number of ticks of delay.
+  function link(a, b, lagTicks){
+    const wire = [];
+    const post = (to, s) => wire.push({ to, s, at: to.G.tick + (lagTicks || 0) });
+    a.NET.ws = { readyState:1, send:(s) => post(b, s) };
+    b.NET.ws = { readyState:1, send:(s) => post(a, s) };
+    return {
+      deliver(){
+        for (let i = wire.length - 1; i >= 0; i--){
+          if (wire[i].to.G.tick < wire[i].at) continue;
+          const m = wire.splice(i, 1)[0];
+          m.to.netMsg(JSON.parse(m.s));
+        }
+      },
+      pending(){ return wire.length; },
+    };
+  }
+
+  function pair(seed, lag){
+    A.netReset(); B.netReset();
+    A.NET.me = 0; A.NET.seed = seed;
+    B.NET.me = 1; B.NET.seed = seed;
+    const w = link(A, B, lag);
+    A.netStart(); B.netStart();
+    return w;
+  }
+
+  function run(w, ticks, script){
+    let stalls = 0;
+    for (let i = 0; i < ticks; i++){
+      w.deliver();
+      if (script) script(i);
+      let moved = false;
+      for (const inst of [A, B]) if (inst.netMayStep()){ inst.update(1 / 30); moved = true; }
+      if (!moved) stalls++;
+      // the wire only moves when someone's clock does, so drain on a stall too
+      if (!moved) w.deliver();
+    }
+    return stalls;
+  }
+
+  /* --- a quiet match: nobody does anything, both must still agree --------- */
+  {
+    const w = pair(50501, 0);
+    t.ok(A.NET.on && B.NET.on, 'both instances consider themselves in a network match');
+    t.ok(A.MY === 0 && B.MY === 1, 'the host plays side 0 and the joiner plays side 1');
+    t.ok(A.G.mp && B.G.mp, 'and both know it is a two-player match');
+    t.ok(A.G.diff.id === 'veteran' && B.G.diff.id === 'veteran',
+      'a network match is always Veteran — every other difficulty is a handicap on side 1, and side 1 is a person');
+    t.ok(A.G.sides[1].ai === false && B.G.sides[1].ai === false, 'nobody is left playing against the AI');
+    t.ok(A.netHash() === B.netHash(), 'the two matches start identical');
+
+    run(w, 30 * 60);
+    t.ok(A.G.tick === B.G.tick, 'after a minute both are on the same tick (' + A.G.tick + '/' + B.G.tick + ')');
+    t.ok(A.netHash() === B.netHash(), 'and still hash the same');
+    t.ok(A.NET.desyncAt === -1 && B.NET.desyncAt === -1, 'neither reported a desync');
+    t.ok(A.G.tick > 30 * 55, 'and the clock really did run (' + A.G.tick + ' ticks)');
+  }
+
+  /* --- a played match: both sides doing DIFFERENT things ------------------ */
+  {
+    const w = pair(50502, 0);
+    // Both instances get the SAME leg-up, applied identically before the first
+    // tick: a Hero Factory each and enough in the vaults to actually spend. A
+    // change made to one machine only would be a desync, which is the next
+    // test — this one is about orders, so both boards start level.
+    for (const inst of [A, B]) for (const s of inst.G.sides){
+      s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000;
+      s.plot[1] = { type:'tavern', lvl:1, tile:1 };
+    }
+    t.ok(A.netHash() === B.netHash(), 'the two boards are still identical after being set up by hand');
+    const did = { a:0, b:0 };
+    const script = (i) => {
+      // Two people playing badly at each other, on purpose out of step.
+      if (i === 12){ A.order(['job', 'gold', 1]); did.a++; }
+      if (i === 31){ B.order(['job', 'wood', 1]); did.b++; }
+      if (i === 44){ A.order(['worker']); did.a++; }
+      if (i === 60){ B.order(['worker']); did.b++; }
+      if (i === 95){ A.order(['build', 0, 'barracks']); did.a++; }
+      if (i === 121){ B.order(['build', 0, 'farm']); did.b++; }
+      if (i === 140){ A.order(['nodeup', 'gold']); did.a++; }
+      if (i === 190){ B.order(['nodeup', 'iron']); did.b++; }
+      if (i === 260){ A.order(['upg', 5]); did.a++; }
+      if (i === 300){ B.order(['upg', 6]); did.b++; }
+      if (i === 420){ A.order(['unit', 'spear']); did.a++; }
+      if (i === 480){ B.order(['unit', 'spear']); did.b++; }
+      if (i === 900){ A.order(['hero', 'fighter']); did.a++; }
+      if (i === 960){ B.order(['hero', 'mage']); did.b++; }
+    };
+    run(w, 30 * 120, script);
+    t.ok(did.a > 5 && did.b > 5, 'both players actually gave orders (' + did.a + ' and ' + did.b + ')');
+    t.ok(A.G.tick === B.G.tick, 'two minutes of two people playing: same tick');
+    t.ok(A.netHash() === B.netHash(), 'and the same board, to the bit');
+    t.ok(A.NET.desyncAt === -1 && B.NET.desyncAt === -1, 'with no desync reported by either');
+
+    // And the orders had to have LANDED, or this proves only that two idle
+    // simulations stay idle together.
+    const built = (inst) => inst.G.sides.reduce((n, s) => n + s.plot.filter(Boolean).length, 0);
+    t.ok(built(A) > 4, 'the buildings that were ordered actually went up (' + built(A) + ')');
+    t.ok(built(A) === built(B), 'and both instances have the same number of them');
+    t.ok(A.G.sides[0].heroes.length === 1 && A.G.sides[1].heroes.length === 1, 'each side forged its hero');
+    t.ok(A.G.sides[0].heroes[0].name === B.G.sides[0].heroes[0].name &&
+         A.G.sides[1].heroes[0].name === B.G.sides[1].heroes[0].name,
+      'and the heroes have the same NAMES on both machines — names come off the shared stream, so this is the stream agreeing');
+    t.ok(A.G.sides[0].heroes[0].cls === 'fighter' && A.G.sides[1].heroes[0].cls === 'mage',
+      'each order went to the side that gave it, not the side that received it');
+  }
+
+  /* --- a slow link -------------------------------------------------------- */
+  {
+    const w = pair(50503, 5);   // ~170ms each way, inside the two-turn budget
+    run(w, 30 * 60, (i) => {
+      if (i === 40) A.order(['worker']);
+      if (i === 70) B.order(['worker']);
+      if (i === 300) A.order(['job', 'iron', 1]);
+      if (i === 330) B.order(['job', 'food', 1]);
+    });
+    t.ok(A.netHash() === B.netHash(), 'a link with lag on it stays in step');
+    t.ok(A.NET.desyncAt === -1 && B.NET.desyncAt === -1, 'and reports no desync');
+    t.ok(A.G.tick === B.G.tick && A.G.tick > 30 * 40,
+      'the delay costs some wall-clock but the match still runs (' + A.G.tick + ' ticks)');
+  }
+
+  /* --- the board must NOT run ahead of the other player ------------------- */
+  {
+    pair(50504, 0);
+    // B never delivers anything, so A must stall at its first turn boundary
+    // rather than guessing what B did.
+    A.NET.ws = { readyState:1, send:() => {} };
+    let ran = 0;
+    for (let i = 0; i < 300; i++) if (A.netMayStep()){ A.update(1 / 30); ran++; }
+    t.ok(ran > 0 && ran <= IB.TURN_TICKS * IB.TURN_DELAY,
+      'with the other player silent the board runs out the primed turns and then stops (' + ran + ' ticks)');
+    t.ok(A.NET.stalled, 'and says so, rather than pretending');
+  }
+
+  /* --- the hash has to be able to FAIL ------------------------------------ */
+  {
+    const w = pair(50505, 0);
+    run(w, 60);
+    // Reach in and change one number on one side only — exactly what a
+    // non-specified Math call would eventually do on its own.
+    B.G.sides[0].res.gold += 0.000001;
+    run(w, 30 * 20);
+    t.ok(A.NET.desyncAt >= 0 || B.NET.desyncAt >= 0,
+      'a single altered number on one machine is caught and reported as a desync');
+    const at = Math.max(A.NET.desyncAt, B.NET.desyncAt);
+    t.ok(at >= 0 && at < 40, 'and caught quickly, near the turn it happened (turn ' + at + ')');
+    t.ok(!A.netMayStep() || !B.netMayStep(), 'after a desync the board stops instead of showing two different games');
+    const adv = (A.NET.desyncAt >= 0 ? A : B).netAdvice();
+    t.ok(adv && /drifted apart/.test(adv.txt), 'and the advice bar explains it (' + (adv && adv.txt) + ')');
+  }
+
+  /* --- losing the other player -------------------------------------------- */
+  {
+    const w = pair(50506, 0);
+    run(w, 90);
+    A.netMsg({ t:'bye' });
+    t.ok(A.NET.lost === true, 'a peer that goes away is noticed');
+    const adv = A.netAdvice();
+    t.ok(adv && /Lost the connection/.test(adv.txt),
+      'and the advice bar says so rather than the board silently freezing (' + (adv && adv.txt) + ')');
+    t.ok(!A.netMayStep(), 'the board stops');
+    t.ok(typeof A.order(['worker']) === 'string', 'and further orders are refused with a reason');
+  }
+
+  /* --- a refused room ------------------------------------------------------ */
+  {
+    A.netReset();
+    A.netMsg({ t:'full' });
+    t.ok(A.NET.status === 'full' && /two players/.test(A.NET.err),
+      'being told a match is full is handled, not left hanging');
+  }
+
+  /* --- orders are the only thing that crosses -------------------------------- */
+  {
+    const sent = [];
+    A.netReset(); B.netReset();
+    A.NET.me = 0; A.NET.seed = 606; B.NET.me = 1; B.NET.seed = 606;
+    A.NET.ws = { readyState:1, send:(s) => { sent.push(JSON.parse(s)); B.netMsg(JSON.parse(s)); } };
+    B.NET.ws = { readyState:1, send:(s) => A.netMsg(JSON.parse(s)) };
+    A.netStart(); B.netStart();
+    for (let i = 0; i < 200; i++){
+      if (i === 30) A.order(['worker']);
+      if (A.netMayStep()) A.update(1 / 30);
+      if (B.netMayStep()) B.update(1 / 30);
+    }
+    t.ok(sent.length > 0, 'the host sent something');
+    const kinds = new Set(sent.map(m => m.t));
+    t.ok([...kinds].every(k => k === 'c' || k === 'h'),
+      'and everything it sent was either orders or a hash (' + [...kinds].join(', ') + ')');
+    const big = sent.map(m => JSON.stringify(m).length).sort((a, b) => b - a)[0];
+    t.ok(big < 400, 'the largest thing that crossed the wire is tiny (' + big + ' bytes) — no board state is being shipped');
+    t.ok(!sent.some(m => JSON.stringify(m).includes('"hp"')), 'nothing sent contains anybody’s health');
+  }
+
+  /* --- the nine verbs ------------------------------------------------------ */
+  {
+    const verbs = Object.keys(IB.CMDS);
+    t.ok(verbs.length === 9, 'there are nine things a player can order (' + verbs.join(', ') + ')');
+    // Every one of them has to be reachable from the interface, or it is an
+    // order nobody can give.
+    const wiring = SRC.slice(SRC.indexOf('function wire()'));
+    const missing = verbs.filter(v => !new RegExp("order\\(\\['" + v + "'").test(wiring));
+    t.ok(missing.length === 0, 'and every one is wired to a control (missing: ' + missing.join(', ') + ')');
+    // ...and nothing in the interface still calls the game directly, which
+    // would change one machine's board without telling the other.
+    for (const direct of ['assign(s,', 'trainWorker(s)', 'trainUnit(s,', 'build(s,', 'upgradeBuilding(s,', 'buyUp(s,', 'upgradeNode(s,'])
+      t.ok(!wiring.includes('say(' + direct), 'the dock no longer calls ' + direct.split('(')[0] + '() behind the network’s back');
+  }
+}
+
+/* ------------------------------------------------------------- solo is intact */
+{
+  // None of the above may have cost the single-player game anything.
+  IB.newMatch({ diff:'veteran', seed:777 });
+  t.ok(!G.mp && G.sides[1].ai === true, 'a normal match still has the Host in it');
+  t.ok(IB.NET.on === false, 'and is not a network match');
+  const before = P().workers.idle;
+  const err = IB.order(['worker']);
+  t.ok(err === null || typeof err === 'string', 'an order on your own returns the same answer the function always did');
+  t.ok(P().trainQ.length === 1, 'and happens immediately, with nothing queued for a turn');
+  t.ok(P().workers.idle === before, 'exactly as it did before any of this existed');
+  IB.newMatch({ diff:'warlord', seed:778 });
+  t.ok(G.diff.id === 'warlord', 'the difficulties still work when it is not a network match');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
