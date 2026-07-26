@@ -1811,6 +1811,73 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(s.res.gold > g0, 'and the deeper mine still pays out');
 }
 
+/* --------------------------------------------- the board waits for your choice */
+{
+  // A level-up choice used to leave the match running underneath it. Driven on
+  // a real page with the choice sheet open for ten seconds, the hero lost 27%
+  // of its health on desktop and 32% on a phone — and the health bar printed ON
+  // the card was a snapshot from the moment it opened, so it read nearly full
+  // while the hero was dying. On a 390px screen the sheet covers the lane
+  // completely, so there was nothing to glance at either. The first hero
+  // decision a new player makes was teaching them that a menu is safe.
+  //
+  // The board holds only for a choice the PLAYER has to make, and only while
+  // the sheet is actually open: a pending pick alone must not freeze the match,
+  // or it would stop with nothing on screen to explain why.
+  t.ok(typeof IB.holdsBoard === 'function', 'whether the board holds is readable from outside');
+  const holds = (h) => (IB.holdsBoard ? IB.holdsBoard(h) : false);
+  IB.newMatch({ diff:'veteran', seed:1523 });
+  const s = P();
+  rich(s);
+  IB.build(s, s.plot.indexOf(null), 'tavern');
+  IB.createHero(s, 'fighter');
+  const h = s.heroes[0];
+  t.ok(h.pend.length > 0, 'a fresh hero has a choice waiting (' + h.pend.length + ')');
+  t.ok(holds(h), 'and that choice holds the board');
+  t.ok(G.held === false, 'but nothing is held until the sheet is actually opened');
+
+  // the Host resolves its own picks in the same tick, so it must never hold
+  const foe = G.sides[1];
+  rich(foe);
+  if (!IB.bList(foe, 'tavern').length) IB.build(foe, foe.plot.indexOf(null), 'tavern');
+  IB.createHero(foe, 'tank');
+  const fh = foe.heroes[foe.heroes.length - 1];
+  if (fh) t.ok(!holds(fh), "the Host's own choice never holds the board");
+
+  // a hold actually stops the simulation
+  {
+    G.held = true;
+    const t0 = G.t, w0 = G.wave, hp0 = h.hp, g0 = s.res.gold;
+    for (let i = 0; i < 300; i++) IB.update(1 / 30);       // ten seconds of match time
+    t.ok(G.t === t0, 'ten seconds of ticks move the clock not at all while held (' + G.t + ')');
+    t.ok(G.wave === w0 && s.res.gold === g0, 'no wave lands and nothing is gathered');
+    t.ok(h.hp === hp0, 'and the hero takes no damage while you are reading its cards');
+    G.held = false;
+    step(2);
+    t.ok(G.t > t0, 'and the match resumes once the choice is made (' + G.t.toFixed(1) + 's)');
+  }
+  // resolving the last pick releases it
+  {
+    let guard = 0;
+    while (h.pend.length && guard++ < 12) IB.pickOption(h, 0);
+    t.ok(h.pend.length === 0, 'the choices are all made');
+    t.ok(!holds(h), 'so the hero no longer holds the board');
+  }
+  // and an AI-driven player side does not hold either — the loop harnesses
+  // drive side 0 with s.ai = true and must not deadlock on a pick
+  {
+    IB.newMatch({ diff:'veteran', seed:1531 });
+    const a = P();
+    a.ai = true;
+    rich(a);
+    IB.build(a, a.plot.indexOf(null), 'tavern');
+    IB.createHero(a, 'mage');
+    const ah = a.heroes[0];
+    if (ah && ah.pend.length) t.ok(!holds(ah), 'a hold played by the assigner never freezes the board');
+    else t.ok(true, 'the assigner had already resolved the pick');
+  }
+}
+
 /* ---------------------------------------------------------------- the advisor */
 {
   // The next-step hint has to name a real, currently-possible action — and it
