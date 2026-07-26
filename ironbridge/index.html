@@ -4731,7 +4731,15 @@ function showMenu(){
    ===================================================================== */
 // The relay only introduces the two machines: it hands out a seed and a side
 // and copies bytes. Everything about the match happens in the two browsers.
-const RELAY_HOST = 'ironbridge-relay.roxorloops.workers.dev';
+// PLACEHOLDER until the relay is deployed. Durable Objects cannot live in a
+// Pages project, so the relay is a separate Worker that has to be deployed
+// once by hand (`cd ironbridge-relay && npx wrangler deploy`), and its address
+// depends on the workers.dev subdomain of whichever account deploys it — which
+// this file cannot know. Point the game at the real one by editing this line,
+// or without editing anything:
+//     localStorage.setItem('ib_relay', 'ironbridge-relay.YOURNAME.workers.dev')
+const RELAY_HOST = 'ironbridge-relay.example.workers.dev';
+const RELAY_UNSET = () => relayHost().includes('.example.workers.dev');
 const relayHost = () => {
   try { return localStorage.getItem('ib_relay') || RELAY_HOST; } catch (e) { return RELAY_HOST; }
 };
@@ -4743,7 +4751,11 @@ function lobbyHtml(){
       '<p class="sub">Send those four letters to whoever you are playing. They pick <b>Play a friend</b>, then <b>Join</b>.</p>'
     : '';
   const body = {
-    idle:  '<p class="sub">One of you starts a match and reads out the code. The other types it in.</p>' +
+    idle:  (RELAY_UNSET()
+             ? '<p class="sub" style="color:#ffcf4d">No relay is set up yet, so this will not connect. ' +
+               'It needs a small Cloudflare Worker deployed once — see <b>ironbridge-relay/README.md</b>.</p>'
+             : '') +
+           '<p class="sub">One of you starts a match and reads out the code. The other types it in.</p>' +
            '<div class="picks">' +
              '<button class="pick" data-act="mphost"><div class="pk">start</div><div class="pt">Start a match</div>' +
              '<div class="pd">You get a four-letter code to pass on.</div></button>' +
@@ -4782,7 +4794,17 @@ async function lobbyHost(){
     LOBBY.code = j.code;
     lobbyConnect(j.code);
     lobbySet('hosting');
-  } catch (e){ lobbySet('error', 'Could not reach the relay. Check your connection, or play the Host instead.'); }
+  } catch (e){
+    // Naming the host it tried turns "check your connection" — which sends you
+    // to look at the wrong thing entirely — into something you can act on. By
+    // far the likeliest cause is that the relay has simply never been deployed.
+    lobbySet('error', RELAY_UNSET()
+      ? 'No relay is set up yet. Two-player needs a small Cloudflare Worker deployed once ' +
+        '(see ironbridge-relay/README.md), then set its address in localStorage under "ib_relay". ' +
+        'One-player works either way.'
+      : 'Could not reach the relay at ' + relayHost() + '. It may be down, or the address may be wrong. ' +
+        'One-player works either way.');
+  }
 }
 
 function lobbyJoin(raw){
@@ -4798,7 +4820,9 @@ function lobbyConnect(code){
   try { sock = new WebSocket('wss://' + relayHost() + '/room/' + code); }
   catch (e){ return lobbySet('error', 'Could not open a connection.'); }
   LOBBY.sock = sock;
-  sock.onerror = () => lobbySet('error', 'The connection failed. If the code is right, the room may be full.');
+  sock.onerror = () => lobbySet('error', RELAY_UNSET()
+    ? 'No relay is set up yet — see ironbridge-relay/README.md. One-player works either way.'
+    : 'Could not reach the relay at ' + relayHost() + '. If the code is right, the room may be full.');
   sock.onclose = () => {
     if (NET.on) NET.peerLost = true;                 // mid-match: the match stalls and says so
     else if (LOBBY.state !== 'error') lobbySet('error', 'The connection closed.');
@@ -5798,6 +5822,7 @@ window.IB = {
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
+  RELAY_UNSET,
   showMenu, syncAdvice,
   hyp, ipow, fxRnd,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
