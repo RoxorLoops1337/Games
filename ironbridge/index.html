@@ -2791,12 +2791,62 @@ function block(c, x, y, w, h, face, top){
   if (top){ c.fillStyle = top; c.fillRect(x, y, w, Math.max(1, h * .16)); }
 }
 // A crenellated crown: the solid band plus its merlons.
-function crown(c, cx, y, w, u, n){
+function crown(c, cx, y, w, u, n, wear){
   block(c, cx - w / 2, y, w, 7 * u, STONE.mid, STONE.lit);
   const step = w / n;
   for (let i = 0; i < n; i++){
     if (i % 2) continue;
+    // a battered turret loses its teeth, and loses them in the same places
+    // every frame — the wear is hashed, not rolled
+    if (wear > 0 && hash2(i * 5.1, wear * 13.7) < wear * .55) continue;
     block(c, cx - w / 2 + i * step, y - 8 * u, step * 1.02, 9 * u, STONE.mid, STONE.lit);
+  }
+}
+
+// A turret at a fifth of its health used to look exactly like a fresh one, so
+// the only way to know which wall was about to fall was to read its bar. Now
+// they crack, lose their crenellations, scorch and finally smoke.
+const WEAR = (st) => {
+  if (st.dead || !st.mhp) return 0;
+  const f = clamp(st.hp / st.mhp, 0, 1);
+  return f > .72 ? 0 : f > .42 ? 1 : f > .22 ? 2 : 3;
+};
+function battleDamage(c, st, X, top, w, h, u){
+  const wear = WEAR(st);
+  if (!wear) return;
+  const seed = st.ord * 3.3 + st.side * 11.7;
+  c.strokeStyle = 'rgba(38,34,30,.55)';
+  c.lineWidth = Math.max(1, 1.3 * u);
+  for (let i = 0; i < wear * 2; i++){
+    const r1 = hash2(i * 2.7, seed), r2 = hash2(i * 4.3, seed + 1), r3 = hash2(i * 6.1, seed + 2);
+    // a crack has to stay on the stone it is cracking
+    const seg = Math.min(7 * u, h * .3);
+    const x0 = X - w / 2 + r1 * w, y0 = top + r2 * (h - seg * 2);
+    c.beginPath();
+    c.moveTo(x0, y0);
+    c.lineTo(x0 + (r3 - .5) * 8 * u, y0 + seg);
+    c.lineTo(x0 + (r1 - .5) * 10 * u, y0 + seg * 2);
+    c.stroke();
+  }
+  if (wear >= 2){
+    // soot around the hits, not stains stuck on the stone
+    c.globalAlpha = .16;
+    for (let i = 0; i < 4; i++){
+      const r = hash2(i * 8.9, seed + 5);
+      ell(c, X - w / 2 + r * w, top + h * (.35 + r * .55), (2.4 + r * 2.6) * u, (1.8 + r * 1.8) * u, '#2b2622');
+    }
+    c.globalAlpha = 1;
+  }
+  if (wear >= 3){
+    // smoke, drifting the way the wind takes the clouds
+    for (let i = 0; i < 3; i++){
+      const ph = G.t * .55 + i * .66 + seed;
+      const k = ph % 1;
+      c.globalAlpha = (1 - k) * .30;
+      ell(c, X + (hash2(i, seed) - .5) * w * .5 + k * 9 * u, top - k * 26 * u,
+        (3 + k * 7) * u, (2.6 + k * 6) * u, '#6d6a66');
+    }
+    c.globalAlpha = 1;
   }
 }
 // Scattered raised blocks so a flat wall reads as masonry.
@@ -2876,7 +2926,8 @@ function drawStructure(c, st){
         const tx = X + sx * 46 * u;
         block(c, tx - 16 * u, Y - 86 * u, 32 * u, 86 * u, STONE.mid, STONE.lit);
         masonry(c, tx - 16 * u, Y - 84 * u, 32 * u, 80 * u, u, 21 + sx + st.side * 5);
-        crown(c, tx, Y - 96 * u, 36 * u, u, 5);
+        crown(c, tx, Y - 96 * u, 36 * u, u, 5, WEAR(st));
+        battleDamage(c, st, tx, Y - 82 * u, 30 * u, 70 * u, u);
         c.fillStyle = STONE.line; c.fillRect(tx - 3 * u, Y - 66 * u, 6 * u, 15 * u);
         // timber palisade skirting the base
         for (let i = 0; i < 4; i++)
@@ -2897,6 +2948,7 @@ function drawStructure(c, st){
       poly(c, [[X, Y - 62 * u], [X, Y - 16 * u], [X - 14 * u, Y - 36 * u]], shade(col, 1.25));
       c.strokeStyle = '#ffffff'; c.lineWidth = 1;
       poly(c, [[X, Y - 62 * u], [X + 14 * u, Y - 36 * u], [X, Y - 16 * u], [X - 14 * u, Y - 36 * u]], null, '#eef6ff', 1);
+      battleDamage(c, st, X, Y - 20 * u, 34 * u, 18 * u, u);
     } else {
       for (let i = 0; i < 5; i++){
         const r = hash2(i, 3 + st.side);
@@ -2920,7 +2972,8 @@ function drawStructure(c, st){
       poly(c, [[X - 16 * u, Y - 12 * u], [X - 13 * u, Y - 58 * u], [X - 7 * u, Y - 58 * u], [X - 9 * u, Y - 12 * u]], STONE.lit);
       poly(c, [[X + 16 * u, Y - 12 * u], [X + 13 * u, Y - 58 * u], [X + 8 * u, Y - 58 * u], [X + 10 * u, Y - 12 * u]], STONE.mid2);
       masonry(c, X - 12 * u, Y - 54 * u, 24 * u, 40 * u, u, st.ord * 7 + st.side * 3);
-      crown(c, X, Y - 68 * u, 32 * u, u, 5);
+      crown(c, X, Y - 68 * u, 32 * u, u, 5, WEAR(st));
+      battleDamage(c, st, X, Y - 56 * u, 26 * u, 44 * u, u);
       // the eye — bright the instant it fires, dimming as it reloads
       const glow = clamp(st.cd * attackSpeedOf(st), 0, 1);
       c.globalAlpha = .18 + glow * .45;
@@ -4729,6 +4782,7 @@ window.IB = {
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
   startZoom, ZOOM_MIN, ZOOM_MAX, clouds, FLOCKS, drawClouds, drawBirds, heroMeters, heroDoing, showHeroSheet,
   overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
+  WEAR, battleDamage, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };

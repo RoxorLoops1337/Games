@@ -1025,6 +1025,63 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(/You lost/.test(IB.timelineHtml()) || !G.timeline.length, 'the timeline names whose walls came down');
 }
 
+/* ------------------------------------------------------- battle damage */
+{
+  // A turret at a fifth of its health used to look exactly like a fresh one,
+  // so the only way to know which wall was about to fall was to read its bar.
+  IB.newMatch({ diff:'veteran', seed:907 });
+  IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1.2;
+  const st = IB.frontStruct(1);
+  t.ok(IB.WEAR(st) === 0, 'a fresh wall shows no damage');
+  let last = 0, bands = new Set(), backwards = 0;
+  for (let f = 100; f >= 0; f--){
+    st.hp = st.mhp * (f / 100);
+    const w = IB.WEAR(st);
+    if (w < last) backwards++;
+    last = w; bands.add(w);
+  }
+  t.ok(backwards === 0, 'damage only ever gets worse as health falls');
+  t.ok(bands.size >= 3, 'there are several stages of ruin to see (' + [...bands].join(',') + ')');
+  st.hp = 1; st.dead = true;
+  t.ok(IB.WEAR(st) === 0, 'and a broken one is drawn as rubble, not as a cracked tower');
+  st.dead = false; st.hp = st.mhp;
+
+  // every structure kind, at every stage, against the colour-checking stub
+  let threw = null, drew = 0;
+  for (const sd of G.sides) for (const s2 of sd.structs){
+    for (const f of [1, .6, .35, .18, .05, 0]){
+      s2.hp = s2.mhp * f; s2.dead = f === 0;
+      IB.cam.x = s2.x;
+      try { IB.draw(); drew++; } catch (e){ threw = s2.key + '@' + f + ': ' + e.message; }
+    }
+    s2.hp = s2.mhp; s2.dead = false;
+  }
+  t.ok(threw === null, 'every wall draws cleanly at every stage of ruin (' + (threw || drew + ' draws') + ')');
+  t.ok(drew >= 50, 'and all of them were drawn (' + drew + ')');
+
+  // the wear is hashed, not rolled: the same wall must not shimmer between frames
+  {
+    const s3 = IB.frontStruct(0);
+    s3.hp = s3.mhp * .3;
+    const before = G.units.length;
+    IB.draw(); IB.draw();
+    t.ok(G.units.length === before, 'drawing damage never touches the simulation');
+    t.ok(IB.WEAR(s3) === IB.WEAR(s3), 'and the stage it shows is stable');
+    s3.hp = s3.mhp;
+  }
+  // it tracks the real fight, not just a test poke
+  {
+    IB.newMatch({ diff:'veteran', seed:911 });
+    G.sides[0].ai = true;
+    let worst = 0;
+    for (let i = 0; i < 30 * 60 * 12 && G.state === 'play'; i++){
+      IB.update(1 / 30);
+      if (i % 900 === 0) for (const sd of G.sides) for (const s4 of sd.structs) worst = Math.max(worst, IB.WEAR(s4));
+    }
+    t.ok(worst >= 2, 'a real siege batters walls far enough to show it (worst stage seen: ' + worst + ')');
+  }
+}
+
 /* ------------------------------------------------------- unit silhouettes */
 {
   // A cannon is worth about four bodies and used to be drawn as a man with a
