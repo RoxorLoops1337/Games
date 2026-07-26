@@ -1265,7 +1265,20 @@ function rebuildGrid(){
 }
 function nearby(x, rad, fn){
   const k0 = Math.floor((x - rad) / 6), k1 = Math.floor((x + rad) / 6);
-  for (let k = k0; k <= k1; k++){ const a = grid.get(k); if (a) for (const u of a) fn(u); }
+  // The cells are six wide and whole cells get walked, so k0..k1 always reaches
+  // up to six units past the radius on both sides — and nine of the sixteen
+  // callers trusted this function to have done the distance test. It never had.
+  // A radius-5 team effect cast at x=10.99 reached a body at x=0.05, 2.19 times
+  // the radius it asked for, and moving the caster one hundredth of a unit
+  // across a cell edge dropped a body that had not moved. Over eight minutes of
+  // real play, 26.6% of the bodies handed to a radius-6 or radius-7 query were
+  // outside it, the furthest by 5.84 units. Reject here, once, rather than
+  // sixteen times at the call sites. It must be <=, not <: the taunt branch
+  // keeps bodies at exactly its own radius.
+  for (let k = k0; k <= k1; k++){
+    const a = grid.get(k);
+    if (a) for (const u of a) if (Math.abs(u.x - x) <= rad) fn(u);
+  }
 }
 
 function liveStructs(side){ return G.sides[side].structs.filter(st => !st.dead); }
@@ -5367,7 +5380,18 @@ function boot(){
   requestAnimationFrame(frame);
 }
 if (!HEADLESS) boot();
-else { newMatch({ diff:'veteran' }); G.state = 'menu'; }
+else {
+  // Headless: no rAF loop and no resize(), but the render path still has to be
+  // REACHABLE. draw() opens `const c = lctx; if (!c) return;` and lctx is
+  // assigned only inside resize(), which returns immediately under HEADLESS —
+  // so across the whole test suite draw() was called 200 times and its body ran
+  // ZERO times. Seventeen hundred lines of drawing had no coverage at all while
+  // the suite's own header claimed otherwise. Only the canvas handle is wired
+  // here; nothing schedules a frame, so a picture is drawn exactly when a test
+  // asks for one.
+  lcv = $('wcv'); lctx = lcv && lcv.getContext('2d');
+  newMatch({ diff:'veteran' }); G.state = 'menu';
+}
 
 /* ------------------------------------------------------------------ headless seam */
 window.IB = {
