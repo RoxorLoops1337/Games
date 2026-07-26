@@ -1291,6 +1291,23 @@ function nearestFoe(u, rad, wantHero){
 // A minion's armour, plus whatever a hero standing beside it is lending.
 function effArmor(u, magic){
   let r = magic ? (u.mr || 0) : (u.armor || 0);
+  // A hero's armour from skills and from the below-half-health passive is read
+  // HERE, per hit, the same way attackDamage reads 'bad' and attackSpeedOf
+  // reads 'bas' and 'asLow'. It used to be baked into h.armor by recalcHero
+  // instead, and recalcHero runs on a level-up, a pick, or a self-buff cast —
+  // never when a skill is cast on you and never when a buff runs out. Three
+  // things were wrong at once because of it: Fortify's +18 and Unbreakable's
+  // +40/+40 are cast through the 'shield' branch and Iron March's +35 through
+  // 'teambuff', none of which recalculate, so all three printed a number on the
+  // pick card and granted nothing; Crossbrace's five-second +26/+26 went in
+  // through the one branch that does recalculate and then never came off, so at
+  // max level it was permanent; and Cold Forged, which reads 'while below half
+  // health', was sampled at recalc time, so it was off during the fight it is
+  // meant to survive and stuck on afterwards at full health.
+  if (u.isHero){
+    r += bsum(u, magic ? 'bmr' : 'barm');
+    if (!magic && u.hp / u.mhp < .5) r += passVal(u, 'armorLow');
+  }
   // Armour Plating: bought, priced, described — and read by nothing until now.
   if (u.struct && G.sides[u.side]) r += UP_EFFECT.armor * G.sides[u.side].towerUp.armor;
   if (!u.isHero && !u.struct && u.side !== undefined){
@@ -1806,9 +1823,11 @@ function recalcHero(h, fresh){
   h.mhp = Math.round((cl.b.hp + cl.g.hp * L + passVal(h, 'hp')) * (1 + passVal(h, 'hpPct')) * dm);
   h.ad = (cl.b.ad + cl.g.ad * L + passVal(h, 'ad')) * dm;
   h.ap = (cl.b.ap + cl.g.ap * L + passVal(h, 'ap')) * (1 + passVal(h, 'apPct')) * dm;
-  h.armor = cl.b.armor + cl.g.armor * L + passVal(h, 'armor') + bsum(h, 'barm')
-    + (h.hp / h.mhp < .5 ? passVal(h, 'armorLow') : 0);
-  h.mr = cl.b.mr + cl.g.mr * L + passVal(h, 'mr') + bsum(h, 'bmr');
+  // barm / bmr / armorLow are NOT folded in here — see effArmor, which reads
+  // them per hit. Baking them made a buff permanent and a health-conditional
+  // passive a snapshot.
+  h.armor = cl.b.armor + cl.g.armor * L + passVal(h, 'armor');
+  h.mr = cl.b.mr + cl.g.mr * L + passVal(h, 'mr');
   h.as = cl.b.as + cl.g.as * L;
   h.asMul = 1 + passVal(h, 'as');
   h.spd = cl.b.spd * (1 + passVal(h, 'ms'));
@@ -2133,6 +2152,16 @@ function enterLane(h){
   h.inLane = true; h.dead = false;
   h.x = gateX(h.side) + dirOf(h.side) * 2; h.y = rr(-1.2, 1.2);
   h.hp = h.mhp; h.mana = h.mmana; h.buffs.length = 0; h.rage = 0; h.retreat = false;
+  // A hero's timed state does not decay while it is dead: statusTick runs from
+  // heroStep, and heroStep returns after counting down respawnT. So whatever
+  // was on the hero at the instant it died was FROZEN, not spent, and started
+  // ticking again the moment it walked back out. Clearing the buffs array made
+  // that look handled; these are bare fields and were missed. A burst kill is
+  // supposed to land on a target that is already stunned or slowed, so this was
+  // not a corner: heroes respawned at full health and could not move.
+  h.stunT = 0; h.slowT = 0; h.slowP = 0; h.taunt = 0;
+  h.markT = 0; h.markBy = undefined; h.markAmp = 0;
+  h.burn = null; h.shield = 0; h.shT = 0; h.target = null;
   const sh = passVal(h, 'spawnShield');
   if (sh){ h.shield = sh; h.shT = 20; }
   G.units.push(h);
@@ -2232,7 +2261,17 @@ function heroStep(h, dt){
   h.mana = Math.min(h.mmana, h.mana + (3.5 + h.lvl * .35 + passVal(h, 'mreg')
     + (atHome ? 22 : 0) + calm * 4) * dt);
   gainXp(h, 8.0 * dt);                       // standing in the lane is worth something
-  for (let i = h.buffs.length - 1; i >= 0; i--){ h.buffs[i].t -= dt; if (h.buffs[i].t <= 0) h.buffs.splice(i, 1); }
+  // Attack range is still baked by recalcHero (ten call sites read h.rng), so
+  // when a buff carrying 'brng' runs out the stat has to be rebuilt or it never
+  // comes back down: Trueshot's ten-second +2 range was permanent, because the
+  // only thing that ever recalculated was the next level-up, and past level 24
+  // gainXp returns before it.
+  let dropped = false;
+  for (let i = h.buffs.length - 1; i >= 0; i--){
+    h.buffs[i].t -= dt;
+    if (h.buffs[i].t <= 0){ if (h.buffs[i].brng) dropped = true; h.buffs.splice(i, 1); }
+  }
+  if (dropped) recalcHero(h);
   if (h.rage > 0 && G.t - h.dmgTaken > 3) h.rage = Math.max(0, h.rage - dt * .05);
   const shieldLow = passVal(h, 'shieldLow');
   if (shieldLow && h.hp / h.mhp < .3 && (h.lowT || 0) <= 0){ h.shield = Math.max(h.shield, shieldLow); h.shT = 18; h.lowT = 45; }
@@ -4507,6 +4546,12 @@ function uiTick(dt){
 /* ------------------------------------------------------------------ modals */
 function closeModal(){ G.held = false; $('modal').classList.remove('on'); paintHeld(); }
 function openModal(html, blocking){
+  // Every sheet in the game is built as a string and handed straight to a DOM
+  // node. Under the test harness $('sheet') is a throwaway proxy, so nothing
+  // any modal renders could be checked from outside — which is how a test that
+  // claimed to guard the held sheet ended up asserting only that a function
+  // existed. Keep the last one where a test can read it.
+  G.sheet = html;
   $('sheet').innerHTML = html;
   $('modal').classList.add('on');
   $('modal').classList.toggle('solid', !!blocking);
@@ -4662,8 +4707,11 @@ function showHeroSheet(h){
     '<div class="hp-stats">' +
     '<span>Damage<b>' + Math.round(attackDamage(h)) + '</b></span>' +
     (h.ap >= 1 ? '<span>Power<b>' + Math.round(h.ap) + '</b></span>' : '') +
-    '<span>Armour<b>' + Math.round(h.armor) + '</b></span>' +
-    '<span>Resist<b>' + Math.round(h.mr) + '</b></span>' +
+    // the two numbers either side of these already report what the sim uses
+    // rather than the stored stat; these two reported the stored one, which is
+    // exactly the number that was wrong
+    '<span>Armour<b>' + Math.round(effArmor(h, false)) + '</b></span>' +
+    '<span>Resist<b>' + Math.round(effArmor(h, true)) + '</b></span>' +
     '<span>Atk speed<b>' + attackSpeedOf(h).toFixed(2) + '</b></span>' +
     '<span>Record<b>' + h.kills + ' / ' + h.deaths + '</b></span>' +
     '</div><div class="hp-doing">' + heroDoing(h) + '</div>' +
