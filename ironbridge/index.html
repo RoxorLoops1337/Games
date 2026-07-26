@@ -891,7 +891,7 @@ const DIFFS = [
 const G = {
   state:'menu', t:0, dt:0, wave:0, waveT:C.FIRST_WAVE, speed:1, paused:false,
   sides:[], units:[], projs:[], fx:[], floats:[], zones:[],
-  winner:null, diff:DIFFS[1], uid:1, toasts:[], log:[], timeline:[], demo:false,
+  winner:null, diff:DIFFS[1], uid:1, toasts:[], log:[], timeline:[], demo:false, held:false,
 };
 
 function makeSide(i, ai){
@@ -946,7 +946,7 @@ function newMatch(opt){
   G.diff = DIFFS.find(d => d.id === (opt.diff || 'veteran')) || DIFFS[1];
   G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null;
   G.units.length = 0; G.projs.length = 0; G.fx.length = 0; G.floats.length = 0; G.zones.length = 0;
-  G.log.length = 0; G.timeline.length = 0; G.paused = false; G.speed = 1; G.demo = false;
+  G.log.length = 0; G.timeline.length = 0; G.paused = false; G.held = false; G.speed = 1; G.demo = false;
   G.sides = [makeSide(0, false), makeSide(1, true)];
   // The Host gets its handicap as a straight resource multiplier, not as
   // cheating in the sim — everything it does, you can also do.
@@ -2366,7 +2366,27 @@ function arnd(s){
 }
 const apick = (s, arr) => arr[Math.floor(arnd(s) * arr.length)];
 
-const AI_BUILD_PLAN = ['farm','barracks','farm','pit','tavern','forge','workshop','farm','barracks','farm','pit','workshop','forge','farm','tavern','farm'];
+// Indexed `AI_BUILD_PLAN[built - 2]` where `built` is how many buildings stand,
+// and the branch that reads it is gated on `built < s.plot.length` — so with a
+// 4x4 plot and two buildings pre-placed, the last index that can ever drive a
+// build is 13. This list had SIXTEEN entries: indices 14 and 15 were dead, and
+// index 14 was the second Tavern. It never once got built. Measured over 32
+// holds: every one finished with exactly one Tavern, heroCap was 1 in 28 of
+// them and 3 in none, and the mean peak was 1.13 heroes on the field.
+//
+// The dead entries are gone. Moving the second Tavern into the reachable range
+// was tried three ways and REVERTED — every version bought the second hero by
+// taking something else the game had only just got working:
+//   drop the 5th Farm     peak heroes 1.13 -> 2.13, but holds arming a Cannon
+//                         fell 5 of 12 -> 2 (heroes and Cannons want the same gold)
+//   drop the 2nd Workshop peak heroes 2.00, Cannons 2 of 12
+//   drop the 2nd Pit      Cannons 7 of 12, but heroes reaching an ultimate
+//                         collapsed 69% -> 51% and mean level 13.0 -> 11.4,
+//                         because a lost training slot shortens the whole match
+// The plot is full at 16 tiles and every tile is doing work. A second Tavern
+// needs a tile somebody has to give up, or heroCap has to come from LEVELLING
+// the one Tavern rather than building a second.
+const AI_BUILD_PLAN = ['farm','barracks','farm','pit','tavern','forge','workshop','farm','barracks','farm','pit','workshop','forge','farm'];
 
 function aiStep(s, dt){
   s.aiT -= dt;
@@ -2489,7 +2509,15 @@ function aiStep(s, dt){
    MAIN LOOP
    ===================================================================== */
 function update(dt){
-  if (G.state !== 'play' || G.paused) return;
+  // A level-up choice used to leave the match running underneath it. Measured
+  // on a real page: with the choice sheet open for ten seconds, the hero lost
+  // 27% of its health on desktop and 32% on a phone — and the health bar
+  // printed ON the card was a snapshot from the moment it opened, so it read
+  // full while the hero was dying. On a 390px screen the sheet covers the lane
+  // entirely, so there was nothing to glance at either. The very first hero
+  // decision a new player makes taught them that a menu is safe when it was
+  // not. The board now waits while a pick is open.
+  if (G.state !== 'play' || G.paused || G.held) return;
   dt = Math.min(dt, .05);
   G.dt = dt; G.t += dt;
   // Every per-side loop below swaps which hold goes first each tick: acting
@@ -4306,7 +4334,7 @@ function uiTick(dt){
 }
 
 /* ------------------------------------------------------------------ modals */
-function closeModal(){ $('modal').classList.remove('on'); }
+function closeModal(){ G.held = false; $('modal').classList.remove('on'); }
 function openModal(html){ $('sheet').innerHTML = html; $('modal').classList.add('on'); $('modal').classList.remove('solid'); }
 
 function showMenu(){
@@ -4401,7 +4429,16 @@ function heroDoing(h){
   return 'Marching.';
 }
 
+// The board holds only for a choice the PLAYER has to make: an unresolved pick
+// on a hero of theirs, with the sheet actually open. A pending pick alone must
+// not freeze anything — the match would stop with nothing on screen to explain
+// why — and the Host's own picks are resolved by autoPick in the same tick.
+function holdsBoard(h){
+  return !!(h && h.pend && h.pend.length && h.side === 0 && !G.sides[0].ai && G.state === 'play');
+}
+
 function showHeroSheet(h){
+  G.held = holdsBoard(h);
   const pend = h.pend[0];
   const passRow = (() => {
     if (pend && pend.kind === 'passive')
@@ -5027,7 +5064,7 @@ let last = 0, lastDraw = 0;
 function frame(ts){
   const raw = Math.min(.1, (ts - last) / 1000 || 0);
   last = ts;
-  if (G.state === 'play' && !G.paused){
+  if (G.state === 'play' && !G.paused && !G.held){
     let left = raw * G.speed;
     let guard = 0;
     while (left > 0 && guard++ < 12){ const st = Math.min(1 / 30, left); update(st); left -= st; }
@@ -5037,7 +5074,7 @@ function frame(ts){
   // up, but the card blurs the whole canvas behind it — and re-blurring a live
   // 1400x820 layer sixty times a second for a still picture cost half the
   // frame rate. Redraw a few times a second instead; the DOM stays live.
-  const frozen = (G.state === 'over' || G.paused) && !G.demo;
+  const frozen = (G.state === 'over' || G.paused || G.held) && !G.demo;
   if (!frozen || ts - lastDraw > 90){ draw(); lastDraw = ts; }
   uiTick(raw);
   requestAnimationFrame(frame);
@@ -5065,7 +5102,7 @@ window.IB = {
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
-  structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH,
+  structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH, AI_BUILD_PLAN, holdsBoard,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
