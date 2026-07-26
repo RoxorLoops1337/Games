@@ -4641,6 +4641,17 @@ let uiT = 0, saveT = 0;
 function syncAdvice(){
   const el = $('advice');
   if (!el) return;
+  // A lockstep match waiting on the other machine looks exactly like a frozen
+  // game unless it says so, and a desync looks like nothing at all. Both
+  // outrank any coaching: there is no point advising a player about their
+  // economy in a match that has stopped being the same match.
+  const net = netBanner();
+  if (net){
+    el.classList.remove('hide');
+    el.querySelector('.at').textContent = net;
+    el.dataset.tab = '';
+    return;
+  }
   const a = (G.state === 'play' && !G.demo) ? adviceFor(G.sides[0]) : null;
   el.classList.toggle('hide', !a);
   if (a){ el.querySelector('.at').textContent = a.txt; el.dataset.tab = a.tab; }
@@ -4704,9 +4715,122 @@ function showMenu(){
       '<div class="pt">' + d.n + '</div><div class="pd">' + d.d + '</div></button>').join('') + '</div>' +
     '<div class="statline"><span>Won <b>' + meta.wins + '</b></span><span>Lost <b>' + meta.losses + '</b></span>' +
     '<span>Best <b>' + (meta.best ? mmss(meta.best) : '—') + '</b></span></div>' +
+    '<div class="picks" style="margin-top:10px"><button class="pick" data-act="mp">' +
+      '<div class="pk">two players</div><div class="pt">Play a friend</div>' +
+      '<div class="pd">Both holds played by people, on one bridge. You get a four-letter code to send them.</div>' +
+    '</button></div>' +
+    '<div class="statline"><span>Won <b>' + meta.wins + '</b></span><span>Lost <b>' + meta.losses + '</b></span>' +
+    '<span>Best <b>' + (meta.best ? mmss(meta.best) : '—') + '</b></span></div>' +
     '<div class="legend"><span>Workers gather · farms raise population · barracks arm workers into the wave</span>' +
     '<span>Heroes level from kills near them and pick a new skill at 3, 6, 9 and 12</span></div>'
   );
+}
+
+/* =====================================================================
+   LOBBY
+   ===================================================================== */
+// The relay only introduces the two machines: it hands out a seed and a side
+// and copies bytes. Everything about the match happens in the two browsers.
+const RELAY_HOST = 'ironbridge-relay.roxorloops.workers.dev';
+const relayHost = () => {
+  try { return localStorage.getItem('ib_relay') || RELAY_HOST; } catch (e) { return RELAY_HOST; }
+};
+const LOBBY = { sock:null, code:'', state:'idle', err:'' };
+
+function lobbyHtml(){
+  const code = LOBBY.code
+    ? '<div style="font-size:34px;letter-spacing:10px;font-weight:800;margin:14px 0 4px">' + LOBBY.code + '</div>' +
+      '<p class="sub">Send those four letters to whoever you are playing. They pick <b>Play a friend</b>, then <b>Join</b>.</p>'
+    : '';
+  const body = {
+    idle:  '<p class="sub">One of you starts a match and reads out the code. The other types it in.</p>' +
+           '<div class="picks">' +
+             '<button class="pick" data-act="mphost"><div class="pk">start</div><div class="pt">Start a match</div>' +
+             '<div class="pd">You get a four-letter code to pass on.</div></button>' +
+             '<button class="pick" data-act="mpjoin"><div class="pk">join</div><div class="pt">Join with a code</div>' +
+             '<div class="pd">Type the four letters they read you.</div></button>' +
+           '</div>',
+    hosting: code + '<p class="sub">Waiting for them to join…</p>',
+    joining: '<p class="sub">Type the four letters.</p>' +
+             '<div style="margin:14px 0"><input id="mpCode" maxlength="4" autocomplete="off" autocapitalize="characters" ' +
+             'style="font-size:30px;letter-spacing:10px;text-align:center;width:190px;padding:8px;text-transform:uppercase;' +
+             'background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:8px"></div>' +
+             '<div class="picks"><button class="pick" data-act="mpgo"><div class="pt">Join</div></button></div>',
+    connecting: '<p class="sub">Connecting…</p>',
+    ready:  code + '<p class="sub">Both here. Starting…</p>',
+    error:  '<p class="sub" style="color:#ff8f6a">' + (LOBBY.err || 'Something went wrong.') + '</p>' +
+            '<div class="picks"><button class="pick" data-act="mp"><div class="pt">Try again</div></button></div>',
+  }[LOBBY.state] || '';
+  return '<h2>Play a friend</h2>' + body +
+    '<div class="picks" style="margin-top:10px"><button class="pick" data-act="mpback"><div class="pt">Back</div></button></div>';
+}
+
+function showLobby(){ openModal(lobbyHtml()); if (!HEADLESS && LOBBY.state === 'joining'){ const el = $('mpCode'); if (el) el.focus(); } }
+function lobbySet(state, err){ LOBBY.state = state; LOBBY.err = err || ''; showLobby(); }
+
+function lobbyClose(){
+  if (LOBBY.sock){ try { LOBBY.sock.close(); } catch (e) {} LOBBY.sock = null; }
+  LOBBY.code = ''; LOBBY.state = 'idle'; LOBBY.err = '';
+}
+
+async function lobbyHost(){
+  lobbySet('connecting');
+  try {
+    const r = await fetch('https://' + relayHost() + '/new', { method:'POST' });
+    const j = await r.json();
+    if (!j.code) throw new Error('no code');
+    LOBBY.code = j.code;
+    lobbyConnect(j.code);
+    lobbySet('hosting');
+  } catch (e){ lobbySet('error', 'Could not reach the relay. Check your connection, or play the Host instead.'); }
+}
+
+function lobbyJoin(raw){
+  const code = String(raw || '').toUpperCase().replace(/[^A-Z]/g, '');
+  if (code.length !== 4) return lobbySet('error', 'A code is four letters.');
+  LOBBY.code = code;
+  lobbySet('connecting');
+  lobbyConnect(code);
+}
+
+function lobbyConnect(code){
+  let sock;
+  try { sock = new WebSocket('wss://' + relayHost() + '/room/' + code); }
+  catch (e){ return lobbySet('error', 'Could not open a connection.'); }
+  LOBBY.sock = sock;
+  sock.onerror = () => lobbySet('error', 'The connection failed. If the code is right, the room may be full.');
+  sock.onclose = () => {
+    if (NET.on) NET.peerLost = true;                 // mid-match: the match stalls and says so
+    else if (LOBBY.state !== 'error') lobbySet('error', 'The connection closed.');
+  };
+  sock.onmessage = (ev) => {
+    let m; try { m = JSON.parse(ev.data); } catch (e){ return; }
+    if (m.k === 'hello' || m.k === 'peers') return;
+    if (m.k === 'start'){
+      // Both machines get here within a few milliseconds of each other, with
+      // the same seed and different sides. From this point the relay is only
+      // carrying command batches.
+      NET.send = (o) => { try { sock.send(JSON.stringify(o)); } catch (e) {} };
+      NET.peerLost = false;
+      netStart({ me:m.side, seed:m.seed, diff:'veteran' });
+      LOBBY.state = 'idle';
+      closeModal(); syncUI();
+      return;
+    }
+    if (m.k === 'peerGone'){ NET.peerLost = true; return; }
+    netRecv(m);
+  };
+}
+
+// One line, only while something is wrong. A lockstep match that is waiting on
+// the other machine looks exactly like a frozen game unless it says so.
+function netBanner(){
+  if (!NET.on) return '';
+  if (NET.desyncAt >= 0)
+    return 'The two matches have drifted apart — this one is no longer the same game. Nothing further will be in sync.';
+  if (NET.peerLost) return 'Lost the connection to the other player.';
+  if (NET.stallT > .4) return 'Waiting for the other player…';
+  return '';
 }
 const mmss = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
 
@@ -5343,6 +5467,11 @@ function wire(){
     else if (a === 'unpause') setPaused(false);
     else if (a === 'replay') showIntro(G.diff.id);
     else if (a === 'menu'){ setPaused(false); startDemo(); showMenu(); }
+    else if (a === 'mp'){ lobbyClose(); showLobby(); }
+    else if (a === 'mpback'){ lobbyClose(); showMenu(); }
+    else if (a === 'mphost'){ lobbyHost(); }
+    else if (a === 'mpjoin'){ lobbySet('joining'); }
+    else if (a === 'mpgo'){ lobbyJoin(HEADLESS ? '' : ($('mpCode') || {}).value); }
     else if (a === 'again'){ clearSave(); newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
     else if (a === 'mkhero'){
       // In multiplayer the hero does not exist yet — it is forged on an agreed
@@ -5473,6 +5602,7 @@ let last = 0, lastDraw = 0;
    ===================================================================== */
 const NET = {
   on:false,           // multiplayer running
+  peerLost:false,     // the socket went away mid-match
   me:0,               // the side this machine controls
   delay:6,            // ticks of input delay — 200ms at 30Hz
   tick:0,             // next tick to simulate
@@ -5667,6 +5797,8 @@ window.IB = {
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
+  LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
+  showMenu, syncAdvice,
   hyp, ipow, fxRnd,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   seenIntro, markSeen, SEEN_KEY, pruneSel,
