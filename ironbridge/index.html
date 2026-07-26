@@ -964,6 +964,24 @@ const G = {
   winner:null, diff:DIFFS[1], uid:1, toasts:[], log:[], timeline:[], demo:false, held:false,
 };
 
+// Which of the two holds this browser is playing: 0 on your own and for
+// whoever hosts, 1 for whoever joins.
+//
+// The interface was hardcoded to side 0 everywhere — the dock, the resource
+// bar, the advice line, the tally, what is clickable, whose crews get drawn.
+// Commands were already routed to NET.me, so the player who JOINED was giving
+// orders to the Ember Host on the right while reading the Azure Pact's gold,
+// workers, buildings and heroes on the left. Every number on their screen
+// belonged to their opponent. They were playing blind and did not necessarily
+// know it.
+//
+// The simulation must never read this. Both machines run BOTH holds, and a
+// hold that behaved differently depending on who was watching would end
+// lockstep instantly. It is for the interface only.
+let MY = 0;
+const me = () => G.sides[MY] || G.sides[0];
+const foe = () => MY === 0 ? 1 : 0;
+
 function makeSide(i, ai){
   const s = {
     i, ai, name:SIDE_NAME[i], col:SIDE_COL[i],
@@ -1040,7 +1058,7 @@ function newMatch(opt){
   // Sit the hold a touch left of centre so the bridge is in shot too. In world
   // units that offset depends on how much world the screen is showing, or a
   // zoomed-in phone opens with half the plot grid off the left edge.
-  cam.x = HOLD_X + .10 * (LW / (LS() * .96));
+  cam.x = myHoldX() + (MY === 0 ? .10 : -.10) * (LW / (LS() * .96));
   return G;
 }
 
@@ -1548,9 +1566,11 @@ function endMatch(winner){
   if (G.state !== 'play') return;
   if (G.demo){ startDemo(); return; }          // the attract battle just starts over
   G.state = 'over'; G.winner = winner;
-  sfx(winner === 0 ? 'win' : 'lose');
+  sfx(winner === MY ? 'win' : 'lose');
   clearSave();
-  saveMeta(winner === 0);
+  // Wins and losses on the menu are a record against the Host. A match against
+  // a person is not the same thing and does not belong in that column.
+  if (!NET.on) saveMeta(winner === MY);
   if (!HEADLESS) showOver();
 }
 
@@ -3798,6 +3818,9 @@ const sel = { tile:-1, node:null, build:null, hero:null, struct:null, unit:null 
 // so one camera covers your farms, the whole span and their gates. Everything
 // below is written in hold-grid units and projected through the world.
 const HOLD_X = -58, TILE = 7.2;
+// Where MY hold stands. Both are always drawn; this is only about where the
+// camera opens and what the HOLD and FOE buttons mean.
+const myHoldX = () => MY === 0 ? HOLD_X : C.LANE_LEN - HOLD_X;
 let holdSide = 0, BSC = 1;
 function holdWorld(gx, gy){
   const d = holdSide === 0 ? 1 : -1;
@@ -3915,7 +3938,7 @@ function drawBuilding(c, b){
   if (t === 'farm') sub = '+' + (C.POP_PER_FARM * b.lvl) + ' pop';
   if (t === 'barracks') sub = 'Lv ' + b.lvl + (b.lvl >= 3 ? ' · cannons' : b.lvl >= 2 ? ' · casters' : '');
   if (t === 'tavern') sub = heroCap(s) + ' hero slot' + (heroCap(s) === 1 ? '' : 's');
-  if (holdSide === 0 && (cam.z > .72 || b.tile === sel.tile)){
+  if (holdSide === MY && (cam.z > .72 || b.tile === sel.tile)){
     const lp0 = bp(gx, gy, 1.55 + z);
     // A packed hold is six labels in a hand's width, so only the one you have
     // selected spells itself out; the rest carry a name and a level digit.
@@ -3986,7 +4009,7 @@ function drawNode(c, key){
       ell(c, q[0] - 2 * B, q[1] - 2 * B, 2.4 * B, 1.6 * B, key === 'gold' ? '#ffe08a' : '#c3cede');
     }
   }
-  if (holdSide !== 0) return;                      // their crews are their business
+  if (holdSide !== MY) return;                      // their crews are their business
   const n = Math.min(s.workers[key], nodeCap(s, key));
   const home = bp(KEEP.gx + .6, KEEP.gy + .5);
   for (let i = 0; i < n; i++){
@@ -4004,7 +4027,7 @@ function drawKeep(c){
   const p = bp(KEEP.gx, KEEP.gy, 1.9);
   c.fillStyle = sideCol(); c.fillRect(p[0] - 2 * B, p[1] - 20 * B, 4 * B, 20 * B);
   poly(c, [[p[0] + 2 * B, p[1] - 20 * B], [p[0] + 18 * B, p[1] - 15 * B], [p[0] + 2 * B, p[1] - 10 * B]], sideCol());
-  if (holdSide !== 0) return;
+  if (holdSide !== MY) return;
   const lb = bp(KEEP.gx, KEEP.gy, 2.5);
   labelQ.push({ x:lb[0], y:lb[1], txt:'Town Hall · ' + s.workers.idle + ' idle', col:'#ffe7b0' });
   for (let i = 0; i < Math.min(6, s.workers.idle); i++){
@@ -4212,7 +4235,7 @@ function camStep(dt){
   if (G.demo && G.state === 'play'){ demoCam(dt); }
   else if (cam.follow){
     let fx = null;
-    const mine = G.sides[0].heroes.filter(h => !h.dead);
+    const mine = me().heroes.filter(h => !h.dead);
     if (mine.length) fx = mine.reduce((a, h) => a + h.x, 0) / mine.length;
     else fx = frontlineX(0);
     cam.x = lerp(cam.x, clamp(fx, CAM_MIN, CAM_MAX), 1 - Math.pow(.02, dt));
@@ -4261,7 +4284,7 @@ const RES_CLASS = { gold:'g', iron:'i', wood:'w', food:'f' };
 const RES_ICON = { gold:'🪙', iron:'⛏️', wood:'🪵', food:'🌾' };
 
 function costHtml(cost){
-  const s = G.sides[0];
+  const s = me();
   return '<span class="cost">' + Object.keys(cost).map(k =>
     '<i class="' + RES_CLASS[k] + (s.res[k] < cost[k] ? ' bad' : '') + '">' + RES_ICON[k] + cost[k] + '</i>'
   ).join(' ') + '</span>';
@@ -4276,7 +4299,7 @@ function gatherRate(s, k){
 const laneArmy = (side) => G.units.filter(u => !u.dead && !u.isHero && u.side === side).length;
 
 function syncHud(){
-  const s = G.sides[0];
+  const s = me();
   for (const k of ['gold','iron','wood','food']){
     const el = $('r' + k[0].toUpperCase() + k.slice(1));
     if (!el) continue;
@@ -4315,7 +4338,7 @@ let dockTab = 'jobs';
 const NARROW = () => !HEADLESS && document.body.classList.contains('narrow');
 
 function dockHtml(){
-  const s = G.sides[0];
+  const s = me();
   const narrow = NARROW();
   const sec = {};
 
@@ -4502,7 +4525,7 @@ function skillPipsHtml(h){
 }
 
 function heroBarHtml(){
-  const s = G.sides[0];
+  const s = me();
   let h = '';
   for (const hero of s.heroes){
     const need = xpNeed(hero.lvl);
@@ -4652,7 +4675,7 @@ function syncAdvice(){
     el.dataset.tab = '';
     return;
   }
-  const a = (G.state === 'play' && !G.demo) ? adviceFor(G.sides[0]) : null;
+  const a = (G.state === 'play' && !G.demo) ? adviceFor(me()) : null;
   el.classList.toggle('hide', !a);
   if (a){ el.querySelector('.at').textContent = a.txt; el.dataset.tab = a.tab; }
 }
@@ -4668,9 +4691,29 @@ function syncUI(){
   $('dock').innerHTML = dockHtml();
   syncAdvice();
 }
+// A click is a press AND a release on the same element. The dock throws away
+// its entire innerHTML and rebuilds it five times a second, which destroys
+// every button in it — so a click whose press-to-release straddled a rebuild
+// released onto an element that no longer existed, and did nothing at all. A
+// deliberate click takes 80-150ms against a 220ms rebuild, so this was landing
+// often enough to read as "I have to click things twice". It was never a
+// multiplayer problem; it has been in the one-player game the whole time.
+//
+// The fix is to not rebuild the dock out from under a finger that is already
+// down. Refreshing is what waits, and it waits at most a fifth of a second —
+// every action calls syncUI() directly when it completes, so nothing on screen
+// goes stale because of this. Capped, so a press whose release is never
+// delivered (dragged off the window, a lost pointer) cannot freeze the dock.
+let uiDown = false, uiWaited = 0;
+const UI_WAIT_CAP = .66;
+
 function uiTick(dt){
   uiT -= dt;
-  if (uiT <= 0){ uiT = .22; syncUI(); }
+  if (uiT <= 0){
+    uiT = .22;
+    if (uiDown && uiWaited < UI_WAIT_CAP) uiWaited += .22;
+    else { uiWaited = 0; syncUI(); }
+  }
   saveT -= dt;
   if (saveT <= 0){ saveT = 10; saveMatch(); }
 }
@@ -4932,7 +4975,7 @@ function heroDoing(h){
 // not freeze anything — the match would stop with nothing on screen to explain
 // why — and the Host's own picks are resolved by autoPick in the same tick.
 function holdsBoard(h){
-  return !!(h && h.pend && h.pend.length && h.side === 0 && !G.sides[0].ai && G.state === 'play');
+  return !!(h && h.pend && h.pend.length && h.side === MY && !me().ai && G.state === 'play');
 }
 
 function showHeroSheet(h){
@@ -5041,7 +5084,7 @@ function wrRow(label, mine, theirs, better){
 }
 
 function pauseHtml(){
-  const s = G.sides[0], f = G.sides[1];
+  const s = me(), f = G.sides[foe()];
   const row = wrRow;
   const inc = (sd) => ['gold','iron','wood','food'].reduce((a, k) => a + gatherRate(sd, k), 0).toFixed(1);
   const heroLine = (sd) => sd.heroes.length
@@ -5049,13 +5092,13 @@ function pauseHtml(){
   return '<h2>Paused</h2>' +
     '<p class="sub">Wave ' + G.wave + ' · ' + mmss(G.t) + ' · ' + G.diff.n + '</p>' +
     '<div class="wr">' +
-    '<div class="wr-head"><b style="color:' + SIDE_COL[0] + '">' + SIDE_NAME[0] + '</b>' +
-    '<span>line of battle</span><b style="color:' + SIDE_COL[1] + '">' + SIDE_NAME[1] + '</b></div>' +
-    '<div class="wr-lob">' + lineOfBattle(0) + lineOfBattle(1) + '</div>' +
-    row('structures standing', liveStructs(0).length, liveStructs(1).length, true) +
+    '<div class="wr-head"><b style="color:' + SIDE_COL[MY] + '">' + SIDE_NAME[MY] + '</b>' +
+    '<span>line of battle</span><b style="color:' + SIDE_COL[foe()] + '">' + SIDE_NAME[foe()] + '</b></div>' +
+    '<div class="wr-lob">' + lineOfBattle(MY) + lineOfBattle(foe()) + '</div>' +
+    row('structures standing', liveStructs(MY).length, liveStructs(foe()).length, true) +
     row('walls broken', s.structsKilled, f.structsKilled, true) +
     row('kills', s.kills, f.kills, true) +
-    row('on the bridge', laneArmy(0), laneArmy(1), true) +
+    row('on the bridge', laneArmy(MY), laneArmy(foe()), true) +
     row('population', popUsed(s) + '/' + popCap(s), popUsed(f) + '/' + popCap(f)) +
     row('gathering /s', inc(s), inc(f), true) +
     row('forge ranks', bsumUp(s), bsumUp(f), true) +
@@ -5107,8 +5150,8 @@ function heroCard(h, star){
 }
 
 function overHtml(){
-  const win = G.winner === 0;
-  const s = G.sides[0], f = G.sides[1];
+  const win = G.winner === MY;
+  const s = me(), f = G.sides[foe()];
   const meta = loadMeta();
   const record = win && meta.best && G.t <= meta.best;
   const star = s.heroes.slice().sort((a, b) => (b.kills - b.deaths) - (a.kills - a.deaths))[0];
@@ -5121,8 +5164,8 @@ function overHtml(){
     (record ? ' <b style="color:var(--gold)">Your fastest win yet.</b>' : '') + '</p>' +
     timelineHtml() +
     '<div class="wr">' +
-    '<div class="wr-head"><b style="color:' + SIDE_COL[0] + '">' + SIDE_NAME[0] + '</b>' +
-    '<span>final tally</span><b style="color:' + SIDE_COL[1] + '">' + SIDE_NAME[1] + '</b></div>' +
+    '<div class="wr-head"><b style="color:' + SIDE_COL[MY] + '">' + SIDE_NAME[MY] + '</b>' +
+    '<span>final tally</span><b style="color:' + SIDE_COL[foe()] + '">' + SIDE_NAME[foe()] + '</b></div>' +
     wrRow('walls broken', s.structsKilled, f.structsKilled, true) +
     wrRow('kills', s.kills, f.kills, true) +
     wrRow('gathered', Math.round(s.gathered), Math.round(f.gathered), true) +
@@ -5324,7 +5367,7 @@ function unproject(sx, sy){
 // actually aimed at — every clickable is tested against its drawn box first,
 // nearest-to-camera first, and only then do we fall back to the bare ground.
 function clickTargets(){
-  const s = G.sides[0], out = [];
+  const s = me(), out = [];
   holdSide = 0;
   // Each clickable is an ellipse around the middle of the shape you can SEE —
   // for a building that is up the screen from its ground cell, not on it.
@@ -5332,7 +5375,7 @@ function clickTargets(){
     const p = bp(gx, gy);
     return { cx:p[0], cy:p[1] - lift * BSC, rx:rx * BSC, ry:ry * BSC, sy:p[1] };
   };
-  for (const h of G.sides[0].heroes){
+  for (const h of me().heroes){
     if (h.dead) continue;
     const p = lp(h.x, h.y);
     out.push({ kind:'hero', hero:h, cx:p[0], cy:p[1] - 18 * cam.z, rx:16 * cam.z, ry:26 * cam.z, sy:p[1], pri:3 });
@@ -5382,7 +5425,7 @@ function resolvePick(sx, sy){
     return { kind:s0Plot(row * PLOT_W + col) ? 'build' : 'plot', tile:row * PLOT_W + col };
   return { kind:'none' };
 }
-const s0Plot = (t) => G.sides[0].plot[t];
+const s0Plot = (t) => me().plot[t];
 
 function pickAt(clientX, clientY){
   const r = lcv.getBoundingClientRect();
@@ -5456,10 +5499,10 @@ function doAction(a){
     paint('btnSpeed', G.speed > 1);
     return;
   }
-  if (a === 'camHold') return camTo(HOLD_X);
-  if (a === 'camGate') return camTo(12);
+  if (a === 'camHold') return camTo(myHoldX());
+  if (a === 'camGate') return camTo(MY === 0 ? 12 : C.LANE_LEN - 12);
   if (a === 'camMid') return camTo(C.LANE_LEN / 2);
-  if (a === 'camFoe') return camTo(C.LANE_LEN - 12);
+  if (a === 'camFoe') return camTo(MY === 0 ? C.LANE_LEN - 12 : 12);
   if (a === 'follow'){ cam.follow = !cam.follow; paint('camFollow', cam.follow); return; }
   if (a === 'zoomIn') { cam.tz = clamp(cam.tz * 1.25, ZOOM_MIN, ZOOM_MAX); return; }
   if (a === 'zoomOut'){ cam.tz = clamp(cam.tz * .8, ZOOM_MIN, ZOOM_MAX); return; }
@@ -5468,7 +5511,16 @@ function doAction(a){
 }
 
 function wire(){
-  const s0 = () => G.sides[0];
+  const s0 = () => me();
+  // Held while a press is in flight anywhere in the dock, so the refresh above
+  // does not delete the button between press and release. Release and cancel
+  // are listened for on the window, not the button: a press that drifts a few
+  // pixels off the control still has to clear the flag.
+  $('dock').addEventListener('pointerdown', () => { uiDown = true; });
+  window.addEventListener('pointerup', () => { uiDown = false; });
+  window.addEventListener('pointercancel', () => { uiDown = false; });
+  window.addEventListener('blur', () => { uiDown = false; });
+
   $('dock').addEventListener('click', (e) => {
     const tab = e.target.closest('[data-tab]');
     if (tab){ dockTab = tab.dataset.tab; syncUI(); return; }
@@ -5693,7 +5745,7 @@ const CMD = {
 // existing test, is untouched. In multiplayer it schedules instead.
 function sendCmd(type, args){
   const c = Object.assign({ type }, args);
-  if (!NET.on) return CMD[type](G.sides[0], c) || '';
+  if (!NET.on) return CMD[type](me(), c) || '';
   c.side = NET.me; c.seq = NET.seq++;
   NET.pending.push(c);
   return '';                      // no feedback yet: it has not happened yet
@@ -5826,6 +5878,7 @@ function netStep(){
 // same difficulty; the only thing that differs is `me`.
 function netStart(opt){
   NET.on = true; NET.me = opt.me | 0; NET.tick = 0; NET.seq = 0;
+  MY = NET.me;                                       // the interface follows the seat
   NET.box.clear(); NET.pending.length = 0; NET.hashes.clear(); NET.peerHashes.clear();
   NET.desyncAt = -1; NET.stallT = 0;
   newMatch({ diff:opt.diff || 'veteran', seed:opt.seed, pvp:true });
@@ -5845,6 +5898,7 @@ function netStart(opt){
 // would sit frozen waiting for orders from a player who had gone.
 function netEnd(){
   NET.on = false; NET.peerLost = false;
+  MY = 0;                                            // back to the left-hand hold
   NET.tick = 0; NET.seq = 0; NET.desyncAt = -1; NET.stallT = 0;
   NET.box.clear(); NET.peerHashes.clear(); NET.hashes.clear(); NET.pending.length = 0;
   acc = 0;
@@ -5937,7 +5991,10 @@ window.IB = {
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
-  netEnd, netCheckHash, typingInto,
+  netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
+  get uiWaited(){ return uiWaited; }, set uiWaited(v){ uiWaited = v; },
+  get MY(){ return MY; }, set MY(v){ MY = v; },
+  get uiDown(){ return uiDown; }, set uiDown(v){ uiDown = v; },
   RELAY_UNSET,
   showMenu, syncAdvice,
   hyp, ipow, fxRnd,
