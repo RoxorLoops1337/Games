@@ -3976,6 +3976,32 @@ t.ok(true, 'drawing an empty bridge is harmless');
   localStorage.removeItem('ib_relay');
   t.ok(IB.relayHost() === host, 'and goes back to the default when that is cleared');
 
+  // The relay is a separate Worker that has to be deployed once by hand, and
+  // its address depends on the deploying account's workers.dev subdomain — so
+  // the shipped default cannot be right, and the first thing anyone sees is a
+  // failure. "Check your connection" sends them to look at the wrong thing
+  // entirely. The lobby has to say what is actually missing, BEFORE they try
+  // and again when it fails.
+  localStorage.removeItem('ib_relay');
+  t.ok(IB.RELAY_UNSET(), 'out of the box, no relay is configured (' + IB.relayHost() + ')');
+  IB.lobbySet('idle');
+  const warn = IB.lobbyHtml();
+  t.ok(/no relay is set up/i.test(warn),
+    'and the lobby says so up front rather than waiting for the failure');
+  t.ok(/README/.test(warn), 'and points at where the instructions are');
+  t.ok(/data-act="mpback"/.test(warn), 'and still lets you back out to the one-player game');
+
+  localStorage.setItem('ib_relay', 'relay.somewhere.workers.dev');
+  t.ok(!IB.RELAY_UNSET(), 'setting an address clears that warning');
+  IB.lobbySet('idle');
+  t.ok(!/no relay is set up/i.test(IB.lobbyHtml()), 'and the lobby stops nagging');
+  // ...and a genuine failure against a configured relay names the host, so it
+  // can be told apart from "never deployed".
+  const src = SRC.slice(SRC.indexOf('function lobbyHost'), SRC.indexOf('function lobbyHost') + 1400);
+  t.ok(src.includes('relayHost()') && /Could not reach the relay at/.test(src),
+    'a configured relay that fails names the host it tried');
+  localStorage.removeItem('ib_relay');
+
   IB.lobbyClose();
   t.ok(IB.LOBBY.state === 'idle' && !IB.LOBBY.sock && IB.LOBBY.code === '',
     'closing the lobby lets go of everything');
