@@ -1864,17 +1864,30 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(!holds(h), 'so the hero no longer holds the board');
   }
   // and an AI-driven player side does not hold either — the loop harnesses
-  // drive side 0 with s.ai = true and must not deadlock on a pick
+  // drive side 0 with s.ai = true and must not deadlock on a pick.
+  //
+  // The first version of this check was VACUOUS and an audit caught it. It
+  // forged the hero on a side already flagged ai, then guarded the real
+  // assertion behind `if (ah.pend.length)` — but createHero calls autoPick
+  // synchronously for an ai side, which drains pend in the same call, so that
+  // was empty in 399 of 399 trials and the meaningful assertion was dead code
+  // behind a `t.ok(true)` wearing a meaningful-sounding label.
+  //
+  // Forge it on a hold that is NOT yet flagged ai, so the pick survives, and
+  // flip the flag afterwards: holdsBoard reads G.sides[0].ai at call time.
   {
     IB.newMatch({ diff:'veteran', seed:1531 });
     const a = P();
-    a.ai = true;
     rich(a);
     IB.build(a, a.plot.indexOf(null), 'tavern');
     IB.createHero(a, 'mage');
     const ah = a.heroes[0];
-    if (ah && ah.pend.length) t.ok(!holds(ah), 'a hold played by the assigner never freezes the board');
-    else t.ok(true, 'the assigner had already resolved the pick');
+    t.ok(!!ah && ah.pend.length > 0,
+      'the hero really does have an unresolved pick to test with (' +
+      (ah ? ah.pend.length : 'no hero') + ')');
+    t.ok(holds(ah), 'and it holds the board while the hold is played by a human');
+    a.ai = true;
+    t.ok(!holds(ah), 'but a hold played by the assigner never freezes the board');
   }
 }
 
@@ -1973,6 +1986,93 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const after = (IB.adviceFor(s) || { txt:'' }).txt;
     t.ok(!/Train one more|Train another/.test(after),
       'and it stops asking while that worker is on the way (' + (after || '(nothing)') + ')');
+  }
+}
+
+/* ------------------------------------------- what the panels actually tell you */
+{
+  // Three things the player was never told, each of which already existed in
+  // the data or the state and simply was not rendered.
+  IB.newMatch({ diff:'veteran', seed:1601 });
+  const s = P();
+
+  // 1. Every forge upgrade carries a description of exactly what a rank buys,
+  //    and it was read nowhere outside its own definition — the Forge was the
+  //    only purchase in the game with no explanation, so a player had to spend
+  //    a rank to learn that Arcane Sockets means attack speed.
+  {
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'forge');
+    const html = IB.dockHtml();
+    let shown = 0;
+    for (const u of [...IB.TOWER_UPS, ...IB.TROOP_UPS]){
+      t.ok(!!u.d && u.d.length > 8, u.n + ' has a description in the table');
+      if (html.includes(u.d)) shown++;
+    }
+    t.ok(shown === IB.TOWER_UPS.length + IB.TROOP_UPS.length,
+      'and every one of them reaches the player (' + shown + ' of ' +
+      (IB.TOWER_UPS.length + IB.TROOP_UPS.length) + ')');
+  }
+
+  // 2. The advice bar never looked at the bridge. Simulated a player who does
+  //    nothing: their outer turret crossed 50% at t=200s, 25% at t=296s and
+  //    fell at t=300s, and at every one of those instants the bar said '1
+  //    worker is standing around. Put one on gold.' Damage to an off-screen
+  //    structure makes no shake, the minimap draws a dying turret like a
+  //    healthy one, and the only signal is a 2.2s toast AFTER it is gone.
+  {
+    IB.newMatch({ diff:'veteran', seed:1607 });
+    const s2 = P();
+    for (const n of ['gold','iron','wood','food']) IB.assign(s2, n, 99);   // no idle-worker note
+    const front = IB.frontStruct(0);
+    t.ok(!!front, 'there is a structure in play');
+    front.hp = front.mhp;
+    const calm = (IB.adviceFor(s2) || { txt:'' }).txt;
+    t.ok(!/down to/.test(calm), 'a healthy front raises no alarm (' + (calm || '(nothing)') + ')');
+    front.hp = front.mhp * .2;
+    const alarm = (IB.adviceFor(s2) || { txt:'' }).txt;
+    t.ok(/down to/.test(alarm), 'a front at a fifth health does (' + alarm + ')');
+    t.ok(alarm.includes(IB.STRUCT_SHORT[front.key]), 'and it names which structure');
+    t.ok(/\d+%/.test(alarm), 'and how bad it is');
+    // a hurt structure BEHIND the front is shielded and cannot be attacked, so
+    // it must not raise an alarm
+    front.hp = front.mhp;
+    const list = G.sides[0].structs, behind = list[list.indexOf(front) + 1];
+    if (behind){
+      behind.hp = behind.mhp * .1;
+      const quiet = (IB.adviceFor(s2) || { txt:'' }).txt;
+      t.ok(!/down to/.test(quiet), 'but a shielded structure behind it does not (' + (quiet || '(nothing)') + ')');
+      behind.hp = behind.mhp;
+    }
+  }
+
+  // 3. The wave shape was not in the save, so a resumed match reported the
+  //    quiet wave however heavy the wave on the bridge actually was.
+  {
+    IB.newMatch({ diff:'veteran', seed:1613 });
+    const foe = G.sides[1];
+    foe.waveKind = 'siege';
+    const before = IB.foeWarning();
+    t.ok(/tears at stone|siege/i.test(before), 'the briefing reads the wave shape (' + before + ')');
+    IB.saveMatch();
+    IB.newMatch({ diff:'veteran', seed:1613 });
+    t.ok(IB.loadMatch() !== false, 'the match resumes');
+    t.ok(G.sides[1].waveKind === 'siege',
+      'and the wave shape came back with it (' + G.sides[1].waveKind + ')');
+    t.ok(IB.foeWarning() === before, 'so the briefing still says the same thing');
+  }
+
+  // 4. A held sheet has to look held — it used to be pixel-identical to an
+  //    idle peek at a hero, down to the pause button still reading 'running'.
+  {
+    IB.newMatch({ diff:'veteran', seed:1619 });
+    const s3 = P();
+    rich(s3);
+    IB.build(s3, s3.plot.indexOf(null), 'tavern');
+    IB.createHero(s3, 'tank');
+    const h = s3.heroes[0];
+    t.ok(h.pend.length > 0 && IB.holdsBoard(h), 'the hero holds the board');
+    t.ok(typeof IB.paintHeld === 'function', 'the pause icon has one shared painter');
   }
 }
 
