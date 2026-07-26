@@ -17,9 +17,13 @@ import { dirname, join } from 'node:path';
 import { harness } from './no_room_for_heroes_lib.mjs';
 
 let CTX;
-function loadGame(store){
+// `srcOverride` loads a MODIFIED copy of the game instead of the file on disk.
+// Each call evals into its own closure, so two calls give two fully independent
+// simulations — which is how the lockstep block below runs one build against
+// another and compares them tick by tick.
+function loadGame(store, srcOverride){
   const here = dirname(fileURLToPath(import.meta.url));
-  const html = readFileSync(join(here, '..', 'ironbridge', 'index.html'), 'utf8');
+  const html = srcOverride || readFileSync(join(here, '..', 'ironbridge', 'index.html'), 'utf8');
   const code = html.match(/<script>([\s\S]*)<\/script>/)[1];
 
   const noop = () => {};
@@ -3535,6 +3539,143 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(/standing around/.test((IB.adviceFor(s) || { txt:'' }).txt),
       'and the economy note comes back once the front is safe');
   }
+}
+
+/* --------------------------------------- the simulation must not watch itself */
+{
+  // Groundwork for lockstep multiplayer: two machines run the same match from
+  // the same seed and trade only inputs, so anything that moves the simulation
+  // without being an input is a desync.
+  //
+  // Cosmetics were exactly that. Sparks, damage numbers and dash ghosts drew
+  // from rnd() — the stream the simulation runs on — from inside blocks capped
+  // on how many particles were already alive. So the number of draws the SIM
+  // consumed depended on how many particles happened to be on screen. Measured
+  // on seed 5031 over 240 simulated seconds, three builds that differed only in
+  // particle policy produced three different matches (11 units alive vs 13).
+  //
+  // The headless suite could not see any of it, because every one of those
+  // blocks is skipped when HEADLESS. So this test builds a copy of the game
+  // with the cosmetic paths FORCED ON and runs it against the normal build.
+  const FX_ON = SRC
+    .replace(/if \(HEADLESS\) return;/g, 'if (false) return;')
+    .replace(/if \(HEADLESS \|\| /g, 'if (false || ')
+    .replace(/if \(!HEADLESS && /g, 'if (true && ')
+    .replace(/if \(!HEADLESS\) /g, 'if (true) ');
+  t.ok(FX_ON !== SRC, 'the cosmetics-forced-on build really is a different source');
+
+  const fxStore = {};
+  const IB2 = loadGame(fxStore, FX_ON);
+  // loadGame rebinds global.localStorage to the new store; put the original
+  // back so nothing after this block reads the wrong saves.
+  global.localStorage = {
+    getItem: k => (k in store ? store[k] : null),
+    setItem: (k, v) => { store[k] = '' + v; },
+    removeItem: k => { delete store[k]; },
+  };
+  t.ok(IB2 !== IB && IB2.G !== G, 'and it loaded as a genuinely separate simulation');
+
+  // A state fingerprint of the SIM only — never of G.fx or G.floats, which are
+  // allowed to differ. If cosmetics leak into the sim, this is what moves.
+  const fingerprint = (g) => g.units.map(u =>
+      u.kind + ':' + u.side + ':' + u.hp.toFixed(9) + ':' + u.x.toFixed(9) + ':' + u.y.toFixed(9)).join(' ') +
+    '|' + g.sides.map(s => s.res.gold.toFixed(9) + ',' + s.res.iron.toFixed(9) + ',' +
+      s.structs.map(st => st.hp.toFixed(6)).join('.')).join('/') +
+    '|' + g.wave + ':' + g.t.toFixed(6);
+
+  // Both sides scripted, both sims given the SAME command stream at the SAME
+  // ticks — which is exactly what the relay will deliver. Commands are chosen
+  // to touch the paths that spawn particles: damage, healing, casting.
+  const SCRIPT = [
+    [ 60, (ib) => { for (const s of ib.G.sides) ib.assign(s, 'gold', 2); } ],
+    [ 90, (ib) => { for (const s of ib.G.sides) ib.assign(s, 'iron', 2); } ],
+    [150, (ib) => { for (const s of ib.G.sides){ s.res.wood += 400; s.res.gold += 400;
+                     ib.build(s, s.plot.indexOf(null), 'barracks'); } } ],
+    [300, (ib) => { for (const s of ib.G.sides){ s.res.gold += 600; s.res.food += 600;
+                     ib.trainUnit(s, 'melee'); ib.trainUnit(s, 'melee'); } } ],
+    [450, (ib) => { for (const s of ib.G.sides){ s.res.wood += 800; s.res.gold += 800;
+                     ib.build(s, s.plot.indexOf(null), 'tavern'); } } ],
+    [600, (ib) => { ib.createHero(ib.G.sides[0], 'fighter'); ib.createHero(ib.G.sides[1], 'marksman'); } ],
+  ];
+
+  const TICKS = 30 * 200;
+  let firstDiff = -1, diffA = '', diffB = '';
+  for (const ib of [IB, IB2]){ ib.newMatch({ diff:'veteran', seed:7331 }); ib.G.sides[0].ai = true; }
+  for (let i = 0; i < TICKS; i++){
+    for (const [at, fn] of SCRIPT) if (at === i){ fn(IB); fn(IB2); }
+    IB.update(1 / 30); IB2.update(1 / 30);
+    if (firstDiff < 0){
+      const a = fingerprint(G), b = fingerprint(IB2.G);
+      if (a !== b){ firstDiff = i; diffA = a.slice(0, 150); diffB = b.slice(0, 150); }
+    }
+  }
+  // The run has to have been worth making: real bodies, real damage, and the
+  // cosmetic build must actually have produced cosmetics (otherwise the two
+  // sims agree only because neither did anything).
+  t.ok(IB2.G.fx.length + IB2.G.floats.length > 0 || IB2.G.units.length > 0,
+    'the cosmetics build ran a real match (' + IB2.G.units.length + ' units, ' +
+    IB2.G.fx.length + ' fx, ' + IB2.G.floats.length + ' floats)');
+  t.ok(G.fx.length === 0 && G.floats.length === 0,
+    'and the normal build drew none, so the two really do differ in cosmetics (' +
+    G.fx.length + ' fx, ' + G.floats.length + ' floats)');
+  t.ok(G.units.length > 2 && G.t > 150,
+    'and the match got far enough to mean something (' + G.units.length + ' units at ' +
+    Math.round(G.t) + 's)');
+  t.ok(firstDiff < 0,
+    'drawing cosmetics does not move the simulation, over ' + TICKS + ' ticks' +
+    (firstDiff < 0 ? '' : ' — diverged at tick ' + firstDiff + '\n    fx-off: ' + diffA + '\n    fx-on:  ' + diffB));
+
+  // And the same seed twice in one process is the same match. G.frame is reset
+  // by newMatch, so a seed names a match no matter what ran before it.
+  const runOnce = (seed, ticks) => {
+    IB.newMatch({ diff:'veteran', seed }); G.sides[0].ai = true;
+    for (let i = 0; i < ticks; i++) IB.update(1 / 30);
+    return fingerprint(G);
+  };
+  const r1 = runOnce(4211, 900);
+  runOnce(9007, 451);                       // odd length on purpose: an even one
+  const r2 = runOnce(4211, 900);            // preserves frame parity and hides the bug
+  t.ok(r1 === r2, 'a seed names a match, whatever was simulated in between');
+}
+
+/* -------------------------------- the math a second machine has to agree on */
+{
+  // IEEE-754 pins +, -, *, / and sqrt exactly, so every engine returns the same
+  // bits. Math.hypot and Math.pow are NOT pinned — the spec lets each engine
+  // choose its own accuracy. That is not theoretical: on THIS engine,
+  // Math.hypot and sqrt(dx*dx+dy*dy) disagree on 41% of lane-scale coordinate
+  // pairs, by up to 5.7e-14. One bit flips a `<=`, which flips a target, which
+  // is a different match ten seconds later.
+  let differ = 0, n = 0;
+  for (let i = 0; i < 20000; i++){
+    const dx = ((i * 2654435761) % 100000) / 357 - 140, dy = ((i * 40503) % 10000) / 830 - 6;
+    n++;
+    if (Math.hypot(dx, dy) !== Math.sqrt(dx * dx + dy * dy)) differ++;
+  }
+  t.ok(differ > n * .05,
+    'hypot and the exactly-specified form really do disagree here (' + differ + ' of ' + n + ')');
+
+  // So the simulation may not call either. Strip comments first — this file
+  // explains the rule in prose, and prose must not satisfy or break the check.
+  const bare = SRC.replace(/^\s*\/\/.*$/gm, '');
+  const hypots = (bare.match(/Math\.hypot\s*\(/g) || []).length;
+  t.ok(hypots === 0, 'no Math.hypot survives anywhere in the game (' + hypots + ')');
+  t.ok((bare.match(/\*\*\s*2/g) || []).length === 0, 'and no ** either, which is Math.pow by another name');
+  t.ok(typeof IB.hyp === 'function' && typeof IB.ipow === 'function',
+    'the deterministic replacements are exported');
+  t.ok(IB.hyp(3, 4) === 5 && IB.hyp(-135.33827103674412, -4.324129725806415) ===
+    Math.sqrt(135.33827103674412 * 135.33827103674412 + 4.324129725806415 * 4.324129725806415),
+    'hyp is exactly sqrt(dx*dx+dy*dy), including on a pair where hypot differs');
+  for (const [b, e] of [[1.65, 0], [1.65, 1], [1.5, 3], [1.35, 5]])
+    t.ok(IB.ipow(b, e) === Array.from({ length:e }).reduce(a => a * b, 1),
+      'ipow(' + b + ',' + e + ') is repeated multiplication');
+
+  // Math.pow may still be used where it cannot reach the simulation. Camera
+  // smoothing is per-client view state and is the only place left.
+  const powLines = bare.split('\n').map((l, i) => [i + 1, l]).filter(([, l]) => /Math\.pow\s*\(/.test(l));
+  t.ok(powLines.length > 0 && powLines.every(([, l]) => /\bcam\./.test(l)),
+    'every remaining Math.pow is camera smoothing, which no other machine sees (' +
+    powLines.map(([i]) => i).join(', ') + ')');
 }
 
 IB.draw();

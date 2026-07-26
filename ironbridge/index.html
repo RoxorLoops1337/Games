@@ -407,8 +407,56 @@ const rnd = () => { // mulberry32 — deterministic so a match can be replayed i
 const rr = (a, b) => a + rnd() * (b - a);
 const ri = (a, b) => Math.floor(rr(a, b + 1));
 const pick = (arr) => arr[Math.floor(rnd() * arr.length)];
+
+// A SECOND stream, for things you can only see.
+//
+// Sparks, damage numbers and dash ghosts used to draw from rnd() — the stream
+// the simulation runs on. Every one of those call sites sits behind a cap on
+// how many particles are already alive (`G.fx.length < 150` and friends) and
+// behind `HEADLESS`, so the NUMBER of draws the simulation consumed depended on
+// how many particles happened to be on screen. Measured on one seed over 240
+// simulated seconds, that produced three different matches:
+//
+//   headless, no particles at all   731194e0b813   11 units alive
+//   particles on, cap 150           3c75e7b84202   13 units alive
+//   particles on, cap 2             e442ae110bea   13 units alive
+//
+// Two players watching the same match at different framerates would therefore
+// desync, and the headless suite could not see it, because the whole block is
+// skipped when HEADLESS. Cosmetics get their own stream so they cannot reach
+// the simulation no matter how many of them are drawn or skipped.
+let _fxSeed = 987654321;
+const fxRnd = () => {
+  _fxSeed |= 0; _fxSeed = (_fxSeed + 0x6D2B79F5) | 0;
+  let t = Math.imul(_fxSeed ^ (_fxSeed >>> 15), 1 | _fxSeed);
+  t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+  return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+};
+const fxRr = (a, b) => a + fxRnd() * (b - a);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
+
+// Distance, spelled so that two machines agree on the last bit.
+//
+// IEEE-754 pins down +, -, *, / and sqrt exactly: every conforming engine must
+// return the correctly-rounded result, so those five are safe to build a
+// lockstep simulation on. Math.hypot is NOT in that list — the spec lets an
+// implementation be as accurate as it likes, and V8, JavaScriptCore and
+// SpiderMonkey disagree in the final bits. Same for Math.pow and `**`. One bit
+// of disagreement in a distance check flips a `<=`, which flips a target,
+// which is a different match ten seconds later.
+//
+// No overflow risk in the swap: the lane is C.LANE_LEN across and every
+// coordinate lives inside a few hundred units, so dx*dx cannot come near the
+// range where hypot's extra care would earn anything.
+// Named `hyp`, not `dist`: thirteen functions already declare a local called
+// `dist` and a global of that name is silently shadowed by every one of them.
+const hyp = (dx, dy) => Math.sqrt(dx * dx + dy * dy);
+// Integer powers, by repeated multiplication, for the same reason. Costs are
+// the one place the sim raises anything to a power, and a cost that differs by
+// one unit between two players is a desync you would notice as a build button
+// greying out on one screen and not the other.
+const ipow = (base, exp) => { let r = 1; for (let i = 0; i < exp; i++) r *= base; return r; };
 
 /* ------------------------------------------------------------------ tuning */
 const C = {
@@ -1007,7 +1055,8 @@ const nodeCap = (s, node) => node === 'food' ? fieldSlots(s)
 const nodeRate = (s, node) => C.GATHER[node] * (1 + C.NODE_RATE_PER_LVL * (nodeLvl(s, node) - 1));
 const nodeUpCost = (s, node) => {
   const l = nodeLvl(s, node);
-  return { wood: Math.round(70 * Math.pow(1.65, l - 1)), gold: Math.round(50 * Math.pow(1.65, l - 1)) };
+  const k = ipow(1.65, l - 1);
+  return { wood: Math.round(70 * k), gold: Math.round(50 * k) };
 };
 function upgradeNode(s, node){
   if (!NODE_UPGRADABLE.includes(node)) return 'the fields are grown by building farms';
@@ -1082,7 +1131,7 @@ function assign(s, node, delta){
 
 function buildCost(type, lvl){
   const B = BUILDINGS[type];
-  return lvl <= 1 ? B.cost : scaleCost(B.up, Math.pow(1.5, lvl - 2));
+  return lvl <= 1 ? B.cost : scaleCost(B.up, ipow(1.5, lvl - 2));
 }
 
 function build(s, tile, type){
@@ -1109,7 +1158,7 @@ function upgradeBuilding(s, tile){
   return null;
 }
 
-function upCostFor(def, lvl){ return scaleCost(def.cost, Math.pow(def.step, lvl)); }
+function upCostFor(def, lvl){ return scaleCost(def.cost, ipow(def.step, lvl)); }
 
 function buyUp(s, id){
   const def = TOWER_UPS.find(u => u.id === id) || TROOP_UPS.find(u => u.id === id);
@@ -1388,12 +1437,12 @@ function dealDmg(src, tgt, amt, o){
   // bury the frame in particles.
   if (!HEADLESS && dmg > 0 && G.fx.length < 150){
     const big = tgt.isHero || tgt.struct || dmg > 60;
-    if (big || rnd() < .4){
+    if (big || fxRnd() < .4){
       const col = magic ? '#c9a6ff' : tgt.struct ? '#e8d9b4' : '#ffd08a';
       for (let i = 0, n = big ? 4 : 2; i < n; i++){
-        const a = rnd() * 6.283, sp = rr(1.5, big ? 6 : 3.5);
-        G.fx.push({ k:'p', x:tgt.x, y:tgt.y, z:rr(.5, 1.4), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5,
-          vz:rr(1, 4), t:rr(.16, .34), dur:.34, col, r:rr(.9, big ? 2.4 : 1.5) });
+        const a = fxRnd() * 6.283, sp = fxRr(1.5, big ? 6 : 3.5);
+        G.fx.push({ k:'p', x:tgt.x, y:tgt.y, z:fxRr(.5, 1.4), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5,
+          vz:fxRr(1, 4), t:fxRr(.16, .34), dur:.34, col, r:fxRr(.9, big ? 2.4 : 1.5) });
       }
     }
     if (tgt.struct && dmg > 40) shake(Math.min(3, dmg / 90), tgt.x);
@@ -1558,10 +1607,10 @@ function areaHit(src, x, y, rad, amt, o){
   const hits = [];
   nearby(x, rad + 2, (u) => {
     if (u.dead || u.side !== foe) return;
-    if (Math.hypot(u.x - x, u.y - y) <= rad + u.r) hits.push(u);
+    if (hyp(u.x - x, u.y - y) <= rad + u.r) hits.push(u);
   });
   for (const st of G.sides[foe].structs)
-    if (!st.dead && st === frontStruct(foe) && Math.hypot(st.x - x, st.y - y) <= rad + st.r) hits.push(st);
+    if (!st.dead && st === frontStruct(foe) && hyp(st.x - x, st.y - y) <= rad + st.r) hits.push(st);
   for (const h of hits) dealDmg(src, h, amt, o);
   if (!HEADLESS) ringFx(x, y, rad, o && o.magic ? '#a98bff' : '#ffbe6a');
   return hits.length;
@@ -1573,7 +1622,7 @@ function chainHit(src, first, amt, jumps){
     let nxt = null, bd = 36;
     nearby(cur.x, 6, (u) => {
       if (u.dead || u.side !== enemyOf(src.side) || seen.has(u.id)) return;
-      const d = (u.x - cur.x) ** 2 + (u.y - cur.y) ** 2;
+      const ex = u.x - cur.x, ey = u.y - cur.y, d = ex * ex + ey * ey;
       if (d < bd){ bd = d; nxt = u; }
     });
     if (!nxt) break;
@@ -1631,7 +1680,7 @@ function acquire(u){
   const foe = enemyOf(u.side);
   if (u.taunt > 0 && u.target && !u.target.dead) return u.target;
   if (u.target && !u.target.dead){
-    const d = Math.hypot(u.target.x - u.x, u.target.y - u.y);
+    const d = hyp(u.target.x - u.x, u.target.y - u.y);
     if (d < 13 && (!u.target.struct || u.target === frontStruct(foe))) return u.target;
   }
   const f = nearestFoe(u, 9.5);
@@ -1653,7 +1702,7 @@ function unitStep(u, dt){
   let mx = dir, my = 0, moving = true;
   if (tgt){
     const dx = tgt.x - u.x, dy = tgt.y - u.y;
-    const dist = Math.hypot(dx, dy) || .001;
+    const dist = hyp(dx, dy) || .001;
     const reach = u.rng + (tgt.r || .4) + u.r;
     if (dist <= reach){
       moving = false;
@@ -1712,7 +1761,7 @@ function structStep(st, dt){
   let best = null, bd = st.rng * st.rng, hero = null, hd = st.rng * st.rng;
   nearby(st.x, st.rng + 1, (u) => {
     if (u.dead || u.side === st.side) return;
-    const d = (u.x - st.x) ** 2 + (u.y - st.y) ** 2;
+    const ex = u.x - st.x, ey = u.y - st.y, d = ex * ex + ey * ey;
     if (d > st.rng * st.rng) return;
     if (u.isHero){ if (d < hd){ hd = d; hero = u; } }
     else if (d < bd){ bd = d; best = u; }
@@ -1730,7 +1779,7 @@ function projStep(dt){
     const p = G.projs[i];
     const t = p.tgt;
     if (!t || t.dead){ G.projs.splice(i, 1); continue; }
-    const dx = t.x - p.x, dy = t.y - p.y, d = Math.hypot(dx, dy);
+    const dx = t.x - p.x, dy = t.y - p.y, d = hyp(dx, dy);
     const step = p.sp * dt;
     if (d <= step + .3){ p.onHit(); G.projs.splice(i, 1); continue; }
     p.x += dx / d * step; p.y += dy / d * step;
@@ -1748,12 +1797,12 @@ function zoneStep(dt){
       const foe = enemyOf(z.side);
       nearby(z.x, z.r + 2, (u) => {
         if (u.dead || u.side !== foe) return;
-        if (Math.hypot(u.x - z.x, u.y - z.y) > z.r + u.r) return;
+        if (hyp(u.x - z.x, u.y - z.y) > z.r + u.r) return;
         dealDmg(src, u, z.dps * .5, { magic:z.magic, ability:true });
         if (z.slow) applySlow(u, z.slow, 1);
       });
       const st = frontStruct(foe);
-      if (st && Math.hypot(st.x - z.x, st.y - z.y) <= z.r + st.r) dealDmg(src, st, z.dps * .5, { magic:z.magic, ability:true });
+      if (st && hyp(st.x - z.x, st.y - z.y) <= z.r + st.r) dealDmg(src, st, z.dps * .5, { magic:z.magic, ability:true });
     }
     if (z.t <= 0) G.zones.splice(i, 1);
   }
@@ -2216,7 +2265,7 @@ function towerCover(st, side){
   let n = 0;
   nearby(st.x, 7, (u) => {
     if (u.dead || u.side !== side || u.isHero) return;
-    if (Math.hypot(u.x - st.x, u.y - st.y) > 7) return;
+    if (hyp(u.x - st.x, u.y - st.y) > 7) return;
     n++;
   });
   return n;
@@ -2225,7 +2274,7 @@ const COVERED = 2;                  // fewer than two bodies is not cover
 function towerCovered(h, tgt){
   for (const st of G.sides[enemyOf(h.side)].structs){
     if (st.dead || !st.ad) continue;
-    if (Math.hypot(st.x - tgt.x, st.y - tgt.y) > st.rng + 1) continue;
+    if (hyp(st.x - tgt.x, st.y - tgt.y) > st.rng + 1) continue;
     if (towerCover(st, h.side) < COVERED) return true;
   }
   return false;
@@ -2234,7 +2283,7 @@ function towerCovered(h, tgt){
 function inTowerFire(h){
   for (const st of G.sides[enemyOf(h.side)].structs){
     if (st.dead || !st.ad) continue;
-    if (Math.hypot(st.x - h.x, st.y - h.y) < st.rng + 1.5) return st;
+    if (hyp(st.x - h.x, st.y - h.y) < st.rng + 1.5) return st;
   }
   return null;
 }
@@ -2342,7 +2391,7 @@ function heroStep(h, dt){
     gx = fl + dir * 2.5; gy = h.y * .5;
     if (tower && !cover) gx = Math.min(gx * dir, (tower.x - dir * (tower.rng + 2)) * dir) * dir;
   }
-  const dx = gx - h.x, dy = gy - h.y, dist = Math.hypot(dx, dy) || .001;
+  const dx = gx - h.x, dy = gy - h.y, dist = hyp(dx, dy) || .001;
   const reach = tgt ? h.rng + (tgt.r || .4) + h.r : 0;
   if (tgt && dist <= reach){
     h.cd -= dt;
@@ -2395,7 +2444,7 @@ function wantCast(h, s, tgt){
   if (s.tag === 'buff' && (s.shield || s.barm)) return frac < .8 && (tgt || h.retreat);
   if (s.tag === 'move' && h.retreat) return true;
   if (!tgt) return false;
-  const d = Math.hypot(tgt.x - h.x, tgt.y - h.y);
+  const d = hyp(tgt.x - h.x, tgt.y - h.y);
   if (s.ult){
     const worth = tgt.isHero || foesNear(h, 6) >= 3 || (tgt.struct && tgt.hp / tgt.mhp < .7);
     if (!worth) return false;
@@ -2468,7 +2517,7 @@ function castSkill(h, sk, tgt){
       areaHit(h, h.x, h.y, s.aoe, pw, { magic:s.magic, ability:true });
       if (s.stun || s.slow) nearby(h.x, s.aoe + 2, (u) => {
         if (u.dead || u.side !== foe) return;
-        if (Math.hypot(u.x - h.x, u.y - h.y) > s.aoe + u.r) return;
+        if (hyp(u.x - h.x, u.y - h.y) > s.aoe + u.r) return;
         if (s.stun) applyStun(u, s.stun);
         if (s.slow) applySlow(u, s.slow, s.slowT || 2);
       });
@@ -2479,7 +2528,7 @@ function castSkill(h, sk, tgt){
       const dist = s.dist || 5;
       const dx0 = h.x, dy0 = h.y;
       if (tgt){
-        const dx = tgt.x - h.x, dy = tgt.y - h.y, d = Math.hypot(dx, dy) || 1;
+        const dx = tgt.x - h.x, dy = tgt.y - h.y, d = hyp(dx, dy) || 1;
         const go = Math.min(dist, Math.max(0, d - (h.rng * .6)));
         h.x += dx / d * go; h.y += dy / d * go;
         abilityDmg(h, tgt, pw, s.magic);
@@ -2553,7 +2602,7 @@ function castSkill(h, sk, tgt){
     case 'taunt': {
       nearby(h.x, s.aoe, (u) => {
         if (u.dead || u.side === h.side) return;
-        if (Math.hypot(u.x - h.x, u.y - h.y) > s.aoe) return;
+        if (hyp(u.x - h.x, u.y - h.y) > s.aoe) return;
         u.target = h; u.taunt = s.dur;
         if (s.dmg) abilityDmg(h, u, pw, s.magic);
       });
@@ -2892,9 +2941,9 @@ function burstFx(x, y, col, n){
   if (HEADLESS) return;
   if (G.fx.length > 260) return;
   for (let i = 0; i < n; i++){
-    const a = rnd() * 6.283, sp = rr(1, 6);
-    G.fx.push({ k:'p', x, y, z:rr(.2, 1.2), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5, vz:rr(1, 5),
-      t:rr(.35, .8), dur:.8, col, r:rr(1.4, 3.2) });
+    const a = fxRnd() * 6.283, sp = fxRr(1, 6);
+    G.fx.push({ k:'p', x, y, z:fxRr(.2, 1.2), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5, vz:fxRr(1, 5),
+      t:fxRr(.35, .8), dur:.8, col, r:fxRr(1.4, 3.2) });
   }
 }
 function ringFx(x, y, r, col){ if (!HEADLESS) G.fx.push({ k:'ring', x, y, r, t:.42, dur:.42, col }); }
@@ -2911,7 +2960,7 @@ function addFloat(x, y, txt, col, sc){
     ox = (Math.abs(ox) + .55) * (ox > 0 ? -1 : 1);
     oy -= .28;
   }
-  G.floats.push({ x:x + ox, y:y + oy + rr(-.15, .15), txt, col, t:.95, dur:.95, sc:sc || 1, vy:rr(-.5, -.9) });
+  G.floats.push({ x:x + ox, y:y + oy + fxRr(-.15, .15), txt, col, t:.95, dur:.95, sc:sc || 1, vy:fxRr(-.5, -.9) });
 }
 const CAST_COL = { dmg:'#ffa96a', heal:'#7fdc8a', buff:'#ffcf4d', cc:'#9ad8ff', move:'#bfe0ff', summon:'#c9a6ff' };
 function castCol(s){ return s.magic ? '#b98bff' : (CAST_COL[s.tag] || '#ffa96a'); }
@@ -2923,7 +2972,7 @@ function castFx(h, s){
   ringFx(h.x, h.y, s.aoe || 2, col);
   burstFx(h.x, h.y, col, 8);
   if (G.floats.length < 80)
-    G.floats.push({ x:h.x + rr(-.8, .8), y:h.y + rr(-.3, .3), txt:s.n.toUpperCase(), col,
+    G.floats.push({ x:h.x + fxRr(-.8, .8), y:h.y + fxRr(-.3, .3), txt:s.n.toUpperCase(), col,
       t:1.4, dur:1.4, sc:1, vy:-.55, cast:true, ult:!!s.ult });
 }
 // A blur of where the hero came from, so a dash reads as movement.
@@ -2936,8 +2985,8 @@ function dashFx(h, x0, y0){
 function healFx(x, y, col){
   if (HEADLESS || G.fx.length > 240) return;
   for (let i = 0; i < 6; i++)
-    G.fx.push({ k:'p', x:x + rr(-.6, .6), y:y + rr(-.4, .4), z:rr(.3, 1),
-      vx:0, vy:0, vz:rr(3, 5.5), t:rr(.4, .7), dur:.7, col:col || '#7fdc8a', r:rr(1, 2) });
+    G.fx.push({ k:'p', x:x + fxRr(-.6, .6), y:y + fxRr(-.4, .4), z:fxRr(.3, 1),
+      vx:0, vy:0, vz:fxRr(3, 5.5), t:fxRr(.4, .7), dur:.7, col:col || '#7fdc8a', r:fxRr(1, 2) });
 }
 function fxStep(dt){
   for (let i = G.fx.length - 1; i >= 0; i--){
@@ -3528,7 +3577,7 @@ function drawUnit(c, u){
   const p = lp(u.x, u.y), S = LS();
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
   ell(c, p[0], p[1] + 1, (u.kind === 'cannon' ? 9 : 7) * sc, 3.4 * sc, 'rgba(0,0,0,.32)');
-  const bob = Math.sin(G.t * 7 + u.ph) * (u.target && Math.hypot(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
+  const bob = Math.sin(G.t * 7 + u.ph) * (u.target && hyp(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
   const bx = p[0], by = p[1] - 2 * sc + bob;
   if (u.kind === 'cannon'){ drawCannon(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   if (u.kind === 'super'){ drawOgre(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
@@ -3973,8 +4022,8 @@ function scatterFor(side){
     const outer = inner - (holdSide === 0 ? 1 : -1) * (PLAT.back + 34);
     if (holdSide === 0 ? (wx > inner - 4 || wx < outer + 4) : (wx < inner + 4 || wx > outer - 4)) return true;
     if (Math.abs(gx) < (PLOT_W - 1) / 2 + 1.1 && Math.abs(gy) < (PLOT_H - 1) / 2 + 1.1) return true;
-    if (Math.hypot(gx - KEEP.gx, gy - KEEP.gy) < 1.9) return true;
-    for (const k in NODES) if (Math.hypot(gx - NODES[k].gx, gy - NODES[k].gy) < 1.9) return true;
+    if (hyp(gx - KEEP.gx, gy - KEEP.gy) < 1.9) return true;
+    for (const k in NODES) if (hyp(gx - NODES[k].gx, gy - NODES[k].gy) < 1.9) return true;
     return false;
   };
   for (let gx = -14; gx <= 13; gx++) for (let gy = -16; gy <= 8; gy++){
@@ -5343,7 +5392,7 @@ function wire(){
     if (touches.size !== 2) return;
     drag = null;
     const [a, b2] = [...touches.values()];
-    const d = Math.hypot(a.clientX - b2.clientX, a.clientY - b2.clientY);
+    const d = hyp(a.clientX - b2.clientX, a.clientY - b2.clientY);
     if (pinch) cam.tz = cam.z = clamp(cam.z * (d / pinch), ZOOM_MIN, ZOOM_MAX);
     pinch = d;
   });
@@ -5432,6 +5481,7 @@ window.IB = {
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
+  hyp, ipow, fxRnd,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   seenIntro, markSeen, SEEN_KEY, pruneSel,
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
