@@ -688,27 +688,64 @@ const TRAIN = {
 /* ------------------------------------------------------------------ structures */
 // x is measured from your own gate outward; side 1 is mirrored at build time.
 const STRUCTS = [
-  { key:'gate',   n:'The Gates',    x:6,  hp:5600, ad:150, as:.85, rng:12, armor:45, mr:45, r:2.4 },
-  { key:'inhib',  n:'Inhibitor',    x:19, hp:3000, ad:0,   as:0,   rng:0,  armor:25, mr:25, r:1.5 },
-  { key:'t3',     n:'Inner Turret', x:31, hp:3400, ad:140, as:.95, rng:11, armor:36, mr:36, r:1.4 },
-  { key:'t2',     n:'Mid Turret',   x:43, hp:3100, ad:130, as:.95, rng:11, armor:32, mr:32, r:1.4 },
-  { key:'t1',     n:'Outer Turret', x:55, hp:2800, ad:120, as:.95, rng:11, armor:28, mr:28, r:1.4 },
+  { key:'gate',   n:'The Gates',    x:6,  hp:6400, ad:150, as:.85, rng:12, armor:45, mr:45, r:2.4 },
+  { key:'inhib',  n:'Inhibitor',    x:19, hp:3400, ad:0,   as:0,   rng:0,  armor:25, mr:25, r:1.5 },
+  { key:'t3',     n:'Inner Turret', x:31, hp:3900, ad:140, as:.95, rng:11, armor:36, mr:36, r:1.4 },
+  { key:'t2',     n:'Mid Turret',   x:43, hp:3550, ad:130, as:.95, rng:11, armor:32, mr:32, r:1.4 },
+  { key:'t1',     n:'Outer Turret', x:55, hp:3200, ad:120, as:.95, rng:11, armor:28, mr:28, r:1.4 },
 ];
 
 /* ------------------------------------------------------------------ tower upgrades */
+// What one rank of each upgrade actually does. Every read of these numbers
+// goes through here, so the description, the sim and the Host's shopping list
+// can never disagree.
+const UP_EFFECT = { hp:.10, armor:12, atk:.22, as:.20, regen:1.0, tad:.18, tarm:18, thp:.16 };
+
 const TOWER_UPS = [
-  { id:'hp',    n:'Reinforced Stone', d:'+14% turret and gate health.',   cost:{ iron:60, wood:40 },  step:1.55 },
-  { id:'armor', n:'Armour Plating',   d:'+9 armour and magic resist.',    cost:{ iron:75, gold:30 },  step:1.55 },
-  { id:'atk',   n:'Ballista Cores',   d:'+12% turret attack damage.',     cost:{ iron:70, gold:45 },  step:1.6 },
-  { id:'as',    n:'Arcane Sockets',   d:'+10% turret attack speed.',      cost:{ gold:80, wood:35 },  step:1.6 },
-  { id:'regen', n:'Repair Crews',     d:'Turrets regenerate +2.5 hp/s.',  cost:{ wood:70, gold:40 },  step:1.5 },
+  { id:'hp',    n:'Reinforced Stone', d:'+10% turret and gate health.',   cost:{ iron:75, wood:55 },  step:1.55 },
+  { id:'armor', n:'Armour Plating',   d:'+12 armour and magic resist.',   cost:{ iron:75, gold:30 },  step:1.55 },
+  { id:'atk',   n:'Ballista Cores',   d:'+22% turret attack damage.',     cost:{ iron:60, gold:40 },  step:1.6 },
+  { id:'as',    n:'Arcane Sockets',   d:'+20% turret attack speed.',      cost:{ gold:80, wood:35 },  step:1.6 },
+  { id:'regen', n:'Repair Crews',     d:'Turrets regenerate +1 hp/s.',    cost:{ wood:95, gold:60 },  step:1.5 },
 ];
 const TROOP_UPS = [
-  { id:'tad',   n:'Sharpened Steel',  d:'+10% minion damage.',            cost:{ iron:55, gold:35 },  step:1.6 },
-  { id:'tarm',  n:'Levy Armour',      d:'+8 minion armour and resist.',   cost:{ iron:65, wood:45 },  step:1.6 },
-  { id:'thp',   n:'Rations',          d:'+10% minion health.',            cost:{ food:60, wood:40 },  step:1.55 },
+  { id:'tad',   n:'Sharpened Steel',  d:'+18% minion damage.',            cost:{ iron:55, gold:35 },  step:1.6 },
+  { id:'tarm',  n:'Levy Armour',      d:'+18 minion armour and resist.',  cost:{ iron:50, wood:35 },  step:1.6 },
+  { id:'thp',   n:'Rations',          d:'+16% minion health.',            cost:{ food:60, wood:40 },  step:1.55 },
 ];
 const MAX_UP = 5;
+
+// Roughly what one rank buys, in hitpoints-equivalent (a point of damage per
+// second is worth about twelve hitpoints), divided by what it costs to gather.
+// The Host shops with this, and the tests use it to prove no upgrade is a trap.
+const RES_SECONDS = () => ({ gold:1 / C.GATHER.gold, iron:1 / C.GATHER.iron,
+  wood:1 / C.GATHER.wood, food:1 / C.GATHER.food });
+function upValue(id){
+  const structHp = STRUCTS.reduce((a, x) => a + x.hp, 0);
+  const structDps = STRUCTS.reduce((a, x) => a + x.ad * x.as, 0);
+  const armor = STRUCTS.reduce((a, x) => a + x.armor, 0) / STRUCTS.length;
+  const army = 14, aHp = 340, aAd = 30, aArm = 20;
+  const gain = (base, add) => (1 + (base + add) / 100) / (1 + base / 100) - 1;
+  switch (id){
+    case 'hp':    return structHp * UP_EFFECT.hp;
+    case 'armor': return structHp * gain(armor, UP_EFFECT.armor);
+    case 'atk':   return structDps * UP_EFFECT.atk * 12;
+    case 'as':    return structDps * UP_EFFECT.as * 12;
+    case 'regen': return UP_EFFECT.regen * STRUCTS.length * 60 * 6;
+    case 'tad':   return army * aAd * UP_EFFECT.tad * 12;
+    case 'tarm':  return army * aHp * gain(aArm, UP_EFFECT.tarm);
+    case 'thp':   return army * aHp * UP_EFFECT.thp;
+  }
+  return 0;
+}
+function upRate(s, id){
+  const def = TOWER_UPS.find(u => u.id === id) || TROOP_UPS.find(u => u.id === id);
+  if (!def) return 0;
+  const ws = RES_SECONDS(), c = upCostFor(def, (TOWER_UPS.includes(def) ? s.towerUp : s.troopUp)[id]);
+  let spend = 0;
+  for (const k in c) spend += c[k] * ws[k];
+  return spend > 0 ? upValue(id) / spend : 0;
+}
 
 /* ------------------------------------------------------------------ buildings */
 const BUILDINGS = {
@@ -939,7 +976,7 @@ function buyUp(s, id){
   return null;
 }
 
-const structMaxHp = (s, st) => Math.round(st.base.hp * (1 + .14 * s.towerUp.hp));
+const structMaxHp = (s, st) => Math.round(st.base.hp * (1 + UP_EFFECT.hp * s.towerUp.hp));
 
 /* ------------------------------------------------------------------ economy tick */
 function ecoStep(s, dt){
@@ -994,7 +1031,8 @@ function spawnUnit(side, kind, o){
     heroHp += passVal(h, 'auraHp');
     if (kind === 'melee') heroHp += passVal(h, 'meleeHp');
   }
-  const hpUp = (1 + .10 * s.troopUp.thp) * (1 + heroHp), adUp = 1 + .10 * s.troopUp.tad, armUp = 8 * s.troopUp.tarm;
+  const hpUp = (1 + UP_EFFECT.thp * s.troopUp.thp) * (1 + heroHp),
+        adUp = 1 + UP_EFFECT.tad * s.troopUp.tad, armUp = UP_EFFECT.tarm * s.troopUp.tarm;
   const u = {
     id:G.uid++, side, kind, isHero:false, struct:false, paid:!!o.paid,
     x:o.x !== undefined ? o.x : gateX(side) + dirOf(side) * 2.5,
@@ -1098,6 +1136,8 @@ function nearestFoe(u, rad, wantHero){
 // A minion's armour, plus whatever a hero standing beside it is lending.
 function effArmor(u, magic){
   let r = magic ? (u.mr || 0) : (u.armor || 0);
+  // Armour Plating: bought, priced, described — and read by nothing until now.
+  if (u.struct && G.sides[u.side]) r += UP_EFFECT.armor * G.sides[u.side].towerUp.armor;
   if (!u.isHero && !u.struct && u.side !== undefined){
     for (const h of G.sides[u.side].heroes)
       if (!h.dead && h.inLane && Math.abs(h.x - u.x) < 8) r += passVal(h, 'auraArm');
@@ -1211,7 +1251,7 @@ function killThing(t, src){
   }
   if (t.isHero) onHeroDeath(t, src);
   else {
-    shareXp(t.x, 26 + 2.4 * G.wave, src);
+    shareXp(t.x, 31 + 2.9 * G.wave, src);
     if (!HEADLESS){ burstFx(t.x, t.y, SIDE_COL[t.side], 7); sfx('die', t.x); }
     const i = G.units.indexOf(t); if (i >= 0) G.units.splice(i, 1);
   }
@@ -1274,14 +1314,14 @@ function attackSpeedOf(u){
     if (u.hp / u.mhp < .5) as *= 1 + passVal(u, 'asLow');
     if (passVal(u, 'asDuel') && nearestFoe(u, 8, true)) as *= 1 + passVal(u, 'asDuel');
   }
-  if (u.struct) as *= 1 + .10 * G.sides[u.side].towerUp.as;
+  if (u.struct) as *= 1 + UP_EFFECT.as * G.sides[u.side].towerUp.as;
   return Math.max(.15, as);
 }
 
 function attackDamage(u){
   let ad = u.ad;
   if (u.isHero) ad += bsum(u, 'bad');
-  if (u.struct) ad *= 1 + .12 * G.sides[u.side].towerUp.atk;
+  if (u.struct) ad *= 1 + UP_EFFECT.atk * G.sides[u.side].towerUp.atk;
   if (u.mb && u.mb.t > 0) ad *= 1 + u.mb.ad;
   return ad;
 }
@@ -1477,7 +1517,7 @@ function structStep(st, dt){
   if (st.hitT > 0) st.hitT -= dt;
   const s = G.sides[st.side];
   st.mhp = structMaxHp(s, st);
-  const reg = 2.5 * s.towerUp.regen;
+  const reg = UP_EFFECT.regen * s.towerUp.regen;
   if (reg > 0 && G.t - st.dmgTaken > 5) st.hp = Math.min(st.mhp, st.hp + reg * dt);
   if (!st.ad) return;
   st.cd -= dt;
@@ -1812,7 +1852,7 @@ function heroStep(h, dt){
     + (atHome ? 34 : 0) + calm * (6 + h.lvl * .9)) * dt);
   h.mana = Math.min(h.mmana, h.mana + (3.5 + h.lvl * .35 + passVal(h, 'mreg')
     + (atHome ? 22 : 0) + calm * 4) * dt);
-  gainXp(h, 4.5 * dt);                       // standing in the lane is worth something
+  gainXp(h, 6.5 * dt);                       // standing in the lane is worth something
   for (let i = h.buffs.length - 1; i >= 0; i--){ h.buffs[i].t -= dt; if (h.buffs[i].t <= 0) h.buffs.splice(i, 1); }
   if (h.rage > 0 && G.t - h.dmgTaken > 3) h.rage = Math.max(0, h.rage - dt * .05);
   const shieldLow = passVal(h, 'shieldLow');
@@ -2126,7 +2166,10 @@ function aiStep(s, dt){
   if (bLvl(s, 'forge') > 0 && arnd(s) < .7){
     const all = [...TOWER_UPS, ...TROOP_UPS];
     const pool = all.filter(u => (TOWER_UPS.includes(u) ? s.towerUp : s.troopUp)[u.id] < upCap(s));
-    if (pool.length){ const u = apick(s, pool); buyUp(s, u.id); }
+    // buy the best value it can actually pay for, with a little noise so two
+    // holds do not shop identically
+    pool.sort((a, b) => upRate(s, b.id) * (.85 + arnd(s) * .3) - upRate(s, a.id));
+    for (const u of pool) if (!buyUp(s, u.id)) break;
   }
   // --- heroes
   if (s.heroes.length < heroCap(s) && canPay(s, HERO_COST)){
@@ -4108,13 +4151,13 @@ window.IB = {
   createHero, makeHero, pickOption, autoPick, gainXp, recalcHero, offer, enterLane, heroStep,
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
-  frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch,
+  frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
-  WAVE_KINDS, waveKindFor, huntRange, lowAlly, heroTarget, towerCovered,
+  WAVE_KINDS, waveKindFor, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
