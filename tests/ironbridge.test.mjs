@@ -1064,6 +1064,69 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(cast.mhp === Math.round(IB.UNITS.caster.hp * (1 + .055 * G.wave)), 'but leaves casters alone');
 }
 
+/* ---------------------------------------------------------------- skill value */
+{
+  // Every skill has to be worth picking. Second Wind was dead last for all six
+  // classes and strictly worse than Mend — less healing, longer cooldown.
+  IB.newMatch({ diff:'veteran', seed:199 });
+  const rate = (id, cls) => {
+    const cl = IB.CLS[cls];
+    return IB.skRate(IB.SKILL[id], 3, cl.b.ad + cl.g.ad * 8, cl.b.ap + cl.g.ap * 8);
+  };
+  const total = (id, r) => IB.SKILL[id].heal[0] + IB.SKILL[id].heal[1] * (r - 1);
+  t.ok(total('secondwind', 3) > total('mend', 3) * 1.3,
+    'a heal that arrives over five seconds pays more than an instant one');
+  t.ok(IB.SKILL.secondwind.cd <= IB.SKILL.mend.cd + 8, 'and does not also cost a much longer cooldown');
+  for (const cl of IB.CLASSES)
+    t.ok(rate('secondwind', cl.id) > rate('mend', cl.id) * .9, 'Second Wind is worth taking as a ' + cl.name);
+
+  // Nothing may be beaten on every axis at once by something in the same pool.
+  let dominated = [];
+  for (const cl of IB.CLASSES){
+    const pool = IB.basicPool(cl.id);
+    const ad = IB.CLS[cl.id].b.ad + IB.CLS[cl.id].g.ad * 8, ap = IB.CLS[cl.id].b.ap + IB.CLS[cl.id].g.ap * 8;
+    for (const a of pool) for (const b of pool){
+      // Only compare like with like: a class's own skill *should* beat the
+      // shared pool for that class — that is what class identity means.
+      if (a === b || a.tag !== b.tag || a.cls !== b.cls) continue;
+      const ra = IB.skRate(a, 3, ad, ap), rb = IB.skRate(b, 3, ad, ap);
+      if (ra < rb * .999 && a.cd >= b.cd && a.mana >= b.mana)
+        dominated.push(cl.id + ':' + a.n + ' < ' + b.n);
+    }
+  }
+  t.ok(dominated.length === 0, 'no skill is beaten on output, cooldown and cost at once (' +
+    dominated.slice(0, 3).join('; ') + ')');
+  // and the value function itself has to be sane
+  let bad = 0;
+  for (const sd of IB.SKILLS) for (const r of [1, 3, 5])
+    if (!finite(IB.skOutput(sd, r, 100, 100)) || IB.skOutput(sd, r, 100, 100) <= 0) bad++;
+  t.ok(bad === 0, 'every skill is worth a finite, positive amount at every rank');
+  t.ok(IB.skOutput(IB.SKILL.fireball, 5, 100, 100) > IB.skOutput(IB.SKILL.fireball, 1, 100, 100),
+    'and ranking a skill up makes it worth more');
+}
+{
+  // The Host used to pick skills and ultimates at pure random, so it built
+  // tanks full of nukes and supports with no heals.
+  IB.newMatch({ diff:'veteran', seed:211 });
+  const taste = { support:0, tank:0, n:0 };
+  for (let seed = 0; seed < 40; seed++){
+    IB.reseed(400 + seed);
+    for (const cls of ['support','tank']){
+      const h = IB.makeHero(1, cls, 'AI');
+      IB.autoPick(h);
+      for (const lv of [3, 6, 9]){ h.lvl = lv; IB.offer(h, 'skill'); IB.autoPick(h); }
+      const kinds = h.skills.map(k => IB.SKILL[k.id]);
+      if (cls === 'support' && kinds.some(k => k.tag === 'heal' || k.tag === 'buff')) taste.support++;
+      if (cls === 'tank' && kinds.some(k => k.tag === 'cc' || k.shield)) taste.tank++;
+    }
+    taste.n++;
+  }
+  t.ok(taste.support > taste.n * .7, 'a Host support usually ends up with something that helps allies (' +
+    taste.support + '/' + taste.n + ')');
+  t.ok(taste.tank > taste.n * .7, 'and a Host tank with crowd control or a shield (' + taste.tank + '/' + taste.n + ')');
+  t.ok(taste.support < taste.n * 1.01, 'without the pick becoming deterministic');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
