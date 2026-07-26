@@ -1652,6 +1652,56 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'and not every one of them is drawing a bar (' + live.filter(IB.showsBar).length + ' of ' + live.length + ')');
 }
 
+/* ------------------------------------------------- naming the bridge */
+{
+  // Every building in the hold carried its name. Nothing on the bridge did —
+  // eight identical towers and two diamonds, whose names appeared only in a
+  // toast that had already scrolled past ('Ember Host loses Inner Turret') or
+  // in a panel you had to click each one to read. And the rule that decides
+  // the match — only the outermost STANDING structure can be attacked — was
+  // invisible, so you could not see where your wave would land.
+  IB.newMatch({ diff:'veteran', seed:863 });
+  // Read through fallbacks so that reverting the source fails these assertions
+  // out loud instead of throwing on a missing export.
+  const SHORT = IB.STRUCT_SHORT || {};
+  const label = (st) => (IB.structLabel ? IB.structLabel(st) : null);
+  const says = (st) => (label(st) || { txt:'' }).txt.includes('in play');
+  for (const st of IB.STRUCTS)
+    t.ok(!!SHORT[st.key], st.n + ' has a short name for the world (' + (SHORT[st.key] || 'none') + ')');
+  t.ok(Object.keys(SHORT).length === IB.STRUCTS.length,
+    'and there are no short names for structures that do not exist');
+  // the short form exists because the full one does not fit between two towers
+  const longest = Math.max(0, ...Object.values(SHORT).map(n => n.length));
+  t.ok(longest > 0 && longest <= 9, 'the longest short name is nine characters (' + longest + ')');
+  for (const st of IB.STRUCTS)
+    t.ok((SHORT[st.key] || '').length <= st.n.length,
+      'and none is longer than the name it stands in for (' + st.n + ')');
+
+  for (const side of [0, 1]){
+    const list = G.sides[side].structs;
+    const marked = list.filter(says);
+    t.ok(marked.length === 1, 'exactly one structure on side ' + side + ' says it is in play');
+    t.ok(marked[0] === IB.frontStruct(side), 'and it is the one that may actually be attacked');
+    t.ok(list.every(st => (label(st) || {}).col === (side === 0 ? '#bfe0ff' : '#ffc4bd')),
+      'both of a side\'s labels wear that side\'s colour');
+  }
+  // knock the front one down: the mark moves, and rubble stops naming itself
+  {
+    const list0 = G.sides[0].structs;                      // sorted outer-first, gates last
+    const front = IB.frontStruct(0), next = list0[list0.indexOf(front) + 1];
+    front.hp = 0; front.dead = true;
+    t.ok(label(front) === null,
+      'a broken structure carries no name — it is already printing its rebuild countdown');
+    t.ok(says(next), 'and the mark moves to what is behind it');
+    t.ok(list0[list0.length - 1].key === 'gate' && !says(list0[list0.length - 1]),
+      'while the gates behind everything stay unmarked');
+    front.dead = false; front.hp = front.mhp;
+  }
+  // and it survives the render path with the fussy context watching the colours
+  IB.draw();
+  t.ok(true, 'the bridge draws with its names on');
+}
+
 /* ------------------------------------------------------- framing + the sky */
 {
   // A phone used to open at the same zoom floor as a laptop, which left the

@@ -3110,6 +3110,34 @@ function drawStructure(c, st){
   if (st.hitT > 0 && !dead){
     c.globalAlpha = st.hitT * 2.2; ell(c, p[0], p[1] - 20 * cam.z, 26 * cam.z, 20 * cam.z, '#ffffff'); c.globalAlpha = 1;
   }
+  // Every building in the hold carries its name; nothing on the bridge did.
+  // Nine identical towers and two diamonds, and the only place their names
+  // appeared was a toast that had already scrolled away ('Ember Host loses
+  // Inner Turret') or a panel you had to click each one to read. Worse, the
+  // rule that decides the whole match — only the outermost standing structure
+  // can be attacked — was invisible: you could not see where your wave would
+  // land or which of yours was in the firing line. So: short names on the
+  // bridge, in the side's colour, and the one in play says so.
+  //
+  // Short names, not the full ones: measured at the zoom the camera buttons
+  // actually land on (0.95 desktop, 0.75-0.78 on a phone) adjacent structures
+  // sit 79px apart on the desktop and 62px on the narrowest phone, and 'Inner
+  // Turret' is ~68px of 9px type. 'Inner' is ~34.
+  const lab = structLabel(st);
+  if (lab) labelQ.push({ x:X, y:Y - (st.key === 'gate' ? 128 : st.key === 'inhib' ? 84 : 96) * cam.z,
+    txt:lab.txt, col:lab.col, small:true });
+}
+// The bridge is read at a glance and a full name is twice the width of the gap
+// between two towers, so the world gets the short form and the inspect panel
+// keeps the full one.
+const STRUCT_SHORT = { gate:'Gates', inhib:'Inhibitor', t3:'Inner', t2:'Mid', t1:'Outer' };
+// Kept out of the draw call so it can be checked without a canvas: a rubble
+// heap already prints its own rebuild countdown, so only standing structures
+// get a name.
+function structLabel(st){
+  if (st.dead) return null;
+  return { txt:(STRUCT_SHORT[st.key] || st.n) + (st === frontStruct(st.side) ? ' · in play' : ''),
+    col:st.side === 0 ? '#bfe0ff' : '#ffc4bd' };
 }
 
 function hpBar(c, x, y, u, w, big){
@@ -4942,6 +4970,7 @@ window.IB = {
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
+  structLabel, STRUCT_SHORT,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
