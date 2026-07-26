@@ -1858,6 +1858,55 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
   t.ok(!stuck, 'the advisor never repeats an instruction the player already followed' + (stuck ? ' (' + stuck + ')' : ''));
   t.ok(guard < 40, 'and it converges');
+
+  // The loop above hands the hold rich(s) first, so every hint it walks is one
+  // the player can pay for immediately — which is exactly why it never caught
+  // this: sampled once a second over eight twelve-minute matches, the bar sat
+  // on the IDENTICAL sentence 'Build a Hero Factory...' for an unbroken 152
+  // seconds, because it repeated an instruction the hold could not afford and
+  // gave no sign of getting closer. A hint you cannot act on has to at least
+  // tell you what you are waiting for.
+  {
+    IB.newMatch({ diff:'veteran', seed:1103 });
+    const s = P();
+    for (const n of ['gold','iron','wood','food']) IB.assign(s, n, 99);   // nobody idle
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'barracks');
+    const cost = IB.buildCost('tavern', 1);
+    const txt = () => (IB.adviceFor(s) || { txt:'' }).txt;
+    for (const k of ['gold','iron','wood','food']) s.res[k] = 0;
+    s.res.wood = cost.wood;                              // wood covered, gold is the gap
+    const poor = txt();
+    t.ok(/Hero Factory/.test(poor), 'a hold with no Hero Factory is still pointed at one (' + poor + ')');
+    t.ok(/\d+ more gold/.test(poor), 'and told which pile it is waiting on, and how much');
+    const short1 = +(poor.match(/(\d+) more gold/) || [])[1];
+    t.ok(short1 === cost.gold, 'the number is the actual shortfall (' + short1 + ' of ' + cost.gold + ')');
+    s.res.gold = Math.floor(cost.gold / 2);
+    const short2 = +(txt().match(/(\d+) more gold/) || [])[1];
+    t.ok(short2 < short1, 'and it counts down as the pile fills (' + short1 + ' → ' + short2 + ')');
+    s.res.gold = cost.gold;
+    t.ok(!/more gold/.test(txt()) && /Hero Factory/.test(txt()),
+      'once it is affordable the hint is the plain instruction again (' + txt() + ')');
+  }
+  // and it must not ask for a worker that is already on the way
+  {
+    IB.newMatch({ diff:'veteran', seed:1107 });
+    const s = P();
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'barracks');
+    IB.build(s, s.plot.indexOf(null), 'tavern');
+    IB.createHero(s, 'tank'); IB.autoPick(s.heroes[0]);
+    IB.build(s, s.plot.indexOf(null), 'farm');           // room to grow
+    for (const n of ['gold','iron','wood','food']) IB.assign(s, n, 99);
+    s.res.iron = 0;                                      // nothing armable, nothing mustering
+    const before = (IB.adviceFor(s) || { txt:'' }).txt;
+    t.ok(/Train one more|Train another/.test(before),
+      'with nobody idle and room in the hold it asks for another worker (' + before + ')');
+    t.ok(IB.trainWorker(s) === null, 'so train one');
+    const after = (IB.adviceFor(s) || { txt:'' }).txt;
+    t.ok(!/Train one more|Train another/.test(after),
+      'and it stops asking while that worker is on the way (' + (after || '(nothing)') + ')');
+  }
 }
 
 /* ---------------------------------------------------------------- effects */
