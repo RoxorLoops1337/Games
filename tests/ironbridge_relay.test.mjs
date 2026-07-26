@@ -193,6 +193,30 @@ const t = harness('ironbridge relay');
   t.ok(a2.last('hello').side === 0, 'and the player who left gets their OWN side back, not the free one');
   t.ok(a2.last('hello').seed === seed, 'on the same seed, so it is the same match resumed');
 
+  // `start` must NOT be sent again. It would put the player who never left back
+  // on the first tick and throw away the match they are still holding. Instead
+  // the room says a rejoin happened, and says which of the two is which —
+  // because from inside a browser "I have a match and you do not" is exactly
+  // the thing a returning player cannot work out for itself.
+  t.ok(!a2.last('start'), 'a returning player is NOT told to start');
+  t.ok(b.msgs().filter(m => m.k === 'start').length === 1,
+    'and the player who stayed is told to start exactly once, ever');
+  const rIn = a2.last('rejoin'), rStay = b.last('rejoin');
+  t.ok(!!rIn && !!rStay, 'both are told a rejoin happened instead');
+  t.ok(rIn.role === 'returning', 'the one that just arrived is the returning one (' + (rIn && rIn.role) + ')');
+  t.ok(rStay.role === 'staying', 'and the one already there is the one that stayed (' + (rStay && rStay.role) + ')');
+  t.ok(rIn.seed === seed && rStay.seed === seed, 'both on the original seed');
+  t.ok(rIn.side === 0 && rStay.side === 1, 'each keeping its own side');
+
+  // A room filling up for the FIRST time must still be a start, not a rejoin.
+  {
+    const fresh = new Room(mkState(), {});
+    await joinRoom(fresh); await joinRoom(fresh);
+    const socks = fresh.state.getWebSockets();
+    t.ok(socks.every(w => !!w.last('start')), 'a room filling up the first time still starts');
+    t.ok(socks.every(w => !w.last('rejoin')), 'and says nothing about rejoining');
+  }
+
   // The room survives eviction: a hibernated object rebuilds from storage, so
   // the seed cannot be re-rolled underneath a match in progress.
   const cold = new Room({ ...st, __socks:st.__socks }, {});

@@ -3940,7 +3940,8 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.NET.stallT = 1.2;
   t.ok(/waiting/i.test(IB.netBanner()), 'a stall is named (' + IB.netBanner() + ')');
   IB.NET.peerLost = true;
-  t.ok(/lost/i.test(IB.netBanner()), 'a dropped peer outranks a stall (' + IB.netBanner() + ')');
+  t.ok(/dropped out/i.test(IB.netBanner()), 'a dropped peer outranks a stall (' + IB.netBanner() + ')');
+  t.ok(/come back/i.test(IB.netBanner()), 'and says it is waiting for them rather than that it is over');
   IB.NET.desyncAt = 900;
   t.ok(/drift|sync/i.test(IB.netBanner()), 'and a desync outranks everything (' + IB.netBanner() + ')');
   // The banner has to reach the one line the player actually reads.
@@ -4883,6 +4884,91 @@ t.ok(true, 'drawing an empty bridge is harmless');
   const wiring = SRC.slice(SRC.indexOf('function wire()'));
   t.ok(/dataset\.net === '1'/.test(wiring), 'and the advice bar opens it when the match is in trouble');
   IB.netEnd();
+}
+
+/* ================================ a dropped player can get back into the match
+   A dead socket used to be the end of it. The relay holds the room, the seed
+   and the seat open, so the only thing missing was the board — and the resync
+   snapshot is exactly that. */
+{
+  // The machine that stayed hands over the board whichever seat it is in. On a
+  // DRIFT the host is the authority because both are live and something has to
+  // break the tie; on a REJOIN the tie does not exist — only one of them knows
+  // anything — so seat must not decide it.
+  IB.netEnd();
+  IB.netStart({ me:1, seed:9700 });      // seat 1: would refuse to send on a drift
+  for (let n = 0; n < 200; n++){ IB.netDeliver(n, 0, []); IB.netDeliver(n, 1, []); }
+  for (let n = 0; n < 40; n++) IB.netStep();
+  const sent = [];
+  IB.NET.send = (o) => sent.push(o);
+
+  IB.netSendSnap();                       // as a drift — the joiner keeps quiet
+  t.ok(sent.length === 0, 'on a drift, seat 1 does not try to be the authority');
+  IB.netSendSnap(true);                   // as a rejoin — it is the only one left
+  t.ok(sent.some(o => o.k === 'sync'), 'but on a rejoin it hands the board over regardless of seat');
+  t.ok(sent.filter(o => o.k === 'sync').every(o => typeof o.part === 'string' && o.tick >= 0),
+    'in labelled pieces');
+
+  // A rejoin must not spend the desync budget — they are different failures and
+  // a match that reconnects six times has not drifted once.
+  IB.netEnd(); IB.netStart({ me:0, seed:9701 });
+  IB.NET.send = () => {};
+  const r0 = IB.NET.resyncs;
+  for (let i = 0; i < 5; i++) IB.netSendSnap(true);
+  t.ok(IB.NET.resyncs === r0, 'reconnecting does not use up the resync budget (' + IB.NET.resyncs + ')');
+  IB.netSendSnap();
+  t.ok(IB.NET.resyncs === r0 + 1, 'but an actual drift still does');
+
+  // While waiting to be told where the match is, the board must not run — a
+  // freshly started match is on tick 0 and simulating it would be inventing a
+  // game that never happened.
+  IB.netEnd(); IB.netStart({ me:1, seed:9702 });
+  for (let n = 0; n < 200; n++){ IB.netDeliver(n, 0, []); IB.netDeliver(n, 1, []); }
+  IB.NET.awaitSync = true;
+  const t0 = IB.NET.tick, clock = G.t;
+  for (let i = 0; i < 60; i++) IB.netStep();
+  t.ok(IB.NET.tick === t0 && G.t === clock, 'a rejoining player holds still until it is told where it is');
+  t.ok(/Picking the match up/.test(IB.netBanner()), 'and says so (' + IB.netBanner() + ')');
+
+  // ...and the snapshot releases it, at the right tick.
+  IB.NET.awaitSync = false;
+  IB.netEnd();
+
+  // Our own socket dying is a different thing from theirs, and is worth retrying.
+  IB.netEnd(); IB.netStart({ me:0, seed:9703 });
+  IB.NET.linkLost = true;
+  const before = IB.NET.retry;
+  IB.netRetry();
+  t.ok(IB.NET.retry === before + 1, 'a dead link schedules a reconnection');
+  t.ok(/trying to get back in/.test(IB.netBanner()), 'and the bar says so (' + IB.netBanner() + ')');
+  t.ok(IB.NET.diary.some(e => e.kind === 'reconnecting'), 'and it is written down');
+  for (let i = 0; i < IB.RETRY_MAX + 4; i++) IB.netRetry();
+  t.ok(IB.NET.retry <= IB.RETRY_MAX, 'it gives up rather than hammering forever (' + IB.NET.retry + '/' + IB.RETRY_MAX + ')');
+  t.ok(IB.NET.diary.some(e => e.kind === 'gave up reconnecting'), 'and says that it gave up');
+
+  // A peer that went is described as maybe coming back, not as the end.
+  IB.netEnd(); IB.netStart({ me:0, seed:9704 });
+  IB.netRecv({ k:'peerGone', side:1 });
+  t.ok(/come back/i.test(IB.netBanner()), 'a peer dropping out reads as recoverable (' + IB.netBanner() + ')');
+
+  // The two failures are told apart, because they need different things from
+  // the player: one is theirs to fix, one is ours.
+  IB.netEnd(); IB.netStart({ me:0, seed:9705 });
+  IB.NET.peerLost = true;
+  const theirs = IB.netBanner();
+  IB.NET.peerLost = false; IB.NET.linkLost = true;
+  const ours = IB.netBanner();
+  t.ok(theirs !== ours, 'their socket dying and ours dying do not read the same');
+  IB.netEnd();
+
+  // The client has to actually handle the relay's rejoin message, and must not
+  // treat it as a fresh start.
+  const wiring = SRC.slice(SRC.indexOf('sock.onmessage'));
+  t.ok(/m\.k === 'rejoin'/.test(wiring), 'the client handles a rejoin');
+  const rj = wiring.slice(wiring.indexOf("m.k === 'rejoin'"), wiring.indexOf("m.k === 'rejoin'") + 900);
+  t.ok(/role === 'staying'/.test(rj) && /netSendSnap\(true\)/.test(rj),
+    'the one that stayed hands the board over');
+  t.ok(/awaitSync = true/.test(rj), 'and the one returning waits for it rather than playing a phantom match');
 }
 
 IB.draw();

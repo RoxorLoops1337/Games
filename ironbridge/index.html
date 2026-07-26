@@ -5050,7 +5050,10 @@ function lobbyConnect(code){
   sock.onclose = (ev) => {
     netDiary('SOCKET CLOSED', 'code ' + ((ev && ev.code) || '?') +
       (ev && ev.reason ? ' "' + ev.reason + '"' : '') + (ev && ev.wasClean ? ' (clean)' : ' (not clean)'));
-    if (NET.on){ NET.peerLost = true; if (!HEADLESS) syncUI(); }   // mid-match: it stalls and says so
+    // OUR socket, not theirs. A dropped link used to end the match outright; a
+    // match seven minutes deep deserves an attempt to get back into it, and the
+    // relay holds the room and the seat open for exactly that.
+    if (NET.on){ NET.linkLost = true; if (!HEADLESS) syncUI(); netRetry(); }
     else if (LOBBY.state !== 'error') lobbySet('error', 'The connection closed.');
   };
   sock.onmessage = (ev) => {
@@ -5060,10 +5063,30 @@ function lobbyConnect(code){
       // Both machines get here within a few milliseconds of each other, with
       // the same seed and different sides. From this point the relay is only
       // carrying command batches.
-      NET.send = (o) => { try { sock.send(JSON.stringify(o)); } catch (e) {} };
+      NET.send = (o) => { if (sock.readyState === 1) try { sock.send(JSON.stringify(o)); } catch (e) {} };
       NET.peerLost = false;
       netStart({ me:m.side, seed:m.seed, diff:'veteran' });
       LOBBY.state = 'idle';
+      closeModal(); syncUI();
+      return;
+    }
+    if (m.k === 'rejoin'){
+      // The room was already playing. `start` is deliberately NOT sent again —
+      // it would put the player who never left back on the first tick — so the
+      // relay says which of the two is returning and which stayed. The one who
+      // stayed is the only one that still knows anything, whichever seat it
+      // happens to be sitting in, and it simply hands the board over.
+      NET.send = (o) => { if (sock.readyState === 1) try { sock.send(JSON.stringify(o)); } catch (e) {} };
+      NET.peerLost = false; NET.linkLost = false; NET.retry = 0;
+      netDiary('rejoin', 'role ' + m.role + '  seat ' + m.side);
+      if (m.role === 'staying' && NET.on){
+        netSendSnap(true);
+      } else {
+        netStart({ me:m.side, seed:m.seed, diff:'veteran' });
+        NET.awaitSync = true;                    // hold until we are told where we are
+        netDiary('awaiting board', 'from the player who stayed');
+        LOBBY.state = 'idle';
+      }
       closeModal(); syncUI();
       return;
     }
@@ -5079,7 +5102,11 @@ function netBanner(){
     return NET.resyncs >= SYNC_MAX
       ? 'The two matches keep drifting apart. This one has stopped — it is no longer the same game.'
       : 'The two matches drifted apart. Putting them back together…';
-  if (NET.peerLost) return 'Lost the connection to the other player.';
+  if (NET.awaitSync) return 'Back in. Picking the match up where it was…';
+  if (NET.linkLost) return NET.retry > 0
+    ? 'Connection lost — trying to get back in (' + NET.retry + ')…'
+    : 'Connection lost.';
+  if (NET.peerLost) return 'The other player dropped out. Waiting for them to come back…';
   if (NET.stallT > .4) return 'Waiting for the other player…';
   return '';
 }
@@ -5926,6 +5953,9 @@ const NET = {
   peerHashes:new Map(),// tick -> the other machine's hash, kept until ours exists
   resyncs:0,          // how many times this match has been put back together
   syncId:0, rx:null,  // a snapshot in flight, reassembled from its pieces
+  awaitSync:false,    // rejoined, holding until the other machine says where we are
+  linkLost:false,     // OUR socket died, as opposed to theirs
+  retry:0,            // reconnection attempts since the link dropped
   diary:[],           // what happened, in order, for when it goes wrong
   pending:[],         // commands issued since the last publish
   send:null,          // transport, injected by the lobby
@@ -6266,6 +6296,24 @@ function showNetReport(){
   G.netReportText = txt;
 }
 
+// Getting back in after our own link drops. The room keeps its seed and holds
+// the seat, so reconnecting to the same code lands in the same match — and the
+// relay then tells both machines who is returning and who stayed.
+const RETRY_MAX = 6;
+const STALL_DEAD = 4;            // seconds of stall before a non-open socket counts as gone
+function netRetry(){
+  if (!NET.on || !NET.linkLost) return;
+  if (NET.retry >= RETRY_MAX){ netDiary('gave up reconnecting', 'after ' + NET.retry + ' tries'); return; }
+  NET.retry++;
+  const wait = Math.min(8000, 500 * ipow(2, NET.retry - 1));
+  netDiary('reconnecting', 'attempt ' + NET.retry + ' in ' + wait + 'ms to room ' + (LOBBY.code || '?'));
+  if (HEADLESS) return;
+  setTimeout(() => {
+    if (!NET.on || !NET.linkLost || !LOBBY.code) return;
+    lobbyConnect(LOBBY.code);
+  }, wait);
+}
+
 /* ------------------------------------------------------------ resync wire
    A snapshot is bigger than the relay will carry in one message — 13KB at wave
    three, 20KB in a busy one, against a 16KB limit — so it goes in pieces and is
@@ -6274,10 +6322,15 @@ function showNetReport(){
 const SYNC_CHUNK = 12000;
 const SYNC_MAX = 4;              // give up rather than loop forever on a repeat
 
-function netSendSnap(){
-  if (NET.me !== 0) return;                       // the host is the authority
-  if (NET.resyncs >= SYNC_MAX) return;
-  NET.resyncs++;
+// `force` is a rejoin rather than a drift: the machine that stayed is the only
+// one that knows anything, whichever seat it happens to be sitting in, and
+// handing a returning player the board is not a failure to be budgeted.
+function netSendSnap(force){
+  if (!force){
+    if (NET.me !== 0) return;                     // on a drift, the host is the authority
+    if (NET.resyncs >= SYNC_MAX) return;
+    NET.resyncs++;
+  }
   const at = NET.tick;
   const body = JSON.stringify(netSnap());
   const id = (NET.syncId = (NET.syncId || 0) + 1);
@@ -6299,7 +6352,8 @@ function netTakeSnap(m){
   NET.rx = null;
   if (!netLoad(snap)) { netDiary('sync in FAILED', 'snapshot would not load'); return; }
   NET.resyncs++;
-  netDiary('sync in', 'adopted the host’s board at tick ' + (m.tick | 0) + ' (resync ' + NET.resyncs + ')');
+  netDiary('sync in', 'adopted the other machine’s board at tick ' + (m.tick | 0) + ' (resync ' + NET.resyncs + ')');
+  NET.awaitSync = false;
   netResumeAt(m.tick | 0);
 }
 
@@ -6330,6 +6384,7 @@ function netStep(){
   // then carrying on — which is what this did, with only a banner to show for
   // it — means both players keep giving orders to a board the other one cannot
   // see, and whoever "wins" did not. The match stops here.
+  if (NET.awaitSync) return false;                // nothing on this board is real yet
   if (NET.desyncAt >= 0) return false;
   if (!netReady(NET.tick)) return false;
   const slot = NET.box.get(NET.tick);
@@ -6364,6 +6419,7 @@ function netStart(opt){
   netClockStart();                                   // a clock that survives being in the background
   NET.box.clear(); NET.pending.length = 0; NET.hashes.clear(); NET.peerHashes.clear();
   NET.desyncAt = -1; NET.stallT = 0; NET.resyncs = 0; NET.rx = null;
+  NET.awaitSync = false; NET.linkLost = false; NET.retry = 0;
   newMatch({ diff:opt.diff || 'veteran', seed:opt.seed, pvp:true });
   G.sides[0].ai = false; G.sides[1].ai = false;      // both holds are people now
   // Prime the pipe: the first NET.delay ticks have no player input by
@@ -6384,6 +6440,7 @@ function netEnd(){
   MY = 0;                                            // back to the left-hand hold
   netClockStop();
   NET.tick = 0; NET.seq = 0; NET.desyncAt = -1; NET.stallT = 0; NET.resyncs = 0; NET.rx = null;
+  NET.awaitSync = false; NET.linkLost = false; NET.retry = 0;
   NET.box.clear(); NET.peerHashes.clear(); NET.hashes.clear(); NET.pending.length = 0;
   acc = 0;
   lobbyClose();
@@ -6452,6 +6509,15 @@ function netPump(){
   // thousand ticks and is not going to pay them.
   if (acc > NET_ARREARS) acc = NET_ARREARS;
   if (blocked && NET.stallT === 0) netDiary('stalled', 'waiting on the other player at tick ' + NET.tick);
+  // A socket does not always announce its own death: the close event can be
+  // slow or never arrive at all, and the match then waits on a peer it can no
+  // longer reach. A long stall with a socket that is not OPEN is that, and it
+  // is treated as a dropped link rather than as patience.
+  if (blocked && NET.stallT > STALL_DEAD && !NET.linkLost && LOBBY.sock && LOBBY.sock.readyState !== 1){
+    netDiary('link looks dead', 'stalled ' + NET.stallT.toFixed(1) + 's with the socket in state ' + LOBBY.sock.readyState);
+    NET.linkLost = true;
+    netRetry();
+  }
   else if (!blocked && NET.stallT > 1) netDiary('resumed', 'after ' + NET.stallT.toFixed(1) + 's of waiting');
   NET.stallT = blocked ? NET.stallT + raw : 0;
 }
@@ -6550,7 +6616,7 @@ window.IB = {
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, ultFlourish, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
-  netDiary, netReport, showNetReport, DIARY_MAX, esc,
+  netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,
   get BSC(){ return BSC; }, set BSC(v){ BSC = v; },
   get holdSide(){ return holdSide; }, set holdSide(v){ holdSide = v; },
   get acc(){ return acc; }, set acc(v){ acc = v; },
