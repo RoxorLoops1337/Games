@@ -615,6 +615,55 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(s.res.gold > g0, 'and the deeper mine still pays out');
 }
 
+/* ---------------------------------------------------------------- the advisor */
+{
+  // The next-step hint has to name a real, currently-possible action — and it
+  // must go quiet once the hold is actually running itself.
+  IB.newMatch({ diff:'veteran', seed:97 });
+  const s = P();
+  const a0 = IB.adviceFor(s);
+  t.ok(a0 && /worker/i.test(a0.txt), 'a fresh hold is told to put its idle workers to work');
+  t.ok(['jobs','train','sel','forge','heroes'].includes(a0.tab), 'and the hint points at a real dock tab');
+  for (const n of ['gold','iron','wood','food']) IB.assign(s, n, 99);
+  const a1 = IB.adviceFor(s);
+  t.ok(!a1 || !/standing around/.test(a1.txt), 'once everyone has a job it stops saying that');
+  rich(s);
+  IB.build(s, s.plot.indexOf(null), 'barracks');
+  const a2 = IB.adviceFor(s);
+  t.ok(!a2 || !/Barracks/.test(a2.txt), 'and it stops asking for a barracks once one stands');
+  // a hero with an unspent choice is always worth surfacing
+  IB.build(s, s.plot.indexOf(null), 'tavern');
+  IB.createHero(s, 'tank');
+  const a3 = IB.adviceFor(s);
+  t.ok(a3 && a3.tab === 'heroes' && /choice/i.test(a3.txt), 'an unspent hero choice is surfaced');
+  IB.autoPick(s.heroes[0]);
+  // Follow the advice literally, the way a new player would. Every hint must be
+  // one the player can actually carry out, or they get stuck in a loop.
+  let guard = 0, stuck = null, lastTxt = '', repeats = 0;
+  while (guard++ < 40){
+    const a = IB.adviceFor(s);
+    if (!a) break;
+    if (a.txt === lastTxt){ if (++repeats > 2){ stuck = a.txt; break; } } else repeats = 0;
+    lastTxt = a.txt;
+    let err = null;
+    if (/Farm/.test(a.txt)) err = IB.build(s, s.plot.indexOf(null), 'farm');
+    else if (/Forge/.test(a.txt)) err = IB.build(s, s.plot.indexOf(null), 'forge');
+    else if (/Hero Factory/.test(a.txt)) err = IB.build(s, s.plot.indexOf(null), 'tavern');
+    else if (/Arm a /.test(a.txt)) err = IB.trainUnit(s, 'melee');
+    else if (/Train one more|Train another/.test(a.txt)) err = IB.trainWorker(s);
+    else if (/standing around/.test(a.txt)){
+      const node = a.txt.match(/on (\w+)\./)[1];
+      err = IB.assign(s, node, 1);
+    }
+    else if (/another hero/.test(a.txt)) err = IB.createHero(s, 'mage');
+    else break;
+    t.ok(err === null || guard > 38, 'advice "' + a.txt.slice(0, 42) + '…" can actually be carried out');
+    step(8);                                  // let anything queued finish
+  }
+  t.ok(!stuck, 'the advisor never repeats an instruction the player already followed' + (stuck ? ' (' + stuck + ')' : ''));
+  t.ok(guard < 40, 'and it converges');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
