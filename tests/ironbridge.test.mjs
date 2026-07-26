@@ -811,6 +811,78 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.keysHtml().split('<kbd>').length - 1 >= IB.KEYS.length, 'the help sheet prints a key chip for every shortcut');
 }
 
+/* ------------------------------------------------------- framing + the sky */
+{
+  // A phone used to open at the same zoom floor as a laptop, which left the
+  // world a thin ribbon in a very large sky.
+  t.ok(IB.startZoom(390) >= .72, 'a phone opens zoomed in enough to read the world (' + IB.startZoom(390).toFixed(2) + ')');
+  t.ok(IB.startZoom(1400) > IB.startZoom(390) * .7, 'a laptop still opens showing plenty of bridge');
+  for (const w of [320, 390, 405, 760, 1024, 1400, 2400]){
+    const z = IB.startZoom(w);
+    t.ok(z >= IB.ZOOM_MIN && z <= IB.ZOOM_MAX, 'the opening zoom at ' + w + 'px is inside the zoom range (' + z.toFixed(2) + ')');
+  }
+  t.ok(IB.startZoom(759) > IB.startZoom(761) - .3, 'nothing falls off a cliff either side of the narrow breakpoint');
+
+  // clouds and birds are laid out once, from a hash, and never from the
+  // simulation's RNG — a redraw must not be able to change the fight
+  const c1 = IB.clouds(), c2 = IB.clouds();
+  t.ok(c1 === c2 && c1.length > 4, 'the sky is laid out once and cached (' + c1.length + ' clouds)');
+  t.ok(c1.every(cl => [cl.x, cl.y, cl.s, cl.d, cl.a].every(v => typeof v === 'number' && isFinite(v))),
+    'every cloud has finite numbers');
+  t.ok(c1.every(cl => cl.y >= 0 && cl.y < .5), 'and sits in the sky, not through the bridge');
+  {
+    // Decoration must never touch the simulation's random streams: two runs
+    // of the same seed have to agree whether or not anything was drawn.
+    const run = (drawing) => {
+      IB.newMatch({ diff:'veteran', seed:501 });
+      const out = [];
+      for (let i = 0; i < 6; i++){
+        if (drawing) IB.draw();
+        out.push(IB.arnd(P()).toFixed(9), IB.arnd(E()).toFixed(9));
+        step(1);
+        out.push(G.units.length);
+      }
+      return out.join(',');
+    };
+    t.ok(run(false) === run(true), 'drawing the sky (or anything else) cannot change the fight');
+  }
+}
+
+/* ------------------------------------------------------- the hero profile */
+{
+  IB.newMatch({ diff:'veteran', seed:503 });
+  const s = P();
+  rich(s);
+  IB.build(s, s.plot.indexOf(null), 'tavern');
+  IB.createHero(s, 'mage');
+  const h = s.heroes[0];
+  t.ok(IB.heroDoing(h) === 'Waiting on you to choose.', 'a hero with an unspent pick says so');
+  IB.autoPick(h);
+  t.ok(IB.heroDoing(h) === 'Marching.', 'once the pick is spent it is out on the bridge');
+  h.inLane = false;      // the state a resumed save comes back in
+  t.ok(IB.heroDoing(h) === 'In the hold, ready to march.', 'a hero waiting to walk out says so');
+  h.inLane = true;
+  h.dead = true; h.respawnT = 12;
+  t.ok(/Reforging/.test(IB.heroDoing(h)), 'a dead hero says when it is coming back');
+  h.dead = false;
+
+  // the meters: the health bar reads the real health, the xp bar the real xp
+  let m = IB.heroMeters(h);
+  t.ok(m.includes(Math.round(h.hp) + ' / ' + Math.round(h.mhp)), 'the health bar prints the health it draws');
+  h.hp = h.mhp * .5;
+  t.ok(/hm-hp" style="width:5[01]\./.test(IB.heroMeters(h)), 'a half-dead hero has a half-full bar');
+  t.ok(/level 3 unlocks a pick/.test(IB.heroMeters(h)), 'and the xp bar names the level that unlocks the next pick');
+  for (let i = 0; i < 40 && h.lvl < C.MAX_LEVEL; i++){ IB.gainXp(h, IB.xpNeed(h.lvl) + 5); IB.autoPick(h); }
+  t.ok(h.lvl === C.MAX_LEVEL && /fully grown/.test(IB.heroMeters(h)), 'a maxed hero is told it is done growing');
+  // the widths it prints are always drawable
+  for (const pct of [0, .01, .5, 1]){
+    h.hp = h.mhp * pct;
+    const w = IB.heroMeters(h).match(/hm-hp" style="width:([\d.]+)%/);
+    t.ok(w && +w[1] >= 0 && +w[1] <= 100, 'the health bar width stays inside the bar at ' + (pct * 100) + '% health');
+  }
+  h.hp = h.mhp;
+}
+
 /* ---------------------------------------------------------------- the intro */
 {
   // Shown once, on the very first match, and never again.

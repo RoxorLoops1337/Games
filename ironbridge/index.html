@@ -237,16 +237,27 @@
     background:linear-gradient(180deg,#c9a978,#b08e5e); color:#2b1d0e;
     box-shadow:inset 0 0 0 3px #8a6a3d, inset 0 0 60px rgba(90,60,20,.35); }
   .parch h2{ color:#40290f; text-align:center; letter-spacing:2px; font-size:20px; }
-  .hp-grid{ display:grid; grid-template-columns:186px 1fr; gap:12px; margin-top:10px; }
+  .hp-grid{ display:grid; grid-template-columns:200px 1fr; gap:12px; margin-top:10px; }
   .hp-left{ padding:10px; background:linear-gradient(180deg,#e0c79b,#c9aa78); border:2px solid #8a6a3d;
     border-radius:10px; text-align:center; }
   .portrait{ height:104px; display:flex; align-items:center; justify-content:center; font-size:52px;
     background:radial-gradient(circle at 50% 35%,#5d7fa8,#2f4763); border:2px solid #8a6a3d; border-radius:8px; }
   .hp-name{ margin-top:7px; font-size:16px; font-weight:800; }
   .hp-lvl{ font-size:12px; color:#6b4f28; }
-  .hp-stats{ display:grid; grid-template-columns:1fr 1fr; gap:3px 8px; margin-top:9px; font-size:11px; text-align:left; }
-  .hp-stats span{ display:flex; justify-content:space-between; gap:5px; border-bottom:1px dotted rgba(90,60,25,.35); }
-  .hp-stats b{ font-weight:800; }
+  .hp-stats{ display:flex; flex-direction:column; gap:2px; margin-top:8px; font-size:11px; text-align:left; }
+  .hp-stats span{ display:flex; justify-content:space-between; gap:6px; border-bottom:1px dotted rgba(90,60,25,.35); }
+  .hp-stats b{ font-weight:800; white-space:nowrap; }
+  .hp-meter{ position:relative; height:16px; margin-top:8px; border-radius:8px; overflow:hidden;
+    background:rgba(74,51,22,.30); border:1px solid #8a6a3d; }
+  .hp-meter.sm{ height:13px; margin-top:4px; }
+  .hp-meter i{ position:absolute; inset:0 auto 0 0; display:block; }
+  .hm-hp{ background:linear-gradient(180deg,#77c46a,#3f8f45); }
+  .hm-xp{ background:linear-gradient(180deg,#78a6de,#3f6ba8); }
+  .hp-meter em{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    font-style:normal; font-size:9px; font-weight:800; color:#2b1d07; letter-spacing:.3px; }
+  .hp-doing{ margin-top:8px; font-size:11px; font-style:italic; color:#6b4f28; text-align:left; }
+  .hp-blurb{ margin-top:7px; padding-top:7px; border-top:1px dotted rgba(90,60,25,.35);
+    font-size:11px; line-height:1.45; color:#6b4f28; text-align:left; }
   .hp-right{ min-width:0; }
   .grid-title{ text-align:center; font-size:13px; font-weight:800; letter-spacing:2px; text-transform:uppercase;
     color:#4a3316; margin-bottom:7px; }
@@ -268,6 +279,9 @@
   @media (max-width:700px){
     .hp-grid{ grid-template-columns:1fr; }
     .tier{ grid-template-columns:1fr; }
+    /* stacked, the portrait is the least useful 240px on the screen — the
+       skill grid is what the player opened this sheet to reach */
+    .portrait{ height:64px; font-size:34px; }
   }
 
   .dtabs{ display:none; }
@@ -877,7 +891,11 @@ function newMatch(opt){
   sel.tile = -1; sel.node = null; sel.build = null; sel.struct = null; sel.unit = null;
   scatterCache[0] = scatterCache[1] = null;
   cam.shake = 0; cam.sx = 0; cam.sy = 0;
-  cam.x = HOLD_X + 14; cam.follow = false; cam.z = cam.tz = clamp(LW / 1100, .55, .95);
+  cam.follow = false; cam.z = cam.tz = startZoom(LW);
+  // Sit the hold a touch left of centre so the bridge is in shot too. In world
+  // units that offset depends on how much world the screen is showing, or a
+  // zoomed-in phone opens with half the plot grid off the left edge.
+  cam.x = HOLD_X + .10 * (LW / (LS() * .96));
   return G;
 }
 
@@ -2488,6 +2506,11 @@ function ell(c, x, y, rx, ry, fill){
    RENDERING — the bridge
    ===================================================================== */
 const LS = () => 9.4 * cam.z;
+// A phone got the same zoom floor as a laptop, which left the world a thin
+// ribbon in a very large sky. A narrow screen starts closer in: you see less
+// of the bridge at once, but you can actually read what is on it.
+const ZOOM_MIN = .42, ZOOM_MAX = 2.2;
+const startZoom = (w) => w < 760 ? clamp(w / 520, .72, .95) : clamp(w / 1100, .55, .95);
 function lp(x, y, z){
   const S = LS();
   return [
@@ -2528,6 +2551,7 @@ function drawSky(c){
     }
     c.lineTo(LW + 60, LH); c.closePath(); c.fill();
   }
+  drawClouds(c);
   // valley floor + the mist that hides how far down it goes
   const vg = c.createLinearGradient(0, LH * .55, 0, LH);
   vg.addColorStop(0, 'rgba(38,60,52,.85)'); vg.addColorStop(.5, 'rgba(20,34,32,.92)'); vg.addColorStop(1, '#0c1414');
@@ -2536,6 +2560,66 @@ function drawSky(c){
     const y = LH * (.60 + i * .07), a = .05 + .03 * Math.sin(G.t * .3 + i);
     c.fillStyle = 'rgba(200,225,230,' + a.toFixed(3) + ')';
     c.fillRect(0, y, LW, LH * .05);
+  }
+  drawBirds(c);
+}
+
+/* -------------------------------------------------------------- the sky
+   Half of a 9:16 phone is sky. It used to be a flat gradient, so the world
+   read as a thin ribbon in an empty room. Clouds and birds are laid out once
+   from a fixed hash — no RNG the simulation can see — and only ever drift.  */
+const SKY_SPAN = 2600;                    // one world-length of cloud, wrapped
+let CLOUDS = null;
+function clouds(){
+  if (CLOUDS) return CLOUDS;
+  CLOUDS = [];
+  for (let i = 0; i < 14; i++){
+    const r = hash2(i * 3.7, 11.3), r2 = hash2(i * 1.9, 47.1), r3 = hash2(i * 5.3, 7.7);
+    CLOUDS.push({
+      x:(i / 14 + r * .05) * SKY_SPAN,
+      y:.05 + r2 * .30,                   // fraction of the canvas height
+      s:.55 + r3 * 1.1,                   // size
+      d:.05 + (i % 3) * .045,             // parallax depth
+      a:.13 + r2 * .16,
+      w:2 + Math.floor(r3 * 3),           // puffs
+    });
+  }
+  return CLOUDS;
+}
+function drawClouds(c){
+  const drift = G.t * 3.5;
+  for (const cl of clouds()){
+    let x = ((cl.x - cam.x * LS() * cl.d - drift * cl.d * 8) % SKY_SPAN + SKY_SPAN) % SKY_SPAN - 200;
+    if (x < -260 || x > LW + 260) continue;
+    const y = LH * cl.y, R = 26 * cl.s * (.7 + cam.z * .5);
+    // one path, one fill — puffs drawn separately stack their alpha and read
+    // as a row of flat discs instead of a cloud
+    c.beginPath();
+    for (let i = 0; i <= cl.w; i++){
+      const f = 1 - Math.abs(i - cl.w / 2) / (cl.w + 1);
+      c.ellipse(x + i * R * .82, y - f * R * .22, R * (.55 + f * .55), R * (.30 + f * .24), 0, 0, 6.2832);
+    }
+    c.fillStyle = 'rgba(236,244,246,' + cl.a.toFixed(3) + ')';
+    c.fill();
+  }
+}
+const FLOCKS = [{ y:.20, sp:11, ph:0 }, { y:.27, sp:8, ph:.45 }, { y:.16, sp:14, ph:.78 }];
+function drawBirds(c){
+  c.strokeStyle = 'rgba(30,44,48,.42)';
+  c.lineWidth = Math.max(1, 1.2 * cam.z);
+  for (let f = 0; f < FLOCKS.length; f++){
+    const fl = FLOCKS[f];
+    const span = LW + 360;
+    const x0 = (((G.t * fl.sp + fl.ph * span) % span) + span) % span - 180;
+    for (let i = 0; i < 3; i++){
+      const x = x0 - i * 15, y = LH * fl.y + Math.sin(G.t * .6 + f + i) * 5 + i * 7;
+      if (x < -30 || x > LW + 30) continue;
+      const w = 4 + Math.sin(G.t * 5 + i + f) * 2.2;      // wingbeat
+      c.beginPath();
+      c.moveTo(x - 5, y); c.quadraticCurveTo(x - 2, y - w, x, y);
+      c.quadraticCurveTo(x + 2, y - w, x + 5, y);
+      c.stroke();
+    }
   }
 }
 
@@ -3798,6 +3882,27 @@ function tierRow(h, label, level, kind, filled){
   return '<div class="tier' + (active ? ' hot' : '') + '"><div class="tl">' + label + '</div><div class="tb">' + body + '</div></div>';
 }
 
+// Health and the road to the next choice, as bars you can read at a glance —
+// the numbers alone never said "two thirds of the way to a new skill".
+function heroMeters(h){
+  const need = xpNeed(h.lvl), maxed = h.lvl >= C.MAX_LEVEL;
+  const xpPct = maxed ? 100 : clamp(h.xp / Math.max(1, need), 0, 1) * 100;
+  const nextPick = h.lvl < C.SKILL_TIERS[0] ? C.SKILL_TIERS[0]
+    : C.SKILL_TIERS.concat([C.ULT_LEVEL], C.RANK_LEVELS).find(l => l > h.lvl);
+  return '<div class="hp-meter"><i class="hm-hp" style="width:' +
+      (clamp(h.hp / h.mhp, 0, 1) * 100).toFixed(1) + '%"></i>' +
+      '<em>' + Math.round(h.hp) + ' / ' + Math.round(h.mhp) + '</em></div>' +
+    '<div class="hp-meter sm"><i class="hm-xp" style="width:' + xpPct.toFixed(1) + '%"></i>' +
+      '<em>' + (maxed ? 'fully grown' : nextPick ? 'level ' + nextPick + ' unlocks a pick' : 'level ' + (h.lvl + 1)) + '</em></div>';
+}
+function heroDoing(h){
+  if (h.dead) return 'Reforging — back in ' + Math.ceil(h.respawnT) + 's.';
+  if (h.pend.length) return 'Waiting on you to choose.';
+  if (!h.inLane) return 'In the hold, ready to march.';
+  if (h.target) return 'Fighting on the bridge.';
+  return 'Marching.';
+}
+
 function showHeroSheet(h){
   const pend = h.pend[0];
   const passRow = (() => {
@@ -3822,17 +3927,19 @@ function showHeroSheet(h){
   openModal('<div class="parch"><h2>Hero Profile</h2>' +
     '<div class="hp-grid"><div class="hp-left">' +
     '<div class="portrait" data-cls="' + h.cls + '">' + classGlyph(h.cls) + '</div>' +
-    '<div class="hp-name">' + h.name + '</div><div class="hp-lvl">Level ' + h.lvl + (h.dead ? ' · reforging ' + Math.ceil(h.respawnT) + 's' : '') + '</div>' +
+    '<div class="hp-name">' + h.name + '</div>' +
+    '<div class="hp-lvl">Level ' + h.lvl + ' · ' + CLS[h.cls].name + '</div>' +
+    heroMeters(h) +
+    // one column: two columns of 79px cut "2692 / 2692" in half
     '<div class="hp-stats">' +
-    '<span>Class<b>' + CLS[h.cls].name + '</b></span>' +
-    '<span>Health<b>' + Math.round(h.hp) + '/' + Math.round(h.mhp) + '</b></span>' +
     '<span>Damage<b>' + Math.round(attackDamage(h)) + '</b></span>' +
-    '<span>Power<b>' + Math.round(h.ap) + '</b></span>' +
+    (h.ap >= 1 ? '<span>Power<b>' + Math.round(h.ap) + '</b></span>' : '') +
     '<span>Armour<b>' + Math.round(h.armor) + '</b></span>' +
     '<span>Resist<b>' + Math.round(h.mr) + '</b></span>' +
     '<span>Atk speed<b>' + attackSpeedOf(h).toFixed(2) + '</b></span>' +
     '<span>Record<b>' + h.kills + ' / ' + h.deaths + '</b></span>' +
-    '</div></div>' +
+    '</div><div class="hp-doing">' + heroDoing(h) + '</div>' +
+    '<div class="hp-blurb">' + CLS[h.cls].blurb + '</div></div>' +
     '<div class="hp-right"><div class="grid-title">Skill Selection Grid</div>' + rows + '</div></div>' +
     '<div class="rowbtn"><button class="big ghost" data-act="close">Back to the bridge</button></div></div>');
 }
@@ -4238,8 +4345,8 @@ function doAction(a){
   if (a === 'camMid') return camTo(C.LANE_LEN / 2);
   if (a === 'camFoe') return camTo(C.LANE_LEN - 12);
   if (a === 'follow'){ cam.follow = !cam.follow; paint('camFollow', cam.follow); return; }
-  if (a === 'zoomIn') { cam.tz = clamp(cam.tz * 1.25, .42, 2.2); return; }
-  if (a === 'zoomOut'){ cam.tz = clamp(cam.tz * .8, .42, 2.2); return; }
+  if (a === 'zoomIn') { cam.tz = clamp(cam.tz * 1.25, ZOOM_MIN, ZOOM_MAX); return; }
+  if (a === 'zoomOut'){ cam.tz = clamp(cam.tz * .8, ZOOM_MIN, ZOOM_MAX); return; }
   if (a === 'help'){ if (G.state === 'play' && !HEADLESS) showHelp(); return; }
   if (a === 'close'){ if (G.paused) setPaused(false); else if (G.state === 'play' && !HEADLESS) closeModal(); return; }
 }
@@ -4356,7 +4463,7 @@ function wire(){
     drag = null;
     const [a, b2] = [...touches.values()];
     const d = Math.hypot(a.clientX - b2.clientX, a.clientY - b2.clientY);
-    if (pinch) cam.tz = cam.z = clamp(cam.z * (d / pinch), .42, 2.2);
+    if (pinch) cam.tz = cam.z = clamp(cam.z * (d / pinch), ZOOM_MIN, ZOOM_MAX);
     pinch = d;
   });
   const drop = (e) => { touches.delete(e.pointerId); if (touches.size < 2) pinch = 0; };
@@ -4365,7 +4472,7 @@ function wire(){
   lcv.addEventListener('dblclick', () => { cam.follow = true; $('camFollow').classList.add('on'); });
   lcv.addEventListener('wheel', (e) => {
     e.preventDefault();
-    cam.tz = clamp(cam.tz * (e.deltaY > 0 ? .88 : 1.14), .42, 2.2);
+    cam.tz = clamp(cam.tz * (e.deltaY > 0 ? .88 : 1.14), ZOOM_MIN, ZOOM_MAX);
   }, { passive:false });
 
   const stash = () => { if (G.state === 'play' && !G.demo) saveMatch(); };
@@ -4428,6 +4535,7 @@ window.IB = {
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   seenIntro, markSeen, SEEN_KEY, pruneSel,
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
+  startZoom, ZOOM_MIN, ZOOM_MAX, clouds, FLOCKS, drawClouds, drawBirds, heroMeters, heroDoing, showHeroSheet,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };
