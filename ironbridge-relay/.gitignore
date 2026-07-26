@@ -1,0 +1,4 @@
+# `wrangler dev` keeps its local Durable Object storage and build scratch here.
+# Per-machine state, not source.
+.wrangler/
+node_modules/
