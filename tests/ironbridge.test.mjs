@@ -811,6 +811,36 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.keysHtml().split('<kbd>').length - 1 >= IB.KEYS.length, 'the help sheet prints a key chip for every shortcut');
 }
 
+/* ------------------------------------------------------- a fair bridge */
+{
+  // Win/loss is a terrible instrument for this: over 120 mirror matches its
+  // standard deviation is 5.5 wins, so a 57%/43% reading says almost nothing.
+  // Measure the two sides against each other inside a fixed window instead —
+  // both play the whole window, so neither number is confounded by who won.
+  let dmg0 = 0, dmg1 = 0, push = 0, n = 0, kills0 = 0, kills1 = 0;
+  for (const seed of [21001, 21008, 21015]){
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[0].ai = true;                 // both holds play, or this is not a mirror
+    for (let i = 0; i < 30 * 60 * 6 && G.state === 'play'; i++){
+      IB.update(1 / 30);
+      if (i % 600 === 0){ push += IB.frontlineX(0) - (C.LANE_LEN - IB.frontlineX(1)); n++; }
+    }
+    // missing hp, not hp lost against a fixed baseline — a hold that buys
+    // Reinforced Stone raises its own maximum mid-match
+    const missing = (sd) => G.sides[sd].structs.reduce((a, x) => a + Math.max(0, x.mhp - Math.max(0, x.hp)), 0);
+    dmg0 += missing(1); dmg1 += missing(0);
+    kills0 += G.sides[0].kills; kills1 += G.sides[1].kills;
+  }
+  const tot = dmg0 + dmg1;
+  t.ok(tot > 2000, 'the two holds actually fought (' + Math.round(tot) + ' wall damage between them)');
+  t.ok(Math.abs(dmg0 - dmg1) / tot < .25,
+    'neither side breaks the other faster (' + Math.round(dmg0) + ' vs ' + Math.round(dmg1) + ')');
+  t.ok(Math.abs(kills0 - kills1) / Math.max(1, kills0 + kills1) < .25,
+    'and neither side kills more (' + kills0 + ' vs ' + kills1 + ')');
+  t.ok(Math.abs(push / Math.max(1, n)) < 6,
+    'the battle line does not sit on one hold’s half (' + (push / Math.max(1, n)).toFixed(1) + ' units off centre)');
+}
+
 /* ------------------------------------------------ the Host's decisions */
 {
   // Each hold draws its decisions from its own stream so neither can bias the
@@ -993,6 +1023,30 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(/Your gates are down/.test(h2) && !/fastest win/.test(h2), 'a loss is never celebrated as a record');
   // and the timeline says whose walls fell, not just "yours"
   t.ok(/You lost/.test(IB.timelineHtml()) || !G.timeline.length, 'the timeline names whose walls came down');
+}
+
+/* ------------------------------------------------------------ health bars */
+{
+  IB.newMatch({ diff:'veteran', seed:829 });
+  const s = P();
+  const u = IB.spawnUnit(0, 'melee', { x:40 });
+  t.ok(!IB.showsBar(u), 'a minion at full health carries no bar');
+  u.hp = u.mhp - 1;
+  t.ok(IB.showsBar(u), 'one that has been hurt does');
+  u.hp = u.mhp; u.shield = 40;
+  t.ok(IB.showsBar(u), 'and so does a shielded one, so the shield is visible');
+  u.shield = 0;
+  rich(s); IB.build(s, s.plot.indexOf(null), 'tavern');
+  IB.createHero(s, 'tank');
+  const h = s.heroes[0];
+  t.ok(IB.showsBar(h) && h.hp === h.mhp, 'a hero keeps its bar at full health — it is what you are watching');
+  // in a real brawl most bodies are untouched, which is the whole point
+  IB.spawnWave();
+  step(2);
+  const live = G.units.filter(x => !x.dead && !x.isHero);
+  t.ok(live.length >= 6, 'a wave is a crowd (' + live.length + ')');
+  t.ok(live.filter(IB.showsBar).length < live.length,
+    'and not every one of them is drawing a bar (' + live.filter(IB.showsBar).length + ' of ' + live.length + ')');
 }
 
 /* ------------------------------------------------------- framing + the sky */

@@ -2946,6 +2946,12 @@ function hpBar(c, x, y, u, w, big){
   }
 }
 
+// A brawl is twenty bodies deep and every one of them used to carry a health
+// bar, which turned the middle of the bridge into a staircase of green and
+// red. A minion earns its bar by being hurt or shielded; a hero always keeps
+// one, because a hero is the thing you are watching.
+const showsBar = (u) => !!u.isHero || u.hp < u.mhp - .5 || u.shield > 0;
+
 function drawUnit(c, u){
   const p = lp(u.x, u.y), S = LS();
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'cannon' || u.kind === 'super' ? 1.45 : 1.18) * cam.z;
@@ -3000,7 +3006,7 @@ function drawUnit(c, u){
       ell(c, bx + Math.cos(a) * 6 * sc, by - 17 * sc + Math.sin(a) * 2 * sc, 1.5 * sc, 1.5 * sc, '#ffcf4d');
     }
   }
-  hpBar(c, bx, by - (u.isHero ? 22 : 18) * sc, u, (u.isHero ? 30 : 17) * sc, u.isHero);
+  if (showsBar(u)) hpBar(c, bx, by - (u.isHero ? 22 : 18) * sc, u, (u.isHero ? 30 : 17) * sc, u.isHero);
   if (u.isHero && u.buffs && u.buffs.some(b => b.t > 0)){
     c.globalAlpha = .5 + .2 * Math.sin(G.t * 5);
     c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.2, 2 * cam.z);
@@ -4633,7 +4639,7 @@ window.IB = {
   seenIntro, markSeen, SEEN_KEY, pruneSel,
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
   startZoom, ZOOM_MIN, ZOOM_MAX, clouds, FLOCKS, drawClouds, drawBirds, heroMeters, heroDoing, showHeroSheet,
-  overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX,
+  overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };
