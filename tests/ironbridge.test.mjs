@@ -1079,6 +1079,46 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* ------------------------------------------------- reaching the unit tiers */
+{
+  // Casters need a level-2 barracks and Cannons a level-3 one, so the price of
+  // that upgrade decides whether two thirds of the TRAIN table exist at all.
+  // It used to cost 90 iron — the one resource a hold arming Footmen (28 iron
+  // each) never has — and traced over a match, iron sat under 60 while wood
+  // climbed past 500 unspent. Measured over twelve matches, the barracks
+  // finished at level 1 in nine of them and never once reached 3.
+  const up = IB.buildCost('barracks', 2);
+  t.ok(up.wood > 0, 'the barracks upgrade is priced in wood, the pile that accumulates');
+  t.ok((up.iron || 0) <= 45, 'and does not lean on iron, the pile the muster drains (' + (up.iron || 0) + ')');
+  {
+    // affordability, worked rather than eyeballed: a hold five minutes in has
+    // roughly this many workers on wood, at this rate, with the workshop
+    // multiplier it is likely to have.
+    IB.newMatch({ diff:'veteran', seed:1301 });
+    const s = P();
+    IB.assign(s, 'wood', 3);
+    const per5 = IB.gatherRate(s, 'wood') * 300;
+    t.ok(per5 > up.wood, 'three workers on wood pay for it inside five minutes (' +
+      Math.round(per5) + ' vs ' + up.wood + ')');
+  }
+  {
+    // and it actually happens in play. Twelve matches put the barracks at 2+
+    // in eight of them, so a hold reaches the gate about two thirds of the
+    // time; over six side-matches the chance of NONE reaching it is 0.33^6,
+    // about one run in 750 — safe to assert.
+    const levels = [];
+    for (const seed of [5031, 5062, 5093]){
+      IB.newMatch({ diff:'veteran', seed });
+      G.sides[0].ai = true;
+      for (let i = 0; i < 30 * 60 * 13 && G.state === 'play'; i++) IB.update(1 / 30);
+      for (const sd of G.sides) levels.push(IB.barracksLvl(sd));
+    }
+    t.ok(levels.some(l => l >= 2),
+      'a hold reaches the barracks level that unlocks Casters (levels seen: ' + levels.join(', ') + ')');
+    t.ok(levels.every(l => l <= IB.BUILDINGS.barracks.maxLvl), 'and none climbs past the cap');
+  }
+}
+
 /* --------------------------------------------------- what a plot buys you */
 {
   // Sixteen plots is the whole hold, so a building that changes nothing is a

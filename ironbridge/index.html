@@ -834,8 +834,12 @@ const BUILDINGS = {
               cost:{ wood:70, gold:20 }, up:{ wood:90, gold:60 }, maxLvl:3, ico:'pit' },
   farm:     { n:'Farm', d:'+' + C.POP_PER_FARM + ' population and 3 field jobs for food.',
               cost:{ wood:45, gold:25 }, up:{ wood:70, food:40 }, maxLvl:3, ico:'farm' },
+  // Levelling this is the only route to Casters and Cannons, and it used to
+  // cost 90 iron — the one resource a hold arming Footmen (28 iron each) never
+  // has. Traced over a match: wood climbs past 500 unspent while iron sits
+  // under 60. The price moved onto the pile that actually accumulates.
   barracks: { n:'Barracks', d:'Turns workers into fighters. Level 2 unlocks casters, level 3 cannons.',
-              cost:{ wood:85, iron:45 }, up:{ wood:120, iron:90, gold:40 }, maxLvl:3, ico:'barracks' },
+              cost:{ wood:85, iron:45 }, up:{ wood:95, iron:30, gold:20 }, maxLvl:3, ico:'barracks' },
   forge:    { n:'Forge', d:'Unlocks turret and minion upgrades. Each level raises the rank cap.',
               cost:{ iron:95, gold:55 }, up:{ iron:140, gold:110 }, maxLvl:3, ico:'forge' },
   tavern:   { n:'Hero Factory', d:'Forges heroes. Each level adds a hero slot and speeds respawns.',
