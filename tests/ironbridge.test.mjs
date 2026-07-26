@@ -86,6 +86,7 @@ const step = (secs) => { const n = Math.round(secs * 30); for (let i = 0; i < n;
 const P = () => G.sides[0];
 const E = () => G.sides[1];
 // Give a side everything it needs so a test can exercise one system in isolation.
+const SKILLOF = (id) => IB.SKILL[id];
 const mmss = (t) => Math.floor(t/60) + 'm' + String(Math.floor(t%60)).padStart(2,'0') + 's';
 const rich = (s) => { s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000; };
 
@@ -874,6 +875,50 @@ t.ok(true, 'drawing an empty bridge is harmless');
   const html = IB.timelineHtml();
   t.ok(html.includes('tl-track') && (html.match(/tl-m/g) || []).length >= 4, 'and it renders a mark for each');
   t.ok(IB.timelineHtml().indexOf('NaN') === -1, 'with no NaN anywhere in it');
+}
+
+/* ---------------------------------------------------------------- ability feedback */
+{
+  // You pick these skills, so casting one has to be legible: a named label in
+  // the world, and a pip on the card that shows its rank and cooldown.
+  IB.newMatch({ diff:'veteran', seed:181 });
+  const h = IB.makeHero(0, 'mage', 'Show');
+  h.pend.length = 0; h.passive = 'arcanefont'; h.lvl = 12; IB.recalcHero(h);
+  IB.enterLane(h); h.x = 60; h.y = 0;
+  const foe = IB.spawnUnit(1, 'melee', { x:62, y:0 });
+  IB.rebuildGrid();
+  t.ok(IB.skillPipsHtml(h).includes('no skills yet'), 'a hero with no skills says so');
+  h.skills.push({ id:'fireball', rank:2, cdT:0 }, { id:'cataclysm', rank:1, cdT:0, ult:true });
+  const pips = IB.skillPipsHtml(h);
+  t.ok((pips.match(/class="pip[ "]/g) || []).length === 2, 'one pip per skill');
+  t.ok(pips.includes('ult'), 'the ultimate is marked');
+  t.ok(pips.includes('>2<'), 'and the rank is shown');
+  h.skills[0].cdT = SKILLOF('fireball').cd;
+  t.ok(/height:(9[0-9]|100)%/.test(IB.skillPipsHtml(h)), 'a skill just cast shows a full cooldown');
+  h.skills[0].cdT = 0;
+  t.ok(/height:0%/.test(IB.skillPipsHtml(h)), 'and an empty one when ready');
+  // the world label
+  G.floats.length = 0;
+  IB.castFx(h, IB.SKILL.cataclysm);
+  const label = G.floats.find(f => f.cast);
+  t.ok(!!label, 'casting names the ability in the world');
+  t.ok(label.txt === 'CATACLYSM' && label.ult === true, 'an ultimate is labelled as one (' + label.txt + ')');
+  t.ok(typeof IB.castCol(IB.SKILL.mend) === 'string' && IB.castCol(IB.SKILL.mend) !== IB.castCol(IB.SKILL.fireball),
+    'a heal and a fireball do not read as the same thing');
+  let badCol = 0;
+  for (const sd of IB.SKILLS) if (!/^#[0-9a-f]{6}$/i.test(IB.castCol(sd))) badCol++;
+  t.ok(badCol === 0, 'every skill has a valid cast colour');
+  // The trails and motes are decoration: they must cost nothing when nobody is
+  // watching, which is what keeps the headless suite fast.
+  G.fx.length = 0;
+  IB.castSkill(h, { id:'shadowstep', rank:1, cdT:0 }, foe);
+  for (let i = 0; i < 60; i++) IB.castSkill(h, { id:'mend', rank:1, cdT:0 }, null);
+  t.ok(G.fx.length === 0, 'cast decoration is skipped entirely under headless');
+  // but the drawing path for it still has to survive being handed one
+  G.fx.push({ k:'ghost', x:60, y:0, col:'#4ea3ff', t:.2, dur:.34, r:1 });
+  G.floats.push({ x:60, y:0, txt:'TEST', col:'#ffcf4d', t:1, dur:1.4, sc:1, vy:-.5, cast:true, ult:true });
+  IB.draw();
+  t.ok(true, 'drawing a blur and a cast label is clean');
 }
 
 IB.draw();
