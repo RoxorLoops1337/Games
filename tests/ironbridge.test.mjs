@@ -693,6 +693,124 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(!/Range<b>/.test(IB.dockHtml()), 'and the panel goes quiet again');
 }
 
+/* ------------------------------------------------------- keyboard + pause */
+{
+  IB.newMatch({ diff:'veteran', seed:401 });
+  // Every shortcut the help sheet prints has to be a shortcut that works —
+  // a printed key that does nothing is worse than no legend at all.
+  for (const row of IB.KEYS){
+    const first = row.k.split(' ')[0];
+    const key = first === 'Space' ? ' ' : first === 'Esc' ? 'Escape' : first.toLowerCase();
+    const a = IB.keyAction(key);
+    t.ok(!!a, 'the help sheet key "' + row.k + '" does something (' + a + ')');
+  }
+  t.ok(IB.keyAction(' ') === 'pause' && IB.keyAction('p') === 'pause', 'space and P both pause');
+  t.ok(IB.keyAction('2') === 'speed2' && IB.keyAction('3') === 'speed3', 'the digits set the speed');
+  t.ok(IB.keyAction('H') === 'camHold' && IB.keyAction('h') === 'camHold', 'shortcuts ignore the shift key');
+  t.ok(IB.keyAction('=') === 'zoomIn' && IB.keyAction('-') === 'zoomOut', '= and - zoom without needing shift');
+  t.ok(IB.keyAction('z') === null && IB.keyAction('Tab') === null, 'keys with no meaning are left alone');
+  {
+    // no key may appear twice in the legend, and no two legend rows may claim
+    // the same action — either one would be a lie on the help sheet
+    const keys = IB.KEYS.flatMap(r => r.k.split(' '));
+    t.ok(new Set(keys).size === keys.length, 'no key is printed twice in the legend');
+    const acts = IB.KEYS.map(r => r.a);
+    t.ok(new Set(acts).size === acts.length, 'and no two rows describe the same control');
+  }
+  // the actions themselves
+  IB.doAction('speed3');
+  t.ok(G.speed === 3, 'speed 3 runs the match at 3x');
+  IB.doAction('speedUp');
+  t.ok(G.speed === 1, 'and the speed button wraps back round to 1x');
+  IB.cam.follow = true;
+  IB.doAction('camFoe');
+  t.ok(IB.cam.x > C.LANE_LEN * .7 && !IB.cam.follow, 'B looks at their base and drops the camera out of follow');
+  IB.doAction('camHold');
+  t.ok(IB.cam.x <= IB.HOLD_X + 1, 'H comes home');
+  t.ok(IB.cam.x >= IB.CAM_MIN, 'and never past the end of the world');
+  IB.doAction('follow');
+  t.ok(IB.cam.follow === true, 'F picks the fighting back up');
+  const z0 = IB.cam.tz;
+  IB.doAction('zoomIn');
+  t.ok(IB.cam.tz > z0, '+ zooms in');
+  for (let i = 0; i < 20; i++) IB.doAction('zoomOut');
+  t.ok(IB.cam.tz >= .42 - 1e-9, 'and zoom cannot be driven past its limit (' + IB.cam.tz.toFixed(2) + ')');
+
+  // pause really stops the world
+  IB.setPaused(true);
+  t.ok(G.paused === true, 'pausing sets the flag');
+  const t0 = G.t, u0 = G.units.length;
+  step(4);
+  t.ok(G.t === t0 && G.units.length === u0, 'and nothing moves or spawns while paused');
+  IB.doAction('close');
+  t.ok(G.paused === false, 'Escape resumes');
+  step(1);
+  t.ok(G.t > t0, 'and the clock runs again');
+}
+
+/* ------------------------------------------------------------ war report */
+{
+  IB.newMatch({ diff:'veteran', seed:409 });
+  const s = P(), f = E();
+  rich(s);
+  IB.build(s, s.plot.indexOf(null), 'forge');
+  IB.buyUp(s, 'hp'); IB.buyUp(s, 'atk');
+  IB.assign(s, 'gold', 3);
+  IB.spawnWave();
+  step(8);
+  let h = IB.pauseHtml();
+  t.ok(h.includes(IB.G.diff.n) && /Wave/.test(h), 'the report says which match this is');
+  t.ok(h.includes('Azure Pact') && h.includes('Ember Host'), 'and puts your hold next to theirs');
+  // read the number the report puts on your side of each row
+  const mineOn = (label) => {
+    const m = h.match(new RegExp('<b class="[^"]*">([^<]*)</b><span>' + label + '</span>'));
+    return m ? m[1] : null;
+  };
+  t.ok(mineOn('structures standing') === String(IB.liveStructs(0).length),
+    'it counts the structures still standing (' + mineOn('structures standing') + ')');
+  t.ok(mineOn('forge ranks') === '2', 'and the two forge ranks you actually bought');
+  t.ok(mineOn('on the bridge') === String(IB.laneArmy(0)) && IB.laneArmy(0) > 0,
+    'and the army actually standing on the bridge (' + IB.laneArmy(0) + ')');
+  t.ok(+mineOn('gathering /s') > 0, 'and what your hold earns every second');
+  {
+    // it has to keep up: break something and the count drops
+    const before = +mineOn('structures standing');
+    const st = IB.frontStruct(0); st.hp = 0; st.dead = true;
+    h = IB.pauseHtml();
+    t.ok(+mineOn('structures standing') === before - 1, 'a turret you lose comes straight off the report');
+    st.dead = false; st.hp = st.mhp;
+    h = IB.pauseHtml();
+  }
+
+  // the line of battle marks exactly one attackable structure per side
+  for (const side of [0, 1]){
+    const lob = IB.lineOfBattle(side);
+    t.ok((lob.match(/lb front/g) || []).length === 1, 'side ' + side + ' has exactly one structure the enemy may attack');
+    t.ok((lob.match(/class="lb/g) || []).length === G.sides[side].structs.length, 'and every structure is drawn in the line');
+  }
+  // break one and the line shows it
+  const front = IB.frontStruct(1);
+  front.hp = 0; front.dead = true;
+  const lob2 = IB.lineOfBattle(1);
+  t.ok(/lb gone/.test(lob2), 'a broken structure is greyed out of the line of battle');
+  t.ok(IB.frontStruct(1) !== front && (lob2.match(/lb front/g) || []).length === 1,
+    'and the next one back becomes the one you can hit');
+
+  // the gathering number in the HUD and the report is the real rate
+  IB.newMatch({ diff:'veteran', seed:411 });
+  const s2 = P();
+  t.ok(IB.gatherRate(s2, 'gold') === 0 || s2.workers.gold > 0, 'an empty mine pays nothing');
+  IB.assign(s2, 'gold', 4);
+  const rate = IB.gatherRate(s2, 'gold');
+  t.ok(rate > 0, 'workers on the gold seam show a rate (' + rate.toFixed(2) + '/s)');
+  const g0 = s2.res.gold;
+  step(10);
+  const got = (s2.res.gold - g0) / 10;
+  t.ok(Math.abs(got - rate) / rate < .12,
+    'and that rate is what the mine actually pays (' + rate.toFixed(2) + ' shown, ' + got.toFixed(2) + ' paid)');
+  t.ok(IB.keysHtml().split('<kbd>').length - 1 >= IB.KEYS.length, 'the help sheet prints a key chip for every shortcut');
+}
+
 /* ---------------------------------------------------------------- the intro */
 {
   // Shown once, on the very first match, and never again.

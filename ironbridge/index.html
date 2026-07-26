@@ -85,6 +85,10 @@
   .abtn{ display:flex; flex-direction:column; align-items:flex-start; gap:2px; padding:7px 10px; text-align:left;
     background:var(--panel2); border:1px solid var(--line); border-radius:8px; min-width:0; flex:1 1 0;
     min-height:44px; justify-content:center; }
+  /* 44px is a thumb; a mouse does not need one, and the extra 6px per row is
+     the difference between the whole forge fitting in the dock and its last
+     rank being sliced off at 820px tall. */
+  @media (hover:hover) and (pointer:fine){ .abtn{ min-height:38px; padding:5px 10px; } }
   .abtn:hover:not(:disabled){ background:#28324a; border-color:#3c4a66; }
   .abtn:disabled{ opacity:.4; cursor:not-allowed; }
   .abtn .t{ font-size:12px; font-weight:700; white-space:nowrap; }
@@ -165,6 +169,39 @@
   .insp span{ display:flex; gap:5px; }
   .insp b{ color:var(--ink); }
   .insp.note{ color:var(--dim2); font-style:italic; display:block; line-height:1.4; }
+  /* the war report behind the pause button */
+  .wr{ margin:12px 0 4px; padding:10px 12px; background:#0e1421; border:1px solid var(--line); border-radius:10px; }
+  .wr-head{ display:flex; align-items:center; gap:8px; font-size:11px; }
+  .wr-head b{ flex:1 1 0; font-size:12px; }
+  .wr-head b:last-child{ text-align:right; }
+  .wr-head span{ flex:0 0 auto; color:var(--dim2); letter-spacing:1px; text-transform:uppercase; font-size:9px; }
+  .wr-lob{ display:flex; gap:10px; margin:8px 0 10px; }
+  .lob{ flex:1 1 0; display:flex; gap:3px; align-items:flex-end; }
+  .lob:last-child{ flex-direction:row-reverse; }
+  .lb{ flex:1 1 0; position:relative; height:46px; background:#182031; border:1px solid var(--line);
+    border-radius:5px; overflow:hidden; display:block; min-width:0; }
+  .lb i{ position:absolute; left:0; right:0; bottom:0; background:linear-gradient(180deg,#3f7fd0,#2a5fa0); opacity:.75; }
+  .lob:last-child .lb i{ background:linear-gradient(180deg,#d06a52,#a03a2a); }
+  .lb.front{ border-color:var(--gold); }
+  .lb.gone{ opacity:.32; }
+  .lb em{ position:absolute; top:3px; left:0; right:0; text-align:center; font-style:normal;
+    font-size:9px; font-weight:800; color:var(--ink); text-shadow:0 1px 2px #000; }
+  .lb u{ position:absolute; bottom:2px; left:0; right:0; text-align:center; text-decoration:none;
+    font-size:8px; letter-spacing:.5px; color:var(--dim2); text-shadow:0 1px 2px #000; }
+  .wr-row{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--dim2);
+    padding:3px 0; border-top:1px solid #18202e; }
+  .wr-row b{ flex:1 1 0; color:var(--ink); font-variant-numeric:tabular-nums; font-weight:700; }
+  .wr-row b:last-child{ text-align:right; }
+  .wr-row span{ flex:0 0 auto; font-size:10px; letter-spacing:1px; text-transform:uppercase; }
+  .wr-row b.good{ color:#7fe08a; } .wr-row b.bad{ color:#ff8f86; }
+  .wr-next{ margin-top:9px; font-size:12px; color:var(--dim); }
+  .wr-next b{ color:var(--gold); font-size:9px; letter-spacing:2px; margin-right:6px; }
+  .keys{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:3px 14px;
+    font-size:11px; color:var(--dim2); }
+  .keys span{ display:flex; align-items:center; gap:5px; }
+  kbd{ display:inline-block; min-width:15px; text-align:center; padding:1px 4px; border-radius:4px;
+    background:#1a2231; border:1px solid var(--line); border-bottom-width:2px; color:var(--ink);
+    font:600 10px system-ui; }
   .tl{ margin:12px 0 4px; padding:10px 12px; background:#0e1421; border:1px solid var(--line); border-radius:10px; }
   .tl-row{ display:flex; align-items:center; gap:9px; margin-bottom:7px; }
   .tl-lbl{ flex:0 0 46px; font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:700; }
@@ -3069,7 +3106,11 @@ function drawBuilding(c, b){
   if (t === 'tavern') sub = heroCap(s) + ' hero slot' + (heroCap(s) === 1 ? '' : 's');
   if (holdSide === 0 && (cam.z > .72 || b.tile === sel.tile)){
     const lp0 = bp(gx, gy, 1.55 + z);
-    labelQ.push({ x:lp0[0], y:lp0[1], txt:BUILDINGS[t].n + '  ' + sub, col:'#d8dee9', hot:b.tile === sel.tile });
+    // A packed hold is six labels in a hand's width, so only the one you have
+    // selected spells itself out; the rest carry a name and a level digit.
+    const hot = b.tile === sel.tile;
+    const txt = BUILDINGS[t].n + (hot ? '  ' + sub : b.lvl > 1 ? '  ' + b.lvl : '');
+    labelQ.push({ x:lp0[0], y:lp0[1], txt, col:'#d8dee9', hot });
   }
 }
 
@@ -3084,11 +3125,17 @@ function flushLabels(c){
     let y = L.y - 11;
     // nudge upward until this label is clear of the ones already placed
     for (let guard = 0; guard < 12; guard++){
-      const hit = placed.find(r => Math.abs(r.x - L.x) < (r.w + w) / 2 && Math.abs(r.y - y) < h + 1);
+      const hit = placed.find(r => Math.abs(r.x - L.x) < (r.w + w) / 2 + 3 && Math.abs(r.y - y) < h + 4);
       if (!hit) break;
-      y = hit.y - h - 2;
+      y = hit.y - h - 4;
     }
     placed.push({ x:L.x, y, w, h });
+    // A label pushed clear of its neighbours has to keep pointing at the thing
+    // it names, or a packed plot reads as a pile of loose text.
+    if (y < L.y - 12){
+      c.strokeStyle = 'rgba(160,180,205,.30)'; c.lineWidth = 1;
+      c.beginPath(); c.moveTo(L.x + .5, y + h); c.lineTo(L.x + .5, L.y - 3); c.stroke();
+    }
     c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
     c.fillRect(L.x - w / 2, y, w, h);
     if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(L.x - w / 2 + .5, y + .5, w - 1, h - 1); }
@@ -3398,13 +3445,20 @@ function costHtml(cost){
 }
 function fmt(n){ return n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(Math.floor(n)); }
 
+// What one job actually pays, per second, right now. The HUD ticker and the
+// war report both read this, so they cannot drift apart.
+function gatherRate(s, k){
+  return Math.min(s.workers[k], nodeCap(s, k)) * nodeRate(s, k) * gatherMul(s);
+}
+const laneArmy = (side) => G.units.filter(u => !u.dead && !u.isHero && u.side === side).length;
+
 function syncHud(){
-  const s = G.sides[0], m = gatherMul(s);
+  const s = G.sides[0];
   for (const k of ['gold','iron','wood','food']){
     const el = $('r' + k[0].toUpperCase() + k.slice(1));
     if (!el) continue;
     el.querySelector('b').textContent = fmt(s.res[k]);
-    const rate = Math.min(s.workers[k], nodeCap(s, k)) * nodeRate(s, k) * m;
+    const rate = gatherRate(s, k);
     el.querySelector('.rate').textContent = rate > 0 ? '+' + rate.toFixed(1) : '';
   }
   const pop = $('rPop');
@@ -3807,6 +3861,63 @@ function timelineHtml(){
     '<span><i class="tl-m gate dot"></i> gates</span></div></div>';
 }
 
+/* ------------------------------------------------------------------ pause
+   Pausing used to just stop the clock. A ten-minute match is long enough that
+   the useful question at that moment is "how am I actually doing?", so the
+   pause is a war report: the line of battle on both sides, and every number
+   that decides the next five minutes, yours next to theirs.                 */
+function lineOfBattle(side){
+  const front = frontStruct(side);
+  return '<div class="lob">' + G.sides[side].structs.map(st => {
+    const cls = st.dead ? ' gone' : st === front ? ' front' : '';
+    const pct = st.dead ? 0 : Math.round(clamp(st.hp / st.mhp, 0, 1) * 100);
+    return '<span class="lb' + cls + '" title="' + st.n + '">' +
+      '<i style="height:' + pct + '%"></i><em>' + (st.dead ? '—' : pct + '%') + '</em>' +
+      '<u>' + (st.key === 'gate' ? 'gates' : st.key === 'inhib' ? 'inhib' : st.key.toUpperCase()) + '</u></span>';
+  }).join('') + '</div>';
+}
+
+function pauseHtml(){
+  const s = G.sides[0], f = G.sides[1];
+  const row = (label, mine, theirs, better) => {
+    const win = better === undefined ? 0 : (better ? (mine > theirs ? 1 : mine < theirs ? -1 : 0)
+                                                   : (mine < theirs ? 1 : mine > theirs ? -1 : 0));
+    return '<div class="wr-row"><b class="' + (win > 0 ? 'good' : win < 0 ? 'bad' : '') + '">' + mine + '</b>' +
+      '<span>' + label + '</span><b>' + theirs + '</b></div>';
+  };
+  const inc = (sd) => ['gold','iron','wood','food'].reduce((a, k) => a + gatherRate(sd, k), 0).toFixed(1);
+  const heroLine = (sd) => sd.heroes.length
+    ? sd.heroes.map(h => h.name + ' ' + h.lvl).join(', ') : 'none';
+  return '<h2>Paused</h2>' +
+    '<p class="sub">Wave ' + G.wave + ' · ' + mmss(G.t) + ' · ' + G.diff.n + '</p>' +
+    '<div class="wr">' +
+    '<div class="wr-head"><b style="color:' + SIDE_COL[0] + '">' + SIDE_NAME[0] + '</b>' +
+    '<span>line of battle</span><b style="color:' + SIDE_COL[1] + '">' + SIDE_NAME[1] + '</b></div>' +
+    '<div class="wr-lob">' + lineOfBattle(0) + lineOfBattle(1) + '</div>' +
+    row('structures standing', liveStructs(0).length, liveStructs(1).length, true) +
+    row('walls broken', s.structsKilled, f.structsKilled, true) +
+    row('kills', s.kills, f.kills, true) +
+    row('on the bridge', laneArmy(0), laneArmy(1), true) +
+    row('population', popUsed(s) + '/' + popCap(s), popUsed(f) + '/' + popCap(f)) +
+    row('gathering /s', inc(s), inc(f), true) +
+    row('forge ranks', bsumUp(s), bsumUp(f), true) +
+    row('heroes', heroLine(s), heroLine(f)) +
+    '</div>' +
+    (() => { const a = adviceFor(s); return a ? '<div class="wr-next"><b>NEXT</b> ' + a.txt + '</div>' : ''; })() +
+    '<div class="rowbtn"><button class="big" data-act="unpause">Resume</button>' +
+    '<button class="big ghost" data-act="menu">Menu</button></div>';
+}
+const bsumUp = (sd) => Object.values(sd.towerUp).reduce((a, v) => a + v, 0) +
+                       Object.values(sd.troopUp).reduce((a, v) => a + v, 0);
+
+function setPaused(v){
+  G.paused = v;
+  if (HEADLESS) return;
+  $('btnPause').textContent = v ? '▶' : '❚❚';
+  $('btnPause').classList.toggle('on', v);
+  if (v) openModal(pauseHtml()); else closeModal();
+}
+
 function showOver(){
   const win = G.winner === 0;
   const s = G.sides[0], f = G.sides[1];
@@ -3852,6 +3963,9 @@ function showIntro(diff){
     '<div class="rowbtn"><button class="big" data-act="introgo" data-diff="' + diff + '">Start the match</button></div>');
 }
 
+const keysHtml = () => '<div class="ptitle" style="margin:10px 0 5px">Keyboard</div><div class="keys">' +
+  KEYS.map(k => '<span><kbd>' + k.k.split(' ').join('</kbd> <kbd>') + '</kbd>' + k.d + '</span>').join('') + '</div>';
+
 function showHelp(){
   openModal('<h2>How the hold works</h2>' +
     '<div class="pd" style="font-size:13px;line-height:1.6">' +
@@ -3861,7 +3975,8 @@ function showHelp(){
     '<p><b>The Forge</b> unlocks turret and minion upgrades; its level sets how high a rank you can buy.</p>' +
     '<p><b>The Hero Factory</b> forges heroes. They fight on their own — you choose the build.</p>' +
     '<p>Break the outer turret, then the mid, then the inner, then the inhibitor, then the gates. Taking an inhibitor sends Siege Ogres for ' + C.SUPER_DUR + 's.</p>' + '<p>It is all one place: drag to look along the world, pinch or scroll to zoom, and use HOLD / GATES / MID / FOE to jump. Click a plot to build on it, or a hero to open its profile.</p>' +
-    '</div><div class="rowbtn"><button class="big ghost" data-act="close">Got it</button>' +
+    '</div>' + keysHtml() +
+    '<div class="rowbtn"><button class="big ghost" data-act="close">Got it</button>' +
     '<button class="big ghost" data-act="replay">Show the introduction again</button></div>');
 }
 
@@ -4077,6 +4192,58 @@ function pickAt(clientX, clientY){
   syncUI();
 }
 
+/* ------------------------------------------------------------------ controls
+   Every view control is one named action, so the buttons and the keyboard
+   drive exactly the same code and cannot fall out of step. KEYS is also what
+   the help sheet prints, so the printed shortcut is always the real one.    */
+const KEYS = [
+  { k:'Space', a:'pause',   d:'pause and read the war report' },
+  { k:'1 2 3', a:'speed',   d:'run at 1×, 2× or 3× speed' },
+  { k:'H',     a:'camHold', d:'look at your hold' },
+  { k:'G',     a:'camGate', d:'look at your gates' },
+  { k:'M',     a:'camMid',  d:'look at the middle of the bridge' },
+  { k:'B',     a:'camFoe',  d:'look at their base' },
+  { k:'F',     a:'follow',  d:'follow the fighting' },
+  { k:'+ −',   a:'zoom',    d:'zoom in and out' },
+  { k:'?',     a:'help',    d:'this sheet' },
+  { k:'Esc',   a:'close',   d:'close whatever is open' },
+];
+function keyAction(key){
+  const k = (key || '').toLowerCase();
+  if (key === ' ' || k === 'p') return 'pause';
+  if (k === '1' || k === '2' || k === '3') return 'speed' + k;
+  if (k === 'h') return 'camHold';
+  if (k === 'g') return 'camGate';
+  if (k === 'm') return 'camMid';
+  if (k === 'b') return 'camFoe';
+  if (k === 'f') return 'follow';
+  if (k === '+' || k === '=') return 'zoomIn';
+  if (k === '-' || k === '_') return 'zoomOut';
+  if (k === '?' || k === '/') return 'help';
+  if (key === 'Escape') return 'close';
+  return null;
+}
+function doAction(a){
+  const paint = (id, on) => { if (!HEADLESS) $(id).classList.toggle('on', on); };
+  const camTo = (x) => { cam.follow = false; cam.x = clamp(x, CAM_MIN, CAM_MAX); paint('camFollow', false); };
+  if (a === 'pause'){ if (G.state === 'play') setPaused(!G.paused); return; }
+  if (a === 'speedUp' || /^speed[123]$/.test(a)){
+    G.speed = a === 'speedUp' ? (G.speed === 1 ? 2 : G.speed === 2 ? 3 : 1) : +a.slice(5);
+    if (!HEADLESS) $('btnSpeed').textContent = G.speed + '×';
+    paint('btnSpeed', G.speed > 1);
+    return;
+  }
+  if (a === 'camHold') return camTo(HOLD_X);
+  if (a === 'camGate') return camTo(12);
+  if (a === 'camMid') return camTo(C.LANE_LEN / 2);
+  if (a === 'camFoe') return camTo(C.LANE_LEN - 12);
+  if (a === 'follow'){ cam.follow = !cam.follow; paint('camFollow', cam.follow); return; }
+  if (a === 'zoomIn') { cam.tz = clamp(cam.tz * 1.25, .42, 2.2); return; }
+  if (a === 'zoomOut'){ cam.tz = clamp(cam.tz * .8, .42, 2.2); return; }
+  if (a === 'help'){ if (G.state === 'play' && !HEADLESS) showHelp(); return; }
+  if (a === 'close'){ if (G.paused) setPaused(false); else if (G.state === 'play' && !HEADLESS) closeModal(); return; }
+}
+
 function wire(){
   const s0 = () => G.sides[0];
   $('dock').addEventListener('click', (e) => {
@@ -4101,7 +4268,7 @@ function wire(){
     syncUI();
   });
   $('modal').addEventListener('click', (e) => {
-    if (e.target === $('modal')){ if (G.state === 'play') closeModal(); return; }
+    if (e.target === $('modal')){ if (G.state === 'play') doAction('close'); return; }
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const a = b.dataset.act;
@@ -4120,9 +4287,10 @@ function wire(){
       if (err){ say(err); return; }
       closeModal(); syncUI();
     }
-    else if (a === 'close') closeModal();
+    else if (a === 'close') doAction('close');
+    else if (a === 'unpause') setPaused(false);
     else if (a === 'replay') showIntro(G.diff.id);
-    else if (a === 'menu'){ startDemo(); showMenu(); }
+    else if (a === 'menu'){ setPaused(false); startDemo(); showMenu(); }
     else if (a === 'again'){ clearSave(); newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
     else if (a === 'mkhero'){
       const err = createHero(s0(), b.dataset.cls);
@@ -4148,25 +4316,15 @@ function wire(){
   window.addEventListener('pointerdown', kick);
   $('btnMenu').addEventListener('click', () => { showMenu(); });
   $('btnHelpBase').addEventListener('click', showHelp);
-  $('btnPause').addEventListener('click', () => {
-    G.paused = !G.paused;
-    $('btnPause').textContent = G.paused ? '▶' : '❚❚';
-    $('btnPause').classList.toggle('on', G.paused);
-  });
-  $('btnSpeed').addEventListener('click', () => {
-    G.speed = G.speed === 1 ? 2 : G.speed === 2 ? 3 : 1;
-    $('btnSpeed').textContent = G.speed + '×';
-    $('btnSpeed').classList.toggle('on', G.speed > 1);
-  });
-  const camTo = (x) => { cam.follow = false; cam.x = x; $('camFollow').classList.remove('on'); };
-  $('camHold').addEventListener('click', () => camTo(HOLD_X));
-  $('camGate').addEventListener('click', () => camTo(12));
-  $('camMid').addEventListener('click', () => camTo(C.LANE_LEN / 2));
-  $('camFoe').addEventListener('click', () => camTo(C.LANE_LEN - 12));
-  $('camFollow').addEventListener('click', () => { cam.follow = !cam.follow; $('camFollow').classList.toggle('on', cam.follow); });
-  const zoomBy = (f) => { cam.tz = clamp(cam.tz * f, .42, 2.2); };
-  $('camOut').addEventListener('click', () => zoomBy(.8));
-  $('camIn').addEventListener('click', () => zoomBy(1.25));
+  $('btnPause').addEventListener('click', () => doAction('pause'));
+  $('btnSpeed').addEventListener('click', () => doAction('speedUp'));
+  $('camHold').addEventListener('click', () => doAction('camHold'));
+  $('camGate').addEventListener('click', () => doAction('camGate'));
+  $('camMid').addEventListener('click', () => doAction('camMid'));
+  $('camFoe').addEventListener('click', () => doAction('camFoe'));
+  $('camFollow').addEventListener('click', () => doAction('follow'));
+  $('camOut').addEventListener('click', () => doAction('zoomOut'));
+  $('camIn').addEventListener('click', () => doAction('zoomIn'));
 
   // one canvas: drag to pan, wheel to zoom, click to select a plot or a hero
   let drag = null;
@@ -4217,12 +4375,10 @@ function wire(){
   window.addEventListener('resize', resizeSoon);
   window.addEventListener('orientationchange', resizeSoon);
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape'){ if (G.state === 'play') closeModal(); }
-    else if (e.key === ' '){ e.preventDefault(); $('btnPause').click(); }
-    else if (e.key === '1' || e.key === '2' || e.key === '3'){
-      G.speed = +e.key; $('btnSpeed').textContent = G.speed + '×';
-      $('btnSpeed').classList.toggle('on', G.speed > 1);
-    }
+    const a = keyAction(e.key);
+    if (!a) return;
+    if (e.key === ' ' || e.key === '/') e.preventDefault();
+    doAction(a);
   });
 }
 
@@ -4271,6 +4427,7 @@ window.IB = {
   WAVE_KINDS, waveKindFor, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   seenIntro, markSeen, SEEN_KEY, pruneSel,
+  keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };
