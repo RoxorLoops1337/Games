@@ -1354,6 +1354,12 @@ t.test('descent: the draft never offers what you already hold', () => {
 
 t.test('descent: quiet hands, red thirst and the ward of thresholds', () => {
   runFresh();
+  // runFresh rolls a real floor off Math.random, and a floor modifier can move
+  // the very numbers this test asserts. Hoarded pays treasure DOUBLE, so the
+  // gold check below read 300 instead of 150 on roughly one run in eight —
+  // measured: one failure in eight consecutive solo runs of this suite. The
+  // boon is what is under test, so hold the floor still.
+  HQ.G.q.def.mods = [];
   const h = rhero('barbarian');
   h.x = 3; h.y = 7; HQ.recomputeVision();
   HQ.takeBoon('quietstep');
@@ -1422,6 +1428,25 @@ t.test('descent: brittle floors show their traps, stolen plans show the doors', 
   HQ.G.run.boons = ['trapsense','mapsense'];
   HQ.beginFloor();
   t.ok(HQ.G.q.traps.length > 0, 'the floor is trapped');
+  // Undermined reveals every trap on its own — the code reads
+  // `boonHas('trapsense') || modHas('brittle')` — so a floor that happened to
+  // roll it passes this with the boon completely broken. Not flaky; quietly
+  // weaker than it looks. Clearing the modifier and calling beginFloor again
+  // would only re-roll the same dice, so pin the stream and keep drawing until
+  // an un-undermined trapped floor comes up. Bounded, and it reports if it
+  // never finds one rather than passing on whatever it got.
+  // The floor is a pure function of the run seed and the depth
+  // (`mkRng(G.run.seed + G.run.depth*7717)`), so calling beginFloor again
+  // redraws the SAME floor — walk the seed instead. Deterministic: the same
+  // seed is found on every run, and the search reports itself if it fails.
+  let tries = 0;
+  while (tries++ < 60){
+    HQ.G.run.seed = 4100 + tries * 13;
+    HQ.beginFloor();
+    if (!HQ.modHas('brittle') && HQ.G.q.traps.length > 0) break;
+  }
+  t.ok(tries < 60, 'a trapped floor without Undermined came up (seed ' + HQ.G.run.seed + ', ' + tries + ' draws)');
+  t.ok(!HQ.modHas('brittle'), 'and it is not an undermined floor doing the work');
   t.ok(HQ.G.q.traps.every(tr => tr.found), "the sapper's eye found all of them");
   t.ok(Object.values(HQ.G.q.doors).every(d => d.found), 'and the stolen plans found every door');
 });
