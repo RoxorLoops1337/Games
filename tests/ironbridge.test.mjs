@@ -1091,6 +1091,38 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* ------------------------------------------------------ reading the wave */
+{
+  // The shape of a wave was announced by a toast that slid past in three
+  // seconds and was never mentioned again, so for the rest of the wave there
+  // was nothing to read and nothing to answer.
+  IB.newMatch({ diff:'veteran', seed:1801 });
+  t.ok(Object.keys(IB.WAVE_ANSWER).length === IB.WAVE_KINDS.length,
+    'every wave shape has an answer written for it');
+  for (const k of IB.WAVE_KINDS)
+    t.ok((IB.WAVE_ANSWER[k.id] || '').length > 20 && IB.WAVE_ANSWER[k.id].length < 60,
+      k.n + ' tells you what to do about it, briefly');
+  // it reads the wave that actually spawned
+  for (const kind of IB.WAVE_KINDS){
+    E().waveKind = kind.id;
+    const w = IB.foeWarning();
+    t.ok(w.includes(kind.n.replace(/^an? /, '')), 'the panel names ' + kind.n);
+    t.ok(w.includes(IB.WAVE_ANSWER[kind.id].slice(0, 18)), 'and gives its answer');
+  }
+  t.ok(!/Next wave in/.test(IB.foeWarning()), 'without repeating the wave clock the top bar already shows');
+  // and it is a READ of the simulation, never a roll: same state, same words,
+  // and no random draw moved
+  {
+    IB.newMatch({ diff:'veteran', seed:1803 });
+    const before = [IB.arnd(P()).toFixed(9), IB.arnd(E()).toFixed(9)];
+    IB.newMatch({ diff:'veteran', seed:1803 });
+    for (let i = 0; i < 5; i++) IB.foeWarning();
+    const after = [IB.arnd(P()).toFixed(9), IB.arnd(E()).toFixed(9)];
+    t.ok(before[0] === after[0] && before[1] === after[1],
+      'reading the wave panel does not touch either hold’s decisions');
+  }
+}
+
 /* ------------------------------------------------------ what each pile is for */
 {
   // Wood builds, iron arms, gold buys heroes and the forge's work, food feeds.
