@@ -1025,6 +1025,68 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(/You lost/.test(IB.timelineHtml()) || !G.timeline.length, 'the timeline names whose walls came down');
 }
 
+/* --------------------------------------------------- what a plot buys you */
+{
+  // Sixteen plots is the whole hold, so a building that changes nothing is a
+  // trap you pay for twice: once in resources and once in the slot. The forge
+  // audit found a dead upgrade this way; this is the same audit one level up.
+  // Every observable a building is supposed to move:
+  const readings = (s) => ({
+    pop:IB.popCap(s), fields:IB.fieldSlots(s), pits:IB.trainSlots(s),
+    muster:IB.barrackSlots(s), tier:IB.barracksLvl(s), forge:IB.upCap(s),
+    heroes:IB.heroCap(s), gather:IB.gatherMul(s),
+  });
+  const changed = (a, b) => Object.keys(a).filter(k => a[k] !== b[k]);
+  const fresh = () => { IB.newMatch({ diff:'veteran', seed:1201 }); const s = P(); rich(s); return s; };
+  for (const type of Object.keys(IB.BUILDINGS)){
+    // the first one
+    let s = fresh();
+    const before = readings(s);
+    const slot = s.plot.indexOf(null);
+    t.ok(IB.build(s, slot, type) === null, 'a ' + IB.BUILDINGS[type].n + ' can be built');
+    const one = changed(before, readings(s));
+    t.ok(one.length > 0, 'a ' + IB.BUILDINGS[type].n + ' changes something (' + (one.join(', ') || 'NOTHING') + ')');
+    // and the level after that
+    rich(s);
+    const mid = readings(s);
+    const err = IB.upgradeBuilding(s, slot);
+    if (!err){
+      const up = changed(mid, readings(s));
+      t.ok(up.length > 0, 'upgrading a ' + IB.BUILDINGS[type].n + ' changes something (' + (up.join(', ') || 'NOTHING') + ')');
+    }
+    // a SECOND one on another plot — this is the case the Hero Factory failed
+    s = fresh();
+    IB.build(s, s.plot.indexOf(null), type);
+    rich(s);
+    const after1 = readings(s);
+    t.ok(IB.build(s, s.plot.indexOf(null), type) === null, 'a second ' + IB.BUILDINGS[type].n + ' can be built');
+    const two = changed(after1, readings(s));
+    t.ok(two.length > 0, 'and a second ' + IB.BUILDINGS[type].n + ' is worth its plot (' + (two.join(', ') || 'NOTHING') + ')');
+  }
+  // hero slots specifically: two taverns are worth the same as one upgraded once
+  {
+    const s = fresh();
+    IB.build(s, s.plot.indexOf(null), 'tavern');
+    t.ok(IB.heroCap(s) === 1, 'one Hero Factory forges one hero');
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'tavern');
+    t.ok(IB.heroCap(s) === 2, 'a second one forges a second (' + IB.heroCap(s) + ')');
+    const s2 = fresh();
+    const t2 = s2.plot.indexOf(null);
+    IB.build(s2, t2, 'tavern'); rich(s2); IB.upgradeBuilding(s2, t2);
+    t.ok(IB.heroCap(s2) === 2, 'and so does upgrading the first — the two routes agree');
+    for (let i = 0; i < 4; i++){ rich(s2); IB.build(s2, s2.plot.indexOf(null), 'tavern'); }
+    t.ok(IB.heroCap(s2) === 3, 'but three is the cap however you get there (' + IB.heroCap(s2) + ')');
+  }
+  // and the Host's build plan must not ask for anything that does nothing
+  {
+    const plan = SRC.match(/const AI_BUILD_PLAN = \[([^\]]*)\]/)[1];
+    const types = [...plan.matchAll(/'(\w+)'/g)].map(m => m[1]);
+    t.ok(types.length > 8, 'the Host has a real build plan (' + types.length + ' entries)');
+    t.ok(types.every(x => IB.BUILDINGS[x]), 'every entry in it is a building that exists');
+  }
+}
+
 /* ------------------------------------------------------- battle damage */
 {
   // A turret at a fifth of its health used to look exactly like a fresh one,
