@@ -162,8 +162,20 @@ t.ok(true, 'drawing an empty bridge is harmless');
 /* ---------------------------------------------------------------- economy */
 {
   const s = P();
-  t.ok(IB.workerCount(s) === 4 && s.workers.idle === 4, 'you open with four idle workers');
+  // The hold opens with its workers already earning — a player who spends the
+  // first minute reading used to come back to an economy that had gathered
+  // nothing while the Host, which assigns on its first tick, was three waves in.
+  t.ok(IB.workerCount(s) === 4, 'you open with four workers');
+  t.ok(s.workers.idle >= 1, 'at least one of them is yours to place');
+  t.ok(IB.workerCount(s) - s.workers.idle >= 2, 'and the rest are already gathering');
+  {
+    const g0 = s.res.gold, w0 = s.res.wood;
+    step(10);
+    t.ok(s.res.gold > g0 && s.res.wood > w0, 'so the piles are growing before you touch anything');
+  }
   t.ok(IB.popCap(s) === C.POP_BASE + C.POP_PER_FARM, 'the starting farm has already raised the population cap');
+  for (const k of ['gold','iron','wood','food']) IB.assign(s, k, -99);
+  t.ok(s.workers.idle === 4, 'and every one of them can be pulled back off again');
   t.ok(IB.assign(s, 'gold', 2) === null && s.workers.gold === 2 && s.workers.idle === 2, 'workers can be put on the gold mine');
   const g0 = s.res.gold;
   step(10);
@@ -1077,6 +1089,27 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.assign(s, 'gold', -1);
     t.ok(s.workers.idle === 1 && IB.trainUnit(s, 'melee') === null, 'pull one off a job and it can be armed');
   }
+}
+
+/* ---------------------------------------------------- the opening minute */
+{
+  // A new player spends the first minute reading the screen. That minute used
+  // to earn nothing at all — four workers stood idle while the Host, which
+  // assigns on its first tick, was three waves in — so the reward for reading
+  // the game was starting it behind.
+  IB.newMatch({ diff:'veteran', seed:1501 });
+  const s = P();
+  const before = Object.assign({}, s.res);
+  for (let i = 0; i < 30 * 60; i++) IB.update(1 / 30);   // touch nothing for a minute
+  const gained = ['gold','iron','wood','food'].filter(k => s.res[k] > before[k]);
+  t.ok(gained.length >= 3, 'a minute of reading the screen still earns you something (' + gained.join(', ') + ')');
+  t.ok(s.res.food > before.food, 'including food, which every worker you train costs 20 of');
+  t.ok(s.workers.idle >= 1, 'and one worker is still waiting for you to place them');
+  // the Host is not quietly ahead on the difficulty that promises an even fight
+  const f = E();
+  const mine = ['gold','iron','wood','food'].reduce((a, k) => a + (s.res[k] - before[k]), 0);
+  t.ok(mine > 60, 'the hold gathers a real amount in that minute (' + Math.round(mine) + ')');
+  t.ok(IB.workerCount(s) === IB.workerCount(f) || f.ai, 'both holds start from the same four workers');
 }
 
 /* ------------------------------------------------------ the attract screen */
