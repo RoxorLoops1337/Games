@@ -2253,9 +2253,16 @@ function aiStep(s, dt){
   if (s.aiT > 0) return;
   s.aiT = 1.4 / G.diff.ai;
 
-  // --- jobs: keep the four piles roughly matched to what it wants to buy
+  // --- jobs: keep the four piles roughly matched to what it wants to buy.
+  // Arming a worker needs an IDLE one, and this loop used to shovel every idle
+  // worker into a mine the instant it appeared — so the barracks starved and
+  // seven minutes of play produced a single Footman out of an army of levies.
+  // Hold one back when there is a barracks standing and something it can pay
+  // to arm.
+  const canArm = barracksLvl(s) > 0 && Object.keys(TRAIN).some(k =>
+    TRAIN[k].barracks <= barracksLvl(s) && canPay(s, TRAIN[k].cost));
   const want = { wood:.30, gold:.30, iron:.25, food:.15 };
-  if (s.workers.idle > 0){
+  if (s.workers.idle > (canArm ? 1 : 0)){
     let bestNode = 'wood', bestGap = -9;
     for (const n of ['gold','iron','wood','food']){
       const room = nodeCap(s, n) - s.workers[n];

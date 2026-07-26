@@ -1025,6 +1025,52 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(/You lost/.test(IB.timelineHtml()) || !G.timeline.length, 'the timeline names whose walls came down');
 }
 
+/* ------------------------------------------------------- arming the hold */
+{
+  // "In the barracks you can upgrade the minions to fighter minions and they
+  // will march with the wave" is a pillar of this game. It barely happened:
+  // the AI's job loop shovelled every idle worker into a mine the instant it
+  // appeared, and arming needs an IDLE worker, so eight minutes of play armed
+  // one Footman out of an army of ninety levies.
+  const armedIn = (seed, mins) => {
+    IB.newMatch({ diff:'veteran', seed });
+    G.sides[0].ai = true;
+    const seen = new Set();
+    let armed = 0, levy = 0;
+    for (let i = 0; i < 30 * 60 * mins && G.state === 'play'; i++){
+      IB.update(1 / 30);
+      for (const u of G.units){
+        if (u.side !== 0 || u.isHero || seen.has(u.id)) continue;
+        seen.add(u.id);
+        if (u.paid) armed++; else levy++;
+      }
+    }
+    return { armed, levy };
+  };
+  let armed = 0, levy = 0;
+  for (const seed of [5031, 5062, 5093]){
+    const r = armedIn(seed, 8);
+    armed += r.armed; levy += r.levy;
+  }
+  t.ok(levy > 100, 'the free levies keep coming (' + levy + ' over three matches)');
+  t.ok(armed >= 9, 'and a hold with a barracks actually arms its workers (' + armed + ' armed bodies)');
+  t.ok(armed / (armed + levy) > .04,
+    'so what you build is a real part of the army, not a rounding error (' +
+    (armed / (armed + levy) * 100).toFixed(1) + '%)');
+  // the mechanism: something has to be idle to be armed
+  {
+    IB.newMatch({ diff:'veteran', seed:5124 });
+    const s = P();
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'barracks');
+    IB.assign(s, 'gold', 99); IB.assign(s, 'iron', 99); IB.assign(s, 'wood', 99); IB.assign(s, 'food', 99);
+    t.ok(s.workers.idle === 0, 'with every worker on a job nobody is free to arm');
+    t.ok(IB.trainUnit(s, 'melee') === 'no idle worker to arm', 'and the barracks says exactly that');
+    IB.assign(s, 'gold', -1);
+    t.ok(s.workers.idle === 1 && IB.trainUnit(s, 'melee') === null, 'pull one off a job and it can be armed');
+  }
+}
+
 /* --------------------------------------------------- what a plot buys you */
 {
   // Sixteen plots is the whole hold, so a building that changes nothing is a
