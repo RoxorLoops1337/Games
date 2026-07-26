@@ -151,6 +151,9 @@
   .pick .pk{ font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--gold); margin-bottom:5px; }
   .pick .pd{ font-size:12px; color:var(--dim); line-height:1.45; }
   .pick .pm{ margin-top:6px; font-size:11px; color:var(--blue); }
+  .pick.resume{ border-color:var(--gold); background:linear-gradient(180deg,#2a2417,#1d1a12); }
+  .pick.resume:hover{ border-color:#ffe08a; }
+  .pick.resume .pk{ color:var(--gold); }
   .rowbtn{ display:flex; gap:8px; flex-wrap:wrap; margin-top:14px; }
   .big{ flex:1 1 160px; padding:11px 16px; font-size:15px; font-weight:800; letter-spacing:.5px;
     background:linear-gradient(180deg,#5ab0ff,#2f7fd8); border:none; border-radius:10px; color:#08111f; }
@@ -286,6 +289,7 @@ const HEADLESS = typeof __IB_HEADLESS__ !== 'undefined';
 /* ------------------------------------------------------------------ rng */
 let _seed = 12345;
 const reseed = (s) => { _seed = (s >>> 0) || 1; };
+const seedNow = () => _seed;
 const rnd = () => { // mulberry32 — deterministic so a match can be replayed in tests
   _seed |= 0; _seed = (_seed + 0x6D2B79F5) | 0;
   let t = Math.imul(_seed ^ (_seed >>> 15), 1 | _seed);
@@ -499,7 +503,7 @@ const SKILLS = [
     f:'A knot of borrowed magic.' }),
   S('barbedtrap','Barbed Trap','any',{ k:'dot', tag:'dmg', cd:18, mana:50, dps:[26,13], apR:.22, aoe:3, dur:5, slow:.25,
     f:'Caltrops and old wire.' }),
-  S('bannercall','Banner Call','any',{ k:'summon', tag:'summon', cd:44, mana:70, kind:'melee', n:2, nPer:1, dur:26,
+  S('bannercall','Banner Call','any',{ k:'summon', tag:'summon', cd:44, mana:70, kind:'melee', count:2, nPer:1, dur:26,
     f:'Two levies answer the horn.' }),
   S('finisher','Finisher','any',{ k:'strike', tag:'dmg', cd:11, mana:40, dmg:[60,30], adR:.9, exec:.5, rng:2.4,
     f:'Costs more the healthier they are.' }),
@@ -570,7 +574,7 @@ const SKILLS = [
     f:'Five seconds of nothing but edge.' }),
   S('championsedge','Champion’s Edge','fighter',{ ult:true, k:'strike', tag:'dmg', cd:60, mana:100, dmg:[220,110], adR:1.4, exec:1.0, rng:2.6,
     f:'One blow, meant for the wounded.' }),
-  S('warbanner','War Banner','fighter',{ ult:true, k:'summon', tag:'summon', cd:80, mana:100, kind:'melee', n:3, nPer:1, dur:30, buffTeam:true,
+  S('warbanner','War Banner','fighter',{ ult:true, k:'summon', tag:'summon', cd:80, mana:100, kind:'melee', count:3, nPer:1, dur:30, buffTeam:true,
     f:'Plant it and the levies come running.' }),
   S('headhunter','Headhunter','marksman',{ ult:true, k:'bolt', tag:'dmg', cd:65, mana:100, dmg:[260,130], adR:1.5, rng:14,
     f:'One shot from very far away.' }),
@@ -586,7 +590,7 @@ const SKILLS = [
     f:'It does not stop hopping.' }),
   S('deathmark','Death Mark','assassin',{ ult:true, k:'dash', tag:'dmg', cd:60, mana:100, dmg:[240,120], adR:1.3, dist:8, rng:9, exec:.8,
     f:'Arrive, and it is already over.' }),
-  S('shadowlegion','Shadow Legion','assassin',{ ult:true, k:'summon', tag:'summon', cd:80, mana:100, kind:'shade', n:3, nPer:1, dur:22,
+  S('shadowlegion','Shadow Legion','assassin',{ ult:true, k:'summon', tag:'summon', cd:80, mana:100, kind:'shade', count:3, nPer:1, dur:22,
     f:'Three of you, briefly.' }),
   S('bloodfeast','Blood Feast','assassin',{ ult:true, k:'buff', tag:'buff', cd:70, mana:100, dur:9, bls:.55, bad:30, bms:.15,
     f:'Every wound you open feeds you.' }),
@@ -615,7 +619,7 @@ function skNums(s, rank){
   if (s.stun) out.push(s.stun.toFixed(1) + 's stun');
   if (s.slow) out.push(Math.round(s.slow * 100) + '% slow');
   if (s.aoe) out.push('area ' + s.aoe.toFixed(1));
-  if (s.n) out.push((s.n + (r - 1) * (s.nPer || 0)) + ' summons');
+  if (s.count) out.push((s.count + (r - 1) * (s.nPer || 0)) + ' summons');
   if (s.bas) out.push('+' + Math.round(s.bas * 100) + '% attack speed');
   if (s.bad) out.push('+' + s.bad + ' damage');
   if (s.bms) out.push('+' + Math.round(s.bms * 100) + '% move speed');
@@ -1176,6 +1180,7 @@ function endMatch(winner){
   if (G.demo){ startDemo(); return; }          // the attract battle just starts over
   G.state = 'over'; G.winner = winner;
   sfx(winner === 0 ? 'win' : 'lose');
+  clearSave();
   saveMeta(winner === 0);
   if (!HEADLESS) showOver();
 }
@@ -1914,7 +1919,7 @@ function castSkill(h, sk, tgt){
       break;
     }
     case 'summon': {
-      const n = (s.n || 1) + (r - 1) * (s.nPer || 0);
+      const n = (s.count || 1) + (r - 1) * (s.nPer || 0);
       for (let i = 0; i < n; i++){
         const su = spawnUnit(h.side, s.kind, { x:h.x - dirOf(h.side) * 1.5, y:h.y + rr(-1.5, 1.5), life:s.dur, hpM:1 + h.lvl * .05, adM:1 + h.lvl * .05 });
         if (su && !HEADLESS) burstFx(su.x, su.y, '#c9a6ff', 6);
@@ -3407,7 +3412,7 @@ function adviceFor(s){
   return null;
 }
 
-let uiT = 0;
+let uiT = 0, saveT = 0;
 function syncAdvice(){
   const el = $('advice');
   if (!el) return;
@@ -3425,6 +3430,8 @@ function syncUI(){
 function uiTick(dt){
   uiT -= dt;
   if (uiT <= 0){ uiT = .22; syncUI(); }
+  saveT -= dt;
+  if (saveT <= 0){ saveT = 10; saveMatch(); }
 }
 
 /* ------------------------------------------------------------------ modals */
@@ -3433,9 +3440,16 @@ function openModal(html){ $('sheet').innerHTML = html; $('modal').classList.add(
 
 function showMenu(){
   const meta = loadMeta();
+  const save = savedMatch();
+  const resume = save ? '<div class="picks" style="margin-bottom:10px"><button class="pick resume" data-act="resume">' +
+    '<div class="pk">unfinished</div><div class="pt">Resume — wave ' + save.wave + '</div>' +
+    '<div class="pd">' + mmss(save.t) + ' in, on ' +
+    ((DIFFS.find(d => d.id === save.diff) || DIFFS[1]).n) + '. Your hold and your heroes are exactly where you left them.</div>' +
+    '</button></div>' : '';
   openModal(
     '<h2>IRONBRIDGE</h2>' +
     '<p class="sub">One bridge. Two holds. Mine, farm, muster and forge heroes — then break their gates before they break yours.</p>' +
+    resume +
     '<div class="picks">' + DIFFS.map((d, i) =>
       '<button class="pick" data-act="start" data-diff="' + d.id + '"><div class="pk">' + (i === 0 ? 'easy' : i === 1 ? 'even' : 'hard') + '</div>' +
       '<div class="pt">' + d.n + '</div><div class="pd">' + d.d + '</div></button>').join('') + '</div>' +
@@ -3590,6 +3604,103 @@ function showHelp(){
 }
 
 /* ------------------------------------------------------------------ meta */
+/* ------------------------------------------------------------------ resume
+   A match runs ten to fifteen minutes. Losing one to a backgrounded tab is
+   the worst thing this game could do to you, so the whole match — hold,
+   heroes with their builds, structures and everyone standing on the bridge —
+   is written to local storage and can be picked back up.                    */
+const SAVE_KEY = 'ib_save', SAVE_VER = 1;
+
+const packHero = (h) => ({
+  cls:h.cls, name:h.name, lvl:h.lvl, xp:h.xp, kills:h.kills, deaths:h.deaths,
+  passive:h.passive, passRank:h.passRank,
+  skills:h.skills.map(s => ({ id:s.id, rank:s.rank, cdT:s.cdT, ult:!!s.ult })),
+  pend:h.pend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
+  x:h.x, y:h.y, hp:h.hp, mana:h.mana, dead:h.dead, inLane:h.inLane, respawnT:h.respawnT,
+});
+const packUnit = (u) => ({
+  kind:u.kind, side:u.side, x:u.x, y:u.y, hp:u.hp, mhp:u.mhp, ad:u.ad, armor:u.armor, mr:u.mr,
+  paid:!!u.paid, life:u.life, cd:u.cd,
+});
+const packSide = (s) => ({
+  res:Object.assign({}, s.res), workers:Object.assign({}, s.workers),
+  nodeLvl:Object.assign({}, s.nodeLvl), towerUp:Object.assign({}, s.towerUp),
+  troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs,
+  kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
+  plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
+  trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
+  muster:s.muster.map(m => ({ type:m.type })),
+  structs:s.structs.map(st => ({ key:st.key, hp:st.hp, dead:st.dead, downT:st.downT })),
+  heroes:s.heroes.map(packHero),
+});
+
+function saveMatch(){
+  if (G.state !== 'play' || G.demo) return false;
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify({
+      v:SAVE_VER, at:Date.now(), diff:G.diff.id, t:G.t, wave:G.wave, waveT:G.waveT,
+      seed:_seed, sides:G.sides.map(packSide),
+      units:G.units.filter(u => !u.isHero).map(packUnit),
+    }));
+    return true;
+  } catch (e){ return false; }
+}
+function savedMatch(){
+  try {
+    const o = JSON.parse(localStorage.getItem(SAVE_KEY) || 'null');
+    return (o && o.v === SAVE_VER && o.sides && o.sides.length === 2) ? o : null;
+  } catch (e){ return null; }
+}
+function clearSave(){ try { localStorage.removeItem(SAVE_KEY); } catch (e){} }
+
+function loadMatch(pack){
+  pack = pack || savedMatch();
+  if (!pack) return 'no saved match';
+  newMatch({ diff:pack.diff, seed:pack.seed || 1 });
+  reseed(pack.seed || 1);
+  G.t = pack.t; G.wave = pack.wave; G.waveT = pack.waveT;
+  pack.sides.forEach((ps, i) => {
+    const s = G.sides[i];
+    Object.assign(s.res, ps.res); Object.assign(s.workers, ps.workers);
+    Object.assign(s.nodeLvl, ps.nodeLvl); Object.assign(s.towerUp, ps.towerUp);
+    Object.assign(s.troopUp, ps.troopUp);
+    s.superT = ps.superT; s.aiT = ps.aiT; s.rs = ps.rs;
+    s.kills = ps.kills; s.structsKilled = ps.structsKilled;
+    s.gathered = ps.gathered; s.spent = ps.spent; s.heroKills = ps.heroKills;
+    s.plot = ps.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile, raise:0 } : null);
+    s.trainQ = ps.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur }));
+    s.muster = ps.muster.map(m => ({ type:m.type }));
+    for (const st of s.structs){
+      const p = ps.structs.find(o => o.key === st.key);
+      if (!p) continue;
+      st.mhp = structMaxHp(s, st);
+      st.hp = Math.min(p.hp, st.mhp); st.dead = p.dead; st.downT = p.downT;
+    }
+    s.heroes = ps.heroes.map(ph => {
+      const h = makeHero(i, ph.cls, ph.name);
+      h.pend.length = 0;
+      h.lvl = ph.lvl; h.xp = ph.xp; h.kills = ph.kills; h.deaths = ph.deaths;
+      h.passive = ph.passive; h.passRank = ph.passRank;
+      h.skills = ph.skills.map(sk => ({ id:sk.id, rank:sk.rank, cdT:sk.cdT, ult:sk.ult }));
+      h.pend = ph.pend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl }));
+      recalcHero(h, true);
+      h.x = ph.x; h.y = ph.y; h.hp = Math.min(ph.hp, h.mhp); h.mana = Math.min(ph.mana, h.mmana);
+      h.dead = ph.dead; h.respawnT = ph.respawnT; h.inLane = false;
+      if (!ph.dead){ h.inLane = true; G.units.push(h); }
+      return h;
+    });
+  });
+  for (const pu of pack.units || []){
+    const u = spawnUnit(pu.side, pu.kind, { x:pu.x, y:pu.y, paid:pu.paid, life:pu.life });
+    if (!u) continue;
+    u.mhp = pu.mhp; u.hp = Math.min(pu.hp, u.mhp); u.ad = pu.ad;
+    u.armor = pu.armor; u.mr = pu.mr; u.cd = pu.cd;
+  }
+  scatterCache[0] = scatterCache[1] = null;
+  rebuildGrid();
+  return null;
+}
+
 const META_KEY = 'ib_meta';
 function loadMeta(){
   try { return Object.assign({ wins:0, losses:0, best:0 }, JSON.parse(localStorage.getItem(META_KEY) || '{}')); }
@@ -3717,10 +3828,16 @@ function wire(){
     const b = e.target.closest('[data-act]');
     if (!b) return;
     const a = b.dataset.act;
-    if (a === 'start'){ audioStart(); newMatch({ diff:b.dataset.diff }); closeModal(); syncUI(); }
+    if (a === 'start'){ audioStart(); clearSave(); newMatch({ diff:b.dataset.diff }); closeModal(); syncUI(); }
+    else if (a === 'resume'){
+      audioStart();
+      const err = loadMatch();
+      if (err){ say(err); return; }
+      closeModal(); syncUI();
+    }
     else if (a === 'close') closeModal();
     else if (a === 'menu'){ startDemo(); showMenu(); }
-    else if (a === 'again'){ newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
+    else if (a === 'again'){ clearSave(); newMatch({ diff:G.diff.id }); closeModal(); syncUI(); }
     else if (a === 'mkhero'){
       const err = createHero(s0(), b.dataset.cls);
       if (err){ say(err); return; }
@@ -3807,6 +3924,10 @@ function wire(){
     cam.tz = clamp(cam.tz * (e.deltaY > 0 ? .88 : 1.14), .42, 2.2);
   }, { passive:false });
 
+  const stash = () => { if (G.state === 'play' && !G.demo) saveMatch(); };
+  window.addEventListener('pagehide', stash);
+  window.addEventListener('blur', stash);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stash(); });
   window.addEventListener('resize', resizeSoon);
   window.addEventListener('orientationchange', resizeSoon);
   window.addEventListener('keydown', (e) => {
@@ -3861,6 +3982,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml,
+  saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };
