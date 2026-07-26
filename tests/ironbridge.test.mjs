@@ -4206,6 +4206,113 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(G.sides[1].ai === true, 'with the Host back in it');
 }
 
+/* ====================================== the joiner plays their own hold
+   Commands were already routed to NET.me, but every readout on screen came
+   from G.sides[0] — so the player who JOINED was giving orders to the hold on
+   the right while reading the numbers of the hold on the left. */
+{
+  IB.netEnd();
+  t.ok(IB.MY === 0, 'on your own you are the left-hand hold');
+  IB.newMatch({ diff:'veteran', seed:6001 });
+  rich(P()); P().res.gold = 4321;
+  E().res.gold = 8765;
+  t.ok(IB.dockHtml().includes('4321') || Math.round(me_gold()) === 4321,
+    'and the dock reads your own gold');
+
+  function me_gold(){ return IB.G.sides[IB.MY].res.gold; }
+
+  // Take seat 1, as the joiner does.
+  IB.netStart({ me:1, seed:6002 });
+  t.ok(IB.NET.me === 1, 'the joiner is seat 1');
+  t.ok(IB.MY === 1, 'and the interface follows the seat');
+  t.ok(IB.G.sides[IB.MY] === E(), 'so "my hold" is the Ember Host, on the right');
+
+  G.sides[0].res.gold = 111; G.sides[1].res.gold = 999;
+  t.ok(Math.round(me_gold()) === 999, 'the numbers on screen are the joiner’s own (' + Math.round(me_gold()) + ')');
+
+  // An order given from seat 1 must reach side 1, and the readout must agree
+  // with where the order went. These two disagreeing IS the bug.
+  const before = G.sides[1].trainQ.length, otherBefore = G.sides[0].trainQ.length;
+  IB.sendCmd('worker');
+  IB.netDeliver(IB.NET.tick, 0, []);
+  for (let i = 0; i < IB.NET.delay + 2 && IB.netStep(); i++) IB.netDeliver(IB.NET.tick, 0, []);
+  t.ok(G.sides[1].trainQ.length > before, 'an order from seat 1 trains on side 1');
+  t.ok(G.sides[0].trainQ.length === otherBefore, 'and does nothing to side 0');
+
+  // The camera, the clickable hold, and the tally all have to agree too.
+  t.ok(IB.myHoldX() === C.LANE_LEN - IB.HOLD_X, 'the camera opens on the right-hand hold');
+  t.ok(IB.foe() === 0, 'and the enemy is side 0');
+  IB.doAction('camHold');
+  const atMine = IB.cam.x;
+  IB.doAction('camFoe');
+  t.ok(IB.cam.x < atMine, 'HOLD and FOE point at opposite ends, the right way round for this seat');
+
+  G.winner = 1;
+  t.ok(/gates are down/.test(IB.overHtml()), 'the result card renders for seat 1');
+  t.ok(IB.overHtml().includes(IB.SIDE_NAME[1]), 'and names the joiner’s own hold first');
+  G.winner = null;
+
+  // Whose crews get drawn, and whose plot is clickable.
+  IB.draw();
+  t.ok(true, 'a full draw from seat 1 is clean');
+  const targets = IB.clickTargets();
+  const plots = targets.filter(o => o.kind === 'plot' || o.kind === 'build');
+  t.ok(plots.length === IB.PLOT_W * IB.PLOT_H, 'every tile of the joiner’s own plot is clickable');
+
+  IB.netEnd();
+  t.ok(IB.MY === 0, 'and leaving gives the seat back');
+  IB.newMatch({ diff:'veteran', seed:6003 });
+  t.ok(IB.G.sides[IB.MY] === P(), 'so a one-player match is the left-hand hold again');
+}
+
+/* ================================= the dock must not vanish under a click
+   A click is a press AND a release on the SAME element. The dock replaces its
+   whole innerHTML five times a second, which destroys every button in it — so
+   a click whose press-to-release straddled a rebuild released onto an element
+   that no longer existed. A deliberate click is 80-150ms against a 220ms
+   rebuild, which is why it read as "I have to click things twice". */
+{
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:6100 });
+
+  // Behavioural, through the real uiTick: with a press in flight the refresh
+  // defers, and the deferral is what accumulates.
+  IB.uiDown = false; IB.uiWaited = 0;
+  for (let i = 0; i < 30; i++) IB.uiTick(1 / 30);          // a second, nothing held
+  t.ok(IB.uiWaited === 0, 'with nothing held down the dock refreshes on its own clock');
+
+  IB.uiDown = true; IB.uiWaited = 0;
+  for (let i = 0; i < 14; i++) IB.uiTick(1 / 30);          // ~0.47s with a finger down
+  t.ok(IB.uiWaited > 0, 'a press in flight defers the rebuild (' + IB.uiWaited.toFixed(2) + 's deferred)');
+
+  // ...but only so far. A press whose release never arrives — dragged off the
+  // window, a lost pointer — must not freeze the dock forever.
+  IB.uiDown = true; IB.uiWaited = 0;
+  for (let i = 0; i < 30 * 5; i++) IB.uiTick(1 / 30);      // five seconds stuck down
+  t.ok(IB.uiWaited <= IB.UI_WAIT_CAP + .001,
+    'and it gives up after the cap rather than freezing (' + IB.uiWaited.toFixed(2) + 's, cap ' + IB.UI_WAIT_CAP + 's)');
+  t.ok(IB.UI_WAIT_CAP >= .4 && IB.UI_WAIT_CAP <= 1.2,
+    'the cap is long enough for a real click and short enough not to be felt (' + IB.UI_WAIT_CAP + 's)');
+
+  // Releasing resumes immediately.
+  IB.uiDown = false;
+  IB.uiTick(1);
+  t.ok(IB.uiWaited === 0, 'releasing lets the dock refresh again at once');
+
+  // The flag has to be cleared by things other than a clean release, or one
+  // press that drifts off a button would stop the dock updating.
+  const wiring = SRC.slice(SRC.indexOf('function wire()'));
+  t.ok(/\$\('dock'\)\.addEventListener\('pointerdown'/.test(wiring), 'a press in the dock sets the flag');
+  for (const ev of ['pointerup', 'pointercancel', 'blur'])
+    t.ok(new RegExp("window\\.addEventListener\\('" + ev + "'[\\s\\S]{0,40}?uiDown = false").test(wiring),
+      ev + ' on the window clears it, so a press that drifts off the button still counts');
+
+  // The thing that made this a bug in the first place: the dock really is
+  // rebuilt wholesale, so deferring is the fix rather than a nicety.
+  t.ok(/\$\('dock'\)\.innerHTML = dockHtml\(\)/.test(SRC),
+    'the dock is still rebuilt wholesale — which is exactly why the guard is needed');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
