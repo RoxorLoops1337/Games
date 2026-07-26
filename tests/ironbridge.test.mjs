@@ -1025,6 +1025,41 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(/You lost/.test(IB.timelineHtml()) || !G.timeline.length, 'the timeline names whose walls came down');
 }
 
+/* ------------------------------------------------------- unit silhouettes */
+{
+  // A cannon is worth about four bodies and used to be drawn as a man with a
+  // crate; an ogre is worth a wave and was a slightly larger man. They have
+  // their own shapes now, which means their own draw paths — and the stub
+  // canvas throws on a bad colour, so this is a real check on all of them.
+  IB.newMatch({ diff:'veteran', seed:901 });
+  IB.cam.follow = false; IB.cam.x = 40; IB.cam.z = IB.cam.tz = 1.2;
+  const kinds = Object.keys(IB.UNITS);
+  t.ok(kinds.length >= 5, 'there are several kinds to tell apart (' + kinds.join(', ') + ')');
+  let drew = 0, threw = null;
+  for (const side of [0, 1]) for (const k of kinds){
+    for (const state of ['plain', 'hit', 'burning', 'stunned', 'shielded', 'swinging', 'hurt']){
+      G.units.length = 0;
+      const u = IB.spawnUnit(side, k, { x:40, y:0 });
+      if (!u) continue;
+      if (state === 'hit') u.hitT = .2;
+      if (state === 'burning') u.burn = { dps:5, t:2 };
+      if (state === 'stunned') u.stunT = 1;
+      if (state === 'shielded') u.shield = 50;
+      if (state === 'swinging') u.swing = .2;
+      if (state === 'hurt') u.hp = u.mhp * .4;
+      try { IB.draw(); drew++; } catch (e){ threw = k + '/' + state + '/side' + side + ': ' + e.message; }
+    }
+  }
+  t.ok(threw === null, 'every kind draws cleanly in every state (' + (threw || drew + ' draws') + ')');
+  t.ok(drew >= kinds.length * 7 * 2 - 4, 'and all of them actually got drawn (' + drew + ')');
+  // the two machine silhouettes are the ones that must not fall back to a person
+  const src = SRC.slice(SRC.indexOf('function drawUnit(c, u){'));
+  t.ok(/kind === 'cannon'\){ drawCannon/.test(src), 'a cannon is drawn as a siege engine, not a soldier');
+  t.ok(/kind === 'super'\){ drawOgre/.test(src), 'an ogre is drawn as an ogre');
+  t.ok(/function drawUnitMarks/.test(SRC),
+    'and both share the shield/burn/stun/health marks, so a cannon can still catch fire');
+}
+
 /* ------------------------------------------------------------ health bars */
 {
   IB.newMatch({ diff:'veteran', seed:829 });
