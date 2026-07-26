@@ -1012,19 +1012,51 @@ function spawnUnit(side, kind, o){
 
 function spawnWave(){
   G.wave++;
+  const kinds = [];
   for (const s of G.sides){
-    const n = 3 + (G.wave >= 8 ? 1 : 0);
-    for (let i = 0; i < n; i++) spawnUnit(s.i, 'grunt', { y:lerp(-2.4, 2.4, i / Math.max(1, n - 1)) });
+    const k = waveKindFor(s);
+    kinds[s.i] = k;
+    s.waveKind = k.id;
+    const n = Math.max(1, 3 + (G.wave >= 8 ? 1 : 0) + k.grunt);
+    for (let i = 0; i < n; i++)
+      spawnUnit(s.i, 'grunt', { y:lerp(-2.4, 2.4, i / Math.max(1, n - 1)), hpM:k.hpM });
+    for (let i = 0; i < k.caster; i++) spawnUnit(s.i, 'caster', { y:i ? 1.8 : -1.8 });
+    for (let i = 0; i < k.sup; i++) spawnUnit(s.i, 'super', { y:0 });
     // A free siege engine rolls out every third wave, then every second, then
     // every wave — so a stalemate slowly stops being an option.
     const every = G.wave >= 20 ? 1 : G.wave >= 12 ? 2 : 3;
-    if (G.wave % every === 0) spawnUnit(s.i, 'cannon', { y:0 });
+    const cannons = (G.wave % every === 0 ? 1 : 0) + k.cannon;
+    for (let i = 0; i < cannons; i++) spawnUnit(s.i, 'cannon', { y:i ? 1.4 : 0 });
     for (const m of s.muster) spawnUnit(s.i, m.type, { paid:true, y:rr(-2.6, 2.6) });
     s.muster.length = 0;
     if (s.superT > 0) for (let i = 0; i < 2; i++) spawnUnit(s.i, 'super', { y:i ? 1.6 : -1.6 });
   }
-  fxToast('Wave ' + G.wave + ' marches out.');
+  const foe = kinds[1];
+  fxToast('Wave ' + G.wave + ' — the Host sends ' + foe.n + '.', foe.id === 'levy' ? '' : 'bad');
   sfx('wave');
+}
+
+// Every wave used to be the same shape. These swap the free trickle around
+// rather than adding to it — a shield wall trades its siege engine for bodies,
+// a volley trades bodies for range — so the shape changes without the wave
+// quietly becoming stronger.
+// Trading a siege engine away for two levies badly under-pays — a cannon is
+// worth about four bodies — so the deltas below are priced against each other
+// rather than picked by eye. Some shapes are still heavier than others; that
+// is what variety means.
+const WAVE_KINDS = [
+  { id:'levy',   n:'levies',        grunt:0,  caster:0, cannon:0,  sup:0, hpM:1,    min:0 },
+  { id:'shield', n:'a shield wall', grunt:2,  caster:0, cannon:0,  sup:0, hpM:1.15, min:4 },
+  { id:'volley', n:'a volley wave', grunt:-2, caster:2, cannon:0,  sup:0, hpM:1,    min:6 },
+  { id:'siege',  n:'siege engines', grunt:-3, caster:0, cannon:1,  sup:0, hpM:1,    min:8 },
+  { id:'ogres',  n:'ogres',         grunt:-2, caster:0, cannon:-1, sup:1, hpM:1,    min:20 },
+];
+function waveKindFor(s){
+  const pool = WAVE_KINDS.filter(k => G.wave >= k.min);
+  // weighted so plain levies stay the common case
+  const roll = arnd(s);
+  if (roll < .45 || pool.length === 1) return WAVE_KINDS[0];
+  return pool[1 + Math.floor(arnd(s) * (pool.length - 1))] || WAVE_KINDS[0];
 }
 
 /* ------------------------------------------------------------------ lookup grid */
@@ -1711,6 +1743,19 @@ function onHeroDeath(h, src){
 }
 
 /* ------------------------------------------------------------------ hero brain */
+// Would chasing this target put us under an enemy turret with nobody to soak
+// for us? Measured at the target, not at the hunter.
+function towerCovered(h, tgt){
+  for (const st of G.sides[enemyOf(h.side)].structs){
+    if (st.dead || !st.ad) continue;
+    if (Math.hypot(st.x - tgt.x, st.y - tgt.y) > st.rng + 1) continue;
+    let cover = 0;
+    nearby(st.x, 7, (u) => { if (!u.dead && u.side === h.side && !u.isHero) cover++; });
+    if (cover < 2) return true;
+  }
+  return false;
+}
+
 function inTowerFire(h){
   for (const st of G.sides[enemyOf(h.side)].structs){
     if (st.dead || !st.ad) continue;
@@ -1732,10 +1777,18 @@ function frontlineX(side){
   return best;
 }
 
+// How far a hero will go out of its way for an enemy hero. An assassin whose
+// whole point is killing heroes had the same nine as everyone else, and ended
+// the match with the fewest hero kills of any class.
+const HUNT = { assassin:15, marksman:10, mage:10, fighter:10, tank:9, support:8 };
+const huntRange = (h) => HUNT[h.cls] || 9;
+
 function heroTarget(h){
   const foe = enemyOf(h.side);
-  const eh = nearestFoe(h, 9, true);
-  if (eh) return eh;
+  const eh = nearestFoe(h, huntRange(h), true);
+  // Hunt further, but not into a turret on your own. Giving the assassin a
+  // long reach without this simply walked it under their guns.
+  if (eh && !towerCovered(h, eh)) return eh;
   const em = nearestFoe(h, Math.max(7, h.rng + 2.5));
   if (em) return em;
   const st = frontStruct(foe);
@@ -1776,7 +1829,7 @@ function heroStep(h, dt){
   // A wounded enemy hero within reach is worth finishing — heroes used to
   // break off every duel the moment either side dipped, so they traded for
   // twenty minutes and nobody ever died to a hero.
-  const prey = nearestFoe(h, 11, true);
+  const prey = nearestFoe(h, huntRange(h) + 2, true);
   const finishing = prey && prey.hp / prey.mhp < .35 && frac > .32 && !(tower && !cover);
   if (h.retreat && (frac > .66 || finishing)) h.retreat = false;
   if (!finishing && (frac < .28 || (tower && !cover && frac < .58))) h.retreat = true;
@@ -1854,10 +1907,18 @@ function wantCast(h, s, tgt){
   if (s.tag === 'buff') return d < Math.max(6, h.rng + 2);
   return d <= (s.rng || h.rng + 2) + (tgt.r || 0);
 }
+// The most hurt friend within reach. With only a hero or two on a side, an
+// ally-only heal was often cast on nobody, which is why supports lost most.
 function lowAlly(h, rad){
-  let f = null;
-  nearby(h.x, rad, (u) => { if (!u.dead && u.side === h.side && u.isHero && u.hp / u.mhp < .6 && (!f || u.hp / u.mhp < f.hp / f.mhp)) f = u; });
-  return f;
+  let hero = null, any = null;
+  nearby(h.x, rad, (u) => {
+    if (u.dead || u.side !== h.side || u === h) return;
+    const f = u.hp / u.mhp;
+    if (f >= .7) return;
+    if (u.isHero){ if (!hero || f < hero.hp / hero.mhp) hero = u; }
+    else if (!any || f < any.hp / any.mhp) any = u;
+  });
+  return hero || any;
 }
 
 function castSkill(h, sk, tgt){
@@ -4053,6 +4114,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
+  WAVE_KINDS, waveKindFor, huntRange, lowAlly, heroTarget, towerCovered,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
