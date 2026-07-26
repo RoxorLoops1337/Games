@@ -1902,7 +1902,15 @@ function pickOption(h, idx){
 // hand-picked class/tag pairs — so every ultimate whose job fell outside them
 // was being scored on damage it does not do. TAG_WORTH pays for the job
 // itself, for any class; the class lines on top are still the class fantasy.
-const TAG_WORTH = { dmg:0, cc:.5, buff:.45, heal:.5, summon:.55 };
+// 'move' was missing from this table, so a mobility skill scored the die and
+// nothing else. Sprint is in all six class pools and rates 0.19 in every one
+// of them — the floor of every pool, 1.4 to 2.6 behind its best. Measured
+// three ways and they agree: 0 of 1200 AI heroes took it; 18,000 heroes over
+// 54,000 offers took it 0-8 times per class (0 of 1762 for the Mage); and a
+// Monte Carlo over real three-option menus puts it at 0.0-0.6% everywhere.
+// Fighter's Dash Strike was the same story at 2%, because the dash bonus
+// below was written for the Assassin only.
+const TAG_WORTH = { dmg:0, cc:.5, buff:.45, heal:.5, summon:.55, move:.45 };
 function skillWorth(h, d){
   let sc = skRate(d, 1, ad0(h), ap0(h)) / 30;
   sc += TAG_WORTH[d.tag] || 0;
@@ -1914,12 +1922,32 @@ function skillWorth(h, d){
   if (h.cls === 'support' && (d.tag === 'heal' || d.tag === 'buff' || d.heal || d.healAlly)) sc += .9;
   if ((h.cls === 'mage' || h.cls === 'marksman') && d.tag === 'dmg') sc += .5;
   if (h.cls === 'assassin' && (d.k === 'dash' || d.exec)) sc += .6;
-  if (h.cls === 'fighter' && (d.aoe || d.tag === 'buff')) sc += .4;
+  if (h.cls === 'fighter' && (d.aoe || d.tag === 'buff' || d.k === 'dash')) sc += .4;
   // An execute is worth having and skRate cannot see it — it is the reason a
   // Champion's Edge beats a bigger sustained number in a real fight.
   if (d.exec) sc += .35;
   return sc;
 }
+// What one more rank of this option is actually worth to this hero: the step
+// from its current rank to the next, not a flat number per kind.
+function rankWorth(h, id){
+  if (id.startsWith('P:')){
+    // the passive's own scoring is still the nine-key sum autoPick has always
+    // used, so a rank of it is valued at a share of that
+    const m = (PASS[h.passive] || { m:{} }).m;
+    const v = (m.ad || 0) * .04 + (m.ap || 0) * .03 + (m.hpPct || 0) * 8 + (m.armor || 0) * .04
+      + (m.as || 0) * 4 + (m.ls || 0) * 5 + (m.hp || 0) * .004 + (m.mdmg || 0) * 2 + (m.tdmg || 0) * 2;
+    return .3 + v * .35;
+  }
+  const s = h.skills.find(o => o.id === id), d = SKILL[id];
+  if (!s || !d) return .4;
+  const ad = ad0(h), ap = ap0(h);
+  const step = skRate(d, s.rank + 1, ad, ap) - skRate(d, s.rank, ad, ap);
+  // an ultimate carries the fight, so a rank of one is worth more than its
+  // raw rate step suggests
+  return .3 + step / 30 + (s.ult ? .25 : 0);
+}
+
 const ad0 = (h) => CLS[h.cls].b.ad + CLS[h.cls].g.ad * 8;
 const ap0 = (h) => CLS[h.cls].b.ap + CLS[h.cls].g.ap * 8;
 
@@ -1937,7 +1965,15 @@ function autoPick(h){
         const m = PASS[id].m;
         sc += (m.ad || 0) * .04 + (m.ap || 0) * .03 + (m.hpPct || 0) * 8 + (m.armor || 0) * .04
             + (m.as || 0) * 4 + (m.ls || 0) * 5 + (m.hp || 0) * .004 + (m.mdmg || 0) * 2 + (m.tdmg || 0) * 2;
-      } else if (p.kind === 'rank'){ sc += id.startsWith('P:') ? .4 : .8; }
+      } else if (p.kind === 'rank'){
+        // This was a flat constant that never looked at WHICH skill it was
+        // ranking: 0.8 for any skill, 0.4 for the passive. Driving 216,000
+        // rank offers, the option with the larger real gain was chosen 52% of
+        // the time from a menu of two (chance is 50%) and 32% from a menu of
+        // three (chance is 33%) — no correlation with value whatsoever, and
+        // half of all heroes reach this choice. Score the actual step instead.
+        sc += rankWorth(h, id);
+      }
       else {
         // skills and ultimates were picked at pure random, so the Host built
         // incoherent heroes — a tank hoarding nukes, a support with none.
@@ -5029,7 +5065,7 @@ window.IB = {
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
-  structLabel, STRUCT_SHORT, skillWorth,
+  structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
