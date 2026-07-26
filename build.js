@@ -59,6 +59,7 @@ const STATIC_PATHS = [
   'leviathan_press',
   'dungeon_pusher',
   'grimhold',
+  'ironbridge',
   'carmanager',
   'tools',
 ];
