@@ -196,6 +196,19 @@
   .wr-row b.good{ color:#7fe08a; } .wr-row b.bad{ color:#ff8f86; }
   .wr-next{ margin-top:9px; font-size:12px; color:var(--dim); }
   .wr-next b{ color:var(--gold); font-size:9px; letter-spacing:2px; margin-right:6px; }
+  /* what your heroes finished the match as */
+  .hcs{ display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:6px; margin-top:8px; }
+  .hc{ padding:7px 9px; background:#0e1421; border:1px solid var(--line); border-radius:10px; min-width:0; }
+  .hc-top{ display:flex; align-items:baseline; gap:6px; }
+  .hc-g{ font-size:13px; }
+  .hc-top b{ font-size:13px; }
+  .hc-lv{ font-size:10px; color:var(--dim2); flex:1 1 auto; }
+  .hc-kd{ font-size:11px; color:var(--dim); font-variant-numeric:tabular-nums; }
+  .hc-build{ display:flex; flex-wrap:wrap; gap:3px; margin-top:5px; }
+  .hc-build i{ font-style:normal; font-size:10px; padding:2px 6px; border-radius:20px;
+    background:#1a2231; border:1px solid var(--line); color:var(--dim); }
+  .hc-build i.ult{ border-color:var(--gold); color:var(--gold); }
+  .hc-none{ font-size:10px; color:var(--dim2); font-style:italic; }
   .keys{ display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:3px 14px;
     font-size:11px; color:var(--dim2); }
   .keys span{ display:flex; align-items:center; gap:5px; }
@@ -204,7 +217,7 @@
     font:600 10px system-ui; }
   .tl{ margin:12px 0 4px; padding:10px 12px; background:#0e1421; border:1px solid var(--line); border-radius:10px; }
   .tl-row{ display:flex; align-items:center; gap:9px; margin-bottom:7px; }
-  .tl-lbl{ flex:0 0 46px; font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:700; }
+  .tl-lbl{ flex:0 0 58px; font-size:10px; letter-spacing:1px; text-transform:uppercase; font-weight:700; }
   .tl-track{ position:relative; flex:1 1 auto; height:12px; background:#1a2231; border-radius:6px; }
   .tl-m{ position:absolute; top:1px; width:5px; height:10px; margin-left:-2px; border-radius:2px;
     background:#8d99b0; }
@@ -416,9 +429,12 @@ const CLASSES = [
   { id:'assassin', name:'Assassin', blurb:'Finds the back line and ends it.',
     b:{ hp:530, ad:74, ap:0, armor:23, mr:26, as:.95, rng:1.8, spd:3.62, mana:280 },
     g:{ hp:92, ad:6.8, ap:0, armor:2.9, mr:2.2, as:.026, mana:26 } },
+  // Support was carrying a near-tank body at ranged distance on top of its
+  // healing — 27 wins in 40 across a 120-match round robin. The healing is
+  // the class; the armour was not.
   { id:'support', name:'Support', blurb:'Keeps the front line standing up.',
-    b:{ hp:555, ad:48, ap:26, armor:25, mr:31, as:.80, rng:6.6, spd:3.42, mana:340 },
-    g:{ hp:96, ad:3.6, ap:9, armor:3.1, mr:3.0, as:.016, mana:38 } },
+    b:{ hp:500, ad:48, ap:26, armor:20, mr:31, as:.80, rng:6.6, spd:3.42, mana:340 },
+    g:{ hp:86, ad:3.6, ap:9, armor:2.6, mr:3.0, as:.016, mana:38 } },
 ];
 const CLS = {}; for (const c of CLASSES) CLS[c.id] = c;
 
@@ -1663,10 +1679,18 @@ function addBuff(h, b){
 }
 const HERO_COST = { gold:130, iron:60, food:45 };
 
+// Two heroes on one side answering to the same name made the result card read
+// like a bug. Take a name nobody in this hold is already using.
+function freeName(side){
+  const taken = new Set((G.sides[side] ? G.sides[side].heroes : []).map(h => h.name));
+  const free = HERO_NAMES.filter(n => !taken.has(n));
+  return pick(free.length ? free : HERO_NAMES);
+}
+
 function makeHero(side, cls, name){
   const cl = CLS[cls] || CLASSES[0];
   const h = {
-    id:G.uid++, side, isHero:true, struct:false, cls:cl.id, name:name || pick(HERO_NAMES),
+    id:G.uid++, side, isHero:true, struct:false, cls:cl.id, name:name || freeName(side),
     lvl:1, xp:0, kills:0, deaths:0, passive:null, passRank:1, skills:[], pend:[], buffs:[],
     x:gateX(side) + dirOf(side) * 2, y:0, r:.62, dead:false, inLane:false, respawnT:0,
     hp:1, mhp:1, mana:1, mmana:1, cd:0, slowT:0, slowP:0, stunT:0, shield:0, shT:0, burn:null,
@@ -2026,6 +2050,20 @@ function lowAlly(h, rad){
   return hero || any;
 }
 
+// A team heal or team buff used to hit every minion in a wide radius, so its
+// worth grew with the size of the wave while every other class only ever
+// helped itself. Measured over 120 matches that made Support a 72% class. It
+// now covers the nearest few bodies — the front line, which is what it is for
+// — and the rest of the wave fights on its own.
+const TEAM_CAP = 6;
+function teamTargets(h, aoe){
+  const out = [];
+  nearby(h.x, aoe, (u) => { if (!u.dead && u.side === h.side && !u.isHero) out.push(u); });
+  if (out.length <= TEAM_CAP) return out;
+  out.sort((a, b) => Math.abs(a.x - h.x) - Math.abs(b.x - h.x));
+  return out.slice(0, TEAM_CAP);
+}
+
 function castSkill(h, sk, tgt){
   const s = SKILL[sk.id], r = sk.rank, foe = enemyOf(h.side);
   const pw = skPower(h, s, r);
@@ -2112,21 +2150,19 @@ function castSkill(h, sk, tgt){
       const aoe = s.aoe || 8;
       for (const a of G.sides[h.side].heroes)
         if (!a.dead && Math.abs(a.x - h.x) < aoe) addBuff(a, { t:dur, tag:s.id, bas:s.bas || 0, bad:s.bad || 0, bms:s.bms || 0, barm:s.barm || 0 });
-      nearby(h.x, aoe, (u) => {
-        if (u.dead || u.side !== h.side || u.isHero) return;
+      for (const u of teamTargets(h, aoe))
         u.mb = { t:dur, ad:(s.bad || 0) / 40 + (s.bas || 0), ms:s.bms || 0 };
-      });
       break;
     }
     case 'teamheal': {
       const aoe = s.aoe || 8;
       const amt = skVal(s.heal, r) + (s.apR || 0) * apBase(h, s);
-      nearby(h.x, aoe, (u) => {
-        if (u.dead || u.side !== h.side) return;
-        healUnit(u, amt);
-        healFx(u.x, u.y);
-        if (s.shield && u.isHero){ u.shield = Math.max(u.shield, skVal(s.shield, r)); u.shT = 6; }
-      });
+      for (const a of G.sides[h.side].heroes){
+        if (a.dead || Math.abs(a.x - h.x) >= aoe) continue;
+        healUnit(a, amt); healFx(a.x, a.y);
+        if (s.shield){ a.shield = Math.max(a.shield, skVal(s.shield, r)); a.shT = 6; }
+      }
+      for (const u of teamTargets(h, aoe)){ healUnit(u, amt); healFx(u.x, u.y); }
       break;
     }
     case 'dot': case 'storm': {
@@ -3958,8 +3994,10 @@ function timelineHtml(){
       return '<i class="tl-m' + cls + '" style="left:' + left.toFixed(2) + '%" title="' +
         e.n + ' — ' + mmss(e.t) + '"></i>';
     }).join('');
+    // "Yours" read as "walls you broke"; the marks are walls that FELL, so it
+    // has to say whose walls they were.
     return '<div class="tl-row"><span class="tl-lbl" style="color:' + SIDE_COL[side] + '">' +
-      (side === 0 ? 'Yours' : 'Theirs') + '</span><span class="tl-track">' + marks + '</span></div>';
+      (side === 0 ? 'You lost' : 'They lost') + '</span><span class="tl-track">' + marks + '</span></div>';
   }).join('');
   return '<div class="tl">' + rows +
     '<div class="tl-axis"><span>0:00</span><span>' + mmss(end) + '</span></div>' +
@@ -3984,14 +4022,18 @@ function lineOfBattle(side){
   }).join('') + '</div>';
 }
 
+// One row of "yours against theirs", green when you are ahead. Shared by the
+// pause report and the result card so a match reads the same way all through.
+function wrRow(label, mine, theirs, better){
+  const win = better === undefined ? 0 : (better ? (mine > theirs ? 1 : mine < theirs ? -1 : 0)
+                                                 : (mine < theirs ? 1 : mine > theirs ? -1 : 0));
+  return '<div class="wr-row"><b class="' + (win > 0 ? 'good' : win < 0 ? 'bad' : '') + '">' + mine + '</b>' +
+    '<span>' + label + '</span><b>' + theirs + '</b></div>';
+}
+
 function pauseHtml(){
   const s = G.sides[0], f = G.sides[1];
-  const row = (label, mine, theirs, better) => {
-    const win = better === undefined ? 0 : (better ? (mine > theirs ? 1 : mine < theirs ? -1 : 0)
-                                                   : (mine < theirs ? 1 : mine > theirs ? -1 : 0));
-    return '<div class="wr-row"><b class="' + (win > 0 ? 'good' : win < 0 ? 'bad' : '') + '">' + mine + '</b>' +
-      '<span>' + label + '</span><b>' + theirs + '</b></div>';
-  };
+  const row = wrRow;
   const inc = (sd) => ['gold','iron','wood','food'].reduce((a, k) => a + gatherRate(sd, k), 0).toFixed(1);
   const heroLine = (sd) => sd.heroes.length
     ? sd.heroes.map(h => h.name + ' ' + h.lvl).join(', ') : 'none';
@@ -4025,22 +4067,51 @@ function setPaused(v){
   if (v) openModal(pauseHtml()); else closeModal();
 }
 
-function showOver(){
+// What your hero actually became. The build is the whole point of the hero
+// system and the result card used to throw it away with the match.
+function heroCard(h, star){
+  const p = PASS[h.passive];
+  const skills = h.skills.slice().sort((a, b) => (a.ult ? 1 : 0) - (b.ult ? 1 : 0));
+  return '<div class="hc"><div class="hc-top"><span class="hc-g">' + classGlyph(h.cls) + '</span>' +
+    '<b>' + (star ? '★ ' : '') + h.name + '</b>' +
+    '<span class="hc-lv">Lv ' + h.lvl + ' · ' + CLS[h.cls].name + '</span>' +
+    '<span class="hc-kd">' + h.kills + '/' + h.deaths + '</span></div>' +
+    '<div class="hc-build">' + (p ? '<i>' + p.n + '</i>' : '') +
+    skills.map(s => '<i' + (s.ult ? ' class="ult"' : '') + '>' + SKILL[s.id].n +
+      (s.rank > 1 ? ' ' + s.rank : '') + '</i>').join('') +
+    (h.skills.length ? '' : '<span class="hc-none">no skills chosen</span>') + '</div></div>';
+}
+
+function overHtml(){
   const win = G.winner === 0;
   const s = G.sides[0], f = G.sides[1];
-  const best = s.heroes.slice().sort((a, b) => (b.kills - b.deaths) - (a.kills - a.deaths))[0];
-  openModal('<h2>' + (win ? 'The Ember gates are down.' : 'Your gates are down.') + '</h2>' +
-    '<p class="sub">' + (win ? 'Ironbridge is yours.' : 'The Host walks across your bridge.') + '</p>' +
+  const meta = loadMeta();
+  const record = win && meta.best && G.t <= meta.best;
+  const star = s.heroes.slice().sort((a, b) => (b.kills - b.deaths) - (a.kills - a.deaths))[0];
+  const heroes = s.heroes.length
+    ? '<div class="hcs">' + s.heroes.map(h => heroCard(h, h === star && h.kills > 0)).join('') + '</div>'
+    : '<div class="wr-next">You never forged a hero. A Hero Factory pays for itself.</div>';
+  return '<h2>' + (win ? 'The Ember gates are down.' : 'Your gates are down.') + '</h2>' +
+    '<p class="sub">' + (win ? 'Ironbridge is yours' : 'The Host walks across your bridge') +
+    ' — ' + mmss(G.t) + ', wave ' + G.wave + ' on ' + G.diff.n + '.' +
+    (record ? ' <b style="color:var(--gold)">Your fastest win yet.</b>' : '') + '</p>' +
     timelineHtml() +
-    '<div class="statline"><span>Time <b>' + mmss(G.t) + '</b></span><span>Waves <b>' + G.wave + '</b></span>' +
-    '<span>Your kills <b>' + s.kills + '</b></span><span>Structures taken <b>' + s.structsKilled + '</b></span>' +
-    '<span>Theirs <b>' + f.structsKilled + '</b></span>' +
-    '<span>Gathered <b>' + Math.round(s.gathered) + '</b></span></div>' +
-    (s.heroes.length ? '<div class="statline">' + s.heroes.map(h =>
-      '<span>' + (best === h && h.kills ? '★ ' : '') + h.name + ' <b>Lv ' + h.lvl + ' · ' +
-      h.kills + '/' + h.deaths + '</b></span>').join('') + '</div>' : '') +
+    '<div class="wr">' +
+    '<div class="wr-head"><b style="color:' + SIDE_COL[0] + '">' + SIDE_NAME[0] + '</b>' +
+    '<span>final tally</span><b style="color:' + SIDE_COL[1] + '">' + SIDE_NAME[1] + '</b></div>' +
+    wrRow('walls broken', s.structsKilled, f.structsKilled, true) +
+    wrRow('kills', s.kills, f.kills, true) +
+    wrRow('gathered', Math.round(s.gathered), Math.round(f.gathered), true) +
+    wrRow('forge ranks', bsumUp(s), bsumUp(f), true) +
+    wrRow('best hero', s.heroes.length ? Math.max(...s.heroes.map(h => h.lvl)) : 0,
+                      f.heroes.length ? Math.max(...f.heroes.map(h => h.lvl)) : 0, true) +
+    '</div>' + heroes +
     '<div class="rowbtn"><button class="big" data-act="again">Fight again</button>' +
-    '<button class="big ghost" data-act="menu">Menu</button></div>');
+    '<button class="big ghost" data-act="menu">Menu</button></div>';
+}
+
+function showOver(){
+  openModal(overHtml());
   $('modal').classList.add('solid');
 }
 
@@ -4536,6 +4607,7 @@ window.IB = {
   seenIntro, markSeen, SEEN_KEY, pruneSel,
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
   startZoom, ZOOM_MIN, ZOOM_MAX, clouds, FLOCKS, drawClouds, drawBirds, heroMeters, heroDoing, showHeroSheet,
+  overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
 };

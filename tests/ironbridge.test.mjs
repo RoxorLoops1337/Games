@@ -811,6 +811,107 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.keysHtml().split('<kbd>').length - 1 >= IB.KEYS.length, 'the help sheet prints a key chip for every shortcut');
 }
 
+/* -------------------------------------------------------- class bodies */
+{
+  // Support used to fight from 6.6 range on a body tougher than the Assassin's
+  // and won 27 of 40 in a 120-match round robin. The rule that broke is easy
+  // to state: if you fight from safety you do not also get to be the hardest
+  // thing on the bridge.
+  IB.newMatch({ diff:'veteran', seed:601 });
+  const ehp = (cls, lvl) => {
+    const h = IB.makeHero(0, cls, 'Probe');
+    h.lvl = lvl; IB.recalcHero(h, true);
+    return { ehp:h.mhp * (1 + h.armor / 100), rng:IB.CLS[cls].b.rng, n:IB.CLS[cls].name };
+  };
+  for (const lvl of [1, 9, 18]){
+    const all = IB.CLASSES.map(c => ehp(c.id, lvl));
+    const ranged = all.filter(x => x.rng > 3), melee = all.filter(x => x.rng <= 3);
+    t.ok(ranged.length >= 2 && melee.length >= 2, 'there are ranged and melee classes to compare at level ' + lvl);
+    const toughestRanged = ranged.slice().sort((a, b) => b.ehp - a.ehp)[0];
+    const softestMelee = melee.slice().sort((a, b) => a.ehp - b.ehp)[0];
+    t.ok(toughestRanged.ehp < softestMelee.ehp,
+      'at level ' + lvl + ' no ranged class outlasts a melee one (' + toughestRanged.n + ' ' +
+      Math.round(toughestRanged.ehp) + ' vs ' + softestMelee.n + ' ' + Math.round(softestMelee.ehp) + ')');
+  }
+  // and a team effect may not simply scale with how many bodies are on screen
+  {
+    IB.newMatch({ diff:'veteran', seed:603 });
+    const s = P();
+    const h = IB.makeHero(0, 'support', 'Probe');
+    s.heroes.push(h); IB.enterLane(h);
+    h.x = 40; h.y = 0;                 // enterLane puts it at the gate; move it out to the fight
+    for (let i = 0; i < 24; i++){
+      const u = IB.spawnUnit(0, 'melee', { x:40 + (i % 12) * .35 });
+      u.y = (i % 5) * .3;
+    }
+    IB.rebuildGrid();
+    const got = IB.teamTargets(h, 9);
+    t.ok(got.length === IB.TEAM_CAP, 'a team effect covers a fixed number of bodies (' + got.length + ')');
+    const far = IB.teamTargets(h, 9).map(u => Math.abs(u.x - h.x)).sort((a, b) => a - b);
+    const all = [];
+    IB.rebuildGrid();
+    for (const u of G.units) if (!u.dead && u.side === 0 && !u.isHero && Math.abs(u.x - h.x) < 9) all.push(Math.abs(u.x - h.x));
+    all.sort((a, b) => a - b);
+    t.ok(all.length > IB.TEAM_CAP, 'with more bodies in range than the cap (' + all.length + ')');
+    t.ok(far.every((d, i) => Math.abs(d - all[i]) < 1e-9), 'and it covers the nearest ones — the front line');
+  }
+}
+
+/* ------------------------------------------------------------ hero names */
+{
+  IB.newMatch({ diff:'veteran', seed:605 });
+  const s = P();
+  rich(s);
+  IB.build(s, s.plot.indexOf(null), 'tavern');
+  const names = [];
+  for (let i = 0; i < 8; i++){
+    const h = IB.makeHero(0, 'fighter');
+    s.heroes.push(h);
+    names.push(h.name);
+  }
+  t.ok(new Set(names).size === names.length, 'no two heroes in a hold answer to the same name');
+  t.ok(names.every(n => IB.HERO_NAMES.includes(n)), 'and every name comes from the roster');
+  t.ok(typeof IB.freeName(1) === 'string', 'the other hold names its heroes too');
+}
+
+/* ------------------------------------------------------ the result card */
+{
+  IB.newMatch({ diff:'veteran', seed:607 });
+  const s = P(), f = E();
+  rich(s);
+  IB.build(s, s.plot.indexOf(null), 'tavern');
+  IB.build(s, s.plot.indexOf(null), 'forge');
+  IB.buyUp(s, 'hp');
+  IB.createHero(s, 'mage');
+  const h = s.heroes[0];
+  for (let i = 0; i < 20 && h.lvl < 14; i++){ IB.gainXp(h, IB.xpNeed(h.lvl) + 5); IB.autoPick(h); }
+  s.kills = 41; f.kills = 12; s.structsKilled = 5; f.structsKilled = 1;
+  G.winner = 0; G.state = 'over'; G.wave = 22; G.t = 640;
+  let h2 = IB.overHtml();
+  t.ok(/Ember gates are down/.test(h2), 'a win says so');
+  t.ok(/10:40/.test(h2), 'and how long it took');
+  t.ok(/wave 22/.test(h2), 'and how far the waves got');
+  const mineOn = (label) => {
+    const m = h2.match(new RegExp('<b class="[^"]*">([^<]*)</b><span>' + label + '</span>'));
+    return m ? m[1] : null;
+  };
+  t.ok(mineOn('walls broken') === '5' && mineOn('kills') === '41', 'the final tally is the real tally');
+  t.ok(mineOn('forge ranks') === '1', 'including what you bought at the forge');
+  t.ok(+mineOn('best hero') === h.lvl, 'and how far your best hero got');
+  // the build the hero finished with is the point of the hero system
+  t.ok(h2.includes(h.name), 'your hero is named on the card');
+  t.ok(h2.includes(IB.PASS[h.passive].n), 'with the passive you chose');
+  for (const sk of h.skills)
+    t.ok(h2.includes(IB.SKILL[sk.id].n), 'and every skill you chose (' + IB.SKILL[sk.id].n + ')');
+  t.ok(h.skills.some(sk => sk.ult) === /class="ult"/.test(h2), 'an ultimate is marked as one');
+  // a loss reads as a loss
+  G.winner = 1;
+  h2 = IB.overHtml();
+  t.ok(/Your gates are down/.test(h2) && !/fastest win/.test(h2), 'a loss is never celebrated as a record');
+  // and the timeline says whose walls fell, not just "yours"
+  t.ok(/You lost/.test(IB.timelineHtml()) || !G.timeline.length, 'the timeline names whose walls came down');
+}
+
 /* ------------------------------------------------------- framing + the sky */
 {
   // A phone used to open at the same zoom floor as a laptop, which left the
