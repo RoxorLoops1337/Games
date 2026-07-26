@@ -493,19 +493,19 @@ const SKILLS = [
     f:'Set the shield and weather it.' }),
   S('warstomp','War Stomp','any',{ k:'nova', tag:'cc', cd:14, mana:50, dmg:[70,32], adR:.5, aoe:3.4, slow:.35, slowT:2,
     f:'The bridge shudders underfoot.' }),
-  S('javelin','Javelin','any',{ k:'bolt', tag:'dmg', cd:8, mana:35, dmg:[75,38], adR:.75, rng:8,
+  S('javelin','Javelin','any',{ k:'bolt', tag:'dmg', cd:9, mana:40, dmg:[75,38], adR:.75, rng:8,
     f:'Thrown hard enough to pin a man to stone.' }),
   S('sprint','Sprint','any',{ k:'buff', tag:'move', cd:22, mana:30, dur:4, bms:.42,
     f:'Nothing clever. Just faster.' }),
-  S('secondwind','Second Wind','any',{ k:'regen', tag:'heal', cd:24, mana:45, heal:[130,70], apR:.6, dur:5,
+  S('secondwind','Second Wind','any',{ k:'regen', tag:'heal', cd:22, mana:45, heal:[215,108], apR:.75, dur:5,
     f:'The wound closes while you keep swinging.' }),
-  S('hexbolt','Hexbolt','any',{ k:'bolt', tag:'dmg', cd:9, mana:45, dmg:[80,40], apR:.65, magic:true, rng:7.5,
+  S('hexbolt','Hexbolt','any',{ k:'bolt', tag:'dmg', cd:9, mana:45, dmg:[82,42], apR:.70, magic:true, rng:7.5,
     f:'A knot of borrowed magic.' }),
-  S('barbedtrap','Barbed Trap','any',{ k:'dot', tag:'dmg', cd:18, mana:50, dps:[26,13], apR:.22, aoe:3, dur:5, slow:.25,
+  S('barbedtrap','Barbed Trap','any',{ k:'dot', tag:'dmg', cd:16, mana:50, dps:[26,13], apR:.22, aoe:3, dur:5, slow:.35,
     f:'Caltrops and old wire.' }),
   S('bannercall','Banner Call','any',{ k:'summon', tag:'summon', cd:44, mana:70, kind:'melee', count:2, nPer:1, dur:26,
     f:'Two levies answer the horn.' }),
-  S('finisher','Finisher','any',{ k:'strike', tag:'dmg', cd:11, mana:40, dmg:[60,30], adR:.9, exec:.5, rng:2.4,
+  S('finisher','Finisher','any',{ k:'strike', tag:'dmg', cd:10, mana:40, dmg:[60,30], adR:.9, exec:.5, rng:2.4,
     f:'Costs more the healthier they are.' }),
   S('emberflask','Ember Flask','any',{ k:'dot', tag:'dmg', cd:16, mana:45, dps:[30,15], apR:.3, aoe:2.8, dur:4,
     f:'Glass, oil, and a bad afternoon.' }),
@@ -516,12 +516,12 @@ const SKILLS = [
     f:'Every blade on the bridge turns your way.' }),
   S('fortify','Fortify','tank',{ k:'shield', tag:'buff', cd:18, mana:50, shield:[180,95], dur:7, barm:18,
     f:'Plant the feet. Let it come.' }),
-  S('quake','Quake','tank',{ k:'nova', tag:'cc', cd:16, mana:55, dmg:[60,30], apR:.4, aoe:4.2, slow:.45, slowT:2.5,
+  S('quake','Quake','tank',{ k:'nova', tag:'cc', cd:14, mana:55, dmg:[60,30], adR:.55, aoe:4.2, slow:.45, slowT:2.5,
     f:'Old stone remembers how to buckle.' }),
   // ---- fighter ----------------------------------------------------------
   S('cleave','Cleave','fighter',{ k:'strike', tag:'dmg', cd:8, mana:35, dmg:[65,33], adR:.8, aoe:2.6, rng:2.3,
     f:'One swing, three men.' }),
-  S('whirlwind','Whirlwind','fighter',{ k:'nova', tag:'dmg', cd:13, mana:50, dmg:[80,42], adR:.85, aoe:3.2,
+  S('whirlwind','Whirlwind','fighter',{ k:'nova', tag:'dmg', cd:11, mana:50, dmg:[80,42], adR:.85, aoe:3.6,
     f:'Spin until the front rank thins out.' }),
   S('dashstrike','Dash Strike','fighter',{ k:'dash', tag:'move', cd:12, mana:40, dmg:[70,36], adR:.7, dist:5.5, rng:6.5,
     f:'Close the gap before they set.' }),
@@ -530,18 +530,18 @@ const SKILLS = [
   // ---- marksman ---------------------------------------------------------
   S('piercing','Piercing Shot','marksman',{ k:'bolt', tag:'dmg', cd:9, mana:40, dmg:[85,44], adR:.9, rng:10, pierce:true,
     f:'Through the first man, into the second.' }),
-  S('volley','Volley','marksman',{ k:'volley', tag:'dmg', cd:14, mana:50, dmg:[40,20], adR:.35, shots:4, rng:9,
+  S('volley','Volley','marksman',{ k:'volley', tag:'dmg', cd:11, mana:50, dmg:[46,23], adR:.40, shots:4, rng:9,
     f:'Four arrows, no aiming.' }),
   S('huntersmark','Hunter’s Mark','marksman',{ k:'mark', tag:'buff', cd:20, mana:35, dur:6, amp:.22, rng:9,
     f:'You have decided who dies.' }),
-  S('scattershot','Scattershot','marksman',{ k:'nova', tag:'dmg', cd:15, mana:45, dmg:[55,28], adR:.6, aoe:3.6, slow:.3, slowT:1.5,
+  S('scattershot','Scattershot','marksman',{ k:'nova', tag:'dmg', cd:12, mana:45, dmg:[55,28], adR:.6, aoe:4, slow:.3, slowT:1.5,
     f:'Point blank, both barrels.' }),
   // ---- mage -------------------------------------------------------------
   S('fireball','Fireball','mage',{ k:'bolt', tag:'dmg', cd:9, mana:55, dmg:[95,50], apR:.8, magic:true, aoe:2.8, rng:8,
     f:'The classic, for good reason.' }),
   S('frostnova','Frost Nova','mage',{ k:'nova', tag:'cc', cd:14, mana:60, dmg:[70,36], apR:.55, magic:true, aoe:4, slow:.5, slowT:2.5,
     f:'The air cracks and everything slows.' }),
-  S('arcanechain','Arcane Chain','mage',{ k:'chain', tag:'dmg', cd:12, mana:55, dmg:[65,34], apR:.5, magic:true, jumps:3, rng:7.5,
+  S('arcanechain','Arcane Chain','mage',{ k:'chain', tag:'dmg', cd:10, mana:50, dmg:[65,34], apR:.5, magic:true, jumps:4, rng:7.5,
     f:'It hops from helm to helm.' }),
   S('meteorfield','Meteor Field','mage',{ k:'dot', tag:'dmg', cd:20, mana:70, dps:[38,20], apR:.35, magic:true, aoe:3.6, dur:5,
     f:'A slow, patient rain of rock.' }),
@@ -550,7 +550,7 @@ const SKILLS = [
     f:'Gone from here, arriving there.' }),
   S('poisonblade','Poison Blade','assassin',{ k:'buff', tag:'buff', cd:18, mana:40, dur:6, bburn:26,
     f:'A green sheen on the edge.' }),
-  S('ambush','Ambush','assassin',{ k:'buff', tag:'buff', cd:20, mana:45, dur:5, bcrit:.35, bad:10,
+  S('ambush','Ambush','assassin',{ k:'buff', tag:'buff', cd:16, mana:45, dur:5, bcrit:.40, bad:14,
     f:'Pick the moment. Take the throat.' }),
   S('ripcut','Ripcut','assassin',{ k:'strike', tag:'dmg', cd:9, mana:35, dmg:[70,38], adR:.85, exec:.7, rng:2.2,
     f:'Finds whatever is already open.' }),
@@ -566,7 +566,7 @@ const SKILLS = [
   // ---- ultimates --------------------------------------------------------
   S('unbreakable','Unbreakable','tank',{ ult:true, k:'shield', tag:'buff', cd:70, mana:100, shield:[500,240], dur:8, barm:40, bmr:40,
     f:'For eight seconds, you are a wall.' }),
-  S('earthwall','Earthwall','tank',{ ult:true, k:'nova', tag:'cc', cd:65, mana:100, dmg:[160,80], apR:.6, aoe:6, stun:1.5,
+  S('earthwall','Earthwall','tank',{ ult:true, k:'nova', tag:'cc', cd:65, mana:100, dmg:[160,80], adR:.7, aoe:6, stun:1.5,
     f:'The bridge answers you.' }),
   S('ironmarch','Iron March','tank',{ ult:true, k:'teambuff', tag:'buff', cd:75, mana:100, dur:9, barm:35, bms:.25, aoe:11,
     f:'Everyone walks forward. Nobody breaks.' }),
@@ -602,6 +602,42 @@ const SKILLS = [
     f:'Light that binds them and mends you.' }),
 ];
 const SKILL = {}; for (const s of SKILLS) SKILL[s.id] = s;
+
+// Roughly what a skill is worth to a hero — the Host's brain picks with it,
+// and the tests use it to prove no skill is a trap. It counts the things a
+// raw damage number misses: how many bodies an area hits, how many shots go
+// out, what a stun is worth, what a summon brings.
+function skOutput(s, rank, ad, ap){
+  const v = (arr) => arr ? arr[0] + arr[1] * (rank - 1) : 0;
+  // mirror the hybrid scaling the shared pool gets in the sim
+  const A = s.cls === 'any' ? Math.max(ad, ap) : ad;
+  const P = s.cls === 'any' ? Math.max(ap, ad * .7) : ap;
+  let out = v(s.dmg) + (s.adR || 0) * A + (s.apR || 0) * P;
+  if (s.dps) out = (v(s.dps) + (s.adR || 0) * A + (s.apR || 0) * P) * (s.dur || 1);
+  if (s.heal) out += v(s.heal) + (s.apR || 0) * P;
+  if (s.shield) out += v(s.shield) + (s.apR || 0) * P;
+  if (s.shots) out *= s.shots;
+  if (s.jumps) out *= 1 + s.jumps * .75;
+  if (s.aoe) out *= 1 + s.aoe * .5;
+  if (s.pierce) out *= 1.5;
+  if (s.magic) out *= 1.12;                       // ignores the armour everyone stacks
+  if (s.exec) out *= 1 + s.exec * .5;             // finishing a hero is the point
+  // Utility priced by what it actually grants, rather than one flat number for
+  // "this is a buff" — which could not tell a crit buff from a poison blade.
+  let util = 0;
+  if (s.count) util += (s.count + (rank - 1) * (s.nPer || 0)) * 220;
+  if (s.stun) util += s.stun * 130;
+  if (s.slow) util += s.slow * 70 * (s.dur ? 2 : 1);
+  if (s.k === 'taunt') util += 90 + (s.dur || 0) * 110;
+  const buff = (s.bad || 0) * 6 + (s.bas || 0) * 400 + (s.bcrit || 0) * 300 + (s.bms || 0) * 200
+    + (s.barm || 0) * 8 + (s.bmr || 0) * 8 + (s.bls || 0) * 350 + (s.bburn || 0) * 8
+    + (s.brng || 0) * 90 + (s.amp || 0) * 400;
+  if (buff) util += buff * (1 + (s.dur || 4) / 8);
+  // anything that lands on the whole line is worth more the wider it reaches
+  if (s.k === 'teambuff' || s.k === 'teamheal' || s.k === 'taunt') util *= 1 + (s.aoe || 0) * .35;
+  return out + util;
+}
+const skRate = (s, rank, ad, ap) => skOutput(s, rank, ad, ap) / Math.max(4, s.cd);
 
 // Pools a hero of a given class may be offered.
 const basicPool = (cls) => SKILLS.filter(s => !s.ult && (s.cls === 'any' || s.cls === cls));
@@ -1607,17 +1643,34 @@ function pickOption(h, idx){
 
 // The Host picks with a light preference for its class fantasy, then at random.
 function autoPick(h){
+  const side = G.sides[h.side];
+  const cl = CLS[h.cls];
+  const ad = cl.b.ad + cl.g.ad * 8, ap = cl.b.ap + cl.g.ap * 8;
   let guard = 0;
   while (h.pend.length && guard++ < 12){
     const p = h.pend[0];
     let best = 0, bs = -1e9;
     p.opts.forEach((id, i) => {
-      let sc = rnd();
+      // its own stream, so the two holds cannot draw off each other
+      let sc = side ? arnd(side) : rnd();
       if (p.kind === 'passive'){
         const m = PASS[id].m;
         sc += (m.ad || 0) * .04 + (m.ap || 0) * .03 + (m.hpPct || 0) * 8 + (m.armor || 0) * .04
             + (m.as || 0) * 4 + (m.ls || 0) * 5 + (m.hp || 0) * .004 + (m.mdmg || 0) * 2 + (m.tdmg || 0) * 2;
       } else if (p.kind === 'rank'){ sc += id.startsWith('P:') ? .4 : .8; }
+      else {
+        // skills and ultimates were picked at pure random, so the Host built
+        // incoherent heroes — a tank hoarding nukes, a support with none.
+        const d = SKILL[id];
+        if (d){
+          sc += skRate(d, 1, ad, ap) / 30;
+          if (h.cls === 'tank' && (d.tag === 'cc' || d.shield)) sc += .7;
+          if (h.cls === 'support' && (d.tag === 'heal' || d.tag === 'buff')) sc += .9;
+          if ((h.cls === 'mage' || h.cls === 'marksman') && d.tag === 'dmg') sc += .5;
+          if (h.cls === 'assassin' && (d.k === 'dash' || d.exec)) sc += .6;
+          if (h.cls === 'fighter' && (d.aoe || d.tag === 'buff')) sc += .4;
+        }
+      }
       if (sc > bs){ bs = sc; best = i; }
     });
     pickOption(h, best);
@@ -1754,8 +1807,13 @@ function heroStep(h, dt){
 
 /* ------------------------------------------------------------------ casting */
 const skVal = (arr, rank) => arr ? arr[0] + arr[1] * (rank - 1) : 0;
+// A skill from the shared pool scales off whichever stat its owner is better
+// at. Without this, every magic skill in that pool is a trap pick for the four
+// classes that have no ability power at all.
+const apBase = (h, s) => s.cls === 'any' ? Math.max(h.ap, attackDamage(h) * .7) : h.ap;
+const adBase = (h, s) => s.cls === 'any' ? Math.max(attackDamage(h), h.ap) : attackDamage(h);
 function skPower(h, s, rank){
-  return skVal(s.dmg, rank) + (s.adR || 0) * attackDamage(h) + (s.apR || 0) * h.ap;
+  return skVal(s.dmg, rank) + (s.adR || 0) * adBase(h, s) + (s.apR || 0) * apBase(h, s);
 }
 function abilityDmg(h, tgt, amt, magic){
   const done = dealDmg(h, tgt, amt, { magic, ability:true, exec:0 });
@@ -1863,17 +1921,17 @@ function castSkill(h, sk, tgt){
     }
     case 'heal': {
       const t = s.ally ? (lowAlly(h, s.rng || 6) || h) : h;
-      healUnit(t, skVal(s.heal, r) + (s.apR || 0) * h.ap);
+      healUnit(t, skVal(s.heal, r) + (s.apR || 0) * apBase(h, s));
       healFx(t.x, t.y);
       break;
     }
     case 'regen': {
-      addBuff(h, { t:dur, tag:'regen', hps:(skVal(s.heal, r) + (s.apR || 0) * h.ap) / dur });
+      addBuff(h, { t:dur, tag:'regen', hps:(skVal(s.heal, r) + (s.apR || 0) * apBase(h, s)) / dur });
       break;
     }
     case 'shield': {
       const t = s.ally ? (lowAlly(h, s.rng || 6) || h) : h;
-      t.shield = Math.max(t.shield, skVal(s.shield, r) + (s.apR || 0) * h.ap);
+      t.shield = Math.max(t.shield, skVal(s.shield, r) + (s.apR || 0) * apBase(h, s));
       t.shT = dur || 6;
       if (s.barm && t.isHero) addBuff(t, { t:dur || 6, barm:s.barm, bmr:s.bmr || 0, tag:'fort' });
       break;
@@ -1896,7 +1954,7 @@ function castSkill(h, sk, tgt){
     }
     case 'teamheal': {
       const aoe = s.aoe || 8;
-      const amt = skVal(s.heal, r) + (s.apR || 0) * h.ap;
+      const amt = skVal(s.heal, r) + (s.apR || 0) * apBase(h, s);
       nearby(h.x, aoe, (u) => {
         if (u.dead || u.side !== h.side) return;
         healUnit(u, amt);
@@ -1907,7 +1965,7 @@ function castSkill(h, sk, tgt){
     }
     case 'dot': case 'storm': {
       const at = s.k === 'storm' ? h : (tgt || h);
-      G.zones.push({ x:at.x, y:at.y, r:s.aoe, dps:skVal(s.dps, r) + (s.adR || 0) * attackDamage(h) + (s.apR || 0) * h.ap,
+      G.zones.push({ x:at.x, y:at.y, r:s.aoe, dps:skVal(s.dps, r) + (s.adR || 0) * adBase(h, s) + (s.apR || 0) * apBase(h, s),
         t:s.dur, dur:s.dur, tick:0, side:h.side, src:h, magic:!!s.magic, slow:s.slow || 0, follow:s.k === 'storm' ? h : null });
       break;
     }
@@ -3994,7 +4052,7 @@ window.IB = {
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
-  skillPipsHtml, castFx, castCol, heroBarHtml, effArmor,
+  skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
