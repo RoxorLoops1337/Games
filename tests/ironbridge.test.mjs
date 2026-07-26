@@ -77,6 +77,10 @@ function loadGame(store){
   return globalThis.IB;
 }
 
+// The game source, read as text — a couple of assertions below are about the
+// code itself rather than its behaviour.
+const SRC = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'ironbridge', 'index.html'), 'utf8');
+
 const t = harness('ironbridge');
 const store = {};
 const IB = loadGame(store);
@@ -101,6 +105,18 @@ t.ok(G.state === 'menu', 'boots into the menu without starting a match');
   let bad = 0;
   for (const p of IB.PASSIVES) for (const k in p.m) if (!finite(p.m[k])) bad++;
   t.ok(bad === 0, 'every passive modifier is a finite number');
+  // A passive that modifies a key nothing reads is a wasted pick out of three,
+  // every time it is offered. Two of them shipped that way; this is the guard.
+  {
+    const start = SRC.indexOf('const PASSIVES = [');
+    const end = SRC.indexOf('\n];', start);
+    const table = SRC.slice(start, end), rest = SRC.slice(0, start) + SRC.slice(end);
+    const keys = new Set();
+    for (const p of IB.PASSIVES) for (const k in p.m) keys.add(k);
+    const dead = [...keys].filter(k => !new RegExp("'" + k + "'").test(rest));
+    t.ok(dead.length === 0, 'every passive modifier is actually read by the game (dead: ' + dead.join(', ') + ')');
+    t.ok(table.length > 4000 && keys.size > 50, 'and the audit really did parse the passive table');
+  }
 }
 {
   const ids = new Set(IB.SKILLS.map(s => s.id));
@@ -1002,6 +1018,50 @@ t.ok(true, 'drawing an empty bridge is harmless');
   try { store['ib_save'] = '{ this is not json'; } catch (e){}
   t.ok(IB.savedMatch() === null, 'and so is a corrupt one');
   IB.clearSave();
+}
+
+/* ---------------------------------------------------------------- passive hooks */
+{
+  // The three hooks that were dead: a hero lending armour to the minions
+  // beside it, and two that make the minions your hold sends out tougher.
+  IB.newMatch({ diff:'veteran', seed:197 });
+  const s = P();
+  const plain = IB.spawnUnit(0, 'melee', { x:60, y:0 });
+  const baseHp = plain.mhp;
+  const warden = IB.makeHero(0, 'tank', 'Warden');
+  warden.pend.length = 0; warden.passive = 'banner'; warden.passRank = 1;
+  IB.recalcHero(warden); IB.enterLane(warden);
+  warden.x = 60; warden.y = 0;
+  s.heroes.push(warden);
+  t.ok(IB.effArmor(plain, false) > plain.armor, 'a banner hero lends armour to the minion beside it');
+  const far = IB.spawnUnit(0, 'melee', { x:110, y:0 });
+  t.ok(IB.effArmor(far, false) === far.armor, 'but not to one at the far end of the bridge');
+  const foe = IB.spawnUnit(1, 'melee', { x:60.5, y:0 });
+  t.ok(IB.effArmor(foe, false) === foe.armor, 'and never to the enemy');
+  const hp0 = plain.hp;
+  IB.dealDmg(foe, plain, 100);
+  const withAura = hp0 - plain.hp;
+  s.heroes.length = 0;
+  const plain2 = IB.spawnUnit(0, 'melee', { x:60, y:0 });
+  const hp1 = plain2.hp;
+  IB.dealDmg(foe, plain2, 100);
+  t.ok(hp1 - plain2.hp > withAura, 'and the lent armour really reduces the damage taken');
+  // the two spawn-time hooks
+  s.heroes.length = 0;
+  const lord = IB.makeHero(0, 'support', 'Lord');
+  lord.pend.length = 0; lord.passive = 'minionlord'; IB.recalcHero(lord);
+  s.heroes.push(lord);
+  const buffed = IB.spawnUnit(0, 'melee', { x:60, y:0 });
+  t.ok(buffed.mhp > baseHp, 'Minion Lord makes every minion you send out tougher (' + baseHp + '→' + buffed.mhp + ')');
+  const theirs = IB.spawnUnit(1, 'melee', { x:60, y:0 });
+  t.ok(theirs.mhp === baseHp, 'and does nothing for theirs');
+  s.heroes.length = 0;
+  const drill = IB.makeHero(0, 'tank', 'Drill');
+  drill.pend.length = 0; drill.passive = 'drillmaster'; IB.recalcHero(drill);
+  s.heroes.push(drill);
+  const foot = IB.spawnUnit(0, 'melee', { x:60 }), cast = IB.spawnUnit(0, 'caster', { x:60 });
+  t.ok(foot.mhp > baseHp, 'Drillmaster toughens footmen');
+  t.ok(cast.mhp === Math.round(IB.UNITS.caster.hp * (1 + .055 * G.wave)), 'but leaves casters alone');
 }
 
 IB.draw();
