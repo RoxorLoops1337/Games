@@ -173,6 +173,12 @@
     background:linear-gradient(180deg,#5ab0ff,#2f7fd8); border:none; border-radius:10px; color:#08111f; }
   .big.ghost{ background:var(--panel2); border:1px solid var(--line); color:var(--ink); }
   .big:hover{ filter:brightness(1.08); }
+  /* the network report — selectable, scrollable, monospaced, because it exists
+     to be read and pasted rather than admired */
+  .netlog{ max-height:46vh; overflow:auto; margin:12px 0 0; padding:10px 12px; text-align:left;
+    background:#0b1018; border:1px solid var(--line); border-radius:9px; color:var(--dim);
+    font-family:ui-monospace,Menlo,monospace; font-size:11px; line-height:1.45;
+    white-space:pre; -webkit-user-select:text; user-select:text; }
   .statline{ display:flex; flex-wrap:wrap; gap:8px 16px; margin:10px 0 0; font-size:12px; color:var(--dim); }
   .insp{ display:flex; flex-wrap:wrap; gap:2px 14px; font-size:11px; color:var(--dim); max-width:270px;
     margin-top:4px; }
@@ -2519,7 +2525,7 @@ function castSkill(h, sk, tgt){
   const pw = skPower(h, s, r);
   const dur = s.dur || 0;
   h.swing = .3;
-  if (!HEADLESS){ castFx(h, s); sfx('cast', h.x); }
+  if (!HEADLESS){ castFx(h, s, tgt); sfx('cast', h.x); }
   switch (s.k){
     case 'strike': {
       if (!tgt) break;
@@ -3000,13 +3006,135 @@ function castCol(s){ return s.magic ? '#b98bff' : (CAST_COL[s.tag] || '#ffa96a')
 
 // You choose these skills, so you should be able to see them happen: the name
 // of the ability rises off the hero that cast it, in the colour of its type.
-function castFx(h, s){
+/* ---------------------------------------------------------------- cast shapes
+   Every skill in the game used to look like every other skill: one ring, eight
+   sparks and the name floating up. There are SEVENTEEN distinct shapes of skill
+   and you could not tell any of them apart on the board — the only way to know
+   what a hero had just done was to read the word.
+
+   Each shape has a picture now. All of it is drawing and nothing else: it is
+   skipped whole under HEADLESS, it draws from the effects stream and never the
+   simulation's, and how much of it gets made depends on how busy the frame is —
+   which is precisely why it must not share a generator with the game. */
+const FX_CAP = 300;
+// Capacity only, deliberately not gated on HEADLESS: castFx is already only
+// reached from a real page, and leaving these callable under the harness is
+// what lets the suite drive every cast shape through the strict canvas — which
+// is where a bad colour string or a bad context call actually gets caught.
+const fxRoom = (n) => G.fx.length + n < FX_CAP;
+
+function beamFx(x, y, x2, y2, col, w, life){
+  if (!fxRoom(1)) return;
+  G.fx.push({ k:'beam', x, y, x2, y2, col, w:w || 3, t:life || .22, dur:life || .22 });
+}
+function arcFx(x, y, ang, r, col){
+  if (!fxRoom(1)) return;
+  G.fx.push({ k:'arc', x, y, a:ang, r, col, t:.26, dur:.26 });
+}
+function waveFx(x, y, r, col, life, follow){
+  if (!fxRoom(1)) return;
+  G.fx.push({ k:'wave', x, y, r, col, t:life || .45, dur:life || .45, follow:follow || null });
+}
+function moteFx(x, y, col, n, spread){
+  if (!fxRoom(n)) return;
+  const sp = spread || .8;
+  for (let i = 0; i < n; i++)
+    G.fx.push({ k:'mote', x:x + fxRr(-sp, sp), y:y + fxRr(-sp * .6, sp * .6), z:fxRr(0, .5),
+      vx:fxRr(-.25, .25), vz:fxRr(1.7, 3.4), col, r:fxRr(.7, 1.6), t:fxRr(.5, .85), dur:.85 });
+}
+
+// The gold second wave and the shake are what mark an ultimate apart from an
+// ordinary cast at a glance, without anyone having to read anything.
+function ultFlourish(h, r){
+  waveFx(h.x, h.y, r * 1.5, '#ffe08a', .62);
+  moteFx(h.x, h.y, '#ffe9a8', 8, 1.2);
+  shake(1.6, h.x);
+}
+
+function castFx(h, s, tgt){
   const col = castCol(s);
-  ringFx(h.x, h.y, s.aoe || 2, col);
-  burstFx(h.x, h.y, col, 8);
+  const ult = !!s.ult;
+  const aoe = s.aoe || 0;
+  const tx = tgt ? tgt.x : h.x, ty = tgt ? tgt.y : h.y;
+  const ang = Math.atan2(ty - h.y, tx - h.x);
+  const big = ult ? 1.6 : 1;
+  h.castT = ult ? .5 : .32;                      // the caster itself pops
+  h.castCol = ult ? '#ffe08a' : col;
+
+  switch (s.k){
+    // it goes off around the caster
+    case 'nova': case 'taunt':
+      waveFx(h.x, h.y, Math.max(2.2, aoe) * big, col, .5);
+      burstFx(h.x, h.y, col, ult ? 16 : 10);
+      break;
+
+    // it reaches out and hits one thing
+    case 'bolt': case 'mark': case 'chain':
+      beamFx(h.x, h.y, tx, ty, col, ult ? 5 : 3, .2);
+      burstFx(tx, ty, col, ult ? 13 : 7);
+      if (aoe) waveFx(tx, ty, aoe, col, .4);
+      break;
+
+    // it swings
+    case 'strike':
+      arcFx(tx, ty, ang, Math.max(1.6, aoe || 1.8) * big, col);
+      burstFx(tx, ty, col, ult ? 14 : 8);
+      if (aoe) waveFx(tx, ty, aoe, col, .38);
+      break;
+
+    // it comes down out of the sky
+    case 'volley': case 'storm': {
+      const r = Math.max(2, aoe);
+      waveFx(tx, ty, r, col, .55, s.k === 'storm' ? h : null);
+      for (let i = 0; i < (ult ? 7 : 5); i++){
+        const ox = fxRr(-r, r), oy = fxRr(-r * .6, r * .6);
+        beamFx(tx + ox, ty + oy - 7, tx + ox, ty + oy, col, 2, fxRr(.16, .3));
+      }
+      break;
+    }
+
+    // it lingers on the ground
+    case 'dot': {
+      const r = Math.max(1.6, aoe || 2);
+      waveFx(tx, ty, r, col, .6);
+      moteFx(tx, ty, col, ult ? 10 : 6, r * .8);
+      break;
+    }
+
+    // it puts something back
+    case 'heal': case 'teamheal': case 'regen':
+      moteFx(tx, ty, '#7fdc8a', ult ? 14 : 9, 1);
+      ringFx(tx, ty, Math.max(1.6, aoe || 1.8), '#7fdc8a');
+      break;
+
+    // it wraps somebody up
+    case 'buff': case 'teambuff': case 'shield':
+      waveFx(h.x, h.y, Math.max(2, aoe || 2.4), col, .42);
+      moteFx(h.x, h.y, col, ult ? 12 : 7, .9);
+      break;
+
+    // it arrives
+    case 'summon':
+      waveFx(h.x, h.y, 2.4 * big, col, .5);
+      moteFx(h.x, h.y, col, ult ? 14 : 9, 1.1);
+      burstFx(h.x, h.y, col, 8);
+      break;
+
+    // it moves the hero — dashFx already draws the trail, this is the kick-off
+    case 'dash':
+      burstFx(h.x, h.y, col, 9);
+      waveFx(h.x, h.y, 1.8, col, .3);
+      break;
+
+    default:
+      ringFx(h.x, h.y, aoe || 2, col);
+      burstFx(h.x, h.y, col, 8);
+  }
+
+  if (ult) ultFlourish(h, Math.max(2.2, aoe || 2.4));
   if (G.floats.length < 80)
     G.floats.push({ x:h.x + fxRr(-.8, .8), y:h.y + fxRr(-.3, .3), txt:s.n.toUpperCase(), col,
-      t:1.4, dur:1.4, sc:1, vy:-.55, cast:true, ult:!!s.ult });
+      t:1.4, dur:1.4, sc:1, vy:-.55, cast:true, ult });
 }
 // A blur of where the hero came from, so a dash reads as movement.
 function dashFx(h, x0, y0){
@@ -3025,8 +3153,16 @@ function fxStep(dt){
   for (let i = G.fx.length - 1; i >= 0; i--){
     const p = G.fx[i]; p.t -= dt;
     if (p.k === 'p'){ p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vz -= 12 * dt; if (p.z < 0){ p.z = 0; p.vz *= -.35; } }
+    // A mote rises and drifts instead of falling — the difference between magic
+    // leaving a body and debris coming off one.
+    else if (p.k === 'mote'){ p.z += p.vz * dt; p.x += p.vx * dt; p.vz *= (1 - .8 * dt); }
+    // A wave sits still and grows; the renderer reads its age for the radius.
+    else if (p.k === 'wave' && p.follow){ p.x = p.follow.x; p.y = p.follow.y; }
     if (p.t <= 0) G.fx.splice(i, 1);
   }
+  // The pop on whoever just cast. Purely a picture — nothing reads it back, and
+  // it is never hashed, so it cannot take the two machines out of step.
+  for (const s of G.sides) for (const h of s.heroes) if (h.castT > 0) h.castT -= dt;
   for (let i = G.floats.length - 1; i >= 0; i--){
     const f = G.floats[i]; f.t -= dt; f.y += f.vy * dt;
     if (f.t <= 0) G.floats.splice(i, 1);
@@ -3611,7 +3747,19 @@ function drawUnit(c, u){
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
   ell(c, p[0], p[1] + 1, (u.kind === 'cannon' ? 9 : 7) * sc, 3.4 * sc, 'rgba(0,0,0,.32)');
   const bob = Math.sin(G.t * 7 + u.ph) * (u.target && hyp(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
-  const bx = p[0], by = p[1] - 2 * sc + bob;
+  // Whoever just cast lifts off the ground for a third of a second over a
+  // brightening pool of their skill's colour. Without it the effects all happen
+  // somewhere ELSE — at the target, in the air, on the ground — and the hero
+  // that did the thing is the one part of it you cannot see.
+  let cast = 0;
+  if (u.castT > 0){
+    cast = clamp(u.castT / .32, 0, 1);
+    const gr = (7 + cast * 9) * sc;
+    c.globalAlpha = cast * .55;
+    ell(c, p[0], p[1] + 1, gr, gr * .45, u.castCol || '#ffe08a');
+    c.globalAlpha = 1;
+  }
+  const bx = p[0], by = p[1] - 2 * sc + bob - cast * 3.2 * sc;
   if (u.kind === 'cannon'){ drawCannon(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   if (u.kind === 'super'){ drawOgre(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   // legs + body
@@ -3740,6 +3888,34 @@ function drawLane(c){
       const q = lp(p.x, p.y, .8), q2 = lp(p.x2, p.y2, .8);
       c.globalAlpha = a; c.strokeStyle = p.col; c.lineWidth = 2.4 * cam.z;
       c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+    } else if (p.k === 'beam'){
+      // A thrown bolt or a falling shaft: a bright core with a soft body, so it
+      // reads at a glance without washing out what is behind it.
+      const q = lp(p.x, p.y, .9), q2 = lp(p.x2, p.y2, .9);
+      c.lineCap = 'round';
+      c.globalAlpha = a * .35; c.strokeStyle = p.col; c.lineWidth = p.w * 2.2 * cam.z;
+      c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+      c.globalAlpha = a; c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(1, p.w * .7) * cam.z;
+      c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+      c.lineCap = 'butt';
+    } else if (p.k === 'arc'){
+      // A swept slash through the target, opening out as it fades.
+      const q = lp(p.x, p.y, .7);
+      const rx = p.r * LS() * (.7 + (1 - a) * .8), ry = rx * .55;
+      c.globalAlpha = a * .9; c.strokeStyle = p.col; c.lineWidth = Math.max(1.5, 3.4 * cam.z);
+      c.lineCap = 'round';
+      c.beginPath(); c.ellipse(q[0], q[1], rx, ry, p.a, -1.15, 1.15); c.stroke();
+      c.lineCap = 'butt';
+    } else if (p.k === 'wave'){
+      // Grows outward and thins as it goes, unlike `ring` which barely moves.
+      const q = lp(p.x, p.y);
+      const g = 1 + (1 - a) * 1.35;
+      c.globalAlpha = a * .75; c.strokeStyle = p.col;
+      c.lineWidth = Math.max(1, (1 + a * 3) * cam.z);
+      c.beginPath(); c.ellipse(q[0], q[1], p.r * LS() * g, p.r * LS() * .5 * g, 0, 0, 6.2832); c.stroke();
+    } else if (p.k === 'mote'){
+      const q = lp(p.x, p.y, p.z);
+      c.globalAlpha = a * .9; ell(c, q[0], q[1], p.r * cam.z, p.r * cam.z, p.col);
     }
     c.globalAlpha = 1;
   }
@@ -4671,10 +4847,15 @@ function syncAdvice(){
   const net = netBanner();
   if (net){
     el.classList.remove('hide');
-    el.querySelector('.at').textContent = net;
+    // A drift or a dead socket is the moment somebody wants to know WHY, so the
+    // bar stops being only a sentence and becomes the way in to the report.
+    const bad = NET.desyncAt >= 0 || NET.peerLost;
+    el.querySelector('.at').textContent = net + (bad ? '  ·  tap for the report' : '');
     el.dataset.tab = '';
+    el.dataset.net = bad ? '1' : '';
     return;
   }
+  el.dataset.net = '';
   const a = (G.state === 'play' && !G.demo) ? adviceFor(me()) : null;
   el.classList.toggle('hide', !a);
   if (a){ el.querySelector('.at').textContent = a.txt; el.dataset.tab = a.tab; }
@@ -4866,8 +5047,10 @@ function lobbyConnect(code){
   sock.onerror = () => lobbySet('error', RELAY_UNSET()
     ? 'No relay is set up yet — see ironbridge-relay/README.md. One-player works either way.'
     : 'Could not reach the relay at ' + relayHost() + '. If the code is right, the room may be full.');
-  sock.onclose = () => {
-    if (NET.on) NET.peerLost = true;                 // mid-match: the match stalls and says so
+  sock.onclose = (ev) => {
+    netDiary('SOCKET CLOSED', 'code ' + ((ev && ev.code) || '?') +
+      (ev && ev.reason ? ' "' + ev.reason + '"' : '') + (ev && ev.wasClean ? ' (clean)' : ' (not clean)'));
+    if (NET.on){ NET.peerLost = true; if (!HEADLESS) syncUI(); }   // mid-match: it stalls and says so
     else if (LOBBY.state !== 'error') lobbySet('error', 'The connection closed.');
   };
   sock.onmessage = (ev) => {
@@ -4884,7 +5067,6 @@ function lobbyConnect(code){
       closeModal(); syncUI();
       return;
     }
-    if (m.k === 'peerGone'){ NET.peerLost = true; return; }
     netRecv(m);
   };
 }
@@ -4894,7 +5076,9 @@ function lobbyConnect(code){
 function netBanner(){
   if (!NET.on) return '';
   if (NET.desyncAt >= 0)
-    return 'The two matches have drifted apart — this one is no longer the same game. Nothing further will be in sync.';
+    return NET.resyncs >= SYNC_MAX
+      ? 'The two matches keep drifting apart. This one has stopped — it is no longer the same game.'
+      : 'The two matches drifted apart. Putting them back together…';
   if (NET.peerLost) return 'Lost the connection to the other player.';
   if (NET.stallT > .4) return 'Waiting for the other player…';
   return '';
@@ -5586,6 +5770,12 @@ function wire(){
     else if (a === 'menu'){ setPaused(false); netEnd(); startDemo(); showMenu(); }
     else if (a === 'mp'){ netEnd(); showLobby(); }
     else if (a === 'mpback'){ netEnd(); showMenu(); }
+    else if (a === 'netlog'){ showNetReport(); }
+    else if (a === 'netcopy'){
+      const txt = G.netReportText || netReport();
+      try { navigator.clipboard.writeText(txt); fxToast('Report copied.', 'good'); }
+      catch (e){ fxToast('Could not copy — select the text instead.', 'bad'); }
+    }
     else if (a === 'mphost'){ lobbyHost(); }
     else if (a === 'mpjoin'){ lobbySet('joining'); }
     else if (a === 'mpgo'){ lobbyJoin(HEADLESS ? '' : ($('mpCode') || {}).value); }
@@ -5610,6 +5800,7 @@ function wire(){
     }
   });
   $('advice').addEventListener('click', () => {
+    if ($('advice').dataset.net === '1'){ showNetReport(); return; }
     const t = $('advice').dataset.tab;
     if (t){ dockTab = t; syncUI(); }
   });
@@ -5733,6 +5924,9 @@ const NET = {
   seq:0,              // per-command counter, for a total order within a side
   box:new Map(),      // tick -> { 0:[cmds] | undefined, 1:[cmds] | undefined }
   peerHashes:new Map(),// tick -> the other machine's hash, kept until ours exists
+  resyncs:0,          // how many times this match has been put back together
+  syncId:0, rx:null,  // a snapshot in flight, reassembled from its pieces
+  diary:[],           // what happened, in order, for when it goes wrong
   pending:[],         // commands issued since the last publish
   send:null,          // transport, injected by the lobby
   stallT:0,           // seconds spent waiting on the peer
@@ -5870,7 +6064,258 @@ function netCheckHash(tick){
   if (NET.desyncAt >= 0) return;
   const mine = NET.hashes.get(tick), theirs = NET.peerHashes.get(tick);
   if (mine === undefined || theirs === undefined) return;
-  if (mine !== theirs) NET.desyncAt = tick;
+  if (mine !== theirs){
+    NET.desyncAt = tick;
+    netDiary('DESYNC', 'tick ' + tick + '  mine ' + mine + '  theirs ' + theirs +
+      '  wave ' + G.wave + '  units ' + G.units.length + '  seed ' + seedNow());
+    // Recoverable. The host packs its board and the joiner adopts it; the board
+    // stops for as long as that takes and then carries on. Only after this has
+    // happened SYNC_MAX times does the match really end — a drift that keeps
+    // coming back is a bug, and papering over it forever would hide it.
+    if (NET.me === 0) netSendSnap();
+  }
+}
+
+/* ---------------------------------------------------------------- resync
+   A desync used to end the match: the board stopped, the bar said the two games
+   had drifted apart, and that was that. It is recoverable — one machine can
+   simply tell the other what the board looks like.
+
+   The host is the authority, chosen by seat rather than by argument so both
+   machines reach the same answer without exchanging a word about it. It packs
+   its whole simulation, ships it, and the joiner adopts it wholesale.
+
+   The pack is built by walking the objects rather than by listing their fields,
+   because a hand-written list is a list that goes stale the first time somebody
+   adds a field — and a field missing from a resync is a resync that desyncs
+   again immediately. Everything primitive is copied; the handful of values that
+   are references to other bodies are stored as indices into one table and
+   re-linked on the way back in. */
+const NET_REFS = { target:1, markBy:1, lastKiller:1 };
+
+// One table of every body on the board. Heroes live in BOTH sides[].heroes and
+// G.units while they are in the lane, and they are the same object — so the
+// table is built from the heroes first and G.units second, and identity does
+// the de-duplicating.
+function netBodies(){
+  const list = [], seen = new Set();
+  const add = (o) => { if (o && !seen.has(o)){ seen.add(o); list.push(o); } };
+  for (const s of G.sides) for (const h of s.heroes) add(h);
+  for (const u of G.units) add(u);
+  return list;
+}
+
+function netSnap(){
+  const bodies = netBodies();
+  const at = new Map();
+  bodies.forEach((o, i) => at.set(o, i + 1));      // 1-based; 0 means nothing
+  const ref = (o) => !o ? 0 : (o.struct ? ['s', o.side, o.ord] : (at.get(o) || 0));
+
+  const packBody = (o) => {
+    const out = {};
+    for (const k in o){
+      const v = o[k];
+      if (NET_REFS[k]){ out[k] = ref(v); continue; }
+      if (k === 'burn'){ out[k] = v ? { dps:v.dps, t:v.t, src:ref(v.src) } : 0; continue; }
+      if (k === 'hitOnce'){ out[k] = v ? [...v] : 0; continue; }
+      if (k === 'buffs'){ out[k] = (v || []).map(b => { const c = {}; for (const j in b) if (typeof b[j] !== 'object') c[j] = b[j]; return c; }); continue; }
+      if (k === 'skills'){ out[k] = (v || []).map(s => ({ id:s.id, rank:s.rank, cdT:s.cdT, ult:!!s.ult })); continue; }
+      if (k === 'pend'){ out[k] = (v || []).map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })); continue; }
+      const t = typeof v;
+      if (t === 'number' || t === 'string' || t === 'boolean') out[k] = v;
+    }
+    return out;
+  };
+
+  return {
+    seed: seedNow(), t:G.t, wave:G.wave, waveT:G.waveT, frame:G.frame || 0, uid:G.uid,
+    state:G.state, winner:G.winner,
+    // In-flight arrows carry a callback and ground zones carry live references;
+    // both last under a second and neither is worth re-linking. They are
+    // dropped on BOTH machines so the two still match exactly.
+    bodies: bodies.map(packBody),
+    heroesOf: G.sides.map(s => s.heroes.map(h => at.get(h) || 0)),
+    unitsOf: G.units.map(u => at.get(u) || 0),
+    sides: G.sides.map(s => ({
+      res:Object.assign({}, s.res), workers:Object.assign({}, s.workers),
+      nodeLvl:Object.assign({}, s.nodeLvl), towerUp:Object.assign({}, s.towerUp),
+      troopUp:Object.assign({}, s.troopUp),
+      rs:s.rs, superT:s.superT, aiT:s.aiT, aiBuild:s.aiBuild, waveKind:s.waveKind,
+      kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
+      plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : 0),
+      trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
+      muster:s.muster.map(m => ({ type:m.type })),
+      structs:s.structs.map(st => ({ key:st.key, hp:st.hp, mhp:st.mhp, dead:st.dead, downT:st.downT, cd:st.cd })),
+    })),
+    timeline: G.timeline.map(e => ({ t:e.t, side:e.side, key:e.key, n:e.n })),
+  };
+}
+
+function netLoad(p){
+  if (!p || !p.bodies || !p.sides) return false;
+  const bodies = p.bodies.map(b => {
+    const o = {};
+    for (const k in b) o[k] = b[k];
+    o.hitOnce = Array.isArray(b.hitOnce) ? new Set(b.hitOnce) : null;
+    o.buffs = (b.buffs || []).map(x => Object.assign({}, x));
+    return o;
+  });
+  const struct = (side, ord) => (G.sides[side].structs.find(x => x.ord === ord) || null);
+  const deref = (v) => {
+    if (!v) return null;
+    if (Array.isArray(v)) return struct(v[1], v[2]);
+    return bodies[v - 1] || null;
+  };
+
+  p.sides.forEach((ps, i) => {
+    const s = G.sides[i];
+    Object.assign(s.res, ps.res); Object.assign(s.workers, ps.workers);
+    Object.assign(s.nodeLvl, ps.nodeLvl); Object.assign(s.towerUp, ps.towerUp);
+    Object.assign(s.troopUp, ps.troopUp);
+    s.rs = ps.rs; s.superT = ps.superT; s.aiT = ps.aiT; s.aiBuild = ps.aiBuild;
+    s.waveKind = ps.waveKind; s.kills = ps.kills; s.structsKilled = ps.structsKilled;
+    s.gathered = ps.gathered; s.spent = ps.spent; s.heroKills = ps.heroKills;
+    s.plot = ps.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile, raise:0 } : null);
+    s.trainQ = ps.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur }));
+    s.muster = ps.muster.map(m => ({ type:m.type }));
+    ps.structs.forEach((st, k) => {
+      const live = s.structs[k];
+      if (!live) return;
+      live.hp = st.hp; live.mhp = st.mhp; live.dead = st.dead; live.downT = st.downT; live.cd = st.cd;
+    });
+  });
+  // Re-link after every body exists, or a target could point at nothing.
+  bodies.forEach((o, i) => {
+    const b = p.bodies[i];
+    for (const k in NET_REFS) if (k in b) o[k] = deref(b[k]);
+    o.burn = b.burn ? { dps:b.burn.dps, t:b.burn.t, src:deref(b.burn.src) } : null;
+  });
+  G.sides.forEach((s, i) => { s.heroes = (p.heroesOf[i] || []).map(n => bodies[n - 1]).filter(Boolean); });
+  G.units.length = 0;
+  for (const n of p.unitsOf || []){ const o = bodies[n - 1]; if (o) G.units.push(o); }
+  G.projs.length = 0; G.zones.length = 0;
+  G.timeline.length = 0;
+  for (const e of p.timeline || []) G.timeline.push({ t:e.t, side:e.side, key:e.key, n:e.n });
+  G.t = p.t; G.wave = p.wave; G.waveT = p.waveT; G.frame = p.frame; G.uid = p.uid;
+  G.state = p.state; G.winner = p.winner;
+  scatterCache[0] = scatterCache[1] = null;
+  rebuildGrid();
+  reseed(p.seed);                       // last, so nothing above can disturb it
+  return true;
+}
+
+/* ------------------------------------------------------------ the diary
+   When a match drifts apart or a socket dies, the only thing anybody had to go
+   on was one sentence in the advice bar. That is enough to know something went
+   wrong and nothing at all to work out what.
+
+   Every network event is written down here as it happens — seats, ticks, hash
+   mismatches with BOTH numbers, snapshots in and out, stalls, the socket's own
+   close code. It is capped and it is plain text, so it costs nothing to leave
+   on and it can be pasted straight into a bug report. `IB.netReport()` in the
+   console prints it; the match-stopped sheet has a button. */
+const DIARY_MAX = 240;
+
+// Every sheet in this game is a string handed to innerHTML. The report is the
+// first one built out of values rather than out of prose — a relay host, a
+// close reason off a socket — so it gets escaped on the way in.
+const esc = (v) => ('' + (v == null ? '' : v)).replace(/[&<>"']/g,
+  (c) => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
+
+function netDiary(kind, detail){
+  if (!NET.diary) NET.diary = [];
+  NET.diary.push({ ms:netNow(), tick:NET.tick, kind, detail:detail === undefined ? '' : detail });
+  if (NET.diary.length > DIARY_MAX) NET.diary.shift();
+}
+const netNow = () => Math.round((typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now());
+
+// Everything a report needs to be worth reading without the reporter having to
+// know what any of it means.
+function netReport(){
+  const L = [];
+  L.push('IRONBRIDGE — network report');
+  L.push('when      ' + new Date().toISOString());
+  L.push('seat      ' + (NET.on ? NET.me + (NET.me === 0 ? ' (host)' : ' (joined)') : 'not in a network match'));
+  L.push('room      ' + (LOBBY.code || '—') + '   relay ' + relayHost());
+  L.push('tick      ' + NET.tick + '   match clock ' + mmss(G.t) + '   wave ' + G.wave);
+  L.push('state     ' + G.state + (NET.peerLost ? '   PEER LOST' : '') +
+         (NET.desyncAt >= 0 ? '   DESYNCED at tick ' + NET.desyncAt : ''));
+  L.push('resyncs   ' + (NET.resyncs || 0) + ' of ' + SYNC_MAX + '   stall ' + (NET.stallT || 0).toFixed(1) + 's');
+  L.push('seed      ' + seedNow() + '   hash now ' + (G.sides.length ? netHash() : '—'));
+  L.push('bodies    ' + G.units.length + ' on the bridge, heroes ' +
+         G.sides.map(s => s.heroes.length).join('/') + ', buildings ' +
+         G.sides.map(s => s.plot.filter(Boolean).length).join('/'));
+  L.push('orders    ' + NET.pending.length + ' queued, ' + NET.box.size + ' ticks in the box');
+  L.push('');
+  L.push('log (most recent last, ms since the page loaded)');
+  const d = NET.diary || [];
+  if (!d.length) L.push('  (nothing recorded)');
+  for (const e of d) L.push('  ' + String(e.ms).padStart(8) + '  t' + String(e.tick).padStart(6) + '  ' +
+    e.kind + (e.detail ? '  ' + e.detail : ''));
+  return L.join('\n');
+}
+
+// The same thing, offered rather than hidden in a console nobody opens.
+function showNetReport(){
+  const txt = netReport();
+  openModal('<h2>Network report</h2>' +
+    '<p class="sub">What the two machines did, in order. Copy this into a bug report — it says which seat, which tick, and what disagreed.</p>' +
+    '<pre class="netlog">' + esc(txt) + '</pre>' +
+    '<div class="rowbtn"><button class="big" data-act="netcopy">Copy</button>' +
+    '<button class="big ghost" data-act="close">Close</button></div>', true);
+  G.netReportText = txt;
+}
+
+/* ------------------------------------------------------------ resync wire
+   A snapshot is bigger than the relay will carry in one message — 13KB at wave
+   three, 20KB in a busy one, against a 16KB limit — so it goes in pieces and is
+   put back together on the other side. Chunking rather than raising the cap
+   keeps this working against a relay that is already deployed. */
+const SYNC_CHUNK = 12000;
+const SYNC_MAX = 4;              // give up rather than loop forever on a repeat
+
+function netSendSnap(){
+  if (NET.me !== 0) return;                       // the host is the authority
+  if (NET.resyncs >= SYNC_MAX) return;
+  NET.resyncs++;
+  const at = NET.tick;
+  const body = JSON.stringify(netSnap());
+  const id = (NET.syncId = (NET.syncId || 0) + 1);
+  const n = Math.ceil(body.length / SYNC_CHUNK) || 1;
+  netDiary('sync out', body.length + ' bytes in ' + n + ' piece(s) at tick ' + at + ' (resync ' + NET.resyncs + ')');
+  for (let i = 0; i < n; i++)
+    if (NET.send) NET.send({ k:'sync', id, i, n, tick:at, part:body.slice(i * SYNC_CHUNK, (i + 1) * SYNC_CHUNK) });
+  netResumeAt(at);                                 // the host restarts its own pipe too
+}
+
+function netTakeSnap(m){
+  if (!NET.on) return;
+  if (!NET.rx || NET.rx.id !== m.id) NET.rx = { id:m.id, n:m.n, parts:[], got:0 };
+  const rx = NET.rx;
+  if (rx.parts[m.i] === undefined){ rx.parts[m.i] = m.part; rx.got++; }
+  if (rx.got < rx.n) return;
+  let snap = null;
+  try { snap = JSON.parse(rx.parts.join('')); } catch (e){ NET.rx = null; return; }
+  NET.rx = null;
+  if (!netLoad(snap)) { netDiary('sync in FAILED', 'snapshot would not load'); return; }
+  NET.resyncs++;
+  netDiary('sync in', 'adopted the host’s board at tick ' + (m.tick | 0) + ' (resync ' + NET.resyncs + ')');
+  netResumeAt(m.tick | 0);
+}
+
+// Both machines restart their order pipeline from the same tick, exactly the
+// way netStart primes a new match — otherwise one of them is still holding
+// orders addressed to ticks that no longer mean anything.
+function netResumeAt(tick){
+  netDiary('resume', 'from tick ' + (tick | 0));
+  NET.tick = tick | 0;
+  NET.box.clear(); NET.pending.length = 0;
+  NET.hashes.clear(); NET.peerHashes.clear();
+  NET.desyncAt = -1; NET.stallT = 0;
+  acc = 0; netLast = 0;
+  for (let i = 0; i < NET.delay; i++){ netDeliver(NET.tick + i, 0, []); netDeliver(NET.tick + i, 1, []); }
+  netPublish();
+  if (!HEADLESS) syncUI();
 }
 
 // Nothing may quietly skip a tick's simulation. update() bails out on G.paused
@@ -5913,10 +6358,12 @@ function netStep(){
 function netStart(opt){
   NET.on = true; NET.me = opt.me | 0; NET.tick = 0; NET.seq = 0;
   MY = NET.me;                                       // the interface follows the seat
+  NET.diary = [];
+  netDiary('start', 'seat ' + NET.me + '  seed ' + (opt.seed >>> 0) + '  delay ' + NET.delay + ' ticks');
   netLast = 0; acc = 0;
   netClockStart();                                   // a clock that survives being in the background
   NET.box.clear(); NET.pending.length = 0; NET.hashes.clear(); NET.peerHashes.clear();
-  NET.desyncAt = -1; NET.stallT = 0;
+  NET.desyncAt = -1; NET.stallT = 0; NET.resyncs = 0; NET.rx = null;
   newMatch({ diff:opt.diff || 'veteran', seed:opt.seed, pvp:true });
   G.sides[0].ai = false; G.sides[1].ai = false;      // both holds are people now
   // Prime the pipe: the first NET.delay ticks have no player input by
@@ -5936,13 +6383,17 @@ function netEnd(){
   NET.on = false; NET.peerLost = false;
   MY = 0;                                            // back to the left-hand hold
   netClockStop();
-  NET.tick = 0; NET.seq = 0; NET.desyncAt = -1; NET.stallT = 0;
+  NET.tick = 0; NET.seq = 0; NET.desyncAt = -1; NET.stallT = 0; NET.resyncs = 0; NET.rx = null;
   NET.box.clear(); NET.peerHashes.clear(); NET.hashes.clear(); NET.pending.length = 0;
   acc = 0;
   lobbyClose();
 }
 
 // Incoming from the relay. Anything malformed is dropped rather than trusted.
+// Everything the other machine can say, in one place. `hello`, `peers` and
+// `start` are the socket coming up and stay with the socket; from here down it
+// is the match talking, and keeping it together is what lets the suite drive
+// the whole protocol without a WebSocket.
 function netRecv(m){
   if (!m || typeof m !== 'object') return;
   if (m.k === 'cmd' && typeof m.tick === 'number' && (m.side === 0 || m.side === 1) && Array.isArray(m.cmds))
@@ -5950,6 +6401,12 @@ function netRecv(m){
   else if (m.k === 'hash' && typeof m.tick === 'number' && typeof m.h === 'number'){
     NET.peerHashes.set(m.tick, m.h);
     netCheckHash(m.tick);
+  }
+  else if (m.k === 'sync' && typeof m.tick === 'number' && typeof m.part === 'string') netTakeSnap(m);
+  else if (m.k === 'peerGone'){
+    NET.peerLost = true;
+    netDiary('PEER GONE', 'the relay says the other player’s socket closed');
+    if (!HEADLESS) syncUI();
   }
 }
 
@@ -5994,6 +6451,8 @@ function netPump(){
   // Never hoard arrears. A window that was away for five minutes owes nine
   // thousand ticks and is not going to pay them.
   if (acc > NET_ARREARS) acc = NET_ARREARS;
+  if (blocked && NET.stallT === 0) netDiary('stalled', 'waiting on the other player at tick ' + NET.tick);
+  else if (!blocked && NET.stallT > 1) netDiary('resumed', 'after ' + NET.stallT.toFixed(1) + 's of waiting');
   NET.stallT = blocked ? NET.stallT + raw : 0;
 }
 
@@ -6089,6 +6548,9 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
+  beamFx, arcFx, waveFx, moteFx, ultFlourish, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
+  netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
+  netDiary, netReport, showNetReport, DIARY_MAX, esc,
   get BSC(){ return BSC; }, set BSC(v){ BSC = v; },
   get holdSide(){ return holdSide; }, set holdSide(v){ holdSide = v; },
   get acc(){ return acc; }, set acc(v){ acc = v; },
