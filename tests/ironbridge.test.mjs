@@ -1091,6 +1091,38 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 
+/* ------------------------------------------------------------------ sound */
+{
+  // Sounds are synthesised, so a table entry nobody plays is silent dead
+  // weight, and an event that plays a key the table lacks is a silent event.
+  // Both directions, read out of the source: every quoted argument to sfx().
+  const played = new Set();
+  for (const m of SRC.matchAll(/\bsfx\(\s*(?:[^)]*?\?\s*)?'(\w+)'/g)) played.add(m[1]);
+  for (const m of SRC.matchAll(/:\s*'(\w+)'\s*,\s*(?:tgt|st|h|u)\.x\s*\)/g)) played.add(m[1]);
+  for (const m of SRC.matchAll(/\bsfx\(([^)]*)\)/g)){
+    for (const q of m[1].matchAll(/'(\w+)'/g)) played.add(q[1]);
+  }
+  const table = new Set(Object.keys(IB.SFX));
+  const silent = [...table].filter(k => !played.has(k));
+  const missing = [...played].filter(k => !table.has(k));
+  t.ok(table.size >= 14, 'the game has a sound for a decent number of things (' + table.size + ')');
+  t.ok(silent.length === 0, 'every sound in the table is actually played somewhere (silent: ' + silent.join(', ') + ')');
+  t.ok(missing.length === 0, 'and nothing asks for a sound the table does not have (missing: ' + missing.join(', ') + ')');
+  // the loudest moments in a match each have one
+  for (const k of ['heroDown', 'inhib', 'fall', 'wave', 'win', 'lose'])
+    t.ok(table.has(k), 'there is a sound for ' + k);
+  // shape: every entry is [minGap, fn] and the important ones ignore the voice cap
+  let bad = 0, priority = 0;
+  for (const k in IB.SFX){
+    const d = IB.SFX[k];
+    if (!Array.isArray(d) || typeof d[0] !== 'number' || typeof d[1] !== 'function') bad++;
+    if (d[2]) priority++;
+  }
+  t.ok(bad === 0, 'every sound is a gap and a voice');
+  t.ok(priority >= 6, 'and the ones that must never be dropped are marked (' + priority + ')');
+  t.ok(IB.sfx('heroDown') === false, 'nothing makes noise in a headless run');
+}
+
 /* ---------------------------------------------------- the opening minute */
 {
   // A new player spends the first minute reading the screen. That minute used
