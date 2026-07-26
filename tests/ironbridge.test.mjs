@@ -1089,6 +1089,27 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.assign(s, 'gold', -1);
     t.ok(s.workers.idle === 1 && IB.trainUnit(s, 'melee') === null, 'pull one off a job and it can be armed');
   }
+  // and the button has to say how many workers it wants. It printed a flat
+  // '+1👥' for all three units while a Caster and a Cannon each take two, so
+  // the button asked for one worker and then refused with 'no idle worker to
+  // arm' while one stood right there.
+  {
+    IB.newMatch({ diff:'veteran', seed:5137 });
+    const s = P();
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'barracks');
+    const b = IB.bList(s, 'barracks')[0];
+    while (b.lvl < IB.BUILDINGS.barracks.maxLvl) IB.upgradeBuilding(s, b.tile);
+    const html = IB.dockHtml();                 // one string, every panel in it
+    for (const k in IB.TRAIN){
+      const d = IB.TRAIN[k];
+      const seg = html.split('data-unit="' + k + '"')[1] || '';
+      t.ok(seg.includes('+' + d.need + '👥'),
+        'the ' + d.n + ' button asks for the ' + d.need + ' worker(s) it actually takes');
+    }
+    t.ok(new Set(Object.keys(IB.TRAIN).map(k => IB.TRAIN[k].need)).size > 1,
+      'and the units do not all cost the same number of workers, so the label has to vary');
+  }
 }
 
 /* ------------------------------------------------------ reading the wave */
@@ -1339,20 +1360,60 @@ t.ok(true, 'drawing an empty bridge is harmless');
       Math.round(per5) + ' vs ' + up.wood + ')');
   }
   {
-    // and it actually happens in play. Twelve matches put the barracks at 2+
-    // in eight of them, so a hold reaches the gate about two thirds of the
-    // time; over six side-matches the chance of NONE reaching it is 0.33^6,
-    // about one run in 750 — safe to assert.
-    const levels = [];
-    for (const seed of [5031, 5062, 5093]){
+    // and it actually happens in play. This used to assert `levels.some(l => 2)`
+    // over three matches at thirteen minutes, which passed on code where the
+    // tier was worthless: a hold reached level 2 and STILL never armed a single
+    // Caster, because a Caster takes TWO idle workers (`need:2`) and the job
+    // assigner reserved exactly one. Measured over twelve side-holds at nine
+    // minutes, before: level 2 in 3, armed something other than a Footman in
+    // ZERO. After: 10 and 8. So assert the thing that was actually dead.
+    //
+    // Deterministic, not statistical: fixed seeds, fixed dt, one simulation —
+    // these counts repeat exactly. The margins (7 and 5, against 10 and 8
+    // measured) are headroom for unrelated balance work, not for noise.
+    const levels = [], armedOther = [];
+    for (const seed of [5031, 5062, 5093, 5124, 5155, 5186]){
       IB.newMatch({ diff:'veteran', seed });
       G.sides[0].ai = true;
-      for (let i = 0; i < 30 * 60 * 13 && G.state === 'play'; i++) IB.update(1 / 30);
-      for (const sd of G.sides) levels.push(IB.barracksLvl(sd));
+      const other = [0, 0];
+      for (let i = 0; i < 30 * 60 * 9 && G.state === 'play'; i++){
+        IB.update(1 / 30);
+        for (const sd of [0, 1]) for (const q of G.sides[sd].trainQ)
+          if (q.type !== 'worker' && q.type !== 'melee') other[sd]++;
+      }
+      for (const sd of [0, 1]){ levels.push(IB.barracksLvl(G.sides[sd])); armedOther.push(other[sd] > 0); }
     }
-    t.ok(levels.some(l => l >= 2),
-      'a hold reaches the barracks level that unlocks Casters (levels seen: ' + levels.join(', ') + ')');
+    const tier = levels.filter(l => l >= 2).length, other = armedOther.filter(Boolean).length;
+    t.ok(tier >= 7, 'a hold reaches the barracks level that unlocks Casters (' +
+      tier + ' of ' + levels.length + ': ' + levels.join(',') + ')');
+    t.ok(other >= 5, 'and the tier is worth reaching — it arms something other than a Footman (' +
+      other + ' of ' + armedOther.length + ' holds)');
     t.ok(levels.every(l => l <= IB.BUILDINGS.barracks.maxLvl), 'and none climbs past the cap');
+  }
+  {
+    // The reserve, on its own. A Footman needs one worker and is always
+    // affordable; a Caster needs two. With exactly the pair in hand, the tick
+    // must not spend one of them on a Footman or shovel them into a mine —
+    // either the Caster goes in, or the pair is still standing there.
+    IB.newMatch({ diff:'veteran', seed:5209 });
+    const s = P();
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'barracks');
+    IB.upgradeBuilding(s, IB.bList(s, 'barracks')[0].tile);
+    t.ok(IB.barracksLvl(s) === 2, 'a level-2 barracks is standing');
+    for (const k of ['gold','iron','wood','food']) s.res[k] = 400;
+    for (const n of ['gold','iron','wood','food']) IB.assign(s, n, -9);   // everyone home
+    const held = s.workers.idle;
+    s.workers.idle = 2;
+    s.aiT = 0;
+    IB.aiStep(s, .1);
+    const q = s.trainQ.filter(o => o.type !== 'worker');
+    t.ok(!q.some(o => o.type === 'melee'),
+      'a Footman does not eat the pair of workers the hold is banking for a Caster');
+    t.ok(q.some(o => o.type === 'caster') || s.workers.idle >= 2,
+      'so either the Caster is armed or the pair is still idle (idle ' + s.workers.idle +
+      ', queued ' + JSON.stringify(q.map(o => o.type)) + ')');
+    t.ok(held >= 0, 'the hold had workers to bring home (' + held + ')');
   }
 }
 
