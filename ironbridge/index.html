@@ -606,11 +606,11 @@ const TRAIN = {
 /* ------------------------------------------------------------------ structures */
 // x is measured from your own gate outward; side 1 is mirrored at build time.
 const STRUCTS = [
-  { key:'gate',   n:'The Gates',    x:7,  hp:5600, ad:150, as:.85, rng:12, armor:45, mr:45, r:2.4 },
-  { key:'inhib',  n:'Inhibitor',    x:15, hp:3000, ad:0,   as:0,   rng:0,  armor:25, mr:25, r:1.5 },
-  { key:'t3',     n:'Inner Turret', x:26, hp:3400, ad:140, as:.95, rng:11, armor:36, mr:36, r:1.4 },
-  { key:'t2',     n:'Mid Turret',   x:38, hp:3100, ad:130, as:.95, rng:11, armor:32, mr:32, r:1.4 },
-  { key:'t1',     n:'Outer Turret', x:50, hp:2800, ad:120, as:.95, rng:11, armor:28, mr:28, r:1.4 },
+  { key:'gate',   n:'The Gates',    x:6,  hp:5600, ad:150, as:.85, rng:12, armor:45, mr:45, r:2.4 },
+  { key:'inhib',  n:'Inhibitor',    x:19, hp:3000, ad:0,   as:0,   rng:0,  armor:25, mr:25, r:1.5 },
+  { key:'t3',     n:'Inner Turret', x:31, hp:3400, ad:140, as:.95, rng:11, armor:36, mr:36, r:1.4 },
+  { key:'t2',     n:'Mid Turret',   x:43, hp:3100, ad:130, as:.95, rng:11, armor:32, mr:32, r:1.4 },
+  { key:'t1',     n:'Outer Turret', x:55, hp:2800, ad:120, as:.95, rng:11, armor:28, mr:28, r:1.4 },
 ];
 
 /* ------------------------------------------------------------------ tower upgrades */
@@ -2088,86 +2088,183 @@ function drawEnds(c){
     poly(c, [lp(bx - dir * 16, -16), lp(bx + dir * 2.5, -16), lp(bx + dir * 2.5, 16), lp(bx - dir * 16, 16)], '#4c7040');
     poly(c, [lp(bx + dir * 2.5, -16), lp(bx + dir * 2.5, 16), lp(bx + dir * 2.5, 16, -9), lp(bx + dir * 2.5, -16, -9)], '#40382e');
     poly(c, [lp(bx + dir * 2.5, -16, -9), lp(bx + dir * 2.5, 16, -9), lp(bx + dir * 1, 12, -16), lp(bx + dir * 1, -12, -16)], '#2c2620');
-    // the keep: curtain wall, two roofed towers, a banner
+    // the keep behind the gates, in the same masonry as everything else
     const col = SIDE_COL[s.i];
-    const wallY = p[1] - 30 * z;
-    c.fillStyle = '#8d8271';
-    c.fillRect(p[0] - 46 * z, wallY - 34 * z, 92 * z, 46 * z);
-    c.fillStyle = '#6e6455';
-    c.fillRect(p[0] - 46 * z, wallY - 38 * z, 92 * z, 6 * z);
-    for (let i = -3; i <= 3; i++) c.fillRect(p[0] + i * 13 * z - 3 * z, wallY - 44 * z, 7 * z, 7 * z);
-    // gate arch
+    const kp = lp(bx - dir * 11, 0);
+    const wallY = kp[1] - 34 * z;
+    block(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 56 * z, STONE.mid, STONE.lit);
+    masonry(c, kp[0] - 46 * z, wallY - 42 * z, 92 * z, 50 * z, z, 41 + s.i);
+    crown(c, kp[0], wallY - 52 * z, 100 * z, z, 9);
     c.fillStyle = '#3a332b';
-    c.beginPath(); c.ellipse(p[0], wallY + 12 * z, 13 * z, 22 * z, 0, Math.PI, 0); c.fill();
-    c.fillRect(p[0] - 13 * z, wallY - 10 * z, 26 * z, 22 * z);
+    c.beginPath(); c.arc(kp[0], wallY - 4 * z, 14 * z, Math.PI, 0); c.fill();
+    c.fillRect(kp[0] - 14 * z, wallY - 4 * z, 28 * z, 16 * z);
     for (const sx of [-1, 1]){
-      const tx = p[0] + sx * 52 * z;
-      c.fillStyle = '#9a8f7c'; c.fillRect(tx - 13 * z, wallY - 62 * z, 26 * z, 74 * z);
-      c.fillStyle = shade(col, .55);
-      poly(c, [[tx - 18 * z, wallY - 60 * z], [tx, wallY - 88 * z], [tx + 18 * z, wallY - 60 * z]], shade(col, .55));
-      c.fillStyle = 'rgba(20,24,30,.55)'; c.fillRect(tx - 4 * z, wallY - 46 * z, 8 * z, 12 * z);
+      const tx = kp[0] + sx * 58 * z;
+      block(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, STONE.mid, STONE.lit);
+      masonry(c, tx - 15 * z, wallY - 72 * z, 30 * z, 80 * z, z, 51 + sx * 3 + s.i);
+      poly(c, [[tx - 23 * z, wallY - 72 * z], [tx, wallY - 108 * z], [tx + 23 * z, wallY - 72 * z]], shade(col, .98));
+      poly(c, [[tx, wallY - 108 * z], [tx + 23 * z, wallY - 72 * z], [tx + 8 * z, wallY - 72 * z]], shade(col, .72));
+      c.fillStyle = STONE.line; c.fillRect(tx - 3 * z, wallY - 56 * z, 6 * z, 14 * z);
     }
-    c.fillStyle = col;
-    c.fillRect(p[0] - 2 * z, wallY - 74 * z, 3 * z, 30 * z);
-    poly(c, [[p[0] + 1 * z, wallY - 74 * z], [p[0] + 22 * z, wallY - 67 * z], [p[0] + 1 * z, wallY - 58 * z]], col);
-    c.fillStyle = '#d8dee9'; c.font = 'bold ' + (11 * z) + 'px system-ui'; c.textAlign = 'center';
-    c.fillText(SIDE_NAME[s.i], p[0], wallY - 96 * z);
+    pennant(c, kp[0] + dir * 20 * z, wallY - 76 * z, z, col, dir);
+    c.fillStyle = '#e7ecf6'; c.font = 'bold ' + (11 * z) + 'px system-ui'; c.textAlign = 'center';
+    c.fillText(SIDE_NAME[s.i], kp[0], wallY - 118 * z);
   }
 }
 
+/* Storybook masonry: pale blocks with a lit top edge, warm timber, a team
+   roof and a lit eye. Everything is laid out in units around the ground
+   anchor and multiplied by the zoom, so one set of numbers serves all sizes. */
+const STONE = { lit:'#dde2da', mid:'#c8cec6', mid2:'#b4bbb3', dark:'#9aa29a', deep:'#7f877f', line:'#69716a' };
+const WOOD = { lit:'#cda063', mid:'#ad8146', dark:'#8a6533' };
+
+function block(c, x, y, w, h, face, top){
+  c.fillStyle = face; c.fillRect(x, y, w, h);
+  if (top){ c.fillStyle = top; c.fillRect(x, y, w, Math.max(1, h * .16)); }
+}
+// A crenellated crown: the solid band plus its merlons.
+function crown(c, cx, y, w, u, n){
+  block(c, cx - w / 2, y, w, 7 * u, STONE.mid, STONE.lit);
+  const step = w / n;
+  for (let i = 0; i < n; i++){
+    if (i % 2) continue;
+    block(c, cx - w / 2 + i * step, y - 8 * u, step * 1.02, 9 * u, STONE.mid, STONE.lit);
+  }
+}
+// Scattered raised blocks so a flat wall reads as masonry.
+function masonry(c, x, y, w, h, u, seed){
+  for (let i = 0; i < 7; i++){
+    const r = hash2(seed + i * 13, seed * 3 + i * 7);
+    const bw = (4 + r * 5) * u, bh = 3.2 * u;
+    const bx = x + r * (w - bw), by = y + hash2(seed + i, seed - i) * (h - bh);
+    c.fillStyle = i % 2 ? STONE.lit : STONE.mid2;
+    c.fillRect(bx, by, bw, bh);
+  }
+}
+function pennant(c, x, y, u, col, dir){
+  c.fillStyle = STONE.deep; c.fillRect(x - 1 * u, y - 4 * u, 2 * u, 16 * u);
+  const w = 20 * u * dir, h = 13 * u;
+  poly(c, [[x, y - 2 * u], [x + w, y - 4 * u], [x + w, y + h - 4 * u], [x, y + h - 2 * u]], col);
+  poly(c, [[x, y - 2 * u], [x + w * .55, y - 3 * u], [x + w * .55, y + h - 3 * u], [x, y + h - 2 * u]], shade(col, 1.12));
+}
+
 function drawStructure(c, st){
-  const p = lp(st.x, st.y), S = LS();
-  const col = SIDE_COL[st.side], dead = st.dead;
-  const base = dead ? '#4a4740' : shade(col, .42);
+  const p = lp(st.x, st.y);
+  const u = cam.z, col = SIDE_COL[st.side], dead = st.dead;
+  const dir = dirOf(st.side);          // which way this side faces the bridge
+  const X = p[0], Y = p[1];
+  ell(c, X, Y + 2 * u, (st.key === 'gate' ? 74 : 26) * u, (st.key === 'gate' ? 16 : 8) * u, 'rgba(0,0,0,.28)');
+
   if (st.key === 'gate'){
-    const w = 26 * cam.z, h = 62 * cam.z;
-    poly(c, [[p[0] - w * 2.1, p[1]], [p[0] + w * 2.1, p[1]], [p[0] + w * 1.9, p[1] - h], [p[0] - w * 1.9, p[1] - h]],
-      dead ? '#3d3a34' : '#6b6558');
-    if (!dead){
-      c.fillStyle = shade(col, .55);
-      c.fillRect(p[0] - w * .55, p[1] - h * .8, w * 1.1, h * .8);
-      c.strokeStyle = 'rgba(20,18,14,.7)'; c.lineWidth = 1.5;
-      for (let i = -2; i <= 2; i++){ c.beginPath(); c.moveTo(p[0] + i * w * .22, p[1] - h * .8); c.lineTo(p[0] + i * w * .22, p[1]); c.stroke(); }
+    if (dead){
+      // knocked in: stumps of the two towers and a heap of blocks
       for (const sx of [-1, 1]){
-        c.fillStyle = '#7a7365';
-        c.fillRect(p[0] + sx * w * 1.6 - 11 * cam.z, p[1] - h * 1.35, 22 * cam.z, h * 1.35);
-        c.fillStyle = col;
-        c.fillRect(p[0] + sx * w * 1.6 - 4 * cam.z, p[1] - h * 1.5, 8 * cam.z, 16 * cam.z);
+        block(c, X + sx * 46 * u - 15 * u, Y - 26 * u, 30 * u, 26 * u, STONE.deep, STONE.dark);
+        poly(c, [[X + sx * 46 * u - 15 * u, Y - 26 * u], [X + sx * 46 * u + 15 * u, Y - 20 * u], [X + sx * 46 * u + 15 * u, Y - 26 * u]], STONE.dark);
       }
+      for (let i = 0; i < 9; i++){
+        const r = hash2(i, st.side * 7);
+        block(c, X - 40 * u + r * 80 * u, Y - (4 + r * 7) * u, (7 + r * 6) * u, (5 + r * 4) * u, STONE.dark, STONE.mid2);
+      }
+      c.globalAlpha = .5; ell(c, X, Y - 10 * u, 60 * u, 16 * u, 'rgba(60,55,50,.7)'); c.globalAlpha = 1;
+    } else {
+      // outbuilding with a tall team-coloured pyramid roof, set behind
+      const ox = X - dir * 78 * u;
+      block(c, ox - 20 * u, Y - 50 * u, 40 * u, 50 * u, STONE.mid, STONE.lit);
+      masonry(c, ox - 20 * u, Y - 50 * u, 40 * u, 50 * u, u, 11 + st.side);
+      poly(c, [[ox - 26 * u, Y - 48 * u], [ox, Y - 88 * u], [ox + 26 * u, Y - 48 * u]], shade(col, .95));
+      poly(c, [[ox, Y - 88 * u], [ox + 26 * u, Y - 48 * u], [ox + 10 * u, Y - 48 * u]], shade(col, .74));
+      c.fillStyle = STONE.line; c.fillRect(ox - 3 * u, Y - 40 * u, 6 * u, 14 * u);
+      // curtain wall between the towers
+      block(c, X - 30 * u, Y - 62 * u, 60 * u, 62 * u, STONE.mid, STONE.lit);
+      masonry(c, X - 30 * u, Y - 60 * u, 60 * u, 56 * u, u, 3 + st.side);
+      // timber lintel spanning both towers
+      block(c, X - 62 * u, Y - 70 * u, 124 * u, 8 * u, WOOD.mid, WOOD.lit);
+      block(c, X - 62 * u, Y - 62 * u, 124 * u, 3 * u, WOOD.dark);
+      // ribbed roof over the gateway
+      const ry = Y - 66 * u;
+      poly(c, [[X - 34 * u, ry + 14 * u], [X - 26 * u, ry], [X + 26 * u, ry], [X + 34 * u, ry + 14 * u]], shade(col, 1.02));
+      c.strokeStyle = shade(col, .72); c.lineWidth = Math.max(1, 1.4 * u);
+      for (let i = -4; i <= 4; i++){
+        const t = i / 4;
+        c.beginPath(); c.moveTo(X + t * 26 * u, ry); c.lineTo(X + t * 34 * u, ry + 14 * u); c.stroke();
+      }
+      block(c, X - 35 * u, ry + 13 * u, 70 * u, 4 * u, shade(col, .66));
+      // arched doorway: voussoir ring, then the doors
+      c.fillStyle = STONE.lit;
+      c.beginPath(); c.arc(X, Y - 30 * u, 24 * u, Math.PI, 0); c.fill();
+      c.fillRect(X - 24 * u, Y - 30 * u, 48 * u, 30 * u);
+      c.fillStyle = WOOD.mid;
+      c.beginPath(); c.arc(X, Y - 30 * u, 18 * u, Math.PI, 0); c.fill();
+      c.fillRect(X - 18 * u, Y - 30 * u, 36 * u, 30 * u);
+      c.strokeStyle = WOOD.dark; c.lineWidth = Math.max(1, 1.2 * u);
+      for (let i = -2; i <= 2; i++){
+        c.beginPath(); c.moveTo(X + i * 7 * u, Y - 44 * u); c.lineTo(X + i * 7 * u, Y); c.stroke();
+      }
+      block(c, X - 18 * u, Y - 26 * u, 36 * u, 3.5 * u, '#6b7078');
+      block(c, X - 18 * u, Y - 11 * u, 36 * u, 3.5 * u, '#6b7078');
+      // the two gate towers
+      for (const sx of [-1, 1]){
+        const tx = X + sx * 46 * u;
+        block(c, tx - 16 * u, Y - 86 * u, 32 * u, 86 * u, STONE.mid, STONE.lit);
+        masonry(c, tx - 16 * u, Y - 84 * u, 32 * u, 80 * u, u, 21 + sx + st.side * 5);
+        crown(c, tx, Y - 96 * u, 36 * u, u, 5);
+        c.fillStyle = STONE.line; c.fillRect(tx - 3 * u, Y - 66 * u, 6 * u, 15 * u);
+        // timber palisade skirting the base
+        for (let i = 0; i < 4; i++)
+          block(c, tx + (sx > 0 ? 14 : -30) * u + i * 4 * u, Y - 20 * u, 3.4 * u, 20 * u, i % 2 ? WOOD.mid : WOOD.lit);
+        block(c, tx - 18 * u, Y - 8 * u, 36 * u, 8 * u, STONE.deep, STONE.dark);
+      }
+      pennant(c, X + dir * 62 * u, Y - 92 * u, u, col, dir);
     }
   } else if (st.key === 'inhib'){
-    const h = 40 * cam.z;
-    poly(c, [[p[0] - 20 * cam.z, p[1]], [p[0] + 20 * cam.z, p[1]], [p[0] + 14 * cam.z, p[1] - 12 * cam.z], [p[0] - 14 * cam.z, p[1] - 12 * cam.z]], base);
+    block(c, X - 22 * u, Y - 12 * u, 44 * u, 12 * u, STONE.deep, STONE.dark);
+    block(c, X - 17 * u, Y - 20 * u, 34 * u, 9 * u, STONE.mid, STONE.lit);
     if (!dead){
       const t = Math.sin(G.t * 2 + st.side) * .5 + .5;
-      poly(c, [[p[0], p[1] - h - 12 * cam.z], [p[0] + 13 * cam.z, p[1] - h * .5], [p[0], p[1] - 10 * cam.z], [p[0] - 13 * cam.z, p[1] - h * .5]],
-        shade(col, .8 + t * .3), '#ffffff', 1);
-      c.globalAlpha = .25 + t * .2;
-      ell(c, p[0], p[1] - h * .6, 26 * cam.z, 26 * cam.z, col);
+      c.globalAlpha = .22 + t * .18;
+      ell(c, X, Y - 38 * u, 30 * u, 30 * u, col);
       c.globalAlpha = 1;
+      poly(c, [[X, Y - 62 * u], [X + 14 * u, Y - 36 * u], [X, Y - 16 * u], [X - 14 * u, Y - 36 * u]], shade(col, .9 + t * .25));
+      poly(c, [[X, Y - 62 * u], [X, Y - 16 * u], [X - 14 * u, Y - 36 * u]], shade(col, 1.25));
+      c.strokeStyle = '#ffffff'; c.lineWidth = 1;
+      poly(c, [[X, Y - 62 * u], [X + 14 * u, Y - 36 * u], [X, Y - 16 * u], [X - 14 * u, Y - 36 * u]], null, '#eef6ff', 1);
     } else {
-      c.fillStyle = 'rgba(90,80,70,.7)';
-      poly(c, [[p[0] - 12 * cam.z, p[1]], [p[0] + 8 * cam.z, p[1] - 10 * cam.z], [p[0] + 14 * cam.z, p[1]]], '#57514a');
+      for (let i = 0; i < 5; i++){
+        const r = hash2(i, 3 + st.side);
+        block(c, X - 16 * u + r * 30 * u, Y - (5 + r * 6) * u, (6 + r * 5) * u, (5 + r * 3) * u, STONE.dark, STONE.mid2);
+      }
     }
   } else {
-    const h = (dead ? 16 : 52) * cam.z, w = 15 * cam.z;
-    poly(c, [[p[0] - w * 1.5, p[1]], [p[0] + w * 1.5, p[1]], [p[0] + w * 1.15, p[1] - 10 * cam.z], [p[0] - w * 1.15, p[1] - 10 * cam.z]], '#5d574d');
-    poly(c, [[p[0] - w, p[1] - 8 * cam.z], [p[0] + w, p[1] - 8 * cam.z], [p[0] + w * .74, p[1] - h], [p[0] - w * .74, p[1] - h]],
-      dead ? '#4b463f' : '#837b6b');
-    if (!dead){
-      c.fillStyle = shade(col, .6);
-      for (let i = -2; i <= 2; i++) c.fillRect(p[0] + i * w * .38 - 2 * cam.z, p[1] - h - 7 * cam.z, 4.5 * cam.z, 8 * cam.z);
-      c.fillStyle = '#6f6858'; c.fillRect(p[0] - w * .86, p[1] - h - 4 * cam.z, w * 1.72, 5 * cam.z);
-      const glow = st.cd < .35 ? 1 : .45;
-      c.globalAlpha = glow;
-      ell(c, p[0], p[1] - h * .62, 5.5 * cam.z, 5.5 * cam.z, col);
+    if (dead){
+      block(c, X - 16 * u, Y - 14 * u, 32 * u, 14 * u, STONE.deep, STONE.dark);
+      for (let i = 0; i < 6; i++){
+        const r = hash2(i, st.ord + st.side * 9);
+        block(c, X - 22 * u + r * 40 * u, Y - (4 + r * 6) * u, (6 + r * 5) * u, (4 + r * 4) * u, STONE.dark, STONE.mid2);
+      }
+      c.globalAlpha = .35; ell(c, X, Y - 6 * u, 26 * u, 8 * u, 'rgba(50,46,42,.8)'); c.globalAlpha = 1;
+    } else {
+      // flared footing → tapered shaft → crenellated crown → the eye
+      poly(c, [[X - 21 * u, Y], [X + 21 * u, Y], [X + 16 * u, Y - 13 * u], [X - 16 * u, Y - 13 * u]], STONE.deep);
+      block(c, X - 21 * u, Y - 5 * u, 42 * u, 5 * u, STONE.dark, STONE.mid2);
+      for (const sx of [-1, 1]) block(c, X + sx * 15 * u - 5 * u, Y - 11 * u, 10 * u, 11 * u, STONE.dark, STONE.mid2);
+      poly(c, [[X - 16 * u, Y - 12 * u], [X + 16 * u, Y - 12 * u], [X + 13 * u, Y - 58 * u], [X - 13 * u, Y - 58 * u]], STONE.mid);
+      poly(c, [[X - 16 * u, Y - 12 * u], [X - 13 * u, Y - 58 * u], [X - 7 * u, Y - 58 * u], [X - 9 * u, Y - 12 * u]], STONE.lit);
+      poly(c, [[X + 16 * u, Y - 12 * u], [X + 13 * u, Y - 58 * u], [X + 8 * u, Y - 58 * u], [X + 10 * u, Y - 12 * u]], STONE.mid2);
+      masonry(c, X - 12 * u, Y - 54 * u, 24 * u, 40 * u, u, st.ord * 7 + st.side * 3);
+      crown(c, X, Y - 68 * u, 32 * u, u, 5);
+      // the eye — bright the instant it fires, dimming as it reloads
+      const glow = clamp(st.cd * attackSpeedOf(st), 0, 1);
+      c.globalAlpha = .18 + glow * .45;
+      ell(c, X, Y - 38 * u, 16 * u, 16 * u, col);
       c.globalAlpha = 1;
-      // banner
-      c.fillStyle = col;
-      poly(c, [[p[0] + w * .8, p[1] - h * .82], [p[0] + w * 1.7, p[1] - h * .74], [p[0] + w * 1.6, p[1] - h * .42], [p[0] + w * .8, p[1] - h * .5]], col);
+      ell(c, X, Y - 38 * u, 9 * u, 9 * u, STONE.lit);
+      ell(c, X, Y - 38 * u, 7 * u, 7 * u, shade(col, .8 + glow * .5));
+      ell(c, X - 2 * u, Y - 40 * u, 2.6 * u, 2.6 * u, '#ffffff');
+      pennant(c, X + dir * 14 * u, Y - 50 * u, u, col, dir);
     }
   }
-  if (!dead) hpBar(c, p[0], p[1] - (st.key === 'gate' ? 88 : st.key === 'inhib' ? 62 : 68) * cam.z, st, 44 * cam.z, true);
+  if (!dead) hpBar(c, X, Y - (st.key === 'gate' ? 116 : st.key === 'inhib' ? 72 : 84) * cam.z, st, 44 * cam.z, true);
   else if (st.downT > 0){
     c.fillStyle = '#d8c49a'; c.font = (11 * cam.z) + 'px system-ui'; c.textAlign = 'center';
     c.fillText(Math.ceil(st.downT) + 's', p[0], p[1] - 18 * cam.z);
