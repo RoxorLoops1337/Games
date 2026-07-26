@@ -1127,6 +1127,107 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(taste.support < taste.n * 1.01, 'without the pick becoming deterministic');
 }
 
+/* ---------------------------------------------------------------- wave shapes */
+{
+  // Every wave used to be identical. The archetypes must all show up, respect
+  // the wave they unlock at, and — the important part — swap the trickle
+  // around rather than quietly making waves stronger.
+  IB.newMatch({ diff:'veteran', seed:223 });
+  t.ok(IB.WAVE_KINDS.length >= 4, 'there is more than one shape of wave');
+  t.ok(IB.WAVE_KINDS[0].id === 'levy' && IB.WAVE_KINDS[0].min === 0, 'plain levies are the default');
+  t.ok(IB.WAVE_KINDS.every(k => k.n && typeof k.min === 'number'), 'each shape is named and has an unlock');
+
+  const seen = {}, power = {};
+  G.wave = 24;                                   // deep enough that every shape is unlocked
+  for (let w = 0; w < 90; w++){
+    G.units.length = 0;
+    for (const sd of G.sides){ sd.muster.length = 0; sd.superT = 0; }
+    IB.spawnWave();
+    const k = P().waveKind;
+    const mine = G.units.filter(u => u.side === 0);
+    seen[k] = (seen[k] || 0) + 1;
+    const val = mine.reduce((a, u) => a + u.mhp + u.ad * 12, 0);
+    (power[k] = power[k] || []).push(val);
+    if (k === 'volley') t.ok(mine.filter(u => u.kind === 'caster').length >= 2, 'a volley wave brings casters');
+    if (k === 'ogres') t.ok(mine.some(u => u.kind === 'super'), 'an ogre push brings an ogre');
+    if (k === 'shield') t.ok(mine.filter(u => u.kind === 'grunt').length >= 5, 'a shield wall brings bodies');
+  }
+  t.ok(Object.keys(seen).length >= 4, 'every shape actually turns up (' + Object.keys(seen).join(',') + ')');
+  t.ok(seen.levy > 20, 'and plain levies stay the common case (' + seen.levy + '/90)');
+  const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+  const means = Object.keys(power).map(k => ({ k, v:avg(power[k]) }));
+  const lo = Math.min(...means.map(m => m.v)), hi = Math.max(...means.map(m => m.v));
+  t.ok(hi / lo < 1.45, 'no shape is a free power spike (' +
+    means.map(m => m.k + ' ' + Math.round(m.v)).join(', ') + ')');
+  // the shapes that unlock late must not appear early
+  IB.newMatch({ diff:'veteran', seed:227 });
+  let early = 0;
+  for (let w = 0; w < 40; w++){
+    G.units.length = 0;
+    for (const sd of G.sides) sd.muster.length = 0;
+    G.wave = 2;
+    IB.spawnWave();
+    G.wave = 2;
+    if (P().waveKind === 'ogres' || P().waveKind === 'siege') early++;
+  }
+  t.ok(early === 0, 'ogres and siege engines do not turn up in the first few waves');
+}
+
+/* ---------------------------------------------------------------- class roles */
+{
+  // An assassin whose whole point is killing heroes hunted no further than a
+  // support did, and finished matches with the fewest hero kills of anyone.
+  t.ok(IB.huntRange({ cls:'assassin' }) > IB.huntRange({ cls:'support' }),
+    'an assassin goes further out of its way for a hero than a support does');
+  t.ok(IB.huntRange({ cls:'assassin' }) > IB.huntRange({ cls:'tank' }), 'and further than a tank');
+  t.ok(IB.huntRange({ cls:'nonsense' }) > 0, 'an unknown class still gets a sane range');
+  IB.newMatch({ diff:'veteran', seed:229 });
+  const killer = IB.makeHero(0, 'assassin', 'Knife');
+  killer.pend.length = 0; killer.passive = 'whetstone'; killer.lvl = 10; IB.recalcHero(killer);
+  IB.enterLane(killer); killer.x = 47; killer.y = 0;
+  const guard = IB.makeHero(0, 'tank', 'Wall');
+  guard.pend.length = 0; guard.passive = 'ironhide'; guard.lvl = 10; IB.recalcHero(guard);
+  IB.enterLane(guard); guard.x = 47; guard.y = 0;
+  const mark = IB.makeHero(1, 'mage', 'Mark');
+  mark.pend.length = 0; mark.passive = 'whetstone'; mark.lvl = 10; IB.recalcHero(mark);
+  IB.enterLane(mark); mark.x = 60; mark.y = 0;   // thirteen away, and clear of their turrets
+  IB.rebuildGrid();
+  t.ok(IB.heroTarget(killer) === mark, 'the assassin picks the distant hero');
+  t.ok(IB.heroTarget(guard) !== mark, 'the tank does not');
+  // ...but a long reach must not walk it under their guns alone
+  const turret = E().structs.find(x => x.key === 't1');
+  mark.x = turret.x - 2;
+  killer.x = turret.x - 12;                       // close enough to reach it
+  IB.rebuildGrid();
+  t.ok(IB.towerCovered(killer, mark) === true, 'a target sitting under a turret is flagged');
+  t.ok(IB.heroTarget(killer) !== mark, 'and the assassin will not chase it there alone');
+  for (let i = 0; i < 3; i++) IB.spawnUnit(0, 'melee', { x:turret.x - 1, y:i - 1 });
+  IB.rebuildGrid();
+  t.ok(IB.towerCovered(killer, mark) === false, 'with minions soaking the turret it is fair game');
+  t.ok(IB.heroTarget(killer) === mark, 'and the assassin goes in');
+}
+{
+  // A support's heal used to be cast on nobody when no hero was hurt.
+  IB.newMatch({ diff:'veteran', seed:233 });
+  const sup = IB.makeHero(0, 'support', 'Mender');
+  sup.pend.length = 0; sup.passive = 'mystic'; sup.lvl = 9; IB.recalcHero(sup);
+  IB.enterLane(sup); sup.x = 60; sup.y = 0;
+  const hurt = IB.spawnUnit(0, 'melee', { x:61, y:0 });
+  hurt.hp = hurt.mhp * .3;
+  const healthy = IB.spawnUnit(0, 'melee', { x:62, y:0 });
+  IB.rebuildGrid();
+  t.ok(IB.lowAlly(sup, 7) === hurt, 'with no wounded hero about, it mends the wounded minion');
+  const hurtHero = IB.makeHero(0, 'fighter', 'Bleeder');
+  hurtHero.pend.length = 0; hurtHero.passive = 'whetstone'; hurtHero.lvl = 9; IB.recalcHero(hurtHero);
+  IB.enterLane(hurtHero); hurtHero.x = 61; hurtHero.y = 0; hurtHero.hp = hurtHero.mhp * .5;
+  IB.rebuildGrid();
+  t.ok(IB.lowAlly(sup, 7) === hurtHero, 'but a wounded hero always comes first');
+  t.ok(IB.lowAlly(sup, 7) !== healthy, 'and it never wastes the cast on someone at full health');
+  const before = hurt.hp;
+  IB.castSkill(sup, { id:'mendingward', rank:2, cdT:0 }, null);
+  t.ok(hurtHero.hp > hurtHero.mhp * .5 || hurt.hp > before, 'and the heal actually lands on somebody');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
