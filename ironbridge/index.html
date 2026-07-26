@@ -1882,11 +1882,50 @@ function pickOption(h, idx){
   return null;
 }
 
+// What one skill is worth to one hero, without the die. Pulled out of autoPick
+// so a harness and the tests can read the real number instead of keeping a
+// copy of it — a copy that was quietly two terms out of date the first time it
+// was used, and produced a confident explanation of the wrong thing.
+//
+// autoPick adds a die roll in [0,1) to this, so an option more than 1.0 behind
+// the best in its menu can NEVER be chosen, however often it is offered.
+// Measured over 400 ultimate offers per class, five of the eighteen ultimates
+// came up zero times and the Fighter and Marksman were locked to one apiece:
+//
+//   Fighter   Bladestorm 100%  Champion's Edge 0%  War Banner 0%
+//   Marksman  Arrow Rain 100%  Headhunter 1%       Trueshot 0%
+//   Mage      Cataclysm 67%    Arcane Torrent 34%  Frost Prison 0%
+//   Support   Sanctuary 81%    Hymn of Valour 19%  Chain of Dawn 0%
+//
+// The cause is that skRate measures DAMAGE. A summon, a stun, a shield or a
+// heal rates near zero, and the class bonuses below only rescued five
+// hand-picked class/tag pairs — so every ultimate whose job fell outside them
+// was being scored on damage it does not do. TAG_WORTH pays for the job
+// itself, for any class; the class lines on top are still the class fantasy.
+const TAG_WORTH = { dmg:0, cc:.5, buff:.45, heal:.5, summon:.55 };
+function skillWorth(h, d){
+  let sc = skRate(d, 1, ad0(h), ap0(h)) / 30;
+  sc += TAG_WORTH[d.tag] || 0;
+  if (d.shield && d.tag !== 'buff') sc += .2;
+  if (h.cls === 'tank' && (d.tag === 'cc' || d.shield)) sc += .7;
+  // ...and a skill that heals is a support skill whatever its tag says: Chain
+  // of Dawn is tagged 'cc' and heals an ally for 150, so the support bonus
+  // stepped straight over it.
+  if (h.cls === 'support' && (d.tag === 'heal' || d.tag === 'buff' || d.heal || d.healAlly)) sc += .9;
+  if ((h.cls === 'mage' || h.cls === 'marksman') && d.tag === 'dmg') sc += .5;
+  if (h.cls === 'assassin' && (d.k === 'dash' || d.exec)) sc += .6;
+  if (h.cls === 'fighter' && (d.aoe || d.tag === 'buff')) sc += .4;
+  // An execute is worth having and skRate cannot see it — it is the reason a
+  // Champion's Edge beats a bigger sustained number in a real fight.
+  if (d.exec) sc += .35;
+  return sc;
+}
+const ad0 = (h) => CLS[h.cls].b.ad + CLS[h.cls].g.ad * 8;
+const ap0 = (h) => CLS[h.cls].b.ap + CLS[h.cls].g.ap * 8;
+
 // The Host picks with a light preference for its class fantasy, then at random.
 function autoPick(h){
   const side = G.sides[h.side];
-  const cl = CLS[h.cls];
-  const ad = cl.b.ad + cl.g.ad * 8, ap = cl.b.ap + cl.g.ap * 8;
   let guard = 0;
   while (h.pend.length && guard++ < 12){
     const p = h.pend[0];
@@ -1903,14 +1942,7 @@ function autoPick(h){
         // skills and ultimates were picked at pure random, so the Host built
         // incoherent heroes — a tank hoarding nukes, a support with none.
         const d = SKILL[id];
-        if (d){
-          sc += skRate(d, 1, ad, ap) / 30;
-          if (h.cls === 'tank' && (d.tag === 'cc' || d.shield)) sc += .7;
-          if (h.cls === 'support' && (d.tag === 'heal' || d.tag === 'buff')) sc += .9;
-          if ((h.cls === 'mage' || h.cls === 'marksman') && d.tag === 'dmg') sc += .5;
-          if (h.cls === 'assassin' && (d.k === 'dash' || d.exec)) sc += .6;
-          if (h.cls === 'fighter' && (d.aoe || d.tag === 'buff')) sc += .4;
-        }
+        if (d) sc += skillWorth(h, d);
       }
       if (sc > bs){ bs = sc; best = i; }
     });
@@ -4997,7 +5029,7 @@ window.IB = {
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
   barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
-  structLabel, STRUCT_SHORT,
+  structLabel, STRUCT_SHORT, skillWorth,
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
