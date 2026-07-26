@@ -4492,15 +4492,6 @@ function adviceFor(s){
       ? BUILDINGS[type].n + ': ' + miss.n + ' more ' + miss.k + ' and you can put one up.'
       : blurb };
   };
-  // Arming a fighter eats an idle worker, so once a barracks stands, keep one
-  // spare rather than telling you to staff every job and then to arm nobody.
-  const spare = bl > 0 ? 1 : 0;
-  const idleJob = ['gold','wood','iron','food'].find(k => s.workers[k] < nodeCap(s, k));
-  if (s.workers.idle > spare && idleJob){
-    const n = s.workers.idle - spare;
-    return { tab:'jobs', txt:n + ' worker' + (n > 1 ? 's are' : ' is') + ' standing around. Put ' +
-      (n > 1 ? 'them' : 'one') + ' on ' + idleJob + '.' };
-  }
   // Nothing in here used to look at the bridge at all. Simulated a player who
   // does nothing: their outer turret crossed 50% health at t=200s, 25% at
   // t=296s and fell at t=300s, and at every one of those instants this bar
@@ -4519,11 +4510,40 @@ function adviceFor(s){
   // something: at half health this line held the bar for 29% of a match, at a
   // third it holds it for 14%, at a quarter 9%. A third is the point where the
   // front is genuinely about to break.
+  //
+  // And for a year it was tested LAST, which meant it never fired for the one
+  // player who needed it. Sampled once a second across nine seeded Veteran
+  // matches with no input at all, this bar returned the identical eleven words
+  // — '1 worker is standing around. Put one on gold.' — in 100% of 3,967
+  // samples, the longest unbroken run being 484 seconds, and all nine of those
+  // matches were lost. Across the same samples the front structure sat under a
+  // third of its health for 630 seconds and the bar named it in NONE of them.
+  // The reason is one of ordering: a player who touches nothing always has an
+  // idle worker and there is always a job below its cap, so the idle-worker
+  // note returned before this block was ever reached. The comment above has
+  // claimed this outranks any economy note since the day it was written; it
+  // only became true when the block moved up here. Same nine seeds after the
+  // move: 630 of 630 danger-seconds named, longest run 484s -> 244s.
+  //
+  // Deliberately no dwell timer on top. Capping this branch's airtime at 40s
+  // was the obvious next step and it is wrong: it drops coverage back to 75%,
+  // muting a live 'your turret is at 12%' to make room for 'put a worker on
+  // gold'. A structure that is still dying is still the most useful thing the
+  // bar can say, and it stops on its own the moment the structure is safe.
   {
     const front = frontStruct(s.i);
     if (front && front.hp < front.mhp * .35)
       return { tab:'sel', txt:(STRUCT_SHORT[front.key] || front.n) + ' is down to ' +
         Math.max(1, Math.round(front.hp / front.mhp * 100)) + '% — they are on it now.' };
+  }
+  // Arming a fighter eats an idle worker, so once a barracks stands, keep one
+  // spare rather than telling you to staff every job and then to arm nobody.
+  const spare = bl > 0 ? 1 : 0;
+  const idleJob = ['gold','wood','iron','food'].find(k => s.workers[k] < nodeCap(s, k));
+  if (s.workers.idle > spare && idleJob){
+    const n = s.workers.idle - spare;
+    return { tab:'jobs', txt:n + ' worker' + (n > 1 ? 's are' : ' is') + ' standing around. Put ' +
+      (n > 1 ? 'them' : 'one') + ' on ' + idleJob + '.' };
   }
   if (popUsed(s) >= popCap(s) - 1)
     return buildAdvice('farm', 'Population is full at ' + popCap(s) + '. Build a Farm on an empty plot.');
