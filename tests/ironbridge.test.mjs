@@ -108,7 +108,13 @@ t.ok(G.state === 'menu', 'boots into the menu without starting a match');
   const kinds = new Set(['strike','bolt','nova','dash','heal','shield','buff','teambuff','regen','dot','summon','chain','volley','mark','taunt','storm','teamheal']);
   t.ok(IB.SKILLS.every(s => kinds.has(s.k)), 'every skill uses an effect kind the sim implements');
   t.ok(IB.SKILLS.every(s => s.cd > 0 && s.mana >= 0 && s.f), 'every skill has a cooldown, a cost and flavour');
-  t.ok(IB.SKILLS.every(s => !s.summon || IB.UNITS[s.kind]), 'every summon points at a real unit type');
+  // A summon skill once carried its count in `n`, which is the name field —
+  // Object.assign quietly replaced "Banner Call" with the number 2.
+  t.ok(IB.SKILLS.every(s => typeof s.n === 'string' && s.n.length > 2),
+    'every skill has a real name, not a number left over from its own data');
+  t.ok(IB.SKILLS.filter(s => s.k === 'summon').every(s => s.count > 0),
+    'and every summon says how many it brings');
+  t.ok(IB.SKILLS.filter(s => s.k === 'summon').every(s => IB.UNITS[s.kind]), 'every summon points at a real unit type');
   for (const cl of IB.CLASSES){
     t.ok(IB.basicPool(cl.id).length >= 6, cl.name + ' can be offered at least 6 basic skills');
     t.ok(IB.ultPool(cl.id).length === 3, cl.name + ' has exactly 3 ultimates');
@@ -919,6 +925,83 @@ t.ok(true, 'drawing an empty bridge is harmless');
   G.floats.push({ x:60, y:0, txt:'TEST', col:'#ffcf4d', t:1, dur:1.4, sc:1, vy:-.5, cast:true, ult:true });
   IB.draw();
   t.ok(true, 'drawing a blur and a cast label is clean');
+}
+
+/* ---------------------------------------------------------------- resume */
+{
+  // A match is ten to fifteen minutes; a backgrounded tab must not cost you
+  // one. Play a real match well into the middle, save it, throw the state
+  // away, and pick it back up.
+  IB.newMatch({ diff:'warlord', seed:191 });
+  const s = P();
+  G.sides[0].ai = true;
+  for (let i = 0; i < 30 * 60 * 6 && G.state === 'play'; i++) IB.update(1 / 30);
+  t.ok(G.state === 'play' && G.wave > 8, 'the match is well under way (wave ' + G.wave + ')');
+  // a snapshot of everything that must survive
+  const before = {
+    t:G.t, wave:G.wave, waveT:G.waveT, diff:G.diff.id,
+    res:Object.assign({}, s.res), workers:Object.assign({}, s.workers),
+    builds:s.plot.filter(Boolean).map(b => b.type + b.lvl).sort().join(','),
+    nodes:Object.assign({}, s.nodeLvl), towerUp:Object.assign({}, s.towerUp),
+    heroes:s.heroes.map(h => h.name + '|' + h.cls + '|' + h.lvl + '|' + h.passive + h.passRank + '|' +
+      h.skills.map(k => k.id + k.rank).join('+')).join(' '),
+    structs:G.sides.map(sd => sd.structs.map(x => x.key + ':' + Math.round(x.hp) + (x.dead ? 'D' : '')).join(',')),
+    units:G.units.filter(u => !u.isHero).length,
+    kills:s.kills, gathered:Math.round(s.gathered),
+  };
+  t.ok(IB.saveMatch() === true, 'the match saves');
+  const pack = IB.savedMatch();
+  t.ok(pack && pack.v === IB.SAVE_VER && pack.wave === before.wave, 'and reads back with a version stamp');
+  // obliterate the live state, then resume
+  IB.newMatch({ diff:'recruit', seed:2 });
+  t.ok(G.wave === 0 && P().heroes.length === 0, 'the world is genuinely wiped before resuming');
+  t.ok(IB.loadMatch(pack) === null, 'the saved match loads');
+  const now = P();
+  t.ok(Math.abs(G.t - before.t) < .01 && G.wave === before.wave, 'the clock and the wave count come back');
+  t.ok(G.diff.id === before.diff, 'on the difficulty it was played at');
+  t.ok(['gold','iron','wood','food'].every(k => Math.abs(now.res[k] - before.res[k]) < .01), 'every resource comes back');
+  t.ok(['idle','gold','iron','wood','food'].every(k => now.workers[k] === before.workers[k]), 'and every worker is on the same job');
+  t.ok(now.plot.filter(Boolean).map(b => b.type + b.lvl).sort().join(',') === before.builds, 'the hold is rebuilt exactly');
+  t.ok(IB.NODE_UPGRADABLE.every(k => IB.nodeLvl(now, k) === before.nodes[k]), 'mines keep the levels you dug them to');
+  t.ok(Object.keys(before.towerUp).every(k => now.towerUp[k] === before.towerUp[k]), 'and the forge ranks you bought');
+  const heroesNow = now.heroes.map(h => h.name + '|' + h.cls + '|' + h.lvl + '|' + h.passive + h.passRank + '|' +
+    h.skills.map(k => k.id + k.rank).join('+')).join(' ');
+  t.ok(heroesNow === before.heroes, 'every hero comes back with its whole build');
+  t.ok(now.heroes.every(h => h.mhp > 0 && h.hp <= h.mhp && finite(h.hp)), 'and with sane stats recomputed');
+  t.ok(now.heroes.filter(h => !h.dead).every(h => G.units.includes(h)), 'living heroes are back on the bridge');
+  t.ok(now.heroes.filter(h => h.dead).every(h => !G.units.includes(h)), 'dead ones are still waiting to respawn');
+  const structsNow = G.sides.map(sd => sd.structs.map(x => x.key + ':' + Math.round(x.hp) + (x.dead ? 'D' : '')).join(','));
+  t.ok(structsNow.join('|') === before.structs.join('|'), 'every turret, inhibitor and gate keeps its damage');
+  t.ok(Math.abs(G.units.filter(u => !u.isHero).length - before.units) <= 1, 'the wave standing on the bridge comes back');
+  t.ok(now.kills === before.kills && Math.round(now.gathered) === before.gathered, 'and the running totals');
+  // and it is a live match, not a museum piece
+  const wave0 = G.wave;
+  for (let i = 0; i < 30 * 60 * 3 && G.state === 'play'; i++) IB.update(1 / 30);
+  t.ok(G.wave > wave0, 'the resumed match keeps running');
+  t.ok(G.units.every(u => finite(u.x) && finite(u.hp)), 'and stays numerically sane');
+  IB.draw();
+  t.ok(true, 'and draws');
+}
+{
+  // The attract battle and a finished match must never leave a save behind.
+  IB.clearSave();
+  IB.startDemo();
+  for (let i = 0; i < 60; i++) IB.update(1 / 30);
+  t.ok(IB.saveMatch() === false && IB.savedMatch() === null, 'the menu battle is never saved');
+  IB.newMatch({ diff:'veteran', seed:193 });
+  step(2);
+  t.ok(IB.saveMatch() === true, 'a real match is');
+  for (const st of E().structs) if (st.key !== 'gate') st.dead = true;
+  const gate = E().structs.find(x => x.key === 'gate');
+  IB.dealDmg(IB.spawnUnit(0, 'cannon', { x:gate.x - 2 }), gate, 999999, { pure:true });
+  t.ok(G.state === 'over', 'the match ends');
+  t.ok(IB.savedMatch() === null, 'and a decided match leaves no save to resume');
+  // a save from a future version is ignored rather than half-loaded
+  try { store['ib_save'] = JSON.stringify({ v:IB.SAVE_VER + 99, sides:[{}, {}] }); } catch (e){}
+  t.ok(IB.savedMatch() === null, 'a save from another version is refused');
+  try { store['ib_save'] = '{ this is not json'; } catch (e){}
+  t.ok(IB.savedMatch() === null, 'and so is a corrupt one');
+  IB.clearSave();
 }
 
 IB.draw();
