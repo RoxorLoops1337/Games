@@ -16,6 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { harness } from './no_room_for_heroes_lib.mjs';
 
+let CTX;
 function loadGame(store){
   const here = dirname(fileURLToPath(import.meta.url));
   const html = readFileSync(join(here, '..', 'ironbridge', 'index.html'), 'utf8');
@@ -33,16 +34,33 @@ function loadGame(store){
     if (!okColour(c)) throw new SyntaxError(`${where}: '${c}' is not a valid colour`);
   };
   const stopCheck = checkColour('addColorStop');
+  // Two things beyond the colour check. `ops` counts every call and every
+  // property write, so a test can tell "drew the world" from "drew nothing" —
+  // draw() early-returned for this suite's entire life and no assertion
+  // noticed. And a non-finite number is refused wherever it appears: a real
+  // canvas SILENTLY DROPS a call carrying NaN, so a shape lost that way is
+  // invisible on the page and invisible to a colour check.
+  const stats = { ops:0 };
+  const numCheck = (where, args) => {
+    for (let i = 0; i < args.length; i++)
+      if (typeof args[i] === 'number' && !Number.isFinite(args[i]))
+        throw new TypeError(where + '(): argument ' + i + ' is ' + args[i]);
+  };
   const ctx = new Proxy({}, { get(_t, k){
+    if (k === '__stats') return stats;
     if (k === 'createLinearGradient' || k === 'createRadialGradient')
-      return () => ({ addColorStop: (_pos, col) => stopCheck(col) });
+      return (...a) => { stats.ops++; numCheck(k, a);
+        return { addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); } }; };
     if (k === 'measureText') return () => ({ width: 24 });
     if (k === 'canvas') return { width: 900, height: 520 };
-    return noop;
+    return (...a) => { stats.ops++; numCheck(k, a); };
   }, set(_t, k, v){
+    stats.ops++;
     if (k === 'fillStyle' || k === 'strokeStyle' || k === 'shadowColor') checkColour(k)(v);
+    if (typeof v === 'number' && !Number.isFinite(v)) throw new TypeError('ctx.' + k + ' = ' + v);
     return true;
   } });
+  CTX = ctx;
   const mkEl = () => new Proxy({
     style: {}, dataset: {}, children: [],
     classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
@@ -514,6 +532,178 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.castSkill(su, { id:'shadowlegion', rank:1, cdT:0 }, null);
   t.ok(G.units.length > n0, 'a summon puts bodies on the bridge');
   t.ok(G.units.filter(u => u.kind === 'shade').every(u => u.life > 0), 'summons are on a timer');
+}
+
+/* ------------------------------------------------------------ the render path */
+{
+  // Every other block in this file exercises the simulation. This one exercises
+  // the picture — and until the canvas got wired up under HEADLESS there was
+  // nothing here to exercise: draw() was CALLED 200 times across this suite and
+  // its body ran ZERO times, because lctx is assigned only inside resize(),
+  // which returns immediately when HEADLESS. Seventeen hundred lines of drawing
+  // shipped green whatever they did. The context counts operations, so a draw
+  // that goes nowhere is a failure rather than a pass, and it refuses a
+  // non-finite number as well as a bad colour: a real canvas silently drops a
+  // call carrying NaN, which makes that shape invisible on the page AND
+  // invisible to a colour check.
+  const ops = () => CTX.__stats.ops;
+  const painted = (label, min) => {
+    const before = ops();
+    let err = null;
+    try { IB.draw(); } catch (e){ err = e.message; }
+    const n = ops() - before;
+    t.ok(!err, 'draw() survives ' + label + (err ? ' — ' + err : ''));
+    t.ok(n >= min, label + ' actually paints (' + n + ' ops, wanted ' + min + ')');
+    return n;
+  };
+
+  // the seam itself. If draw() ever stops reaching the canvas, every assertion
+  // below silently becomes a no-op — so prove it reaches it before anything else.
+  t.ok(painted('the menu', 400) > 400, 'the headless canvas is wired: draw() reaches the context');
+
+  // a real match with both holds built out and heroes on the bridge
+  IB.newMatch({ diff:'veteran', seed:8123 });
+  painted('the opening frame', 400);
+  for (const s of G.sides){
+    let ti = 0;
+    for (const type of Object.keys(IB.BUILDINGS)){
+      while (ti < s.plot.length && s.plot[ti]) ti++;
+      s.res.gold = s.res.iron = s.res.wood = s.res.food = 90000;
+      IB.build(s, ti, type);
+    }
+    s.res.gold = s.res.iron = s.res.wood = s.res.food = 90000;
+    IB.createHero(s, 'fighter');
+  }
+  t.ok(P().plot.filter(Boolean).length >= 6, 'the hold really is built up (' +
+    P().plot.filter(Boolean).length + ' plots)');
+  t.ok(P().heroes.length > 0 && E().heroes.length > 0, 'and both sides really have a hero');
+  painted('a built-up hold with heroes', 1000);
+
+  // a live brawl, with a selection ring following a real unit
+  let frames = 0, thinnest = Infinity, blew = null;
+  for (let i = 0; i < 1800 && G.state === 'play'; i++){
+    IB.update(1 / 30); IB.camStep(1 / 30);
+    if (i % 200 === 0) IB.spawnWave();
+    if (i % 60) continue;
+    IB.sel.unit = G.units.find(u => !u.dead && !u.isHero) || null;
+    IB.sel.struct = IB.liveStructs(1)[0] || null;
+    const b = ops();
+    try { IB.draw(); } catch (e){ blew = blew || ('frame ' + i + ': ' + e.message); }
+    thinnest = Math.min(thinnest, ops() - b); frames++;
+  }
+  IB.sel.unit = null; IB.sel.struct = null;
+  t.ok(!blew, 'draw() survives a live brawl' + (blew ? ' — ' + blew : ''));
+  t.ok(frames > 20 && G.units.filter(u => !u.dead).length > 3,
+    'the brawl really ran with a crowd on the bridge (' + frames + ' frames, ' +
+    G.units.filter(u => !u.dead).length + ' bodies)');
+  t.ok(thinnest > 800, 'and every frame of it painted a full board (thinnest ' + thinnest + ' ops)');
+
+  // a dead hero, a broken structure, and an inhibitor counting down to a rebuild
+  {
+    const h = P().heroes.find(x => !x.dead);
+    if (h){ IB.dealDmg(null, h, h.hp + 9999, {}); t.ok(h.dead, 'a hero really is down'); }
+    painted('a dead hero on the board', 600);
+    const inh = E().structs.find(x => x.key === 'inhib');
+    for (const st of E().structs) if (st.key !== 'inhib' && st.key !== 'gate'){ st.dead = true; st.hp = 0; }
+    inh.dead = true; inh.hp = 0; inh.downT = 4;
+    t.ok(E().structs.filter(x => x.dead).length >= 4, 'and most of a hold really is rubble');
+    painted('broken structures and an inhibitor rebuilding', 600);
+  }
+
+  // every layer on its own. A whole-frame count only notices a draw that goes
+  // to nothing — neuter ONE layer and the other twelve still push thousands of
+  // ops, so each exported piece has to paint on its own account.
+  {
+    IB.newMatch({ diff:'veteran', seed:77 });
+    for (let i = 0; i < 900; i++) IB.update(1 / 30);
+    t.ok(G.units.some(u => !u.dead), 'the layer sweep has a populated board');
+    const layers = [
+      ['drawSky', () => IB.drawSky(CTX), 20],
+      ['drawGround', () => IB.drawGround(CTX), 20],
+      ['drawPlateau', () => IB.drawPlateau(CTX), 20],
+      ['drawHold', () => { IB.cam.x = IB.HOLD_X; IB.drawHold(CTX, 0); }, 100],
+      ['drawDeck', () => IB.drawDeck(CTX), 20],
+      ['drawLane', () => IB.drawLane(CTX), 100],
+      ['drawMinimap', () => IB.drawMinimap(CTX), 20],
+    ];
+    for (const [name, fn, min] of layers){
+      const b = ops();
+      let e2 = null;
+      try { fn(); } catch (e){ e2 = e.message; }
+      t.ok(!e2, name + '() draws without throwing' + (e2 ? ' — ' + e2 : ''));
+      t.ok(ops() - b >= min, name + '() puts its layer on the canvas (' + (ops() - b) +
+        ' ops, wanted ' + min + ')');
+    }
+    IB.cam.x = IB.HOLD_X;
+  }
+
+  // the whole camera envelope — every zoom the game allows, at both ends of the world
+  {
+    let n = 0, min = Infinity, threw = null;
+    for (let zi = 0; zi <= 4; zi++){
+      IB.cam.z = IB.cam.tz = IB.ZOOM_MIN + (IB.ZOOM_MAX - IB.ZOOM_MIN) * zi / 4;
+      for (let xi = 0; xi <= 4; xi++){
+        IB.cam.x = IB.CAM_MIN + (IB.CAM_MAX - IB.CAM_MIN) * xi / 4;
+        const b = ops();
+        try { IB.draw(); } catch (e){ threw = threw || (IB.cam.z.toFixed(2) + ' @ ' + IB.cam.x.toFixed(0) + ': ' + e.message); }
+        min = Math.min(min, ops() - b); n++;
+      }
+    }
+    t.ok(!threw, 'no zoom or camera position breaks the picture' + (threw ? ' — ' + threw : ''));
+    t.ok(n === 25, 'the sweep covered zoom ' + IB.ZOOM_MIN + '-' + IB.ZOOM_MAX +
+      ' across the whole world');
+    t.ok(min > 200, 'and every one of those views painted something (thinnest ' + min + ' ops)');
+    IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
+  }
+
+  // both winners, and the frozen board behind the result card
+  for (const w of [0, 1]){
+    IB.newMatch({ diff:'veteran', seed:600 + w });
+    for (let i = 0; i < 300; i++) IB.update(1 / 30);
+    IB.endMatch(w);
+    t.ok(G.state === 'over' && G.winner === w, 'the match ended with side ' + w + ' winning');
+    painted('the board behind side ' + w + "'s result card", 400);
+  }
+}
+
+/* -------------------------------------------- the grid must not widen a radius */
+{
+  // nearby() bins bodies by x into cells six wide and walks whole cells, so a
+  // body up to six units past the radius reached the callback — and nine of the
+  // sixteen callers trusted it to have done the distance test. A radius-5 team
+  // effect cast at x=10.99 reached a body at x=0.05, and moving the caster one
+  // hundredth of a unit across a cell edge dropped a body that had not moved.
+  // nearby is not exported, so drive it through two real callers instead.
+  IB.newMatch({ diff:'veteran', seed:9001 });
+  const sup = IB.makeHero(0, 'support', 'Rangefinder');
+  sup.pend.length = 0; sup.passive = 'mystic'; IB.recalcHero(sup, true);
+  P().heroes.push(sup); IB.enterLane(sup);
+  const RAD = 5;
+  G.units.length = 0; G.units.push(sup);
+  sup.x = 6.0; sup.y = 0;                        // a radius of 5 from here walks cells 0..1
+  const near = IB.spawnUnit(0, 'melee', { x:sup.x + 3.5, y:0 });
+  const far  = IB.spawnUnit(0, 'melee', { x:sup.x + 5.9, y:0 });
+  near.hp = near.mhp * .40;
+  far.hp  = far.mhp  * .20;                      // the MORE hurt of the two
+  IB.rebuildGrid();
+  const cell = (x) => Math.floor(x / 6);
+  // assert the premise, so this cannot rot into a tautology if the lane, the
+  // cell width or the spawn geometry ever moves
+  t.ok(Math.abs(far.x - sup.x) > RAD, 'the far body really is outside the radius (' +
+    (far.x - sup.x).toFixed(1) + ' > ' + RAD + ')');
+  t.ok(cell(far.x) >= cell(sup.x - RAD) && cell(far.x) <= cell(sup.x + RAD),
+    'and really is inside a cell the scan walks (cell ' + cell(far.x) + ' of ' +
+    cell(sup.x - RAD) + '..' + cell(sup.x + RAD) + ')');
+  const team = IB.teamTargets(sup, RAD);
+  t.ok(team.includes(near), 'a team effect reaches the body inside its radius');
+  t.ok(!team.includes(far), 'and stops at the radius, not at the cell edge');
+  t.ok(IB.lowAlly(sup, RAD) === near,
+    'a heal picks the wounded body it can actually reach, not the more wounded one it cannot');
+  // and the filter is not merely over-eager: one step closer and it counts again
+  far.x = sup.x + 4.9; IB.rebuildGrid();
+  t.ok(IB.teamTargets(sup, RAD).includes(far),
+    'a body just inside the radius still counts (' + (far.x - sup.x).toFixed(1) + ')');
+  G.units.length = 0; P().heroes.length = 0;
 }
 
 /* ------------------------------------------------ a hero is not its own cover */
