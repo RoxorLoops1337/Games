@@ -2615,8 +2615,44 @@ t.ok(true, 'drawing an empty bridge is harmless');
     if (w[1] < IB.PLAT.far || w[1] > IB.PLAT.near || w[0] > 0) off++;
   }
   t.ok(off === 0, 'nothing is scattered off the mesa or over the cliff (' + off + ')');
+  // Same deal for the mottling on the mesa top: laid out once, never re-rolled,
+  // and every patch has to land on the island rather than out over the chasm.
+  t.ok(IB.grassCache[0] === null, 'a new match forgets the old grass too');
+  const g = IB.grassFor(0);
+  t.ok(g.length > 10 && IB.grassFor(0) === g, 'the dapple is built once and reused');
+  t.ok(IB.grassFor(1) !== g, 'and each hold gets its own');
+  let gOff = 0;
+  for (const p of g)
+    if (p.y < IB.PLAT.far || p.y > IB.PLAT.near || p.x > 3 || p.x < 3 - (IB.PLAT.back + 34)) gOff++;
+  t.ok(gOff === 0, 'no patch of grass is painted off the mesa (' + gOff + ')');
+  // The road has to start at the bridge end of the mesa and finish at the hall,
+  // or it is decoration pointing nowhere.
+  const R = IB.ROAD;
+  t.ok(R.length >= 4 && R[0][0] > 6, 'the road starts out at the gate end');
+  t.ok(Math.hypot(R[R.length - 1][0] - IB.KEEP.gx, R[R.length - 1][1] - IB.KEEP.gy) < 1.6,
+    'and finishes at the town hall');
+  for (const p of R){
+    const w = IB.holdWorld(p[0], p[1]);
+    if (w[1] < IB.PLAT.far || w[1] > IB.PLAT.near || w[0] > 3 || w[0] < 3 - (IB.PLAT.back + 34)) gOff++;
+  }
+  t.ok(gOff === 0, 'and every bend of it is on the island');
+  // The town hall itself, and the workers who orbit it, must stand on ground —
+  // it used to be drawn four world units past the outer cliff.
+  const kw = IB.holdWorld(IB.KEEP.gx, IB.KEEP.gy);
+  const outerW = 3 - (IB.PLAT.back + 34);
+  t.ok(kw[0] > outerW + 8, 'the town hall stands well inside the outer cliff');
+  t.ok(kw[1] > IB.PLAT.far + 6 && kw[1] < IB.PLAT.near - 6, 'and clear of the far and near edges');
+  // ...and the mines have to be somewhere you can actually see them: the great
+  // keep in drawEnds() stands at world (-16, 0) and is painted over the hold.
+  const sx = (x, y) => x * .96 - y * .52, sy = (x, y) => x * .07 + y * .60;
+  for (const k in IB.NODES){
+    const n = IB.NODES[k], w = IB.holdWorld(n.gx, n.gy);
+    const dx = Math.abs(sx(w[0] + 16, w[1])), dy = sy(w[0] + 16, w[1]);
+    t.ok(dx > 9 || dy > 14 || dy < -20, k + ' is not standing behind the castle (dx ' + dx.toFixed(1) + ' dy ' + dy.toFixed(1) + ')');
+  }
   IB.newMatch({ diff:'veteran', seed:101 });
   t.ok(IB.scatterCache[0] === null, 'and it is dropped again on the next match');
+  t.ok(IB.grassCache[0] === null, 'along with the grass');
 }
 {
   // Camera shake is bounded and ignores anything happening off screen.

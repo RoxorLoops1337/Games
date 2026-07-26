@@ -1064,6 +1064,7 @@ function newMatch(opt){
   r.wood = Math.round(r.wood * e); r.food = Math.round(r.food * e);
   sel.tile = -1; sel.node = null; sel.build = null; sel.struct = null; sel.unit = null;
   scatterCache[0] = scatterCache[1] = null;
+  grassCache[0] = grassCache[1] = null;
   cam.shake = 0; cam.sx = 0; cam.sy = 0;
   cam.follow = false; cam.z = cam.tz = startZoom(LW);
   // Sit the hold a touch left of centre so the bridge is in shot too. In world
@@ -4478,18 +4479,58 @@ function drawNode(c, key){
   labelQ.push({ x:p[0], y:p[1] + 26 * B, txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col });
 }
 
+// The seat of the hold. It was one plain box with a flag on it, smaller than
+// the barracks and with no shadow when every plot building had one — so the
+// most important building on the island read as the least. It stands on a
+// stone footing now, with a door, lit windows and a chimney going.
 function drawKeep(c){
   const s = G.sides[holdSide], B = bu();
-  drawHouse(c, KEEP.gx, KEEP.gy, .52, .42, 1.0, .48, '#b9a17c', '#7a4a3c');
-  const p = bp(KEEP.gx, KEEP.gy, 1.9);
-  c.fillStyle = sideCol(); c.fillRect(p[0] - 2 * B, p[1] - 20 * B, 4 * B, 20 * B);
-  poly(c, [[p[0] + 2 * B, p[1] - 20 * B], [p[0] + 18 * B, p[1] - 15 * B], [p[0] + 2 * B, p[1] - 10 * B]], sideCol());
+  const gx = KEEP.gx, gy = KEEP.gy;
+  ell(c, ...bp(gx, gy + .12), BSC * .95, BSC * .46, 'rgba(0,0,0,.24)');
+  // a flagged stone terrace, so it sits ON something
+  poly(c, [bp(gx - .78, gy - .62), bp(gx + .78, gy - .62), bp(gx + .78, gy + .66), bp(gx - .78, gy + .66)], '#8b8778');
+  poly(c, [bp(gx - .70, gy - .55), bp(gx + .70, gy - .55), bp(gx + .70, gy + .58), bp(gx - .70, gy + .58)], '#9d9989');
+  c.strokeStyle = 'rgba(60,58,50,.35)'; c.lineWidth = Math.max(1, 1.2 * B);
+  for (let i = -1; i <= 1; i++){
+    const a = bp(gx - .70, gy + i * .38), b = bp(gx + .70, gy + i * .38);
+    c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+  }
+  const W = .62, D = .48, WH = 1.15;
+  drawHouse(c, gx, gy, W, D, WH, .55, '#c4ab84', '#7a4a3c');
+  // Openings go on the two faces this projection actually shows: the near face
+  // at y = gy + D, and the right-hand face at x = gx + W. Anything drawn on the
+  // other two ends up floating over the roof, which is where the first pass put
+  // the windows.
+  const face = (x0, x1, y0, y1, z0, z1, fill) =>
+    poly(c, [bp(x0, y0, z0), bp(x1, y1, z0), bp(x1, y1, z1), bp(x0, y0, z1)], fill);
+  face(gx - .17, gx + .17, gy + D, gy + D, 0, .66, '#4a3526');          // the door
+  face(gx - .15, gx + .15, gy + D, gy + D, .62, .68, '#8a6a48');        // its lintel
+  for (const [a, b] of [[-.50, -.30], [.30, .50]])                      // windows, near face
+    face(gx + a, gx + b, gy + D, gy + D, .56, .92, '#f0cf82');
+  for (const [a, b] of [[-.30, -.10], [.12, .32]])                      // and on the right face
+    face(gx + W, gx + W, gy + a, gy + b, .56, .92, '#e6c179');
+  // chimney: based low enough that the roof swallows its foot
+  const ch = bp(gx + .24, gy - .16, 1.34);
+  c.fillStyle = '#6f6252'; c.fillRect(ch[0] - 4.5 * B, ch[1] - 18 * B, 9 * B, 26 * B);
+  c.fillStyle = '#8a7a66'; c.fillRect(ch[0] - 4.5 * B, ch[1] - 18 * B, 9 * B, 3 * B);
+  c.fillStyle = '#3a3128'; c.fillRect(ch[0] - 3 * B, ch[1] - 19 * B, 6 * B, 2 * B);
+  for (let i = 0; i < 4; i++){
+    const ph = (G.t * .32 + i * .25) % 1;
+    c.globalAlpha = .24 * (1 - ph);
+    ell(c, ch[0] + Math.sin(ph * 5 + i) * 5 * B, ch[1] - 22 * B - ph * 32 * B,
+      (2.6 + ph * 7) * B, (2.2 + ph * 5.5) * B, '#cfd6dc');
+  }
+  c.globalAlpha = 1;
+  const p = bp(gx - .34, gy + D, WH + .55);
+  c.fillStyle = '#6a5540'; c.fillRect(p[0] - 1.6 * B, p[1] - 20 * B, 3.2 * B, 20 * B);
+  poly(c, [[p[0] + 1.6 * B, p[1] - 20 * B], [p[0] + 17 * B, p[1] - 15.5 * B], [p[0] + 1.6 * B, p[1] - 11 * B]], sideCol());
+  poly(c, [[p[0] + 1.6 * B, p[1] - 15.5 * B], [p[0] + 17 * B, p[1] - 15.5 * B], [p[0] + 1.6 * B, p[1] - 11 * B]], shade(sideCol(), .78));
   if (holdSide !== MY) return;
-  const lb = bp(KEEP.gx, KEEP.gy, 2.5);
+  const lb = bp(KEEP.gx, KEEP.gy, 2.7);
   labelQ.push({ x:lb[0], y:lb[1], txt:'Town Hall · ' + s.workers.idle + ' idle', col:'#ffe7b0' });
   for (let i = 0; i < Math.min(6, s.workers.idle); i++){
     const a = G.t * .3 + i * 1.1;
-    const q = bp(KEEP.gx + Math.cos(a) * .9, KEEP.gy + .9 + Math.sin(a) * .35);
+    const q = bp(gx + Math.cos(a) * 1.15, gy + 1.15 + Math.sin(a) * .38);
     drawWorkerFig(c, q[0], q[1], '#8d99b0', false, .85);
   }
 }
@@ -4531,18 +4572,34 @@ function scatterFor(side){
   return out;
 }
 
+// The main road: the gate, the plots, the hall. It used to stop dead thirty
+// world units short of the buildings, so the hold read as a set of objects
+// dropped on a lawn rather than a place people live in and walk around.
+const ROAD = [[8.3, 0], [5.6, .35], [2.6, .15], [-.1, -.25], [-2.3, -1.05]];
 function drawGround(c){
-  // trodden paths from the hall out to every job
   const home = bp(KEEP.gx + .6, KEEP.gy + .7);
-  c.strokeStyle = 'rgba(120,98,62,.30)'; c.lineCap = 'round';
+  const lay = (pts, w, col) => {
+    c.strokeStyle = col; c.lineWidth = Math.max(2, BSC * w);
+    c.lineCap = 'round'; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+    c.stroke();
+  };
+  const main = ROAD.map(p => bp(p[0], p[1]));
+  lay(main, .34, 'rgba(74,58,34,.34)');            // the rut either side
+  lay(main, .24, 'rgba(150,124,80,.36)');          // and the packed earth down the middle
+  // trodden paths from the hall out to every job
   for (const k in NODES){
     const q = bp(NODES[k].gx, NODES[k].gy);
-    c.lineWidth = Math.max(4, BSC * .22);
-    c.beginPath(); c.moveTo(home[0], home[1]);
-    c.quadraticCurveTo((home[0] + q[0]) / 2 + BSC * .3, (home[1] + q[1]) / 2, q[0], q[1]);
-    c.stroke();
+    const mid = [(home[0] + q[0]) / 2 + BSC * .3, (home[1] + q[1]) / 2];
+    for (const [w, col] of [[.22, 'rgba(74,58,34,.26)'], [.13, 'rgba(150,124,80,.30)']]){
+      c.strokeStyle = col; c.lineWidth = Math.max(2, BSC * w); c.lineCap = 'round';
+      c.beginPath(); c.moveTo(home[0], home[1]);
+      c.quadraticCurveTo(mid[0], mid[1], q[0], q[1]);
+      c.stroke();
+    }
   }
-  c.lineCap = 'butt';
+  c.lineCap = 'butt'; c.lineJoin = 'miter';
   const s = BSC / 34;
   for (const it of scatterFor(holdSide)){
     const r = it.r;
@@ -4590,12 +4647,28 @@ function drawPlateau(c){
   poly(c, [e(inner, F), e(inner, N), e(inner, N, -DROP), e(inner, F, -DROP)], '#40382e');
   poly(c, [e(inner, F, -DROP * .4), e(inner, N, -DROP * .4), e(inner, N, -DROP), e(inner, F, -DROP)], '#2f2922');
   poly(c, [e(outer, F), e(outer, N), e(outer, N, -DROP), e(outer, F, -DROP)], '#453c33');
-  // strata across the face
-  c.globalAlpha = .35;
-  for (let i = 1; i < 4; i++){
-    const z = -DROP * (i / 4);
-    poly(c, [e(outer, N, z), e(inner, N, z), e(inner, N, z - 1.6), e(outer, N, z - 1.6)], '#6a5c4c');
+  // Strata. The cliff is the second-biggest surface in the picture after the
+  // grass and it was three faint bands on one of its two faces — a brown slab
+  // most of the way down the screen. Both faces get bedding planes now, plus
+  // vertical joints, and a paler weathered lip under the turf.
+  c.globalAlpha = .30;
+  for (let i = 1; i < 7; i++){
+    const z = -DROP * (i / 7);
+    const h = 1.1 + (i % 3) * .8;
+    poly(c, [e(outer, N, z), e(inner, N, z), e(inner, N, z - h), e(outer, N, z - h)], i % 2 ? '#6a5c4c' : '#544738');
+    poly(c, [e(inner, F, z), e(inner, N, z), e(inner, N, z - h), e(inner, F, z - h)], i % 2 ? '#5e5142' : '#4a3f32');
   }
+  c.globalAlpha = .22;
+  for (let i = 0; i < 9; i++){                       // joints running down the rock
+    const t = (i + .5) / 9, w = .8 + (i % 2) * .5;
+    const x = lerp(outer, inner, t);
+    poly(c, [e(x, N, -2), e(x + d * w, N, -2), e(x + d * w, N, -DROP * .78), e(x, N, -DROP * .78)], '#2b251e');
+    const y = lerp(F, N, t);
+    poly(c, [e(inner, y, -2), e(inner, y + w * 1.6, -2), e(inner, y + w * 1.6, -DROP * .78), e(inner, y, -DROP * .78)], '#2b251e');
+  }
+  c.globalAlpha = .5;
+  poly(c, [e(outer, N), e(inner, N), e(inner, N, -1.8), e(outer, N, -1.8)], '#6f6350');
+  poly(c, [e(inner, F), e(inner, N), e(inner, N, -1.8), e(inner, F, -1.8)], '#655a49');
   c.globalAlpha = 1;
   // and the bottom of the cliff dissolving into the dark of the chasm
   for (let i = 0; i < 3; i++){
@@ -4611,16 +4684,53 @@ function drawPlateau(c){
   poly(c, [e(outer, N - 8), e(inner, N - 8), e(inner, N), e(outer, N)], '#3d5c33');
   poly(c, [e(inner - d * 9, F), e(inner, F), e(inner, N), e(inner - d * 9, N)], '#43663a');
   c.globalAlpha = 1;
+  // Dapple. The mesa is by a distance the largest thing on screen and it was
+  // one flat fill, which made the whole hold read as objects dropped on felt.
+  // The patches are laid out once per side and never move.
+  const S = LS();
+  for (const g of grassFor(holdSide)){
+    const p = e(g.x, g.y);
+    if (p[0] < -90 || p[0] > LW + 90 || p[1] < -70 || p[1] > LH + 70) continue;
+    c.globalAlpha = g.a;
+    ell(c, p[0], p[1], g.rw * .96 * S, g.rh * .60 * S, g.col);
+  }
+  c.globalAlpha = 1;
   // the far edge fades into the valley haze instead of ending on a hard line
   for (let i = 0; i < 3; i++){
     c.globalAlpha = .15 - i * .045;
     poly(c, [e(outer, F + i * 4), e(inner, F + i * 4), e(inner, F + i * 4 + 4), e(outer, F + i * 4 + 4)], '#8ea9ac');
   }
   c.globalAlpha = 1;
-  // the road out to the gates
+  // where the road leaves the mesa and meets the bridge
   c.globalAlpha = .5;
-  poly(c, [e(inner, -5), e(inner - d * 30, -5), e(inner - d * 30, 5), e(inner, 5)], '#7d6a44');
+  poly(c, [e(inner, -5), e(inner - d * 12, -5), e(inner - d * 12, 5), e(inner, 5)], '#7d6a44');
   c.globalAlpha = 1;
+}
+
+// The mottling on the mesa top: patches of longer and shorter grass and a few
+// bare scrapes of earth. Deterministic and computed once per side, like the
+// countryside — this is decoration and never touches the simulation.
+const grassCache = [null, null];
+function grassFor(side){
+  if (grassCache[side]) return grassCache[side];
+  const inner = side === 0 ? 3 : C.LANE_LEN - 3;
+  const outer = inner - (side === 0 ? 1 : -1) * (PLAT.back + 34);
+  const x0 = Math.min(inner, outer), x1 = Math.max(inner, outer);
+  const COLS = ['#54804a', '#436236', '#5b8a4e', '#6b6042'];
+  const out = [];
+  for (let i = 0; i < 34; i++){
+    const hx = hash2(i * 3 + 1 + side * 97, 7), hy = hash2(11, i * 5 + 3 + side * 53);
+    const k = hash2(i + side * 31, i * 2 + 5);
+    const ci = k > .90 ? 3 : (k > .58 ? 2 : (k > .28 ? 1 : 0));
+    const rw = 5 + hash2(i, 13) * 12;
+    out.push({
+      x:x0 + hx * (x1 - x0), y:PLAT.far + 4 + hy * (PLAT.near - PLAT.far - 8),
+      rw, rh:rw * (.5 + hash2(i, 19) * .3),
+      col:COLS[ci], a:ci === 3 ? .22 : .18 + hash2(i, 23) * .14,
+    });
+  }
+  grassCache[side] = out;
+  return out;
 }
 
 // Is any part of this hold's mesa on screen? Both mesas are ~80 world units
@@ -5834,6 +5944,7 @@ function loadMatch(pack){
     u.armor = pu.armor; u.mr = pu.mr; u.cd = pu.cd;
   }
   scatterCache[0] = scatterCache[1] = null;
+  grassCache[0] = grassCache[1] = null;
   rebuildGrid();
   return null;
 }
@@ -6514,6 +6625,7 @@ function netLoad(p){
   G.t = p.t; G.wave = p.wave; G.waveT = p.waveT; G.frame = p.frame; G.uid = p.uid;
   G.state = p.state; G.winner = p.winner;
   scatterCache[0] = scatterCache[1] = null;
+  grassCache[0] = grassCache[1] = null;
   rebuildGrid();
   reseed(p.seed);                       // last, so nothing above can disturb it
   return true;
@@ -6892,7 +7004,8 @@ window.IB = {
   attackDamage, attackSpeedOf, castSkill, rebuildGrid, reseed, cam, sel, loadMeta,
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
-  adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
+  adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
+  holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
