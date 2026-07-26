@@ -4738,7 +4738,7 @@ function showMenu(){
 // this file cannot know. Point the game at the real one by editing this line,
 // or without editing anything:
 //     localStorage.setItem('ib_relay', 'ironbridge-relay.YOURNAME.workers.dev')
-const RELAY_HOST = 'ironbridge-relay.example.workers.dev';
+const RELAY_HOST = 'ironbridge-relay.danhieux-senjka.workers.dev';
 const RELAY_UNSET = () => relayHost().includes('.example.workers.dev');
 const relayHost = () => {
   try { return localStorage.getItem('ib_relay') || RELAY_HOST; } catch (e) { return RELAY_HOST; }

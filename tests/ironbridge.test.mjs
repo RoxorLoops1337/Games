@@ -3982,8 +3982,21 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // failure. "Check your connection" sends them to look at the wrong thing
   // entirely. The lobby has to say what is actually missing, BEFORE they try
   // and again when it fails.
+  // The relay IS deployed now, so the shipped default names a real host and
+  // nobody gets the warning on a fresh page. The unconfigured path still has to
+  // work, though — anyone who forks this repo lands in it, because the address
+  // depends on the deploying account's workers.dev subdomain and cannot be
+  // inherited. So it is driven explicitly rather than by leaving the default
+  // broken, which is what this block used to rely on.
   localStorage.removeItem('ib_relay');
-  t.ok(IB.RELAY_UNSET(), 'out of the box, no relay is configured (' + IB.relayHost() + ')');
+  t.ok(!IB.RELAY_UNSET(), 'the shipped default names a deployed relay (' + IB.relayHost() + ')');
+  t.ok(/\.workers\.dev$/.test(IB.relayHost()) && !/\.example\./.test(IB.relayHost()),
+    'and it is a real workers.dev host, not the placeholder');
+  IB.lobbySet('idle');
+  t.ok(!/no relay is set up/i.test(IB.lobbyHtml()), 'so a fresh page gets no warning about a missing relay');
+
+  localStorage.setItem('ib_relay', 'ironbridge-relay.example.workers.dev');
+  t.ok(IB.RELAY_UNSET(), 'a placeholder address still reads as no relay configured');
   IB.lobbySet('idle');
   const warn = IB.lobbyHtml();
   t.ok(/no relay is set up/i.test(warn),
