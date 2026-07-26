@@ -57,8 +57,8 @@
   #advice.hide{ display:none; }
   #advice .ah{ font-size:9px; letter-spacing:2px; color:var(--gold); font-weight:800; }
   #advice .at{ font-size:12px; color:var(--ink); line-height:1.35; }
-  @media (max-width:760px){ #advice{ max-width:calc(100% - 20px); bottom:8px; }
-    #toast{ top:84px; } }
+  @media (max-width:760px){ #advice{ max-width:calc(100% - 20px); bottom:8px; } }
+  body.narrow #toast{ top:84px; max-width:calc(100% - 20px); }
 
   /* ---------------- command dock ---------------- */
   #dock{ flex:0 0 auto; display:flex; gap:8px; align-items:stretch; padding:7px 9px;
@@ -440,7 +440,7 @@ const PASSIVES = [
   { id:'momentum',   n:'Momentum',        d:'Each kill grants +6 damage for 30s, max 5.',       m:{ killAd:6 } },
   { id:'bloodmoney', n:'Blood Money',     d:'Kills pay 8 gold; +10% gold from structures.',     m:{ killGold:8, structGold:.10 } },
   { id:'wallbreaker',n:'Wallbreaker',     d:'+45% damage to gates specifically.',               m:{ gateDmg:.45 } },
-  { id:'minionlord', n:'Minion Lord',     d:'Allied minions near you gain +10% health.',        m:{ auraHp:.10 } },
+  { id:'minionlord', n:'Minion Lord',     d:'Every minion your hold sends out has +10% health.', m:{ auraHp:.10 } },
   { id:'standard',   n:'Standard Bearer', d:'Allied minions near you move 12% faster.',         m:{ auraMs:.12 } },
   { id:'stalwart',   n:'Stalwart',        d:'+240 health, -4% attack speed.',                   m:{ hp:240, as:-.04 } },
   { id:'harrier',    n:'Harrier',         d:'+11% attack speed and +5% move speed.',            m:{ as:.11, ms:.05 } },
@@ -450,7 +450,7 @@ const PASSIVES = [
   { id:'trapper',    n:'Trapper',         d:'Attacks slow by 15% and deal 5 true damage.',      m:{ slowOn:.15, truOn:5 } },
   { id:'inferno',    n:'Inferno',         d:'Burns from your attacks last twice as long.',      m:{ burn:16, burnDur:6 } },
   { id:'sapper',     n:'Sapper',          d:'+22% turret damage; turret kills pay 30 gold.',    m:{ tdmg:.22, structGold:.20 } },
-  { id:'warden',     n:'Warden',          d:'+16 armour; nearby minions take 8% less damage.',  m:{ armor:16, auraArm:8 } },
+  { id:'warden',     n:'Warden',          d:'+16 armour, and +8 armour to minions beside you.',  m:{ armor:16, auraArm:8 } },
   { id:'preacher',   n:'Preacher',        d:'Allies near you gain +8% damage.',                 m:{ auraDmg:.08, auraHeal:2 } },
   { id:'scavenger',  n:'Scavenger',       d:'Kills restore 30 health and 20 mana.',             m:{ killHeal:30, killMana:20 } },
   { id:'ironwill',   n:'Iron Will',       d:'25% shorter crowd control, +80 health.',           m:{ tenacity:.25, hp:80 } },
@@ -462,7 +462,7 @@ const PASSIVES = [
   { id:'stormcaller',n:'Stormcaller',     d:'Every 5th attack chains 45 damage to two foes.',   m:{ chainHit:45 } },
   { id:'lifebinder', n:'Lifebinder',      d:'Heal the lowest nearby ally for 10 per second.',   m:{ auraHeal:10 } },
   { id:'siegemaster',n:'Siege Master',    d:'Your cannon minions gain +25% damage.',            m:{ cannonDmg:.25 } },
-  { id:'drillmaster',n:'Drillmaster',     d:'Your melee minions gain +12% health.',             m:{ meleeHp:.12 } },
+  { id:'drillmaster',n:'Drillmaster',     d:'Every footman you send out has +12% health.',       m:{ meleeHp:.12 } },
   { id:'archmagus',  n:'Archmagus',       d:'Your caster minions gain +20% damage.',            m:{ casterDmg:.20 } },
   { id:'brawler',    n:'Brawler',         d:'+10 damage and +90 health.',                       m:{ ad:10, hp:90 } },
   { id:'trickster',  n:'Trickster',       d:'-15% cooldowns, +12% move speed.',                 m:{ cdr:.15, ms:.12 } },
@@ -953,7 +953,12 @@ function spawnUnit(side, kind, o){
   const d = UNITS[kind], s = G.sides[side];
   if (G.units.length >= C.MAX_UNITS) return null;
   const waveScale = 1 + .055 * G.wave;
-  const hpUp = 1 + .10 * s.troopUp.thp, adUp = 1 + .10 * s.troopUp.tad, armUp = 8 * s.troopUp.tarm;
+  let heroHp = 0;
+  for (const h of s.heroes){
+    heroHp += passVal(h, 'auraHp');
+    if (kind === 'melee') heroHp += passVal(h, 'meleeHp');
+  }
+  const hpUp = (1 + .10 * s.troopUp.thp) * (1 + heroHp), adUp = 1 + .10 * s.troopUp.tad, armUp = 8 * s.troopUp.tarm;
   const u = {
     id:G.uid++, side, kind, isHero:false, struct:false, paid:!!o.paid,
     x:o.x !== undefined ? o.x : gateX(side) + dirOf(side) * 2.5,
@@ -1022,9 +1027,17 @@ function nearestFoe(u, rad, wantHero){
 }
 
 /* ------------------------------------------------------------------ damage */
+// A minion's armour, plus whatever a hero standing beside it is lending.
+function effArmor(u, magic){
+  let r = magic ? (u.mr || 0) : (u.armor || 0);
+  if (!u.isHero && !u.struct && u.side !== undefined){
+    for (const h of G.sides[u.side].heroes)
+      if (!h.dead && h.inLane && Math.abs(h.x - u.x) < 8) r += passVal(h, 'auraArm');
+  }
+  return r;
+}
 function mitigate(amt, tgt, magic){
-  const r = magic ? (tgt.mr || 0) : (tgt.armor || 0);
-  return amt * 100 / (100 + Math.max(-90, r));
+  return amt * 100 / (100 + Math.max(-90, effArmor(tgt, magic)));
 }
 
 function alliesNear(u, rad){
@@ -3981,7 +3994,7 @@ window.IB = {
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, holdOnScreen, startDemo, timelineHtml, arnd,
-  skillPipsHtml, castFx, castCol, heroBarHtml,
+  skillPipsHtml, castFx, castCol, heroBarHtml, effArmor,
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
