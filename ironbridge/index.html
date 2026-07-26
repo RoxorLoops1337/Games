@@ -691,6 +691,8 @@ const SKILLS = [
     f:'Costs more the healthier they are.' }),
   S('emberflask','Ember Flask','any',{ k:'dot', tag:'dmg', cd:16, mana:45, dps:[30,15], apR:.3, aoe:2.8, dur:4,
     f:'Glass, oil, and a bad afternoon.' }),
+  S('ironhook','Iron Hook','any',{ k:'hook', tag:'cc', cd:15, mana:55, dmg:[80,42], adR:.55, apR:.25, rng:9.5,
+    stun:.6, pull:.45, f:'The chain goes out. Whoever it finds comes back.' }),
   // ---- tank -------------------------------------------------------------
   S('shieldbash','Shield Bash','tank',{ k:'strike', tag:'cc', cd:12, mana:40, dmg:[70,34], adR:.6, stun:.9, rng:2.2,
     f:'The rim of the shield, straight to the jaw.' }),
@@ -809,6 +811,9 @@ function skOutput(s, rank, ad, ap){
   let util = 0;
   if (s.count) util += (s.count + (rank - 1) * (s.nPer || 0)) * 220;
   if (s.stun) util += s.stun * 130;
+  // Dragging somebody out of their line and onto your front rank is worth more
+  // than the damage attached to it — it decides where the fight happens.
+  if (s.pull) util += 230 + (s.rng || 0) * 18;
   if (s.slow) util += s.slow * 70 * (s.dur ? 2 : 1);
   if (s.k === 'taunt') util += 90 + (s.dur || 0) * 110;
   const buff = (s.bad || 0) * 6 + (s.bas || 0) * 400 + (s.bcrit || 0) * 300 + (s.bms || 0) * 200
@@ -1280,6 +1285,7 @@ function spawnUnit(side, kind, o){
     as:d.as, rng:d.rng, spd:d.spd, r:d.r, tdmg:d.tdmg, magic:!!d.magic, bounty:d.bounty,
     cd:rr(0, .5), target:null, dead:false, slowT:0, slowP:0, stunT:0, shield:0, shT:0,
     burn:null, hitT:0, swing:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0,
+    pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
   };
   u.hp = u.mhp;
   G.units.push(u);
@@ -1653,10 +1659,10 @@ function basicAttack(u, tgt){
 // `kind` is for the renderer only: 'bolt' is a spell, anything else is a shaft.
 // A volley of arrows and a mage's bolt used to be the same two circles, which
 // is a large part of why a fight was hard to read.
-function shoot(u, tgt, onHit, col, kind){
+function shoot(u, tgt, onHit, col, kind, sp){
   sfx('shot', u.x);
-  G.projs.push({ x:u.x, y:u.y, z:u.struct ? 2.6 : .8, tgt, onHit, col, sp:tgt.struct ? 34 : 26,
-    dead:false, tr:[], kind:kind || (u.magic ? 'bolt' : 'shaft'), ax:0, ay:0 });
+  G.projs.push({ x:u.x, y:u.y, z:u.struct ? 2.6 : .8, tgt, onHit, col, sp:sp || (tgt.struct ? 34 : 26),
+    dead:false, tr:[], kind:kind || (u.magic ? 'bolt' : 'shaft'), ax:0, ay:0, src:u });
 }
 
 function areaHit(src, x, y, rad, amt, o){
@@ -1700,6 +1706,34 @@ function applyStun(t, dur){
   if (t.struct) return;
   const ten = t.isHero ? passVal(t, 'tenacity') : 0;
   t.stunT = Math.max(t.stunT, dur * (1 - ten));
+}
+// A hook has landed and this body is on the end of the chain. The destination
+// was fixed the moment the chain bit, so a pull is a straight line at a fixed
+// speed — nothing here reads a random stream or a live position, which is what
+// lets both machines drag the same body to the same tile.
+function applyPull(t, x, y, dur, by){
+  if (t.struct) return;
+  const ten = t.isHero ? passVal(t, 'tenacity') : 0;
+  const grab = 1 - ten * .5;                       // a braced hero travels less of the way
+  t.pullX = t.x + (x - t.x) * grab;
+  t.pullY = t.y + (y - t.y) * grab;
+  t.pullT = dur;
+  t.pullSp = Math.max(10, hyp(t.pullX - t.x, t.pullY - t.y) / dur);
+  t.pullBy = by || null;
+}
+// Returns true when the body spent this tick being dragged, so the caller
+// skips the walking and the swinging — you do not get to fight on the way in.
+function pullStep(u, dt){
+  if (!(u.pullT > 0)) return false;
+  u.pullT -= dt;
+  const dx = u.pullX - u.x, dy = u.pullY - u.y, d = hyp(dx, dy);
+  const step = u.pullSp * dt;
+  if (d <= step){ u.x = u.pullX; u.y = u.pullY; u.pullT = 0; }
+  else { u.x += dx / d * step; u.y += dy / d * step; }
+  if (u.pullT <= 0){ u.pullT = 0; u.pullBy = null; }
+  u.y = clamp(u.y, -C.LANE_W / 2 + u.r, C.LANE_W / 2 - u.r);
+  u.x = clamp(u.x, -2, C.LANE_LEN + 2);
+  return true;
 }
 function applyBurn(t, dps, dur, src){
   if (t.struct) return;
@@ -1753,6 +1787,7 @@ function unitStep(u, dt){
     u.life -= dt;
     if (u.life <= 0){ u.dead = true; const i = G.units.indexOf(u); if (i >= 0) G.units.splice(i, 1); return; }
   }
+  if (pullStep(u, dt)) return;                    // being dragged beats every other plan
   if (u.stunT > 0) return;
   const tgt = u.target = acquire(u);
   const dir = dirOf(u.side);
@@ -1920,6 +1955,7 @@ function makeHero(side, cls, name){
     hp:1, mhp:1, mana:1, mmana:1, cd:0, slowT:0, slowP:0, stunT:0, shield:0, shT:0, burn:null,
     hitT:0, swing:0, target:null, ph:rnd() * 6.28, rage:0, atkN:0, dmgTaken:-99, retreat:false,
     lastKiller:null, dmgDealt:0, magic:false, tdmg:1,
+    pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
   };
   recalcHero(h, true);
   h.hp = h.mhp; h.mana = h.mmana;
@@ -2284,6 +2320,7 @@ function enterLane(h){
   // supposed to land on a target that is already stunned or slowed, so this was
   // not a corner: heroes respawned at full health and could not move.
   h.stunT = 0; h.slowT = 0; h.slowP = 0; h.taunt = 0;
+  h.pullT = 0; h.pullBy = null;
   h.markT = 0; h.markBy = undefined; h.markAmp = 0;
   h.burn = null; h.shield = 0; h.shT = 0; h.target = null;
   const sh = passVal(h, 'spawnShield');
@@ -2417,6 +2454,7 @@ function heroStep(h, dt){
   // hero auras that heal
   const ah = passVal(h, 'auraHeal');
   if (ah) nearby(h.x, 7, (u) => { if (!u.dead && u.side === h.side && u !== h) healUnit(u, ah * dt); });
+  if (pullStep(h, dt)) return;
   if (h.stunT > 0) return;
 
   const frac = h.hp / h.mhp;
@@ -2511,6 +2549,9 @@ function wantCast(h, s, tgt){
     const worth = tgt.isHero || foesNear(h, 6) >= 3 || (tgt.struct && tgt.hp / tgt.mhp < .7);
     if (!worth) return false;
   }
+  // A hook thrown at somebody already standing on you does nothing but damage,
+  // and a hook thrown at a turret does not even do that — it cannot be dragged.
+  if (s.k === 'hook') return !tgt.struct && d > h.r + (tgt.r || 0) + 1.8 && d <= (s.rng || 9) + (tgt.r || 0);
   if (s.tag === 'summon') return d < 14;
   if (s.tag === 'buff') return d < Math.max(6, h.rng + 2);
   return d <= (s.rng || h.rng + 2) + (tgt.r || 0);
@@ -2573,6 +2614,25 @@ function castSkill(h, sk, tgt){
     case 'volley': {
       if (!tgt) break;
       for (let i = 0; i < (s.shots || 3); i++) shoot(h, tgt, () => { if (!tgt.dead) abilityDmg(h, tgt, pw, s.magic); }, '#ffe08a', 'shaft');
+      break;
+    }
+    // The chain. It flies out slow enough to watch, and whatever it bites gets
+    // dragged to the caster's feet — which is the whole point, because a hook
+    // that only did damage would just be a worse bolt.
+    case 'hook': {
+      if (!tgt) break;
+      const land = () => {
+        if (tgt.dead) return;
+        abilityDmg(h, tgt, pw, s.magic);
+        if (s.stun) applyStun(tgt, s.stun);
+        // where the chain ends: just off the caster's shield, on the line it flew
+        const dx = tgt.x - h.x, dy = tgt.y - h.y, d = hyp(dx, dy) || 1;
+        const stop = h.r + (tgt.r || .4) + .5;
+        const ex = h.x + dx / d * stop, ey = h.y + dy / d * stop;
+        applyPull(tgt, ex, ey, s.pull || .45, h);
+        if (!HEADLESS) hookSnapFx(h, tgt);
+      };
+      shoot(h, tgt, land, s.ult ? '#ffd27a' : '#d9c49a', 'hook', s.ult ? 26 : 20);
       break;
     }
     case 'nova': {
@@ -3161,6 +3221,13 @@ function castFx(h, s, tgt){
       waveFx(h.x, h.y, 1.8, col, .3);
       break;
 
+    // it throws a chain — the projectile is the effect, so this is only the
+    // shoulder going back. The snap is drawn when the chain actually bites.
+    case 'hook':
+      waveFx(h.x, h.y, 1.5 * big, col, .26);
+      burstFx(h.x, h.y, '#d9c49a', ult ? 8 : 5);
+      break;
+
     default:
       ringFx(h.x, h.y, aoe || 2, col);
       burstFx(h.x, h.y, col, 8);
@@ -3185,6 +3252,18 @@ function dashFx(h, x0, y0){
       col, t:.10 + i * .035, dur:.4, r:1 });
   waveFx(x0, y0, 1.6, col, .3);            // the ground it pushed off
   burstFx(h.x, h.y, col, 7);               // and where it arrived
+}
+// The moment the chain bites: a hard flash on the body, a jerk on the line,
+// and dust kicked up along the path it is about to be dragged down. The chain
+// itself keeps being drawn for as long as the pull lasts — see drawChains.
+function hookSnapFx(h, tgt){
+  if (!fxRoom(9)) return;
+  burstFx(tgt.x, tgt.y, '#ffe6b0', 9);
+  waveFx(tgt.x, tgt.y, 1.4, '#ffe6b0', .3);
+  for (let i = 1; i <= 4; i++)
+    G.fx.push({ k:'ghost', x:lerp(tgt.x, h.x, i / 6), y:lerp(tgt.y, h.y, i / 6),
+      col:'#d9c49a', t:.12 + i * .04, dur:.34, r:.8 });
+  shake(4, tgt.x);
 }
 // Who did that to whom. A heal landed on somebody four bodies away with
 // nothing connecting the two, so the only way to know a support had done
@@ -3273,6 +3352,31 @@ function poly(c, pts, fill, stroke, lw){
 }
 function ell(c, x, y, rx, ry, fill){
   c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 6.2832); c.fillStyle = fill; c.fill();
+}
+// A length of chain between two points in the world. Drawn as discrete links
+// with a slack sag, because one straight line reads as a laser and this is
+// supposed to be iron. Purely cosmetic: nothing here touches the simulation.
+function chainLine(c, x, y, z, x2, y2, z2, col){
+  const a = lp(x, y, z), b = lp(x2, y2, z2);
+  const dx = b[0] - a[0], dy = b[1] - a[1];
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 1) return;
+  const n = clamp(Math.round(len / Math.max(4, 6 * cam.z)), 2, 30);
+  const sag = Math.min(13 * cam.z, len * .07);
+  const at = (t) => [a[0] + dx * t, a[1] + dy * t + Math.sin(t * Math.PI) * sag];
+  // the dark line the links hang on, so gaps between them never look like breaks
+  c.strokeStyle = 'rgba(28,24,20,.55)'; c.lineWidth = Math.max(1, 2.2 * cam.z); c.lineCap = 'round';
+  c.beginPath();
+  for (let i = 0; i <= n; i++){ const p = at(i / n); if (i === 0) c.moveTo(p[0], p[1]); else c.lineTo(p[0], p[1]); }
+  c.stroke();
+  // and the links themselves: short bright bars with iron between them
+  c.lineWidth = Math.max(1.4, 3.6 * cam.z);
+  for (let i = 0; i < n; i++){
+    const p = at(i / n), q = at((i + .62) / n);
+    c.strokeStyle = i % 2 ? (col || '#d9c49a') : '#8b7d66';
+    c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke();
+  }
+  c.lineCap = 'butt';
 }
 
 /* =====================================================================
@@ -3979,6 +4083,10 @@ function drawLane(c){
     }
     c.globalAlpha = 1;
   }
+  // Anything still on the end of a chain, drawn under the bodies so the links
+  // pass behind whoever is being reeled in.
+  for (const u of G.units)
+    if (u.pullT > 0 && u.pullBy && !u.pullBy.dead) chainLine(c, u.pullBy.x, u.pullBy.y, .9, u.x, u.y, .7, '#d9c49a');
   const draws = [];
   for (const s of G.sides) for (const st of s.structs) draws.push({ y:lp(st.x, st.y)[1], f:() => drawStructure(c, st) });
   for (const u of G.units){ if (!u.dead) draws.push({ y:lp(u.x, u.y)[1], f:() => drawUnit(c, u) }); }
@@ -4000,7 +4108,19 @@ function drawLane(c){
       c.lineCap = 'butt';
     }
     c.globalAlpha = 1;
-    if (p.kind === 'bolt'){
+    if (p.kind === 'hook'){
+      // a chain paid out from the thrower, with the claw on the end of it
+      if (p.src && !p.src.dead) chainLine(c, p.src.x, p.src.y, .9, p.x, p.y, p.z, p.col);
+      const nx = p.ax || 1, ny = (p.ay || 0) * .55, L = 5 * cam.z;
+      c.strokeStyle = '#8f8168'; c.lineWidth = 2.6 * cam.z; c.lineCap = 'round';
+      c.beginPath();
+      c.moveTo(q[0] + nx * L, q[1] + ny * L);
+      c.lineTo(q[0] - nx * L * .4 - ny * L * .8, q[1] - ny * L * .4 + nx * L * .8);
+      c.moveTo(q[0] + nx * L, q[1] + ny * L);
+      c.lineTo(q[0] - nx * L * .4 + ny * L * .8, q[1] - ny * L * .4 - nx * L * .8);
+      c.stroke(); c.lineCap = 'butt';
+      ell(c, q[0], q[1], 2.6 * cam.z, 2.6 * cam.z, p.col);
+    } else if (p.kind === 'bolt'){
       // a spell: a soft body around a hot core
       c.globalAlpha = .5; ell(c, q[0], q[1], 5.2 * cam.z, 5.2 * cam.z, p.col); c.globalAlpha = 1;
       ell(c, q[0], q[1], 2.4 * cam.z, 2.4 * cam.z, '#ffffff');
@@ -4167,12 +4287,18 @@ function bp(gx, gy, z){
 const bu = () => LS() * TILE / 45;
 const tileGX = (t) => (t % PLOT_W) - (PLOT_W - 1) / 2;
 const tileGY = (t) => Math.floor(t / PLOT_W) - (PLOT_H - 1) / 2;
+// Where the furniture stands. These are not free numbers: the great keep in
+// drawEnds() stands at world (-16, 0), which is hold-grid (5.8, 0), and it is
+// painted over the hold. The gold mine used to sit at (4.8, -1.6) — close
+// enough in screen space that the castle swallowed it whole and all you saw
+// was its label. Everything here is spread so that no two things share a
+// screen column, and so the town hall is well inside the outer cliff.
 const NODES = {
-  gold: { gx:4.8, gy:-1.6, n:'Gold Mine', col:'#ffcf4d' },
-  iron: { gx:5.2, gy:2.2,  n:'Iron Mine', col:'#b9c6d8' },
-  wood: { gx:0.4, gy:5.0,  n:'Woodland',  col:'#6fbf5a' },
+  gold: { gx:2.2, gy:-4.8, n:'Gold Mine', col:'#ffcf4d' },
+  iron: { gx:5.4, gy:3.4,  n:'Iron Mine', col:'#b9c6d8' },
+  wood: { gx:-1.0, gy:4.6, n:'Woodland',  col:'#6fbf5a' },
 };
-const KEEP = { gx:-3.5, gy:-2.0 };
+const KEEP = { gx:-3.0, gy:-1.2 };
 
 function drawTile(c, gx, gy, fill, stroke){
   poly(c, [bp(gx - .5, gy - .5), bp(gx + .5, gy - .5), bp(gx + .5, gy + .5), bp(gx - .5, gy + .5)], fill, stroke, 1);
@@ -4446,7 +4572,11 @@ function drawGround(c){
 
 // The mesa your hold stands on: grass on top, rock walls falling into the
 // chasm on every side you can actually see.
-const PLAT = { far:-54, near:38, back:48 };
+// `back` is how far the mesa reaches away from the bridge. It was 48, which
+// put the outer cliff at world x -79 — and the town hall at -83, hanging in
+// the air off the back of the island. The mesa reaches far enough now that
+// the hall, and the workers who wander around it, stand on solid ground.
+const PLAT = { far:-58, near:40, back:60 };
 function drawPlateau(c){
   const d = holdSide === 0 ? 1 : -1;
   const inner = holdSide === 0 ? 3 : C.LANE_LEN - 3;         // where it meets the bridge
@@ -6276,7 +6406,7 @@ function netCheckHash(tick){
    again immediately. Everything primitive is copied; the handful of values that
    are references to other bodies are stored as indices into one table and
    re-linked on the way back in. */
-const NET_REFS = { target:1, markBy:1, lastKiller:1 };
+const NET_REFS = { target:1, markBy:1, lastKiller:1, pullBy:1 };
 
 // One table of every body on the board. Heroes live in BOTH sides[].heroes and
 // G.units while they are in the lane, and they are the same object — so the
@@ -6770,6 +6900,7 @@ window.IB = {
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
+  applyPull, pullStep, wantCast, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
   netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,
