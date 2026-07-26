@@ -4626,6 +4626,117 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.netEnd();
 }
 
+/* ================================================ you can see a skill happen
+   Every skill used to look like every other skill: one ring, eight sparks and
+   the name floating up. Seventeen distinct shapes, one picture between them. */
+{
+  IB.netEnd();
+  IB.newMatch({ diff:'veteran', seed:7000 });
+  rich(P());
+  P().plot[2] = { type:'tavern', lvl:3, tile:2 };
+  IB.createHero(P(), 'mage');
+  const h = P().heroes[0];
+  IB.createHero(P(), 'fighter');
+  const foeH = E().heroes[0] || { x:h.x + 6, y:h.y + 1, r:.4, hp:100, mhp:100, side:1 };
+
+  // Every shape in the game draws something, and shapes that are different
+  // draw different things. A blanket "it made some particles" would pass on the
+  // old code, which is the thing being fixed.
+  const shapes = [...new Set(IB.SKILLS.map(x => x.k))];
+  t.ok(shapes.length >= 15, 'the game has a lot of distinct skill shapes (' + shapes.length + ')');
+
+  const seen = {};
+  for (const k of shapes){
+    const s = IB.SKILLS.find(x => x.k === k);
+    G.fx.length = 0; G.floats.length = 0;
+    h.castT = 0;
+    IB.castFx(h, s, foeH);
+    const kinds = [...new Set(G.fx.map(f => f.k))].sort().join('+');
+    seen[k] = kinds;
+    t.ok(G.fx.length > 0, "'" + k + "' draws something (" + G.fx.length + ' bits: ' + kinds + ')');
+    t.ok(h.castT > 0, "'" + k + "' pops the hero that cast it");
+  }
+  const distinct = new Set(Object.values(seen));
+  t.ok(distinct.size >= 5,
+    'and the shapes do not all look alike (' + distinct.size + ' distinct pictures across ' + shapes.length + ' shapes)');
+  // The specific reads that matter most.
+  t.ok(/beam/.test(seen.bolt), 'a bolt reaches out to its target with a beam');
+  t.ok(/arc/.test(seen.strike), 'a strike sweeps an arc');
+  t.ok(/wave/.test(seen.nova), 'a nova goes off as an expanding wave');
+  t.ok(/mote/.test(seen.heal), 'a heal rises off the target as motes');
+  t.ok(/beam/.test(seen.volley), 'a volley comes down out of the sky');
+
+  // An ultimate has to be obviously an ultimate without reading anything.
+  {
+    const ord = IB.SKILLS.find(x => !x.ult && x.k === 'nova');
+    const ult = IB.SKILLS.find(x => x.ult && x.k === 'nova') || IB.SKILLS.find(x => x.ult);
+    G.fx.length = 0; IB.castFx(h, ord, foeH);
+    const nOrd = G.fx.length, popOrd = h.castT;
+    G.fx.length = 0; IB.castFx(h, ult, foeH);
+    t.ok(G.fx.length > nOrd, 'an ultimate throws more on screen than an ordinary cast (' + nOrd + ' -> ' + G.fx.length + ')');
+    t.ok(h.castT > popOrd, 'and holds the pop on the caster longer');
+    t.ok(G.fx.some(f => f.col === '#ffe08a'), 'with a gold flourish that ordinary casts do not get');
+  }
+
+  // The cap. A hero spamming skills in a twenty-body brawl must not be able to
+  // bury the frame.
+  {
+    G.fx.length = 0;
+    for (let i = 0; i < 200; i++) IB.castFx(h, IB.SKILLS.find(x => x.k === 'nova'), foeH);
+    t.ok(G.fx.length <= IB.FX_CAP, 'two hundred casts still fit under the cap (' + G.fx.length + '/' + IB.FX_CAP + ')');
+  }
+
+  // NONE of it may touch the simulation's random stream. This is the rule that
+  // the whole determinism effort rests on, and new effects are exactly how it
+  // would get broken.
+  {
+    G.fx.length = 0;
+    const before = IB.seedNow();
+    for (const k of shapes) IB.castFx(h, IB.SKILLS.find(x => x.k === k), foeH);
+    IB.beamFx(0, 0, 5, 5, '#ffffff', 3, .2);
+    IB.arcFx(1, 1, .5, 2, '#ffffff');
+    IB.waveFx(2, 2, 3, '#ffffff', .4);
+    IB.moteFx(3, 3, '#7fdc8a', 12, 1);
+    t.ok(IB.seedNow() === before, 'not one of the new effects advances the simulation’s random stream');
+  }
+
+  // And every one of them has to survive the renderer. The stub context here
+  // rejects a bad colour string the way a real canvas does, so this is where a
+  // typo in an rgba() would be caught rather than on the page.
+  {
+    G.fx.length = 0;
+    for (const k of shapes) IB.castFx(h, IB.SKILLS.find(x => x.k === k), foeH);
+    IB.moteFx(h.x, h.y, '#7fdc8a', 6, 1);
+    const n = G.fx.length;
+    IB.draw();
+    t.ok(true, 'a frame with every cast shape on it at once draws clean (' + n + ' effects)');
+    // ...and again part-way through their life, since the renderer reads age.
+    IB.fxStep(.12); IB.draw();
+    IB.fxStep(.12); IB.draw();
+    t.ok(true, 'and again as they age');
+    // the pop on the caster is drawn too
+    h.castT = .3; IB.draw();
+    h.castT = .02; IB.draw();
+    t.ok(true, 'including the pop on the hero that cast');
+  }
+
+  // The pop fades on its own rather than sticking.
+  {
+    h.castT = .3;
+    for (let i = 0; i < 20; i++) IB.fxStep(1 / 30);
+    t.ok(h.castT <= 0, 'the cast pop fades out (' + h.castT.toFixed(3) + ')');
+  }
+
+  // Motes rise; sparks fall. That difference is the whole reason mote exists.
+  {
+    G.fx.length = 0;
+    IB.moteFx(0, 0, '#7fdc8a', 4, .5);
+    const z0 = G.fx.map(f => f.z);
+    IB.fxStep(.1);
+    t.ok(G.fx.every((f, i) => f.z > z0[i]), 'motes rise');
+  }
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 

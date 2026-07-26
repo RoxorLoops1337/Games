@@ -2519,7 +2519,7 @@ function castSkill(h, sk, tgt){
   const pw = skPower(h, s, r);
   const dur = s.dur || 0;
   h.swing = .3;
-  if (!HEADLESS){ castFx(h, s); sfx('cast', h.x); }
+  if (!HEADLESS){ castFx(h, s, tgt); sfx('cast', h.x); }
   switch (s.k){
     case 'strike': {
       if (!tgt) break;
@@ -3000,13 +3000,135 @@ function castCol(s){ return s.magic ? '#b98bff' : (CAST_COL[s.tag] || '#ffa96a')
 
 // You choose these skills, so you should be able to see them happen: the name
 // of the ability rises off the hero that cast it, in the colour of its type.
-function castFx(h, s){
+/* ---------------------------------------------------------------- cast shapes
+   Every skill in the game used to look like every other skill: one ring, eight
+   sparks and the name floating up. There are SEVENTEEN distinct shapes of skill
+   and you could not tell any of them apart on the board — the only way to know
+   what a hero had just done was to read the word.
+
+   Each shape has a picture now. All of it is drawing and nothing else: it is
+   skipped whole under HEADLESS, it draws from the effects stream and never the
+   simulation's, and how much of it gets made depends on how busy the frame is —
+   which is precisely why it must not share a generator with the game. */
+const FX_CAP = 300;
+// Capacity only, deliberately not gated on HEADLESS: castFx is already only
+// reached from a real page, and leaving these callable under the harness is
+// what lets the suite drive every cast shape through the strict canvas — which
+// is where a bad colour string or a bad context call actually gets caught.
+const fxRoom = (n) => G.fx.length + n < FX_CAP;
+
+function beamFx(x, y, x2, y2, col, w, life){
+  if (!fxRoom(1)) return;
+  G.fx.push({ k:'beam', x, y, x2, y2, col, w:w || 3, t:life || .22, dur:life || .22 });
+}
+function arcFx(x, y, ang, r, col){
+  if (!fxRoom(1)) return;
+  G.fx.push({ k:'arc', x, y, a:ang, r, col, t:.26, dur:.26 });
+}
+function waveFx(x, y, r, col, life, follow){
+  if (!fxRoom(1)) return;
+  G.fx.push({ k:'wave', x, y, r, col, t:life || .45, dur:life || .45, follow:follow || null });
+}
+function moteFx(x, y, col, n, spread){
+  if (!fxRoom(n)) return;
+  const sp = spread || .8;
+  for (let i = 0; i < n; i++)
+    G.fx.push({ k:'mote', x:x + fxRr(-sp, sp), y:y + fxRr(-sp * .6, sp * .6), z:fxRr(0, .5),
+      vx:fxRr(-.25, .25), vz:fxRr(1.7, 3.4), col, r:fxRr(.7, 1.6), t:fxRr(.5, .85), dur:.85 });
+}
+
+// The gold second wave and the shake are what mark an ultimate apart from an
+// ordinary cast at a glance, without anyone having to read anything.
+function ultFlourish(h, r){
+  waveFx(h.x, h.y, r * 1.5, '#ffe08a', .62);
+  moteFx(h.x, h.y, '#ffe9a8', 8, 1.2);
+  shake(1.6, h.x);
+}
+
+function castFx(h, s, tgt){
   const col = castCol(s);
-  ringFx(h.x, h.y, s.aoe || 2, col);
-  burstFx(h.x, h.y, col, 8);
+  const ult = !!s.ult;
+  const aoe = s.aoe || 0;
+  const tx = tgt ? tgt.x : h.x, ty = tgt ? tgt.y : h.y;
+  const ang = Math.atan2(ty - h.y, tx - h.x);
+  const big = ult ? 1.6 : 1;
+  h.castT = ult ? .5 : .32;                      // the caster itself pops
+  h.castCol = ult ? '#ffe08a' : col;
+
+  switch (s.k){
+    // it goes off around the caster
+    case 'nova': case 'taunt':
+      waveFx(h.x, h.y, Math.max(2.2, aoe) * big, col, .5);
+      burstFx(h.x, h.y, col, ult ? 16 : 10);
+      break;
+
+    // it reaches out and hits one thing
+    case 'bolt': case 'mark': case 'chain':
+      beamFx(h.x, h.y, tx, ty, col, ult ? 5 : 3, .2);
+      burstFx(tx, ty, col, ult ? 13 : 7);
+      if (aoe) waveFx(tx, ty, aoe, col, .4);
+      break;
+
+    // it swings
+    case 'strike':
+      arcFx(tx, ty, ang, Math.max(1.6, aoe || 1.8) * big, col);
+      burstFx(tx, ty, col, ult ? 14 : 8);
+      if (aoe) waveFx(tx, ty, aoe, col, .38);
+      break;
+
+    // it comes down out of the sky
+    case 'volley': case 'storm': {
+      const r = Math.max(2, aoe);
+      waveFx(tx, ty, r, col, .55, s.k === 'storm' ? h : null);
+      for (let i = 0; i < (ult ? 7 : 5); i++){
+        const ox = fxRr(-r, r), oy = fxRr(-r * .6, r * .6);
+        beamFx(tx + ox, ty + oy - 7, tx + ox, ty + oy, col, 2, fxRr(.16, .3));
+      }
+      break;
+    }
+
+    // it lingers on the ground
+    case 'dot': {
+      const r = Math.max(1.6, aoe || 2);
+      waveFx(tx, ty, r, col, .6);
+      moteFx(tx, ty, col, ult ? 10 : 6, r * .8);
+      break;
+    }
+
+    // it puts something back
+    case 'heal': case 'teamheal': case 'regen':
+      moteFx(tx, ty, '#7fdc8a', ult ? 14 : 9, 1);
+      ringFx(tx, ty, Math.max(1.6, aoe || 1.8), '#7fdc8a');
+      break;
+
+    // it wraps somebody up
+    case 'buff': case 'teambuff': case 'shield':
+      waveFx(h.x, h.y, Math.max(2, aoe || 2.4), col, .42);
+      moteFx(h.x, h.y, col, ult ? 12 : 7, .9);
+      break;
+
+    // it arrives
+    case 'summon':
+      waveFx(h.x, h.y, 2.4 * big, col, .5);
+      moteFx(h.x, h.y, col, ult ? 14 : 9, 1.1);
+      burstFx(h.x, h.y, col, 8);
+      break;
+
+    // it moves the hero — dashFx already draws the trail, this is the kick-off
+    case 'dash':
+      burstFx(h.x, h.y, col, 9);
+      waveFx(h.x, h.y, 1.8, col, .3);
+      break;
+
+    default:
+      ringFx(h.x, h.y, aoe || 2, col);
+      burstFx(h.x, h.y, col, 8);
+  }
+
+  if (ult) ultFlourish(h, Math.max(2.2, aoe || 2.4));
   if (G.floats.length < 80)
     G.floats.push({ x:h.x + fxRr(-.8, .8), y:h.y + fxRr(-.3, .3), txt:s.n.toUpperCase(), col,
-      t:1.4, dur:1.4, sc:1, vy:-.55, cast:true, ult:!!s.ult });
+      t:1.4, dur:1.4, sc:1, vy:-.55, cast:true, ult });
 }
 // A blur of where the hero came from, so a dash reads as movement.
 function dashFx(h, x0, y0){
@@ -3025,8 +3147,16 @@ function fxStep(dt){
   for (let i = G.fx.length - 1; i >= 0; i--){
     const p = G.fx[i]; p.t -= dt;
     if (p.k === 'p'){ p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt; p.vz -= 12 * dt; if (p.z < 0){ p.z = 0; p.vz *= -.35; } }
+    // A mote rises and drifts instead of falling — the difference between magic
+    // leaving a body and debris coming off one.
+    else if (p.k === 'mote'){ p.z += p.vz * dt; p.x += p.vx * dt; p.vz *= (1 - .8 * dt); }
+    // A wave sits still and grows; the renderer reads its age for the radius.
+    else if (p.k === 'wave' && p.follow){ p.x = p.follow.x; p.y = p.follow.y; }
     if (p.t <= 0) G.fx.splice(i, 1);
   }
+  // The pop on whoever just cast. Purely a picture — nothing reads it back, and
+  // it is never hashed, so it cannot take the two machines out of step.
+  for (const s of G.sides) for (const h of s.heroes) if (h.castT > 0) h.castT -= dt;
   for (let i = G.floats.length - 1; i >= 0; i--){
     const f = G.floats[i]; f.t -= dt; f.y += f.vy * dt;
     if (f.t <= 0) G.floats.splice(i, 1);
@@ -3611,7 +3741,19 @@ function drawUnit(c, u){
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
   ell(c, p[0], p[1] + 1, (u.kind === 'cannon' ? 9 : 7) * sc, 3.4 * sc, 'rgba(0,0,0,.32)');
   const bob = Math.sin(G.t * 7 + u.ph) * (u.target && hyp(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
-  const bx = p[0], by = p[1] - 2 * sc + bob;
+  // Whoever just cast lifts off the ground for a third of a second over a
+  // brightening pool of their skill's colour. Without it the effects all happen
+  // somewhere ELSE — at the target, in the air, on the ground — and the hero
+  // that did the thing is the one part of it you cannot see.
+  let cast = 0;
+  if (u.castT > 0){
+    cast = clamp(u.castT / .32, 0, 1);
+    const gr = (7 + cast * 9) * sc;
+    c.globalAlpha = cast * .55;
+    ell(c, p[0], p[1] + 1, gr, gr * .45, u.castCol || '#ffe08a');
+    c.globalAlpha = 1;
+  }
+  const bx = p[0], by = p[1] - 2 * sc + bob - cast * 3.2 * sc;
   if (u.kind === 'cannon'){ drawCannon(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   if (u.kind === 'super'){ drawOgre(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   // legs + body
@@ -3740,6 +3882,34 @@ function drawLane(c){
       const q = lp(p.x, p.y, .8), q2 = lp(p.x2, p.y2, .8);
       c.globalAlpha = a; c.strokeStyle = p.col; c.lineWidth = 2.4 * cam.z;
       c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+    } else if (p.k === 'beam'){
+      // A thrown bolt or a falling shaft: a bright core with a soft body, so it
+      // reads at a glance without washing out what is behind it.
+      const q = lp(p.x, p.y, .9), q2 = lp(p.x2, p.y2, .9);
+      c.lineCap = 'round';
+      c.globalAlpha = a * .35; c.strokeStyle = p.col; c.lineWidth = p.w * 2.2 * cam.z;
+      c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+      c.globalAlpha = a; c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(1, p.w * .7) * cam.z;
+      c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+      c.lineCap = 'butt';
+    } else if (p.k === 'arc'){
+      // A swept slash through the target, opening out as it fades.
+      const q = lp(p.x, p.y, .7);
+      const rx = p.r * LS() * (.7 + (1 - a) * .8), ry = rx * .55;
+      c.globalAlpha = a * .9; c.strokeStyle = p.col; c.lineWidth = Math.max(1.5, 3.4 * cam.z);
+      c.lineCap = 'round';
+      c.beginPath(); c.ellipse(q[0], q[1], rx, ry, p.a, -1.15, 1.15); c.stroke();
+      c.lineCap = 'butt';
+    } else if (p.k === 'wave'){
+      // Grows outward and thins as it goes, unlike `ring` which barely moves.
+      const q = lp(p.x, p.y);
+      const g = 1 + (1 - a) * 1.35;
+      c.globalAlpha = a * .75; c.strokeStyle = p.col;
+      c.lineWidth = Math.max(1, (1 + a * 3) * cam.z);
+      c.beginPath(); c.ellipse(q[0], q[1], p.r * LS() * g, p.r * LS() * .5 * g, 0, 0, 6.2832); c.stroke();
+    } else if (p.k === 'mote'){
+      const q = lp(p.x, p.y, p.z);
+      c.globalAlpha = a * .9; ell(c, q[0], q[1], p.r * cam.z, p.r * cam.z, p.col);
     }
     c.globalAlpha = 1;
   }
@@ -6089,6 +6259,7 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
+  beamFx, arcFx, waveFx, moteFx, ultFlourish, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   get BSC(){ return BSC; }, set BSC(v){ BSC = v; },
   get holdSide(){ return holdSide; }, set holdSide(v){ holdSide = v; },
   get acc(){ return acc; }, set acc(v){ acc = v; },
