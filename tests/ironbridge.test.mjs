@@ -516,6 +516,162 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(G.units.filter(u => u.kind === 'shade').every(u => u.life > 0), 'summons are on a timer');
 }
 
+/* ------------------------------------------ what a hero brings back from the dead */
+{
+  // The other half of the same mistake. A hero's timed state does not decay
+  // while it is dead — statusTick runs from the living branch of heroStep, and
+  // that branch returns after counting respawnT down — so whatever was on the
+  // hero when it died was frozen, not spent, and started ticking again the
+  // moment it walked back out of its own gate. Clearing h.buffs made that look
+  // handled; these are bare fields and were missed. Every duration below is
+  // 60s, longer than any respawn, so a build that merely ticked the timers
+  // while dead would still fail: only actually clearing them passes.
+  IB.newMatch({ diff:'veteran', seed:4242 });
+  const h = IB.makeHero(0, 'fighter', 'Frostbit'); h.pend.length = 0;
+  P().heroes.push(h); IB.enterLane(h);
+  const foe = IB.makeHero(1, 'mage', 'Emberhand'); foe.pend.length = 0;
+  E().heroes.push(foe); IB.enterLane(foe); foe.x = h.x + 2;
+  h.stunT = 60; h.slowT = 60; h.slowP = .45; h.taunt = 60;
+  h.markT = 60; h.markBy = 1; h.markAmp = .35;
+  h.burn = { dps:40, t:60, src:foe };
+  h.shield = 300; h.shT = 60; h.target = foe;
+  IB.dealDmg(foe, h, 999999, { pure:true });
+  t.ok(h.dead && h.respawnT > 0, 'the crowd-controlled hero goes down');
+  h.respawnT = .05;
+  step(.2);
+  t.ok(!h.dead && h.inLane, 'and comes back');
+  const stuck = ['stunT', 'slowT', 'slowP', 'taunt', 'markT', 'markAmp', 'shT']
+    .filter(k => (h[k] || 0) > 0);
+  t.ok(stuck.length === 0, 'carrying none of the crowd control that killed it (' +
+    (stuck.map(k => k + '=' + (+h[k]).toFixed(2)).join(' ') || 'clean') + ')');
+  t.ok(!h.burn, 'and no fire still owed on a body that just came back at full health');
+  t.ok(!h.target || (!h.target.dead && G.units.includes(h.target)),
+    'and no reference left to the body it was fighting when it died');
+  // the symptom a player would see, asserted as behaviour rather than as fields.
+  // Send the killer home first: a hero with an enemy hero standing next to it
+  // is supposed to stop and fight, and that would look exactly like a stun.
+  foe.x = IB.gateX(1); foe.y = 0; IB.rebuildGrid();
+  const x0 = h.x, hp0 = h.hp;
+  step(1);
+  t.ok(Math.abs(h.x - x0) > .4, 'it marches out instead of standing frozen at its own gate (moved ' +
+    Math.abs(h.x - x0).toFixed(2) + ')');
+  t.ok(h.hp >= hp0 - .001, 'and is not burned down by the fire that killed it (' +
+    Math.round(hp0) + ' -> ' + Math.round(h.hp) + ')');
+}
+
+/* ------------------------------------------------- armour a skill says it gives */
+{
+  // Armour and resist from a skill are read per hit by effArmor, the same way
+  // attackDamage reads 'bad' and attackSpeedOf reads 'bas'. They used to be
+  // baked into h.armor by recalcHero, which runs on a level-up, on a pick, and
+  // on a self-buff cast — and on nothing else. Three things were wrong at once:
+  // a skill cast through the 'shield' or 'teambuff' branch never recalculated,
+  // so Fortify's +18 and Unbreakable's +40/+40 and Iron March's +35 printed a
+  // number on the pick card and granted nothing; the one branch that did
+  // recalculate never recalculated again on expiry, so Crossbrace's five-second
+  // +26/+26 was permanent; and Cold Forged, which reads 'while below half
+  // health', was a snapshot taken whenever the last recalc happened.
+  IB.newMatch({ diff:'veteran', seed:7714 });
+  const mk = (cls, lvl) => {
+    const h = IB.makeHero(0, cls, 'Plate');
+    h.pend.length = 0; h.lvl = lvl || 12; IB.recalcHero(h, true);
+    return h;
+  };
+  const arm = (h) => IB.effArmor(h, false), res = (h) => IB.effArmor(h, true);
+
+  // every skill in the game that promises armour or resist, by whichever branch
+  // it happens to be cast through
+  const promises = IB.SKILLS.filter(s => s.barm || s.bmr);
+  t.ok(promises.length >= 4, 'several skills promise armour (' + promises.map(s => s.n).join(', ') + ')');
+  t.ok(new Set(promises.map(s => s.k)).size >= 3,
+    'and they are cast through more than one branch (' + [...new Set(promises.map(s => s.k))].join(', ') + ')');
+  const short = [];
+  for (const d of promises){
+    const h = mk(d.cls === 'any' ? 'tank' : d.cls, 12);
+    // a team buff walks the side's hero list, so the caster has to be on it —
+    // otherwise this loop would report a real skill as broken
+    G.sides[0].heroes.length = 0; G.sides[0].heroes.push(h);
+    IB.enterLane(h); h.x = 60; h.y = 0; IB.rebuildGrid();
+    const a0 = arm(h), r0 = res(h);
+    IB.castSkill(h, { id:d.id, rank:1, cdT:0, ult:!!d.ult }, h);
+    const ga = arm(h) - a0, gr = res(h) - r0;
+    if (ga < (d.barm || 0) - .01 || gr < (d.bmr || 0) - .01)
+      short.push(d.n + ' (' + d.k + ') promised ' + (d.barm || 0) + '/' + (d.bmr || 0) +
+        ', gave ' + ga.toFixed(0) + '/' + gr.toFixed(0));
+    G.units.length = 0;
+  }
+  t.ok(short.length === 0, 'a skill grants the armour its own card prints (' +
+    (short.join('; ') || 'all ' + promises.length + ' of them') + ')');
+
+  // and the ally-targeted one reaches the ally, not just the caster
+  {
+    const h = mk('tank', 12); IB.enterLane(h); h.x = 60; h.y = 0;
+    const mate = mk('marksman', 8); IB.enterLane(mate); mate.x = 61; mate.y = 0;
+    G.sides[0].heroes.push(h, mate); IB.rebuildGrid();
+    const before = arm(mate);
+    IB.castSkill(h, { id:'ironmarch', rank:1, cdT:0, ult:true }, h);
+    t.ok(arm(mate) > before, 'Iron March armours the ally it marches with (' +
+      before.toFixed(0) + ' -> ' + arm(mate).toFixed(0) + ')');
+    G.units.length = 0; G.sides[0].heroes.length = 0;
+  }
+
+  // it has to come back off, at max level, where nothing recalculates
+  {
+    const h = mk('tank', IB.C.MAX_LEVEL); IB.enterLane(h); h.x = 60;
+    G.sides[0].heroes.push(h);
+    const base = arm(h), baseR = res(h), baseRng = h.rng;
+    IB.castSkill(h, { id:'crossbrace', rank:3, cdT:0 }, h);
+    t.ok(arm(h) > base + 10, 'Crossbrace goes on (' + base.toFixed(0) + ' -> ' + arm(h).toFixed(0) + ')');
+    const dur = IB.SKILL.crossbrace.dur || 5;
+    step(dur + 2);
+    t.ok(Math.abs(arm(h) - base) < .01 && Math.abs(res(h) - baseR) < .01,
+      'and comes back off when it runs out (' + arm(h).toFixed(0) + '/' + res(h).toFixed(0) +
+      ' against ' + base.toFixed(0) + '/' + baseR.toFixed(0) + ')');
+    // range is still a stored stat, so it needs the rebuild rather than a live read
+    const mm = mk('marksman', IB.C.MAX_LEVEL); IB.enterLane(mm); mm.x = 58;
+    G.sides[0].heroes.push(mm);
+    const r0 = mm.rng;
+    IB.castSkill(mm, { id:'trueshot', rank:1, cdT:0, ult:true }, mm);
+    t.ok(mm.rng > r0, 'Trueshot lengthens the shot (' + r0.toFixed(1) + ' -> ' + mm.rng.toFixed(1) + ')');
+    step((IB.SKILL.trueshot.dur || 10) + 2);
+    t.ok(Math.abs(mm.rng - r0) < .01, 'and it goes back to normal (' + mm.rng.toFixed(1) + ')');
+    t.ok(Math.abs(baseRng - baseRng) < 1, 'and the tank is untouched by the marksman');
+    G.units.length = 0; G.sides[0].heroes.length = 0;
+  }
+
+  // "+18 armour while below half health" has to mean while, not once
+  {
+    const cold = IB.PASS.coldforged;
+    t.ok(cold && cold.m.armorLow > 0, 'Cold Forged still promises armour at low health');
+    const h = mk('tank', 12); h.passive = 'coldforged'; IB.recalcHero(h, true);
+    const full = arm(h);
+    h.hp = h.mhp * .2;
+    t.ok(arm(h) - full > cold.m.armorLow - .01,
+      'it is on while the hero is below half health (' + full.toFixed(0) + ' -> ' + arm(h).toFixed(0) + ')');
+    // a level-up here used to freeze the low-health value in permanently
+    IB.recalcHero(h);
+    h.hp = h.mhp;
+    t.ok(Math.abs(arm(h) - full) < .01,
+      'and off again once the hero is healed, even after a recalculation (' + arm(h).toFixed(0) + ')');
+  }
+
+  // the number on the hero card is the number the fight uses
+  {
+    const h = mk('tank', 12); IB.enterLane(h); h.x = 60;
+    G.sides[0].heroes.push(h);
+    IB.castSkill(h, { id:'fortify', rank:2, cdT:0 }, h);
+    t.ok(Math.round(arm(h)) !== Math.round(h.armor),
+      'the stored stat and the fighting stat genuinely differ under a buff (' +
+      Math.round(h.armor) + ' stored, ' + Math.round(arm(h)) + ' used)');
+    IB.showHeroSheet(h);
+    const shown = /Armour<b>(\d+)</.exec(G.sheet || '');
+    t.ok(shown && +shown[1] === Math.round(arm(h)),
+      'and the hero card prints the one the fight uses (' + (shown ? shown[1] : 'no armour line') +
+      ', fighting with ' + Math.round(arm(h)) + ')');
+    G.units.length = 0; G.sides[0].heroes.length = 0;
+  }
+}
+
 /* ---------------------------------------------------------------- the Host */
 {
   IB.newMatch({ diff:'veteran', seed:61 });
