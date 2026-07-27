@@ -6744,6 +6744,146 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(over === 0, 'and none of them lands on the name under it (' + over + ')');
     G.units.length = 0;
   }
+  // The narrator — the strip top-left, where this game says "Ember Host loses
+  // The Gates." Walked across every message it can print, driven by the real
+  // events rather than by calling fxToast by hand, it gave all ten of them the
+  // same 2.2 seconds and the same box: the match ending read exactly like
+  // "Report copied." The control three thousand lines up is the damage number,
+  // which takes four distinct sizes across five blows.
+  //
+  // Three more things the walk turned up. The same line said three times made
+  // three boxes and filled the whole strip, so repeated housekeeping could push
+  // the gates falling off the board. newMatch() cleared G.log and left the DOM
+  // alone, so a fresh match opened still reading the last one's obituary. And
+  // the dwell was counted by setTimeout — wall time — so a line said and then
+  // paused for 2.4 seconds was gone before the player unpaused.
+  {
+    IB.newMatch({ diff:'veteran', seed:4400 });
+    // G.toasts was in the state object from the beginning and nothing had ever
+    // read or written it. Everything below is only testable because it does now.
+    t.ok(Array.isArray(G.toasts) && G.toasts.length === 0, 'the strip starts empty');
+
+    // ---- the table, each row driven by the event that says it
+    const said = () => G.toasts[G.toasts.length - 1];
+    const rows = [];
+    const after = (label, fn) => {
+      IB.newMatch({ diff:'veteran', seed:4400 });
+      IB.clearToasts();
+      fn();
+      const x = said();
+      rows.push({ label, msg:x ? x.msg : '(nothing)', w:x ? x.w : 0, life:x ? +x.dur.toFixed(2) : 0 });
+    };
+    const drop = (key) => {
+      const list = G.sides[1].structs;
+      const st = list.find(x => x.key === key);
+      for (const o of list) if (o.ord < st.ord){ o.dead = true; o.hp = 0; }
+      const killer = IB.spawnUnit(0, 'melee', { x:st.x - 1, y:0, paid:true });
+      IB.rebuildGrid();
+      IB.clearToasts();
+      IB.dealDmg(killer, st, st.mhp * 4, { pure:true });
+      return st;
+    };
+    after('the gates',  () => drop('gate'));
+    after('inhibitor',  () => drop('inhib'));
+    after('a turret',   () => drop('t1'));
+    after('hero down',  () => {
+      const s1 = G.sides[1];
+      if (!s1.heroes.length){ const nh = IB.makeHero(1, Object.keys(IB.CLS)[0]); s1.heroes.push(nh); IB.enterLane(nh); }
+      const h = s1.heroes[0];
+      const killer = IB.spawnUnit(0, 'melee', { x:h.x - 1, y:h.y, paid:true });
+      IB.rebuildGrid(); IB.clearToasts();
+      IB.dealDmg(killer, h, h.mhp * 4, { pure:true });
+    });
+    after('a wave',     () => { G.wave = 9; IB.spawnWave(); });
+    after('housekeeping', () => IB.fxToast('Not enough gold.', 'bad', IB.TOAST_W.ui));
+    t.ok(rows.every(r => r.msg !== '(nothing)'),
+      'every one of those events actually said something (' + rows.filter(r => r.msg === '(nothing)').length + ' silent)');
+    t.ok(new Set(rows.map(r => r.life)).size >= rows.length - 1,
+      'the narrator gives them different amounts of time (' + new Set(rows.map(r => r.life)).size + ' of ' + rows.length + ')');
+    const gates = rows[0], keep = rows[rows.length - 1];
+    t.ok(gates.life > keep.life * 2,
+      'the match turning over lasts more than twice as long as housekeeping (' +
+      gates.life + 's vs ' + keep.life + 's)');
+    t.ok(rows[0].life > rows[1].life && rows[1].life > rows[2].life,
+      'and a fall is worth more the deeper into the line it is (' +
+      rows.slice(0, 3).map(r => r.life).join('s → ') + 's)');
+
+    // The SAME ladder that sizes the sparks and the camera kick, not a second
+    // one that could drift from it. Order, not arithmetic — recomputing
+    // toastFallW here would only assert my own sum.
+    {
+      IB.newMatch({ diff:'veteran', seed:4400 });
+      const line = G.sides[1].structs.slice().sort((a, b) => a.ord - b.ord);
+      let disagree = 0;
+      for (let i = 1; i < line.length; i++){
+        const a = line[i - 1], b = line[i];
+        if ((IB.toastFallW(b) > IB.toastFallW(a)) !== (IB.fallSparks(b) > IB.fallSparks(a))) disagree++;
+      }
+      t.ok(disagree === 0,
+        'the sentence and the bang agree about which fall mattered (' + disagree + ' that did not)');
+    }
+
+    // ---- said twice is one line, not two
+    IB.newMatch({ diff:'veteran', seed:4400 });
+    IB.clearToasts();
+    for (let i = 0; i < 3; i++) IB.fxToast('Not enough gold.', 'bad', IB.TOAST_W.ui);
+    t.ok(G.toasts.length === 1, 'the same thing said three times is one line (' + G.toasts.length + ')');
+    t.ok(G.toasts[0].n === 3, 'that counts (×' + G.toasts[0].n + ')');
+
+    // ---- over the cap the LIGHTEST goes, not the oldest
+    IB.clearToasts();
+    IB.fxToast('Ember Host loses The Gates.', 'bad', 1);
+    for (const k of ['gold', 'iron', 'wood', 'food'])
+      IB.fxToast('Not enough ' + k + '.', 'bad', IB.TOAST_W.ui);
+    t.ok(G.toasts.length === IB.TOAST.cap, 'the strip stays at its cap (' + G.toasts.length + ')');
+    t.ok(G.toasts.some(x => /The Gates/.test(x.msg)),
+      'and four refused purchases do not push the gates falling off the board');
+    t.ok(G.toasts[0].msg === 'Ember Host loses The Gates.',
+      'the heavy line is still the one at the top (' + G.toasts[0].msg + ')');
+
+    // ---- the match clock, not the wall clock
+    G.state = 'play'; G.paused = false; G.held = false; G.speed = 1;
+    t.ok(IB.toastRate() === 1, 'a running match spends one second per second');
+    G.speed = 2;
+    t.ok(IB.toastRate() === 2, 'at 2× the strip keeps up with the fight (' + IB.toastRate() + ')');
+    G.speed = 1; G.paused = true;
+    t.ok(IB.toastRate() === 0, 'and stops dead while the game is paused');
+    G.paused = false; G.held = true;
+    t.ok(IB.toastRate() === 0, 'and while a sheet is open over the board');
+    G.held = false; G.state = 'menu';
+    t.ok(IB.toastRate() === 1, 'off the board there is no match clock, so it falls back to real time');
+    G.state = 'play';
+
+    // ---- and it really retires them, on that clock
+    IB.clearToasts();
+    IB.fxToast('Ember Host loses The Gates.', 'bad', 1);
+    IB.fxToast('Not enough gold.', 'bad', IB.TOAST_W.ui);
+    const lightLife = G.toasts.find(x => /gold/.test(x.msg)).dur;
+    for (let i = 0; i < Math.round((lightLife + .1) * 30); i++) IB.toastStep(1 / 30);
+    t.ok(G.toasts.length === 1 && /The Gates/.test(G.toasts[0].msg),
+      'the housekeeping line goes first and the heavy one stays (' + G.toasts.length + ' left)');
+    for (let i = 0; i < 30 * 8; i++) IB.toastStep(1 / 30);
+    t.ok(G.toasts.length === 0, 'and everything clears in the end (' + G.toasts.length + ')');
+
+    // ---- a new match is not still reading the last one's obituary
+    IB.fxToast('Ember Host loses The Gates.', 'bad', 1);
+    IB.fxToast('Kass has fallen.', 'bad', IB.TOAST_W.hero);
+    t.ok(G.toasts.length === 2, 'two lines from the old match (' + G.toasts.length + ')');
+    IB.newMatch({ diff:'veteran', seed:4401 });
+    t.ok(G.toasts.length === 0, 'and none of them survive newMatch (' + G.toasts.length + ')');
+    t.ok(G.log.length === 0, 'the log behind it was always cleared; now the strip is too');
+
+    // ---- cosmetic, and provably so. It is written from seat-local branches —
+    // a level-up says something only for MY hero — so it must never reach the
+    // lockstep hash or a snapshot.
+    const h0 = IB.netHash();
+    IB.fxToast('Kass has fallen.', 'bad', IB.TOAST_W.hero);
+    t.ok(IB.netHash() === h0, 'the narrator is outside the lockstep hash');
+    t.ok(!JSON.stringify(IB.netSnap()).includes('Kass has fallen'),
+      'and outside the snapshot a rejoining player is caught up with');
+    IB.clearToasts();
+    G.units.length = 0;
+  }
   // The wart swing0 fixed, in two more places. An ultimate's pop was given .5
   // seconds and divided by the basic's .32, so it sat pinned at full for the
   // first .18 and only then began to fade — a different SHAPE from the basic
