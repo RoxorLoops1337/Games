@@ -3089,6 +3089,56 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'a hold with every job manned draws from either seat, at every zoom');
 }
 {
+  // The inhibitor — the thing that, when it breaks, lets the other side's
+  // ogres through. It was a flat diamond sitting dead still on a plain grey
+  // box, next to a gate with masonry, timber and a pennant.
+  IB.newMatch({ diff:'veteran', seed:143 });
+  let minSplit = 1e9, maxSplit = -1e9, minLift = 1e9, maxLift = -1e9;
+  let outside = 0, offPlinth = 0, badGlint = 0, badAura = 0;
+  for (let i = 0; i < 400; i++){
+    const S = IB.shardAt(i * .11);
+    if (Math.abs(S.split) >= IB.SHARD.w) outside++;
+    if (S.lift < 0 || S.lift > IB.SHARD.rise + 1e-9) offPlinth++;
+    if (!(S.glint >= 0 && S.glint < 1)) badGlint++;
+    if (!(S.aura > 0 && S.aura < 1)) badAura++;
+    minSplit = Math.min(minSplit, S.split); maxSplit = Math.max(maxSplit, S.split);
+    minLift = Math.min(minLift, S.lift); maxLift = Math.max(maxLift, S.lift);
+  }
+  // A facet split that wanders outside the outline turns the shard back into
+  // the flat diamond it used to be — and only at the moment it happens, so a
+  // screenshot taken a tenth of a second either side looks perfect.
+  t.ok(outside === 0, 'the lit facet never leaves the shard (' + outside + ' frames)');
+  // A lift out of range either sinks it into its own plinth or leaves it in
+  // the sky, and the shadow under it is sized from the same number.
+  t.ok(offPlinth === 0, 'it always hovers within reach of its plinth (' + offPlinth + ')');
+  t.ok(badGlint === 0 && badAura === 0, 'the glint stays a phase and the aura an alpha');
+  // ...and it has to actually move, or all of the above is satisfied by a
+  // constant and the shard is still standing dead still.
+  t.ok(minSplit < -IB.SHARD.w * .5 && maxSplit > IB.SHARD.w * .5, 'the shard turns both ways');
+  t.ok(maxLift - minLift > IB.SHARD.rise * .9, 'and rises and falls the whole way');
+  t.ok(IB.SHARD.top > IB.SHARD.bot, 'the shard is taller than it is nothing');
+
+  // Every structure, alive and broken, on both sides, across a full cycle of
+  // the shard's clock — the shadow under it shrinks as it lifts, and the stub
+  // canvas throws on a negative radius.
+  IB.cam.follow = false;
+  for (const side of [0, 1]){
+    for (const st of G.sides[side].structs){
+      IB.cam.x = st.x;
+      for (const dead of [false, true]){
+        st.dead = dead;
+        for (const z of [.45, 1, 2.2]){
+          IB.cam.z = IB.cam.tz = z;
+          for (let f = 0; f < 8; f++){ G.t += .37; IB.draw(); }
+        }
+      }
+      st.dead = false;
+    }
+  }
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'every structure draws whole and broken, both sides, right through the cycle');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
