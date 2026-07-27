@@ -924,6 +924,27 @@ function startQuest(qi, def, seed){
     }
   }
 
+  // One chest on a deep floor was never a chest. Never the quest chest, never
+  // one inside the vault — a locked room you have paid to open should pay.
+  const lieDepth = q.depth || 0;             // authored quests have no depth: none there
+  if (lieDepth >= LIE_FROM && R() < LIE_CHANCE){
+    const pool = Q.furn.filter(f => f.t === 'chest' && !f.quest && !f.vault);
+    if (pool.length) pool[Math.floor(R()*pool.length)].lie = true;
+    else {
+      // no chest to lie with, so it brought its own
+      const goal = (q.objective && q.objective.room !== undefined) ? q.objective.room : -1;
+      const rooms = ROOMS.map(r => r.id).filter(id => id !== Q.vault && id !== goal);
+      for (let tries = 0; tries < 8; tries++){
+        const rid = rooms[Math.floor(R()*rooms.length)];
+        const spot = freeFurnSpot(rid, 1, 1, R);
+        if (!spot) continue;
+        Q.furn.push({ t:'chest', r:rid, x:spot[0], y:spot[1], w:1, h:1, rot:0,
+                      quest:null, taken:false, searched:false, lie:true });
+        break;
+      }
+    }
+  }
+
   // stairs and the corridor around them start lit
   for (const [x,y] of STAIRS) Q.seen[idx(x,y)] = 1;
   recomputeVision();
@@ -3565,6 +3586,7 @@ function heroWalk(h, path, done){
   };
   const finishStep = () => {
     recomputeVision();
+    mimicWatch();                       // something in this room was not furniture
     refreshField();
     checkQuestState();
     renderHUD();
@@ -3801,6 +3823,7 @@ function hurt(a, n, done){
   floatText(a.x, a.y, '−' + n, a.kind === 'hero' ? '#ff7a6a' : '#ffd06a', n >= 3);
   spark(a.x, a.y, 10 + n*4, a.kind === 'hero' ? '#c0392b' : '#8a1f1f', { spd:.016, up:.004 });
   if (a.bp <= 0){ kill(a); }
+  else if (a.boss) bossLastWords(a);
   renderHUD();
   if (done) done();
 }
@@ -4154,6 +4177,21 @@ function openDoorAt(h, d){
     if (!HEADLESS){ showTrialOffer(() => openDoorAt(h, d)); return false; }
     startTrial();
   }
+  // A door the broken trial bolted. No key fits it — somebody puts a shoulder
+  // through it, and pays for the privilege. Never a lock you cannot get past.
+  if (d.trialBolt){
+    if (!h || h.acted){
+      say('Bolted from the inside. Somebody with an action left will have to put a shoulder through it.', 'bad');
+      sfx('block');
+      return false;
+    }
+    h.acted = true;
+    d.trialBolt = false; d.locked = false;
+    say(`${h.name} puts a shoulder through the bolt. It costs a Body Point.`, 'bad');
+    sfx('door'); G.shake = Math.max(G.shake, 14);
+    hurt(h, 1, null);
+    if (!h.alive) return false;
+  }
   if (d.locked && !G.q.key){
     say('The door is locked, and the lock is a good one. Something down here is carrying the key.', 'bad');
     sfx('block');
@@ -4225,6 +4263,30 @@ function bossIntro(rid){
   setMood('fight');
   return b;
 }
+// And a second line when he is nearly done, so the fight has a shape: the room
+// says his name, you take him apart, and the room says one thing more.
+const BOSS_LAST = {
+  gargoyle:'A crack runs through it, and it does not slow down',
+  chaos:   'He is still on his feet, and that is the problem',
+  ogre:    'He stops laughing. That is worse',
+  sorcerer:'The working is coming apart in his hands',
+  troll:   'It has stopped knitting itself back together',
+  mummy:   'What is left of it is still coming',
+};
+function bossLastWords(m){
+  if (!G || !G.q || !m || !m.boss || !m.alive) return null;
+  if (m.bp > 1 || m.spoke) return null;
+  m.spoke = 1;
+  const line = BOSS_LAST[m.mt] || 'Whatever held it together is going';
+  banner(m.name, line);
+  say(`${m.name} — ${line}.`, 'bad');
+  sfx('boss');
+  G.shake = Math.max(G.shake, 18);
+  G.camPunch = 1.2;
+  hitStop(220);
+  return m;
+}
+
 function doorBetween(x1,y1,x2,y2){
   const d = doorAt(x1,y1,x2,y2);
   return d && (!d.secret || d.found) ? d : null;
@@ -4319,6 +4381,55 @@ function chestBites(h, chest){
   renderHUD();
   return null;
 }
+
+/* ------------------------------------------------------- LYING MIMICS */
+// Forcing a chest can turn one into a mimic. From the third floor down, one
+// chest on the floor was never a chest at all, and it is waiting for somebody
+// to walk within arm's reach. Find Traps turns it up before it turns up you —
+// which is what makes walking past a chest a decision instead of a habit.
+
+const LIE_FROM = 3;
+const LIE_CHANCE = .38;
+const lyingChests = () => (G.q && G.q.furn ? G.q.furn.filter(f => f.lie && !f.sprung) : []);
+// A hero standing beside one is close enough.
+function mimicWatch(){
+  if (!G || !G.q || G.q.over) return null;
+  for (const f of lyingChests()){
+    const h = livingHeroes().find(x => Math.max(Math.abs(x.x - f.x), Math.abs(x.y - f.y)) <= 1);
+    if (h) return springMimic(f, h);
+  }
+  return null;
+}
+// The teeth come out. Whoever woke it wears the first bite; a mimic you already
+// spotted has lost its ambush and just stands up.
+function springMimic(f, h, quiet){
+  if (!f || f.sprung) return null;
+  f.sprung = true; f.lie = false;
+  const i = G.q.furn.indexOf(f);
+  if (i >= 0) G.q.furn.splice(i, 1);
+  const def = MONSTERS.mimic;
+  const m = { kind:'monster', uid:9500 + ri(499), mt:'mimic', name:def.name,
+    x:f.x, y:f.y, alive:true, facing:-1,
+    bpMax:def.bp, bp:def.bp, atk:def.atk, def:def.def, mind:def.mind, mv:def.move,
+    boss:false, awake:true, sleep:0, stun:0, bob:rnd()*6.28 };
+  G.q.actors.push(m);
+  spark(f.x, f.y, 24, '#7a5a2c', { spd:.02, up:.004 });
+  setMood('fight');
+  recomputeVision();
+  if (quiet){
+    say('The chest is breathing. It gives up pretending and stands.', 'bad');
+    sfx('die'); G.shake = Math.max(G.shake, 10);
+  } else {
+    say(`${h ? h.name + ' reaches for the chest' : 'Somebody reaches for the chest'}, and the chest reaches back.`, 'bad');
+    banner('MIMIC', 'it has been waiting');
+    sfx('boss'); G.shake = Math.max(G.shake, 20); hitStop(240);
+    focusOn(f.x, f.y); G.camPunch = 1.3;
+    if (h) later(320, () => { if (h.alive && m.alive) monsterAttack(m, h, () => {}); });
+  }
+  refreshField(); renderHUD();
+  return m;
+}
+
 function showChest(h, chest){
   const pct = Math.round(FORCE_RISK*100);
   modal(`<h2>The Chest</h2>
@@ -4532,9 +4643,17 @@ function searchTraps(){
     if ((rid >= 0 && d.rid === rid) || near){ d.found = true; doors++; }
   }
   if (G.q.trapSearchedTiles === undefined) G.q.trapSearchedTiles = 1;
-  say(found || doors
-    ? `${h.name} finds ${found ? found + ' trap' + (found>1?'s':'') : ''}${found&&doors?' and ':''}${doors ? doors + ' hidden door' + (doors>1?'s':'') : ''}.`
-    : `${h.name} finds nothing hidden here.`, found||doors ? 'good' : '');
+  // a mimic is a trap with an appetite, and a careful hero can spot one
+  let lies = 0;
+  for (const f of lyingChests()){
+    const inRoom = rid >= 0 && f.r === rid;
+    const near = dist2(f.x, f.y, h.x, h.y) <= 5 && hasLOS(h.x, h.y, f.x, f.y);
+    if (inRoom || near){ springMimic(f, h, true); lies++; }
+  }
+  say(found || doors || lies
+    ? `${h.name} finds ${found ? found + ' trap' + (found>1?'s':'') : ''}${found&&doors?' and ':''}${doors ? doors + ' hidden door' + (doors>1?'s':'') : ''}${
+        lies ? (found||doors ? ', and ' : '') + 'something pretending to be furniture' : ''}.`
+    : `${h.name} finds nothing hidden here.`, found||doors||lies ? 'good' : '');
   recomputeVision(); renderHUD();
 }
 
@@ -5665,12 +5784,35 @@ function startTrial(){
   renderHUD();
   return true;
 }
+// Breaking one used to simply stop. A trial you can fail for free is a lottery
+// ticket, not a decision — so it breaks loudly: the doors of the room slam and
+// bolt, and the Warlock looks up from whatever he was doing.
+const TRIAL_WRATH = 8;
 function failTrial(why){
   if (!trialActive()) return;
+  const room = G.q.trial.room;
   G.q.trial.failed = true; G.q.trial.done = true; G.q.trial.active = false;
   say(`The trial is broken — ${why}`, 'bad');
+  banner('BROKEN', 'the room is not finished with you');
   sfx('lose');
-  renderHUD();
+  G.shake = Math.max(G.shake, 20);
+  hitStop(260);
+
+  // every door of that room slams shut and bolts itself
+  let slammed = 0;
+  for (const k in G.q.doors){
+    const d = G.q.doors[k];
+    if (d.rid !== room) continue;
+    d.open = false; d.locked = true; d.trialBolt = true;
+    slammed++;
+  }
+  if (slammed){
+    sfx('door');
+    say(`The ${slammed > 1 ? 'doors' : 'door'} slam${slammed > 1 ? '' : 's'} and bolt${slammed > 1 ? '' : 's'}. You are on whichever side you are on.`, 'bad');
+  }
+  stirWrath(TRIAL_WRATH, 'a trial broken');
+  recomputeVision(); refreshField(); renderHUD();
+  return slammed;
 }
 function winTrial(){
   if (!trialActive()) return;
@@ -5709,6 +5851,8 @@ function showTrialOffer(onAccept){
     <p class="flavor">Words are cut into the lintel, and they are not a warning. They are terms.</p>
     <div class="obj"><b>The terms</b>${d.terms}</div>
     <div class="row"><div class="ic">✦</div><div class="tx"><b>If you answer them</b><s>2 Fate, and whatever is on the plinth</s></div></div>
+    <div class="row"><div class="ic">⛓</div><div class="tx"><b>If you break them</b><s>Every door of this room slams and bolts —
+      a shoulder and a Body Point to get through one — and the Warlock looks up</s></div></div>
     <div class="row"><div class="ic">🚪</div><div class="tx"><b>If you would rather not</b><s>The door stays shut. It will still be here.</s></div></div>
     <div class="rule"></div>
     <div style="text-align:center">
@@ -7000,7 +7144,8 @@ globalThis.HQ = {
   draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
   WAGER_MAX, wagerCost, canWager, wagerDraft,
   get draftState(){ return draftState; }, set draftState(v){ draftState = v; },
-  BOSS_LINES, bossOf, bossIntro,
+  BOSS_LINES, bossOf, bossIntro, BOSS_LAST, bossLastWords,
+  LIE_FROM, LIE_CHANCE, lyingChests, mimicWatch, springMimic, TRIAL_WRATH,
   FORCE_RISK, chestIn, drawCard, forcedCard, openChest, chestBites, showChest,
   floorChoices, chooseFloor, dblStake, canDouble, doubleOrNothing, settleStake,
   newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius, showHistory, monsterShoot,

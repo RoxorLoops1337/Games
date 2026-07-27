@@ -86,19 +86,29 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   onto the body, turns every living hero to look, names them and what did it,
   and leaves a ✝ on the run line and a line in the panel. *(batch 9)*
 
+- **Boss last words** — a second card on his last Body Point, so the fight has a
+  shape: the room says his name, you take him apart, the room says one thing
+  more. *(batch 10)*
+- **Mimics that lie better** — from the third floor down, one chest was never a
+  chest. Step within arm's reach and it takes the first bite; spend an action on
+  Find Traps and it only stands up. *(batch 10)*
+- **A trial you can fail loudly** — breaking one slams and bolts every door of
+  that room and jumps the Warlock's attention by eight. A shoulder and a Body
+  Point opens a bolt; no key fits it. The terms say so before you accept. *(batch 10)*
+
 ---
 
 ## Next up
 
-1. **Boss last words.** The intro card is one line the room says. A second line
-   when he is down to his last Body Point would close the bracket, and it is the
-   cheapest beat left.
-2. **Mimics that lie better.** A mimic only exists after you force a chest. One
-   that sits in a room pretending, and moves when you walk past, would make
-   every chest on the board a question instead of only the forced ones.
-3. **A trial you can fail loudly.** Breaking a vigil currently just stops.
-   It should cost something — the door slams, or the Warlock's attention jumps —
-   so accepting the terms is a real risk and not a free lottery ticket.
+1. **The trial plinth.** A trial room should have something visibly on a plinth
+   in the middle of it, so the reward is a thing you can see from the doorway
+   rather than a line of text afterwards.
+2. **Split the between-floors screen.** It now carries three boons, a blood
+   price, a wager, a stake bar, the pedlar and the stairs. It scrolls, which is
+   survivable, but the gambles and the shopping want separating before a ninth
+   thing lands on it.
+3. **The body stays.** A fallen hero's marker should remain on the square for
+   the rest of the floor. The fall has a beat now; it should also leave a mark.
 
 ## Backlog, roughly in order of value
 
@@ -121,20 +131,20 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   only carried torches matter.
 
 ### Feel
-- **The trial plinth** — a trial room should have something visibly on a plinth
-  in the middle of it, so the reward is a thing you can see from the doorway
-  rather than a line of text after the fact.
 - **Streak on the HUD** — the banner fires and is gone. A small counter beside
   the Fate pill would let you feel the run you are on before it breaks.
-- **The body stays** — a fallen hero's marker should remain on the square for the
-  rest of the floor. The fall now has a beat; it should also leave a mark.
+- **Bolted doors should look bolted.** A trial-bolted door draws like any other
+  shut door. It wants a visible bar across it, or the cost is a surprise twice.
 
 ### New ideas the batch turned up
 - **Trial variants.** A third kind: leave the room without opening a chest, or
   kill the marked one first. Two kinds is thin for something this visible.
-- **The draft screen is getting long.** Three boons, a blood price, a wager, a
-  stake bar, the pedlar and the stairs. It scrolls, which is fine, but the
-  gambles and the shopping want separating before a seventh thing lands on it.
 - **A blood price you can buy back.** The toll is permanent. A shrine or the
   pedlar offering to return one maximum Body Point at a steep price would make
   taking one on a bad floor less of a one-way door.
+- **A chest that has been opened should say so on the board.** With mimics on
+  the floor, telling a searched chest from an unsearched one at a glance is
+  suddenly load-bearing, and right now it is a subtle darkening.
+- **More things that lie.** The mimic proves the pattern. A tomb that is not a
+  tomb, or a suit of armour on a rack that steps off it, would make the
+  furniture itself part of the threat model rather than scenery.
