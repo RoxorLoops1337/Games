@@ -15,6 +15,8 @@ const DEFAULT_BINDS = {
   Tab: 'scores', Escape: 'pause', KeyP: 'pause',
 };
 
+import { createTouch, isTouchCapable } from './touch.js';
+
 export function createInput(G, canvas, opts = {}) {
   const doc = canvas.ownerDocument || document;
   const held = new Set();
@@ -87,10 +89,25 @@ export function createInput(G, canvas, opts = {}) {
     return Math.sign(v) * Math.pow(n, exp);
   };
 
+  // Touch runs alongside the keyboard rather than instead of it: a tablet with
+  // a keyboard, or a laptop with a touchscreen, should have both work without
+  // the game deciding which one the player meant.
+  const touch = isTouchCapable() && opts.root
+    ? createTouch(G, opts.root, { press, release })
+    : null;
+
   return {
     get locked() { return locked; },
+    get touch() { return touch; },
+    get usingTouch() { return !!(touch && touch.active); },
 
-    lock() { if (canvas.requestPointerLock) canvas.requestPointerLock(); },
+    // Pointer lock does not exist on a touchscreen, and asking for it there
+    // either throws or silently never resolves — so the caller has to be told
+    // that being "unlocked" is the normal state rather than a paused game.
+    lock() {
+      if (touch && touch.active) { if (opts.onLock) opts.onLock(); return; }
+      if (canvas.requestPointerLock) canvas.requestPointerLock();
+    },
     unlock() { if (doc.exitPointerLock) doc.exitPointerLock(); },
 
     // Called once per rendered frame, before the simulation steps.
@@ -130,6 +147,16 @@ export function createInput(G, canvas, opts = {}) {
         }
       }
 
+      // The touch stick is already deadzoned and curved, so it is added raw and
+      // the clamp below keeps a stick plus a held key from exceeding full speed.
+      if (touch) {
+        mx += touch.state.move.x;
+        my += touch.state.move.y;
+        touch.drainLook({ get x() { return dx; }, set x(v) { dx = v; },
+                          get y() { return dy; }, set y(v) { dy = v; } });
+        touch.refresh();
+      }
+
       const mag = Math.hypot(mx, my);
       if (mag > 1) { mx /= mag; my /= mag; }
       inp.move.x = mx; inp.move.y = my;
@@ -143,6 +170,7 @@ export function createInput(G, canvas, opts = {}) {
     endFrame() { down.clear(); up.clear(); G.input.look.x = 0; G.input.look.y = 0; },
 
     dispose() {
+      if (touch) touch.dispose();
       doc.removeEventListener('keydown', kd);
       doc.removeEventListener('keyup', ku);
       doc.removeEventListener('mousedown', md);

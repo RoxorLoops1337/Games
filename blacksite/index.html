@@ -128,6 +128,58 @@
     pointer-events:none}
   #app.debug #perf{display:block}
 
+  /* ── touch controls ──────────────────────────────────────────────────────
+     Hidden until the input layer confirms a real touch. A device with both a
+     touchscreen and a mouse should not get thumb buttons for existing. */
+  #touch{position:absolute;inset:0;z-index:25;display:none;touch-action:none;
+    -webkit-user-select:none;user-select:none}
+  #app.touch #touch{display:block}
+  #app.touch canvas#gl{cursor:none}
+  /* Everything sits above the safe area — a home indicator or a notch will
+     otherwise swallow whichever control is nearest the edge. */
+  #touch .pad{position:absolute;display:grid;place-content:center;
+    border:1px solid rgba(159,176,189,.30);border-radius:50%;
+    background:rgba(10,13,17,.34);backdrop-filter:blur(2px);
+    color:rgba(232,240,247,.86);font-size:10px;letter-spacing:.14em;
+    text-transform:uppercase;text-shadow:0 1px 4px rgba(0,0,0,.9);
+    transition:background .08s,transform .08s,border-color .08s;
+    will-change:transform}
+  #touch .pad.on{background:rgba(255,182,72,.30);border-color:var(--amber);
+    transform:scale(.94)}
+  #touch .pad[hidden]{display:none}
+
+  /* The fire button is the biggest thing on screen and sits where the right
+     thumb already rests. Everything else is arranged around it. */
+  #tfire{right:calc(22px + env(safe-area-inset-right));bottom:calc(96px + env(safe-area-inset-bottom));
+    width:104px;height:104px;font-size:11px}
+  #tads{right:calc(140px + env(safe-area-inset-right));bottom:calc(150px + env(safe-area-inset-bottom));
+    width:74px;height:74px}
+  #treload{right:calc(148px + env(safe-area-inset-right));bottom:calc(58px + env(safe-area-inset-bottom));
+    width:64px;height:64px;color:var(--amber)}
+  #tjump{right:calc(28px + env(safe-area-inset-right));bottom:calc(216px + env(safe-area-inset-bottom));
+    width:66px;height:66px}
+  #tcrouch{right:calc(112px + env(safe-area-inset-right));bottom:calc(238px + env(safe-area-inset-bottom));
+    width:62px;height:62px}
+
+  /* The movement stick is floating: it is drawn wherever the thumb lands, so
+     it never has to be found. Hidden until then. */
+  #tstick{position:absolute;left:0;top:0;width:104px;height:104px;margin:-52px 0 0 -52px;
+    border:1px solid rgba(159,176,189,.26);border-radius:50%;
+    background:rgba(10,13,17,.26);opacity:0;transition:opacity .12s;pointer-events:none}
+  #tstick.on{opacity:1}
+  #tstick i{position:absolute;left:50%;top:50%;width:46px;height:46px;
+    transform:translate(-50%,-50%);border-radius:50%;
+    background:rgba(232,240,247,.30);border:1px solid rgba(232,240,247,.5)}
+  /* A hint on the left, only before the player has ever touched down. */
+  #thint{position:absolute;left:calc(26px + env(safe-area-inset-left));
+    bottom:calc(96px + env(safe-area-inset-bottom));width:180px;
+    font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    color:rgba(159,176,189,.5);line-height:1.8;pointer-events:none;
+    transition:opacity .4s}
+  #app.touched #thint{opacity:0}
+
+  @media (prefers-reduced-motion:reduce){ #touch .pad{transition:none} }
+
   #fatal{position:absolute;inset:0;z-index:99;display:grid;place-content:center;
     gap:12px;padding:40px;text-align:center;background:#08090b}
   #fatal[hidden]{display:none}
@@ -167,6 +219,16 @@
       <div class="bar"><i></i></div>
     </div>
     <div id="toast"></div>
+  </div>
+
+  <div id="touch" aria-hidden="true">
+    <div id="tstick"><i></i></div>
+    <div id="thint">Left — move<br>Right — look, tap to fire</div>
+    <div class="pad" id="tjump"   data-act="jump">Jump</div>
+    <div class="pad" id="tcrouch" data-act="crouch" data-toggle="1">Crouch</div>
+    <div class="pad" id="tads"    data-act="ads"    data-toggle="1">Aim</div>
+    <div class="pad" id="treload" data-act="reload" hidden>Reload</div>
+    <div class="pad" id="tfire"   data-act="fire">Fire</div>
   </div>
 
   <div id="perf"></div>

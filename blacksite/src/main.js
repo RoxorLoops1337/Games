@@ -35,6 +35,12 @@ export async function boot(root) {
   // was inert and everything was always rendering at ULTRA.
   if (typeof window.__BS_QUALITY__ === 'number') {
     G.settings.quality = Math.max(0, Math.min(3, window.__BS_QUALITY__ | 0));
+  } else if (isPhone()) {
+    // Decided before the engine exists, because the tier sizes the render
+    // targets. A phone will not hold tier 3, and booting it there means a
+    // stuttering first impression the player has to go and fix. The menu's
+    // saved settings are applied after this and override it.
+    G.settings.quality = 1;
   }
   const loadStatus = root.querySelector('#load-status');
   const say = (s) => { if (loadStatus) loadStatus.textContent = s; };
@@ -89,8 +95,13 @@ export async function boot(root) {
   const audio = createAudio(G);
   const hud = createHUD(G, root);
   const input = createInput(G, canvas, {
+    root,
     onLockLost() {
       root.classList.remove('locked');
+      // On a touchscreen there is no pointer to lose, so losing it must not
+      // pause the game — otherwise the first tap pauses it and the second
+      // unpauses it, forever.
+      if (input && input.usingTouch) return;
       if (G.mode === 'playing') { G.mode = 'paused'; menu.show('pause'); }
     },
     onLock() {
@@ -100,6 +111,13 @@ export async function boot(root) {
       if (G.mode === 'paused') { G.mode = 'playing'; menu.hide(); }
     },
   });
+
+  // The controls appear on the first real touch rather than on capability, so a
+  // laptop with a touchscreen is not given thumb buttons it will never use.
+  if (input.touch) {
+    const reveal = () => { root.classList.add('touch', 'touched'); };
+    window.addEventListener('touchstart', reveal, { passive: true, once: true });
+  }
 
   const menu = createMenu(G, root, {
     start() {
@@ -263,6 +281,17 @@ export async function boot(root) {
   window.BLACKSITE = api;
   emit(G, 'ready', {});
   return api;
+}
+
+// A coarse pointer on a small screen: an actual phone or small tablet, rather
+// than a laptop that happens to have a touchscreen. Only used to pick a
+// starting quality tier — the controls themselves appear on a real touch, so
+// getting this wrong costs a settings change and never a broken game.
+function isPhone() {
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  const coarse = window.matchMedia('(pointer: coarse)').matches;
+  const small = Math.min(window.innerWidth, window.innerHeight) <= 820;
+  return coarse && small;
 }
 
 // Three compiles a material the first time it is actually drawn. `compileAsync`
