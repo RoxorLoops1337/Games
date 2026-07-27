@@ -960,6 +960,57 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(below === 0, 'no label is pushed below what it names (' + below + ')');
     t.ok(drift < 140, 'and none wanders far enough to stop pointing at it (' + Math.round(drift) + 'px)');
 
+    // A label dodged every neighbour it had been told about and then walked
+    // off the side of the picture. A turret name near the edge of the view was
+    // painted half past the canvas: "Outer · in play" read as "Outer · in pla".
+    // The frame was the one neighbour nothing ever declared.
+    t.ok(IB.LW > 200, 'the frame has a width to stay inside (' + IB.LW + ')');
+    t.ok(IB.labelX(IB.LW - 2, 80) < IB.LW - 40, 'a plate at the right edge is slid back inside');
+    t.ok(IB.labelX(2, 80) > 40, 'and one at the left edge too');
+    t.ok(IB.labelX(IB.LW / 2, 80) === IB.LW / 2, 'a plate with room either side is left where it is');
+    // The far side of the same problem: something OFF the frame is not visible,
+    // but its plate is wide enough to reach back in. Clamping those would line
+    // the border with names for things the player cannot see, so they go.
+    t.ok(IB.labelSeen({ x: IB.LW / 2 }), 'a label over the picture is drawn');
+    t.ok(!IB.labelSeen({ x: IB.LW + 3 }), 'and one whose subject is off the frame is not');
+    t.ok(!IB.labelSeen({ x: -3 }), 'either side');
+
+    // Then real frames. Sweep the camera across the map so plates keep meeting
+    // the edge, and check every one that got placed actually fits. Counting
+    // only the clipped ones would pass against an empty board, so the sweep
+    // reports how many it looked at and how many the clamp had to move —
+    // a run where nothing was near an edge proves nothing.
+    let outside = 0, seenPlates = 0, hugged = 0, deepest = 0, orphan = 0, skipped = 0;
+    for (const z of [0.52, 0.8, 1.2]){
+      IB.cam.z = IB.cam.tz = z;
+      for (let x = -40; x <= 190; x += 10){
+        IB.cam.x = x;
+        IB.draw();
+        for (const p of IB.labelPlaced){
+          seenPlates++;
+          const l = p.x - p.w / 2, r = p.x + p.w / 2;
+          const cut = Math.max(l < 0 ? -l : 0, r > IB.LW ? r - IB.LW : 0);
+          if (cut > 0){ outside++; deepest = Math.max(deepest, cut); }
+          // ay is what it points at; x is where the plate ended up. A plate
+          // that had to slide is the clamp doing work rather than idling.
+          if (Math.abs(p.x - IB.LW / 2) > IB.LW / 2 - p.w) hugged++;
+          // ax is the thing being named. A plate whose subject is off the
+          // frame is a name with nothing under it — and with the clamp in
+          // place it would sit ON the border, which the fits-inside check
+          // above cannot see, so it needs asking about separately.
+          if (p.ax < 0 || p.ax > IB.LW) orphan++;
+        }
+        skipped += IB.labelSkipped;
+      }
+    }
+    IB.cam.z = IB.cam.tz = 1;
+    t.ok(seenPlates > 300, 'the edge sweep had plates to check (' + seenPlates + ')');
+    t.ok(hugged > 0, "and plates that came right up against the frame (" + hugged + ")");
+    t.ok(skipped > 20, 'and subjects off the frame to leave out (' + skipped + ')');
+    t.ok(outside === 0, 'no label is painted past the edge of the picture (' +
+      outside + (deepest ? ', worst ' + Math.round(deepest) + 'px' : '') + ')');
+    t.ok(orphan === 0, 'and none is drawn for something off the frame (' + orphan + ')');
+
     IB.cam.x = IB.HOLD_X;
   }
 

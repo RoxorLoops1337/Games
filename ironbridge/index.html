@@ -5683,20 +5683,40 @@ function endText(c){ c.textAlign = TEXT0.align; c.textBaseline = TEXT0.baseline;
    compared top edges and used only the NEW label's height, which was harmless
    while every box in the list was the same size and wrong as soon as it
    wasn't.                                                                   */
-const LABEL_PAD = { x:3, y:4 };
+const LABEL_PAD = { x:3, y:4, edge:4 };
 const labelHits = (a, b) =>
   Math.abs(a.x - b.x) < (a.w + b.w) / 2 + LABEL_PAD.x &&
   Math.abs(a.y - b.y) < (a.h + b.h) / 2 + LABEL_PAD.y;
+// A label dodged every other label and every bar under it, and then walked
+// straight off the side of the picture: a turret name near the edge of the
+// view had its plate painted half past the canvas, so "Outer · in play" read
+// as "Outer · in pla". The frame is the one neighbour nothing declared.
+// Slide the plate back inside; the leader line below keeps it pointing at
+// whatever it is naming. Clamped before the vertical nudge, so the dodging
+// happens where the plate is actually going to sit.
+const labelX = (x, w) => {
+  const m = w / 2 + LABEL_PAD.edge;
+  return clamp(x, m, Math.max(m, LW - m));
+};
+// The other half of the same problem, from the far side. A turret just past
+// the right edge is not on screen, but its plate is wide enough to reach back
+// in, so the border grew a row of half-words naming things the player cannot
+// see. Clamping those would be worse — it would line the frame with them.
+// If the thing is off screen its name goes with it.
+const labelSeen = (L) => L.x >= 0 && L.x <= LW;
 const LABEL_TRIES = 14;
 let labelBlock = [];                       // reserved this frame, cleared on flush
 let labelPlaced = [], labelBlocked = [];   // where it all ended up, for the tests
+let labelSkipped = 0;                      // named something off the frame
 const blockLabel = (x, cy, w, h) => { labelBlock.push({ x, y:cy, w, h }); };
 
 let labelQ = [];
 function flushLabels(c){
   const placed = labelBlock.slice();
+  labelSkipped = 0;
   labelQ.sort((a, b) => a.y - b.y);
   for (const L of labelQ){
+    if (!labelSeen(L)){ labelSkipped++; continue; }
     // The offsets under here used to be `y + 8.5` and `y + 10`, tuned against
     // whichever baseline the previous draw had left behind — which meant the
     // whole plate sat differently depending on whether a hero was on screen.
@@ -5704,6 +5724,7 @@ function flushLabels(c){
     // no longer needs a magic number to say so.
     setText(c, (L.small ? 8 : 9) + 'px system-ui', 'center', 'middle');
     const w = c.measureText(L.txt).width + 8, h = L.small ? 11 : 13;
+    const lx = labelX(L.x, w);
     let cy = L.y - 11 + h / 2;
     // nudge upward until this label is clear of everything already down —
     // other labels AND the bars and roundels that reserved their own space
@@ -5714,22 +5735,23 @@ function flushLabels(c){
       // one or two, and it cannot come back down onto something it passed.
       let top = null;
       for (const r of placed)
-        if (labelHits(r, { x:L.x, y:cy, w, h }) && (!top || r.y - r.h / 2 < top.y - top.h / 2)) top = r;
+        if (labelHits(r, { x:lx, y:cy, w, h }) && (!top || r.y - r.h / 2 < top.y - top.h / 2)) top = r;
       if (!top) break;
       cy = top.y - top.h / 2 - h / 2 - LABEL_PAD.y;
     }
     const y = cy - h / 2;
-    placed.push({ x:L.x, y:cy, w, h, ay:L.y });   // ay: what it is pointing at
+    placed.push({ x:lx, y:cy, w, h, ax:L.x, ay:L.y });   // ax, ay: what it is pointing at
     // A label pushed clear of its neighbours has to keep pointing at the thing
-    // it names, or a packed plot reads as a pile of loose text.
-    if (y < L.y - 12){
+    // it names, or a packed plot reads as a pile of loose text. A plate slid
+    // in off the edge has moved sideways rather than up, so the leader leans.
+    if (y < L.y - 12 || Math.abs(lx - L.x) > 1){
       c.strokeStyle = 'rgba(160,180,205,.30)'; c.lineWidth = 1;
-      c.beginPath(); c.moveTo(L.x + .5, y + h); c.lineTo(L.x + .5, L.y - 3); c.stroke();
+      c.beginPath(); c.moveTo(lx + .5, y + h); c.lineTo(L.x + .5, L.y - 3); c.stroke();
     }
     c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
-    c.fillRect(L.x - w / 2, y, w, h);
-    if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(L.x - w / 2 + .5, y + .5, w - 1, h - 1); }
-    c.fillStyle = L.col; c.fillText(L.txt, L.x, cy);
+    c.fillRect(lx - w / 2, y, w, h);
+    if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(lx - w / 2 + .5, y + .5, w - 1, h - 1); }
+    c.fillStyle = L.col; c.fillText(L.txt, lx, cy);
   }
   endText(c);
   labelPlaced = placed.slice(labelBlock.length);
@@ -8529,8 +8551,9 @@ window.IB = {
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
   WEAR, battleDamage, crown, hash2, stSeed, merlonHolds, CROWN_TIERS, UPMARK, upBands, upPlate, towerBands, towerRanks, troopRanks, bsumUp, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
-  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels, setText, endText, TEXT0, labelHits, LABEL_PAD, LABEL_TRIES, blockLabel,
-  get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
+  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
+  get labelSkipped(){ return labelSkipped; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
+  get LW(){ return LW; }, get LH(){ return LH; },
 };
 
 </script>
