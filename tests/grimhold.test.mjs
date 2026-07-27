@@ -2840,7 +2840,7 @@ t.test('trials: a floor only offers one, never over the objective or the vault',
     seen++;
     t.ok(f.trial.room !== f.objective.room, 'a trial never seals the objective');
     t.ok(f.trial.room !== f.vault, 'and never doubles as the vault');
-    t.ok(f.trial.kind === 'survive' || f.trial.kind === 'clean', 'and is one of the two');
+    t.ok(HQ.TRIALS[f.trial.kind], `${f.trial.kind} is a trial the game knows`);
   }
   t.ok(seen > 3, `depth 6 offers trials sometimes (saw ${seen}/60)`);
   for (let i = 0; i < 30; i++) if (HQ.makeFloor(2, Math.random).trial) shallow++;
@@ -3859,7 +3859,7 @@ t.test('plinth: a trial room has one, and nothing else does', () => {
       t.ok(p, 'a trial room stands one in it');
       t.eq(p.r, HQ.G.q.trialRoom.room, 'in the room the terms are about');
       t.ok(!p.spent, 'and it is lit');
-      t.eq(HQ.G.q.furn.filter(f => f.plinth).length, 1, 'exactly one');
+      t.eq(HQ.plinths().filter(f => (f.for||'trial') === 'trial').length, 1, 'exactly one for the trial');
     } else {
       without++;
       t.eq(p, null, 'a floor with no trial has no plinth');
@@ -4448,6 +4448,7 @@ t.test('traps: a disarmed one stops warning you about itself', () => {
   HQ.G.q.furn = [];
   const tr = HQ.G.q.traps[0];
   t.ok(tr, 'the floor has a trap');
+  HQ.G.q.traps = [tr];              // the only trap on the board, so the paint is its own
   tr.found = true; tr.sprung = false; tr.disarmed = false;
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
   HQ.recomputeVision();
@@ -4472,6 +4473,7 @@ t.test('traps: disarming one through the real action changes how it reads', () =
   runAt(3);
   HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
   const tr = HQ.G.q.traps[0];
+  HQ.G.q.traps = [tr];              // the only trap on the board, so the paint is its own
   tr.found = true; tr.sprung = false; tr.disarmed = false;
   const h = HQ.runAlive()[0];
   put(h, tr.x + 1, tr.y);
@@ -4528,6 +4530,216 @@ t.test('render: a hero going down fades out, and the vignette is always there', 
   for (let i = 0; i < 40; i++) HQ.update(60);
   t.ok(!(h.deathT > 0), 'the fade is over');
   t.eq(HQ.G.q.bodies.length, 1, 'and what is left stays');
+});
+
+/* --------------------------------------------------------- the marked one */
+
+// stand a trial's worth of monsters in a room and accept the terms
+function markedTrial(rid, n){
+  runAt(5);
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth);
+  emptyRoom(rid);
+  const r = HQ.ROOMS[rid];
+  const spare = HQ.G.q.actors.filter(a => a.kind === 'monster').slice(0, n || 3);
+  spare.forEach((m, i) => {
+    m.alive = true; m.mt = 'orc'; delete m.affix; m.elite = false; m.boss = false;
+    m.bp = m.bpMax = 2; m.marked = false; m.diedIn = undefined;
+    m.x = r.x + (i % r.w); m.y = r.y + Math.floor(i / r.w);
+  });
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'marked' };
+  HQ.startTrial();
+  return spare;
+}
+
+t.test('marked: a third kind of trial, and it picks somebody when you accept', () => {
+  t.ok(HQ.TRIALS.marked, 'the game knows it');
+  t.eq(HQ.TRIAL_KINDS.length, 3, 'three kinds now');
+  t.ok(HQ.TRIALS.marked.terms.length > 40, 'and it says what it wants');
+  const mob = markedTrial(4, 3);
+  t.ok(HQ.trialActive(), 'the trial is running');
+  t.ok(HQ.G.q.trial.marked, 'and the mark has landed on something');
+  const it = HQ.markedOne();
+  t.ok(it, 'which the game can point at');
+  t.ok(it.marked, 'and which knows it is marked');
+  t.ok(mob.includes(it), 'and it is one of the things in the room');
+  t.eq(mob.filter(m => m.marked).length, 1, 'exactly one of them');
+});
+
+t.test('marked: you can see which one it is from across the room', () => {
+  markedTrial(4, 3);
+  const it = HQ.markedOne();
+  // a monster is only drawn on a square somebody can see, so stand next to it
+  put(HQ.runAlive()[0], it.x, it.y + 1);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  t.ok(HQ.tileVisible(it.x, it.y), 'the marked one is in sight');
+  const withMark = paintOf();
+  t.ok(paintedLike(withMark, /^rgba\(200,90,255,/), 'the mark draws a ring on the floor under it');
+  t.ok(paintedLike(withMark, /^rgba\(220,140,255,/), 'and a sigil over its head');
+
+  // take the mark off and the paint goes with it
+  it.marked = false;
+  const without = paintOf();
+  t.ok(!paintedLike(without, /^rgba\(220,140,255,/), 'an unmarked room paints no sigil');
+
+  // and it is only ever on one of them
+  it.marked = true;
+  t.eq(HQ.monstersOf().filter(m => m.marked).length, 1, 'one mark, one target');
+});
+
+t.test('marked: killing it first answers the trial', () => {
+  markedTrial(4, 3);
+  const it = HQ.markedOne();
+  const f0 = HQ.fateOf();
+  HQ.hurt(it, 99, null);
+  t.ok(!it.alive, 'the marked one is down');
+  t.ok(HQ.G.q.trial.won, 'and that is the trial answered');
+  t.ok(!HQ.G.q.trial.failed, 'not broken');
+  t.eq(HQ.fateOf(), f0 + 2, 'and it pays');
+});
+
+t.test('marked: killing anything else first breaks it', () => {
+  const mob = markedTrial(4, 3);
+  const it = HQ.markedOne();
+  const other = mob.find(m => m !== it && m.alive);
+  t.ok(other, 'there is somebody else in the room');
+  const f0 = HQ.fateOf();
+  HQ.hurt(other, 99, null);
+  t.ok(!other.alive, 'the wrong one is down');
+  t.ok(HQ.G.q.trial.failed, 'and the trial is broken');
+  t.ok(!HQ.G.q.trial.won, 'not answered');
+  t.eq(HQ.fateOf(), f0, 'and pays nothing');
+  // and the doors slammed, like any other broken trial
+  const doors = Object.values(HQ.G.q.doors).filter(d => d.rid === 4);
+  t.ok(doors.every(d => d.trialBolt), 'the room bolted itself behind it');
+});
+
+t.test('marked: something dying elsewhere on the floor is not your problem', () => {
+  const mob = markedTrial(4, 3);
+  const it = HQ.markedOne();
+  // a bystander two rooms away
+  const far = HQ.G.q.actors.find(a => a.kind === 'monster' && a.alive && !mob.includes(a));
+  if (far){
+    const r5 = HQ.ROOMS[5];
+    far.x = r5.x; far.y = r5.y; far.mt = 'orc'; delete far.affix; far.elite = false; far.boss = false;
+    HQ.hurt(far, 99, null);
+    t.ok(!far.alive, 'it is dead');
+    t.ok(HQ.trialActive(), 'and the trial in the other room carries on');
+  } else t.ok(true, 'the floor had nobody spare, which is also fine');
+  // finishing properly still works afterwards
+  HQ.hurt(it, 99, null);
+  t.ok(HQ.G.q.trial.won, 'and the marked one still answers it');
+});
+
+t.test('marked: a room with nothing in it is never dealt this trial', () => {
+  for (let i = 0; i < 40; i++){
+    runAt(6);
+    const tr = HQ.G.q.trialRoom;
+    if (!tr || tr.kind === 'survive') continue;
+    const n = HQ.monstersOf().filter(m => HQ.roomAt(m.x,m.y) === tr.room).length;
+    t.ok(n > 0, `a ${tr.kind} trial has something in the room`);
+  }
+  // and accepting one with an empty room refuses rather than hanging
+  runAt(5);
+  emptyRoom(4);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: 4, kind: 'marked' };
+  t.eq(HQ.startTrial(), false, 'nothing to mark, nothing to start');
+  t.eq(HQ.G.q.trial, null, 'and no half-started trial left behind');
+});
+
+/* ------------------------------------------------------------ a vault plinth */
+
+t.test('vault: a locked room shows what the key is for', () => {
+  let seen = 0;
+  for (let i = 0; i < 50; i++){
+    runAt(6);
+    if (HQ.G.q.vault < 0) continue;
+    seen++;
+    const p = HQ.vaultPlinth();
+    t.ok(p, 'the vault stands one in it');
+    t.eq(p.r, HQ.G.q.vault, 'inside the vault');
+    t.eq(p.for, 'vault', 'and it knows what it is for');
+    t.ok(p.relic, 'holding something');
+    // a floor with both never promises the same relic twice
+    const tp = HQ.trialPlinth();
+    if (tp && tp.relic) t.ok(tp.relic !== p.relic, 'and never the same one the trial is offering');
+  }
+  t.ok(seen > 3, `deep floors lock rooms (saw ${seen}/50)`);
+});
+
+t.test('vault: searching it pays the relic that was standing there', () => {
+  runAt(6);
+  // build the vault by hand so the test does not wait on generation
+  const rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth && f.r !== rid);
+  HQ.G.run.relics = [];
+  HQ.G.q.vault = rid;
+  HQ.G.q.relicFound = null;
+  const p = HQ.placePlinth(HQ.G.q, rid, Math.random, 'vault');
+  p.relic = 'thread';
+  emptyRoom(rid);
+  const h = HQ.runAlive()[0];
+  const r = HQ.ROOMS[rid];
+  put(h, r.x, r.y);
+  use(h);
+  t.eq(HQ.plinthRelicOf(p), 'thread', 'the plinth is promising the thread');
+  HQ.searchTreasure();
+  t.eq(HQ.G.q.relicFound, 'thread', 'and the vault pays the thread');
+  t.ok(p.spent, 'and the plinth goes dark');
+  t.eq(HQ.plinthRelicOf(p), null, 'with nothing left to promise');
+});
+
+/* -------------------------------------------------------- the bonesetter */
+
+t.test('blood: the stone keeps a tally of what it took', () => {
+  runAt(3);
+  HQ.G.run.boons = [];
+  t.eq(HQ.bloodOwed(), 0, 'nothing owed to start');
+  const heroes = HQ.G.run.heroes;
+  const caps = heroes.map(h => h.bpMax);
+  HQ.takeBoon('bloodprice');                       // one point a head
+  t.eq(HQ.bloodOwed(), heroes.length, 'one from each of them');
+  heroes.forEach((h, i) => t.eq(h.bpMax, caps[i] - 1, `${h.name} is down one`));
+  HQ.takeBoon('lastlight');                        // two more a head
+  t.eq(HQ.bloodOwed(), heroes.length*3, 'three from each of them now');
+});
+
+t.test('blood: the bonesetter gives one back to everybody, at a price', () => {
+  runAt(3);
+  HQ.G.run.boons = [];
+  HQ.takeBoon('bloodprice');
+  const heroes = HQ.G.run.heroes;
+  const capsAfterToll = heroes.map(h => h.bpMax);
+  heroes.forEach(h => { h.bp = 1; });
+  HQ.G.run.gold = 1000;
+  const owed0 = HQ.bloodOwed();
+  t.ok(owed0 > 0, 'the stone is holding something');
+  t.ok(HQ.buyPedlar('bonesetter'), 'and he will sell it back');
+  t.eq(HQ.G.run.gold, 1000 - 420, 'for four hundred and twenty');
+  t.eq(HQ.bloodOwed(), owed0 - heroes.length, 'one back for each of them');
+  heroes.forEach((h, i) => t.eq(h.bpMax, capsAfterToll[i] + 1, `${h.name} has the point back`));
+  heroes.forEach(h => t.eq(h.bp, 2, 'and it is healed, not just allowed'));
+  // the boon itself is not lost — you bought the point, not an undo
+  t.ok(HQ.boonHas('bloodprice'), 'you keep what you paid for');
+  t.eq(HQ.attackDice(HQ.runAlive()[0], { mt:'orc', bp:2 }) >= 3, true, 'and it still swings');
+});
+
+t.test('blood: nothing owed, nothing to sell', () => {
+  runAt(3);
+  HQ.G.run.boons = [];
+  HQ.G.run.gold = 1000;
+  t.eq(HQ.bloodOwed(), 0, 'the stone has taken nothing');
+  t.eq(HQ.buyPedlar('bonesetter'), false, 'so there is nothing to buy');
+  t.eq(HQ.G.run.gold, 1000, 'and no gold changes hands');
+
+  // and a party that cannot afford him keeps its gold too
+  HQ.takeBoon('bloodprice');
+  HQ.G.run.gold = 100;
+  const owed = HQ.bloodOwed();
+  t.eq(HQ.buyPedlar('bonesetter'), false, 'too poor');
+  t.eq(HQ.bloodOwed(), owed, 'and still owing exactly as much');
 });
 
 t.run();

@@ -907,9 +907,11 @@ function startQuest(qi, def, seed){
   Q.trialRoom = (q.trial && q.trial.room !== undefined) ? { room:q.trial.room, kind:q.trial.kind } : null;
   Q.trial = null;
   Q.vault = -1; Q.key = false;
-  if (Q.trialRoom && Q.trialRoom.kind === 'clean'
+  // a trial that needs something to kill needs something in the room to kill
+  if (Q.trialRoom && TRIALS[Q.trialRoom.kind] && TRIALS[Q.trialRoom.kind].needsMonsters !== false
+      && Q.trialRoom.kind !== 'survive'
       && !Q.actors.some(a => a.kind === 'monster' && roomAt(a.x,a.y) === Q.trialRoom.room)){
-    Q.trialRoom = null;                       // nothing to kill is not a trial
+    Q.trialRoom = null;
   }
   const keyBearer = Q.actors.some(a => a.elite && roomAt(a.x, a.y) !== q.vault);
   if (q.vault !== undefined && q.vault >= 0 && keyBearer){
@@ -932,7 +934,10 @@ function startQuest(qi, def, seed){
 
   // A trial room says what it wants on the lintel. What it pays stands lit in
   // the middle of the floor, so the reason to accept is a thing you can see.
-  if (Q.trialRoom) placePlinth(Q, Q.trialRoom.room, R);
+  // A vault gets one too: a locked room should show what the key is for through
+  // the doorway, so hunting the champion carrying it is a decision, not a chore.
+  if (Q.trialRoom) placePlinth(Q, Q.trialRoom.room, R, 'trial');
+  if (Q.vault >= 0) placePlinth(Q, Q.vault, R, 'vault');
 
   // One piece of furniture on a deep floor was never furniture. Never a quest
   // piece, never one inside the vault — a locked room you paid to open pays.
@@ -969,7 +974,7 @@ function startQuest(qi, def, seed){
 // The plinth wants the middle of the room, where a doorway can see it. If the
 // middle is taken it takes the nearest free square it can, and if the room is
 // full it does without — no plinth is better than one you cannot walk around.
-function placePlinth(Q, rid, R){
+function placePlinth(Q, rid, R, forWhat){
   const r = ROOMS[rid];
   const cx = r.x + ((r.w - 1) >> 1), cy = r.y + ((r.h - 1) >> 1);
   const free = (x,y) => !Q.furn.some(f => x>=f.x && x<f.x+f.w && y>=f.y && y<f.y+f.h)
@@ -984,22 +989,30 @@ function placePlinth(Q, rid, R){
   // It holds a particular relic, chosen now, so it can be drawn and named
   // before you agree to anything. One you already carry is no reason to fight.
   const held = (G && G.run && G.run.relics) ? G.run.relics : [];
-  const pool = RELICS.filter(x => !held.includes(x.id));
+  const spoken = Q.furn.filter(f => f.plinth && f.relic).map(f => f.relic);
+  const pool = RELICS.filter(x => !held.includes(x.id) && !spoken.includes(x.id));
   const relic = pool.length ? pool[Math.floor(R()*pool.length)].id : null;
   const f = { t:'plinth', r:rid, x:spot[0], y:spot[1], w:1, h:1, rot:0,
-              quest:null, taken:false, searched:false, plinth:true, spent:false, relic };
+              quest:null, taken:false, searched:false,
+              plinth:true, spent:false, relic, for: forWhat || 'trial' };
   Q.furn.push(f);
   return f;
 }
-const trialPlinth = () => (G && G.q && G.q.furn ? G.q.furn.find(f => f.plinth) || null : null);
-// What this floor's trial is actually paying, if anything.
+const plinths = () => (G && G.q && G.q.furn ? G.q.furn.filter(f => f.plinth) : []);
+const plinthFor = (what) => plinths().find(f => (f.for || 'trial') === what) || null;
+const trialPlinth = () => plinthFor('trial');
+const vaultPlinth = () => plinthFor('vault');
+// What a plinth is actually paying, if anything.
+function plinthRelicOf(f){
+  return f && f.relic && !f.spent && !relicHas(f.relic) ? f.relic : null;
+}
 function plinthRelic(){
   const f = trialPlinth();
   return f && f.relic && !relicHas(f.relic) ? f.relic : null;
 }
 // Win or lose, the light goes out — the room has finished with you either way.
-function spendPlinth(){
-  const f = trialPlinth();
+function spendPlinth(what){
+  const f = plinthFor(what || 'trial');
   if (f) f.spent = true;
   return f;
 }
@@ -3180,6 +3193,20 @@ function drawActorTag(g, a, px, py, u, t){
       g.fillStyle = af.col;
       g.fillText(af.ic, px + u*.30, py - u*.44);
     }
+    // The one the trial wants dead first. It has to be findable across a lit
+    // room at a glance, so it gets a ring on the floor and a sigil over it.
+    if (a.marked && a.alive){
+      const p = .5 + Math.sin(t*.005 + (a.bob||0))*.5;
+      g.strokeStyle = `rgba(200,90,255,${(.45 + p*.40).toFixed(3)})`;
+      g.lineWidth = 2.6;
+      g.beginPath(); g.ellipse(px, py + u*.34, u*.42, u*.17, 0, 0, 6.284); g.stroke();
+      g.beginPath(); g.ellipse(px, py + u*.34, u*.30, u*.12, 0, 0, 6.284); g.stroke();
+      g.font = `${u*.34}px Georgia,serif`; g.textAlign = 'center';
+      g.fillStyle = 'rgba(0,0,0,.75)';
+      g.fillText('✖', px + 1, py - u*.56 - p*2 + 1);
+      g.fillStyle = `rgba(220,140,255,${(.75 + p*.25).toFixed(3)})`;
+      g.fillText('✖', px, py - u*.56 - p*2);
+    }
     if (a.poisonMark){ /* reserved */ }
     if (a.sleep > 0){
       g.fillStyle = '#9fd8e8'; g.font = `${u*.28}px Georgia,serif`; g.textAlign = 'center';
@@ -4090,7 +4117,8 @@ function kill(a){
     say(`${a.name} falls.`, 'good');
     G.q.kills = (G.q.kills || 0) + 1;
     bumpStreak();
-    later(20, checkTrialKill);
+    a.diedIn = roomAt(a.x, a.y);                 // which room it went down in
+    later(20, () => checkTrialKill(a));
     const slayer = G.q.lastStriker && livingHeroes().find(x => x.id === G.q.lastStriker);
     if (slayer){
       slayer.kills = (slayer.kills || 0) + 1;
@@ -4581,8 +4609,15 @@ function drawCard(rid, h){
   let card = TREASURE_DECK[G.q.deck[G.q.deckAt++ % G.q.deck.length]];
   if (rid === G.q.vault){
     card = { k:'gold', n:250 + ri(200), t:'The vault', d:'This is what the lock was for.' };
-    const r = G.run && !G.q.relicFound ? relicOffer() : null;
-    if (r){ G.q.relicFound = r.id; later(900, () => showRelic(r.id)); }
+    // it pays what has been standing on the plinth in here all along
+    const p = vaultPlinth();
+    const want = plinthRelicOf(p);
+    const r = G.run && !G.q.relicFound ? (want || (relicOffer() || {}).id) : null;
+    if (r){
+      G.q.relicFound = r;
+      spendPlinth('vault');
+      later(900, () => showRelic(r));
+    }
   }
   return card;
 }
@@ -6052,19 +6087,36 @@ const TRIALS = {
     terms:'Set foot inside and hold the room for five turns. Leave it empty and the vigil breaks.' },
   clean:   { name:'The Clean Kill',
     terms:'Kill everything in the room without a single hero taking a wound. One drop of blood and it is over.' },
+  // Order of death, not speed or safety — a fight you have to aim rather than win
+  marked:  { name:'The Marked One', needsMonsters:true,
+    terms:'One of them wears the mark. It dies first, or it does not count. Anything else in the room falling before it breaks the trial.' },
 };
+const TRIAL_KINDS = Object.keys(TRIALS);
 function trialDef(){ return G.q && G.q.trial ? TRIALS[G.q.trial.kind] : null; }
 function trialActive(){ return !!(G.q && G.q.trial && G.q.trial.active && !G.q.trial.done); }
 
 function startTrial(){
   if (!G.q || !G.q.trialRoom || G.q.trial) return false;
   G.q.trial = { room:G.q.trialRoom.room, kind:G.q.trialRoom.kind, turns:0,
-                active:true, failed:false, done:false, won:false };
+                active:true, failed:false, done:false, won:false, marked:null };
+  // The marked one is chosen when you accept, out of whatever is standing then,
+  // so it is a target you can see rather than a secret you have to guess.
+  if (G.q.trial.kind === 'marked'){
+    const inRoom = monstersOf().filter(m => roomAt(m.x,m.y) === G.q.trial.room);
+    if (!inRoom.length){ G.q.trial = null; return false; }
+    const it = inRoom[ri(inRoom.length)];
+    it.marked = true;
+    G.q.trial.marked = it.uid;
+    say(`The mark settles on ${it.name}.`, 'magic');
+  }
   say(`${TRIALS[G.q.trial.kind].name} begins.`, 'magic');
   sfx('boss'); G.shake = 12;
   renderHUD();
   return true;
 }
+// dead or alive — the whole point is asking whether it has died yet
+const markedOne = () => (G.q && G.q.trial && G.q.trial.marked)
+  ? G.q.actors.find(a => a.kind === 'monster' && a.uid === G.q.trial.marked) || null : null;
 // Breaking one used to simply stop. A trial you can fail for free is a lottery
 // ticket, not a decision — so it breaks loudly: the doors of the room slam and
 // bolt, and the Warlock looks up from whatever he was doing.
@@ -6124,10 +6176,21 @@ function tickTrial(){
     else say(`The vigil holds. ${TRIALS.survive.turns - T.turns} turn${TRIALS.survive.turns-T.turns>1?'s':''} to go.`, 'magic');
   }
 }
-function checkTrialKill(){
-  if (!trialActive() || G.q.trial.kind !== 'clean') return;
-  const left = monstersOf().filter(m => roomAt(m.x,m.y) === G.q.trial.room).length;
-  if (!left) winTrial();
+function checkTrialKill(victim){
+  if (!trialActive()) return;
+  const T = G.q.trial;
+  if (T.kind === 'clean'){
+    const left = monstersOf().filter(m => roomAt(m.x,m.y) === T.room).length;
+    if (!left) winTrial();
+    return;
+  }
+  if (T.kind === 'marked'){
+    // the marked one dies first, or not at all
+    const it = markedOne();
+    if (it && !it.alive){ winTrial(); return; }
+    if (victim && victim.kind === 'monster' && victim.uid !== T.marked && victim.diedIn === T.room)
+      failTrial(`${victim.name} went down before the marked one.`);
+  }
 }
 function showTrialOffer(onAccept){
   const t = G.q.trialRoom;
@@ -6611,7 +6674,8 @@ function makeFloor(depth, R){
   // a trial is never the objective room and never the vault: one door, one idea
   const trialPool = rooms.filter(id => id !== goalRoom && id !== vaultRoom);
   const trialRoom = depth >= 4 && R() < .38
-    ? { room: trialPool[Math.floor(R()*trialPool.length)], kind: R() < .5 ? 'survive' : 'clean' }
+    ? { room: trialPool[Math.floor(R()*trialPool.length)],
+        kind: TRIAL_KINDS[Math.floor(R()*TRIAL_KINDS.length)] }
     : null;
 
   let traps = 2 + Math.floor(depth*.8);
@@ -6819,7 +6883,9 @@ function canPayBlood(b){
 function payBlood(b){
   if (!canPayBlood(b)) return false;
   for (const h of G.run.heroes){
+    const before = h.bpMax;
     h.bpMax = Math.max(1, h.bpMax - b.cost);
+    h.tolled = (h.tolled || 0) + (before - h.bpMax);   // what the stone actually took
     h.bp = Math.min(h.bp, h.bpMax);
   }
   say(`${b.ic} ${b.name} — ${b.desc}`, 'good');
@@ -6924,7 +6990,12 @@ const PEDLAR = [
   { id:'mend',   ic:'✚',  name:'Field Surgery',  cost:200, desc:'Restore 3 Body Points to every living hero, now.' },
   { id:'leather',ic:'🦺', name:'Leather Armour', cost:260, desc:'+1 defend die for one hero who has none.' },
   { id:'absolve',ic:'⛓',  name:'Absolution',     cost:320, desc:'Lift one curse you are carrying.' },
+  // The blood price was a one-way door. It is an expensive door now instead.
+  { id:'bonesetter',ic:'🦴', name:'The Bonesetter', cost:420,
+    desc:'Give every hero back one maximum Body Point the stone took, and heal it.' },
 ];
+// How much of the party's maximum the blood prices are still holding.
+const bloodOwed = () => (G.run ? G.run.heroes.reduce((n,h) => n + (h.tolled || 0), 0) : 0);
 function buyPedlar(id){
   if (!G.run) return false;
   const it = PEDLAR.find(p => p.id === id);
@@ -6939,6 +7010,15 @@ function buyPedlar(id){
   } else if (id === 'absolve'){
     if (!G.run.curses.length) return false;
     liftCurse();
+  } else if (id === 'bonesetter'){
+    if (!bloodOwed()) return false;                  // nothing owed, nothing to buy
+    let n = 0;
+    for (const h of G.run.heroes){
+      if (!(h.tolled > 0)) continue;
+      h.tolled--; h.bpMax++; h.bp = Math.min(h.bpMax, h.bp + 1); n++;
+    }
+    if (!n) return false;
+    say(`The bonesetter works. ${n} hero${n>1?'es':''} stand${n>1?'':'s'} a little straighter.`, 'good');
   } else {
     const who = alive.find(h => !h.armour && h.id !== 'wizard');
     if (!who) return false;
@@ -7029,9 +7109,12 @@ function showDraft(){
       <div class="tx"><b>Bank it</b><s>Put the ${stake} in the purse and stop.</s></div>
       <button class="bu own" data-bank="1">Bank</button>
     </div>` : '';
-  const ped = PEDLAR.map(p => `<div class="row">
+  // he only offers what there is any point buying
+  const owed = bloodOwed();
+  const ped = PEDLAR.filter(p => p.id !== 'bonesetter' || owed > 0).map(p => `<div class="row">
       <div class="ic">${p.ic}</div>
-      <div class="tx"><b>${p.name}</b><s>${p.desc}</s></div>
+      <div class="tx"><b>${p.name}</b><s>${p.desc}${
+        p.id === 'bonesetter' ? `<br>The stone is holding ${owed} between you.` : ''}</s></div>
       <button class="bu" data-ped="${p.id}" ${G.run.gold < p.cost ? 'disabled' : ''}>◈ ${p.cost}</button>
     </div>`).join('');
   // Eight things on one scroll was too many. Three tabs: what you take, what
@@ -7474,7 +7557,8 @@ globalThis.HQ = {
   WAGER_MAX, wagerCost, canWager, wagerDraft,
   get draftState(){ return draftState; }, set draftState(v){ draftState = v; },
   BOSS_LINES, bossOf, bossIntro, BOSS_LAST, bossLastWords,
-  placePlinth, trialPlinth, spendPlinth, plinthRelic, drawRelicOn, drawBody, drawRansacked, DRAFT_TABS,
+  placePlinth, trialPlinth, vaultPlinth, plinths, plinthFor, spendPlinth, plinthRelic, plinthRelicOf,
+  drawRelicOn, drawBody, drawRansacked, DRAFT_TABS, TRIAL_KINDS, markedOne, bloodOwed,
   historyRows, thisRunRow, STREAK_SHOW,
   LIE_FROM, LIE_CHANCE, LIARS, LIAR_TYPES, liars, lyingChests,
   mimicWatch, springLiar, springMimic, TRIAL_WRATH,

@@ -132,19 +132,29 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   the torch falloff and the death fade, which had no test that would notice
   them breaking. *(batch 14)*
 
+- **The Marked One** — a third trial. One thing in the room wears the mark and
+  has to die first; anything else falling before it breaks the terms. A fight
+  you have to aim rather than one you have to win. *(batch 15)*
+- **A vault stands its relic on a plinth too** — a locked room now shows what
+  the key is for through the doorway, and pays exactly that. Never the same
+  relic the floor's trial is offering. *(batch 15)*
+- **The Bonesetter** — 420 gold gives every hero back one maximum Body Point the
+  blood price took, and heals it. You keep the boon; you bought the point back,
+  not an undo. He only appears when the stone is holding something. *(batch 15)*
+
 ---
 
 ## Next up
 
-1. **Trial variants.** A third kind — leave the room without opening a chest, or
-   kill the marked one first. Two kinds is thin for something this visible, and
-   the plinth and the bolt now make trials worth walking toward.
-2. **A vault should stand its relic on a plinth too.** The plinth is a pattern,
-   not a one-off: a locked room showing what the key is for through the doorway
-   would make the key worth hunting rather than worth stumbling into.
-3. **A blood price you can buy back.** The toll is permanent. A shrine or the
-   pedlar returning one maximum Body Point at a steep price would make taking
-   one on a bad floor less of a one-way door.
+1. **A room you have never opened should look different from one you cleared.**
+   The board says a lot about where you *have* been — opened chests, ransacked
+   shelves, disarmed traps, bodies. It cannot say where you have not.
+2. **Bodies the Warlock can use.** A hero's remains sit there doing nothing. A
+   necromancer raising one, or a hero taking back a fallen friend's weapon,
+   would make the mark on the square matter.
+3. **Sell a boon to the pedlar.** Gold for one you never use. The stake gambles
+   one away; this would let you choose to, and the Bonesetter has just made the
+   pedlar the place where regret gets undone.
 
 ## Backlog, roughly in order of value
 
@@ -153,9 +163,6 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   something climbs out. Repeatable, stakes rise each pull.
 - **Force the door.** Forcing works on chests; a locked or stuck door should ask
   the same question, with noise instead of a needle as the cost.
-- **Sell a boon to the pedlar.** Gold for a boon you never use. The stake gambles
-  one away; this would let you choose to.
-
 ### Roguelike depth
 - **Vault variants.** A vault that is trapped, or one whose key is held by a
   champion that flees.
@@ -173,13 +180,6 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   saying `6/8 · BUTCHERY` would make the thing you are climbing toward concrete.
 
 ### New ideas the batch turned up
-- **Bodies the Warlock can use.** A hero's remains sit there for the rest of the
-  floor doing nothing. A necromancer raising one, or a hero able to take back a
-  fallen friend's weapon, would make the mark on the square matter.
-- **The board now says a lot about where you have been.** Opened chests,
-  ransacked shelves, disarmed traps, bodies. What it still cannot say is where
-  you have *not* — a room you have never opened looks like one you cleared and
-  left. A mark on the map, or a count in the HUD, would close that.
 - **Everything dangerous pulses; nothing safe does.** That fell out of the
   disarmed trap and is worth making a rule. The lying furniture is the one
   thing that breaks it deliberately, which is exactly why it works.
