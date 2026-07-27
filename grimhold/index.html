@@ -43,6 +43,10 @@
   .pill.gold{color:var(--gold2);border-color:rgba(216,168,60,.45)}
   .pill.fate{color:#ccb8ff;border-color:rgba(154,134,224,.5)}
   .pill.eye{color:#e8a99f;border-color:rgba(176,58,44,.45)}
+  /* the run you are on, before it breaks */
+  .pill.streak{color:#e8d2a0;border-color:rgba(216,168,60,.35)}
+  .pill.streak.hot{color:#ffdca6;border-color:rgba(232,150,60,.75);box-shadow:0 0 12px rgba(232,150,60,.35)}
+  .pill.streak.max{color:#fff0d0;border-color:rgba(255,170,70,.95);box-shadow:0 0 18px rgba(255,150,60,.55)}
   .pill.eye.hot{color:#ffd9d1;border-color:rgba(224,80,60,.9);box-shadow:0 0 14px rgba(176,58,44,.5)}
   #menubtn{pointer-events:auto;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
     font-size:15px;background:rgba(20,17,13,.85);border:1px solid var(--line);color:var(--ink)}
@@ -210,6 +214,7 @@
     <div id="qname">Grimhold<b>The Trial</b></div>
     <div class="pill gold" id="goldpill">◈ <span id="goldn">0</span></div>
     <div class="pill fate" id="fatepill">✦ <span id="faten">0</span></div>
+  <div class="pill streak" id="streakpill" style="display:none">⚔ <span id="streakn">0</span></div>
   <div class="pill eye" id="wrathpill" style="display:none">👁</div>
   <div class="pill" id="turnpill">Turn <span id="turnn">1</span></div>
     <div id="menubtn">☰</div>
@@ -976,12 +981,22 @@ function placePlinth(Q, rid, R){
     spot = pool[0] || null;
   }
   if (!spot) return null;
+  // It holds a particular relic, chosen now, so it can be drawn and named
+  // before you agree to anything. One you already carry is no reason to fight.
+  const held = (G && G.run && G.run.relics) ? G.run.relics : [];
+  const pool = RELICS.filter(x => !held.includes(x.id));
+  const relic = pool.length ? pool[Math.floor(R()*pool.length)].id : null;
   const f = { t:'plinth', r:rid, x:spot[0], y:spot[1], w:1, h:1, rot:0,
-              quest:null, taken:false, searched:false, plinth:true, spent:false };
+              quest:null, taken:false, searched:false, plinth:true, spent:false, relic };
   Q.furn.push(f);
   return f;
 }
 const trialPlinth = () => (G && G.q && G.q.furn ? G.q.furn.find(f => f.plinth) || null : null);
+// What this floor's trial is actually paying, if anything.
+function plinthRelic(){
+  const f = trialPlinth();
+  return f && f.relic && !relicHas(f.relic) ? f.relic : null;
+}
 // Win or lose, the light goes out — the room has finished with you either way.
 function spendPlinth(){
   const f = trialPlinth();
@@ -2588,12 +2603,8 @@ function drawFurniture(g, f, t){
       const lift = -h*.30 - pulse*h*.05;
       g.fillStyle = `rgba(216,168,60,${.10 + pulse*.10})`;   // the light it throws
       g.beginPath(); g.ellipse(0, lift, w*.30, h*.22, 0, 0, 6.284); g.fill();
-      g.fillStyle = `rgba(243,212,136,${.75 + pulse*.25})`;
-      g.beginPath();
-      g.moveTo(0, lift - h*.13); g.lineTo(w*.10, lift); g.lineTo(0, lift + h*.13);
-      g.lineTo(-w*.10, lift); g.closePath(); g.fill();
-      g.fillStyle = `rgba(255,246,214,${.5 + pulse*.5})`;
-      g.beginPath(); g.arc(0, lift, w*.035, 0, 6.284); g.fill();
+      // and the thing it is actually paying, floating over it
+      drawRelicOn(g, f.relic, w*.13, lift, pulse);
     }
   } else if (F==='cage'){
     g.fillStyle = 'rgba(10,8,6,.75)'; rr(g, -w*.36, -h*.40, w*.72, h*.74, 3); g.fill();
@@ -2632,6 +2643,81 @@ function drawBody(g, b, t){
   g.fillRect(-TS*.235, TS*.00, TS*.235, TS*.045);
   g.fillStyle = 'rgba(0,0,0,.55)';
   g.beginPath(); g.ellipse(-TS*.12, TS*.005, TS*.055, TS*.028, 0, 0, 6.284); g.fill();
+  g.restore();
+}
+
+// The plinth used to hold a gem that meant "a reward". It holds the actual
+// relic now, so accepting the terms is a decision about a specific object you
+// can see from the doorway rather than about a reward in the abstract.
+function drawRelicOn(g, id, s, y, pulse){
+  const lit = `rgba(243,212,136,${(.75 + pulse*.25).toFixed(3)})`;
+  const dim = `rgba(196,164,96,${(.55 + pulse*.25).toFixed(3)})`;
+  const hot = `rgba(255,246,214,${(.5 + pulse*.5).toFixed(3)})`;
+  g.save(); g.translate(0, y);
+  switch (id){
+    case 'skull':
+      g.fillStyle = lit;
+      g.beginPath(); g.arc(0, -s*.12, s*.62, 0, 6.284); g.fill();
+      g.fillRect(-s*.34, s*.30, s*.68, s*.30);
+      g.fillStyle = 'rgba(30,20,10,.85)';
+      g.beginPath(); g.arc(-s*.24, -s*.14, s*.17, 0, 6.284); g.fill();
+      g.beginPath(); g.arc( s*.24, -s*.14, s*.17, 0, 6.284); g.fill();
+      break;
+    case 'lantern':
+      g.fillStyle = dim; g.fillRect(-s*.42, -s*.50, s*.84, s*.16);
+      g.fillStyle = lit; g.fillRect(-s*.34, -s*.34, s*.68, s*.76);
+      g.fillStyle = hot;
+      g.beginPath(); g.ellipse(0, s*.02, s*.20, s*.30, 0, 0, 6.284); g.fill();
+      g.fillStyle = dim; g.fillRect(-s*.42, s*.42, s*.84, s*.16);
+      break;
+    case 'ring':
+      g.strokeStyle = lit; g.lineWidth = s*.26;
+      g.beginPath(); g.arc(0, s*.06, s*.44, 0, 6.284); g.stroke();
+      g.fillStyle = hot;
+      g.beginPath(); g.arc(0, -s*.48, s*.20, 0, 6.284); g.fill();
+      break;
+    case 'coin':
+      g.fillStyle = lit;
+      g.beginPath(); g.ellipse(0, 0, s*.40, s*.60, 0, 0, 6.284); g.fill();
+      g.fillStyle = 'rgba(60,42,16,.65)';
+      g.beginPath(); g.ellipse(0, 0, s*.18, s*.34, 0, 0, 6.284); g.fill();
+      break;
+    case 'horn':
+      g.fillStyle = lit;
+      g.beginPath();
+      g.moveTo(-s*.62, s*.34); g.quadraticCurveTo(s*.10, s*.34, s*.56, -s*.34);
+      g.quadraticCurveTo(s*.20, s*.02, -s*.58, s*.62); g.closePath(); g.fill();
+      g.fillStyle = hot; g.fillRect(s*.34, -s*.42, s*.24, s*.16);
+      break;
+    case 'mirror':
+      g.fillStyle = dim;
+      g.beginPath(); g.ellipse(0, -s*.10, s*.44, s*.56, 0, 0, 6.284); g.fill();
+      g.fillStyle = 'rgba(24,16,30,.88)';
+      g.beginPath(); g.ellipse(0, -s*.10, s*.32, s*.44, 0, 0, 6.284); g.fill();
+      g.fillStyle = lit; g.fillRect(-s*.12, s*.42, s*.24, s*.34);
+      break;
+    case 'anvil':
+      g.fillStyle = lit;
+      g.fillRect(-s*.58, -s*.42, s*1.16, s*.28);
+      g.fillRect(-s*.22, -s*.14, s*.44, s*.36);
+      g.fillRect(-s*.46, s*.22, s*.92, s*.24);
+      break;
+    case 'thread':
+      g.strokeStyle = lit; g.lineWidth = s*.16; g.lineCap = 'round';
+      g.beginPath();
+      g.moveTo(-s*.56, -s*.44);
+      g.quadraticCurveTo(s*.50, -s*.10, -s*.42, s*.24);
+      g.quadraticCurveTo(-s*.10, s*.62, s*.54, s*.50);
+      g.stroke();
+      break;
+    default:                                    // a trial with nothing left to pay
+      g.fillStyle = lit;
+      g.beginPath();
+      g.moveTo(0, -s); g.lineTo(s*.76, 0); g.lineTo(0, s); g.lineTo(-s*.76, 0);
+      g.closePath(); g.fill();
+      g.fillStyle = hot;
+      g.beginPath(); g.arc(0, 0, s*.26, 0, 6.284); g.fill();
+  }
   g.restore();
 }
 
@@ -2852,6 +2938,7 @@ function clampCam(){
 // A door opening is the game's biggest beat; the camera should lean into it.
 // Consecutive kills without a hero bleeding for it.
 const STREAK_STEPS = [3, 5, 8, 12];
+const STREAK_SHOW = 2;                 // below two it is not a run, it is a Tuesday
 function bumpStreak(){
   if (!G.q) return;
   G.q.streak = (G.q.streak || 0) + 1;
@@ -5189,6 +5276,17 @@ function renderHUD(){
   $('goldn').textContent = (G.run ? G.run.gold : G.camp.gold) + (G.q.pot ? ' +' + G.q.pot : '');
   const fp = $('fatepill');
   if (fp){ fp.style.display = ''; $('faten').textContent = fateOf(); }
+  // the run you are on. It only appears once it is worth minding, and it says
+  // how far to the next step so the banner is something you can see coming.
+  const sp = $('streakpill');
+  if (sp){
+    const n = G.q.streak || 0;
+    const next = STREAK_STEPS.find(s => s > n);
+    sp.style.display = n >= STREAK_SHOW ? '' : 'none';
+    $('streakn').textContent = next === undefined ? String(n) : `${n}/${next}`;
+    sp.classList.toggle('hot', n >= 5);
+    sp.classList.toggle('max', next === undefined);
+  }
   const wp = $('wrathpill');
   if (wp){
     const lvl = G.q.wrathAt || 0, next = WRATH_STEPS[lvl];
@@ -5968,11 +6066,15 @@ function winTrial(){
   say(`${trialDef().name} is answered.`, 'good');
   sfx('win'); G.shake = 16;
   addFate(2, 'a trial answered');
+  // it pays what was standing on the plinth, not a surprise off the shelf
+  const want = plinthRelic();
   const p = spendPlinth();
   if (p) spark(p.x, p.y, 26, '#f3d488', { spd:.02, up:.006, glow:'rgba(243,212,136,.5)', r:1.6 });
-  const r = G.run ? relicOffer() : null;
-  if (r) later(700, () => showRelic(r.id));
+  const r = G.run ? (want || (relicOffer() || {}).id) : null;
+  G.q.trialPaid = r || null;                  // what the room actually put up
+  if (r) later(700, () => showRelic(r));
   renderHUD();
+  return { won:true, relic:r };
 }
 // Called once a turn, after the Warlock has moved.
 function tickTrial(){
@@ -6000,7 +6102,10 @@ function showTrialOffer(onAccept){
     <div class="rule"></div>
     <p class="flavor">Words are cut into the lintel, and they are not a warning. They are terms.</p>
     <div class="obj"><b>The terms</b>${d.terms}</div>
-    <div class="row"><div class="ic">✦</div><div class="tx"><b>If you answer them</b><s>2 Fate, and whatever is on the plinth</s></div></div>
+    ${(() => { const rid2 = plinthRelic(), R2 = rid2 && RELIC(rid2);
+      return `<div class="row"><div class="ic">${R2 ? R2.ic : '✦'}</div><div class="tx"><b>If you answer them</b><s>2 Fate${
+        R2 ? `, and the <b style="display:inline;font-size:inherit;color:var(--gold2)">${R2.name}</b> on the plinth — ${R2.desc}`
+           : ', and whatever is on the plinth'}</s></div></div>`; })()}
     <div class="row"><div class="ic">⛓</div><div class="tx"><b>If you break them</b><s>Every door of this room slams and bolts —
       a shoulder and a Body Point to get through one — and the Warlock looks up</s></div></div>
     <div class="row"><div class="ic">🚪</div><div class="tx"><b>If you would rather not</b><s>The door stays shut. It will still be here.</s></div></div>
@@ -6813,6 +6918,7 @@ const DRAFT_TABS = [
   { id:'boons', name:'Boons' },
   { id:'coin',  name:'Coin'  },
   { id:'stair', name:'Stairs'},
+  { id:'book',  name:'Book'  },
 ];
 function showDraft(){
   const next = G.run.depth + 1;
@@ -6903,6 +7009,12 @@ function showDraft(){
       draftState.taken ? `<p class="flavor" style="text-align:center;margin-top:12px">Nothing else to take here. The stair is waiting.</p>` : ''}`,
     coin:  `${wager}${wager ? '<div class="rule"></div>' : ''}${head('The pedlar on the stair')}${ped}`,
     stair: `${head('Choose your stair')}${stairs}`,
+    // how far this has got before, next to how far it has got this time
+    book:  `${head('This descent')}<div class="qlist">${thisRunRow()}</div>
+            <div class="rule"></div>${head(`The last ${Math.min(10, (G.meta.history||[]).length) || 'few'}`)}
+            <div class="qlist">${historyRows()}</div>
+            <div class="row"><div class="ic">⬇</div><div class="tx"><b>Deepest</b><s>${
+              G.meta.runs} run${G.meta.runs===1?'':'s'} attempted</s></div><div style="color:#f3d488">${G.meta.best}</div></div>`,
   };
   modal(`
     <h2>Between Floors</h2>
@@ -7007,9 +7119,10 @@ function showMentor(){
 }
 
 const HERO_IC = { barbarian:'🪓', dwarf:'⚒', elf:'🏹', wizard:'🔮' };
-function showHistory(){
+// The Book, as rows — shared by the title screen and the between-floors tab.
+function historyRows(){
   const h = G.meta.history || [];
-  const rows = h.length ? h.map(r => `<div class="qrow" style="cursor:default">
+  return h.length ? h.map(r => `<div class="qrow" style="cursor:default">
       <div class="n">${r.depth}</div>
       <div class="tx">
         <b>${r.party.map(p => HERO_IC[p] || '·').join(' ')} ${r.won ? 'walked away' : 'ended'} at depth ${r.depth}</b>
@@ -7020,6 +7133,26 @@ function showHistory(){
       </div>
     </div>`).join('')
     : '<p class="flavor">Nothing written down yet. Go and give it something to write.</p>';
+}
+// And the run you are on, which is the line the Book has not written yet.
+function thisRunRow(){
+  if (!G.run) return '';
+  const alive = runAlive(), gone = G.run.heroes.filter(h => !h.alive);
+  return `<div class="qrow" style="cursor:default;border-color:rgba(216,168,60,.4)">
+      <div class="n" style="color:var(--gold2)">${G.run.depth}</div>
+      <div class="tx">
+        <b>This one, still going</b>
+        <s>${alive.length} standing · ${G.run.kills || 0} killed · ◈ ${G.run.gold}
+        ${gone.length ? `<br><span style="color:#b03a2c">Lost: ${gone.map(h => h.name).join(', ')}</span>` : ''}
+        ${G.run.boons.length ? `<br>${G.run.boons.map(b => BOON(b) ? BOON(b).ic : '').join('')}` : ''}
+        ${G.run.curses.length ? ` ${G.run.curses.map(c => CURSE_MARK(c) ? CURSE_MARK(c).ic : '').join('')}` : ''}
+        ${G.run.relics.length ? ` ${G.run.relics.map(x => RELIC(x) ? RELIC(x).ic : '').join('')}` : ''}</s>
+      </div>
+    </div>`;
+}
+function showHistory(){
+  const h = G.meta.history || [];
+  const rows = historyRows();
   modal(`<h2>The Book</h2>
     <div class="sub" style="margin:2px 0 0">The last ${Math.min(10, h.length) || 'few'} descents</div>
     <div class="rule"></div>
@@ -7305,7 +7438,8 @@ globalThis.HQ = {
   WAGER_MAX, wagerCost, canWager, wagerDraft,
   get draftState(){ return draftState; }, set draftState(v){ draftState = v; },
   BOSS_LINES, bossOf, bossIntro, BOSS_LAST, bossLastWords,
-  placePlinth, trialPlinth, spendPlinth, drawBody, DRAFT_TABS,
+  placePlinth, trialPlinth, spendPlinth, plinthRelic, drawRelicOn, drawBody, DRAFT_TABS,
+  historyRows, thisRunRow, STREAK_SHOW,
   LIE_FROM, LIE_CHANCE, LIARS, LIAR_TYPES, liars, lyingChests,
   mimicWatch, springLiar, springMimic, TRIAL_WRATH,
   FORCE_RISK, chestIn, drawCard, forcedCard, openChest, chestBites, showChest,
