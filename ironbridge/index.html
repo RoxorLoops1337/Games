@@ -3460,28 +3460,69 @@ const DECK = { top:'#938b79', top2:'#a09884', side:'#544c42', edge:'#3f3931', ra
 // nobody walks on, and a kerb inside it is a raised edge bodies stand on.
 const DECK_XS = { track:2.4, kerb:4.9, railH:1.35 };
 
+// Where the light in this game actually comes from, at last. LIT says the sun
+// is up and to the left of the viewer; this is the sun, and a test holds the
+// two to the same answer — a sun drawn on the right of a world lit from the
+// left is the same bug drawHouse had, just at the other end of it.
+// Fractions of the canvas, so it lands in the same place on a phone.
+const SUN = { x:.17, y:.16, r:26, halo:6.5 };
+// The ridge slope that gets the rim runs from the foot of a peak to its apex,
+// this far to the RIGHT — so the face it belongs to looks left, into the sun.
+// Flip the sun to the other side of the sky and this has to flip with it.
+const RIDGE_RIM = 70;
+// The ridges behind everything. `rim` is the edge the sun catches, `haze` the
+// pool at the foot that makes the next band read as further off.
+const BANDS = [
+  { d:.10, y:.30, h:.26, col:'rgba(96,124,132,.55)', rim:'rgba(198,214,206,.40)', haze:'rgba(186,206,206,.55)' },
+  { d:.20, y:.38, h:.24, col:'rgba(72,101,96,.68)',  rim:'rgba(158,183,172,.34)', haze:'rgba(160,186,184,.5)' },
+  { d:.34, y:.47, h:.22, col:'rgba(48,74,64,.85)',   rim:'rgba(120,150,136,.30)', haze:'rgba(132,162,158,.45)' },
+];
 function drawSky(c){
   const g = c.createLinearGradient(0, 0, 0, LH);
   g.addColorStop(0, '#6f97ab'); g.addColorStop(.34, '#87a9ac'); g.addColorStop(.55, '#5e7f72'); g.addColorStop(1, '#1b2a26');
   c.fillStyle = g; c.fillRect(0, 0, LW, LH);
+  // The sun. Everything in this game is lit from the upper left — the mesa,
+  // the bodies, the mines, and since LIT the buildings too — and there was
+  // nothing in the sky doing the lighting. It sits still while the world
+  // scrolls under it, which is what something that far away does.
+  const sx = LW * SUN.x, sy = LH * SUN.y, sr = SUN.r * (.7 + cam.z * .4);
+  const halo = c.createRadialGradient(sx, sy, 0, sx, sy, sr * SUN.halo);
+  halo.addColorStop(0, 'rgba(255,238,196,.34)');
+  halo.addColorStop(.45, 'rgba(255,232,186,.13)');
+  halo.addColorStop(1, 'rgba(255,232,186,0)');
+  c.fillStyle = halo; c.fillRect(0, 0, LW, LH * .75);
+  ell(c, sx, sy, sr * 1.22, sr * 1.22, 'rgba(255,246,214,.30)');
+  ell(c, sx, sy, sr, sr, '#fff6de');
   // three parallax ridges receding into haze
-  const bands = [
-    { d:.10, y:.30, h:.26, col:'rgba(96,124,132,.55)' },
-    { d:.20, y:.38, h:.24, col:'rgba(72,101,96,.68)' },
-    { d:.34, y:.47, h:.22, col:'rgba(48,74,64,.85)' },
-  ];
-  for (const b of bands){
+  const ridgeX = (i, d) => ((i * 230 - cam.x * LS() * d) % (LW + 690) + LW + 690) % (LW + 690) - 230;
+  for (const b of BANDS){
     c.fillStyle = b.col;
     c.beginPath();
     c.moveTo(-40, LH);
     for (let i = -1; i < 9; i++){
-      const bx = ((i * 230 - cam.x * LS() * b.d) % (LW + 690) + LW + 690) % (LW + 690) - 230;
+      const bx = ridgeX(i, b.d);
       c.lineTo(bx, LH * (b.y + b.h));
       c.lineTo(bx + 70, LH * b.y - (i % 3) * 16);
       c.lineTo(bx + 140, LH * (b.y + b.h * .55));
       c.lineTo(bx + 215, LH * (b.y + .04));
     }
     c.lineTo(LW + 60, LH); c.closePath(); c.fill();
+    // and the slope that faces the sun catches it, the same as every ridge of
+    // rock and every roof down on the island
+    c.strokeStyle = b.rim; c.lineWidth = Math.max(1, 2.4 * cam.z); c.lineCap = 'round';
+    for (let i = -1; i < 9; i++){
+      const bx = ridgeX(i, b.d);
+      if (bx < -240 || bx > LW + 60) continue;
+      c.beginPath();
+      c.moveTo(bx, LH * (b.y + b.h));
+      c.lineTo(bx + RIDGE_RIM, LH * b.y - (i % 3) * 16);
+      c.stroke();
+    }
+    c.lineCap = 'butt';
+    // haze pooling at the foot of the band, so the next one reads as further
+    c.globalAlpha = .30;
+    c.fillStyle = b.haze; c.fillRect(0, LH * (b.y + b.h) - 6, LW, LH * .05);
+    c.globalAlpha = 1;
   }
   drawClouds(c);
   // valley floor + the mist that hides how far down it goes
@@ -7810,7 +7851,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
