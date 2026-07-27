@@ -798,12 +798,12 @@ export function buildLevel(G, engine, materials) {
     // hanging over an unlit apron either.
     if (quality >= 1) {
       bulkheadLamp(1.6, DECK - 0.30, CW.zN, 0, Math.PI / 2, {
-        color: WORK, intensity: 18, distance: 15,
+        color: WORK, intensity: 20, distance: 15, angle: 1.18, penumbra: 0.85,
       }, 'pad');
     }
     if (quality >= 2) {
       bulkheadLamp(CW.x, DECK - 0.30, 8.0, 0, Math.PI / 2, {
-        color: WORK, intensity: 14, distance: 13,
+        color: WORK, intensity: 15, distance: 13, angle: 1.18, penumbra: 0.85,
       }, 'pad');
     }
 

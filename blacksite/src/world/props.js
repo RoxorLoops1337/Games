@@ -555,7 +555,7 @@ export function bulkhead(opts = {}) {
 // really lights a floor, and it earns its place by standing next to the open
 // cable trench somebody was last working in. Head faces +Z, raked down.
 export function workLamp(opts = {}) {
-  const h = opts.h || 1.72, R = opts.spread || 0.42, tilt = opts.tilt == null ? -0.34 : opts.tilt;
+  const h = opts.h || 1.72, R = opts.spread || 0.42, tilt = opts.tilt == null ? 0.30 : opts.tilt;
   const col = opts.color;
   const body = [], lens = [];
   const strut = (a, b, r, seg = 5) => {
