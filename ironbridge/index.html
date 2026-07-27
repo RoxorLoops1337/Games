@@ -5049,6 +5049,21 @@ function drawGround(c){
 // the air off the back of the island. The mesa reaches far enough now that
 // the hall, and the workers who wander around it, stand on solid ground.
 const PLAT = { far:-58, near:40, back:60 };
+// The three walls of the mesa you can ever see, each as a segment in the
+// ground plane that gets extruded down into the chasm. `outer` is the back
+// wall: invisible from your own hold, and the whole reason it spent this long
+// as a single flat quad while the other two had rock in them.
+function platFaces(side){
+  const d = side === 0 ? 1 : -1;
+  const inner = side === 0 ? 3 : C.LANE_LEN - 3;
+  const outer = inner - d * (PLAT.back + 34);
+  const F = PLAT.far, N = PLAT.near;
+  return [
+    { k:'near',  a:[outer, N], b:[inner, N], base:'#4a4038', band:'#6a5c4c', band2:'#544738', lip:'#6f6350' },
+    { k:'inner', a:[inner, F], b:[inner, N], base:'#40382e', band:'#5e5142', band2:'#4a3f32', lip:'#655a49' },
+    { k:'outer', a:[outer, F], b:[outer, N], base:'#453c33', band:'#615343', band2:'#4c4133', lip:'#665b4a' },
+  ];
+}
 function drawPlateau(c){
   const d = holdSide === 0 ? 1 : -1;
   const inner = holdSide === 0 ? 3 : C.LANE_LEN - 3;         // where it meets the bridge
@@ -5056,43 +5071,40 @@ function drawPlateau(c){
   const F = PLAT.far, N = PLAT.near;
   const e = (x, y, z) => lp(x, y, z);
   const DROP = 46;
-  // rock walls first, so the grass caps them cleanly
-  poly(c, [e(outer, N), e(inner, N), e(inner, N, -DROP), e(outer, N, -DROP)], '#4a4038');
-  poly(c, [e(outer, N, -DROP * .45), e(inner, N, -DROP * .45), e(inner, N, -DROP), e(outer, N, -DROP)], '#39322b');
-  poly(c, [e(inner, F), e(inner, N), e(inner, N, -DROP), e(inner, F, -DROP)], '#40382e');
-  poly(c, [e(inner, F, -DROP * .4), e(inner, N, -DROP * .4), e(inner, N, -DROP), e(inner, F, -DROP)], '#2f2922');
-  poly(c, [e(outer, F), e(outer, N), e(outer, N, -DROP), e(outer, F, -DROP)], '#453c33');
-  // Strata. The cliff is the second-biggest surface in the picture after the
-  // grass and it was three faint bands on one of its two faces — a brown slab
-  // most of the way down the screen. Both faces get bedding planes now, plus
-  // vertical joints, and a paler weathered lip under the turf.
-  c.globalAlpha = .30;
-  for (let i = 1; i < 7; i++){
-    const z = -DROP * (i / 7);
-    const h = 1.1 + (i % 3) * .8;
-    poly(c, [e(outer, N, z), e(inner, N, z), e(inner, N, z - h), e(outer, N, z - h)], i % 2 ? '#6a5c4c' : '#544738');
-    poly(c, [e(inner, F, z), e(inner, N, z), e(inner, N, z - h), e(inner, F, z - h)], i % 2 ? '#5e5142' : '#4a3f32');
+  // Every visible wall of the mesa, walked as a list. The bedding planes, the
+  // joints, the weathered lip and the dissolve into the chasm used to be
+  // written out per face, and the BACK wall got none of them — one flat brown
+  // quad. You never see it from your own hold, so it looked fine right up
+  // until you pressed FOE and the enemy island turned out to be sitting on a
+  // slab. Iterating means a face cannot be added and then forgotten.
+  for (const f of platFaces(holdSide)){
+    const q = (t0, t1, z0, z1, col) => {
+      const ax = lerp(f.a[0], f.b[0], t0), ay = lerp(f.a[1], f.b[1], t0);
+      const bx = lerp(f.a[0], f.b[0], t1), by = lerp(f.a[1], f.b[1], t1);
+      poly(c, [e(ax, ay, z0), e(bx, by, z0), e(bx, by, z1), e(ax, ay, z1)], col);
+    };
+    q(0, 1, 0, -DROP, f.base);
+    q(0, 1, -DROP * .45, -DROP, shade(f.base, .78));
+    c.globalAlpha = .30;
+    for (let i = 1; i < 7; i++){
+      const z = -DROP * (i / 7), h = 1.1 + (i % 3) * .8;
+      q(0, 1, z, z - h, i % 2 ? f.band : f.band2);
+    }
+    c.globalAlpha = .22;
+    for (let i = 0; i < 9; i++){                     // joints running down the rock
+      const t = (i + .5) / 9, w = (.8 + (i % 2) * .5) / 90;
+      q(t, t + w, -2, -DROP * .78, '#2b251e');
+    }
+    c.globalAlpha = .5;
+    q(0, 1, 0, -1.8, f.lip);                         // weathered under the turf
+    c.globalAlpha = 1;
+    for (let i = 0; i < 3; i++){                     // and the foot of it going dark
+      const z0 = -DROP * (.55 + i * .15), z1 = z0 - DROP * .15;
+      c.globalAlpha = .22 + i * .26;
+      q(0, 1, z0, z1, '#0c1414');
+    }
+    c.globalAlpha = 1;
   }
-  c.globalAlpha = .22;
-  for (let i = 0; i < 9; i++){                       // joints running down the rock
-    const t = (i + .5) / 9, w = .8 + (i % 2) * .5;
-    const x = lerp(outer, inner, t);
-    poly(c, [e(x, N, -2), e(x + d * w, N, -2), e(x + d * w, N, -DROP * .78), e(x, N, -DROP * .78)], '#2b251e');
-    const y = lerp(F, N, t);
-    poly(c, [e(inner, y, -2), e(inner, y + w * 1.6, -2), e(inner, y + w * 1.6, -DROP * .78), e(inner, y, -DROP * .78)], '#2b251e');
-  }
-  c.globalAlpha = .5;
-  poly(c, [e(outer, N), e(inner, N), e(inner, N, -1.8), e(outer, N, -1.8)], '#6f6350');
-  poly(c, [e(inner, F), e(inner, N), e(inner, N, -1.8), e(inner, F, -1.8)], '#655a49');
-  c.globalAlpha = 1;
-  // and the bottom of the cliff dissolving into the dark of the chasm
-  for (let i = 0; i < 3; i++){
-    const z0 = -DROP * (.55 + i * .15), z1 = z0 - DROP * .15;
-    c.globalAlpha = .22 + i * .26;
-    poly(c, [e(outer, N, z0), e(inner, N, z0), e(inner, N, z1), e(outer, N, z1)], '#0c1414');
-    poly(c, [e(inner, F, z0), e(inner, N, z0), e(inner, N, z1), e(inner, F, z1)], '#0c1414');
-  }
-  c.globalAlpha = 1;
   // grass top
   poly(c, [e(outer, F), e(inner, F), e(inner, N), e(outer, N)], '#4c7040');
   c.globalAlpha = .35;
@@ -7436,7 +7448,7 @@ window.IB = {
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
-  recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf,
+  recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,

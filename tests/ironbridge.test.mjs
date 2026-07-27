@@ -2952,6 +2952,49 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'the ogre and the gun draw on both sides, firing and hit, at both ends of the lane');
 }
 {
+  // The mesa's walls. The bedding planes, joints, weathered lip and dissolve
+  // into the chasm were written out per face — and the BACK wall got none of
+  // them, so it stayed one flat brown quad. You never see it from your own
+  // hold, which is why it survived: it looked fine right up until you pressed
+  // FOE and the enemy island turned out to be sitting on a slab.
+  IB.newMatch({ diff:'veteran', seed:131 });
+  for (const side of [0, 1]){
+    const fs = IB.platFaces(side);
+    t.ok(fs.length === 3, 'side ' + side + ' has all three visible walls (' + fs.length + ')');
+    const keys = fs.map(f => f.k).sort().join(',');
+    t.ok(keys === 'inner,near,outer', 'and they are the near, inner and outer ones (' + keys + ')');
+    const inner = side === 0 ? 3 : C.LANE_LEN - 3;
+    const outer = inner - (side === 0 ? 1 : -1) * (IB.PLAT.back + 34);
+    for (const f of fs){
+      // A wall with no length draws nothing, and a wall drawn along a line the
+      // mesa does not have would float beside the island.
+      t.ok(f.a[0] !== f.b[0] || f.a[1] !== f.b[1], f.k + ' is a real segment');
+      for (const p of [f.a, f.b]){
+        const onX = Math.abs(p[0] - inner) < 1e-9 || Math.abs(p[0] - outer) < 1e-9;
+        const onY = Math.abs(p[1] - IB.PLAT.far) < 1e-9 || Math.abs(p[1] - IB.PLAT.near) < 1e-9;
+        t.ok(onX && onY, f.k + '’s corner is on the edge of the mesa');
+      }
+      // Every tone the rock is built from goes through shade(), which parseInts
+      // the string after the '#'.
+      for (const k of ['base', 'band', 'band2', 'lip'])
+        t.ok(/^#[0-9a-f]{6}$/i.test(f[k]), f.k + '.' + k + ' is a colour shade() can read (' + f[k] + ')');
+    }
+  }
+  // The two mesas must not share a wall — one hold's cliff standing where the
+  // other's should be is the kind of thing that only shows at one camera angle.
+  const a0 = IB.platFaces(0).map(f => f.k + ':' + f.a + '|' + f.b);
+  const a1 = IB.platFaces(1).map(f => f.k + ':' + f.a + '|' + f.b);
+  t.ok(a0.every(s => !a1.includes(s)), 'the two holds stand on their own rock');
+  // and the whole thing draws from behind, which is where the flat wall was
+  IB.cam.follow = false;
+  for (const x of [IB.HOLD_X - 20, IB.HOLD_X + 4, C.LANE_LEN / 2, C.LANE_LEN - IB.HOLD_X + 20]){
+    IB.cam.x = x;
+    for (const z of [.45, 1, 2]){ IB.cam.z = IB.cam.tz = z; IB.draw(); }
+  }
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'both mesas draw from in front, from behind and from the middle');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
