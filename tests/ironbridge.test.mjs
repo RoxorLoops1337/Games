@@ -4754,6 +4754,139 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.cam.x = 26;
     IB.MY = seat0c;
   }
+  {
+    // A hero is built over a whole match — a class, a passive out of a
+    // hundred, three skills, an ultimate, and up to five ranks in each. None
+    // of it reached the body. Measured with max HP held equal, so the health
+    // bar's notch count could not masquerade as a change, a level 18 hero
+    // with four skills and seven ranks drew EXACTLY the same seventy shapes
+    // as the level 1 one that walked out of the tavern. The only thing on the
+    // board that said a hero had grown was the digit in its roundel.
+    const s = CTX.__stats;
+    const seat0d = IB.MY;
+    t.ok(IB.heroRanks({ passRank:2, skills:[{ rank:3 }, { rank:1 }] }) === 6, 'ranks are the passive plus the skills');
+    t.ok(IB.heroRanks({ }) === 0, 'and a hero with nothing has none');
+    t.ok(IB.mantleOf({ }) === 0, 'so it wears nothing');
+    t.ok(IB.mantleOf({ passRank:1, skills:[] }) > 0, 'the very first pick shows');
+    t.ok(IB.mantleOf({ passRank:1, skills:[] }) < 1, 'and does not finish it (' +
+      IB.mantleOf({ passRank:1, skills:[] }).toFixed(2) + ')');
+    t.ok(IB.mantleOf({ passRank:5, skills:[{ rank:5 }, { rank:5 }, { rank:5 }, { rank:5 }] }) === 1,
+      'a fully built hero wears all of it');
+    let back = 0;
+    for (let r = 1; r <= 25; r++)
+      if (IB.mantleOf({ passRank:0, skills:[{ rank:r }] }) < IB.mantleOf({ passRank:0, skills:[{ rank:r - 1 }] })) back++;
+    t.ok(back === 0, 'and it only ever grows (' + back + ')');
+
+    // DRIVEN — and it has to be driven on GEOMETRY. The mantle is two polygons
+    // at every rank, so an op count cannot tell a fresh hero from a built one
+    // and a test written that way would pass with the whole thing removed.
+    const MARK = '#12ff34';
+    const spread = (ranks) => {
+      s.lines = []; s.dropped = 0;
+      IB.heroMantle(CTX, { isHero:true, side:0, hitT:0, passRank:0, skills:[{ rank:ranks }] },
+        400, 300, 340, 1, MARK);
+      const ys = s.lines.map(l => l.y), xs = s.lines.map(l => l.x);
+      if (!ys.length) return null;
+      return { drop:Math.max(...ys) - Math.min(...ys), wide:Math.max(...xs) - Math.min(...xs),
+               n:s.lines.length, dropped:s.dropped };
+    };
+    const NOMANTLE = { drop:0, wide:0, n:0, dropped:0 };
+    const fresh = spread(1) || NOMANTLE, built = spread(12) || NOMANTLE;
+    t.ok(fresh !== NOMANTLE && built !== NOMANTLE, 'a hero wears a mantle at all');
+    t.ok(fresh.dropped === 0 && built.dropped === 0, 'and the capture held it');
+    t.ok(fresh.n >= 6, 'the mantle is a real shape (' + fresh.n + ' points)');
+    t.ok(built.drop > fresh.drop * 1.4, 'and it lengthens as the hero is built (' +
+      fresh.drop.toFixed(2) + ' → ' + built.drop.toFixed(2) + ')');
+    t.ok(built.wide > fresh.wide, 'and broadens with it (' +
+      fresh.wide.toFixed(2) + ' → ' + built.wide.toFixed(2) + ')');
+    t.ok(spread(0) === null, 'and a hero with no picks yet wears none');
+
+    // The whole point, stated the way the bug was found: two heroes, same max
+    // HP so the bar cannot speak for them, must not draw the same body.
+    {
+      IB.newMatch({ diff:'veteran', seed:8101 });
+      IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1; IB.MY = 0;
+      const build = (lvl) => {
+        G.sides[0].heroes.length = 0;
+        const h = IB.makeHero(0, 'fighter', 'Probe');
+        G.sides[0].heroes.push(h); IB.enterLane(h); IB.autoPick(h);
+        for (let i = 0; i < 60 && h.lvl < lvl; i++){ IB.gainXp(h, IB.xpNeed(h.lvl) + 5); IB.autoPick(h); }
+        IB.recalcHero(h, true);
+        h.x = 60; h.y = 0; h.mhp = 1000; h.hp = 1000;      // hold the bar still
+        s.lines = []; s.dropped = 0;
+        IB.drawUnit(CTX, h);
+        const ys = s.lines.map(l => l.y);
+        return { ranks:IB.heroRanks(h), skills:h.skills.length,
+                 span:ys.length ? Math.max(...ys) - Math.min(...ys) : 0, dropped:s.dropped };
+      };
+      // Compare a level 1 against a level 18 for the fact of it, but do NOT
+      // rest the assertion there: two different heroes differ in a dozen ways
+      // and the first version of this passed with the mantle removed entirely,
+      // on a difference that had nothing to do with it. Confounded.
+      const a = build(1), b = build(18);
+      t.ok(a.dropped === 0 && b.dropped === 0, 'the hero sweep held its capture');
+      t.ok(b.ranks > a.ranks && b.skills > a.skills, 'the level 18 hero really is more built (' +
+        a.ranks + '→' + b.ranks + ' ranks, ' + a.skills + '→' + b.skills + ' skills)');
+      // The controlled version: ONE hero, drawn twice, with nothing changed
+      // between the two but the ranks it has earned.
+      G.sides[0].heroes.length = 0;
+      const h = IB.makeHero(0, 'fighter', 'Control');
+      G.sides[0].heroes.push(h); IB.enterLane(h); IB.autoPick(h);
+      for (let i = 0; i < 60 && h.lvl < 18; i++){ IB.gainXp(h, IB.xpNeed(h.lvl) + 5); IB.autoPick(h); }
+      IB.recalcHero(h, true);
+      h.x = 60; h.y = 0; h.mhp = 1000; h.hp = 1000;
+      const drawSpan = () => {
+        s.lines = []; s.dropped = 0;
+        IB.drawUnit(CTX, h);
+        const ys = s.lines.map(l => l.y);
+        return { span:ys.length ? Math.max(...ys) - Math.min(...ys) : 0, n:s.lines.length, dropped:s.dropped };
+      };
+      const earned = drawSpan();
+      const keepP = h.passRank, keepR = h.skills.map(sk => sk.rank);
+      h.passRank = 0; for (const sk of h.skills) sk.rank = 0;
+      const stripped = drawSpan();
+      h.passRank = keepP; h.skills.forEach((sk, i) => { sk.rank = keepR[i]; });
+      t.ok(earned.dropped === 0 && stripped.dropped === 0, 'and held it for the controlled pair');
+      t.ok(earned.n > 0 && stripped.n > 0, 'both draws put a body on the canvas');
+      t.ok(earned.n !== stripped.n || earned.span !== stripped.span,
+        'the SAME hero draws differently once it has earned its ranks (' +
+        stripped.n + '/' + stripped.span.toFixed(1) + ' → ' + earned.n + '/' + earned.span.toFixed(1) + ')');
+    }
+    // Read the neighbouring branch: a levy is not a champion.
+    {
+      IB.newMatch({ diff:'veteran', seed:8103 });
+      IB.cam.follow = false; IB.cam.x = 40; IB.cam.z = IB.cam.tz = 1;
+      G.units.length = 0;
+      const u = IB.spawnUnit(0, 'grunt', { y:0 });
+      u.x = 40; u.passRank = 5; u.skills = [{ rank:5 }];    // even if it somehow had ranks
+      s.lines = [];
+      IB.drawUnit(CTX, u);
+      const withRanks = s.lines.length;
+      u.passRank = 0; u.skills = [];
+      s.lines = [];
+      IB.drawUnit(CTX, u);
+      t.ok(withRanks === s.lines.length, 'a minion does not put on a champion’s mantle');
+    }
+    // Whose colour? The hero's own hold, from either chair.
+    {
+      let wrong = 0, seen = 0;
+      for (const seat of [0, 1]) for (const side of [0, 1]){
+        IB.MY = seat;
+        s.fills = []; s.fillsDropped = 0;
+        IB.heroMantle(CTX, { isHero:true, side, hitT:0, passRank:5, skills:[{ rank:5 }] },
+          400, 300, 340, 1, IB.SIDE_COL[side]);
+        const own = s.fills.filter(f => f && f !== null).length;
+        if (own > 0) seen++;
+        if (s.fillsDropped) wrong++;
+      }
+      IB.MY = seat0d;
+      t.ok(seen === 4, 'a mantle paints for either hold from either chair (' + seen + '/4)');
+      t.ok(wrong === 0, 'and the capture held all four (' + wrong + ')');
+    }
+    G.units.length = 0;
+    IB.cam.x = 26;
+    IB.MY = seat0d;
+  }
 
   // The sweep as a rule instead of a list. Anything the game does FOR the
   // person watching — a sound, a toast, a panel refresh — must never be gated
