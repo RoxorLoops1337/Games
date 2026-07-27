@@ -237,6 +237,7 @@ export async function boot(root) {
       audio.handle(e);
       fx.handle(e);
       if (enemies.handle) enemies.handle(e);
+      if (viewmodel.handle) viewmodel.handle(e);
       hud.handle(e);
       if (e.type === 'land') engine.kickLanding(e.hard);
       if (e.type === 'playerDied') { menu.show('dead'); input.unlock(); }
