@@ -70,7 +70,10 @@ function loadGame(store, srcOverride){
   // alpha back leaves every later shape in the frame translucent, and an
   // unbalanced save() leaks a clip or a transform into whatever draws next.
   // Neither is visible to a per-call check, because no single call is wrong.
-  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = [];
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = [];
+  const TEXT0 = { lineCap:'butt', textAlign:'start', textBaseline:'alphabetic' };
+  Object.assign(stats, TEXT0);
+  stats.__text0 = TEXT0;
   const ctx = new Proxy({}, { get(_t, k){
     if (k === '__stats') return stats;
     if (k === 'save') return () => { stats.ops++; stats.depth++; stats.maxDepth = Math.max(stats.maxDepth, stats.depth); };
@@ -82,6 +85,14 @@ function loadGame(store, srcOverride){
       return (...a) => { stats.ops++; numCheck(k, a);
         return { addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); } }; };
     if (k === 'measureText') return () => ({ width: 24 });
+    // What state each piece of text was actually drawn under. The property
+    // tracking above says what was SET; this says what reached the glyph,
+    // which is the only way to state the bug as a relationship: the same
+    // label has to render the same whatever else is on the board.
+    if (k === 'fillText' || k === 'strokeText') return (...a) => {
+      stats.ops++; numCheck(k, a);
+      stats.texts.push({ txt: String(a[0]), baseline: stats.textBaseline, align: stats.textAlign, font: stats.font });
+    };
     if (k === 'canvas') return { width: 900, height: 520 };
     if (k === 'setLineDash') return (a) => {
       stats.ops++;
@@ -108,6 +119,11 @@ function loadGame(store, srcOverride){
       stats.lw = Math.max(stats.lw, v);
       stats.lwMin = Math.min(stats.lwMin, v);
     }
+    // The rest of the sticky channels. textBaseline is the one that bit: a
+    // label's vertical offset means one thing under `alphabetic` and another
+    // under `middle`, so text that never changed moved on its own depending on
+    // what had been drawn before it.
+    if (k === 'lineCap' || k === 'textAlign' || k === 'textBaseline' || k === 'font') stats[k] = v;
     return true;
   } });
   CTX = ctx;
@@ -738,7 +754,18 @@ t.ok(true, 'drawing an empty bridge is harmless');
   {
     IB.newMatch({ diff:'veteran', seed:77 });
     for (let i = 0; i < 900; i++) IB.update(1 / 30);
+    // A hero has to be standing in it. The level roundel on a hero's bar is
+    // the only thing in the game that sets textBaseline, so a sweep with no
+    // hero on the bridge is a sweep that cannot see the leak — the same shape
+    // as watching the widest lineWidth and missing the one that was wrong.
+    for (const side of [0, 1]){
+      const hh = IB.makeHero(side, side ? 'fighter' : 'mage', side ? 'Vex' : 'Ora');
+      hh.pend.length = 0; hh.lvl = 7; IB.recalcHero(hh);
+      G.sides[side].heroes.push(hh); IB.enterLane(hh);
+      hh.x = 60 + side * 3; hh.y = side ? 1 : -1;
+    }
     t.ok(G.units.some(u => !u.dead), 'the layer sweep has a populated board');
+    t.ok(G.sides.every(s => s.heroes.some(h => !h.dead)), 'with a hero of each side standing on the bridge');
     const layers = [
       ['drawSky', () => IB.drawSky(CTX), 20],
       ['drawGround', () => IB.drawGround(CTX), 20],
@@ -764,12 +791,25 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // the layer, so every one of them has to hand the canvas back the way it
     // was handed over — alpha at 1, no dash, no unbalanced save().
     const st = CTX.__stats;
+    // Every sticky channel, not just the three from last round. lineCap and
+    // textBaseline are the same class and both were leaking: the roundel on a
+    // hero's bar set textBaseline='middle' and never put it back, so from the
+    // moment your first hero walked onto the bridge every label in the game —
+    // hold names, structure names, node counts — slid half a line, and slid
+    // back when the hero died.
+    const cleanText = (name) => {
+      for (const k of ['lineCap', 'textAlign', 'textBaseline'])
+        t.ok(st[k] === st.__text0[k],
+          name + '() hands back the default ' + k + ' (' + st[k] + ')');
+    };
+    const resetState = () => { st.alpha = 1; st.dash = 0; st.depth = 0; Object.assign(st, st.__text0); };
     for (const [name, fn] of layers){
-      st.alpha = 1; st.dash = 0; st.depth = 0;
+      resetState();
       try { fn(); } catch (e){ /* the throw is already reported above */ }
       t.ok(st.alpha === 1, name + '() puts the alpha back (' + st.alpha + ')');
       t.ok(st.dash === 0, name + '() leaves no dash pattern behind');
       t.ok(st.depth === 0, name + '() balances its save/restore (' + st.depth + ')');
+      cleanText(name);
     }
     // And the pieces small enough to call on their own, where a leak has
     // nothing after it to hide behind.
@@ -779,16 +819,53 @@ t.ok(true, 'drawing an empty bridge is harmless');
       ['drawBirds', () => IB.drawBirds(CTX)],
       ['drawChasm', () => IB.drawChasm(CTX)],
       ['drawPiers', () => IB.drawPiers(CTX)],
+      ['drawUnit', () => IB.drawUnit(CTX, G.sides[0].heroes[0])],
+      ['flushLabels', () => { IB.drawUnit(CTX, G.sides[0].heroes[0]); IB.flushLabels(CTX); }],
     ];
     for (const [name, fn] of bits){
-      st.alpha = 1; st.dash = 0; st.depth = 0;
+      resetState();
       let e3 = null;
       try { fn(); } catch (e){ e3 = e.message; }
       t.ok(!e3, name + '() draws on its own' + (e3 ? ' — ' + e3 : ''));
       t.ok(st.alpha === 1, name + '() puts the alpha back (' + st.alpha + ')');
       t.ok(st.dash === 0, name + '() leaves no dash pattern behind');
       t.ok(st.depth === 0, name + '() balances its save/restore (' + st.depth + ')');
+      cleanText(name);
     }
+
+    // The bug itself, stated as the relationship it broke: a label has to
+    // render the same whatever else happens to be on the board. The level
+    // roundel on a hero's bar set textBaseline='middle' and never put it back,
+    // so from the moment your first hero walked onto the bridge every plate in
+    // the game — hold names, structure names, node counts — slid half a line,
+    // and slid back when that hero died. Text that moves because of something
+    // it has nothing to do with.
+    const labelState = () => {
+      st.texts = []; Object.assign(st, st.__text0);
+      IB.draw();
+      const m = new Map();
+      for (const e of st.texts) if (!m.has(e.txt)) m.set(e.txt, e.baseline + '/' + e.align);
+      return m;
+    };
+    const withHero = labelState();
+    const alive = [];
+    for (const s2 of G.sides) for (const h of s2.heroes) if (!h.dead){ alive.push(h); h.dead = true; h.inLane = false; }
+    const without = labelState();
+    for (const h of alive){ h.dead = false; h.inLane = true; }
+    let moved = 0, shared = 0;
+    for (const [txt, state] of without){
+      if (!withHero.has(txt)) continue;
+      shared++;
+      if (withHero.get(txt) !== state) moved++;
+    }
+    t.ok(alive.length > 0, 'the baseline check had heroes to take away (' + alive.length + ')');
+    t.ok(shared > 4, 'and labels on the board either way to compare (' + shared + ')');
+    t.ok(moved === 0, 'a label renders the same whether or not a hero is on the bridge (' + moved + ' moved)');
+    // Rule out the do-nothing pass: text has to be reaching the canvas at all,
+    // and every piece of it has to have said which baseline it wanted.
+    t.ok(withHero.size > 6, 'the frame really draws text (' + withHero.size + ' distinct)');
+    t.ok([...withHero.values()].every(v => !v.startsWith('undefined')), 'and every piece of it set its own state');
+
     IB.cam.x = IB.HOLD_X;
   }
 
