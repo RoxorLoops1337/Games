@@ -2394,4 +2394,199 @@ t.test('floors: a modifier list never contains a hole', () => {
   t.ok(HQ.G.q, 'depth 0 builds without throwing');
 });
 
+/* --------------------------------------------- the new roster and the book */
+
+t.test('roster: the four newcomers are whole, drawable and placed by depth', () => {
+  for (const id of ['troll','wraith','archer','cultist']){
+    const d = HQ.MONSTERS[id];
+    t.ok(d, `${id} exists`);
+    for (const k of ['name','move','atk','def','bp','mind','gold','col','col2','size'])
+      t.ok(d[k] !== undefined, `${id} has ${k}`);
+    const e = HQ.SPAWN_TABLE.find(x => x.t === id);
+    t.ok(e, `${id} is on the spawn table`);
+    t.ok(e.from >= 2, `${id} is not on the first floor`);
+  }
+  t.ok(HQ.MONSTERS.troll.regen, 'the troll knits');
+  t.ok(HQ.MONSTERS.wraith.ethereal, 'the wraith is not really there');
+  t.ok(HQ.MONSTERS.archer.shooter, 'the archer shoots');
+  t.ok(HQ.MONSTERS.cultist.herald, 'the cultist screams');
+  // and every one of them draws
+  fresh(0);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const spots = [[10,7],[11,7],[12,7],[13,7]];
+  ['troll','wraith','archer','cultist'].forEach((mt, i) => {
+    const m = HQ.monstersOf()[i];
+    m.mt = mt; m.x = spots[i][0]; m.y = spots[i][1]; m.alive = true;
+  });
+  HQ.recomputeVision();
+  for (let i = 0; i < 5; i++){ HQ.update(16); HQ.draw(); }
+  t.ok(true, 'all four render without complaint');
+});
+
+t.test('wraith: steel goes through it, magic does not', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.mt = 'wraith'; m.x = 11; m.y = 7; m.bp = m.bpMax = 9; m.def = 0;
+  delete m.affix; m.elite = false;
+  HQ.recomputeVision();
+  ALL_SKULLS();
+  HQ.doAttack(h, m);
+  t.eq(m.bp, 9, 'the broadsword does nothing at all');
+
+  h.weapon = 'spirit'; h.acted = false;
+  ALL_SKULLS();
+  HQ.doAttack(h, m);
+  t.ok(m.bp < 9, 'the Spirit Blade bites');
+
+  m.bp = m.bpMax = 9;
+  const w = use(hero('wizard'));
+  put(w, 11, 8);
+  HQ.recomputeVision();
+  ALL_SKULLS();
+  HQ.castSpell(w, 'ballflame', m);
+  t.ok(m.bp < 9, 'and so does a spell');
+  hero('barbarian').weapon = 'broadsword';
+});
+
+t.test('troll: it knits itself back together unless the wound was fire', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian','wizard']);
+  HQ.G.run.depth = 8;
+  HQ.beginFloor();
+  const m = HQ.monstersOf()[0];
+  m.mt = 'troll'; m.bpMax = 6; m.bp = 3; m.awake = true; m.sleep = 0; m.stun = 0; m.burned = 0;
+  delete m.affix; m.elite = false;                 // a warded champion would eat the spell
+  m.x = 20; m.y = 3;
+  for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
+  HQ.monsterAct(m, () => {});
+  t.eq(m.bp, 4, 'it closes a wound on its turn');
+  HQ.monsterAct(m, () => {});
+  t.eq(m.bp, 5, 'and another');
+
+  // fire stops it
+  const w = HQ.runAlive().find(x => x.id === 'wizard');
+  HQ.G.q.activeId = w.id; w.acted = false;
+  w.x = 20; w.y = 4;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1); HQ.recomputeVision();
+  m.bpMax = 12; m.bp = 12;                         // it has to survive the burn to knit
+  ALL_SKULLS();
+  HQ.castSpell(w, 'ballflame', m);
+  t.ok(m.alive, 'it survived the fire');
+  t.ok(m.burned, 'and the burn is marked');
+  const after = m.bp;
+  HQ.monsterAct(m, () => {});
+  t.eq(m.bp, after, 'and it does not knit that turn');
+  HQ.monsterAct(m, () => {});
+  t.eq(m.bp, after + 1, 'though it starts again the turn after');
+});
+
+t.test('archer: it shoots from range instead of walking into reach', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian']);
+  HQ.G.run.depth = 4;
+  HQ.beginFloor();
+  const h = HQ.runAlive()[0];
+  h.x = 11; h.y = 11;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.mt = 'archer'; m.atk = 4; m.x = 11; m.y = 7; m.awake = true; m.sleep = 0; m.stun = 0;
+  delete m.affix; m.elite = false;
+  for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
+  HQ.recomputeVision();
+  const bp = h.bp, at = [m.x, m.y].join();
+  ALL_SKULLS();
+  HQ.monsterAct(m, () => {});
+  t.eq([m.x, m.y].join(), at, 'it held its ground');
+  t.ok(h.bp < bp, 'and put an arrow in you from there');
+});
+
+t.test('cultist: it wakes the room it is standing in, once', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian']);
+  HQ.G.run.depth = 5;
+  HQ.beginFloor();
+  const h = HQ.runAlive()[0];
+  const rid = 6;
+  const tiles = HQ.roomTiles(rid).filter(([x,y]) => !HQ.furnAt(x,y));
+  const c = HQ.monstersOf()[0];
+  c.mt = 'cultist'; [c.x, c.y] = tiles[0]; c.awake = true; c.sleep = 0; c.stun = 0; c.heralded = 0;
+  let sleepers = 0;
+  HQ.monstersOf().forEach((o, i) => {
+    if (o === c) return;
+    if (i < 5){ [o.x, o.y] = tiles[i]; o.awake = false; sleepers++; }
+    else o.alive = false;
+  });
+  h.x = tiles[6][0]; h.y = tiles[6][1];
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1); HQ.recomputeVision();
+  t.ok(sleepers > 0, 'the room was asleep');
+  HQ.monsterAct(c, () => {});
+  t.ok(c.heralded, 'it screamed');
+  t.ok(HQ.monstersOf().filter(o => HQ.roomAt(o.x,o.y) === rid).every(o => o.awake),
+       'and the room is awake');
+  c.heralded = 1;
+  t.ok(true, 'and it only does that once');
+});
+
+t.test('the book: a run writes itself down, with what finished it', () => {
+  const store = {};
+  const A = loadGame(store);
+  A.G = A.newG();
+  A.startRun(['barbarian','elf']);
+  A.G.run.depth = 5;
+  A.G.run.kills = 22;
+  A.takeBoon('ironskin');
+  A.addCurse('frail');
+  A.G.run.lastFall = { who:'Elf', by:'a Cave Troll', depth:5 };
+  A.endRun('test');
+  const book = A.G.meta.history;
+  t.eq(book.length, 1, 'one entry written');
+  const r = book[0];
+  t.eq(r.depth, 5, 'the depth it reached');
+  t.eq(r.kills, 22, 'what it killed');
+  t.eq(r.party.join(), 'barbarian,elf', 'who went');
+  t.eq(r.boons.join(), 'ironskin', 'what they carried');
+  t.eq(r.curses.join(), 'frail', 'and what carried them');
+  t.eq(r.fall.by, 'a Cave Troll', 'and what finished it');
+
+  // it survives being closed and reopened, and keeps only the last ten
+  const B = loadGame(store);
+  const m = B.loadCampaign() && B.loadMeta();
+  t.eq(m.history.length, 1, 'the book is on disk');
+  t.eq(m.history[0].fall.by, 'a Cave Troll', 'with the story intact');
+
+  A.G.meta.history = [];
+  for (let i = 0; i < 14; i++){
+    A.G = Object.assign(A.G, { run: A.newRun(['dwarf']) });
+    A.G.run.depth = i + 1;
+    A.endRun('test');
+  }
+  t.eq(A.G.meta.history.length, 10, 'the book keeps ten');
+  t.eq(A.G.meta.history[0].depth, 14, 'newest first');
+});
+
+t.test('the book: what killed a hero is recorded by name', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['wizard']);
+  HQ.beginFloor();
+  const h = HQ.runAlive()[0];
+  h.x = 11; h.y = 8; h.bp = 1;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.atk = 6; m.name = 'Armoured Orc';
+  HQ.recomputeVision();
+  ALL_SKULLS();
+  HQ.monsterAttack(m, h, () => {});
+  t.ok(!h.alive, 'the wizard is down');
+  t.ok(HQ.G.run.lastFall, 'the fall is recorded');
+  t.eq(HQ.G.run.lastFall.by, 'Armoured Orc', 'by name');
+  t.eq(HQ.G.run.lastFall.who, 'Wizard', 'and who it was');
+});
+
 t.run();
