@@ -5917,6 +5917,92 @@ function projShadow(c, p){
 const RIPPLE = { spent:.28 };
 const rippleW = (base, a) => Math.max(1, base * (RIPPLE.spent + (1 - RIPPLE.spent) * a) * cam.z);
 
+/* Everything on the deck is y-sorted: the structures and the bodies go into
+   one array keyed on their GROUND position and are painted back to front.
+   Projectiles were not in that array — they were painted afterwards, all of
+   them, over everything. Measured by logging the paint order of a real frame:
+
+     shot far, body near   the body is nearer   painted on top: THE SHOT
+     shot near, body far   the shot is nearer   painted on top: the shot
+     control: two bodies   the near one wins    painted on top: the near body
+
+   so an arrow in the far lane was painted over a footman standing three
+   units closer to the camera, and a shot skimming the deck passed in front
+   of the tower it was flying behind. The bodies beside it have sorted
+   correctly the whole time.
+
+   The key is the GROUND position, not where the thing is drawn: a shell
+   lobbed four units up over a tower is still on the far side of it, and
+   should pass behind it and then appear over it — which is what sorting on
+   the shadow gives you and what sorting on the raised sprite does not. */
+function drawProj(c, p){
+  const q = lp(p.x, p.y, p.z);
+  // the streak it has just cut through the air
+  if (p.tr.length >= 6){
+    c.lineCap = 'round';
+    for (let i = 0; i + 5 < p.tr.length; i += 3){
+      const a = lp(p.tr[i], p.tr[i + 1], p.tr[i + 2]);
+      const b = lp(p.tr[i + 3], p.tr[i + 4], p.tr[i + 5]);
+      c.globalAlpha = .10 + .5 * (i / p.tr.length);
+      c.strokeStyle = p.col; c.lineWidth = projLook(p.kind).streak * cam.z * (.4 + i / p.tr.length);
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+    }
+    c.lineCap = 'butt';
+  }
+  c.globalAlpha = 1;
+  if (p.kind === 'hook'){
+    // a chain paid out from the thrower, with the claw on the end of it
+    if (p.src && !p.src.dead) chainLine(c, p.src.x, p.src.y, .9, p.x, p.y, p.z, p.col);
+    const nx = p.ax || 1, ny = (p.ay || 0) * .55, L = 5 * cam.z;
+    c.strokeStyle = '#8f8168'; c.lineWidth = 2.6 * cam.z; c.lineCap = 'round';
+    c.beginPath();
+    c.moveTo(q[0] + nx * L, q[1] + ny * L);
+    c.lineTo(q[0] - nx * L * .4 - ny * L * .8, q[1] - ny * L * .4 + nx * L * .8);
+    c.moveTo(q[0] + nx * L, q[1] + ny * L);
+    c.lineTo(q[0] - nx * L * .4 + ny * L * .8, q[1] - ny * L * .4 - nx * L * .8);
+    c.stroke(); c.lineCap = 'butt';
+    ell(c, q[0], q[1], 2.6 * cam.z, 2.6 * cam.z, p.col);
+  } else if (p.kind === 'bolt'){
+    // a spell: a soft body around a hot core, no shaft to point with
+    const L = projLook('bolt');
+    c.globalAlpha = .5; ell(c, q[0], q[1], L.head * 2.2 * cam.z, L.head * 2.2 * cam.z, p.col); c.globalAlpha = 1;
+    ell(c, q[0], q[1], L.head * cam.z, L.head * cam.z, '#ffffff');
+  } else {
+    // Everything else is drawn along the direction it is travelling rather
+    // than as a dot — one routine, and the table decides how long the body is
+    // and how big the tip: an arrow, a siege shell and a turret bolt used to
+    // be the same seven pixels of line and the same 1.7 of head.
+    const L = projLook(p.kind);
+    const nx = p.ax || 1, ny = (p.ay || 0) * .55;
+    const len = L.len * cam.z;
+    c.strokeStyle = p.col; c.lineWidth = L.streak * cam.z; c.lineCap = 'round';
+    c.beginPath(); c.moveTo(q[0] - nx * len, q[1] - ny * len);
+    c.lineTo(q[0] + nx * len * .5, q[1] + ny * len * .5); c.stroke();
+    c.lineCap = 'butt';
+    ell(c, q[0] + nx * len * .5, q[1] + ny * len * .5, L.head * cam.z, L.head * cam.z, '#ffffff');
+  }
+}
+
+/* What gets painted on the deck, in the order it gets painted. Pulled out of
+   drawLane so the composition of a frame is something that can be read and
+   asserted rather than inferred from four thousand canvas calls.
+
+   Everything is keyed on its GROUND position — where its shadow is — and not on
+   where it is drawn. A shell lobbed four units up over a turret is still on the
+   far side of it; sorting on the raised sprite would hand it the near side.
+
+   Array.sort is stable, so the push order decides ties: a structure, then a
+   body standing at its foot, then a shot passing at the same depth, which is
+   the right answer for all three. */
+function laneOrder(){
+  const draws = [];
+  for (const s of G.sides) for (const st of s.structs) draws.push({ y:lp(st.x, st.y)[1], k:'struct', o:st });
+  for (const u of G.units) if (!u.dead) draws.push({ y:lp(u.x, u.y)[1], k:'unit', o:u });
+  for (const p of G.projs) draws.push({ y:lp(p.x, p.y)[1], k:'proj', o:p });
+  draws.sort((a, b) => a.y - b.y);
+  return draws;
+}
+
 function drawLane(c){
   // zones under everyone
   for (const z of G.zones){
@@ -5962,58 +6048,10 @@ function drawLane(c){
   // pass behind whoever is being reeled in.
   for (const u of G.units)
     if (u.pullT > 0 && u.pullBy && !u.pullBy.dead) chainLine(c, u.pullBy.x, u.pullBy.y, .9, u.x, u.y, .7, '#d9c49a');
-  const draws = [];
-  for (const s of G.sides) for (const st of s.structs) draws.push({ y:lp(st.x, st.y)[1], f:() => drawStructure(c, st) });
-  for (const u of G.units){ if (!u.dead) draws.push({ y:lp(u.x, u.y)[1], f:() => drawUnit(c, u) }); }
-  draws.sort((a, b) => a.y - b.y);
-  for (const d of draws) d.f();
-  // projectiles
-  for (const p of G.projs){
-    const q = lp(p.x, p.y, p.z);
-    // the streak it has just cut through the air
-    if (p.tr.length >= 6){
-      c.lineCap = 'round';
-      for (let i = 0; i + 5 < p.tr.length; i += 3){
-        const a = lp(p.tr[i], p.tr[i + 1], p.tr[i + 2]);
-        const b = lp(p.tr[i + 3], p.tr[i + 4], p.tr[i + 5]);
-        c.globalAlpha = .10 + .5 * (i / p.tr.length);
-        c.strokeStyle = p.col; c.lineWidth = projLook(p.kind).streak * cam.z * (.4 + i / p.tr.length);
-        c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
-      }
-      c.lineCap = 'butt';
-    }
-    c.globalAlpha = 1;
-    if (p.kind === 'hook'){
-      // a chain paid out from the thrower, with the claw on the end of it
-      if (p.src && !p.src.dead) chainLine(c, p.src.x, p.src.y, .9, p.x, p.y, p.z, p.col);
-      const nx = p.ax || 1, ny = (p.ay || 0) * .55, L = 5 * cam.z;
-      c.strokeStyle = '#8f8168'; c.lineWidth = 2.6 * cam.z; c.lineCap = 'round';
-      c.beginPath();
-      c.moveTo(q[0] + nx * L, q[1] + ny * L);
-      c.lineTo(q[0] - nx * L * .4 - ny * L * .8, q[1] - ny * L * .4 + nx * L * .8);
-      c.moveTo(q[0] + nx * L, q[1] + ny * L);
-      c.lineTo(q[0] - nx * L * .4 + ny * L * .8, q[1] - ny * L * .4 - nx * L * .8);
-      c.stroke(); c.lineCap = 'butt';
-      ell(c, q[0], q[1], 2.6 * cam.z, 2.6 * cam.z, p.col);
-    } else if (p.kind === 'bolt'){
-      // a spell: a soft body around a hot core, no shaft to point with
-      const L = projLook('bolt');
-      c.globalAlpha = .5; ell(c, q[0], q[1], L.head * 2.2 * cam.z, L.head * 2.2 * cam.z, p.col); c.globalAlpha = 1;
-      ell(c, q[0], q[1], L.head * cam.z, L.head * cam.z, '#ffffff');
-    } else {
-      // Everything else is drawn along the direction it is travelling rather
-      // than as a dot — one routine, and the table decides how long the body is
-      // and how big the tip: an arrow, a siege shell and a turret bolt used to
-      // be the same seven pixels of line and the same 1.7 of head.
-      const L = projLook(p.kind);
-      const nx = p.ax || 1, ny = (p.ay || 0) * .55;
-      const len = L.len * cam.z;
-      c.strokeStyle = p.col; c.lineWidth = L.streak * cam.z; c.lineCap = 'round';
-      c.beginPath(); c.moveTo(q[0] - nx * len, q[1] - ny * len);
-      c.lineTo(q[0] + nx * len * .5, q[1] + ny * len * .5); c.stroke();
-      c.lineCap = 'butt';
-      ell(c, q[0] + nx * len * .5, q[1] + ny * len * .5, L.head * cam.z, L.head * cam.z, '#ffffff');
-    }
+  for (const d of laneOrder()){
+    if (d.k === 'struct') drawStructure(c, d.o);
+    else if (d.k === 'unit') drawUnit(c, d.o);
+    else drawProj(c, d.o);
   }
   // particles
   for (const p of G.fx){
@@ -9599,7 +9637,7 @@ window.IB = {
   fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
-  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor,
+  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder,
   STATUS, statusFade, spanN,
   HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
