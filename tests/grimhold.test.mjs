@@ -3536,4 +3536,245 @@ t.test('stake: once a stair, only what you hold, and it puts back what it undoes
   HQ.G.run.heroes.forEach((h, i) => t.eq(h.bpMax, caps[i] - 1, `${h.name} loses the point it gave`));
 });
 
+/* ---------------------------------------------------------- boss last words */
+
+t.test('bosses: the second line exists for every boss the first line does', () => {
+  for (const mt in HQ.BOSS_LINES)
+    t.ok(HQ.BOSS_LAST[mt] && HQ.BOSS_LAST[mt].length > 15, `${mt} has something to say on the way down`);
+  for (const b of HQ.BOSS_TABLE)
+    t.ok(HQ.BOSS_LAST[b.t], `${b.t} can be dealt and can speak`);
+});
+
+t.test('bosses: he speaks on his last Body Point, once, and only him', () => {
+  fresh(0);
+  const boss = HQ.monstersOf().find(m => m.boss);
+  boss.bpMax = 4; boss.bp = 4;
+  t.eq(HQ.bossLastWords(boss), null, 'nothing to say at full strength');
+  HQ.hurt(boss, 2, null);
+  t.eq(boss.bp, 2, 'two off');
+  t.ok(!boss.spoke, 'and still nothing');
+  HQ.hurt(boss, 1, null);
+  t.eq(boss.bp, 1, 'down to the last');
+  t.ok(boss.spoke, 'and now he says it');
+  const once = boss.spoke;
+  t.eq(HQ.bossLastWords(boss), null, 'and does not repeat himself');
+  t.eq(boss.spoke, once, 'still just the once');
+
+  // an ordinary monster on its last point says nothing
+  fresh(0);
+  const m = HQ.monstersOf().find(x => !x.boss);
+  m.bpMax = 2; m.bp = 2;
+  HQ.hurt(m, 1, null);
+  t.ok(!m.spoke, 'a goblin gets no title card');
+  t.eq(HQ.bossLastWords(m), null, 'not even if you ask');
+
+  // and a dead boss does not get the last word
+  fresh(0);
+  const b3 = HQ.monstersOf().find(x => x.boss);
+  b3.bp = 1; b3.alive = false;
+  t.eq(HQ.bossLastWords(b3), null, 'the dead have said everything they are going to');
+});
+
+/* ---------------------------------------------------------- lying mimics */
+
+t.test('mimics: a deep floor may have one chest that is not a chest, and never a paid one', () => {
+  t.eq(HQ.LIE_FROM, 3, 'not on the first two floors');
+  t.ok(HQ.LIE_CHANCE > .2 && HQ.LIE_CHANCE < .6, 'and not on every one after');
+  let seen = 0, shallow = 0;
+  for (let i = 0; i < 60; i++){
+    runAt(6);
+    const lies = HQ.lyingChests();
+    if (!lies.length) continue;
+    seen++;
+    t.eq(lies.length, 1, 'never more than one on a floor');
+    t.ok(!lies[0].quest, 'never the quest chest');
+    t.ok(!lies[0].vault, 'never one inside a vault you paid to open');
+    t.eq(lies[0].t, 'chest', 'and it is pretending to be a chest');
+  }
+  t.ok(seen > 5, `depth 6 grows them (saw ${seen}/60)`);
+  for (let i = 0; i < 25; i++){ runAt(2); shallow += HQ.lyingChests().length; }
+  t.eq(shallow, 0, 'and the shallow floors are honest');
+
+  // the authored campaign is never touched
+  for (let qi = 0; qi < HQ.QUESTS.length; qi++){
+    fresh(qi);
+    t.eq(HQ.lyingChests().length, 0, `quest ${qi} has no mimics hiding in it`);
+  }
+});
+
+// force a lying chest into a known square of a known room
+function planted(rid){
+  const r = HQ.ROOMS[rid];
+  HQ.G.q.furn.forEach(f => { delete f.lie; });      // the floor may have grown its own
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
+  const f = { t:'chest', r:rid, x:r.x + 1, y:r.y + 1, w:1, h:1, rot:0,
+              quest:null, taken:false, searched:false, lie:true };
+  HQ.G.q.furn.push(f);
+  return f;
+}
+
+t.test('mimics: walking within arm’s reach is what wakes it, and it bites first', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const rid = 4;
+  const f = planted(rid);
+  emptyRoom(rid);
+  const h = HQ.runAlive()[0];
+  // two squares away: still furniture
+  put(h, f.x + 2, f.y);
+  t.eq(HQ.mimicWatch(), null, 'two squares off and it keeps still');
+  t.eq(HQ.lyingChests().length, 1, 'still pretending');
+
+  // one square away: teeth
+  put(h, f.x + 1, f.y);
+  const before = HQ.monstersOf().length;
+  const m = HQ.mimicWatch();
+  t.ok(m, 'it stops pretending');
+  t.eq(m.mt, 'mimic', 'because it never was a chest');
+  t.eq(m.x, f.x, 'it is where the chest was');
+  t.eq(m.y, f.y, 'exactly');
+  t.ok(m.awake, 'and it is not sleepy');
+  t.eq(HQ.monstersOf().length, before + 1, 'one more thing on the board');
+  t.eq(HQ.lyingChests().length, 0, 'and nothing left pretending');
+  t.ok(!HQ.G.q.furn.includes(f), 'the furniture is gone with it');
+  t.eq(HQ.mimicWatch(), null, 'and it only springs the once');
+});
+
+t.test('mimics: it is walking past that wakes it, not the test calling the watcher', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const rid = 4;
+  const f = planted(rid);
+  emptyRoom(rid);
+  for (const m of HQ.monstersOf()) m.alive = false;
+  const h = HQ.runAlive()[0];
+  // start three squares off along the row, then walk in
+  put(h, f.x + 3, f.y);
+  use(h);
+  h.moveLeft = 4; h.rolled = true;
+  HQ.refreshField();
+  t.eq(HQ.lyingChests().length, 1, 'still furniture when the turn starts');
+  HQ.heroWalk(h, [[f.x + 2, f.y], [f.x + 1, f.y]], () => {});
+  t.eq(HQ.lyingChests().length, 0, 'walking into reach is what does it');
+  t.ok(HQ.monstersOf().some(m => m.mt === 'mimic' && m.alive), 'and there is a mimic where the chest was');
+});
+
+t.test('mimics: Find Traps turns one up before it turns up you', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const rid = 4;
+  const f = planted(rid);
+  emptyRoom(rid);
+  for (const m of HQ.monstersOf()) m.alive = false;      // nothing near enough to stop the search
+  const h = HQ.runAlive()[0];
+  put(h, HQ.ROOMS[rid].x, HQ.ROOMS[rid].y);
+  use(h);
+  const bp0 = h.bp;
+  HQ.searchTraps();
+  const m = HQ.monstersOf().find(x => x.mt === 'mimic');
+  t.ok(m, 'the search finds what was pretending');
+  t.eq(HQ.lyingChests().length, 0, 'and it is not pretending any more');
+  t.eq(h.bp, bp0, 'spotting it first means it does not get the first bite');
+  t.eq(m.x, f.x, 'and it stands up where it was sitting');
+});
+
+t.test('mimics: a spotted one is a fair fight, an ambush is not', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const f = planted(4);
+  emptyRoom(4);
+  const h = HQ.runAlive()[0];
+  put(h, f.x, f.y + 1);
+  h.bp = h.bpMax = 9;
+  ALL_SKULLS();                                          // its bite lands
+  HQ.springMimic(f, h);
+  t.ok(h.bp < 9, 'the ambush costs whoever reached for it');
+
+  // the quiet version does not
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const f2 = planted(4);
+  emptyRoom(4);
+  const h2 = HQ.runAlive()[0];
+  put(h2, f2.x, f2.y + 1);
+  h2.bp = h2.bpMax = 9;
+  ALL_SKULLS();
+  const m2 = HQ.springMimic(f2, h2, true);
+  t.eq(h2.bp, 9, 'a mimic you saw coming does not get a free swing');
+  t.ok(m2 && m2.alive, 'but it is still very much there');
+});
+
+/* ------------------------------------------------- a trial you can fail loudly */
+
+t.test('trials: breaking one slams the room shut and the Warlock looks up', () => {
+  runAt(5);
+  const rid = 4;
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'clean' };
+  HQ.startTrial();
+  // open the room's doors so the slam is something you can see happen
+  const doors = Object.values(HQ.G.q.doors).filter(d => d.rid === rid);
+  t.ok(doors.length >= 2, 'the room has doors to slam');
+  doors.forEach(d => { d.open = true; d.locked = false; d.trialBolt = false; });
+  const w0 = HQ.G.q.wrath || 0;
+  const h = HQ.runAlive()[0];
+  h.bp = h.bpMax;
+  HQ.hurt(h, 1, null);
+  t.ok(HQ.G.q.trial.failed, 'the clean kill is broken');
+  t.ok(doors.every(d => !d.open), 'every door of that room is shut');
+  t.ok(doors.every(d => d.trialBolt), 'and bolted');
+  t.eq(HQ.G.q.wrath, w0 + HQ.TRIAL_WRATH, 'and the Warlock noticed');
+  t.ok(HQ.TRIAL_WRATH >= 5, 'by a margin worth minding');
+
+  // doors of other rooms are untouched
+  const others = Object.values(HQ.G.q.doors).filter(d => d.rid !== rid);
+  t.ok(others.every(d => !d.trialBolt), 'the rest of the floor is not bolted');
+});
+
+t.test('trials: a bolted door is never a wall — a shoulder and a Body Point opens it', () => {
+  runAt(5);
+  const rid = 4;
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'clean' };
+  HQ.startTrial();
+  HQ.failTrial('the test said so');
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  t.ok(d.trialBolt, 'the door is bolted');
+  const h = HQ.runAlive()[0];
+  h.bp = h.bpMax = 9;
+  put(h, slot[3], slot[4]);
+  use(h);
+  h.acted = true;
+  t.eq(HQ.openDoorAt(h, d), false, 'a hero with no action left cannot shift it');
+  t.ok(!d.open, 'and it stays shut');
+  t.eq(h.bp, 9, 'and costs nothing to fail at');
+
+  h.acted = false;
+  HQ.openDoorAt(h, d);
+  t.ok(d.open, 'a hero with an action puts a shoulder through it');
+  t.ok(!d.trialBolt, 'the bolt is gone');
+  t.eq(h.bp, 8, 'and it cost a Body Point');
+  t.ok(h.acted, 'and the action');
+});
+
+t.test('trials: the vault key does not open what a broken trial bolted', () => {
+  runAt(5);
+  const rid = 4;
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'survive' };
+  HQ.startTrial();
+  HQ.failTrial('nobody stayed');
+  HQ.G.q.key = true;                       // carrying the iron key
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  const h = HQ.runAlive()[0];
+  h.bp = h.bpMax = 9;
+  put(h, slot[3], slot[4]);
+  use(h);
+  HQ.openDoorAt(h, d);
+  t.eq(h.bp, 8, 'the key is no use here — it still costs a Body Point');
+  t.ok(d.open, 'but the door does open');
+});
+
 t.run();
