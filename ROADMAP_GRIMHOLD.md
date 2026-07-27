@@ -67,41 +67,41 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **Kill-streak flourish** — three, five, eight and twelve kills without a hero
   taking a wound escalate the banner, the shake and the hit-stop; eight pays a
   Fate. One wound and you are back to nothing. *(batch 7)*
+- **Boss intros** — the door swings, the camera punches, and the thing at the
+  back of the hall gets its name and one line said out loud, once. *(batch 8)*
+- **Forced chests** — every chest asks whether you want it open or open now.
+  Easing it gives the room's own card; forcing pays double, and two times in
+  five the lock was a needle or the chest was a **Mimic**. *(batch 8)*
+- **The Warlock's Wager** — throw the whole boon hand back for Fate. One, then
+  two, then three, and nothing is protected: what you turned down can return.
+  *(batch 8)*
 
 ---
 
 ## Next up
 
-1. **Boss intros.** A one-line title card when a boss's room opens — the door
-   swings, the camera pushes in, and the thing inside gets its name said out
-   loud before it moves. The cheapest beat left on the list.
-2. **Forced chests.** Open carefully (small, safe) or force it (better, and it
-   may be trapped, or a mimic). A gamble on the action you take most often.
-3. **The Warlock's Wager.** Spend Fate to reroll the entire boon draft. Fate now
-   comes in fast enough from trials and streaks that it needs a second sink.
+1. **Stake a boon.** Offer to wager a held boon on a die for two of them. The
+   wager throws a hand you have not taken; this stakes one you already own.
+2. **Blood price boons.** A fourth, stronger boon offered beside the three,
+   costing maximum Body Points instead of nothing.
+3. **Better death.** A hero's fall gets its own beat — slow-mo, the party turns,
+   and the run line says who is gone. Currently the biggest thing in the game
+   with the smallest presentation.
 
 ## Backlog, roughly in order of value
 
 ### Gamble
-- **The Warlock's Wager.** Spend Fate to reroll the *entire draft*.
 - **Stake a boon.** Offer to wager a held boon on a die for two of them.
 - **Blood price boons.** A second, stronger boon offered beside the three, which
   costs maximum Body Points instead of nothing.
-- **Forced chests.** Open carefully (small, safe) or force it (better, may be
-  trapped or a mimic).
 - **Gambler's Coffin** room feature: roll a die, skull = treasure, black shield =
   something climbs out. Repeatable, stakes rise each pull.
+- **Force the door.** Forcing works on chests; a locked or stuck door should ask
+  the same question, with noise instead of a needle as the cost.
 
 ### Roguelike depth
 - **Vault variants.** A vault that is trapped, or one whose key is held by a
   champion that flees.
-- **Curses.** Persistent drawbacks you accept for a strong reward; removable at a
-  shrine or by paying the pedlar.
-- **Hero progression inside a run.** Kills earn a small pick at set thresholds —
-  a weapon die, a defend die, a spell slot.
-- **Relics** with visible slots, distinct from boons: found, not drafted.
-- **Warlock's attention meter.** Fills with time spent and coin taken; at
-  thresholds he intervenes — reinforcements, a sealed door, a curse on a hero.
 - **More monsters.** Giant rat swarm, hellhound (breath down a line), spider
   (webs a square you must spend a turn cutting free of), a chained thing that
   cannot leave its room but hits like the end of the world.
@@ -118,6 +118,11 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   the Fate pill would let you feel the run you are on before it breaks.
 
 ### New ideas the batch turned up
+- **Mimics that lie better.** A mimic only exists after you force a chest. One
+  that sits in a room pretending, and only moves when you walk past, would make
+  every chest on the board a small question instead of only the forced ones.
+- **A boss that says something back.** The intro card is one line the room says.
+  A second line when he is down to his last Body Point would close it.
 - **A trial you can fail loudly.** Breaking a vigil currently just stops. It
   should cost something — the room's door slams, or the Warlock's attention
   jumps — so declining is a real choice against a real risk.
