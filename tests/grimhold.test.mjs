@@ -4933,4 +4933,233 @@ t.test('selling: Stout Heart gives back the Body Point it lent', () => {
   t.eq(HQ.defendDice(h2), d0, 'and selling it takes the die back');
 });
 
+/* ------------------------------------------- what the Warlock wants with them */
+
+// a body on a known square, and a sorcerer standing where it can see it
+function graveScene(){
+  runAt(4);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.furn = [];
+  const dead = HQ.runAlive()[1], taker = HQ.runAlive()[0];
+  dead.weapon = 'dagger'; dead.items = {};
+  taker.weapon = 'broadsword'; taker.items = {};
+  put(dead, 12, 9);
+  clearSquare(12, 9);
+  HQ.G.q.lastKiller = 'a Chaos Sorcerer';
+  dead.bp = 1;
+  HQ.hurt(dead, 4, null);
+  const body = HQ.G.q.bodies[0];
+  // one caster, in the same corridor, with a clear line to the body
+  for (const m of HQ.monstersOf()) m.alive = false;
+  const caster = HQ.G.q.actors.find(a => a.kind === 'monster');
+  caster.alive = true; caster.mt = 'sorcerer'; delete caster.affix; caster.elite = false;
+  caster.boss = false; caster.bp = caster.bpMax = 3; caster.awake = true; caster.sleep = 0;
+  caster.x = 12; caster.y = 11;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  return { body, caster, taker, dead };
+}
+
+t.test('raising: a caster that can see a body starts working on it', () => {
+  const { body, caster } = graveScene();
+  t.eq(HQ.RAISE_TURNS, 2, 'two turns of warning');
+  t.ok(HQ.raisers().includes(caster), 'the sorcerer is something that can do this');
+  t.ok(!HQ.bodyStirring(body), 'nothing has started yet');
+  HQ.tickRaising();
+  t.ok(HQ.bodyStirring(body), 'and now it has');
+  t.eq(body.stirring, HQ.RAISE_TURNS, 'with the full count on it');
+  t.eq(HQ.stirringBodies().length, 1, 'one body at a time — it is not a factory');
+});
+
+t.test('raising: two turns later it gets up wearing their name', () => {
+  const { body, dead } = graveScene();
+  HQ.tickRaising();
+  t.eq(body.stirring, 2, 'two');
+  HQ.tickRaising();
+  t.eq(body.stirring, 1, 'one');
+  t.ok(!body.risen, 'still down');
+  const before = HQ.monstersOf().length;
+  HQ.tickRaising();
+  t.ok(body.risen, 'and up');
+  t.eq(HQ.monstersOf().length, before + 1, 'as something on the board');
+  const it = HQ.monstersOf().find(m => m.wasHero === dead.id);
+  t.ok(it, 'that used to be them');
+  t.ok(it.name.includes(dead.name), `and wears their name (${it.name})`);
+  t.eq(it.mt, 'zombie', 'as a corpse');
+  t.ok(it.awake, 'and it is not asleep');
+  t.eq(HQ.bodyAt(12, 9).risen, true, 'the body is spent');
+});
+
+t.test('raising: killing the caster stops it, and so does laying them to rest', () => {
+  // kill the caster mid-work
+  const a = graveScene();
+  HQ.tickRaising();
+  t.eq(a.body.stirring, 2, 'it has started');
+  a.caster.alive = false;
+  HQ.tickRaising();
+  t.eq(a.body.stirring, 0, 'and stops when there is nothing left to pull');
+  t.ok(!a.body.risen, 'nobody gets up');
+  HQ.tickRaising(); HQ.tickRaising();
+  t.ok(!a.body.risen, 'and stays that way');
+
+  // or go back and settle them
+  const b = graveScene();
+  HQ.tickRaising();
+  t.ok(HQ.bodyStirring(b.body), 'it has started here too');
+  put(b.taker, 12, 9);
+  use(b.taker);
+  t.ok(HQ.layToRest(b.taker, b.body), 'a hero standing on them can settle it');
+  t.ok(b.taker.acted, 'for the action');
+  t.ok(b.body.laid, 'and they are laid to rest');
+  t.ok(!HQ.bodyStirring(b.body), 'nothing is pulling at them now');
+  HQ.tickRaising(); HQ.tickRaising(); HQ.tickRaising();
+  t.ok(!b.body.risen, 'and the caster cannot start again on somebody at peace');
+  t.eq(HQ.layToRest(b.taker, b.body), false, 'and it only gets done once');
+});
+
+t.test('raising: a hero with nothing left to spend cannot settle anybody', () => {
+  const { body, taker } = graveScene();
+  HQ.tickRaising();
+  put(taker, 12, 9);
+  taker.acted = true;
+  t.eq(HQ.layToRest(taker, body), false, 'no action, no last rites');
+  t.ok(HQ.bodyStirring(body), 'and it keeps pulling');
+});
+
+t.test('raising: a stirring body says so on the board', () => {
+  const { body } = graveScene();
+  const quiet = paintOf();
+  t.ok(!paintedLike(quiet, /^rgba\(150,90,200,/), 'a settled body draws nothing extra');
+  HQ.tickRaising();
+  const loud = paintOf();
+  t.ok(paintedLike(loud, /^rgba\(150,90,200,/), 'a stirring one gets a ring');
+  t.ok(paintedLike(loud, /^rgba\(190,130,240,/), 'and a count over it');
+  body.laid = true;
+  t.ok(!paintedLike(paintOf(), /^rgba\(190,130,240,/), 'and settling it takes both away');
+});
+
+t.test('raising: it is the Warlock’s turn that does it, not the test calling the ticker', () => {
+  const { body, dead } = graveScene();
+  t.ok(!HQ.bodyStirring(body), 'nothing yet');
+  HQ.endZargonTurn();
+  t.ok(HQ.bodyStirring(body), 'a turn passes and something starts');
+  HQ.endZargonTurn();
+  HQ.endZargonTurn();
+  t.ok(body.risen, 'and two more and they are up');
+  t.ok(HQ.monstersOf().some(m => m.wasHero === dead.id), 'wearing their name');
+});
+
+t.test('liars: it is the Warlock’s turn that lets one hide, too', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.bodies = [];
+  const f = planted(4);
+  emptyRoom(4);
+  const h = HQ.runAlive()[0];
+  put(h, f.x, f.y + 1);
+  const m = HQ.springLiar(f, null, true);
+  t.ok(m.alive, 'it is out');
+  for (const x of HQ.runAlive()) put(x, HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  HQ.G.q.seen.fill(0);
+  HQ.recomputeVision();
+  const before = HQ.liars().length;
+  HQ.endZargonTurn();
+  t.ok(!m.alive, 'and a turn away from it puts it back in the furniture');
+  t.eq(HQ.liars().length, before + 1, 'as something pretending again');
+});
+
+t.test('raising: with no caster on the floor nothing ever stirs', () => {
+  const { body, caster } = graveScene();
+  caster.alive = false;
+  for (let i = 0; i < 6; i++) HQ.tickRaising();
+  t.ok(!HQ.bodyStirring(body), 'nothing to pull at them');
+  t.ok(!body.risen, 'and nothing gets up');
+  t.eq(HQ.raisers().length, 0, 'because there is nobody who could');
+});
+
+/* -------------------------------------------- a liar that goes back to lying */
+
+t.test('liars: one nobody is looking at, that nobody has hurt, hides again', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const f = planted(4);
+  emptyRoom(4);
+  const h = HQ.runAlive()[0];
+  put(h, f.x, f.y + 1);
+  const m = HQ.springLiar(f, null, true);
+  t.ok(m && m.alive, 'it is out');
+  t.ok(m.wasLiar, 'and it remembers what it was');
+  t.eq(m.wasLiar.t, 'chest', 'a chest');
+
+  // while somebody is next to it, it stays out
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  t.eq(HQ.tickLiars(), null, 'watched, it stays where it is');
+  t.ok(m.alive, 'still a monster');
+
+  // walk away and it settles back down
+  for (const x of HQ.runAlive()) put(x, HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  HQ.G.q.seen.fill(0);
+  HQ.recomputeVision();
+  const before = HQ.liars().length;
+  const hid = HQ.tickLiars();
+  t.ok(hid, 'unwatched, it stops being a monster');
+  t.ok(!m.alive, 'it is off the board');
+  t.eq(HQ.liars().length, before + 1, 'and back to being furniture');
+  const again = HQ.liars().find(x => x.x === m.x && x.y === m.y);
+  t.ok(again, 'on the square it was standing on');
+  t.eq(again.t, 'chest', 'as the thing it was pretending to be');
+});
+
+t.test('liars: hurt it once and it has lost the trick for good', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const f = planted(4);
+  emptyRoom(4);
+  const h = HQ.runAlive()[0];
+  put(h, f.x, f.y + 1);
+  const m = HQ.springLiar(f, null, true);
+  m.bpMax = 4; m.bp = 4;
+  HQ.hurt(m, 1, null);
+  t.eq(m.bp, 3, 'it is wounded');
+  for (const x of HQ.runAlive()) put(x, HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  HQ.G.q.seen.fill(0);
+  HQ.recomputeVision();
+  t.eq(HQ.tickLiars(), null, 'and a wounded thing cannot pretend any more');
+  t.ok(m.alive, 'it is still a monster');
+
+  // an ordinary monster was never a liar and never hides
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const plain = HQ.monstersOf()[0];
+  t.ok(!plain.wasLiar, 'an orc is just an orc');
+  for (const x of HQ.runAlive()) put(x, HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  HQ.G.q.seen.fill(0);
+  HQ.recomputeVision();
+  t.eq(HQ.tickLiars(), null, 'and nothing on the floor sinks back into the furniture');
+});
+
+t.test('liars: one that hides can be sprung all over again', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const f = planted(4);
+  emptyRoom(4);
+  const h = HQ.runAlive()[0];
+  put(h, f.x, f.y + 1);
+  const m = HQ.springLiar(f, null, true);
+  for (const x of HQ.runAlive()) put(x, HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  HQ.G.q.seen.fill(0);
+  HQ.recomputeVision();
+  HQ.tickLiars();
+  const again = HQ.liars().find(x => x.x === m.x && x.y === m.y);
+  t.ok(again, 'it is furniture again');
+  // and it is a real liar, not a decoration
+  put(h, again.x, again.y + 1);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  const m2 = HQ.mimicWatch();
+  t.ok(m2, 'walking back into reach wakes it again');
+  t.eq(m2.mt, 'mimic', 'and it is still a mimic');
+});
+
 t.run();

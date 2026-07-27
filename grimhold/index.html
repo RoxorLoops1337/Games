@@ -2683,6 +2683,17 @@ function drawBody(g, b, t){
   g.fillRect(-TS*.235, TS*.00, TS*.235, TS*.045);
   g.fillStyle = 'rgba(0,0,0,.55)';
   g.beginPath(); g.ellipse(-TS*.12, TS*.005, TS*.055, TS*.028, 0, 0, 6.284); g.fill();
+  // Something is pulling at them. This one gets the hot fast treatment, because
+  // for once the thing on the floor is about to become dangerous.
+  if (b.stirring > 0 && !b.risen && !b.laid){
+    const q = .5 + Math.sin(t*.006)*.5;
+    g.strokeStyle = `rgba(150,90,200,${(.35 + q*.45).toFixed(3)})`;
+    g.lineWidth = 2.4;
+    g.beginPath(); g.ellipse(0, TS*.08, TS*.36, TS*.20, 0, 0, 6.284); g.stroke();
+    g.fillStyle = `rgba(190,130,240,${(.45 + q*.45).toFixed(3)})`;
+    g.font = `${TS*.30}px Georgia,serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(b.stirring), 0, -TS*.30 - q*2);
+  }
   g.restore();
 }
 
@@ -4453,6 +4464,9 @@ function endZargonTurn(){
   if (q.turnLimit && G.q.turn > q.turnLimit){ questOver(false, 'The working completes. Grimhold seals itself with you inside.'); return; }
   tickTrial();
   if (G.q.over) return;
+  tickRaising();
+  tickLiars();
+  if (G.q.over) return;
   G.q.phase = 'hero';
   for (const h of heroes()){
     h.done = !h.alive; h.acted = false; h.rolled = false; h.moveLeft = 0;
@@ -4738,7 +4752,9 @@ function springLiar(f, h, quiet){
   const m = { kind:'monster', uid:9500 + ri(499), mt:L.mt, name:def.name,
     x:f.x, y:f.y, alive:true, facing:-1,
     bpMax:def.bp, bp:def.bp, atk:def.atk, def:def.def, mind:def.mind, mv:def.move,
-    boss:false, awake:true, sleep:0, stun:0, bob:rnd()*6.28 };
+    boss:false, awake:true, sleep:0, stun:0, bob:rnd()*6.28,
+    // it remembers what it was pretending to be, and can go back to it
+    wasLiar: { t:f.t, r:f.r, w:f.w, h:f.h, rot:f.rot } };
   G.q.actors.push(m);
   spark(f.x, f.y, 24, L.col, { spd:.02, up:.004 });
   setMood('fight');
@@ -4758,6 +4774,28 @@ function springLiar(f, h, quiet){
 }
 const springMimic = springLiar;                // the name it had when it was only chests
 
+// And it can go back. A liar nobody is looking at, that nobody has managed to
+// hurt, settles down and becomes furniture again — on the square it is standing
+// on, not the one it started from. Wound it and it has lost the trick for good.
+function tickLiars(){
+  if (!G || !G.q || G.q.over) return null;
+  let hid = null;
+  for (const m of monstersOf()){
+    if (!m.wasLiar || m.bp < m.bpMax) continue;
+    if (livingHeroes().some(h => tileVisible(m.x, m.y) || dist2(h.x, h.y, m.x, m.y) <= 4)) continue;
+    if (furnAt(m.x, m.y)) continue;              // no room to be furniture here
+    m.alive = false; m.deathT = 0;
+    const L = m.wasLiar;
+    G.q.furn.push({ t:L.t, r:roomAt(m.x, m.y), x:m.x, y:m.y, w:L.w || 1, h:L.h || 1,
+                    rot:L.rot || 0, quest:null, taken:false, searched:false, lie:true });
+    say('Somewhere behind you, something stops moving.', 'bad');
+    hid = m;
+    break;
+  }
+  if (hid){ recomputeVision(); refreshField(); renderHUD(); }
+  return hid;
+}
+
 /* --------------------------------------------------- WHAT THEY WERE CARRYING */
 // A body has been sitting on its square doing nothing since the fall got its
 // own beat. Their weapon is still in their hand. Going back for it costs the
@@ -4775,11 +4813,82 @@ function bodyWorthTaking(b, h){
 function bodyWatch(h){
   if (!G || !G.q || G.q.over || !h || !h.alive) return null;
   const b = bodyAt(h.x, h.y);
-  if (!bodyWorthTaking(b, h)) return null;
+  if (!b || b.risen) return null;
+  if (!bodyWorthTaking(b, h) && !bodyStirring(b)) return null;
   if (HEADLESS) return b;                       // tests call takeUp themselves
   if (h.acted) return b;                        // nothing left to spend on it
   showBody(h, b);
   return b;
+}
+
+/* ------------------------------------------------- WHAT THE WARLOCK WANTS */
+// Taking a friend's blade back was the party's half of it. This is his: while
+// a sorcerer is alive on the floor, the nearest body it can see starts to
+// stir, and two turns later it gets up wearing your friend's name. Killing the
+// sorcerer stops it; so does going back and laying them to rest, which costs
+// the same action the blade did. Leaving them where they fell is a decision now.
+
+const RAISE_TURNS = 2;
+const bodyStirring = (b) => !!(b && b.stirring > 0 && !b.risen && !b.laid);
+const stirringBodies = () => (G.q && G.q.bodies ? G.q.bodies.filter(bodyStirring) : []);
+const raisers = () => monstersOf().filter(m => MONSTERS[m.mt] && MONSTERS[m.mt].caster);
+function layToRest(h, b){
+  if (!h || !b || h.acted || b.risen || b.laid) return false;
+  h.acted = true;
+  b.laid = true; b.stirring = 0;
+  say(`${h.name} closes ${b.name}'s eyes. Whatever was pulling at them lets go.`, 'good');
+  spark(b.x, b.y, 18, '#9fd8e8', { spd:.012, up:.006 });
+  sfx('heal');
+  renderHUD();
+  return true;
+}
+// Called once a turn, with the Warlock's other business.
+function tickRaising(){
+  if (!G || !G.q || G.q.over || !G.q.bodies) return null;
+  const casters = raisers();
+  let risen = null;
+  for (const b of G.q.bodies){
+    if (b.risen || b.laid) continue;
+    if (b.stirring > 0){
+      if (!casters.length){                       // nothing left to pull at them
+        b.stirring = 0;
+        say(`Whatever was reaching for ${b.name} has stopped.`, 'good');
+        continue;
+      }
+      b.stirring--;
+      if (b.stirring <= 0) risen = raiseBody(b) || risen;
+      else say(`${b.name} is moving. Not on their own.`, 'bad');
+      continue;
+    }
+    // nothing has started on this one yet — a caster who can see it begins
+    if (!casters.length) continue;
+    if (casters.some(m => hasLOS(m.x, m.y, b.x, b.y) && dist2(m.x, m.y, b.x, b.y) <= 64)){
+      b.stirring = RAISE_TURNS;
+      say(`Something starts to work on ${b.name} where they fell.`, 'bad');
+      sfx('spell');
+      break;                                      // one at a time; it is not a factory
+    }
+  }
+  renderHUD();
+  return risen;
+}
+function raiseBody(b){
+  if (!b || b.risen || b.laid) return null;
+  b.risen = true;
+  const def = MONSTERS.zombie;
+  const m = { kind:'monster', uid:9800 + ri(199), mt:'zombie', name:`${b.name}'s Corpse`,
+    x:b.x, y:b.y, alive:true, facing:-1,
+    bpMax:def.bp + 1, bp:def.bp + 1, atk:def.atk, def:def.def, mind:def.mind, mv:def.move,
+    boss:false, awake:true, sleep:0, stun:0, bob:rnd()*6.28, wasHero:b.id };
+  G.q.actors.push(m);
+  say(`${b.name} gets up. It is not ${b.name} any more.`, 'bad');
+  banner(b.name.toUpperCase(), 'is on its feet again');
+  sfx('boss'); G.shake = Math.max(G.shake, 22); hitStop(240);
+  spark(b.x, b.y, 26, '#7d8f6a', { spd:.02, up:.005 });
+  focusOn(b.x, b.y); G.camPunch = 1.3;
+  setMood('fight');
+  recomputeVision(); refreshField(); renderHUD();
+  return m;
 }
 function takeUp(h, b){
   if (!h || !b || b.taken || h.acted) return null;
@@ -4809,24 +4918,35 @@ function showBody(h, b){
   const theirs = WEAPONS[b.weapon], mine = weaponOf(h);
   const better = !!(theirs && !theirs.quest && theirs.dice > mine.dice);
   const items = Object.keys(b.items || {}).filter(k => b.items[k] > 0);
+  const stirring = bodyStirring(b);
+  const worth = bodyWorthTaking(b, h);
   modal(`<h2>${b.name}</h2>
-    <div class="sub" style="margin:2px 0 0">Where they went down</div>
+    <div class="sub" style="margin:2px 0 0">${stirring ? 'Something is pulling at them' : 'Where they went down'}</div>
     <div class="rule"></div>
-    <p class="flavor">Cut down by ${b.by}. Their hands are still closed around it.</p>
+    <p class="flavor">Cut down by ${b.by}. ${stirring
+      ? `Their fingers have started to move, and nobody told them to. ${
+          b.stirring} turn${b.stirring>1?'s':''} before they stand up.`
+      : 'Their hands are still closed around it.'}</p>
     ${better ? `<div class="row"><div class="ic">${theirs.ic}</div>
       <div class="tx"><b>${theirs.name}</b><s>${theirs.desc}<br>Yours throws ${mine.dice} ${
         mine.dice === 1 ? 'die' : 'dice'}; this throws ${theirs.dice}.</s></div></div>` : ''}
     ${items.map(k => `<div class="row"><div class="ic">${k === 'potion' ? '🧪' : '⚱'}</div>
       <div class="tx"><b>${k === 'potion' ? 'Healing Potion' : 'Holy Water'} ×${b.items[k]}</b>
       <s>Still in their pack.</s></div></div>`).join('')}
-    <div class="row"><div class="ic">⌛</div><div class="tx"><b>It costs your action</b>
-      <s>Kneeling to take it is the turn you were going to spend swinging.</s></div></div>
+    ${stirring ? `<div class="row blood"><div class="ic">✝</div>
+      <div class="tx"><b>Lay them to rest</b><s>It stops. They stay down for good — and you
+      leave whatever they were carrying with them.</s></div></div>` : ''}
+    <div class="row"><div class="ic">⌛</div><div class="tx"><b>You only have the one action</b>
+      <s>${stirring ? 'Taking it up does not settle them. Only one of these gets done.'
+                    : 'Kneeling to take it is the turn you were going to spend swinging.'}</s></div></div>
     <div class="rule"></div>
     <div style="text-align:center">
-      <button class="btn big" id="mTakeUp">Take it up</button>
+      ${worth ? `<button class="btn big" id="mTakeUp">Take it up</button>` : ''}
+      ${stirring ? `<button class="btn ${worth ? '' : 'big'}" id="mLayRest">Lay them to rest</button>` : ''}
       <button class="btn ghost" id="mLeaveThem">Leave them</button>
     </div>`);
   bindModal('#mTakeUp', () => { closeModal(); takeUp(h, b); });
+  bindModal('#mLayRest', () => { closeModal(); layToRest(h, b); });
   bindModal('#mLeaveThem', () => { closeModal(); say(`${b.name} is left where they fell.`, ''); });
 }
 
@@ -7692,6 +7812,7 @@ globalThis.HQ = {
   drawRelicOn, drawBody, drawRansacked, DRAFT_TABS, TRIAL_KINDS, markedOne, bloodOwed,
   roomUnopened, roomsUnopened, bodyAt, bodyWorthTaking, bodyWatch, takeUp, showBody,
   SELL_PRICE, sellable, sellBoon,
+  RAISE_TURNS, bodyStirring, stirringBodies, raisers, layToRest, tickRaising, raiseBody, tickLiars,
   historyRows, thisRunRow, STREAK_SHOW,
   LIE_FROM, LIE_CHANCE, LIARS, LIAR_TYPES, liars, lyingChests,
   mimicWatch, springLiar, springMimic, TRIAL_WRATH,
