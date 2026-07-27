@@ -445,6 +445,7 @@ const FURN = {
   altar:     { name:'Altar',        w:2, h:1, search:true },
   sorcerer:  { name:"Sorcerer's Table", w:2, h:1, search:true },
   cage:      { name:'Iron Cage',    w:1, h:1, search:false },
+  plinth:    { name:'Plinth',       w:1, h:1, search:false },
 };
 
 /* --------------------------------------------------------------- the book */
@@ -924,6 +925,10 @@ function startQuest(qi, def, seed){
     }
   }
 
+  // A trial room says what it wants on the lintel. What it pays stands lit in
+  // the middle of the floor, so the reason to accept is a thing you can see.
+  if (Q.trialRoom) placePlinth(Q, Q.trialRoom.room, R);
+
   // One chest on a deep floor was never a chest. Never the quest chest, never
   // one inside the vault — a locked room you have paid to open should pay.
   const lieDepth = q.depth || 0;             // authored quests have no depth: none there
@@ -952,6 +957,34 @@ function startQuest(qi, def, seed){
   const first = heroes().find(h => h.alive);
   if (first) beginHeroActivation(first);
   return Q;
+}
+
+// The plinth wants the middle of the room, where a doorway can see it. If the
+// middle is taken it takes the nearest free square it can, and if the room is
+// full it does without — no plinth is better than one you cannot walk around.
+function placePlinth(Q, rid, R){
+  const r = ROOMS[rid];
+  const cx = r.x + ((r.w - 1) >> 1), cy = r.y + ((r.h - 1) >> 1);
+  const free = (x,y) => !Q.furn.some(f => x>=f.x && x<f.x+f.w && y>=f.y && y<f.y+f.h)
+                     && !Q.actors.some(a => a.alive && a.x===x && a.y===y);
+  let spot = free(cx, cy) ? [cx, cy] : null;
+  if (!spot){
+    const pool = roomTiles(rid).filter(([x,y]) => free(x,y))
+      .sort((a,b) => (Math.abs(a[0]-cx)+Math.abs(a[1]-cy)) - (Math.abs(b[0]-cx)+Math.abs(b[1]-cy)));
+    spot = pool[0] || null;
+  }
+  if (!spot) return null;
+  const f = { t:'plinth', r:rid, x:spot[0], y:spot[1], w:1, h:1, rot:0,
+              quest:null, taken:false, searched:false, plinth:true, spent:false };
+  Q.furn.push(f);
+  return f;
+}
+const trialPlinth = () => (G && G.q && G.q.furn ? G.q.furn.find(f => f.plinth) || null : null);
+// Win or lose, the light goes out — the room has finished with you either way.
+function spendPlinth(){
+  const f = trialPlinth();
+  if (f) f.spent = true;
+  return f;
 }
 
 // A spot inside a room big enough for a piece of furniture, against a wall if
@@ -2521,6 +2554,26 @@ function drawFurniture(g, f, t){
     g.fillRect(w*.02, -h*.28, w*.24, h*.16);
     g.strokeStyle = 'rgba(0,0,0,.4)'; g.lineWidth = 1;
     g.beginPath(); g.moveTo(w*.14,-h*.28); g.lineTo(w*.14,-h*.12); g.stroke();
+  } else if (F==='plinth'){
+    // A trial's terms are cut into the lintel; the reason to accept them stands
+    // in the middle of the room, lit, where you can see it from the doorway.
+    g.fillStyle = '#3a3630'; rr(g, -w*.22, -h*.02, w*.44, h*.34, 2); g.fill();
+    g.fillStyle = '#4c4740'; rr(g, -w*.28, -h*.10, w*.56, h*.12, 2); g.fill();
+    g.fillStyle = '#565048'; rr(g, -w*.26, h*.26, w*.52, h*.10, 2); g.fill();
+    if (f.spent){
+      g.fillStyle = 'rgba(0,0,0,.45)'; rr(g, -w*.28, -h*.12, w*.56, h*.14, 2); g.fill();
+    } else {
+      const pulse = .5 + Math.sin(t*.0026)*.5;
+      const lift = -h*.30 - pulse*h*.05;
+      g.fillStyle = `rgba(216,168,60,${.10 + pulse*.10})`;   // the light it throws
+      g.beginPath(); g.ellipse(0, lift, w*.30, h*.22, 0, 0, 6.284); g.fill();
+      g.fillStyle = `rgba(243,212,136,${.75 + pulse*.25})`;
+      g.beginPath();
+      g.moveTo(0, lift - h*.13); g.lineTo(w*.10, lift); g.lineTo(0, lift + h*.13);
+      g.lineTo(-w*.10, lift); g.closePath(); g.fill();
+      g.fillStyle = `rgba(255,246,214,${.5 + pulse*.5})`;
+      g.beginPath(); g.arc(0, lift, w*.035, 0, 6.284); g.fill();
+    }
   } else if (F==='cage'){
     g.fillStyle = 'rgba(10,8,6,.75)'; rr(g, -w*.36, -h*.40, w*.72, h*.74, 3); g.fill();
     g.strokeStyle = '#6a6258'; g.lineWidth = Math.max(2, w*.035);
@@ -2531,6 +2584,33 @@ function drawFurniture(g, f, t){
     g.beginPath(); g.moveTo(-w*.36,-h*.38); g.lineTo(w*.36,-h*.38); g.stroke();
     g.beginPath(); g.moveTo(-w*.36, h*.30); g.lineTo(w*.36, h*.30); g.stroke();
   }
+  g.restore();
+}
+
+// What is left where a hero fell. It stays on the square for the rest of the
+// floor: a helm on its side, a blade planted, and a stain that does not fade.
+function drawBody(g, b, t){
+  // the stain spreads over the first moments rather than appearing all at once
+  b.t = (b.t || 0) + 1;
+  const settle = Math.min(1, b.t/26);
+  const px = (b.x + .5)*TS, py = (b.y + .5)*TS;
+  g.save(); g.translate(px, py);
+  g.fillStyle = `rgba(90,20,14,${(.34*settle).toFixed(3)})`;
+  g.beginPath(); g.ellipse(0, TS*.10, TS*.34*settle, TS*.19*settle, 0, 0, 6.284); g.fill();
+  g.fillStyle = `rgba(122,31,20,${(.24*settle).toFixed(3)})`;
+  g.beginPath(); g.ellipse(-TS*.14, TS*.16, TS*.15*settle, TS*.08*settle, 0, 0, 6.284); g.fill();
+  // the blade, planted where they went down
+  g.strokeStyle = '#8b8578'; g.lineWidth = Math.max(2, TS*.045); g.lineCap = 'round';
+  g.beginPath(); g.moveTo(TS*.14, TS*.12); g.lineTo(TS*.05, -TS*.26); g.stroke();
+  g.strokeStyle = '#4a3a24'; g.lineWidth = Math.max(2, TS*.05);
+  g.beginPath(); g.moveTo(TS*.16, TS*.16); g.lineTo(TS*.13, TS*.06); g.stroke();
+  // the helm, on its side
+  g.fillStyle = '#6f6a60';
+  g.beginPath(); g.arc(-TS*.12, TS*.02, TS*.115, Math.PI*1.05, Math.PI*2.1); g.fill();
+  g.fillStyle = '#514c45';
+  g.fillRect(-TS*.235, TS*.00, TS*.235, TS*.045);
+  g.fillStyle = 'rgba(0,0,0,.55)';
+  g.beginPath(); g.ellipse(-TS*.12, TS*.005, TS*.055, TS*.028, 0, 0, 6.284); g.fill();
   g.restore();
 }
 
@@ -2783,6 +2863,7 @@ function draw(){
     if (G.q.seen[idx(d.cx,d.cy)] || G.q.seen[idx(d.rx,d.ry)]) drawDoor(ctx, d, t);
   }
   for (const tr of G.q.traps) if (G.q.seen[idx(tr.x,tr.y)]) drawTrap(ctx, tr, t);
+  for (const b of (G.q.bodies || [])) if (G.q.seen[idx(b.x,b.y)]) drawBody(ctx, b, t);
 
   drawMarkers(ctx, t);
 
@@ -3903,6 +3984,11 @@ function heroFalls(a){
   if (G.q){
     if (!G.q.fallen) G.q.fallen = [];
     if (!G.q.fallen.some(f => f.id === a.id)) G.q.fallen.push({ id:a.id, name:a.name, by });
+    // and the square keeps them. A hero's death should be somewhere on the
+    // board for the rest of the floor, not a banner that goes past.
+    if (!G.q.bodies) G.q.bodies = [];
+    if (!G.q.bodies.some(b => b.id === a.id))
+      G.q.bodies.push({ id:a.id, name:a.name, x:a.x, y:a.y, by, t:0 });
     G.q.streak = 0;
   }
 
@@ -5811,6 +5897,7 @@ function failTrial(why){
     say(`The ${slammed > 1 ? 'doors' : 'door'} slam${slammed > 1 ? '' : 's'} and bolt${slammed > 1 ? '' : 's'}. You are on whichever side you are on.`, 'bad');
   }
   stirWrath(TRIAL_WRATH, 'a trial broken');
+  if (spendPlinth()) say('The light on the plinth goes out.', 'bad');
   recomputeVision(); refreshField(); renderHUD();
   return slammed;
 }
@@ -5820,6 +5907,8 @@ function winTrial(){
   say(`${trialDef().name} is answered.`, 'good');
   sfx('win'); G.shake = 16;
   addFate(2, 'a trial answered');
+  const p = spendPlinth();
+  if (p) spark(p.x, p.y, 26, '#f3d488', { spd:.02, up:.006, glow:'rgba(243,212,136,.5)', r:1.6 });
   const r = G.run ? relicOffer() : null;
   if (r) later(700, () => showRelic(r.id));
   renderHUD();
@@ -6659,11 +6748,16 @@ function buyPedlar(id){
 }
 
 let draftState = null;
+const DRAFT_TABS = [
+  { id:'boons', name:'Boons' },
+  { id:'coin',  name:'Coin'  },
+  { id:'stair', name:'Stairs'},
+];
 function showDraft(){
   const next = G.run.depth + 1;
   if (!draftState || draftState.depth !== G.run.depth){
     draftState = { depth:G.run.depth, opts:draftOptions(), taken:null, stairs:null,
-                   blood:bloodOffer(), staked:null };
+                   blood:bloodOffer(), staked:null, tab:'boons' };
   }
   if (!draftState.stairs){
     G.run.depth = next;                       // generate the floors below
@@ -6737,6 +6831,18 @@ function showDraft(){
       <div class="tx"><b>${p.name}</b><s>${p.desc}</s></div>
       <button class="bu" data-ped="${p.id}" ${G.run.gold < p.cost ? 'disabled' : ''}>◈ ${p.cost}</button>
     </div>`).join('');
+  // Eight things on one scroll was too many. Three tabs: what you take, what
+  // you spend, and where you go. The party and the purse stay above all three,
+  // because they are the numbers every one of those decisions is made against.
+  const tab = DRAFT_TABS.some(x => x.id === draftState.tab) ? draftState.tab : 'boons';
+  draftState.tab = tab;
+  const head = (s) => `<div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">${s}</div>`;
+  const panes = {
+    boons: `${head(draftState.taken ? 'Taken' : 'Take one boon')}${rows}${bloodRow}${wagerRow}${stakeRow}${
+      draftState.taken ? `<p class="flavor" style="text-align:center;margin-top:12px">Nothing else to take here. The stair is waiting.</p>` : ''}`,
+    coin:  `${wager}${wager ? '<div class="rule"></div>' : ''}${head('The pedlar on the stair')}${ped}`,
+    stair: `${head('Choose your stair')}${stairs}`,
+  };
   modal(`
     <h2>Between Floors</h2>
     <div class="sub" style="margin:2px 0 0">Depth ${G.run.depth} cleared · ${next} below</div>
@@ -6746,19 +6852,12 @@ function showDraft(){
       ${G.run.heroes.length > alive.length ? `<div style="color:#b03a2c;font-size:11px;margin-top:4px">Lost: ${G.run.heroes.filter(h=>!h.alive).map(h=>h.name).join(', ')}</div>` : ''}
     </div>
     <div class="goldline">◈ ${G.run.gold}${stake ? ` <span style="color:#ccb8ff">· ◈ ${stake} unbanked</span>` : ''}</div>
-    ${wager}
     <div class="rule"></div>
-    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">Take one boon</div>
-    ${rows}
-    ${bloodRow}
-    ${wagerRow}
-    ${stakeRow}
-    <div class="rule"></div>
-    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">The pedlar on the stair</div>
-    ${ped}
-    <div class="rule"></div>
-    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);text-align:center;margin-bottom:6px">Choose your stair</div>
-    ${stairs}`, 'draft');
+    <div class="tabs">${DRAFT_TABS.map(x => `<button class="tab ${x.id === tab ? 'on' : ''}" data-tab="${x.id}">${
+      x.name}${x.id === 'boons' && draftState.taken ? ' ✓' : ''}${
+      x.id === 'coin' && stake ? ' ◈' : ''}</button>`).join('')}</div>
+    ${panes[tab]}`, 'draft');
+  bindAll('.tab[data-tab]', el => { draftState.tab = el.dataset.tab; showDraft(); });
   bindAll('.bu[data-boon]', el => {
     if (draftState.taken) return;
     if (takeBoon(el.dataset.boon)) draftState.taken = el.dataset.boon;
@@ -7145,6 +7244,7 @@ globalThis.HQ = {
   WAGER_MAX, wagerCost, canWager, wagerDraft,
   get draftState(){ return draftState; }, set draftState(v){ draftState = v; },
   BOSS_LINES, bossOf, bossIntro, BOSS_LAST, bossLastWords,
+  placePlinth, trialPlinth, spendPlinth, drawBody, DRAFT_TABS,
   LIE_FROM, LIE_CHANCE, lyingChests, mimicWatch, springMimic, TRIAL_WRATH,
   FORCE_RISK, chestIn, drawCard, forcedCard, openChest, chestBites, showChest,
   floorChoices, chooseFloor, dblStake, canDouble, doubleOrNothing, settleStake,
