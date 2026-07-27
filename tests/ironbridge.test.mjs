@@ -4773,6 +4773,98 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(Math.abs(slow - fast) < .12, 'and a turret already spent the same share of its cycle kicking (' +
       slow.toFixed(2) + ' / ' + fast.toFixed(2) + ')');
   }
+  // How hard was that? Two things in the picture answer it — the damage number
+  // over the body, and the body itself — and they were not answering it the
+  // same way. Measured across blow sizes the number ran 0.77 to 1.75 while the
+  // flinch sat at 0.18 seconds for every single hit: a 1% graze and a 90%
+  // haymaker rocked a body exactly as far, for exactly as long. floatScale,
+  // three lines away in the same function, already knew.
+  {
+    t.ok(IB.hitWeight(0, 100) === 0, 'nothing is not a hit');
+    t.ok(IB.hitWeight(10, 0) === 0, 'and neither is a hit on nothing');
+    t.ok(IB.hitWeight(1e9, 100) === 1, 'the weight tops out');
+    t.ok(IB.hitWeight(20, 100) > IB.hitWeight(5, 100), 'and rises with the blow');
+    t.ok(IB.HIT.min < IB.HIT.max && IB.HIT.near < IB.HIT.far, 'a rock has two ends to it');
+    t.ok(IB.hitTime(1) > IB.hitTime(0) && IB.hitPush(1) > IB.hitPush(0),
+      'a heavy blow rocks a body longer and further');
+
+    // The crisp version: the number and the flinch have to agree about the
+    // size of a hit — same rise, same saturation point — because they now ask
+    // one function. Sampled across the whole range.
+    IB.newMatch({ diff:'veteran', seed:7701 });
+    const mhp = 1000;
+    const sizes = [.01, .05, .12, .25, .5, .9];
+    const rows = sizes.map(f => ({
+      f, num:IB.floatScale(mhp * f, mhp), t:IB.hitTime(IB.hitWeight(mhp * f, mhp)),
+      push:IB.hitPush(IB.hitWeight(mhp * f, mhp)),
+    }));
+    let disagree = 0;
+    for (let i = 1; i < rows.length; i++){
+      const a = rows[i - 1], b = rows[i];
+      // wherever the number grows the flinch must grow, and where it has
+      // topped out the flinch must have topped out too
+      if ((b.num > a.num + 1e-9) !== (b.t > a.t + 1e-9)) disagree++;
+      if ((b.push > a.push + 1e-9) !== (b.t > a.t + 1e-9)) disagree++;
+    }
+    t.ok(disagree === 0, 'the number over a body and the body’s own flinch agree about the blow (' +
+      disagree + ')');
+    t.ok(rows[rows.length - 1].t > rows[0].t * 1.8,
+      'and the range is worth having (' + rows[0].t.toFixed(3) + ' → ' + rows[rows.length - 1].t.toFixed(3) + ')');
+
+    // Then real blows, through the real dealDmg, watching the body.
+    const flinchOf = (frac) => {
+      IB.newMatch({ diff:'veteran', seed:7703 });
+      G.units.length = 0;
+      const v = IB.spawnUnit(1, 'super', { y:0 });
+      if (!v) return null;
+      v.mhp = mhp; v.hp = mhp;
+      IB.dealDmg(null, v, mhp * frac, { pure:true });
+      return { t0:v.hitT, w:v.hitW };
+    };
+    const NOHIT = { t0:0, w:0 };
+    const light = flinchOf(.02) || NOHIT, heavy = flinchOf(.6) || NOHIT;
+    t.ok(light !== NOHIT && heavy !== NOHIT, 'a real blow really rocks a real body');
+    t.ok(heavy.t0 > light.t0 * 1.8, 'a haymaker rocks it longer than a graze (' +
+      light.t0.toFixed(3) + ' → ' + heavy.t0.toFixed(3) + ')');
+    t.ok(heavy.w > light.w, 'and the body remembers how hard it was hit');
+    t.ok(IB.hitPush(heavy.w) > IB.hitPush(light.w) * 1.5, 'so it is thrown further too');
+    G.units.length = 0;
+  }
+  // The wart swing0 fixed, in two more places. An ultimate's pop was given .5
+  // seconds and divided by the basic's .32, so it sat pinned at full for the
+  // first .18 and only then began to fade — a different SHAPE from the basic
+  // beside it rather than a longer one.
+  {
+    // DRIVEN, not recomputed. The first version of this block worked out
+    // `castT / castT0` in the test itself and duly passed with the bug put
+    // back — it was asserting its own arithmetic. The pool under a caster is
+    // an ellipse whose radius carries the value, so drive drawUnit and read
+    // the radius that actually reached the canvas.
+    IB.newMatch({ diff:'veteran', seed:7705 });
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+    const POOL = '#12ff34';
+    const h = IB.makeHero(0, 'mage', 'Popper');
+    h.pend.length = 0; G.sides[0].heroes.push(h); IB.enterLane(h); h.x = 60; h.y = 0;
+    const poolAt = (dur, frac) => {
+      h.castT0 = dur; h.castT = dur * frac; h.castCol = POOL;
+      CTX.__stats.ellipses = []; CTX.__stats.dropped = 0;
+      IB.drawUnit(CTX, h);
+      const mine = CTX.__stats.ellipses.filter(e => e.fill === POOL);
+      return mine.length ? { r:Math.max(...mine.map(e => e.rx)), dropped:CTX.__stats.dropped } : null;
+    };
+    const NOPOOL = { r:0, dropped:0 };
+    for (const [name, dur] of [['a basic', .32], ['an ultimate', .5]]){
+      const at = [];
+      for (let i = 0; i <= 8; i++) at.push(poolAt(dur, 1 - i / 10) || NOPOOL);
+      t.ok(at.every(x => x !== NOPOOL), name + ' cast really draws a pool');
+      t.ok(at[0].dropped === 0, 'and the capture held it for ' + name);
+      let flat = 0;
+      for (let i = 1; i < at.length; i++) if (at[i].r >= at[i - 1].r - 1e-9) flat++;
+      t.ok(flat === 0, name + ' pop shrinks from the first frame rather than sitting pinned (' + flat + ')');
+      t.ok(at[0].r > at[at.length - 1].r, 'and is biggest when it is newest for ' + name);
+    }
+    h.castT = 0; h.castT0 = 0;
+  }
   G.units.length = 0;
 }
 {
