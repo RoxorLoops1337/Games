@@ -34,6 +34,11 @@
   #waveBox{ padding:4px 10px; background:#0e1421; border:1px solid var(--line); border-radius:8px;
     font-variant-numeric:tabular-nums; }
   #waveBox b{ color:var(--gold); }
+  /* The last few seconds before a wave. Nothing in the top bar used to change
+     between 0:18 and 0:00, so the metronome had to be consulted rather than
+     felt. Pulled off the same warm alert colour as .abtn.hot. */
+  #waveBox.soon{ background:#241a10; border-color:#c9922a; color:#ffdf9a; }
+  #waveBox.soon b{ color:#ffdf9a; }
   .tbtn{ padding:5px 10px; background:var(--panel2); border:1px solid var(--line); border-radius:8px;
     font-size:13px; font-weight:600; }
   .tbtn:hover{ background:#26314a; }
@@ -4440,6 +4445,54 @@ const KEEP_ART = {
   doorTop:-4, doorR:14, doorH:16,
 };
 const keepBase = () => KEEP_ART.wallTop + KEEP_ART.wallH;
+/* A wave lands every 22 seconds and it decides what the next 22 are spent on:
+   it is the metronome of the whole match. Measured across one full countdown
+   on a live page, second by second, what the player was told about it was five
+   characters of grey text in a corner box — the same class, the same weight,
+   the same colour at 0:18 as at 0:00 — and the BOARD said nothing at any of
+   the eighteen samples. Every reaction in this game arrives after the event.
+
+   The one countdown the game already tells properly sits four hundred lines
+   away: the ogre window, a bar on the board plus a number, in the colour of
+   the side sending them. Same idiom here, with one deliberate difference —
+   the ogre bar DRAINS, because that window is closing; this one FILLS, because
+   a muster is assembling. Two clocks that mean opposite things should not look
+   the same.
+
+   It is drawn at the keep the wave walks out of, which drawEnds culls when the
+   camera is out on the bridge — so the board half cannot be the only half. The
+   top bar carries the same state in a class, and that one is always on screen. */
+const MUSTER = { lead:7, w:40, h:3.6, back:'rgba(10,12,18,.7)', txt:'#ffe6bd', up:16, gap:6 };
+// One number, four readers — the bar, the label, the top-bar class and the
+// test. They cannot disagree about when a wave is close.
+const mustering = () => G.state === 'play' && G.waveT <= MUSTER.lead;
+const musterPhase = () => clamp(1 - G.waveT / MUSTER.lead, 0, 1);
+// What the clock should READ, as a whole number of seconds still to go. floor()
+// spends the last whole second saying 0:00 — announcing a wave that has not
+// arrived — and undercounts by one the entire way down: at 17.99s left it read
+// 0:17. Every other countdown in the game already ceils (the ogre window, a
+// structure rebuilding, a hero reforging, both inspector lines); the wave clock
+// was the only one flooring, and floor is for mmss(), which counts up.
+const waveSecs = () => Math.max(0, Math.ceil(G.waveT));
+
+function musterMark(c, x, nameY, s, z){
+  if (!mustering()) return;
+  const f = musterPhase();
+  const w = MUSTER.w * z, h = Math.max(1, MUSTER.h * z);
+  const bx = x - w / 2, by = nameY - MUSTER.up * z;
+  c.fillStyle = MUSTER.back; c.fillRect(bx - 1.2, by - 1.2, w + 2.4, h + 2.4);
+  c.fillStyle = SIDE_COL[s.i]; c.fillRect(bx, by, w * f, h);
+  c.fillStyle = shade(SIDE_COL[s.i], 1.3); c.fillRect(bx, by, w * f, h * .45);
+  c.fillStyle = MUSTER.txt;
+  const sz = Math.max(8, Math.round(9 * z));
+  setText(c, 'bold ' + sz + 'px system-ui', 'center', 'middle');
+  const ty = by - MUSTER.gap * z;
+  const txt = 'WAVE ' + (G.wave + 1) + ' · ' + Math.max(1, waveSecs()) + 's';
+  c.fillText(txt, x, ty);
+  blockLabel(x, ty, c.measureText(txt).width + LABEL_PAD.x * 2, sz * 1.35);
+  endText(c);
+}
+
 function drawEnds(c){
   for (const s of G.sides){
     const dir = dirOf(s.i);
@@ -4524,6 +4577,9 @@ function drawEnds(c){
     // stay out of rather than something that moves itself.
     blockLabel(kp[0], nameY, c.measureText(SIDE_NAME[s.i]).width + LABEL_PAD.x * 2, nameSz * 1.35);
     endText(c);
+    // Above the name, which is why it is drawn after it: the name reserves its
+    // airspace first and the muster stacks off nameY rather than off the wall.
+    musterMark(c, kp[0], nameY, s, z);
   }
 }
 
@@ -6997,7 +7053,12 @@ function syncHud(){
   pop.classList.toggle('full', popUsed(s) >= popCap(s));
   const wb = $('waveBox');
   wb.querySelector('b').textContent = G.wave;
-  $('waveT').textContent = Math.floor(G.waveT / 60) + ':' + String(Math.floor(G.waveT % 60)).padStart(2, '0');
+  // The keeps are culled the moment the camera moves out onto the bridge, so
+  // the board's muster bar cannot be the only place this lives. This box is
+  // always on screen.
+  wb.classList.toggle('soon', mustering());
+  const left = waveSecs();
+  $('waveT').textContent = Math.floor(left / 60) + ':' + String(left % 60).padStart(2, '0');
 }
 
 // The dock is one row of columns under the world: jobs, training, whatever plot
@@ -9225,7 +9286,7 @@ window.IB = {
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
-  OVER_HOLD, overStep,
+  OVER_HOLD, overStep, syncHud, MUSTER, mustering, musterPhase, waveSecs, musterMark,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, ARC, arcH, arcZ, applyStun, applySlow, chainLine, hookSnapFx,
