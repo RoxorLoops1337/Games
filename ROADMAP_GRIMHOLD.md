@@ -96,19 +96,28 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   that room and jumps the Warlock's attention by eight. A shoulder and a Body
   Point opens a bolt; no key fits it. The terms say so before you accept. *(batch 10)*
 
+- **The trial plinth** — a lit stone column in the middle of a trial room,
+  visible from the doorway, so the reason to accept the terms is a thing you can
+  see. The light goes out whichever way the trial ends. *(batch 11)*
+- **Split the between-floors screen** — three tabs (Boons, Coin, Stairs) under a
+  pinned party-and-purse header. Eight things on one scroll was too many; each
+  tab now fits a phone. *(batch 11)*
+- **The body stays** — a helm on its side, a planted blade and a stain that
+  settles in, left on the square for the rest of the floor. *(batch 11)*
+
 ---
 
 ## Next up
 
-1. **The trial plinth.** A trial room should have something visibly on a plinth
-   in the middle of it, so the reward is a thing you can see from the doorway
-   rather than a line of text afterwards.
-2. **Split the between-floors screen.** It now carries three boons, a blood
-   price, a wager, a stake bar, the pedlar and the stairs. It scrolls, which is
-   survivable, but the gambles and the shopping want separating before a ninth
-   thing lands on it.
-3. **The body stays.** A fallen hero's marker should remain on the square for
-   the rest of the floor. The fall has a beat now; it should also leave a mark.
+1. **Bolted doors should look bolted.** A trial-bolted door draws like any other
+   shut door, so the Body Point it costs is a surprise the first time and an
+   annoyance after. It wants a visible bar across it.
+2. **An opened chest should read as opened.** With mimics on the floor, telling a
+   searched chest from an unsearched one at a glance became load-bearing, and it
+   is currently a subtle darkening.
+3. **More things that lie.** The mimic proves the pattern. A tomb that is not a
+   tomb, or a suit of armour on a rack that steps off it, would make the
+   furniture itself part of the threat model rather than scenery.
 
 ## Backlog, roughly in order of value
 
@@ -133,8 +142,9 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 ### Feel
 - **Streak on the HUD** — the banner fires and is gone. A small counter beside
   the Fate pill would let you feel the run you are on before it breaks.
-- **Bolted doors should look bolted.** A trial-bolted door draws like any other
-  shut door. It wants a visible bar across it, or the cost is a surprise twice.
+- **The plinth should hold the thing it pays.** It draws a generic gem. Drawing
+  the actual relic on offer would make accepting the terms a choice about a
+  specific object rather than about a reward in the abstract.
 
 ### New ideas the batch turned up
 - **Trial variants.** A third kind: leave the room without opening a chest, or
@@ -142,9 +152,8 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **A blood price you can buy back.** The toll is permanent. A shrine or the
   pedlar offering to return one maximum Body Point at a steep price would make
   taking one on a bad floor less of a one-way door.
-- **A chest that has been opened should say so on the board.** With mimics on
-  the floor, telling a searched chest from an unsearched one at a glance is
-  suddenly load-bearing, and right now it is a subtle darkening.
-- **More things that lie.** The mimic proves the pattern. A tomb that is not a
-  tomb, or a suit of armour on a rack that steps off it, would make the
-  furniture itself part of the threat model rather than scenery.
+- **Bodies the Warlock can use.** A hero's remains sit there for the rest of the
+  floor doing nothing. A necromancer raising one, or a hero able to take back a
+  fallen friend's weapon, would make the mark on the square matter.
+- **A fourth tab for the Book.** The between-floors screen now has room for one,
+  and the run's history is currently only reachable from the title screen.

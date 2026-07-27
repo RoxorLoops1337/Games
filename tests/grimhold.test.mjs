@@ -3777,4 +3777,227 @@ t.test('trials: the vault key does not open what a broken trial bolted', () => {
   t.ok(d.open, 'but the door does open');
 });
 
+/* ---------------------------------------------------------- the trial plinth */
+
+t.test('plinth: a trial room has one, and nothing else does', () => {
+  t.ok(HQ.FURN.plinth, 'a plinth is a piece of furniture');
+  t.eq(HQ.FURN.plinth.search, false, 'and not something you ransack');
+  let withTrial = 0, without = 0;
+  for (let i = 0; i < 40; i++){
+    runAt(6);
+    const p = HQ.trialPlinth();
+    if (HQ.G.q.trialRoom){
+      withTrial++;
+      t.ok(p, 'a trial room stands one in it');
+      t.eq(p.r, HQ.G.q.trialRoom.room, 'in the room the terms are about');
+      t.ok(!p.spent, 'and it is lit');
+      t.eq(HQ.G.q.furn.filter(f => f.plinth).length, 1, 'exactly one');
+    } else {
+      without++;
+      t.eq(p, null, 'a floor with no trial has no plinth');
+    }
+  }
+  t.ok(withTrial > 2 && without > 2, `both kinds of floor were seen (${withTrial}/${without})`);
+  // the authored campaign has no trials, so no plinths
+  for (let qi = 0; qi < HQ.QUESTS.length; qi++){
+    fresh(qi);
+    t.eq(HQ.trialPlinth(), null, `quest ${qi} has none`);
+  }
+});
+
+t.test('plinth: it stands where a doorway can see it, and never on top of anything', () => {
+  for (let i = 0; i < 30; i++){
+    runAt(6);
+    const p = HQ.trialPlinth();
+    if (!p) continue;
+    const r = HQ.ROOMS[p.r];
+    t.ok(p.x >= r.x && p.x < r.x + r.w, 'inside the room, across');
+    t.ok(p.y >= r.y && p.y < r.y + r.h, 'inside the room, down');
+    const others = HQ.G.q.furn.filter(f => f !== p);
+    t.ok(!others.some(f => p.x >= f.x && p.x < f.x + f.w && p.y >= f.y && p.y < f.y + f.h),
+      'never inside another piece of furniture');
+    // and near the middle, where the door can see it
+    const cx = r.x + ((r.w - 1) >> 1), cy = r.y + ((r.h - 1) >> 1);
+    t.ok(Math.abs(p.x - cx) + Math.abs(p.y - cy) <= 3, 'and near the middle of the floor');
+  }
+});
+
+t.test('plinth: the light goes out whichever way the trial ends', () => {
+  // answered
+  runAt(5);
+  let rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth);
+  HQ.placePlinth(HQ.G.q, rid, Math.random);
+  emptyRoom(rid);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'survive' };
+  HQ.startTrial();
+  const h = HQ.runAlive()[0];
+  const r = HQ.ROOMS[rid];
+  put(h, r.x, r.y);
+  t.ok(!HQ.trialPlinth().spent, 'lit while the vigil holds');
+  for (let i = 0; i < 5; i++) HQ.tickTrial();
+  t.ok(HQ.G.q.trial.won, 'answered');
+  t.ok(HQ.trialPlinth().spent, 'and the plinth is spent');
+
+  // broken
+  runAt(5);
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth);
+  HQ.placePlinth(HQ.G.q, rid, Math.random);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'clean' };
+  HQ.startTrial();
+  t.ok(!HQ.trialPlinth().spent, 'lit while it is still a trial');
+  HQ.failTrial('the test broke it');
+  t.ok(HQ.trialPlinth().spent, 'and out when it breaks — the room is finished with you');
+});
+
+t.test('plinth: it is solid, and it draws both lit and spent', () => {
+  runAt(5);
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth);
+  const p = HQ.placePlinth(HQ.G.q, 4, Math.random);
+  t.ok(p, 'it went down');
+  t.eq(HQ.furnAt(p.x, p.y), p, 'and the square is furniture now');
+  t.ok(HQ.blocked(p.x, p.y), 'you walk around it, not through it');
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  HQ.draw();
+  t.ok(true, 'lit, it draws');
+  p.spent = true;
+  HQ.draw();
+  t.ok(true, 'and spent, it still draws');
+});
+
+/* ------------------------------------------------------------- the body stays */
+
+t.test('bodies: a fall leaves something on the square for the rest of the floor', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  t.ok(!HQ.G.q.bodies || !HQ.G.q.bodies.length, 'the floor starts clean');
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  HQ.G.q.lastKiller = 'a Fimir';
+  h.bp = 1;
+  HQ.hurt(h, 4, null);
+  t.ok(HQ.G.q.bodies && HQ.G.q.bodies.length === 1, 'and keeps one afterwards');
+  const b = HQ.G.q.bodies[0];
+  t.eq(b.x, 12, 'on the square they went down on');
+  t.eq(b.y, 9, 'exactly');
+  t.eq(b.name, h.name, 'with their name');
+  t.eq(b.by, 'a Fimir', 'and what did it');
+
+  // it outlives the death animation — the actor stops drawing, the body does not
+  for (let i = 0; i < 40; i++) HQ.update(60);
+  t.eq(HQ.G.q.bodies.length, 1, 'still there a full second later');
+  t.ok(!h.alive, 'and the hero is still gone');
+
+  // and killing them twice does not leave two
+  HQ.heroFalls(h);
+  t.eq(HQ.G.q.bodies.length, 1, 'one hero, one body');
+});
+
+t.test('bodies: they draw, and they do not block the square they are on', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  clearSquare(12, 9);
+  h.bp = 1;
+  HQ.hurt(h, 4, null);
+  const b = HQ.G.q.bodies[0];
+  t.ok(!HQ.blocked(b.x, b.y), 'the living can walk over the dead');
+  t.eq(HQ.furnAt(b.x, b.y), null, 'a body is not furniture');
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  // the board's own render loop is what puts it on screen — its settle clock
+  // only advances when the frame actually draws it
+  t.eq(b.t, 0, 'it has not been drawn yet');
+  HQ.draw();
+  t.ok(b.t > 0, 'the frame draws it');
+  const once = b.t;
+  HQ.draw();
+  t.ok(b.t > once, 'and keeps drawing it, frame after frame');
+
+  // a body in the dark is not drawn
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const h2 = HQ.runAlive()[0];
+  put(h2, 12, 9);
+  h2.bp = 1;
+  HQ.hurt(h2, 4, null);
+  const b2 = HQ.G.q.bodies[0];
+  HQ.G.q.seen.fill(0);
+  HQ.draw();
+  t.eq(b2.t, 0, 'what you cannot see is not drawn');
+});
+
+t.test('bodies: a fresh floor does not carry the last floor’s dead', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const h = HQ.runAlive()[0];
+  h.bp = 1;
+  HQ.hurt(h, 4, null);
+  t.eq(HQ.G.q.bodies.length, 1, 'one down here');
+  HQ.G.run.depth = 4;
+  HQ.beginFloor();
+  t.ok(!HQ.G.q.bodies || !HQ.G.q.bodies.length, 'and the next floor is clean stone');
+});
+
+/* --------------------------------------------------- the between-floors tabs */
+
+t.test('draft: three tabs, and the whole screen is reachable through them', () => {
+  t.eq(HQ.DRAFT_TABS.map(x => x.id).join(), 'boons,coin,stair', 'what you take, what you spend, where you go');
+  for (const x of HQ.DRAFT_TABS) t.ok(x.name && x.name.length >= 4, `${x.id} has a legible label`);
+  runAt(3);
+  HQ.G.run.gold = 900;
+  HQ.G.run.stake = 200;
+  HQ.G.run.boons = ['swiftboots'];
+  HQ.draftState = null;
+  HQ.showDraft();
+  t.ok(HQ.draftState, 'the draft is up');
+  t.eq(HQ.draftState.tab, 'boons', 'and it opens on what you take');
+  t.eq(HQ.draftState.opts.length >= 3, true, 'with a hand to take from');
+  // switching tabs does not throw away the hand or the stairs
+  const opts = HQ.draftState.opts.map(b => b.id).join();
+  const stairs = HQ.draftState.stairs.length;
+  for (const id of ['coin','stair','boons']){
+    HQ.draftState.tab = id;
+    HQ.showDraft();
+    t.eq(HQ.draftState.tab, id, `the ${id} tab stays selected`);
+    t.eq(HQ.draftState.opts.map(b => b.id).join(), opts, 'the hand survives the switch');
+    t.eq(HQ.draftState.stairs.length, stairs, 'and so do the stairs');
+  }
+});
+
+t.test('draft: the tab you are on survives taking a boon, and the stairs still work', () => {
+  runAt(3);
+  HQ.G.run.gold = 900;
+  HQ.G.run.boons = [];
+  HQ.draftState = null;
+  HQ.showDraft();
+  HQ.draftState.tab = 'coin';
+  const id = HQ.draftState.opts[0].id;
+  HQ.takeBoon(id);
+  HQ.draftState.taken = id;
+  HQ.showDraft();
+  t.eq(HQ.draftState.tab, 'coin', 'taking a boon does not throw you back to the boons tab');
+  t.ok(HQ.boonHas(id), 'and the boon is taken');
+
+  // an unknown tab falls back rather than rendering nothing
+  HQ.draftState.tab = 'nonsense';
+  HQ.showDraft();
+  t.eq(HQ.draftState.tab, 'boons', 'a tab that does not exist falls back to the first');
+
+  // and walking down a stair still ends the screen
+  const d = HQ.draftState.stairs[0];
+  t.ok(d && d.name, 'there is a stair to take');
+  const depth0 = HQ.G.run.depth;
+  HQ.draftState = null;
+  HQ.G.run.depth = depth0 + 1;
+  HQ.chooseFloor(d);
+  HQ.beginFloor();
+  t.eq(HQ.G.run.depth, depth0 + 1, 'and it takes you down');
+  t.ok(HQ.G.q, 'onto a floor');
+});
+
 t.run();
