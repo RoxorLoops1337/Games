@@ -3232,6 +3232,44 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'both keeps draw from either seat at every zoom');
 }
 {
+  // The deck. The lane you spend the whole match fighting on was two tones
+  // alternating every four units, which at any distance is a stripe, with a
+  // two-bar railing and nothing else.
+  const D = IB.DECK_XS, half = C.LANE_W / 2, outer = half + .6;
+  // The worn track is meant to be the strip everything marches down, so it has
+  // to be inside the lane bodies are actually clamped to — wider than that and
+  // it is ground worn by nobody.
+  t.ok(D.track > 0 && D.track < half, 'the worn track lies inside the walkable lane');
+  // The kerb is raised edging. Inside the lane it becomes a raised edge that
+  // bodies stand on top of, which reads as them floating.
+  t.ok(D.kerb >= half, 'the kerb starts at or outside the lane edge');
+  t.ok(D.kerb < outer, 'and is still on the deck rather than past it');
+  t.ok(D.railH > 0, 'the railing has height');
+
+  // Then the part that ties the art to the simulation: over a real match, no
+  // body may ever end up standing on the kerb. separate() shoves bodies
+  // sideways and heroes are clamped by a different line to minions, so this is
+  // not something the constants alone can tell you.
+  IB.newMatch({ diff:'veteran', seed:157 });
+  G.sides[0].ai = true;
+  let onKerb = 0, widest = 0;
+  for (let i = 0; i < 30 * 120 && G.state === 'play'; i++){
+    IB.update(1 / 30);
+    if (i % 5) continue;
+    for (const u of G.units){
+      if (u.dead) continue;
+      widest = Math.max(widest, Math.abs(u.y));
+      if (Math.abs(u.y) >= D.kerb) onKerb++;
+    }
+  }
+  t.ok(widest > 1, 'the match really did spread bodies across the lane (' + widest.toFixed(2) + ')');
+  t.ok(onKerb === 0, 'and not one of them ever stood on the kerb (' + onKerb + ')');
+  IB.cam.follow = false;
+  for (const z of [.4, 1, 2.4]){ IB.cam.z = IB.cam.tz = z; IB.cam.x = C.LANE_LEN / 2; IB.draw(); }
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'and the span draws at every zoom');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;

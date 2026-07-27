@@ -3411,6 +3411,12 @@ function shake(amount, worldX){
   cam.shake = Math.min(14, cam.shake + amount);
 }
 const DECK = { top:'#938b79', top2:'#a09884', side:'#544c42', edge:'#3f3931', rail:'#7a7060' };
+// The cross-section of the span, in the same units the simulation clamps
+// bodies with. `track` is the strip worn down the middle by everything that
+// marches over it and `kerb` is where the raised edging starts — so the two
+// have to bracket C.LANE_W / 2: a track wider than the lane is worn ground
+// nobody walks on, and a kerb inside it is a raised edge bodies stand on.
+const DECK_XS = { track:2.4, kerb:4.9, railH:1.35 };
 
 function drawSky(c){
   const g = c.createLinearGradient(0, 0, 0, LH);
@@ -3509,32 +3515,53 @@ function drawBirds(c){
 
 function drawDeck(c){
   const W = C.LANE_W / 2 + .6;
-  const seg = 4;
+  const D = DECK_XS, seg = 4;
   for (let x = 0; x < C.LANE_LEN; x += seg){
     const x2 = Math.min(C.LANE_LEN, x + seg);
     const a = lp(x, -W), b = lp(x2, -W), d = lp(x2, W), e = lp(x, W);
     if (Math.max(a[0], b[0]) < -80 || Math.min(a[0], b[0]) > LW + 80) continue;
-    const k = (Math.floor(x / seg) % 2) === 0;
-    poly(c, [a, b, d, e], k ? DECK.top : DECK.top2);
+    const i = Math.floor(x / seg);
+    // The lane you spend the whole match fighting on was two tones alternating
+    // every four units, which at any distance is a stripe. The courses vary
+    // per bay off the same fixed hash the countryside uses, so it reads as
+    // stone somebody laid rather than a repeat.
+    const r = hash2(i * 3.1, 5.7);
+    poly(c, [a, b, d, e], shade(i % 2 ? DECK.top : DECK.top2, .94 + r * .12));
+    // the track worn down the middle by everything that has marched over it
+    const t0 = lp(x, -D.track), t1 = lp(x2, -D.track), t2 = lp(x2, D.track), t3 = lp(x, D.track);
+    poly(c, [t0, t1, t2, t3], shade(DECK.top, .88 + hash2(i * 1.7, 9.3) * .06));
+    // kerbs, outside the walkable lane so nothing ever stands on them
+    for (const s of [-1, 1]){
+      const k0 = lp(x, s * D.kerb), k1 = lp(x2, s * D.kerb), k2 = lp(x2, s * W), k3 = lp(x, s * W);
+      poly(c, [k0, k1, k2, k3], s < 0 ? shade(DECK.top2, 1.06) : shade(DECK.top2, .86));
+    }
     // underside so the bridge reads as stone with weight
     const a2 = lp(x, W, -1.6), b2 = lp(x2, W, -1.6);
     poly(c, [e, d, b2, a2], DECK.side);
     poly(c, [a, b, lp(x2, -W, -1.1), lp(x, -W, -1.1)], DECK.edge);
-    // planks / joint lines
-    c.strokeStyle = 'rgba(40,36,30,.35)'; c.lineWidth = 1;
+    // joints: one at every bay, a finer one halfway across it
+    c.strokeStyle = 'rgba(40,36,30,.38)'; c.lineWidth = 1;
     c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(d[0], d[1]); c.stroke();
+    const h0 = lp(x + seg / 2, -W), h1 = lp(x + seg / 2, W);
+    c.strokeStyle = 'rgba(40,36,30,.16)';
+    c.beginPath(); c.moveTo(h0[0], h0[1]); c.lineTo(h1[0], h1[1]); c.stroke();
   }
-  // railings
+  // railings: posts with a capped top, a top rail and a lower one
   for (const side of [-1, 1]){
     const y = side * W;
     for (let x = 0; x <= C.LANE_LEN; x += 4){
-      const p0 = lp(x, y), p1 = lp(x, y, 1.1);
+      const p0 = lp(x, y), p1 = lp(x, y, D.railH);
       if (p0[0] < -40 || p0[0] > LW + 40) continue;
-      c.strokeStyle = DECK.rail; c.lineWidth = Math.max(1, 2.4 * cam.z);
+      c.strokeStyle = DECK.rail; c.lineWidth = Math.max(1, 2.6 * cam.z);
       c.beginPath(); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke();
-      const q = lp(Math.min(C.LANE_LEN, x + 4), y, 1.1);
-      c.strokeStyle = shade(DECK.rail, 1.15);
+      c.fillStyle = shade(DECK.rail, 1.3);
+      c.fillRect(p1[0] - 2 * cam.z, p1[1] - 2 * cam.z, 4 * cam.z, 2.4 * cam.z);
+      const xn = Math.min(C.LANE_LEN, x + 4);
+      const q = lp(xn, y, D.railH), qm = lp(xn, y, D.railH * .48), pm = lp(x, y, D.railH * .48);
+      c.strokeStyle = shade(DECK.rail, 1.15); c.lineWidth = Math.max(1, 2.2 * cam.z);
       c.beginPath(); c.moveTo(p1[0], p1[1]); c.lineTo(q[0], q[1]); c.stroke();
+      c.strokeStyle = shade(DECK.rail, .82); c.lineWidth = Math.max(1, 1.6 * cam.z);
+      c.beginPath(); c.moveTo(pm[0], pm[1]); c.lineTo(qm[0], qm[1]); c.stroke();
     }
   }
   // Abutments: the span has to visibly land ON the rock at both ends, or the
@@ -7666,7 +7693,7 @@ window.IB = {
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
-  KEEP_ART, keepBase, drawEnds,
+  KEEP_ART, keepBase, drawEnds, DECK, DECK_XS,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
