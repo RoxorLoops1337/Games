@@ -4378,6 +4378,7 @@ function hpBar(c, x, y, u, w, big){
   const f = clamp(u.hp / u.mhp, 0, 1);
   const h = big ? 5 * cam.z : 3.2 * cam.z;
   const x0 = x - w / 2;
+  blockLabel(x, y + h / 2, w + 2.8, h + 2.8);      // a name must not land on it
   c.fillStyle = 'rgba(8,10,14,.82)'; c.fillRect(x0 - 1.4, y - 1.4, w + 2.8, h + 2.8);
   c.fillStyle = 'rgba(46,52,60,.9)'; c.fillRect(x0, y, w, h);
   const chip = clamp((u.chipHp === undefined ? u.hp : u.chipHp) / u.mhp, 0, 1);
@@ -4722,6 +4723,7 @@ function drawUnitMarks(c, u, bx, by, p, sc){
     // roundel seated on the end of the hero's own bar now, with a lit rim so
     // it belongs to the same set of objects as everything else.
     const lx = bx - 18.5 * sc, ly = by - 22 * sc, lr = 5.4 * sc;
+    blockLabel(lx, ly, (lr + 1.1) * 2, (lr + 1.1) * 2);
     ell(c, lx, ly, lr + 1.1, lr + 1.1, 'rgba(8,10,14,.82)');
     ell(c, lx, ly, lr, lr, shade(col, .34));
     ell(c, lx, ly - lr * .34, lr * .86, lr * .5, shade(col, .52));
@@ -5357,9 +5359,30 @@ function setText(c, font, align, baseline){
 }
 function endText(c){ c.textAlign = TEXT0.align; c.textBaseline = TEXT0.baseline; }
 
+/* --------------------------------------------------------- label traffic
+   Labels were nudged clear of OTHER LABELS and of nothing else, so a name in
+   a brawl walked straight over the level roundel and the health bar — the two
+   things it is describing. The roundel scales with the body and the plate does
+   not, so the closer you leaned in the worse it got.
+
+   Anything that occupies the airspace over a body reserves it here, and the
+   labels go above the lot. Boxes are centre-x, centre-y, so that one overlap
+   test can be honest about two rectangles of different heights — the old one
+   compared top edges and used only the NEW label's height, which was harmless
+   while every box in the list was the same size and wrong as soon as it
+   wasn't.                                                                   */
+const LABEL_PAD = { x:3, y:4 };
+const labelHits = (a, b) =>
+  Math.abs(a.x - b.x) < (a.w + b.w) / 2 + LABEL_PAD.x &&
+  Math.abs(a.y - b.y) < (a.h + b.h) / 2 + LABEL_PAD.y;
+const LABEL_TRIES = 14;
+let labelBlock = [];                       // reserved this frame, cleared on flush
+let labelPlaced = [], labelBlocked = [];   // where it all ended up, for the tests
+const blockLabel = (x, cy, w, h) => { labelBlock.push({ x, y:cy, w, h }); };
+
 let labelQ = [];
 function flushLabels(c){
-  const placed = [];
+  const placed = labelBlock.slice();
   labelQ.sort((a, b) => a.y - b.y);
   for (const L of labelQ){
     // The offsets under here used to be `y + 8.5` and `y + 10`, tuned against
@@ -5369,14 +5392,22 @@ function flushLabels(c){
     // no longer needs a magic number to say so.
     setText(c, (L.small ? 8 : 9) + 'px system-ui', 'center', 'middle');
     const w = c.measureText(L.txt).width + 8, h = L.small ? 11 : 13;
-    let y = L.y - 11;
-    // nudge upward until this label is clear of the ones already placed
-    for (let guard = 0; guard < 12; guard++){
-      const hit = placed.find(r => Math.abs(r.x - L.x) < (r.w + w) / 2 + 3 && Math.abs(r.y - y) < h + 4);
-      if (!hit) break;
-      y = hit.y - h - 4;
+    let cy = L.y - 11 + h / 2;
+    // nudge upward until this label is clear of everything already down —
+    // other labels AND the bars and roundels that reserved their own space
+    for (let guard = 0; guard < LABEL_TRIES; guard++){
+      // Above the HIGHEST thing it is touching, not the first one found in the
+      // array. Stepping over them one at a time climbs a crowded body a box
+      // per try and runs out of tries before it is clear; this converges in
+      // one or two, and it cannot come back down onto something it passed.
+      let top = null;
+      for (const r of placed)
+        if (labelHits(r, { x:L.x, y:cy, w, h }) && (!top || r.y - r.h / 2 < top.y - top.h / 2)) top = r;
+      if (!top) break;
+      cy = top.y - top.h / 2 - h / 2 - LABEL_PAD.y;
     }
-    placed.push({ x:L.x, y, w, h });
+    const y = cy - h / 2;
+    placed.push({ x:L.x, y:cy, w, h, ay:L.y });   // ay: what it is pointing at
     // A label pushed clear of its neighbours has to keep pointing at the thing
     // it names, or a packed plot reads as a pile of loose text.
     if (y < L.y - 12){
@@ -5386,9 +5417,12 @@ function flushLabels(c){
     c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
     c.fillRect(L.x - w / 2, y, w, h);
     if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(L.x - w / 2 + .5, y + .5, w - 1, h - 1); }
-    c.fillStyle = L.col; c.fillText(L.txt, L.x, y + h / 2);
+    c.fillStyle = L.col; c.fillText(L.txt, L.x, cy);
   }
   endText(c);
+  labelPlaced = placed.slice(labelBlock.length);
+  labelBlocked = labelBlock;
+  labelBlock = [];
   labelQ = [];
 }
 
@@ -8143,7 +8177,8 @@ window.IB = {
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
   WEAR, battleDamage, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
-  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels, setText, endText, TEXT0,
+  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels, setText, endText, TEXT0, labelHits, LABEL_PAD, LABEL_TRIES, blockLabel,
+  get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
 };
 
 </script>
