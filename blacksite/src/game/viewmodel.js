@@ -555,7 +555,7 @@ export function createViewmodel(G, engine, materials) {
       // factor other than 1 here is a lie the eye catches on the first frame.
       const s = L && typeof L.sunIntensity === 'number' ? L.sunIntensity : src.intensity;
       key.intensity = clamp(s, 0.05, 6);
-      fill.intensity = key.intensity * 0.26 + 0.05;
+      fill.intensity = key.intensity * 0.13 + 0.03;
     }
     const at = engine.viewCam.position;
     keyTarget.position.copy(at);
