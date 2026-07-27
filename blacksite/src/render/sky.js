@@ -452,6 +452,9 @@ const AP_FRAG = /* glsl */`
     base = mix(base, apSunward, pow(max(mu, 0.0), 2.5) * 0.85);
     // The forward-scatter lobe on top is what sells "dusty air": a silhouette
     // between you and the sun should be swimming in glare, not merely tinted.
+    // Scaled by f a second time on purpose — glare is light gathered along the
+    // whole path, so it should arrive quadratically with depth, not sit on the
+    // near edge of a doorway.
     vec3 inscat = base + apSunTint * (apPhase(mu, 0.70) * apGlow * f);
 
     gl_FragColor.rgb = mix(gl_FragColor.rgb, inscat, clamp(f, 0.0, 1.0));
@@ -891,13 +894,12 @@ export function createSky(G, engine) {
     // an ambient level without sampling the cubemap.
     let lum = 0;
     for (let i = 0; i < 8; i++) {
-      const a = i / 8 * Math.PI * 2;
-      const d = norm3([Math.cos(a) * 0.8, 0.6, Math.sin(a) * 0.8]);
+      const ang = i / 8 * Math.PI * 2;
+      const d = norm3([Math.cos(ang) * 0.8, 0.6, Math.sin(ang) * 0.8]);
       const c = skyJS(d, s, state.turbidity, 8, 3);
       lum += 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
     }
     api.skyLuminance = lum / 8 * e;
-    api.sunColor = sunColor;
     api.turbidity = state.turbidity;
 
     // FogExp2 with the anti-solar horizon colour is the fallback for anything
