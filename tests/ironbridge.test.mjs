@@ -5024,6 +5024,118 @@ t.ok(true, 'drawing an empty bridge is harmless');
         'a levy on the strip is in its side’s minion colour (' + JSON.stringify(r.levyMark) + ')');
     }
 
+    /* ...and it says WHOSE without saying WHAT. The strip sizes the stone by
+       what it is worth — a gate 5x10, an inhibitor 4x8, a turret 3x6 — and
+       sized every body on the bridge at the same 1.6x1.6:
+
+         what          worth   mark        px²
+         Levy          5       1.6 x 1.6   2.56
+         Cannon        10      1.6 x 1.6   2.56
+         Siege Ogre    12      1.6 x 1.6   2.56
+         distinct marks: 1 of 5
+         control, same widget, same frame — the stone: 3 distinct of 3
+
+       Which put the widget's one job the wrong way round: five levies and two
+       Siege Ogres are worth almost the same (25 against 24), and the strip gave
+       the levies 12.8px² against the ogres' 5.1. The trickle read as two and a
+       half times the push that costs an inhibitor to unlock. */
+    {
+      IB.newMatch({ diff:'veteran', seed:7400 });
+      IB.MY = 0;
+      IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+      const kinds = ['grunt', 'melee', 'caster', 'cannon', 'super'];
+      const rows = kinds.map(k => {
+        G.units.length = 0;
+        const u = IB.spawnUnit(0, k, { x:60, y:0, paid:true });
+        IB.rebuildGrid();
+        return { k, u, worth:IB.minionWorth(u), sz:IB.miniBodyR(u) };
+      });
+      t.ok(new Set(rows.map(r2 => +r2.sz.toFixed(3))).size === kinds.length,
+        'five kinds put five different marks on the strip (' +
+        new Set(rows.map(r2 => +r2.sz.toFixed(2))).size + ' of ' + kinds.length + ')');
+      const byWorth = rows.slice().sort((a2, b2) => a2.worth - b2.worth);
+      let wrong = 0;
+      for (let i = 1; i < byWorth.length; i++) if (byWorth[i].sz <= byWorth[i - 1].sz) wrong++;
+      t.ok(wrong === 0,
+        'a body worth more is a bigger mark, all the way up (' + wrong + ' that were not)');
+      // A levy is the common case and must not have moved.
+      const levy = rows.find(r2 => r2.k === 'grunt');
+      t.ok(Math.abs(levy.sz - IB.MINI_MARK.minion) < .1,
+        'and a levy is the mark it has always been (' + levy.sz.toFixed(2) +
+        ' vs ' + IB.MINI_MARK.minion + ')');
+      // The SAME ladder the death reaction reads, checked by order rather than
+      // by recomputing the formula.
+      let apart = 0;
+      for (let i = 1; i < byWorth.length; i++)
+        if ((byWorth[i].sz > byWorth[i - 1].sz) !==
+            (IB.deathSparks(byWorth[i].u) > IB.deathSparks(byWorth[i - 1].u))) apart++;
+      t.ok(apart === 0,
+        'the strip and the way a body comes apart agree about what it was worth (' + apart + ')');
+      // A hero is still its own class of mark, above the heaviest body.
+      t.ok(IB.MINI_MARK.hero + IB.MINI_MARK.rim * 2 > rows[rows.length - 1].sz,
+        'and a hero still outranks the heaviest body (' +
+        (IB.MINI_MARK.hero + IB.MINI_MARK.rim * 2) + ' vs ' + rows[rows.length - 1].sz.toFixed(2) + ')');
+
+      // WIRED: what reached the strip, and the punchline — two waves worth the
+      // same, one of which the widget used to call the smaller.
+      const inkOf = (kind, n, gap) => {
+        IB.newMatch({ diff:'veteran', seed:7400 });
+        IB.MY = 0;
+        G.units.length = 0;
+        IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+        for (let i = 0; i < n; i++)
+          IB.spawnUnit(1, kind, { x:52 + i * gap, y:(i % 3 - 1) * 1.8, paid:true });
+        IB.rebuildGrid();
+        const st = CTX.__stats;
+        st.rects = [];
+        IB.drawMinimap(CTX);
+        const want = IB.miniBodyR(G.units[0]);
+        const mine = st.rects.filter(r2 => r2.col === IB.SIDE_COL2[1] && Math.abs(r2.w - want) < .01);
+        return { marks:mine.length, ink:mine.reduce((a2, r2) => a2 + r2.w * r2.h, 0),
+          worth:G.units.reduce((a2, u) => a2 + IB.minionWorth(u), 0) };
+      };
+      const levies = inkOf('grunt', 5, 1.4), ogres = inkOf('super', 2, 2.6);
+      t.ok(levies.marks === 5 && ogres.marks === 2,
+        'both waves really reached the strip (' + levies.marks + ' and ' + ogres.marks + ')');
+      t.ok(Math.abs(levies.worth - ogres.worth) <= 2,
+        'and they are worth about the same (' + levies.worth + ' vs ' + ogres.worth + ')');
+      t.ok(ogres.ink > levies.ink,
+        'so the ogre push is the bigger thing on the strip (' +
+        ogres.ink.toFixed(1) + 'px² vs ' + levies.ink.toFixed(1) + ')');
+
+      // The control, untouched: the stone still says what it is worth.
+      {
+        IB.newMatch({ diff:'veteran', seed:7400 });
+        IB.MY = 0; G.units.length = 0;
+        IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+        const st = CTX.__stats;
+        st.rects = [];
+        IB.drawMinimap(CTX);
+        const m = IB.minimapRect();
+        const at = (key) => {
+          const sx = G.sides[1].structs.find(x => x.key === key);
+          const px = m.x0 + 6 + ((sx.x - m.W0) / (m.W1 - m.W0)) * (m.w - 12);
+          const hit = st.rects.filter(r2 => r2.w < 8 && Math.abs(r2.x + r2.w / 2 - px) < 3);
+          return hit.length ? hit[0].w * hit[0].h : 0;
+        };
+        const stone = ['t1', 'inhib', 'gate'].map(at);
+        t.ok(new Set(stone).size === 3,
+          'the stone still takes three different marks (' + stone.join(', ') + ')');
+        t.ok(stone[0] < stone[1] && stone[1] < stone[2], 'in the order it is worth');
+      }
+
+      // Cosmetic: drawing the strip moves nothing.
+      G.units.length = 0;
+      const u2 = IB.spawnUnit(0, 'super', { x:60, y:0, paid:true });
+      IB.rebuildGrid();
+      const h0 = IB.netHash();
+      const before = [u2.x, u2.y, u2.hp, u2.bounty].join(',');
+      IB.drawMinimap(CTX); IB.drawMinimap(CTX);
+      t.ok([u2.x, u2.y, u2.hp, u2.bounty].join(',') === before, 'drawing the strip does not move a body');
+      t.ok(IB.netHash() === h0, 'nor the lockstep hash');
+      G.units.length = 0;
+    }
+
     // And a hero that DIES left the strip altogether, because onHeroDeath
     // splices it out of G.units and the loop read G.units. Measured: alive it
     // laid down a rim and a side colour at its mark, dead it laid down
