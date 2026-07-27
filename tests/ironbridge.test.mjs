@@ -4204,6 +4204,79 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
   IB.MY = was;
   t.ok(true, 'and the strip draws with it broken, from either seat');
+
+  // The heroes on the same strip were drawn '#ffffff' — and so was the
+  // enemy's. Measured from both chairs, the widget laid down `#ffffff 3x3`
+  // twice while every other mark on it carried a side colour. The block above
+  // says this in so many words about the hold plates; they were fixed and the
+  // heroes were left behind, three lines further down in the same function.
+  {
+    const st3 = CTX.__stats;
+    const seat0m = IB.MY;
+    // Where each hero's mark lands, taken from the game's own projection
+    // rather than by hunting for a size — a search by size would quietly pass
+    // if the size ever changed, which is the sort of thing this fix changes.
+    const strip = (seat) => {
+      IB.newMatch({ diff:'veteran', seed:9210 });
+      IB.MY = seat;
+      const heroes = [];
+      for (const i of [0, 1]){
+        const h = IB.makeHero(i, i ? 'fighter' : 'mage', i ? 'Mera' : 'Aldric');
+        G.sides[i].heroes.push(h);
+        IB.gainXp(h, 3000); IB.autoPick(h);
+        IB.enterLane(h);
+        h.x = 46 + i * 34; h.y = i ? 1 : -1;
+        heroes.push(h);
+      }
+      const levy = IB.spawnUnit(0, 'melee', { x:70, y:0, paid:true });
+      IB.cam.follow = false; IB.cam.x = 64; IB.cam.z = IB.cam.tz = 1;
+      st3.rects = []; st3.rectsDropped = 0;
+      IB.drawMinimap(CTX);
+      const m = IB.minimapRect();
+      const px = (wx) => m.x0 + 6 + ((wx - m.W0) / (m.W1 - m.W0)) * (m.w - 12);
+      // Only the small marks: the hold plates and the lane are wide bars that
+      // span half the strip and would swallow any point you asked about.
+      const at = (wx) => st3.rects
+        .filter(r => r.w <= IB.MINI_MARK.hero + IB.MINI_MARK.rim * 2 + .5 &&
+                     px(wx) >= r.x - .01 && px(wx) <= r.x + r.w + .01)
+        .map(r => r.col);
+      return { heroes, levy, dropped: st3.rectsDropped, n: st3.rects.length,
+        at, marks: heroes.map(h => at(h.x)), levyMark: at(levy.x) };
+    };
+
+    let named = 0, told = 0, rimmed = 0;
+    for (const seat of [0, 1]){
+      const r = strip(seat);
+      t.ok(r.dropped === 0, 'the strip capture held it, seat ' + seat);
+      t.ok(r.n > 8, 'and the strip really drew, seat ' + seat + ' (' + r.n + ' marks)');
+      // Pair the claim with proof there is a mark at all — "not white" is
+      // trivially true of a point where nothing was painted.
+      t.ok(r.marks[0].length > 0 && r.marks[1].length > 0,
+        'both heroes have a mark on it, seat ' + seat +
+        ' (' + JSON.stringify(r.marks) + ')');
+      if (r.marks[0].includes(IB.SIDE_COL[0]) && r.marks[1].includes(IB.SIDE_COL[1])) named++;
+      // The crisp version of the bug: the two stacks must not read the same.
+      if (r.marks[0].join() !== r.marks[1].join()) told++;
+      // And a hero must still not read as a levy. The rim is what says so, and
+      // the levy is the control — it proves the search finds marks at all.
+      if (r.marks[0].includes(IB.MINI_MARK.rimCol) &&
+          r.levyMark.length > 0 && !r.levyMark.includes(IB.MINI_MARK.rimCol)) rimmed++;
+    }
+    t.ok(named === 2, 'each hero on the strip wears its own side’s colour, from either chair (' + named + '/2)');
+    t.ok(told === 2, 'so the two are told apart (' + told + '/2)');
+    t.ok(rimmed === 2, 'and a hero is still marked out from a levy (' + rimmed + '/2)');
+    t.ok(IB.MINI_MARK.hero > IB.MINI_MARK.minion,
+      'a hero is the bigger mark too (' + IB.MINI_MARK.hero + ' vs ' + IB.MINI_MARK.minion + ')');
+
+    // The control the whole thing was measured against: minions already spoke
+    // the strip's colour language, which is how the heroes stood out as wrong.
+    {
+      const r = strip(0);
+      t.ok(r.levyMark.some(cc => cc === IB.SIDE_COL2[0]),
+        'a levy on the strip is in its side’s minion colour (' + JSON.stringify(r.levyMark) + ')');
+    }
+    IB.MY = seat0m;
+  }
 }
 {
   // Good news and bad news are relative to the PLAYER, not to side zero. Every

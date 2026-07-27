@@ -5322,6 +5322,7 @@ function minimapWorldX(sx){
 // from the other.
 const MINI_MINE = .52, MINI_THEIRS = .30;
 const miniHoldCol = (i) => shade(SIDE_COL[i], i === MY ? MINI_MINE : MINI_THEIRS);
+const MINI_MARK = { hero:3, rim:1, minion:1.6, rimCol:'#ffffff' };
 function drawMinimap(c){
   const m = minimapRect();
   const w = m.w, h = m.h, x0 = m.x0, y0 = m.y0;
@@ -5352,11 +5353,29 @@ function drawMinimap(c){
     c.fillStyle = st.dead ? 'rgba(120,132,150,.5)' : SIDE_COL[s.i];
     c.fillRect(mx(st.x) - sz / 2, y0 + h / 2 - (st.dead ? sz * .4 : sz), sz, st.dead ? sz * .8 : sz * 2);
   }
+  // A hero was drawn WHITE — and so was the enemy's. The two most important
+  // marks on the only widget that shows the whole war at once, and the one
+  // question the widget exists to answer is whose. Measured from both chairs,
+  // the strip laid down `#ffffff 3x3` twice and every other mark on it in a
+  // side colour.
+  //
+  // The note above says this in so many words about the holds — they were
+  // green and brown, keyed to the side index, in a colour language nothing
+  // else here speaks. That was fixed and the heroes were left behind, three
+  // lines further down, in the same function. Side colour to say whose; a
+  // white rim so a hero still reads as a hero and not a levy.
   for (const u of G.units){
     if (u.dead) continue;
-    c.fillStyle = u.isHero ? '#ffffff' : SIDE_COL2[u.side];
-    const sz = u.isHero ? 3 : 1.6;
-    c.fillRect(mx(u.x) - sz / 2, y0 + h / 2 + u.y * .8 - sz / 2, sz, sz);
+    const px = mx(u.x), py = y0 + h / 2 + u.y * .8;
+    if (u.isHero){
+      const out = MINI_MARK.hero + MINI_MARK.rim * 2;
+      c.fillStyle = MINI_MARK.rimCol; c.fillRect(px - out / 2, py - out / 2, out, out);
+      c.fillStyle = SIDE_COL[u.side];
+      c.fillRect(px - MINI_MARK.hero / 2, py - MINI_MARK.hero / 2, MINI_MARK.hero, MINI_MARK.hero);
+    } else {
+      c.fillStyle = SIDE_COL2[u.side];
+      c.fillRect(px - MINI_MARK.minion / 2, py - MINI_MARK.minion / 2, MINI_MARK.minion, MINI_MARK.minion);
+    }
   }
   // camera window
   const halfW = (LW * .5) / (LS() * .96);
@@ -8697,7 +8716,7 @@ window.IB = {
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
   WEAR, battleDamage, crown, hash2, stSeed, merlonHolds, CROWN_TIERS, UPMARK, upBands, upPlate, towerBands, towerRanks, troopRanks, bsumUp, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
-  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
+  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
   get LW(){ return LW; }, get LH(){ return LH; },
 };
