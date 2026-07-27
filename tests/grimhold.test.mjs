@@ -2075,7 +2075,10 @@ t.test('vault: the door refuses you until a champion drops the key', () => {
   t.ok(!HQ.openDoorAt(h, door), 'the door will not open');
   t.ok(!door.open, 'and stays shut');
 
-  const bearer = HQ.monstersOf().find(m => m.elite && HQ.roomAt(m.x, m.y) !== HQ.G.q.vault);
+  // a runner vault pins the key to one named champion; a plain one puts it on
+  // whichever champion is standing outside
+  const bearer = (HQ.G.q.keyBearer && HQ.monstersOf().find(m => m.uid === HQ.G.q.keyBearer))
+    || HQ.monstersOf().find(m => m.elite && HQ.roomAt(m.x, m.y) !== HQ.G.q.vault);
   // a champion zombie gets back up once, so put it down until it stays down
   let swings = 0;
   while (bearer.alive && swings++ < 4) HQ.hurt(bearer, 99, null);
@@ -5369,7 +5372,7 @@ function asMonster(mt, x, y){
   const d = HQ.MONSTERS[mt];
   m.bpMax = m.bp = d.bp; m.atk = d.atk; m.def = d.def; m.mind = d.mind; m.mv = d.move;
   m.name = d.name; m.awake = true; m.sleep = 0; m.stun = 0;
-  m.skittish = 0; m.fled = 0; m.breathed = 0;
+  m.skittish = 0; m.fled = 0; m.breathed = 0; m.runner = 0; m.cornered = 0;
   m.x = x; m.y = y;
   HQ.recomputeVision();
   return m;
@@ -5602,6 +5605,414 @@ t.test('lock: no action, no shoulder — and a trial bolt is not a lock', () => 
   // an unlocked door is not forced either
   d.trialBolt = false; d.locked = false;
   t.eq(HQ.forceDoor(h, d), false, 'and there is nothing to force on an open lock');
+});
+
+/* -------------------------------------------------------- floor themes */
+
+// A floor built with a chosen theme and no modifiers, so a test measures the
+// theme and nothing else.
+function themedRun(theme, depth, party){
+  depth = depth || 6;
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(party || ['barbarian','wizard']);
+  HQ.G.run.depth = depth;
+  const def = HQ.makeFloor(depth, Math.random);
+  def.theme = theme; def.mods = []; def.trial = null;
+  HQ.G.run.nextDef = def;
+  HQ.beginFloor();
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  return HQ.G;
+}
+// every flooded square on the board
+function waters(){
+  const out = [];
+  for (let y = 0; y < HQ.H; y++) for (let x = 0; x < HQ.W; x++)
+    if (HQ.G.q.water[HQ.idx(x,y)]) out.push([x,y]);
+  return out;
+}
+
+t.test('flood: a themed floor takes water, and a plain one does not', () => {
+  themedRun(null);
+  t.eq(waters().length, 0, 'a floor with no theme is dry all the way through');
+
+  let got = 0;
+  for (let i = 0; i < 6 && !got; i++){ themedRun('flood'); got = waters().length; }
+  t.ok(got > 0, 'a flooded floor has water on it');
+  const w = waters();
+  t.ok(w.every(([x,y]) => HQ.isFloor(x,y)), 'and every flooded square is a square you could stand on');
+  t.ok(!w.some(([x,y]) => HQ.STAIRS.some(s => s[0] === x && s[1] === y)), 'never the stair itself');
+  t.ok(!w.some(([x,y]) => Math.abs(x-8) + Math.abs(y-17) < 3), 'and never the doorstep you arrive on');
+  // the water is in the corridors, which is the point: the short way is the wet way
+  const corr = w.filter(([x,y]) => HQ.roomAt(x,y) < 0).length;
+  t.ok(corr > w.length/2, 'most of it is in the corridors, not the rooms');
+});
+
+t.test('flood: the floor tells you it is flooded before you take a step', () => {
+  themedRun('flood');
+  const said = HQ.G.q.log.map(l => l.text).join(' ');
+  const T = HQ.THEME('flood');
+  t.ok(said.includes(T.name), 'the arrival log names the theme');
+  t.ok(said.includes(T.desc), 'and says what it costs you');
+
+  themedRun(null);
+  const dry = HQ.G.q.log.map(l => l.text).join(' ');
+  t.ok(!dry.includes(T.name), 'a floor with no theme says nothing about one');
+});
+
+t.test('flood: the theme is drawn on its own roll, so it never eats a modifier', () => {
+  t.ok(HQ.THEMES.length >= 1, 'there is at least one theme');
+  t.ok(HQ.THEMES.every(x => x.id && x.name && x.desc && x.ic), 'each one says what it is');
+  t.ok(!HQ.MODIFIERS.some(m => HQ.THEMES.some(x => x.id === m.id)), 'and no theme is also a modifier');
+  // a themed floor can still carry its full complement of modifiers
+  let both = false;
+  for (let i = 0; i < 40 && !both; i++){
+    const def = HQ.makeFloor(9, Math.random);
+    if (def.theme && def.mods.length) both = true;
+  }
+  t.ok(both, 'a floor can be themed and modified at once');
+});
+
+t.test('flood: wading costs two squares', () => {
+  themedRun('flood');
+  // a dry square and a wet one, side by side, both reachable
+  t.eq(HQ.stepCost(8, 17), 1, 'dry ground costs one');
+  const w = waters();
+  t.ok(w.length > 0, 'there is water to wade');
+  t.ok(w.every(([x,y]) => HQ.isWater(x,y)), 'every flooded square knows it is wet');
+  t.ok(w.every(([x,y]) => HQ.stepCost(x,y) === 2), 'and every one of them costs two to enter');
+
+  // the walk field prices it the same way. Not every flooded square has a dry
+  // neighbour — the water comes in sheets — so find one that does.
+  const h = HQ.runAlive()[0];
+  for (const a of HQ.G.q.actors) if (a !== h) a.alive = false;
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  let pair = null;
+  for (const [wx,wy] of w){
+    for (const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]){
+      const nx = wx+dx, ny = wy+dy;
+      if (HQ.isFloor(nx,ny) && !HQ.isWater(nx,ny) && HQ.linked(nx,ny,wx,wy) && !HQ.furnAt(nx,ny)){
+        pair = [[nx,ny],[wx,wy]]; break;
+      }
+    }
+    if (pair) break;
+  }
+  t.ok(pair, 'somewhere the water meets dry ground');
+  if (pair){
+    const [[fx,fy],[wx,wy]] = pair;
+    put(h, fx, fy);
+    const f = HQ.walkField(fx, fy, 6, h);
+    t.eq(f.d.get(HQ.idx(wx,wy)), 2, 'the first wet square is two squares deep into your move');
+  }
+});
+
+t.test('flood: a dry way round beats a wet short cut', () => {
+  themedRun('flood');
+  HQ.G.q.furn = [];
+  const h = HQ.runAlive()[0];
+  for (const a of HQ.G.q.actors) if (a !== h) a.alive = false;
+  // hand-build the case: a straight corridor run with the middle square flooded
+  const r = HQ.ROOMS[4];
+  const y = r.y + 1;
+  HQ.G.q.water.fill(0);
+  for (let x = r.x; x < r.x + r.w; x++) HQ.G.q.water[HQ.idx(x,y)] = 0;
+  t.ok(r.w >= 3, 'the room is wide enough to walk across');
+  put(h, r.x, y);
+  const dry = HQ.walkField(r.x, y, 8, h).d.get(HQ.idx(r.x + 2, y));
+  HQ.G.q.water[HQ.idx(r.x + 1, y)] = 1;
+  const wet = HQ.walkField(r.x, y, 8, h).d.get(HQ.idx(r.x + 2, y));
+  t.eq(dry, 2, 'two dry squares across cost two');
+  t.ok(wet > dry, 'and flooding the middle one costs more');
+  // and the field still finds the cheapest route rather than the first one it met
+  t.eq(wet, 3, 'wading one square is one square dearer, not two');
+});
+
+t.test('flood: a hero walking through water spends the extra square', () => {
+  themedRun('flood');
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  const h = HQ.runAlive()[0];
+  for (const a of HQ.G.q.actors) if (a !== h) a.alive = false;
+  const r = HQ.ROOMS[4];
+  const y = r.y + 1;
+  HQ.G.q.water.fill(0);
+  put(h, r.x, y);
+  use(h);
+  h.moveLeft = 6; h.rolled = true;
+  HQ.heroWalk(h, [[r.x+1, y]], null);
+  t.eq(h.x, r.x+1, 'the hero got there');
+  t.eq(h.moveLeft, 5, 'dry ground took one square');
+
+  HQ.G.q.water[HQ.idx(r.x+2, y)] = 1;
+  HQ.heroWalk(h, [[r.x+2, y]], null);
+  t.eq(h.x, r.x+2, 'and waded on');
+  t.eq(h.moveLeft, 3, 'and the water took two');
+});
+
+t.test('flood: wading is what buys the quiet', () => {
+  themedRun('flood');
+  HQ.G.q.water.fill(0);
+  const rid = 4, r = HQ.ROOMS[rid];
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  const m = HQ.G.q.actors.find(a => a.kind === 'monster');
+  const h = HQ.runAlive()[0];
+
+  const setup = () => {
+    HQ.G.q.roomSeen[rid] = 0;
+    d.open = false; d.secret = false; d.locked = false; d.trialBolt = false; d.forced = false;
+    m.alive = true; m.mt = 'orc'; delete m.affix; m.elite = false; m.boss = false;
+    m.x = r.x; m.y = r.y; m.awake = false; m.sleep = 0;
+    put(h, slot[3], slot[4]); use(h);
+  };
+
+  // dry: opening the door wakes the room
+  setup();
+  HQ.G.q.water[HQ.idx(slot[3], slot[4])] = 0;
+  t.ok(!HQ.wading(h), 'standing on dry ground');
+  HQ.openDoorAt(h, d);
+  t.ok(m.awake, 'a door opened from dry ground wakes what is behind it');
+
+  // wet: the same door, from the water, does not
+  setup();
+  HQ.G.q.water[HQ.idx(slot[3], slot[4])] = 1;
+  t.ok(HQ.wading(h), 'standing in the water');
+  HQ.openDoorAt(h, d);
+  t.ok(d.open, 'the door still opens');
+  t.ok(HQ.G.q.roomSeen[rid], 'and you can still see in');
+  t.ok(!m.awake, 'but nothing in there heard it');
+});
+
+t.test('flood: a shoulder through the lock is loud however deep you are standing', () => {
+  themedRun('flood');
+  const rid = 4, r = HQ.ROOMS[rid];
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  d.open = false; d.secret = false; d.trialBolt = false; d.forced = false; d.locked = true;
+  HQ.G.q.key = false; HQ.G.q.vault = -1;
+  HQ.G.q.roomSeen[rid] = 0;
+  const m = HQ.G.q.actors.find(a => a.kind === 'monster');
+  m.alive = true; m.mt = 'orc'; delete m.affix; m.elite = false; m.boss = false;
+  m.x = r.x; m.y = r.y; m.awake = false; m.sleep = 0;
+  const h = HQ.runAlive()[0];
+  put(h, slot[3], slot[4]); use(h);
+  HQ.G.q.water[HQ.idx(slot[3], slot[4])] = 1;
+  t.ok(HQ.wading(h), 'up to the knees');
+  HQ.forceDoor(h, d);
+  t.ok(d.open, 'the lock comes off');
+  t.ok(m.awake, 'and the water buys you nothing when you break it — that noise carries');
+});
+
+t.test('flood: the water is on the board and it is the one cold thing on it', () => {
+  themedRun('flood');
+  HQ.G.q.water.fill(0);
+  HQ.G.q.seen.fill(1);
+  const dry = paintOf(() => HQ.draw());
+  t.ok(!painted(dry, 'rgba(22,58,74,.62)'), 'a dry floor paints no water');
+
+  const r = HQ.ROOMS[4];
+  HQ.G.q.water[HQ.idx(r.x, r.y)] = 1;
+  const wet = paintOf(() => HQ.draw());
+  t.ok(painted(wet, 'rgba(22,58,74,.62)'), 'a flooded square paints the water');
+  t.ok(paintedLike(wet, /^rgba\(150,205,225,[\d.]+\)$/), 'with the light moving on it');
+
+  // and whoever is standing in it wears a ring, so wading is never a surprise.
+  // It goes on above the actor and above the movement field: painted under
+  // either one, it is drawn and invisible, which is worse than absent.
+  const h = HQ.runAlive()[0];
+  for (const a of HQ.G.q.actors) if (a !== h) a.alive = false;
+  put(h, r.x + 1, r.y);
+  t.ok(!paintedLike(paintOf(() => HQ.draw()), /^rgba\(180,225,240,[\d.]+\)$/), 'nobody dry wears one');
+  put(h, r.x, r.y);
+  t.ok(HQ.wading(h), 'the hero is in the water');
+  t.ok(paintedLike(paintOf(() => HQ.draw()), /^rgba\(180,225,240,[\d.]+\)$/), 'a ripple round whoever is in it');
+  t.ok(painted(paintOf(() => HQ.draw()), 'rgba(180,225,240,.5)'), 'with a solid rim so it reads under the move field');
+});
+
+t.test('flood: an unseen flooded square stays unseen', () => {
+  themedRun('flood');
+  HQ.G.q.water.fill(0);
+  HQ.G.q.seen.fill(0);
+  const r = HQ.ROOMS[4];
+  HQ.G.q.water[HQ.idx(r.x, r.y)] = 1;
+  t.ok(!painted(paintOf(() => HQ.draw()), 'rgba(22,58,74,.62)'), 'water you have not found does not draw itself');
+});
+
+/* ------------------------------------------------------- vault variants */
+
+// A floor whose vault is of a chosen kind, with champions guaranteed.
+function vaultRun(kind, depth){
+  depth = depth || 7;
+  for (let i = 0; i < 40; i++){
+    HQ.setRng(Math.random);
+    HQ.G = HQ.newG();
+    HQ.G.run = HQ.newRun(['barbarian','wizard']);
+    HQ.G.run.depth = depth;
+    const def = HQ.makeFloor(depth, Math.random);
+    def.theme = null; def.mods = []; def.trial = null;
+    def.eliteChance = 1;
+    if (def.vault < 0) continue;
+    def.vaultKind = kind;
+    HQ.G.run.nextDef = def;
+    HQ.beginFloor();
+    HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+    if (HQ.G.q.vault >= 0 && HQ.G.q.vaultKind === kind) return HQ.G;
+  }
+  return null;
+}
+
+t.test('vault: not every lock is the same problem', () => {
+  const kinds = new Set();
+  for (let i = 0; i < 300; i++){
+    const def = HQ.makeFloor(7, Math.random);
+    if (def.vault >= 0) kinds.add(def.vaultKind);
+  }
+  t.ok(kinds.has('plain'), 'some vaults are just locked');
+  t.ok(kinds.has('runner'), 'some have a bearer who runs');
+  t.ok(kinds.has('watched'), 'and some are wired to the hall');
+  // a floor with no vault has no vault variant to speak of
+  let none = null;
+  for (let i = 0; i < 200 && !none; i++){
+    const def = HQ.makeFloor(1, Math.random);
+    if (def.vault < 0) none = def;
+  }
+  t.ok(none, 'shallow floors have no vault');
+  t.eq(none && none.vaultKind, 'plain', 'and no variant either');
+});
+
+t.test('vault runner: the key is on one champion, and it is marked', () => {
+  const G = vaultRun('runner');
+  t.ok(G, 'a runner vault turns up');
+  if (!G) return;
+  t.eq(HQ.G.q.vaultKind, 'runner', 'the floor knows what kind of vault it has');
+  const bear = HQ.G.q.actors.find(a => a.uid === HQ.G.q.keyBearer);
+  t.ok(bear, 'and which champion is carrying the key');
+  t.ok(bear.elite, 'it is a champion');
+  t.ok(bear.runner, 'and it is marked as one that runs');
+  t.ok(HQ.roomAt(bear.x, bear.y) !== HQ.G.q.vault, 'never locked inside its own vault');
+});
+
+// Room 4 with everything cleared out of it, the bearer stood in the middle and
+// a hero at its elbow. Built rather than found, so "it ran" is measurable.
+function cornerScene(mv){
+  const G = vaultRun('runner');
+  if (!G) return null;
+  const bear = HQ.G.q.actors.find(a => a.uid === HQ.G.q.keyBearer);
+  if (!bear) return null;
+  const r = HQ.ROOMS[4];
+  HQ.G.q.furn = []; HQ.G.q.traps = []; HQ.G.q.water.fill(0);
+  for (const a of HQ.G.q.actors) if (a.kind === 'monster' && a !== bear) a.alive = false;
+  for (const k in HQ.G.q.doors) HQ.G.q.doors[k].open = true;
+  // a plain melee champion: an archer or a caster would shoot from the corner
+  // instead, which is right for them and beside the point here
+  bear.mt = 'orc'; delete bear.affix; bear.name = HQ.MONSTERS.orc.name;
+  bear.atk = HQ.MONSTERS.orc.atk; bear.def = HQ.MONSTERS.orc.def;
+  bear.bpMax = bear.bp = HQ.MONSTERS.orc.bp; bear.heralded = 1;
+  bear.alive = true; bear.awake = true; bear.sleep = 0; bear.stun = 0;
+  bear.cornered = 0; bear.mv = mv === undefined ? 4 : mv;
+  bear.x = r.x + 1; bear.y = r.y + 1; bear.px = bear.x + .5; bear.py = bear.y + .5;
+  // one hero only: "away" is measured from whoever the monster picked, so a
+  // second hero on the far side would make "it ran away" ambiguous
+  const h = HQ.runAlive()[0];
+  for (const o of HQ.runAlive()) if (o !== h) o.alive = false;
+  put(h, r.x, r.y + 1);                       // directly beside it
+  HQ.G.q.seen.fill(1); HQ.recomputeVision();
+  return { bear, h, r };
+}
+
+t.test('vault runner: with floor to run on, it runs instead of swinging', () => {
+  const sc = cornerScene(4);
+  t.ok(sc, 'the scene sets up');
+  if (!sc) return;
+  const { bear, h } = sc;
+  const was = Math.max(Math.abs(bear.x-h.x), Math.abs(bear.y-h.y));
+  t.eq(was, 1, 'it starts at your elbow');
+  const hp = h.bp, from = [bear.x, bear.y];
+  HQ.monsterAct(bear, () => {});
+  t.ok(bear.x !== from[0] || bear.y !== from[1], 'it moved');
+  t.ok(Math.max(Math.abs(bear.x-h.x), Math.abs(bear.y-h.y)) > was, 'and it moved away from you');
+  t.eq(h.bp, hp, 'and never laid a hand on you');
+  t.ok(!bear.cornered, 'it is not cornered — it is just quick');
+});
+
+t.test('vault runner: cornered, it turns round and fights', () => {
+  const sc = cornerScene(0);                  // nowhere left to put between you
+  t.ok(sc, 'the scene sets up');
+  if (!sc) return;
+  const { bear, h } = sc;
+  t.eq(bear.mv, 0, 'it cannot reach a single square, let alone a further one');
+  h.bp = h.bpMax = 8;
+  const from = [bear.x, bear.y];
+  ALL_SKULLS();
+  HQ.monsterAct(bear, () => {});
+  t.eq(bear.x, from[0], 'it stays where it is');
+  t.eq(bear.y, from[1], 'because there is nowhere to go');
+  t.ok(bear.cornered, 'and it knows it');
+  t.ok(h.bp < 8, 'so it swings — which is the whole reason cornering one is worth doing');
+});
+
+t.test('vault runner: a champion with no key does not run', () => {
+  const G = vaultRun('plain');
+  t.ok(G, 'a plain vault turns up');
+  if (!G) return;
+  t.ok(!HQ.G.q.keyBearer, 'a plain vault pins the key to nobody');
+  t.ok(!HQ.monstersOf().some(m => m.runner), 'and nothing on the floor is running');
+});
+
+t.test('vault runner: only the bearer is carrying the key', () => {
+  const G = vaultRun('runner');
+  t.ok(G, 'a runner vault turns up');
+  if (!G) return;
+  const bear = HQ.G.q.actors.find(a => a.uid === HQ.G.q.keyBearer);
+  const other = HQ.G.q.actors.find(a => a.elite && a.alive && a !== bear);
+  t.ok(!HQ.G.q.key, 'nobody has the key yet');
+  const putDown = (m) => { let n = 0; while (m.alive && n++ < 5) HQ.hurt(m, 99, null); return !m.alive; };
+  if (other){
+    t.ok(putDown(other), 'the other champion goes down');
+    t.ok(!HQ.G.q.key, 'killing a different champion does not produce it');
+  }
+  t.ok(putDown(bear), 'and so, eventually, does the bearer');
+  t.ok(HQ.G.q.key, 'the key was on the one that was running');
+});
+
+t.test('vault watched: opening it wakes the floor, and it says so first', () => {
+  const G = vaultRun('watched');
+  t.ok(G, 'a watched vault turns up');
+  if (!G) return;
+  t.eq(HQ.G.q.vaultKind, 'watched', 'the floor knows the vault is wired');
+  HQ.G.q.key = true;
+  const vd = Object.values(HQ.G.q.doors).find(d => d.rid === HQ.G.q.vault);
+  t.ok(vd, 'the vault has a door');
+  vd.open = false; vd.secret = false; vd.trialBolt = false;
+
+  // put a few things to sleep somewhere else on the floor entirely
+  const sleepers = HQ.G.q.actors.filter(a => a.kind === 'monster' && a.alive
+    && HQ.roomAt(a.x,a.y) !== HQ.G.q.vault);
+  t.ok(sleepers.length >= 1, 'there is something asleep out there');
+  for (const m of sleepers) m.awake = false;
+
+  const h = HQ.runAlive()[0];
+  put(h, vd.cx, vd.cy); use(h);
+  HQ.openDoorAt(h, vd);
+  t.ok(vd.open, 'the vault opens');
+  t.ok(sleepers.every(m => m.awake), 'and everything left on the floor is awake');
+  t.eq(HQ.G.q.vaultKind, 'plain', 'the cord only pulls once');
+});
+
+t.test('vault watched: a plain vault opens without waking anybody', () => {
+  const G = vaultRun('plain');
+  t.ok(G, 'a plain vault turns up');
+  if (!G) return;
+  HQ.G.q.key = true;
+  const vd = Object.values(HQ.G.q.doors).find(d => d.rid === HQ.G.q.vault);
+  vd.open = false; vd.secret = false; vd.trialBolt = false;
+  const far = HQ.G.q.actors.filter(a => a.kind === 'monster' && a.alive
+    && HQ.roomAt(a.x,a.y) !== HQ.G.q.vault && HQ.roomAt(a.x,a.y) !== vd.rid);
+  for (const m of far) m.awake = false;
+  const h = HQ.runAlive()[0];
+  put(h, vd.cx, vd.cy); use(h);
+  HQ.openDoorAt(h, vd);
+  t.ok(vd.open, 'the vault opens');
+  t.ok(far.length === 0 || far.some(m => !m.awake), 'and the rest of the floor sleeps on');
 });
 
 t.run();

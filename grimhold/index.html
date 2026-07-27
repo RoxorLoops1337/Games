@@ -691,26 +691,35 @@ const blocked = (x,y) => !isFloor(x,y) || !!furnAt(x,y) || !!actorAt(x,y);
 
 // Breadth-first walk out from a square, respecting doors, bodies and furniture.
 // Returns {d:Map(idx->steps), from:Map(idx->idx)} for path reconstruction.
+// Squares cost 1, except water, which costs 2. That makes this a shortest-path
+// problem rather than a flood fill: expand in cost order through buckets, so a
+// square reached late by a cheap dry path still beats the wet one that got
+// there first.
 function walkField(sx, sy, maxSteps, mover, flying){
   const d = new Map(), from = new Map();
   d.set(idx(sx,sy), 0);
-  let frontier = [[sx,sy]];
-  while (frontier.length){
-    const next = [];
+  const buckets = [];
+  const push = (c, x, y) => { (buckets[c] = buckets[c] || []).push([x,y]); };
+  push(0, sx, sy);
+  for (let cost = 0; cost <= maxSteps; cost++){
+    const frontier = buckets[cost];
+    if (!frontier) continue;
     for (const [x,y] of frontier){
-      const cost = d.get(idx(x,y));
+      if (d.get(idx(x,y)) !== cost) continue;      // superseded by a cheaper route
       if (cost >= maxSteps) continue;
       for (const [dx,dy] of DIRS){
         const nx = x+dx, ny = y+dy, ni = idx(nx,ny);
-        if (!inB(nx,ny) || d.has(ni)) continue;
+        if (!inB(nx,ny)) continue;
         if (!linked(x,y,nx,ny)) continue;
         if (furnAt(nx,ny) && !flying) continue;    // a gargoyle steps over a table
         if (!bodyPassable(mover, actorAt(nx,ny))) continue;
-        d.set(ni, cost+1); from.set(ni, idx(x,y));
-        next.push([nx,ny]);
+        const nc = cost + stepCost(nx,ny);
+        if (nc > maxSteps) continue;
+        if (d.has(ni) && d.get(ni) <= nc) continue;
+        d.set(ni, nc); from.set(ni, idx(x,y));
+        push(nc, nx, ny);
       }
     }
-    frontier = next;
   }
   return { d, from };
 }
@@ -824,6 +833,7 @@ function startQuest(qi, def, seed){
     itemsFound:[], collected:0, npcFreed:false, bossDead:false, carrier:null, pot:0, fate:1,
     wrath:0, wrathAt:0, lastStriker:null, streak:0, streakBest:0, trialRoom:null, trial:null,
     log:[], activeId:null, escaped:false,
+    water: new Array(W*H).fill(0),
   };
   // shuffle the treasure deck with the quest seed
   for (let i=Q.deck.length-1; i>0; i--){ const j = Math.floor(R()*(i+1)); const t=Q.deck[i]; Q.deck[i]=Q.deck[j]; Q.deck[j]=t; }
@@ -910,6 +920,41 @@ function startQuest(qi, def, seed){
     Q.traps.push({ x, y, t:TT[Math.floor(R()*TT.length)], found:false, sprung:false, disarmed:false });
   }
 
+  // --- the water --------------------------------------------------------
+  // Corridors flood first, because the corridor is the short way round and the
+  // whole point is that the short way now costs something. Rooms take water
+  // only at the mouths their flooded corridors open onto, so a flooded floor
+  // still has dry ground to fight on.
+  if (q.theme === 'flood'){
+    const corr = [];
+    for (let y=0;y<H;y++) for (let x=0;x<W;x++)
+      if (isFloor(x,y) && roomAt(x,y) < 0 && !STAIRS.some(st => st[0]===x && st[1]===y)) corr.push([x,y]);
+    // seed a few pools and let them spread, so the water is in sheets rather
+    // than a scatter you can hop through
+    const seeds = Math.max(2, Math.round(corr.length * .05));
+    let front = [];
+    for (let i=0;i<seeds && corr.length;i++){
+      const [x,y] = corr[Math.floor(R()*corr.length)];
+      Q.water[idx(x,y)] = 1; front.push([x,y]);
+    }
+    for (let pass=0; pass<7 && front.length; pass++){
+      const next = [];
+      for (const [x,y] of front) for (const [dx,dy] of DIRS){
+        const nx = x+dx, ny = y+dy;
+        if (!inB(nx,ny) || Q.water[idx(nx,ny)]) continue;
+        if (!isFloor(nx,ny) || !linked(x,y,nx,ny)) continue;
+        if (STAIRS.some(st => st[0]===nx && st[1]===ny)) continue;
+        // water walks down the corridors freely and only laps into a room
+        const intoRoom = roomAt(nx,ny) >= 0;
+        if (R() < (intoRoom ? .28 : .82)){ Q.water[idx(nx,ny)] = 1; if (!intoRoom) next.push([nx,ny]); }
+      }
+      front = next;
+    }
+    // the doorstep is never underwater — a run that starts wading starts wrong
+    for (let y=0;y<H;y++) for (let x=0;x<W;x++)
+      if (Math.abs(x-8) + Math.abs(y-17) < 3) Q.water[idx(x,y)] = 0;
+  }
+
   // --- the vault: one room sealed, its key on a champion's belt ----------
   Q.trialRoom = (q.trial && q.trial.room !== undefined) ? { room:q.trial.room, kind:q.trial.kind } : null;
   Q.trial = null;
@@ -920,9 +965,19 @@ function startQuest(qi, def, seed){
       && !Q.actors.some(a => a.kind === 'monster' && roomAt(a.x,a.y) === Q.trialRoom.room)){
     Q.trialRoom = null;
   }
+  Q.vaultKind = 'plain'; Q.keyBearer = null;
   const keyBearer = Q.actors.some(a => a.elite && roomAt(a.x, a.y) !== q.vault);
   if (q.vault !== undefined && q.vault >= 0 && keyBearer){
     Q.vault = q.vault;
+    Q.vaultKind = q.vaultKind || 'plain';
+    // A bearer who runs has to be a named individual — "any champion" cannot
+    // flee. So this variant, and only this variant, pins the key to one of them.
+    if (Q.vaultKind === 'runner'){
+      const pool = Q.actors.filter(a => a.elite && a.alive && roomAt(a.x,a.y) !== q.vault);
+      const bear = pool[Math.floor(R()*pool.length)];
+      if (bear){ bear.runner = 1; bear.hasKey = 1; Q.keyBearer = bear.uid; }
+      else Q.vaultKind = 'plain';
+    }
     // A vault is locked, not hidden: stacking a secret door on top of the lock
     // is two obstacles wearing one door, and you can read neither of them.
     for (const k in Q.doors){
@@ -1129,10 +1184,13 @@ function recomputeVision(){
   for (let i=0;i<W*H;i++) if (vis[i]) Q.seen[i] = 1;
   Q.vis = vis;
 }
-function revealRoom(rid){
+// `by` is whoever opened it. Somebody standing in water opens a door quietly
+// enough that the room does not stir — that is what the wading is buying.
+function revealRoom(rid, by){
   if (rid < 0 || G.q.roomSeen[rid]) return;
   G.q.roomSeen[rid] = 1;
   for (const [x,y] of roomTiles(rid)) G.q.seen[idx(x,y)] = 1;
+  if (wading(by)) return;
   for (const m of monstersOf()) if (roomAt(m.x,m.y) === rid) m.awake = true;
 }
 const tileVisible = (x,y) => !!(G.q.vis && G.q.vis[idx(x,y)]);
@@ -3197,6 +3255,7 @@ function draw(){
   camApply(ctx);
 
   if (BAKE) ctx.drawImage(BAKE, 0, 0);
+  drawWater(ctx, t);
 
   // furniture, doors, traps
   for (const f of G.q.furn) if (G.q.seen[idx(f.x,f.y)]) drawFurniture(ctx, f, t);
@@ -3342,6 +3401,13 @@ function drawActor(g, a, t){
   if (a.alive) drawActorTag(g, a, px, py, u, t);
 }
 function drawActorTag(g, a, px, py, u, t){
+  if (isWater(a.x, a.y)){                         // up to the knees, and it shows
+    const q = (t*.0016 + (a.bob||0)) % 1;
+    g.strokeStyle = `rgba(180,225,240,${(.55*(1-q)).toFixed(3)})`; g.lineWidth = 2;
+    g.beginPath(); g.ellipse(px, py + u*.30, u*(.20 + q*.30), u*(.09 + q*.13), 0, 0, 6.284); g.stroke();
+    g.strokeStyle = 'rgba(180,225,240,.5)'; g.lineWidth = 2.4;
+    g.beginPath(); g.ellipse(px, py + u*.30, u*.30, u*.13, 0, 0, 6.284); g.stroke();
+  }
   if (a.webbed){                                  // caught, and going nowhere
     const q = .5 + Math.sin(t*.004 + (a.bob||0))*.5;
     g.strokeStyle = `rgba(20,22,28,.55)`;         // a dark backing so the strands read on any floor
@@ -3427,6 +3493,28 @@ function drawActorTag(g, a, px, py, u, t){
       g.strokeStyle = 'rgba(150,200,120,.4)'; g.lineWidth = 2;
       g.beginPath(); g.arc(px, py - u*.08, u*.40, 0, 6.284); g.stroke();
     }
+  }
+}
+
+// The water has to read as *cost* at a glance, so it is the one cold thing on a
+// board of warm stone, and it moves. Nothing else on the floor does either.
+function drawWater(g, t){
+  if (!G.q.water) return;
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const i = idx(x,y);
+    if (!G.q.water[i] || !G.q.seen[i]) continue;
+    const px = x*TS, py = y*TS;
+    g.fillStyle = 'rgba(22,58,74,.62)';
+    g.fillRect(px, py, TS, TS);
+    // two slow bands sliding across, offset per square so it never tiles
+    const ph = t*.0011 + (x*.7 + y*1.3);
+    for (let b=0;b<2;b++){
+      const o = ((ph + b*.5) % 1) * TS;
+      g.fillStyle = `rgba(150,205,225,${(.055 + .05*Math.sin(ph*6.28 + b*3.14)).toFixed(3)})`;
+      g.fillRect(px, py + o - 2, TS, 3);
+    }
+    g.strokeStyle = 'rgba(150,205,225,.16)'; g.lineWidth = 1;
+    g.strokeRect(px+.5, py+.5, TS-1, TS-1);
   }
 }
 
@@ -4031,8 +4119,10 @@ function heroWalk(h, path, done){
     const ox = h.x, oy = h.y;
     h.facing = nx > ox ? 1 : nx < ox ? -1 : h.facing;
     sfx('step');
+    const cost = stepCost(nx, ny);
     slide(h, nx, ny, 150, () => {
-      h.moveLeft--;
+      h.moveLeft -= cost;
+      if (cost > 1) sfx('step');                   // wading sounds like wading
       const npc = G.q.actors.find(a => a.kind === 'npc' && a.follow === h.id && a.alive);
       // they take the square you just left — which is how you swap past them
       if (npc){
@@ -4326,7 +4416,7 @@ function kill(a){
     if (a.elite){
       G.q.pot = (G.q.pot || 0) + 30;
       addFate(curseHas('watched') ? 2 : 1, `${a.name} put down`);
-      if (G.q.vault >= 0 && !G.q.key){
+      if (G.q.vault >= 0 && !G.q.key && (!G.q.keyBearer || G.q.keyBearer === a.uid)){
         G.q.key = true;
         say(`${a.name} was carrying an iron key. Something on this floor is locked.`, 'good');
         spark(a.x, a.y, 22, '#d8a83c', { spd:.02, up:.004, glow:'rgba(216,168,60,.5)', r:1.6 });
@@ -4574,6 +4664,14 @@ function monsterBreath(m, aim, done){
   next();
 }
 
+// A key-bearer that has run out of squares to put between it and you stops
+// running and swings — which is the whole reason cornering one is worth doing.
+function markCornered(m){
+  if (m.cornered) return;
+  m.cornered = 1;
+  say(`${m.name} has run out of floor. It turns round.`, 'bad');
+}
+
 function monsterAct(m, done){
   if (m.sleep > 0){ done(); return; }
   if (m.stun > 0){ m.stun--; done(); return; }
@@ -4653,6 +4751,8 @@ function monsterAct(m, done){
   // already next to someone? hit them — unless it has been bloodied and is small
   for (const h of targets){
     if (dist2(m.x,m.y,h.x,h.y) === 1 && linked(m.x,m.y,h.x,h.y)){
+      // the one with the key will not trade blows — unless it has run out of floor
+      if (m.runner) break;
       if (m.skittish && !m.fled){ m.fled = 1; break; }
       // a spider webs somebody who is still free, and only bites if they are not
       if (MONSTERS[m.mt] && MONSTERS[m.mt].webber && !h.webbed){
@@ -4669,7 +4769,7 @@ function monsterAct(m, done){
     }
   }
   const f = walkFieldSafe(m.x, m.y, m.mv, m, m.mt === 'gargoyle');
-  const away = !!(m.skittish && m.fled);            // bloodied goblins want distance
+  const away = !!(m.runner) || !!(m.skittish && m.fled);   // bloodied goblins want distance; a key-bearer wants a wall between you
   let goal = null, goalD = dist2(m.x,m.y,best.x,best.y), goalCost = 0;
   for (const [k, cost] of f.d){
     const x = k % W, y = (k/W)|0;
@@ -4679,7 +4779,8 @@ function monsterAct(m, done){
     if (better || (d === goalD && cost < goalCost && !away)){ goalD = d; goal = [x,y]; goalCost = cost; }
   }
   if (away && goal){ m.skittish = 0; m.fled = 0; }
-  if (!goal){ strike(); return; }
+  if (!goal){ if (m.runner) markCornered(m); strike(); return; }
+  if (m.runner) m.cornered = 0;
   const path = tracePath(f, goal[0], goal[1]);
   if (!path || !path.length){ strike(); return; }
   let k = 0;
@@ -4737,6 +4838,12 @@ function openDoorAt(h, d){
     if (!HEADLESS){ showTrialOffer(() => openDoorAt(h, d)); return false; }
     startTrial();
   }
+  // and so does a vault somebody wired to the rest of the hall. The warning is
+  // the mechanic: a floor-wide wake nobody saw coming is an ambush, not a choice.
+  if (d.rid === G.q.vault && G.q.vaultKind === 'watched' && !d.locked && !d.warned){
+    d.warned = 1;
+    if (!HEADLESS){ showWatchedVault(h, d); return false; }
+  }
   // A door the broken trial bolted. No key fits it — somebody puts a shoulder
   // through it, and pays for the privilege. Never a lock you cannot get past.
   if (d.trialBolt){
@@ -4765,9 +4872,20 @@ function openDoorAt(h, d){
     say('The key turns. Whatever they were keeping in here, it is yours now.', 'good');
     sfx('gold');
   }
+  // A watched vault is wired to the rest of the floor. It says so on the way in,
+  // so taking it early is a decision rather than an ambush.
+  const watched = d.rid === G.q.vault && G.q.vaultKind === 'watched';
   d.open = true;
   sfx('door');
   say('The door swings open.', '');
+  if (watched){
+    let n = 0;
+    for (const m of monstersOf()) if (!m.awake){ m.awake = true; n++; }
+    G.q.vaultKind = 'plain';                      // it only goes off the once
+    sfx('block'); G.shake = Math.max(G.shake, 16);
+    say(n ? `The vault was wired to the hall. ${n} of them are awake now, and they know where.`
+          : 'The vault was wired to the hall. Nothing left to wake.', 'bad');
+  }
   if (boonHas('doorward')){
     for (const x of livingHeroes()) if (x.bp < x.bpMax){ x.bp++; floatText(x.x, x.y, '+1', '#7de8a0'); }
   }
@@ -4777,7 +4895,9 @@ function openDoorAt(h, d){
     if (n) say(`The horn sounds. ${n} of them stand there blinking.`, 'good');
   }
   pushIn(d.rid);
-  revealRoom(d.rid);
+  const quiet = !d.loud && wading(h) && monstersOf().some(m => roomAt(m.x,m.y) === d.rid && !m.awake);
+  revealRoom(d.rid, d.loud ? null : h);
+  if (quiet) say(`${h.name} eases it open from the water. Nothing in there has noticed.`, 'good');
   recomputeVision();
   refreshField();
   const q = questDef();
@@ -4807,8 +4927,12 @@ function forceDoor(h, d){
   say(`${h.name} puts a shoulder through the lock. The whole floor heard that.`, 'bad');
   sfx('door'); G.shake = Math.max(G.shake, 16); hitStop(120);
   stirWrath(FORCE_DOOR_WRATH, 'a door taken off its lock');
-  // opening the room wakes what is in it; the noise is what the Warlock hears
+  // opening the room wakes what is in it; the noise is what the Warlock hears.
+  // Standing in water buys quiet for a door you ease open — not for one you put
+  // your shoulder through.
+  d.loud = true;
   openDoorAt(h, d);
+  d.loud = false;
   return true;
 }
 function showForceDoor(h, d){
@@ -4835,6 +4959,37 @@ function showForceDoor(h, d){
     </div>`);
   bindModal('#mForceDoor', () => { closeModal(); forceDoor(h, d); });
   bindModal('#mLeaveLock', () => { closeModal(); say('You leave the lock alone.', ''); });
+}
+
+// A vault wired to the hall. You have the key and the door will open — the
+// question is whether you want the whole floor awake while you empty it.
+function showWatchedVault(h, d){
+  const asleep = monstersOf().filter(m => !m.awake).length;
+  modal(`<h2>Wired</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[d.rid].name}</div>
+    <div class="rule"></div>
+    <p class="flavor">The lock is open, but there is a cord running off the frame
+      and away down the hall. Whoever sealed this room did not want it emptied
+      quietly.</p>
+    <div class="row">
+      <div class="ic">🚪</div>
+      <div class="tx"><b>Open it now</b><s>Everything still sleeping on this floor
+        wakes, and knows where you are</s></div>
+      <div style="color:#b03a2c">${asleep} asleep</div>
+    </div>
+    <div class="row">
+      <div class="ic">⏳</div>
+      <div class="tx"><b>Clear the floor first</b><s>The cord only pulls what is left
+        to pull. Come back when there is nothing</s></div>
+      <div style="color:#63bf7d">free</div>
+    </div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mVaultOpen">Open it</button>
+      <button class="btn ghost" id="mVaultWait">Leave it for now</button>
+    </div>`);
+  bindModal('#mVaultOpen', () => { closeModal(); openDoorAt(h, d); });
+  bindModal('#mVaultWait', () => { closeModal(); say('You step back from the cord. It will keep.', ''); });
 }
 
 /* ------------------------------------------------------------ boss intros */
@@ -6683,6 +6838,24 @@ const MODIFIERS = [
 ];
 const MOD = (id) => MODIFIERS.find(m => m.id === id);
 
+/* ------------------------------------------------------------- 12c1. THEMES */
+// A modifier changes the numbers on a floor. A theme changes how the floor is
+// walked. They are drawn separately so a theme never eats a modifier slot.
+
+const THEMES = [
+  { id:'flood', from:2, ic:'🌊', name:'Flooded',
+    desc:'The lower halls have taken water. Wading costs two squares — but nothing hears you coming.' },
+];
+const THEME = (id) => THEMES.find(x => x.id === id);
+const themeIs = (id) => !!(G && G.q && G.q.def && G.q.def.theme === id);
+
+// Water is the only thing on the board that costs more than one square to enter.
+const isWater = (x,y) => !!(G && G.q && G.q.water && G.q.water[idx(x,y)]);
+const stepCost = (x,y) => isWater(x,y) ? 2 : 1;
+// Standing in it is the whole bargain: slow, and quiet enough that a room you
+// open from the water does not wake up.
+const wading = (a) => !!(a && a.alive && isWater(a.x, a.y));
+
 const META_UNLOCKS = [
   { id:'leather',   ic:'🦺', cost:2, name:'Standard Issue',  desc:'Every hero starts a run in leather armour.' },
   { id:'potionbelt',ic:'🧪', cost:2, name:'Potion Belt',     desc:'Every hero starts a run with a healing potion.' },
@@ -7217,6 +7390,12 @@ function makeFloor(depth, R){
   if (R() < modChance){ const m = draw(); if (m) mods.push(m); }
   if (depth >= 4 && R() < modChance*.5){ const m = draw(); if (m) mods.push(m); }
 
+  // --- theme -------------------------------------------------------------
+  // Drawn on its own roll so it never competes with the modifiers for a slot.
+  const themePool = THEMES.filter(x => (x.from || 1) <= depth);
+  const theme = themePool.length && R() < .30
+    ? themePool[Math.floor(R()*themePool.length)].id : null;
+
   // --- objective ---------------------------------------------------------
   const kinds = bossFloor ? ['slay']
     : depth <= 4 ? ['slay','clear','fetch','rescue','collect']
@@ -7287,6 +7466,11 @@ function makeFloor(depth, R){
   // floor lock its own quest away.
   const vaultPool = rooms.filter(id => id !== goalRoom);
   const vaultRoom = depth >= 3 && R() < .45 ? vaultPool[Math.floor(R()*vaultPool.length)] : -1;
+  // Not every lock is the same problem. One in three vaults has a bearer who
+  // will not stand and fight; one in three is wired to the rest of the floor.
+  const vk = R();
+  const vaultKind = vaultRoom < 0 ? 'plain'
+    : vk < .34 ? 'runner' : vk < .67 ? 'watched' : 'plain';
   // a trial is never the objective room and never the vault: one door, one idea
   const trialPool = rooms.filter(id => id !== goalRoom && id !== vaultRoom);
   const trialRoom = depth >= 4 && R() < .38
@@ -7297,7 +7481,7 @@ function makeFloor(depth, R){
   let traps = 2 + Math.floor(depth*.8);
   if (mods.includes('brittle')) traps *= 2;
   return {
-    name, sub:`Depth ${depth}`, depth, mods,
+    name, sub:`Depth ${depth}`, depth, mods, theme, vaultKind,
     intro:'', objective, monsters, furn,
     traps:Math.min(14, traps), secrets: depth >= 3 ? 2 : 1,
     eliteChance: Math.min(.32, .06 + depth*.032),
@@ -7384,6 +7568,7 @@ function beginFloor(){
   setMood('explore');
   say(`Depth ${G.run.depth}: ${def.name}.`, '');
   for (const m of def.mods){ const M = MOD(m); if (M) say(`${M.ic} ${M.name} — ${M.desc}`, 'bad'); }
+  { const T = THEME(def.theme); if (T) say(`${T.ic} ${T.name} — ${T.desc}`, 'bad'); }
   banner('DEPTH ' + G.run.depth, def.name);
   renderHUD(); renderLog();
   saveRun();
@@ -8237,6 +8422,8 @@ globalThis.HQ = {
   hasLOS, walkField, walkFieldOpen, tracePath, actorAt, furnAt, blocked, trapAt, trapBlocks, bodyPassable,
   newG, newCampaign, mkHero, startQuest, launchQuest, boot, setRng,
   BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes, BOON, MOD,
+  THEMES, THEME, themeIs, isWater, stepCost, wading, drawWater, showWatchedVault, revealRoom,
+  markCornered, dist2,
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
   draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
   WAGER_MAX, wagerCost, canWager, wagerDraft,
