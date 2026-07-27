@@ -30,6 +30,12 @@ import { createMenu } from './ui/menu.js';
 export async function boot(root) {
   const canvas = root.querySelector('#gl');
   const G = createState(0x51ed5eed);
+  // The screenshot rig and the render suite set this before the page loads so
+  // they can exercise a specific tier. Without reading it the `--quality` flag
+  // was inert and everything was always rendering at ULTRA.
+  if (typeof window.__BS_QUALITY__ === 'number') {
+    G.settings.quality = Math.max(0, Math.min(3, window.__BS_QUALITY__ | 0));
+  }
   const loadStatus = root.querySelector('#load-status');
   const say = (s) => { if (loadStatus) loadStatus.textContent = s; };
 
@@ -68,6 +74,13 @@ export async function boot(root) {
   say('compiling shaders');
   const post = createPostFX(G, engine, sky);
   engine.post = post;
+  // The composite pass tone maps with AgX inside its own shader, which the sky
+  // cannot detect: it watches `renderer.toneMapping`, and that is deliberately
+  // left at NoToneMapping so the world renders into an HDR buffer untouched. Un-
+  // told, the dome keeps its own highlight shoulder on and the aureole gets
+  // compressed twice — two shoulders in series is how a dusk sky turns to grey
+  // felt, and the amber near the sun is the first thing it costs you.
+  if (sky.setToneMapped) sky.setToneMapped(true);
 
   const audio = createAudio(G);
   const hud = createHUD(G, root);

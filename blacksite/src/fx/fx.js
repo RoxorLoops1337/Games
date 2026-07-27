@@ -1169,7 +1169,7 @@ function build(G, engine, materials) {
     tA.tDir.array[o] = dx; tA.tDir.array[o + 1] = dy; tA.tDir.array[o + 2] = dz; tA.tDir.array[o + 3] = dist;
     const life = dist / TRACER_SPEED + TRACER_LEN / TRACER_SPEED + 0.02;
     tA.tCfg.array[o] = TRACER_SPEED; tA.tCfg.array[o + 1] = life;
-    tA.tCfg.array[o + 2] = 0.020; tA.tCfg.array[o + 3] = TRACER_LEN;
+    tA.tCfg.array[o + 2] = 0.045; tA.tCfg.array[o + 3] = TRACER_LEN;
     for (const name of TATTR) tA[name].needsUpdate = true;
     if (clock.t + life > tracers.until) tracers.until = clock.t + life;
   }
@@ -1449,7 +1449,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + rr(0.4, 1.6); _p.vz = _dir.z * sp;
       _p.life = rr(0.7, 1.5); _p.drag = 0.6; _p.grav = 1; _p.stretch = 0.6; _p.turb = 0;
       c0(0xa9a296); c1(0x6a6459);
-      _p.s0 = rr(0.010, 0.022); _p.s1 = _p.s0 * 0.8;
+      _p.s0 = rr(0.022, 0.045); _p.s1 = _p.s0 * 0.8;
       _p.tile = T_CHIP; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.6;
       _p.floor = fy; _p.rest = rr(0.25, 0.45); _p.spin = sym(18);
       push(alphaPool);
@@ -1462,7 +1462,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp; _p.vz = _dir.z * sp;
       _p.life = rr(0.25, 0.45); _p.drag = 7; _p.grav = -0.02; _p.stretch = 0; _p.turb = 0;
       c0(0xd8d2c6); c1(0x8b857a);
-      _p.s0 = rr(0.10, 0.18); _p.s1 = _p.s0 * 2.6;
+      _p.s0 = rr(0.22, 0.36); _p.s1 = _p.s0 * 2.6;
       _p.tile = T_PUFF; _p.alpha = 0.5; _p.rot = rnd() * 6.28; _p.fade = 1.6;
       _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
       push(alphaPool);
@@ -1477,7 +1477,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp * 0.4 + 0.25; _p.vz = _dir.z * sp;
       _p.life = rr(1.6, 3.0); _p.drag = 1.6; _p.grav = 0.03; _p.stretch = 0; _p.turb = 0.5;
       c0(0xc3bcae); c1(0x7f7a70);
-      _p.s0 = rr(0.14, 0.26); _p.s1 = _p.s0 * rr(3.0, 4.5);
+      _p.s0 = rr(0.28, 0.48); _p.s1 = _p.s0 * rr(3.0, 4.5);
       _p.tile = T_SMOKE; _p.alpha = rr(0.14, 0.26); _p.rot = rnd() * 6.28; _p.fade = 1.9;
       _p.floor = -1e6; _p.rest = 0; _p.spin = sym(0.4);
       push(alphaPool);
@@ -1503,7 +1503,7 @@ function build(G, engine, materials) {
       _p.life = rr(0.28, 0.85); _p.drag = 1.4; _p.grav = 0.85;
       _p.stretch = rr(0.9, 1.6); _p.turb = 0;
       c0(0xfffbe8); c1(0xd0350a);
-      _p.s0 = rr(0.014, 0.028); _p.s1 = _p.s0 * 0.35;
+      _p.s0 = rr(0.030, 0.055); _p.s1 = _p.s0 * 0.35;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.55;
       _p.floor = fy; _p.rest = rr(0.35, 0.6); _p.spin = 0;
       push(addPool);
@@ -1514,7 +1514,7 @@ function build(G, engine, materials) {
     _p.vx = _p.vy = _p.vz = 0;
     _p.life = 0.07; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
     c0(0xffffff); c1(0xffb15a);
-    _p.s0 = rr(0.22, 0.34); _p.s1 = 0.05;
+    _p.s0 = rr(0.42, 0.62); _p.s1 = 0.08;
     _p.tile = T_GLOW; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 1.2;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
     push(addPool);
@@ -1528,7 +1528,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + 0.8; _p.vz = _dir.z * sp;
       _p.life = rr(0.6, 1.2); _p.drag = 0.7; _p.grav = 1; _p.stretch = 0.4; _p.turb = 0;
       c0(0x8d8f92); c1(0x4a4c50);
-      _p.s0 = rr(0.006, 0.012); _p.s1 = _p.s0;
+      _p.s0 = rr(0.014, 0.026); _p.s1 = _p.s0;
       _p.tile = T_CHIP; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.6;
       _p.floor = fy; _p.rest = 0.4; _p.spin = sym(24);
       push(alphaPool);
@@ -1547,7 +1547,7 @@ function build(G, engine, materials) {
       // then just fall. That deceleration is the entire read of "sand".
       _p.life = rr(0.6, 1.2); _p.drag = 2.4; _p.grav = 1; _p.stretch = 0.3; _p.turb = 0;
       c0(0xc7a878); c1(0x8a6f47);
-      _p.s0 = rr(0.010, 0.020); _p.s1 = _p.s0 * 0.9;
+      _p.s0 = rr(0.022, 0.042); _p.s1 = _p.s0 * 0.9;
       _p.tile = T_CHIP; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.8;
       _p.floor = fy; _p.rest = 0.08; _p.spin = sym(10);
       push(alphaPool);
@@ -1559,7 +1559,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp * 0.7 + 0.5; _p.vz = _dir.z * sp;
       _p.life = rr(0.9, 1.8); _p.drag = 3.2; _p.grav = 0.22; _p.stretch = 0; _p.turb = 0.25;
       c0(0xd9bb8b); c1(0x9c8158);
-      _p.s0 = rr(0.16, 0.30); _p.s1 = _p.s0 * rr(2.2, 3.2);
+      _p.s0 = rr(0.30, 0.52); _p.s1 = _p.s0 * rr(2.2, 3.2);
       _p.tile = T_PUFF; _p.alpha = rr(0.35, 0.6); _p.rot = rnd() * 6.28; _p.fade = 1.5;
       _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
       push(alphaPool);
@@ -1578,7 +1578,7 @@ function build(G, engine, materials) {
       // fragment tumbling end over end is unmistakably wood.
       _p.stretch = 0; _p.turb = 0.1;
       c0(0xa8763f); c1(0x5f4223);
-      _p.s0 = rr(0.014, 0.032); _p.s1 = _p.s0;
+      _p.s0 = rr(0.030, 0.062); _p.s1 = _p.s0;
       _p.tile = T_SHARD; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.7;
       _p.floor = fy; _p.rest = 0.22; _p.spin = sym(26);
       push(alphaPool);
@@ -1590,7 +1590,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + 0.3; _p.vz = _dir.z * sp;
       _p.life = rr(0.7, 1.4); _p.drag = 4; _p.grav = 0.05; _p.stretch = 0; _p.turb = 0.4;
       c0(0xd6b483); c1(0x93764f);
-      _p.s0 = rr(0.09, 0.16); _p.s1 = _p.s0 * 2.8;
+      _p.s0 = rr(0.20, 0.34); _p.s1 = _p.s0 * 2.8;
       _p.tile = T_SMOKE; _p.alpha = 0.30; _p.rot = rnd() * 6.28; _p.fade = 1.7;
       _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
       push(alphaPool);
@@ -1606,7 +1606,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + rr(0.2, 1.4); _p.vz = _dir.z * sp;
       _p.life = rr(0.9, 1.7); _p.drag = 0.5; _p.grav = 1; _p.stretch = 0.3; _p.turb = 0;
       c0(0xe8f6ff); c1(0x9fc0d0);
-      _p.s0 = rr(0.008, 0.020); _p.s1 = _p.s0;
+      _p.s0 = rr(0.020, 0.042); _p.s1 = _p.s0;
       _p.tile = T_SHARD; _p.alpha = 0.9; _p.rot = rnd() * 6.28; _p.fade = 0.5;
       _p.floor = fy; _p.rest = 0.30; _p.spin = sym(30);
       push(alphaPool);
@@ -1620,7 +1620,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + 0.8; _p.vz = _dir.z * sp;
       _p.life = rr(0.4, 0.9); _p.drag = 0.5; _p.grav = 1; _p.stretch = 0.5; _p.turb = 0;
       c0(0xffffff); c1(0x8fc8ff);
-      _p.s0 = rr(0.010, 0.020); _p.s1 = 0.004;
+      _p.s0 = rr(0.024, 0.044); _p.s1 = 0.008;
       _p.tile = T_GLOW; _p.alpha = 0.9; _p.rot = 0; _p.fade = 1.0;
       _p.floor = fy; _p.rest = 0.3; _p.spin = 0;
       push(addPool);
@@ -1628,7 +1628,7 @@ function build(G, engine, materials) {
     _p.x = x; _p.y = y; _p.z = z; _p.vx = _p.vy = _p.vz = 0;
     _p.life = 0.09; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
     c0(0xffffff); c1(0xbfe4ff);
-    _p.s0 = 0.16; _p.s1 = 0.03; _p.tile = T_GLOW; _p.alpha = 0.9; _p.rot = 0; _p.fade = 1.4;
+    _p.s0 = 0.34; _p.s1 = 0.06; _p.tile = T_GLOW; _p.alpha = 0.9; _p.rot = 0; _p.fade = 1.4;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
     push(addPool);
     addDecal(x, y, z, nx, ny, nz, rr(0.14, 0.22), D_GLASS, 0xbcd6e4, 0.85, 55);
@@ -1645,7 +1645,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + rr(-0.2, 1.0); _p.vz = _dir.z * sp;
       _p.life = rr(0.35, 0.9); _p.drag = 2.8; _p.grav = 1; _p.stretch = 0.8; _p.turb = 0;
       c0(0xa3140f); c1(0x4a0705);
-      _p.s0 = rr(0.010, 0.028); _p.s1 = _p.s0 * 0.7;
+      _p.s0 = rr(0.024, 0.055); _p.s1 = _p.s0 * 0.7;
       _p.tile = T_DROP; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 1.0;
       _p.floor = fy; _p.rest = 0; _p.spin = sym(12);
       push(alphaPool);
@@ -1659,7 +1659,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + 0.2; _p.vz = _dir.z * sp;
       _p.life = rr(0.45, 0.9); _p.drag = 5; _p.grav = 0.25; _p.stretch = 0; _p.turb = 0.15;
       c0(0xb8231a); c1(0x5e0d09);
-      _p.s0 = rr(0.10, 0.20); _p.s1 = _p.s0 * 2.2;
+      _p.s0 = rr(0.22, 0.40); _p.s1 = _p.s0 * 2.2;
       _p.tile = T_MIST; _p.alpha = rr(0.35, 0.6); _p.rot = rnd() * 6.28; _p.fade = 1.6;
       _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
       push(alphaPool);
@@ -1687,7 +1687,7 @@ function build(G, engine, materials) {
       // the turbulence term does the fluttering for free.
       _p.life = rr(1.4, 2.8); _p.drag = 4.5; _p.grav = 0.10; _p.stretch = 0; _p.turb = 0.9;
       c0(0x6f8f3f); c1(0x3d5322);
-      _p.s0 = rr(0.014, 0.030); _p.s1 = _p.s0;
+      _p.s0 = rr(0.032, 0.065); _p.s1 = _p.s0;
       _p.tile = T_LEAF; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 1.2;
       _p.floor = -1e6; _p.rest = 0; _p.spin = sym(9);
       push(alphaPool);
@@ -1697,7 +1697,7 @@ function build(G, engine, materials) {
       _p.vx = sym(0.4); _p.vy = rr(0.1, 0.5); _p.vz = sym(0.4);
       _p.life = rr(0.6, 1.2); _p.drag = 4; _p.grav = 0.02; _p.stretch = 0; _p.turb = 0.5;
       c0(0x9fb572); c1(0x6c7f4c);
-      _p.s0 = 0.09; _p.s1 = 0.26;
+      _p.s0 = 0.20; _p.s1 = 0.52;
       _p.tile = T_SMOKE; _p.alpha = 0.16; _p.rot = rnd() * 6.28; _p.fade = 1.8;
       _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
       push(alphaPool);
@@ -1714,7 +1714,7 @@ function build(G, engine, materials) {
       _p.vx = Math.cos(a) * tilt * sp; _p.vy = sp * (1 - tilt * 0.5); _p.vz = Math.sin(a) * tilt * sp;
       _p.life = rr(0.5, 1.0); _p.drag = 0.9; _p.grav = 1; _p.stretch = 0.6; _p.turb = 0;
       c0(0xdff0f7); c1(0x8fb6c6);
-      _p.s0 = rr(0.010, 0.024); _p.s1 = _p.s0 * 0.8;
+      _p.s0 = rr(0.024, 0.050); _p.s1 = _p.s0 * 0.8;
       _p.tile = T_DROP; _p.alpha = 0.85; _p.rot = rnd() * 6.28; _p.fade = 0.9;
       _p.floor = y; _p.rest = 0; _p.spin = sym(8);
       push(alphaPool);
@@ -1722,7 +1722,7 @@ function build(G, engine, materials) {
     _p.x = x; _p.y = y + 0.01; _p.z = z; _p.vx = _p.vy = _p.vz = 0;
     _p.life = 0.5; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
     c0(0xeaf6fb); c1(0xa8c8d6);
-    _p.s0 = 0.10; _p.s1 = 0.55; _p.tile = T_RING; _p.alpha = 0.55; _p.rot = 0; _p.fade = 1.6;
+    _p.s0 = 0.20; _p.s1 = 1.05; _p.tile = T_RING; _p.alpha = 0.55; _p.rot = 0; _p.fade = 1.6;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
     push(alphaPool);
     addDecal(x, y, z, nx, ny, nz, 0.3, D_RIPPLE, 0xbfe0ee, 0.4, 1.2);
@@ -1738,7 +1738,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + 0.4; _p.vz = _dir.z * sp;
       _p.life = rr(0.5, 1.0); _p.drag = 2.6; _p.grav = 1; _p.stretch = 0.2; _p.turb = 0;
       c0(0x3a3a3c); c1(0x1e1e20);
-      _p.s0 = rr(0.008, 0.016); _p.s1 = _p.s0;
+      _p.s0 = rr(0.018, 0.034); _p.s1 = _p.s0;
       _p.tile = T_CHIP; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.8;
       _p.floor = fy; _p.rest = 0.15; _p.spin = sym(14);
       push(alphaPool);
@@ -1747,7 +1747,7 @@ function build(G, engine, materials) {
     _p.vx = nx * 0.5; _p.vy = ny * 0.5 + 0.2; _p.vz = nz * 0.5;
     _p.life = 0.5; _p.drag = 5; _p.grav = 0.02; _p.stretch = 0; _p.turb = 0.2;
     c0(0x54524f); c1(0x2c2b29);
-    _p.s0 = 0.08; _p.s1 = 0.24; _p.tile = T_SMOKE; _p.alpha = 0.35; _p.rot = rnd() * 6.28; _p.fade = 1.7;
+    _p.s0 = 0.18; _p.s1 = 0.50; _p.tile = T_SMOKE; _p.alpha = 0.35; _p.rot = rnd() * 6.28; _p.fade = 1.7;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
     push(alphaPool);
     addDecal(x, y, z, nx, ny, nz, rr(0.05, 0.08), D_RUBBER, 0x1c1c1e, 0.85, 55);
@@ -1799,11 +1799,11 @@ function build(G, engine, materials) {
     _p.vx = _fwd.x * 1.2; _p.vy = _fwd.y * 1.2; _p.vz = _fwd.z * 1.2;
     _p.life = 0.045; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
     c0(0xfff3d0); c1(0xff9a2e);
-    _p.s0 = rr(0.30, 0.44); _p.s1 = _p.s0 * 0.5;
+    _p.s0 = rr(0.40, 0.58); _p.s1 = _p.s0 * 0.5;
     _p.tile = T_FLASH; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.9;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
     push(addPool);
-    _p.life = 0.055; _p.s0 = rr(0.14, 0.20); _p.s1 = 0.03;
+    _p.life = 0.055; _p.s0 = rr(0.22, 0.30); _p.s1 = 0.05;
     _p.tile = T_GLOW; c0(0xffffff); c1(0xffb352);
     push(addPool);
 
@@ -1815,7 +1815,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp; _p.vz = _dir.z * sp;
       _p.life = rr(0.10, 0.26); _p.drag = 5; _p.grav = 0.7; _p.stretch = 1.3; _p.turb = 0;
       c0(0xfff6d8); c1(0xd2500c);
-      _p.s0 = rr(0.010, 0.020); _p.s1 = 0.003;
+      _p.s0 = rr(0.022, 0.040); _p.s1 = 0.006;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.7;
       _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
       push(addPool);
@@ -1829,7 +1829,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + 0.35; _p.vz = _dir.z * sp;
       _p.life = rr(0.5, 1.1); _p.drag = 4.5; _p.grav = -0.03; _p.stretch = 0; _p.turb = 0.6;
       c0(0xbfbcb4); c1(0x6f6d68);
-      _p.s0 = rr(0.05, 0.09); _p.s1 = _p.s0 * rr(3.5, 5.5);
+      _p.s0 = rr(0.10, 0.17); _p.s1 = _p.s0 * rr(3.5, 5.5);
       _p.tile = T_SMOKE; _p.alpha = rr(0.10, 0.20); _p.rot = rnd() * 6.28; _p.fade = 1.9;
       _p.floor = -1e6; _p.rest = 0; _p.spin = sym(0.5);
       push(alphaPool);
@@ -1922,7 +1922,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = Math.abs(_dir.y) * sp + rr(1, 5); _p.vz = _dir.z * sp;
       _p.life = rr(1.2, 2.6); _p.drag = 0.35; _p.grav = 1; _p.stretch = 0.5; _p.turb = 0;
       c0(0x8b8378); c1(0x413c35);
-      _p.s0 = rr(0.02, 0.05); _p.s1 = _p.s0;
+      _p.s0 = rr(0.04, 0.09); _p.s1 = _p.s0;
       _p.tile = T_CHIP; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.7;
       _p.floor = fy; _p.rest = rr(0.2, 0.45); _p.spin = sym(20);
       push(alphaPool);
@@ -1935,7 +1935,7 @@ function build(G, engine, materials) {
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + rr(1, 4); _p.vz = _dir.z * sp;
       _p.life = rr(0.6, 1.6); _p.drag = 1.1; _p.grav = 0.9; _p.stretch = 1.1; _p.turb = 0.2;
       c0(0xffe9b0); c1(0x8f1a02);
-      _p.s0 = rr(0.02, 0.045); _p.s1 = 0.006;
+      _p.s0 = rr(0.045, 0.09); _p.s1 = 0.012;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.8;
       _p.floor = fy; _p.rest = 0.4; _p.spin = 0;
       push(addPool);
@@ -1970,7 +1970,7 @@ function build(G, engine, materials) {
       _p.life = rr(0.7, 1.5); _p.drag = 3.2; _p.grav = 0.04; _p.stretch = 0; _p.turb = 0.5;
       if (surface === S.SAND) { c0(0xd0b284); c1(0x8f7a58); }
       else { c0(0xb5b0a6); c1(0x74706a); }
-      _p.s0 = rr(0.08, 0.16); _p.s1 = _p.s0 * rr(2.5, 4);
+      _p.s0 = rr(0.16, 0.30); _p.s1 = _p.s0 * rr(2.5, 4);
       _p.tile = T_SMOKE; _p.alpha = rr(0.06, 0.16) * (hard ? 1.8 : 1);
       _p.rot = rnd() * 6.28; _p.fade = 2.0;
       _p.floor = -1e6; _p.rest = 0; _p.spin = 0;

@@ -82,18 +82,18 @@ const SURF = {
 // concrete level under a low sun, and an enemy the player cannot pick out of the
 // background is a bug however accurate the colour is.
 const COL = {
-  fatigue: 0x5d6350,
-  fatigueDark: 0x484d3e,
-  carrier: 0x383b33,
-  pouch: 0x4d5243,
-  helmet: 0x43473d,
-  boot: 0x26282a,
-  glove: 0x2c2f31,
-  face: 0x2e3034,
+  fatigue: 0x585d47,
+  fatigueDark: 0x3f4335,
+  carrier: 0x23251e,
+  pouch: 0x33362b,
+  helmet: 0x2b2e26,
+  boot: 0x1a1c1d,
+  glove: 0x202223,
+  face: 0x25272b,
   skin: 0x9a7355,
-  gun: 0x2b2e31,
-  gunMetal: 0x474b50,
-  lens: 0x33484a,
+  gun: 0x1e2124,
+  gunMetal: 0x3a3e43,
+  lens: 0x2c3f42,
 };
 
 // ── primitive helpers ────────────────────────────────────────────────────────
