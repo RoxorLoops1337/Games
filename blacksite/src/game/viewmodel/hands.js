@@ -19,7 +19,7 @@ import { roundRectPts, sweep, frameChain, tubeCurve, latheZ, partBin } from './g
 const GLOVE = 0x26292a;      // dark nomex, slightly cool
 const GLOVE_HI = 0x34393b;   // the knuckle and finger crowns catch light
 const CUFF = 0x1a1e1f;
-const SLEEVE = 0x373327;     // fatigue tan, desaturated
+const SLEEVE = 0x2b2820;     // fatigue tan, desaturated and field-dirty
 
 // A finger is a tube through three control points on a circle around the grip.
 // Real fingers are not circular arcs, so the middle point is pushed slightly

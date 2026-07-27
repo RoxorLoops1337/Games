@@ -172,7 +172,7 @@ export function stepVerlet(body, dt, gravity) {
     q.o.copy(q.p);
     q.p.x += vx; q.p.y += vy + gravity * dt * dt; q.p.z += vz;
   }
-  for (let it = 0; it < 3; it++) {
+  for (let it = 0; it < 4; it++) {
     const links = body.links;
     for (let i = 0; i < links.length; i++) {
       const L = links[i], A = pts[L.a], B = pts[L.b];

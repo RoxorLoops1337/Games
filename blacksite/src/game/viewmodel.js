@@ -33,12 +33,12 @@ import * as C from '../core/constants.js';
 import { clamp, lerp, smooth, vec3 } from '../core/state.js';
 import { raycast } from '../world/collision.js';
 import { createGunMaterials } from './viewmodel/gunmetal.js';
-import { buildArsenal, pickModel } from './viewmodel/guns.js';
+import { createArsenal, resolveId } from './viewmodel/guns.js';
 
 const _v = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vector3();
 const _xw = new THREE.Vector3(), _yw = new THREE.Vector3(), _zw = new THREE.Vector3();
 const _m = new THREE.Matrix4(), _m2 = new THREE.Matrix4();
-const _eye = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0);
+const _eye = new THREE.Vector3(), _up = new THREE.Vector3(0, 1, 0), _pr = new THREE.Vector3();
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion();
 
 const TAU = Math.PI * 2;
@@ -48,7 +48,7 @@ const wrap = (a) => (a > Math.PI ? a - TAU : a < -Math.PI ? a + TAU : a);
 
 export function createViewmodel(G, engine, materials) {
   const gun = createGunMaterials(G, engine, materials);
-  const arsenal = buildArsenal(gun.mats);
+  const arsenal = createArsenal(gun.mats);
 
   const group = new THREE.Group();          // = attach
   const sway = new THREE.Group();
@@ -58,11 +58,20 @@ export function createViewmodel(G, engine, materials) {
   group.add(sway); sway.add(motion); motion.add(pivot); pivot.add(base);
   group.matrixAutoUpdate = true;
 
-  for (const k in arsenal) {
-    base.add(arsenal[k].group);
-    prep(arsenal[k]);
-  }
   engine.view.add(group);
+
+  // Resolve an id to a built, prepared model, building it the first time it is
+  // asked for. Everything downstream deals in models, never in ids.
+  const built = {};
+  function modelFor(id) {
+    const key = resolveId(arsenal, id);
+    if (built[key]) return built[key];
+    const m = arsenal.get(key) || arsenal.get('rifle');
+    if (!m) return null;
+    if (!m.prepped) { m.prepped = true; base.add(m.group); prep(m); m.group.visible = false; }
+    built[key] = m;
+    return m;
+  }
 
   // ── lighting the view scene ────────────────────────────────────────────────
   // The view scene is its own scene, so it gets none of the world's lights for
@@ -169,14 +178,10 @@ export function createViewmodel(G, engine, materials) {
     // authored, so a new weapon does not need another table entry.
     const magY = model.rest.mag ? model.rest.mag.p.y : 0;
     model.magGrab = new THREE.Vector3(0.030, magY - 0.105, model.id === 'pistol' ? 0.030 : -0.045);
-    // Left visible on purpose: `warmup()` in main.js walks the *visible* graph
-    // to compile shaders, and a weapon that boots hidden pays its compile stall
-    // the first time it is drawn — which is the frame the player switches to it.
   }
 
   function setModel(model) {
     if (st.model === model) return;
-    if (!st.model) for (const k in arsenal) arsenal[k].group.visible = false;
     if (st.model) st.model.group.visible = false;
     st.model = model;
     if (model) {
@@ -235,7 +240,8 @@ export function createViewmodel(G, engine, materials) {
     poll(w, dt);
 
     // Which weapon, and is a swap hiding the switch?
-    const want = pickModel(arsenal, w && w.id);
+    const want = modelFor(w && w.id);
+    if (!want && !st.model) { group.visible = false; return; }
     if (!st.model) setModel(want);
     else if (want !== st.model && st.swap.t < 0) { st.swap.t = 0; st.swap.pending = want; }
 
@@ -314,29 +320,40 @@ export function createViewmodel(G, engine, materials) {
       Math.sin(ph) * 0.026 * bob,
       Math.sin(ph + 0.9) * 0.034 * bob + Math.sin(st.idle * 2 + 0.7) * 0.0060 * still);
 
+    // ── the big poses: sprint, swap, reload ──────────────────────────────────
+    // These three want large rotations, and *where* those rotations happen is
+    // the whole difference between a pose and a glitch. `motion` sits on the
+    // camera origin, so a 0.6 rad roll applied there swings a weapon 30 cm away
+    // through a 19 cm arc and throws it clean off the side of the screen. They
+    // belong on the shoulder pivot, which is where a person's arms actually
+    // rotate a rifle from. Translations stay on `motion`, where they mean what
+    // they say.
+    _pr.set(0, 0, 0);
+
     // Sprint: the weapon comes off the shoulder line, cants across the body and
     // drops. It is the game telling you, without a HUD element, that pulling the
     // trigger right now will cost you a beat to recover from.
     if (sp > 0.001) {
-      motion.position.x += 0.030 * sp;
-      motion.position.y -= 0.058 * sp;
-      motion.position.z += 0.050 * sp;
-      motion.rotation.x -= 0.28 * sp;
-      motion.rotation.y += 0.62 * sp;
-      motion.rotation.z -= 0.50 * sp;
+      motion.position.x += 0.062 * sp;
+      motion.position.y -= 0.030 * sp;
+      motion.position.z += 0.030 * sp;
+      _pr.x -= 0.18 * sp;
+      _pr.y += 0.24 * sp;
+      _pr.z -= 0.36 * sp;
     }
 
-    // ── swap ─────────────────────────────────────────────────────────────────
     if (st.swap.t >= 0) {
       const t = st.swap.t / st.swap.dur;
       // Down fast, up slower — a weapon comes off the shoulder quicker than it
       // comes back onto it.
       const drop = t < 0.46 ? smoothstep(t / 0.46) : 1 - smoothstep((t - 0.46) / 0.54);
-      motion.position.y -= 0.26 * drop;
+      motion.position.y -= 0.16 * drop;
       motion.position.z += 0.05 * drop;
-      motion.rotation.x -= 1.05 * drop;
-      motion.rotation.z += 0.40 * drop;
+      _pr.x -= 0.85 * drop;
+      _pr.z += 0.30 * drop;
     }
+
+    animateReload(model, dt, _pr);
 
     // ── recoil ───────────────────────────────────────────────────────────────
     // Stiff and underdamped, so the sights overshoot on the way back down and
@@ -362,7 +379,7 @@ export function createViewmodel(G, engine, materials) {
       lerp(0.085, 0.004, aim),
       lerp(-0.150, -0.052, aim),
       lerp(0.215, 0.165, aim));
-    pivot.rotation.set(R.pitch + simKick * 0.02, R.yaw, R.roll);
+    pivot.rotation.set(R.pitch + simKick * 0.02 + _pr.x, R.yaw + _pr.y, R.roll + _pr.z);
 
     // ── the pose ─────────────────────────────────────────────────────────────
     _v.copy(model.hipPos).lerp(model.adsPos, aim);
@@ -376,9 +393,6 @@ export function createViewmodel(G, engine, materials) {
     base.position.copy(_v).sub(pivot.position);
     base.quaternion.copy(_qa);
     base.translateZ(R.back + simKick * 0.004);
-
-    // ── reload ───────────────────────────────────────────────────────────────
-    animateReload(model, dt);
 
     // ── moving parts ─────────────────────────────────────────────────────────
     st.trigger = Math.max(0, st.trigger - dt * 9);
@@ -413,7 +427,7 @@ export function createViewmodel(G, engine, materials) {
   // simulation: if the weapon says the magazine is out, it is out. When no
   // events arrive (the drain is not wired yet), the same timeline is recovered
   // by polling `w.reloading`, and the two paths are mutually exclusive.
-  function animateReload(model, dt) {
+  function animateReload(model, dt, outRot) {
     const rl = st.reload;
     if (rl.t < 0) return;
     rl.t += dt;
@@ -425,12 +439,12 @@ export function createViewmodel(G, engine, materials) {
     // performed with the gun still level shows the player nothing but the top of
     // the receiver while a magazine teleports somewhere underneath it.
     const present = u < 0.14 ? smoothstep(u / 0.14) : u > 0.86 ? 1 - smoothstep((u - 0.86) / 0.14) : 1;
-    motion.position.x -= 0.024 * present;
-    motion.position.y += 0.008 * present;
-    motion.position.z += 0.048 * present;
-    motion.rotation.x -= 0.07 * present;
-    motion.rotation.y += 0.30 * present;
-    motion.rotation.z -= 0.62 * present;
+    motion.position.x -= 0.008 * present;
+    motion.position.y += 0.052 * present;
+    motion.position.z += 0.044 * present;
+    outRot.x -= 0.02 * present;
+    outRot.y += 0.18 * present;
+    outRot.z -= 0.54 * present;
 
     const mag = model.nodes.mag, rest = model.rest.mag;
     if (mag && rest) {
@@ -624,8 +638,8 @@ export function createViewmodel(G, engine, materials) {
       else if (e.phase === 'end' && st.reload.t >= 0) st.reload.t = Math.max(st.reload.t, st.reload.dur * 0.88);
       st.reload.phase = e.phase || st.reload.phase;
     } else if (e.type === 'weaponSwap' || e.type === 'swap') {
-      const want = pickModel(arsenal, e.weapon || (G.weapons.slots[G.weapons.active] || {}).id);
-      if (want !== st.model && st.swap.t < 0) { st.swap.t = 0; st.swap.pending = want; }
+      const want = modelFor(e.weapon || (G.weapons.slots[G.weapons.active] || {}).id);
+      if (want && want !== st.model && st.swap.t < 0) { st.swap.t = 0; st.swap.pending = want; }
     }
   }
 

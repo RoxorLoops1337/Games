@@ -543,9 +543,9 @@ function beginDeath(rig, e, G) {
   set('elbowL', SP[B.foreL]); set('handL', SP[B.handL]);
   set('kneeR', SP[B.shinR]); set('footR', SP[B.footR]);
   set('kneeL', SP[B.shinL]); set('footL', SP[B.footL]);
-  rd.pts[rd.index.head].r = 0.12;
-  rd.pts[rd.index.chest].r = 0.14;
-  rd.pts[rd.index.pelvis].r = 0.13;
+  rd.pts[rd.index.head].r = 0.11;
+  rd.pts[rd.index.chest].r = 0.12;
+  rd.pts[rd.index.pelvis].r = 0.12;
 
   const link = (a, b, k, slack) => linkVerlet(rd, a, b, k, slack);
   link('pelvis', 'chest', 1); link('chest', 'head', 1);
@@ -555,10 +555,13 @@ function beginDeath(rig, e, G) {
   link('pelvis', 'kneeL', 1); link('kneeL', 'footL', 1);
   // Shape-keepers. Without the diagonals the body folds flat like a deckchair;
   // with them it keeps a ribcage and a hip line all the way to the floor.
-  link('pelvis', 'head', 0.45); link('pelvis', 'handR', 0.12, 0.15);
-  link('pelvis', 'handL', 0.12, 0.15); link('chest', 'kneeR', 0.22, 0.1);
-  link('chest', 'kneeL', 0.22, 0.1); link('kneeR', 'kneeL', 0.25, 0.2);
+  link('pelvis', 'head', 0.75); link('pelvis', 'handR', 0.12, 0.15);
+  link('pelvis', 'handL', 0.12, 0.15); link('chest', 'kneeR', 0.32, 0.05);
+  link('chest', 'kneeL', 0.32, 0.05); link('kneeR', 'kneeL', 0.25, 0.2);
   link('elbowR', 'elbowL', 0.2, 0.1); link('footR', 'footL', 0.08, 0.6);
+  // Legs kept roughly extended: a corpse that folds its knees under its own
+  // pelvis reads as a dropped puppet, not as a man who was standing a moment ago.
+  link('pelvis', 'footR', 0.20, 0.02); link('pelvis', 'footL', 0.20, 0.02);
 
   const g = G.world && G.world.grid ? groundBelow(G.world, rig.pos.x, rig.pos.y + 0.4, rig.pos.z, 4) : null;
   rd.groundY = (g ? g.y : rig.pos.y) - rig.pos.y;
@@ -567,7 +570,7 @@ function beginDeath(rig, e, G) {
   const c = Math.cos(rig.feetYaw), s = Math.sin(rig.feetYaw);
   const wx = rig.vel.x, wz = rig.vel.z;
   let vx = wx * c - wz * s, vz = wx * s + wz * c;
-  let px = 0, pz = 0.7, py = 0.25;
+  let px = 0, pz = 0.7, py = 0.12;
   if (e && finite3(e.dir)) {
     px = e.dir.x * c - e.dir.z * s; pz = e.dir.x * s + e.dir.z * c;
   } else if (e && finite3(e.point)) {
@@ -575,7 +578,7 @@ function beginDeath(rig, e, G) {
     const dl = Math.hypot(dx, dz) || 1;
     px = (dx * c - dz * s) / dl; pz = (dx * s + dz * c) / dl;
   }
-  const kick = e && e.headshot ? 2.6 : 1.5;
+  const kick = e && e.headshot ? 2.0 : 1.1;
   const h = 1 / 60;
   for (const q of rd.pts) {
     const upper = q.name === 'head' || q.name === 'chest' ? 1.5 : q.name === 'pelvis' ? 0.9 : 0.5;
@@ -597,7 +600,9 @@ function updateRig(rig, dt, G, cam) {
   // Hysteresis, or a soldier walking the boundary strobes between two bodies.
   if (want > rig.lod && d > (want === 2 ? LOD_FAR : LOD_NEAR) + LOD_HYST) rig.lod = want;
   else if (want < rig.lod) rig.lod = want;
-  const far = rig.lod === 2 && rig.mode !== 'dying';
+  // Only a living body gets the box stand-in. A corpse has to keep the skeleton,
+  // or a man shot at 40 m springs back upright as a crate.
+  const far = rig.lod === 2 && rig.mode === 'alive';
   rig.mesh.visible = !far;
   rig.eyes.visible = rig.lod === 0;
   rig.far.visible = far;

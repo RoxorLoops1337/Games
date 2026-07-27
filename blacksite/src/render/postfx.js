@@ -164,7 +164,7 @@ export function createPostFX(G, engine, sky) {
   // Laplacian of the frame: the temporal resolve costs roughly 18% of the
   // frame's high-frequency energy, and this is the setting that returns it
   // without pushing into the crunchy over-sharpened look.
-  let sharpenAmount = 0.85;
+  let sharpenAmount = 1.0;
 
   // How far the per-frame jitter spreads inside the pixel. A full-width jitter
   // is a box filter over the whole texel, which is maximally stable and
@@ -358,6 +358,8 @@ export function createPostFX(G, engine, sky) {
     set sharpen(v) { sharpenAmount = v; applySettings(); },
     get jitterScale() { return jitterScale; },
     set jitterScale(v) { jitterScale = v; },
+    get sharpenWide() { return passes.composite ? passes.composite.uniforms.uSharpenWide.value : 0; },
+    set sharpenWide(v) { if (passes.composite) passes.composite.uniforms.uSharpenWide.value = v; },
 
     dispose() {
       disposeAll([workA, workB, ldr]);

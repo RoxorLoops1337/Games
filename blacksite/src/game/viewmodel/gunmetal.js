@@ -191,9 +191,14 @@ export function createGunMaterials(G, engine, materials) {
     // pale plastic no matter how dark its albedo is. Real parkerised and
     // anodised finishes are matte for exactly the reason they were chosen — a
     // shiny rifle is a rifle you can be seen with.
-    steel: from('metal', { roughness: 0.47, metalness: 0.92, envMapIntensity: 1.0 }),
+    // Not bare metal. Anodising and parkerising are conversion coatings — a
+    // non-metallic layer grown on the surface — and modelling them at metalness
+    // 0.9 makes the receiver a sky mirror whose own albedo cannot be seen at
+    // all. Dropping it lets the dark finish actually be dark, which is the
+    // difference between a service rifle and a chrome one.
+    steel: from('metal', { roughness: 0.47, metalness: 0.55, envMapIntensity: 1.0 }),
     // Phosphate on the barrel and the bolt carrier — same alloy, matte finish.
-    phos: from('metal', { roughness: 0.68, metalness: 0.88, envMapIntensity: 1.0 }),
+    phos: from('metal', { roughness: 0.68, metalness: 0.40, envMapIntensity: 1.0 }),
     // Furniture. Glass-filled nylon is a dielectric and much rougher; getting
     // this contrast right is most of what makes the metal look like metal.
     poly: from('dark', { roughness: 0.88, metalness: 0.03, envMapIntensity: 1.0 }),

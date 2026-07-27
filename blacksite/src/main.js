@@ -66,6 +66,10 @@ export async function boot(root) {
   say('loading weapons');
   createWeapons(G);
   const viewmodel = createViewmodel(G, engine, materials);
+  // FX needs the muzzle in world space to put the flash and the brass in the
+  // right place. Hung off the engine so it can ask directly, rather than
+  // reaching through `window.BLACKSITE` and falling back to a constant offset.
+  engine.viewmodel = viewmodel;
 
   say('spawning');
   const enemies = createEnemyRigs(G, engine, materials);

@@ -196,7 +196,10 @@ function forge(mats) {
 
 function buildRifle(mats) {
   const f = forge(mats);
-  const TAN = 0x4e4735, BLK = 0x222326;
+  // Worn FDE rather than fresh: the furniture is the largest single area on
+  // the weapon, and fresh coyote tan is light enough to be the brightest thing
+  // in a dusk frame — which is not where the eye should be going.
+  const TAN = 0x3a3527, BLK = 0x222326;
 
   // Upper receiver. The cross-section is the whole point: a rounded slab with a
   // rib along the spine, so the rail has something to sit on and the side view
@@ -971,48 +974,62 @@ function buildPistol(mats) {
 
 const BUILDERS = { rifle: buildRifle, smg: buildSMG, dmr: buildDMR, shotgun: buildShotgun, pistol: buildPistol };
 
-export function buildArsenal(mats) {
-  const out = {};
-  for (const k in BUILDERS) {
-    try {
-      const m = BUILDERS[k](mats);
-      attachHands(m, mats);
-      out[k] = m;
-    } catch (err) {
-      // One bad weapon must not take the boot down with it — the rest of the
-      // arsenal still works and the id falls back to whatever did build.
-      console.warn('viewmodel: could not build', k, err);
-    }
-  }
-  return out;
+// Built on demand rather than all at once. Five weapons is about 350 ms of
+// extrusion and triangulation, which is a fifth of the whole boot budget spent
+// on four guns the player may never pick up. Deferring is safe here because
+// every weapon shares the same five materials and the same attribute layout, so
+// the shader programs are already compiled by the time a second one appears —
+// the cost of a late build is geometry, not a pipeline stall.
+export function createArsenal(mats) {
+  const cache = {};
+  return {
+    ids: Object.keys(BUILDERS),
+    has(id) { return !!BUILDERS[id]; },
+    get(id) {
+      if (cache[id] !== undefined) return cache[id];
+      if (!BUILDERS[id]) return null;
+      let m = null;
+      try {
+        m = BUILDERS[id](mats);
+        attachHands(m, mats);
+      } catch (err) {
+        // One bad weapon must not take the boot down with it — the rest of the
+        // arsenal still works and the id falls back to whatever did build.
+        console.warn('viewmodel: could not build', id, err);
+        m = null;
+      }
+      cache[id] = m;
+      return m;
+    },
+  };
 }
 
 function attachHands(model, mats) {
   const h = model.hands;
   if (!h) return;
   model.nodes.handR = placeHand(buildHand(mats, {
-    gripR: h.right.gripR, wrap: h.right.wrap, index: h.right.index, armDir: h.right.armDir || [0.50, 0.72, 0.48],
+    gripR: h.right.gripR, wrap: h.right.wrap, index: h.right.index,
+    armDir: h.right.armDir || [0.80, -0.58, 0.10],
   }), h.right.pos, h.right.axis, h.right.palm);
   model.group.add(model.nodes.handR);
 
   model.nodes.handL = placeHand(buildHand(mats, {
-    gripR: h.left.gripR, wrap: h.left.wrap, mirror: h.left.mirror !== false, armDir: h.left.armDir || [0.5, 0.6, 0.5],
-    spread: h.left.spread,
+    gripR: h.left.gripR, wrap: h.left.wrap, mirror: h.left.mirror !== false,
+    armDir: h.left.armDir || [0.74, -0.66, 0], spread: h.left.spread,
   }), h.left.pos, h.left.axis, h.left.palm);
   model.group.add(model.nodes.handL);
 }
 
-// Map whatever the weapons agent calls its guns onto a model. Matching on
-// keywords rather than on an exact table means a new weapon id gets a sensible
-// silhouette on the day it is added rather than a missing one.
-export function pickModel(arsenal, id) {
-  if (!id) return arsenal.rifle || Object.values(arsenal)[0];
-  if (arsenal[id]) return arsenal[id];
-  const s = String(id).toLowerCase();
-  const test = (m, keys) => keys.some((k) => s.includes(k)) && arsenal[m];
-  if (test('pistol', ['pistol', 'side', 'hand', 'revol', 'glock', 'usp', 'm9'])) return arsenal.pistol;
-  if (test('shotgun', ['shot', 'pump', 'gauge', 'slug', 'breach'])) return arsenal.shotgun;
-  if (test('dmr', ['dmr', 'marks', 'snip', 'scout', 'sr-', 'bolt'])) return arsenal.dmr;
-  if (test('smg', ['smg', 'sub', 'mp', 'vector', 'uzi', 'pdw'])) return arsenal.smg;
-  return arsenal.rifle || Object.values(arsenal)[0];
+// Map whatever the weapons agent calls its guns onto one of these five. Matching
+// on keywords rather than on an exact table means a new weapon id gets a
+// sensible silhouette on the day it is added rather than a missing one.
+export function resolveId(arsenal, id) {
+  if (id && arsenal.has(id)) return id;
+  const s = String(id || '').toLowerCase();
+  const pick = (m, keys) => (keys.some((k) => s.includes(k)) && arsenal.has(m)) ? m : null;
+  return pick('pistol', ['pistol', 'side', 'revol', 'glock', 'usp', 'm9', 'deagle'])
+    || pick('shotgun', ['shot', 'pump', 'gauge', 'slug', 'breach', 'buck'])
+    || pick('dmr', ['dmr', 'marks', 'snip', 'scout', 'bolt', 'sr-'])
+    || pick('smg', ['smg', 'sub', 'mp', 'vector', 'uzi', 'pdw', 'mac'])
+    || 'rifle';
 }

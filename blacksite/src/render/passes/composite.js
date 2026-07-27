@@ -40,6 +40,7 @@ uniform float uVignette;
 uniform float uDistortion;
 uniform float uSaturation;
 uniform float uSharpen;
+uniform float uSharpenWide;
 uniform vec3 uShadowTint;
 uniform vec3 uHighlightTint;
 
@@ -132,7 +133,7 @@ vec3 untmap( vec3 c ){ return c / max( 1.0 - max( c.r, max( c.g, c.b ) ), 1e-4 )
 // the 3×3 cross's own min/max. Detail returns; a halo is arithmetically
 // impossible. Folded into this shader because the composite already reads this
 // texel and a separate pass would cost a full-resolution round trip.
-vec3 sharpenDelta( vec2 uv, vec2 texel ){
+vec3 sharpenDelta( vec2 uv, vec2 texel, float amount ){
   vec3 e = tmap( texture2D( tColor, uv ).rgb );
   vec3 b = tmap( texture2D( tColor, uv + vec2( 0.0, -texel.y ) ).rgb );
   vec3 d = tmap( texture2D( tColor, uv + vec2( -texel.x, 0.0 ) ).rgb );
@@ -147,7 +148,7 @@ vec3 sharpenDelta( vec2 uv, vec2 texel ){
   vec3 lobeRGB = max( -hitMin, hitMax );
   // The least-negative channel lobe wins: taking the strongest would let one
   // channel sharpen harder than the others and shift the hue of the edge.
-  float lobe = max( -0.1875, min( 0.0, max( lobeRGB.r, max( lobeRGB.g, lobeRGB.b ) ) ) ) * uSharpen;
+  float lobe = max( -0.1875, min( 0.0, max( lobeRGB.r, max( lobeRGB.g, lobeRGB.b ) ) ) ) * amount;
 
   vec3 sharp = ( e + lobe * ( b + d + f + h ) ) / ( 1.0 + 4.0 * lobe );
   return untmap( sharp ) - untmap( e );
@@ -172,7 +173,15 @@ void main(){
 
   // Sharpen before the bloom is added: bloom is a deliberately soft signal and
   // running a detail filter over it only amplifies its own sampling structure.
-  if ( uSharpen > 0.0 ) col += sharpenDelta( base, 1.0 / uResolution );
+  // Two scales. The temporal resolve does not only soften single-texel detail:
+  // the Catmull-Rom history resample and the repeated blend eat two-texel
+  // features as well, and a one-texel kernel cannot reach them. The wider lobe
+  // runs the same overshoot-free limiter at radius two.
+  if ( uSharpen > 0.0 ) {
+    vec2 texel = 1.0 / uResolution;
+    col += sharpenDelta( base, texel, uSharpen );
+    if ( uSharpenWide > 0.0 ) col += sharpenDelta( base, texel * 2.0, uSharpen * uSharpenWide );
+  }
 
   col += texture2D( tBloom, base ).rgb * uBloom;
   col *= uExposure;
@@ -213,6 +222,7 @@ export function createCompositePass(renderer, opts = {}) {
     // zero when it is not, because sharpening an un-antialiased frame just
     // makes the aliasing crisper.
     uSharpen: { value: 0.0 },
+    uSharpenWide: { value: 0.55 },
     uShadowTint: { value: new THREE.Vector3(0.90, 1.005, 1.10) },
     uHighlightTint: { value: new THREE.Vector3(1.055, 1.0, 0.90) },
   });

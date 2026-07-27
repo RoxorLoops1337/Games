@@ -895,7 +895,7 @@ function build(G, engine, materials) {
   // than the sky, and clamping them to white makes them read as paper cut-outs
   // sitting in front of the world. Over-range is also what the bloom pass is
   // looking for, so this is the one number that decides whether a hit glows.
-  const matAdd = particleMaterial(true, 0.12, 2.4);
+  const matAdd = particleMaterial(true, 0.12, 1.6);
   const alphaPool = makePool(N_ALPHA, matAlpha, 10);
   const addPool = makePool(N_ADD, matAdd, 12);
 
@@ -1146,7 +1146,7 @@ function build(G, engine, materials) {
   }
 
   // ── tracers ────────────────────────────────────────────────────────────────
-  const tracerU = { uTime: { value: 0 }, uColor: { value: new THREE_.Color(0xffd9a0) } };
+  const tracerU = { uTime: { value: 0 }, uColor: { value: new THREE_.Color(0xffd9a0).multiplyScalar(2.6) } };
   const tracerGeo = new THREE_.InstancedBufferGeometry();
   tracerGeo.setIndex(quadIdx);
   tracerGeo.setAttribute('position', quadPos);
@@ -1381,7 +1381,7 @@ function build(G, engine, materials) {
   for (let i = 0; i < 2; i++) {
     const mat = new THREE_.ShaderMaterial({
       vertexShader: WAVE_VERT, fragmentShader: WAVE_FRAG,
-      uniforms: { uColor: { value: new THREE_.Color(0xffd9a8) }, uAlpha: { value: 0 } },
+      uniforms: { uColor: { value: new THREE_.Color(0xffd9a8).multiplyScalar(2.0) }, uAlpha: { value: 0 } },
       transparent: true, depthWrite: false, blending: THREE_.AdditiveBlending,
       side: THREE_.DoubleSide,
     });
@@ -1523,7 +1523,7 @@ function build(G, engine, materials) {
       // reads as a spark, because the eye expects a bright head with a hint of
       // tail rather than a uniform hairline.
       _p.stretch = rr(0.45, 0.80); _p.turb = 0;
-      c0(0xfff0c4); c1(0xd4300a);
+      c0(0xfff0c4, 3.2); c1(0xd4300a, 1.3);
       _p.s0 = rr(0.035, 0.062); _p.s1 = _p.s0 * 0.4;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.55;
       _p.floor = fy; _p.rest = rr(0.35, 0.6); _p.spin = 0;
@@ -1534,7 +1534,7 @@ function build(G, engine, materials) {
     _p.x = x + nx * 0.02; _p.y = y + ny * 0.02; _p.z = z + nz * 0.02;
     _p.vx = _p.vy = _p.vz = 0;
     _p.life = 0.07; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
-    c0(0xffffff); c1(0xffb15a);
+    c0(0xffffff, 6); c1(0xffb15a, 2.2);
     _p.s0 = rr(0.42, 0.62); _p.s1 = 0.08;
     _p.tile = T_GLOW; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 1.2;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
@@ -1640,7 +1640,7 @@ function build(G, engine, materials) {
       _p.x = x; _p.y = y; _p.z = z;
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + 0.8; _p.vz = _dir.z * sp;
       _p.life = rr(0.4, 0.9); _p.drag = 0.5; _p.grav = 1; _p.stretch = 0.5; _p.turb = 0;
-      c0(0xffffff); c1(0x8fc8ff);
+      c0(0xffffff, 3.5); c1(0x8fc8ff, 1.4);
       _p.s0 = rr(0.024, 0.044); _p.s1 = 0.008;
       _p.tile = T_GLOW; _p.alpha = 0.9; _p.rot = 0; _p.fade = 1.0;
       _p.floor = fy; _p.rest = 0.3; _p.spin = 0;
@@ -1648,7 +1648,7 @@ function build(G, engine, materials) {
     }
     _p.x = x; _p.y = y; _p.z = z; _p.vx = _p.vy = _p.vz = 0;
     _p.life = 0.09; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
-    c0(0xffffff); c1(0xbfe4ff);
+    c0(0xffffff, 5); c1(0xbfe4ff, 1.8);
     _p.s0 = 0.34; _p.s1 = 0.06; _p.tile = T_GLOW; _p.alpha = 0.9; _p.rot = 0; _p.fade = 1.4;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
     push(addPool);
@@ -1834,13 +1834,13 @@ function build(G, engine, materials) {
     // whether the player's monitor ever shows it, and a flash you only see half
     // the time reads as a stutter in the gun rather than as light.
     _p.life = 0.055; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
-    c0(0xfff3d0); c1(0xff9a2e);
+    c0(0xfff3d0, 5.5); c1(0xff9a2e, 2.6);
     _p.s0 = rr(0.40, 0.58) * gain; _p.s1 = _p.s0 * 0.5;
     _p.tile = T_FLASH; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.9;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
     push(addPool);
     _p.life = 0.065; _p.s0 = rr(0.22, 0.30) * gain; _p.s1 = 0.05;
-    _p.tile = T_GLOW; c0(0xffffff); c1(0xffb352);
+    _p.tile = T_GLOW; c0(0xffffff, 7); c1(0xffb352, 2.6);
     push(addPool);
 
     // Sparks blown out of the barrel with the gas.
@@ -1850,7 +1850,7 @@ function build(G, engine, materials) {
       _p.x = _mz.x; _p.y = _mz.y; _p.z = _mz.z;
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp; _p.vz = _dir.z * sp;
       _p.life = rr(0.10, 0.26); _p.drag = 5; _p.grav = 0.7; _p.stretch = 0.7; _p.turb = 0;
-      c0(0xfff6d8); c1(0xd2500c);
+      c0(0xfff6d8, 3.5); c1(0xd2500c, 1.4);
       _p.s0 = rr(0.022, 0.040); _p.s1 = 0.006;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.7;
       _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
@@ -1913,9 +1913,12 @@ function build(G, engine, materials) {
       _p.x = x + sym(0.2); _p.y = y + sym(0.2); _p.z = z + sym(0.2);
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp * 0.8 + rr(1, 4); _p.vz = _dir.z * sp;
       _p.life = rr(0.30, 0.75); _p.drag = 6.5; _p.grav = -0.35; _p.stretch = 0; _p.turb = 0.2;
+      // Over-range on purpose. A fireball that peaks at pure white is a white
+      // circle; one that peaks at four times white is a fireball, because the
+      // bloom and the tone curve get something to roll off.
       const hot = rnd();
-      c0(hot > 0.6 ? 0xfffbe0 : 0xffd166, 1);
-      c1(hot > 0.6 ? 0xff6a12 : 0x8c1c04, 1);
+      c0(hot > 0.6 ? 0xfffbe0 : 0xffd166, hot > 0.6 ? 4.5 : 2.8);
+      c1(hot > 0.6 ? 0xff6a12 : 0x8c1c04, 1.4);
       _p.s0 = R * rr(0.10, 0.24); _p.s1 = _p.s0 * rr(1.7, 2.6);
       _p.tile = hot > 0.5 ? T_PUFF : T_SMOKE; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 1.3;
       _p.floor = -1e6; _p.rest = 0; _p.spin = sym(1.2);
@@ -1972,7 +1975,7 @@ function build(G, engine, materials) {
       _p.x = x; _p.y = y; _p.z = z;
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + rr(1, 4); _p.vz = _dir.z * sp;
       _p.life = rr(0.6, 1.6); _p.drag = 1.1; _p.grav = 0.9; _p.stretch = 0.6; _p.turb = 0.2;
-      c0(0xffe9b0); c1(0x8f1a02);
+      c0(0xffe9b0, 3.0); c1(0x8f1a02, 1.2);
       _p.s0 = rr(0.045, 0.09); _p.s1 = 0.012;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.8;
       _p.floor = fy; _p.rest = 0.4; _p.spin = 0;

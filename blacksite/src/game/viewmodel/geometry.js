@@ -251,10 +251,14 @@ export function shade(geo, hex, opts = {}) {
       // 0 on a face square to an axis, ~0.42 on a 45° break, which is what a
       // chamfer is. Squared so only the genuine corners go bright.
       const edge = Math.min(1, Math.max(0, (1 - Math.max(ax, ay, az)) * 2.5));
-      k += wear * edge * edge;
+      // Capped hard. A full doubling was tuned against a test scene with no sky
+      // in it; outdoors it turns every rail rib and every rounded corner into a
+      // bright band, and since a rail is a hundred chamfers in a row that adds up
+      // to the single palest object on screen. Edge wear is a hint, not a light.
+      k += wear * 0.34 * edge * edge;
     } else if (wear > 0) {
       // On a revolved part the wear lives on the crest facing up and outward.
-      k += wear * 0.35 * Math.max(0, nrm.getY(i));
+      k += wear * 0.16 * Math.max(0, nrm.getY(i));
     }
     if (ao > 0) {
       // Two cheap occlusion terms standing in for the ambient shadow the view
