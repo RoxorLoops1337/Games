@@ -866,6 +866,64 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(withHero.size > 6, 'the frame really draws text (' + withHero.size + ' distinct)');
     t.ok([...withHero.values()].every(v => !v.startsWith('undefined')), 'and every piece of it set its own state');
 
+    // Label traffic. The nudge-upward only ever compared labels against OTHER
+    // LABELS, so a name in a brawl walked straight over the level roundel and
+    // the health bar — the two things it is describing. The roundel scales
+    // with the body and the plate does not, so leaning in made it worse.
+    const box = (x, y, w, h) => ({ x, y, w, h });
+    t.ok(IB.labelHits(box(0, 0, 10, 10), box(0, 0, 10, 10)), 'two plates in the same place collide');
+    t.ok(!IB.labelHits(box(0, 0, 10, 10), box(40, 0, 10, 10)), 'and two well apart do not');
+    t.ok(IB.labelHits(box(0, 0, 10, 10), box(0, 30, 10, 10)) === IB.labelHits(box(0, 30, 10, 10), box(0, 0, 10, 10)),
+      'the test does not care which box is asked about first');
+    // The old test compared TOP edges and used only the new label's height, so
+    // it read a tall box as short. Two boxes of very different heights, with
+    // their centres far apart but their bodies overlapping, must still collide.
+    t.ok(IB.labelHits(box(0, 0, 10, 60), box(0, 26, 10, 10)),
+      'a short plate inside a tall one collides with it');
+    t.ok(!IB.labelHits(box(0, 0, 10, 60), box(0, 90, 10, 10)),
+      'and one clear above it does not');
+    // Rule out the do-nothing settings: no padding, and no room to move.
+    t.ok(IB.LABEL_PAD.x > 0 && IB.LABEL_PAD.y > 0, 'plates keep a little air around them');
+    t.ok(IB.LABEL_TRIES > 4, 'and a label gets more than a couple of tries to find a gap');
+
+    // Then a real frame, with heroes and their roundels and bars in it, and
+    // every plate checked against every reservation. Reading the tables alone
+    // would not have caught it — the reservations were simply never made.
+    IB.cam.follow = false; IB.cam.x = 60;
+    let worst = null, overlaps = 0, pairs = 0;
+    for (const z of [1, 1.8, 2.4]){
+      IB.cam.z = IB.cam.tz = z;
+      IB.draw();
+      const plates = IB.labelPlaced, blocked = IB.labelBlocked;
+      for (const p of plates) for (const b of blocked){
+        pairs++;
+        if (IB.labelHits(p, b)){ overlaps++; worst = worst || ('zoom ' + z); }
+      }
+    }
+    IB.cam.z = IB.cam.tz = 1;
+    t.ok(pairs > 200, 'the label sweep had plates and reservations to compare (' + pairs + ')');
+    t.ok(IB.labelPlaced.length > 4, 'and real labels on the board (' + IB.labelPlaced.length + ')');
+    t.ok(IB.labelBlocked.length > 4, 'and real bars and roundels under them (' + IB.labelBlocked.length + ')');
+    t.ok(overlaps === 0, 'no label lands on a health bar or a level roundel (' +
+      overlaps + (worst ? ', first at ' + worst : '') + ')');
+    // And they must not land on each other either — the thing that already
+    // worked has to keep working now that the geometry underneath changed.
+    let selfHit = 0;
+    IB.draw();
+    const ps = IB.labelPlaced;
+    for (let i = 0; i < ps.length; i++) for (let j = i + 1; j < ps.length; j++)
+      if (IB.labelHits(ps[i], ps[j])) selfHit++;
+    t.ok(selfHit === 0, 'and no label lands on another label (' + selfHit + ')');
+    // Clearing everything is easy if you are allowed to go anywhere. A plate
+    // has to stay near the thing it names, and it never moves DOWN onto it.
+    let drift = 0, below = 0;
+    for (const p of ps){
+      drift = Math.max(drift, p.ay - p.y);
+      if (p.y > p.ay) below++;
+    }
+    t.ok(below === 0, 'no label is pushed below what it names (' + below + ')');
+    t.ok(drift < 140, 'and none wanders far enough to stop pointing at it (' + Math.round(drift) + 'px)');
+
     IB.cam.x = IB.HOLD_X;
   }
 
