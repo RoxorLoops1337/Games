@@ -3562,10 +3562,298 @@ function sfx(key, worldX){
 /* =====================================================================
    EFFECTS
    ===================================================================== */
+/* ---------------------------------------------------------------- fx look
+   Every particle in this game was a hard-edged flat ellipse: one radius, one
+   colour, one alpha, painted the same whether it was a coal thrown off a
+   fireball or a chip of masonry off a gate. Two hundred of them at once read
+   as confetti, because confetti is exactly what they were.
+
+   What follows is the material half of the effects layer — the answer to
+   "what is this made of" — and it is entirely a painting concern: nothing
+   below is ever read by update(), by netHash(), or by any spawner's decision
+   about how many of a thing to make. The spawners still say WHAT happened and
+   HOW MUCH; this says what it looks like.
+
+   Three ideas do most of the work:
+
+     a SOFT particle. A radial sprite with a hot core and a feathered edge,
+     built once per colour and blitted, instead of a filled ellipse. One
+     drawImage, no per-frame gradient, and the edge stops being a cut-out.
+
+     HOT versus COLD, decided by the colour itself. Anything saturated is
+     fire, magic or a spark and is drawn ADDITIVELY, so two of them overlapping
+     get brighter; anything washed out is dust, stone or splintered wood and is
+     drawn normally, so two of them overlapping stay dirty. The board already
+     encoded which was which — '#ffcf4d' is a coal and '#e8d9b4' is masonry —
+     and nothing had ever asked.
+
+     MOTION. A particle carries a velocity that the renderer had been throwing
+     away. Projected into screen space it gives both a direction to stretch
+     along and a speed to stretch by, which is the whole difference between a
+     spark flying and a dot fading.                                          */
+
+// ---- colour, parsed once. Six-digit and three-digit hex, which is all the
+// effects layer has ever used; anything else lands on white rather than on a
+// crash, because the art system's rule is that a bad asset never breaks a frame.
+const FX_RGB = new Map();
+function fxRGBof(col){
+  let v = FX_RGB.get(col);
+  if (v) return v;
+  let r = 255, g = 255, b = 255;
+  if (typeof col === 'string' && col.charCodeAt(0) === 35){
+    if (col.length >= 7){
+      r = parseInt(col.slice(1, 3), 16); g = parseInt(col.slice(3, 5), 16); b = parseInt(col.slice(5, 7), 16);
+    } else if (col.length >= 4){
+      r = parseInt(col[1] + col[1], 16); g = parseInt(col[2] + col[2], 16); b = parseInt(col[3] + col[3], 16);
+    }
+  }
+  if (!(r >= 0)) r = 255;
+  if (!(g >= 0)) g = 255;
+  if (!(b >= 0)) b = 255;
+  v = [r, g, b];
+  if (FX_RGB.size < 192) FX_RGB.set(col, v);
+  return v;
+}
+const fxHex2 = (v) => { const s = Math.round(clamp(v, 0, 255)).toString(16); return s.length < 2 ? '0' + s : s; };
+// A colour mixed towards white (k > 0) or towards black (k < 0), as a hex
+// string. Cached, because these are wanted per particle per frame and a
+// string built three hundred times a frame is three hundred allocations.
+const FX_MIX = new Map();
+function fxMix(col, k){
+  const key = col + '|' + k;
+  let s = FX_MIX.get(key);
+  if (s) return s;
+  const c = fxRGBof(col);
+  const to = k > 0 ? 255 : 0, m = k > 0 ? k : -k;
+  s = '#' + fxHex2(lerp(c[0], to, m)) + fxHex2(lerp(c[1], to, m)) + fxHex2(lerp(c[2], to, m));
+  if (FX_MIX.size < 384) FX_MIX.set(key, s);
+  return s;
+}
+// How hot a colour is, 0 to 1, from its saturation. This is the switch between
+// additive and normal blending and it is deliberately a property OF THE
+// COLOUR rather than a flag on the spawner: hitBurst, deaths, falls and every
+// cast already choose a colour that says what the thing is made of, so reading
+// it back means the eight makers that this file does not own get the right
+// material for free and can never disagree with the four that it does.
+const FX_HEAT = new Map();
+function fxHeat(col){
+  let h = FX_HEAT.get(col);
+  if (h !== undefined) return h;
+  const c = fxRGBof(col);
+  const mx = Math.max(c[0], c[1], c[2]), mn = Math.min(c[0], c[1], c[2]);
+  h = clamp(((mx <= 0 ? 0 : (mx - mn) / mx) - .17) * 2.4, 0, 1);
+  if (FX_HEAT.size < 192) FX_HEAT.set(col, h);
+  return h;
+}
+
+// ---- the sprite bank. One 64px canvas per colour per kind, built the first
+// time it is asked for and then blitted. Four kinds, and each of them is a
+// statement about a material:
+//
+//   glow  a coal or a mote of magic — white-hot centre, long feathered falloff
+//   chip  a fragment of stone or wood — lit top, solid body, dark far side
+//   puff  dust and smoke — no core at all, just density that thins outwards
+//   ring  a shockwave — nothing in the middle and a bright band at the rim
+//
+// Never built under HEADLESS: the suite plays hundreds of matches and a canvas
+// it will never look at is time it should not spend. Every draw below falls
+// back to the flat ellipse it used to be when there is no sprite, so the
+// headless context still sees the same geometry with the same numbers in it.
+const FX_SPR_PX = 64;
+const FX_SPR = new Map();
+const fxSpritesOn = !HEADLESS;
+function fxSprite(col, kind){
+  if (!fxSpritesOn) return null;
+  const key = kind + col;
+  let cv = FX_SPR.get(key);
+  if (cv !== undefined) return cv;
+  cv = null;
+  try {
+    const el = document.createElement('canvas');
+    el.width = FX_SPR_PX; el.height = FX_SPR_PX;
+    const g = el.getContext('2d');
+    const h = FX_SPR_PX / 2;
+    const c0 = fxRGBof(col);
+    const hot = fxRGBof(fxMix(col, .78));
+    const dark = fxRGBof(fxMix(col, -.45));
+    const rgba = (t, al) => 'rgba(' + t[0] + ',' + t[1] + ',' + t[2] + ',' + al + ')';
+    const gr = g.createRadialGradient(h, h, 0, h, h, h);
+    if (kind === 'ring'){
+      // A narrow band, because a shockwave is an EDGE. The first cut of this
+      // spread the band from .70 to .90 and the result was a soft oval stain
+      // on the boards that read as fog; the energy has to be where the front
+      // is or it is not a front.
+      gr.addColorStop(0, rgba(c0, 0));
+      gr.addColorStop(.60, rgba(c0, 0));
+      gr.addColorStop(.76, rgba(c0, .20));
+      gr.addColorStop(.86, rgba(hot, .95));
+      gr.addColorStop(.93, rgba(c0, .30));
+      gr.addColorStop(1, rgba(c0, 0));
+    } else if (kind === 'puff'){
+      gr.addColorStop(0, rgba(c0, .68));
+      gr.addColorStop(.34, rgba(c0, .44));
+      gr.addColorStop(.68, rgba(c0, .17));
+      gr.addColorStop(1, rgba(c0, 0));
+    } else if (kind === 'chip'){
+      // Matter, not light: opaque nearly all the way out, with one pixel of
+      // feather so it does not alias, and a dark edge so a fragment on pale
+      // boards still has a silhouette. A soft-edged chip reads as a bubble.
+      // Flat and opaque with one pixel of feather. NO dark rim: a ring of
+      // shadow round a six-pixel disc does not read as a stone edge, it reads
+      // as a soap bubble, which is exactly what the first two cuts produced.
+      // A fragment is separated from the boards by VALUE — the caller hands it
+      // a darker colour than the wall it came off — not by an outline.
+      gr.addColorStop(0, rgba(c0, 1));
+      gr.addColorStop(.82, rgba(c0, 1));
+      gr.addColorStop(.95, rgba(dark, .55));
+      gr.addColorStop(1, rgba(dark, 0));
+    } else {
+      gr.addColorStop(0, rgba(hot, 1));
+      gr.addColorStop(.12, rgba(c0, .95));
+      gr.addColorStop(.36, rgba(c0, .48));
+      gr.addColorStop(.68, rgba(c0, .15));
+      gr.addColorStop(1, rgba(c0, 0));
+    }
+    g.fillStyle = gr;
+    g.fillRect(0, 0, FX_SPR_PX, FX_SPR_PX);
+    cv = el;
+  } catch (e){ cv = null; }
+  if (FX_SPR.size < 128) FX_SPR.set(key, cv);
+  return cv;
+}
+
+// A soft particle. `stretch` is how many times its own radius it is smeared
+// along `ang`, which is what turns a fast spark into a streak and leaves a
+// slow one a round blob — the cheapest honest motion cue there is, because
+// the velocity is already on the particle and was simply never read.
+function fxBlob(c, x, y, r, col, kind, ang, stretch){
+  if (!(r > .03)) return;
+  const spr = fxSprite(col, kind);
+  if (!spr){ ell(c, x, y, r, r, col); return; }
+  if (stretch > 1.05){
+    c.save();
+    c.translate(x, y); c.rotate(ang);
+    c.drawImage(spr, -r * stretch, -r, r * 2 * stretch, r * 2);
+    c.restore();
+  } else {
+    c.drawImage(spr, x - r, y - r, r * 2, r * 2);
+  }
+}
+// The same, squashed into the deck's ellipse — every ripple in the game lies
+// flat on the boards at a fixed 0.55 aspect, so its glow has to as well.
+function fxFlat(c, x, y, rx, ry, col, kind){
+  if (!(rx > .03) || !(ry > .03)) return;
+  const spr = fxSprite(col, kind);
+  if (!spr){ ell(c, x, y, rx, ry, col); return; }
+  c.drawImage(spr, x - rx, y - ry, rx * 2, ry * 2);
+}
+// An ember does not burn steadily. Two sines beaten together and sampled from
+// a table, so the flicker costs an index rather than two trig calls per
+// particle per frame, and so it is identical on both machines.
+const FX_FLICK = new Float32Array(64);
+for (let i = 0; i < 64; i++)
+  FX_FLICK[i] = .66 + .34 * (Math.sin(i * .93) * .62 + Math.sin(i * 2.71 + 1.3) * .38);
+// A particle's own phase, from where it is rather than from a counter — no
+// new field, nothing for the simulation to carry, and two machines drawing the
+// same particle flicker in step.
+const fxPhase = (p) => ((p.x * 71 + p.y * 131 + p.r * 271) | 0) & 63;
+const fxFlick = (p) => FX_FLICK[(fxPhase(p) + ((p.t * 90) | 0)) & 63];
+// How far a particle smears per pixel-per-second of SCREEN speed, and how far
+// it is ever allowed to go. Past about three times its own radius a streak
+// stops reading as motion and starts reading as a scratch on the lens.
+const FX_STREAK = { per: 1 / 320, max: 2.6 };
+// Where a world velocity points on the screen. The projection shears x by the
+// lane and lifts y by the height, so a particle thrown straight down the
+// bridge and one thrown across it streak at completely different angles —
+// which is the entire reason this is worth doing rather than smearing
+// everything along its raw heading.
+function fxVel(p, out){
+  const S = LS();
+  out[0] = ((p.vx || 0) * .96 - (p.vy || 0) * .52) * S;
+  out[1] = ((p.vx || 0) * .07 + (p.vy || 0) * .60 - (p.vz || 0) * .95) * S;
+  return out;
+}
+const FX_V = [0, 0];
+const strokeEll = (c, x, y, rx, ry) => {
+  c.beginPath(); c.ellipse(x, y, Math.max(0, rx), Math.max(0, ry), 0, 0, 6.2832); c.stroke();
+};
+
+// Eight points round a ripple, where the dust it drags off the boards ends up.
+// A table, so a skirt costs eight lookups rather than sixteen trig calls, and
+// so both machines put the dust in exactly the same places.
+const FX_RING_N = 8;
+const FX_RING_C = new Float32Array(FX_RING_N), FX_RING_S = new Float32Array(FX_RING_N);
+for (let i = 0; i < FX_RING_N; i++){
+  FX_RING_C[i] = Math.cos(i * 6.2832 / FX_RING_N);
+  FX_RING_S[i] = Math.sin(i * 6.2832 / FX_RING_N);
+}
+/* ONE painter for both marks on the boards. `ring` and `wave` are the same
+   object at two speeds — a ripple that barely moves and a blast that runs —
+   and they had drifted into two different pictures: one stroke each, in
+   slightly different colours, at slightly different weights, thinning on
+   slightly different curves. A player cannot tell those apart as a language,
+   only as noise.
+
+   Four layers, and each of them is doing a job the others cannot:
+
+     the FRONT, a narrow band of light where the energy actually is;
+     the DUST it kicks off the deck, weighted by how cold the colour is, so a
+       masonry shockwave throws grit and a spell throws none;
+     a dark SEAT half a line below the front, which is the only reason any of
+       this reads on pale boards as well as over the chasm;
+     and a hot INNER edge, which is what says energy rather than paint.
+
+   Only the third of those is drawn in the effect's own colour at the width the
+   ripple states, because that is the one the player is being asked to read as
+   "this is the area". Everything else is atmosphere around it.              */
+function fxRipple(c, x, y, rx, ry, col, a, w, dust){
+  c.globalCompositeOperation = 'lighter';
+  c.globalAlpha = clamp(a * a * .8, 0, 1);
+  fxFlat(c, x, y, rx * 1.16, ry * 1.16, col, 'ring');
+  c.globalCompositeOperation = 'source-over';
+  // Below about thirty pixels across there is no room on screen for eight
+  // separate puffs of grit and they land on top of each other as one smear —
+  // so the skirt is the first thing to go. Level of detail, from the only
+  // measure that matters for it, which is how big the thing is in the frame.
+  if (dust > .04 && rx > 15){
+    const dcol = fxMix(col, -.3);
+    const seed = (x + y) | 0;
+    for (let i = 0; i < FX_RING_N; i++){
+      const k = .55 + .45 * FX_FLICK[(i * 11 + seed) & 63];
+      c.globalAlpha = clamp(a * a * .55 * dust * k, 0, 1);
+      fxFlat(c, x + rx * FX_RING_C[i] * .95, y + ry * FX_RING_S[i] * .95,
+        rx * .40 * k, rx * .30 * k, dcol, 'puff');
+    }
+  }
+  c.globalAlpha = clamp(a * .36, 0, 1);
+  c.strokeStyle = fxMix(col, -.66); c.lineWidth = w * 1.9;
+  strokeEll(c, x, y + w * .55, rx, ry);
+  c.globalAlpha = clamp(a * .85, 0, 1);
+  c.strokeStyle = col; c.lineWidth = w;
+  strokeEll(c, x, y, rx, ry);
+  c.globalAlpha = clamp(a * a * .95, 0, 1);
+  c.strokeStyle = fxMix(col, .65); c.lineWidth = Math.max(1, w * .42);
+  strokeEll(c, x, y, rx * .975, ry * .975);
+  // The near side of the front catches the light. A perfectly even hoop is
+  // the one thing on this board that would have no idea where the sun is, and
+  // the bodies, the boards and the towers have all known since they were drawn.
+  c.globalCompositeOperation = 'lighter';
+  c.globalAlpha = clamp(a * a * .42, 0, 1);
+  c.strokeStyle = fxMix(col, .5); c.lineWidth = Math.max(1, w * .8);
+  c.beginPath();
+  c.ellipse(x, y, Math.max(0, rx * .99), Math.max(0, ry * .99), 0, .42, 2.72);
+  c.stroke();
+  c.globalCompositeOperation = 'source-over';
+}
+
 function burstFx(x, y, col, n){
   if (!fxRoom(n)) return;
   for (let i = 0; i < n; i++){
-    const a = fxRnd() * 6.283, sp = fxRr(1, 6);
+    // Speed on a square law rather than flat: most of a burst stays close to
+    // where it happened and a handful of pieces really go, which is the shape
+    // an explosion actually has. A flat spread gives an even ring of debris
+    // and reads as a firework rather than as something coming apart.
+    const a = fxRnd() * 6.283, u = fxRnd(), sp = 1 + 5.6 * u * u;
     G.fx.push({ k:'p', x, y, z:fxRr(.2, 1.2), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5, vz:fxRr(1, 5),
       ...life(fxRr(.35, .8)), col, r:fxRr(1.4, 3.2) });
   }
@@ -3817,13 +4105,40 @@ function arcFx(x, y, ang, r, col){
 function waveFx(x, y, r, col, life, follow){
   if (!fxRoom(1)) return;
   G.fx.push({ k:'wave', x, y, r, col, t:life || .45, dur:life || .45, follow:follow || null });
+  // Everything that throws a shockwave is an event — a body coming apart, a
+  // gate going down, a spell landing — and every one of them used to begin
+  // with a hoop quietly appearing. The pop at the origin is what says
+  // something HAPPENED here, and it is gone before the eye can settle on it.
+  //
+  // It rides on the WAVE rather than on the burst of sparks next to it,
+  // because a burst is priced to the exact spark and its count is asserted;
+  // the wave is the thing that means "a blast", and this is one line of the
+  // same statement. Deliberately much smaller than the wave: a flash marks
+  // where, and the ripple is the only thing allowed to state how big.
+  flashFx(x, y, .9, Math.min(2.2, Math.max(.8, r * .55)), col);
 }
-function moteFx(x, y, col, n, spread){
+function moteFx(x, y, col, n, spread, smoke){
   if (!fxRoom(n)) return;
   const sp = spread || .8;
   for (let i = 0; i < n; i++)
     G.fx.push({ k:'mote', x:x + fxRr(-sp, sp), y:y + fxRr(-sp * .6, sp * .6), z:fxRr(0, .5),
-      vx:fxRr(-.25, .25), vz:fxRr(1.7, 3.4), col, r:fxRr(.7, 1.6), ...life(fxRr(.5, .85)) });
+      vx:fxRr(-.25, .25), vz:fxRr(1.7, 3.4), col, r:fxRr(.7, 1.6), ...life(fxRr(.5, .85)),
+      // `sm` is a painting flag and nothing else: the same rising, drifting,
+      // decelerating mote, drawn as a puff that expands and turns instead of
+      // as a spark that holds its size. fxStep already moves it exactly the
+      // way smoke moves, so smoke needed no new physics — only a new coat.
+      sm: smoke ? 1 : 0 });
+}
+// A one-frame pop. Every impact in a good action game has a flash that is
+// gone before you can look at it and is the reason the hit reads at all; this
+// board had none, so the brightest thing a spell ever produced was the ring
+// it left behind. Lives ~.09s on purpose — long enough for two frames at 30,
+// short enough that it can never be mistaken for a lingering effect.
+// Air, not deck: it carries a height like everything else that is not a mark
+// on the boards.
+function flashFx(x, y, z, r, col){
+  if (!fxRoom(1)) return;
+  G.fx.push({ k:'flash', x, y, z:z === undefined ? 1 : z, r:r || 2, col, t:.09, dur:.09 });
 }
 
 // The gold second wave and the shake are what mark an ultimate apart from an
@@ -3856,12 +4171,15 @@ function castFx(h, s, tgt){
     case 'nova': case 'taunt':
       waveFx(h.x, h.y, Math.max(2.2, fxR(2.2)), col, .5);
       burstFx(h.x, h.y, col, ult ? 16 : 10);
+      flashFx(h.x, h.y, 1.1, Math.max(2.2, fxR(2.2)) * .85, col);
       break;
 
     // it reaches out and hits one thing
     case 'bolt': case 'mark': case 'chain':
       beamFx(h.x, h.y, tx, ty, col, ult ? 5 : 3, .2);
       burstFx(tx, ty, col, ult ? 13 : 7);
+      flashFx(h.x, h.y, 1.1, ult ? 1.5 : 1.1, col);      // it leaves the hand
+      flashFx(tx, ty, .9, ult ? 2.6 : 1.8, col);         // and it arrives
       if (aoe) waveFx(tx, ty, aoe, col, .4);
       break;
 
@@ -3869,6 +4187,7 @@ function castFx(h, s, tgt){
     case 'strike':
       arcFx(tx, ty, ang, Math.max(1.6, aoe || 1.8) * big, col);
       burstFx(tx, ty, col, ult ? 14 : 8);
+      flashFx(tx, ty, .9, ult ? 2.2 : 1.5, col);
       if (aoe) waveFx(tx, ty, aoe, col, .38);
       break;
 
@@ -3879,6 +4198,7 @@ function castFx(h, s, tgt){
       for (let i = 0; i < (ult ? 7 : 5); i++){
         const ox = fxRr(-r, r), oy = fxRr(-r * .6, r * .6);
         beamFx(tx + ox, ty + oy - 7, tx + ox, ty + oy, col, 2, fxRr(.16, .3));
+        if (i < 3) flashFx(tx + ox, ty + oy, .6, 1.2, col);
       }
       break;
     }
@@ -3888,6 +4208,9 @@ function castFx(h, s, tgt){
       const r = Math.max(1.6, aoe || 2);
       waveFx(tx, ty, r, col, .6);
       moteFx(tx, ty, col, ult ? 10 : 6, r * .8);
+      // and the fug that hangs over it — the same rising, slowing motes,
+      // painted as smoke rather than as sparks
+      moteFx(tx, ty, fxMix(col, -.3), ult ? 6 : 4, r * .9, true);
       break;
     }
 
@@ -3908,12 +4231,14 @@ function castFx(h, s, tgt){
       waveFx(h.x, h.y, fxR(2.4), col, .5);
       moteFx(h.x, h.y, col, ult ? 14 : 9, 1.1);
       burstFx(h.x, h.y, col, 8);
+      flashFx(h.x, h.y, 1, ult ? 2.4 : 1.7, col);
       break;
 
     // it moves the hero — dashFx already draws the trail, this is the kick-off
     case 'dash':
       burstFx(h.x, h.y, col, ult ? 14 : 9);
       waveFx(h.x, h.y, fxR(1.8), col, .3);
+      flashFx(h.x, h.y, .9, ult ? 2 : 1.4, col);
       break;
 
     // it throws a chain — the projectile is the effect, so this is only the
@@ -3921,6 +4246,7 @@ function castFx(h, s, tgt){
     case 'hook':
       waveFx(h.x, h.y, fxR(1.5), col, .26);
       burstFx(h.x, h.y, '#d9c49a', ult ? 8 : 5);
+      flashFx(h.x, h.y, 1, 1.2, col);
       break;
 
     default:
@@ -5962,52 +6288,175 @@ const rippleW = (base, a) => Math.max(1, base * (RIPPLE.spent + (1 - RIPPLE.spen
    lobbed four units up over a tower is still on the far side of it, and
    should pass behind it and then appear over it — which is what sorting on
    the shadow gives you and what sorting on the raised sprite does not. */
+/* What a shot is made OF.
+
+   PROJ_LOOK next door is the silhouette — how high it is lobbed, how long the
+   body is, how big the tip, how many points of streak it drags — and it stays
+   the source of per-kind character. It has nothing to say about MATERIAL,
+   which is why every one of the five used to be the same flat line in a
+   different colour: an arrow, a fireball, a mortar shell and a turret bolt
+   all drew as a tapered stroke and a white dot.
+
+   Same keys, deliberately, so a kind cannot exist in one table and not the
+   other, and every value is a claim you can defend out loud:
+
+     heat    how much of it is light rather than matter. Above .5 the trail is
+             drawn additively and blooms; below it, it is a solid thing moving
+             and is drawn normally so it stays readable against bright sky.
+     smoke   whether it leaves anything behind. Only the mortar does: a shell
+             is the one shot on this board with a burning charge on it.
+     corona  the halo carried by the head, in multiples of the tip's own size.
+     core    how much of the streak's width is the white-hot centre.
+     ink     the dark under-stroke a cold shot needs to read against the sky.  */
+const PROJ_FX = {
+  bolt:  { heat:1,   smoke:0,  corona:3.2, core:.44, ink:0 },
+  shaft: { heat:.12, smoke:0,  corona:.9,  core:.28, ink:.6 },
+  // A mortar shell is MATTER with a charge burning on it, not a ball of
+  // plasma: drawn additively it washed out to a white star with a bright
+  // thread behind it and the smoke — the whole point of a shell — disappeared
+  // underneath its own trail. Cold body, hot head.
+  shell: { heat:.42, smoke:1,  corona:1.7, core:.34, ink:.4 },
+  spark: { heat:1,   smoke:0,  corona:2.6, core:.40, ink:0 },
+  hook:  { heat:0,   smoke:0,  corona:.8,  core:.26, ink:.6 },
+};
+const projFx = (k) => PROJ_FX[k] || PROJ_FX.shaft;
+
 function drawProj(c, p){
   const q = lp(p.x, p.y, p.z);
-  // the streak it has just cut through the air
-  if (p.tr.length >= 6){
+  const L = projLook(p.kind), F = projFx(p.kind);
+  const hot = F.heat > .5;
+  const n = p.tr.length;
+  // ---- the streak it has just cut through the air. Three strokes of the same
+  // polyline rather than one: a wide dim body, a mid weight, and a core. The
+  // taper is on the SEGMENT, so the trail is a wedge that is fattest at the
+  // head — which is what gives a shot its sense of mass and direction.
+  if (n >= 6){
     c.lineCap = 'round';
-    for (let i = 0; i + 5 < p.tr.length; i += 3){
-      const a = lp(p.tr[i], p.tr[i + 1], p.tr[i + 2]);
-      const b = lp(p.tr[i + 3], p.tr[i + 4], p.tr[i + 5]);
-      c.globalAlpha = .10 + .5 * (i / p.tr.length);
-      c.strokeStyle = p.col; c.lineWidth = projLook(p.kind).streak * cam.z * (.4 + i / p.tr.length);
-      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+    // smoke first, and under everything: a mortar's charge burns all the way
+    // to the target, so the oldest puff is the biggest and the faintest.
+    if (F.smoke > 0){
+      const smk = fxMix(p.col, -.52);
+      for (let i = 0; i + 2 < n; i += 3){
+        const u = i / n;                                   // 0 at the tail
+        const b = lp(p.tr[i], p.tr[i + 1], p.tr[i + 2]);
+        c.globalAlpha = clamp(.30 * (.4 + .6 * u) * F.smoke, 0, 1);
+        fxFlat(c, b[0], b[1], cam.z * (3.4 + (1 - u) * 7), cam.z * (3 + (1 - u) * 6), smk, 'puff');
+      }
     }
+    // A cold shot's trail gets an outline under it first, and in NORMAL
+    // blending, before anything additive starts. A pale shaft crossing pale
+    // sky had no trail at all until this: additive light on a light background
+    // adds nothing, which is the one thing 'lighter' cannot do for you.
+    if (F.ink > 0){
+      c.strokeStyle = '#2a2118';
+      for (let i = 0; i + 5 < n; i += 3){
+        const u = i / n;
+        const A = lp(p.tr[i], p.tr[i + 1], p.tr[i + 2]);
+        const B = lp(p.tr[i + 3], p.tr[i + 4], p.tr[i + 5]);
+        c.globalAlpha = clamp(.24 * u * u * F.ink, 0, 1);
+        c.lineWidth = Math.max(.6, L.streak * cam.z * (.25 + .75 * u * u) * 1.7);
+        c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.stroke();
+      }
+    }
+    if (hot) c.globalCompositeOperation = 'lighter';
+    const wide = fxMix(p.col, hot ? -.05 : -.5);
+    const core = fxMix(p.col, .8);
+    for (let pass = 0; pass < 3; pass++){
+      // pass 0 the corona, pass 1 the body, pass 2 the hot core
+      c.strokeStyle = pass === 0 ? wide : pass === 1 ? p.col : core;
+      for (let i = 0; i + 5 < n; i += 3){
+        const u = i / n;
+        if (pass === 2 && u < .45) continue;               // the core is only the fresh end
+        const A = lp(p.tr[i], p.tr[i + 1], p.tr[i + 2]);
+        const B = lp(p.tr[i + 3], p.tr[i + 4], p.tr[i + 5]);
+        const taper = .25 + .75 * u * u;                   // a wedge, not a ribbon
+        c.globalAlpha = clamp(
+          pass === 0 ? .26 * u * (hot ? 1 : .55)
+          : pass === 1 ? .16 + .62 * u
+          : (hot ? .55 : .3) * (u - .45) / .55, 0, 1);
+        c.lineWidth = Math.max(.5, L.streak * cam.z * taper *
+          (pass === 0 ? 2.6 : pass === 1 ? 1 : F.core));
+        c.beginPath(); c.moveTo(A[0], A[1]); c.lineTo(B[0], B[1]); c.stroke();
+      }
+    }
+    if (hot) c.globalCompositeOperation = 'source-over';
     c.lineCap = 'butt';
   }
   c.globalAlpha = 1;
+  // ---- the halo the head carries. Additive on everything, because even a
+  // wooden shaft catches the sun; how much of it there is comes from the table.
+  if (F.corona > 0){
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = .18 + .55 * F.heat;
+    fxFlat(c, q[0], q[1], L.head * F.corona * cam.z, L.head * F.corona * cam.z, p.col, 'glow');
+    c.globalCompositeOperation = 'source-over';
+    c.globalAlpha = 1;
+  }
   if (p.kind === 'hook'){
     // a chain paid out from the thrower, with the claw on the end of it
     if (p.src && !p.src.dead) chainLine(c, p.src.x, p.src.y, .9, p.x, p.y, p.z, p.col);
-    const nx = p.ax || 1, ny = (p.ay || 0) * .55, L = 5 * cam.z;
+    const nx = p.ax || 1, ny = (p.ay || 0) * .55, L2 = 5 * cam.z;
     c.strokeStyle = '#8f8168'; c.lineWidth = 2.6 * cam.z; c.lineCap = 'round';
     c.beginPath();
-    c.moveTo(q[0] + nx * L, q[1] + ny * L);
-    c.lineTo(q[0] - nx * L * .4 - ny * L * .8, q[1] - ny * L * .4 + nx * L * .8);
-    c.moveTo(q[0] + nx * L, q[1] + ny * L);
-    c.lineTo(q[0] - nx * L * .4 + ny * L * .8, q[1] - ny * L * .4 - nx * L * .8);
-    c.stroke(); c.lineCap = 'butt';
+    c.moveTo(q[0] + nx * L2, q[1] + ny * L2);
+    c.lineTo(q[0] - nx * L2 * .4 - ny * L2 * .8, q[1] - ny * L2 * .4 + nx * L2 * .8);
+    c.moveTo(q[0] + nx * L2, q[1] + ny * L2);
+    c.lineTo(q[0] - nx * L2 * .4 + ny * L2 * .8, q[1] - ny * L2 * .4 - nx * L2 * .8);
+    c.stroke();
+    // a highlight down the near side of the claw: this is forged iron and the
+    // sun is in a known place, so it may as well catch it
+    c.globalAlpha = .7; c.strokeStyle = '#e3d6bb'; c.lineWidth = Math.max(1, 1.1 * cam.z);
+    c.beginPath();
+    c.moveTo(q[0] + nx * L2, q[1] + ny * L2);
+    c.lineTo(q[0] - nx * L2 * .4 - ny * L2 * .8, q[1] - ny * L2 * .4 + nx * L2 * .8);
+    c.stroke();
+    c.globalAlpha = 1; c.lineCap = 'butt';
     ell(c, q[0], q[1], 2.6 * cam.z, 2.6 * cam.z, p.col);
   } else if (p.kind === 'bolt'){
     // a spell: a soft body around a hot core, no shaft to point with
-    const L = projLook('bolt');
-    c.globalAlpha = .5; ell(c, q[0], q[1], L.head * 2.2 * cam.z, L.head * 2.2 * cam.z, p.col); c.globalAlpha = 1;
-    ell(c, q[0], q[1], L.head * cam.z, L.head * cam.z, '#ffffff');
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = .75;
+    fxFlat(c, q[0], q[1], L.head * 2.2 * cam.z, L.head * 2.2 * cam.z, p.col, 'glow');
+    c.globalAlpha = 1;
+    fxFlat(c, q[0], q[1], L.head * cam.z, L.head * cam.z, fxMix(p.col, .85), 'glow');
+    c.globalCompositeOperation = 'source-over';
   } else {
     // Everything else is drawn along the direction it is travelling rather
     // than as a dot — one routine, and the table decides how long the body is
-    // and how big the tip: an arrow, a siege shell and a turret bolt used to
+    // and how big its tip: an arrow, a siege shell and a turret bolt used to
     // be the same seven pixels of line and the same 1.7 of head.
-    const L = projLook(p.kind);
     const nx = p.ax || 1, ny = (p.ay || 0) * .55;
     const len = L.len * cam.z;
-    c.strokeStyle = p.col; c.lineWidth = L.streak * cam.z; c.lineCap = 'round';
-    c.beginPath(); c.moveTo(q[0] - nx * len, q[1] - ny * len);
-    c.lineTo(q[0] + nx * len * .5, q[1] + ny * len * .5); c.stroke();
-    c.lineCap = 'butt';
-    ell(c, q[0] + nx * len * .5, q[1] + ny * len * .5, L.head * cam.z, L.head * cam.z, '#ffffff');
+    const x0 = q[0] - nx * len, y0 = q[1] - ny * len;
+    const x1 = q[0] + nx * len * .5, y1 = q[1] + ny * len * .5;
+    c.lineCap = 'round';
+    // A cold shot gets an outline first. An arrow over the chasm and an arrow
+    // over the sky are the same six pale pixels, and against the sky it
+    // vanished; the outline is what makes one thing read on both.
+    if (F.ink > 0){
+      c.globalAlpha = F.ink; c.strokeStyle = '#2a2118';
+      c.lineWidth = L.streak * cam.z + Math.max(1.2, 1.6 * cam.z);
+      c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    }
+    c.globalAlpha = 1;
+    c.strokeStyle = p.col; c.lineWidth = L.streak * cam.z;
+    c.beginPath(); c.moveTo(x0, y0); c.lineTo(x1, y1); c.stroke();
+    // the lit edge along the top of the shaft
+    c.globalAlpha = .8; c.strokeStyle = fxMix(p.col, .55);
+    c.lineWidth = Math.max(.6, L.streak * cam.z * .34);
+    c.beginPath(); c.moveTo(x0, y0 - L.streak * cam.z * .26); c.lineTo(x1, y1 - L.streak * cam.z * .26); c.stroke();
+    c.globalAlpha = 1; c.lineCap = 'butt';
+    if (hot){
+      c.globalCompositeOperation = 'lighter';
+      fxFlat(c, x1, y1, L.head * 1.9 * cam.z, L.head * 1.9 * cam.z, p.col, 'glow');
+      c.globalCompositeOperation = 'source-over';
+    }
+    // The tip is only white-hot if the thing IS hot. An arrowhead lit to the
+    // same value as a turret bolt is the reason four kinds of shot used to
+    // look like one kind of shot in four colours.
+    ell(c, x1, y1, L.head * cam.z, L.head * cam.z, fxMix(p.col, hot ? .88 : .42));
   }
+  c.globalAlpha = 1;
 }
 
 /* What gets painted on the deck, in the order it gets painted. Pulled out of
@@ -6046,66 +6495,256 @@ const fxOnDeck = (p) => !!DECK_FX[p.k];
 const fxDeck = () => G.fx.filter(fxOnDeck);
 const fxAir = () => G.fx.filter(p => !fxOnDeck(p));
 
+/* Nine kinds of effect, and what each of them is made OF.
+
+   The rules are the same for all of them, and they are the rules a modern 2D
+   action game plays by:
+
+     ONE LIGHT. Everything hot is drawn additively over the deck, so two
+     overlapping sparks are brighter than one and a burst has a centre.
+     Everything cold is drawn normally, so dust stacks up dirty instead of
+     glowing. Which of the two a thing is comes from its own colour.
+
+     NOTHING FADES LINEARLY. `a` is the raw share of life left; every use of it
+     below is curved. Hot things go out on a square law, so an ember is bright
+     for most of its life and then gone; ripples thin on the curve rippleW()
+     already had; smoke thins slowest of all, because that is what smoke does.
+
+     BIRTH IS AN EVENT. The first frame of a spark is bigger and hotter than
+     the second — the one-frame pop that makes an impact land. Ripples are the
+     other way round: born at full weight, spending it outwards.
+
+   All of it is downstream of the simulation, reads only fields the spawners
+   already wrote, and is never hashed.                                       */
 function drawFx(c, p){
   const a = clamp(p.t / p.dur, 0, 1);
   if (p.k === 'p'){
+    // ---- a spark, a coal, or a chip of stone. Which of those it is comes
+    // from the colour its maker chose, and the maker never had to say.
     const q = lp(p.x, p.y, p.z);
-    const pr = sparkR(p.r, a) * cam.z;
-    c.globalAlpha = a; ell(c, q[0], q[1], pr, pr, p.col);
+    const heat = fxHeat(p.col);
+    fxVel(p, FX_V);
+    const sp = Math.sqrt(FX_V[0] * FX_V[0] + FX_V[1] * FX_V[1]);
+    const ang = sp > 1 ? Math.atan2(FX_V[1], FX_V[0]) : 0;
+    const stretch = 1 + Math.min(FX_STREAK.max, sp * FX_STREAK.per);
+    let pr = sparkR(p.r, a) * cam.z;
+    if (a > .9) pr *= 1 + (a - .9) * 2.4;         // the frame it is born in
+    if (heat > .3){
+      const f = fxFlick(p);
+      c.globalCompositeOperation = 'lighter';
+      // the halo it throws — wide, weak, and streaked hardest, because the
+      // glow of a moving coal smears further than the coal does
+      c.globalAlpha = clamp(a * a * (.38 + .38 * f) * (.5 + .5 * heat), 0, 1);
+      fxBlob(c, q[0], q[1], pr * 2.6, p.col, 'glow', ang, stretch);
+      // the body of it
+      c.globalAlpha = clamp(a * (.5 + .4 * f), 0, 1);
+      fxBlob(c, q[0], q[1], pr * 1.15, p.col, 'glow', ang, 1 + (stretch - 1) * .6);
+      // and the coal at the middle, hot enough to read as white
+      c.globalAlpha = clamp(a * (.62 + .38 * f), 0, 1);
+      fxBlob(c, q[0], q[1], pr * .46, fxMix(p.col, .8), 'glow', ang, 1 + (stretch - 1) * .35);
+      c.globalCompositeOperation = 'source-over';
+    } else {
+      // A solid fragment in a cloud of its own dust. The dust is slower than
+      // the fragment — it is left behind rather than thrown — so it barely
+      // streaks; the fragment does, and it is opaque, and it is LIT: one
+      // highlight towards the sun, which is the whole difference between a
+      // chip of masonry and a bubble.
+      // The fragment is DARKER than the wall it came off. That is the whole
+      // trick: a chip drawn in the colour of the masonry is the same value as
+      // the boards behind it and comes out as a pale bubble — which is exactly
+      // what the first cut of this looked like. A stone edge-on is in its own
+      // shadow, and only the face turned towards the sun catches anything.
+      c.globalAlpha = clamp(a * a * .22, 0, 1);
+      fxBlob(c, q[0], q[1], pr * 3.4, fxMix(p.col, -.16), 'puff', ang, 1 + (stretch - 1) * .3);
+      // OPAQUE while it lives, and only translucent at the very end. A
+      // fragment is matter: it does not become see-through halfway across the
+      // deck. Fading it linearly like a spark is what left it the same value
+      // as the boards, and a shape the same value as its background is
+      // invisible however carefully it is drawn. It shrinks instead —
+      // sparkR() has always done that — and goes out in the last fifth.
+      c.globalAlpha = clamp(a * 1.9, 0, 1);
+      fxBlob(c, q[0], q[1], pr * .7, fxMix(p.col, -.46), 'chip', ang, 1 + (stretch - 1) * .7);
+      // and, only on the fragments big enough on screen to carry one, a
+      // specular at the edge turned towards the sun. Below about seven pixels
+      // across, any internal structure at all reads as noise and a highlight
+      // in the middle of a dark disc turns the whole thing into a bubble —
+      // which is what two earlier cuts of this shipped. Small debris is a
+      // silhouette and nothing else.
+      if (pr > 3.4){
+        c.globalAlpha = clamp(a * .45, 0, 1);
+        fxBlob(c, q[0] - pr * .34 * shadowSide(), q[1] - pr * .34, pr * .24, p.col, 'glow', 0, 1);
+      }
+    }
   } else if (p.k === 'ring'){
+    // ---- a mark on the boards. Height is ignored on purpose: this is a
+    // ripple ON the deck, not something in the air above it.
     const q = lp(p.x, p.y);
-    c.globalAlpha = a * .8; c.strokeStyle = p.col; c.lineWidth = rippleW(2.5, a);
-    c.beginPath(); c.ellipse(q[0], q[1], p.r * LS() * (1.35 - a * .35), p.r * LS() * .55 * (1.35 - a * .35), 0, 0, 6.2832); c.stroke();
+    const g = 1.35 - a * .35;
+    const rx = p.r * LS() * g;
+    fxRipple(c, q[0], q[1], rx, rx * .55, p.col, a, rippleW(2.5, a), 1 - fxHeat(p.col));
   } else if (p.k === 'ghost'){
+    // ---- where a hero was a fraction of a second ago. A soft silhouette and
+    // not a hard oval: an afterimage is light left on the eye.
     const q = lp(p.x, p.y);
-    c.globalAlpha = a * .45;
-    ell(c, q[0], q[1] - 7 * cam.z, 4.5 * cam.z, 9 * cam.z, p.col);
+    c.globalAlpha = a * .4;
+    fxFlat(c, q[0], q[1] - 7 * cam.z, 4.8 * cam.z, 9.5 * cam.z, p.col, 'glow');
+  } else if (p.k === 'flash'){
+    // ---- the pop. Nothing but light, and gone in two frames.
+    const q = lp(p.x, p.y, p.z);
+    const r = p.r * LS() * (1.35 - a * .35);
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = a * a * .8;
+    fxFlat(c, q[0], q[1], r * 1.15, r * .85, p.col, 'glow');
+    c.globalAlpha = a * a;
+    fxFlat(c, q[0], q[1], r * .45, r * .36, fxMix(p.col, .75), 'glow');
+    c.globalCompositeOperation = 'source-over';
   } else if (p.k === 'bolt'){
     const q = lp(p.x, p.y, .8), q2 = lp(p.x2, p.y2, .8);
-    c.globalAlpha = a; c.strokeStyle = p.col; c.lineWidth = 2.4 * cam.z;
-    c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
-  } else if (p.k === 'beam'){
-    // A thrown bolt or a falling shaft: a bright core with a soft body, so it
-    // reads at a glance without washing out what is behind it.
-    const q = lp(p.x, p.y, .9), q2 = lp(p.x2, p.y2, .9);
     c.lineCap = 'round';
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = a * .32; c.strokeStyle = p.col; c.lineWidth = 6 * cam.z;
+    c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+    c.globalAlpha = a; c.strokeStyle = fxMix(p.col, .7); c.lineWidth = 2.4 * cam.z;
+    c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+    c.globalCompositeOperation = 'source-over';
+    c.lineCap = 'butt';
+  } else if (p.k === 'beam'){
+    // ---- a thrown bolt, or a shaft falling out of the sky. Three weights of
+    // the same line — a wide corona, the body, and a core hot enough to read
+    // white — plus a bloom at each end, so it has somewhere it came FROM and
+    // somewhere it landed rather than being a length of pipe.
+    //
+    // A beam does NOT thin as it ages, unlike every ripple around it: its
+    // width IS the beam. It only ever gets dimmer.
+    const q = lp(p.x, p.y, .9), q2 = lp(p.x2, p.y2, .9);
+    const w = p.w * cam.z;
+    c.lineCap = 'round';
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = a * a * .30; c.strokeStyle = fxMix(p.col, -.1); c.lineWidth = p.w * 4.4 * cam.z;
+    c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
     c.globalAlpha = a * .35; c.strokeStyle = p.col; c.lineWidth = p.w * 2.2 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
-    c.globalAlpha = a; c.strokeStyle = '#ffffff'; c.lineWidth = Math.max(1, p.w * .7) * cam.z;
+    c.globalAlpha = a; c.strokeStyle = fxMix(p.col, .82); c.lineWidth = Math.max(1, p.w * .7) * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
+    c.globalAlpha = a * a * .85;
+    fxFlat(c, q2[0], q2[1], w * 2.6, w * 2.6, p.col, 'glow');
+    c.globalAlpha = a * a * .5;
+    fxFlat(c, q[0], q[1], w * 1.5, w * 1.5, p.col, 'glow');
+    c.globalCompositeOperation = 'source-over';
     c.lineCap = 'butt';
   } else if (p.k === 'arc'){
-    // A swept slash through the target, opening out as it fades.
+    // ---- a swept slash. It opens out as it fades, and it is TAPERED: the
+    // leading edge of a swing is heavy and the tail of it is a thread. One
+    // constant-width crescent is a croissant; this is a blade going through.
     const q = lp(p.x, p.y, .7);
     const rx = p.r * LS() * (.7 + (1 - a) * .8), ry = rx * .55;
-    c.globalAlpha = a * .9; c.strokeStyle = p.col; c.lineWidth = rippleW(3.4, a);
+    const w0 = rippleW(3.4, a);
     c.lineCap = 'round';
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = a * a * .5; c.strokeStyle = fxMix(p.col, -.08); c.lineWidth = w0 * 3.2;
     c.beginPath(); c.ellipse(q[0], q[1], rx, ry, p.a, -1.15, 1.15); c.stroke();
+    c.globalCompositeOperation = 'source-over';
+    // the dark side of the blade, half a line under the sweep, so a slash over
+    // pale boards has an edge instead of dissolving into them
+    c.globalAlpha = a * .45; c.strokeStyle = fxMix(p.col, -.66); c.lineWidth = w0 * 1.7;
+    c.beginPath(); c.ellipse(q[0], q[1] + w0 * .5, rx, ry, p.a, -1.15, 1.15); c.stroke();
+    c.globalAlpha = a * .95; c.strokeStyle = p.col; c.lineWidth = w0;
+    c.beginPath(); c.ellipse(q[0], q[1], rx, ry, p.a, -1.15, 1.15); c.stroke();
+    // the hot edge, four segments running back from the point of the swing
+    c.globalCompositeOperation = 'lighter';
+    c.strokeStyle = fxMix(p.col, .75);
+    for (let i = 0; i < 4; i++){
+      const u0 = i / 4, u1 = (i + 1) / 4;
+      const k = 1 - u0;                       // 1 at the leading edge
+      c.globalAlpha = clamp(a * (.3 + .7 * k) * k, 0, 1);
+      c.lineWidth = Math.max(.6, w0 * .8 * k);
+      c.beginPath();
+      c.ellipse(q[0], q[1], rx * (1 - .04 * u0), ry * (1 - .04 * u0), p.a, 1.15 - u1 * 2.3, 1.15 - u0 * 2.3);
+      c.stroke();
+    }
+    c.globalCompositeOperation = 'source-over';
     c.lineCap = 'butt';
   } else if (p.k === 'wave'){
-    // Grows outward and thins as it goes, unlike `ring` which barely moves.
+    // ---- a shockwave. It leaves fastest at the instant it is made and then
+    // decelerates, which is the difference between a blast and a hoop being
+    // scaled up at a constant rate.
     const q = lp(p.x, p.y);
-    const g = 1 + (1 - a) * 1.35;
-    c.globalAlpha = a * .75; c.strokeStyle = p.col;
-    c.lineWidth = rippleW(4, a);
-    c.beginPath(); c.ellipse(q[0], q[1], p.r * LS() * g, p.r * LS() * .5 * g, 0, 0, 6.2832); c.stroke();
+    // eased outwards: fastest at birth, decelerating. Spelled as repeated
+    // multiplication rather than as a power, for the same reason hyp() exists
+    // — Math.pow is not pinned by the spec and nothing in this file may use it
+    // where two machines could ever compare notes.
+    const g = 1 + (1 - a * a * (.55 + .45 * a)) * 1.35;
+    const rx = p.r * LS() * g;
+    fxRipple(c, q[0], q[1], rx, rx * .5, p.col, a, rippleW(4, a), 1 - fxHeat(p.col));
   } else if (p.k === 'link'){
+    // ---- a tether: a heal, a ward, a rally. It draws itself ON from the
+    // caster towards whoever it is for, and the bead riding the head of it is
+    // what the eye follows to find out who that is.
     const q = lp(p.x, p.y, 1.1), q2 = lp(p.x2, p.y2, 1.1);
     const g = linkReach(a);                           // it draws itself ON, fast
     const mx = q[0] + (q2[0] - q[0]) * g;
     const my = q[1] + (q2[1] - q[1]) * g;
     c.lineCap = 'round';
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = a * a * .4; c.strokeStyle = fxMix(p.col, -.05); c.lineWidth = 9 * cam.z;
+    c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
+    c.globalCompositeOperation = 'source-over';
     c.globalAlpha = a * .55; c.strokeStyle = p.col; c.lineWidth = 4.5 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
-    c.globalAlpha = a; c.lineWidth = 1.6 * cam.z;
+    c.globalAlpha = a; c.strokeStyle = p.col; c.lineWidth = 1.6 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
+    c.globalCompositeOperation = 'lighter';
+    c.globalAlpha = a * .9;
+    fxFlat(c, mx, my, 5.5 * cam.z, 5.5 * cam.z, p.col, 'glow');
+    c.globalCompositeOperation = 'source-over';
     c.lineCap = 'butt';
   } else if (p.k === 'mote'){
     const q = lp(p.x, p.y, p.z);
     const mr = sparkR(p.r, a) * cam.z;
-    c.globalAlpha = a * .9; ell(c, q[0], q[1], mr, mr, p.col);
+    if (p.sm){
+      // ---- smoke. It expands, turns, and thins on a curve that keeps it
+      // around long after a spark of the same age has gone. fxStep already
+      // moves it the way smoke moves; all that was missing was the coat.
+      const age = 1 - a;
+      const rr = mr * (1.4 + age * 2.6);
+      c.globalAlpha = clamp(a * a * .45, 0, 1);
+      const spr = fxSprite(p.col, 'puff');
+      if (spr){
+        c.save();
+        c.translate(q[0], q[1]);
+        c.rotate((fxPhase(p) - 32) * .02 + age * ((fxPhase(p) & 7) - 3.5) * .09);
+        c.drawImage(spr, -rr, -rr * .82, rr * 2, rr * 1.64);
+        c.restore();
+      } else ell(c, q[0], q[1], rr, rr * .82, p.col);
+    } else {
+      fxVel(p, FX_V);
+      const sp = Math.sqrt(FX_V[0] * FX_V[0] + FX_V[1] * FX_V[1]);
+      const ang = sp > 1 ? Math.atan2(FX_V[1], FX_V[0]) : 0;
+      // A mote drifts an order of magnitude slower than a spark flies, so it
+      // needs its own sensitivity: on the spark's scale a rising mote comes
+      // out perfectly round and the drift — the one thing that says this is
+      // magic leaving a body rather than a dot — is invisible.
+      const stretch = 1 + Math.min(1.9, sp * FX_STREAK.per * 3.4);
+      const f = fxFlick(p);
+      // A mote is the smallest thing on the board, so it has to be the
+      // brightest to be seen at all: a wide soft bloom, a body, and a nearly
+      // white heart. Every third one carries a bigger bloom than its
+      // neighbours — a drift of identical dots reads as a texture, and a
+      // handful of brighter ones among them reads as a swarm.
+      const big = (fxPhase(p) % 3) === 0 ? 1.5 : 1;
+      c.globalCompositeOperation = 'lighter';
+      c.globalAlpha = clamp(a * a * (.40 + .35 * f), 0, 1);
+      fxBlob(c, q[0], q[1], mr * 3.6 * big, p.col, 'glow', ang, stretch);
+      c.globalAlpha = clamp(a * (.6 + .4 * f), 0, 1);
+      fxBlob(c, q[0], q[1], mr * 1.5, p.col, 'glow', ang, 1 + (stretch - 1) * .6);
+      // the white heart only exists on motes with the pixels to carry one
+      if (mr > 1.1){
+        c.globalAlpha = clamp(a * (.75 + .25 * f), 0, 1);
+        fxBlob(c, q[0], q[1], mr * .55, fxMix(p.col, .85), 'glow', ang, 1);
+      }
+      c.globalCompositeOperation = 'source-over';
+    }
   }
-  c.globalAlpha = 1;
   c.globalAlpha = 1;
 }
 
