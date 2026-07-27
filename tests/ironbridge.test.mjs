@@ -2698,6 +2698,41 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'and the gorge draws at every zoom without throwing');
 }
 {
+  // The mines. Their art derives its lit and shaded tones from the node's own
+  // colour with shade(), which does parseInt on the string after the '#' — a
+  // node added later with 'gold' or 'rgb(...)' in that field renders NaNNaNNaN
+  // and the canvas throws, but only while that hold is the one on screen.
+  IB.newMatch({ diff:'veteran', seed:111 });
+  for (const k in IB.NODES){
+    const col = IB.NODES[k].col;
+    t.ok(/^#[0-9a-f]{6}$/i.test(col), k + ' has a colour shade() can read (' + col + ')');
+    t.ok(/^#[0-9a-f]{6}$/i.test(IB.shade(col, .8)), 'and shade() gives one back for ' + k);
+  }
+  // The plot tiles changed: an empty plot now passes null for its stroke, and
+  // the stub canvas in this harness throws on a bad colour string. Drive both
+  // states, and a selection, at both ends of the zoom.
+  const s = P();
+  rich(s);
+  IB.cam.follow = false; IB.cam.x = IB.HOLD_X + 6;
+  for (const z of [.5, 1.6]){
+    IB.cam.z = IB.cam.tz = z;
+    IB.sel.tile = -1; IB.sel.node = null; IB.draw();       // every plot empty
+    IB.sel.tile = 2; IB.draw();                            // one pegged out and selected
+    for (let i = 0; i < s.plot.length; i++) IB.build(s, i, 'farm');
+    IB.sel.tile = -1; IB.sel.node = 'gold'; IB.draw();     // every plot built, a mine picked
+    for (let i = 0; i < s.plot.length; i++) s.plot[i] = null;
+  }
+  IB.sel.node = null; IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'a hold draws empty, built and selected, at both ends of the zoom');
+  // Nothing in the hold art may touch the simulation's random stream — the
+  // ore cart and the workers both ride the clock, and a draw that consumed
+  // rnd() would desync the two machines the moment one of them looked away.
+  IB.newMatch({ diff:'veteran', seed:113 });
+  const before = IB.netHash();
+  for (let i = 0; i < 5; i++) IB.draw();
+  t.ok(IB.netHash() === before, 'drawing the hold does not move the simulation');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;

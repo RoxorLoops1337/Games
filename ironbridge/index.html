@@ -4540,15 +4540,71 @@ function drawNode(c, key){
       poly(c, [[q[0] - 8 * B, q[1] - 17 * B], [q[0], q[1] - 34 * B], [q[0] + 8 * B, q[1] - 17 * B]], i % 2 ? '#4c8c42' : '#5aa04c');
     }
   } else {
-    poly(c, [[p[0] - 34 * B, p[1] + 4 * B], [p[0] - 14 * B, p[1] - 24 * B], [p[0] + 12 * B, p[1] - 20 * B], [p[0] + 34 * B, p[1] + 4 * B]],
-      key === 'gold' ? '#8c7a52' : '#6a7382');
-    poly(c, [[p[0] - 12 * B, p[1] + 4 * B], [p[0] - 8 * B, p[1] - 13 * B], [p[0] + 8 * B, p[1] - 13 * B], [p[0] + 12 * B, p[1] + 4 * B]], '#241f1b');
-    c.fillStyle = '#4a4038';
-    c.fillRect(p[0] - 13 * B, p[1] - 15 * B, 26 * B, 3 * B);
+    // A mine used to be a flat trapezoid with a black rectangle punched in it
+    // and four pebbles on the ground line: no shadow, no depth, nothing to say
+    // anyone worked there. These are the economy and you look at them all game.
+    const rock = key === 'gold' ? '#8c7a52' : '#6a7382';
+    const ore = key === 'gold' ? '#e8b53d' : '#93a1b3';
+    const oreLit = key === 'gold' ? '#ffe08a' : '#c3cede';
+    const P = (pts, fill) => poly(c, pts.map(q => [p[0] + q[0] * B, p[1] + q[1] * B]), fill);
+    ell(c, p[0], p[1] + 3 * B, 40 * B, 15 * B, 'rgba(0,0,0,.22)');
+    // the spoil heap the diggings came out of, behind the mouth
+    P([[-40, 4], [-22, -30], [10, -35], [40, 4]], shade(rock, .82));
+    P([[-22, -30], [10, -35], [17, -20], [-13, -15]], shade(rock, 1.14));
+    P([[-40, 4], [-22, -30], [-13, -15], [-18, 4]], shade(rock, .96));
+    P([[17, -20], [10, -35], [40, 4], [22, 4]], shade(rock, .70));
+    // the adit: a tunnel that gets darker as it goes in, not a flat hole
+    P([[-13, 4], [-10, -19], [10, -19], [13, 4]], '#2b241d');
+    P([[-9, 4], [-7, -15], [7, -15], [9, 4]], '#150f0b');
+    // timbered, because a hole in rock without a frame reads as a cave
+    const wood = '#6b4f2e', woodLit = '#8c6a3e';
+    P([[-17, 5], [-12, 5], [-12, -22], [-17, -22]], wood);
+    P([[12, 5], [17, 5], [17, -22], [12, -22]], wood);
+    P([[-17, -22], [17, -22], [17, -27], [-17, -27]], woodLit);
+    P([[-19, -27], [19, -27], [19, -29], [-19, -29]], wood);
+    // corner braces, not one beam straight across the opening — the first pass
+    // put a diagonal through the middle of the mouth and it read as a barred
+    // door rather than a mine you could walk into
+    P([[-17, -18], [-12, -22], [-12, -18], [-17, -14]], shade(wood, .82));
+    P([[17, -18], [12, -22], [12, -18], [17, -14]], shade(wood, .82));
+    // a lantern hung at the head
+    c.globalAlpha = .17;
+    ell(c, p[0] + 15 * B, p[1] - 24 * B, 5.5 * B, 4.5 * B, '#ffca6a');
+    c.globalAlpha = 1;
+    ell(c, p[0] + 15 * B, p[1] - 24 * B, 1.9 * B, 2.2 * B, '#ffe9b0');
+    // rails out of the mouth, and a cart working them
+    c.strokeStyle = '#4b4239'; c.lineWidth = Math.max(1, 1.6 * B);
+    for (let i = 0; i < 5; i++){
+      const t = i / 4;
+      const a = [p[0] + lerp(-7, -13, t) * B, p[1] + lerp(2, 19, t) * B];
+      const b = [p[0] + lerp(7, 13, t) * B, p[1] + lerp(2, 19, t) * B];
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+    }
+    c.strokeStyle = '#5d5346'; c.lineWidth = Math.max(1, 1.8 * B);
+    for (const sx of [-1, 1]){
+      c.beginPath();
+      c.moveTo(p[0] + sx * 7 * B, p[1] + 2 * B);
+      c.lineTo(p[0] + sx * 13 * B, p[1] + 19 * B);
+      c.stroke();
+    }
+    // The cart runs on the clock, not on a random stream — both machines see
+    // it in the same place, and the simulation never hears about it.
+    const ph = (G.t * .17 + (key === 'gold' ? 0 : .5)) % 1;
+    const tri = ph < .5 ? ph * 2 : 2 - ph * 2;      // out of the mine, and back in
+    const cx = p[0], cy = p[1] + lerp(-2, 17, tri) * B;
+    const w = lerp(5, 8.5, tri) * B, hgt = lerp(4, 6.5, tri) * B;
+    ell(c, cx, cy + hgt * .5, w * 1.05, hgt * .42, 'rgba(0,0,0,.24)');
+    c.fillStyle = '#5b4a34'; c.fillRect(cx - w, cy - hgt, w * 2, hgt);
+    c.fillStyle = '#725d40'; c.fillRect(cx - w, cy - hgt, w * 2, hgt * .28);
+    for (let i = 0; i < 3; i++)
+      ell(c, cx - w * .55 + i * w * .55, cy - hgt - hgt * .18, w * .30, hgt * .26, i % 2 ? oreLit : ore);
+    ell(c, cx - w * .6, cy, w * .22, hgt * .22, '#3a3128');
+    ell(c, cx + w * .6, cy, w * .22, hgt * .22, '#3a3128');
+    // and the ore already brought out, stacked to one side
     for (let i = 0; i < 4; i++){
-      const q = [p[0] - 24 * B + i * 15 * B, p[1] + 2 * B];
-      ell(c, q[0], q[1], 5 * B, 3 * B, key === 'gold' ? '#e8b53d' : '#93a1b3');
-      ell(c, q[0] - 2 * B, q[1] - 2 * B, 2.4 * B, 1.6 * B, key === 'gold' ? '#ffe08a' : '#c3cede');
+      const q = [p[0] + (-30 + i * 9) * B, p[1] + (6 + (i % 2) * 3) * B];
+      ell(c, q[0], q[1], 5 * B, 3 * B, ore);
+      ell(c, q[0] - 1.6 * B, q[1] - 1.6 * B, 2.4 * B, 1.6 * B, oreLit);
     }
   }
   if (holdSide !== MY) return;                      // their crews are their business
@@ -4560,7 +4616,7 @@ function drawNode(c, key){
     const x = lerp(p[0], home[0], tri), y = lerp(p[1] - 6 * B, home[1], tri);
     drawWorkerFig(c, x, y, N.col, ph >= .5, .9);
   }
-  labelQ.push({ x:p[0], y:p[1] + 26 * B, txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col });
+  labelQ.push({ x:p[0], y:p[1] + (key === 'wood' ? 26 : 36) * B, txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col });
 }
 
 // The seat of the hold. It was one plain box with a flag on it, smaller than
@@ -4836,11 +4892,22 @@ function drawHold(c, side){
   for (let t = 0; t < s.plot.length; t++){
     const gx = tileGX(t), gy = tileGY(t);
     const hot = !fog && t === sel.tile && !sel.node;
-    drawTile(c, gx, gy, s.plot[t] ? '#4d4739' : (hot ? 'rgba(78,163,255,.30)' : 'rgba(46,52,40,.55)'),
-      hot ? '#4ea3ff' : 'rgba(0,0,0,.35)');
+    // An empty plot is ground somebody has already cleared and pegged out, not
+    // a hole. It used to be a dark translucent wash, which against the dappled
+    // grass read as one muddy rectangle in the middle of the hold.
+    drawTile(c, gx, gy, s.plot[t] ? '#4d4739' : (hot ? 'rgba(78,163,255,.30)' : 'rgba(132,114,76,.38)'),
+      hot ? '#4ea3ff' : (s.plot[t] ? 'rgba(0,0,0,.35)' : null));
     if (!s.plot[t] && !fog){
+      // pegs at the corners, and the line run between them
+      c.strokeStyle = 'rgba(214,198,152,.34)'; c.lineWidth = Math.max(1, 1.2 * cam.z);
+      const k = .22;
+      for (const [sx, sy] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]){
+        const a = bp(gx + sx * .5, gy + sy * .5), b = bp(gx + sx * (.5 - k), gy + sy * .5);
+        const d = bp(gx + sx * .5, gy + sy * (.5 - k));
+        c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(a[0], a[1]); c.lineTo(d[0], d[1]); c.stroke();
+      }
       const p = bp(gx, gy, .12);
-      c.fillStyle = hot ? '#9ad0ff' : 'rgba(200,215,190,.35)';
+      c.fillStyle = hot ? '#9ad0ff' : 'rgba(226,214,178,.40)';
       c.font = 'bold ' + Math.round(15 * bu()) + 'px system-ui';
       c.textAlign = 'center'; c.textBaseline = 'middle';
       c.fillText('+', p[0], p[1]); c.textBaseline = 'alphabetic';
@@ -7092,7 +7159,7 @@ window.IB = {
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
-  drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT,
+  drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
