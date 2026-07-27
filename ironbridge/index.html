@@ -1708,7 +1708,9 @@ function dealDmg(src, tgt, amt, o){
   // not to its neighbour. Sound is not a spark either.
   if (dmg > 0) sfx(hitSfx(tgt), tgt.x);
   if (dmg > 0) hitShake(tgt);
-  if (dmg > 0 && !HEADLESS)
+  // The !HEADLESS was here and inside addFloat, so the suite could not see a
+  // damage number even with the effects forced on. addFloat guards itself now.
+  if (dmg > 0)
     addFloat(tgt.x, tgt.y, Math.round(dmg), magic ? '#c69bff' : (src && src.isHero ? '#ffe08a' : '#ffffff'),
       floatScale(dmg, tgt.mhp) * (tgt.struct ? .9 : 1));
   if (src && src.isHero && dmg > 0){
@@ -1731,10 +1733,53 @@ function dealDmg(src, tgt, amt, o){
   return dmg;
 }
 
+/* Mending, which had almost none of what a blow has. Walked across every way a
+   body can be healed in this game, driven by the real event:
+
+     how                   share  sparks  numbers  sound
+     a Mend cast           —      6       1        cast
+     a hero's lifesteal    4%     0       1        —
+     an aura, one second   3.5%   0       0        —
+     a kill-heal           5.6%   0       1        —
+
+   healFx() existed and was called from THREE of the eleven places a body can
+   be mended — the heal skill and the two arms of the team-heal ult. The other
+   eight, which is every passive, every aura, every lifesteal tick and every
+   kill-heal, put health back on a body and said nothing. And a trickle said
+   nothing twice over: the float was gated on `amt > 4`, so an aura restoring
+   twelve health a second — three and a half percent of a footman — passed it
+   thirty times in tenths and never once cleared the bar.
+
+   So the effect moves INSIDE healUnit, where every path has to go through it,
+   exactly as hitBurst lives inside dealDmg. The trickle problem is why it was
+   left at the call sites: six particles thirty times a second is not an
+   option. It accumulates instead — a body banks what it has been given and
+   the picture happens when the bank is worth showing, so a drip reads as a
+   steady pulse and a Sanctuary reads as one big one.
+
+   Deliberately no camera shake: a mend is not an impact. The weight is the
+   same hitWeight the blow uses, so the two ladders are the same ladder.     */
+const HEAL = { least:.012, spark:{ min:3, max:11 }, up:{ min:2.6, max:6.2 },
+               r:{ min:.9, max:2.3 }, col:'#7fdc8a', loud:.35, life:{ min:.4, max:.75 } };
+const healSparks = (w) => Math.round(HEAL.spark.min + (HEAL.spark.max - HEAL.spark.min) * clamp(w, 0, 1));
+const healSfx = (w) => w >= HEAL.loud ? 'mendBig' : 'mend';
+
 function healUnit(u, amt){
   if (!u || u.dead || amt <= 0) return;
+  const room = u.mhp - u.hp;
   u.hp = Math.min(u.mhp, u.hp + amt);
-  if (!HEADLESS && amt > 4) addFloat(u.x, u.y, '+' + Math.round(amt), '#7fdc8a', floatScale(amt, u.mhp) * .9);
+  // Banked, not spent: what actually went into the body, so overhealing a full
+  // body does not throw a light show for nothing.
+  const got = Math.min(amt, Math.max(0, room));
+  if (got <= 0) return;
+  u.healAcc = (u.healAcc || 0) + got;
+  if (u.healAcc < u.mhp * HEAL.least) return;
+  const shown = u.healAcc;
+  u.healAcc = 0;
+  const w = hitWeight(shown, u.mhp);
+  healFx(u.x, u.y, HEAL.col, w);
+  sfx(healSfx(w), u.x);
+  addFloat(u.x, u.y, '+' + Math.round(shown), HEAL.col, floatScale(shown, u.mhp) * .9);
 }
 
 function killThing(t, src){
@@ -3109,8 +3154,9 @@ function castSkill(h, sk, tgt){
     }
     case 'heal': {
       const t = s.ally ? (lowAlly(h, s.rng || 6) || h) : h;
+      // healFx moved inside healUnit, which is the only way the other eight
+      // healing paths in this game were ever going to get one.
       healUnit(t, skVal(s.heal, r) + (s.apR || 0) * apBase(h, s));
-      healFx(t.x, t.y);
       if (t !== h) linkFx(h.x, h.y, t.x, t.y, '#7fdc8a');
       break;
     }
@@ -3147,12 +3193,12 @@ function castSkill(h, sk, tgt){
       const amt = skVal(s.heal, r) + (s.apR || 0) * apBase(h, s);
       for (const a of G.sides[h.side].heroes){
         if (a.dead || Math.abs(a.x - h.x) >= aoe) continue;
-        healUnit(a, amt); healFx(a.x, a.y);
+        healUnit(a, amt);
         if (a !== h && !HEADLESS) linkFx(h.x, h.y, a.x, a.y, '#7fdc8a');
         if (s.shield){ a.shield = Math.max(a.shield, skVal(s.shield, r)); a.shT = 6; }
       }
       for (const u of teamTargets(h, aoe)){
-        healUnit(u, amt); healFx(u.x, u.y);
+        healUnit(u, amt);
         if (!HEADLESS) linkFx(h.x, h.y, u.x, u.y, '#7fdc8a');
       }
       break;
@@ -3473,6 +3519,10 @@ const SFX = {
   win:    [1.0,  () => { [392, 523, 659, 784].forEach((f, i) => tone({ f, dur:.42, v:.15, type:'triangle', at:i * .13 })); }, 1],
   lose:   [1.0,  () => { [392, 311, 262, 196].forEach((f, i) => tone({ f, dur:.5, v:.15, type:'sawtooth', at:i * .15 })); }, 1],
   click:  [.03,  () => noiseHit({ v:.06, dur:.03, cut:3200, hp:true })],
+  // Mending made no noise at all. Rising intervals, against everything above
+  // that falls — a wound closing is the one thing in this game that goes up.
+  mend:   [.16,  () => tone({ f:520, f2:780, dur:.14, v:.07, type:'sine' })],
+  mendBig:[.30,  () => { [523, 698, 880].forEach((f, i) => tone({ f, dur:.20, v:.09, type:'sine', at:i * .05 })); }],
   // A hero falling is the loudest thing that happens in a match and it used to
   // make no noise at all — a toast slid past and that was the whole event.
   heroDown:[.5, () => { tone({ f:330, f2:98, dur:.55, v:.17, type:'sawtooth' });
@@ -3713,7 +3763,12 @@ function floatSlot(x, y, sc){
   return [k * FLOAT_GAP.step * s, -n * FLOAT_GAP.rise * s];
 }
 function addFloat(x, y, txt, col, sc){
-  if (HEADLESS) return;
+  // Gated the same way the particles are rather than on HEADLESS alone: the
+  // damage and heal NUMBERS were the one part of the feedback a headless test
+  // could never look at, so every assertion about them had to be made in a
+  // browser or not at all. Still free by default — fxForce is off unless a
+  // test asks for it.
+  if (HEADLESS && !fxForce) return;
   if (G.floats.length > 90) G.floats.shift();
   // Three numbers landing on one body in the same tenth of a second used to
   // print on top of each other. Step each new one clear of whatever is still
@@ -3926,11 +3981,20 @@ function linkFx(x, y, x2, y2, col){
   G.fx.push({ k:'link', x, y, x2, y2, col, t:.38, dur:.38 });
 }
 
-function healFx(x, y, col){
-  if (!fxRoom(6)) return;
-  for (let i = 0; i < 6; i++)
+// A fixed six motes whatever it was worth: a twelve-point drip and a 260-point
+// Sanctuary looked identical. `w` is the same weight the blow uses.
+function healFx(x, y, col, w){
+  const k = clamp(w === undefined ? .35 : w, 0, 1);
+  const n = healSparks(k);
+  if (!fxRoom(n)) return 0;
+  const up = HEAL.up.min + (HEAL.up.max - HEAL.up.min) * k;
+  const r0 = HEAL.r.min + (HEAL.r.max - HEAL.r.min) * k;
+  for (let i = 0; i < n; i++)
     G.fx.push({ k:'p', x:x + fxRr(-.6, .6), y:y + fxRr(-.4, .4), z:fxRr(.3, 1),
-      vx:0, vy:0, vz:fxRr(3, 5.5), ...life(fxRr(.4, .7)), col:col || '#7fdc8a', r:fxRr(1, 2) });
+      vx:0, vy:0, vz:fxRr(HEAL.up.min, up),
+      ...life(fxRr(HEAL.life.min, HEAL.life.max)),
+      col:col || HEAL.col, r:fxRr(HEAL.r.min, r0) });
+  return n;
 }
 // A particle's alpha is t/dur. So handing one a short `t` against a shared
 // `dur` does not shorten its life — it makes it BORN faint. Four bursts in this
@@ -9472,7 +9536,7 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   OVER_HOLD, overStep, syncHud, MUSTER, mustering, musterPhase, waveSecs, musterMark,
-  basicAttack, attackDamage,
+  basicAttack, attackDamage, healUnit, healFx, HEAL, healSparks, healSfx, addBuff,
   fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
