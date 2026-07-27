@@ -660,7 +660,6 @@ export function createSky(G, engine) {
   dome.scale.setScalar(600);
   dome.frustumCulled = false;
   dome.renderOrder = 1000;
-  dome.matrixAutoUpdate = true;
   scene.add(dome);
 
   // The cubemap is rendered from a separate one-mesh scene running the full
@@ -741,10 +740,11 @@ export function createSky(G, engine) {
     renderer.setRenderTarget(prevTarget);
   }
 
-  // PMREM is the whole point of item 3: a raw cubemap gives a mirror, and every
-  // rough surface in the level then reflects a razor-sharp horizon, which is the
-  // "plastic metal" look. The prefiltered mip chain is what makes roughness mean
-  // anything to a reflection.
+  // A raw cubemap set as `scene.environment` gives every surface a mirror, so a
+  // rough steel drum comes back reflecting a razor-sharp horizon — which is
+  // precisely the look people call "plastic". PMREM's prefiltered mip chain is
+  // what makes roughness mean something to a reflection, and it is the single
+  // cheapest thing that stops metal reading as painted cardboard.
   function buildEnv() {
     if (!pmrem) {
       pmrem = new THREE.PMREMGenerator(renderer);

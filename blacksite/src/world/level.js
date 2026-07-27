@@ -1289,7 +1289,7 @@ export function buildLevel(G, engine, materials) {
       // so the site's tallest landmark is a black lattice against it and the
       // catwalk cuts the frame just above the eyeline. Everything in here is
       // either a silhouette or a rim light.
-      sunward: { pos: [4.0, 1.72, 8.0], yaw: 0.62, pitch: 0.13 },
+      sunward: { pos: [0.5, 1.72, 9.5], yaw: 0.62, pitch: 0.13 },
 
       // The reverse: sun over the shoulder, raking south-east across the silo
       // cap. Full form on the collar and its hazard banding, the gantry legs

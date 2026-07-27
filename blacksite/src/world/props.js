@@ -396,18 +396,22 @@ export function jersey(len, opts = {}) {
 // Sandbag emplacement. Bags are squashed low-poly spheres, staggered course to
 // course and jittered, because a bag wall built on a grid looks like masonry.
 export function sandbags(len, rows = 3, opts = {}) {
-  const col = opts.color, out = [];
+  const out = [];
   const bw = 0.44, bh = 0.20, bd = 0.28;
   const rnd = mulberry(opts.seed || 7);
   for (let r = 0; r < rows; r++) {
-    const inset = r * 0.045;
+    // Every course is set back and a bag shorter at each end. A bag wall built
+    // plumb and flush is the give-away — real ones are battered, because that is
+    // the only way a stack of half-full sacks stands up.
+    const batter = r * 0.05, end = r * bw * 0.34;
     const off = (r % 2) * bw * 0.5;
-    for (let x = -len / 2 + off; x < len / 2 - 0.1; x += bw * 0.94) {
-      const s = 0.9 + rnd() * 0.22;
-      const g = sphere(1, 7, 5, { color: col });
-      g.applyMatrix4(new THREE.Matrix4().makeScale(bw * 0.5 * s, bh * 0.5 * s, bd * 0.5 * s));
-      out.push(place(g, x + (rnd() - 0.5) * 0.05, bh * (r + 0.5) - r * 0.03,
-        (rnd() - 0.5) * 0.05 + inset * 0, (rnd() - 0.5) * 0.4));
+    for (let x = -len / 2 + off + end; x < len / 2 - end - 0.1; x += bw * 0.94) {
+      const s = 0.88 + rnd() * 0.26;
+      const v = 0.86 + rnd() * 0.26;
+      const g = sphere(1, 7, 5, { color: [v, v * 0.985, v * 0.94] });
+      g.applyMatrix4(new THREE.Matrix4().makeScale(bw * 0.5 * s, bh * 0.5 * s, bd * 0.5 * (2 - s)));
+      out.push(place(g, x + (rnd() - 0.5) * 0.07, bh * (r + 0.5) - r * 0.035,
+        (rnd() - 0.5) * 0.06 + batter, (rnd() - 0.5) * 0.7, (rnd() - 0.5) * 0.18, (rnd() - 0.5) * 0.22));
     }
   }
   return out;
