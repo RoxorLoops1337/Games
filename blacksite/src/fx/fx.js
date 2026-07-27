@@ -2236,7 +2236,7 @@ function build(G, engine, materials) {
       for (const s of lights) { s.dur = 0; s.light.intensity = 0; }
       for (const w of waves) { w.dur = 0; w.mesh.visible = false; }
       shotCount = 0;
-      muzzleLooked = false;
+      muzzleNode = null; muzzleFn = null;
     },
 
     dispose() {
