@@ -89,6 +89,14 @@
      the difference between the whole forge fitting in the dock and its last
      rank being sliced off at 820px tall. */
   @media (hover:hover) and (pointer:fine){ .abtn{ min-height:38px; padding:5px 10px; } }
+  /* The one option in a barracks choice that is not an ordinary drill. It was
+     given `hot` and there was no rule for it, so the thing the whole tenth
+     level builds toward looked exactly like the two safe picks beside it.
+     .tier.hot has marked the same idea for ages; this is that, in a button. */
+  .abtn.hot{ border-color:#c9922a; background:#241e12; }
+  .abtn.hot .t{ color:#ffdf9a; }
+  .abtn.hot .c{ color:#c9ab74; }
+  .abtn.hot:hover:not(:disabled){ background:#2e2617; border-color:#e0a52e; }
   .abtn:hover:not(:disabled){ background:#28324a; border-color:#3c4a66; }
   .abtn:disabled{ opacity:.4; cursor:not-allowed; }
   .abtn .t{ font-size:12px; font-weight:700; white-space:nowrap; }
@@ -6928,59 +6936,59 @@ function dockHtml(){
   sec.jobs = h;
 
   // ---- training and the barracks
-  h = '<div class="ptitle">Train</div><div class="pgrid">';
-  h += '<button class="abtn" data-act="worker"><span class="t">Worker</span><span class="c">' + costHtml(C.WORKER_COST) + '</span></button>';
-  h += '</div>';
-  const q = s.trainQ.map(x => {
-    const pc = Math.round(clamp(x.t / x.dur, 0, 1) * 100);
-    return '<span class="qchip"><i class="fill" style="width:' + pc + '%"></i><span>Worker</span></span>';
-  }).join('');
-  h += '<div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>';
+  // A pending choice blocks the next drill, so while one is up nothing else in
+  // this column can be acted on — and the column is 200px tall. Measured, it
+  // was the only one of the four that did not fit its box in ANY state, and
+  // with a choice up the third option sat below the fold: at a tenth level
+  // that is the special, the one thing the whole tier is built toward. So a
+  // choice takes the column to itself.
+  const pend0 = s.troopPend[0];
+  h = '';
+  if (!pend0){
+    h += '<div class="ptitle">Train</div><div class="pgrid">';
+    h += '<button class="abtn" data-act="worker"><span class="t">Worker</span><span class="c">' + costHtml(C.WORKER_COST) + '</span></button>';
+    h += '</div>';
+    const q = s.trainQ.map(x => {
+      const pc = Math.round(clamp(x.t / x.dur, 0, 1) * 100);
+      return '<span class="qchip"><i class="fill" style="width:' + pc + '%"></i><span>Worker</span></span>';
+    }).join('');
+    h += '<div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>';
+  }
 
-  // The barracks drills the army the Host already sends. One track a kind,
-  // each level a choice of three, every tenth level offering something with a
-  // name. Nothing here puts another body on the bridge.
   const bl0 = barracksLvl(s);
-  h += '<div class="ptitle">Barracks' + (bl0 ? '' : ' — none built') + '</div>';
-  if (s.troopPend.length){
-    const pend = s.troopPend[0];
-    h += '<div class="insp">' + TRAIN[pend.kind].n + ' reaches level ' + pend.lvl + '. Choose one:</div><div class="pgrid">';
-    pend.opts.forEach((id, i) => {
+  if (pend0){
+    h += '<div class="ptitle">' + TRAIN[pend0.kind].n + ' — level ' + pend0.lvl + '</div>';
+    h += '<div class="insp note">Choose one. Nothing else drills until you do.</div><div class="pgrid">';
+    pend0.opts.forEach((id, i) => {
       const d = TROOP_PERK[id] || TROOP_SPECIAL[id];
-      const sp = !!TROOP_SPECIAL[id];
-      h += '<button class="abtn' + (sp ? ' hot' : '') + '" data-act="troopick" data-opt="' + i + '">' +
+      h += '<button class="abtn' + (TROOP_SPECIAL[id] ? ' hot' : '') + '" data-act="troopick" data-opt="' + i + '">' +
         '<span class="t">' + d.n + '</span><span class="c">' + d.d + '</span></button>';
     });
     h += '</div>';
   } else {
-    h += '<div class="pgrid">';
+    h += '<div class="ptitle">Barracks' + (bl0 ? '' : ' — none built') + '</div><div class="pgrid">';
     for (const k of TROOP_KINDS){
       const t = s.troop[k], cost = troopCost(s, k);
       const cap = troopCap(s), maxed = t.lvl >= TROOP.maxLvl, capped = t.lvl >= cap;
       const ok = bl0 > 0 && !maxed && !capped && canPay(s, cost);
       const next = t.lvl + 1;
+      // What this track has actually taken, on the button rather than in a row
+      // of its own — the separate chip row was most of what did not fit.
+      const spec = t.perks.filter(p => TROOP_SPECIAL[p]).map(p => TROOP_SPECIAL[p].n);
       h += '<button class="abtn" data-act="troopup" data-troop="' + k + '"' + (ok ? '' : ' disabled') + '>' +
         '<span class="t">' + TRAIN[k].n + ' Lv' + t.lvl + (troopSpecialLvl(next) ? ' ★' : '') + '</span>' +
-        '<span class="c">' + (maxed ? 'fully drilled' : capped ? 'a bigger barracks first' : bl0 ? costHtml(cost) : 'needs a barracks') + '</span></button>';
+        '<span class="c">' + (maxed ? 'fully drilled' : capped ? 'bigger barracks' : bl0 ? costHtml(cost) : 'needs a barracks') +
+        (spec.length ? ' · ' + spec.join(', ') : '') + '</span></button>';
     }
     h += '</div>';
-    // What the drilling has actually bought, so the panel is not just a bill.
-    const done = TROOP_KINDS.map(k => {
-      const t = s.troop[k];
-      if (!t.perks.length) return '';
-      const names = {};
-      for (const id of t.perks){ const d = TROOP_PERK[id] || TROOP_SPECIAL[id]; names[d.n] = (names[d.n] || 0) + 1; }
-      return '<span class="mchip">' + TRAIN[k].n + ': ' +
-        Object.keys(names).map(n => n + (names[n] > 1 ? ' ×' + names[n] : '')).join(', ') + '</span>';
-    }).filter(Boolean).join('');
-    if (done) h += '<div id="musterRow">' + done + '</div>';
   }
-  sec.train = h +
-    // What the Host has on the bridge right now, and the one thing that
-    // answers it. The shape of a wave was announced by a toast that slid past
-    // in three seconds and was never mentioned again.
-    '<div class="ptitle">Next wave' + (s.superT > 0 ? ' — OGRES ' + Math.ceil(s.superT) + 's' : '') + '</div>' +
-    '<div class="insp">' + foeWarning() + '</div>';
+  // The wave warning used to be printed here AND under Your hold. Two copies
+  // of one line, and this copy was most of why the train column was the only
+  // one of the four that did not fit its box. The other copy is the older and
+  // better-placed one — but it only rendered when nothing was selected, so
+  // clicking a plot made the warning disappear. One copy now, always up.
+  sec.train = h + (pend0 || s.superT <= 0 ? '' :
+    '<div class="ptitle">Ogres</div><div class="insp note">' + Math.ceil(s.superT) + 's of siege ogres are marching.</div>');
 
   // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
@@ -7055,9 +7063,12 @@ function dockHtml(){
   } else {
     h += '<div class="ptitle">Your hold</div><div style="font-size:12px;color:var(--dim);max-width:250px;line-height:1.5">' +
       'Click a plot to build, a building to upgrade it, or a mine to dig it deeper. Drag to look around, pinch or scroll to zoom.</div>';
-    h += '<div class="ptitle" style="margin-top:8px">On the bridge</div>' +
-      '<div class="insp note" style="margin-top:2px">' + foeWarning() + '</div>';
   }
+  // Whatever is in this column, what is walking at you goes under it. It used
+  // to live in the no-selection branch, so the one line that says what the
+  // next wave is made of vanished the moment you clicked a plot to answer it.
+  h += '<div class="ptitle" style="margin-top:8px">On the bridge</div>' +
+    '<div class="insp note" style="margin-top:2px">' + foeWarning() + '</div>';
   sec.sel = h;
 
   if (bLvl(s, 'forge') > 0){
