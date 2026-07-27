@@ -74,10 +74,11 @@ function reticleTexture(size = 64, style = 'dot') {
   const c = size / 2;
   ctx.clearRect(0, 0, size, size);
   const g = ctx.createRadialGradient(c, c, 0, c, c, c);
+  const tight = style !== 'dot';
   g.addColorStop(0.00, 'rgba(255,255,255,1)');
-  g.addColorStop(0.10, 'rgba(255,110,70,1)');
-  g.addColorStop(0.24, 'rgba(255,40,20,0.55)');
-  g.addColorStop(0.55, 'rgba(255,25,10,0.10)');
+  g.addColorStop(tight ? 0.045 : 0.10, 'rgba(255,110,70,1)');
+  g.addColorStop(tight ? 0.10 : 0.24, 'rgba(255,40,20,0.55)');
+  g.addColorStop(tight ? 0.22 : 0.55, 'rgba(255,25,10,0.10)');
   g.addColorStop(1.00, 'rgba(255,0,0,0)');
   ctx.fillStyle = g;
   ctx.beginPath(); ctx.arc(c, c, c, 0, Math.PI * 2); ctx.fill();
@@ -90,14 +91,25 @@ function reticleTexture(size = 64, style = 'dot') {
     ctx.lineTo(c + size * 0.20, c - size * 0.16);
     ctx.stroke();
   } else if (style === 'cross') {
-    ctx.strokeStyle = 'rgba(20,20,22,0.9)';
-    ctx.lineWidth = size * 0.03;
+    // Additive blending cannot draw a dark line, so an illuminated reticle is
+    // the only kind that survives the compositing. Thin bright arms with a gap
+    // at the centre, plus two mil-dots a side — enough structure to read as an
+    // optic rather than as a lens flare.
+    ctx.strokeStyle = 'rgba(255,150,110,0.95)';
+    ctx.lineWidth = Math.max(1, size * 0.022);
     ctx.beginPath();
-    ctx.moveTo(0, c); ctx.lineTo(size * 0.36, c);
-    ctx.moveTo(size, c); ctx.lineTo(size * 0.64, c);
-    ctx.moveTo(c, 0); ctx.lineTo(c, size * 0.36);
-    ctx.moveTo(c, size); ctx.lineTo(c, size * 0.64);
+    ctx.moveTo(size * 0.03, c); ctx.lineTo(size * 0.40, c);
+    ctx.moveTo(size * 0.97, c); ctx.lineTo(size * 0.60, c);
+    ctx.moveTo(c, size * 0.03); ctx.lineTo(c, size * 0.40);
+    ctx.moveTo(c, size * 0.97); ctx.lineTo(c, size * 0.60);
     ctx.stroke();
+    ctx.fillStyle = 'rgba(255,190,150,0.9)';
+    for (const d of [0.14, 0.24]) {
+      for (const s2 of [-1, 1]) {
+        ctx.beginPath(); ctx.arc(c + s2 * size * d, c, size * 0.016, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(c, c + s2 * size * d, size * 0.016, 0, Math.PI * 2); ctx.fill();
+      }
+    }
   }
   const t = new THREE.CanvasTexture(cv);
   t.colorSpace = THREE.SRGBColorSpace;

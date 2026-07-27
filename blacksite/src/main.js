@@ -79,7 +79,16 @@ export async function boot(root) {
     },
     resume() { input.lock(); },
     restart() { restart(); },
-    quality(q) { engine.setQuality(q); post.setQuality && post.setQuality(q); },
+    // `engine.setQuality` resizes the buffers and re-tiers the renderer; the
+    // modules that own their own budgets have to be told separately, because
+    // the engine deliberately knows nothing about them.
+    quality(q) {
+      engine.setQuality(q);
+      post.setQuality && post.setQuality(q);
+      lighting.setQuality && lighting.setQuality(q);
+      sky.setQuality && sky.setQuality(q);
+      materials.setQuality && materials.setQuality(q);
+    },
   });
 
   function restart() {
@@ -154,6 +163,7 @@ export async function boot(root) {
 
     engine.updateCamera(dt);
     sky.update(dt);
+    materials.update(dt);
     lighting.update(dt);
     level.update && level.update(dt);
     enemies.sync(dt);

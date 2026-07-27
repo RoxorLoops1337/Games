@@ -24,12 +24,12 @@ export const BONES = [
   ['chest',   2,  0,      0.170,  0],
   ['neck',    3,  0,      0.190,  0],
   ['head',    4,  0,      0.090,  0],
-  ['clavR',   3,  0.050,  0.130,  0],
-  ['armR',    6,  0.155,  0,      0],
+  ['clavR',   3,  0.058,  0.130,  0],
+  ['armR',    6,  0.167,  0,      0],
   ['foreR',   7,  0,     -0.285,  0],
   ['handR',   8,  0,     -0.260,  0],
-  ['clavL',   3, -0.050,  0.130,  0],
-  ['armL',   10, -0.155,  0,      0],
+  ['clavL',   3, -0.058,  0.130,  0],
+  ['armL',   10, -0.167,  0,      0],
   ['foreL',  11,  0,     -0.285,  0],
   ['handL',  12,  0,     -0.260,  0],
   ['thighR',  1,  0.095, -0.070,  0],
@@ -49,7 +49,7 @@ export const B = BONES.reduce((m, b, i) => (m[b[0]] = i, m), {});
 export const DIM = {
   hipY: 0.885, kneeY: 0.435, ankleY: 0.080,
   thigh: 0.450, shin: 0.355,
-  shoulderY: 1.390, shoulderX: 0.205,
+  shoulderY: 1.390, shoulderX: 0.225,
   upperArm: 0.285, foreArm: 0.260,
   chestY: 1.260, headY: 1.540, eyeY: 1.635,
   standPelvis: 0.925,        // 3 cm under the bind height: knees never lock
@@ -78,19 +78,22 @@ const SURF = {
   skin: [0.68, 0.0],
 };
 
+// Lifted off black on purpose. A soldier in true dark olive disappears into a
+// concrete level under a low sun, and an enemy the player cannot pick out of the
+// background is a bug however accurate the colour is.
 const COL = {
-  fatigue: 0x474c3f,
-  fatigueDark: 0x383c31,
-  carrier: 0x282b27,
-  pouch: 0x3a3e34,
-  helmet: 0x32352e,
-  boot: 0x191b1c,
-  glove: 0x212325,
-  face: 0x24262a,
-  skin: 0x8a6549,
-  gun: 0x24272a,
-  gunMetal: 0x3c4045,
-  lens: 0x2a3a3a,
+  fatigue: 0x5d6350,
+  fatigueDark: 0x484d3e,
+  carrier: 0x383b33,
+  pouch: 0x4d5243,
+  helmet: 0x43473d,
+  boot: 0x26282a,
+  glove: 0x2c2f31,
+  face: 0x2e3034,
+  skin: 0x9a7355,
+  gun: 0x2b2e31,
+  gunMetal: 0x474b50,
+  lens: 0x33484a,
 };
 
 // ── primitive helpers ────────────────────────────────────────────────────────
@@ -253,16 +256,20 @@ function buildBodyParts() {
   // Torso: three overlapping ellipsoids rather than one barrel, because the
   // waist has to be narrower than both the ribcage and the hips or the body
   // reads as a bollard in a helmet.
-  add(place(ellipsoid(0.150, 0.130, 0.112), 0, 0.960, 0), COL.fatigue, SURF.cloth,
+  add(place(ellipsoid(0.168, 0.135, 0.126), 0, 0.960, 0), COL.fatigue, SURF.cloth,
     segment(B.pelvis, -1, B.spine, 1.09, 0.83, 0.10, 0.12, 0.4, 0.42));
-  add(place(ellipsoid(0.138, 0.125, 0.104), 0, 1.115, 0), COL.fatigue, SURF.cloth,
+  add(place(ellipsoid(0.148, 0.125, 0.112), 0, 1.115, 0), COL.fatigue, SURF.cloth,
     segment(B.spine, B.pelvis, B.chest, 1.24, 0.99, 0.13, 0.13));
-  add(place(ellipsoid(0.170, 0.150, 0.122), 0, 1.280, 0), COL.fatigue, SURF.cloth,
+  add(place(ellipsoid(0.196, 0.152, 0.132), 0, 1.285, 0), COL.fatigue, SURF.cloth,
     segment(B.chest, B.spine, B.neck, 1.42, 1.15, 0.14, 0.13, 0.40, 0.30));
 
   // Plate carrier. Sits proud of the chest and squares the silhouette off — the
-  // one shape that turns "person" into "soldier" at 30 m.
-  add(place(roundBox(0.360, 0.380, 0.262, 0.055), 0, 1.262, 0), COL.carrier, SURF.hard, rigid(B.chest));
+  // one shape that turns "person" into "soldier" at 30 m. The straps over the
+  // trapezius matter as much as the plate: they are what widens the shoulder
+  // line, and a narrow shoulder line is what makes a character read as a doll.
+  add(place(roundBox(0.395, 0.385, 0.280, 0.055), 0, 1.262, 0), COL.carrier, SURF.hard, rigid(B.chest));
+  add(place(roundBox(0.090, 0.070, 0.300, 0.028), 0.125, 1.428, -0.010), COL.carrier, SURF.hard, rigid(B.chest));
+  add(place(roundBox(0.090, 0.070, 0.300, 0.028), -0.125, 1.428, -0.010), COL.carrier, SURF.hard, rigid(B.chest));
   add(place(roundBox(0.100, 0.108, 0.060, 0.022), 0.078, 1.190, -0.145), COL.pouch, SURF.webbing, rigid(B.chest));
   add(place(roundBox(0.100, 0.108, 0.060, 0.022), -0.020, 1.190, -0.148), COL.pouch, SURF.webbing, rigid(B.chest));
   add(place(roundBox(0.086, 0.070, 0.052, 0.020), -0.098, 1.196, -0.140), COL.pouch, SURF.webbing, rigid(B.chest));
@@ -271,9 +278,9 @@ function buildBodyParts() {
   add(place(new THREE.BoxGeometry(0.020, 0.020, 0.150), -0.045, 1.360, 0.150), COL.gunMetal, SURF.metal, rigid(B.chest));
 
   // Belt and drop pouches.
-  add(place(roundBox(0.320, 0.076, 0.240, 0.030), 0, 0.902, 0), COL.carrier, SURF.webbing, rigid(B.pelvis));
-  add(place(roundBox(0.096, 0.110, 0.060, 0.022), 0.155, 0.700, -0.030), COL.pouch, SURF.webbing, rigid(B.thighR));
-  add(place(roundBox(0.086, 0.096, 0.056, 0.020), -0.150, 0.720, 0.010), COL.pouch, SURF.webbing, rigid(B.thighL));
+  add(place(roundBox(0.352, 0.078, 0.258, 0.030), 0, 0.902, 0), COL.carrier, SURF.webbing, rigid(B.pelvis));
+  add(place(roundBox(0.096, 0.115, 0.062, 0.022), 0.172, 0.700, -0.030), COL.pouch, SURF.webbing, rigid(B.thighR));
+  add(place(roundBox(0.086, 0.100, 0.058, 0.020), -0.168, 0.720, 0.010), COL.pouch, SURF.webbing, rigid(B.thighL));
 
   // Shoulders. Weighted to the clavicles so the deltoid rolls with the arm
   // instead of shearing at the seam.
@@ -282,14 +289,14 @@ function buildBodyParts() {
     const arm = s > 0 ? B.armR : B.armL;
     const fore = s > 0 ? B.foreR : B.foreL;
     const hand = s > 0 ? B.handR : B.handL;
-    add(place(ellipsoid(0.082, 0.072, 0.080, 8, 5), s * M.shoulderX, 1.382, 0), COL.fatigueDark, SURF.cloth,
+    add(place(ellipsoid(0.098, 0.088, 0.096, 8, 5), s * M.shoulderX, 1.378, 0), COL.fatigueDark, SURF.cloth,
       (x, y, z, o) => { o[0] = clav; o[1] = 0.55; o[2] = arm; o[3] = 0.40; o[4] = B.chest; o[5] = 0.05; o[6] = clav; o[7] = 0; });
-    add(place(capsule(0.055, 0.175), s * M.shoulderX, 1.2475, 0), COL.fatigue, SURF.cloth,
+    add(place(capsule(0.064, 0.160), s * M.shoulderX, 1.2475, 0), COL.fatigue, SURF.cloth,
       segment(arm, clav, fore, 1.39, 1.105, 0.075, 0.075, 0.45, 0.42));
-    add(place(capsule(0.047, 0.166), s * M.shoulderX, 0.975, 0), COL.fatigue, SURF.cloth,
+    add(place(capsule(0.053, 0.155), s * M.shoulderX, 0.975, 0), COL.fatigue, SURF.cloth,
       segment(fore, arm, hand, 1.105, 0.845, 0.075, 0.055, 0.40, 0.30));
     // Elbow pad — reads as kit and hides the crease at the same time.
-    add(place(roundBox(0.076, 0.086, 0.078, 0.030), s * M.shoulderX, 1.098, -0.012), COL.fatigueDark, SURF.hard,
+    add(place(roundBox(0.084, 0.092, 0.086, 0.032), s * M.shoulderX, 1.098, -0.012), COL.fatigueDark, SURF.hard,
       (x, y, z, o) => { o[0] = fore; o[1] = 0.55; o[2] = arm; o[3] = 0.45; o[4] = fore; o[5] = 0; o[6] = fore; o[7] = 0; });
   }
 
@@ -317,15 +324,15 @@ function buildBodyParts() {
     const shin = s > 0 ? B.shinR : B.shinL;
     const foot = s > 0 ? B.footR : B.footL;
     const toe = s > 0 ? B.toeR : B.toeL;
-    add(place(capsule(0.084, 0.282), s * 0.095, 0.660, 0), COL.fatigue, SURF.cloth,
+    add(place(capsule(0.100, 0.250), s * 0.098, 0.660, 0), COL.fatigue, SURF.cloth,
       segment(thigh, B.pelvis, shin, 0.885, 0.435, 0.11, 0.09, 0.42, 0.44));
-    add(place(capsule(0.066, 0.223), s * 0.095, 0.2575, 0.004), COL.fatigue, SURF.cloth,
+    add(place(capsule(0.075, 0.205), s * 0.098, 0.2575, 0.004), COL.fatigue, SURF.cloth,
       segment(shin, thigh, foot, 0.435, 0.080, 0.085, 0.06, 0.42, 0.25));
-    add(place(roundBox(0.088, 0.096, 0.090, 0.034), s * 0.095, 0.440, -0.020), COL.fatigueDark, SURF.hard,
+    add(place(roundBox(0.098, 0.104, 0.100, 0.036), s * 0.098, 0.440, -0.020), COL.fatigueDark, SURF.hard,
       (x, y, z, o) => { o[0] = shin; o[1] = 0.55; o[2] = thigh; o[3] = 0.45; o[4] = shin; o[5] = 0; o[6] = shin; o[7] = 0; });
-    add(place(roundBox(0.104, 0.108, 0.268, 0.032), s * 0.095, 0.058, -0.048), COL.boot, SURF.rubber,
+    add(place(roundBox(0.114, 0.110, 0.274, 0.032), s * 0.098, 0.058, -0.048), COL.boot, SURF.rubber,
       footWeight(foot, shin, toe, -0.100));
-    add(place(roundBox(0.100, 0.062, 0.104, 0.024), s * 0.095, 0.128, 0.038), COL.boot, SURF.rubber,
+    add(place(roundBox(0.110, 0.068, 0.112, 0.024), s * 0.098, 0.132, 0.038), COL.boot, SURF.rubber,
       footWeight(foot, shin, toe, -0.100));
   }
 

@@ -281,9 +281,14 @@ function buildRifle(mats) {
   // Ejection port: a recessed rectangle, a hinged dust cover lip and the brass
   // deflector behind it. Cheap, and the right side of a rifle is featureless
   // without it.
-  const port = slab(0.030, 0.024, 0.006, 0.003, 0.0008);
-  port.rotateY(Math.PI / 2); port.translate(0.0192, 0.006, -0.055);
-  f.steel(port, 0x46494e, { wear: 0.3, ao: 0.6 });
+  const port = slab(0.034, 0.026, 0.008, 0.003, 0.0008);
+  port.rotateY(Math.PI / 2); port.translate(0.0172, 0.006, -0.055);
+  f.steel(port, 0x24272a, { wear: 0.25, ao: 0.7 });
+  for (const dy of [0.0145, -0.0145]) {
+    const lip = slab(0.038, 0.0032, 0.005, 0.001, 0.0006);
+    lip.rotateY(Math.PI / 2); lip.translate(0.0204, 0.006 + dy, -0.055);
+    f.steel(lip, 0xa2a9af, { wear: 1.0 });
+  }
   const cover = slab(0.034, 0.026, 0.004, 0.004, 0.0010);
   cover.rotateY(Math.PI / 2); cover.translate(0.0212, 0.004, -0.055);
   cover.rotateX(0);
@@ -396,7 +401,7 @@ function buildRifle(mats) {
     eyeRelief: 0.160,
     optic: { centre: [0, 0.0640, opt.lensZ], r: opt.lensR },
     muzzle: [0, 0, -0.648],
-    hip: { pos: [0.115, -0.105, -0.300], rot: [-0.045, 0.045, 0.055] },
+    hip: { pos: [0.113, -0.104, -0.296], rot: [-0.042, 0.052, -0.062] },
     mass: 1.0,
     hands: {
       // The grip axis runs up-and-back out of the web of the hand, so that is
@@ -538,7 +543,7 @@ function buildSMG(mats) {
     eyeRelief: 0.150,
     optic: { centre: [0, sy, -0.030], r: 0.0105 },
     muzzle: [0, 0, -0.340],
-    hip: { pos: [0.110, -0.100, -0.268], rot: [-0.040, 0.050, 0.055] },
+    hip: { pos: [0.108, -0.098, -0.262], rot: [-0.038, 0.056, -0.060] },
     mass: 0.78,
     hands: {
       right: { pos: [0, -0.054, 0.032], axis: [0, 0.94, -0.33], palm: [1, 0, 0.28], gripR: 0.018,
@@ -666,7 +671,7 @@ function buildDMR(mats) {
   ], 20);
   ocular.translate(0, sy, 0);
   f.steel(ocular, 0x767c83, { round: true, wear: 0.45 });
-  const eyecup = latheZ([[0.0250, 0.006], [0.0272, 0.000], [0.0272, -0.014], [0.0250, -0.016]], 18);
+  const eyecup = latheZ([[0.0252, 0.010], [0.0312, 0.004], [0.0312, -0.012], [0.0252, -0.018], [0.0252, 0.010]], 18);
   eyecup.translate(0, sy, 0);
   f.rubber(eyecup, 0x383a3d, { round: true });
 
@@ -692,7 +697,7 @@ function buildDMR(mats) {
     eyeRelief: 0.098,
     optic: { centre: [0, sy, -0.020], r: 0.0175, scope: true },
     muzzle: [0, 0, -0.736],
-    hip: { pos: [0.122, -0.112, -0.322], rot: [-0.048, 0.042, 0.058] },
+    hip: { pos: [0.120, -0.110, -0.318], rot: [-0.045, 0.048, -0.064] },
     mass: 1.4,
     hands: {
       right: { pos: [0, -0.064, 0.042], axis: [0, 0.93, -0.36], palm: [1, 0, 0.30], gripR: 0.020,
@@ -781,7 +786,7 @@ function buildShotgun(mats) {
   // Sights. The rear ghost ring stands well over a bore-level bead, so the
   // sight line is not parallel to the barrel — the ADS solve has to handle it.
   const beadY = 0.0136 + 0.0055, beadZ = -0.500;
-  const ringY = rearSight(f.steel, 0.010, 0.0430, 0x70767c);
+  const ringY = rearSight(f.steel, 0.070, 0.0530, 0x70767c);
   const beadBase = slab(0.012, 0.006, 0.014, 0.002, 0.0008);
   beadBase.translate(0, 0.0155, beadZ);
   f.phos(beadBase, 0x70767c);
@@ -792,16 +797,16 @@ function buildShotgun(mats) {
   bead.frustumCulled = false;
   f.group.add(bead);
 
-  const dir = new THREE.Vector3(0, beadY - ringY, beadZ - 0.010).normalize();
+  const dir = new THREE.Vector3(0, beadY - ringY, beadZ - 0.070).normalize();
 
   return {
     id: 'shotgun',
     group: f.group, nodes: f.nodes,
-    sight: { pos: [0, ringY, 0.010], dir: [dir.x, dir.y, dir.z], up: [0, 1, 0] },
-    eyeRelief: 0.140,
+    sight: { pos: [0, ringY, 0.070], dir: [dir.x, dir.y, dir.z], up: [0, 1, 0] },
+    eyeRelief: 0.175,
     optic: null,
     muzzle: [0, 0, -0.528],
-    hip: { pos: [0.118, -0.108, -0.296], rot: [-0.045, 0.045, 0.055] },
+    hip: { pos: [0.116, -0.106, -0.292], rot: [-0.042, 0.052, -0.062] },
     mass: 1.25,
     pumpTravel: 0.062,
     hands: {
@@ -933,10 +938,10 @@ function buildPistol(mats) {
     id: 'pistol',
     group: f.group, nodes: f.nodes,
     sight: { pos: [0, sy + 0.0015, 0.030], dir: [0, -0.0005, -1], up: [0, 1, 0] },
-    eyeRelief: 0.400,
+    eyeRelief: 0.300,
     optic: null,
     muzzle: [0, 0.018, -0.126],
-    hip: { pos: [0.076, -0.084, -0.330], rot: [-0.030, 0.030, 0.032] },
+    hip: { pos: [0.074, -0.082, -0.300], rot: [-0.028, 0.034, -0.034] },
     mass: 0.55,
     slideTravel: 0.030,
     hands: {

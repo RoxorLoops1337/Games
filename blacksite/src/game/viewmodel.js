@@ -306,12 +306,12 @@ export function createViewmodel(G, engine, materials) {
     // drops. It is the game telling you, without a HUD element, that pulling the
     // trigger right now will cost you a beat to recover from.
     if (sp > 0.001) {
-      motion.position.x += 0.036 * sp;
-      motion.position.y -= 0.052 * sp;
-      motion.position.z += 0.048 * sp;
-      motion.rotation.x -= 0.30 * sp;
-      motion.rotation.y += 0.58 * sp;
-      motion.rotation.z += 0.44 * sp;
+      motion.position.x += 0.030 * sp;
+      motion.position.y -= 0.085 * sp;
+      motion.position.z += 0.050 * sp;
+      motion.rotation.x -= 0.34 * sp;
+      motion.rotation.y += 0.62 * sp;
+      motion.rotation.z -= 0.50 * sp;
     }
 
     // ── swap ─────────────────────────────────────────────────────────────────
@@ -408,16 +408,17 @@ export function createViewmodel(G, engine, materials) {
     const u = clamp(rl.t / rl.dur, 0, 1);
     if (u >= 1) { rl.t = -1; rl.phase = ''; restNodes(model); return; }
 
-    // Present the weapon: rolled toward the shooter and dropped, so the magwell
-    // faces the hands. A reload that happens with the gun still level looks like
-    // the magazine is being teleported.
+    // Present the weapon: brought in toward the lens and rolled so the magwell
+    // turns to face the camera. The roll is the load-bearing part — a reload
+    // performed with the gun still level shows the player nothing but the top of
+    // the receiver while a magazine teleports somewhere underneath it.
     const present = u < 0.14 ? smoothstep(u / 0.14) : u > 0.86 ? 1 - smoothstep((u - 0.86) / 0.14) : 1;
-    motion.position.x += 0.030 * present;
-    motion.position.y -= 0.052 * present;
-    motion.position.z += 0.022 * present;
-    motion.rotation.x -= 0.10 * present;
-    motion.rotation.y += 0.34 * present;
-    motion.rotation.z += 0.46 * present;
+    motion.position.x -= 0.024 * present;
+    motion.position.y += 0.008 * present;
+    motion.position.z += 0.048 * present;
+    motion.rotation.x -= 0.07 * present;
+    motion.rotation.y += 0.30 * present;
+    motion.rotation.z -= 0.62 * present;
 
     const mag = model.nodes.mag, rest = model.rest.mag;
     if (mag && rest) {
@@ -428,8 +429,8 @@ export function createViewmodel(G, engine, materials) {
       } else if (u < 0.40) {                // falling free
         const t = (u - 0.20) / 0.20;
         mag.visible = true;
-        mag.position.set(rest.p.x, rest.p.y - 0.34 * t * t, rest.p.z + 0.05 * t);
-        mag.rotation.set(0.5 * t, 0.2 * t, -0.9 * t);
+        mag.position.set(rest.p.x, rest.p.y - 0.22 * t * t, rest.p.z + 0.04 * t);
+        mag.rotation.set(0.44 * t, 0.18 * t, -0.8 * t);
       } else if (u < 0.52) {                // hand is off-screen fetching
         mag.visible = false;
       } else if (u < 0.74) {                // coming up, angled into the well
