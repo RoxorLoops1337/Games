@@ -3706,6 +3706,9 @@ t.test('mimics: it is walking past that wakes it, not the test calling the watch
   const f = planted(rid);
   emptyRoom(rid);
   for (const m of HQ.monstersOf()) m.alive = false;
+  // nothing on the floor of that room to interrupt a walk across it: a trap
+  // hands the walk off to springTrap and the hero never arrives
+  HQ.G.q.traps = HQ.G.q.traps.filter(tr => HQ.roomAt(tr.x, tr.y) !== rid);
   const h = HQ.runAlive()[0];
   // a straight run of three squares inside the room, ending beside the chest —
   // derived from the room, because rooms are not all the same shape
@@ -3723,6 +3726,8 @@ t.test('mimics: it is walking past that wakes it, not the test calling the watch
   HQ.refreshField();
   t.eq(HQ.liars().length, 1, 'still furniture when the turn starts');
   HQ.heroWalk(h, path.steps, () => {});
+  // if the walk stopped short the rest of this proves nothing, so say so
+  t.eq([h.x, h.y].join(), path.steps[1].join(), 'the hero actually arrived beside it');
   t.eq(HQ.liars().length, 0, 'walking into reach is what does it');
   t.ok(HQ.monstersOf().some(m => m.mt === 'mimic' && m.alive), 'and there is a mimic where the chest was');
 });
@@ -4740,6 +4745,192 @@ t.test('blood: nothing owed, nothing to sell', () => {
   const owed = HQ.bloodOwed();
   t.eq(HQ.buyPedlar('bonesetter'), false, 'too poor');
   t.eq(HQ.bloodOwed(), owed, 'and still owing exactly as much');
+});
+
+/* ------------------------------------------ rooms nobody has looked into yet */
+
+t.test('unopened: the floor counts the rooms nobody has been into', () => {
+  runAt(3);
+  const all = HQ.ROOMS.length;
+  const n0 = HQ.roomsUnopened();
+  t.ok(n0 > 0 && n0 <= all, `some rooms are still shut (${n0}/${all})`);
+  const shut = HQ.ROOMS.map(r => r.id).filter(id => HQ.roomUnopened(id));
+  t.eq(shut.length, n0, 'and the count agrees with the rooms themselves');
+
+  HQ.revealRoom(shut[0]);
+  t.eq(HQ.roomsUnopened(), n0 - 1, 'opening one takes it off the count');
+  t.ok(!HQ.roomUnopened(shut[0]), 'and that room is no longer unopened');
+  t.ok(HQ.roomUnopened(shut[1]), 'while the next one still is');
+
+  // opening the same room twice does not double-count
+  HQ.revealRoom(shut[0]);
+  t.eq(HQ.roomsUnopened(), n0 - 1, 'and it only comes off once');
+
+  // clear the lot and it reads zero
+  for (const r of HQ.ROOMS) HQ.revealRoom(r.id);
+  t.eq(HQ.roomsUnopened(), 0, 'a floor you have been all over reads nothing left');
+});
+
+t.test('unopened: a door onto one is drawn differently from a door you have been through', () => {
+  runAt(3);
+  HQ.G.q.furn = [];
+  HQ.G.q.traps = [];
+  // one shut door, onto a room nobody has opened
+  const slot = HQ.DOOR_SLOTS.find(s => HQ.roomUnopened(s[0]));
+  t.ok(slot, 'the floor has an unopened room with a door');
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  for (const k in HQ.G.q.doors){ const o = HQ.G.q.doors[k]; o.open = true; o.secret = false; }
+  d.open = false; d.secret = false; d.locked = false; d.trialBolt = false;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.G.q.roomSeen[d.rid] = 0;                     // this one only
+  HQ.recomputeVision();
+  const cold = paintOf();
+  t.ok(paintedLike(cold, /^rgba\(150,200,235,/), 'an unopened door is outlined cold');
+  t.ok(paintedLike(cold, /^rgba\(180,220,245,/), 'with a pale band across it');
+
+  // walk through it and the invitation goes
+  HQ.G.q.roomSeen[d.rid] = 1;
+  const warm = paintOf();
+  t.ok(!paintedLike(warm, /^rgba\(150,200,235,/), 'a room you have been in stops asking');
+  t.ok(!paintedLike(warm, /^rgba\(180,220,245,/), 'and the band goes with it');
+
+  // and a bolted door keeps its bolt rather than an invitation
+  HQ.G.q.roomSeen[d.rid] = 0;
+  d.trialBolt = true;
+  const bolted = paintOf();
+  t.ok(!paintedLike(bolted, /^rgba\(150,200,235,/), 'a bolted door is not an invitation');
+  t.ok(painted(bolted, '#2b2126'), 'it is a bar');
+});
+
+/* --------------------------------------------- what a fallen friend was holding */
+
+// put a hero down on a known square, holding a known weapon and a potion
+function fell(where){
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const dead = HQ.runAlive()[1], taker = HQ.runAlive()[0];
+  dead.weapon = 'battleaxe';
+  dead.items = { potion: 2 };
+  taker.weapon = 'dagger';
+  taker.items = {};
+  put(dead, where[0], where[1]);
+  clearSquare(where[0], where[1]);
+  HQ.G.q.lastKiller = 'an Ogre Champion';
+  dead.bp = 1;
+  HQ.hurt(dead, 4, null);
+  return { dead, taker, body: HQ.G.q.bodies[0] };
+}
+
+t.test('bodies: what they were carrying goes down with them', () => {
+  const { dead, body } = fell([12, 9]);
+  t.ok(body, 'there is a body');
+  t.eq(body.weapon, 'battleaxe', 'holding what they were holding');
+  t.eq(body.items.potion, 2, 'and carrying what they were carrying');
+  t.eq(body.taken, false, 'and nobody has been back for it');
+  t.eq(HQ.bodyAt(12, 9), body, 'the square knows what is on it');
+  t.eq(HQ.bodyAt(1, 1), null, 'and an empty square does not');
+  t.ok(!dead.alive, 'they are still dead');
+});
+
+t.test('bodies: going back for it costs the action you were going to swing with', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9);
+  use(taker);
+  t.ok(HQ.bodyWorthTaking(body, taker), 'a battleaxe beats a dagger');
+  const got = HQ.takeUp(taker, body);
+  t.ok(got, 'they take it up');
+  t.eq(got.weapon, 'battleaxe', 'the axe');
+  t.eq(taker.weapon, 'battleaxe', 'and it is in their hands now');
+  t.eq(taker.items.potion, 2, 'with the potions');
+  t.ok(taker.acted, 'and the action is spent');
+  t.ok(body.taken, 'and the body has been gone through');
+  t.eq(HQ.takeUp(taker, body), null, 'there is nothing left on it');
+});
+
+t.test('bodies: a hero with nothing left to spend cannot kneel, and a worse blade is not worth it', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9);
+  taker.acted = true;
+  t.eq(HQ.takeUp(taker, body), null, 'no action, no taking');
+  t.eq(taker.weapon, 'dagger', 'still holding the dagger');
+  t.eq(body.taken, false, 'and the body is untouched');
+
+  // and a body holding worse steel and nothing else is not offered at all
+  const two = fell([12, 9]);
+  two.body.weapon = 'dagger';
+  two.body.items = {};
+  two.taker.weapon = 'broadsword';
+  put(two.taker, 12, 9);
+  use(two.taker);
+  t.ok(!HQ.bodyWorthTaking(two.body, two.taker), 'there is nothing on them worth the turn');
+  t.eq(HQ.bodyWatch(two.taker), null, 'so nobody is asked');
+
+  // but a worse blade with a potion on it still is
+  two.body.items = { potion: 1 };
+  t.ok(HQ.bodyWorthTaking(two.body, two.taker), 'the potion alone is worth kneeling for');
+  const got = HQ.takeUp(two.taker, two.body);
+  t.eq(got.weapon, null, 'they keep their own steel');
+  t.eq(two.taker.weapon, 'broadsword', 'the better one');
+  t.eq(two.taker.items.potion, 1, 'and take the potion');
+});
+
+t.test('bodies: standing on one is what asks the question', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 14, 9);
+  use(taker);
+  t.eq(HQ.bodyWatch(taker), null, 'two squares off and nobody asks');
+  put(taker, 12, 9);
+  t.eq(HQ.bodyWatch(taker), body, 'standing on them does');
+  // and a dead hero is asked nothing
+  taker.alive = false;
+  t.eq(HQ.bodyWatch(taker), null, 'the dead do not go through pockets');
+});
+
+/* ------------------------------------------------------ the pedlar buys back */
+
+t.test('selling: a boon you never use is worth something, but not a blood price', () => {
+  t.ok(HQ.SELL_PRICE > 100, 'he pays a real amount');
+  runAt(3);
+  HQ.G.run.boons = [];
+  HQ.G.run.gold = 0;
+  HQ.takeBoon('swiftboots');
+  HQ.takeBoon('bloodprice');
+  const list = HQ.sellable();
+  t.ok(list.includes('swiftboots'), 'an ordinary boon is on the shelf');
+  t.ok(!list.includes('bloodprice'), 'and a blood price is not — that is between you and the stone');
+
+  const before = HQ.G.run.gold;
+  const sale = HQ.sellBoon('swiftboots');
+  t.ok(sale, 'the sale goes through');
+  t.eq(sale.paid, HQ.SELL_PRICE, 'for what he said');
+  t.eq(HQ.G.run.gold, before + HQ.SELL_PRICE, 'and the purse has it');
+  t.ok(!HQ.boonHas('swiftboots'), 'and the boon is gone');
+  t.ok(HQ.boonHas('bloodprice'), 'while what you bled for stays');
+
+  t.eq(HQ.sellBoon('bloodprice'), null, 'he will not take a blood price');
+  t.ok(HQ.boonHas('bloodprice'), 'and it is still yours');
+  t.eq(HQ.sellBoon('swiftboots'), null, 'nor something you already sold');
+});
+
+t.test('selling: Stout Heart gives back the Body Point it lent', () => {
+  runAt(3);
+  HQ.G.run.boons = [];
+  const caps = HQ.G.run.heroes.map(h => h.bpMax);
+  HQ.takeBoon('stoutheart');
+  HQ.G.run.heroes.forEach((h, i) => t.eq(h.bpMax, caps[i] + 1, `${h.name} is up one`));
+  HQ.sellBoon('stoutheart');
+  HQ.G.run.heroes.forEach((h, i) => t.eq(h.bpMax, caps[i], `${h.name} gives it back`));
+  HQ.G.run.heroes.forEach(h => t.ok(h.bp <= h.bpMax, 'and nobody is over their cap'));
+
+  // selling the effect really removes it
+  runAt(3);
+  HQ.G.run.boons = [];
+  const h2 = HQ.runAlive()[0];
+  const d0 = HQ.defendDice(h2);
+  HQ.takeBoon('ironskin');
+  t.eq(HQ.defendDice(h2), d0 + 1, 'iron skin is worth a die');
+  HQ.sellBoon('ironskin');
+  t.eq(HQ.defendDice(h2), d0, 'and selling it takes the die back');
 });
 
 t.run();
