@@ -48,6 +48,8 @@
   .pill.streak.hot{color:#ffdca6;border-color:rgba(232,150,60,.75);box-shadow:0 0 12px rgba(232,150,60,.35)}
   .pill.streak.max{color:#fff0d0;border-color:rgba(255,170,70,.95);box-shadow:0 0 18px rgba(255,150,60,.55)}
   .pill.eye.hot{color:#ffd9d1;border-color:rgba(224,80,60,.9);box-shadow:0 0 14px rgba(176,58,44,.5)}
+  /* rooms nobody has looked into yet — pale and cold, not a warning */
+  .pill.shut{color:#b9cfe0;border-color:rgba(150,190,220,.38)}
   #menubtn{pointer-events:auto;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
     font-size:15px;background:rgba(20,17,13,.85);border:1px solid var(--line);color:var(--ink)}
 
@@ -216,6 +218,7 @@
     <div class="pill fate" id="fatepill">✦ <span id="faten">0</span></div>
   <div class="pill streak" id="streakpill" style="display:none">⚔ <span id="streakn">0</span></div>
   <div class="pill eye" id="wrathpill" style="display:none">👁</div>
+  <div class="pill shut" id="doorpill" style="display:none">🚪 <span id="doorn">0</span></div>
   <div class="pill" id="turnpill">Turn <span id="turnn">1</span></div>
     <div id="menubtn">☰</div>
   </div>
@@ -1112,6 +1115,11 @@ function revealRoom(rid){
 }
 const tileVisible = (x,y) => !!(G.q.vis && G.q.vis[idx(x,y)]);
 const tileSeen = (x,y) => !!G.q.seen[idx(x,y)];
+// Rooms nobody has looked into yet. A cleared room and one you never opened
+// look identical on the board; this is what tells them apart.
+const roomUnopened = (rid) => rid >= 0 && !G.q.roomSeen[rid];
+const roomsUnopened = () => (G && G.q && G.q.roomSeen)
+  ? ROOMS.reduce((n, r) => n + (G.q.roomSeen[r.id] ? 0 : 1), 0) : 0;
 
 /* -------------------------------------------------- 4. THE DUNGEON'S FACE */
 // The floor, the walls and the stairs are baked once into a big offscreen
@@ -2810,6 +2818,16 @@ function drawDoor(g, d, t){
       g.fillStyle = `rgba(200,150,255,${.25 + Math.sin(t*.004)*.15})`;
       g.beginPath(); g.arc(-w*.28, 0, h*.16, 0, 6.284); g.fill();
     }
+    // Nobody has been through this one. Pale and cold, and slow — it is an
+    // invitation, not a warning, and the warnings on this board are hot and fast.
+    if (roomUnopened(d.rid) && !d.trialBolt){
+      const q = .5 + Math.sin(t*.0018)*.5;
+      g.strokeStyle = `rgba(150,200,235,${(.16 + q*.26).toFixed(3)})`;
+      g.lineWidth = 2;
+      rr(g, -w/2 - 1, -h/2 - 1, w + 2, h + 2, 3); g.stroke();
+      g.fillStyle = `rgba(180,220,245,${(.10 + q*.16).toFixed(3)})`;
+      g.fillRect(-w/2, -h*.06, w, h*.12);
+    }
     // A trial's bolt is not a lock — no key fits it, and it costs a Body Point
     // to shift. It gets a bar across the whole door so the cost is never a
     // surprise: you can see what you are about to put a shoulder through.
@@ -3861,6 +3879,7 @@ function heroWalk(h, path, done){
     checkQuestState();
     renderHUD();
     if (done) done();
+    bodyWatch(h);                       // you are standing on somebody
   };
   step();
 }
@@ -4178,7 +4197,11 @@ function heroFalls(a){
     // board for the rest of the floor, not a banner that goes past.
     if (!G.q.bodies) G.q.bodies = [];
     if (!G.q.bodies.some(b => b.id === a.id))
-      G.q.bodies.push({ id:a.id, name:a.name, x:a.x, y:a.y, by, t:0 });
+      // what they were carrying goes down with them, and can be picked back up
+      G.q.bodies.push({ id:a.id, name:a.name, x:a.x, y:a.y, by, t:0,
+        weapon: a.weapon || null,
+        items: Object.assign({}, a.items || {}),
+        taken: false });
     G.q.streak = 0;
   }
 
@@ -4734,6 +4757,78 @@ function springLiar(f, h, quiet){
   return m;
 }
 const springMimic = springLiar;                // the name it had when it was only chests
+
+/* --------------------------------------------------- WHAT THEY WERE CARRYING */
+// A body has been sitting on its square doing nothing since the fall got its
+// own beat. Their weapon is still in their hand. Going back for it costs the
+// action you were going to spend on something else, which is the whole point:
+// walking to a dead friend has to compete with fighting.
+
+const bodyAt = (x,y) => (G.q && G.q.bodies ? G.q.bodies.find(b => b.x === x && b.y === y) || null : null);
+function bodyWorthTaking(b, h){
+  if (!b || b.taken || !h) return false;
+  const theirs = WEAPONS[b.weapon], mine = weaponOf(h);
+  const betterWeapon = !!(theirs && !theirs.quest && theirs.dice > mine.dice);
+  const anyItems = Object.keys(b.items || {}).some(k => b.items[k] > 0);
+  return betterWeapon || anyItems;
+}
+function bodyWatch(h){
+  if (!G || !G.q || G.q.over || !h || !h.alive) return null;
+  const b = bodyAt(h.x, h.y);
+  if (!bodyWorthTaking(b, h)) return null;
+  if (HEADLESS) return b;                       // tests call takeUp themselves
+  if (h.acted) return b;                        // nothing left to spend on it
+  showBody(h, b);
+  return b;
+}
+function takeUp(h, b){
+  if (!h || !b || b.taken || h.acted) return null;
+  const theirs = WEAPONS[b.weapon], mine = weaponOf(h);
+  const got = { weapon:null, items:[] };
+  h.acted = true;
+  b.taken = true;
+  if (theirs && !theirs.quest && theirs.dice > mine.dice){
+    h.weapon = b.weapon;
+    got.weapon = b.weapon;
+  }
+  for (const k in (b.items || {})){
+    const n = b.items[k];
+    if (!n) continue;
+    h.items[k] = (h.items[k] || 0) + n;
+    got.items.push(k);
+  }
+  sfx('gold');
+  say(got.weapon
+    ? `${h.name} takes up ${b.name}'s ${theirs.name}.`
+    : `${h.name} takes what ${b.name} was carrying.`, 'good');
+  spark(b.x, b.y, 16, '#c8a24a', { spd:.014, up:.005 });
+  renderHUD(); saveRun();
+  return got;
+}
+function showBody(h, b){
+  const theirs = WEAPONS[b.weapon], mine = weaponOf(h);
+  const better = !!(theirs && !theirs.quest && theirs.dice > mine.dice);
+  const items = Object.keys(b.items || {}).filter(k => b.items[k] > 0);
+  modal(`<h2>${b.name}</h2>
+    <div class="sub" style="margin:2px 0 0">Where they went down</div>
+    <div class="rule"></div>
+    <p class="flavor">Cut down by ${b.by}. Their hands are still closed around it.</p>
+    ${better ? `<div class="row"><div class="ic">${theirs.ic}</div>
+      <div class="tx"><b>${theirs.name}</b><s>${theirs.desc}<br>Yours throws ${mine.dice} ${
+        mine.dice === 1 ? 'die' : 'dice'}; this throws ${theirs.dice}.</s></div></div>` : ''}
+    ${items.map(k => `<div class="row"><div class="ic">${k === 'potion' ? '🧪' : '⚱'}</div>
+      <div class="tx"><b>${k === 'potion' ? 'Healing Potion' : 'Holy Water'} ×${b.items[k]}</b>
+      <s>Still in their pack.</s></div></div>`).join('')}
+    <div class="row"><div class="ic">⌛</div><div class="tx"><b>It costs your action</b>
+      <s>Kneeling to take it is the turn you were going to spend swinging.</s></div></div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mTakeUp">Take it up</button>
+      <button class="btn ghost" id="mLeaveThem">Leave them</button>
+    </div>`);
+  bindModal('#mTakeUp', () => { closeModal(); takeUp(h, b); });
+  bindModal('#mLeaveThem', () => { closeModal(); say(`${b.name} is left where they fell.`, ''); });
+}
 
 function showChest(h, chest){
   const pct = Math.round(FORCE_RISK*100);
@@ -5357,6 +5452,14 @@ function renderHUD(){
     $('streakn').textContent = next === undefined ? String(n) : `${n}/${next}`;
     sp.classList.toggle('hot', n >= 5);
     sp.classList.toggle('max', next === undefined);
+  }
+  // The board says a great deal about where you have been and nothing about
+  // where you have not. This is the count of rooms nobody has looked into.
+  const dp = $('doorpill');
+  if (dp){
+    const n = roomsUnopened();
+    dp.style.display = n > 0 ? '' : 'none';
+    $('doorn').textContent = n;
   }
   const wp = $('wrathpill');
   if (wp){
@@ -6996,6 +7099,24 @@ const PEDLAR = [
 ];
 // How much of the party's maximum the blood prices are still holding.
 const bloodOwed = () => (G.run ? G.run.heroes.reduce((n,h) => n + (h.tolled || 0), 0) : 0);
+
+/* ------------------------------------------------- SELLING WHAT YOU DO NOT USE */
+// The stake gambles a boon away. This lets you choose to. A blood price is not
+// for sale — you paid for that in Body Points, and the Bonesetter handles it.
+const SELL_PRICE = 190;
+const sellable = () => (G.run ? G.run.boons.filter(id => BOON(id) && !BLOOD(id)) : []);
+function sellBoon(id){
+  if (!G.run || !sellable().includes(id)) return null;
+  const b = BOON(id);
+  const i = G.run.boons.indexOf(id);
+  G.run.boons.splice(i, 1);
+  if (id === 'stoutheart') for (const h of G.run.heroes){ h.bpMax = Math.max(1, h.bpMax - 1); h.bp = Math.min(h.bp, h.bpMax); }
+  G.run.gold += SELL_PRICE;
+  sfx('gold');
+  say(`${b.name} goes into the pedlar's bag. ◈ ${SELL_PRICE}.`, 'good');
+  renderHUD(); saveRun();
+  return { id, paid: SELL_PRICE };
+}
 function buyPedlar(id){
   if (!G.run) return false;
   const it = PEDLAR.find(p => p.id === id);
@@ -7117,6 +7238,15 @@ function showDraft(){
         p.id === 'bonesetter' ? `<br>The stone is holding ${owed} between you.` : ''}</s></div>
       <button class="bu" data-ped="${p.id}" ${G.run.gold < p.cost ? 'disabled' : ''}>◈ ${p.cost}</button>
     </div>`).join('');
+  // and he buys as well as sells — a boon you never use is worth something
+  const forSale = sellable();
+  const sellRow = !forSale.length ? '' : `<div class="rule"></div><div class="row">
+      <div class="ic">🪙</div>
+      <div class="tx"><b>He buys, too</b><s>◈ ${SELL_PRICE} for a boon you never use.
+        Not the ones you paid for in blood — those are between you and the stone.</s></div>
+    </div>
+    <div class="stakebar">${forSale.map(id => `<button class="bu" data-sell="${id}">${
+      BOON(id).ic} ${BOON(id).name}</button>`).join('')}</div>`;
   // Eight things on one scroll was too many. Three tabs: what you take, what
   // you spend, and where you go. The party and the purse stay above all three,
   // because they are the numbers every one of those decisions is made against.
@@ -7126,7 +7256,7 @@ function showDraft(){
   const panes = {
     boons: `${head(draftState.taken ? 'Taken' : 'Take one boon')}${rows}${bloodRow}${wagerRow}${stakeRow}${
       draftState.taken ? `<p class="flavor" style="text-align:center;margin-top:12px">Nothing else to take here. The stair is waiting.</p>` : ''}`,
-    coin:  `${wager}${wager ? '<div class="rule"></div>' : ''}${head('The pedlar on the stair')}${ped}`,
+    coin:  `${wager}${wager ? '<div class="rule"></div>' : ''}${head('The pedlar on the stair')}${ped}${sellRow}`,
     stair: `${head('Choose your stair')}${stairs}`,
     // how far this has got before, next to how far it has got this time
     book:  `${head('This descent')}<div class="qlist">${thisRunRow()}</div>
@@ -7161,6 +7291,7 @@ function showDraft(){
     showDraft();
   });
   bindAll('.bu[data-stake]', el => { if (stakeBoon(el.dataset.stake)) showDraft(); });
+  bindAll('.bu[data-sell]', el => { if (sellBoon(el.dataset.sell)) showDraft(); });
   bindAll('.bu[data-wager]', () => { if (wagerDraft()) showDraft(); });
   bindAll('.bu[data-ped]', el => { if (buyPedlar(el.dataset.ped)) showDraft(); });
   bindAll('.bu[data-dbl]', () => {
@@ -7559,6 +7690,8 @@ globalThis.HQ = {
   BOSS_LINES, bossOf, bossIntro, BOSS_LAST, bossLastWords,
   placePlinth, trialPlinth, vaultPlinth, plinths, plinthFor, spendPlinth, plinthRelic, plinthRelicOf,
   drawRelicOn, drawBody, drawRansacked, DRAFT_TABS, TRIAL_KINDS, markedOne, bloodOwed,
+  roomUnopened, roomsUnopened, bodyAt, bodyWorthTaking, bodyWatch, takeUp, showBody,
+  SELL_PRICE, sellable, sellBoon,
   historyRows, thisRunRow, STREAK_SHOW,
   LIE_FROM, LIE_CHANCE, LIARS, LIAR_TYPES, liars, lyingChests,
   mimicWatch, springLiar, springMimic, TRIAL_WRATH,

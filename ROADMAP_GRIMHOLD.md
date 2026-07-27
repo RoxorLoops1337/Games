@@ -142,25 +142,33 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   blood price took, and heals it. You keep the boon; you bought the point back,
   not an undo. He only appears when the stone is holding something. *(batch 15)*
 
+- **Rooms nobody has opened** — a pill counting them, and a cold pale outline on
+  the doors onto them. An invitation, not a warning: slow and blue, where the
+  warnings on this board are hot and fast. *(batch 16)*
+- **What a fallen friend was holding** — stand on a body and it asks. Their
+  weapon if it beats yours, their potions either way, for the action you were
+  going to spend swinging. *(batch 16)*
+- **The pedlar buys** — 190 gold for a boon you never use. Not the ones you paid
+  for in blood; those are between you and the stone. *(batch 16)*
+
 ---
 
 ## Next up
 
-1. **A room you have never opened should look different from one you cleared.**
-   The board says a lot about where you *have* been — opened chests, ransacked
-   shelves, disarmed traps, bodies. It cannot say where you have not.
-2. **Bodies the Warlock can use.** A hero's remains sit there doing nothing. A
-   necromancer raising one, or a hero taking back a fallen friend's weapon,
-   would make the mark on the square matter.
-3. **Sell a boon to the pedlar.** Gold for one you never use. The stake gambles
-   one away; this would let you choose to, and the Bonesetter has just made the
-   pedlar the place where regret gets undone.
+1. **The Warlock should want the bodies too.** Taking a friend's blade back is
+   the party's half of it. A sorcerer raising one, after a turn or two of
+   warning, would make leaving them where they fell a real risk instead of just
+   a missed pickup.
+2. **A liar that gets a second chance.** Every liar springs once and is then an
+   ordinary monster. One that could sink back into being furniture if it lost
+   sight of you would be genuinely unsettling.
+3. **Gambler's Coffin.** A room feature: roll a die, skull pays, black shield
+   opens it. Repeatable, stakes climbing each pull. The last unbuilt gamble on
+   the list, and the board now has the vocabulary for it.
 
 ## Backlog, roughly in order of value
 
 ### Gamble
-- **Gambler's Coffin** room feature: roll a die, skull = treasure, black shield =
-  something climbs out. Repeatable, stakes rise each pull.
 - **Force the door.** Forcing works on chests; a locked or stuck door should ask
   the same question, with noise instead of a needle as the cost.
 ### Roguelike depth
@@ -183,13 +191,14 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **Everything dangerous pulses; nothing safe does.** That fell out of the
   disarmed trap and is worth making a rule. The lying furniture is the one
   thing that breaks it deliberately, which is exactly why it works.
-- **Tests that walk should derive their path from the room.** A batch-12 test
-  assumed a fixed room width and flaked once in twelve runs. Anything driving
-  `heroWalk` wants the same treatment.
-- **A liar that gets a second chance.** Every liar springs once and is then an
-  ordinary monster. One that could sink back into being furniture if it lost
-  sight of you would be genuinely unsettling.
-- **The paint recorder.** The suite can now assert what colours a frame reached
-  for, which is what finally made art changes testable. Worth using on the older
-  render paths — the fog, the light falloff, the death fade — which have never
-  had a test that would notice them breaking.
+- **A walking test must assert that it arrived.** The batch-12 walk test has
+  now flaked twice: first on room width, then on a trap handing the walk off to
+  `springTrap` mid-stride. It clears the room's traps and checks the hero's
+  square before asserting anything else. Every test driving `heroWalk` wants
+  both — a path derived from the room, and proof the hero got there.
+- **The pedlar is becoming the regret shop.** He lifts curses, buys back blood
+  and now buys boons. That is a coherent identity worth leaning into rather
+  than letting it accrete: he should probably have his own screen, not a row.
+- **The paint recorder is now the way art gets tested.** Four batches have used
+  it. Anything drawn conditionally should be asserted through it rather than
+  through "draw() did not throw", which passes either way.
