@@ -447,6 +447,17 @@ function applyRecoil(G, w, ads) {
   w.lastShot = G.time.t;
 }
 
+// Every event this module emits came out of the gun in the player's hands, one
+// metre from his ear. Stamping that on all of them saves the audio layer a
+// distance guess that goes wrong the first time a hostile fires from arm's
+// length — and gives the AI the same fields to fill in for its own weapons.
+function wemit(G, type, data) {
+  data.local = true;
+  data.team = C.TEAM.PLAYER;
+  if (data.source === undefined) data.source = 'player';
+  return emit(G, type, data);
+}
+
 const FALLBACK_RECOIL = WEAPONS.rifle.recoil;
 
 // Integrates the view toward the pattern target, and the target back toward
@@ -518,7 +529,7 @@ function startReload(G, w) {
     w.phase = 'mag';
     w.reloadDur = w.chambered ? w.reload.tac : w.reload.empty;
   }
-  emit(G, 'reload', {
+  wemit(G, 'reload', {
     weapon: w.id, phase: 'start', slot: G.weapons.active,
     ammo: w.ammo, res: w.res, empty: !w.chambered, shell: w.reloadMode === 'shell',
     duration: w.reloadMode === 'shell' ? w.reload.start : w.reloadDur,
@@ -533,13 +544,13 @@ function cancelReload(G, w, why) {
     // reason to reload a shotgun one round at a time next to a doorway.
     w.phase = 'end';
     w.phaseT = w.reload.cancel;
-    emit(G, 'reload', { weapon: w.id, phase: 'cancel', reason: why, ammo: w.ammo, res: w.res });
+    wemit(G, 'reload', { weapon: w.id, phase: 'cancel', reason: why, ammo: w.ammo, res: w.res });
     return true;
   }
   w.state = 'idle';
   w.phase = '';
   w.reloadT = 0;
-  emit(G, 'reload', { weapon: w.id, phase: 'cancel', reason: why, ammo: w.ammo, res: w.res });
+  wemit(G, 'reload', { weapon: w.id, phase: 'cancel', reason: why, ammo: w.ammo, res: w.res });
   return true;
 }
 
@@ -552,7 +563,7 @@ function finishReload(G, w) {
   w.phase = '';
   w.bolt = false;
   w.dry = false;
-  emit(G, 'reload', { weapon: w.id, phase: 'end', ammo: w.ammo, res: w.res, loaded: take });
+  wemit(G, 'reload', { weapon: w.id, phase: 'end', ammo: w.ammo, res: w.res, loaded: take });
 }
 
 function stepReload(G, w, dt) {
@@ -570,21 +581,21 @@ function stepReload(G, w, dt) {
     if (w.phase === 'shell') {
       w.ammo++; w.res--;
       w.bolt = false; w.dry = false;
-      emit(G, 'reload', { weapon: w.id, phase: 'shell', ammo: w.ammo, res: w.res, shell: w.ammo });
+      wemit(G, 'reload', { weapon: w.id, phase: 'shell', ammo: w.ammo, res: w.res, shell: w.ammo });
       const cap = w.mag + (w.chambered ? 1 : 0);
       if (w.ammo >= cap || w.res <= 0) {
         w.phase = 'end';
         w.phaseT = w.reload.end - over;
         // Run the tube dry and the action is open: the pump-out that closes the
         // reload is also what chambers the first shell.
-        if (!w.chambered) emit(G, 'reload', { weapon: w.id, phase: 'bolt', ammo: w.ammo, res: w.res });
+        if (!w.chambered) wemit(G, 'reload', { weapon: w.id, phase: 'bolt', ammo: w.ammo, res: w.res });
       } else w.phaseT = w.reload.shell - over;
       return;
     }
     // end / cancel pump-out
     w.state = 'idle';
     w.phase = '';
-    emit(G, 'reload', { weapon: w.id, phase: 'end', ammo: w.ammo, res: w.res, loaded: 0 });
+    wemit(G, 'reload', { weapon: w.id, phase: 'end', ammo: w.ammo, res: w.res, loaded: 0 });
     return;
   }
 
@@ -592,11 +603,11 @@ function stepReload(G, w, dt) {
   const rl = w.reload;
   if (!(w.reloadFlags & 1) && w.reloadT >= rl.magout) {
     w.reloadFlags |= 1;
-    emit(G, 'reload', { weapon: w.id, phase: 'magout', ammo: w.ammo, res: w.res });
+    wemit(G, 'reload', { weapon: w.id, phase: 'magout', ammo: w.ammo, res: w.res });
   }
   if (!(w.reloadFlags & 2) && w.reloadT >= rl.magin) {
     w.reloadFlags |= 2;
-    emit(G, 'reload', { weapon: w.id, phase: 'magin', ammo: w.ammo, res: w.res });
+    wemit(G, 'reload', { weapon: w.id, phase: 'magin', ammo: w.ammo, res: w.res });
   }
   // The bolt only has to be released when the last round locked it back, so this
   // beat exists on the empty reload and nowhere else. It is the loudest, most
@@ -604,7 +615,7 @@ function stepReload(G, w, dt) {
   // says "you are back in the fight" a quarter-second before you actually are.
   if (!w.chambered && !(w.reloadFlags & 4) && w.reloadT >= (rl.bolt != null ? rl.bolt : w.reloadDur * 0.82)) {
     w.reloadFlags |= 4;
-    emit(G, 'reload', { weapon: w.id, phase: 'bolt', ammo: w.ammo, res: w.res });
+    wemit(G, 'reload', { weapon: w.id, phase: 'bolt', ammo: w.ammo, res: w.res });
   }
   if (w.reloadT >= w.reloadDur) finishReload(G, w);
 }
@@ -642,7 +653,7 @@ export function requestSwap(G, slot) {
   W.pending = slot;
   W.swapPhase = 'holster';
   W.swapT = cur ? cur.swap.holster : 0.2;
-  emit(G, 'swap', { phase: 'holster', from: cur ? cur.id : null, to: W.slots[slot].id, slot });
+  wemit(G, 'swap', { phase: 'holster', from: cur ? cur.id : null, to: W.slots[slot].id, slot });
   return true;
 }
 
@@ -661,7 +672,7 @@ function stepSwap(G, dt) {
     if (to) { to.shotIndex = 0; to.bloom = 0; to.cool = 0; to.buffer = 0; to.burstLeft = 0; }
     W.swapPhase = 'draw';
     W.swapT = (to ? to.swap.draw : 0.3) - over;
-    emit(G, 'swap', {
+    wemit(G, 'swap', {
       phase: 'draw', from: from ? from.id : null, to: to ? to.id : null,
       slot: W.active, ammo: to ? to.ammo : 0, res: to ? to.res : 0,
     });
@@ -670,7 +681,7 @@ function stepSwap(G, dt) {
   W.swapPhase = '';
   W.swapT = 0;
   const to = W.slots[W.active];
-  emit(G, 'swap', { phase: 'ready', to: to ? to.id : null, slot: W.active });
+  wemit(G, 'swap', { phase: 'ready', to: to ? to.id : null, slot: W.active });
 }
 
 // ── firing ───────────────────────────────────────────────────────────────────
@@ -699,14 +710,13 @@ function shoot(G, w, age) {
   G.stats.shots++;
   const shotId = ++W.shotId;
 
-  emit(G, 'shot', {
+  wemit(G, 'shot', {
     weapon: w.id, name: w.name, slot: W.active, shotId,
     // `class` is the synthesis fingerprint, not the human archetype: the audio
     // layer only knows six gun voices, so the Kestrel borrows the sniper's and
     // the Talon the rifle's. `local` and `team` say whose gun this was — a
     // distance test cannot, the moment a hostile fires from arm's length.
-    class: w.class, archetype: w.archetype, local: true, team: C.TEAM.PLAYER,
-    source: 'player', silenced: !!w.silenced, muzzle: w.muzzle,
+    class: w.class, archetype: w.archetype, silenced: !!w.silenced, muzzle: w.muzzle,
     origin, dir: { x: _dir.x, y: _dir.y, z: _dir.z },
     spread: cone, spreadDeg: cone / DEG, bloom: w.bloom,
     ammo: w.ammo, res: w.res, mode: w.mode, pellets: n,
@@ -732,7 +742,7 @@ function shoot(G, w, age) {
   if (hit) G.stats.hits++;
   G.stats.accuracy = G.stats.shots ? G.stats.hits / G.stats.shots : 0;
   if (kills || dmg) {
-    emit(G, 'shotResult', { weapon: w.id, shotId, damage: dmg, kills, headshot });
+    wemit(G, 'shotResult', { weapon: w.id, shotId, damage: dmg, kills, headshot });
   }
 
   w.bloom = Math.min(w.bloom + w.spread.perShot, w.spread.bloomMax);
@@ -743,7 +753,7 @@ function shoot(G, w, age) {
     // Bolt catch: the action locks open on the last round, which is why the next
     // reload is the slow one and why the HUD can show an empty gun.
     w.bolt = true;
-    emit(G, 'boltCatch', { weapon: w.id, res: w.res });
+    wemit(G, 'boltCatch', { weapon: w.id, res: w.res });
   }
 }
 
@@ -778,7 +788,7 @@ export function updateWeapons(G, dt) {
   if (p.sprinting) cancelReload(G, w, 'sprint');
   if (w.pumpT > 0) {
     w.pumpT -= dt;
-    if (w.pumpT <= 0) { w.pumpT = 0; emit(G, 'cycle', { weapon: w.id, ammo: w.ammo }); }
+    if (w.pumpT <= 0) { w.pumpT = 0; wemit(G, 'cycle', { weapon: w.id, ammo: w.ammo }); }
   }
 
   // ── aim down sights ───────────────────────────────────────────────────────
@@ -788,8 +798,8 @@ export function updateWeapons(G, dt) {
   // die because the gun would not come down.
   const rate = 1 / Math.max(w.adsTime, 1e-3);
   p.ads = clamp(p.ads + (wantAds ? rate : -rate * 1.4) * dt, 0, 1);
-  if (wantAds && !W.adsHeld) emit(G, 'adsIn', { weapon: w.id, zoom: w.zoom, time: w.adsTime });
-  else if (!wantAds && W.adsHeld) emit(G, 'adsOut', { weapon: w.id, zoom: w.zoom });
+  if (wantAds && !W.adsHeld) wemit(G, 'adsIn', { weapon: w.id, zoom: w.zoom, time: w.adsTime });
+  else if (!wantAds && W.adsHeld) wemit(G, 'adsOut', { weapon: w.id, zoom: w.zoom });
   W.adsHeld = wantAds;
 
   // ── slot select ───────────────────────────────────────────────────────────
@@ -835,7 +845,7 @@ export function updateWeapons(G, dt) {
     if (!canShoot(G, w)) {
       if (w.ammo <= 0 && w.state !== 'reload' && W.swapT <= 0 && !w.dry) {
         w.dry = true;
-        emit(G, 'dryfire', { weapon: w.id, slot: W.active, res: w.res });
+        wemit(G, 'dryfire', { weapon: w.id, slot: W.active, res: w.res });
         w.buffer = 0;
         // Auto-reload on an empty trigger pull. Every shooter does this because
         // the alternative is players standing in the open pulling a dead trigger.
