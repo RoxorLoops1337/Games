@@ -33,25 +33,35 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   furniture; bloodied goblins break off and run. *(batch 2)*
 - **Held dice** — a pool you could spend Fate on waits for you instead of
   resolving half a second after it lands. *(batch 2, reported)*
+- **Altars** — pray free at 58%, or bleed two Body Points for the greater table
+  at 82%. Blessings, and four curses that bite back. *(batch 3)*
+- **Double or nothing** — a cleared floor's takings sit unbanked on the
+  between-floors screen. One combat die: skull doubles, white shield holds,
+  black shield takes the lot. Press as often as you dare. *(batch 3)*
+- **Locked vaults** — from depth 3, a room may be sealed and its key carried by
+  a champion standing outside it. Three chests inside, and the vault pays
+  250-450 a search. *(batch 3)*
 
 ---
 
 ## Next up
 
-1. **Shrines and cursed altars.** A room feature you may use once: pray for a
-   random blessing, or bleed a Body Point on the altar for a boon. Both tables
-   contain something bad.
-2. **Double or nothing.** At the between-floors screen, stake the floor's gold on
-   one combat die: skull doubles it, black shield takes the lot.
-3. **Locked vaults.** A sealed treasure room on some floors; the key drops from a
-   champion. Gives elites a reason to be hunted rather than avoided.
+1. **Curses you carry.** The altar's curse table is one-shot; make some of it
+   stick. A carried curse is a visible drawback (−1 defend die, doors cost your
+   action, monsters wake a room early) that you can pay a shrine or the pedlar to
+   lift — or keep, because some of them pay.
+2. **Hero progression inside a run.** Kills earn a pick at set thresholds: a
+   weapon die, a defend die, a spell slot, a Fate. Gives a long run a shape
+   beyond boons.
+3. **The Warlock's attention meter.** Fills with turns spent and coin taken; at
+   thresholds he intervenes — reinforcements at the stair, a door sealed behind
+   you, a curse on the richest hero. Makes greed cost something.
 
 ## Backlog, roughly in order of value
 
 ### Gamble
-- **Double or nothing** on the floor's gold at the between-floors screen: one
-  combat die, skull doubles the pot, black shield takes it.
 - **The Warlock's Wager.** Spend Fate to reroll the *entire draft*.
+- **Stake a boon.** Offer to wager a held boon on a die for two of them.
 - **Blood price boons.** A second, stronger boon offered beside the three, which
   costs maximum Body Points instead of nothing.
 - **Forced chests.** Open carefully (small, safe) or force it (better, may be
@@ -60,7 +70,8 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   something climbs out. Repeatable, stakes rise each pull.
 
 ### Roguelike depth
-- **Locked vaults.** A sealed treasure room; the key drops from an elite.
+- **Vault variants.** A vault that is trapped, or one whose key is held by a
+  champion that flees.
 - **Curses.** Persistent drawbacks you accept for a strong reward; removable at a
   shrine or by paying the pedlar.
 - **Hero progression inside a run.** Kills earn a small pick at set thresholds —

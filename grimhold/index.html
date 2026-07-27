@@ -865,6 +865,21 @@ function startQuest(qi, def, seed){
     Q.traps.push({ x, y, t:TT[Math.floor(R()*TT.length)], found:false, sprung:false, disarmed:false });
   }
 
+  // --- the vault: one room sealed, its key on a champion's belt ----------
+  Q.vault = -1; Q.key = false;
+  const keyBearer = Q.actors.some(a => a.elite && roomAt(a.x, a.y) !== q.vault);
+  if (q.vault !== undefined && q.vault >= 0 && keyBearer){
+    Q.vault = q.vault;
+    for (const k in Q.doors) if (Q.doors[k].rid === Q.vault) Q.doors[k].locked = true;
+    // and it is worth breaking into
+    const spots = roomTiles(Q.vault).filter(([x,y]) => !furnAt(x,y) && !actorAt(x,y));
+    for (let i = 0; i < Math.min(3, spots.length); i++){
+      const [x,y] = spots[Math.floor(R()*spots.length)];
+      if (furnAt(x,y)) continue;
+      Q.furn.push({ t:'chest', r:Q.vault, x, y, w:1, h:1, rot:0, quest:null, taken:false, searched:false, vault:true });
+    }
+  }
+
   // stairs and the corridor around them start lit
   for (const [x,y] of STAIRS) Q.seen[idx(x,y)] = 1;
   recomputeVision();
@@ -2353,6 +2368,16 @@ function drawDoor(g, d, t){
       g.fillStyle = `rgba(200,150,255,${.25 + Math.sin(t*.004)*.15})`;
       g.beginPath(); g.arc(-w*.28, 0, h*.16, 0, 6.284); g.fill();
     }
+    if (d.locked){
+      const lit = G.q.key ? .9 : .45 + Math.sin(t*.004)*.2;
+      g.fillStyle = `rgba(216,168,60,${lit})`;
+      g.fillRect(-w*.34, -h*.20, w*.16, h*.40);
+      g.fillStyle = 'rgba(20,16,10,.85)';
+      g.beginPath(); g.arc(-w*.26, -h*.02, h*.09, 0, 6.284); g.fill();
+      g.fillRect(-w*.29, -h*.02, w*.06, h*.16);
+      g.strokeStyle = `rgba(216,168,60,${lit})`; g.lineWidth = 2.4;
+      g.beginPath(); g.arc(-w*.26, -h*.20, h*.13, Math.PI, 0); g.stroke();
+    }
   }
   g.restore();
 }
@@ -3557,6 +3582,11 @@ function kill(a){
     if (a.elite){
       G.q.pot = (G.q.pot || 0) + 30;
       addFate(1, `${a.name} put down`);
+      if (G.q.vault >= 0 && !G.q.key){
+        G.q.key = true;
+        say(`${a.name} was carrying an iron key. Something on this floor is locked.`, 'good');
+        spark(a.x, a.y, 22, '#d8a83c', { spd:.02, up:.004, glow:'rgba(216,168,60,.5)', r:1.6 });
+      }
       spark(a.x, a.y, 20, AFFIX(a.affix).col, { spd:.022, life:800 });
     }
     if (boonHas('vampiric')){
@@ -3769,6 +3799,16 @@ function endZargonTurn(){
 function openDoorAt(h, d){
   if (d.open) return false;
   if (d.secret && !d.found) return false;
+  if (d.locked && !G.q.key){
+    say('The door is locked, and the lock is a good one. Something down here is carrying the key.', 'bad');
+    sfx('block');
+    return false;
+  }
+  if (d.locked){
+    d.locked = false;
+    say('The key turns. Whatever they were keeping in here, it is yours now.', 'good');
+    sfx('gold');
+  }
   d.open = true;
   sfx('door');
   say('The door swings open.', '');
@@ -3812,7 +3852,8 @@ function searchTreasure(){
     renderHUD();
     return;
   }
-  const card = TREASURE_DECK[G.q.deck[G.q.deckAt++ % G.q.deck.length]];
+  let card = TREASURE_DECK[G.q.deck[G.q.deckAt++ % G.q.deck.length]];
+  if (rid === G.q.vault) card = { k:'gold', n:250 + ri(200), t:'The vault', d:'This is what the lock was for.' };
   later(260, () => applyTreasure(card, h));
   renderHUD();
 }
@@ -4060,6 +4101,127 @@ function useHolyWater(m){
   return true;
 }
 
+/* ---------------------------------------------------------- 9b. THE ALTAR */
+// One altar a room, one use a quest. Pray for free at even-ish odds, or open a
+// vein for better ones. Both tables can turn on you — that is the point.
+
+const BLESSINGS = [
+  { id:'mend',  ic:'✚', t:'The stone is warm', d:'Every hero recovers 2 Body Points.' },
+  { id:'fate',  ic:'✦', t:'Something listens', d:'+1 Fate.' },
+  { id:'sight', ic:'👁', t:'The floor shows itself', d:'Every trap and hidden door on this floor is revealed.' },
+  { id:'clean', ic:'💧', t:'Clean water',        d:'Poison and curses wash off the party.' },
+  { id:'coin',  ic:'◈',  t:'An old offering',    d:'150 gold, left by somebody who did not come back.' },
+];
+const GREATER = [
+  { id:'heal',  ic:'✚', t:'The stone drinks and gives back', d:'Every hero is healed in full.' },
+  { id:'fate2', ic:'✦', t:'It takes an interest in you',     d:'+2 Fate.' },
+  { id:'boon',  ic:'🃏', t:'A gift with a name',             d:'A boon, free.' },
+  { id:'hoard', ic:'◈',  t:'The floor gives up its purse',   d:'400 gold.' },
+];
+const CURSES = [
+  { id:'guard', ic:'👹', t:'Something was sleeping under it', d:'A champion climbs out.' },
+  { id:'wake',  ic:'🔔', t:'The stone screams',               d:'Everything on this floor knows where you are.' },
+  { id:'rot',   ic:'🐍', t:'The offering was not for you',    d:'The hero is poisoned.' },
+  { id:'toll',  ic:'💀', t:'It takes its due',                d:'Half the coin in the pot, gone.' },
+];
+
+function altarTarget(){
+  const h = activeHero();
+  if (!h) return null;
+  for (const f of G.q.furn){
+    if (f.t !== 'altar' || f.used) continue;
+    for (let j=0;j<f.h;j++) for (let i=0;i<f.w;i++){
+      const d = dist2(h.x, h.y, f.x+i, f.y+j);
+      if (d <= 1) return f;
+    }
+  }
+  return null;
+}
+function altarOutcome(kind, h, f){
+  f.used = true;
+  const bad = rnd() < (kind === 'bleed' ? .18 : .42);
+  const table = bad ? CURSES : (kind === 'bleed' ? GREATER : BLESSINGS);
+  const pick1 = table[ri(table.length)];
+  const heroes2 = livingHeroes();
+  sfx(bad ? 'trap' : 'heal');
+  G.shake = bad ? 14 : 6;
+  spark(f.x + f.w/2 - .5, f.y, 26, bad ? '#b03a2c' : '#f3d488',
+        { spd:.018, up:.005, glow: bad ? 'rgba(176,58,44,.45)' : 'rgba(243,212,136,.5)', r:1.6 });
+  switch (pick1.id){
+    case 'mend':  for (const x of heroes2) x.bp = Math.min(x.bpMax, x.bp + 2); break;
+    case 'heal':  for (const x of heroes2) x.bp = x.bpMax; break;
+    case 'fate':  addFate(1, 'the altar'); break;
+    case 'fate2': addFate(2, 'the altar'); break;
+    case 'sight':
+      for (const tr of G.q.traps) tr.found = true;
+      for (const k in G.q.doors) G.q.doors[k].found = true;
+      break;
+    case 'clean': for (const x of heroes2){ x.poison = 0; delete x.cursed; } break;
+    case 'coin':  G.q.pot = (G.q.pot || 0) + 150; break;
+    case 'hoard': G.q.pot = (G.q.pot || 0) + 400; break;
+    case 'boon': {
+      const opts = G.run ? draftOptions() : [];
+      if (opts.length) takeBoon(opts[0].id);
+      break;
+    }
+    case 'guard': {
+      spawnWanderer(h);
+      const born = monstersOf()[monstersOf().length - 1];
+      if (born && !born.affix) applyAffix(born, AFFIXES[ri(AFFIXES.length)].id);
+      break;
+    }
+    case 'wake':  for (const m of monstersOf()) m.awake = true; break;
+    case 'rot':   h.poison = Math.max(h.poison || 0, 3); break;
+    case 'toll':  G.q.pot = Math.floor((G.q.pot || 0)/2); break;
+  }
+  say(`${pick1.ic} ${pick1.t} — ${pick1.d}`, bad ? 'bad' : 'good');
+  recomputeVision(); refreshField(); renderHUD(); checkQuestState();
+  return { bad, outcome:pick1.id };
+}
+function useAltar(kind){
+  const h = activeHero(), f = altarTarget();
+  if (!h || !f || h.acted || busy()) return false;
+  if (kind === 'bleed' && h.bp <= 2){
+    say(`${h.name} has not the blood to spare.`, 'bad');
+    return false;
+  }
+  h.acted = true;
+  if (kind === 'bleed'){
+    floatText(h.x, h.y, '−2', '#ff7a6a');
+    hurt(h, 2, null);
+    if (!h.alive){ renderHUD(); return true; }
+  }
+  return altarOutcome(kind, h, f);
+}
+function showAltar(){
+  const h = activeHero(), f = altarTarget();
+  if (!h || !f) return;
+  modal(`<h2>The Altar</h2>
+    <div class="sub" style="margin:2px 0 0">Whoever built this wanted something</div>
+    <div class="rule"></div>
+    <p class="flavor">The stone is older than the keep around it, and the channel cut
+      down its middle has been used. ${h.name} can say the words, or open a vein.</p>
+    <div class="row">
+      <div class="ic">🙏</div>
+      <div class="tx"><b>Pray</b><s>Free. A blessing, or the stone takes an interest in you.</s></div>
+      <div style="color:#63bf7d">58%</div>
+    </div>
+    <div class="row">
+      <div class="ic">🩸</div>
+      <div class="tx"><b>Bleed</b><s>Two Body Points, and the greater table.</s></div>
+      <div style="color:#63bf7d">82%</div>
+    </div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn" id="mPray">Pray</button>
+      <button class="btn red" id="mBleed" ${h.bp <= 2 ? 'disabled' : ''}>Bleed · 2 Body</button>
+      <button class="btn ghost" id="mLeave">Leave it alone</button>
+    </div>`);
+  bindModal('#mPray',  () => { closeModal(); useAltar('pray'); });
+  bindModal('#mBleed', () => { closeModal(); useAltar('bleed'); });
+  bindModal('#mLeave', closeModal);
+}
+
 /* ----------------------------------------------------------------- spells */
 
 function knownSpells(h){
@@ -4300,8 +4462,12 @@ function renderHUD(){
   const dicing = () => 'Hold on — the dice are still rolling.';
   const guard = (fn) => () => busy() ? dicing() : (!h ? 'Nobody is up.' : fn());
   const canSearch = !!h && !h.acted && rid >= 0 && !G.q.searched[rid] && !roomHasMonsters;
+  const altar = altarTarget();
   const defs = [
-    { ic:'🔦', lb:'Search<br>Room', on:canSearch, fn:searchTreasure, why: guard(() => {
+    altar
+      ? { ic:'🕯', lb:'The<br>Altar', on:!!h && !h.acted, fn:showAltar, hot:!!h && !h.acted,
+          why: guard(() => h.acted ? spent() : null) }
+      : { ic:'🔦', lb:'Search<br>Room', on:canSearch, fn:searchTreasure, why: guard(() => {
         if (h.acted) return spent();
         if (rid < 0) return 'You can only ransack a room, not a corridor.';
         if (G.q.searched[rid]) return `${ROOMS[rid].name} has been picked over already.`;
@@ -5108,6 +5274,11 @@ function makeFloor(depth, R){
     for (const r of spread) furn.push({ r, t:'chest', quest:objective.item });
   }
 
+  // A vault is never the objective room: sealing that behind a key would let a
+  // floor lock its own quest away.
+  const vaultPool = rooms.filter(id => id !== goalRoom);
+  const vaultRoom = depth >= 3 && R() < .45 ? vaultPool[Math.floor(R()*vaultPool.length)] : -1;
+
   let traps = 2 + Math.floor(depth*.8);
   if (mods.includes('brittle')) traps *= 2;
   return {
@@ -5115,6 +5286,7 @@ function makeFloor(depth, R){
     intro:'', objective, monsters, furn,
     traps:Math.min(14, traps), secrets: depth >= 3 ? 2 : 1,
     eliteChance: Math.min(.32, .06 + depth*.032),
+    vault: vaultRoom,
     reward: 60 + depth*40, keepItem,
   };
 }
@@ -5130,7 +5302,7 @@ function newRun(partyIds){
   }
   return {
     heroes, party:partyIds.slice(), depth:0, boons:[], gold: metaHas('warchest') ? 250 : 0,
-    kills:0, floorsCleared:0, revived:false, over:false, fate:1, nextDef:null,
+    kills:0, floorsCleared:0, revived:false, over:false, fate:1, nextDef:null, stake:0, doubles:0,
     seed: (Math.random()*1e9)|0,
   };
 }
@@ -5207,7 +5379,8 @@ function descentFloorEnd(won, why){
   const pot = G.q.pot || 0;
   G.run.kills += (G.q.kills || 0);
   if (won){
-    G.run.gold += pot + questDef().reward;
+    G.run.stake = pot + questDef().reward;      // stake it, or bank it on the next screen
+    G.run.doubles = 0;
     G.run.floorsCleared++;
   }
   saveRun();
@@ -5216,6 +5389,7 @@ function descentFloorEnd(won, why){
 }
 
 function endRun(why){
+  settleStake();                                 // an unresolved stake still counts
   G.run.over = true;
   const depth = G.run.depth;
   const favour = depth + G.run.floorsCleared + Math.floor(G.run.gold/300)
@@ -5266,6 +5440,30 @@ function takeBoon(id){
   if (id === 'bloodprice') for (const h of G.run.heroes){ h.bpMax = Math.max(1, h.bpMax - 1); h.bp = Math.min(h.bp, h.bpMax); }
   saveRun();
   return true;
+}
+
+// Stake the floor's takings on one combat die. Skull doubles it, a white shield
+// leaves it, a black shield takes the lot — and you may keep pressing.
+function dblStake(){ return G.run ? (G.run.stake || 0) : 0; }
+function canDouble(){ return !!(G.run && !G.run.over && (G.run.stake || 0) > 0); }
+function doubleOrNothing(){
+  if (!canDouble()) return null;
+  const face = combatDie();
+  const before = G.run.stake;
+  let out;
+  if (face === SKULL){ G.run.stake = before*2; out = 'double'; }
+  else if (face === WHITE){ out = 'hold'; }
+  else { G.run.stake = 0; out = 'lost'; }
+  G.run.doubles = (G.run.doubles || 0) + 1;
+  sfx(out === 'lost' ? 'lose' : out === 'double' ? 'gold' : 'block');
+  return { face, out, before, after:G.run.stake };
+}
+function settleStake(){
+  if (!G.run) return 0;
+  const n = G.run.stake || 0;
+  G.run.gold += n;
+  G.run.stake = 0; G.run.doubles = 0;
+  return n;
 }
 
 const PEDLAR = [
@@ -5324,6 +5522,23 @@ function showDraft(){
     </div>`;
   }).join('');
   const alive = runAlive();
+  const stake = dblStake();
+  const wager = stake > 0 ? `
+    <div class="rule"></div>
+    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">The floor's takings</div>
+    <div class="row">
+      <div class="ic">🎲</div>
+      <div class="tx"><b>Double or nothing · ◈ ${stake}</b>
+        <s>One combat die. Skull doubles it (3 in 6), white shield leaves it (2 in 6),
+        black shield takes the lot (1 in 6). Press as often as you dare.
+        ${G.run.doubles ? `<br>Pressed ${G.run.doubles} time${G.run.doubles>1?'s':''} already.` : ''}</s></div>
+      <button class="bu" data-dbl="1">Roll</button>
+    </div>
+    <div class="row">
+      <div class="ic">◈</div>
+      <div class="tx"><b>Bank it</b><s>Put the ${stake} in the purse and stop.</s></div>
+      <button class="bu own" data-bank="1">Bank</button>
+    </div>` : '';
   const ped = PEDLAR.map(p => `<div class="row">
       <div class="ic">${p.ic}</div>
       <div class="tx"><b>${p.name}</b><s>${p.desc}</s></div>
@@ -5337,7 +5552,8 @@ function showDraft(){
       ${alive.map(h => `${h.name} ${h.bp}/${h.bpMax}`).join(' · ')}
       ${G.run.heroes.length > alive.length ? `<div style="color:#b03a2c;font-size:11px;margin-top:4px">Lost: ${G.run.heroes.filter(h=>!h.alive).map(h=>h.name).join(', ')}</div>` : ''}
     </div>
-    <div class="goldline">◈ ${G.run.gold}</div>
+    <div class="goldline">◈ ${G.run.gold}${stake ? ` <span style="color:#ccb8ff">· ◈ ${stake} unbanked</span>` : ''}</div>
+    ${wager}
     <div class="rule"></div>
     <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">Take one boon</div>
     ${rows}
@@ -5353,7 +5569,17 @@ function showDraft(){
     showDraft();
   });
   bindAll('.bu[data-ped]', el => { if (buyPedlar(el.dataset.ped)) showDraft(); });
+  bindAll('.bu[data-dbl]', () => {
+    const r = doubleOrNothing();
+    if (!r) return;
+    showDraft();
+    say(r.out === 'double' ? `Skull. ◈ ${r.after}.`
+      : r.out === 'hold'   ? `A white shield. The ${r.after} stands.`
+      :                      'A black shield. All of it, gone.', r.out === 'lost' ? 'bad' : 'good');
+  });
+  bindAll('.bu[data-bank]', () => { settleStake(); showDraft(); });
   bindAll('.qrow[data-stair]', el => {
+    settleStake();                               // walking down banks the rest
     const d = draftState.stairs[+el.dataset.stair];
     draftState = null;
     closeModal();
@@ -5686,7 +5912,7 @@ globalThis.HQ = {
   BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes,
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
   draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
-  floorChoices, chooseFloor,
+  floorChoices, chooseFloor, dblStake, canDouble, doubleOrNothing, settleStake,
   newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius,
   activeHero, heroes, livingHeroes, monstersOf, busy, hudState, syncHUD, renderHUD,
   strikeBlocker, strikeReason,
@@ -5696,6 +5922,7 @@ globalThis.HQ = {
   AFFIXES, AFFIX, applyAffix, isWarded, tickPoison, fateOf, addFate, canReroll, spendReroll, resolveDice, diceShape,
   castSpell, knownSpells, spellReady, searchTreasure, searchTraps, disarmTrap, disarmTarget,
   quaffPotion, useHolyWater, applyTreasure, spawnWanderer, openDoorAt, springTrap, giveQuestItem,
+  BLESSINGS, GREATER, CURSES, altarTarget, altarOutcome, useAltar, showAltar,
   pushOdds, canPush, pushLuck, bankPush, showPush,
   objectiveReady, needsEscape, onStairs, checkQuestState, questOver, showQuestEnd,
   recomputeVision, revealRoom, tileVisible, tileSeen, bakeDungeon, freeTile, freeFurnSpot,

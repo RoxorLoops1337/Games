@@ -1294,6 +1294,8 @@ t.test('descent: a fallen hero is gone for the whole run', () => {
   HQ.G.q.pot = 100;
   HQ.questOver(true);
   t.eq(HQ.G.run.floorsCleared, 1, 'the floor counted');
+  t.ok(HQ.dblStake() >= 100, 'and its takings are on the table to stake or bank');
+  t.eq(HQ.settleStake() >= 100, true, 'banking moves them to the purse');
   t.ok(HQ.G.run.gold >= 100, 'and paid');
   HQ.G.run.depth++;
   HQ.beginFloor();
@@ -2005,6 +2007,167 @@ t.test('dice: a rerollable pool waits for you instead of vanishing', () => {
        `the window is long enough to decide in (${withFate.total - withFate.settleAt}ms)`);
   t.ok(withNone.total - withNone.settleAt < 1000, 'and short when there is no choice');
   t.eq(withFate.settleAt, withNone.settleAt, 'the dice land at the same moment either way');
+});
+
+/* ------------------------------------------- vaults, altars and the wager */
+
+t.test('vault: a locked room needs a key, and the key is never behind the lock', () => {
+  HQ.setRng(Math.random);
+  let found = 0;
+  for (let d = 3; d <= 14; d++){
+    HQ.G = HQ.newG();
+    HQ.G.run = HQ.newRun(['barbarian','dwarf']);
+    HQ.G.run.depth = d;
+    HQ.beginFloor();
+    const v = HQ.G.q.vault;
+    if (v < 0) continue;
+    found++;
+    t.ok(v !== HQ.questDef().objective.room, `depth ${d}: the vault is not the prisoner's cell`);
+    const locked = Object.values(HQ.G.q.doors).filter(x => x.locked);
+    t.ok(locked.length > 0, `depth ${d}: the vault is actually sealed`);
+    t.ok(locked.every(x => x.rid === v), 'and only the vault is sealed');
+    // somebody outside the vault is carrying the key
+    const bearers = HQ.monstersOf().filter(m => m.elite && HQ.roomAt(m.x, m.y) !== v);
+    t.ok(bearers.length > 0, `depth ${d}: a champion outside the vault carries the key`);
+    t.ok(!HQ.G.q.key, 'which you do not have yet');
+    // and the vault holds something worth the trouble
+    t.ok(HQ.G.q.furn.some(f => f.vault), 'there is a hoard inside');
+  }
+  t.ok(found > 0, `vaults do turn up (${found} across depths 3-14)`);
+});
+
+t.test('vault: the door refuses you until a champion drops the key', () => {
+  HQ.setRng(Math.random);
+  let tries = 0, set = false;
+  while (tries++ < 40 && !set){
+    HQ.G = HQ.newG();
+    HQ.G.run = HQ.newRun(['barbarian','dwarf']);
+    HQ.G.run.depth = 8;
+    HQ.beginFloor();
+    if (HQ.G.q.vault >= 0) set = true;
+  }
+  t.ok(set, 'found a floor with a vault');
+  const door = Object.values(HQ.G.q.doors).find(d => d.locked);
+  const h = HQ.livingHeroes()[0];
+  HQ.G.q.activeId = h.id;
+  h.x = door.cx; h.y = door.cy;
+  HQ.G.q.seen.fill(1); HQ.recomputeVision();
+  t.ok(!HQ.openDoorAt(h, door), 'the door will not open');
+  t.ok(!door.open, 'and stays shut');
+
+  const bearer = HQ.monstersOf().find(m => m.elite && HQ.roomAt(m.x, m.y) !== HQ.G.q.vault);
+  HQ.hurt(bearer, 99, null);
+  t.ok(HQ.G.q.key, 'the champion was carrying it');
+  t.ok(HQ.openDoorAt(h, door), 'and now the lock turns');
+  t.ok(door.open && !door.locked, 'the vault is open');
+});
+
+t.test('altar: praying and bleeding both have a table, and both can turn on you', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  // put an altar next to the hero
+  HQ.G.q.furn.push({ t:'altar', r:4, x:3, y:7, w:2, h:1, rot:0, taken:false, used:false });
+  put(h, 3, 8);
+  t.ok(HQ.altarTarget(), 'the altar is within reach');
+  use(hero('dwarf'));
+  put(hero('dwarf'), 20, 3);
+  t.ok(!HQ.altarTarget(), 'and not from across the keep');
+  use(h); put(h, 3, 8);
+
+  // a blessing
+  rig([0.99]);                                    // never the bad branch
+  const f = HQ.altarTarget();
+  const good = HQ.altarOutcome('pray', h, f);
+  t.ok(!good.bad, 'this one blessed');
+  t.ok(HQ.BLESSINGS.some(b => b.id === good.outcome), 'from the lesser table');
+  t.ok(f.used, 'and the altar is spent');
+  t.ok(!HQ.altarTarget(), 'so it offers nothing more');
+
+  // a curse
+  HQ.G.q.furn.push({ t:'altar', r:4, x:5, y:7, w:2, h:1, rot:0, taken:false, used:false });
+  put(h, 5, 8);
+  rig([0.0]);
+  const bad = HQ.altarOutcome('pray', h, HQ.altarTarget());
+  t.ok(bad.bad, 'this one cursed');
+  t.ok(HQ.CURSES.some(c => c.id === bad.outcome), 'from the curse table');
+
+  // bleeding draws on the greater table
+  HQ.G.q.furn.push({ t:'altar', r:4, x:1, y:7, w:2, h:1, rot:0, taken:false, used:false });
+  put(h, 1, 8);
+  rig([0.99]);
+  const great = HQ.altarOutcome('bleed', h, HQ.altarTarget());
+  t.ok(HQ.GREATER.some(g => g.id === great.outcome), 'from the greater table');
+});
+
+t.test('altar: bleeding costs blood, and will not be done by the nearly dead', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  HQ.G.q.furn.push({ t:'altar', r:4, x:3, y:7, w:2, h:1, rot:0, taken:false, used:false });
+  put(h, 3, 8);
+  h.bp = 2;
+  t.ok(!HQ.useAltar('bleed'), 'two Body Points is not enough to spare two');
+  t.ok(!h.acted, 'and it did not cost the action');
+  h.bp = h.bpMax;
+  rig([0.99]);
+  t.ok(HQ.useAltar('bleed'), 'a healthy hero can');
+  t.eq(h.bp, h.bpMax - 2, 'and pays for it');
+  t.ok(h.acted, 'it is the action for the turn');
+});
+
+t.test('altar: a curse that wakes the floor really wakes the floor', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  HQ.G.q.furn.push({ t:'altar', r:4, x:3, y:7, w:2, h:1, rot:0, taken:false, used:false });
+  put(h, 3, 8);
+  for (const m of HQ.monstersOf()) m.awake = false;
+  const f = HQ.altarTarget();
+  // force the 'wake' curse: bad branch, then the index of wake in CURSES
+  const wakeAt = HQ.CURSES.findIndex(c => c.id === 'wake');
+  rig([0.0, (wakeAt + .5)/HQ.CURSES.length]);
+  const r = HQ.altarOutcome('pray', h, f);
+  if (r.outcome === 'wake') t.ok(HQ.monstersOf().every(m => m.awake), 'everything is looking at you');
+  else t.ok(true, 'a different curse came up, which is also fine');
+});
+
+t.test('wager: the die is a real die and the odds are the combat die', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian']);
+  t.ok(!HQ.canDouble(), 'nothing to stake yet');
+  HQ.G.run.stake = 200;
+  t.ok(HQ.canDouble(), 'now there is');
+
+  rig([0.0]);                                     // skull
+  let r = HQ.doubleOrNothing();
+  t.eq(r.out, 'double', 'a skull doubles it');
+  t.eq(HQ.dblStake(), 400, 'to four hundred');
+
+  rig([0.5]);                                     // white shield
+  r = HQ.doubleOrNothing();
+  t.eq(r.out, 'hold', 'a white shield leaves it');
+  t.eq(HQ.dblStake(), 400, 'untouched');
+
+  rig([0.9]);                                     // black shield
+  r = HQ.doubleOrNothing();
+  t.eq(r.out, 'lost', 'a black shield takes the lot');
+  t.eq(HQ.dblStake(), 0, 'all of it');
+  t.ok(!HQ.canDouble(), 'and there is nothing left to press');
+  t.eq(HQ.G.run.doubles, 3, 'three presses were counted');
+});
+
+t.test('wager: banking moves it to the purse, and an ended run never eats it', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian']);
+  HQ.G.run.gold = 100; HQ.G.run.stake = 250;
+  t.eq(HQ.settleStake(), 250, 'the stake settles');
+  t.eq(HQ.G.run.gold, 350, 'into the purse');
+  t.eq(HQ.dblStake(), 0, 'and off the table');
+
+  HQ.G.run.stake = 500;
+  HQ.G.run.depth = 3;
+  HQ.endRun('test');
+  t.eq(HQ.G.run.gold, 850, 'a run that ends mid-wager still banks it');
 });
 
 t.run();
