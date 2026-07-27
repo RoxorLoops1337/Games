@@ -5543,10 +5543,37 @@ function heroMantle(c, u, bx, by, floor, sc, col){
     u.hitT > 0 ? '#ffffff' : shade(col, .46));
 }
 
+/* What a body's shadow is, from the body. It used to be typed in at the call
+   site as `(u.kind === 'cannon' ? 9 : 7) * sc` — two numbers for six kinds and a
+   hero. Measured, driving every one of them through drawUnit:
+
+     what          collision r   shadow rx   shadow / body drawn
+     Levy          .42           8.3         2.33
+     Footman       .48           8.3         2.33
+     Caster        .44           8.3         2.33
+     Cannon        .62           13.0        2.65
+     Siege Ogre    .70           11.2        1.94
+     a hero        .62           12.3        0.64
+
+   The Siege Ogre has the biggest footprint in the game and is drawn bigger than
+   anything else on the bridge, and it cast a SMALLER shadow than a Cannon. The
+   three light bodies have three different footprints and one identical shadow.
+   And nothing is proportional to anything: the ratio runs 0.64 to 2.65.
+
+   The game already knows how much deck each body stands on — `r` is what the
+   separation push and every range check use. One footprint, two readers.
+
+   The control was projShadow, forty lines up, which computes from how high the
+   thing is and takes four distinct values across four heights.               */
+const BODY_SHADOW = { foot:2.1, squash:.485, a:.32, lift:1 };
+const bodyShadowR = (u) => (u.r || .45) * LS() * BODY_SHADOW.foot;
+
 function drawUnit(c, u){
   const p = lp(u.x, u.y), S = LS();
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
-  shadow(c, p[0], p[1] + 1, (u.kind === 'cannon' ? 9 : 7) * sc, 3.4 * sc, 'rgba(0,0,0,.32)');
+  const shr = bodyShadowR(u);
+  shadow(c, p[0], p[1] + BODY_SHADOW.lift * cam.z, shr, shr * BODY_SHADOW.squash,
+    'rgba(0,0,0,' + BODY_SHADOW.a + ')');
   const bob = Math.sin(gaitOf(u)) * (u.target && hyp(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
   // Whoever just cast lifts off the ground for a third of a second over a
   // brightening pool of their skill's colour. Without it the effects all happen
@@ -9667,6 +9694,7 @@ window.IB = {
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder, drawFx, fxOnDeck, DECK_FX, fxDeck, fxAir,
+  BODY_SHADOW, bodyShadowR,
   STATUS, statusFade, spanN,
   HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
