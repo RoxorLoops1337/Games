@@ -122,18 +122,29 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **Streak on the HUD** — a counter beside the Fate pill from two kills up,
   reading `6/8` so the next banner is something you can see coming. *(batch 13)*
 
+- **Everything you can search reads as searched** — the seven other searchable
+  pieces get the chest's treatment: a dark emptied hole punched through the
+  body and the leavings on the floor at their feet. *(batch 14)*
+- **A disarmed trap looks disarmed** — it kept the live pulsing warning, which
+  was a lie. It goes grey, crossed out, and stops moving; stillness is the
+  signal, because everything dangerous on this board pulses. *(batch 14)*
+- **A safety net under the old render paths** — the paint recorder now covers
+  the torch falloff and the death fade, which had no test that would notice
+  them breaking. *(batch 14)*
+
 ---
 
 ## Next up
 
-1. **A searched bookcase, tomb and cupboard should read as searched.** The chest
-   does now. Every other searchable piece still looks untouched forever, which
-   is the same "have I been here" problem one step along.
-2. **A disarmed trap should look disarmed**, for the same reason — a sprung one
-   reads clearly, a disarmed one does not.
-3. **Point the paint recorder at the old render paths.** The suite can now
-   assert what colours a frame reached for. The fog, the light falloff and the
-   death fade have never had a test that would notice them breaking.
+1. **Trial variants.** A third kind — leave the room without opening a chest, or
+   kill the marked one first. Two kinds is thin for something this visible, and
+   the plinth and the bolt now make trials worth walking toward.
+2. **A vault should stand its relic on a plinth too.** The plinth is a pattern,
+   not a one-off: a locked room showing what the key is for through the doorway
+   would make the key worth hunting rather than worth stumbling into.
+3. **A blood price you can buy back.** The toll is permanent. A shrine or the
+   pedlar returning one maximum Body Point at a steep price would make taking
+   one on a bad floor less of a one-way door.
 
 ## Backlog, roughly in order of value
 
@@ -162,16 +173,16 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   saying `6/8 · BUTCHERY` would make the thing you are climbing toward concrete.
 
 ### New ideas the batch turned up
-- **Trial variants.** A third kind: leave the room without opening a chest, or
-  kill the marked one first. Two kinds is thin for something this visible.
-- **A blood price you can buy back.** The toll is permanent. A shrine or the
-  pedlar offering to return one maximum Body Point at a steep price would make
-  taking one on a bad floor less of a one-way door.
 - **Bodies the Warlock can use.** A hero's remains sit there for the rest of the
   floor doing nothing. A necromancer raising one, or a hero able to take back a
   fallen friend's weapon, would make the mark on the square matter.
-- **The plinth is a pattern, not a one-off.** A vault could stand its relic on
-  one too, so a locked room shows what the key is for through the doorway.
+- **The board now says a lot about where you have been.** Opened chests,
+  ransacked shelves, disarmed traps, bodies. What it still cannot say is where
+  you have *not* — a room you have never opened looks like one you cleared and
+  left. A mark on the map, or a count in the HUD, would close that.
+- **Everything dangerous pulses; nothing safe does.** That fell out of the
+  disarmed trap and is worth making a rule. The lying furniture is the one
+  thing that breaks it deliberately, which is exactly why it works.
 - **Tests that walk should derive their path from the room.** A batch-12 test
   assumed a fixed room width and flaked once in twelve runs. Anything driving
   `heroWalk` wants the same treatment.

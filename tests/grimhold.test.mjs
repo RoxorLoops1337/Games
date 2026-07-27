@@ -4365,4 +4365,169 @@ t.test('book: the tab shows the Book without leaving the between-floors screen',
   t.ok(HQ.draftState.stairs.length >= 2, 'the stairs are still there');
 });
 
+/* ------------------------------------------- furniture that has been through */
+
+// stand one piece of furniture in a room and nothing else
+function onlyFurn(rid, type){
+  const r = HQ.ROOMS[rid];
+  HQ.G.q.furn = [];
+  const f = { t:type, r:rid, x:r.x + 1, y:r.y + 1, w:HQ.FURN[type].w, h:HQ.FURN[type].h,
+              rot:0, quest:null, taken:false, searched:false };
+  HQ.G.q.furn.push(f);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  return f;
+}
+
+t.test('ransacked: everything you can search reads as searched once it has been', () => {
+  const searchable = Object.keys(HQ.FURN).filter(k => HQ.FURN[k].search && k !== 'chest');
+  t.ok(searchable.length >= 5, `there are several (${searchable.join(', ')})`);
+  for (const type of searchable){
+    runAt(3);
+    HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+    const f = onlyFurn(4, type);
+    const before = paintOf();
+    t.ok(!painted(before, 'rgba(6,5,4,.66)'), `${type} is untouched to start`);
+    f.searched = true;
+    const after = paintOf();
+    t.ok(painted(after, 'rgba(6,5,4,.66)'), `${type} shows it has been gone through`);
+    t.ok(painted(after, 'rgba(150,132,100,.55)'), `and ${type} has leavings at its feet`);
+  }
+  // a table is not searchable and never gets the treatment
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const tbl = onlyFurn(4, 'table');
+  tbl.searched = true;
+  t.ok(!painted(paintOf(), 'rgba(6,5,4,.66)'), 'a table has nothing to ransack');
+});
+
+t.test('ransacked: it is the search that does it, for every piece in the room', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null; HQ.G.q.vault = -1;
+  const rid = 4, r = HQ.ROOMS[rid];
+  HQ.G.q.furn = [];
+  const pieces = ['bookcase','cupboard','rack'].map((type, i) => {
+    const f = { t:type, r:rid, x:r.x + i, y:r.y + 1, w:1, h:1, rot:0,
+                quest:null, taken:false, searched:false };
+    HQ.G.q.furn.push(f);
+    return f;
+  });
+  emptyRoom(rid);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  t.ok(pieces.every(f => !f.searched), 'nothing has been touched');
+  const h = HQ.runAlive()[0];
+  put(h, r.x, r.y);
+  use(h);
+  HQ.searchTreasure();
+  t.ok(pieces.every(f => f.searched), 'ransacking the room goes through all of it');
+
+  // and furniture in another room is left alone
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.furn = [];
+  const mine = { t:'bookcase', r:4, x:HQ.ROOMS[4].x, y:HQ.ROOMS[4].y, w:1, h:1, rot:0,
+                 quest:null, taken:false, searched:false };
+  const theirs = { t:'bookcase', r:5, x:HQ.ROOMS[5].x, y:HQ.ROOMS[5].y, w:1, h:1, rot:0,
+                   quest:null, taken:false, searched:false };
+  HQ.G.q.furn.push(mine, theirs);
+  emptyRoom(4);
+  const h2 = HQ.runAlive()[0];
+  put(h2, HQ.ROOMS[4].x + 1, HQ.ROOMS[4].y);
+  use(h2);
+  HQ.searchTreasure();
+  t.ok(mine.searched, 'this room is done');
+  t.ok(!theirs.searched, 'the next room is not');
+});
+
+/* ------------------------------------------------------- a trap laid to rest */
+
+t.test('traps: a disarmed one stops warning you about itself', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.furn = [];
+  const tr = HQ.G.q.traps[0];
+  t.ok(tr, 'the floor has a trap');
+  tr.found = true; tr.sprung = false; tr.disarmed = false;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+
+  const live = paintOf();
+  t.ok(paintedLike(live, /^rgba\(232,182,60,/), 'a live trap is painted in warning gold');
+  t.ok(!paintedLike(live, /^rgba\(150,144,132,/), 'and carries no cross');
+
+  tr.disarmed = true;
+  const dead = paintOf();
+  t.ok(paintedLike(dead, /^rgba\(150,144,132,/), 'a disarmed one is crossed out');
+  t.ok(paintedLike(dead, /^rgba\(126,120,110,/), 'in grey');
+  t.ok(!paintedLike(dead, /^rgba\(232,182,60,/), 'and has stopped shouting in gold');
+
+  // a sprung trap is a different thing again and keeps its own art
+  tr.disarmed = false; tr.sprung = true;
+  const gone = paintOf();
+  t.ok(!paintedLike(gone, /^rgba\(150,144,132,/), 'a sprung trap is not a disarmed one');
+});
+
+t.test('traps: disarming one through the real action changes how it reads', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const tr = HQ.G.q.traps[0];
+  tr.found = true; tr.sprung = false; tr.disarmed = false;
+  const h = HQ.runAlive()[0];
+  put(h, tr.x + 1, tr.y);
+  use(h);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  t.ok(paintedLike(paintOf(), /^rgba\(232,182,60,/), 'gold while it is live');
+  ALL_SKULLS();                                     // the dwarf gets it first time
+  HQ.disarmTrap(tr, h);
+  if (!tr.disarmed) tr.disarmed = true;             // some heroes roll for it
+  const after = paintOf();
+  t.ok(paintedLike(after, /^rgba\(150,144,132,/), 'and grey once it is dealt with');
+  t.eq(HQ.trapAt(tr.x, tr.y), null, 'and it is no longer a trap on that square');
+});
+
+/* ------------------------------- the render paths that never had a safety net */
+
+t.test('render: the fog is actually drawn, and light falls off from the torches', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  t.ok(HQ.TORCHES.length > 0, 'there are torches on the walls');
+  // a torch only throws light onto squares somebody can actually see, so stand
+  // the party under one before asking whether it is lit
+  const tr = HQ.TORCHES[0];
+  const tx = Math.floor(tr.x), ty = Math.floor(tr.y);
+  let spot = null;
+  for (const [dx,dy] of [[0,0],[1,0],[-1,0],[0,1],[0,-1]])
+    if (!spot && HQ.isFloor(tx+dx, ty+dy)) spot = [tx+dx, ty+dy];
+  t.ok(spot, 'and floor beside one to stand on');
+  for (const h of HQ.runAlive()) put(h, spot[0], spot[1]);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  const lit = paintOf();
+  // torchlight is an additive radial gradient in orange; the fog is a full-board
+  // image draw. Both are load-bearing and neither had a test before now.
+  t.ok(paintedLike(lit, /^rgba\(255,186,96,/), 'the torches throw their own colour');
+  t.ok(paintedLike(lit, /^rgba\(120,50,10,0\)$/), 'and fall off to nothing at the edge');
+});
+
+t.test('render: a hero going down fades out, and the vignette is always there', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  h.bp = 1;
+  HQ.hurt(h, 4, null);
+  t.ok(!h.alive, 'down');
+  t.ok(h.deathT > 0, 'and still on screen, going up in ash');
+  const mid = paintOf();
+  t.ok(mid.length > 0, 'the frame paints through the fade');
+  // the fade runs down and the actor leaves; the body it left does not
+  for (let i = 0; i < 40; i++) HQ.update(60);
+  t.ok(!(h.deathT > 0), 'the fade is over');
+  t.eq(HQ.G.q.bodies.length, 1, 'and what is left stays');
+});
+
 t.run();
