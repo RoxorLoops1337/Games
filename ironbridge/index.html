@@ -3402,6 +3402,22 @@ function poly(c, pts, fill, stroke, lw){
 function ell(c, x, y, rx, ry, fill){
   c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 6.2832); c.fillStyle = fill; c.fill();
 }
+// A shadow falls AWAY from the sun. Every one in the game sat directly under
+// its object, which was fine while nothing in the sky said where the light
+// came from — but SUN says now, and a shadow with no direction is the one
+// thing left in the picture that does not know where the light is.
+//
+// The offset is a fraction of the patch's own size, so a town hall throws
+// further than a wood chip without anyone having to say how tall either is.
+// Kept under one radius: past that the shadow clears the object and the thing
+// reads as floating rather than lit.
+const SHADOW = { dx:.34, dy:.22 };
+const shadowSide = () => (SUN.x < .5 ? 1 : -1);
+const shadowOff = (rx, ry) => [rx * SHADOW.dx * shadowSide(), ry * SHADOW.dy];
+function shadow(c, x, y, rx, ry, col){
+  const o = shadowOff(rx, ry);
+  ell(c, x + o[0], y + o[1], rx, ry, col);
+}
 // A length of chain between two points in the world. Drawn as discrete links
 // with a slack sag, because one straight line reads as a laser and this is
 // supposed to be iron. Purely cosmetic: nothing here touches the simulation.
@@ -3826,7 +3842,7 @@ function drawEnds(c){
     // it rather than a highlight along the top.
     const base = wallY + keepBase() * z;
     c.globalAlpha = .22;
-    ell(c, kp[0], base + 2 * z, 92 * z, 15 * z, '#1d2a1c');
+    shadow(c, kp[0], base + 2 * z, 92 * z, 15 * z, '#1d2a1c');
     c.globalAlpha = 1;
     block(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 56 * z, STONE.mid);
     block(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 3.5 * z, STONE.lit);
@@ -3858,7 +3874,7 @@ function drawEnds(c){
     for (const sx of [-1, 1]){
       const tx = kp[0] + sx * 58 * z;
       c.globalAlpha = .22;
-      ell(c, tx, base + 2 * z, 22 * z, 7 * z, '#1d2a1c');
+      shadow(c, tx, base + 2 * z, 22 * z, 7 * z, '#1d2a1c');
       c.globalAlpha = 1;
       block(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, STONE.mid);
       block(c, tx - 16 * z, wallY - 74 * z, 32 * z, 4 * z, STONE.lit);
@@ -3999,7 +4015,7 @@ function drawStructure(c, st){
   const u = cam.z, col = SIDE_COL[st.side], dead = st.dead;
   const dir = dirOf(st.side);          // which way this side faces the bridge
   const X = p[0], Y = p[1];
-  ell(c, X, Y + 2 * u, (st.key === 'gate' ? 74 : 26) * u, (st.key === 'gate' ? 16 : 8) * u, 'rgba(0,0,0,.28)');
+  shadow(c, X, Y + 2 * u, (st.key === 'gate' ? 74 : 26) * u, (st.key === 'gate' ? 16 : 8) * u, 'rgba(0,0,0,.28)');
 
   if (st.key === 'gate'){
     if (dead){
@@ -4075,7 +4091,7 @@ function drawStructure(c, st){
     if (!dead){
       const cy = Y - S.lift * u;
       c.globalAlpha = .30 - S.lift * .045;
-      ell(c, X, Y - 19 * u, (13 - S.lift) * u, (4.4 - S.lift * .55) * u, '#2c2a26');
+      shadow(c, X, Y - 19 * u, (13 - S.lift) * u, (4.4 - S.lift * .55) * u, '#2c2a26');
       c.globalAlpha = S.aura;
       ell(c, X, cy - 38 * u, 30 * u, 30 * u, col);
       c.globalAlpha = 1;
@@ -4382,7 +4398,7 @@ function strideOf(u){
 function drawUnit(c, u){
   const p = lp(u.x, u.y), S = LS();
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
-  ell(c, p[0], p[1] + 1, (u.kind === 'cannon' ? 9 : 7) * sc, 3.4 * sc, 'rgba(0,0,0,.32)');
+  shadow(c, p[0], p[1] + 1, (u.kind === 'cannon' ? 9 : 7) * sc, 3.4 * sc, 'rgba(0,0,0,.32)');
   const bob = Math.sin(G.t * 7 + u.ph) * (u.target && hyp(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
   // Whoever just cast lifts off the ground for a third of a second over a
   // brightening pool of their skill's colour. Without it the effects all happen
@@ -4942,7 +4958,7 @@ function drawBuilding(c, b){
   const z = raise * 1.2;
   const t = b.type;
   c.globalAlpha = raise > 0 ? clamp(1 - raise * .5, .35, 1) : 1;
-  ell(c, ...bp(gx, gy + .1), BSC * .62, BSC * .3, 'rgba(0,0,0,.22)');
+  shadow(c, ...bp(gx, gy + .1), BSC * .62, BSC * .3, 'rgba(0,0,0,.22)');
   if (t === 'farm'){
     drawTile(c, gx, gy, '#6d5a34');
     // The furrows used to add the raise to the tile's gy instead of to its
@@ -4987,7 +5003,7 @@ function drawBuilding(c, b){
     // as four floating sticks whatever you do to the frame behind them. Round
     // shields are a shape that survives being small.
     const rk = bp(gx - .44, gy + .20, z);
-    ell(c, rk[0], rk[1], 10 * B, 3.6 * B, 'rgba(0,0,0,.20)');
+    shadow(c, rk[0], rk[1], 10 * B, 3.6 * B, 'rgba(0,0,0,.20)');
     for (let i = 0; i < 3; i++){
       const sx = rk[0] - 4 * B + i * 3.6 * B, sy = rk[1] - 4 * B - (i % 2) * 1.2 * B;
       ell(c, sx, sy, 4.4 * B, 4.7 * B, shade(sideCol(), .48));
@@ -5144,7 +5160,7 @@ function drawWorkerFig(c, x, y, col, carry, sc, ph){
   sc = (sc || 1) * bu();
   const coat = workerCoat();
   const st = Math.sin(ph || 0) * WORKER_STRIDE * sc;
-  ell(c, x, y + 1, 3.2 * sc, 1.6 * sc, 'rgba(0,0,0,.25)');
+  shadow(c, x, y + 1, 3.2 * sc, 1.6 * sc, 'rgba(0,0,0,.25)');
   c.fillStyle = shade(coat, .54);
   for (const s of [-1, 1]) c.fillRect(x + s * 1.05 * sc - .85 * sc + s * st, y - 2.6 * sc, 1.7 * sc, 2.8 * sc);
   c.fillStyle = coat; c.fillRect(x - 2 * sc, y - 7.4 * sc, 4 * sc, 5.2 * sc);
@@ -5170,18 +5186,18 @@ function drawNode(c, key){
     // Five flat triangles with no shadows read as worse than the scenery trees
     // scattered around them, which at least have a shadow and a lit side — and
     // nothing said anybody was felling anything here.
-    ell(c, p[0], p[1] + 4 * B, 36 * B, 14 * B, 'rgba(0,0,0,.16)');
+    shadow(c, p[0], p[1] + 4 * B, 36 * B, 14 * B, 'rgba(0,0,0,.16)');
     // stumps, felled logs and the block, laid out before the standing timber so
     // the trees behind them read as further back
     for (const st of WOOD_LOT.stumps){
       const q = bp(N.gx + st[0], N.gy + st[1]);
-      ell(c, q[0], q[1] + 1 * B, 6 * B, 3 * B, 'rgba(0,0,0,.18)');
+      shadow(c, q[0], q[1] + 1 * B, 6 * B, 3 * B, 'rgba(0,0,0,.18)');
       c.fillStyle = '#5c4326'; c.fillRect(q[0] - 4.5 * B, q[1] - 4 * B, 9 * B, 4 * B);
       ell(c, q[0], q[1] - 4 * B, 4.5 * B, 2.4 * B, '#a3814f');
       ell(c, q[0], q[1] - 4 * B, 2.2 * B, 1.2 * B, '#8a6a3c');
     }
     const lg = bp(N.gx + WOOD_LOT.logs[0], N.gy + WOOD_LOT.logs[1]);
-    ell(c, lg[0], lg[1] + 2 * B, 15 * B, 5 * B, 'rgba(0,0,0,.18)');
+    shadow(c, lg[0], lg[1] + 2 * B, 15 * B, 5 * B, 'rgba(0,0,0,.18)');
     for (let i = 0; i < 3; i++){
       const ox = (i === 2 ? 5 : i * 10) * B, oy = (i === 2 ? -6 : 0) * B;
       c.fillStyle = '#6b4f2e'; c.fillRect(lg[0] - 12 * B + ox, lg[1] - 6 * B + oy, 12 * B, 6 * B);
@@ -5190,7 +5206,7 @@ function drawNode(c, key){
     }
     // the chopping block, with the axe left in it
     const bl = bp(N.gx + WOOD_LOT.block[0], N.gy + WOOD_LOT.block[1]);
-    ell(c, bl[0], bl[1] + 1 * B, 7 * B, 3 * B, 'rgba(0,0,0,.20)');
+    shadow(c, bl[0], bl[1] + 1 * B, 7 * B, 3 * B, 'rgba(0,0,0,.20)');
     c.fillStyle = '#5c4326'; c.fillRect(bl[0] - 5.5 * B, bl[1] - 6 * B, 11 * B, 6 * B);
     ell(c, bl[0], bl[1] - 6 * B, 5.5 * B, 2.8 * B, '#b08d56');
     c.strokeStyle = '#7a5a34'; c.lineWidth = Math.max(1, 1.8 * B); c.lineCap = 'round';
@@ -5206,7 +5222,7 @@ function drawNode(c, key){
     for (let i = 0; i < WOOD_LOT.trees.length; i++){
       const q = bp(N.gx + WOOD_LOT.trees[i][0], N.gy + WOOD_LOT.trees[i][1]);
       const sc = .88 + (i % 3) * .12;
-      ell(c, q[0], q[1] + 2 * B, 10 * B * sc, 4 * B * sc, 'rgba(0,0,0,.20)');
+      shadow(c, q[0], q[1] + 2 * B, 10 * B * sc, 4 * B * sc, 'rgba(0,0,0,.20)');
       c.fillStyle = '#5c4326'; c.fillRect(q[0] - 2 * B, q[1] - 12 * B * sc, 4 * B, 12 * B * sc);
       poly(c, [[q[0] - 11 * B * sc, q[1] - 9 * B * sc], [q[0], q[1] - 27 * B * sc], [q[0] + 11 * B * sc, q[1] - 9 * B * sc]], i % 2 ? '#3f7a3a' : '#457f3d');
       poly(c, [[q[0] - 8.5 * B * sc, q[1] - 16 * B * sc], [q[0], q[1] - 32 * B * sc], [q[0] + 8.5 * B * sc, q[1] - 16 * B * sc]], i % 2 ? '#4c8c42' : '#54974a');
@@ -5222,7 +5238,7 @@ function drawNode(c, key){
     const ore = key === 'gold' ? '#e8b53d' : '#93a1b3';
     const oreLit = key === 'gold' ? '#ffe08a' : '#c3cede';
     const P = (pts, fill) => poly(c, pts.map(q => [p[0] + q[0] * B, p[1] + q[1] * B]), fill);
-    ell(c, p[0], p[1] + 3 * B, 40 * B, 15 * B, 'rgba(0,0,0,.22)');
+    shadow(c, p[0], p[1] + 3 * B, 40 * B, 15 * B, 'rgba(0,0,0,.22)');
     // the spoil heap the diggings came out of, behind the mouth
     P([[-40, 4], [-22, -30], [10, -35], [40, 4]], shade(rock, .82));
     P([[-22, -30], [10, -35], [17, -20], [-13, -15]], shade(rock, 1.14));
@@ -5268,7 +5284,7 @@ function drawNode(c, key){
     const tri = ph < .5 ? ph * 2 : 2 - ph * 2;      // out of the mine, and back in
     const cx = p[0], cy = p[1] + lerp(-2, 17, tri) * B;
     const w = lerp(5, 8.5, tri) * B, hgt = lerp(4, 6.5, tri) * B;
-    ell(c, cx, cy + hgt * .5, w * 1.05, hgt * .42, 'rgba(0,0,0,.24)');
+    shadow(c, cx, cy + hgt * .5, w * 1.05, hgt * .42, 'rgba(0,0,0,.24)');
     c.fillStyle = '#5b4a34'; c.fillRect(cx - w, cy - hgt, w * 2, hgt);
     c.fillStyle = '#725d40'; c.fillRect(cx - w, cy - hgt, w * 2, hgt * .28);
     for (let i = 0; i < 3; i++)
@@ -5301,7 +5317,7 @@ function drawNode(c, key){
 function drawKeep(c){
   const s = G.sides[holdSide], B = bu();
   const gx = KEEP.gx, gy = KEEP.gy;
-  ell(c, ...bp(gx, gy + .12), BSC * .95, BSC * .46, 'rgba(0,0,0,.24)');
+  shadow(c, ...bp(gx, gy + .12), BSC * .95, BSC * .46, 'rgba(0,0,0,.24)');
   // a flagged stone terrace, so it sits ON something
   poly(c, [bp(gx - .78, gy - .62), bp(gx + .78, gy - .62), bp(gx + .78, gy + .66), bp(gx - .78, gy + .66)], '#8b8778');
   poly(c, [bp(gx - .70, gy - .55), bp(gx + .70, gy - .55), bp(gx + .70, gy + .58), bp(gx - .70, gy + .58)], '#9d9989');
@@ -5422,12 +5438,12 @@ function drawGround(c){
     if (p[0] < -60 || p[0] > LW + 60) continue;
     if (p[1] < -60 || p[1] > LH + 60) continue;
     if (r < .16){                                     // tree
-      ell(c, p[0], p[1] + 2, 9 * s, 4 * s, 'rgba(0,0,0,.20)');
+      shadow(c, p[0], p[1] + 2, 9 * s, 4 * s, 'rgba(0,0,0,.20)');
       c.fillStyle = '#57431f'; c.fillRect(p[0] - 1.6 * s, p[1] - 9 * s, 3.2 * s, 9 * s);
       poly(c, [[p[0] - 9 * s, p[1] - 7 * s], [p[0], p[1] - 26 * s], [p[0] + 9 * s, p[1] - 7 * s]], r < .08 ? '#3f7a3a' : '#4b8c42');
       poly(c, [[p[0] - 6 * s, p[1] - 14 * s], [p[0], p[1] - 30 * s], [p[0] + 6 * s, p[1] - 14 * s]], '#57a04c');
     } else if (r < .26){                              // boulder
-      ell(c, p[0], p[1] + 1, 8 * s, 3.5 * s, 'rgba(0,0,0,.18)');
+      shadow(c, p[0], p[1] + 1, 8 * s, 3.5 * s, 'rgba(0,0,0,.18)');
       poly(c, [[p[0] - 8 * s, p[1]], [p[0] - 4 * s, p[1] - 7 * s], [p[0] + 4 * s, p[1] - 8 * s], [p[0] + 8 * s, p[1]]], '#7d7f77');
       poly(c, [[p[0] - 4 * s, p[1] - 7 * s], [p[0] + 4 * s, p[1] - 8 * s], [p[0] + 2 * s, p[1] - 3 * s], [p[0] - 3 * s, p[1] - 3 * s]], '#93958c');
     } else if (r < .34){                              // shrub
@@ -7851,7 +7867,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,

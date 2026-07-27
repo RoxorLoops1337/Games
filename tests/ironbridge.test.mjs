@@ -3495,6 +3495,47 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'the sky draws from either end of the world at every zoom');
 }
 {
+  // Shadows. Every one in the game sat directly under its object, which was
+  // fine while nothing in the sky said where the light came from. SUN says
+  // now, so a shadow with no direction is the last thing in the picture that
+  // does not know where the light is.
+  const [dx, dy] = IB.shadowOff(10, 4);
+  t.ok(Math.sign(dx) === -Math.sign(IB.SUN.x - .5),
+    'a shadow falls to the opposite side from the sun');
+  t.ok(IB.SUN.y < .5 && dy > 0, 'and downward, the sun being above the horizon');
+  // A zero offset passes every direction check there is — and a zero offset is
+  // exactly what was there before, so it has to be ruled out on its own.
+  t.ok(IB.SHADOW.dx > 0.05, 'the offset is big enough to see (' + IB.SHADOW.dx + ')');
+  // Past one radius the shadow clears the object entirely and the thing reads
+  // as floating rather than lit.
+  t.ok(IB.SHADOW.dx < 1 && IB.SHADOW.dy < 1, 'and small enough that the shadow stays under its object');
+  // It is a fraction of the patch, so a town hall throws further than a wood
+  // chip without anybody having to say how tall either of them is.
+  const big = IB.shadowOff(40, 15), small = IB.shadowOff(4, 1.5);
+  t.ok(Math.abs(big[0]) > Math.abs(small[0]) * 5, 'a big thing throws a longer shadow than a small one');
+  t.ok(IB.shadowOff(0, 0)[0] === 0, 'and something with no footprint throws nothing');
+
+  // The whole board, both seats, at both ends of the zoom — every shadow in
+  // the game goes through this one function now and there are eighteen of them.
+  IB.newMatch({ diff:'veteran', seed:191 });
+  IB.cam.follow = false;
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    const s = G.sides[seat];
+    s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000;
+    const types = Object.keys(IB.BUILDINGS);
+    for (let i = 0; i < types.length; i++) IB.build(s, i, types[i]);
+    for (const k of Object.keys(IB.UNITS)) IB.spawnUnit(seat, k, { x:60, y:0 });
+    IB.rebuildGrid();
+    for (const x of [IB.myHoldX() + 4, C.LANE_LEN / 2]){
+      IB.cam.x = x;
+      for (const z of [.5, 1, 2]){ IB.cam.z = IB.cam.tz = z; IB.draw(); }
+    }
+  }
+  IB.MY = 0; IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'everything that casts a shadow draws, from either seat, at every zoom');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
