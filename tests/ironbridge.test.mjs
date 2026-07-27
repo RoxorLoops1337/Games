@@ -2577,6 +2577,165 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'and both share the shield/burn/stun/health marks, so a cannon can still catch fire');
 }
 
+/* ------------------------------------------------------- who is in front
+   Everything on the deck is y-sorted: the structures and the bodies go into one
+   array keyed on their ground position and are painted back to front.
+   Projectiles were not in that array — they were painted afterwards, all of
+   them, over everything. Measured by logging the paint order of a real frame in
+   a browser:
+
+     shot far, body near   the body is nearer   painted on top: THE SHOT
+     shot near, body far   the shot is nearer   painted on top: the shot
+     control: two bodies   the near one wins    painted on top: the near body
+
+   So an arrow in the far lane was painted over a footman standing three units
+   closer to the camera. The bodies beside it have sorted correctly the whole
+   time — the control is what says so.                                        */
+{
+  const setup = (projY, bodyY) => {
+    IB.newMatch({ diff:'veteran', seed:9600 });
+    IB.MY = 0;
+    G.units.length = 0; G.projs.length = 0;
+    const body = IB.spawnUnit(1, 'melee', { x:60, y:bodyY, paid:true });
+    body.spd = 0;
+    IB.rebuildGrid();
+    IB.shoot({ x:52, y:projY, magic:false }, { x:70, y:projY, dead:false, r:.5, side:1 },
+      () => {}, '#12ff34', 'shaft');
+    for (let i = 0; i < 9; i++) IB.projStep(1 / 30);
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 3;
+    return { body, proj:G.projs[0] };
+  };
+  const at = (list, o) => list.findIndex(d => d.o === o);
+
+  // ---- the case
+  {
+    const { body, proj } = setup(-2.4, 2.4);
+    t.ok(proj, 'the shot is in the air');
+    const order = IB.laneOrder();
+    const iP = at(order, proj), iB = at(order, body);
+    t.ok(iP >= 0, 'a projectile is in the paint order at all (' + iP + ')');
+    t.ok(iB >= 0, 'and so is the body');
+    t.ok(IB.lp(body.x, body.y)[1] > IB.lp(proj.x, proj.y)[1],
+      'the body really is the nearer of the two');
+    t.ok(iP < iB,
+      'so the far-lane shot is painted BEFORE the near-lane body, and passes behind it (' +
+      iP + ' vs ' + iB + ')');
+  }
+  // ---- and the other way round, which was right by accident before
+  {
+    const { body, proj } = setup(2.4, -2.4);
+    const order = IB.laneOrder();
+    t.ok(at(order, proj) > at(order, body),
+      'a shot in the NEAR lane still passes in front of a body behind it');
+  }
+  // ---- the control: two bodies in those same two lanes
+  {
+    IB.newMatch({ diff:'veteran', seed:9600 });
+    IB.MY = 0;
+    G.units.length = 0; G.projs.length = 0;
+    const farU = IB.spawnUnit(1, 'melee', { x:60, y:-2.4, paid:true });
+    const nearU = IB.spawnUnit(0, 'melee', { x:60, y:2.4, paid:true });
+    farU.spd = nearU.spd = 0;
+    IB.rebuildGrid();
+    const order = IB.laneOrder();
+    t.ok(at(order, nearU) > at(order, farU),
+      'the near body is still painted over the far one, as it always was');
+  }
+  // ---- the key is the GROUND, not the sprite. A shell lobbed four units up
+  // over a turret is still on the far side of it.
+  {
+    IB.newMatch({ diff:'veteran', seed:9600 });
+    IB.MY = 0;
+    G.units.length = 0; G.projs.length = 0;
+    // In the NEAR lane on purpose. Put it in the far lane and it is already
+    // first in the list, so raising it cannot move it and the assertion has no
+    // teeth — which is exactly how it read when this was written.
+    for (const y of [-2.4, 0]) IB.spawnUnit(1, 'melee', { x:60, y, paid:true });
+    IB.shoot({ x:52, y:2.4, magic:false }, { x:70, y:2.4, dead:false, r:.5, side:1 },
+      () => {}, '#12ff34', 'shell');
+    for (let i = 0; i < 6; i++) IB.projStep(1 / 30);
+    IB.rebuildGrid();
+    const p = G.projs[0];
+    const low = IB.laneOrder().findIndex(d => d.o === p);
+    t.ok(low > 0, 'the shell is not already at the back of the list (' + low + ')');
+    const wasZ = p.z;
+    p.z = 40;                                     // absurdly high, same ground spot
+    const high = IB.laneOrder().findIndex(d => d.o === p);
+    t.ok(low === high,
+      'flying it forty units up does not move it in the order (' + low + ' vs ' + high + ')');
+    p.z = wasZ;
+  }
+  // ---- ties keep the push order: a structure, then a body at its foot, then a
+  // shot passing at the same depth
+  {
+    IB.newMatch({ diff:'veteran', seed:9600 });
+    IB.MY = 0;
+    G.units.length = 0; G.projs.length = 0;
+    const st = G.sides[1].structs.find(x => x.key === 't1');
+    const u = IB.spawnUnit(1, 'melee', { x:st.x, y:st.y, paid:true });
+    u.spd = 0;
+    IB.rebuildGrid();
+    IB.shoot({ x:st.x - 6, y:st.y, magic:false }, { x:st.x + 6, y:st.y, dead:false, r:.5, side:1 },
+      () => {}, '#12ff34', 'shaft');
+    G.projs[0].x = st.x; G.projs[0].y = st.y;
+    const order = IB.laneOrder();
+    const iS = at(order, st), iU = at(order, u), iP = at(order, G.projs[0]);
+    t.ok(iS >= 0 && iU >= 0 && iP >= 0, 'all three are in the order');
+    t.ok(iS < iU && iU < iP,
+      'at the same depth: the wall, then the body at its foot, then the shot going past (' +
+      iS + ' < ' + iU + ' < ' + iP + ')');
+  }
+  // ---- one painter, and it is the sorted one. This is the guard that stops a
+  // future projectile pass being bolted on after the bodies again.
+  {
+    const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    const calls = [...CODE.matchAll(/\bdrawProj\s*\(/g)].length;
+    const defs = [...CODE.matchAll(/function\s+drawProj\s*\(/g)].length;
+    t.ok(defs === 1, 'there is one drawProj (' + defs + ')');
+    t.ok(calls - defs === 1, 'and exactly one thing calls it (' + (calls - defs) + ')');
+    t.ok(/laneOrder\(\)[\s\S]{0,260}drawProj\(/.test(CODE),
+      'and that one thing is the loop over laneOrder()');
+    // The first version of this was a regex for the old separate pass, and it
+    // fired on ANY G.projs loop mentioning z — including the sort key itself,
+    // so it gave the right verdict for the wrong reason. Ask the list instead:
+    // anything appended after the sort shows up as a step backwards.
+    IB.newMatch({ diff:'veteran', seed:9600 });
+    IB.MY = 0;
+    G.units.length = 0; G.projs.length = 0;
+    for (const y of [-2.4, 0, 2.4]) IB.spawnUnit(1, 'melee', { x:60, y, paid:true });
+    IB.shoot({ x:52, y:-2.4, magic:false }, { x:70, y:-2.4, dead:false, r:.5, side:1 },
+      () => {}, '#12ff34', 'shaft');
+    IB.shoot({ x:52, y:2.4, magic:false }, { x:70, y:2.4, dead:false, r:.5, side:1 },
+      () => {}, '#12ff34', 'shaft');
+    for (let i = 0; i < 6; i++) IB.projStep(1 / 30);
+    IB.rebuildGrid();
+    const ord = IB.laneOrder();
+    let steps = 0;
+    for (let i = 1; i < ord.length; i++) if (ord[i].y < ord[i - 1].y - 1e-9) steps++;
+    t.ok(ord.filter(d => d.k === 'proj').length === 2, 'both shots are in the list');
+    t.ok(steps === 0,
+      'and the whole list runs back to front with nothing appended after the sort (' +
+      steps + ' steps backwards)');
+    G.projs.length = 0; G.units.length = 0;
+  }
+  // ---- reading the order must not move anything
+  {
+    IB.newMatch({ diff:'veteran', seed:9600 });
+    IB.MY = 0;
+    G.units.length = 0; G.projs.length = 0;
+    const u = IB.spawnUnit(1, 'melee', { x:60, y:1, paid:true });
+    IB.rebuildGrid();
+    IB.shoot({ x:52, y:0, magic:false }, { x:70, y:0, dead:false, r:.5, side:1 }, () => {}, '#12ff34', 'shaft');
+    const h0 = IB.netHash();
+    const before = [u.x, u.y, G.projs[0].x, G.projs[0].y, G.projs.length].join(',');
+    IB.laneOrder(); IB.laneOrder();
+    t.ok([u.x, u.y, G.projs[0].x, G.projs[0].y, G.projs.length].join(',') === before,
+      'asking who is in front moves nobody');
+    t.ok(IB.netHash() === h0, 'nor the lockstep hash');
+    G.projs.length = 0; G.units.length = 0;
+  }
+}
+
 /* ------------------------------------------------ status: how much, how long
    Six marks can sit on a body — a shield, burning, slowed, marked, stunned,
    and a hero's buff ring. Walked as a table with G.t PINNED, because they
