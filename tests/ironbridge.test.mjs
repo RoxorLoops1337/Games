@@ -4863,6 +4863,126 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(h0 > 10, 'the hero sweep drew a hero (' + h0 + ')');
       t.ok(h5 === h0, 'a hero does not put on levy kit (' + h0 + ' → ' + h5 + ')');
     }
+
+    // Breaking an inhibitor buys the attacker 95 seconds of Siege Ogres — the
+    // biggest swing in the match — and none of it reached the board. At superT
+    // 0, 20, 50 and 95 a broken inhibitor drew exactly the same 24 ops, the
+    // same 2064 of ink and the same one string, while the rebuild clock right
+    // beside it varied across all three of ITS readings on the same
+    // instrument. Only the wave panel knew.
+    //
+    // And the one number the board did show was the wrong clock: the rebuild
+    // runs 130s against the window's 95, so a player reading the rubble for
+    // "how long does this last" was told a number 35 seconds too long.
+    {
+      const st2 = CTX.__stats;
+      const seat0o = IB.MY;
+      t.ok(C.SUPER_DUR > 0 && C.INHIB_RESPAWN > C.SUPER_DUR,
+        'the window really closes before the inhibitor is back (' + C.SUPER_DUR +
+        's of ogres, ' + C.INHIB_RESPAWN + 's to rebuild) — which is why one number could not do for both');
+
+      const broken = (superT, downT, side, seat) => {
+        IB.newMatch({ diff:'veteran', seed:7710 });
+        IB.MY = seat === undefined ? 0 : seat;
+        const st = G.sides[side === undefined ? 0 : side].structs.find(x => x.key === 'inhib');
+        st.dead = true; st.hp = 0; st.downT = downT === undefined ? 130 : downT;
+        G.sides[IB.enemyOf(st.side)].superT = superT;
+        IB.cam.follow = false; IB.cam.x = st.x; IB.cam.z = IB.cam.tz = 1.2;
+        st2.rects = []; st2.texts = []; st2.rectsDropped = 0;
+        IB.drawStructure(CTX, st);
+        const say = st2.texts.map(x => x.txt);
+        return { st, rects: st2.rects, texts: st2.texts, says: say,
+          ogre: say.filter(x => /OGRES/.test(x)), dropped: st2.rectsDropped };
+      };
+
+      const off = broken(0), fresh = broken(C.SUPER_DUR), half = broken(C.SUPER_DUR / 2);
+      t.ok(off.dropped === 0 && fresh.dropped === 0, 'the rect capture held it');
+      // Pair the "nothing" with proof the body drew: otherwise this only says
+      // a broken inhibitor draws nothing at all, which it plainly does not.
+      t.ok(off.rects.length > 0 || off.says.length > 0,
+        'a broken inhibitor draws something either way (' + off.rects.length + ' rects, ' + off.says.length + ' strings)');
+      t.ok(off.ogre.length === 0, 'no window, no marker (' + off.says.join(' ') + ')');
+      t.ok(fresh.ogre.length === 1, 'a fresh window says so on the board (' + fresh.says.join(' ') + ')');
+      t.ok(/95/.test(fresh.ogre[0]), 'and says how long is left (' + fresh.ogre[0] + ')');
+      t.ok(half.ogre[0] !== fresh.ogre[0], 'and counts down (' + fresh.ogre[0] + ' → ' + half.ogre[0] + ')');
+      // The rebuild clock has to survive alongside it — it is the control that
+      // proved the instrument worked, and it is still the other half of the pair.
+      t.ok(fresh.says.some(x => /130/.test(x)), 'the rebuild clock is still there too (' + fresh.says.join(' ') + ')');
+
+      // The bar drains. Measured off the rect, not off the string, so a marker
+      // that printed the right number over a fixed-width bar cannot pass.
+      const barOf = (r) => {
+        const bars = r.rects.filter(x => x.col === IB.SIDE_COL[IB.enemyOf(r.st.side)]);
+        return bars.length ? Math.max(...bars.map(x => x.w)) : 0;
+      };
+      const bFull = barOf(fresh), bHalf = barOf(half), bLow = barOf(broken(C.SUPER_DUR * .1));
+      t.ok(bFull > 0, 'the window draws a real bar (' + bFull.toFixed(1) + ')');
+      t.ok(bHalf < bFull && bLow < bHalf, 'and it drains (' +
+        bFull.toFixed(1) + ' → ' + bHalf.toFixed(1) + ' → ' + bLow.toFixed(1) + ')');
+      t.ok(Math.abs(bHalf - bFull / 2) < 1, 'half the window is half the bar (' +
+        bHalf.toFixed(1) + ' vs ' + bFull.toFixed(1) + ')');
+
+      // WHOSE ogres. The window belongs to the side that BROKE the inhibitor,
+      // not the side that lost it, and a marker in the wrong colour would name
+      // the wrong army at the moment it matters most. Both sides, so a flip
+      // that happens to be right for side 0 cannot pass.
+      // Asked as a DIFF — which colours appear when the window is open that
+      // were not there when it was shut. The monument already paints itself in
+      // the defender's colours, so simply looking for a colour would find one
+      // either way; and a width comparison would only be restating the
+      // constant the marker was built from.
+      let named = 0, bothWays = 0;
+      for (const side of [0, 1]){
+        const shut = new Set(broken(0, 130, side).rects.map(x => x.col));
+        const open = broken(C.SUPER_DUR, 130, side).rects.map(x => x.col);
+        const added = new Set(open.filter(cc => !shut.has(cc)));
+        if (added.size) bothWays++;
+        if (added.has(IB.SIDE_COL[IB.enemyOf(side)]) && !added.has(IB.SIDE_COL[side])) named++;
+      }
+      t.ok(bothWays === 2, 'opening the window put new colour on the board, both sides (' + bothWays + '/2)');
+      t.ok(named === 2, 'and it is the colours of the side sending the ogres (' + named + '/2)');
+
+      // The two clocks must not sit on each other. The first version set their
+      // offsets independently and the bar landed on the rebuild figure; both
+      // come off one stack now, so this is the guard for that.
+      {
+        const r = broken(C.SUPER_DUR, 130);
+        const bar = r.rects.filter(x => x.col === IB.SIDE_COL[IB.enemyOf(0)])[0];
+        const rebuild = r.texts.find(x => /^\d+s$/.test(x.txt));
+        t.ok(!!bar && !!rebuild, 'both clocks are on the board to compare (' +
+          (bar ? 'bar' : 'no bar') + ', ' + (rebuild ? rebuild.txt : 'no rebuild') + ')');
+        if (bar && rebuild){
+          const px = parseFloat(/([\d.]+)px/.exec(rebuild.font || '')?.[1]) || 10;
+          const rw = CTX.measureText(rebuild.txt).width;
+          const ox = Math.min(bar.x + bar.w, rebuild.x + rw / 2) - Math.max(bar.x, rebuild.x - rw / 2);
+          const oy = Math.min(bar.y + bar.h, rebuild.y + px / 2) - Math.max(bar.y, rebuild.y - px / 2);
+          t.ok(!(ox > 0 && oy > 0), 'and neither is sitting on the other (' +
+            ox.toFixed(1) + ' x ' + oy.toFixed(1) + ' of overlap)');
+        }
+      }
+
+      // WIRED, and only where it belongs. A live inhibitor is not a broken one,
+      // and a broken turret did not buy anybody ogres.
+      {
+        IB.newMatch({ diff:'veteran', seed:7712 });
+        IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1.2;
+        const inhib = G.sides[0].structs.find(x => x.key === 'inhib');
+        const turret = G.sides[0].structs.find(x => x.key === 't1');
+        G.sides[1].superT = C.SUPER_DUR;
+        const saysOgres = (stt) => {
+          IB.cam.x = stt.x; st2.texts = [];
+          IB.drawStructure(CTX, stt);
+          return st2.texts.some(x => /OGRES/.test(x.txt));
+        };
+        inhib.dead = false; inhib.hp = inhib.mhp;
+        t.ok(!saysOgres(inhib), 'a standing inhibitor carries no window');
+        turret.dead = true; turret.hp = 0; turret.downT = 0;
+        t.ok(!saysOgres(turret), 'and a broken turret is not where ogres come from');
+        inhib.dead = true; inhib.hp = 0; inhib.downT = C.INHIB_RESPAWN;
+        t.ok(saysOgres(inhib), 'the broken inhibitor is (and the sweep could tell)');
+      }
+      IB.MY = seat0o;
+    }
     IB.cam.x = 26;
     IB.MY = seat0c;
   }

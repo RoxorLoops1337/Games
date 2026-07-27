@@ -4282,6 +4282,48 @@ function towerBands(c, X, Y, u, ranks){
   }
 }
 
+/* Breaking an inhibitor buys the attacker 95 seconds of Siege Ogres, and that
+   window is the single biggest swing in the match. It never reached the board:
+   at superT 0, 20, 50 and 95 a broken inhibitor drew exactly the same 24 ops,
+   the same 2064 of ink and the same one string, while the rebuild clock right
+   beside it varied across all three of its readings on the same instrument.
+   Only the wave panel knew.
+
+   Worse than merely absent. The one number the board DID show is the rebuild —
+   130s — and the ogres stop at 95. A player reading the broken monument for
+   'how long does this last' was being told a number 35 seconds too long, about
+   the wrong clock. So the two go together, and they are told apart: this one
+   is a draining bar in the colour of the side sending the ogres, above the
+   pale rebuild figure it was being confused with.
+
+   Anchored at the broken inhibitor because breaking it is what started the
+   clock — the monument is the one place both facts live, even though they
+   belong to opposite sides. SUPER_DUR < INHIB_RESPAWN, so the window always
+   closes while the inhibitor is still down and there is always something to
+   hang it on.                                                               */
+// Both clocks come off ONE stack, measured up from the rubble, so they cannot
+// crowd each other at some zoom nobody looked at. The first version set the two
+// offsets independently and the bar sat on top of the rebuild figure.
+const DOWNSTACK = { rebuild:18, font:11, bar:44, gap:6 };
+const OGRE_MARK = { w:34, h:3.4, back:'rgba(10,12,18,.7)', txt:'#ffd9a8' };
+function ogreWindow(c, x, y, st){
+  // enemyOf, not an inline flip: onStructDown sets superT on exactly this side,
+  // and the two must not be able to drift apart.
+  const foeSide = enemyOf(st.side);
+  const left = G.sides[foeSide].superT;
+  if (!(left > 0)) return;
+  const f = clamp(left / C.SUPER_DUR, 0, 1);
+  const w = OGRE_MARK.w * cam.z, h = Math.max(1, OGRE_MARK.h * cam.z);
+  const bx = x - w / 2, by = y - DOWNSTACK.bar * cam.z;
+  c.fillStyle = OGRE_MARK.back; c.fillRect(bx - 1.2, by - 1.2, w + 2.4, h + 2.4);
+  c.fillStyle = SIDE_COL[foeSide]; c.fillRect(bx, by, w * f, h);
+  c.fillStyle = shade(SIDE_COL[foeSide], 1.3); c.fillRect(bx, by, w * f, h * .45);
+  c.fillStyle = OGRE_MARK.txt;
+  setText(c, 'bold ' + Math.max(8, Math.round(9 * cam.z)) + 'px system-ui', 'center', 'middle');
+  c.fillText("OGRES " + Math.ceil(left) + "s", x, by - DOWNSTACK.gap * cam.z);
+  endText(c);
+}
+
 function drawStructure(c, st){
   const p = lp(st.x, st.y);
   const u = cam.z, col = SIDE_COL[st.side], dead = st.dead;
@@ -4454,11 +4496,14 @@ function drawStructure(c, st){
     }
   }
   if (!dead) hpBar(c, X, Y - (st.key === 'gate' ? 116 : st.key === 'inhib' ? 72 : 84) * cam.z, st, 44 * cam.z, true);
-  else if (st.downT > 0){
-    c.fillStyle = '#d8c49a';
-    setText(c, Math.max(9, Math.round(11 * cam.z)) + 'px system-ui', 'center', 'middle');
-    c.fillText(Math.ceil(st.downT) + 's', p[0], p[1] - 18 * cam.z);
-    endText(c);
+  else {
+    if (st.downT > 0){
+      c.fillStyle = '#d8c49a';
+      setText(c, Math.max(9, Math.round(DOWNSTACK.font * cam.z)) + "px system-ui", "center", "middle");
+      c.fillText(Math.ceil(st.downT) + "s", p[0], p[1] - DOWNSTACK.rebuild * cam.z);
+      endText(c);
+    }
+    if (st.key === 'inhib') ogreWindow(c, p[0], p[1], st);
   }
   if (st.hitT > 0 && !dead){
     c.globalAlpha = st.hitT * 2.2; ell(c, p[0], p[1] - 20 * cam.z, 26 * cam.z, 20 * cam.z, '#ffffff'); c.globalAlpha = 1;
@@ -8620,7 +8665,7 @@ window.IB = {
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, MUSTER, musterRanks, TRAINEE, trainCrew, trainSlots, barrackSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
-  mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
+  mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
   floatScale, hitWeight, HIT, hitTime, hitPush, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
