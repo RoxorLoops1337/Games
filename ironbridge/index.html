@@ -1036,7 +1036,7 @@ function makeSide(i, ai){
     s.structs.push({
       struct:true, side:i, key:d.key, n:d.n, ord:0, x, y:yo,
       hp:d.hp, base:d, mhp:d.hp, ad:d.ad, as:d.as, rng:d.rng, armor:d.armor, mr:d.mr, r:d.r,
-      cd:0, dead:false, downT:0, target:null, hitT:0, id:G.uid++,
+      cd:0, dead:false, downT:0, target:null, hitT:0, id:G.uid++, chipHp:d.hp,
     });
   }
   // Attack order runs from the bridge inward: outer turret first, gates last.
@@ -1291,7 +1291,7 @@ function spawnUnit(side, kind, o){
     ad:d.ad * waveScale * adUp * (o.adM || 1), armor:d.armor + armUp, mr:d.mr + armUp,
     as:d.as, rng:d.rng, spd:d.spd, r:d.r, tdmg:d.tdmg, magic:!!d.magic, bounty:d.bounty,
     cd:rr(0, .5), target:null, dead:false, slowT:0, slowP:0, stunT:0, shield:0, shT:0,
-    burn:null, hitT:0, swing:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0,
+    burn:null, hitT:0, swing:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
   };
   u.hp = u.mhp;
@@ -1760,6 +1760,7 @@ function speedOf(u){
 }
 
 function statusTick(u, dt){
+  chipTick(u, dt);
   if (u.slowT > 0){ u.slowT -= dt; if (u.slowT <= 0) u.slowP = 0; }
   if (u.stunT > 0) u.stunT -= dt;
   if (u.markT > 0) u.markT -= dt;
@@ -1849,6 +1850,7 @@ function structStep(st, dt){
     return;
   }
   if (st.hitT > 0) st.hitT -= dt;
+  chipTick(st, dt);
   const s = G.sides[st.side];
   st.mhp = structMaxHp(s, st);
   const reg = UP_EFFECT.regen * s.towerUp.regen;
@@ -1961,7 +1963,7 @@ function makeHero(side, cls, name){
     x:gateX(side) + dirOf(side) * 2, y:0, r:.62, dead:false, inLane:false, respawnT:0,
     hp:1, mhp:1, mana:1, mmana:1, cd:0, slowT:0, slowP:0, stunT:0, shield:0, shT:0, burn:null,
     hitT:0, swing:0, target:null, ph:rnd() * 6.28, rage:0, atkN:0, dmgTaken:-99, retreat:false,
-    lastKiller:null, dmgDealt:0, magic:false, tdmg:1,
+    lastKiller:null, dmgDealt:0, magic:false, tdmg:1, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
   };
   recalcHero(h, true);
@@ -4119,17 +4121,50 @@ function structLabel(st){
     col:st.side === 0 ? '#bfe0ff' : '#ffc4bd' };
 }
 
+// A bar is a flat block of colour on a black block, twenty of them at once in
+// a brawl. It tells you the number but not the story — how hard that last hit
+// landed, or how close to the next chunk this thing is.
+//
+// The chip is the pale trail behind the fill, showing health that has JUST
+// gone. It lives in the simulation (see chipTick) rather than in the renderer,
+// so both machines agree on it and a resync carries it; nothing reads it for
+// any decision and the hash does not mix it.
+const HP_TICK = 220;              // one notch per this much health, up to HP_TICKS
+const HP_TICKS = 6;
 function hpBar(c, x, y, u, w, big){
   const f = clamp(u.hp / u.mhp, 0, 1);
   const h = big ? 5 * cam.z : 3.2 * cam.z;
-  c.fillStyle = 'rgba(8,10,14,.8)'; c.fillRect(x - w / 2 - 1, y - 1, w + 2, h + 2);
-  c.fillStyle = u.side === 0 ? '#54d06a' : '#e0544a';
-  c.fillRect(x - w / 2, y, w * f, h);
+  const x0 = x - w / 2;
+  c.fillStyle = 'rgba(8,10,14,.82)'; c.fillRect(x0 - 1.4, y - 1.4, w + 2.8, h + 2.8);
+  c.fillStyle = 'rgba(46,52,60,.9)'; c.fillRect(x0, y, w, h);
+  const chip = clamp((u.chipHp === undefined ? u.hp : u.chipHp) / u.mhp, 0, 1);
+  if (chip > f){
+    c.fillStyle = 'rgba(255,226,168,.85)';
+    c.fillRect(x0 + w * f, y, w * (chip - f), h);
+  }
+  const col = u.side === 0 ? '#54d06a' : '#e0544a';
+  c.fillStyle = col; c.fillRect(x0, y, w * f, h);
+  c.fillStyle = shade(col, 1.28); c.fillRect(x0, y, w * f, h * .38);
+  // notches, so a long bar reads as an amount rather than a length
+  const n = clamp(Math.round(u.mhp / HP_TICK), 0, HP_TICKS);
+  if (n > 1 && w > 14){
+    c.fillStyle = 'rgba(8,10,14,.42)';
+    for (let i = 1; i < n; i++) c.fillRect(x0 + (w * i / n) - .5, y, 1, h);
+  }
   if (u.shield > 0){
     const sf = clamp(u.shield / u.mhp, 0, 1);
     c.fillStyle = 'rgba(220,235,255,.85)';
-    c.fillRect(x - w / 2, y, w * Math.min(1, sf), h * .45);
+    c.fillRect(x0, y, w * Math.min(1, sf), h * .45);
   }
+}
+// How fast the chip runs down to meet the bar. Named so a test can hold it to
+// what a chip is for: it has to LAG a hit (or it shows nothing) and it has to
+// catch up (or a body that took one hit wears a pale stripe for the rest of
+// the match).
+const CHIP_RATE = .55, CHIP_FLOOR = 60;
+function chipTick(u, dt){
+  if (u.chipHp === undefined || u.chipHp < u.hp) u.chipHp = u.hp;
+  else if (u.chipHp > u.hp) u.chipHp = Math.max(u.hp, u.chipHp - (u.mhp * CHIP_RATE + CHIP_FLOOR) * dt);
 }
 
 // A brawl is twenty bodies deep and every one of them used to carry a health
@@ -4439,10 +4474,18 @@ function drawUnitMarks(c, u, bx, by, p, sc){
     c.globalAlpha = 1;
   }
   if (u.isHero){
-    c.fillStyle = '#0b0f18'; c.strokeStyle = col; c.lineWidth = 1.4;
-    c.beginPath(); c.arc(bx - 20 * sc, by - 20 * sc, 6.5 * sc, 0, 6.2832); c.fill(); c.stroke();
-    c.fillStyle = '#ffcf4d'; c.font = 'bold ' + Math.max(7, Math.round(7.5 * sc)) + 'px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
-    c.fillText(String(u.lvl), bx - 20 * sc, by - 19.6 * sc);
+    // The badge was a big flat black disc floating out to the side of the
+    // hero, and in a brawl it was the loudest thing on the bridge. It is a
+    // roundel seated on the end of the hero's own bar now, with a lit rim so
+    // it belongs to the same set of objects as everything else.
+    const lx = bx - 18.5 * sc, ly = by - 22 * sc, lr = 5.4 * sc;
+    ell(c, lx, ly, lr + 1.1, lr + 1.1, 'rgba(8,10,14,.82)');
+    ell(c, lx, ly, lr, lr, shade(col, .34));
+    ell(c, lx, ly - lr * .34, lr * .86, lr * .5, shade(col, .52));
+    c.strokeStyle = shade(col, 1.1); c.lineWidth = Math.max(1, 1.2 * cam.z);
+    c.beginPath(); c.arc(lx, ly, lr, 0, 6.2832); c.stroke();
+    c.fillStyle = '#ffe7a8'; c.font = 'bold ' + Math.max(7, Math.round(7 * sc)) + 'px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(String(u.lvl), lx, ly + .4 * sc);
     labelQ.push({ x:bx, y:by - 26 * sc, txt:u.name, col:u.side === 0 ? '#bfe0ff' : '#ffc4bd', small:true });
     c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 1;
     c.beginPath(); c.ellipse(bx, p[1], 11 * sc, 5 * sc, 0, 0, 6.2832); c.stroke();
@@ -7693,7 +7736,7 @@ window.IB = {
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
-  KEEP_ART, keepBase, drawEnds, DECK, DECK_XS,
+  KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,

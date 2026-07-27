@@ -3270,6 +3270,76 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'and the span draws at every zoom');
 }
 {
+  // Health bars. Twenty flat blocks of colour on twenty black blocks in a
+  // brawl — they told you the number but not the story: how hard the last hit
+  // landed, or how close a thing is to the next chunk of its bar.
+  IB.newMatch({ diff:'veteran', seed:163 });
+  const u = IB.spawnUnit(0, 'melee', { x:40, y:0 });
+  IB.rebuildGrid();
+
+  // The chip is the pale trail behind the fill. It has to LAG a hit — with no
+  // lag it shows nothing at all — and it has to CATCH UP, or a body that took
+  // one hit wears a pale stripe for the rest of the match.
+  u.hp = u.mhp; IB.chipTick(u, 1 / 30);
+  t.ok(u.chipHp === u.mhp, 'an untouched body has no chip');
+  u.hp = u.mhp * .4;
+  IB.chipTick(u, 1 / 30);
+  t.ok(u.chipHp > u.hp, 'the chip lags the hit that just landed');
+  let steps = 0;
+  while (u.chipHp > u.hp && steps < 600){ IB.chipTick(u, 1 / 30); steps++; }
+  t.ok(u.chipHp === u.hp, 'and runs down to meet the bar');
+  t.ok(steps > 2 && steps < 120, 'in a time you can see but not wait through (' + steps + ' frames)');
+  // Healing has to snap it up, or the chip sits BEHIND the fill and the bar
+  // shows a gap that is not there.
+  u.hp = u.mhp; IB.chipTick(u, 1 / 30);
+  t.ok(u.chipHp === u.hp, 'a healed body loses its chip at once');
+  t.ok(IB.CHIP_RATE > 0 && IB.CHIP_FLOOR > 0, 'the chip runs at a rate with a floor under it');
+  // The floor is what stops a low-max-health body taking forever: rate alone
+  // is proportional to mhp, so a levy would crawl.
+  const tiny = { hp:10, mhp:100, chipHp:100 };
+  let ts = 0;
+  while (tiny.chipHp > tiny.hp && ts < 600){ IB.chipTick(tiny, 1 / 30); ts++; }
+  t.ok(ts < 120, 'even the smallest body clears its chip promptly (' + ts + ')');
+
+  // Notches: a bar has to read as an amount, not a length — but a levy with
+  // 200 health should not be diced into six.
+  let badTicks = 0;
+  for (const mhp of [40, 200, 900, 4000, 20000]){
+    const n = Math.min(Math.max(Math.round(mhp / IB.HP_TICK), 0), IB.HP_TICKS);
+    if (n > IB.HP_TICKS || n < 0) badTicks++;
+  }
+  t.ok(badTicks === 0, 'the notch count stays within bounds at every size');
+  t.ok(IB.HP_TICKS >= 2 && IB.HP_TICK > 0, 'and there is more than one notch to draw');
+
+  // chipHp lives in the simulation so both machines agree on it and a resync
+  // carries it. Nothing may read it for a decision, and the hash must not mix
+  // it — otherwise a client that drew a frame the other did not would desync.
+  IB.newMatch({ diff:'veteran', seed:167 });
+  const before = IB.netHash();
+  for (const s of G.sides){
+    for (const st of s.structs) st.chipHp = st.mhp * .3;
+    for (const h of s.heroes) h.chipHp = 1;
+  }
+  for (const b of G.units) b.chipHp = 1;
+  t.ok(IB.netHash() === before, 'the chip cannot move the hash, so it cannot desync a match');
+
+  // And then a real fight: the chip has to actually turn up in play, and every
+  // body has to be left consistent rather than carrying a stale trail.
+  IB.newMatch({ diff:'veteran', seed:169 });
+  G.sides[0].ai = true;
+  let sawChip = 0, inverted = 0;
+  for (let i = 0; i < 30 * 90 && G.state === 'play'; i++){
+    IB.update(1 / 30);
+    for (const b of G.units){
+      if (b.dead) continue;
+      if (b.chipHp > b.hp + 1e-6) sawChip++;
+      if (b.chipHp < b.hp - 1e-6) inverted++;
+    }
+  }
+  t.ok(sawChip > 50, 'over a real match the chip is on screen often (' + sawChip + ' body-frames)');
+  t.ok(inverted === 0, 'and never falls behind the bar it trails (' + inverted + ')');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
