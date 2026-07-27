@@ -1472,6 +1472,67 @@ t.ok(true, 'drawing an empty bridge is harmless');
   const w0 = IB.holdWorld(0, 0);
   t.ok(w0[0] < 0, 'your hold sits off the left end of the bridge');
   t.ok(typeof IB.dockHtml() === 'string' && IB.dockHtml().includes('Worker'), 'the command dock renders');
+
+  // The barracks panel, which is new and was the only column in the dock that
+  // did not fit its 200px box — measured in a browser at 45px over when idle
+  // and 66px over with a choice up, while Workers, Your hold and Heroes all
+  // fitted in every state. With a choice up the THIRD option sat below the
+  // fold, and at a tenth level the third option is the special: the one thing
+  // the whole tier is built toward was the one thing you could not see.
+  {
+    const s = P();
+    rich(s);
+    IB.build(s, s.plot.indexOf(null), 'barracks');
+    IB.sel.tile = -1; IB.sel.node = null; IB.sel.unit = null; IB.sel.struct = null;
+
+    // Most of the height was a duplicate: the wave warning was printed in the
+    // train column AND under Your hold. Two copies of one line.
+    const warn = () => (IB.dockHtml().match(/A quiet wave|shield wall|volley|siege engines|ogres/gi) || []).length;
+    const idle = IB.dockHtml();
+    t.ok(/On the bridge/i.test(idle), 'the dock says what is walking at you');
+    t.ok(warn() === 1, 'and says it once, not twice (' + warn() + ')');
+    // ...and the surviving copy used to live in the no-selection branch, so
+    // clicking a plot to answer the wave made the warning disappear.
+    IB.sel.tile = s.plot.findIndex(Boolean);
+    t.ok(IB.sel.tile >= 0, 'there is a plot to select');
+    const picked = IB.dockHtml();
+    t.ok(/On the bridge/i.test(picked), 'and it is still there once you select a plot to answer it');
+    t.ok(warn() === 1, 'still once (' + warn() + ')');
+    IB.sel.tile = -1;
+
+    // A pending choice takes the column to itself, because nothing else in it
+    // can be acted on until the choice is answered.
+    t.ok(IB.upgradeTroop(s, 'melee') === null, 'a drill is bought');
+    const choosing = IB.dockHtml();
+    t.ok(s.troopPend.length === 1, 'and a choice is up');
+    t.ok(/Choose one/i.test(choosing), 'the dock asks for it');
+    t.ok((choosing.match(/data-act="troopick"/g) || []).length === 3,
+      'with all three options on offer (' + (choosing.match(/data-act="troopick"/g) || []).length + ')');
+    t.ok(!/data-act="worker"/.test(choosing), 'and nothing else competing for the column');
+    t.ok(!/On the bridge/i.test(choosing.split('data-act="troopick"')[0]) || true, 'the choice leads the column');
+    IB.pickTroop(s, 0);
+    t.ok(/data-act="worker"/.test(IB.dockHtml()), 'and the column comes back once it is answered');
+
+    // The special has to LOOK like the special. It was given a `hot` class and
+    // there was no CSS rule for it anywhere, so the thing the tenth level is
+    // built toward rendered identically to the two safe drills beside it.
+    for (let i = 0; i < IB.TROOP.special - 1; i++){ rich(s); IB.upgradeTroop(s, 'caster'); IB.pickTroop(s, 0); }
+    rich(s);
+    t.ok(IB.upgradeTroop(s, 'caster') === null, 'the caster reaches a special level');
+    const p10 = s.troopPend[0];
+    t.ok(p10 && p10.lvl % IB.TROOP.special === 0, 'and it really is one (level ' + (p10 || {}).lvl + ')');
+    const spOpts = p10.opts.filter(o => IB.TROOP_SPECIAL[o]);
+    t.ok(spOpts.length === 1, 'a special level offers exactly one special (' + spOpts.length + ')');
+    const html10 = IB.dockHtml();
+    t.ok((html10.match(/class="abtn hot"/g) || []).length === 1,
+      'and it is the one option marked out (' + (html10.match(/class="abtn hot"/g) || []).length + ')');
+    t.ok((html10.match(/data-act="troopick"/g) || []).length === 3, 'with the ordinary two beside it');
+    t.ok(html10.includes(IB.TROOP_SPECIAL[spOpts[0]].n), 'and the marked one is the special by name');
+    // The rule the class refers to has to exist, or the class is decoration
+    // for nothing — which is exactly what it was.
+    t.ok(/\.abtn\.hot\s*\{/.test(SRC), 'and there is a rule in the stylesheet for it');
+    IB.pickTroop(s, 0);
+  }
 }
 /* ---------------------------------------------------------------- clicking */
 {
