@@ -65,7 +65,14 @@ function mkState(){
   };
 }
 const upgrade = new Request('https://x/room/ABCD', { headers:{ Upgrade:'websocket' } });
-const joinRoom = (room) => room.fetch(upgrade);
+// A client says on connect whether it is bringing a board. The room cannot see
+// this and used to guess at it; `have` is that claim.
+const joinRoom = (room, have, tick) => room.fetch(new Request(
+  'https://x/room/ABCD' + (have ? '?have=1&tick=' + (tick || 0) : '?have=0'),
+  { headers:{ Upgrade:'websocket' } }));
+// ...and keeps it current on the wire, because the machine that stayed made
+// its claim before the match existed.
+const beats = (room, ws, tick) => room.webSocketMessage(ws, '"have:' + tick + '"');
 
 const t = harness('ironbridge relay');
 
@@ -181,6 +188,11 @@ const t = harness('ironbridge relay');
   const [a, b] = st.__socks;
   const seed = a.last('start').seed;
 
+  // The match runs. Both machines beat their claim out on the wire once a
+  // second, which is what makes the one that STAYS a candidate to hand the
+  // board over — its connect-time claim was made before there was a match.
+  await beats(room, a, 400); await beats(room, b, 400);
+
   a.closed = true;
   await room.webSocketClose(a);
   t.ok(b.last('peerGone').side === 0, 'the one still here is told which side left');
@@ -215,6 +227,116 @@ const t = harness('ironbridge relay');
     const socks = fresh.state.getWebSockets();
     t.ok(socks.every(w => !!w.last('start')), 'a room filling up the first time still starts');
     t.ok(socks.every(w => !w.last('rejoin')), 'and says nothing about rejoining');
+  }
+
+  /* ------------------------------------------------- both of them reloaded
+     The hang. The room used to decide start-versus-rejoin from a sticky flag
+     it set the first time two players were present and never cleared — which
+     is not the same fact as "somebody in here still has a board". So when
+     BOTH players reloaded, the room sent `rejoin` and named one of them the
+     keeper on the strength of having connected first. That machine had
+     nothing either. It waited for a snapshot; the other waited for a
+     snapshot; neither ever sent one, and both sat under a banner saying the
+     match was being picked up. Forever.
+
+     Nobody claims a board now, so nobody is asked for one.                  */
+  {
+    const st2 = mkState();
+    const room2 = new Room(st2, {});
+    await joinRoom(room2); await joinRoom(room2);        // a match gets played
+    const [p, q] = st2.__socks;
+    const oldSeed = p.last('start').seed;
+    await beats(room2, p, 900); await beats(room2, q, 900);
+    p.closed = true; q.closed = true;
+    await room2.webSocketClose(p); await room2.webSocketClose(q);
+
+    // Both come back with nothing, which is what a reloaded tab is.
+    await joinRoom(room2); await joinRoom(room2);
+    const back = st2.__socks.filter(w => !w.closed);
+    t.ok(back.length === 2, 'both of them get back into the room (' + back.length + ')');
+    t.ok(back.every(w => !!w.last('start')),
+      'and with neither of them holding a board, the room starts a new match rather than asking them to swap one');
+    t.ok(back.every(w => !w.last('rejoin')), 'nobody is told to rejoin a match that no longer exists anywhere');
+    t.ok(back[0].last('start').seed === back[1].last('start').seed, 'both on the same seed');
+    t.ok(back[0].last('start').seed !== oldSeed,
+      'and a NEW one — a code being reused is a new match, and replaying the old seed would make two different matches read identically in a bug report');
+    t.ok(back[0].last('start').side !== back[1].last('start').side, 'one seat each');
+  }
+
+  /* --------------------------------------------- a claim that is out of date
+     The other half of the same bug, and the reason the claim is beaten out on
+     the wire rather than read once at connect. The player who STAYS made its
+     claim before the match existed — at that moment it truthfully had
+     nothing. Read only at connect, it would still be saying so an hour later,
+     and a returning player would be told to start instead of being handed the
+     board that is right there.                                              */
+  {
+    const st3 = mkState();
+    const room3 = new Room(st3, {});
+    await joinRoom(room3); await joinRoom(room3);       // neither has anything YET
+    const [h, j] = st3.__socks;
+    const seed3 = h.last('start').seed;
+    await beats(room3, h, 250); await beats(room3, j, 250);   // now they do
+
+    j.closed = true; await room3.webSocketClose(j);
+    await joinRoom(room3);                                     // back with nothing
+    const back = st3.__socks[st3.__socks.length - 1];
+    t.ok(!back.last('start'), 'a returning player is not told to start a new match over a live one');
+    const rr = back.last('rejoin'), rs = h.last('rejoin');
+    t.ok(!!rr && !!rs, 'both are told it is a rejoin');
+    t.ok(rs.role === 'staying',
+      'and the one that has been beating out a claim all match is the one asked for the board');
+    t.ok(rr.role === 'returning' && rr.seed === seed3, 'on the same seed, so it is the same match');
+  }
+
+  // Two boards, which happens when both links blink at once. The furthest
+  // along is the better board to keep — it is the one with the most of the
+  // match actually simulated in it.
+  {
+    const st4 = mkState();
+    const room4 = new Room(st4, {});
+    await joinRoom(room4, true, 120); await joinRoom(room4, true, 6100);
+    const [lo, hi] = st4.__socks;
+    t.ok(hi.last('rejoin') && hi.last('rejoin').role === 'staying',
+      'with a board each, the machine further into the match keeps it (' +
+      (hi.last('rejoin') || {}).role + ')');
+    t.ok(lo.last('rejoin') && lo.last('rejoin').role === 'returning',
+      'and the one further behind takes the other one');
+    t.ok(!lo.last('start') && !hi.last('start'), 'and neither is told to start over');
+  }
+
+  // A seat held by a socket that is already gone. `webSocketClose` is not
+  // guaranteed to have run — a killed tab, a phone through a tunnel — and a
+  // dead socket used to keep its seat, so the player coming back was told the
+  // room was full. The room they were locked out of was their own.
+  {
+    const st5 = mkState();
+    const room5 = new Room(st5, {});
+    await joinRoom(room5); await joinRoom(room5);
+    const [x, y] = st5.__socks;
+    x.readyState = 3;                                   // CLOSED, and nobody was told
+    const r = await joinRoom(room5);
+    t.ok(r.status === 101,
+      'a seat held by a socket that is already closed does not lock its owner out (' + r.status + ')');
+    const back = st5.__socks[st5.__socks.length - 1];
+    t.ok(back.last('hello').side === 0, 'and the seat it hands back is the dead one’s, not the live one’s');
+    t.ok(y.readyState !== 3, 'the socket that is actually alive is left alone');
+  }
+
+  // The claim beat is housekeeping, not a move. Relaying it would be harmless
+  // — the game ignores a bare string — but the relay's one rule is that it
+  // carries the game's words and speaks none of its own.
+  {
+    const st6 = mkState();
+    const room6 = new Room(st6, {});
+    await joinRoom(room6); await joinRoom(room6);
+    const [u, v] = st6.__socks;
+    const before = v.sent.length;
+    await beats(room6, u, 77);
+    t.ok(v.sent.length === before, 'a claim beat is not relayed to the other player');
+    t.ok(!!u.last('pong'), 'it is answered, so it doubles as the liveness ping');
+    t.ok((u.deserializeAttachment() || {}).tick === 77,
+      'and it is what updates the claim the room rules on (' + (u.deserializeAttachment() || {}).tick + ')');
   }
 
   // The room survives eviction: a hibernated object rebuilds from storage, so

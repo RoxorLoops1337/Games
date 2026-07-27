@@ -11799,7 +11799,14 @@ const RELAY_UNSET = () => relayHost().includes('.example.workers.dev');
 const relayHost = () => {
   try { return localStorage.getItem('ib_relay') || RELAY_HOST; } catch (e) { return RELAY_HOST; }
 };
-const LOBBY = { sock:null, code:'', state:'idle', err:'' };
+const LOBBY = { sock:null, code:'', state:'idle', err:'', peers:0 };
+// Who the room says is in it. "Waiting for them to join" is the same screen
+// whether nobody has typed the code yet or both of you are in and the room
+// has failed to start the match — and those two need completely different
+// things done about them.
+const lobbyWho = () => LOBBY.peers >= 2
+  ? '<p class="sub" style="color:#8fd18f">Both of you are in the room.</p>'
+  : LOBBY.peers === 1 ? '<p class="sub">1 of 2 in the room.</p>' : '';
 
 function lobbyHtml(){
   const code = LOBBY.code
@@ -11818,13 +11825,13 @@ function lobbyHtml(){
              '<button class="pick" data-act="mpjoin"><div class="pk">join</div><div class="pt">Join with a code</div>' +
              '<div class="pd">Type the four letters they read you.</div></button>' +
            '</div>',
-    hosting: code + '<p class="sub">Waiting for them to join…</p>',
+    hosting: code + lobbyWho() + '<p class="sub">Waiting for them to join…</p>',
     joining: '<p class="sub">Type the four letters.</p>' +
              '<div style="margin:14px 0"><input id="mpCode" maxlength="4" autocomplete="off" autocapitalize="characters" ' +
              'style="font-size:30px;letter-spacing:10px;text-align:center;width:190px;padding:8px;text-transform:uppercase;' +
              'background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:8px"></div>' +
              '<div class="picks"><button class="pick" data-act="mpgo"><div class="pt">Join</div></button></div>',
-    connecting: '<p class="sub">Connecting…</p>',
+    connecting: lobbyWho() + '<p class="sub">Connecting…</p>',
     ready:  code + '<p class="sub">Both here. Starting…</p>',
     error:  '<p class="sub" style="color:#ff8f6a">' + (LOBBY.err || 'Something went wrong.') + '</p>' +
             '<div class="picks"><button class="pick" data-act="mp"><div class="pt">Try again</div></button></div>',
@@ -11838,7 +11845,7 @@ function lobbySet(state, err){ LOBBY.state = state; LOBBY.err = err || ''; showL
 
 function lobbyClose(){
   if (LOBBY.sock){ try { LOBBY.sock.close(); } catch (e) {} LOBBY.sock = null; }
-  LOBBY.code = ''; LOBBY.state = 'idle'; LOBBY.err = '';
+  LOBBY.code = ''; LOBBY.state = 'idle'; LOBBY.err = ''; LOBBY.peers = 0;
 }
 
 async function lobbyHost(){
@@ -11873,7 +11880,15 @@ function lobbyJoin(raw){
 
 function lobbyConnect(code){
   let sock;
-  try { sock = new WebSocket('wss://' + relayHost() + '/room/' + code); }
+  // What we are bringing. The relay cannot see whether this browser still has
+  // a board, and when it guessed — from a flag it set the first time a room
+  // filled and never cleared — it got it wrong in both directions: two players
+  // who had both reloaded were told to swap a board neither of them had, and a
+  // code that had ever been played on could never start a second match. So we
+  // say. A live match reports the tick it is on, because if BOTH sides still
+  // have one, the further along is the better board to keep.
+  const q = NET.on && !NET.awaitSync ? '?have=1&tick=' + (NET.tick | 0) : '?have=0';
+  try { sock = new WebSocket('wss://' + relayHost() + '/room/' + code + q); }
   catch (e){ return lobbySet('error', 'Could not open a connection.'); }
   LOBBY.sock = sock;
   sock.onerror = () => lobbySet('error', RELAY_UNSET()
@@ -11890,7 +11905,17 @@ function lobbyConnect(code){
   };
   sock.onmessage = (ev) => {
     let m; try { m = JSON.parse(ev.data); } catch (e){ return; }
-    if (m.k === 'hello' || m.k === 'peers') return;
+    if (m.k === 'hello') return;
+    // `peers` was thrown away, and throwing it away is why a failure here looks
+    // like nothing at all: the host sat under "waiting for them to join" with
+    // no way to tell whether the other player had reached the room and
+    // something went wrong afterwards, or had never arrived. It is one line and
+    // it splits the two halves of every report about this screen.
+    if (m.k === 'peers'){
+      LOBBY.peers = m.n | 0;
+      if (LOBBY.state === 'hosting' || LOBBY.state === 'connecting') showLobby();
+      return;
+    }
     if (m.k === 'start'){
       // Both machines get here within a few milliseconds of each other, with
       // the same seed and different sides. From this point the relay is only
@@ -11911,11 +11936,22 @@ function lobbyConnect(code){
       NET.send = (o) => { if (sock.readyState === 1) try { sock.send(JSON.stringify(o)); } catch (e) {} };
       NET.peerLost = false; NET.linkLost = false; NET.retry = 0;
       netDiary('rejoin', 'role ' + m.role + '  seat ' + m.side);
-      if (m.role === 'staying' && NET.on){
+      if (m.role === 'staying'){
+        // The relay only names a keeper that SAID it had a board, so this
+        // branch cannot be reached empty-handed any more. It is still checked,
+        // because the alternative when it went wrong was not an error — it was
+        // the else branch, silently, and two machines waiting on each other
+        // under a banner that said everything was fine.
+        if (!NET.on){
+          netDiary('rejoin BAD', 'named the keeper, and this machine has no board');
+          return lobbySet('error', 'The relay asked this machine for the match and it does not have one. ' +
+            'Both of you leave the room and start a new one.');
+        }
         netSendSnap(true);
       } else {
         netStart({ me:m.side, seed:m.seed, diff:'veteran' });
         NET.awaitSync = true;                    // hold until we are told where we are
+        NET.syncWait = 0;
         netDiary('awaiting board', 'from the player who stayed');
         LOBBY.state = 'idle';
       }
@@ -11934,7 +11970,9 @@ function netBanner(){
     return NET.resyncs >= SYNC_MAX
       ? 'The two matches keep drifting apart. This one has stopped — it is no longer the same game.'
       : 'The two matches drifted apart. Putting them back together…';
-  if (NET.awaitSync) return 'Back in. Picking the match up where it was…';
+  if (NET.awaitSync) return NET.syncGaveUp
+    ? 'The other machine never sent the board. Both of you leave the room and start a new one.'
+    : 'Back in. Picking the match up where it was…';
   if (NET.linkLost) return NET.retry > 0
     ? 'Connection lost — trying to get back in (' + NET.retry + ')…'
     : 'Connection lost.';
@@ -12822,6 +12860,8 @@ const NET = {
   pending:[],         // commands issued since the last publish
   send:null,          // transport, injected by the lobby
   stallT:0,           // seconds spent waiting on the peer
+  syncWait:0,         // seconds spent waiting on a board that was promised
+  syncGaveUp:false,   // ...long enough that saying nothing became the bug
   hashes:new Map(),   // tick -> my own state hash, for desync detection
   desyncAt:-1,
 };
@@ -12868,11 +12908,22 @@ function sendCmd(kind, args){
 // Publish this machine's batch for a tick NET.delay ahead, every tick, empty or
 // not. The empty ones are not waste — they are how the other machine learns it
 // is safe to proceed.
+// Once a second, tell the relay we are holding a board and how far along it
+// is. The relay cannot see this and used to guess — with a flag it set the
+// first time a room filled and never cleared — which hung two players who had
+// both reloaded, each waiting for the other to hand over a match neither had.
+// The connect-time claim in the URL only covers the machine that is
+// connecting; this covers the one that stayed.
+const HAVE_EVERY = 30;           // ticks — one second at 30Hz
 function netPublish(){
   const at = NET.tick + NET.delay;
   const batch = NET.pending; NET.pending = [];
   netDeliver(at, NET.me, batch);
   if (NET.send) NET.send({ k:'cmd', tick:at, side:NET.me, cmds:batch });
+  // Not while awaiting a board: this machine has a seat and a seed but nothing
+  // on it, and saying otherwise would make it a candidate to hand the match to.
+  if (NET.send && !NET.awaitSync && NET.tick % HAVE_EVERY === 0)
+    NET.send('have:' + (NET.tick | 0));
 }
 
 function netDeliver(tick, side, cmds){
@@ -13218,6 +13269,7 @@ function netRetry(){
    keeps this working against a relay that is already deployed. */
 const SYNC_CHUNK = 12000;
 const SYNC_MAX = 4;              // give up rather than loop forever on a repeat
+const SYNC_WAIT = 20;            // seconds to wait for a board before saying so
 
 // `force` is a rejoin rather than a drift: the machine that stayed is the only
 // one that knows anything, whichever seat it happens to be sitting in, and
@@ -13250,7 +13302,7 @@ function netTakeSnap(m){
   if (!netLoad(snap)) { netDiary('sync in FAILED', 'snapshot would not load'); return; }
   NET.resyncs++;
   netDiary('sync in', 'adopted the other machine’s board at tick ' + (m.tick | 0) + ' (resync ' + NET.resyncs + ')');
-  NET.awaitSync = false;
+  NET.awaitSync = false; NET.syncWait = 0; NET.syncGaveUp = false;
   netResumeAt(m.tick | 0);
 }
 
@@ -13316,7 +13368,7 @@ function netStart(opt){
   netClockStart();                                   // a clock that survives being in the background
   NET.box.clear(); NET.pending.length = 0; NET.hashes.clear(); NET.peerHashes.clear();
   NET.desyncAt = -1; NET.stallT = 0; NET.resyncs = 0; NET.rx = null;
-  NET.awaitSync = false; NET.linkLost = false; NET.retry = 0;
+  NET.awaitSync = false; NET.syncWait = 0; NET.syncGaveUp = false; NET.linkLost = false; NET.retry = 0;
   newMatch({ diff:opt.diff || 'veteran', seed:opt.seed, pvp:true });
   G.sides[0].ai = false; G.sides[1].ai = false;      // both holds are people now
   // Prime the pipe: the first NET.delay ticks have no player input by
@@ -13337,7 +13389,7 @@ function netEnd(){
   MY = 0;                                            // back to the left-hand hold
   netClockStop();
   NET.tick = 0; NET.seq = 0; NET.desyncAt = -1; NET.stallT = 0; NET.resyncs = 0; NET.rx = null;
-  NET.awaitSync = false; NET.linkLost = false; NET.retry = 0;
+  NET.awaitSync = false; NET.syncWait = 0; NET.syncGaveUp = false; NET.linkLost = false; NET.retry = 0;
   NET.box.clear(); NET.peerHashes.clear(); NET.hashes.clear(); NET.pending.length = 0;
   acc = 0;
   lobbyClose();
@@ -13396,6 +13448,19 @@ function netPump(){
   if (!netLast){ netLast = now; return; }
   const raw = Math.min(NET_ARREARS, (now - netLast) / 1000);
   netLast = now;
+  // A board that never arrives used to be indistinguishable from one that was
+  // about to: awaitSync stops the simulation dead and had no clock on it, so a
+  // snapshot that was never sent left the game frozen under a banner saying it
+  // was being picked up. Forever. Whatever else goes wrong here, it has to
+  // stop LOOKING like it is working.
+  if (NET.awaitSync){
+    NET.syncWait = (NET.syncWait || 0) + raw;
+    if (NET.syncWait > SYNC_WAIT && !NET.syncGaveUp){
+      NET.syncGaveUp = true;
+      netDiary('sync never came', 'waited ' + NET.syncWait.toFixed(1) + 's for the other machine’s board');
+      if (!HEADLESS) syncUI();
+    }
+  }
   acc += raw;
   let ran = 0, blocked = false;
   while (acc >= 1 / 30 && ran < NET_BUDGET){
@@ -13529,7 +13594,7 @@ window.IB = {
   STATUS, statusFade, spanN,
   HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
-  netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
+  netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX, SYNC_WAIT, lobbyWho, HAVE_EVERY,
   netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,
   get BSC(){ return BSC; }, set BSC(v){ BSC = v; },
   get holdSide(){ return holdSide; }, set holdSide(v){ holdSide = v; },

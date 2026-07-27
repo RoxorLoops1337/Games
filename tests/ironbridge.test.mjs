@@ -10894,10 +10894,72 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // treat it as a fresh start.
   const wiring = SRC.slice(SRC.indexOf('sock.onmessage'));
   t.ok(/m\.k === 'rejoin'/.test(wiring), 'the client handles a rejoin');
-  const rj = wiring.slice(wiring.indexOf("m.k === 'rejoin'"), wiring.indexOf("m.k === 'rejoin'") + 900);
+  // To the end of the handler, not a fixed number of characters — a window
+  // measured in bytes is a window that closes the next time somebody writes a
+  // comment, and it did.
+  const rj = wiring.slice(wiring.indexOf("m.k === 'rejoin'"), wiring.indexOf('netRecv(m);'));
   t.ok(/role === 'staying'/.test(rj) && /netSendSnap\(true\)/.test(rj),
     'the one that stayed hands the board over');
   t.ok(/awaitSync = true/.test(rj), 'and the one returning waits for it rather than playing a phantom match');
+
+  /* ------------------------------------------------ waiting for a board
+     The hang this whole protocol change is about. `awaitSync` stops the
+     simulation dead and had no clock on it, so a board that was never sent —
+     which is exactly what happened when the relay named a keeper that did not
+     have one — left the game frozen under a banner saying it was being picked
+     up. Whatever else goes wrong here, it must stop LOOKING like it works. */
+  IB.netEnd(); IB.netStart({ me:1, seed:9706 });
+  IB.NET.awaitSync = true; IB.NET.syncWait = 0; IB.NET.syncGaveUp = false;
+  const waiting = IB.netBanner();
+  t.ok(/picking the match up/i.test(waiting), 'waiting on a board reads as a wait (' + waiting + ')');
+  IB.NET.syncWait = IB.SYNC_WAIT + 1;
+  IB.netPump(); IB.netPump();
+  t.ok(IB.NET.syncGaveUp, 'a board that never comes is eventually admitted to (' + IB.NET.syncWait.toFixed(1) + 's)');
+  t.ok(IB.netBanner() !== waiting && /never sent/i.test(IB.netBanner()),
+    'and the bar stops claiming it is working (' + IB.netBanner() + ')');
+  t.ok(IB.NET.diary.some(e => e.kind === 'sync never came'), 'and it is written down');
+  // The wait has to be long enough that a big board in flight is not called a
+  // failure — a snapshot is twenty kilobytes in pieces.
+  t.ok(IB.SYNC_WAIT >= 10, 'the wait is long enough for a real snapshot to arrive (' + IB.SYNC_WAIT + 's)');
+  // And arriving clears it, or the second rejoin of a match would start out
+  // already having given up.
+  IB.netTakeSnap({ id:1, i:0, n:1, tick:5, part:JSON.stringify(IB.netSnap()) });
+  t.ok(!IB.NET.awaitSync && !IB.NET.syncGaveUp && IB.NET.syncWait === 0,
+    'and a board that does arrive clears the whole complaint');
+  IB.netEnd();
+
+  /* ------------------------------------------- what the client tells the room
+     The relay cannot see whether this browser still has a board, and when it
+     guessed — from a flag it set the first time a room filled and never
+     cleared — it hung two players who had both reloaded, each waiting for the
+     other to hand over a match neither had. So the client says. Twice: once in
+     the connect URL, which only covers the machine that is connecting, and
+     then on the wire, because the machine that STAYED made its claim before
+     the match existed.                                                       */
+  const conn = SRC.slice(SRC.indexOf('function lobbyConnect'), SRC.indexOf('function lobbyConnect') + 1400);
+  t.ok(/have=1/.test(conn) && /have=0/.test(conn),
+    'the connect URL declares whether this machine is bringing a board');
+  t.ok(/NET\.on/.test(conn) && /awaitSync/.test(conn),
+    'and a machine that is itself still waiting for a board does not claim to have one');
+  t.ok(IB.HAVE_EVERY > 0 && IB.HAVE_EVERY <= 60,
+    'the claim is refreshed at least once a second (' + IB.HAVE_EVERY + ' ticks)');
+  const pub = SRC.slice(SRC.indexOf('function netPublish'), SRC.indexOf('function netDeliver'));
+  t.ok(/'have:'/.test(pub), 'and it goes out with the batch that already goes out every tick');
+  t.ok(/awaitSync/.test(pub),
+    'and not while this machine is waiting for a board, or it would offer one it does not have');
+
+  // The one thing that made this unreportable: `peers` was parsed and thrown
+  // away, so "waiting for them to join" was the same screen whether nobody had
+  // typed the code or both of you were in and the room had failed to start.
+  t.ok(/m\.k === 'peers'/.test(wiring) && /LOBBY\.peers/.test(wiring),
+    'the room’s head count reaches the lobby instead of being dropped');
+  IB.LOBBY.peers = 0; t.ok(IB.lobbyWho() === '', 'an empty room says nothing extra');
+  IB.LOBBY.peers = 1;
+  t.ok(/1 of 2/.test(IB.lobbyWho()), 'one player in the room says so (' + IB.lobbyWho() + ')');
+  IB.LOBBY.peers = 2;
+  t.ok(/both/i.test(IB.lobbyWho()) && IB.lobbyWho() !== IB.lobbyHtml(),
+    'and two says so differently, which is the whole point (' + IB.lobbyWho() + ')');
+  IB.LOBBY.peers = 0;
 }
 
 /* ============================================ you can see what is happening
