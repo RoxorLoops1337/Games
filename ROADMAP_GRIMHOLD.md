@@ -58,20 +58,27 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   a third means putting one down. *(batch 6)*
 - **Curses that pay** — every mark now takes something and gives something back,
   so keeping one is a decision rather than a punishment. *(batch 6)*
+- **Trial rooms** — from depth 4, a door that states its terms before you open
+  it: hold the room five turns, or clear it without a hero bleeding. Declining
+  costs nothing. Answering pays two Fate and a relic. *(batch 7)*
+- **What you are carrying** — a READ chip on the run line opens the whole
+  inventory: this floor's modifiers, every boon, curse and relic, with the text
+  you were shown when you took it. *(batch 7)*
+- **Kill-streak flourish** — three, five, eight and twelve kills without a hero
+  taking a wound escalate the banner, the shake and the hit-stop; eight pays a
+  Fate. One wound and you are back to nothing. *(batch 7)*
 
 ---
 
 ## Next up
 
-1. **Trial rooms.** A door that announces its terms before you open it: survive
-   five turns inside, or kill everything in it without taking a wound. Optional,
-   so it is a decision rather than a tax. Pays a relic and Fate — which now
-   exists to pay out.
-2. **A relic and curse panel.** The top bar shows icons; there is nowhere to read
-   what you are actually carrying. One tap on the run line should list boons,
-   curses and relics with their text.
-3. **Kill-streak flourish.** Consecutive kills without a hero taking a wound
-   escalate the banner, the shake and the music. Free feel, no new rules.
+1. **Boss intros.** A one-line title card when a boss's room opens — the door
+   swings, the camera pushes in, and the thing inside gets its name said out
+   loud before it moves. The cheapest beat left on the list.
+2. **Forced chests.** Open carefully (small, safe) or force it (better, and it
+   may be trapped, or a mimic). A gamble on the action you take most often.
+3. **The Warlock's Wager.** Spend Fate to reroll the entire boon draft. Fate now
+   comes in fast enough from trials and streaks that it needs a second sink.
 
 ## Backlog, roughly in order of value
 
@@ -103,7 +110,16 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   only carried torches matter.
 
 ### Feel
-- **Kill-streak flourish** — consecutive kills without taking damage escalate the
-  banner and the music.
-- **Boss intros** — a one-line title card when a boss's room opens.
 - **Better death** — a hero's fall gets its own beat: slow-mo, the party turns.
+- **The trial plinth** — a trial room should have something visibly on a plinth
+  in the middle of it, so the reward is a thing you can see from the doorway
+  rather than a line of text after the fact.
+- **Streak on the HUD** — the banner fires and is gone. A small counter beside
+  the Fate pill would let you feel the run you are on before it breaks.
+
+### New ideas the batch turned up
+- **A trial you can fail loudly.** Breaking a vigil currently just stops. It
+  should cost something — the room's door slams, or the Warlock's attention
+  jumps — so declining is a real choice against a real risk.
+- **Trial variants.** A third kind: leave the room without opening a chest, or
+  kill the marked one first. Two kinds is thin for something this visible.
