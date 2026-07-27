@@ -5733,6 +5733,35 @@ function drawWorkerFig(c, x, y, col, carry, sc, ph){
   }
 }
 
+/* A node's LEVEL was invisible. Three nodes, three levels each, bought with
+   real gold and wood — and measured on op count AND on drawn extent, so a
+   shape that only resized could not hide, all nine combinations came out
+   identical. A level 3 gold mine gathers at 1.33 against 0.85 and holds ten
+   crew against six, and it looked exactly like a level 1 one.
+
+   The crew is the sibling that condemns it: the very same function draws one
+   worker per assignee and that reads perfectly, 117 ops to 186 across the
+   range. drawNode has always known how to show what a hold has put into a
+   node. It just never showed what the hold had BOUGHT.
+
+   Spoil heaps, one per level worked, in an arc on the near side. One shape for
+   all three nodes so they cannot drift apart — which is how the level came to
+   be missing from all three at once.                                        */
+const NODE_TIER = { r:24, spread:.72, base:.45, w:6.4, h:3.2, step:1.35 };
+function nodeHeaps(c, p, B, lvl, col){
+  const n = clamp(Math.round(lvl || 1), 1, 3);
+  for (let i = 0; i < n; i++){
+    const a = NODE_TIER.base + i * NODE_TIER.spread;
+    const hx = p[0] + Math.cos(a) * NODE_TIER.r * B;
+    const hy = p[1] + Math.sin(a) * NODE_TIER.r * .5 * B + 7 * B;
+    const k = 1 + i * .18;
+    shadow(c, hx, hy + 1 * B, NODE_TIER.w * k * B, NODE_TIER.h * .55 * k * B, 'rgba(0,0,0,.20)');
+    ell(c, hx, hy, NODE_TIER.w * k * B, NODE_TIER.h * k * B, shade(col, .46));
+    ell(c, hx - NODE_TIER.w * .28 * k * B, hy - NODE_TIER.h * .34 * k * B,
+      NODE_TIER.w * .46 * k * B, NODE_TIER.h * .5 * k * B, shade(col, .68));
+  }
+}
+
 function drawNode(c, key){
   const N = NODES[key], s = G.sides[holdSide], B = bu();
   const p = bp(N.gx, N.gy);
@@ -5852,6 +5881,7 @@ function drawNode(c, key){
       ell(c, q[0] - 1.6 * B, q[1] - 1.6 * B, 2.4 * B, 1.6 * B, oreLit);
     }
   }
+  nodeHeaps(c, p, B, nodeLvl(s, key), N.col);
   if (holdSide !== MY) return;                      // their crews are their business
   const n = Math.min(s.workers[key], nodeCap(s, key));
   const home = bp(KEEP.gx + .6, KEEP.gy + .5);
@@ -8426,7 +8456,7 @@ window.IB = {
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
-  drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
+  drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
