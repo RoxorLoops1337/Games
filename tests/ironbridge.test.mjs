@@ -3536,6 +3536,60 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'everything that casts a shadow draws, from either seat, at every zoom');
 }
 {
+  // The strip along the bottom. Its two hold blocks were green and brown,
+  // keyed to the side INDEX — so the one widget whose entire job is telling
+  // you where you are told player two that the enemy's hold was the friendly
+  // green one. Same shape as the worker tunic: a per-side value that is not
+  // per-SEAT is invisible from one chair and wrong from the other.
+  IB.newMatch({ diff:'veteran', seed:197 });
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return .2126 * ((n >> 16) & 255) + .7152 * ((n >> 8) & 255) + .0722 * (n & 255);
+  };
+  const chan = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const was = IB.MY;
+  const cols = {};
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    cols[seat] = [IB.miniHoldCol(0), IB.miniHoldCol(1)];
+  }
+  IB.MY = was;
+  t.ok(cols[0][0] !== cols[0][1], 'the two holds are told apart on the strip');
+  // The one that matters: whichever seat you are in, YOURS is the lit one.
+  t.ok(lum(cols[0][0]) > lum(cols[0][1]), 'from seat one, your hold is the brighter block');
+  t.ok(lum(cols[1][1]) > lum(cols[1][0]), 'and from seat two it is the other one');
+  // Equal weights would still give two different colours, because SIDE_COL
+  // differs — and would lose the seat cue entirely, which is the bug.
+  t.ok(IB.MINI_MINE > IB.MINI_THEIRS, 'your hold is drawn brighter than theirs, not merely differently');
+  // And the strip has to speak the same colour language as the rest of the
+  // game: the structures and units on it were already in side colours while
+  // the ground under them was green and brown.
+  let wrongHue = 0;
+  for (const seat of [0, 1]){
+    const [b, r] = cols[seat];
+    if (chan(b)[2] <= chan(b)[0]) wrongHue++;     // side zero reads blue
+    if (chan(r)[0] <= chan(r)[2]) wrongHue++;     // side one reads red
+  }
+  t.ok(wrongHue === 0, 'each hold block is its own side’s colour (' + wrongHue + ' wrong)');
+
+  // Broken structures used to vanish from the strip, so it could not show you
+  // that the line of battle had moved — the one thing it is for. Drive a real
+  // match until something actually falls, then draw it.
+  // Take one down through the real damage path rather than setting a flag, so
+  // whatever else falling does to a structure happens too.
+  const doomed = G.sides[1].structs.find(s => s.key === 't1');
+  const killer = IB.spawnUnit(0, 'melee', { x:doomed.x - 1, y:0 });
+  IB.rebuildGrid();
+  IB.dealDmg(killer, doomed, doomed.mhp * 4, { pure:true });
+  t.ok(doomed.dead, 'a structure came down through the damage path');
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    for (const w of [1440, 700]){ IB.cam.z = IB.cam.tz = 1; IB.draw(); }
+  }
+  IB.MY = was;
+  t.ok(true, 'and the strip draws with it broken, from either seat');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
