@@ -2026,6 +2026,7 @@ t.test('vault: a locked room needs a key, and the key is never behind the lock',
     const locked = Object.values(HQ.G.q.doors).filter(x => x.locked);
     t.ok(locked.length > 0, `depth ${d}: the vault is actually sealed`);
     t.ok(locked.every(x => x.rid === v), 'and only the vault is sealed');
+    t.ok(locked.every(x => !x.secret && x.found), 'a vault is locked, never also hidden');
     // somebody outside the vault is carrying the key
     const bearers = HQ.monstersOf().filter(m => m.elite && HQ.roomAt(m.x, m.y) !== v);
     t.ok(bearers.length > 0, `depth ${d}: a champion outside the vault carries the key`);
@@ -2056,8 +2057,11 @@ t.test('vault: the door refuses you until a champion drops the key', () => {
   t.ok(!door.open, 'and stays shut');
 
   const bearer = HQ.monstersOf().find(m => m.elite && HQ.roomAt(m.x, m.y) !== HQ.G.q.vault);
-  HQ.hurt(bearer, 99, null);
-  t.ok(HQ.G.q.key, 'the champion was carrying it');
+  // a champion zombie gets back up once, so put it down until it stays down
+  let swings = 0;
+  while (bearer.alive && swings++ < 4) HQ.hurt(bearer, 99, null);
+  t.ok(!bearer.alive, 'the champion is finally down');
+  t.ok(HQ.G.q.key, 'and was carrying the key');
   t.ok(HQ.openDoorAt(h, door), 'and now the lock turns');
   t.ok(door.open && !door.locked, 'the vault is open');
 });
@@ -2168,6 +2172,226 @@ t.test('wager: banking moves it to the purse, and an ended run never eats it', (
   HQ.G.run.depth = 3;
   HQ.endRun('test');
   t.eq(HQ.G.run.gold, 850, 'a run that ends mid-wager still banks it');
+});
+
+/* --------------------------------- curses carried, lessons learned, the eye */
+
+t.test('curses: a mark travels with you and actually costs something', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian','dwarf']);
+  HQ.G.run.depth = 1;
+  HQ.beginFloor();
+  const h = HQ.runAlive()[0];
+  t.eq(HQ.G.run.curses.length, 0, 'you start clean');
+
+  const d0 = HQ.defendDice(h);
+  t.ok(HQ.addCurse('frail'), 'brittle bones takes hold');
+  t.ok(HQ.curseHas('frail'), 'and is carried');
+  t.eq(HQ.defendDice(h), d0 - 1, 'costing a defend die');
+  t.ok(!HQ.addCurse('frail'), 'and cannot be doubled up');
+
+  HQ.G.q.def.mods = [];                          // a Lightless floor already clamps
+  const r0 = HQ.torchRadius();
+  HQ.addCurse('blind');
+  t.eq(HQ.torchRadius(), r0 - 2, 'a guttering light reaches less far');
+  t.ok(HQ.torchRadius() >= 2, 'and never blinds you completely');
+
+  HQ.G.q.pot = 0;
+  HQ.G.q.def.mods = [];                          // the rolled floor may be Hoarded
+  HQ.addCurse('greedy');
+  HQ.applyTreasure({ k:'gold', n:100, t:'purse', d:'' }, h);
+  t.eq(HQ.G.q.pot, 75, "the miser's due takes a quarter");
+
+  // and it survives the walk downstairs
+  HQ.G.run.depth = 2;
+  HQ.beginFloor();
+  t.ok(HQ.curseHas('frail') && HQ.curseHas('blind'), 'the marks came down with you');
+  t.eq(HQ.defendDice(HQ.runAlive()[0]), HQ.HERO_DEFS.find(x => x.id === HQ.runAlive()[0].id).def - 1,
+       'and are still biting on the new floor');
+});
+
+t.test('curses: they can be lifted, by water or by paying for it', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian']);
+  HQ.beginFloor();
+  HQ.addCurse('frail'); HQ.addCurse('heavy');
+  t.eq(HQ.G.run.curses.length, 2, 'carrying two');
+  t.eq(HQ.liftCurse('heavy'), 'heavy', 'one is lifted by name');
+  t.ok(!HQ.curseHas('heavy') && HQ.curseHas('frail'), 'and only that one');
+
+  HQ.G.run.gold = 400;
+  t.ok(HQ.buyPedlar('absolve'), 'absolution is for sale');
+  t.eq(HQ.G.run.curses.length, 0, 'and lifts the last of it');
+  t.eq(HQ.G.run.gold, 80, 'for 320 gold');
+  t.ok(!HQ.buyPedlar('absolve'), 'and is not sold to the unburdened');
+});
+
+t.test('curses: a pact is a curse taken on purpose, for a boon', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian','dwarf']);
+  HQ.beginFloor();
+  const h = HQ.runAlive()[0];
+  HQ.G.q.activeId = h.id; h.acted = false;
+  HQ.G.q.furn.push({ t:'altar', r:HQ.roomAt(h.x,h.y) >= 0 ? HQ.roomAt(h.x,h.y) : 4,
+                     x:h.x, y:h.y - 1, w:1, h:1, rot:0, used:false });
+  t.ok(HQ.altarTarget(), 'the altar is in reach');
+  const boons = HQ.G.run.boons.length;
+  t.ok(HQ.altarPact(), 'the pact is struck');
+  t.eq(HQ.G.run.curses.length, 1, 'a curse is taken');
+  t.eq(HQ.G.run.boons.length, boons + 1, 'and a boon is given');
+  t.ok(h.acted, 'and it cost the action');
+});
+
+t.test('lessons: kills are credited to the hero who made them', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian','dwarf']);
+  HQ.beginFloor();
+  const h = HQ.runAlive()[0], other = HQ.runAlive()[1];
+  HQ.G.q.activeId = h.id;
+  h.x = 11; h.y = 8; h.acted = false;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = 1; m.def = 0;
+  HQ.recomputeVision();
+  const k0 = h.kills || 0;
+  ALL_SKULLS();
+  HQ.doAttack(h, m);
+  t.eq(h.kills, k0 + 1, 'the striker is credited');
+  t.ok(!other.kills, 'and nobody else is');
+});
+
+t.test('lessons: a pick is due at the thresholds, and it changes the hero', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian']);
+  HQ.beginFloor();
+  const h = HQ.runAlive()[0];
+  h.kills = 0; h.picks = [];
+  t.ok(!HQ.lessonDue(h), 'nothing owed yet');
+  h.kills = HQ.KILL_STEPS[0];
+  t.ok(HQ.lessonDue(h), `a pick is due at ${HQ.KILL_STEPS[0]} kills`);
+  const opts = HQ.lessonOptions(h);
+  t.eq(opts.length, 3, 'three to choose from');
+  t.eq(new Set(opts.map(o => o.id)).size, 3, 'all different');
+
+  const atk = HQ.attackDice(h, { mt:'skeleton', bp:3 });
+  t.ok(HQ.takeLesson(h, 'hand'), 'the weapon hand is taken');
+  t.eq(HQ.attackDice(h, { mt:'skeleton', bp:3 }), atk + 1, 'and is worth a die');
+  t.ok(!HQ.lessonDue(h), 'and the debt is paid');
+
+  h.kills = HQ.KILL_STEPS[1];
+  const def = HQ.defendDice(h);
+  t.ok(HQ.takeLesson(h, 'guard'), 'the next threshold pays too');
+  t.eq(HQ.defendDice(h), def + 1, 'a defend die this time');
+
+  h.kills = HQ.KILL_STEPS[2];
+  const bp = h.bpMax;
+  HQ.takeLesson(h, 'vigour');
+  t.eq(h.bpMax, bp + 2, 'vigour raises the ceiling');
+  t.eq(h.picks.length, 3, 'three lessons held');
+  t.ok(!HQ.takeLesson(h, 'hand'), 'and none of them are free');
+});
+
+t.test('lessons: they ride down to the next floor with the hero', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian','elf']);
+  HQ.beginFloor();
+  const h = HQ.runAlive()[0];
+  h.kills = HQ.KILL_STEPS[0];
+  HQ.takeLesson(h, 'fleet');
+  HQ.G.run.depth = 2;
+  HQ.beginFloor();
+  const same = HQ.runAlive().find(x => x.id === h.id);
+  t.ok(same.picks.includes('fleet'), 'the lesson came down with them');
+  same.rolled = false;
+  rig([0.0]);                                        // 1 + 1 on the dice
+  HQ.beginHeroActivation(same);
+  t.eq(same.moveLeft, 2 + 2, 'and fleet is still worth two squares');
+});
+
+t.test('the eye: time and greed both draw it, and it acts at the thresholds', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian','dwarf']);
+  HQ.beginFloor();
+  t.eq(HQ.G.q.wrath, 0, 'he is not looking yet');
+  t.eq(HQ.G.q.wrathAt, 0, 'and has done nothing');
+
+  // a turn passing stirs it
+  for (const x of HQ.heroes()) x.done = true;
+  HQ.zargonTurn();
+  t.ok(HQ.G.q.wrath > 0, 'time draws his eye');
+
+  // so does coin
+  const before = HQ.G.q.wrath;
+  HQ.G.q.def.mods = [];
+  HQ.applyTreasure({ k:'gold', n:300, t:'purse', d:'' }, HQ.runAlive()[0]);
+  t.ok(HQ.G.q.wrath > before + 2, 'and a fat purse draws it harder');
+
+  // at the threshold he does something
+  const monsters = HQ.monstersOf().length;
+  HQ.G.q.wrath = 0; HQ.G.q.wrathAt = 0;
+  HQ.stirWrath(HQ.WRATH_STEPS[0], 'test');
+  t.eq(HQ.G.q.wrathAt, 1, 'the first threshold is crossed');
+  t.ok(HQ.monstersOf().length > monsters, 'and he sends something');
+
+  HQ.G.q.wrath = HQ.WRATH_STEPS[1];
+  const opened = Object.values(HQ.G.q.doors).filter(d => d.open).length;
+  HQ.stirWrath(1, 'test');
+  t.eq(HQ.G.q.wrathAt, 2, 'the second is crossed');
+
+  HQ.G.q.wrath = HQ.WRATH_STEPS[2];
+  const n2 = HQ.monstersOf().length;
+  HQ.stirWrath(1, 'test');
+  t.eq(HQ.G.q.wrathAt, 3, 'and the third');
+  t.ok(HQ.monstersOf().length > n2, 'which sends a champion');
+});
+
+t.test('the eye: it starts fresh on every floor', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian']);
+  HQ.beginFloor();
+  HQ.stirWrath(40, 'test');
+  t.ok(HQ.G.q.wrath >= 40, 'he is watching');
+  HQ.G.run.depth = 2;
+  HQ.beginFloor();
+  t.eq(HQ.G.q.wrath, 0, 'a new floor is a fresh sheet');
+  t.eq(HQ.G.q.wrathAt, 0, 'and he starts over');
+});
+
+t.test('the Quest Book is untouched by any of it', () => {
+  fresh(0);
+  t.ok(!HQ.G.run, 'a quest is not a run');
+  t.eq(HQ.G.q.wrath, 0, 'the eye starts closed');
+  const h = hero('barbarian');
+  t.ok(!HQ.curseHas('frail'), 'no curses can be carried outside a run');
+  t.eq(HQ.defendDice(h), HQ.HERO_DEFS[0].def, 'and the sheet reads as it always did');
+  t.eq(HQ.attackDice(h, { mt:'orc', bp:1 }), HQ.WEAPONS.broadsword.dice, 'as does the sword');
+});
+
+t.test('floors: a modifier list never contains a hole', () => {
+  // splice on an empty pool returns undefined, and an undefined modifier used
+  // to take out beginFloor on the next line
+  const roll = (seed) => { let a = seed; return () => { a = (a*1664525 + 1013904223) >>> 0; return a/4294967296; }; };
+  for (let d = 0; d <= 16; d++){
+    for (let i = 0; i < 8; i++){
+      const def = HQ.makeFloor(d, roll(d*97 + i));
+      t.ok(Array.isArray(def.mods), `depth ${d} has a modifier list`);
+      t.ok(def.mods.every(m => !!HQ.MOD(m)), `depth ${d} run ${i}: every modifier is real`);
+    }
+  }
+  // and a floor built at depth 0 does not throw on the way in
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(['barbarian']);
+  HQ.beginFloor();
+  t.ok(HQ.G.q, 'depth 0 builds without throwing');
 });
 
 t.run();

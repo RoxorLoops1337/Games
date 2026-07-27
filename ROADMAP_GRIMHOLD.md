@@ -41,21 +41,27 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **Locked vaults** — from depth 3, a room may be sealed and its key carried by
   a champion standing outside it. Three chests inside, and the vault pays
   250-450 a search. *(batch 3)*
+- **Carried curses** — six marks that follow you down the stair until a shrine or
+  320 gold lifts them, plus the pact: take one on purpose, get a boon. *(batch 4)*
+- **Lessons** — kills are credited to the hero who made them, and buy a pick at
+  3/7/12/18/25: weapon hand, guard, vigour, fleet. Two of each, maximum. *(batch 4)*
+- **The Warlock's attention** — a meter in the HUD that fills with turns spent,
+  coin taken and rooms rummaged. At 14/28/44 he sends something, bolts a door
+  behind you, then marks your healthiest hero and sends a champion. *(batch 4)*
 
 ---
 
 ## Next up
 
-1. **Curses you carry.** The altar's curse table is one-shot; make some of it
-   stick. A carried curse is a visible drawback (−1 defend die, doors cost your
-   action, monsters wake a room early) that you can pay a shrine or the pedlar to
-   lift — or keep, because some of them pay.
-2. **Hero progression inside a run.** Kills earn a pick at set thresholds: a
-   weapon die, a defend die, a spell slot, a Fate. Gives a long run a shape
-   beyond boons.
-3. **The Warlock's attention meter.** Fills with turns spent and coin taken; at
-   thresholds he intervenes — reinforcements at the stair, a door sealed behind
-   you, a curse on the richest hero. Makes greed cost something.
+1. **A run history screen.** The last ten runs — depth, party, boons, curses, and
+   what finally did it. Losing should still leave a story behind, and it is the
+   cheapest thing that makes a lost run feel like it counted.
+2. **New monsters.** The roster is the original eight. Add a cave troll that
+   regenerates unless the wound was fire, a wraith only magic and the Spirit
+   Blade can touch, a skeleton archer, and a cultist that wakes its whole room.
+3. **Trial rooms.** A door that announces its terms before you open it: survive
+   five turns, or kill everything without taking a wound, for a guaranteed relic.
+   Optional, so it is a decision rather than a tax.
 
 ## Backlog, roughly in order of value
 
@@ -70,6 +76,9 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   something climbs out. Repeatable, stakes rise each pull.
 
 ### Roguelike depth
+- **Curses that pay.** Some marks should carry an upside so keeping one is a real
+  option: Marked draws monsters but doubles Fate from champions, say.
+- **Relics** found in vaults rather than drafted, with visible slots.
 - **Vault variants.** A vault that is trapped, or one whose key is held by a
   champion that flees.
 - **Curses.** Persistent drawbacks you accept for a strong reward; removable at a
