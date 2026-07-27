@@ -113,17 +113,27 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   never sealed (a mummy), and armour on a rack that steps down off it (a chaos
   warrior). What comes out is whatever that furniture would hide. *(batch 12)*
 
+- **The plinth holds the thing it pays** — a particular relic, chosen when the
+  room is built, drawn on the plinth with its own silhouette and named in the
+  terms before you agree to anything. Never one you already carry. *(batch 13)*
+- **A fourth tab for the Book** — the run you are on above the runs that are
+  finished, so choosing a stair happens next to how far this has got before.
+  *(batch 13)*
+- **Streak on the HUD** — a counter beside the Fate pill from two kills up,
+  reading `6/8` so the next banner is something you can see coming. *(batch 13)*
+
 ---
 
 ## Next up
 
-1. **The plinth should hold the thing it pays.** It draws a generic gem. Drawing
-   the actual relic on offer would make accepting the terms a choice about a
-   specific object rather than a reward in the abstract.
-2. **A fourth tab for the Book.** The between-floors screen now has room for one,
-   and the run's history is currently only reachable from the title screen.
-3. **Streak on the HUD.** The banner fires and is gone. A small counter beside
-   the Fate pill would let you feel the run you are on before it breaks.
+1. **A searched bookcase, tomb and cupboard should read as searched.** The chest
+   does now. Every other searchable piece still looks untouched forever, which
+   is the same "have I been here" problem one step along.
+2. **A disarmed trap should look disarmed**, for the same reason — a sprung one
+   reads clearly, a disarmed one does not.
+3. **Point the paint recorder at the old render paths.** The suite can now
+   assert what colours a frame reached for. The fog, the light falloff and the
+   death fade have never had a test that would notice them breaking.
 
 ## Backlog, roughly in order of value
 
@@ -146,9 +156,10 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   only carried torches matter.
 
 ### Feel
-- **A searched bookcase, tomb and cupboard should read as searched too.** The
-  chest now does. Every other searchable piece still looks untouched forever.
-- **A trap you have disarmed should look disarmed**, for the same reason.
+- **The relic silhouettes are small at board zoom.** They read, but only just.
+  A gentle scale-up while the room is on screen would earn its keep.
+- **The streak pill could show what the next banner is called.** It says `6/8`;
+  saying `6/8 · BUTCHERY` would make the thing you are climbing toward concrete.
 
 ### New ideas the batch turned up
 - **Trial variants.** A third kind: leave the room without opening a chest, or
@@ -159,6 +170,11 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **Bodies the Warlock can use.** A hero's remains sit there for the rest of the
   floor doing nothing. A necromancer raising one, or a hero able to take back a
   fallen friend's weapon, would make the mark on the square matter.
+- **The plinth is a pattern, not a one-off.** A vault could stand its relic on
+  one too, so a locked room shows what the key is for through the doorway.
+- **Tests that walk should derive their path from the room.** A batch-12 test
+  assumed a fixed room width and flaked once in twelve runs. Anything driving
+  `heroWalk` wants the same treatment.
 - **A liar that gets a second chance.** Every liar springs once and is then an
   ordinary monster. One that could sink back into being furniture if it lost
   sight of you would be genuinely unsettling.

@@ -3707,14 +3707,23 @@ t.test('mimics: it is walking past that wakes it, not the test calling the watch
   emptyRoom(rid);
   for (const m of HQ.monstersOf()) m.alive = false;
   const h = HQ.runAlive()[0];
-  // start three squares off along the row, then walk in
-  put(h, f.x + 3, f.y);
+  // a straight run of three squares inside the room, ending beside the chest —
+  // derived from the room, because rooms are not all the same shape
+  const inRoom = (x,y) => HQ.roomAt(x,y) === rid;
+  let path = null;
+  for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    const a = [f.x + dx*1, f.y + dy*1], b = [f.x + dx*2, f.y + dy*2], c = [f.x + dx*3, f.y + dy*3];
+    if (inRoom(...a) && inRoom(...b) && inRoom(...c)){ path = { start:c, steps:[b, a] }; break; }
+  }
+  t.ok(path, 'the room is big enough to walk across');
+  if (!path) return;
+  put(h, path.start[0], path.start[1]);
   use(h);
   h.moveLeft = 4; h.rolled = true;
   HQ.refreshField();
-  t.eq(HQ.lyingChests().length, 1, 'still furniture when the turn starts');
-  HQ.heroWalk(h, [[f.x + 2, f.y], [f.x + 1, f.y]], () => {});
-  t.eq(HQ.lyingChests().length, 0, 'walking into reach is what does it');
+  t.eq(HQ.liars().length, 1, 'still furniture when the turn starts');
+  HQ.heroWalk(h, path.steps, () => {});
+  t.eq(HQ.liars().length, 0, 'walking into reach is what does it');
   t.ok(HQ.monstersOf().some(m => m.mt === 'mimic' && m.alive), 'and there is a mimic where the chest was');
 });
 
@@ -4005,7 +4014,8 @@ t.test('bodies: a fresh floor does not carry the last floor’s dead', () => {
 /* --------------------------------------------------- the between-floors tabs */
 
 t.test('draft: three tabs, and the whole screen is reachable through them', () => {
-  t.eq(HQ.DRAFT_TABS.map(x => x.id).join(), 'boons,coin,stair', 'what you take, what you spend, where you go');
+  t.eq(HQ.DRAFT_TABS.map(x => x.id).join(), 'boons,coin,stair,book',
+    'what you take, what you spend, where you go, and how it has gone before');
   for (const x of HQ.DRAFT_TABS) t.ok(x.name && x.name.length >= 4, `${x.id} has a legible label`);
   runAt(3);
   HQ.G.run.gold = 900;
@@ -4170,6 +4180,189 @@ t.test('chests: forcing or easing one open changes how it reads on the board', (
   const after = paintOf();
   t.ok(painted(after, '#160f06'), 'and now it reads as opened from across the room');
   t.ok(!paintedLike(after, /^rgba\(255,240,196,/), 'with nothing left to draw you back');
+});
+
+/* ------------------------------------------- the plinth holds a real relic */
+
+t.test('plinth: it holds a particular relic, and never one you already carry', () => {
+  let seen = 0;
+  const kinds = new Set();
+  for (let i = 0; i < 50; i++){
+    runAt(6);
+    const p = HQ.trialPlinth();
+    if (!p) continue;
+    seen++;
+    t.ok(p.relic, 'it is holding something specific');
+    t.ok(HQ.RELIC(p.relic), `${p.relic} is a real relic`);
+    kinds.add(p.relic);
+  }
+  t.ok(seen > 3, `deep floors put one up (saw ${seen}/50)`);
+  t.ok(kinds.size >= 2, `and not always the same one (${kinds.size} kinds)`);
+
+  // a party already holding a relic is never offered that one
+  for (let i = 0; i < 30; i++){
+    HQ.setRng(Math.random);
+    HQ.G = HQ.newG();
+    HQ.G.run = HQ.newRun(['barbarian','wizard']);
+    HQ.G.run.depth = 6;
+    HQ.G.run.relics = ['skull','anvil'];
+    HQ.beginFloor();
+    const p = HQ.trialPlinth();
+    if (!p) continue;
+    t.ok(p.relic !== 'skull' && p.relic !== 'anvil', `${p.relic} is not one you carry`);
+  }
+});
+
+t.test('plinth: answering the trial pays the relic that was standing on it', () => {
+  runAt(5);
+  const rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth);
+  HQ.G.run.relics = [];
+  const p = HQ.placePlinth(HQ.G.q, rid, Math.random);
+  p.relic = 'horn';                                  // a specific promise
+  emptyRoom(rid);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'survive' };
+  HQ.startTrial();
+  t.eq(HQ.plinthRelic(), 'horn', 'and the room says so before you agree');
+  const h = HQ.runAlive()[0];
+  const r = HQ.ROOMS[rid];
+  put(h, r.x, r.y);
+  for (let i = 0; i < 5; i++) HQ.tickTrial();
+  t.ok(HQ.G.q.trial.won, 'the vigil holds');
+  t.eq(HQ.G.q.trialPaid, 'horn', 'and what it pays is what was standing there');
+  t.eq(p.spent, true, 'the plinth is spent');
+
+  // a plinth holding nothing still pays something rather than nothing
+  runAt(5);
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth);
+  HQ.G.run.relics = [];
+  const bare = HQ.placePlinth(HQ.G.q, rid, Math.random);
+  bare.relic = null;
+  emptyRoom(rid);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'survive' };
+  HQ.startTrial();
+  const h2 = HQ.runAlive()[0];
+  put(h2, HQ.ROOMS[rid].x, HQ.ROOMS[rid].y);
+  const out = HQ.winTrial();
+  t.ok(out && out.relic, 'an empty plinth still finds something to give');
+  t.ok(HQ.RELIC(out.relic), 'and it is a real relic');
+
+  // one you already hold is not a promise
+  runAt(5);
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth);
+  HQ.G.run.relics = ['mirror'];
+  const p2 = HQ.placePlinth(HQ.G.q, rid, Math.random);
+  p2.relic = 'mirror';
+  t.eq(HQ.plinthRelic(), null, 'a relic you carry is nothing to fight for');
+});
+
+t.test('plinth: it draws the relic it holds, and each one draws differently', () => {
+  runAt(5);
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => !f.plinth);
+  const p = HQ.placePlinth(HQ.G.q, 4, Math.random);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  const shots = {};
+  for (const r of HQ.RELICS){
+    p.relic = r.id; p.spent = false;
+    shots[r.id] = paintOf().join('|');
+    t.ok(shots[r.id].length > 0, `${r.id} paints something`);
+  }
+  // a skull is not a coin is not an anvil — the shapes reach for different paint
+  const uniq = new Set(Object.values(shots));
+  t.ok(uniq.size >= 4, `the relics do not all draw the same (${uniq.size} distinct frames)`);
+
+  // and a spent plinth stops drawing any of it
+  p.relic = 'skull'; p.spent = false;
+  const lit = paintOf();
+  p.spent = true;
+  const out = paintOf();
+  t.ok(lit.length > out.length, 'a lit plinth paints more than a spent one');
+  t.ok(!paintedLike(out, /^rgba\(216,168,60,0\.[12]/), 'and throws no light once it is spent');
+});
+
+/* -------------------------------------------------------- the streak pill */
+
+t.test('streak: the counter appears once it is a run, and says how far to the next step', () => {
+  t.eq(HQ.STREAK_SHOW, 2, 'one kill is not a run');
+  t.ok(HQ.STREAK_SHOW < HQ.STREAK_STEPS[0], 'and it shows before the first banner, not after');
+  runAt(4);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  t.eq(HQ.G.q.streak, 0, 'nothing yet');
+  HQ.bumpStreak();
+  t.eq(HQ.G.q.streak, 1, 'one');
+  HQ.bumpStreak();
+  t.eq(HQ.G.q.streak, 2, 'two — worth showing');
+  // the next step is always ahead of you until there is none left
+  for (const n of [0, 1, 2, 4, 7, 11]){
+    HQ.G.q.streak = n;
+    const next = HQ.STREAK_STEPS.find(s => s > n);
+    t.ok(next !== undefined && next > n, `at ${n} there is a ${next} to reach for`);
+  }
+  HQ.G.q.streak = 12;
+  t.eq(HQ.STREAK_STEPS.find(s => s > 12), undefined, 'and past twelve there is nothing left to reach');
+});
+
+t.test('streak: a wound clears it, and the HUD survives being asked either way', () => {
+  runAt(4);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.streak = 6;
+  HQ.syncHUD(); HQ.renderHUD();
+  t.ok(true, 'the HUD renders with a streak up');
+  const h = HQ.runAlive()[0];
+  HQ.hurt(h, 1, null);
+  t.eq(HQ.G.q.streak, 0, 'a wound takes it');
+  HQ.syncHUD(); HQ.renderHUD();
+  t.ok(true, 'and renders with it gone');
+});
+
+/* --------------------------------------------------------- the Book tab */
+
+t.test('book: the run you are on sits above the runs that are finished', () => {
+  runAt(3);
+  HQ.G.run.gold = 640;
+  HQ.G.run.kills = 17;
+  HQ.G.run.boons = ['swiftboots'];
+  HQ.G.run.relics = ['skull'];
+  const mine = HQ.thisRunRow();
+  t.ok(mine.includes('still going'), 'the run in progress has its own line');
+  t.ok(mine.includes('640'), 'with the purse on it');
+  t.ok(mine.includes('17'), 'and the body count');
+  t.ok(mine.includes(HQ.BOON('swiftboots').ic), 'and what it is carrying');
+  t.ok(mine.includes(HQ.RELIC('skull').ic), 'relics included');
+
+  // a fallen hero is named on it
+  const h = HQ.runAlive()[0];
+  h.alive = false;
+  t.ok(HQ.thisRunRow().includes(h.name), 'and whoever is not coming back');
+
+  // an empty book says so rather than rendering nothing
+  HQ.G.meta.history = [];
+  t.ok(HQ.historyRows().length > 20, 'an empty book still says something');
+  t.ok(!HQ.historyRows().includes('qrow'), 'and does not fake a row');
+});
+
+t.test('book: the tab shows the Book without leaving the between-floors screen', () => {
+  runAt(3);
+  HQ.G.meta.history = [{ depth:5, party:['barbarian','elf'], won:false, cleared:4, kills:31,
+                         gold:900, favour:3, boons:['ironskin'], curses:['heavy'],
+                         fall:{ who:'Elf', by:'an Ogre Champion', depth:5 } }];
+  HQ.G.run.gold = 100;
+  HQ.draftState = null;
+  HQ.showDraft();
+  HQ.draftState.tab = 'book';
+  HQ.showDraft();
+  t.eq(HQ.draftState.tab, 'book', 'the Book has its own tab');
+  const rows = HQ.historyRows();
+  t.ok(rows.includes('depth 5'), 'the finished run is in it');
+  t.ok(rows.includes('Elf fell to an Ogre Champion'), 'with what did it');
+  t.ok(rows.includes(HQ.BOON('ironskin').ic), 'and what it was carrying');
+  // and the screen still works afterwards
+  HQ.draftState.tab = 'stair';
+  HQ.showDraft();
+  t.ok(HQ.draftState.stairs.length >= 2, 'the stairs are still there');
 });
 
 t.run();
