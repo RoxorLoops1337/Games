@@ -6689,6 +6689,127 @@ t.ok(true, 'drawing an empty bridge is harmless');
       IB.shakeAsked = 0;
       G.units.length = 0;
     }
+
+    // And the other half of the same question: what happens when a body is
+    // MENDED? Walked across every way it can happen, driven by the real event:
+    //
+    //   how                   share  sparks  numbers  sound
+    //   a hero's lifesteal    4%     0       1        —
+    //   an aura, one second   3.5%   0       0        —
+    //   a kill-heal           5.6%   0       1        —
+    //
+    // healFx() existed and was called from THREE of the eleven places a body
+    // can be healed. The other eight — every passive, every aura, every
+    // lifesteal tick, every kill-heal — put health back and said nothing. A
+    // trickle said nothing twice over: the float was gated on `amt > 4`, so an
+    // aura restoring twelve health a second passed it thirty times in tenths
+    // and never once cleared the bar.
+    {
+      const wasForce = IB.fxForce;
+      IB.fxForce = true;
+      const mended = (amt, mk) => {
+        IB.newMatch({ diff:'veteran', seed:8800 });
+        G.units.length = 0;
+        const u = mk ? mk() : IB.spawnUnit(0, 'melee', { x:60, y:0, paid:true });
+        u.hp = u.mhp * .2; u.healAcc = 0;
+        G.fx.length = 0; G.floats.length = 0; IB.AU.want = null; IB.shakeAsked = 0;
+        if (typeof amt === 'function') amt(u); else IB.healUnit(u, u.mhp * amt);
+        const ps = G.fx.filter(p => p.k === 'p');
+        return { u, n:ps.length, up:ps.every(p => p.vz > 0), sound:IB.AU.want,
+          num:G.floats.length ? G.floats[0].txt : null, shake:IB.shakeAsked };
+      };
+
+      // ---- the funnel. This is the assertion that stops the bug coming back:
+      // the effect belongs to healUnit, and no caller may have its own.
+      // Comments talk about healFx too, and a scan that counts prose reports
+      // callers that do not exist.
+      const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+      const healCalls = [...CODE.matchAll(/\bhealFx\s*\(/g)].length;
+      const healDefs = [...CODE.matchAll(/function\s+healFx\s*\(/g)].length;
+      t.ok(healDefs === 1, 'there is one healFx (' + healDefs + ')');
+      t.ok(healCalls - healDefs === 1,
+        'and exactly one thing calls it, so no path can be left out (' + (healCalls - healDefs) + ' callers)');
+      t.ok(/function healUnit[\s\S]{0,900}healFx\(/.test(CODE),
+        'and that one thing is healUnit');
+
+      // ---- every landed heal above the threshold is seen, heard and counted
+      const solid = mended(.05);
+      t.ok(solid.n > 0, 'a heal throws something (' + solid.n + ')');
+      t.ok(solid.up, 'and it rises, unlike debris off a blow');
+      t.ok(/^mend/.test(solid.sound || ''), 'and it is heard (' + (solid.sound || 'silence') + ')');
+      t.ok(solid.num && solid.num[0] === '+', 'and counted (' + solid.num + ')');
+      t.ok(solid.shake === 0, 'a mend is not an impact, so the camera stays still');
+
+      // ---- the ladder, and its direction
+      const rungs = [.02, .05, .12, .30].map(f => ({ f, ...mended(f) }));
+      t.ok(new Set(rungs.map(r => r.n)).size >= 3,
+        'and how much it throws varies with the mend (' + rungs.map(r => r.n).join(', ') + ')');
+      let back = 0;
+      for (let i = 1; i < rungs.length; i++) if (rungs[i].n < rungs[i - 1].n) back++;
+      t.ok(back === 0, 'never going backwards up the ladder (' + back + ' steps that did)');
+      t.ok(rungs[0].sound !== rungs[rungs.length - 1].sound,
+        'a drip and a full mend do not sound the same (' + rungs[0].sound + ' vs ' + rungs[rungs.length - 1].sound + ')');
+      // the SAME weight the blow uses, checked by order rather than by sum
+      const disagree = rungs.filter((r, i) => i > 0 &&
+        (IB.healSparks(IB.hitWeight(r.u.mhp * r.f, r.u.mhp)) >
+         IB.healSparks(IB.hitWeight(rungs[i - 1].u.mhp * rungs[i - 1].f, rungs[i - 1].u.mhp)))
+        !== (r.n > rungs[i - 1].n)).length;
+      t.ok(disagree === 0, 'the mend ladder is the blow ladder (' + disagree + ' rungs that disagreed)');
+
+      // ---- a trickle is BANKED, not lost. This is what the old `amt > 4`
+      // threw away thirty times a second.
+      const drip = mended((u) => IB.healUnit(u, u.mhp * .002));
+      t.ok(drip.n === 0 && drip.num === null, 'one tick of an aura is too small to show');
+      t.ok(drip.u.healAcc > 0, 'but it is banked rather than lost (' + drip.u.healAcc.toFixed(2) + ')');
+      const second = mended((u) => { for (let i = 0; i < 30; i++) IB.healUnit(u, u.mhp * .002); });
+      t.ok(second.n > 0, 'and a second of it does show (' + second.n + ')');
+      t.ok(second.num && Number(second.num.slice(1)) > 1,
+        'counting what the body actually got, not one tick of it (' + second.num + ')');
+
+      // ---- overhealing a full body is not a light show
+      IB.newMatch({ diff:'veteran', seed:8800 });
+      G.units.length = 0;
+      const full = IB.spawnUnit(0, 'melee', { x:60, y:0, paid:true });
+      full.hp = full.mhp; full.healAcc = 0;
+      G.fx.length = 0; IB.AU.want = null;
+      IB.healUnit(full, full.mhp);
+      t.ok(G.fx.length === 0 && !IB.AU.want, 'healing a body that is already whole says nothing');
+
+      // ---- WIRED: two real paths that never had an effect of their own
+      IB.newMatch({ diff:'veteran', seed:8800 });
+      G.units.length = 0;
+      const s0h = G.sides[0];
+      if (!s0h.heroes.length){ const nh = IB.makeHero(0, Object.keys(IB.CLS)[0]); s0h.heroes.push(nh); IB.enterLane(nh); }
+      const hh = s0h.heroes[0];
+      IB.recalcHero(hh);
+      hh.dead = false; hh.inLane = true; hh.x = 58; hh.y = 0; hh.hp = hh.mhp * .3; hh.healAcc = 0;
+      G.fx.length = 0; IB.AU.want = null;
+      IB.castSkill(hh, { id:'mend', rank:1, cdT:0 });     // the field is `rank`; skVal(heal, undefined) is NaN
+      t.ok(hh.hp > hh.mhp * .3, 'the Mend really mended (' + Math.round(hh.hp) + ' of ' + Math.round(hh.mhp) + ')');
+      t.ok(G.fx.filter(p => p.k === 'p').length > 0, 'and it showed');
+      // a regen buff ticking through update(), which had nothing at all
+      hh.hp = hh.mhp * .3; hh.healAcc = 0;
+      IB.addBuff(hh, { t:4, tag:'regen', hps:hh.mhp * .06 });
+      G.fx.length = 0; IB.AU.want = null;
+      for (let i = 0; i < 30; i++) IB.update(1 / 30);
+      t.ok(hh.hp > hh.mhp * .3, 'the regen really ticked (' + Math.round(hh.hp) + ')');
+      t.ok(G.fx.filter(p => p.k === 'p').length > 0,
+        'and a buff healing over time is now visible too (' + G.fx.filter(p => p.k === 'p').length + ')');
+
+      // ---- cosmetic, and free when nobody is watching
+      const h0 = IB.netHash();
+      full.healAcc = 12.5;
+      t.ok(IB.netHash() === h0, 'the bank is outside the lockstep hash');
+      IB.fxForce = false;
+      G.fx.length = 0;
+      const q = IB.spawnUnit(0, 'melee', { x:60, y:0, paid:true });
+      q.hp = q.mhp * .2; q.healAcc = 0;
+      IB.healUnit(q, q.mhp * .3);
+      t.ok(G.fx.length === 0, 'and a headless run still costs nothing (' + G.fx.length + ')');
+      IB.fxForce = wasForce;
+      IB.shakeAsked = 0;
+      G.units.length = 0;
+    }
     G.units.length = 0;
   }
   // Nothing that died was worth more than anything else that died. A 190hp
