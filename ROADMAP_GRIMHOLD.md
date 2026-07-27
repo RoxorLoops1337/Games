@@ -167,25 +167,32 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   boons, and that had been accreting a row at a time inside the Coin tab. One
   door now, and behind it what he sells and what he buys. *(batch 18)*
 
+- **Three more things in the dark** — a Cave Spider that spends no blood and
+  takes your whole next turn instead, a Hellhound that breathes down a straight
+  line and catches everybody standing in it, and the Chained, which cannot take
+  a step and hits for six. *(batch 19)*
+- **Force the door** — a locked door now asks the same question a chest does.
+  Wait for whoever is carrying the key, or put a shoulder through it for your
+  action: it opens now, the room wakes up, and the Warlock hears six. *(batch 19)*
+
 ---
 
 ## Next up
 
-1. **More monsters.** The bestiary has not grown since batch 5 while everything
-   around it has. A spider that webs a square you spend a turn cutting out of, a
-   hellhound breathing down a line, a chained thing that cannot leave its room
-   but hits like the end of the world.
-2. **Force the door.** Forcing works on chests; a stuck or locked door should ask
-   the same question, with noise instead of a needle as the cost.
-3. **Floor themes beyond modifiers.** A flooded floor where movement costs
+1. **Floor themes beyond modifiers.** A flooded floor where movement costs
    double in water, a collapsing floor whose squares fall in over time. The
    modifiers change numbers; these would change how a floor is walked.
+2. **Vault variants.** A vault that is trapped, or one whose key is held by a
+   champion that flees — so opening the lock is not always the same problem.
+3. **A carried body.** The dead are already a resource both sides want: the
+   party takes the blade, the Warlock takes the body. Let a hero pick a fallen
+   friend up and carry them — slower, hands full — and pay to have them back on
+   the between-floors screen.
 
 ## Backlog, roughly in order of value
 
 ### Roguelike depth
-- **Vault variants.** A vault that is trapped, or one whose key is held by a
-  champion that flees.
+- *(vault variants promoted to Next up, batch 19)*
 
 ### Feel
 - **The relic silhouettes are small at board zoom.** They read, but only just.
@@ -222,3 +229,16 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **The paint recorder is now the way art gets tested.** Four batches have used
   it. Anything drawn conditionally should be asserted through it rather than
   through "draw() did not throw", which passes either way.
+- **A status marker written in the wrong branch is invisible, not broken.** The
+  webbing drew inside `drawActorTag`'s `kind === 'monster'` arm, so heroes — the
+  only things a spider webs — never wore it. Nothing threw and no test failed;
+  the browser screenshot caught it. Status art belongs above the kind split.
+- **Webbing is the first status that costs a whole turn with no roll and no
+  save.** It is meant to hurt, but it stacks with the freeze family without ever
+  asking. Worth checking a hero cannot be webbed out of two turns running.
+- **The Chained's `move: 0` is the whole mechanism.** There is no pen and no
+  guard; any future affix or effect that grants movement would quietly unchain
+  it. If movement ever becomes grantable, that is the thing to check.
+- **A revert-check that will not bite is telling you the code is dead.** Three
+  times now — `!f.plinth`, the force-door wake loop, the Chained's room pen —
+  the honest fix was deleting the guard, not writing a test that cannot fail.

@@ -5359,4 +5359,249 @@ t.test('pedlar: the shop still does everything it did as rows', () => {
   t.eq(HQ.G.run.gold, gold + HQ.SELL_PRICE, 'for what he said');
 });
 
+/* ------------------------------------------------------------ three new things */
+
+// borrow a monster off the floor and make it the thing under test
+function asMonster(mt, x, y){
+  const m = HQ.G.q.actors.find(a => a.kind === 'monster');
+  for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
+  m.alive = true; m.mt = mt; delete m.affix; m.elite = false; m.boss = false;
+  const d = HQ.MONSTERS[mt];
+  m.bpMax = m.bp = d.bp; m.atk = d.atk; m.def = d.def; m.mind = d.mind; m.mv = d.move;
+  m.name = d.name; m.awake = true; m.sleep = 0; m.stun = 0;
+  m.skittish = 0; m.fled = 0; m.breathed = 0;
+  m.x = x; m.y = y;
+  HQ.recomputeVision();
+  return m;
+}
+
+t.test('bestiary: the three of them are real monsters with art and a place to spawn', () => {
+  for (const mt of ['spider','hound','chained']){
+    const d = HQ.MONSTERS[mt];
+    t.ok(d, `${mt} is in the bestiary`);
+    t.ok(d.name && d.name.length > 3, `${mt} has a name`);
+    t.ok(d.gold > 0, `${mt} is worth killing`);
+    t.ok(HQ.SPAWN_TABLE.some(s => s.t === mt), `${mt} can be dealt onto a floor`);
+  }
+  t.ok(HQ.MONSTERS.spider.webber, 'the spider webs');
+  t.ok(HQ.MONSTERS.hound.breath, 'the hound breathes');
+  t.ok(HQ.MONSTERS.chained.chained, 'the chained one is chained');
+  t.eq(HQ.MONSTERS.chained.move, 0, 'and goes nowhere');
+  t.ok(HQ.MONSTERS.chained.atk >= 6, 'but hits like the end of the world');
+
+  // and they draw
+  runAt(6);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  for (const mt of ['spider','hound','chained']){
+    const h = HQ.runAlive()[0];
+    const m = asMonster(mt, h.x + 1, h.y);
+    HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+    HQ.recomputeVision();
+    HQ.draw();
+    t.ok(m.alive, `${mt} draws without throwing`);
+  }
+});
+
+t.test('spider: it takes your turn rather than your Body Points', () => {
+  runAt(4);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  h.bp = h.bpMax = 8; h.webbed = 0;
+  const m = asMonster('spider', 12, 8);
+  HQ.monsterAct(m, () => {});
+  t.ok(h.webbed, 'it webs whoever it reaches');
+  t.eq(h.bp, 8, 'and takes no blood doing it');
+
+  // and the turn goes
+  h.rolled = false; h.acted = false; h.moveLeft = 9;
+  HQ.beginHeroActivation(h);
+  t.eq(h.moveLeft, 0, 'the webbed hero goes nowhere');
+  t.ok(h.acted, 'and does nothing');
+  t.ok(!h.webbed, 'because the turn was spent cutting out of it');
+
+  // the turn after that is normal again
+  h.rolled = false; h.acted = false;
+  HQ.beginHeroActivation(h);
+  t.ok(h.moveLeft > 0, 'and then they can move again');
+});
+
+t.test('spider: a webbed hero is visibly webbed', () => {
+  runAt(4);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  h.webbed = 0;
+  const clean = paintOf(() => HQ.draw());
+  t.ok(!painted(clean, 'rgba(232,238,248,1.000') && !paintedLike(clean, /^rgba\(232,238,248,0\.\d+\)$/),
+    'nothing web-coloured on the board while nobody is caught');
+
+  h.webbed = 1;
+  const caught = paintOf(() => HQ.draw());
+  t.ok(paintedLike(caught, /^rgba\(232,238,248,[\d.]+\)$/), 'the strands go on once they are');
+  t.ok(painted(caught, 'rgba(20,22,28,.55)'), 'over a dark backing, so they read on a lit floor too');
+});
+
+t.test('spider: somebody already webbed just gets bitten', () => {
+  runAt(4);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const h = HQ.runAlive()[0];
+  put(h, 12, 9);
+  h.bp = h.bpMax = 8; h.webbed = 1;
+  const m = asMonster('spider', 12, 8);
+  ALL_SKULLS();
+  HQ.monsterAct(m, () => {});
+  t.ok(h.bp < 8 || h.webbed, 'it does not waste a second web on the same hero');
+});
+
+t.test('hound: it breathes down a line and catches everybody standing in it', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const party = HQ.runAlive();
+  t.ok(party.length >= 2, 'there are two of them to catch');
+  // line them up in the corridor, in front of the hound
+  put(party[0], 12, 9);
+  put(party[1], 12, 10);
+  for (let i = 2; i < party.length; i++) put(party[i], HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  clearSquare(12, 9); clearSquare(12, 10);
+  const m = asMonster('hound', 12, 8);
+  const aim = HQ.breathLine(m, party[0]);
+  t.ok(aim, 'there is a line to breathe down');
+  t.ok(aim.line.some(([x,y]) => x === 12 && y === 9), 'the near one is in it');
+  t.ok(aim.line.some(([x,y]) => x === 12 && y === 10), 'and so is the far one');
+
+  party[0].bp = party[0].bpMax = 9;
+  party[1].bp = party[1].bpMax = 9;
+  ALL_SKULLS();
+  HQ.monsterAct(m, () => {});
+  t.ok(party[0].bp < 9, 'the near one burns');
+  t.ok(party[1].bp < 9, 'and so does the one behind them');
+  t.ok(m.breathed > 0, 'and it has used a breath');
+});
+
+t.test('hound: a line that is not a line is not a breath', () => {
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const h = HQ.runAlive()[0];
+  put(h, 14, 10);
+  const m = asMonster('hound', 12, 8);
+  // (12,8) to (14,10) is a clean diagonal, so that one is a line
+  t.ok(HQ.breathLine(m, { x:14, y:10 }), 'a diagonal counts');
+  t.eq(HQ.breathLine(m, { x:15, y:9 }), null, "a knight's move does not");
+  t.eq(HQ.breathLine(m, { x:12, y:8 }), null, 'and its own square is not a direction');
+});
+
+t.test('chained: it is chained, and chained means it does not come to you', () => {
+  runAt(8);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  for (const k in HQ.G.q.doors){ const o = HQ.G.q.doors[k]; o.open = true; o.secret = false; o.found = true; }
+  const rid = 4, r = HQ.ROOMS[rid];
+  const m = asMonster('chained', r.x + 1, r.y + 1);
+  t.eq(m.mv, 0, 'it is given no movement at all');
+  t.eq(HQ.MONSTERS.chained.move, 0, 'because that is what being chained means here');
+  const start = [m.x, m.y].join();
+  // put the party as far away as the board allows and let it want them
+  for (const x of HQ.runAlive()) put(x, HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  for (let i = 0; i < 10; i++) HQ.monsterAct(m, () => {});
+  t.eq([m.x, m.y].join(), start, 'ten turns of wanting and it has not moved an inch');
+  t.eq(HQ.roomAt(m.x, m.y), rid, 'still in the room it was chained in');
+
+  // and it is the only thing on the board that cannot chase
+  const movers = Object.keys(HQ.MONSTERS).filter(k => HQ.MONSTERS[k].move > 0);
+  t.ok(movers.length > 10, 'everything else can walk');
+  t.ok(!movers.includes('chained'), 'and it cannot');
+});
+
+t.test('chained: and somebody who walks into its room is very much its business', () => {
+  runAt(8);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const rid = 4, r = HQ.ROOMS[rid];
+  const m = asMonster('chained', r.x + 1, r.y + 1);
+  const h = HQ.runAlive()[0];
+  const beside = [m.x + 1, m.y];
+  t.eq(HQ.roomAt(beside[0], beside[1]), rid, 'there is a square beside it inside the room');
+  clearSquare(beside[0], beside[1]);
+  put(h, beside[0], beside[1]);
+  h.bp = h.bpMax = 9;
+  HQ.recomputeVision();
+  ALL_SKULLS();
+  HQ.monsterAct(m, () => {});
+  t.ok(h.bp < 9, `it hits whoever comes within reach of it (${9 - h.bp})`);
+  t.ok(9 - h.bp >= 4, 'and it hits like the end of the world');
+  t.eq(HQ.roomAt(m.x, m.y), rid, 'without ever leaving the room');
+});
+
+/* ---------------------------------------------------------- forcing a lock */
+
+t.test('lock: a locked door with no key is a question, not a wall', () => {
+  runAt(6);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const rid = 4;
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  d.open = false; d.secret = false; d.trialBolt = false; d.forced = false;
+  d.locked = true;
+  HQ.G.q.key = false;
+  const h = HQ.runAlive()[0];
+  put(h, slot[3], slot[4]);
+  use(h);
+  const w0 = HQ.G.q.wrath || 0;
+  t.ok(HQ.forceDoor(h, d), 'a shoulder opens it');
+  t.ok(d.open, 'the door is open');
+  t.ok(!d.locked, 'and the lock is off it');
+  t.ok(d.forced, 'and it remembers being forced');
+  t.ok(h.acted, 'it cost the action');
+  t.eq(HQ.G.q.wrath, w0 + HQ.FORCE_DOOR_WRATH, 'and the Warlock heard it');
+  t.ok(HQ.FORCE_DOOR_WRATH >= 4, 'by a margin worth minding');
+});
+
+t.test('lock: forcing one puts you inside a room that is already awake', () => {
+  runAt(6);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const rid = 4;
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  d.open = false; d.secret = false; d.trialBolt = false; d.forced = false; d.locked = true;
+  HQ.G.q.key = false;
+  const r = HQ.ROOMS[rid];
+  const m = HQ.G.q.actors.find(a => a.kind === 'monster');
+  m.alive = true; m.mt = 'orc'; delete m.affix; m.elite = false; m.boss = false;
+  m.x = r.x; m.y = r.y; m.awake = false; m.sleep = 0;
+  const h = HQ.runAlive()[0];
+  put(h, slot[3], slot[4]);
+  use(h);
+  t.ok(!m.awake, 'it is asleep behind the lock');
+  t.ok(!HQ.G.q.roomSeen[rid], 'and nobody has seen in there');
+  HQ.forceDoor(h, d);
+  t.ok(d.open, 'the door is off its lock and open');
+  t.ok(HQ.G.q.roomSeen[rid], 'you are looking into the room');
+  t.ok(m.awake, 'and nothing in it is asleep any more');
+});
+
+t.test('lock: no action, no shoulder — and a trial bolt is not a lock', () => {
+  runAt(6);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const rid = 4;
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  d.open = false; d.secret = false; d.trialBolt = false; d.forced = false; d.locked = true;
+  const h = HQ.runAlive()[0];
+  put(h, slot[3], slot[4]);
+  use(h);
+  h.acted = true;
+  t.eq(HQ.forceDoor(h, d), false, 'nothing left to spend on it');
+  t.ok(!d.open, 'and the door stays shut');
+
+  h.acted = false;
+  d.trialBolt = true;
+  t.eq(HQ.forceDoor(h, d), false, 'a trial bolt is its own thing, with its own price');
+  t.ok(!d.open, 'and does not come off this way');
+
+  // an unlocked door is not forced either
+  d.trialBolt = false; d.locked = false;
+  t.eq(HQ.forceDoor(h, d), false, 'and there is nothing to force on an open lock');
+});
+
 t.run();
