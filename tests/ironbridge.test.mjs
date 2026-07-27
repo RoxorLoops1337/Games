@@ -3139,6 +3139,62 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'every structure draws whole and broken, both sides, right through the cycle');
 }
 {
+  // The turrets. Six of them on screen and they are what you spend the whole
+  // match fighting past, and each was a tapered white block with a painted
+  // circle on it — no hoarding, no slits, and nothing to show for a shot.
+  IB.newMatch({ diff:'veteran', seed:149 });
+  const tur = G.sides[1].structs.find(s => s.key === 't1');
+  t.ok(tur && tur.ad > 0, 'there is a turret that shoots');
+  const as = IB.attackSpeedOf(tur);
+
+  // cd counts down from a full reload to zero, so the flash is 1 the instant
+  // it looses and 0 when it is ready again.
+  tur.cd = 1 / as;
+  t.ok(Math.abs(IB.turretShot(tur).hot - 1) < 1e-9, 'the eye is full bright the instant it fires');
+  tur.cd = 0;
+  t.ok(IB.turretShot(tur).hot === 0 && IB.turretShot(tur).kick === 0, 'and dark once it is loaded again');
+  tur.cd = -1;
+  t.ok(IB.turretShot(tur).hot === 0, 'an overdue turret does not go negative');
+
+  let outHot = 0, outKick = 0, notMono = 0, prevHot = -1, prevKick = -1;
+  let minHot = 9, maxHot = -9, minKick = 9, maxKick = -9;
+  for (let i = 0; i <= 200; i++){
+    tur.cd = (1 / as) * (i / 200);
+    const S = IB.turretShot(tur);
+    if (!(S.hot >= 0 && S.hot <= 1)) outHot++;
+    if (!(S.kick >= 0 && S.kick <= IB.TURRET_KICK + 1e-9)) outKick++;
+    // The mount has to run back in, not wander: kick may only rise with hot.
+    if (S.hot < prevHot - 1e-12 || S.kick < prevKick - 1e-12) notMono++;
+    prevHot = S.hot; prevKick = S.kick;
+    minHot = Math.min(minHot, S.hot); maxHot = Math.max(maxHot, S.hot);
+    minKick = Math.min(minKick, S.kick); maxKick = Math.max(maxKick, S.kick);
+  }
+  t.ok(outHot === 0, 'the flash stays an alpha across the whole reload (' + outHot + ')');
+  t.ok(outKick === 0, 'and the lurch stays within one stroke (' + outKick + ')');
+  t.ok(notMono === 0, 'the mount runs back in rather than wandering (' + notMono + ')');
+  // ...and it has to actually change. Every bound above is satisfied by a
+  // constant, which is a lamp that never blinks — and a painted circle that
+  // never brightened is what was there before.
+  t.ok(maxHot - minHot > .9, 'the eye really does light and go out (' + minHot.toFixed(2) + '..' + maxHot.toFixed(2) + ')');
+  t.ok(maxKick - minKick > IB.TURRET_KICK * .9, 'and the mount really does travel');
+
+  // Then a real match: a turret that is actually shooting must be seen both
+  // lit and dark, or the flash is tied to something that never moves.
+  IB.newMatch({ diff:'veteran', seed:151 });
+  G.sides[0].ai = true;
+  let sawHot = false, sawCold = false;
+  for (let i = 0; i < 30 * 90 && G.state === 'play'; i++){
+    IB.update(1 / 30);
+    for (const s of G.sides) for (const st of s.structs){
+      if (st.dead || !st.ad) continue;
+      const h = IB.turretShot(st).hot;
+      if (h > .8) sawHot = true;
+      if (h < .05) sawCold = true;
+    }
+  }
+  t.ok(sawHot && sawCold, 'over a real match the turrets are seen both firing and loaded');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
