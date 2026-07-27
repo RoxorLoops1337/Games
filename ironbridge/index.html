@@ -5385,18 +5385,120 @@ const swingPhase = (u) => (u.swing > 0 ? clamp(u.swing / (u.swing0 || RECOIL_T),
 function recoilOf(u){
   return -dirOf(u.side) * swingPhase(u) * RECOIL;
 }
+
+/* ── MOTION ────────────────────────────────────────────────────────────────
+   Every body in the game moved on one sine. Legs, hips, torso, head, arm and
+   weapon all read the same wave at the same instant with the same amplitude,
+   which is the definition of a cut-out sliding along the deck rather than a
+   thing walking up it. Sampled one stride of a footman across eight instants:
+   the boots slid without ever leaving the boards, the hips never dropped onto
+   a planted foot, the sword sat at exactly the same angle in all eight, and
+   the whole figure was rigid above the knees.
+
+   Four things fix that and nothing else is needed:
+     WEIGHT     — the hips fall onto the foot that plants and vault back up
+                  through mid-stance, so the body has mass.
+     CONTACT    — a planted foot does not slide. Stance is a straight ramp
+                  backwards at exactly the speed the body walks; the swing is
+                  a cubic that carries the foot through and lifts it clear.
+     OVERLAP    — the shoulders trail the hips, the arms trail the shoulders,
+                  the head trails the arms. Nothing lands on the same beat.
+     SPRING     — a blow does not stop where it lands and a gun does not slide
+                  back on a straight line. Both ring down.
+
+   All of it is a pure function of state the simulation already owns — u.x,
+   u.ph, u.swing, u.cd, G.t — so nothing here can be read back into update(),
+   and two machines draw the same limb on the same tick.                    */
+const ANIM = {
+  stance:.58,          // share of the cycle a foot spends on the deck
+  reach:.62,           // how much of a full stride the drawn foot takes
+  lift:.72,            // how far the swinging foot clears the deck
+  dip:1.05,            // how far the hips fall onto a planted foot
+  roll:.42,            // shoulders counter-rotating against the hips
+  armSw:.90,           // how far the arms swing, against the legs
+  lag:.55,             // radians the shoulders trail the hips by
+  headLag:.42,         // and the head trails the shoulders by
+  march:.55,           // how far a body leans into the march
+  settle:.80,          // metres it takes to ease out of the walk and plant
+  breath:.45,          // idle rise and fall — a stood body has to LIVE, and at
+  chest:.62,           // .34 of a body unit nothing on screen could see it.
+  breathHz:.38,        // The chest carries most of it: hips still, ribs moving.
+  sway:.52,            // idle weight shift, side to side
+  antic:.17,           // seconds of wind-up before a blow lands
+  lunge:1.5,           // how far a body throws itself into a blow
+  springK:3.6,         // how fast a struck thing stops ringing
+  springW:14.0,        // and how fast it rings
+};
+// The ogre is not a bigger footman. It is the same animal at 1.7 times the
+// weight: a deeper drop onto each foot, more of it trailing behind the beat,
+// and a club that keeps going after the arm has stopped.
+const OGRE_HEFT = 1.7;
+
+/* A struck thing rings down; it does not slide home on a straight line. One
+   table, read by every weapon, the cannon's barrel and a body's own flinch —
+   phase 1 is the instant of the blow, 0 is rest. Sixty-four entries and a
+   lerp, because this is read five or six times per body per frame. */
+const SPR_N = 64;
+const SPR_TAB = new Float32Array(SPR_N + 1);
+for (let i = 0; i <= SPR_N; i++){
+  const t = i / SPR_N;
+  SPR_TAB[i] = Math.exp(-ANIM.springK * t) * Math.cos(ANIM.springW * t);
+}
+const springOf = (ph) => {
+  const f = clamp(1 - ph, 0, 1) * SPR_N, i = Math.min(SPR_N - 1, f | 0), t = f - i;
+  return SPR_TAB[i] + (SPR_TAB[i + 1] - SPR_TAB[i]) * t;
+};
+/* ANTICIPATION. A blow used to appear out of nowhere: u.swing only exists
+   AFTER the strike lands, so every arm in the game snapped from rest to
+   impact with nothing in between. u.cd is the gap to the next one and the
+   simulation has always had it — the last sixth of a second of it is the
+   wind-up, and it costs nothing to read. */
+function anticOf(u){
+  if (u.swing > 0 || !u.target) return 0;
+  const cd = u.cd;
+  if (!(cd >= 0) || cd > ANIM.antic) return 0;
+  const k = 1 - cd / ANIM.antic;
+  return k * k * (3 - 2 * k);
+}
+// One number for a whole blow: -1 fully wound up, 0 at rest, +1 the instant it
+// lands, ringing back through rest as the arm recovers. Every weapon reads it.
+function blowOf(u){
+  const ph = swingPhase(u);
+  return ph > 0 ? springOf(ph) : -anticOf(u);
+}
+
+/* A gun is three masses on one frame and they do not move together. The
+   carriage takes the blow, the wheels take it a moment later through the
+   axles and ROLL as they take it, and the barrel runs back in its trunnions
+   and is pushed home again by the recuperator, overshooting once before it
+   settles. Sampled seven instants of a shot before this: the wheels did not
+   move at all while the carriage slid four pixels off them, which is a gun
+   coming apart rather than one firing.
+
+   Everything below is the same recoilOf the suite pins, read at different
+   scales and different lags. Nothing new is stored anywhere.              */
+const CANNON = { wheel:.94, roll:2.5, barrel:1.06, ring:.95, pitch:1.15, flagW:5.4, flagHz:3.4, flagA:1.0 };
 function drawCannon(c, u, bx, by, floor, sc, col){
   const dir = dirOf(u.side), hit = u.hitT > 0;
   const wood = hit ? '#ffffff' : '#6b5334', iron = hit ? '#ffffff' : '#3d3a35';
+  const ph = swingPhase(u);
   const kick = recoilOf(u) * sc;
-  // wheels, with spokes and a hub — they were flat discs with a dot
+  const wk = kick * CANNON.wheel;
+  // the barrel runs back further than the frame does and comes home ringing
+  // ...and before the shot the crew runs it up to battery, so a gun about to
+  // fire is not a gun sitting still
+  const bk = kick * CANNON.barrel +
+    -dir * (ph > 0 ? springOf(ph) * ph * CANNON.ring : blowOf(u) * .9) * sc;
+  const pitch = ph * CANNON.pitch * sc;             // and the muzzle lifts as it goes
+  // wheels, with spokes and a hub — they were flat discs with a dot. They
+  // travel with the frame and turn through exactly the ground they cover.
   for (const wx of [-5, 4.5]){
-    const wcx = bx + wx * sc, wcy = floor - 3 * sc;
+    const wcx = bx + wx * sc + wk, wcy = floor - 3 * sc;
     ell(c, wcx, wcy, 3.4 * sc, 3.4 * sc, iron);
     ell(c, wcx, wcy, 2.7 * sc, 2.7 * sc, hit ? '#ffffff' : shade(wood, .82));
     if (!hit){
       c.strokeStyle = shade(wood, 1.2); c.lineWidth = Math.max(.6, .9 * sc);
-      const roll = cyc(u.x * .28 + wx * .1) * 6.2832;
+      const roll = cyc(u.x * .28 + wx * .1 + (wk / sc) / (CANNON.roll * 6.2832)) * 6.2832;
       for (let i = 0; i < 4; i++){
         const a = roll + i * .7854;
         c.beginPath();
@@ -5407,30 +5509,42 @@ function drawCannon(c, u, bx, by, floor, sc, col){
     }
     ell(c, wcx, wcy, 1.2 * sc, 1.2 * sc, iron);
   }
-  // carriage, with a lit top edge like every other timber in the game
-  poly(c, [[bx - 7 * sc + kick, floor - 4 * sc], [bx + 6 * sc + kick, floor - 5 * sc],
-           [bx + 6 * sc + kick, floor - 8 * sc], [bx - 7 * sc + kick, floor - 7 * sc]], wood);
-  poly(c, [[bx - 7 * sc + kick, floor - 7 * sc], [bx + 6 * sc + kick, floor - 8 * sc],
-           [bx + 6 * sc + kick, floor - 9 * sc], [bx - 7 * sc + kick, floor - 8 * sc]], hit ? '#ffffff' : shade(wood, 1.28));
+  // carriage, with a lit top edge like every other timber in the game — it
+  // squats on its trail as the shot goes off
+  const nose = -dir * pitch * .5;
+  poly(c, [[bx - 7 * sc + kick, floor - 4 * sc - nose], [bx + 6 * sc + kick, floor - 5 * sc + nose],
+           [bx + 6 * sc + kick, floor - 8 * sc + nose], [bx - 7 * sc + kick, floor - 7 * sc - nose]], wood);
+  poly(c, [[bx - 7 * sc + kick, floor - 7 * sc - nose], [bx + 6 * sc + kick, floor - 8 * sc + nose],
+           [bx + 6 * sc + kick, floor - 9 * sc + nose], [bx - 7 * sc + kick, floor - 8 * sc - nose]], hit ? '#ffffff' : shade(wood, 1.28));
   // barrel, angled the way it fires
   const y0 = floor - 8.5 * sc;
-  poly(c, [[bx - dir * 4 * sc + kick, y0], [bx + dir * 8 * sc + kick, y0 - 5 * sc],
-           [bx + dir * 8 * sc + kick, y0 - 8 * sc], [bx - dir * 4 * sc + kick, y0 - 3.5 * sc]], iron);
-  poly(c, [[bx - dir * 4 * sc + kick, y0 - 3.5 * sc], [bx + dir * 8 * sc + kick, y0 - 8 * sc],
-           [bx + dir * 8 * sc + kick, y0 - 9 * sc], [bx - dir * 4 * sc + kick, y0 - 4.4 * sc]],
+  poly(c, [[bx - dir * 4 * sc + bk, y0], [bx + dir * 8 * sc + bk, y0 - 5 * sc - pitch],
+           [bx + dir * 8 * sc + bk, y0 - 8 * sc - pitch], [bx - dir * 4 * sc + bk, y0 - 3.5 * sc]], iron);
+  poly(c, [[bx - dir * 4 * sc + bk, y0 - 3.5 * sc], [bx + dir * 8 * sc + bk, y0 - 8 * sc - pitch],
+           [bx + dir * 8 * sc + bk, y0 - 9 * sc - pitch], [bx - dir * 4 * sc + bk, y0 - 4.4 * sc]],
     hit ? '#ffffff' : shade(iron, 1.9));
   for (const t of [.25, .62]){                                  // reinforcing bands
-    const mx = bx + dir * lerp(-4, 8, t) * sc + kick, my = y0 - lerp(0, 5, t) * sc;
+    const mx = bx + dir * lerp(-4, 8, t) * sc + bk, my = y0 - lerp(0, 5, t) * sc - pitch * t;
     poly(c, [[mx - dir * .7 * sc, my + .4 * sc], [mx + dir * .7 * sc, my + .4 * sc],
              [mx + dir * .7 * sc, my - 5 * sc], [mx - dir * .7 * sc, my - 5 * sc]],
       hit ? '#ffffff' : shade(iron, 1.5));
   }
-  ell(c, bx + dir * 8 * sc + kick, y0 - 6.4 * sc, 1.9 * sc, 2.2 * sc, hit ? '#ffffff' : shade(iron, .7));
-  // team pennant so you can still tell whose it is
-  c.fillStyle = hit ? '#ffffff' : col;
-  c.fillRect(bx - dir * 7 * sc, floor - 15 * sc, 1.2 * sc, 8 * sc);
-  poly(c, [[bx - dir * 7 * sc, floor - 15 * sc], [bx - dir * 12 * sc, floor - 13.5 * sc],
-           [bx - dir * 7 * sc, floor - 11.5 * sc]], hit ? '#ffffff' : col);
+  ell(c, bx + dir * 8 * sc + bk, y0 - 6.4 * sc - pitch, 1.9 * sc, 2.2 * sc, hit ? '#ffffff' : shade(iron, .7));
+  /* The pennant. It was a rectangle and a triangle nailed to the frame — the
+     one piece of cloth in the game, dead still on a gun that recoils. Cloth
+     has no muscles: it only ever does what the pole did a moment ago, plus the
+     wind. A travelling wave down its length, whipped by the shot.          */
+  const px = bx - dir * 7 * sc + kick * .8;
+  const wv = (k) => Math.sin(G.t * CANNON.flagHz + u.ph + k) * CANNON.flagA;
+  const whip = -dir * ph * 2.6 * sc, lean = -kick * .45;
+  poly(c, [[px, floor - 7 * sc], [px + 1.2 * sc, floor - 7 * sc],
+           [px + 1.2 * sc + lean, floor - 15 * sc], [px + lean, floor - 15 * sc]],
+    hit ? '#ffffff' : col);
+  poly(c, [[px + lean, floor - 15 * sc],
+           [px - dir * 2.4 * sc + lean + whip * .5, floor - (14.6 + wv(0) * .45) * sc],
+           [px - dir * CANNON.flagW * sc + lean + whip, floor - (13.2 + wv(1.7) * .95) * sc],
+           [px - dir * 2.2 * sc + lean + whip * .4, floor - (11.8 + wv(2.9) * .7) * sc],
+           [px + lean * .4, floor - 11.5 * sc]], hit ? '#ffffff' : col);
 }
 
 // The ogre missed the pass that gave the infantry legs, a lit shoulder and a
@@ -5440,30 +5554,48 @@ function drawOgre(c, u, bx, by, floor, sc, col){
   const dir = dirOf(u.side), hit = u.hitT > 0;
   const skin = hit ? '#ffffff' : shade(col, .62);
   const body = hit ? '#ffffff' : col;
-  // legs, on the same stride the infantry walks
-  const st = strideOf(u) * sc * .9;
-  for (const s of [-1, 1]){
-    const hipx = bx + s * 3.4 * sc, ftx = bx + s * 3.8 * sc + s * st;
+  /* HEAVY. It walked on the infantry's cycle scaled by .9, which is what made
+     the biggest thing on the bridge read as a large levy: same beat, same
+     bounce, same instant everywhere. It is on the same tables now at OGRE_HEFT
+     — a deeper drop onto each foot, a longer trail between hips, shoulders,
+     head and club — so its mass shows in the timing rather than only in how
+     much space it takes up. */
+  const P = poseOf(u, OGRE_HEFT);
+  const bw = blowOf(u);
+  const lean = bw * ANIM.lunge * 1.3 * dir * sc;
+  const hipX = bx - P.roll * .4 * sc + lean * .2 - dir * P.march * .25 * sc;
+  const shX = bx + P.roll * 1.1 * sc + lean + dir * P.march * sc;
+  const shY = -P.chest * sc;                     // a chest that size moves a lot of air
+  // legs, on the same stride the infantry walks — planted, lifted, and slow
+  // A big body takes big slow steps, not a levy's mincing ones, and its boot
+  // spreads on the deck at the instant it lands.
+  const legs = [[-1, P.lead, P.liftL, gaitJolt(P.g)], [1, P.trail, P.liftT, gaitJolt(P.g + 3.14159265)]];
+  for (const lg of legs){
+    const s = lg[0], st = lg[1] * BODY_STRIDE * sc * 1.6;
+    const hipx = hipX + s * 3.4 * sc, ftx = hipX + s * 3.8 * sc + st, fy = floor - lg[2] * sc;
+    const sq = lg[3] * P.w;
     poly(c, [[hipx - 1.9 * sc, by - 1 * sc], [hipx + 1.9 * sc, by - 1 * sc],
-             [ftx + 1.8 * sc, floor], [ftx - 1.8 * sc, floor]], shade(body, hit ? 1 : .44));
+             [ftx + 1.8 * sc, fy], [ftx - 1.8 * sc, fy]], shade(body, hit ? 1 : .44));
     c.fillStyle = shade(body, hit ? 1 : .32);
-    c.fillRect(ftx - 2.2 * sc, floor - 1.7 * sc, 4.4 * sc, 1.9 * sc);
+    c.fillRect(ftx - (2.2 + sq * .5) * sc, fy - (1.7 - sq * .3) * sc, (4.4 + sq) * sc, (1.9 - sq * .3) * sc);
   }
   // hunched barrel of a body — wide at the shoulders, small head sunk into it.
   // It has to tower over the infantry: an ogre is worth a whole wave.
-  poly(c, [[bx - 6.5 * sc, by], [bx + 6.5 * sc, by], [bx + 8 * sc, by - 13 * sc],
-           [bx - 8 * sc, by - 13 * sc]], body);
-  poly(c, [[bx + 2 * sc, by], [bx + 6.5 * sc, by], [bx + 8 * sc, by - 13 * sc], [bx + 2.6 * sc, by - 13 * sc]],
+  const shTop = by - 13 * sc + shY;
+  poly(c, [[hipX - 6.5 * sc, by], [hipX + 6.5 * sc, by], [shX + 8 * sc, shTop],
+           [shX - 8 * sc, shTop]], body);
+  poly(c, [[hipX + 2 * sc, by], [hipX + 6.5 * sc, by], [shX + 8 * sc, shTop], [shX + 2.6 * sc, shTop]],
     shade(body, hit ? 1 : LIT.bodyDark));
-  poly(c, [[bx - 8 * sc, by - 13 * sc], [bx - 1 * sc, by - 13 * sc], [bx - 1.4 * sc, by - 9.6 * sc], [bx - 7.4 * sc, by - 9.6 * sc]],
+  poly(c, [[shX - 8 * sc, shTop], [shX - 1 * sc, shTop], [shX - 1.4 * sc, by - 9.6 * sc], [shX - 7.4 * sc, by - 9.6 * sc]],
     shade(body, hit ? 1 : LIT.bodyLit));
   c.fillStyle = shade(body, hit ? 1 : .5);
-  c.fillRect(bx - 8 * sc, by - 9 * sc, 16 * sc, 2.4 * sc);            // the belt
-  // pauldrons, so the shoulders read as bulk rather than a wide box
+  c.fillRect(hipX - 8 * sc, by - 9 * sc, 16 * sc, 2.4 * sc);          // the belt
+  // pauldrons, so the shoulders read as bulk rather than a wide box — they
+  // roll with the shoulders and lag them a touch, so the bulk has weight
   for (const s of [-1, 1])
-    ell(c, bx + s * 7.4 * sc, by - 12.4 * sc, 3.2 * sc, 2.4 * sc, shade(body, hit ? 1 : .56));
+    ell(c, shX + s * 7.4 * sc, by - (12.4 - s * P.roll * .5) * sc + shY, 3.2 * sc, 2.4 * sc, shade(body, hit ? 1 : .56));
   // and a head with something in it: a heavy brow, two small eyes, a tusk
-  const hx = bx + dir * 1.5 * sc, hy = by - 15.4 * sc;
+  const hx = shX + dir * 1.5 * sc + P.head * .6 * sc, hy = by - 15.4 * sc - Math.abs(P.head) * .5 * sc + shY;
   ell(c, hx, hy, 3.6 * sc, 3.2 * sc, skin);
   if (!hit){
     ell(c, hx, hy - 2.1 * sc, 3.4 * sc, 1.3 * sc, shade(skin, .72));  // brow
@@ -5471,14 +5603,19 @@ function drawOgre(c, u, bx, by, floor, sc, col){
     poly(c, [[hx + dir * .9 * sc, hy + 2.2 * sc], [hx + dir * 1.7 * sc, hy + 2.0 * sc],
              [hx + dir * 1.4 * sc, hy + .7 * sc]], '#e8e2d2');        // tusk, at the jaw
   }
-  // club, raised on the swing
-  const sw = swingPhase(u);
+  /* CLUB. Two rules for a heavy thing on the end of an arm: it arrives after
+     the arm does, and it keeps going after the arm has stopped. `bw` carries
+     the wind-up and the ring-down; the head of it reads the same number one
+     beat later than the haft, so the club bends through the stroke instead of
+     staying a rigid stick bolted to the shoulder. */
+  const hbw = bw, tbw = bw * .78 + springOf(clamp(swingPhase(u) + .10, 0, 1)) * .30;
+  const swg = P.arm * dir * .8 * sc;      // a club that heavy barely swings
   c.strokeStyle = "#5b4426"; c.lineWidth = 3.4 * sc; c.lineCap = 'round';
   c.beginPath();
-  c.moveTo(bx + dir * 5.5 * sc, by - 7 * sc);
-  c.lineTo(bx + dir * (11 + sw * 2) * sc, by - (16 - sw * 11) * sc);
+  c.moveTo(shX + dir * 5.5 * sc, by - 7 * sc + shY * .5);
+  c.lineTo(shX + dir * (11 + hbw * 2) * sc + swg, by - (16 - hbw * 11) * sc + shY * .8);
   c.stroke(); c.lineCap = 'butt';
-  const kx = bx + dir * (12 + sw * 2) * sc, ky = by - (17.5 - sw * 12) * sc;
+  const kx = shX + dir * (12 + tbw * 2) * sc + swg * 1.25, ky = by - (17.5 - tbw * 12) * sc + shY * .8;
   ell(c, kx, ky, 3.4 * sc, 3.8 * sc, '#6f5730');
   ell(c, kx - dir * 1 * sc, ky - 1.1 * sc, 1.5 * sc, 1.7 * sc, '#8a6f3e');
   for (let i = 0; i < 3; i++)                                          // banded with iron
@@ -5508,9 +5645,125 @@ const STEP_RATE = 6.2832 / STEP_LEN;
 const gaitOf = (u) => u.x * STEP_RATE + u.ph;
 const walking = (u) => !(u.stunT > 0 || u.pullT > 0) &&
   !(u.target && hyp(u.target.x - u.x, u.target.y - u.y) <= u.rng + (u.target.r || .4) + u.r);
+
+/* THE CYCLE, as three tables read by every walking thing in the game.
+
+   A sine was the wrong shape twice over. A foot on a sine spends most of the
+   cycle near the ends of the stride and crosses the middle at speed — which
+   is exactly backwards: a planted foot has to travel back at a CONSTANT rate,
+   the rate the body is walking at, or it slides on the boards. And a sine has
+   no swing phase at all; both feet were on the ground the whole time.
+
+     GAIT_FOOT   fore-aft, one leg. Stance is a straight ramp (a planted foot
+                 does not slide); the swing is a cubic Hermite whose end slopes
+                 match the ramp, so toe-off and heel-strike are continuous
+                 rather than a stop and a start. Normalised at build time so
+                 the Hermite's overshoot can never throw a leg further than one
+                 BODY_STRIDE — the invariant the suite checks.
+     GAIT_LIFT   how far off the deck. Zero for the whole of stance, a half
+                 sine through the swing. The foot is DOWN when it is planted,
+                 which is what makes the ramp above read as contact.
+     GAIT_DROP   the hips. -1 at contact, vaulting up to 0 at mid-stance, and
+                 falling back faster than it rose, because a body drops onto a
+                 foot and lifts off it.                                     */
+const GAIT_N = 96;
+const GAIT_INV = 1 / 6.2832;
+const GAIT_FOOT = new Float32Array(GAIT_N + 1);
+const GAIT_LIFT = new Float32Array(GAIT_N + 1);
+const GAIT_DROP = new Float32Array(GAIT_N + 1);
+const GAIT_JOLT = new Float32Array(GAIT_N + 1);
+{
+  const st = ANIM.stance, m = -2 * (1 - st) / st, RISE = .62;
+  let mx = 0;
+  for (let i = 0; i <= GAIT_N; i++){
+    const p = i / GAIT_N;
+    let v;
+    if (p < st) v = 1 - 2 * (p / st);
+    else {
+      const q = (p - st) / (1 - st), q2 = q * q, q3 = q2 * q;
+      v = (-4 * q3 + 6 * q2 - 1) + m * (2 * q3 - 3 * q2 + q);
+    }
+    GAIT_FOOT[i] = v;
+    if (Math.abs(v) > mx) mx = Math.abs(v);
+    GAIT_LIFT[i] = p < st ? 0 : Math.sin(Math.PI * (p - st) / (1 - st));
+    const q = cyc(p * 2);                       // two contacts to a stride
+    // ...and a jolt at the instant of each plant, decaying over a sixth of the
+    // step. Without it the hips run a smooth sine between the two feet and the
+    // body has weight but no IMPACT — it never actually hits the deck.
+    const jolt = Math.max(0, 1 - q / .16);
+    GAIT_JOLT[i] = jolt * jolt;
+    GAIT_DROP[i] = (q < RISE
+      ? -(1 + Math.cos(Math.PI * q / RISE)) / 2
+      : -(1 - Math.cos(Math.PI * (q - RISE) / (1 - RISE))) / 2) - .22 * jolt * jolt;
+  }
+  for (let i = 0; i <= GAIT_N; i++) GAIT_FOOT[i] /= mx;
+}
+const gaitTab = (tab, g) => {
+  const f = cyc(g * GAIT_INV) * GAIT_N, i = f | 0, t = f - i;
+  return tab[i] + (tab[i + 1] - tab[i]) * t;
+};
+const gaitFoot = (g) => gaitTab(GAIT_FOOT, g);
+const gaitLift = (g) => gaitTab(GAIT_LIFT, g);
+const gaitDrop = (g) => gaitTab(GAIT_DROP, g);
+const gaitJolt = (g) => gaitTab(GAIT_JOLT, g);
+
 function strideOf(u){
   if (!walking(u)) return 0;
-  return Math.sin(gaitOf(u)) * BODY_STRIDE;
+  return gaitFoot(gaitOf(u)) * BODY_STRIDE;
+}
+
+/* Everything the clock and a body's own state say about how it is MOVING, in
+   body units, computed once and read by every limb — so the legs, the hips,
+   the shoulders, the head and the weapon can never come apart.
+
+   `heft` is the only knob: the ogre is the same animal moving slower and
+   heavier, with more of everything trailing behind the beat.               */
+/* THE SETTLE. `walking()` is a yes-or-no — a body stopped dead the frame its
+   target came into reach, mid-stride, one leg in the air, and it started again
+   just as abruptly. Nothing in the game stores WHEN a body stopped, and adding
+   that would be simulation state read by the renderer, which is not allowed.
+
+   But there is a clock already there: the last stride's worth of ground. A
+   body eases out of its walk over the final ANIM.settle metres of the approach
+   and eases back into it over the first ANIM.settle of the withdrawal, which
+   is a deceleration into the plant and an acceleration out of it — the same
+   picture a stored timer would have bought, out of position, which both
+   machines already agree on to the last bit. strideOf keeps the hard predicate
+   the suite pins; this is the shape drawn around it.                        */
+function walkAmt(u){
+  if (u.stunT > 0 || u.pullT > 0) return 0;
+  if (!u.target) return 1;
+  const d = hyp(u.target.x - u.x, u.target.y - u.y) - (u.rng + (u.target.r || .4) + u.r);
+  const k = clamp(d / ANIM.settle, 0, 1);
+  return k * k * (3 - 2 * k);
+}
+function poseOf(u, heft){
+  const h = heft || 1;
+  const w = walkAmt(u), idle = 1 - w;
+  const g = gaitOf(u);
+  const t = G.t * 6.2832 + u.ph;
+  const br = Math.sin(t * ANIM.breathHz);
+  const lag = ANIM.lag * h, PI = 3.14159265;
+  return {
+    g, w,
+    // the two legs, half a cycle apart — mirrored feet put a body in the air
+    lead:  gaitFoot(g) * ANIM.reach * w,
+    trail: gaitFoot(g + PI) * ANIM.reach * w,
+    liftL: gaitLift(g) * ANIM.lift * h * w,
+    liftT: gaitLift(g + PI) * ANIM.lift * h * w,
+    // hips: zero-mean on both sides, so easing between them cannot pop
+    rise:  (gaitDrop(g) + .5) * 2 * ANIM.dip * h * w + br * ANIM.breath * idle,
+    // and everything above them, each on its own beat
+    roll:  gaitFoot(g - lag) * ANIM.roll * h * w + Math.sin(t * .29) * ANIM.sway * idle,
+    arm:   gaitFoot(g + PI - lag) * ANIM.armSw * w + Math.sin(t * .23) * .22 * idle,
+    head:  gaitFoot(g + PI - lag - ANIM.headLag * h) * ANIM.roll * .8 * w + br * .3 * idle,
+    march: ANIM.march * h * w,        // a body on the move leans into it
+    // the ribs, which is where breathing actually happens — the hips hold still
+    chest: br * ANIM.chest * h * idle,
+    // the instant of each plant, for whatever wants to land ON it
+    jolt: Math.max(gaitJolt(g), gaitJolt(g + PI)) * w,
+    breath: br,
+  };
 }
 /* A hero is built over a whole match — a class, a passive out of a hundred,
    three skills, an ultimate, and up to five ranks in each of them — and none
@@ -5571,10 +5824,19 @@ const bodyShadowR = (u) => (u.r || .45) * LS() * BODY_SHADOW.foot;
 function drawUnit(c, u){
   const p = lp(u.x, u.y), S = LS();
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
+  // One pose for the whole body. The ogre is the same animal, heavier.
+  const P = poseOf(u, u.kind === 'super' ? OGRE_HEFT : u.isHero ? 1.12 : 1);
   const shr = bodyShadowR(u);
-  shadow(c, p[0], p[1] + BODY_SHADOW.lift * cam.z, shr, shr * BODY_SHADOW.squash,
-    'rgba(0,0,0,' + BODY_SHADOW.a + ')');
-  const bob = Math.sin(gaitOf(u)) * (u.target && hyp(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
+  /* The shadow was a fixed ellipse under a body that moved up and down, which
+     is the one thing a contact shadow may not be: it says the body is never
+     really touching the deck. Its FOOTPRINT is still exactly what the unit's
+     collision radius asks for — the thing the suite pins — but it tightens and
+     darkens as the hips come down onto a foot and opens up as they lift. */
+  const gnd = clamp(.5 - P.rise * .5, 0, 1);
+  shadow(c, p[0], p[1] + BODY_SHADOW.lift * cam.z, shr,
+    shr * BODY_SHADOW.squash * (.88 + .24 * gnd),
+    'rgba(0,0,0,' + (BODY_SHADOW.a * (.84 + .32 * gnd)).toFixed(3) + ')');
+  const bob = -P.rise * sc;
   // Whoever just cast lifts off the ground for a third of a second over a
   // brightening pool of their skill's colour. Without it the effects all happen
   // somewhere ELSE — at the target, in the air, on the ground — and the hero
@@ -5583,8 +5845,11 @@ function drawUnit(c, u){
   // body's COLOUR for a frame — so twenty bodies trading blows read as twenty
   // bodies standing still, occasionally flashing. A flinch away from the enemy
   // costs nothing and makes a brawl look like one.
+  // ...and it does not slide back in a straight line either. A body knocked
+  // back rings home on the same spring the weapons use, so the recovery has a
+  // settle in it rather than a constant crawl.
   const flinch = u.hitT > 0
-    ? (u.hitT / (u.hitT0 || HIT.min)) * hitPush(u.hitW || 0) * sc * -dirOf(u.side) : 0;
+    ? springOf(clamp(u.hitT / (u.hitT0 || HIT.min), 0, 1)) * hitPush(u.hitW || 0) * sc * -dirOf(u.side) : 0;
   let cast = 0;
   if (u.castT > 0){
     cast = clamp(u.castT / (u.castT0 || .32), 0, 1);
@@ -5598,39 +5863,62 @@ function drawUnit(c, u){
   if (u.kind === 'super'){ drawOgre(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   const dir0 = dirOf(u.side);
   const body = u.hitT > 0 ? '#ffffff' : col;
+  /* OVERLAP, in four offsets. The hips turn one way, the shoulders the other
+     and a beat later, the head later still — and the whole thing throws itself
+     forward into a blow and hangs back before one. Every part of the body
+     above the knees used to sit on the same pixel column and translate as one
+     block, which is the difference between a puppet and a figure.            */
+  const bw = blowOf(u);
+  // the far end of a weapon arrives after the hand does and keeps going after
+  // it stops — one lagged read of the same stroke, the club's rule at a
+  // levy's weight
+  const tbw = bw * .82 + springOf(clamp(swingPhase(u) + .09, 0, 1)) * .24;
+  const lean = bw * ANIM.lunge * dir0 * sc;
+  const hipX = bx - P.roll * .38 * sc + lean * .25 - dir0 * P.march * .2 * sc;
+  const shX  = bx + P.roll * sc + lean + dir0 * P.march * sc;
+  const hdX  = bx + P.head * sc + lean * .7;
+  const shY  = -P.chest * sc;                        // the ribs rise; the belt does not
+  const hdY  = -Math.abs(P.head) * .22 * sc + shY;
   // Legs that stride. Every body on the bridge used to be two 2px sticks under
   // a torso that bobbed on the spot, so a wave marching up the span read as a
-  // row of pieces sliding along it. They walk on the same clock as the bob and
+  // row of pieces sliding along it. They walk on the ground they cover and
   // plant when the thing they are hitting is in reach.
   if (u.isHero) heroMantle(c, u, bx, by, p[1], sc, col);
-  const st = strideOf(u) * sc;
-  for (const s of [-1, 1]){
-    const hipx = bx + s * 2.1 * sc, ftx = bx + s * 2.4 * sc + s * st;
+  const legs = [[-1, P.lead, P.liftL, gaitJolt(P.g)], [1, P.trail, P.liftT, gaitJolt(P.g + 3.14159265)]];
+  for (const lg of legs){
+    const s = lg[0], ftx = hipX + s * 2.4 * sc + lg[1] * BODY_STRIDE * sc;
+    const hipx = hipX + s * 2.1 * sc, fy = p[1] - lg[2] * sc, sq = lg[3] * P.w * .7;
     poly(c, [[hipx - 1.5 * sc, by - 1 * sc], [hipx + 1.5 * sc, by - 1 * sc],
-             [ftx + 1.4 * sc, p[1]], [ftx - 1.4 * sc, p[1]]], shade(body, .52));
+             [ftx + 1.4 * sc, fy], [ftx - 1.4 * sc, fy]], shade(body, .52));
     c.fillStyle = shade(body, .38);
-    c.fillRect(ftx - 1.8 * sc, p[1] - 1.4 * sc, 3.6 * sc, 1.6 * sc);   // the boot
+    // the boot spreads on the boards at the instant it takes the weight
+    c.fillRect(ftx - (1.8 + sq * .35) * sc, fy - (1.4 - sq * .25) * sc,
+      (3.6 + sq * .7) * sc, (1.6 - sq * .25) * sc);
   }
   // Torso, with a lit face and a shaded one. It was a single flat fill — the
   // only thing left in the game without a light side, next to houses, mines,
-  // cliffs and masonry that all have one.
+  // cliffs and masonry that all have one. It shears between hips and shoulders
+  // now, so the two ends of it are never on the same beat.
   c.fillStyle = body;
   c.beginPath();
-  c.moveTo(bx - 4.2 * sc, by); c.lineTo(bx + 4.2 * sc, by);
-  c.lineTo(bx + 3.2 * sc, by - 9 * sc); c.lineTo(bx - 3.2 * sc, by - 9 * sc);
+  const shTop = by - 9 * sc + shY;
+  c.moveTo(hipX - 4.2 * sc, by); c.lineTo(hipX + 4.2 * sc, by);
+  c.lineTo(shX + 3.2 * sc, shTop); c.lineTo(shX - 3.2 * sc, shTop);
   c.closePath(); c.fill();
-  poly(c, [[bx + 1.1 * sc, by], [bx + 4.2 * sc, by], [bx + 3.2 * sc, by - 9 * sc], [bx + 1.1 * sc, by - 9 * sc]],
+  poly(c, [[hipX + 1.1 * sc, by], [hipX + 4.2 * sc, by], [shX + 3.2 * sc, shTop], [shX + 1.1 * sc, shTop]],
     shade(body, u.hitT > 0 ? 1 : LIT.bodyDark));
-  poly(c, [[bx - 3.2 * sc, by - 9 * sc], [bx - .4 * sc, by - 9 * sc], [bx - .4 * sc, by - 6.4 * sc], [bx - 3.5 * sc, by - 6.4 * sc]],
+  poly(c, [[shX - 3.2 * sc, shTop], [shX - .4 * sc, shTop], [shX - .4 * sc, by - 6.4 * sc], [shX - 3.5 * sc, by - 6.4 * sc]],
     shade(body, u.hitT > 0 ? 1 : LIT.bodyLit));
   c.fillStyle = shade(body, .60);
-  c.fillRect(bx - 4.2 * sc, by - 4 * sc, 8.4 * sc, 1.6 * sc);          // the belt
-  // an arm reaching to whatever it is holding, so the weapon leaves a hand
+  c.fillRect(hipX - 4.2 * sc, by - 4 * sc, 8.4 * sc, 1.6 * sc);        // the belt
+  // an arm reaching to whatever it is holding, so the weapon leaves a hand —
+  // and swinging against the legs, a beat behind the shoulders it hangs from
   c.strokeStyle = shade(body, .66); c.lineWidth = 2.1 * sc; c.lineCap = 'round';
   c.beginPath();
-  c.moveTo(bx + dir0 * 2.4 * sc, by - 7.4 * sc);
-  const arm = swingPhase(u);
-  c.lineTo(bx + dir0 * (4 + arm * 1.4) * sc, by - (5 - arm * 1.6) * sc);
+  c.moveTo(shX + dir0 * 2.4 * sc, by - 7.4 * sc + shY);
+  const arm = swingPhase(u), swg = P.arm * dir0 * 1.5 * sc;
+  c.lineTo(shX + dir0 * (4 + arm * 1.4) * sc + swg,
+    by - (5 - arm * 1.6) * sc - Math.abs(P.arm) * .5 * sc + shY * .7);
   c.stroke(); c.lineCap = 'butt';
   /* What the BARRACKS drilled into this body. The forge's plate below has
      marked its own work since it was written — "on the shoulder the enemy
@@ -5651,7 +5939,7 @@ function drawUnit(c, u){
     const dr = drillRank(G.sides[u.side], u.kind);
     for (let i = 0; i < dr; i++){
       const y = by - (DRILL.y - i * DRILL.gap) * sc;
-      const x0 = bx + dirOf(u.side) * DRILL.x * sc - DRILL.w * sc / 2;
+      const x0 = shX + dirOf(u.side) * DRILL.x * sc - DRILL.w * sc / 2;
       // a dark seat under each bar, or bone on a pale body disappears too
       c.fillStyle = DRILL.dark;
       c.fillRect(x0 - .3 * sc, y - .3 * sc, DRILL.w * sc + .6 * sc, DRILL.h * sc + .6 * sc);
@@ -5667,55 +5955,68 @@ function drawUnit(c, u){
     if (pl > 0){
       const w = (UPMARK.plate.min + (UPMARK.plate.max - UPMARK.plate.min) * pl) * 2.6 * sc;
       c.fillStyle = u.hitT > 0 ? '#ffffff' : shade(col, .44);
-      c.fillRect(bx - dirOf(u.side) * 2.4 * sc - w / 2, by - 9.6 * sc, w, 1.9 * sc + pl * 1.2 * sc);
+      c.fillRect(shX - dirOf(u.side) * 2.4 * sc - w / 2, by - 9.6 * sc, w, 1.9 * sc + pl * 1.2 * sc);
       c.fillStyle = u.hitT > 0 ? '#ffffff' : shade(col, .92);
-      c.fillRect(bx - dirOf(u.side) * 2.4 * sc - w / 2, by - 9.6 * sc, w, .8 * sc);
+      c.fillRect(shX - dirOf(u.side) * 2.4 * sc - w / 2, by - 9.6 * sc, w, .8 * sc);
     }
   }
-  // head
-  ell(c, bx, by - 11.6 * sc, 3 * sc, 3.2 * sc, u.hitT > 0 ? '#ffffff' : '#e8d6b8');
+  // head — a beat behind the shoulders it sits on, which is what stops the
+  // whole figure reading as one rigid stamp
+  const hY = by + hdY;
+  ell(c, hdX, hY - 11.6 * sc, 3 * sc, 3.2 * sc, u.hitT > 0 ? '#ffffff' : '#e8d6b8');
   const hooded = u.kind === 'caster' || u.cls === 'mage' || u.cls === 'support';
   if (hooded){
     // a hood, not a helmet — the caster reads as a caster before it casts
-    poly(c, [[bx - 3.6 * sc, by - 10.2 * sc], [bx, by - 16.4 * sc], [bx + 3.6 * sc, by - 10.2 * sc]],
+    poly(c, [[hdX - 3.6 * sc, hY - 10.2 * sc], [hdX + P.head * .6 * sc, hY - 16.4 * sc], [hdX + 3.6 * sc, hY - 10.2 * sc]],
       u.hitT > 0 ? '#ffffff' : shade(col, .58));
   } else {
     c.fillStyle = shade(col, .55);
-    c.fillRect(bx - 3.1 * sc, by - 14.4 * sc, 6.2 * sc, 2.6 * sc);
+    c.fillRect(hdX - 3.1 * sc, hY - 14.4 * sc, 6.2 * sc, 2.6 * sc);
     // a footman is the one wearing real armour, and it shows
     if (u.kind === 'melee' || u.isHero){
       c.fillStyle = shade(col, u.hitT > 0 ? 1 : .38);
-      c.fillRect(bx - 3.6 * sc, by - 15.6 * sc, 7.2 * sc, 1.4 * sc);
+      c.fillRect(hdX - 3.6 * sc, hY - 15.6 * sc, 7.2 * sc, 1.4 * sc);
     }
     // a visor slot, on the side it is facing — a bare oval reads as looking
     // nowhere, and every body on the bridge is supposed to be facing the fight
     c.fillStyle = 'rgba(40,34,28,.55)';
-    c.fillRect(bx + dir0 * .4 * sc - 1.9 * sc, by - 12.3 * sc, 3.8 * sc, 1.3 * sc);
+    c.fillRect(hdX + dir0 * .4 * sc - 1.9 * sc, hY - 12.3 * sc, 3.8 * sc, 1.3 * sc);
   }
-  // weapon by role
-  const sw = swingPhase(u);
+  /* WEAPON. It used to read `swingPhase` straight, so it travelled the blow
+     and nothing else: no wind-up before it, no follow-through after it, and it
+     hung dead still while the body under it walked. `bw` is the whole stroke —
+     negative through the wind-up the cooldown announces, +1 at the instant of
+     contact, ringing back through rest as the arm recovers — and the marching
+     arm swing rides on top of it. */
   c.strokeStyle = "#d8dbe2"; c.lineWidth = 1.7 * sc; c.lineCap = 'round';
   const dir = dirOf(u.side);
   c.beginPath();
   if (u.kind === 'caster' || u.cls === 'mage' || u.cls === 'support'){
-    c.moveTo(bx + dir * 4 * sc, by - 2 * sc); c.lineTo(bx + dir * 5 * sc, by - 15 * sc);
+    // a staff is planted; the head of it lags the body, so it sways
+    const tipx = shX + dir * 5 * sc + swg * .5 + tbw * dir * 1.1 * sc;
+    c.moveTo(hipX + dir * 4 * sc, by - 2 * sc); c.lineTo(tipx, by - 15 * sc);
     c.stroke();
-    ell(c, bx + dir * 5 * sc, by - 16 * sc, 2.2 * sc, 2.2 * sc, u.side === 0 ? '#9ad8ff' : '#ffb08a');
+    ell(c, tipx + P.roll * .5 * sc + (tbw - bw) * dir * .8 * sc, by - (16 + tbw * .5) * sc,
+      2.2 * sc, 2.2 * sc, u.side === 0 ? '#9ad8ff' : '#ffb08a');
     c.beginPath();
   } else if (u.rng > 3){
-    c.moveTo(bx + dir * 3 * sc, by - 9 * sc); c.lineTo(bx + dir * 6 * sc, by - 3 * sc);
+    // a bow rides the shoulders and dips as it is drawn
+    c.moveTo(shX + dir * 3 * sc + swg * .3, by - 9 * sc);
+    c.lineTo(shX + dir * (6 + tbw * 1.2) * sc + swg * .6, by - (3 - tbw * 1.4) * sc);
   } else {
-    c.moveTo(bx + dir * 3.5 * sc, by - 6 * sc);
-    c.lineTo(bx + dir * (7 + sw * 3) * sc, by - (10 - sw * 7) * sc);
+    c.moveTo(shX + dir * 3.5 * sc + swg * .4, by - 6 * sc + shY * .7);
+    c.lineTo(shX + dir * (7 + tbw * 3) * sc + swg,
+      by - (10 - tbw * 7) * sc - Math.abs(P.arm) * .4 * sc + shY * .8);
   }
   c.stroke(); c.lineCap = 'butt';
   // shield arm, on the side away from the enemy — levies carry a round buckler,
   // footmen a kite shield, which is most of the difference between them
   if (u.kind === 'grunt' || u.kind === 'melee' || (u.isHero && u.rng <= 3)){
-    const sx = bx - dir * 3.6 * sc;
-    if (u.kind === 'grunt') ell(c, sx, by - 5 * sc, 2.6 * sc, 2.8 * sc, shade(col, u.hitT > 0 ? 1 : .5));
-    else poly(c, [[sx - 2.6 * sc, by - 8.4 * sc], [sx + 2.6 * sc, by - 8.4 * sc],
-                  [sx + 2.6 * sc, by - 3.4 * sc], [sx, by - .8 * sc], [sx - 2.6 * sc, by - 3.4 * sc]],
+    // the off arm swings against the weapon arm, and comes up as a blow lands
+    const sx = shX - dir * 3.6 * sc - swg * .8;
+    if (u.kind === 'grunt') ell(c, sx, by - (5 + bw * .8) * sc, 2.6 * sc, 2.8 * sc, shade(col, u.hitT > 0 ? 1 : .5));
+    else poly(c, [[sx - 2.6 * sc, by - (8.4 + bw * .7) * sc], [sx + 2.6 * sc, by - (8.4 + bw * .7) * sc],
+                  [sx + 2.6 * sc, by - (3.4 + bw * .7) * sc], [sx, by - (.8 + bw * .7) * sc], [sx - 2.6 * sc, by - (3.4 + bw * .7) * sc]],
               shade(col, u.hitT > 0 ? 1 : .46));
   }
   drawUnitMarks(c, u, bx, by, p, sc);
@@ -6928,26 +7229,48 @@ function flushLabels(c){
 // player two's crews came out wearing the other side's colour.
 const WORKER_STRIDE = 1.5;
 const workerCoat = () => shade(sideCol(), .72);
+/* There are more of these on screen than of anything else, and every one of
+   them shuffled: two rectangles on a mirrored sine, a coat that never dipped,
+   and a crate on the shoulder as rigid as the shoulder. They walk on the same
+   three tables the soldiers do — planted feet, hips that fall onto them, a free
+   arm swinging against the legs — and the load on the shoulder lags the body
+   carrying it, which is the whole reason a carried thing reads as heavy.    */
 function drawWorkerFig(c, x, y, col, carry, sc, ph){
   sc = (sc || 1) * bu();
   const coat = workerCoat();
-  const st = Math.sin(ph || 0) * WORKER_STRIDE * sc;
-  shadow(c, x, y + 1, 3.2 * sc, 1.6 * sc, 'rgba(0,0,0,.25)');
+  const g = ph || 0, PI = 3.14159265;
+  const lead = gaitFoot(g), trail = gaitFoot(g + PI);
+  const rise = (gaitDrop(g) + .5) * 2 * .55 * sc;             // the hips, + is up
+  const roll = gaitFoot(g - ANIM.lag) * .38 * sc;             // shoulders, a beat late
+  const arm = gaitFoot(g + PI - ANIM.lag);
+  const hd = gaitFoot(g + PI - ANIM.lag - ANIM.headLag) * .3 * sc;
+  const gnd = clamp(.5 - rise / sc * .9, 0, 1);               // 1 at the bottom of the step
+  const hy = y - rise, sx = x + roll;
+  shadow(c, x, y + 1, 3.2 * sc, 1.6 * sc * (.88 + .24 * gnd),
+    'rgba(0,0,0,' + (.25 * (.84 + .32 * gnd)).toFixed(3) + ')');
   c.fillStyle = shade(coat, .54);
-  for (const s of [-1, 1]) c.fillRect(x + s * 1.05 * sc - .85 * sc + s * st, y - 2.6 * sc, 1.7 * sc, 2.8 * sc);
-  c.fillStyle = coat; c.fillRect(x - 2 * sc, y - 7.4 * sc, 4 * sc, 5.2 * sc);
-  c.fillStyle = shade(coat, LIT.coatLit); c.fillRect(x - 2 * sc, y - 7.4 * sc, 1.4 * sc, 5.2 * sc);
-  c.fillStyle = shade(coat, LIT.coatDark); c.fillRect(x - 2 * sc, y - 4.4 * sc, 4 * sc, 1 * sc);
+  const legs = [[-1, lead, g], [1, trail, g + PI]];
+  for (const lg of legs){
+    const s = lg[0], ft = lg[1] * WORKER_STRIDE * ANIM.reach * sc, lift = gaitLift(lg[2]) * .7 * sc;
+    c.fillRect(x + s * 1.05 * sc - .85 * sc + ft, y - 2.6 * sc - lift, 1.7 * sc, 2.8 * sc);
+  }
+  c.fillStyle = coat; c.fillRect(sx - 2 * sc, hy - 7.4 * sc, 4 * sc, 5.2 * sc);
+  c.fillStyle = shade(coat, LIT.coatLit); c.fillRect(sx - 2 * sc, hy - 7.4 * sc, 1.4 * sc, 5.2 * sc);
+  c.fillStyle = shade(coat, LIT.coatDark); c.fillRect(sx - 2 * sc, hy - 4.4 * sc, 4 * sc, 1 * sc);
   c.strokeStyle = shade(coat, .84); c.lineWidth = 1.5 * sc; c.lineCap = 'round';
   c.beginPath();
-  c.moveTo(x + 1.5 * sc, y - 6.4 * sc);
-  c.lineTo(x + (carry ? 2.4 : 2.3) * sc, y - (carry ? 8.4 : 4.6) * sc);
+  c.moveTo(sx + 1.5 * sc, hy - 6.4 * sc);
+  // the free arm swings; the arm holding a load up does not
+  const aw = carry ? arm * .25 : arm * 1.15;
+  c.lineTo(sx + (carry ? 2.4 : 2.3) * sc + aw * sc, hy - (carry ? 8.4 : 4.6) * sc - Math.abs(aw) * .35 * sc);
   c.stroke(); c.lineCap = 'butt';
-  ell(c, x, y - 8.6 * sc, 2 * sc, 2.1 * sc, '#e8d6b8');
-  c.fillStyle = shade(coat, .48); c.fillRect(x - 2.2 * sc, y - 10.3 * sc, 4.4 * sc, 1.5 * sc);
+  ell(c, sx + hd, hy - 8.6 * sc, 2 * sc, 2.1 * sc, '#e8d6b8');
+  c.fillStyle = shade(coat, .48); c.fillRect(sx + hd - 2.2 * sc, hy - 10.3 * sc, 4.4 * sc, 1.5 * sc);
   if (carry){
-    c.fillStyle = col; c.fillRect(x - 2.6 * sc, y - 12.6 * sc, 5.2 * sc, 3 * sc);
-    c.fillStyle = shade(col, 1.16); c.fillRect(x - 2.6 * sc, y - 12.6 * sc, 5.2 * sc, .9 * sc);
+    // the load arrives after the shoulder does, and tips as it comes
+    const lx = sx + roll * .9 + hd * .5, ly = hy - rise * .35;
+    c.fillStyle = col; c.fillRect(lx - 2.6 * sc, ly - 12.6 * sc, 5.2 * sc, 3 * sc);
+    c.fillStyle = shade(col, 1.16); c.fillRect(lx - 2.6 * sc, ly - 12.6 * sc, 5.2 * sc, .9 * sc);
   }
 }
 
