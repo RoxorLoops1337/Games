@@ -353,6 +353,9 @@ const MONSTERS = {
   archer:  { name:'Skeleton Archer',move:6, atk:2, def:2, bp:1, mind:0, gold:35,  col:'#d8d0b8', col2:'#948a72', size:.8, undead:true, shooter:true },
   cultist: { name:'Cultist',       move:8,  atk:2, def:2, bp:2, mind:3, gold:55,  col:'#6a2a3a', col2:'#3d1622', size:.88, herald:true },
   mimic:   { name:'Mimic',         move:4,  atk:4, def:3, bp:3, mind:2, gold:140, col:'#7a5a2c', col2:'#59401f', size:.92 },
+  spider:  { name:'Cave Spider',   move:10, atk:2, def:2, bp:2, mind:1, gold:60,  col:'#3a2f42', col2:'#221b28', size:.86, webber:true },
+  hound:   { name:'Hellhound',     move:10, atk:3, def:2, bp:2, mind:2, gold:85,  col:'#5a2418', col2:'#33130c', size:.94, breath:true },
+  chained: { name:'The Chained',   move:0,  atk:6, def:4, bp:6, mind:3, gold:160, col:'#4a4038', col2:'#2a231d', size:1.18, chained:true },
 };
 
 /* ------------------------------------------------------------- the market */
@@ -454,6 +457,7 @@ const FURN = {
   sorcerer:  { name:"Sorcerer's Table", w:2, h:1, search:true },
   cage:      { name:'Iron Cage',    w:1, h:1, search:false },
   plinth:    { name:'Plinth',       w:1, h:1, search:false },
+  coffin:    { name:"Gambler's Coffin", w:2, h:1, search:false },
 };
 
 /* --------------------------------------------------------------- the book */
@@ -683,30 +687,40 @@ function furnAt(x,y){
   }
   return null;
 }
-const blocked = (x,y) => !isFloor(x,y) || !!furnAt(x,y) || !!actorAt(x,y);
+const blocked = (x,y) => !isFloor(x,y) || holeAt(x,y) || !!furnAt(x,y) || !!actorAt(x,y);
 
 // Breadth-first walk out from a square, respecting doors, bodies and furniture.
 // Returns {d:Map(idx->steps), from:Map(idx->idx)} for path reconstruction.
+// Squares cost 1, except water, which costs 2. That makes this a shortest-path
+// problem rather than a flood fill: expand in cost order through buckets, so a
+// square reached late by a cheap dry path still beats the wet one that got
+// there first.
 function walkField(sx, sy, maxSteps, mover, flying){
   const d = new Map(), from = new Map();
   d.set(idx(sx,sy), 0);
-  let frontier = [[sx,sy]];
-  while (frontier.length){
-    const next = [];
+  const buckets = [];
+  const push = (c, x, y) => { (buckets[c] = buckets[c] || []).push([x,y]); };
+  push(0, sx, sy);
+  for (let cost = 0; cost <= maxSteps; cost++){
+    const frontier = buckets[cost];
+    if (!frontier) continue;
     for (const [x,y] of frontier){
-      const cost = d.get(idx(x,y));
+      if (d.get(idx(x,y)) !== cost) continue;      // superseded by a cheaper route
       if (cost >= maxSteps) continue;
       for (const [dx,dy] of DIRS){
         const nx = x+dx, ny = y+dy, ni = idx(nx,ny);
-        if (!inB(nx,ny) || d.has(ni)) continue;
+        if (!inB(nx,ny)) continue;
         if (!linked(x,y,nx,ny)) continue;
+        if (holeAt(nx,ny)) continue;               // nothing walks over a hole, not even a gargoyle
         if (furnAt(nx,ny) && !flying) continue;    // a gargoyle steps over a table
         if (!bodyPassable(mover, actorAt(nx,ny))) continue;
-        d.set(ni, cost+1); from.set(ni, idx(x,y));
-        next.push([nx,ny]);
+        const nc = cost + stepCost(nx,ny);
+        if (nc > maxSteps) continue;
+        if (d.has(ni) && d.get(ni) <= nc) continue;
+        d.set(ni, nc); from.set(ni, idx(x,y));
+        push(nc, nx, ny);
       }
     }
-    frontier = next;
   }
   return { d, from };
 }
@@ -797,6 +811,7 @@ function defendDice(h){
 function moveSlow(h){
   let s = 0;
   if (h.armour && ARMOURS[h.armour]) s += ARMOURS[h.armour].slow || 0;
+  if (h && h.carrying) s += CARRY_SLOW;            // somebody over your shoulder
   return s;
 }
 const heroes = () => G.q.actors.filter(a => a.kind === 'hero');
@@ -820,6 +835,8 @@ function startQuest(qi, def, seed){
     itemsFound:[], collected:0, npcFreed:false, bossDead:false, carrier:null, pot:0, fate:1,
     wrath:0, wrathAt:0, lastStriker:null, streak:0, streakBest:0, trialRoom:null, trial:null,
     log:[], activeId:null, escaped:false,
+    water: new Array(W*H).fill(0),
+    hole: new Array(W*H).fill(0), crack: new Array(W*H).fill(0),
   };
   // shuffle the treasure deck with the quest seed
   for (let i=Q.deck.length-1; i>0; i--){ const j = Math.floor(R()*(i+1)); const t=Q.deck[i]; Q.deck[i]=Q.deck[j]; Q.deck[j]=t; }
@@ -906,6 +923,41 @@ function startQuest(qi, def, seed){
     Q.traps.push({ x, y, t:TT[Math.floor(R()*TT.length)], found:false, sprung:false, disarmed:false });
   }
 
+  // --- the water --------------------------------------------------------
+  // Corridors flood first, because the corridor is the short way round and the
+  // whole point is that the short way now costs something. Rooms take water
+  // only at the mouths their flooded corridors open onto, so a flooded floor
+  // still has dry ground to fight on.
+  if (q.theme === 'flood'){
+    const corr = [];
+    for (let y=0;y<H;y++) for (let x=0;x<W;x++)
+      if (isFloor(x,y) && roomAt(x,y) < 0 && !STAIRS.some(st => st[0]===x && st[1]===y)) corr.push([x,y]);
+    // seed a few pools and let them spread, so the water is in sheets rather
+    // than a scatter you can hop through
+    const seeds = Math.max(2, Math.round(corr.length * .05));
+    let front = [];
+    for (let i=0;i<seeds && corr.length;i++){
+      const [x,y] = corr[Math.floor(R()*corr.length)];
+      Q.water[idx(x,y)] = 1; front.push([x,y]);
+    }
+    for (let pass=0; pass<7 && front.length; pass++){
+      const next = [];
+      for (const [x,y] of front) for (const [dx,dy] of DIRS){
+        const nx = x+dx, ny = y+dy;
+        if (!inB(nx,ny) || Q.water[idx(nx,ny)]) continue;
+        if (!isFloor(nx,ny) || !linked(x,y,nx,ny)) continue;
+        if (STAIRS.some(st => st[0]===nx && st[1]===ny)) continue;
+        // water walks down the corridors freely and only laps into a room
+        const intoRoom = roomAt(nx,ny) >= 0;
+        if (R() < (intoRoom ? .28 : .82)){ Q.water[idx(nx,ny)] = 1; if (!intoRoom) next.push([nx,ny]); }
+      }
+      front = next;
+    }
+    // the doorstep is never underwater — a run that starts wading starts wrong
+    for (let y=0;y<H;y++) for (let x=0;x<W;x++)
+      if (Math.abs(x-8) + Math.abs(y-17) < 3) Q.water[idx(x,y)] = 0;
+  }
+
   // --- the vault: one room sealed, its key on a champion's belt ----------
   Q.trialRoom = (q.trial && q.trial.room !== undefined) ? { room:q.trial.room, kind:q.trial.kind } : null;
   Q.trial = null;
@@ -916,9 +968,19 @@ function startQuest(qi, def, seed){
       && !Q.actors.some(a => a.kind === 'monster' && roomAt(a.x,a.y) === Q.trialRoom.room)){
     Q.trialRoom = null;
   }
+  Q.vaultKind = 'plain'; Q.keyBearer = null;
   const keyBearer = Q.actors.some(a => a.elite && roomAt(a.x, a.y) !== q.vault);
   if (q.vault !== undefined && q.vault >= 0 && keyBearer){
     Q.vault = q.vault;
+    Q.vaultKind = q.vaultKind || 'plain';
+    // A bearer who runs has to be a named individual — "any champion" cannot
+    // flee. So this variant, and only this variant, pins the key to one of them.
+    if (Q.vaultKind === 'runner'){
+      const pool = Q.actors.filter(a => a.elite && a.alive && roomAt(a.x,a.y) !== q.vault);
+      const bear = pool[Math.floor(R()*pool.length)];
+      if (bear){ bear.runner = 1; bear.hasKey = 1; Q.keyBearer = bear.uid; }
+      else Q.vaultKind = 'plain';
+    }
     // A vault is locked, not hidden: stacking a secret door on top of the lock
     // is two obstacles wearing one door, and you can read neither of them.
     for (const k in Q.doors){
@@ -926,6 +988,9 @@ function startQuest(qi, def, seed){
       if (d.rid !== Q.vault) continue;
       d.locked = true; d.secret = false; d.found = true;
     }
+    // The relic is the point of the room, so it gets its square before the
+    // chests do — a small vault filled with chests used to leave none.
+    placePlinth(Q, Q.vault, R, 'vault');
     // and it is worth breaking into
     const spots = roomTiles(Q.vault).filter(([x,y]) => !furnAt(x,y) && !actorAt(x,y));
     for (let i = 0; i < Math.min(3, spots.length); i++){
@@ -940,7 +1005,22 @@ function startQuest(qi, def, seed){
   // A vault gets one too: a locked room should show what the key is for through
   // the doorway, so hunting the champion carrying it is a decision, not a chore.
   if (Q.trialRoom) placePlinth(Q, Q.trialRoom.room, R, 'trial');
-  if (Q.vault >= 0) placePlinth(Q, Q.vault, R, 'vault');
+
+  // Somebody has been using a tomb on this floor as a bank. Never the vault —
+  // a room you paid a key for should not also be a slot machine.
+  const cofDepth = q.depth || 0;             // authored quests have no depth: none there
+  if (cofDepth >= COFFIN_FROM && R() < COFFIN_CHANCE){
+    const goal2 = (q.objective && q.objective.room !== undefined) ? q.objective.room : -1;
+    const rooms2 = ROOMS.map(r => r.id).filter(id => id !== Q.vault && id !== goal2);
+    for (let tries = 0; tries < 8; tries++){
+      const rid = rooms2[Math.floor(R()*rooms2.length)];
+      const spot = freeFurnSpot(rid, FURN.coffin.w, FURN.coffin.h, R);
+      if (!spot) continue;
+      Q.furn.push({ t:'coffin', r:rid, x:spot[0], y:spot[1], w:spot[2], h:spot[3], rot:spot[4],
+                    quest:null, taken:false, searched:false, pulls:0, done:false });
+      break;
+    }
+  }
 
   // One piece of furniture on a deep floor was never furniture. Never a quest
   // piece, never one inside the vault — a locked room you paid to open pays.
@@ -1107,10 +1187,13 @@ function recomputeVision(){
   for (let i=0;i<W*H;i++) if (vis[i]) Q.seen[i] = 1;
   Q.vis = vis;
 }
-function revealRoom(rid){
+// `by` is whoever opened it. Somebody standing in water opens a door quietly
+// enough that the room does not stir — that is what the wading is buying.
+function revealRoom(rid, by){
   if (rid < 0 || G.q.roomSeen[rid]) return;
   G.q.roomSeen[rid] = 1;
   for (const [x,y] of roomTiles(rid)) G.q.seen[idx(x,y)] = 1;
+  if (wading(by)) return;
   for (const m of monstersOf()) if (roomAt(m.x,m.y) === rid) m.awake = true;
 }
 const tileVisible = (x,y) => !!(G.q.vis && G.q.vis[idx(x,y)]);
@@ -2382,6 +2465,99 @@ function drawArcher(g, u, m, t){
   g.beginPath(); g.arc(-u*.045,-u*.285, u*.013, 0, 6.284); g.fill();
   g.beginPath(); g.arc( u*.045,-u*.285, u*.013, 0, 6.284); g.fill();
 }
+// Eight legs and no interest in fighting you fairly. Low and wide, so it reads
+// as something that scuttles rather than something that squares up.
+function drawSpider(g, u, m, t){
+  const d = MONSTERS.spider;
+  shadow(g, u, .34);
+  const scut = Math.sin(t*.007 + (m.bob||0));
+  g.strokeStyle = d.col2; g.lineWidth = u*.045; g.lineCap = 'round';
+  for (let i = 0; i < 4; i++){
+    const ly = -u*.10 + i*u*.075;
+    const kick = Math.sin(t*.008 + i*1.4 + (m.bob||0))*u*.035;
+    g.beginPath(); g.moveTo(-u*.10, ly);
+    g.lineTo(-u*.30, ly - u*.10 + kick); g.lineTo(-u*.40, ly + u*.10); g.stroke();
+    g.beginPath(); g.moveTo( u*.10, ly);
+    g.lineTo( u*.30, ly - u*.10 - kick); g.lineTo( u*.40, ly + u*.10); g.stroke();
+  }
+  g.fillStyle = d.col;                                   // abdomen
+  g.beginPath(); g.ellipse(0, u*.10 + scut*u*.01, u*.20, u*.17, 0, 0, 6.284); g.fill();
+  g.fillStyle = 'rgba(200,80,120,.45)';                  // the mark on its back
+  g.beginPath();
+  g.moveTo(0, u*.02); g.lineTo(u*.06, u*.12); g.lineTo(0, u*.20); g.lineTo(-u*.06, u*.12);
+  g.closePath(); g.fill();
+  g.fillStyle = d.col2;                                  // cephalothorax
+  g.beginPath(); g.ellipse(0, -u*.13, u*.14, u*.12, 0, 0, 6.284); g.fill();
+  g.fillStyle = '#e8d24a';
+  for (let i = 0; i < 4; i++){
+    const x = -u*.075 + (i % 2)*u*.15, y = -u*.17 + ((i/2)|0)*u*.055;
+    g.beginPath(); g.arc(x, y, u*.022, 0, 6.284); g.fill();
+  }
+}
+
+// It runs hot. The breath is the point, so the head is all jaw and the ribs glow.
+function drawHound(g, u, m, t){
+  const d = MONSTERS.hound;
+  shadow(g, u, .30);
+  const pant = .5 + Math.sin(t*.009 + (m.bob||0))*.5;
+  limb(g, -u*.14, u*.10, -u*.18, u*.32, u*.055, d.col2);
+  limb(g,  u*.14, u*.10,  u*.20, u*.32, u*.055, d.col2);
+  limb(g, -u*.02, u*.12, -u*.06, u*.32, u*.05,  d.col2);
+  g.fillStyle = d.col;                                   // body, low and long
+  g.beginPath(); g.ellipse(-u*.02, u*.02, u*.26, u*.15, -.12, 0, 6.284); g.fill();
+  g.strokeStyle = `rgba(255,150,60,${(.30 + pant*.35).toFixed(3)})`;   // the fire inside
+  g.lineWidth = u*.028;
+  for (let i = 0; i < 3; i++){
+    const x = -u*.14 + i*u*.12;
+    g.beginPath(); g.moveTo(x, -u*.06); g.lineTo(x + u*.02, u*.09); g.stroke();
+  }
+  g.strokeStyle = d.col2; g.lineWidth = u*.05;           // tail
+  g.beginPath(); g.moveTo(-u*.26, -u*.02); g.lineTo(-u*.40, -u*.16); g.stroke();
+  g.fillStyle = d.col;                                   // head, thrown forward
+  g.beginPath(); g.ellipse(u*.26, -u*.10, u*.15, u*.11, .2, 0, 6.284); g.fill();
+  g.fillStyle = d.col2;                                  // muzzle
+  g.beginPath();
+  g.moveTo(u*.34, -u*.12); g.lineTo(u*.50, -u*.05); g.lineTo(u*.34, u*.00);
+  g.closePath(); g.fill();
+  g.fillStyle = `rgba(255,190,90,${(.55 + pant*.45).toFixed(3)})`;
+  g.beginPath(); g.ellipse(u*.46, -u*.055, u*.05, u*.035, 0, 0, 6.284); g.fill();
+  g.fillStyle = '#ffca5a';
+  g.beginPath(); g.arc(u*.24, -u*.15, u*.032, 0, 6.284); g.fill();
+  g.fillStyle = d.col2;                                  // ears back
+  g.beginPath(); g.moveTo(u*.18,-u*.20); g.lineTo(u*.12,-u*.34); g.lineTo(u*.26,-u*.24);
+  g.closePath(); g.fill();
+}
+
+// It cannot come after you. That is the only good news.
+function drawChained(g, u, m, t){
+  const d = MONSTERS.chained;
+  shadow(g, u, .38);
+  const heave = Math.sin(t*.0022 + (m.bob||0))*u*.012;
+  // the chains, running off to the floor it is pinned to
+  g.strokeStyle = '#6a6258'; g.lineWidth = u*.035;
+  for (const s of [-1, 1]){
+    g.beginPath();
+    g.moveTo(s*u*.20, u*.02 + heave);
+    g.quadraticCurveTo(s*u*.42, u*.24, s*u*.46, u*.38);
+    g.stroke();
+    g.fillStyle = '#4a443c';
+    g.beginPath(); g.ellipse(s*u*.46, u*.38, u*.055, u*.030, 0, 0, 6.284); g.fill();
+  }
+  g.save(); g.translate(0, heave);
+  torso(g, u, u*.26, u*.20, -u*.22, u*.30, d.col, d.col2);
+  limb(g, -u*.26,-u*.14, -u*.40, u*.10, u*.085, d.col2);
+  limb(g,  u*.26,-u*.14,  u*.40, u*.10, u*.085, d.col2);
+  g.fillStyle = '#57504a';                               // the iron round its middle
+  g.fillRect(-u*.27, -u*.02, u*.54, u*.09);
+  g.fillStyle = 'rgba(190,190,205,.25)';
+  g.fillRect(-u*.27, -u*.02, u*.54, 1.6);
+  headBall(g, u, -u*.32, u*.15, d.col);
+  g.fillStyle = '#2a231d';                               // hood, or what is left of it
+  g.beginPath(); g.arc(0, -u*.34, u*.155, Math.PI*1.05, Math.PI*2.05); g.fill();
+  eyes(g, u, -u*.31, u*.040, '#d84a3a');
+  g.restore();
+}
+
 function drawCultist(g, u, m, t){
   const d = MONSTERS.cultist;
   shadow(g, u, .27);
@@ -2455,6 +2631,7 @@ const MON_ART = {
   goblin:drawGoblin, orc:drawOrc, fimir:drawFimir, skeleton:drawSkeleton, zombie:drawZombie,
   mummy:drawMummy, chaos:drawChaos, gargoyle:drawGargoyle, sorcerer:drawSorcerer, ogre:drawOgre,
   troll:drawTroll, wraith:drawWraith, archer:drawArcher, cultist:drawCultist, mimic:drawMimic,
+  spider:drawSpider, hound:drawHound, chained:drawChained,
 };
 
 function drawNPC(g, u, t){
@@ -2627,6 +2804,28 @@ function drawFurniture(g, f, t){
       // and the thing it is actually paying, floating over it
       drawRelicOn(g, f.relic, w*.13, lift, pulse);
     }
+  } else if (F==='coffin'){
+    // A tomb somebody has been using as a bank. The lid is off-centre because
+    // it has been lifted before, and the coins on it are the argument.
+    const L = w*.44, D = h*.34;
+    g.fillStyle = '#2f2a22'; rr(g, -L, -D*.6, L*2, D*1.9, 4); g.fill();
+    g.fillStyle = '#4a4034'; rr(g, -L*.97, -D*1.0, L*1.94, D*1.75, 5); g.fill();
+    g.fillStyle = f.done ? '#3a332a' : '#5e5240';
+    rr(g, -L*.88, -D*1.06, L*1.84, D*1.5, 5); g.fill();
+    g.fillStyle = 'rgba(0,0,0,.55)';                 // the gap the lid leaves
+    g.fillRect(-L*.88, -D*1.06, L*.16, D*1.5);
+    if (f.done){
+      g.fillStyle = 'rgba(0,0,0,.45)'; rr(g, -L*.88, -D*1.06, L*1.84, D*1.5, 5); g.fill();
+    } else {
+      const q = .5 + Math.sin(t*.0024 + f.x)*.5;
+      g.fillStyle = `rgba(216,168,60,${(.55 + q*.35).toFixed(3)})`;   // the takings on the lid
+      for (let i = 0; i < 3; i++){
+        g.beginPath();
+        g.ellipse(-L*.30 + i*L*.34, -D*.50, w*.035, w*.024, 0, 0, 6.284); g.fill();
+      }
+      g.fillStyle = `rgba(255,236,180,${(.20 + q*.25).toFixed(3)})`;
+      g.fillRect(-L*.84, -D*1.02, L*1.76, 2);
+    }
   } else if (F==='cage'){
     g.fillStyle = 'rgba(10,8,6,.75)'; rr(g, -w*.36, -h*.40, w*.72, h*.74, 3); g.fill();
     g.strokeStyle = '#6a6258'; g.lineWidth = Math.max(2, w*.035);
@@ -2683,6 +2882,17 @@ function drawBody(g, b, t){
   g.fillRect(-TS*.235, TS*.00, TS*.235, TS*.045);
   g.fillStyle = 'rgba(0,0,0,.55)';
   g.beginPath(); g.ellipse(-TS*.12, TS*.005, TS*.055, TS*.028, 0, 0, 6.284); g.fill();
+  // Something is pulling at them. This one gets the hot fast treatment, because
+  // for once the thing on the floor is about to become dangerous.
+  if (b.stirring > 0 && !b.risen && !b.laid){
+    const q = .5 + Math.sin(t*.006)*.5;
+    g.strokeStyle = `rgba(150,90,200,${(.35 + q*.45).toFixed(3)})`;
+    g.lineWidth = 2.4;
+    g.beginPath(); g.ellipse(0, TS*.08, TS*.36, TS*.20, 0, 0, 6.284); g.stroke();
+    g.fillStyle = `rgba(190,130,240,${(.45 + q*.45).toFixed(3)})`;
+    g.font = `${TS*.30}px Georgia,serif`; g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(String(b.stirring), 0, -TS*.30 - q*2);
+  }
   g.restore();
 }
 
@@ -3048,6 +3258,8 @@ function draw(){
   camApply(ctx);
 
   if (BAKE) ctx.drawImage(BAKE, 0, 0);
+  drawWater(ctx, t);
+  drawCollapse(ctx, t);
 
   // furniture, doors, traps
   for (const f of G.q.furn) if (G.q.seen[idx(f.x,f.y)]) drawFurniture(ctx, f, t);
@@ -3056,7 +3268,7 @@ function draw(){
     if (G.q.seen[idx(d.cx,d.cy)] || G.q.seen[idx(d.rx,d.ry)]) drawDoor(ctx, d, t);
   }
   for (const tr of G.q.traps) if (G.q.seen[idx(tr.x,tr.y)]) drawTrap(ctx, tr, t);
-  for (const b of (G.q.bodies || [])) if (G.q.seen[idx(b.x,b.y)]) drawBody(ctx, b, t);
+  for (const b of (G.q.bodies || [])) if (!b.carried && G.q.seen[idx(b.x,b.y)]) drawBody(ctx, b, t);
 
   drawMarkers(ctx, t);
 
@@ -3193,6 +3405,59 @@ function drawActor(g, a, t){
   if (a.alive) drawActorTag(g, a, px, py, u, t);
 }
 function drawActorTag(g, a, px, py, u, t){
+  if (a.carrying){                                // somebody over the shoulder
+    const q = .5 + Math.sin(t*.003 + (a.bob||0))*.5;
+    g.save();
+    g.translate(px, py - u*.30);
+    g.rotate(-.34);
+    g.fillStyle = 'rgba(20,18,16,.5)';            // a dark backing, as ever
+    rr(g, -u*.40, -u*.10, u*.80, u*.20, u*.09); g.fill();
+    g.fillStyle = '#7a6a58';
+    rr(g, -u*.38, -u*.08, u*.76, u*.16, u*.07); g.fill();
+    g.fillStyle = '#d8c3a4';                      // a head at one end, boots at the other
+    g.beginPath(); g.arc(-u*.36, 0, u*.10, 0, 6.284); g.fill();
+    g.fillStyle = '#4a3a2c';
+    g.beginPath(); g.arc(u*.34, u*.02, u*.07, 0, 6.284); g.fill();
+    // an amber rim, the colour every other "this is costing you" marker uses.
+    // A glyph at this size is mush; the silhouette is the thing that reads.
+    g.globalAlpha = .55 + q*.35;
+    g.strokeStyle = 'rgba(232,186,96,.9)'; g.lineWidth = 2;
+    rr(g, -u*.40, -u*.10, u*.80, u*.20, u*.09); g.stroke();
+    g.globalAlpha = 1;
+    g.restore();
+  }
+  if (isWater(a.x, a.y)){                         // up to the knees, and it shows
+    const q = (t*.0016 + (a.bob||0)) % 1;
+    g.strokeStyle = `rgba(180,225,240,${(.55*(1-q)).toFixed(3)})`; g.lineWidth = 2;
+    g.beginPath(); g.ellipse(px, py + u*.30, u*(.20 + q*.30), u*(.09 + q*.13), 0, 0, 6.284); g.stroke();
+    g.strokeStyle = 'rgba(180,225,240,.5)'; g.lineWidth = 2.4;
+    g.beginPath(); g.ellipse(px, py + u*.30, u*.30, u*.13, 0, 0, 6.284); g.stroke();
+  }
+  if (a.webbed){                                  // caught, and going nowhere
+    const q = .5 + Math.sin(t*.004 + (a.bob||0))*.5;
+    g.strokeStyle = `rgba(20,22,28,.55)`;         // a dark backing so the strands read on any floor
+    g.lineWidth = 5;
+    for (let i = 0; i < 4; i++){
+      const an = i/4*6.284 + .4;
+      g.beginPath(); g.moveTo(px + Math.cos(an)*u*.46, py + Math.sin(an)*u*.34);
+      g.lineTo(px - Math.cos(an)*u*.46, py - Math.sin(an)*u*.34); g.stroke();
+    }
+    g.strokeStyle = `rgba(232,238,248,${(.72 + q*.28).toFixed(3)})`;
+    g.lineWidth = 2.6;
+    for (let i = 0; i < 4; i++){
+      const an = i/4*6.284 + .4;
+      g.beginPath(); g.moveTo(px + Math.cos(an)*u*.46, py + Math.sin(an)*u*.34);
+      g.lineTo(px - Math.cos(an)*u*.46, py - Math.sin(an)*u*.34); g.stroke();
+    }
+    g.beginPath(); g.ellipse(px, py, u*.34, u*.25, 0, 0, 6.284); g.stroke();
+    g.beginPath(); g.ellipse(px, py, u*.18, u*.13, 0, 0, 6.284); g.stroke();
+    // and the same head glyph every other status wears, so it reads at a glance
+    g.font = `${u*.34}px Georgia,serif`; g.textAlign = 'center';
+    g.fillStyle = 'rgba(0,0,0,.75)';
+    g.fillText('✳', px + 1, py - u*.56 + 1);
+    g.fillStyle = `rgba(232,238,248,${(.75 + q*.25).toFixed(3)})`;
+    g.fillText('✳', px, py - u*.56);
+  }
   if (a.kind === 'monster'){
     if (a.bp < a.bpMax || a.boss){
       const w = u*.56, y = py - u*.62;
@@ -3253,6 +3518,65 @@ function drawActorTag(g, a, px, py, u, t){
       g.strokeStyle = 'rgba(150,200,120,.4)'; g.lineWidth = 2;
       g.beginPath(); g.arc(px, py - u*.08, u*.40, 0, 6.284); g.stroke();
     }
+  }
+}
+
+// The water has to read as *cost* at a glance, so it is the one cold thing on a
+// board of warm stone, and it moves. Nothing else on the floor does either.
+function drawWater(g, t){
+  if (!G.q.water) return;
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const i = idx(x,y);
+    if (!G.q.water[i] || !G.q.seen[i]) continue;
+    const px = x*TS, py = y*TS;
+    g.fillStyle = 'rgba(22,58,74,.62)';
+    g.fillRect(px, py, TS, TS);
+    // two slow bands sliding across, offset per square so it never tiles
+    const ph = t*.0011 + (x*.7 + y*1.3);
+    for (let b=0;b<2;b++){
+      const o = ((ph + b*.5) % 1) * TS;
+      g.fillStyle = `rgba(150,205,225,${(.055 + .05*Math.sin(ph*6.28 + b*3.14)).toFixed(3)})`;
+      g.fillRect(px, py + o - 2, TS, 3);
+    }
+    g.strokeStyle = 'rgba(150,205,225,.16)'; g.lineWidth = 1;
+    g.strokeRect(px+.5, py+.5, TS-1, TS-1);
+  }
+}
+
+// A crack is a warning, so it pulses — everything dangerous on this board does.
+// A hole is a fact, so it does not.
+function drawCollapse(g, t){
+  if (!G.q.hole) return;
+  const p = .5 + Math.sin(t*.006)*.5;
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const i = idx(x,y);
+    if (!G.q.seen[i]) continue;
+    const px = x*TS, py = y*TS;
+    if (G.q.hole[i]){
+      g.fillStyle = '#070605';
+      g.fillRect(px, py, TS, TS);
+      // a lip of broken stone round the edge, so it reads as depth not shadow
+      g.strokeStyle = 'rgba(150,128,98,.5)'; g.lineWidth = 2.5;
+      g.beginPath();
+      g.moveTo(px+2, py+5); g.lineTo(px+TS*.34, py+2); g.lineTo(px+TS*.66, py+6);
+      g.lineTo(px+TS-2, py+3); g.stroke();
+      g.beginPath();
+      g.moveTo(px+3, py+TS-3); g.lineTo(px+TS*.4, py+TS-6); g.lineTo(px+TS-4, py+TS-2); g.stroke();
+      g.fillStyle = 'rgba(0,0,0,.55)';
+      g.beginPath(); g.ellipse(px+TS/2, py+TS/2, TS*.34, TS*.28, 0, 0, 6.284); g.fill();
+      continue;
+    }
+    if (!G.q.crack[i]) continue;
+    g.strokeStyle = `rgba(228,150,70,${(.30 + p*.45).toFixed(3)})`;
+    g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(px+3, py+TS*.30); g.lineTo(px+TS*.38, py+TS*.52);
+    g.lineTo(px+TS*.30, py+TS*.74); g.lineTo(px+TS*.62, py+TS-3); g.stroke();
+    g.beginPath();
+    g.moveTo(px+TS*.38, py+TS*.52); g.lineTo(px+TS-3, py+TS*.36); g.stroke();
+    g.strokeStyle = `rgba(228,150,70,${(.20 + p*.30).toFixed(3)})`;
+    g.lineWidth = 1.5;
+    rr(g, px+3, py+3, TS-6, TS-6, 4); g.stroke();
   }
 }
 
@@ -3857,14 +4181,17 @@ function heroWalk(h, path, done){
     const ox = h.x, oy = h.y;
     h.facing = nx > ox ? 1 : nx < ox ? -1 : h.facing;
     sfx('step');
+    const cost = stepCost(nx, ny);
     slide(h, nx, ny, 150, () => {
-      h.moveLeft--;
+      h.moveLeft -= cost;
+      if (cost > 1) sfx('step');                   // wading sounds like wading
       const npc = G.q.actors.find(a => a.kind === 'npc' && a.follow === h.id && a.alive);
       // they take the square you just left — which is how you swap past them
       if (npc){
         const there = actorAt(ox, oy);
         if (!there || there === npc) slide(npc, ox, oy, 150, null);
       }
+      dragAlong(h);
       recomputeVision();
       focusOn(h.x, h.y);
       const tr = trapAt(h.x, h.y);
@@ -3880,6 +4207,7 @@ function heroWalk(h, path, done){
     renderHUD();
     if (done) done();
     bodyWatch(h);                       // you are standing on somebody
+    coffinWatch(h);                     // and somebody has been banking in that
   };
   step();
 }
@@ -3961,6 +4289,7 @@ function strikeBlocker(h, m){
   if (!h || !h.alive) return 'nohero';
   if (!m || !m.alive) return 'gone';
   if (h.acted) return 'acted';
+  if (h.carrying) return 'hands';                  // both of them are holding somebody
   const w = weaponOf(h);
   const dx = Math.abs(h.x-m.x), dy = Math.abs(h.y-m.y);
   const orth = (dx+dy) === 1 && linked(h.x,h.y,m.x,m.y);
@@ -3980,6 +4309,7 @@ function strikeReason(h, m, code){
   const w = weaponOf(h);
   switch (code){
     case 'acted':   return `${h.name} has already taken an action this turn.`;
+    case 'hands':   return `${h.name} is carrying somebody. Put them down first.`;
     case 'crowded': return `The ${w.name.toLowerCase()} cannot be fired with something this close.`;
     case 'sight':   return `${h.name} has no clear shot at the ${m.name}.`;
     case 'range':   return `The ${m.name} is out of reach.`;
@@ -4151,7 +4481,7 @@ function kill(a){
     if (a.elite){
       G.q.pot = (G.q.pot || 0) + 30;
       addFate(curseHas('watched') ? 2 : 1, `${a.name} put down`);
-      if (G.q.vault >= 0 && !G.q.key){
+      if (G.q.vault >= 0 && !G.q.key && (!G.q.keyBearer || G.q.keyBearer === a.uid)){
         G.q.key = true;
         say(`${a.name} was carrying an iron key. Something on this floor is locked.`, 'good');
         spark(a.x, a.y, 22, '#d8a83c', { spd:.02, up:.004, glow:'rgba(216,168,60,.5)', r:1.6 });
@@ -4189,6 +4519,12 @@ function heroFalls(a){
   a.done = true;
   a.fellTo = by;
 
+  // whoever they were carrying goes down with them, on this square
+  if (a.carrying && G.q && G.q.bodies){
+    const held = G.q.bodies.find(b => b.id === a.carrying);
+    if (held){ held.carried = 0; held.x = a.x; held.y = a.y; }
+    a.carrying = 0;
+  }
   // the floor keeps its own list, so the run line can say who is gone
   if (G.q){
     if (!G.q.fallen) G.q.fallen = [];
@@ -4234,6 +4570,16 @@ function beginHeroActivation(h){
   h.buffs.veil = 0; delete h.buffs.veil;
   h.acted = false;
   focusOn(h.x, h.y);
+  // Webbing costs the whole turn. No roll, no defence — the most expensive
+  // thing a spider can take off you is the thing it takes.
+  if (h.webbed){
+    h.webbed = 0; h.rolled = true; h.moveLeft = 0; h.acted = true;
+    say(`${h.name} spends the turn cutting out of the webbing.`, 'bad');
+    sfx('search');
+    spark(h.x, h.y, 12, '#cfd6e2', { spd:.012, life:600 });
+    refreshField(); renderHUD();
+    return;
+  }
   if (!h.rolled){
     const a = 1+ri(6), b = 1+ri(6);
     let total = a + b - moveSlow(h) + (boonHas('swiftboots') ? 1 : 0);
@@ -4336,6 +4682,67 @@ function monsterShoot(m, h, done){
   });
 }
 
+/* ------------------------------------------------- WHAT THE NEW THINGS DO */
+// A spider does not want to kill you, it wants you to stop moving. A hero it
+// catches spends their next turn cutting out of the webbing — no roll, no
+// defence, just a turn gone, which is the most expensive thing in the game.
+function monsterWeb(m, h, done){
+  if (G.q) G.q.lastKiller = m.name;
+  h.webbed = 1;
+  focusOn(m.x, m.y);
+  lungeAt(m, h.x, h.y);
+  say(`${m.name} throws webbing over ${h.name}. That is next turn gone.`, 'bad');
+  sfx('spell'); G.shake = Math.max(G.shake, 8);
+  spark(h.x, h.y, 16, '#cfd6e2', { spd:.012, up:.002, life:700 });
+  renderHUD();
+  later(260, done);
+}
+// A hellhound breathes down a straight line. Everybody standing in it rolls.
+function breathLine(m, h){
+  const dx = Math.sign(h.x - m.x), dy = Math.sign(h.y - m.y);
+  if (!dx && !dy) return null;
+  if (dx && dy && Math.abs(h.x - m.x) !== Math.abs(h.y - m.y)) return null;
+  if (!dx && !dy) return null;
+  const line = [];
+  for (let i = 1; i <= 4; i++){
+    const x = m.x + dx*i, y = m.y + dy*i;
+    if (!isFloor(x,y) || !hasLOS(m.x, m.y, x, y)) break;
+    line.push([x,y]);
+  }
+  return line.length ? { dx, dy, line } : null;
+}
+function monsterBreath(m, aim, done){
+  if (G.q) G.q.lastKiller = m.name;
+  const caught = livingHeroes().filter(h => aim.line.some(([x,y]) => x === h.x && y === h.y));
+  focusOn(m.x, m.y);
+  say(`${m.name} opens its mouth and the corridor lights up. ${caught.length} in the way.`, 'bad');
+  sfx('trap'); G.shake = Math.max(G.shake, 14); hitStop(90);
+  for (const [x,y] of aim.line)
+    spark(x, y, 12, '#ff9040', { spd:.014, up:.006, life:520, glow:'rgba(255,140,60,.4)', r:1.2 });
+  let i = 0;
+  const next = () => {
+    if (i >= caught.length){ renderHUD(); later(220, done); return; }
+    const h = caught[i++];
+    const atk = rollCombat(m.atk);
+    const def = rollCombat(defendDice(h));
+    const dmg = Math.max(0, countSkulls(atk) - countShields(def, true));
+    showDice('defend', atk, def, `${m.name} burns ${h.name}`,
+      dmg > 0 ? `${h.name} loses ${dmg}` : 'Not this one', () => {
+        if (dmg > 0){ sfx('hit'); hurt(h, dmg, null); } else sfx('miss');
+        next();
+      });
+  };
+  next();
+}
+
+// A key-bearer that has run out of squares to put between it and you stops
+// running and swings — which is the whole reason cornering one is worth doing.
+function markCornered(m){
+  if (m.cornered) return;
+  m.cornered = 1;
+  say(`${m.name} has run out of floor. It turns round.`, 'bad');
+}
+
 function monsterAct(m, done){
   if (m.sleep > 0){ done(); return; }
   if (m.stun > 0){ m.stun--; done(); return; }
@@ -4388,6 +4795,21 @@ function monsterAct(m, done){
       return;
     }
   }
+  // a hellhound would rather catch two of you at once
+  if (MONSTERS[m.mt] && MONSTERS[m.mt].breath && (m.breathed || 0) < 2){
+    let bestAim = null, bestCount = 0;
+    for (const h of targets){
+      const aim = breathLine(m, h);
+      if (!aim) continue;
+      const n = targets.filter(x => aim.line.some(([px,py]) => px === x.x && py === x.y)).length;
+      if (n > bestCount){ bestCount = n; bestAim = aim; }
+    }
+    if (bestAim && bestCount > 0){
+      m.breathed = (m.breathed || 0) + 1;
+      monsterBreath(m, bestAim, done);
+      return;
+    }
+  }
   // a caster would rather burn you from across the room
   if (MONSTERS[m.mt] && MONSTERS[m.mt].caster && (m.cast || 0) < 3){
     const seen = targets.filter(h => dist2(m.x,m.y,h.x,h.y) <= 8 && hasLOS(m.x,m.y,h.x,h.y));
@@ -4400,7 +4822,14 @@ function monsterAct(m, done){
   // already next to someone? hit them — unless it has been bloodied and is small
   for (const h of targets){
     if (dist2(m.x,m.y,h.x,h.y) === 1 && linked(m.x,m.y,h.x,h.y)){
+      // the one with the key will not trade blows — unless it has run out of floor
+      if (m.runner) break;
       if (m.skittish && !m.fled){ m.fled = 1; break; }
+      // a spider webs somebody who is still free, and only bites if they are not
+      if (MONSTERS[m.mt] && MONSTERS[m.mt].webber && !h.webbed){
+        monsterWeb(m, h, done);
+        return;
+      }
       focusOn(m.x,m.y);
       // the frenzied get a second swing, at whoever is still standing
       monsterAttack(m, h, m.affix === 'frenzied'
@@ -4411,7 +4840,7 @@ function monsterAct(m, done){
     }
   }
   const f = walkFieldSafe(m.x, m.y, m.mv, m, m.mt === 'gargoyle');
-  const away = !!(m.skittish && m.fled);            // bloodied goblins want distance
+  const away = !!(m.runner) || !!(m.skittish && m.fled);   // bloodied goblins want distance; a key-bearer wants a wall between you
   let goal = null, goalD = dist2(m.x,m.y,best.x,best.y), goalCost = 0;
   for (const [k, cost] of f.d){
     const x = k % W, y = (k/W)|0;
@@ -4421,7 +4850,8 @@ function monsterAct(m, done){
     if (better || (d === goalD && cost < goalCost && !away)){ goalD = d; goal = [x,y]; goalCost = cost; }
   }
   if (away && goal){ m.skittish = 0; m.fled = 0; }
-  if (!goal){ strike(); return; }
+  if (!goal){ if (m.runner) markCornered(m); strike(); return; }
+  if (m.runner) m.cornered = 0;
   const path = tracePath(f, goal[0], goal[1]);
   if (!path || !path.length){ strike(); return; }
   let k = 0;
@@ -4453,6 +4883,10 @@ function endZargonTurn(){
   if (q.turnLimit && G.q.turn > q.turnLimit){ questOver(false, 'The working completes. Grimhold seals itself with you inside.'); return; }
   tickTrial();
   if (G.q.over) return;
+  tickRaising();
+  tickLiars();
+  tickCollapse();
+  if (G.q.over) return;
   G.q.phase = 'hero';
   for (const h of heroes()){
     h.done = !h.alive; h.acted = false; h.rolled = false; h.moveLeft = 0;
@@ -4476,6 +4910,12 @@ function openDoorAt(h, d){
     if (!HEADLESS){ showTrialOffer(() => openDoorAt(h, d)); return false; }
     startTrial();
   }
+  // and so does a vault somebody wired to the rest of the hall. The warning is
+  // the mechanic: a floor-wide wake nobody saw coming is an ambush, not a choice.
+  if (d.rid === G.q.vault && G.q.vaultKind === 'watched' && !d.locked && !d.warned){
+    d.warned = 1;
+    if (!HEADLESS){ showWatchedVault(h, d); return false; }
+  }
   // A door the broken trial bolted. No key fits it — somebody puts a shoulder
   // through it, and pays for the privilege. Never a lock you cannot get past.
   if (d.trialBolt){
@@ -4492,6 +4932,9 @@ function openDoorAt(h, d){
     if (!h.alive) return false;
   }
   if (d.locked && !G.q.key){
+    // No key, but a locked door is still only a door. Forcing it is the same
+    // question the chests ask: quiet and slow, or now and loud.
+    if (!HEADLESS && h && !h.acted && !d.forced){ showForceDoor(h, d); return false; }
     say('The door is locked, and the lock is a good one. Something down here is carrying the key.', 'bad');
     sfx('block');
     return false;
@@ -4501,9 +4944,20 @@ function openDoorAt(h, d){
     say('The key turns. Whatever they were keeping in here, it is yours now.', 'good');
     sfx('gold');
   }
+  // A watched vault is wired to the rest of the floor. It says so on the way in,
+  // so taking it early is a decision rather than an ambush.
+  const watched = d.rid === G.q.vault && G.q.vaultKind === 'watched';
   d.open = true;
   sfx('door');
   say('The door swings open.', '');
+  if (watched){
+    let n = 0;
+    for (const m of monstersOf()) if (!m.awake){ m.awake = true; n++; }
+    G.q.vaultKind = 'plain';                      // it only goes off the once
+    sfx('block'); G.shake = Math.max(G.shake, 16);
+    say(n ? `The vault was wired to the hall. ${n} of them are awake now, and they know where.`
+          : 'The vault was wired to the hall. Nothing left to wake.', 'bad');
+  }
   if (boonHas('doorward')){
     for (const x of livingHeroes()) if (x.bp < x.bpMax){ x.bp++; floatText(x.x, x.y, '+1', '#7de8a0'); }
   }
@@ -4513,7 +4967,9 @@ function openDoorAt(h, d){
     if (n) say(`The horn sounds. ${n} of them stand there blinking.`, 'good');
   }
   pushIn(d.rid);
-  revealRoom(d.rid);
+  const quiet = !d.loud && wading(h) && monstersOf().some(m => roomAt(m.x,m.y) === d.rid && !m.awake);
+  revealRoom(d.rid, d.loud ? null : h);
+  if (quiet) say(`${h.name} eases it open from the water. Nothing in there has noticed.`, 'good');
   recomputeVision();
   refreshField();
   const q = questDef();
@@ -4528,6 +4984,84 @@ function openDoorAt(h, d){
   }
   renderHUD();
   return true;
+}
+
+/* ------------------------------------------------------------ FORCING A DOOR */
+// A chest asks whether you want it open or open now. A locked door with no key
+// used to just say no. It asks the same question — and the cost is noise
+// rather than a needle: the Warlock hears it, and so does the room behind it.
+
+const FORCE_DOOR_WRATH = 6;
+function forceDoor(h, d){
+  if (!h || !d || h.acted || !d.locked || d.trialBolt) return false;
+  h.acted = true;
+  d.forced = true; d.locked = false;
+  say(`${h.name} puts a shoulder through the lock. The whole floor heard that.`, 'bad');
+  sfx('door'); G.shake = Math.max(G.shake, 16); hitStop(120);
+  stirWrath(FORCE_DOOR_WRATH, 'a door taken off its lock');
+  // opening the room wakes what is in it; the noise is what the Warlock hears.
+  // Standing in water buys quiet for a door you ease open — not for one you put
+  // your shoulder through.
+  d.loud = true;
+  openDoorAt(h, d);
+  d.loud = false;
+  return true;
+}
+function showForceDoor(h, d){
+  modal(`<h2>The Lock</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[d.rid].name}</div>
+    <div class="rule"></div>
+    <p class="flavor">A good lock, and no key on anybody here. ${h.name} can leave
+      it for whoever is carrying the key — or stop asking politely.</p>
+    <div class="row">
+      <div class="ic">🗝</div>
+      <div class="tx"><b>Find the key</b><s>A champion on this floor has it. The door will wait.</s></div>
+      <div style="color:#63bf7d">quiet</div>
+    </div>
+    <div class="row">
+      <div class="ic">🪓</div>
+      <div class="tx"><b>Put a shoulder through it</b><s>It opens now, for your action — and the
+        Warlock hears it, and nothing in that room is asleep any more</s></div>
+      <div style="color:#b03a2c">loud</div>
+    </div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mForceDoor">Force it</button>
+      <button class="btn ghost" id="mLeaveLock">Leave it locked</button>
+    </div>`);
+  bindModal('#mForceDoor', () => { closeModal(); forceDoor(h, d); });
+  bindModal('#mLeaveLock', () => { closeModal(); say('You leave the lock alone.', ''); });
+}
+
+// A vault wired to the hall. You have the key and the door will open — the
+// question is whether you want the whole floor awake while you empty it.
+function showWatchedVault(h, d){
+  const asleep = monstersOf().filter(m => !m.awake).length;
+  modal(`<h2>Wired</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[d.rid].name}</div>
+    <div class="rule"></div>
+    <p class="flavor">The lock is open, but there is a cord running off the frame
+      and away down the hall. Whoever sealed this room did not want it emptied
+      quietly.</p>
+    <div class="row">
+      <div class="ic">🚪</div>
+      <div class="tx"><b>Open it now</b><s>Everything still sleeping on this floor
+        wakes, and knows where you are</s></div>
+      <div style="color:#b03a2c">${asleep} asleep</div>
+    </div>
+    <div class="row">
+      <div class="ic">⏳</div>
+      <div class="tx"><b>Clear the floor first</b><s>The cord only pulls what is left
+        to pull. Come back when there is nothing</s></div>
+      <div style="color:#63bf7d">free</div>
+    </div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mVaultOpen">Open it</button>
+      <button class="btn ghost" id="mVaultWait">Leave it for now</button>
+    </div>`);
+  bindModal('#mVaultOpen', () => { closeModal(); openDoorAt(h, d); });
+  bindModal('#mVaultWait', () => { closeModal(); say('You step back from the cord. It will keep.', ''); });
 }
 
 /* ------------------------------------------------------------ boss intros */
@@ -4738,7 +5272,9 @@ function springLiar(f, h, quiet){
   const m = { kind:'monster', uid:9500 + ri(499), mt:L.mt, name:def.name,
     x:f.x, y:f.y, alive:true, facing:-1,
     bpMax:def.bp, bp:def.bp, atk:def.atk, def:def.def, mind:def.mind, mv:def.move,
-    boss:false, awake:true, sleep:0, stun:0, bob:rnd()*6.28 };
+    boss:false, awake:true, sleep:0, stun:0, bob:rnd()*6.28,
+    // it remembers what it was pretending to be, and can go back to it
+    wasLiar: { t:f.t, r:f.r, w:f.w, h:f.h, rot:f.rot } };
   G.q.actors.push(m);
   spark(f.x, f.y, 24, L.col, { spd:.02, up:.004 });
   setMood('fight');
@@ -4758,13 +5294,36 @@ function springLiar(f, h, quiet){
 }
 const springMimic = springLiar;                // the name it had when it was only chests
 
+// And it can go back. A liar nobody is looking at, that nobody has managed to
+// hurt, settles down and becomes furniture again — on the square it is standing
+// on, not the one it started from. Wound it and it has lost the trick for good.
+function tickLiars(){
+  if (!G || !G.q || G.q.over) return null;
+  let hid = null;
+  for (const m of monstersOf()){
+    if (!m.wasLiar || m.bp < m.bpMax) continue;
+    if (livingHeroes().some(h => tileVisible(m.x, m.y) || dist2(h.x, h.y, m.x, m.y) <= 4)) continue;
+    if (furnAt(m.x, m.y)) continue;              // no room to be furniture here
+    m.alive = false; m.deathT = 0;
+    const L = m.wasLiar;
+    G.q.furn.push({ t:L.t, r:roomAt(m.x, m.y), x:m.x, y:m.y, w:L.w || 1, h:L.h || 1,
+                    rot:L.rot || 0, quest:null, taken:false, searched:false, lie:true });
+    say('Somewhere behind you, something stops moving.', 'bad');
+    hid = m;
+    break;
+  }
+  if (hid){ recomputeVision(); refreshField(); renderHUD(); }
+  return hid;
+}
+
 /* --------------------------------------------------- WHAT THEY WERE CARRYING */
 // A body has been sitting on its square doing nothing since the fall got its
 // own beat. Their weapon is still in their hand. Going back for it costs the
 // action you were going to spend on something else, which is the whole point:
 // walking to a dead friend has to compete with fighting.
 
-const bodyAt = (x,y) => (G.q && G.q.bodies ? G.q.bodies.find(b => b.x === x && b.y === y) || null : null);
+const bodyAt = (x,y) => (G.q && G.q.bodies
+  ? G.q.bodies.find(b => b.x === x && b.y === y && !b.carried) || null : null);
 function bodyWorthTaking(b, h){
   if (!b || b.taken || !h) return false;
   const theirs = WEAPONS[b.weapon], mine = weaponOf(h);
@@ -4775,11 +5334,216 @@ function bodyWorthTaking(b, h){
 function bodyWatch(h){
   if (!G || !G.q || G.q.over || !h || !h.alive) return null;
   const b = bodyAt(h.x, h.y);
-  if (!bodyWorthTaking(b, h)) return null;
+  if (!b || b.risen) return null;
+  // A friend's body is always worth one question, because you can always carry
+  // them out. Once. Waving it in your face every time you cross the square is
+  // how a decision turns into a dialog you learn to dismiss.
+  const askable = bodyWorthTaking(b, h) || bodyStirring(b)
+    || (!b.declined && !b.carried && !h.carrying);
+  if (!askable) return null;
   if (HEADLESS) return b;                       // tests call takeUp themselves
   if (h.acted) return b;                        // nothing left to spend on it
   showBody(h, b);
   return b;
+}
+
+/* -------------------------------------------------------- THE FLOOR GOES */
+// The second theme, and the first with a clock on it. A square you have already
+// walked starts to crack; two turns later it falls in and stops being a square.
+// The route in closes behind you, so pressing deeper is a decision rather than
+// a direction.
+//
+// The one hard rule is that it must never seal anything off. Every candidate is
+// tested by walking the whole board without it — if that leaves a square the
+// stair cannot reach, it does not crack. A floor that locks its own objective
+// away is not a theme, it is a soft lock.
+
+const CRACK_TURNS = 2;
+
+// Can everything still be reached from the stair if this square goes?
+function stillWhole(hx, hy){
+  const seen = new Uint8Array(W*H);
+  const [sx,sy] = STAIRS[0];
+  if ((sx === hx && sy === hy) || holeAt(sx,sy)) return false;
+  const stack = [[sx,sy]];
+  seen[idx(sx,sy)] = 1;
+  let n = 1;
+  while (stack.length){
+    const [x,y] = stack.pop();
+    for (const [dx,dy] of DIRS){
+      const nx = x+dx, ny = y+dy, ni = idx(nx,ny);
+      if (!inB(nx,ny) || seen[ni]) continue;
+      if (!isFloor(nx,ny)) continue;
+      if (nx === hx && ny === hy) continue;      // the square under test is gone
+      if (holeAt(nx,ny)) continue;
+      // doors may be shut and still count — you can always open one
+      if (!linkedIgnoringDoors(x,y,nx,ny)) continue;
+      seen[ni] = 1; n++; stack.push([nx,ny]);
+    }
+  }
+  let want = 0;
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    if (!isFloor(x,y) || holeAt(x,y)) continue;
+    if (x === hx && y === hy) continue;
+    want++;
+  }
+  return n === want;
+}
+
+// Somewhere the party has already been, and nothing is standing on.
+function collapseCandidates(){
+  const out = [];
+  for (let y=0;y<H;y++) for (let x=0;x<W;x++){
+    const i = idx(x,y);
+    if (!isFloor(x,y) || G.q.hole[i] || G.q.crack[i]) continue;
+    if (!G.q.seen[i]) continue;                  // the floor only gives way where you have been
+    if (STAIRS.some(st => st[0]===x && st[1]===y)) continue;
+    if (Math.abs(x-8) + Math.abs(y-17) < 3) continue;
+    if (actorAt(x,y) || furnAt(x,y) || bodyAt(x,y)) continue;
+    if (trapAt(x,y) || trapBlocks(x,y)) continue;
+    // never a doorway: a door hanging over a hole is a door that reads as usable
+    let onDoor = false;
+    for (const k in G.q.doors){
+      const d = G.q.doors[k];
+      if ((d.rx===x && d.ry===y) || (d.cx===x && d.cy===y)){ onDoor = true; break; }
+    }
+    if (onDoor) continue;
+    out.push([x,y]);
+  }
+  return out;
+}
+
+// Whoever is standing on a square when it goes stumbles clear and pays for it.
+function stumbleClear(a){
+  const spots = [];
+  for (const [dx,dy] of DIRS){
+    const nx = a.x+dx, ny = a.y+dy;
+    if (!inB(nx,ny) || !linked(a.x,a.y,nx,ny)) continue;
+    if (holeAt(nx,ny) || furnAt(nx,ny) || actorAt(nx,ny)) continue;
+    spots.push([nx,ny]);
+  }
+  if (!spots.length) return false;
+  const [nx,ny] = spots[ri(spots.length)];
+  a.x = nx; a.y = ny; a.px = nx + .5; a.py = ny + .5;
+  return true;
+}
+
+// Called once a turn, with the Warlock's other business.
+function tickCollapse(){
+  if (!G || !G.q || G.q.over || !themeIs('collapse')) return null;
+  const out = { cracked:null, fell:[] };
+
+  // what has been cracking long enough falls in
+  for (let i = 0; i < W*H; i++){
+    if (!G.q.crack[i]) continue;
+    G.q.crack[i]--;
+    if (G.q.crack[i] > 0) continue;
+    const x = i % W, y = (i/W)|0;
+    const who = actorAt(x,y);
+    // somebody standing on it gets one chance to scramble; if there is nowhere
+    // to scramble to, the square waits rather than swallowing them
+    if (who){
+      if (!stumbleClear(who)){ G.q.crack[i] = 1; continue; }
+      say(`${who.name} goes down with the floor and scrambles out of it.`, 'bad');
+      if (who.kind === 'hero') hurt(who, 1, null); else hurt(who, 1, null);
+      sfx('trap');
+    }
+    G.q.hole[i] = 1;
+    out.fell.push([x,y]);
+    spark(x, y, 16, '#6a5a48', { spd:.016, up:-.004, life:700 });
+  }
+  if (out.fell.length){
+    G.shake = Math.max(G.shake, 12);
+    sfx('block');
+    say(out.fell.length > 1
+      ? `${out.fell.length} more of the floor drops away.`
+      : 'A stretch of floor drops away into the dark.', 'bad');
+  }
+
+  // and something new starts to go
+  const cands = collapseCandidates();
+  for (let tries = 0; tries < 12 && cands.length; tries++){
+    const k = ri(cands.length);
+    const [x,y] = cands[k];
+    cands.splice(k, 1);
+    if (!stillWhole(x, y)) continue;             // never seal anything off
+    G.q.crack[idx(x,y)] = CRACK_TURNS;
+    out.cracked = [x,y];
+    if (tileVisible(x,y)) say('Something gives underfoot. That stretch will not hold.', 'bad');
+    break;
+  }
+  recomputeVision(); refreshField();
+  return out;
+}
+
+/* ------------------------------------------------- WHAT THE WARLOCK WANTS */
+// Taking a friend's blade back was the party's half of it. This is his: while
+// a sorcerer is alive on the floor, the nearest body it can see starts to
+// stir, and two turns later it gets up wearing your friend's name. Killing the
+// sorcerer stops it; so does going back and laying them to rest, which costs
+// the same action the blade did. Leaving them where they fell is a decision now.
+
+const RAISE_TURNS = 2;
+const bodyStirring = (b) => !!(b && b.stirring > 0 && !b.risen && !b.laid);
+const stirringBodies = () => (G.q && G.q.bodies ? G.q.bodies.filter(bodyStirring) : []);
+const raisers = () => monstersOf().filter(m => MONSTERS[m.mt] && MONSTERS[m.mt].caster);
+function layToRest(h, b){
+  if (!h || !b || h.acted || b.risen || b.laid) return false;
+  h.acted = true;
+  b.laid = true; b.stirring = 0;
+  say(`${h.name} closes ${b.name}'s eyes. Whatever was pulling at them lets go.`, 'good');
+  spark(b.x, b.y, 18, '#9fd8e8', { spd:.012, up:.006 });
+  sfx('heal');
+  renderHUD();
+  return true;
+}
+// Called once a turn, with the Warlock's other business.
+function tickRaising(){
+  if (!G || !G.q || G.q.over || !G.q.bodies) return null;
+  const casters = raisers();
+  let risen = null;
+  for (const b of G.q.bodies){
+    if (b.risen || b.laid) continue;
+    if (b.stirring > 0){
+      if (!casters.length){                       // nothing left to pull at them
+        b.stirring = 0;
+        say(`Whatever was reaching for ${b.name} has stopped.`, 'good');
+        continue;
+      }
+      b.stirring--;
+      if (b.stirring <= 0) risen = raiseBody(b) || risen;
+      else say(`${b.name} is moving. Not on their own.`, 'bad');
+      continue;
+    }
+    // nothing has started on this one yet — a caster who can see it begins
+    if (!casters.length) continue;
+    if (casters.some(m => hasLOS(m.x, m.y, b.x, b.y) && dist2(m.x, m.y, b.x, b.y) <= 64)){
+      b.stirring = RAISE_TURNS;
+      say(`Something starts to work on ${b.name} where they fell.`, 'bad');
+      sfx('spell');
+      break;                                      // one at a time; it is not a factory
+    }
+  }
+  renderHUD();
+  return risen;
+}
+function raiseBody(b){
+  if (!b || b.risen || b.laid) return null;
+  b.risen = true;
+  const def = MONSTERS.zombie;
+  const m = { kind:'monster', uid:9800 + ri(199), mt:'zombie', name:`${b.name}'s Corpse`,
+    x:b.x, y:b.y, alive:true, facing:-1,
+    bpMax:def.bp + 1, bp:def.bp + 1, atk:def.atk, def:def.def, mind:def.mind, mv:def.move,
+    boss:false, awake:true, sleep:0, stun:0, bob:rnd()*6.28, wasHero:b.id };
+  G.q.actors.push(m);
+  say(`${b.name} gets up. It is not ${b.name} any more.`, 'bad');
+  banner(b.name.toUpperCase(), 'is on its feet again');
+  sfx('boss'); G.shake = Math.max(G.shake, 22); hitStop(240);
+  spark(b.x, b.y, 26, '#7d8f6a', { spd:.02, up:.005 });
+  focusOn(b.x, b.y); G.camPunch = 1.3;
+  setMood('fight');
+  recomputeVision(); refreshField(); renderHUD();
+  return m;
 }
 function takeUp(h, b){
   if (!h || !b || b.taken || h.acted) return null;
@@ -4805,29 +5569,88 @@ function takeUp(h, b){
   renderHUD(); saveRun();
   return got;
 }
+/* ------------------------------------------------------- CARRYING THEM OUT */
+// The party takes the blade; the Warlock takes the body. This is the third
+// claim on the dead, and the most expensive: a hero with somebody over their
+// shoulder is slower and cannot swing at all. Get them to the stair and the
+// pedlar will do the rest — for money.
+
+const CARRY_SLOW = 2;
+const carriedBody = (h) => (h && h.carrying && G.q && G.q.bodies)
+  ? G.q.bodies.find(b => b.id === h.carrying) || null : null;
+const anyCarried = () => (G.q && G.q.bodies) ? G.q.bodies.filter(b => b.carried) : [];
+
+function shoulder(h, b){
+  if (!h || !b || h.acted || b.risen || b.carried || h.carrying) return false;
+  h.acted = true;
+  h.carrying = b.id;
+  b.carried = 1; b.stirring = 0;                  // nothing raises what you are holding
+  b.x = h.x; b.y = h.y;
+  say(`${h.name} gets ${b.name} over a shoulder. Both hands are full now.`, '');
+  sfx('search');
+  renderHUD(); refreshField(); saveRun();
+  return true;
+}
+function putDown(h){
+  const b = carriedBody(h);
+  if (!h || !b) return false;
+  h.carrying = 0; b.carried = 0;
+  b.x = h.x; b.y = h.y;
+  say(`${h.name} lays ${b.name} down.`, '');
+  sfx('ui');
+  renderHUD(); refreshField();
+  return true;
+}
+// the body goes where the shoulder goes
+function dragAlong(h){
+  const b = carriedBody(h);
+  if (b){ b.x = h.x; b.y = h.y; }
+}
+
 function showBody(h, b){
+  const canShoulder = !b.risen && !b.carried && !h.carrying && !h.acted;
   const theirs = WEAPONS[b.weapon], mine = weaponOf(h);
   const better = !!(theirs && !theirs.quest && theirs.dice > mine.dice);
   const items = Object.keys(b.items || {}).filter(k => b.items[k] > 0);
+  const stirring = bodyStirring(b);
+  const worth = bodyWorthTaking(b, h);
   modal(`<h2>${b.name}</h2>
-    <div class="sub" style="margin:2px 0 0">Where they went down</div>
+    <div class="sub" style="margin:2px 0 0">${stirring ? 'Something is pulling at them' : 'Where they went down'}</div>
     <div class="rule"></div>
-    <p class="flavor">Cut down by ${b.by}. Their hands are still closed around it.</p>
+    <p class="flavor">Cut down by ${b.by}. ${stirring
+      ? `Their fingers have started to move, and nobody told them to. ${
+          b.stirring} turn${b.stirring>1?'s':''} before they stand up.`
+      : 'Their hands are still closed around it.'}</p>
     ${better ? `<div class="row"><div class="ic">${theirs.ic}</div>
       <div class="tx"><b>${theirs.name}</b><s>${theirs.desc}<br>Yours throws ${mine.dice} ${
         mine.dice === 1 ? 'die' : 'dice'}; this throws ${theirs.dice}.</s></div></div>` : ''}
     ${items.map(k => `<div class="row"><div class="ic">${k === 'potion' ? '🧪' : '⚱'}</div>
       <div class="tx"><b>${k === 'potion' ? 'Healing Potion' : 'Holy Water'} ×${b.items[k]}</b>
       <s>Still in their pack.</s></div></div>`).join('')}
-    <div class="row"><div class="ic">⌛</div><div class="tx"><b>It costs your action</b>
-      <s>Kneeling to take it is the turn you were going to spend swinging.</s></div></div>
+    ${stirring ? `<div class="row blood"><div class="ic">✝</div>
+      <div class="tx"><b>Lay them to rest</b><s>It stops. They stay down for good — and you
+      leave whatever they were carrying with them.</s></div></div>` : ''}
+    ${canShoulder ? `<div class="row"><div class="ic">🫂</div>
+      <div class="tx"><b>Carry them out</b><s>Two squares slower, and you cannot swing at all
+      while you have them. Reach the stair with them and there is somebody who can help.</s></div>
+      <div style="color:#c8a24a">heavy</div></div>` : ''}
+    <div class="row"><div class="ic">⌛</div><div class="tx"><b>You only have the one action</b>
+      <s>${stirring ? 'Taking it up does not settle them. Only one of these gets done.'
+                    : 'Kneeling to take it is the turn you were going to spend swinging.'}</s></div></div>
     <div class="rule"></div>
     <div style="text-align:center">
-      <button class="btn big" id="mTakeUp">Take it up</button>
+      ${worth ? `<button class="btn big" id="mTakeUp">Take it up</button>` : ''}
+      ${stirring ? `<button class="btn ${worth ? '' : 'big'}" id="mLayRest">Lay them to rest</button>` : ''}
+      ${canShoulder ? `<button class="btn ${worth || stirring ? '' : 'big'}" id="mShoulder">Carry them out</button>` : ''}
       <button class="btn ghost" id="mLeaveThem">Leave them</button>
     </div>`);
   bindModal('#mTakeUp', () => { closeModal(); takeUp(h, b); });
-  bindModal('#mLeaveThem', () => { closeModal(); say(`${b.name} is left where they fell.`, ''); });
+  bindModal('#mLayRest', () => { closeModal(); layToRest(h, b); });
+  bindModal('#mShoulder', () => { closeModal(); shoulder(h, b); });
+  bindModal('#mLeaveThem', () => {
+    b.declined = 1;                               // asked and answered
+    closeModal(); say(`${b.name} is left where they fell.`, '');
+  });
 }
 
 function showChest(h, chest){
@@ -4919,6 +5742,104 @@ function bankPush(){
   renderHUD();
   return true;
 }
+/* ------------------------------------------------------- THE GAMBLER'S COFFIN */
+// Somebody has been using a tomb as a bank, and whatever they were banking
+// against is still in there. One combat die a pull: a skull pays and the pot
+// climbs, a white shield moves nothing but the pot climbs anyway, and a black
+// shield lets out whatever the pot has been feeding. The first pull costs an
+// action; after that you may keep going until you stop or it stops you.
+
+const COFFIN_FROM = 3;
+const COFFIN_CHANCE = .3;
+// What climbs out gets worse the longer you have been at it.
+const COFFIN_GUESTS = ['goblin','skeleton','orc','fimir','mummy','chaos'];
+const coffinAt = (rid) => (G.q && G.q.furn ? G.q.furn.find(f => f.t === 'coffin' && f.r === rid) || null : null);
+const coffinNear = (h) => (!h || !G.q || !G.q.furn) ? null
+  : G.q.furn.find(f => f.t === 'coffin' && !f.done
+      && Math.max(Math.abs(h.x - (f.x + (f.w-1)/2)), Math.abs(h.y - (f.y + (f.h-1)/2))) <= 1.5) || null;
+function coffinPot(pulls){ return Math.round(120 * (1 + pulls*.85)); }
+function coffinPull(h, f){
+  if (!h || !f || f.done || !G.q || G.q.over) return null;
+  if (!f.pulls && h.acted) return null;              // the first one costs the turn
+  if (!f.pulls) h.acted = true;
+  const face = combatDie();
+  const out = { face, pulls: f.pulls || 0, paid:0, guest:null, done:false };
+  f.pulls = (f.pulls || 0) + 1;
+  if (face === SKULL){
+    let n = coffinPot(out.pulls);
+    if (boonHas('luckyfind')) n = Math.round(n*1.5);
+    if (modHas('wealthy')) n *= 2;
+    if (curseHas('greedy')) n = Math.round(n*.75);
+    G.q.pot = (G.q.pot || 0) + n;
+    out.paid = n;
+    stirWrath(Math.ceil(n/60), 'coin');
+    sfx('gold');
+    floatText(f.x, f.y, '+' + n, '#f3d488', n >= 200);
+    spark(f.x, f.y, 18, '#d8a83c', { spd:.015, up:.005 });
+    say(`The lid comes up and there is coin under it. ◈ ${n}.`, 'good');
+  } else if (face === WHITE){
+    sfx('block');
+    say('The lid grinds, settles, and gives you nothing. Whatever is under it is listening.', '');
+  } else {
+    f.done = true; out.done = true;
+    const t = COFFIN_GUESTS[Math.min(COFFIN_GUESTS.length - 1, f.pulls - 1)];
+    const m = spawnWanderer(h, t);
+    out.guest = m ? m.mt : null;
+    say(`The lid goes over. Something has been waiting under it for a long time.`, 'bad');
+    banner('IT WAS NOT EMPTY', 'somebody had been feeding it');
+    sfx('boss'); G.shake = Math.max(G.shake, 20); hitStop(220);
+  }
+  renderHUD(); checkQuestState();
+  if (!HEADLESS && !f.done && !G.q.over) later(420, () => showCoffin(h, f));
+  return out;
+}
+function showCoffin(h, f){
+  if (!h || !f || f.done) return;
+  const next = coffinPot((f.pulls || 0) + 1);
+  const guest = MONSTERS[COFFIN_GUESTS[Math.min(COFFIN_GUESTS.length - 1, f.pulls || 0)]];
+  modal(`<h2>The Gambler's Coffin</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[f.r].name}${
+      f.pulls ? ` · pull ${f.pulls + 1}` : ''}</div>
+    <div class="rule"></div>
+    <p class="flavor">Somebody has been using this as a bank, and whatever they
+      were banking against is still in it. The lid has been lifted before.</p>
+    <div class="row">
+      <div class="ic">◈</div>
+      <div class="tx"><b>A skull pays</b><s>About ${next} under the lid, and more every time</s></div>
+      <div style="color:#63bf7d">3 in 6</div>
+    </div>
+    <div class="row">
+      <div class="ic">🛡</div>
+      <div class="tx"><b>A white shield moves nothing</b><s>But the pot climbs anyway</s></div>
+      <div style="color:#c8b088">2 in 6</div>
+    </div>
+    <div class="row">
+      <div class="ic">☠</div>
+      <div class="tx"><b>A black shield lets it out</b><s>${
+        guest ? guest.name : 'Something'} — and the lid stays off for good</s></div>
+      <div style="color:#b03a2c">1 in 6</div>
+    </div>
+    ${!f.pulls ? `<div class="row"><div class="ic">⌛</div><div class="tx"><b>The first pull costs your action</b>
+      <s>After that you may keep going until you stop, or it stops you.</s></div></div>` : ''}
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mPull">${f.pulls ? 'Again' : 'Lift the lid'}</button>
+      <button class="btn ghost" id="mCoffinGo">${f.pulls ? 'Step away from it' : 'Leave it shut'}</button>
+    </div>`);
+  bindModal('#mPull', () => { closeModal(); coffinPull(h, f); });
+  bindModal('#mCoffinGo', () => { closeModal(); say('You leave the lid where it is.', ''); });
+}
+// Walking up to one asks, the same way a body does.
+function coffinWatch(h){
+  if (!G || !G.q || G.q.over || !h || !h.alive) return null;
+  const f = coffinNear(h);
+  if (!f || f.done) return null;
+  if (HEADLESS) return f;
+  if (h.acted && !f.pulls) return f;
+  if (!f.seen){ f.seen = 1; showCoffin(h, f); }
+  return f;
+}
+
 function showPush(){
   if (!canPush()) return;
   const P = G.q.push, o = pushOdds(P.pulls);
@@ -6172,6 +7093,29 @@ const MODIFIERS = [
 ];
 const MOD = (id) => MODIFIERS.find(m => m.id === id);
 
+/* ------------------------------------------------------------- 12c1. THEMES */
+// A modifier changes the numbers on a floor. A theme changes how the floor is
+// walked. They are drawn separately so a theme never eats a modifier slot.
+
+const THEMES = [
+  { id:'flood', from:2, ic:'🌊', name:'Flooded',
+    desc:'The lower halls have taken water. Wading costs two squares — but nothing hears you coming.' },
+  { id:'collapse', from:4, ic:'🕳', name:'Giving Way',
+    desc:'The floor is going. Cracks open behind you, and what has cracked falls in two turns later.' },
+];
+const THEME = (id) => THEMES.find(x => x.id === id);
+const themeIs = (id) => !!(G && G.q && G.q.def && G.q.def.theme === id);
+
+// Water is the only thing on the board that costs more than one square to enter.
+const isWater = (x,y) => !!(G && G.q && G.q.water && G.q.water[idx(x,y)]);
+// A square that has fallen in is not a square any more. Sight crosses it; feet do not.
+const holeAt = (x,y) => !!(G && G.q && G.q.hole && G.q.hole[idx(x,y)]);
+const crackAt = (x,y) => (G && G.q && G.q.crack ? (G.q.crack[idx(x,y)] || 0) : 0);
+const stepCost = (x,y) => isWater(x,y) ? 2 : 1;
+// Standing in it is the whole bargain: slow, and quiet enough that a room you
+// open from the water does not wake up.
+const wading = (a) => !!(a && a.alive && isWater(a.x, a.y));
+
 const META_UNLOCKS = [
   { id:'leather',   ic:'🦺', cost:2, name:'Standard Issue',  desc:'Every hero starts a run in leather armour.' },
   { id:'potionbelt',ic:'🧪', cost:2, name:'Potion Belt',     desc:'Every hero starts a run with a healing potion.' },
@@ -6683,6 +7627,8 @@ const SPAWN_TABLE = [
   { t:'sorcerer',cost:6, from:7 }, { t:'ogre',     cost:7, from:9 },
   { t:'archer',  cost:2, from:2 }, { t:'cultist',  cost:3, from:4 },
   { t:'wraith',  cost:4, from:6 }, { t:'troll',    cost:6, from:8 },
+  { t:'spider',  cost:3, from:3 }, { t:'hound',    cost:4, from:5 },
+  { t:'chained', cost:7, from:8 },
 ];
 const BOSS_TABLE = [
   { t:'gargoyle', from:1 }, { t:'chaos', from:3 }, { t:'ogre', from:5 },
@@ -6703,6 +7649,12 @@ function makeFloor(depth, R){
   const draw = () => pool.length ? pool.splice(Math.floor(R()*pool.length), 1)[0] : null;
   if (R() < modChance){ const m = draw(); if (m) mods.push(m); }
   if (depth >= 4 && R() < modChance*.5){ const m = draw(); if (m) mods.push(m); }
+
+  // --- theme -------------------------------------------------------------
+  // Drawn on its own roll so it never competes with the modifiers for a slot.
+  const themePool = THEMES.filter(x => (x.from || 1) <= depth);
+  const theme = themePool.length && R() < .30
+    ? themePool[Math.floor(R()*themePool.length)].id : null;
 
   // --- objective ---------------------------------------------------------
   const kinds = bossFloor ? ['slay']
@@ -6774,6 +7726,11 @@ function makeFloor(depth, R){
   // floor lock its own quest away.
   const vaultPool = rooms.filter(id => id !== goalRoom);
   const vaultRoom = depth >= 3 && R() < .45 ? vaultPool[Math.floor(R()*vaultPool.length)] : -1;
+  // Not every lock is the same problem. One in three vaults has a bearer who
+  // will not stand and fight; one in three is wired to the rest of the floor.
+  const vk = R();
+  const vaultKind = vaultRoom < 0 ? 'plain'
+    : vk < .34 ? 'runner' : vk < .67 ? 'watched' : 'plain';
   // a trial is never the objective room and never the vault: one door, one idea
   const trialPool = rooms.filter(id => id !== goalRoom && id !== vaultRoom);
   const trialRoom = depth >= 4 && R() < .38
@@ -6784,7 +7741,7 @@ function makeFloor(depth, R){
   let traps = 2 + Math.floor(depth*.8);
   if (mods.includes('brittle')) traps *= 2;
   return {
-    name, sub:`Depth ${depth}`, depth, mods,
+    name, sub:`Depth ${depth}`, depth, mods, theme, vaultKind,
     intro:'', objective, monsters, furn,
     traps:Math.min(14, traps), secrets: depth >= 3 ? 2 : 1,
     eliteChance: Math.min(.32, .06 + depth*.032),
@@ -6871,6 +7828,7 @@ function beginFloor(){
   setMood('explore');
   say(`Depth ${G.run.depth}: ${def.name}.`, '');
   for (const m of def.mods){ const M = MOD(m); if (M) say(`${M.ic} ${M.name} — ${M.desc}`, 'bad'); }
+  { const T = THEME(def.theme); if (T) say(`${T.ic} ${T.name} — ${T.desc}`, 'bad'); }
   banner('DEPTH ' + G.run.depth, def.name);
   renderHUD(); renderLog();
   saveRun();
@@ -6886,6 +7844,17 @@ function startRun(partyIds){
 function descentFloorEnd(won, why){
   const pot = G.q.pot || 0;
   G.run.kills += (G.q.kills || 0);
+  // whoever was carried out comes off the floor with the party. Only if the
+  // floor was actually cleared — you cannot carry somebody out of a rout.
+  if (won){
+    G.run.carried = G.run.carried || [];
+    for (const b of anyCarried()){
+      if (G.run.carried.some(c => c.id === b.id)) continue;
+      G.run.carried.push({ id:b.id, name:b.name, by:b.by });
+      say(`${b.name} comes up the stair on somebody's shoulder.`, 'good');
+    }
+    for (const h of heroes()) h.carrying = 0;
+  }
   if (won){
     G.run.stake = pot + questDef().reward;      // stake it, or bank it on the next screen
     G.run.doubles = 0;
@@ -7096,9 +8065,63 @@ const PEDLAR = [
   // The blood price was a one-way door. It is an expensive door now instead.
   { id:'bonesetter',ic:'🦴', name:'The Bonesetter', cost:420,
     desc:'Give every hero back one maximum Body Point the stone took, and heal it.' },
+  // You did the hard part on the floor. This is only the bill.
+  { id:'mortuary', ic:'🫂', name:'The Long Table',  cost:500,
+    desc:'Somebody you carried up the stair opens their eyes. They come back at one Body Point.' },
 ];
+const carriedOut = () => (G.run && G.run.carried) ? G.run.carried.filter(
+  c => G.run.heroes.some(h => h.id === c.id && !h.alive)) : [];
 // How much of the party's maximum the blood prices are still holding.
 const bloodOwed = () => (G.run ? G.run.heroes.reduce((n,h) => n + (h.tolled || 0), 0) : 0);
+
+/* ------------------------------------------------------------- THE PEDLAR */
+// He lifts curses, buys back the blood price, and buys boons you never use.
+// That is one identity — the place regret gets undone — and it had been
+// growing a row at a time inside the Coin tab. It is a shop now.
+
+function pedlarBlurb(owed){
+  const bits = [];
+  const affordable = PEDLAR.filter(p => p.cost <= G.run.gold
+    && (p.id !== 'bonesetter' || owed > 0)
+    && (p.id !== 'mortuary' || carriedOut().length)
+    && (p.id !== 'absolve' || G.run.curses.length)).length;
+  bits.push(affordable ? `${affordable} thing${affordable>1?'s':''} you can afford` : 'Nothing you can afford');
+  if (owed > 0) bits.push(`he can give back ${owed} Body Point${owed>1?'s':''} the stone took`);
+  if (sellable().length) bits.push('and he buys');
+  return bits.join(' · ');
+}
+function showPedlar(){
+  if (!G.run) return;
+  const owed = bloodOwed();
+  const rows = PEDLAR.filter(p => (p.id !== 'bonesetter' || owed > 0)
+                              && (p.id !== 'mortuary' || carriedOut().length)).map(p => `<div class="row">
+      <div class="ic">${p.ic}</div>
+      <div class="tx"><b>${p.name}</b><s>${p.desc}${
+        p.id === 'bonesetter' ? `<br>The stone is holding ${owed} between you.` : ''}${
+        p.id === 'absolve' && !G.run.curses.length ? '<br>Nothing on you to lift.' : ''}</s></div>
+      <button class="bu" data-buy="${p.id}" ${G.run.gold < p.cost
+        || (p.id === 'absolve' && !G.run.curses.length) ? 'disabled' : ''}>◈ ${p.cost}</button>
+    </div>`).join('');
+  const forSale = sellable();
+  modal(`<h2>The Pedlar</h2>
+    <div class="sub" style="margin:2px 0 0">On the stair, as always</div>
+    <div class="rule"></div>
+    <div class="goldline">◈ ${G.run.gold}</div>
+    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">What he sells</div>
+    ${rows}
+    ${forSale.length ? `<div class="rule"></div>
+      <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">What he buys</div>
+      <div class="row"><div class="ic">🪙</div>
+        <div class="tx"><b>◈ ${SELL_PRICE} for a boon</b><s>One you never use. Not the ones you paid
+          for in blood — those are between you and the stone.</s></div></div>
+      <div class="stakebar">${forSale.map(id => `<button class="bu" data-sell2="${id}">${
+        BOON(id).ic} ${BOON(id).name}</button>`).join('')}</div>` : ''}
+    <div class="rule"></div>
+    <div style="text-align:center"><button class="btn ghost" id="mShopBack">Back to the stair</button></div>`);
+  bindAll('.bu[data-buy]', el => { if (buyPedlar(el.dataset.buy)) showPedlar(); });
+  bindAll('.bu[data-sell2]', el => { if (sellBoon(el.dataset.sell2)) showPedlar(); });
+  bindModal('#mShopBack', () => { closeModal(); showDraft(); });
+}
 
 /* ------------------------------------------------- SELLING WHAT YOU DO NOT USE */
 // The stake gambles a boon away. This lets you choose to. A blood price is not
@@ -7131,6 +8154,15 @@ function buyPedlar(id){
   } else if (id === 'absolve'){
     if (!G.run.curses.length) return false;
     liftCurse();
+  } else if (id === 'mortuary'){
+    const out = carriedOut();
+    if (!out.length) return false;                   // nobody was carried up
+    const c = out[0];
+    const back = G.run.heroes.find(h => h.id === c.id);
+    if (!back) return false;
+    back.alive = true; back.bp = 1;
+    G.run.carried = G.run.carried.filter(x => x.id !== c.id);
+    say(`${back.name} opens their eyes on the long table. One Body Point, and a debt.`, 'good');
   } else if (id === 'bonesetter'){
     if (!bloodOwed()) return false;                  // nothing owed, nothing to buy
     let n = 0;
@@ -7230,23 +8262,16 @@ function showDraft(){
       <div class="tx"><b>Bank it</b><s>Put the ${stake} in the purse and stop.</s></div>
       <button class="bu own" data-bank="1">Bank</button>
     </div>` : '';
-  // he only offers what there is any point buying
+  // He lifts curses, buys back blood and buys boons: he is the place regret gets
+  // undone, and that had been accreting one row at a time inside this tab. One
+  // door into his shop now, and the shop is its own screen.
   const owed = bloodOwed();
-  const ped = PEDLAR.filter(p => p.id !== 'bonesetter' || owed > 0).map(p => `<div class="row">
-      <div class="ic">${p.ic}</div>
-      <div class="tx"><b>${p.name}</b><s>${p.desc}${
-        p.id === 'bonesetter' ? `<br>The stone is holding ${owed} between you.` : ''}</s></div>
-      <button class="bu" data-ped="${p.id}" ${G.run.gold < p.cost ? 'disabled' : ''}>◈ ${p.cost}</button>
-    </div>`).join('');
-  // and he buys as well as sells — a boon you never use is worth something
-  const forSale = sellable();
-  const sellRow = !forSale.length ? '' : `<div class="rule"></div><div class="row">
-      <div class="ic">🪙</div>
-      <div class="tx"><b>He buys, too</b><s>◈ ${SELL_PRICE} for a boon you never use.
-        Not the ones you paid for in blood — those are between you and the stone.</s></div>
-    </div>
-    <div class="stakebar">${forSale.map(id => `<button class="bu" data-sell="${id}">${
-      BOON(id).ic} ${BOON(id).name}</button>`).join('')}</div>`;
+  const ped = `<div class="row">
+      <div class="ic">🎒</div>
+      <div class="tx"><b>The pedlar on the stair</b><s>${pedlarBlurb(owed)}</s></div>
+      <button class="bu" data-shop="1">Open</button>
+    </div>`;
+  const sellRow = '';
   // Eight things on one scroll was too many. Three tabs: what you take, what
   // you spend, and where you go. The party and the purse stay above all three,
   // because they are the numbers every one of those decisions is made against.
@@ -7292,6 +8317,7 @@ function showDraft(){
   });
   bindAll('.bu[data-stake]', el => { if (stakeBoon(el.dataset.stake)) showDraft(); });
   bindAll('.bu[data-sell]', el => { if (sellBoon(el.dataset.sell)) showDraft(); });
+  bindAll('.bu[data-shop]', () => { closeModal(); showPedlar(); });
   bindAll('.bu[data-wager]', () => { if (wagerDraft()) showDraft(); });
   bindAll('.bu[data-ped]', el => { if (buyPedlar(el.dataset.ped)) showDraft(); });
   bindAll('.bu[data-dbl]', () => {
@@ -7683,6 +8709,10 @@ globalThis.HQ = {
   hasLOS, walkField, walkFieldOpen, tracePath, actorAt, furnAt, blocked, trapAt, trapBlocks, bodyPassable,
   newG, newCampaign, mkHero, startQuest, launchQuest, boot, setRng,
   BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes, BOON, MOD,
+  THEMES, THEME, themeIs, isWater, stepCost, wading, drawWater, showWatchedVault, revealRoom,
+  holeAt, crackAt, CRACK_TURNS, tickCollapse, collapseCandidates, stillWhole, stumbleClear, drawCollapse,
+  CARRY_SLOW, shoulder, putDown, carriedBody, anyCarried, dragAlong, carriedOut,
+  markCornered, dist2,
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
   draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
   WAGER_MAX, wagerCost, canWager, wagerDraft,
@@ -7691,7 +8721,11 @@ globalThis.HQ = {
   placePlinth, trialPlinth, vaultPlinth, plinths, plinthFor, spendPlinth, plinthRelic, plinthRelicOf,
   drawRelicOn, drawBody, drawRansacked, DRAFT_TABS, TRIAL_KINDS, markedOne, bloodOwed,
   roomUnopened, roomsUnopened, bodyAt, bodyWorthTaking, bodyWatch, takeUp, showBody,
-  SELL_PRICE, sellable, sellBoon,
+  SELL_PRICE, sellable, sellBoon, pedlarBlurb, showPedlar,
+  monsterWeb, monsterBreath, breathLine, forceDoor, showForceDoor, FORCE_DOOR_WRATH,
+  COFFIN_FROM, COFFIN_CHANCE, COFFIN_GUESTS, coffinAt, coffinNear, coffinPot,
+  coffinPull, showCoffin, coffinWatch,
+  RAISE_TURNS, bodyStirring, stirringBodies, raisers, layToRest, tickRaising, raiseBody, tickLiars,
   historyRows, thisRunRow, STREAK_SHOW,
   LIE_FROM, LIE_CHANCE, LIARS, LIAR_TYPES, liars, lyingChests,
   mimicWatch, springLiar, springMimic, TRIAL_WRATH,

@@ -151,35 +151,68 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **The pedlar buys** — 190 gold for a boon you never use. Not the ones you paid
   for in blood; those are between you and the stone. *(batch 16)*
 
+- **The Warlock wants the bodies too** — while a caster lives, the nearest body
+  it can see starts to stir, and two turns later gets up wearing your friend's
+  name. Kill the caster or go back and lay them to rest; both stop it, and the
+  rites cost the same action the blade did. *(batch 17)*
+- **A liar that gets a second chance** — a sprung liar nobody is looking at, that
+  nobody has managed to wound, sinks back into being furniture on whatever
+  square it is standing on. Hurt it once and it has lost the trick. *(batch 17)*
+
+- **The Gambler's Coffin** — a tomb somebody has been using as a bank. One die a
+  pull: a skull pays and the pot climbs, a white shield moves nothing and the
+  pot climbs anyway, a black shield lets out whatever has been fed on it — and
+  what comes out gets worse the longer you have been at it. *(batch 18)*
+- **The pedlar has his own shop** — he lifts curses, buys back blood and buys
+  boons, and that had been accreting a row at a time inside the Coin tab. One
+  door now, and behind it what he sells and what he buys. *(batch 18)*
+
+- **Three more things in the dark** — a Cave Spider that spends no blood and
+  takes your whole next turn instead, a Hellhound that breathes down a straight
+  line and catches everybody standing in it, and the Chained, which cannot take
+  a step and hits for six. *(batch 19)*
+- **Force the door** — a locked door now asks the same question a chest does.
+  Wait for whoever is carrying the key, or put a shoulder through it for your
+  action: it opens now, the room wakes up, and the Warlock hears six. *(batch 19)*
+
+- **The flooded floor** — the first *theme*, drawn on its own roll so it never
+  eats a modifier slot. The corridors take water; wading costs two squares
+  instead of one, and buys the quiet: a door eased open from the water does not
+  wake the room behind it. Putting a shoulder through one still does. *(batch 20)*
+- **Vault variants** — a lock is no longer always the same problem. One in three
+  vaults pins its key to a named champion who will not stand and fight until you
+  have cornered it; one in three is wired to the hall, and says so before it
+  opens. *(batch 20)*
+
+- **The floor gives way** — the second theme, and the first with a clock on it.
+  A square you have already walked starts to crack; two turns later it falls in
+  and stops being a square. Every candidate is tested by walking the whole board
+  without it, so it can never seal anything off. *(batch 21)*
+- **Carrying them out** — the third claim on the dead. A hero can get a fallen
+  friend over a shoulder: two squares slower, and no swinging at all while you
+  have them. Reach the stair and the pedlar's long table will wake them, for
+  500. *(batch 21)*
+
 ---
 
 ## Next up
 
-1. **The Warlock should want the bodies too.** Taking a friend's blade back is
-   the party's half of it. A sorcerer raising one, after a turn or two of
-   warning, would make leaving them where they fell a real risk instead of just
-   a missed pickup.
-2. **A liar that gets a second chance.** Every liar springs once and is then an
-   ordinary monster. One that could sink back into being furniture if it lost
-   sight of you would be genuinely unsettling.
-3. **Gambler's Coffin.** A room feature: roll a die, skull pays, black shield
-   opens it. Repeatable, stakes climbing each pull. The last unbuilt gamble on
-   the list, and the board now has the vocabulary for it.
+1. **The water should matter to more than your feet.** Fire ought to gutter in
+   it, a shock ought to travel through it, and something ought to live in it.
+   One of those three, not all of them.
+2. **The themes should meet the monsters.** A flooded floor and a collapsing one
+   currently change what the *party* can do and nothing else. Something that
+   swims, or something that does not care whether the floor is there, would make
+   a theme a reason to fear a room rather than a reason to walk differently.
+3. **Somebody worth carrying out who is not already dead.** The long table only
+   pays for your own fallen. A prisoner too hurt to walk — carried on the same
+   terms, hands full, two squares slower — would make the mechanic a choice you
+   go looking for rather than one grief hands you.
 
 ## Backlog, roughly in order of value
 
-### Gamble
-- **Force the door.** Forcing works on chests; a locked or stuck door should ask
-  the same question, with noise instead of a needle as the cost.
 ### Roguelike depth
-- **Vault variants.** A vault that is trapped, or one whose key is held by a
-  champion that flees.
-- **More monsters.** Giant rat swarm, hellhound (breath down a line), spider
-  (webs a square you must spend a turn cutting free of), a chained thing that
-  cannot leave its room but hits like the end of the world.
-- **Floor themes** beyond modifiers: a flooded floor (movement costs double in
-  water), a collapsing floor (squares fall in over time), a lightless floor where
-  only carried torches matter.
+- *(vault variants promoted to Next up, batch 19)*
 
 ### Feel
 - **The relic silhouettes are small at board zoom.** They read, but only just.
@@ -188,6 +221,23 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   saying `6/8 · BUTCHERY` would make the thing you are climbing toward concrete.
 
 ### New ideas the batch turned up
+- **Every gamble now costs an action except the coffin's later pulls.** That is
+  deliberate — press-your-luck needs to run without a turn between pulls — but
+  it means the coffin is the strongest thing on a floor if you find it early.
+  Worth watching whether it wants a cap.
+- **The between-floors screen is a hub now, not a list.** Boons, Coin, Stairs,
+  Book, and Coin is itself a door to a shop. That is the right shape; the title
+  screen and the run's own menu have not caught up with it.
+- **A wired-up ticker needs a turn-loop test.** Both new tickers passed their
+  own tests with the `endZargonTurn` call deleted, because the tests called them
+  directly. Anything hung off the turn loop wants one test that drives
+  `endZargonTurn` and watches the effect — the same gap `drawBody` had.
+- **The dead are becoming a resource both sides want.** The party takes the
+  blade; the Warlock takes the body. A third claim — a hero who could be
+  carried out and revived between floors, at a price — would close the triangle.
+- **A liar that hides is a horror mechanic without a horror payoff.** It sinks
+  back silently. A footprint, a moved chest, something that says *it was not
+  there before* would be worth more than the hiding itself.
 - **Everything dangerous pulses; nothing safe does.** That fell out of the
   disarmed trap and is worth making a rule. The lying furniture is the one
   thing that breaks it deliberately, which is exactly why it works.
@@ -196,9 +246,59 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   `springTrap` mid-stride. It clears the room's traps and checks the hero's
   square before asserting anything else. Every test driving `heroWalk` wants
   both — a path derived from the room, and proof the hero got there.
-- **The pedlar is becoming the regret shop.** He lifts curses, buys back blood
-  and now buys boons. That is a coherent identity worth leaning into rather
-  than letting it accrete: he should probably have his own screen, not a row.
 - **The paint recorder is now the way art gets tested.** Four batches have used
   it. Anything drawn conditionally should be asserted through it rather than
   through "draw() did not throw", which passes either way.
+- **A status marker written in the wrong branch is invisible, not broken.** The
+  webbing drew inside `drawActorTag`'s `kind === 'monster'` arm, so heroes — the
+  only things a spider webs — never wore it. Nothing threw and no test failed;
+  the browser screenshot caught it. Status art belongs above the kind split.
+- **Webbing is the first status that costs a whole turn with no roll and no
+  save.** It is meant to hurt, but it stacks with the freeze family without ever
+  asking. Worth checking a hero cannot be webbed out of two turns running.
+- **The Chained's `move: 0` is the whole mechanism.** There is no pen and no
+  guard; any future affix or effect that grants movement would quietly unchain
+  it. If movement ever becomes grantable, that is the thing to check.
+- **A revert-check that will not bite is telling you the code is dead.** Five
+  times now — `!f.plinth`, the force-door wake loop, the Chained's room pen, and
+  in batch 20 both a cornered-runner pre-check the fall-through already handled
+  and a `!m.runner` guard on fields a runner never reads. The honest fix was
+  deleting the guard, not writing a test that cannot fail.
+- **The board is no longer uniform-cost, and that is a load-bearing change.**
+  `walkField` is a shortest-path search now, not a flood fill, because a square
+  reached late by a dry route has to beat the wet one that got there first.
+  Anything new that changes what a square costs goes through `stepCost` — and
+  wants a test that the *cheaper* route wins, not merely that some route exists.
+- **Status art drawn in the wrong pass is invisible, not broken — again.** The
+  wading ripple was painted in `drawWater`, under the movement field and under
+  the actor. Same failure as batch 19's webbing, same fix: it belongs in
+  `drawActorTag`, above everything. Two batches running, the browser caught it
+  and the suite did not. A paint test proves a colour was reached for, never
+  that anything can see it.
+- **A test that accepts either outcome tests neither.** The first runner tests
+  passed a bearer that ran *and* a bearer that stood and swung, so deleting the
+  fleeing entirely left them green. If a mechanic has two legal outcomes, build
+  the scene that forces one of them and assert that one.
+- **The flooded floor is quiet, and the game has other quiet.** Wading, the
+  Elf's step, an unopened room — nothing yet says how they combine. Whatever
+  goes in next that muffles you should check what is already muffling you.
+- **A generator that removes squares needs a whole-board proof, not a local
+  one.** The collapsing floor tests every candidate by walking the entire map
+  without it. A cheaper local check — "it still has two neighbours" — passes
+  squares that cut the board in half. Anything that takes ground away wants
+  `stillWhole`, and a test that runs the floor to exhaustion and re-walks it.
+- **A colour that is nearly another colour is not a testable colour.** The
+  carried-body rim was painted in the active hero's amber, so the paint test
+  passed with the feature deleted. Markers that need proving want a literal
+  nothing else on the board uses. Grep the file before picking one.
+- **An emoji is not a glyph at board zoom.** 🫂 on a shoulder was mush at 2× on a
+  phone. The status markers that read — ✖, ✳, z, ✦ — are all plain serif
+  characters, and the thing that actually read here was the silhouette. Draw the
+  shape; do not label it.
+- **Three claims on the dead is the whole triangle now.** The blade, the
+  Warlock, and the shoulder. There is nothing obvious left to add to a body —
+  which means the next move is a body that is not one of yours.
+- **A prompt you cannot decline permanently becomes a prompt you learn to
+  dismiss.** Carrying made every body worth asking about, including the empty
+  ones, so "leave them" now sticks for the floor. Anything that starts asking
+  about a square the party will cross repeatedly needs the same latch.
