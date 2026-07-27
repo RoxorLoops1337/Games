@@ -76,28 +76,39 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   two, then three, and nothing is protected: what you turned down can return.
   *(batch 8)*
 
+- **Stake a boon** — put one you already hold on a single die. Skull and he pays
+  another on top, white shield and nothing moves, black shield and it is his.
+  Once a stair. *(batch 9)*
+- **Blood price boons** — a fourth offer beside the three, stronger than
+  anything in the pool, paid for out of the party's maximum Body Points. Four of
+  them, from the second stair down, and never one that would kill you. *(batch 9)*
+- **Better death** — a fall stops the world for half a second, throws the camera
+  onto the body, turns every living hero to look, names them and what did it,
+  and leaves a ✝ on the run line and a line in the panel. *(batch 9)*
+
 ---
 
 ## Next up
 
-1. **Stake a boon.** Offer to wager a held boon on a die for two of them. The
-   wager throws a hand you have not taken; this stakes one you already own.
-2. **Blood price boons.** A fourth, stronger boon offered beside the three,
-   costing maximum Body Points instead of nothing.
-3. **Better death.** A hero's fall gets its own beat — slow-mo, the party turns,
-   and the run line says who is gone. Currently the biggest thing in the game
-   with the smallest presentation.
+1. **Boss last words.** The intro card is one line the room says. A second line
+   when he is down to his last Body Point would close the bracket, and it is the
+   cheapest beat left.
+2. **Mimics that lie better.** A mimic only exists after you force a chest. One
+   that sits in a room pretending, and moves when you walk past, would make
+   every chest on the board a question instead of only the forced ones.
+3. **A trial you can fail loudly.** Breaking a vigil currently just stops.
+   It should cost something — the door slams, or the Warlock's attention jumps —
+   so accepting the terms is a real risk and not a free lottery ticket.
 
 ## Backlog, roughly in order of value
 
 ### Gamble
-- **Stake a boon.** Offer to wager a held boon on a die for two of them.
-- **Blood price boons.** A second, stronger boon offered beside the three, which
-  costs maximum Body Points instead of nothing.
 - **Gambler's Coffin** room feature: roll a die, skull = treasure, black shield =
   something climbs out. Repeatable, stakes rise each pull.
 - **Force the door.** Forcing works on chests; a locked or stuck door should ask
   the same question, with noise instead of a needle as the cost.
+- **Sell a boon to the pedlar.** Gold for a boon you never use. The stake gambles
+  one away; this would let you choose to.
 
 ### Roguelike depth
 - **Vault variants.** A vault that is trapped, or one whose key is held by a
@@ -110,21 +121,20 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   only carried torches matter.
 
 ### Feel
-- **Better death** — a hero's fall gets its own beat: slow-mo, the party turns.
 - **The trial plinth** — a trial room should have something visibly on a plinth
   in the middle of it, so the reward is a thing you can see from the doorway
   rather than a line of text after the fact.
 - **Streak on the HUD** — the banner fires and is gone. A small counter beside
   the Fate pill would let you feel the run you are on before it breaks.
+- **The body stays** — a fallen hero's marker should remain on the square for the
+  rest of the floor. The fall now has a beat; it should also leave a mark.
 
 ### New ideas the batch turned up
-- **Mimics that lie better.** A mimic only exists after you force a chest. One
-  that sits in a room pretending, and only moves when you walk past, would make
-  every chest on the board a small question instead of only the forced ones.
-- **A boss that says something back.** The intro card is one line the room says.
-  A second line when he is down to his last Body Point would close it.
-- **A trial you can fail loudly.** Breaking a vigil currently just stops. It
-  should cost something — the room's door slams, or the Warlock's attention
-  jumps — so declining is a real choice against a real risk.
 - **Trial variants.** A third kind: leave the room without opening a chest, or
   kill the marked one first. Two kinds is thin for something this visible.
+- **The draft screen is getting long.** Three boons, a blood price, a wager, a
+  stake bar, the pedlar and the stairs. It scrolls, which is fine, but the
+  gambles and the shopping want separating before a seventh thing lands on it.
+- **A blood price you can buy back.** The toll is permanent. A shrine or the
+  pedlar offering to return one maximum Body Point at a steep price would make
+  taking one on a bad floor less of a one-way door.
