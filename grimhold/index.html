@@ -31,8 +31,12 @@
     padding:calc(6px + env(safe-area-inset-top)) 10px 8px;
     background:linear-gradient(180deg,rgba(8,7,6,.92),rgba(8,7,6,0))}
   #qname{flex:1;min-width:0;font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--gold);
-    text-shadow:0 2px 8px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    text-shadow:0 2px 8px #000;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    pointer-events:auto;padding:2px 4px;border-radius:9px}
+  #qname:active{background:rgba(216,168,60,.14)}
   #qname b{display:block;color:var(--dim);font-size:9.5px;font-weight:400;letter-spacing:.22em;margin-top:1px}
+  #qname b u{text-decoration:none;color:var(--gold);opacity:.75;margin:0 4px;font-size:8px;
+    letter-spacing:.12em;border:1px solid rgba(216,168,60,.4);border-radius:5px;padding:1px 3px}
   .pill{pointer-events:auto;background:rgba(20,17,13,.85);border:1px solid var(--line);border-radius:999px;
     padding:4px 10px;font-size:11.5px;letter-spacing:.08em;display:flex;align-items:center;gap:5px;color:var(--ink)}
   .pill.gold{color:var(--gold2);border-color:rgba(216,168,60,.45)}
@@ -792,7 +796,7 @@ function startQuest(qi, def, seed){
     searched: new Array(ROOMS.length).fill(0), trapSearched: new Array(ROOMS.length).fill(0),
     deck: TREASURE_DECK.map((_,i)=>i), deckAt:0,
     itemsFound:[], collected:0, npcFreed:false, bossDead:false, carrier:null, pot:0, fate:1,
-    wrath:0, wrathAt:0, lastStriker:null,
+    wrath:0, wrathAt:0, lastStriker:null, streak:0, streakBest:0, trialRoom:null, trial:null,
     log:[], activeId:null, escaped:false,
   };
   // shuffle the treasure deck with the quest seed
@@ -881,7 +885,13 @@ function startQuest(qi, def, seed){
   }
 
   // --- the vault: one room sealed, its key on a champion's belt ----------
+  Q.trialRoom = (q.trial && q.trial.room !== undefined) ? { room:q.trial.room, kind:q.trial.kind } : null;
+  Q.trial = null;
   Q.vault = -1; Q.key = false;
+  if (Q.trialRoom && Q.trialRoom.kind === 'clean'
+      && !Q.actors.some(a => a.kind === 'monster' && roomAt(a.x,a.y) === Q.trialRoom.room)){
+    Q.trialRoom = null;                       // nothing to kill is not a trial
+  }
   const keyBearer = Q.actors.some(a => a.elite && roomAt(a.x, a.y) !== q.vault);
   if (q.vault !== undefined && q.vault >= 0 && keyBearer){
     Q.vault = q.vault;
@@ -2645,6 +2655,23 @@ function clampCam(){
   G.cam.y = mh < halfH*2 ? mh/2 : clamp(G.cam.y, halfH - TS*.6, mh - halfH + TS*.6);
 }
 // A door opening is the game's biggest beat; the camera should lean into it.
+// Consecutive kills without a hero bleeding for it.
+const STREAK_STEPS = [3, 5, 8, 12];
+function bumpStreak(){
+  if (!G.q) return;
+  G.q.streak = (G.q.streak || 0) + 1;
+  G.q.streakBest = Math.max(G.q.streakBest || 0, G.q.streak);
+  const n = G.q.streak;
+  if (STREAK_STEPS.includes(n)){
+    const word = n >= 12 ? 'UNTOUCHABLE' : n >= 8 ? 'BUTCHERY' : n >= 5 ? 'RAMPAGE' : 'ON A RUN';
+    banner(word, `${n} without a scratch`);
+    G.shake = Math.max(G.shake, 10 + n);
+    hitStop(60 + Math.min(90, n*6));
+    sfx('win');
+    if (n >= 8) addFate(1, `${n} kills without a scratch`);
+  }
+}
+
 function pushIn(rid){
   if (rid < 0 || rid === undefined) return;
   const r = ROOMS[rid];
@@ -3704,6 +3731,9 @@ function monsterAttack(m, h, done){
 function hurt(a, n, done){
   a.bp -= n;
   a.hurtT = 280;
+  if (a.kind === 'hero' && trialActive() && G.q.trial.kind === 'clean')
+    failTrial(`${a.name} is bleeding.`);
+  if (a.kind === 'hero' && G.q) G.q.streak = 0;
   if (a.bp <= 0 && a.kind === 'hero' && relicHas('coin') && G.run && !G.run.coinUsed){
     G.run.coinUsed = 1; a.bp = 1;
     say(`${a.name} pays the ferryman and is turned back at the water.`, 'good');
@@ -3741,6 +3771,8 @@ function kill(a){
     hitStop(60);
     say(`${a.name} falls.`, 'good');
     G.q.kills = (G.q.kills || 0) + 1;
+    bumpStreak();
+    later(20, checkTrialKill);
     const slayer = G.q.lastStriker && livingHeroes().find(x => x.id === G.q.lastStriker);
     if (slayer){
       slayer.kills = (slayer.kills || 0) + 1;
@@ -4009,6 +4041,8 @@ function endZargonTurn(){
   }
   const q = questDef();
   if (q.turnLimit && G.q.turn > q.turnLimit){ questOver(false, 'The working completes. Grimhold seals itself with you inside.'); return; }
+  tickTrial();
+  if (G.q.over) return;
   G.q.phase = 'hero';
   for (const h of heroes()){
     h.done = !h.alive; h.acted = false; h.rolled = false; h.moveLeft = 0;
@@ -4027,6 +4061,11 @@ function endZargonTurn(){
 function openDoorAt(h, d){
   if (d.open) return false;
   if (d.secret && !d.found) return false;
+  // a trial announces its terms before it lets you in
+  if (G.q.trialRoom && d.rid === G.q.trialRoom.room && !G.q.trial){
+    if (!HEADLESS){ showTrialOffer(() => openDoorAt(h, d)); return false; }
+    startTrial();
+  }
   if (d.locked && !G.q.key){
     say('The door is locked, and the lock is a good one. Something down here is carrying the key.', 'bad');
     sfx('block');
@@ -4657,7 +4696,12 @@ function renderHUD(){
   if (HEADLESS || !G || !G.q) return;
   const q = questDef();
   const mods = (q.mods || []).map(m => MOD(m)).filter(Boolean).map(m => m.ic).join('');
-  $('qname').innerHTML = `${q.name}${mods ? ' ' + mods : ''}<b>${q.sub}${
+  // The sub-line is the run line: what floor, what you carry, and a tap to read
+  // it. On a phone the top bar has room for one of those spelled out, so on a
+  // descent the depth goes short and the icons keep the space.
+  const sub = G.run ? q.sub.replace(/^Depth /, 'D') : q.sub;
+  $('qname').innerHTML = `${q.name}${mods ? ' ' + mods : ''}<b>${sub}${
+    carriedList().length ? '<u>read</u>' : ''}${
     G.run && G.run.boons.length ? ' · ' + G.run.boons.map(b => BOON(b).ic).join('') : ''}${
     G.run && G.run.curses.length ? ' · ' + G.run.curses.map(c => CURSE_MARK(c).ic).join('') : ''}${
     G.run && G.run.relics.length ? ' · ' + G.run.relics.map(r => RELIC(r).ic).join('') : ''}</b>`;
@@ -5151,6 +5195,7 @@ function bindInput(){
   $('btnContinue').addEventListener('click', () => { audioInit(); resumeRun(); });
   $('btnHow').addEventListener('click', () => { audioInit(); $('scTitle').classList.remove('on'); showHow(); });
   $('menubtn').addEventListener('click', openMenu);
+  $('qname').addEventListener('click', () => { if (!modalOpen && G && G.q) showCarried(); });
   $('scModal').addEventListener('click', e => { if (e.target.id === 'scModal' && modalOpen) { /* stay put */ } });
 }
 
@@ -5365,6 +5410,82 @@ const META_UNLOCKS = [
   { id:'revive',    ic:'⚱',  cost:5, name:'Mentor’s Bargain',desc:'Once a run, a fallen hero returns at the next floor with 1 Body Point.' },
 ];
 
+/* ------------------------------------------------------------- 12c2. TRIALS */
+// A door that tells you what it wants before you open it. Optional, always —
+// a trial you cannot decline is just a tax with a name on it.
+
+const TRIALS = {
+  survive: { turns:5, name:'The Vigil',
+    terms:'Set foot inside and hold the room for five turns. Leave it empty and the vigil breaks.' },
+  clean:   { name:'The Clean Kill',
+    terms:'Kill everything in the room without a single hero taking a wound. One drop of blood and it is over.' },
+};
+function trialDef(){ return G.q && G.q.trial ? TRIALS[G.q.trial.kind] : null; }
+function trialActive(){ return !!(G.q && G.q.trial && G.q.trial.active && !G.q.trial.done); }
+
+function startTrial(){
+  if (!G.q || !G.q.trialRoom || G.q.trial) return false;
+  G.q.trial = { room:G.q.trialRoom.room, kind:G.q.trialRoom.kind, turns:0,
+                active:true, failed:false, done:false, won:false };
+  say(`${TRIALS[G.q.trial.kind].name} begins.`, 'magic');
+  sfx('boss'); G.shake = 12;
+  renderHUD();
+  return true;
+}
+function failTrial(why){
+  if (!trialActive()) return;
+  G.q.trial.failed = true; G.q.trial.done = true; G.q.trial.active = false;
+  say(`The trial is broken — ${why}`, 'bad');
+  sfx('lose');
+  renderHUD();
+}
+function winTrial(){
+  if (!trialActive()) return;
+  G.q.trial.won = true; G.q.trial.done = true; G.q.trial.active = false;
+  say(`${trialDef().name} is answered.`, 'good');
+  sfx('win'); G.shake = 16;
+  addFate(2, 'a trial answered');
+  const r = G.run ? relicOffer() : null;
+  if (r) later(700, () => showRelic(r.id));
+  renderHUD();
+}
+// Called once a turn, after the Warlock has moved.
+function tickTrial(){
+  if (!trialActive()) return;
+  const T = G.q.trial;
+  if (T.kind === 'survive'){
+    const held = livingHeroes().some(h => roomAt(h.x,h.y) === T.room);
+    if (!held){ failTrial('nobody was left standing in the room.'); return; }
+    T.turns++;
+    if (T.turns >= TRIALS.survive.turns) winTrial();
+    else say(`The vigil holds. ${TRIALS.survive.turns - T.turns} turn${TRIALS.survive.turns-T.turns>1?'s':''} to go.`, 'magic');
+  }
+}
+function checkTrialKill(){
+  if (!trialActive() || G.q.trial.kind !== 'clean') return;
+  const left = monstersOf().filter(m => roomAt(m.x,m.y) === G.q.trial.room).length;
+  if (!left) winTrial();
+}
+function showTrialOffer(onAccept){
+  const t = G.q.trialRoom;
+  if (!t) return;
+  const d = TRIALS[t.kind];
+  modal(`<h2>${d.name}</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[t.room].name}</div>
+    <div class="rule"></div>
+    <p class="flavor">Words are cut into the lintel, and they are not a warning. They are terms.</p>
+    <div class="obj"><b>The terms</b>${d.terms}</div>
+    <div class="row"><div class="ic">✦</div><div class="tx"><b>If you answer them</b><s>2 Fate, and whatever is on the plinth</s></div></div>
+    <div class="row"><div class="ic">🚪</div><div class="tx"><b>If you would rather not</b><s>The door stays shut. It will still be here.</s></div></div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mAccept">Accept the terms</button>
+      <button class="btn ghost" id="mDecline">Walk on</button>
+    </div>`);
+  bindModal('#mAccept', () => { closeModal(); startTrial(); if (onAccept) onAccept(); });
+  bindModal('#mDecline', () => { closeModal(); say('You leave the door shut.', ''); });
+}
+
 /* ------------------------------------------------------------ 12d2. RELICS */
 // Relics are not drafted. You find them, in vaults and at the end of trials,
 // and you may carry two. A third means putting one down — which is the first
@@ -5473,6 +5594,53 @@ function liftCurse(id){
   G.run.curses.splice(i, 1);
   say(`${CURSE_MARK(which).name} is lifted.`, 'good');
   return which;
+}
+
+/* ------------------------------------------------- 12e2. WHAT YOU ARE CARRYING */
+// The top bar can only afford icons. Tapping the run line spells them out —
+// this floor's modifiers, then every boon, curse and relic, with its text.
+
+function carriedList(){
+  const out = [];
+  if (!G || !G.q) return out;
+  for (const m of (questDef().mods || [])){
+    const d = MOD(m); if (d) out.push({ group:'floor', id:d.id, ic:d.ic, name:d.name, desc:d.desc });
+  }
+  if (G.run){
+    for (const b of G.run.boons){
+      const d = BOON(b); if (d) out.push({ group:'boon', id:d.id, ic:d.ic, name:d.name, desc:d.desc });
+    }
+    for (const c of G.run.curses){
+      const d = CURSE_MARK(c);
+      if (d) out.push({ group:'curse', id:d.id, ic:d.ic, name:d.name, desc:d.desc, up:d.up });
+    }
+    for (const r of G.run.relics){
+      const d = RELIC(r); if (d) out.push({ group:'relic', id:d.id, ic:d.ic, name:d.name, desc:d.desc });
+    }
+  }
+  return out;
+}
+const CARRY_HEADS = { floor:'This floor', boon:'Boons', curse:'Curses', relic:'Relics' };
+function showCarried(){
+  const items = carriedList();
+  const q = questDef();
+  let body = '';
+  for (const g of ['floor','boon','curse','relic']){
+    const rows = items.filter(i => i.group === g);
+    if (!rows.length) continue;
+    body += `<div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);margin:12px 0 4px">${
+      CARRY_HEADS[g]}${g === 'relic' ? ` · ${rows.length}/${RELIC_SLOTS}` : ''}</div>`;
+    body += rows.map(i => `<div class="row"><div class="ic">${i.ic}</div><div class="tx"><b>${i.name}</b><s>${
+      i.desc}${i.up ? ' ' + i.up : ''}</s></div></div>`).join('');
+  }
+  if (!body) body = `<p class="flavor">Nothing but the torch and what you walked in with.</p>`;
+  modal(`<h2>${q.name}</h2>
+    <div class="sub" style="margin:2px 0 0">${q.sub}</div>
+    <div class="rule"></div>
+    ${body}
+    <div class="rule"></div>
+    <div style="text-align:center"><button class="btn ghost" id="mCarryClose">Back</button></div>`);
+  bindModal('#mCarryClose', closeModal);
 }
 
 /* ---------------------------------------------------- 12f. WHAT HEROES LEARN */
@@ -5761,6 +5929,11 @@ function makeFloor(depth, R){
   // floor lock its own quest away.
   const vaultPool = rooms.filter(id => id !== goalRoom);
   const vaultRoom = depth >= 3 && R() < .45 ? vaultPool[Math.floor(R()*vaultPool.length)] : -1;
+  // a trial is never the objective room and never the vault: one door, one idea
+  const trialPool = rooms.filter(id => id !== goalRoom && id !== vaultRoom);
+  const trialRoom = depth >= 4 && R() < .38
+    ? { room: trialPool[Math.floor(R()*trialPool.length)], kind: R() < .5 ? 'survive' : 'clean' }
+    : null;
 
   let traps = 2 + Math.floor(depth*.8);
   if (mods.includes('brittle')) traps *= 2;
@@ -5770,6 +5943,7 @@ function makeFloor(depth, R){
     traps:Math.min(14, traps), secrets: depth >= 3 ? 2 : 1,
     eliteChance: Math.min(.32, .06 + depth*.032),
     vault: vaultRoom,
+    trial: trialRoom,
     reward: 60 + depth*40, keepItem,
   };
 }
@@ -6448,7 +6622,7 @@ globalThis.HQ = {
   newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius, showHistory, monsterShoot,
   activeHero, heroes, livingHeroes, monstersOf, busy, hudState, syncHUD, renderHUD,
   strikeBlocker, strikeReason,
-  tapTile, selectHero, endHeroTurn, zargonTurn, monsterAct, heroWalk, refreshField,
+  tapTile, selectHero, endHeroTurn, zargonTurn, endZargonTurn, monsterAct, heroWalk, refreshField,
   doAttack, canStrike, monsterAttack, hurt, kill, attackDice, defendDice, moveSlow,
   rollCombat, combatDie, countSkulls, countShields,
   AFFIXES, AFFIX, applyAffix, isWarded, tickPoison, fateOf, addFate, canReroll, spendReroll, resolveDice, diceShape,
@@ -6457,6 +6631,9 @@ globalThis.HQ = {
   BLESSINGS, GREATER, CURSES, altarTarget, altarOutcome, useAltar, showAltar, altarPact,
   CURSE_MARKS, CURSE_MARK, curseHas, addCurse, liftCurse,
   RELICS, RELIC, RELIC_SLOTS, relicHas, relicOffer, takeRelic, showRelic, applyRelicOnArrival, trapBite,
+  TRIALS, trialDef, trialActive, startTrial, failTrial, winTrial, tickTrial, checkTrialKill, showTrialOffer,
+  STREAK_STEPS, bumpStreak,
+  carriedList, showCarried, CARRY_HEADS,
   LESSONS, LESSON, KILL_STEPS, lessonDue, lessonOptions, takeLesson, showLesson, heroHas,
   WRATH_STEPS, stirWrath, warlockActs,
   pushOdds, canPush, pushLuck, bankPush, showPush,

@@ -2791,4 +2791,239 @@ t.test('relics: they ride down the stair and into the book', () => {
   t.eq(A.G.meta.history[0].relics.join(), 'skull,anvil', 'and the book remembers what you carried');
 });
 
+/* ----------------------------------------------------------------- trials */
+
+// Put every monster somewhere other than the trial room so the room contents
+// are whatever the test says they are.
+function emptyRoom(rid){
+  for (const m of HQ.monstersOf()) if (HQ.roomAt(m.x, m.y) === rid) m.alive = false;
+}
+// Two squares of a room, guaranteed inside it.
+function roomSquare(rid, n){
+  const r = HQ.ROOMS[rid];
+  return [r.x + (n || 0) % r.w, r.y + Math.floor((n || 0) / r.w)];
+}
+
+t.test('trials: the terms are written out before anybody opens the door', () => {
+  for (const k of ['survive', 'clean']){
+    const d = HQ.TRIALS[k];
+    t.ok(d && d.name && d.name.length > 3, `${k} has a name`);
+    t.ok(d.terms && d.terms.length > 30, `${k} spells out what it wants`);
+  }
+  t.eq(HQ.TRIALS.survive.turns, 5, 'the vigil is five turns');
+});
+
+t.test('trials: a floor only offers one, never over the objective or the vault', () => {
+  let seen = 0, shallow = 0;
+  for (let i = 0; i < 60; i++){
+    const f = HQ.makeFloor(6, Math.random);
+    if (!f.trial) continue;
+    seen++;
+    t.ok(f.trial.room !== f.objective.room, 'a trial never seals the objective');
+    t.ok(f.trial.room !== f.vault, 'and never doubles as the vault');
+    t.ok(f.trial.kind === 'survive' || f.trial.kind === 'clean', 'and is one of the two');
+  }
+  t.ok(seen > 3, `depth 6 offers trials sometimes (saw ${seen}/60)`);
+  for (let i = 0; i < 30; i++) if (HQ.makeFloor(2, Math.random).trial) shallow++;
+  t.eq(shallow, 0, 'the deep floors keep them; the shallow ones do not');
+});
+
+t.test('trials: nothing begins until the terms are accepted', () => {
+  runAt(5);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: 4, kind: 'survive' };
+  t.ok(!HQ.trialActive(), 'a marked room is not yet a trial');
+  t.ok(HQ.startTrial(), 'accepting the terms starts it');
+  t.ok(HQ.trialActive(), 'and now it is running');
+  t.eq(HQ.startTrial(), false, 'and it cannot be started twice');
+});
+
+t.test('trials: the vigil pays out on the fifth turn and breaks if the room empties', () => {
+  runAt(5);
+  const rid = 4;
+  emptyRoom(rid);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'survive' };
+  HQ.startTrial();
+  const h = HQ.runAlive()[0];
+  const [hx, hy] = roomSquare(rid, 0);
+  put(h, hx, hy);
+  const f0 = HQ.fateOf();
+  for (let i = 0; i < 4; i++) HQ.tickTrial();
+  t.ok(HQ.trialActive(), 'four turns in, the vigil is still standing');
+  t.eq(HQ.fateOf(), f0, 'and has paid nothing yet');
+  HQ.tickTrial();
+  t.ok(!HQ.trialActive(), 'the fifth turn ends it');
+  t.ok(HQ.G.q.trial.won, 'answered');
+  t.eq(HQ.fateOf(), f0 + 2, 'and worth two Fate');
+
+  // the turn loop is what counts the turns, not the test calling tickTrial
+  runAt(5);
+  emptyRoom(rid);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'survive' };
+  HQ.startTrial();
+  for (const x of HQ.runAlive()) put(x, hx, hy);
+  const fT = HQ.fateOf();
+  for (let i = 0; i < 5; i++) HQ.endZargonTurn();
+  t.ok(HQ.G.q.trial.won, 'five ends of the Warlock’s turn answer the vigil');
+  t.eq(HQ.fateOf(), fT + 2, 'and pay for it');
+
+  // and the other way: walk out and it breaks
+  runAt(5);
+  emptyRoom(rid);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'survive' };
+  HQ.startTrial();
+  const h2 = HQ.runAlive()[0];
+  for (const x of HQ.runAlive()) put(x, HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  put(h2, HQ.STAIRS[0][0], HQ.STAIRS[0][1]);
+  const f1 = HQ.fateOf();
+  HQ.tickTrial();
+  t.ok(!HQ.trialActive(), 'an empty room breaks the vigil');
+  t.ok(HQ.G.q.trial.failed, 'and it counts as broken, not answered');
+  t.eq(HQ.fateOf(), f1, 'nothing paid for a broken trial');
+});
+
+t.test('trials: the clean kill ends the moment a hero bleeds', () => {
+  runAt(5);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: 4, kind: 'clean' };
+  HQ.startTrial();
+  const h = HQ.runAlive()[0];
+  const f0 = HQ.fateOf();
+  HQ.hurt(h, 1, null);
+  t.ok(!HQ.trialActive(), 'one drop of blood and it is over');
+  t.ok(HQ.G.q.trial.failed, 'broken');
+  t.eq(HQ.fateOf(), f0, 'and pays nothing');
+});
+
+t.test('trials: the clean kill pays when the last thing in the room falls', () => {
+  runAt(5);
+  const rid = 4;
+  emptyRoom(rid);
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'clean' };
+  HQ.startTrial();
+  // stand two orcs in the room and cut them down without being touched
+  const spares = HQ.monstersOf().slice(0, 2);
+  t.eq(spares.length, 2, 'the floor had two bodies to borrow');
+  spares.forEach((m, i) => {
+    m.mt = 'orc'; delete m.affix; m.elite = false; m.boss = false; m.bp = 1;
+    const [x, y] = roomSquare(rid, i);
+    m.x = x; m.y = y;
+  });
+  const f0 = HQ.fateOf();
+  HQ.hurt(spares[0], 9, null);
+  t.ok(HQ.trialActive(), 'one down is not all of them');
+  HQ.hurt(spares[1], 9, null);
+  t.ok(!HQ.trialActive(), 'the room is clear');
+  t.ok(HQ.G.q.trial.won, 'answered');
+  t.eq(HQ.fateOf(), f0 + 2, 'two Fate for the clean kill');
+});
+
+t.test('trials: opening the marked door is what commits you to it', () => {
+  runAt(5);
+  const rid = 4;
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'survive' };
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  d.open = false; d.secret = false; d.locked = false;
+  const h = HQ.runAlive()[0];
+  put(h, slot[3], slot[4]);
+  use(h);
+  t.ok(!HQ.trialActive(), 'still just a door');
+  HQ.openDoorAt(h, d);
+  t.ok(HQ.trialActive(), 'through the door, the terms are in force');
+  t.eq(HQ.G.q.trial.room, rid, 'and they are about that room');
+});
+
+/* ----------------------------------------------------------- kill streaks */
+
+t.test('streaks: consecutive kills climb, and a wound puts you back to nothing', () => {
+  t.eq(HQ.STREAK_STEPS.join(), '3,5,8,12', 'the four steps');
+  runAt(4);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  t.eq(HQ.G.q.streak, 0, 'you start on nothing');
+  HQ.bumpStreak(); HQ.bumpStreak();
+  t.eq(HQ.G.q.streak, 2, 'two kills, two on the counter');
+  t.eq(HQ.G.q.streakBest, 2, 'and the floor remembers the best of it');
+  const h = HQ.runAlive()[0];
+  HQ.hurt(h, 1, null);
+  t.eq(HQ.G.q.streak, 0, 'a wound wipes it');
+  t.eq(HQ.G.q.streakBest, 2, 'but not the record');
+});
+
+t.test('streaks: a kill counts itself, and eight of them pay Fate', () => {
+  runAt(4);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const m = HQ.monstersOf()[0];
+  m.mt = 'orc'; delete m.affix; m.elite = false; m.boss = false;
+  const s0 = HQ.G.q.streak;
+  HQ.hurt(m, 99, null);
+  t.eq(HQ.G.q.streak, s0 + 1, 'a body on the floor is one on the counter');
+
+  HQ.G.q.streak = 7;
+  const f0 = HQ.fateOf();
+  HQ.bumpStreak();
+  t.eq(HQ.G.q.streak, 8, 'eight');
+  t.eq(HQ.fateOf(), f0 + 1, 'and eight without a scratch is worth Fate');
+  HQ.G.q.streak = 3;
+  const f1 = HQ.fateOf();
+  HQ.bumpStreak();
+  t.eq(HQ.fateOf(), f1, 'the early steps are noise and glory, not currency');
+});
+
+/* --------------------------------------------------- what you are carrying */
+
+t.test('carrying: the run line spells out every boon, curse and relic it shows', () => {
+  runAt(4);
+  HQ.G.run.boons = []; HQ.G.run.curses = []; HQ.G.run.relics = [];
+  HQ.G.q.def.mods = ['dark'];
+  HQ.G.run.boons.push('swiftboots');
+  HQ.addCurse('heavy');
+  HQ.takeRelic('skull');
+
+  const list = HQ.carriedList();
+  const byId = (id) => list.find(i => i.id === id);
+  t.ok(byId('dark') && byId('dark').group === 'floor', "this floor's modifier is on the list");
+  t.eq(byId('dark').desc, HQ.MOD('dark').desc, 'with the text you were shown when you chose it');
+  t.ok(byId('swiftboots') && byId('swiftboots').group === 'boon', 'the boon is there');
+  t.eq(byId('swiftboots').desc, HQ.BOON('swiftboots').desc, 'with its text');
+  t.ok(byId('heavy') && byId('heavy').group === 'curse', 'the curse is there');
+  t.eq(byId('heavy').up, HQ.CURSE_MARK('heavy').up, 'including what it pays back');
+  t.ok(byId('skull') && byId('skull').group === 'relic', 'and the relic');
+  t.eq(byId('skull').desc, HQ.RELIC('skull').desc, 'with its text');
+  t.eq(list.length, 4, 'and nothing else');
+
+  // the panel is grouped, and the groups are named
+  for (const g of ['floor','boon','curse','relic']) t.ok(HQ.CARRY_HEADS[g], `${g} has a heading`);
+  // order: floor, then boons, then curses, then relics — the way the bar reads
+  t.eq(list.map(i => i.group).join(), 'floor,boon,curse,relic', 'in the order the bar shows them');
+});
+
+t.test('carrying: everything the top bar can show is something the panel can read out', () => {
+  runAt(5);
+  HQ.G.q.def.mods = HQ.MODIFIERS.map(m => m.id);
+  HQ.G.run.boons = HQ.BOONS.map(b => b.id);
+  HQ.G.run.curses = HQ.CURSE_MARKS.map(c => c.id);
+  HQ.G.run.relics = HQ.RELICS.slice(0, HQ.RELIC_SLOTS).map(r => r.id);
+  const list = HQ.carriedList();
+  t.eq(list.length,
+    HQ.MODIFIERS.length + HQ.BOONS.length + HQ.CURSE_MARKS.length + HQ.RELIC_SLOTS,
+    'every icon has a line');
+  for (const i of list){
+    t.ok(i.ic && i.ic.length, `${i.id} has the icon the bar draws`);
+    t.ok(i.name && i.name.length > 2, `${i.id} has a name`);
+    t.ok(i.desc && i.desc.length > 8, `${i.id} says what it does`);
+  }
+  // and a bare run still has something to say
+  runAt(1);
+  HQ.G.q.def.mods = []; HQ.G.run.boons = []; HQ.G.run.curses = []; HQ.G.run.relics = [];
+  t.eq(HQ.carriedList().length, 0, 'an empty-handed party carries nothing');
+  HQ.showCarried();
+  t.ok(true, 'and the panel opens anyway');
+});
+
 t.run();
