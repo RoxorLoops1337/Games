@@ -1688,9 +1688,28 @@ function basicAttack(u, tgt){
 // `kind` is for the renderer only: 'bolt' is a spell, anything else is a shaft.
 // A volley of arrows and a mage's bolt used to be the same two circles, which
 // is a large part of why a fight was hard to read.
+/* An arrow flew FLAT. It dropped a fifth of a metre in the first tenth of a
+   second, hit a floor at .6 and then travelled in a dead straight horizontal
+   line the rest of the way — and the shadow under it made that worse rather
+   than better, holding a constant offset the whole flight like something
+   hovering. Only a turret's shot, which starts at 2.6 and never reaches the
+   floor, ever visibly descended at all.
+
+   Everything arcs now: up out of the hand, over, and down onto the target,
+   with the height of the arc set by how far it has to go — so a point-blank
+   shot still goes more or less straight and a long one is thrown. Purely a
+   picture: the hit test has only ever used x and y, and projectiles are not
+   in netHash, so nothing here can move the two machines apart.             */
+const ARC = { rise:.10, cap:2.0, land:.5 };
+const arcH = (d) => Math.min(ARC.cap, d * ARC.rise);
+// Height at a fraction `u` of the way from launch to landing.
+const arcZ = (z0, d, u) => lerp(z0, ARC.land, u) + arcH(d) * Math.sin(clamp(u, 0, 1) * Math.PI);
+
 function shoot(u, tgt, onHit, col, kind, sp){
   sfx('shot', u.x);
-  G.projs.push({ x:u.x, y:u.y, z:u.struct ? 2.6 : .8, tgt, onHit, col, sp:sp || (tgt.struct ? 34 : 26),
+  const z0 = u.struct ? 2.6 : .8;
+  G.projs.push({ x:u.x, y:u.y, z:z0, z0, d0:Math.max(.001, hyp(tgt.x - u.x, tgt.y - u.y)),
+    tgt, onHit, col, sp:sp || (tgt.struct ? 34 : 26),
     dead:false, tr:[], kind:kind || (u.magic ? 'bolt' : 'shaft'), ax:0, ay:0, src:u });
 }
 
@@ -1907,7 +1926,7 @@ function projStep(dt){
     if (d <= step + .3){ p.onHit(); G.projs.splice(i, 1); continue; }
     p.ax = dx / d; p.ay = dy / d;                 // which way it is pointing
     p.x += dx / d * step; p.y += dy / d * step;
-    p.z = Math.max(.6, p.z - dt * 2);
+    p.z = arcZ(p.z0 === undefined ? .8 : p.z0, p.d0 || d, 1 - d / (p.d0 || d));
     // Where it has just been. Deterministic — these are simulation positions —
     // so both machines draw the same streak, and nothing reads it back.
     p.tr.push(p.x, p.y, p.z);
@@ -8235,7 +8254,7 @@ window.IB = {
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
-  applyPull, pullStep, wantCast, applyStun, applySlow, chainLine, hookSnapFx,
+  applyPull, pullStep, wantCast, ARC, arcH, arcZ, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
   netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,

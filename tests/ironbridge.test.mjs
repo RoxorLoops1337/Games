@@ -4273,6 +4273,60 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.cam.z = IB.cam.tz = 1;
   t.ok(dNear > dFar, 'and the thinnest line on the deck does too — the plank joints (' + dFar + ' → ' + dNear + ')');
 
+  // An arrow flew FLAT. It dropped a fifth of a metre in the first tenth of a
+  // second, hit a floor, and then travelled in a dead straight horizontal line
+  // — which the shadow under it made worse rather than better, holding a
+  // constant offset the whole way like something hovering. Only a turret's
+  // shot, starting high enough never to reach the floor, ever descended.
+  t.ok(IB.ARC.rise > 0 && IB.ARC.cap > 0, 'a shot is thrown, not slid');
+  t.ok(IB.arcH(16) > IB.arcH(4), 'a long shot arcs higher than a short one (' +
+    IB.arcH(4).toFixed(2) + ' → ' + IB.arcH(16).toFixed(2) + ')');
+  t.ok(IB.arcH(400) === IB.ARC.cap, 'but the arc is capped, not unbounded');
+  t.ok(IB.arcH(.5) < .4, 'and a point-blank shot still goes more or less straight');
+  // The shape: out of the hand at the height it left, over the top, down onto
+  // the target. Peak strictly above both ends.
+  {
+    const z0 = .8, d = 16;
+    const zs = [];
+    for (let i = 0; i <= 20; i++) zs.push(IB.arcZ(z0, d, i / 20));
+    const peak = Math.max(...zs), peakAt = zs.indexOf(peak) / 20;
+    t.ok(Math.abs(zs[0] - z0) < .001, 'it leaves at the height it was fired from');
+    t.ok(Math.abs(zs[20] - IB.ARC.land) < .001, 'and arrives at the height it lands');
+    t.ok(peak > zs[0] + .2 && peak > zs[20] + .2, 'with a top above both ends (' + peak.toFixed(2) + ')');
+    t.ok(peakAt > .2 && peakAt < .8, 'somewhere in the middle of the flight (' + peakAt.toFixed(2) + ')');
+    // Monotone up then monotone down — no wobble, no second hump.
+    let turns = 0;
+    for (let i = 2; i < zs.length; i++)
+      if (Math.sign(zs[i] - zs[i - 1]) !== Math.sign(zs[i - 1] - zs[i - 2])) turns++;
+    t.ok(turns === 1, 'and exactly one turn in it (' + turns + ')');
+  }
+  // Then a real shot, flown frame by frame. This is the assertion the old
+  // behaviour fails: it never went up at all.
+  {
+    IB.newMatch({ diff:'veteran', seed:6131 });
+    IB.fxForce = true;
+    const from = { x:56, y:0, magic:false };
+    const tgt = { x:72, y:0, dead:false, r:.5, side:1 };
+    G.projs.length = 0;
+    IB.shoot(from, tgt, () => {}, '#12ff34', 'shaft');
+    const zs = [];
+    for (let i = 0; i < 40 && G.projs.length; i++){
+      zs.push(G.projs[0].z);
+      IB.projStep(1 / 30);
+    }
+    t.ok(zs.length > 12, 'the shot really flew (' + zs.length + ' frames)');
+    const up = Math.max(...zs) - zs[0], down = Math.max(...zs) - zs[zs.length - 1];
+    t.ok(up > .5, 'a real arrow climbs after it is loosed (' + up.toFixed(2) + ')');
+    t.ok(down > .5, 'and comes down on the way in (' + down.toFixed(2) + ')');
+    // The shadow separation is what reads as height, and it was constant.
+    const seps = zs.map(z => IB.lp(60, 0, 0)[1] - IB.lp(60, 0, z)[1]);
+    t.ok(Math.max(...seps) - Math.min(...seps) > 8,
+      'so the arrow visibly parts from its own shadow (' +
+      (Math.max(...seps) - Math.min(...seps)).toFixed(1) + 'px)');
+    G.projs.length = 0;
+    IB.fxForce = false;
+  }
+
   // And the notification that was not merely the wrong colour but absent: the
   // level-up toast fired for side zero only, so player two's hero levelled up
   // in silence. Drive a real level-up from the second chair.
@@ -4342,6 +4396,68 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(h.pend.length === 0, 'and the offer is cleared from seat ' + seat);
   }
   IB.MY = seat0;
+
+  // The world is meant to be a mirror: whatever the left hold has, the right
+  // hold has the same of. This walks every structure in the game, alive and in
+  // rubble, drawing it for BOTH sides at the same camera distance and counting
+  // what each one actually put on the canvas. A key that lays down a different
+  // number of shapes on one side than the other is drawing something for one
+  // player that the other never sees — which is how the mesa's back wall went
+  // undetailed for a whole match's worth of rounds.
+  //
+  // It finds nothing today. That is the point of an invariant.
+  {
+    const st0 = seat0;
+    IB.MY = 0;
+    // The capture is a running log for the whole suite; by the time this block
+    // runs it is near its ceiling and would start refusing entries mid-sweep.
+    CTX.__stats.ellipses = []; CTX.__stats.lines = []; CTX.__stats.texts = [];
+    const shapes = (fn) => {
+      const s = CTX.__stats;
+      const before = { e:s.ellipses.length, l:s.lines.length, t:s.texts.length, o:s.ops };
+      s.dropped = 0;
+      fn();
+      return { e:s.ellipses.length - before.e, l:s.lines.length - before.l,
+               t:s.texts.length - before.t, o:s.ops - before.o, dropped:s.dropped };
+    };
+    IB.newMatch({ diff:'veteran', seed:7401 });
+    IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+    let compared = 0, lopsided = [], lost = 0;
+    for (const dead of [false, true]){
+      for (const s of G.sides) for (const st of s.structs){
+        st.dead = dead; st.hp = dead ? 0 : st.mhp; st.downT = dead ? 4 : 0;
+      }
+      for (const key of [...new Set(G.sides[0].structs.map(st => st.key))]){
+        const per = [];
+        for (const i of [0, 1]){
+          const st = G.sides[i].structs.find(x => x.key === key);
+          IB.cam.x = st.x;
+          // The inhibitor's shard is deliberately phase-offset by side so the
+          // two are not in lockstep — the same trick the birds use. Comparing
+          // them at the same INSTANT compares different moments of the same
+          // animation and reports a difference that is not one. Wind the clock
+          // back so both are at the same phase.
+          const t0 = G.t;
+          G.t = t0 - i * 1.7;
+          per.push(shapes(() => IB.drawStructure(CTX, st)));
+          G.t = t0;
+        }
+        compared++;
+        lost += per[0].dropped + per[1].dropped;
+        for (const k of ['e', 'l', 't'])
+          if (per[0][k] !== per[1][k])
+            lopsided.push(key + (dead ? '[down]' : '') + ' ' + k + ' ' + per[0][k] + '/' + per[1][k]);
+        // And it must draw SOMETHING, or a mirror of two blanks passes.
+        if (per[0].o < 10) lopsided.push(key + ' drew almost nothing (' + per[0].o + ' ops)');
+      }
+    }
+    t.ok(compared >= 10, 'the mirror sweep covered every structure, standing and fallen (' + compared + ')');
+    t.ok(lost === 0, 'and the capture held all of it (' + lost + ' dropped)');
+    t.ok(lopsided.length === 0, 'both holds are built the same (' +
+      (lopsided.length ? lopsided.slice(0, 4).join(' | ') : 'mirrored') + ')');
+    IB.cam.x = 26;
+    IB.MY = st0;
+  }
 
   // The sweep as a rule instead of a list. Anything the game does FOR the
   // person watching — a sound, a toast, a panel refresh — must never be gated
