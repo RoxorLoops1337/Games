@@ -863,7 +863,8 @@ function playImpact(rig, o) {
   const lvl = (o.gain != null ? o.gain : 1) * (0.35 + 0.65 * e) * (0.35 + 0.65 * near);
   if (!claim(rig, lvl)) return;
 
-  const H = head(rig, rig.bus.world, 0.12 + 0.55 * (1 - near), lvl, when + 1.2 + m.ring * 8);
+  const wet = o.wet != null ? o.wet : 0.12 + 0.55 * (1 - near);
+  const H = head(rig, rig.bus.world, wet, lvl, when + 1.2 + m.ring * 8);
   const V = H.v;
   let sink = H;
   if (o.pos) {

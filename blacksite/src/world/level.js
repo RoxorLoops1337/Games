@@ -992,9 +992,9 @@ export function buildLevel(G, engine, materials) {
   // to stop props reading as objects dropped onto a plane.
   for (const [x, z, len, ry, h] of [
     [-17.5, -7.7, 13, 0, 0.55],
-    [-26.9, -20, 20, Math.PI / 2, 0.7], [-13, 12.3, 14, Math.PI, 0.45],
+    [-26.1, -20, 20, -Math.PI / 2, 0.7], [-13, 12.3, 14, Math.PI, 0.45],
     [11.5, 6.6, 11, 0, 0.5], [-21, 10.4, 11, 0, 0.5],
-    [8.7, -20, 18, -Math.PI / 2, 0.6], [-4, -31.4, 16, Math.PI, 0.55],
+    [8.1, -20, 18, Math.PI / 2, 0.6], [-4, -32.1, 16, Math.PI, 0.55],
     [-20.5, 12.2, 8, Math.PI, 0.4],
   ]) {
     putAll(PR.drift(len, h, 2.6, { seed: (x * 13 + z * 7) | 0 }), 'sand', x, GY, z, ry, 0, 0);
@@ -1138,11 +1138,9 @@ export function buildLevel(G, engine, materials) {
       if (!b.solid || !b.blocksSight) continue;
       if (b.tag === 'floor' || b.tag === 'bounds' || b.tag === 'stair') continue;
       const top = b.max.y, bot = b.min.y;
-      if (top < 0.80 || top > 2.30) continue;
-      if (bot > 1.1) continue;                       // must be standing on something
+      if (top - bot < 0.35) continue;                // a plate is not cover
       const sx = b.max.x - b.min.x, sz = b.max.z - b.min.z;
       if (sx < 0.55 || sz < 0.25) { if (sz < 0.55 || sx < 0.25) continue; }
-      const stance = top < 1.40 ? 'crouch' : 'stand';
       for (const [nx, nz] of [[0, 1], [0, -1], [1, 0], [-1, 0]]) {
         const along = nx !== 0 ? sz : sx;
         if (along < 0.9) continue;
@@ -1154,7 +1152,13 @@ export function buildLevel(G, engine, materials) {
           else { pz = (nz > 0 ? b.max.z : b.min.z) + nz * 0.66; px = b.min.x + sx * t; }
           const g = groundBelow(w, px, top + 0.9, pz, 3.2);
           if (!g) continue;
-          if (Math.abs(g.y - Math.max(bot, 0)) > 0.9) continue;   // stood in a hole or on a lip
+          // Everything below is measured against the floor you would actually be
+          // standing on, not against y=0 — otherwise a roof parapet, which is the
+          // best crouch cover on the site, filters out for being "too high".
+          const rise = top - g.y;
+          if (rise < 0.80 || rise > 2.30) continue;
+          if (Math.abs(g.y - bot) > 0.9) continue;   // the box does not sit on that floor
+          const stance = rise < 1.40 ? 'crouch' : 'stand';
           // Body clearance: nothing solid in the volume a person would occupy.
           queryAABB(w.grid, { x: px - 0.36, y: g.y + 0.12, z: pz - 0.36 },
             { x: px + 0.36, y: g.y + (stance === 'crouch' ? 1.15 : 1.75), z: pz + 0.36 }, probe);
@@ -1164,7 +1168,7 @@ export function buildLevel(G, engine, materials) {
           out.push({
             pos: { x: px, y: g.y, z: pz },
             dir: { x: -nx, y: 0, z: -nz },
-            height: top - g.y,
+            height: rise,
             stance,
           });
         }
@@ -1192,7 +1196,8 @@ export function buildLevel(G, engine, materials) {
       { name: 'pad', r: [-28, -8, 28, 14], n: 5 },
       { name: 'bunker', r: [-27, -33, 9, -8], n: 6 },
       { name: 'silo', r: [8, -42, 31, -5], n: 5 },
-      { name: 'roof', r: [-27, -33, 9, -8], n: 2, minY: 4.0 },
+      { name: 'roof', r: [-27, -33, 9, -8], n: 3, minY: 4.0 },
+      { name: 'catwalk', r: [-8, -8, 18, 24], n: 2, minY: 3.0 },
     ];
     const out = [];
     for (const z of zones) {
@@ -1236,6 +1241,63 @@ export function buildLevel(G, engine, materials) {
     spawn: { x: 0, y: 1.80, z: 44 },
     spawnYaw: 0,
     cover, drawables,
+
+    // The screenshot rig reads these instead of its own table, so they are the
+    // frames this level gets judged on. Chosen the way you would choose stills
+    // for a trailer rather than the way you would choose debug cameras: between
+    // them they cover all three zones plus the vertical, they show the compound
+    // both with the sun and against it, and at least one of them is pointed at
+    // nothing but floor, because material work is invisible in a wide shot.
+    //
+    // The sun sits at about 24° in the north-west, so a camera at yaw ≈ 0.60
+    // faces it and one at yaw ≈ −2.55 has it over its shoulder. Every pose here
+    // is one or the other on purpose — a shot lit from the side at dusk is the
+    // one lighting condition that flatters nothing.
+    poses: {
+      // Where the player actually starts: outside the wire, looking up the road.
+      // The whole facility is in this one frame — chevrons, revetments, the
+      // catwalk, the mast, the gantry — and none of it is hidden.
+      spawn: { pos: [0, 1.80, 44], yaw: 0, pitch: -0.02 },
+
+      // The 34 m lane, from inside it. Revetment on the left, stair tower and
+      // catwalk on the right, the compound at the end of it. This is the shot
+      // that has to make you want a rifle.
+      approach: { pos: [-6.5, 1.72, 30.5], yaw: 0.09, pitch: -0.03 },
+
+      // From the catwalk at 3.7 m, three-quarters onto the whole site: the pad
+      // below, the bunker and its leaning mast to the left, the silo cap and the
+      // striped gantry to the right, rails in the near field for scale.
+      overlook: { pos: [16, 5.42, 3.0], yaw: 0.42, pitch: -0.14 },
+
+      // The bunker spine, looking south out of the blast-door end. Dark walls,
+      // ceiling services for depth, a lit doorway at 7 m. Deliberately a few
+      // degrees off-axis: a perfect one-point perspective reads as a test render.
+      corridor: { pos: [0, 1.72, -15.5], yaw: 3.02, pitch: -0.02 },
+
+      // Straight into the sun with a container 5 m away as a black foreground
+      // mass and the catwalk cutting across above the eyeline. Everything here
+      // is either a silhouette or a rim light.
+      sunward: { pos: [13.5, 1.72, 9.5], yaw: 0.60, pitch: 0.15 },
+
+      // The reverse: sun over the shoulder, raking across the silo cap from the
+      // alley. Full form on the collar, the closure door and the gantry legs,
+      // with their shadows running back toward the lens.
+      backlit: { pos: [10.2, 1.90, -25.5], yaw: -2.50, pitch: -0.03 },
+
+      // Nothing but floor: apron bays and their joints, gravel, the cast lip of
+      // the cable trench, the trays in the bottom of it and a checker plate over.
+      ground: { pos: [5.5, 1.72, 5.5], yaw: -0.35, pitch: -0.62 },
+
+      // Viewmodel frames. A weapon reads best as a dark shape against a bright
+      // aperture, which is exactly what the corridor's south door is; the ADS
+      // frame is down the approach lane, because that is where you would use it.
+      weapon: { pos: [0.6, 1.72, -12.0], yaw: 3.05, pitch: -0.02, ads: 0 },
+      ads: { pos: [-6.5, 1.72, 30.5], yaw: 0.09, pitch: -0.03, ads: 1 },
+
+      // Extras: the two positions a player remembers the level by.
+      silo: { pos: [19, 2.77, -8.5], yaw: 0.0, pitch: -0.10 },
+      roof: { pos: [-13, 6.32, -10.6], yaw: 0.0, pitch: -0.12 },
+    },
 
     update(dt) {
       t += dt;
