@@ -4866,7 +4866,10 @@ t.test('bodies: a hero with nothing left to spend cannot kneel, and a worse blad
   put(two.taker, 12, 9);
   use(two.taker);
   t.ok(!HQ.bodyWorthTaking(two.body, two.taker), 'there is nothing on them worth the turn');
-  t.eq(HQ.bodyWatch(two.taker), null, 'so nobody is asked');
+  // but they are still a friend you could carry out, so you are asked once
+  t.ok(HQ.bodyWatch(two.taker), 'you are still asked — you can always carry them');
+  two.body.declined = 1;
+  t.eq(HQ.bodyWatch(two.taker), null, 'and once you have said no, not again');
 
   // but a worse blade with a potion on it still is
   two.body.items = { potion: 1 };
@@ -6013,6 +6016,361 @@ t.test('vault watched: a plain vault opens without waking anybody', () => {
   HQ.openDoorAt(h, vd);
   t.ok(vd.open, 'the vault opens');
   t.ok(far.length === 0 || far.some(m => !m.awake), 'and the rest of the floor sleeps on');
+});
+
+/* ------------------------------------------------- the floor giving way */
+
+// A floor built with a chosen theme is `themedRun`. Collapsing floors need the
+// party to have seen something before it can crack, so this opens the map.
+function collapseRun(depth){
+  themedRun('collapse', depth || 6);
+  HQ.G.q.seen.fill(1);
+  HQ.G.q.roomSeen.fill(1);
+  for (const k in HQ.G.q.doors) HQ.G.q.doors[k].open = true;
+  HQ.recomputeVision();
+  return HQ.G;
+}
+function holes(){
+  const out = [];
+  for (let y = 0; y < HQ.H; y++) for (let x = 0; x < HQ.W; x++)
+    if (HQ.G.q.hole[HQ.idx(x,y)]) out.push([x,y]);
+  return out;
+}
+function cracks(){
+  const out = [];
+  for (let y = 0; y < HQ.H; y++) for (let x = 0; x < HQ.W; x++)
+    if (HQ.G.q.crack[HQ.idx(x,y)]) out.push([x,y]);
+  return out;
+}
+
+t.test('collapse: it is a theme like the water, and it says so on arrival', () => {
+  const T = HQ.THEME('collapse');
+  t.ok(T, 'the theme exists');
+  t.ok(T.from >= 4, 'and it does not turn up on the shallow floors');
+  collapseRun();
+  const said = HQ.G.q.log.map(l => l.text).join(' ');
+  t.ok(said.includes(T.name), 'the arrival log names it');
+  t.ok(said.includes(T.desc), 'and says what it does');
+  t.eq(holes().length, 0, 'nothing has fallen in yet');
+  t.eq(cracks().length, 0, 'and nothing has started to');
+});
+
+t.test('collapse: a square cracks, and two turns later it is gone', () => {
+  collapseRun();
+  const out = HQ.tickCollapse();
+  t.ok(out.cracked, 'the first turn opens a crack');
+  const [cx, cy] = out.cracked;
+  t.eq(HQ.crackAt(cx, cy), HQ.CRACK_TURNS, 'with a fuse on it');
+  t.ok(!HQ.holeAt(cx, cy), 'and it is still a square');
+
+  HQ.tickCollapse();
+  t.eq(HQ.crackAt(cx, cy), HQ.CRACK_TURNS - 1, 'the fuse burns down');
+  t.ok(!HQ.holeAt(cx, cy), 'still standing');
+
+  HQ.tickCollapse();
+  t.ok(HQ.holeAt(cx, cy), 'and then it is not');
+  t.eq(HQ.crackAt(cx, cy), 0, 'the crack is spent');
+});
+
+t.test('collapse: a hole is not a square you can walk on', () => {
+  collapseRun();
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  const h = HQ.runAlive()[0];
+  for (const a of HQ.G.q.actors) if (a !== h) a.alive = false;
+  const r = HQ.ROOMS[4], y = r.y + 1;
+  t.ok(r.w >= 3, 'the room is wide enough');
+  put(h, r.x, y);
+  const target = HQ.idx(r.x + 2, y);
+  t.ok(HQ.walkField(r.x, y, 6, h).d.has(target), 'you can cross the room');
+
+  HQ.G.q.hole[HQ.idx(r.x + 1, y)] = 1;
+  t.ok(HQ.holeAt(r.x + 1, y), 'the middle square is gone');
+  t.ok(HQ.blocked(r.x + 1, y), 'and it counts as blocked');
+  const f = HQ.walkField(r.x, y, 6, h);
+  t.ok(!f.d.has(HQ.idx(r.x + 1, y)), 'nothing steps into it');
+  // you can still get round it inside the room, but never through it
+  const path = HQ.tracePath(f, r.x + 2, y);
+  if (path) t.ok(!path.some(([px,py]) => px === r.x + 1 && py === y), 'and no route goes through it');
+});
+
+t.test('collapse: sight crosses a hole even though feet do not', () => {
+  collapseRun();
+  const r = HQ.ROOMS[4], y = r.y + 1;
+  HQ.G.q.hole[HQ.idx(r.x + 1, y)] = 1;
+  t.ok(HQ.hasLOS(r.x, y, r.x + 2, y), 'you can see across the gap you cannot cross');
+});
+
+t.test('collapse: it never seals anything off', () => {
+  collapseRun();
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  for (const a of HQ.G.q.actors) if (a.kind === 'monster') a.alive = false;
+  // run the floor out for a long time and check the board stays whole
+  for (let turn = 0; turn < 40; turn++) HQ.tickCollapse();
+  t.ok(holes().length > 0, 'a lot of it has fallen in');
+  // every remaining floor square is still reachable from the stair
+  const { W, H, idx, STAIRS, linkedIgnoringDoors, isFloor } = HQ;
+  const seen = new Set([idx(STAIRS[0][0], STAIRS[0][1])]);
+  const q = [STAIRS[0]];
+  while (q.length){
+    const [x, y] = q.shift();
+    for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0]]){
+      const nx = x + dx, ny = y + dy, k = idx(nx, ny);
+      if (nx < 0 || ny < 0 || nx >= W || ny >= H || seen.has(k)) continue;
+      if (!isFloor(nx, ny) || HQ.holeAt(nx, ny)) continue;
+      if (!linkedIgnoringDoors(x, y, nx, ny)) continue;
+      seen.add(k); q.push([nx, ny]);
+    }
+  }
+  let standing = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+    if (isFloor(x, y) && !HQ.holeAt(x, y)) standing++;
+  t.eq(seen.size, standing, 'and every square still there can be walked to');
+  t.ok(!HQ.holeAt(STAIRS[0][0], STAIRS[0][1]), 'the stair never goes');
+});
+
+t.test('collapse: the doorways and the doorstep are never taken', () => {
+  collapseRun();
+  for (const a of HQ.G.q.actors) if (a.kind === 'monster') a.alive = false;
+  for (let turn = 0; turn < 40; turn++) HQ.tickCollapse();
+  for (const [x,y] of holes()){
+    t.ok(Math.abs(x-8) + Math.abs(y-17) >= 3, `${x},${y} is off the doorstep`);
+    let onDoor = false;
+    for (const k in HQ.G.q.doors){
+      const d = HQ.G.q.doors[k];
+      if ((d.rx===x && d.ry===y) || (d.cx===x && d.cy===y)) onDoor = true;
+    }
+    t.ok(!onDoor, `${x},${y} is not a doorway`);
+  }
+});
+
+t.test('collapse: the floor only gives way where you have been', () => {
+  themedRun('collapse', 6);
+  for (const a of HQ.G.q.actors) if (a.kind === 'monster') a.alive = false;
+  // the party has only seen the way in — pick a room they have not opened
+  const shut = HQ.ROOMS.find(r => !HQ.G.q.roomSeen[r.id]
+    && !HQ.G.q.seen[HQ.idx(r.x, r.y)]);
+  t.ok(shut, 'there is a room nobody has looked into');
+  for (let turn = 0; turn < 25; turn++) HQ.tickCollapse();
+  t.ok(cracks().length + holes().length > 0, 'the floor has been giving way');
+  for (const [x,y] of cracks().concat(holes()))
+    t.ok(HQ.G.q.seen[HQ.idx(x,y)], `${x},${y} is somewhere you have been`);
+  if (shut){
+    let inShut = 0;
+    for (const [x,y] of cracks().concat(holes())) if (HQ.roomAt(x,y) === shut.id) inShut++;
+    t.eq(inShut, 0, 'and nothing has given way in the room nobody opened');
+  }
+
+  // open it, and it becomes fair game
+  for (let y = shut.y; y < shut.y + shut.h; y++) for (let x = shut.x; x < shut.x + shut.w; x++)
+    HQ.G.q.seen[HQ.idx(x,y)] = 1;
+  let reached = 0;
+  for (let turn = 0; turn < 60 && !reached; turn++){
+    const out = HQ.tickCollapse();
+    if (out.cracked && HQ.roomAt(out.cracked[0], out.cracked[1]) === shut.id) reached = 1;
+  }
+  t.ok(reached, 'once you have opened it, it can go too');
+});
+
+t.test('collapse: whoever is standing on it scrambles out and pays for it', () => {
+  collapseRun();
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  const h = HQ.runAlive()[0];
+  for (const a of HQ.G.q.actors) if (a !== h) a.alive = false;
+  const r = HQ.ROOMS[4], y = r.y + 1;
+  put(h, r.x + 1, y);
+  h.bp = h.bpMax = 8;
+  HQ.G.q.crack[HQ.idx(r.x + 1, y)] = 1;          // goes this turn
+  HQ.tickCollapse();
+  t.ok(HQ.holeAt(r.x + 1, y), 'the square went');
+  t.ok(h.x !== r.x + 1 || h.y !== y, 'and the hero is not standing in the hole');
+  t.ok(h.bp < 8, 'they paid for the scramble');
+  t.ok(h.alive, 'but they are not down it');
+});
+
+t.test('collapse: a square with nowhere to scramble to waits instead', () => {
+  collapseRun();
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  const h = HQ.runAlive()[0];
+  for (const a of HQ.G.q.actors) if (a !== h) a.alive = false;
+  const r = HQ.ROOMS[4], y = r.y + 1;
+  put(h, r.x + 1, y);
+  h.bp = h.bpMax = 8;
+  // wall the hero in with holes on every side
+  for (const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]) HQ.G.q.hole[HQ.idx(r.x+1+dx, y+dy)] = 1;
+  HQ.G.q.crack[HQ.idx(r.x + 1, y)] = 1;
+  HQ.tickCollapse();
+  t.ok(!HQ.holeAt(r.x + 1, y), 'the square under them does not go');
+  t.eq(h.x, r.x + 1, 'the hero has not moved');
+  t.eq(h.bp, 8, 'and has not been hurt');
+});
+
+t.test('collapse: it is hung off the turn loop, not called by hand', () => {
+  collapseRun();
+  for (const a of HQ.G.q.actors) if (a.kind === 'monster') a.alive = false;
+  const before = cracks().length + holes().length;
+  HQ.endZargonTurn();
+  t.ok(cracks().length + holes().length > before, 'ending a turn moves the floor along');
+});
+
+t.test('collapse: a floor with no theme never gives way', () => {
+  themedRun(null, 6);
+  HQ.G.q.seen.fill(1);
+  for (let turn = 0; turn < 10; turn++) HQ.tickCollapse();
+  t.eq(cracks().length, 0, 'no cracks');
+  t.eq(holes().length, 0, 'no holes');
+});
+
+t.test('collapse: a crack pulses and a hole does not', () => {
+  collapseRun();
+  HQ.G.q.seen.fill(1);
+  const clean = paintOf(() => HQ.draw());
+  t.ok(!paintedLike(clean, /^rgba\(228,150,70,[\d.]+\)$/), 'an intact floor paints no cracks');
+  t.ok(!painted(clean, '#070605'), 'and no holes');
+
+  const r = HQ.ROOMS[4];
+  HQ.G.q.crack[HQ.idx(r.x, r.y)] = 2;
+  t.ok(paintedLike(paintOf(() => HQ.draw()), /^rgba\(228,150,70,[\d.]+\)$/), 'a crack is drawn, and in a warning colour');
+
+  HQ.G.q.crack[HQ.idx(r.x, r.y)] = 0;
+  HQ.G.q.hole[HQ.idx(r.x, r.y)] = 1;
+  const gone = paintOf(() => HQ.draw());
+  t.ok(painted(gone, '#070605'), 'a hole is drawn');
+  t.ok(painted(gone, 'rgba(150,128,98,.5)'), 'with a broken lip, so it reads as depth');
+  t.ok(!paintedLike(gone, /^rgba\(228,150,70,[\d.]+\)$/), 'and it has stopped warning you');
+});
+
+t.test('collapse: a square you have not found stays dark', () => {
+  collapseRun();
+  HQ.G.q.seen.fill(0);
+  const r = HQ.ROOMS[4];
+  HQ.G.q.hole[HQ.idx(r.x, r.y)] = 1;
+  t.ok(!painted(paintOf(() => HQ.draw()), 'rgba(150,128,98,.5)'), 'a hole you have not found is not drawn');
+});
+
+/* --------------------------------------------------------- carrying them */
+
+t.test('carry: a friend can go over your shoulder, for the action', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9); use(taker);
+  t.ok(!taker.carrying, 'nobody is carrying anybody');
+  t.ok(HQ.shoulder(taker, body), 'you can pick them up');
+  t.eq(taker.carrying, body.id, 'and they are on your shoulder');
+  t.ok(body.carried, 'and the body knows it');
+  t.ok(taker.acted, 'it cost the action');
+  t.eq(HQ.carriedBody(taker), body, 'and the game can say who');
+
+  // not twice, and not somebody else
+  const two = fell([12, 9]);
+  t.ok(!HQ.shoulder(taker, two.body), 'you only have the one pair of arms');
+});
+
+t.test('carry: hands full means slower, and no swinging at all', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9); use(taker);
+  const dry = HQ.moveSlow(taker);
+  HQ.shoulder(taker, body);
+  t.eq(HQ.moveSlow(taker) - dry, HQ.CARRY_SLOW, 'the roll is two squares shorter');
+
+  // and there is nothing to be done with a blade you are not holding
+  const m = HQ.G.q.actors.find(a => a.kind === 'monster') || null;
+  if (m){
+    m.alive = true; m.awake = true;
+    m.x = taker.x + 1; m.y = taker.y;
+    HQ.recomputeVision();
+    taker.acted = false;
+    t.ok(!HQ.canStrike(taker, m), 'you cannot swing with somebody in your arms');
+    HQ.putDown(taker);
+    t.ok(!taker.carrying, 'put them down');
+    t.ok(HQ.canStrike(taker, m), 'and your hands are free again');
+  }
+});
+
+t.test('carry: they travel with you, and are not lying on the floor any more', () => {
+  const { taker, body } = fell([12, 9]);
+  HQ.G.q.furn = []; HQ.G.q.traps = [];
+  put(taker, 12, 9); use(taker);
+  HQ.shoulder(taker, body);
+  t.eq(HQ.bodyAt(12, 9), null, 'the square they fell on is clear');
+
+  taker.acted = false; taker.rolled = true; taker.moveLeft = 4;
+  clearSquare(12, 8);
+  HQ.heroWalk(taker, [[12, 8]], null);
+  t.eq(taker.y, 8, 'the hero moved');
+  t.eq(body.x, taker.x, 'and the body came with them');
+  t.eq(body.y, taker.y, 'to the same square');
+});
+
+t.test('carry: going down means dropping them where you fell', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9); use(taker);
+  HQ.shoulder(taker, body);
+  taker.bp = 1;
+  HQ.hurt(taker, 9, null);
+  t.ok(!taker.alive, 'the carrier is down');
+  t.ok(!taker.carrying, 'and is not carrying anybody');
+  t.ok(!body.carried, 'the body is on the floor again');
+  t.eq(body.x, taker.x, 'on the square it happened');
+  t.eq(body.y, taker.y, 'exactly there');
+});
+
+t.test('carry: nothing raises somebody you are holding', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9); use(taker);
+  body.stirring = 2;
+  HQ.shoulder(taker, body);
+  t.eq(body.stirring, 0, 'the pull lets go the moment you pick them up');
+  HQ.tickRaising();
+  t.ok(!body.risen, 'and they do not get up in your arms');
+});
+
+t.test('carry: reaching the stair with them is what buys the chance', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9); use(taker);
+  HQ.shoulder(taker, body);
+  HQ.G.run.gold = 2000;
+  HQ.G.run.carried = [];
+  const dead = HQ.G.run.heroes.find(h => h.id === body.id);
+  t.ok(dead && !dead.alive, 'the hero is dead on the roster');
+
+  HQ.descentFloorEnd(true, '');
+  t.ok(HQ.G.run.carried.some(c => c.id === body.id), 'they came up the stair');
+  t.eq(HQ.carriedOut().length, 1, 'and there is somebody the pedlar can work on');
+
+  t.ok(HQ.buyPedlar('mortuary'), 'you can pay for it');
+  t.ok(dead.alive, 'and they open their eyes');
+  t.eq(dead.bp, 1, 'at one Body Point');
+  t.eq(HQ.carriedOut().length, 0, 'and there is nobody left on the table');
+  t.ok(!HQ.buyPedlar('mortuary'), 'so there is nothing more to buy');
+});
+
+t.test('carry: you cannot carry somebody out of a floor you lost', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9); use(taker);
+  HQ.shoulder(taker, body);
+  HQ.G.run.carried = [];
+  HQ.descentFloorEnd(false, 'routed');
+  t.eq(HQ.G.run.carried.length, 0, 'nobody comes up the stair from a rout');
+});
+
+t.test('carry: the pedlar only offers the table when there is somebody on it', () => {
+  runAt(4);
+  HQ.G.run.gold = 2000;
+  HQ.G.run.carried = [];
+  t.eq(HQ.carriedOut().length, 0, 'nobody has been carried out');
+  t.ok(!HQ.buyPedlar('mortuary'), 'and there is nothing to buy');
+  t.ok(!HQ.pedlarBlurb(HQ.bloodOwed()).includes('undefined'), 'and the shop line still reads');
+});
+
+t.test('carry: a hero with somebody on their shoulder shows it', () => {
+  const { taker, body } = fell([12, 9]);
+  put(taker, 12, 9); use(taker);
+  HQ.G.q.seen.fill(1); HQ.recomputeVision();
+  t.ok(!painted(paintOf(() => HQ.draw()), '#7a6a58'), 'nobody empty-handed wears one');
+  HQ.shoulder(taker, body);
+  const held = paintOf(() => HQ.draw());
+  t.ok(painted(held, '#7a6a58'), 'the shape goes on the shoulder');
+  t.ok(painted(held, 'rgba(20,18,16,.5)'), 'over a dark backing, so it reads on a lit floor');
+  t.ok(painted(held, 'rgba(232,186,96,.9)'), 'and an amber rim, like every other cost on this board');
 });
 
 t.run();

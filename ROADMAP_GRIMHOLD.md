@@ -184,20 +184,30 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   have cornered it; one in three is wired to the hall, and says so before it
   opens. *(batch 20)*
 
+- **The floor gives way** — the second theme, and the first with a clock on it.
+  A square you have already walked starts to crack; two turns later it falls in
+  and stops being a square. Every candidate is tested by walking the whole board
+  without it, so it can never seal anything off. *(batch 21)*
+- **Carrying them out** — the third claim on the dead. A hero can get a fallen
+  friend over a shoulder: two squares slower, and no swinging at all while you
+  have them. Reach the stair and the pedlar's long table will wake them, for
+  500. *(batch 21)*
+
 ---
 
 ## Next up
 
-1. **A second theme.** `THEMES` is a table with one entry in it. A collapsing
-   floor whose squares fall in over time would prove the shape holds — and
-   unlike the water, it would put a clock on the whole floor.
-2. **A carried body.** The dead are already a resource both sides want: the
-   party takes the blade, the Warlock takes the body. Let a hero pick a fallen
-   friend up and carry them — slower, hands full — and pay to have them back on
-   the between-floors screen.
-3. **The water should matter to more than your feet.** Fire ought to gutter in
+1. **The water should matter to more than your feet.** Fire ought to gutter in
    it, a shock ought to travel through it, and something ought to live in it.
    One of those three, not all of them.
+2. **The themes should meet the monsters.** A flooded floor and a collapsing one
+   currently change what the *party* can do and nothing else. Something that
+   swims, or something that does not care whether the floor is there, would make
+   a theme a reason to fear a room rather than a reason to walk differently.
+3. **Somebody worth carrying out who is not already dead.** The long table only
+   pays for your own fallen. A prisoner too hurt to walk — carried on the same
+   terms, hands full, two squares slower — would make the mechanic a choice you
+   go looking for rather than one grief hands you.
 
 ## Backlog, roughly in order of value
 
@@ -272,3 +282,23 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **The flooded floor is quiet, and the game has other quiet.** Wading, the
   Elf's step, an unopened room — nothing yet says how they combine. Whatever
   goes in next that muffles you should check what is already muffling you.
+- **A generator that removes squares needs a whole-board proof, not a local
+  one.** The collapsing floor tests every candidate by walking the entire map
+  without it. A cheaper local check — "it still has two neighbours" — passes
+  squares that cut the board in half. Anything that takes ground away wants
+  `stillWhole`, and a test that runs the floor to exhaustion and re-walks it.
+- **A colour that is nearly another colour is not a testable colour.** The
+  carried-body rim was painted in the active hero's amber, so the paint test
+  passed with the feature deleted. Markers that need proving want a literal
+  nothing else on the board uses. Grep the file before picking one.
+- **An emoji is not a glyph at board zoom.** 🫂 on a shoulder was mush at 2× on a
+  phone. The status markers that read — ✖, ✳, z, ✦ — are all plain serif
+  characters, and the thing that actually read here was the silhouette. Draw the
+  shape; do not label it.
+- **Three claims on the dead is the whole triangle now.** The blade, the
+  Warlock, and the shoulder. There is nothing obvious left to add to a body —
+  which means the next move is a body that is not one of yours.
+- **A prompt you cannot decline permanently becomes a prompt you learn to
+  dismiss.** Carrying made every body worth asking about, including the empty
+  ones, so "leave them" now sticks for the floor. Anything that starts asking
+  about a square the party will cross repeatedly needs the same latch.
