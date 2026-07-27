@@ -6655,7 +6655,14 @@ const stoneLit = () => -shadowSide();          // -1: the lit edge of a stone is
 // The tones a course of blocks is picked out of. Precomputed: shade() parses a
 // hex string every call, and a wall lays down sixty blocks a frame.
 const STONE_TONE = ['#d5d2c3', '#c5c3b5', '#e0ddcc', '#b6b7aa', '#cecbbc', '#a9aa9f'];
-const STONE_TONE_LIT = STONE_TONE.map(h => shade(h, 1.10));
+/* The lit face of a course used to be the body at 1.10, which put the peak of
+   the masonry family at #f6f3e0 — brighter than anything in the sky it stands
+   in front of. Stone lit by an overcast-warm sun is not a light source; it is
+   a mid-grey with the top eighth of a chamfer catching. 1.05 keeps the chamfer
+   legible at every zoom and lands the graded peak of the family at roughly
+   #c6c3b2, which is UNDER the horizon — so at wide zoom a hold reads as a
+   silhouette against the haze rather than dissolving into it.                */
+const STONE_TONE_LIT = STONE_TONE.map(h => shade(h, 1.05));
 const STONE_TONE_DARK = STONE_TONE.map(h => shade(h, .84));
 
 /* A stone block with a thickness. It was a rectangle with a pale stripe across
@@ -10840,6 +10847,27 @@ const POST = {
   cool: '46,84,126',  coolA: .40,
   gam: '64,66,72',    gamA: .10,   // the curve's foot, everywhere
   lift: 3,         // blacks lifted off zero: no film ever reaches it
+  // The grade proper — the two ends the picture did not have. Everything above
+  // this line moves colour about inside the range it already occupied; the
+  // histogram still sat crushed in the middle third with no black point and no
+  // white point, which is what raw output looks like and photographs do not.
+  // One multiply down the frame gives it a floor, heaviest at the bottom where
+  // the gorge is, and one screen on the sun gives it a ceiling — and between
+  // them a warm/cool axis the whole frame is hung on.
+  floor: '24,32,52', floorA: .34,   // the multiply at the very bottom of the frame
+  horizon: .40,      knee: .60, kneeA: .17,   // nothing at the horizon, and back hard just
+                                    // under it — the band the masonry stands in
+  zenith: .16,                      // ...and a little of it at the top, which is what caps
+                                    // the clouds: they carried MORE contrast than the
+                                    // midground in front of them, and a lid on the
+                                    // highlight is depth restored for no extra fill.
+  sun: '255,238,205', sunA: .16,    // the screen highlight, centred on SUN
+  sunR: .82,                        // its reach, in frame diagonals
+  gDiv: 1,         // the scale the three ramps are baked at. 1 is not laziness: a
+                   // STRETCHED blit costs a rasteriser more than a 1:1 one, and
+                   // measurably more than the gradient fill it replaced — 4 was
+                   // tried and is 20ms a frame worse than 1. Turn it up only to
+                   // trade the picture for the two buffers' memory.
   grain: .065, grainN: 4, grainPx: 160, grainHz: 11,
   still: 5,        // frames a frozen board may keep its bright pass for
   budget: 4.5,     // ms of post a frame will pay for before a stage is dropped
@@ -10909,9 +10937,11 @@ function postCache(c, W, H){
   if (postB && postB.W === W && postB.H === H) return postB;
   const bw = Math.max(4, Math.round(W / POST.div)), bh = Math.max(4, Math.round(H / POST.div));
   const cw = Math.max(4, Math.round(W / POST.caDiv)), ch = Math.max(4, Math.round(H / POST.caDiv));
+  const gw = Math.max(8, Math.round(W / POST.gDiv)), gh = Math.max(8, Math.round(H / POST.gDiv));
   const b1 = postCx(bw, bh), b2 = postCx(bw, bh), pr = postCx(cw, ch), pg = postCx(cw, ch);
+  const gm = postCx(gw, gh), gs = postCx(gw, gh);
   const tiles = (postB && postB.tiles) || postGrain();
-  if (!b1 || !b2 || !pr || !pg || !tiles){ postB = false; return null; }
+  if (!b1 || !b2 || !pr || !pg || !gm || !gs || !tiles){ postB = false; return null; }
   let P;
   try {
     // ---- the light on one axis: the sun's corner warm, the far corner the
@@ -10922,16 +10952,72 @@ function postCache(c, W, H){
     lit.addColorStop(.44, 'rgba(' + POST.gam + ',' + POST.gamA + ')');
     lit.addColorStop(.62, 'rgba(' + POST.gam + ',' + POST.gamA + ')');
     lit.addColorStop(1,   'rgba(' + POST.cool + ',' + POST.coolA + ')');
-    // ---- the corners, and with them the floor of the gorge: one radial, sat
+    // ---- THE GRADE, baked once into two buffers.
+    //
+    // Three ramps across the whole frame, none of which changes unless the
+    // frame does — and a radial gradient is the dearest fill a rasteriser
+    // owns, because it solves a quadratic at every pixel of every frame. So
+    // they are solved ONCE per resize into buffers and blitted after that, and
+    // because multiply is associative the corner falloff and the black point
+    // fold into a single opaque buffer between them. The frame ends up doing
+    // one multiply blit and one screen blit where it used to do one radial
+    // fill: the black point costs less than nothing, and the white point costs
+    // about three milliseconds of the fifty this pass was already spending.
+    //
+    // the corners, and with them the floor of the gorge: one radial, sat
     // above the middle of the frame and pulled toward the sun, so the bottom
     // of the picture falls off further than the top and the light side least.
-    const R = hyp(W, H) * .66, vx = W * POST.vigX, vy = H * POST.vigY;
-    const vig = c.createRadialGradient(vx, vy, R * .26, vx, vy, R);
-    const vc = '18,26,38,';
-    vig.addColorStop(0,   'rgba(' + vc + '0)');
-    vig.addColorStop(.45, 'rgba(' + vc + (POST.vigA * .12).toFixed(3) + ')');
-    vig.addColorStop(.72, 'rgba(' + vc + (POST.vigA * .42).toFixed(3) + ')');
-    vig.addColorStop(1,   'rgba(' + vc + POST.vigA.toFixed(3) + ')');
+    const vig = (cx, w, h) => {
+      const R = hyp(w, h) * .66, vx = w * POST.vigX, vy = h * POST.vigY;
+      const g = cx.createRadialGradient(vx, vy, R * .26, vx, vy, R);
+      const vc = '18,26,38,';
+      g.addColorStop(0,   'rgba(' + vc + '0)');
+      g.addColorStop(.45, 'rgba(' + vc + (POST.vigA * .12).toFixed(3) + ')');
+      g.addColorStop(.72, 'rgba(' + vc + (POST.vigA * .42).toFixed(3) + ')');
+      g.addColorStop(1,   'rgba(' + vc + POST.vigA.toFixed(3) + ')');
+      return g;
+    };
+    // the black point. A ramp straight down the frame, multiplied, so the
+    // bottom of the picture has somewhere to end: the gorge, the piers and the
+    // deck's own shadow all sit in the heaviest part of it and the world stops
+    // floating. It goes to nothing at the horizon, comes back hard just under
+    // it — which is where the masonry stands, and the masonry was out-valuing
+    // the sky — and comes back a little at the very TOP as well, because a
+    // zenith is darker than a horizon in any sky ever photographed and that
+    // top stop is the lid on the clouds, which were carrying a wider value
+    // spread than the midground standing in front of them.
+    const flo = (cx, w, h) => {
+      const g = cx.createLinearGradient(0, 0, 0, h);
+      const hz = clamp(POST.horizon, .02, .9), kn = clamp(POST.knee, hz + .02, .98);
+      g.addColorStop(0,  'rgba(' + POST.floor + ',' + POST.zenith + ')');
+      g.addColorStop(hz, 'rgba(' + POST.floor + ',0)');
+      g.addColorStop(kn, 'rgba(' + POST.floor + ',' + POST.kneeA + ')');
+      g.addColorStop(1,  'rgba(' + POST.floor + ',' + POST.floorA + ')');
+      return g;
+    };
+    // and the white point, screened on the sun's own corner. Screen adds most
+    // where the frame is darkest, so it lifts the shadow side of a cloud
+    // toward the highlight rather than blowing the highlight further out —
+    // the same fill is the ceiling and the highlight family both.
+    const sky = (cx, w, h) => {
+      const sr = hyp(w, h) * POST.sunR;
+      const g = cx.createRadialGradient(w * SUN.x, h * SUN.y, 0, w * SUN.x, h * SUN.y, sr);
+      g.addColorStop(0,  'rgba(' + POST.sun + ',' + POST.sunA + ')');
+      g.addColorStop(.5, 'rgba(' + POST.sun + ',' + (POST.sunA * .38).toFixed(3) + ')');
+      g.addColorStop(1,  'rgba(' + POST.sun + ',0)');
+      return g;
+    };
+    // White first, so what comes out is an opaque picture of the light lost at
+    // every point of the frame — which is what a multiply wants and what an
+    // alpha ramp only pretends to be.
+    gm.globalCompositeOperation = 'source-over';
+    gm.fillStyle = '#ffffff'; gm.fillRect(0, 0, gw, gh);
+    gm.globalCompositeOperation = 'multiply';
+    if (POST.vigA > 0){ gm.fillStyle = vig(gm, gw, gh); gm.fillRect(0, 0, gw, gh); }
+    gm.fillStyle = flo(gm, gw, gh); gm.fillRect(0, 0, gw, gh);
+    gm.globalCompositeOperation = 'source-over';
+    gs.clearRect(0, 0, gw, gh);
+    gs.fillStyle = sky(gs, gw, gh); gs.fillRect(0, 0, gw, gh);
     // ---- aberration. One ramp, used three ways: the two channel copies are
     // masked BY it, and the frame is taken down by one MINUS it, so red and
     // cyan add the edge back up to exactly the light it started with.
@@ -10981,7 +11067,7 @@ function postCache(c, W, H){
     P = {
       W, H, bw, bh, cw, ch, b1, b2, pr, pg, tiles, age: 99, bands,
       soft: typeof c.filter === 'string',
-      lit, vig,
+      lit, gm, gs,
       maskR: mk(pr, cw, ch, false), maskG: mk(pg, cw, ch, false), caCut: mk(c, W, H, true),
       // The lifted blacks are a flat constant, and the bright pass is already
       // adding a buffer to the frame — so the constant rides IN that buffer
@@ -11128,9 +11214,17 @@ function postGrade(c, P, W, H, lvl){
     c.globalCompositeOperation = 'soft-light';
     c.fillStyle = P.lit; c.fillRect(0, 0, W, H);
   }
-  if (POST.vigA > 0){
-    c.globalCompositeOperation = 'multiply';
-    c.fillStyle = P.vig; c.fillRect(0, 0, W, H);
+  // The corners and the black point, folded into one buffer, and then the
+  // white point on top of them. Two blits of a baked ramp, which is the
+  // cheapest thing in the whole chain — so these live at the BOTTOM of the
+  // ladder, below the bright pass and below the grain. A machine too slow for
+  // any of the rest still gets a graded picture, because a frame with no ends
+  // to it is the failure the bright pass was covering for.
+  c.globalCompositeOperation = 'multiply';
+  c.drawImage(P.gm.canvas, 0, 0, W, H);
+  if (POST.sunA > 0){
+    c.globalCompositeOperation = 'screen';
+    c.drawImage(P.gs.canvas, 0, 0, W, H);
   }
   const pat = lvl >= 1 && POST.grain > 0 && P.pat[Math.floor(Math.abs(G.t) * POST.grainHz) % P.pat.length];
   if (pat){
@@ -13551,6 +13645,7 @@ window.IB = {
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
   SKY, plateKey, skyRoll, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
+  POST, postFx, postCache, postGrade, STONE_TONE, STONE_TONE_LIT, STONE_TONE_DARK,
   get LW(){ return LW; }, get LH(){ return LH; },
 };
 
