@@ -2995,6 +2995,55 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'both mesas draw from in front, from behind and from the middle');
 }
 {
+  // Doors and windows. Every plot building goes through drawHouse and only the
+  // town hall and the forge ever had an opening cut into it — the rest were
+  // blank boxes standing next to a hall with a door, four lit windows and a
+  // chimney.
+  IB.newMatch({ diff:'veteran', seed:137 });
+  // Add a building type and this fails until you say what its walls look like.
+  // A null entry is a decision somebody made; a missing one is a case nobody
+  // wrote, and those are what keep turning up in this file.
+  for (const k in IB.BUILDINGS)
+    t.ok(k in IB.TRIM, k + ' says whether it has openings');
+  for (const k in IB.TRIM)
+    t.ok(k in IB.BUILDINGS, 'TRIM.' + k + ' names a building that exists');
+
+  for (const k in IB.TRIM){
+    const spec = IB.TRIM[k];
+    if (!spec) continue;
+    const w = .40, d = .32, wh = .70;
+    const os = IB.houseOpenings(w, d, wh, spec);
+    t.ok(os.length === 1 + (spec.win || 0) + (spec.side || 0), k + ' cuts every opening it asks for');
+    t.ok(os.filter(o => o.kind === 'door').length === 1, k + ' has exactly one door');
+    for (const o of os){
+      // The two faces this projection shows. An opening on either of the other
+      // two is hidden by the building and surfaces over the roof instead —
+      // which is what the town hall's windows did on the first pass, and a
+      // still screenshot of the front of the house will not tell you.
+      t.ok(o.plane === 'near' || o.plane === 'right', k + ' cuts only into a face you can see (' + o.plane + ')');
+      t.ok(o.z0 >= 0 && o.z1 > o.z0 && o.z1 <= wh + 1e-9,
+        k + '’s ' + o.kind + ' stays between the ground and the wall head');
+      const lim = o.plane === 'near' ? w : d;
+      t.ok(o.a >= -lim - 1e-9 && o.b <= lim + 1e-9 && o.b > o.a,
+        k + '’s ' + o.kind + ' stays inside the wall it is cut into');
+    }
+    // A window overlapping the door reads as a smear, and only at one angle.
+    for (const plane of ['near', 'right']){
+      const on = os.filter(o => o.plane === plane).sort((p, q) => p.a - q.a);
+      for (let i = 1; i < on.length; i++)
+        t.ok(on[i].a >= on[i - 1].b - 1e-9 || on[i].z0 >= on[i - 1].z1 - 1e-9,
+          k + '’s openings on the ' + plane + ' face do not overlap');
+    }
+  }
+  // The door has to reach the ground — a door starting halfway up a wall is a
+  // hatch, and the whole point is that somebody walks out of it.
+  for (const k in IB.TRIM){
+    if (!IB.TRIM[k]) continue;
+    const door = IB.houseOpenings(.4, .32, .7, IB.TRIM[k]).find(o => o.kind === 'door');
+    t.ok(door.z0 === 0, k + '’s door starts on the ground');
+  }
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;

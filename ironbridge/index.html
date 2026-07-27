@@ -4573,6 +4573,51 @@ function drawHouse(c, gx, gy, w, d, wh, rh, wall, roof){
   poly(c, [E1, R1, R2, E4], shade(roof, .74));
 }
 
+// What a house has cut into it. Every plot building goes through drawHouse and
+// only the town hall and the forge ever had a door — the rest were blank boxes
+// standing next to a hall with a door, four lit windows and a chimney.
+//
+// Returned as data rather than drawn inline so a test can check every opening
+// lands on a face this projection actually shows: the near face at y = +d and
+// the right-hand face at x = +w. An opening on either of the other two is
+// hidden by the building itself and surfaces over the roof instead — which is
+// exactly what the town hall's windows did on the first pass.
+// Keyed by building type, and every type in BUILDINGS has to appear — a null
+// means "this one deliberately has no house openings", which is a decision
+// somebody made rather than a case that was never written. Add a building and
+// the test fails until you say what its walls look like.
+const TRIM = {
+  pit:      null,                              // no house at all, it is a hole
+  forge:    null,                              // its opening is the fire door
+  farm:     { win:1, side:0, lit:false },
+  barracks: { win:2, side:1, lit:false },
+  tavern:   { win:2, side:2, lit:true },
+  workshop: { win:2, side:1, lit:true },
+};
+function houseOpenings(w, d, wh, spec){
+  const out = [{ plane:'near', a:-w * .26, b:w * .26, z0:0, z1:wh * .60, kind:'door' }];
+  const z0 = wh * .50, z1 = wh * .80;
+  const near = [[-w * .82, -w * .46], [w * .46, w * .82]];
+  for (let i = 0; i < (spec.win || 0); i++)
+    out.push({ plane:'near', a:near[i % 2][0], b:near[i % 2][1], z0, z1, kind:'win' });
+  const side = [[-d * .64, -d * .22], [d * .20, d * .62]];
+  for (let i = 0; i < (spec.side || 0); i++)
+    out.push({ plane:'right', a:side[i % 2][0], b:side[i % 2][1], z0, z1, kind:'win' });
+  return out;
+}
+function houseTrim(c, gx, gy, w, d, wh, spec, base){
+  const b0 = base || 0;
+  for (const o of houseOpenings(w, d, wh - b0, spec)){
+    const fill = o.kind === 'door' ? '#4a3526' : (spec.lit ? '#f0cf82' : '#5d5140');
+    const pts = o.plane === 'near'
+      ? [bp(gx + o.a, gy + d, b0 + o.z0), bp(gx + o.b, gy + d, b0 + o.z0),
+         bp(gx + o.b, gy + d, b0 + o.z1), bp(gx + o.a, gy + d, b0 + o.z1)]
+      : [bp(gx + w, gy + o.a, b0 + o.z0), bp(gx + w, gy + o.b, b0 + o.z0),
+         bp(gx + w, gy + o.b, b0 + o.z1), bp(gx + w, gy + o.a, b0 + o.z1)];
+    poly(c, pts, fill);
+  }
+}
+
 function drawBuilding(c, b){
   const gx = tileGX(b.tile), gy = tileGY(b.tile), B = bu();
   const raise = (b.raise || 0);
@@ -4582,16 +4627,20 @@ function drawBuilding(c, b){
   ell(c, ...bp(gx, gy + .1), BSC * .62, BSC * .3, 'rgba(0,0,0,.22)');
   if (t === 'farm'){
     drawTile(c, gx, gy, '#6d5a34');
-    c.strokeStyle = '#8a7440'; c.lineWidth = 1.6;
-    for (let i = -3; i <= 3; i++){
-      const a = bp(gx - .45, gy + i * .12 + z, 0), e = bp(gx + .45, gy + i * .12 + z, 0);
-      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(e[0], e[1]); c.stroke();
+    // The furrows used to add the raise to the tile's gy instead of to its
+    // height, so while a farm was being built its field slid sideways across
+    // the plot rather than rising with it.
+    for (let i = -4; i <= 4; i++){
+      poly(c, [bp(gx - .46, gy + i * .10, z), bp(gx + .46, gy + i * .10, z),
+               bp(gx + .46, gy + i * .10 + .05, z), bp(gx - .46, gy + i * .10 + .05, z)],
+        i % 2 ? '#7d6739' : '#5d4d2c');
     }
-    for (let i = 0; i < 5; i++){
-      const p = bp(gx - .3 + i * .16, gy - .28 + (i % 2) * .5, z + .1);
-      ell(c, p[0], p[1], BSC * .07, BSC * .1, '#9ec95c');
+    for (let i = 0; i < 9; i++){
+      const p = bp(gx - .36 + (i % 5) * .18, gy - .22 + Math.floor(i / 5) * .34, z + .1);
+      ell(c, p[0], p[1], BSC * .07, BSC * .1, i % 3 ? '#9ec95c' : '#87b64d');
     }
     drawHouse(c, gx - .28, gy - .3, .22, .18, .5 + z, .3, '#a9825a', '#b8503f');
+    houseTrim(c, gx - .28, gy - .3, .22, .18, .5 + z, TRIM.farm, z);
   } else if (t === 'pit'){
     // This is the building your army comes out of and it was two flat
     // ellipses on a dark tile — it read as a puddle. It is a mustering pit
@@ -4644,12 +4693,19 @@ function drawBuilding(c, b){
   } else if (t === 'barracks'){
     drawTile(c, gx, gy, '#5e5748');
     drawHouse(c, gx, gy, .42, .34, .62 + z, .40, '#b08a5e', '#a34438');
+    houseTrim(c, gx, gy, .42, .34, .62 + z, TRIM.barracks, z);
     const p = bp(gx - .5, gy + .1, z + .95);
     c.fillStyle = sideCol(); c.fillRect(p[0], p[1], 7 * B, 12 * B);
-    c.strokeStyle = '#d8dbe2'; c.lineWidth = 2 * B;
-    for (let i = 0; i < 3; i++){
-      const a = bp(gx + .5, gy - .3 + i * .3, z), e = bp(gx + .55, gy - .3 + i * .3, z + .55);
-      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(e[0], e[1]); c.stroke();
+    // Shields hung on the wall. These were three thin white lines standing at
+    // gx + .5 against a house half-width of .42 — a hand's breadth outside the
+    // wall, so they floated beside it, and at this size a 2px line reads as a
+    // floating line however you dress it. The same thing happened at the
+    // mustering pit; a round shield is a shape that survives being small.
+    for (let i = 0; i < 2; i++){
+      const q = bp(gx + .42, gy + .04 + i * .20, z + .32);
+      ell(c, q[0], q[1], 4.6 * B, 4.9 * B, shade(sideCol(), .46));
+      ell(c, q[0], q[1], 3.4 * B, 3.7 * B, shade(sideCol(), .86));
+      ell(c, q[0], q[1], 1.2 * B, 1.3 * B, '#c9d2dd');
     }
   } else if (t === 'forge'){
     const F = FIT.forge;
@@ -4689,6 +4745,7 @@ function drawBuilding(c, b){
   } else if (t === 'tavern'){
     drawTile(c, gx, gy, '#575044');
     drawHouse(c, gx, gy, .40, .32, .95 + z, .38, '#c49a68', '#3f6b8c');
+    houseTrim(c, gx, gy, .40, .32, .95 + z, TRIM.tavern, z);
     const s0 = bp(gx + .5, gy + .1, z + .7);
     c.strokeStyle = '#6a5540'; c.lineWidth = 2 * B;
     c.beginPath(); c.moveTo(s0[0], s0[1]); c.lineTo(s0[0] + 10 * B, s0[1] - 3 * B); c.stroke();
@@ -4697,6 +4754,7 @@ function drawBuilding(c, b){
   } else {
     drawTile(c, gx, gy, '#514b42');
     drawHouse(c, gx, gy, .38, .3, .48 + z, .26, '#9a8f7d', '#6f6455');
+    houseTrim(c, gx, gy, .38, .3, .48 + z, TRIM[t] || TRIM.workshop, z);
     const g = bp(gx + .1, gy - .05, z + .82);
     c.strokeStyle = '#c8a24a'; c.lineWidth = 2.4 * B;
     c.beginPath(); c.arc(g[0], g[1], 7 * B, 0, 6.2832); c.stroke();
@@ -7448,7 +7506,7 @@ window.IB = {
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
-  recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces,
+  recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
