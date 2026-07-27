@@ -2212,6 +2212,15 @@ t.ok(true, 'drawing an empty bridge is harmless');
   for (const m of SRC.matchAll(/\bsfx\(([^)]*)\)/g)){
     for (const q of m[1].matchAll(/'(\w+)'/g)) played.add(q[1]);
   }
+  // A key can also come from a helper — `sfx(hitSfx(tgt), tgt.x)` — and the
+  // passes above see only the call site, so the moment a choice of sound was
+  // factored out of one, all three of its keys read as dead weight. Collect
+  // from any `*Sfx` helper that is genuinely handed to sfx() somewhere, so the
+  // scan still fails on a helper nobody plays.
+  for (const m of SRC.matchAll(/\bconst\s+(\w*Sfx)\s*=([^;]*);/g)){
+    if (!new RegExp('\\bsfx\\(\\s*' + m[1] + '\\s*\\(').test(SRC)) continue;
+    for (const q of m[2].matchAll(/'(\w+)'/g)) played.add(q[1]);
+  }
   const table = new Set(Object.keys(IB.SFX));
   const silent = [...table].filter(k => !played.has(k));
   const missing = [...played].filter(k => !table.has(k));
@@ -6545,6 +6554,138 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(IB.shakeAsked > 0, 'a blow that does not kill still moves the camera (' + IB.shakeAsked.toFixed(2) + ')');
       t.ok(Math.abs(IB.shakeAsked - at(anvil.hitW)) < 1e-9,
         'by exactly the weight it was given (' + IB.shakeAsked.toFixed(3) + ' vs ' + at(anvil.hitW).toFixed(3) + ')');
+      IB.shakeAsked = 0;
+      G.units.length = 0;
+    }
+
+    // The FOURTH thing that weight should buy: the sparks the blow throws.
+    // Walked as a ladder from a graze to a near-kill through the real dealDmg,
+    // four of six blows threw NOTHING AT ALL — `if (big || fxRnd() < .4)`, so
+    // an ordinary hit had a 60% chance of no impact whatsoever, decided by a
+    // coin. And `big` was `dmg > 60`, a fixed number for a thing that varies:
+    // a levy's health runs 190 to 450 over twenty-five waves. On the same six
+    // rows the number, the flinch and the camera each took five distinct
+    // values — and all three read tgt.hitW, set on the line directly above
+    // where the sparks were.
+    {
+      const wasForce = IB.fxForce;
+      IB.fxForce = true;
+      const blow = (frac) => {
+        IB.newMatch({ diff:'veteran', seed:6200 });
+        G.units.length = 0;
+        const tgt = IB.spawnUnit(1, 'grunt', { x:60, y:0, paid:true });
+        const src = IB.spawnUnit(0, 'melee', { x:56, y:0, paid:true });
+        IB.rebuildGrid();
+        G.fx.length = 0; IB.shakeAsked = 0;
+        IB.dealDmg(src, tgt, tgt.mhp * frac, { pure:true });
+        const ps = G.fx.filter(p => p.k === 'p');
+        return { frac, tgt, src, n:ps.length, w:tgt.hitW,
+          fast:Math.max(0, ...ps.map(p => Math.hypot(p.vx, p.vy))),
+          big:Math.max(0, ...ps.map(p => p.r)),
+          away:ps.length ? ps.every(p => (p.vx > 0) === (tgt.x - src.x > 0)) : false,
+          shake:IB.shakeAsked };
+      };
+      const fracs = [.01, .04, .10, .20, .32];
+      const rows = fracs.map(blow);
+      t.ok(rows.every(r => !r.tgt.dead), 'none of those blows killed, so nothing else threw sparks');
+      t.ok(rows.every(r => r.n > 0),
+        'EVERY blow that lands is seen (' + rows.filter(r => r.n === 0).length + ' of ' +
+        rows.length + ' threw nothing)');
+      t.ok(new Set(rows.map(r => r.n)).size >= 4,
+        'and how much it throws varies with the blow (' + rows.map(r => r.n).join(', ') + ')');
+      let flat = 0;
+      for (let i = 1; i < rows.length; i++) if (rows[i].n < rows[i - 1].n) flat++;
+      t.ok(flat === 0, 'never going backwards up the ladder (' + flat + ' steps that did)');
+      t.ok(rows[rows.length - 1].fast > rows[0].fast && rows[rows.length - 1].big > rows[0].big,
+        'a haymaker throws it further and bigger than a graze (' +
+        rows[0].fast.toFixed(2) + '→' + rows[rows.length - 1].fast.toFixed(2) + ')');
+      // The SAME weight the other three read, checked by order rather than by
+      // recomputing the formula — which would only assert my own sum.
+      const disagree = rows.filter((r, i) => i > 0 &&
+        (IB.hitSparks(r.w) > IB.hitSparks(rows[i - 1].w)) !== (r.shake > rows[i - 1].shake)).length;
+      t.ok(disagree === 0,
+        'the sparks and the camera agree about which blow was heavier (' + disagree + ' that did not)');
+      t.ok(IB.hitSparks(0) >= 1, 'even the lightest landed blow throws something (' + IB.hitSparks(0) + ')');
+
+      // Direction. Debris used to leave in a full random circle whatever hit it
+      // and from wherever, so a blow had no direction at all.
+      t.ok(rows.every(r => r.away), 'and all of it leaves the way the blow was going');
+      G.fx.length = 0;
+      const lone = IB.spawnUnit(1, 'grunt', { x:60, y:0, paid:true });
+      IB.dealDmg(null, lone, lone.mhp * .3, { pure:true });
+      const around = G.fx.filter(p => p.k === 'p');
+      t.ok(around.length > 0 && new Set(around.map(p => p.vx > 0)).size >= 1,
+        'a burn with nobody behind it still throws something (' + around.length + ')');
+
+      // What STRUCK decides the colour, not only what was struck — except on
+      // stone, where the chips come off the wall whatever opened it.
+      const struckBy = (mk, magic) => {
+        IB.newMatch({ diff:'veteran', seed:6200 });
+        G.units.length = 0;
+        const tgt = IB.spawnUnit(1, 'grunt', { x:60, y:0, paid:true });
+        const src = mk(tgt);
+        IB.rebuildGrid();
+        G.fx.length = 0;
+        IB.dealDmg(src, tgt, tgt.mhp * .2, { pure:true, magic:!!magic });
+        return [...new Set(G.fx.filter(p => p.k === 'p').map(p => p.col))].join(',');
+      };
+      const cols = [
+        ['a blade',  struckBy((t2) => IB.spawnUnit(0, 'melee',  { x:t2.x - 4, y:0, paid:true }))],
+        ['a shell',  struckBy((t2) => IB.spawnUnit(0, 'cannon', { x:t2.x - 4, y:0, paid:true }))],
+        ['a spell',  struckBy((t2) => IB.spawnUnit(0, 'caster', { x:t2.x - 4, y:0, paid:true }), true)],
+        ['a turret', struckBy(() => G.sides[0].structs.find(x => x.key === 't1'))],
+      ];
+      t.ok(cols.every(c => c[1]), 'all four of them threw something');
+      t.ok(new Set(cols.map(c => c[1])).size === cols.length,
+        'four different things striking a body look like four different things (' +
+        cols.map(c => c[0] + ':' + c[1]).join(' ') + ')');
+      // and stone is the target's, not the striker's
+      t.ok(IB.hitKind({ kind:'cannon', rng:9 }, false, { struct:true }) === 'stone' &&
+           IB.hitKind({ kind:'melee', rng:1.6 }, false, { struct:true }) === 'stone',
+        'a wall gives up masonry whatever opened it');
+      // No kind may name a look that is not there.
+      const kindsSeen = new Set();
+      for (const src of [null, { struct:true, rng:9 }, { kind:'cannon', rng:9 }, { kind:'caster', rng:6, magic:true },
+                         { kind:'melee', rng:1.6 }, { kind:'grunt', rng:1.5 }])
+        for (const m of [false, true])
+          for (const tg of [{ struct:false }, { struct:true }]) kindsSeen.add(IB.hitKind(src, m, tg));
+      t.ok([...kindsSeen].every(k => IB.HIT_LOOK[k]),
+        'every kind of impact the game can produce has a look (' +
+        [...kindsSeen].filter(k => !IB.HIT_LOOK[k]).join(', ') + ' missing)');
+
+      // The SOUND was still inside the particle budget — the same fix applied
+      // to the camera and not to its neighbour four lines up, so the hits went
+      // silent exactly when the fight got busy enough to fill the budget.
+      IB.newMatch({ diff:'veteran', seed:6200 });
+      G.units.length = 0;
+      const anvil2 = IB.spawnUnit(1, 'grunt', { x:60, y:0, paid:true });
+      const fist = IB.spawnUnit(0, 'melee', { x:56, y:0, paid:true });
+      IB.rebuildGrid();
+      G.fx.length = 0;
+      while (G.fx.length < IB.FX_CAP)
+        G.fx.push({ k:'p', x:0, y:0, z:0, vx:0, vy:0, vz:0, t:9, dur:9, col:'#fff', r:1 });
+      IB.AU.want = null;
+      const before = G.fx.length;
+      IB.dealDmg(fist, anvil2, anvil2.mhp * .2, { pure:true });
+      t.ok(G.fx.length === before, 'a full budget really does refuse the sparks (' + (G.fx.length - before) + ' made)');
+      t.ok(/^hit|^stone/.test(IB.AU.want || ''),
+        'and the blow is still heard (' + (IB.AU.want || 'silence') + ')');
+      // the sound reads the weight too, rather than a fixed damage number
+      t.ok(IB.hitSfx({ hitW:1 }) !== IB.hitSfx({ hitW:0 }),
+        'a haymaker and a graze do not sound the same (' + IB.hitSfx({ hitW:1 }) + ' vs ' + IB.hitSfx({ hitW:0 }) + ')');
+      t.ok(IB.hitSfx({ struct:true, hitW:0 }) === 'stone', 'and stone always sounds like stone');
+
+      // Cosmetic: none of it is in the lockstep hash, and a headless run with
+      // the budget shut makes nothing at all.
+      G.fx.length = 0;
+      const h0 = IB.netHash();
+      IB.hitBurst(anvil2, fist, false);
+      t.ok(IB.netHash() === h0, 'what a blow looks like is outside the lockstep hash');
+      IB.fxForce = false;
+      G.fx.length = 0;
+      IB.dealDmg(fist, anvil2, anvil2.mhp * .2, { pure:true });
+      t.ok(G.fx.length === 0, 'and a headless run still costs nothing (' + G.fx.length + ')');
+      IB.fxForce = wasForce;
       IB.shakeAsked = 0;
       G.units.length = 0;
     }

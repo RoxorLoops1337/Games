@@ -1696,25 +1696,17 @@ function dealDmg(src, tgt, amt, o){
   }
   tgt.hitW = hitWeight(dmg, tgt.mhp);
   tgt.hp -= dmg; tgt.hitT = tgt.hitT0 = hitTime(tgt.hitW); tgt.dmgTaken = G.t;
-  // A spark where the blow lands. Capped hard so a wave-on-wave brawl cannot
-  // bury the frame in particles.
-  if (dmg > 0 && fxRoom(4)){
-    const big = tgt.isHero || tgt.struct || dmg > 60;
-    if (big || fxRnd() < .4){
-      const col = magic ? '#c9a6ff' : tgt.struct ? '#e8d9b4' : '#ffd08a';
-      for (let i = 0, n = big ? 4 : 2; i < n; i++){
-        const a = fxRnd() * 6.283, sp = fxRr(1.5, big ? 6 : 3.5);
-        G.fx.push({ k:'p', x:tgt.x, y:tgt.y, z:fxRr(.5, 1.4), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5,
-          vz:fxRr(1, 4), ...life(fxRr(.16, .34)), col, r:fxRr(.9, big ? 2.4 : 1.5) });
-      }
-    }
-    sfx(tgt.struct ? 'stone' : (big ? 'hitBig' : 'hit'), tgt.x);
-  }
+  if (dmg > 0) hitBurst(tgt, src, magic);
   // Outside the particle budget on purpose. fxRoom is about how many sparks
   // the frame can hold; the camera is not a spark, and shake() already guards
   // itself on HEADLESS and on being off screen. Left inside, the feedback for
   // a blow would go quiet exactly when the fight got busy enough to fill the
   // budget — which is backwards.
+  //
+  // The hit SOUND was still inside it, four lines above this paragraph, for as
+  // long as the paragraph has existed: the same fix, applied to the camera and
+  // not to its neighbour. Sound is not a spark either.
+  if (dmg > 0) sfx(hitSfx(tgt), tgt.x);
   if (dmg > 0) hitShake(tgt);
   if (dmg > 0 && !HEADLESS)
     addFloat(tgt.x, tgt.y, Math.round(dmg), magic ? '#c69bff' : (src && src.isHero ? '#ffe08a' : '#ffffff'),
@@ -3581,6 +3573,73 @@ function hitShake(tgt){
   const a = hitShakeAmt(tgt);
   if (a > 0) shake(a, tgt.x);
   return a;
+}
+
+/* What a blow LOOKS like when it lands. Walked as a ladder from a graze to a
+   near-kill on one body, through the real dealDmg:
+
+     share of hp   weight  | sparks  | number  flinch  shake
+     1%            0.03    | 0       | 0.77    0.106   0
+     10%           0.31    | 0       | 1.06    0.163   0.66
+     20%           0.63    | 0       | 1.37    0.225   1.31
+     32%           1       | 4       | 1.75    0.3     2.1
+
+   Four of six blows threw NOTHING AT ALL — the old code was `if (big ||
+   fxRnd() < .4)`, so an ordinary hit had a 60% chance of producing no impact
+   whatsoever, decided by a coin. And `big` was `dmg > 60`, a fixed number for a
+   thing that varies: a levy's health runs 190 to 450 over twenty-five waves, so
+   sixty damage is a third of a body early and an eighth of one late. Exactly
+   the mistake deathHeft's own comment warns about.
+
+   Meanwhile the damage number, the flinch and the camera kick all took five
+   distinct values across the same six rows — and all three read tgt.hitW, which
+   is computed on the line directly above where the sparks used to be. Fourth
+   reader now, same weight, so they cannot drift.                             */
+const HIT_FX = { least:1, most:7, sp:{ min:2.0, max:6.4 }, r:{ min:.85, max:2.6 },
+                 cone:1.15, up:{ min:1, max:4 }, life:{ min:.16, max:.36 }, loud:.55 };
+// Never zero: a blow that landed is a blow the player should see. The cap is
+// still the cap — fxRoom decides whether there is room at all.
+const hitSparks = (w) => Math.round(HIT_FX.least + (HIT_FX.most - HIT_FX.least) * clamp(w, 0, 1));
+/* What struck, not what was struck — the same classifier the projectiles use,
+   with one more entry for a blade, which never becomes a projectile. Stone
+   still wins on stone: chips come off the thing that was HIT, and a wall gives
+   up masonry whatever opened it. */
+const HIT_LOOK = {
+  bolt:  { col:'#c9a6ff', sc:1.05 },   // a spell
+  shaft: { col:'#ffd08a', sc:1 },      // an arrow
+  shell: { col:'#e8d9b4', sc:1.45 },   // siege: heavy, slow, big debris
+  spark: { col:'#ffe3a8', sc:.8 },     // a turret bolt: small and fast
+  blade: { col:'#ffe0b0', sc:1.1 },    // steel
+  stone: { col:'#e8d9b4', sc:1.2 },    // what comes off a wall
+};
+const hitKind = (src, magic, tgt) =>
+  tgt && tgt.struct ? 'stone'
+  : magic ? 'bolt'
+  : !src ? 'shaft'
+  : (src.struct || src.rng > 3) ? projKindFor(src)
+  : 'blade';
+const hitSfx = (tgt) => tgt.struct ? 'stone' : ((tgt.hitW || 0) >= HIT_FX.loud ? 'hitBig' : 'hit');
+
+function hitBurst(tgt, src, magic){
+  const n = hitSparks(tgt.hitW || 0);
+  if (!fxRoom(n)) return 0;
+  const L = HIT_LOOK[hitKind(src, magic, tgt)] || HIT_LOOK.shaft;
+  const w = clamp(tgt.hitW || 0, 0, 1);
+  const sp0 = HIT_FX.sp.min + (HIT_FX.sp.max - HIT_FX.sp.min) * w;
+  const r0 = HIT_FX.r.min + (HIT_FX.r.max - HIT_FX.r.min) * w;
+  // Which way it came from. Debris used to leave in a full random circle
+  // whatever hit it and from wherever — so a blow had no direction at all.
+  const dx = src ? tgt.x - src.x : 0, dy = src ? tgt.y - src.y : 0;
+  const base = (dx || dy) ? Math.atan2(dy, dx) : null;
+  for (let i = 0; i < n; i++){
+    const a = base === null ? fxRnd() * 6.283 : base + fxRr(-HIT_FX.cone, HIT_FX.cone);
+    const sp = fxRr(HIT_FX.sp.min * .6, sp0) * L.sc;
+    G.fx.push({ k:'p', x:tgt.x, y:tgt.y, z:fxRr(.5, 1.4),
+      vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5, vz:fxRr(HIT_FX.up.min, HIT_FX.up.max),
+      ...life(fxRr(HIT_FX.life.min, HIT_FX.life.max)),
+      col:L.col, r:fxRr(HIT_FX.r.min * .8, r0) * L.sc });
+  }
+  return n;
 }
 
 /* How much of a moment a body coming apart is. The game already prices every
@@ -9417,7 +9476,8 @@ window.IB = {
   fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
-  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, applyStun, applySlow, chainLine, hookSnapFx,
+  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor,
+  HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
   netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,
