@@ -6298,6 +6298,29 @@ const MINI_DOWN = 'rgba(120,132,150,.5)';
 // down never smaller than a levy's mark: a fallen hero is grey and nothing else
 // small on the strip is, but it should not be the tinier thing as well.
 const MINI_MARK = { hero:3, rim:1, minion:1.6, down:1.9, rimCol:'#ffffff' };
+/* The strip sizes the STONE by what it is worth — a gate 5x10, an inhibitor
+   4x8, a turret 3x6 — and sized every BODY on the bridge at the same 1.6x1.6.
+   Measured by driving each kind through drawMinimap:
+
+     what          worth   mark        px²
+     Levy          5       1.6 x 1.6   2.56
+     Footman       6       1.6 x 1.6   2.56
+     Cannon        10      1.6 x 1.6   2.56
+     Siege Ogre    12      1.6 x 1.6   2.56
+     distinct marks: 1 of 5
+
+     control, same widget, same frame — the stone: 3 distinct of 3
+
+   Which put the widget's one job the wrong way round. Five levies and two
+   Siege Ogres are worth almost exactly the same (25 against 24), and the strip
+   gave the levies 12.8px² against the ogres' 5.1 — so the trickle read as two
+   and a half times the push that costs an inhibitor to unlock.
+
+   deathHeft is the game's own price on a body's head and already decides how
+   hard one comes apart. Third reader. A levy is the common case and lands
+   within a twentieth of a pixel of the mark it has always had. */
+const MINI_BODY = { min:1.15, max:3.4 };
+const miniBodyR = (u) => MINI_BODY.min + (MINI_BODY.max - MINI_BODY.min) * deathHeft(u);
 function drawMinimap(c){
   const m = minimapRect();
   const w = m.w, h = m.h, x0 = m.x0, y0 = m.y0;
@@ -6342,8 +6365,9 @@ function drawMinimap(c){
   for (const u of G.units){
     if (u.dead || u.isHero) continue;      // heroes are drawn off their roster below
     const px = mx(u.x), py = y0 + h / 2 + u.y * .8;
+    const sz = miniBodyR(u);
     c.fillStyle = SIDE_COL2[u.side];
-    c.fillRect(px - MINI_MARK.minion / 2, py - MINI_MARK.minion / 2, MINI_MARK.minion, MINI_MARK.minion);
+    c.fillRect(px - sz / 2, py - sz / 2, sz, sz);
   }
   // Heroes come off the ROSTER, not off G.units, because onHeroDeath splices a
   // dead one out of G.units — so drawn from there, a hero that dies simply
@@ -9758,7 +9782,7 @@ window.IB = {
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder, drawFx, fxOnDeck, DECK_FX, fxDeck, fxAir,
-  BODY_SHADOW, bodyShadowR, FLOAT_PAD, floatPlan,
+  BODY_SHADOW, bodyShadowR, FLOAT_PAD, floatPlan, MINI_BODY, miniBodyR,
   STATUS, statusFade, spanN,
   HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
