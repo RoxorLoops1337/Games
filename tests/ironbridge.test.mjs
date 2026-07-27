@@ -4438,6 +4438,180 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'every building type draws with the new faces, from either seat');
 }
 {
+  // THE LIGHT LAW. The block above checks that the light comes from the left.
+  // This one checks that there is a light at all — that every number in LIT is
+  // the answer to one question asked of one light vector, rather than a value
+  // somebody picked and defended in isolation.
+  //
+  // The bug that names this test: LIT.roofNear was .86 while LIT.near was
+  // 1.02. roofNear is the gable end standing on the near wall — the same
+  // compass bearing, leaning BACK toward the open sky — so it was darker than
+  // the wall underneath it, which no light in the universe can arrange. Two
+  // roof planes ninety degrees apart shared a fill for the same reason. Every
+  // hand-set table drifts like this eventually; a derived one cannot.
+  const L = IB.LIT, LG = IB.LIGHT, pl = IB.planeLit;
+  t.ok(LG.z > 0, 'the sun is above the world rather than under it');
+  t.ok((LG.x < 0) === (IB.SUN.x < .5),
+    'and stands on the side of the world the sun disc is drawn on');
+  t.ok(Math.abs(Math.sqrt(LG.x * LG.x + LG.y * LG.y + LG.z * LG.z) - 1) < .02,
+    'the light vector is a direction, not a direction and a brightness at once');
+
+  // The law itself, asked of the shape rather than of the table: tilting any
+  // wall back toward the sky can only ever brighten it, whichever way it
+  // faces, because the sun is up there. This is the statement roofNear broke.
+  for (const [nx, ny, name] of [[0, 1, 'near'], [1, 0, 'right'], [-1, 0, 'left'], [0, -1, 'far']]){
+    const up = pl(nx * .7, ny * .7, .7);
+    t.ok(up > pl(nx, ny, 0) + .05,
+      'a ' + name + ' plane laid back toward the sky is brighter than the same plane stood upright (' +
+      up.toFixed(3) + ' vs ' + pl(nx, ny, 0).toFixed(3) + ')');
+  }
+  t.ok(pl(0, 0, 1) > pl(0, 0, -1) + .5, 'and a face turned at the sky beats one turned at the ground');
+
+  // The table is that law, cached. Every entry has to be the dot product of
+  // the plane it names — including the two that used to disagree.
+  const near = (a, b, why) => t.ok(Math.abs(a - b) < 1e-9, why + ' (' + a.toFixed(4) + ' vs ' + b.toFixed(4) + ')');
+  const R = IB.ROOF;
+  near(L.near, pl(0, 1, 0), 'the near wall is exactly what the light says a near wall is');
+  near(L.right, pl(1, 0, 0), 'and the right-hand wall what it says a right-hand wall is');
+  near(L.cap, pl(0, 0, 1), 'and the cap what it says of a face pointed at the sky');
+  near(L.roofLeft, pl(-R.rh, 0, R.over * R.w), 'the left slope is its own pitch, taken off the same light');
+  near(L.roofRight, pl(R.rh, 0, R.over * R.w), 'and the right slope its own');
+  near(L.roofNear, pl(0, R.rh, (R.over - R.ridge) * R.d), 'and the near gable its own');
+  near(L.roofFar, pl(0, -R.rh, (R.over - R.ridge) * R.d), 'and the far gable its own');
+  // The regression, stated as the impossibility it is.
+  t.ok(L.roofNear >= L.near,
+    'the gable leaning back off the near wall is never darker than the near wall (' +
+    L.roofNear.toFixed(3) + ' vs ' + L.near.toFixed(3) + ')');
+  t.ok(L.roofRight > L.right + .2,
+    'and the slope over the shaded wall is well clear of the wall itself — it still sees sky (' +
+    L.roofRight.toFixed(3) + ' vs ' + L.right.toFixed(3) + ')');
+  // Rule out the table that satisfies all of that by being flat.
+  t.ok(L.roofLeft - L.roofRight > .15 && L.near - L.right > .3,
+    'planes ninety degrees apart do not share a fill');
+  t.ok(new Set([L.near, L.right, L.cap, L.roofLeft, L.roofRight, L.roofNear, L.roofFar]).size === 7,
+    'and no two of the seven planes come out at the same number');
+  // A pitched roof is a pitched roof whatever building it is on: across the
+  // whole range the six buildings use, the sunward slope stays sunward.
+  for (const [w, rh] of [[.22, .30], [.40, .36], [.62, .55], [.38, .26]]){
+    t.ok(pl(-rh, 0, R.over * w) > pl(rh, 0, R.over * w) + .15,
+      'at pitch ' + (rh / w).toFixed(2) + ' the sunward slope still beats the other one');
+  }
+}
+{
+  // Two illuminants. shade() was a scalar multiply — every colour slid at
+  // black, so hue and saturation could not move and NO SHADOW IN THE GAME
+  // COULD CONTAIN COLOUR. There are two lights outdoors: a warm sun, and a
+  // blue sky that is the only thing lighting what the sun cannot reach.
+  const chan = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const lum = (c) => .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+  // Red over blue, as a FRACTION of the colour's own weight: a scalar multiply
+  // scales r and b together and cannot move this number at all, which is the
+  // whole complaint. An absolute red-minus-blue would drift with brightness
+  // and let the old function through.
+  const warmth = (c) => (c[0] - c[2]) / (c[0] + c[1] + c[2] || 1);
+  const stone = '#c4ab84';
+  const base = chan(stone), sun = chan(IB.shade(stone, 1.02)), sky = chan(IB.shade(stone, .34));
+
+  t.ok(warmth(sun) > warmth(base), 'a face in the sun is warmer than the paint it was mixed from');
+  t.ok(warmth(sky) < warmth(base), 'and a face the sun never reaches is cooler than it');
+  t.ok(warmth(sun) - warmth(sky) > .10,
+    'the two illuminants are far enough apart to see (' + warmth(sun).toFixed(3) + ' vs ' + warmth(sky).toFixed(3) + ')');
+  // The old function, ruled out: a scalar multiply leaves hue frozen exactly.
+  const hue = (c) => Math.atan2(1.732 * (c[1] - c[2]), 2 * c[0] - c[1] - c[2]);
+  t.ok(Math.abs(hue(sky) - hue(base)) > .02, 'the shadow is a different hue, not the same hue dimmed');
+  t.ok(Math.abs(hue(sun) - hue(base)) > .005, 'and so is the lit face');
+
+  // The floor. Nothing under an open sky is black — the sky is still up there
+  // lighting it — so shade() at nought is dim, not gone.
+  const dark = chan(IB.shade(stone, 0));
+  t.ok(lum(dark) > lum(base) * .2, 'a surface with no sun on it is still lit by the sky');
+  t.ok(lum(dark) < lum(base) * .5, 'but it is plainly in shadow');
+
+  // Brightness is still exactly what the call site asked for. 122 call sites
+  // were written against a scalar multiply; the tint must not smuggle value
+  // in with it, or a saturated blue in shadow comes out BRIGHTER than the
+  // same blue in the sun — which is how the minimap swapped its two holds.
+  for (const col of ['#4ea3ff', '#ff5a52', '#7a4a3c', '#8b8778']){
+    const c0 = chan(col);
+    for (const f of [.2, .5, .85]){
+      const got = lum(chan(IB.shade(col, f))), want = lum(c0) * (IB.SHADE.amb + (1 - IB.SHADE.amb) * f);
+      t.ok(Math.abs(got - want) < 2.5,
+        col + ' at ' + f + ' has the brightness the call site asked for (' + got.toFixed(1) + ' vs ' + want.toFixed(1) + ')');
+    }
+    t.ok(lum(chan(IB.shade(col, .3))) < lum(chan(IB.shade(col, .6))),
+      col + ' in shadow is darker than the same ' + col + ' half-lit');
+    t.ok(lum(chan(IB.shade(col, 1.25))) > lum(chan(IB.shade(col, 1))),
+      'and a rim on ' + col + ' is brighter than the face it sits on');
+  }
+  // A blue thing in shadow against a red thing in the light: the pair that
+  // caught it. The strip's own two blocks, from both seats.
+  for (const seat of [0, 1]){
+    const was = IB.MY; IB.MY = seat;
+    t.ok(lum(chan(IB.miniHoldCol(seat))) > lum(chan(IB.miniHoldCol(1 - seat))),
+      'from seat ' + seat + ' your hold is still the brighter block on the strip');
+    IB.MY = was;
+  }
+
+  // The sun's colour is the SUN's colour: move it and every lit surface in the
+  // world moves with it. This is the wire the old shade() did not have.
+  const wasWarm = IB.SUN.warm;
+  IB.SUN.warm = '190,215,255';
+  const cold = chan(IB.shade(stone, 1.1));
+  IB.SUN.warm = wasWarm;
+  const back = chan(IB.shade(stone, 1.1));
+  t.ok(warmth(cold) < warmth(back) - .05,
+    'paint the sun blue and the lit stone turns blue with it (' +
+    warmth(cold).toFixed(3) + ' vs ' + warmth(back).toFixed(3) + ')');
+  t.ok(back.join() === chan(IB.shade(stone, 1.1)).join(), 'and putting the sun back puts the stone back');
+}
+{
+  // Cones. There are four on the board, two on each keep, and each one was ONE
+  // TRIANGLE of one flat fill — the reddest shape in the picture with no light
+  // on it anywhere. A cone turns through the light: it always has a half that
+  // faces the sun and a half that cannot.
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return .2126 * ((n >> 16) & 255) + .7152 * ((n >> 8) & 255) + .0722 * (n & 255); };
+  // A context that keeps what it was asked to draw rather than drawing it.
+  const draw = (sunX) => {
+    const fills = [], rims = [];
+    let cur = [];
+    const c2 = {
+      fillStyle:'#000', strokeStyle:'#000', lineWidth:1,
+      beginPath(){ cur = []; },
+      moveTo(x, y){ cur.push([x, y]); },
+      lineTo(x, y){ cur.push([x, y]); },
+      closePath(){},
+      fill(){ fills.push({ col:c2.fillStyle, pts:cur }); },
+      stroke(){ rims.push({ col:c2.strokeStyle, pts:cur }); },
+    };
+    const wasX = IB.SUN.x;
+    if (sunX !== undefined) IB.SUN.x = sunX;
+    IB.coneRoof(c2, 100, 20, 60, 23, '#ff5a52', 1);
+    IB.SUN.x = wasX;
+    return { fills, rims };
+  };
+  const one = draw();
+  t.ok(one.fills.length === 2, 'a cone is drawn as two halves, not as one triangle (' + one.fills.length + ')');
+  t.ok(one.fills[0].col !== one.fills[1].col, 'and the two halves are not the same colour');
+  for (const h of one.fills) t.ok(/^#[0-9a-f]{6}$/i.test(h.col), 'each half is a colour a canvas can read (' + h.col + ')');
+  t.ok(lum(one.fills[0].col) > lum(one.fills[1].col) + 20,
+    'the half facing the sun is brighter than the half turned away (' +
+    lum(one.fills[0].col).toFixed(0) + ' vs ' + lum(one.fills[1].col).toFixed(0) + ')');
+  t.ok(IB.CONE.split > 0 && IB.CONE.split < 1,
+    'the terminator sits past the middle of the base, because the sun is high');
+  t.ok(one.rims.length === 1 && one.rims[0].col.indexOf(IB.SUN.warm) >= 0,
+    'and the sunward edge carries a hairline of the sun’s own colour');
+  const mid = (h) => (h.pts[0][0] + h.pts[1][0] + h.pts[2][0]) / 3;
+  // It turns with the sun, the same as the shadows and the clouds do — and the
+  // rim goes round with it, or the lit half ends up rimmed down its dark edge.
+  const left = draw(.17), right = draw(.83);
+  t.ok(mid(left.fills[0]) < 100 && mid(right.fills[0]) > 100,
+    'the lit half is on the sun’s side of the apex, whichever side of the sky the sun is on');
+  t.ok(left.rims[0].pts[1][0] < 100 && right.rims[0].pts[1][0] > 100,
+    'and the hairline runs down the sunward edge either way');
+  t.ok(Math.abs(mid(left.fills[0]) - 100) > 4,
+    'the split is a real split, not a seam down the middle (' + mid(left.fills[0]).toFixed(1) + ' from an apex at 100)');
+}
+{
   // The sky. Every object in this game is lit from the upper left and there
   // was nothing up there doing the lighting — and a sun on the WRONG side of
   // that sky would be the same bug drawHouse had, seen from the other end.
