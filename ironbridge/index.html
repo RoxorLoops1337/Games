@@ -3236,13 +3236,20 @@ function castFx(h, s, tgt){
   const tx = tgt ? tgt.x : h.x, ty = tgt ? tgt.y : h.y;
   const ang = Math.atan2(ty - h.y, tx - h.x);
   const big = ult ? 1.6 : 1;
+  // An ultimate's flourish may be bigger. The ring that says "this is what got
+  // hit" may not. Where a skill states an aoe that IS the radius, and drawing
+  // it 1.6x over — which is what nova did — tells the player an area is
+  // dangerous when it is not. Where a skill states none, the size is pure
+  // decoration and scales freely. `strike` next door already had this right:
+  // it scales its stylised slash and leaves the truthful wave beside it alone.
+  const fxR = (base) => aoe || base * big;
   h.castT = ult ? .5 : .32;                      // the caster itself pops
   h.castCol = ult ? '#ffe08a' : col;
 
   switch (s.k){
     // it goes off around the caster
     case 'nova': case 'taunt':
-      waveFx(h.x, h.y, Math.max(2.2, aoe) * big, col, .5);
+      waveFx(h.x, h.y, Math.max(2.2, fxR(2.2)), col, .5);
       burstFx(h.x, h.y, col, ult ? 16 : 10);
       break;
 
@@ -3287,27 +3294,27 @@ function castFx(h, s, tgt){
 
     // it wraps somebody up
     case 'buff': case 'teambuff': case 'shield':
-      waveFx(h.x, h.y, Math.max(2, aoe || 2.4), col, .42);
+      waveFx(h.x, h.y, Math.max(2, fxR(2.4)), col, .42);
       moteFx(h.x, h.y, col, ult ? 12 : 7, .9);
       break;
 
     // it arrives
     case 'summon':
-      waveFx(h.x, h.y, 2.4 * big, col, .5);
+      waveFx(h.x, h.y, fxR(2.4), col, .5);
       moteFx(h.x, h.y, col, ult ? 14 : 9, 1.1);
       burstFx(h.x, h.y, col, 8);
       break;
 
     // it moves the hero — dashFx already draws the trail, this is the kick-off
     case 'dash':
-      burstFx(h.x, h.y, col, 9);
-      waveFx(h.x, h.y, 1.8, col, .3);
+      burstFx(h.x, h.y, col, ult ? 14 : 9);
+      waveFx(h.x, h.y, fxR(1.8), col, .3);
       break;
 
     // it throws a chain — the projectile is the effect, so this is only the
     // shoulder going back. The snap is drawn when the chain actually bites.
     case 'hook':
-      waveFx(h.x, h.y, 1.5 * big, col, .26);
+      waveFx(h.x, h.y, fxR(1.5), col, .26);
       burstFx(h.x, h.y, '#d9c49a', ult ? 8 : 5);
       break;
 
