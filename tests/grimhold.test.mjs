@@ -2589,4 +2589,206 @@ t.test('the book: what killed a hero is recorded by name', () => {
   t.eq(HQ.G.run.lastFall.who, 'Wizard', 'and who it was');
 });
 
+/* ------------------------------------------------- relics and paying curses */
+
+function runAt(depth, party){
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.G.run = HQ.newRun(party || ['barbarian','wizard']);
+  HQ.G.run.depth = depth || 1;
+  HQ.beginFloor();
+  return HQ.G;
+}
+
+t.test('relics: two slots, and a third means putting one down', () => {
+  runAt(4);
+  t.eq(HQ.RELIC_SLOTS, 2, 'you may carry two');
+  t.eq(HQ.G.run.relics.length, 0, 'and start with none');
+  t.ok(HQ.takeRelic('skull'), 'the first goes in');
+  t.ok(HQ.takeRelic('ring'), 'and the second');
+  t.ok(!HQ.takeRelic('skull'), 'never the same one twice');
+  t.ok(!HQ.takeRelic('anvil'), 'a third will not fit');
+  t.eq(HQ.G.run.relics.length, 2, 'still two');
+  t.ok(!HQ.takeRelic('anvil', 'lantern'), 'and you cannot drop what you are not holding');
+  t.ok(HQ.takeRelic('anvil', 'ring'), 'but you may drop one you are');
+  t.eq(HQ.G.run.relics.join(), 'skull,anvil', 'and the swap is exact');
+  t.ok(!HQ.relicHas('ring'), 'the ring is on the floor now');
+
+  // and the offer never repeats what you hold
+  for (let i = 0; i < 30; i++){
+    const o = HQ.relicOffer();
+    t.ok(o && !HQ.relicHas(o.id), 'an offer is always something new');
+  }
+});
+
+t.test('relics: each one actually does the thing it says', () => {
+  runAt(4, ['barbarian','wizard']);
+  const h = HQ.runAlive()[0];
+  const skel = { mt:'skeleton', bp:3 }, orc = { mt:'orc', bp:3 };
+
+  const a0 = HQ.attackDice(h, skel);
+  HQ.takeRelic('ring');
+  t.eq(HQ.attackDice(h, skel), a0 + 1, 'the ring bites the undead');
+  t.eq(HQ.attackDice(h, orc), HQ.attackDice(h, orc), 'and not the living');
+  t.eq(HQ.attackDice(h, orc), a0, 'exactly as before against an orc');
+
+  const d0 = HQ.defendDice(h), t0 = HQ.trapBite(2);
+  HQ.takeRelic('anvil');
+  t.eq(HQ.defendDice(h), d0 + 1, 'the anvil is a defend die');
+  t.eq(HQ.trapBite(2), t0 - 1, 'and takes a point off every trap');
+  t.ok(HQ.trapBite(1) >= 1, 'though a trap always bites at least once');
+
+  // the lantern lights the floor and shows the traps
+  runAt(6);
+  const r0 = HQ.torchRadius();
+  HQ.G.q.traps.forEach(tr => { tr.found = false; });
+  HQ.takeRelic('lantern');
+  t.eq(HQ.torchRadius(), r0 + 3, 'the lantern reaches further');
+  t.ok(HQ.G.q.traps.every(tr => tr.found), 'and shows every trap at once');
+
+  // the thread unpicks hidden doors
+  runAt(6);
+  for (const k in HQ.G.q.doors) HQ.G.q.doors[k].found = false;
+  HQ.takeRelic('thread');
+  t.ok(Object.values(HQ.G.q.doors).every(d => d.found), 'the thread finds every door');
+});
+
+t.test('relics: the skull pays on arrival, the coin pays once', () => {
+  runAt(2);
+  HQ.takeRelic('skull');
+  const f0 = HQ.fateOf();
+  HQ.G.run.depth = 3;
+  HQ.beginFloor();
+  t.eq(HQ.fateOf(), f0 + 1, 'the skull is worth a Fate a floor');
+
+  runAt(2);
+  HQ.takeRelic('coin');
+  const a = HQ.runAlive()[0], b = HQ.runAlive()[1];
+  HQ.hurt(a, 99, null);
+  t.ok(a.alive, 'the ferryman turns the first one back');
+  t.eq(a.bp, 1, 'on one Body Point');
+  t.ok(HQ.G.run.coinUsed, 'and the coin is spent');
+  HQ.hurt(b, 99, null);
+  t.ok(!b.alive, 'the second pays properly');
+});
+
+t.test('relics: the mirror lands spells on warded things, the horn stuns a room', () => {
+  runAt(5, ['wizard','barbarian']);
+  const w = HQ.runAlive().find(x => x.id === 'wizard');
+  HQ.G.q.activeId = w.id; w.acted = false; w.x = 11; w.y = 8;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = m.bpMax = 12; m.def = 0;
+  delete m.affix; HQ.applyAffix(m, 'warded');
+  HQ.recomputeVision();
+  ALL_SKULLS();
+  HQ.castSpell(w, 'ballflame', m);
+  t.eq(m.bp, 12, 'without the mirror it washes off');
+
+  HQ.takeRelic('mirror');
+  w.acted = false;
+  ALL_SKULLS();
+  HQ.castSpell(w, 'firewrath', m);
+  t.ok(m.bp < 12, 'with it, the spell lands anyway');
+
+  // the horn
+  runAt(5);
+  HQ.takeRelic('horn');
+  const door = Object.values(HQ.G.q.doors).find(d => !d.open && !d.secret && !d.locked);
+  const inside = HQ.monstersOf().filter(x => HQ.roomAt(x.x, x.y) === door.rid);
+  HQ.openDoorAt(HQ.runAlive()[0], door);
+  if (inside.length) t.ok(inside.every(x => x.stun > 0), 'everything in the room is standing there blinking');
+  else t.ok(true, 'the room was empty, which is also fine');
+});
+
+t.test('curses: every mark takes something and gives something back', () => {
+  for (const c of HQ.CURSE_MARKS){
+    t.ok(c.desc && c.desc.length > 8, `${c.id} says what it costs`);
+    t.ok(c.up && c.up.length > 8, `${c.id} says what it pays`);
+  }
+  runAt(3);
+  const h = HQ.runAlive()[0];
+
+  const a0 = HQ.attackDice(h, { mt:'orc', bp:2 }), d0 = HQ.defendDice(h);
+  HQ.addCurse('frail');
+  t.eq(HQ.defendDice(h), d0 - 1, 'brittle bones costs a defend die');
+  t.eq(HQ.attackDice(h, { mt:'orc', bp:2 }), a0 + 1, 'and pays an attack die');
+
+  HQ.addCurse('heavy');
+  t.eq(HQ.defendDice(h), d0, 'the dragging chain gives the defend die back');
+
+  runAt(3);
+  HQ.G.q.traps.forEach(tr => { tr.found = false; });
+  const t0 = HQ.trapBite(2);
+  HQ.addCurse('thin');
+  t.eq(HQ.trapBite(2), t0 + 1, 'thin skin cuts deeper');
+  HQ.G.run.depth = 4;
+  HQ.beginFloor();
+  t.ok(HQ.G.q.traps.every(tr => tr.found), 'and you are jumpy enough to see them all');
+
+  runAt(3);
+  const f0 = HQ.fateOf();
+  HQ.addCurse('greedy');
+  HQ.G.run.depth = 4;
+  HQ.beginFloor();
+  t.eq(HQ.fateOf(), f0 + 1, "the miser's due pays interest in Fate");
+});
+
+t.test('curses: the marked are found faster but paid double for it', () => {
+  runAt(4);
+  HQ.addCurse('watched');
+  const h = HQ.runAlive()[0];
+  h.x = 11; h.y = 8;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.mt = 'orc';                                    // a zombie would get back up
+  m.x = 11; m.y = 7; m.bp = 1;
+  if (!m.affix) HQ.applyAffix(m, 'armoured');
+  HQ.recomputeVision();
+  const f0 = HQ.fateOf();
+  HQ.hurt(m, 99, null);
+  t.eq(HQ.fateOf(), f0 + 2, 'a champion is worth two Fate to the marked');
+});
+
+t.test('curses: a dim party is spotted later than a bright one', () => {
+  runAt(4);
+  const h = HQ.runAlive()[0];
+  // twelve squares apart: inside the normal twelve, outside the blind six
+  h.x = 9; h.y = 6;
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.mt = 'orc'; m.x = 16; m.y = 11; m.awake = true; m.sleep = 0; m.stun = 0; m.mv = 1;
+  delete m.affix; m.elite = false;
+  for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
+  HQ.G.q.furn = [];
+  HQ.recomputeVision();
+  const at = [m.x, m.y].join();
+  HQ.monsterAct(m, () => {});
+  t.ok([m.x, m.y].join() !== at, 'it comes for a party it can see across the room');
+
+  m.x = 16; m.y = 11;
+  HQ.addCurse('blind');
+  const at2 = [m.x, m.y].join();
+  HQ.monsterAct(m, () => {});
+  t.eq([m.x, m.y].join(), at2, 'and stays put for one it cannot');
+});
+
+t.test('relics: they ride down the stair and into the book', () => {
+  const store = {};
+  const A = loadGame(store);
+  A.G = A.newG();
+  A.startRun(['barbarian','dwarf']);
+  A.takeRelic('skull'); A.takeRelic('anvil');
+  A.saveRun();
+  const B = loadGame(store);
+  B.G = B.newG();
+  t.ok(B.resumeRun(), 'the run comes back');
+  t.eq(B.G.run.relics.join(), 'skull,anvil', 'still holding both');
+  t.ok(B.relicHas('anvil'), 'and they still work');
+
+  A.G.run.depth = 4;
+  A.endRun('test');
+  t.eq(A.G.meta.history[0].relics.join(), 'skull,anvil', 'and the book remembers what you carried');
+});
+
 t.run();
