@@ -4593,17 +4593,33 @@ function drawOgre(c, u, bx, by, floor, sc, col){
 // must PLANT, and one walking up the bridge must not. Reads the clock and the
 // unit's own fixed phase, never a random stream, so both machines see the same
 // legs at the same tick.
+/* A walk cycle used to run off the CLOCK: sin(G.t * 7), the same seven radians
+   a second whether the body was sprinting, trudging, or crawling at forty per
+   cent under a slow. Measured, every unit in the game took exactly nine half
+   steps in four seconds — so a slowed one covered half the ground with the same
+   leg motion and moon-walked, and the fastest unit on the bridge took the
+   longest strides for identical animation.
+
+   It runs off the GROUND now. Steps per metre is the thing that holds still;
+   steps per second falls out of how fast you are actually going, which is what
+   makes a slow look like a slow. u.x is simulation state both machines already
+   agree on, so this adds no state and cannot drift.                         */
 const BODY_STRIDE = 2.4;
+const STEP_LEN = 3.1;                          // metres of ground per full stride
+const STEP_RATE = 6.2832 / STEP_LEN;
+// One phase for the whole body, so the legs and the bounce cannot disagree.
+const gaitOf = (u) => u.x * STEP_RATE + u.ph;
+const walking = (u) => !(u.stunT > 0 || u.pullT > 0) &&
+  !(u.target && hyp(u.target.x - u.x, u.target.y - u.y) <= u.rng + (u.target.r || .4) + u.r);
 function strideOf(u){
-  if (u.stunT > 0 || u.pullT > 0) return 0;
-  if (u.target && hyp(u.target.x - u.x, u.target.y - u.y) <= u.rng + (u.target.r || .4) + u.r) return 0;
-  return Math.sin(G.t * 7 + u.ph) * BODY_STRIDE;
+  if (!walking(u)) return 0;
+  return Math.sin(gaitOf(u)) * BODY_STRIDE;
 }
 function drawUnit(c, u){
   const p = lp(u.x, u.y), S = LS();
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
   shadow(c, p[0], p[1] + 1, (u.kind === 'cannon' ? 9 : 7) * sc, 3.4 * sc, 'rgba(0,0,0,.32)');
-  const bob = Math.sin(G.t * 7 + u.ph) * (u.target && hyp(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
+  const bob = Math.sin(gaitOf(u)) * (u.target && hyp(u.target.x - u.x, u.target.y - u.y) < u.rng + 1 ? .6 : 1.4) * sc * .4;
   // Whoever just cast lifts off the ground for a third of a second over a
   // brightening pool of their skill's colour. Without it the effects all happen
   // somewhere ELSE — at the target, in the air, on the ground — and the hero
@@ -8241,7 +8257,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
