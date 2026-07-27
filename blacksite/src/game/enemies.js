@@ -760,7 +760,7 @@ function poseWeapon(rig, lower) {
   _handR.copy(_v3).sub(_v4).addScaledVector(_v1, -0.055 * rig.recoil.x);
 
   // Right arm to the grip.
-  _v5.set(0.85, -0.30, 0.50).applyQuaternion(SQ[B.chest]).normalize();
+  _v5.set(0.55, -0.80, 0.42).applyQuaternion(SQ[B.chest]).normalize();
   solveTwoBone(SP[B.armR], _handR, DIM.upperArm, DIM.foreArm, _v5, _v2, _v6);
   aimLimb(rig, B.armR, SP[B.armR], _v2, _v5);
   aimLimb(rig, B.foreR, _v2, _v6, _v5);
