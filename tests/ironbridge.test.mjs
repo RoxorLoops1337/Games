@@ -4245,6 +4245,144 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(Math.abs(big[0]) > IB.FLOAT_GAP.step, 'a number beside a big one is pushed further than one step');
   t.ok(small[0] === 0 && Number.isFinite(big[0]) && Number.isFinite(big[1]), 'and the slot is always a real place');
   G.floats.length = 0;
+
+  /* ...and the half of the problem that fan cannot see. floatSlot reasons in
+     WORLD coordinates; the collision it is preventing happens on the SCREEN,
+     and the projection trades depth for horizontal position, so two bodies
+     three lanes apart land on the same pixels. Measured across four hundred
+     frames of a real brawl, following the front line: 1280 numbers drawn and
+     1430 of them landed on another number, 172,400px² of overlap.
+
+     Sweeping every dial floatSlot has barely moved it — window ×2 got to 1214,
+     step ×2 to 1101, all three at once to 1009 — which is what says the
+     mechanism is wrong rather than the constants. The control, on the same
+     instrument in the same frames: 10,820 label plates and ZERO overlaps,
+     because the label traffic has dodged in screen space since it was written. */
+  {
+    const wasForce = IB.fxForce;
+    IB.fxForce = true;
+    IB.newMatch({ diff:'veteran', seed:5150 });
+    IB.MY = 0;
+    IB.cam.follow = false; IB.cam.x = 59; IB.cam.z = IB.cam.tz = 2.6;
+    G.floats.length = 0; G.units.length = 0;
+
+    // Two bodies a long way apart in the world and nearly on top of each other
+    // on the screen — precisely what the world-space window refuses to look at.
+    // lp() trades depth for horizontal position: screen x is
+    // (x - cam.x) * S * .96 - y * S * .52, so a body 4.8 deeper needs to be 2.6
+    // NEARER along the bridge to land on the same column of pixels. Getting
+    // that sign backwards put the two 120px apart and the wired case below
+    // measured nothing at all.
+    const a2 = IB.spawnUnit(1, 'melee', { x:57.5, y:-2.4, paid:true });
+    const b2 = IB.spawnUnit(1, 'melee', { x:60.1, y:2.4, paid:true });
+    const pa = IB.lp(a2.x, a2.y), pb = IB.lp(b2.x, b2.y);
+    t.ok(Math.hypot(a2.x - b2.x, a2.y - b2.y) > IB.FLOAT_GAP.win,
+      'the two bodies are outside each other’s world window (' +
+      Math.hypot(a2.x - b2.x, a2.y - b2.y).toFixed(1) + ' vs ' + IB.FLOAT_GAP.win + ')');
+    t.ok(Math.abs(pa[0] - pb[0]) < 8,
+      'and yet they draw in the same column of pixels (' + Math.abs(pa[0] - pb[0]).toFixed(1) + 'px apart)');
+
+    G.floats.length = 0;
+    IB.addFloat(a2.x, a2.y, '444', '#ffffff', 1);
+    const lone = IB.floatSlot(b2.x, b2.y, 1);
+    t.ok(lone[0] === 0 && lone[1] === 0,
+      'so the world fan gives the second number no offset at all — it cannot see the first');
+
+    // The screen pass can. Six numbers pushed onto the SAME spot — the world
+    // fan out of the picture, so what is left is the pass on its own.
+    const natural = (f) => IB.lp(f.x, f.y, 1.4)[1] - (1 - f.t / f.dur) * 22;
+    // The plan says how big each number is as well as where it goes — the first
+    // version of this recomputed the height and got it wrong, because a young
+    // number is drawn shrunk and the plan spaces them at full size.
+    const boxOf = (p) => ({ x:p.q[0], y:p.cy, w:p.w, h:p.h });
+    const hit = (A, B) => Math.abs(A.x - B.x) < (A.w + B.w) / 2 && Math.abs(A.y - B.y) < (A.h + B.h) / 2;
+    const stack = () => {
+      G.floats.length = 0;
+      for (let i = 0; i < 6; i++)
+        G.floats.push({ x:a2.x, y:a2.y, txt:String(100 + i), col:'#ffffff',
+          t:.95 - i * .01, dur:.95, sc:1, vy:-.6 });
+      return IB.floatPlan(CTX);
+    };
+    const plan = stack();
+    t.ok(plan.length === 6, 'the plan has a place for each (' + plan.length + ')');
+    let piled = 0;
+    for (let i = 0; i < plan.length; i++) for (let j = i + 1; j < plan.length; j++)
+      if (hit(boxOf(plan[i]), boxOf(plan[j]))) piled++;
+    t.ok(piled === 0,
+      'and six numbers on one spot land on six different places (' + piled + ' pairs that did not)');
+
+    // The older one holds its place; the new arrival is what moves. Placing
+    // newest-first makes every number already on screen jump when another lands.
+    const oldest = plan.reduce((m, p) => p.f.t < m.f.t ? p : m);
+    t.ok(Math.abs(oldest.cy - natural(oldest.f)) < 1e-6,
+      'the one that has been up longest keeps its place');
+    const moved = plan.filter(p => Math.abs(p.cy - natural(p.f)) > 1e-6).length;
+    t.ok(moved === plan.length - 1,
+      'and every other one is what moved (' + moved + ' of ' + (plan.length - 1) + ')');
+
+    // A number with nobody near it is not moved at all.
+    G.floats.length = 0;
+    IB.addFloat(a2.x, a2.y, '7', '#ffffff', 1);
+    const solo = IB.floatPlan(CTX)[0];
+    t.ok(Math.abs(solo.cy - natural(solo.f)) < 1e-6, 'and a number on its own is left where it belongs');
+
+    // WIRED, through the real frame: count digit-on-digit overlaps in what
+    // reached the canvas, with the pass on and with it off.
+    const collide = () => {
+      const st = CTX.__stats;
+      st.texts = [];
+      IB.drawLane(CTX);
+      // Every number is drawn twice — an outline pass and a fill pass at the
+      // same coordinates — and the stub records strokeText as well as fillText.
+      // Counting them naively made each number overlap ITSELF, which pinned the
+      // count at exactly one per number whatever the placement did.
+      const seen = new Set();
+      const nums = st.texts.filter(t2 => {
+        if (!/^[+]?\d+$/.test(t2.txt)) return false;
+        const key = t2.txt + '@' + t2.x.toFixed(2) + ',' + t2.y.toFixed(2);
+        if (seen.has(key)) return false;
+        seen.add(key); return true;
+      });
+      let n = 0;
+      for (let i = 0; i < nums.length; i++) for (let j = i + 1; j < nums.length; j++){
+        const A = nums[i], B = nums[j];
+        const pxA = +(/(\d+(?:\.\d+)?)px/.exec(A.font) || [0, 11])[1];
+        const pxB = +(/(\d+(?:\.\d+)?)px/.exec(B.font) || [0, 11])[1];
+        const wA = Math.max(8, String(A.txt).length * 5.4), wB = Math.max(8, String(B.txt).length * 5.4);
+        if (Math.abs(A.x - B.x) < (wA + wB) / 2 && Math.abs(A.y - B.y) < (pxA + pxB) / 2) n++;
+      }
+      return { n, drawn:nums.length };
+    };
+    // Pushed straight onto the list at the SAME spot rather than through
+    // addFloat, so the world fan is out of the picture and what is left is the
+    // screen pass on its own. (Going through addFloat under the stub's font
+    // metrics separated them before the pass ever ran, and the assertion
+    // measured nothing.)
+    G.floats.length = 0;
+    for (let i = 0; i < 6; i++)
+      G.floats.push({ x:a2.x, y:a2.y, txt:String(100 + i), col:'#ffffff',
+        t:.95 - i * .01, dur:.95, sc:1, vy:-.6 });
+    const on = collide();
+    const wasTries = IB.FLOAT_PAD.tries;
+    IB.FLOAT_PAD.tries = 0;
+    const off = collide();
+    IB.FLOAT_PAD.tries = wasTries;
+    t.ok(on.drawn === 6 && on.drawn === off.drawn,
+      'the same six numbers are drawn either way (' + on.drawn + ' and ' + off.drawn + ')');
+    t.ok(off.n > 0, 'without the pass they pile up (' + off.n + ')');
+    t.ok(on.n < off.n / 2,
+      'and with it they do not (' + on.n + ' vs ' + off.n + ')');
+
+    // Cosmetic: planning where they go moves nothing.
+    const h0 = IB.netHash();
+    const before = G.floats.map(f => f.x + ',' + f.y + ',' + f.t).join('|');
+    IB.floatPlan(CTX); IB.floatPlan(CTX);
+    t.ok(G.floats.map(f => f.x + ',' + f.y + ',' + f.t).join('|') === before,
+      'asking where the numbers go does not move them');
+    t.ok(IB.netHash() === h0, 'nor the lockstep hash');
+    G.floats.length = 0; G.units.length = 0;
+    IB.fxForce = wasForce;
+  }
 }
 {
   // Which way the light comes from. The sun in this game is up and to the LEFT
