@@ -3493,6 +3493,80 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
   IB.cam.z = IB.cam.tz = 1;
   t.ok(true, 'the sky draws from either end of the world at every zoom');
+
+  // Clouds were the last thing in frame nothing lit. The mesa walls, the
+  // roofs, the bodies, the mines and the ridge rims all know where the sun is;
+  // a cumulus sitting directly beneath it was the same flat slab as one on the
+  // far side of the sky, which is why they read as fog stuck on the gradient.
+  // They get a shaded belly and a sunlit crown now, and both of those hang off
+  // the same shadowSide() the ground uses — so the test is that the sky and
+  // the island cannot disagree, not that the numbers are any particular value.
+  const chan3 = (s) => s.split(',').map(Number);
+  t.ok(IB.CLOUD_PASSES.length === Object.keys(IB.CLOUD).length,
+    'every cloud pass is in the table and every entry in the table is a pass');
+  for (const k of IB.CLOUD_PASSES) t.ok(!!IB.CLOUD[k], 'pass ' + k + ' has a definition');
+  t.ok(IB.CLOUD_PASSES[0] === 'body', 'the silhouette goes down first, the shading on top of it');
+
+  const belly = chan3(IB.CLOUD.belly.col), body = chan3(IB.CLOUD.body.col), crown = chan3(IB.CLOUD.crown.col);
+  // Brightness by luminance, not channel by channel: the crown is a WARM
+  // light, so its blue sits below the body's on purpose and a per-channel
+  // ordering would forbid the very thing that makes it read as sunlight.
+  const lum = (c) => c[0] * .299 + c[1] * .587 + c[2] * .114;
+  t.ok(lum(crown) > lum(body) && lum(body) > lum(belly),
+    'the crown is brighter than the body and the body than the belly');
+  t.ok(crown[0] - crown[2] > body[0] - body[2],
+    'the lit side is warmer than the body it sits on');
+  t.ok(belly[2] - belly[0] > body[2] - body[0],
+    'and the shaded side is cooler, the way sky fills a shadow');
+
+  // Direction. The crown leans toward the sun and the belly away from it —
+  // which is to say the belly leans the same way a shadow falls.
+  t.ok(IB.cloudLean('crown') === -IB.shadowSide(), 'the sunlit crown is on the sun’s side');
+  t.ok(IB.cloudLean('belly') === IB.shadowSide(), 'and the belly is on the side the shadows fall');
+  t.ok(IB.cloudRise('crown') < 0 && IB.cloudRise('belly') > 0,
+    'the crown rides up and the belly sits under, the light being overhead');
+  // Cross-check against something that has nothing to do with the sky: a roof.
+  // If either convention is ever flipped these two stop agreeing.
+  t.ok(IB.cloudLean('crown') === Math.sign(IB.LIT.roofRight - IB.LIT.roofLeft),
+    'a cloud and a roof are lit from the same side');
+  // Move the sun and the clouds must turn with it, the same as the shadows do.
+  const sunX = IB.SUN.x;
+  IB.SUN.x = 1 - sunX;
+  t.ok(IB.cloudLean('crown') === -IB.shadowSide(), 'and they still agree with the sun on the other side');
+  t.ok(IB.cloudLean('crown') !== IB.cloudLean('belly'), 'crown and belly never lean the same way');
+  IB.SUN.x = sunX;
+
+  // Rule out the settings that pass every direction check by doing nothing:
+  // no offset at all, and shading the same colour as the body.
+  for (const k of ['belly', 'crown']){
+    const p = IB.CLOUD[k];
+    t.ok(p.dx > .05 || p.dy > .05, 'the ' + k + ' is actually offset (' + p.dx + ', ' + p.dy + ')');
+    t.ok(p.dx < 1 && p.dy < 1, 'but not so far it clears the cloud (' + k + ')');
+    t.ok(p.a > .1, 'and it is opaque enough to see (' + k + ' ' + p.a + ')');
+    t.ok(p.col !== IB.CLOUD.body.col, 'and a different colour from the body (' + k + ')');
+  }
+  // Every cloud has to be worth shading in the first place — invisible ones
+  // were the real reason the old shading did not read.
+  let faint = 0, huge = 0;
+  for (const cl of IB.clouds()){
+    if (cl.a < .2) faint++;
+    if (cl.a > .75) huge++;
+    if (!(cl.w >= 2 && cl.s > 0 && cl.d > 0)) faint++;
+  }
+  t.ok(faint === 0, 'no cloud is too faint to have a lit side (' + faint + ')');
+  t.ok(huge === 0, 'and none is so solid it stops reading as sky (' + huge + ')');
+
+  // Then draw them for real, from both ends of the sky and across a wrap, so
+  // the clip/restore pairing and the offset paths get exercised rather than
+  // just inspected. The stub canvas throws on a negative radius.
+  IB.newMatch({ diff:'veteran', seed:1811 });
+  IB.cam.follow = false;
+  for (const z of [.42, 1, 2.4]){
+    IB.cam.z = IB.cam.tz = z;
+    for (let i = 0; i < 40; i++){ G.t = i * 7.5; IB.cam.x = IB.CAM_MIN + i * 4; IB.draw(); }
+  }
+  IB.cam.z = IB.cam.tz = 1; G.t = 0;
+  t.ok(true, 'clouds draw across a full wrap of the sky at every zoom');
 }
 {
   // Shadows. Every one in the game sat directly under its object, which was
@@ -3641,7 +3715,72 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(G.log.some(e => /reaches level/.test(e.msg)),
       'and the player was told about it from seat ' + seat);
   }
+
+  // Two more of the same shape, found by grepping for the literal index rather
+  // than by playing: the train-complete sound and the hero sheet's refresh
+  // after a pick. Both said "side zero", so from seat two units finished
+  // training in silence and the sheet did not redraw. They ask forMe() now.
+  let notMine = 0;
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    if (IB.forMe(seat) !== true) notMine++;
+    if (IB.forMe(1 - seat) !== false) notMine++;
+  }
+  t.ok(notMine === 0, 'forMe() follows the chair, not the index (' + notMine + ' wrong)');
+
+  // Then the real thing, because a helper that nothing calls proves nothing.
+  // sfx() records what it MEANT to play before its early-outs, so a headless
+  // run can hear a sound that a wrongly-seated gate would have swallowed.
+  for (const seat of [0, 1]){
+    IB.newMatch({ diff:'veteran', seed:271 });
+    IB.MY = seat;
+    const mine = G.sides[seat], theirs = G.sides[1 - seat];
+    rich(mine); rich(theirs);
+    const idle0 = mine.workers.idle;
+    t.ok(IB.trainWorker(mine) === null, 'a worker goes into the pit from seat ' + seat);
+    IB.AU.want = null;
+    for (let i = 0; i < 30 * 90 && IB.AU.want !== 'build'; i++) IB.ecoStep(mine, 1 / 30);
+    t.ok(mine.workers.idle > idle0, 'the worker finished from seat ' + seat);
+    t.ok(IB.AU.want === 'build', 'and finishing it was audible from seat ' + seat);
+
+    // Rule out the other half: the noise has to be MINE, not any completion.
+    const theirIdle0 = theirs.workers.idle;
+    t.ok(IB.trainWorker(theirs) === null, 'the enemy trains one too, from seat ' + seat);
+    IB.AU.want = null;
+    for (let i = 0; i < 30 * 90 && theirs.workers.idle === theirIdle0; i++) IB.ecoStep(theirs, 1 / 30);
+    t.ok(theirs.workers.idle > theirIdle0, 'and it finished, from seat ' + seat);
+    t.ok(IB.AU.want !== 'build', 'but the enemy pit is silent from seat ' + seat);
+  }
+
+  // And the pick itself, driven for real from both chairs. The refresh behind
+  // it is DOM-only, so what a headless run can prove is that the pick lands —
+  // the guard is checked against the source below, where it is visible.
+  for (const seat of [0, 1]){
+    IB.newMatch({ diff:'veteran', seed:317 });
+    IB.MY = seat;
+    const h = IB.makeHero(seat, 'fighter', 'Chooser');
+    h.pend.length = 0; G.sides[seat].heroes.push(h); IB.enterLane(h);
+    const p = IB.offer(h, 'skill');
+    t.ok(p && p.opts.length > 0, 'a skill is offered from seat ' + seat);
+    const before = h.skills.length;
+    t.ok(IB.pickOption(h, 0) === null, 'the pick is accepted from seat ' + seat);
+    t.ok(h.skills.length === before + 1, 'and the hero actually gained it from seat ' + seat);
+    t.ok(h.pend.length === 0, 'and the offer is cleared from seat ' + seat);
+  }
   IB.MY = seat0;
+
+  // The sweep as a rule instead of a list. Anything the game does FOR the
+  // person watching — a sound, a toast, a panel refresh — must never be gated
+  // on a bare index. Four rounds of this sweep have found seven such lines;
+  // this fails on the eighth before anyone has to sit in the other chair.
+  const seatGate = /(side|\.i|\bi)\s*===?\s*[01]\b/;
+  const guilty = SRC.split('\n')
+    .map((ln, i) => ({ ln:ln.trim(), n:i + 1 }))
+    .filter(o => /\b(sfx|fxToast|syncUI)\s*\(/.test(o.ln) && seatGate.test(o.ln))
+    .filter(o => !/^\s*\/\//.test(o.ln));
+  t.ok(guilty.length === 0,
+    'no sound, toast or panel refresh is gated on a bare side index' +
+    (guilty.length ? ' — ' + guilty.map(o => o.n + ': ' + o.ln).join(' | ') : ''));
 }
 {
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.

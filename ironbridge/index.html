@@ -998,6 +998,15 @@ const G = {
 let MY = 0;
 const me = () => G.sides[MY] || G.sides[0];
 const foe = () => MY === 0 ? 1 : 0;
+// Anything the game does FOR THE PERSON AT THIS SCREEN — a sound, a panel
+// refresh, a toast — asks this rather than comparing against zero. Written as
+// its own name because "side === 0" reads as correct and is not: it silently
+// means "player one", and the same three characters appear all over the sim
+// where they genuinely do mean side zero. Two more bugs of exactly this shape
+// turned up in the seat-two sweep: the train-complete sound and the hero
+// sheet's refresh after a pick, both of which only ever happened for player
+// one. Cosmetic reads only — see the note above about the simulation.
+const forMe = (side) => side === MY;
 
 function makeSide(i, ai){
   const s = {
@@ -1257,7 +1266,7 @@ function ecoStep(s, dt){
       s.trainQ.splice(i, 1);
       if (q.type === 'worker') s.workers.idle++;
       else s.muster.push({ type:q.type });
-      if (s.i === 0) sfx('build');
+      if (forMe(s.i)) sfx('build');
     }
   }
   for (const b of s.plot) if (b && b.raise > 0) b.raise = Math.max(0, b.raise - dt * 1.6);
@@ -2091,7 +2100,7 @@ function pickOption(h, idx){
   }
   h.pend.shift();
   recalcHero(h);
-  if (h.side === 0 && !HEADLESS) syncUI();
+  if (forMe(h.side) && !HEADLESS) syncUI();
   return null;
 }
 
@@ -2976,7 +2985,7 @@ function update(dt){
    cannot turn into a wall of noise.
    ===================================================================== */
 const MUTE_KEY = 'ib_mute';
-const AU = { ctx:null, master:null, noise:null, muted:false, last:{}, voices:0 };
+const AU = { ctx:null, master:null, noise:null, muted:false, last:{}, voices:0, want:null };
 try { AU.muted = localStorage.getItem(MUTE_KEY) === '1'; } catch (e){}
 
 function audioStart(){
@@ -3062,6 +3071,12 @@ const SFX = {
 
 // worldX is optional: a sound from off the edge of the screen is not played.
 function sfx(key, worldX){
+  // Recorded BEFORE every early-out, so it is what the game meant to play
+  // rather than what the speakers managed. A sound gated on the wrong seat is
+  // otherwise invisible to a headless test: sfx() returns immediately and
+  // leaves nothing behind to assert on. AU is not simulation state and is not
+  // in netSnap, so writing here cannot move the two machines apart.
+  AU.want = key;
   if (HEADLESS || AU.muted || !AU.ctx) return false;
   const d = SFX[key];
   if (!d) return false;
@@ -3574,11 +3589,39 @@ function clouds(){
       y:.05 + r2 * .30,                   // fraction of the canvas height
       s:.55 + r3 * 1.1,                   // size
       d:.05 + (i % 3) * .045,             // parallax depth
-      a:.13 + r2 * .16,
+      a:.26 + r2 * .26,
       w:2 + Math.floor(r3 * 3),           // puffs
     });
   }
   return CLOUDS;
+}
+// A cloud was the one thing left in frame that nothing lit. The mesa, the
+// roofs, the bodies, the mines and even the ridge rims all obey LIT and SUN,
+// and a cumulus sitting directly beneath the sun was the same flat slab as one
+// on the far side of the sky — which is what made them read as fog pasted onto
+// the gradient instead of weather with a top and a bottom. Three passes now:
+// the shaded belly, the body, and the crown that faces the sun. The offsets
+// come off SUN through shadowSide(), the same call the ground shadows use, so
+// the sky cannot drift out of agreement with the island under it.
+const CLOUD = {
+  body:  { dx:0,   dy:0,   sc:1,   col:'232,241,245', a:1   },
+  belly: { dx:.34, dy:.42, sc:1,   col:'146,174,199', a:.92 },   // away from the sun
+  crown: { dx:.30, dy:.34, sc:.92, col:'255,251,236', a:.88 },   // toward it
+};
+const CLOUD_PASSES = ['body', 'belly', 'crown'];       // silhouette, then its shading
+// +1 puts a pass on the side the shadows fall on, -1 on the side the sun is.
+const cloudLean = (k) => (k === 'crown' ? -1 : 1) * shadowSide();
+// And the same again vertically: light comes from above, so only the crown
+// rides up. Named rather than inlined because getting one of these two signs
+// backwards lights the cloud from underneath and still looks like weather.
+const cloudRise = (k) => (k === 'crown' ? -1 : 1);
+function cloudPath(c, x, y, R, w, sc){
+  c.beginPath();
+  for (let i = 0; i <= w; i++){
+    const f = 1 - Math.abs(i - w / 2) / (w + 1);
+    c.ellipse(x + i * R * .82, y - f * R * .22,
+      R * (.55 + f * .55) * sc, R * (.30 + f * .24) * sc, 0, 0, 6.2832);
+  }
 }
 function drawClouds(c){
   const drift = G.t * 3.5;
@@ -3586,15 +3629,26 @@ function drawClouds(c){
     let x = ((cl.x - cam.x * LS() * cl.d - drift * cl.d * 8) % SKY_SPAN + SKY_SPAN) % SKY_SPAN - 200;
     if (x < -260 || x > LW + 260) continue;
     const y = LH * cl.y, R = 26 * cl.s * (.7 + cam.z * .5);
-    // one path, one fill — puffs drawn separately stack their alpha and read
-    // as a row of flat discs instead of a cloud
-    c.beginPath();
-    for (let i = 0; i <= cl.w; i++){
-      const f = 1 - Math.abs(i - cl.w / 2) / (cl.w + 1);
-      c.ellipse(x + i * R * .82, y - f * R * .22, R * (.55 + f * .55), R * (.30 + f * .24), 0, 0, 6.2832);
-    }
-    c.fillStyle = 'rgba(236,244,246,' + cl.a.toFixed(3) + ')';
+    // One path, one fill, for the silhouette — puffs filled separately stack
+    // their own alpha and read as a row of flat discs instead of a cloud.
+    cloudPath(c, x, y, R, cl.w, 1);
+    c.fillStyle = 'rgba(' + CLOUD.body.col + ',' + cl.a.toFixed(3) + ')';
     c.fill();
+    // The shading is then CLIPPED to that silhouette. Offset copies painted
+    // loose hang past the edge and read as a second, fainter cloud sitting
+    // behind the first; inside the clip the same two shapes are simply a dark
+    // underside and a bright top.
+    c.save();
+    cloudPath(c, x, y, R, cl.w, 1);
+    c.clip();
+    for (const k of CLOUD_PASSES){
+      if (k === 'body') continue;
+      const p = CLOUD[k];
+      cloudPath(c, x + R * p.dx * cloudLean(k), y + R * p.dy * cloudRise(k), R, cl.w, p.sc);
+      c.fillStyle = 'rgba(' + p.col + ',' + (cl.a * p.a).toFixed(3) + ')';
+      c.fill();
+    }
+    c.restore();
   }
 }
 const FLOCKS = [{ y:.20, sp:11, ph:0 }, { y:.27, sp:8, ph:.45 }, { y:.16, sp:14, ph:.78 }];
@@ -7903,7 +7957,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, BAR_MINE, BAR_THEIRS,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, AU, BAR_MINE, BAR_THEIRS,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
@@ -7929,7 +7983,7 @@ window.IB = {
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   seenIntro, markSeen, SEEN_KEY, pruneSel,
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
-  startZoom, ZOOM_MIN, ZOOM_MAX, camStep, demoCam, clouds, FLOCKS, drawClouds, drawBirds, heroMeters, heroDoing, showHeroSheet,
+  startZoom, ZOOM_MIN, ZOOM_MAX, camStep, demoCam, clouds, FLOCKS, drawClouds, drawBirds, CLOUD, CLOUD_PASSES, cloudLean, cloudRise, cloudPath, SKY_SPAN, heroMeters, heroDoing, showHeroSheet,
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
   WEAR, battleDamage, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
