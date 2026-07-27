@@ -1306,7 +1306,7 @@ function spawnUnit(side, kind, o){
     ad:d.ad * waveScale * adUp * (o.adM || 1), armor:d.armor + armUp, mr:d.mr + armUp,
     as:d.as, rng:d.rng, spd:d.spd, r:d.r, tdmg:d.tdmg, magic:!!d.magic, bounty:d.bounty,
     cd:rr(0, .5), target:null, dead:false, slowT:0, slowP:0, stunT:0, shield:0, shT:0,
-    burn:null, hitT:0, swing:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0, chipHp:0,
+    burn:null, hitT:0, swing:0, swing0:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
   };
   u.hp = u.mhp;
@@ -1648,7 +1648,7 @@ function basicAttack(u, tgt){
   const dmg = attackDamage(u);
   const magic = !!u.magic;
   const ranged = u.rng > 3;
-  u.swing = .22;
+  u.swing = u.swing0 = swingTime(u);
   const land = () => {
     if (u.dead || tgt.dead) return;
     let amt = dmg, crit = false;
@@ -2003,7 +2003,7 @@ function makeHero(side, cls, name){
     lvl:1, xp:0, kills:0, deaths:0, passive:null, passRank:1, skills:[], pend:[], buffs:[],
     x:gateX(side) + dirOf(side) * 2, y:0, r:.62, dead:false, inLane:false, respawnT:0,
     hp:1, mhp:1, mana:1, mmana:1, cd:0, slowT:0, slowP:0, stunT:0, shield:0, shT:0, burn:null,
-    hitT:0, swing:0, target:null, ph:rnd() * 6.28, rage:0, atkN:0, dmgTaken:-99, retreat:false,
+    hitT:0, swing:0, swing0:0, target:null, ph:rnd() * 6.28, rage:0, atkN:0, dmgTaken:-99, retreat:false,
     lastKiller:null, dmgDealt:0, magic:false, tdmg:1, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
   };
@@ -2643,7 +2643,7 @@ function castSkill(h, sk, tgt){
   const s = SKILL[sk.id], r = sk.rank, foe = enemyOf(h.side);
   const pw = skPower(h, s, r);
   const dur = s.dur || 0;
-  h.swing = .3;
+  h.swing = h.swing0 = Math.max(.3, swingTime(h));
   if (!HEADLESS){ castFx(h, s, tgt); sfx('cast', h.x); }
   switch (s.k){
     case 'strike': {
@@ -4483,10 +4483,27 @@ const showsBar = (u) => !!u.isHero || u.hp < u.mhp - .5 || u.shield > 0;
 // somewhere else. Pulled out of the draw call because the sign matters and a
 // still frame will not show it to you: recoil that pushed the gun TOWARD the
 // enemy would read as a lunge, and it would read as one on only one side.
+/* A blow used to take a fixed .22 seconds to wind down however fast the arm
+   was going. Measured across attack speeds, the share of its time a body spent
+   mid-recoil ran 0.12, 0.23, 0.44, 0.87 as its attack speed doubled — and a
+   Shade at 4.8 attacks a second came out at 0.99: the arm never returned to
+   rest at all, so the fastest attacker on the bridge read as one with a stuck
+   arm rather than a quick one. At the other end a Cannon spent 93% of its time
+   frozen and the blow was over before you saw it.
+
+   The turret, one function up, had this right from the start: its heat is
+   `cd * as`, the fraction of its own cycle remaining, so the kick scales with
+   how fast the gun is firing. A body's swing is a fraction of the gap between
+   blows now too, floored and capped so it is never a twitch and never a whole
+   cycle. `swing0` remembers what it was given, so the recoil is normalised
+   against its own duration — which also fixes an old wart, a .22 swing divided
+   by a .25 constant that started the recoil at 88% and never reached full. */
+const SWING = { frac:.34, min:.09, max:.55 };
+const swingTime = (u) => clamp(SWING.frac / attackSpeedOf(u), SWING.min, SWING.max);
 const RECOIL = 2.6, RECOIL_T = .25;
 function recoilOf(u){
   if (!(u.swing > 0)) return 0;
-  return -dirOf(u.side) * clamp(u.swing / RECOIL_T, 0, 1) * RECOIL;
+  return -dirOf(u.side) * clamp(u.swing / (u.swing0 || RECOIL_T), 0, 1) * RECOIL;
 }
 function drawCannon(c, u, bx, by, floor, sc, col){
   const dir = dirOf(u.side), hit = u.hitT > 0;
@@ -8258,7 +8275,7 @@ window.IB = {
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
-  recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
+  recoilOf, RECOIL, RECOIL_T, SWING, swingTime, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
   floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,

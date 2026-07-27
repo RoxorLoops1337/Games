@@ -4672,6 +4672,107 @@ t.ok(true, 'drawing an empty bridge is harmless');
     u.target = null;
     t.ok(IB.strideOf(u) !== 0, 'and it walks again afterwards');
   }
+  // The same question asked of the ATTACK. A blow used to take a fixed .22
+  // seconds to wind down however fast the arm was going, so the share of its
+  // time a body spent mid-recoil ran 0.12, 0.23, 0.44, 0.87 as its attack
+  // speed doubled — and a Shade at 4.8 attacks a second came out at 0.99, the
+  // arm never returning to rest at all. The fastest attacker on the bridge
+  // read as one with a stuck arm rather than a quick one.
+  const swingRun = (kind, asMul) => {
+    IB.newMatch({ diff:'veteran', seed:7601 });
+    G.units.length = 0;
+    const u = IB.spawnUnit(0, kind, { y:0 });
+    const v = IB.spawnUnit(1, 'grunt', { y:0 });
+    if (!u || !v) return null;
+    u.as *= asMul;
+    const near = 40 + Math.min(1, u.rng * .5);
+    u.x = 40; v.x = near; v.mhp = v.hp = 1e9;
+    let blows = 0, moving = 0, frames = 0, wasSwing = false;
+    for (let i = 0; i < 300; i++){
+      IB.update(1 / 30);
+      if (!G.units.includes(u) || !G.units.includes(v)) break;
+      v.hp = v.mhp; v.x = near;                  // keep the sparring partner up
+      frames++;
+      const sw = u.swing > 0;
+      if (sw && !wasSwing) blows++;
+      if (Math.abs(IB.recoilOf(u)) > .01) moving++;
+      wasSwing = sw;
+    }
+    return { as:IB.attackSpeedOf(u), blows, duty:frames ? moving / frames : 0, frames };
+  };
+  {
+    const runs = [];
+    for (const kind of Object.keys(IB.UNITS)) for (const m of [.5, 1, 2, 4]){
+      const r = swingRun(kind, m);
+      if (r) runs.push({ kind, m, ...r });
+    }
+    t.ok(runs.length >= 12, 'the swing sweep covers every kind at every pace (' + runs.length + ')');
+    let idle = 0, stuck = 0;
+    for (const r of runs){
+      if (r.blows < 2) idle++;                   // it has to be fighting...
+      if (r.duty > .8) stuck++;                  // ...and the arm has to come back
+    }
+    t.ok(idle === 0, 'every one of them actually landed blows (' + idle + ' did not)');
+    t.ok(stuck === 0, 'and no arm is left permanently cocked (' + stuck + ')');
+    // The relationship: how long a blow takes is a fraction of the gap between
+    // blows, so the share of time the arm is moving holds still while the pace
+    // does not. This is the assertion the old fixed .22 fails outright.
+    const duties = runs.map(r => r.duty);
+    const lo = Math.min(...duties), hi = Math.max(...duties);
+    t.ok(hi / lo < 2.8, 'a body spends about the same share of its time swinging at any pace (' +
+      lo.toFixed(2) + '–' + hi.toFixed(2) + ')');
+    // Rule out a constant that is constant because nothing varied.
+    const paces = runs.map(r => r.as);
+    t.ok(Math.max(...paces) / Math.min(...paces) > 8, 'the sweep really spanned a range of paces (' +
+      Math.min(...paces).toFixed(2) + '–' + Math.max(...paces).toFixed(2) + ')');
+    const blows = runs.map(r => r.blows);
+    t.ok(Math.max(...blows) > Math.min(...blows) * 4, 'and a range of blow counts (' +
+      Math.min(...blows) + '–' + Math.max(...blows) + ')');
+  }
+  // The rule, walked without a fight.
+  {
+    const fake = (as) => ({ as, side:0, struct:false, isHero:false });
+    t.ok(IB.swingTime(fake(1)) > IB.swingTime(fake(4)), 'a faster arm finishes its blow sooner');
+    t.ok(IB.swingTime(fake(99)) === IB.SWING.min, 'but a blow is never a twitch');
+    t.ok(IB.swingTime(fake(.01)) === IB.SWING.max, 'and never a whole cycle');
+    t.ok(IB.SWING.min > 0 && IB.SWING.min < IB.SWING.max, 'the two ends are a real range');
+    t.ok(IB.SWING.frac > 0 && IB.SWING.frac < 1, 'and a blow is part of a cycle, not all of it');
+    // The recoil is normalised against its own duration now — which also fixes
+    // an old wart: a .22 swing divided by a .25 constant started the kick at
+    // 88% and never once reached full.
+    const u = { swing:.4, swing0:.4, side:0 };
+    t.ok(Math.abs(Math.abs(IB.recoilOf(u)) - IB.RECOIL) < 1e-9, 'a fresh blow kicks all the way back');
+    u.swing = .2;
+    t.ok(Math.abs(IB.recoilOf(u)) < IB.RECOIL * .55, 'and is halfway home at halfway through');
+    u.swing = 0;
+    t.ok(IB.recoilOf(u) === 0, 'and is done when it is done');
+    u.swing = .4;
+    const a = IB.recoilOf({ swing:.4, swing0:.4, side:0 }), b = IB.recoilOf({ swing:.4, swing0:.4, side:1 });
+    t.ok(Math.sign(a) === -Math.sign(b), 'and the two sides kick away from each other');
+  }
+  // The branch next door, which had it right all along and is what condemned
+  // the body: a turret's heat is `cd * as`, the fraction of its OWN cycle
+  // remaining, so its kick already scaled with how fast the gun fires.
+  {
+    IB.newMatch({ diff:'veteran', seed:7603 });
+    const st = G.sides[0].structs.find(x => x.key === 't1');
+    const duty = (asMul) => {
+      const as0 = st.as;
+      st.as = as0 * asMul;
+      const period = 1 / IB.attackSpeedOf(st);
+      let hot = 0, n = 40;
+      for (let i = 0; i < n; i++){
+        st.cd = period * (i / n);
+        if (IB.turretShot(st).kick > .01) hot++;
+      }
+      st.as = as0;
+      return hot / n;
+    };
+    const slow = duty(.5), fast = duty(4);
+    t.ok(slow > 0 && fast > 0, 'the gun kicks at either pace');
+    t.ok(Math.abs(slow - fast) < .12, 'and a turret already spent the same share of its cycle kicking (' +
+      slow.toFixed(2) + ' / ' + fast.toFixed(2) + ')');
+  }
   G.units.length = 0;
 }
 {
