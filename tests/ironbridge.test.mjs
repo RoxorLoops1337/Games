@@ -65,9 +65,19 @@ function loadGame(store, srcOverride){
   // for the rest of the frame comes out dashed. `stats.dash` follows it so a
   // test can assert the frame ended clean — a leak of this kind is invisible
   // to every other check here, because nothing about the call is wrong.
-  stats.dash = 0;
+  // globalAlpha and the save/restore stack are the same class of bug: state,
+  // not arguments. A block that fades something out and forgets to put the
+  // alpha back leaves every later shape in the frame translucent, and an
+  // unbalanced save() leaks a clip or a transform into whatever draws next.
+  // Neither is visible to a per-call check, because no single call is wrong.
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = [];
   const ctx = new Proxy({}, { get(_t, k){
     if (k === '__stats') return stats;
+    if (k === 'save') return () => { stats.ops++; stats.depth++; stats.maxDepth = Math.max(stats.maxDepth, stats.depth); };
+    if (k === 'restore') return () => {
+      stats.ops++;
+      if (--stats.depth < 0) throw new RangeError('restore() with nothing saved');
+    };
     if (k === 'createLinearGradient' || k === 'createRadialGradient')
       return (...a) => { stats.ops++; numCheck(k, a);
         return { addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); } }; };
@@ -84,7 +94,20 @@ function loadGame(store, srcOverride){
   }, set(_t, k, v){
     stats.ops++;
     if (k === 'fillStyle' || k === 'strokeStyle' || k === 'shadowColor') checkColour(k)(v);
+    if (k === 'strokeStyle') stats.strokes.push(v);
     if (typeof v === 'number' && !Number.isFinite(v)) throw new TypeError('ctx.' + k + ' = ' + v);
+    if (k === 'globalAlpha'){
+      if (!(v >= 0 && v <= 1)) throw new RangeError('globalAlpha = ' + v + ' is outside 0..1');
+      stats.alpha = v;
+    }
+    // The widest and the NARROWEST stroke laid down since the last reset. The
+    // narrowest is the one that matters: a shape sets a dozen widths and all
+    // but one may scale with the zoom, so watching the widest passes whether
+    // the odd one out is fixed or not. The odd one out is always the thinnest.
+    if (k === 'lineWidth'){
+      stats.lw = Math.max(stats.lw, v);
+      stats.lwMin = Math.min(stats.lwMin, v);
+    }
     return true;
   } });
   CTX = ctx;
@@ -732,6 +755,39 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(!e2, name + '() draws without throwing' + (e2 ? ' — ' + e2 : ''));
       t.ok(ops() - b >= min, name + '() puts its layer on the canvas (' + (ops() - b) +
         ' ops, wanted ' + min + ')');
+    }
+    IB.cam.x = IB.HOLD_X;
+
+    // Canvas state is a bug class of its own, and checking it at the END of a
+    // frame does not find it: a layer can leave the alpha at .3 and the next
+    // layer sets it back before anybody looks. The boundary that matters is
+    // the layer, so every one of them has to hand the canvas back the way it
+    // was handed over — alpha at 1, no dash, no unbalanced save().
+    const st = CTX.__stats;
+    for (const [name, fn] of layers){
+      st.alpha = 1; st.dash = 0; st.depth = 0;
+      try { fn(); } catch (e){ /* the throw is already reported above */ }
+      t.ok(st.alpha === 1, name + '() puts the alpha back (' + st.alpha + ')');
+      t.ok(st.dash === 0, name + '() leaves no dash pattern behind');
+      t.ok(st.depth === 0, name + '() balances its save/restore (' + st.depth + ')');
+    }
+    // And the pieces small enough to call on their own, where a leak has
+    // nothing after it to hide behind.
+    const bits = [
+      ['heroRing', () => IB.heroRing(CTX, 400, 300, 1, 0)],
+      ['drawClouds', () => IB.drawClouds(CTX)],
+      ['drawBirds', () => IB.drawBirds(CTX)],
+      ['drawChasm', () => IB.drawChasm(CTX)],
+      ['drawPiers', () => IB.drawPiers(CTX)],
+    ];
+    for (const [name, fn] of bits){
+      st.alpha = 1; st.dash = 0; st.depth = 0;
+      let e3 = null;
+      try { fn(); } catch (e){ e3 = e.message; }
+      t.ok(!e3, name + '() draws on its own' + (e3 ? ' — ' + e3 : ''));
+      t.ok(st.alpha === 1, name + '() puts the alpha back (' + st.alpha + ')');
+      t.ok(st.dash === 0, name + '() leaves no dash pattern behind');
+      t.ok(st.depth === 0, name + '() balances its save/restore (' + st.depth + ')');
     }
     IB.cam.x = IB.HOLD_X;
   }
@@ -3888,16 +3944,101 @@ t.ok(true, 'drawing an empty bridge is harmless');
       for (const side of [0, 1])
         G.zones.push({ x:62 + side * 4, y:side ? 1 : -1, r:3, dps:12, t:4, dur:5,
                        tick:0, side, src:null, magic, slow:0, follow:null });
+    // A hero from each side standing in them, so the frame actually runs
+    // through heroRing and the state checks below cover it. Without a body on
+    // the bridge the whole hero half of the draw is dead code to this block —
+    // which is how a leaked globalAlpha in heroRing first slipped through.
+    for (const side of [0, 1]){
+      const h = IB.makeHero(side, side ? 'fighter' : 'marksman', side ? 'Rho' : 'Sig');
+      h.pend.length = 0; G.sides[side].heroes.push(h); IB.enterLane(h);
+      h.x = 62 + side * 4; h.y = side ? 1 : -1;
+      h.slowT = 2; h.slowP = .4; h.markT = 2; h.stunT = 1; h.shield = 20; h.shT = 2;
+      h.burn = { dps:6, t:3, src:null };
+    }
     for (const z of [.42, 1, 2.4]){
       IB.cam.z = IB.cam.tz = z;
       for (let i = 0; i < 6; i++){ G.t = i * .37; IB.draw(); }
       t.ok(CTX.__stats.dash === 0,
         'the frame ends with no dash pattern left on the canvas — seat ' + seat + ', zoom ' + z);
+      // The other two channels of the same class. A block that fades something
+      // and forgets to put the alpha back leaves the rest of the frame
+      // translucent; an unbalanced save() leaks a clip into whatever is next.
+      t.ok(CTX.__stats.alpha === 1,
+        'and with the alpha put back — seat ' + seat + ', zoom ' + z + ' (' + CTX.__stats.alpha + ')');
+      t.ok(CTX.__stats.depth === 0,
+        'and with every save() restored — seat ' + seat + ', zoom ' + z + ' (' + CTX.__stats.depth + ')');
     }
     G.zones.length = 0;
     IB.cam.z = IB.cam.tz = 1; G.t = 0;
   }
   IB.MY = seat0;
+
+  // The hero's disc. It was one hairline of flat white under both of them —
+  // and in a brawl at your own gates, which of those two figures is yours is
+  // the only read that matters. Friend and foe come off barCol now, the same
+  // two colours as the bar over their head, so the mark at the feet and the
+  // mark at the top cannot drift apart.
+  let bwrong = 0;
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    if (IB.barCol(seat) !== IB.BAR_MINE) bwrong++;
+    if (IB.barCol(1 - seat) !== IB.BAR_THEIRS) bwrong++;
+  }
+  t.ok(bwrong === 0, 'friend and foe colour follows the chair (' + bwrong + ')');
+  IB.MY = 0; const b0 = IB.barCol(0);
+  IB.MY = 1; const b1 = IB.barCol(1);
+  IB.MY = seat0;
+  t.ok(b0 === b1, 'and your own hero reads the same from either chair');
+  // One source of truth, not two that happen to agree today.
+  t.ok(!/u\.side === MY \? BAR_MINE/.test(SRC), 'the health bar asks barCol rather than inlining the seat');
+  // And the ring is DRIVEN, not just inspected: paint one and read back the
+  // colour that reached the canvas. Asserting on the table alone would have
+  // let a hardcoded white through, which is exactly what was there before.
+  const ringCols = (side) => {
+    CTX.__stats.strokes = [];
+    IB.heroRing(CTX, 400, 300, 1, side);
+    return CTX.__stats.strokes;
+  };
+  let painted = 0;
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    for (const side of [0, 1]){
+      const want = side === seat ? IB.BAR_MINE : IB.BAR_THEIRS;
+      const got = ringCols(side);
+      if (!got.length || got.some(v => v !== want)) painted++;
+    }
+  }
+  IB.MY = seat0;
+  t.ok(painted === 0, 'the ring is painted in the friend/foe colour from either chair (' + painted + ')');
+  t.ok(ringCols(0).length >= 1, 'and it does paint something');
+  for (const k of ['col', 'mine', 'theirs'])
+    t.ok(!(k in IB.HERO_RING), 'the ring carries no colour of its own (' + k + ')');
+  // Rule out the settings that draw a ring that says nothing: an inner ring
+  // that is not inside, and a fill louder than the edge that defines it.
+  t.ok(IB.HERO_RING.inner > 0 && IB.HERO_RING.inner < 1, 'the inner ring is inside the outer one');
+  t.ok(IB.HERO_RING.glow < IB.HERO_RING.rim, 'and the disc is quieter than its edge');
+  t.ok(IB.HERO_RING.rx > IB.HERO_RING.ry, 'the disc lies flat on the deck, like every other ground shape');
+
+  // And the defect that made it invisible exactly when you leaned in: a bare
+  // `lineWidth = 1` among twenty `Math.max(x, y * cam.z)`. Drive it and watch.
+  const ringLw = (z) => {
+    IB.cam.z = IB.cam.tz = z;
+    CTX.__stats.lw = 0; CTX.__stats.lwMin = Infinity;
+    IB.heroRing(CTX, 400, 300, 1, 0);
+    return CTX.__stats.lwMin;
+  };
+  const lwNear = ringLw(2.4), lwFar = ringLw(1);
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(lwNear > lwFar, 'every stroke of the hero ring thickens with the zoom, the thinnest included (' +
+    lwFar + ' → ' + lwNear + ')');
+  // The plank joints on the deck had it too, which is the largest surface in
+  // the game: the rails beside them scaled and the planks did not.
+  const deckLw = (z) => {
+    IB.cam.z = IB.cam.tz = z; CTX.__stats.lwMin = Infinity; IB.drawDeck(CTX); return CTX.__stats.lwMin;
+  };
+  const dNear = deckLw(2.4), dFar = deckLw(1);
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(dNear > dFar, 'and the thinnest line on the deck does too — the plank joints (' + dFar + ' → ' + dNear + ')');
 
   // And the notification that was not merely the wrong colour but absent: the
   // level-up toast fired for side zero only, so player two's hero levelled up

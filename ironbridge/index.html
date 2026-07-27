@@ -3766,8 +3766,10 @@ function drawDeck(c){
     const a2 = lp(x, W, -1.6), b2 = lp(x2, W, -1.6);
     poly(c, [e, d, b2, a2], DECK.side);
     poly(c, [a, b, lp(x2, -W, -1.1), lp(x, -W, -1.1)], DECK.edge);
-    // joints: one at every bay, a finer one halfway across it
-    c.strokeStyle = 'rgba(40,36,30,.38)'; c.lineWidth = 1;
+    // joints: one at every bay, a finer one halfway across it. Scaled like the
+    // rails three lines down — a bare `= 1` here meant that leaning all the way
+    // in thickened every plank edge on the bridge except the planks.
+    c.strokeStyle = 'rgba(40,36,30,.38)'; c.lineWidth = Math.max(1, 1.1 * cam.z);
     c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(d[0], d[1]); c.stroke();
     const h0 = lp(x + seg / 2, -W), h1 = lp(x + seg / 2, W);
     c.strokeStyle = 'rgba(40,36,30,.16)';
@@ -4360,6 +4362,12 @@ function structLabel(st){
 // player two watched their own troops carry red bars and the enemy's carry
 // green ones, for the entire match.
 const BAR_MINE = '#54d06a', BAR_THEIRS = '#e0544a';
+// Friend and foe, in one place. Green reads as yours and red as theirs in
+// every game anybody has played, and the moment two things in the picture both
+// want to say "this one is mine" they have to say it with the same two
+// colours — the bar over a hero's head and the ring under their feet had no
+// way to disagree while there was only one of them.
+const barCol = (side) => (forMe(side) ? BAR_MINE : BAR_THEIRS);
 const HP_TICK = 220;              // one notch per this much health, up to HP_TICKS
 const HP_TICKS = 6;
 function hpBar(c, x, y, u, w, big){
@@ -4373,7 +4381,7 @@ function hpBar(c, x, y, u, w, big){
     c.fillStyle = 'rgba(255,226,168,.85)';
     c.fillRect(x0 + w * f, y, w * (chip - f), h);
   }
-  const col = u.side === MY ? BAR_MINE : BAR_THEIRS;
+  const col = barCol(u.side);
   c.fillStyle = col; c.fillRect(x0, y, w * f, h);
   c.fillStyle = shade(col, 1.28); c.fillRect(x0, y, w * f, h * .38);
   // notches, so a long bar reads as an amount rather than a length
@@ -4718,9 +4726,32 @@ function drawUnitMarks(c, u, bx, by, p, sc){
     c.fillStyle = '#ffe7a8'; c.font = 'bold ' + Math.max(7, Math.round(7 * sc)) + 'px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillText(String(u.lvl), lx, ly + .4 * sc);
     labelQ.push({ x:bx, y:by - 26 * sc, txt:u.name, col:u.side === 0 ? '#bfe0ff' : '#ffc4bd', small:true });
-    c.strokeStyle = 'rgba(255,255,255,.25)'; c.lineWidth = 1;
-    c.beginPath(); c.ellipse(bx, p[1], 11 * sc, 5 * sc, 0, 0, 6.2832); c.stroke();
+    heroRing(c, bx, p[1], sc, u.side);
   }
+}
+
+/* -------------------------------------------------------- the hero's disc
+   The mark that says a hero is standing here was one hairline of flat white,
+   the same under both of them — and in a brawl at your own gates, which of
+   those two figures is yours is the only read that matters. It was also the
+   one stroke in drawUnit whose lineWidth ignored the zoom, a bare `= 1` among
+   twenty `Math.max(x, y * cam.z)`, so it thinned to nothing exactly when you
+   leaned in to look. Friend and foe now come off barCol, the same two colours
+   as the bar over their head, so the two marks cannot drift apart.           */
+const HERO_RING = { rx:11, ry:5, lw:1.9, glow:.14, rim:.60, inner:.62, innerA:.28 };
+function heroRing(c, x, y, sc, side){
+  const col = barCol(side);
+  c.globalAlpha = HERO_RING.glow;
+  ell(c, x, y, HERO_RING.rx * sc, HERO_RING.ry * sc, col);
+  c.globalAlpha = HERO_RING.innerA;
+  c.strokeStyle = col; c.lineWidth = Math.max(.8, HERO_RING.lw * .6 * cam.z);
+  c.beginPath();
+  c.ellipse(x, y, HERO_RING.rx * HERO_RING.inner * sc, HERO_RING.ry * HERO_RING.inner * sc, 0, 0, 6.2832);
+  c.stroke();
+  c.globalAlpha = HERO_RING.rim;
+  c.lineWidth = Math.max(1, HERO_RING.lw * cam.z);
+  c.beginPath(); c.ellipse(x, y, HERO_RING.rx * sc, HERO_RING.ry * sc, 0, 0, 6.2832); c.stroke();
+  c.globalAlpha = 1;
 }
 
 // Whose lingering zone this is, on every channel except hue — the hue is
@@ -8049,7 +8080,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, ZONE, ZONE_LOUD, zoneLook,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
