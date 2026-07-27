@@ -42,6 +42,16 @@ const CROSS_TAX = 0.92;
 // box it just left.
 const EPS = 0.004;
 
+// How close a round has to pass to be worth a supersonic crack. Four metres is
+// generous on purpose: being shot at from off-screen is otherwise completely
+// silent until the health bar moves, and the crack is the only cue that tells
+// you which way to turn.
+export const WHIZZ_RADIUS = 4;
+
+// Nominal muzzle velocity when a weapon does not declare one. Only the audio
+// layer uses it, for doppler — the bullet itself is instant.
+export const DEFAULT_MUZZLE = 850;
+
 const bulletFilter = (s) => s.solid !== false;
 
 // ── damage over distance ─────────────────────────────────────────────────────
@@ -151,6 +161,40 @@ export function enemyHitboxes(e, out = []) {
   return out;
 }
 
+// Closest approach of a point to the segment [origin, origin + dir·len], as
+// { miss, at, point }. The whole traced path of a bullet is one straight line
+// however many walls it went through, so this is exact rather than per-segment.
+export function closestApproach(p, origin, dir, len) {
+  const vx = p.x - origin.x, vy = p.y - origin.y, vz = p.z - origin.z;
+  let at = vx * dir.x + vy * dir.y + vz * dir.z;
+  if (at < 0) at = 0; else if (at > len) at = len;
+  const px = origin.x + dir.x * at, py = origin.y + dir.y * at, pz = origin.z + dir.z * at;
+  return { miss: Math.hypot(p.x - px, p.y - py, p.z - pz), at, point: { x: px, y: py, z: pz } };
+}
+
+// The crack of a round going past your head. Emitted for anything the player did
+// not fire — a bullet leaving the player's own muzzle passes within nothing of
+// him by definition, so his own weapon is excluded rather than filtered by
+// distance. Exported so any module that traces its own bullets (the AI does) can
+// get the same event with one call instead of re-deriving the geometry.
+export function emitWhizz(G, origin, dir, len, opts = {}) {
+  const p = G.player;
+  if (!p || !p.alive) return null;
+  const ca = closestApproach(p.pos, origin, dir, len);
+  const radius = opts.radius != null ? opts.radius : WHIZZ_RADIUS;
+  if (ca.miss > radius) return null;
+  return emit(G, 'whizz', {
+    point: ca.point,
+    miss: ca.miss,
+    speed: opts.speed != null ? opts.speed : DEFAULT_MUZZLE,
+    at: ca.at,
+    weapon: opts.weapon || null,
+    source: opts.source != null ? opts.source : null,
+    team: opts.team != null ? opts.team : null,
+    shotId: opts.shotId || 0,
+  });
+}
+
 const _hb = [];
 const _ids = new Set();
 
@@ -213,6 +257,12 @@ export function damageEnemy(G, e, amount, ctx = {}) {
 
   G.stats.damage += Math.min(amount, before > 0 ? before : amount);
 
+  // The audio and FX layers place the flesh hit at `point`; a caller that did
+  // not trace a ray (a grenade, a melee) still gets the body's own position
+  // rather than a null they would have to guess around.
+  const at = ctx.point ? { x: ctx.point.x, y: ctx.point.y, z: ctx.point.z }
+    : (e.pos ? { x: e.pos.x, y: e.pos.y + (e.height || 1.8) * 0.62, z: e.pos.z } : null);
+
   emit(G, 'damage', {
     target: e.id != null ? e.id : ctx.index,
     enemy: e,
@@ -223,7 +273,8 @@ export function damageEnemy(G, e, amount, ctx = {}) {
     headshot: ctx.part === 'HEAD',
     weapon: ctx.weapon || null,
     dist: ctx.dist || 0,
-    point: ctx.point || null,
+    point: at,
+    pos: at,
     dir: ctx.dir || null,
     penetrated: !!ctx.penetrated,
     lethal: after <= 0 && before > 0,
@@ -242,7 +293,8 @@ export function damageEnemy(G, e, amount, ctx = {}) {
       headshot: ctx.part === 'HEAD',
       part: ctx.part || 'CHEST',
       dist: ctx.dist || 0,
-      point: ctx.point || null,
+      point: at,
+      pos: at,
       dir: ctx.dir || null,
       overkill: -after,
     });
@@ -378,6 +430,17 @@ export function fireBullet(G, weapon, origin, dir, opts = {}) {
     const rem = Math.max(maxRange - travelled, 0);
     out.end = { x: o.x + dir.x * rem, y: o.y + dir.y * rem, z: o.z + dir.z * rem };
     out.dist = maxRange;
+  }
+
+  // Incoming fire announces itself. `team` here is the *shooter's* team, so the
+  // player's own rounds are excluded by identity rather than by a distance
+  // fudge that would break the moment he fires past his own shoulder.
+  if (team !== TEAM.PLAYER && opts.whizz !== false) {
+    emitWhizz(G, origin, dir, out.dist, {
+      speed: opts.speed != null ? opts.speed : (weapon.muzzle || DEFAULT_MUZZLE),
+      weapon: wid, source: opts.source, team, shotId,
+      radius: opts.whizzRadius,
+    });
   }
   // The tracer/decal layer wants one segment per ray with a definite endpoint,
   // which the impact stream alone does not give it for a clean miss.

@@ -70,11 +70,26 @@
 //   firing      true on the tick a round leaves the barrel
 //   muzzle {x,y,z}, anim (string hint), gait 0..1, stride (metres)
 //
+//   timbre      0..1, fixed at spawn — the voice identity the audio engine maps
+//               to vocal tract length and pitch. One man sounds like himself for
+//               the whole encounter, which is how the player tells the one he
+//               wounded from a new one without seeing either.
 //   spawnT, deathT, removeAt, killEmitted
 //
 // Events emitted here: 'shot', 'impact', 'step', 'reload', 'damage', 'kill',
-// 'despawn', 'aiState', 'aiCallout', 'nearMiss'. All carry `source: enemy.id`
-// and `team` where it disambiguates.
+// 'despawn', 'aiState', 'aiCallout', 'aiHit', 'nearMiss', 'vox'. All carry
+// `source: enemy.id` and `team` where it disambiguates.
+//
+//   { type:'vox', kind:'alert'|'bark'|'suppress'|'pain'|'death'|'reload',
+//     pos, timbre, source, team }        pos is the head, not the boots
+//   { type:'step', pos, surface, sprint, source, team }
+//   { type:'damage', target, amount, part, point, source, hp }
+//   { type:'kill', target, weapon, headshot, point, pos }
+//
+// 'damage' and 'kill' carry `point` — where the round actually landed — so the
+// flesh impact and the death sound come from the wound rather than from the
+// entity origin. Callers may pass it; when they do not it defaults to the centre
+// of the hitbox that was struck.
 
 import * as C from '../core/constants.js';
 import { V, clamp, lerp, emit, vec3 } from '../core/state.js';
@@ -1731,8 +1746,8 @@ function pointLineDist(p, o, dx, dy, dz, maxD) {
  *
  * `amount` is the weapon's base damage; the C.HITBOX[part] multiplier is applied
  * here so callers never have to remember to. Pass `opts.premultiplied` if it
- * already was. Emits 'damage', and 'kill' if this is the fatal hit. Returns the
- * damage actually dealt.
+ * already was, and `opts.point` for where the round actually landed. Emits
+ * 'damage', and 'kill' if this is the fatal hit. Returns the damage dealt.
  *
  * The weapons module may instead write `enemy.hp` directly — that works too, and
  * the reaction (flinch, alert, callout) still happens, because updateEnemy
@@ -1743,13 +1758,30 @@ export function damageEnemy(G, e, amount, part = 'CHEST', source = 'player', opt
   const ai = ensureAI(G);
   const mult = opts.premultiplied ? 1 : (C.HITBOX[part] != null ? C.HITBOX[part] : 1);
   const dealt = amount * mult;
+  const point = opts.point ? V.clone(opts.point) : partPoint(e, part);
   e.hp -= dealt;
   e._hp = e.hp;
   G.stats.damage += dealt;
-  ai.own.add(emit(G, 'damage', { target: e.id, amount: dealt, part, source, hp: Math.max(0, e.hp) }));
-  reactToHit(G, ai, e, dealt, part);
-  if (e.hp <= 0) killEnemy(G, e, source, part === 'HEAD');
+  ai.own.add(emit(G, 'damage', { target: e.id, amount: dealt, part, source, point, hp: Math.max(0, e.hp) }));
+  reactToHit(G, ai, e, dealt, part, point);
+  if (e.hp <= 0) killEnemy(G, e, source, part === 'HEAD', point);
   return dealt;
+}
+
+// Where a hit on this part landed, when the caller did not say. The centre of
+// the named hitbox is a far better guess than the entity origin: blood, impact
+// and the grunt all want to come from the chest that was hit, not from between
+// the man's boots.
+function partPoint(e, part) {
+  const list = e.hitboxes;
+  if (list) {
+    for (let i = 0; i < list.length; i++) {
+      const h = list[i];
+      if (h.part !== part) continue;
+      return { x: (h.min.x + h.max.x) / 2, y: (h.min.y + h.max.y) / 2, z: (h.min.z + h.max.z) / 2 };
+    }
+  }
+  return { x: e.pos.x, y: e.pos.y + e.eye * 0.8, z: e.pos.z };
 }
 
 // A 'damage' event that this module did not emit came from the weapons module.
@@ -1764,19 +1796,23 @@ function applyForeignDamage(G, ai, ev) {
   if (amount <= 0) return;
   e.hp -= amount;
   G.stats.damage += amount;
-  reactToHit(G, ai, e, amount, ev.part);
-  if (e.hp <= 0) killEnemy(G, e, ev.source || 'player', ev.part === 'HEAD');
+  reactToHit(G, ai, e, amount, ev.part, ev.point);
+  if (e.hp <= 0) killEnemy(G, e, ev.source || 'player', ev.part === 'HEAD', ev.point);
   e._hp = e.hp;
 }
 
-function reactToHit(G, ai, e, amount, part) {
+function reactToHit(G, ai, e, amount, part, point) {
   e.flinch = Math.min(1, e.flinch + amount / 40);
   // Stagger is short on purpose. Long stagger turns a firefight into a stunlock
   // and takes the fight away from whoever is losing it.
   e.stagger = Math.max(e.stagger, Math.min(0.28, 0.06 + amount / 260));
   e.suppression = Math.min(1, e.suppression + 0.35);
   e.anim = 'hit';
-  emit(G, 'aiHit', { target: e.id, amount, part: part || null, pos: V.clone(e.pos) });
+  const at = point ? V.clone(point) : partPoint(e, part || 'CHEST');
+  emit(G, 'aiHit', { target: e.id, amount, part: part || null, point: at, pos: V.clone(e.pos) });
+  // The grunt comes from the head whatever the round hit, because that is where
+  // the mouth is.
+  if (e.hp > 0) vox(G, e, 'pain');
 
   // Being shot tells you where from — roughly. Even an enemy who never saw the
   // player now has a direction to face, which is what stops him standing there
@@ -1797,12 +1833,13 @@ function reactToHit(G, ai, e, amount, part) {
 }
 
 /**
- * killEnemy(G, enemy, source, headshot) — kill outright, skipping the damage
- * path. Emits 'kill' unless the weapons module already did (it sets
+ * killEnemy(G, enemy, source, headshot, point) — kill outright, skipping the
+ * damage path. `point` is where the fatal round landed, for the FX and the
+ * death sound. Emits 'kill' unless the weapons module already did (it sets
  * `killEmitted` by emitting a 'kill' event with this enemy's id, which this
  * module watches for).
  */
-export function killEnemy(G, e, source = 'player', headshot = false) {
+export function killEnemy(G, e, source = 'player', headshot = false, point = null) {
   const ai = ensureAI(G);
   // Guarded on the state, not on `alive`: another module may already have
   // cleared the flag, and this still needs to run exactly once.
@@ -1826,12 +1863,14 @@ export function killEnemy(G, e, source = 'player', headshot = false) {
   V.set(e.vel, 0, 0, 0);
   bb.deaths++;
   ai.stats.killed++;
+  const at = point ? V.clone(point) : partPoint(e, headshot ? 'HEAD' : 'CHEST');
   emit(G, 'aiState', { target: e.id, from: e.prevState, to: 'dead', why: source, pos: V.clone(e.pos) });
+  vox(G, e, 'death');
   if (!e.killEmitted) {
     e.killEmitted = true;
     G.stats.kills++;
     if (headshot) G.stats.headshots++;
-    ai.own.add(emit(G, 'kill', { target: e.id, weapon: source, headshot, pos: V.clone(e.pos) }));
+    ai.own.add(emit(G, 'kill', { target: e.id, weapon: source, headshot, point: at, pos: V.clone(e.pos) }));
   }
   // A man going down in front of you is information. The squad gets the shooter's
   // position and the survivors get nervous.

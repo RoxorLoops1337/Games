@@ -69,13 +69,13 @@ export const WEAPONS = {
   // SMG needs ten rounds and 540 ms. Everything else in the roster is described
   // by how it differs from this.
   rifle: {
-    id: 'rifle', name: 'MK-7 Carbine', class: 'AR', mode: 'auto',
-    rpm: 720, mag: 30, reserve: 210, reserveMax: 300, pellets: 1,
+    id: 'rifle', name: 'MK-7 Carbine', archetype: 'AR', class: 'rifle', muzzle: 890,
+    mode: 'auto', rpm: 720, mag: 30, reserve: 210, reserveMax: 300, pellets: 1,
     dmg: { near: 26, far: 20, d0: 26, d1: 48 },
     pen: 1.0, range: 220, zoom: 1.35,
     adsTime: 0.24, sprintOut: 0.18,
     swap: { holster: 0.24, draw: 0.42 },
-    reload: { tac: 2.05, empty: 2.60, magout: 0.55, magin: 1.35 },
+    reload: { tac: 2.05, empty: 2.60, magout: 0.55, magin: 1.35, bolt: 2.05 },
     spread: {
       hip: 2.6, ads: 0.14, move: 1.7, air: 3.6, crouch: 0.76, sprintMul: 2.2,
       // Bloom has to out-run its own decay while the trigger is down or the
@@ -105,13 +105,13 @@ export const WEAPONS = {
   // ADS and the tightest hip-fire cone in the game: it is the only primary you
   // can fight with without aiming.
   smg: {
-    id: 'smg', name: 'VK-9 Sting', class: 'SMG', mode: 'auto',
-    rpm: 1000, mag: 32, reserve: 224, reserveMax: 320, pellets: 1,
+    id: 'smg', name: 'VK-9 Sting', archetype: 'SMG', class: 'smg', muzzle: 400,
+    mode: 'auto', rpm: 1000, mag: 32, reserve: 224, reserveMax: 320, pellets: 1,
     dmg: { near: 23, far: 11, d0: 10, d1: 28 },
     pen: 0.60, range: 120, zoom: 1.15,
     adsTime: 0.16, sprintOut: 0.10,
     swap: { holster: 0.17, draw: 0.30 },
-    reload: { tac: 1.75, empty: 2.20, magout: 0.45, magin: 1.15 },
+    reload: { tac: 1.75, empty: 2.20, magout: 0.45, magin: 1.15, bolt: 1.72 },
     spread: {
       hip: 1.9, ads: 0.30, move: 0.85, air: 3.0, crouch: 0.82, sprintMul: 2.0,
       perShot: 0.26, bloomMax: 3.6, decay: 3.0, max: 9.0,
@@ -133,13 +133,13 @@ export const WEAPONS = {
   // bloom per shot so a panicked double-tap at range throws the second round
   // wide. Pace it and it is the best gun here; rush it and it is the worst.
   dmr: {
-    id: 'dmr', name: 'DM-12 Kestrel', class: 'DMR', mode: 'semi',
-    rpm: 275, mag: 12, reserve: 84, reserveMax: 120, pellets: 1,
+    id: 'dmr', name: 'DM-12 Kestrel', archetype: 'DMR', class: 'sniper', muzzle: 840,
+    mode: 'semi', rpm: 275, mag: 12, reserve: 84, reserveMax: 120, pellets: 1,
     dmg: { near: 55, far: 44, d0: 60, d1: 100 },
     pen: 1.9, range: 300, zoom: 2.4,
     adsTime: 0.34, sprintOut: 0.26,
     swap: { holster: 0.30, draw: 0.52 },
-    reload: { tac: 2.45, empty: 3.05, magout: 0.70, magin: 1.65 },
+    reload: { tac: 2.45, empty: 3.05, magout: 0.70, magin: 1.65, bolt: 2.42 },
     spread: {
       hip: 4.6, ads: 0.03, move: 2.6, air: 5.5, crouch: 0.62, sprintMul: 2.4,
       perShot: 0.55, bloomMax: 4.0, decay: 2.6, max: 10.0,
@@ -162,8 +162,8 @@ export const WEAPONS = {
   // stick. Shell-by-shell reload, cancellable at any point, so a half-full tube
   // is a decision rather than a punishment.
   shotgun: {
-    id: 'shotgun', name: 'S-870 Breacher', class: 'SG', mode: 'pump',
-    rpm: 75, mag: 7, reserve: 42, reserveMax: 60, pellets: 9, pump: 0.55,
+    id: 'shotgun', name: 'S-870 Breacher', archetype: 'SG', class: 'shotgun', muzzle: 380,
+    mode: 'pump', rpm: 75, mag: 7, reserve: 42, reserveMax: 60, pellets: 9, pump: 0.55,
     dmg: { near: 12, far: 3, d0: 8, d1: 22 },
     pen: 0.35, range: 60, zoom: 1.0,
     adsTime: 0.26, sprintOut: 0.20,
@@ -193,13 +193,13 @@ export const WEAPONS = {
   // cliff to 15 past 34 m and only penetrates the thinnest cover, so it never
   // becomes the gun you *choose*.
   pistol: {
-    id: 'pistol', name: 'M9 Warden', class: 'PISTOL', mode: 'semi',
-    rpm: 450, mag: 15, reserve: 90, reserveMax: 150, pellets: 1,
+    id: 'pistol', name: 'M9 Warden', archetype: 'PISTOL', class: 'pistol', muzzle: 350,
+    mode: 'semi', rpm: 450, mag: 15, reserve: 90, reserveMax: 150, pellets: 1,
     dmg: { near: 28, far: 15, d0: 14, d1: 34 },
     pen: 0.55, range: 120, zoom: 1.20,
     adsTime: 0.15, sprintOut: 0.08,
     swap: { holster: 0.14, draw: 0.22 },
-    reload: { tac: 1.55, empty: 2.05, magout: 0.40, magin: 0.95 },
+    reload: { tac: 1.55, empty: 2.05, magout: 0.40, magin: 0.95, bolt: 1.56 },
     spread: {
       // Huge bloom per shot against an equally huge decay: pace the trigger and
       // the sidearm is precise, empty it as fast as you can click and the last
@@ -221,14 +221,15 @@ export const WEAPONS = {
   // third of a second of free fire. 1.3 penetration and a 25 damage floor keep
   // it honest at range where the carbine has already given up.
   burst: {
-    id: 'burst', name: 'SG-3 Talon', class: 'BR', mode: 'burst',
+    id: 'burst', name: 'SG-3 Talon', archetype: 'BR', class: 'rifle', muzzle: 820,
+    mode: 'burst',
     rpm: 900, burst: 3, burstDelay: 0.26,
     mag: 24, reserve: 168, reserveMax: 240, pellets: 1,
     dmg: { near: 34, far: 25, d0: 32, d1: 62 },
     pen: 1.3, range: 260, zoom: 1.60,
     adsTime: 0.27, sprintOut: 0.20,
     swap: { holster: 0.26, draw: 0.44 },
-    reload: { tac: 2.20, empty: 2.75, magout: 0.60, magin: 1.45 },
+    reload: { tac: 2.20, empty: 2.75, magout: 0.60, magin: 1.45, bolt: 2.16 },
     spread: {
       hip: 3.2, ads: 0.09, move: 1.9, air: 4.0, crouch: 0.70, sprintMul: 2.2,
       // One burst adds 0.9° of cone and the lockout decays 0.83° of it, so
