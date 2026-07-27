@@ -5162,4 +5162,201 @@ t.test('liars: one that hides can be sprung all over again', () => {
   t.eq(m2.mt, 'mimic', 'and it is still a mimic');
 });
 
+/* ---------------------------------------------------- the Gambler's Coffin */
+
+// a coffin on a known square, with a hero beside it
+function coffinScene(rid){
+  runAt(5);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.def.mods = [];            // Hoarded doubles coin; this is about the ladder
+  const r = HQ.ROOMS[rid];
+  HQ.G.q.furn = [];
+  emptyRoom(rid);
+  const f = { t:'coffin', r:rid, x:r.x, y:r.y + 1, w:2, h:1, rot:0,
+              quest:null, taken:false, searched:false, pulls:0, done:false };
+  HQ.G.q.furn.push(f);
+  const h = HQ.runAlive()[0];
+  put(h, r.x, r.y);
+  use(h);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  return { f, h };
+}
+
+t.test('coffin: deep floors grow one, and never in the vault or the objective', () => {
+  t.eq(HQ.COFFIN_FROM, 3, 'not on the first two floors');
+  t.ok(HQ.COFFIN_CHANCE > .1 && HQ.COFFIN_CHANCE < .5, 'and not on every one after');
+  let seen = 0, shallow = 0;
+  for (let i = 0; i < 60; i++){
+    runAt(6);
+    const c = HQ.G.q.furn.filter(f => f.t === 'coffin');
+    if (!c.length) continue;
+    seen++;
+    t.eq(c.length, 1, 'one to a floor');
+    t.ok(c[0].r !== HQ.G.q.vault, 'never inside the vault you paid a key for');
+    t.eq(c[0].pulls, 0, 'and nobody has been at it');
+  }
+  t.ok(seen > 4, `depth 6 grows them (saw ${seen}/60)`);
+  for (let i = 0; i < 25; i++){ runAt(2); shallow += HQ.G.q.furn.filter(f => f.t === 'coffin').length; }
+  t.eq(shallow, 0, 'the shallow floors have none');
+  // and the authored campaign is untouched
+  for (let qi = 0; qi < HQ.QUESTS.length; qi++){
+    fresh(qi);
+    t.eq(HQ.G.q.furn.filter(f => f.t === 'coffin').length, 0, `quest ${qi} has none`);
+  }
+});
+
+t.test('coffin: a skull pays, and pays more every time', () => {
+  const { f, h } = coffinScene(4);
+  HQ.G.q.pot = 0;
+  ALL_SKULLS();
+  const first = HQ.coffinPull(h, f);
+  t.ok(first, 'the lid comes up');
+  t.eq(first.face, HQ.SKULL, 'a skull');
+  t.ok(first.paid > 0, 'and it pays');
+  t.eq(HQ.G.q.pot, first.paid, 'into the pot');
+  t.ok(h.acted, 'and the first pull cost the action');
+  t.ok(!f.done, 'the lid is still off');
+
+  const second = HQ.coffinPull(h, f);
+  t.ok(second.paid > first.paid, `and the pot climbs (${first.paid} → ${second.paid})`);
+  t.eq(HQ.G.q.pot, first.paid + second.paid, 'both in the pot');
+  t.eq(f.pulls, 2, 'two pulls on it');
+  t.ok(HQ.coffinPot(3) > HQ.coffinPot(1), 'and it keeps climbing');
+});
+
+t.test('coffin: a white shield moves nothing but the pot still climbs', () => {
+  const { f, h } = coffinScene(4);
+  HQ.G.q.pot = 0;
+  NO_SHIELDS();
+  const r = HQ.coffinPull(h, f);
+  t.eq(r.face, HQ.WHITE, 'a white shield');
+  t.eq(r.paid, 0, 'nothing under the lid this time');
+  t.eq(HQ.G.q.pot, 0, 'and nothing in the pot');
+  t.eq(f.pulls, 1, 'but it counts as a pull');
+  t.ok(!f.done, 'and the lid is still off');
+  ALL_SKULLS();
+  const paid = HQ.coffinPull(h, f);
+  t.ok(paid.paid > HQ.coffinPot(0), 'so the next skull pays more than the opening rate');
+  t.eq(paid.paid, HQ.coffinPot(1), 'exactly one pull further up the ladder');
+});
+
+t.test('coffin: a black shield lets something out and shuts it for good', () => {
+  const { f, h } = coffinScene(4);
+  const before = HQ.monstersOf().length;
+  ALL_SHIELDS();
+  const r = HQ.coffinPull(h, f);
+  t.eq(r.face, HQ.BLACK, 'a black shield');
+  t.ok(r.done, 'and that is the end of it');
+  t.ok(f.done, 'the coffin is shut');
+  t.ok(r.guest, `something climbs out (${r.guest})`);
+  t.eq(HQ.monstersOf().length, before + 1, 'and it is on the board');
+  t.ok(HQ.COFFIN_GUESTS.includes(r.guest), 'and it is one of the things that lives in there');
+  t.eq(HQ.coffinPull(h, f), null, 'a shut coffin gives nothing more');
+});
+
+t.test('coffin: what comes out gets worse the longer you have been at it', () => {
+  for (const at of [0, 3, 9]){
+    const { f, h } = coffinScene(4);
+    f.pulls = at;
+    ALL_SHIELDS();
+    const r = HQ.coffinPull(h, f);
+    const want = HQ.COFFIN_GUESTS[Math.min(HQ.COFFIN_GUESTS.length - 1, at)];
+    t.eq(r.guest, want, `after ${at} pulls it is a ${want}`);
+  }
+  // the list actually escalates
+  const cost = (t2) => HQ.MONSTERS[t2].bp * 10 + HQ.MONSTERS[t2].atk;
+  t.ok(cost(HQ.COFFIN_GUESTS[HQ.COFFIN_GUESTS.length-1]) > cost(HQ.COFFIN_GUESTS[0]),
+    'and the last is worse than the first');
+});
+
+t.test('coffin: the first pull needs an action, the rest do not', () => {
+  const { f, h } = coffinScene(4);
+  h.acted = true;
+  t.eq(HQ.coffinPull(h, f), null, 'no action, no lid');
+  t.eq(f.pulls, 0, 'and nothing has been pulled');
+
+  h.acted = false;
+  ALL_SKULLS();
+  HQ.coffinPull(h, f);
+  t.ok(h.acted, 'the first one takes it');
+  t.ok(HQ.coffinPull(h, f), 'and the rest are free, because you are already committed');
+  t.ok(HQ.coffinPull(h, f), 'as many as you dare');
+  t.eq(f.pulls, 3, 'three pulls on the one action');
+});
+
+t.test('coffin: walking up to it is what asks', () => {
+  const { f, h } = coffinScene(4);
+  t.eq(HQ.coffinWatch(h), f, 'standing beside it asks');
+  const r = HQ.ROOMS[4];
+  put(h, r.x + 5 < r.x + r.w ? r.x + 5 : r.x, r.y + r.h - 1);
+  const near = HQ.coffinNear(h);
+  if (!near) t.eq(HQ.coffinWatch(h), null, 'and standing well away does not');
+  else t.ok(true, 'the room was too small to stand clear of it, which is fine');
+  // a shut one never asks again
+  put(h, r.x, r.y);
+  f.done = true;
+  t.eq(HQ.coffinWatch(h), null, 'and a shut coffin has nothing to say');
+});
+
+/* ------------------------------------------------------------- the pedlar */
+
+t.test('pedlar: one door on the stair instead of a pile of rows', () => {
+  runAt(3);
+  HQ.G.run.gold = 900;
+  HQ.G.run.boons = [];
+  HQ.G.run.curses = [];
+  HQ.draftState = null;
+  HQ.showDraft();
+  const blurb = HQ.pedlarBlurb(0);
+  t.ok(blurb.length > 10, 'the door says what is behind it');
+  t.ok(/\d+ things? you can afford/.test(blurb), `and how much of it you can afford (${blurb})`);
+
+  // it names the blood he can give back
+  HQ.takeBoon('bloodprice');
+  const owed = HQ.bloodOwed();
+  t.ok(owed > 0, 'the stone is holding something');
+  t.ok(HQ.pedlarBlurb(owed).includes(String(owed)), 'and the door says so');
+
+  // and that he buys
+  HQ.takeBoon('swiftboots');
+  t.ok(HQ.pedlarBlurb(HQ.bloodOwed()).includes('buys'), 'and that he buys');
+  HQ.G.run.boons = ['bloodprice'];
+  t.ok(!HQ.pedlarBlurb(HQ.bloodOwed()).includes('buys'), 'but not when there is nothing to sell him');
+});
+
+t.test('pedlar: the shop still does everything it did as rows', () => {
+  runAt(3);
+  HQ.G.run.gold = 2000;
+  HQ.G.run.boons = [];
+  HQ.G.run.curses = [];
+  HQ.showPedlar();
+  t.ok(true, 'the shop opens');
+
+  // buying
+  const alive = HQ.runAlive();
+  alive.forEach(h => { h.bp = 1; });
+  t.ok(HQ.buyPedlar('mend'), 'field surgery still sells');
+  alive.forEach(h => t.ok(h.bp > 1, `${h.name} is patched up`));
+
+  // lifting a curse
+  HQ.addCurse('heavy');
+  t.ok(HQ.curseHas('heavy'), 'a mark is on you');
+  t.ok(HQ.buyPedlar('absolve'), 'and absolution still sells');
+  t.ok(!HQ.curseHas('heavy'), 'and lifts it');
+  t.eq(HQ.buyPedlar('absolve'), false, 'and will not sell you nothing');
+
+  // buying back blood
+  HQ.takeBoon('bloodprice');
+  const owed = HQ.bloodOwed();
+  t.ok(HQ.buyPedlar('bonesetter'), 'the bonesetter still works');
+  t.ok(HQ.bloodOwed() < owed, 'and the stone gives some back');
+
+  // and selling
+  HQ.takeBoon('ironskin');
+  const gold = HQ.G.run.gold;
+  t.ok(HQ.sellBoon('ironskin'), 'and he still buys');
+  t.eq(HQ.G.run.gold, gold + HQ.SELL_PRICE, 'for what he said');
+});
+
 t.run();

@@ -159,31 +159,33 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   nobody has managed to wound, sinks back into being furniture on whatever
   square it is standing on. Hurt it once and it has lost the trick. *(batch 17)*
 
+- **The Gambler's Coffin** — a tomb somebody has been using as a bank. One die a
+  pull: a skull pays and the pot climbs, a white shield moves nothing and the
+  pot climbs anyway, a black shield lets out whatever has been fed on it — and
+  what comes out gets worse the longer you have been at it. *(batch 18)*
+- **The pedlar has his own shop** — he lifts curses, buys back blood and buys
+  boons, and that had been accreting a row at a time inside the Coin tab. One
+  door now, and behind it what he sells and what he buys. *(batch 18)*
+
 ---
 
 ## Next up
 
-1. **Gambler's Coffin.** A room feature: roll a die, skull pays, black shield
-   opens it. Repeatable, stakes climbing each pull. The last unbuilt gamble on
-   the list, and the board now has the vocabulary for it.
-2. **The pedlar wants his own screen.** He lifts curses, buys back blood tolls
-   and now buys boons. That is a coherent identity — the place regret gets
-   undone — and it has been accreting one row at a time inside the Coin tab.
-3. **More monsters.** The bestiary has not grown since batch 5 while everything
-   around it has. A spider that webs a square, a hellhound breathing down a
-   line, a chained thing that cannot leave its room.
+1. **More monsters.** The bestiary has not grown since batch 5 while everything
+   around it has. A spider that webs a square you spend a turn cutting out of, a
+   hellhound breathing down a line, a chained thing that cannot leave its room
+   but hits like the end of the world.
+2. **Force the door.** Forcing works on chests; a stuck or locked door should ask
+   the same question, with noise instead of a needle as the cost.
+3. **Floor themes beyond modifiers.** A flooded floor where movement costs
+   double in water, a collapsing floor whose squares fall in over time. The
+   modifiers change numbers; these would change how a floor is walked.
 
 ## Backlog, roughly in order of value
 
-### Gamble
-- **Force the door.** Forcing works on chests; a locked or stuck door should ask
-  the same question, with noise instead of a needle as the cost.
 ### Roguelike depth
 - **Vault variants.** A vault that is trapped, or one whose key is held by a
   champion that flees.
-- **Floor themes** beyond modifiers: a flooded floor (movement costs double in
-  water), a collapsing floor (squares fall in over time), a lightless floor where
-  only carried torches matter.
 
 ### Feel
 - **The relic silhouettes are small at board zoom.** They read, but only just.
@@ -192,6 +194,13 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   saying `6/8 · BUTCHERY` would make the thing you are climbing toward concrete.
 
 ### New ideas the batch turned up
+- **Every gamble now costs an action except the coffin's later pulls.** That is
+  deliberate — press-your-luck needs to run without a turn between pulls — but
+  it means the coffin is the strongest thing on a floor if you find it early.
+  Worth watching whether it wants a cap.
+- **The between-floors screen is a hub now, not a list.** Boons, Coin, Stairs,
+  Book, and Coin is itself a door to a shop. That is the right shape; the title
+  screen and the run's own menu have not caught up with it.
 - **A wired-up ticker needs a turn-loop test.** Both new tickers passed their
   own tests with the `endZargonTurn` call deleted, because the tests called them
   directly. Anything hung off the turn loop wants one test that drives
