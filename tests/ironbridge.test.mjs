@@ -4669,6 +4669,102 @@ t.ok(true, 'drawing an empty bridge is harmless');
     G.fx.length = 0;
   }
 
+  // What a cast draws, walked over every skill in the game rather than over
+  // the two or three anybody thinks to look at.
+  {
+    IB.newMatch({ diff:'veteran', seed:6121 });
+    IB.fxForce = true;
+    const h = IB.makeHero(0, 'mage', 'Caster');
+    h.pend.length = 0; G.sides[0].heroes.push(h); IB.enterLane(h); h.x = 60; h.y = 0;
+    const tgt = { x:66, y:1, dead:false, r:.5, side:1 };
+    // ultFlourish adds a wave of its own to EVERY ultimate, in its own gold.
+    // Left in, it swamps the measurement and every kind looks like it scales —
+    // which is exactly what the first run of this said.
+    const FLOURISH = ['#ffe08a', '#ffe9a8'];
+    const cast = (s) => {
+      G.fx.length = 0; G.floats.length = 0;
+      IB.castFx(h, s, tgt);
+      const own = G.fx.filter(p => !FLOURISH.includes(p.col));
+      return {
+        // Arcs are a stylised slash, not a claim about area, so they are not
+        // in `marks` — the wave beside them is what states the radius.
+        marks:own.filter(p => p.k === 'wave' || p.k === 'ring').map(p => p.r),
+        arcs:own.filter(p => p.k === 'arc').map(p => p.r),
+        beam:Math.max(0, ...own.filter(p => p.k === 'beam').map(p => p.w)),
+        parts:own.filter(p => p.k === 'p' || p.k === 'mote').length,
+        n:own.length,
+      };
+    };
+    const ids = Object.keys(IB.SKILL);
+    t.ok(ids.length > 40, 'the cast sweep covers the whole skill list (' + ids.length + ')');
+
+    // A ring that says "this is what got hit" may not lie about it. An
+    // ultimate's flourish can be as big as it likes; a stated area cannot.
+    // nova drew its real radius at 1.6x for every ultimate — telling the
+    // player an area was dangerous when it was not.
+    const FLOOR = 2.4;                       // below this a marker is drawn just big enough to see
+    let over = 0, withAoe = 0, worst = '';
+    for (const id of ids){
+      const s = IB.SKILL[id];
+      if (!s.aoe) continue;
+      withAoe++;
+      const r = cast(s);
+      for (const m of r.marks)
+        if (m > Math.max(s.aoe, FLOOR) + .01){
+          over++;
+          if (!worst) worst = id + ' draws ' + m.toFixed(2) + ' for an aoe of ' + s.aoe;
+        }
+    }
+    t.ok(withAoe > 15, 'and plenty of them state an area (' + withAoe + ')');
+    t.ok(over === 0, 'no cast draws a bigger area than the one it hits (' + over +
+      (worst ? ' — ' + worst : '') + ')');
+
+    // And every ultimate has to outdraw its own basic. Compared only against a
+    // basic with the SAME aoe, or the ult's larger area masquerades as the
+    // flourish scaling and three kinds come back "yes" that are not.
+    const kinds = new Map();
+    for (const id of ids){
+      const s = IB.SKILL[id];
+      if (!kinds.has(s.k)) kinds.set(s.k, []);
+      kinds.get(s.k).push(s);
+    }
+    let pairs = 0, flat = 0, flatNames = [];
+    for (const [k, list] of kinds){
+      const basics = list.filter(s => !s.ult), ults = list.filter(s => s.ult);
+      if (!basics.length || !ults.length) continue;
+      for (const u of ults){
+        const b = basics.find(x => (x.aoe || 0) === (u.aoe || 0));
+        if (!b) continue;                     // not like for like; skip rather than lie
+        pairs++;
+        const rb = cast(b), ru = cast(u);
+        const bigger =
+          Math.max(0, ...ru.marks) > Math.max(0, ...rb.marks) + .01 ||
+          Math.max(0, ...ru.arcs) > Math.max(0, ...rb.arcs) + .01 ||
+          ru.beam > rb.beam + .01 ||
+          ru.parts > rb.parts;
+        if (!bigger){ flat++; flatNames.push(k + ':' + u.id); }
+      }
+    }
+    t.ok(pairs >= 4, 'there are like-for-like basic/ultimate pairs to compare (' + pairs + ')');
+    t.ok(flat === 0, 'every ultimate draws bigger than the basic beside it (' +
+      flat + (flatNames.length ? ' — ' + flatNames.join(', ') : '') + ')');
+
+    // The rule itself, walked without a canvas: a stated area is the radius, a
+    // stated nothing is decoration and scales.
+    const dash = IB.SKILL[ids.find(id => IB.SKILL[id].k === 'dash' && !IB.SKILL[id].ult)];
+    const dashU = IB.SKILL[ids.find(id => IB.SKILL[id].k === 'dash' && IB.SKILL[id].ult)];
+    if (dash && dashU){
+      const a = cast(dash), b = cast(dashU);
+      t.ok(b.parts > a.parts, 'an ultimate dash throws more than a basic one (' +
+        a.parts + ' → ' + b.parts + ')');
+      t.ok(Math.max(0, ...b.marks) > Math.max(0, ...a.marks),
+        'and pushes off harder (' + Math.max(0, ...a.marks) + ' → ' + Math.max(0, ...b.marks) + ')');
+    } else {
+      t.ok(false, 'the skill list still has a basic and an ultimate dash to compare');
+    }
+    G.fx.length = 0; G.floats.length = 0;
+  }
+
   G.fx.length = 0;
   IB.fxForce = false;
   IB.cam.x = 26;
