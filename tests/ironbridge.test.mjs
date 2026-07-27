@@ -4455,8 +4455,104 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(lost === 0, 'and the capture held all of it (' + lost + ' dropped)');
     t.ok(lopsided.length === 0, 'both holds are built the same (' +
       (lopsided.length ? lopsided.slice(0, 4).join(' | ') : 'mirrored') + ')');
+
+    // ...and they have to WEAR the same. The sweep above only ever tested full
+    // health and rubble, which is why it missed a t3 keeping two merlons on one
+    // hold and none on the other: the crown was seeded from the side.
+    let unmirrored = [];
+    for (const f of [.8, .6, .35, .15]){
+      for (const s of G.sides) for (const st of s.structs){ st.dead = false; st.hp = st.mhp * f; }
+      for (const key of [...new Set(G.sides[0].structs.map(st => st.key))]){
+        const per = [0, 1].map(i => {
+          const st = G.sides[i].structs.find(x => x.key === key);
+          IB.cam.x = st.x;
+          const t0 = G.t; G.t = t0 - i * 1.7;
+          const r = shapes(() => IB.drawStructure(CTX, st));
+          G.t = t0;
+          return r;
+        });
+        for (const k of ['e', 'l'])
+          if (per[0][k] !== per[1][k])
+            unmirrored.push(key + ' at ' + Math.round(f * 100) + '% ' + k + ' ' + per[0][k] + '/' + per[1][k]);
+      }
+    }
+    t.ok(unmirrored.length === 0, 'and both holds wear the same as they are broken down (' +
+      (unmirrored.length ? unmirrored.slice(0, 3).join(' | ') : 'mirrored') + ')');
+    for (const s of G.sides) for (const st of s.structs){ st.dead = false; st.hp = st.mhp; }
     IB.cam.x = 26;
     IB.MY = st0;
+  }
+  {
+    // A battered tower loses its teeth. It lost ALL of them at the first
+    // scratch: the threshold was `wear * .55`, which at tier one already
+    // exceeded every value the hash returns for these three merlons — so a
+    // turret at 71% health had a bald crown, and 71%, 40% and 2% drew
+    // identically. Four states of damage, two pictures.
+    //
+    // And the hash was re-rolled per tier, `hash2(i, wear * 13.7)`, so the set
+    // of missing teeth changed as the tower took damage: a tooth could regrow.
+    // battleDamage, three lines away, already graded 0/2/4/6 cracks and
+    // already seeded from the structure. Both go through one seed now.
+    IB.newMatch({ diff:'veteran', seed:7801 });
+    IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+    const s = CTX.__stats;
+    const teeth = (st, wear) => {
+      const b = s.ops;
+      IB.crown(CTX, 400, 300, 40, 1, 5, wear, IB.stSeed(st));
+      return s.ops - b;                      // crown draws nothing but blocks
+    };
+    const structs = G.sides[0].structs.filter(x => x.key !== 'gate' && x.key !== 'inhib');
+    t.ok(structs.length >= 3, 'there are towers to batter (' + structs.length + ')');
+    // Monotone: a tooth knocked off stays off. This is the regrow bug.
+    let regrew = 0;
+    const totals = [0, 0, 0, 0];
+    for (const st of structs){
+      let prev = Infinity;
+      for (let w = 0; w <= 3; w++){
+        const n = teeth(st, w);
+        totals[w] += n;
+        if (n > prev) regrew++;
+        prev = n;
+      }
+    }
+    t.ok(regrew === 0, 'a merlon knocked off a tower never comes back (' + regrew + ')');
+    // Graded: each tier costs the board more teeth than the last. This is the
+    // all-or-nothing bug — before, tiers 1, 2 and 3 were identical.
+    let flat = 0;
+    for (let w = 1; w <= 3; w++) if (!(totals[w] < totals[w - 1])) flat++;
+    t.ok(flat === 0, 'and every tier of damage costs it more (' +
+      totals.join(' → ') + ')');
+    t.ok(totals[3] < totals[0] * .5, 'a wrecked crown is most of the way gone (' +
+      totals[3] + ' of ' + totals[0] + ')');
+    // Per structure, not per tier: every tower used to lose exactly the same
+    // teeth because the seed had nothing about the tower in it.
+    const atTier2 = structs.map(st => teeth(st, 2));
+    t.ok(new Set(atTier2).size > 1, 'and two towers do not wear identically (' + atTier2.join(',') + ')');
+    // Mirrored: a tower and its counterpart across the bridge wear the same.
+    let sideDiff = 0;
+    for (const key of structs.map(x => x.key)) for (let w = 0; w <= 3; w++){
+      const a = G.sides[0].structs.find(x => x.key === key);
+      const b = G.sides[1].structs.find(x => x.key === key);
+      if (teeth(a, w) !== teeth(b, w)) sideDiff++;
+    }
+    t.ok(sideDiff === 0, 'a tower and its opposite number wear the same (' + sideDiff + ')');
+    // The sibling that condemned it must keep grading too.
+    const cracks = (st, f) => {
+      st.dead = false; st.hp = st.mhp * f;
+      const b = s.ops;
+      IB.battleDamage(CTX, st, 400, 300, 40, 30, 1);
+      return s.ops - b;
+    };
+    const st1 = structs[0];
+    const wearScale = [.9, .6, .3, .1].map(f => cracks(st1, f));
+    st1.hp = st1.mhp;
+    let unsorted = 0;
+    for (let i = 1; i < wearScale.length; i++) if (!(wearScale[i] > wearScale[i - 1])) unsorted++;
+    t.ok(unsorted === 0, 'the walls still take more damage as the tower does (' +
+      wearScale.join(' → ') + ')');
+    t.ok(IB.WEAR({ dead:true, mhp:100, hp:100 }) === 0, 'and rubble has no wear of its own');
+    t.ok(IB.CROWN_TIERS > 1, 'the crown comes off in stages');
+    IB.cam.x = 26;
   }
 
   // The sweep as a rule instead of a list. Anything the game does FOR the

@@ -4110,14 +4110,40 @@ function block(c, x, y, w, h, face, top){
   if (top){ c.fillStyle = top; c.fillRect(x, y, w, Math.max(1, h * .16)); }
 }
 // A crenellated crown: the solid band plus its merlons.
-function crown(c, cx, y, w, u, n, wear){
+/* Which stone a piece of wear belongs to. One seed, because two things ask —
+   the cracks and soot on the walls, and the teeth on the crown — and they were
+   not asking the same way: battleDamage seeded from the structure, so every
+   tower cracked differently, while the crown seeded from the WEAR TIER alone,
+   so all nine towers on the board lost exactly the same teeth.               */
+// The SIDE is deliberately not in it. The two holds are mirror images, so a
+// tower and its counterpart across the bridge take their damage in the same
+// places; different towers within a hold still differ from each other. With
+// the side in — which is how battleDamage seeded before this — a t3 at 30%
+// health kept two merlons on one hold and none on the other, and the mirror
+// invariant only missed it because it tests full health and rubble, not the
+// states in between. It tests those now too.
+const stSeed = (st) => st.ord * 3.3 + st.key.length * 2.9;
+/* And a merlon comes off when the tower is battered past that merlon's own
+   toughness — and does NOT come back. The old test re-rolled the hash at every
+   tier, `hash2(i, wear * 13.7)`, so the set of missing teeth changed as the
+   tower took damage and a tooth could regrow. That never showed, because the
+   threshold was `wear * .55`, which at the very first tier already exceeded
+   every value the hash returns for these three teeth: measured, a turret at
+   71% health had already lost its whole crown, and 71%, 40% and 2% drew
+   identically. Four states of damage, two pictures.
+
+   Toughness comes off the hash and the tier is compared against it, so the
+   loss is monotone by construction rather than by luck — battleDamage beside
+   it grades 0, 2, 4, 6 cracks and this now grades with it.                  */
+const CROWN_TIERS = 3;
+const merlonHolds = (i, wear, seed) => hash2(i * 5.1, seed) >= wear / CROWN_TIERS;
+function crown(c, cx, y, w, u, n, wear, seed){
   block(c, cx - w / 2, y, w, 7 * u, STONE.mid, STONE.lit);
   const step = w / n;
   for (let i = 0; i < n; i++){
     if (i % 2) continue;
-    // a battered turret loses its teeth, and loses them in the same places
-    // every frame — the wear is hashed, not rolled
-    if (wear > 0 && hash2(i * 5.1, wear * 13.7) < wear * .55) continue;
+    // the same places every frame — the wear is hashed, not rolled
+    if (wear > 0 && !merlonHolds(i, wear, seed || 0)) continue;
     block(c, cx - w / 2 + i * step, y - 8 * u, step * 1.02, 9 * u, STONE.mid, STONE.lit);
   }
 }
@@ -4133,7 +4159,7 @@ const WEAR = (st) => {
 function battleDamage(c, st, X, top, w, h, u){
   const wear = WEAR(st);
   if (!wear) return;
-  const seed = st.ord * 3.3 + st.side * 11.7;
+  const seed = stSeed(st);
   c.strokeStyle = 'rgba(38,34,30,.55)';
   c.lineWidth = Math.max(1, 1.3 * u);
   for (let i = 0; i < wear * 2; i++){
@@ -4271,7 +4297,7 @@ function drawStructure(c, st){
         const tx = X + sx * 46 * u;
         block(c, tx - 16 * u, Y - 86 * u, 32 * u, 86 * u, STONE.mid, STONE.lit);
         masonry(c, tx - 16 * u, Y - 84 * u, 32 * u, 80 * u, u, 21 + sx + st.side * 5);
-        crown(c, tx, Y - 96 * u, 36 * u, u, 5, WEAR(st));
+        crown(c, tx, Y - 96 * u, 36 * u, u, 5, WEAR(st), stSeed(st));
         battleDamage(c, st, tx, Y - 82 * u, 30 * u, 70 * u, u);
         c.fillStyle = STONE.line; c.fillRect(tx - 3 * u, Y - 66 * u, 6 * u, 15 * u);
         // timber palisade skirting the base
@@ -4355,7 +4381,7 @@ function drawStructure(c, st){
       poly(c, [[hx, hy], [hx + dir * 9 * u, hy + 2 * u], [hx + dir * 9 * u, hy + 3.5 * u], [hx, hy + 1.6 * u]], WOOD.lit);
       for (let i = 0; i < 3; i++)                        // the props under it
         block(c, X - 11 * u + i * 9 * u, hy + 10 * u, 2.4 * u, 5 * u, WOOD.dark);
-      crown(c, X, Y - 68 * u, 32 * u, u, 5, WEAR(st));
+      crown(c, X, Y - 68 * u, 32 * u, u, 5, WEAR(st), stSeed(st));
       battleDamage(c, st, X, Y - 56 * u, 26 * u, 44 * u, u);
       // The eye. It was a painted circle that brightened; it is a weapon in a
       // socket now, and it lurches back on the shot — the same trick that made
@@ -8319,7 +8345,7 @@ window.IB = {
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
   startZoom, ZOOM_MIN, ZOOM_MAX, camStep, demoCam, clouds, FLOCKS, drawClouds, drawBirds, CLOUD, CLOUD_PASSES, cloudLean, cloudRise, cloudPath, SKY_SPAN, BIRD, birdSlot, birdDrift, birdBeat, birdBob, heroMeters, heroDoing, showHeroSheet,
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
-  WEAR, battleDamage, drawStructure,
+  WEAR, battleDamage, crown, hash2, stSeed, merlonHolds, CROWN_TIERS, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels, setText, endText, TEXT0, labelHits, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
