@@ -5011,6 +5011,75 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.cam.x = 26;
     IB.MY = seat0e;
   }
+  {
+    // Troops armed at the barracks stand in the mustering pit until the wave
+    // goes out. They cost population and gold the moment you arm them, and
+    // they decide whether the next wave is a levy trickle or a real push — and
+    // the pit showed nothing. Six armed fighters drew exactly the same 1957
+    // ops across the same 1327.3 as an empty hold, on op count and extent
+    // alike. The dock's muster row has always listed them: the panel knew and
+    // the board did not.
+    //
+    // drawNode's crew is the sibling that condemns it — one figure at the node
+    // for every hand assigned to it, in the very same file.
+    const s = CTX.__stats;
+    const seat0f = IB.MY;
+    const holdWith = (side, n, watcher) => {
+      IB.newMatch({ diff:'veteran', seed:8301 });
+      IB.MY = watcher === undefined ? side : watcher;
+      IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+      IB.cam.x = side === 0 ? IB.HOLD_X : C.LANE_LEN - IB.HOLD_X;
+      const sd = G.sides[side];
+      sd.plot[4] = { type:'pit', lvl:2, tile:4, raise:0 };
+      sd.muster.length = 0;
+      for (let i = 0; i < n; i++) sd.muster.push({ type: i % 2 ? 'melee' : 'caster' });
+      s.dropped = 0;
+      const b = s.ops;
+      IB.drawHold(CTX, side);
+      return { n:s.ops - b, dropped:s.dropped };
+    };
+    const empty = holdWith(0, 0), one = holdWith(0, 1), few = holdWith(0, 3), many = holdWith(0, 6);
+    t.ok(empty.n > 500, 'the hold really drew (' + empty.n + ' ops)');
+    t.ok([empty, one, few, many].every(x => x.dropped === 0), 'and the capture held it');
+    t.ok(one.n > empty.n, 'a single armed fighter stands in the pit (' + empty.n + ' → ' + one.n + ')');
+    t.ok(few.n > one.n && many.n > few.n, 'and the muster grows with it (' +
+      one.n + ' → ' + few.n + ' → ' + many.n + ')');
+    // No saturating at the first fighter — the trap the crown fell into.
+    t.ok(many.n - few.n > 0 && few.n - one.n > 0, 'every fighter after the first shows too');
+    // But it is bounded, or a big muster buries the plot it is standing on.
+    const huge = holdWith(0, 40);
+    t.ok(huge.n <= empty.n + (many.n - empty.n) * 3, 'and a huge muster does not bury the plot (' +
+      many.n + ' at six → ' + huge.n + ' at forty)');
+    t.ok(IB.MUSTER.cap > 3, 'the pit holds a real company before it stops counting (' + IB.MUSTER.cap + ')');
+
+    // CROSSED. What the other hold has waiting is not something you get to
+    // count — the same rule their crews already follow — and a seat test where
+    // owner and watcher are the same side could not tell either way.
+    let leaked = 0, shown = 0;
+    for (const owner of [0, 1]){
+      const mine = holdWith(owner, 6, owner).n, mineEmpty = holdWith(owner, 0, owner).n;
+      const theirs = holdWith(owner, 6, 1 - owner).n, theirsEmpty = holdWith(owner, 0, 1 - owner).n;
+      if (mine > mineEmpty) shown++;
+      if (theirs !== theirsEmpty) leaked++;
+    }
+    t.ok(shown === 2, 'each hold shows you your own muster (' + shown + '/2)');
+    t.ok(leaked === 0, 'and never shows you theirs (' + leaked + ')');
+    IB.MY = seat0f;
+
+    // The sibling has to keep working — the crew at the node is what this was
+    // measured against, and it is in the same file for the same reason.
+    {
+      IB.newMatch({ diff:'veteran', seed:8305 });
+      IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
+      G.sides[0].workers.gold = 0;
+      const c0 = (() => { const b = s.ops; IB.drawHold(CTX, 0); return s.ops - b; })();
+      G.sides[0].workers.gold = 5;
+      const c5 = (() => { const b = s.ops; IB.drawHold(CTX, 0); return s.ops - b; })();
+      t.ok(c5 > c0, 'the crew still stands at the node it works (' + c0 + ' → ' + c5 + ')');
+    }
+    IB.cam.x = 26;
+    IB.MY = seat0f;
+  }
 
   // The sweep as a rule instead of a list. Anything the game does FOR the
   // person watching — a sound, a toast, a panel refresh — must never be gated
