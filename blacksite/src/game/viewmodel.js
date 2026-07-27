@@ -46,6 +46,13 @@ const smoothstep = (t) => { t = clamp(t, 0, 1); return t * t * (3 - 2 * t); };
 // Angles wrap at ±π, and a wrap must not read as a 6-radian flick of the wrist.
 const wrap = (a) => (a > Math.PI ? a - TAU : a < -Math.PI ? a + TAU : a);
 
+// Five directions over the upper hemisphere: straight up plus four at 55°.
+// Enough to tell a bay from a courtyard, cheap enough to run ten times a second.
+const SKY_RAYS = [
+  [0, 1, 0],
+  [0.82, 0.57, 0], [-0.82, 0.57, 0], [0, 0.57, 0.82], [0, 0.57, -0.82],
+];
+
 export function createViewmodel(G, engine, materials) {
   const gun = createGunMaterials(G, engine, materials);
   const arsenal = createArsenal(gun.mats);
@@ -611,12 +618,23 @@ export function createViewmodel(G, engine, materials) {
       sun.ray.x = sun.dir.x; sun.ray.y = sun.dir.y; sun.ray.z = sun.dir.z;
       try {
         sun.visTarget = raycast(G.world, sun.org, sun.ray, 45) ? 0 : 1;
-        // Straight up, for the environment. Under a container roof the weapon
-        // should stop reflecting a sky it cannot see — without this it carries a
-        // full outdoor probe into a dark interior and glows there, which is the
-        // most conspicuous way a viewmodel can fail to belong to a room.
-        sun.ray.x = 0.12; sun.ray.y = 1; sun.ray.z = 0.08;
-        sun.skyTarget = raycast(G.world, sun.org, sun.ray, 14) ? 0 : 1;
+        // And how much sky. A single straight-up ray is not enough: a container
+        // bay is open at both ends, so the roof stops the vertical ray in some
+        // spots and misses it in others, and the weapon flickers between outdoor
+        // and indoor as the player walks. Five rays over the upper hemisphere is
+        // a crude enough irradiance estimate to be honest and cheap enough to run
+        // ten times a second.
+        //
+        // This matters more than it sounds. The environment probe is the view
+        // scene's only ambient specular, and an unoccluded outdoor probe carried
+        // into a dark interior is precisely how a weapon ends up glowing in a
+        // room where everything else has gone black.
+        let open = 0;
+        for (const d of SKY_RAYS) {
+          sun.ray.x = d[0]; sun.ray.y = d[1]; sun.ray.z = d[2];
+          if (!raycast(G.world, sun.org, sun.ray, 16)) open++;
+        }
+        sun.skyTarget = open / SKY_RAYS.length;
       } catch { sun.visTarget = 1; sun.skyTarget = 1; }
     }
     sun.vis = smooth(sun.vis, sun.visTarget, 5.5, dt);
@@ -624,9 +642,8 @@ export function createViewmodel(G, engine, materials) {
     // Never all the way off: bounce still reaches the gun indoors, and that
     // residual is what keeps the chamfers legible in a doorway.
     key.intensity *= 0.10 + 0.90 * sun.vis;
-    // The environment is the view scene's only ambient specular, so this is the
-    // one lever that makes a polished receiver go matte under a roof.
-    gun.setEnvScale(0.30 + 0.70 * sun.sky);
+    fill.intensity *= 0.45 + 0.55 * sun.sky;
+    gun.setEnvScale(0.22 + 0.78 * sun.sky);
 
     const at = engine.viewCam.position;
     keyTarget.position.copy(at);

@@ -46,7 +46,7 @@ const _v1 = new THREE.Vector3(), _v2 = new THREE.Vector3(), _v3 = new THREE.Vect
 const _v4 = new THREE.Vector3(), _v5 = new THREE.Vector3(), _v6 = new THREE.Vector3();
 const _q1 = new THREE.Quaternion(), _q2 = new THREE.Quaternion(), _q3 = new THREE.Quaternion();
 const _e1 = new THREE.Euler(0, 0, 0, 'YXZ');
-const _aim = new THREE.Vector3(), _gaze = new THREE.Vector3();
+const _gaze = new THREE.Vector3();
 const _gunQ = new THREE.Quaternion(), _handR = new THREE.Vector3(), _handL = new THREE.Vector3();
 const IDENTITY = new THREE.Matrix4();
 
