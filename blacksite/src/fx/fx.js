@@ -1789,16 +1789,23 @@ function build(G, engine, materials) {
   // right of centre, a little below the eye, half a metre forward.
   const MUZZLE_LOCAL = new THREE_.Vector3(0.13, -0.055, -0.56);
   const PORT_LOCAL = new THREE_.Vector3(0.17, -0.045, -0.30);
-  let muzzleNode = null, muzzleLooked = false;
+  let muzzleNode = null, muzzleFn = null;
 
+  // Three ways to find the barrel, in descending order of trust, re-probed on
+  // every shot until one of them answers: the viewmodel is built after FX and
+  // swaps its model on every weapon change, so a value cached at boot would be
+  // a flash hanging in the air where the last gun used to be.
   function muzzleWorld(out) {
-    if (!muzzleLooked) {
-      muzzleLooked = true;
-      // Opt-in: name a node `muzzle` anywhere in the viewmodel scene and the
-      // flash, the smoke and the tracer origin all move to it.
+    if (!muzzleNode && !muzzleFn) {
       muzzleNode = engine.view.getObjectByName ? engine.view.getObjectByName('muzzle') : null;
+      if (!muzzleNode) {
+        const vm = engine.viewmodel
+          || (typeof window !== 'undefined' && window.BLACKSITE && window.BLACKSITE.viewmodel);
+        if (vm && typeof vm.muzzle === 'function') muzzleFn = vm.muzzle;
+      }
     }
     if (muzzleNode) { muzzleNode.getWorldPosition(out); return out; }
+    if (muzzleFn && muzzleFn(out, null)) return out;
     return out.copy(MUZZLE_LOCAL).applyMatrix4(engine.viewCam.matrixWorld);
   }
 
