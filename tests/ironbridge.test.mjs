@@ -179,14 +179,37 @@ function loadGame(store, srcOverride){
     return true;
   } });
   CTX = ctx;
-  const mkEl = () => new Proxy({
-    style: {}, dataset: {}, children: [],
-    classList: { add: noop, remove: noop, toggle: noop, contains: () => false },
-    addEventListener: noop, removeEventListener: noop, appendChild: noop, remove: noop,
-    getContext: () => ctx, querySelector: () => mkEl(), querySelectorAll: () => [],
-    getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 520 }),
-    setPointerCapture: noop, innerHTML: '', textContent: '', width: 900, height: 520,
-  }, { get(t, k){ return (k in t) ? t[k] : noop; }, set(t, k, v){ t[k] = v; return true; } });
+  // Elements used to be thrown away and remade on every lookup, and classList
+  // was four no-ops that reported `contains: false` forever. So anything the
+  // game says in the top bar — a resource count, the wave clock, the class it
+  // puts on that clock as a wave closes in — was written into an object that
+  // was discarded before the assertion could read it. The HUD half of a fix
+  // could not be tested at all, which is exactly how a fix ends up applied to
+  // only some of its cases. Elements are now sticky per id (and per selector
+  // under an element), and classList is a real set.
+  const mkEl = () => {
+    const cls = new Set();
+    const kids = new Map();
+    return new Proxy({
+      style: {}, dataset: {}, children: [],
+      classList: {
+        add: (...n) => n.forEach(x => cls.add(x)),
+        remove: (...n) => n.forEach(x => cls.delete(x)),
+        toggle: (n, on) => { const want = on === undefined ? !cls.has(n) : !!on; cls[want ? 'add' : 'delete'](n); return want; },
+        contains: (n) => cls.has(n),
+      },
+      get className(){ return [...cls].join(' '); },
+      set className(v){ cls.clear(); String(v || '').split(/\s+/).filter(Boolean).forEach(x => cls.add(x)); },
+      addEventListener: noop, removeEventListener: noop, appendChild: noop, remove: noop,
+      getContext: () => ctx,
+      querySelector: (sel) => { if (!kids.has(sel)) kids.set(sel, mkEl()); return kids.get(sel); },
+      querySelectorAll: () => [],
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 900, height: 520 }),
+      setPointerCapture: noop, innerHTML: '', textContent: '', width: 900, height: 520,
+    }, { get(t, k){ return (k in t) ? t[k] : noop; }, set(t, k, v){ t[k] = v; return true; } });
+  };
+  const byId = new Map();
+  const getEl = (id) => { if (!byId.has(id)) byId.set(id, mkEl()); return byId.get(id); };
 
   global.localStorage = {
     getItem: k => (k in store ? store[k] : null),
@@ -200,8 +223,8 @@ function loadGame(store, srcOverride){
   global.devicePixelRatio = 1;
   global.innerWidth = 1400; global.innerHeight = 800;
   global.document = new Proxy({
-    getElementById: () => mkEl(), createElement: () => mkEl(),
-    querySelector: () => mkEl(), querySelectorAll: () => [], addEventListener: noop, body: mkEl(),
+    getElementById: getEl, createElement: () => mkEl(),
+    querySelector: (sel) => getEl('sel:' + sel), querySelectorAll: () => [], addEventListener: noop, body: mkEl(),
   }, { get(t, k){ return (k in t) ? t[k] : noop; } });
   global.window = new Proxy(global, {
     get(t, k){ return (k in t) ? t[k] : undefined; },
@@ -6628,6 +6651,97 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(IB.netHash() === h0, 'the hold is outside the lockstep hash');
     IB.newMatch({ diff:'veteran', seed:7801 });
     t.ok(G.overHold === 0, 'and a new match starts unheld');
+    G.units.length = 0;
+  }
+  // A wave lands every 22 seconds and it decides what the next 22 are spent
+  // on — it is the metronome of the match. Walked second by second across a
+  // full countdown on a live page, what the player was told about it was five
+  // characters of grey text in a corner box: ONE class the whole way down, the
+  // same weight at 0:18 as at 0:00, and the board mentioned it at 0 of 18
+  // samples. The control on the same instrument is the ogre window, a
+  // countdown four hundred lines away that the game already tells properly —
+  // a bar on the board plus a number, distinct at every sample of its own.
+  {
+    IB.newMatch({ diff:'veteran', seed:9101 });
+    const box = () => document.getElementById('waveBox');
+    const clock = () => document.getElementById('waveT').textContent;
+
+    // ---- the clock read one second short the whole way down, and spent the
+    // last whole second announcing a wave that had not arrived.
+    const reads = [];
+    for (const left of [22, 17.99, 7, 1.5, 0.4, 0]){
+      G.waveT = left; IB.syncHud();
+      reads.push({ left, secs:IB.waveSecs(), txt:clock(), soon:box().classList.contains('soon') });
+    }
+    t.ok(reads[0].txt === '0:22', 'a full period reads as a full period (' + reads[0].txt + ')');
+    t.ok(reads[1].secs === 18, '17.99s left is eighteen seconds to go, not seventeen (' + reads[1].secs + ')');
+    t.ok(reads[4].txt === '0:01', 'and four tenths of a second left still reads 0:01 (' + reads[4].txt + ')');
+    t.ok(reads[5].txt === '0:00', 'only nothing left reads 0:00 (' + reads[5].txt + ')');
+    t.ok(reads.every(r => r.secs >= r.left - 1e-9),
+      'the clock never claims less time than there is');
+
+    // ---- the top bar changes state. It carried exactly one before.
+    t.ok(new Set(reads.map(r => r.soon)).size === 2,
+      'the top bar is in two different states across a countdown, not one');
+    t.ok(reads[0].soon === false && reads[3].soon === true,
+      'plain at a full period, lit when the wave is close');
+    t.ok(IB.MUSTER.lead > 0 && IB.MUSTER.lead < C.WAVE_PERIOD,
+      'and the lit band is a slice of the period, not all of it (' + IB.MUSTER.lead + 's of ' + C.WAVE_PERIOD + ')');
+
+    // ---- the band, and its DIRECTION. The ogre bar drains because that
+    // window is closing; this one fills because a muster is assembling. Built
+    // the other way round, every "distinct pictures" count below would still
+    // have been perfect.
+    G.waveT = IB.MUSTER.lead + .01; t.ok(IB.mustering() === false, 'just outside the band, nothing');
+    G.waveT = IB.MUSTER.lead;       t.ok(IB.mustering() === true,  'at the band, it starts');
+    const far = (G.waveT = IB.MUSTER.lead, IB.musterPhase());
+    const near = (G.waveT = .2, IB.musterPhase());
+    t.ok(far < near, 'the muster FILLS as the wave closes in (' + far.toFixed(2) + ' → ' + near.toFixed(2) + ')');
+    t.ok(far === 0, 'empty the moment the band opens');
+    t.ok(near > .9 && near <= 1, 'and all but full at the last moment (' + near.toFixed(2) + ')');
+    G.waveT = 3; G.state = 'over';
+    t.ok(IB.mustering() === false, 'and no wave is mustering once the match is over');
+    G.state = 'play';
+
+    // ---- WIRED: the real countdown crosses the band on its own, and the
+    // wave really lands at the bottom of it.
+    IB.newMatch({ diff:'veteran', seed:9101 });
+    let litFor = 0, lastWave = G.wave;
+    for (let i = 0; i < 30 * 30; i++){
+      IB.update(1 / 30);
+      if (IB.mustering()) litFor += 1 / 30;
+      if (G.wave !== lastWave) break;
+    }
+    t.ok(G.wave === lastWave + 1, 'a wave arrived under its own clock (wave ' + G.wave + ')');
+    t.ok(Math.abs(litFor - IB.MUSTER.lead) < .2,
+      'and the board was lit for the whole lead-in and no longer (' + litFor.toFixed(2) + 's of ' + IB.MUSTER.lead + ')');
+    t.ok(IB.mustering() === false, 'the moment it lands the muster is over');
+
+    // ---- and it reaches the picture. drawEnds is the real caller.
+    const keeps = () => {
+      CTX.__stats.texts.length = 0;
+      IB.drawEnds(CTX);
+      return CTX.__stats.texts.filter(x => /^WAVE /.test(x.txt));
+    };
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = .55;   // wide enough for both keeps
+    G.waveT = C.WAVE_PERIOD;
+    t.ok(keeps().length === 0, 'nothing on the board while the wave is far off');
+    G.waveT = 2.4;
+    const marks = keeps();
+    t.ok(marks.length === 2, 'and one at EACH keep once it is close (' + marks.length + ')');
+    t.ok(marks.every(m => m.txt === 'WAVE ' + (G.wave + 1) + ' · 3s'),
+      'naming the wave that is COMING, not the one on the bridge (' + (marks[0] || {}).txt + ' while wave ' + G.wave + ' fights)');
+    t.ok(new Set(marks.map(m => Math.round(m.x))).size === 2,
+      'at two different places, one per keep');
+    // Seen, not merely drawn: it sits above the keep's name, which is the
+    // biggest text on the board, and it reserves its own airspace.
+    CTX.__stats.texts.length = 0; IB.drawEnds(CTX);
+    const names = CTX.__stats.texts.filter(x => IB.SIDE_NAME.includes(x.txt));
+    t.ok(names.length === 2, 'both keep names are on the board to sit above (' + names.length + ')');
+    let over = 0;
+    for (const m of CTX.__stats.texts.filter(x => /^WAVE /.test(x.txt)))
+      for (const n of names) if (Math.abs(m.x - n.x) < 4 && m.y >= n.y) over++;
+    t.ok(over === 0, 'and none of them lands on the name under it (' + over + ')');
     G.units.length = 0;
   }
   // The wart swing0 fixed, in two more places. An ultimate's pop was given .5
