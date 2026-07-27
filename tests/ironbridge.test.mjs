@@ -3398,6 +3398,59 @@ t.ok(true, 'drawing an empty bridge is harmless');
   G.floats.length = 0;
 }
 {
+  // Which way the light comes from. The sun in this game is up and to the LEFT
+  // of the viewer, and the mesa is the proof: platFaces gives its near wall the
+  // lightest stone and the wall facing the bridge the darkest, and that is the
+  // biggest object on screen. Bodies agreed, mines agreed, turrets agreed.
+  //
+  // drawHouse did not. The near face — which points down-LEFT in this
+  // projection — was the DARKEST at .70 while the right-hand face was .92, so
+  // every building in the game was shaded against the cliff it stood on and
+  // against the worker walking past its door. No single screenshot says which
+  // of the two is wrong; you have to hold them side by side and count.
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return .2126 * ((n >> 16) & 255) + .7152 * ((n >> 8) & 255) + .0722 * (n & 255);
+  };
+  const L = IB.LIT;
+  t.ok(L.near > L.right, 'a house’s near wall catches more light than its right-hand wall');
+  t.ok(L.roofLeft > L.roofRight, 'and its left roof slope more than its right');
+  t.ok(L.roofNear > L.roofFar, 'and the gable you can see more than the one you cannot');
+  t.ok(L.bodyLit > L.bodyDark, 'a body’s left is its bright side');
+  t.ok(L.coatLit > L.coatDark, 'and so is a worker’s');
+  // The same statement, made through shade() on a real colour — a factor pair
+  // that clips at the top of the range would satisfy the comparisons above and
+  // still come out flat on screen.
+  const wall = '#c4ab84';
+  t.ok(lum(IB.shade(wall, L.near)) > lum(IB.shade(wall, L.right)) + 8,
+    'and the two wall tones are far enough apart to see');
+  // Against the mesa, which is the object that settles the argument.
+  const fs = IB.platFaces(0);
+  const near = fs.find(f => f.k === 'near'), inner = fs.find(f => f.k === 'inner');
+  t.ok(lum(near.base) > lum(inner.base),
+    'the island’s near cliff is brighter than the one facing the bridge — the house now agrees with it');
+  // Both holds have to agree with each other too, or one island is lit from
+  // the wrong side and only the player standing on it would ever notice.
+  const fs1 = IB.platFaces(1);
+  t.ok(lum(fs1.find(f => f.k === 'near').base) > lum(fs1.find(f => f.k === 'inner').base),
+    'and so is the other island’s');
+  // Draw a hold with a building of every type, both seats, so the flipped
+  // faces are actually exercised rather than only compared as numbers.
+  IB.newMatch({ diff:'veteran', seed:179 });
+  IB.cam.follow = false;
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    const s = G.sides[seat];
+    s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000;
+    const types = Object.keys(IB.BUILDINGS);
+    for (let i = 0; i < types.length; i++) IB.build(s, i, types[i]);
+    IB.cam.x = IB.myHoldX() + 4;
+    for (const z of [.6, 1.4]){ IB.cam.z = IB.cam.tz = z; IB.draw(); }
+  }
+  IB.MY = 0; IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'every building type draws with the new faces, from either seat');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
