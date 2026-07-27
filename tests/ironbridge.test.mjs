@@ -3044,6 +3044,51 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
 }
 {
+  // Workers. There are more of these on screen than anything else in the game
+  // — every mine crew, every field hand, every idle body round the hall — and
+  // each was a rectangle with a circle on top, standing next to soldiers with
+  // legs, boots, an arm and a visor.
+  IB.newMatch({ diff:'veteran', seed:139 });
+  // Their tunic was a hardcoded '#3f6f9e'. Workers are only ever drawn on your
+  // OWN hold, so it looked right for as long as you were the Azure Pact — but
+  // MY can be 1, and then player two's crews walked around their red hold
+  // wearing the other side's blue. A per-side colour that is not per-side is
+  // invisible from one seat and wrong from the other.
+  const was = IB.holdSide;
+  const coats = [0, 1].map(s => { IB.holdSide = s; return IB.workerCoat(); });
+  IB.holdSide = was;
+  t.ok(coats[0] !== coats[1], 'a worker wears the colour of the hold it works for');
+  for (let s = 0; s < 2; s++){
+    t.ok(/^#[0-9a-f]{6}$/i.test(coats[s]), 'side ' + s + '’s coat is a colour shade() can read (' + coats[s] + ')');
+    t.ok(coats[s].toLowerCase() !== '#3f6f9e', 'and not the old fixed blue');
+  }
+  // The stride reads the phase it is handed and nothing else, so both machines
+  // draw the same legs — and it can never throw a leg further than one step.
+  let peak = 0;
+  for (let i = 0; i < 40; i++) peak = Math.max(peak, Math.abs(Math.sin(i * .31) * IB.WORKER_STRIDE));
+  t.ok(peak > IB.WORKER_STRIDE * .9 && peak <= IB.WORKER_STRIDE + 1e-9,
+    'a worker takes a full stride and no more (' + peak.toFixed(2) + ')');
+
+  // Draw a hold from BOTH seats with every job manned. The colour bug above
+  // only exists in the seat the suite never used to sit in.
+  const rich2 = (s) => { s.res.gold = 9000; s.res.iron = 9000; s.res.wood = 9000; s.res.food = 9000; };
+  for (const seat of [0, 1]){
+    IB.newMatch({ diff:'veteran', seed:141 });
+    IB.MY = seat;
+    const s = G.sides[seat];
+    rich2(s);
+    s.workers.gold = 3; s.workers.iron = 3; s.workers.wood = 3; s.workers.food = 3; s.workers.idle = 6;
+    for (let i = 0; i < 4; i++) IB.build(s, i, ['farm', 'barracks', 'forge', 'tavern'][i]);
+    IB.cam.follow = false; IB.cam.x = IB.myHoldX() + 4;
+    for (const z of [.5, 1, 2]){
+      IB.cam.z = IB.cam.tz = z;
+      for (let f = 0; f < 4; f++){ G.t += .27; IB.draw(); }
+    }
+  }
+  IB.MY = 0; IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'a hold with every job manned draws from either seat, at every zoom');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;

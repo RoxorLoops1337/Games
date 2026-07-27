@@ -4812,13 +4812,37 @@ function flushLabels(c){
   labelQ = [];
 }
 
-function drawWorkerFig(c, x, y, col, carry, sc){
+// There are more of these on screen than anything else in the game — every
+// mine crew, every field hand, every idle body round the hall — and each one
+// was a rectangle with a circle on top, next to soldiers on the bridge with
+// legs, boots, an arm and a visor.
+//
+// The tunic was also a hardcoded blue. That is fine right up until you are the
+// Ember Host: workers are only ever drawn on your OWN hold, MY can be 1, and
+// player two's crews came out wearing the other side's colour.
+const WORKER_STRIDE = 1.5;
+const workerCoat = () => shade(sideCol(), .72);
+function drawWorkerFig(c, x, y, col, carry, sc, ph){
   sc = (sc || 1) * bu();
+  const coat = workerCoat();
+  const st = Math.sin(ph || 0) * WORKER_STRIDE * sc;
   ell(c, x, y + 1, 3.2 * sc, 1.6 * sc, 'rgba(0,0,0,.25)');
-  c.fillStyle = '#3f6f9e';
-  c.fillRect(x - 2 * sc, y - 7 * sc, 4 * sc, 6 * sc);
+  c.fillStyle = shade(coat, .54);
+  for (const s of [-1, 1]) c.fillRect(x + s * 1.05 * sc - .85 * sc + s * st, y - 2.6 * sc, 1.7 * sc, 2.8 * sc);
+  c.fillStyle = coat; c.fillRect(x - 2 * sc, y - 7.4 * sc, 4 * sc, 5.2 * sc);
+  c.fillStyle = shade(coat, 1.22); c.fillRect(x - 2 * sc, y - 7.4 * sc, 1.4 * sc, 5.2 * sc);
+  c.fillStyle = shade(coat, .68); c.fillRect(x - 2 * sc, y - 4.4 * sc, 4 * sc, 1 * sc);
+  c.strokeStyle = shade(coat, .84); c.lineWidth = 1.5 * sc; c.lineCap = 'round';
+  c.beginPath();
+  c.moveTo(x + 1.5 * sc, y - 6.4 * sc);
+  c.lineTo(x + (carry ? 2.4 : 2.3) * sc, y - (carry ? 8.4 : 4.6) * sc);
+  c.stroke(); c.lineCap = 'butt';
   ell(c, x, y - 8.6 * sc, 2 * sc, 2.1 * sc, '#e8d6b8');
-  if (carry){ c.fillStyle = col; c.fillRect(x - 2.6 * sc, y - 11.6 * sc, 5.2 * sc, 3 * sc); }
+  c.fillStyle = shade(coat, .48); c.fillRect(x - 2.2 * sc, y - 10.3 * sc, 4.4 * sc, 1.5 * sc);
+  if (carry){
+    c.fillStyle = col; c.fillRect(x - 2.6 * sc, y - 12.6 * sc, 5.2 * sc, 3 * sc);
+    c.fillStyle = shade(col, 1.16); c.fillRect(x - 2.6 * sc, y - 12.6 * sc, 5.2 * sc, .9 * sc);
+  }
 }
 
 function drawNode(c, key){
@@ -4947,7 +4971,7 @@ function drawNode(c, key){
     const ph = cyc(G.t * .22 + i * .19);
     const tri = ph < .5 ? ph * 2 : 2 - ph * 2;
     const x = lerp(p[0], home[0], tri), y = lerp(p[1] - 6 * B, home[1], tri);
-    drawWorkerFig(c, x, y, N.col, ph >= .5, .9);
+    drawWorkerFig(c, x, y, N.col, ph >= .5, .9, ph * 12.6 + i);
   }
   labelQ.push({ x:p[0], y:p[1] + (key === 'wood' ? 26 : 36) * B, txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col });
 }
@@ -5004,7 +5028,7 @@ function drawKeep(c){
   for (let i = 0; i < Math.min(6, s.workers.idle); i++){
     const a = G.t * .3 + i * 1.1;
     const q = bp(gx + Math.cos(a) * 1.15, gy + 1.15 + Math.sin(a) * .38);
-    drawWorkerFig(c, q[0], q[1], '#8d99b0', false, .85);
+    drawWorkerFig(c, q[0], q[1], '#8d99b0', false, .85, a * 3.4);
   }
 }
 const sideCol = () => SIDE_COL[holdSide];
@@ -5276,7 +5300,7 @@ function drawHold(c, side){
       const f = farms[i % farms.length];
       const a = G.t * .5 + i * 1.7;
       const q = bp(tileGX(f.tile) + Math.cos(a) * .34, tileGY(f.tile) + .1 + Math.sin(a) * .3, .05);
-      drawWorkerFig(c, q[0], q[1], '#7fdc8a', (Math.sin(a) > 0), .85);
+      drawWorkerFig(c, q[0], q[1], '#7fdc8a', (Math.sin(a) > 0), .85, a * 2.8);
     }
   }
   // Their hold reads as distant through the alpha above. It used to also get a
@@ -7507,6 +7531,7 @@ window.IB = {
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
+  drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
