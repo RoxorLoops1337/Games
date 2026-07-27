@@ -3801,6 +3801,20 @@ function pennant(c, x, y, u, col, dir){
   poly(c, [[x, y - 2 * u], [x + w * .55, y - 3 * u], [x + w * .55, y + h - 3 * u], [x, y + h - 2 * u]], shade(col, 1.12));
 }
 
+// How the inhibitor's shard hangs and turns. A function rather than arithmetic
+// inline because two of these would break the illusion and neither shows in a
+// still frame: a facet split that wanders outside the outline turns the shard
+// back into the flat diamond it used to be, and a lift out of range either
+// sinks it into its own plinth or leaves it hanging in the sky.
+const SHARD = { w:14, top:62, bot:16, rise:3.2 };
+function shardAt(t){
+  return {
+    lift: (Math.sin(t * 1.6) * .5 + .5) * SHARD.rise,
+    split: Math.cos(t * 1.15) * SHARD.w * .62,   // where the lit facet meets the dark
+    glint: cyc(t * .21),                         // the highlight travelling down it
+    aura: .22 + (Math.sin(t * 2) * .5 + .5) * .18,
+  };
+}
 function drawStructure(c, st){
   const p = lp(st.x, st.y);
   const u = cam.z, col = SIDE_COL[st.side], dead = st.dead;
@@ -3872,17 +3886,41 @@ function drawStructure(c, st){
       pennant(c, X + dir * 62 * u, Y - 92 * u, u, col, dir);
     }
   } else if (st.key === 'inhib'){
+    // The thing that, when it breaks, lets the other side's ogres through —
+    // and it was a flat diamond sitting dead still on a plain grey box, next
+    // to a gate with masonry, timber and a pennant.
+    const S = shardAt(G.t + st.side * 1.7);
     block(c, X - 22 * u, Y - 12 * u, 44 * u, 12 * u, STONE.deep, STONE.dark);
+    masonry(c, X - 21 * u, Y - 11 * u, 42 * u, 10 * u, u, 61 + st.side);
     block(c, X - 17 * u, Y - 20 * u, 34 * u, 9 * u, STONE.mid, STONE.lit);
     if (!dead){
-      const t = Math.sin(G.t * 2 + st.side) * .5 + .5;
-      c.globalAlpha = .22 + t * .18;
-      ell(c, X, Y - 38 * u, 30 * u, 30 * u, col);
+      const cy = Y - S.lift * u;
+      c.globalAlpha = .30 - S.lift * .045;
+      ell(c, X, Y - 19 * u, (13 - S.lift) * u, (4.4 - S.lift * .55) * u, '#2c2a26');
+      c.globalAlpha = S.aura;
+      ell(c, X, cy - 38 * u, 30 * u, 30 * u, col);
       c.globalAlpha = 1;
-      poly(c, [[X, Y - 62 * u], [X + 14 * u, Y - 36 * u], [X, Y - 16 * u], [X - 14 * u, Y - 36 * u]], shade(col, .9 + t * .25));
-      poly(c, [[X, Y - 62 * u], [X, Y - 16 * u], [X - 14 * u, Y - 36 * u]], shade(col, 1.25));
-      c.strokeStyle = '#ffffff'; c.lineWidth = 1;
-      poly(c, [[X, Y - 62 * u], [X + 14 * u, Y - 36 * u], [X, Y - 16 * u], [X - 14 * u, Y - 36 * u]], null, '#eef6ff', 1);
+      const top = cy - SHARD.top * u, bot = cy - SHARD.bot * u, mid = cy - 36 * u;
+      const L = X - SHARD.w * u, R = X + SHARD.w * u, M = X + S.split * u;
+      poly(c, [[X, top], [R, mid], [X, bot], [L, mid]], shade(col, .78));
+      poly(c, [[X, top], [M, mid], [X, bot], [L, mid]], shade(col, 1.18));
+      poly(c, [[X, top], [M, mid], [X, bot]], shade(col, 1.42));
+      poly(c, [[X, top], [R, mid], [X, bot], [L, mid]], null, '#eef6ff', 1);
+      // a glint running down the shard as it turns
+      const gy = lerp(top, bot, S.glint), gw = SHARD.w * u * (1 - Math.abs(S.glint - .5) * 2) * .34;
+      if (gw > 0){
+        c.globalAlpha = .7 * Math.sin(S.glint * Math.PI);
+        poly(c, [[X - gw * .2, gy + 1.6 * u], [X + gw, gy - 2.2 * u],
+                 [X + gw, gy - .8 * u], [X - gw * .2, gy + 3 * u]], '#ffffff');
+        c.globalAlpha = 1;
+      }
+      // and light coming off it
+      for (let i = 0; i < 3; i++){
+        const ph = cyc(G.t * .3 + i * .34 + st.side * .5);
+        c.globalAlpha = .45 * (1 - ph);
+        ell(c, X + Math.sin(ph * 6 + i * 2) * 11 * u, bot - ph * 44 * u, 1.6 * u, 1.9 * u, SIDE_COL2[st.side]);
+      }
+      c.globalAlpha = 1;
       battleDamage(c, st, X, Y - 20 * u, 34 * u, 18 * u, u);
     } else {
       for (let i = 0; i < 5; i++){
@@ -7531,7 +7569,7 @@ window.IB = {
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
-  drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME,
+  drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
