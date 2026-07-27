@@ -4827,6 +4827,19 @@ function projShadow(c, p){
     'rgba(0,0,0,' + a.toFixed(3) + ')');
 }
 
+/* An expanding shape runs THIN as it spreads: the same energy stretched over a
+   longer edge. `wave` did that from the day it was written — four pixels down
+   to one as it doubles — and `ring` and `arc` expanded on a stroke weight that
+   never moved at all, so they read as a hoop being scaled up rather than as
+   something coming apart. `arc` was the worst of it, doubling its radius on a
+   line that stayed 3.4 the whole way.
+
+   All three ask for their width the same way now, so they cannot drift apart
+   again. Things that do NOT expand — a beam, a ghost — keep their weight; the
+   width of a beam IS the beam.                                              */
+const RIPPLE = { spent:.28 };
+const rippleW = (base, a) => Math.max(1, base * (RIPPLE.spent + (1 - RIPPLE.spent) * a) * cam.z);
+
 function drawLane(c){
   // zones under everyone
   for (const z of G.zones){
@@ -4928,7 +4941,7 @@ function drawLane(c){
       c.globalAlpha = a; ell(c, q[0], q[1], pr, pr, p.col);
     } else if (p.k === 'ring'){
       const q = lp(p.x, p.y);
-      c.globalAlpha = a * .8; c.strokeStyle = p.col; c.lineWidth = 2.5 * cam.z;
+      c.globalAlpha = a * .8; c.strokeStyle = p.col; c.lineWidth = rippleW(2.5, a);
       c.beginPath(); c.ellipse(q[0], q[1], p.r * LS() * (1.35 - a * .35), p.r * LS() * .55 * (1.35 - a * .35), 0, 0, 6.2832); c.stroke();
     } else if (p.k === 'ghost'){
       const q = lp(p.x, p.y);
@@ -4952,7 +4965,7 @@ function drawLane(c){
       // A swept slash through the target, opening out as it fades.
       const q = lp(p.x, p.y, .7);
       const rx = p.r * LS() * (.7 + (1 - a) * .8), ry = rx * .55;
-      c.globalAlpha = a * .9; c.strokeStyle = p.col; c.lineWidth = Math.max(1.5, 3.4 * cam.z);
+      c.globalAlpha = a * .9; c.strokeStyle = p.col; c.lineWidth = rippleW(3.4, a);
       c.lineCap = 'round';
       c.beginPath(); c.ellipse(q[0], q[1], rx, ry, p.a, -1.15, 1.15); c.stroke();
       c.lineCap = 'butt';
@@ -4961,7 +4974,7 @@ function drawLane(c){
       const q = lp(p.x, p.y);
       const g = 1 + (1 - a) * 1.35;
       c.globalAlpha = a * .75; c.strokeStyle = p.col;
-      c.lineWidth = Math.max(1, (1 + a * 3) * cam.z);
+      c.lineWidth = rippleW(4, a);
       c.beginPath(); c.ellipse(q[0], q[1], p.r * LS() * g, p.r * LS() * .5 * g, 0, 0, 6.2832); c.stroke();
     } else if (p.k === 'link'){
       const q = lp(p.x, p.y, 1.1), q2 = lp(p.x2, p.y2, 1.1);
@@ -8214,7 +8227,7 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
-  beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
+  beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,

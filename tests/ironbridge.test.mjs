@@ -119,7 +119,7 @@ function loadGame(store, srcOverride){
     };
     if (k === 'ellipse') return (...a) => {
       stats.ops++; numCheck(k, a); radCheck(k, a);
-      if (stats.ellipses.length < CAP) stats.ellipses.push({ x:a[0], y:a[1], rx:a[2], ry:a[3], fill:null, alpha:stats.alpha });
+      if (stats.ellipses.length < CAP) stats.ellipses.push({ x:a[0], y:a[1], rx:a[2], ry:a[3], fill:null, alpha:stats.alpha, w:stats.lineWidth, col:stats.stroke });
       else stats.dropped++;
     };
     // ell() lays the path down, THEN sets fillStyle, THEN fills — so the
@@ -4602,6 +4602,70 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(IB.LINK.snap > 1, 'the reveal outruns the fade (' + IB.LINK.snap + ')');
     t.ok(IB.linkReach(.95) < 1, 'but it is still a reveal, not a jump');
     t.ok(IB.linkReach(.9) < IB.linkReach(.8), 'and it grows monotonically');
+    G.fx.length = 0;
+  }
+
+  // An expanding shape runs THIN as it spreads — the same energy stretched
+  // over a longer edge. `wave` did that from the day it was written; `ring`
+  // and `arc` expanded on a stroke weight that never moved, so they read as a
+  // hoop being scaled up rather than as something coming apart. `arc` was the
+  // worst of it: it doubles its radius on a line that stayed 3.4 the whole way.
+  {
+    IB.newMatch({ diff:'veteran', seed:6117 });
+    IB.fxForce = true;
+    IB.cam.follow = false; IB.cam.x = 62; IB.cam.z = IB.cam.tz = 1;
+    const MARK = '#12ff34';
+    // Measure one kind at one age: the biggest thing drawn in the marker
+    // colour, with the weight it was drawn at.
+    const at = (make, age) => {
+      G.fx.length = 0;
+      make();
+      if (!G.fx.length) return null;
+      for (const p of G.fx) p.t = p.dur * age;
+      CTX.__stats.ellipses = []; CTX.__stats.lines = []; CTX.__stats.dropped = 0;
+      IB.draw();
+      const mine = CTX.__stats.ellipses.filter(e => e.col === MARK);
+      const lines = CTX.__stats.lines.filter(l => l.col === MARK);
+      if (!mine.length && !lines.length) return null;
+      const r = mine.length ? Math.max(...mine.map(e => e.rx)) : 0;
+      const w = Math.max(...(mine.length ? mine : lines).map(e => e.w));
+      return { r, w, dropped:CTX.__stats.dropped };
+    };
+    const SPREADERS = [
+      ['ring', () => IB.ringFx(62, 0, 3, MARK)],
+      ['wave', () => IB.waveFx(62, 0, 3, MARK, .45)],
+      ['arc',  () => IB.arcFx(62, 0, .4, 3, MARK)],
+    ];
+    const MISSING = { r:0, w:0, dropped:0 };
+    let spread = 0, thinned = 0, seen = 0;
+    for (const [name, make] of SPREADERS){
+      const fresh = at(make, 1) || MISSING, spent = at(make, .08) || MISSING;
+      t.ok(fresh !== MISSING && spent !== MISSING, name + ' draws across its life');
+      t.ok(fresh.dropped === 0 && spent.dropped === 0, 'and the capture held the frame for ' + name);
+      seen++;
+      if (spent.r > fresh.r) spread++;
+      if (spent.w < fresh.w) thinned++;
+      t.ok(spent.r > fresh.r, name + ' expands (' + fresh.r.toFixed(1) + ' → ' + spent.r.toFixed(1) + ')');
+      t.ok(spent.w < fresh.w, 'and runs thin doing it (' + fresh.w.toFixed(2) + ' → ' + spent.w.toFixed(2) + ')');
+    }
+    t.ok(seen === 3 && spread === 3 && thinned === 3,
+      'every expanding shape in the game spreads and thins (' + spread + '/' + thinned + ' of ' + seen + ')');
+
+    // Read the neighbouring branch and guard it. A beam does NOT expand, and
+    // its width IS the beam — thinning it would be a different effect, so the
+    // fix must not have reached it.
+    const bFresh = at(() => IB.beamFx(59, -1, 66, 1, MARK, 6, .22), 1) || MISSING;
+    const bSpent = at(() => IB.beamFx(59, -1, 66, 1, MARK, 6, .22), .08) || MISSING;
+    t.ok(bFresh !== MISSING, 'a beam draws');
+    t.ok(bSpent.w === bFresh.w, 'and keeps its weight, being a beam and not a ripple (' +
+      bFresh.w.toFixed(2) + ' → ' + bSpent.w.toFixed(2) + ')');
+
+    // The shape of the thinning, walked without a canvas.
+    t.ok(IB.rippleW(4, 1) > IB.rippleW(4, 0), 'a ripple is heaviest when it is new');
+    t.ok(IB.rippleW(4, 1) === 4 * IB.cam.z, 'and full weight at birth');
+    t.ok(IB.rippleW(4, .5) > IB.rippleW(4, .2), 'thinning all the way down');
+    t.ok(IB.rippleW(4, 0) >= 1, 'but never to nothing a canvas would drop');
+    t.ok(IB.RIPPLE.spent > 0 && IB.RIPPLE.spent < 1, 'and the spent weight is a real fraction of the fresh one');
     G.fx.length = 0;
   }
 
