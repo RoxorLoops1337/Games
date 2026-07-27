@@ -5449,6 +5449,33 @@ function rankFlags(c, gx, gy, z, lvl){
   }
 }
 
+/* Troops armed at the barracks stand in the mustering pit until the wave goes
+   out. They cost population and gold the moment you arm them, and they are the
+   thing that decides whether your next wave is a levy trickle or a real push —
+   and the pit showed nothing. Six armed fighters drew exactly the same 1957
+   ops across the same 1327.3 as an empty hold, on op count and on extent
+   alike. The dock's muster row has always listed them: the panel knew, the
+   board did not.
+
+   One figure per fighter, formed up on the pit — the same way drawNode puts a
+   worker at the node for every hand assigned to it, which is the sibling that
+   condemns this. Yours only: what the other hold has waiting is not something
+   you get to count, the same rule their crews already follow.               */
+// It takes the hold's own side rather than me(), which inside the guard below
+// is the same object — but only BECAUSE of the guard. Written this way so that
+// if the fog rule ever moves, the muster still belongs to the hold it is
+// standing on rather than silently following the watcher.
+const MUSTER = { cap:8, cols:4, dx:.145, dy:.115, x0:-.22, y0:.30 };
+function musterRanks(c, gx, gy, z, s){
+  if (holdSide !== MY) return;
+  const n = Math.min(s.muster.length, MUSTER.cap);
+  for (let i = 0; i < n; i++){
+    const q = bp(gx + MUSTER.x0 + (i % MUSTER.cols) * MUSTER.dx,
+                 gy + MUSTER.y0 + Math.floor(i / MUSTER.cols) * MUSTER.dy, z);
+    drawWorkerFig(c, q[0], q[1], sideCol(), false, .8, i * 2.1);
+  }
+}
+
 function drawBuilding(c, b){
   const gx = tileGX(b.tile), gy = tileGY(b.tile), B = bu();
   const raise = (b.raise || 0);
@@ -5521,6 +5548,7 @@ function drawBuilding(c, b){
       c.strokeStyle = '#6a5540'; c.lineWidth = 3 * B; c.beginPath(); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke();
       c.fillStyle = sideCol(); c.fillRect(p1[0] - 2 * B, p1[1], 8 * B * (s > 0 ? 1 : -1), 9 * B);
     }
+    musterRanks(c, gx, gy, z, G.sides[holdSide]);
   } else if (t === 'barracks'){
     drawTile(c, gx, gy, '#5e5748');
     drawHouse(c, gx, gy, .42, .34, .62 + z, .40, '#b08a5e', '#a34438');
@@ -8457,7 +8485,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, MUSTER, musterRanks, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
