@@ -44,6 +44,7 @@ function loadGame(store, srcOverride){
   // noticed. And a non-finite number is refused wherever it appears: a real
   // canvas SILENTLY DROPS a call carrying NaN, so a shape lost that way is
   // invisible on the page and invisible to a colour check.
+  const CAP = 60000;
   const stats = { ops:0 };
   const numCheck = (where, args) => {
     for (let i = 0; i < args.length; i++)
@@ -70,7 +71,7 @@ function loadGame(store, srcOverride){
   // alpha back leaves every later shape in the frame translucent, and an
   // unbalanced save() leaks a clip or a transform into whatever draws next.
   // Neither is visible to a per-call check, because no single call is wrong.
-  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null;
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null; stats.lines = []; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
   const TEXT0 = { lineCap:'butt', textAlign:'start', textBaseline:'alphabetic' };
   Object.assign(stats, TEXT0);
   stats.__text0 = TEXT0;
@@ -104,10 +105,22 @@ function loadGame(store, srcOverride){
     // Where the ellipses actually landed. Reading a table tells you what a
     // shadow was configured to be; this tells you where it was put, which is
     // the only way to check it leans the way the sun says.
+    // Where lines actually end. A tether's whole job is to touch the thing it
+    // is reaching for, and no amount of reading its table says whether it got
+    // there — nor, it turns out, does looking at a screenshot.
+    if (k === 'moveTo' || k === 'lineTo') return (...a) => {
+      stats.ops++; numCheck(k, a);
+      // A cap that silently drops what it cannot hold is worse than no cap:
+      // the deck alone lays down four thousand lines before the effects are
+      // reached, so a small buffer records the bridge and none of the thing
+      // under test. It counts what it refused, and the tests assert on that.
+      if (stats.lines.length < CAP) stats.lines.push({ k, x:a[0], y:a[1], w:stats.lineWidth, alpha:stats.alpha, col:stats.stroke });
+      else stats.dropped++;
+    };
     if (k === 'ellipse') return (...a) => {
       stats.ops++; numCheck(k, a); radCheck(k, a);
-      if (stats.ellipses.length < 4000)
-        stats.ellipses.push({ x:a[0], y:a[1], rx:a[2], ry:a[3], fill:null, alpha:stats.alpha });
+      if (stats.ellipses.length < CAP) stats.ellipses.push({ x:a[0], y:a[1], rx:a[2], ry:a[3], fill:null, alpha:stats.alpha });
+      else stats.dropped++;
     };
     // ell() lays the path down, THEN sets fillStyle, THEN fills — so the
     // colour has to be read at the fill, not at the ellipse. Reading it early
@@ -122,7 +135,7 @@ function loadGame(store, srcOverride){
   }, set(_t, k, v){
     stats.ops++;
     if (k === 'fillStyle' || k === 'strokeStyle' || k === 'shadowColor') checkColour(k)(v);
-    if (k === 'strokeStyle') stats.strokes.push(v);
+    if (k === 'strokeStyle'){ stats.strokes.push(v); stats.stroke = v; }
     if (k === 'fillStyle') stats.fill = v;
     if (typeof v === 'number' && !Number.isFinite(v)) throw new TypeError('ctx.' + k + ' = ' + v);
     if (k === 'globalAlpha'){
@@ -134,6 +147,7 @@ function loadGame(store, srcOverride){
     // but one may scale with the zoom, so watching the widest passes whether
     // the odd one out is fixed or not. The odd one out is always the thinnest.
     if (k === 'lineWidth'){
+      stats.lineWidth = v;
       stats.lw = Math.max(stats.lw, v);
       stats.lwMin = Math.min(stats.lwMin, v);
     }
@@ -4528,6 +4542,69 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.sparkR(3, 1) > IB.sparkR(3, 0), 'a spark is bigger alive than dying');
   t.ok(IB.SPARK.min > 0 && IB.SPARK.min < 1, 'but it never shrinks away to nothing');
   t.ok(IB.sparkR(3, 1) === 3, 'and it is full size at birth');
+  // A tether — a heal, a ward, a rally — draws itself on from the caster
+  // towards whoever it is reaching for. It did that at a rate that took 62% of
+  // its life to arrive, against a linear fade. So the one thing a tether
+  // exists to say, WHO it connects to, was the one thing it never got round
+  // to: brightest as a stub an inch out of the caster's hand, full length only
+  // at 37% opacity, invisible before it touched anybody.
+  {
+    IB.newMatch({ diff:'veteran', seed:6113 });
+    IB.fxForce = true;
+    IB.cam.follow = false; IB.cam.x = 62; IB.cam.z = IB.cam.tz = 1;
+    const FROM = [59, -1], TO = [66, 1], TETHER = '#12ff34';
+    const far = IB.lp(TO[0], TO[1], 1.1);
+    // How close the drawn line got to the target, and how visible it was.
+    const reachAt = (age) => {
+      G.fx.length = 0;
+      IB.linkFx(FROM[0], FROM[1], TO[0], TO[1], TETHER);
+      if (!G.fx.length) return null;
+      for (const p of G.fx) p.t = p.dur * age;
+      CTX.__stats.lines = []; CTX.__stats.dropped = 0;
+      IB.draw();
+      // Only the tether's own strokes — the deck alone lays down hundreds of
+      // lines and the nearest of THOSE to the target sits a fixed 11px away at
+      // every age, which is a very steady way to measure nothing.
+      const ends = CTX.__stats.lines.filter(l => l.k === 'lineTo' && l.col === TETHER);
+      if (!ends.length) return null;
+      // A tether is drawn twice, a soft body under a bright core, and both
+      // end at the same point. The brightest of the two is what the eye
+      // reads, so take the nearest distance and then the LOUDEST line that
+      // achieves it — not simply the first one to arrive.
+      const d = Math.min(...ends.map(l => Math.hypot(l.x - far[0], l.y - far[1])));
+      const alpha = Math.max(...ends
+        .filter(l => Math.hypot(l.x - far[0], l.y - far[1]) <= d + .5)
+        .map(l => l.alpha));
+      return { d, alpha, dropped:CTX.__stats.dropped };
+    };
+    const NOREACH = { d:Infinity, alpha:0 };
+    const born = reachAt(1) || NOREACH, early = reachAt(.75) || NOREACH, late = reachAt(.15) || NOREACH;
+    t.ok(born !== NOREACH && early !== NOREACH, 'a tether draws at all');
+    // The instrument must not have stopped looking before it got there. It
+    // did, the first time: the deck fills four thousand lines on its own, so
+    // a small buffer recorded the bridge and none of the effect.
+    t.ok(early.dropped === 0, 'and the capture held the whole frame (' + early.dropped + ' dropped)');
+    // At birth it is a stub: it has NOT arrived. That part was always right.
+    t.ok(born.d > 20, 'it starts out of the caster’s hand, not already there (' +
+      Math.round(born.d) + 'px short)');
+    // A quarter of the way through its life it has to be TOUCHING the target...
+    t.ok(early.d < 2, 'and it reaches whoever it is for, early (' + Math.round(early.d) + 'px short)');
+    // ...and be worth looking at when it gets there. This is the whole bug:
+    // the old one arrived at 37% and was gone by the time it mattered.
+    t.ok(early.alpha > .6, 'while there is still enough of it to see (' + early.alpha.toFixed(2) + ')');
+    t.ok(late.d < 2, 'and it stays connected for the rest of its life (' + Math.round(late.d) + 'px)');
+    // The reveal walked on its own, so it can be checked without a canvas.
+    t.ok(IB.linkReach(1) === 0, 'nothing is drawn at the instant it is cast');
+    t.ok(IB.linkReach(0) === 1, 'and it is whole by the end');
+    t.ok(IB.linkReach(.75) === 1, 'having arrived in the first quarter of its life');
+    // Rule out the settings that make the reveal meaningless: instant (no
+    // travel at all) is as wrong as too slow, in the other direction.
+    t.ok(IB.LINK.snap > 1, 'the reveal outruns the fade (' + IB.LINK.snap + ')');
+    t.ok(IB.linkReach(.95) < 1, 'but it is still a reveal, not a jump');
+    t.ok(IB.linkReach(.9) < IB.linkReach(.8), 'and it grows monotonically');
+    G.fx.length = 0;
+  }
+
   G.fx.length = 0;
   IB.fxForce = false;
   IB.cam.x = 26;
