@@ -353,6 +353,9 @@ const MONSTERS = {
   archer:  { name:'Skeleton Archer',move:6, atk:2, def:2, bp:1, mind:0, gold:35,  col:'#d8d0b8', col2:'#948a72', size:.8, undead:true, shooter:true },
   cultist: { name:'Cultist',       move:8,  atk:2, def:2, bp:2, mind:3, gold:55,  col:'#6a2a3a', col2:'#3d1622', size:.88, herald:true },
   mimic:   { name:'Mimic',         move:4,  atk:4, def:3, bp:3, mind:2, gold:140, col:'#7a5a2c', col2:'#59401f', size:.92 },
+  spider:  { name:'Cave Spider',   move:10, atk:2, def:2, bp:2, mind:1, gold:60,  col:'#3a2f42', col2:'#221b28', size:.86, webber:true },
+  hound:   { name:'Hellhound',     move:10, atk:3, def:2, bp:2, mind:2, gold:85,  col:'#5a2418', col2:'#33130c', size:.94, breath:true },
+  chained: { name:'The Chained',   move:0,  atk:6, def:4, bp:6, mind:3, gold:160, col:'#4a4038', col2:'#2a231d', size:1.18, chained:true },
 };
 
 /* ------------------------------------------------------------- the market */
@@ -927,6 +930,9 @@ function startQuest(qi, def, seed){
       if (d.rid !== Q.vault) continue;
       d.locked = true; d.secret = false; d.found = true;
     }
+    // The relic is the point of the room, so it gets its square before the
+    // chests do — a small vault filled with chests used to leave none.
+    placePlinth(Q, Q.vault, R, 'vault');
     // and it is worth breaking into
     const spots = roomTiles(Q.vault).filter(([x,y]) => !furnAt(x,y) && !actorAt(x,y));
     for (let i = 0; i < Math.min(3, spots.length); i++){
@@ -941,7 +947,6 @@ function startQuest(qi, def, seed){
   // A vault gets one too: a locked room should show what the key is for through
   // the doorway, so hunting the champion carrying it is a decision, not a chore.
   if (Q.trialRoom) placePlinth(Q, Q.trialRoom.room, R, 'trial');
-  if (Q.vault >= 0) placePlinth(Q, Q.vault, R, 'vault');
 
   // Somebody has been using a tomb on this floor as a bank. Never the vault —
   // a room you paid a key for should not also be a slot machine.
@@ -2399,6 +2404,99 @@ function drawArcher(g, u, m, t){
   g.beginPath(); g.arc(-u*.045,-u*.285, u*.013, 0, 6.284); g.fill();
   g.beginPath(); g.arc( u*.045,-u*.285, u*.013, 0, 6.284); g.fill();
 }
+// Eight legs and no interest in fighting you fairly. Low and wide, so it reads
+// as something that scuttles rather than something that squares up.
+function drawSpider(g, u, m, t){
+  const d = MONSTERS.spider;
+  shadow(g, u, .34);
+  const scut = Math.sin(t*.007 + (m.bob||0));
+  g.strokeStyle = d.col2; g.lineWidth = u*.045; g.lineCap = 'round';
+  for (let i = 0; i < 4; i++){
+    const ly = -u*.10 + i*u*.075;
+    const kick = Math.sin(t*.008 + i*1.4 + (m.bob||0))*u*.035;
+    g.beginPath(); g.moveTo(-u*.10, ly);
+    g.lineTo(-u*.30, ly - u*.10 + kick); g.lineTo(-u*.40, ly + u*.10); g.stroke();
+    g.beginPath(); g.moveTo( u*.10, ly);
+    g.lineTo( u*.30, ly - u*.10 - kick); g.lineTo( u*.40, ly + u*.10); g.stroke();
+  }
+  g.fillStyle = d.col;                                   // abdomen
+  g.beginPath(); g.ellipse(0, u*.10 + scut*u*.01, u*.20, u*.17, 0, 0, 6.284); g.fill();
+  g.fillStyle = 'rgba(200,80,120,.45)';                  // the mark on its back
+  g.beginPath();
+  g.moveTo(0, u*.02); g.lineTo(u*.06, u*.12); g.lineTo(0, u*.20); g.lineTo(-u*.06, u*.12);
+  g.closePath(); g.fill();
+  g.fillStyle = d.col2;                                  // cephalothorax
+  g.beginPath(); g.ellipse(0, -u*.13, u*.14, u*.12, 0, 0, 6.284); g.fill();
+  g.fillStyle = '#e8d24a';
+  for (let i = 0; i < 4; i++){
+    const x = -u*.075 + (i % 2)*u*.15, y = -u*.17 + ((i/2)|0)*u*.055;
+    g.beginPath(); g.arc(x, y, u*.022, 0, 6.284); g.fill();
+  }
+}
+
+// It runs hot. The breath is the point, so the head is all jaw and the ribs glow.
+function drawHound(g, u, m, t){
+  const d = MONSTERS.hound;
+  shadow(g, u, .30);
+  const pant = .5 + Math.sin(t*.009 + (m.bob||0))*.5;
+  limb(g, -u*.14, u*.10, -u*.18, u*.32, u*.055, d.col2);
+  limb(g,  u*.14, u*.10,  u*.20, u*.32, u*.055, d.col2);
+  limb(g, -u*.02, u*.12, -u*.06, u*.32, u*.05,  d.col2);
+  g.fillStyle = d.col;                                   // body, low and long
+  g.beginPath(); g.ellipse(-u*.02, u*.02, u*.26, u*.15, -.12, 0, 6.284); g.fill();
+  g.strokeStyle = `rgba(255,150,60,${(.30 + pant*.35).toFixed(3)})`;   // the fire inside
+  g.lineWidth = u*.028;
+  for (let i = 0; i < 3; i++){
+    const x = -u*.14 + i*u*.12;
+    g.beginPath(); g.moveTo(x, -u*.06); g.lineTo(x + u*.02, u*.09); g.stroke();
+  }
+  g.strokeStyle = d.col2; g.lineWidth = u*.05;           // tail
+  g.beginPath(); g.moveTo(-u*.26, -u*.02); g.lineTo(-u*.40, -u*.16); g.stroke();
+  g.fillStyle = d.col;                                   // head, thrown forward
+  g.beginPath(); g.ellipse(u*.26, -u*.10, u*.15, u*.11, .2, 0, 6.284); g.fill();
+  g.fillStyle = d.col2;                                  // muzzle
+  g.beginPath();
+  g.moveTo(u*.34, -u*.12); g.lineTo(u*.50, -u*.05); g.lineTo(u*.34, u*.00);
+  g.closePath(); g.fill();
+  g.fillStyle = `rgba(255,190,90,${(.55 + pant*.45).toFixed(3)})`;
+  g.beginPath(); g.ellipse(u*.46, -u*.055, u*.05, u*.035, 0, 0, 6.284); g.fill();
+  g.fillStyle = '#ffca5a';
+  g.beginPath(); g.arc(u*.24, -u*.15, u*.032, 0, 6.284); g.fill();
+  g.fillStyle = d.col2;                                  // ears back
+  g.beginPath(); g.moveTo(u*.18,-u*.20); g.lineTo(u*.12,-u*.34); g.lineTo(u*.26,-u*.24);
+  g.closePath(); g.fill();
+}
+
+// It cannot come after you. That is the only good news.
+function drawChained(g, u, m, t){
+  const d = MONSTERS.chained;
+  shadow(g, u, .38);
+  const heave = Math.sin(t*.0022 + (m.bob||0))*u*.012;
+  // the chains, running off to the floor it is pinned to
+  g.strokeStyle = '#6a6258'; g.lineWidth = u*.035;
+  for (const s of [-1, 1]){
+    g.beginPath();
+    g.moveTo(s*u*.20, u*.02 + heave);
+    g.quadraticCurveTo(s*u*.42, u*.24, s*u*.46, u*.38);
+    g.stroke();
+    g.fillStyle = '#4a443c';
+    g.beginPath(); g.ellipse(s*u*.46, u*.38, u*.055, u*.030, 0, 0, 6.284); g.fill();
+  }
+  g.save(); g.translate(0, heave);
+  torso(g, u, u*.26, u*.20, -u*.22, u*.30, d.col, d.col2);
+  limb(g, -u*.26,-u*.14, -u*.40, u*.10, u*.085, d.col2);
+  limb(g,  u*.26,-u*.14,  u*.40, u*.10, u*.085, d.col2);
+  g.fillStyle = '#57504a';                               // the iron round its middle
+  g.fillRect(-u*.27, -u*.02, u*.54, u*.09);
+  g.fillStyle = 'rgba(190,190,205,.25)';
+  g.fillRect(-u*.27, -u*.02, u*.54, 1.6);
+  headBall(g, u, -u*.32, u*.15, d.col);
+  g.fillStyle = '#2a231d';                               // hood, or what is left of it
+  g.beginPath(); g.arc(0, -u*.34, u*.155, Math.PI*1.05, Math.PI*2.05); g.fill();
+  eyes(g, u, -u*.31, u*.040, '#d84a3a');
+  g.restore();
+}
+
 function drawCultist(g, u, m, t){
   const d = MONSTERS.cultist;
   shadow(g, u, .27);
@@ -2472,6 +2570,7 @@ const MON_ART = {
   goblin:drawGoblin, orc:drawOrc, fimir:drawFimir, skeleton:drawSkeleton, zombie:drawZombie,
   mummy:drawMummy, chaos:drawChaos, gargoyle:drawGargoyle, sorcerer:drawSorcerer, ogre:drawOgre,
   troll:drawTroll, wraith:drawWraith, archer:drawArcher, cultist:drawCultist, mimic:drawMimic,
+  spider:drawSpider, hound:drawHound, chained:drawChained,
 };
 
 function drawNPC(g, u, t){
@@ -3243,6 +3342,31 @@ function drawActor(g, a, t){
   if (a.alive) drawActorTag(g, a, px, py, u, t);
 }
 function drawActorTag(g, a, px, py, u, t){
+  if (a.webbed){                                  // caught, and going nowhere
+    const q = .5 + Math.sin(t*.004 + (a.bob||0))*.5;
+    g.strokeStyle = `rgba(20,22,28,.55)`;         // a dark backing so the strands read on any floor
+    g.lineWidth = 5;
+    for (let i = 0; i < 4; i++){
+      const an = i/4*6.284 + .4;
+      g.beginPath(); g.moveTo(px + Math.cos(an)*u*.46, py + Math.sin(an)*u*.34);
+      g.lineTo(px - Math.cos(an)*u*.46, py - Math.sin(an)*u*.34); g.stroke();
+    }
+    g.strokeStyle = `rgba(232,238,248,${(.72 + q*.28).toFixed(3)})`;
+    g.lineWidth = 2.6;
+    for (let i = 0; i < 4; i++){
+      const an = i/4*6.284 + .4;
+      g.beginPath(); g.moveTo(px + Math.cos(an)*u*.46, py + Math.sin(an)*u*.34);
+      g.lineTo(px - Math.cos(an)*u*.46, py - Math.sin(an)*u*.34); g.stroke();
+    }
+    g.beginPath(); g.ellipse(px, py, u*.34, u*.25, 0, 0, 6.284); g.stroke();
+    g.beginPath(); g.ellipse(px, py, u*.18, u*.13, 0, 0, 6.284); g.stroke();
+    // and the same head glyph every other status wears, so it reads at a glance
+    g.font = `${u*.34}px Georgia,serif`; g.textAlign = 'center';
+    g.fillStyle = 'rgba(0,0,0,.75)';
+    g.fillText('✳', px + 1, py - u*.56 + 1);
+    g.fillStyle = `rgba(232,238,248,${(.75 + q*.25).toFixed(3)})`;
+    g.fillText('✳', px, py - u*.56);
+  }
   if (a.kind === 'monster'){
     if (a.bp < a.bpMax || a.boss){
       const w = u*.56, y = py - u*.62;
@@ -4285,6 +4409,16 @@ function beginHeroActivation(h){
   h.buffs.veil = 0; delete h.buffs.veil;
   h.acted = false;
   focusOn(h.x, h.y);
+  // Webbing costs the whole turn. No roll, no defence — the most expensive
+  // thing a spider can take off you is the thing it takes.
+  if (h.webbed){
+    h.webbed = 0; h.rolled = true; h.moveLeft = 0; h.acted = true;
+    say(`${h.name} spends the turn cutting out of the webbing.`, 'bad');
+    sfx('search');
+    spark(h.x, h.y, 12, '#cfd6e2', { spd:.012, life:600 });
+    refreshField(); renderHUD();
+    return;
+  }
   if (!h.rolled){
     const a = 1+ri(6), b = 1+ri(6);
     let total = a + b - moveSlow(h) + (boonHas('swiftboots') ? 1 : 0);
@@ -4387,6 +4521,59 @@ function monsterShoot(m, h, done){
   });
 }
 
+/* ------------------------------------------------- WHAT THE NEW THINGS DO */
+// A spider does not want to kill you, it wants you to stop moving. A hero it
+// catches spends their next turn cutting out of the webbing — no roll, no
+// defence, just a turn gone, which is the most expensive thing in the game.
+function monsterWeb(m, h, done){
+  if (G.q) G.q.lastKiller = m.name;
+  h.webbed = 1;
+  focusOn(m.x, m.y);
+  lungeAt(m, h.x, h.y);
+  say(`${m.name} throws webbing over ${h.name}. That is next turn gone.`, 'bad');
+  sfx('spell'); G.shake = Math.max(G.shake, 8);
+  spark(h.x, h.y, 16, '#cfd6e2', { spd:.012, up:.002, life:700 });
+  renderHUD();
+  later(260, done);
+}
+// A hellhound breathes down a straight line. Everybody standing in it rolls.
+function breathLine(m, h){
+  const dx = Math.sign(h.x - m.x), dy = Math.sign(h.y - m.y);
+  if (!dx && !dy) return null;
+  if (dx && dy && Math.abs(h.x - m.x) !== Math.abs(h.y - m.y)) return null;
+  if (!dx && !dy) return null;
+  const line = [];
+  for (let i = 1; i <= 4; i++){
+    const x = m.x + dx*i, y = m.y + dy*i;
+    if (!isFloor(x,y) || !hasLOS(m.x, m.y, x, y)) break;
+    line.push([x,y]);
+  }
+  return line.length ? { dx, dy, line } : null;
+}
+function monsterBreath(m, aim, done){
+  if (G.q) G.q.lastKiller = m.name;
+  const caught = livingHeroes().filter(h => aim.line.some(([x,y]) => x === h.x && y === h.y));
+  focusOn(m.x, m.y);
+  say(`${m.name} opens its mouth and the corridor lights up. ${caught.length} in the way.`, 'bad');
+  sfx('trap'); G.shake = Math.max(G.shake, 14); hitStop(90);
+  for (const [x,y] of aim.line)
+    spark(x, y, 12, '#ff9040', { spd:.014, up:.006, life:520, glow:'rgba(255,140,60,.4)', r:1.2 });
+  let i = 0;
+  const next = () => {
+    if (i >= caught.length){ renderHUD(); later(220, done); return; }
+    const h = caught[i++];
+    const atk = rollCombat(m.atk);
+    const def = rollCombat(defendDice(h));
+    const dmg = Math.max(0, countSkulls(atk) - countShields(def, true));
+    showDice('defend', atk, def, `${m.name} burns ${h.name}`,
+      dmg > 0 ? `${h.name} loses ${dmg}` : 'Not this one', () => {
+        if (dmg > 0){ sfx('hit'); hurt(h, dmg, null); } else sfx('miss');
+        next();
+      });
+  };
+  next();
+}
+
 function monsterAct(m, done){
   if (m.sleep > 0){ done(); return; }
   if (m.stun > 0){ m.stun--; done(); return; }
@@ -4439,6 +4626,21 @@ function monsterAct(m, done){
       return;
     }
   }
+  // a hellhound would rather catch two of you at once
+  if (MONSTERS[m.mt] && MONSTERS[m.mt].breath && (m.breathed || 0) < 2){
+    let bestAim = null, bestCount = 0;
+    for (const h of targets){
+      const aim = breathLine(m, h);
+      if (!aim) continue;
+      const n = targets.filter(x => aim.line.some(([px,py]) => px === x.x && py === x.y)).length;
+      if (n > bestCount){ bestCount = n; bestAim = aim; }
+    }
+    if (bestAim && bestCount > 0){
+      m.breathed = (m.breathed || 0) + 1;
+      monsterBreath(m, bestAim, done);
+      return;
+    }
+  }
   // a caster would rather burn you from across the room
   if (MONSTERS[m.mt] && MONSTERS[m.mt].caster && (m.cast || 0) < 3){
     const seen = targets.filter(h => dist2(m.x,m.y,h.x,h.y) <= 8 && hasLOS(m.x,m.y,h.x,h.y));
@@ -4452,6 +4654,11 @@ function monsterAct(m, done){
   for (const h of targets){
     if (dist2(m.x,m.y,h.x,h.y) === 1 && linked(m.x,m.y,h.x,h.y)){
       if (m.skittish && !m.fled){ m.fled = 1; break; }
+      // a spider webs somebody who is still free, and only bites if they are not
+      if (MONSTERS[m.mt] && MONSTERS[m.mt].webber && !h.webbed){
+        monsterWeb(m, h, done);
+        return;
+      }
       focusOn(m.x,m.y);
       // the frenzied get a second swing, at whoever is still standing
       monsterAttack(m, h, m.affix === 'frenzied'
@@ -4546,6 +4753,9 @@ function openDoorAt(h, d){
     if (!h.alive) return false;
   }
   if (d.locked && !G.q.key){
+    // No key, but a locked door is still only a door. Forcing it is the same
+    // question the chests ask: quiet and slow, or now and loud.
+    if (!HEADLESS && h && !h.acted && !d.forced){ showForceDoor(h, d); return false; }
     say('The door is locked, and the lock is a good one. Something down here is carrying the key.', 'bad');
     sfx('block');
     return false;
@@ -4582,6 +4792,49 @@ function openDoorAt(h, d){
   }
   renderHUD();
   return true;
+}
+
+/* ------------------------------------------------------------ FORCING A DOOR */
+// A chest asks whether you want it open or open now. A locked door with no key
+// used to just say no. It asks the same question — and the cost is noise
+// rather than a needle: the Warlock hears it, and so does the room behind it.
+
+const FORCE_DOOR_WRATH = 6;
+function forceDoor(h, d){
+  if (!h || !d || h.acted || !d.locked || d.trialBolt) return false;
+  h.acted = true;
+  d.forced = true; d.locked = false;
+  say(`${h.name} puts a shoulder through the lock. The whole floor heard that.`, 'bad');
+  sfx('door'); G.shake = Math.max(G.shake, 16); hitStop(120);
+  stirWrath(FORCE_DOOR_WRATH, 'a door taken off its lock');
+  // opening the room wakes what is in it; the noise is what the Warlock hears
+  openDoorAt(h, d);
+  return true;
+}
+function showForceDoor(h, d){
+  modal(`<h2>The Lock</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[d.rid].name}</div>
+    <div class="rule"></div>
+    <p class="flavor">A good lock, and no key on anybody here. ${h.name} can leave
+      it for whoever is carrying the key — or stop asking politely.</p>
+    <div class="row">
+      <div class="ic">🗝</div>
+      <div class="tx"><b>Find the key</b><s>A champion on this floor has it. The door will wait.</s></div>
+      <div style="color:#63bf7d">quiet</div>
+    </div>
+    <div class="row">
+      <div class="ic">🪓</div>
+      <div class="tx"><b>Put a shoulder through it</b><s>It opens now, for your action — and the
+        Warlock hears it, and nothing in that room is asleep any more</s></div>
+      <div style="color:#b03a2c">loud</div>
+    </div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mForceDoor">Force it</button>
+      <button class="btn ghost" id="mLeaveLock">Leave it locked</button>
+    </div>`);
+  bindModal('#mForceDoor', () => { closeModal(); forceDoor(h, d); });
+  bindModal('#mLeaveLock', () => { closeModal(); say('You leave the lock alone.', ''); });
 }
 
 /* ------------------------------------------------------------ boss intros */
@@ -6941,6 +7194,8 @@ const SPAWN_TABLE = [
   { t:'sorcerer',cost:6, from:7 }, { t:'ogre',     cost:7, from:9 },
   { t:'archer',  cost:2, from:2 }, { t:'cultist',  cost:3, from:4 },
   { t:'wraith',  cost:4, from:6 }, { t:'troll',    cost:6, from:8 },
+  { t:'spider',  cost:3, from:3 }, { t:'hound',    cost:4, from:5 },
+  { t:'chained', cost:7, from:8 },
 ];
 const BOSS_TABLE = [
   { t:'gargoyle', from:1 }, { t:'chaos', from:3 }, { t:'ogre', from:5 },
@@ -7991,6 +8246,7 @@ globalThis.HQ = {
   drawRelicOn, drawBody, drawRansacked, DRAFT_TABS, TRIAL_KINDS, markedOne, bloodOwed,
   roomUnopened, roomsUnopened, bodyAt, bodyWorthTaking, bodyWatch, takeUp, showBody,
   SELL_PRICE, sellable, sellBoon, pedlarBlurb, showPedlar,
+  monsterWeb, monsterBreath, breathLine, forceDoor, showForceDoor, FORCE_DOOR_WRATH,
   COFFIN_FROM, COFFIN_CHANCE, COFFIN_GUESTS, coffinAt, coffinNear, coffinPot,
   coffinPull, showCoffin, coffinWatch,
   RAISE_TURNS, bodyStirring, stirringBodies, raisers, layToRest, tickRaising, raiseBody, tickLiars,
