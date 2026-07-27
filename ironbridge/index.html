@@ -4679,11 +4679,76 @@ function resize(){
   if (wasNarrow !== narrow) syncUI();
 }
 
+/* Two illuminants, one function.
+
+   shade() was a scalar multiply — it slid every colour straight at black.
+   Measured, the enemy keep's lit stone went H60 S.05 to H90 S.05: hue and
+   saturation frozen, value the only thing that ever moved. There are 122 call
+   sites and every shadow in this game is on this one line, so NO SHADOW IN
+   THIS WORLD COULD CONTAIN COLOUR, and a world whose shadows are all the same
+   grey reads as a world with no light in it at all.
+
+   Outdoors there are two lights, never one. The sun is warm and directional;
+   the sky is a blue dome, it is much weaker, and it is the ONLY thing lighting
+   what the sun cannot reach. So `f` stops meaning brightness and starts
+   meaning HOW MUCH SUN this surface takes: at f = 1 the light on it is the
+   sun's and the colour warms toward SUN.warm; at f = 0 the sun never reaches
+   it, the fill is all sky, the colour cools — and it stops at SHADE.amb rather
+   than at black, because nothing under an open sky is ever black.
+
+   The colour moves; the BRIGHTNESS does not. The tint is applied and then the
+   result is pulled back to exactly f (or amb + (1-amb)f in shade) times the
+   luminance it started with, so every one of the 122 call sites keeps the
+   value relationship it was written for — a rim is still brighter than the
+   face under it by the same amount — and all that changes is which light the
+   colour belongs to. Skip that normalisation and a saturated blue in shadow
+   comes out BRIGHTER than the same blue in the sun, purely because the sky
+   pushed its strongest channel: the minimap's two holds swapped over exactly
+   that way on the first pass, and it took a test to notice.
+
+   Same signature, so all 122 call sites keep working untouched.             */
+const SHADE = {
+  // What a surface the sun never reaches still gets from the sky: nothing
+  // under an open sky is black. Held low on purpose. At .55 — the first thing
+  // tried — the whole world's range folds into its top half, everything goes
+  // milky, and two things a factor of two apart stop being told apart at all.
+  // The sky is a far weaker light than the sun. This is what that looks like.
+  amb:.32,
+  sky:[.80, .94, 1.26],     // the fill's colour, as channel gains
+  lum:[.2126, .7152, .0722],
+};
+// The sun's own colour, taken from the sun that is actually drawn in the sky —
+// which until now lit nothing in this game at all — as channel gains. Cached
+// against the string it came from, so changing the colour of the sun changes
+// the colour of every lit surface in the world with it.
+let sunGainStr = '', sunGain = [1, 1, 1];
+function sunTint(){
+  if (SUN.warm !== sunGainStr){
+    sunGainStr = SUN.warm;
+    const p = sunGainStr.split(',').map(Number);
+    const m = (p[0] + p[1] + p[2]) / 3 || 1;
+    sunGain = [p[0] / m, p[1] / m, p[2] / m];
+  }
+  return sunGain;
+}
 const shade = (hex, f) => {
   const n = parseInt(hex.slice(1), 16);
-  const r = clamp(Math.round(((n >> 16) & 255) * f), 0, 255);
-  const g = clamp(Math.round(((n >> 8) & 255) * f), 0, 255);
-  const b = clamp(Math.round((n & 255) * f), 0, 255);
+  const W = sunTint(), S = SHADE.sky, L = SHADE.lum;
+  const r0 = (n >> 16) & 255, g0 = (n >> 8) & 255, b0 = n & 255;
+  // w: how much of the light on this surface is the sun's rather than the
+  // sky's. SQUARED, because on a straight ramp everything past half-lit came
+  // out warm and the shade half of a roof warmed with it — a plane has to be
+  // genuinely turned into the sun before it takes the sun's colour.
+  const w = f >= 1 ? 1 : (f > 0 ? f * f : 0);
+  const v = f >= 1 ? f : SHADE.amb + (1 - SHADE.amb) * f;
+  const r1 = r0 * (S[0] + (W[0] - S[0]) * w);
+  const g1 = g0 * (S[1] + (W[1] - S[1]) * w);
+  const b1 = b0 * (S[2] + (W[2] - S[2]) * w);
+  const l1 = L[0] * r1 + L[1] * g1 + L[2] * b1;
+  const k = l1 > 0 ? v * (L[0] * r0 + L[1] * g0 + L[2] * b0) / l1 : v;
+  const r = clamp(Math.round(r1 * k), 0, 255);
+  const g = clamp(Math.round(g1 * k), 0, 255);
+  const b = clamp(Math.round(b1 * k), 0, 255);
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 };
 function poly(c, pts, fill, stroke, lw){
@@ -6582,8 +6647,7 @@ function drawEnds(c){
       rimEdge(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, 1.2 * z, .4);
       aoBand(c, tx - 18 * z, base - 9 * z, 36 * z, 9 * z, -1, .34);
       block(c, tx - 18 * z, base - 8 * z, 36 * z, 8 * z, STONE.deep, STONE.dark);
-      poly(c, [[tx - 23 * z, wallY - 72 * z], [tx, wallY - 108 * z], [tx + 23 * z, wallY - 72 * z]], shade(col, .98));
-      poly(c, [[tx, wallY - 108 * z], [tx + 23 * z, wallY - 72 * z], [tx + 8 * z, wallY - 72 * z]], shade(col, .72));
+      coneRoof(c, tx, wallY - 108 * z, wallY - 72 * z, 23 * z, col, z);
       // the roof sits on the tower head, so the head is in its shade
       aoBand(c, tx - 16 * z, wallY - 74 * z, 32 * z, 9 * z, 1, .40);
       block(c, tx - 24 * z, wallY - 74 * z, 48 * z, 3 * z, STONE.mid2, STONE.lit);   // the eaves course
@@ -9551,11 +9615,47 @@ function drawTile(c, gx, gy, fill, stroke){
 // One table for the whole convention, so the next thing that needs a lit face
 // and a shaded one takes them from here instead of picking a direction on its
 // own — which is how the buildings ended up disagreeing with their island.
+//
+// And then the table disagreed with ITSELF, because every number in it was set
+// by hand: roofNear was .86 against near at 1.02, so the gable leaning back
+// toward the open sky came out DARKER than the vertical wall it stands on,
+// which no light can do. Two roof planes ninety degrees apart shared a fill.
+//
+// So nothing here is hand-set any more. LIGHT is where the sun stands, in the
+// hold's own grid — to the left (-x), toward the viewer (+y) and high (+z),
+// which is the same up-and-to-the-left the sun disc is drawn at and the same
+// side every shadow falls away from. planeLit() turns a surface normal into a
+// shade() factor and NOTHING ELSE decides how bright a plane is. LIT is a
+// cache of the answers for the handful of planes the game draws over and over,
+// so the call sites do not change and do not each pay for a square root.
+//
+//   amb    what a plane gets with the sun edge-on: the sky is still up there
+//   gain   how much the sun adds on top of that when the plane turns into it
+const LIGHT = { x:-.44, y:.52, z:.73, amb:.62, gain:.62 };
+function planeLit(nx, ny, nz){
+  const m = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1;
+  return clamp(LIGHT.amb + LIGHT.gain * (nx * LIGHT.x + ny * LIGHT.y + nz * LIGHT.z) / m, .06, 1.4);
+}
+// The pitch drawHouse builds every roof at, near enough: the six buildings run
+// from a 30° workshop to a 49° farm, and across that whole span the slope
+// facing the sun moves by .03 — far less than one cache costs to avoid.
+const ROOF = { w:.40, d:.32, rh:.36, over:1.18, ridge:1.15 };
+// A body is round, so its bright flank is the one whose normal points along
+// the light's own bearing on the ground — hence the horizontal light only.
+// Cloth takes it further than skin does: folds hold the shade.
+const LIT_H = hyp(LIGHT.x, LIGHT.y), LIT_CLOTH = 1.15;
 const LIT = {
-  near:1.02, right:.74, cap:1.05,                       // house walls
-  roofNear:.86, roofFar:.66, roofLeft:1.06, roofRight:.78,
-  bodyLit:1.16, bodyDark:.74,                           // a torso's two sides
-  coatLit:1.22, coatDark:.68,                           // and a worker's
+  near:planeLit(0, 1, 0), right:planeLit(1, 0, 0), cap:planeLit(0, 0, 1),   // house walls
+  // The two slopes lean over the eaves; the two gable ends stand almost
+  // upright, leaning back by the hand's breadth the ridge is set in from the
+  // eave — which is why a gable is never darker than the wall beneath it.
+  roofLeft:planeLit(-ROOF.rh, 0, ROOF.over * ROOF.w),
+  roofRight:planeLit(ROOF.rh, 0, ROOF.over * ROOF.w),
+  roofNear:planeLit(0, ROOF.rh, (ROOF.over - ROOF.ridge) * ROOF.d),
+  roofFar:planeLit(0, -ROOF.rh, (ROOF.over - ROOF.ridge) * ROOF.d),
+  bodyLit:planeLit(LIGHT.x, LIGHT.y, 0), bodyDark:planeLit(-LIGHT.x, -LIGHT.y, 0),
+  coatLit:LIGHT.amb + LIGHT.gain * LIT_CLOTH * LIT_H,
+  coatDark:LIGHT.amb - LIGHT.gain * LIT_CLOTH * LIT_H,
 };
 function drawHouse(c, gx, gy, w, d, wh, rh, wall, roof){
   const A = bp(gx - w, gy - d), B = bp(gx + w, gy - d), Cc = bp(gx + w, gy + d), D = bp(gx - w, gy + d);
@@ -9563,13 +9663,58 @@ function drawHouse(c, gx, gy, w, d, wh, rh, wall, roof){
   poly(c, [D, Cc, C1, D1], shade(wall, LIT.near));
   poly(c, [Cc, B, B1, C1], shade(wall, LIT.right));
   poly(c, [A1, B1, C1, D1], shade(wall, LIT.cap));
-  const R1 = bp(gx, gy - d * 1.15, wh + rh), R2 = bp(gx, gy + d * 1.15, wh + rh);
-  const E1 = bp(gx - w * 1.18, gy - d * 1.18, wh), E2 = bp(gx + w * 1.18, gy - d * 1.18, wh);
-  const E3 = bp(gx + w * 1.18, gy + d * 1.18, wh), E4 = bp(gx - w * 1.18, gy + d * 1.18, wh);
+  const R1 = bp(gx, gy - d * ROOF.ridge, wh + rh), R2 = bp(gx, gy + d * ROOF.ridge, wh + rh);
+  const E1 = bp(gx - w * ROOF.over, gy - d * ROOF.over, wh), E2 = bp(gx + w * ROOF.over, gy - d * ROOF.over, wh);
+  const E3 = bp(gx + w * ROOF.over, gy + d * ROOF.over, wh), E4 = bp(gx - w * ROOF.over, gy + d * ROOF.over, wh);
   poly(c, [E1, E2, R1], shade(roof, LIT.roofFar));
   poly(c, [E2, E3, R2, R1], shade(roof, LIT.roofRight));
   poly(c, [E4, E3, R2], shade(roof, LIT.roofNear));
   poly(c, [E1, R1, R2, E4], shade(roof, LIT.roofLeft));
+  ridgeRim(c, R1, R2);
+}
+// The one edge on a roof where the sun actually lands: the ridge, where the
+// slope that faces the light meets the slope that does not. A hairline of the
+// sun's OWN colour rather than a lighter tint of the tiles — this is the light
+// itself catching an edge, and it is what tells you the two planes either side
+// of it are two planes and not one fill.
+const RIDGE = { a:.5, w:.9 };
+function ridgeRim(c, p, q){
+  c.strokeStyle = 'rgba(' + SUN.warm + ',' + RIDGE.a + ')';
+  c.lineWidth = Math.max(1, RIDGE.w * bu());
+  c.beginPath(); c.moveTo(p[0], p[1]); c.lineTo(q[0], q[1]); c.stroke();
+}
+
+/* A cone roof. There are four of them on the board, two on each keep, and
+   every one was ONE TRIANGLE of ONE flat fill — the reddest, most-lit-looking
+   shape in the picture, with no light on it at all.
+
+   A cone has no flat side. It turns continuously through the light, so it
+   always has a half that faces the sun and a half that cannot, from any angle
+   you look at it. The firs on the hillside have known this since they were
+   drawn — "a fir is a cone and a cone has both", says the comment over their
+   split — and the architecture did not.
+
+   Split at the light's own bearing, both halves off the same planeLit() every
+   wall and roof plane in the world now uses, and a hairline of the sun's
+   colour down the sunward edge, where the light actually lands.
+
+   `split` is not a half: the sun is HIGH, so rather more than half of a cone
+   is lit and the terminator sits past the middle, on the shade side.
+
+   The gatehouse pyramids in drawStructure are the same shape and are still
+   one flat fill apiece. They want this function; they are somebody else's
+   fifty lines.                                                             */
+const CONE = { split:.30, rim:.6, w:.9 };
+function coneRoof(c, ax, ay, by, hw, col, u){
+  const lit = SUN.x < .5 ? -1 : 1;                    // the sunward side, in screen x
+  const rise = Math.abs(by - ay), run = Math.abs(hw) || 1;
+  const nx = LIGHT.x / LIT_H * run, ny = LIGHT.y / LIT_H * run;
+  const tx = ax - lit * CONE.split * hw;              // where it turns out of the light
+  poly(c, [[ax + lit * hw, by], [ax, ay], [tx, by]], shade(col, planeLit(nx, ny, rise)));
+  poly(c, [[tx, by], [ax, ay], [ax - lit * hw, by]], shade(col, planeLit(-nx, -ny, rise)));
+  c.strokeStyle = 'rgba(' + SUN.warm + ',' + CONE.rim + ')';
+  c.lineWidth = Math.max(1, CONE.w * (u || 1));
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(ax + lit * hw, by); c.stroke();
 }
 
 // What a house has cut into it. Every plot building goes through drawHouse and
@@ -13512,7 +13657,7 @@ window.IB = {
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
+  floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, LIGHT, planeLit, SHADE, sunTint, ROOF, RIDGE, ridgeRim, CONE, coneRoof, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
