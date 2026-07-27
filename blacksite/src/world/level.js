@@ -582,7 +582,7 @@ export function buildLevel(G, engine, materials) {
     // Its neighbour twenty metres up the alley is dark, and the contrast is the
     // point: one working fitting reads as a facility on a trickle of emergency
     // power, two reads as a lighting rig.
-    bulkheadLamp(8.02, ROOF + 0.55, -25.6, Math.PI / 2, 0.88, null, 'silo');
+    bulkheadLamp(8.02, ROOF + 0.55, -25.6, Math.PI / 2, 0.88, null);
   }
 
   // Stairs are a chore for an AABB collider, so each flight collides as a stack
@@ -787,6 +787,24 @@ export function buildLevel(G, engine, materials) {
     for (const sx of [-1.5, 1.5]) {
       putAll(PR.iBeam(DECK - 0.35 - PY, 0.28, 0.18), 'metal', CW.x + sx, (PY + DECK - 0.35) / 2, 22.6, 0, 0, Math.PI / 2, 'approach');
       S(boxFromCenter(CW.x + sx, (PY + DECK - 0.35) / 2, 22.6, 0.24, DECK - 0.35 - PY, 0.24, SURFACE.METAL, { thickness: 30 }));
+    }
+
+    // Under-deck work lights. The apron in front of the bunker's main door is
+    // where every route on the site converges and it has nothing overhead but
+    // this walkway, so the walkway is what carries the light — which is also
+    // where a real one would be, bolted to the underside of the deck out of the
+    // weather. Fitting and light are installed together and only above a tier,
+    // so a machine that cannot afford the second one does not get a lit lamp
+    // hanging over an unlit apron either.
+    if (quality >= 1) {
+      bulkheadLamp(1.6, DECK - 0.30, CW.zN, 0, Math.PI / 2, {
+        color: WORK, intensity: 18, distance: 15,
+      }, 'pad');
+    }
+    if (quality >= 2) {
+      bulkheadLamp(CW.x, DECK - 0.30, 8.0, 0, Math.PI / 2, {
+        color: WORK, intensity: 14, distance: 13,
+      }, 'pad');
     }
 
     // Caged ladder off the pad, mid-run. The short way up, and the one that
