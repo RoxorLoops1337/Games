@@ -9973,6 +9973,427 @@ function camStep(dt){
   } else { cam.sx = 0; cam.sy = 0; }
 }
 
+/* =====================================================================
+   POST — the finished world, graded
+
+   The frame is the last place anything can be said about the whole picture at
+   once: that there is ONE light and it is warm and up on the left, that the
+   air between here and the far ridge is not free, that a lens is looking at
+   this and no lens is perfect. Everything below runs on the finished bitmap
+   and reads nothing but that bitmap, the camera and SUN — no unit, no
+   structure, nothing the simulation can see or be moved by.
+
+   It is also the one pass that touches every pixel, so all of it is composite
+   work on the GPU's own blend modes: no getImageData, no per-pixel loop, the
+   bright pass at a quarter of the frame and the aberration at a half, and
+   that only in the strips of the frame it can reach. The only pixels ever
+   written by hand are four grain tiles, built once at load.
+
+   Measured on a software rasteriser at 3200×1316 (the worst case there is —
+   a browser with no GPU canvas), over a 52ms base frame: bright pass +59ms,
+   aberration +62, tone curve +54, grade +39, grain +27. On a GPU canvas the
+   same passes are texture blits and cost a fraction of that. Rather than
+   guess which machine it is on, the pass times itself and drops stages until
+   it fits — see postFx.
+   ===================================================================== */
+const POST = {
+  div: 4,          // the bright pass works at a quarter of the frame
+  blur: 5,         // blurred this far in ITS pixels, so zoom cannot change the look
+  cut: 8,          // bright pass = frame⁸ — a midtone comes back at half a
+  bloom: .24,      // percent of itself and whitewashed stone at a third. THAT
+  bloomCol: '#ffe0b4',   // is the threshold, and what comes back is the colour of the light
+  wide: .55, blurW: 4.5, // the second, wider tier of it — the veil round the sun
+  caDiv: 2,        // aberration at half the frame
+  ca: .0032,       // channel split at the frame edge, as a fraction of the frame
+  caR0: .80,       // nothing splits inside this much of the frame radius — the
+  caMax: .72,      // half-res copy must never reach anything you look AT
+  vigA: .62,       // corner falloff
+  vigX: .43, vigY: .38,   // its centre, pulled up and toward the sun
+  // The grade. Soft-light against a colour BELOW mid grey pulls a channel
+  // down and above it pushes up, so a warm whose blue sits under 128 warms
+  // without brightening — and a neutral dark laid over everything is exactly
+  // base², the shadow half of a filmic curve. The bright pass adds the other
+  // half back on top, and between them the picture gets its contrast.
+  curve: 'contrast(113%) saturate(110%)',   // '' turns the tone curve off
+  warm: '190,140,78', warmA: .52,
+  cool: '46,84,126',  coolA: .40,
+  gam: '64,66,72',    gamA: .10,   // the curve's foot, everywhere
+  lift: 3,         // blacks lifted off zero: no film ever reaches it
+  grain: .065, grainN: 4, grainPx: 160, grainHz: 11,
+  still: 5,        // frames a frozen board may keep its bright pass for
+  budget: 4.5,     // ms of post a frame will pay for before a stage is dropped
+  frameCap: 45,    // ...or this much of a WHOLE frame, deferred work included
+  frameMax: 400,   // (a gap longer than this is a tab switch, not a slow frame)
+  warm0: 12,       // frames ignored while the buffers and the JIT settle
+  pin: null,       // a level, to hold the picture still for a screenshot
+};
+
+// The grade is the one thing in the renderer that is pure taste, and taste is
+// found by looking rather than by arithmetic. These are the dials, reachable
+// from the console so a value can be moved and the next frame judged, and a
+// flush for the ones baked into the cached gradients.
+if (typeof window !== 'undefined'){
+  window.IBPOST = POST;
+  window.IBPOSTFLUSH = () => { postB = null; };
+  window.IBPOSTLVL = () => [postLvl, postEma, postGap];   // what the governor settled on
+}
+
+// A surface we can draw on, or null. A real canvas hands back a context that
+// points at the canvas it came from; the headless harness's stub hands back
+// the ONE shared context for everything, which would paint the frame onto
+// itself. Anything short of the real thing turns the whole pass off and the
+// game draws exactly as it did before.
+function postCx(w, h){
+  try {
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(1, w | 0); cv.height = Math.max(1, h | 0);
+    const cx = cv.getContext && cv.getContext('2d');
+    if (!cx || cx.canvas !== cv || cx.canvas.width !== (w | 0)) return null;
+    return cx;
+  } catch (e){ return null; }
+}
+
+// Grain, as four tiles cycled a few times a second. Built from the world's own
+// stable hash rather than Math.random, so the same tile comes out on every
+// machine and every run — and off the frame clock rather than the wall clock,
+// so a screenshot of the same moment is the same picture twice.
+function postGrain(){
+  const out = [];
+  for (let k = 0; k < POST.grainN; k++){
+    const px = POST.grainPx;
+    const cx = postCx(px, px);
+    if (!cx || !cx.createImageData) return null;
+    try {
+      const img = cx.createImageData(px, px);
+      const d = img.data;
+      for (let i = 0, y = 0; y < px; y++) for (let x = 0; x < px; x++, i += 4){
+        // 128 is the identity for overlay, so grain rides symmetrically on
+        // top of whatever is under it instead of lifting or crushing it.
+        const v = 128 + Math.round((hash2(x + k * 977.3, y + k * 313.7) - .5) * 150);
+        d[i] = d[i + 1] = d[i + 2] = v; d[i + 3] = 255;
+      }
+      cx.putImageData(img, 0, 0);
+      out.push(cx.canvas);
+    } catch (e){ return null; }
+  }
+  return out;
+}
+
+// Buffers, gradients and patterns, all of it rebuilt only when the frame
+// changes size. `false` means we asked once and cannot have them.
+let postB = null;
+function postCache(c, W, H){
+  if (postB === false) return null;
+  if (postB && postB.W === W && postB.H === H) return postB;
+  const bw = Math.max(4, Math.round(W / POST.div)), bh = Math.max(4, Math.round(H / POST.div));
+  const cw = Math.max(4, Math.round(W / POST.caDiv)), ch = Math.max(4, Math.round(H / POST.caDiv));
+  const b1 = postCx(bw, bh), b2 = postCx(bw, bh), pr = postCx(cw, ch), pg = postCx(cw, ch);
+  const tiles = (postB && postB.tiles) || postGrain();
+  if (!b1 || !b2 || !pr || !pg || !tiles){ postB = false; return null; }
+  let P;
+  try {
+    // ---- the light on one axis: the sun's corner warm, the far corner the
+    // blue an open sky fills its shadows with. Soft-light, so it grades what
+    // is there rather than painting over it.
+    const lit = c.createLinearGradient(W * SUN.x, H * SUN.y, W * (1 - SUN.x * .5), H * 1.05);
+    lit.addColorStop(0,   'rgba(' + POST.warm + ',' + POST.warmA + ')');
+    lit.addColorStop(.44, 'rgba(' + POST.gam + ',' + POST.gamA + ')');
+    lit.addColorStop(.62, 'rgba(' + POST.gam + ',' + POST.gamA + ')');
+    lit.addColorStop(1,   'rgba(' + POST.cool + ',' + POST.coolA + ')');
+    // ---- the corners, and with them the floor of the gorge: one radial, sat
+    // above the middle of the frame and pulled toward the sun, so the bottom
+    // of the picture falls off further than the top and the light side least.
+    const R = hyp(W, H) * .66, vx = W * POST.vigX, vy = H * POST.vigY;
+    const vig = c.createRadialGradient(vx, vy, R * .26, vx, vy, R);
+    const vc = '18,26,38,';
+    vig.addColorStop(0,   'rgba(' + vc + '0)');
+    vig.addColorStop(.45, 'rgba(' + vc + (POST.vigA * .12).toFixed(3) + ')');
+    vig.addColorStop(.72, 'rgba(' + vc + (POST.vigA * .42).toFixed(3) + ')');
+    vig.addColorStop(1,   'rgba(' + vc + POST.vigA.toFixed(3) + ')');
+    // ---- aberration. One ramp, used three ways: the two channel copies are
+    // masked BY it, and the frame is taken down by one MINUS it, so red and
+    // cyan add the edge back up to exactly the light it started with.
+    // The ramp is written ACROSS the ring, not in frame radius: two stops
+    // that both land on 0 after clamping are a step, and a step in this ramp
+    // is a hard arc drawn across the picture where the rebuilt edge begins.
+    const stops = [[0, 0], [.34, .07], [.7, .42], [1, 1]];
+    const mk = (cx, w, h, cut) => {
+      const r = hyp(w, h) * .5;
+      const g = cx.createRadialGradient(w * .5, h * .5, r * POST.caR0, w * .5, h * .5, r);
+      for (const s of stops){
+        const a = s[1] * POST.caMax;
+        const t = s[0];
+        g.addColorStop(clamp(t, 0, 1), cut
+          ? 'rgb(' + Math.round(255 * (1 - a)) + ',' + Math.round(255 * (1 - a)) + ',' + Math.round(255 * (1 - a)) + ')'
+          : 'rgba(255,255,255,' + a.toFixed(3) + ')');
+      }
+      return g;
+    };
+    // ---- and the only part of the frame the aberration can reach. Outside
+    // that ring the mask is flat zero, so every one of the pass's dear
+    // full-frame operations is cut down to two or four strips: a rectangular
+    // clip is the one kind a rasteriser can actually bound its work to, and
+    // this turns the dearest stage in the pass into the cheapest.
+    // The strips have to cover EVERY point outside that circle, corners
+    // included — a strip merely as wide as the circle's gap on the axis
+    // leaves the corner diagonals out and puts a hard vertical seam down the
+    // picture where the mask is cut off mid-ramp. So the middle rectangle
+    // they leave behind is sized by its own corner: the furthest point of it
+    // has to still be inside the circle.
+    const r0 = hyp(W, H) * .5 * POST.caR0;
+    const pad = Math.ceil(Math.max(W, H) * POST.ca * 2) + 2;
+    const hw = W * .5, hh = H * .5;
+    let sx = 0, sy = 0;
+    if (r0 >= hh) sx = hw - Math.sqrt(Math.max(0, r0 * r0 - hh * hh));
+    else if (r0 >= hw) sy = hh - Math.sqrt(Math.max(0, r0 * r0 - hw * hw));
+    else { const q = r0 / Math.SQRT2; sx = hw - q; sy = hh - q; }
+    // Rounded to whole buffer pixels, so no clip in either resolution ever
+    // lands on a half pixel and has to be antialiased.
+    const q = Math.max(1, POST.caDiv);
+    sx = clamp(Math.ceil((sx + (sx > 0 ? pad : 0)) / q) * q, 0, Math.floor(hw / q) * q);
+    sy = clamp(Math.ceil((sy + (sy > 0 ? pad : 0)) / q) * q, 0, Math.floor(hh / q) * q);
+    const bands = [];
+    if (sx > 0){ bands.push([0, 0, sx, H], [W - sx, 0, sx, H]); }
+    const midW = W - sx * 2;
+    if (sy > 0 && midW > 0){ bands.push([sx, 0, midW, sy], [sx, H - sy, midW, sy]); }
+    P = {
+      W, H, bw, bh, cw, ch, b1, b2, pr, pg, tiles, age: 99, bands,
+      soft: typeof c.filter === 'string',
+      lit, vig,
+      maskR: mk(pr, cw, ch, false), maskG: mk(pg, cw, ch, false), caCut: mk(c, W, H, true),
+      // The lifted blacks are a flat constant, and the bright pass is already
+      // adding a buffer to the frame — so the constant rides IN that buffer
+      // and the lift costs no pass of its own. Divided by the bloom's alpha,
+      // since that is what it will be multiplied by on the way back.
+      lift: 'rgb(' + [.7, 1, 1.4].map(m => clamp(Math.round(POST.lift * m / Math.max(.05, POST.bloom)), 0, 255)).join(',') + ')',
+      pat: tiles.map(t => c.createPattern(t, 'repeat')),
+    };
+    if (P.pat.some(p => !p)) return (postB = false, null);
+  } catch (e){ postB = false; return null; }
+  postB = P;
+  return P;
+}
+
+// The bright pass: the frame raised to a power, blurred in two tiers, tinted
+// the colour of the light and added back. The POWER is the threshold, and it
+// is the whole trick — no branch, no compare, just a few multiply blends on a
+// quarter-scale buffer. At the eighth, a midtone comes back at half a percent
+// of itself while the sun, the clouds and whitewashed stone keep a third.
+function postBloom(c, P, W, H){
+  const b1 = P.b1, b2 = P.b2, bw = P.bw, bh = P.bh;
+  // A finished board redraws the same picture over and over — draw() is
+  // already throttled there — so the bright pass may be kept for a few frames
+  // instead of being rebuilt from a bitmap that has not changed. Only while
+  // the camera is genuinely still: a glow five frames behind a moving camera
+  // is a smear, and the whole point of the cache is that nothing moved.
+  const still = G.state === 'over' && cam.x === P.cx && cam.z === P.cz;
+  P.cx = cam.x; P.cz = cam.z;
+  if (P.age >= (still ? POST.still : 1)){
+    b2.globalCompositeOperation = 'copy'; b2.globalAlpha = 1;
+    if (P.soft) b2.filter = 'none';
+    b2.drawImage(c.canvas, 0, 0, bw, bh);
+    b1.globalCompositeOperation = 'copy'; b1.globalAlpha = 1;
+    if (P.soft) b1.filter = 'none';
+    b1.drawImage(b2.canvas, 0, 0);
+    b1.globalCompositeOperation = 'multiply';
+    for (let i = 1; i < POST.cut; i++) b1.drawImage(b2.canvas, 0, 0);
+    // "Warm the highlights" is a thing you do to bright PIXELS, not to a
+    // corner of the frame — and the bright pass is already exactly the bright
+    // pixels, isolated. Tinting it here is a fill on a quarter-scale buffer,
+    // and it lands only where something is actually catching the sun.
+    b1.fillStyle = POST.bloomCol; b1.fillRect(0, 0, bw, bh);
+    b2.globalCompositeOperation = 'copy';
+    if (P.soft) b2.filter = 'blur(' + POST.blur + 'px)';
+    b2.drawImage(b1.canvas, 0, 0);
+    // A second, much wider blur of the SAME bright pass, added on top of the
+    // first. One tier alone is a halo traced round the shape that made it;
+    // two is what light in air actually does — a tight core and a wide veil
+    // over the whole quarter of the sky the sun is in. It costs one more
+    // quarter-scale blur, because both tiers ride home in the same buffer.
+    if (P.soft && POST.wide > 0){
+      b2.globalCompositeOperation = 'lighter';
+      b2.globalAlpha = POST.wide;
+      b2.filter = 'blur(' + (POST.blur * POST.blurW) + 'px)';
+      b2.drawImage(b1.canvas, 0, 0);
+      b2.globalAlpha = 1;
+    }
+    if (P.soft) b2.filter = 'none';
+    if (POST.lift > 0){
+      b2.globalCompositeOperation = 'lighter';
+      b2.fillStyle = P.lift; b2.fillRect(0, 0, bw, bh);
+    }
+    b2.globalCompositeOperation = 'source-over';
+    P.age = 0;
+  }
+  P.age++;
+  c.globalCompositeOperation = 'lighter';
+  c.globalAlpha = POST.bloom;
+  // Without ctx.filter there is no blur to be had, so the pass comes back
+  // through a sixteenth-scale corner of itself: cruder, but still a glow and
+  // still cheap, and nothing anywhere depends on it existing.
+  if (P.soft) c.drawImage(b2.canvas, 0, 0, W, H);
+  else c.drawImage(b2.canvas, 0, 0, Math.max(2, bw >> 2), Math.max(2, bh >> 2), 0, 0, W, H);
+  c.globalAlpha = 1;
+  c.globalCompositeOperation = 'source-over';
+}
+
+// Chromatic aberration, at the edges only. Red is thrown a hair wide of cyan;
+// red and cyan together are white, so the ring keeps every bit of its light
+// and only its EDGES come apart — which is the whole of what a lens does.
+function postAber(c, P, W, H){
+  if (!P.bands.length) return;
+  const dx = W * POST.ca, dy = H * POST.ca, k = 1 / POST.caDiv;
+  // The two channel copies, built only where they will be used.
+  const split = (cx, tint, mask) => {
+    for (const b of P.bands){
+      const x = b[0] * k, y = b[1] * k, w = b[2] * k, h = b[3] * k;
+      cx.save();
+      cx.beginPath(); cx.rect(x, y, w, h); cx.clip();
+      cx.globalCompositeOperation = 'source-over'; cx.globalAlpha = 1;
+      if (P.soft) cx.filter = 'none';
+      cx.drawImage(c.canvas, b[0], b[1], b[2], b[3], x, y, w, h);
+      cx.globalCompositeOperation = 'multiply';
+      cx.fillStyle = tint; cx.fillRect(x, y, w, h);
+      cx.restore();
+    }
+    // The mask goes on in ONE pass over the whole buffer, never per band: a
+    // clipped destination-in leaves the clip's own antialiased edge holding
+    // half-strength colour that the mask never gets to zero, and half a red
+    // plus half a cyan is a bright white hairline drawn straight down the
+    // picture. It was there, it was three pixels wide, and it took a column
+    // scan to find it.
+    cx.globalCompositeOperation = 'destination-in'; cx.globalAlpha = 1;
+    cx.fillStyle = mask; cx.fillRect(0, 0, P.cw, P.ch);
+    cx.globalCompositeOperation = 'source-over';
+  };
+  split(P.pr, '#ff0000', P.maskR);
+  split(P.pg, '#00ffff', P.maskG);
+  for (const b of P.bands){
+    c.save();
+    c.beginPath(); c.rect(b[0], b[1], b[2], b[3]); c.clip();
+    c.globalCompositeOperation = 'multiply';
+    c.fillStyle = P.caCut; c.fillRect(b[0], b[1], b[2], b[3]);
+    // Red sits where it always was; cyan is thrown a hair wide of it by
+    // taking a slightly INSET piece of its buffer and stretching that over
+    // the whole frame. Both copies therefore cover every pixel and neither
+    // ever samples off the end of its own buffer — an offset copy that does
+    // leaves the outermost columns short of a channel, which reads as a dark
+    // bruise down the edge of the screen. It was there. It was six columns.
+    c.globalCompositeOperation = 'lighter';
+    c.drawImage(P.pr.canvas, 0, 0, W, H);
+    c.drawImage(P.pg.canvas, dx * k, dy * k, P.cw - dx * k * 2, P.ch - dy * k * 2, 0, 0, W, H);
+    c.restore();
+  }
+  c.globalCompositeOperation = 'source-over';
+}
+
+// The curve, the colour, the corners and the grain. Four full-frame passes,
+// and the last of them is the only one the eye is meant to notice it cannot
+// see: fine enough to dither the flat fills this game is made of, and off the
+// frame clock rather than the wall clock so it never crawls.
+function postGrade(c, P, W, H, lvl){
+  // The one honest tone curve available to a 2D canvas: the frame, drawn
+  // through a filter onto itself. Blend modes can only push a pixel by where
+  // it SITS; this pushes it by what it IS, which is the difference between a
+  // graded picture and a tinted one.
+  if (lvl >= 1 && P.soft && POST.curve){
+    c.globalCompositeOperation = 'source-over';
+    c.filter = POST.curve;
+    c.drawImage(c.canvas, 0, 0);
+    c.filter = 'none';
+  }
+  if (POST.warmA > 0 || POST.gamA > 0){
+    c.globalCompositeOperation = 'soft-light';
+    c.fillStyle = P.lit; c.fillRect(0, 0, W, H);
+  }
+  if (POST.vigA > 0){
+    c.globalCompositeOperation = 'multiply';
+    c.fillStyle = P.vig; c.fillRect(0, 0, W, H);
+  }
+  const pat = lvl >= 1 && POST.grain > 0 && P.pat[Math.floor(Math.abs(G.t) * POST.grainHz) % P.pat.length];
+  if (pat){
+    c.globalCompositeOperation = 'overlay';
+    c.globalAlpha = POST.grain;
+    c.fillStyle = pat; c.fillRect(0, 0, W, H);
+    c.globalAlpha = 1;
+  }
+  c.globalCompositeOperation = 'source-over';
+}
+
+// What a frame of post costs comes down to one thing: whether this browser
+// put its canvas on the GPU. On one that did, these are half a dozen texture
+// blits and the whole pass is under a millisecond. On a software rasteriser
+// the same passes are tens of milliseconds and the game would crawl. Rather
+// than guess, the pass times itself over a smoothed window and gives up its
+// stages worst-value-first:
+//
+//   3  everything
+//   2  no aberration      — dearest stage, least seen
+//   1  no bright pass     — with it goes the lifted black it rides in on
+//   0  the grade alone    — two fills: the light's colour, and the corners
+//  -1  nothing
+//
+// It only ever steps DOWN. A picture that flickers between two grades as the
+// load moves about is worse than either grade, and no machine gets faster
+// halfway through a match. A slower one gets a plainer picture and the
+// identical game: nothing here is read by the simulation, or readable BY it.
+const postNow = (typeof performance !== 'undefined' && performance && performance.now)
+  ? () => performance.now() : null;
+let postLvl = 3, postEma = 0, postGap = 0, postSeen = 0, postT0 = 0;
+
+function postFx(c){
+  if (!c || !c.canvas) return;
+  const lvl = POST.pin === null || POST.pin === undefined ? postLvl : POST.pin;
+  if (lvl < 0) return;
+  const W = c.canvas.width | 0, H = c.canvas.height | 0;
+  if (W < 16 || H < 16) return;
+  const P = postCache(c, W, H);
+  if (!P) return;
+  const t0 = postNow ? postNow() : 0;
+  c.save();
+  try {
+    // Device pixels, whatever the display's scale: grain that is one pixel on
+    // a laptop and two on a phone is two different pictures.
+    c.setTransform(1, 0, 0, 1, 0, 0);
+    c.globalAlpha = 1; c.globalCompositeOperation = 'source-over';
+    if (P.soft) c.filter = 'none';
+    // Each stage answers to its own dial as well, and a dial at zero is a
+    // stage that never runs.
+    if (lvl >= 2 && POST.bloom > 0) postBloom(c, P, W, H);
+    if (lvl >= 3 && POST.ca > 0 && POST.caMax > 0) postAber(c, P, W, H);
+    postGrade(c, P, W, H, lvl);
+  } catch (e){ postB = false; }
+  c.restore();
+  if (postNow && POST.pin === null){
+    const t1 = postNow();
+    const dt = t1 - t0;
+    // Two signals, because one of them lies. A canvas QUEUES its work: the
+    // stages that read the frame back (the bright pass, the aberration, the
+    // tone curve) force the queue out and so are honestly timed where they
+    // are called, but a stage that only issues fills costs nothing here and
+    // everything a frame later. So the whole cycle — the end of the last
+    // pass to the end of this one — is watched as well, and that is the one
+    // number that cannot be deferred out of. Absurd gaps are dropped rather
+    // than believed: a backgrounded tab is not a slow machine, and coming
+    // back to a stripped picture would be the worse bug.
+    const cycle = postT0 > 0 ? t1 - postT0 : 0;
+    postT0 = t1;
+    const k = postSeen < POST.warm0 ? .3 : .06;
+    postSeen++;
+    postEma += (dt - postEma) * k;
+    if (cycle > 0 && cycle < POST.frameMax) postGap += (cycle - postGap) * k;
+    // How far over, not merely whether — a machine four times too slow should
+    // not need four windows to find that out, and on a machine that slow a
+    // window is measured in seconds.
+    const over = Math.max(postEma / POST.budget, postGap / POST.frameCap);
+    if (postSeen > POST.warm0 && over > 1){
+      postLvl = Math.max(-1, postLvl - (over > 4 ? 3 : over > 2 ? 2 : 1));
+      postSeen = 0; postEma = 0; postGap = 0;
+    }
+  }
+}
+
 const CAM_MIN = HOLD_X - 26, CAM_MAX = C.LANE_LEN - HOLD_X + 26;
 function draw(){
   const c = lctx;
@@ -9988,6 +10409,7 @@ function draw(){
   gorgeDepth(c);           // and everything below it falling away into the dark
   drawDeck(c);
   drawLane(c);
+  postFx(c);               // the world is finished here — everything below is interface
   if (sel.struct && !sel.struct.dead){
     const q = lp(sel.struct.x, sel.struct.y);
     c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.5, 2.2 * cam.z);
