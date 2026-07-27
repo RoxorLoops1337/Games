@@ -3288,4 +3288,252 @@ t.test('wager: nothing is protected, and no Fate means no deal', () => {
   t.eq(HQ.wagerDraft(), null, 'no take-backs');
 });
 
+/* -------------------------------------------------------------- a hero falls */
+
+t.test('death: a fall is recorded by name, and by what did it', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const h = HQ.runAlive()[0];
+  HQ.G.q.lastKiller = 'an Orc';
+  h.bp = 1;
+  HQ.hurt(h, 5, null);
+  t.ok(!h.alive, 'the hero is down');
+  t.ok(HQ.G.q.fallen && HQ.G.q.fallen.length === 1, 'the floor keeps a list');
+  t.eq(HQ.G.q.fallen[0].name, h.name, 'with the name on it');
+  t.eq(HQ.G.q.fallen[0].by, 'an Orc', 'and what did it');
+  t.eq(HQ.G.run.lastFall.who, h.name, 'and the run remembers too');
+  t.ok(h.done, 'their turn is over');
+  t.eq(HQ.G.q.streak, 0, 'and the streak is gone with them');
+
+  // killing them again does not add a second line
+  HQ.heroFalls(h);
+  t.eq(HQ.G.q.fallen.length, 1, 'one hero, one line');
+});
+
+t.test('death: the world stops and the party turns to look', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const party = HQ.runAlive();
+  t.ok(party.length >= 2, 'there is somebody left to do the looking');
+  const victim = party[0], witness = party[1];
+  put(victim, 12, 9);
+  put(witness, 9, 9);
+  witness.lt = 0;
+  HQ.G.cam.tx = 0; HQ.G.cam.ty = 0;
+  HQ.G.shake = 0;
+  victim.bp = 1;
+  HQ.hurt(victim, 3, null);
+  t.ok(witness.lt > 0, 'the living turn toward where they were standing');
+  t.ok(witness.lx > 0.9, 'leaning the right way along the corridor');
+  t.eq(Math.round(witness.ly), 0, 'and not off it');
+  t.ok(HQ.G.shake >= 20, 'and the floor shakes for it');
+  t.eq(HQ.G.cam.tx, (victim.x + .5)*HQ.TS, 'the camera goes to them');
+  t.eq(HQ.G.cam.ty, (victim.y + .5)*HQ.TS, 'both ways');
+  t.ok(HQ.G.camPunch > 1, 'and punches in');
+});
+
+t.test('death: an unnamed killer still gets said out loud', () => {
+  runAt(2);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.lastKiller = null;
+  const h = HQ.runAlive()[0];
+  h.bp = 1;
+  HQ.hurt(h, 9, null);
+  t.eq(HQ.G.q.fallen[0].by, 'the dark', 'the dark takes the credit when nothing else will');
+});
+
+/* ---------------------------------------------------------- blood price boons */
+
+t.test('blood: every one of them is stronger than the pool and says what it costs', () => {
+  t.ok(HQ.BLOOD_BOONS.length >= 3, 'there are several');
+  for (const b of HQ.BLOOD_BOONS){
+    t.ok(b.cost >= 1, `${b.id} costs Body Points`);
+    t.ok(b.desc && b.desc.length > 15, `${b.id} says what it does`);
+    t.ok(b.toll && b.toll.length > 15, `${b.id} says what it takes`);
+    t.eq(HQ.BOON(b.id).id, b.id, `${b.id} resolves as a boon everywhere else`);
+    t.ok(!HQ.BOONS.some(x => x.id === b.id), `${b.id} is not in the ordinary pool`);
+  }
+  // and the ordinary draft never deals one
+  runAt(4);
+  for (let i = 0; i < 40; i++)
+    for (const o of HQ.draftOptions())
+      t.ok(!HQ.BLOOD(o.id), `the draft never deals ${o.id} for free`);
+});
+
+t.test('blood: it is not offered on the first stair, and it is offered after', () => {
+  t.eq(HQ.BLOOD_FROM, 2, 'not on the way to the second floor');
+  runAt(1);
+  t.eq(HQ.bloodOffer(), null, 'nothing on the first');
+  runAt(3);
+  t.ok(HQ.bloodOffer(), 'something further down');
+  // and never one you already carry
+  runAt(4);
+  HQ.G.run.boons = HQ.BLOOD_BOONS.map(b => b.id);
+  t.eq(HQ.bloodOffer(), null, 'and never one you already paid for');
+});
+
+t.test('blood: the whole party pays, and it will not kill anybody to do it', () => {
+  runAt(3);
+  HQ.G.run.boons = [];
+  const b = HQ.BLOOD('bloodprice');
+  const before = HQ.G.run.heroes.map(h => h.bpMax);
+  t.ok(HQ.canPayBlood(b), 'the party can afford it');
+  t.ok(HQ.takeBoon('bloodprice'), 'and takes it');
+  HQ.G.run.heroes.forEach((h, i) => t.eq(h.bpMax, before[i] - b.cost, `${h.name} pays`));
+  HQ.G.run.heroes.forEach(h => t.ok(h.bp <= h.bpMax, `${h.name} is not over their new cap`));
+  t.ok(HQ.boonHas('bloodprice'), 'and holds it');
+
+  // a party down to one Body Point each cannot pay at all
+  runAt(3);
+  HQ.G.run.boons = [];
+  for (const h of HQ.G.run.heroes){ h.bpMax = 1; h.bp = 1; }
+  const b2 = HQ.BLOOD('ironvow');
+  t.ok(!HQ.canPayBlood(b2), 'nobody has a Body Point to spare');
+  t.eq(HQ.takeBoon('ironvow'), false, 'so the offer cannot be taken');
+  t.ok(!HQ.boonHas('ironvow'), 'and nothing was carried away');
+  HQ.G.run.heroes.forEach(h => t.eq(h.bpMax, 1, 'and nobody paid anyway'));
+});
+
+t.test('blood: each of them actually does the thing it promises', () => {
+  // the iron vow
+  runAt(3);
+  HQ.G.run.boons = [];
+  const h = HQ.runAlive()[0];
+  const d0 = HQ.defendDice(h);
+  HQ.takeBoon('ironvow');
+  t.eq(HQ.defendDice(h), d0 + 2, 'the iron vow is worth two defend dice');
+
+  // blood price
+  runAt(3);
+  HQ.G.run.boons = [];
+  const h2 = HQ.runAlive()[0];
+  const a0 = HQ.attackDice(h2, { mt:'orc', bp:2 });
+  HQ.takeBoon('bloodprice');
+  t.eq(HQ.attackDice(h2, { mt:'orc', bp:2 }), a0 + 2, 'the blood price is worth two attack dice');
+
+  // the reaper's cut
+  runAt(3);
+  HQ.G.run.boons = [];
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.takeBoon('reaper');
+  const slayer = HQ.runAlive()[0];
+  slayer.bpMax = 8; slayer.bp = 4;
+  HQ.G.q.lastStriker = slayer.id;
+  const m = HQ.monstersOf()[0];
+  m.mt = 'orc'; delete m.affix; m.elite = false; m.boss = false;
+  HQ.hurt(m, 99, null);
+  t.eq(slayer.bp, 5, 'a kill puts a Body Point back');
+  slayer.bp = slayer.bpMax;
+  const m2 = HQ.monstersOf().find(x => x.alive && !x.boss);
+  if (m2){
+    m2.mt = 'orc'; delete m2.affix; m2.elite = false;
+    HQ.G.q.lastStriker = slayer.id;
+    HQ.hurt(m2, 99, null);
+    t.eq(slayer.bp, slayer.bpMax, 'and never over the cap');
+  }
+
+  // last light
+  runAt(3);
+  HQ.G.run.boons = [];
+  HQ.G.q.traps.forEach(tr => { tr.found = false; });
+  t.ok(HQ.G.q.traps.length > 0, 'the floor has traps to find');
+  HQ.takeBoon('lastlight');
+  HQ.G.run.depth = 4;
+  HQ.beginFloor();
+  t.ok(HQ.G.q.traps.every(tr => tr.found), 'last light shows every trap on arrival');
+  t.ok(Object.values(HQ.G.q.doors).every(dr => dr.found), 'and every hidden door');
+});
+
+t.test('blood: a boon paid for in Body Points rides down the stair and reads back', () => {
+  const store = {};
+  const A = loadGame(store);
+  A.G = A.newG();
+  A.startRun(['barbarian','dwarf']);
+  A.G.run.depth = 3;
+  A.takeBoon('reaper');
+  A.saveRun();
+  const B = loadGame(store);
+  B.G = B.newG();
+  t.ok(B.resumeRun(), 'the run comes back');
+  t.ok(B.boonHas('reaper'), 'still paid for');
+  // and the carried panel gives it its own heading, with the toll
+  B.G.run.depth = 3;
+  B.beginFloor();
+  const row = B.carriedList().find(i => i.id === 'reaper');
+  t.ok(row, 'it is on the list');
+  t.eq(row.group, 'blood', 'under its own heading');
+  t.eq(row.up, B.BLOOD('reaper').toll, 'with what it cost written out');
+  t.ok(B.CARRY_HEADS.blood, 'and the heading has a name');
+  t.ok(B.CARRY_ORDER.includes('blood'), 'and a place in the order');
+});
+
+/* --------------------------------------------------------------- stake a boon */
+
+function atStake(){
+  runAt(3);
+  HQ.G.run.boons = ['swiftboots'];
+  HQ.G.run.fate = 0;
+  HQ.draftState = { depth:HQ.G.run.depth, opts:HQ.draftOptions(), taken:null,
+                    stairs:[], blood:null, staked:null };
+  return HQ.draftState;
+}
+
+t.test('stake: skull pays another on top, and you keep the one you staked', () => {
+  atStake();
+  ALL_SKULLS();
+  const r = HQ.stakeBoon('swiftboots');
+  t.ok(r, 'the die is thrown');
+  t.eq(r.out, 'won', 'a skull');
+  t.ok(HQ.boonHas('swiftboots'), 'you keep what you staked');
+  t.ok(r.won, 'and he pays another');
+  t.ok(HQ.boonHas(r.won), 'which you are now holding');
+  t.eq(HQ.G.run.boons.length, 2, 'two boons for the one');
+});
+
+t.test('stake: a white shield moves nothing, a black shield takes it', () => {
+  atStake();
+  NO_SHIELDS();
+  const hold = HQ.stakeBoon('swiftboots');
+  t.eq(hold.out, 'hold', 'a white shield');
+  t.ok(HQ.boonHas('swiftboots'), 'and nothing moves');
+  t.eq(HQ.G.run.boons.length, 1, 'still just the one');
+
+  atStake();
+  ALL_SHIELDS();
+  const lost = HQ.stakeBoon('swiftboots');
+  t.eq(lost.out, 'lost', 'a black shield');
+  t.ok(!HQ.boonHas('swiftboots'), 'and it is his now');
+  t.eq(HQ.G.run.boons.length, 0, 'left with nothing');
+});
+
+t.test('stake: once a stair, only what you hold, and it puts back what it undoes', () => {
+  const D = atStake();
+  NO_SHIELDS();
+  t.ok(HQ.canStake(), 'the offer is open');
+  HQ.stakeBoon('swiftboots');
+  t.ok(!HQ.canStake(), 'and closes after one throw');
+  t.eq(HQ.stakeBoon('swiftboots'), null, 'asking again does nothing');
+  t.eq(D.staked, 'swiftboots', 'and it remembers what went on the table');
+
+  // you cannot stake something you do not hold
+  atStake();
+  t.eq(HQ.stakeBoon('ironskin'), null, 'you can only stake what is yours');
+
+  // and once you have taken this stair's boon, the table is closed
+  atStake();
+  HQ.draftState.taken = 'ironskin';
+  t.ok(!HQ.canStake(), 'the hand is spent');
+
+  // losing Stout Heart gives back the Body Point it granted
+  runAt(3);
+  HQ.G.run.boons = [];
+  HQ.takeBoon('stoutheart');
+  const caps = HQ.G.run.heroes.map(h => h.bpMax);
+  HQ.draftState = { depth:HQ.G.run.depth, opts:HQ.draftOptions(), taken:null,
+                    stairs:[], blood:null, staked:null };
+  ALL_SHIELDS();
+  t.eq(HQ.stakeBoon('stoutheart').out, 'lost', 'the black shield takes it');
+  HQ.G.run.heroes.forEach((h, i) => t.eq(h.bpMax, caps[i] - 1, `${h.name} loses the point it gave`));
+});
+
 t.run();

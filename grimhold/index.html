@@ -37,6 +37,7 @@
   #qname b{display:block;color:var(--dim);font-size:9.5px;font-weight:400;letter-spacing:.22em;margin-top:1px}
   #qname b u{text-decoration:none;color:var(--gold);opacity:.75;margin:0 4px;font-size:8px;
     letter-spacing:.12em;border:1px solid rgba(216,168,60,.4);border-radius:5px;padding:1px 3px}
+  #qname b em{font-style:normal;color:var(--blood);opacity:.95;letter-spacing:.08em}
   .pill{pointer-events:auto;background:rgba(20,17,13,.85);border:1px solid var(--line);border-radius:999px;
     padding:4px 10px;font-size:11.5px;letter-spacing:.08em;display:flex;align-items:center;gap:5px;color:var(--ink)}
   .pill.gold{color:var(--gold2);border-color:rgba(216,168,60,.45)}
@@ -161,6 +162,15 @@
     border-radius:7px;padding:7px 11px;font-size:11.5px;letter-spacing:.09em;font-family:var(--serif);cursor:pointer}
   .row .bu[disabled]{opacity:.3}
   .row .bu.own{border-color:rgba(99,191,125,.5);color:var(--emerald);background:rgba(99,191,125,.1)}
+  .row .bu.red{border-color:rgba(176,58,44,.6);color:#f0c2ba;background:rgba(176,58,44,.16)}
+  /* the blood price is marked out from the three above it */
+  .row.blood{background:linear-gradient(90deg,rgba(120,30,22,.20),rgba(120,30,22,.05));
+    border:1px solid rgba(176,58,44,.34);border-radius:7px;margin:6px 0;padding:9px 8px}
+  .row.blood .tx b{color:#f0c2ba}
+  .row.blood .tx i{font-style:normal;color:var(--blood);letter-spacing:.04em}
+  .stakebar{display:flex;gap:6px;flex-wrap:wrap;padding:2px 4px 10px}
+  .stakebar .bu{border:1px solid var(--line2);background:rgba(216,168,60,.10);color:var(--gold2);
+    border-radius:7px;padding:6px 10px;font-size:11px;letter-spacing:.06em;font-family:var(--serif);cursor:pointer}
   .tabs{display:flex;gap:5px;margin-bottom:10px;flex-wrap:wrap;justify-content:center}
   .tab{border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);color:var(--dim);border-radius:999px;
     padding:5px 12px;font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;font-family:var(--serif);cursor:pointer}
@@ -768,6 +778,7 @@ function defendDice(h){
   for (const g in h.gear) if (h.gear[g] && GEAR[g] && GEAR[g].def) n += GEAR[g].def;
   if (h.buffs && h.buffs.rockskin) n += 2;
   if (boonHas('ironskin')) n += 1;
+  if (boonHas('ironvow')) n += 2;                // paid for in Body Points
   if (h.picks) n += h.picks.filter(p => p === 'guard').length;
   if (curseHas('frail')) n -= 1;
   if (curseHas('heavy')) n += 1;                 // dug in
@@ -3817,6 +3828,11 @@ function kill(a){
     const slayer = G.q.lastStriker && livingHeroes().find(x => x.id === G.q.lastStriker);
     if (slayer){
       slayer.kills = (slayer.kills || 0) + 1;
+      // the reaper's cut: what you take, you keep
+      if (boonHas('reaper') && slayer.bp < slayer.bpMax){
+        slayer.bp++;
+        floatText(slayer.x, slayer.y, '+1', '#c0392b');
+      }
       if (G.run && lessonDue(slayer)) later(700, () => showLesson(slayer));
     }
     if (a.elite){
@@ -3842,19 +3858,50 @@ function kill(a){
     }
     const npc = null;
   } else if (a.kind === 'hero'){
-    sfx('heroDie');
-    if (G.q) G.q.lastKiller = G.q.lastKiller || null;
-    if (G.run) G.run.lastFall = { who:a.name, by:(G.q && G.q.lastKiller) || 'the dark', depth:G.run.depth };
-    say(`${a.name} falls, and does not get up.`, 'bad');
-    spark(a.x, a.y, 30, '#7a1f14', { spd:.02, life:800 });
-    a.done = true;
-    const npc = G.q.actors.find(x => x.kind === 'npc' && x.follow === a.id);
-    if (npc){
-      const other = livingHeroes()[0];
-      npc.follow = other ? other.id : null;
-    }
+    heroFalls(a);
   }
   later(40, checkQuestState);
+}
+
+/* -------------------------------------------------------------- 9c. A FALL */
+// Losing a hero is the biggest thing that happens in a run and it used to go
+// past in one log line. It gets its own beat now: the world stops, the camera
+// goes to them, the party turns to look, and the floor remembers the name.
+
+function heroFalls(a){
+  sfx('heroDie');
+  if (G.q) G.q.lastKiller = G.q.lastKiller || null;
+  const by = (G.q && G.q.lastKiller) || 'the dark';
+  if (G.run) G.run.lastFall = { who:a.name, by, depth:G.run.depth };
+  a.done = true;
+  a.fellTo = by;
+
+  // the floor keeps its own list, so the run line can say who is gone
+  if (G.q){
+    if (!G.q.fallen) G.q.fallen = [];
+    if (!G.q.fallen.some(f => f.id === a.id)) G.q.fallen.push({ id:a.id, name:a.name, by });
+    G.q.streak = 0;
+  }
+
+  banner(a.name, `cut down by ${by}`);
+  say(`${a.name} falls, and does not get up.`, 'bad');
+  spark(a.x, a.y, 30, '#7a1f14', { spd:.02, life:800 });
+  spark(a.x, a.y, 16, '#3a2a24', { spd:.006, up:.010, life:1400, grav:-.000006, r:1.4 });
+  G.shake = Math.max(G.shake, 26);
+  hitStop(520);                            // the longest the game ever stops
+  focusOn(a.x, a.y);
+  G.camPunch = 1.6;
+  // the party turns to look at where they were standing
+  for (const h of livingHeroes()) lungeAt(h, a.x, a.y);
+  setMood('fight');
+
+  const npc = G.q.actors.find(x => x.kind === 'npc' && x.follow === a.id);
+  if (npc){
+    const other = livingHeroes()[0];
+    npc.follow = other ? other.id : null;
+  }
+  renderHUD();
+  return a;
 }
 
 /* ------------------------------------------------------------- activation */
@@ -4866,7 +4913,9 @@ function renderHUD(){
   // it. On a phone the top bar has room for one of those spelled out, so on a
   // descent the depth goes short and the icons keep the space.
   const sub = G.run ? q.sub.replace(/^Depth /, 'D') : q.sub;
+  const gone = (G.q.fallen || []).length;
   $('qname').innerHTML = `${q.name}${mods ? ' ' + mods : ''}<b>${sub}${
+    gone ? ` <em>✝${gone}</em>` : ''}${
     carriedList().length ? '<u>read</u>' : ''}${
     G.run && G.run.boons.length ? ' · ' + G.run.boons.map(b => BOON(b).ic).join('') : ''}${
     G.run && G.run.curses.length ? ' · ' + G.run.curses.map(c => CURSE_MARK(c).ic).join('') : ''}${
@@ -5553,9 +5602,27 @@ const BOONS = [
   { id:'stoutheart', ic:'❤',  name:'Stout Heart',       desc:'+1 maximum Body Point for every hero, healed at once.' },
   { id:'torchbearer',ic:'🔥', name:'Torchbearer',       desc:'Your torches throw light 3 squares further.' },
   { id:'spellecho',  ic:'✨', name:'Echoing Weave',     desc:"Each hero's first spell on a floor is not spent." },
-  { id:'bloodprice', ic:'☠',  name:'Blood Price',       desc:'+2 attack dice for everyone — and −1 maximum Body Point.', curse:true },
 ];
-const BOON = (id) => BOONS.find(b => b.id === id);
+
+// The fourth thing on the draft. Stronger than anything in the ordinary pool,
+// and paid for in maximum Body Points rather than in nothing at all — the party
+// that takes one is a party that has decided the floor below is worth it.
+const BLOOD_BOONS = [
+  { id:'bloodprice', ic:'☠',  name:'Blood Price',   cost:1,
+    desc:'+2 attack dice for every hero, always.',
+    toll:'Every hero gives up a maximum Body Point.' },
+  { id:'ironvow',    ic:'🩸', name:'The Iron Vow',  cost:1,
+    desc:'+2 defend dice for every hero, always.',
+    toll:'Every hero gives up a maximum Body Point.' },
+  { id:'reaper',     ic:'💀', name:"The Reaper's Cut", cost:1,
+    desc:'Every kill puts a Body Point back into the hero who made it.',
+    toll:'Every hero gives up a maximum Body Point.' },
+  { id:'lastlight',  ic:'🕯', name:'Last Light',    cost:2,
+    desc:'Every trap and every hidden door on a floor is yours the moment you arrive.',
+    toll:'Every hero gives up two maximum Body Points.' },
+];
+const BLOOD = (id) => BLOOD_BOONS.find(b => b.id === id);
+const BOON = (id) => BOONS.find(b => b.id === id) || BLOOD(id);
 
 const MODIFIERS = [
   { id:'dark',    from:1, ic:'🌑', name:'Lightless',  desc:'Your torches barely reach. Sight cut to a stride.' },
@@ -5774,7 +5841,11 @@ function carriedList(){
   }
   if (G.run){
     for (const b of G.run.boons){
-      const d = BOON(b); if (d) out.push({ group:'boon', id:d.id, ic:d.ic, name:d.name, desc:d.desc });
+      const d = BOON(b); if (!d) continue;
+      // a boon you paid Body Points for reads under its own heading, with the toll
+      out.push(BLOOD(b)
+        ? { group:'blood', id:d.id, ic:d.ic, name:d.name, desc:d.desc, up:d.toll }
+        : { group:'boon',  id:d.id, ic:d.ic, name:d.name, desc:d.desc });
     }
     for (const c of G.run.curses){
       const d = CURSE_MARK(c);
@@ -5786,12 +5857,13 @@ function carriedList(){
   }
   return out;
 }
-const CARRY_HEADS = { floor:'This floor', boon:'Boons', curse:'Curses', relic:'Relics' };
+const CARRY_HEADS = { floor:'This floor', boon:'Boons', blood:'Paid in blood', curse:'Curses', relic:'Relics' };
+const CARRY_ORDER = ['floor','boon','blood','curse','relic'];
 function showCarried(){
   const items = carriedList();
   const q = questDef();
   let body = '';
-  for (const g of ['floor','boon','curse','relic']){
+  for (const g of CARRY_ORDER){
     const rows = items.filter(i => i.group === g);
     if (!rows.length) continue;
     body += `<div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);margin:12px 0 4px">${
@@ -5800,6 +5872,12 @@ function showCarried(){
       i.desc}${i.up ? ' ' + i.up : ''}</s></div></div>`).join('');
   }
   if (!body) body = `<p class="flavor">Nothing but the torch and what you walked in with.</p>`;
+  const fallen = (G.q.fallen || []);
+  if (fallen.length){
+    body += `<div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--blood);margin:12px 0 4px">The fallen</div>`;
+    body += fallen.map(f => `<div class="row"><div class="ic">✝</div><div class="tx"><b>${
+      f.name}</b><s>Cut down by ${f.by}.</s></div></div>`).join('');
+  }
   modal(`<h2>${q.name}</h2>
     <div class="sub" style="margin:2px 0 0">${q.sub}</div>
     <div class="rule"></div>
@@ -6175,8 +6253,9 @@ function beginFloor(){
 
   startQuest(-1, def, G.run.seed + G.run.depth*104729 + (def.branch || 0)*7717);
   G.q.runDepth = G.run.depth;
-  if (boonHas('trapsense') || modHas('brittle') || curseHas('thin')) for (const tr of G.q.traps) tr.found = true;
-  if (boonHas('mapsense')) for (const k in G.q.doors) G.q.doors[k].found = true;
+  if (boonHas('trapsense') || boonHas('lastlight') || modHas('brittle') || curseHas('thin'))
+    for (const tr of G.q.traps) tr.found = true;
+  if (boonHas('mapsense') || boonHas('lastlight')) for (const k in G.q.doors) G.q.doors[k].found = true;
   applyRelicOnArrival();
   if (relicHas('skull')) addFate(1, "the Warlock's skull");
   if (curseHas('greedy')) addFate(1, 'the stone pays interest');
@@ -6276,10 +6355,41 @@ function draftOptions(){
 }
 function takeBoon(id){
   if (!G.run || G.run.boons.includes(id)) return false;
+  const blood = BLOOD(id);
+  if (blood && !payBlood(blood)) return false;      // nobody left to pay with
   G.run.boons.push(id);
   if (id === 'stoutheart') for (const h of G.run.heroes){ h.bpMax++; h.bp = Math.min(h.bpMax, h.bp + 1); }
-  if (id === 'bloodprice') for (const h of G.run.heroes){ h.bpMax = Math.max(1, h.bpMax - 1); h.bp = Math.min(h.bp, h.bpMax); }
   saveRun();
+  return true;
+}
+
+/* --------------------------------------------------------- BLOOD PRICE BOONS */
+// One is offered beside the three, from the second floor down. It is stronger
+// than anything in the ordinary pool and it is not free: the party pays for it
+// out of their maximum Body Points, and there is no giving it back.
+
+const BLOOD_FROM = 2;                            // not on the first stair down
+function bloodOffer(){
+  if (!G.run || G.run.depth < BLOOD_FROM) return null;
+  const pool = BLOOD_BOONS.filter(b => !G.run.boons.includes(b.id));
+  return pool.length ? pool[ri(pool.length)] : null;
+}
+// Every hero must be able to survive the toll — a boon that kills the party as
+// you take it is not a decision, it is a bug with flavour text.
+function canPayBlood(b){
+  if (!G.run || !b) return false;
+  const alive = runAlive();
+  return alive.length > 0 && alive.every(h => h.bpMax - b.cost >= 1);
+}
+function payBlood(b){
+  if (!canPayBlood(b)) return false;
+  for (const h of G.run.heroes){
+    h.bpMax = Math.max(1, h.bpMax - b.cost);
+    h.bp = Math.min(h.bp, h.bpMax);
+  }
+  say(`${b.ic} ${b.name} — ${b.desc}`, 'good');
+  say(b.toll, 'bad');
+  sfx('heroDie');
   return true;
 }
 
@@ -6307,6 +6417,46 @@ function wagerDraft(){
   say(`✦ ${cost} Fate. The Warlock deals again.`, 'magic');
   renderHUD();
   return { cost, before, after: draftState.opts.map(b => b.id) };
+}
+
+/* ------------------------------------------------------------ STAKE A BOON */
+// The Wager throws back a hand you have not taken. This puts a boon you already
+// own on one combat die: skull and the Warlock pays another on top, white
+// shield and nothing happens, black shield and it is his. Once a stair.
+
+function canStake(){
+  return !!(G.run && draftState && !draftState.taken && !draftState.staked
+    && G.run.boons.length > 0
+    && BOONS.some(b => !G.run.boons.includes(b.id)));      // something left to win
+}
+function stakeBoon(id){
+  if (!canStake() || !G.run.boons.includes(id)) return null;
+  const b = BOON(id);
+  draftState.staked = id;
+  const face = combatDie();
+  let out, won = null;
+  if (face === SKULL){
+    const pool = BOONS.filter(x => !G.run.boons.includes(x.id));
+    won = pool.length ? pool[ri(pool.length)] : null;
+    if (won) G.run.boons.push(won.id);
+    out = won ? 'won' : 'hold';
+    sfx('win');
+    say(won ? `Skull. You keep ${b.name}, and he throws in ${won.name}.`
+            : `Skull — but he has nothing left worth having.`, 'good');
+  } else if (face === WHITE){
+    out = 'hold';
+    sfx('block');
+    say(`A white shield. ${b.name} stays where it is, and so does everything else.`, '');
+  } else {
+    const i = G.run.boons.indexOf(id);
+    if (i >= 0) G.run.boons.splice(i, 1);
+    if (id === 'stoutheart') for (const h of G.run.heroes){ h.bpMax = Math.max(1, h.bpMax - 1); h.bp = Math.min(h.bp, h.bpMax); }
+    out = 'lost';
+    sfx('lose');
+    say(`A black shield. ${b.name} is his now.`, 'bad');
+  }
+  saveRun(); renderHUD();
+  return { face, out, staked:id, won: won ? won.id : null };
 }
 
 // Stake the floor's takings on one combat die. Skull doubles it, a white shield
@@ -6368,7 +6518,8 @@ let draftState = null;
 function showDraft(){
   const next = G.run.depth + 1;
   if (!draftState || draftState.depth !== G.run.depth){
-    draftState = { depth:G.run.depth, opts:draftOptions(), taken:null, stairs:null };
+    draftState = { depth:G.run.depth, opts:draftOptions(), taken:null, stairs:null,
+                   blood:bloodOffer(), staked:null };
   }
   if (!draftState.stairs){
     G.run.depth = next;                       // generate the floors below
@@ -6384,6 +6535,24 @@ function showDraft(){
       <button class="bu ${draftState.taken === b.id ? 'own' : ''}" data-boon="${b.id}"
         ${draftState.taken ? 'disabled' : ''}>${draftState.taken === b.id ? 'Taken' : 'Take'}</button>
     </div>`).join('');
+  // The blood price sits under the three, marked out, with what it costs said
+  // plainly. Taking it is instead of a boon, not as well as one.
+  const bb = draftState.blood;
+  const bloodRow = (!bb || draftState.taken) ? '' : `<div class="row blood">
+      <div class="ic">${bb.ic}</div>
+      <div class="tx"><b>${bb.name}</b><s>${bb.desc}<br><i>${bb.toll}</i></s></div>
+      <button class="bu red" data-blood="${bb.id}" ${canPayBlood(bb) ? '' : 'disabled'}>${
+        canPayBlood(bb) ? `−${bb.cost} BP` : 'Too thin'}</button>
+    </div>`;
+  const stakeable = canStake() ? G.run.boons.filter(id => BOON(id)) : [];
+  const stakeRow = !stakeable.length ? '' : `<div class="row">
+      <div class="ic">🎲</div>
+      <div class="tx"><b>Stake a boon</b><s>Put one you already hold on a single die.
+        Skull and he pays another on top (3 in 6), white shield and nothing moves (2 in 6),
+        black shield and it is his (1 in 6). Once a stair.</s></div>
+    </div>
+    <div class="stakebar">${stakeable.map(id => `<button class="bu" data-stake="${id}">${
+      BOON(id).ic} ${BOON(id).name}</button>`).join('')}</div>`;
   const wagersLeft = WAGER_MAX - (draftState.wagers || 0);
   const wagerRow = (draftState.taken || wagersLeft <= 0) ? '' : `<div class="row">
       <div class="ic">✦</div>
@@ -6437,7 +6606,9 @@ function showDraft(){
     <div class="rule"></div>
     <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">Take one boon</div>
     ${rows}
+    ${bloodRow}
     ${wagerRow}
+    ${stakeRow}
     <div class="rule"></div>
     <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">The pedlar on the stair</div>
     ${ped}
@@ -6449,6 +6620,12 @@ function showDraft(){
     if (takeBoon(el.dataset.boon)) draftState.taken = el.dataset.boon;
     showDraft();
   });
+  bindAll('.bu[data-blood]', el => {
+    if (draftState.taken) return;
+    if (takeBoon(el.dataset.blood)) draftState.taken = el.dataset.blood;
+    showDraft();
+  });
+  bindAll('.bu[data-stake]', el => { if (stakeBoon(el.dataset.stake)) showDraft(); });
   bindAll('.bu[data-wager]', () => { if (wagerDraft()) showDraft(); });
   bindAll('.bu[data-ped]', el => { if (buyPedlar(el.dataset.ped)) showDraft(); });
   bindAll('.bu[data-dbl]', () => {
@@ -6643,7 +6820,7 @@ function resumeRun(){
   if (G.run){
     // a run carries its own roster, saved whole — nothing to reconcile
     G.run.heroes = G.run.heroes.map(h => Object.assign(mkHero(HERO_DEFS.find(d => d.id === h.id) || HERO_DEFS[0]), h));
-    G.run.boons = (G.run.boons || []).filter(b => BOONS.some(x => x.id === b));
+    G.run.boons = (G.run.boons || []).filter(b => !!BOON(b));   // ordinary and blood alike
   }
   // the saved heroes hold their in-quest condition; put it back on the roster
   const savedHeroes = (s.camp && s.camp.heroes) || [];
@@ -6840,7 +7017,9 @@ globalThis.HQ = {
   RELICS, RELIC, RELIC_SLOTS, relicHas, relicOffer, takeRelic, showRelic, applyRelicOnArrival, trapBite,
   TRIALS, trialDef, trialActive, startTrial, failTrial, winTrial, tickTrial, checkTrialKill, showTrialOffer,
   STREAK_STEPS, bumpStreak,
-  carriedList, showCarried, CARRY_HEADS,
+  carriedList, showCarried, CARRY_HEADS, CARRY_ORDER,
+  BLOOD_BOONS, BLOOD, BLOOD_FROM, bloodOffer, canPayBlood, payBlood,
+  canStake, stakeBoon, heroFalls,
   LESSONS, LESSON, KILL_STEPS, lessonDue, lessonOptions, takeLesson, showLesson, heroHas,
   WRATH_STEPS, stirWrath, warlockActs,
   pushOdds, canPush, pushLuck, bankPush, showPush,
