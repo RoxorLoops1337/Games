@@ -3026,4 +3026,266 @@ t.test('carrying: everything the top bar can show is something the panel can rea
   t.ok(true, 'and the panel opens anyway');
 });
 
+/* ------------------------------------------------------------ boss intros */
+
+t.test('bosses: every boss a floor can deal has a line to be introduced with', () => {
+  for (const b of HQ.BOSS_TABLE)
+    t.ok(HQ.BOSS_LINES[b.t] && HQ.BOSS_LINES[b.t].length > 20, `${b.t} has a title line`);
+  // and the authored campaign's bosses too
+  const authored = new Set();
+  for (const q of HQ.QUESTS) for (const m of (q.monsters || [])) if (m.boss) authored.add(m.t);
+  for (const mt of authored)
+    t.ok(HQ.BOSS_LINES[mt] && HQ.BOSS_LINES[mt].length > 20, `${mt} leads a quest and has a line`);
+});
+
+t.test('bosses: the card fires once, for the boss, and never for an empty room', () => {
+  fresh(0);
+  const boss = HQ.monstersOf().find(m => m.boss);
+  t.ok(boss, 'quest 1 has a boss');
+  const rid = HQ.roomAt(boss.x, boss.y);
+  t.eq(HQ.bossOf(rid), boss, 'the room knows what is standing in it');
+
+  const first = HQ.bossIntro(rid);
+  t.eq(first, boss, 'opening the door introduces him');
+  t.ok(HQ.G.q.bossMet && HQ.G.q.bossMet[boss.uid], 'and he is marked as met');
+  t.eq(HQ.bossIntro(rid), null, 'a title you have read is just a delay — it never repeats');
+
+  // a room with nothing special in it says nothing
+  const plain = HQ.ROOMS.map(r => r.id).find(id => id !== rid && !HQ.bossOf(id));
+  t.eq(HQ.bossIntro(plain), null, 'an ordinary room gets no title card');
+
+  // and a dead boss is not introduced
+  fresh(0);
+  const b2 = HQ.monstersOf().find(m => m.boss);
+  b2.alive = false;
+  t.eq(HQ.bossIntro(HQ.roomAt(b2.x, b2.y)), null, 'nor a dead one');
+});
+
+t.test('bosses: walking through the door is what triggers it', () => {
+  fresh(0);
+  const boss = HQ.monstersOf().find(m => m.boss);
+  const rid = HQ.roomAt(boss.x, boss.y);
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  d.open = false; d.secret = false; d.locked = false;
+  HQ.G.q.announced = {};
+  const h = hero('barbarian');
+  put(h, slot[3], slot[4]);
+  use(h);
+  t.ok(!(HQ.G.q.bossMet && HQ.G.q.bossMet[boss.uid]), 'not met through a shut door');
+  HQ.openDoorAt(h, d);
+  t.ok(HQ.G.q.bossMet && HQ.G.q.bossMet[boss.uid], 'met the moment the door swings');
+});
+
+/* --------------------------------------------------------- forced chests */
+
+// place a plain, unopened chest in a room and give the hero the floor of it
+function chestAt(rid){
+  const r = HQ.ROOMS[rid];
+  const f = { t:'chest', r:rid, x:r.x, y:r.y, w:1, h:1, rot:0, quest:null, taken:false, searched:false };
+  HQ.G.q.furn.push(f);
+  return f;
+}
+
+t.test('chests: the room only asks the question when there is a chest to ask it about', () => {
+  runAt(3);
+  const rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
+  t.eq(HQ.chestIn(rid), null, 'a room with no chest has nothing to force');
+  const c = chestAt(rid);
+  t.eq(HQ.chestIn(rid), c, 'a chest is a question');
+  c.taken = true;
+  t.eq(HQ.chestIn(rid), null, 'an opened one is not');
+  c.taken = false; c.quest = 'Strongbox';
+  t.eq(HQ.chestIn(rid), null, 'and a quest chest is handled before the question is asked');
+});
+
+t.test('chests: searching a room with a chest in it goes through the chest', () => {
+  runAt(3);
+  const rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
+  const c = chestAt(rid);
+  emptyRoom(rid);
+  const h = HQ.runAlive()[0];
+  put(h, HQ.ROOMS[rid].x, HQ.ROOMS[rid].y);
+  use(h);
+  t.ok(!c.taken, 'the chest is shut');
+  HQ.searchTreasure();
+  t.ok(c.taken, 'ransacking the room is what opens it');
+  t.ok(HQ.G.q.searched[rid], 'and the room is picked over');
+
+  // a room with no chest still searches, and nothing pretends otherwise
+  runAt(3);
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== 5);
+  emptyRoom(5);
+  const h2 = HQ.runAlive()[0];
+  put(h2, HQ.ROOMS[5].x, HQ.ROOMS[5].y);
+  use(h2);
+  t.eq(HQ.chestIn(5), null, 'no chest here');
+  HQ.searchTreasure();
+  t.ok(HQ.G.q.searched[5], 'and the search happens anyway');
+});
+
+t.test('chests: forcing one pays twice, and turns anything else into coin', () => {
+  runAt(3);
+  const gold = HQ.forcedCard({ k:'gold', n:100, t:'A purse', d:'Coin.' });
+  t.eq(gold.n, 200, 'twice the coin');
+  t.eq(gold.k, 'gold', 'still coin');
+  const item = HQ.forcedCard({ k:'item', n:'potion', t:'A vial', d:'Something to drink.' });
+  t.eq(item.k, 'gold', 'anything else comes out as loose coin');
+  t.ok(item.n >= 80 && item.n < 160, `and a real amount of it (got ${item.n})`);
+});
+
+t.test('chests: easing one open is the search you have always had', () => {
+  runAt(3);
+  const rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
+  const c = chestAt(rid);
+  const h = HQ.runAlive()[0];
+  put(h, HQ.ROOMS[rid].x, HQ.ROOMS[rid].y);
+  // the card the room was always going to give you, untouched — hazards and all
+  HQ.G.q.vault = -1;                       // a vault deals its own card; not this test
+  const expect = HQ.TREASURE_DECK[HQ.G.q.deck[HQ.G.q.deckAt % HQ.G.q.deck.length]];
+  const card = HQ.openChest(h, c, false);
+  t.ok(card, 'a card comes out');
+  t.eq(card.t, expect.t, 'and it is the deck\'s next card, not a better one');
+  t.eq(card.k, expect.k, 'of the kind the deck dealt');
+  if (card.k === 'gold') t.eq(card.n, expect.n, 'and not doubled');
+  t.ok(c.taken, 'and the chest is open');
+  t.eq(HQ.monstersOf().filter(m => m.mt === 'mimic').length, 0, 'and nothing climbed out');
+});
+
+t.test('chests: forcing one either pays double or goes badly, and the odds are the odds', () => {
+  // rigged lucky: rnd() below FORCE_RISK never happens
+  runAt(3);
+  let rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
+  let c = chestAt(rid);
+  let h = HQ.runAlive()[0];
+  put(h, HQ.ROOMS[rid].x, HQ.ROOMS[rid].y);
+  HQ.setRng(() => 0.99);                                   // never below FORCE_RISK
+  const good = HQ.openChest(h, c, true);
+  t.ok(good, 'a forced chest that holds pays out');
+  t.ok(good.k === 'gold', 'in coin');
+
+  // rigged unlucky, and not deep enough for a mimic: the needle
+  HQ.setRng(Math.random);
+  runAt(1);
+  rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
+  c = chestAt(rid);
+  h = HQ.runAlive()[0];
+  put(h, HQ.ROOMS[rid].x, HQ.ROOMS[rid].y);
+  h.bp = h.bpMax = 8; h.poison = 0;
+  HQ.setRng(() => 0.01);                                   // always below FORCE_RISK
+  HQ.openChest(h, c, true);
+  t.eq(h.bp, 6, 'the needle costs two Body Points');
+  t.ok(h.poison >= 2, 'and it was on the needle for a reason');
+  t.eq(HQ.monstersOf().filter(m => m.mt === 'mimic').length, 0, 'no mimic on the first floor');
+});
+
+t.test('chests: from the second floor down, the chest may not be a chest', () => {
+  runAt(4);
+  const rid = 4;
+  HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== rid);
+  const c = chestAt(rid);
+  const h = HQ.runAlive()[0];
+  put(h, HQ.ROOMS[rid].x, HQ.ROOMS[rid].y);
+  const before = HQ.monstersOf().length;
+  HQ.setRng(() => 0.01);                    // unlucky, and under the mimic's half
+  const m = HQ.chestBites(h, c);
+  t.ok(m, 'something climbs out');
+  t.eq(m.mt, 'mimic', 'and it is what was pretending to be the chest');
+  t.eq(HQ.monstersOf().length, before + 1, 'and it is on the board');
+  t.ok(m.awake, 'awake, and it has been awake the whole time');
+});
+
+t.test('chests: the mimic is a real monster with a real body and a face', () => {
+  const d = HQ.MONSTERS.mimic;
+  t.ok(d, 'it is in the bestiary');
+  t.ok(d.bp >= 2 && d.atk >= 3, 'and it is worth being scared of');
+  t.ok(d.gold >= 100, 'and worth killing');
+  t.ok(HQ.FORCE_RISK > .2 && HQ.FORCE_RISK < .6, 'forcing is a gamble, not a tax or a formality');
+  // it draws: put one on the board and run a frame
+  runAt(4);
+  const h = HQ.runAlive()[0];
+  const m = HQ.spawnWanderer(h, 'mimic');
+  t.ok(m && m.mt === 'mimic', 'it can be spawned by name');
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  HQ.draw();
+  t.ok(true, 'and drawing it does not throw');
+});
+
+/* ----------------------------------------------------- the Warlock's Wager */
+
+function atDraft(fate){
+  runAt(2);
+  HQ.G.run.fate = fate === undefined ? 5 : fate;
+  HQ.draftState = { depth: HQ.G.run.depth, opts: HQ.draftOptions(), taken:null,
+                    stairs:[{ name:'x', mods:[], objective:{label:'y'}, reward:1, monsters:[] }] };
+  return HQ.draftState;
+}
+
+t.test('wager: the cost climbs every time you ask, and it stops at three', () => {
+  t.eq(HQ.WAGER_MAX, 3, 'three deals and no more');
+  // deliberately rich: only the cap should be able to stop this, not the purse
+  const D = atDraft(99);
+  t.eq(HQ.wagerCost(), 1, 'the first is one Fate');
+  t.ok(HQ.canWager(), 'and you can afford it');
+  HQ.wagerDraft();
+  t.eq(HQ.wagerCost(), 2, 'the second is two');
+  HQ.wagerDraft();
+  t.eq(HQ.wagerCost(), 3, 'the third is three');
+  HQ.wagerDraft();
+  t.eq(D.wagers, 3, 'three deals taken');
+  t.ok(HQ.fateOf() > 10, 'with Fate still in hand');
+  t.ok(!HQ.canWager(), 'and the Warlock is done with you anyway');
+  t.eq(HQ.wagerDraft(), null, 'asking again does nothing');
+});
+
+t.test('wager: it costs Fate, and it really deals a new hand', () => {
+  const D = atDraft(6);
+  const before = D.opts.map(b => b.id);
+  const f0 = HQ.fateOf();
+  const r = HQ.wagerDraft();
+  t.ok(r, 'the deal goes through');
+  t.eq(HQ.fateOf(), f0 - 1, 'one Fate gone');
+  t.eq(r.cost, 1, 'and it says what it cost');
+  t.eq(D.opts.length, before.length, 'the same size hand comes back');
+  t.eq(r.before.join(), before.join(), 'it reports what it threw away');
+  // deal enough times that a genuinely fresh hand must have shown up at least once
+  let changed = 0;
+  for (let i = 0; i < 40; i++){
+    const E = atDraft(9);
+    const b = E.opts.map(x => x.id).join();
+    HQ.wagerDraft();
+    if (E.opts.map(x => x.id).join() !== b) changed++;
+  }
+  t.ok(changed > 30, `the hand actually changes (${changed}/40)`);
+});
+
+t.test('wager: nothing is protected, and no Fate means no deal', () => {
+  // a boon you turned down can come straight back — the pool is every boon you
+  // do not already own, not every boon you have not yet been shown
+  const D = atDraft(9);
+  const shown = D.opts.map(b => b.id);
+  let returned = false;
+  for (let i = 0; i < 60 && !returned; i++){
+    HQ.draftState = { depth:1, opts:HQ.draftOptions(), taken:null, stairs:[] };
+    if (HQ.draftState.opts.some(b => shown.includes(b.id))) returned = true;
+  }
+  t.ok(returned, 'what you turned down is still in the deck');
+
+  atDraft(0);
+  t.ok(!HQ.canWager(), 'no Fate, no deal');
+  t.eq(HQ.wagerDraft(), null, 'and asking anyway does nothing');
+
+  const E = atDraft(5);
+  HQ.takeBoon(E.opts[0].id);
+  E.taken = E.opts[0].id;
+  t.ok(!HQ.canWager(), 'and once you have taken one, the hand is spent');
+  t.eq(HQ.wagerDraft(), null, 'no take-backs');
+});
+
 t.run();

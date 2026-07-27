@@ -54,7 +54,8 @@
     background:linear-gradient(90deg,rgba(6,5,4,0),rgba(6,5,4,.86) 22%,rgba(6,5,4,.86) 78%,rgba(6,5,4,0));
     border-top:1px solid rgba(216,168,60,.22);border-bottom:1px solid rgba(216,168,60,.22)}
   #turnband.on{opacity:1}
-  #turnband small{display:block;font-size:11px;letter-spacing:.34em;color:var(--gold);margin-top:8px;font-weight:400}
+  #turnband small{display:block;font-size:11px;letter-spacing:.24em;color:var(--gold);margin-top:8px;font-weight:400;
+    max-width:min(420px,84vw);margin-left:auto;margin-right:auto;line-height:1.65;text-transform:none}
 
   /* ----------------------------------------------------------- log */
   #log{position:absolute;left:8px;right:8px;top:calc(46px + env(safe-area-inset-top));
@@ -333,6 +334,7 @@ const MONSTERS = {
   wraith:  { name:'Wraith',        move:8,  atk:3, def:2, bp:2, mind:4, gold:100, col:'#8fa0b8', col2:'#4a5568', size:.95, undead:true, ethereal:true },
   archer:  { name:'Skeleton Archer',move:6, atk:2, def:2, bp:1, mind:0, gold:35,  col:'#d8d0b8', col2:'#948a72', size:.8, undead:true, shooter:true },
   cultist: { name:'Cultist',       move:8,  atk:2, def:2, bp:2, mind:3, gold:55,  col:'#6a2a3a', col2:'#3d1622', size:.88, herald:true },
+  mimic:   { name:'Mimic',         move:4,  atk:4, def:3, bp:3, mind:2, gold:140, col:'#7a5a2c', col2:'#59401f', size:.92 },
 };
 
 /* ------------------------------------------------------------- the market */
@@ -2307,10 +2309,49 @@ function drawCultist(g, u, m, t){
   eyes(g, u, -u*.31, u*.04, '#ff7a5a');
 }
 
+// A chest that has been waiting. It is still a chest until it is not — the lid
+// is the jaw, and it never quite closes again once it has opened.
+function drawMimic(g, u, m, t){
+  const d = MONSTERS.mimic;
+  shadow(g, u, .32);
+  const gape = .5 + Math.sin(t*.003 + (m.bob||0))*.5;         // chewing
+  const lid = -u*.10 - gape*u*.13;
+  // stubby legs it should not have
+  limb(g, -u*.16, u*.22, -u*.20, u*.34, u*.07, d.col2);
+  limb(g,  u*.16, u*.22,  u*.20, u*.34, u*.07, d.col2);
+  // the box
+  g.fillStyle = d.col2;
+  rr(g, -u*.30, -u*.08, u*.60, u*.34, u*.04); g.fill();
+  g.fillStyle = '#c8a24a';
+  g.fillRect(-u*.30, u*.06, u*.60, u*.05);
+  // the maw, behind the lid
+  g.fillStyle = '#2a0d0d';
+  rr(g, -u*.27, lid, u*.54, -lid - u*.06, u*.03); g.fill();
+  const teeth = 6;
+  g.fillStyle = '#f0ead8';
+  for (let i = 0; i < teeth; i++){
+    const x = -u*.25 + i*(u*.50/(teeth-1));
+    g.beginPath(); g.moveTo(x - u*.035, lid + u*.02);
+    g.lineTo(x + u*.035, lid + u*.02); g.lineTo(x, lid + u*.10); g.closePath(); g.fill();
+    g.beginPath(); g.moveTo(x - u*.035, -u*.06);
+    g.lineTo(x + u*.035, -u*.06); g.lineTo(x, -u*.14); g.closePath(); g.fill();
+  }
+  g.fillStyle = '#8a2f3a';                                    // tongue
+  g.beginPath(); g.ellipse(0, -u*.07, u*.13, u*.05 + gape*u*.03, 0, 0, 6.284); g.fill();
+  // the lid, thrown back
+  g.save(); g.translate(0, lid); g.rotate(-.32 - gape*.22);
+  g.fillStyle = d.col;
+  rr(g, -u*.30, -u*.16, u*.60, u*.18, u*.06); g.fill();
+  g.fillStyle = '#c8a24a'; g.fillRect(-u*.30, -u*.06, u*.60, u*.04);
+  g.restore();
+  // two small eyes where a lock would be
+  eyes(g, u, -u*.26 - gape*u*.05, u*.040, '#ffd24a');
+}
+
 const MON_ART = {
   goblin:drawGoblin, orc:drawOrc, fimir:drawFimir, skeleton:drawSkeleton, zombie:drawZombie,
   mummy:drawMummy, chaos:drawChaos, gargoyle:drawGargoyle, sorcerer:drawSorcerer, ogre:drawOgre,
-  troll:drawTroll, wraith:drawWraith, archer:drawArcher, cultist:drawCultist,
+  troll:drawTroll, wraith:drawWraith, archer:drawArcher, cultist:drawCultist, mimic:drawMimic,
 };
 
 function drawNPC(g, u, t){
@@ -4099,9 +4140,43 @@ function openDoorAt(h, d){
     const n = monstersOf().filter(m => roomAt(m.x,m.y) === d.rid).length;
     say(`${room.name}${n ? ' — ' + n + ' hostile' + (n>1?'s':'') : ' — empty'}`, n ? 'bad' : '');
     if (n) setMood('fight');
+    bossIntro(d.rid);
   }
   renderHUD();
   return true;
+}
+
+/* ------------------------------------------------------------ boss intros */
+// The thing at the end of a floor gets its name said out loud before it moves.
+// One card, one line, once — a title you have already read is just a delay.
+
+const BOSS_LINES = {
+  gargoyle:'Carved to guard, and it remembers the work',
+  chaos:   'His armour has not been off in years',
+  ogre:    'The ceiling is low. He stopped minding',
+  sorcerer:'He was expecting somebody — not you',
+  troll:   'It has been fed. It is still hungry',
+  mummy:   'It has outlasted whoever wrapped it',
+};
+function bossOf(rid){
+  return monstersOf().find(m => m.boss && m.alive && roomAt(m.x, m.y) === rid) || null;
+}
+function bossIntro(rid){
+  if (!G || !G.q) return null;
+  const b = bossOf(rid);
+  if (!b) return null;
+  if (!G.q.bossMet) G.q.bossMet = {};
+  if (G.q.bossMet[b.uid]) return null;             // a title card, not a habit
+  G.q.bossMet[b.uid] = 1;
+  const line = BOSS_LINES[b.mt] || 'The master of this floor.';
+  banner(b.name, line);
+  say(`${b.name}. ${line}`, 'bad');
+  sfx('boss');
+  G.shake = Math.max(G.shake, 22);
+  G.camPunch = 1.4;
+  hitStop(260);
+  setMood('fight');
+  return b;
 }
 function doorBetween(x1,y1,x2,y2){
   const d = doorAt(x1,y1,x2,y2);
@@ -4125,14 +4200,103 @@ function searchTreasure(){
     renderHUD();
     return;
   }
+  // A room with a chest in it asks one question before it pays anything.
+  const chest = chestIn(rid);
+  if (chest && !HEADLESS){ showChest(h, chest); return; }
+  openChest(h, chest, false);
+}
+
+/* ---------------------------------------------------------- FORCED CHESTS */
+// Every chest asks the same question: do you want it open, or do you want it
+// open now. Easing it takes the card the room was always going to give you.
+// Putting your shoulder to it pays twice — and roughly two times in five the
+// lock was a needle, or the chest was never a chest.
+
+const FORCE_RISK = .42;
+function chestIn(rid){
+  if (!G.q || rid < 0) return null;
+  return G.q.furn.find(f => f.r === rid && f.t === 'chest' && !f.quest && !f.taken) || null;
+}
+function drawCard(rid, h){
   let card = TREASURE_DECK[G.q.deck[G.q.deckAt++ % G.q.deck.length]];
   if (rid === G.q.vault){
     card = { k:'gold', n:250 + ri(200), t:'The vault', d:'This is what the lock was for.' };
     const r = G.run && !G.q.relicFound ? relicOffer() : null;
     if (r){ G.q.relicFound = r.id; later(900, () => showRelic(r.id)); }
   }
+  return card;
+}
+// What forcing it is worth if it goes well: twice the coin, or coin on top of
+// whatever else was in there.
+function forcedCard(card){
+  if (card.k === 'gold') return Object.assign({}, card, { n: card.n*2, d: card.d + ' The lid did not survive.' });
+  return Object.assign({}, card, { k:'gold', n:80 + ri(80), t:card.t,
+    d:`${card.d} And loose coin under it.` });
+}
+function openChest(h, chest, forced){
+  const rid = roomAt(h.x, h.y);
+  if (chest) chest.taken = true;
+  if (forced){
+    stirWrath(3, 'splintering wood');
+    sfx('door'); G.shake = Math.max(G.shake, 10);
+    if (rnd() < FORCE_RISK){ chestBites(h, chest); return null; }
+    const card = forcedCard(drawCard(rid, h));
+    later(260, () => applyTreasure(card, h));
+    renderHUD();
+    return card;
+  }
+  const card = drawCard(rid, h);
   later(260, () => applyTreasure(card, h));
   renderHUD();
+  return card;
+}
+// It goes wrong in one of two ways, and the second one has teeth.
+function chestBites(h, chest){
+  const depth = G.run ? G.run.depth : (G.q.qi + 1);
+  const mimic = depth >= 2 && rnd() < .5;
+  if (mimic){
+    if (chest) chest.taken = true;
+    const m = spawnWanderer(h, 'mimic');
+    say('The chest was never a chest. It has been waiting a long time.', 'bad');
+    sfx('boss'); G.shake = Math.max(G.shake, 18); hitStop(200);
+    if (m) banner('MIMIC', 'it was patient');
+    renderHUD();
+    return m;
+  }
+  const n = 2;
+  say('The lock was a needle, and it was meant for exactly this.', 'bad');
+  spark(h.x, h.y, 18, '#7fd86b', { spd:.016, up:.004 });
+  sfx('hit'); G.shake = Math.max(G.shake, 12);
+  h.poison = Math.max(h.poison || 0, 2);
+  hurt(h, n, null);
+  renderHUD();
+  return null;
+}
+function showChest(h, chest){
+  const pct = Math.round(FORCE_RISK*100);
+  modal(`<h2>The Chest</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[chest.r].name}</div>
+    <div class="rule"></div>
+    <p class="flavor">Iron banding, and a lock somebody cared about. ${h.name}
+      can pick at it, or stop pretending and put a shoulder through the lid.</p>
+    <div class="row">
+      <div class="ic">🗝</div>
+      <div class="tx"><b>Ease it open</b><s>Whatever is in there, and nothing else</s></div>
+      <div style="color:#63bf7d">safe</div>
+    </div>
+    <div class="row">
+      <div class="ic">🪓</div>
+      <div class="tx"><b>Put your shoulder to it</b><s>Twice the coin — or a needle in the lock,
+        or something that has been waiting to be opened</s></div>
+      <div style="color:#b03a2c">${pct}%</div>
+    </div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mForce">Force it</button>
+      <button class="btn ghost" id="mEase">Ease it open</button>
+    </div>`);
+  bindModal('#mForce', () => { closeModal(); openChest(h, chest, true); });
+  bindModal('#mEase',  () => { closeModal(); openChest(h, chest, false); });
 }
 // Push your luck. The first pull is the search itself; every pull after it
 // pays more and is likelier to go wrong. The odds are always on screen — a
@@ -4266,9 +4430,9 @@ function applyTreasure(card, h){
   }
   renderHUD(); checkQuestState();
 }
-function spawnWanderer(h){
+function spawnWanderer(h, type){
   const pool = ['goblin','orc','skeleton','fimir','zombie'];
-  const t = pool[Math.min(pool.length-1, Math.floor(G.q.qi/2.4) + ri(2))] || 'goblin';
+  const t = type || pool[Math.min(pool.length-1, Math.floor(G.q.qi/2.4) + ri(2))] || 'goblin';
   const spots = [];
   for (const [dx,dy] of DIRS8){
     const x = h.x+dx, y = h.y+dy;
@@ -4286,14 +4450,16 @@ function spawnWanderer(h){
       }
     }
   }
-  if (!spots.length) return;
+  if (!spots.length) return null;
   const [x,y] = pick(spots);
   const def = MONSTERS[t];
-  G.q.actors.push({ kind:'monster', uid:9000 + ri(9999), mt:t, name:def.name, x, y, alive:true, facing:-1,
+  const mon = { kind:'monster', uid:9000 + ri(9999), mt:t, name:def.name, x, y, alive:true, facing:-1,
     bpMax:def.bp, bp:def.bp, atk:def.atk, def:def.def, mind:def.mind, mv:def.move,
-    boss:false, awake:true, sleep:0, stun:0, bob:Math.random()*6.28 });
+    boss:false, awake:true, sleep:0, stun:0, bob:Math.random()*6.28 };
+  G.q.actors.push(mon);
   spark(x, y, 20, '#6a1f7a', { spd:.02, glow:'rgba(150,60,200,.4)', r:1.4 });
   setMood('fight');
+  return mon;
 }
 
 function searchTraps(){
@@ -6117,6 +6283,32 @@ function takeBoon(id){
   return true;
 }
 
+/* -------------------------------------------------- THE WARLOCK'S WAGER */
+// Three boons you do not want is the worst screen in the game. Fate can throw
+// the whole hand back — but it costs one more every time you ask, and the next
+// hand can be worse. Nothing is protected: the boons you just turned down can
+// come straight back.
+
+const WAGER_MAX = 3;
+function wagerCost(){ return 1 + (draftState ? (draftState.wagers || 0) : 0); }
+function canWager(){
+  return !!(G.run && draftState && !draftState.taken
+    && (draftState.wagers || 0) < WAGER_MAX
+    && fateOf() >= wagerCost());
+}
+function wagerDraft(){
+  if (!canWager()) return null;
+  const cost = wagerCost();
+  if (G.run) G.run.fate -= cost; else G.q.fate -= cost;
+  draftState.wagers = (draftState.wagers || 0) + 1;
+  const before = draftState.opts.map(b => b.id);
+  draftState.opts = draftOptions();
+  sfx('spell');
+  say(`✦ ${cost} Fate. The Warlock deals again.`, 'magic');
+  renderHUD();
+  return { cost, before, after: draftState.opts.map(b => b.id) };
+}
+
 // Stake the floor's takings on one combat die. Skull doubles it, a white shield
 // leaves it, a black shield takes the lot — and you may keep pressing.
 function dblStake(){ return G.run ? (G.run.stake || 0) : 0; }
@@ -6192,6 +6384,15 @@ function showDraft(){
       <button class="bu ${draftState.taken === b.id ? 'own' : ''}" data-boon="${b.id}"
         ${draftState.taken ? 'disabled' : ''}>${draftState.taken === b.id ? 'Taken' : 'Take'}</button>
     </div>`).join('');
+  const wagersLeft = WAGER_MAX - (draftState.wagers || 0);
+  const wagerRow = (draftState.taken || wagersLeft <= 0) ? '' : `<div class="row">
+      <div class="ic">✦</div>
+      <div class="tx"><b>The Warlock's Wager</b><s>Throw this hand back and take another.
+        Nothing is protected — what you just turned down can come straight back.
+        ${draftState.wagers ? `Dealt again ${draftState.wagers} time${draftState.wagers>1?'s':''}; ` : ''}${
+        wagersLeft} left.</s></div>
+      <button class="bu" data-wager="1" ${canWager() ? '' : 'disabled'}>✦ ${wagerCost()}</button>
+    </div>`;
   const stairs = draftState.stairs.map((d, i) => {
     const mods = (d.mods || []).map(m => MOD(m)).filter(Boolean).map(m => `${m.ic} ${m.name}`).join(' · ');
     return `<div class="qrow" data-stair="${i}">
@@ -6236,6 +6437,7 @@ function showDraft(){
     <div class="rule"></div>
     <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">Take one boon</div>
     ${rows}
+    ${wagerRow}
     <div class="rule"></div>
     <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">The pedlar on the stair</div>
     ${ped}
@@ -6247,6 +6449,7 @@ function showDraft(){
     if (takeBoon(el.dataset.boon)) draftState.taken = el.dataset.boon;
     showDraft();
   });
+  bindAll('.bu[data-wager]', () => { if (wagerDraft()) showDraft(); });
   bindAll('.bu[data-ped]', el => { if (buyPedlar(el.dataset.ped)) showDraft(); });
   bindAll('.bu[data-dbl]', () => {
     const r = doubleOrNothing();
@@ -6618,6 +6821,10 @@ globalThis.HQ = {
   BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes, BOON, MOD,
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
   draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
+  WAGER_MAX, wagerCost, canWager, wagerDraft,
+  get draftState(){ return draftState; }, set draftState(v){ draftState = v; },
+  BOSS_LINES, bossOf, bossIntro,
+  FORCE_RISK, chestIn, drawCard, forcedCard, openChest, chestBites, showChest,
   floorChoices, chooseFloor, dblStake, canDouble, doubleOrNothing, settleStake,
   newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius, showHistory, monsterShoot,
   activeHero, heroes, livingHeroes, monstersOf, busy, hudState, syncHUD, renderHUD,
