@@ -4887,6 +4887,130 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.cam.x = 26;
     IB.MY = seat0d;
   }
+  {
+    // A node's LEVEL was invisible. Three nodes, three levels each, bought
+    // with real gold and wood — and measured on op count AND on drawn extent,
+    // so a shape that only resized could not hide, all nine combinations came
+    // out identical. A level 3 gold mine gathers at 1.33 against 0.85 and
+    // holds ten crew against six, and it looked exactly like a level 1 one.
+    //
+    // The crew is the sibling that condemns it: the very same function draws
+    // one worker per assignee and that reads perfectly, 117 ops to 186 across
+    // the range. drawNode always knew how to show what a hold had PUT INTO a
+    // node — it just never showed what the hold had BOUGHT.
+    const s = CTX.__stats;
+    const seat0e = IB.MY;
+    // Driven through drawHold, NOT drawNode directly: drawNode reads the
+    // module-level `holdSide` that drawHold sets, so calling it on its own
+    // measures whichever hold the previous block happened to leave behind.
+    // Done that way every reading came back 214 — including the crew, which a
+    // browser probe had just shown working perfectly. Suspicious stability,
+    // and it was the instrument.
+    const nodeOps = (key, lvl, crew) => {
+      IB.newMatch({ diff:'veteran', seed:8201 });
+      IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
+      IB.MY = 0;
+      const sd = G.sides[0];
+      sd.nodeLvl[key] = lvl;
+      sd.workers[key] = crew || 0;
+      s.dropped = 0;
+      const b = s.ops;
+      IB.drawHold(CTX, 0);
+      return { n:s.ops - b, dropped:s.dropped, rate:IB.nodeRate(sd, key), cap:IB.nodeCap(sd, key) };
+    };
+    t.ok(IB.NODE_UPGRADABLE.length >= 3, 'there are nodes to upgrade (' + IB.NODE_UPGRADABLE.length + ')');
+    let flat = [], lost = 0, sameSum = 0;
+    for (const key of IB.NODE_UPGRADABLE){
+      const at = [1, 2, 3].map(l => nodeOps(key, l, 0));
+      lost += at.reduce((a, x) => a + x.dropped, 0);
+      // the levels have to actually BE different, or "identical" proves nothing
+      if (at[0].rate === at[2].rate && at[0].cap === at[2].cap) sameSum++;
+      for (let i = 1; i < at.length; i++)
+        if (!(at[i].n > at[i - 1].n)) flat.push(key + ' lvl' + (i + 1) + ' ' + at[i - 1].n + '→' + at[i].n);
+    }
+    t.ok(lost === 0, 'the node sweep held its capture (' + lost + ' dropped)');
+    t.ok(sameSum === 0, 'and the levels really differ in what they give (' + sameSum + ')');
+    t.ok(flat.length === 0, 'every level of every node puts more on the ground than the one below (' +
+      (flat.length ? flat.slice(0, 3).join(' | ') : 'all three grade') + ')');
+    // No saturating at the first upgrade — the trap the crown fell into.
+    t.ok(IB.nodeHeaps && true, 'the heaps are their own function');
+    {
+      const heapsAt = (lvl) => {
+        s.dropped = 0; const b = s.ops;
+        IB.nodeHeaps(CTX, [400, 300], 1, lvl, '#c8a24a');
+        return s.ops - b;
+      };
+      const h1 = heapsAt(1), h2 = heapsAt(2), h3 = heapsAt(3);
+      t.ok(h1 > 0, 'a level one node has been worked at all (' + h1 + ')');
+      t.ok(h2 > h1 && h3 > h2, 'and each level shows (' + h1 + ' → ' + h2 + ' → ' + h3 + ')');
+      t.ok(heapsAt(9) === h3, 'nothing goes past the last level');
+      t.ok(heapsAt(0) === h1, 'and nothing falls below the first');
+    }
+    // The sibling that condemned it has to keep working.
+    {
+      const c0 = nodeOps('gold', 1, 0).n, c5 = nodeOps('gold', 1, 5).n;
+      t.ok(c5 > c0, 'the crew still shows at the node it is working (' + c0 + ' → ' + c5 + ')');
+    }
+    // Whose node? A hold's own level, from either chair — and unlike the crew,
+    // the workings are visible on both holds: you can see how deep they have dug.
+    {
+      let wrong = 0, shown = 0;
+      for (const seat of [0, 1]) for (const owner of [0, 1]){
+        IB.MY = seat;
+        IB.newMatch({ diff:'veteran', seed:8205 });
+        IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+        G.sides[owner].nodeLvl.gold = 3;
+        for (const side of [0, 1]){
+          IB.cam.x = side === 0 ? IB.HOLD_X : C.LANE_LEN - IB.HOLD_X;
+          IB.holdsBoard;                                   // (no-op; keeps the read honest)
+          const b = s.ops;
+          IB.drawHold(CTX, side);
+          const n = s.ops - b;
+          if (n < 50) wrong++;                             // the hold must have drawn
+        }
+        shown++;
+      }
+      IB.MY = seat0e;
+      t.ok(shown === 4, 'the node seat sweep ran for both holds from both chairs (' + shown + ')');
+      t.ok(wrong === 0, 'and every hold in it actually drew (' + wrong + ')');
+      // The crisp version: one hold, drawn twice, with nothing changed between
+      // the two but the level its gold mine has been dug to.
+      for (const seat of [0, 1]){
+        IB.MY = seat;
+        IB.newMatch({ diff:'veteran', seed:8207 });
+        IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+        IB.cam.x = seat === 0 ? IB.HOLD_X : C.LANE_LEN - IB.HOLD_X;
+        const own = G.sides[seat];
+        own.nodeLvl.gold = 1;
+        const low = (() => { const b = s.ops; IB.drawHold(CTX, seat); return s.ops - b; })();
+        own.nodeLvl.gold = 3;
+        const high = (() => { const b = s.ops; IB.drawHold(CTX, seat); return s.ops - b; })();
+        t.ok(low > 50, 'the hold drew for seat ' + seat + ' (' + low + ')');
+        t.ok(high > low, 'a node shows its own hold’s level from seat ' + seat + ' (' + low + ' → ' + high + ')');
+      }
+      // CROSSED, which is the only version that can catch the bug: the hold
+      // being drawn is not the hold being watched. With both the same — which
+      // is what the loop above does — reading me() instead of the node's owner
+      // gives the identical answer and the mistake is invisible.
+      for (const seat of [0, 1]){
+        const owner = 1 - seat;
+        IB.MY = seat;
+        IB.newMatch({ diff:'veteran', seed:8209 });
+        IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+        IB.cam.x = owner === 0 ? IB.HOLD_X : C.LANE_LEN - IB.HOLD_X;
+        G.sides[owner].nodeLvl.gold = 1;
+        const low = (() => { const b = s.ops; IB.drawHold(CTX, owner); return s.ops - b; })();
+        G.sides[owner].nodeLvl.gold = 3;
+        const high = (() => { const b = s.ops; IB.drawHold(CTX, owner); return s.ops - b; })();
+        t.ok(low > 50, 'the other hold drew, watched from seat ' + seat + ' (' + low + ')');
+        t.ok(high > low, 'and it shows ITS level, not the watcher’s — seat ' + seat +
+          ' looking at hold ' + owner + ' (' + low + ' → ' + high + ')');
+      }
+      IB.MY = seat0e;
+    }
+    IB.cam.x = 26;
+    IB.MY = seat0e;
+  }
 
   // The sweep as a rule instead of a list. Anything the game does FOR the
   // person watching — a sound, a toast, a panel refresh — must never be gated
