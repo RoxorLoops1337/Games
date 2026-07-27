@@ -564,6 +564,25 @@ export function buildLevel(G, engine, materials) {
     putAll(PR.railing(2.0, { h: 1.06 }), 'metal', x + 1.25, ROOF, -18.9, Math.PI / 2, 0, 0, 'silo');
     S(makeBox({ x: x + 1.2, y: ROOF, z: -19.9 }, { x: x + 1.3, y: ROOF + 1.08, z: -17.9 },
       SURFACE.METAL, { solid: true, blocksSight: false }));
+
+    // Two fittings on the parapet over the alley, and only one of them works.
+    //
+    // The live one is the single most important light on the site: this stair
+    // is the attacker's route onto the roof, it sits in a 3.8 m slot between
+    // two four-metre walls, and at this sun the slot gets nothing at all — you
+    // are climbing sixteen risers you cannot see the edges of. It is also the
+    // one light here that casts, and it casts for exactly that reason: the
+    // treads, the stringer and the handrail throwing hard shadows down the
+    // alley wall is what tells you where the next step is. Everything else on
+    // this site is lit well enough by a shadowless pool.
+    bulkheadLamp(8.02, ROOF + 0.55, -15.4, Math.PI / 2, 0.88, {
+      color: WORK, intensity: 26, distance: 13, angle: 0.85, penumbra: 0.45,
+      shadow: true, shadowQ: 1,
+    });
+    // Its neighbour twenty metres up the alley is dark, and the contrast is the
+    // point: one working fitting reads as a facility on a trickle of emergency
+    // power, two reads as a lighting rig.
+    bulkheadLamp(8.02, ROOF + 0.55, -25.6, Math.PI / 2, 0.88, null, 'silo');
   }
 
   // Stairs are a chore for an AABB collider, so each flight collides as a stack
