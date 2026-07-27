@@ -1025,7 +1025,7 @@ function makeSide(i, ai){
     // to place, which is the first thing the game asks you to do.
     workers:{ idle:1, gold:1, iron:0, wood:1, food:1 },
     plot:new Array(PLOT_W * PLOT_H).fill(null),
-    trainQ:[], muster:[], heroes:[],
+    trainQ:[], heroes:[],
     nodeLvl:{ gold:1, iron:1, wood:1 },
     // Its own decision stream (see arnd) — mixed with a draw from the match
     // seed, or every hold makes exactly the same decisions in every match it
@@ -1036,6 +1036,11 @@ function makeSide(i, ai){
 
     towerUp:{ hp:0, armor:0, atk:0, as:0, regen:0 },
     troopUp:{ tad:0, tarm:0, thp:0 },
+    // The barracks no longer arms bodies — the Host sends the wave and the
+    // barracks makes the wave BETTER. One track per kind that marches, each
+    // with its own level and the perks taken along the way.
+    troop:{ melee:{ lvl:0, perks:[] }, caster:{ lvl:0, perks:[] }, cannon:{ lvl:0, perks:[] } },
+    troopPend:[],
     structs:[], superT:0, aiT:0, aiBuild:0, waveKind:'levy',
     kills:0, structsKilled:0, gathered:0, spent:0, heroKills:0,
   };
@@ -1133,10 +1138,9 @@ function upgradeNode(s, node){
 }
 const workerCount = (s) => s.workers.idle + s.workers.gold + s.workers.iron + s.workers.wood + s.workers.food;
 const fielded = (s) => G.units.reduce((a, u) => a + ((u.side === s.i && !u.dead && u.paid) ? 1 : 0), 0);
-const popUsed = (s) => workerCount(s) + s.muster.length + fielded(s)
+const popUsed = (s) => workerCount(s) + fielded(s)
   + s.trainQ.reduce((a, q) => a + (q.type === 'worker' ? 1 : 0), 0);
 const trainSlots = (s) => Math.max(1, bLvl(s, 'pit'));
-const barrackSlots = (s) => bLvl(s, 'barracks');
 const gatherMul = (s) => {
   let m = 1 + .12 * bLvl(s, 'workshop');
   for (const h of s.heroes) m += passVal(h, 'gatherM');
@@ -1166,18 +1170,147 @@ function trainWorker(s){
   return null;
 }
 
-function trainUnit(s, type){
-  const d = TRAIN[type];
-  if (!d) return 'unknown unit';
-  if (barracksLvl(s) < d.barracks) return 'needs a level ' + d.barracks + ' barracks';
-  if (s.trainQ.filter(q => q.type !== 'worker').length >= barrackSlots(s)) return 'the barracks are busy';
-  if (s.workers.idle < d.need) return 'no idle worker to arm';
-  if (!canPay(s, d.cost)) return 'not enough resources';
-  pay(s, d.cost);
-  s.workers.idle -= d.need;
-  s.trainQ.push({ type, t:0, dur:d.time });
+/* ------------------------------------------------------- the barracks
+   It used to arm idle workers into footmen, casters and cannons, which sat in
+   a muster until the next wave carried them out — so what you bought did not
+   appear when you bought it, and buying enough of it simply put more bodies on
+   the bridge than the other hold could answer. Neither is what a barracks is
+   for here.
+
+   It trains the army you already have instead. Every wave the Host sends
+   contains footmen, casters and cannons; each of those three has its own track
+   at the barracks, and each level up is a choice of three. The bodies do not
+   get more numerous, they get better — so a hold that invests is answering the
+   same wave with a sharper one rather than a bigger one. */
+const TROOP_KINDS = ['melee', 'caster', 'cannon'];
+// Small on purpose. A level is a nudge; ten levels is a real difference.
+const TROOP_PERK = {
+  ad:    { n:'Sharpened',  d:'+5% attack damage',          m:{ ad:.05 } },
+  as:    { n:'Drilled',    d:'+5% attack speed',           m:{ as:.05 } },
+  hp:    { n:'Hardened',   d:'+6% health',                 m:{ hp:.06 } },
+  armor: { n:'Plated',     d:'+3 armour',                  m:{ armor:3 } },
+  mr:    { n:'Warded',     d:'+3 magic resist',            m:{ mr:3 } },
+  spd:   { n:'Marched',    d:'+4% move speed',             m:{ spd:.04 } },
+  tdmg:  { n:'Sappers',    d:'+10% damage to structures',  m:{ tdmg:.10 } },
+};
+const TROOP_PERK_IDS = Object.keys(TROOP_PERK);
+/* Twenty of these, and every one is small. A special is meant to give a kind a
+   flavour you can feel across a whole wave, not to decide a fight on its own —
+   so the chances sit around a tenth and the numbers are single digits. Each is
+   tagged with the kinds it makes sense for: a cannon that heals a hero it is
+   nowhere near is not a perk, it is noise. */
+const TROOP_SPECIAL = {
+  ember:   { n:'Ember Tips',   d:'12% chance to set a blow alight.',              for:['melee','caster','cannon'], hit:{ chance:.12, burn:{ dps:9, t:3 } } },
+  venom:   { n:'Venom',        d:'12% chance to poison for 4s.',                  for:['melee','caster'],          hit:{ chance:.12, burn:{ dps:6, t:4, magic:true } } },
+  daze:    { n:'Dazing Blows', d:'8% chance to stun for 0.35s.',                  for:['melee','cannon'],          hit:{ chance:.08, stun:.35 } },
+  chill:   { n:'Chill',        d:'15% chance to slow by 25% for 1.5s.',           for:['caster','cannon'],         hit:{ chance:.15, slow:.25, slowT:1.5 } },
+  hex:     { n:'Hexed Shot',   d:'12% chance to strip 6 armour for 3s.',          for:['caster'],                  hit:{ chance:.12, sunder:6, sunderT:3 } },
+  crush:   { n:'Crushing',     d:'8% chance a blow lands for half again.',        for:['melee','cannon'],          hit:{ chance:.08, crit:.5 } },
+  spark:   { n:'Arc',          d:'10% chance to arc 30% to a nearby foe.',        for:['caster'],                  hit:{ chance:.10, arc:.30 } },
+  siphon:  { n:'Siphon',       d:'A kill mends the nearest allied hero for 8.',   for:['melee','caster','cannon'], kill:{ heroHeal:8 } },
+  zeal:    { n:'Zeal',         d:'A kill grants +12% attack speed for 2s.',       for:['melee'],                   kill:{ selfAs:.12, t:2 } },
+  lifetap: { n:'Lifetap',      d:'Heals for 6% of damage dealt.',                 for:['melee'],                   mod:{ lifesteal:.06 } },
+  pierce:  { n:'Piercing',     d:'8% of damage ignores armour.',                  for:['melee','cannon'],          mod:{ pierce:.08 } },
+  heft:    { n:'Siege Work',   d:'+15% damage to structures.',                    for:['cannon'],                  mod:{ tdmg:.15 } },
+  thorns:  { n:'Barbed',       d:'Returns 8% of the damage it takes.',            for:['melee'],                   mod:{ thorns:.08 } },
+  bulwark: { n:'Bulwark',      d:'+8 armour while below half health.',            for:['melee'],                   mod:{ lowArmor:8 } },
+  mend:    { n:'Field Mend',   d:'Regains 1.2% health a second.',                 for:['melee','cannon'],          mod:{ regen:.012 } },
+  swift:   { n:'Forced March', d:'+8% move speed.',                               for:['melee','caster','cannon'], mod:{ spd:.08 } },
+  guard:   { n:'Braced',       d:'10% chance to shrug off a fifth of a blow.',    for:['melee','cannon'],          mod:{ shrug:.10 } },
+  reach:   { n:'Long Reach',   d:'+0.8 attack range.',                            for:['caster','cannon'],         mod:{ rng:.8 } },
+  vigil:   { n:'Vigil',        d:'Allied heroes nearby take 4% less damage.',     for:['melee','caster','cannon'], mod:{ heroGuard:.04 } },
+  rally:   { n:'Rallying',     d:'+3% attack damage to allies within four.',      for:['melee','caster','cannon'], mod:{ auraAd:.03 } },
+};
+const TROOP_SPECIAL_IDS = Object.keys(TROOP_SPECIAL);
+// Every tenth level is the one that offers something with a name.
+// How far the barracks lets a track go. Levels SUM across barracks, so a
+// second one on another plot is worth its ground — and the cap is what makes
+// the building matter after the first level: ten drills a track, twenty puts
+// its first special in reach, and the top of the ladder wants real investment.
+const TROOP = { special:10, cost:{ gold:70, iron:55 }, per:.28, maxLvl:40, perBarracks:10 };
+const troopCap = (s) => Math.min(TROOP.maxLvl, bLvl(s, 'barracks') * TROOP.perBarracks);
+const troopTrack = (s, kind) => s.troop[kind];
+const troopCost = (s, kind) => {
+  const lvl = troopTrack(s, kind).lvl;
+  const m = 1 + TROOP.per * lvl;
+  return { gold:Math.round(TROOP.cost.gold * m), iron:Math.round(TROOP.cost.iron * m) };
+};
+const troopSpecialLvl = (lvl) => lvl > 0 && lvl % TROOP.special === 0;
+
+function upgradeTroop(s, kind){
+  const t = s.troop[kind];
+  if (!t) return 'unknown troop';
+  if (barracksLvl(s) < 1) return 'needs a barracks';
+  if (t.lvl >= TROOP.maxLvl) return 'already fully drilled';
+  if (t.lvl >= troopCap(s)) return 'a bigger barracks first';
+  if (s.troopPend.length) return 'a choice is already waiting';
+  const cost = troopCost(s, kind);
+  if (!canPay(s, cost)) return 'not enough resources';
+  pay(s, cost);
+  t.lvl++;
+  offerTroop(s, kind);
   return null;
 }
+
+/* Three to choose from, the same shape the hero picks use. On a special level
+   it is two ordinary drills and one thing with a name — so the special is
+   always a real choice against something safe, never a free gift. */
+function offerTroop(s, kind){
+  const t = s.troop[kind];
+  const opts = [];
+  const pool = TROOP_PERK_IDS.slice();
+  const want = troopSpecialLvl(t.lvl) ? 2 : 3;
+  for (let i = 0; i < want && pool.length; i++)
+    opts.push(pool.splice(Math.floor(arnd(s) * pool.length), 1)[0]);
+  if (troopSpecialLvl(t.lvl)){
+    const owned = new Set(t.perks.filter(p => TROOP_SPECIAL[p]));
+    const sp = TROOP_SPECIAL_IDS.filter(id => !owned.has(id) && TROOP_SPECIAL[id].for.includes(kind));
+    if (sp.length) opts.push(sp[Math.floor(arnd(s) * sp.length)]);
+    else if (pool.length) opts.push(pool.splice(Math.floor(arnd(s) * pool.length), 1)[0]);
+  }
+  const p = { kind, opts, lvl:t.lvl };
+  s.troopPend.push(p);
+  return p;
+}
+
+function pickTroop(s, idx){
+  const p = s.troopPend[0];
+  if (!p) return 'nothing to choose';
+  const id = p.opts[idx];
+  if (id === undefined) return 'no such option';
+  s.troop[p.kind].perks.push(id);
+  s.troopPend.shift();
+  return null;
+}
+
+// The Host picks too, or its barracks is a monument. Leans a little toward the
+// thing with a name, then takes whatever is going.
+function autoPickTroop(s){
+  let guard = 0;
+  while (s.troopPend.length && guard++ < 8){
+    const p = s.troopPend[0];
+    let best = 0;
+    p.opts.forEach((id, i) => { if (TROOP_SPECIAL[id] && arnd(s) < .7) best = i; });
+    pickTroop(s, best);
+  }
+}
+
+/* What every perk on a track adds up to. Read once per spawn for the stat
+   mods, and per blow for the ones that fire on hit — one place, so a perk
+   cannot mean one thing to the body and another to the blow. */
+function troopMod(s, kind, stat){
+  const t = s.troop && s.troop[kind];
+  if (!t) return 0;
+  let v = 0;
+  for (const id of t.perks){
+    const p = TROOP_PERK[id];
+    if (p && p.m[stat] !== undefined){ v += p.m[stat]; continue; }
+    const sp = TROOP_SPECIAL[id];
+    if (sp && sp.mod && sp.mod[stat] !== undefined) v += sp.mod[stat];
+  }
+  return v;
+}
+const troopHas = (s, kind, id) => !!(s.troop && s.troop[kind] && s.troop[kind].perks.includes(id));
 
 function assign(s, node, delta){
   if (delta > 0){
@@ -1264,14 +1397,14 @@ function ecoStep(s, dt){
   }
   for (let i = s.trainQ.length - 1; i >= 0; i--){
     const q = s.trainQ[i];
-    const slots = q.type === 'worker' ? trainSlots(s) : barrackSlots(s);
-    const rank = s.trainQ.filter(o => (o.type === 'worker') === (q.type === 'worker')).indexOf(q);
-    if (rank >= slots) continue;                 // waiting for a free slot
+    // Only workers are trained now — the barracks drills the army it is sent
+    // rather than arming bodies into it.
+    const rank = s.trainQ.indexOf(q);
+    if (rank >= trainSlots(s)) continue;         // waiting for a free pit
     q.t += dt;
     if (q.t >= q.dur){
       s.trainQ.splice(i, 1);
-      if (q.type === 'worker') s.workers.idle++;
-      else s.muster.push({ type:q.type });
+      s.workers.idle++;
       if (forMe(s.i)) sfx('build');
     }
   }
@@ -1298,13 +1431,19 @@ function spawnUnit(side, kind, o){
   }
   const hpUp = (1 + UP_EFFECT.thp * s.troopUp.thp) * (1 + heroHp),
         adUp = 1 + UP_EFFECT.tad * s.troopUp.tad, armUp = UP_EFFECT.tarm * s.troopUp.tarm;
+  // What the barracks drilled into this kind. Levies get none of it — they are
+  // the bodies the Host sends whatever you do, and the three trained kinds are
+  // what the barracks is for.
+  const bk = (stat) => troopMod(s, kind, stat);
   const u = {
     id:G.uid++, side, kind, isHero:false, struct:false, paid:!!o.paid,
     x:o.x !== undefined ? o.x : gateX(side) + dirOf(side) * 2.5,
     y:o.y !== undefined ? o.y : rr(-2.6, 2.6),
-    mhp:Math.round(d.hp * waveScale * hpUp * (o.hpM || 1)), hp:0,
-    ad:d.ad * waveScale * adUp * (o.adM || 1), armor:d.armor + armUp, mr:d.mr + armUp,
-    as:d.as, rng:d.rng, spd:d.spd, r:d.r, tdmg:d.tdmg, magic:!!d.magic, bounty:d.bounty,
+    mhp:Math.round(d.hp * waveScale * hpUp * (1 + bk('hp')) * (o.hpM || 1)), hp:0,
+    ad:d.ad * waveScale * adUp * (1 + bk('ad')) * (o.adM || 1),
+    armor:d.armor + armUp + bk('armor'), mr:d.mr + armUp + bk('mr'),
+    as:d.as * (1 + bk('as')), rng:d.rng + bk('rng'), spd:d.spd * (1 + bk('spd')),
+    r:d.r, tdmg:d.tdmg * (1 + bk('tdmg')), magic:!!d.magic, bounty:d.bounty,
     cd:rr(0, .5), target:null, dead:false, slowT:0, slowP:0, stunT:0, shield:0, shT:0,
     burn:null, hitT:0, hitT0:0, hitW:0, swing:0, swing0:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
@@ -1327,6 +1466,7 @@ function spawnWave(){
     const n = Math.max(1, 3 + (G.wave >= 8 ? 1 : 0) + k.grunt);
     for (let i = 0; i < n; i++)
       spawnUnit(s.i, 'grunt', { y:lerp(-2.4, 2.4, i / Math.max(1, n - 1)), hpM:k.hpM });
+    for (let i = 0; i < (k.melee || 0); i++) spawnUnit(s.i, 'melee', { y:i ? 1.2 : -1.2 });
     for (let i = 0; i < k.caster; i++) spawnUnit(s.i, 'caster', { y:i ? 1.8 : -1.8 });
     for (let i = 0; i < k.sup; i++) spawnUnit(s.i, 'super', { y:0 });
     // A free siege engine rolls out every third wave, then every second, then
@@ -1334,8 +1474,6 @@ function spawnWave(){
     const every = G.wave >= 20 ? 1 : G.wave >= 12 ? 2 : 3;
     const cannons = (G.wave % every === 0 ? 1 : 0) + k.cannon;
     for (let i = 0; i < cannons; i++) spawnUnit(s.i, 'cannon', { y:i ? 1.4 : 0 });
-    for (const m of s.muster) spawnUnit(s.i, m.type, { paid:true, y:rr(-2.6, 2.6) });
-    s.muster.length = 0;
     if (s.superT > 0) for (let i = 0; i < 2; i++) spawnUnit(s.i, 'super', { y:i ? 1.6 : -1.6 });
   }
   // The wave warning is the one piece of copy in the game that has to be read
@@ -1357,11 +1495,15 @@ function spawnWave(){
 // rather than picked by eye. Some shapes are still heavier than others; that
 // is what variety means.
 const WAVE_KINDS = [
-  { id:'levy',   n:'levies',        grunt:0,  caster:0, cannon:0,  sup:0, hpM:1,    min:0 },
-  { id:'shield', n:'a shield wall', grunt:2,  caster:0, cannon:0,  sup:0, hpM:1.15, min:4 },
-  { id:'volley', n:'a volley wave', grunt:-2, caster:2, cannon:0,  sup:0, hpM:1,    min:6 },
-  { id:'siege',  n:'siege engines', grunt:-3, caster:0, cannon:1,  sup:0, hpM:1,    min:8 },
-  { id:'ogres',  n:'ogres',         grunt:-2, caster:0, cannon:-1, sup:1, hpM:1,    min:20 },
+  // Footmen march with every wave now. They used to exist only if you armed
+  // them at the barracks, so the one kind the barracks is named for could be
+  // absent from the battlefield entirely — and with the barracks no longer
+  // arming anything, they would have vanished from the game.
+  { id:'levy',   n:'levies',        grunt:0,  melee:1, caster:0, cannon:0,  sup:0, hpM:1,    min:0 },
+  { id:'shield', n:'a shield wall', grunt:2,  melee:2, caster:0, cannon:0,  sup:0, hpM:1.15, min:4 },
+  { id:'volley', n:'a volley wave', grunt:-2, melee:1, caster:2, cannon:0,  sup:0, hpM:1,    min:6 },
+  { id:'siege',  n:'siege engines', grunt:-3, melee:1, caster:0, cannon:1,  sup:0, hpM:1,    min:8 },
+  { id:'ogres',  n:'ogres',         grunt:-2, melee:1, caster:0, cannon:-1, sup:1, hpM:1,    min:20 },
 ];
 function waveKindFor(s){
   const pool = WAVE_KINDS.filter(k => G.wave >= k.min);
@@ -1531,6 +1673,16 @@ function dealDmg(src, tgt, amt, o){
     const vamp = o.ability ? passVal(src, 'spellVamp') + bsum(src, 'bvamp') : passVal(src, 'ls') + bsum(src, 'bls');
     if (vamp > 0) healUnit(src, dmg * vamp);
   }
+  // Drilled bodies: what they give back, what they shrug off, and the armour
+  // a bulwark finds when it is nearly done.
+  if (src && !src.isHero && !src.struct && dmg > 0){
+    const ls = troopMod(G.sides[src.side], src.kind, 'lifesteal');
+    if (ls > 0) healUnit(src, dmg * ls);
+  }
+  if (tgt && !tgt.isHero && !tgt.struct && dmg > 0 && src && !src.struct){
+    const th = troopMod(G.sides[tgt.side], tgt.kind, 'thorns');
+    if (th > 0 && src.hp !== undefined) dealDmg(tgt, src, dmg * th, { pure:true, noHooks:true });
+  }
   if (tgt.isHero && !o.ability && src && !src.struct && passVal(tgt, 'thorns') > 0 && src.hp !== undefined)
     dealDmg(tgt, src, dmg * passVal(tgt, 'thorns'), { pure:true, noHooks:true });
   if (tgt.hp <= 0) killThing(tgt, src);
@@ -1553,6 +1705,7 @@ function killThing(t, src){
     if (src.isHero) g = g * (1 + passVal(src, 'goldM')) + passVal(src, 'killGold');
     s.res.gold += g; s.kills++;
   }
+  if (src && !src.isHero && !src.struct) troopOnKill(src);
   if (src && src.isHero){
     healUnit(src, passVal(src, 'killHeal'));
     src.mana = Math.min(src.mmana, src.mana + passVal(src, 'killMana'));
@@ -1649,6 +1802,10 @@ function attackSpeedOf(u){
     if (passVal(u, 'asDuel') && nearestFoe(u, 8, true)) as *= 1 + passVal(u, 'asDuel');
   }
   if (u.struct) as *= 1 + UP_EFFECT.as * G.sides[u.side].towerUp.as;
+  // A minion buff carries attack speed as well as damage and movement. It
+  // always had the channel and nothing ever read it, so Zeal — the drill that
+  // is entirely "+12% attack speed after a kill" — did nothing at all.
+  if (u.mb && u.mb.t > 0 && u.mb.as) as *= 1 + u.mb.as;
   return Math.max(.15, as);
 }
 
@@ -1658,6 +1815,58 @@ function attackDamage(u){
   if (u.struct) ad *= 1 + UP_EFFECT.atk * G.sides[u.side].towerUp.atk;
   if (u.mb && u.mb.t > 0) ad *= 1 + u.mb.ad;
   return ad;
+}
+
+/* What a drilled body does on top of hitting the thing. Everything here rolls
+   off the simulation's own stream, the same one a hero's crit uses, so both
+   machines in a two-player match see the same ember catch and the same blow
+   glance off. Nothing in here is cosmetic-only.
+
+   A special names the kinds it is offered to, and this asks the track the body
+   actually came from — so a perk taken on the cannons cannot fire on a footman
+   that never earned it. */
+function troopOnHit(u, tgt, amt){
+  const s = G.sides[u.side];
+  if (!s || !s.troop || !s.troop[u.kind]) return;
+  for (const id of s.troop[u.kind].perks){
+    const sp = TROOP_SPECIAL[id];
+    if (!sp || !sp.hit || tgt.dead) continue;
+    if (rnd() >= sp.hit.chance) continue;
+    const h = sp.hit;
+    if (h.burn) applyBurn(tgt, h.burn.dps, h.burn.t, u);
+    if (h.stun) applyStun(tgt, h.stun);
+    if (h.slow) applySlow(tgt, h.slow, h.slowT || 1.5);
+    if (h.sunder){ tgt.sunder = Math.max(tgt.sunder || 0, h.sunder); tgt.sunderT = Math.max(tgt.sunderT || 0, h.sunderT); }
+    if (h.crit) dealDmg(u, tgt, amt * h.crit, { magic:!!u.magic });
+    if (h.arc){
+      let hit = null;
+      nearby(tgt.x, 4.5, (o) => {
+        if (hit || o.dead || o === tgt || o.side === u.side || o.struct) return;
+        hit = o;
+      });
+      if (hit) dealDmg(u, hit, amt * h.arc, { magic:true });
+    }
+  }
+}
+
+// And what a drilled body does when it finishes something off.
+function troopOnKill(u){
+  const s = G.sides[u.side];
+  if (!s || !s.troop || !s.troop[u.kind]) return;
+  for (const id of s.troop[u.kind].perks){
+    const sp = TROOP_SPECIAL[id];
+    if (!sp || !sp.kill) continue;
+    if (sp.kill.heroHeal){
+      let best = null, bd = 1e9;
+      for (const h of s.heroes){
+        if (h.dead || !h.inLane) continue;
+        const d = Math.abs(h.x - u.x);
+        if (d < bd){ bd = d; best = h; }
+      }
+      if (best && bd < 14) healUnit(best, sp.kill.heroHeal);
+    }
+    if (sp.kill.selfAs) u.mb = { t:sp.kill.t || 2, ad:0, ms:0, as:sp.kill.selfAs };
+  }
 }
 
 function basicAttack(u, tgt){
@@ -1674,6 +1883,7 @@ function basicAttack(u, tgt){
       amt += passVal(u, 'onHitAp') * u.ap;
     }
     const done = dealDmg(u, tgt, amt * (tgt.struct ? (u.tdmg || 1) : 1), { magic });
+    if (!u.isHero) troopOnHit(u, tgt, amt);
     if (u.isHero && !tgt.dead){
       const tru = passVal(u, 'truOn'); if (tru) dealDmg(u, tgt, tru, { pure:true });
       const bn = passVal(u, 'burn') + bsum(u, 'bburn');
@@ -2900,10 +3110,8 @@ function aiStep(s, dt){
   // level. Measured over sixteen eight-minute matches: 218 Footmen armed, zero
   // of anything else. Hold back as many as the dearest thing it could actually
   // pay for right now needs.
-  const armable = Object.keys(TRAIN).filter(k =>
-    TRAIN[k].barracks <= barracksLvl(s) && canPay(s, TRAIN[k].cost));
-  const armNeed = barracksLvl(s) > 0 && armable.length
-    ? Math.max(...armable.map(k => TRAIN[k].need)) : 0;
+  // Nothing is armed any more, so no workers are held back for it.
+  const armNeed = 0;
   // Every worker costs 20 food to train, so a hold that under-staffs the
   // fields throttles its own growth and then cannot afford a hero (45 food).
   // Traced: food sat under 35 all match while iron piled up unspent.
@@ -2961,23 +3169,19 @@ function aiStep(s, dt){
           cost[k] - s.res[k] <= gatherRate(s, k) * 30)) break;      // nearly there — save up
     }
   }
-  // --- arm the workers
+  // --- drill the army
+  // The barracks no longer arms bodies, so there is nothing to bank workers
+  // for and nothing to race: it buys levels on whichever kind it can afford,
+  // and takes the choice the moment it is offered or the next purchase is
+  // blocked behind an unanswered one.
+  autoPickTroop(s);
   const bl = barracksLvl(s);
-  if (bl > 0){
+  if (bl > 0 && !s.troopPend.length && arnd(s) < .6){
     const roll = arnd(s);
-    const order = bl >= 3 ? (roll < .45 ? ['melee','cannon','caster'] : roll < .8 ? ['cannon','caster','melee'] : ['caster','melee','cannon'])
-      : bl === 2 ? (roll < .6 ? ['melee','caster'] : ['caster','melee']) : ['melee'];
+    const order = roll < .4 ? ['melee','caster','cannon']
+                : roll < .75 ? ['cannon','melee','caster'] : ['caster','cannon','melee'];
     for (const t of order){
-      // A Footman is always affordable, so it won every race for the pair of
-      // workers the hold was banking for a Caster: measured, a Caster was
-      // never once clear to arm at a one-second sample even after the tier
-      // was up — idle workers blocked it 100% of the time. Leave the pair
-      // alone unless there is a spare worker beyond it — and step OVER the
-      // Footman rather than stopping, or the pass never reaches the Cannon
-      // and the Caster it is being kept for. (This was a `break`, which is
-      // why a level-3 barracks armed a Cannon in only 3 holds of 12.)
-      if (TRAIN[t].need < armNeed && s.workers.idle <= armNeed) continue;
-      if (!trainUnit(s, t)) break;
+      if (!upgradeTroop(s, t)){ autoPickTroop(s); break; }
     }
   }
   // --- forge work
@@ -5731,33 +5935,6 @@ function rankFlags(c, gx, gy, z, lvl){
   }
 }
 
-/* Troops armed at the barracks stand in the mustering pit until the wave goes
-   out. They cost population and gold the moment you arm them, and they are the
-   thing that decides whether your next wave is a levy trickle or a real push —
-   and the pit showed nothing. Six armed fighters drew exactly the same 1957
-   ops across the same 1327.3 as an empty hold, on op count and on extent
-   alike. The dock's muster row has always listed them: the panel knew, the
-   board did not.
-
-   One figure per fighter, formed up on the pit — the same way drawNode puts a
-   worker at the node for every hand assigned to it, which is the sibling that
-   condemns this. Yours only: what the other hold has waiting is not something
-   you get to count, the same rule their crews already follow.               */
-// It takes the hold's own side rather than me(), which inside the guard below
-// is the same object — but only BECAUSE of the guard. Written this way so that
-// if the fog rule ever moves, the muster still belongs to the hold it is
-// standing on rather than silently following the watcher.
-const MUSTER = { cap:8, cols:4, dx:.145, dy:.115, x0:-.22, y0:.30 };
-function musterRanks(c, gx, gy, z, s){
-  if (holdSide !== MY) return;
-  const n = Math.min(s.muster.length, MUSTER.cap);
-  for (let i = 0; i < n; i++){
-    const q = bp(gx + MUSTER.x0 + (i % MUSTER.cols) * MUSTER.dx,
-                 gy + MUSTER.y0 + Math.floor(i / MUSTER.cols) * MUSTER.dy, z);
-    drawWorkerFig(c, q[0], q[1], sideCol(), false, .8, i * 2.1);
-  }
-}
-
 /* Workers and troops in training are paid for the moment you order them —
    gold, food and a population slot each — and between waves they are the whole
    of what a hold is doing. The board showed none of it: twelve things in
@@ -5776,12 +5953,14 @@ function musterRanks(c, gx, gy, z, s){
    waiting for a free slot holds at the faint end — and because the bob is
    driven by its OWN timer rather than by the clock, it stands dead still while
    it waits, which is exactly what it is doing.                              */
+// Only the pit trains anything now: the barracks drills the army the Host
+// sends rather than arming bodies into it.
 const TRAINEE = { cap:6, cols:3, dx:.155, dy:.12, dim:.30, small:.34, full:.78, beat:3.4,
-  pit:{ x:-.40, y:-.26 }, barracks:{ x:-.24, y:.30 } };
-function trainCrew(c, gx, gy, z, s, worker, at){
+  pit:{ x:-.40, y:-.26 } };
+function trainCrew(c, gx, gy, z, s, at){
   if (holdSide !== MY) return;
-  const q = s.trainQ.filter(o => (o.type === 'worker') === worker);
-  const slots = worker ? trainSlots(s) : barrackSlots(s);
+  const q = s.trainQ;
+  const slots = trainSlots(s);
   const n = Math.min(q.length, TRAINEE.cap);
   for (let i = 0; i < n; i++){
     // Past the slot count nothing is being worked on yet, so it stays at nought
@@ -5868,10 +6047,7 @@ function drawBuilding(c, b){
       c.strokeStyle = '#6a5540'; c.lineWidth = 3 * B; c.beginPath(); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke();
       c.fillStyle = sideCol(); c.fillRect(p1[0] - 2 * B, p1[1], 8 * B * (s > 0 ? 1 : -1), 9 * B);
     }
-    // Hands still being taken on stand back from the mouth; the muster below
-    // is drawn after them so the ones ready to march are the ones in front.
-    trainCrew(c, gx, gy, z, G.sides[holdSide], true, TRAINEE.pit);
-    musterRanks(c, gx, gy, z, G.sides[holdSide]);
+    trainCrew(c, gx, gy, z, G.sides[holdSide], TRAINEE.pit);
   } else if (t === 'barracks'){
     drawTile(c, gx, gy, '#5e5748');
     drawHouse(c, gx, gy, .42, .34, .62 + z, .40, '#b08a5e', '#a34438');
@@ -5889,7 +6065,6 @@ function drawBuilding(c, b){
       ell(c, q[0], q[1], 3.4 * B, 3.7 * B, shade(sideCol(), .86));
       ell(c, q[0], q[1], 1.2 * B, 1.3 * B, '#c9d2dd');
     }
-    trainCrew(c, gx, gy, z, G.sides[holdSide], false, TRAINEE.barracks);
   } else if (t === 'forge'){
     const F = FIT.forge;
     drawTile(c, gx, gy, '#4f4a44');
@@ -6752,34 +6927,60 @@ function dockHtml(){
   }
   sec.jobs = h;
 
-  // ---- training
+  // ---- training and the barracks
   h = '<div class="ptitle">Train</div><div class="pgrid">';
   h += '<button class="abtn" data-act="worker"><span class="t">Worker</span><span class="c">' + costHtml(C.WORKER_COST) + '</span></button>';
-  for (const k in TRAIN){
-    const d = TRAIN[k], ok = barracksLvl(s) >= d.barracks;
-    h += '<button class="abtn" data-act="unit" data-unit="' + k + '"' + (ok ? '' : ' disabled') + '>' +
-      // A Caster and a Cannon each take TWO workers off the piles, not one.
-      // This printed a flat '+1👥' for all three, so the two that cost a pair
-      // said they cost one — on a button that then refuses with 'no idle
-      // worker to arm' and no explanation of how many it wanted.
-      '<span class="t">' + d.n + '</span><span class="c">' +
-      (ok ? costHtml(d.cost) + ' +' + d.need + '👥' : 'barracks Lv' + d.barracks) + '</span></button>';
-  }
+  h += '</div>';
   const q = s.trainQ.map(x => {
     const pc = Math.round(clamp(x.t / x.dur, 0, 1) * 100);
-    const nm = x.type === 'worker' ? 'Worker' : TRAIN[x.type].n;
-    return '<span class="qchip"><i class="fill" style="width:' + pc + '%"></i><span>' + nm + '</span></span>';
+    return '<span class="qchip"><i class="fill" style="width:' + pc + '%"></i><span>Worker</span></span>';
   }).join('');
-  const cnt = {};
-  for (const m of s.muster) cnt[m.type] = (cnt[m.type] || 0) + 1;
-  const mus = Object.keys(cnt).map(k => '<span class="mchip">' + TRAIN[k].n + ' ×' + cnt[k] + '</span>').join('');
-  sec.train = h + '</div><div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>' +
+  h += '<div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>';
+
+  // The barracks drills the army the Host already sends. One track a kind,
+  // each level a choice of three, every tenth level offering something with a
+  // name. Nothing here puts another body on the bridge.
+  const bl0 = barracksLvl(s);
+  h += '<div class="ptitle">Barracks' + (bl0 ? '' : ' — none built') + '</div>';
+  if (s.troopPend.length){
+    const pend = s.troopPend[0];
+    h += '<div class="insp">' + TRAIN[pend.kind].n + ' reaches level ' + pend.lvl + '. Choose one:</div><div class="pgrid">';
+    pend.opts.forEach((id, i) => {
+      const d = TROOP_PERK[id] || TROOP_SPECIAL[id];
+      const sp = !!TROOP_SPECIAL[id];
+      h += '<button class="abtn' + (sp ? ' hot' : '') + '" data-act="troopick" data-opt="' + i + '">' +
+        '<span class="t">' + d.n + '</span><span class="c">' + d.d + '</span></button>';
+    });
+    h += '</div>';
+  } else {
+    h += '<div class="pgrid">';
+    for (const k of TROOP_KINDS){
+      const t = s.troop[k], cost = troopCost(s, k);
+      const cap = troopCap(s), maxed = t.lvl >= TROOP.maxLvl, capped = t.lvl >= cap;
+      const ok = bl0 > 0 && !maxed && !capped && canPay(s, cost);
+      const next = t.lvl + 1;
+      h += '<button class="abtn" data-act="troopup" data-troop="' + k + '"' + (ok ? '' : ' disabled') + '>' +
+        '<span class="t">' + TRAIN[k].n + ' Lv' + t.lvl + (troopSpecialLvl(next) ? ' ★' : '') + '</span>' +
+        '<span class="c">' + (maxed ? 'fully drilled' : capped ? 'a bigger barracks first' : bl0 ? costHtml(cost) : 'needs a barracks') + '</span></button>';
+    }
+    h += '</div>';
+    // What the drilling has actually bought, so the panel is not just a bill.
+    const done = TROOP_KINDS.map(k => {
+      const t = s.troop[k];
+      if (!t.perks.length) return '';
+      const names = {};
+      for (const id of t.perks){ const d = TROOP_PERK[id] || TROOP_SPECIAL[id]; names[d.n] = (names[d.n] || 0) + 1; }
+      return '<span class="mchip">' + TRAIN[k].n + ': ' +
+        Object.keys(names).map(n => n + (names[n] > 1 ? ' ×' + names[n] : '')).join(', ') + '</span>';
+    }).filter(Boolean).join('');
+    if (done) h += '<div id="musterRow">' + done + '</div>';
+  }
+  sec.train = h +
+    // What the Host has on the bridge right now, and the one thing that
+    // answers it. The shape of a wave was announced by a toast that slid past
+    // in three seconds and was never mentioned again.
     '<div class="ptitle">Next wave' + (s.superT > 0 ? ' — OGRES ' + Math.ceil(s.superT) + 's' : '') + '</div>' +
-    '<div id="musterRow">' + (mus || '<span class="mchip">levies only</span>') + '</div>' +
-    // ...and what the Host has on the bridge right now, with the one thing
-    // that answers it. The shape of a wave was announced by a toast that slid
-    // past in three seconds and never mentioned again.
-    '';
+    '<div class="insp">' + foeWarning() + '</div>';
 
   // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
@@ -7026,19 +7227,19 @@ function adviceFor(s){
     return buildAdvice('tavern', 'Build a Hero Factory. Heroes fight on their own, and they carry a push.');
   if (s.heroes.length < heroCap(s) && canPay(s, HERO_COST))
     return { tab:'heroes', txt:'You can afford another hero. Forge one.' };
-  const armable = Object.keys(TRAIN).filter(k => bl >= TRAIN[k].barracks && canPay(s, TRAIN[k].cost));
-  const mustering = s.muster.length > 0 || s.trainQ.some(q => q.type !== 'worker');
-  if (!mustering){
-    if (s.workers.idle > 0 && armable.length)
-      return { tab:'train', txt:'Nothing is mustering. Arm a ' + TRAIN[armable[0]].n +
-        ' before wave ' + (G.wave + 1) + ' leaves.' };
-    // ...unless one is already on the way, which is what made this the single
-    // most-repeated line in the game.
-    if (s.workers.idle === 0 && popUsed(s) < popCap(s) && !queued('worker'))
-      return { tab:'train', txt:'Every worker is busy, so there is nobody to arm. Train one more.' };
-    if (armable.length === 0)
-      return { tab:'jobs', txt:'You cannot afford a fighter. Put more workers on iron and wood.' };
+  // The barracks drills rather than arms now, so the thing to nag about is an
+  // unanswered choice — it blocks the next purchase — and then a track that is
+  // affordable and standing still.
+  if (bl > 0 && s.troopPend.length)
+    return { tab:'train', txt:'Your barracks is waiting on a choice. Pick one and the drill takes.' };
+  if (bl > 0 && !s.troopPend.length){
+    const afford = TROOP_KINDS.filter(k => s.troop[k].lvl < TROOP.maxLvl && canPay(s, troopCost(s, k)));
+    if (afford.length)
+      return { tab:'train', txt:'You can drill your ' + TRAIN[afford[0]].n +
+        's. Every level makes the wave you already send land harder.' };
   }
+  if (s.workers.idle === 0 && popUsed(s) < popCap(s) && !queued('worker'))
+    return { tab:'train', txt:'Every worker is busy. Train one more.' };
   if (bLvl(s, 'forge') === 0 && s.res.iron > 120)
     return buildAdvice('forge', 'You have iron spare. A Forge unlocks turret and minion upgrades.');
   if (workerCount(s) < 10 && popUsed(s) < popCap(s) - 1 && !queued('worker'))
@@ -7692,12 +7893,23 @@ const packUnit = (u) => ({
 const packSide = (s) => ({
   res:Object.assign({}, s.res), workers:Object.assign({}, s.workers),
   nodeLvl:Object.assign({}, s.nodeLvl), towerUp:Object.assign({}, s.towerUp),
+  troop:{ melee:{ lvl:s.troop.melee.lvl, perks:s.troop.melee.perks.slice() },
+          caster:{ lvl:s.troop.caster.lvl, perks:s.troop.caster.perks.slice() },
+          cannon:{ lvl:s.troop.cannon.lvl, perks:s.troop.cannon.perks.slice() } },
+  troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
   troopUp:Object.assign({}, s.troopUp), superT:s.superT, aiT:s.aiT, rs:s.rs, waveKind:s.waveKind,
   kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
   plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : null),
   trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
-  muster:s.muster.map(m => ({ type:m.type })),
-  structs:s.structs.map(st => ({ key:st.key, hp:st.hp, dead:st.dead, downT:st.downT })),
+  // A turret carries more than its health. dmgTaken gates its regeneration —
+  // it only mends five seconds after the last blow — and cd is where it is in
+  // its firing cycle, so a snapshot that dropped both handed the resynced
+  // machine a turret that healed on a different schedule and fired on a
+  // different beat. It only stayed hidden while nothing happened to be hitting
+  // a turret at the instant the snapshot was taken.
+  structs:s.structs.map(st => ({ key:st.key, hp:st.hp, dead:st.dead, downT:st.downT,
+    cd:st.cd, dmgTaken:st.dmgTaken, chipHp:st.chipHp,
+    hitT:st.hitT, hitT0:st.hitT0, hitW:st.hitW })),
   heroes:s.heroes.map(packHero),
 });
 
@@ -7731,6 +7943,10 @@ function loadMatch(pack){
     Object.assign(s.res, ps.res); Object.assign(s.workers, ps.workers);
     Object.assign(s.nodeLvl, ps.nodeLvl); Object.assign(s.towerUp, ps.towerUp);
     Object.assign(s.troopUp, ps.troopUp);
+    if (ps.troop) for (const k of TROOP_KINDS) if (ps.troop[k]){
+      s.troop[k].lvl = ps.troop[k].lvl; s.troop[k].perks = ps.troop[k].perks.slice();
+    }
+    if (ps.troopPend) s.troopPend = ps.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl }));
     s.superT = ps.superT; s.aiT = ps.aiT; s.rs = ps.rs;
     // Without this a resumed match reported the quiet wave for up to a full
     // 22-second period, however heavy the wave actually on the bridge was —
@@ -7741,12 +7957,15 @@ function loadMatch(pack){
     s.gathered = ps.gathered; s.spent = ps.spent; s.heroKills = ps.heroKills;
     s.plot = ps.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile, raise:0 } : null);
     s.trainQ = ps.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur }));
-    s.muster = ps.muster.map(m => ({ type:m.type }));
     for (const st of s.structs){
       const p = ps.structs.find(o => o.key === st.key);
       if (!p) continue;
       st.mhp = structMaxHp(s, st);
       st.hp = Math.min(p.hp, st.mhp); st.dead = p.dead; st.downT = p.downT;
+      if (p.cd !== undefined) st.cd = p.cd;
+      if (p.dmgTaken !== undefined) st.dmgTaken = p.dmgTaken;
+      if (p.chipHp !== undefined) st.chipHp = p.chipHp;
+      if (p.hitT !== undefined){ st.hitT = p.hitT; st.hitT0 = p.hitT0; st.hitW = p.hitW; }
     }
     s.heroes = ps.heroes.map(ph => {
       const h = makeHero(i, ph.cls, ph.name);
@@ -7984,7 +8203,8 @@ function wire(){
     // one-player and schedules it for an agreed tick in multiplayer.
     if (a === 'job') say(sendCmd('job', { node:b.dataset.node, d:+b.dataset.d }));
     else if (a === 'worker') say(sendCmd('worker', {}));
-    else if (a === 'unit') say(sendCmd('unit', { unit:b.dataset.unit }));
+    else if (a === 'troopup') say(sendCmd('troopup', { troop:b.dataset.troop }));
+    else if (a === 'troopick') say(sendCmd('troopick', { opt:+b.dataset.opt }));
     else if (a === 'build') say(sendCmd('build', { tile:sel.tile, type:b.dataset.type }));
     else if (a === 'upgrade') say(sendCmd('upgrade', { tile:sel.tile }));
     else if (a === 'up') say(sendCmd('up', { up:b.dataset.up }));
@@ -8192,7 +8412,8 @@ const NET = {
 const CMD = {
   job:     (s, c) => assign(s, c.node, c.d),
   worker:  (s)    => trainWorker(s),
-  unit:    (s, c) => trainUnit(s, c.unit),
+  troopup: (s, c) => upgradeTroop(s, c.troop),
+  troopick:(s, c) => pickTroop(s, c.opt),
   build:   (s, c) => build(s, c.tile, c.type),
   upgrade: (s, c) => upgradeBuilding(s, c.tile),
   up:      (s, c) => buyUp(s, c.up),
@@ -8282,10 +8503,18 @@ function netHash(){
     for (const k of ['gold', 'iron', 'wood']) mix(s.nodeLvl[k]);
     for (const k of ['hp', 'armor', 'atk', 'as', 'regen']) mix(s.towerUp[k]);
     for (const k of ['tad', 'tarm', 'thp']) mix(s.troopUp[k]);
+    // The barracks tracks decide every stat every trained body spawns with, so
+    // two machines that disagree about them disagree about the whole army.
+    for (const k of TROOP_KINDS){
+      const t = s.troop[k];
+      mix(t.lvl); mix(t.perks.length);
+      for (const id of t.perks) mixs(id);
+    }
+    mix(s.troopPend.length);
+    for (const p of s.troopPend){ mixs(p.kind); for (const o of p.opts) mixs(o); }
     for (const b of s.plot){ if (!b){ mix(0); continue; } mixs(b.type); mix(b.lvl); }
     mix(s.trainQ.length);
     for (const q of s.trainQ){ mixs(q.type); mix(Math.round(q.t * 30)); }
-    mix(s.muster.length);
     for (const st of s.structs) mix(Math.round(st.hp * 64));
     mix(s.heroes.length);
     for (const h of s.heroes){
@@ -8369,6 +8598,13 @@ function netSnap(){
       if (NET_REFS[k]){ out[k] = ref(v); continue; }
       if (k === 'burn'){ out[k] = v ? { dps:v.dps, t:v.t, src:ref(v.src) } : 0; continue; }
       if (k === 'hitOnce'){ out[k] = v ? [...v] : 0; continue; }
+      // A minion buff is a flat object of numbers, and packBody keeps only
+      // primitives — so it was dropped from every snapshot and a resynced body
+      // silently lost the damage, speed and attack speed it was carrying. It
+      // was rare enough to hide while only a hero's Banner Call set one; a
+      // drill that grants attack speed on a kill sets one every time anything
+      // dies, which is what brought it out.
+      if (k === 'mb'){ out[k] = v ? { t:v.t, ad:v.ad || 0, ms:v.ms || 0, as:v.as || 0 } : 0; continue; }
       if (k === 'buffs'){ out[k] = (v || []).map(b => { const c = {}; for (const j in b) if (typeof b[j] !== 'object') c[j] = b[j]; return c; }); continue; }
       if (k === 'skills'){ out[k] = (v || []).map(s => ({ id:s.id, rank:s.rank, cdT:s.cdT, ult:!!s.ult })); continue; }
       if (k === 'pend'){ out[k] = (v || []).map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })); continue; }
@@ -8391,12 +8627,23 @@ function netSnap(){
       res:Object.assign({}, s.res), workers:Object.assign({}, s.workers),
       nodeLvl:Object.assign({}, s.nodeLvl), towerUp:Object.assign({}, s.towerUp),
       troopUp:Object.assign({}, s.troopUp),
+      troop:{ melee:{ lvl:s.troop.melee.lvl, perks:s.troop.melee.perks.slice() },
+              caster:{ lvl:s.troop.caster.lvl, perks:s.troop.caster.perks.slice() },
+              cannon:{ lvl:s.troop.cannon.lvl, perks:s.troop.cannon.perks.slice() } },
+      troopPend:s.troopPend.map(p => ({ kind:p.kind, opts:p.opts.slice(), lvl:p.lvl })),
       rs:s.rs, superT:s.superT, aiT:s.aiT, aiBuild:s.aiBuild, waveKind:s.waveKind,
       kills:s.kills, structsKilled:s.structsKilled, gathered:s.gathered, spent:s.spent, heroKills:s.heroKills,
       plot:s.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile } : 0),
       trainQ:s.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur })),
-      muster:s.muster.map(m => ({ type:m.type })),
-      structs:s.structs.map(st => ({ key:st.key, hp:st.hp, mhp:st.mhp, dead:st.dead, downT:st.downT, cd:st.cd })),
+          // A turret carries more than health and a firing cooldown.
+          // dmgTaken gates its regeneration — it only mends five seconds after
+          // the last blow — so a resynced machine healed its turrets on a
+          // different schedule from the one it was resyncing with, and the two
+          // drifted apart from there. It stayed hidden while nothing happened
+          // to be hitting a turret at the instant a snapshot was taken.
+          structs:s.structs.map(st => ({ key:st.key, hp:st.hp, mhp:st.mhp, dead:st.dead, downT:st.downT,
+            cd:st.cd, dmgTaken:st.dmgTaken, chipHp:st.chipHp,
+            hitT:st.hitT, hitT0:st.hitT0, hitW:st.hitW })),
     })),
     timeline: G.timeline.map(e => ({ t:e.t, side:e.side, key:e.key, n:e.n })),
   };
@@ -8409,6 +8656,7 @@ function netLoad(p){
     for (const k in b) o[k] = b[k];
     o.hitOnce = Array.isArray(b.hitOnce) ? new Set(b.hitOnce) : null;
     o.buffs = (b.buffs || []).map(x => Object.assign({}, x));
+    o.mb = b.mb ? Object.assign({}, b.mb) : null;
     return o;
   });
   const struct = (side, ord) => (G.sides[side].structs.find(x => x.ord === ord) || null);
@@ -8423,16 +8671,22 @@ function netLoad(p){
     Object.assign(s.res, ps.res); Object.assign(s.workers, ps.workers);
     Object.assign(s.nodeLvl, ps.nodeLvl); Object.assign(s.towerUp, ps.towerUp);
     Object.assign(s.troopUp, ps.troopUp);
+    if (ps.troop) for (const k of TROOP_KINDS) if (ps.troop[k]){
+      s.troop[k].lvl = ps.troop[k].lvl; s.troop[k].perks = ps.troop[k].perks.slice();
+    }
+    if (ps.troopPend) s.troopPend = ps.troopPend.map(q => ({ kind:q.kind, opts:q.opts.slice(), lvl:q.lvl }));
     s.rs = ps.rs; s.superT = ps.superT; s.aiT = ps.aiT; s.aiBuild = ps.aiBuild;
     s.waveKind = ps.waveKind; s.kills = ps.kills; s.structsKilled = ps.structsKilled;
     s.gathered = ps.gathered; s.spent = ps.spent; s.heroKills = ps.heroKills;
     s.plot = ps.plot.map(b => b ? { type:b.type, lvl:b.lvl, tile:b.tile, raise:0 } : null);
     s.trainQ = ps.trainQ.map(q => ({ type:q.type, t:q.t, dur:q.dur }));
-    s.muster = ps.muster.map(m => ({ type:m.type }));
     ps.structs.forEach((st, k) => {
       const live = s.structs[k];
       if (!live) return;
       live.hp = st.hp; live.mhp = st.mhp; live.dead = st.dead; live.downT = st.downT; live.cd = st.cd;
+      if (st.dmgTaken !== undefined) live.dmgTaken = st.dmgTaken;
+      if (st.chipHp !== undefined) live.chipHp = st.chipHp;
+      if (st.hitT !== undefined){ live.hitT = st.hitT; live.hitT0 = st.hitT0; live.hitW = st.hitW; }
     });
   });
   // Re-link after every body exists, or a target could point at nothing.
@@ -8818,10 +9072,11 @@ window.IB = {
   G, C, DIFFS, CLASSES, CLS, PASSIVES, PASS, SKILLS, SKILL, UNITS, TRAIN, STRUCTS,
   BUILDINGS, TOWER_UPS, TROOP_UPS, MAX_UP, HERO_COST, PLOT_W, PLOT_H,
   newMatch, update, draw, spawnWave, spawnUnit, dealDmg, mitigate, healUnit,
-  trainWorker, trainUnit, assign, build, upgradeBuilding, buyUp, buildCost, upCostFor,
+  trainWorker, assign, TROOP_KINDS, TROOP_PERK, TROOP_SPECIAL, TROOP, troopCost, troopSpecialLvl,
+  upgradeTroop, troopCap, offerTroop, pickTroop, autoPickTroop, troopMod, troopHas, troopTrack, build, upgradeBuilding, buyUp, buildCost, upCostFor,
   createHero, makeHero, pickOption, autoPick, gainXp, recalcHero, offer, enterLane, heroStep,
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
-  barrackSlots, gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
+  gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
   frontStruct, liveStructs, structMaxHp, gateX, frontlineX, aiStep, ecoStep, endMatch, upCostFor,
   structLabel, STRUCT_SHORT, skillWorth, rankWorth, TAG_WORTH, AI_BUILD_PLAN, holdsBoard, paintHeld,
   towerCover, towerCovered, COVERED,
@@ -8831,7 +9086,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, MUSTER, musterRanks, TRAINEE, trainCrew, trainSlots, barrackSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, TRAINEE, trainCrew, trainSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,

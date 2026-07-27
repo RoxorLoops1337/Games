@@ -374,19 +374,25 @@ t.ok(true, 'drawing an empty bridge is harmless');
 {
   const s = P();
   rich(s);
-  t.ok(typeof IB.trainUnit(s, 'melee') === 'string', 'without a barracks you cannot arm anyone');
+  // The barracks no longer arms bodies into a muster. Every wave the Host
+  // sends already contains footmen, casters and cannons; the barracks drills
+  // those three so the same wave lands harder. Buying more bodies was both the
+  // thing that did not visibly happen — what you armed waited for the next
+  // wave — and the thing that made a rich hold unanswerable.
+  t.ok(typeof IB.upgradeTroop(s, 'melee') === 'string', 'without a barracks there is nothing to drill');
   const free = s.plot.indexOf(null);
   IB.build(s, free, 'barracks');
   t.ok(IB.barracksLvl(s) === 1, 'the barracks is standing');
   const idle0 = s.workers.idle;
-  t.ok(IB.trainUnit(s, 'melee') === null, 'a footman can be armed');
-  t.ok(s.workers.idle === idle0 - 1, 'arming a footman consumes an idle worker');
-  t.ok(typeof IB.trainUnit(s, 'caster') === 'string', 'casters need a level 2 barracks');
-  IB.upgradeBuilding(s, free);
-  t.ok(IB.barracksLvl(s) === 2 && IB.trainUnit(s, 'caster') === null, 'upgrading the barracks unlocks casters');
-  step(20);
-  const armed = s.muster.length + G.units.filter(u => u.side === 0 && u.paid).length;
-  t.ok(armed >= 2, 'finished fighters muster up (or march out with a wave) — ' + armed);
+  t.ok(IB.upgradeTroop(s, 'melee') === null, 'and now the footmen can be drilled');
+  t.ok(s.troop.melee.lvl === 1, 'which puts a level on the track (' + s.troop.melee.lvl + ')');
+  t.ok(s.workers.idle === idle0, 'and costs no bodies — it is not arming anyone');
+  t.ok(s.troopPend.length === 1, 'a level offers a choice');
+  t.ok(s.troopPend[0].opts.length === 3, 'of three (' + s.troopPend[0].opts.length + ')');
+  t.ok(typeof IB.upgradeTroop(s, 'caster') === 'string', 'and blocks the next drill until it is answered');
+  t.ok(IB.pickTroop(s, 0) === null && s.troop.melee.perks.length === 1, 'picking takes the drill');
+  t.ok(s.troopPend.length === 0, 'and clears the choice');
+  t.ok(IB.upgradeTroop(s, 'caster') === null, 'after which the next track is free to drill');
 }
 {
   const s = P();
@@ -413,11 +419,13 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(mine.length >= 3 && theirs.length >= 3, 'both sides get a free levy trickle');
   t.ok(mine.every(u => finite(u.x) && finite(u.y) && u.hp > 0), 'spawned minions are well formed');
   t.ok(mine.every(u => Math.abs(u.x - IB.gateX(0)) < 6), 'your minions spawn at your own gate');
-  s.muster.push({ type:'melee' }, { type:'cannon' });
-  IB.spawnWave();
-  t.ok(G.units.some(u => u.kind === 'cannon' && u.side === 0), 'mustered fighters march out with the wave');
-  t.ok(s.muster.length === 0, 'the muster empties when the wave leaves');
-  t.ok(G.units.filter(u => u.side === 0 && u.paid).length === 2, 'only armed fighters count against your population');
+  // Footmen used to exist only if you armed them, so the one kind the barracks
+  // is named for could be absent from the battlefield entirely — and with the
+  // barracks no longer arming anything they would have vanished from the game.
+  // They march with every wave now, alongside the levies.
+  t.ok(mine.some(u => u.kind === 'melee'), 'footmen march with the wave, unbought');
+  t.ok(theirs.some(u => u.kind === 'melee'), 'from both holds');
+  t.ok(mine.every(u => !u.paid), 'and nothing on the bridge was bought by the body');
 }
 {
   // minions walk toward the enemy and meet in the middle
@@ -1922,72 +1930,48 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(/You lost/.test(IB.timelineHtml()) || !G.timeline.length, 'the timeline names whose walls came down');
 }
 
-/* ------------------------------------------------------- arming the hold */
+/* --------------------------------------------------- drilling the hold */
 {
-  // "In the barracks you can upgrade the minions to fighter minions and they
-  // will march with the wave" is a pillar of this game. It barely happened:
-  // the AI's job loop shovelled every idle worker into a mine the instant it
-  // appeared, and arming needs an IDLE worker, so eight minutes of play armed
-  // one Footman out of an army of ninety levies.
-  const armedIn = (seed, mins) => {
+  // "In the barracks you can turn workers into fighters and they march with
+  // the wave" used to be a pillar of this game, and it did not work: what you
+  // armed sat in a muster until the next wave, so it did not appear when you
+  // bought it, and buying enough of it simply put more bodies on the bridge
+  // than the other hold could answer.
+  //
+  // The barracks drills the army the Host already sends instead. Nothing it
+  // buys adds a body — so this asks the two things that replaced the old
+  // claim: the Host really spends on it, and what it spends really reaches
+  // the bodies that spawn.
+  const drilledIn = (seed, mins) => {
     IB.newMatch({ diff:'veteran', seed });
     G.sides[0].ai = true;
+    let levy = 0;
     const seen = new Set();
-    let armed = 0, levy = 0;
     for (let i = 0; i < 30 * 60 * mins && G.state === 'play'; i++){
       IB.update(1 / 30);
       for (const u of G.units){
         if (u.side !== 0 || u.isHero || seen.has(u.id)) continue;
-        seen.add(u.id);
-        if (u.paid) armed++; else levy++;
+        seen.add(u.id); levy++;
       }
     }
-    return { armed, levy };
+    const t = G.sides[0].troop;
+    return { levy, lvl:t.melee.lvl + t.caster.lvl + t.cannon.lvl,
+      perks:t.melee.perks.length + t.caster.perks.length + t.cannon.perks.length,
+      pend:G.sides[0].troopPend.length };
   };
-  let armed = 0, levy = 0;
+  let levy = 0, lvl = 0, perks = 0, stuck = 0;
   for (const seed of [5031, 5062, 5093]){
-    const r = armedIn(seed, 8);
-    armed += r.armed; levy += r.levy;
+    const r = drilledIn(seed, 8);
+    levy += r.levy; lvl += r.lvl; perks += r.perks; stuck += r.pend;
   }
-  t.ok(levy > 100, 'the free levies keep coming (' + levy + ' over three matches)');
-  t.ok(armed >= 9, 'and a hold with a barracks actually arms its workers (' + armed + ' armed bodies)');
-  t.ok(armed / (armed + levy) > .04,
-    'so what you build is a real part of the army, not a rounding error (' +
-    (armed / (armed + levy) * 100).toFixed(1) + '%)');
-  // the mechanism: something has to be idle to be armed
-  {
-    IB.newMatch({ diff:'veteran', seed:5124 });
-    const s = P();
-    rich(s);
-    IB.build(s, s.plot.indexOf(null), 'barracks');
-    IB.assign(s, 'gold', 99); IB.assign(s, 'iron', 99); IB.assign(s, 'wood', 99); IB.assign(s, 'food', 99);
-    t.ok(s.workers.idle === 0, 'with every worker on a job nobody is free to arm');
-    t.ok(IB.trainUnit(s, 'melee') === 'no idle worker to arm', 'and the barracks says exactly that');
-    IB.assign(s, 'gold', -1);
-    t.ok(s.workers.idle === 1 && IB.trainUnit(s, 'melee') === null, 'pull one off a job and it can be armed');
-  }
-  // and the button has to say how many workers it wants. It printed a flat
-  // '+1👥' for all three units while a Caster and a Cannon each take two, so
-  // the button asked for one worker and then refused with 'no idle worker to
-  // arm' while one stood right there.
-  {
-    IB.newMatch({ diff:'veteran', seed:5137 });
-    const s = P();
-    rich(s);
-    IB.build(s, s.plot.indexOf(null), 'barracks');
-    const b = IB.bList(s, 'barracks')[0];
-    while (b.lvl < IB.BUILDINGS.barracks.maxLvl) IB.upgradeBuilding(s, b.tile);
-    const html = IB.dockHtml();                 // one string, every panel in it
-    for (const k in IB.TRAIN){
-      const d = IB.TRAIN[k];
-      const seg = html.split('data-unit="' + k + '"')[1] || '';
-      t.ok(seg.includes('+' + d.need + '👥'),
-        'the ' + d.n + ' button asks for the ' + d.need + ' worker(s) it actually takes');
-    }
-    t.ok(new Set(Object.keys(IB.TRAIN).map(k => IB.TRAIN[k].need)).size > 1,
-      'and the units do not all cost the same number of workers, so the label has to vary');
-  }
+  t.ok(levy > 100, 'the free wave keeps coming (' + levy + ' bodies over three matches)');
+  t.ok(lvl >= 9, 'and a hold with a barracks actually drills its army (' + lvl + ' levels over three matches)');
+  // A level with an unanswered choice blocks the next purchase, so a Host that
+  // buys but never picks would look busy and stay level 1 forever.
+  t.ok(perks === lvl, 'every level it bought, it also chose (' + perks + '/' + lvl + ')');
+  t.ok(stuck === 0, 'and it never leaves a choice hanging (' + stuck + ')');
 }
+
 
 /* ------------------------------------------------------ reading the wave */
 {
@@ -2255,43 +2239,25 @@ t.ok(true, 'drawing an empty bridge is harmless');
       const other = [0, 0];
       for (let i = 0; i < 30 * 60 * 9 && G.state === 'play'; i++){
         IB.update(1 / 30);
-        for (const sd of [0, 1]) for (const q of G.sides[sd].trainQ)
-          if (q.type !== 'worker' && q.type !== 'melee') other[sd]++;
+        // The barracks drills rather than arms, so what matters is whether a
+        // hold spreads its work past the footmen it starts on.
+        for (const sd of [0, 1]){
+          const t = G.sides[sd].troop;
+          other[sd] = t.caster.lvl + t.cannon.lvl;
+        }
       }
       for (const sd of [0, 1]){ levels.push(IB.barracksLvl(G.sides[sd])); armedOther.push(other[sd] > 0); }
     }
     const tier = levels.filter(l => l >= 2).length, other = armedOther.filter(Boolean).length;
     t.ok(tier >= 7, 'a hold reaches the barracks level that unlocks Casters (' +
       tier + ' of ' + levels.length + ': ' + levels.join(',') + ')');
-    t.ok(other >= 5, 'and the tier is worth reaching — it arms something other than a Footman (' +
+    t.ok(other >= 5, 'and the tier is worth reaching — it drills something other than its Footmen (' +
       other + ' of ' + armedOther.length + ' holds)');
     t.ok(levels.every(l => l <= IB.BUILDINGS.barracks.maxLvl), 'and none climbs past the cap');
   }
-  {
-    // The reserve, on its own. A Footman needs one worker and is always
-    // affordable; a Caster needs two. With exactly the pair in hand, the tick
-    // must not spend one of them on a Footman or shovel them into a mine —
-    // either the Caster goes in, or the pair is still standing there.
-    IB.newMatch({ diff:'veteran', seed:5209 });
-    const s = P();
-    rich(s);
-    IB.build(s, s.plot.indexOf(null), 'barracks');
-    IB.upgradeBuilding(s, IB.bList(s, 'barracks')[0].tile);
-    t.ok(IB.barracksLvl(s) === 2, 'a level-2 barracks is standing');
-    for (const k of ['gold','iron','wood','food']) s.res[k] = 400;
-    for (const n of ['gold','iron','wood','food']) IB.assign(s, n, -9);   // everyone home
-    const held = s.workers.idle;
-    s.workers.idle = 2;
-    s.aiT = 0;
-    IB.aiStep(s, .1);
-    const q = s.trainQ.filter(o => o.type !== 'worker');
-    t.ok(!q.some(o => o.type === 'melee'),
-      'a Footman does not eat the pair of workers the hold is banking for a Caster');
-    t.ok(q.some(o => o.type === 'caster') || s.workers.idle >= 2,
-      'so either the Caster is armed or the pair is still idle (idle ' + s.workers.idle +
-      ', queued ' + JSON.stringify(q.map(o => o.type)) + ')');
-    t.ok(held >= 0, 'the hold had workers to bring home (' + held + ')');
-  }
+  // (The worker-reserve rule that used to live here protected the pair of idle
+  // bodies a Caster cost to arm. Nothing is armed any more, so there is nothing
+  // to reserve and nothing left to test.)
   {
     // The Cannon sits behind a THIRD barracks level, and that level was
     // unreachable for a different reason than the second one. Priced from the
@@ -2324,15 +2290,16 @@ t.ok(true, 'drawing an empty bridge is harmless');
       const gun = [0, 0];
       for (let i = 0; i < 30 * 60 * 12 && G.state === 'play'; i++){
         IB.update(1 / 30);
-        for (const sd of [0, 1]) for (const q of G.sides[sd].trainQ)
-          if (q.type === 'cannon') gun[sd]++;
+        // Cannons are drilled, not armed: the level on the track is the thing
+        // the third barracks tier is worth reaching for.
+        for (const sd of [0, 1]) gun[sd] = G.sides[sd].troop.cannon.lvl;
       }
       for (const sd of [0, 1]){ lv3.push(IB.barracksLvl(G.sides[sd])); cannon.push(gun[sd] > 0); }
     }
     const top = lv3.filter(l => l >= 3).length, guns = cannon.filter(Boolean).length;
     t.ok(top >= 14, 'a hold reaches the barracks level that unlocks Cannons (' +
       top + ' of ' + lv3.length + ': ' + lv3.join(',') + ')');
-    t.ok(guns >= 3, 'and it arms a Cannon with it (' + guns + ' of ' + cannon.length + ' holds)');
+    t.ok(guns >= 3, 'and drills its Cannons with it (' + guns + ' of ' + cannon.length + ' holds)');
   }
   {
     // The save-up rule on its own: a cheap upgrade near the bottom of the list
@@ -2371,7 +2338,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // Every observable a building is supposed to move:
   const readings = (s) => ({
     pop:IB.popCap(s), fields:IB.fieldSlots(s), pits:IB.trainSlots(s),
-    muster:IB.barrackSlots(s), tier:IB.barracksLvl(s), forge:IB.upCap(s),
+    drill:IB.troopCap(s), tier:IB.barracksLvl(s), forge:IB.upCap(s),
     heroes:IB.heroCap(s), gather:IB.gatherMul(s),
   });
   const changed = (a, b) => Object.keys(a).filter(k => a[k] !== b[k]);
@@ -2814,7 +2781,8 @@ t.ok(true, 'drawing an empty bridge is harmless');
     if (/Farm/.test(a.txt)) err = IB.build(s, s.plot.indexOf(null), 'farm');
     else if (/Forge/.test(a.txt)) err = IB.build(s, s.plot.indexOf(null), 'forge');
     else if (/Hero Factory/.test(a.txt)) err = IB.build(s, s.plot.indexOf(null), 'tavern');
-    else if (/Arm a /.test(a.txt)) err = IB.trainUnit(s, 'melee');
+    else if (/drill your/.test(a.txt)) err = IB.upgradeTroop(s, 'melee');
+    else if (/waiting on a choice/.test(a.txt)) err = IB.pickTroop(s, 0);
     else if (/Train one more|Train another/.test(a.txt)) err = IB.trainWorker(s);
     else if (/standing around/.test(a.txt)){
       const node = a.txt.match(/on (\w+)\./)[1];
@@ -5512,71 +5480,20 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.MY = seat0e;
   }
   {
-    // Troops armed at the barracks stand in the mustering pit until the wave
-    // goes out. They cost population and gold the moment you arm them, and
-    // they decide whether the next wave is a levy trickle or a real push — and
-    // the pit showed nothing. Six armed fighters drew exactly the same 1957
-    // ops across the same 1327.3 as an empty hold, on op count and extent
-    // alike. The dock's muster row has always listed them: the panel knew and
-    // the board did not.
-    //
-    // drawNode's crew is the sibling that condemns it — one figure at the node
-    // for every hand assigned to it, in the very same file.
+    // (The muster that used to stand in the pit is gone with the mechanic: the
+    // barracks drills the wave the Host already sends rather than arming
+    // bodies into one, so there is nothing waiting there to draw. The node
+    // crew that condemned it is still the sibling every other hold marker is
+    // measured against, so it keeps its check here.)
     const s = CTX.__stats;
     const seat0f = IB.MY;
-    const holdWith = (side, n, watcher) => {
-      IB.newMatch({ diff:'veteran', seed:8301 });
-      IB.MY = watcher === undefined ? side : watcher;
-      IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
-      IB.cam.x = side === 0 ? IB.HOLD_X : C.LANE_LEN - IB.HOLD_X;
-      const sd = G.sides[side];
-      sd.plot[4] = { type:'pit', lvl:2, tile:4, raise:0 };
-      sd.muster.length = 0;
-      for (let i = 0; i < n; i++) sd.muster.push({ type: i % 2 ? 'melee' : 'caster' });
-      s.dropped = 0;
-      const b = s.ops;
-      IB.drawHold(CTX, side);
-      return { n:s.ops - b, dropped:s.dropped };
-    };
-    const empty = holdWith(0, 0), one = holdWith(0, 1), few = holdWith(0, 3), many = holdWith(0, 6);
-    t.ok(empty.n > 500, 'the hold really drew (' + empty.n + ' ops)');
-    t.ok([empty, one, few, many].every(x => x.dropped === 0), 'and the capture held it');
-    t.ok(one.n > empty.n, 'a single armed fighter stands in the pit (' + empty.n + ' → ' + one.n + ')');
-    t.ok(few.n > one.n && many.n > few.n, 'and the muster grows with it (' +
-      one.n + ' → ' + few.n + ' → ' + many.n + ')');
-    // No saturating at the first fighter — the trap the crown fell into.
-    t.ok(many.n - few.n > 0 && few.n - one.n > 0, 'every fighter after the first shows too');
-    // But it is bounded, or a big muster buries the plot it is standing on.
-    const huge = holdWith(0, 40);
-    t.ok(huge.n <= empty.n + (many.n - empty.n) * 3, 'and a huge muster does not bury the plot (' +
-      many.n + ' at six → ' + huge.n + ' at forty)');
-    t.ok(IB.MUSTER.cap > 3, 'the pit holds a real company before it stops counting (' + IB.MUSTER.cap + ')');
-
-    // CROSSED. What the other hold has waiting is not something you get to
-    // count — the same rule their crews already follow — and a seat test where
-    // owner and watcher are the same side could not tell either way.
-    let leaked = 0, shown = 0;
-    for (const owner of [0, 1]){
-      const mine = holdWith(owner, 6, owner).n, mineEmpty = holdWith(owner, 0, owner).n;
-      const theirs = holdWith(owner, 6, 1 - owner).n, theirsEmpty = holdWith(owner, 0, 1 - owner).n;
-      if (mine > mineEmpty) shown++;
-      if (theirs !== theirsEmpty) leaked++;
-    }
-    t.ok(shown === 2, 'each hold shows you your own muster (' + shown + '/2)');
-    t.ok(leaked === 0, 'and never shows you theirs (' + leaked + ')');
-    IB.MY = seat0f;
-
-    // The sibling has to keep working — the crew at the node is what this was
-    // measured against, and it is in the same file for the same reason.
-    {
-      IB.newMatch({ diff:'veteran', seed:8305 });
-      IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
-      G.sides[0].workers.gold = 0;
-      const c0 = (() => { const b = s.ops; IB.drawHold(CTX, 0); return s.ops - b; })();
-      G.sides[0].workers.gold = 5;
-      const c5 = (() => { const b = s.ops; IB.drawHold(CTX, 0); return s.ops - b; })();
-      t.ok(c5 > c0, 'the crew still stands at the node it works (' + c0 + ' → ' + c5 + ')');
-    }
+    IB.newMatch({ diff:'veteran', seed:8305 });
+    IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
+    G.sides[0].workers.gold = 0;
+    const c0 = (() => { const b = s.ops; IB.drawHold(CTX, 0); return s.ops - b; })();
+    G.sides[0].workers.gold = 5;
+    const c5 = (() => { const b = s.ops; IB.drawHold(CTX, 0); return s.ops - b; })();
+    t.ok(c5 > c0, 'the crew still stands at the node it works (' + c0 + ' → ' + c5 + ')');
     IB.cam.x = 26;
     IB.MY = seat0f;
   }
@@ -5606,7 +5523,6 @@ t.ok(true, 'drawing an empty bridge is harmless');
       const sd = G.sides[side];
       sd.plot[4] = { type:'pit', lvl:2, tile:4, raise:0 };
       sd.plot[5] = { type:'barracks', lvl:2, tile:5, raise:0 };
-      sd.muster.length = 0;
       for (const k of ['gold', 'iron', 'wood', 'food', 'idle']) sd.workers[k] = 0;
       sd.trainQ = q.map(x => ({ ...x }));
       s.dropped = 0; s.ellipses = []; s.fills = []; s.lines = []; s.texts = [];
@@ -7517,7 +7433,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
   const seen = {}, power = {};
   for (let w = 0; w < 90; w++){
     G.units.length = 0;
-    for (const sd of G.sides){ sd.muster.length = 0; sd.superT = 0; }
+    for (const sd of G.sides) sd.superT = 0;
     // spawnWave() advances the wave, and a wave 90 later is stronger whatever
     // its shape — pin it, or this measures the clock instead of the shape.
     G.wave = 23;                                 // deep enough that every shape is unlocked
@@ -7543,7 +7459,6 @@ t.ok(true, 'drawing an empty bridge is harmless');
   let early = 0;
   for (let w = 0; w < 40; w++){
     G.units.length = 0;
-    for (const sd of G.sides) sd.muster.length = 0;
     G.wave = 2;
     IB.spawnWave();
     G.wave = 2;
@@ -7793,8 +7708,9 @@ t.ok(true, 'drawing an empty bridge is harmless');
     [ 90, (ib) => { for (const s of ib.G.sides) ib.assign(s, 'iron', 2); } ],
     [150, (ib) => { for (const s of ib.G.sides){ s.res.wood += 400; s.res.gold += 400;
                      ib.build(s, s.plot.indexOf(null), 'barracks'); } } ],
-    [300, (ib) => { for (const s of ib.G.sides){ s.res.gold += 600; s.res.food += 600;
-                     ib.trainUnit(s, 'melee'); ib.trainUnit(s, 'melee'); } } ],
+    [300, (ib) => { for (const s of ib.G.sides){ s.res.gold += 600; s.res.iron += 600;
+                     ib.upgradeTroop(s, 'melee'); ib.pickTroop(s, 0);
+                     ib.upgradeTroop(s, 'melee'); ib.pickTroop(s, 0); } } ],
     [450, (ib) => { for (const s of ib.G.sides){ s.res.wood += 800; s.res.gold += 800;
                      ib.build(s, s.plot.indexOf(null), 'tavern'); } } ],
     [600, (ib) => { ib.createHero(ib.G.sides[0], 'fighter'); ib.createHero(ib.G.sides[1], 'marksman'); } ],
@@ -7968,9 +7884,12 @@ t.ok(true, 'drawing an empty bridge is harmless');
     [140, 0, 'build',  { tile:0, type:'barracks' }],
     [163, 1, 'build',  { tile:0, type:'farm' }],
     [200, 1, 'build',  { tile:1, type:'barracks' }],
-    [255, 0, 'unit',   { unit:'melee' }],
-    [290, 1, 'unit',   { unit:'melee' }],
-    [330, 0, 'unit',   { unit:'melee' }],
+    [255, 0, 'troopup',  { troop:'melee' }],
+    [258, 0, 'troopick', { opt:0 }],
+    [290, 1, 'troopup',  { troop:'caster' }],
+    [293, 1, 'troopick', { opt:1 }],
+    [330, 0, 'troopup',  { troop:'cannon' }],
+    [333, 0, 'troopick', { opt:2 }],
     [420, 0, 'nodeup', { node:'gold' }],
     [470, 1, 'nodeup', { node:'iron' }],
   ];
@@ -8823,7 +8742,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
     ['nodeup',  { node:'gold' },       (s) => s.nodeLvl.gold],
     ['upgrade', { tile:5 },            (s) => s.plot[5].lvl],
     ['up',      { up:'hp' },           (s) => s.towerUp.hp],
-    ['unit',    { unit:'melee' },      (s) => s.trainQ.filter(q => q.type !== 'worker').length],
+    ['troopup', { troop:'melee' },     (s) => s.troop.melee.lvl],
   ];
   for (const [kind, args, read] of cases){
     netMatch(9601);
@@ -8970,6 +8889,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(G.state === 'play', 'the match under test is still running');
   t.ok(G.units.length > 3, 'with bodies on the bridge (' + G.units.length + ')');
 
+  G.projs.length = 0; G.zones.length = 0;      // see the note below
   const at = IB.netHash();
   const json = JSON.stringify(IB.netSnap());
   t.ok(json.length > 2000, 'a snapshot is a substantial thing (' + json.length + ' bytes)');
@@ -8985,12 +8905,20 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.netLoad(JSON.parse(json)); const r2 = runOn();
   t.ok(r1 === r2, 'two runs from one snapshot are identical');
 
-  // ...and identical to a machine that never drifted at all.
+  // ...and identical to a machine that never drifted at all — with one caveat
+  // the snapshot is explicit about. In-flight arrows and ground zones carry
+  // callbacks and live references, so netSnap drops them; a resync is safe
+  // because BOTH machines load the same snapshot and both drop them together.
+  // A machine that never drifted still has its arrows, so it is only
+  // comparable once they have landed. This seed used to have none in the air
+  // at the snapshot instant, which is why the difference never showed; drain
+  // them explicitly rather than depend on that.
   IB.newMatch({ diff:'veteran', seed:9800 });
   for (const s of G.sides){ rich(s); s.plot[2] = { type:'tavern', lvl:3, tile:2 }; }
   IB.createHero(G.sides[0], 'mage'); IB.createHero(G.sides[1], 'fighter');
   for (const s of G.sides) for (const h of s.heroes){ h.lvl = 12; IB.recalcHero(h, true); IB.autoPick(h); }
   step(70);
+  G.projs.length = 0; G.zones.length = 0;
   const clean = runOn();
   t.ok(clean === r1, 'and indistinguishable from a run that never drifted — which is the whole point');
 
