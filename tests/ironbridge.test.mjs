@@ -2901,6 +2901,57 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'every building draws on every plot, mid-raise and finished, at every zoom');
 }
 {
+  // The ogre and the cannon have their own draw functions and both missed the
+  // pass that gave the infantry legs, a lit side and a face — so the biggest,
+  // most dangerous thing on the bridge ended up the least detailed thing on it,
+  // standing next to levies with more going on than it had.
+  IB.newMatch({ diff:'veteran', seed:127 });
+  // drawUnit dispatches on these two literal strings; rename a kind in the
+  // unit table and the branch silently stops firing.
+  t.ok(IB.UNITS.super && IB.UNITS.cannon, 'the two kinds with their own art still exist under those names');
+
+  // Recoil. The sign is the whole point: a gun that kicked TOWARD the enemy
+  // would read as a lunge, and it would read as one on only one side of the
+  // bridge — which no single screenshot would show.
+  const guns = [IB.spawnUnit(0, 'cannon', { x:40, y:0 }), IB.spawnUnit(1, 'cannon', { x:44, y:0 })];
+  for (const g of guns){
+    g.swing = 0;
+    t.ok(IB.recoilOf(g) === 0, 'a gun that has not fired sits still');
+    g.swing = IB.RECOIL_T;
+    const r = IB.recoilOf(g);
+    t.ok(Math.abs(r - IB.RECOIL) < 1e-9 || Math.abs(r + IB.RECOIL) < 1e-9,
+      'and kicks a full stroke the instant it fires (' + r.toFixed(2) + ')');
+    t.ok(Math.sign(r) === -IB.dirOf(g.side), 'backward, away from what it is shooting at, on side ' + g.side);
+    g.swing = IB.RECOIL_T * .5;
+    t.ok(Math.abs(IB.recoilOf(g)) < IB.RECOIL && Math.abs(IB.recoilOf(g)) > 0, 'and runs back in as the stroke decays');
+    g.swing = IB.RECOIL_T * 4;
+    t.ok(Math.abs(IB.recoilOf(g)) <= IB.RECOIL + 1e-9, 'never further than one stroke, however long the swing');
+    g.swing = 0;
+  }
+
+  // Both big bodies, on both sides, at both ends of the lane — a unit can be
+  // clamped out to x = -2, and the wheel roll is a phase taken off its x.
+  const bigs = [];
+  for (const side of [0, 1]) for (const k of ['super', 'cannon'])
+    bigs.push(IB.spawnUnit(side, k, { x:side === 0 ? 30 : 90, y:0 }));
+  IB.rebuildGrid();
+  IB.cam.follow = false;
+  for (const x of [-2, 30, C.LANE_LEN + 2]){
+    for (const b of bigs) b.x = x;
+    IB.cam.x = x;
+    for (const z of [.45, 1, 2.6]){
+      IB.cam.z = IB.cam.tz = z;
+      for (const b of bigs){ b.swing = .2; b.hitT = 0; }
+      IB.draw();
+      for (const b of bigs){ b.swing = 0; b.hitT = .1; }
+      IB.draw();
+      for (const b of bigs) b.hitT = 0;
+    }
+  }
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'the ogre and the gun draw on both sides, firing and hit, at both ends of the lane');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
