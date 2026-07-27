@@ -241,8 +241,21 @@ export function createGunMaterials(G, engine, materials) {
 
   const env = { fallback: null, current: null };
 
+  // Base env weights, so the runtime occlusion scale multiplies the authored
+  // value rather than replacing it.
+  const envBase = {};
+  for (const k in mats) envBase[k] = mats[k].envMapIntensity === undefined ? 1 : mats[k].envMapIntensity;
+  let envScale = -1;
+
   return {
     mats,
+    // How much of the sky the weapon can actually see, applied per material.
+    setEnvScale(v) {
+      const s2 = Math.max(0, Math.min(2, v));
+      if (Math.abs(s2 - envScale) < 0.004) return;
+      envScale = s2;
+      for (const k in mats) if (mats[k].envMapIntensity !== undefined) mats[k].envMapIntensity = envBase[k] * s2;
+    },
     // Called every frame; almost always a no-op after the first.
     syncEnvironment(view, scene) {
       if (view.environment && view.environment !== env.fallback) return;   // owned elsewhere

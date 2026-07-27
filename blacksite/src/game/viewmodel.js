@@ -101,7 +101,10 @@ export function createViewmodel(G, engine, materials) {
   const sun = {
     light: null, dir: new THREE.Vector3(-0.42, 0.34, -0.62).normalize(), search: 0,
     // How much of the sun the player can actually see, smoothed. See syncLights.
-    vis: 1, probe: 0, ray: vec3(), org: vec3(),
+    vis: 1, visTarget: 1, probe: 0, ray: vec3(), org: vec3(),
+    // …and how much sky, which is a separate question: you can be out of the
+    // sun and still under an open sky, and the two shade a weapon differently.
+    sky: 1, skyTarget: 1,
   };
 
   // ── animation state ────────────────────────────────────────────────────────
@@ -606,14 +609,24 @@ export function createViewmodel(G, engine, materials) {
       sun.probe = 0.10;
       sun.org.x = G.player.pos.x; sun.org.y = G.player.pos.y; sun.org.z = G.player.pos.z;
       sun.ray.x = sun.dir.x; sun.ray.y = sun.dir.y; sun.ray.z = sun.dir.z;
-      let blocked = false;
-      try { blocked = !!raycast(G.world, sun.org, sun.ray, 45); } catch { blocked = false; }
-      sun.visTarget = blocked ? 0 : 1;
+      try {
+        sun.visTarget = raycast(G.world, sun.org, sun.ray, 45) ? 0 : 1;
+        // Straight up, for the environment. Under a container roof the weapon
+        // should stop reflecting a sky it cannot see — without this it carries a
+        // full outdoor probe into a dark interior and glows there, which is the
+        // most conspicuous way a viewmodel can fail to belong to a room.
+        sun.ray.x = 0.12; sun.ray.y = 1; sun.ray.z = 0.08;
+        sun.skyTarget = raycast(G.world, sun.org, sun.ray, 14) ? 0 : 1;
+      } catch { sun.visTarget = 1; sun.skyTarget = 1; }
     }
-    sun.vis = smooth(sun.vis, sun.visTarget === undefined ? 1 : sun.visTarget, 5.5, dt);
-    // Never all the way off: even in full shade the sky still reaches the gun,
-    // and that residual is what keeps the chamfers legible in a doorway.
+    sun.vis = smooth(sun.vis, sun.visTarget, 5.5, dt);
+    sun.sky = smooth(sun.sky, sun.skyTarget, 4.5, dt);
+    // Never all the way off: bounce still reaches the gun indoors, and that
+    // residual is what keeps the chamfers legible in a doorway.
     key.intensity *= 0.10 + 0.90 * sun.vis;
+    // The environment is the view scene's only ambient specular, so this is the
+    // one lever that makes a polished receiver go matte under a roof.
+    gun.setEnvScale(0.30 + 0.70 * sun.sky);
 
     const at = engine.viewCam.position;
     keyTarget.position.copy(at);

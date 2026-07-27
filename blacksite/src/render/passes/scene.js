@@ -17,6 +17,15 @@
 // extra quarter-resolution draw of the viewmodel in flat white. That is a
 // handful of triangles, and it is the difference between a stable weapon and a
 // weapon that ghosts across the screen every time the player turns.
+//
+// The third is why there are two of everything. Particle FX wants to read the
+// scene's depth (soft particles) and colour (refraction) from *inside* the world
+// render — but a texture attached to the bound framebuffer cannot be sampled,
+// and drivers are entitled to return garbage or drop the draw when you try. So
+// the scene target is double-buffered and the frame that just finished is
+// published for anyone outside this file to read. It is one frame old, which is
+// invisible on a soft-particle fade or a heat shimmer, and it costs one extra
+// target instead of the extra scene render an FX-side depth prepass would.
 
 import * as THREE from 'three';
 import { makeRT, makeDepthTexture } from './common.js';
@@ -24,7 +33,11 @@ import { makeRT, makeDepthTexture } from './common.js';
 export function createScenePass(renderer, engine, opts = {}) {
   const hdrType = opts.hdrType || THREE.UnsignedByteType;
 
-  let color = null, mask = null, depthTex = null;
+  // buf[cur] is written this frame; buf[done] is the last completed frame and
+  // is what the outside world may sample.
+  const buf = [null, null];
+  let cur = 0, done = 1;
+  let mask = null;
   let w = 1, h = 1;
 
   const _clear = new THREE.Color();
@@ -35,32 +48,46 @@ export function createScenePass(renderer, engine, opts = {}) {
   function alloc(nw, nh) {
     w = Math.max(1, nw | 0); h = Math.max(1, nh | 0);
     free();
-    color = makeRT(w, h, { type: hdrType, name: 'hdr.world', depth: true });
-    depthTex = makeDepthTexture(renderer, w, h);
-    if (depthTex) color.depthTexture = depthTex;
+    for (let i = 0; i < 2; i++) {
+      const rt = makeRT(w, h, { type: hdrType, name: 'hdr.world' + i, depth: true });
+      const d = makeDepthTexture(renderer, w, h);
+      if (d) rt.depthTexture = d;
+      buf[i] = rt;
+    }
+    // Both start on 0: the first `renderWorld` flips `cur` to 1, so the
+    // published buffer is never the one being drawn into, even on frame one.
+    cur = 0; done = 0;
     // Quarter res is plenty: the mask is only ever used as a binary "is this the
     // weapon" test, and a soft edge there is harmless.
     mask = makeRT(Math.max(1, w >> 1), Math.max(1, h >> 1), { name: 'vm.mask' });
   }
 
   function free() {
-    if (color) color.dispose();
+    for (let i = 0; i < 2; i++) { if (buf[i]) buf[i].dispose(); buf[i] = null; }
     if (mask) mask.dispose();
-    color = mask = depthTex = null;
+    mask = null;
   }
 
   const api = {
-    get color() { return color; },
+    get color() { return buf[cur]; },
     get mask() { return mask; },
-    get depthTexture() { return depthTex; },
-    get hasDepth() { return !!depthTex; },
+    get depthTexture() { return buf[cur] ? buf[cur].depthTexture : null; },
+    get hasDepth() { return !!(buf[cur] && buf[cur].depthTexture); },
+
+    // Published to other subsystems: complete, and guaranteed not to be the
+    // framebuffer anything is currently drawing into.
+    get publishedColor() { return buf[done] ? buf[done].texture : null; },
+    get publishedDepth() { return buf[done] ? buf[done].depthTexture : null; },
+    // Called once the frame's world render is finished with.
+    publish() { done = cur; },
 
     resize(nw, nh) { alloc(nw, nh); },
 
     // World only. Background and fog come from the scene as configured by the
     // sky module; nothing here overrides them.
     renderWorld() {
-      renderer.setRenderTarget(color);
+      cur ^= 1;
+      renderer.setRenderTarget(buf[cur]);
       renderer.autoClear = true;
       renderer.clear(true, true, false);
       renderer.render(engine.scene, engine.camera);
