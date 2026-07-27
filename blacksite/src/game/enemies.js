@@ -903,7 +903,7 @@ function poseLeg(rig, i) {
 
   // Knees track forward and slightly outward, more so crouched — a crouch with
   // the knees in the sagittal plane looks like a chair, not a firing position.
-  _v5.set(f.side * (0.16 + rig.crouchW * 0.35), 0.22, -1).applyQuaternion(SQ[B.pelvis]).normalize();
+  _v5.set(f.side * (0.06 + rig.crouchW * 0.30), 0.22, -1).applyQuaternion(SQ[B.pelvis]).normalize();
   solveTwoBone(SP[thigh], f.rig, DIM.thigh, DIM.shin, _v5, _v2, _v6);
   aimLimb(rig, thigh, SP[thigh], _v2, _v5);
   aimLimb(rig, shin, _v2, _v6, _v5);

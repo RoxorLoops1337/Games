@@ -72,14 +72,20 @@ export function createViewmodel(G, engine, materials) {
   // belong in the frame.
   //
   // So: one key mirrored from `engine.lighting.sun` and re-aimed at the weapon
-  // every frame, and one fill at about a quarter of it. That fill is the only
-  // light here with no counterpart in the world and it is still defensible — it
-  // stands in for bounce off the player's own chest and forearms, which is real
-  // light the world has no geometry for. Anything beyond those two is a lie.
+  // every frame, and one fill that is a copy of the world's ground-bounce light
+  // rather than a rig of its own.
+  //
+  // That second point is not pedantry. A hemisphere light with a bright *sky*
+  // colour adds a top light the world does not have, and the top of a weapon is
+  // exactly what the player is looking at — so the receiver and handguard come
+  // back a stop and a half hot while the level behind them does not, and the gun
+  // reads as a prop composited over a photograph even though the key matches
+  // perfectly. The sky's contribution is already in the environment map; the
+  // only thing left to add is bounce, and bounce comes from below.
   const key = new THREE.DirectionalLight(0xffeeda, 1.0);
   const keyTarget = new THREE.Object3D();
   key.castShadow = false;
-  const fill = new THREE.HemisphereLight(0x9cc0e4, 0x40382e, 0.28);
+  const fill = new THREE.HemisphereLight(0x0a0c10, 0x40382e, 0.16);
   engine.view.add(key, keyTarget, fill);
   key.target = keyTarget;
   const sun = { light: null, dir: new THREE.Vector3(-0.42, 0.34, -0.62).normalize(), search: 0 };
@@ -555,7 +561,17 @@ export function createViewmodel(G, engine, materials) {
       // factor other than 1 here is a lie the eye catches on the first frame.
       const s = L && typeof L.sunIntensity === 'number' ? L.sunIntensity : src.intensity;
       key.intensity = clamp(s, 0.05, 6);
-      fill.intensity = key.intensity * 0.13 + 0.03;
+      // Copy the world's bounce outright, with a modest lift for the light that
+      // comes off the player's own chest and forearms — the one source the world
+      // genuinely has no geometry for.
+      const b = L && L.bounce;
+      if (b) {
+        fill.color.copy(b.color);
+        fill.groundColor.copy(b.groundColor);
+        fill.intensity = b.intensity * 1.25;
+      } else {
+        fill.intensity = key.intensity * 0.11 + 0.03;
+      }
     }
     const at = engine.viewCam.position;
     keyTarget.position.copy(at);

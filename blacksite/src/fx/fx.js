@@ -533,10 +533,13 @@ void main() {
   // and it nearly vanishes. This one term is most of why a dusk scene feels like
   // it has air in it.
   float fs = pow(max(dot(normalize(toCam), -uSunDir), 0.0), 5.0);
-  float bright = aCfg.w * mix(0.25, 1.0, fs);
+  // Even away from the sun a mote picks up sky bounce, so the floor is a third
+  // of the peak rather than zero — a field that vanishes when you turn round
+  // reads as a bug, not as physics.
+  float bright = aCfg.w * mix(0.34, 1.0, fs);
   // Near fade so a mote never lands on the lens, far fade so the field has no
   // visible edge where the wrap box ends.
-  bright *= smoothstep(0.35, 1.6, dist) * (1.0 - smoothstep(span.x * 0.30, span.x * 0.52, dist));
+  bright *= smoothstep(0.30, 1.1, dist) * (1.0 - smoothstep(span.x * 0.34, span.x * 0.52, dist));
 
   vec4 mv = viewMatrix * vec4(p, 1.0);
   float size = aCfg.x;
@@ -556,7 +559,7 @@ void main() {
     float h = clamp(1.0 - (p.y - uGround) / max(span.y, 0.001), 0.0, 1.0);
     size *= 1.0 + 0.25 * sin(uTime * 1.3 + aCfg.z * 9.0);
     along = size;
-    bright *= h * h * smoothstep(7.0, 16.0, dist);
+    bright *= h * h * smoothstep(5.0, 11.0, dist);
   }
   vec2 q = position.xy;
   mv.xy += ax * (q.x * along) + vec2(-ax.y, ax.x) * (q.y * size);
@@ -883,7 +886,12 @@ function build(G, engine, materials) {
   // depth sort would mean rewriting the whole instance buffer every frame, which
   // is exactly the bandwidth this design exists to avoid.
   const matAlpha = particleMaterial(false, 0.45, 1.0);
-  const matAdd = particleMaterial(true, 0.12, 1.0);
+  // Additive families are pushed past 1.0 deliberately: sparks, flashes and
+  // fireballs are the only things in a dusk scene that are genuinely brighter
+  // than the sky, and clamping them to white makes them read as paper cut-outs
+  // sitting in front of the world. Over-range is also what the bloom pass is
+  // looking for, so this is the one number that decides whether a hit glows.
+  const matAdd = particleMaterial(true, 0.12, 2.4);
   const alphaPool = makePool(N_ALPHA, matAlpha, 10);
   const addPool = makePool(N_ADD, matAdd, 12);
 
@@ -1001,7 +1009,11 @@ function build(G, engine, materials) {
   }
 
   const HAZE_FRAC = 0.16;   // of the mote budget, spent on ground heat shimmer
-  const moteMesh = makeAtmo(N_MOTE, true, 1.0, new THREE_.Vector3(56, 15, 56), (i, a, c) => {
+  // The mote field is deliberately small — 20 m, not 60. A dust mote is
+  // sub-pixel past about eight metres, so spreading the budget over a large
+  // volume spends most of it on particles that never light a single pixel;
+  // concentrating it near the camera is what makes the air visible.
+  const moteMesh = makeAtmo(N_MOTE, true, 1.0, new THREE_.Vector3(20, 11, 20), (i, a, c) => {
     const haze = i < N_MOTE * HAZE_FRAC;
     a[i * 4] = rnd(); a[i * 4 + 1] = haze ? rnd() * 0.22 : Math.pow(rnd(), 1.6); a[i * 4 + 2] = rnd();
     a[i * 4 + 3] = haze ? 1 : 0;
@@ -1011,17 +1023,18 @@ function build(G, engine, materials) {
       // gradient that breathes reads as rising air well enough at distance.
       // The alpha is deliberately at the edge of perception: shimmer you can
       // point at is fog, and fog is somebody else's pass.
-      c[i * 4] = rr(0.7, 1.8); c[i * 4 + 1] = rr(0.05, 0.16);
-      c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.006, 0.016);
+      c[i * 4] = rr(0.8, 2.0); c[i * 4 + 1] = rr(0.05, 0.16);
+      c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.010, 0.026);
     } else {
-      c[i * 4] = rr(0.012, 0.045); c[i * 4 + 1] = rr(0.12, 0.5);
-      c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.10, 0.45);
+      c[i * 4] = rr(0.022, 0.070); c[i * 4 + 1] = rr(0.12, 0.5);
+      c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.22, 0.80);
     }
   });
-  const streakMesh = makeAtmo(N_STREAK, false, 1.0, new THREE_.Vector3(44, 5.5, 44), (i, a, c) => {
-    a[i * 4] = rnd(); a[i * 4 + 1] = Math.pow(rnd(), 2.2); a[i * 4 + 2] = rnd(); a[i * 4 + 3] = 2;
-    c[i * 4] = rr(0.006, 0.02); c[i * 4 + 1] = rr(1.4, 3.4);
-    c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.05, 0.18);
+  const streakMesh = makeAtmo(N_STREAK, false, 1.0, new THREE_.Vector3(26, 5, 26), (i, a, c) => {
+    // Weighted to the bottom of the band: wind-driven sand hugs the ground.
+    a[i * 4] = rnd(); a[i * 4 + 1] = Math.pow(rnd(), 2.4); a[i * 4 + 2] = rnd(); a[i * 4 + 3] = 2;
+    c[i * 4] = rr(0.012, 0.032); c[i * 4 + 1] = rr(1.6, 3.8);
+    c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.07, 0.24);
   });
 
   // ── decals ─────────────────────────────────────────────────────────────────

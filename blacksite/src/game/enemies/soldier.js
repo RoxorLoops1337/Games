@@ -209,8 +209,19 @@ function mergeParts(parts, skinned) {
       const x = P.getX(i), y = P.getY(i), z = P.getZ(i);
       const o = (vo + i) * 3;
       pos[o] = x; pos[o + 1] = y; pos[o + 2] = z;
-      nor[o] = N.getX(i); nor[o + 1] = N.getY(i); nor[o + 2] = N.getZ(i);
-      col[o] = c.r; col[o + 1] = c.g; col[o + 2] = c.b;
+      const ny = N.getY(i);
+      nor[o] = N.getX(i); nor[o + 1] = ny; nor[o + 2] = N.getZ(i);
+      // Sky occlusion and grime, baked into the colour. There is no room in the
+      // budget for an AO map on a character, but a downward-facing surface being
+      // darker is 90% of what an AO map buys — without it the body is one flat
+      // value and every capsule reads as a balloon. The hash on top is dirt: a
+      // uniform albedo is the other half of why untextured geometry looks like
+      // moulded plastic.
+      const ao = 0.74 + 0.26 * (ny * 0.5 + 0.5);
+      const h = Math.sin((x * 91.7 + y * 47.3 + z * 133.1) * 12.9898) * 43758.5453;
+      const grit = 1 + ((h - Math.floor(h)) - 0.5) * 0.13;
+      const k = ao * grit;
+      col[o] = c.r * k; col[o + 1] = c.g * k; col[o + 2] = c.b * k;
       if (U) { uv[(vo + i) * 2] = U.getX(i); uv[(vo + i) * 2 + 1] = U.getY(i); }
       srf[(vo + i) * 2] = s[0]; srf[(vo + i) * 2 + 1] = s[1];
       if (skinned) {
@@ -308,7 +319,7 @@ function buildBodyParts() {
   add(place(ellipsoid(0.094, 0.113, 0.102), 0, 1.628, -0.004), COL.face, SURF.cloth, rigid(B.head));
   add(place(ellipsoid(0.070, 0.030, 0.022, 8, 4), 0, 1.652, -0.090), COL.skin, SURF.skin, rigid(B.head));
   // Helmet: a cut sphere, a brim, and the rail furniture that breaks its outline.
-  const dome = new THREE.SphereGeometry(0.121, 10, 6, 0, Math.PI * 2, 0, 1.75);
+  const dome = new THREE.SphereGeometry(0.129, 10, 6, 0, Math.PI * 2, 0, 1.78);
   dome.scale(1, 1.02, 1.06);
   add(place(dome, 0, 1.636, 0.004), COL.helmet, SURF.hard, rigid(B.head));
   add(place(roundBox(0.150, 0.030, 0.060, 0.012), 0, 1.664, -0.104), COL.helmet, SURF.hard, rigid(B.head));

@@ -106,8 +106,12 @@ const GUNS = {
 
 const MAT = {
   [SURFACE.CONCRETE]: { res: [820, 1900, 3600], ring: 0.030, q: 5, grit: 1.00, gritHz: 2400, gritDec: 0.055, thump: 0.55, thumpHz: 130, bright: 1.0 },
-  [SURFACE.METAL]:    { res: [1180, 2740, 5300], ring: 0.34, q: 26, grit: 0.62, gritHz: 4200, gritDec: 0.030, thump: 0.30, thumpHz: 180, bright: 1.35 },
-  [SURFACE.SAND]:     { res: [420, 900, 1700], ring: 0.008, q: 1.4, grit: 1.25, gritHz: 3100, gritDec: 0.115, thump: 0.42, thumpHz: 92, bright: 0.55 },
+  // Sheet metal radiates: it is a driven panel, not a struck lump, and it is the
+  // loudest thing in this table. Sand is the quietest surface that exists —
+  // nearly all of the energy goes into moving grains rather than into the air —
+  // so its `grit` is low even though its decay is the longest here.
+  [SURFACE.METAL]:    { res: [1180, 2740, 5300], ring: 0.34, q: 26, grit: 1.15, gritHz: 4200, gritDec: 0.030, thump: 0.30, thumpHz: 180, bright: 1.35 },
+  [SURFACE.SAND]:     { res: [420, 900, 1700], ring: 0.008, q: 1.4, grit: 0.85, gritHz: 3100, gritDec: 0.115, thump: 0.42, thumpHz: 92, bright: 0.55 },
   [SURFACE.WOOD]:     { res: [320, 640, 1450], ring: 0.075, q: 9, grit: 0.85, gritHz: 1800, gritDec: 0.048, thump: 0.80, thumpHz: 105, bright: 0.75 },
   [SURFACE.GLASS]:    { res: [2400, 4300, 6900], ring: 0.20, q: 22, grit: 1.10, gritHz: 6200, gritDec: 0.070, thump: 0.14, thumpHz: 240, bright: 1.55 },
   [SURFACE.FLESH]:    { res: [260, 520, 950], ring: 0.014, q: 3, grit: 0.75, gritHz: 900, gritDec: 0.045, thump: 0.95, thumpHz: 78, bright: 0.35 },

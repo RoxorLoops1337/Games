@@ -28,13 +28,13 @@ function wearTexture(size = 256) {
   if (!ctx) return null;
 
   // Base: mottled blotches, low contrast — this is the finish itself.
-  ctx.fillStyle = '#d6d6d6';
+  ctx.fillStyle = '#eeeeee';
   ctx.fillRect(0, 0, size, size);
   let seed = 0x2f6e2b1;
   const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   for (let i = 0; i < 700; i++) {
     const r = 3 + rnd() * 26;
-    const v = 214 + (rnd() - 0.5) * 70;
+    const v = 238 + (rnd() - 0.5) * 60;
     ctx.fillStyle = `rgba(${v | 0},${v | 0},${v | 0},0.10)`;
     ctx.beginPath();
     ctx.arc(rnd() * size, rnd() * size, r, 0, Math.PI * 2);
@@ -181,18 +181,26 @@ export function createGunMaterials(G, engine, materials) {
   };
 
   const mats = {
-    // Blued/anodised receiver steel. Low roughness so the chamfers throw a hard
-    // specular line; the wear map breaks it up so it is not a mirror.
-    steel: from('metal', { roughness: 0.33, metalness: 0.92, envMapIntensity: 1.0 }),
+    // Blued/anodised receiver steel.
+    //
+    // The temptation is to run this glossy, because a hard specular line down a
+    // chamfer is what sells machined metal. It is also a trap: a metal at 0.3
+    // roughness has a Fresnel rise to a full mirror at grazing angles, and a
+    // first-person weapon is seen almost entirely at grazing angles. Under a
+    // bright sky the whole receiver then returns the sky and the gun reads as
+    // pale plastic no matter how dark its albedo is. Real parkerised and
+    // anodised finishes are matte for exactly the reason they were chosen — a
+    // shiny rifle is a rifle you can be seen with.
+    steel: from('metal', { roughness: 0.47, metalness: 0.92, envMapIntensity: 1.0 }),
     // Phosphate on the barrel and the bolt carrier — same alloy, matte finish.
-    phos: from('metal', { roughness: 0.58, metalness: 0.88, envMapIntensity: 1.0 }),
+    phos: from('metal', { roughness: 0.68, metalness: 0.88, envMapIntensity: 1.0 }),
     // Furniture. Glass-filled nylon is a dielectric and much rougher; getting
     // this contrast right is most of what makes the metal look like metal.
-    poly: from('dark', { roughness: 0.84, metalness: 0.03, envMapIntensity: 1.0 }),
+    poly: from('dark', { roughness: 0.88, metalness: 0.03, envMapIntensity: 1.0 }),
     // Grip pads, buttpad, sling loops.
-    rubber: from('dark', { roughness: 0.93, metalness: 0.0, envMapIntensity: 1.0 }),
+    rubber: from('dark', { roughness: 0.96, metalness: 0.0, envMapIntensity: 1.0 }),
     // Nomex glove. Slightly sheened where the palm is worn smooth.
-    glove: from('dark', { roughness: 0.88, metalness: 0.0, envMapIntensity: 1.0 }),
+    glove: from('dark', { roughness: 0.92, metalness: 0.0, envMapIntensity: 1.0 }),
   };
 
   // The lens is not glass in the usual sense — it is a coated element, which

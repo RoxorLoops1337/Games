@@ -156,7 +156,7 @@ export function createCompositePass(renderer, opts = {}) {
     tColor: { value: null },
     tBloom: { value: null },
     uResolution: { value: new THREE.Vector2(1, 1) },
-    uExposure: { value: opts.exposure != null ? opts.exposure : 1.0 },
+    uExposure: { value: opts.exposure != null ? opts.exposure : 1.3 },
     uBloom: { value: opts.bloom != null ? opts.bloom : 0.06 },
     uTime: { value: 0 },
     uGrain: { value: 0.030 },
