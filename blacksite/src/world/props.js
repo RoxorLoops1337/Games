@@ -526,6 +526,65 @@ export function floodMast(h = 9, opts = {}) {
   return { parts: out, lamps, lens };
 }
 
+// Bulkhead lamp — the fitting that gets bolted to a wall, a parapet or the
+// underside of a walkway. Lens faces +Z, everything else hangs off behind it.
+//
+// The wire guard is the whole read. A glowing box is a light source; a glowing
+// box behind four bars and a hoop is something a fitter mounted at head height
+// where it was going to get hit. Returned as body/lens rather than one bag,
+// because the lens has to be able to go dark independently of the housing —
+// which is how a dead fitting gets modelled here.
+export function bulkhead(opts = {}) {
+  const r = opts.r || 0.16, col = opts.color;
+  const body = [], lens = [];
+  body.push(place(chamferBox(r * 2.4, r * 2.4, 0.09, 0.02, { color: col }), 0, 0, -0.075));
+  body.push(place(cyl(r * 1.2, r * 1.36, 0.10, 10, { color: col }), 0, 0, -0.01, 0, Math.PI / 2, 0));
+  // The conduit gland underneath. Nothing is wired from the top — water.
+  body.push(place(cyl(0.032, 0.032, 0.14, 6, { color: col }), 0, -r * 1.55, -0.09));
+  body.push(place(torus(r * 1.06, 0.014, 4, 12, Math.PI * 2, { color: col }), 0, 0, 0.075));
+  for (let i = 0; i < 4; i++) {
+    body.push(place(chamferBox(0.022, r * 2.12, 0.022, 0.004, { color: col }), 0, 0, 0.075, 0, 0, i * Math.PI / 4));
+  }
+  lens.push(place(cyl(r, r, 0.05, 12, { color: opts.lens }), 0, 0, 0.042, 0, Math.PI / 2, 0));
+  return { body, lens };
+}
+
+// Tripod work light — the thing somebody wheels out when the mains lighting has
+// been off for thirty years. It is the only fixture on this site that sits at
+// head height instead of nine metres up, which makes it the only one that
+// really lights a floor, and it earns its place by standing next to the open
+// cable trench somebody was last working in. Head faces +Z, raked down.
+export function workLamp(opts = {}) {
+  const h = opts.h || 1.72, R = opts.spread || 0.42, tilt = opts.tilt == null ? -0.34 : opts.tilt;
+  const col = opts.color;
+  const body = [], lens = [];
+  const strut = (a, b, r, seg = 5) => {
+    const d = b.clone().sub(a), L = d.length();
+    if (L < 1e-4) return;
+    const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize());
+    body.push(cyl(r, r, L, seg, { color: col })
+      .applyMatrix4(new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), q, new THREE.Vector3(1, 1, 1))));
+  };
+  const knuckle = new THREE.Vector3(0, h * 0.60, 0);
+  for (let i = 0; i < 3; i++) {
+    const a = i / 3 * Math.PI * 2 + 0.5;
+    strut(new THREE.Vector3(Math.cos(a) * R, 0, Math.sin(a) * R), knuckle, 0.022);
+    body.push(place(chamferBox(0.09, 0.02, 0.09, 0.004, { color: col }), Math.cos(a) * R, 0.012, Math.sin(a) * R));
+  }
+  // The inner column telescopes out of the knuckle — two diameters, so the
+  // silhouette says "extended" rather than "one stick".
+  strut(new THREE.Vector3(0, h * 0.28, 0), new THREE.Vector3(0, h * 0.64, 0), 0.030, 6);
+  strut(knuckle, new THREE.Vector3(0, h, 0), 0.021, 6);
+  body.push(place(cyl(0.048, 0.048, 0.07, 8, { color: col }), 0, h * 0.62, 0));
+  body.push(place(chamferBox(0.30, 0.20, 0.13, 0.02, { color: col }), 0, h, 0.055, 0, tilt));
+  body.push(place(chamferBox(0.34, 0.022, 0.03, 0.006, { color: col }), 0, h + 0.115, 0.02, 0, tilt));
+  // Lens on the head's front face, carried round by the same rake as the head.
+  const c = Math.cos(tilt), s = Math.sin(tilt);
+  lens.push(place(chamferBox(0.26, 0.15, 0.02, 0.006, { color: opts.lens }),
+    0, h - 0.075 * s, 0.055 + 0.075 * c, 0, tilt));
+  return { body, lens };
+}
+
 // Three-leg lattice mast. The zigzag bracing is generated rather than boxed so
 // the taper reads honestly from any angle — this is the level's tallest
 // landmark and it is seen mostly as a silhouette.

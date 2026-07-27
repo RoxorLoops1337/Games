@@ -145,6 +145,47 @@ export function buildLevel(G, engine, materials) {
     return S(boxFromCenter(cx, cy, cz, sx, sy, sz, surface, opts));
   }
 
+  // ── practicals ─────────────────────────────────────────────────────────────
+  //
+  // Every real light on the site is declared here, next to the fitting it comes
+  // out of, and §10 turns the list into Object3Ds at the end. Declaring them at
+  // the placement site rather than in one block at the bottom is the whole
+  // trick: the call that emits an emissive lens is the call that registers the
+  // light, so a glowing lamp with nothing behind it cannot happen by drift.
+  //
+  // Colour. The dusk sun is #ffd6af and by that hour it is the warmest thing in
+  // the sky, so a practical that matches it just reads as more sunlight leaking
+  // in. These sit *warm but distinctly cooler* than the key — enough that on a
+  // wall lit by both you can see which is which, which is the only reason to
+  // have them at all. The bunker's emergency circuit is the exception: it is
+  // sodium, far warmer than anything outside, and that is what makes stepping
+  // indoors feel like stepping into a different building's power.
+  const FLOOD = 0xffe6c8;         // metal-halide apron floods
+  const WORK = 0xfff0dc;          // portable work lights, near white
+  const SODIUM = 0xffb24a;        // the bunker's emergency circuit
+  const quality = Math.max(0, Math.min(3, G.settings.quality | 0));
+  const practicalDefs = [];
+  const practical = (d) => { practicalDefs.push(d); return d; };
+
+  // A wall fitting, and its light, from one call. Pass `light` null and the
+  // lens goes to the glass material instead of the emissive one — that is how
+  // a dead fitting is modelled, and it is one argument rather than a decision
+  // somebody has to remember to make in two places.
+  function bulkheadLamp(x, y, z, ry, rx, light, chunk) {
+    const b = PR.bulkhead({});
+    putAll(b.body, 'metal', x, y, z, ry, rx, 0, chunk);
+    putAll(b.lens, light ? 'lamp' : 'glass', x, y, z, ry, rx, 0, chunk);
+    if (!light) return;
+    // The beam leaves along the lens normal, worked out from the way the
+    // housing was hung rather than typed in a second time — so a fitting that
+    // gets nudged takes its light with it.
+    const c = Math.cos(rx);
+    practical({
+      ...light, pos: [x, y, z],
+      aim: light.aim || [x + c * Math.sin(ry) * 4, y - Math.sin(rx) * 4, z + c * Math.cos(ry) * 4],
+    });
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // 1 · GROUND
   // ═══════════════════════════════════════════════════════════════════════════
@@ -832,16 +873,42 @@ export function buildLevel(G, engine, materials) {
 
   // Floodlight masts. Nine metres of nothing, and they are load-bearing: a flat
   // apron with no vertical elements has no sense of scale at all.
-  for (const [x, z, ry, ch] of [
-    [-25, 45, 0.2, 'approach'], [26, 44, -0.3, 'approach'], [-28.5, 8, 1.2, 'pad'],
-    [-8.5, 24, 0.35, 'approach'], [22.5, 26, -0.5, 'approach'],
-    [26.5, 15, -0.8, 'approach'], [27, -30, 0.4, 'silo'], [-6, -37, 0.9, 'bunker'],
+  //
+  // The last column says whether the mast still has power, and it is the only
+  // place that decision is made: a live one gets emissive lenses *and* a light
+  // in §10, a dead one gets cold glass and nothing. Four of eight are dead on
+  // purpose. A row of identical lit masts reads as a lighting rig; a lit one
+  // standing next to a dark one reads as a place where somebody stopped paying
+  // the bill, and it costs a material swap to say so. The live four are the
+  // four the player walks under — the road, the west pad, the motor pool and
+  // the silo apron; the dead four are the ones you only ever see from 30 m.
+  for (const [x, z, ry, ch, live] of [
+    [-25, 45, 0.2, 'approach', false], [26, 44, -0.3, 'approach', false],
+    [-28.5, 8, 1.2, 'pad', true], [-8.5, 24, 0.35, 'approach', true],
+    [22.5, 26, -0.5, 'approach', true], [26.5, 15, -0.8, 'approach', false],
+    [27, -30, 0.4, 'silo', true], [-6, -37, 0.9, 'bunker', false],
   ]) {
     const m = PR.floodMast(9, {});
     putAll(m.parts, 'metal', x, GY, z, ry, 0, 0, ch);
-    for (const l of m.lamps) {
+    for (let i = 0; i < m.lamps.length; i++) {
+      // A dead mast loses one housing's glass entirely — thirty years of grit
+      // and one bored sentry with a rifle. The other three go to the glass
+      // material, which under this sky reads as a cold mirror.
+      if (!live && i === 2) continue;
+      const l = m.lamps[i];
       const p = new THREE.Vector3(l[0], l[1], l[2]).applyMatrix4(xf(x, GY, z, ry));
-      putAll([chamferBox(0.40, 0.03, 0.28, 0.01)], 'lamp', p.x, p.y - 0.02, p.z, ry, -0.55, 0, ch);
+      putAll([chamferBox(0.40, 0.03, 0.28, 0.01)], live ? 'lamp' : 'glass',
+        p.x, p.y - 0.02, p.z, ry, -0.55, 0, ch);
+    }
+    if (live) {
+      // One light for four housings, not four. They point at the same patch of
+      // apron from within half a metre of each other, so four lights would be
+      // four times the fragment cost of a difference nobody can see. The cone
+      // is wide and heavily feathered because that is the union of four beams.
+      practical({
+        pos: [x, 8.95, z], aim: [x, 0, z],
+        angle: 0.98, penumbra: 0.75, intensity: 62, distance: 34, color: FLOOD,
+      });
     }
     S(boxFromCenter(x, GY + 4.5, z, 0.4, 9.0, 0.4, SURFACE.METAL, { thickness: 40 }));
   }
