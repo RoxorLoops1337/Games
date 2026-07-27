@@ -4771,6 +4771,14 @@ function minimapWorldX(sx){
   const m = minimapRect();
   return m.W0 + clamp((sx - m.x0 - 6) / (m.w - 12), 0, 1) * (m.W1 - m.W0);
 }
+// What colour a hold shows as on the strip. Yours is the brighter one, and
+// which one that is follows MY rather than the side index — the strip whose
+// entire job is orientation was telling player two that the enemy's hold was
+// the friendly green block. Same shape of bug as the worker tunic: a per-side
+// value that is not actually per-seat is invisible from one chair and wrong
+// from the other.
+const MINI_MINE = .52, MINI_THEIRS = .30;
+const miniHoldCol = (i) => shade(SIDE_COL[i], i === MY ? MINI_MINE : MINI_THEIRS);
 function drawMinimap(c){
   const m = minimapRect();
   const w = m.w, h = m.h, x0 = m.x0, y0 = m.y0;
@@ -4778,18 +4786,28 @@ function drawMinimap(c){
   c.fillStyle = 'rgba(8,12,18,.76)'; c.fillRect(x0, y0, w, h);
   c.strokeStyle = '#2a3446'; c.lineWidth = 1; c.strokeRect(x0 + .5, y0 + .5, w - 1, h - 1);
   const mx = (x) => x0 + 6 + ((x - W0) / (W1 - W0)) * (w - 12);
-  // the two holds, then the span between them
+  // The two holds. These were green and brown, keyed to the side INDEX — so
+  // the strip whose whole job is telling you where you are told player two
+  // that the enemy's hold was the friendly-looking green one. And green and
+  // brown are not the colour language anything else in this widget speaks:
+  // the structures and units on it were already drawn in side colours.
   for (const i of [0, 1]){
     const hx = i === 0 ? HOLD_X : C.LANE_LEN - HOLD_X;
-    c.fillStyle = i === 0 ? 'rgba(76,112,64,.85)' : 'rgba(112,76,64,.85)';
-    c.fillRect(mx(hx - 22), y0 + 5, Math.max(6, mx(hx + 22) - mx(hx - 22)), h - 10);
+    const a = mx(hx - 22), b = Math.max(6, mx(hx + 22) - a);
+    c.fillStyle = miniHoldCol(i);
+    c.fillRect(a, y0 + 5, b, h - 10);
+    if (i === MY){                      // and yours is the one with a light on it
+      c.fillStyle = shade(SIDE_COL[i], 1.05);
+      c.fillRect(a, y0 + 5, b, 2);
+    }
   }
   c.fillStyle = '#3d4658'; c.fillRect(mx(0), y0 + h / 2 - 2, mx(C.LANE_LEN) - mx(0), 4);
   for (const s of G.sides) for (const st of s.structs){
-    if (st.dead) continue;
-    c.fillStyle = SIDE_COL[s.i];
     const sz = st.key === 'gate' ? 5 : st.key === 'inhib' ? 4 : 3;
-    c.fillRect(mx(st.x) - sz / 2, y0 + h / 2 - sz, sz, sz * 2);
+    // A broken turret used to simply vanish, so the strip could not show you
+    // that the line of battle had moved — which is the one thing it is for.
+    c.fillStyle = st.dead ? 'rgba(120,132,150,.5)' : SIDE_COL[s.i];
+    c.fillRect(mx(st.x) - sz / 2, y0 + h / 2 - (st.dead ? sz * .4 : sz), sz, st.dead ? sz * .8 : sz * 2);
   }
   for (const u of G.units){
     if (u.dead) continue;
@@ -7867,7 +7885,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
