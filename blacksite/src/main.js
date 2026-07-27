@@ -19,7 +19,7 @@ import { buildLevel } from './world/level.js';
 import { createWeapons, updateWeapons } from './game/weapons.js';
 import { createViewmodel } from './game/viewmodel.js';
 import { updatePlayer } from './game/player.js';
-import { updateAI } from './game/ai.js';
+import { updateAI, resetAI } from './game/ai.js';
 import { createEnemyRigs } from './game/enemies.js';
 import { updateDirector } from './game/director.js';
 import { createFX } from './fx/fx.js';
@@ -91,6 +91,10 @@ export async function boot(root) {
     createWeapons(G);
     G.player.pos.x = level.spawn.x; G.player.pos.y = level.spawn.y; G.player.pos.z = level.spawn.z;
     G.player.yaw = level.spawnYaw || 0;
+    // The AI is self-healing without this, but squad blackboards and in-flight
+    // paths would survive one frame into the new run and briefly point men at
+    // where the last one ended.
+    resetAI(G);
     enemies.reset && enemies.reset();
     fx.reset && fx.reset();
     G.mode = 'playing';

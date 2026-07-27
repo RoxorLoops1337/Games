@@ -132,12 +132,12 @@ uniform sampler2D tAO;
 uniform vec2 uTexel;
 uniform float uFrame;
 
-const vec2 POISSON[ 8 ] = vec2[ 8 ](
-  vec2(  0.9245,  0.0000 ), vec2(  0.4046,  0.7509 ),
-  vec2( -0.3120,  0.8256 ), vec2( -0.8801,  0.2740 ),
-  vec2( -0.6817, -0.5464 ), vec2(  0.0492, -0.9188 ),
-  vec2(  0.6606, -0.5178 ), vec2(  0.2000,  0.2500 )
-);
+// GLSL ES 1.00 has no array initialisers, so the disc is unrolled through a
+// macro rather than a lookup table.
+#define TAP( ox, oy ) { \
+  vec4 s = texture2D( tAO, vUv + rot * vec2( ox, oy ) * uTexel * 3.0 ); \
+  float w = exp( -abs( s.g - centerDepth ) * 220.0 ); \
+  sum += s.r * w; wsum += w; }
 
 void main(){
   vec4 c = texture2D( tAO, vUv );
@@ -148,14 +148,17 @@ void main(){
   float ca = cos( a ), sa = sin( a );
   mat2 rot = mat2( ca, -sa, sa, ca );
 
-  for ( int i = 0; i < 8; i++ ){
-    vec2 o = rot * POISSON[ i ] * uTexel * 3.0;
-    vec4 s = texture2D( tAO, vUv + o );
-    // Reject across depth discontinuities, or the blur drags foreground
-    // occlusion out over the background and every object grows a dark halo.
-    float w = exp( -abs( s.g - centerDepth ) * 220.0 );
-    sum += s.r * w; wsum += w;
-  }
+  // Reject across depth discontinuities, or the blur drags foreground
+  // occlusion out over the background and every object grows a dark halo.
+  TAP(  0.9245,  0.0000 )
+  TAP(  0.4046,  0.7509 )
+  TAP( -0.3120,  0.8256 )
+  TAP( -0.8801,  0.2740 )
+  TAP( -0.6817, -0.5464 )
+  TAP(  0.0492, -0.9188 )
+  TAP(  0.6606, -0.5178 )
+  TAP(  0.2000,  0.2500 )
+
   gl_FragColor = vec4( sum / wsum, centerDepth, 0.0, 1.0 );
 }
 `;

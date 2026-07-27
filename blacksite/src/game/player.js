@@ -79,9 +79,13 @@ export function updatePlayer(G, dt) {
   p.pos.y = feetY + p.eye;
 
   // ── sprint ─────────────────────────────────────────────────────────────────
+  // Pulling the trigger drops you out of a sprint. Without this the player can
+  // hold sprint through a whole firefight and the weapon never leaves the
+  // lowered pose, so the sprint animation stops meaning "you cannot shoot yet"
+  // — which is the one thing it exists to communicate.
   const wantsForward = inp.move.y > 0.6 && Math.abs(inp.move.x) < 0.85;
   p.sprinting = inp.buttons.has('sprint') && wantsForward && p.grounded &&
-    p.stance !== 'crouch' && p.ads < 0.2;
+    p.stance !== 'crouch' && p.ads < 0.2 && !inp.buttons.has('fire');
 
   // ── wish direction, in world space ─────────────────────────────────────────
   const sy = Math.sin(p.yaw), cy = Math.cos(p.yaw);

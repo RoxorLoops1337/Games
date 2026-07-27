@@ -43,23 +43,26 @@ export function roundRectPts(w, h, r, seg = 3) {
 // spine that the rail sits on. Two numbers control how "military" it reads —
 // the shoulder width and how far the rib stands proud.
 export function receiverPts(w, h, rib = 0.4, ribW = 0.55, r = 0.006) {
-  const x = w / 2, y = h / 2, rx = (w * ribW) / 2, ry = y + h * rib;
-  const p = roundRectPts(w, h, r, 3);
-  // Splice the rib into the top run of the rounded rect.
-  const out = [];
-  for (const q of p) {
-    if (q[1] > y - r * 1.01 && Math.abs(q[0]) < rx) continue;
-    out.push(q);
-  }
-  // Rebuild the top edge with the rib in it, walking right to left.
-  const top = [[rx, y], [rx, ry - 0.0015], [rx - 0.0015, ry], [-rx + 0.0015, ry], [-rx, ry - 0.0015], [-rx, y]];
-  // Find the insert point: after the last vertex with x > 0 and y near +y.
-  let ins = out.length;
-  for (let i = 0; i < out.length; i++) {
-    if (out[i][0] > 0 && out[i][1] > y - r * 1.01) { ins = i + 1; break; }
-  }
-  out.splice(ins, 0, ...top);
-  return out;
+  const x = w / 2, y = h / 2, ry = y + h * rib;
+  r = Math.max(1e-5, Math.min(r, x * 0.6, y * 0.6));
+  const rx = Math.min((w * ribW) / 2, x - r - 0.0008);
+  const pts = [];
+  const arc = (cx, cy, a0, a1, seg) => {
+    for (let i = 0; i <= seg; i++) {
+      const a = a0 + (a1 - a0) * (i / seg);
+      pts.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]);
+    }
+  };
+  arc(x - r, -y + r, -Math.PI / 2, 0, 3);          // up the right side
+  arc(x - r, y - r, 0, Math.PI / 2, 3);            // ends at (x-r, y)
+  // The rib, walked right to left so the loop stays counter-clockwise. Its own
+  // corners are knocked off by 1.5 mm — the rail sits on this, and a square rib
+  // under a square rail gives two coincident sharp edges and a black seam.
+  pts.push([rx, y], [rx, ry - 0.0015], [rx - 0.0015, ry],
+    [-rx + 0.0015, ry], [-rx, ry - 0.0015], [-rx, y]);
+  arc(-x + r, y - r, Math.PI / 2, Math.PI, 3);
+  arc(-x + r, -y + r, Math.PI, Math.PI * 1.5, 3);
+  return pts;
 }
 
 export function shapeFrom(pts, holes) {
@@ -205,8 +208,6 @@ export function tubeCurve(points, r, tubular = 8, radial = 6, taper = 1) {
     // Fingers are fatter at the knuckle than at the tip. Scale the ring radius
     // by walking the v coordinate, which TubeGeometry lays out along the curve.
     const p = g.attributes.position, uv = g.attributes.uv;
-    const centres = [];
-    for (let i = 0; i <= tubular; i++) centres.push(curve.getPointAt(i / tubular));
     for (let i = 0; i < p.count; i++) {
       const t = uv.getY(i), c = curve.getPointAt(Math.min(1, Math.max(0, t)));
       const s = 1 + (taper - 1) * t;

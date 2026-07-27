@@ -49,16 +49,26 @@ export function createState(seed = 0x9e3779b9) {
     enemies: [],
     projectiles: [],
     tracers: [],
+    // Placed by the director where the pacing needs them, not scattered.
+    // { id, kind:'ammo'|'health', pos, amount, taken }
+    pickups: [],
     events: [],
 
     world: {
       statics: [],       // { min, max, surface, thickness } AABB soup
       grid: null,        // uniform-grid broadphase built by world/collision.js
+      nav: null,         // walkable grid + A* cache, built once by game/nav.js
       spawns: [],
-      cover: [],         // { pos, dir, height } points the AI reasons about
+      // { pos, dir, height } — pos is where a body stands, dir is the outward
+      // normal pointing at the threat. Hints only: the AI re-validates every
+      // candidate against the player's real position, so a wrong entry costs a
+      // rejected option rather than a man standing in the open feeling safe.
+      cover: [],
       bounds: { min: vec3(-80, -8, -80), max: vec3(80, 40, 80) },
       ready: false,
     },
+
+    ai: null,            // squad blackboards + attack tokens, owned by game/ai.js
 
     director: { wave: 0, alive: 0, budget: 0, nextSpawn: 0, phase: 'idle' },
 

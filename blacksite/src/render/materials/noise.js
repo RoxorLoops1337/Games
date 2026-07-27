@@ -70,16 +70,49 @@ export function addOctave(out, size, fx, fy, amp, seed, mode = 0) {
   fx = Math.max(1, Math.round(fx)); fy = Math.max(1, Math.round(fy));
   const lat = lattice(fx, fy, seed);
   const ax = axis(size, fx), ay = axis(size, fy);
+  const xi0 = ax.i0, xi1 = ax.i1, xw = ax.w;
   for (let y = 0; y < size; y++) {
     const r0 = ay.i0[y] * fx, r1 = ay.i1[y] * fx, wy = ay.w[y], row = y * size;
-    for (let x = 0; x < size; x++) {
-      const a0 = ax.i0[x], a1 = ax.i1[x], wx = ax.w[x];
-      const t0 = lat[r0 + a0], t1 = lat[r0 + a1], b0 = lat[r1 + a0], b1 = lat[r1 + a1];
-      const top = t0 + (t1 - t0) * wx, bot = b0 + (b1 - b0) * wx;
-      let v = top + (bot - top) * wy;
-      if (mode === 1) v = 1 - Math.abs(v * 2 - 1);        // ridged — creases and cracks
-      else if (mode === 2) v = Math.abs(v * 2 - 1);       // billow — clumps and blisters
-      out[row + x] += v * amp;
+    if (mode === 0) {
+      // Split rather than branching per texel: this is the hottest loop in the
+      // whole library and the shape check does not belong inside it.
+      for (let x = 0; x < size; x++) {
+        const a0 = xi0[x], a1 = xi1[x], wx = xw[x];
+        const t0 = lat[r0 + a0], b0 = lat[r1 + a0];
+        const top = t0 + (lat[r0 + a1] - t0) * wx, bot = b0 + (lat[r1 + a1] - b0) * wx;
+        out[row + x] += (top + (bot - top) * wy) * amp;
+      }
+    } else {
+      for (let x = 0; x < size; x++) {
+        const a0 = xi0[x], a1 = xi1[x], wx = xw[x];
+        const t0 = lat[r0 + a0], b0 = lat[r1 + a0];
+        const top = t0 + (lat[r0 + a1] - t0) * wx, bot = b0 + (lat[r1 + a1] - b0) * wx;
+        const v = top + (bot - top) * wy;
+        out[row + x] += (mode === 1 ? 1 - Math.abs(v * 2 - 1) : Math.abs(v * 2 - 1)) * amp;
+      }
+    }
+  }
+  return out;
+}
+
+// Bilinear wrapped magnification. A field whose highest octave is well below
+// the target resolution carries no information at that resolution, so it is
+// synthesised small and blown up — one pass instead of three, and the result is
+// identical to within a fraction of a value.
+export function upsample(src, srcSize, dstSize) {
+  const out = field(dstSize), s = srcSize / dstSize, m = srcSize - 1;
+  const i0 = new Int32Array(dstSize), i1 = new Int32Array(dstSize), w = new Float32Array(dstSize);
+  for (let i = 0; i < dstSize; i++) {
+    const g = i * s, a = Math.floor(g);
+    i0[i] = a & m; i1[i] = (a + 1) & m; w[i] = g - a;
+  }
+  for (let y = 0; y < dstSize; y++) {
+    const r0 = i0[y] * srcSize, r1 = i1[y] * srcSize, wy = w[y], row = y * dstSize;
+    for (let x = 0; x < dstSize; x++) {
+      const a0 = i0[x], a1 = i1[x], wx = w[x];
+      const top = src[r0 + a0] + (src[r0 + a1] - src[r0 + a0]) * wx;
+      const bot = src[r1 + a0] + (src[r1 + a1] - src[r1 + a0]) * wx;
+      out[row + x] = top + (bot - top) * wy;
     }
   }
   return out;
@@ -88,7 +121,12 @@ export function addOctave(out, size, fx, fy, amp, seed, mode = 0) {
 // Fractal sum. Lacunarity defaults to 2.13 rather than 2 on purpose: octaves at
 // exactly doubling frequencies line their features up and the result reads as a
 // grid. An irrational-ish ratio never repeats inside the tile.
+// `lo` synthesises at 1/lo resolution and magnifies — see `upsample`.
 export function fbm(size, o = {}) {
+  if (o.lo > 1) {
+    const s2 = Math.max(32, (size / o.lo) | 0);
+    if (s2 < size) return upsample(fbm(s2, { ...o, lo: 1 }), s2, size);
+  }
   const oct = o.oct || 4, gain = o.gain != null ? o.gain : 0.5, lac = o.lac || 2.13;
   let fx = o.fx != null ? o.fx : (o.freq || 4);
   let fy = o.fy != null ? o.fy : (o.freq || 4);
@@ -135,8 +173,19 @@ export function warp(src, size, wx, wy, amt) {
 
 // F1 (distance to nearest feature point), F2−F1 (cell borders, i.e. cracks and
 // mortar) and a per-cell random id so each pebble can get its own colour.
-export function worley(size, cells, seed, jitter = 1) {
+export function worley(size, cells, seed, jitter = 1, lo = 1) {
   cells = Math.max(2, Math.round(cells));
+  // Large cells resolve fine at a quarter of the resolution; the borders are
+  // the only sharp thing in the field and they survive the magnification.
+  if (lo > 1) {
+    const s2 = Math.max(64, (size / lo) | 0);
+    if (s2 < size && cells < s2 / 8) {
+      const w = worley(s2, cells, seed, jitter, 1);
+      return {
+        f1: upsample(w.f1, s2, size), f2: upsample(w.f2, s2, size), id: upsample(w.id, s2, size),
+      };
+    }
+  }
   const rnd = mulberry32((seed | 0) ^ 0x9e37);
   const px = new Float32Array(cells * cells), py = new Float32Array(cells * cells);
   const pid = new Float32Array(cells * cells);
@@ -147,26 +196,43 @@ export function worley(size, cells, seed, jitter = 1) {
     pid[i] = rnd();
   }
   const f1 = field(size), f2 = field(size), id = field(size);
-  const inv = 1 / size;
-  for (let y = 0; y < size; y++) {
-    const v = y * inv, cy = Math.floor(v * cells);
-    for (let x = 0; x < size; x++) {
-      const u = x * inv, cx = Math.floor(u * cells);
-      let d1 = 9, d2 = 9, best = 0;
+  const inv = 1 / size, scale = cells * 1.4;
+  // Walked cell by cell rather than texel by texel: the nine candidate points
+  // are gathered once per cell and the pixels inside it just measure against
+  // them. Wrapping is folded into the gathered coordinates, so the inner loop
+  // has no modulo and no floor in it at all.
+  const nx = new Float64Array(9), ny = new Float64Array(9), nid = new Float64Array(9);
+  for (let cy = 0; cy < cells; cy++) {
+    const y0 = Math.ceil(cy * size / cells), y1 = Math.min(size, Math.ceil((cy + 1) * size / cells));
+    for (let cx = 0; cx < cells; cx++) {
+      const x0 = Math.ceil(cx * size / cells), x1 = Math.min(size, Math.ceil((cx + 1) * size / cells));
+      let c = 0;
       for (let oy = -1; oy <= 1; oy++) {
-        const gy = ((cy + oy) % cells + cells) % cells;
+        let gy = cy + oy, sy = 0;
+        if (gy < 0) { gy += cells; sy = -1; } else if (gy >= cells) { gy -= cells; sy = 1; }
         for (let ox = -1; ox <= 1; ox++) {
-          const gx = ((cx + ox) % cells + cells) % cells;
+          let gx = cx + ox, sx = 0;
+          if (gx < 0) { gx += cells; sx = -1; } else if (gx >= cells) { gx -= cells; sx = 1; }
           const k = gy * cells + gx;
-          const dx = wrapDelta(px[k] - u), dy = wrapDelta(py[k] - v);
-          const d = dx * dx + dy * dy;
-          if (d < d1) { d2 = d1; d1 = d; best = pid[k]; } else if (d < d2) d2 = d;
+          nx[c] = px[k] + sx; ny[c] = py[k] + sy; nid[c] = pid[k]; c++;
         }
       }
-      const i = y * size + x;
-      f1[i] = Math.min(1, Math.sqrt(d1) * cells * 1.4);
-      f2[i] = Math.min(1, (Math.sqrt(d2) - Math.sqrt(d1)) * cells * 1.4);
-      id[i] = best;
+      for (let y = y0; y < y1; y++) {
+        const v = y * inv, row = y * size;
+        for (let x = x0; x < x1; x++) {
+          const u = x * inv;
+          let d1 = 9, d2 = 9, best = 0;
+          for (let j = 0; j < 9; j++) {
+            const dx = nx[j] - u, dy = ny[j] - v;
+            const d = dx * dx + dy * dy;
+            if (d < d1) { d2 = d1; d1 = d; best = nid[j]; } else if (d < d2) d2 = d;
+          }
+          const s1 = Math.sqrt(d1), i = row + x;
+          f1[i] = Math.min(1, s1 * scale);
+          f2[i] = Math.min(1, (Math.sqrt(d2) - s1) * scale);
+          id[i] = best;
+        }
+      }
     }
   }
   return { f1, f2, id };
@@ -200,6 +266,24 @@ export function blur(src, size, r) {
   return out;
 }
 
+// Box-average minification. Averaging rather than point-sampling matters here:
+// a point-sampled reduction of a noisy height field aliases, and the alias then
+// gets blurred into the occlusion term where it reads as blotches.
+export function downsample(src, srcSize, dstSize) {
+  const out = field(dstSize), k = srcSize / dstSize, inv = 1 / (k * k);
+  for (let y = 0; y < dstSize; y++) {
+    for (let x = 0; x < dstSize; x++) {
+      let acc = 0;
+      for (let j = 0; j < k; j++) {
+        const row = (y * k + j) * srcSize + x * k;
+        for (let i = 0; i < k; i++) acc += src[row + i];
+      }
+      out[y * dstSize + x] = acc * inv;
+    }
+  }
+  return out;
+}
+
 // Height → tangent-space normal, Sobel rather than a two-tap difference because
 // a two-tap picks up the texel grid and prints it into the shading as a faint
 // crosshatch under a sharp light.
@@ -215,12 +299,12 @@ export function sobelNormal(h, size, strength, out) {
       const bl = h[yn + xp], bc = h[yn + xc], br = h[yn + xn];
       const dx = (tr + 2 * mr + br) - (tl + 2 * ml + bl);
       const dy = (bl + 2 * bc + br) - (tl + 2 * tc + tr);
-      let nx = -dx * strength, ny = -dy * strength, nz = 1;
-      const l = 1 / Math.hypot(nx, ny, nz);
+      const nx = -dx * strength, ny = -dy * strength;
+      const l = 1 / Math.sqrt(nx * nx + ny * ny + 1);
       const i = (yc + x) * 4;
       out[i] = (nx * l * 0.5 + 0.5) * 255;
       out[i + 1] = (ny * l * 0.5 + 0.5) * 255;
-      out[i + 2] = (nz * l * 0.5 + 0.5) * 255;
+      out[i + 2] = (l * 0.5 + 0.5) * 255;
       out[i + 3] = 255;
     }
   }
@@ -233,7 +317,12 @@ export function sobelNormal(h, size, strength, out) {
 // albedo with good cavity darkening reads better than a busy albedo without it.
 export function cavityAO(h, size, o = {}) {
   const near = blur(h, size, Math.max(1, Math.round(size * (o.near || 0.012))));
-  const wide = blur(h, size, Math.max(2, Math.round(size * (o.wide || 0.06))));
+  // The wide term is, by definition, low frequency — computing it at a quarter
+  // resolution costs a sixteenth and is indistinguishable in the result.
+  const q = Math.max(64, size >> 2);
+  const wide = q < size
+    ? upsample(blur(downsample(h, size, q), q, Math.max(2, Math.round(q * (o.wide || 0.06)))), q, size)
+    : blur(h, size, Math.max(2, Math.round(size * (o.wide || 0.06))));
   const kn = o.kNear != null ? o.kNear : 9, kw = o.kWide != null ? o.kWide : 3.2;
   const out = field(size);
   for (let i = 0; i < out.length; i++) {

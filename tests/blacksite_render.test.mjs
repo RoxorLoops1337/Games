@@ -19,9 +19,9 @@ import { harness } from './no_room_for_heroes_lib.mjs';
 
 const t = harness('blacksite-render');
 
-let serve, launch, findChrome, openGame, pose, frameStats;
+let serve, launch, findChrome, openGame, pose, frameStats, diagnoseBoot;
 try {
-  ({ serve, launch, findChrome, openGame, pose, frameStats } =
+  ({ serve, launch, findChrome, openGame, pose, frameStats, diagnoseBoot } =
     await import('../tools/blacksite/shoot.mjs'));
 } catch (e) {
   console.log('blacksite-render: SKIPPED — could not load the screenshot rig (' + e.message + ')');
@@ -53,9 +53,30 @@ const IGNORE = [
 ];
 const noisy = (text) => IGNORE.some((re) => re.test(text));
 
+// A boot failure has to be reported, not thrown — an uncaught rejection here
+// exits before the harness prints anything, which turns a one-line diagnosis
+// into a stack trace and a timeout.
 async function boot(opts) {
-  const r = await openGame(browser, port, opts);
-  return r;
+  try {
+    return await openGame(browser, port, opts);
+  } catch (err) {
+    t.ok(false, 'the game boots — ' + err.message);
+    await browser.close();
+    server.close();
+    t.done();
+    throw err;
+  }
+}
+
+// Every module must parse as a module, on its own. This is a separate assertion
+// from "the game boots" because it is the one that says *which file* is wrong.
+{
+  const page = await browser.newPage();
+  await page.goto(`http://127.0.0.1:${port}/blacksite/`, { waitUntil: 'domcontentloaded' });
+  const bad = await diagnoseBoot(page);
+  t.ok(bad.length === 0, 'every module under src/ parses and imports' +
+    (bad.length ? ' — ' + bad.map((b) => `${b.file}: ${b.error}`).join(' | ') : ''));
+  await page.close();
 }
 
 // ─────────────────────────────────────────────────────────── boots at all

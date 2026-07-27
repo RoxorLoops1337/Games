@@ -110,8 +110,45 @@ export async function openGame(browser, port, { w = 1600, h = 900, quality = 3 }
   }, quality);
 
   await page.goto(`http://127.0.0.1:${port}/blacksite/`, { waitUntil: 'load', timeout: 60000 });
-  await page.waitForFunction(() => !!window.BLACKSITE, null, { timeout: 120000 });
+  try {
+    await page.waitForFunction(() => !!window.BLACKSITE, null, { timeout: 120000 });
+  } catch (err) {
+    // A module that fails to parse takes the whole import graph down, and all
+    // the timeout tells you is that nothing booted. Ask the browser to import
+    // each module on its own so the broken one names itself.
+    const culprits = await diagnoseBoot(page).catch(() => []);
+    const detail = culprits.length
+      ? '\n  ' + culprits.map((c) => `${c.file} → ${c.error}`).join('\n  ')
+      : '\n  (every module parsed on its own — the failure is inside a create*() call)';
+    err.message = 'the game never published window.BLACKSITE.' + detail;
+    throw err;
+  }
   return { page, logs };
+}
+
+// Imports every module under src/ individually, in the page, and reports the
+// ones that throw. Catches the failure mode that `node --check` cannot see: a
+// backtick inside a GLSL comment closes the JS template literal it lives in, so
+// the file is valid as a script and invalid as a module.
+export async function diagnoseBoot(page) {
+  const root = path.join(REPO, 'blacksite', 'src');
+  const files = [];
+  (function walk(dir) {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith('.js')) files.push(path.relative(root, p).split(path.sep).join('/'));
+    }
+  })(root);
+
+  return page.evaluate(async (list) => {
+    const bad = [];
+    for (const f of list) {
+      try { await import('./src/' + f); }
+      catch (e) { bad.push({ file: f, error: String(e && e.message || e).slice(0, 200) }); }
+    }
+    return bad;
+  }, files);
 }
 
 // Poses the camera, then renders `frames` frames. Temporal effects (TAA

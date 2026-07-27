@@ -15,6 +15,11 @@ import {
   lineOfSight, moveCharacter, groundBelow,
 } from '../blacksite/src/world/collision.js';
 import { updatePlayer, damagePlayer, hasHeadroom } from '../blacksite/src/game/player.js';
+import {
+  WEAPONS, WEAPON_IDS, createWeapons, updateWeapons, setLoadout,
+  activeWeapon, currentSpread,
+} from '../blacksite/src/game/weapons.js';
+import { damageAtRange, penetrationLoss, MAX_PENETRATIONS } from '../blacksite/src/game/ballistics.js';
 
 const t = harness('blacksite');
 const finite = (v) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
@@ -55,6 +60,36 @@ function run(G, ticks, setup) {
     G.events.length = 0;
   }
 }
+
+// Drives the weapon simulation the way the real loop does, collecting every
+// event rather than discarding it. `hold` is the button set held down; `tap`
+// fires a press on the tick it names.
+function drive(G, seconds, hold = [], tap = null) {
+  const events = [];
+  const ticks = Math.round(seconds / C.TICK);
+  for (let i = 0; i < ticks; i++) {
+    G.input.buttons = new Set(typeof hold === 'function' ? hold(i) : hold);
+    G.input.pressed = new Set(tap ? tap(i) || [] : []);
+    G.input.released = new Set();
+    G.time.t += C.TICK;
+    updateWeapons(G, C.TICK);
+    for (const e of G.events) events.push(e);
+    G.events.length = 0;
+  }
+  return events;
+}
+
+function armed(id, seed = 4242) {
+  const G = createState(seed);
+  G.world = Object.assign(G.world, arena());
+  G.world.ready = true;
+  G.player.pos.x = 0; G.player.pos.z = 8; G.player.pos.y = C.EYE_STAND;
+  G.player.grounded = true;
+  createWeapons(G, [id]);
+  return G;
+}
+
+const count = (evts, type) => evts.filter((e) => e.type === type).length;
 
 // ─────────────────────────────────────────────────────────────── state
 {
@@ -349,6 +384,294 @@ function run(G, ticks, setup) {
   }
   t.ok(C.PENETRATION[C.SURFACE.METAL].loss > C.PENETRATION[C.SURFACE.WOOD].loss,
     'and metal eats more of a bullet than wood does');
+}
+
+// ────────────────────────────────────────────────────── the roster is coherent
+{
+  t.ok(WEAPON_IDS.length >= 5, `the roster has real breadth (${WEAPON_IDS.length} weapons)`);
+  for (const id of WEAPON_IDS) {
+    const w = WEAPONS[id];
+    t.ok(w.rpm > 0 && w.mag > 0 && w.dmg.near > 0, `${id} has usable numbers`);
+    t.ok(w.dmg.far <= w.dmg.near, `${id} does not get stronger with distance`);
+    t.ok(w.dmg.d1 > w.dmg.d0, `${id}'s falloff band runs the right way`);
+    t.ok(w.spread.ads < w.spread.hip, `${id} is tighter down the sights than from the hip`);
+  }
+
+  // The whole point of a roster is that the tools disagree about range. If the
+  // rifle beat the SMG at both 8 m and 40 m there would be no choice to make.
+  const rifle = WEAPONS.rifle, smg = WEAPONS.smg;
+  const shots = (w, d) => Math.ceil(100 / damageAtRange(w, d));
+  const ttk = (w, d) => (shots(w, d) - 1) * (60 / w.rpm);
+  t.ok(ttk(smg, 8) < ttk(rifle, 8), `the SMG wins the doorway (${(ttk(smg, 8) * 1000) | 0} ms vs ${(ttk(rifle, 8) * 1000) | 0} ms at 8 m)`);
+  t.ok(ttk(rifle, 40) < ttk(smg, 40), `and the rifle wins the courtyard (${(ttk(rifle, 40) * 1000) | 0} ms vs ${(ttk(smg, 40) * 1000) | 0} ms at 40 m)`);
+  t.ok(smg.adsTime < rifle.adsTime, 'and the SMG gets to the sights first');
+}
+
+// ────────────────────────────────────────────────────────── damage falloff
+{
+  const w = WEAPONS.rifle;
+  t.ok(Math.abs(damageAtRange(w, 0) - w.dmg.near) < 1e-9, 'point blank is the near value exactly');
+  t.ok(Math.abs(damageAtRange(w, w.dmg.d0) - w.dmg.near) < 1e-9, 'the plateau holds right up to the shoulder');
+  t.ok(Math.abs(damageAtRange(w, w.dmg.d1) - w.dmg.far) < 1e-9, 'and the floor is reached exactly at the far edge');
+  t.ok(Math.abs(damageAtRange(w, 500) - w.dmg.far) < 1e-9, 'past which it stops falling rather than going negative');
+
+  const mid = damageAtRange(w, (w.dmg.d0 + w.dmg.d1) / 2);
+  t.ok(Math.abs(mid - (w.dmg.near + w.dmg.far) / 2) < 0.02,
+    `the band's midpoint is the mean, so the curve is symmetric (${mid.toFixed(2)})`);
+
+  // An S-curve sits above a straight line in the first half of the band. That
+  // shoulder is what keeps a weapon feeling like itself just past its range.
+  const q = w.dmg.d0 + (w.dmg.d1 - w.dmg.d0) * 0.25;
+  const linear = w.dmg.near + (w.dmg.far - w.dmg.near) * 0.25;
+  t.ok(damageAtRange(w, q) > linear, 'and the near shoulder stays above a linear falloff');
+
+  let prev = Infinity;
+  for (let d = 0; d <= 120; d += 2) {
+    const v = damageAtRange(w, d);
+    if (v > prev + 1e-9) { prev = -1; break; }
+    prev = v;
+  }
+  t.ok(prev !== -1, 'damage never rises as the target gets further away');
+}
+
+// ──────────────────────────────────────────────────────────── penetration
+{
+  const thin = penetrationLoss(C.SURFACE.WOOD, 4, 1);
+  const thick = penetrationLoss(C.SURFACE.WOOD, 30, 1);
+  t.ok(thin > thick, 'thicker material takes more out of a bullet');
+  t.ok(thin > 0 && thin <= 1, 'and the survivor fraction stays a fraction');
+  t.ok(penetrationLoss(C.SURFACE.METAL, 4, 1) < penetrationLoss(C.SURFACE.WOOD, 4, 1),
+    'metal eats more of a round than wood at the same thickness');
+  t.ok(penetrationLoss(C.SURFACE.CONCRETE, 4, 2) > penetrationLoss(C.SURFACE.CONCRETE, 4, 1),
+    'and a more powerful round keeps more of itself through the same wall');
+  t.ok(penetrationLoss(C.SURFACE.CONCRETE, 400, 1) === 0, 'past the limit a round is simply stopped');
+  t.ok(MAX_PENETRATIONS >= 1 && MAX_PENETRATIONS <= 3,
+    'a bullet crosses a bounded number of surfaces rather than the whole level');
+}
+
+// ──────────────────────────────────────────────────────────── rate of fire
+{
+  // The load-bearing case is a weapon whose cycle is not a whole number of
+  // ticks: 1000 rpm is 0.06 s against a 1/120 s step. If the accumulator
+  // quantises to the tick, the SMG silently fires at 857 rpm instead. Load the
+  // gun far past its magazine so the window measures the rate and nothing else.
+  for (const id of ['rifle', 'smg']) {
+    const G = armed(id);
+    const w = activeWeapon(G);
+    w.mag = 9999; w.ammo = 9999;
+    const fired = count(drive(G, 2, ['fire']), 'shot');
+    const expect = WEAPONS[id].rpm / 30;          // rounds in two seconds
+    t.ok(Math.abs(fired - expect) <= 1,
+      `${id} holds its stated ${WEAPONS[id].rpm} rpm across a non-integer tick cycle (${fired} vs ${expect})`);
+  }
+
+  // Running dry on a held trigger dry-fires once and reloads itself. Every
+  // shooter does this; the alternative is standing in the open pulling a dead
+  // trigger. The count that matters is that it is *one* dryfire, not one per
+  // tick for the length of the reload.
+  const G = armed('smg');
+  const evts = drive(G, 5, ['fire']);
+  const w = activeWeapon(G);
+  const mag = WEAPONS.smg.mag;
+  t.ok(count(evts, 'shot') > mag, `a held trigger keeps firing past the first magazine (${count(evts, 'shot')})`);
+  t.ok(count(evts, 'dryfire') === 1, `announcing exactly one dry trigger, not one a tick (${count(evts, 'dryfire')})`);
+  t.ok(evts.some((e) => e.type === 'reload' && e.phase === 'start'), 'because it reloaded itself');
+  t.ok(w.res < WEAPONS.smg.reserve, 'and the rounds came out of the reserve');
+}
+
+// ─────────────────────────────────────────────────── trigger discipline
+{
+  // A semi-auto must fire once per press however long the button is held.
+  const G = armed('dmr');
+  const evts = drive(G, 1.5, ['fire']);
+  t.ok(count(evts, 'shot') === 1, `holding fire on a semi-auto fires once (${count(evts, 'shot')})`);
+
+  // And clicking it must not silently eat inputs — that is what the buffer is for.
+  const H = armed('dmr');
+  const clicks = drive(H, 2.0, (i) => (i % 40 < 4 ? ['fire'] : []));
+  t.ok(count(clicks, 'shot') >= 4, `clicking a semi-auto fires every click (${count(clicks, 'shot')})`);
+}
+
+// ──────────────────────────────────────────────────────────── the shotgun
+{
+  const G = armed('shotgun');
+  const evts = drive(G, 0.3, ['fire']);
+  const shot = evts.find((e) => e.type === 'shot');
+  t.ok(shot, 'the shotgun fires');
+  t.ok(shot.pellets > 1, `and throws a pattern rather than a bullet (${shot.pellets} pellets)`);
+  t.ok(count(evts, 'trace') === shot.pellets, 'with one traced ray per pellet');
+  t.ok(count(evts, 'shot') === 1, 'and a pump gun fires once per trigger pull');
+}
+
+// ─────────────────────────────────────────────────────────────── recoil
+{
+  const G = armed('rifle');
+  drive(G, 1.2, ['fire']);
+  t.ok(Math.abs(G.recoil.pitch) > 0.005, `firing actually moves the aim (${G.recoil.pitch.toFixed(4)} rad)`);
+  const climbed = G.recoil.pitch;
+  drive(G, 1.2, []);
+  t.ok(Math.abs(G.recoil.pitch) < Math.abs(climbed) * 0.05,
+    `and it recovers to the pre-fire point when the trigger is released (${G.recoil.pitch.toFixed(5)} rad)`);
+  t.ok(Number.isFinite(G.recoil.yaw) && Number.isFinite(G.recoil.kick), 'with nothing left non-finite');
+
+  // Recoil has to be a shape you can learn. Different seeds must produce
+  // near-identical climbs, or the only counter is luck.
+  const paths = [1, 2, 3, 4, 5].map((s) => {
+    const g = armed('rifle', s * 7919);
+    drive(g, 20 * (60 / WEAPONS.rifle.rpm) + 0.02, ['fire']);
+    return g.recoil.pitch;
+  });
+  const lo = Math.min(...paths), hi = Math.max(...paths);
+  const spreadDeg = (hi - lo) * 180 / Math.PI;
+  t.ok(spreadDeg < 0.5, `a twenty-shot climb varies by under half a degree across seeds (${spreadDeg.toFixed(3)}°)`);
+  t.ok(Math.abs(paths[0]) > 0.02, 'while still being a climb worth countering');
+
+  // Same seed, same everything — the property the whole suite rests on.
+  const a = armed('rifle', 999), b = armed('rifle', 999);
+  drive(a, 0.8, ['fire']); drive(b, 0.8, ['fire']);
+  t.ok(a.recoil.pitch === b.recoil.pitch && a.recoil.yaw === b.recoil.yaw,
+    'two runs from the same seed produce bit-identical recoil');
+}
+
+// ─────────────────────────────────────────────────────────────── spread
+{
+  const G = armed('rifle');
+  const w = activeWeapon(G);
+
+  G.player.stance = 'stand'; G.player.ads = 0; G.player.grounded = true;
+  V.set(G.player.vel, 0, 0, 0);
+  const still = currentSpread(G, w);
+
+  G.player.ads = 1;
+  const ads = currentSpread(G, w);
+
+  G.player.ads = 0; G.player.stance = 'crouch';
+  const crouch = currentSpread(G, w);
+
+  G.player.stance = 'stand'; V.set(G.player.vel, 4, 0, 0);
+  const moving = currentSpread(G, w);
+
+  V.set(G.player.vel, 0, 0, 0); G.player.grounded = false;
+  const air = currentSpread(G, w);
+
+  t.ok(ads < crouch, 'aiming is tighter than crouching');
+  t.ok(crouch < still, 'crouching is tighter than standing');
+  t.ok(still < moving, 'standing still is tighter than moving');
+  t.ok(moving < air, 'and everything is tighter than being airborne');
+
+  // Firing blooms the cone, and letting go closes it again.
+  const H = armed('rifle');
+  const hw = activeWeapon(H);
+  H.player.grounded = true;
+  const base = currentSpread(H, hw);
+  drive(H, 0.6, ['fire']);
+  t.ok(currentSpread(H, hw) > base, 'firing opens the cone');
+  drive(H, 2.5, []);
+  t.ok(Math.abs(currentSpread(H, hw) - base) < 1e-6, 'and it closes back to exactly the base, not near it');
+}
+
+// ─────────────────────────────────────────────────────────────── reloading
+{
+  // A round left in the chamber is a round you keep.
+  const G = armed('rifle');
+  const w = activeWeapon(G);
+  drive(G, 0.3, ['fire']);
+  const spent = w.ammo;
+  t.ok(spent > 0 && spent < w.mag, 'fired a few rounds without emptying the magazine');
+  const evts = drive(G, 3.2, [], (i) => (i === 0 ? ['reload'] : []));
+  t.ok(w.ammo === w.mag + 1, `a tactical reload keeps the chambered round (${w.ammo} = mag+1)`);
+
+  const phases = evts.filter((e) => e.type === 'reload').map((e) => e.phase);
+  t.ok(phases[0] === 'start' && phases[phases.length - 1] === 'end',
+    `the reload runs start → … → end (${phases.join(',')})`);
+  t.ok(phases.includes('magout') && phases.includes('magin'), 'passing through both magazine phases');
+
+  // Emptying the gun costs the chambered round and the longer reload.
+  const H = armed('rifle');
+  const hw = activeWeapon(H);
+  drive(H, 5, ['fire']);
+  t.ok(hw.ammo === 0, 'held the trigger until it was empty');
+  drive(H, 4, [], (i) => (i === 0 ? ['reload'] : []));
+  t.ok(hw.ammo === hw.mag, `an empty reload gives exactly a magazine, not mag+1 (${hw.ammo})`);
+}
+
+{
+  // Sprinting cancels a reload without eating the ammunition.
+  const G = armed('rifle');
+  const w = activeWeapon(G);
+  drive(G, 0.3, ['fire']);
+  const before = w.ammo, res = w.res;
+  drive(G, 0.5, [], (i) => (i === 0 ? ['reload'] : []));
+  G.player.sprinting = true;
+  const evts = drive(G, 0.3, []);
+  t.ok(w.state !== 'reload', 'sprinting interrupts a reload');
+  t.ok(w.ammo === before && w.res === res, 'and the interrupted magazine is not lost');
+  t.ok(evts.some((e) => e.type === 'reload' && e.phase === 'cancel'), 'the cancel is announced');
+}
+
+// ────────────────────────────────────────────────────── aim down sights
+{
+  const G = armed('rifle');
+  t.ok(G.player.ads === 0, 'the gun starts at the hip');
+  drive(G, WEAPONS.rifle.adsTime + 0.02, ['ads']);
+  t.ok(G.player.ads > 0.99, 'holding aim reaches the sights in the stated time');
+  drive(G, WEAPONS.rifle.adsTime, []);
+  t.ok(G.player.ads === 0, 'and releasing comes down at least as fast — you never die waiting for it');
+
+  // Sprinting has to win over aiming, or the sprint pose means nothing.
+  const H = armed('rifle');
+  drive(H, 0.4, ['ads']);
+  H.player.sprinting = true;
+  drive(H, 0.5, ['ads']);
+  t.ok(H.player.ads === 0, 'sprinting drops you out of the sights');
+}
+
+// ─────────────────────────────────────────────────────── swapping weapons
+{
+  const G = createState(77);
+  G.world = Object.assign(G.world, arena());
+  G.player.grounded = true;
+  createWeapons(G, ['rifle', 'shotgun', 'pistol']);
+  t.ok(G.weapons.slots.length === 3, 'a three-slot loadout arms three weapons');
+
+  const evts = drive(G, 1.4, [], (i) => (i === 0 ? ['slot2'] : []));
+  t.ok(G.weapons.active === 1, 'pressing a slot key swaps to it');
+  const ph = evts.filter((e) => e.type === 'swap').map((e) => e.phase);
+  t.ok(ph.join(',') === 'holster,draw,ready', `the swap runs holster → draw → ready (${ph.join(',')})`);
+
+  // You must not be able to fire mid-swap.
+  const H = createState(78);
+  H.world = Object.assign(H.world, arena());
+  H.player.grounded = true;
+  createWeapons(H, ['rifle', 'shotgun']);
+  const mid = drive(H, 0.1, ['fire'], (i) => (i === 0 ? ['slot2'] : []));
+  t.ok(count(mid, 'shot') === 0, 'and the gun cannot fire while it is being raised');
+}
+
+// ────────────────────────────────────────────── nothing breaks under abuse
+{
+  const G = createState(31337);
+  G.world = Object.assign(G.world, arena());
+  G.player.grounded = true;
+  setLoadout(G, ['rifle', 'shotgun', 'pistol']);
+  createWeapons(G, ['rifle', 'shotgun', 'pistol']);
+
+  let broke = null;
+  for (let i = 0; i < 4000 && !broke; i++) {
+    G.input.buttons = new Set(i % 3 === 0 ? ['fire'] : i % 5 === 0 ? ['fire', 'ads'] : ['ads']);
+    G.input.pressed = new Set(
+      i % 41 === 0 ? ['reload'] : i % 67 === 0 ? ['slot2'] : i % 89 === 0 ? ['slot1'] : []);
+    G.player.sprinting = i % 131 === 0;
+    G.time.t += C.TICK;
+    updateWeapons(G, C.TICK);
+    G.events.length = 0;
+    const w = activeWeapon(G);
+    if (!Number.isFinite(G.recoil.pitch) || !Number.isFinite(G.recoil.yaw) ||
+        !Number.isFinite(G.player.ads) || !w || !Number.isFinite(w.ammo) ||
+        w.ammo < 0 || w.ammo > w.mag + 1 || w.res < 0) broke = i;
+  }
+  t.ok(broke === null, 'four thousand ticks of mashed fire, reload and swap keeps every weapon valid');
+  t.ok(G.player.ads >= 0 && G.player.ads <= 1, 'and the aim blend stays inside its range');
 }
 
 t.done();

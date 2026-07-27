@@ -27,6 +27,7 @@ export function createScenePass(renderer, engine, opts = {}) {
   let color = null, mask = null, depthTex = null;
   let w = 1, h = 1;
 
+  const _clear = new THREE.Color();
   const maskMaterial = new THREE.MeshBasicMaterial({
     color: 0xffffff, fog: false, depthTest: false, depthWrite: false, toneMapped: false,
   });
@@ -67,26 +68,30 @@ export function createScenePass(renderer, engine, opts = {}) {
 
     // Draws the viewmodel into whatever target the chain has reached, clearing
     // depth first. Called after the world-space effects have run, so their
-    // inputs stay clean.
+    // inputs stay clean. Leaves `autoClear` off — the caller owns it for the
+    // rest of the chain.
     renderViewmodel(target) {
       renderer.setRenderTarget(target);
       renderer.autoClear = false;
       renderer.clearDepth();
       renderer.render(engine.view, engine.viewCam);
-      renderer.autoClear = true;
     },
 
     // Flat-white silhouette of the viewmodel. `overrideMaterial` is set and
     // restored around the draw so the viewmodel module never sees it.
     renderMask() {
       const prev = engine.view.overrideMaterial;
+      const prevClear = renderer.getClearColor(_clear).getHex();
+      const prevAlpha = renderer.getClearAlpha();
       engine.view.overrideMaterial = maskMaterial;
       renderer.setRenderTarget(mask);
-      renderer.autoClear = true;
+      renderer.autoClear = false;
       renderer.setClearColor(0x000000, 1);
       renderer.clear(true, true, false);
       renderer.render(engine.view, engine.viewCam);
       engine.view.overrideMaterial = prev;
+      renderer.setClearColor(prevClear, prevAlpha);
+      renderer.autoClear = true;
     },
 
     dispose() { free(); maskMaterial.dispose(); },
