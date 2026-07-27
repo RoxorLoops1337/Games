@@ -3685,7 +3685,16 @@ ok(HR.rankFor(1200).rep > HR.rankFor(100).rep, 'higher rep = higher rank tier');
 }
 {
   // determinism: same rng + same state → same outcome (preview matches the deterministic core)
-  const mk = () => { const g = HR.freshGame(); g.day = HR.VISITOR_FIRST_DAY; g.horses.push(HR.mkHorse({ breed: 'arabian', age: 20, speed: 80, stamina: 80, temperament: 70, wins: 3 })); return g; };
+  // This test failed nondeterministically — about one run in three hundred.
+  // freshGame() stocks the ranch with THREE randomly generated horses, and
+  // previewVisitorDay sums visitorAppealOf across the whole roster, so pushing
+  // a fixed horse onto two fresh games did not give two identical states: the
+  // starting three differed, and with them the payout. Measured over 3000
+  // pairs, the preview disagreed 10 times and the outcome followed it every
+  // time. Replacing the roster rather than adding to it makes the premise —
+  // "same rng + same state" — actually true, and seeding mkHorse keeps the one
+  // remaining horse from drawing its own genes.
+  const mk = () => { const g = HR.freshGame(); g.day = HR.VISITOR_FIRST_DAY; g.horses = [HR.mkHorse({ breed: 'arabian', age: 20, speed: 80, stamina: 80, temperament: 70, wins: 3, rng: rng(7) })]; return g; };
   const a = HR.hostVisitorDay(mk(), { rng: rng(42) });
   const b = HR.hostVisitorDay(mk(), { rng: rng(42) });
   ok(a.coins === b.coins && a.visitors === b.visitors && a.rep === b.rep, 'same rng + state yields the same outcome');

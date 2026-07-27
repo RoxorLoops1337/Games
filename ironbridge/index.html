@@ -2384,11 +2384,26 @@ function enterLane(h){
   G.units.push(h);
 }
 
+/* How long this hero stays down. One function, two readers: onHeroDeath sets
+   the clock from it and the strip divides by it to say how far back a fallen
+   hero has come. Stored as a lone countdown with no starting value, the mark
+   would have had nothing to be a fraction OF — and inventing a second field to
+   hold it would have meant another thing for the save and the net snapshot to
+   carry and get wrong. Reading the same formula twice needs neither.
+
+   It is evaluated against the hold as it stands NOW, so upgrading the tavern
+   while your hero is down shortens the denominator and the pip jumps forward a
+   little. That is the right answer to "how long until it is back" and the
+   clamp keeps it in range either way.                                       */
+function respawnDur(h){
+  const tav = bList(G.sides[h.side], 'tavern').reduce((a, b) => Math.max(a, b.lvl), 1);
+  return (C.RESPAWN_BASE + C.RESPAWN_PER_LVL * h.lvl) * (1 + passVal(h, 'respawn')) * (1 - .08 * (tav - 1));
+}
+
 function onHeroDeath(h, src){
   h.dead = true; h.inLane = false; h.deaths++;
   const i = G.units.indexOf(h); if (i >= 0) G.units.splice(i, 1);
-  const tav = bList(G.sides[h.side], 'tavern').reduce((a, b) => Math.max(a, b.lvl), 1);
-  h.respawnT = (C.RESPAWN_BASE + C.RESPAWN_PER_LVL * h.lvl) * (1 + passVal(h, 'respawn')) * (1 - .08 * (tav - 1));
+  h.respawnT = respawnDur(h);
   const dh = passVal(h, 'deathHeal');
   if (dh) nearby(h.x, 8, (u) => { if (!u.dead && u.side === h.side) healUnit(u, dh); });
   if (src && src.side !== undefined){
@@ -5322,7 +5337,13 @@ function minimapWorldX(sx){
 // from the other.
 const MINI_MINE = .52, MINI_THEIRS = .30;
 const miniHoldCol = (i) => shade(SIDE_COL[i], i === MY ? MINI_MINE : MINI_THEIRS);
-const MINI_MARK = { hero:3, rim:1, minion:1.6, rimCol:'#ffffff' };
+// Down, but still on the board. One colour for it, read by the broken
+// structures and by the fallen heroes, so the strip cannot end up saying
+// 'gone' two different ways.
+const MINI_DOWN = 'rgba(120,132,150,.5)';
+// down never smaller than a levy's mark: a fallen hero is grey and nothing else
+// small on the strip is, but it should not be the tinier thing as well.
+const MINI_MARK = { hero:3, rim:1, minion:1.6, down:1.9, rimCol:'#ffffff' };
 function drawMinimap(c){
   const m = minimapRect();
   const w = m.w, h = m.h, x0 = m.x0, y0 = m.y0;
@@ -5350,7 +5371,7 @@ function drawMinimap(c){
     const sz = st.key === 'gate' ? 5 : st.key === 'inhib' ? 4 : 3;
     // A broken turret used to simply vanish, so the strip could not show you
     // that the line of battle had moved — which is the one thing it is for.
-    c.fillStyle = st.dead ? 'rgba(120,132,150,.5)' : SIDE_COL[s.i];
+    c.fillStyle = st.dead ? MINI_DOWN : SIDE_COL[s.i];
     c.fillRect(mx(st.x) - sz / 2, y0 + h / 2 - (st.dead ? sz * .4 : sz), sz, st.dead ? sz * .8 : sz * 2);
   }
   // A hero was drawn WHITE — and so was the enemy's. The two most important
@@ -5365,16 +5386,39 @@ function drawMinimap(c){
   // lines further down, in the same function. Side colour to say whose; a
   // white rim so a hero still reads as a hero and not a levy.
   for (const u of G.units){
-    if (u.dead) continue;
+    if (u.dead || u.isHero) continue;      // heroes are drawn off their roster below
     const px = mx(u.x), py = y0 + h / 2 + u.y * .8;
-    if (u.isHero){
+    c.fillStyle = SIDE_COL2[u.side];
+    c.fillRect(px - MINI_MARK.minion / 2, py - MINI_MARK.minion / 2, MINI_MARK.minion, MINI_MARK.minion);
+  }
+  // Heroes come off the ROSTER, not off G.units, because onHeroDeath splices a
+  // dead one out of G.units — so drawn from there, a hero that dies simply
+  // leaves the strip. Measured: alive it laid down a rim and a side colour at
+  // its mark, dead it laid down nothing at all, while a broken structure four
+  // lines up greyed out in the same frame on the same instrument.
+  //
+  // Which is the note above, again: a turret used to vanish and was fixed
+  // precisely because a mark that disappears cannot tell you the line of
+  // battle has moved. The heroes were left out of that too.
+  //
+  // A hero being down is the window you push in, and the ENEMY's respawn was
+  // nowhere at all — your own is on your hero card, theirs was in no panel and
+  // on no board. So the stub grows back as the clock runs down: full size and
+  // in colour means it is standing on the bridge, a small grey pip means it
+  // has just fallen, and a nearly-full grey one means do not start anything.
+  for (const s of G.sides) for (const hero of s.heroes){
+    if (!hero.inLane && !hero.dead) continue;      // never left the tavern
+    const px = mx(hero.x), py = y0 + h / 2 + hero.y * .8;
+    if (hero.dead){
+      const back = 1 - clamp(hero.respawnT / Math.max(.001, respawnDur(hero)), 0, 1);
+      const sz = MINI_MARK.down + (MINI_MARK.hero - MINI_MARK.down) * back;
+      c.fillStyle = MINI_DOWN;
+      c.fillRect(px - sz / 2, py - sz / 2, sz, sz);
+    } else {
       const out = MINI_MARK.hero + MINI_MARK.rim * 2;
       c.fillStyle = MINI_MARK.rimCol; c.fillRect(px - out / 2, py - out / 2, out, out);
-      c.fillStyle = SIDE_COL[u.side];
+      c.fillStyle = SIDE_COL[hero.side];
       c.fillRect(px - MINI_MARK.hero / 2, py - MINI_MARK.hero / 2, MINI_MARK.hero, MINI_MARK.hero);
-    } else {
-      c.fillStyle = SIDE_COL2[u.side];
-      c.fillRect(px - MINI_MARK.minion / 2, py - MINI_MARK.minion / 2, MINI_MARK.minion, MINI_MARK.minion);
     }
   }
   // camera window
@@ -8716,7 +8760,7 @@ window.IB = {
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
   WEAR, battleDamage, crown, hash2, stSeed, merlonHolds, CROWN_TIERS, UPMARK, upBands, upPlate, towerBands, towerRanks, troopRanks, bsumUp, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
-  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
+  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
   get LW(){ return LW; }, get LH(){ return LH; },
 };
