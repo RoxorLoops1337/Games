@@ -61,6 +61,11 @@ function loadGame(store, srcOverride){
       if (typeof a[i] === 'number' && a[i] < 0)
         throw new RangeError(k + '(): radius ' + i + ' is negative (' + a[i] + ')');
   };
+  // A dash pattern is state, not an argument: leave one set and every stroke
+  // for the rest of the frame comes out dashed. `stats.dash` follows it so a
+  // test can assert the frame ended clean — a leak of this kind is invisible
+  // to every other check here, because nothing about the call is wrong.
+  stats.dash = 0;
   const ctx = new Proxy({}, { get(_t, k){
     if (k === '__stats') return stats;
     if (k === 'createLinearGradient' || k === 'createRadialGradient')
@@ -68,6 +73,13 @@ function loadGame(store, srcOverride){
         return { addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); } }; };
     if (k === 'measureText') return () => ({ width: 24 });
     if (k === 'canvas') return { width: 900, height: 520 };
+    if (k === 'setLineDash') return (a) => {
+      stats.ops++;
+      if (!Array.isArray(a)) throw new TypeError('setLineDash() wants an array');
+      numCheck('setLineDash', a);
+      for (const v of a) if (v < 0) throw new RangeError('setLineDash(): negative dash ' + v);
+      stats.dash = a.length;
+    };
     return (...a) => { stats.ops++; numCheck(k, a); radCheck(k, a); };
   }, set(_t, k, v){
     stats.ops++;
@@ -3823,6 +3835,69 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.BAR_MINE !== IB.BAR_THEIRS, 'friend and foe bars are different colours');
   t.ok(chan(IB.BAR_MINE)[1] > chan(IB.BAR_MINE)[0], 'yours reads green');
   t.ok(chan(IB.BAR_THEIRS)[0] > chan(IB.BAR_THEIRS)[1], 'theirs reads red');
+
+  // The same question one layer down, asked of the thing that can actually
+  // kill you while you are reading it. Every lingering zone hurts whoever does
+  // not own it, and they all drew identically — an Inferno you have to step
+  // out of looked exactly like your own. The HUE is spoken for by the damage
+  // type (armour or resist), so ownership has to arrive on other channels.
+  let quiet = 0;
+  for (const k of IB.ZONE_LOUD){
+    if (!(IB.ZONE.theirs[k] > IB.ZONE.mine[k])) quiet++;
+  }
+  t.ok(IB.ZONE_LOUD.length >= 4, 'ownership speaks on more than one channel (' + IB.ZONE_LOUD.length + ')');
+  t.ok(quiet === 0, 'and the one you must not stand in is louder on every one of them (' + quiet + ')');
+  // Table completeness: a numeric channel left out of ZONE_LOUD is a channel
+  // nothing checks, which is how a silently-equal setting survives.
+  const numKeys = (o) => Object.keys(o).filter(k => typeof o[k] === 'number').sort();
+  t.ok(numKeys(IB.ZONE.mine).join() === numKeys(IB.ZONE.theirs).join(),
+    'both zone looks define the same channels');
+  t.ok(numKeys(IB.ZONE.mine).join() === IB.ZONE_LOUD.slice().sort().join(),
+    'and every one of them is checked (' + numKeys(IB.ZONE.mine).join() + ')');
+  // The keep-out marker has to survive the colour being taken away.
+  t.ok(IB.ZONE.theirs.dash.length > 0, 'a hostile zone is ringed with a dashed keep-out line');
+  t.ok(IB.ZONE.mine.dash.length === 0, 'and your own is not, or the board is all hazard tape');
+  t.ok(IB.ZONE.theirs.dash.every(v => v > 0), 'with a dash pattern a canvas will accept');
+  // Ownership must not touch hue — that channel already means something else.
+  for (const k of ['col', 'hot', 'magic'])
+    t.ok(!(k in IB.ZONE.mine) && !(k in IB.ZONE.theirs), 'ownership does not repaint the damage type (' + k + ')');
+
+  // And it follows the chair. Stated the crisp way: a zone YOU cast reads the
+  // same whichever seat you are sitting in.
+  let zwrong = 0;
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    if (IB.zoneLook(seat) !== IB.ZONE.mine) zwrong++;
+    if (IB.zoneLook(1 - seat) !== IB.ZONE.theirs) zwrong++;
+  }
+  t.ok(zwrong === 0, 'a zone knows whose it is from either chair (' + zwrong + ')');
+  IB.MY = 0; const z0 = IB.zoneLook(0);
+  IB.MY = 1; const z1 = IB.zoneLook(1);
+  IB.MY = seat0;
+  t.ok(z0 === z1, 'and your own zone reads the same from either chair');
+
+  // Then draw them for real: both owners, both damage types, from both seats,
+  // and at both ends of the zoom. The dash goes through setLineDash, which is
+  // canvas STATE — leave it set and every stroke after it in the frame comes
+  // out dashed, which no colour or radius check would ever notice.
+  for (const seat of [0, 1]){
+    IB.newMatch({ diff:'veteran', seed:911 });
+    IB.MY = seat;
+    IB.cam.follow = false; IB.cam.x = 64;
+    for (const magic of [true, false])
+      for (const side of [0, 1])
+        G.zones.push({ x:62 + side * 4, y:side ? 1 : -1, r:3, dps:12, t:4, dur:5,
+                       tick:0, side, src:null, magic, slow:0, follow:null });
+    for (const z of [.42, 1, 2.4]){
+      IB.cam.z = IB.cam.tz = z;
+      for (let i = 0; i < 6; i++){ G.t = i * .37; IB.draw(); }
+      t.ok(CTX.__stats.dash === 0,
+        'the frame ends with no dash pattern left on the canvas — seat ' + seat + ', zoom ' + z);
+    }
+    G.zones.length = 0;
+    IB.cam.z = IB.cam.tz = 1; G.t = 0;
+  }
+  IB.MY = seat0;
 
   // And the notification that was not merely the wrong colour but absent: the
   // level-up toast fired for side zero only, so player two's hero levelled up
