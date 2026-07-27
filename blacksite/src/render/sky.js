@@ -331,10 +331,13 @@ void main() {
   // Degraded path: no render target, so the scattering integral never ran. Three
   // measured colours from the same model, interpolated. Wrong in the details,
   // right in the palette, and it keeps the screen from going black.
-  float up = smoothstep(-0.05, 0.65, dir.y);
-  vec3 col = mix(uHorizon, uZenith, up);
+  float up = smoothstep(-0.02, 0.75, dir.y);
+  // Squared, because the real gradient does almost all of its work in the first
+  // 20° above the horizon and a linear ramp drags the warm band up into the
+  // zenith where it has no business being.
+  vec3 col = mix(uHorizon, uZenith, up * up);
   float toSun = max(dot(dir, uSunDir), 0.0);
-  col = mix(col, uSunward, pow(toSun, 3.0) * (1.0 - up * 0.55));
+  col = mix(col, uSunward, pow(toSun, 6.0) * (1.0 - up) * 0.9);
 #endif
 
   col = shoulder(col * uExposure);

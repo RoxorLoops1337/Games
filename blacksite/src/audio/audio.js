@@ -895,7 +895,10 @@ function playImpact(rig, o) {
     r.type = 'bandpass'; r.frequency.value = m.res[i] * rnd(0.93, 1.08); r.Q.value = m.q * rnd(0.8, 1.2);
     const src = noiseSrc(rig, when, tailOf(0.0006, m.ring) + 0.05, 1);
     const vg = ctx.createGain();
-    ar(vg.gain, when, lvl * 0.55 * Math.pow(0.6, i) * (m.q > 8 ? 2.2 : 1), 0.0006, m.ring * rnd(0.8, 1.25));
+    // √Q for the same reason the footstep ring needs it: a narrow band passes
+    // proportionally less of a broadband excitation, so without it a round on
+    // sheet steel comes out quieter than the same round on concrete.
+    ar(vg.gain, when, lvl * 0.38 * Math.sqrt(m.q) * Math.pow(0.6, i), 0.0006, m.ring * rnd(0.8, 1.25));
     src.connect(r); r.connect(vg); vg.connect(sink);
     V.nodes.push(r, vg);
   }
