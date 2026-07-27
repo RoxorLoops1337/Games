@@ -4021,6 +4021,17 @@ function drawOgre(c, u, bx, by, floor, sc, col){
   ell(c, bx + dir * (12 + sw * 2) * sc, by - (17.5 - sw * 12) * sc, 3.4 * sc, 3.8 * sc, '#6f5730');
 }
 
+// How far this body's feet are apart right now. Pulled out of the draw call so
+// it can be checked: a body that is stood in reach of the thing it is hitting
+// must PLANT, and one walking up the bridge must not. Reads the clock and the
+// unit's own fixed phase, never a random stream, so both machines see the same
+// legs at the same tick.
+const BODY_STRIDE = 2.4;
+function strideOf(u){
+  if (u.stunT > 0 || u.pullT > 0) return 0;
+  if (u.target && hyp(u.target.x - u.x, u.target.y - u.y) <= u.rng + (u.target.r || .4) + u.r) return 0;
+  return Math.sin(G.t * 7 + u.ph) * BODY_STRIDE;
+}
 function drawUnit(c, u){
   const p = lp(u.x, u.y), S = LS();
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
@@ -4046,17 +4057,40 @@ function drawUnit(c, u){
   const bx = p[0] + flinch, by = p[1] - 2 * sc + bob - cast * 3.2 * sc;
   if (u.kind === 'cannon'){ drawCannon(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
   if (u.kind === 'super'){ drawOgre(c, u, bx, by, p[1], sc, col); return drawUnitMarks(c, u, bx, by, p, sc); }
-  // legs + body
-  c.strokeStyle = shade(col, .45); c.lineWidth = 2 * sc;
-  c.beginPath(); c.moveTo(bx - 2 * sc, by); c.lineTo(bx - 2.6 * sc, p[1]); c.moveTo(bx + 2 * sc, by); c.lineTo(bx + 2.6 * sc, p[1]); c.stroke();
+  const dir0 = dirOf(u.side);
   const body = u.hitT > 0 ? '#ffffff' : col;
+  // Legs that stride. Every body on the bridge used to be two 2px sticks under
+  // a torso that bobbed on the spot, so a wave marching up the span read as a
+  // row of pieces sliding along it. They walk on the same clock as the bob and
+  // plant when the thing they are hitting is in reach.
+  const st = strideOf(u) * sc;
+  for (const s of [-1, 1]){
+    const hipx = bx + s * 2.1 * sc, ftx = bx + s * 2.4 * sc + s * st;
+    poly(c, [[hipx - 1.5 * sc, by - 1 * sc], [hipx + 1.5 * sc, by - 1 * sc],
+             [ftx + 1.4 * sc, p[1]], [ftx - 1.4 * sc, p[1]]], shade(body, .52));
+    c.fillStyle = shade(body, .38);
+    c.fillRect(ftx - 1.8 * sc, p[1] - 1.4 * sc, 3.6 * sc, 1.6 * sc);   // the boot
+  }
+  // Torso, with a lit face and a shaded one. It was a single flat fill — the
+  // only thing left in the game without a light side, next to houses, mines,
+  // cliffs and masonry that all have one.
   c.fillStyle = body;
   c.beginPath();
   c.moveTo(bx - 4.2 * sc, by); c.lineTo(bx + 4.2 * sc, by);
   c.lineTo(bx + 3.2 * sc, by - 9 * sc); c.lineTo(bx - 3.2 * sc, by - 9 * sc);
   c.closePath(); c.fill();
-  c.fillStyle = shade(body, .72);
-  c.fillRect(bx - 4.2 * sc, by - 4 * sc, 8.4 * sc, 1.6 * sc);
+  poly(c, [[bx + 1.1 * sc, by], [bx + 4.2 * sc, by], [bx + 3.2 * sc, by - 9 * sc], [bx + 1.1 * sc, by - 9 * sc]],
+    shade(body, u.hitT > 0 ? 1 : .74));
+  poly(c, [[bx - 3.2 * sc, by - 9 * sc], [bx - .4 * sc, by - 9 * sc], [bx - .4 * sc, by - 6.4 * sc], [bx - 3.5 * sc, by - 6.4 * sc]],
+    shade(body, u.hitT > 0 ? 1 : 1.16));
+  c.fillStyle = shade(body, .60);
+  c.fillRect(bx - 4.2 * sc, by - 4 * sc, 8.4 * sc, 1.6 * sc);          // the belt
+  // an arm reaching to whatever it is holding, so the weapon leaves a hand
+  c.strokeStyle = shade(body, .66); c.lineWidth = 2.1 * sc; c.lineCap = 'round';
+  c.beginPath();
+  c.moveTo(bx + dir0 * 2.4 * sc, by - 7.4 * sc);
+  c.lineTo(bx + dir0 * (4 + (u.swing > 0 ? 1.4 : 0)) * sc, by - (5 - (u.swing > 0 ? 1.6 : 0)) * sc);
+  c.stroke(); c.lineCap = 'butt';
   // head
   ell(c, bx, by - 11.6 * sc, 3 * sc, 3.2 * sc, u.hitT > 0 ? '#ffffff' : '#e8d6b8');
   const hooded = u.kind === 'caster' || u.cls === 'mage' || u.cls === 'support';
@@ -4072,6 +4106,10 @@ function drawUnit(c, u){
       c.fillStyle = shade(col, u.hitT > 0 ? 1 : .38);
       c.fillRect(bx - 3.6 * sc, by - 15.6 * sc, 7.2 * sc, 1.4 * sc);
     }
+    // a visor slot, on the side it is facing — a bare oval reads as looking
+    // nowhere, and every body on the bridge is supposed to be facing the fight
+    c.fillStyle = 'rgba(40,34,28,.55)';
+    c.fillRect(bx + dir0 * .4 * sc - 1.9 * sc, by - 12.3 * sc, 3.8 * sc, 1.3 * sc);
   }
   // weapon by role
   const sw = u.swing > 0 ? 1 : 0;
@@ -7251,7 +7289,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,

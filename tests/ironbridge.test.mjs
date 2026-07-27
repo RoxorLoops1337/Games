@@ -2776,6 +2776,74 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'and the whole lot draws at both ends of the zoom');
 }
 {
+  // The bodies. Every one of them used to be a flat fill on two 2px sticks —
+  // the only things left in the game without a lit side, next to houses,
+  // mines, cliffs and masonry that all have one — and the legs never moved, so
+  // a wave marching up the span read as a row of pieces sliding along it.
+  IB.newMatch({ diff:'veteran', seed:119 });
+  const walker = IB.spawnUnit(0, 'melee', { x:40, y:0 });
+  walker.target = null;
+  IB.rebuildGrid();
+  // A body with nothing in reach walks. Sample the cycle rather than one
+  // instant, because the stride crosses zero twice a stride.
+  let peak = 0;
+  for (let i = 0; i < 40; i++){ IB.update(1 / 30); walker.target = null; peak = Math.max(peak, Math.abs(IB.strideOf(walker))); }
+  t.ok(peak > IB.BODY_STRIDE * .5, 'a body walking up the bridge moves its legs (' + peak.toFixed(2) + ')');
+  t.ok(peak <= IB.BODY_STRIDE + 1e-9, 'and never further than one stride (' + peak.toFixed(2) + ')');
+
+  // ...and one stood in reach of what it is hitting plants its feet. This is
+  // the whole reason the stride is a function and not arithmetic inline: legs
+  // still swinging while a body trades blows on the spot is a moonwalk.
+  const foe = IB.spawnUnit(1, 'melee', { x:40.2, y:0 });
+  IB.rebuildGrid();
+  walker.x = foe.x - .3; walker.target = foe;
+  // Sweep the phase rather than the clock: update() would re-acquire the
+  // target and push the two apart, and the point here is the branch, not the
+  // pathing.
+  let planted = true;
+  for (let i = 0; i < 24; i++){ walker.ph = i * .31; if (IB.strideOf(walker) !== 0) planted = false; }
+  t.ok(planted, 'a body fighting in reach keeps its feet on the ground');
+  walker.x = foe.x - (walker.rng + foe.r + walker.r) - 4;
+  let moved = false;
+  for (let i = 0; i < 24; i++){ walker.ph = i * .31; if (Math.abs(IB.strideOf(walker)) > .4) moved = true; }
+  t.ok(moved, 'and picks them up again once it has to close the gap');
+  // Stunned and hooked bodies are not walking anywhere either.
+  walker.target = null; walker.stunT = 1;
+  t.ok(IB.strideOf(walker) === 0, 'a stunned body does not stride');
+  walker.stunT = 0; IB.applyPull(walker, 34, 0, .4, foe);
+  t.ok(IB.strideOf(walker) === 0, 'nor one on the end of a chain');
+  walker.pullT = 0;
+
+  // Every kind of body has to survive the render path, in every state that
+  // changes how it is drawn, at both ends of the zoom. The stub canvas in this
+  // harness throws on a bad colour string, and the torso now derives three
+  // tones from the side colour with shade().
+  IB.newMatch({ diff:'veteran', seed:121 });
+  const kinds = Object.keys(IB.UNITS);
+  t.ok(kinds.length >= 4, 'there is more than one kind of body to draw (' + kinds.length + ')');
+  for (const k of kinds) IB.spawnUnit(0, k, { x:50, y:0 });
+  for (const cls of ['tank', 'mage', 'support', 'marksman']){
+    const h = IB.makeHero(0, cls, 'Look');
+    h.pend.length = 0; h.passive = 'ironhide'; IB.recalcHero(h);
+    IB.enterLane(h); h.x = 52; h.y = 0;
+  }
+  IB.rebuildGrid();
+  IB.cam.follow = false; IB.cam.x = 50;
+  for (const z of [.45, 1, 2.6]){
+    IB.cam.z = IB.cam.tz = z;
+    IB.draw();
+    for (const u of G.units){ u.hitT = .1; u.castT = .2; u.castCol = '#9ad8ff'; u.swing = .2; u.shield = 40; u.shT = 2; }
+    IB.draw();
+    for (const u of G.units){ u.hitT = 0; u.castT = 0; u.swing = 0; u.shield = 0; u.shT = 0; }
+  }
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'every kind of body draws, hit, casting, swinging and shielded, at every zoom');
+  // And none of it may touch the simulation — the legs read the clock.
+  const h0 = IB.netHash();
+  for (let i = 0; i < 4; i++) IB.draw();
+  t.ok(IB.netHash() === h0, 'drawing the bodies does not move the simulation');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
