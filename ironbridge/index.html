@@ -5486,6 +5486,44 @@ function musterRanks(c, gx, gy, z, s){
   }
 }
 
+/* Workers and troops in training are paid for the moment you order them —
+   gold, food and a population slot each — and between waves they are the whole
+   of what a hold is doing. The board showed none of it: twelve things in
+   training drew exactly the same 2120 ops across the same 1566x1047.9 as an
+   idle hold, on op count and on drawn extent alike, at every stage of every
+   timer. The dock's progress bars knew; the settlement did not.
+
+   The muster right above is the sibling that condemns it — it already puts one
+   figure on the pit for every fighter standing ready. These are the ones not
+   ready yet, so they are drawn taking shape: a thing whose timer is running
+   fades in and fills out as it goes. Yours only, the same rule the muster and
+   the node crews already follow.
+
+   trainStep runs the first `slots` of each kind and leaves the rest queued, so
+   the split is read off the same rank rather than guessed at. One still
+   waiting for a free slot holds at the faint end — and because the bob is
+   driven by its OWN timer rather than by the clock, it stands dead still while
+   it waits, which is exactly what it is doing.                              */
+const TRAINEE = { cap:6, cols:3, dx:.155, dy:.12, dim:.30, small:.34, full:.78, beat:3.4,
+  pit:{ x:-.40, y:-.26 }, barracks:{ x:-.24, y:.30 } };
+function trainCrew(c, gx, gy, z, s, worker, at){
+  if (holdSide !== MY) return;
+  const q = s.trainQ.filter(o => (o.type === 'worker') === worker);
+  const slots = worker ? trainSlots(s) : barrackSlots(s);
+  const n = Math.min(q.length, TRAINEE.cap);
+  for (let i = 0; i < n; i++){
+    // Past the slot count nothing is being worked on yet, so it stays at nought
+    // however long it has sat there.
+    const u = i < slots ? clamp(q[i].t / (q[i].dur || 1), 0, 1) : 0;
+    const p = bp(gx + at.x + (i % TRAINEE.cols) * TRAINEE.dx,
+                 gy + at.y + Math.floor(i / TRAINEE.cols) * TRAINEE.dy, z);
+    c.globalAlpha = TRAINEE.dim + (1 - TRAINEE.dim) * u;
+    drawWorkerFig(c, p[0], p[1], sideCol(), false,
+      TRAINEE.small + (TRAINEE.full - TRAINEE.small) * u, q[i].t * TRAINEE.beat + i);
+    c.globalAlpha = 1;
+  }
+}
+
 function drawBuilding(c, b){
   const gx = tileGX(b.tile), gy = tileGY(b.tile), B = bu();
   const raise = (b.raise || 0);
@@ -5558,6 +5596,9 @@ function drawBuilding(c, b){
       c.strokeStyle = '#6a5540'; c.lineWidth = 3 * B; c.beginPath(); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke();
       c.fillStyle = sideCol(); c.fillRect(p1[0] - 2 * B, p1[1], 8 * B * (s > 0 ? 1 : -1), 9 * B);
     }
+    // Hands still being taken on stand back from the mouth; the muster below
+    // is drawn after them so the ones ready to march are the ones in front.
+    trainCrew(c, gx, gy, z, G.sides[holdSide], true, TRAINEE.pit);
     musterRanks(c, gx, gy, z, G.sides[holdSide]);
   } else if (t === 'barracks'){
     drawTile(c, gx, gy, '#5e5748');
@@ -5576,6 +5617,7 @@ function drawBuilding(c, b){
       ell(c, q[0], q[1], 3.4 * B, 3.7 * B, shade(sideCol(), .86));
       ell(c, q[0], q[1], 1.2 * B, 1.3 * B, '#c9d2dd');
     }
+    trainCrew(c, gx, gy, z, G.sides[holdSide], false, TRAINEE.barracks);
   } else if (t === 'forge'){
     const F = FIT.forge;
     drawTile(c, gx, gy, '#4f4a44');
@@ -8517,7 +8559,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, MUSTER, musterRanks, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, MUSTER, musterRanks, TRAINEE, trainCrew, trainSlots, barrackSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,

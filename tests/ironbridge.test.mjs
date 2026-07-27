@@ -5132,6 +5132,111 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.MY = seat0f;
   }
   {
+    // Workers and troops IN TRAINING are paid for the moment you order them and
+    // are the whole of what a hold does between waves — and the board showed
+    // none of it. Twelve things in training drew exactly the same 2120 ops
+    // across the same 1566x1047.9 as an idle hold, at every stage of every
+    // timer. The dock's progress bars knew; the settlement did not.
+    //
+    // The muster above is the sibling that condemns it: one figure on the pit
+    // per fighter already standing ready. These are the ones not ready yet.
+    const s = CTX.__stats;
+    const seat0m = IB.MY;
+    // Isolate. Every worker figure a hold draws is a node crew, an idle hand,
+    // a mustered fighter — or a trainee. Empty all the others and the heads
+    // that remain can only be trainees, which is what makes counting them mean
+    // anything. HEAD, not ops: this figure fades and resizes with its timer,
+    // and an op count cannot see either — a test written on ops alone passes
+    // with the progress ramp deleted.
+    const HEAD = '#e8d6b8';
+    const holdTraining = (side, q, watcher) => {
+      IB.newMatch({ diff:'veteran', seed:8309 });
+      IB.MY = watcher === undefined ? side : watcher;
+      IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+      IB.cam.x = side === 0 ? IB.HOLD_X : C.LANE_LEN - IB.HOLD_X;
+      const sd = G.sides[side];
+      sd.plot[4] = { type:'pit', lvl:2, tile:4, raise:0 };
+      sd.plot[5] = { type:'barracks', lvl:2, tile:5, raise:0 };
+      sd.muster.length = 0;
+      for (const k of ['gold', 'iron', 'wood', 'food', 'idle']) sd.workers[k] = 0;
+      sd.trainQ = q.map(x => ({ ...x }));
+      s.dropped = 0; s.ellipses = []; s.fills = []; s.lines = []; s.texts = [];
+      const b = s.ops;
+      IB.drawHold(CTX, side);
+      const heads = s.ellipses.filter(e => e.fill === HEAD);
+      return { n:s.ops - b, dropped:s.dropped, heads,
+        alphas: heads.map(h => +h.alpha.toFixed(3)).sort((a, b2) => a - b2),
+        sizes: heads.map(h => +h.rx.toFixed(3)).sort((a, b2) => a - b2) };
+    };
+    const w = (t2, dur) => ({ type:'worker', t:t2, dur:dur || 6 });
+    const f = (t2, dur) => ({ type:'melee', t:t2, dur:dur || 8 });
+
+    const none = holdTraining(0, []);
+    t.ok(none.n > 500, 'the hold really drew (' + none.n + ' ops)');
+    t.ok(none.dropped === 0, 'and the capture held it');
+    // The isolation is the whole basis of the count. If anything else on the
+    // hold is still drawing figures, every number below is measuring it.
+    t.ok(none.heads.length === 0, 'an idle hold with no crews has nobody standing on it (' +
+      none.heads.length + ')');
+
+    const one = holdTraining(0, [w(1)]);
+    const four = holdTraining(0, [w(1), w(1), f(1), f(1)]);
+    t.ok(one.heads.length === 1, 'one thing in training puts one figure at its building (' +
+      one.heads.length + ')');
+    t.ok(four.heads.length === 4, 'and four puts four (' + four.heads.length + ')');
+    // Both buildings, not just whichever one happened to get the call.
+    const onlyW = holdTraining(0, [w(1), w(1)]), onlyF = holdTraining(0, [f(1), f(1)]);
+    t.ok(onlyW.heads.length === 2, 'hands being taken on show at the pit (' + onlyW.heads.length + ')');
+    t.ok(onlyF.heads.length === 2, 'and troops being armed at the barracks (' + onlyF.heads.length + ')');
+
+    // Bounded, or a long queue buries the plot it stands on.
+    const flood = holdTraining(0, Array.from({ length: 40 }, () => w(1)));
+    t.ok(flood.heads.length <= IB.TRAINEE.cap, 'a long queue stops counting before it buries the plot (' +
+      flood.heads.length + ' of 40, cap ' + IB.TRAINEE.cap + ')');
+    t.ok(IB.TRAINEE.cap > 3, 'but not before a real batch is shown (' + IB.TRAINEE.cap + ')');
+
+    // How far along it is. Alpha AND size, because the fix ramps both and an
+    // assertion on either alone passes with half of it reverted.
+    const early = holdTraining(0, [w(.5 * 6)]), late = holdTraining(0, [w(.95 * 6)]);
+    t.ok(early.heads.length === 1 && late.heads.length === 1, 'both stages drew their one figure');
+    t.ok(late.alphas[0] > early.alphas[0], 'a thing nearly finished is more solid than one half done (' +
+      early.alphas[0] + ' → ' + late.alphas[0] + ')');
+    t.ok(late.sizes[0] > early.sizes[0], 'and it has filled out (' +
+      early.sizes[0] + ' → ' + late.sizes[0] + ')');
+    // Not saturating before the first step, the trap the crown fell into: the
+    // very start has to differ from the middle too.
+    const fresh = holdTraining(0, [w(0)]);
+    t.ok(early.alphas[0] > fresh.alphas[0], 'and one just ordered is fainter still (' +
+      fresh.alphas[0] + ' → ' + early.alphas[0] + ')');
+
+    // A pit at level 2 works two at a time; the rest are only queued. Ordering
+    // four gives two being worked on and two waiting, and the waiting pair must
+    // sit at the floor no matter how long they have been in the list.
+    const backed = holdTraining(0, [w(.9 * 6), w(.9 * 6), w(.9 * 6), w(.9 * 6)]);
+    const floor = IB.TRAINEE.dim;
+    const stalled = backed.alphas.filter(a => Math.abs(a - floor) < 1e-6).length;
+    const working = backed.alphas.filter(a => a > floor + .01).length;
+    t.ok(backed.heads.length === 4, 'four ordered, four shown (' + backed.heads.length + ')');
+    t.ok(working === 2 && stalled === 2,
+      'the pit works as many as it has slots and the rest wait (' + working + ' working, ' +
+      stalled + ' waiting, alphas ' + backed.alphas.join(' ') + ')');
+
+    // CROSSED. What the other hold has coming is not something you get to
+    // count — the same rule the muster and the node crews follow — and a seat
+    // test where owner and watcher are the same side could not tell either way.
+    let leaked = 0, shown = 0;
+    for (const owner of [0, 1]){
+      const mine = holdTraining(owner, [w(1), f(1)], owner).heads.length;
+      const theirs = holdTraining(owner, [w(1), f(1)], 1 - owner).heads.length;
+      if (mine === 2) shown++;
+      if (theirs !== 0) leaked++;
+    }
+    t.ok(shown === 2, 'each hold shows you your own training (' + shown + '/2)');
+    t.ok(leaked === 0, 'and never shows you theirs (' + leaked + ')');
+    IB.cam.x = 26;
+    IB.MY = seat0m;
+  }
+  {
     // Every annotation on a hold recedes as the camera pulls back — except the
     // rank standards, which did not. Measured, the labels drop from 88 ops to
     // 28 across the threshold while the flags sat at 110 the whole way, so at
