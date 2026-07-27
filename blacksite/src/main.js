@@ -156,6 +156,8 @@ export async function boot(root) {
   let last = performance.now() / 1000;
   let acc = 0;
   let raf = 0;
+  const fixedDt = typeof window.__BS_FIXED_DT__ === 'number' && window.__BS_FIXED_DT__ > 0
+    ? Math.min(window.__BS_FIXED_DT__, 0.25) : 0;
   const perf = { fps: 60, ms: 16, smoothed: 16 };
 
   function frame(now) {
@@ -167,6 +169,11 @@ export async function boot(root) {
     // the accumulator spends the next second catching up in fast-forward.
     if (dt > 0.25) dt = 0.25;
     if (dt < 0) dt = 0;
+    // The screenshot rig pins the delta so a capture is reproducible: on
+    // software GL a frame genuinely takes over a second, and every spring,
+    // decay and accumulator in the game would otherwise see a different
+    // timestep on every run and no two captures would match.
+    if (fixedDt) dt = fixedDt;
     perf.ms = dt * 1000;
     perf.smoothed += (perf.ms - perf.smoothed) * 0.06;
     perf.fps = 1000 / Math.max(perf.smoothed, 0.001);
