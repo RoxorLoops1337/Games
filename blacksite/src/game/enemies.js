@@ -760,7 +760,7 @@ function poseWeapon(rig, lower) {
   // Shoulder pocket: where the stock lives. The hand position falls out of it,
   // which is why the weapon never drifts off the shoulder no matter what the
   // spine is doing.
-  _v3.set(0.105, 0.130 + 0.075 * rig.aimW - 0.030 * reloadW, -0.020 - 0.045 * reloadW)
+  _v3.set(0.105, 0.132 + 0.108 * rig.aimW - 0.030 * reloadW, -0.020 - 0.045 * reloadW)
     .applyQuaternion(SQ[B.chest]).add(SP[B.chest]);
   _v4.set(DIM.gunStock[0], DIM.gunStock[1], DIM.gunStock[2]).applyQuaternion(_gunQ);
   _handR.copy(_v3).sub(_v4).addScaledVector(_v1, -0.055 * rig.recoil.x);
@@ -966,7 +966,7 @@ function poseHead(rig, dt) {
   // inboard. Without it the sights are at eye height and the eyes are somewhere
   // else, which is the tell that a character is holding a prop.
   const weld = rig.aimW * (1 - Math.min(1, Math.max(0, rig.reloadT) * 2));
-  const np = rig.headPitch + Math.sin(t * 0.83 + 1.2) * 0.022 * idle - weld * 0.11;
+  const np = rig.headPitch + Math.sin(t * 0.83 + 1.2) * 0.022 * idle - weld * 0.15;
 
   setEuler(rig, B.neck, np * 0.35, ny * 0.35 + weld * 0.05, weld * 0.05);
   setEuler(rig, B.head, np * 0.65, ny * 0.65 + weld * 0.05, -ny * 0.10 + weld * 0.10 + rig.flinchR.x * 0.35);
