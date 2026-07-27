@@ -1414,7 +1414,7 @@ function build(G, engine, materials) {
       const e = 1 - Math.pow(1 - k, 2.6);
       const r = w.r0 + (w.r1 - w.r0) * e;
       w.mesh.scale.setScalar(r);
-      w.mat.uniforms.uAlpha.value = Math.pow(1 - k, 1.8) * 0.9;
+      w.mat.uniforms.uAlpha.value = Math.pow(1 - k, 1.8) * 0.38;
     }
   }
 
@@ -1812,9 +1812,14 @@ function build(G, engine, materials) {
   let shotCount = 0;
   const TRACER_EVERY = 3;
 
-  function muzzleFlash(dx, dy, dz) {
+  // `at` is a world position for a shot that did not come from the player's own
+  // gun — an enemy rifle needs the same flash and the same light, just not from
+  // the viewmodel's barrel, and it must not eject brass into the player's face.
+  function muzzleFlash(dx, dy, dz, silenced, at) {
     const cam = engine.camera;
-    muzzleWorld(_mz);
+    const local = !at;
+    if (at) _mz.set(at.x, at.y, at.z); else muzzleWorld(_mz);
+    const gain = silenced ? 0.30 : 1;
     _fwd.set(dx, dy, dz);
     if (_fwd.lengthSq() < 1e-8) _fwd.set(0, 0, -1).applyQuaternion(cam.quaternion);
     _fwd.normalize();
@@ -1825,18 +1830,21 @@ function build(G, engine, materials) {
     // what makes automatic fire look like a looping GIF.
     _p.x = _mz.x; _p.y = _mz.y; _p.z = _mz.z;
     _p.vx = _fwd.x * 1.2; _p.vy = _fwd.y * 1.2; _p.vz = _fwd.z * 1.2;
-    _p.life = 0.045; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
+    // Three frames, not two: at 60 fps a two-frame flash is a coin toss on
+    // whether the player's monitor ever shows it, and a flash you only see half
+    // the time reads as a stutter in the gun rather than as light.
+    _p.life = 0.055; _p.drag = 1; _p.grav = 0; _p.stretch = 0; _p.turb = 0;
     c0(0xfff3d0); c1(0xff9a2e);
-    _p.s0 = rr(0.40, 0.58); _p.s1 = _p.s0 * 0.5;
+    _p.s0 = rr(0.40, 0.58) * gain; _p.s1 = _p.s0 * 0.5;
     _p.tile = T_FLASH; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 0.9;
     _p.floor = -1e6; _p.rest = 0; _p.spin = 0;
     push(addPool);
-    _p.life = 0.055; _p.s0 = rr(0.22, 0.30); _p.s1 = 0.05;
+    _p.life = 0.065; _p.s0 = rr(0.22, 0.30) * gain; _p.s1 = 0.05;
     _p.tile = T_GLOW; c0(0xffffff); c1(0xffb352);
     push(addPool);
 
     // Sparks blown out of the barrel with the gas.
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < (silenced ? 2 : 6); i++) {
       cone(_fwd.x, _fwd.y, _fwd.z, 0.34);
       const sp = rr(3, 11);
       _p.x = _mz.x; _p.y = _mz.y; _p.z = _mz.z;
@@ -1866,15 +1874,17 @@ function build(G, engine, materials) {
     // The real light. This is the part that sells it: for three frames the
     // walls, the viewmodel and the dust in the air all get brighter, and no
     // sprite can fake that.
-    flash(_mz.x, _mz.y, _mz.z, 9.0, 0.055, 0xffc98a, 11);
+    flash(_mz.x, _mz.y, _mz.z, 9.0 * gain, 0.055, 0xffc98a, 11);
 
     // Eject brass out of the port. Ejection lags the shot by a frame or two in
     // reality; nobody has ever noticed it not doing so.
-    const port = _cv.copy(PORT_LOCAL).applyMatrix4(engine.viewCam.matrixWorld);
-    ejectCasing(port.x, port.y, port.z,
-      _right.x, _right.y, _right.z,
-      _fwd.x, _fwd.y, _fwd.z,
-      G.player.vel.x, G.player.vel.y, G.player.vel.z);
+    if (local) {
+      const port = _cv.copy(PORT_LOCAL).applyMatrix4(engine.viewCam.matrixWorld);
+      ejectCasing(port.x, port.y, port.z,
+        _right.x, _right.y, _right.z,
+        _fwd.x, _fwd.y, _fwd.z,
+        G.player.vel.x, G.player.vel.y, G.player.vel.z);
+    }
 
     // Tracer on one round in three, from the muzzle to whatever it will hit.
     shotCount++;
@@ -1906,7 +1916,7 @@ function build(G, engine, materials) {
       const hot = rnd();
       c0(hot > 0.6 ? 0xfffbe0 : 0xffd166, 1);
       c1(hot > 0.6 ? 0xff6a12 : 0x8c1c04, 1);
-      _p.s0 = rr(0.35, 0.9) * (0.6 + pw * 0.6); _p.s1 = _p.s0 * rr(1.6, 2.6);
+      _p.s0 = R * rr(0.10, 0.24); _p.s1 = _p.s0 * rr(1.7, 2.6);
       _p.tile = hot > 0.5 ? T_PUFF : T_SMOKE; _p.alpha = 1; _p.rot = rnd() * 6.28; _p.fade = 1.3;
       _p.floor = -1e6; _p.rest = 0; _p.spin = sym(1.2);
       push(addPool);
@@ -1922,7 +1932,7 @@ function build(G, engine, materials) {
       _p.vx = Math.cos(a) * sp; _p.vy = rr(0.4, 2.2); _p.vz = Math.sin(a) * sp;
       _p.life = rr(2.4, 4.6); _p.drag = 1.5; _p.grav = -0.05; _p.stretch = 0; _p.turb = 0.8;
       c0(0x6e6255); c1(0x2f2b27);
-      _p.s0 = rr(0.5, 1.0); _p.s1 = _p.s0 * rr(3.0, 5.0);
+      _p.s0 = R * rr(0.12, 0.24); _p.s1 = _p.s0 * rr(2.6, 4.2);
       _p.tile = T_SMOKE; _p.alpha = rr(0.30, 0.55); _p.rot = rnd() * 6.28; _p.fade = 1.8;
       _p.floor = -1e6; _p.rest = 0; _p.spin = sym(0.5);
       push(alphaPool);
@@ -1936,7 +1946,7 @@ function build(G, engine, materials) {
       _p.vx = Math.cos(a) * sp; _p.vy = rr(0.2, 1.4); _p.vz = Math.sin(a) * sp;
       _p.life = rr(1.4, 2.8); _p.drag = 2.6; _p.grav = 0.02; _p.stretch = 0; _p.turb = 0.6;
       c0(0xc0a982); c1(0x6e6152);
-      _p.s0 = rr(0.4, 0.8); _p.s1 = _p.s0 * rr(2.5, 4.0);
+      _p.s0 = R * rr(0.10, 0.20); _p.s1 = _p.s0 * rr(2.4, 3.6);
       _p.tile = T_SMOKE; _p.alpha = rr(0.25, 0.45); _p.rot = rnd() * 6.28; _p.fade = 1.9;
       _p.floor = -1e6; _p.rest = 0; _p.spin = sym(0.4);
       push(alphaPool);
@@ -1971,7 +1981,7 @@ function build(G, engine, materials) {
 
     addDecal(x, fy, z, 0, 1, 0, R * rr(0.55, 0.8), rnd() > 0.5 ? D_SCORCH_A : D_SCORCH_B, 0x141210, 0.88, 90);
     flash(x, y + 0.6, z, 60 * pw, 0.45, 0xffb04a, R * 5);
-    shockwave(x, y, z, R * 1.6, 0.42);
+    shockwave(x, y, z, R * 1.15, 0.34);
 
     // The camera kick. Written to G.shake, which engine.updateCamera decays and
     // turns into a band-limited offset; FX never touches the camera itself.
@@ -2121,7 +2131,11 @@ function build(G, engine, materials) {
       switch (e.type) {
         case 'shot': {
           const d = e.dir || engine.aimDir;
-          muzzleFlash(d.x, d.y, d.z);
+          // A shot whose origin is not the player's own eye came from somebody
+          // else's gun, and gets its flash where that gun is.
+          const o = e.origin;
+          const remote = o && Math.hypot(o.x - G.player.pos.x, o.y - G.player.pos.y, o.z - G.player.pos.z) > 0.6;
+          muzzleFlash(d.x, d.y, d.z, e.silenced, remote ? o : null);
           break;
         }
         case 'impact': {
