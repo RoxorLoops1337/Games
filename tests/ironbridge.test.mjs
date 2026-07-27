@@ -4275,6 +4275,123 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(r.levyMark.some(cc => cc === IB.SIDE_COL2[0]),
         'a levy on the strip is in its side’s minion colour (' + JSON.stringify(r.levyMark) + ')');
     }
+
+    // And a hero that DIES left the strip altogether, because onHeroDeath
+    // splices it out of G.units and the loop read G.units. Measured: alive it
+    // laid down a rim and a side colour at its mark, dead it laid down
+    // nothing, while a broken structure four lines up greyed out in the same
+    // frame on the same instrument. Third time the answer has been a note in
+    // this very function — a turret used to vanish and was fixed precisely
+    // because a mark that disappears cannot say the line of battle has moved.
+    {
+      const dead = (backFrac) => {
+        IB.newMatch({ diff:'veteran', seed:9410 });
+        IB.MY = 0;
+        const hs = [];
+        for (const i of [0, 1]){
+          const hh = IB.makeHero(i, i ? 'fighter' : 'mage', i ? 'Mera' : 'Aldric');
+          G.sides[i].heroes.push(hh);
+          IB.gainXp(hh, 3000); IB.autoPick(hh); IB.enterLane(hh);
+          hh.x = 48 + i * 30; hh.y = i ? 1 : -1;
+          hs.push(hh);
+        }
+        IB.rebuildGrid();
+        IB.cam.follow = false; IB.cam.x = 64; IB.cam.z = IB.cam.tz = 1;
+        const victim = hs[1], where = victim.x;
+        const m = IB.minimapRect();
+        const px = (wx) => m.x0 + 6 + ((wx - m.W0) / (m.W1 - m.W0)) * (m.w - 12);
+        const shot = () => {
+          st3.rects = []; st3.rectsDropped = 0;
+          IB.drawMinimap(CTX);
+          return { dropped: st3.rectsDropped, all: st3.rects.length,
+            at: st3.rects.filter(r => r.w <= 8 && px(where) >= r.x - .01 && px(where) <= r.x + r.w + .01) };
+        };
+        const alive = shot();
+        IB.dealDmg(hs[0], victim, victim.mhp * 4, { pure:true });
+        if (backFrac !== undefined) victim.respawnT = IB.respawnDur(victim) * (1 - backFrac);
+        return { victim, alive, down: shot(), inUnits: G.units.indexOf(victim) >= 0 };
+      };
+
+      const d = dead(0);
+      t.ok(d.victim.dead, 'the hero really died, through the damage path');
+      // The precise reason the old loop could not show it — worth stating, or
+      // the fix reads as arbitrary.
+      t.ok(!d.inUnits, 'and onHeroDeath took it out of G.units, which is why reading G.units lost it');
+      t.ok(d.alive.dropped === 0 && d.down.dropped === 0, 'the strip capture held both frames');
+      t.ok(d.alive.at.length > 0, 'a living hero has a mark (' + d.alive.at.length + ')');
+      // Exactly its own two marks and nothing else. Heroes moved off G.units
+      // onto the roster; if the units loop ever draws them again as well, a
+      // living hero picks up a stray levy pip underneath it — invisible in an
+      // op count and invisible in a screenshot, because it hides under the
+      // mark that is already there.
+      t.ok(d.alive.at.every(r => r.col === IB.MINI_MARK.rimCol || r.col === IB.SIDE_COL[1]),
+        'and only its own (' + JSON.stringify(d.alive.at.map(r => r.col)) + ')');
+      t.ok(!d.alive.at.some(r => r.col === IB.SIDE_COL2[1]),
+        'with no levy pip hiding under it from a second pass');
+      t.ok(d.down.at.length > 0, 'and a fallen one is still on the strip (' + d.down.at.length + ')');
+      t.ok(d.down.at.every(r => r.col === IB.MINI_DOWN),
+        'greyed out, the same way a broken structure is (' + JSON.stringify(d.down.at.map(r => r.col)) + ')');
+      t.ok(!d.down.at.some(r => r.col === IB.SIDE_COL[1]),
+        'and not still flying its colours as though it were standing there');
+      // One grey, read by the fallen heroes AND the broken structures, so the
+      // strip cannot end up saying "gone" in two different ways.
+      t.ok(typeof IB.MINI_DOWN === 'string' && IB.MINI_DOWN.length > 0, 'there is one down colour to share');
+
+      // It grows back as the clock runs down, which is the only place the
+      // ENEMY's respawn is legible at all — your own is on your hero card and
+      // theirs was in no panel and on no board.
+      const sizeAt = (f) => { const r = dead(f).down.at; return r.length ? Math.max(...r.map(x => x.w)) : 0; };
+      const s0 = sizeAt(0), s5 = sizeAt(.5), s9 = sizeAt(.95);
+      t.ok(s0 > 0 && s9 > 0, 'the pip is there at both ends of the wait (' + s0 + ', ' + s9 + ')');
+      t.ok(s5 > s0 && s9 > s5, 'and it grows back as the hero does (' +
+        s0 + ' → ' + s5 + ' → ' + s9 + ')');
+      t.ok(s9 <= IB.MINI_MARK.hero + .01, 'without ever passing a hero that is actually standing (' +
+        s9 + ' vs ' + IB.MINI_MARK.hero + ')');
+      t.ok(IB.MINI_MARK.down >= IB.MINI_MARK.minion,
+        'a fallen hero is never a smaller mark than a levy (' +
+        IB.MINI_MARK.down + ' vs ' + IB.MINI_MARK.minion + ')');
+
+      // respawnDur is one formula with two readers — onHeroDeath sets the
+      // clock from it, the strip divides by it. Asked against the clock the
+      // game itself set, not against a copy of the arithmetic.
+      {
+        const r = dead();
+        t.ok(Math.abs(r.victim.respawnT - IB.respawnDur(r.victim)) < 1e-9,
+          'the clock the game set and the one the strip divides by are the same number (' +
+          r.victim.respawnT.toFixed(3) + ' vs ' + IB.respawnDur(r.victim).toFixed(3) + ')');
+        t.ok(IB.respawnDur(r.victim) > 1, 'and it is a real duration (' + IB.respawnDur(r.victim).toFixed(1) + 's)');
+      }
+
+      // A hero still in the tavern has never been on the bridge and must not
+      // appear on it. Paired with proof the strip drew, so this is not just
+      // "nothing happened".
+      {
+        // Asked as a DIFF — draw the strip, add the hero to the roster, draw
+        // again. A benched hero stands at its own gate, where the gate's mark
+        // already is, so "is anything painted at its x" answers yes whatever
+        // the code does; the first version of this check failed on the gate
+        // and not on the hero.
+        IB.newMatch({ diff:'veteran', seed:9412 });
+        IB.MY = 0;
+        IB.cam.follow = false; IB.cam.x = 64; IB.cam.z = IB.cam.tz = 1;
+        st3.rects = []; IB.drawMinimap(CTX);
+        const before = st3.rects.length;
+        const benched = IB.makeHero(0, 'mage', 'Bench');
+        G.sides[0].heroes.push(benched);
+        st3.rects = []; IB.drawMinimap(CTX);
+        const after = st3.rects.length;
+        t.ok(!benched.inLane && !benched.dead, 'the benched hero is neither out nor down');
+        t.ok(before > 8, 'and the strip drew anyway (' + before + ' marks)');
+        t.ok(after === before, 'a hero still in the tavern adds nothing to the strip (' +
+          before + ' → ' + after + ')');
+        // The same diff must show a mark once it walks out, or the diff itself
+        // is measuring nothing.
+        IB.enterLane(benched);
+        st3.rects = []; IB.drawMinimap(CTX);
+        t.ok(st3.rects.length > before, 'and does once it walks out (' +
+          before + ' → ' + st3.rects.length + ')');
+      }
+    }
     IB.MY = seat0m;
   }
 }
