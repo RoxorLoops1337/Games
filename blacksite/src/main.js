@@ -47,6 +47,11 @@ export async function boot(root) {
   say('lighting the sky');
   const sky = createSky(G, engine);
   const lighting = createLighting(G, engine, sky);
+  // Hung off the engine so any render module can read the authoritative light
+  // state without main.js threading it through every constructor. The viewmodel
+  // in particular needs it: it renders in a separate scene, so the only way its
+  // key light can agree with the world's is to read the same numbers.
+  engine.lighting = lighting;
 
   say('assembling the level');
   const level = buildLevel(G, engine, materials);

@@ -307,9 +307,9 @@ export function createViewmodel(G, engine, materials) {
     // trigger right now will cost you a beat to recover from.
     if (sp > 0.001) {
       motion.position.x += 0.030 * sp;
-      motion.position.y -= 0.085 * sp;
+      motion.position.y -= 0.058 * sp;
       motion.position.z += 0.050 * sp;
-      motion.rotation.x -= 0.34 * sp;
+      motion.rotation.x -= 0.28 * sp;
       motion.rotation.y += 0.62 * sp;
       motion.rotation.z -= 0.50 * sp;
     }

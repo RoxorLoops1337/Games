@@ -139,6 +139,12 @@ export function createLighting(G, engine, sky) {
     const envTarget = 0.85 + (1 - clamp(direct / 0.35, 0, 1)) * 0.85;
     state.envIntensity = smooth(state.envIntensity, envTarget, 5, dt);
     scene.environmentIntensity = state.envIntensity;
+    // The viewmodel lives in its own scene with its own camera, so it does not
+    // inherit any of this. It has to be told, or the weapon ends up lit by a
+    // different sky than the world it is being carried through — which reads
+    // instantly as a prop composited over a photograph.
+    engine.view.environmentIntensity = state.envIntensity;
+    if (!engine.view.environment) engine.view.environment = scene.environment;
 
     // Ground bounce tracks the sun and takes the sand's colour with it. It is
     // strongest when the sun is low, because that is when the most light is

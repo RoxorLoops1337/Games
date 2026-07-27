@@ -479,8 +479,19 @@ export function createHUD(G, root) {
     // so what is readable here is last frame's counts — which is what we want.
     const info = B && B.engine && B.engine.renderer && B.engine.renderer.info;
     const rend = info && info.render, mem = info && info.memory;
+    // fx.js keeps its live particles as the instance count on two pooled meshes;
+    // anything else that turns up gets read through the same probe-a-few-shapes
+    // rule the rest of this file uses.
     const fx = B && B.fx;
-    const parts = fx ? num(fx.count, num(fx.live, num(fx.particles && fx.particles.count, -1))) : -1;
+    let parts = -1, partBudget = 0;
+    if (fx && fx.pools) {
+      parts = 0;
+      for (const k in fx.pools) {
+        const pool = fx.pools[k];
+        parts += num(pool && pool.geo && pool.geo.instanceCount, 0);
+        partBudget += num(pool && pool.n, 0);
+      }
+    } else if (fx) parts = num(fx.count, num(fx.live, -1));
     let alive = 0;
     for (let i = 0; i < G.enemies.length; i++) {
       const e = G.enemies[i];
@@ -495,7 +506,7 @@ export function createHUD(G, root) {
       `draw ${rend ? rend.calls : '—'}  tri ${rend ? fmtK(rend.triangles) : '—'}  ` +
       `prog ${info && info.programs ? info.programs.length : '—'}\n` +
       `tex ${mem ? mem.textures : '—'}  geo ${mem ? mem.geometries : '—'}  ` +
-      `parts ${parts < 0 ? '—' : parts}\n` +
+      `parts ${parts < 0 ? '—' : parts + (partBudget ? '/' + partBudget : '')}\n` +
       `enemies ${alive}/${G.enemies.length}  steps ${G.time.steps}  frame ${G.time.frame}\n` +
       `pos ${p.pos.x.toFixed(1)} ${p.pos.y.toFixed(1)} ${p.pos.z.toFixed(1)}  ` +
       `hdg ${pad3(Math.round(S.heading))}  spd ${Math.hypot(p.vel.x, p.vel.z).toFixed(1)}`);
@@ -883,8 +894,11 @@ const CSS = `
 #hud #ammo,#hud #health,#hud #objective,#hud #killfeed,#hud #toast{
   text-shadow:0 1px 4px rgba(0,0,0,.85),0 0 12px rgba(0,0,0,.45)}
 
-#perf{background:rgba(6,8,10,.6);padding:6px 9px;border-left:1px solid var(--amber-dim);
-  color:#9fb0bd;font-size:10.5px;letter-spacing:.02em;z-index:40}
+/* Opaque, because the debug readout sits over the objective block and a
+   translucent panel there is two texts fighting for the same pixels. */
+#perf{background:rgba(7,9,12,.94);padding:7px 10px;border-left:1px solid var(--amber-dim);
+  color:#9fb0bd;font-size:10.5px;letter-spacing:.02em;z-index:40;
+  box-shadow:0 6px 24px rgba(0,0,0,.6)}
 
 @media (prefers-reduced-motion:reduce){
   #hud .blk,#hud #compass,#hud #lowhp{transition:none}

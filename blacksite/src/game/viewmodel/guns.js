@@ -785,10 +785,22 @@ function buildShotgun(mats) {
 
   // Sights. The rear ghost ring stands well over a bore-level bead, so the
   // sight line is not parallel to the barrel — the ADS solve has to handle it.
-  const beadY = 0.0136 + 0.0055, beadZ = -0.500;
-  const ringY = rearSight(f.steel, 0.070, 0.0530, 0x70767c);
-  const beadBase = slab(0.012, 0.006, 0.014, 0.002, 0.0008);
-  beadBase.translate(0, 0.0155, beadZ);
+  // A ventilated sighting rib, which is what a bead actually sits on. It also
+  // buys the clearance the sight line needs: without it the line from a ghost
+  // ring down to a bore-level bead clips the top of its own receiver and you
+  // aim at the inside of the gun.
+  const beadY = 0.0280, beadZ = -0.500;
+  const rib = slab(0.0075, 0.0055, 0.360, 0.0015, 0.0008);
+  rib.translate(0, 0.0243, -0.330);
+  f.phos(rib, 0x4a4e53, { wear: 0.7 });
+  for (const z of [-0.180, -0.290, -0.400, -0.495]) {
+    const post = slab(0.0060, 0.0090, 0.0090, 0.0012, 0.0006);
+    post.translate(0, 0.0185, z);
+    f.phos(post, 0x44484d, { wear: 0.5 });
+  }
+  const ringY = rearSight(f.steel, 0.070, 0.0580, 0x70767c);
+  const beadBase = slab(0.010, 0.005, 0.010, 0.002, 0.0008);
+  beadBase.translate(0, 0.0252, beadZ);
   f.phos(beadBase, 0x70767c);
   f.finish();
 
