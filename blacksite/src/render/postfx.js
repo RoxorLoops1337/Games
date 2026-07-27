@@ -186,8 +186,8 @@ export function createPostFX(G, engine, sky) {
     if (!passes.composite) return;
     const u = passes.composite.uniforms;
     u.uGrain.value = (enabled.grain && G.settings.filmGrain !== false) ? 0.030 : 0.0;
-    u.uChromatic.value = (enabled.chromatic && G.settings.chromatic !== false) ? 0.9 : 0.0;
-    u.uVignette.value = enabled.vignette ? 0.55 : 0.0;
+    u.uChromatic.value = (enabled.chromatic && G.settings.chromatic !== false) ? 0.008 : 0.0;
+    u.uVignette.value = enabled.vignette ? 0.46 : 0.0;
   }
 
   // ── allocation ─────────────────────────────────────────────────────────────

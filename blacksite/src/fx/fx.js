@@ -549,11 +549,14 @@ void main() {
     if (l > 1e-4) ax = wv.xy / l;
     along = size + length(wv) * uStretch * 6.0;
   } else if (aRnd.w > 0.5) {
-    // Heat haze: a slow vertical breathing, widest near the ground.
+    // Heat haze: a slow vertical breathing, strongest against the ground.
+    // Critically, it only exists at distance. Shimmer is an accumulation of
+    // refraction along a long sight line — you never see it at arm's length —
+    // and a haze quad the camera can walk inside washes the whole frame out.
     float h = clamp(1.0 - (p.y - uGround) / max(span.y, 0.001), 0.0, 1.0);
     size *= 1.0 + 0.25 * sin(uTime * 1.3 + aCfg.z * 9.0);
     along = size;
-    bright *= h * h;
+    bright *= h * h * smoothstep(7.0, 16.0, dist);
   }
   vec2 q = position.xy;
   mv.xy += ax * (q.x * along) + vec2(-ax.y, ax.x) * (q.y * size);
@@ -1005,8 +1008,10 @@ function build(G, engine, materials) {
       // Heat shimmer: broad, dim, warm, hugging the ground. Not a refraction —
       // this module cannot read the scene colour — but a low-contrast warm
       // gradient that breathes reads as rising air well enough at distance.
-      c[i * 4] = rr(0.9, 2.6); c[i * 4 + 1] = rr(0.05, 0.16);
-      c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.020, 0.045);
+      // The alpha is deliberately at the edge of perception: shimmer you can
+      // point at is fog, and fog is somebody else's pass.
+      c[i * 4] = rr(0.7, 1.8); c[i * 4 + 1] = rr(0.05, 0.16);
+      c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.006, 0.016);
     } else {
       c[i * 4] = rr(0.012, 0.045); c[i * 4 + 1] = rr(0.12, 0.5);
       c[i * 4 + 2] = rnd(); c[i * 4 + 3] = rr(0.10, 0.45);
@@ -1977,6 +1982,12 @@ function build(G, engine, materials) {
   let softActive = false;
 
   function renderDepth() {
+    // Nothing alive means nothing to soften. The atmosphere layer does not use
+    // the depth term at all, so an idle scene must not pay for a second pass
+    // over the level just to have it sampled by no one.
+    if (clock.t >= alphaPool.until && clock.t >= addPool.until) {
+      shared.uSoft.value = 0; softActive = false; return;
+    }
     // Free if the post chain already produced one — the same texture, one fewer
     // pass, and it upgrades itself the moment postfx starts exposing it.
     const external = engine.post && (engine.post.depthTexture || engine.post.sceneDepth);

@@ -16,10 +16,10 @@
 import * as THREE from 'three';
 import { roundRectPts, sweep, frameChain, tubeCurve, latheZ, partBin } from './geometry.js';
 
-const GLOVE = 0x4a5153;      // dark nomex, slightly cool
-const GLOVE_HI = 0x646c70;   // the knuckle and finger crowns catch light
-const CUFF = 0x363c3f;
-const SLEEVE = 0x6b634e;     // fatigue tan, desaturated
+const GLOVE = 0x5d6668;      // dark nomex, slightly cool
+const GLOVE_HI = 0x7c858a;   // the knuckle and finger crowns catch light
+const CUFF = 0x464d50;
+const SLEEVE = 0x847b62;     // fatigue tan, desaturated
 
 // A finger is a tube through three control points on a circle around the grip.
 // Real fingers are not circular arcs, so the middle point is pushed slightly
@@ -132,8 +132,8 @@ export function buildHand(mats, opt = {}) {
       ]);
     }
     const frames = frameChain(path, [0, 0, 1]);
-    const prof = roundRectPts(0.052, 0.044, 0.016, 3);
-    const s = [0.62, 0.70, 0.86, 1.0, 1.12, 1.22];
+    const prof = roundRectPts(0.046, 0.039, 0.014, 3);
+    const s = [0.64, 0.72, 0.88, 1.0, 1.10, 1.18];
     frames.forEach((f, i) => { f.sx = s[i]; f.sy = s[i] * 0.96; });
     add(sweep(prof, frames), SLEEVE, { wear: 0.10, ao: 0.5, grain: 0.09 });
 

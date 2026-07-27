@@ -272,8 +272,8 @@ export function createMenu(G, root, cb) {
       // anything long gets split into the letters and the alternates.
       let out = keys.join('  ');
       if (out.length > 16) {
-        const single = keys.filter((k) => k.length === 1);
-        const rest = keys.filter((k) => k.length !== 1);
+        const single = keys.filter((k) => /^[A-Za-z0-9]$/.test(k));
+        const rest = keys.filter((k) => !/^[A-Za-z0-9]$/.test(k));
         out = [single.join(' '), rest.join(' ')].filter(Boolean).join('   ·   ');
       }
       add(label, out);
@@ -434,7 +434,8 @@ function keyLabel(code) {
 const CSS = `
 #menu{overflow:auto;padding:28px 20px}
 #menu [data-screen]{display:none}
-#menu [data-screen].on{display:block;max-height:calc(100vh - 56px);overflow:auto}
+#menu [data-screen].on{display:block;max-height:calc(100vh - 56px);overflow:auto;
+  scrollbar-width:thin;scrollbar-color:var(--amber-dim) transparent}
 #menu .panel.wide{min-width:min(560px,94vw);max-width:min(680px,94vw)}
 #menu .panel.wide .row{padding:7px 2px}
 #menu [data-screen=main] h2{font-size:23px;letter-spacing:.5em;text-indent:.5em}

@@ -91,6 +91,14 @@ const MACRO_TRI = `
   diffuseColor *= sampledDiffuseColor;
 #endif`;
 
+// The same three projections without the second normal map, for a tier that has
+// detail normals turned off.
+const NORMAL_TRI_PLAIN = `
+#ifdef USE_NORMALMAP_TANGENTSPACE
+  vec3 bsWorldN = bsTriN( normalMap, bsWPos, normalize( bsWNrm ), bsScale, normalScale );
+  normal = normalize( ( viewMatrix * vec4( bsWorldN, 0.0 ) ).xyz );
+#endif`;
+
 const MACRO_UV = `
 #ifdef USE_MAP
   vec4 sampledDiffuseColor = texture2D( map, vMapUv );
@@ -175,6 +183,13 @@ export function installSurfaceShader(mat, opts = {}) {
     bsScale: { value: 1 / (opts.metres || 2) },
   };
   const tri = !!opts.triplanar;
+  // A tier that has turned detail normals or macro breakup off should not pay a
+  // texture fetch to multiply by one — the branches are compiled out rather than
+  // skipped at runtime, which is the difference between a dead sampler and a
+  // dead register.
+  const det = (opts.detailStrength || 0) > 0.001 && !!opts.detailMap;
+  const key = `bs-${tri ? 'tri' : 'uv'}${det ? '-d' : ''}`;
+
   BLOCKS.set(mat, u);
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, u);
@@ -187,10 +202,10 @@ export function installSurfaceShader(mat, opts = {}) {
       f = sub(f, '#include <roughnessmap_fragment>', ROUGH_TRI, log);
       f = sub(f, '#include <metalnessmap_fragment>', METAL_TRI, log);
       f = sub(f, '#include <aomap_fragment>', AO_TRI, log);
-      f = sub(f, '#include <normal_fragment_maps>', NORMAL_TRI, log);
+      f = sub(f, '#include <normal_fragment_maps>', det ? NORMAL_TRI : NORMAL_TRI_PLAIN, log);
     } else {
       f = sub(f, '#include <map_fragment>', MACRO_UV, log);
-      f = sub(f, '#include <normal_fragment_maps>', NORMAL_UV, log);
+      if (det) f = sub(f, '#include <normal_fragment_maps>', NORMAL_UV, log);
     }
     shader.fragmentShader = f;
     if (log.missing.length) {
@@ -198,9 +213,10 @@ export function installSurfaceShader(mat, opts = {}) {
       console.warn('[materials] shader chunk not found, feature skipped:', log.missing.join(', '));
     }
   };
-  // Two materials with the same patch shape share one compiled program; without
-  // this three would key only on the built-in defines and hand the second
-  // material the first one's unpatched program.
-  mat.customProgramCacheKey = () => (tri ? 'bs-tri' : 'bs-uv');
+  // Materials with the same patch shape share one compiled program. three's
+  // default key is the source text of `onBeforeCompile`, which for a closure
+  // built per material is the same string every time — and would hand the
+  // second material the first one's program, projection and all.
+  mat.customProgramCacheKey = () => key;
   return u;
 }

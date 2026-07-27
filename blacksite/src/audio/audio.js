@@ -409,6 +409,7 @@ function buildRig(ctx, quality) {
     hrtf: quality >= 2,
     maxVoices: quality >= 3 ? 30 : quality >= 2 ? 24 : 16,
     voices: [],
+    dying: [],
   };
 }
 
@@ -431,28 +432,41 @@ const tailOf = (attack, tau) => attack + tau * 7;
 // voice will be at the listener; when the pool is full the quietest one is
 // ramped out over 8 ms rather than cut, because a hard stop on a decaying tail
 // is a click, and a click is louder than the voice it saved.
+//
+// A stolen voice leaves `voices` immediately and finishes fading in `dying`.
+// Leaving it in the live pool until the next sweep would make the cap advisory
+// rather than binding, and a mag dump at 12 rounds a second outruns a sweep
+// that only happens once a frame — measured at 2617 concurrent voices before
+// this was split in two.
+function release(v) {
+  for (const n of v.nodes) { try { n.disconnect(); } catch { /* already gone */ } }
+}
+
 function claim(rig, level) {
   if (rig.voices.length < rig.maxVoices) return true;
   let worst = -1, wl = level;
   for (let i = 0; i < rig.voices.length; i++) {
     if (rig.voices[i].level < wl) { wl = rig.voices[i].level; worst = i; }
   }
-  if (worst < 0) return false;
-  const v = rig.voices[worst];
+  if (worst < 0) return false;                    // nothing quieter — drop the newcomer
+  const now = rig.ctx.currentTime;
+  const v = rig.voices.splice(worst, 1)[0];
   try {
-    v.head.gain.cancelScheduledValues(rig.ctx.currentTime);
-    v.head.gain.setTargetAtTime(0, rig.ctx.currentTime, 0.008);
+    v.head.gain.cancelScheduledValues(now);
+    v.head.gain.setTargetAtTime(0, now, 0.008);
   } catch { /* the param was already released */ }
-  v.endsAt = rig.ctx.currentTime + 0.04;
+  v.endsAt = now + 0.05;
+  rig.dying.push(v);
+  // A suspended context freezes `currentTime`, so the fade queue would never
+  // drain on its own. Bound it too, and take the click over the leak.
+  while (rig.dying.length > rig.maxVoices) release(rig.dying.shift());
   return true;
 }
 
 function reap(rig, now) {
-  const v = rig.voices;
-  for (let i = v.length - 1; i >= 0; i--) {
-    if (v[i].endsAt <= now) {
-      for (const n of v[i].nodes) { try { n.disconnect(); } catch { /* already gone */ } }
-      v.splice(i, 1);
+  for (const list of [rig.voices, rig.dying]) {
+    for (let i = list.length - 1; i >= 0; i--) {
+      if (list[i].endsAt <= now) { release(list[i]); list.splice(i, 1); }
     }
   }
 }
@@ -1145,8 +1159,12 @@ function playExplosion(rig, o) {
   const near = 1 / (1 + d / 30);
   const lvl = (o.gain != null ? o.gain : 1) * (0.5 + 0.5 * near) * 1.9;
   const when = o.when + Math.min(d / SPEED_OF_SOUND, MAX_DELAY);
-  claim(rig, 10);       // an explosion never loses a voice contest
-  const H = head(rig, rig.bus.world, 0.35 + 0.5 * (1 - near), 10, when + 4.0);
+  // An explosion never loses a voice contest — `Infinity` makes the steal
+  // unconditional — but it still has to take a slot rather than being waved
+  // past the cap, or a grenade spam ends up as the one thing that can blow the
+  // budget. The voice it holds carries a high level so nothing else steals it.
+  if (!claim(rig, Infinity)) return;
+  const H = head(rig, rig.bus.world, 0.35 + 0.5 * (1 - near), 8, when + 4.0);
   const V = H.v;
   let sink = H;
   if (o.pos) {

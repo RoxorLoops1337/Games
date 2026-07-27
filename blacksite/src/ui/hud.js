@@ -202,7 +202,6 @@ export function createHUD(G, root) {
     feed: [],
     toastT: 0,
     perfT: 0,
-    debug: false,
     cine: 0,
   };
 
@@ -215,12 +214,10 @@ export function createHUD(G, root) {
   const onKey = (e) => {
     if (e.code !== 'F3' && e.code !== 'Backquote') return;
     e.preventDefault();
-    S.debug = !S.debug;
-    root.classList.toggle('debug', S.debug);
+    root.classList.toggle('debug');
     S.perfT = 0;
   };
   doc.addEventListener('keydown', onKey);
-  S.debug = root.classList.contains('debug');
 
   // ───────────────────────────────────────────────────────────────────────────
   function update(dt, perf) {
@@ -242,7 +239,10 @@ export function createHUD(G, root) {
     updateDirs(dt, p);
     updateFeed(dt);
     if (S.toastT > 0 && (S.toastT -= dt) <= 0) css(E.toast, 'opacity', '0');
-    if (S.debug) updatePerf(dt, perf);
+    // Read the class rather than caching a flag: the overlay is also turned on
+    // by the test rig and by hand from the console, and a private boolean would
+    // silently disagree with what the page is showing.
+    if (root.classList.contains('debug')) updatePerf(dt, perf);
   }
 
   // ── crosshair ──────────────────────────────────────────────────────────────
@@ -257,7 +257,11 @@ export function createHUD(G, root) {
     const deg = spreadDeg(w);
     let gap;
     if (deg >= 0) {
-      const half = Math.tan(clamp(G.settings.fov, 40, 130) * 0.5 / DEG);
+      // The live camera FOV, not the setting: sprint pushes it out and ADS pulls
+      // it in, and a cone drawn against the wrong FOV is wrong exactly when the
+      // player is moving fastest.
+      const cam = win.BLACKSITE && win.BLACKSITE.engine && win.BLACKSITE.engine.camera;
+      const half = Math.tan(clamp(num(cam && cam.fov, G.settings.fov), 20, 130) * 0.5 / DEG);
       gap = Math.tan(clamp(deg, 0, 45) / DEG) / half * (win.innerHeight * 0.5);
     } else {
       // Fallback for a weapon that publishes no cone: movement bloom smoothed
@@ -856,7 +860,7 @@ const CSS = `
 
 #hud #health .bar{position:relative}
 #hud #health .bar i{position:absolute;inset:0;width:100%;transition:background .3s}
-#hud #health .bar i.ghost{background:rgba(255,77,61,.5)}
+#hud #health .bar i.ghost{background:rgba(255,77,61,.62)}
 #hud #health .num{display:inline-block;will-change:transform}
 #hud #health.warn .bar i:not(.ghost){background:var(--amber)}
 #hud #health.crit .bar i:not(.ghost){background:var(--bad)}

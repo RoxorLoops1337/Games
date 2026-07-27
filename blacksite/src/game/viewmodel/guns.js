@@ -80,7 +80,7 @@ function tubeOptic(add, opts) {
   for (const z of [z0 - 0.001, z1 + 0.001]) {
     const b = latheZ([[0, 0], [0.0045, 0], [0.0045, 0.004], [0.0032, 0.005]], 10);
     b.rotateZ(Math.PI / 2); b.translate(0.013, y - r - 0.012, z);
-    add(b, 0xbbc2c6, { round: true, wear: 0.6 });
+    add(b, 0xe3ebf0, { round: true, wear: 0.6 });
   }
   // Windage and elevation turrets — small, but they are the two knurled lumps
   // that say "optic" from any angle.
@@ -164,10 +164,10 @@ function forge(mats) {
   const subs = [];
   const self = {
     group, nodes,
-    steel: (g, c, o) => bin.add('steel', g, c === undefined ? 0x898f96 : c, Object.assign({ wear: 0.55, ao: 0.30 }, o)),
-    phos: (g, c, o) => bin.add('phos', g, c === undefined ? 0x6a6f73 : c, Object.assign({ wear: 0.4, ao: 0.30 }, o)),
-    poly: (g, c, o) => bin.add('poly', g, c === undefined ? 0x525245 : c, Object.assign({ wear: 0.22, ao: 0.38, grain: 0.05 }, o)),
-    rubber: (g, c, o) => bin.add('rubber', g, c === undefined ? 0x36383f : c, Object.assign({ wear: 0.12, ao: 0.42, grain: 0.07 }, o)),
+    steel: (g, c, o) => bin.add('steel', g, c === undefined ? 0xa8afb7 : c, Object.assign({ wear: 0.55, ao: 0.30 }, o)),
+    phos: (g, c, o) => bin.add('phos', g, c === undefined ? 0x83898e : c, Object.assign({ wear: 0.4, ao: 0.30 }, o)),
+    poly: (g, c, o) => bin.add('poly', g, c === undefined ? 0x676757 : c, Object.assign({ wear: 0.22, ao: 0.38, grain: 0.05 }, o)),
+    rubber: (g, c, o) => bin.add('rubber', g, c === undefined ? 0x464850 : c, Object.assign({ wear: 0.12, ao: 0.42, grain: 0.07 }, o)),
     mesh(geo, mat) {
       const m = new THREE.Mesh(geo, mat);
       m.castShadow = false; m.receiveShadow = false; m.frustumCulled = false;
@@ -196,28 +196,28 @@ function forge(mats) {
 
 function buildRifle(mats) {
   const f = forge(mats);
-  const TAN = 0x928466, BLK = 0x44464a;
+  const TAN = 0xb2a27e, BLK = 0x56595d;
 
   // Upper receiver. The cross-section is the whole point: a rounded slab with a
   // rib along the spine, so the rail has something to sit on and the side view
   // has a shoulder that catches light.
   const up = extrudePts(receiverPts(0.040, 0.048, 0.22, 0.55, 0.0065), 0.225, { bevel: 0.0018 });
   up.translate(0, 0.004, -0.045);
-  f.steel(up, 0x80868b);
+  f.steel(up, 0x9da4aa);
 
   // Lower: the fire control housing plus the magwell flare, drawn in side view
   // because that is the shape you actually recognise.
   f.steel(sideProfile([
     [0.070, -0.002], [0.070, -0.034], [0.030, -0.040], [0.006, -0.052],
     [-0.040, -0.058], [-0.062, -0.050], [-0.062, -0.002],
-  ], 0.036, { bevel: 0.0016 }), 0x7a8186);
+  ], 0.036, { bevel: 0.0016 }), 0x969ea4);
 
   // Magwell flare — a short tapered collar the magazine drops through.
   f.steel(sweptBlock([0, -0.036, -0.040], [0, -0.062, -0.046], 0.034, 0.052, 0.006,
-    [[1.10, 1.06], [1.0, 1.0], [0.97, 0.98]], [0, 0, 1]), 0x7d8489, { wear: 0.7 });
+    [[1.10, 1.06], [1.0, 1.0], [0.97, 0.98]], [0, 0, 1]), 0x9aa2a8, { wear: 0.7 });
 
   // Rail, unbroken from the charging handle out over the handguard.
-  railRibs(f.steel, 0.055, -0.152, 0.0350, 0.0212, 0x757a80);
+  railRibs(f.steel, 0.055, -0.152, 0.0350, 0.0212, 0x90969d);
 
   // Barrel: chamber shoulder, a slim profile under the handguard, and a step up
   // at the gas block where a real barrel is thickest.
@@ -225,25 +225,25 @@ function buildRifle(mats) {
     [0.0000, -0.140], [0.0130, -0.140], [0.0130, -0.170], [0.0098, -0.180],
     [0.0092, -0.376], [0.0108, -0.376], [0.0108, -0.404], [0.0086, -0.408],
     [0.0082, -0.552], [0.0000, -0.552],
-  ], 18), 0x62666a, { round: true, wear: 0.5 });
+  ], 18), 0x7a7e83, { round: true, wear: 0.5 });
 
   // Gas block and tube.
   const gb = slab(0.021, 0.026, 0.030, 0.003, 0.0010);
   gb.translate(0, 0.006, -0.392);
-  f.phos(gb, 0x6d7175, { wear: 0.6 });
-  f.phos(latheZ([[0.0032, -0.392], [0.0032, -0.170]], 8), 0x70787d, { round: true });
+  f.phos(gb, 0x878b90, { wear: 0.6 });
+  f.phos(latheZ([[0.0032, -0.392], [0.0032, -0.170]], 8), 0x8a949a, { round: true });
 
   // A2-pattern flash hider: shoulder, body, tines with real gaps between them.
   f.phos(latheZ([
     [0.0082, -0.548], [0.0132, -0.552], [0.0132, -0.566], [0.0116, -0.570],
     [0.0116, -0.628], [0.0132, -0.632], [0.0132, -0.640], [0.0086, -0.644], [0.0000, -0.644],
-  ], 16), 0x5a5e62, { round: true, wear: 0.55 });
+  ], 16), 0x70757a, { round: true, wear: 0.55 });
   for (let i = 0; i < 5; i++) {
     const a = -Math.PI / 2 + 0.5 + (i / 5) * (Math.PI * 2 - 1.0);
     const t = slab(0.0042, 0.0030, 0.052, 0.0010, 0.0006);
     t.translate(0, 0.0128, -0.598);
     t.rotateZ(a);
-    f.phos(t, 0x606468, { wear: 0.8 });
+    f.phos(t, 0x777c81, { wear: 0.8 });
   }
 
   // Handguard: two vented side panels, a top deck the rail continues over, and
@@ -270,12 +270,12 @@ function buildRifle(mats) {
   f.poly(floor, TAN);
   // The rail continues over the handguard at exactly the receiver's height —
   // two rails at two heights is the classic procedural-gun giveaway.
-  railRibs(f.poly, hz0 - 0.002, hz1 + 0.006, 0.0350, 0.0212, 0x565348);
+  railRibs(f.poly, hz0 - 0.002, hz1 + 0.006, 0.0350, 0.0212, 0x6b685b);
   // Two M-LOK lugs on the underside, where a hand actually grips.
   for (const z of [-0.230, -0.300]) {
     const l = slab(0.026, 0.010, 0.030, 0.004, 0.0010);
     l.translate(0, hy - 0.034, z);
-    f.poly(l, 0x45453c);
+    f.poly(l, 0x57574d);
   }
 
   // Ejection port: a recessed rectangle, a hinged dust cover lip and the brass
@@ -283,46 +283,46 @@ function buildRifle(mats) {
   // without it.
   const port = slab(0.030, 0.024, 0.006, 0.003, 0.0008);
   port.rotateY(Math.PI / 2); port.translate(0.0192, 0.006, -0.055);
-  f.steel(port, 0x36393d, { wear: 0.3, ao: 0.6 });
+  f.steel(port, 0x46494e, { wear: 0.3, ao: 0.6 });
   const cover = slab(0.034, 0.026, 0.004, 0.004, 0.0010);
   cover.rotateY(Math.PI / 2); cover.translate(0.0212, 0.004, -0.055);
   cover.rotateX(0);
-  f.steel(cover, 0x787e84, { wear: 0.75 });
+  f.steel(cover, 0x949ba2, { wear: 0.75 });
   const defl = sweptBlock([0.019, 0.020, -0.018], [0.030, 0.006, -0.026], 0.018, 0.012, 0.004,
     [[0.5, 0.6], [1, 1], [0.8, 0.7]], [0, 1, 0]);
-  f.steel(defl, 0x80868b, { wear: 0.7 });
+  f.steel(defl, 0x9da4aa, { wear: 0.7 });
   const fwd = latheZ([[0, 0], [0.0062, 0], [0.0062, 0.010], [0.0048, 0.012], [0, 0.012]], 12);
   fwd.rotateZ(-Math.PI / 2); fwd.translate(0.0192, 0.008, 0.020);
-  f.steel(fwd, 0x80868b, { round: true });
+  f.steel(fwd, 0x9da4aa, { round: true });
 
   // Charging handle, on its own node so the reload can run it.
   const ch = f.sub('charge');
   const bar = slab(0.048, 0.009, 0.030, 0.002, 0.0010);
   bar.translate(0, 0.030, 0.074);
-  ch.steel(bar, 0x6f757a, { wear: 0.85 });
+  ch.steel(bar, 0x899096, { wear: 0.85 });
   const stem = slab(0.016, 0.007, 0.048, 0.002, 0.0008);
   stem.translate(0, 0.030, 0.052);
-  ch.steel(stem, 0x686f74);
+  ch.steel(stem, 0x81898f);
   const latch = slab(0.014, 0.011, 0.008, 0.002, 0.0008);
   latch.translate(-0.017, 0.030, 0.070);
-  ch.steel(latch, 0x939a9f, { wear: 0.9 });
+  ch.steel(latch, 0xb3bcc2, { wear: 0.9 });
 
   // Trigger, on a node so it can be pulled.
   const tg = f.sub('trigger');
   const tr = sideProfile([
     [0.008, -0.018], [0.008, -0.030], [0.002, -0.038], [-0.004, -0.038], [-0.002, -0.026], [-0.001, -0.018],
   ], 0.007, { bevel: 0.0008 });
-  tg.steel(tr, 0xbbc3c8, { wear: 0.9 });
+  tg.steel(tr, 0xe3ecf2, { wear: 0.9 });
   tg.group.position.set(0, -0.018, 0);
   tr.translate(0, 0.018, 0);
-  triggerGuard(f.steel, -0.004, -0.008, 0.032, 0x757c81);
+  triggerGuard(f.steel, -0.004, -0.008, 0.032, 0x90989e);
   // Safety selector and mag release — two small lumps that break the flat side.
   const sel = latheZ([[0, 0], [0.0075, 0], [0.0075, 0.006], [0.0055, 0.008], [0, 0.008]], 10);
   sel.rotateZ(-Math.PI / 2); sel.translate(0.0182, -0.012, 0.030);
-  f.steel(sel, 0x575c62, { round: true });
+  f.steel(sel, 0x6d737a, { round: true });
   const rel = slab(0.006, 0.011, 0.011, 0.002, 0.0006);
   rel.translate(0.0202, -0.020, -0.030);
-  f.steel(rel, 0x686f74);
+  f.steel(rel, 0x81898f);
 
   // Magazine — swept down a curve, because a straight box magazine is the single
   // most obvious "programmer art" tell on a rifle.
@@ -335,17 +335,17 @@ function buildRifle(mats) {
   }
   const mf = frameChain(magPath, [0, 0, 1]);
   mf.forEach((fr, i) => { const t = i / 6; fr.sx = 1 - t * 0.04; fr.sy = 1 - t * 0.05; });
-  mg.poly(sweep(roundRectPts(0.0240, 0.0400, 0.0060, 3), mf), 0x414439, { wear: 0.3 });
+  mg.poly(sweep(roundRectPts(0.0240, 0.0400, 0.0060, 3), mf), 0x535649, { wear: 0.3 });
   const plate = slab(0.030, 0.012, 0.046, 0.004, 0.0010);
   plate.rotateX(-0.30); plate.translate(0, -0.190, -0.072);
-  mg.poly(plate, 0x373930, { wear: 0.35 });
+  mg.poly(plate, 0x47493f, { wear: 0.35 });
   // A witness-hole column: five dots down the side, unmistakably a magazine.
   for (let i = 0; i < 5; i++) {
     const t = i / 4;
     const h = latheZ([[0, 0], [0.0028, 0], [0.0028, 0.002], [0, 0.002]], 8);
     h.rotateZ(-Math.PI / 2);
     h.translate(0.0124, -0.070 - t * 0.100, -0.043 - t * 0.022);
-    mg.poly(h, 0x1e211d, { round: true, ao: 0.7 });
+    mg.poly(h, 0x292d28, { round: true, ao: 0.7 });
   }
 
   // Pistol grip and stock.
@@ -354,23 +354,23 @@ function buildRifle(mats) {
   const beaver = slab(0.030, 0.016, 0.020, 0.006, 0.0012);
   beaver.rotateX(0.35); beaver.translate(0, -0.024, 0.058);
   f.poly(beaver, TAN);
-  f.steel(latheZ([[0, 0.062], [0.0175, 0.062], [0.0175, 0.185], [0, 0.185]], 16), 0x686d73, { round: true, wear: 0.45 });
+  f.steel(latheZ([[0, 0.062], [0.0175, 0.062], [0.0175, 0.185], [0, 0.185]], 16), 0x81878e, { round: true, wear: 0.45 });
   for (let i = 0; i < 6; i++) {
     const r = latheZ([[0.0175, 0.078 + i * 0.019], [0.0198, 0.080 + i * 0.019], [0.0198, 0.088 + i * 0.019], [0.0175, 0.090 + i * 0.019]], 14);
-    f.steel(r, 0x6f7479, { round: true, wear: 0.6 });
+    f.steel(r, 0x898f95, { round: true, wear: 0.6 });
   }
   f.poly(sweptBlock([0, -0.004, 0.120], [0, -0.006, 0.246], 0.044, 0.052, 0.008,
     [[0.86, 0.72], [1.0, 0.92], [1.0, 1.0], [0.96, 1.06]], [0, 1, 0]), BLK, { wear: 0.25 });
   const pad = slab(0.042, 0.062, 0.014, 0.006, 0.0016);
   pad.rotateX(-0.12); pad.translate(0, -0.006, 0.252);
-  f.rubber(pad, 0x2f3236);
+  f.rubber(pad, 0x3d4146);
 
   // Sights: the optic is the primary, and the folded-down irons stay on the gun
   // because that is what a real rifle looks like.
-  const opt = tubeOptic(f.steel, { z0: -0.052, z1: -0.148, y: 0.0640, r: 0.0195, hex: 0x676d73 });
+  const opt = tubeOptic(f.steel, { z0: -0.052, z1: -0.148, y: 0.0640, r: 0.0195, hex: 0x80878e });
   // Co-witnessed with the dot: the post tip lands on the optic's axis, which is
   // what a real backup sight is set up to do and reads as intent, not accident.
-  frontSight(f.phos, -0.378, 0.0437, 0.0130, 0x6c7176);
+  frontSight(f.phos, -0.378, 0.0437, 0.0130, 0x858b91);
 
   f.finish();
 
@@ -396,7 +396,7 @@ function buildRifle(mats) {
     eyeRelief: 0.160,
     optic: { centre: [0, 0.0640, opt.lensZ], r: opt.lensR },
     muzzle: [0, 0, -0.648],
-    hip: { pos: [0.098, -0.118, -0.185], rot: [-0.020, 0.098, 0.040] },
+    hip: { pos: [0.115, -0.105, -0.300], rot: [-0.045, 0.045, 0.055] },
     mass: 1.0,
     hands: {
       // The grip axis runs up-and-back out of the web of the hand, so that is
@@ -414,31 +414,31 @@ function buildRifle(mats) {
 
 function buildSMG(mats) {
   const f = forge(mats);
-  const BLK = 0x464953;
+  const BLK = 0x595c68;
 
   // A rolled-steel receiver: round-backed rather than slab-sided, which is what
   // separates an SMG silhouette from a carbine at a glance.
   f.steel(latheZ([
     [0, 0.055], [0.0215, 0.052], [0.0215, -0.108], [0.0180, -0.118], [0, -0.118],
-  ], 20), 0x6d747c, { round: true, wear: 0.5 });
+  ], 20), 0x878f98, { round: true, wear: 0.5 });
   const spine = slab(0.026, 0.012, 0.170, 0.004, 0.0012);
   spine.translate(0, 0.021, -0.030);
-  f.steel(spine, 0x686f76);
-  railRibs(f.steel, 0.046, -0.240, 0.0265, 0.0212, 0x666b73);
+  f.steel(spine, 0x818991);
+  railRibs(f.steel, 0.046, -0.240, 0.0265, 0.0212, 0x7e848e);
 
   // Short barrel with a shroud and a three-prong flash hider.
   f.phos(latheZ([
     [0, -0.108], [0.0098, -0.108], [0.0098, -0.268], [0.0086, -0.272], [0, -0.272],
-  ], 14), 0x60666a, { round: true });
+  ], 14), 0x777e83, { round: true });
   f.phos(latheZ([
     [0.0086, -0.268], [0.0128, -0.272], [0.0128, -0.284], [0.0104, -0.288],
     [0.0104, -0.328], [0.0118, -0.332], [0.0072, -0.336], [0, -0.336],
-  ], 14), 0x595c60, { round: true, wear: 0.6 });
+  ], 14), 0x6f7377, { round: true, wear: 0.6 });
   for (let i = 0; i < 3; i++) {
     const t = slab(0.0050, 0.0034, 0.044, 0.0012, 0.0006);
     t.translate(0, 0.0122, -0.310);
     t.rotateZ(i * (Math.PI * 2 / 3) + 0.4);
-    f.phos(t, 0x606468, { wear: 0.8 });
+    f.phos(t, 0x777c81, { wear: 0.8 });
   }
 
   // Polymer handguard with side vents and a vertical foregrip.
@@ -462,7 +462,7 @@ function buildSMG(mats) {
   hfloor.translate(0, -0.0205, (hz0 + hz1) / 2);
   f.poly(hfloor, BLK);
   f.poly(sweptBlock([0, -0.026, -0.196], [0, -0.104, -0.190], 0.030, 0.030, 0.009,
-    [[0.95, 0.95], [1.0, 1.0], [0.98, 0.98], [1.06, 1.06]], [0, 0, 1]), 0x3f4148, { wear: 0.2 });
+    [[0.95, 0.95], [1.0, 1.0], [0.98, 0.98], [1.06, 1.06]], [0, 0, 1]), 0x50535b, { wear: 0.2 });
 
   // Straight-stack magazine, forward of the trigger guard.
   const mg = f.sub('mag');
@@ -470,23 +470,23 @@ function buildSMG(mats) {
   for (let i = 0; i <= 5; i++) { const t = i / 5; mp.push([0, -0.040 - 0.150 * t, -0.052 - 0.012 * t * t]); }
   const mf = frameChain(mp, [0, 0, 1]);
   mf.forEach((fr, i) => { fr.sx = 1 - (i / 5) * 0.03; });
-  mg.poly(sweep(roundRectPts(0.0280, 0.0360, 0.0060, 3), mf), 0x393c41, { wear: 0.3 });
+  mg.poly(sweep(roundRectPts(0.0280, 0.0360, 0.0060, 3), mf), 0x494d53, { wear: 0.3 });
   const mplate = slab(0.032, 0.038, 0.010, 0.003, 0.0010);
   mplate.rotateX(Math.PI / 2); mplate.translate(0, -0.194, -0.064);
-  mg.poly(mplate, 0x2f3236);
+  mg.poly(mplate, 0x3d4146);
 
   // Skeleton folding stock: two struts and a pad. The gaps in it are the point.
   for (const s of [-1, 1]) {
     f.steel(sweptBlock([s * 0.014, 0.014, 0.052], [s * 0.020, -0.004, 0.196], 0.010, 0.010, 0.004,
-      [[1, 1], [1, 1], [1, 1]], [0, 1, 0]), 0x6b7179, { wear: 0.5 });
+      [[1, 1], [1, 1], [1, 1]], [0, 1, 0]), 0x848b95, { wear: 0.5 });
   }
   const spad = slab(0.038, 0.052, 0.012, 0.006, 0.0014);
   spad.translate(0, -0.004, 0.200);
-  f.rubber(spad, 0x2c2f33);
+  f.rubber(spad, 0x3a3d42);
 
-  triggerGuard(f.steel, -0.004, -0.006, 0.028, 0x6a7078);
+  triggerGuard(f.steel, -0.004, -0.006, 0.028, 0x838a94);
   const tg = f.sub('trigger');
-  tg.steel(sideProfile([[0.006, 0], [0.006, -0.012], [0.000, -0.019], [-0.005, -0.019], [-0.003, -0.008], [-0.002, 0]], 0.006, { bevel: 0.0007 }), 0xbbc3c8);
+  tg.steel(sideProfile([[0.006, 0], [0.006, -0.012], [0.000, -0.019], [-0.005, -0.019], [-0.003, -0.008], [-0.002, 0]], 0.006, { bevel: 0.0007 }), 0xe3ecf2);
   tg.group.position.set(0, -0.016, 0);
   f.poly(sweptBlock([0, -0.026, 0.020], [0, -0.108, 0.048], 0.032, 0.040, 0.010,
     [[0.92, 0.90], [1.0, 1.0], [0.98, 0.96], [0.88, 0.80]], [0, 0, 1]), BLK, { wear: 0.2 });
@@ -496,7 +496,7 @@ function buildSMG(mats) {
   const chg = latheZ([[0, 0], [0.0070, 0], [0.0070, 0.026], [0.0052, 0.030], [0, 0.030]], 12);
   chg.rotateZ(Math.PI / 2); chg.rotateX(0.4);
   chg.translate(-0.024, 0.016, -0.090);
-  ch.steel(chg, 0x7a8189, { round: true, wear: 0.8 });
+  ch.steel(chg, 0x969ea8, { round: true, wear: 0.8 });
 
   // An open reflex sight rather than a tube — a different sight archetype from
   // the rifle, so the two guns do not read as reskins of each other.
@@ -505,15 +505,15 @@ function buildSMG(mats) {
     [-0.036, sy - 0.026], [-0.010, sy - 0.026], [-0.010, sy - 0.010],
     [-0.036, sy - 0.010],
   ], 0.026, { bevel: 0.0012 });
-  f.steel(shoe, 0x666c74, { wear: 0.5 });
+  f.steel(shoe, 0x7e858f, { wear: 0.5 });
   for (const s of [-1, 1]) {
     const wing = slab(0.0040, 0.030, 0.030, 0.0015, 0.0008);
     wing.translate(s * 0.0130, sy + 0.001, -0.040);
-    f.steel(wing, 0x666c74, { wear: 0.7 });
+    f.steel(wing, 0x7e858f, { wear: 0.7 });
   }
   const hood = slab(0.030, 0.0045, 0.032, 0.0018, 0.0008);
   hood.translate(0, sy + 0.017, -0.040);
-  f.steel(hood, 0x666c74, { wear: 0.7 });
+  f.steel(hood, 0x7e858f, { wear: 0.7 });
 
   f.finish();
 
@@ -538,7 +538,7 @@ function buildSMG(mats) {
     eyeRelief: 0.150,
     optic: { centre: [0, sy, -0.030], r: 0.0105 },
     muzzle: [0, 0, -0.340],
-    hip: { pos: [0.092, -0.108, -0.170], rot: [-0.018, 0.092, 0.038] },
+    hip: { pos: [0.110, -0.100, -0.268], rot: [-0.040, 0.050, 0.055] },
     mass: 0.78,
     hands: {
       right: { pos: [0, -0.054, 0.032], axis: [0, 0.94, -0.33], palm: [1, 0, 0.28], gripR: 0.018,
@@ -555,16 +555,16 @@ function buildSMG(mats) {
 
 function buildDMR(mats) {
   const f = forge(mats);
-  const GRN = 0x57604e;
+  const GRN = 0x6d7762;
 
   const up = extrudePts(receiverPts(0.044, 0.056, 0.20, 0.50, 0.007), 0.290, { bevel: 0.0020 });
   up.translate(0, 0.006, -0.060);
-  f.steel(up, 0x757c82);
+  f.steel(up, 0x90989f);
   f.steel(sideProfile([
     [0.086, -0.004], [0.086, -0.038], [0.030, -0.046], [0.006, -0.056],
     [-0.046, -0.062], [-0.070, -0.052], [-0.070, -0.004],
-  ], 0.040, { bevel: 0.0018 }), 0x70767d);
-  railRibs(f.steel, 0.070, -0.172, 0.0410, 0.0212, 0x6b7076);
+  ], 0.040, { bevel: 0.0018 }), 0x8a919a);
+  railRibs(f.steel, 0.070, -0.172, 0.0410, 0.0212, 0x848a91);
 
   // A heavy fluted barrel. The flutes are actual geometry: six longitudinal
   // grooves that catch a rolling highlight as the weapon sways, which is the
@@ -572,23 +572,23 @@ function buildDMR(mats) {
   f.phos(latheZ([
     [0, -0.178], [0.0165, -0.178], [0.0165, -0.212], [0.0140, -0.222],
     [0.0134, -0.640], [0.0120, -0.648], [0, -0.648],
-  ], 20), 0x5e6368, { round: true, wear: 0.45 });
+  ], 20), 0x757b81, { round: true, wear: 0.45 });
   for (let i = 0; i < 6; i++) {
     const fl = latheZ([[0.0000, -0.240], [0.0038, -0.244], [0.0038, -0.612], [0.0000, -0.616]], 8);
     fl.translate(0, 0.0132, 0);
     fl.rotateZ((i / 6) * Math.PI * 2 + 0.3);
-    f.phos(fl, 0x45494d, { round: true, ao: 0.6, wear: 0.2 });
+    f.phos(fl, 0x575c61, { round: true, ao: 0.6, wear: 0.2 });
   }
   // Muzzle brake with three pairs of side ports.
   f.phos(latheZ([
     [0.0120, -0.640], [0.0182, -0.646], [0.0182, -0.726], [0.0150, -0.732], [0, -0.732],
-  ], 16), 0x565a5e, { round: true, wear: 0.6 });
+  ], 16), 0x6b7075, { round: true, wear: 0.6 });
   for (let i = 0; i < 3; i++) {
     for (const s of [-1, 1]) {
       const p = slab(0.0060, 0.0140, 0.0120, 0.0015, 0.0006);
       p.rotateY(Math.PI / 2);
       p.translate(s * 0.0182, 0.0025, -0.660 - i * 0.024);
-      f.phos(p, 0x2c2f32, { ao: 0.75, wear: 0.15 });
+      f.phos(p, 0x3a3d41, { ao: 0.75, wear: 0.15 });
     }
   }
 
@@ -609,13 +609,13 @@ function buildDMR(mats) {
   const ddeck = slab(0.044, 0.008, hz0 - hz1, 0.004, 0.0012);
   ddeck.translate(0, 0.0370, (hz0 + hz1) / 2);
   f.poly(ddeck, GRN);
-  railRibs(f.poly, hz0 - 0.002, hz1 + 0.006, 0.0410, 0.0212, 0x454c40);
+  railRibs(f.poly, hz0 - 0.002, hz1 + 0.006, 0.0410, 0.0212, 0x576052);
   const dfloor = slab(0.040, 0.008, hz0 - hz1 - 0.02, 0.004, 0.0012);
   dfloor.translate(0, -0.0320, (hz0 + hz1) / 2 - 0.008);
   f.poly(dfloor, GRN);
   for (const s of [-1, 1]) {
     f.steel(sweptBlock([s * 0.012, -0.030, -0.400], [s * 0.026, -0.040, -0.300], 0.009, 0.009, 0.003,
-      [[1, 1], [1, 1], [1, 1]], [0, 1, 0]), 0x5a5f64, { wear: 0.5 });
+      [[1, 1], [1, 1], [1, 1]], [0, 1, 0]), 0x70767c, { wear: 0.5 });
   }
 
   // 20-round magazine, gently curved.
@@ -623,24 +623,24 @@ function buildDMR(mats) {
   const mp = [];
   for (let i = 0; i <= 5; i++) { const t = i / 5; mp.push([0, -0.054 - 0.118 * t, -0.046 - 0.020 * t * t]); }
   const mf = frameChain(mp, [0, 0, 1]);
-  mg.poly(sweep(roundRectPts(0.0260, 0.0420, 0.0060, 3), mf), 0x3f4139, { wear: 0.3 });
+  mg.poly(sweep(roundRectPts(0.0260, 0.0420, 0.0060, 3), mf), 0x505349, { wear: 0.3 });
   const dplate = slab(0.032, 0.012, 0.048, 0.004, 0.0010);
   dplate.rotateX(-0.24); dplate.translate(0, -0.174, -0.070);
-  mg.poly(dplate, 0x343728);
+  mg.poly(dplate, 0x434735);
 
   // Fixed stock with a cheek riser and an adjustable pad.
   f.poly(sweptBlock([0, -0.010, 0.086], [0, -0.010, 0.290], 0.046, 0.062, 0.010,
     [[0.82, 0.66], [1.0, 0.92], [1.0, 1.04], [0.94, 1.10]], [0, 1, 0]), GRN, { wear: 0.22 });
   const comb = slab(0.036, 0.020, 0.130, 0.007, 0.0016);
   comb.rotateX(-0.05); comb.translate(0, 0.030, 0.190);
-  f.poly(comb, 0x4a5141);
+  f.poly(comb, 0x5d6653);
   const dpad = slab(0.044, 0.070, 0.014, 0.006, 0.0016);
   dpad.rotateX(-0.10); dpad.translate(0, -0.012, 0.298);
-  f.rubber(dpad, 0x2c2f33);
+  f.rubber(dpad, 0x3a3d42);
 
-  triggerGuard(f.steel, -0.004, -0.010, 0.036, 0x6d747a);
+  triggerGuard(f.steel, -0.004, -0.010, 0.036, 0x878f96);
   const tg = f.sub('trigger');
-  tg.steel(sideProfile([[0.008, -0.018], [0.008, -0.032], [0.001, -0.040], [-0.005, -0.040], [-0.003, -0.026], [-0.001, -0.018]], 0.007, { bevel: 0.0008 }), 0xbbc3c8);
+  tg.steel(sideProfile([[0.008, -0.018], [0.008, -0.032], [0.001, -0.040], [-0.005, -0.040], [-0.003, -0.026], [-0.001, -0.018]], 0.007, { bevel: 0.0008 }), 0xe3ecf2);
   tg.group.position.set(0, -0.018, 0);
   f.poly(sweptBlock([0, -0.034, 0.026], [0, -0.124, 0.062], 0.036, 0.044, 0.011,
     [[0.92, 0.90], [1.0, 1.0], [1.0, 0.98], [0.90, 0.82]], [0, 0, 1]), GRN, { wear: 0.2 });
@@ -648,27 +648,27 @@ function buildDMR(mats) {
   const ch = f.sub('charge');
   const bolt = slab(0.014, 0.014, 0.056, 0.005, 0.0012);
   bolt.translate(0.030, 0.014, 0.030);
-  ch.steel(bolt, 0x969ca1, { wear: 0.9 });
+  ch.steel(bolt, 0xb7bec4, { wear: 0.9 });
   const knob = new THREE.SphereGeometry(0.0105, 10, 8);
   knob.translate(0.036, 0.014, 0.052);
-  ch.steel(knob, 0x414448, { round: true, wear: 0.4 });
+  ch.steel(knob, 0x53565b, { round: true, wear: 0.4 });
 
   // The scope: a 30 mm tube with a real objective bell, a sunshade, turrets and
   // a rubber ocular ring.
   const sy = 0.0740;
-  const opt = tubeOptic(f.steel, { z0: -0.012, z1: -0.196, y: sy, r: 0.0180, hex: 0x60666b });
+  const opt = tubeOptic(f.steel, { z0: -0.012, z1: -0.196, y: sy, r: 0.0180, hex: 0x777e84 });
   f.steel(latheZ([
     [0.0180, -0.190], [0.0180, -0.206], [0.0268, -0.222], [0.0268, -0.288],
     [0.0244, -0.292], [0.0244, -0.222], [0.0180, -0.208], [0.0180, -0.190],
-  ], 22).translate(0, sy, 0), 0x5b6066, { round: true, wear: 0.4 });
+  ], 22).translate(0, sy, 0), 0x71777e, { round: true, wear: 0.4 });
   const ocular = latheZ([
     [0.0180, -0.012], [0.0250, -0.016], [0.0250, -0.050], [0.0180, -0.054],
   ], 20);
   ocular.translate(0, sy, 0);
-  f.steel(ocular, 0x5f646a, { round: true, wear: 0.45 });
+  f.steel(ocular, 0x767c83, { round: true, wear: 0.45 });
   const eyecup = latheZ([[0.0250, 0.006], [0.0272, 0.000], [0.0272, -0.014], [0.0250, -0.016]], 18);
   eyecup.translate(0, sy, 0);
-  f.rubber(eyecup, 0x2a2c2f, { round: true });
+  f.rubber(eyecup, 0x383a3d, { round: true });
 
   f.finish();
 
@@ -692,7 +692,7 @@ function buildDMR(mats) {
     eyeRelief: 0.098,
     optic: { centre: [0, sy, -0.020], r: 0.0175, scope: true },
     muzzle: [0, 0, -0.736],
-    hip: { pos: [0.104, -0.128, -0.205], rot: [-0.024, 0.104, 0.046] },
+    hip: { pos: [0.122, -0.112, -0.322], rot: [-0.048, 0.042, 0.058] },
     mass: 1.4,
     hands: {
       right: { pos: [0, -0.064, 0.042], axis: [0, 0.93, -0.36], palm: [1, 0, 0.30], gripR: 0.020,
@@ -707,35 +707,35 @@ function buildDMR(mats) {
 
 function buildShotgun(mats) {
   const f = forge(mats);
-  const WOOD = 0x684d3b;
+  const WOOD = 0x81614c;
 
   // A milled steel receiver with a very large ejection port — the defining
   // feature of a pump gun from the side.
   const up = extrudePts(receiverPts(0.044, 0.058, 0.10, 0.45, 0.008), 0.200, { bevel: 0.0020 });
   up.translate(0, 0.008, -0.020);
-  f.steel(up, 0x53575c);
+  f.steel(up, 0x686d73);
   const port = slab(0.052, 0.028, 0.006, 0.004, 0.0010);
   port.rotateY(Math.PI / 2); port.translate(0.0206, 0.004, -0.030);
-  f.steel(port, 0x2c2f33, { wear: 0.25, ao: 0.65 });
+  f.steel(port, 0x3a3d42, { wear: 0.25, ao: 0.65 });
   const loadPort = slab(0.048, 0.022, 0.006, 0.004, 0.0010);
   loadPort.rotateX(Math.PI / 2); loadPort.translate(0, -0.022, -0.030);
-  f.steel(loadPort, 0x2c2f33, { wear: 0.25, ao: 0.65 });
+  f.steel(loadPort, 0x3a3d42, { wear: 0.25, ao: 0.65 });
 
   // 18.5" barrel over a magazine tube, joined by two barrel bands.
   f.phos(latheZ([
     [0, -0.108], [0.0158, -0.108], [0.0158, -0.140], [0.0140, -0.150],
     [0.0136, -0.508], [0.0148, -0.512], [0.0148, -0.522], [0.0122, -0.524], [0, -0.524],
-  ], 20), 0x52565a, { round: true, wear: 0.45 });
+  ], 20), 0x676b70, { round: true, wear: 0.45 });
   const tube = latheZ([
     [0, -0.120], [0.0118, -0.120], [0.0118, -0.452], [0.0132, -0.456],
     [0.0132, -0.470], [0.0100, -0.474], [0, -0.474],
   ], 16);
   tube.translate(0, -0.0272, 0);
-  f.phos(tube, 0x565b5f, { round: true, wear: 0.5 });
+  f.phos(tube, 0x6b7176, { round: true, wear: 0.5 });
   for (const z of [-0.300, -0.446]) {
     const band = slab(0.030, 0.052, 0.012, 0.006, 0.0012);
     band.translate(0, -0.0136, z);
-    f.phos(band, 0x60666a, { wear: 0.6 });
+    f.phos(band, 0x777e83, { wear: 0.6 });
   }
 
   // Heat shield: rings and longitudinal straps, so you see the barrel through
@@ -743,13 +743,13 @@ function buildShotgun(mats) {
   // is, and it costs eight small parts.
   for (const z of [-0.170, -0.240, -0.310, -0.380]) {
     const r = latheZ([[0.0176, z + 0.006], [0.0196, z + 0.006], [0.0196, z - 0.006], [0.0176, z - 0.006], [0.0176, z + 0.006]], 16);
-    f.steel(r, 0x45494d, { round: true, wear: 0.5 });
+    f.steel(r, 0x575c61, { round: true, wear: 0.5 });
   }
   for (let i = 0; i < 6; i++) {
     const s = slab(0.0060, 0.0030, 0.226, 0.0012, 0.0006);
     s.translate(0, 0.0190, -0.276);
     s.rotateZ(-Math.PI / 2 + 0.45 + (i / 5) * (Math.PI * 2 - 0.9));
-    f.steel(s, 0x45494d, { wear: 0.55 });
+    f.steel(s, 0x575c61, { wear: 0.55 });
   }
 
   // Pump forend on its own node — it cycles after every shot, which is the
@@ -761,7 +761,7 @@ function buildShotgun(mats) {
   for (let i = 0; i < 7; i++) {
     const g = latheZ([[0.0230, pz0 - 0.012 - i * 0.016], [0.0250, pz0 - 0.016 - i * 0.016], [0.0230, pz0 - 0.020 - i * 0.016]], 14);
     g.translate(0, -0.0272, 0);
-    pump.poly(g, 0x594132, { round: true, ao: 0.6 });
+    pump.poly(g, 0x6f5341, { round: true, ao: 0.6 });
   }
 
   // Stock: a pistol-grip type with a thick recoil pad, because a 12-gauge
@@ -770,21 +770,21 @@ function buildShotgun(mats) {
     [[0.84, 0.72], [1.0, 0.94], [1.02, 1.04], [0.96, 1.12]], [0, 1, 0]), WOOD, { wear: 0.2, grain: 0.10 });
   const spad = slab(0.046, 0.078, 0.018, 0.008, 0.0018);
   spad.rotateX(-0.16); spad.translate(0, -0.034, 0.284);
-  f.rubber(spad, 0x2a2c2f);
+  f.rubber(spad, 0x383a3d);
   f.poly(sweptBlock([0, -0.034, 0.020], [0, -0.118, 0.058], 0.036, 0.044, 0.011,
     [[0.92, 0.90], [1.0, 1.0], [1.0, 0.98], [0.90, 0.82]], [0, 0, 1]), WOOD, { wear: 0.2, grain: 0.10 });
-  triggerGuard(f.steel, -0.004, -0.014, 0.036, 0x575c62);
+  triggerGuard(f.steel, -0.004, -0.014, 0.036, 0x6d737a);
   const tg = f.sub('trigger');
-  tg.steel(sideProfile([[0.008, -0.022], [0.008, -0.036], [0.001, -0.044], [-0.005, -0.044], [-0.003, -0.030], [-0.001, -0.022]], 0.008, { bevel: 0.0008 }), 0xbbc3c8);
+  tg.steel(sideProfile([[0.008, -0.022], [0.008, -0.036], [0.001, -0.044], [-0.005, -0.044], [-0.003, -0.030], [-0.001, -0.022]], 0.008, { bevel: 0.0008 }), 0xe3ecf2);
   tg.group.position.set(0, -0.022, 0);
 
   // Sights. The rear ghost ring stands well over a bore-level bead, so the
   // sight line is not parallel to the barrel — the ADS solve has to handle it.
   const beadY = 0.0136 + 0.0055, beadZ = -0.500;
-  const ringY = rearSight(f.steel, 0.010, 0.0430, 0x5a5f64);
+  const ringY = rearSight(f.steel, 0.010, 0.0430, 0x70767c);
   const beadBase = slab(0.012, 0.006, 0.014, 0.002, 0.0008);
   beadBase.translate(0, 0.0155, beadZ);
-  f.phos(beadBase, 0x5a5f64);
+  f.phos(beadBase, 0x70767c);
   f.finish();
 
   const bead = new THREE.Mesh(new THREE.SphereGeometry(0.0028, 10, 8), mats.foresight);
@@ -801,7 +801,7 @@ function buildShotgun(mats) {
     eyeRelief: 0.140,
     optic: null,
     muzzle: [0, 0, -0.528],
-    hip: { pos: [0.100, -0.124, -0.190], rot: [-0.022, 0.100, 0.042] },
+    hip: { pos: [0.118, -0.108, -0.296], rot: [-0.045, 0.045, 0.055] },
     mass: 1.25,
     pumpTravel: 0.062,
     hands: {
@@ -818,7 +818,7 @@ function buildShotgun(mats) {
 
 function buildPistol(mats) {
   const f = forge(mats);
-  const FRAME = 0x45494e;
+  const FRAME = 0x575c62;
 
   // Slide: a squared section with a bevelled nose and a real ejection port.
   const slideProf = [
@@ -827,17 +827,17 @@ function buildPistol(mats) {
   ];
   const sl = extrudePts(slideProf, 0.160, { bevel: 0.0018 });
   sl.translate(0, 0.0205, -0.036);
-  f.steel(sl, 0x53595f, { wear: 0.6 });
+  f.steel(sl, 0x686f76, { wear: 0.6 });
   const nose = slab(0.026, 0.028, 0.012, 0.004, 0.0014);
   nose.translate(0, 0.0205, -0.114);
-  f.steel(nose, 0x53595f, { wear: 0.8 });
+  f.steel(nose, 0x686f76, { wear: 0.8 });
   // Rear and front cocking serrations — actual cut geometry, twelve of them.
   for (let i = 0; i < 7; i++) {
     for (const s of [-1, 1]) {
       const g = slab(0.0030, 0.0180, 0.0042, 0.0008, 0.0005);
       g.rotateY(Math.PI / 2);
       g.translate(s * 0.0138, 0.0195, 0.028 - i * 0.0072);
-      f.steel(g, 0x404449, { ao: 0.6, wear: 0.35 });
+      f.steel(g, 0x52565c, { ao: 0.6, wear: 0.35 });
     }
   }
   for (let i = 0; i < 4; i++) {
@@ -845,19 +845,19 @@ function buildPistol(mats) {
       const g = slab(0.0030, 0.0150, 0.0042, 0.0008, 0.0005);
       g.rotateY(Math.PI / 2);
       g.translate(s * 0.0138, 0.0195, -0.082 - i * 0.0072);
-      f.steel(g, 0x404449, { ao: 0.6, wear: 0.35 });
+      f.steel(g, 0x52565c, { ao: 0.6, wear: 0.35 });
     }
   }
   const ejp = slab(0.044, 0.016, 0.006, 0.003, 0.0008);
   ejp.rotateY(Math.PI / 2); ejp.translate(0.0130, 0.0270, -0.052);
-  f.steel(ejp, 0x26282b, { wear: 0.2, ao: 0.7 });
+  f.steel(ejp, 0x333539, { wear: 0.2, ao: 0.7 });
   // Barrel hood and crown, visible at the muzzle.
   f.phos(latheZ([
     [0, -0.108], [0.0082, -0.108], [0.0082, -0.122], [0.0058, -0.122], [0, -0.122],
-  ], 14).translate(0, 0.0180, 0), 0x747a80, { round: true, wear: 0.7 });
+  ], 14).translate(0, 0.0180, 0), 0x8f969d, { round: true, wear: 0.7 });
   const rod = latheZ([[0, -0.100], [0.0046, -0.100], [0.0046, -0.120], [0, -0.120]], 12);
   rod.translate(0, 0.0025, 0);
-  f.steel(rod, 0x92989e, { round: true, wear: 0.6 });
+  f.steel(rod, 0xb2b9c0, { round: true, wear: 0.6 });
 
   // Polymer frame: dust cover with an accessory rail, then the grip.
   f.poly(sideProfile([
@@ -867,11 +867,11 @@ function buildPistol(mats) {
   for (let i = 0; i < 3; i++) {
     const r = slab(0.024, 0.004, 0.007, 0.001, 0.0006);
     r.translate(0, -0.0175, -0.062 - i * 0.012);
-    f.poly(r, 0x383c40);
+    f.poly(r, 0x484d52);
   }
   triggerGuard(f.steel, -0.002, -0.002, 0.026, FRAME);
   const tg = f.sub('trigger');
-  tg.steel(sideProfile([[0.005, -0.008], [0.005, -0.020], [0.000, -0.026], [-0.005, -0.026], [-0.003, -0.014], [-0.002, -0.008]], 0.006, { bevel: 0.0007 }), 0xb2babf);
+  tg.steel(sideProfile([[0.005, -0.008], [0.005, -0.020], [0.000, -0.026], [-0.005, -0.026], [-0.003, -0.014], [-0.002, -0.008]], 0.006, { bevel: 0.0007 }), 0xd8e1e7);
   tg.group.position.set(0, -0.008, 0);
 
   // Grip: raked back 18°, swelling at the palm and flaring at the heel. The
@@ -882,7 +882,7 @@ function buildPistol(mats) {
     const panel = slab(0.005, 0.062, 0.026, 0.004, 0.0010);
     panel.rotateX(-0.36);
     panel.translate(s * 0.0155, -0.058, 0.038);
-    f.rubber(panel, 0x2b2e32, { grain: 0.13 });
+    f.rubber(panel, 0x393c41, { grain: 0.13 });
   }
   const beaver = slab(0.026, 0.012, 0.020, 0.005, 0.0012);
   beaver.rotateX(0.42); beaver.translate(0, -0.006, 0.048);
@@ -893,18 +893,18 @@ function buildPistol(mats) {
   const mp = [];
   for (let i = 0; i <= 3; i++) { const t = i / 3; mp.push([0, -0.012 - 0.098 * t, 0.014 + 0.036 * t]); }
   const mf = frameChain(mp, [0, 0, 1]);
-  mg.steel(sweep(roundRectPts(0.0225, 0.0300, 0.0045, 3), mf), 0x4a5055, { wear: 0.3 });
+  mg.steel(sweep(roundRectPts(0.0225, 0.0300, 0.0045, 3), mf), 0x5d646a, { wear: 0.3 });
   const pl = slab(0.030, 0.036, 0.010, 0.003, 0.0010);
   pl.rotateX(-0.36); pl.translate(0, -0.113, 0.052);
-  mg.poly(pl, 0x37393f);
+  mg.poly(pl, 0x474950);
 
   // Slide stop, safety and the magazine release.
   const stop = slab(0.006, 0.010, 0.030, 0.002, 0.0006);
   stop.translate(-0.0152, 0.002, -0.006);
-  f.steel(stop, 0x6a7075, { wear: 0.7 });
+  f.steel(stop, 0x838a90, { wear: 0.7 });
   const rel = latheZ([[0, 0], [0.0055, 0], [0.0055, 0.004], [0.0040, 0.005]], 10);
   rel.rotateZ(-Math.PI / 2); rel.translate(0.0146, -0.006, 0.010);
-  f.steel(rel, 0x6a7075, { round: true });
+  f.steel(rel, 0x838a90, { round: true });
 
   // Three-dot night sights: a blade up front, a notch at the back, tritium in
   // both. At arm's length they are two millimetres tall, so the glow is what
@@ -912,11 +912,11 @@ function buildPistol(mats) {
   const sy = 0.0400;
   const fb = slab(0.0042, 0.0080, 0.0050, 0.0010, 0.0005);
   fb.translate(0, sy - 0.001, -0.100);
-  f.steel(fb, 0x383c40, { wear: 0.9 });
+  f.steel(fb, 0x484d52, { wear: 0.9 });
   const rb = sideProfile([
     [0.036, sy - 0.005], [0.024, sy - 0.005], [0.024, sy + 0.003], [0.036, sy + 0.003],
   ], 0.024, { bevel: 0.0008, holes: [[[0.033, sy - 0.005], [0.027, sy - 0.005], [0.027, sy + 0.004], [0.033, sy + 0.004]]] });
-  f.steel(rb, 0x383c40, { wear: 0.9 });
+  f.steel(rb, 0x484d52, { wear: 0.9 });
 
   f.finish();
 
@@ -936,7 +936,7 @@ function buildPistol(mats) {
     eyeRelief: 0.400,
     optic: null,
     muzzle: [0, 0.018, -0.126],
-    hip: { pos: [0.072, -0.100, -0.230], rot: [-0.030, 0.070, 0.030] },
+    hip: { pos: [0.076, -0.084, -0.330], rot: [-0.030, 0.030, 0.032] },
     mass: 0.55,
     slideTravel: 0.030,
     hands: {

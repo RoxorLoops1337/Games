@@ -231,7 +231,6 @@ export async function createMaterials(G, engine) {
   const bootMs = now() - t0;
 
   let appliedAniso = aniso;
-  let time = 0;
 
   return {
     cache,
@@ -260,8 +259,7 @@ export async function createMaterials(G, engine) {
     // Nothing here animates, so this is only a hook: it keeps filtering in step
     // with a quality change made from the settings menu, which otherwise leaves
     // every texture at the anisotropy it happened to be built with.
-    update(dt) {
-      time += dt || 0;
+    update() {
       const want = Math.min((engine && engine.tier && engine.tier.aniso) || 1, maxAniso);
       if (want !== appliedAniso) {
         appliedAniso = aniso = want;
@@ -271,7 +269,8 @@ export async function createMaterials(G, engine) {
 
     dispose() {
       if (idleHandle && typeof window !== 'undefined') {
-        (window.cancelIdleCallback || window.clearTimeout)(idleHandle);
+        if (window.cancelIdleCallback) window.cancelIdleCallback(idleHandle);
+        else window.clearTimeout(idleHandle);
       }
       for (const t of textures) t.dispose();
       for (const m of cache.values()) m.dispose();

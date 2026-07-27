@@ -129,13 +129,17 @@ export function extrude(profile, len, opts = {}) {
   const pos = [], nrm = [], uvs = [], cols = [];
   const n = profile.length;
 
-  // signed area so we know which way the outline runs
+  // Force the outline counter-clockwise up front. With a known winding the
+  // outward normal of every edge is just (ey, −ex) and the triangle order that
+  // falls out of the sweep is already correct — the alternative is a per-edge
+  // sign test that is wrong in exactly one of the four cases, which is how you
+  // end up with a jersey barrier lit from inside.
   let area = 0;
   for (let i = 0; i < n; i++) {
     const p = profile[i], q = profile[(i + 1) % n];
     area += p[0] * q[1] - q[0] * p[1];
   }
-  const ccw = area > 0;
+  if (area < 0) profile = profile.slice().reverse();
 
   const put = (x, y, z, nx, ny, nz, u, v) => {
     pos.push(x, y, z); nrm.push(nx, ny, nz); uvs.push(u, v); cols.push(col[0], col[1], col[2]);
@@ -148,8 +152,7 @@ export function extrude(profile, len, opts = {}) {
     let ex = q[0] - p[0], ey = q[1] - p[1];
     const el = Math.hypot(ex, ey) || 1;
     ex /= el; ey /= el;
-    let nx = ey, ny = -ex;
-    if (ccw) { nx = -ey; ny = ex; }
+    const nx = ey, ny = -ex;
     const a = [p[0], p[1], -hz], b = [q[0], q[1], -hz], c = [q[0], q[1], hz], d = [p[0], p[1], hz];
     put(a[0], a[1], a[2], nx, ny, 0, run, 0);
     put(b[0], b[1], b[2], nx, ny, 0, run + el, 0);
@@ -163,7 +166,7 @@ export function extrude(profile, len, opts = {}) {
   for (const s of [-1, 1]) {
     for (let i = 1; i + 1 < n; i++) {
       const tri = [profile[0], profile[i], profile[i + 1]];
-      const order = (s > 0) === ccw ? tri : [tri[0], tri[2], tri[1]];
+      const order = s > 0 ? tri : [tri[0], tri[2], tri[1]];
       for (const p of order) put(p[0], p[1], s * hz, 0, 0, s, p[0], p[1]);
     }
   }
@@ -620,7 +623,9 @@ export function drift(len, h, dep, opts = {}) {
   };
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
     const a = pt(i, j), b = pt(i + 1, j), c = pt(i + 1, j + 1), d = pt(i, j + 1);
-    for (const tri of [[a, b, c], [a, c, d]]) {
+    // Wound so the surface faces up: (+x)×(+z) points down, so the pairs go the
+    // other way round.
+    for (const tri of [[a, c, b], [a, d, c]]) {
       for (const p of tri) { pos.push(p[0], p[1], p[2]); uvs.push(p[0], p[2]); cols.push(col[0], col[1], col[2]); }
     }
   }

@@ -28,13 +28,13 @@ function wearTexture(size = 256) {
   if (!ctx) return null;
 
   // Base: mottled blotches, low contrast — this is the finish itself.
-  ctx.fillStyle = '#8a8a8a';
+  ctx.fillStyle = '#d6d6d6';
   ctx.fillRect(0, 0, size, size);
   let seed = 0x2f6e2b1;
   const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
   for (let i = 0; i < 700; i++) {
     const r = 3 + rnd() * 26;
-    const v = 128 + (rnd() - 0.5) * 90;
+    const v = 214 + (rnd() - 0.5) * 70;
     ctx.fillStyle = `rgba(${v | 0},${v | 0},${v | 0},0.10)`;
     ctx.beginPath();
     ctx.arc(rnd() * size, rnd() * size, r, 0, Math.PI * 2);
@@ -48,7 +48,7 @@ function wearTexture(size = 256) {
     const a = (rnd() < 0.72 ? 0 : Math.PI / 2) + (rnd() - 0.5) * 0.5;
     const len = 6 + rnd() * 70;
     const bright = rnd() < 0.5;
-    ctx.strokeStyle = bright ? 'rgba(230,230,230,0.20)' : 'rgba(40,40,40,0.16)';
+    ctx.strokeStyle = bright ? 'rgba(255,255,255,0.22)' : 'rgba(90,90,90,0.18)';
     ctx.lineWidth = 0.6 + rnd() * 1.4;
     ctx.beginPath();
     ctx.moveTo(x, y);
@@ -117,7 +117,7 @@ function fallbackEnv(engine) {
       const t = 1 - y / (h - 1);            // 1 at the top
       // Sky above, warm bounce below, and a brighter band at the horizon: three
       // tones is enough for a curved barrel to show a readable gradient.
-      const sky = [0.62, 0.78, 1.05], grd = [0.30, 0.25, 0.19], hor = [1.05, 0.98, 0.86];
+      const sky = [0.95, 1.15, 1.55], grd = [0.42, 0.36, 0.28], hor = [1.55, 1.44, 1.26];
       const band = Math.exp(-Math.pow((t - 0.5) * 6, 2));
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 4;

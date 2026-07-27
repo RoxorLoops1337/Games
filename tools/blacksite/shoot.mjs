@@ -50,15 +50,21 @@ export function serve(root = REPO) {
 
 // Named camera poses, so a critique and a fix can be compared from the exact
 // same viewpoint instead of from wherever the player happened to spawn.
+//
+// These are the fallback. The level is the thing that knows where its own good
+// views are, so `pose()` prefers `BLACKSITE.level.poses[name]` whenever the
+// level publishes one — otherwise a level redesign silently leaves every
+// screenshot pointing at empty desert, which is exactly what happened once.
 export const POSES = {
-  spawn:    { pos: [0, 1.72, 8],     yaw: 0,     pitch: -0.03 },
-  overlook: { pos: [16, 5.4, 20],    yaw: -0.62, pitch: -0.20 },
-  corridor: { pos: [0, 1.72, -14],   yaw: Math.PI, pitch: 0.0 },
-  sunward:  { pos: [-10, 1.72, 4],   yaw: 0.75,  pitch: 0.06 },
-  backlit:  { pos: [10, 1.72, -4],   yaw: -2.4,  pitch: -0.02 },
-  ground:   { pos: [4, 1.72, 4],     yaw: -0.4,  pitch: -0.55 },
-  weapon:   { pos: [0, 1.72, 6],     yaw: 0.2,   pitch: -0.05, ads: 0 },
-  ads:      { pos: [0, 1.72, 6],     yaw: 0.2,   pitch: -0.05, ads: 1 },
+  spawn:    { pos: [0, 1.8, 44],   yaw: 0,     pitch: -0.04 },
+  approach: { pos: [0, 1.8, 30],   yaw: 0,     pitch: -0.02 },
+  overlook: { pos: [18, 6.5, 18],  yaw: -0.70, pitch: -0.18 },
+  corridor: { pos: [0, 1.8, 4],    yaw: 0,     pitch: 0.0 },
+  sunward:  { pos: [0, 1.8, 20],   yaw: 0.75,  pitch: 0.06 },
+  backlit:  { pos: [0, 1.8, 10],   yaw: -2.39, pitch: -0.02 },
+  ground:   { pos: [4, 1.8, 24],   yaw: -0.4,  pitch: -0.45 },
+  weapon:   { pos: [0, 1.8, 34],   yaw: 0.2,   pitch: -0.05, ads: 0 },
+  ads:      { pos: [0, 1.8, 34],   yaw: 0.2,   pitch: -0.05, ads: 1 },
 };
 
 export async function launch(opts = {}) {
@@ -155,7 +161,15 @@ export async function diagnoseBoot(page) {
 // accumulation, exposure adaptation, particle warm-up) need several frames
 // before a screenshot represents what a player actually sees.
 export async function pose(page, name, frames = 12) {
-  const p = typeof name === 'string' ? POSES[name] : name;
+  let p = typeof name === 'string' ? POSES[name] : name;
+  if (typeof name === 'string') {
+    // The level gets the last word on where its own good views are.
+    const own = await page.evaluate((n) => {
+      const L = window.BLACKSITE && window.BLACKSITE.level;
+      return (L && L.poses && L.poses[n]) || null;
+    }, name).catch(() => null);
+    if (own) p = own;
+  }
   if (!p) throw new Error('unknown pose: ' + name);
   await page.evaluate(async ({ p, frames }) => {
     const B = window.BLACKSITE, G = B.G;

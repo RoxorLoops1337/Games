@@ -155,7 +155,7 @@ export function createVolumetricPass(renderer, opts = {}) {
     uCamPos: { value: new THREE.Vector3() },
     uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     uSunColor: { value: new THREE.Color(1, 0.86, 0.68) },
-    uDensity: { value: opts.density != null ? opts.density : 0.10 },
+    uDensity: { value: opts.density != null ? opts.density : 0.0035 },
     uMaxDist: { value: opts.maxDist || 70 },
     uAnisotropy: { value: opts.anisotropy != null ? opts.anisotropy : 0.72 },
     uHeightFalloff: { value: opts.heightFalloff != null ? opts.heightFalloff : 0.075 },

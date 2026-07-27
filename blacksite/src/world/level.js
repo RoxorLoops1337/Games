@@ -825,6 +825,7 @@ export function buildLevel(G, engine, materials) {
   // apron with no vertical elements has no sense of scale at all.
   for (const [x, z, ry, ch] of [
     [-25, 45, 0.2, 'approach'], [26, 44, -0.3, 'approach'], [-28.5, 8, 1.2, 'pad'],
+    [-8.5, 24, 0.35, 'approach'], [22.5, 26, -0.5, 'approach'],
     [26.5, 15, -0.8, 'approach'], [27, -30, 0.4, 'silo'], [-6, -37, 0.9, 'bunker'],
   ]) {
     const m = PR.floodMast(9, {});
@@ -843,6 +844,42 @@ export function buildLevel(G, engine, materials) {
     S(boxFromCenter(19.5 + 3.4, GY + 0.30, 37.5 + 2.9, 7.4, 0.55, 1.0, SURFACE.METAL, { thickness: 20 }));
     putAll(PR.rubble(14, 1.6, { seed: 44, big: 0.5 }), 'concrete', 19.5, GY, 37.5, 0, 0, 0, 'approach');
   }
+
+  // ── motor pool ─────────────────────────────────────────────────────────────
+  // A hardstand east of the catwalk. It exists for two reasons: it is what the
+  // overlook actually looks at (the pose faces east-north-east, and 14 m of bare
+  // sand out to the wire was the weakest frame in the level), and it opens a
+  // third lane up the approach so the catwalk is a route to flank around rather
+  // than a wall to walk under.
+  apron(18, 8, 30, 34, { cell: 6.0, chunk: 'approach' });
+  floorBox(18, 8, 30, 34);
+  cont(23.5, 12.5, 12.19, Math.PI / 2 + 0.03);
+  cont(27.5, 24.0, 6.06, 0.10);
+  cont(20.0, 31.0, 6.06, Math.PI / 2 - 0.06);
+  // Pipe stock on timber bearers — a stack of 40 cm cylinders reads as material
+  // handling from 40 m and gives the flat hardstand a horizontal it needs.
+  for (let r = 0; r < 3; r++) {
+    for (let i = 0; i < 5 - r; i++) {
+      putAll([cyl(0.28, 0.28, 5.6, 12)], 'rust',
+        22.0 + (i + r * 0.5) * 0.58, GY + 0.42 + r * 0.5, 19.5, 0, 0, Math.PI / 2, 'approach');
+    }
+  }
+  for (const bz of [17.2, 21.8]) {
+    putAll([chamferBox(3.4, 0.24, 0.26, 0.02)], 'wood', 22.9, GY + 0.12, bz, 0, 0, 0, 'approach');
+  }
+  S(boxFromCenter(22.9, GY + 0.95, 19.5, 3.6, 1.9, 5.8, SURFACE.METAL, { thickness: 40 }));
+  // Transformer bank behind its own little compound.
+  for (const tz of [27.5, 29.6]) {
+    block(25.0, GY + 0.15, tz, 2.6, 0.3, 1.6, 'concrete', SURFACE.CONCRETE, { chunk: 'approach' });
+    block(25.0, GY + 1.05, tz, 2.1, 1.5, 1.25, 'metal', SURFACE.METAL, { chunk: 'approach', c: 0.03 });
+    for (let i = 0; i < 7; i++) {
+      putAll([chamferBox(0.06, 1.2, 0.34, 0.008)], 'metal', 26.15, GY + 1.05, tz - 0.5 + i * 0.17, 0, 0, 0, 'approach');
+    }
+    for (const px of [-0.6, 0, 0.6]) putAll([cyl(0.12, 0.14, 0.5, 8)], 'glass', 25.0 + px, GY + 2.05, tz, 0, 0, 0, 'approach');
+  }
+  putAll(PR.spool(0.9, 0.95, {}), 'metal', 19.5, GY + 0.9, 26.5, 0.9, 0, 0, 'approach');
+  S(boxFromCenter(19.5, GY + 0.9, 26.5, 1.85, 1.8, 1.85, SURFACE.WOOD, { thickness: 60 }));
+  bags(28.6, 17.5, 3.4, Math.PI / 2, 'approach');
 
   // Guard post at the gate, and the gate itself.
   block(-13.5, GY + 1.55, 47.0, 3.4, 3.1, 3.0, 'concrete', SURFACE.CONCRETE, { chunk: 'edge' });
@@ -874,15 +911,22 @@ export function buildLevel(G, engine, materials) {
     }
   }
 
-  // Low pipe run along the bunker's south face at 1.6 m — cover you shoot under,
-  // not over, which is a height the level otherwise never offers.
-  putAll(PR.pipeRun([[-25, 1.62, -7.6], [7.6, 1.62, -7.6], [11.2, 1.62, -11.2], [11.2, 1.62, -31]], 0.21, { seg: 12, flangeEvery: 5.2 }), 'rust', 0, 0, 0, 0, 0, 0, 'pad');
-  for (let x = -24; x < 7; x += 4.2) {
+  // Low pipe run along the west half of the bunker's south face at 1.6 m — cover
+  // you shoot *under* rather than over, which is a height nothing else here
+  // offers. It stops short of the control-room door: a service run that blocks
+  // a doorway is the classic way to make a route look open and play closed.
+  putAll(PR.pipeRun([[-25.5, 1.62, -7.6], [-11.4, 1.62, -7.6]], 0.21, { seg: 12, flangeEvery: 4.6 }), 'rust', 0, 0, 0, 0, 0, 0, 'pad');
+  putAll(PR.pipeRun([[7.9, 1.62, -7.6], [11.2, 1.62, -11.4], [11.2, 1.62, -31]], 0.21, { seg: 12, flangeEvery: 5.2 }), 'rust', 0, 0, 0, 0, 0, 0, 'pad');
+  for (const x of [-24.2, -20.0, -15.8, -11.8]) {
     putAll([chamferBox(0.22, 1.4, 0.22, 0.014)], 'metal', x, GY + 0.7, -7.6, 0, 0, 0, 'pad');
     S(boxFromCenter(x, GY + 0.7, -7.6, 0.24, 1.4, 0.24, SURFACE.METAL, { thickness: 24 }));
   }
-  S(makeBox({ x: -25, y: 1.40, z: -7.85 }, { x: 7.9, y: 1.85, z: -7.35 }, SURFACE.METAL, { thickness: 4 }));
+  S(makeBox({ x: -25.6, y: 1.40, z: -7.85 }, { x: -11.3, y: 1.85, z: -7.35 }, SURFACE.METAL, { thickness: 4 }));
+  S(makeBox({ x: 7.8, y: 1.40, z: -7.85 }, { x: 11.45, y: 1.85, z: -7.35 }, SURFACE.METAL, { thickness: 4 }));
   S(makeBox({ x: 10.95, y: 1.40, z: -31 }, { x: 11.45, y: 1.85, z: -11.0 }, SURFACE.METAL, { thickness: 4 }));
+  // Everything that has to cross the doorways crosses them at 3.3 m instead.
+  putAll(PR.cableTray(19.0, 0.5), 'rust', -1.5, 3.30, -7.4, 0, 0, 0, 'pad');
+  putAll(PR.pipeRun([[-11.0, 3.16, -7.4], [7.6, 3.16, -7.4]], 0.11, { seg: 8, flangeEvery: 4.4 }), 'rust', 0, 0, 0, 0, 0, 0, 'pad');
 
   // Bollards along the apron edge.
   for (let x = -22; x <= 4; x += 3.2) {
@@ -912,8 +956,11 @@ export function buildLevel(G, engine, materials) {
       putAll(PR.fenceFrame(b - a, 2.6, { spacing: 3.2, barbed: true }), 'metal', mx, GY, mz, ry, 0, 0, 'edge');
       const g = new THREE.PlaneGeometry(b - a, 2.35, 1, 1);
       g.translate(0, 1.28, 0);
+      // Six tiles a metre, two diamonds a tile — 8 cm mesh, which is what
+      // 9-gauge chain-link actually is. Tile it any coarser and the fence reads
+      // as a cargo net.
       const uv = g.attributes.uv;
-      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (b - a) * 0.55, uv.getY(i) * 1.3);
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * (b - a) * 6, uv.getY(i) * 14);
       chainGeos.push(prep(g).applyMatrix4(xf(x + (ry ? 0 : (a + b) / 2), GY, z + (ry ? (a + b) / 2 : 0), ry)));
       S(boxFromCenter(mx, GY + 1.4, mz, ry ? 0.14 : b - a, 2.8, ry ? b - a : 0.14, SURFACE.METAL,
         { solid: true, blocksSight: false, thickness: 2 }));
@@ -944,13 +991,24 @@ export function buildLevel(G, engine, materials) {
   // windward (south-west) face of every long wall are the cheapest possible way
   // to stop props reading as objects dropped onto a plane.
   for (const [x, z, len, ry, h] of [
-    [-9, -7.6, 15, 0, 0.55], [4, -7.6, 7, 0, 0.42],
+    [-17.5, -7.7, 13, 0, 0.55],
     [-26.9, -20, 20, Math.PI / 2, 0.7], [-13, 12.3, 14, Math.PI, 0.45],
     [11.5, 6.6, 11, 0, 0.5], [-21, 10.4, 11, 0, 0.5],
     [8.7, -20, 18, -Math.PI / 2, 0.6], [-4, -31.4, 16, Math.PI, 0.55],
     [-20.5, 12.2, 8, Math.PI, 0.4],
   ]) {
     putAll(PR.drift(len, h, 2.6, { seed: (x * 13 + z * 7) | 0 }), 'sand', x, GY, z, ry, 0, 0);
+  }
+
+  // Gravel and spalled concrete, scattered wherever the eye is likely to be
+  // pointed at the floor. It is 10–25 cm of nothing, it has no collision, and it
+  // is the difference between a concrete apron and a grey plane.
+  for (const [x, z, n, r, seed] of [
+    [5, 3, 30, 6.5, 61], [-7, 6, 22, 5, 62], [11, -3, 20, 5, 63], [-19, 2, 18, 5, 68],
+    [0, 20, 24, 7, 64], [-14, 17, 20, 6, 65], [8, 33, 18, 6, 69], [22, 20, 18, 6, 70],
+    [18, -12, 22, 6, 66], [1, -24, 18, 5, 67], [-16, -12, 16, 5, 71], [4, -30, 14, 4, 72],
+  ]) {
+    putAll(PR.rubble(n, r, { seed, big: 0.17 }), 'concrete', x, PY - 0.02, z, 0, 0, 0);
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -1209,12 +1267,12 @@ export function buildLevel(G, engine, materials) {
   function chainlinkMaterial() {
     // A 64² diamond weave, alpha-tested. Alpha test rather than blending so it
     // sorts correctly against everything behind it and costs nothing extra.
-    const s = 64;
+    const s = 128;
     const cv = document.createElement('canvas');
     cv.width = cv.height = s;
     const g2 = cv.getContext('2d');
     g2.fillStyle = '#000'; g2.fillRect(0, 0, s, s);
-    g2.strokeStyle = '#fff'; g2.lineWidth = 5; g2.lineCap = 'square';
+    g2.strokeStyle = '#fff'; g2.lineWidth = 9; g2.lineCap = 'square';
     for (let i = -s; i <= s * 2; i += s / 2) {
       g2.beginPath(); g2.moveTo(i, -2); g2.lineTo(i + s, s + 2); g2.stroke();
       g2.beginPath(); g2.moveTo(i, s + 2); g2.lineTo(i + s, -2); g2.stroke();

@@ -75,6 +75,10 @@ const STEP_POWER = 3.0;
 const SUN_I = 14.0;
 const SUN_ANG = 0.00465;    // solar angular radius, radians (0.266°)
 
+// Extinction applied to the sky dome's own ground, per metre. See the uniform
+// below for why it is not the same number as the level's fog density.
+const GROUND_HAZE = 0.022;
+
 // Highlight shoulder. See `shoulder()` below for why this is here at all.
 const KNEE = 0.55;
 const SHOULDER = 0.9;
@@ -196,7 +200,8 @@ vec3 sunOpticalDepth(vec3 p, vec3 sunDir, int steps) {
 // fall below the horizon. groundAlbedo is the desert floor; folding it into the
 // same integral is what makes the ground haze and the sky haze agree at the
 // horizon line instead of meeting at a visible seam.
-vec3 atmosphere(vec3 ro, vec3 rd, vec3 sunDir, int steps, int sunSteps, vec3 groundAlbedo) {
+vec3 atmosphere(vec3 ro, vec3 rd, vec3 sunDir, int steps, int sunSteps, vec3 groundAlbedo,
+                float groundHaze, vec3 hazeAway, vec3 hazeSun) {
   float tTop = exitSphere(ro, rd, R_TOP);
   if (tTop <= 0.0) return vec3(0.0);
   float tGround = enterSphere(ro, rd, R_GROUND);
@@ -235,6 +240,18 @@ vec3 atmosphere(vec3 ro, vec3 rd, vec3 sunDir, int steps, int sunSteps, vec3 gro
     // without it the far desert goes black in the sun's shadow direction and the
     // horizon develops a hard dark band.
     vec3 lit = groundAlbedo * (uSunI * ndl * sunAtGround / PI + vec3(0.006, 0.008, 0.012));
+
+    // The scattering integral says the desert floor is unhazed, and for a steep
+    // downward ray from an eye 2 m up it is right — that ground is a few metres
+    // away. But the only part of it a player ever sees is the sliver just under
+    // the horizon, which is tens of kilometres out. Left alone it meets the
+    // hazed level floor as a hard brown stripe. So the near-surface haze the
+    // level fog uses is applied here too, toward the same measured horizon
+    // colours, and the seam closes.
+    float haze = 1.0 - exp(-groundHaze * tGround);
+    vec3 hazeCol = mix(hazeAway, hazeSun, pow(max(mu, 0.0), 2.5) * 0.85);
+    lit = mix(lit, hazeCol, haze);
+
     col += lit * extinction(odView);
   }
   return col;
@@ -266,6 +283,8 @@ uniform float uLimb;
 uniform float uFrame;
 uniform float uKnee;
 uniform float uShoulder;
+uniform float uDiscMax;
+const float PI_F = 3.141592653589793;
 
 // A dusk sky spans about 200:1 between the zenith and the sky a degree off the
 // sun. Something has to compress that, and if nothing in the chain does, the
@@ -318,23 +337,34 @@ void main() {
   col = mix(col, uSunward, pow(toSun, 3.0) * (1.0 - up * 0.55));
 #endif
 
+  col = shoulder(col * uExposure);
+
   // The solar disc is drawn analytically rather than baked into the cubemap: at
   // 0.53° across it is about six pixels, and a 256² cubemap face resolves 0.35°
-  // per texel, so a baked sun would be a soft blob. Limb darkening is
-  // wavelength-dependent — the edge of the disc reddens because you are looking
-  // obliquely through more photosphere — and it is the difference between a sun
-  // and a white circle.
-  float cosA = dot(dir, uSunDir);
-  float ang = acos(clamp(cosA, -1.0, 1.0));
+  // per texel, so a baked sun would be a soft blob with no edge.
+  //
+  // Its radiance is the sun's irradiance divided by its solid angle, which puts
+  // it four to five orders of magnitude above the sky an arc-minute away from
+  // it. Nothing displays that, and nothing should try: it is added *after* the
+  // sky's shoulder and given a much higher ceiling of its own, so the core
+  // clips to white — which is what a photograph of the sun does — while the
+  // aureole around it stays under 1.0 and keeps its amber.
+  //
+  // Limb darkening is wavelength-dependent: the rim reddens because you are
+  // looking obliquely through more photosphere. At 0.27° it is worth well under
+  // a pixel here, but it costs nothing and it is what makes the disc survive
+  // being rendered at 4K.
+  float ang = acos(clamp(dot(dir, uSunDir), -1.0, 1.0));
   float r = ang / uSunAng;
   if (r < 1.15) {
     float m = sqrt(max(0.0, 1.0 - min(r, 1.0) * min(r, 1.0)));
     vec3 limb = 1.0 - uLimb * (1.0 - pow(vec3(m), vec3(0.42, 0.50, 0.62)));
-    float edge = 1.0 - smoothstep(0.90, 1.06, r);
-    col += uSunI * limb * uSunTrans * edge;
+    float edge = 1.0 - smoothstep(0.88, 1.04, r);
+    vec3 disc = (uSunI / (PI_F * uSunAng * uSunAng)) * limb * uSunTrans * uExposure;
+    float dm = max(max(disc.r, disc.g), disc.b);
+    col += disc * ((uDiscMax * dm / (dm + uDiscMax)) / max(dm, 1e-4)) * edge;
   }
 
-  col = shoulder(col * uExposure);
   col += (hash12(gl_FragCoord.xy + uFrame) - 0.5) * (1.0 / 255.0);
   gl_FragColor = vec4(max(col, 0.0), 1.0);
 }
@@ -583,7 +613,7 @@ export function createSky(G, engine) {
     apDensity:    { value: 0.0075 },
     apFalloff:    { value: 1 / 26 },   // haze halves every ~18 m of altitude
     apBase:       { value: 0.0 },
-    apGlow:       { value: 1.2 },
+    apGlow:       { value: 0.8 },
     apMaxOpacity: { value: 0.985 },
   };
 
@@ -597,6 +627,7 @@ export function createSky(G, engine) {
     uFrame:    { value: 0 },
     uKnee:     { value: KNEE },
     uShoulder: { value: SHOULDER },
+    uDiscMax:  { value: 3.2 },
     uSunI:     { value: SUN_I },
     uSky:      { value: null },
     uZenith:   { value: zenith },
@@ -640,7 +671,14 @@ export function createSky(G, engine) {
       uSunI:      { value: SUN_I },
       uSteps:     { value: tier.view },
       uSunSteps:  { value: tier.sun },
-      uGround:    { value: new THREE.Color(0.30, 0.245, 0.175) },
+      uGround:    { value: new THREE.Color(0.34, 0.28, 0.20) },
+      // Thicker than the level's own haze on purpose. The dome's ground stands in
+      // for desert that is tens of kilometres out, but the ray from a 2 m eye
+      // reaches the sphere in a hundred metres, so the geometric distance badly
+      // understates how much air is really in the way.
+      uGroundHaze: { value: GROUND_HAZE },
+      uHazeAway:  { value: new THREE.Color() },
+      uHazeSun:   { value: new THREE.Color() },
     };
     lutMat = new THREE.ShaderMaterial({
       uniforms: lutUniforms,
@@ -652,11 +690,15 @@ export function createSky(G, engine) {
         uniform int uSteps;
         uniform int uSunSteps;
         uniform vec3 uGround;
+        uniform float uGroundHaze;
+        uniform vec3 uHazeAway;
+        uniform vec3 uHazeSun;
         ${ATMOSPHERE_GLSL}
         void main() {
           vec3 dir = normalize(vDir);
           vec3 ro = vec3(0.0, R_GROUND + 2.0, 0.0);
-          vec3 col = atmosphere(ro, dir, uSunDir, uSteps, uSunSteps, uGround);
+          vec3 col = atmosphere(ro, dir, uSunDir, uSteps, uSunSteps, uGround,
+                                uGroundHaze, uHazeAway, uHazeSun);
           gl_FragColor = vec4(max(col, 0.0), 1.0);
         }
       `,
@@ -833,6 +875,14 @@ export function createSky(G, engine) {
     sunward.setRGB(w[0], w[1], w[2]);
     fogUniforms.apSunTint.value.setRGB(
       sunColor.r * 0.30 * e, sunColor.g * 0.30 * e, sunColor.b * 0.30 * e);
+
+    // The cubemap is the source for the PMREM as well as for the dome, so it
+    // stores raw radiance — the haze colours handed to it must be pre-shoulder
+    // or the environment light picks up a display curve it should never see.
+    if (lutMat) {
+      lutMat.uniforms.uHazeAway.value.setRGB(away[0], away[1], away[2]);
+      lutMat.uniforms.uHazeSun.value.setRGB(toward[0], toward[1], toward[2]);
+    }
 
     // A crude hemispherical average, for anyone who needs an exposure target or
     // an ambient level without sampling the cubemap.

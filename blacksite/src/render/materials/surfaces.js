@@ -355,7 +355,7 @@ export function sand(size, seed = 307, o = {}) {
   const peb = N.worley(size, Math.max(6, size >> 5), seed + 6, 1, 2);
   const light = o.light || [0.735, 0.615, 0.435];
   const dark = o.dark || [0.44, 0.355, 0.245];
-  const rf = o.rippleFreq || 11;
+  const rf = o.rippleFreq || 17;
 
   for (let y = 0; y < size; y++) {
     const v = y * inv;
@@ -414,7 +414,7 @@ export function ground(size, seed = 409, o = {}) {
       // Voronoi diagram, which is exactly what they are.
       const crack = 1 - N.sstep(0.02, 0.13, plates.f2[i] + (crackWob[i] - 0.5) * 0.08);
       const stone = 1 - N.sstep(0.06, 0.30, grav.f1[i]);
-      const rip = Math.sin((u * 9 + v * 2 + (bend[i] - 0.5) * 1.6) * TAU);
+      const rip = Math.sin((u * 17 + v * 3 + (bend[i] - 0.5) * 1.6) * TAU);
       // Sand wins most of the floor; the cracked hardpan shows through where the
       // wind has scoured it. Two materials on one plane is the whole point.
       const drifted = N.sstep(0.34, 0.62, drift[i] * 0.85 + macro[i] * 0.35);
