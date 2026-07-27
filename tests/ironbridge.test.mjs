@@ -71,7 +71,7 @@ function loadGame(store, srcOverride){
   // alpha back leaves every later shape in the frame translucent, and an
   // unbalanced save() leaks a clip or a transform into whatever draws next.
   // Neither is visible to a per-call check, because no single call is wrong.
-  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.rects = []; stats.rectsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
   const TEXT0 = { lineCap:'butt', textAlign:'start', textBaseline:'alphabetic' };
   Object.assign(stats, TEXT0);
   stats.__text0 = TEXT0;
@@ -138,6 +138,18 @@ function loadGame(store, srcOverride){
       if (stats.fills.length < CAP) stats.fills.push(stats.fill); else stats.fillsDropped++;
       const last = stats.ellipses[stats.ellipses.length - 1];
       if (last && last.fill === null){ last.fill = stats.fill; last.alpha = stats.alpha; }
+    };
+    // Where the rectangles landed. Almost every bar, plate and panel in the
+    // game is a fillRect, and until now the only thing recorded about them was
+    // that they happened — so a bar whose FILL tracks a number looked identical
+    // to one drawn at a fixed width. Its own dropped counter, for the same
+    // reason the fills have one.
+    if (k === 'fillRect' || k === 'strokeRect') return (...a) => {
+      stats.ops++; numCheck(k, a);
+      if (stats.rects.length < CAP)
+        stats.rects.push({ k, x:a[0], y:a[1], w:a[2], h:a[3],
+          col: k === 'fillRect' ? stats.fill : stats.stroke, alpha:stats.alpha });
+      else stats.rectsDropped++;
     };
     return (...a) => { stats.ops++; numCheck(k, a); radCheck(k, a); };
   }, set(_t, k, v){
@@ -4900,6 +4912,84 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(built.wide > fresh.wide, 'and broadens with it (' +
       fresh.wide.toFixed(2) + ' → ' + built.wide.toFixed(2) + ')');
     t.ok(spread(0) === null, 'and a hero with no picks yet wears none');
+
+    // A hero's MANA decides whether the next thing that happens is a Fireball
+    // or a poke with a stick, and four passives are bought with real gold to
+    // move it. None of it reached the body: a hero at nought mana drew exactly
+    // the same 79 ops and the same 2157 of ink as one at full, while the
+    // health bar three lines up varied across all three of its readings on the
+    // same instrument. The hero sheet has always had a mana bar — only the
+    // panel knew, and only for the hero you had selected.
+    {
+      const mp = (mana, mmana, skills) => {
+        s.rects = []; s.rectsDropped = 0;
+        IB.mpBar(CTX, 200, 100, { mana, mmana, skills: skills || [] }, 60);
+        const fill = s.rects.filter(r => r.col === IB.MPBAR.col);
+        return { w: fill.length ? Math.max(...fill.map(r => r.w)) : 0,
+          n: s.rects.length, dropped: s.rectsDropped,
+          tip: s.rects.some(r => r.col === '#eaf4ff') };
+      };
+      const dry = mp(0, 300), half = mp(150, 300), full = mp(300, 300);
+      t.ok(dry.dropped === 0 && full.dropped === 0, 'the rect capture held it');
+      t.ok(full.n > 3, 'the mana bar is a real object — plate, groove, fill, gloss (' + full.n + ')');
+      t.ok(dry.w === 0, 'a dry hero shows an empty bar (' + dry.w + ')');
+      t.ok(half.w > dry.w && full.w > half.w, 'and it fills with the pool (' +
+        dry.w + ' → ' + half.w + ' → ' + full.w + ')');
+      // Not saturating before its first step, and not overrunning its groove.
+      t.ok(Math.abs(half.w - full.w / 2) < 1, 'half a pool is half a bar (' +
+        half.w + ' vs ' + full.w + ')');
+      t.ok(mp(400, 300).w <= full.w, 'and an overfull pool cannot spill past the end');
+      t.ok(mp(50, 0).n === 0, 'something with no mana at all gets no bar');
+
+      // The tip is not a second opinion about whether a hero can cast — it is
+      // skillArmed's answer, the same one castLoop acts on. Cooldowns are only
+      // surfaced through it: this is a "can it go right now" light, not three
+      // separate timers.
+      const cheap = { id:'javelin', rank:1, cdT:0 };
+      const spent = { id:'javelin', rank:1, cdT:5 };
+      t.ok(mp(300, 300, [cheap]).tip, 'a hero with something ready shows it');
+      t.ok(!mp(300, 300, [spent]).tip, 'one still on cooldown does not');
+      t.ok(!mp(1, 300, [cheap]).tip, 'nor one that cannot pay for it');
+      t.ok(!mp(300, 300, []).tip, 'nor one with nothing to cast');
+      // And the predicate itself, against the numbers the skill actually costs.
+      const jav = IB.SKILL.javelin;
+      t.ok(jav && jav.mana > 1, 'the skill under test really costs mana (' + (jav || {}).mana + ')');
+      t.ok(IB.skillArmed({ mana: jav.mana }, { id:'javelin', cdT:0 }), 'armed when paid for and off cooldown');
+      t.ok(!IB.skillArmed({ mana: jav.mana - 1 }, { id:'javelin', cdT:0 }), 'not when a point short');
+      t.ok(!IB.skillArmed({ mana: jav.mana }, { id:'javelin', cdT:0.01 }), 'not with any cooldown left');
+      t.ok(!IB.skillArmed({ mana: 999 }, { id:'nosuchskill', cdT:0 }), 'and never for a skill that is not real');
+
+      // WIRED. The piece working is not the same as the body drawing it — the
+      // mantle taught that. A real hero through the real drawUnit, and a real
+      // footman that must not sprout one.
+      IB.newMatch({ diff:'veteran', seed:8109 });
+      IB.MY = 0; IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.4;
+      const hero = IB.makeHero(0, 'mage', 'Probe');
+      G.sides[0].heroes.push(hero);
+      IB.gainXp(hero, 4000); IB.autoPick(hero);
+      IB.enterLane(hero);
+      hero.x = 60; hero.y = 0;
+      const bodyBar = (fn) => { s.rects = []; s.rectsDropped = 0; fn();
+        return { hit: s.rects.filter(r => r.col === IB.MPBAR.col).length, dropped: s.rectsDropped }; };
+      hero.mana = hero.mmana;
+      const heroDrew = bodyBar(() => IB.drawUnit(CTX, hero));
+      t.ok(hero.skills.length > 0, 'the hero really took its picks (' + hero.skills.length + ' skills)');
+      t.ok(heroDrew.dropped === 0, 'and the body capture held it');
+      t.ok(heroDrew.hit > 0, 'a hero on the bridge wears its mana (' + heroDrew.hit + ')');
+      // A real levy, spawned rather than hoped for: the first version of this
+      // took whatever happened to be on the bridge, found nothing, and fell
+      // through to a branch that asserted nothing at all — which is exactly
+      // the check that mattered most.
+      const grunt = IB.spawnUnit(0, 'melee', { x:58, y:0, paid:true });
+      t.ok(grunt && !grunt.isHero, 'there is a real levy on the bridge to compare against');
+      const gruntDrew = bodyBar(() => IB.drawUnit(CTX, grunt));
+      t.ok(gruntDrew.dropped === 0, 'and its capture held too');
+      t.ok(gruntDrew.hit === 0, 'a levy wears no mana bar (' + gruntDrew.hit + ')');
+      // It still wears the thing the mana bar was modelled on, or the
+      // comparison above is just "this body drew nothing".
+      const gruntRects = (() => { s.rects = []; IB.drawUnit(CTX, grunt); return s.rects.length; })();
+      t.ok(gruntRects > 4, 'while still drawing a body and a health bar (' + gruntRects + ')');
+    }
 
     // The whole point, stated the way the bug was found: two heroes, same max
     // HP so the bar cannot speak for them, must not draw the same body.
