@@ -4566,6 +4566,115 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'and it still draws');
 }
 {
+  // A walk cycle used to run off the CLOCK — the same seven radians a second
+  // whether the body was sprinting, trudging, or crawling at forty per cent
+  // under a slow. Every unit in the game took exactly nine half steps in four
+  // seconds, so a slowed one covered half the ground with the same leg motion
+  // and moon-walked, and the fastest unit took the longest strides for
+  // identical animation.
+  //
+  // The thing that has to hold still is steps per METRE. Steps per second
+  // falls out of how fast you are actually going — which is what makes a slow
+  // read as a slow.
+  const gaitRun = (kind, slow) => {
+    IB.newMatch({ diff:'veteran', seed:7501 });
+    G.units.length = 0;
+    const u = IB.spawnUnit(0, kind, { y:0 });
+    if (!u) return null;
+    u.x = 30; u.target = null;
+    if (slow) IB.applySlow(u, slow, 99);
+    let last = IB.strideOf(u), halfSteps = 0;
+    const x0 = u.x;
+    for (let i = 0; i < 120; i++){
+      IB.update(1 / 30);
+      if (!G.units.includes(u)) break;
+      u.target = null;                          // keep it walking, not fighting
+      const s = IB.strideOf(u);
+      if (Math.sign(s) !== Math.sign(last) && s !== 0) halfSteps++;
+      last = s;
+    }
+    const dist = Math.abs(u.x - x0);
+    return { dist, halfSteps, perM: dist > .01 ? halfSteps / dist : 0 };
+  };
+  const kinds = Object.keys(IB.UNITS);
+  t.ok(kinds.length >= 4, 'the gait sweep covers every unit kind (' + kinds.length + ')');
+  const runs = [];
+  for (const kind of kinds) for (const slow of [0, .5]){
+    const r = gaitRun(kind, slow);
+    if (!r) continue;
+    runs.push({ kind, slow, ...r });
+  }
+  t.ok(runs.length >= 8, 'and every one of them actually walked (' + runs.length + ')');
+  let still = 0, frozen = 0;
+  for (const r of runs){
+    if (r.dist < 3) still++;                    // it has to cover ground...
+    if (r.halfSteps < 2) frozen++;              // ...and take steps while doing it
+  }
+  t.ok(still === 0, 'each run covered real ground (' + still + ' did not)');
+  t.ok(frozen === 0, 'and took real steps (' + frozen + ' did not)');
+  // The invariant. Steps per metre, across every kind AND both speeds.
+  const perM = runs.map(r => r.perM);
+  const lo = Math.min(...perM), hi = Math.max(...perM);
+  t.ok(hi / lo < 1.35, 'every body takes the same steps per metre, fast or slowed (' +
+    lo.toFixed(2) + '–' + hi.toFixed(2) + ')');
+  // And the other half: rule out a "constant" that is constant because nothing
+  // varies. A slowed unit must cover less ground AND take fewer steps.
+  let unslowed = 0, samesteps = 0;
+  for (const kind of kinds){
+    const a = runs.find(r => r.kind === kind && r.slow === 0);
+    const b = runs.find(r => r.kind === kind && r.slow === .5);
+    if (!a || !b) continue;
+    if (!(b.dist < a.dist * .8)) unslowed++;
+    if (!(b.halfSteps < a.halfSteps)) samesteps++;
+  }
+  t.ok(unslowed === 0, 'a slow really does slow the body down (' + unslowed + ')');
+  t.ok(samesteps === 0, 'and its legs slow with it — this is the whole bug (' + samesteps + ')');
+  // A fast unit covering more ground takes MORE steps, not longer ones.
+  {
+    const fast = runs.filter(r => r.slow === 0).sort((a, b) => b.dist - a.dist)[0];
+    const slowUnit = runs.filter(r => r.slow === 0).sort((a, b) => a.dist - b.dist)[0];
+    t.ok(fast.dist > slowUnit.dist * 1.1, 'the unit kinds really do differ in pace (' +
+      slowUnit.kind + ' ' + slowUnit.dist.toFixed(1) + ' vs ' + fast.kind + ' ' + fast.dist.toFixed(1) + ')');
+    t.ok(fast.halfSteps > slowUnit.halfSteps, 'and the quicker one takes more steps, not longer ones (' +
+      slowUnit.halfSteps + ' → ' + fast.halfSteps + ')');
+  }
+  // The gait itself: driven by ground, not by the clock, and not in lockstep.
+  {
+    IB.newMatch({ diff:'veteran', seed:7503 });
+    G.units.length = 0;
+    const a = IB.spawnUnit(0, 'grunt', { y:0 }), b = IB.spawnUnit(0, 'grunt', { y:1 });
+    a.x = 30; b.x = 30;
+    const t0 = G.t;
+    const g0 = IB.gaitOf(a);
+    G.t = t0 + 5;
+    t.ok(IB.gaitOf(a) === g0, 'a body standing still does not walk on the spot');
+    G.t = t0;
+    a.x = 33.1;
+    t.ok(Math.abs(IB.gaitOf(a) - g0 - 6.2832) < .01, 'and one stride cycle is one STEP_LEN of ground');
+    a.x = 30;
+    t.ok(a.ph !== b.ph, 'two bodies are given different phases');
+    t.ok(IB.gaitOf(a) !== IB.gaitOf(b), 'so a column does not march in lockstep');
+    t.ok(IB.STEP_LEN > 0 && IB.STEP_RATE > 0, 'a stride covers real ground');
+  }
+  // Read the neighbouring branch: the stride must still STOP for the three
+  // things that stop it. Driving the gait off position must not have quietly
+  // dropped any of them.
+  {
+    IB.newMatch({ diff:'veteran', seed:7505 });
+    G.units.length = 0;
+    const u = IB.spawnUnit(0, 'grunt', { y:0 });
+    u.x = 33.9; u.target = null;                        // mid-stride, so 0 means stopped
+    t.ok(IB.strideOf(u) !== 0, 'a walking body has a stride to lose');
+    u.stunT = 1; t.ok(IB.strideOf(u) === 0, 'a stunned body does not walk'); u.stunT = 0;
+    u.pullT = 1; t.ok(IB.strideOf(u) === 0, 'nor one being dragged'); u.pullT = 0;
+    u.target = { x:u.x + .2, y:u.y, r:.4 };
+    t.ok(IB.strideOf(u) === 0, 'nor one standing in reach of what it is hitting');
+    u.target = null;
+    t.ok(IB.strideOf(u) !== 0, 'and it walks again afterwards');
+  }
+  G.units.length = 0;
+}
+{
   // A particle's alpha is t/dur, so a short `t` against a shared `dur` does
   // not shorten its life — it makes it BORN faint. Four bursts in this game
   // varied `t` meaning to vary the lifetime, and the result was that most of
