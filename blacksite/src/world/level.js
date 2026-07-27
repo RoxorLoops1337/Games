@@ -1022,6 +1022,18 @@ export function buildLevel(G, engine, materials) {
   putAll(PR.pipeRun([[-11.6, GY + 1.15, 45.3], [-4.2, GY + 1.15, 45.3]], 0.08, { seg: 6, flangeEvery: 9 }), 'paint', 0, 0, 0, 0, 0, 0, 'edge');
   S(boxFromCenter(-7.9, GY + 1.15, 45.3, 7.6, 0.2, 0.2, SURFACE.METAL, { solid: true, blocksSight: false }));
 
+  // Gate lamps, one a side on the posts flanking the vehicle gap, and the east
+  // one is the only thing on the site still lighting the ground a player stands
+  // on in the first second of the game. It is behind the spawn and rakes north
+  // up the road, so you never see the source — you see your own ground come up
+  // out of the dark ahead of you, which is the whole difference between reading
+  // the approach and guessing at it. The west one is dead; a gate with one lamp
+  // out is a gate somebody stopped maintaining, and it costs nothing to say so.
+  bulkheadLamp(4.5, GY + 2.55, 50, -2.611, 0.28, {
+    color: FLOOD, intensity: 110, distance: 26, angle: 0.68, penumbra: 0.55,
+  }, 'approach');
+  bulkheadLamp(-4.5, GY + 2.55, 50, 2.611, 0.28, null, 'edge');
+
   // Spools, crates, drums — the scatter that turns a plan into a place.
   for (const [x, z, ry, ch] of [[-10.5, 27, 0.3, 'approach'], [21.5, 12.5, 1.1, 'approach'], [-3.5, -35.5, 0.6, 'bunker'], [13.5, -6.5, 2.0, 'pad']]) {
     putAll(PR.spool(0.9, 0.95, {}), 'metal', x, GY + 0.9, z, ry, 0, 0, ch);
