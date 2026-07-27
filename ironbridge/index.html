@@ -4942,46 +4942,128 @@ const abHw = (t) => 5 - t * 1.1;                 // half-length, narrowing downw
 const abY = (t) => C.LANE_W / 2 + .6 - t * 1.4;  // and the face pulling back with it
 
 const PIER_SPAN = 16, PIER_HW = 3.2, PIER_TOP = -1.6, PIER_BOT = -30, PIER_SEGS = 7;
+// The stone the whole bridge stands in. Two tones for its two faces, from the
+// same convention every wall in the game uses: the face turned at the viewer
+// takes the light, the face turned right is the one the sun has left.
+const PIER = { face:'#57503f', side:'#332f27', cap:'#6b6250', arris:'#9c9077', soffit:'#241f19' };
 function drawPiers(c){
   const W = C.LANE_W / 2 + .6;
   const z = cam.z;
+  // How far into the gorge's own air a thing at this depth has sunk. Every
+  // fade under the bridge goes through it, so the piers, the arches and the
+  // rock behind them all agree about where the bottom is.
+  const sink = (t) => clamp(t * t * .55 + t * .45, 0, .86);
+  // The bridge's own shadow, thrown down the face of everything under it. It
+  // is the darkest thing in the gap and it is why the piers read as standing
+  // in front of the canyon rather than printed on it. World-anchored to the
+  // span, so it never crosses onto the islands at either end.
+  {
+    const x0 = Math.max(0, cam.x - 90), x1 = Math.min(C.LANE_LEN, cam.x + 90);
+    for (let i = 0; i < 4; i++){
+      const z0 = PIER_TOP - i * 1.7, z1 = z0 - 1.7;
+      c.globalAlpha = .34 - i * .075;
+      poly(c, [lp(x0, W, z0), lp(x1, W, z0), lp(x1, W, z1), lp(x0, W, z1)], '#0d1114');
+    }
+    c.globalAlpha = 1;
+  }
   for (let x = PIER_SPAN / 2; x < C.LANE_LEN; x += PIER_SPAN){
     const p = lp(x, W, PIER_TOP);
     if (p[0] < -170 || p[0] > LW + 170) continue;
     // Drawn in bands rather than as one quad so the foot can dissolve into the
     // gorge. A pier that runs solid to the bottom of the screen is a bar, not
-    // a thing standing in a canyon whose floor you never see.
+    // a thing standing in a canyon whose floor you never see. What is new is
+    // that it dissolves by turning INTO the gorge's colour rather than by
+    // going transparent — a pier you can see the rock through is a ghost.
     for (let k = 0; k < PIER_SEGS; k++){
       const t0 = k / PIER_SEGS, t1 = (k + 1) / PIER_SEGS;
       const z0 = lerp(PIER_TOP, PIER_BOT, t0), z1 = lerp(PIER_TOP, PIER_BOT, t1);
       const w0 = lerp(PIER_HW, PIER_HW * .58, t0), w1 = lerp(PIER_HW, PIER_HW * .58, t1);
-      c.globalAlpha = clamp(1.15 - t0 * 1.25, 0, 1);
+      const s0 = sink(t0);
+      c.globalAlpha = clamp(1.25 - t0 * .95, 0, 1);
+      const lit = shade(PIER.face, (k % 2 ? .94 : 1.04) * (1 - s0 * .3));
       poly(c, [lp(x - w0, W, z0), lp(x + w0, W, z0), lp(x + w1, W, z1), lp(x - w1, W, z1)],
-        k % 2 ? '#3e3a32' : '#443f36');
-      poly(c, [lp(x - w0, W, z0), lp(x - w0, -W, z0), lp(x - w1, -W, z1), lp(x - w1, W, z1)], '#2b2922');
+        mixHex(lit, GORGE.void1, s0 * .62));
+      // the face turned away from the sun — the +x side, the same one every
+      // house in this game shows and the one the old code had backwards
+      poly(c, [lp(x + w0, W, z0), lp(x + w0, -W, z0), lp(x + w1, -W, z1), lp(x + w1, W, z1)],
+        mixHex(shade(PIER.side, 1 - s0 * .25), GORGE.void2, s0 * .55));
     }
     c.globalAlpha = 1;
-    // a corbel where it takes the deck
-    poly(c, [lp(x - PIER_HW * 1.2, W, PIER_TOP + .2), lp(x + PIER_HW * 1.2, W, PIER_TOP + .2),
-             lp(x + PIER_HW * 1.2, W, PIER_TOP - 1.5), lp(x - PIER_HW * 1.2, W, PIER_TOP - 1.5)], '#4e4a3e');
-    c.globalAlpha = .26; c.strokeStyle = '#7a7161'; c.lineWidth = Math.max(1, 1.2 * z);
-    for (let k = 1; k < 4; k++){
-      const t = k / 6, zz = lerp(PIER_TOP, PIER_BOT, t), hwk = lerp(PIER_HW, PIER_HW * .58, t);
-      const a = lp(x - hwk, W, zz), b = lp(x + hwk, W, zz);
+    // the sunward arris: the vertical corner the light actually lands on, which
+    // is what gives a pier a round rather than a printed edge
+    c.strokeStyle = PIER.arris; c.lineWidth = Math.max(1, 1.5 * z);
+    for (let k = 0; k < PIER_SEGS; k++){
+      const t0 = k / PIER_SEGS, t1 = (k + 1) / PIER_SEGS;
+      c.globalAlpha = .38 * (1 - sink(t0));
+      const a = lp(x - lerp(PIER_HW, PIER_HW * .58, t0), W, lerp(PIER_TOP, PIER_BOT, t0));
+      const b = lp(x - lerp(PIER_HW, PIER_HW * .58, t1), W, lerp(PIER_TOP, PIER_BOT, t1));
       c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
     }
     c.globalAlpha = 1;
+    // coursing
+    c.strokeStyle = '#241f19'; c.lineWidth = Math.max(1, 1.1 * z);
+    for (let k = 1; k < 7; k++){
+      const t = k / 9, zz = lerp(PIER_TOP, PIER_BOT, t), hwk = lerp(PIER_HW, PIER_HW * .58, t);
+      c.globalAlpha = .26 * (1 - sink(t));
+      const a = lp(x - hwk, W, zz), b = lp(x + hwk, W, zz);
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+      c.globalAlpha = .18 * (1 - sink(t));
+      c.strokeStyle = '#8a8069';
+      c.beginPath(); c.moveTo(a[0], a[1] + 1.3 * z); c.lineTo(b[0], b[1] + 1.3 * z); c.stroke();
+      c.strokeStyle = '#241f19';
+    }
+    c.globalAlpha = 1;
+    // a corbel where it takes the deck, with the light on its top splay
+    poly(c, [lp(x - PIER_HW * 1.2, W, PIER_TOP + .2), lp(x + PIER_HW * 1.2, W, PIER_TOP + .2),
+             lp(x + PIER_HW * 1.2, W, PIER_TOP - 1.5), lp(x - PIER_HW * 1.2, W, PIER_TOP - 1.5)], PIER.cap);
+    poly(c, [lp(x - PIER_HW * 1.2, W, PIER_TOP + .2), lp(x + PIER_HW * 1.2, W, PIER_TOP + .2),
+             lp(x + PIER_HW * 1.2, W, PIER_TOP - .3), lp(x - PIER_HW * 1.2, W, PIER_TOP - .3)], shade(PIER.cap, 1.22));
+    // Contact. The deck sat ON these and cast nothing, so a hundred tons of
+    // timber floated a pixel above the stone holding it up. The shadow falls
+    // away from the sun, which is down and to the right of the corbel, and it
+    // is strongest right at the joint.
+    c.globalAlpha = .5;
+    poly(c, [lp(x - PIER_HW * 1.2, W, PIER_TOP - 1.5), lp(x + PIER_HW * 1.2, W, PIER_TOP - 1.5),
+             lp(x + PIER_HW * 1.08, W, PIER_TOP - 2.6), lp(x - PIER_HW * 1.08, W, PIER_TOP - 2.6)], '#191510');
+    c.globalAlpha = .28;
+    poly(c, [lp(x - PIER_HW * 1.08, W, PIER_TOP - 2.6), lp(x + PIER_HW * 1.08, W, PIER_TOP - 2.6),
+             lp(x + PIER_HW, W, PIER_TOP - 4.4), lp(x - PIER_HW, W, PIER_TOP - 4.4)], '#191510');
+    c.globalAlpha = 1;
   }
-  // the spandrels: the solid stone between one arch and the next
-  c.fillStyle = 'rgba(32,30,25,.88)';
+  // The spandrels: the solid stone between one arch and the next. It was a
+  // flat black lens, which is a hole, not masonry. An arch has a soffit you
+  // can see up into — darkest at the crown where nothing reaches it, opening
+  // out towards the springing — and the ring of voussoirs around it.
   for (let x = PIER_SPAN / 2; x + PIER_SPAN < C.LANE_LEN; x += PIER_SPAN){
     const a = lp(x + PIER_HW, W, PIER_TOP), b = lp(x + PIER_SPAN - PIER_HW, W, PIER_TOP);
     if (b[0] < -80 || a[0] > LW + 80) continue;
     const m = lp(x + PIER_SPAN / 2, W, PIER_TOP - 11);
+    const arch = () => {
+      c.beginPath();
+      c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]);
+      c.quadraticCurveTo(m[0], m[1], a[0], a[1]);
+      c.closePath();
+    };
+    arch();
+    const ag = c.createLinearGradient(0, Math.min(a[1], b[1]), 0, m[1]);
+    ag.addColorStop(0, '#171310');
+    ag.addColorStop(.45, PIER.soffit);
+    ag.addColorStop(1, mixHex('#332d24', GORGE.void1, .55));
+    c.fillStyle = ag; c.fill();
+    // the ring of stones round the opening, lit on the sunward haunch
+    c.lineWidth = Math.max(1, 1.6 * z);
+    c.globalAlpha = .34; c.strokeStyle = '#6d6553';
+    arch(); c.stroke();
+    c.globalAlpha = 1;
+    // and the shadow the deck throws into the head of the arch
+    c.globalAlpha = .45;
+    const h = lp(x + PIER_SPAN / 2, W, PIER_TOP - 2.2);
     c.beginPath();
     c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]);
-    c.quadraticCurveTo(m[0], m[1], a[0], a[1]);
-    c.closePath(); c.fill();
+    c.quadraticCurveTo(h[0], h[1], a[0], a[1]);
+    c.closePath();
+    c.fillStyle = '#100d0a'; c.fill();
+    c.globalAlpha = 1;
   }
 }
 
@@ -5001,14 +5083,289 @@ function spires(){
   }
   return SPIRES;
 }
+
+/* --------------------------------------------------------------- the gorge
+   What was under the bridge: nothing. drawSky's gradient ran to the bottom of
+   the canvas and its three parallax ridges ran with it, so the distant
+   MOUNTAINS were visible below the deck — a bridge over a hole with a
+   landscape at the bottom of it, which is the one arrangement that cannot
+   happen. The eleven flat triangles laid over that were the only thing in the
+   gap saying "canyon", and they said it in one tone.
+
+   What a canyon does to light is the whole effect: the rim is in the sun, and
+   every step down is darker and BLUER than the step above it, because less of
+   the sky reaches it and more air stands between it and the eye. That is the
+   only rule here, and every number below obeys it.
+
+   Each layer is a full-width crest anchored to the camera by its own parallax
+   rate — the same idiom the sky ridges use, so a wall half a mile back slides
+   past slower than the rock the piers stand on. Nothing is hand-placed and
+   nothing is per-pixel: five crests, a river, two mist banks and a near wall,
+   all of them paths with a gradient in them. */
+const GORGE = {
+  lip:-(C.LANE_W / 2) - 1.1,    // world y of the far rim — the top of the drop
+  void0:'#4c5d64', void1:'#1e2d36', void2:'#070c11',
+};
+// Back to front. `p` is how fast a layer slides against the camera (1 is the
+// rock the bridge stands on), `y` where its lip sits down the visible drop,
+// `amp`/`step` the size of the terraces in it.
+//
+// The first attempt at this drew tall teeth and got a SECOND MOUNTAIN RANGE
+// under the bridge — spikes pointing at the sky, in a hole. A canyon wall
+// stepping away below you is nearly horizontal: ledges and risers, wandering a
+// little, running a long way. The amplitude is a fraction of the gap to the
+// next layer for exactly that reason, and every layer's top tone is darker
+// than the one above it's bottom tone, with no exception, because that
+// ordering IS the depth.
+const GORGE_WALLS = [
+  { p:.13, y:.105, amp:20, step:168, top:'#6c6a5e', bot:'#4e5450', rim:'#9d9d8c' },
+  { p:.22, y:.215, amp:22, step:206, top:'#4a5450', bot:'#374449', rim:'#828a7d' },
+  { p:.34, y:.325, amp:24, step:143, top:'#32404b', bot:'#25323d', rim:'#637274' },
+  { p:.49, y:.440, amp:26, step:187, top:'#222e39', bot:'#17222b', rim:'#4d5c63' },
+  { p:.66, y:.560, amp:24, step:126, top:'#151f29', bot:'#0c141b', rim:'#3a4852' },
+];
+// The wall on YOUR side of the gap, rising into the bottom of the frame. It is
+// the closest rock in the picture and it is looking away from the sun, so it
+// is the darkest thing on screen — which is exactly what gives the five
+// layers above it somewhere to recede to.
+const GORGE_NEAR = { p:1.0, y:.845, amp:34, step:255, top:'#0b1119', bot:'#04070b' };
+const RIVER = { y:.705, h:.020, p:.78 };
+
+// One wall lip, walked left to right: a ledge, the flat run of it, and the
+// riser off the end. `floor` closes the shape down to the bottom of the canvas;
+// pass null and you get the bare profile, which is what the strata lines and
+// the sun on the ledges are drawn from.
+function crestPath(c, y, amp, step, off, seed, floorY){
+  const i0 = Math.floor(-off / step) - 1;
+  const n = Math.ceil(LW / step) + 3;
+  c.beginPath();
+  if (floorY !== null) c.moveTo(-40, floorY);
+  for (let i = 0; i <= n; i++){
+    const k = i0 + i;
+    const a = hash2(k * 1.7 + seed, seed * 2.3 + 1.1);
+    const b = hash2(k * 3.1 + seed, seed * 5.7 + 4.9);
+    const px = k * step + off, py = y + amp * (a - .5) * 2;
+    const w = step * (.40 + b * .36);
+    if (floorY === null && i === 0) c.moveTo(px, py); else c.lineTo(px, py);
+    c.lineTo(px + w, py);
+    c.lineTo(px + w + step * .10, py + amp * (b - .42) * 1.4);
+  }
+  if (floorY !== null){ c.lineTo(LW + 40, floorY); c.closePath(); }
+}
+// SUN sits high and to the left, so what it lands on down here is the TOP of
+// every ledge — the flats, not the risers. Striking them is the same statement
+// RIDGE_RIM makes about the ridges in the sky, made again about the rock under
+// the bridge, and it is what turns a stack of silhouettes into strata.
+function crestRim(c, y, amp, step, off, seed, col, w){
+  const i0 = Math.floor(-off / step) - 1;
+  const n = Math.ceil(LW / step) + 3;
+  c.strokeStyle = col; c.lineWidth = w; c.lineCap = 'butt';
+  c.beginPath();
+  for (let i = 0; i <= n; i++){
+    const k = i0 + i;
+    const a = hash2(k * 1.7 + seed, seed * 2.3 + 1.1);
+    const b = hash2(k * 3.1 + seed, seed * 5.7 + 4.9);
+    const px = k * step + off, py = y + amp * (a - .5) * 2;
+    const ww = step * (.40 + b * .36);
+    if (px > LW + 60 || px + ww < -60) continue;
+    // only part of each flat, or the highlights join up into long straight
+    // lines and the wall grows glass shelves
+    c.moveTo(px + ww * .12, py); c.lineTo(px + ww * (.55 + b * .3), py);
+  }
+  c.stroke();
+}
+// The thing that finally made the gap read as a hole rather than as water:
+// RIBS. A canyon wall is overwhelmingly vertical — buttress, gully, buttress,
+// all the way down — and five horizontal bands across the full width of the
+// screen, however carefully toned, is a lake every time. Each rib is a pair of
+// quads running the whole depth of its layer: the left flank lit, because SUN
+// is to the left, and the right flank in its own shadow.
+function crestRibs(c, y, amp, step, off, seed, depth, lit, dark, a){
+  const i0 = Math.floor(-off / step) - 1;
+  const n = Math.ceil(LW / step) + 3;
+  const yAt = (k) => y + amp * (hash2(k * 1.7 + seed, seed * 2.3 + 1.1) - .5) * 2;
+  for (let i = 0; i <= n; i++){
+    const k = i0 + i;
+    const x0 = k * step + off, x1 = x0 + step;
+    if (x1 < -step || x0 > LW + step) continue;
+    const b = hash2(k * 3.1 + seed, seed * 5.7 + 4.9);
+    const y0 = yAt(k), y1 = yAt(k + 1);
+    const mx = x0 + step * (.30 + b * .34), my = lerp(y0, y1, (mx - x0) / step);
+    const yb = y + depth * (.78 + b * .5);
+    // the foot of a rib is narrower than its head: a buttress tapers, and a
+    // column of parallel-sided quads reads as a row of buildings
+    const tp = step * (.10 + b * .16);
+    c.globalAlpha = a * (.65 + b * .5);
+    poly(c, [[x0, y0], [mx, my], [mx - tp * .4, yb], [x0 + tp, yb]], lit);
+    c.globalAlpha = a * (.95 + (1 - b) * .55);
+    poly(c, [[mx, my], [x1, y1], [x1 - tp, yb], [mx - tp * .4, yb]], dark);
+  }
+  c.globalAlpha = 1;
+}
 function drawChasm(c){
   const S = LS();
+  const rimY = lp(cam.x, GORGE.lip, 0)[1];
+  if (rimY > LH) return;                       // the gap is off the bottom of the screen
+  const H = Math.max(210, LH - rimY);
+  // The teeth are sized against the DROP, not against the zoom: the gorge
+  // always fills the same shape of screen, so scaling its rock by cam.z alone
+  // made the whole canyon go smooth and lake-like the moment you pulled back.
+  const zw = clamp(H / 380, .55, 1.9);
+  const y = (f) => rimY + H * f;
+
+  // The void everything sinks into: warm-grey at the rim, cold and black at
+  // the floor. Drawn first so no layer ever has sky behind it — and given a
+  // broken top edge, because a straight one across the whole canvas is a
+  // SHORELINE. The first version had exactly that and the gorge read as a
+  // lake, which is the same mistake as the mountains showing under the deck:
+  // a hole in the ground does not have a horizon.
+  const vg = c.createLinearGradient(0, rimY - 10, 0, LH);
+  vg.addColorStop(0, GORGE.void0);
+  vg.addColorStop(.42, GORGE.void1);
+  vg.addColorStop(1, GORGE.void2);
+  // and only down as far as the first wall's lip reaches up: everything below
+  // that is covered five times over, and a canvas this size cannot afford to
+  // paint the same 400,000 pixels nine times a frame.
+  crestPath(c, rimY + 9 * zw, 17 * zw, 186 * zw, -cam.x * S * .09, 41,
+    y(GORGE_WALLS[0].y) + GORGE_WALLS[0].amp * 2.4 * zw);
+  c.fillStyle = vg; c.fill();
+
+  // five walls stepping down and back
+  for (let i = 0; i < GORGE_WALLS.length; i++){
+    const w = GORGE_WALLS[i];
+    const wy = y(w.y), amp = w.amp * zw, step = w.step * zw;
+    const off = -cam.x * S * w.p;
+    const next = i + 1 < GORGE_WALLS.length ? y(GORGE_WALLS[i + 1].y) : y(GORGE_NEAR.y);
+    // Each layer stops just below the next one's lip instead of running to the
+    // bottom of the canvas. Five full-height fills stacked on each other is
+    // five times the fill rate for one layer's worth of visible pixels.
+    const floorY = next + (i + 1 < GORGE_WALLS.length ? GORGE_WALLS[i + 1].amp : GORGE_NEAR.amp) * 2.4 * zw;
+    crestPath(c, wy, amp, step, off, i * 3 + 1, floorY);
+    // A ledge is three things going down: the lip in full light, the riser
+    // under it that the sun cannot reach, and the terrace below that. Fill the
+    // whole layer with that sequence and the wall has shelves in it; fill it
+    // with one ramp, as the first pass did, and it has none.
+    const g = c.createLinearGradient(0, wy - amp, 0, next + amp);
+    g.addColorStop(0, shade(w.top, 1.1));
+    g.addColorStop(.14, shade(w.top, .60));
+    g.addColorStop(.42, w.top);
+    g.addColorStop(1, w.bot);
+    c.fillStyle = g; c.fill();
+    // the spurs and gullies down its face
+    // Only the layers you can still see the rock on: by the fourth the wall is
+    // two shades off black and the ribs cost fill rate to say nothing.
+    if (i < 3) crestRibs(c, wy, amp, step * .84, off, i * 3 + 1, (next - wy) * 1.1,
+      shade(w.top, 1.30), shade(w.bot, .48), .32 - i * .02);
+    // bedding planes: the same profile, a little lower each time, which is what
+    // makes the rock read as layered rather than as a cut-out
+    const gap = next - wy;
+    for (let k = 1; k <= 2; k++){
+      c.globalAlpha = (k % 2 ? .22 : .28) * (1 - i * .13);
+      crestPath(c, wy + gap * (k / 2.6), amp * .8, step * 1.15, off, i * 3 + 1, null);
+      c.strokeStyle = k % 2 ? shade(w.top, 1.28) : shade(w.bot, .55);
+      c.lineWidth = Math.max(1, (k % 2 ? 1.4 : 2.2) * zw);
+      c.stroke();
+    }
+    c.globalAlpha = .34 - i * .04;
+    crestRim(c, wy, amp, step, off, i * 3 + 1, w.rim, Math.max(1, 1.9 * zw));
+    c.globalAlpha = 1;
+  }
+
+  // The river, a long way down. It is the only thing in the gorge with any
+  // light left in it, which is what tells you how far down "down" is.
+  const ry = y(RIVER.y), rh = Math.max(3, H * RIVER.h);
+  const roff = -cam.x * S * RIVER.p;
+  const rg = c.createLinearGradient(0, ry - rh * 1.6, 0, ry + rh * 1.6);
+  rg.addColorStop(0, '#131d26'); rg.addColorStop(.30, '#3d5f68');
+  rg.addColorStop(.52, '#4a6f75'); rg.addColorStop(.78, '#26414d');
+  rg.addColorStop(1, '#101923');
+  c.fillStyle = rg; c.fillRect(0, ry - rh * 1.6, LW, rh * 3.2);
+  // Current: pale streaks sliding downstream, slowly, because it is far away.
+  // Kept soft — at full strength this came out as a neon strip laid across the
+  // canyon rather than water a thousand feet down.
+  c.globalAlpha = .16;
+  c.strokeStyle = '#9dbdc0'; c.lineWidth = Math.max(1, 1.1 * zw); c.lineCap = 'round';
+  c.beginPath();
+  for (let i = 0; i < 12; i++){
+    const r = hash2(i * 2.7, 9.1), r2 = hash2(i * 1.3, 4.4);
+    const span = LW + 420;
+    const sx = cyc((i * .137 + r + (G.t * (2.6 + r2 * 3.4) + roff) / span)) * span - 210;
+    const sy = ry + (r2 - .5) * rh * 2.1;
+    c.moveTo(sx, sy); c.lineTo(sx + (30 + r * 54) * zw, sy);
+  }
+  c.stroke(); c.lineCap = 'butt';
+  // and the sun on it. SUN is up and to the left, so the glints crowd the left
+  // of the reach and thin out across it.
+  for (let i = 0; i < 7; i++){
+    const r = hash2(i * 5.3, 2.2), r2 = hash2(i * 8.9, 6.6);
+    const span = LW + 300;
+    const gx = cyc(i * .11 + r * .3 + (G.t * (1.8 + r * 2.2) + roff) / span) * span - 150;
+    const gy = ry + (r2 - .5) * rh * 1.1;
+    const tw = .35 + .65 * Math.abs(Math.sin(G.t * (.7 + r * .8) + i));
+    c.globalAlpha = .30 * tw * clamp(1.3 - gx / LW, .2, 1);
+    ell(c, gx, gy, (4 + r * 9) * zw, Math.max(.6, 1.1 * zw), '#dceee6');
+  }
+  c.globalAlpha = 1;
+
+  // Mist lying on the water. Two banks at different rates, so the gap between
+  // them reads as air rather than as a texture.
+  {
+    const my = ry - H * .022, mh = H * .075;
+    const mg = c.createLinearGradient(0, my - mh, 0, my + mh);
+    mg.addColorStop(0, 'rgba(178,206,208,0)');
+    mg.addColorStop(.44, 'rgba(178,206,208,.24)');
+    mg.addColorStop(1, 'rgba(178,206,208,0)');
+    c.fillStyle = mg;
+    c.globalAlpha = .62 + .18 * Math.sin(G.t * .21);
+    c.fillRect(0, my - mh, LW, mh * 2);
+  }
+  c.globalAlpha = 1;
+
+  // The rock that is actually in the gap with the bridge — world-anchored, so
+  // it slides at the same rate as the piers and reads as the same distance.
+  // Fogged by how deep it stands, which is the rule the whole gorge obeys.
   for (const s of spires()){
     const b = lp(s.x, s.y, s.zb), t = lp(s.x, s.y, s.zb + s.h);
     if (b[0] < -110 || b[0] > LW + 110 || t[1] > LH + 40) continue;
-    const w = s.w * .96 * S;
-    poly(c, [[b[0] - w, b[1]], [t[0], t[1]], [b[0] + w, b[1]]], s.near ? '#1b2a28' : '#22322f');
-    poly(c, [[t[0], t[1]], [b[0] + w, b[1]], [b[0] + w * .3, b[1]]], s.near ? '#263733' : '#2c403b');
+    // Blunt stacks, not spikes. As thin triangles these were eleven black
+    // fangs standing up out of a hole, which is a shark, not a canyon.
+    // These stand a long way BEHIND the span — far enough that at full
+    // strength eleven of them came out as chimneys silhouetted on the
+    // mountains, above the rim of the hole they are supposed to be inside.
+    // Held under the rim and washed into the far wall's own tone, they read as
+    // what they are: buttresses standing off the back wall of the gorge.
+    const w = s.w * 1.15 * S, tw = w * .42;
+    const ty = Math.max(t[1], rimY + 10 * zw);
+    if (b[1] - ty < 6) continue;
+    const f = clamp(-s.y / 55, 0, 1);
+    c.globalAlpha = clamp(.42 - f * .26, .08, .42);
+    const base = s.near ? '#1a2530' : '#22303a';
+    poly(c, [[b[0] - w, b[1]], [t[0] - tw, ty + tw * .35], [t[0], ty], [t[0] + tw, ty + tw * .5],
+             [b[0] + w, b[1]]], mixHex(base, GORGE.void0, f * .85));
+    poly(c, [[t[0], ty], [t[0] + tw, ty + tw * .5], [b[0] + w, b[1]], [b[0] + w * .2, b[1]]],
+      mixHex(shade(base, .6), GORGE.void1, f * .85));
+    c.globalAlpha = 1;
+  }
+
+  // Depth haze over the lot, thickening downward, so the floor of the canyon
+  // is genuinely further away than the rim and not merely darker.
+  const hz = c.createLinearGradient(0, rimY, 0, y(.52));
+  hz.addColorStop(0, 'rgba(140,170,172,.10)');
+  hz.addColorStop(.5, 'rgba(108,142,152,.05)');
+  hz.addColorStop(1, 'rgba(70,98,112,.12)');
+  c.fillStyle = hz; c.fillRect(0, rimY, LW, y(.52) - rimY);
+
+  // and the near wall, closing the frame off at the bottom
+  {
+    const ny = y(GORGE_NEAR.y), amp = GORGE_NEAR.amp * zw, step = GORGE_NEAR.step * zw;
+    const off = -cam.x * S * GORGE_NEAR.p;
+    crestPath(c, ny, amp, step, off, 29, LH + 40);
+    const g = c.createLinearGradient(0, ny - amp, 0, LH);
+    g.addColorStop(0, GORGE_NEAR.top); g.addColorStop(1, GORGE_NEAR.bot);
+    c.fillStyle = g; c.fill();
+    c.globalAlpha = .22;
+    crestRim(c, ny, amp, step, off, 29, '#5d757a', Math.max(1, 2.4 * zw));
+    c.globalAlpha = 1;
   }
 }
 
@@ -7572,13 +7929,23 @@ function drawGround(c){
     c.stroke();
   };
   const main = ROAD.map(p => bp(p[0], p[1]));
-  lay(main, .34, 'rgba(74,58,34,.34)');            // the rut either side
-  lay(main, .24, 'rgba(150,124,80,.36)');          // and the packed earth down the middle
+  // A road is a trench worn into the turf: grass falling away at the edges,
+  // packed earth in the middle, and two wheel ruts down it that are the only
+  // reason it reads as a road rather than as a brown stripe.
+  lay(main, .40, 'rgba(52,72,42,.34)');            // the turf giving way at the verge
+  lay(main, .34, 'rgba(74,58,34,.42)');            // the rut either side
+  lay(main, .24, 'rgba(150,124,80,.42)');          // and the packed earth down the middle
+  lay(main, .17, 'rgba(178,150,100,.26)');         // dried out and lit along its crown
+  c.globalAlpha = .30;
+  for (const d of [-.055, .055])
+    lay(main.map(p => [p[0], p[1] + BSC * d]), .045, 'rgba(58,44,26,.9)');
+  c.globalAlpha = 1;
   // trodden paths from the hall out to every job
   for (const k in NODES){
     const q = bp(NODES[k].gx, NODES[k].gy);
     const mid = [(home[0] + q[0]) / 2 + BSC * .3, (home[1] + q[1]) / 2];
-    for (const [w, col] of [[.22, 'rgba(74,58,34,.26)'], [.13, 'rgba(150,124,80,.30)']]){
+    for (const [w, col] of [[.26, 'rgba(52,72,42,.24)'], [.22, 'rgba(74,58,34,.30)'],
+                            [.13, 'rgba(150,124,80,.34)']]){
       c.strokeStyle = col; c.lineWidth = Math.max(2, BSC * w); c.lineCap = 'round';
       c.beginPath(); c.moveTo(home[0], home[1]);
       c.quadraticCurveTo(mid[0], mid[1], q[0], q[1]);
@@ -7587,28 +7954,77 @@ function drawGround(c){
   }
   c.lineCap = 'butt'; c.lineJoin = 'miter';
   const s = BSC / 34;
+  // The countryside. Every one of these used to be two flat triangles or one
+  // flat quad with a grey smudge under it — hundreds of objects, on the biggest
+  // surface in the game, none of which knew where the light was. They all take
+  // the same rule now: lit on the upper LEFT, shaded on the lower right, and a
+  // shadow thrown by shadow() so it leans the way SUN says, like everything
+  // else that stands on this island.
   for (const it of scatterFor(holdSide)){
     const r = it.r;
     const p = bp(it.gx, it.gy);
     if (p[0] < -60 || p[0] > LW + 60) continue;
     if (p[1] < -60 || p[1] > LH + 60) continue;
+    const v = hash2(it.gx * 3.7, it.gy * 5.1);      // this one's own dice, held for its life
+    const v2 = hash2(it.gx * 1.3 + 9, it.gy * 2.9 + 4);
     if (r < .16){                                     // tree
-      shadow(c, p[0], p[1] + 2, 9 * s, 4 * s, 'rgba(0,0,0,.20)');
-      c.fillStyle = '#57431f'; c.fillRect(p[0] - 1.6 * s, p[1] - 9 * s, 3.2 * s, 9 * s);
-      poly(c, [[p[0] - 9 * s, p[1] - 7 * s], [p[0], p[1] - 26 * s], [p[0] + 9 * s, p[1] - 7 * s]], r < .08 ? '#3f7a3a' : '#4b8c42');
-      poly(c, [[p[0] - 6 * s, p[1] - 14 * s], [p[0], p[1] - 30 * s], [p[0] + 6 * s, p[1] - 14 * s]], '#57a04c');
-    } else if (r < .26){                              // boulder
-      shadow(c, p[0], p[1] + 1, 8 * s, 3.5 * s, 'rgba(0,0,0,.18)');
-      poly(c, [[p[0] - 8 * s, p[1]], [p[0] - 4 * s, p[1] - 7 * s], [p[0] + 4 * s, p[1] - 8 * s], [p[0] + 8 * s, p[1]]], '#7d7f77');
-      poly(c, [[p[0] - 4 * s, p[1] - 7 * s], [p[0] + 4 * s, p[1] - 8 * s], [p[0] + 2 * s, p[1] - 3 * s], [p[0] - 3 * s, p[1] - 3 * s]], '#93958c');
-    } else if (r < .34){                              // shrub
-      ell(c, p[0], p[1] - 3 * s, 7 * s, 5 * s, '#3f6f38');
-      ell(c, p[0] - 3 * s, p[1] - 5 * s, 4 * s, 3.5 * s, '#4b8542');
-    } else {                                          // grass tuft
-      c.strokeStyle = 'rgba(150,190,120,.55)'; c.lineWidth = 1.2;
-      for (let i = -1; i <= 1; i++){
-        c.beginPath(); c.moveTo(p[0] + i * 3 * s, p[1]); c.lineTo(p[0] + i * 4.5 * s, p[1] - 6 * s); c.stroke();
+      const sc = .82 + v * .40, tall = 1 + v2 * .28;
+      shadow(c, p[0], p[1] + 1.5, 10 * s * sc, 4.2 * s * sc, 'rgba(20,34,18,.26)');
+      // trunk, with the light down one side of it
+      c.fillStyle = '#4a3819'; c.fillRect(p[0] - 1.7 * s * sc, p[1] - 9 * s * sc, 3.4 * s * sc, 9 * s * sc);
+      c.fillStyle = '#69512a'; c.fillRect(p[0] - 1.7 * s * sc, p[1] - 9 * s * sc, 1.4 * s * sc, 9 * s * sc);
+      // canopy in two skirts, each one split down the middle into a lit half
+      // and a shaded half — a fir is a cone and a cone has both
+      const green = v > .55 ? '#4f9245' : (v > .25 ? '#478639' : '#3d7a38');
+      for (const [wd, y0, y1, f] of [[9.2, -6.5, -25, 1], [6.4, -13.5, -30.5 * tall, 1.14]]){
+        const W = wd * s * sc, T = y1 * s * sc * tall, B0 = y0 * s * sc;
+        poly(c, [[p[0] - W, p[1] + B0], [p[0], p[1] + T], [p[0] + W * .12, p[1] + B0]],
+          shade(green, 1.22 * f));
+        poly(c, [[p[0] + W * .12, p[1] + B0], [p[0], p[1] + T], [p[0] + W, p[1] + B0]],
+          shade(green, .74 * f));
       }
+      // the sunward edge of the crown, where the light actually lands
+      c.strokeStyle = 'rgba(190,226,140,.45)'; c.lineWidth = Math.max(1, 1.1 * s * sc);
+      c.beginPath();
+      c.moveTo(p[0], p[1] - 30.5 * s * sc * tall);
+      c.lineTo(p[0] - 6.4 * s * sc, p[1] - 13.5 * s * sc);
+      c.stroke();
+    } else if (r < .26){                              // boulder
+      const sc = .8 + v * .5;
+      shadow(c, p[0], p[1] + 1, 8.4 * s * sc, 3.6 * s * sc, 'rgba(20,30,18,.24)');
+      const grey = v2 > .5 ? '#77796f' : '#6d6f66';
+      poly(c, [[p[0] - 8 * s * sc, p[1]], [p[0] - 4.4 * s * sc, p[1] - 7 * s * sc],
+               [p[0] + 4 * s * sc, p[1] - 8 * s * sc], [p[0] + 8 * s * sc, p[1]]], shade(grey, .86));
+      poly(c, [[p[0] - 4.4 * s * sc, p[1] - 7 * s * sc], [p[0] + 4 * s * sc, p[1] - 8 * s * sc],
+               [p[0] + 1.6 * s * sc, p[1] - 2.6 * s * sc], [p[0] - 3.4 * s * sc, p[1] - 2.8 * s * sc]],
+        shade(grey, 1.24));
+      poly(c, [[p[0] + 4 * s * sc, p[1] - 8 * s * sc], [p[0] + 8 * s * sc, p[1]],
+               [p[0] + 1.6 * s * sc, p[1] - 2.6 * s * sc]], shade(grey, .62));
+      // a little of the turf creeping up its foot
+      c.globalAlpha = .5;
+      ell(c, p[0] - 2.2 * s * sc, p[1] - .4 * s, 4 * s * sc, 1.5 * s * sc, '#4a7a3c');
+      c.globalAlpha = 1;
+    } else if (r < .34){                              // shrub
+      const sc = .85 + v * .45;
+      shadow(c, p[0], p[1] + .6, 7 * s * sc, 2.6 * s * sc, 'rgba(20,34,18,.20)');
+      const g2 = v2 > .5 ? '#3f6f38' : '#456f31';
+      ell(c, p[0], p[1] - 3 * s * sc, 7 * s * sc, 5 * s * sc, shade(g2, .82));
+      ell(c, p[0] - 1.4 * s * sc, p[1] - 4.4 * s * sc, 5.4 * s * sc, 4 * s * sc, g2);
+      ell(c, p[0] - 3 * s * sc, p[1] - 5.4 * s * sc, 3.2 * s * sc, 2.6 * s * sc, shade(g2, 1.34));
+    } else {                                          // grass tuft
+      const sc = .8 + v * .5;
+      c.globalAlpha = .35;
+      ell(c, p[0] + 1.2 * s, p[1] + .5 * s, 4 * s * sc, 1.4 * s * sc, '#2f4f2b');
+      c.globalAlpha = 1;
+      c.lineWidth = Math.max(1, .9 * s * sc); c.lineCap = 'round';
+      for (let i = -1; i <= 1; i++){
+        c.strokeStyle = i < 0 ? 'rgba(168,206,124,.44)' : (i === 0 ? 'rgba(126,168,100,.40)' : 'rgba(84,124,74,.38)');
+        c.beginPath();
+        c.moveTo(p[0] + i * 2.2 * s * sc, p[1]);
+        c.lineTo(p[0] + i * 3.4 * s * sc, p[1] - (3.6 + v2 * 2.2) * s * sc);
+        c.stroke();
+      }
+      c.lineCap = 'butt';
     }
   }
 }
@@ -7624,16 +8040,40 @@ const PLAT = { far:-58, near:40, back:60 };
 // ground plane that gets extruded down into the chasm. `outer` is the back
 // wall: invisible from your own hold, and the whole reason it spent this long
 // as a single flat quad while the other two had rock in them.
+// `lit` is the one thing here that is not a colour: how much of SUN a wall
+// actually gets, from its own outward normal rather than from its name. The
+// walls at constant x face left or right — in this projection +x is screen
+// right, which is the far side from the sun, so the wall on the +x boundary of
+// the mesa is the dark one and the wall on the -x boundary is the bright one.
+// That flips between the two holds, which is why it has to be derived and not
+// written down: the enemy island's cliff faces the sun on the side that YOUR
+// island has in shadow, and hard-coding it lit one of the two from the wrong
+// place. The near wall points at the viewer, square to the light, so it sits
+// in the middle — which is where the tones in `base` already had it.
+const PLAT_LIGHT = { near:1.0, sun:1.20, away:.76 };
 function platFaces(side){
   const d = side === 0 ? 1 : -1;
   const inner = side === 0 ? 3 : C.LANE_LEN - 3;
   const outer = inner - d * (PLAT.back + 34);
   const F = PLAT.far, N = PLAT.near;
+  const xLit = (nx) => nx > 0 ? PLAT_LIGHT.away : PLAT_LIGHT.sun;
   return [
-    { k:'near',  a:[outer, N], b:[inner, N], base:'#4a4038', band:'#6a5c4c', band2:'#544738', lip:'#6f6350' },
-    { k:'inner', a:[inner, F], b:[inner, N], base:'#40382e', band:'#5e5142', band2:'#4a3f32', lip:'#655a49' },
-    { k:'outer', a:[outer, F], b:[outer, N], base:'#453c33', band:'#615343', band2:'#4c4133', lip:'#665b4a' },
+    { k:'near',  a:[outer, N], b:[inner, N], base:'#4a4038', band:'#6a5c4c', band2:'#544738', lip:'#6f6350', lit:PLAT_LIGHT.near },
+    { k:'inner', a:[inner, F], b:[inner, N], base:'#40382e', band:'#5e5142', band2:'#4a3f32', lip:'#655a49', lit:xLit(d) },
+    { k:'outer', a:[outer, F], b:[outer, N], base:'#453c33', band:'#615343', band2:'#4c4133', lip:'#665b4a', lit:xLit(-d) },
   ];
+}
+// Two colours, blended. shade() can only take a tone up or down its own hue,
+// and the whole point of the depth rule is that rock does not merely darken as
+// it falls into the gorge — it goes BLUE, towards whatever the air down there
+// is made of. Nothing in the file could say that until now.
+function mixHex(a, b, t){
+  const na = parseInt(a.slice(1), 16), nb = parseInt(b.slice(1), 16);
+  const u = clamp(t, 0, 1);
+  const r = Math.round(lerp((na >> 16) & 255, (nb >> 16) & 255, u));
+  const g = Math.round(lerp((na >> 8) & 255, (nb >> 8) & 255, u));
+  const l = Math.round(lerp(na & 255, nb & 255, u));
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | l).toString(16).slice(1);
 }
 function drawPlateau(c){
   const d = holdSide === 0 ? 1 : -1;
@@ -7648,55 +8088,199 @@ function drawPlateau(c){
   // quad. You never see it from your own hold, so it looked fine right up
   // until you pressed FOE and the enemy island turned out to be sitting on a
   // slab. Iterating means a face cannot be added and then forgotten.
+  const S = LS();
   for (const f of platFaces(holdSide)){
     const q = (t0, t1, z0, z1, col) => {
       const ax = lerp(f.a[0], f.b[0], t0), ay = lerp(f.a[1], f.b[1], t0);
       const bx = lerp(f.a[0], f.b[0], t1), by = lerp(f.a[1], f.b[1], t1);
       poly(c, [e(ax, ay, z0), e(bx, by, z0), e(bx, by, z1), e(ax, ay, z1)], col);
     };
-    q(0, 1, 0, -DROP, f.base);
-    q(0, 1, -DROP * .45, -DROP, shade(f.base, .78));
-    c.globalAlpha = .30;
-    for (let i = 1; i < 7; i++){
-      const z = -DROP * (i / 7), h = 1.1 + (i % 3) * .8;
-      q(0, 1, z, z - h, i % 2 ? f.band : f.band2);
+    // Which way along the wall is towards the sun. The two walls at constant x
+    // run along y and the near wall runs along x, so "left" is a different
+    // direction on each of them — and every buttress on the cliff needs to
+    // know it, or half the island is lit from the wrong side.
+    const ta = e(f.a[0], f.a[1], 0), tb = e(f.b[0], f.b[1], 0);
+    const sunT = tb[0] < ta[0] ? 1 : -1;                     // +1 if rising t goes sunward
+    // The rock itself, in beds rather than as one quad. Two things are running
+    // down it at once: the light drops off as the wall falls away from the
+    // sky, and the colour walks towards the air in the gorge — the same rule
+    // the canyon obeys, applied to the thing standing in it, so the mesa and
+    // the walls behind it belong to one picture instead of two.
+    const NB = 13;
+    for (let i = 0; i < NB; i++){
+      const t0 = i / NB, t1 = (i + 1) / NB;
+      const dep = t0 * t0 * .55 + t0 * .45;                  // darkens faster lower down
+      let col = mixHex(shade(f.base, f.lit * (1.34 - dep * .78)), GORGE.void1, dep * .55);
+      // Skylight. A wall the sun cannot reach is not black — it is looking
+      // straight up at a very large blue thing, and the top of it picks that
+      // up. Without it the shaded face of the mesa, which is the biggest
+      // object on screen from your own hold, was one dead brown.
+      if (f.lit < 1) col = mixHex(col, '#5d7180', (1 - dep) * .30 * (1.1 - f.lit));
+      q(0, 1, -DROP * t0, -DROP * t1 - .01, col);
     }
-    c.globalAlpha = .22;
-    for (let i = 0; i < 9; i++){                     // joints running down the rock
-      const t = (i + .5) / 9, w = (.8 + (i % 2) * .5) / 90;
-      q(t, t + w, -2, -DROP * .78, '#2b251e');
+    // Buttresses. A cliff is not a plane: it stands out and cuts back in, and
+    // without that the biggest flat area in the game is a painted board. Each
+    // panel is a shade off its neighbours with a lit arris on its sunward edge
+    // and the gully beside it in shadow.
+    for (let i = 0; i < 8; i++){
+      const r = hash2(i * 5.7 + holdSide * 17, 2.9), r2 = hash2(i * 3.3, 8.8);
+      const t0 = (i + r * .5) / 8, t1 = t0 + (.30 + r2 * .48) / 8;
+      const zb = -DROP * (.58 + r * .34);
+      c.globalAlpha = .20 + r2 * .16;
+      q(t0, t1, -.4, zb, r2 > .5 ? '#93856c' : '#1f1a15');
+      const eL = sunT > 0 ? t1 : t0, eD = sunT > 0 ? t0 : t1;
+      c.globalAlpha = .22;
+      q(eL - .006, eL + .006, -.4, zb * .92, '#a4957a');     // the arris that catches the sun
+      c.globalAlpha = .26;
+      q(eD - .010, eD + .010, -.4, zb * .96, '#1c1814');     // and the gully beside it
     }
-    c.globalAlpha = .5;
-    q(0, 1, 0, -1.8, f.lip);                         // weathered under the turf
     c.globalAlpha = 1;
-    for (let i = 0; i < 3; i++){                     // and the foot of it going dark
-      const z0 = -DROP * (.55 + i * .15), z1 = z0 - DROP * .15;
-      c.globalAlpha = .22 + i * .26;
-      q(0, 1, z0, z1, '#0c1414');
+    // Bedding planes. Every bed has a top the sun lands on and an underside it
+    // cannot reach, and that pair — not the line between them — is what makes
+    // rock read as rock. Their spacing wanders, because level courses are
+    // masonry and this is a cliff.
+    for (let i = 1; i < 7; i++){
+      const r = hash2(i * 4.3 + holdSide * 11, 7.7);
+      const th = .6 + r * .8;
+      // in pieces, and each piece at its own height. Nine beds run dead level
+      // across a hundred feet of cliff is weatherboarding, not geology — the
+      // near wall came out looking like the side of a shed.
+      for (let j = 0; j < 3; j++){
+        const rj = hash2(i * 7.1 + j * 3.3, holdSide * 5 + 2.2);
+        const rj2 = hash2(j * 9.7 + i, 6.4);
+        if (rj2 < .16) continue;                       // and some of them stop dead
+        const t0 = (j + rj * .3) / 3, t1 = (j + .78 + rj * .3) / 3;
+        const z = -DROP * ((i - .35 + r * .7 + (rj - .5) * .5) / 7);
+        c.globalAlpha = .34 * (1 - i / 12);
+        q(t0, t1, z, z - th, shade(f.band, f.lit * 1.06));
+        c.globalAlpha = .40 * (1 - i / 14);
+        q(t0, t1, z - th, z - th - (.7 + r * .9), shade(f.band2, f.lit * .48));
+      }
+    }
+    c.globalAlpha = 1;
+    // Joints. A crack has a wall the sun gets into and a wall it does not, so
+    // each one is a bright hair against a dark one — the same wedge as a bed,
+    // stood on end.
+    for (let i = 0; i < 11; i++){
+      const r = hash2(i * 2.9 + holdSide * 23, 13.1), r2 = hash2(i * 6.1, 3.7);
+      const t = (i + .18 + r * .64) / 11, w = (.7 + r2 * .9) / 90;
+      const z0 = -1.2 - r2 * 3, z1 = -DROP * (.55 + r * .38);
+      c.globalAlpha = .30;
+      q(t, t + w, z0, z1, '#221d18');
+      c.globalAlpha = .16;
+      q(t - w * .7, t, z0, z1 * .9, shade(f.band, 1.25));
+    }
+    c.globalAlpha = 1;
+    // Where the turf stops and the rock starts: a weathered lip that catches
+    // the light, and under it the hard shadow of the overhang. This join used
+    // to be a single flat line, which is the one thing a cliff edge never is.
+    // The caprock: the band of soil and weathered stone the turf sits on. Its
+    // underside is ragged, because that is where the cliff is coming apart.
+    for (let j = 0; j < 6; j++){
+      const rj = hash2(j * 8.3 + holdSide * 29, 4.1);
+      const t0 = j / 6, t1 = (j + 1.03) / 6;
+      c.globalAlpha = .70;
+      q(t0, t1, .10, -.35 - rj * .35, shade(f.lip, f.lit * 1.42));
+      c.globalAlpha = .60;
+      q(t0, t1, -.35 - rj * .35, -1.6 - rj * 1.9, shade(f.lip, f.lit * .62));
+    }
+    for (let i = 0; i < 3; i++){                     // ambient occlusion under the lip
+      c.globalAlpha = .34 - i * .10;
+      q(0, 1, -1.1 - i * 1.0, -2.4 - i * 1.7, '#12100e');
+    }
+    c.globalAlpha = 1;
+    // and the foot of it drowning in the gorge, in the gorge's own colours
+    for (let i = 0; i < 4; i++){
+      const t0 = .50 + i * .125, t1 = t0 + .13;
+      c.globalAlpha = .16 + i * .22;
+      q(0, 1, -DROP * t0, -DROP * t1, i < 2 ? GORGE.void1 : GORGE.void2);
     }
     c.globalAlpha = 1;
   }
-  // grass top
-  poly(c, [e(outer, F), e(inner, F), e(inner, N), e(outer, N)], '#4c7040');
-  c.globalAlpha = .35;
-  poly(c, [e(outer, N - 8), e(inner, N - 8), e(inner, N), e(outer, N)], '#3d5c33');
-  poly(c, [e(inner - d * 9, F), e(inner, F), e(inner, N), e(inner - d * 9, N)], '#43663a');
-  c.globalAlpha = 1;
-  // Dapple. The mesa is by a distance the largest thing on screen and it was
-  // one flat fill, which made the whole hold read as objects dropped on felt.
-  // The patches are laid out once per side and never move.
-  const S = LS();
+  // ------------------------------------------------------------------ the sward
+  // One gradient over the whole top, thrown from SUN. The mesa is by a
+  // distance the largest object on screen and it was a single flat fill, so
+  // the biggest surface in the game was the only one that did not know where
+  // the light was. Opaque, and laid down ONCE — a flat base with a translucent
+  // gradient over it is two fills of the largest quad in the game every frame,
+  // for a result one fill can state.
+  const K = [e(outer, F), e(inner, F), e(inner, N), e(outer, N)];
+  {
+    const xs = K.map(p => p[0]), ys = K.map(p => p[1]);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs);
+    const y0 = Math.min(...ys), y1 = Math.max(...ys);
+    // from the corner nearest the sun to the one furthest from it
+    const gg = c.createLinearGradient(lerp(x0, x1, SUN.x), y0, lerp(x1, x0, SUN.x), y1);
+    gg.addColorStop(0, '#6d9a52');
+    gg.addColorStop(.38, '#548046');
+    gg.addColorStop(.78, '#456839');
+    gg.addColorStop(1, '#33512f');
+    poly(c, K, gg);
+  }
+  // Dapple: patches of longer and shorter grass, each with the shaded side it
+  // would have if it were a real clump of anything.
   for (const g of grassFor(holdSide)){
     const p = e(g.x, g.y);
     if (p[0] < -90 || p[0] > LW + 90 || p[1] < -70 || p[1] > LH + 70) continue;
-    c.globalAlpha = g.a;
-    ell(c, p[0], p[1], g.rw * .96 * S, g.rh * .60 * S, g.col);
+    const rw = g.rw * .96 * S, rh = g.rh * .60 * S;
+    if (g.k){
+      // a clump: a few overlapping heads, the sunward one brightest
+      c.globalAlpha = g.a * 1.5;
+      const o = shadowOff(rw, rh);
+      ell(c, p[0] + o[0], p[1] + o[1], rw * .9, rh * .9, '#33512e');
+      for (let j = 0; j < 2; j++){
+        const hx = p[0] + (j - .5) * rw * .62, hy = p[1] - j * rh * .2;
+        c.globalAlpha = g.a * 2.1;
+        ell(c, hx, hy, rw * .68, rh * .76, shade(g.col, j === 0 ? 1.18 : .86));
+      }
+    } else {
+      // a tonal wash: no edge, no ring, just ground that is not all one green
+      c.globalAlpha = g.a;
+      ell(c, p[0], p[1], rw, rh, g.col);
+      c.globalAlpha = g.a * .5;
+      ell(c, p[0] - rw * .18, p[1] - rh * .22, rw * .68, rh * .64, shade(g.col, 1.14));
+    }
+  }
+  c.globalAlpha = 1;
+  // The turf goes dark where the ground is about to drop away, because there
+  // is nothing under it bouncing light back up. Without it the grass ends on a
+  // razor line and the island reads as a sticker.
+  for (const f of platFaces(holdSide)){
+    const ax = f.a[0], ay = f.a[1], bx = f.b[0], by = f.b[1];
+    const inx = (ay === N && by === N) ? 0 : -d * 5, iny = (ay === N && by === N) ? -5 : 0;
+    for (let i = 0; i < 3; i++){
+      const u0 = i / 3, u1 = (i + 1) / 3;
+      c.globalAlpha = .13 + i * .15;
+      poly(c, [
+        e(ax + inx * (1 - u0), ay + iny * (1 - u0)), e(bx + inx * (1 - u0), by + iny * (1 - u0)),
+        e(bx + inx * (1 - u1), by + iny * (1 - u1)), e(ax + inx * (1 - u1), ay + iny * (1 - u1)),
+      ], '#25401f');
+    }
+    // The very rim of the turf, catching the light before the ground falls out
+    // from under it — and, hanging over it, the grass that grew past the edge.
+    // A cliff top that ends on a clean cut is a cut, not an edge.
+    c.globalAlpha = .5;
+    poly(c, [e(ax, ay), e(bx, by), e(bx + inx * .16, by + iny * .16), e(ax + inx * .16, ay + iny * .16)],
+      f.lit > 1 ? '#a8d47e' : '#7fa862');
+    c.globalAlpha = 1;
+    for (let j = 0; j < 18; j++){
+      const rj = hash2(j * 3.9 + holdSide * 37, 8.6), rj2 = hash2(j * 6.7, 2.4);
+      if (rj2 < .34) continue;
+      const t = (j + rj) / 18;
+      const gx = lerp(ax, bx, t), gy2 = lerp(ay, by, t);
+      const p0 = e(gx, gy2, .05), p1 = e(gx, gy2, -.45 - rj2 * .7);
+      const w = (.6 + rj * .9) * LS() * .12;
+      c.globalAlpha = .55;
+      poly(c, [[p0[0] - w, p0[1]], [p0[0] + w, p0[1]], [p1[0] + w * .3, p1[1]], [p1[0] - w * .5, p1[1]]],
+        rj > .5 ? '#3f6b34' : '#4d7c3c');
+      c.globalAlpha = 1;
+    }
   }
   c.globalAlpha = 1;
   // the far edge fades into the valley haze instead of ending on a hard line
-  for (let i = 0; i < 3; i++){
-    c.globalAlpha = .15 - i * .045;
-    poly(c, [e(outer, F + i * 4), e(inner, F + i * 4), e(inner, F + i * 4 + 4), e(outer, F + i * 4 + 4)], '#8ea9ac');
+  for (let i = 0; i < 4; i++){
+    c.globalAlpha = .19 - i * .045;
+    poly(c, [e(outer, F + i * 3.5), e(inner, F + i * 3.5), e(inner, F + i * 3.5 + 3.5), e(outer, F + i * 3.5 + 3.5)], '#93aeb0');
   }
   c.globalAlpha = 1;
   // where the road leaves the mesa and meets the bridge
@@ -7716,6 +8300,10 @@ function grassFor(side){
   const x0 = Math.min(inner, outer), x1 = Math.max(inner, outer);
   const COLS = ['#54804a', '#436236', '#5b8a4e', '#6b6042'];
   const out = [];
+  // Two things share this list. The big soft washes say the field is not all
+  // one green; the clumps are the things actually growing in it. One flat fill
+  // read as felt, and a field of nothing but washes read as mould — it needed
+  // both, at very different sizes.
   for (let i = 0; i < 34; i++){
     const hx = hash2(i * 3 + 1 + side * 97, 7), hy = hash2(11, i * 5 + 3 + side * 53);
     const k = hash2(i + side * 31, i * 2 + 5);
@@ -7723,8 +8311,18 @@ function grassFor(side){
     const rw = 5 + hash2(i, 13) * 12;
     out.push({
       x:x0 + hx * (x1 - x0), y:PLAT.far + 4 + hy * (PLAT.near - PLAT.far - 8),
-      rw, rh:rw * (.5 + hash2(i, 19) * .3),
-      col:COLS[ci], a:ci === 3 ? .22 : .18 + hash2(i, 23) * .14,
+      rw, rh:rw * (.5 + hash2(i, 19) * .3), k:0,
+      col:COLS[ci], a:ci === 3 ? .13 : .10 + hash2(i, 23) * .09,
+    });
+  }
+  for (let i = 0; i < 36; i++){
+    const hx = hash2(i * 7 + 5 + side * 41, 29), hy = hash2(31, i * 9 + 11 + side * 67);
+    const k = hash2(i * 2 + side * 13, i + 19);
+    const rw = 1.5 + hash2(i, 37) * 2.6;
+    out.push({
+      x:x0 + hx * (x1 - x0), y:PLAT.far + 4 + hy * (PLAT.near - PLAT.far - 8),
+      rw, rh:rw * (.62 + hash2(i, 43) * .3), k:1,
+      col:COLS[k > .78 ? 2 : (k > .34 ? 0 : 1)], a:.10 + hash2(i, 47) * .07,
     });
   }
   grassCache[side] = out;
