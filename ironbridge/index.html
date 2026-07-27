@@ -1505,14 +1505,14 @@ function dealDmg(src, tgt, amt, o){
   tgt.hp -= dmg; tgt.hitT = .18; tgt.dmgTaken = G.t;
   // A spark where the blow lands. Capped hard so a wave-on-wave brawl cannot
   // bury the frame in particles.
-  if (!HEADLESS && dmg > 0 && G.fx.length < 150){
+  if (dmg > 0 && fxRoom(4)){
     const big = tgt.isHero || tgt.struct || dmg > 60;
     if (big || fxRnd() < .4){
       const col = magic ? '#c9a6ff' : tgt.struct ? '#e8d9b4' : '#ffd08a';
       for (let i = 0, n = big ? 4 : 2; i < n; i++){
         const a = fxRnd() * 6.283, sp = fxRr(1.5, big ? 6 : 3.5);
         G.fx.push({ k:'p', x:tgt.x, y:tgt.y, z:fxRr(.5, 1.4), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5,
-          vz:fxRr(1, 4), t:fxRr(.16, .34), dur:.34, col, r:fxRr(.9, big ? 2.4 : 1.5) });
+          vz:fxRr(1, 4), ...life(fxRr(.16, .34)), col, r:fxRr(.9, big ? 2.4 : 1.5) });
       }
     }
     if (tgt.struct && dmg > 40) shake(Math.min(3, dmg / 90), tgt.x);
@@ -3110,16 +3110,15 @@ function sfx(key, worldX){
    EFFECTS
    ===================================================================== */
 function burstFx(x, y, col, n){
-  if (HEADLESS) return;
-  if (G.fx.length > 260) return;
+  if (!fxRoom(n)) return;
   for (let i = 0; i < n; i++){
     const a = fxRnd() * 6.283, sp = fxRr(1, 6);
     G.fx.push({ k:'p', x, y, z:fxRr(.2, 1.2), vx:Math.cos(a) * sp, vy:Math.sin(a) * sp * .5, vz:fxRr(1, 5),
-      t:fxRr(.35, .8), dur:.8, col, r:fxRr(1.4, 3.2) });
+      ...life(fxRr(.35, .8)), col, r:fxRr(1.4, 3.2) });
   }
 }
-function ringFx(x, y, r, col){ if (!HEADLESS) G.fx.push({ k:'ring', x, y, r, t:.42, dur:.42, col }); }
-function boltFx(x, y, x2, y2, col){ if (!HEADLESS) G.fx.push({ k:'bolt', x, y, x2, y2, t:.22, dur:.22, col }); }
+function ringFx(x, y, r, col){ if (fxRoom(1)) G.fx.push({ k:'ring', x, y, r, t:.42, dur:.42, col }); }
+function boltFx(x, y, x2, y2, col){ if (fxRoom(1)) G.fx.push({ k:'bolt', x, y, x2, y2, t:.22, dur:.22, col }); }
 // How big a damage number is drawn, and how hard it punches in. A scratch and
 // a hit that took a third of somebody printed at exactly the same size, so a
 // brawl was a wall of identical digits and the one number you cared about was
@@ -3197,6 +3196,10 @@ const FX_CAP = 300;
 // inspects it, rather than one of those two needs losing to the other.
 let fxForce = false;
 const fxRoom = (n) => (fxForce || !HEADLESS) && G.fx.length + n < FX_CAP;
+// EVERY maker goes through it. Half of them used to test HEADLESS directly and
+// so ignored the opt-in entirely — which meant the bursts, the sparks and the
+// heal were exactly the effects a headless test could not reach even when it
+// asked to, and a bug in how they were born survived for the life of the file.
 
 function beamFx(x, y, x2, y2, col, w, life){
   if (!fxRoom(1)) return;
@@ -3215,7 +3218,7 @@ function moteFx(x, y, col, n, spread){
   const sp = spread || .8;
   for (let i = 0; i < n; i++)
     G.fx.push({ k:'mote', x:x + fxRr(-sp, sp), y:y + fxRr(-sp * .6, sp * .6), z:fxRr(0, .5),
-      vx:fxRr(-.25, .25), vz:fxRr(1.7, 3.4), col, r:fxRr(.7, 1.6), t:fxRr(.5, .85), dur:.85 });
+      vx:fxRr(-.25, .25), vz:fxRr(1.7, 3.4), col, r:fxRr(.7, 1.6), ...life(fxRr(.5, .85)) });
 }
 
 // The gold second wave and the shake are what mark an ultimate apart from an
@@ -3355,11 +3358,27 @@ function linkFx(x, y, x2, y2, col){
 }
 
 function healFx(x, y, col){
-  if (HEADLESS || G.fx.length > 240) return;
+  if (!fxRoom(6)) return;
   for (let i = 0; i < 6; i++)
     G.fx.push({ k:'p', x:x + fxRr(-.6, .6), y:y + fxRr(-.4, .4), z:fxRr(.3, 1),
-      vx:0, vy:0, vz:fxRr(3, 5.5), t:fxRr(.4, .7), dur:.7, col:col || '#7fdc8a', r:fxRr(1, 2) });
+      vx:0, vy:0, vz:fxRr(3, 5.5), ...life(fxRr(.4, .7)), col:col || '#7fdc8a', r:fxRr(1, 2) });
 }
+// A particle's alpha is t/dur. So handing one a short `t` against a shared
+// `dur` does not shorten its life — it makes it BORN faint. Four bursts in this
+// game varied `t` meaning to vary the lifetime, and the result was that most of
+// every burst popped into existence already half dissolved: a hit spark could
+// appear at .47 alpha and a death mote at .59, and the shortest-lived debris —
+// the sharpest flick in the whole effect — was the faintest thing in it.
+//
+// The dash trail is the one place where a low starting alpha IS the point, and
+// it earns it by setting dur explicitly rather than going through here.
+const life = (t) => ({ t, dur:t });
+// Debris also shrinks as it goes out, rather than holding full size and simply
+// becoming transparent, which reads as a decal fading rather than as something
+// thrown.
+const SPARK = { min:.35 };
+const sparkR = (r, a) => r * (SPARK.min + (1 - SPARK.min) * a);
+
 function fxStep(dt){
   for (let i = G.fx.length - 1; i >= 0; i--){
     const p = G.fx[i]; p.t -= dt;
@@ -4893,7 +4912,8 @@ function drawLane(c){
     const a = clamp(p.t / p.dur, 0, 1);
     if (p.k === 'p'){
       const q = lp(p.x, p.y, p.z);
-      c.globalAlpha = a; ell(c, q[0], q[1], p.r * cam.z, p.r * cam.z, p.col);
+      const pr = sparkR(p.r, a) * cam.z;
+      c.globalAlpha = a; ell(c, q[0], q[1], pr, pr, p.col);
     } else if (p.k === 'ring'){
       const q = lp(p.x, p.y);
       c.globalAlpha = a * .8; c.strokeStyle = p.col; c.lineWidth = 2.5 * cam.z;
@@ -4944,7 +4964,8 @@ function drawLane(c){
       c.lineCap = 'butt';
     } else if (p.k === 'mote'){
       const q = lp(p.x, p.y, p.z);
-      c.globalAlpha = a * .9; ell(c, q[0], q[1], p.r * cam.z, p.r * cam.z, p.col);
+      const mr = sparkR(p.r, a) * cam.z;
+      c.globalAlpha = a * .9; ell(c, q[0], q[1], mr, mr, p.col);
     }
     c.globalAlpha = 1;
   }
@@ -8181,7 +8202,7 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
-  beamFx, arcFx, waveFx, moteFx, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
+  beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
