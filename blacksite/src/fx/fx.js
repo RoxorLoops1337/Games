@@ -473,7 +473,11 @@ varying float vTile, vFog, vViewZ;
 
 void main() {
   if (vCol.a <= 0.001) discard;
-  vec2 cellIdx = vec2(mod(vTile, uGrid.x), floor(vTile / uGrid.x));
+  // Tile rows count from the bottom: a CanvasTexture is uploaded with flipY, so
+  // row 0 of the canvas ends up at the top of UV space. Getting this backwards
+  // silently swaps whole rows of the atlas — smoke drawn with the muzzle-flash
+  // sprite, and every effect subtly wrong in a way that is hard to name.
+  vec2 cellIdx = vec2(mod(vTile, uGrid.x), (uGrid.y - 1.0) - floor(vTile / uGrid.x));
   vec2 uv = (cellIdx + clamp(vUv, 0.002, 0.998)) / uGrid;
   vec4 tex = texture2D(uAtlas, uv);
   float a = tex.a * vCol.a;
@@ -582,7 +586,7 @@ varying vec4 vCol;
 varying float vTile, vFog;
 void main() {
   if (vCol.a <= 0.001) discard;
-  vec2 cellIdx = vec2(mod(vTile, uGrid.x), floor(vTile / uGrid.x));
+  vec2 cellIdx = vec2(mod(vTile, uGrid.x), (uGrid.y - 1.0) - floor(vTile / uGrid.x));
   vec4 tex = texture2D(uAtlas, (cellIdx + clamp(vUv, 0.002, 0.998)) / uGrid);
   float a = tex.a * vCol.a;
   if (a <= 0.002) discard;
@@ -710,7 +714,7 @@ varying vec4 vCol;
 varying float vTile, vFog;
 void main() {
   if (vCol.a <= 0.002) discard;
-  vec2 cellIdx = vec2(mod(vTile, uGrid.x), floor(vTile / uGrid.x));
+  vec2 cellIdx = vec2(mod(vTile, uGrid.x), (uGrid.y - 1.0) - floor(vTile / uGrid.x));
   vec4 tex = texture2D(uAtlas, (cellIdx + clamp(vUv, 0.004, 0.996)) / uGrid);
   float a = tex.a * vCol.a;
   if (a <= 0.003) discard;
@@ -1513,10 +1517,14 @@ function build(G, engine, materials) {
       const sp = rr(4, 15) * e;
       _p.x = x; _p.y = y; _p.z = z;
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + rr(0, 1.2); _p.vz = _dir.z * sp;
-      _p.life = rr(0.28, 0.85); _p.drag = 1.4; _p.grav = 0.85;
-      _p.stretch = rr(0.9, 1.6); _p.turb = 0;
-      c0(0xfffbe8); c1(0xd0350a);
-      _p.s0 = rr(0.030, 0.055); _p.s1 = _p.s0 * 0.35;
+      _p.life = rr(0.24, 0.70); _p.drag = 1.4; _p.grav = 0.85;
+      // Stretch is tuned *shorter* than the physically correct 1/60 s smear.
+      // The honest length reads as a scratch on the lens; a little under it
+      // reads as a spark, because the eye expects a bright head with a hint of
+      // tail rather than a uniform hairline.
+      _p.stretch = rr(0.45, 0.80); _p.turb = 0;
+      c0(0xfff0c4); c1(0xd4300a);
+      _p.s0 = rr(0.035, 0.062); _p.s1 = _p.s0 * 0.4;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.55;
       _p.floor = fy; _p.rest = rr(0.35, 0.6); _p.spin = 0;
       push(addPool);
@@ -1826,7 +1834,7 @@ function build(G, engine, materials) {
       const sp = rr(3, 11);
       _p.x = _mz.x; _p.y = _mz.y; _p.z = _mz.z;
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp; _p.vz = _dir.z * sp;
-      _p.life = rr(0.10, 0.26); _p.drag = 5; _p.grav = 0.7; _p.stretch = 1.3; _p.turb = 0;
+      _p.life = rr(0.10, 0.26); _p.drag = 5; _p.grav = 0.7; _p.stretch = 0.7; _p.turb = 0;
       c0(0xfff6d8); c1(0xd2500c);
       _p.s0 = rr(0.022, 0.040); _p.s1 = 0.006;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.7;
@@ -1946,7 +1954,7 @@ function build(G, engine, materials) {
       const sp = rr(4, 16) * pw;
       _p.x = x; _p.y = y; _p.z = z;
       _p.vx = _dir.x * sp; _p.vy = _dir.y * sp + rr(1, 4); _p.vz = _dir.z * sp;
-      _p.life = rr(0.6, 1.6); _p.drag = 1.1; _p.grav = 0.9; _p.stretch = 1.1; _p.turb = 0.2;
+      _p.life = rr(0.6, 1.6); _p.drag = 1.1; _p.grav = 0.9; _p.stretch = 0.6; _p.turb = 0.2;
       c0(0xffe9b0); c1(0x8f1a02);
       _p.s0 = rr(0.045, 0.09); _p.s1 = 0.012;
       _p.tile = T_STREAK; _p.alpha = 1; _p.rot = 0; _p.fade = 0.8;

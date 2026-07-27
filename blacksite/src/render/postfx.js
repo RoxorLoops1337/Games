@@ -157,8 +157,14 @@ export function createPostFX(G, engine, sky) {
   // ── settings ───────────────────────────────────────────────────────────────
   const enabled = {
     ao: true, volumetrics: true, motionBlur: true, bloom: true,
-    taa: true, grain: true, chromatic: true, vignette: true,
+    taa: true, grain: true, chromatic: true, vignette: true, sharpen: true,
   };
+
+  // How hard the composite's RCAS pushes. Tuned against the mean absolute
+  // Laplacian of the frame: the temporal resolve costs roughly 18% of the
+  // frame's high-frequency energy, and this is the setting that returns it
+  // without pushing into the crunchy over-sharpened look.
+  let sharpenAmount = 0.85;
 
   function useTAA() {
     return !broken && caps.taa && enabled.taa && !!passes.taa && G.settings.quality >= 1;
@@ -188,6 +194,9 @@ export function createPostFX(G, engine, sky) {
     u.uGrain.value = (enabled.grain && G.settings.filmGrain !== false) ? 0.030 : 0.0;
     u.uChromatic.value = (enabled.chromatic && G.settings.chromatic !== false) ? 0.008 : 0.0;
     u.uVignette.value = enabled.vignette ? 0.46 : 0.0;
+    // Only meaningful behind TAA. Without it the frame is already at full
+    // spatial detail and the sharpener would just make the aliasing crisper.
+    u.uSharpen.value = (enabled.sharpen && useTAA()) ? sharpenAmount : 0.0;
   }
 
   // ── allocation ─────────────────────────────────────────────────────────────
@@ -338,6 +347,9 @@ export function createPostFX(G, engine, sky) {
     set exposure(v) { if (passes.composite) passes.composite.uniforms.uExposure.value = v; },
     get bloomStrength() { return passes.composite ? passes.composite.uniforms.uBloom.value : 0; },
     set bloomStrength(v) { if (passes.composite) passes.composite.uniforms.uBloom.value = v; },
+    // 0 = off, 1 = the strongest lobe RCAS will allow without overshoot.
+    get sharpen() { return sharpenAmount; },
+    set sharpen(v) { sharpenAmount = v; applySettings(); },
 
     dispose() {
       disposeAll([workA, workB, ldr]);

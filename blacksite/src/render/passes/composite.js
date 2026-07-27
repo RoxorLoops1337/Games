@@ -39,6 +39,7 @@ uniform float uChromatic;
 uniform float uVignette;
 uniform float uDistortion;
 uniform float uSaturation;
+uniform float uSharpen;
 uniform vec3 uShadowTint;
 uniform vec3 uHighlightTint;
 
@@ -112,6 +113,46 @@ vec3 lin2srgb( vec3 c ){
   return mix( c * 12.92, 1.055 * pow( c, vec3( 1.0 / 2.4 ) ) - 0.055, step( vec3( 0.0031308 ), c ) );
 }
 
+// A reversible squash into 0..1, so the sharpener below can assume a display
+// range while still operating on HDR data. Sharpening after the tonemap would
+// mean tonemapping five taps instead of one.
+vec3 tmap( vec3 c ){ return c / ( 1.0 + max( c.r, max( c.g, c.b ) ) ); }
+vec3 untmap( vec3 c ){ return c / max( 1.0 - max( c.r, max( c.g, c.b ) ), 1e-4 ); }
+
+// AMD's RCAS, returned as a delta so the aberrated colour can keep its own
+// lateral offsets.
+//
+// A temporal resolve is a weighted average over a jittered history, which makes
+// it a low-pass filter by construction — TAA always costs high-frequency detail,
+// and the fix is to put it back rather than to weaken the accumulation, since
+// weakening it just brings the shimmer back. An unsharp mask would do it by
+// adding a scaled high-pass, but that overshoots and rings on any edge already
+// at full contrast — here that is the sky/silo line. RCAS instead solves, per
+// channel, for the largest sharpening lobe that still leaves the result inside
+// the 3×3 cross's own min/max. Detail returns; a halo is arithmetically
+// impossible. Folded into this shader because the composite already reads this
+// texel and a separate pass would cost a full-resolution round trip.
+vec3 sharpenDelta( vec2 uv, vec2 texel ){
+  vec3 e = tmap( texture2D( tColor, uv ).rgb );
+  vec3 b = tmap( texture2D( tColor, uv + vec2( 0.0, -texel.y ) ).rgb );
+  vec3 d = tmap( texture2D( tColor, uv + vec2( -texel.x, 0.0 ) ).rgb );
+  vec3 f = tmap( texture2D( tColor, uv + vec2(  texel.x, 0.0 ) ).rgb );
+  vec3 h = tmap( texture2D( tColor, uv + vec2( 0.0,  texel.y ) ).rgb );
+
+  vec3 mn4 = min( min( b, d ), min( f, h ) );
+  vec3 mx4 = max( max( b, d ), max( f, h ) );
+
+  vec3 hitMin = min( mn4, e ) / max( 4.0 * mx4, 1e-4 );
+  vec3 hitMax = ( vec3( 1.0 ) - max( mx4, e ) ) / min( 4.0 * mn4 - 4.0, -1e-4 );
+  vec3 lobeRGB = max( -hitMin, hitMax );
+  // The least-negative channel lobe wins: taking the strongest would let one
+  // channel sharpen harder than the others and shift the hue of the edge.
+  float lobe = max( -0.1875, min( 0.0, max( lobeRGB.r, max( lobeRGB.g, lobeRGB.b ) ) ) ) * uSharpen;
+
+  vec3 sharp = ( e + lobe * ( b + d + f + h ) ) / ( 1.0 + 4.0 * lobe );
+  return untmap( sharp ) - untmap( e );
+}
+
 void main(){
   vec2 centred = vUv - 0.5;
   float r2 = dot( centred, centred );
@@ -128,6 +169,10 @@ void main(){
   col.r = texture2D( tColor, clamp( base + ca, vec2( 0.0 ), vec2( 1.0 ) ) ).r;
   col.g = texture2D( tColor, base ).g;
   col.b = texture2D( tColor, clamp( base - ca, vec2( 0.0 ), vec2( 1.0 ) ) ).b;
+
+  // Sharpen before the bloom is added: bloom is a deliberately soft signal and
+  // running a detail filter over it only amplifies its own sampling structure.
+  if ( uSharpen > 0.0 ) col += sharpenDelta( base, 1.0 / uResolution );
 
   col += texture2D( tBloom, base ).rgb * uBloom;
   col *= uExposure;
@@ -164,6 +209,10 @@ export function createCompositePass(renderer, opts = {}) {
     uVignette: { value: 0.46 },
     uDistortion: { value: 0.018 },
     uSaturation: { value: 1.06 },
+    // Driven by the chain: full strength when the temporal filter is running,
+    // zero when it is not, because sharpening an un-antialiased frame just
+    // makes the aliasing crisper.
+    uSharpen: { value: 0.0 },
     uShadowTint: { value: new THREE.Vector3(0.90, 1.005, 1.10) },
     uHighlightTint: { value: new THREE.Vector3(1.055, 1.0, 0.90) },
   });

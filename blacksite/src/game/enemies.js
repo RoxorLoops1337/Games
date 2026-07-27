@@ -375,9 +375,14 @@ function readEnemy(rig, e, G, dt) {
     feetY = rig.groundHit ? rig.groundY : p.y - (Number.isFinite(e.eye) ? e.eye : 0);
   }
 
+  const fresh = rig.spawnT === 0;
   rig.prev.copy(rig.pos);
   rig.pos.set(p.x, feetY, p.z);
-  if (rig.spawnT === 0) rig.prev.copy(rig.pos);
+  // A recycled rig still has the last man's feet nailed to the last man's floor,
+  // and a body the sim teleported has left its own behind. Either way the plant
+  // has to be abandoned, or the soldier stands there doing the splits.
+  const jumped = fresh || rig.prev.distanceToSquared(rig.pos) > 2.25;
+  if (fresh) rig.prev.copy(rig.pos);
 
   if (finite3(e.vel)) rig.vel.set(e.vel.x, 0, e.vel.z);
   else if (dt > 1e-5) rig.vel.set((rig.pos.x - rig.prev.x) / dt, 0, (rig.pos.z - rig.prev.z) / dt);
@@ -399,7 +404,8 @@ function readEnemy(rig, e, G, dt) {
   else if (off < -1.05) want = rig.aimYaw + 1.05;
   const turn = wrapPi(want - rig.feetYaw);
   const urgency = 0.9 + rig.moveW * 14 + smoothstep(0.45, 1.0, Math.abs(turn)) * 11;
-  rig.feetYaw = wrapPi(rig.feetYaw + turn * (1 - Math.exp(-urgency * dt)));
+  rig.feetYaw = fresh ? want : wrapPi(rig.feetYaw + turn * (1 - Math.exp(-urgency * dt)));
+  if (jumped) replantFeet(rig);
 
   const crouch = e.stance === 'crouch' || e.stance === 'prone' || !!e.crouch || RE_CROUCH.test(state);
   rig.crouchW = approach(rig.crouchW, crouch ? 1 : 0, 8, dt);
@@ -824,6 +830,15 @@ function keyToRig(rig, k, out) {
 // ── legs and feet ────────────────────────────────────────────────────────────
 
 const _plant = new THREE.Vector3();
+
+function replantFeet(rig) {
+  for (let i = 0; i < 2; i++) {
+    const f = rig.feet[i];
+    rigToWorld(rig, f.side * 0.098, DIM.ankleY, f.side * 0.03, f.world);
+    f.lift.copy(f.world);
+    f.planted = true; f.shuffle = -1; f.pitch = 0; f.groundY = rig.pos.y;
+  }
+}
 
 function updateFeet(rig, dt, G, sN) {
   const D = rig.duty;

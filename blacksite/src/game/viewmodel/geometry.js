@@ -257,8 +257,14 @@ export function shade(geo, hex, opts = {}) {
       k += wear * 0.35 * Math.max(0, nrm.getY(i));
     }
     if (ao > 0) {
+      // Two cheap occlusion terms standing in for the ambient shadow the view
+      // scene cannot cast: height within the part, because the underside of a
+      // receiver never sees the sky, and how far the normal faces down, because
+      // that is where a real bake would go dark. Without them every surface
+      // returns the same irradiance and the weapon reads as one flat cut-out.
       const t = (pos.getY(i) - _bb.min.y) / yr;
-      k *= 1 - ao * (1 - t) * (1 - t);
+      const down = 0.5 - 0.5 * nrm.getY(i);
+      k *= 1 - ao * (0.55 * (1 - t) * (1 - t) + 0.45 * down * down);
     }
     if (grain > 0) {
       const h = Math.sin(pos.getX(i) * 517.3 + pos.getY(i) * 311.7 + pos.getZ(i) * 727.1) * 43758.5453;

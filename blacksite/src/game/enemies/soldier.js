@@ -316,10 +316,10 @@ function buildBodyParts() {
   // what the reference wears anyway.
   add(place(capsule(0.050, 0.055), 0, 1.470, -0.005), COL.face, SURF.skin,
     segment(B.neck, B.chest, B.head, 1.53, 1.40, 0.06, 0.06, 0.45, 0.35));
-  add(place(ellipsoid(0.094, 0.113, 0.102), 0, 1.628, -0.004), COL.face, SURF.cloth, rigid(B.head));
+  add(place(ellipsoid(0.087, 0.108, 0.096), 0, 1.626, -0.004), COL.face, SURF.cloth, rigid(B.head));
   add(place(ellipsoid(0.070, 0.030, 0.022, 8, 4), 0, 1.652, -0.090), COL.skin, SURF.skin, rigid(B.head));
   // Helmet: a cut sphere, a brim, and the rail furniture that breaks its outline.
-  const dome = new THREE.SphereGeometry(0.129, 10, 6, 0, Math.PI * 2, 0, 1.78);
+  const dome = new THREE.SphereGeometry(0.118, 10, 6, 0, Math.PI * 2, 0, 1.78);
   dome.scale(1, 1.02, 1.06);
   add(place(dome, 0, 1.636, 0.004), COL.helmet, SURF.hard, rigid(B.head));
   add(place(roundBox(0.150, 0.030, 0.060, 0.012), 0, 1.664, -0.104), COL.helmet, SURF.hard, rigid(B.head));

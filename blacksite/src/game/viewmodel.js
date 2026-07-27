@@ -30,7 +30,8 @@
 
 import * as THREE from 'three';
 import * as C from '../core/constants.js';
-import { clamp, lerp, smooth } from '../core/state.js';
+import { clamp, lerp, smooth, vec3 } from '../core/state.js';
+import { raycast } from '../world/collision.js';
 import { createGunMaterials } from './viewmodel/gunmetal.js';
 import { buildArsenal, pickModel } from './viewmodel/guns.js';
 
@@ -88,7 +89,11 @@ export function createViewmodel(G, engine, materials) {
   const fill = new THREE.HemisphereLight(0x0a0c10, 0x40382e, 0.16);
   engine.view.add(key, keyTarget, fill);
   key.target = keyTarget;
-  const sun = { light: null, dir: new THREE.Vector3(-0.42, 0.34, -0.62).normalize(), search: 0 };
+  const sun = {
+    light: null, dir: new THREE.Vector3(-0.42, 0.34, -0.62).normalize(), search: 0,
+    // How much of the sun the player can actually see, smoothed. See syncLights.
+    vis: 1, probe: 0, ray: vec3(), org: vec3(),
+  };
 
   // ── animation state ────────────────────────────────────────────────────────
   const st = {
@@ -573,6 +578,29 @@ export function createViewmodel(G, engine, materials) {
         fill.intensity = key.intensity * 0.11 + 0.03;
       }
     }
+    // Is the player standing in the sun at all?
+    //
+    // This is the difference between a weapon that is in the scene and one that
+    // is in front of it. The world has shadow maps; the view scene deliberately
+    // does not, so without this the weapon stays brightly sunlit while the
+    // player walks into a container bay and everything around them goes black —
+    // and a lit object against an unlit background reads as a HUD element, not
+    // as something being held. One ray every sixth frame, smoothed over a fifth
+    // of a second so a doorway does not snap.
+    sun.probe -= dt;
+    if (sun.probe <= 0 && G.world && G.world.grid) {
+      sun.probe = 0.10;
+      sun.org.x = G.player.pos.x; sun.org.y = G.player.pos.y; sun.org.z = G.player.pos.z;
+      sun.ray.x = sun.dir.x; sun.ray.y = sun.dir.y; sun.ray.z = sun.dir.z;
+      let blocked = false;
+      try { blocked = !!raycast(G.world, sun.org, sun.ray, 45); } catch { blocked = false; }
+      sun.visTarget = blocked ? 0 : 1;
+    }
+    sun.vis = smooth(sun.vis, sun.visTarget === undefined ? 1 : sun.visTarget, 5.5, dt);
+    // Never all the way off: even in full shade the sky still reaches the gun,
+    // and that residual is what keeps the chamfers legible in a doorway.
+    key.intensity *= 0.10 + 0.90 * sun.vis;
+
     const at = engine.viewCam.position;
     keyTarget.position.copy(at);
     key.position.copy(at).addScaledVector(sun.dir, 6);
