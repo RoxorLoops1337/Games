@@ -11271,6 +11271,99 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.fxForce = false;
 }
 
+{
+  // THE GRADE. The picture had no ends to it: sampled off the real canvas, six
+  // in ten world pixels sat between luma .30 and .50, nothing reached black,
+  // nothing reached white — and the values were the wrong way round, the Ember
+  // Host's masonry measuring L .785 against a sky of L .633. Stonework cannot
+  // out-value the sky it stands in front of; that is not a look, it is a
+  // missing grade. Two halves: cap the stone family, then put a floor and a
+  // ceiling on the whole frame.
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (.2126 * ((n >> 16) & 255) + .7152 * ((n >> 8) & 255) + .0722 * (n & 255)) / 255;
+  };
+  // ---- the stone family. A lit face is the top eighth of a chamfer catching
+  // the sun, not a source of its own.
+  const rat = IB.STONE_TONE.map((h, i) => lum(IB.STONE_TONE_LIT[i]) / lum(h));
+  t.ok(Math.min(...rat) > 1.005,
+    'the lit face of a course is still brighter than its body (x' + Math.min(...rat).toFixed(3) + ')');
+  // The failure this replaces is x1.10, which put the peak of the family at
+  // #f6f3e0 — paper, in front of a sky that never gets near it. And the
+  // failure a cap could introduce instead is a lit face DARKER than the body
+  // it caps, which is an inverted bevel; the line above rules that one out.
+  t.ok(Math.max(...rat) < 1.08,
+    'and no brighter than a chamfer can honestly be (x' + Math.max(...rat).toFixed(3) + ')');
+  const peak = Math.max(...IB.STONE_TONE_LIT.map(lum));
+  t.ok(peak < lum('#f0ede0'), 'so the brightest masonry in the game is under paper white (' + peak.toFixed(3) + ')');
+  t.ok(Math.max(...IB.STONE_TONE_DARK.map(lum)) < peak, 'and the shaded family is under the lit one');
+
+  // ---- the frame's two ends. A black point that is heaviest at the bottom,
+  // where the gorge is, and a white point on the sun.
+  t.ok(IB.POST.floorA > .1, 'the frame is given a black point at the bottom (' + IB.POST.floorA + ')');
+  t.ok(IB.POST.sunA > .05, 'and a white point at the sun (' + IB.POST.sunA + ')');
+  t.ok(IB.POST.floorA > IB.POST.zenith, 'and the weight of it is at the bottom, not the top');
+  // The ramp goes to nothing at the horizon and comes back under it. Without
+  // the knee the masonry band gets almost none of the floor, and the masonry
+  // band is the thing this whole fix is about — a straight top-to-bottom ramp
+  // is the degenerate version and it measures 4% short of the target.
+  t.ok(IB.POST.horizon > 0 && IB.POST.horizon < IB.POST.knee && IB.POST.knee < 1,
+    'the ramp bottoms out at the horizon and comes back under it (' + IB.POST.horizon + ' -> ' + IB.POST.knee + ')');
+  t.ok(IB.POST.kneeA > 0 && IB.POST.kneeA < IB.POST.floorA,
+    'and keeps climbing after the knee (' + IB.POST.kneeA + ' -> ' + IB.POST.floorA + ')');
+  // The clouds were carrying more contrast and more internal detail than the
+  // midground standing in front of them, which is depth inverted. The lid on
+  // them is this one stop, and a zenith of zero is exactly the picture that
+  // had the problem.
+  t.ok(IB.POST.zenith > .05, 'the ramp comes back at the zenith, which is what caps the clouds (' + IB.POST.zenith + ')');
+  // A warm/cool axis, or it is a brightness change rather than a grade. Both
+  // halves painted the same colour would pass every test above.
+  const rgb = (s) => s.split(',').map(Number);
+  const [fr, , fb] = rgb(IB.POST.floor), [sr, , sb] = rgb(IB.POST.sun);
+  t.ok(fb > fr + 20, 'the shadow the frame falls into is cool (' + IB.POST.floor + ')');
+  t.ok(sr > sb + 20, 'and the light it is lifted by is warm (' + IB.POST.sun + ')');
+
+  // ---- where it sits on the quality ladder. It is two blits; the bright pass
+  // is eight multiplies and two blurs. So the grade has to outlive the bloom
+  // all the way down, or a slow machine loses the ends of the picture and
+  // keeps the dearest thing in the chain.
+  const chain = String(IB.postFx);
+  t.ok(/lvl >= 2 && POST\.bloom/.test(chain), 'the bright pass is gated at tier 2');
+  t.ok(/lvl >= 3 && POST\.ca/.test(chain), 'the aberration at tier 3');
+  t.ok(/\n\s*postGrade\(c, P, W, H, lvl\);/.test(chain),
+    'and the grade at no tier at all — it runs whenever the pass runs');
+
+  // And it really does lay both ends down at the bottom tier. Driven with a
+  // recording context, because a dial being set is not the same as a fill
+  // happening: the whole grade sat behind `lvl >= 1` once and nobody noticed.
+  {
+    const ops = [];
+    const cx = {
+      canvas:{ width:200, height:100 }, filter:'none', globalAlpha:1,
+      globalCompositeOperation:'source-over', fillStyle:'#000000',
+      fillRect(){ ops.push(['fill', cx.globalCompositeOperation, cx.fillStyle]); },
+      drawImage(img){ ops.push(['blit', cx.globalCompositeOperation, img]); },
+    };
+    const P = { soft:false, lit:'#808080', pat:[], gm:{ canvas:'FLOOR' }, gs:{ canvas:'SUN' } };
+    IB.postGrade(cx, P, 200, 100, 0);
+    const at = (m, img) => ops.findIndex(o => o[0] === 'blit' && o[1] === m && o[2] === img);
+    t.ok(at('multiply', 'FLOOR') >= 0, 'the black point is multiplied over the world at the lowest tier');
+    t.ok(at('screen', 'SUN') > at('multiply', 'FLOOR'),
+      'and the white point screened on top of it, in that order — a floor laid over a ceiling eats it');
+    t.ok(cx.globalCompositeOperation === 'source-over',
+      'and the pass hands the context back in a state the HUD can draw in');
+    // The grain is the tier above and must NOT have run here — if it had, the
+    // two assertions above would be true of a chain that never got cheaper.
+    t.ok(!ops.some(o => o[1] === 'overlay'), 'and no grain, which belongs a tier up');
+  }
+  // Frame cost. Both ends are ramps that only change when the frame does, so
+  // they are baked once and blitted — and a STRETCHED blit costs a software
+  // rasteriser more than the gradient fill it replaced, which is the whole
+  // reason this number is 1 and not 4.
+  t.ok(IB.POST.gDiv >= 1, 'the grade buffers are baked at frame scale or under (' + IB.POST.gDiv + ')');
+  t.ok(IB.POST.sunR > .4, 'and the sun lift reaches across the frame (' + IB.POST.sunR + ')');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
