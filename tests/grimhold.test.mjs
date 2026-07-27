@@ -32,16 +32,23 @@ function loadGame(store){
     if (!okColour(c)) throw new SyntaxError(`${where}: '${c}' is not a valid colour`);
   };
   const stopCheck = checkColour('addColorStop');
+  // Every colour the frame paints with, when armed. Art is not testable by
+  // pixel here, but "did this frame reach for the bolt's iron" is — and it is
+  // the difference between a draw branch existing and being wired up.
+  const paint = { on:false, seen:[] };
   const ctx = new Proxy({}, { get(_t, k){
     if (k === 'createLinearGradient' || k === 'createRadialGradient')
-      return () => ({ addColorStop: (_pos, col) => stopCheck(col) });
+      return () => ({ addColorStop: (_pos, col) => { stopCheck(col); if (paint.on) paint.seen.push(col); } });
     if (k === 'measureText') return () => ({ width: 10 });
     if (k === 'getImageData') return (a,b,w,h) => ({ data:new Uint8ClampedArray(w*h*4), width:w, height:h });
     if (k === 'createImageData') return (w,h) => ({ data:new Uint8ClampedArray(w*h*4), width:w, height:h });
     if (k === 'canvas') return { width: 800, height: 1400 };
     return noop;
   }, set(_t, k, v){
-    if (k === 'fillStyle' || k === 'strokeStyle' || k === 'shadowColor') checkColour(k)(v);
+    if (k === 'fillStyle' || k === 'strokeStyle' || k === 'shadowColor'){
+      checkColour(k)(v);
+      if (paint.on) paint.seen.push(v);
+    }
     return true;
   } });
   const mkEl = () => new Proxy({
@@ -74,6 +81,8 @@ function loadGame(store){
   global.__HQ_HEADLESS__ = true;
 
   eval('(function(){' + code + '\n})()');
+  // each loaded game owns its own recorder — a later load must not steal it
+  globalThis.HQ.__paint = paint;
   return globalThis.HQ;
 }
 
@@ -110,6 +119,16 @@ function rig(seq){
     return v;
   });
 }
+// Draw one frame and hand back every colour it painted with.
+function paintOf(fn){
+  const P = HQ.__paint;
+  P.seen = []; P.on = true;
+  try { if (fn) fn(); HQ.draw(); } finally { P.on = false; }
+  return P.seen;
+}
+const painted = (list, hex) => list.some(c => String(c).toLowerCase() === hex.toLowerCase());
+const paintedLike = (list, re) => list.some(c => re.test(String(c)));
+
 const ALL_SKULLS = () => rig([0.0]);          // ri(6) === 0 → skull, and pick() → first
 const ALL_SHIELDS = () => rig([0.9]);         // ri(6) === 5 → black shield
 const NO_SHIELDS = () => rig([0.5]);          // ri(6) === 3 → white shield
@@ -3577,28 +3596,68 @@ t.test('bosses: he speaks on his last Body Point, once, and only him', () => {
 
 /* ---------------------------------------------------------- lying mimics */
 
-t.test('mimics: a deep floor may have one chest that is not a chest, and never a paid one', () => {
+t.test('mimics: a deep floor may have one piece of furniture that is not furniture', () => {
   t.eq(HQ.LIE_FROM, 3, 'not on the first two floors');
   t.ok(HQ.LIE_CHANCE > .2 && HQ.LIE_CHANCE < .6, 'and not on every one after');
   let seen = 0, shallow = 0;
-  for (let i = 0; i < 60; i++){
+  const kinds = new Set();
+  for (let i = 0; i < 90; i++){
     runAt(6);
-    const lies = HQ.lyingChests();
+    const lies = HQ.liars();
     if (!lies.length) continue;
     seen++;
     t.eq(lies.length, 1, 'never more than one on a floor');
-    t.ok(!lies[0].quest, 'never the quest chest');
+    t.ok(!lies[0].quest, 'never a quest piece');
     t.ok(!lies[0].vault, 'never one inside a vault you paid to open');
-    t.eq(lies[0].t, 'chest', 'and it is pretending to be a chest');
+    t.ok(HQ.LIARS[lies[0].t], `${lies[0].t} is something that can lie`);
+    kinds.add(lies[0].t);
   }
-  t.ok(seen > 5, `depth 6 grows them (saw ${seen}/60)`);
-  for (let i = 0; i < 25; i++){ runAt(2); shallow += HQ.lyingChests().length; }
+  t.ok(seen > 8, `depth 6 grows them (saw ${seen}/90)`);
+  t.ok(kinds.size >= 2, `and not always the same thing (${[...kinds].join(', ')})`);
+  for (let i = 0; i < 25; i++){ runAt(2); shallow += HQ.liars().length; }
   t.eq(shallow, 0, 'and the shallow floors are honest');
 
   // the authored campaign is never touched
   for (let qi = 0; qi < HQ.QUESTS.length; qi++){
     fresh(qi);
-    t.eq(HQ.lyingChests().length, 0, `quest ${qi} has no mimics hiding in it`);
+    t.eq(HQ.liars().length, 0, `quest ${qi} has nothing hiding in it`);
+  }
+});
+
+t.test('liars: each kind lies as the thing it is, and brings what that thing hides', () => {
+  t.ok(HQ.LIAR_TYPES.length >= 3, 'three things can lie');
+  for (const key of HQ.LIAR_TYPES){
+    const L = HQ.LIARS[key];
+    t.ok(HQ.FURN[key], `${key} is real furniture when it is telling the truth`);
+    t.ok(HQ.MONSTERS[L.mt], `${key} turns into something real`);
+    t.ok(L.banner && L.banner.length > 3, `${key} has a banner`);
+    t.ok(L.ambush && L.ambush.length > 20, `${key} has a line for the ambush`);
+    t.ok(L.quiet && L.quiet.length > 20, `${key} has a line for being caught out`);
+    t.ok(L.col && L.col[0] === '#', `${key} throws the right colour when it goes`);
+  }
+  // a chest is a mimic, a tomb is undead, a rack is what was wearing the armour
+  t.eq(HQ.LIARS.chest.mt, 'mimic', 'a chest has teeth');
+  t.ok(HQ.MONSTERS[HQ.LIARS.tomb.mt].undead, 'a tomb holds something that was buried');
+  t.ok(!HQ.MONSTERS[HQ.LIARS.rack.mt].undead, 'and the armour was somebody, not something');
+
+  // each springs into its own monster on its own square
+  for (const key of HQ.LIAR_TYPES){
+    runAt(5);
+    HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+    HQ.G.q.furn.forEach(f => { delete f.lie; });
+    const r = HQ.ROOMS[4];
+    HQ.G.q.furn = HQ.G.q.furn.filter(f => f.r !== 4);
+    emptyRoom(4);
+    const f = { t:key, r:4, x:r.x + 1, y:r.y + 1, w:HQ.FURN[key].w, h:HQ.FURN[key].h,
+                rot:0, quest:null, taken:false, searched:false, lie:true };
+    HQ.G.q.furn.push(f);
+    const m = HQ.springLiar(f, null, true);
+    t.ok(m, `${key} stops pretending`);
+    t.eq(m.mt, HQ.LIARS[key].mt, `${key} was hiding a ${HQ.LIARS[key].mt}`);
+    t.eq(m.x, f.x, `${key} stands where it was`);
+    t.eq(m.y, f.y, 'exactly');
+    t.ok(m.awake, 'and awake');
+    t.eq(HQ.liars().length, 0, 'and nothing left pretending');
   }
 });
 
@@ -3998,6 +4057,119 @@ t.test('draft: the tab you are on survives taking a boon, and the stairs still w
   HQ.beginFloor();
   t.eq(HQ.G.run.depth, depth0 + 1, 'and it takes you down');
   t.ok(HQ.G.q, 'onto a floor');
+});
+
+/* -------------------------------------------------- a bolt you can see */
+
+t.test('bolts: a trial-bolted door is drawn barred, and an ordinary shut door is not', () => {
+  runAt(5);
+  const rid = 4;
+  HQ.G.q.trial = null;
+  HQ.G.q.trialRoom = { room: rid, kind: 'clean' };
+  HQ.startTrial();
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+
+  // before it breaks: the doors are ordinary
+  const before = paintOf();
+  t.ok(!painted(before, '#2b2126'), 'no brackets on the board yet');
+  t.ok(!paintedLike(before, /^rgba\(176,58,44,/), 'and nothing angry about a door');
+
+  HQ.failTrial('the test broke it');
+  const doors = Object.values(HQ.G.q.doors).filter(d => d.rid === rid);
+  t.ok(doors.length && doors.every(d => d.trialBolt), 'the doors are bolted');
+  const after = paintOf();
+  t.ok(painted(after, '#2b2126'), 'the brackets are painted');
+  t.ok(painted(after, '#241b1b'), 'and the bolt heads');
+  t.ok(paintedLike(after, /^rgba\(176,58,44,/), 'and the bar is still angry about it');
+
+  // and a shouldered-open bolt stops drawing the bar
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  const h = HQ.runAlive()[0];
+  h.bp = h.bpMax = 9;
+  put(h, slot[3], slot[4]);
+  use(h);
+  HQ.openDoorAt(h, d);
+  t.ok(d.open && !d.trialBolt, 'that one is through');
+  for (const o of doors) if (o !== d){ o.trialBolt = false; o.locked = false; }
+  const cleared = paintOf();
+  t.ok(!painted(cleared, '#2b2126'), 'and no bar is drawn once nothing is bolted');
+});
+
+t.test('bolts: a bolt is not a lock, and does not draw like one', () => {
+  runAt(5);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  const rid = 4;
+  const slot = HQ.DOOR_SLOTS.find(s => s[0] === rid);
+  const d = HQ.G.q.doors[HQ.dkey(slot[1], slot[2], slot[3], slot[4])];
+  // clear every other door so only this one can be painting anything
+  for (const k in HQ.G.q.doors){ const o = HQ.G.q.doors[k]; o.locked = false; o.trialBolt = false; o.open = false; }
+  d.locked = true; d.secret = false;
+  HQ.G.q.key = false;
+  const gold = (l) => l.filter(c => /^rgba\(216,168,60,/.test(String(c))).length;
+  const lockPaint = paintOf();
+  t.ok(gold(lockPaint) > 0, 'a lock is gold');
+  t.ok(!painted(lockPaint, '#2b2126'), 'and carries no bar');
+
+  // the bolt takes the branch instead of the lock, so the gold goes with it
+  d.locked = true; d.trialBolt = true;
+  const boltPaint = paintOf();
+  t.ok(painted(boltPaint, '#2b2126'), 'a bolt carries a bar');
+  t.ok(gold(boltPaint) < gold(lockPaint), 'and reads as iron, not gold — no keyhole is drawn');
+});
+
+/* ----------------------------------------------- an opened chest reads opened */
+
+t.test('chests: a shut one glints, an opened one is unmistakably open', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  const rid = 4;
+  const r = HQ.ROOMS[rid];
+  HQ.G.q.furn = [];                          // only the chest under test on the board
+  const c = { t:'chest', r:rid, x:r.x + 1, y:r.y + 1, w:1, h:1, rot:0,
+              quest:null, taken:false, searched:false };
+  HQ.G.q.furn.push(c);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+
+  const shut = paintOf();
+  t.ok(painted(shut, '#d8b85a'), 'a shut chest still has its lock boss');
+  t.ok(paintedLike(shut, /^rgba\(255,240,196,/), 'and a glint that says it is worth opening');
+  t.ok(!painted(shut, '#160f06'), 'and nothing empty about it');
+
+  c.taken = true;
+  const open = paintOf();
+  t.ok(painted(open, '#160f06'), 'an opened one shows the empty inside');
+  t.ok(painted(open, '#6b4c26'), 'with the lid tipped back');
+  t.ok(!painted(open, '#d8b85a'), 'and the lock boss is gone with it');
+  t.ok(!paintedLike(open, /^rgba\(255,240,196,/), 'and it has stopped glinting at you');
+});
+
+t.test('chests: forcing or easing one open changes how it reads on the board', () => {
+  runAt(3);
+  HQ.G.q.trial = null; HQ.G.q.trialRoom = null;
+  HQ.G.q.vault = -1;
+  const rid = 4;
+  const r = HQ.ROOMS[rid];
+  HQ.G.q.furn = [];
+  const c = { t:'chest', r:rid, x:r.x + 1, y:r.y + 1, w:1, h:1, rot:0,
+              quest:null, taken:false, searched:false };
+  HQ.G.q.furn.push(c);
+  emptyRoom(rid);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  HQ.recomputeVision();
+  t.ok(paintedLike(paintOf(), /^rgba\(255,240,196,/), 'it glints before you have been to it');
+
+  const h = HQ.runAlive()[0];
+  put(h, r.x, r.y);
+  use(h);
+  HQ.searchTreasure();
+  t.ok(c.taken, 'the search opens it');
+  const after = paintOf();
+  t.ok(painted(after, '#160f06'), 'and now it reads as opened from across the room');
+  t.ok(!paintedLike(after, /^rgba\(255,240,196,/), 'with nothing left to draw you back');
 });
 
 t.run();

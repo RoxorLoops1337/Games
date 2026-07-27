@@ -105,19 +105,25 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **The body stays** — a helm on its side, a planted blade and a stain that
   settles in, left on the square for the rest of the floor. *(batch 11)*
 
+- **Bolted doors look bolted** — an iron bar across the whole leaf, bracketed and
+  still red about it, instead of drawing like any other shut door. *(batch 12)*
+- **An opened chest reads as opened** — lid tipped back over an empty inside, no
+  lock boss and no glint; a shut one keeps both. *(batch 12)*
+- **More things that lie** — the pattern generalised past chests. A tomb that was
+  never sealed (a mummy), and armour on a rack that steps down off it (a chaos
+  warrior). What comes out is whatever that furniture would hide. *(batch 12)*
+
 ---
 
 ## Next up
 
-1. **Bolted doors should look bolted.** A trial-bolted door draws like any other
-   shut door, so the Body Point it costs is a surprise the first time and an
-   annoyance after. It wants a visible bar across it.
-2. **An opened chest should read as opened.** With mimics on the floor, telling a
-   searched chest from an unsearched one at a glance became load-bearing, and it
-   is currently a subtle darkening.
-3. **More things that lie.** The mimic proves the pattern. A tomb that is not a
-   tomb, or a suit of armour on a rack that steps off it, would make the
-   furniture itself part of the threat model rather than scenery.
+1. **The plinth should hold the thing it pays.** It draws a generic gem. Drawing
+   the actual relic on offer would make accepting the terms a choice about a
+   specific object rather than a reward in the abstract.
+2. **A fourth tab for the Book.** The between-floors screen now has room for one,
+   and the run's history is currently only reachable from the title screen.
+3. **Streak on the HUD.** The banner fires and is gone. A small counter beside
+   the Fate pill would let you feel the run you are on before it breaks.
 
 ## Backlog, roughly in order of value
 
@@ -140,11 +146,9 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   only carried torches matter.
 
 ### Feel
-- **Streak on the HUD** — the banner fires and is gone. A small counter beside
-  the Fate pill would let you feel the run you are on before it breaks.
-- **The plinth should hold the thing it pays.** It draws a generic gem. Drawing
-  the actual relic on offer would make accepting the terms a choice about a
-  specific object rather than about a reward in the abstract.
+- **A searched bookcase, tomb and cupboard should read as searched too.** The
+  chest now does. Every other searchable piece still looks untouched forever.
+- **A trap you have disarmed should look disarmed**, for the same reason.
 
 ### New ideas the batch turned up
 - **Trial variants.** A third kind: leave the room without opening a chest, or
@@ -155,5 +159,10 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **Bodies the Warlock can use.** A hero's remains sit there for the rest of the
   floor doing nothing. A necromancer raising one, or a hero able to take back a
   fallen friend's weapon, would make the mark on the square matter.
-- **A fourth tab for the Book.** The between-floors screen now has room for one,
-  and the run's history is currently only reachable from the title screen.
+- **A liar that gets a second chance.** Every liar springs once and is then an
+  ordinary monster. One that could sink back into being furniture if it lost
+  sight of you would be genuinely unsettling.
+- **The paint recorder.** The suite can now assert what colours a frame reached
+  for, which is what finally made art changes testable. Worth using on the older
+  render paths — the fog, the light falloff, the death fade — which have never
+  had a test that would notice them breaking.
