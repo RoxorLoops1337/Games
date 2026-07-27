@@ -191,9 +191,12 @@ export async function pose(page, name, frames = 12) {
   }, { p, frames });
 }
 
-export async function shoot(page, out) {
+export async function shoot(page, out, timeout = 180000) {
   fs.mkdirSync(path.dirname(out), { recursive: true });
-  await page.screenshot({ path: out, type: 'png' });
+  // Playwright's 30 s default is nowhere near enough here: the capture forces a
+  // fresh composite, and a full post chain on SwiftShader can take a minute at
+  // a useful resolution.
+  await page.screenshot({ path: out, type: 'png', timeout });
   return out;
 }
 
