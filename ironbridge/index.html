@@ -4837,11 +4837,14 @@ const SKY_STOPS = [
 ];
 // Nine stops is not something to rebuild sixty times a second, and a canvas
 // gradient outlives the frame that made it. Keyed on the canvas size, which is
-// the only thing that can invalidate it.
-let SKYG = null, SKYG_K = '';
+// the only thing that can invalidate it — and on WHICH canvas asked, because a
+// gradient belongs to the context that made it and the sky is now painted into
+// a plate rather than straight at the screen.
+let SKYG = null, SKYG_K = '', SKYG_C = null;
 function skyGrad(c){
   const k = LW + 'x' + LH;
-  if (SKYG && SKYG_K === k) return SKYG;
+  if (SKYG && SKYG_K === k && SKYG_C === c) return SKYG;
+  SKYG_C = c;
   const g = c.createLinearGradient(0, 0, 0, LH);
   for (const s of SKY_STOPS) g.addColorStop(s[0], s[1]);
   SKYG = g; SKYG_K = k;
@@ -4873,13 +4876,23 @@ const RAYS = [
 // Widths and weights of the nested wedges that make one shaft. Widest and
 // faintest first, so the stack sums to a soft-shouldered beam.
 const RAY_LOBES = [[1, .06], [.70, .18], [.44, .26], [.20, .24]];
-function drawGodRays(c, sx, sy, sr){
+const RAY_H = .62;                 // the shafts never reach below this
+// Twenty-four gradient-filled wedges, each the length of the screen diagonal,
+// every one of them composited additively: measured, this was the single most
+// expensive thing in the frame — more than the whole of the rest of the world.
+// So it is baked, and the price is the breathing. Each shaft used to swell on
+// its own slow cycle; now the SHAPE is frozen at a fixed per-shaft phase (so
+// the six still differ from one another, which is what you actually see) and
+// the whole sheet breathes together on the blit. Nobody has ever looked at a
+// sky and noticed that two shafts twenty seconds apart were in step.
+function skyRays(c, w, h){
+  const sx = LW * SUN.x, sy = LH * SUN.y, sr = SUN.r * (.7 + cam.z * .4);
   const L = Math.sqrt(LW * LW + LH * LH) * 1.15;
   c.save();
-  c.beginPath(); c.rect(0, 0, LW, LH * .62); c.clip();
+  c.beginPath(); c.rect(0, 0, w, h); c.clip();
   c.globalCompositeOperation = 'lighter';
   for (const R of RAYS){
-    const br = Math.sin(G.t * R.sp + R.ph);
+    const br = Math.sin(R.ph);
     const ang = R.a + br * .016, len = L * R.l;
     const cs = Math.cos(ang), sn = Math.sin(ang), px = -sn, py = cs;
     // The shaft starts several disc radii out. Close in, the aureole is
@@ -4907,7 +4920,18 @@ function drawGodRays(c, sx, sy, sr){
   c.globalAlpha = 1;
   c.restore();
 }
-function drawSky(c){
+function drawGodRays(c){
+  const P = plate('skyRays', LW, LH * RAY_H, plateKey(true), skyRays);
+  // Painted additively into a transparent plate and blitted additively out of
+  // it: premultiplied src+dst either way, so the picture is the one the live
+  // path drew, one drawImage instead of twenty-four.
+  if (P) blitPlate(c, P, 0, 0, .80 + .20 * Math.sin(G.t * .17), 'lighter');
+  else skyRays(c, LW, LH * RAY_H);
+}
+// The gradient, the forward scatter and the disc: the part of the sky that
+// is a pure function of the frame and the zoom. Painted into `c` wherever
+// that is — the live canvas the first time, a plate every time after.
+function skyBack(c){
   c.fillStyle = skyGrad(c); c.fillRect(0, 0, LW, LH);
   // The sun. Everything in this game is lit from the upper left — the mesa,
   // the bodies, the mines, and since LIT the buildings too — and there was
@@ -4936,6 +4960,34 @@ function drawSky(c){
   dg.addColorStop(.86, '#fff3cd');
   dg.addColorStop(1, 'rgba(255,240,196,0)');
   ell(c, sx, sy, sr, sr, dg);
+}
+// One last wash where every band has gone to nothing, so the ridges do not
+// simply stop at a line — they run out of contrast and then out of sky.
+const WASH_Y = .40, WASH_H = .21;
+function skyWash(c, w, h){
+  const hz = c.createLinearGradient(0, 0, 0, h * (.20 / WASH_H));
+  hz.addColorStop(0, 'rgba(' + HORIZON + ',0)');
+  hz.addColorStop(.66, 'rgba(' + HORIZON + ',.13)');
+  hz.addColorStop(1, 'rgba(' + HORIZON + ',.03)');
+  c.fillStyle = hz; c.fillRect(0, 0, w, h);
+}
+// The valley floor, and how far down it goes. Its own plate because it is
+// half the screen of gradient and never changes; the mist strata that drift
+// over it stay live, being thin and being the part that moves.
+function skyFloor(c, w, h){
+  const vg = c.createLinearGradient(0, 0, 0, h);
+  vg.addColorStop(0, 'rgba(58,84,72,0)');
+  vg.addColorStop(.13, 'rgba(44,66,57,.70)');
+  vg.addColorStop(.28, 'rgba(30,48,44,.90)');
+  vg.addColorStop(.6, 'rgba(20,34,32,.94)');
+  vg.addColorStop(1, '#0c1414');
+  c.fillStyle = vg; c.fillRect(0, 0, w, h);
+}
+// Everything in the sky that SCROLLS. Cached plates cannot help here — the
+// ridges move with the camera and the weather moves on its own — so this is
+// the part that gets paid for every frame, and the part dynamic resolution
+// is aimed at.
+function skyRoll(c){
   // Weather, furthest first: cirrus at the top of the troposphere, then the
   // cumulus sheets. Both go down BEFORE the ridges, so a mountain occludes the
   // foot of a cloud — which is the cheapest depth cue in the whole picture and
@@ -4990,23 +5042,13 @@ function drawSky(c){
     hg.addColorStop(1, BAND_FX[k].haze0);
     c.fillStyle = hg; c.fillRect(0, hy - h0, LW, h0 + LH * .05);
   }
-  // One last wash where every band has gone to nothing, so the ridges do not
-  // simply stop at a line — they run out of contrast and then out of sky.
-  const hz = c.createLinearGradient(0, LH * .40, 0, LH * .60);
-  hz.addColorStop(0, 'rgba(' + HORIZON + ',0)');
-  hz.addColorStop(.66, 'rgba(' + HORIZON + ',.13)');
-  hz.addColorStop(1, 'rgba(' + HORIZON + ',.03)');
-  c.fillStyle = hz; c.fillRect(0, LH * .40, LW, LH * .21);
-  drawGodRays(c, sx, sy, sr);
+  const W = plate('skyWash', LW, LH * WASH_H, plateKey(false), skyWash);
+  if (W) blitPlate(c, W, 0, LH * WASH_Y); else skyWash(c, LW, LH * WASH_H);
+  drawGodRays(c);
   // valley floor + the mist that hides how far down it goes. The floor used to
   // start at .85 alpha on a hard line, which drew the horizon as a step.
-  const vg = c.createLinearGradient(0, LH * .50, 0, LH);
-  vg.addColorStop(0, 'rgba(58,84,72,0)');
-  vg.addColorStop(.13, 'rgba(44,66,57,.70)');
-  vg.addColorStop(.28, 'rgba(30,48,44,.90)');
-  vg.addColorStop(.6, 'rgba(20,34,32,.94)');
-  vg.addColorStop(1, '#0c1414');
-  c.fillStyle = vg; c.fillRect(0, LH * .50, LW, LH * .50);
+  const F = plate('skyFloor', LW, LH * .50, plateKey(false), skyFloor);
+  if (F) blitPlate(c, F, 0, LH * .50); else skyFloor(c, LW, LH * .50);
   // and the mist itself: soft strata rather than five grey rectangles
   for (let i = 0; i < 5; i++){
     const y = LH * (.585 + i * .07), a = .055 + .032 * Math.sin(G.t * .3 + i), hgt = LH * .062;
@@ -5016,6 +5058,60 @@ function drawSky(c){
     mg.addColorStop(1, 'rgba(202,226,231,0)');
     c.fillStyle = mg; c.fillRect(0, y, LW, hgt);
   }
+}
+/* ------------------------------------------------- dynamic sky resolution
+   The sky is the one layer in the picture that can take being drawn small
+   and blown back up. Everything in it is low frequency — gradients, haze,
+   cloud, mountains dissolving into air — and the one thing that ISN'T, the
+   sun's disc, is not in here: it sits in its own full-resolution plate
+   underneath and is blitted sharp.
+   So when the machine cannot pay for the whole frame, the sky goes soft
+   rather than the game going choppy, which is the trade every shipping
+   renderer makes and the one nobody notices. At `res` 1 this path is off
+   entirely and the sky is drawn straight at the screen, pixel for pixel.  */
+const SKY = {
+  res:1,                          // where the governor has settled
+  // and where it may go, worst last. The first step down is a big one on
+  // purpose: going through a plate costs a full-screen blit, and measured, a
+  // .78 sky paid that blit back exactly and saved nothing. A step that does
+  // not buy a millisecond is a step that only costs sharpness.
+  steps:[1, .62, .48, .38],
+  budget:26,                      // ms of whole frame before a step is given up
+  every:20,                       // frames between measurements
+  warm0:3,                        // samples ignored while the JIT settles
+  frameMax:400,                   // (a gap longer than this is a tab switch)
+  pin:null,                       // a resolution, to hold a screenshot still
+};
+let skyFrames = 0, skySamples = 0, skyEma = 0;
+// The same bargain postFx makes, one layer further in. Measured rarely and
+// honestly: a canvas QUEUES, so a frame timed without forcing the queue out
+// measures how long it took to WRITE the commands rather than to run them —
+// and forcing it costs a pipeline stall, so it happens a few times a second
+// and no more. A governor that only ever goes one way does not need a fast
+// signal, and one that could go back up would hunt.
+function skyStep(c, t0){
+  if (SKY.pin !== null && SKY.pin !== undefined) return;
+  if (!postNow || !t0) return;
+  if (++skyFrames % SKY.every) return;
+  try { c.getImageData(0, 0, 1, 1); } catch (e){ return; }
+  const dt = postNow() - t0;
+  if (!(dt > 0) || dt > SKY.frameMax) return;
+  skyEma = skySamples ? skyEma + (dt - skyEma) * .4 : dt;
+  if (++skySamples < SKY.warm0) return;
+  const i = SKY.steps.indexOf(SKY.res);
+  if (skyEma > SKY.budget && i >= 0 && i < SKY.steps.length - 1){
+    SKY.res = SKY.steps[i + 1];
+    skySamples = 0; skyEma = 0;
+  }
+}
+function drawSky(c){
+  const P = plate('skyBack', LW, LH, plateKey(true), skyBack);
+  if (P) blitPlate(c, P, 0, 0); else skyBack(c);
+  const r = SKY.pin === null || SKY.pin === undefined ? SKY.res : SKY.pin;
+  // `null` key: this plate is repainted every frame by design — what it saves
+  // is pixels, not repaints. Only the canvas behind it is reused.
+  const R = r < .995 ? plate('skyRoll', LW, LH, null, skyRoll, r) : null;
+  if (R) blitPlate(c, R, 0, 0); else skyRoll(c);
   drawBirds(c);
 }
 
@@ -5064,6 +5160,67 @@ function skyCanvas(w, h){
     const cc = cv.getContext('2d');
     return cc ? { cv, cc } : null;
   } catch (e){ return null; }
+}
+
+/* --------------------------------------------------------------- plates
+   A sky costs about twenty full-screen gradient fills, and measured on a
+   software rasteriser that was 37ms of a 72ms frame — more than everything
+   else in the world put together. Almost none of it needs paying for twice:
+   the sun sits still in the frame while the bridge scrolls under it, and so
+   do the horizon wash, the shafts and the valley floor. Only the ridges
+   actually move.
+   So each of those groups is painted ONCE into its own canvas and blitted
+   after that, and repainted only when something it genuinely depends on
+   changes — the canvas size and the zoom. Nothing here is keyed on the
+   clock: a plate that rebuilt on a timer would trade a steady cost for a
+   hitch every N frames, which is the worse of the two.
+   Painted at device resolution, not CSS resolution, or the whole sky would
+   come back soft on a retina screen — the one place a cache is allowed to
+   cost nothing is quality.                                                 */
+const PLATES = new Map();
+function plateKey(zoomed){
+  // What may invalidate a plate, and deliberately NOT cam.x — a plate that
+  // moved with the camera would be rebuilt every frame of every pan, which
+  // is the whole thing this exists to avoid. A test holds this shape.
+  return LW + 'x' + LH + (zoomed ? '@' + Math.round(cam.z * 64) : '');
+}
+function plate(id, w, h, key, paint, scale){
+  // Tests drive draw() through a recording stub, where a plate would swallow
+  // the very calls the sweep is counting. The picture is identical either
+  // way; this is purely how fast it arrives.
+  if (HEADLESS) return null;
+  // `scale` under 1 is dynamic resolution: the plate holds fewer pixels than
+  // the place it will be blitted to, and the paint callback never knows —
+  // it draws in frame coordinates either way.
+  const dpr = clamp(lcv && lcv.width && LW ? lcv.width / LW : 1, 1, 3) * clamp(scale || 1, .25, 1);
+  const pw = Math.max(2, Math.round(w * dpr)), ph = Math.max(2, Math.round(h * dpr));
+  let P = PLATES.get(id);
+  if (P === false) return null;                    // no offscreen canvas here
+  // A null key means "repaint every time" — for a plate whose whole job is
+  // holding fewer pixels rather than holding them for longer.
+  if (P && key !== null && P.key === key && P.cv.width === pw && P.cv.height === ph) return P;
+  if (!P || P.cv.width !== pw || P.cv.height !== ph){
+    const cn = skyCanvas(pw, ph);
+    if (!cn){ PLATES.set(id, false); return null; }
+    P = { cv:cn.cv, cc:cn.cc, key:'', w, h };
+    PLATES.set(id, P);
+  }
+  try {
+    P.cc.setTransform(dpr, 0, 0, dpr, 0, 0);
+    P.cc.clearRect(0, 0, w + 2, h + 2);
+    paint(P.cc, w, h);
+  } catch (e){ PLATES.set(id, false); return null; }
+  P.key = key; P.w = w; P.h = h;
+  return P;
+}
+// Blit a plate at its place in the frame. `mode` is the composite it wants,
+// because an additive plate and an opaque one are not interchangeable.
+function blitPlate(c, P, x, y, a, mode){
+  c.save();
+  if (mode) c.globalCompositeOperation = mode;
+  if (a !== undefined && a !== 1) c.globalAlpha = clamp(a, 0, 1);
+  c.drawImage(P.cv, x, y, P.w, P.h);
+  c.restore();
 }
 // One soft puff: opaque at the middle, gone at the rim. Drawn in a scaled
 // space so a single radial gradient can be any ellipse.
@@ -11062,6 +11219,7 @@ const CAM_MIN = HOLD_X - 26, CAM_MAX = C.LANE_LEN - HOLD_X + 26;
 function draw(){
   const c = lctx;
   if (!c) return;
+  const t0 = postNow ? postNow() : 0;
   BSC = LS() * TILE;
   c.save();
   drawSky(c);
@@ -11088,6 +11246,7 @@ function draw(){
   flushLabels(c);
   drawMinimap(c);
   c.restore();
+  skyStep(c, t0);
 }
 
 /* =====================================================================
@@ -13391,6 +13550,7 @@ window.IB = {
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
+  SKY, plateKey, skyRoll, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
   get LW(){ return LW; }, get LH(){ return LH; },
 };
 

@@ -4450,6 +4450,47 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.SUN.y > 0 && IB.SUN.y < IB.BANDS[0].y,
     'and above the furthest ridge rather than buried in it');
   t.ok(IB.SUN.r > 0 && IB.SUN.halo > 1, 'it has a disc, and a halo bigger than the disc');
+
+  // Plates. The sky is about twenty full-screen gradient fills, which measured
+  // as more than half the frame, so the parts of it that do not move are
+  // painted once and blitted after that. The one thing that would undo the
+  // whole idea is keying a plate on where the camera is: it would rebuild
+  // every frame of every pan, which is exactly the case it exists for.
+  const k0 = IB.plateKey(true), kz = IB.plateKey(false);
+  const camX = IB.cam.x;
+  IB.cam.x = camX + 137;
+  t.ok(IB.plateKey(true) === k0 && IB.plateKey(false) === kz,
+    'a plate key does not move with the camera along the bridge');
+  IB.cam.x = camX;
+  const camZ = IB.cam.z;
+  IB.cam.z = camZ * 1.7;
+  t.ok(IB.plateKey(true) !== k0, 'but a zoomed plate is rebuilt when the zoom changes');
+  t.ok(IB.plateKey(false) === kz, 'and one that does not care about zoom is not');
+  IB.cam.z = camZ;
+
+  // Dynamic sky resolution. The governor only ever goes one way — a two-way
+  // one hunts — so the steps have to be ordered worst-last, and the first of
+  // them has to be the full-resolution picture or a fast machine would never
+  // get it.
+  t.ok(IB.SKY.steps[0] === 1, 'the sky starts at full resolution');
+  let up = 0;
+  for (let i = 1; i < IB.SKY.steps.length; i++) if (IB.SKY.steps[i] >= IB.SKY.steps[i - 1]) up++;
+  t.ok(up === 0, 'and every step down is actually down (' + IB.SKY.steps.join(' > ') + ')');
+  t.ok(IB.SKY.steps[IB.SKY.steps.length - 1] >= .25,
+    'and never so far down that the sky stops being a picture');
+  t.ok(IB.SKY.steps.includes(IB.SKY.res), 'the resolution it is on is one of the steps it knows');
+  // A budget under a 60Hz frame would drop the sky on a machine that was
+  // keeping up perfectly well.
+  t.ok(IB.SKY.budget > 16.7, 'the frame budget leaves room for a 60Hz frame (' + IB.SKY.budget + 'ms)');
+  // The god rays are the expensive half of the sky and they are baked, so
+  // their shape must not read the clock — a plate that changed every frame
+  // would be a repaint with extra steps.
+  t.ok(IB.RAYS.length > 2 && IB.RAY_LOBES.length > 1, 'the shafts are stacked wedges, not a starburst');
+  t.ok(IB.RAY_H > 0 && IB.RAY_H < 1, 'and they stop above the valley floor (' + IB.RAY_H + ')');
+  t.ok(!/G\.t/.test(String(IB.skyRays)), 'the baked shaft plate does not read the clock');
+  // Whereas the layer that scrolls must, or the weather would freeze.
+  t.ok(/G\.t/.test(String(IB.skyRoll)) || /G\.t/.test(String(IB.drawClouds)),
+    'the scrolling half of the sky still moves with time');
   // The rim runs foot -> apex to the RIGHT, so the face it belongs to looks
   // left. Move the sun and this has to move with it.
   t.ok(Math.sign(IB.RIDGE_RIM) === (IB.SUN.x < .5 ? 1 : -1),
