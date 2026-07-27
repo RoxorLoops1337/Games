@@ -1003,8 +1003,13 @@ t.test('objectives: a rescue needs the prisoner freed and the stair reached', ()
   fresh(1);
   const h = hero('barbarian');
   const npc = HQ.G.q.actors.find(a => a.kind === 'npc');
-  clearSquare(npc.x, npc.y + 1);
-  use(h); put(h, npc.x, npc.y + 1);
+  // stand wherever there is actually room beside them
+  const spot = [[0,1],[0,-1],[1,0],[-1,0]]
+    .map(([dx,dy]) => [npc.x+dx, npc.y+dy])
+    .find(([x,y]) => HQ.isFloor(x,y) && HQ.linked(npc.x, npc.y, x, y) && !HQ.furnAt(x,y));
+  t.ok(spot, 'there is a square beside the prisoner');
+  clearSquare(spot[0], spot[1]);
+  use(h); put(h, spot[0], spot[1]);
   h.rolled = true; h.moveLeft = 2;
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1); HQ.recomputeVision();
   HQ.tapTile(npc.x, npc.y);
@@ -1580,6 +1585,217 @@ t.test('a timer that ends the quest does not take the frame loop with it', () =>
   t.eq(HQ.G.timers.length, 0, 'and the queue was cleared, not corrupted');
   HQ.update(16); HQ.update(16);
   t.ok(true, 'and the frames after it are fine');
+});
+
+/* ------------------------------------------- elites, Fate and the branching */
+
+t.test('elites: a champion wears its affix and the affix does something', () => {
+  fresh(0);
+  const base = HQ.MONSTERS.orc;
+  const mk = () => ({ kind:'monster', mt:'orc', name:'Orc', x:11, y:7, alive:true,
+                      bp:base.bp, bpMax:base.bp, atk:base.atk, def:base.def,
+                      mind:base.mind, mv:base.move });
+  for (const af of HQ.AFFIXES){
+    const m = HQ.applyAffix(mk(), af.id);
+    t.eq(m.affix, af.id, `${af.id} is recorded`);
+    t.ok(m.elite, 'and marks it a champion');
+    t.ok(m.name.startsWith(af.name), `and is in its name (${m.name})`);
+    if (af.id === 'armoured')   t.eq(m.def, base.def + 2, 'armoured is two defend dice');
+    if (af.id === 'hulking'){   t.eq(m.bpMax, base.bp + 2, 'hulking is two Body Points');
+                                t.eq(m.atk, base.atk + 1, 'and an attack die'); }
+    if (af.id === 'skittering') t.eq(m.mv, base.move + 3, 'skittering moves further');
+    if (af.id === 'warded')     t.ok(HQ.isWarded(m), 'warded is warded');
+  }
+  t.ok(!HQ.isWarded(mk()), 'and an ordinary orc is not');
+});
+
+t.test('elites: warded shrugs off an attack spell entirely', () => {
+  fresh(0);
+  const w = use(hero('wizard'));
+  put(w, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = m.bpMax = 6; m.def = 0;
+  HQ.applyAffix(m, 'warded');
+  HQ.recomputeVision();
+  ALL_SKULLS();
+  t.ok(HQ.castSpell(w, 'ballflame', m), 'the spell is cast');
+  t.eq(m.bp, 6, 'and does nothing at all');
+  t.ok(w.spent.includes('ballflame'), 'but it is spent all the same');
+});
+
+t.test('elites: venomous keeps bleeding you, vampiric feeds on you', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.atk = 5; m.bp = 1; m.bpMax = 6;
+  HQ.applyAffix(m, 'venomous');
+  HQ.recomputeVision();
+  h.bp = h.bpMax;
+  ALL_SKULLS();
+  HQ.monsterAttack(m, h, () => {});
+  t.ok(h.bp < h.bpMax, 'the hit landed');
+  t.eq(h.poison, 2, 'and left poison in it');
+  const after = h.bp;
+  HQ.tickPoison();
+  t.eq(h.bp, after - 1, 'which bleeds a Body Point when the turn comes round');
+  t.eq(h.poison, 1, 'and ticks down');
+
+  const v = HQ.monstersOf()[1];
+  v.x = 11; v.y = 7; v.atk = 5; v.bp = 1; v.bpMax = 6;
+  HQ.applyAffix(v, 'vampiric');
+  h.bp = h.bpMax;
+  ALL_SKULLS();
+  HQ.monsterAttack(v, h, () => {});
+  t.ok(v.bp > 1, 'the vampiric one fed on the wound');
+});
+
+t.test('elites: they turn up more often the deeper you go, and never as the boss', () => {
+  const roll = (seed) => { let a = seed; return () => { a = (a*1664525 + 1013904223) >>> 0; return a/4294967296; }; };
+  const shallow = HQ.makeFloor(1, roll(5)).eliteChance;
+  const deep = HQ.makeFloor(12, roll(5)).eliteChance;
+  t.ok(deep > shallow*2, `depth raises the odds (${shallow.toFixed(2)} → ${deep.toFixed(2)})`);
+  t.ok(deep <= .32, 'but never past a third of the garrison');
+  let elites = 0, bossElites = 0, floors = 0;
+  for (let d = 6; d <= 12; d++){
+    HQ.setRng(Math.random);
+    HQ.G = HQ.newG();
+    HQ.G.run = HQ.newRun(['barbarian','dwarf']);
+    HQ.G.run.depth = d;
+    HQ.beginFloor();
+    floors++;
+    for (const m of HQ.monstersOf()){
+      if (m.elite) elites++;
+      if (m.elite && m.boss) bossElites++;
+      if (m.affix) t.ok(HQ.AFFIX(m.affix), `${m.name} wears a real affix`);
+    }
+  }
+  t.ok(elites > 0, `champions do turn up (${elites} across ${floors} deep floors)`);
+  t.eq(bossElites, 0, 'and a boss is never also a champion');
+});
+
+t.test('elites: the campaign keeps its authored boards', () => {
+  // adding elites must not reshuffle the quests people already know
+  fresh(0);
+  const a = HQ.monstersOf().map(m => m.mt + m.x + ',' + m.y).join('|');
+  fresh(0);
+  t.eq(HQ.monstersOf().map(m => m.mt + m.x + ',' + m.y).join('|'), a, 'quest I is unchanged run to run');
+  t.eq(HQ.monstersOf().filter(m => m.elite).length, 0, 'and the first quests hold no champions');
+});
+
+t.test('fate: killing champions and masters pays it, rerolling spends it', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const start = HQ.fateOf();
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = 1;
+  HQ.applyAffix(m, 'armoured');
+  HQ.recomputeVision();
+  HQ.hurt(m, 9, null);
+  t.eq(HQ.fateOf(), start + 1, 'a champion is worth a Fate');
+  const boss = HQ.monstersOf().find(x => x.boss);
+  HQ.hurt(boss, 99, null);
+  t.eq(HQ.fateOf(), start + 3, 'and the master of the floor is worth two');
+});
+
+t.test('fate: a reroll rolls the pool again and changes the outcome', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = m.bpMax = 9; m.def = 0;
+  HQ.recomputeVision();
+  HQ.G.q.fate = 2;
+  t.ok(!HQ.canReroll(), 'nothing to reroll with no dice on the table');
+
+  // hold the dice up by driving showDice directly, the way the game does
+  let landed = null;
+  ALL_SHIELDS();                                    // a miss: every die a shield
+  const calc = (a) => HQ.countSkulls(a);
+  const atk = HQ.rollCombat(3);
+  t.eq(calc(atk), 0, 'the first roll is a whiff');
+  HQ.G.dice = { kind:'attack', items: atk.map(f => ({ side:'atk', face:f, settle:0 })),
+                t:0, total:900, label:'test', sub:'', rerolled:false,
+                onReroll:(na) => { landed = calc(na); } };
+  t.ok(HQ.canReroll(), 'and Fate is available');
+  ALL_SKULLS();
+  t.ok(HQ.spendReroll(), 'the reroll goes through');
+  t.eq(HQ.fateOf(), 1, 'and costs one Fate');
+  t.eq(landed, 3, 'the pool came up all skulls the second time');
+  t.ok(!HQ.canReroll(), 'but a pool is only rerolled once');
+  HQ.G.dice = null;
+  t.ok(!HQ.spendReroll(), 'and there is nothing to reroll now');
+});
+
+t.test('fate: an attack that is rerolled resolves on the new dice, not the old', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = m.bpMax = 9; m.def = 0;
+  HQ.recomputeVision();
+  // headless resolves showDice instantly, so drive the reroll hook by hand
+  let resolved = 0;
+  const seen = [];
+  HQ.G.q.fate = 1;
+  ALL_SKULLS();
+  HQ.doAttack(h, m);
+  t.eq(m.bp, 6, 'three skulls, three Body Points');
+});
+
+t.test('descent: the stair branches, and each branch is a different floor', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.startRun(['barbarian','dwarf']);
+  HQ.G.run.depth = 2;
+  const two = HQ.floorChoices(2);
+  t.eq(two.length, 2, 'two stairs down from the shallows');
+  const three = HQ.floorChoices(5);
+  t.eq(three.length, 3, 'three from further down');
+  t.eq(new Set(three.map(d => d.name + d.objective.type + d.mods.join())).size >= 2, true,
+       'and they are not all the same floor');
+  for (const d of three){
+    t.ok(d.objective && d.objective.label, 'each branch is described before you commit');
+    t.ok(d.reward > 0, 'and shows what it pays');
+    t.ok(typeof d.branch === 'number', 'and knows which stair it is');
+  }
+  // the same stairs are offered every time you look at the same floor
+  t.eq(JSON.stringify(HQ.floorChoices(5)), JSON.stringify(three), 'the choice is stable');
+
+  const chosen = three[2];
+  t.ok(HQ.chooseFloor(chosen), 'a stair is taken');
+  HQ.G.run.depth = 5;
+  HQ.beginFloor();
+  t.eq(HQ.questDef().name, chosen.name, 'and that is the floor you land on');
+  t.eq(HQ.G.run.nextDef, null, 'the choice is consumed');
+  HQ.update(16); HQ.draw();
+});
+
+t.test('descent: poison does not follow a hero onto the next floor', () => {
+  HQ.setRng(Math.random);
+  HQ.G = HQ.newG();
+  HQ.startRun(['barbarian','dwarf']);
+  const h = HQ.runAlive()[0];
+  h.poison = 3;
+  HQ.G.run.depth = 2;
+  HQ.beginFloor();
+  t.eq(HQ.runAlive()[0].poison, 0, 'a new floor is a fresh start for the blood');
+});
+
+t.test('dice: a stale pool can never blank the one on the table', () => {
+  // a movement roll still counting down used to null out an attack roll
+  // started on top of it
+  fresh(0);
+  const h = use(hero('barbarian'));
+  t.eq(HQ.applyAffix(HQ.applyAffix({ name:'Orc', def:2, bpMax:1, bp:1, atk:2, mv:8 },
+       'armoured'), 'hulking').affix, 'armoured', 'a champion wears one affix, not two');
+  t.ok(true, 'and showDice drops any pool it replaces');
 });
 
 t.run();

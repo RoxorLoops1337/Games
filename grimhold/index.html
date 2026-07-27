@@ -36,6 +36,7 @@
   .pill{pointer-events:auto;background:rgba(20,17,13,.85);border:1px solid var(--line);border-radius:999px;
     padding:4px 10px;font-size:11.5px;letter-spacing:.08em;display:flex;align-items:center;gap:5px;color:var(--ink)}
   .pill.gold{color:var(--gold2);border-color:rgba(216,168,60,.45)}
+  .pill.fate{color:#ccb8ff;border-color:rgba(154,134,224,.5)}
   #menubtn{pointer-events:auto;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
     font-size:15px;background:rgba(20,17,13,.85);border:1px solid var(--line);color:var(--ink)}
 
@@ -191,7 +192,8 @@
   <div id="topbar">
     <div id="qname">Grimhold<b>The Trial</b></div>
     <div class="pill gold" id="goldpill">◈ <span id="goldn">0</span></div>
-    <div class="pill" id="turnpill">Turn <span id="turnn">1</span></div>
+    <div class="pill fate" id="fatepill">✦ <span id="faten">0</span></div>
+  <div class="pill" id="turnpill">Turn <span id="turnn">1</span></div>
     <div id="menubtn">☰</div>
   </div>
   <div id="log"></div>
@@ -774,7 +776,7 @@ function startQuest(qi, def, seed){
     seen: new Array(W*H).fill(0), roomSeen: new Array(ROOMS.length).fill(0),
     searched: new Array(ROOMS.length).fill(0), trapSearched: new Array(ROOMS.length).fill(0),
     deck: TREASURE_DECK.map((_,i)=>i), deckAt:0,
-    itemsFound:[], collected:0, npcFreed:false, bossDead:false, carrier:null, pot:0,
+    itemsFound:[], collected:0, npcFreed:false, bossDead:false, carrier:null, pot:0, fate:1,
     log:[], activeId:null, escaped:false,
   };
   // shuffle the treasure deck with the quest seed
@@ -813,12 +815,16 @@ function startQuest(qi, def, seed){
       const spot = m.boss ? deepTile(m.r) : freeTile(m.r, R);
       if (!spot) continue;
       const def = MONSTERS[m.t];
-      Q.actors.push({
+      const mon = {
         kind:'monster', uid:uid++, mt:m.t, name:m.name || def.name,
         x:spot[0], y:spot[1], alive:true, facing:-1,
         bpMax:(m.bp||def.bp), bp:(m.bp||def.bp), atk:def.atk, def:def.def, mind:def.mind,
         mv:def.move, boss:!!m.boss, spirit:!!m.spirit, awake:false, sleep:0, stun:0, bob:R()*6.28,
-      });
+      };
+      // a champion is an ordinary monster wearing one visible affix
+      const ec = q.eliteChance !== undefined ? q.eliteChance : (qi >= 3 ? .05 + qi*.012 : 0);
+      if (!mon.boss && ec > 0 && R() < ec) applyAffix(mon, AFFIXES[Math.floor(R()*AFFIXES.length)].id);
+      Q.actors.push(mon);
     }
   }
 
@@ -833,6 +839,7 @@ function startQuest(qi, def, seed){
     h.mp = h.mpMax;
     h.moveLeft = 0; h.rolled = false; h.acted = false; h.done = false;
     h.spent = []; h.buffs = {}; h.quests = []; h.facing = 1; h.kind = 'hero';
+    h.poison = 0; h.echoed = 0;
     Q.actors.push(h);
   });
 
@@ -2653,6 +2660,18 @@ function drawActorTag(g, a, px, py, u, t){
       g.fillStyle = a.boss ? '#e0b040' : '#c0392b';
       rr(g, px-w/2+1, y+1, (w-2)*(a.bp/a.bpMax), 3.5, 1.7); g.fill();
     }
+    if (a.elite && a.affix){
+      const af = AFFIX(a.affix), p = .5 + Math.sin(t*.004 + (a.bob||0))*.5;
+      g.strokeStyle = af.col; g.globalAlpha = .35 + p*.35; g.lineWidth = 2.2;
+      g.beginPath(); g.ellipse(px, py + u*.34, u*.36, u*.14, 0, 0, 6.284); g.stroke();
+      g.globalAlpha = 1;
+      g.font = `${u*.30}px Georgia,serif`; g.textAlign = 'center';
+      g.fillStyle = 'rgba(0,0,0,.7)';
+      g.fillText(af.ic, px + u*.30 + 1, py - u*.44 + 1);
+      g.fillStyle = af.col;
+      g.fillText(af.ic, px + u*.30, py - u*.44);
+    }
+    if (a.poisonMark){ /* reserved */ }
     if (a.sleep > 0){
       g.fillStyle = '#9fd8e8'; g.font = `${u*.28}px Georgia,serif`; g.textAlign = 'center';
       g.fillText('z', px + u*.22, py - u*.52 + Math.sin(t*.004)*3);
@@ -3041,22 +3060,41 @@ function rollCombat(n){ const out = []; for (let i=0;i<n;i++) out.push(combatDie
 const countSkulls = (f) => f.filter(v => v === SKULL).length;
 const countShields = (f, hero) => f.filter(v => v === (hero ? WHITE : BLACK)).length;
 
-function showDice(kind, atk, def, label, sub, done){
+function showDice(kind, atk, def, label, sub, done, onReroll){
   const items = [];
   for (const f of atk) items.push({ side:'atk', face:f, settle:0 });
   for (const f of def) items.push({ side:'def', face:f, settle:0 });
   const per = 90, base = 380;
   items.forEach((it,i) => { it.settle = base + i*per; });
   const total = base + items.length*per + 520;
-  G.dice = { kind, items, t:0, total, label, sub };
+  // Drop any pool still on the table: a stale timer must never blank a newer
+  // roll, and the token makes that impossible even if one slips through.
+  if (G.dice && G.dice.timer){
+    const i = G.timers.indexOf(G.dice.timer);
+    if (i >= 0) G.timers.splice(i, 1);
+  }
+  const token = {};
+  G.dice = { kind, items, t:0, total, label, sub, token,
+             onReroll:onReroll || null, rerolled:false };
   sfx('dice');
-  G.dice.timer = later(total, () => { G.dice = null; if (done) done(); });
+  G.dice.timer = later(total, () => {
+    if (G.dice && G.dice.token !== token) return;
+    G.dice = null; if (done) done();
+  });
 }
 function showMoveDice(a, b, done){
+  if (G.dice && G.dice.timer){
+    const i = G.timers.indexOf(G.dice.timer);
+    if (i >= 0) G.timers.splice(i, 1);
+  }
+  const token = {};
   G.dice = { kind:'move', items:[{side:'pip',face:a,settle:380},{side:'pip',face:b,settle:470}],
-             t:0, total:1150, label:'MOVEMENT', sub:(a+b)+' squares' };
+             t:0, total:1150, label:'MOVEMENT', sub:(a+b)+' squares', token };
   sfx('dice');
-  G.dice.timer = later(1150, () => { G.dice = null; if (done) done(); });
+  G.dice.timer = later(1150, () => {
+    if (G.dice && G.dice.token !== token) return;
+    G.dice = null; if (done) done();
+  });
 }
 
 function drawDice(g, t){
@@ -3095,6 +3133,22 @@ function drawDice(g, t){
     dieFace(g, size, it.side, settled ? it.face : (D.kind === 'move' ? 1+ri(6) : face), D.kind);
     g.restore();
   });
+  // Fate: one reroll a pool, and the whole point is that you can see the cost
+  if (canReroll()){
+    const bw = Math.min(230, cw - 80), bh = 42;
+    const bx = cw/2 - bw/2, by = cy + size/2 + (D.sub ? 44 : 22);
+    D.btn = { x:bx, y:by, w:bw, h:bh };
+    const p = .5 + Math.sin(TT0*.005)*.5;
+    g.fillStyle = `rgba(60,40,90,${.72 + p*.12})`;
+    rr(g, bx, by, bw, bh, 12); g.fill();
+    g.strokeStyle = `rgba(180,150,255,${.55 + p*.35})`; g.lineWidth = 1.6;
+    rr(g, bx, by, bw, bh, 12); g.stroke();
+    g.fillStyle = '#ddd0ff'; g.font = '700 14px Georgia,serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.letterSpacing = '2px';
+    g.fillText(`✦ REROLL  ·  ${fateOf()} FATE`, cw/2, by + bh/2);
+    g.letterSpacing = '0px';
+  } else D.btn = null;
   if (D.sub && D.t > D.total - 620){
     g.globalAlpha = Math.min(1, (D.t - (D.total-620))/180);
     g.fillStyle = '#f3d488'; g.font = '700 15px Georgia,serif';
@@ -3344,19 +3398,22 @@ function doAttack(h, m){
   h.facing = m.x > h.x ? 1 : m.x < h.x ? -1 : h.facing;
   setMood('fight');
   const n = attackDice(h, m);
-  const atk = rollCombat(n);
-  const def = rollCombat(m.def);
-  const skulls = countSkulls(atk);
-  const blocks = countShields(def, false);
   const immune = m.spirit && !weaponOf(h).spirit;
-  let dmg = Math.max(0, skulls - blocks);
-  if (immune) dmg = 0;
-  const savage = n >= 2 && skulls === n && !immune && dmg > 0;
-  const sub = immune ? 'The blow passes through him'
-            : savage ? `SAVAGE — ${dmg} Body Point${dmg>1?'s':''}`
-            : dmg > 0 ? `${dmg} Body Point${dmg>1?'s':''}` : 'Turned aside';
+  const calc = (a, d) => {
+    const skulls = countSkulls(a), blocks = countShields(d, false);
+    let dmg = immune ? 0 : Math.max(0, skulls - blocks);
+    const savage = n >= 2 && skulls === n && !immune && dmg > 0;
+    return { dmg, savage, sub: immune ? 'The blow passes through him'
+      : savage ? `SAVAGE — ${dmg} Body Point${dmg>1?'s':''}`
+      : dmg > 0 ? `${dmg} Body Point${dmg>1?'s':''}` : 'Turned aside' };
+  };
+  let r = calc(rollCombat(0), []);
+  const atk = rollCombat(n), def = rollCombat(m.def);
+  r = calc(atk, def);
   if (h.buffs.courage) delete h.buffs.courage;
-  showDice('attack', atk, def, `${h.name} vs ${m.name}`, sub, () => {
+  const reroll = (na, nd) => { r = calc(na, nd); if (G.dice) G.dice.sub = r.sub; };
+  showDice('attack', atk, def, `${h.name} vs ${m.name}`, r.sub, () => {
+    const dmg = r.dmg, savage = r.savage;
     lungeAt(h, m.x, m.y);
     const dir = [Math.sign(m.x - h.x), Math.sign(m.y - h.y)];
     if (immune){
@@ -3380,7 +3437,7 @@ function doAttack(h, m){
       spark(m.x, m.y, 8, '#c8ccd2', { spd:.014 });
     }
     refreshField(); renderHUD(); checkQuestState();
-  });
+  }, reroll);
   return true;
 }
 
@@ -3390,24 +3447,34 @@ function monsterAttack(m, h, done){
     later(300, done); return;
   }
   m.facing = h.x > m.x ? 1 : h.x < m.x ? -1 : m.facing;
-  const atk = rollCombat(m.atk);
-  const def = rollCombat(defendDice(h));
-  const skulls = countSkulls(atk);
-  const blocks = countShields(def, true);
-  const dmg = Math.max(0, skulls - blocks);
-  const sub = dmg > 0 ? `${h.name} loses ${dmg}` : `${h.name} holds`;
-  showDice('defend', atk, def, `${m.name} vs ${h.name}`, sub, () => {
+  const calc = (a, d) => {
+    const dmg = Math.max(0, countSkulls(a) - countShields(d, true));
+    return { dmg, sub: dmg > 0 ? `${h.name} loses ${dmg}` : `${h.name} holds` };
+  };
+  const atk = rollCombat(m.atk), def = rollCombat(defendDice(h));
+  let r = calc(atk, def);
+  const reroll = (na, nd) => { r = calc(na, nd); if (G.dice) G.dice.sub = r.sub; };
+  showDice('defend', atk, def, `${m.name} vs ${h.name}`, r.sub, () => {
     lungeAt(m, h.x, h.y);
+    const dmg = r.dmg;
     if (dmg > 0){
       sfx('hit'); G.shake = 8 + dmg*3; hitStop(60 + dmg*24);
       spark(h.x, h.y, 10 + dmg*4, '#a01d14',
             { spd:.024, dir:[Math.sign(h.x-m.x), Math.sign(h.y-m.y)], life:640 });
+      if (m.affix === 'venomous' && !h.poison){
+        h.poison = 2;
+        say(`${h.name} is poisoned — it will keep bleeding.`, 'bad');
+      }
+      if (m.affix === 'vampiric' && m.bp < m.bpMax){
+        m.bp = Math.min(m.bpMax, m.bp + 1);
+        floatText(m.x, m.y, '+1', '#c0392b');
+      }
       hurt(h, dmg, null);
     }
     else { sfx('block'); spark(h.x, h.y, 8, '#dfe4ea', { spd:.012 }); }
     renderHUD();
     later(220, done);
-  });
+  }, reroll);
 }
 
 function hurt(a, n, done){
@@ -3436,12 +3503,18 @@ function kill(a){
     hitStop(60);
     say(`${a.name} falls.`, 'good');
     G.q.kills = (G.q.kills || 0) + 1;
+    if (a.elite){
+      G.q.pot = (G.q.pot || 0) + 30;
+      addFate(1, `${a.name} put down`);
+      spark(a.x, a.y, 20, AFFIX(a.affix).col, { spd:.022, life:800 });
+    }
     if (boonHas('vampiric')){
       const near = livingHeroes().sort((p,q2) => dist2(p.x,p.y,a.x,a.y) - dist2(q2.x,q2.y,a.x,a.y))[0];
       if (near && near.bp < near.bpMax){ near.bp++; floatText(near.x, near.y, '+1', '#7de8a0'); }
     }
     if (a.boss){
       G.q.bossDead = true;
+      addFate(2, 'the master of this floor is dead');
       sfx('boss'); G.shake = 26;
       spark(a.x, a.y, 46, '#e0b040', { spd:.03, glow:'rgba(224,176,64,.5)', r:2.2, life:900 });
       say(`${a.name} is destroyed!`, 'good');
@@ -3549,7 +3622,13 @@ function monsterAct(m, done){
   // already next to someone? hit them
   for (const h of targets){
     if (dist2(m.x,m.y,h.x,h.y) === 1 && linked(m.x,m.y,h.x,h.y)){
-      focusOn(m.x,m.y); monsterAttack(m, h, done); return;
+      focusOn(m.x,m.y);
+      // the frenzied get a second swing, at whoever is still standing
+      monsterAttack(m, h, m.affix === 'frenzied'
+        ? () => { const t = h.alive ? h : livingHeroes().find(x => dist2(m.x,m.y,x.x,x.y) === 1);
+                  if (t && m.alive) monsterAttack(m, t, done); else done(); }
+        : done);
+      return;
     }
   }
   const f = walkFieldSafe(m.x, m.y, m.mv, m);
@@ -3593,6 +3672,7 @@ function endZargonTurn(){
   const first = heroes().find(h => h.alive && !h.done);
   if (!first){ questOver(false, 'The party is destroyed.'); return; }
   banner('YOUR TURN', 'turn ' + G.q.turn);
+  tickPoison();
   beginHeroActivation(first);
   renderHUD();
 }
@@ -3809,6 +3889,12 @@ function castSpell(h, key, target){
   sfx('spell');
   const el = ELEMENTS[sp.el];
   spark(h.x, h.y, 22, el.col, { spd:.016, up:.004, glow:hexA(el.col, .4) });
+  if (sp.dice && target && isWarded(target)){
+    say(`The spell washes off the ${target.name} — it is warded.`, 'bad');
+    spark(target.x, target.y, 18, '#a88ae8', { spd:.016, glow:'rgba(168,138,232,.4)', r:1.3 });
+    refreshField(); renderHUD();
+    return true;
+  }
   if (sp.dice && target){
     const atk = rollCombat(sp.dice);
     const skulls = countSkulls(atk);
@@ -3960,6 +4046,8 @@ function renderHUD(){
   $('qname').innerHTML = `${q.name}${mods ? ' ' + mods : ''}<b>${q.sub}${
     G.run && G.run.boons.length ? ' · ' + G.run.boons.map(b => BOON(b).ic).join('') : ''}</b>`;
   $('goldn').textContent = (G.run ? G.run.gold : G.camp.gold) + (G.q.pot ? ' +' + G.q.pot : '');
+  const fp = $('fatepill');
+  if (fp){ fp.style.display = ''; $('faten').textContent = fateOf(); }
   $('turnn').textContent = G.q.turn + (q.turnLimit ? '/' + q.turnLimit : '');
   $('turnpill').classList.toggle('gold', !!q.turnLimit && G.q.turn > q.turnLimit - 6);
 
@@ -4464,6 +4552,11 @@ function openMenu(){
 function onTap(sx, sy){
   if (!G || !G.q || modalOpen) return;
   if (G.dice){
+    const b = G.dice.btn;
+    if (b && sx >= b.x && sx <= b.x + b.w && sy >= b.y && sy <= b.y + b.h){
+      spendReroll();
+      return;
+    }
     // slam them down rather than making the player wait out the animation
     const left = G.dice.total - G.dice.t;
     if (left > 420){
@@ -4648,6 +4741,82 @@ const boonHas = (id) => !!(G && G.run && G.run.boons && G.run.boons.includes(id)
 const modHas  = (id) => !!(G && G.q && G.q.def && G.q.def.mods && G.q.def.mods.includes(id));
 const metaHas = (id) => !!(G && G.meta && G.meta.unlocks && G.meta.unlocks.includes(id));
 
+/* ------------------------------------------------------------ 12c. ELITES */
+// A champion is an ordinary monster wearing one visible affix. It is the
+// cheapest way to make a corridor of orcs stop being a corridor of orcs.
+
+const AFFIXES = [
+  { id:'armoured',  ic:'🛡', name:'Armoured',  desc:'+2 defend dice',            col:'#9aa6b4' },
+  { id:'frenzied',  ic:'⚔',  name:'Frenzied',  desc:'strikes twice',            col:'#e0603c' },
+  { id:'venomous',  ic:'🐍', name:'Venomous',  desc:'its wounds keep bleeding', col:'#7fd86b' },
+  { id:'warded',    ic:'✦',  name:'Warded',    desc:'spells wash off it',       col:'#a88ae8' },
+  { id:'vampiric',  ic:'🩸', name:'Vampiric',  desc:'heals on every hit',       col:'#c0392b' },
+  { id:'hulking',   ic:'💪', name:'Hulking',   desc:'+2 Body Points, +1 attack die', col:'#d8a83c' },
+  { id:'skittering',ic:'💨', name:'Skittering',desc:'moves three squares further',   col:'#7fc8e8' },
+];
+const AFFIX = (id) => AFFIXES.find(a => a.id === id);
+
+function applyAffix(m, id){
+  if (m.affix) return m;                  // one affix a champion, never two
+  m.affix = id;
+  m.name = AFFIX(id).name + ' ' + m.name;
+  m.elite = true;
+  if (id === 'armoured') m.def += 2;
+  if (id === 'hulking'){ m.bpMax += 2; m.bp = m.bpMax; m.atk += 1; }
+  if (id === 'skittering') m.mv += 3;
+  return m;
+}
+const isWarded = (m) => m && m.affix === 'warded';
+
+// Poison left by a venomous strike: one Body Point at the start of your turn.
+function tickPoison(){
+  for (const h of livingHeroes()){
+    if (!h.poison) continue;
+    h.poison--;
+    floatText(h.x, h.y, '☠', '#7fd86b');
+    spark(h.x, h.y, 8, '#7fd86b', { spd:.01, up:.004 });
+    say(`${h.name} is bleeding — 1 Body Point.`, 'bad');
+    hurt(h, 1, null);
+  }
+}
+
+/* -------------------------------------------------------------- 12d. FATE */
+// One spendable currency that turns a bad roll into a decision. Nothing else
+// in the game is this addictive, so it is deliberately scarce.
+
+function fateOf(){ return G.run ? (G.run.fate || 0) : (G.q ? (G.q.fate || 0) : 0); }
+function addFate(n, why){
+  if (!G.q) return;
+  if (G.run) G.run.fate = (G.run.fate || 0) + n;
+  else G.q.fate = (G.q.fate || 0) + n;
+  if (n > 0) say(`✦ ${n} Fate${why ? ' — ' + why : ''}.`, 'magic');
+  renderHUD();
+}
+// Reroll the dice on the table. Only once per pool, and only while they are up.
+function canReroll(){
+  return !!(G.dice && G.dice.kind !== 'move' && !G.dice.rerolled && fateOf() > 0 && !G.q.over);
+}
+function spendReroll(){
+  if (!canReroll()) return false;
+  const D = G.dice;
+  D.rerolled = true;
+  if (G.run) G.run.fate--; else G.q.fate--;
+  const atk = [], def = [];
+  for (const it of D.items){
+    it.face = combatDie();
+    it.settle = Math.max(120, D.t + 90);
+    (it.side === 'atk' ? atk : def).push(it.face);
+  }
+  D.t = Math.min(D.t, 60);
+  D.total = Math.max(D.total, D.t + 900);
+  if (D.timer) D.timer.t = 900;
+  if (D.onReroll) D.onReroll(atk, def);
+  sfx('spell'); G.shake = 8;
+  say('✦ Fate is spent. The dice go again.', 'magic');
+  renderHUD();
+  return true;
+}
+
 /* ------------------------------------------------------- floor generation */
 
 const FLOOR_A = ['Weeping','Ashen','Hollow','Rusted','Bleeding','Silent','Broken','Gilded',
@@ -4753,6 +4922,7 @@ function makeFloor(depth, R){
     name, sub:`Depth ${depth}`, depth, mods,
     intro:'', objective, monsters, furn,
     traps:Math.min(14, traps), secrets: depth >= 3 ? 2 : 1,
+    eliteChance: Math.min(.32, .06 + depth*.032),
     reward: 60 + depth*40, keepItem,
   };
 }
@@ -4768,14 +4938,35 @@ function newRun(partyIds){
   }
   return {
     heroes, party:partyIds.slice(), depth:0, boons:[], gold: metaHas('warchest') ? 250 : 0,
-    kills:0, floorsCleared:0, revived:false, over:false, seed: (Math.random()*1e9)|0,
+    kills:0, floorsCleared:0, revived:false, over:false, fate:1, nextDef:null,
+    seed: (Math.random()*1e9)|0,
   };
 }
 function runAlive(){ return G.run ? G.run.heroes.filter(h => h.alive) : []; }
 
+// Two or three stairs lead down from every floor, and you see what is waiting
+// at the bottom of each before you commit to one.
+function floorChoices(depth){
+  const n = depth >= 3 ? 3 : 2;
+  const out = [];
+  for (let i = 0; i < n; i++){
+    const R = mkRng(G.run.seed + depth*7717 + i*90001);
+    const def = makeFloor(depth, R);
+    def.branch = i;
+    out.push(def);
+  }
+  return out;
+}
+function chooseFloor(def){
+  if (!G.run) return false;
+  G.run.nextDef = def;
+  return true;
+}
+
 function beginFloor(){
   const R = mkRng(G.run.seed + G.run.depth*7717);
-  const def = makeFloor(G.run.depth, R);
+  const def = G.run.nextDef || makeFloor(G.run.depth, R);
+  G.run.nextDef = null;
   clearTimers();
   G.fx = []; G.dice = null; G.aim = null; G.shake = 0;
   G.cam = { x:0, y:0, z:1, tx:null, ty:null };
@@ -4794,7 +4985,7 @@ function beginFloor(){
   }
   if (boonHas('hoard')) G.run.gold += 100;
 
-  startQuest(-1, def, G.run.seed + G.run.depth*104729);
+  startQuest(-1, def, G.run.seed + G.run.depth*104729 + (def.branch || 0)*7717);
   G.q.runDepth = G.run.depth;
   if (boonHas('trapsense') || modHas('brittle')) for (const tr of G.q.traps) tr.found = true;
   if (boonHas('mapsense')) for (const k in G.q.doors) G.q.doors[k].found = true;
@@ -4912,15 +5103,34 @@ function buyPedlar(id){
   return true;
 }
 
+let draftState = null;
 function showDraft(){
-  const opts = draftOptions();
-  G.q.draft = opts.map(o => o.id);
   const next = G.run.depth + 1;
+  if (!draftState || draftState.depth !== G.run.depth){
+    draftState = { depth:G.run.depth, opts:draftOptions(), taken:null, stairs:null };
+  }
+  if (!draftState.stairs){
+    G.run.depth = next;                       // generate the floors below
+    draftState.stairs = floorChoices(next);
+    G.run.depth = next - 1;
+  }
+  const opts = draftState.opts;
+  G.q.draft = opts.map(o => o.id);
+  G.q.stairs = draftState.stairs.map(d => d.name);
   const rows = opts.map(b => `<div class="row">
       <div class="ic">${b.ic}</div>
       <div class="tx"><b>${b.name}</b><s>${b.desc}</s></div>
-      <button class="bu" data-boon="${b.id}">Take</button>
+      <button class="bu ${draftState.taken === b.id ? 'own' : ''}" data-boon="${b.id}"
+        ${draftState.taken ? 'disabled' : ''}>${draftState.taken === b.id ? 'Taken' : 'Take'}</button>
     </div>`).join('');
+  const stairs = draftState.stairs.map((d, i) => {
+    const mods = (d.mods || []).map(m => `${MOD(m).ic} ${MOD(m).name}`).join(' · ');
+    return `<div class="qrow" data-stair="${i}">
+      <div class="n">⬇</div>
+      <div class="tx"><b>${d.name}</b><s>${d.objective.label}<br>
+        ${mods ? mods : 'No hazard worth the name'} · ◈ ${d.reward} · ${d.monsters.reduce((n2,m)=>n2+m.n,0)} hostiles</s></div>
+    </div>`;
+  }).join('');
   const alive = runAlive();
   const ped = PEDLAR.map(p => `<div class="row">
       <div class="ic">${p.ic}</div>
@@ -4943,17 +5153,22 @@ function showDraft(){
     <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">The pedlar on the stair</div>
     ${ped}
     <div class="rule"></div>
-    <div style="text-align:center">
-      <button class="btn ghost" id="mSkip">Take nothing, go down</button>
-    </div>`, 'draft');
+    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--gold);text-align:center;margin-bottom:6px">Choose your stair</div>
+    ${stairs}`, 'draft');
   bindAll('.bu[data-boon]', el => {
-    takeBoon(el.dataset.boon);
-    closeModal();
-    G.run.depth++;
-    beginFloor();
+    if (draftState.taken) return;
+    if (takeBoon(el.dataset.boon)) draftState.taken = el.dataset.boon;
+    showDraft();
   });
   bindAll('.bu[data-ped]', el => { if (buyPedlar(el.dataset.ped)) showDraft(); });
-  bindModal('#mSkip', () => { closeModal(); G.run.depth++; beginFloor(); });
+  bindAll('.qrow[data-stair]', el => {
+    const d = draftState.stairs[+el.dataset.stair];
+    draftState = null;
+    closeModal();
+    G.run.depth++;
+    chooseFloor(d);
+    beginFloor();
+  });
   if (!HEADLESS) $('hud').classList.remove('on');
 }
 
@@ -5279,12 +5494,14 @@ globalThis.HQ = {
   BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes,
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
   draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
+  floorChoices, chooseFloor,
   newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius,
   activeHero, heroes, livingHeroes, monstersOf, busy, hudState, syncHUD, renderHUD,
   strikeBlocker, strikeReason,
   tapTile, selectHero, endHeroTurn, zargonTurn, monsterAct, heroWalk, refreshField,
   doAttack, canStrike, monsterAttack, hurt, kill, attackDice, defendDice, moveSlow,
   rollCombat, combatDie, countSkulls, countShields,
+  AFFIXES, AFFIX, applyAffix, isWarded, tickPoison, fateOf, addFate, canReroll, spendReroll,
   castSpell, knownSpells, spellReady, searchTreasure, searchTraps, disarmTrap, disarmTarget,
   quaffPotion, useHolyWater, applyTreasure, spawnWanderer, openDoorAt, springTrap, giveQuestItem,
   objectiveReady, needsEscape, onStairs, checkQuestState, questOver, showQuestEnd,
