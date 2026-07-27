@@ -1306,7 +1306,7 @@ function spawnUnit(side, kind, o){
     ad:d.ad * waveScale * adUp * (o.adM || 1), armor:d.armor + armUp, mr:d.mr + armUp,
     as:d.as, rng:d.rng, spd:d.spd, r:d.r, tdmg:d.tdmg, magic:!!d.magic, bounty:d.bounty,
     cd:rr(0, .5), target:null, dead:false, slowT:0, slowP:0, stunT:0, shield:0, shT:0,
-    burn:null, hitT:0, swing:0, swing0:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0, chipHp:0,
+    burn:null, hitT:0, hitT0:0, hitW:0, swing:0, swing0:0, life:o.life || 0, ph:rnd() * 6.28, dmgTaken:0, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
   };
   u.hp = u.mhp;
@@ -1502,7 +1502,8 @@ function dealDmg(src, tgt, amt, o){
     const ab = Math.min(tgt.shield, dmg);
     tgt.shield -= ab; dmg -= ab;
   }
-  tgt.hp -= dmg; tgt.hitT = .18; tgt.dmgTaken = G.t;
+  tgt.hitW = hitWeight(dmg, tgt.mhp);
+  tgt.hp -= dmg; tgt.hitT = tgt.hitT0 = hitTime(tgt.hitW); tgt.dmgTaken = G.t;
   // A spark where the blow lands. Capped hard so a wave-on-wave brawl cannot
   // bury the frame in particles.
   if (dmg > 0 && fxRoom(4)){
@@ -2003,7 +2004,7 @@ function makeHero(side, cls, name){
     lvl:1, xp:0, kills:0, deaths:0, passive:null, passRank:1, skills:[], pend:[], buffs:[],
     x:gateX(side) + dirOf(side) * 2, y:0, r:.62, dead:false, inLane:false, respawnT:0,
     hp:1, mhp:1, mana:1, mmana:1, cd:0, slowT:0, slowP:0, stunT:0, shield:0, shT:0, burn:null,
-    hitT:0, swing:0, swing0:0, target:null, ph:rnd() * 6.28, rage:0, atkN:0, dmgTaken:-99, retreat:false,
+    hitT:0, hitT0:0, hitW:0, castT:0, castT0:0, swing:0, swing0:0, target:null, ph:rnd() * 6.28, rage:0, atkN:0, dmgTaken:-99, retreat:false,
     lastKiller:null, dmgDealt:0, magic:false, tdmg:1, chipHp:0,
     pullT:0, pullX:0, pullY:0, pullSp:0, pullBy:null,
   };
@@ -3149,11 +3150,22 @@ function boltFx(x, y, x2, y2, col){ if (fxRoom(1)) G.fx.push({ k:'bolt', x, y, x
 // would print unreadably small without one.
 const FLOAT_SC = { min:.74, max:1.75, full:.32 };
 const FLOAT_POP = .16;
+// How hard a blow landed, 0 to 1, a hit worth FLOAT_SC.full of your health
+// being as hard as it gets counted. ONE normalisation, because two things in
+// the picture answer this question and they were not answering it the same
+// way: the damage number was sized by it and the body it landed on was handed
+// a flat .18 seconds and a flat 2.6 pixels whether it was a graze or a
+// haymaker. Measured, the number ran 0.77 to 1.75 across the range while the
+// flinch sat at 0.18 for every single hit.
+const hitWeight = (amt, mhp) =>
+  (!(mhp > 0) || !(amt > 0)) ? 0 : clamp(amt / (mhp * FLOAT_SC.full), 0, 1);
 function floatScale(amt, mhp){
-  if (!(mhp > 0) || !(amt > 0)) return FLOAT_SC.min;
-  const f = clamp(amt / (mhp * FLOAT_SC.full), 0, 1);
-  return FLOAT_SC.min + (FLOAT_SC.max - FLOAT_SC.min) * f;
+  return FLOAT_SC.min + (FLOAT_SC.max - FLOAT_SC.min) * hitWeight(amt, mhp);
 }
+// What that weight buys a body: how long it is rocked, and how far.
+const HIT = { min:.10, max:.30, near:.9, far:3.4 };
+const hitTime = (w) => HIT.min + (HIT.max - HIT.min) * w;
+const hitPush = (w) => HIT.near + (HIT.far - HIT.near) * w;
 // Where a new number goes when others are still rising near it. The step and
 // the window were fixed numbers, written when every damage number was the same
 // size — now that a big hit prints at nearly two and a half times a scratch,
@@ -3262,7 +3274,7 @@ function castFx(h, s, tgt){
   // decoration and scales freely. `strike` next door already had this right:
   // it scales its stylised slash and leaves the truthful wave beside it alone.
   const fxR = (base) => aoe || base * big;
-  h.castT = ult ? .5 : .32;                      // the caster itself pops
+  h.castT = h.castT0 = ult ? .5 : .32;           // the caster itself pops
   h.castCol = ult ? '#ffe08a' : col;
 
   switch (s.k){
@@ -4645,10 +4657,11 @@ function drawUnit(c, u){
   // body's COLOUR for a frame — so twenty bodies trading blows read as twenty
   // bodies standing still, occasionally flashing. A flinch away from the enemy
   // costs nothing and makes a brawl look like one.
-  const flinch = u.hitT > 0 ? (u.hitT / .18) * 2.6 * sc * -dirOf(u.side) : 0;
+  const flinch = u.hitT > 0
+    ? (u.hitT / (u.hitT0 || HIT.min)) * hitPush(u.hitW || 0) * sc * -dirOf(u.side) : 0;
   let cast = 0;
   if (u.castT > 0){
-    cast = clamp(u.castT / .32, 0, 1);
+    cast = clamp(u.castT / (u.castT0 || .32), 0, 1);
     const gr = (7 + cast * 9) * sc;
     c.globalAlpha = cast * .55;
     ell(c, p[0], p[1] + 1, gr, gr * .45, u.castCol || '#ffe08a');
@@ -8278,7 +8291,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, SWING, swingTime, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
+  floatScale, hitWeight, HIT, hitTime, hitPush, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
