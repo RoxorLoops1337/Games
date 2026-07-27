@@ -22,7 +22,12 @@ import { clamp, smooth } from '../core/state.js';
 // How far from the eye the shadow map covers. Past this a raking dusk shadow is
 // indistinguishable from ambient occlusion anyway, and the AO pass carries the
 // grounding instead.
-const SHADOW_RANGE = { 0: 0, 1: 42, 2: 68, 3: 96 };
+// The sphere that bounds a frustum slice is set by the far plane's *corners*,
+// and at an 80° field of view those are a long way off-axis: a 96 m range needs
+// a 164 m radius, which is 8 cm a texel even on a 4096² map. Pulling the range
+// in buys sharpness where shadows are actually read — anything past ~70 m at a
+// raking dusk sun is indistinguishable from ambient occlusion anyway.
+const SHADOW_RANGE = { 0: 0, 1: 38, 2: 55, 3: 72 };
 
 // A low sun casts a long, shallow shadow, so the depth range has to reach well
 // behind the receiver to still contain the caster — otherwise a floodlight mast
@@ -124,9 +129,13 @@ export function createLighting(G, engine, sky) {
   function grade(dt) {
     const direct = Math.max(0, sky.sunDir.y);    // sine of the elevation angle
 
-    // Direct sun falls away fast near the horizon, which is the whole reason a
-    // dusk scene reads as dusk. Below the horizon it is gone entirely.
-    const target = 3.6 * Math.pow(direct, 0.55);
+    // A low sun is *reddened and softened*, not dim. The first version of this
+    // used a 0.55 exponent and landed on 1.26 against an ambient of 1.34 — with
+    // ambient at parity a shadowed surface keeps the whole sky and loses only
+    // the direct term, so nothing casts a shadow you can see. At 8.5° this
+    // curve gives about 3.5, which is roughly a 4:1 key-to-fill and the reason
+    // a mast throws a shadow across the apron instead of a smudge.
+    const target = 1.2 + 4.5 * Math.pow(direct, 0.35);
     state.sunIntensity = smooth(state.sunIntensity, target, 6, dt);
     sun.intensity = state.sunIntensity;
     sun.color.copy(sky.sunColor);
@@ -136,7 +145,11 @@ export function createLighting(G, engine, sky) {
     // down. A rig that holds ambient constant goes black at exactly the hour
     // this level is set at — which is the failure this line exists to prevent,
     // and was the reason every up-facing surface here was reading near-black.
-    const envTarget = 0.85 + (1 - clamp(direct / 0.35, 0, 1)) * 0.85;
+    // Enough to keep an up-facing surface off the floor, not so much that it
+    // competes with the key. The balance to watch is the ratio, not either
+    // number: this stays near a quarter of the sun, and the moment it reached
+    // parity every cast shadow in the level disappeared.
+    const envTarget = 0.55 + (1 - clamp(direct / 0.35, 0, 1)) * 0.55;
     state.envIntensity = smooth(state.envIntensity, envTarget, 5, dt);
     scene.environmentIntensity = state.envIntensity;
     // The viewmodel lives in its own scene with its own camera, so it does not
