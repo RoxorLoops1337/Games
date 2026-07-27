@@ -302,6 +302,11 @@ export function createPostFX(G, engine, sky) {
       passes.fxaa.render(null, ldr.texture);
     }
 
+    // Hand this frame's world colour and depth to anyone outside the chain —
+    // the FX system reads both. Published after the frame is done with them so
+    // the buffer can never be the one a later draw is bound to.
+    scene.publish();
+
     renderer.setRenderTarget(null);
     renderer.autoClear = true;
     captured = false;
@@ -318,6 +323,18 @@ export function createPostFX(G, engine, sky) {
     // Exposed so a settings menu or a debug key can switch a single stage
     // without rebuilding anything.
     passes, caps, enabled,
+
+    // ── shared buffers ───────────────────────────────────────────────────────
+    // Both are the previous frame's world render, at full resolution, and both
+    // are null when the chain is not running so a consumer can fall back.
+    //
+    // `depthTexture` saves the FX system a whole extra scene render for soft
+    // particles; `sceneTexture` is linear HDR world colour before tonemapping,
+    // which is what a refraction or heat-haze effect needs to sample. They are
+    // one frame stale on purpose: sampling the current frame's buffers would
+    // mean reading the framebuffer that is being written, which is undefined.
+    get depthTexture() { return (!broken && passes.scene) ? passes.scene.publishedDepth : null; },
+    get sceneTexture() { return (!broken && passes.scene) ? passes.scene.publishedColor : null; },
 
     render() {
       if (broken || !workA) { forward(); return; }
