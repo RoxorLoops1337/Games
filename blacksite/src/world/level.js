@@ -279,6 +279,27 @@ export function buildLevel(G, engine, materials) {
     S(boxFromCenter(px, PY - 0.045, (TR.z0 + TR.z1) / 2, pw, 0.09, TR.z1 - TR.z0 + 0.3, SURFACE.METAL));
   }
 
+  // The tripod work light standing at the open end of the trench, facing back
+  // down it. Everything else on this site is nine metres up or bolted to a
+  // wall, and none of it puts anything on the middle of the apron — which is
+  // the largest piece of ground the player crosses and the one place the low
+  // sun cannot reach past the catwalk. A head at 1.7 m is the only fixture
+  // geometry that can, and a portable lamp left beside the cable somebody was
+  // last pulling is the reason there is one.
+  {
+    const wl = PR.workLamp({});
+    const ry = -1.845;
+    putAll(wl.body, 'metal', 8.2, PY, 3.6, ry, 0, 0, 'pad');
+    putAll(wl.lens, 'lamp', 8.2, PY, 3.6, ry, 0, 0, 'pad');
+    S(boxFromCenter(8.2, PY + 0.86, 3.6, 0.5, 1.72, 0.5, SURFACE.METAL, { thickness: 10 }));
+    const c = Math.cos(0.30);
+    practical({
+      pos: [8.2, PY + 1.74, 3.6],
+      aim: [8.2 + c * Math.sin(ry) * 6, PY + 1.74 - Math.sin(0.30) * 6, 3.6 + c * Math.cos(ry) * 6],
+      color: WORK, intensity: 22, distance: 16, angle: 0.72, penumbra: 0.5,
+    });
+  }
+
   // Road in from the gate, and the two aprons north of the bunker line.
   apron(-7.5, 12, 7.5, 52, { cell: 6.5 });
   floorBox(-7.5, 12, 7.5, 52);
