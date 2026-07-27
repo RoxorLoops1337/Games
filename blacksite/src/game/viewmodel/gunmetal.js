@@ -188,11 +188,11 @@ export function createGunMaterials(G, engine, materials) {
     phos: from('metal', { roughness: 0.58, metalness: 0.88, envMapIntensity: 1.0 }),
     // Furniture. Glass-filled nylon is a dielectric and much rougher; getting
     // this contrast right is most of what makes the metal look like metal.
-    poly: from('dark', { roughness: 0.76, metalness: 0.04, envMapIntensity: 1.0 }),
+    poly: from('dark', { roughness: 0.84, metalness: 0.03, envMapIntensity: 1.0 }),
     // Grip pads, buttpad, sling loops.
     rubber: from('dark', { roughness: 0.93, metalness: 0.0, envMapIntensity: 1.0 }),
     // Nomex glove. Slightly sheened where the palm is worn smooth.
-    glove: from('dark', { roughness: 0.82, metalness: 0.0, envMapIntensity: 1.0 }),
+    glove: from('dark', { roughness: 0.88, metalness: 0.0, envMapIntensity: 1.0 }),
   };
 
   // The lens is not glass in the usual sense — it is a coated element, which
