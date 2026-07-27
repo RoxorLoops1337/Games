@@ -4762,19 +4762,128 @@ function poly(c, pts, fill, stroke, lw){
 function ell(c, x, y, rx, ry, fill){
   c.beginPath(); c.ellipse(x, y, rx, ry, 0, 0, 6.2832); c.fillStyle = fill; c.fill();
 }
-// A shadow falls AWAY from the sun. Every one in the game sat directly under
-// its object, which was fine while nothing in the sky said where the light
-// came from — but SUN says now, and a shadow with no direction is the one
-// thing left in the picture that does not know where the light is.
-//
-// The offset is a fraction of the patch's own size, so a town hall throws
-// further than a wood chip without anyone having to say how tall either is.
-// Kept under one radius: past that the shadow clears the object and the thing
-// reads as floating rather than lit.
-const SHADOW = { dx:.34, dy:.22 };
+/* GROUND CONTACT: two marks, not one.
+
+   A shadow falls AWAY from the sun, and the offset is a fraction of the
+   patch's own size, so a keep throws further than a wood chip without anyone
+   having to say how tall either is. That much was already true.
+
+   What was not: ONE undirected ellipse was the entire shadow language of this
+   world. It was deliberately held under a radius so that no shadow ever
+   cleared its own footprint — which meant no shadow ever resembled its
+   caster, none had a contact core, and a dozen bodies in a brawl multiplied
+   into one grey mush. Six art directors looking from six different lenses all
+   came back with the same sentence: nothing here is attached to the ground.
+
+   So anything standing on the ground gets TWO marks, and they do different
+   jobs:
+
+     the contact core   the footprint at .45, ZERO offset, hard-edged, dark.
+                        This is the occlusion in the angle where the object
+                        meets the ground, and it is the mark that fastens: it
+                        never moves, so the eye reads contact, and being small
+                        it survives overlapping instead of pooling.
+
+     the thrown body    the same footprint smeared along the sun vector at a
+                        third of the core's weight. It is allowed to CLEAR the
+                        footprint now — the old rule against that is what kept
+                        every shadow a haze directly underneath — because the
+                        core is holding the object down and the throw is free
+                        to say where the light is.
+
+   Both come off the ONE colour the caller already passes, so all thirty call
+   sites in this file inherit the pair untouched. That is the point: the panel
+   ruled that the bug is not "the keep has no shadow", it is that coverage is
+   per-asset-type and therefore always inconsistent — so it is fixed at the
+   primitive, which is the only place it can be fixed once and stay fixed.
+
+   The caller's globalAlpha is folded IN rather than laid over. drawEnds wraps
+   the keep's shadow in .22; a blanket alpha over the pair would flatten them
+   straight back into the single haze this replaces.                          */
+const SHADOW = {
+  // The soft mark's throw, as a fraction of the patch. Unchanged, and still
+  // under one radius — this is what something NOT touching the ground gets,
+  // where there is no contact to anchor a longer throw to.
+  dx:.34, dy:.22,
+  reach:3.1,     // how much further the thrown BODY goes than that
+  core:.45,      // the contact patch, as a fraction of the footprint
+  coreA:1.75,    // what the caller's alpha buys the core...
+  bodyA:.70,     // ...and what it buys the throw
+};
+/* No level of detail here, and that is deliberate — it was tried. Dropping to
+   one mark below about a pixel of core costs three fills a prop and looks
+   identical STILL, so it reads as free. It is not: a hold carries sixty pieces
+   of scatter within a few pixels of each other in size, so they all cross the
+   threshold within one notch of the zoom, and sixty shadows change shape
+   together on a wheel click. A pop that size is worse than the 4% it saves,
+   and the op-count invariant the hold's own suite keeps saw it before any
+   screenshot did.                                                            */
 const shadowSide = () => (SUN.x < .5 ? 1 : -1);
 const shadowOff = (rx, ry) => [rx * SHADOW.dx * shadowSide(), ry * SHADOW.dy];
+// The same bearing, further out: where the sun puts the far end of the body.
+const throwOff = (rx, ry) =>
+  [rx * SHADOW.dx * SHADOW.reach * shadowSide(), ry * SHADOW.dy * SHADOW.reach];
+/* The colour a caller passed, pulled apart once and kept. Every shadow in the
+   game now needs its colour at two different weights, and rebuilding that from
+   a string forty times a frame is work nobody has to do twice. Cosmetic: no
+   part of this is in netHash, and the key is the string itself. */
+const SH_PARTS = new Map();
+function shadowParts(col){
+  let v = SH_PARTS.get(col);
+  if (v) return v;
+  let r = 0, g = 0, b = 0, a = 1;
+  if (col.charCodeAt(0) === 35){
+    if (col.length === 4){
+      const n = parseInt(col.slice(1), 16);
+      r = ((n >> 8) & 15) * 17; g = ((n >> 4) & 15) * 17; b = (n & 15) * 17;
+    } else {
+      const n = parseInt(col.slice(1, 7), 16);
+      r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
+    }
+  } else {
+    const p = col.slice(col.indexOf('(') + 1, col.lastIndexOf(')')).split(',');
+    r = Math.round(+p[0]); g = Math.round(+p[1]); b = Math.round(+p[2]);
+    if (p.length > 3) a = +p[3];
+  }
+  v = { pre:'rgba(' + r + ',' + g + ',' + b + ',', a };
+  if (SH_PARTS.size < 512) SH_PARTS.set(col, v);
+  return v;
+}
+/* A footprint smeared along a vector: the convex hull of the patch the object
+   stands on and the patch the light throws it to. Two arcs and one fill, and
+   unlike an ellipse parked under the object it has the caster's own width at
+   both ends — which is what makes a gate read as a gate lying on the deck and
+   a body read as a body.
+
+   The arcs are split at the bearing's own tangents (atan2 in the ellipse's
+   parametric space, not screen space, or a squashed patch splits crooked), and
+   the NEAR cap is laid first so the two subpaths close along both flanks with
+   no moveTo between them. */
+function smear(c, x, y, rx, ry, ox, oy, col){
+  const t = Math.atan2(oy / ry, ox / rx);
+  c.beginPath();
+  c.ellipse(x, y, rx, ry, 0, t + 1.5708, t + 4.7124);
+  c.ellipse(x + ox, y + oy, rx, ry, 0, t - 1.5708, t + 1.5708);
+  c.closePath();
+  c.fillStyle = col; c.fill();
+}
 function shadow(c, x, y, rx, ry, col){
+  if (!(rx > 0) || !(ry > 0)) return;
+  const q = shadowParts(col), env = c.globalAlpha;
+  const w = q.a * env;                 // the weight the caller asked for, in total
+  const o = throwOff(rx, ry);
+  c.globalAlpha = 1;
+  smear(c, x, y, rx, ry, o[0], o[1],
+    q.pre + Math.min(1, w * SHADOW.bodyA).toFixed(3) + ')');
+  ell(c, x, y, rx * SHADOW.core, ry * SHADOW.core,
+    q.pre + Math.min(1, w * SHADOW.coreA).toFixed(3) + ')');
+  c.globalAlpha = env;
+}
+// One soft ellipse, for what is NOT standing on the ground: a shaft in flight,
+// the inhibitor's floating shard. There is no contact under either of them, and
+// a contact core is a claim about where a thing is touching — so drawing one
+// under something in mid-air would be the loudest lie in the picture.
+function softShadow(c, x, y, rx, ry, col){
   const o = shadowOff(rx, ry);
   ell(c, x + o[0], y + o[1], rx, ry, col);
 }
@@ -5638,6 +5747,23 @@ const PLANK = {
   bolts:6,       // bolt heads across each strap
   rail:4,        // world units between rail posts
 };
+/* Where the sun puts a point standing `h` above the deck: `x` world units
+   along the span per unit of height, `y` across it. The same bearing every
+   other shadow in the game leans on — shadowSide() supplies the direction —
+   stated in world units because the rails are IN the world and every one of
+   these lands through lp() like anything else on the boards. Cooler than the
+   planks it falls on, not just darker: the light that reaches a shadow here
+   is the sky's. */
+const RAIL_SH = { x:4.2, y:1.0, col:'rgba(30,34,32,.34)' };
+// Which edge of the deck the sun is BEHIND — asked of the projection, never
+// assumed. lp() puts the smaller screen y further off, so this is a question
+// with an answer rather than a constant somebody typed in and a later camera
+// change quietly falsified.
+const deckFarY = (halfW) => lp(0, -halfW)[1] < lp(0, halfW)[1] ? -halfW : halfW;
+// And where a point `h` above that edge lands on the boards: along the span the
+// way every other shadow leans, and ACROSS it toward the middle of the deck.
+const railShadowOff = (h, farY) =>
+  [h * RAIL_SH.x * shadowSide(), h * RAIL_SH.y * (farY < 0 ? 1 : -1)];
 /* lp() is an AFFINE projection: a line of constant y on the deck is a straight
    line on screen at every x, and the direction x runs in never changes. So one
    gradient laid on the axis perpendicular to the run of the span colours the
@@ -5888,20 +6014,44 @@ function drawDeck(c){
       c.fillStyle = 'rgba(96,98,99,.85)'; bolt(0, 0, br * .82, br * .62);
       c.fillStyle = 'rgba(226,222,206,.55)'; bolt(-br * .26, -br * .22, br * .38, br * .28);
     }
-    // 7. what the far handrail throws on the boards. Only the far one: the
-    //    sun is behind the viewer's left shoulder, so the near rail's shadow
-    //    falls off the bridge and into the gorge, and drawing it would be a
-    //    lie the rest of the lighting could be checked against.
-    const shx = D.railH * 1.75, shy = D.railH * .42;
-    c.fillStyle = 'rgba(34,29,22,.26)';
+    /* 7. what the far handrail throws on the boards.
+
+       A hundred and twenty world units of handrail stand in open daylight
+       over the most-looked-at surface in the game, and what they put on it
+       was one stub of shade per post: no top rail, no mid rail, nothing
+       running the LENGTH of the deck at all. The rails are what a rail
+       shadow is — the stripes are the whole reason you can tell the boards
+       are lit rather than tinted.
+
+       Only the FAR rail throws. The sun is over the viewer's left shoulder
+       and the throw comes toward the camera, so the near rail's shadow leaves
+       the deck at the fascia and drops thirty feet into the gorge — drawing
+       it would be a lie the rest of the lighting could be checked against.
+       Which edge is the far one is ASKED of the projection rather than
+       assumed: lp() puts the smaller screen y further off, and the day the
+       camera is flipped the assumption paints every stripe off the wrong
+       side of the bridge.                                                   */
+    const farY = deckFarY(W);
+    const o0 = railShadowOff(D.railH, farY);
+    const shx = o0[0], shy = o0[1];
+    // one rail, all the way down the visible run: two points, one quad
+    const railBar = (h, half) => {
+      const o = railShadowOff(h, farY);
+      const a = lp(xs[i0] + o[0], farY + o[1] - half), b = lp(xs[i1] + o[0], farY + o[1] - half);
+      const d2 = lp(xs[i1] + o[0], farY + o[1] + half), e2 = lp(xs[i0] + o[0], farY + o[1] + half);
+      dquad(c, a[0], a[1], b[0], b[1], d2[0], d2[1], e2[0], e2[1]);
+    };
+    c.fillStyle = RAIL_SH.col;
     c.beginPath();
+    railBar(D.railH, .17);                     // the top rail...
+    railBar(D.railH * .48, .12);               // ...and the one under it
     for (let px = Math.ceil(xs[i0] / PLANK.rail) * PLANK.rail; px <= xs[i1]; px += PLANK.rail){
-      const a = lp(px - .13, -W), b = lp(px + .13, -W);
-      const d2 = lp(px + .13 + shx, -W + shy), e2 = lp(px - .13 + shx, -W + shy);
+      const a = lp(px - .13, farY), b = lp(px + .13, farY);
+      const d2 = lp(px + .13 + shx, farY + shy), e2 = lp(px - .13 + shx, farY + shy);
       dquad(c, a[0], a[1], b[0], b[1], d2[0], d2[1], e2[0], e2[1]);
       // the cap on top of the post, thrown wider than the post below it
-      const c0 = lp(px - .26 + shx, -W + shy), c1 = lp(px + .26 + shx, -W + shy);
-      const c2 = lp(px + .26 + shx * 1.12, -W + shy * 1.12), c3 = lp(px - .26 + shx * 1.12, -W + shy * 1.12);
+      const c0 = lp(px - .26 + shx, farY + shy), c1 = lp(px + .26 + shx, farY + shy);
+      const c2 = lp(px + .26 + shx * 1.12, farY + shy * 1.12), c3 = lp(px - .26 + shx * 1.12, farY + shy * 1.12);
       dquad(c, c0[0], c0[1], c1[0], c1[1], c2[0], c2[1], c3[0], c3[1]);
     }
     c.fill();
@@ -6603,9 +6753,11 @@ function drawEnds(c){
     // which on a wall this tall came out as a pale slab across the middle of
     // it rather than a highlight along the top.
     const base = wallY + keepBase() * z;
-    c.globalAlpha = .22;
-    shadow(c, kp[0], base + 2 * z, 92 * z, 15 * z, '#1d2a1c');
-    c.globalAlpha = 1;
+    // The weight goes in the COLOUR, not in a blanket globalAlpha over the
+    // call. shadow() lays two marks of very different strengths now; a wash
+    // across both flattens them back into the one haze they replaced, and this
+    // is the biggest object in its frame — the one that most needs the core.
+    shadow(c, kp[0], base + 2 * z, 92 * z, 15 * z, 'rgba(29,42,28,.34)');
     /* The air between. The keep stands well behind the gate and the gate is the
        thing you are actually looking at, but the two were painted in exactly
        the same greys, so nothing in the picture said which was further off. A
@@ -6650,7 +6802,8 @@ function drawEnds(c){
     c.globalAlpha = .18; c.fillStyle = '#28322e';
     c.fillRect(kp[0] - 52 * z, base - 8 * z, 104 * z, 8 * z);
     c.globalAlpha = 1;
-    block(c, kp[0] - 54 * z, base - 10 * z, 108 * z, 3 * z, STONE.mid2, STONE.lit);
+    // the plinth cap, oversailing the courses under it by half its own depth
+    block(c, kp[0] - 54 * z, base - 10 * z, 108 * z, 3 * z, STONE.mid2, STONE.lit, STONE.mid, z);
     crown(c, kp[0], wallY - 52 * z, 100 * z, z, 7);
     // the way in, with a timber gate in it rather than a painted hole
     voussoirs(c, kp[0], wallY - 4 * z, 11 * z, 15 * z, z, 9);
@@ -6661,15 +6814,13 @@ function drawEnds(c){
     c.beginPath(); c.arc(kp[0], wallY - 3 * z, 10.4 * z, Math.PI, 0);
     c.lineTo(kp[0] + 10.4 * z, base); c.lineTo(kp[0] - 10.4 * z, base); c.closePath(); c.clip();
     timber(c, kp[0] - 11 * z, wallY - 15 * z, 22 * z, 30 * z, z, 43 + s.i, true);
-    aoBand(c, kp[0] - 11 * z, wallY - 15 * z, 22 * z, 8 * z, 1, .5);
+    archShade(c, kp[0] - 11 * z, wallY - 15 * z, 22 * z, 30 * z);
     c.restore();
     ironStrap(c, kp[0] - 11 * z, wallY - 1 * z, 22 * z, 2.6 * z, z, true);
     ironStrap(c, kp[0] - 11 * z, wallY + 7 * z, 22 * z, 2.6 * z, z, true);
     for (const sx of [-1, 1]){
       const tx = kp[0] + sx * 58 * z;
-      c.globalAlpha = .22;
-      shadow(c, tx, base + 2 * z, 22 * z, 7 * z, '#1d2a1c');
-      c.globalAlpha = 1;
+      shadow(c, tx, base + 2 * z, 22 * z, 7 * z, 'rgba(29,42,28,.32)');
       masonry(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, z, 51 + sx * 3 + s.i, { weather:1 });
       haze(tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z);
       aoSide(c, tx - 16 * z, wallY - 74 * z, 12 * z, 86 * z, stoneLit(), .3);
@@ -6679,7 +6830,9 @@ function drawEnds(c){
       coneRoof(c, tx, wallY - 108 * z, wallY - 72 * z, 23 * z, col, z);
       // the roof sits on the tower head, so the head is in its shade
       aoBand(c, tx - 16 * z, wallY - 74 * z, 32 * z, 9 * z, 1, .40);
-      block(c, tx - 24 * z, wallY - 74 * z, 48 * z, 3 * z, STONE.mid2, STONE.lit);   // the eaves course
+      // the eaves course, which stands eight units clear of a thirty-two unit
+      // tower on both sides — the biggest overhang on the keep
+      block(c, tx - 24 * z, wallY - 74 * z, 48 * z, 3 * z, STONE.mid2, STONE.lit, STONE.mid, z);
       c.fillStyle = STONE.line; c.fillRect(tx - 3 * z, wallY - 56 * z, 6 * z, 14 * z);
       c.fillStyle = STONE.lit;
       c.fillRect(tx + stoneLit() * 3 * z - (stoneLit() < 0 ? .9 * z : 0), wallY - 56 * z, .9 * z, 14 * z);
@@ -6766,8 +6919,44 @@ const STONE_TONE_DARK = STONE_TONE.map(h => shade(h, .84));
    one down the side the sun is on, and the occlusion down the far side and
    along the foot. Below a few pixels the bevel IS the block, so it is skipped
    — a turret at the far end of the bridge does not need it and cannot show it. */
+/* FIX 6 — what a course that PROJECTS does to the wall under it.
+
+   Nothing that overhangs in this world threw anything. The keep's parapet
+   corbels clear of its wall and the wall below it carried on at exactly the
+   same value; the eaves course over a gate tower oversails it by half a tower
+   and left no line at all. An overhang is the cheapest shadow there is — the
+   light simply cannot get in under it — and its absence is most of what made
+   these walls read as printed rather than built.
+
+   A band five world units tall under the course, at shade(base, .55): the
+   wall's own colour under sky alone, which shade() now knows how to make, so
+   the band belongs to the same light as the stone it sits on rather than being
+   a grey laid over it. Hard at the top, where the stone actually overhangs,
+   falling to nothing over the five. Not an opaque fill — the coursing beneath
+   has to survive it, or the band becomes exactly the painted stripe it is
+   there to replace.                                                          */
+const UNDER = { h:5, f:.55, a:.80 };
+function underCourse(c, x, y, w, u, base){
+  const h = UNDER.h * u;
+  if (!(w > 0) || !(h > 0) || typeof base !== 'string' || base[0] !== '#') return;
+  const n = parseInt(shade(base, UNDER.f).slice(1), 16);
+  const pre = 'rgba(' + ((n >> 16) & 255) + ',' + ((n >> 8) & 255) + ',' + (n & 255) + ',';
+  const g = c.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, pre + UNDER.a + ')');
+  g.addColorStop(.30, pre + (UNDER.a * .52).toFixed(3) + ')');
+  g.addColorStop(1, pre + '0)');
+  c.fillStyle = g; c.fillRect(x, y, w, h);
+}
 const BEVEL = { top:.17, side:.11, foot:.15, dark:.78, foot2:.62, min:3.2 };
-function block(c, x, y, w, h, face, top){
+/* `over` is what this block projects OVER: pass the wall's colour and the
+   course draws its own soffit shadow onto it. It is a parameter of the
+   primitive rather than a line at each call site for the same reason the two
+   shadow marks are — coverage that has to be remembered per asset is coverage
+   that will be inconsistent by the next pass. `u` is the unit scale the band
+   is measured in; without it a course drawn at cam.z 2 would throw the same
+   pixels as one at .5. */
+function block(c, x, y, w, h, face, top, over, u){
+  if (over) underCourse(c, x, y + h, w, u || 1, over);
   c.fillStyle = face; c.fillRect(x, y, w, h);
   if (!top) return;
   const t = Math.max(1, h * BEVEL.top);
@@ -6804,6 +6993,27 @@ function aoSide(c, x, y, w, h, dir, a){
   g.addColorStop(0, 'rgba(26,30,28,' + (a || .3).toFixed(3) + ')');
   g.addColorStop(1, 'rgba(26,30,28,0)');
   c.fillStyle = g; c.fillRect(x, y, w, h);
+}
+/* And the other half of FIX 6: no recess in this world was dark. The gate's
+   plank door was lit right up under the arch head, which is the one place on a
+   door the sun can never reach — an opening is a hole through eight feet of
+   wall, the arch stones overhang the void, and the light gets in at the
+   THRESHOLD and dies going up. A door lit evenly to its crown is a door
+   painted on the wall, which is exactly how every one of these read.
+
+   Black, not the grey-green the ambient occlusion uses: this is the absence of
+   light in a hole, not the dark where two lit solids meet, and mixing the two
+   is why the aoBands over these doors registered as a smudge. The top 40% of
+   the opening, falling off downward. One quad per opening.                   */
+const ARCH_SHADE = { f:.40, a:.45 };
+function archShade(c, x, y, w, h){
+  const d = h * ARCH_SHADE.f;
+  if (!(w > 0) || !(d > 0)) return;
+  const g = c.createLinearGradient(0, y, 0, y + d);
+  g.addColorStop(0, 'rgba(0,0,0,' + ARCH_SHADE.a + ')');
+  g.addColorStop(.45, 'rgba(0,0,0,' + (ARCH_SHADE.a * .42).toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(0,0,0,0)');
+  c.fillStyle = g; c.fillRect(x, y, w, d);
 }
 // The bounce of sky and sun down the silhouette edge that faces the light. One
 // thin bright line, at low alpha, on the sun side only — it is what lifts a
@@ -7396,7 +7606,9 @@ function drawStructure(c, st){
         const t = i / 4;
         c.beginPath(); c.moveTo(X + t * 26 * u, ry); c.lineTo(X + t * 34 * u, ry + 14 * u); c.stroke();
       }
-      block(c, X - 35 * u, ry + 13 * u, 70 * u, 4 * u, shade(col, .66));
+      // the roof's fascia oversails the whole gateway, and the wall under it
+      // is the biggest unbroken face on the structure
+      block(c, X - 35 * u, ry + 13 * u, 70 * u, 4 * u, shade(col, .66), null, STONE.mid, u);
       // Arched doorway. The ring was one flat pale shape: an arch is built of
       // VOUSSOIRS, wedges radiating off the centre, and each one takes the
       // light differently depending on which way it faces — which is the whole
@@ -7417,7 +7629,8 @@ function drawStructure(c, st){
       c.beginPath(); c.arc(X, Y - 30 * u, 17 * u, Math.PI, 0);
       c.lineTo(X + 17 * u, Y); c.lineTo(X - 17 * u, Y); c.closePath(); c.clip();
       timber(c, X - 17 * u, Y - 47 * u, 34 * u, 47 * u, u, 23 + st.side, true);
-      aoBand(c, X - 17 * u, Y - 47 * u, 34 * u, 12 * u, 1, .5);
+      // the head of the opening, where the sun has never been
+      archShade(c, X - 17 * u, Y - 47 * u, 34 * u, 47 * u);
       aoSide(c, X - 17 * u, Y - 47 * u, 9 * u, 47 * u, stoneLit(), .34);
       c.restore();
       ironStrap(c, X - 18 * u, Y - 26 * u, 36 * u, 3.5 * u, u, true);
@@ -7455,7 +7668,10 @@ function drawStructure(c, st){
     if (!dead){
       const cy = Y - S.lift * u;
       c.globalAlpha = .30 - S.lift * .045;
-      shadow(c, X, Y - 19 * u, (13 - S.lift) * u, (4.4 - S.lift * .55) * u, '#2c2a26');
+      // The shard hovers over its altar and never lands, so it gets the soft
+      // mark: a contact core under a floating thing says it is resting on the
+      // stone, which is the one thing this object must not look like.
+      softShadow(c, X, Y - 19 * u, (13 - S.lift) * u, (4.4 - S.lift * .55) * u, '#2c2a26');
       c.globalAlpha = S.aura;
       ell(c, X, cy - 38 * u, 30 * u, 30 * u, col);
       c.globalAlpha = 1;
@@ -8641,7 +8857,9 @@ function projShadow(c, p){
   const k = Math.max(PROJ_SHADOW.floor, 1 - h * PROJ_SHADOW.shrink);
   const a = Math.max(PROJ_SHADOW.min, PROJ_SHADOW.a - h * PROJ_SHADOW.fade);
   const g = lp(p.x, p.y, 0);
-  shadow(c, g[0], g[1], PROJ_SHADOW.rx * k * cam.z, PROJ_SHADOW.ry * k * cam.z,
+  // softShadow, not shadow: nothing in flight is touching the deck, so it gets
+  // the throw and no contact core.
+  softShadow(c, g[0], g[1], PROJ_SHADOW.rx * k * cam.z, PROJ_SHADOW.ry * k * cam.z,
     'rgba(0,0,0,' + a.toFixed(3) + ')');
 }
 
@@ -13844,8 +14062,8 @@ window.IB = {
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, TRAINEE, trainCrew, trainSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
-  KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, LIGHT, planeLit, SHADE, sunTint, ROOF, RIDGE, ridgeRim, CONE, coneRoof, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
+  KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, RAIL_SH, deckFarY, railShadowOff, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
+  floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, LIGHT, planeLit, SHADE, sunTint, ROOF, RIDGE, ridgeRim, CONE, coneRoof, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, throwOff, smear, softShadow, shadowParts, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
@@ -13879,7 +14097,7 @@ window.IB = {
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
   startZoom, ZOOM_MIN, ZOOM_MAX, camStep, demoCam, clouds, FLOCKS, drawClouds, drawBirds, CLOUD, CLOUD_PASSES, cloudLean, cloudRise, cloudPath, SKY_SPAN, BIRD, birdSlot, birdDrift, birdBeat, birdBob, heroMeters, heroDoing, showHeroSheet,
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
-  WEAR, battleDamage, crown, hash2, stSeed, merlonHolds, CROWN_TIERS, UPMARK, upBands, upPlate, towerBands, towerRanks, troopRanks, bsumUp, drawStructure,
+  WEAR, battleDamage, crown, block, UNDER, underCourse, ARCH_SHADE, archShade, hash2, stSeed, merlonHolds, CROWN_TIERS, UPMARK, upBands, upPlate, towerBands, towerRanks, troopRanks, bsumUp, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
