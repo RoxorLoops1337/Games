@@ -5426,6 +5426,16 @@ function houseTrim(c, gx, gy, w, d, wh, spec, base){
    One table, drawn by drawBuilding after whatever the building itself put
    down, so all six gain it the same way and cannot drift apart — which is how
    the level came to be missing from all six in the first place.             */
+/* How close you have to be before a plot spells itself out. The labels have
+   always used this; the rank standards added beside them did not, so at a wide
+   zoom every annotation on a hold receded except those — measured, the labels
+   drop from 88 ops to 28 as the camera pulls back and the flags sat at 110 the
+   whole way. Five plots' worth of pennants then became the loudest thing on
+   the island, competing with the buildings they were describing.
+
+   One threshold, asked by both, so they cannot drift apart again.           */
+const PLOT_DETAIL = .72;
+const plotDetail = (b) => cam.z > PLOT_DETAIL || b.tile === sel.tile;
 const RANK = { x:.30, y:-.40, gap:.15, h:.62, w:.17, lift:.55 };
 function rankFlags(c, gx, gy, z, lvl){
   const n = clamp(Math.round(lvl || 1), 1, 3), B = bu();
@@ -5623,7 +5633,7 @@ function drawBuilding(c, b){
       c.lineTo(g[0] + Math.cos(a) * 10 * B, g[1] + Math.sin(a) * 10 * B); c.stroke();
     }
   }
-  rankFlags(c, gx, gy, z, b.lvl);
+  if (plotDetail(b)) rankFlags(c, gx, gy, z, b.lvl);
   c.globalAlpha = 1;
   // Labels are queued and laid out after every building is drawn, so a packed
   // plot does not turn into a pile of overlapping text.
@@ -5632,7 +5642,7 @@ function drawBuilding(c, b){
   if (t === 'farm') sub = '+' + (C.POP_PER_FARM * b.lvl) + ' pop';
   if (t === 'barracks') sub = 'Lv ' + b.lvl + (b.lvl >= 3 ? ' · cannons' : b.lvl >= 2 ? ' · casters' : '');
   if (t === 'tavern') sub = heroCap(s) + ' hero slot' + (heroCap(s) === 1 ? '' : 's');
-  if (holdSide === MY && (cam.z > .72 || b.tile === sel.tile)){
+  if (holdSide === MY && plotDetail(b)){
     const lp0 = bp(gx, gy, 1.55 + z);
     // A packed hold is six labels in a hand's width, so only the one you have
     // selected spells itself out; the rest carry a name and a level digit.
@@ -8485,7 +8495,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, MUSTER, musterRanks, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, MUSTER, musterRanks, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,

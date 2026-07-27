@@ -5080,6 +5080,131 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.cam.x = 26;
     IB.MY = seat0f;
   }
+  {
+    // Every annotation on a hold recedes as the camera pulls back — except the
+    // rank standards, which did not. Measured, the labels drop from 88 ops to
+    // 28 across the threshold while the flags sat at 110 the whole way, so at
+    // a wide zoom five plots' worth of pennants became the loudest thing on
+    // the island, competing with the buildings they were describing.
+    //
+    // The label is the sibling: it has always had this rule. One threshold now,
+    // asked by both.
+    const s = CTX.__stats;
+    const seat0g = IB.MY;
+    IB.MY = 0;
+    const holdAt = (z, sel) => {
+      IB.newMatch({ diff:'veteran', seed:8401 });
+      IB.MY = 0;
+      const sd = G.sides[0];
+      for (const [i, type] of [[0, 'farm'], [3, 'barracks'], [4, 'pit'], [6, 'forge'], [8, 'tavern']])
+        sd.plot[i] = { type, lvl:3, tile:i, raise:0 };
+      IB.sel.tile = sel === undefined ? -1 : sel;
+      IB.cam.follow = false; IB.cam.z = IB.cam.tz = z; IB.cam.x = IB.HOLD_X;
+      // Clear the SHARED captures, not just the one this block reads: the
+      // zoom sweep below draws forty holds, and leaving lines/ellipses to fill
+      // makes a later, unrelated block report an overflow it never caused.
+      s.dropped = 0; s.texts = []; s.lines = []; s.ellipses = []; s.fills = [];
+      const b = s.ops;
+      IB.drawHold(CTX, 0);
+      IB.flushLabels(CTX);
+      return { n:s.ops - b, texts:s.texts.length, dropped:s.dropped };
+    };
+    const near = holdAt(1.6), far = holdAt(.5);
+    t.ok(near.n > 500 && far.n > 500, 'the hold drew at both zooms (' + far.n + ' / ' + near.n + ')');
+    t.ok(near.dropped === 0 && far.dropped === 0, 'and the capture held both');
+    t.ok(near.n > far.n, 'a plot spells itself out only when you are close (' + far.n + ' → ' + near.n + ')');
+    t.ok(near.texts > far.texts, 'and the labels do the same (' + far.texts + ' → ' + near.texts + ')');
+    // The crisp version: the flags and the labels must cross at the SAME zoom,
+    // because they now ask one function. Find each crossing and compare.
+    {
+      const zs = [];
+      for (let z = .40; z <= 1.2; z += .02) zs.push(+z.toFixed(2));
+      const rows = zs.map(z => ({ z, ...holdAt(z) }));
+      const firstAbove = (pick) => {
+        const lo = pick(rows[0]);
+        for (const r of rows) if (pick(r) > lo) return r.z;
+        return null;
+      };
+      const flagZ = firstAbove(r => r.n), textZ = firstAbove(r => r.texts);
+      t.ok(flagZ !== null && textZ !== null, 'both the standards and the labels arrive somewhere in the sweep');
+      t.ok(flagZ === textZ, 'and they arrive at the same zoom (' + flagZ + ' vs ' + textZ + ')');
+      t.ok(Math.abs(flagZ - IB.PLOT_DETAIL) <= .03, 'which is the threshold they share (' +
+        flagZ + ' vs ' + IB.PLOT_DETAIL + ')');
+    }
+    // ISOLATED. Everything above measures the whole hold, where the labels
+    // also recede — so it stays green with the flags left ungated, which is
+    // exactly the bug. The enemy hold draws no labels at all (holdSide !== MY),
+    // so what changes across the threshold THERE is the standards and nothing
+    // else.
+    {
+      const foeHoldAt = (z, lvl) => {
+        IB.newMatch({ diff:'veteran', seed:8405 });
+        IB.MY = 0;
+        const sd = G.sides[1];
+        for (const [i, type] of [[0, 'farm'], [3, 'barracks'], [4, 'pit'], [6, 'forge'], [8, 'tavern']])
+          sd.plot[i] = { type, lvl:lvl === undefined ? 3 : lvl, tile:i, raise:0 };
+        IB.sel.tile = -1;
+        IB.cam.follow = false; IB.cam.z = IB.cam.tz = z;
+        IB.cam.x = C.LANE_LEN - IB.HOLD_X;
+        s.dropped = 0; s.texts = []; s.lines = []; s.ellipses = []; s.fills = [];
+        const b2 = s.ops;
+        IB.drawHold(CTX, 1);
+        IB.flushLabels(CTX);
+        return { n:s.ops - b2, texts:s.texts.length, dropped:s.dropped };
+      };
+      // And compare only within a zoom, never across one: a hold's own op count
+      // moves with the camera for reasons of its own — things leave the screen
+      // — and comparing 0.5 against 1.6 measured that instead, in the opposite
+      // direction, failing with the fix correctly in place. The controlled
+      // reading is level 3 against level 1 at ONE zoom: nothing differs between
+      // those two draws but the number of standards.
+      const flagCost = (z) => {
+        const three = foeHoldAt(z, 3), one = foeHoldAt(z, 1);
+        return { cost:three.n - one.n, drew:one.n, texts:three.texts,
+                 dropped:three.dropped + one.dropped };
+      };
+      const closeUp = flagCost(1.6), wideOut = flagCost(.5);
+      t.ok(closeUp.drew > 400 && wideOut.drew > 400, 'the other hold drew at both zooms (' +
+        wideOut.drew + ' / ' + closeUp.drew + ')');
+      t.ok(closeUp.dropped === 0 && wideOut.dropped === 0, 'and the capture held both');
+      t.ok(closeUp.texts === 0 && wideOut.texts === 0,
+        'and it carries no labels to confound the reading (' + wideOut.texts + '/' + closeUp.texts + ')');
+      t.ok(closeUp.cost > 0, 'close up, the standards cost something (' + closeUp.cost + ')');
+      t.ok(wideOut.cost === 0, 'and pulled back they cost nothing at all (' + wideOut.cost + ')');
+    }
+    // The escape hatch: the plot you have selected spells itself out however
+    // far away you are, or picking a building at a wide zoom tells you nothing.
+    {
+      const plain = holdAt(.5, -1), picked = holdAt(.5, 4);
+      t.ok(picked.n > plain.n, 'the plot you have selected shows itself at any zoom (' +
+        plain.n + ' → ' + picked.n + ')');
+      t.ok(IB.plotDetail({ tile:4 }) === true, 'plotDetail says so directly');
+      IB.sel.tile = -1;
+    }
+    // Rule out the do-nothing thresholds: one that never hides, and one that
+    // never shows.
+    t.ok(IB.PLOT_DETAIL > IB.ZOOM_MIN && IB.PLOT_DETAIL < IB.ZOOM_MAX,
+      'the threshold sits inside the zoom range (' + IB.ZOOM_MIN + ' < ' + IB.PLOT_DETAIL + ' < ' + IB.ZOOM_MAX + ')');
+    // And round 39's invariant still holds where it matters — close up, every
+    // level of every building still puts more on the plot than the one below.
+    {
+      IB.newMatch({ diff:'veteran', seed:8403 });
+      IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
+      let flat = 0;
+      for (const type of Object.keys(IB.BUILDINGS)){
+        const at = [1, 2, 3].map(l => {
+          G.sides[0].plot[4] = { type, lvl:l, tile:4, raise:0 };
+          const b = s.ops; IB.drawHold(CTX, 0); const n = s.ops - b;
+          G.sides[0].plot[4] = null;
+          return n;
+        });
+        for (let i = 1; i < at.length; i++) if (!(at[i] > at[i - 1])) flat++;
+      }
+      t.ok(flat === 0, 'and up close a level still shows on every building (' + flat + ')');
+    }
+    IB.cam.z = IB.cam.tz = 1; IB.cam.x = 26;
+    IB.MY = seat0g;
+  }
 
   // The sweep as a rule instead of a list. Anything the game does FOR the
   // person watching — a sound, a toast, a panel refresh — must never be gated
