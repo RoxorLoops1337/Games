@@ -4023,8 +4023,10 @@ function drawEnds(c){
       poly(c, [[nx - 5 * z, wallY - 10 * z], [nx, wallY - 15 * z], [nx + 5 * z, wallY - 10 * z]], shade(col, .78));
     }
     pennant(c, kp[0] + dir * 20 * z, wallY - 76 * z, z, col, dir);
-    c.fillStyle = '#e7ecf6'; c.font = 'bold ' + Math.max(9, Math.round(11 * z)) + 'px system-ui'; c.textAlign = 'center';
+    c.fillStyle = '#e7ecf6';
+    setText(c, 'bold ' + Math.max(9, Math.round(11 * z)) + 'px system-ui', 'center', 'middle');
     c.fillText(SIDE_NAME[s.i], kp[0], wallY - 118 * z);
+    endText(c);
   }
 }
 
@@ -4312,8 +4314,10 @@ function drawStructure(c, st){
   }
   if (!dead) hpBar(c, X, Y - (st.key === 'gate' ? 116 : st.key === 'inhib' ? 72 : 84) * cam.z, st, 44 * cam.z, true);
   else if (st.downT > 0){
-    c.fillStyle = '#d8c49a'; c.font = Math.max(9, Math.round(11 * cam.z)) + 'px system-ui'; c.textAlign = 'center';
+    c.fillStyle = '#d8c49a';
+    setText(c, Math.max(9, Math.round(11 * cam.z)) + 'px system-ui', 'center', 'middle');
     c.fillText(Math.ceil(st.downT) + 's', p[0], p[1] - 18 * cam.z);
+    endText(c);
   }
   if (st.hitT > 0 && !dead){
     c.globalAlpha = st.hitT * 2.2; ell(c, p[0], p[1] - 20 * cam.z, 26 * cam.z, 20 * cam.z, '#ffffff'); c.globalAlpha = 1;
@@ -4723,8 +4727,10 @@ function drawUnitMarks(c, u, bx, by, p, sc){
     ell(c, lx, ly - lr * .34, lr * .86, lr * .5, shade(col, .52));
     c.strokeStyle = shade(col, 1.1); c.lineWidth = Math.max(1, 1.2 * cam.z);
     c.beginPath(); c.arc(lx, ly, lr, 0, 6.2832); c.stroke();
-    c.fillStyle = '#ffe7a8'; c.font = 'bold ' + Math.max(7, Math.round(7 * sc)) + 'px system-ui'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillStyle = '#ffe7a8';
+    setText(c, 'bold ' + Math.max(7, Math.round(7 * sc)) + 'px system-ui', 'center', 'middle');
     c.fillText(String(u.lvl), lx, ly + .4 * sc);
+    endText(c);
     labelQ.push({ x:bx, y:by - 26 * sc, txt:u.name, col:u.side === 0 ? '#bfe0ff' : '#ffc4bd', small:true });
     heroRing(c, bx, p[1], sc, u.side);
   }
@@ -4914,8 +4920,10 @@ function drawLane(c){
     }
     c.globalAlpha = 1;
   }
-  // damage numbers
-  c.textAlign = 'center';
+  // damage numbers. Their y is a world point, so they want the baseline sitting
+  // ON that point rather than an em below it — which is what they were getting
+  // by accident, and only whenever a hero happened to be on screen.
+  setText(c, '10px system-ui', 'center', 'middle');
   for (const f of G.floats){
     const q = lp(f.x, f.y, f.cast ? 2.4 : 1.4);
     c.globalAlpha = clamp(f.t / f.dur, 0, 1);
@@ -4942,6 +4950,7 @@ function drawLane(c){
     }
     c.globalAlpha = 1;
   }
+  endText(c);
 }
 
 // One strip covering the whole world: your hold, the span, their hold.
@@ -5329,13 +5338,36 @@ function drawBuilding(c, b){
   }
 }
 
+/* ------------------------------------------------------------ text state
+   textAlign, textBaseline and font are canvas STATE, and a text offset means
+   one thing under `alphabetic` and another under `middle`. The level roundel
+   on a hero's bar set `middle` and never put it back, so from the moment your
+   first hero walked onto the bridge every label in the game — hold names,
+   structure names, node counts, the Town Hall line — slid half a line down,
+   and slid back when that hero died. Nothing about any individual call was
+   wrong, which is why nothing caught it.
+
+   Everything that draws text goes through these two now: say what you want,
+   then hand the defaults back.                                              */
+const TEXT0 = { align:'start', baseline:'alphabetic' };
+function setText(c, font, align, baseline){
+  c.font = font;
+  c.textAlign = align || 'center';
+  c.textBaseline = baseline || 'alphabetic';
+}
+function endText(c){ c.textAlign = TEXT0.align; c.textBaseline = TEXT0.baseline; }
+
 let labelQ = [];
 function flushLabels(c){
-  c.textAlign = 'center';
   const placed = [];
   labelQ.sort((a, b) => a.y - b.y);
   for (const L of labelQ){
-    c.font = (L.small ? 8 : 9) + 'px system-ui';
+    // The offsets under here used to be `y + 8.5` and `y + 10`, tuned against
+    // whichever baseline the previous draw had left behind — which meant the
+    // whole plate sat differently depending on whether a hero was on screen.
+    // Centred in its own plate is the thing that was actually wanted, and it
+    // no longer needs a magic number to say so.
+    setText(c, (L.small ? 8 : 9) + 'px system-ui', 'center', 'middle');
     const w = c.measureText(L.txt).width + 8, h = L.small ? 11 : 13;
     let y = L.y - 11;
     // nudge upward until this label is clear of the ones already placed
@@ -5354,8 +5386,9 @@ function flushLabels(c){
     c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
     c.fillRect(L.x - w / 2, y, w, h);
     if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(L.x - w / 2 + .5, y + .5, w - 1, h - 1); }
-    c.fillStyle = L.col; c.fillText(L.txt, L.x, y + (L.small ? 8.5 : 10));
+    c.fillStyle = L.col; c.fillText(L.txt, L.x, y + h / 2);
   }
+  endText(c);
   labelQ = [];
 }
 
@@ -5824,9 +5857,9 @@ function drawHold(c, side){
       }
       const p = bp(gx, gy, .12);
       c.fillStyle = hot ? '#9ad0ff' : 'rgba(226,214,178,.40)';
-      c.font = 'bold ' + Math.round(15 * bu()) + 'px system-ui';
-      c.textAlign = 'center'; c.textBaseline = 'middle';
-      c.fillText('+', p[0], p[1]); c.textBaseline = 'alphabetic';
+      setText(c, 'bold ' + Math.round(15 * bu()) + 'px system-ui', 'center', 'middle');
+      c.fillText('+', p[0], p[1]);
+      endText(c);
     }
   }
   if (!fog && sel.node && NODES[sel.node]){
@@ -8110,7 +8143,7 @@ window.IB = {
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
   WEAR, battleDamage, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
-  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels,
+  drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, drawGround, flushLabels, setText, endText, TEXT0,
 };
 
 </script>
