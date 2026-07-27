@@ -4093,8 +4093,19 @@ function drawEnds(c){
     }
     pennant(c, kp[0] + dir * 20 * z, wallY - 76 * z, z, col, dir);
     c.fillStyle = '#e7ecf6';
-    setText(c, 'bold ' + Math.max(9, Math.round(11 * z)) + 'px system-ui', 'center', 'middle');
-    c.fillText(SIDE_NAME[s.i], kp[0], wallY - 118 * z);
+    const nameSz = Math.max(9, Math.round(11 * z));
+    setText(c, 'bold ' + nameSz + 'px system-ui', 'center', 'middle');
+    const nameY = wallY - 118 * z;
+    c.fillText(SIDE_NAME[s.i], kp[0], nameY);
+    // The keep's name is the biggest piece of text on the board and it was the
+    // one thing that never told the label traffic it was there. Labels dodge
+    // each other, the health bars and the level roundels — so the hold's own
+    // plates walked straight across "Azure Pact", 71 times over a camera sweep
+    // and up to 208px² of overlap at a wide zoom, where the island compresses
+    // and everything crowds the keep. Same shape as the frame: a neighbour
+    // nobody declared. Reserved AFTER drawing, because this is airspace to
+    // stay out of rather than something that moves itself.
+    blockLabel(kp[0], nameY, c.measureText(SIDE_NAME[s.i]).width + LABEL_PAD.x * 2, nameSz * 1.35);
     endText(c);
   }
 }
