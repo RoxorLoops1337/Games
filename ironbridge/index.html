@@ -1579,7 +1579,7 @@ function onStructDown(st, src){
   if (src && src.isHero) g *= 1 + passVal(src, 'structGold');
   foe.res.gold += g; foe.structsKilled++;
   awardXp(src, 70, st.x);
-  fxToast(SIDE_NAME[st.side] + ' loses ' + st.n + '.', st.side === 0 ? 'bad' : 'good');
+  fxToast(SIDE_NAME[st.side] + ' loses ' + st.n + '.', badFor(st.side));
   if (!HEADLESS){
     burstFx(st.x, st.y, '#d8c49a', 30);
     ringFx(st.x, st.y, st.key === 'gate' ? 7 : 4.5, '#ffd9a0');
@@ -1847,7 +1847,7 @@ function structStep(st, dt){
     if (st.downT > 0){
       st.downT -= dt;
       if (st.downT <= 0){ st.dead = false; st.mhp = structMaxHp(G.sides[st.side], st); st.hp = st.mhp;
-        fxToast(SIDE_NAME[st.side] + '’s inhibitor is rebuilt.', st.side === 0 ? 'good' : 'bad'); }
+        fxToast(SIDE_NAME[st.side] + '’s inhibitor is rebuilt.', goodFor(st.side)); }
     }
     return;
   }
@@ -2041,7 +2041,12 @@ function gainXp(h, amt){
     if (C.SKILL_TIERS.includes(h.lvl)) offer(h, 'skill');
     else if (h.lvl === C.ULT_LEVEL) offer(h, 'ult');
     else if (C.RANK_LEVELS.includes(h.lvl)) offer(h, 'rank');
-    if (h.side === 0 && !HEADLESS){ fxToast(h.name + ' reaches level ' + h.lvl + '.', 'good'); sfx('level'); }
+    // This fired only for side zero, so player two's hero levelled up in
+    // silence — no toast, no sound, nothing at all. The !HEADLESS guard went
+    // with it: fxToast writes the match log before it touches the DOM and
+    // sfx() returns early on its own, so gating the pair here only hid the
+    // notification from the tests as well as from player two.
+    if (h.side === MY){ fxToast(h.name + ' reaches level ' + h.lvl + '.', 'good'); sfx('level'); }
     if (G.sides[h.side].ai) autoPick(h);
   }
   if (h.lvl >= C.MAX_LEVEL) h.xp = 0;
@@ -2352,7 +2357,7 @@ function onHeroDeath(h, src){
     if (src.isHero){ src.kills++; h.lastKiller = src; }
     awardXp(src, 130 + h.lvl * 11, h.x);
   }
-  fxToast(h.name + ' has fallen.', h.side === 0 ? 'bad' : 'good');
+  fxToast(h.name + ' has fallen.', badFor(h.side));
   sfx('heroDown', h.x);
   if (!HEADLESS){
     burstFx(h.x, h.y, SIDE_COL[h.side], 22);
@@ -4226,6 +4231,12 @@ function structLabel(st){
 // gone. It lives in the simulation (see chipTick) rather than in the renderer,
 // so both machines agree on it and a resync carries it; nothing reads it for
 // any decision and the hash does not mix it.
+// Green reads as friendly and red as hostile in every game anybody has ever
+// played, so these are FRIEND and FOE colours rather than team colours — the
+// body under the bar already says whose it is. Keyed to the index, they meant
+// player two watched their own troops carry red bars and the enemy's carry
+// green ones, for the entire match.
+const BAR_MINE = '#54d06a', BAR_THEIRS = '#e0544a';
 const HP_TICK = 220;              // one notch per this much health, up to HP_TICKS
 const HP_TICKS = 6;
 function hpBar(c, x, y, u, w, big){
@@ -4239,7 +4250,7 @@ function hpBar(c, x, y, u, w, big){
     c.fillStyle = 'rgba(255,226,168,.85)';
     c.fillRect(x0 + w * f, y, w * (chip - f), h);
   }
-  const col = u.side === 0 ? '#54d06a' : '#e0544a';
+  const col = u.side === MY ? BAR_MINE : BAR_THEIRS;
   c.fillStyle = col; c.fillRect(x0, y, w * f, h);
   c.fillStyle = shade(col, 1.28); c.fillRect(x0, y, w * f, h * .38);
   // notches, so a long bar reads as an amount rather than a length
@@ -4832,6 +4843,13 @@ const HOLD_X = -58, TILE = 7.2;
 // Where MY hold stands. Both are always drawn; this is only about where the
 // camera opens and what the HOLD and FOE buttons mean.
 const myHoldX = () => MY === 0 ? HOLD_X : C.LANE_LEN - HOLD_X;
+// Good news and bad news are relative to the PLAYER, not to side zero. Every
+// toast in the game was keyed to the index, so from seat two a message saying
+// you had just lost your gates arrived in the colour that means things are
+// going well, and the enemy losing theirs arrived as a warning. Same shape as
+// the worker tunic and the minimap: a per-side value that is not per-seat.
+const goodFor = (side) => (side === MY ? 'good' : 'bad');
+const badFor = (side) => (side === MY ? 'bad' : 'good');
 let holdSide = 0, BSC = 1;
 function holdWorld(gx, gy){
   const d = holdSide === 0 ? 1 : -1;
@@ -7885,7 +7903,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, BAR_MINE, BAR_THEIRS,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,

@@ -3590,6 +3590,60 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'and the strip draws with it broken, from either seat');
 }
 {
+  // Good news and bad news are relative to the PLAYER, not to side zero. Every
+  // toast in the game was keyed to the index — so from seat two a message
+  // saying you had just lost your gates arrived in the colour that means
+  // things are going well, and the enemy losing theirs arrived as a warning.
+  // Third time this shape has turned up after the worker tunic and the
+  // minimap, so this block asks the question from both chairs on purpose.
+  const seat0 = IB.MY;
+  let wrong = 0;
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    const mine = seat, theirs = 1 - seat;
+    if (IB.badFor(mine) !== 'bad') wrong++;        // losing your own thing is bad news
+    if (IB.badFor(theirs) !== 'good') wrong++;     // losing theirs is not
+    if (IB.goodFor(mine) !== 'good') wrong++;
+    if (IB.goodFor(theirs) !== 'bad') wrong++;
+  }
+  IB.MY = seat0;
+  t.ok(wrong === 0, 'every toast tone follows the seat, from either seat (' + wrong + ' wrong)');
+  // Stated the other way round, which is the crisp version of the bug: the
+  // tone for "my gates fell" has to be the SAME from either chair.
+  IB.MY = 0; const a0 = IB.badFor(0);
+  IB.MY = 1; const a1 = IB.badFor(1);
+  IB.MY = seat0;
+  t.ok(a0 === a1, 'losing your own gates reads the same whichever side you are');
+
+  // Health bars. Green reads as friendly and red as hostile in every game
+  // anybody has played, so these are FRIEND and FOE colours rather than team
+  // colours — the body under the bar already says whose it is. Keyed to the
+  // index, they meant player two watched their own troops carry red bars and
+  // the enemy's carry green ones for the whole match.
+  const chan = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  t.ok(IB.BAR_MINE !== IB.BAR_THEIRS, 'friend and foe bars are different colours');
+  t.ok(chan(IB.BAR_MINE)[1] > chan(IB.BAR_MINE)[0], 'yours reads green');
+  t.ok(chan(IB.BAR_THEIRS)[0] > chan(IB.BAR_THEIRS)[1], 'theirs reads red');
+
+  // And the notification that was not merely the wrong colour but absent: the
+  // level-up toast fired for side zero only, so player two's hero levelled up
+  // in silence. Drive a real level-up from the second chair.
+  for (const seat of [0, 1]){
+    IB.newMatch({ diff:'veteran', seed:199 });
+    IB.MY = seat;
+    const h = IB.makeHero(seat, 'fighter', 'Climber');
+    h.pend.length = 0; h.passive = 'whetstone'; IB.recalcHero(h);
+    G.sides[seat].heroes.push(h); IB.enterLane(h);
+    const lvl0 = h.lvl;
+    G.log.length = 0;
+    IB.gainXp(h, IB.xpNeed(h.lvl) * 2 + 50);
+    t.ok(h.lvl > lvl0, 'the hero levelled from seat ' + seat);
+    t.ok(G.log.some(e => /reaches level/.test(e.msg)),
+      'and the player was told about it from seat ' + seat);
+  }
+  IB.MY = seat0;
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
