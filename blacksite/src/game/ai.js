@@ -317,6 +317,10 @@ export function spawnEnemy(G, opts = {}) {
     cover: null, peek: 0, peekSide: G.rng() < 0.5 ? -1 : 1, lean: 0,
     hesitate: 0, strafeSign: 0,
 
+    // Fixed voice identity. Drawn once and never touched again — the audio
+    // engine maps it to vocal tract length and pitch together.
+    timbre: G.rng(), voxT: -999, voxPainT: -999,
+
     // Read by the enemy rig; written here every tick in updateBody.
     feetY: pos.y, aimDir: vec3(0, 0, -1), aiming: false, attend: null, target: null,
     armor: opts.armor || 0,
@@ -758,6 +762,36 @@ function setState(G, ai, e, s, why) {
   }
   if (s === 'dead') return;
   emit(G, 'aiState', { target: e.id, from: e.prevState, to: s, why: e.stateWhy, pos: V.clone(e.pos) });
+
+  // The three transitions a man says out loud. Everything else he does quietly,
+  // which is what makes these three carry: a squad that comments on its own
+  // every move is noise, and the player stops hearing any of it.
+  if (s === 'alert') vox(G, e, 'alert');
+  else if (s === 'combat' && e.prevState !== 'reposition' && e.prevState !== 'suppressed') vox(G, e, 'bark');
+  else if (s === 'suppressed') vox(G, e, 'suppress');
+}
+
+/**
+ * A vocalisation. `timbre` is fixed per enemy at spawn and the audio engine
+ * scales vocal tract length and pitch from it, so one man stays recognisably
+ * himself across a whole encounter — which is how a player tells "the one I
+ * wounded" from "a new one" without seeing either.
+ *
+ * Barks share one cooldown so a man thrashing between states does not chatter;
+ * pain has its own, because a grunt swallowed by a callout reads as a hit that
+ * did not land.
+ */
+function vox(G, e, kind, at) {
+  const hurt = kind === 'pain' || kind === 'death';
+  if (kind !== 'death') {
+    const last = hurt ? e.voxPainT : e.voxT;
+    if (G.time.t - last < (hurt ? 0.42 : 0.9)) return;
+  }
+  if (hurt) e.voxPainT = G.time.t; else e.voxT = G.time.t;
+  emit(G, 'vox', {
+    kind, timbre: e.timbre, source: e.id, team: e.team, kindOf: e.kind,
+    pos: V.clone(at || e.eyePos),   // the mouth, not the boots
+  });
 }
 
 // ── behaviours ───────────────────────────────────────────────────────────────
@@ -1499,9 +1533,11 @@ function reloadTick(G, ai, e, dt) {
     e.reloadT = e.weapon.reload;
     e.burst = 0;
     emit(G, 'reload', { weapon: e.kind, phase: 'start', duration: e.weapon.reload, source: e.id, team: e.team });
-    // Reloading is loud and it is a tell. The player who counts rounds should be
-    // rewarded for it.
+    // Reloading is loud and it is a tell — the shout doubly so. The player who
+    // counts rounds should be rewarded for it, and the one who does not should
+    // still hear the gap coming.
     emit(G, 'aiCallout', { source: e.id, squad: e.squad, reason: 'reloading', pos: V.clone(e.pos) });
+    vox(G, e, 'reload');
   }
 }
 
