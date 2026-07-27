@@ -50,6 +50,17 @@ function loadGame(store, srcOverride){
       if (typeof args[i] === 'number' && !Number.isFinite(args[i]))
         throw new TypeError(where + '(): argument ' + i + ' is ' + args[i]);
   };
+  // A real canvas THROWS IndexSizeError on a negative radius, and this stub
+  // used to shrug it off — so a looping animation whose phase went negative
+  // (`x % 1` keeps the sign of x, and half the plot tiles have a negative gx)
+  // blew up in the browser while every suite here stayed green.
+  const radCheck = (k, a) => {
+    const at = k === 'ellipse' ? [2, 3] : k === 'arc' ? [2] : k === 'arcTo' ? [4] : null;
+    if (!at) return;
+    for (const i of at)
+      if (typeof a[i] === 'number' && a[i] < 0)
+        throw new RangeError(k + '(): radius ' + i + ' is negative (' + a[i] + ')');
+  };
   const ctx = new Proxy({}, { get(_t, k){
     if (k === '__stats') return stats;
     if (k === 'createLinearGradient' || k === 'createRadialGradient')
@@ -57,7 +68,7 @@ function loadGame(store, srcOverride){
         return { addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); } }; };
     if (k === 'measureText') return () => ({ width: 24 });
     if (k === 'canvas') return { width: 900, height: 520 };
-    return (...a) => { stats.ops++; numCheck(k, a); };
+    return (...a) => { stats.ops++; numCheck(k, a); radCheck(k, a); };
   }, set(_t, k, v){
     stats.ops++;
     if (k === 'fillStyle' || k === 'strokeStyle' || k === 'shadowColor') checkColour(k)(v);
@@ -2842,6 +2853,52 @@ t.ok(true, 'drawing an empty bridge is harmless');
   const h0 = IB.netHash();
   for (let i = 0; i < 4; i++) IB.draw();
   t.ok(IB.netHash() === h0, 'drawing the bodies does not move the simulation');
+}
+{
+  // `x % 1` keeps the SIGN of x. Every looping animation in the art takes its
+  // phase that way and offsets it by something that can be negative — tileGX
+  // is -1.5 on half the plots — so the forge's smoke came out with a negative
+  // phase, and the puff sized by it asked the canvas for a negative radius.
+  // Chromium throws on that, and it only happened on the plots left of centre.
+  for (const v of [-2.75, -1, -0.25, 0, 0.25, 3.5, 7.75]){
+    const r = IB.cyc(v);
+    t.ok(r >= 0 && r < 1, 'cyc(' + v + ') is a real phase (' + r.toFixed(3) + ')');
+  }
+  t.ok(Math.abs(IB.cyc(-0.25) - 0.75) < 1e-12, 'and it wraps rather than reflecting');
+
+  // A fitting anchored above the ridge stands in mid-air. The forge's chimney
+  // was at z + 1.15 against a ridge at z + 0.85, so its masonry hung over the
+  // roof with an opaque orange disc floating above that.
+  for (const k in IB.FIT){
+    const f = IB.FIT[k];
+    t.ok(f.chimney <= f.wh + f.rh, k + '’s chimney is bedded in the roof, not floating over it');
+    t.ok(f.chimney > f.wh, 'and it comes out above the wall head');
+  }
+
+  // Draw every building type, on every plot tile, at both ends of the zoom.
+  // Half the tiles have a negative gx and that is what the bug above needed.
+  IB.newMatch({ diff:'veteran', seed:123 });
+  const s2 = P();
+  rich(s2);
+  const types = Object.keys(IB.BUILDINGS);
+  t.ok(types.length >= 5, 'there is more than one kind of building (' + types.length + ')');
+  let lefts = 0;
+  for (let i = 0; i < s2.plot.length; i++){
+    s2.plot[i] = { type:types[i % types.length], lvl:1, tile:i };
+    if (IB.tileGX(i) < 0) lefts++;
+  }
+  t.ok(lefts > 0, 'and some of them are on the left half of the grid (' + lefts + ')');
+  IB.cam.follow = false; IB.cam.x = IB.HOLD_X + 4;
+  for (const z of [.5, 1, 2.2]){
+    IB.cam.z = IB.cam.tz = z;
+    for (const raise of [0, .6]){
+      for (const b of s2.plot) if (b) b.raise = raise;
+      for (let f = 0; f < 6; f++){ G.t += .21; IB.draw(); }   // walk the loops
+    }
+  }
+  for (const b of s2.plot) if (b) b.raise = 0;
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'every building draws on every plot, mid-raise and finished, at every zoom');
 }
 {
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.

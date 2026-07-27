@@ -453,6 +453,12 @@ const fxRnd = () => {
 const fxRr = (a, b) => a + fxRnd() * (b - a);
 const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const lerp = (a, b, t) => a + (b - a) * t;
+// A repeating 0..1 phase. `x % 1` keeps the SIGN of x, and every looping
+// animation in the art offsets its phase by something that can be negative —
+// tileGX is -1.5 on half the plots — so `% 1` hands back a negative phase and
+// anything sized by it comes out negative. A canvas throws on a negative
+// radius, which is how this was found.
+const cyc = (v) => v - Math.floor(v);
 
 // Distance, spelled so that two machines agree on the last bit.
 //
@@ -4473,6 +4479,17 @@ const WOOD_LOT = {
   trees: [[-.85, -.42], [-.30, -.60], [.28, -.48], [.78, -.20], [-.60, .08], [.05, .02]],
 };
 
+// Where a building's fittings sit, in the same z its house is built in: `wh`
+// is the wall height and `rh` the roof, so the ridge is at wh + rh. A chimney
+// anchored ABOVE the ridge stands in mid-air — which is exactly what the
+// forge's did, at z + 1.15 against a ridge at z + 0.85, with its glow drawn as
+// an opaque orange disc floating over the roof. Kept as a table so a test can
+// check every fitting lands on the building it belongs to.
+const FIT = {
+  forge:   { wh:.55, rh:.30, chimney:.72 },
+  townhall:{ wh:1.15, rh:.55, chimney:1.34 },
+};
+
 function drawTile(c, gx, gy, fill, stroke){
   poly(c, [bp(gx - .5, gy - .5), bp(gx + .5, gy - .5), bp(gx + .5, gy + .5), bp(gx - .5, gy + .5)], fill, stroke, 1);
 }
@@ -4512,9 +4529,49 @@ function drawBuilding(c, b){
     }
     drawHouse(c, gx - .28, gy - .3, .22, .18, .5 + z, .3, '#a9825a', '#b8503f');
   } else if (t === 'pit'){
+    // This is the building your army comes out of and it was two flat
+    // ellipses on a dark tile — it read as a puddle. It is a mustering pit
+    // now: a stone kerb, steps cut down into it, a plank ramp somebody walks
+    // up, and a brazier burning at the head of it.
     drawTile(c, gx, gy, '#4a4038');
-    ell(c, ...bp(gx, gy, z), BSC * .42, BSC * .22, '#2a2420');
-    ell(c, ...bp(gx, gy, z + .04), BSC * .3, BSC * .15, '#6b3a2c');
+    ell(c, ...bp(gx, gy, z), BSC * .46, BSC * .24, '#6d6355');          // the kerb
+    ell(c, ...bp(gx, gy, z + .01), BSC * .40, BSC * .205, '#514a3f');
+    ell(c, ...bp(gx, gy, z + .02), BSC * .33, BSC * .17, '#3a332b');    // first step down
+    ell(c, ...bp(gx, gy, z + .03), BSC * .25, BSC * .13, '#251f1a');    // and the dark of it
+    c.globalAlpha = .34 + .12 * Math.sin(G.t * 2.2 + gx);
+    ell(c, ...bp(gx, gy, z + .04), BSC * .17, BSC * .09, '#c2632c');    // torchlight from below
+    c.globalAlpha = 1;
+    // the ramp out, running toward the front of the plot
+    poly(c, [bp(gx - .16, gy + .18, z + .02), bp(gx + .16, gy + .18, z + .02),
+             bp(gx + .22, gy + .52, z), bp(gx - .22, gy + .52, z)], '#7a5c38');
+    c.strokeStyle = '#5c4326'; c.lineWidth = Math.max(1, 1.2 * B);
+    for (let i = 1; i < 4; i++){
+      const tt = i / 4;
+      const a = bp(lerp(gx - .16, gx - .22, tt), lerp(gy + .18, gy + .52, tt), z + .02 - tt * .02);
+      const e = bp(lerp(gx + .16, gx + .22, tt), lerp(gy + .18, gy + .52, tt), z + .02 - tt * .02);
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(e[0], e[1]); c.stroke();
+    }
+    // Kit stacked ready to be handed out. This was a rack of spears first, and
+    // at the size a plot building actually gets on screen four 1px lines read
+    // as four floating sticks whatever you do to the frame behind them. Round
+    // shields are a shape that survives being small.
+    const rk = bp(gx - .44, gy + .20, z);
+    ell(c, rk[0], rk[1], 10 * B, 3.6 * B, 'rgba(0,0,0,.20)');
+    for (let i = 0; i < 3; i++){
+      const sx = rk[0] - 4 * B + i * 3.6 * B, sy = rk[1] - 4 * B - (i % 2) * 1.2 * B;
+      ell(c, sx, sy, 4.4 * B, 4.7 * B, shade(sideCol(), .48));
+      ell(c, sx, sy, 3.3 * B, 3.6 * B, shade(sideCol(), .88));
+      ell(c, sx, sy, 1.2 * B, 1.3 * B, '#c9d2dd');
+    }
+    // the brazier at the head of the pit
+    const br = bp(gx + .42, gy - .30, z);
+    c.fillStyle = '#4a4038'; c.fillRect(br[0] - 1.6 * B, br[1] - 8 * B, 3.2 * B, 8 * B);
+    ell(c, br[0], br[1] - 9 * B, 4.4 * B, 2.2 * B, '#5e5449');
+    const fl = .6 + .3 * Math.sin(G.t * 7 + gy);
+    c.globalAlpha = .55;
+    ell(c, br[0], br[1] - 11 * B, 5 * B * fl, 5 * B * fl, '#ff8a3d');
+    c.globalAlpha = 1;
+    ell(c, br[0], br[1] - 11 * B, 2.2 * B * fl, 2.6 * B * fl, '#ffd58a');
     for (const s of [-1, 1]){
       const p0 = bp(gx + s * .42, gy - .35, z), p1 = bp(gx + s * .42, gy - .35, z + .9);
       c.strokeStyle = '#6a5540'; c.lineWidth = 3 * B; c.beginPath(); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke();
@@ -4531,15 +4588,40 @@ function drawBuilding(c, b){
       c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(e[0], e[1]); c.stroke();
     }
   } else if (t === 'forge'){
+    const F = FIT.forge;
     drawTile(c, gx, gy, '#4f4a44');
-    drawHouse(c, gx, gy, .40, .32, .55 + z, .3, '#8d8579', '#5c5750');
-    const ch = bp(gx + .22, gy - .22, z + 1.15);
-    c.fillStyle = '#6d6459'; c.fillRect(ch[0] - 4 * B, ch[1], 9 * B, 16 * B);
-    const glow = .45 + .25 * Math.sin(G.t * 4);
-    c.globalAlpha = glow * (raise > 0 ? .4 : 1);
-    ell(c, ch[0], ch[1] - 4 * B, 7 * B, 6 * B, '#ff8a3d');
-    ell(c, ...bp(gx, gy + .3, z + .2), BSC * .18, BSC * .1, '#ff8a3d');
+    drawHouse(c, gx, gy, .40, .32, F.wh + z, F.rh, '#8d8579', '#5c5750');
+    // The stack. Its old anchor was z + 1.15 against a ridge at z + 0.85, so
+    // it stood in mid-air over the roof — and fillRect draws DOWNWARD, so the
+    // masonry hung below the anchor while the "glow" was an opaque orange disc
+    // floating above it. It is bedded into the roof now and drawn upward.
+    const ch = bp(gx + .20, gy - .16, z + F.chimney);
+    c.fillStyle = '#6d6459'; c.fillRect(ch[0] - 5 * B, ch[1] - 12 * B, 10 * B, 20 * B);
+    c.fillStyle = '#857b6d'; c.fillRect(ch[0] - 6 * B, ch[1] - 14 * B, 12 * B, 3 * B);
+    c.fillStyle = '#2c251f'; c.fillRect(ch[0] - 3.5 * B, ch[1] - 15 * B, 7 * B, 2 * B);
+    for (let i = 0; i < 3; i++){                       // smoke off the flue
+      const ph = cyc(G.t * .34 + i * .33 + gx);
+      c.globalAlpha = .24 * (1 - ph) * (raise > 0 ? .4 : 1);
+      ell(c, ch[0] + Math.sin(ph * 5 + i) * 4 * B, ch[1] - 18 * B - ph * 24 * B,
+        (2.4 + ph * 6) * B, (2 + ph * 4.6) * B, '#9b968c');
+    }
     c.globalAlpha = 1;
+    // the fire is in the doorway, on the face you can see, not in the sky
+    const glow = .55 + .25 * Math.sin(G.t * 6 + gx);
+    const face = (x0, x1, z0, z1, fill) =>
+      poly(c, [bp(x0, gy + .32, z0), bp(x1, gy + .32, z0), bp(x1, gy + .32, z1), bp(x0, gy + .32, z1)], fill);
+    face(gx - .17, gx + .17, z, z + .36 + F.wh * .1, '#2a1c14');
+    c.globalAlpha = glow * (raise > 0 ? .4 : 1);
+    face(gx - .12, gx + .12, z + .02, z + .30, '#ff8a3d');
+    c.globalAlpha = 1;
+    c.globalAlpha = (.13 + .05 * Math.sin(G.t * 6)) * (raise > 0 ? .4 : 1);
+    ell(c, ...bp(gx, gy + .46, z), BSC * .20, BSC * .10, '#ff8a3d');   // spill on the ground
+    c.globalAlpha = 1;
+    // the anvil it is all for
+    const an = bp(gx - .44, gy + .30, z);
+    c.fillStyle = '#3c3630'; c.fillRect(an[0] - 2 * B, an[1] - 4 * B, 4 * B, 4 * B);
+    poly(c, [[an[0] - 6 * B, an[1] - 5 * B], [an[0] + 6 * B, an[1] - 5 * B],
+             [an[0] + 4 * B, an[1] - 8 * B], [an[0] - 5 * B, an[1] - 8 * B]], '#565049');
   } else if (t === 'tavern'){
     drawTile(c, gx, gy, '#575044');
     drawHouse(c, gx, gy, .40, .32, .95 + z, .38, '#c49a68', '#3f6b8c');
@@ -4718,7 +4800,7 @@ function drawNode(c, key){
     }
     // The cart runs on the clock, not on a random stream — both machines see
     // it in the same place, and the simulation never hears about it.
-    const ph = (G.t * .17 + (key === 'gold' ? 0 : .5)) % 1;
+    const ph = cyc(G.t * .17 + (key === 'gold' ? 0 : .5));
     const tri = ph < .5 ? ph * 2 : 2 - ph * 2;      // out of the mine, and back in
     const cx = p[0], cy = p[1] + lerp(-2, 17, tri) * B;
     const w = lerp(5, 8.5, tri) * B, hgt = lerp(4, 6.5, tri) * B;
@@ -4740,7 +4822,7 @@ function drawNode(c, key){
   const n = Math.min(s.workers[key], nodeCap(s, key));
   const home = bp(KEEP.gx + .6, KEEP.gy + .5);
   for (let i = 0; i < n; i++){
-    const ph = (G.t * .22 + i * .19) % 1;
+    const ph = cyc(G.t * .22 + i * .19);
     const tri = ph < .5 ? ph * 2 : 2 - ph * 2;
     const x = lerp(p[0], home[0], tri), y = lerp(p[1] - 6 * B, home[1], tri);
     drawWorkerFig(c, x, y, N.col, ph >= .5, .9);
@@ -4764,8 +4846,8 @@ function drawKeep(c){
     const a = bp(gx - .70, gy + i * .38), b = bp(gx + .70, gy + i * .38);
     c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
   }
-  const W = .62, D = .48, WH = 1.15;
-  drawHouse(c, gx, gy, W, D, WH, .55, '#c4ab84', '#7a4a3c');
+  const W = .62, D = .48, WH = FIT.townhall.wh;
+  drawHouse(c, gx, gy, W, D, WH, FIT.townhall.rh, '#c4ab84', '#7a4a3c');
   // Openings go on the two faces this projection actually shows: the near face
   // at y = gy + D, and the right-hand face at x = gx + W. Anything drawn on the
   // other two ends up floating over the roof, which is where the first pass put
@@ -4779,12 +4861,12 @@ function drawKeep(c){
   for (const [a, b] of [[-.30, -.10], [.12, .32]])                      // and on the right face
     face(gx + W, gx + W, gy + a, gy + b, .56, .92, '#e6c179');
   // chimney: based low enough that the roof swallows its foot
-  const ch = bp(gx + .24, gy - .16, 1.34);
+  const ch = bp(gx + .24, gy - .16, FIT.townhall.chimney);
   c.fillStyle = '#6f6252'; c.fillRect(ch[0] - 4.5 * B, ch[1] - 18 * B, 9 * B, 26 * B);
   c.fillStyle = '#8a7a66'; c.fillRect(ch[0] - 4.5 * B, ch[1] - 18 * B, 9 * B, 3 * B);
   c.fillStyle = '#3a3128'; c.fillRect(ch[0] - 3 * B, ch[1] - 19 * B, 6 * B, 2 * B);
   for (let i = 0; i < 4; i++){
-    const ph = (G.t * .32 + i * .25) % 1;
+    const ph = cyc(G.t * .32 + i * .25);
     c.globalAlpha = .24 * (1 - ph);
     ell(c, ch[0] + Math.sin(ph * 5 + i) * 5 * B, ch[1] - 22 * B - ph * 32 * B,
       (2.6 + ph * 7) * B, (2.2 + ph * 5.5) * B, '#cfd6dc');
@@ -7289,7 +7371,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
