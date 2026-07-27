@@ -82,6 +82,10 @@ export function createState(seed = 0x9e3779b9) {
       filmGrain: true,
       chromatic: true,
       volumetrics: true,
+      // One accumulating figure per target rather than a number per bullet —
+      // a stream of them is a looter-shooter tell that fights this game's
+      // register, but the total damage a burst did is genuinely useful.
+      dmgNumbers: true,
       shake: 1,
       masterVol: 0.8,
     },

@@ -65,31 +65,44 @@
   #hud{position:absolute;inset:0;z-index:20;pointer-events:none;
     opacity:0;transition:opacity .35s ease}
   #app.playing #hud{opacity:1}
-  #crosshair{position:absolute;left:50%;top:50%;width:44px;height:44px;
-    transform:translate(-50%,-50%);will-change:transform,opacity}
-  #hitmark{position:absolute;left:50%;top:50%;width:34px;height:34px;
+  /* 200px, not 44: a reticle bloomed out to the edge of a 8° hip-fire cone
+     needs the room, and an SVG that clips its own ticks looks like a bug. */
+  #crosshair{position:absolute;left:50%;top:50%;width:200px;height:200px;
+    transform:translate(-50%,-50%);will-change:transform,opacity;overflow:visible}
+  #hitmark{position:absolute;left:50%;top:50%;width:40px;height:40px;
     transform:translate(-50%,-50%) scale(.7);opacity:0;will-change:transform,opacity}
+  /* No transition here. The HUD decays this per frame, and a transition that is
+     restarted every frame never reaches its target — it just lags. */
   #dmg{position:absolute;inset:0;opacity:0;
-    background:radial-gradient(120% 100% at 50% 50%,transparent 42%,rgba(150,12,8,.55) 100%);
-    transition:opacity .18s ease}
+    background:radial-gradient(120% 100% at 50% 50%,transparent 42%,rgba(150,12,8,.55) 100%)}
+  #dmgnum{position:absolute;inset:0;overflow:hidden}
+  #dmgnum span{position:absolute;font-size:15px;font-weight:600;letter-spacing:.06em;
+    text-shadow:0 2px 10px rgba(0,0,0,.95);will-change:transform,opacity;pointer-events:none}
   #lowhp{position:absolute;inset:0;opacity:0;pointer-events:none;
     background:radial-gradient(115% 95% at 50% 50%,transparent 30%,rgba(120,8,6,.62) 100%)}
   #ammo{position:absolute;right:38px;bottom:30px;text-align:right;line-height:1}
-  #ammo .mag{font-size:44px;font-weight:600;letter-spacing:.04em;
-    text-shadow:0 2px 14px rgba(0,0,0,.9)}
+  /* inline-block so the per-shot punch animation has something to transform;
+     transforms do not apply to inline boxes. */
+  #ammo .mag{display:inline-block;font-size:44px;font-weight:600;letter-spacing:.04em;
+    text-shadow:0 2px 14px rgba(0,0,0,.9);will-change:transform}
   #ammo .mag.low{color:var(--bad)}
   #ammo .res{font-size:16px;color:#8d9caa;margin-left:6px}
   #ammo .name{font-size:11px;letter-spacing:.3em;color:var(--amber-dim);
     text-transform:uppercase;margin-bottom:6px}
   #ammo .fire{font-size:10px;letter-spacing:.24em;color:#6c7a86;margin-top:5px}
   #health{position:absolute;left:38px;bottom:30px;width:210px}
-  #health .bar{height:3px;background:rgba(255,255,255,.10);overflow:hidden}
-  #health .bar i{display:block;height:100%;width:100%;background:var(--hud);
-    transform-origin:left;transition:transform .12s linear,background .3s}
-  #health .num{font-size:26px;font-weight:600;margin-bottom:5px;line-height:1}
+  #health .bar{position:relative;height:3px;background:rgba(255,255,255,.10);overflow:hidden}
+  /* Two bars stacked: the live one, and a ghost that lags behind it so the size
+     of a hit stays readable for a moment after the hit itself. No transition —
+     the HUD drives both per frame, and a transition here only adds lag. */
+  #health .bar i{position:absolute;inset:0;height:100%;width:100%;background:var(--hud);
+    transform-origin:left;transition:background .3s;will-change:transform}
+  #health .bar i.ghost{background:rgba(255,77,61,.55)}
+  #health .num{display:inline-block;font-size:26px;font-weight:600;margin-bottom:5px;
+    line-height:1;will-change:transform}
   #health .label{font-size:10px;letter-spacing:.3em;color:#6c7a86;text-transform:uppercase;margin-bottom:8px}
   #compass{position:absolute;left:50%;top:22px;transform:translateX(-50%);
-    width:min(420px,54vw);height:26px;overflow:hidden;
+    width:min(420px,54vw);height:34px;overflow:hidden;
     -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);
             mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
   #objective{position:absolute;left:38px;top:26px;font-size:11px;letter-spacing:.2em;
@@ -106,8 +119,13 @@
             mask:radial-gradient(closest-side,transparent 62%,#000 66%,#000 78%,transparent 82%)}
   #toast{position:absolute;left:50%;top:58%;transform:translateX(-50%);text-align:center;
     font-size:13px;letter-spacing:.3em;text-transform:uppercase;color:var(--amber);opacity:0}
-  #perf{position:absolute;left:6px;top:6px;font-size:10px;color:#5c6a76;
-    letter-spacing:.06em;display:none;white-space:pre;line-height:1.5}
+  /* Lives in #app rather than #hud: the HUD fades to nothing outside play, and
+     a profiler that disappears the moment you open a menu is no use. Opaque,
+     because it overlaps the objective block. */
+  #perf{position:absolute;left:6px;top:6px;z-index:30;font-size:10px;color:#8fa0ac;
+    letter-spacing:.06em;display:none;white-space:pre;line-height:1.5;
+    padding:6px 8px;background:rgba(6,7,9,.82);border:1px solid rgba(159,176,189,.14);
+    pointer-events:none}
   #app.debug #perf{display:block}
 
   #fatal{position:absolute;inset:0;z-index:99;display:grid;place-content:center;
@@ -129,13 +147,12 @@
   <div id="hud" aria-hidden="true">
     <div id="dmg"></div>
     <div id="lowhp"></div>
-    <div id="dmgdir"></div>
-    <svg id="crosshair" viewBox="0 0 44 44" aria-hidden="true"></svg>
-    <svg id="hitmark" viewBox="0 0 34 34" aria-hidden="true">
-      <g stroke="#fff" stroke-width="2" stroke-linecap="square">
-        <path d="M9 9 L14 14 M25 9 L20 14 M9 25 L14 20 M25 25 L20 20"/>
-      </g>
-    </svg>
+    <div id="dmgdir"><i></i><i></i><i></i><i></i><i></i></div>
+    <div id="dmgnum"></div>
+    <svg id="crosshair" viewBox="0 0 200 200" aria-hidden="true"></svg>
+    <!-- Contents are rebuilt from JS: hit, headshot and kill are three different
+         shapes, not three tints of the same one. -->
+    <svg id="hitmark" viewBox="0 0 40 40" aria-hidden="true"></svg>
     <svg id="compass" aria-hidden="true"></svg>
     <div id="objective"><b>Objective</b><span></span></div>
     <div id="killfeed"></div>
@@ -150,8 +167,9 @@
       <div class="bar"><i></i></div>
     </div>
     <div id="toast"></div>
-    <div id="perf"></div>
   </div>
+
+  <div id="perf"></div>
 
   <div id="menu"></div>
 

@@ -72,8 +72,16 @@ export async function boot(root) {
   const audio = createAudio(G);
   const hud = createHUD(G, root);
   const input = createInput(G, canvas, {
-    onLockLost() { if (G.mode === 'playing') { G.mode = 'paused'; menu.show('pause'); } },
-    onLock() { if (G.mode === 'paused') { G.mode = 'playing'; menu.hide(); } },
+    onLockLost() {
+      root.classList.remove('locked');
+      if (G.mode === 'playing') { G.mode = 'paused'; menu.show('pause'); }
+    },
+    onLock() {
+      // The CSS hides the system cursor only while the pointer is locked; without
+      // this class the crosshair cursor never switches off during play.
+      root.classList.add('locked');
+      if (G.mode === 'paused') { G.mode = 'playing'; menu.hide(); }
+    },
   });
 
   const menu = createMenu(G, root, {
@@ -112,6 +120,10 @@ export async function boot(root) {
     enemies.reset && enemies.reset();
     fx.reset && fx.reset();
     G.mode = 'playing';
+    // Restarting owns re-acquiring the pointer. It is always reached from a
+    // click on the death screen, so the gesture requirement is satisfied and
+    // the browser will grant it.
+    input.lock();
   }
 
   G.player.pos.x = level.spawn.x; G.player.pos.y = level.spawn.y; G.player.pos.z = level.spawn.z;
