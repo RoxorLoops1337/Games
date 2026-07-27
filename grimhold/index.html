@@ -454,6 +454,7 @@ const FURN = {
   sorcerer:  { name:"Sorcerer's Table", w:2, h:1, search:true },
   cage:      { name:'Iron Cage',    w:1, h:1, search:false },
   plinth:    { name:'Plinth',       w:1, h:1, search:false },
+  coffin:    { name:"Gambler's Coffin", w:2, h:1, search:false },
 };
 
 /* --------------------------------------------------------------- the book */
@@ -941,6 +942,22 @@ function startQuest(qi, def, seed){
   // the doorway, so hunting the champion carrying it is a decision, not a chore.
   if (Q.trialRoom) placePlinth(Q, Q.trialRoom.room, R, 'trial');
   if (Q.vault >= 0) placePlinth(Q, Q.vault, R, 'vault');
+
+  // Somebody has been using a tomb on this floor as a bank. Never the vault —
+  // a room you paid a key for should not also be a slot machine.
+  const cofDepth = q.depth || 0;             // authored quests have no depth: none there
+  if (cofDepth >= COFFIN_FROM && R() < COFFIN_CHANCE){
+    const goal2 = (q.objective && q.objective.room !== undefined) ? q.objective.room : -1;
+    const rooms2 = ROOMS.map(r => r.id).filter(id => id !== Q.vault && id !== goal2);
+    for (let tries = 0; tries < 8; tries++){
+      const rid = rooms2[Math.floor(R()*rooms2.length)];
+      const spot = freeFurnSpot(rid, FURN.coffin.w, FURN.coffin.h, R);
+      if (!spot) continue;
+      Q.furn.push({ t:'coffin', r:rid, x:spot[0], y:spot[1], w:spot[2], h:spot[3], rot:spot[4],
+                    quest:null, taken:false, searched:false, pulls:0, done:false });
+      break;
+    }
+  }
 
   // One piece of furniture on a deep floor was never furniture. Never a quest
   // piece, never one inside the vault — a locked room you paid to open pays.
@@ -2627,6 +2644,28 @@ function drawFurniture(g, f, t){
       // and the thing it is actually paying, floating over it
       drawRelicOn(g, f.relic, w*.13, lift, pulse);
     }
+  } else if (F==='coffin'){
+    // A tomb somebody has been using as a bank. The lid is off-centre because
+    // it has been lifted before, and the coins on it are the argument.
+    const L = w*.44, D = h*.34;
+    g.fillStyle = '#2f2a22'; rr(g, -L, -D*.6, L*2, D*1.9, 4); g.fill();
+    g.fillStyle = '#4a4034'; rr(g, -L*.97, -D*1.0, L*1.94, D*1.75, 5); g.fill();
+    g.fillStyle = f.done ? '#3a332a' : '#5e5240';
+    rr(g, -L*.88, -D*1.06, L*1.84, D*1.5, 5); g.fill();
+    g.fillStyle = 'rgba(0,0,0,.55)';                 // the gap the lid leaves
+    g.fillRect(-L*.88, -D*1.06, L*.16, D*1.5);
+    if (f.done){
+      g.fillStyle = 'rgba(0,0,0,.45)'; rr(g, -L*.88, -D*1.06, L*1.84, D*1.5, 5); g.fill();
+    } else {
+      const q = .5 + Math.sin(t*.0024 + f.x)*.5;
+      g.fillStyle = `rgba(216,168,60,${(.55 + q*.35).toFixed(3)})`;   // the takings on the lid
+      for (let i = 0; i < 3; i++){
+        g.beginPath();
+        g.ellipse(-L*.30 + i*L*.34, -D*.50, w*.035, w*.024, 0, 0, 6.284); g.fill();
+      }
+      g.fillStyle = `rgba(255,236,180,${(.20 + q*.25).toFixed(3)})`;
+      g.fillRect(-L*.84, -D*1.02, L*1.76, 2);
+    }
   } else if (F==='cage'){
     g.fillStyle = 'rgba(10,8,6,.75)'; rr(g, -w*.36, -h*.40, w*.72, h*.74, 3); g.fill();
     g.strokeStyle = '#6a6258'; g.lineWidth = Math.max(2, w*.035);
@@ -3891,6 +3930,7 @@ function heroWalk(h, path, done){
     renderHUD();
     if (done) done();
     bodyWatch(h);                       // you are standing on somebody
+    coffinWatch(h);                     // and somebody has been banking in that
   };
   step();
 }
@@ -5039,6 +5079,104 @@ function bankPush(){
   renderHUD();
   return true;
 }
+/* ------------------------------------------------------- THE GAMBLER'S COFFIN */
+// Somebody has been using a tomb as a bank, and whatever they were banking
+// against is still in there. One combat die a pull: a skull pays and the pot
+// climbs, a white shield moves nothing but the pot climbs anyway, and a black
+// shield lets out whatever the pot has been feeding. The first pull costs an
+// action; after that you may keep going until you stop or it stops you.
+
+const COFFIN_FROM = 3;
+const COFFIN_CHANCE = .3;
+// What climbs out gets worse the longer you have been at it.
+const COFFIN_GUESTS = ['goblin','skeleton','orc','fimir','mummy','chaos'];
+const coffinAt = (rid) => (G.q && G.q.furn ? G.q.furn.find(f => f.t === 'coffin' && f.r === rid) || null : null);
+const coffinNear = (h) => (!h || !G.q || !G.q.furn) ? null
+  : G.q.furn.find(f => f.t === 'coffin' && !f.done
+      && Math.max(Math.abs(h.x - (f.x + (f.w-1)/2)), Math.abs(h.y - (f.y + (f.h-1)/2))) <= 1.5) || null;
+function coffinPot(pulls){ return Math.round(120 * (1 + pulls*.85)); }
+function coffinPull(h, f){
+  if (!h || !f || f.done || !G.q || G.q.over) return null;
+  if (!f.pulls && h.acted) return null;              // the first one costs the turn
+  if (!f.pulls) h.acted = true;
+  const face = combatDie();
+  const out = { face, pulls: f.pulls || 0, paid:0, guest:null, done:false };
+  f.pulls = (f.pulls || 0) + 1;
+  if (face === SKULL){
+    let n = coffinPot(out.pulls);
+    if (boonHas('luckyfind')) n = Math.round(n*1.5);
+    if (modHas('wealthy')) n *= 2;
+    if (curseHas('greedy')) n = Math.round(n*.75);
+    G.q.pot = (G.q.pot || 0) + n;
+    out.paid = n;
+    stirWrath(Math.ceil(n/60), 'coin');
+    sfx('gold');
+    floatText(f.x, f.y, '+' + n, '#f3d488', n >= 200);
+    spark(f.x, f.y, 18, '#d8a83c', { spd:.015, up:.005 });
+    say(`The lid comes up and there is coin under it. ◈ ${n}.`, 'good');
+  } else if (face === WHITE){
+    sfx('block');
+    say('The lid grinds, settles, and gives you nothing. Whatever is under it is listening.', '');
+  } else {
+    f.done = true; out.done = true;
+    const t = COFFIN_GUESTS[Math.min(COFFIN_GUESTS.length - 1, f.pulls - 1)];
+    const m = spawnWanderer(h, t);
+    out.guest = m ? m.mt : null;
+    say(`The lid goes over. Something has been waiting under it for a long time.`, 'bad');
+    banner('IT WAS NOT EMPTY', 'somebody had been feeding it');
+    sfx('boss'); G.shake = Math.max(G.shake, 20); hitStop(220);
+  }
+  renderHUD(); checkQuestState();
+  if (!HEADLESS && !f.done && !G.q.over) later(420, () => showCoffin(h, f));
+  return out;
+}
+function showCoffin(h, f){
+  if (!h || !f || f.done) return;
+  const next = coffinPot((f.pulls || 0) + 1);
+  const guest = MONSTERS[COFFIN_GUESTS[Math.min(COFFIN_GUESTS.length - 1, f.pulls || 0)]];
+  modal(`<h2>The Gambler's Coffin</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[f.r].name}${
+      f.pulls ? ` · pull ${f.pulls + 1}` : ''}</div>
+    <div class="rule"></div>
+    <p class="flavor">Somebody has been using this as a bank, and whatever they
+      were banking against is still in it. The lid has been lifted before.</p>
+    <div class="row">
+      <div class="ic">◈</div>
+      <div class="tx"><b>A skull pays</b><s>About ${next} under the lid, and more every time</s></div>
+      <div style="color:#63bf7d">3 in 6</div>
+    </div>
+    <div class="row">
+      <div class="ic">🛡</div>
+      <div class="tx"><b>A white shield moves nothing</b><s>But the pot climbs anyway</s></div>
+      <div style="color:#c8b088">2 in 6</div>
+    </div>
+    <div class="row">
+      <div class="ic">☠</div>
+      <div class="tx"><b>A black shield lets it out</b><s>${
+        guest ? guest.name : 'Something'} — and the lid stays off for good</s></div>
+      <div style="color:#b03a2c">1 in 6</div>
+    </div>
+    ${!f.pulls ? `<div class="row"><div class="ic">⌛</div><div class="tx"><b>The first pull costs your action</b>
+      <s>After that you may keep going until you stop, or it stops you.</s></div></div>` : ''}
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mPull">${f.pulls ? 'Again' : 'Lift the lid'}</button>
+      <button class="btn ghost" id="mCoffinGo">${f.pulls ? 'Step away from it' : 'Leave it shut'}</button>
+    </div>`);
+  bindModal('#mPull', () => { closeModal(); coffinPull(h, f); });
+  bindModal('#mCoffinGo', () => { closeModal(); say('You leave the lid where it is.', ''); });
+}
+// Walking up to one asks, the same way a body does.
+function coffinWatch(h){
+  if (!G || !G.q || G.q.over || !h || !h.alive) return null;
+  const f = coffinNear(h);
+  if (!f || f.done) return null;
+  if (HEADLESS) return f;
+  if (h.acted && !f.pulls) return f;
+  if (!f.seen){ f.seen = 1; showCoffin(h, f); }
+  return f;
+}
+
 function showPush(){
   if (!canPush()) return;
   const P = G.q.push, o = pushOdds(P.pulls);
@@ -7220,6 +7358,53 @@ const PEDLAR = [
 // How much of the party's maximum the blood prices are still holding.
 const bloodOwed = () => (G.run ? G.run.heroes.reduce((n,h) => n + (h.tolled || 0), 0) : 0);
 
+/* ------------------------------------------------------------- THE PEDLAR */
+// He lifts curses, buys back the blood price, and buys boons you never use.
+// That is one identity — the place regret gets undone — and it had been
+// growing a row at a time inside the Coin tab. It is a shop now.
+
+function pedlarBlurb(owed){
+  const bits = [];
+  const affordable = PEDLAR.filter(p => p.cost <= G.run.gold
+    && (p.id !== 'bonesetter' || owed > 0)
+    && (p.id !== 'absolve' || G.run.curses.length)).length;
+  bits.push(affordable ? `${affordable} thing${affordable>1?'s':''} you can afford` : 'Nothing you can afford');
+  if (owed > 0) bits.push(`he can give back ${owed} Body Point${owed>1?'s':''} the stone took`);
+  if (sellable().length) bits.push('and he buys');
+  return bits.join(' · ');
+}
+function showPedlar(){
+  if (!G.run) return;
+  const owed = bloodOwed();
+  const rows = PEDLAR.filter(p => p.id !== 'bonesetter' || owed > 0).map(p => `<div class="row">
+      <div class="ic">${p.ic}</div>
+      <div class="tx"><b>${p.name}</b><s>${p.desc}${
+        p.id === 'bonesetter' ? `<br>The stone is holding ${owed} between you.` : ''}${
+        p.id === 'absolve' && !G.run.curses.length ? '<br>Nothing on you to lift.' : ''}</s></div>
+      <button class="bu" data-buy="${p.id}" ${G.run.gold < p.cost
+        || (p.id === 'absolve' && !G.run.curses.length) ? 'disabled' : ''}>◈ ${p.cost}</button>
+    </div>`).join('');
+  const forSale = sellable();
+  modal(`<h2>The Pedlar</h2>
+    <div class="sub" style="margin:2px 0 0">On the stair, as always</div>
+    <div class="rule"></div>
+    <div class="goldline">◈ ${G.run.gold}</div>
+    <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">What he sells</div>
+    ${rows}
+    ${forSale.length ? `<div class="rule"></div>
+      <div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin-bottom:6px">What he buys</div>
+      <div class="row"><div class="ic">🪙</div>
+        <div class="tx"><b>◈ ${SELL_PRICE} for a boon</b><s>One you never use. Not the ones you paid
+          for in blood — those are between you and the stone.</s></div></div>
+      <div class="stakebar">${forSale.map(id => `<button class="bu" data-sell2="${id}">${
+        BOON(id).ic} ${BOON(id).name}</button>`).join('')}</div>` : ''}
+    <div class="rule"></div>
+    <div style="text-align:center"><button class="btn ghost" id="mShopBack">Back to the stair</button></div>`);
+  bindAll('.bu[data-buy]', el => { if (buyPedlar(el.dataset.buy)) showPedlar(); });
+  bindAll('.bu[data-sell2]', el => { if (sellBoon(el.dataset.sell2)) showPedlar(); });
+  bindModal('#mShopBack', () => { closeModal(); showDraft(); });
+}
+
 /* ------------------------------------------------- SELLING WHAT YOU DO NOT USE */
 // The stake gambles a boon away. This lets you choose to. A blood price is not
 // for sale — you paid for that in Body Points, and the Bonesetter handles it.
@@ -7350,23 +7535,16 @@ function showDraft(){
       <div class="tx"><b>Bank it</b><s>Put the ${stake} in the purse and stop.</s></div>
       <button class="bu own" data-bank="1">Bank</button>
     </div>` : '';
-  // he only offers what there is any point buying
+  // He lifts curses, buys back blood and buys boons: he is the place regret gets
+  // undone, and that had been accreting one row at a time inside this tab. One
+  // door into his shop now, and the shop is its own screen.
   const owed = bloodOwed();
-  const ped = PEDLAR.filter(p => p.id !== 'bonesetter' || owed > 0).map(p => `<div class="row">
-      <div class="ic">${p.ic}</div>
-      <div class="tx"><b>${p.name}</b><s>${p.desc}${
-        p.id === 'bonesetter' ? `<br>The stone is holding ${owed} between you.` : ''}</s></div>
-      <button class="bu" data-ped="${p.id}" ${G.run.gold < p.cost ? 'disabled' : ''}>◈ ${p.cost}</button>
-    </div>`).join('');
-  // and he buys as well as sells — a boon you never use is worth something
-  const forSale = sellable();
-  const sellRow = !forSale.length ? '' : `<div class="rule"></div><div class="row">
-      <div class="ic">🪙</div>
-      <div class="tx"><b>He buys, too</b><s>◈ ${SELL_PRICE} for a boon you never use.
-        Not the ones you paid for in blood — those are between you and the stone.</s></div>
-    </div>
-    <div class="stakebar">${forSale.map(id => `<button class="bu" data-sell="${id}">${
-      BOON(id).ic} ${BOON(id).name}</button>`).join('')}</div>`;
+  const ped = `<div class="row">
+      <div class="ic">🎒</div>
+      <div class="tx"><b>The pedlar on the stair</b><s>${pedlarBlurb(owed)}</s></div>
+      <button class="bu" data-shop="1">Open</button>
+    </div>`;
+  const sellRow = '';
   // Eight things on one scroll was too many. Three tabs: what you take, what
   // you spend, and where you go. The party and the purse stay above all three,
   // because they are the numbers every one of those decisions is made against.
@@ -7412,6 +7590,7 @@ function showDraft(){
   });
   bindAll('.bu[data-stake]', el => { if (stakeBoon(el.dataset.stake)) showDraft(); });
   bindAll('.bu[data-sell]', el => { if (sellBoon(el.dataset.sell)) showDraft(); });
+  bindAll('.bu[data-shop]', () => { closeModal(); showPedlar(); });
   bindAll('.bu[data-wager]', () => { if (wagerDraft()) showDraft(); });
   bindAll('.bu[data-ped]', el => { if (buyPedlar(el.dataset.ped)) showDraft(); });
   bindAll('.bu[data-dbl]', () => {
@@ -7811,7 +7990,9 @@ globalThis.HQ = {
   placePlinth, trialPlinth, vaultPlinth, plinths, plinthFor, spendPlinth, plinthRelic, plinthRelicOf,
   drawRelicOn, drawBody, drawRansacked, DRAFT_TABS, TRIAL_KINDS, markedOne, bloodOwed,
   roomUnopened, roomsUnopened, bodyAt, bodyWorthTaking, bodyWatch, takeUp, showBody,
-  SELL_PRICE, sellable, sellBoon,
+  SELL_PRICE, sellable, sellBoon, pedlarBlurb, showPedlar,
+  COFFIN_FROM, COFFIN_CHANCE, COFFIN_GUESTS, coffinAt, coffinNear, coffinPot,
+  coffinPull, showCoffin, coffinWatch,
   RAISE_TURNS, bodyStirring, stirringBodies, raisers, layToRest, tickRaising, raiseBody, tickLiars,
   historyRows, thisRunRow, STREAK_SHOW,
   LIE_FROM, LIE_CHANCE, LIARS, LIAR_TYPES, liars, lyingChests,
