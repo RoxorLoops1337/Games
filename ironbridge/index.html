@@ -1797,6 +1797,39 @@ function awardXp(src, amt, x){
   }
 }
 
+/* What a structure falling is worth. Five fall in a match and they are not
+   equal events: an Outer Turret is a step, an Inhibitor starts ninety-five
+   seconds of siege ogres, and the Gates END THE MATCH. Measured before this,
+   all five threw exactly the same thirty-four sparks and not one of them threw
+   a wave at all — while every BODY on the bridge has thrown one sized by what
+   it was worth since the bounty ladder went in. Three distinct reactions
+   across five falls, and the three turrets were indistinguishable from each
+   other.
+
+   The weight is the line of battle itself. `ord` is the order the structures
+   have to be broken in, the same ordering frontStruct enforces, so how deep
+   into that line a structure sits is exactly how big a step breaking it is —
+   and it ranks the Inhibitor above the turrets without a special case for it.
+   One heft feeding four channels, so the sparks, the ring, the wave and the
+   camera cannot drift apart the way four separate constants did.
+
+   The top of the shake is what the gates always asked for; what changed is
+   that a turret no longer asks for nearly as much. */
+const FALL = { spark:16, sparkUp:36, ring:3.4, ringUp:4.6, wave:1.8, waveUp:3.6, shake:5, shakeUp:9 };
+// ord counts from the bridge inward — "outer turret first, gates last", as the
+// sort that assigns it says — so it is already how many structures the attacker
+// has had to break to be standing here. Nought at the outer turret, one at the
+// gates. (Read the other way round first, which handed the Outer Turret the
+// biggest reaction in the match and the Gates the smallest.)
+const structHeft = (st) => {
+  const n = STRUCTS.length - 1;
+  return n > 0 ? clamp((st.ord || 0) / n, 0, 1) : 1;
+};
+const fallSparks = (st) => Math.round(FALL.spark + structHeft(st) * FALL.sparkUp);
+const fallRing   = (st) => FALL.ring + structHeft(st) * FALL.ringUp;
+const fallWave   = (st) => FALL.wave + structHeft(st) * FALL.waveUp;
+const fallShake  = (st) => FALL.shake + structHeft(st) * FALL.shakeUp;
+
 function onStructDown(st, src){
   const s = G.sides[st.side], foe = G.sides[enemyOf(st.side)];
   let g = C.BOUNTY_STRUCT;
@@ -1805,12 +1838,18 @@ function onStructDown(st, src){
   awardXp(src, 70, st.x);
   fxToast(SIDE_NAME[st.side] + ' loses ' + st.n + '.', badFor(st.side));
   if (!HEADLESS){
-    burstFx(st.x, st.y, '#d8c49a', 30);
-    ringFx(st.x, st.y, st.key === 'gate' ? 7 : 4.5, '#ffd9a0');
-    shake(st.key === 'gate' ? 14 : st.key === 'inhib' ? 9 : 7, st.x);
+    burstFx(st.x, st.y, '#d8c49a', fallSparks(st));
+    ringFx(st.x, st.y, fallRing(st), '#ffd9a0');
+    // Every body that comes apart throws a shockwave sized by what it was
+    // worth. A structure threw none at all, which is why the biggest events in
+    // the match read quieter than a levy dying next to them.
+    waveFx(st.x, st.y, fallWave(st), '#ffd9a0', .5);
     sfx('fall', st.x);
     if (st.key === 'inhib') sfx('inhib', st.x);
   }
+  // Outside the guard, like the death shake: the camera is not a particle, and
+  // shake() guards itself on HEADLESS and on being off screen.
+  shake(fallShake(st), st.x);
   G.timeline.push({ t:G.t, side:st.side, key:st.key, n:st.n });
   if (st.key === 'inhib'){ foe.superT = C.SUPER_DUR; st.downT = C.INHIB_RESPAWN; }
   if (st.key === 'gate'){ endMatch(enemyOf(st.side)); }
@@ -9155,7 +9194,7 @@ window.IB = {
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
+  floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
