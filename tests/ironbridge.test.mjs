@@ -71,7 +71,7 @@ function loadGame(store, srcOverride){
   // alpha back leaves every later shape in the frame translucent, and an
   // unbalanced save() leaks a clip or a transform into whatever draws next.
   // Neither is visible to a per-call check, because no single call is wrong.
-  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null; stats.lines = []; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
   const TEXT0 = { lineCap:'butt', textAlign:'start', textBaseline:'alphabetic' };
   Object.assign(stats, TEXT0);
   stats.__text0 = TEXT0;
@@ -128,6 +128,10 @@ function loadGame(store, srcOverride){
     // convincing way to test nothing at all.
     if (k === 'fill') return (...a) => {
       stats.ops++;
+      // Its own counter: a frame lays down thousands of fills, so sharing
+      // `dropped` with the shape captures would make every other block in the
+      // suite report a loss it did not have.
+      if (stats.fills.length < CAP) stats.fills.push(stats.fill); else stats.fillsDropped++;
       const last = stats.ellipses[stats.ellipses.length - 1];
       if (last && last.fill === null){ last.fill = stats.fill; last.alpha = stats.alpha; }
     };
@@ -4552,6 +4556,91 @@ t.ok(true, 'drawing an empty bridge is harmless');
       wearScale.join(' → ') + ')');
     t.ok(IB.WEAR({ dead:true, mhp:100, hp:100 }) === 0, 'and rubble has no wear of its own');
     t.ok(IB.CROWN_TIERS > 1, 'the crown comes off in stages');
+    IB.cam.x = 26;
+  }
+  {
+    // A building's LEVEL was invisible. Six buildings, three levels each, and
+    // all eighteen combinations drew exactly the same shapes — b.lvl reached
+    // nothing inside drawBuilding except the label text. You could spend three
+    // tiers of iron on a Forge and the only thing that changed on your hold
+    // was a digit.
+    IB.newMatch({ diff:'veteran', seed:7901 });
+    IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
+    const seat0b = IB.MY; IB.MY = 0;
+    const s = CTX.__stats;
+    const plotOps = (type, lvl) => {
+      G.sides[0].plot[4] = lvl ? { type, lvl, tile:4, raise:0 } : null;
+      s.dropped = 0;
+      const b = s.ops;
+      IB.drawHold(CTX, 0);
+      const n = s.ops - b;
+      G.sides[0].plot[4] = null;
+      return { n, dropped:s.dropped };
+    };
+    const types = Object.keys(IB.BUILDINGS);
+    t.ok(types.length >= 5, 'the level sweep covers every building (' + types.length + ')');
+    let flat = [], lost = 0;
+    for (const type of types){
+      const at = [1, 2, 3].map(l => plotOps(type, l));
+      lost += at.reduce((a, x) => a + x.dropped, 0);
+      for (let i = 1; i < at.length; i++)
+        if (!(at[i].n > at[i - 1].n)) flat.push(type + ' lvl' + (i + 1) + ' ' + at[i - 1].n + '→' + at[i].n);
+    }
+    t.ok(lost === 0, 'the capture held every hold it drew (' + lost + ' dropped)');
+    t.ok(flat.length === 0, 'every level of every building puts more on the plot than the one below (' +
+      (flat.length ? flat.slice(0, 3).join(' | ') : 'all six grade') + ')');
+    // Rule out a "grows" that is really the plot being empty at level 0.
+    const empty = plotOps('forge', 0).n, one = plotOps('forge', 1).n;
+    t.ok(one > empty, 'and a built plot is more than an empty one (' + empty + ' → ' + one + ')');
+    IB.MY = seat0b;
+
+    // The rank itself, driven. Count the standards, not the ops.
+    {
+      const flags = (lvl) => {
+        s.lines = []; s.dropped = 0; s.fills = []; s.fillsDropped = 0;
+        IB.rankFlags(CTX, 0, 0, 0, lvl);
+        return { masts:s.lines.filter(l => l.k === 'moveTo').length, dropped:s.dropped };
+      };
+      const f1 = flags(1), f2 = flags(2), f3 = flags(3);
+      t.ok(f1.dropped === 0, 'the rank capture held');
+      t.ok(f1.masts >= 1, 'a level one building flies a standard (' + f1.masts + ')');
+      t.ok(f2.masts > f1.masts && f3.masts > f2.masts,
+        'and one more for every level (' + f1.masts + ' → ' + f2.masts + ' → ' + f3.masts + ')');
+      t.ok(flags(9).masts === f3.masts, 'a level beyond the last flies no more than the last');
+      t.ok(flags(0).masts === f1.masts, 'and a level below the first flies no fewer than the first');
+      t.ok(IB.RANK.gap > 0, 'the standards stand apart from each other');
+      t.ok(IB.RANK.h > 0 && IB.RANK.w > 0, 'and each is a real shape');
+    }
+    // The rank is in the hold's colour, from either chair — asked before it
+    // could become the thirteenth seat bug rather than after.
+    {
+      // A rank flies the HOLD's colour, not the seat's — asked before it could
+      // become the thirteenth seat bug rather than after. Driven: paint one and
+      // read back the colours that reached the canvas.
+      t.ok(IB.SIDE_COL[0] !== IB.SIDE_COL[1], 'the two holds fly different colours');
+      let wrong = 0, seen = 0;
+      for (const seat of [0, 1]) for (const side of [0, 1]){
+        IB.MY = seat;
+        IB.newMatch({ diff:'veteran', seed:7903 });
+        G.sides[side].plot[4] = { type:'forge', lvl:3, tile:4, raise:0 };
+        // Point the camera AT the hold under test. A hold off the edge of the
+        // screen is culled and draws nothing at all, and "nothing" filtered
+        // for a colour is a very confident zero.
+        IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+        IB.cam.x = side === 0 ? IB.HOLD_X : C.LANE_LEN - IB.HOLD_X;
+        s.fills = []; s.fillsDropped = 0;
+        IB.drawHold(CTX, side);
+        G.sides[side].plot[4] = null;
+        const mine = s.fills.filter(f => f === IB.SIDE_COL[side]).length;
+        const theirs = s.fills.filter(f => f === IB.SIDE_COL[1 - side]).length;
+        if (mine > 0) seen++;
+        if (theirs > 0) wrong++;
+        if (s.fillsDropped) wrong++;
+      }
+      IB.MY = seat0b;
+      t.ok(seen === 4, 'a hold paints in its own colour from either chair (' + seen + '/4)');
+      t.ok(wrong === 0, 'and never in the other hold’s (' + wrong + ')');
+    }
     IB.cam.x = 26;
   }
 

@@ -5346,6 +5346,39 @@ function houseTrim(c, gx, gy, w, d, wh, spec, base){
   }
 }
 
+/* A building's LEVEL was invisible. Six buildings, three levels each, and all
+   eighteen combinations drew exactly the same shapes — measured, the op count
+   is identical at level 1, 2 and 3, because b.lvl reached nothing in here
+   except the label text. You could spend three tiers of iron on a Forge and
+   the only thing that changed on your hold was a digit.
+
+   Rank flies on the plot now: one standard per level, in the hold's colour.
+   One table, drawn by drawBuilding after whatever the building itself put
+   down, so all six gain it the same way and cannot drift apart — which is how
+   the level came to be missing from all six in the first place.             */
+const RANK = { x:.30, y:-.40, gap:.15, h:.62, w:.17, lift:.55 };
+function rankFlags(c, gx, gy, z, lvl){
+  const n = clamp(Math.round(lvl || 1), 1, 3), B = bu();
+  for (let i = 0; i < n; i++){
+    const fx = gx + RANK.x - i * RANK.gap;
+    const foot = bp(fx, gy + RANK.y, z);
+    const head = bp(fx, gy + RANK.y, z + RANK.lift + RANK.h);
+    c.strokeStyle = '#6b5334'; c.lineWidth = Math.max(1, 1.1 * B);
+    c.beginPath(); c.moveTo(foot[0], foot[1]); c.lineTo(head[0], head[1]); c.stroke();
+    // the pennant, hanging off the mast on the side the light comes from
+    const tip = bp(fx, gy + RANK.y, z + RANK.lift + RANK.h * .52);
+    poly(c, [[head[0], head[1]], [head[0] - RANK.w * BSC, tip[1] - (head[1] - tip[1]) * .1],
+             [tip[0], tip[1]]], sideCol());
+    poly(c, [[head[0], head[1]], [head[0] - RANK.w * BSC * .45, head[1] + (tip[1] - head[1]) * .45],
+             [tip[0], tip[1]]], shade(sideCol(), 1.18));
+    // A name must not land on the rank it is naming. Same reservation the bars
+    // and the level roundels make — a standard is one more thing in the
+    // airspace over a plot, and at three of them it reached the label.
+    blockLabel(head[0] - RANK.w * BSC * .5, (head[1] + tip[1]) / 2,
+      RANK.w * BSC + 2, Math.abs(tip[1] - head[1]) + 2);
+  }
+}
+
 function drawBuilding(c, b){
   const gx = tileGX(b.tile), gy = tileGY(b.tile), B = bu();
   const raise = (b.raise || 0);
@@ -5492,6 +5525,7 @@ function drawBuilding(c, b){
       c.lineTo(g[0] + Math.cos(a) * 10 * B, g[1] + Math.sin(a) * 10 * B); c.stroke();
     }
   }
+  rankFlags(c, gx, gy, z, b.lvl);
   c.globalAlpha = 1;
   // Labels are queued and laid out after every building is drawn, so a packed
   // plot does not turn into a pile of overlapping text.
@@ -8313,7 +8347,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, RECOIL, RECOIL_T, SWING, swingTime, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
