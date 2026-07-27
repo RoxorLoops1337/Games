@@ -4685,6 +4685,144 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.fxForce = false;
   }
 
+  // Everything that shoots goes through ONE line of basicAttack — `if (ranged)
+  // shoot(u, tgt, land, ...)` — and that line passes no kind. So what came out
+  // was decided by the TARGET and the distance and never by the thing that
+  // fired it. Measured, firing every ranged shooter at a real target through
+  // the real attack path:
+  //
+  //   caster → a body     bolt   sp 26   arc rise 0.16   streak 3.2
+  //   cannon → a body     shaft  sp 26   arc rise 0.16   streak 1.9
+  //   a hero → a body     shaft  sp 26   arc rise 0.16   streak 1.9
+  //
+  // A siege cannon — half the attack speed of everything else, 2.2× damage to
+  // stone — threw a byte-identical object to a hero's arrow, same colour, same
+  // arc. Control on the same instrument: the bodies that fire them, four
+  // distinct silhouettes of four.
+  {
+    IB.newMatch({ diff:'veteran', seed:5500 });
+    IB.MY = 0;
+    // ---- what a body throws comes off the body
+    const s0 = G.sides[0];
+    if (!s0.heroes.length){ const nh = IB.makeHero(0, Object.keys(IB.CLS)[0]); s0.heroes.push(nh); IB.enterLane(nh); }
+    // whichever class came first may be a melee one; basicAttack only shoots
+    // when rng > 3, and what is under test is the projectile, not the class list
+    s0.heroes[0].rng = 6; s0.heroes[0].x = 52; s0.heroes[0].y = 0;
+    s0.heroes[0].dead = false; s0.heroes[0].inLane = true;
+    const shooters = [
+      ['a caster', IB.spawnUnit(0, 'caster', { x:50, y:0, paid:true })],
+      ['a cannon', IB.spawnUnit(0, 'cannon', { x:52, y:0, paid:true })],
+      ['a turret', s0.structs.find(x => x.key === 't1')],
+      ['a hero',   s0.heroes[0]],
+    ];
+    const kinds = shooters.map(([n, u]) => [n, IB.projKindFor(u)]);
+    t.ok(new Set(kinds.map(k => k[1])).size === shooters.length,
+      'four kinds of shooter throw four different things (' + kinds.map(k => k[1]).join(', ') + ')');
+    t.ok(kinds.every(k => IB.PROJ_LOOK[k[1]]),
+      'and every kind a shooter can produce has a look (' +
+      kinds.filter(k => !IB.PROJ_LOOK[k[1]]).map(k => k[1]).join(', ') + ' missing)');
+
+    // ---- WIRED, through basicAttack, which is the line that used to decide it
+    const fireAt = (u, tgt) => {
+      G.projs.length = 0;
+      IB.rebuildGrid();
+      IB.basicAttack(u, tgt);
+      return G.projs[0];
+    };
+    const foe = IB.spawnUnit(1, 'grunt', { x:56, y:0, paid:true });
+    const byCannon = fireAt(shooters[1][1], foe);
+    const byHero   = fireAt(shooters[3][1], foe);
+    t.ok(byCannon && byHero, 'both of them actually shot something');
+    t.ok(byCannon.kind !== byHero.kind,
+      'a siege shell is not the same object as a hero’s arrow (' + byCannon.kind + ' vs ' + byHero.kind + ')');
+    // The table and the wiring, joined: it is not enough that projKindFor says
+    // four different things if shoot() does not ask it.
+    const wired = shooters.map(([n, u]) => {
+      const p = fireAt(u, foe);
+      return [n, IB.projKindFor(u), p ? p.kind : '(nothing)'];
+    });
+    t.ok(wired.every(w => w[1] === w[2]),
+      'and each shooter really launches the kind it is supposed to (' +
+      wired.filter(w => w[1] !== w[2]).map(w => w[0] + ' wanted ' + w[1] + ' got ' + w[2]).join('; ') + ')');
+    t.ok(new Set(wired.map(w => w[2])).size === shooters.length,
+      'so four different things are in the air (' + wired.map(w => w[2]).join(', ') + ')');
+
+    // ---- the ladder, and its DIRECTION. Built the other way round every
+    // "distinct pictures" count below would still be perfect.
+    const L = (k) => IB.PROJ_LOOK[k];
+    t.ok(IB.arcH(8, 'shell') > IB.arcH(8, 'shaft') && IB.arcH(8, 'shaft') > IB.arcH(8, 'spark'),
+      'a shell is lobbed, an arrow is thrown and a turret bolt is flat (' +
+      [IB.arcH(8, 'shell'), IB.arcH(8, 'shaft'), IB.arcH(8, 'spark')].map(x => x.toFixed(2)).join(' > ') + ')');
+    t.ok(L('shell').streak > L('shaft').streak && L('shaft').streak > L('spark').streak,
+      'and it drags the widest streak (' +
+      [L('shell').streak, L('shaft').streak, L('spark').streak].join(' > ') + ')');
+    t.ok(L('shell').head > L('spark').head,
+      'with the biggest head on it (' + L('shell').head + ' vs ' + L('spark').head + ')');
+    t.ok(L('spark').len > L('shell').len,
+      'while the turret bolt is the longest thin dash on the board (' + L('spark').len + ' vs ' + L('shell').len + ')');
+    // The ceiling is a ceiling, not a suggestion.
+    t.ok(IB.arcH(400, 'shell') === L('shell').cap, 'a lob has a ceiling (' + IB.arcH(400, 'shell') + ')');
+
+    // ---- the streak length is the shooter's too, and it really caps there
+    const flown = (kind) => {
+      G.projs.length = 0;
+      IB.shoot({ x:40, y:0, magic:false }, { x:80, y:0, dead:false, r:.5, side:1 }, () => {}, '#12ff34', kind);
+      // read it in flight, not after it has landed and been spliced away
+      let most = 0;
+      for (let i = 0; i < 60 && G.projs.length; i++){
+        IB.projStep(1 / 30);
+        if (G.projs.length) most = Math.max(most, G.projs[0].tr.length / 3);
+      }
+      return most;
+    };
+    const trails = ['shell', 'shaft', 'spark'].map(k => [k, flown(k)]);
+    t.ok(trails.every(([k, n]) => n === L(k).trail),
+      'each kind keeps the streak its table gives it (' + trails.map(x => x[0] + ':' + x[1]).join(' ') + ')');
+    t.ok(new Set(trails.map(x => x[1])).size === 3,
+      'and those are three different lengths, not one');
+
+    // ---- SPEED IS UNTOUCHED, which is what makes this safe to land. sp is
+    // when onHit() fires, and that is the simulation and the balance.
+    G.projs.length = 0;
+    const speeds = [];
+    for (const [n, u] of shooters){
+      const p = fireAt(u, foe);
+      if (p) speeds.push([n, p.sp, p.kind]);
+    }
+    t.ok(speeds.length === shooters.length, 'all four shot (' + speeds.length + ')');
+    t.ok(new Set(speeds.map(s => s[1])).size === 1,
+      'and every one of them still travels at the same speed at the same target — ' +
+      'the look changed and the balance did not (' + speeds.map(s => s[2] + ':' + s[1]).join(' ') + ')');
+    const atStruct = fireAt(shooters[1][1], G.sides[1].structs.find(x => x.key === 't1'));
+    t.ok(atStruct && atStruct.sp === 34 && speeds[0][1] === 26,
+      'a shot at stone is still the faster one it always was (' + (atStruct || {}).sp + ' vs ' + speeds[0][1] + ')');
+
+    // ---- height is a picture. The hit test has only ever used x and y, so a
+    // projectile flown at an absurd height must land on exactly the same frame.
+    const flightFrames = (mangle) => {
+      G.projs.length = 0;
+      let hit = 0;
+      IB.shoot({ x:40, y:0, magic:false }, { x:70, y:0, dead:false, r:.5, side:1 },
+        () => { hit = 1; }, '#12ff34', 'shaft');
+      let n = 0;
+      while (G.projs.length && n < 200){ if (mangle) G.projs[0].z = 99; IB.projStep(1 / 30); n++; }
+      return { n, hit };
+    };
+    const plain = flightFrames(false), high = flightFrames(true);
+    t.ok(plain.hit === 1 && high.hit === 1, 'both shots landed');
+    t.ok(plain.n === high.n,
+      'and a shot flown at an absurd height lands on the same frame (' + plain.n + ' vs ' + high.n + ')');
+
+    // ---- outside the hash, like the rest of the picture
+    G.projs.length = 0;
+    IB.shoot({ x:40, y:0, magic:false }, { x:70, y:0, dead:false, r:.5, side:1 }, () => {}, '#12ff34', 'shell');
+    const h0 = IB.netHash();
+    G.projs[0].kind = 'spark'; G.projs[0].z = 12; G.projs[0].tr.length = 0;
+    t.ok(IB.netHash() === h0, 'what a projectile looks like is outside the lockstep hash');
+    G.projs.length = 0;
+    G.units.length = 0;
+  }
+
   // And the notification that was not merely the wrong colour but absent: the
   // level-up toast fired for side zero only, so player two's hero levelled up
   // in silence. Drive a real level-up from the second chair.

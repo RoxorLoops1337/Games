@@ -2038,16 +2038,49 @@ function basicAttack(u, tgt){
    picture: the hit test has only ever used x and y, and projectiles are not
    in netHash, so nothing here can move the two machines apart.             */
 const ARC = { rise:.10, cap:2.0, land:.5 };
-const arcH = (d) => Math.min(ARC.cap, d * ARC.rise);
+
+/* Everything that shoots in this game goes through ONE line of basicAttack —
+   `if (ranged) shoot(u, tgt, land, ...)` — and that line passes no kind. So
+   what came out was decided by the TARGET and the distance, never by the thing
+   that fired it. Measured, firing every ranged shooter at a real target through
+   the real attack path:
+
+     caster → a body     bolt   sp 26   arc rise 0.16   streak 3.2
+     cannon → a body     shaft  sp 26   arc rise 0.16   streak 1.9
+     a hero → a body     shaft  sp 26   arc rise 0.16   streak 1.9
+
+   A siege cannon — the heaviest thing on the bridge, half the attack speed of
+   everything else and 2.2× damage to stone — threw a byte-identical object to a
+   hero's arrow, in the same colour, on the same arc. Control on the same
+   instrument: the bodies that fire them, four distinct silhouettes of four.
+
+   So the shooter picks the look now. SPEED IS NOT IN HERE ON PURPOSE: sp
+   decides when onHit() lands, which is the simulation and the balance. Height,
+   streak and head are picture only — the hit test has only ever used x and y. */
+const PROJ_LOOK = {
+  //        arc per unit of range, its ceiling, points of streak kept, streak
+  //        width, how long the head is drawn, and how big its tip is
+  bolt:  { rise:.055, cap:1.1, trail:8, streak:3.2, len:0,   head:2.4 },  // a spell: flat and fast
+  shaft: { rise:.10,  cap:2.0, trail:6, streak:1.9, len:7,   head:1.7 },  // an arrow
+  shell: { rise:.30,  cap:4.4, trail:9, streak:3.4, len:4.5, head:3.2 },  // siege: lobbed, heavy, slow to fall
+  spark: { rise:.02,  cap:.45, trail:5, streak:1.3, len:9.5, head:1.4 },  // a turret bolt: the flattest thing on the board
+  hook:  { rise:.10,  cap:2.0, trail:6, streak:2.4, len:0,   head:2.6 },
+};
+const projLook = (k) => PROJ_LOOK[k] || PROJ_LOOK.shaft;
+// What a body throws, from the body rather than from what it is aimed at.
+const projKindFor = (u) =>
+  u.magic ? 'bolt' : u.struct ? 'spark' : u.kind === 'cannon' ? 'shell' : 'shaft';
+
+const arcH = (d, k) => { const L = projLook(k); return Math.min(L.cap, d * L.rise); };
 // Height at a fraction `u` of the way from launch to landing.
-const arcZ = (z0, d, u) => lerp(z0, ARC.land, u) + arcH(d) * Math.sin(clamp(u, 0, 1) * Math.PI);
+const arcZ = (z0, d, u, k) => lerp(z0, ARC.land, u) + arcH(d, k) * Math.sin(clamp(u, 0, 1) * Math.PI);
 
 function shoot(u, tgt, onHit, col, kind, sp){
   sfx('shot', u.x);
   const z0 = u.struct ? 2.6 : .8;
   G.projs.push({ x:u.x, y:u.y, z:z0, z0, d0:Math.max(.001, hyp(tgt.x - u.x, tgt.y - u.y)),
     tgt, onHit, col, sp:sp || (tgt.struct ? 34 : 26),
-    dead:false, tr:[], kind:kind || (u.magic ? 'bolt' : 'shaft'), ax:0, ay:0, src:u });
+    dead:false, tr:[], kind:kind || projKindFor(u), ax:0, ay:0, src:u });
 }
 
 function areaHit(src, x, y, rad, amt, o){
@@ -2263,11 +2296,14 @@ function projStep(dt){
     if (d <= step + .3){ p.onHit(); G.projs.splice(i, 1); continue; }
     p.ax = dx / d; p.ay = dy / d;                 // which way it is pointing
     p.x += dx / d * step; p.y += dy / d * step;
-    p.z = arcZ(p.z0 === undefined ? .8 : p.z0, p.d0 || d, 1 - d / (p.d0 || d));
+    p.z = arcZ(p.z0 === undefined ? .8 : p.z0, p.d0 || d, 1 - d / (p.d0 || d), p.kind);
     // Where it has just been. Deterministic — these are simulation positions —
-    // so both machines draw the same streak, and nothing reads it back.
+    // so both machines draw the same streak, and nothing reads it back. How
+    // much of it is kept is the shooter's, like the arc: a shell drags, a
+    // turret bolt leaves a short hot dash.
     p.tr.push(p.x, p.y, p.z);
-    if (p.tr.length > 18) p.tr.splice(0, 3);
+    const keep = projLook(p.kind).trail * 3;
+    if (p.tr.length > keep) p.tr.splice(0, p.tr.length - keep);
   }
 }
 
@@ -5759,7 +5795,7 @@ function drawLane(c){
         const a = lp(p.tr[i], p.tr[i + 1], p.tr[i + 2]);
         const b = lp(p.tr[i + 3], p.tr[i + 4], p.tr[i + 5]);
         c.globalAlpha = .10 + .5 * (i / p.tr.length);
-        c.strokeStyle = p.col; c.lineWidth = (p.kind === 'bolt' ? 3.2 : 1.9) * cam.z * (.4 + i / p.tr.length);
+        c.strokeStyle = p.col; c.lineWidth = projLook(p.kind).streak * cam.z * (.4 + i / p.tr.length);
         c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
       }
       c.lineCap = 'butt';
@@ -5778,17 +5814,23 @@ function drawLane(c){
       c.stroke(); c.lineCap = 'butt';
       ell(c, q[0], q[1], 2.6 * cam.z, 2.6 * cam.z, p.col);
     } else if (p.kind === 'bolt'){
-      // a spell: a soft body around a hot core
-      c.globalAlpha = .5; ell(c, q[0], q[1], 5.2 * cam.z, 5.2 * cam.z, p.col); c.globalAlpha = 1;
-      ell(c, q[0], q[1], 2.4 * cam.z, 2.4 * cam.z, '#ffffff');
+      // a spell: a soft body around a hot core, no shaft to point with
+      const L = projLook('bolt');
+      c.globalAlpha = .5; ell(c, q[0], q[1], L.head * 2.2 * cam.z, L.head * 2.2 * cam.z, p.col); c.globalAlpha = 1;
+      ell(c, q[0], q[1], L.head * cam.z, L.head * cam.z, '#ffffff');
     } else {
-      // a shaft: drawn along the direction it is travelling, not as a dot
+      // Everything else is drawn along the direction it is travelling rather
+      // than as a dot — one routine, and the table decides how long the body is
+      // and how big the tip: an arrow, a siege shell and a turret bolt used to
+      // be the same seven pixels of line and the same 1.7 of head.
+      const L = projLook(p.kind);
       const nx = p.ax || 1, ny = (p.ay || 0) * .55;
-      const L = 7 * cam.z;
-      c.strokeStyle = p.col; c.lineWidth = 2 * cam.z; c.lineCap = 'round';
-      c.beginPath(); c.moveTo(q[0] - nx * L, q[1] - ny * L); c.lineTo(q[0] + nx * L * .5, q[1] + ny * L * .5); c.stroke();
+      const len = L.len * cam.z;
+      c.strokeStyle = p.col; c.lineWidth = L.streak * cam.z; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(q[0] - nx * len, q[1] - ny * len);
+      c.lineTo(q[0] + nx * len * .5, q[1] + ny * len * .5); c.stroke();
       c.lineCap = 'butt';
-      ell(c, q[0] + nx * L * .5, q[1] + ny * L * .5, 1.7 * cam.z, 1.7 * cam.z, '#ffffff');
+      ell(c, q[0] + nx * len * .5, q[1] + ny * len * .5, L.head * cam.z, L.head * cam.z, '#ffffff');
     }
   }
   // particles
@@ -9371,10 +9413,11 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   OVER_HOLD, overStep, syncHud, MUSTER, mustering, musterPhase, waveSecs, musterMark,
+  basicAttack, attackDamage,
   fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
-  applyPull, pullStep, wantCast, ARC, arcH, arcZ, applyStun, applySlow, chainLine, hookSnapFx,
+  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
   netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,
