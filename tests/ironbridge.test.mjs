@@ -6485,6 +6485,77 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.shakeAsked = 0;
     G.units.length = 0;
   }
+  // Five structures fall in a match and they are not equal events: an Outer
+  // Turret is a step, an Inhibitor starts ninety-five seconds of siege ogres,
+  // and the Gates END THE MATCH. Measured before this, all five threw exactly
+  // the same thirty-four sparks and not one of them threw a wave at all —
+  // while every body on the bridge has thrown one sized by what it was worth
+  // since the bounty ladder went in. Three distinct reactions across five
+  // falls, and the three turrets were indistinguishable.
+  {
+    IB.newMatch({ diff:'veteran', seed:7801 });
+    const line = G.sides[1].structs;
+    t.ok(line.length === IB.STRUCTS.length, 'the whole line of battle is standing (' + line.length + ')');
+    // ord is the order they must be broken in, so it is already "how many has
+    // the attacker had to break to be standing here".
+    const byOrd = line.slice().sort((a, b) => a.ord - b.ord);
+    t.ok(byOrd[0].key === 't1', 'the outer turret is the first step (' + byOrd[0].key + ')');
+    t.ok(byOrd[byOrd.length - 1].key === 'gate', 'and the gates are the last (' + byOrd[byOrd.length - 1].key + ')');
+    t.ok(IB.structHeft(byOrd[0]) === 0, 'so the first step is the lightest');
+    t.ok(IB.structHeft(byOrd[byOrd.length - 1]) === 1, 'and the one that ends the match is the heaviest');
+    // The direction, stated on its own — it was written the other way round
+    // first, which handed the Outer Turret the biggest reaction in the match
+    // and the Gates the smallest.
+    const gate = line.find(x => x.key === 'gate'), outer = line.find(x => x.key === 't1');
+    const inhib = line.find(x => x.key === 'inhib');
+    t.ok(IB.structHeft(gate) > IB.structHeft(outer),
+      'the gates outweigh the outer turret (' + IB.structHeft(outer) + ' vs ' + IB.structHeft(gate) + ')');
+    t.ok(line.filter(x => /^t\d$/.test(x.key)).every(x => IB.structHeft(inhib) > IB.structHeft(x)),
+      'and the inhibitor outweighs every turret, without a special case for it');
+    // Every step up the line is a bigger event on every channel, or one of the
+    // four has come loose from the other three.
+    let flat = 0;
+    for (let i = 1; i < byOrd.length; i++){
+      const a = byOrd[i - 1], b = byOrd[i];
+      if (!(IB.fallSparks(b) > IB.fallSparks(a) && IB.fallRing(b) > IB.fallRing(a) &&
+            IB.fallWave(b) > IB.fallWave(a) && IB.fallShake(b) > IB.fallShake(a))) flat++;
+    }
+    t.ok(flat === 0, 'every step up the line is a bigger fall on all four channels (' + flat + ' that were not)');
+    // A structure threw no shockwave at all. Every body does.
+    t.ok(IB.fallWave(outer) > 0, 'even the first turret throws a wave now (' + IB.fallWave(outer).toFixed(2) + ')');
+    t.ok(IB.fallShake(gate) <= 14 + 1e-9,
+      'and the gates ask for what they always asked for (' + IB.fallShake(gate) + ')');
+    t.ok(IB.fallShake(outer) < IB.fallShake(gate) * .6,
+      'while a turret asks for far less (' + IB.fallShake(outer) + ' vs ' + IB.fallShake(gate) + ')');
+
+    // WIRED, through the real damage path. The sparks, ring and wave are
+    // browser-only — they sit inside the !HEADLESS block — so what the suite
+    // reads is what the camera was asked for, which is outside it.
+    const drop = (key) => {
+      IB.newMatch({ diff:'veteran', seed:7801 });
+      const list = G.sides[1].structs;
+      const st = list.find(x => x.key === key);
+      for (const o of list) if (o.ord < st.ord){ o.dead = true; o.hp = 0; }
+      const killer = IB.spawnUnit(0, 'melee', { x:st.x - 1, y:0, paid:true });
+      IB.rebuildGrid();
+      IB.shakeAsked = 0;
+      IB.dealDmg(killer, st, st.mhp * 4, { pure:true });
+      return { st, dead:!!st.dead, asked:IB.shakeAsked };
+    };
+    const dOuter = drop('t1'), dInhib = drop('inhib'), dGate = drop('gate');
+    t.ok(dOuter.dead && dInhib.dead && dGate.dead, 'all three really came down');
+    t.ok(dOuter.asked > 0, 'a fall asks the camera for something (' + dOuter.asked.toFixed(2) + ')');
+    t.ok(dGate.asked > dInhib.asked && dInhib.asked > dOuter.asked,
+      'and asks for more the deeper into the line it is (' + dOuter.asked.toFixed(2) + ' → ' +
+      dInhib.asked.toFixed(2) + ' → ' + dGate.asked.toFixed(2) + ')');
+    // The blow that broke it lands as well as breaks it, so the total is the
+    // blow plus the fall — but the fall's own share has to be in there.
+    t.ok(dGate.asked >= IB.fallShake(dGate.st) - 1e-9,
+      'and the fall’s own share reached the camera (' + IB.fallShake(dGate.st).toFixed(2) +
+      ' of ' + dGate.asked.toFixed(2) + ')');
+    IB.shakeAsked = 0;
+    G.units.length = 0;
+  }
   // The wart swing0 fixed, in two more places. An ultimate's pop was given .5
   // seconds and divided by the basic's .32, so it sat pinned at full for the
   // first .18 and only then began to fade — a different SHAPE from the basic
