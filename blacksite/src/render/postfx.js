@@ -130,8 +130,8 @@ export function createPostFX(G, engine, sky) {
 
   function applyJitter() {
     const on = useTAA();
-    const jx = on ? (halton(frame % 8 + 1, 2) - 0.5) * 2 / Math.max(1, width) : 0;
-    const jy = on ? (halton(frame % 8 + 1, 3) - 0.5) * 2 / Math.max(1, height) : 0;
+    const jx = on ? (halton(frame % 8 + 1, 2) - 0.5) * 2 * jitterScale / Math.max(1, width) : 0;
+    const jy = on ? (halton(frame % 8 + 1, 3) - 0.5) * 2 * jitterScale / Math.max(1, height) : 0;
     engine.camera.projectionMatrix.elements[8] = jx;
     engine.camera.projectionMatrix.elements[9] = jy;
     // The viewmodel rides the same jitter, otherwise it is the one object in
@@ -165,6 +165,12 @@ export function createPostFX(G, engine, sky) {
   // frame's high-frequency energy, and this is the setting that returns it
   // without pushing into the crunchy over-sharpened look.
   let sharpenAmount = 0.85;
+
+  // How far the per-frame jitter spreads inside the pixel. A full-width jitter
+  // is a box filter over the whole texel, which is maximally stable and
+  // maximally soft; pulling it in trades a little edge quality for detail the
+  // sharpener does not then have to invent.
+  let jitterScale = 1.0;
 
   function useTAA() {
     return !broken && caps.taa && enabled.taa && !!passes.taa && G.settings.quality >= 1;
@@ -350,6 +356,8 @@ export function createPostFX(G, engine, sky) {
     // 0 = off, 1 = the strongest lobe RCAS will allow without overshoot.
     get sharpen() { return sharpenAmount; },
     set sharpen(v) { sharpenAmount = v; applySettings(); },
+    get jitterScale() { return jitterScale; },
+    set jitterScale(v) { jitterScale = v; },
 
     dispose() {
       disposeAll([workA, workB, ldr]);

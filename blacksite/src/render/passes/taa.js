@@ -188,6 +188,8 @@ export function createTAAPass(renderer, opts = {}) {
   const api = {
     enabled: true,
     get texture() { return out ? out.texture : null; },
+    get feedback() { return mat.uniforms.uFeedback.value; },
+    set feedback(v) { mat.uniforms.uFeedback.value = v; },
 
     resize(nw, nh) { alloc(nw, nh); },
     invalidate() { valid = false; },
