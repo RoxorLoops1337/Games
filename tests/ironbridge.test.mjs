@@ -3451,6 +3451,50 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'every building type draws with the new faces, from either seat');
 }
 {
+  // The sky. Every object in this game is lit from the upper left and there
+  // was nothing up there doing the lighting — and a sun on the WRONG side of
+  // that sky would be the same bug drawHouse had, seen from the other end.
+  const rgba = (s) => {
+    const m = s.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+    return m ? .2126 * +m[1] + .7152 * +m[2] + .0722 * +m[3] : NaN;
+  };
+  t.ok((IB.SUN.x < .5) === (IB.LIT.near > IB.LIT.right),
+    'the sun is on the side of the sky the whole world is lit from');
+  t.ok(IB.SUN.y > 0 && IB.SUN.y < IB.BANDS[0].y,
+    'and above the furthest ridge rather than buried in it');
+  t.ok(IB.SUN.r > 0 && IB.SUN.halo > 1, 'it has a disc, and a halo bigger than the disc');
+  // The rim runs foot -> apex to the RIGHT, so the face it belongs to looks
+  // left. Move the sun and this has to move with it.
+  t.ok(Math.sign(IB.RIDGE_RIM) === (IB.SUN.x < .5 ? 1 : -1),
+    'the ridge slope that catches the light is the one facing the sun');
+
+  let dim = 0, out = 0;
+  for (const b of IB.BANDS){
+    if (!(rgba(b.rim) > rgba(b.col))) dim++;
+    if (!Number.isFinite(rgba(b.haze))) out++;
+  }
+  t.ok(dim === 0, 'every ridge rim is brighter than the ridge it edges');
+  t.ok(out === 0, 'and every haze colour is one a canvas can read');
+  // Painter's order: the bands are drawn in array order, so each has to be
+  // NEARER than the one before it. Reorder them and far mountains paint over
+  // near ones, which reads as a hole in the horizon.
+  let back = 0;
+  for (let i = 1; i < IB.BANDS.length; i++)
+    if (IB.BANDS[i].d <= IB.BANDS[i - 1].d || IB.BANDS[i].y <= IB.BANDS[i - 1].y) back++;
+  t.ok(back === 0, 'the ridges are laid down furthest first (' + back + ' out of order)');
+
+  // The halo is a radial gradient — a new call on this path — and the whole
+  // sky has to survive every camera the game can reach.
+  IB.newMatch({ diff:'veteran', seed:181 });
+  IB.cam.follow = false;
+  for (const x of [IB.CAM_MIN, 0, C.LANE_LEN / 2, C.LANE_LEN, IB.CAM_MAX]){
+    IB.cam.x = x;
+    for (const z of [.42, 1, 2.2]){ IB.cam.z = IB.cam.tz = z; IB.draw(); }
+  }
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'the sky draws from either end of the world at every zoom');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
