@@ -417,11 +417,22 @@ export function sandbags(len, rows = 3, opts = {}) {
 // stack so the wound bulk reads even in silhouette.
 export function spool(r = 0.85, w = 0.9, opts = {}) {
   const col = opts.color, wood = opts.wood, out = [];
-  out.push(place(cyl(r, r, 0.07, 16, { color: wood }), 0, 0, w / 2 - 0.035, 0, Math.PI / 2, 0));
-  out.push(place(cyl(r, r, 0.07, 16, { color: wood }), 0, 0, -w / 2 + 0.035, 0, Math.PI / 2, 0));
-  out.push(place(cyl(r * 0.34, r * 0.34, w - 0.1, 12, { color: wood }), 0, 0, 0, 0, Math.PI / 2, 0));
-  for (let i = 0; i < 4; i++) {
-    out.push(place(torus(r * 0.34 + 0.055 + i * 0.075, 0.038, 5, 16, Math.PI * 2, { color: col }), 0, 0, 0));
+  for (const sz of [-1, 1]) {
+    const z = sz * (w / 2 - 0.035);
+    out.push(place(cyl(r, r, 0.07, 16, { color: wood }), 0, 0, z, 0, Math.PI / 2, 0));
+    // A bare disc reads as a coin at any distance. The rim band and the six
+    // radial battens are what make it read as a cable drum instead.
+    out.push(place(torus(r - 0.04, 0.05, 5, 18, Math.PI * 2, { color: col }), 0, 0, z + sz * 0.045));
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2;
+      out.push(place(chamferBox(r * 0.92, 0.11, 0.05, 0.012, { color: wood }),
+        Math.cos(a) * r * 0.44, Math.sin(a) * r * 0.44, z + sz * 0.05, 0, 0, a));
+    }
+  }
+  out.push(place(cyl(r * 0.36, r * 0.36, w - 0.1, 12, { color: wood }), 0, 0, 0, 0, Math.PI / 2, 0));
+  for (let i = 0; i < 5; i++) {
+    out.push(place(torus(r * 0.42 + i * 0.082, 0.044, 5, 16, Math.PI * 2, { color: col }),
+      0, 0, (i % 2 ? 0.05 : -0.05)));
   }
   return out;
 }

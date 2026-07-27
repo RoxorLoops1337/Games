@@ -955,7 +955,8 @@ function build(G, engine, materials) {
   const atmoU = {
     uTime: { value: 0 },
     uStretch: shared.uStretch,
-    uSpan: { value: new THREE_.Vector3(56, 15, 56) },
+    // uSpan is deliberately absent: it is the one uniform that differs between
+    // the two atmosphere meshes, so each material supplies its own.
     uCam: { value: new THREE_.Vector3() },
     uWind: shared.uWind,
     uSunDir: { value: new THREE_.Vector3(0.42, -0.34, 0.62).normalize() },

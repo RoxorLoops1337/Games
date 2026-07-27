@@ -183,16 +183,16 @@ export function createGunMaterials(G, engine, materials) {
   const mats = {
     // Blued/anodised receiver steel. Low roughness so the chamfers throw a hard
     // specular line; the wear map breaks it up so it is not a mirror.
-    steel: from('metal', { roughness: 0.31, metalness: 0.92, envMapIntensity: 1.9 }),
+    steel: from('metal', { roughness: 0.33, metalness: 0.92, envMapIntensity: 1.0 }),
     // Phosphate on the barrel and the bolt carrier — same alloy, matte finish.
-    phos: from('metal', { roughness: 0.58, metalness: 0.88, envMapIntensity: 1.45 }),
+    phos: from('metal', { roughness: 0.58, metalness: 0.88, envMapIntensity: 1.0 }),
     // Furniture. Glass-filled nylon is a dielectric and much rougher; getting
     // this contrast right is most of what makes the metal look like metal.
-    poly: from('dark', { roughness: 0.74, metalness: 0.04, envMapIntensity: 1.0 }),
+    poly: from('dark', { roughness: 0.76, metalness: 0.04, envMapIntensity: 1.0 }),
     // Grip pads, buttpad, sling loops.
-    rubber: from('dark', { roughness: 0.92, metalness: 0.0, envMapIntensity: 0.55 }),
+    rubber: from('dark', { roughness: 0.93, metalness: 0.0, envMapIntensity: 1.0 }),
     // Nomex glove. Slightly sheened where the palm is worn smooth.
-    glove: from('dark', { roughness: 0.80, metalness: 0.0, envMapIntensity: 0.75 }),
+    glove: from('dark', { roughness: 0.82, metalness: 0.0, envMapIntensity: 1.0 }),
   };
 
   // The lens is not glass in the usual sense — it is a coated element, which
@@ -200,8 +200,8 @@ export function createGunMaterials(G, engine, materials) {
   // whatever is behind the shooter. Physical transmission would be honest and
   // also invisible, so this fakes it with a dark, very smooth metal.
   mats.lens = new THREE.MeshStandardMaterial({
-    color: 0x18303f, roughness: 0.05, metalness: 0.80,
-    envMapIntensity: 3.4, side: THREE.FrontSide,
+    color: 0x14283a, roughness: 0.05, metalness: 0.80,
+    envMapIntensity: 1.6, side: THREE.FrontSide,
   });
 
   const dotTex = reticleTexture(64, 'dot');
@@ -232,13 +232,14 @@ export function createGunMaterials(G, engine, materials) {
     mats,
     // Called every frame; almost always a no-op after the first.
     syncEnvironment(view, scene) {
+      if (view.environment && view.environment !== env.fallback) return;   // owned elsewhere
       const world = scene ? scene.environment : null;
       if (world) {
         if (env.current !== world) { env.current = world; view.environment = world; }
-      } else {
-        if (!env.fallback) env.fallback = fallbackEnv(engine);
-        if (env.fallback && env.current !== env.fallback) { env.current = env.fallback; view.environment = env.fallback; }
+        return;
       }
+      if (!env.fallback) env.fallback = fallbackEnv(engine);
+      if (env.fallback && env.current !== env.fallback) { env.current = env.fallback; view.environment = env.fallback; }
       if ('environmentIntensity' in view) view.environmentIntensity = 1.0;
     },
     dispose() {

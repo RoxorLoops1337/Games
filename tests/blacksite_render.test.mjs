@@ -204,6 +204,90 @@ async function boot(opts) {
   await page.close();
 }
 
+// ───────────────────────────────── the camera survives a stalled frame
+{
+  // The camera rig's springs run on the render delta, which the loop clamps to
+  // 0.25 s after a stall or an alt-tab. Explicit Euler on a stiff spring
+  // diverges at that step size, and when it did, the camera's Y reached 7×10¹²,
+  // every mesh fell outside the frustum, and the frame came back as bare sky —
+  // with no error logged anywhere. Feed it the worst delta it can legally see
+  // and check it is still pointing at the world.
+  const { page, logs } = await boot({ w: 400, h: 225, quality: 2 });
+  await pose(page, 'spawn', 4);
+
+  const r = await page.evaluate(async () => {
+    const B = window.BLACKSITE, e = B.engine;
+    const before = e.camera.position.y;
+    // Land hard a few times, then hand it nothing but stalled frames.
+    for (let i = 0; i < 60; i++) {
+      if (i % 12 === 0) e.kickLanding(1);
+      e.updateCamera(0.25);
+    }
+    const dip = e.rig.landDip, sway = e.rig.sway.x;
+    // And a pathological one, larger than the loop would ever pass.
+    e.updateCamera(5);
+    return {
+      before, after: e.camera.position.y,
+      dip, sway,
+      finite: Number.isFinite(e.camera.position.y) && Number.isFinite(e.rig.landDip),
+      extreme: e.camera.position.y,
+    };
+  });
+
+  t.ok(r.finite, 'sixty stalled frames leave the camera finite');
+  t.ok(Math.abs(r.dip) < 1, `the landing spring stays bounded (dip ${r.dip.toFixed(4)})`);
+  t.ok(Math.abs(r.sway) <= 0.1, `and so does the sway spring (${r.sway.toFixed(4)})`);
+  t.ok(Math.abs(r.after - r.before) < 2,
+    `the camera does not drift away from the player (${r.before.toFixed(2)} → ${r.after.toFixed(2)})`);
+
+  // The real symptom, asserted directly: after all that, does the world still
+  // draw? A camera in orbit renders the sky and nothing else.
+  const drew = await page.evaluate(async () => {
+    const B = window.BLACKSITE;
+    for (let i = 0; i < 3; i++) await new Promise((rf) => requestAnimationFrame(rf));
+    let visible = 0;
+    const cam = B.engine.camera;
+    const f = new B.THREE.Frustum().setFromProjectionMatrix(
+      new B.THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    B.level.group.traverse((o) => { if (o.isMesh && f.intersectsObject(o)) visible++; });
+    return { visible, calls: B.engine.renderer.info.render.calls };
+  });
+  t.ok(drew.visible > 0, `the level is still in frame afterwards (${drew.visible} meshes, ${drew.calls} calls)`);
+
+  const bad = logs.filter((l) => (l.type === 'error' || l.type === 'pageerror') && !noisy(l.text));
+  t.ok(bad.length === 0, 'and nothing threw' + (bad.length ? ' — ' + bad[0].text.slice(0, 200) : ''));
+
+  await page.close();
+}
+
+// ──────────────────────────── every named pose actually frames something
+{
+  // A pose that renders empty sky is either a camera in the wrong place or a
+  // level that moved out from under it. Either way it is worth catching here
+  // rather than in a screenshot nobody looks at.
+  const { page } = await boot({ w: 400, h: 225, quality: 2 });
+  const names = await page.evaluate(() => {
+    const L = window.BLACKSITE.level;
+    return L && L.poses ? Object.keys(L.poses) : [];
+  });
+  t.ok(names.length > 0, `the level publishes its own camera poses (${names.length})`);
+
+  for (const name of names) {
+    await pose(page, name, 3);
+    const r = await page.evaluate(() => {
+      const B = window.BLACKSITE, cam = B.engine.camera;
+      const f = new B.THREE.Frustum().setFromProjectionMatrix(
+        new B.THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+      let visible = 0;
+      B.level.group.traverse((o) => { if (o.isMesh && f.intersectsObject(o)) visible++; });
+      return { visible, y: cam.position.y };
+    });
+    t.ok(Number.isFinite(r.y) && Math.abs(r.y) < 200, `the ${name} pose keeps the camera in the level (y ${r.y.toFixed(1)})`);
+    t.ok(r.visible > 0, `the ${name} pose has something in frame (${r.visible} meshes)`);
+  }
+  await page.close();
+}
+
 // ──────────────────────────────────── every quality tier, and a resize
 {
   const { page, logs } = await boot({ w: 480, h: 270, quality: 2 });

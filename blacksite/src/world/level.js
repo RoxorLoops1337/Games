@@ -546,7 +546,7 @@ export function buildLevel(G, engine, materials) {
   buildSilo();
   function buildSilo() {
     const seg = 8, rm = (SILO.rOut + SILO.rIn) / 2, ring = SILO.rOut - SILO.rIn;
-    const chord = 2 * rm * Math.tan(Math.PI / seg) + 0.25;
+    const chord = 2 * SILO.rOut * Math.tan(Math.PI / seg) + 0.08;
     for (let i = 0; i < seg; i++) {
       const a = (i + 0.5) / seg * Math.PI * 2;
       const cx = SILO.x + Math.cos(a) * rm, cz = SILO.z + Math.sin(a) * rm;
@@ -571,6 +571,15 @@ export function buildLevel(G, engine, materials) {
       const a = i * 1.31, r = 1.2 + i * 0.7;
       putAll([chamferBox(2.6, 0.09, 1.4, 0.012)], 'rust',
         SILO.x + Math.cos(a) * r, 0.98, SILO.z + Math.sin(a) * r, a * 1.7, (rnd() - 0.5) * 0.22, 0, 'silo');
+    }
+    // Hazard banding round the lip. Without it the cap is a circular concrete
+    // pad; with it, it is unmistakably the top of a hole, from 40 m, in one
+    // glance — which is the entire job of a landmark.
+    for (let i = 0; i < 20; i++) {
+      const a = (i + 0.5) / 20 * Math.PI * 2;
+      putAll([chamferBox(0.9, 0.22, 0.42, 0.02)], i % 2 ? 'paint' : 'dark',
+        SILO.x + Math.cos(a) * (SILO.rIn + 0.28), SILO.top + 0.05, SILO.z + Math.sin(a) * (SILO.rIn + 0.28),
+        -a, 0, 0, 'silo');
     }
     // Two sand drifts banked up the collar's flanks. They are the only way onto
     // the rim, which makes the cap a position you have to commit to reaching.
@@ -1259,10 +1268,11 @@ export function buildLevel(G, engine, materials) {
       // catwalk, the mast, the gantry — and none of it is hidden.
       spawn: { pos: [0, 1.80, 44], yaw: 0, pitch: -0.02 },
 
-      // The 34 m lane, from inside it. Revetment on the left, stair tower and
-      // catwalk on the right, the compound at the end of it. This is the shot
-      // that has to make you want a rifle.
-      approach: { pos: [-6.5, 1.72, 30.5], yaw: 0.09, pitch: -0.03 },
+      // Standing in the slalom, between the two jersey chevrons: barriers
+      // running diagonally out of the near right, the revetment mid-left, and
+      // 44 m of open road to the compound. This is the shot that has to make you
+      // want a rifle, and the barriers are there to say why you cannot just run.
+      approach: { pos: [-6.5, 1.72, 36.5], yaw: 0.06, pitch: -0.03 },
 
       // From the catwalk at 3.7 m, three-quarters onto the whole site: the pad
       // below, the bunker and its leaning mast to the left, the silo cap and the
@@ -1274,15 +1284,18 @@ export function buildLevel(G, engine, materials) {
       // degrees off-axis: a perfect one-point perspective reads as a test render.
       corridor: { pos: [0, 1.72, -15.5], yaw: 3.02, pitch: -0.02 },
 
-      // Straight into the sun with a container 5 m away as a black foreground
-      // mass and the catwalk cutting across above the eyeline. Everything here
-      // is either a silhouette or a rim light.
-      sunward: { pos: [13.5, 1.72, 9.5], yaw: 0.60, pitch: 0.15 },
+      // Straight into the sun, from the middle of the pad. The sun sits behind
+      // the bunker's west end at almost exactly the bearing of the leaning mast,
+      // so the site's tallest landmark is a black lattice against it and the
+      // catwalk cuts the frame just above the eyeline. Everything in here is
+      // either a silhouette or a rim light.
+      sunward: { pos: [4.0, 1.72, 8.0], yaw: 0.62, pitch: 0.13 },
 
-      // The reverse: sun over the shoulder, raking across the silo cap from the
-      // alley. Full form on the collar, the closure door and the gantry legs,
-      // with their shadows running back toward the lens.
-      backlit: { pos: [10.2, 1.90, -25.5], yaw: -2.50, pitch: -0.03 },
+      // The reverse: sun over the shoulder, raking south-east across the silo
+      // cap. Full form on the collar and its hazard banding, the gantry legs
+      // converging overhead, the alley and the bunker's east wall falling away
+      // behind, and every shadow running back toward the lens.
+      backlit: { pos: [12.6, 1.75, -25.0], yaw: -2.52, pitch: -0.02 },
 
       // Nothing but floor: apron bays and their joints, gravel, the cast lip of
       // the cable trench, the trays in the bottom of it and a checker plate over.
@@ -1292,7 +1305,7 @@ export function buildLevel(G, engine, materials) {
       // aperture, which is exactly what the corridor's south door is; the ADS
       // frame is down the approach lane, because that is where you would use it.
       weapon: { pos: [0.6, 1.72, -12.0], yaw: 3.05, pitch: -0.02, ads: 0 },
-      ads: { pos: [-6.5, 1.72, 30.5], yaw: 0.09, pitch: -0.03, ads: 1 },
+      ads: { pos: [-6.5, 1.72, 36.5], yaw: 0.06, pitch: -0.03, ads: 1 },
 
       // Extras: the two positions a player remembers the level by.
       silo: { pos: [19, 2.77, -8.5], yaw: 0.0, pitch: -0.10 },

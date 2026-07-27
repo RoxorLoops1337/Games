@@ -111,6 +111,45 @@ export function createEngine(G, canvas) {
   const _shake = new THREE.Vector3();
   const _dir = { x: 0, y: 0, z: 0 };
 
+  // Every spring in the rig, integrated in bounded sub-steps.
+  //
+  // These run on the *render* delta, not the fixed simulation step, so they see
+  // whatever the frame rate happens to be — including the 0.25 s the loop
+  // clamps to after a stall or an alt-tab. Explicit Euler on a stiffness-180
+  // spring diverges above about 1/30 s (the restoring term overshoots further
+  // than it started), and once it does, it does not come back: the camera Y
+  // reached 7×10¹² in testing, every mesh failed the frustum test, and the
+  // frame came back as bare sky. Sub-stepping keeps the integration inside its
+  // stable range no matter how long the frame took.
+  const SPRING_STEP = 1 / 120;
+
+  function stepSprings(dt, dYaw, dPitch) {
+    let remaining = Math.min(dt, 0.5);
+    // The rotation impulse is delivered once, not once per sub-step, or a slow
+    // frame would amplify the same mouse movement several times over.
+    let impulseYaw = dYaw * 2.2, impulsePitch = dPitch * 2.2;
+    const stiff = 120, damp = 2 * Math.sqrt(stiff) * 0.85;
+    while (remaining > 1e-6) {
+      const h = Math.min(remaining, SPRING_STEP);
+      remaining -= h;
+
+      rig.swayVel.x += (-rig.sway.x * stiff - rig.swayVel.x * damp) * h + impulseYaw;
+      rig.swayVel.y += (-rig.sway.y * stiff - rig.swayVel.y * damp) * h + impulsePitch;
+      impulseYaw = impulsePitch = 0;
+      rig.sway.x = clamp(rig.sway.x + rig.swayVel.x * h, -0.09, 0.09);
+      rig.sway.y = clamp(rig.sway.y + rig.swayVel.y * h, -0.09, 0.09);
+
+      rig.landVel += (-rig.landDip * 180 - rig.landVel * 17) * h;
+      rig.landDip += rig.landVel * h;
+    }
+    // A belt-and-braces clamp. Sub-stepping makes divergence impossible for any
+    // finite dt, but a NaN arriving from outside would still poison the camera
+    // permanently, and a camera is not worth losing to one bad frame.
+    if (!Number.isFinite(rig.landDip) || !Number.isFinite(rig.landVel)) { rig.landDip = 0; rig.landVel = 0; }
+    if (!Number.isFinite(rig.sway.x) || !Number.isFinite(rig.sway.y)) { rig.sway.set(0, 0); rig.swayVel.set(0, 0); }
+    rig.landDip = clamp(rig.landDip, -0.6, 0.6);
+  }
+
   // `alpha` is the render interpolation factor between fixed steps.
   function updateCamera(dt) {
     const p = G.player;
@@ -119,11 +158,7 @@ export function createEngine(G, canvas) {
     // toward zero, driven by how fast the view is rotating.
     const dYaw = p.yaw - rig.lastYaw, dPitch = p.pitch - rig.lastPitch;
     rig.lastYaw = p.yaw; rig.lastPitch = p.pitch;
-    const stiff = 120, damp = 2 * Math.sqrt(stiff) * 0.85;
-    rig.swayVel.x += (-rig.sway.x * stiff - rig.swayVel.x * damp) * dt + dYaw * 2.2;
-    rig.swayVel.y += (-rig.sway.y * stiff - rig.swayVel.y * damp) * dt + dPitch * 2.2;
-    rig.sway.x = clamp(rig.sway.x + rig.swayVel.x * dt, -0.09, 0.09);
-    rig.sway.y = clamp(rig.sway.y + rig.swayVel.y * dt, -0.09, 0.09);
+    stepSprings(dt, dYaw, dPitch);
 
     // Head bob, phase-locked to stride so the low point lands with the footstep.
     const speed = Math.hypot(p.vel.x, p.vel.z);
@@ -145,9 +180,9 @@ export function createEngine(G, canvas) {
     if (p.stance === 'slide') rig.rollTarget += 0.09;
     rig.roll = smooth(rig.roll, rig.rollTarget, 9, dt);
 
-    // Landing dip, as a spring rather than a curve so a hard landing overshoots.
-    rig.landVel += (-rig.landDip * 180 - rig.landVel * 17) * dt;
-    rig.landDip += rig.landVel * dt;
+    // The landing dip is a spring rather than a curve so a hard landing
+    // overshoots and settles; it is integrated up in `stepSprings` with the
+    // rest of them, where the step size is bounded.
 
     if (G.shake.t > 0) { G.shake.t -= dt; G.shake.amp *= Math.exp(-6 * dt); }
     else G.shake.amp = 0;

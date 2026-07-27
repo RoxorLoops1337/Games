@@ -64,23 +64,24 @@ export function createViewmodel(G, engine, materials) {
   engine.view.add(group);
 
   // ── lighting the view scene ────────────────────────────────────────────────
-  // The viewmodel scene gets none of the world's lights, and a weapon lit by a
-  // different key than the room it is in is the definition of "pasted on". So
-  // the key here is a mirror of whatever directional light the world is using,
-  // re-aimed at the weapon every frame, and the environment comes straight from
-  // the world's IBL when there is one.
-  const key = new THREE.DirectionalLight(0xffeeda, 3.0);
+  // The view scene is its own scene, so it gets none of the world's lights for
+  // free — and the temptation is to give the weapon a nice three-point rig,
+  // which is exactly how a viewmodel ends up looking like a studio product shot
+  // pasted over a photograph. It has to be lit by *the same sun*, at the same
+  // intensity, from the same direction, or no amount of geometry will make it
+  // belong in the frame.
+  //
+  // So: one key mirrored from `engine.lighting.sun` and re-aimed at the weapon
+  // every frame, and one fill at about a quarter of it. That fill is the only
+  // light here with no counterpart in the world and it is still defensible — it
+  // stands in for bounce off the player's own chest and forearms, which is real
+  // light the world has no geometry for. Anything beyond those two is a lie.
+  const key = new THREE.DirectionalLight(0xffeeda, 1.0);
   const keyTarget = new THREE.Object3D();
   key.castShadow = false;
-  const fill = new THREE.HemisphereLight(0x9cc0e4, 0x38312a, 1.30);
-  // A cold rim from behind and above picks the top edges of the receiver out
-  // against the world, which is the only thing keeping a dark gun readable in a
-  // dark corridor.
-  const rim = new THREE.DirectionalLight(0xa8c8ff, 1.15);
-  const rimTarget = new THREE.Object3D();
-  rim.castShadow = false;
-  engine.view.add(key, keyTarget, fill, rim, rimTarget);
-  key.target = keyTarget; rim.target = rimTarget;
+  const fill = new THREE.HemisphereLight(0x9cc0e4, 0x40382e, 0.28);
+  engine.view.add(key, keyTarget, fill);
+  key.target = keyTarget;
   const sun = { light: null, dir: new THREE.Vector3(-0.42, 0.34, -0.62).normalize(), search: 0 };
 
   // ── animation state ────────────────────────────────────────────────────────
@@ -530,31 +531,35 @@ export function createViewmodel(G, engine, materials) {
 
   // ── world lighting handoff ─────────────────────────────────────────────────
   function syncLights(dt) {
-    sun.search -= dt;
-    if (!sun.light && sun.search <= 0) {
-      sun.search = 0.75;
-      engine.scene.traverse((o) => {
-        if (!sun.light && o.isDirectionalLight) sun.light = o;
-      });
+    // `engine.lighting` is the authority when the lighting module is present.
+    // Falling back to a scene walk keeps the weapon lit in a bare test scene and
+    // keeps this module from being the thing that breaks a partial boot.
+    const L = engine.lighting;
+    let src = L && L.sun ? L.sun : null;
+    if (!src) {
+      sun.search -= dt;
+      if (!sun.light && sun.search <= 0) {
+        sun.search = 0.75;
+        engine.scene.traverse((o) => { if (!sun.light && o.isDirectionalLight) sun.light = o; });
+      }
+      src = sun.light;
     }
-    if (sun.light) {
-      // Only the direction and colour carry over. Intensity does not: the world
-      // sun is tuned against a 40 m street and would blow the weapon out at
-      // 40 cm, so the key is scaled to something that keeps the chamfers bright
-      // without clipping the polymer.
-      sun.dir.copy(sun.light.position).sub(sun.light.target.position);
+    if (src) {
+      sun.dir.copy(src.position);
+      if (src.target) sun.dir.sub(src.target.position);
       if (sun.dir.lengthSq() < 1e-6) sun.dir.set(-0.42, 0.34, -0.62);
       sun.dir.normalize();
-      key.color.copy(sun.light.color);
-      key.intensity = clamp(sun.light.intensity * 0.95, 1.6, 3.6);
+      key.color.copy(src.color);
+      // One-to-one with the world sun. The weapon is 40 cm from the lens and the
+      // containers are 40 m away, but they stand under the same sky, and any
+      // factor other than 1 here is a lie the eye catches on the first frame.
+      const s = L && typeof L.sunIntensity === 'number' ? L.sunIntensity : src.intensity;
+      key.intensity = clamp(s, 0.05, 6);
+      fill.intensity = key.intensity * 0.26 + 0.05;
     }
     const at = engine.viewCam.position;
     keyTarget.position.copy(at);
     key.position.copy(at).addScaledVector(sun.dir, 6);
-    rimTarget.position.copy(at);
-    // The rim opposes the key horizontally and comes from above, which is where
-    // a sky bounce is, so it never fights the sun for the same edge.
-    rim.position.set(at.x - sun.dir.x * 5, at.y + 5, at.z - sun.dir.z * 5);
   }
 
   // ── event and polling plumbing ─────────────────────────────────────────────
@@ -620,7 +625,7 @@ export function createViewmodel(G, engine, materials) {
     arsenal,
     get model() { return st.model; },
     dispose() {
-      engine.view.remove(group, key, keyTarget, fill, rim, rimTarget);
+      engine.view.remove(group, key, keyTarget, fill);
       gun.dispose();
     },
   };

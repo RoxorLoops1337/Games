@@ -107,9 +107,13 @@ void main(){
     if ( dd < best ){ best = dd; dilated = o; } }
   DILATE( -1.0, -1.0 ) DILATE( 1.0, -1.0 ) DILATE( -1.0, 1.0 ) DILATE( 1.0, 1.0 )
 
-  vec2 prevUv = reproject( dilated, best );
+  // Dilation gives us a *motion vector*, borrowed from the nearest neighbour —
+  // not a position. Sampling history at the neighbour's reprojected position
+  // instead shifts every edge pixel by up to a texel every frame, and since the
+  // history feeds back into itself that walk compounds into a permanent smear.
+  vec2 motionVec = reproject( dilated, best ) - dilated;
   float weapon = step( 0.5, texture2D( tMask, vUv ).r );
-  prevUv = mix( prevUv, vUv, weapon );
+  vec2 prevUv = vUv + motionVec * ( 1.0 - weapon );
 
   if ( prevUv.x < 0.0 || prevUv.x > 1.0 || prevUv.y < 0.0 || prevUv.y > 1.0 ){
     gl_FragColor = vec4( cur, 1.0 ); return;

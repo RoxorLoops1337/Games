@@ -417,11 +417,23 @@ function patchSoldier(mat, rim) {
   return mat;
 }
 
+// Takes the world material's *response* — env map, fog, tone mapping, whatever
+// the render layer decides those should be — and leaves its maps behind. The
+// level's surfaces are triplanar world-space projections, which is right for a
+// wall and wrong for a man: walk through one and the texture swims over him.
+// The body carries its colour per vertex instead.
 function baseMaterial(materials, name, fallback) {
-  let m = null;
-  try { m = materials && materials.get ? materials.get(name) : null; } catch { m = null; }
-  if (m && m.clone) { m = m.clone(); } else { m = new THREE.MeshStandardMaterial(); }
-  if (!m.isMeshStandardMaterial) m = new THREE.MeshStandardMaterial();
+  const m = new THREE.MeshStandardMaterial();
+  let src = null;
+  try { src = materials && materials.get ? materials.get(name) : null; } catch { src = null; }
+  if (src && src.isMeshStandardMaterial) {
+    m.envMap = src.envMap;
+    if (Number.isFinite(src.envMapIntensity)) m.envMapIntensity = src.envMapIntensity;
+    m.fog = src.fog;
+    m.toneMapped = src.toneMapped;
+    m.dithering = src.dithering;
+    m.shadowSide = src.shadowSide;
+  }
   Object.assign(m, fallback);
   return m;
 }
