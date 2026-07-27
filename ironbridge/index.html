@@ -4723,6 +4723,18 @@ function drawUnitMarks(c, u, bx, by, p, sc){
   }
 }
 
+// Whose lingering zone this is, on every channel except hue — the hue is
+// already spoken for by the damage type. The one you have to walk out of is
+// louder in all of them; your own sits quietly under the fight and stays out
+// of the way of reading it. Keyed through forMe(), never through the index:
+// ten bugs in this game have been a per-side value that was not per-seat.
+const ZONE = {
+  mine:   { fill:.10, rim:.32, lw:1.5, pulse:.030, dash:[],     motes:.55 },
+  theirs: { fill:.21, rim:.80, lw:3.0, pulse:.085, dash:[9, 6], motes:1   },
+};
+const ZONE_LOUD = ['fill', 'rim', 'lw', 'pulse', 'motes'];   // every one of them, louder
+const zoneLook = (side) => (forMe(side) ? ZONE.mine : ZONE.theirs);
+
 function drawLane(c){
   // zones under everyone
   for (const z of G.zones){
@@ -4733,18 +4745,29 @@ function drawLane(c){
     // hurting after the cast is over, and it was a flat pulsing disc. It now
     // has an edge you can stand outside of, a churn inside it, and it visibly
     // runs down — the three things a player needs to decide whether to walk in.
+    // The fourth thing is whose it is, which it never said: an Inferno you have
+    // to step out of drew exactly like your own, and the answer is the same one
+    // the health bars gave. The HUE still says what kind of damage it is, so
+    // ownership arrives on a different channel — see ZONE.
+    const lk = zoneLook(z.side);
     const life = clamp(z.t / Math.max(.1, z.dur), 0, 1);
-    c.globalAlpha = (.16 + .07 * Math.sin(G.t * 6)) * (.35 + .65 * life);
+    const run = .35 + .65 * life, pulse = Math.sin(G.t * 6);
+    c.globalAlpha = (lk.fill + lk.pulse * pulse) * run;
     ell(c, p[0], p[1], rx, ry, col);
-    c.globalAlpha = (.45 + .2 * Math.sin(G.t * 6)) * (.35 + .65 * life);
-    c.strokeStyle = hot; c.lineWidth = Math.max(1, 2 * cam.z);
+    c.globalAlpha = (lk.rim + lk.pulse * 2 * pulse) * run;
+    c.strokeStyle = hot; c.lineWidth = Math.max(1, lk.lw * cam.z);
+    // A dashed rim reads as keep-out with the colour taken away, which is the
+    // point: the one zone you must not stand in should not depend on telling
+    // purple from orange.
+    if (lk.dash.length) c.setLineDash(lk.dash.map(v => v * cam.z));
     c.beginPath(); c.ellipse(p[0], p[1], rx, ry, 0, 0, 6.2832); c.stroke();
+    c.setLineDash([]);
     // the churn: a few motes turning inside the circle, keyed off the clock so
     // it costs nothing and stays put
     for (let i = 0; i < 5; i++){
       const a = G.t * (z.magic ? 1.6 : 2.2) + i * 1.257;
       const rr2 = .45 + .45 * ((i * 7 % 5) / 5);
-      c.globalAlpha = (.3 + .3 * Math.sin(G.t * 5 + i)) * life;
+      c.globalAlpha = (.3 + .3 * Math.sin(G.t * 5 + i)) * life * lk.motes;
       ell(c, p[0] + Math.cos(a) * rx * rr2, p[1] + Math.sin(a) * ry * rr2, 2.2 * cam.z, 2.2 * cam.z, hot);
     }
     c.globalAlpha = 1;
@@ -8026,7 +8049,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
