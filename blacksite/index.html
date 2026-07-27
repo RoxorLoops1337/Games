@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>BLACKSITE</title>
+<meta name="description" content="A first-person shooter built in Three.js.">
+<meta name="theme-color" content="#08090b">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2308090b'/%3E%3Cg stroke='%23ffb648' stroke-width='2.5' fill='none'%3E%3Ccircle cx='16' cy='16' r='7'/%3E%3Cpath d='M16 2v6M16 24v6M2 16h6M24 16h6'/%3E%3C/g%3E%3C/svg%3E">
+<style>
+  /* The whole UI is DOM on top of one canvas. A HUD drawn into the 3D scene
+     costs a pass and fights the post chain; DOM is sharper, free, and scales
+     with the device pixel ratio without any work. */
+  :root {
+    --amber:#ffb648; --amber-dim:#c07d22; --ink:#08090b; --steel:#9fb0bd;
+    --bad:#ff4d3d; --good:#5fd28a; --hud:rgba(232,240,247,.92);
+    --ui: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--ink);overflow:hidden;
+    font-family:var(--ui);color:var(--hud);
+    -webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}
+  #app{position:fixed;inset:0;overflow:hidden;background:#000}
+  canvas#gl{position:absolute;inset:0;width:100%;height:100%;display:block;
+    cursor:none;touch-action:none}
+  #app:not(.locked) canvas#gl{cursor:crosshair}
+
+  /* ── loading ─────────────────────────────────────────────────────────── */
+  #boot{position:absolute;inset:0;display:grid;place-content:center;gap:18px;
+    background:radial-gradient(120% 90% at 50% 40%,#14171c 0%,#08090b 70%);
+    z-index:60;transition:opacity .6s ease,visibility .6s}
+  #app.ready #boot{opacity:0;visibility:hidden}
+  #boot h1{margin:0;font-size:clamp(28px,7vw,58px);letter-spacing:.42em;font-weight:600;
+    text-indent:.42em;color:#e8f0f7;text-shadow:0 0 40px rgba(255,182,72,.25)}
+  #boot .rule{height:1px;background:linear-gradient(90deg,transparent,var(--amber-dim),transparent)}
+  #load-status{text-align:center;font-size:12px;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--amber-dim);min-height:1.2em}
+
+  /* ── menus ───────────────────────────────────────────────────────────── */
+  #menu{position:absolute;inset:0;z-index:50;display:none;place-content:center;
+    background:rgba(6,7,9,.72);backdrop-filter:blur(14px) saturate(.7)}
+  #menu.on{display:grid}
+  .panel{min-width:min(460px,92vw);padding:30px 34px;
+    background:linear-gradient(180deg,rgba(22,26,32,.92),rgba(12,14,18,.94));
+    border:1px solid rgba(159,176,189,.16);border-radius:2px;
+    box-shadow:0 30px 90px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.05)}
+  .panel h2{margin:0 0 4px;font-size:15px;letter-spacing:.34em;text-transform:uppercase;color:var(--amber)}
+  .panel .sub{margin:0 0 22px;font-size:11px;letter-spacing:.16em;color:#7d8b97;text-transform:uppercase}
+  .panel button{display:block;width:100%;margin:0 0 8px;padding:12px 16px;text-align:left;
+    background:rgba(255,255,255,.03);color:var(--hud);cursor:pointer;font:inherit;font-size:13px;
+    border:1px solid rgba(159,176,189,.14);border-left:2px solid transparent;
+    letter-spacing:.14em;text-transform:uppercase;transition:background .12s,border-color .12s,transform .12s}
+  .panel button:hover,.panel button:focus-visible{background:rgba(255,182,72,.10);
+    border-left-color:var(--amber);transform:translateX(3px);outline:none}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:14px;
+    padding:9px 2px;font-size:12px;letter-spacing:.1em;color:#b8c6d2;
+    border-bottom:1px solid rgba(159,176,189,.08)}
+  .row input[type=range]{flex:0 0 190px;accent-color:var(--amber)}
+  .row select{background:#12151a;color:var(--hud);border:1px solid rgba(159,176,189,.2);
+    padding:5px 8px;font:inherit;font-size:12px}
+  .keys{font-size:11px;line-height:1.9;color:#7d8b97;letter-spacing:.08em}
+  .keys b{color:var(--amber-dim);font-weight:600}
+
+  /* ── HUD ─────────────────────────────────────────────────────────────── */
+  #hud{position:absolute;inset:0;z-index:20;pointer-events:none;
+    opacity:0;transition:opacity .35s ease}
+  #app.playing #hud{opacity:1}
+  #crosshair{position:absolute;left:50%;top:50%;width:44px;height:44px;
+    transform:translate(-50%,-50%);will-change:transform,opacity}
+  #hitmark{position:absolute;left:50%;top:50%;width:34px;height:34px;
+    transform:translate(-50%,-50%) scale(.7);opacity:0;will-change:transform,opacity}
+  #dmg{position:absolute;inset:0;opacity:0;
+    background:radial-gradient(120% 100% at 50% 50%,transparent 42%,rgba(150,12,8,.55) 100%);
+    transition:opacity .18s ease}
+  #lowhp{position:absolute;inset:0;opacity:0;pointer-events:none;
+    background:radial-gradient(115% 95% at 50% 50%,transparent 30%,rgba(120,8,6,.62) 100%)}
+  #ammo{position:absolute;right:38px;bottom:30px;text-align:right;line-height:1}
+  #ammo .mag{font-size:44px;font-weight:600;letter-spacing:.04em;
+    text-shadow:0 2px 14px rgba(0,0,0,.9)}
+  #ammo .mag.low{color:var(--bad)}
+  #ammo .res{font-size:16px;color:#8d9caa;margin-left:6px}
+  #ammo .name{font-size:11px;letter-spacing:.3em;color:var(--amber-dim);
+    text-transform:uppercase;margin-bottom:6px}
+  #ammo .fire{font-size:10px;letter-spacing:.24em;color:#6c7a86;margin-top:5px}
+  #health{position:absolute;left:38px;bottom:30px;width:210px}
+  #health .bar{height:3px;background:rgba(255,255,255,.10);overflow:hidden}
+  #health .bar i{display:block;height:100%;width:100%;background:var(--hud);
+    transform-origin:left;transition:transform .12s linear,background .3s}
+  #health .num{font-size:26px;font-weight:600;margin-bottom:5px;line-height:1}
+  #health .label{font-size:10px;letter-spacing:.3em;color:#6c7a86;text-transform:uppercase;margin-bottom:8px}
+  #compass{position:absolute;left:50%;top:22px;transform:translateX(-50%);
+    width:min(420px,54vw);height:26px;overflow:hidden;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent);
+            mask-image:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
+  #objective{position:absolute;left:38px;top:26px;font-size:11px;letter-spacing:.2em;
+    text-transform:uppercase;color:#8d9caa}
+  #objective b{display:block;color:var(--amber);font-size:13px;letter-spacing:.28em;margin-bottom:4px}
+  #killfeed{position:absolute;right:38px;top:26px;text-align:right;font-size:11.5px;
+    letter-spacing:.1em;line-height:2}
+  #killfeed div{opacity:0;transform:translateX(14px);animation:feed .3s forwards}
+  @keyframes feed{to{opacity:1;transform:none}}
+  #dmgdir{position:absolute;inset:0}
+  #dmgdir i{position:absolute;left:50%;top:50%;width:150px;height:150px;margin:-75px 0 0 -75px;
+    opacity:0;background:conic-gradient(from -18deg,rgba(255,60,40,.85),transparent 36deg);
+    -webkit-mask:radial-gradient(closest-side,transparent 62%,#000 66%,#000 78%,transparent 82%);
+            mask:radial-gradient(closest-side,transparent 62%,#000 66%,#000 78%,transparent 82%)}
+  #toast{position:absolute;left:50%;top:58%;transform:translateX(-50%);text-align:center;
+    font-size:13px;letter-spacing:.3em;text-transform:uppercase;color:var(--amber);opacity:0}
+  #perf{position:absolute;left:6px;top:6px;font-size:10px;color:#5c6a76;
+    letter-spacing:.06em;display:none;white-space:pre;line-height:1.5}
+  #app.debug #perf{display:block}
+
+  #fatal{position:absolute;inset:0;z-index:99;display:grid;place-content:center;
+    gap:12px;padding:40px;text-align:center;background:#08090b}
+  #fatal[hidden]{display:none}
+  #fatal .msg{font-size:15px;letter-spacing:.14em;color:var(--bad)}
+  #fatal .detail{font-size:11px;color:#6c7a86;max-width:60ch}
+
+  @media (prefers-reduced-motion:reduce){
+    #boot,#menu,.panel button{transition:none}
+    #killfeed div{animation:none;opacity:1;transform:none}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="gl"></canvas>
+
+  <div id="hud" aria-hidden="true">
+    <div id="dmg"></div>
+    <div id="lowhp"></div>
+    <div id="dmgdir"></div>
+    <svg id="crosshair" viewBox="0 0 44 44" aria-hidden="true"></svg>
+    <svg id="hitmark" viewBox="0 0 34 34" aria-hidden="true">
+      <g stroke="#fff" stroke-width="2" stroke-linecap="square">
+        <path d="M9 9 L14 14 M25 9 L20 14 M9 25 L14 20 M25 25 L20 20"/>
+      </g>
+    </svg>
+    <svg id="compass" aria-hidden="true"></svg>
+    <div id="objective"><b>Objective</b><span></span></div>
+    <div id="killfeed"></div>
+    <div id="ammo">
+      <div class="name">—</div>
+      <div><span class="mag">0</span><span class="res">/ 0</span></div>
+      <div class="fire">—</div>
+    </div>
+    <div id="health">
+      <div class="label">Vitals</div>
+      <div class="num">100</div>
+      <div class="bar"><i></i></div>
+    </div>
+    <div id="toast"></div>
+    <div id="perf"></div>
+  </div>
+
+  <div id="menu"></div>
+
+  <div id="boot">
+    <h1>BLACKSITE</h1>
+    <div class="rule"></div>
+    <div id="load-status">initialising</div>
+  </div>
+
+  <div id="fatal" hidden>
+    <div class="msg"></div>
+    <div class="detail"></div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three.module.min.js",
+    "three/addons/": "./vendor/addons/"
+  }
+}
+</script>
+<script type="module">
+  import { boot } from './src/main.js';
+  const root = document.getElementById('app');
+  boot(root).catch((err) => {
+    console.error(err);
+    const el = document.getElementById('fatal');
+    el.hidden = false;
+    el.querySelector('.msg').textContent = 'Failed to start.';
+    el.querySelector('.detail').textContent = String(err && err.stack || err);
+    root.classList.add('ready');
+  });
+</script>
+</body>
+</html>
