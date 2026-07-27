@@ -85,14 +85,18 @@ function loadGame(store, srcOverride){
     if (k === 'createLinearGradient' || k === 'createRadialGradient')
       return (...a) => { stats.ops++; numCheck(k, a);
         return { addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); } }; };
-    if (k === 'measureText') return () => ({ width: 24 });
+    if (k === 'measureText') return (txt) => ({ width: Math.max(8, String(txt).length * 5.4) });
     // What state each piece of text was actually drawn under. The property
     // tracking above says what was SET; this says what reached the glyph,
     // which is the only way to state the bug as a relationship: the same
     // label has to render the same whatever else is on the board.
+    // WHERE the text landed, as well as under what state. The keep's name is
+    // drawn straight onto the canvas and the only way to ask whether a label
+    // plate is sitting on it is to know where both of them are.
     if (k === 'fillText' || k === 'strokeText') return (...a) => {
       stats.ops++; numCheck(k, a);
-      stats.texts.push({ txt: String(a[0]), baseline: stats.textBaseline, align: stats.textAlign, font: stats.font });
+      stats.texts.push({ txt: String(a[0]), x: a[1], y: a[2], col: stats.fill,
+        baseline: stats.textBaseline, align: stats.textAlign, font: stats.font });
     };
     if (k === 'canvas') return { width: 900, height: 520 };
     if (k === 'setLineDash') return (a) => {
@@ -1010,6 +1014,51 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(outside === 0, 'no label is painted past the edge of the picture (' +
       outside + (deepest ? ', worst ' + Math.round(deepest) + 'px' : '') + ')');
     t.ok(orphan === 0, 'and none is drawn for something off the frame (' + orphan + ')');
+
+    // The keep's name is the biggest piece of text on the board, and it was the
+    // one thing that never told the label traffic it was there. Labels dodge
+    // each other, the health bars and the level roundels — and then the hold's
+    // own plates walked straight across "Azure Pact". Over a camera sweep in
+    // the browser that was 71 overlaps, up to 208px², nearly all of it at a
+    // wide zoom where the island compresses and everything crowds the keep.
+    //
+    // The bars and roundels are the sibling: they have always reserved their
+    // airspace. This asks the same question the other way round — not "did the
+    // banner reserve" but "is a plate sitting on the glyphs", with the banner's
+    // box taken from the font the game actually set rather than from the
+    // constant the reservation uses.
+    const bstat = CTX.__stats;
+    let onBanner = 0, bannerSeen = 0, platesSeen = 0, deepestHit = 0;
+    for (const z of [0.52, 0.8, 1.2]){
+      IB.cam.z = IB.cam.tz = z;
+      for (let x = -40; x <= 190; x += 10){
+        IB.cam.x = x;
+        bstat.texts = [];
+        IB.draw();
+        const banners = bstat.texts.filter(tx => IB.SIDE_NAME.includes(tx.txt));
+        for (const b of banners){
+          bannerSeen++;
+          // The glyph box, not the reserved one: width from the same measure
+          // the canvas would use, height from the font the game actually set.
+          // Deliberately smaller than what the reservation asks for, so this
+          // checks the player-visible overlap rather than restating the
+          // constants the fix chose.
+          const px = parseFloat(/([\d.]+)px/.exec(b.font || '')?.[1]) || 10;
+          const bw = CTX.measureText(b.txt).width, bh = px;
+          for (const p of IB.labelPlaced){
+            platesSeen++;
+            const ox = Math.min(b.x + bw / 2, p.x + p.w / 2) - Math.max(b.x - bw / 2, p.x - p.w / 2);
+            const oy = Math.min(b.y + bh / 2, p.y + p.h / 2) - Math.max(b.y - bh / 2, p.y - p.h / 2);
+            if (ox > 0 && oy > 0){ onBanner++; deepestHit = Math.max(deepestHit, ox * oy); }
+          }
+        }
+      }
+    }
+    IB.cam.z = IB.cam.tz = 1;
+    t.ok(bannerSeen > 20, 'the banner sweep had keeps on screen to walk over (' + bannerSeen + ')');
+    t.ok(platesSeen > 200, 'and plates that could have walked over them (' + platesSeen + ')');
+    t.ok(onBanner === 0, 'no label plate lands on the keep’s name (' + onBanner +
+      (deepestHit ? ', worst ' + Math.round(deepestHit) + 'px²' : '') + ')');
 
     IB.cam.x = IB.HOLD_X;
   }
