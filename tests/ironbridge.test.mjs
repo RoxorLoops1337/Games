@@ -4435,6 +4435,103 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.draw();
   t.ok(true, 'and it still draws');
 }
+{
+  // A particle's alpha is t/dur, so a short `t` against a shared `dur` does
+  // not shorten its life — it makes it BORN faint. Four bursts in this game
+  // varied `t` meaning to vary the lifetime, and the result was that most of
+  // every burst popped into existence already half dissolved. The shortest
+  // lived debris, which should be the sharpest flick in the effect, was the
+  // faintest thing in it.
+  IB.newMatch({ diff:'veteran', seed:6101 });
+  IB.fxForce = true;               // the decoration is off by default here
+  const born = (make) => {
+    G.fx.length = 0;
+    make();
+    return G.fx.slice();
+  };
+  const cases = [
+    ['a death burst', () => IB.burstFx(60, 0, '#ffd08a', 14)],
+    ['motes off a body', () => IB.moteFx(60, 0, '#c9a6ff', 10, 1)],
+    ['a heal', () => IB.healFx(60, 0, '#7fdc8a')],
+  ];
+  let faint = 0, counted = 0, dimmest = 1;
+  for (const [name, make] of cases){
+    const ps = born(make);
+    t.ok(ps.length >= 5, name + ' really makes debris (' + ps.length + ')');
+    for (const p of ps){
+      counted++;
+      const a0 = p.t / p.dur;
+      dimmest = Math.min(dimmest, a0);
+      if (a0 < .999) faint++;
+    }
+  }
+  // The hit spark is made inside dealDmg rather than by a function of its own,
+  // so it has to be shaken out of a real hit.
+  {
+    IB.newMatch({ diff:'veteran', seed:6103 });
+    const tgt = G.units.find(u => !u.dead) || IB.spawnUnit(1, 'grunt', { y:0 });
+    let sparks = 0;
+    for (let i = 0; i < 60 && sparks < 4; i++){
+      G.fx.length = 0;
+      IB.dealDmg(null, G.units.find(u => !u.dead) || tgt, 30, {});
+      for (const p of G.fx) if (p.k === 'p'){
+        sparks++; counted++;
+        const a0 = p.t / p.dur;
+        dimmest = Math.min(dimmest, a0);
+        if (a0 < .999) faint++;
+      }
+      for (const u of G.units) if (u.dead) u.dead = false, u.hp = u.mhp;
+    }
+    t.ok(sparks >= 4, 'a real hit throws sparks (' + sparks + ')');
+  }
+  t.ok(counted > 25, 'the birth sweep had debris to look at (' + counted + ')');
+  t.ok(faint === 0, 'no particle is born already fading (' + faint + ' of ' + counted +
+    ', dimmest ' + dimmest.toFixed(2) + ')');
+  t.ok(IB.life(.4).t === IB.life(.4).dur, 'life() gives a particle its own clock');
+  t.ok(IB.life(.4).t === .4, 'and the lifetime asked for');
+
+  // Read the neighbouring branch: the dash trail means it. Each ghost in it is
+  // deliberately born fainter than the last, so the trail fades along its
+  // length — and it says so by setting dur itself instead of going through
+  // life(). Proving the fix did not flatten the one that was right.
+  {
+    IB.newMatch({ diff:'veteran', seed:6107 });
+    const h = IB.makeHero(0, 'fighter', 'Dasher');
+    h.pend.length = 0; G.sides[0].heroes.push(h); IB.enterLane(h); h.x = 60; h.y = 0;
+    G.fx.length = 0;
+    IB.dashFx(h, 54, -1);
+    const gs = G.fx.filter(p => p.k === 'ghost');
+    t.ok(gs.length >= 5, 'a dash leaves a trail (' + gs.length + ')');
+    const a0s = gs.map(p => p.t / p.dur);
+    t.ok(new Set(a0s.map(v => v.toFixed(3))).size > 3,
+      'and every ghost in it is born at its own brightness (' + new Set(a0s.map(v => v.toFixed(2))).size + ')');
+    t.ok(Math.min(...a0s) < .6, 'the far end of it starts faint on purpose (' + Math.min(...a0s).toFixed(2) + ')');
+  }
+
+  // And debris shrinks as it goes out rather than holding full size and simply
+  // turning transparent, which reads as a decal fading instead of something
+  // thrown. Driven through the renderer, not read off the table.
+  IB.newMatch({ diff:'veteran', seed:6109 });
+  IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+  const radiiAt = (age) => {
+    G.fx.length = 0;
+    IB.burstFx(60, 0, '#ffd08a', 12);
+    for (const p of G.fx) p.t = p.dur * age;
+    CTX.__stats.ellipses = [];
+    IB.draw();
+    return CTX.__stats.ellipses;
+  };
+  const fresh = radiiAt(1), spent = radiiAt(.08);
+  t.ok(fresh.length > 12 && spent.length > 12, 'the shrink sweep drew the debris (' +
+    fresh.length + ' / ' + spent.length + ')');
+  const biggest = (es) => Math.max(...es.map(e => e.rx));
+  t.ok(IB.sparkR(3, 1) > IB.sparkR(3, 0), 'a spark is bigger alive than dying');
+  t.ok(IB.SPARK.min > 0 && IB.SPARK.min < 1, 'but it never shrinks away to nothing');
+  t.ok(IB.sparkR(3, 1) === 3, 'and it is full size at birth');
+  G.fx.length = 0;
+  IB.fxForce = false;
+  IB.cam.x = 26;
+}
 
 /* ---------------------------------------------------------------- difficulty */
 {
