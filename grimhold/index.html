@@ -2616,7 +2616,26 @@ function drawFurniture(g, f, t){
     g.beginPath(); g.moveTo(-w*.36,-h*.38); g.lineTo(w*.36,-h*.38); g.stroke();
     g.beginPath(); g.moveTo(-w*.36, h*.30); g.lineTo(w*.36, h*.30); g.stroke();
   }
+  // The chest has its own opened art. Everything else you can ransack gets the
+  // same "somebody has been through this" read: the inside is a dark hole now,
+  // and what was in it is on the floor at its feet.
+  if (f.searched && F !== 'chest' && FURN[F] && FURN[F].search) drawRansacked(g, w, h, f);
   g.restore();
+}
+function drawRansacked(g, w, h, f){
+  g.fillStyle = 'rgba(6,5,4,.66)';                 // emptied out
+  rr(g, -w*.30, -h*.24, w*.60, h*.32, 3); g.fill();
+  g.fillStyle = 'rgba(0,0,0,.42)';
+  rr(g, -w*.26, -h*.20, w*.52, h*.16, 2); g.fill();
+  // and the leavings, deterministic per square so they do not crawl about
+  const j = (n) => ((Math.sin((f.x*7.13 + f.y*3.71 + n*1.97)) + 1) % 1);
+  g.fillStyle = 'rgba(150,132,100,.55)';
+  for (let i = 0; i < 3; i++){
+    const x = -w*.30 + j(i)*w*.60, y = h*.16 + j(i+9)*h*.14;
+    g.fillRect(x, y, w*.10, h*.045);
+  }
+  g.fillStyle = 'rgba(210,196,166,.30)';
+  g.fillRect(-w*.16 + j(4)*w*.30, h*.24, w*.13, h*.035);
 }
 
 // What is left where a hero fell. It stays on the square for the rest of the
@@ -2825,6 +2844,20 @@ function drawTrap(g, tr, t){
   if (!tr.found && !tr.sprung) return;
   const px = (tr.x+.5)*TS, py = (tr.y+.5)*TS;
   g.save(); g.translate(px, py);
+  // A disarmed trap used to keep the live warning mark, pulsing away at
+  // something that cannot hurt you any more. It goes grey and it stops moving —
+  // stillness is the signal, because everything dangerous on this board pulses.
+  if (tr.disarmed && !tr.sprung){
+    g.strokeStyle = 'rgba(126,120,110,.55)'; g.lineWidth = 2;
+    rr(g, -TS*.30, -TS*.30, TS*.60, TS*.60, 5); g.stroke();
+    g.strokeStyle = 'rgba(150,144,132,.75)'; g.lineWidth = 3; g.lineCap = 'round';
+    g.beginPath(); g.moveTo(-TS*.18, -TS*.18); g.lineTo(TS*.18, TS*.18); g.stroke();
+    g.beginPath(); g.moveTo(TS*.18, -TS*.18); g.lineTo(-TS*.18, TS*.18); g.stroke();
+    g.fillStyle = 'rgba(90,86,78,.40)';
+    g.beginPath(); g.arc(0, 0, TS*.07, 0, 6.284); g.fill();
+    g.restore();
+    return;
+  }
   if (tr.t === 'pit'){
     if (tr.sprung){
       g.fillStyle = '#040303';
@@ -4515,6 +4548,9 @@ function searchTreasure(){
   if (monstersOf().some(m => roomAt(m.x,m.y) === rid)){ say('Not with monsters in the room.', 'bad'); return; }
   if (G.q.searched[rid]){ say('This room has been picked over already.', 'bad'); return; }
   h.acted = true; G.q.searched[rid] = 1;
+  // everything in here has been gone through, and should look it from the door
+  for (const f of G.q.furn)
+    if (f.r === rid && FURN[f.t] && FURN[f.t].search) f.searched = true;
   stirWrath(3, 'rummaging');
   sfx('search');
   const qf = G.q.furn.find(f => f.r === rid && f.quest && !f.taken);
@@ -7438,7 +7474,7 @@ globalThis.HQ = {
   WAGER_MAX, wagerCost, canWager, wagerDraft,
   get draftState(){ return draftState; }, set draftState(v){ draftState = v; },
   BOSS_LINES, bossOf, bossIntro, BOSS_LAST, bossLastWords,
-  placePlinth, trialPlinth, spendPlinth, plinthRelic, drawRelicOn, drawBody, DRAFT_TABS,
+  placePlinth, trialPlinth, spendPlinth, plinthRelic, drawRelicOn, drawBody, drawRansacked, DRAFT_TABS,
   historyRows, thisRunRow, STREAK_SHOW,
   LIE_FROM, LIE_CHANCE, LIARS, LIAR_TYPES, liars, lyingChests,
   mimicWatch, springLiar, springMimic, TRIAL_WRATH,
