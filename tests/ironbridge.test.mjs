@@ -2577,6 +2577,128 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'and both share the shield/burn/stun/health marks, so a cannon can still catch fire');
 }
 
+/* ------------------------------------------- what is on the deck and what is over it
+   The effects layer is nine kinds painted in one flat pass after everything
+   else. Two of them are not in the air at all: `ring` and `wave` are drawn at
+   lp(x, y) with NO height, which makes them ripples on the boards. Everything
+   else in the layer carries a z.
+
+   Measured in a browser by diffing two frames — drawing is deterministic with
+   G.t pinned, so the op index at which a frame WITH a thing first differs from
+   the frame without it is exactly where that thing was painted:
+
+     a body at its foot   op 3398 of 3921   86.7%
+     a shockwave (wave)   op 3898           99.4%   after the bodies
+     a fall ring (ring)   op 3898           99.4%   after the bodies
+     control: a zone      op 2898           73.9%   before them
+
+   The zone is the same kind of object — a stain on the boards — and drawLane
+   has painted it under everyone since it was written, twenty lines above the
+   pass that washed the ripples over the tower they were breaking.            */
+{
+  IB.newMatch({ diff:'veteran', seed:9700 });
+  IB.MY = 0;
+  const wasForce = IB.fxForce;
+  IB.fxForce = true;
+  G.fx.length = 0;
+
+  // ---- the partition. Between them the two passes are the whole layer:
+  // nothing painted twice, nothing dropped.
+  IB.waveFx(60, 0, 3, '#12ff34', .5);
+  IB.ringFx(60, 0, 5, '#12ff34');
+  IB.burstFx(60, 0, '#12ff34', 6);
+  IB.moteFx(60, 0, '#12ff34', 4, 1);
+  IB.arcFx(60, 0, 0, 2, '#12ff34');
+  t.ok(G.fx.length >= 12, 'a mixed layer to sort (' + G.fx.length + ')');
+  const deck = IB.fxDeck(), air = IB.fxAir();
+  t.ok(deck.length + air.length === G.fx.length,
+    'the two passes are the whole layer (' + deck.length + ' + ' + air.length + ' of ' + G.fx.length + ')');
+  t.ok(deck.every(p => !air.includes(p)), 'and nothing is in both, so nothing is painted twice');
+  t.ok(deck.length > 0 && air.length > 0, 'and both passes have something to do');
+  // Named, not just filtered: `every` on an empty list is true, so emptying the
+  // table passed this until it said WHICH kinds have to be there.
+  const deckKinds = [...new Set(deck.map(p => p.k))].sort().join(',');
+  t.ok(deckKinds === 'ring,wave',
+    'the deck pass is the ripples and only the ripples (' + (deckKinds || 'nothing') + ')');
+  t.ok(air.every(p => p.k !== 'ring' && p.k !== 'wave'), 'and the air pass has none of them');
+  t.ok(IB.fxOnDeck({ k:'ring' }) && IB.fxOnDeck({ k:'wave' }),
+    'a ripple is a mark on the boards');
+  t.ok(!IB.fxOnDeck({ k:'p' }) && !IB.fxOnDeck({ k:'mote' }) && !IB.fxOnDeck({ k:'arc' }),
+    'and a spark, a mote and a slash are not');
+
+  // ---- every kind the game can spawn is classified. A kind nobody sorted
+  // would silently fall into the air pass and look right until it did not.
+  {
+    G.fx.length = 0;
+    IB.newMatch({ diff:'veteran', seed:9700 });
+    IB.fxForce = true;
+    IB.burstFx(60, 0, '#12ff34', 3);
+    IB.ringFx(60, 0, 4, '#12ff34');
+    IB.waveFx(60, 0, 3, '#12ff34', .5);
+    IB.moteFx(60, 0, '#12ff34', 3, 1);
+    IB.arcFx(60, 0, 0, 2, '#12ff34');
+    IB.beamFx(60, 0, 66, 0, '#12ff34');
+    IB.linkFx(60, 0, 66, 0, '#12ff34');
+    const kinds = [...new Set(G.fx.map(p => p.k))];
+    t.ok(kinds.length >= 6, 'the spawners between them make most of the layer (' + kinds.join(',') + ')');
+    t.ok(kinds.every(k => IB.fxOnDeck({ k }) === !!IB.DECK_FX[k]),
+      'and every kind gets an answer from one table');
+    t.ok(Object.keys(IB.DECK_FX).every(k => kinds.includes(k)),
+      'with nothing in the table that the game cannot make (' +
+      Object.keys(IB.DECK_FX).filter(k => !kinds.includes(k)).join(',') + ')');
+  }
+
+  // ---- WHY they belong on the deck: they ignore height entirely. Give a ring
+  // an absurd z and it draws in exactly the same place; give a spark one and it
+  // does not.
+  {
+    G.fx.length = 0;
+    IB.ringFx(60, 0, 4, '#12ff34');
+    const ring = G.fx[0];
+    const st = CTX.__stats;
+    const drawnY = (p) => { st.ellipses = []; st.lines = []; IB.drawFx(CTX, p);
+      const all = st.ellipses.concat(st.lines);
+      return all.length ? +all[0].y.toFixed(2) : null; };
+    const flat = drawnY(ring);
+    ring.z = 40;
+    t.ok(flat !== null && drawnY(ring) === flat,
+      'a ripple ignores height, which is what makes it a mark on the boards (' + flat + ')');
+    G.fx.length = 0;
+    IB.burstFx(60, 0, '#12ff34', 1);
+    const spark = G.fx[0];
+    const low = drawnY(spark);
+    spark.z = 40;
+    t.ok(low !== null && drawnY(spark) !== low,
+      'while a spark is somewhere in the air and moves when you raise it');
+  }
+
+  // ---- and the passes are consumed on the right sides of the bodies
+  {
+    const CODE = SRC.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+    const lane = CODE.indexOf('for (const d of laneOrder())');
+    const onDeck = CODE.indexOf('for (const p of fxDeck())');
+    const inAir = CODE.indexOf('for (const p of fxAir())');
+    t.ok(lane > 0 && onDeck > 0 && inAir > 0, 'all three passes are there');
+    t.ok(onDeck < lane, 'the ripples are painted before the bodies walk over them');
+    t.ok(inAir > lane, 'and everything in the air after them');
+    const calls = [...CODE.matchAll(/\bdrawFx\s*\(/g)].length;
+    const defs = [...CODE.matchAll(/function\s+drawFx\s*\(/g)].length;
+    t.ok(defs === 1 && calls - defs === 2,
+      'one painter, called from exactly those two places (' + (calls - defs) + ')');
+  }
+
+  // ---- reading the passes must not move anything
+  {
+    const h0 = IB.netHash();
+    const n = G.fx.length;
+    IB.fxDeck(); IB.fxAir();
+    t.ok(G.fx.length === n, 'asking what is on the deck spawns nothing');
+    t.ok(IB.netHash() === h0, 'and is outside the lockstep hash');
+  }
+  G.fx.length = 0;
+  IB.fxForce = wasForce;
+}
+
 /* ------------------------------------------------------- who is in front
    Everything on the deck is y-sorted: the structures and the bodies go into one
    array keyed on their ground position and are painted back to front.
@@ -7809,7 +7931,13 @@ t.ok(true, 'drawing an empty bridge is harmless');
       for (const p of G.fx) p.t = p.dur * age;
       CTX.__stats.ellipses = []; CTX.__stats.lines = []; CTX.__stats.dropped = 0;
       IB.draw();
-      const mine = CTX.__stats.ellipses.filter(e => e.col === MARK);
+      // `col` on an ellipse is the STROKE colour at the moment the path was
+      // laid, recorded whether or not anything stroked it — so every filled
+      // ellipse drawn after these ripples inherits the marker colour and gets
+      // counted as one of them. That was harmless only while ring and wave were
+      // the last things in the frame. A stroked shape is one the fill handler
+      // never back-filled, so `fill === null` is what says "this was stroked".
+      const mine = CTX.__stats.ellipses.filter(e => e.col === MARK && e.fill === null);
       const lines = CTX.__stats.lines.filter(l => l.col === MARK);
       if (!mine.length && !lines.length) return null;
       const r = mine.length ? Math.max(...mine.map(e => e.rx)) : 0;
