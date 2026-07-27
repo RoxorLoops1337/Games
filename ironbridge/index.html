@@ -277,6 +277,10 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
   @keyframes tin{ from{ opacity:0; transform:translateX(-10px); } }
   .tst.good{ color:#7fdc8a; border-color:#2f5c3c; } .tst.bad{ color:#ff8a84; border-color:#5c2f2f; }
+  /* A longer dwell is felt rather than seen, so the heavy lines — a hold losing
+     a structure, a hero going down — are also bigger than the housekeeping. */
+  .tst.loud{ padding:6px 14px; font-size:13.5px; letter-spacing:.6px; border-width:2px;
+    background:rgba(10,14,22,.94); box-shadow:0 2px 14px rgba(0,0,0,.45); }
 
   /* ---------------- hero profile (parchment) ---------------- */
   .parch{ margin:-18px; padding:16px 18px 14px; border-radius:12px;
@@ -1094,6 +1098,10 @@ function newMatch(opt){
   G.frame = 0;
   G.units.length = 0; G.projs.length = 0; G.fx.length = 0; G.floats.length = 0; G.zones.length = 0;
   G.log.length = 0; G.timeline.length = 0; G.paused = false; G.held = false; G.speed = 1; G.demo = false;
+  // The log was cleared here and the strip the player actually reads was not,
+  // so a fresh match opened still showing the last one's obituary — measured,
+  // two lines of the old match survived newMatch().
+  clearToasts();
   PVP = !!opt.pvp;
   G.sides = [makeSide(0, false), makeSide(1, true)];
   // The Host gets its handicap as a straight resource multiplier, not as
@@ -1523,7 +1531,8 @@ function spawnWave(){
   // danger, while the wave actually walking at you went unannounced. Every
   // match, every wave. It reads the seat now, like the toast tone next to it.
   const inc = kinds[foe()];
-  fxToast('Wave ' + G.wave + ' — the ' + foeName() + ' sends ' + inc.n + '.', inc.id === 'levy' ? '' : 'bad');
+  fxToast('Wave ' + G.wave + ' — the ' + foeName() + ' sends ' + inc.n + '.',
+    inc.id === 'levy' ? '' : 'bad', inc.id === 'levy' ? TOAST_W.levy : TOAST_W.wave);
   sfx('wave');
 }
 
@@ -1842,7 +1851,7 @@ function onStructDown(st, src){
   if (src && src.isHero) g *= 1 + passVal(src, 'structGold');
   foe.res.gold += g; foe.structsKilled++;
   awardXp(src, 70, st.x);
-  fxToast(SIDE_NAME[st.side] + ' loses ' + st.n + '.', badFor(st.side));
+  fxToast(SIDE_NAME[st.side] + ' loses ' + st.n + '.', badFor(st.side), toastFallW(st));
   if (!HEADLESS){
     burstFx(st.x, st.y, '#d8c49a', fallSparks(st));
     ringFx(st.x, st.y, fallRing(st), '#ffd9a0');
@@ -2214,7 +2223,7 @@ function structStep(st, dt){
     if (st.downT > 0){
       st.downT -= dt;
       if (st.downT <= 0){ st.dead = false; st.mhp = structMaxHp(G.sides[st.side], st); st.hp = st.mhp;
-        fxToast(SIDE_NAME[st.side] + '’s inhibitor is rebuilt.', goodFor(st.side)); }
+        fxToast(SIDE_NAME[st.side] + '’s inhibitor is rebuilt.', goodFor(st.side), TOAST_W.rebuild); }
     }
     return;
   }
@@ -2413,7 +2422,7 @@ function gainXp(h, amt){
     // with it: fxToast writes the match log before it touches the DOM and
     // sfx() returns early on its own, so gating the pair here only hid the
     // notification from the tests as well as from player two.
-    if (h.side === MY){ fxToast(h.name + ' reaches level ' + h.lvl + '.', 'good'); sfx('level'); }
+    if (h.side === MY){ fxToast(h.name + ' reaches level ' + h.lvl + '.', 'good', TOAST_W.level); sfx('level'); }
     if (G.sides[h.side].ai) autoPick(h);
   }
   if (h.lvl >= C.MAX_LEVEL) h.xp = 0;
@@ -2739,7 +2748,7 @@ function onHeroDeath(h, src){
     if (src.isHero){ src.kills++; h.lastKiller = src; }
     awardXp(src, 130 + h.lvl * 11, h.x);
   }
-  fxToast(h.name + ' has fallen.', badFor(h.side));
+  fxToast(h.name + ' has fallen.', badFor(h.side), TOAST_W.hero);
   sfx('heroDown', h.x);
   if (!HEADLESS){
     burstFx(h.x, h.y, SIDE_COL[h.side], heroSparks(h));
@@ -3864,17 +3873,91 @@ function fxStep(dt){
   }
   for (const z of G.zones) if (z.follow){ z.x = z.follow.x; z.y = z.follow.y; }
 }
-function fxToast(msg, kind){
+/* The narrator — the strip of lines top-left that is where this game says
+   "Ember Host loses The Gates." Walked across every message it can print, it
+   gave all ten of them the same 2.2 seconds and the same box: the match ending
+   read exactly like "Report copied." The control three thousand lines up is the
+   damage number, where a scratch and a haymaker used to print identically and
+   now take four distinct sizes across five blows.
+
+   Three more things the walk turned up. The same line said three times made
+   three boxes and filled the whole strip, so a repeated "Not enough gold."
+   could push the gates falling off the board. newMatch() cleared G.log and left
+   the DOM alone, so a fresh match opened still reading the last one's obituary.
+   And the 2.2 seconds were counted by setTimeout — wall time — so a message
+   said and then paused for 2.4 seconds was gone before the player unpaused.
+
+   G.toasts existed all along and nothing had ever read or written it. It does
+   now: the strip is state, the DOM is a painting of it, and everything below is
+   testable without a browser. Cosmetic state — it is written from seat-local
+   branches (a level-up toast fires only for MY hero) so it must never reach
+   netHash or a snapshot, exactly like G.fx. */
+const TOAST = { life:{ min:1.8, max:5.2 }, cap:3, plain:.4, loud:.7 };
+const toastLife = (w) => TOAST.life.min + (TOAST.life.max - TOAST.life.min) * clamp(w, 0, 1);
+// What each thing the game can say is worth. The whole point of the table is
+// that these are not all the same number.
+const TOAST_W = { fall:.55, hero:.8, level:.5, rebuild:.6, wave:.45, levy:.3, ui:.1 };
+// A structure's fall is already laid out on a ladder by how deep into the line
+// it is — the same one that sizes the sparks and the camera kick. One ladder,
+// so the biggest bang and the longest sentence cannot disagree about which
+// fall mattered.
+const toastFallW = (st) => TOAST_W.fall + (1 - TOAST_W.fall) * structHeft(st);
+
+let toastSeq = 0;
+function fxToast(msg, kind, w){
   G.log.push({ t:G.t, msg });
   if (G.log.length > 40) G.log.shift();
+  kind = kind || '';
+  w = clamp(w === undefined ? TOAST.plain : w, 0, 1);
+  const same = G.toasts.find(x => x.msg === msg && x.kind === kind);
+  if (same){
+    same.n++; same.w = Math.max(same.w, w);
+    same.dur = same.t = toastLife(same.w);
+  } else {
+    G.toasts.push({ id:++toastSeq, msg, kind, w, n:1, t:toastLife(w), dur:toastLife(w) });
+  }
+  // Over the cap the LIGHTEST goes, not the oldest — among equals the oldest,
+  // because the search keeps the first minimum it finds.
+  while (G.toasts.length > TOAST.cap){
+    let worst = 0;
+    for (let i = 1; i < G.toasts.length; i++) if (G.toasts[i].w < G.toasts[worst].w) worst = i;
+    G.toasts.splice(worst, 1);
+  }
+  paintToasts();
+}
+
+// The narrator runs on the MATCH's clock rather than the wall's: at 2× twice as
+// much happens per real second and the strip has to keep up with it, and a line
+// must not run out while the player is reading a pause screen. Off the board —
+// on the menu, in a lobby — there is no match clock, so it falls back to real.
+const toastRate = () => G.state === 'play' ? ((G.paused || G.held) ? 0 : G.speed) : 1;
+function toastStep(dt){
+  if (!G.toasts.length) return;
+  let gone = false;
+  for (let i = G.toasts.length - 1; i >= 0; i--){
+    const x = G.toasts[i];
+    x.t -= dt;
+    if (x.t <= 0){ G.toasts.splice(i, 1); gone = true; }
+  }
+  if (gone) paintToasts();
+}
+function clearToasts(){ G.toasts.length = 0; paintToasts(); }
+
+// Keyed by id rather than rebuilt, or every repaint would restart the slide-in
+// on every line that had not changed.
+const toastNodes = new Map();
+function paintToasts(){
   if (HEADLESS) return;
-  const el = document.createElement('div');
-  el.className = 'tst' + (kind ? ' ' + kind : '');
-  el.textContent = msg;
   const box = document.getElementById('toast');
-  box.appendChild(el);
-  setTimeout(() => el.remove(), 2200);
-  while (box.children.length > 3) box.firstChild.remove();
+  if (!box) return;
+  const live = new Set(G.toasts.map(x => x.id));
+  for (const [id, el] of toastNodes) if (!live.has(id)){ el.remove(); toastNodes.delete(id); }
+  for (const x of G.toasts){
+    let el = toastNodes.get(x.id);
+    if (!el){ el = document.createElement('div'); toastNodes.set(x.id, el); box.appendChild(el); }
+    el.className = 'tst' + (x.kind ? ' ' + x.kind : '') + (x.w >= TOAST.loud ? ' loud' : '');
+    el.textContent = x.msg + (x.n > 1 ? ' ×' + x.n : '');
+  }
 }
 
 /* =====================================================================
@@ -7488,6 +7571,7 @@ let uiDown = false, uiWaited = 0;
 const UI_WAIT_CAP = .66;
 
 function uiTick(dt){
+  toastStep(dt * toastRate());
   uiT -= dt;
   if (uiT <= 0){
     uiT = .22;
@@ -7952,7 +8036,7 @@ function setPaused(v){
   // players agreeing to stop, which is a negotiation the relay would have to
   // carry and a new way for a match to get stuck if the message is lost.
   if (v && NET.on){
-    if (!HEADLESS) fxToast('A two-player match cannot be paused — the other player is still playing.', 'bad');
+    if (!HEADLESS) fxToast('A two-player match cannot be paused — the other player is still playing.', 'bad', TOAST_W.ui);
     return;
   }
   G.paused = v;
@@ -8198,7 +8282,7 @@ function saveMeta(won){
 let rsT = 0;
 function resizeSoon(){ clearTimeout(rsT); rsT = setTimeout(resize, 30); }
 
-function say(msg){ if (msg) fxToast(msg, 'bad'); }
+function say(msg){ if (msg) fxToast(msg, 'bad', TOAST_W.ui); }
 
 // Screen point → world ground point (the inverse of lp with z = 0).
 function unproject(sx, sy){
@@ -8429,8 +8513,8 @@ function wire(){
     else if (a === 'netlog'){ showNetReport(); }
     else if (a === 'netcopy'){
       const txt = G.netReportText || netReport();
-      try { navigator.clipboard.writeText(txt); fxToast('Report copied.', 'good'); }
-      catch (e){ fxToast('Could not copy — select the text instead.', 'bad'); }
+      try { navigator.clipboard.writeText(txt); fxToast('Report copied.', 'good', TOAST_W.ui); }
+      catch (e){ fxToast('Could not copy — select the text instead.', 'bad', TOAST_W.ui); }
     }
     else if (a === 'mphost'){ lobbyHost(); }
     else if (a === 'mpjoin'){ lobbySet('joining'); }
@@ -9287,6 +9371,7 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   OVER_HOLD, overStep, syncHud, MUSTER, mustering, musterPhase, waveSecs, musterMark,
+  fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, ARC, arcH, arcZ, applyStun, applySlow, chainLine, hookSnapFx,
