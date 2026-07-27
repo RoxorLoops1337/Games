@@ -3352,6 +3352,18 @@ function hookSnapFx(h, tgt){
 // nothing connecting the two, so the only way to know a support had done
 // anything was to watch a health bar and guess. A line that lives for a third
 // of a second answers it.
+/* A tether — a heal, a ward, a rally. It draws itself on from the caster
+   towards whoever it is reaching for, and it did that at a rate that took 62%
+   of its life to arrive, against a linear fade. So the one thing a tether
+   exists to say — WHO it connects to — was the one thing it never got round
+   to: it was brightest as a stub an inch out of the caster's hand, reached
+   full length at 37% opacity, and was invisible before it touched anybody.
+
+   `snap` is how much faster the reveal runs than the life. It has to arrive
+   while there is still enough of the effect left to see it arrive.          */
+const LINK = { snap:5, arrive:.8 };
+const linkReach = (a) => Math.min(1, (1 - a) * LINK.snap);
+
 function linkFx(x, y, x2, y2, col){
   if (!fxRoom(1)) return;
   G.fx.push({ k:'link', x, y, x2, y2, col, t:.38, dur:.38 });
@@ -4953,9 +4965,9 @@ function drawLane(c){
       c.beginPath(); c.ellipse(q[0], q[1], p.r * LS() * g, p.r * LS() * .5 * g, 0, 0, 6.2832); c.stroke();
     } else if (p.k === 'link'){
       const q = lp(p.x, p.y, 1.1), q2 = lp(p.x2, p.y2, 1.1);
-      const g = 1 - a;                                  // it draws itself ON over its life
-      const mx = q[0] + (q2[0] - q[0]) * Math.min(1, g * 1.6);
-      const my = q[1] + (q2[1] - q[1]) * Math.min(1, g * 1.6);
+      const g = linkReach(a);                           // it draws itself ON, fast
+      const mx = q[0] + (q2[0] - q[0]) * g;
+      const my = q[1] + (q2[1] - q[1]) * g;
       c.lineCap = 'round';
       c.globalAlpha = a * .55; c.strokeStyle = p.col; c.lineWidth = 4.5 * cam.z;
       c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
@@ -8202,7 +8214,7 @@ window.IB = {
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
-  beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
+  beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
