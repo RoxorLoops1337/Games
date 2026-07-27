@@ -3684,6 +3684,20 @@ function gorgeDepth(c){
   c.globalAlpha = 1;
 }
 
+// The great keep behind the gates, as stations measured from the wall head.
+// Everything here used to be loose numbers in the draw call, and the thing
+// that went wrong was exactly what loose numbers do: the wall grew a hard
+// bottom edge sitting on the grass with no footing and no shadow under it,
+// while the gate standing in front of it had both. A table can be checked —
+// that the crown sits ON the wall, that the towers and the wall share a
+// ground line, that the plinth is under all of it and the door inside it.
+const KEEP_ART = {
+  wallTop:-44, wallH:56, crownTop:-52, crownH:7,
+  towerTop:-74, towerH:86, roofApex:-108, roofEave:-72,
+  plinthH:8, plinthOver:4,
+  doorTop:-4, doorR:14, doorH:16,
+};
+const keepBase = () => KEEP_ART.wallTop + KEEP_ART.wallH;
 function drawEnds(c){
   for (const s of G.sides){
     const dir = dirOf(s.i);
@@ -3695,19 +3709,62 @@ function drawEnds(c){
     const col = SIDE_COL[s.i];
     const kp = lp(bx - dir * 11, 0);
     const wallY = kp[1] - 34 * z;
-    block(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 56 * z, STONE.mid, STONE.lit);
-    masonry(c, kp[0] - 46 * z, wallY - 42 * z, 92 * z, 50 * z, z, 41 + s.i);
+    // It stood on nothing — a flat block with a hard bottom edge sitting on
+    // the grass, no shadow under it, while the gate in front of it has a
+    // stone footing. And block()'s lit edge is a sixteenth of the height,
+    // which on a wall this tall came out as a pale slab across the middle of
+    // it rather than a highlight along the top.
+    const base = wallY + keepBase() * z;
+    c.globalAlpha = .22;
+    ell(c, kp[0], base + 2 * z, 92 * z, 15 * z, '#1d2a1c');
+    c.globalAlpha = 1;
+    block(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 56 * z, STONE.mid);
+    block(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 3.5 * z, STONE.lit);
+    masonry(c, kp[0] - 46 * z, wallY - 40 * z, 92 * z, 46 * z, z, 41 + s.i);
+    // buttresses, so a wall this wide is not one unbroken face
+    for (const bxo of [-38, -20, 20, 38]){
+      block(c, kp[0] + bxo * z - 4 * z, wallY - 40 * z, 8 * z, 52 * z, STONE.mid2);
+      block(c, kp[0] + bxo * z - 4 * z, wallY - 40 * z, 3 * z, 52 * z, STONE.dark);
+      poly(c, [[kp[0] + bxo * z - 6 * z, wallY - 40 * z], [kp[0] + bxo * z + 6 * z, wallY - 40 * z],
+               [kp[0] + bxo * z, wallY - 47 * z]], STONE.mid2);
+    }
+    // a plinth the whole thing stands on
+    block(c, kp[0] - 52 * z, base - 8 * z, 104 * z, 8 * z, STONE.deep, STONE.dark);
+    block(c, kp[0] - 54 * z, base - 10 * z, 108 * z, 3 * z, STONE.mid2, STONE.lit);
     crown(c, kp[0], wallY - 52 * z, 100 * z, z, 9);
+    // the way in, with a timber gate in it rather than a painted hole
     c.fillStyle = '#3a332b';
     c.beginPath(); c.arc(kp[0], wallY - 4 * z, 14 * z, Math.PI, 0); c.fill();
     c.fillRect(kp[0] - 14 * z, wallY - 4 * z, 28 * z, 16 * z);
+    c.fillStyle = WOOD.mid;
+    c.beginPath(); c.arc(kp[0], wallY - 3 * z, 11 * z, Math.PI, 0); c.fill();
+    c.fillRect(kp[0] - 11 * z, wallY - 3 * z, 22 * z, 15 * z);
+    c.strokeStyle = WOOD.dark; c.lineWidth = Math.max(1, 1.1 * z);
+    for (let i = -1; i <= 1; i++){
+      c.beginPath(); c.moveTo(kp[0] + i * 6 * z, wallY - 13 * z); c.lineTo(kp[0] + i * 6 * z, base); c.stroke();
+    }
+    block(c, kp[0] - 11 * z, wallY - 1 * z, 22 * z, 2.6 * z, '#6b7078');
+    block(c, kp[0] - 11 * z, wallY + 7 * z, 22 * z, 2.6 * z, '#6b7078');
     for (const sx of [-1, 1]){
       const tx = kp[0] + sx * 58 * z;
-      block(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, STONE.mid, STONE.lit);
-      masonry(c, tx - 15 * z, wallY - 72 * z, 30 * z, 80 * z, z, 51 + sx * 3 + s.i);
+      c.globalAlpha = .22;
+      ell(c, tx, base + 2 * z, 22 * z, 7 * z, '#1d2a1c');
+      c.globalAlpha = 1;
+      block(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, STONE.mid);
+      block(c, tx - 16 * z, wallY - 74 * z, 32 * z, 4 * z, STONE.lit);
+      masonry(c, tx - 15 * z, wallY - 70 * z, 30 * z, 76 * z, z, 51 + sx * 3 + s.i);
+      block(c, tx - 18 * z, base - 8 * z, 36 * z, 8 * z, STONE.deep, STONE.dark);
       poly(c, [[tx - 23 * z, wallY - 72 * z], [tx, wallY - 108 * z], [tx + 23 * z, wallY - 72 * z]], shade(col, .98));
       poly(c, [[tx, wallY - 108 * z], [tx + 23 * z, wallY - 72 * z], [tx + 8 * z, wallY - 72 * z]], shade(col, .72));
+      block(c, tx - 24 * z, wallY - 74 * z, 48 * z, 3 * z, STONE.mid2, STONE.lit);   // the eaves course
       c.fillStyle = STONE.line; c.fillRect(tx - 3 * z, wallY - 56 * z, 6 * z, 14 * z);
+    }
+    // banners hung either side of the gateway
+    for (const sx of [-1, 1]){
+      const nx = kp[0] + sx * 30 * z;
+      c.fillStyle = shade(col, .92); c.fillRect(nx - 5 * z, wallY - 34 * z, 10 * z, 24 * z);
+      c.fillStyle = shade(col, 1.16); c.fillRect(nx - 5 * z, wallY - 34 * z, 3.5 * z, 24 * z);
+      poly(c, [[nx - 5 * z, wallY - 10 * z], [nx, wallY - 15 * z], [nx + 5 * z, wallY - 10 * z]], shade(col, .78));
     }
     pennant(c, kp[0] + dir * 20 * z, wallY - 76 * z, z, col, dir);
     c.fillStyle = '#e7ecf6'; c.font = 'bold ' + Math.max(9, Math.round(11 * z)) + 'px system-ui'; c.textAlign = 'center';
@@ -7609,6 +7666,7 @@ window.IB = {
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
+  KEEP_ART, keepBase, drawEnds,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,

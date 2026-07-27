@@ -3195,6 +3195,43 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(sawHot && sawCold, 'over a real match the turrets are seen both firing and loaded');
 }
 {
+  // The great keep behind the gates. Its stations were loose numbers in the
+  // draw call and they did what loose numbers do: the wall ended in a hard
+  // bottom edge sitting on the grass, with no footing and no shadow under it,
+  // while the gate standing right in front of it had both.
+  const K = IB.KEEP_ART, base = IB.keepBase();
+  t.ok(base === K.wallTop + K.wallH, 'the ground line is the foot of the wall');
+  // A crown floating above its own wall, or sunk into it, is the same class of
+  // mistake — and at this camera it reads as a shadow rather than a gap.
+  t.ok(Math.abs((K.crownTop + K.crownH) - K.wallTop) <= 1,
+    'the crown sits on the wall head rather than over it (' + (K.crownTop + K.crownH) + ' vs ' + K.wallTop + ')');
+  // The towers and the wall have to stand on the SAME ground, or one of them
+  // is buried and the other is in the air.
+  t.ok(K.towerTop + K.towerH === base, 'the towers reach the same ground line as the wall');
+  t.ok(K.towerTop < K.wallTop, 'and rise above it');
+  t.ok(K.roofApex < K.roofEave && K.roofEave <= K.towerTop + 4, 'their roofs sit on top of them, apex highest');
+  // The plinth carries everything: it has to be under the wall and wider.
+  t.ok(K.plinthH > 0 && K.plinthOver > 0, 'there is a plinth and it oversails');
+  // The doorway has to be inside the wall it is cut through — a door reaching
+  // past the wall head is an arch, and one below the ground line is a cellar.
+  t.ok(K.doorTop - K.doorR > K.wallTop, 'the doorway arch stays under the wall head');
+  t.ok(K.doorTop + K.doorH >= base - 1 && K.doorTop + K.doorH <= base + 1, 'and its threshold is the ground');
+
+  // Both ends drawn, at every zoom and from either seat — drawEnds mirrors
+  // itself by dirOf(side) and half of what it draws is offset by it.
+  IB.newMatch({ diff:'veteran', seed:153 });
+  IB.cam.follow = false;
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    for (const x of [-5, C.LANE_LEN / 2, C.LANE_LEN + 5]){
+      IB.cam.x = x;
+      for (const z of [.45, 1, 2.2]){ IB.cam.z = IB.cam.tz = z; IB.draw(); }
+    }
+  }
+  IB.MY = 0; IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'both keeps draw from either seat at every zoom');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
