@@ -4774,6 +4774,28 @@ const ZONE = {
 const ZONE_LOUD = ['fill', 'rim', 'lw', 'pulse', 'motes'];   // every one of them, louder
 const zoneLook = (side) => (forMe(side) ? ZONE.mine : ZONE.theirs);
 
+/* ------------------------------------------------- what is in the air
+   Everything solid in this game throws a shadow — the bodies, the trees, the
+   rocks, the mines, the buildings, eighteen call sites of it — and an arrow in
+   flight threw nothing. A projectile carries a real height: a shaft leaves a
+   body at .8 and a turret lobs one from 2.6, and it falls the whole way. None
+   of that was in the picture, so both drew as the same streak at the same
+   place and neither looked like it was above the boards at all. The shadow is
+   the only thing that can say how high something is.
+
+   It fades as the thing climbs and firms up as it drops — and it goes through
+   the same shadow() as every other shadow on the board, so it leans the way
+   the sun says without being told twice.                                     */
+const PROJ_SHADOW = { rx:3.6, ry:1.5, a:.34, fade:.075, min:.07, shrink:.09, floor:.4 };
+function projShadow(c, p){
+  const h = Math.max(0, p.z);
+  const k = Math.max(PROJ_SHADOW.floor, 1 - h * PROJ_SHADOW.shrink);
+  const a = Math.max(PROJ_SHADOW.min, PROJ_SHADOW.a - h * PROJ_SHADOW.fade);
+  const g = lp(p.x, p.y, 0);
+  shadow(c, g[0], g[1], PROJ_SHADOW.rx * k * cam.z, PROJ_SHADOW.ry * k * cam.z,
+    'rgba(0,0,0,' + a.toFixed(3) + ')');
+}
+
 function drawLane(c){
   // zones under everyone
   for (const z of G.zones){
@@ -4811,6 +4833,10 @@ function drawLane(c){
     }
     c.globalAlpha = 1;
   }
+  // What is in the air, marked on the boards under it. Drawn here rather than
+  // with the projectiles themselves, which are painted after the bodies — a
+  // shadow belongs on the deck, beneath everyone's feet.
+  for (const p of G.projs) projShadow(c, p);
   // Anything still on the end of a chain, drawn under the bodies so the links
   // pass behind whoever is being reeled in.
   for (const u of G.units)
@@ -8147,7 +8173,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
