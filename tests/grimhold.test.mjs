@@ -1798,4 +1798,213 @@ t.test('dice: a stale pool can never blank the one on the table', () => {
   t.ok(true, 'and showDice drops any pool it replaces');
 });
 
+/* ------------------------------------------------- push your luck, habits */
+
+t.test('push: a room that pays opens the gamble, and the odds are real', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  const rid = 4;
+  const [x, y] = HQ.roomTiles(rid).find(([a,b]) => !HQ.furnAt(a,b) && !HQ.actorAt(a,b));
+  put(h, x, y);
+  HQ.G.q.pot = 0;
+  HQ.applyTreasure({ k:'gold', n:100, t:'purse', d:'' }, h);
+  t.ok(HQ.G.q.push, 'the push is open');
+  t.eq(HQ.G.q.push.rid, rid, 'on the room you searched');
+  t.eq(HQ.G.q.push.won, 100, 'holding what the search paid');
+  t.ok(HQ.canPush(), 'and it can be pushed');
+
+  // odds must worsen and pay must rise, monotonically, and stay bounded
+  let lastBad = -1, lastMult = -1;
+  for (let pulls = 1; pulls <= 10; pulls++){
+    const o = HQ.pushOdds(pulls);
+    t.ok(o.bad > lastBad || o.bad === .72, `pull ${pulls} is no safer than the last`);
+    t.ok(o.mult > lastMult, `pull ${pulls} pays more than the last`);
+    t.ok(o.bad <= .72, 'and the risk is capped short of certain');
+    lastBad = o.bad; lastMult = o.mult;
+  }
+  t.ok(HQ.pushOdds(1).bad < .35, 'the first push is a fair bet');
+  t.ok(HQ.pushOdds(4).bad > .6, 'the fourth is not');
+});
+
+t.test('push: a good pull pays, a bad pull ends it and bites', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  const [x, y] = HQ.roomTiles(4).find(([a,b]) => !HQ.furnAt(a,b) && !HQ.actorAt(a,b));
+  put(h, x, y);
+  HQ.G.q.roomSeen.fill(1); HQ.recomputeVision();
+  HQ.G.q.pot = 0;
+  HQ.applyTreasure({ k:'gold', n:100, t:'purse', d:'' }, h);
+
+  rig([0.99]);                                   // never rolls the bad branch
+  const before = HQ.G.q.pot;
+  t.ok(HQ.pushLuck(), 'the push comes off');
+  t.ok(HQ.G.q.pot > before, 'and pays into the pot');
+  t.ok(HQ.canPush(), 'and can be pushed again');
+  t.eq(HQ.G.q.push.pulls, 2, 'the pull count moved');
+
+  rig([0.0]);                                    // always the bad branch
+  const bp = h.bp, mon = HQ.monstersOf().length;
+  t.ok(!HQ.pushLuck(), 'this one goes wrong');
+  t.ok(HQ.G.q.push.done, 'and the room is closed to you');
+  t.ok(!HQ.canPush(), 'no more pushing');
+  const bitten = h.bp < bp || HQ.monstersOf().length > mon || h.poison > 0;
+  t.ok(bitten, 'and it cost something — a wound, a wanderer or poison');
+});
+
+t.test('push: banking keeps the coin, and ending the turn closes the room', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  const [x, y] = HQ.roomTiles(4).find(([a,b]) => !HQ.furnAt(a,b) && !HQ.actorAt(a,b));
+  put(h, x, y);
+  HQ.applyTreasure({ k:'gold', n:100, t:'purse', d:'' }, h);
+  const pot = HQ.G.q.pot;
+  t.ok(HQ.bankPush(), 'you can walk away');
+  t.ok(!HQ.canPush(), 'and the gamble is over');
+  t.eq(HQ.G.q.pot, pot, 'with the coin still yours');
+
+  HQ.applyTreasure({ k:'gold', n:50, t:'purse', d:'' }, h);
+  t.ok(HQ.canPush(), 'a fresh search reopens it');
+  HQ.endHeroTurn();
+  t.ok(!HQ.canPush(), 'but ending the turn closes it');
+});
+
+t.test('push: only the hero who searched may push', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  const [x, y] = HQ.roomTiles(4).find(([a,b]) => !HQ.furnAt(a,b) && !HQ.actorAt(a,b));
+  put(h, x, y);
+  HQ.applyTreasure({ k:'gold', n:100, t:'purse', d:'' }, h);
+  t.ok(HQ.canPush(), 'the searcher may push');
+  use(hero('dwarf'));
+  t.ok(!HQ.canPush(), 'the dwarf may not push the barbarian’s luck');
+});
+
+t.test('monsters: the Chaos Sorcerer finally casts', () => {
+  fresh(6);                                        // The Stone Hunter
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const sorc = HQ.monstersOf().find(m => HQ.MONSTERS[m.mt].caster);
+  t.ok(sorc, 'there is a caster on the board');
+  sorc.x = 11; sorc.y = 11; sorc.awake = true; sorc.sleep = 0; sorc.stun = 0;
+  for (const m of HQ.monstersOf()) if (m !== sorc) m.alive = false;
+  HQ.recomputeVision();
+  const bp = h.bp;
+  ALL_SKULLS();
+  HQ.monsterAct(sorc, () => {});
+  t.ok(sorc.cast > 0, 'it cast rather than walked');
+  t.ok(h.bp < bp, 'and the bolt landed');
+  t.eq([sorc.x, sorc.y].join(), '11,11', 'without closing the distance');
+  // and it does not spam it forever
+  sorc.cast = 3;
+  const at = [sorc.x, sorc.y].join();
+  HQ.monsterAct(sorc, () => {});
+  t.ok([sorc.x, sorc.y].join() !== at || h.bp < bp, 'once it is out of bolts it comes for you');
+});
+
+t.test('monsters: a zombie gets up once, and only once', () => {
+  fresh(0);
+  const z = HQ.monstersOf()[0];
+  z.mt = 'zombie'; z.bp = 1; z.bpMax = 1; z.alive = true; z.risen = 0;
+  rig([0.0]);                                      // rnd() < .5 → it rises
+  HQ.hurt(z, 5, null);
+  t.ok(z.alive, 'it gets back up');
+  t.eq(z.bp, 1, 'on one Body Point');
+  t.eq(z.risen, 1, 'and it is marked');
+  rig([0.0]);
+  HQ.hurt(z, 5, null);
+  t.ok(!z.alive, 'the second time it stays down');
+});
+
+t.test('monsters: a mummy’s touch dulls the next swing', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.mt = 'mummy'; m.x = 11; m.y = 7; m.atk = 5; m.bp = m.bpMax = 9; m.def = 0;
+  HQ.recomputeVision();
+  const full = HQ.attackDice(h, m);
+  ALL_SKULLS();
+  HQ.monsterAttack(m, h, () => {});
+  t.ok(h.cursed, 'the curse clings');
+  t.eq(HQ.attackDice(h, m), full - 1, 'and costs a die');
+  h.acted = false;
+  ALL_SKULLS();
+  HQ.doAttack(h, m);
+  t.ok(!h.cursed, 'it burns off on the swing');
+  t.eq(HQ.attackDice(h, m), full, 'and the die comes back');
+});
+
+t.test('monsters: a chaos warrior turns the first blow of each turn', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.mt = 'chaos'; m.x = 11; m.y = 7; m.bp = m.bpMax = 30; m.def = 0; m.parried = 0;
+  HQ.recomputeVision();
+  rig([0.0]);                                      // all skulls, no shields
+  h.acted = false; HQ.doAttack(h, m);
+  t.eq(m.parried, 1, 'the parry is spent');
+  const afterFirst = m.bp;
+  h.acted = false;
+  rig([0.0]);
+  HQ.doAttack(h, m);
+  t.ok(m.bp < afterFirst, 'and the second blow goes in');
+});
+
+t.test('monsters: a gargoyle steps over the furniture, an orc does not', () => {
+  fresh(0);
+  const f = HQ.G.q.furn[0];
+  const fx = f.x, fy = f.y;
+  const ground = HQ.walkField(fx, fy - 1, 4, { kind:'monster' }, false);
+  const flying = HQ.walkField(fx, fy - 1, 4, { kind:'monster' }, true);
+  t.ok(!ground.d.has(HQ.idx(fx, fy)), 'the walker will not cross the table');
+  t.ok(flying.d.has(HQ.idx(fx, fy)), 'the flyer will');
+});
+
+t.test('monsters: a bloodied goblin breaks off instead of trading blows', () => {
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const g = HQ.monstersOf()[0];
+  g.mt = 'goblin'; g.x = 11; g.y = 7; g.bp = g.bpMax = 4; g.awake = true;
+  g.sleep = 0; g.stun = 0; g.mv = 6; g.skittish = 1; g.fled = 0;
+  for (const m of HQ.monstersOf()) if (m !== g) m.alive = false;
+  HQ.recomputeVision();
+  const bp = h.bp;
+  HQ.monsterAct(g, () => {});
+  t.eq(h.bp, bp, 'it did not swing');
+  t.ok(Math.abs(g.x - h.x) + Math.abs(g.y - h.y) > 1, 'it put ground between them');
+});
+
+t.test('dice: a rerollable pool waits for you instead of vanishing', () => {
+  // Reported: the resolution popup disappeared before a reroll was possible.
+  // It auto-resolved 520ms after landing, and tapping to read it only made
+  // that sooner.
+  fresh(0);
+  const h = use(hero('barbarian'));
+  put(h, 11, 8);
+  HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
+  const m = HQ.monstersOf()[0];
+  m.x = 11; m.y = 7; m.bp = m.bpMax = 9; m.def = 2;
+  HQ.recomputeVision();
+
+  // headless resolves the animation instantly, so inspect the shape showDice
+  // hands a pool rather than trying to catch one mid-air
+  HQ.G.q.fate = 2;
+  const withFate = HQ.diceShape('attack', 5, 2);
+  const withNone = HQ.diceShape('attack', 5, 0);
+  const moveRoll = HQ.diceShape('move', 2, 2);
+  t.ok(withFate.hold, 'a rerollable pool is held');
+  t.ok(!withNone.hold, 'with no Fate there is nothing to decide, so it flows');
+  t.ok(!moveRoll.hold, 'and a movement roll never holds');
+  t.ok(withFate.total - withFate.settleAt > 4000,
+       `the window is long enough to decide in (${withFate.total - withFate.settleAt}ms)`);
+  t.ok(withNone.total - withNone.settleAt < 1000, 'and short when there is no choice');
+  t.eq(withFate.settleAt, withNone.settleAt, 'the dice land at the same moment either way');
+});
+
 t.run();

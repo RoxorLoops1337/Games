@@ -655,7 +655,7 @@ const blocked = (x,y) => !isFloor(x,y) || !!furnAt(x,y) || !!actorAt(x,y);
 
 // Breadth-first walk out from a square, respecting doors, bodies and furniture.
 // Returns {d:Map(idx->steps), from:Map(idx->idx)} for path reconstruction.
-function walkField(sx, sy, maxSteps, mover){
+function walkField(sx, sy, maxSteps, mover, flying){
   const d = new Map(), from = new Map();
   d.set(idx(sx,sy), 0);
   let frontier = [[sx,sy]];
@@ -668,7 +668,7 @@ function walkField(sx, sy, maxSteps, mover){
         const nx = x+dx, ny = y+dy, ni = idx(nx,ny);
         if (!inB(nx,ny) || d.has(ni)) continue;
         if (!linked(x,y,nx,ny)) continue;
-        if (furnAt(nx,ny)) continue;
+        if (furnAt(nx,ny) && !flying) continue;    // a gargoyle steps over a table
         if (!bodyPassable(mover, actorAt(nx,ny))) continue;
         d.set(ni, cost+1); from.set(ni, idx(x,y));
         next.push([nx,ny]);
@@ -743,6 +743,7 @@ function attackDice(h, target){
     if (boonHas('executioner') && target.bp <= 1) n += 2;
   }
   if (boonHas('bloodprice')) n += 2;
+  if (h.cursed) n = Math.max(1, n - 1);
   return n;
 }
 function defendDice(h){
@@ -3066,7 +3067,13 @@ function showDice(kind, atk, def, label, sub, done, onReroll){
   for (const f of def) items.push({ side:'def', face:f, settle:0 });
   const per = 90, base = 380;
   items.forEach((it,i) => { it.settle = base + i*per; });
-  const total = base + items.length*per + 520;
+  const shape = diceShape(kind, items.length, fateOf());
+  const settleAt = shape.settleAt;
+  // If Fate could be spent on this pool, hold it on the table and wait for the
+  // player. Auto-resolving half a second after the dice land gave nobody time
+  // to decide, and tapping to read the result only made it resolve sooner.
+  const hold = shape.hold;
+  const total = shape.total;
   // Drop any pool still on the table: a stale timer must never blank a newer
   // roll, and the token makes that impossible even if one slips through.
   if (G.dice && G.dice.timer){
@@ -3074,7 +3081,7 @@ function showDice(kind, atk, def, label, sub, done, onReroll){
     if (i >= 0) G.timers.splice(i, 1);
   }
   const token = {};
-  G.dice = { kind, items, t:0, total, label, sub, token,
+  G.dice = { kind, items, t:0, total, settleAt, hold, label, sub, token,
              onReroll:onReroll || null, rerolled:false };
   sfx('dice');
   G.dice.timer = later(total, () => {
@@ -3095,6 +3102,25 @@ function showMoveDice(a, b, done){
     if (G.dice && G.dice.token !== token) return;
     G.dice = null; if (done) done();
   });
+}
+
+// The timing a pool would be given — held for a decision, or flowing.
+function diceShape(kind, n, fate){
+  const settleAt = 380 + n*90;
+  const hold = kind !== 'move' && fate > 0;
+  return { settleAt, hold, total: settleAt + (hold ? 6000 : 520) };
+}
+
+// Fire a waiting pool's resolution now, on the player's say-so.
+function resolveDice(){
+  if (!G.dice) return false;
+  const T = G.dice.timer;
+  if (T){
+    const i = G.timers.indexOf(T);
+    if (i >= 0) G.timers.splice(i, 1);
+    T.fn();
+  } else G.dice = null;
+  return true;
 }
 
 function drawDice(g, t){
@@ -3148,9 +3174,16 @@ function drawDice(g, t){
     g.letterSpacing = '2px';
     g.fillText(`✦ REROLL  ·  ${fateOf()} FATE`, cw/2, by + bh/2);
     g.letterSpacing = '0px';
+    if (D.t >= D.settleAt){
+      g.globalAlpha = .55 + Math.sin(TT0*.004)*.25;
+      g.fillStyle = '#9c8d75'; g.font = '10px Georgia,serif';
+      g.letterSpacing = '3px';
+      g.fillText('OR TAP ANYWHERE TO CARRY ON', cw/2, by + bh + 16);
+      g.letterSpacing = '0px'; g.globalAlpha = 1;
+    }
   } else D.btn = null;
-  if (D.sub && D.t > D.total - 620){
-    g.globalAlpha = Math.min(1, (D.t - (D.total-620))/180);
+  if (D.sub && D.t >= D.settleAt){
+    g.globalAlpha = Math.min(1, (D.t - D.settleAt)/180);
     g.fillStyle = '#f3d488'; g.font = '700 15px Georgia,serif';
     g.letterSpacing = '2px';
     g.fillText(D.sub, cw/2, cy + size/2 + 22);
@@ -3302,12 +3335,12 @@ function refreshField(){
 }
 // The field you may *end* on: squeezing past a companion is fine, standing on
 // one is not, and a fallen block is not a square at all.
-function walkFieldSafe(x, y, n, mover){
-  const f = walkField(x, y, n, mover);
+function walkFieldSafe(x, y, n, mover, flying){
+  const f = walkField(x, y, n, mover, flying);
   for (const [k] of [...f.d]){
     const tx = k % W, ty = (k/W)|0;
     const occ = actorAt(tx,ty);
-    if (trapBlocks(tx,ty) || (occ && occ !== mover)) f.d.delete(k);
+    if (trapBlocks(tx,ty) || (occ && occ !== mover) || furnAt(tx,ty)) f.d.delete(k);
   }
   return f;
 }
@@ -3408,9 +3441,13 @@ function doAttack(h, m){
       : dmg > 0 ? `${dmg} Body Point${dmg>1?'s':''}` : 'Turned aside' };
   };
   let r = calc(rollCombat(0), []);
-  const atk = rollCombat(n), def = rollCombat(m.def);
+  let extra = 0;
+  if (m.mt === 'chaos' && !m.parried){ m.parried = 1; extra = 2; }   // the first blow is turned
+  const atk = rollCombat(n), def = rollCombat(m.def + extra);
   r = calc(atk, def);
+  if (extra) say(`${m.name} turns the first blow of the turn aside.`, '');
   if (h.buffs.courage) delete h.buffs.courage;
+  if (h.cursed) delete h.cursed;
   const reroll = (na, nd) => { r = calc(na, nd); if (G.dice) G.dice.sub = r.sub; };
   showDice('attack', atk, def, `${h.name} vs ${m.name}`, r.sub, () => {
     const dmg = r.dmg, savage = r.savage;
@@ -3426,6 +3463,8 @@ function doAttack(h, m){
       hitStop(savage ? 150 : 70);
       m.sleep = 0;
       spark(m.x, m.y, savage ? 22 : 12, '#a01d14', { spd:.026, dir, up:.002, life:640 });
+      // a pack goblin scatters the moment it is bloodied
+      if (m.mt === 'goblin' && m.bp - dmg > 0) m.skittish = 1;
       if (savage){
         banner('SAVAGE', `${h.name} opens up the ${m.name}`);
         spark(m.x, m.y, 16, '#ffd07a', { spd:.03, dir, glow:'rgba(255,190,90,.45)', r:1.6, life:700 });
@@ -3461,6 +3500,10 @@ function monsterAttack(m, h, done){
       sfx('hit'); G.shake = 8 + dmg*3; hitStop(60 + dmg*24);
       spark(h.x, h.y, 10 + dmg*4, '#a01d14',
             { spd:.024, dir:[Math.sign(h.x-m.x), Math.sign(h.y-m.y)], life:640 });
+      if (m.mt === 'mummy' && !h.cursed){
+        h.cursed = 1;
+        say(`The ${m.name}'s touch clings — ${h.name}'s next attack rolls one die fewer.`, 'bad');
+      }
       if (m.affix === 'venomous' && !h.poison){
         h.poison = 2;
         say(`${h.name} is poisoned — it will keep bleeding.`, 'bad');
@@ -3493,6 +3536,14 @@ function hurt(a, n, done){
   if (done) done();
 }
 function kill(a){
+  // the dead do not always stay down
+  if (a.kind === 'monster' && a.mt === 'zombie' && !a.risen && rnd() < .5){
+    a.risen = 1; a.bp = 1;
+    say(`${a.name} gets back up.`, 'bad');
+    spark(a.x, a.y, 18, '#7d8f6a', { spd:.016, up:.005 });
+    sfx('die'); G.shake = 8;
+    return;
+  }
   a.alive = false; a.deathT = 620;
   if (a.kind === 'monster'){
     sfx('die');
@@ -3566,6 +3617,7 @@ function endHeroTurn(){
   const h = activeHero();
   if (!h || busy()) return;
   h.done = true; h.moveLeft = 0;
+  if (G.q.push && G.q.push.hero === h.id) G.q.push.done = true;
   sfx('ui');
   const next = G.q.actors.find(a => a.kind === 'hero' && a.alive && !a.done);
   if (next) beginHeroActivation(next);
@@ -3598,9 +3650,31 @@ function zargonTurn(){
   later(HEADLESS ? 0 : 620, next);
 }
 
+// What each kind of thing does with its turn beyond walking at you.
+function monsterCast(m, h, done){
+  const atk = rollCombat(3);
+  const skulls = countSkulls(atk);
+  m.cast = (m.cast || 0) + 1;
+  focusOn(m.x, m.y);
+  say(`${m.name} throws a bolt of the Warlock's fire at ${h.name}.`, 'magic');
+  spark(m.x, m.y, 18, '#c86bff', { spd:.02, dir:[Math.sign(h.x-m.x), Math.sign(h.y-m.y)],
+                                   glow:'rgba(200,107,255,.4)', r:1.4 });
+  showDice('attack', atk, [], `${m.name} vs ${h.name}`,
+    skulls ? `${skulls} Body Point${skulls>1?'s':''} — no shield will help` : 'It gutters out', () => {
+    if (skulls > 0){
+      sfx('hit'); G.shake = 10 + skulls*3; hitStop(70);
+      spark(h.x, h.y, 14 + skulls*3, '#c86bff', { spd:.022, life:700 });
+      hurt(h, skulls, null);
+    }
+    renderHUD();
+    later(220, done);
+  });
+}
+
 function monsterAct(m, done){
   if (m.sleep > 0){ done(); return; }
   if (m.stun > 0){ m.stun--; done(); return; }
+  m.parried = 0;                                   // chaos warriors parry once a turn
   const targets = livingHeroes();
   if (!targets.length){ done(); return; }
   // A monster holds its room until it can actually see somebody. Without this
@@ -3619,9 +3693,19 @@ function monsterAct(m, done){
     if (adj){ focusOn(m.x,m.y); monsterAttack(m, best, done); }
     else done();
   };
-  // already next to someone? hit them
+  // a caster would rather burn you from across the room
+  if (MONSTERS[m.mt] && MONSTERS[m.mt].caster && (m.cast || 0) < 3){
+    const seen = targets.filter(h => dist2(m.x,m.y,h.x,h.y) <= 8 && hasLOS(m.x,m.y,h.x,h.y));
+    if (seen.length && !targets.some(h => dist2(m.x,m.y,h.x,h.y) === 1)){
+      const mark = seen.sort((a,b) => a.bp - b.bp)[0];
+      monsterCast(m, mark, done);
+      return;
+    }
+  }
+  // already next to someone? hit them — unless it has been bloodied and is small
   for (const h of targets){
     if (dist2(m.x,m.y,h.x,h.y) === 1 && linked(m.x,m.y,h.x,h.y)){
+      if (m.skittish && !m.fled){ m.fled = 1; break; }
       focusOn(m.x,m.y);
       // the frenzied get a second swing, at whoever is still standing
       monsterAttack(m, h, m.affix === 'frenzied'
@@ -3631,14 +3715,17 @@ function monsterAct(m, done){
       return;
     }
   }
-  const f = walkFieldSafe(m.x, m.y, m.mv, m);
+  const f = walkFieldSafe(m.x, m.y, m.mv, m, m.mt === 'gargoyle');
+  const away = !!(m.skittish && m.fled);            // bloodied goblins want distance
   let goal = null, goalD = dist2(m.x,m.y,best.x,best.y), goalCost = 0;
   for (const [k, cost] of f.d){
     const x = k % W, y = (k/W)|0;
     if (blocked(x,y) && !(x===m.x&&y===m.y)) continue;
     const d = dist2(x,y,best.x,best.y);
-    if (d < goalD || (d === goalD && cost < goalCost)){ goalD = d; goal = [x,y]; goalCost = cost; }
+    const better = away ? d > goalD : d < goalD;
+    if (better || (d === goalD && cost < goalCost && !away)){ goalD = d; goal = [x,y]; goalCost = cost; }
   }
+  if (away && goal){ m.skittish = 0; m.fled = 0; }
   if (!goal){ strike(); return; }
   const path = tracePath(f, goal[0], goal[1]);
   if (!path || !path.length){ strike(); return; }
@@ -3729,6 +3816,100 @@ function searchTreasure(){
   later(260, () => applyTreasure(card, h));
   renderHUD();
 }
+// Push your luck. The first pull is the search itself; every pull after it
+// pays more and is likelier to go wrong. The odds are always on screen — a
+// gamble you cannot see the price of is just a trap.
+function pushOdds(pulls){
+  return {
+    bad: Math.min(.72, .16 + pulls*.15),
+    mult: 1 + pulls*.7,
+  };
+}
+function canPush(){
+  const p = G.q.push;
+  if (!p || !G.q || G.q.over) return false;
+  const h = activeHero();
+  return !!(h && h.id === p.hero && p.pulls > 0 && !p.done);
+}
+function pushLuck(){
+  if (!canPush()) return false;
+  const P = G.q.push, h = activeHero();
+  const o = pushOdds(P.pulls);
+  P.pulls++;
+  const bad = rnd() < o.bad;
+  sfx('search');
+  if (bad){
+    P.done = true;
+    const roll = ri(3);
+    if (roll === 0){
+      say('Your luck runs out — something was listening.', 'bad');
+      spawnWanderer(h);
+    } else if (roll === 1){
+      const n = 1 + ri(2);
+      say(`Your luck runs out — the shelf gives way. ${n} Body Point${n>1?'s':''}.`, 'bad');
+      spark(h.x, h.y, 18, '#6a6258', { spd:.018 });
+      hurt(h, n, null);
+    } else {
+      say('Your luck runs out — the dust in here is not dust. Poisoned.', 'bad');
+      h.poison = Math.max(h.poison || 0, 2);
+      spark(h.x, h.y, 16, '#7fd86b', { spd:.014, up:.004 });
+    }
+    G.shake = 12;
+  } else {
+    const base = [40, 60, 80, 120][Math.min(3, P.pulls - 2)] || 120;
+    let n = Math.round(base * o.mult);
+    if (boonHas('luckyfind')) n = Math.round(n*1.5);
+    if (modHas('wealthy')) n *= 2;
+    G.q.pot = (G.q.pot || 0) + n;
+    P.won += n;
+    sfx('gold');
+    floatText(h.x, h.y, '+' + n, '#f3d488', n >= 150);
+    spark(h.x, h.y, 16, '#d8a83c', { spd:.014, up:.004 });
+    say(`Another handful — ${n} gold. That is ${P.won} from this room.`, 'good');
+  }
+  renderHUD(); checkQuestState();
+  if (!HEADLESS && !P.done && !G.q.over) later(420, showPush);
+  return !bad;
+}
+function bankPush(){
+  if (!G.q.push) return false;
+  const P = G.q.push;
+  P.done = true;
+  if (P.won > 0) say(`You take the ${P.won} and step away from it.`, 'good');
+  renderHUD();
+  return true;
+}
+function showPush(){
+  if (!canPush()) return;
+  const P = G.q.push, o = pushOdds(P.pulls);
+  const next = Math.round(([40,60,80,120][Math.min(3, P.pulls - 1)] || 120) * o.mult);
+  const pct = Math.round(o.bad*100);
+  modal(`
+    <h2>Push Your Luck</h2>
+    <div class="sub" style="margin:2px 0 0">${ROOMS[P.rid].name} · pull ${P.pulls}</div>
+    <div class="rule"></div>
+    <p class="flavor">There is more in here. There is also whatever has been living
+      in here. ${activeHero().name} can keep rummaging, or take what is already in hand.</p>
+    <div class="goldline">◈ ${P.won} in hand</div>
+    <div class="row">
+      <div class="ic">◈</div>
+      <div class="tx"><b>Another handful</b><s>Roughly ${next} gold if it goes well</s></div>
+      <div style="color:#63bf7d">${100 - pct}%</div>
+    </div>
+    <div class="row">
+      <div class="ic">☠</div>
+      <div class="tx"><b>Something goes wrong</b><s>A wandering monster, a collapse, or poison</s></div>
+      <div style="color:#b03a2c">${pct}%</div>
+    </div>
+    <div class="rule"></div>
+    <div style="text-align:center">
+      <button class="btn big" id="mPush">Push</button>
+      <button class="btn ghost" id="mBank">Take the ${P.won} and stop</button>
+    </div>`);
+  bindModal('#mPush', () => { closeModal(); pushLuck(); });
+  bindModal('#mBank', () => { closeModal(); bankPush(); });
+}
+
 function applyTreasure(card, h){
   if (card.k === 'gold'){
     let n = card.n;
@@ -3754,6 +3935,14 @@ function applyTreasure(card, h){
     }
   } else {
     say(`${card.t}. ${card.d}`, '');
+  }
+  // a room that gave you something will give you more, for a price
+  if (card.k === 'gold' || card.k === 'item'){
+    const rid = roomAt(h.x, h.y);
+    if (rid >= 0){
+      G.q.push = { rid, hero:h.id, pulls:1, won:(card.k === 'gold' ? card.n : 0), done:false };
+      if (!HEADLESS) later(500, showPush);
+    }
   }
   renderHUD(); checkQuestState();
 }
@@ -4557,14 +4746,15 @@ function onTap(sx, sy){
       spendReroll();
       return;
     }
-    // slam them down rather than making the player wait out the animation
-    const left = G.dice.total - G.dice.t;
-    if (left > 420){
-      G.dice.t = G.dice.total - 400;
-      if (G.dice.timer) G.dice.timer.t = Math.min(G.dice.timer.t, 400);
+    if (G.dice.t < G.dice.settleAt){
+      // still tumbling — slam them down rather than waiting the animation out
+      G.dice.t = G.dice.settleAt;
       for (const it of G.dice.items) it.settle = Math.min(it.settle, G.dice.t - 40);
+      if (!G.dice.hold && G.dice.timer) G.dice.timer.t = Math.min(G.dice.timer.t, 520);
       sfx('block');
+      return;
     }
+    resolveDice();                       // landed, and the player has read it
     return;
   }
   if (G.q.over) return;
@@ -4808,8 +4998,10 @@ function spendReroll(){
     (it.side === 'atk' ? atk : def).push(it.face);
   }
   D.t = Math.min(D.t, 60);
-  D.total = Math.max(D.total, D.t + 900);
-  if (D.timer) D.timer.t = 900;
+  D.settleAt = 60 + D.items.length*90 + 180;
+  D.hold = false;                                  // spent — it resolves on its own now
+  D.total = D.settleAt + 900;
+  if (D.timer) D.timer.t = D.total;
   if (D.onReroll) D.onReroll(atk, def);
   sfx('spell'); G.shake = 8;
   say('✦ Fate is spent. The dice go again.', 'magic');
@@ -5501,9 +5693,10 @@ globalThis.HQ = {
   tapTile, selectHero, endHeroTurn, zargonTurn, monsterAct, heroWalk, refreshField,
   doAttack, canStrike, monsterAttack, hurt, kill, attackDice, defendDice, moveSlow,
   rollCombat, combatDie, countSkulls, countShields,
-  AFFIXES, AFFIX, applyAffix, isWarded, tickPoison, fateOf, addFate, canReroll, spendReroll,
+  AFFIXES, AFFIX, applyAffix, isWarded, tickPoison, fateOf, addFate, canReroll, spendReroll, resolveDice, diceShape,
   castSpell, knownSpells, spellReady, searchTreasure, searchTraps, disarmTrap, disarmTarget,
   quaffPotion, useHolyWater, applyTreasure, spawnWanderer, openDoorAt, springTrap, giveQuestItem,
+  pushOdds, canPush, pushLuck, bankPush, showPush,
   objectiveReady, needsEscape, onStairs, checkQuestState, questOver, showQuestEnd,
   recomputeVision, revealRoom, tileVisible, tileSeen, bakeDungeon, freeTile, freeFurnSpot,
   buy, showArmoury, showQuestSelect, showQuestScroll, saveCampaign, loadCampaign, migrateCamp,

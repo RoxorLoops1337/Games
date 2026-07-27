@@ -25,21 +25,26 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   die pool. Earned from elites and bosses. The gamble at the centre of combat. *(batch 1)*
 - **Branching descent** — the stair offers two or three floors, each showing its
   modifier, objective and reward before you commit. *(batch 1)*
+- **Press-your-luck searching** — a room that pays opens a gamble: pull again at
+  visibly worsening odds for visibly rising coin, or bank and walk away. *(batch 2)*
+- **Monster abilities** — the Chaos Sorcerer finally casts (three bolts, no
+  defence, at range); zombies rise once; a mummy's touch dulls your next swing;
+  chaos warriors parry the first blow of each turn; gargoyles step over
+  furniture; bloodied goblins break off and run. *(batch 2)*
+- **Held dice** — a pool you could spend Fate on waits for you instead of
+  resolving half a second after it lands. *(batch 2, reported)*
 
 ---
 
 ## Next up
 
-1. **Press-your-luck searching.** After a successful search you may search the
-   room again. Each extra pull raises the odds of a wandering monster or a trap
-   card, and the treasure gets better. Bank or push. Shows the odds explicitly.
-2. **Monster abilities.** The `caster` flag on the Chaos Sorcerer is still
-   unused. Sorcerers cast (fire bolt / summon / curse), goblins flee at 1 BP and
-   alert their room, zombies rise once, mummies curse on hit, chaos warriors
-   parry the first blow each turn, gargoyles step over furniture.
-3. **Shrines and cursed altars.** A room feature you may use once: pray for a
+1. **Shrines and cursed altars.** A room feature you may use once: pray for a
    random blessing, or bleed a Body Point on the altar for a boon. Both tables
    contain something bad.
+2. **Double or nothing.** At the between-floors screen, stake the floor's gold on
+   one combat die: skull doubles it, black shield takes the lot.
+3. **Locked vaults.** A sealed treasure room on some floors; the key drops from a
+   champion. Gives elites a reason to be hunted rather than avoided.
 
 ## Backlog, roughly in order of value
 
