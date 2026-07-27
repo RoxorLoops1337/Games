@@ -4826,56 +4826,408 @@ function drawBirds(c){
   c.lineCap = 'butt';
 }
 
+/* --------------------------------------------------------------- the deck
+   The surface the entire match is fought on, and until now the flattest thing
+   in the picture: two tones alternating every four world units with a hairline
+   between them. At any distance that is a stripe; at any zoom it is cardboard.
+   It is supposed to be weathered timber laid on iron, and it is the one
+   surface every body, number and name plate in the game sits on — so it has to
+   have material and depth without ever competing with what stands on it.
+   Everything below is built to that one rule: the texture is loud at the
+   edges, where nothing ever stands, and deliberately washed out down the
+   middle, where everything does.
+
+   The whole cross-section is a table rather than arithmetic in the draw, so
+   the profile can be read (and argued with) without running the game.        */
+const PLANK = {
+  pitch:.94,     // nominal board width, world units
+  jit:.34,       // and how far the sawmill missed by, board to board
+  toneN:7,       // boards sort into this many tone buckets, so a hundred and
+  toneA:.125,    // forty boards' worth of colour variation costs seven fills
+  grain:2,       // streaks of grain per board
+  iron:8,        // world units between the iron straps
+  bolts:6,       // bolt heads across each strap
+  rail:4,        // world units between rail posts
+};
+/* lp() is an AFFINE projection: a line of constant y on the deck is a straight
+   line on screen at every x, and the direction x runs in never changes. So one
+   gradient laid on the axis perpendicular to the run of the span colours the
+   whole bridge correctly however far it runs off both sides of the screen —
+   which is the only way to shade a hundred-and-twenty-metre surface without
+   rebuilding the gradient per bay. The numbers are lp()'s own; `dy` and `dz`
+   are how far the gradient advances per world unit across and per world unit
+   down, and `den` is the axis' own squared length. */
+const DECK_AXIS = { x:-.07, y:.96, den:.9265, dy:.6124, dz:.912 };
+function dgrad(c, p, span, stops){
+  const k = span / DECK_AXIS.den;
+  const g = c.createLinearGradient(p[0], p[1], p[0] + DECK_AXIS.x * k, p[1] + DECK_AXIS.y * k);
+  for (let i = 0; i < stops.length; i++) g.addColorStop(stops[i][0], stops[i][1]);
+  return g;
+}
+// The deck in section, far kerb (0) to near kerb (1). In order: the kerb top
+// catching sky, the black angle behind it where no light gets, board opening
+// out, the stripe the far handrail throws across it, bare timber, the angle of
+// the near kerb, and its lit top. Every dark value in here is a CONCAVE corner
+// and every light one faces up or into the sun — one light, all the way down.
+// The kerb is a fifth of a world unit wide — two per cent of this gradient, a
+// couple of pixels even leaning all the way in. Trying to draw it in stops
+// turned the whole far edge of the bridge into fog. It is a LINE, so it is
+// drawn as a line, and the gradient only carries what is genuinely soft: the
+// shadow in the angle behind each kerb, and the stripe the far handrail casts.
+const DECK_SECT = [
+  [0, '#443d31'],
+  [.030, '#82775f'],
+  [.060, '#5d5445'], [.098, '#6f6452'],
+  [.17, '#948769'], [.45, '#a2947a'], [.72, '#9e9075'],
+  [.90, '#8d8067'], [.958, '#544b3c'], [1, '#6d6353'],
+];
+// Aerial perspective, on a surface that has no perspective to give it. The
+// far rail is thirty feet further off than the near one and the air between
+// is the same air that greys out the ridges behind it, so the far strip of
+// deck loses a little contrast and picks up a little of the sky's colour.
+const DECK_HAZE = [
+  [0, 'rgba(146,166,176,.085)'], [.10, 'rgba(146,166,176,.055)'],
+  [.30, 'rgba(146,166,176,0)'], [1, 'rgba(146,166,176,0)'],
+];
+// The track worn down the middle, laid OVER the texture rather than under it:
+// what a hundred thousand boots do to a board is take the grain off it. It
+// doubles as the readability valve — every body, bar and number in the match
+// stands inside this strip, and this is what stops the timber arguing with
+// them. Wide and soft, because a hard-edged worn patch is a decal.
+const DECK_WEAR = [
+  [0, 'rgba(214,207,187,0)'], [.19, 'rgba(214,207,187,0)'],
+  [.31, 'rgba(214,207,187,.055)'], [.41, 'rgba(219,213,194,.185)'],
+  [.50, 'rgba(221,215,197,.205)'], [.59, 'rgba(219,213,194,.185)'],
+  [.69, 'rgba(214,207,187,.055)'], [.81, 'rgba(214,207,187,0)'],
+  [1, 'rgba(214,207,187,0)'],
+];
+// The gap between two boards, the lit lip of the board beyond it, and the
+// grain. All three fade toward the far rail: this projection has no
+// perspective to make the far side smaller, so the far side gets less texture
+// instead — which is what distance actually does to detail.
+const DECK_GAP = [
+  [0, 'rgba(33,28,21,.26)'], [.055, 'rgba(33,28,21,.11)'],
+  [.5, 'rgba(33,28,21,.24)'], [.93, 'rgba(33,28,21,.38)'], [1, 'rgba(33,28,21,.26)'],
+];
+const DECK_LIP = [
+  [0, 'rgba(240,231,206,0)'], [.13, 'rgba(240,231,206,.028)'],
+  [.5, 'rgba(243,234,209,.075)'], [1, 'rgba(243,234,209,.125)'],
+];
+const DECK_GRAIN = [
+  [0, 'rgba(62,52,39,0)'], [.30, 'rgba(62,52,39,.030)'], [1, 'rgba(62,52,39,.085)'],
+];
+// Not every joint on a bridge is the same joint. A third of them have opened
+// up, a third are still tight, and drawing all of them at one weight is what
+// turned a deck of boards into corrugated iron the first time round. Three
+// classes, three strokes, chosen off the same fixed hash as the board tones.
+const DECK_JOINT = [.42, .72, 1];
+// The edge beam you see from this side of the gorge: nosing catching the sky,
+// then straight down into the dark under the span.
+const DECK_FASC = [[0, '#6d6353'], [.10, '#4e463a'], [.44, '#3d372d'], [1, '#28241d']];
+// Where every board on the bridge begins. Built once — the span never changes
+// length, and a table beats re-hashing a hundred and forty boards a frame.
+let PLANK_XS = null;
+function plankXs(){
+  if (PLANK_XS) return PLANK_XS;
+  const a = [];
+  for (let i = 0; ; i++){
+    const x = i * PLANK.pitch + (hash2(i * 1.7, 4.3) - .5) * PLANK.jit;
+    a.push(clamp(x, 0, C.LANE_LEN));
+    if (x >= C.LANE_LEN) break;
+  }
+  PLANK_XS = a;
+  return a;
+}
+// Scratch for the visible run of boards: two screen points per joint, reused
+// frame to frame so a surface this size never allocates.
+const DK_FX = [], DK_FY = [], DK_NX = [], DK_NY = [], DK_B = [], DK_J = [];
+const dquad = (c, ax, ay, bx, by, cx, cy, dx, dy) => {
+  c.moveTo(ax, ay); c.lineTo(bx, by); c.lineTo(cx, cy); c.lineTo(dx, dy); c.closePath();
+};
+
 function drawDeck(c){
   const W = C.LANE_W / 2 + .6;
-  const D = DECK_XS, seg = 4;
-  for (let x = 0; x < C.LANE_LEN; x += seg){
-    const x2 = Math.min(C.LANE_LEN, x + seg);
-    const a = lp(x, -W), b = lp(x2, -W), d = lp(x2, W), e = lp(x, W);
-    if (Math.max(a[0], b[0]) < -80 || Math.min(a[0], b[0]) > LW + 80) continue;
-    const i = Math.floor(x / seg);
-    // The lane you spend the whole match fighting on was two tones alternating
-    // every four units, which at any distance is a stripe. The courses vary
-    // per bay off the same fixed hash the countryside uses, so it reads as
-    // stone somebody laid rather than a repeat.
-    const r = hash2(i * 3.1, 5.7);
-    poly(c, [a, b, d, e], shade(i % 2 ? DECK.top : DECK.top2, .94 + r * .12));
-    // the track worn down the middle by everything that has marched over it
-    const t0 = lp(x, -D.track), t1 = lp(x2, -D.track), t2 = lp(x2, D.track), t3 = lp(x, D.track);
-    poly(c, [t0, t1, t2, t3], shade(DECK.top, .88 + hash2(i * 1.7, 9.3) * .06));
-    // kerbs, outside the walkable lane so nothing ever stands on them
-    for (const s of [-1, 1]){
-      const k0 = lp(x, s * D.kerb), k1 = lp(x2, s * D.kerb), k2 = lp(x2, s * W), k3 = lp(x, s * W);
-      poly(c, [k0, k1, k2, k3], s < 0 ? shade(DECK.top2, 1.06) : shade(DECK.top2, .86));
+  const D = DECK_XS, S = LS(), z = cam.z;
+  // Every line on the deck thickens with the zoom, the faintest included. A
+  // bare `= 1` among these once meant that leaning all the way in thickened
+  // every edge on the bridge except the planks.
+  const lwz = (w) => Math.max(.55 * z, w * z);
+  const xs = plankXs();
+  // Only the boards that can be on screen. At a leaned-in zoom nine tenths of
+  // the span is off the side, and this is the largest surface in the game.
+  const marg = W * S * .52 + 70, inv = 1 / (S * .96);
+  const i0 = clamp(Math.floor((cam.x + (-marg - LW * .5 - cam.sx) * inv) / PLANK.pitch) - 2, 0, xs.length - 1);
+  const i1 = clamp(Math.ceil((cam.x + (LW + marg - LW * .5 - cam.sx) * inv) / PLANK.pitch) + 2, 0, xs.length - 1);
+  const n = i1 - i0;
+  if (n > 0){
+    for (let j = 0; j <= n; j++){
+      const x = xs[i0 + j], f = lp(x, -W), q = lp(x, W);
+      DK_FX[j] = f[0]; DK_FY[j] = f[1]; DK_NX[j] = q[0]; DK_NY[j] = q[1];
+      DK_J[j] = Math.min(2, (hash2((i0 + j) * 7.3, 1.9) * 3) | 0);
+      if (j < n) DK_B[j] = Math.min(PLANK.toneN - 1, (hash2((i0 + j) * 3.1, 5.7) * PLANK.toneN) | 0);
     }
-    // underside so the bridge reads as stone with weight
-    const a2 = lp(x, W, -1.6), b2 = lp(x2, W, -1.6);
-    poly(c, [e, d, b2, a2], DECK.side);
-    poly(c, [a, b, lp(x2, -W, -1.1), lp(x, -W, -1.1)], DECK.edge);
-    // joints: one at every bay, a finer one halfway across it. Scaled like the
-    // rails three lines down — a bare `= 1` here meant that leaning all the way
-    // in thickened every plank edge on the bridge except the planks.
-    c.strokeStyle = 'rgba(40,36,30,.38)'; c.lineWidth = Math.max(1, 1.1 * cam.z);
-    c.beginPath(); c.moveTo(b[0], b[1]); c.lineTo(d[0], d[1]); c.stroke();
-    const h0 = lp(x + seg / 2, -W), h1 = lp(x + seg / 2, W);
-    c.strokeStyle = 'rgba(40,36,30,.16)';
-    c.beginPath(); c.moveTo(h0[0], h0[1]); c.lineTo(h1[0], h1[1]); c.stroke();
+    const acrossW = 2 * W * S * DECK_AXIS.dy;      // one gradient's worth of deck
+    const pFar = [DK_FX[0], DK_FY[0]];
+    // 1. the boards as one surface, lit in section
+    c.fillStyle = dgrad(c, pFar, acrossW, DECK_SECT);
+    c.beginPath();
+    dquad(c, DK_FX[0], DK_FY[0], DK_FX[n], DK_FY[n], DK_NX[n], DK_NY[n], DK_NX[0], DK_NY[0]);
+    c.fill();
+    // 2. and then board by board, sorted into buckets so the variation is
+    //    seven fills instead of a hundred and forty. No board is more than a
+    //    tenth of a tone from its neighbour — enough to break the surface up,
+    //    never enough to read as a pattern.
+    for (let k = 0; k < PLANK.toneN; k++){
+      const d = k / (PLANK.toneN - 1) * 2 - 1;
+      if (Math.abs(d) < .02) continue;
+      let any = false;
+      c.beginPath();
+      for (let j = 0; j < n; j++){
+        if (DK_B[j] !== k) continue;
+        any = true;
+        dquad(c, DK_FX[j], DK_FY[j], DK_FX[j + 1], DK_FY[j + 1], DK_NX[j + 1], DK_NY[j + 1], DK_NX[j], DK_NY[j]);
+      }
+      if (!any) continue;
+      c.fillStyle = d > 0 ? 'rgba(255,246,225,' + (d * PLANK.toneA).toFixed(3) + ')'
+                          : 'rgba(30,24,17,' + (-d * PLANK.toneA).toFixed(3) + ')';
+      c.fill();
+    }
+    // and one board in eleven that has taken more weather than the rest —
+    // rare enough that you notice the board rather than the rule.
+    let stained = false;
+    c.beginPath();
+    for (let j = 0; j < n; j++){
+      if (hash2((i0 + j) * 8.9, 3.7) > .09) continue;
+      stained = true;
+      dquad(c, DK_FX[j], DK_FY[j], DK_FX[j + 1], DK_FY[j + 1], DK_NX[j + 1], DK_NY[j + 1], DK_NX[j], DK_NY[j]);
+    }
+    if (stained){ c.fillStyle = 'rgba(58,45,31,.14)'; c.fill(); }
+    // 3. the track worn down the middle. UNDER the grain and the joints, not
+    //    over them: painted on last it swallowed both and the middle of the
+    //    bridge — the part you actually look at — stopped being boards at all.
+    //    A second, much fainter pass goes on after them for the polish.
+    c.fillStyle = dgrad(c, pFar, acrossW, DECK_WEAR);
+    c.beginPath();
+    dquad(c, DK_FX[0], DK_FY[0], DK_FX[n], DK_FY[n], DK_NX[n], DK_NY[n], DK_NX[0], DK_NY[0]);
+    c.fill();
+    // 3. grain — streaks running the length of each board, which on a bridge
+    //    is ACROSS it. Two per board, offset and cut short off the same fixed
+    //    hash, so no two boards carry the same figure. Off entirely when
+    //    pulled back, where it would only be noise.
+    if (z > .62){
+      c.strokeStyle = dgrad(c, pFar, acrossW, DECK_GRAIN);
+      c.lineWidth = lwz(.85); c.lineCap = 'round';
+      c.beginPath();
+      for (let j = 0; j < n; j++){
+        const bx = xs[i0 + j], bw = xs[i0 + j + 1] - bx;
+        if (bw <= 0) continue;
+        for (let s = 0; s < PLANK.grain; s++){
+          const h = hash2((i0 + j) * 2.9 + s * 13.7, 7.1), h2 = hash2((i0 + j) * 5.3 + s * 3.3, 2.7);
+          const gx = bx + bw * (.20 + h * .58);
+          const y0 = -W + .5 + h2 * (2 * W - 3.2), y1 = Math.min(W - .5, y0 + 1.4 + h * 3.0);
+          // Grain WANDERS. A dead straight streak lying parallel to the joint
+          // it sits next to is just a second joint, and two boards' worth of
+          // those is the corrugated iron this deck used to look like.
+          const a = lp(gx, y0), m = lp(gx + (h2 - .5) * .14, (y0 + y1) * .5), b = lp(gx, y1);
+          c.moveTo(a[0], a[1]); c.lineTo(m[0], m[1]); c.lineTo(b[0], b[1]);
+        }
+      }
+      c.stroke();
+      c.lineCap = 'butt';
+    }
+    // 4. the gap between boards, and 5. the lit lip of the one beyond it.
+    //    The sun is up and to the LEFT, and +x runs right across the screen,
+    //    so the low-x face of every joint is the one it reaches: dark line,
+    //    highlight a pixel to the right of it, every time, all the way down
+    //    the bridge. This is the single thing that makes the deck read as
+    //    boards rather than a painted grid.
+    const lip = Math.max(1, .9 * z);
+    const gGap = dgrad(c, pFar, acrossW, DECK_GAP);
+    const gLip = dgrad(c, [pFar[0] + lip, pFar[1]], acrossW, DECK_LIP);
+    for (let k = 0; k < 3; k++){
+      c.globalAlpha = DECK_JOINT[k];
+      c.lineWidth = lwz(.85 + k * .22);
+      c.strokeStyle = gGap;
+      c.beginPath();
+      for (let j = 0; j <= n; j++){
+        if (DK_J[j] !== k) continue;
+        c.moveTo(DK_FX[j], DK_FY[j]); c.lineTo(DK_NX[j], DK_NY[j]);
+      }
+      c.stroke();
+      c.lineWidth = lwz(.8);
+      c.strokeStyle = gLip;
+      c.beginPath();
+      for (let j = 0; j <= n; j++){
+        if (DK_J[j] !== k) continue;
+        c.moveTo(DK_FX[j] + lip, DK_FY[j]); c.lineTo(DK_NX[j] + lip, DK_NY[j]);
+      }
+      c.stroke();
+    }
+    c.globalAlpha = 1;
+    // 6. iron. Straps across the deck at every bay with bolt heads through
+    //    them — the thing that says this is a bridge and not a floor. Each
+    //    strap is a dark band, a lit leading edge and a shadow line behind,
+    //    and the heads only appear once they are big enough to be heads.
+    const ir0 = Math.ceil(xs[i0] / PLANK.iron), ir1 = Math.floor(xs[i1] / PLANK.iron);
+    for (let k = ir0; k <= ir1; k++){
+      const bx = k * PLANK.iron, hw = .23;
+      const a = lp(bx - hw, -W), b = lp(bx + hw, -W), d2 = lp(bx + hw, W), e2 = lp(bx - hw, W);
+      // Iron is COOLER than the timber around it as well as darker. A warm
+      // dark band on warm boards is a dirty board; the blue in it is the
+      // whole difference between metal and a stain.
+      c.fillStyle = 'rgba(44,46,48,.46)';
+      c.beginPath(); dquad(c, a[0], a[1], b[0], b[1], d2[0], d2[1], e2[0], e2[1]); c.fill();
+      c.lineWidth = lwz(.8);
+      c.strokeStyle = 'rgba(206,201,186,.26)';
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(e2[0], e2[1]); c.stroke();
+      c.strokeStyle = 'rgba(20,17,13,.34)';
+      c.beginPath(); c.moveTo(b[0] + lip, b[1]); c.lineTo(d2[0] + lip, d2[1]); c.stroke();
+      if (z < .8) continue;
+      // A bolt head is a dome: a seated shadow, the head, and one specular
+      // clip up and to the left where the sun is. Three passes over the whole
+      // strap rather than three per bolt, so it costs three fills.
+      const br = Math.max(1.1, 1.05 * z), dy = (2 * W - 1.8) / (PLANK.bolts - 1);
+      const bolt = (ox, oy, rx, ry) => {
+        c.beginPath();
+        for (let m = 0; m < PLANK.bolts; m++){
+          const p = lp(bx, -W + .9 + m * dy);
+          c.ellipse(p[0] + ox, p[1] + oy, rx, ry, 0, 0, 6.2832);
+        }
+        c.fill();
+      };
+      c.fillStyle = 'rgba(16,14,11,.42)'; bolt(br * .34, br * .30, br * .92, br * .70);
+      c.fillStyle = 'rgba(96,98,99,.85)'; bolt(0, 0, br * .82, br * .62);
+      c.fillStyle = 'rgba(226,222,206,.55)'; bolt(-br * .26, -br * .22, br * .38, br * .28);
+    }
+    // 7. what the far handrail throws on the boards. Only the far one: the
+    //    sun is behind the viewer's left shoulder, so the near rail's shadow
+    //    falls off the bridge and into the gorge, and drawing it would be a
+    //    lie the rest of the lighting could be checked against.
+    const shx = D.railH * 1.75, shy = D.railH * .42;
+    c.fillStyle = 'rgba(34,29,22,.26)';
+    c.beginPath();
+    for (let px = Math.ceil(xs[i0] / PLANK.rail) * PLANK.rail; px <= xs[i1]; px += PLANK.rail){
+      const a = lp(px - .13, -W), b = lp(px + .13, -W);
+      const d2 = lp(px + .13 + shx, -W + shy), e2 = lp(px - .13 + shx, -W + shy);
+      dquad(c, a[0], a[1], b[0], b[1], d2[0], d2[1], e2[0], e2[1]);
+      // the cap on top of the post, thrown wider than the post below it
+      const c0 = lp(px - .26 + shx, -W + shy), c1 = lp(px + .26 + shx, -W + shy);
+      const c2 = lp(px + .26 + shx * 1.12, -W + shy * 1.12), c3 = lp(px - .26 + shx * 1.12, -W + shy * 1.12);
+      dquad(c, c0[0], c0[1], c1[0], c1[1], c2[0], c2[1], c3[0], c3[1]);
+    }
+    c.fill();
+    // 8. the polish: boots take the grain off before they take the board off,
+    //    so the last thing over the track is a thin wash that softens the
+    //    texture rather than hiding it.
+    c.globalAlpha = .38;
+    c.fillStyle = dgrad(c, pFar, acrossW, DECK_WEAR);
+    c.beginPath();
+    dquad(c, DK_FX[0], DK_FY[0], DK_FX[n], DK_FY[n], DK_NX[n], DK_NY[n], DK_NX[0], DK_NY[0]);
+    c.fill();
+    c.globalAlpha = 1;
+    // 9. what collects where nobody walks: moss in the angle of both kerbs.
+    //    Small and many rather than big and soft — one large blur reads as a
+    //    stain on the lens, three small ones read as something growing.
+    if (z > .55){
+      c.fillStyle = 'rgba(112,126,78,.20)';
+      c.beginPath();
+      for (let j = 0; j < n; j++){
+        const h = hash2((i0 + j) * 6.1, 11.3);
+        if (h > .34) continue;
+        const bx = xs[i0 + j], sgn = h < .17 ? -1 : 1;
+        const h2 = hash2((i0 + j) * 4.7, 8.9);
+        const p = lp(bx + .35, sgn * (D.kerb - .12 - h2 * .62));
+        c.ellipse(p[0], p[1], (.30 + h * 1.5) * S * .16, (.22 + h * .8) * S * .10, 0, 0, 6.2832);
+      }
+      c.fill();
+      // and the grit that packs into a joint at the edge of the deck
+      c.fillStyle = 'rgba(56,48,34,.20)';
+      c.beginPath();
+      for (let j = 0; j <= n; j++){
+        const h = hash2((i0 + j) * 9.7, 5.1);
+        if (h > .30) continue;
+        const sgn = h < .15 ? -1 : 1, len = .5 + h * 3.0;
+        const y0 = sgn * (D.kerb - .1), y1 = sgn * Math.max(D.track, D.kerb - .1 - len);
+        const a = lp(xs[i0 + j] - .07, y0), b = lp(xs[i0 + j] + .07, y0);
+        const d3 = lp(xs[i0 + j] + .07, y1), e3 = lp(xs[i0 + j] - .07, y1);
+        dquad(c, a[0], a[1], b[0], b[1], d3[0], d3[1], e3[0], e3[1]);
+      }
+      c.fill();
+    }
+    // 9b. and the air over the far half of it
+    c.fillStyle = dgrad(c, pFar, acrossW, DECK_HAZE);
+    c.beginPath();
+    dquad(c, DK_FX[0], DK_FY[0], DK_FX[n], DK_FY[n], DK_NX[n], DK_NY[n], DK_NX[0], DK_NY[0]);
+    c.fill();
+    // 10. the kerbs: raised edging, outside the lane so nothing ever stands on
+    //     one. The section gradient already has the shadow in the angle of
+    //     both of them; all that is left is the arris — one crisp line where
+    //     the deck stops and the kerb starts, which is the edge that tells you
+    //     the kerb is raised rather than painted on.
+    const kw = lwz(.9);
+    for (const s of [-1, 1]){
+      const k0 = lp(xs[i0], s * D.kerb), k1 = lp(xs[i1], s * D.kerb);
+      // the shadow the kerb drops onto the deck beside it...
+      c.lineWidth = kw;
+      c.strokeStyle = s < 0 ? 'rgba(21,18,14,.34)' : 'rgba(21,18,14,.24)';
+      c.beginPath(); c.moveTo(k0[0], k0[1] - s * kw); c.lineTo(k1[0], k1[1] - s * kw); c.stroke();
+      // ...and the top of the kerb itself, which faces the sky
+      c.strokeStyle = s < 0 ? 'rgba(214,206,184,.22)' : 'rgba(224,214,188,.16)';
+      c.beginPath(); c.moveTo(k0[0], k0[1]); c.lineTo(k1[0], k1[1]); c.stroke();
+    }
+    // The silhouette. Everything past this line is thirty feet of air and then
+    // the far wall of the gorge, and until it was drawn as one hard edge the
+    // whole far side of the bridge dissolved into the haze over it.
+    c.lineWidth = lwz(1.15);
+    c.strokeStyle = 'rgba(226,221,203,.34)';
+    c.beginPath(); c.moveTo(DK_FX[0], DK_FY[0]); c.lineTo(DK_FX[n], DK_FY[n]); c.stroke();
+    // 11. the near fascia — the edge beam, with the bolts of every strap
+    //     coming through it so the iron on top has something to hold on to.
+    //     The deck's own silhouette is the top of it: a convex corner facing
+    //     the sky, so it takes a hard highlight, not the shadow it used to.
+    const f0 = lp(xs[i0], W), f1 = lp(xs[i1], W);
+    const g0 = lp(xs[i0], W, -1.7), g1 = lp(xs[i1], W, -1.7);
+    c.fillStyle = dgrad(c, f0, 1.7 * S * DECK_AXIS.dz, DECK_FASC);
+    c.beginPath(); dquad(c, f0[0], f0[1], f1[0], f1[1], g1[0], g1[1], g0[0], g0[1]); c.fill();
+    c.lineWidth = lwz(1.0);
+    c.strokeStyle = 'rgba(228,214,182,.22)';
+    c.beginPath(); c.moveTo(f0[0], f0[1]); c.lineTo(f1[0], f1[1]); c.stroke();
+    if (z > .8){
+      const br = Math.max(1, .8 * z);
+      c.fillStyle = 'rgba(24,20,16,.42)';
+      c.beginPath();
+      for (let k = ir0; k <= ir1; k++){
+        const p = lp(k * PLANK.iron, W, -.75);
+        c.ellipse(p[0], p[1], br, br, 0, 0, 6.2832);
+      }
+      c.fill();
+    }
   }
-  // railings: posts with a capped top, a top rail and a lower one
+  // railings: posts with a capped top, a top rail and a lower one. The far
+  // rail is picked out against the sky and the near one sits in front of the
+  // gorge, so they cannot be the same value and read as one pair of rails.
   for (const side of [-1, 1]){
-    const y = side * W;
-    for (let x = 0; x <= C.LANE_LEN; x += 4){
+    const y = side * W, far = side < 0;
+    const post = far ? '#8a8070' : '#5f5749';
+    for (let x = 0; x <= C.LANE_LEN; x += PLANK.rail){
       const p0 = lp(x, y), p1 = lp(x, y, D.railH);
       if (p0[0] < -40 || p0[0] > LW + 40) continue;
-      c.strokeStyle = DECK.rail; c.lineWidth = Math.max(1, 2.6 * cam.z);
+      // where the post meets the boards
+      c.fillStyle = 'rgba(28,24,18,.30)';
+      c.beginPath(); c.ellipse(p0[0], p0[1], Math.max(1.4, 3.1 * z), Math.max(.8, 1.5 * z), 0, 0, 6.2832); c.fill();
+      c.strokeStyle = shade(post, .78); c.lineWidth = Math.max(1.1, 2.9 * z);
       c.beginPath(); c.moveTo(p0[0], p0[1]); c.lineTo(p1[0], p1[1]); c.stroke();
-      c.fillStyle = shade(DECK.rail, 1.3);
-      c.fillRect(p1[0] - 2 * cam.z, p1[1] - 2 * cam.z, 4 * cam.z, 2.4 * cam.z);
-      const xn = Math.min(C.LANE_LEN, x + 4);
+      c.strokeStyle = shade(post, 1.08); c.lineWidth = Math.max(.7, 1.3 * z);
+      c.beginPath(); c.moveTo(p0[0] - z, p0[1]); c.lineTo(p1[0] - z, p1[1]); c.stroke();
+      c.fillStyle = shade(post, 1.26);
+      c.fillRect(p1[0] - 2 * z, p1[1] - 2 * z, 4 * z, 2.4 * z);
+      const xn = Math.min(C.LANE_LEN, x + PLANK.rail);
       const q = lp(xn, y, D.railH), qm = lp(xn, y, D.railH * .48), pm = lp(x, y, D.railH * .48);
-      c.strokeStyle = shade(DECK.rail, 1.15); c.lineWidth = Math.max(1, 2.2 * cam.z);
-      c.beginPath(); c.moveTo(p1[0], p1[1]); c.lineTo(q[0], q[1]); c.stroke();
-      c.strokeStyle = shade(DECK.rail, .82); c.lineWidth = Math.max(1, 1.6 * cam.z);
+      c.strokeStyle = shade(post, .70); c.lineWidth = Math.max(1, 2.4 * z);
+      c.beginPath(); c.moveTo(p1[0], p1[1] + .9 * z); c.lineTo(q[0], q[1] + .9 * z); c.stroke();
+      c.strokeStyle = shade(post, 1.18); c.lineWidth = Math.max(.7, 1.5 * z);
+      c.beginPath(); c.moveTo(p1[0], p1[1] - .7 * z); c.lineTo(q[0], q[1] - .7 * z); c.stroke();
+      c.strokeStyle = shade(post, .82); c.lineWidth = Math.max(.9, 1.7 * z);
       c.beginPath(); c.moveTo(pm[0], pm[1]); c.lineTo(qm[0], qm[1]); c.stroke();
     }
   }
