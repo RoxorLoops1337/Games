@@ -203,11 +203,14 @@ export function concrete(size, seed = 101, o = {}) {
     }
   }
 
-  // Tie-rod holes sit on the formwork grid: board joint crossings, every other one.
+  // Tie-rod holes sit on the formwork grid. Kept sparse and shallow in albedo
+  // on purpose: they are the most *identifiable* feature in the tile, and a
+  // strong identifiable feature is what turns a repeat into a visible lattice
+  // across a thirty-metre wall.
   const rnd = mulberry32(seed * 7919);
   for (let by = 0; by < boards; by++) {
     for (let bx = 0; bx < joints * 2; bx++) {
-      if (rnd() < 0.35) continue;
+      if (rnd() < 0.55) continue;
       const cx = (bx + 0.5) / (joints * 2), cy = (by + 0.35 + rnd() * 0.3) / boards;
       const r = 0.018 + rnd() * 0.006, lip = rnd() * 0.5;
       stampDisc(size, cx, cy, r, (i, d, ang) => {
@@ -216,7 +219,7 @@ export function concrete(size, seed = 101, o = {}) {
         const bite = 1 + Math.cos(ang * 3 + lip * 9) * 0.10 + Math.cos(ang * 7) * 0.05;
         const cone = 1 - N.sstep(0.5 * bite, 1.0 * bite, d);
         S.h[i] -= cone * 0.20;
-        S.cr[i] *= 1 - cone * 0.34; S.cg[i] *= 1 - cone * 0.34; S.cb[i] *= 1 - cone * 0.32;
+        S.cr[i] *= 1 - cone * 0.22; S.cg[i] *= 1 - cone * 0.22; S.cb[i] *= 1 - cone * 0.20;
         S.r[i] = N.clamp01(S.r[i] + cone * 0.05);
       });
     }
@@ -306,7 +309,7 @@ export function metal(size, seed = 211, o = {}) {
   // Bolt heads along the seams. Domed, with a shadowed collar and a rust weep
   // below — bolts are the first thing to go and the eye reads them as scale.
   const rnd = mulberry32(seed * 104729);
-  const perSeam = Math.max(4, Math.round(6 * (size / 512) + 4));
+  const perSeam = o.bolts === 0 ? 0 : Math.max(4, Math.round(6 * (size / 512) + 4));
   for (let s = 0; s < panelsU; s++) {
     for (let k = 0; k < perSeam; k++) {
       if (rnd() < 0.12) continue;
@@ -318,11 +321,15 @@ export function metal(size, seed = 211, o = {}) {
         S.h[i] += head * dome * 0.10 - (1 - head) * 0.05;
         const hexFace = 0.5 + 0.5 * Math.cos(ang * 6);
         const shade = 0.75 + hexFace * 0.25;
-        S.cr[i] = N.mix(S.cr[i], N.mix(0.38, 0.70, rustyBolt) * shade, head * 0.85);
-        S.cg[i] = N.mix(S.cg[i], N.mix(0.19, 0.71, rustyBolt) * shade, head * 0.85);
-        S.cb[i] = N.mix(S.cb[i], N.mix(0.09, 0.73, rustyBolt) * shade, head * 0.85);
-        S.r[i] = N.mix(S.r[i], N.mix(0.88, 0.34, rustyBolt), head * 0.8);
-        S.m[i] = N.mix(S.m[i], N.mix(0.30, 0.9, rustyBolt), head * 0.8);
+        // Most bolts went in before the panel was painted, so most of them are
+        // the panel colour with a shadow around the head; only the ones water
+        // has found are rust, and only a few are bare steel.
+        const w = head * (rustyBolt < 0.55 ? 0.35 : 0.8);
+        S.cr[i] = N.mix(S.cr[i], N.mix(0.38, 0.58, rustyBolt) * shade, w);
+        S.cg[i] = N.mix(S.cg[i], N.mix(0.19, 0.59, rustyBolt) * shade, w);
+        S.cb[i] = N.mix(S.cb[i], N.mix(0.09, 0.61, rustyBolt) * shade, w);
+        S.r[i] = N.mix(S.r[i], N.mix(0.88, 0.38, rustyBolt), w);
+        S.m[i] = N.mix(S.m[i], N.mix(0.30, 0.9, rustyBolt), w);
       });
     }
   }
@@ -708,7 +715,7 @@ export const RECIPES = {
   concrete: { fn: concrete, hero: true },
   metal: { fn: metal },
   rust: { fn: (s, seed) => metal(s, seed, { rust: 0.42, paint: [0.30, 0.16, 0.09], paintRough: 0.85 }) },
-  gunmetal: { fn: (s, seed) => metal(s, seed, { paint: [0.30, 0.305, 0.32], paintMetal: 0.86, paintRough: 0.44, rust: -0.24, panelsU: 1, panelsV: 1 }) },
+  gunmetal: { fn: (s, seed) => metal(s, seed, { paint: [0.30, 0.305, 0.32], paintMetal: 0.86, paintRough: 0.44, rust: -0.30, panelsU: 1, panelsV: 1, bolts: 0 }) },
   sand: { fn: sand },
   sandFloor: { fn: ground, hero: true },
   wood: { fn: wood },

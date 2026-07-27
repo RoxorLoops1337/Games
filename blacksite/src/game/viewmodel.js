@@ -69,10 +69,10 @@ export function createViewmodel(G, engine, materials) {
   // the key here is a mirror of whatever directional light the world is using,
   // re-aimed at the weapon every frame, and the environment comes straight from
   // the world's IBL when there is one.
-  const key = new THREE.DirectionalLight(0xffeeda, 2.4);
+  const key = new THREE.DirectionalLight(0xffeeda, 3.0);
   const keyTarget = new THREE.Object3D();
   key.castShadow = false;
-  const fill = new THREE.HemisphereLight(0x8fb4d8, 0x2b2620, 0.85);
+  const fill = new THREE.HemisphereLight(0x9cc0e4, 0x38312a, 1.30);
   // A cold rim from behind and above picks the top edges of the receiver out
   // against the world, which is the only thing keeping a dark gun readable in a
   // dark corridor.
@@ -545,7 +545,7 @@ export function createViewmodel(G, engine, materials) {
       if (sun.dir.lengthSq() < 1e-6) sun.dir.set(-0.42, 0.34, -0.62);
       sun.dir.normalize();
       key.color.copy(sun.light.color);
-      key.intensity = clamp(sun.light.intensity * 0.75, 0.8, 3.2);
+      key.intensity = clamp(sun.light.intensity * 0.95, 1.6, 3.6);
     }
     const at = engine.viewCam.position;
     keyTarget.position.copy(at);

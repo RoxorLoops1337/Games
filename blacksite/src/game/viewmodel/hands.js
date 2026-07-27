@@ -16,10 +16,10 @@
 import * as THREE from 'three';
 import { roundRectPts, sweep, frameChain, tubeCurve, latheZ, partBin } from './geometry.js';
 
-const GLOVE = 0x33383a;      // dark nomex, slightly cool
-const GLOVE_HI = 0x474d50;   // the knuckle and finger crowns catch light
-const CUFF = 0x23282a;
-const SLEEVE = 0x4c4636;     // fatigue tan, desaturated
+const GLOVE = 0x4a5153;      // dark nomex, slightly cool
+const GLOVE_HI = 0x646c70;   // the knuckle and finger crowns catch light
+const CUFF = 0x363c3f;
+const SLEEVE = 0x6b634e;     // fatigue tan, desaturated
 
 // A finger is a tube through three control points on a circle around the grip.
 // Real fingers are not circular arcs, so the middle point is pushed slightly

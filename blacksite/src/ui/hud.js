@@ -24,7 +24,7 @@ const CH_C = CH_SIZE / 2;
 const CH_GAP_MIN = 3.0;           // crouched, still, nothing happening
 const CH_GAP_BASE = 7.5;          // standing, still
 const CH_GAP_MAX = 52;            // sprinting, mid-burst, in the air
-const CH_TICK = 8.5;
+const CH_TICK = 10;
 const CH_RELOAD_R = 30;
 
 // The compass tape shows a 140° window. Wider and the marks crowd together;
@@ -803,9 +803,9 @@ const CSS = `
 /* Contrast without a panel: a wide dark stroke under a thin bright one, plus a
    drop shadow on the text. Legible on white sky and on black concrete alike. */
 #hud #crosshair{width:${CH_SIZE}px;height:${CH_SIZE}px}
-#hud .ch-sh{fill:none;stroke:rgba(0,0,0,.6);stroke-width:4.2;stroke-linecap:round}
-#hud circle.ch-sh{fill:rgba(0,0,0,.6);stroke:none}
-#hud .ch-tk{fill:none;stroke:rgba(236,244,251,.96);stroke-width:1.7;stroke-linecap:round}
+#hud .ch-sh{fill:none;stroke:rgba(0,0,0,.62);stroke-width:4.8;stroke-linecap:round}
+#hud circle.ch-sh{fill:rgba(0,0,0,.62);stroke:none}
+#hud .ch-tk{fill:none;stroke:rgba(238,245,252,.98);stroke-width:2.1;stroke-linecap:round}
 #hud circle.ch-tk{fill:rgba(236,244,251,.98);stroke:none}
 #hud .ch-rl{fill:none;stroke:var(--amber);stroke-width:2.2;stroke-linecap:round;opacity:0;
   filter:drop-shadow(0 0 2px rgba(0,0,0,.85))}
@@ -834,8 +834,8 @@ const CSS = `
 #hud .dmgnum .dn.head{color:var(--amber);font-size:18px}
 #hud .dmgnum .dn.head::after{content:'\\00a0\\25B2';font-size:9px;vertical-align:.28em}
 
-#hud .co-t{stroke:rgba(200,214,226,.45);stroke-width:1.2}
-#hud .co-major{stroke:rgba(232,240,247,.9);stroke-width:1.6}
+#hud .co-t{stroke:rgba(208,220,232,.6);stroke-width:1.3}
+#hud .co-major{stroke:rgba(238,245,252,.95);stroke-width:1.8}
 #hud .co-lab{fill:rgba(232,240,247,.92);font:600 11px var(--ui);letter-spacing:.1em}
 #hud .co-index{fill:var(--amber)}
 #hud .co-pip{fill:var(--bad)}
@@ -874,6 +874,8 @@ const CSS = `
 #hud #killfeed div.out{animation:bs-feed-out .4s forwards}
 @keyframes bs-feed-out{to{opacity:0;transform:translateX(14px)}}
 
+#hud #objective{max-width:min(34ch,30vw)}
+#hud #objective span{display:block;line-height:1.55;color:rgba(226,235,243,.86)}
 #hud #ammo,#hud #health,#hud #objective,#hud #killfeed,#hud #toast{
   text-shadow:0 1px 4px rgba(0,0,0,.85),0 0 12px rgba(0,0,0,.45)}
 

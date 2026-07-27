@@ -612,7 +612,11 @@ function playGun(rig, o) {
     shape.curve = satCurve(2.2, true);   // the near-field of a muzzle is genuinely non-linear
     shape.oversample = '2x';
     const vg = ctx.createGain();
-    ar(vg.gain, when, blastLvl * 1.15, 0.0004, g.blastDec);
+    // The 2.4 is not a taste knob: a Q≈0.6 bandpass throws away most of a white
+    // noise source's amplitude, and the peak overpressure of a real muzzle blast
+    // is the transient — if the body layer ends up owning the loudest sample the
+    // shot has been built backwards.
+    ar(vg.gain, when, blastLvl * 2.4, 0.0004, g.blastDec);
     src.connect(bp); bp.connect(shape); shape.connect(vg); vg.connect(sink);
     V.nodes.push(bp, shape, vg);
   }
@@ -637,25 +641,31 @@ function playGun(rig, o) {
   // pitched pulse from the gas column (swept sine) and a broadband thump
   // (resonant-lowpassed noise). Either alone sounds synthetic.
   {
+    // Offset behind the blast by ~2 ms: the shock front leaves first and the gas
+    // column's resonance only establishes itself behind it. It is a small number
+    // but it is what keeps the leading edge in the hands of the transient.
+    const t0 = when + 0.002;
     const dur = tailOf(0.001, g.bodyDec) + 0.02;
-    const o1 = osc(rig, when, dur, 'sine');
-    o1.frequency.setValueAtTime(g.bodyHi, when);
-    o1.frequency.exponentialRampToValueAtTime(g.bodyLo, when + g.bodyDec * 1.6);
-    const o2 = osc(rig, when, dur, 'triangle');
-    o2.frequency.setValueAtTime(g.bodyHi * 0.62, when);
-    o2.frequency.exponentialRampToValueAtTime(g.bodyLo * 0.55, when + g.bodyDec * 1.9);
+    const o1 = osc(rig, t0, dur, 'sine');
+    o1.frequency.setValueAtTime(g.bodyHi, t0);
+    o1.frequency.exponentialRampToValueAtTime(g.bodyLo, t0 + g.bodyDec * 1.6);
+    const o2 = osc(rig, t0, dur, 'triangle');
+    o2.frequency.setValueAtTime(g.bodyHi * 0.62, t0);
+    o2.frequency.exponentialRampToValueAtTime(g.bodyLo * 0.55, t0 + g.bodyDec * 1.9);
     const vg = ctx.createGain();
-    ar(vg.gain, when, blastLvl * g.bodyLvl, 0.0009, g.bodyDec);
+    ar(vg.gain, t0, blastLvl * g.bodyLvl, 0.0009, g.bodyDec);
     const o2g = ctx.createGain(); o2g.gain.value = 0.45;
     o1.connect(vg); o2.connect(o2g); o2g.connect(vg); vg.connect(sink);
 
-    const nsrc = noiseSrc(rig, when, dur, rnd(0.9, 1.1));
+    const nsrc = noiseSrc(rig, t0, dur, rnd(0.9, 1.1));
     const lp = ctx.createBiquadFilter();
-    lp.type = 'lowpass'; lp.Q.value = 6;
-    lp.frequency.setValueAtTime(g.bodyHi * 4.2, when);
-    lp.frequency.exponentialRampToValueAtTime(g.bodyLo * 1.6, when + g.bodyDec * 2.2);
+    // Q 4 rather than 6: any higher and the filter rings on past the pulse that
+    // excited it, which pushes the loudest sample of the shot into the body.
+    lp.type = 'lowpass'; lp.Q.value = 4;
+    lp.frequency.setValueAtTime(g.bodyHi * 4.2, t0);
+    lp.frequency.exponentialRampToValueAtTime(g.bodyLo * 1.6, t0 + g.bodyDec * 2.2);
     const ng = ctx.createGain();
-    ar(ng.gain, when, blastLvl * g.bodyLvl * 0.8, 0.0006, g.bodyDec * 1.2);
+    ar(ng.gain, t0, blastLvl * g.bodyLvl * 0.6, 0.0006, g.bodyDec * 1.2);
     nsrc.connect(lp); lp.connect(ng); ng.connect(sink);
     V.nodes.push(vg, o2g, lp, ng);
   }

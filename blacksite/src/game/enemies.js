@@ -134,6 +134,8 @@ export function createEnemyRigs(G, engine, materials) {
     rig.flinchP.x = rig.flinchP.v = rig.flinchR.x = rig.flinchR.v = 0;
     rig.stagger = 0;
     rig.hp = rig.lastHp = 1;
+    rig.lastShots = 0;
+    rig.spawnT = 0;
   }
 
   // ── frame ──────────────────────────────────────────────────────────────────
@@ -324,9 +326,9 @@ function createRig(assets, boneInverses, engine, index) {
     blink: 0, blinkNext: 1 + Math.random() * 3, gazeShift: 0, gazeX: 0,
     recoil: makeSpring(), flinchP: makeSpring(), flinchR: makeSpring(),
     stagger: 0, staggerDir: 0,
-    reloadT: -1, reloadDur: 2.1,
+    reloadT: -1, reloadDur: 2.1, lastShots: 0,
     hp: 1, lastHp: 1, deadT: 0, spawnT: 0,
-    lod: 0, groundY: 0, groundT: 0,
+    lod: 0, groundY: 0, groundT: 0, groundHit: false,
     ragdoll: null, ragSettle: 0,
   };
   applyQuality(rig, 3);
@@ -404,9 +406,10 @@ function readEnemy(rig, e, G, dt) {
   rig.aimW = approach(rig.aimW, engaged ? 1 : 0.18, 5.5, dt);
   rig.sprintW = approach(rig.sprintW, smoothstep(4.3, 6.2, rig.speed) * (engaged ? 0.25 : 1), 4, dt);
 
+  // `lean` is the signed one; `peek` on its own is an amount without a side.
   let peek = 0;
-  if (Number.isFinite(e.peek)) peek = clamp(e.peek, -1, 1);
-  else if (Number.isFinite(e.lean)) peek = clamp(e.lean, -1, 1);
+  if (Number.isFinite(e.lean)) peek = clamp(e.lean, -1, 1);
+  else if (Number.isFinite(e.peek)) peek = clamp(e.peek * (e.peekSide || 1), -1, 1);
   else if (/peekleft|leanleft/i.test(state)) peek = -1;
   else if (/peekright|leanright/i.test(state)) peek = 1;
   rig.peekW = approach(rig.peekW, peek, 6, dt);
@@ -422,7 +425,23 @@ function readEnemy(rig, e, G, dt) {
   }
   rig.lastHp = rig.hp = hp;
 
-  if (rig.reloadT < 0 && RE_RELOAD.test(state)) startReload(rig, e.reloadTime);
+  // Shots and reloads, read straight off the simulation's own counters. The
+  // event hooks below do the same job a frame earlier; polling is what keeps the
+  // rig honest if nobody ever wires them.
+  const shots = Number.isFinite(e.shotsFired) ? e.shotsFired : 0;
+  if (shots > rig.lastShots) fireImpulse(rig);
+  rig.lastShots = shots;
+
+  if (Number.isFinite(e.reloadT) && e.reloadT > 0) {
+    // The sim counts a reload down; the animation runs it up. Driving the clip
+    // off the remaining time means the hand slaps the magazine home exactly when
+    // the weapon says it is loaded.
+    const dur = (e.weapon && e.weapon.reload) || rig.reloadDur;
+    rig.reloadDur = dur;
+    rig.reloadT = clamp(dur - e.reloadT, 0, dur);
+  } else if (Number.isFinite(e.reloadT) && rig.reloadT >= 0 && e.reloadT <= 0) {
+    rig.reloadT = -1;
+  } else if (rig.reloadT < 0 && RE_RELOAD.test(state)) startReload(rig, e.reloadTime);
 
   if (rig.mode === 'alive' && (e.alive === false || hp <= 0)) beginDeath(rig, null, G);
   rig.spawnT += Math.max(dt, 1e-6);

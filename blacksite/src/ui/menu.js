@@ -251,7 +251,7 @@ export function createMenu(G, root, cb) {
   function bindsTable() {
     const g = el(doc, 'div', 'keys');
     const order = [
-      ['Move', ['fwd', 'back', 'left', 'right']], ['Jump', ['jump']], ['Sprint', ['sprint']],
+      ['Move', ['fwd', 'left', 'back', 'right']], ['Jump', ['jump']], ['Sprint', ['sprint']],
       ['Crouch / slide', ['crouch']], ['Reload', ['reload']], ['Melee', ['melee']],
       ['Grenade', ['grenade']], ['Interact', ['use']], ['Knife', ['knife']],
       ['Lean', ['lean_l', 'lean_r']], ['Weapons', ['slot1', 'slot2', 'slot3']],
@@ -267,7 +267,16 @@ export function createMenu(G, root, cb) {
     for (const [label, actions] of order) {
       const keys = [];
       for (const a of actions) for (const k of byAction[a] || []) if (!keys.includes(k)) keys.push(k);
-      if (keys.length) add(label, keys.join('  '));
+      if (!keys.length) continue;
+      // Movement binds two whole sets of keys and reads as noise on one line, so
+      // anything long gets split into the letters and the alternates.
+      let out = keys.join('  ');
+      if (out.length > 16) {
+        const single = keys.filter((k) => k.length === 1);
+        const rest = keys.filter((k) => k.length !== 1);
+        out = [single.join(' '), rest.join(' ')].filter(Boolean).join('   ·   ');
+      }
+      add(label, out);
     }
     add('Fire', 'Left mouse');
     add('Aim down sights', 'Right mouse');
@@ -410,7 +419,7 @@ function pct(v) { return Math.round(v * 100) + '%'; }
 function keyLabel(code) {
   if (code.startsWith('Key')) return code.slice(3);
   if (code.startsWith('Digit')) return code.slice(5);
-  if (code.startsWith('Arrow')) return code.slice(5) + ' arrow';
+  if (code.startsWith('Arrow')) return { Up: '↑', Down: '↓', Left: '←', Right: '→' }[code.slice(5)] || code;
   const named = {
     Space: 'Space', ShiftLeft: 'Shift', ShiftRight: 'R-Shift', ControlLeft: 'Ctrl',
     ControlRight: 'R-Ctrl', Tab: 'Tab', Escape: 'Esc', Enter: 'Enter',
@@ -426,7 +435,9 @@ const CSS = `
 #menu{overflow:auto;padding:28px 20px}
 #menu [data-screen]{display:none}
 #menu [data-screen].on{display:block;max-height:calc(100vh - 56px);overflow:auto}
-#menu .panel.wide{min-width:min(620px,94vw)}
+#menu .panel.wide{min-width:min(560px,94vw);max-width:min(680px,94vw)}
+#menu .panel.wide .row{padding:7px 2px}
+#menu [data-screen=main] h2{font-size:23px;letter-spacing:.5em;text-indent:.5em}
 #menu .panel h2{position:relative;padding-bottom:12px}
 #menu .panel h2::after{content:'';position:absolute;left:0;right:0;bottom:4px;height:1px;
   background:linear-gradient(90deg,var(--amber-dim),transparent)}
@@ -435,7 +446,8 @@ const CSS = `
 
 #menu button.primary{border-left-color:var(--amber-dim);background:rgba(255,182,72,.06)}
 #menu button.ghost{color:#8d9caa;font-size:12px;padding:9px 16px}
-#menu :focus-visible{outline:1px solid var(--amber);outline-offset:2px}
+#menu :focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+#menu .sw input:focus-visible{outline-offset:3px}
 
 #menu .sect{margin:20px 0 4px;font-size:10px;letter-spacing:.34em;text-transform:uppercase;
   color:var(--amber-dim)}
@@ -465,9 +477,10 @@ const CSS = `
   border-bottom:1px solid rgba(159,176,189,.08)}
 #menu .srow b{color:var(--amber);font-weight:600;font-variant-numeric:tabular-nums}
 
-#menu .krow{display:flex;justify-content:space-between;gap:18px;
+#menu .krow{display:flex;justify-content:space-between;gap:18px;align-items:baseline;
   border-bottom:1px solid rgba(159,176,189,.07);padding:2px 0}
-#menu .krow .kl{color:#8d9caa}
+#menu .krow .kl{color:#8d9caa;flex:0 0 auto}
+#menu .krow b{text-align:right}
 #menu .hint{margin:16px 0 0;font-size:10.5px;line-height:1.7;letter-spacing:.08em;color:#6c7a86}
 #menu .keys .hint{margin-top:14px}
 

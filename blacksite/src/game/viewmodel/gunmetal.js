@@ -117,7 +117,7 @@ function fallbackEnv(engine) {
       const t = 1 - y / (h - 1);            // 1 at the top
       // Sky above, warm bounce below, and a brighter band at the horizon: three
       // tones is enough for a curved barrel to show a readable gradient.
-      const sky = [0.30, 0.42, 0.62], grd = [0.16, 0.13, 0.10], hor = [0.55, 0.52, 0.48];
+      const sky = [0.62, 0.78, 1.05], grd = [0.30, 0.25, 0.19], hor = [1.05, 0.98, 0.86];
       const band = Math.exp(-Math.pow((t - 0.5) * 6, 2));
       for (let x = 0; x < w; x++) {
         const i = (y * w + x) * 4;
@@ -149,7 +149,12 @@ export function createGunMaterials(G, engine, materials) {
   const from = (name, over) => {
     let base;
     try { base = materials && materials.get ? materials.get(name) : null; } catch { base = null; }
+    // A world material may carry a shader hook authored for a two-metre wall.
+    // On a four-centimetre receiver that is worse than no material at all.
+    if (base && !base.isMeshStandardMaterial) base = null;
     const m = base && base.clone ? base.clone() : new THREE.MeshStandardMaterial();
+    m.onBeforeCompile = () => {};
+    m.customProgramCacheKey = () => 'blacksite-vm';
     for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'aoMap', 'bumpMap', 'displacementMap', 'alphaMap']) {
       if (k in m) m[k] = null;
     }
@@ -166,16 +171,16 @@ export function createGunMaterials(G, engine, materials) {
   const mats = {
     // Blued/anodised receiver steel. Low roughness so the chamfers throw a hard
     // specular line; the wear map breaks it up so it is not a mirror.
-    steel: from('metal', { roughness: 0.34, metalness: 1.0, envMapIntensity: 1.15 }),
+    steel: from('metal', { roughness: 0.31, metalness: 0.92, envMapIntensity: 1.9 }),
     // Phosphate on the barrel and the bolt carrier — same alloy, matte finish.
-    phos: from('metal', { roughness: 0.62, metalness: 0.95, envMapIntensity: 0.85 }),
+    phos: from('metal', { roughness: 0.58, metalness: 0.88, envMapIntensity: 1.45 }),
     // Furniture. Glass-filled nylon is a dielectric and much rougher; getting
     // this contrast right is most of what makes the metal look like metal.
-    poly: from('dark', { roughness: 0.78, metalness: 0.03, envMapIntensity: 0.6 }),
+    poly: from('dark', { roughness: 0.74, metalness: 0.04, envMapIntensity: 1.0 }),
     // Grip pads, buttpad, sling loops.
-    rubber: from('dark', { roughness: 0.94, metalness: 0.0, envMapIntensity: 0.35 }),
+    rubber: from('dark', { roughness: 0.92, metalness: 0.0, envMapIntensity: 0.55 }),
     // Nomex glove. Slightly sheened where the palm is worn smooth.
-    glove: from('dark', { roughness: 0.82, metalness: 0.0, envMapIntensity: 0.5 }),
+    glove: from('dark', { roughness: 0.80, metalness: 0.0, envMapIntensity: 0.75 }),
   };
 
   // The lens is not glass in the usual sense — it is a coated element, which
@@ -183,8 +188,8 @@ export function createGunMaterials(G, engine, materials) {
   // whatever is behind the shooter. Physical transmission would be honest and
   // also invisible, so this fakes it with a dark, very smooth metal.
   mats.lens = new THREE.MeshStandardMaterial({
-    color: 0x0b1620, roughness: 0.06, metalness: 0.85,
-    envMapIntensity: 2.4, side: THREE.FrontSide,
+    color: 0x18303f, roughness: 0.05, metalness: 0.80,
+    envMapIntensity: 3.4, side: THREE.FrontSide,
   });
 
   const dotTex = reticleTexture(64, 'dot');
