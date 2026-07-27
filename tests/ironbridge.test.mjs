@@ -6101,6 +6101,102 @@ t.ok(true, 'drawing an empty bridge is harmless');
     u.swing = .4;
     const a = IB.recoilOf({ swing:.4, swing0:.4, side:0 }), b = IB.recoilOf({ swing:.4, swing0:.4, side:1 });
     t.ok(Math.sign(a) === -Math.sign(b), 'and the two sides kick away from each other');
+
+    // All of the above was done for the BODY and none of it for the ARM
+    // holding the weapon, which went on reading `u.swing > 0 ? 1 : 0`. One
+    // normalisation now, with recoilOf a reader of it rather than the owner.
+    t.ok(IB.swingPhase({ swing:.4, swing0:.4 }) === 1, 'a blow just landed is the whole of its phase');
+    t.ok(IB.swingPhase({ swing:0, swing0:.4 }) === 0, 'and a body at rest is none of it');
+    t.ok(Math.abs(IB.swingPhase({ swing:.2, swing0:.4 }) - .5) < 1e-9, 'halfway through is halfway');
+    t.ok(IB.swingPhase({ swing:9, swing0:.4 }) === 1, 'and it cannot run past the end');
+    let backwards = 0, last = -1;
+    for (let i = 0; i <= 20; i++){
+      const v = IB.swingPhase({ swing:.4 * i / 20, swing0:.4 });
+      if (v < last) backwards++;
+      last = v;
+    }
+    t.ok(backwards === 0, 'it only ever climbs with the swing (' + backwards + ' steps back)');
+    // recoilOf reads it rather than repeating it, so the arm and the body it
+    // hangs off cannot come apart again.
+    for (const f of [1, .6, .25, 0]){
+      const uu = { swing:.4 * f, swing0:.4, side:0 };
+      t.ok(Math.abs(Math.abs(IB.recoilOf(uu)) - IB.swingPhase(uu) * IB.RECOIL) < 1e-9,
+        'the body kicks by exactly that phase at ' + f);
+    }
+  }
+  // DRIVEN. The rule holding is not the same as the arms using it. Sample a
+  // whole swing and ask which pen points MOVE and how many places they visit —
+  // rather than guessing which stroke is the weapon by its colour, which the
+  // first probe did and read the same coordinate seven times over.
+  {
+    const s = CTX.__stats;
+    const seat0w = IB.MY;
+    const FR = [1, .8, .6, .4, .2, .05, 0];
+    const sweep = (kind) => {
+      IB.newMatch({ diff:'veteran', seed:8810 });
+      IB.MY = 0;
+      const u = IB.spawnUnit(0, kind, { x:60, y:0, paid:true });
+      IB.rebuildGrid();
+      IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.6;
+      const dur = IB.swingTime(u);
+      u.swing0 = dur;
+      const frames = [];
+      for (const f of FR){
+        u.swing = dur * f;
+        s.lines = []; s.dropped = 0;
+        IB.drawUnit(CTX, u);
+        frames.push({ pts:s.lines.map(l => l.x + ',' + l.y), dropped:s.dropped });
+      }
+      const n = Math.min(...frames.map(f => f.pts.length));
+      const even = frames.every(f => f.pts.length === n);
+      let moving = 0, smooth = 0, flags = 0;
+      for (let i = 0; i < n; i++){
+        const spots = new Set(frames.map(f => f.pts[i])).size;
+        if (spots > 1){ moving++; if (spots >= FR.length) smooth++; else flags++; }
+      }
+      return { n, even, moving, smooth, flags, dropped: frames.reduce((a, f) => a + f.dropped, 0), dur };
+    };
+
+    // The cannon is the control: drawCannon already asked recoilOf, so it was
+    // smooth before this change and must still be. If it ever reads as a flag
+    // the instrument is broken, not the game.
+    const gun = sweep('cannon');
+    t.ok(gun.dropped === 0, 'the swing capture held');
+    t.ok(gun.even, 'and every frame drew the same pen strokes, so slots line up');
+    t.ok(gun.moving > 4, 'the control moves real geometry through its swing (' + gun.moving + ' points)');
+    t.ok(gun.flags === 0 && gun.smooth === gun.moving,
+      'and every moving part of it travels the whole swing (' + gun.smooth + '/' + gun.moving + ')');
+
+    const snapped = [];
+    for (const kind of ['melee', 'caster', 'super']){
+      const r = sweep(kind);
+      t.ok(r.dropped === 0, 'the ' + kind + ' capture held');
+      // Pair the claim with proof something moved: "no flags" is trivially
+      // true of a body that does not move at all.
+      t.ok(r.moving > 0, 'a ' + kind + ' moves something through its swing (' + r.moving + ')');
+      if (!(r.flags === 0 && r.smooth === r.moving)) snapped.push(kind + '(' + r.flags + ' of ' + r.moving + ' snapping)');
+    }
+    // Named, not counted: the ogre's club and the weapon-by-role arm are
+    // separate sites, and an aggregate count cannot say which one came apart.
+    t.ok(snapped.length === 0, 'every weapon travels its swing instead of snapping between two poses' +
+      (snapped.length ? ' — ' + snapped.join(', ') : ''));
+
+    // The duty-cycle point, which is why a flag was wrong rather than merely
+    // coarse: swingTime runs from SWING.min to SWING.max with attack speed, so
+    // a raised-or-lowered flag held a slow body's weapon up six times longer
+    // than a fast one's. The phase is the same shape at either end.
+    {
+      const fast = { swing:IB.SWING.min, swing0:IB.SWING.min };
+      const slow = { swing:IB.SWING.max, swing0:IB.SWING.max };
+      t.ok(IB.swingPhase(fast) === IB.swingPhase(slow),
+        'a fast blow and a slow one are at the same point of their own swing when they land');
+      const half = (o) => IB.swingPhase({ swing:o.swing0 / 2, swing0:o.swing0 });
+      t.ok(Math.abs(half(fast) - half(slow)) < 1e-9,
+        'and still are halfway through (' + half(fast).toFixed(3) + ' vs ' + half(slow).toFixed(3) + ')');
+      t.ok(IB.SWING.max > IB.SWING.min * 2,
+        'the two really are far apart in seconds (' + IB.SWING.min + ' vs ' + IB.SWING.max + ')');
+    }
+    IB.MY = seat0w;
   }
   // The branch next door, which had it right all along and is what condemned
   // the body: a turret's heat is `cd * as`, the fraction of its OWN cycle
