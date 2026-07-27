@@ -3806,6 +3806,18 @@ function pennant(c, x, y, u, col, dir){
 // still frame: a facet split that wanders outside the outline turns the shard
 // back into the flat diamond it used to be, and a lift out of range either
 // sinks it into its own plinth or leaves it hanging in the sky.
+// How lit a turret's eye is, and how far its mount has lurched back. `cd`
+// counts down from a full reload to zero, so this is 1 the instant it looses
+// and 0 when it is ready again. Named so a test can hold it to exactly that: a
+// flash that never fades is a lamp, and one that never lights means the thing
+// shoots you with no sign of it having done so.
+const TURRET_KICK = 3.4;
+function turretShot(st){
+  const as = attackSpeedOf(st);
+  if (!(as > 0) || !(st.cd > 0)) return { hot:0, kick:0 };
+  const hot = clamp(st.cd * as, 0, 1);
+  return { hot, kick:hot * hot * TURRET_KICK };
+}
 const SHARD = { w:14, top:62, bot:16, rise:3.2 };
 function shardAt(t){
   return {
@@ -3945,17 +3957,44 @@ function drawStructure(c, st){
       poly(c, [[X - 16 * u, Y - 12 * u], [X - 13 * u, Y - 58 * u], [X - 7 * u, Y - 58 * u], [X - 9 * u, Y - 12 * u]], STONE.lit);
       poly(c, [[X + 16 * u, Y - 12 * u], [X + 13 * u, Y - 58 * u], [X + 8 * u, Y - 58 * u], [X + 10 * u, Y - 12 * u]], STONE.mid2);
       masonry(c, X - 12 * u, Y - 54 * u, 24 * u, 40 * u, u, st.ord * 7 + st.side * 3);
+      // a string course round the shaft, and slits to shoot out of
+      block(c, X - 15 * u, Y - 48 * u, 30 * u, 4 * u, STONE.mid2, STONE.lit);
+      for (const sx of [-1, 1]){
+        const slx = X + sx * 8 * u;
+        c.fillStyle = '#3f4440'; c.fillRect(slx - 1.5 * u, Y - 26 * u, 3 * u, 7 * u);
+        c.fillStyle = STONE.deep; c.fillRect(slx - 2.8 * u, Y - 27.4 * u, 5.6 * u, 1.4 * u);
+      }
+      // the timber hoarding it fights from, overhanging the side the enemy is on
+      const hx = X + dir * 13 * u, hy = Y - 62 * u;
+      block(c, X - 14 * u, hy, 28 * u, 10 * u, WOOD.mid, WOOD.lit);
+      poly(c, [[hx, hy], [hx + dir * 9 * u, hy + 2 * u], [hx + dir * 9 * u, hy + 9 * u], [hx, hy + 10 * u]], WOOD.dark);
+      poly(c, [[hx, hy], [hx + dir * 9 * u, hy + 2 * u], [hx + dir * 9 * u, hy + 3.5 * u], [hx, hy + 1.6 * u]], WOOD.lit);
+      for (let i = 0; i < 3; i++)                        // the props under it
+        block(c, X - 11 * u + i * 9 * u, hy + 10 * u, 2.4 * u, 5 * u, WOOD.dark);
       crown(c, X, Y - 68 * u, 32 * u, u, 5, WEAR(st));
       battleDamage(c, st, X, Y - 56 * u, 26 * u, 44 * u, u);
-      // the eye — bright the instant it fires, dimming as it reloads
-      const glow = clamp(st.cd * attackSpeedOf(st), 0, 1);
-      c.globalAlpha = .18 + glow * .45;
-      ell(c, X, Y - 38 * u, 16 * u, 16 * u, col);
+      // The eye. It was a painted circle that brightened; it is a weapon in a
+      // socket now, and it lurches back on the shot — the same trick that made
+      // the cannon read as firing instead of standing still.
+      const S = turretShot(st);
+      const ex = X - dir * S.kick * u, ey = Y - 38 * u;
+      c.globalAlpha = .18 + S.hot * .45;
+      ell(c, X + dir * S.hot * 6 * u, ey, (16 + S.hot * 5) * u, (16 + S.hot * 5) * u, col);
       c.globalAlpha = 1;
-      ell(c, X, Y - 38 * u, 9 * u, 9 * u, STONE.lit);
-      ell(c, X, Y - 38 * u, 7 * u, 7 * u, shade(col, .8 + glow * .5));
-      ell(c, X - 2 * u, Y - 40 * u, 2.6 * u, 2.6 * u, '#ffffff');
-      pennant(c, X + dir * 14 * u, Y - 50 * u, u, col, dir);
+      ell(c, ex, ey, 11 * u, 11 * u, STONE.mid2);        // the iron ring
+      ell(c, ex, ey, 9 * u, 9 * u, STONE.lit);
+      ell(c, ex, ey, 7.4 * u, 7.4 * u, '#3a3f3c');       // the socket behind it
+      ell(c, ex, ey, 6.2 * u, 6.2 * u, shade(col, .8 + S.hot * .5));
+      ell(c, ex - 2 * u, ey - 2 * u, 2.4 * u, 2.4 * u, '#ffffff');
+      // and the flash, for the moment after it looses
+      if (S.hot > .74){
+        const f = (S.hot - .74) / .26;
+        c.globalAlpha = f * .8;
+        const mx = X + dir * (11 + f * 7) * u;
+        poly(c, [[mx, ey - 5 * u * f], [mx + dir * 13 * u * f, ey], [mx, ey + 5 * u * f]], '#fff2c4');
+        c.globalAlpha = 1;
+      }
+      pennant(c, X + dir * 14 * u, Y - 78 * u, u, col, dir);
     }
   }
   if (!dead) hpBar(c, X, Y - (st.key === 'gate' ? 116 : st.key === 'inhib' ? 72 : 84) * cam.z, st, 44 * cam.z, true);
@@ -7569,7 +7608,7 @@ window.IB = {
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, cyc,
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
-  drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2,
+  drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
