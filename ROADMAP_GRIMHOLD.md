@@ -54,6 +54,10 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   anything beside it braver). *(batch 5)*
 - **The Book** — the last ten descents: depth, party, boons, curses, and what
   finally did it, by name. *(batch 5)*
+- **Relics** — eight of them, found in vaults rather than drafted, two slots, so
+  a third means putting one down. *(batch 6)*
+- **Curses that pay** — every mark now takes something and gives something back,
+  so keeping one is a decision rather than a punishment. *(batch 6)*
 
 ---
 
@@ -61,12 +65,13 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 
 1. **Trial rooms.** A door that announces its terms before you open it: survive
    five turns inside, or kill everything in it without taking a wound. Optional,
-   so it is a decision rather than a tax. Pays a boon and Fate.
-2. **Relics.** Found, not drafted — in vaults and from trials, with two visible
-   slots so taking one means dropping one. The first thing in the game you own
-   rather than roll.
-3. **Curses that pay.** Some marks should carry an upside so keeping one is a
-   real option: Marked draws monsters but doubles the Fate champions drop.
+   so it is a decision rather than a tax. Pays a relic and Fate — which now
+   exists to pay out.
+2. **A relic and curse panel.** The top bar shows icons; there is nowhere to read
+   what you are actually carrying. One tap on the run line should list boons,
+   curses and relics with their text.
+3. **Kill-streak flourish.** Consecutive kills without a hero taking a wound
+   escalate the banner, the shake and the music. Free feel, no new rules.
 
 ## Backlog, roughly in order of value
 
@@ -81,9 +86,6 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   something climbs out. Repeatable, stakes rise each pull.
 
 ### Roguelike depth
-- **Curses that pay.** Some marks should carry an upside so keeping one is a real
-  option: Marked draws monsters but doubles Fate from champions, say.
-- **Relics** found in vaults rather than drafted, with visible slots.
 - **Vault variants.** A vault that is trapped, or one whose key is held by a
   champion that flees.
 - **Curses.** Persistent drawbacks you accept for a strong reward; removable at a
@@ -91,8 +93,6 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **Hero progression inside a run.** Kills earn a small pick at set thresholds —
   a weapon die, a defend die, a spell slot.
 - **Relics** with visible slots, distinct from boons: found, not drafted.
-- **Trial rooms.** Optional: survive N turns / kill without taking a wound, for a
-  guaranteed relic.
 - **Warlock's attention meter.** Fills with time spent and coin taken; at
   thresholds he intervenes — reinforcements, a sealed door, a curse on a hero.
 - **More monsters.** Giant rat swarm, hellhound (breath down a line), spider

@@ -751,6 +751,8 @@ function attackDice(h, target){
   }
   if (boonHas('bloodprice')) n += 2;
   if (h.picks) n += h.picks.filter(p => p === 'hand').length;
+  if (curseHas('frail')) n += 1;                 // nothing to lose
+  if (relicHas('ring') && target && MONSTERS[target.mt] && MONSTERS[target.mt].undead) n += 1;
   if (h.cursed) n = Math.max(1, n - 1);
   return n;
 }
@@ -762,6 +764,8 @@ function defendDice(h){
   if (boonHas('ironskin')) n += 1;
   if (h.picks) n += h.picks.filter(p => p === 'guard').length;
   if (curseHas('frail')) n -= 1;
+  if (curseHas('heavy')) n += 1;                 // dug in
+  if (relicHas('anvil')) n += 1;
   return Math.max(0, n);
 }
 function moveSlow(h){
@@ -955,6 +959,7 @@ const TORCH = 7;
 function torchRadius(){
   let r = TORCH;
   if (boonHas('torchbearer')) r += 3;
+  if (relicHas('lantern')) r += 3;
   if (modHas('dark')) r = Math.max(2, r - 4);
   if (curseHas('blind')) r -= 2;
   return Math.max(2, r);
@@ -3507,6 +3512,13 @@ function walkFieldSafe(x, y, n, mover, flying){
 
 /* ------------------------------------------------------------------ traps */
 
+// What a trap actually takes, once the marks and the relics have their say.
+function trapBite(n){
+  let d = n;
+  if (curseHas('thin')) d += 1;
+  if (relicHas('anvil')) d -= 1;
+  return Math.max(1, d);
+}
 function springTrap(h, tr, cont){
   tr.sprung = true; tr.found = true;
   if (G.q) G.q.lastKiller = tr.t === 'pit' ? 'a pit' : tr.t === 'spear' ? 'a spear trap' : 'a falling block';
@@ -3515,24 +3527,24 @@ function springTrap(h, tr, cont){
     if (h.gear.rope){
       say(`${h.name} drops into a pit — and is out again on the rope.`, 'bad');
       spark(h.x, h.y, 14, '#6b5a3c');
-      hurt(h, 1 + (curseHas('thin')?1:0), () => later(220, cont));
+      hurt(h, trapBite(1), () => later(220, cont));
       return;
     }
     say(`${h.name} falls into a pit! −1 Body Point, and there the movement ends.`, 'bad');
     spark(h.x, h.y, 18, '#4a3a28');
     h.moveLeft = 0;
-    hurt(h, 1 + (curseHas('thin')?1:0), () => later(260, cont));
+    hurt(h, trapBite(1), () => later(260, cont));
   } else if (tr.t === 'spear'){
     say(`Spears burst from the wall! ${h.name} loses 2 Body Points.`, 'bad');
     spark(h.x, h.y, 20, '#c8ccd2', { spd:.02 });
-    hurt(h, 2 + (curseHas('thin')?1:0), () => later(260, cont));
+    hurt(h, trapBite(2), () => later(260, cont));
   } else {
     say(`A block of stone crashes down — 3 Body Points, and the way is shut.`, 'bad');
     spark(h.x, h.y, 26, '#6a6258', { spd:.018 });
     const back = lastFreeNeighbour(h);
     h.moveLeft = 0;
     if (back) slide(h, back[0], back[1], 130, null);
-    hurt(h, 3 + (curseHas('thin')?1:0), () => later(280, cont));
+    hurt(h, trapBite(3), () => later(280, cont));
   }
 }
 function lastFreeNeighbour(h){
@@ -3692,6 +3704,12 @@ function monsterAttack(m, h, done){
 function hurt(a, n, done){
   a.bp -= n;
   a.hurtT = 280;
+  if (a.bp <= 0 && a.kind === 'hero' && relicHas('coin') && G.run && !G.run.coinUsed){
+    G.run.coinUsed = 1; a.bp = 1;
+    say(`${a.name} pays the ferryman and is turned back at the water.`, 'good');
+    spark(a.x, a.y, 26, '#d8a83c', { spd:.02, up:.005, glow:'rgba(216,168,60,.5)', r:1.8 });
+    sfx('heal');
+  }
   if (a.bp <= 0 && a.kind === 'hero' && boonHas('secondwind') && !G.q.secondWindUsed){
     G.q.secondWindUsed = 1; a.bp = 1;
     say(`${a.name} should be dead — and is not. Second wind.`, 'good');
@@ -3730,7 +3748,7 @@ function kill(a){
     }
     if (a.elite){
       G.q.pot = (G.q.pot || 0) + 30;
-      addFate(1, `${a.name} put down`);
+      addFate(curseHas('watched') ? 2 : 1, `${a.name} put down`);
       if (G.q.vault >= 0 && !G.q.key){
         G.q.key = true;
         say(`${a.name} was carrying an iron key. Something on this floor is locked.`, 'good');
@@ -3904,7 +3922,8 @@ function monsterAct(m, done){
   if (!targets.length){ done(); return; }
   // A monster holds its room until it can actually see somebody. Without this
   // leash a revealed dungeon turns into one rolling mob a dozen rooms deep.
-  const engaged = targets.some(h => dist2(m.x,m.y,h.x,h.y) <= 12 && hasLOS(m.x,m.y,h.x,h.y));
+  const reach = curseHas('blind') ? 6 : 12;      // a dim party is spotted later
+  const engaged = targets.some(h => dist2(m.x,m.y,h.x,h.y) <= reach && hasLOS(m.x,m.y,h.x,h.y));
   if (!engaged && roomAt(m.x,m.y) >= 0){ done(); return; }
   // closest hero we can actually reach or see
   let best = null, bestD = 1e9;
@@ -4024,6 +4043,11 @@ function openDoorAt(h, d){
   if (boonHas('doorward')){
     for (const x of livingHeroes()) if (x.bp < x.bpMax){ x.bp++; floatText(x.x, x.y, '+1', '#7de8a0'); }
   }
+  if (relicHas('horn')){
+    let n = 0;
+    for (const m of monstersOf()) if (roomAt(m.x,m.y) === d.rid){ m.stun = Math.max(m.stun||0, 1); n++; }
+    if (n) say(`The horn sounds. ${n} of them stand there blinking.`, 'good');
+  }
   pushIn(d.rid);
   revealRoom(d.rid);
   recomputeVision();
@@ -4063,7 +4087,11 @@ function searchTreasure(){
     return;
   }
   let card = TREASURE_DECK[G.q.deck[G.q.deckAt++ % G.q.deck.length]];
-  if (rid === G.q.vault) card = { k:'gold', n:250 + ri(200), t:'The vault', d:'This is what the lock was for.' };
+  if (rid === G.q.vault){
+    card = { k:'gold', n:250 + ri(200), t:'The vault', d:'This is what the lock was for.' };
+    const r = G.run && !G.q.relicFound ? relicOffer() : null;
+    if (r){ G.q.relicFound = r.id; later(900, () => showRelic(r.id)); }
+  }
   later(260, () => applyTreasure(card, h));
   renderHUD();
 }
@@ -4470,7 +4498,7 @@ function castSpell(h, key, target){
   sfx('spell');
   const el = ELEMENTS[sp.el];
   spark(h.x, h.y, 22, el.col, { spd:.016, up:.004, glow:hexA(el.col, .4) });
-  if (sp.dice && target && isWarded(target)){
+  if (sp.dice && target && isWarded(target) && !relicHas('mirror')){
     say(`The spell washes off the ${target.name} — it is warded.`, 'bad');
     spark(target.x, target.y, 18, '#a88ae8', { spd:.016, glow:'rgba(168,138,232,.4)', r:1.3 });
     refreshField(); renderHUD();
@@ -4631,7 +4659,8 @@ function renderHUD(){
   const mods = (q.mods || []).map(m => MOD(m)).filter(Boolean).map(m => m.ic).join('');
   $('qname').innerHTML = `${q.name}${mods ? ' ' + mods : ''}<b>${q.sub}${
     G.run && G.run.boons.length ? ' · ' + G.run.boons.map(b => BOON(b).ic).join('') : ''}${
-    G.run && G.run.curses.length ? ' · ' + G.run.curses.map(c => CURSE_MARK(c).ic).join('') : ''}</b>`;
+    G.run && G.run.curses.length ? ' · ' + G.run.curses.map(c => CURSE_MARK(c).ic).join('') : ''}${
+    G.run && G.run.relics.length ? ' · ' + G.run.relics.map(r => RELIC(r).ic).join('') : ''}</b>`;
   $('goldn').textContent = (G.run ? G.run.gold : G.camp.gold) + (G.q.pot ? ' +' + G.q.pot : '');
   const fp = $('fatepill');
   if (fp){ fp.style.display = ''; $('faten').textContent = fateOf(); }
@@ -5336,17 +5365,93 @@ const META_UNLOCKS = [
   { id:'revive',    ic:'⚱',  cost:5, name:'Mentor’s Bargain',desc:'Once a run, a fallen hero returns at the next floor with 1 Body Point.' },
 ];
 
+/* ------------------------------------------------------------ 12d2. RELICS */
+// Relics are not drafted. You find them, in vaults and at the end of trials,
+// and you may carry two. A third means putting one down — which is the first
+// thing in the game you own rather than roll for.
+
+const RELIC_SLOTS = 2;
+const RELICS = [
+  { id:'skull',  ic:'💀', name:"Warlock's Skull",       desc:'+1 Fate at the start of every floor.' },
+  { id:'lantern',ic:'🏮', name:'Deepwater Lantern',     desc:'+3 torch, and every trap shows itself as you arrive.' },
+  { id:'ring',   ic:'💍', name:'Ring of Bone',          desc:'+1 attack die against the undead.' },
+  { id:'coin',   ic:'🪙', name:"Ferryman's Coin",       desc:'Once a run, a hero who would fall survives on 1 Body Point.' },
+  { id:'horn',   ic:'📯', name:'Cracked Horn',          desc:'Everything in a room you open loses its first turn.' },
+  { id:'mirror', ic:'🪞', name:'Black Mirror',          desc:'Your spells land on warded things anyway.' },
+  { id:'anvil',  ic:'⚒',  name:'Splinter of the Anvil', desc:'+1 defend die, and traps cut one point less.' },
+  { id:'thread', ic:'🧵', name:'Red Thread',            desc:'Hidden doors are never hidden from you.' },
+];
+const RELIC = (id) => RELICS.find(r => r.id === id);
+const relicHas = (id) => !!(G && G.run && G.run.relics && G.run.relics.includes(id));
+function relicOffer(){
+  if (!G.run) return null;
+  const pool = RELICS.filter(r => !G.run.relics.includes(r.id));
+  return pool.length ? pool[ri(pool.length)] : null;
+}
+function takeRelic(id, dropId){
+  if (!G.run || !RELIC(id) || relicHas(id)) return false;
+  if (G.run.relics.length >= RELIC_SLOTS){
+    const i = G.run.relics.indexOf(dropId);
+    if (i < 0) return false;
+    say(`${RELIC(dropId).name} is left behind.`, '');
+    G.run.relics.splice(i, 1);
+  }
+  G.run.relics.push(id);
+  say(`${RELIC(id).ic} ${RELIC(id).name} — ${RELIC(id).desc}`, 'good');
+  sfx('win');
+  applyRelicOnArrival();
+  renderHUD(); saveRun();
+  return true;
+}
+// The relics that do their work the moment you set foot on a floor.
+function applyRelicOnArrival(){
+  if (!G.q) return;
+  if (relicHas('lantern')) for (const tr of G.q.traps) tr.found = true;
+  if (relicHas('thread')) for (const k in G.q.doors) G.q.doors[k].found = true;
+}
+function showRelic(id){
+  const r = RELIC(id);
+  if (!r) return;
+  const full = G.run.relics.length >= RELIC_SLOTS;
+  modal(`<h2>${r.ic} ${r.name}</h2>
+    <div class="sub" style="margin:2px 0 0">${full ? 'Your hands are full' : 'Yours, if you want it'}</div>
+    <div class="rule"></div>
+    <p class="flavor">${r.desc}</p>
+    ${full ? `<div style="font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--dim);text-align:center;margin:10px 0 6px">Put something down</div>
+      ${G.run.relics.map(x => `<div class="row">
+        <div class="ic">${RELIC(x).ic}</div>
+        <div class="tx"><b>${RELIC(x).name}</b><s>${RELIC(x).desc}</s></div>
+        <button class="bu" data-drop="${x}">Drop this</button>
+      </div>`).join('')}` : ''}
+    <div class="rule"></div>
+    <div style="text-align:center">
+      ${full ? '' : `<button class="btn big" id="mTake">Take it</button>`}
+      <button class="btn ghost" id="mLeaveR">Leave it</button>
+    </div>`);
+  bindModal('#mTake', () => { takeRelic(id); closeModal(); });
+  bindAll('.bu[data-drop]', el => { takeRelic(id, el.dataset.drop); closeModal(); });
+  bindModal('#mLeaveR', closeModal);
+}
+
 /* ------------------------------------------------------------- 12e. CURSES */
 // A curse you carry, floor after floor, until you pay somebody to lift it.
 // Some of them are worth keeping — that is what makes taking one a decision.
 
+// Every mark takes something and gives something back. A curse you would never
+// keep is just a punishment; a curse you might keep is a decision.
 const CURSE_MARKS = [
-  { id:'frail',  ic:'🦴', name:'Brittle Bones', desc:'−1 defend die for every hero.' },
-  { id:'heavy',  ic:'⛓',  name:'Dragging Chain', desc:'−1 to every movement roll.' },
-  { id:'blind',  ic:'🕯', name:'Guttering Light', desc:'Your torches reach 2 squares less.' },
-  { id:'greedy', ic:'🪙', name:"Miser's Due",   desc:'Coin you find is worth a quarter less.' },
-  { id:'watched',ic:'👁', name:'Marked',        desc:'Something new arrives every sixth turn.' },
-  { id:'thin',   ic:'🩸', name:'Thin Skin',     desc:'Traps cut one Body Point deeper.' },
+  { id:'frail',  ic:'🦴', name:'Brittle Bones',  desc:'−1 defend die for every hero.',
+    up:'But they swing like they have nothing to lose: +1 attack die.' },
+  { id:'heavy',  ic:'⛓',  name:'Dragging Chain', desc:'−1 to every movement roll.',
+    up:'But you are dug in where you stand: +1 defend die.' },
+  { id:'blind',  ic:'🕯', name:'Guttering Light',desc:'Your torches reach 2 squares less.',
+    up:'And nothing sees you coming until it is close.' },
+  { id:'greedy', ic:'🪙', name:"Miser's Due",    desc:'Coin you find is worth a quarter less.',
+    up:'The stone takes coin and gives interest: +1 Fate every floor.' },
+  { id:'watched',ic:'👁', name:'Marked',         desc:'Something new arrives every sixth turn.',
+    up:'And everything it sends is worth two Fate instead of one.' },
+  { id:'thin',   ic:'🩸', name:'Thin Skin',      desc:'Traps cut one Body Point deeper.',
+    up:'You are jumpy enough to spot every one of them on arrival.' },
 ];
 const CURSE_MARK = (id) => CURSE_MARKS.find(c => c.id === id);
 const curseHas = (id) => !!(G && G.run && G.run.curses && G.run.curses.includes(id));
@@ -5356,7 +5461,8 @@ function addCurse(id){
   const c = id ? CURSE_MARK(id) : (free.length ? free[ri(free.length)] : null);
   if (!c || G.run.curses.includes(c.id)) return null;
   G.run.curses.push(c.id);
-  say(`${c.ic} ${c.name} — ${c.desc} It travels with you.`, 'bad');
+  say(`${c.ic} ${c.name} — ${c.desc}`, 'bad');
+  if (c.up) say(c.up, 'good');
   return c.id;
 }
 function liftCurse(id){
@@ -5680,7 +5786,7 @@ function newRun(partyIds){
   return {
     heroes, party:partyIds.slice(), depth:0, boons:[], gold: metaHas('warchest') ? 250 : 0,
     kills:0, floorsCleared:0, revived:false, over:false, fate:1, nextDef:null, stake:0, doubles:0,
-    curses:[],
+    curses:[], relics:[], coinUsed:false,
     seed: (Math.random()*1e9)|0,
   };
 }
@@ -5729,8 +5835,11 @@ function beginFloor(){
 
   startQuest(-1, def, G.run.seed + G.run.depth*104729 + (def.branch || 0)*7717);
   G.q.runDepth = G.run.depth;
-  if (boonHas('trapsense') || modHas('brittle')) for (const tr of G.q.traps) tr.found = true;
+  if (boonHas('trapsense') || modHas('brittle') || curseHas('thin')) for (const tr of G.q.traps) tr.found = true;
   if (boonHas('mapsense')) for (const k in G.q.doors) G.q.doors[k].found = true;
+  applyRelicOnArrival();
+  if (relicHas('skull')) addFate(1, "the Warlock's skull");
+  if (curseHas('greedy')) addFate(1, 'the stone pays interest');
   recomputeVision();
 
   bakeDungeon(4242 + G.run.depth*991);
@@ -5783,7 +5892,7 @@ function endRun(why){
     gold: G.run.gold, favour,
     party: G.run.heroes.map(x => x.id),
     lost: G.run.heroes.filter(x => !x.alive).map(x => x.id),
-    boons: G.run.boons.slice(), curses: G.run.curses.slice(),
+    boons: G.run.boons.slice(), curses: G.run.curses.slice(), relics: (G.run.relics||[]).slice(),
     fall: G.run.lastFall || null,
     won: runAlive().length > 0,
   });
@@ -6347,6 +6456,7 @@ globalThis.HQ = {
   quaffPotion, useHolyWater, applyTreasure, spawnWanderer, openDoorAt, springTrap, giveQuestItem,
   BLESSINGS, GREATER, CURSES, altarTarget, altarOutcome, useAltar, showAltar, altarPact,
   CURSE_MARKS, CURSE_MARK, curseHas, addCurse, liftCurse,
+  RELICS, RELIC, RELIC_SLOTS, relicHas, relicOffer, takeRelic, showRelic, applyRelicOnArrival, trapBite,
   LESSONS, LESSON, KILL_STEPS, lessonDue, lessonOptions, takeLesson, showLesson, heroHas,
   WRATH_STEPS, stirWrath, warlockActs,
   pushOdds, canPush, pushLuck, bankPush, showPush,
