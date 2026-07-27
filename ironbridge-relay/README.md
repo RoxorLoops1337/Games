@@ -86,12 +86,16 @@ worker against a stand-in for the Durable Object runtime, including an eviction,
 since hibernation is the failure mode that otherwise only shows up in
 production.
 
-## Known gap
+## Reconnect
 
-**Reconnect resumes the seat, not the match.** A player who drops gets their own
-side and the same seed back, but their simulation restarts at tick 0 while the
-peer is thousands of ticks ahead, so the two will not agree. The pieces for
-fixing it already exist in the game (`packSide`/`packUnit`/`loadMatch`) — a
-rejoining client needs a state snapshot from the peer plus the commands since,
-rather than just the seed. Until that lands, a disconnect ends the match in
-practice.
+A player who drops rejoins the same room, gets their own side and the same seed
+back, and is then **caught up from the peer** rather than restarted: the peer
+sends a state snapshot (`netSnap`, chunked over `SYNC_CHUNK`) plus the commands
+since, and the rejoining client resumes at the peer's tick. This used to be the
+worker's one known gap — reconnect resumed the seat but not the match, so the
+two simulations disagreed from the first frame and a disconnect ended the match
+in practice. It does not any more.
+
+Two things are dropped on purpose and dropped on **both** machines, so they stay
+in step: projectiles already in flight, and purely cosmetic state (the fx layer,
+camera shake, the end-of-match board hold). None of it is in `netHash`.
