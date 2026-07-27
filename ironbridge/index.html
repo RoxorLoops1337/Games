@@ -4245,74 +4245,238 @@ const DECK_XS = { track:2.4, kerb:4.9, railH:1.35 };
 // two to the same answer — a sun drawn on the right of a world lit from the
 // left is the same bug drawHouse had, just at the other end of it.
 // Fractions of the canvas, so it lands in the same place on a phone.
-const SUN = { x:.17, y:.16, r:26, halo:6.5 };
+//   r        the disc
+//   halo     the aureole it bleeds into, in disc radii
+//   glow     the forward-scatter lift, in disc radii — the reason the sky is
+//            palest and warmest beside the sun and deepest away from it
+//   core     where the white-hot centre of the disc gives way to its limb
+//   scatter  how much light the air between you and the sun throws back
+const SUN = { x:.17, y:.16, r:26, halo:6.5, glow:16, core:.5, scatter:1, warm:'255,243,209' };
 // The ridge slope that gets the rim runs from the foot of a peak to its apex,
 // this far to the RIGHT — so the face it belongs to looks left, into the sun.
 // Flip the sun to the other side of the sky and this has to flip with it.
 const RIDGE_RIM = 70;
+// What everything far enough away turns into. Aerial perspective is not a
+// vibe: air is not clear, so the further a thing is the more of the air's own
+// colour is mixed into it, until at the horizon there is nothing left of the
+// thing at all. One colour for the whole picture to converge on, so the bands,
+// the haze pools and the horizon wash cannot disagree about what "far" is.
+const HORIZON = '203,216,209';
 // The ridges behind everything. `rim` is the edge the sun catches, `haze` the
-// pool at the foot that makes the next band read as further off.
+// pool at the foot that makes the next band read as further off, and `fog` how
+// much of HORIZON is mixed into the band itself — which is the number that
+// turns three silhouettes into three DISTANCES rather than three shades.
 const BANDS = [
-  { d:.10, y:.30, h:.26, col:'rgba(96,124,132,.55)', rim:'rgba(198,214,206,.40)', haze:'rgba(186,206,206,.55)' },
-  { d:.20, y:.38, h:.24, col:'rgba(72,101,96,.68)',  rim:'rgba(158,183,172,.34)', haze:'rgba(160,186,184,.5)' },
-  { d:.34, y:.47, h:.22, col:'rgba(48,74,64,.85)',   rim:'rgba(120,150,136,.30)', haze:'rgba(132,162,158,.45)' },
+  { d:.10, y:.30, h:.26, col:'rgba(133,163,178,.66)', rim:'rgba(232,242,236,.34)', haze:'rgba(190,210,210,.55)', fog:.40 },
+  { d:.20, y:.38, h:.24, col:'rgba(90,127,131,.80)',  rim:'rgba(190,210,198,.32)', haze:'rgba(166,192,190,.5)',  fog:.24 },
+  { d:.34, y:.47, h:.22, col:'rgba(44,76,67,.92)',    rim:'rgba(136,168,150,.32)', haze:'rgba(120,152,148,.45)', fog:.11 },
 ];
-function drawSky(c){
+// The haze pools were a hard-edged fillRect, which drew a straight line across
+// the mountains at the exact height it was supposed to be dissolving them.
+// Same colour, pulled apart into a soft band, and the two ends parsed once
+// here rather than through a regex every frame.
+const BAND_FX = BANDS.map(b => {
+  const p = b.haze.match(/[\d.]+/g);
+  const rgb = p[0] + ',' + p[1] + ',' + p[2];
+  return { haze0:'rgba(' + rgb + ',0)', haze1:'rgba(' + rgb + ',.20)' };
+});
+// A sky is not two colours. Blue is what the air itself scatters, so it is
+// deepest and most saturated straight up — where you are looking through the
+// least air — and washes out through progressively greyer, warmer, paler steps
+// to a bright band at the horizon, where you are looking through the most of
+// it. These stops are that curve, sampled. The old two-stop version is why the
+// whole picture read as paper: nothing in it changed with distance.
+const SKY_STOPS = [
+  [0,    '#2f5f8a'],
+  [.10,  '#3d6f96'],
+  [.22,  '#5786a4'],
+  [.33,  '#7ba1b0'],
+  [.43,  '#9db8ba'],
+  [.51,  '#bbc8c0'],
+  [.575, '#cbcbb4'],
+  [.66,  '#93a695'],
+  [1,    '#1b2a26'],
+];
+// Nine stops is not something to rebuild sixty times a second, and a canvas
+// gradient outlives the frame that made it. Keyed on the canvas size, which is
+// the only thing that can invalidate it.
+let SKYG = null, SKYG_K = '';
+function skyGrad(c){
+  const k = LW + 'x' + LH;
+  if (SKYG && SKYG_K === k) return SKYG;
   const g = c.createLinearGradient(0, 0, 0, LH);
-  g.addColorStop(0, '#6f97ab'); g.addColorStop(.34, '#87a9ac'); g.addColorStop(.55, '#5e7f72'); g.addColorStop(1, '#1b2a26');
-  c.fillStyle = g; c.fillRect(0, 0, LW, LH);
+  for (const s of SKY_STOPS) g.addColorStop(s[0], s[1]);
+  SKYG = g; SKYG_K = k;
+  return g;
+}
+// Peak shapes off the fixed hash rather than `(i % 3) * 16`, which was one
+// silhouette repeated every 230px and read as wallpaper. The rim pass calls
+// the same two functions the silhouette does, or the highlight slides off the
+// ridge it belongs to.
+const ridgeTop = (i, k) => hash2(i * 1.7 + k * 9.1, 4.3) * 34 + (i % 3) * 8;
+const ridgeMid = (i, k) => hash2(i * 2.9 + k * 5.3, 8.1);
+// Crepuscular shafts. Sunlight is only visible side-on because there is dust
+// and water in the way, so a shaft is the same forward scatter as the glow
+// around the disc, just organised into beams by whatever is occluding it.
+//
+// The first version of this was a starburst: seven hard-edged wedges meeting
+// at a point, which is a lens flare, not weather. Two things fix it. Each
+// shaft is now a STACK of nested wedges whose alphas follow a bell — so the
+// lateral profile fades out instead of ending on a line you can see — and
+// they begin well away from the disc, so nothing converges on a star.
+const RAYS = [
+  { a:-.20, w:.042, l:1.00, i:.85, sp:.21, ph:0   },
+  { a: .05, w:.068, l:.86,  i:.58, sp:.17, ph:1.9 },
+  { a: .27, w:.037, l:1.00, i:.80, sp:.26, ph:3.4 },
+  { a: .50, w:.076, l:.80,  i:.46, sp:.14, ph:5.1 },
+  { a: .72, w:.040, l:.96,  i:.72, sp:.23, ph:2.3 },
+  { a:1.26, w:.032, l:.88,  i:.56, sp:.29, ph:.8  },
+];
+// Widths and weights of the nested wedges that make one shaft. Widest and
+// faintest first, so the stack sums to a soft-shouldered beam.
+const RAY_LOBES = [[1, .06], [.70, .18], [.44, .26], [.20, .24]];
+function drawGodRays(c, sx, sy, sr){
+  const L = Math.sqrt(LW * LW + LH * LH) * 1.15;
+  c.save();
+  c.beginPath(); c.rect(0, 0, LW, LH * .62); c.clip();
+  c.globalCompositeOperation = 'lighter';
+  for (const R of RAYS){
+    const br = Math.sin(G.t * R.sp + R.ph);
+    const ang = R.a + br * .016, len = L * R.l;
+    const cs = Math.cos(ang), sn = Math.sin(ang), px = -sn, py = cs;
+    // The shaft starts several disc radii out. Close in, the aureole is
+    // already doing this job and doing it without corners.
+    const ax = sx + cs * sr * 2.6, ay = sy + sn * sr * 2.6;
+    const bx = sx + cs * len, by = sy + sn * len;
+    const g = c.createLinearGradient(ax, ay, bx, by);
+    const a0 = R.i * SUN.scatter * (.55 + br * .45) * .064;
+    g.addColorStop(0, 'rgba(' + SUN.warm + ',0)');
+    g.addColorStop(.16, 'rgba(' + SUN.warm + ',' + a0.toFixed(4) + ')');
+    g.addColorStop(.45, 'rgba(' + SUN.warm + ',' + (a0 * .60).toFixed(4) + ')');
+    g.addColorStop(1, 'rgba(' + SUN.warm + ',0)');
+    for (const lobe of RAY_LOBES){
+      c.globalAlpha = lobe[1];
+      c.fillStyle = g;
+      const hw = len * R.w * lobe[0] * (1 + br * .16), nw = sr * .5 * lobe[0];
+      c.beginPath();
+      c.moveTo(ax - px * nw, ay - py * nw);
+      c.lineTo(bx - px * hw, by - py * hw);
+      c.lineTo(bx + px * hw, by + py * hw);
+      c.lineTo(ax + px * nw, ay + py * nw);
+      c.closePath(); c.fill();
+    }
+  }
+  c.globalAlpha = 1;
+  c.restore();
+}
+function drawSky(c){
+  c.fillStyle = skyGrad(c); c.fillRect(0, 0, LW, LH);
   // The sun. Everything in this game is lit from the upper left — the mesa,
   // the bodies, the mines, and since LIT the buildings too — and there was
   // nothing in the sky doing the lighting. It sits still while the world
   // scrolls under it, which is what something that far away does.
   const sx = LW * SUN.x, sy = LH * SUN.y, sr = SUN.r * (.7 + cam.z * .4);
-  const halo = c.createRadialGradient(sx, sy, 0, sx, sy, sr * SUN.halo);
-  halo.addColorStop(0, 'rgba(255,238,196,.34)');
-  halo.addColorStop(.45, 'rgba(255,232,186,.13)');
-  halo.addColorStop(1, 'rgba(255,232,186,0)');
-  c.fillStyle = halo; c.fillRect(0, 0, LW, LH * .75);
-  ell(c, sx, sy, sr * 1.22, sr * 1.22, 'rgba(255,246,214,.30)');
-  ell(c, sx, sy, sr, sr, '#fff6de');
+  // Forward scatter first: the broad, weak, warm lift the air throws back
+  // along the line to the sun. It is why a real sky is brightest beside the
+  // sun rather than uniformly bright, and it is doing more work here than the
+  // disc is — the disc is 26px, this is half the screen.
+  const fg = c.createRadialGradient(sx, sy, sr * .5, sx, sy, sr * SUN.glow);
+  fg.addColorStop(0, 'rgba(255,252,236,.60)');              // the aureole, the
+  fg.addColorStop(.055, 'rgba(255,247,220,.46)');           // ring of sky the
+  fg.addColorStop(.11, 'rgba(255,242,207,.35)');            // disc bleeds into
+  fg.addColorStop(.24, 'rgba(255,238,199,.21)');            // and then the long
+  fg.addColorStop(.42, 'rgba(242,240,215,.105)');           // scatter tail
+  fg.addColorStop(.62, 'rgba(228,236,214,.05)');
+  fg.addColorStop(1, 'rgba(208,224,215,0)');
+  c.fillStyle = fg; c.fillRect(0, 0, LW, LH * .72);
+  // and the disc, which has a white-hot core and a limb that gives out
+  // rather than an edge you could cut yourself on. A flat cream circle is a
+  // sticker; this is a light source.
+  const dg = c.createRadialGradient(sx, sy, 0, sx, sy, sr);
+  dg.addColorStop(0, '#ffffff');
+  dg.addColorStop(SUN.core, '#fffcf0');
+  dg.addColorStop(.86, '#fff3cd');
+  dg.addColorStop(1, 'rgba(255,240,196,0)');
+  ell(c, sx, sy, sr, sr, dg);
+  // Weather, furthest first: cirrus at the top of the troposphere, then the
+  // cumulus sheets. Both go down BEFORE the ridges, so a mountain occludes the
+  // foot of a cloud — which is the cheapest depth cue in the whole picture and
+  // the one the old order threw away by painting clouds over everything.
+  drawCirrus(c);
+  drawClouds(c);
   // three parallax ridges receding into haze
   const ridgeX = (i, d) => ((i * 230 - cam.x * LS() * d) % (LW + 690) + LW + 690) % (LW + 690) - 230;
-  for (const b of BANDS){
+  for (let k = 0; k < BANDS.length; k++){
+    const b = BANDS[k];
     c.fillStyle = b.col;
     c.beginPath();
     c.moveTo(-40, LH);
     for (let i = -1; i < 9; i++){
       const bx = ridgeX(i, b.d);
       c.lineTo(bx, LH * (b.y + b.h));
-      c.lineTo(bx + 70, LH * b.y - (i % 3) * 16);
-      c.lineTo(bx + 140, LH * (b.y + b.h * .55));
-      c.lineTo(bx + 215, LH * (b.y + .04));
+      c.lineTo(bx + RIDGE_RIM, LH * b.y - ridgeTop(i, k));
+      c.lineTo(bx + 128, LH * (b.y + b.h * (.40 + ridgeMid(i, k) * .32)));
+      c.lineTo(bx + 172, LH * b.y - ridgeTop(i + 5, k) * .62);
+      c.lineTo(bx + 215, LH * (b.y + .02 + ridgeMid(i + 3, k) * .05));
     }
     c.lineTo(LW + 60, LH); c.closePath(); c.fill();
+    // Aerial perspective, done where it actually happens: inside the band.
+    // The further the ridge the more of HORIZON is mixed into it, and most of
+    // all at its foot, where you are looking through the most air. Clipped to
+    // the silhouette that was just laid down, so it dissolves the mountain
+    // rather than painting a band of fog across the sky behind it.
+    c.save(); c.clip();
+    const ag = c.createLinearGradient(0, LH * (b.y - .06), 0, LH * (b.y + b.h + .02));
+    ag.addColorStop(0, 'rgba(' + HORIZON + ',0)');
+    ag.addColorStop(.55, 'rgba(' + HORIZON + ',' + (b.fog * .45).toFixed(3) + ')');
+    ag.addColorStop(1, 'rgba(' + HORIZON + ',' + b.fog.toFixed(3) + ')');
+    c.fillStyle = ag; c.fillRect(0, LH * (b.y - .08), LW, LH * (b.h + .20));
+    c.restore();
     // and the slope that faces the sun catches it, the same as every ridge of
     // rock and every roof down on the island
-    c.strokeStyle = b.rim; c.lineWidth = Math.max(1, 2.4 * cam.z); c.lineCap = 'round';
+    c.strokeStyle = b.rim; c.lineWidth = Math.max(1, (1.5 + k * .6) * cam.z); c.lineCap = 'round';
     for (let i = -1; i < 9; i++){
       const bx = ridgeX(i, b.d);
       if (bx < -240 || bx > LW + 60) continue;
       c.beginPath();
       c.moveTo(bx, LH * (b.y + b.h));
-      c.lineTo(bx + RIDGE_RIM, LH * b.y - (i % 3) * 16);
+      c.lineTo(bx + RIDGE_RIM, LH * b.y - ridgeTop(i, k));
       c.stroke();
     }
     c.lineCap = 'butt';
     // haze pooling at the foot of the band, so the next one reads as further
-    c.globalAlpha = .30;
-    c.fillStyle = b.haze; c.fillRect(0, LH * (b.y + b.h) - 6, LW, LH * .05);
-    c.globalAlpha = 1;
+    const hy = LH * (b.y + b.h), h0 = LH * .10;
+    const hg = c.createLinearGradient(0, hy - h0, 0, hy + LH * .05);
+    hg.addColorStop(0, BAND_FX[k].haze0);
+    hg.addColorStop(.62, BAND_FX[k].haze1);
+    hg.addColorStop(1, BAND_FX[k].haze0);
+    c.fillStyle = hg; c.fillRect(0, hy - h0, LW, h0 + LH * .05);
   }
-  drawClouds(c);
-  // valley floor + the mist that hides how far down it goes
-  const vg = c.createLinearGradient(0, LH * .55, 0, LH);
-  vg.addColorStop(0, 'rgba(38,60,52,.85)'); vg.addColorStop(.5, 'rgba(20,34,32,.92)'); vg.addColorStop(1, '#0c1414');
-  c.fillStyle = vg; c.fillRect(0, LH * .55, LW, LH * .45);
+  // One last wash where every band has gone to nothing, so the ridges do not
+  // simply stop at a line — they run out of contrast and then out of sky.
+  const hz = c.createLinearGradient(0, LH * .40, 0, LH * .60);
+  hz.addColorStop(0, 'rgba(' + HORIZON + ',0)');
+  hz.addColorStop(.66, 'rgba(' + HORIZON + ',.13)');
+  hz.addColorStop(1, 'rgba(' + HORIZON + ',.03)');
+  c.fillStyle = hz; c.fillRect(0, LH * .40, LW, LH * .21);
+  drawGodRays(c, sx, sy, sr);
+  // valley floor + the mist that hides how far down it goes. The floor used to
+  // start at .85 alpha on a hard line, which drew the horizon as a step.
+  const vg = c.createLinearGradient(0, LH * .50, 0, LH);
+  vg.addColorStop(0, 'rgba(58,84,72,0)');
+  vg.addColorStop(.13, 'rgba(44,66,57,.70)');
+  vg.addColorStop(.28, 'rgba(30,48,44,.90)');
+  vg.addColorStop(.6, 'rgba(20,34,32,.94)');
+  vg.addColorStop(1, '#0c1414');
+  c.fillStyle = vg; c.fillRect(0, LH * .50, LW, LH * .50);
+  // and the mist itself: soft strata rather than five grey rectangles
   for (let i = 0; i < 5; i++){
-    const y = LH * (.60 + i * .07), a = .05 + .03 * Math.sin(G.t * .3 + i);
-    c.fillStyle = 'rgba(200,225,230,' + a.toFixed(3) + ')';
-    c.fillRect(0, y, LW, LH * .05);
+    const y = LH * (.585 + i * .07), a = .055 + .032 * Math.sin(G.t * .3 + i), hgt = LH * .062;
+    const mg = c.createLinearGradient(0, y, 0, y + hgt);
+    mg.addColorStop(0, 'rgba(202,226,231,0)');
+    mg.addColorStop(.5, 'rgba(202,226,231,' + a.toFixed(3) + ')');
+    mg.addColorStop(1, 'rgba(202,226,231,0)');
+    c.fillStyle = mg; c.fillRect(0, y, LW, hgt);
   }
   drawBirds(c);
 }
@@ -4322,22 +4486,185 @@ function drawSky(c){
    read as a thin ribbon in an empty room. Clouds and birds are laid out once
    from a fixed hash — no RNG the simulation can see — and only ever drift.  */
 const SKY_SPAN = 2600;                    // one world-length of cloud, wrapped
+const CLOUD_N = 18;
 let CLOUDS = null;
 function clouds(){
   if (CLOUDS) return CLOUDS;
   CLOUDS = [];
-  for (let i = 0; i < 14; i++){
+  for (let i = 0; i < CLOUD_N; i++){
     const r = hash2(i * 3.7, 11.3), r2 = hash2(i * 1.9, 47.1), r3 = hash2(i * 5.3, 7.7);
+    // Four sheets rather than three, and size, opacity and parallax speed all
+    // rank together on the same tier — two clouds the same size moving at
+    // different speeds is the tell that a sky is a decal with a scroll on it.
+    const tier = i % 4, dep = tier / 3;   // 0 = furthest sheet, 1 = nearest
     CLOUDS.push({
-      x:(i / 14 + r * .05) * SKY_SPAN,
-      y:.05 + r2 * .30,                   // fraction of the canvas height
-      s:.55 + r3 * 1.1,                   // size
-      d:.05 + (i % 3) * .045,             // parallax depth
-      a:.26 + r2 * .26,
+      k:i,                                // which sprite this cloud owns
+      x:(i / CLOUD_N + r * .045) * SKY_SPAN,
+      y:.035 + dep * .11 + r2 * .21,      // fraction of the canvas height
+      s:.7 + dep * 1.0 + r3 * .75,        // size
+      d:.042 + tier * .040,               // parallax depth
+      a:.40 + dep * .14 + r2 * .18,
       w:2 + Math.floor(r3 * 3),           // puffs
     });
   }
   return CLOUDS;
+}
+/* ------------------------------------------------------- sky sprite cache
+   A cloud drawn as a row of hard ellipses is a row of hard ellipses, and no
+   amount of shading fixes an edge you can cut yourself on. Real cumulus has an
+   opaque core and a rim that dissolves, which on a canvas means a radial
+   falloff per puff — far too expensive to pay for eighteen clouds sixty times
+   a second. So each cloud is rendered ONCE, at its own resolution, into its
+   own little canvas, and blitted after that: one drawImage per cloud per
+   frame instead of a dozen gradients. Shapes come off hash2, never off the
+   simulation's RNG, and nothing here is read by anything downstream.        */
+function skyCanvas(w, h){
+  try {
+    const cv = document.createElement('canvas');
+    cv.width = Math.max(2, Math.round(w));
+    cv.height = Math.max(2, Math.round(h));
+    const cc = cv.getContext('2d');
+    return cc ? { cv, cc } : null;
+  } catch (e){ return null; }
+}
+// One soft puff: opaque at the middle, gone at the rim. Drawn in a scaled
+// space so a single radial gradient can be any ellipse.
+function softBlob(c, x, y, rx, ry, col, a){
+  if (!(rx > 0 && ry > 0 && a > 0)) return;
+  c.save();
+  c.translate(x, y); c.scale(rx, ry);
+  const g = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+  g.addColorStop(0, 'rgba(' + col + ',' + a.toFixed(4) + ')');
+  g.addColorStop(.60, 'rgba(' + col + ',' + (a * .92).toFixed(4) + ')');
+  g.addColorStop(.85, 'rgba(' + col + ',' + (a * .34).toFixed(4) + ')');
+  g.addColorStop(1, 'rgba(' + col + ',0)');
+  c.fillStyle = g; c.fillRect(-1, -1, 2, 2);
+  c.restore();
+}
+// Where a cloud's puffs sit, in puff radii. Jittered per cloud so no two have
+// the same outline, and with a wider flatter puff along the base — cumulus
+// sits on a line, it does not scallop.
+function cloudPuffs(cl){
+  const out = [], w = cl.w;
+  for (let i = 0; i <= w; i++){
+    const f = 1 - Math.abs(i - w / 2) / (w + 1);
+    const j = hash2(i * 3.3 + cl.k * 7.1, 2.9), j2 = hash2(i * 5.7 + cl.k * 2.3, 6.4);
+    out.push({
+      x:(i - w / 2) * .70 + (j - .5) * .18,
+      y:-f * .58 - j2 * .18,
+      rx:(.52 + f * .50) * (.84 + j * .30),
+      ry:(.40 + f * .48) * (.82 + j2 * .34),
+    });
+  }
+  out.push({ x:(hash2(cl.k * 2.7, 1.1) - .5) * .3, y:.16, rx:w * .40 + .5, ry:.27 });
+  // Roughly half of them get a tower: a second head boiling up off one
+  // shoulder. Without it every cloud in the sky is the same lumpy sausage
+  // seen at a different size, which is the thing that makes a bank of them
+  // read as a repeat rather than as weather.
+  const t = hash2(cl.k * 6.7, 12.9);
+  if (t > .42){
+    const t2 = hash2(cl.k * 4.9, 3.7), side = t2 > .5 ? 1 : -1;
+    out.push({ x:side * (w * .22 + t2 * .35), y:-.86 - t * .34,
+      rx:.44 + t2 * .30, ry:.40 + t * .26 });
+  }
+  return out;
+}
+// Puff radius in sprite pixels. Scaled by the cloud's own size so the biggest
+// one is not blitted at twice the resolution it was drawn at — a soft edge is
+// meant to be soft, not out of focus.
+const cloudRes = (cl) => Math.round(clamp(30 * (.7 + cl.s * .75), 24, 96));
+const CLOUD_SPR = new Map();
+function cloudSprite(cl){
+  if (CLOUD_SPR.has(cl.k)) return CLOUD_SPR.get(cl.k);
+  const P = cloudPuffs(cl);
+  let x0 = 9, x1 = -9, y0 = 9, y1 = -9;
+  for (const p of P){
+    x0 = Math.min(x0, p.x - p.rx); x1 = Math.max(x1, p.x + p.rx);
+    y0 = Math.min(y0, p.y - p.ry); y1 = Math.max(y1, p.y + p.ry);
+  }
+  x0 -= .3; x1 += .3; y0 -= .3; y1 += .3;
+  const R = cloudRes(cl), W = (x1 - x0) * R, H = (y1 - y0) * R;
+  const body = skyCanvas(W, H), rim = skyCanvas(W, H);
+  if (!body || !rim){ CLOUD_SPR.set(cl.k, null); return null; }
+  const ox = -x0 * R, oy = -y0 * R;
+  const bc = body.cc, lean = cloudLean('crown'), rise = cloudRise('crown');
+  for (const p of P) softBlob(bc, ox + p.x * R, oy + p.y * R, p.rx * R, p.ry * R, CLOUD.body.col, 1);
+  // The shading is painted with `source-atop`, which is the soft-edged answer
+  // to the clip the hard-edged version needed: an offset copy only lands where
+  // the cloud already is, and it lands with the cloud's own feathered alpha
+  // instead of against a cut-out. Directions come off cloudLean/cloudRise, the
+  // same calls the ground shadows use, so the sky cannot drift out of
+  // agreement with the island under it.
+  bc.globalCompositeOperation = 'source-atop';
+  for (const p of P)
+    softBlob(bc, ox + (p.x + CLOUD.belly.dx * cloudLean('belly') * .58) * R,
+                 oy + (p.y + CLOUD.belly.dy * cloudRise('belly') * .70) * R,
+                 p.rx * R * CLOUD.belly.sc, p.ry * R * CLOUD.belly.sc, CLOUD.belly.col, CLOUD.belly.a * .76);
+  for (const p of P)
+    softBlob(bc, ox + (p.x + CLOUD.crown.dx * lean * .52) * R,
+                 oy + (p.y + CLOUD.crown.dy * rise * .60) * R,
+                 p.rx * R * CLOUD.crown.sc, p.ry * R * CLOUD.crown.sc, CLOUD.crown.col, CLOUD.crown.a * 1.05);
+  bc.globalCompositeOperation = 'source-over';
+  // And a second sprite holding the sunward edge alone, kept in reserve for
+  // the clouds that pass near the sun. `destination-in` trims it back to the
+  // cloud's own silhouette, so what is left is a rim and nothing else.
+  const rc = rim.cc;
+  for (const p of P)
+    softBlob(rc, ox + (p.x + CLOUD.crown.dx * lean * .84) * R,
+                 oy + (p.y + CLOUD.crown.dy * rise * .84) * R,
+                 p.rx * R * .80, p.ry * R * .76, SUN.warm, .9);
+  rc.globalCompositeOperation = 'destination-in';
+  for (const p of P) softBlob(rc, ox + p.x * R, oy + p.y * R, p.rx * R, p.ry * R, '255,255,255', 1);
+  rc.globalCompositeOperation = 'source-over';
+  const spr = { cv:body.cv, rim:rim.cv, ox, oy, R, w:W, h:H };
+  CLOUD_SPR.set(cl.k, spr);
+  return spr;
+}
+/* ----------------------------------------------------------------- cirrus
+   Ice, five miles up, moving on a different wind from the cumulus and far
+   enough away that it barely parallaxes at all. Four sheets of thin streaks,
+   pre-rendered the same way the clouds are.                                 */
+const CIRRUS = [
+  { k:0, x:.03, y:.045, s:1.25, d:.014, a:.30, n:11 },
+  { k:1, x:.27, y:.095, s:.95,  d:.020, a:.22, n:8  },
+  { k:2, x:.52, y:.065, s:1.40, d:.017, a:.26, n:13 },
+  { k:3, x:.76, y:.115, s:1.05, d:.024, a:.18, n:9  },
+];
+const CIRRUS_W = 560, CIRRUS_H = 130;
+const CIRRUS_SPR = new Map();
+function cirrusSprite(ci){
+  if (CIRRUS_SPR.has(ci.k)) return CIRRUS_SPR.get(ci.k);
+  const cn = skyCanvas(CIRRUS_W, CIRRUS_H);
+  if (!cn){ CIRRUS_SPR.set(ci.k, null); return null; }
+  const cc = cn.cc;
+  for (let i = 0; i < ci.n; i++){
+    const r1 = hash2(i * 4.1 + ci.k * 13.7, 3.3);
+    const r2 = hash2(i * 8.3 + ci.k * 2.9, 9.7);
+    const r3 = hash2(i * 1.3 + ci.k * 6.1, 5.5);
+    softBlob(cc, 50 + r1 * (CIRRUS_W - 140), 20 + r2 * (CIRRUS_H - 44),
+      56 + r3 * 140, 1.8 + r1 * 3.0, '250,253,255', .5 + r3 * .45);
+  }
+  const spr = { cv:cn.cv };
+  CIRRUS_SPR.set(ci.k, spr);
+  return spr;
+}
+function drawCirrus(c){
+  const drift = G.t * 3.5;
+  for (const ci of CIRRUS){
+    const spr = cirrusSprite(ci);
+    if (!spr) continue;
+    const k = (.8 + cam.z * .45) * ci.s, w = CIRRUS_W * k, h = CIRRUS_H * k;
+    const base = ((ci.x * SKY_SPAN - cam.x * LS() * ci.d - drift * ci.d * 8) % SKY_SPAN + SKY_SPAN) % SKY_SPAN - 340;
+    c.globalAlpha = ci.a;
+    // Two copies, a wrap apart: a cirrus sheet is wide enough that the seam
+    // would otherwise be a hole in the sky rather than a cut off screen.
+    for (const off of [0, -SKY_SPAN]){
+      const x = base + off;
+      if (x > LW + 40 || x + w < -40) continue;
+      c.drawImage(spr.cv, x, LH * ci.y, w, h);
+    }
+    c.globalAlpha = 1;
+  }
 }
 // A cloud was the one thing left in frame that nothing lit. The mesa, the
 // roofs, the bodies, the mines and even the ridge rims all obey LIT and SUN,
@@ -4367,33 +4694,51 @@ function cloudPath(c, x, y, R, w, sc){
       R * (.55 + f * .55) * sc, R * (.30 + f * .24) * sc, 0, 0, 6.2832);
   }
 }
+// Where each visible cloud landed this frame, reused between the two passes
+// below so the placement maths is done once and the composite mode is switched
+// twice per frame instead of twice per cloud.
+const CLOUD_LAID = [];
 function drawClouds(c){
   const drift = G.t * 3.5;
+  const sx = LW * SUN.x, sy = LH * SUN.y, reach = Math.max(1, LW * .5);
+  CLOUD_LAID.length = 0;
   for (const cl of clouds()){
-    let x = ((cl.x - cam.x * LS() * cl.d - drift * cl.d * 8) % SKY_SPAN + SKY_SPAN) % SKY_SPAN - 200;
-    if (x < -260 || x > LW + 260) continue;
+    const x = ((cl.x - cam.x * LS() * cl.d - drift * cl.d * 8) % SKY_SPAN + SKY_SPAN) % SKY_SPAN - 200;
+    if (x < -340 || x > LW + 340) continue;
     const y = LH * cl.y, R = 26 * cl.s * (.7 + cam.z * .5);
-    // One path, one fill, for the silhouette — puffs filled separately stack
-    // their own alpha and read as a row of flat discs instead of a cloud.
-    cloudPath(c, x, y, R, cl.w, 1);
-    c.fillStyle = 'rgba(' + CLOUD.body.col + ',' + cl.a.toFixed(3) + ')';
-    c.fill();
-    // The shading is then CLIPPED to that silhouette. Offset copies painted
-    // loose hang past the edge and read as a second, fainter cloud sitting
-    // behind the first; inside the clip the same two shapes are simply a dark
-    // underside and a bright top.
-    c.save();
-    cloudPath(c, x, y, R, cl.w, 1);
-    c.clip();
-    for (const k of CLOUD_PASSES){
-      if (k === 'body') continue;
-      const p = CLOUD[k];
-      cloudPath(c, x + R * p.dx * cloudLean(k), y + R * p.dy * cloudRise(k), R, cl.w, p.sc);
-      c.fillStyle = 'rgba(' + p.col + ',' + (cl.a * p.a).toFixed(3) + ')';
+    const spr = cloudSprite(cl);
+    if (!spr){
+      // No offscreen canvas to render into — a headless or hostile document.
+      // The art system is graceful everywhere else in this game and the sky is
+      // not the place to start throwing: hard-edged weather beats no weather.
+      cloudPath(c, x, y, R, cl.w, 1);
+      c.fillStyle = 'rgba(' + CLOUD.body.col + ',' + cl.a.toFixed(3) + ')';
       c.fill();
+      continue;
     }
-    c.restore();
+    const k = R / spr.R;
+    const ddx = (x - sx) / reach, ddy = (y - sy) / reach;
+    const lit = clamp(1 - Math.sqrt(ddx * ddx + ddy * ddy), 0, 1);
+    CLOUD_LAID.push({ spr, x:x - spr.ox * k, y:y - spr.oy * k, w:spr.w * k, h:spr.h * k,
+      a:clamp(cl.a, 0, 1), lit:lit > .03 ? clamp(lit * lit * (.55 + cl.a), 0, 1) : 0 });
   }
+  for (const L of CLOUD_LAID){
+    c.globalAlpha = L.a;
+    c.drawImage(L.spr.cv, L.x, L.y, L.w, L.h);
+  }
+  // The silver lining. A cloud passing near the sun does not get uniformly
+  // brighter, its sunward edge burns out — so the rim sprite goes on top,
+  // additively, scaled by how close to the sun this cloud actually is. All of
+  // them in one pass, because flipping the composite mode per cloud breaks
+  // whatever batching the canvas was doing.
+  c.globalCompositeOperation = 'lighter';
+  for (const L of CLOUD_LAID){
+    if (!L.lit) continue;
+    c.globalAlpha = L.lit;
+    c.drawImage(L.spr.rim, L.x, L.y, L.w, L.h);
+  }
+  c.globalCompositeOperation = 'source-over';
+  c.globalAlpha = 1;
 }
 /* ------------------------------------------------------------------ birds
    Three strokes each, three birds a flock, every one the same size on a
@@ -4405,9 +4750,12 @@ function drawClouds(c){
 const FLOCKS = [
   // Lower in the sky is nearer — the same thing BANDS says about the ridges —
   // so y, sc and d all rank together and a test can check they never disagree.
-  { y:.16, sp:14, ph:.78, n:4, sc:.70, d:.016 },
-  { y:.20, sp:11, ph:0,   n:5, sc:1.00, d:.030 },
-  { y:.27, sp:8,  ph:.45, n:7, sc:1.30, d:.044 },
+  // `col` is the aerial perspective the ridges already have, applied to a
+  // bird: the far flock is not a smaller dark bird, it is a bird with most of
+  // the sky's own colour mixed into it. A silhouette at distance is pale.
+  { y:.16, sp:14, ph:.78, n:4, sc:.70, d:.016, col:'96,122,134', a:.40 },
+  { y:.20, sp:11, ph:0,   n:5, sc:1.00, d:.030, col:'60,84,96',  a:.52 },
+  { y:.27, sp:8,  ph:.45, n:7, sc:1.30, d:.044, col:'32,48,56',  a:.62 },
 ];
 const BIRD = {
   gapX:12,          // how far behind the leader each rank sits
@@ -4453,7 +4801,7 @@ function drawBirds(c){
     // glass while the sky slid behind them was the tell.
     const x0 = ((birdDrift(fl) % span) + span) % span - 180;
     const sc = fl.sc * (.72 + cam.z * .34);
-    c.strokeStyle = 'rgba(30,44,48,' + (BIRD.a * (.55 + fl.sc * .40)).toFixed(3) + ')';
+    c.strokeStyle = 'rgba(' + fl.col + ',' + (BIRD.a * fl.a * 2).toFixed(3) + ')';
     c.lineWidth = Math.max(.7, BIRD.lw * sc * cam.z);
     for (let i = 0; i < fl.n; i++){
       const [ox, oy] = birdSlot(i);
@@ -4464,9 +4812,14 @@ function drawBirds(c){
       // instead of pulsing. Both come off the fixed hash, never the RNG.
       const w = (BIRD.wMin + (BIRD.wMax - BIRD.wMin) * birdBeat(f, i, G.t)) * sc;
       const hw = BIRD.span * sc;
+      // A gull, not a tick mark: the wrists lift and the tips fall away below
+      // the body line, which is the shape that reads as a bird at four pixels
+      // across. Two symmetrical curves off one centre, so a wingbeat opens the
+      // whole span rather than hinging one side.
       c.beginPath();
-      c.moveTo(x - hw, y); c.quadraticCurveTo(x - hw * .4, y - w, x, y);
-      c.quadraticCurveTo(x + hw * .4, y - w, x + hw, y);
+      c.moveTo(x - hw, y + w * .34);
+      c.quadraticCurveTo(x - hw * .46, y - w, x, y - w * .12);
+      c.quadraticCurveTo(x + hw * .46, y - w, x + hw, y + w * .34);
       c.stroke();
     }
   }
