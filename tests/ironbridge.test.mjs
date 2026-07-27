@@ -6276,6 +6276,149 @@ t.ok(true, 'drawing an empty bridge is harmless');
       light.t0.toFixed(3) + ' → ' + heavy.t0.toFixed(3) + ')');
     t.ok(heavy.w > light.w, 'and the body remembers how hard it was hit');
     t.ok(IB.hitPush(heavy.w) > IB.hitPush(light.w) * 1.5, 'so it is thrown further too');
+
+    // The THIRD thing that weight should buy, and did not. The camera shook
+    // only for structures, on a `Math.min(3, dmg / 90)` that reached its cap at
+    // eight percent of a turret — three values across six blows — while a hero
+    // taking 684 damage shook the board exactly as hard as one taking 14: not
+    // at all. Driven off the weight the blow has already been given, so the
+    // number, the flinch and the camera cannot drift apart.
+    //
+    // hitShakeAmt returns as well as spends, because shake() is a no-op under
+    // HEADLESS: without a return value the suite could only say nothing threw.
+    {
+      const at = (w, struct) => IB.hitShakeAmt({ hitW:w, struct:!!struct, x:0 });
+      t.ok(at(0) === 0, 'nothing landed, nothing moves');
+      t.ok(at(IB.HIT_SHAKE.floor) === 0, 'and a graze is beneath the floor');
+      t.ok(at(1) > 0, 'a full-weight blow moves the camera');
+      let flat = 0, prev = -1;
+      const ws = [.1, .2, .35, .5, .7, 1];
+      for (const w of ws){ const v = at(w); if (v <= prev + 1e-9) flat++; prev = v; }
+      t.ok(flat === 0, 'and it grows the whole way up, never saturating (' + flat + ' flat steps of ' + ws.length + ')');
+      t.ok(at(1, true) > at(1), 'stone still shakes harder than a body');
+      // It has to read the SAME weight the number and the flinch read, or the
+      // three go their own ways again. Asked through a real blow.
+      const hv = flinchOf(.6) || NOHIT;
+      t.ok(hv !== NOHIT && at(hv.w) > 0, 'a real haymaker really moves it (' + at(hv.w).toFixed(2) + ')');
+      const lt = flinchOf(.02) || NOHIT;
+      t.ok(lt !== NOHIT && at(hv.w) > at(lt.w), 'and further than a real graze');
+
+      // WIRED, on a blow that does NOT kill — measured separately from the
+      // death, because on a killing blow the death's own shake swamps it and
+      // unwiring the blow entirely goes unnoticed. It also has to sit outside
+      // the particle budget: fxRoom is about how many sparks the frame can
+      // hold, and the camera is not a spark, so leaving it inside made the
+      // feedback go quiet exactly when the fight got busy.
+      IB.newMatch({ diff:'veteran', seed:7716 });
+      const anvil = IB.spawnUnit(1, 'super', { x:60, y:0, paid:true });
+      IB.rebuildGrid();
+      const puncher = IB.spawnUnit(0, 'melee', { x:59, y:0, paid:true });
+      IB.shakeAsked = 0;
+      IB.fxForce = false;                       // the particle budget shut, as it is in a real headless run
+      IB.dealDmg(puncher, anvil, anvil.mhp * .5, { pure:true });
+      t.ok(!anvil.dead, 'the body survived the blow, so nothing else asked the camera');
+      t.ok(IB.shakeAsked > 0, 'a blow that does not kill still moves the camera (' + IB.shakeAsked.toFixed(2) + ')');
+      t.ok(Math.abs(IB.shakeAsked - at(anvil.hitW)) < 1e-9,
+        'by exactly the weight it was given (' + IB.shakeAsked.toFixed(3) + ' vs ' + at(anvil.hitW).toFixed(3) + ')');
+      IB.shakeAsked = 0;
+      G.units.length = 0;
+    }
+    G.units.length = 0;
+  }
+  // Nothing that died was worth more than anything else that died. A 190hp
+  // levy, a 560hp Cannon and a 1250hp Siege Ogre — the one that costs an
+  // inhibitor to unlock — all came apart with the same thirteen sparks, the
+  // same 1.3 wave, the same four motes and no shake at all. Two distinct
+  // reactions across seven kinds of death.
+  //
+  // Worse: the four lines doing it each asked `t.isHero ?`, inside the ELSE of
+  // `if (t.isHero) onHeroDeath(...)`. The question could only be answered no,
+  // so every minion took the small branch and `if (t.isHero) shake(1.4)` never
+  // fired once in the game's life.
+  {
+    const kinds = ['grunt', 'melee', 'caster', 'cannon', 'super'];
+    IB.newMatch({ diff:'veteran', seed:7710 });
+    const of = (k) => { const u = IB.spawnUnit(0, k, { x:50, y:0, paid:true }); G.units.length = 0; return u; };
+    const rows = kinds.map(k => { const u = of(k); return { k, u,
+      worth:IB.minionWorth(u), heft:IB.deathHeft(u),
+      spark:IB.deathSparks(u), wave:IB.deathWave(u), mote:IB.deathMotes(u), shake:IB.deathShake(u) }; });
+    // The ladder is the game's own price on a body's head, so the reaction and
+    // the payout cannot drift. Prove it is a real ladder before leaning on it.
+    t.ok(rows[0].worth < rows[rows.length - 1].worth,
+      'the game prices a levy below a siege ogre (' + rows[0].worth + ' → ' + rows[rows.length - 1].worth + ')');
+    t.ok(IB.minionWorth({ bounty:9 }) === C.BOUNTY_MINION + 9, 'and worth is that price, not a second opinion');
+    let flat = 0;
+    for (let i = 1; i < rows.length; i++){
+      const a = rows[i - 1], b = rows[i];
+      if (b.worth > a.worth && !(b.spark > a.spark && b.wave > a.wave && b.shake > a.shake)) flat++;
+    }
+    t.ok(flat === 0, 'every step up the ladder is a bigger death (' + flat + ' steps that were not)');
+    t.ok(rows[0].heft >= 0 && rows[rows.length - 1].heft <= 1, 'heft stays in its range');
+    // Squared on purpose: shake accumulates and a wave of levies must not
+    // rattle the camera as hard as the one thing that mattered.
+    const levy = rows[0], ogre = rows[rows.length - 1];
+    t.ok(ogre.shake > levy.shake * 8, 'an ogre thumps far harder than a levy, not merely harder (' +
+      levy.shake.toFixed(3) + ' vs ' + ogre.shake.toFixed(3) + ')');
+    t.ok(levy.shake * 8 < ogre.shake, 'so eight levies together still do not out-thump it');
+
+    // Heroes, off the same kind of ladder. A hero going down was a flat 22
+    // sparks and a flat 6 of shake whether it walked out of the tavern this
+    // minute or has been carrying the match for twenty.
+    const mkH = (lvl) => { const h = IB.makeHero(0, 'fighter', 'H'); h.lvl = lvl; return h; };
+    const h1 = mkH(1), hMid = mkH(Math.max(2, Math.round(C.MAX_LEVEL / 2))), hMax = mkH(C.MAX_LEVEL);
+    t.ok(IB.heroWorth(hMax) > IB.heroWorth(h1), 'a maxed hero is a richer kill (' +
+      IB.heroWorth(h1) + ' → ' + IB.heroWorth(hMax) + ')');
+    t.ok(IB.heroShake(hMax) > IB.heroShake(hMid) && IB.heroShake(hMid) > IB.heroShake(h1),
+      'and a bigger moment when it falls (' + IB.heroShake(h1).toFixed(2) + ' → ' +
+      IB.heroShake(hMid).toFixed(2) + ' → ' + IB.heroShake(hMax).toFixed(2) + ')');
+    t.ok(IB.heroSparks(hMax) > IB.heroSparks(h1) && IB.heroRingR(hMax) > IB.heroRingR(h1),
+      'in sparks and in the ring, not just the camera');
+    // It is ALWAYS a moment, though — the floors are what the flat values were.
+    t.ok(IB.heroShake(h1) > ogre.shake, 'even the greenest hero outweighs an ogre (' +
+      IB.heroShake(h1).toFixed(2) + ' vs ' + ogre.shake.toFixed(2) + ')');
+    t.ok(IB.heroHeft(h1) === 0 && IB.heroHeft(hMax) === 1, 'and the ladder uses its whole range');
+
+    // The payout is the other reader. If the two ever stop being the same
+    // function the reaction starts describing a number nobody is paid.
+    IB.newMatch({ diff:'veteran', seed:7712 });
+    const hero = IB.makeHero(1, 'fighter', 'Mark');
+    G.sides[1].heroes.push(hero); IB.gainXp(hero, 4000); IB.autoPick(hero);
+    IB.enterLane(hero); hero.x = 60; hero.y = 0;
+    IB.rebuildGrid();
+    const killer = IB.spawnUnit(0, 'melee', { x:59, y:0, paid:true });
+    const gold0 = G.sides[0].res.gold, expect = IB.heroWorth(hero);
+    IB.dealDmg(killer, hero, hero.mhp * 4, { pure:true });
+    t.ok(hero.dead, 'the hero really died');
+    t.ok(Math.abs((G.sides[0].res.gold - gold0) - expect) < 1e-9,
+      'and paid exactly what the reaction was sized by (' + (G.sides[0].res.gold - gold0) + ' vs ' + expect + ')');
+
+    // WIRED. Every one of the numbers above is a function the draw is supposed
+    // to call, and the bug being replaced was a call that never fired at all —
+    // `if (t.isHero) shake(1.4)` sat in the else-branch of `if (t.isHero)` for
+    // the game's whole life. shake() is a no-op under HEADLESS, so the suite
+    // reads what the camera was ASKED for instead: recorded before the guard
+    // and before the off-screen cull, and read by nothing in the simulation.
+    const askedFor = (kind) => {
+      IB.newMatch({ diff:'veteran', seed:7714 });
+      const victim = IB.spawnUnit(1, kind, { x:60, y:0, paid:true });
+      IB.rebuildGrid();
+      const k2 = IB.spawnUnit(0, 'melee', { x:59, y:0, paid:true });
+      IB.shakeAsked = 0;
+      IB.dealDmg(k2, victim, victim.mhp * 4, { pure:true });
+      return { asked: IB.shakeAsked, dead: !!victim.dead, victim };
+    };
+    const levyDeath = askedFor('grunt'), ogreDeath = askedFor('super');
+    t.ok(levyDeath.dead && ogreDeath.dead, 'both really died on the way through');
+    t.ok(levyDeath.asked > 0, 'a death asks the camera for something (' + levyDeath.asked.toFixed(2) + ')');
+    t.ok(ogreDeath.asked > levyDeath.asked,
+      'and an ogre asks for more than a levy (' + levyDeath.asked.toFixed(2) +
+      ' → ' + ogreDeath.asked.toFixed(2) + ')');
+    // The killing blow lands as well as kills, so the total is the blow plus
+    // the death — but the death's own share must be in there.
+    t.ok(ogreDeath.asked >= IB.deathShake(ogreDeath.victim) - 1e-9,
+      'and the death’s own share of it reached the camera (' +
+      IB.deathShake(ogreDeath.victim).toFixed(2) + ' of ' + ogreDeath.asked.toFixed(2) + ')');
+    IB.shakeAsked = 0;
     G.units.length = 0;
   }
   // The wart swing0 fixed, in two more places. An ultimate's pop was given .5

@@ -1516,9 +1516,14 @@ function dealDmg(src, tgt, amt, o){
           vz:fxRr(1, 4), ...life(fxRr(.16, .34)), col, r:fxRr(.9, big ? 2.4 : 1.5) });
       }
     }
-    if (tgt.struct && dmg > 40) shake(Math.min(3, dmg / 90), tgt.x);
     sfx(tgt.struct ? 'stone' : (big ? 'hitBig' : 'hit'), tgt.x);
   }
+  // Outside the particle budget on purpose. fxRoom is about how many sparks
+  // the frame can hold; the camera is not a spark, and shake() already guards
+  // itself on HEADLESS and on being off screen. Left inside, the feedback for
+  // a blow would go quiet exactly when the fight got busy enough to fill the
+  // budget — which is backwards.
+  if (dmg > 0) hitShake(tgt);
   if (dmg > 0 && !HEADLESS)
     addFloat(tgt.x, tgt.y, Math.round(dmg), magic ? '#c69bff' : (src && src.isHero ? '#ffe08a' : '#ffffff'),
       floatScale(dmg, tgt.mhp) * (tgt.struct ? .9 : 1));
@@ -1544,7 +1549,7 @@ function killThing(t, src){
   if (t.struct){ onStructDown(t, src); return; }
   const s = src && src.side !== undefined ? G.sides[src.side] : null;
   if (s && !t.isHero){
-    let g = C.BOUNTY_MINION + (t.bounty || 0);
+    let g = minionWorth(t);
     if (src.isHero) g = g * (1 + passVal(src, 'goldM')) + passVal(src, 'killGold');
     s.res.gold += g; s.kills++;
   }
@@ -1563,12 +1568,22 @@ function killThing(t, src){
       // Bodies used to vanish between frames. Something that died should leave
       // a mark on the ground and a puff going up, or a wave wiping out four
       // minions looks like a rendering glitch.
-      burstFx(t.x, t.y, SIDE_COL[t.side], t.isHero ? 16 : 9);
-      waveFx(t.x, t.y, t.isHero ? 2.4 : 1.3, SIDE_COL[t.side], .45);
-      moteFx(t.x, t.y, SIDE_COL2[t.side] || '#ffffff', t.isHero ? 8 : 4, .7);
-      if (t.isHero) shake(1.4, t.x);
+      // These four lines each asked `t.isHero ?` — inside the ELSE of
+      // `if (t.isHero) onHeroDeath(...)`, so the question could only ever be
+      // answered no. Every minion took the small branch and the shake never
+      // fired once. Heft answers the question the ternary was reaching for,
+      // and answers it for all six kinds instead of two.
+      burstFx(t.x, t.y, SIDE_COL[t.side], deathSparks(t));
+      waveFx(t.x, t.y, deathWave(t), SIDE_COL[t.side], .45);
+      moteFx(t.x, t.y, SIDE_COL2[t.side] || '#ffffff', deathMotes(t), .7);
       sfx('die', t.x);
     }
+    // Same reason as the blow above: the camera is not a particle, and shake()
+    // guards itself. Left inside the !HEADLESS block it could not be seen to
+    // fire at all, which is how the old `if (t.isHero) shake(1.4)` sat in the
+    // else-branch of `if (t.isHero)` for the game's whole life without once
+    // running.
+    shake(deathShake(t), t.x);
     const i = G.units.indexOf(t); if (i >= 0) G.units.splice(i, 1);
   }
 }
@@ -2408,16 +2423,16 @@ function onHeroDeath(h, src){
   if (dh) nearby(h.x, 8, (u) => { if (!u.dead && u.side === h.side) healUnit(u, dh); });
   if (src && src.side !== undefined){
     const s = G.sides[src.side];
-    s.res.gold += C.BOUNTY_HERO + h.lvl * 8; s.heroKills++;
+    s.res.gold += heroWorth(h); s.heroKills++;
     if (src.isHero){ src.kills++; h.lastKiller = src; }
     awardXp(src, 130 + h.lvl * 11, h.x);
   }
   fxToast(h.name + ' has fallen.', badFor(h.side));
   sfx('heroDown', h.x);
   if (!HEADLESS){
-    burstFx(h.x, h.y, SIDE_COL[h.side], 22);
-    ringFx(h.x, h.y, 3.2, SIDE_COL[h.side]);
-    shake(6, h.x);
+    burstFx(h.x, h.y, SIDE_COL[h.side], heroSparks(h));
+    ringFx(h.x, h.y, heroRingR(h), SIDE_COL[h.side]);
+    shake(heroShake(h), h.x);
     sfx('hero', h.x);
   }
 }
@@ -3191,6 +3206,75 @@ function floatScale(amt, mhp){
 const HIT = { min:.10, max:.30, near:.9, far:3.4 };
 const hitTime = (w) => HIT.min + (HIT.max - HIT.min) * w;
 const hitPush = (w) => HIT.near + (HIT.far - HIT.near) * w;
+/* The third thing that weight should buy, and did not. The camera shook only
+   for STRUCTURES, and only on a `Math.min(3, dmg / 90)` that reached its cap
+   at eight percent of a turret's health — so across six blows from a scratch
+   to a near-kill it took three values, and a hero taking 684 damage shook the
+   board exactly as hard as one taking 14: not at all. The float and the flinch
+   two lines up were already reading hitWeight. This reads the weight the blow
+   has ALREADY been given rather than recomputing it, so the three cannot drift.
+
+   Stone still shakes harder than a body — that part was right. */
+const HIT_SHAKE = { floor:.06, amt:2.1, struct:1.7 };
+// Returns the amount as well as spending it, because shake() itself is a no-op
+// under HEADLESS — so without this every one of these numbers would be
+// invisible to the suite and the only thing a test could say is that nothing
+// threw. The same reason the four death figures below are functions rather
+// than expressions inlined at the call.
+function hitShakeAmt(tgt){
+  const w = (tgt && tgt.hitW) || 0;
+  if (w <= HIT_SHAKE.floor) return 0;
+  return HIT_SHAKE.amt * w * (tgt.struct ? HIT_SHAKE.struct : 1);
+}
+function hitShake(tgt){
+  const a = hitShakeAmt(tgt);
+  if (a > 0) shake(a, tgt.x);
+  return a;
+}
+
+/* How much of a moment a body coming apart is. The game already prices every
+   kill — a levy pays BOUNTY_MINION+2, a Cannon +7, a Siege Ogre +9 — and that
+   ladder is the designer's own statement of what a body was worth. It is the
+   right measure and max HP is not: a levy's health runs 200 to 451 over
+   twenty-five waves, so a late levy would blow up like an early ogre, while
+   the ogre-to-levy RATIO stays put. One function, two readers — the payout is
+   paid by it and the board reacts by it — so what you see can never drift from
+   what you were paid.
+
+   Measured before this, a 200hp levy, a 560hp Cannon and a 1250hp Siege Ogre
+   all died with the same thirteen sparks, the same 1.3 wave, the same four
+   motes and no shake at all: two distinct reactions across seven kinds of
+   death. The ogre costs an inhibitor to unlock. */
+const minionWorth = (u) => C.BOUNTY_MINION + (u.bounty || 0);
+const DEATH = { least:C.BOUNTY_MINION, most:C.BOUNTY_MINION + 9,
+  spark:6, sparkUp:11, wave:.95, waveUp:1.5, mote:3, moteUp:5, shake:3.4 };
+const deathHeft = (u) =>
+  clamp((minionWorth(u) - DEATH.least) / Math.max(1e-6, DEATH.most - DEATH.least), 0, 1);
+const deathSparks = (u) => Math.round(DEATH.spark + deathHeft(u) * DEATH.sparkUp);
+const deathWave   = (u) => DEATH.wave + deathHeft(u) * DEATH.waveUp;
+const deathMotes  = (u) => Math.round(DEATH.mote + deathHeft(u) * DEATH.moteUp);
+// Squared, so eight levies going down together barely register while one ogre
+// thumps: shake ACCUMULATES, and a linear ramp would let a wave of cheap
+// bodies rattle the camera as hard as the thing that matters.
+const deathShake  = (u) => { const h = deathHeft(u); return DEATH.shake * h * h; };
+
+/* The same question for a hero, off the same kind of ladder: a kill pays
+   BOUNTY_HERO plus eight a level, so a fresh hero is worth 68 and a maxed one
+   204. A hero going down was a flat 22 sparks, a flat 3.2 ring and a flat 6 of
+   shake whether it was the one that walked out of the tavern this minute or
+   the one that has been carrying the match for twenty. It is always a moment —
+   the floors here are what the flat values used to be — but it is not always
+   the SAME moment. */
+const heroWorth = (h) => C.BOUNTY_HERO + (h.lvl || 1) * 8;
+const HERO_DEATH = { spark:20, sparkUp:16, ring:3, ringUp:1.5, shake:5, shakeUp:4.5 };
+const heroHeft = (h) => {
+  const lo = C.BOUNTY_HERO + 8, hi = C.BOUNTY_HERO + C.MAX_LEVEL * 8;
+  return clamp((heroWorth(h) - lo) / Math.max(1e-6, hi - lo), 0, 1);
+};
+const heroSparks = (h) => Math.round(HERO_DEATH.spark + heroHeft(h) * HERO_DEATH.sparkUp);
+const heroRingR  = (h) => HERO_DEATH.ring + heroHeft(h) * HERO_DEATH.ringUp;
+const heroShake  = (h) => HERO_DEATH.shake + heroHeft(h) * HERO_DEATH.shakeUp;
+
 // Where a new number goes when others are still rising near it. The step and
 // the window were fixed numbers, written when every damage number was the same
 // size — now that a big hit prints at nearly two and a half times a scratch,
@@ -3587,7 +3671,14 @@ function lp(x, y, z){
 }
 // A knock felt through the camera. Capped, and only when the hit is on screen,
 // so a brawl at the far end of the world never rattles the hold you are in.
+// What the camera was ASKED for, before the headless guard and before the
+// off-screen cull. Nothing in the simulation reads it. It exists because the
+// bug this replaced was a call that never fired — `if (t.isHero) shake(1.4)`
+// sat in the else-branch of `if (t.isHero)` for the game's whole life — and a
+// suite that cannot see the wiring cannot catch that happening again.
+let shakeAsked = 0;
 function shake(amount, worldX){
+  shakeAsked += amount;
   if (HEADLESS) return;
   const p = (worldX - cam.x) * LS() * .96 + LW * .5;
   if (p < -120 || p > LW + 120) return;
@@ -8744,7 +8835,7 @@ window.IB = {
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, hitWeight, HIT, hitTime, hitPush, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
+  floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
