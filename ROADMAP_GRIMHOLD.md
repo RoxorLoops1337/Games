@@ -175,19 +175,29 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   Wait for whoever is carrying the key, or put a shoulder through it for your
   action: it opens now, the room wakes up, and the Warlock hears six. *(batch 19)*
 
+- **The flooded floor** — the first *theme*, drawn on its own roll so it never
+  eats a modifier slot. The corridors take water; wading costs two squares
+  instead of one, and buys the quiet: a door eased open from the water does not
+  wake the room behind it. Putting a shoulder through one still does. *(batch 20)*
+- **Vault variants** — a lock is no longer always the same problem. One in three
+  vaults pins its key to a named champion who will not stand and fight until you
+  have cornered it; one in three is wired to the hall, and says so before it
+  opens. *(batch 20)*
+
 ---
 
 ## Next up
 
-1. **Floor themes beyond modifiers.** A flooded floor where movement costs
-   double in water, a collapsing floor whose squares fall in over time. The
-   modifiers change numbers; these would change how a floor is walked.
-2. **Vault variants.** A vault that is trapped, or one whose key is held by a
-   champion that flees — so opening the lock is not always the same problem.
-3. **A carried body.** The dead are already a resource both sides want: the
+1. **A second theme.** `THEMES` is a table with one entry in it. A collapsing
+   floor whose squares fall in over time would prove the shape holds — and
+   unlike the water, it would put a clock on the whole floor.
+2. **A carried body.** The dead are already a resource both sides want: the
    party takes the blade, the Warlock takes the body. Let a hero pick a fallen
    friend up and carry them — slower, hands full — and pay to have them back on
    the between-floors screen.
+3. **The water should matter to more than your feet.** Fire ought to gutter in
+   it, a shock ought to travel through it, and something ought to live in it.
+   One of those three, not all of them.
 
 ## Backlog, roughly in order of value
 
@@ -239,6 +249,26 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **The Chained's `move: 0` is the whole mechanism.** There is no pen and no
   guard; any future affix or effect that grants movement would quietly unchain
   it. If movement ever becomes grantable, that is the thing to check.
-- **A revert-check that will not bite is telling you the code is dead.** Three
-  times now — `!f.plinth`, the force-door wake loop, the Chained's room pen —
-  the honest fix was deleting the guard, not writing a test that cannot fail.
+- **A revert-check that will not bite is telling you the code is dead.** Five
+  times now — `!f.plinth`, the force-door wake loop, the Chained's room pen, and
+  in batch 20 both a cornered-runner pre-check the fall-through already handled
+  and a `!m.runner` guard on fields a runner never reads. The honest fix was
+  deleting the guard, not writing a test that cannot fail.
+- **The board is no longer uniform-cost, and that is a load-bearing change.**
+  `walkField` is a shortest-path search now, not a flood fill, because a square
+  reached late by a dry route has to beat the wet one that got there first.
+  Anything new that changes what a square costs goes through `stepCost` — and
+  wants a test that the *cheaper* route wins, not merely that some route exists.
+- **Status art drawn in the wrong pass is invisible, not broken — again.** The
+  wading ripple was painted in `drawWater`, under the movement field and under
+  the actor. Same failure as batch 19's webbing, same fix: it belongs in
+  `drawActorTag`, above everything. Two batches running, the browser caught it
+  and the suite did not. A paint test proves a colour was reached for, never
+  that anything can see it.
+- **A test that accepts either outcome tests neither.** The first runner tests
+  passed a bearer that ran *and* a bearer that stood and swung, so deleting the
+  fleeing entirely left them green. If a mechanic has two legal outcomes, build
+  the scene that forces one of them and assert that one.
+- **The flooded floor is quiet, and the game has other quiet.** Wading, the
+  Elf's step, an unopened room — nothing yet says how they combine. Whatever
+  goes in next that muffles you should check what is already muffling you.
