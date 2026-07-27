@@ -1498,7 +1498,9 @@ function dealDmg(src, tgt, amt, o){
     if (tgt.struct && dmg > 40) shake(Math.min(3, dmg / 90), tgt.x);
     sfx(tgt.struct ? 'stone' : (big ? 'hitBig' : 'hit'), tgt.x);
   }
-  if (dmg > 0 && !HEADLESS) addFloat(tgt.x, tgt.y, Math.round(dmg), magic ? '#c69bff' : (src && src.isHero ? '#ffe08a' : '#ffffff'), tgt.isHero || tgt.struct ? 1 : .8);
+  if (dmg > 0 && !HEADLESS)
+    addFloat(tgt.x, tgt.y, Math.round(dmg), magic ? '#c69bff' : (src && src.isHero ? '#ffe08a' : '#ffffff'),
+      floatScale(dmg, tgt.mhp) * (tgt.struct ? .9 : 1));
   if (src && src.isHero && dmg > 0){
     const vamp = o.ability ? passVal(src, 'spellVamp') + bsum(src, 'bvamp') : passVal(src, 'ls') + bsum(src, 'bls');
     if (vamp > 0) healUnit(src, dmg * vamp);
@@ -1512,7 +1514,7 @@ function dealDmg(src, tgt, amt, o){
 function healUnit(u, amt){
   if (!u || u.dead || amt <= 0) return;
   u.hp = Math.min(u.mhp, u.hp + amt);
-  if (!HEADLESS && amt > 4) addFloat(u.x, u.y, '+' + Math.round(amt), '#7fdc8a', .8);
+  if (!HEADLESS && amt > 4) addFloat(u.x, u.y, '+' + Math.round(amt), '#7fdc8a', floatScale(amt, u.mhp) * .9);
 }
 
 function killThing(t, src){
@@ -3087,18 +3089,56 @@ function burstFx(x, y, col, n){
 }
 function ringFx(x, y, r, col){ if (!HEADLESS) G.fx.push({ k:'ring', x, y, r, t:.42, dur:.42, col }); }
 function boltFx(x, y, x2, y2, col){ if (!HEADLESS) G.fx.push({ k:'bolt', x, y, x2, y2, t:.22, dur:.22, col }); }
+// How big a damage number is drawn, and how hard it punches in. A scratch and
+// a hit that took a third of somebody printed at exactly the same size, so a
+// brawl was a wall of identical digits and the one number you cared about was
+// the same weight as the twenty you did not.
+//
+// Scaled by the FRACTION of the target it removed, which is what a player is
+// actually reading. The floor matters as much as the ceiling: a gate has
+// thousands of health, so every hit on it is a rounding error by fraction and
+// would print unreadably small without one.
+const FLOAT_SC = { min:.74, max:1.75, full:.32 };
+const FLOAT_POP = .16;
+function floatScale(amt, mhp){
+  if (!(mhp > 0) || !(amt > 0)) return FLOAT_SC.min;
+  const f = clamp(amt / (mhp * FLOAT_SC.full), 0, 1);
+  return FLOAT_SC.min + (FLOAT_SC.max - FLOAT_SC.min) * f;
+}
+// Where a new number goes when others are still rising near it. The step and
+// the window were fixed numbers, written when every damage number was the same
+// size — now that a big hit prints at nearly two and a half times a scratch,
+// a fixed step lets the big ones smear straight back over each other. Both
+// scale with the larger of the two numbers involved.
+// The step was .55 world units against a three-digit number about 2.2 world
+// units wide at the standard zoom, so two numbers landing together printed
+// "51" and "105" as "5105". It clears the text now.
+const FLOAT_GAP = { win:2.4, step:1.15, rise:.34 };
+// It also never fanned both ways. The old line read
+//   ox = (Math.abs(ox) + step) * (ox > 0 ? -1 : 1)
+// which looks like it alternates — but ox starts at 0, so the first step goes
+// negative and every step after it reads `ox > 0` as false and goes negative
+// again. Numbers marched off to the left in a line instead of spreading around
+// the body they belong to.
+function floatSlot(x, y, sc){
+  let n = 0, s = sc;
+  for (const f of G.floats){
+    if (f.t < .35) continue;
+    const sm = Math.max(sc, f.sc || 1);
+    if (Math.abs(f.x - x) > FLOAT_GAP.win * sm || Math.abs(f.y - y) > 1.2) continue;
+    n++; s = Math.max(s, f.sc || 1);
+  }
+  if (!n) return [0, 0];
+  const k = Math.ceil(n / 2) * (n % 2 ? -1 : 1);
+  return [k * FLOAT_GAP.step * s, -n * FLOAT_GAP.rise * s];
+}
 function addFloat(x, y, txt, col, sc){
   if (HEADLESS) return;
   if (G.floats.length > 90) G.floats.shift();
   // Three numbers landing on one body in the same tenth of a second used to
   // print on top of each other. Step each new one clear of whatever is still
   // rising near it, so a brawl reads as a column of numbers, not a smear.
-  let ox = 0, oy = 0;
-  for (const f of G.floats){
-    if (f.t < .35 || Math.abs(f.x - x) > 1.6 || Math.abs(f.y - y) > 1.2) continue;
-    ox = (Math.abs(ox) + .55) * (ox > 0 ? -1 : 1);
-    oy -= .28;
-  }
+  const [ox, oy] = floatSlot(x, y, sc || 1);
   G.floats.push({ x:x + ox, y:y + oy + fxRr(-.15, .15), txt, col, t:.95, dur:.95, sc:sc || 1, vy:fxRr(-.5, -.9) });
 }
 const CAST_COL = { dmg:'#ffa96a', heal:'#7fdc8a', buff:'#ffcf4d', cc:'#9ad8ff', move:'#bfe0ff', summon:'#c9a6ff' };
@@ -4642,7 +4682,17 @@ function drawLane(c){
       c.fillStyle = f.ult ? '#ffe08a' : f.col;
       c.fillText(String(f.txt), q[0], y);
     } else {
-      c.fillStyle = f.col; c.font = 'bold ' + Math.max(9, Math.round(11 * f.sc * cam.z)) + 'px system-ui';
+      // The cast names have been outlined since they were written; the damage
+      // numbers, in the other half of the same branch, never were — so yellow
+      // digits landed on a pale body and vanished. And a number punches in
+      // rather than appearing at full size, which is most of what makes a big
+      // hit feel like one.
+      const age = 1 - f.t / f.dur;
+      const pop = age < FLOAT_POP ? .55 + .45 * (age / FLOAT_POP) : 1;
+      c.font = 'bold ' + Math.max(9, Math.round(11 * f.sc * pop * cam.z)) + 'px system-ui';
+      c.lineWidth = Math.max(2, 2.6 * f.sc * cam.z); c.strokeStyle = 'rgba(6,9,14,.8)';
+      c.strokeText(String(f.txt), q[0], y);
+      c.fillStyle = f.col;
       c.fillText(String(f.txt), q[0], y);
     }
     c.globalAlpha = 1;
@@ -7737,6 +7787,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
