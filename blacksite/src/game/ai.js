@@ -77,8 +77,10 @@
 //   spawnT, deathT, removeAt, killEmitted
 //
 // Events emitted here: 'shot', 'impact', 'step', 'reload', 'damage', 'kill',
-// 'despawn', 'aiState', 'aiCallout', 'aiHit', 'nearMiss', 'vox'. All carry
-// `source: enemy.id` and `team` where it disambiguates.
+// 'despawn', 'aiState', 'aiCallout', 'aiHit', 'vox', and 'whizz' (via
+// ballistics' emitWhizz, so an enemy round and a player round produce the
+// identical event). All carry `source: enemy.id` and `team` where it
+// disambiguates.
 //
 //   { type:'vox', kind:'alert'|'bark'|'suppress'|'pain'|'death'|'reload',
 //     pos, timbre, source, team }        pos is the head, not the boots
@@ -95,6 +97,7 @@ import * as C from '../core/constants.js';
 import { V, clamp, lerp, emit, vec3 } from '../core/state.js';
 import { raycast, lineOfSight, moveCharacter, groundBelow } from '../world/collision.js';
 import { damagePlayer } from './player.js';
+import { emitWhizz } from './ballistics.js';
 import * as NAV from './nav.js';
 import * as SQ from './squad.js';
 
@@ -1696,11 +1699,20 @@ function fireRound(G, ai, e, blind, atOverride) {
       energy: W.damage, source: e.id,
     });
   }
-  // A round that goes past close enough to hear is worth telling the FX and
-  // audio layers about — the crack of a near miss is most of what makes being
-  // shot at feel like being shot at.
-  const miss = pointLineDist(p.pos, from, sx, sy, sz, W.range);
-  if (miss < 1.8) emit(G, 'nearMiss', { pos: V.clone(p.pos), dist: miss, source: e.id });
+  // The crack of a round going past your head — most of what makes being shot at
+  // feel like being shot at, and the only cue that tells you which way to turn
+  // when the shooter is off screen. Ballistics owns the geometry so the AI's
+  // rounds and the player's produce the identical event; it also carries the
+  // miss distance, which is what the loudness is scaled by. A whizz that is
+  // always deafening is worse than no whizz at all, because then the round that
+  // genuinely nearly hit you sounds like every other one.
+  //
+  // The length is where the round actually stopped, not its nominal range: a
+  // bullet that buried itself in a wall two metres from the muzzle never went
+  // anywhere near the player, and passing the full range would claim it did.
+  emitWhizz(G, from, { x: sx, y: sy, z: sz }, wall ? wall.t : W.range, {
+    weapon: e.kind, source: e.id, team: e.team, speed: W.bulletSpeed,
+  });
 }
 
 // Ray against the player's collision cylinder. The player is not made of
@@ -1728,13 +1740,6 @@ function rayHitsPlayer(G, o, dx, dy, dz, maxD) {
   const rel = (y - feet) / h;
   const part = rel > 0.87 ? 'HEAD' : rel > 0.55 ? 'CHEST' : rel > 0.36 ? 'STOMACH' : 'LEG';
   return { t, part, point: { x: o.x + dx * t, y, z: o.z + dz * t } };
-}
-
-function pointLineDist(p, o, dx, dy, dz, maxD) {
-  const vx = p.x - o.x, vy = p.y - o.y, vz = p.z - o.z;
-  let t = vx * dx + vy * dy + vz * dz;
-  t = clamp(t, 0, maxD);
-  return Math.hypot(vx - dx * t, vy - dy * t, vz - dz * t);
 }
 
 // ── damage & death ───────────────────────────────────────────────────────────
