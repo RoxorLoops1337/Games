@@ -929,21 +929,23 @@ function startQuest(qi, def, seed){
   // the middle of the floor, so the reason to accept is a thing you can see.
   if (Q.trialRoom) placePlinth(Q, Q.trialRoom.room, R);
 
-  // One chest on a deep floor was never a chest. Never the quest chest, never
-  // one inside the vault — a locked room you have paid to open should pay.
+  // One piece of furniture on a deep floor was never furniture. Never a quest
+  // piece, never one inside the vault — a locked room you paid to open pays.
   const lieDepth = q.depth || 0;             // authored quests have no depth: none there
   if (lieDepth >= LIE_FROM && R() < LIE_CHANCE){
-    const pool = Q.furn.filter(f => f.t === 'chest' && !f.quest && !f.vault);
+    const pool = Q.furn.filter(f => LIARS[f.t] && !f.quest && !f.vault);
     if (pool.length) pool[Math.floor(R()*pool.length)].lie = true;
     else {
-      // no chest to lie with, so it brought its own
+      // nothing on the floor to lie as, so it brought its own
       const goal = (q.objective && q.objective.room !== undefined) ? q.objective.room : -1;
       const rooms = ROOMS.map(r => r.id).filter(id => id !== Q.vault && id !== goal);
+      const t = LIAR_TYPES[Math.floor(R()*LIAR_TYPES.length)];
+      const fw = FURN[t].w, fh = FURN[t].h;
       for (let tries = 0; tries < 8; tries++){
         const rid = rooms[Math.floor(R()*rooms.length)];
-        const spot = freeFurnSpot(rid, 1, 1, R);
+        const spot = freeFurnSpot(rid, fw, fh, R);
         if (!spot) continue;
-        Q.furn.push({ t:'chest', r:rid, x:spot[0], y:spot[1], w:1, h:1, rot:0,
+        Q.furn.push({ t, r:rid, x:spot[0], y:spot[1], w:spot[2], h:spot[3], rot:spot[4],
                       quest:null, taken:false, searched:false, lie:true });
         break;
       }
@@ -2448,14 +2450,33 @@ function drawFurniture(g, f, t){
     for (let i=1;i<4;i++){ g.beginPath(); g.moveTo(-w*.40 + i*w*.20, -h*.30); g.lineTo(-w*.40 + i*w*.20, h*.22); g.stroke(); }
     g.fillStyle = 'rgba(255,220,170,.10)'; rr(g, -w*.38, -h*.28, w*.76, h*.10, 3); g.fill();
   } else if (F==='chest'){
+    // With mimics on the floor, "have I been to that one" is load-bearing. A
+    // shut chest keeps its lid and its glint; an opened one is unmistakably
+    // open — lid thrown back, nothing inside, no gold left on it.
     g.fillStyle = '#59401f';
     rr(g, -w*.34, -h*.20, w*.68, h*.44, 4); g.fill();
-    g.fillStyle = '#7a5a2c'; rr(g, -w*.34, -h*.30, w*.68, h*.24, 7); g.fill();
-    g.fillStyle = '#c8a24a'; g.fillRect(-w*.34, -h*.10, w*.68, h*.07);
-    g.fillStyle = '#d8b85a';
-    g.beginPath(); g.arc(0, -h*.04, w*.07, 0, 6.284); g.fill();
-    g.fillStyle = '#2a1c0c'; g.fillRect(-w*.02, -h*.05, w*.04, h*.09);
-    if (f.taken){ g.fillStyle = 'rgba(0,0,0,.5)'; rr(g,-w*.34,-h*.30,w*.68,h*.30,6); g.fill(); }
+    if (f.taken){
+      g.fillStyle = '#160f06';                          // the empty inside
+      rr(g, -w*.30, -h*.18, w*.60, h*.30, 3); g.fill();
+      g.fillStyle = 'rgba(0,0,0,.55)';
+      rr(g, -w*.26, -h*.15, w*.52, h*.16, 2); g.fill();
+      g.save();                                          // the lid, tipped back
+      g.translate(0, -h*.24); g.rotate(-.42);
+      g.fillStyle = '#6b4c26'; rr(g, -w*.32, -h*.20, w*.64, h*.20, 5); g.fill();
+      g.fillStyle = '#4a3318'; g.fillRect(-w*.32, -h*.06, w*.64, h*.05);
+      g.restore();
+      g.fillStyle = 'rgba(0,0,0,.45)';                   // shadow it casts back
+      rr(g, -w*.34, h*.16, w*.68, h*.08, 3); g.fill();
+    } else {
+      g.fillStyle = '#7a5a2c'; rr(g, -w*.34, -h*.30, w*.68, h*.24, 7); g.fill();
+      g.fillStyle = '#c8a24a'; g.fillRect(-w*.34, -h*.10, w*.68, h*.07);
+      g.fillStyle = '#d8b85a';
+      g.beginPath(); g.arc(0, -h*.04, w*.07, 0, 6.284); g.fill();
+      g.fillStyle = '#2a1c0c'; g.fillRect(-w*.02, -h*.05, w*.04, h*.09);
+      const glint = .5 + Math.sin(t*.0022 + f.x*1.7 + f.y)*.5;   // it wants opening
+      g.fillStyle = `rgba(255,240,196,${(.10 + glint*.16).toFixed(3)})`;
+      g.fillRect(-w*.30, -h*.28, w*.24, 1.8);
+    }
   } else if (F==='throne'){
     g.fillStyle = '#3a3238'; rr(g, -w*.30, -h*.44, w*.60, h*.74, 6); g.fill();
     g.fillStyle = '#4f4550'; rr(g, -w*.26, -h*.40, w*.52, h*.44, 5); g.fill();
@@ -2671,7 +2692,28 @@ function drawDoor(g, d, t){
       g.fillStyle = `rgba(200,150,255,${.25 + Math.sin(t*.004)*.15})`;
       g.beginPath(); g.arc(-w*.28, 0, h*.16, 0, 6.284); g.fill();
     }
-    if (d.locked){
+    // A trial's bolt is not a lock — no key fits it, and it costs a Body Point
+    // to shift. It gets a bar across the whole door so the cost is never a
+    // surprise: you can see what you are about to put a shoulder through.
+    if (d.trialBolt){
+      const pulse = .5 + Math.sin(t*.0035)*.5;
+      g.fillStyle = '#2b2126';                              // brackets
+      g.fillRect(-w*.44, -h*.16, w*.10, h*.34);
+      g.fillRect( w*.34, -h*.16, w*.10, h*.34);
+      const bar = g.createLinearGradient(0, -h*.10, 0, h*.14);
+      bar.addColorStop(0, '#7a6a6a'); bar.addColorStop(.5, '#4a3c3c'); bar.addColorStop(1, '#2e2424');
+      g.fillStyle = bar;
+      g.fillRect(-w*.46, -h*.08, w*.92, h*.20);             // the bar itself
+      g.fillStyle = 'rgba(224,150,130,.35)';
+      g.fillRect(-w*.46, -h*.08, w*.92, 1.6);
+      g.fillStyle = '#241b1b';                              // bolt heads
+      g.beginPath(); g.arc(-w*.34, h*.02, h*.055, 0, 6.284); g.fill();
+      g.beginPath(); g.arc( w*.34, h*.02, h*.055, 0, 6.284); g.fill();
+      g.strokeStyle = `rgba(176,58,44,${.30 + pulse*.30})`; // it is still angry
+      g.lineWidth = 2;
+      g.strokeRect(-w*.46, -h*.08, w*.92, h*.20);
+    }
+    else if (d.locked){
       const lit = G.q.key ? .9 : .45 + Math.sin(t*.004)*.2;
       g.fillStyle = `rgba(216,168,60,${lit})`;
       g.fillRect(-w*.34, -h*.20, w*.16, h*.40);
@@ -4468,46 +4510,64 @@ function chestBites(h, chest){
   return null;
 }
 
-/* ------------------------------------------------------- LYING MIMICS */
-// Forcing a chest can turn one into a mimic. From the third floor down, one
-// chest on the floor was never a chest at all, and it is waiting for somebody
-// to walk within arm's reach. Find Traps turns it up before it turns up you —
-// which is what makes walking past a chest a decision instead of a habit.
+/* --------------------------------------------------- FURNITURE THAT LIES */
+// Forcing a chest can turn one into a mimic. From the third floor down one
+// piece of furniture on the floor was never furniture, and it is waiting for
+// somebody to walk within arm's reach. Find Traps turns it up before it turns
+// up you — which is what makes walking past the scenery a decision.
+//
+// Three things can lie, and each lies as the thing it is: the chest has teeth,
+// the tomb was never sealed, and the armour on the rack is standing up by
+// itself. What comes out is whatever that piece of furniture would hide.
 
 const LIE_FROM = 3;
 const LIE_CHANCE = .38;
-const lyingChests = () => (G.q && G.q.furn ? G.q.furn.filter(f => f.lie && !f.sprung) : []);
+const LIARS = {
+  chest: { mt:'mimic',  col:'#7a5a2c', banner:'MIMIC',           sub:'it has been waiting',
+    ambush:'reaches for the chest, and the chest reaches back.',
+    quiet: 'The chest is breathing. It gives up pretending and stands.' },
+  tomb:  { mt:'mummy',  col:'#c9bb93', banner:'IT WAS NOT EMPTY', sub:'the lid was never sealed',
+    ambush:'leans on the tomb, and the lid goes over with a crack.',
+    quiet: 'The lid of the tomb does not quite sit right, and has not for a long time.' },
+  rack:  { mt:'chaos',  col:'#3a3340', banner:'IT WAS NOT ARMOUR',sub:'nobody put it there',
+    ambush:'steps past the weapon rack, and the armour on it steps down.',
+    quiet: 'The armour on the rack is standing at attention. Nothing is holding it up.' },
+};
+const LIAR_TYPES = Object.keys(LIARS);
+const liars = () => (G && G.q && G.q.furn ? G.q.furn.filter(f => f.lie && !f.sprung) : []);
+const lyingChests = liars;                     // it was all chests once
 // A hero standing beside one is close enough.
 function mimicWatch(){
   if (!G || !G.q || G.q.over) return null;
-  for (const f of lyingChests()){
+  for (const f of liars()){
     const h = livingHeroes().find(x => Math.max(Math.abs(x.x - f.x), Math.abs(x.y - f.y)) <= 1);
-    if (h) return springMimic(f, h);
+    if (h) return springLiar(f, h);
   }
   return null;
 }
-// The teeth come out. Whoever woke it wears the first bite; a mimic you already
-// spotted has lost its ambush and just stands up.
-function springMimic(f, h, quiet){
+// It stops pretending. Whoever woke it wears the first blow; one you already
+// spotted has lost its ambush and simply stands up.
+function springLiar(f, h, quiet){
   if (!f || f.sprung) return null;
+  const L = LIARS[f.t] || LIARS.chest;
   f.sprung = true; f.lie = false;
   const i = G.q.furn.indexOf(f);
   if (i >= 0) G.q.furn.splice(i, 1);
-  const def = MONSTERS.mimic;
-  const m = { kind:'monster', uid:9500 + ri(499), mt:'mimic', name:def.name,
+  const def = MONSTERS[L.mt];
+  const m = { kind:'monster', uid:9500 + ri(499), mt:L.mt, name:def.name,
     x:f.x, y:f.y, alive:true, facing:-1,
     bpMax:def.bp, bp:def.bp, atk:def.atk, def:def.def, mind:def.mind, mv:def.move,
     boss:false, awake:true, sleep:0, stun:0, bob:rnd()*6.28 };
   G.q.actors.push(m);
-  spark(f.x, f.y, 24, '#7a5a2c', { spd:.02, up:.004 });
+  spark(f.x, f.y, 24, L.col, { spd:.02, up:.004 });
   setMood('fight');
   recomputeVision();
   if (quiet){
-    say('The chest is breathing. It gives up pretending and stands.', 'bad');
+    say(L.quiet, 'bad');
     sfx('die'); G.shake = Math.max(G.shake, 10);
   } else {
-    say(`${h ? h.name + ' reaches for the chest' : 'Somebody reaches for the chest'}, and the chest reaches back.`, 'bad');
-    banner('MIMIC', 'it has been waiting');
+    say(`${h ? h.name : 'Somebody'} ${L.ambush}`, 'bad');
+    banner(L.banner, L.sub);
     sfx('boss'); G.shake = Math.max(G.shake, 20); hitStop(240);
     focusOn(f.x, f.y); G.camPunch = 1.3;
     if (h) later(320, () => { if (h.alive && m.alive) monsterAttack(m, h, () => {}); });
@@ -4515,6 +4575,7 @@ function springMimic(f, h, quiet){
   refreshField(); renderHUD();
   return m;
 }
+const springMimic = springLiar;                // the name it had when it was only chests
 
 function showChest(h, chest){
   const pct = Math.round(FORCE_RISK*100);
@@ -4729,12 +4790,12 @@ function searchTraps(){
     if ((rid >= 0 && d.rid === rid) || near){ d.found = true; doors++; }
   }
   if (G.q.trapSearchedTiles === undefined) G.q.trapSearchedTiles = 1;
-  // a mimic is a trap with an appetite, and a careful hero can spot one
+  // furniture that lies is a trap with an appetite, and a careful hero spots it
   let lies = 0;
-  for (const f of lyingChests()){
+  for (const f of liars()){
     const inRoom = rid >= 0 && f.r === rid;
     const near = dist2(f.x, f.y, h.x, h.y) <= 5 && hasLOS(h.x, h.y, f.x, f.y);
-    if (inRoom || near){ springMimic(f, h, true); lies++; }
+    if (inRoom || near){ springLiar(f, h, true); lies++; }
   }
   say(found || doors || lies
     ? `${h.name} finds ${found ? found + ' trap' + (found>1?'s':'') : ''}${found&&doors?' and ':''}${doors ? doors + ' hidden door' + (doors>1?'s':'') : ''}${
@@ -7245,7 +7306,8 @@ globalThis.HQ = {
   get draftState(){ return draftState; }, set draftState(v){ draftState = v; },
   BOSS_LINES, bossOf, bossIntro, BOSS_LAST, bossLastWords,
   placePlinth, trialPlinth, spendPlinth, drawBody, DRAFT_TABS,
-  LIE_FROM, LIE_CHANCE, lyingChests, mimicWatch, springMimic, TRIAL_WRATH,
+  LIE_FROM, LIE_CHANCE, LIARS, LIAR_TYPES, liars, lyingChests,
+  mimicWatch, springLiar, springMimic, TRIAL_WRATH,
   FORCE_RISK, chestIn, drawCard, forcedCard, openChest, chestBites, showChest,
   floorChoices, chooseFloor, dblStake, canDouble, doubleOrNothing, settleStake,
   newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius, showHistory, monsterShoot,
