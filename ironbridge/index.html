@@ -2577,6 +2577,16 @@ function abilityDmg(h, tgt, amt, magic){
   return done;
 }
 
+/* Armed: off cooldown and paid for. castLoop asks this before it looks at
+   whether the moment is right, and the bar under the hero asks the very same
+   question — so the board cannot show a hero ready to go while the simulation
+   knows it is dry or still waiting. One predicate, two readers. */
+function skillArmed(h, sk){
+  const s = SKILL[sk.id];
+  return !!s && !(sk.cdT > 0) && h.mana >= s.mana;
+}
+const heroArmed = (h) => (h.skills || []).some(sk => skillArmed(h, sk));
+
 function castLoop(h, tgt, dt){
   for (const sk of h.skills){
     if (sk.cdT > 0) sk.cdT -= dt;
@@ -2584,7 +2594,7 @@ function castLoop(h, tgt, dt){
   if (h.castLock > 0){ h.castLock -= dt; return; }
   for (const sk of h.skills){
     const s = SKILL[sk.id];
-    if (!s || sk.cdT > 0 || h.mana < s.mana) continue;
+    if (!skillArmed(h, sk)) continue;
     if (!wantCast(h, s, tgt)) continue;
     castSkill(h, sk, tgt);
     h.mana -= s.mana;
@@ -4532,6 +4542,39 @@ function hpBar(c, x, y, u, w, big){
     c.fillRect(x0, y, w * Math.min(1, sf), h * .45);
   }
 }
+/* A hero's mana decides whether the next thing that happens is a Fireball or a
+   poke with a stick. Four separate passives are bought with real gold to move
+   it — Meditation, Deep Well, Silk Robes, Mystic — and none of it reached the
+   board: a hero at nought mana drew exactly the same 79 ops and the same 2157
+   of ink as one at full, while the health bar three lines up varied across all
+   three of its readings on the same instrument. The hero sheet has always had
+   a mana bar; only the panel knew, and only for the hero you had selected.
+
+   The health bar is the sibling, so this is the same object built smaller:
+   same plate, same lit top edge, sitting just under it in the blue the sheet
+   already uses. No notches — this is a fuel gauge, not an amount to count.
+
+   The tip lights when the hero is ARMED, which is skillArmed's question and
+   not a second opinion about it: cooldowns are the other half of "can it cast
+   now", and a bar that filled while every skill was still spent would be
+   telling you the wrong thing at exactly the moment you were reading it.    */
+const MPBAR = { h:.42, gap:1.6, col:'#5fa8ff', lit:1.32, back:'rgba(24,34,52,.9)', tip:2.2 };
+function mpBar(c, x, y, u, w){
+  if (!(u.mmana > 0)) return;
+  const f = clamp(u.mana / u.mmana, 0, 1);
+  const h = Math.max(1, 5 * cam.z * MPBAR.h);
+  const x0 = x - w / 2;
+  blockLabel(x, y + h / 2, w + 2.8, h + 2.8);
+  c.fillStyle = 'rgba(8,10,14,.82)'; c.fillRect(x0 - 1.4, y - 1.4, w + 2.8, h + 2.8);
+  c.fillStyle = MPBAR.back; c.fillRect(x0, y, w, h);
+  c.fillStyle = MPBAR.col; c.fillRect(x0, y, w * f, h);
+  c.fillStyle = shade(MPBAR.col, MPBAR.lit); c.fillRect(x0, y, w * f, h * .5);
+  // The tip: something is off cooldown and affordable right now.
+  if (f > 0 && heroArmed(u)){
+    c.fillStyle = '#eaf4ff';
+    c.fillRect(x0 + w * f - Math.min(MPBAR.tip * cam.z, w * f), y - .6, Math.min(MPBAR.tip * cam.z, w * f), h + 1.2);
+  }
+}
 // How fast the chip runs down to meet the bar. Named so a test can hold it to
 // what a chip is for: it has to LAG a hit (or it shows nothing) and it has to
 // catch up (or a body that took one hit wears a pale stripe for the rest of
@@ -4920,7 +4963,12 @@ function drawUnitMarks(c, u, bx, by, p, sc){
       ell(c, bx + Math.cos(a) * 6 * sc, by - 17 * sc + Math.sin(a) * 2 * sc, 1.5 * sc, 1.5 * sc, '#ffcf4d');
     }
   }
-  if (showsBar(u)) hpBar(c, bx, by - (u.isHero ? 22 : u.kind === 'super' ? 21 : 18) * sc, u, (u.isHero ? 30 : 17) * sc, u.isHero);
+  if (showsBar(u)){
+    const barY = by - (u.isHero ? 22 : u.kind === 'super' ? 21 : 18) * sc;
+    const barW = (u.isHero ? 30 : 17) * sc;
+    hpBar(c, bx, barY, u, barW, u.isHero);
+    if (u.isHero) mpBar(c, bx, barY + 5 * cam.z + MPBAR.gap * cam.z, u, barW);
+  }
   if (u.isHero && u.buffs && u.buffs.some(b => b.t > 0)){
     c.globalAlpha = .5 + .2 * Math.sin(G.t * 5);
     c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.2, 2 * cam.z);
@@ -8572,7 +8620,7 @@ window.IB = {
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, MUSTER, musterRanks, TRAINEE, trainCrew, trainSlots, barrackSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
-  drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
+  mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
   floatScale, hitWeight, HIT, hitTime, hitPush, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
