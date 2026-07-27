@@ -4695,6 +4695,37 @@ function strideOf(u){
   if (!walking(u)) return 0;
   return Math.sin(gaitOf(u)) * BODY_STRIDE;
 }
+/* A hero is built over a whole match — a class, a passive out of a hundred,
+   three skills, an ultimate, and up to five ranks in each of them — and none
+   of it reached the body. Measured with max HP held equal so the health bar's
+   notch count could not masquerade as a change, a level 18 hero with four
+   skills and seven ranks drew EXACTLY the same seventy shapes as the level 1
+   one that had walked out of the tavern an hour earlier. The only thing on
+   the board that said a hero had grown was the digit in its roundel.
+
+   A mantle off the shoulders, lengthening with the ranks earned. Behind the
+   body, so it changes the SILHOUETTE — which is the thing that was identical
+   — and continuous rather than tiered, so there is no threshold to saturate
+   at the first pick.                                                        */
+const MANTLE = { full:14, min:.30, max:1, w:5.2, h:8.4 };
+const heroRanks = (h) => (h.passRank || 0) + (h.skills || []).reduce((a, sk) => a + (sk.rank || 0), 0);
+const mantleOf = (h) => clamp(heroRanks(h) / MANTLE.full, 0, 1);
+function heroMantle(c, u, bx, by, floor, sc, col){
+  const m = mantleOf(u);
+  if (!(m > 0)) return;
+  const dir = dirOf(u.side);
+  const w = MANTLE.w * (MANTLE.min + (MANTLE.max - MANTLE.min) * m) * sc;
+  const drop = MANTLE.h * (MANTLE.min + (MANTLE.max - MANTLE.min) * m) * sc;
+  const top = by - 9.2 * sc, hem = Math.min(floor - .6 * sc, top + drop);
+  // hangs off the trailing shoulder, away from the fight
+  const ax = bx - dir * .8 * sc;
+  poly(c, [[ax - w, top], [ax + w * .5, top],
+           [ax + w * .35, hem], [ax - w * 1.15, hem]],
+    u.hitT > 0 ? '#ffffff' : shade(col, .30));
+  poly(c, [[ax - w, top], [ax - w * .3, top], [ax - w * .55, hem], [ax - w * 1.15, hem]],
+    u.hitT > 0 ? '#ffffff' : shade(col, .46));
+}
+
 function drawUnit(c, u){
   const p = lp(u.x, u.y), S = LS();
   const col = SIDE_COL[u.side], sc = (u.isHero ? 1.75 : u.kind === 'super' ? 1.6 : u.kind === 'cannon' ? 1.45 : 1.18) * cam.z;
@@ -4727,6 +4758,7 @@ function drawUnit(c, u){
   // a torso that bobbed on the spot, so a wave marching up the span read as a
   // row of pieces sliding along it. They walk on the same clock as the bob and
   // plant when the thing they are hitting is in reach.
+  if (u.isHero) heroMantle(c, u, bx, by, p[1], sc, col);
   const st = strideOf(u) * sc;
   for (const s of [-1, 1]){
     const hipx = bx + s * 2.1 * sc, ftx = bx + s * 2.4 * sc + s * st;
@@ -8396,7 +8428,7 @@ window.IB = {
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
-  recoilOf, RECOIL, RECOIL_T, SWING, swingTime, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
+  recoilOf, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
   floatScale, hitWeight, HIT, hitTime, hitPush, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
