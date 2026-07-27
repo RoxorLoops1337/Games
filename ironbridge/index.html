@@ -3533,19 +3533,53 @@ function drawDeck(c){
   }
   // Abutments: the span has to visibly land ON the rock at both ends, or the
   // deck just disappears into the cliff face.
+  // It was three flat quads and five faint stripes: a brown box the width of
+  // the span, sitting at both ends of the bridge with nothing on it. This is
+  // masonry taking the thrust of an arch, so it batters inward as it goes down
+  // and it is laid in courses. The taper is a pair of named functions rather
+  // than arithmetic inline, so a test can prove it leans IN — a batter that
+  // went the other way would put the whole block on an overhang.
   for (const i of [0, 1]){
     const bxx = i === 0 ? 0 : C.LANE_LEN;
     const d = i === 0 ? 1 : -1;
     const a0 = lp(bxx - d * 5, -W), a1 = lp(bxx + d * 5, -W), a2 = lp(bxx + d * 5, W), a3 = lp(bxx - d * 5, W);
-    if (a0[0] < -200 || a0[0] > LW + 200) continue;
-    const dz = -9;
-    poly(c, [a3, a2, lp(bxx + d * 5, W, dz), lp(bxx - d * 5, W, dz)], '#5b5348');
-    poly(c, [a1, a2, lp(bxx + d * 5, W, dz), lp(bxx + d * 5, -W, dz)], '#4a4339');
-    poly(c, [a0, a1, a2, a3], '#6f6759');
-    c.globalAlpha = .4;
-    for (let k = -2; k <= 2; k++)
-      poly(c, [lp(bxx - d * 5, k * 2), lp(bxx + d * 5, k * 2), lp(bxx + d * 5, k * 2 + .5), lp(bxx - d * 5, k * 2 + .5)], '#3f392f');
+    if (a0[0] < -220 || a0[0] > LW + 220) continue;
+    for (let k = 0; k < AB_N; k++){
+      const t0 = k / AB_N, t1 = (k + 1) / AB_N;
+      const z0 = AB_DZ * t0, z1 = AB_DZ * t1;
+      const h0 = abHw(t0), h1 = abHw(t1), y0 = abY(t0), y1 = abY(t1);
+      const dim = 1 - t0 * .24;                       // it loses light as it falls
+      poly(c, [lp(bxx - d * h0, y0, z0), lp(bxx + d * h0, y0, z0),
+               lp(bxx + d * h1, y1, z1), lp(bxx - d * h1, y1, z1)],
+        shade(k % 2 ? '#6a6254' : '#5d5648', dim));
+      poly(c, [lp(bxx + d * h0, -W, z0), lp(bxx + d * h0, y0, z0),
+               lp(bxx + d * h1, y1, z1), lp(bxx + d * h1, -W, z1)],
+        shade(k % 2 ? '#544d41' : '#4a4438', dim));
+    }
+    // individual stones picked out of the courses, deterministic per end
+    c.globalAlpha = .22;
+    for (let k = 0; k < 9; k++){
+      const r = hash2(k * 5.3 + i * 41, 9.1), t = (k % AB_N) / AB_N;
+      const h = abHw(t), y = abY(t), z = AB_DZ * t;
+      const x0 = -h + r * (h * 2 - 2.4);
+      poly(c, [lp(bxx + d * x0, y, z - .3), lp(bxx + d * (x0 + 2.2), y, z - .3),
+               lp(bxx + d * (x0 + 2.2), y, z - 1.4), lp(bxx + d * x0, y, z - 1.4)], STONE.lit);
+    }
     c.globalAlpha = 1;
+    // a spur down the middle of the face, the way a real one is buttressed
+    const sp = 1.5, spz = AB_DZ * .74;
+    poly(c, [lp(bxx - d * sp, W, -1.2), lp(bxx + d * sp, W, -1.2),
+             lp(bxx + d * sp * .6, W + 3.2, spz), lp(bxx - d * sp * .6, W + 3.2, spz)], '#8b8170');
+    poly(c, [lp(bxx + d * sp, W, -1.2), lp(bxx + d * sp * .6, W + 3.2, spz),
+             lp(bxx + d * sp * .6, abY(.74), spz), lp(bxx + d * sp, abY(0), -1.2)], '#443e34');
+    // the cap the deck actually rests on, oversailing the courses below it
+    poly(c, [lp(bxx - d * AB_CAP, W + .6, 1.0), lp(bxx + d * AB_CAP, W + .6, 1.0),
+             lp(bxx + d * AB_CAP, W + .6, -1.2), lp(bxx - d * AB_CAP, W + .6, -1.2)], '#7f7666');
+    poly(c, [lp(bxx + d * AB_CAP, -W, 1.0), lp(bxx + d * AB_CAP, W + .6, 1.0),
+             lp(bxx + d * AB_CAP, W + .6, -1.2), lp(bxx + d * AB_CAP, -W, -1.2)], '#69604f');
+    poly(c, [lp(bxx - d * AB_CAP, -W, 1.0), lp(bxx + d * AB_CAP, -W, 1.0),
+             lp(bxx + d * AB_CAP, W + .6, 1.0), lp(bxx - d * AB_CAP, W + .6, 1.0)], '#8b8170');
+    poly(c, [a0, a1, a2, a3], '#6f6759');
   }
 }
 
@@ -3555,6 +3589,10 @@ function drawDeck(c){
    under the deck — "arches" that sprang from nothing and rested on nothing.
    The bridge stands on piers now, with the spandrels between them, and the
    canyon has rock in it and a floor you cannot quite see. */
+const AB_N = 7, AB_DZ = -12, AB_CAP = 5.6;
+const abHw = (t) => 5 - t * 1.1;                 // half-length, narrowing downward
+const abY = (t) => C.LANE_W / 2 + .6 - t * 1.4;  // and the face pulling back with it
+
 const PIER_SPAN = 16, PIER_HW = 3.2, PIER_TOP = -1.6, PIER_BOT = -30, PIER_SEGS = 7;
 function drawPiers(c){
   const W = C.LANE_W / 2 + .6;
@@ -4381,9 +4419,21 @@ const tileGY = (t) => Math.floor(t / PLOT_W) - (PLOT_H - 1) / 2;
 const NODES = {
   gold: { gx:2.2, gy:-4.8, n:'Gold Mine', col:'#ffcf4d' },
   iron: { gx:5.4, gy:3.4,  n:'Iron Mine', col:'#b9c6d8' },
-  wood: { gx:-1.0, gy:4.6, n:'Woodland',  col:'#6fbf5a' },
+  wood: { gx:-1.0, gy:4.3, n:'Woodland',  col:'#6fbf5a' },
 };
 const KEEP = { gx:-3.0, gy:-1.2 };
+// The logging camp, as grid offsets from the woodland node rather than as
+// numbers buried in the draw call — so a test can walk them and check they all
+// land on the island. The first pass put the wood chips at +0.95, and with the
+// node at gy 4.6 against a near edge of 5.56 they were being drawn on the lip
+// of the cliff. That is the same mistake the town hall used to make.
+const WOOD_LOT = {
+  stumps: [[-.78, .16], [-.38, .24]],
+  logs: [.74, .14],
+  block: [-.16, .30],
+  chips: [[-.48, .40], [-.22, .40], [.04, .40], [-.48, .50], [-.22, .50]],
+  trees: [[-.85, -.42], [-.30, -.60], [.28, -.48], [.78, -.20], [-.60, .08], [.05, .02]],
+};
 
 function drawTile(c, gx, gy, fill, stroke){
   poly(c, [bp(gx - .5, gy - .5), bp(gx + .5, gy - .5), bp(gx + .5, gy + .5), bp(gx - .5, gy + .5)], fill, stroke, 1);
@@ -4533,11 +4583,52 @@ function drawNode(c, key){
   const N = NODES[key], s = G.sides[holdSide], B = bu();
   const p = bp(N.gx, N.gy);
   if (key === 'wood'){
-    for (let i = 0; i < 5; i++){
-      const q = bp(N.gx + (i % 3 - 1) * .55, N.gy + (i > 2 ? .55 : 0) - .2);
-      c.fillStyle = '#5c4326'; c.fillRect(q[0] - 2 * B, q[1] - 12 * B, 4 * B, 12 * B);
-      poly(c, [[q[0] - 11 * B, q[1] - 10 * B], [q[0], q[1] - 30 * B], [q[0] + 11 * B, q[1] - 10 * B]], i % 2 ? '#3f7a3a' : '#4c8c42');
-      poly(c, [[q[0] - 8 * B, q[1] - 17 * B], [q[0], q[1] - 34 * B], [q[0] + 8 * B, q[1] - 17 * B]], i % 2 ? '#4c8c42' : '#5aa04c');
+    // Five flat triangles with no shadows read as worse than the scenery trees
+    // scattered around them, which at least have a shadow and a lit side — and
+    // nothing said anybody was felling anything here.
+    ell(c, p[0], p[1] + 4 * B, 36 * B, 14 * B, 'rgba(0,0,0,.16)');
+    // stumps, felled logs and the block, laid out before the standing timber so
+    // the trees behind them read as further back
+    for (const st of WOOD_LOT.stumps){
+      const q = bp(N.gx + st[0], N.gy + st[1]);
+      ell(c, q[0], q[1] + 1 * B, 6 * B, 3 * B, 'rgba(0,0,0,.18)');
+      c.fillStyle = '#5c4326'; c.fillRect(q[0] - 4.5 * B, q[1] - 4 * B, 9 * B, 4 * B);
+      ell(c, q[0], q[1] - 4 * B, 4.5 * B, 2.4 * B, '#a3814f');
+      ell(c, q[0], q[1] - 4 * B, 2.2 * B, 1.2 * B, '#8a6a3c');
+    }
+    const lg = bp(N.gx + WOOD_LOT.logs[0], N.gy + WOOD_LOT.logs[1]);
+    ell(c, lg[0], lg[1] + 2 * B, 15 * B, 5 * B, 'rgba(0,0,0,.18)');
+    for (let i = 0; i < 3; i++){
+      const ox = (i === 2 ? 5 : i * 10) * B, oy = (i === 2 ? -6 : 0) * B;
+      c.fillStyle = '#6b4f2e'; c.fillRect(lg[0] - 12 * B + ox, lg[1] - 6 * B + oy, 12 * B, 6 * B);
+      ell(c, lg[0] - 12 * B + ox, lg[1] - 3 * B + oy, 2.2 * B, 3 * B, '#a3814f');
+      ell(c, lg[0] - 12 * B + ox, lg[1] - 3 * B + oy, 1.1 * B, 1.5 * B, '#7d6038');
+    }
+    // the chopping block, with the axe left in it
+    const bl = bp(N.gx + WOOD_LOT.block[0], N.gy + WOOD_LOT.block[1]);
+    ell(c, bl[0], bl[1] + 1 * B, 7 * B, 3 * B, 'rgba(0,0,0,.20)');
+    c.fillStyle = '#5c4326'; c.fillRect(bl[0] - 5.5 * B, bl[1] - 6 * B, 11 * B, 6 * B);
+    ell(c, bl[0], bl[1] - 6 * B, 5.5 * B, 2.8 * B, '#b08d56');
+    c.strokeStyle = '#7a5a34'; c.lineWidth = Math.max(1, 1.8 * B); c.lineCap = 'round';
+    c.beginPath(); c.moveTo(bl[0] + 1 * B, bl[1] - 7 * B); c.lineTo(bl[0] + 7 * B, bl[1] - 17 * B); c.stroke();
+    c.lineCap = 'butt';
+    poly(c, [[bl[0] + 5 * B, bl[1] - 15 * B], [bl[0] + 11 * B, bl[1] - 18 * B],
+             [bl[0] + 10 * B, bl[1] - 12 * B], [bl[0] + 6 * B, bl[1] - 12 * B]], '#b9c2ce');
+    for (const ch of WOOD_LOT.chips){                 // chips where the axe fell
+      const q = bp(N.gx + ch[0], N.gy + ch[1]);
+      ell(c, q[0], q[1], 2.2 * B, 1.2 * B, '#c9a978');
+    }
+    // and the standing timber, drawn back to front
+    for (let i = 0; i < WOOD_LOT.trees.length; i++){
+      const q = bp(N.gx + WOOD_LOT.trees[i][0], N.gy + WOOD_LOT.trees[i][1]);
+      const sc = .88 + (i % 3) * .12;
+      ell(c, q[0], q[1] + 2 * B, 10 * B * sc, 4 * B * sc, 'rgba(0,0,0,.20)');
+      c.fillStyle = '#5c4326'; c.fillRect(q[0] - 2 * B, q[1] - 12 * B * sc, 4 * B, 12 * B * sc);
+      poly(c, [[q[0] - 11 * B * sc, q[1] - 9 * B * sc], [q[0], q[1] - 27 * B * sc], [q[0] + 11 * B * sc, q[1] - 9 * B * sc]], i % 2 ? '#3f7a3a' : '#457f3d');
+      poly(c, [[q[0] - 8.5 * B * sc, q[1] - 16 * B * sc], [q[0], q[1] - 32 * B * sc], [q[0] + 8.5 * B * sc, q[1] - 16 * B * sc]], i % 2 ? '#4c8c42' : '#54974a');
+      poly(c, [[q[0] - 5.5 * B * sc, q[1] - 23 * B * sc], [q[0], q[1] - 36 * B * sc], [q[0] + 5.5 * B * sc, q[1] - 23 * B * sc]], '#5aa04c');
+      // the sun is on the same side as it is on every roof in this game
+      poly(c, [[q[0], q[1] - 36 * B * sc], [q[0] + 5.5 * B * sc, q[1] - 23 * B * sc], [q[0], q[1] - 23 * B * sc]], '#4a8b40');
     }
   } else {
     // A mine used to be a flat trapezoid with a black rectangle punched in it
@@ -7160,6 +7251,7 @@ window.IB = {
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,

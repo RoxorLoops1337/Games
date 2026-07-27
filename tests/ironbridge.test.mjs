@@ -2733,6 +2733,49 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.netHash() === before, 'drawing the hold does not move the simulation');
 }
 {
+  // The abutments — the blocks the span lands on. They were three flat quads
+  // and five faint stripes, a brown box at both ends of the bridge. They are
+  // coursed masonry taking the thrust of an arch now, which means the taper
+  // has to lean IN: a batter going the other way puts the whole block on an
+  // overhang, and at this camera angle you would not necessarily notice.
+  for (let k = 0; k < IB.AB_N; k++){
+    const t0 = k / IB.AB_N, t1 = (k + 1) / IB.AB_N;
+    t.ok(IB.abHw(t1) < IB.abHw(t0), 'course ' + k + ' is shorter than the one above it');
+    t.ok(IB.abY(t1) < IB.abY(t0), 'and pulled further back');
+  }
+  t.ok(IB.abHw(1) > 0 && IB.abY(1) > -C.LANE_W / 2,
+    'the batter never crosses the far side of the block');
+  t.ok(IB.AB_CAP > IB.abHw(0), 'the cap oversails the topmost course');
+  t.ok(IB.AB_DZ < 0, 'and the courses go down from the deck, not up');
+
+  // The logging camp. Its props are grid offsets from the woodland node, and
+  // the whole point of pulling them out of the draw call is that a prop past
+  // the near edge of the mesa hangs in the air — which is what the town hall
+  // did, and what the first version of the wood chips did.
+  IB.newMatch({ diff:'veteran', seed:117 });
+  const N = IB.NODES.wood;
+  const all = [...IB.WOOD_LOT.stumps, ...IB.WOOD_LOT.chips, ...IB.WOOD_LOT.trees,
+               IB.WOOD_LOT.logs, IB.WOOD_LOT.block];
+  t.ok(all.length >= 14, 'the camp has something in it (' + all.length + ' pieces)');
+  let off = 0;
+  for (const o of all){
+    const w = IB.holdWorld(N.gx + o[0], N.gy + o[1]);
+    if (w[1] < IB.PLAT.far + 3 || w[1] > IB.PLAT.near - 3) off++;
+    if (w[0] > 0 || w[0] < 3 - (IB.PLAT.back + 34) + 3) off++;
+  }
+  t.ok(off === 0, 'every stump, log, chip and tree stands on the island (' + off + ')');
+  // The ground props are laid out in front of the standing timber, or the
+  // trees end up drawn over the top of the camp they belong to.
+  const backmost = Math.min(...IB.WOOD_LOT.trees.map(o => o[1]));
+  const frontmost = Math.max(...IB.WOOD_LOT.trees.map(o => o[1]));
+  t.ok(IB.WOOD_LOT.block[1] > frontmost && IB.WOOD_LOT.logs[1] > backmost,
+    'the block and the log pile sit in front of the timber');
+  IB.cam.follow = false; IB.cam.x = IB.HOLD_X + 6;
+  for (const z of [.5, 1.8]){ IB.cam.z = IB.cam.tz = z; IB.draw(); }
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'and the whole lot draws at both ends of the zoom');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
