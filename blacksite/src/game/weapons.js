@@ -570,10 +570,15 @@ function stepReload(G, w, dt) {
     if (w.phase === 'shell') {
       w.ammo++; w.res--;
       w.bolt = false; w.dry = false;
-      emit(G, 'reload', { weapon: w.id, phase: 'shell', ammo: w.ammo, res: w.res });
+      emit(G, 'reload', { weapon: w.id, phase: 'shell', ammo: w.ammo, res: w.res, shell: w.ammo });
       const cap = w.mag + (w.chambered ? 1 : 0);
-      if (w.ammo >= cap || w.res <= 0) { w.phase = 'end'; w.phaseT = w.reload.end - over; }
-      else w.phaseT = w.reload.shell - over;
+      if (w.ammo >= cap || w.res <= 0) {
+        w.phase = 'end';
+        w.phaseT = w.reload.end - over;
+        // Run the tube dry and the action is open: the pump-out that closes the
+        // reload is also what chambers the first shell.
+        if (!w.chambered) emit(G, 'reload', { weapon: w.id, phase: 'bolt', ammo: w.ammo, res: w.res });
+      } else w.phaseT = w.reload.shell - over;
       return;
     }
     // end / cancel pump-out
@@ -592,6 +597,14 @@ function stepReload(G, w, dt) {
   if (!(w.reloadFlags & 2) && w.reloadT >= rl.magin) {
     w.reloadFlags |= 2;
     emit(G, 'reload', { weapon: w.id, phase: 'magin', ammo: w.ammo, res: w.res });
+  }
+  // The bolt only has to be released when the last round locked it back, so this
+  // beat exists on the empty reload and nowhere else. It is the loudest, most
+  // metallic thing the gun does that is not a gunshot, and it is the cue that
+  // says "you are back in the fight" a quarter-second before you actually are.
+  if (!w.chambered && !(w.reloadFlags & 4) && w.reloadT >= (rl.bolt != null ? rl.bolt : w.reloadDur * 0.82)) {
+    w.reloadFlags |= 4;
+    emit(G, 'reload', { weapon: w.id, phase: 'bolt', ammo: w.ammo, res: w.res });
   }
   if (w.reloadT >= w.reloadDur) finishReload(G, w);
 }
@@ -688,6 +701,12 @@ function shoot(G, w, age) {
 
   emit(G, 'shot', {
     weapon: w.id, name: w.name, slot: W.active, shotId,
+    // `class` is the synthesis fingerprint, not the human archetype: the audio
+    // layer only knows six gun voices, so the Kestrel borrows the sniper's and
+    // the Talon the rifle's. `local` and `team` say whose gun this was — a
+    // distance test cannot, the moment a hostile fires from arm's length.
+    class: w.class, archetype: w.archetype, local: true, team: C.TEAM.PLAYER,
+    source: 'player', silenced: !!w.silenced, muzzle: w.muzzle,
     origin, dir: { x: _dir.x, y: _dir.y, z: _dir.z },
     spread: cone, spreadDeg: cone / DEG, bloom: w.bloom,
     ammo: w.ammo, res: w.res, mode: w.mode, pellets: n,
