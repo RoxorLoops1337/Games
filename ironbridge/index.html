@@ -987,6 +987,7 @@ const G = {
   state:'menu', t:0, dt:0, wave:0, waveT:C.FIRST_WAVE, speed:1, paused:false,
   sides:[], units:[], projs:[], fx:[], floats:[], zones:[],
   winner:null, diff:DIFFS[1], uid:1, toasts:[], log:[], timeline:[], demo:false, held:false,
+  overHold:0,
 };
 
 // Which of the two holds this browser is playing: 0 on your own and for
@@ -1077,7 +1078,7 @@ function newMatch(opt){
   opt = opt || {};
   reseed(opt.seed || (HEADLESS ? 1337 : (Date.now() & 0x7fffffff)));
   G.diff = DIFFS.find(d => d.id === (opt.diff || 'veteran')) || DIFFS[1];
-  G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null;
+  G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null; G.overHold = 0;
   // update() alternates which hold acts first on the parity of G.frame, and
   // this line was missing: the counter ran on across matches, so the SAME seed
   // replayed differently depending on how many frames the tab had already
@@ -1864,7 +1865,29 @@ function endMatch(winner){
   // Wins and losses on the menu are a record against the Host. A match against
   // a person is not the same thing and does not belong in that column.
   if (!NET.on) saveMeta(winner === MY);
-  if (!HEADLESS) showOver();
+  // The gates coming down is the biggest reaction in the match — and nobody
+  // ever saw it. onStructDown throws its sparks and its shock wave, then this
+  // line raised the result card in the SAME frame, over the top of them. Worse:
+  // fxStep() lives inside update(), which stops the instant G.state is 'over',
+  // so the particles did not even decay — they hung frozen behind the card for
+  // as long as it was up. Hold the board for a beat first; overStep() below
+  // keeps the cosmetics moving and raises the card when the beat is over.
+  G.overHold = OVER_HOLD;
+}
+
+// Seconds of board between the winning blow and the result card. Real time,
+// not sim time: the match is already decided and G.state is 'over', so nothing
+// here touches simStep, the seed, or netHash. Both machines end on the same sim
+// frame and each runs its own hold.
+const OVER_HOLD = 1.5;
+
+function overStep(dt){
+  if (G.state !== 'over' || !(G.overHold > 0)) return false;
+  if (G.paused || G.held) return true;         // still holding, just not ticking
+  G.overHold = Math.max(0, G.overHold - dt);
+  fxStep(dt);                                  // the sim has stopped; cosmetics only
+  if (G.overHold <= 0 && !HEADLESS) showOver();
+  return true;
 }
 
 /* ------------------------------------------------------------------ attacks */
@@ -9137,12 +9160,13 @@ function frame(ts){
     let guard = 0;
     while (left > 0 && guard++ < 12){ const st = Math.min(1 / 30, left); update(st); left -= st; }
   }
+  const holding = overStep(raw);
   camStep(raw);
   // Nothing on the board moves while the result card or the pause report is
   // up, but the card blurs the whole canvas behind it — and re-blurring a live
   // 1400x820 layer sixty times a second for a still picture cost half the
   // frame rate. Redraw a few times a second instead; the DOM stays live.
-  const frozen = (G.state === 'over' || G.paused || G.held) && !G.demo;
+  const frozen = (G.state === 'over' || G.paused || G.held) && !G.demo && !holding;
   if (!frozen || ts - lastDraw > 90){ draw(); lastDraw = ts; }
   uiTick(raw);
   requestAnimationFrame(frame);
@@ -9201,6 +9225,7 @@ window.IB = {
   NET, CMD, sendCmd, netStart, netStep, netRecv, netDeliver, netReady, netPublish, netHash,
   LOBBY, showLobby, lobbySet, lobbyClose, lobbyJoin, lobbyHtml, netBanner, relayHost,
   netEnd, netCheckHash, typingInto, uiTick, myHoldX, foe, SIDE_NAME, SIDE_COL, UI_WAIT_CAP,
+  OVER_HOLD, overStep,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, ARC, arcH, arcZ, applyStun, applySlow, chainLine, hookSnapFx,

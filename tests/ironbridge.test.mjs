@@ -6556,6 +6556,80 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.shakeAsked = 0;
     G.units.length = 0;
   }
+  // …and having made the gates the biggest reaction in the match, measure who
+  // sees it. Nobody did. On a live page, sampling every 100ms: the result card
+  // was up at 0ms — the same frame onStructDown threw the sparks — and the 58
+  // particles behind it did not decay either, because fxStep() lives inside
+  // update(), which returns on the first line once G.state is 'over'. They hung
+  // at IDENTICAL coordinates from 0ms to 1600ms. Control on the same
+  // instrument: an inhibitor, whose fall does not end the match, moved its
+  // debris across nine of sixteen samples and was down to nothing by 1200ms.
+  {
+    IB.newMatch({ diff:'veteran', seed:7801 });
+    t.ok(G.overHold === 0, 'a fresh match is not holding');
+    t.ok(IB.overStep(1) === false, 'and overStep does nothing while the match is on');
+    t.ok(IB.OVER_HOLD >= 1, 'the hold is long enough to be a beat and not a stutter (' + IB.OVER_HOLD + 's)');
+    // WIRED, through the real damage path — endMatch() is not called by hand.
+    const list = G.sides[1].structs;
+    const gate = list.find(x => x.key === 'gate');
+    for (const o of list) if (o.ord < gate.ord){ o.dead = true; o.hp = 0; }
+    const killer = IB.spawnUnit(0, 'melee', { x:gate.x - 1, y:0, paid:true });
+    IB.rebuildGrid();
+    IB.dealDmg(killer, gate, gate.mhp * 4, { pure:true });
+    t.ok(G.state === 'over' && G.winner === 0, 'the gates ended the match');
+    t.ok(G.overHold === IB.OVER_HOLD, 'and the board is held before the card (' + G.overHold + 's)');
+
+    // The fall's own sparks sit inside the !HEADLESS block, so stand in for
+    // them with the same spawner the fall uses. What is under test is whether
+    // ANYTHING on the fx layer still moves once the match is over.
+    const shot = () => G.fx.filter(p => p.k === 'p').map(p => p.x.toFixed(4) + ',' + p.z.toFixed(4)).join(' ');
+    const wasForce = IB.fxForce;
+    IB.fxForce = true;
+    G.fx.length = 0;
+    IB.burstFx(gate.x, gate.y, '#d8c49a', 16);
+    t.ok(G.fx.length === 16, 'sixteen sparks in the air (' + G.fx.length + ')');
+    const at0 = shot();
+    // The sim, which is what used to be the only thing running.
+    for (let i = 0; i < 10; i++) IB.update(1 / 30);
+    t.ok(shot() === at0, 'the stopped simulation does not move them — this is the bug');
+    t.ok(G.fx.length === 16, 'and does not retire them either (' + G.fx.length + ')');
+    // The hold, which is.
+    let held = 0;
+    for (let i = 0; i < 10; i++){ if (IB.overStep(1 / 30)) held++; }
+    t.ok(held === 10, 'the hold ran for all ten of those frames (' + held + ')');
+    t.ok(shot() !== at0, 'and the debris on the gates MOVED while it did');
+    t.ok(Math.abs(G.overHold - (IB.OVER_HOLD - 10 / 30)) < 1e-6,
+      'the hold spent exactly the time it was given (' + G.overHold.toFixed(3) + 's left)');
+
+    // A pause during the hold stops the clock rather than eating it — the card
+    // must not arrive while the pause report is up.
+    G.paused = true;
+    const parked = G.overHold;
+    for (let i = 0; i < 5; i++) t.ok(IB.overStep(1 / 30) === true, 'a paused hold is still a hold');
+    t.ok(G.overHold === parked, 'and does not burn down while paused (' + G.overHold.toFixed(3) + 's)');
+    G.paused = false;
+
+    // It ends, and having ended it stays ended.
+    let frames = 0;
+    while (IB.overStep(1 / 30) && frames < 600) frames++;
+    t.ok(G.overHold === 0, 'the hold runs out');
+    // The longest spark lives .8s and the hold is longer than that, so by the
+    // time the card comes up the board has cleared ITSELF. Before, all sixteen
+    // were still sitting where they were thrown.
+    t.ok(G.fx.length === 0, 'the debris cleared instead of hanging frozen behind the card (' + G.fx.length + ' left)');
+    t.ok(IB.overStep(1 / 30) === false, 'and does not come back');
+    t.ok(G.state === 'over', 'the match is still over afterwards');
+    IB.fxForce = wasForce;
+
+    // Cosmetic, and provably so: the hold is real time on one machine's frame
+    // loop, and two machines must not disagree about the board because of it.
+    const h0 = IB.netHash();
+    G.overHold = 0.4321;
+    t.ok(IB.netHash() === h0, 'the hold is outside the lockstep hash');
+    IB.newMatch({ diff:'veteran', seed:7801 });
+    t.ok(G.overHold === 0, 'and a new match starts unheld');
+    G.units.length = 0;
+  }
   // The wart swing0 fixed, in two more places. An ultimate's pop was given .5
   // seconds and divided by the basic's .32, so it sat pinned at full for the
   // first .18 and only then began to fade — a different SHAPE from the basic
