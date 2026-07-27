@@ -5083,6 +5083,93 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(h5 === h0, 'a hero does not put on levy kit (' + h0 + ' → ' + h5 + ')');
     }
 
+    // What the BARRACKS drilled into a body. The forge plate right above has
+    // marked its own work since it was written — "on the shoulder the enemy
+    // sees" — and the barracks is by far the bigger spend. Measured,
+    // twenty-four drills drew exactly the same 47 ops, the same 200 of ink and
+    // the same five colours as an undrilled body, while the forge varied across
+    // all three of its readings on the same instrument.
+    {
+      const st4 = CTX.__stats;
+      const seat0p = IB.MY;
+      t.ok(IB.drillRank({ }, 'melee') === 0, 'a hold with no barracks work wears nothing');
+      t.ok(IB.drillRank({ troop:{ melee:{ lvl:0, perks:[] } } }, 'melee') === 0, 'nor one at level nought');
+      t.ok(IB.drillRank({ troop:{ melee:{ lvl:1, perks:[] } } }, 'melee') === 1,
+        'the very first drill already shows — nothing saturates at the first purchase');
+      // One a special tier, off TROOP.special so the mark and the ladder cannot
+      // drift apart.
+      const at = (lvl) => IB.drillRank({ troop:{ melee:{ lvl, perks:[] } } }, 'melee');
+      t.ok(at(IB.TROOP.special) === 1 && at(IB.TROOP.special + 1) === 2,
+        'and a bar appears exactly when the track passes a special tier (' +
+        at(IB.TROOP.special) + ' → ' + at(IB.TROOP.special + 1) + ')');
+      t.ok(at(9999) === IB.DRILL.max, 'it stops at the cap (' + at(9999) + '/' + IB.DRILL.max + ')');
+      t.ok(IB.DRILL.max > 2, 'which is a real range (' + IB.DRILL.max + ')');
+
+      // DRIVEN, and on the geometry rather than the op count. The first version
+      // of the mark stacked UPWARD and the head — an ellipse drawn after it —
+      // covered every bar above the collar: ops rose with every chevron while
+      // the picture showed exactly one however many were bought. An op count
+      // says a thing was drawn, not that it can be seen.
+      const bodyAt = (lvl, kind) => {
+        IB.newMatch({ diff:'veteran', seed:6600 });
+        IB.MY = 0;
+        const sd = G.sides[0];
+        sd.troop.melee.lvl = lvl; sd.troop.cannon.lvl = lvl;
+        IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.6;
+        const u = IB.spawnUnit(0, kind || 'melee', { x:60, y:0 });
+        st4.rects = []; st4.ellipses = []; st4.fills = []; st4.rectsDropped = 0;
+        IB.drawUnit(CTX, u);
+        const bars = st4.rects.filter(r => r.col === IB.DRILL.col);
+        const head = st4.ellipses.find(e => e.fill === '#e8d6b8');
+        return { bars, head, dropped:st4.rectsDropped, u };
+      };
+      const none = bodyAt(0), one = bodyAt(1), full = bodyAt(IB.TROOP.special * IB.DRILL.max);
+      t.ok(none.dropped === 0 && full.dropped === 0, 'the body capture held');
+      t.ok(none.bars.length === 0, 'an undrilled body wears no braid (' + none.bars.length + ')');
+      // Pair the nothing with proof the body drew: "no braid" is trivially true
+      // of a body that drew nothing at all.
+      t.ok(!!none.head, 'and it is a body all the same — it has a head');
+      t.ok(one.bars.length === 1, 'one tier is one bar (' + one.bars.length + ')');
+      t.ok(full.bars.length === IB.DRILL.max, 'and a fully drilled kind wears the lot (' +
+        full.bars.length + '/' + IB.DRILL.max + ')');
+      // NOT HIDDEN. Every bar has to sit clear of the head that is drawn over it.
+      t.ok(!!full.head, 'the head is on the board to be compared against');
+      const headBottom = full.head.y + full.head.ry;
+      const buried = full.bars.filter(r => r.y < headBottom);
+      t.ok(buried.length === 0, 'and every bar sits clear of it (' + buried.length +
+        ' of ' + full.bars.length + ' behind the head)');
+      // Distinct from the forge's plate, or two marks in one place read as one
+      // thing bought twice.
+      t.ok(full.bars.every(r => Math.abs(r.y - (-9.6)) > 0 ), 'the braid is not the forge plate');
+      // A levy is not drilled — the barracks has no track for it.
+      const levy = bodyAt(IB.TROOP.special * IB.DRILL.max, 'grunt');
+      t.ok(!!levy.head, 'a levy drew a body');
+      t.ok(levy.bars.length === 0, 'and wears no braid, because nothing drills it (' + levy.bars.length + ')');
+
+      // The movement cap. Taking the march drill every time it was offered put
+      // eight stacks on the footmen and they arrived TWELVE AND A HALF units
+      // ahead of the levies they were meant to be marching behind.
+      const spdOf = (n) => {
+        const sd = { troop:{ melee:{ lvl:n, perks:Array.from({ length:n }, () => 'spd') } } };
+        return IB.troopMod(sd, 'melee', 'spd');
+      };
+      t.ok(spdOf(1) > 0, 'one march drill is worth something (' + spdOf(1).toFixed(3) + ')');
+      t.ok(spdOf(2) > spdOf(1), 'and two are worth more');
+      t.ok(spdOf(20) === IB.TROOP_MAX.spd, 'but it stops (' + spdOf(20) + ' at a cap of ' + IB.TROOP_MAX.spd + ')');
+      t.ok(spdOf(20) === spdOf(40), 'and stays stopped');
+      // The cap has to BIND — one that sits above anything reachable is not a cap.
+      // The cap has to BIND: one sitting above anything the ladder can reach is
+      // not a cap at all. Read the drill's own value rather than a copy of it.
+      const per = IB.TROOP_PERK.spd.m.spd;
+      t.ok(IB.TROOP_MAX.spd < per * IB.TROOP.maxLvl,
+        'and it binds well inside what the ladder allows (' + IB.TROOP_MAX.spd +
+        ' against ' + (per * IB.TROOP.maxLvl).toFixed(2) + ' unchecked)');
+      // Nothing else is capped: more attack never costs you the shape of a wave.
+      const adOf = (n) => IB.troopMod({ troop:{ melee:{ lvl:n, perks:Array.from({ length:n }, () => 'ad') } } }, 'melee', 'ad');
+      t.ok(adOf(20) > adOf(10), 'attack keeps stacking (' + adOf(10).toFixed(2) + ' → ' + adOf(20).toFixed(2) + ')');
+      IB.MY = seat0p;
+    }
+
     // Breaking an inhibitor buys the attacker 95 seconds of Siege Ogres — the
     // biggest swing in the match — and none of it reached the board. At superT
     // 0, 20, 50 and 95 a broken inhibitor drew exactly the same 24 ops, the

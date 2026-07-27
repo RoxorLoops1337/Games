@@ -1306,6 +1306,17 @@ function autoPickTroop(s){
 /* What every perk on a track adds up to. Read once per spawn for the stat
    mods, and per blow for the ones that fire on hit — one place, so a perk
    cannot mean one thing to the body and another to the blow. */
+/* A ceiling on the stats where stacking one drill breaks something rather than
+   improving it. Movement is the one that does: taking the march drill every
+   time it was offered put eight stacks on the footmen, and measured over a
+   real wave they arrived TWELVE AND A HALF units ahead of the levies they were
+   supposed to be marching behind — the column spread from 0.7 to 12.6, so the
+   drilled bodies met the enemy line alone and the screen turned up afterwards.
+   A drill that makes your army arrive piecemeal is a trap, not an upgrade.
+
+   Only movement is capped. The rest stack because more attack or more armour
+   never costs you the shape of the wave. */
+const TROOP_MAX = { spd:.12 };
 function troopMod(s, kind, stat){
   const t = s.troop && s.troop[kind];
   if (!t) return 0;
@@ -1316,8 +1327,24 @@ function troopMod(s, kind, stat){
     const sp = TROOP_SPECIAL[id];
     if (sp && sp.mod && sp.mod[stat] !== undefined) v += sp.mod[stat];
   }
-  return v;
+  return TROOP_MAX[stat] !== undefined ? Math.min(v, TROOP_MAX[stat]) : v;
 }
+// One chevron a special tier, off TROOP.special so the mark and the ladder it
+// describes cannot drift apart.
+// Bone, not a lighter team colour: the first version shaded the chevrons off
+// the side colour and they vanished into the torso's own lit face — a brighter
+// blue on a blue body reads as a highlight, not a marking. Rank braid is not
+// team-coloured anywhere else in the game either.
+// The stack runs DOWN the chest. It ran up in the first version and the head
+// — an ellipse from by-14.8 to by-8.4, drawn after this — covered everything
+// above the collar: the op count went up with every chevron and the picture
+// showed exactly one bar however many were bought. Ops say a thing was drawn,
+// not that it can be seen.
+const DRILL = { max:4, w:3.0, h:.8, gap:1.05, y:7.7, x:.2, col:'#f0e2bd', dark:'rgba(20,16,10,.45)' };
+const drillRank = (s, kind) => {
+  const t = s && s.troop && s.troop[kind];
+  return t ? clamp(Math.ceil(t.lvl / TROOP.special), 0, DRILL.max) : 0;
+};
 const troopHas = (s, kind, id) => !!(s.troop && s.troop[kind] && s.troop[kind].perks.includes(id));
 
 function assign(s, node, delta){
@@ -5218,6 +5245,33 @@ function drawUnit(c, u){
   const arm = swingPhase(u);
   c.lineTo(bx + dir0 * (4 + arm * 1.4) * sc, by - (5 - arm * 1.6) * sc);
   c.stroke(); c.lineCap = 'butt';
+  /* What the BARRACKS drilled into this body. The forge's plate below has
+     marked its own work since it was written — "on the shoulder the enemy
+     sees" — and the barracks is by far the bigger spend: a hold twelve levels
+     deep has paid thousands of gold and iron for it. Measured, twenty-four
+     drills drew exactly the same 47 ops, the same 200 of ink and the same five
+     colours as an undrilled body, while the forge varied across all three of
+     its readings on the same instrument. The whole feature was invisible on
+     the bridge.
+
+     Chevrons rather than another plate: two bars in the same place would read
+     as one thing bought twice. These sit on the front of the chest, the plate
+     stays on the back shoulder, and the two can be read at once. One chevron a
+     special tier, so a bar appears exactly when the track passes the level
+     that offers something with a name — and the first drill already shows one,
+     so nothing saturates at the first purchase. */
+  if (!u.isHero && !u.struct){
+    const dr = drillRank(G.sides[u.side], u.kind);
+    for (let i = 0; i < dr; i++){
+      const y = by - (DRILL.y - i * DRILL.gap) * sc;
+      const x0 = bx + dirOf(u.side) * DRILL.x * sc - DRILL.w * sc / 2;
+      // a dark seat under each bar, or bone on a pale body disappears too
+      c.fillStyle = DRILL.dark;
+      c.fillRect(x0 - .3 * sc, y - .3 * sc, DRILL.w * sc + .6 * sc, DRILL.h * sc + .6 * sc);
+      c.fillStyle = u.hitT > 0 ? '#ffffff' : DRILL.col;
+      c.fillRect(x0, y, DRILL.w * sc, DRILL.h * sc);
+    }
+  }
   // What the forge bought this body, on the shoulder the enemy sees. Grows
   // continuously with the ranks of troop work rather than in tiers, so there
   // is no threshold to saturate at the first purchase.
@@ -9084,7 +9138,7 @@ window.IB = {
   BUILDINGS, TOWER_UPS, TROOP_UPS, MAX_UP, HERO_COST, PLOT_W, PLOT_H,
   newMatch, update, draw, spawnWave, spawnUnit, dealDmg, mitigate, healUnit,
   trainWorker, assign, TROOP_KINDS, TROOP_PERK, TROOP_SPECIAL, TROOP, troopCost, troopSpecialLvl,
-  upgradeTroop, troopCap, offerTroop, pickTroop, autoPickTroop, troopMod, troopHas, troopTrack, build, upgradeBuilding, buyUp, buildCost, upCostFor,
+  upgradeTroop, troopCap, TROOP_MAX, DRILL, drillRank, offerTroop, pickTroop, autoPickTroop, troopMod, troopHas, troopTrack, build, upgradeBuilding, buyUp, buildCost, upCostFor,
   createHero, makeHero, pickOption, autoPick, gainXp, recalcHero, offer, enterLane, heroStep,
   popCap, popUsed, workerCount, fieldSlots, nodeCap, heroCap, upCap, barracksLvl, trainSlots,
   gatherMul, bLvl, bList, canPay, xpNeed, skNums, basicPool, ultPool, passVal, bsum,
