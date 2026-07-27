@@ -3340,6 +3340,64 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(inverted === 0, 'and never falls behind the bar it trails (' + inverted + ')');
 }
 {
+  // Damage numbers. The cast names in the other half of the same branch have
+  // been outlined since they were written; the numbers never were, so yellow
+  // digits landed on a pale body and vanished. And a scratch printed at the
+  // same size as a hit that took a third of somebody.
+  IB.newMatch({ diff:'veteran', seed:173 });
+  const S = IB.FLOAT_SC;
+  t.ok(S.min > 0 && S.max > S.min && S.full > 0, 'the size range is a real range');
+  // Nothing may come back non-finite: the stub canvas refuses NaN, and a real
+  // one silently drops the call, so a number sized by a divide-by-zero would
+  // just not be there.
+  let bad = 0, prev = -1, rose = 0;
+  for (const [amt, mhp] of [[0, 0], [0, 100], [-5, 100], [1, 1], [NaN, 100], [50, NaN]])
+    if (!Number.isFinite(IB.floatScale(amt, mhp))) bad++;
+  t.ok(bad === 0, 'every degenerate hit still has a finite size');
+  for (let i = 0; i <= 100; i++){
+    const v = IB.floatScale(i * 8, 600);
+    if (v < S.min - 1e-9 || v > S.max + 1e-9) bad++;
+    if (v < prev - 1e-9) bad++;
+    if (v > prev + 1e-9) rose++;
+    prev = v;
+  }
+  t.ok(bad === 0, 'size climbs with the hit and stays inside its range');
+  t.ok(rose > 5, 'and really does climb rather than sitting flat (' + rose + ' steps)');
+  // The floor is what keeps a gate legible: thousands of health means every
+  // hit on it is a rounding error by fraction.
+  t.ok(IB.floatScale(150, 6400) >= S.min, 'a hit on the gates is still readable');
+  t.ok(IB.floatScale(400, 600) > IB.floatScale(20, 600) * 1.5, 'a big hit is visibly bigger than a scratch');
+
+  // Where a number goes when others are already rising there. The old line
+  //   ox = (Math.abs(ox) + step) * (ox > 0 ? -1 : 1)
+  // looks like it alternates, but ox starts at 0 so it went negative and then
+  // read `ox > 0` as false forever: numbers marched off to the left in a line
+  // instead of fanning around the body.
+  G.floats.length = 0;
+  const xs = [];
+  for (let i = 0; i < 6; i++){
+    const [ox] = IB.floatSlot(50, 0, 1);
+    xs.push(ox);
+    G.floats.push({ x:50 + ox, y:0, txt:'1', col:'#fff', t:.9, dur:.9, sc:1, vy:-.5 });
+  }
+  t.ok(xs[0] === 0, 'the first number sits on the body');
+  t.ok(xs.some(v => v > 0) && xs.some(v => v < 0), 'and the rest fan to BOTH sides (' + xs.map(v => v.toFixed(2)).join(' ') + ')');
+  const spread = Math.max(...xs) - Math.min(...xs);
+  t.ok(spread >= IB.FLOAT_GAP.step * 2, 'the fan is at least a step wide either way');
+  // A three-digit number is about 2.2 world units across at the standard zoom,
+  // so a step under half that prints "51" and "105" as "5105".
+  t.ok(IB.FLOAT_GAP.step >= 1, 'the step clears the width of the text (' + IB.FLOAT_GAP.step + ')');
+  // Bigger numbers need a wider berth, or the big ones smear back over each
+  // other exactly where it matters most.
+  G.floats.length = 0;
+  const small = IB.floatSlot(50, 0, 1);
+  G.floats.push({ x:50, y:0, txt:'1', col:'#fff', t:.9, dur:.9, sc:S.max, vy:-.5 });
+  const big = IB.floatSlot(50, 0, S.max);
+  t.ok(Math.abs(big[0]) > IB.FLOAT_GAP.step, 'a number beside a big one is pushed further than one step');
+  t.ok(small[0] === 0 && Number.isFinite(big[0]) && Number.isFinite(big[1]), 'and the slot is always a real place');
+  G.floats.length = 0;
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
