@@ -4511,6 +4511,62 @@ t.ok(true, 'drawing an empty bridge is harmless');
     if (IB.BANDS[i].d <= IB.BANDS[i - 1].d || IB.BANDS[i].y <= IB.BANDS[i - 1].y) back++;
   t.ok(back === 0, 'the ridges are laid down furthest first (' + back + ' out of order)');
 
+  // A mountain is not made of glass. The three bands used to be filled at
+  // .66, .80 and .92, which made every one of them a window onto the ones
+  // behind it: pale spikes crossed peaks that were supposed to be in FRONT of
+  // them, and leaned in, the far range showed through the near one hard
+  // enough to be taken for a translucent cliff. Opaque now — the air in front
+  // of a ridge is the only thing allowed to lighten it.
+  const alphaOf = (s) => {
+    const m = s.match(/rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/);
+    return m ? +m[1] : 1;
+  };
+  let glass = 0;
+  for (const b of IB.BANDS) if (alphaOf(b.col) < 1) glass++;
+  t.ok(glass === 0, 'no ridge is painted at an alpha for the range behind it to show through');
+  t.ok(new Set(IB.BANDS.map(b => b.col)).size === IB.BANDS.length,
+    'and the three did not all become the same opaque colour on the way');
+  // Which means `fog` is now carrying the recession on its own, so it has to
+  // thin as the ridges come nearer — three bands with one fog value would be
+  // three shades again rather than three distances.
+  let thick = 0;
+  for (let i = 1; i < IB.BANDS.length; i++) if (!(IB.BANDS[i].fog < IB.BANDS[i - 1].fog)) thick++;
+  t.ok(thick === 0, 'and each nearer ridge has less air in front of it than the one behind it');
+
+  // Where the far range's outline lands. Its baseline used to run straight
+  // across the top of the bridge's far handrail — two edges that merely touch,
+  // which is the oldest amateur tell there is — so the outline alone now
+  // carries on down behind the deck.
+  IB.newMatch({ diff:'veteran', seed:4242 });
+  IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = .62;
+  IB.draw();
+  const deckW = C.LANE_W / 2 + .6;
+  const railTop = IB.lp(60, -deckW, 1.35)[1], nearKerb = IB.lp(60, deckW)[1];
+  const pool = IB.LH * IB.bandFoot(IB.BANDS[0]);      // where its air still lies
+  const outline = IB.LH * IB.ridgeFoot(IB.BANDS[0]);  // where its silhouette ends
+  t.ok(pool > railTop - 14 && pool < nearKerb,
+    'the far range still has the bridge rail at its nominal foot — the artefact this exists for');
+  t.ok(outline > nearKerb,
+    'but its outline runs on past the near kerb, so the range passes behind the deck (' +
+    Math.round(outline) + ' vs ' + Math.round(nearKerb) + ')');
+  const drop = outline - pool;
+  t.ok(drop >= 55 && drop <= 100,
+    'dropped ' + Math.round(drop) + 'px: far enough to clear the rail, not so far the range is buried');
+  // And ONLY the outline moved. The haze pool and the fog gradient are the
+  // best-lit thing in this sky and they stay where they were — a haze that
+  // followed the outline down would go behind the bridge with it and the far
+  // range would lose the one thing putting it behind the middle one.
+  let dragged = 0;
+  for (let i = 1; i < IB.BANDS.length; i++)
+    if (IB.ridgeFoot(IB.BANDS[i]) !== IB.bandFoot(IB.BANDS[i])) dragged++;
+  t.ok(dragged === 0, 'no other band was moved with it');
+  t.ok(IB.ridgeFoot(IB.BANDS[0]) !== IB.bandFoot(IB.BANDS[0]),
+    'and the two heights are genuinely two heights, not one function twice');
+  t.ok(/bandFoot\(b\)/.test(String(IB.skyRoll)),
+    'the haze still pools at the band\'s own foot rather than at the outline\'s');
+  t.ok(/b\.y \+ b\.h \+ \.02/.test(String(IB.skyRoll)),
+    'and the fog gradient still ends exactly where it always did');
+
   // The halo is a radial gradient — a new call on this path — and the whole
   // sky has to survive every camera the game can reach.
   IB.newMatch({ diff:'veteran', seed:181 });

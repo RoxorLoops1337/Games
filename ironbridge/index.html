@@ -4804,11 +4804,36 @@ const HORIZON = '203,216,209';
 // pool at the foot that makes the next band read as further off, and `fog` how
 // much of HORIZON is mixed into the band itself — which is the number that
 // turns three silhouettes into three DISTANCES rather than three shades.
+//
+// A mountain is not made of glass. These were filled at .66, .80 and .92, so
+// every band was a window onto the two behind it: pale spikes crossed peaks
+// that were supposed to be in FRONT of them, and at a leaned-in zoom the far
+// range showed through the near one hard enough to be mistaken for a
+// translucent cliff. The recession never came from that alpha anyway — `fog`
+// mixes HORIZON into the band, most of all at its foot, and does the whole
+// job. So the silhouettes are OPAQUE and the air between you and them is the
+// only thing lightening them, which is what air actually does.
+// (`rgb(...)` rather than a hex triple on purpose: the three channels stay
+// readable side by side, and the rim-vs-band luminance check reads them.)
+//
+// `foot` is how far BELOW the nominal foot the silhouette's baseline runs on
+// down — see ridgeFoot.
 const BANDS = [
-  { d:.10, y:.30, h:.26, col:'rgba(133,163,178,.66)', rim:'rgba(232,242,236,.34)', haze:'rgba(190,210,210,.55)', fog:.40 },
-  { d:.20, y:.38, h:.24, col:'rgba(90,127,131,.80)',  rim:'rgba(190,210,198,.32)', haze:'rgba(166,192,190,.5)',  fog:.24 },
-  { d:.34, y:.47, h:.22, col:'rgba(44,76,67,.92)',    rim:'rgba(136,168,150,.32)', haze:'rgba(120,152,148,.45)', fog:.11 },
+  { d:.10, y:.30, h:.26, foot:.135, col:'rgb(133,163,178)', rim:'rgba(232,242,236,.34)', haze:'rgba(190,210,210,.55)', fog:.40 },
+  { d:.20, y:.38, h:.24, foot:0,    col:'rgb(90,127,131)',  rim:'rgba(190,210,198,.32)', haze:'rgba(166,192,190,.5)',  fog:.24 },
+  { d:.34, y:.47, h:.22, foot:0,    col:'rgb(44,76,67)',    rim:'rgba(136,168,150,.32)', haze:'rgba(120,152,148,.45)', fog:.11 },
 ];
+// Where a band's air is: the height its haze pools at and the height its fog
+// gradient runs down to. Nothing below moves this — the aerial perspective is
+// the best-lit thing in the picture and it stays exactly where it was.
+const bandFoot = (b) => b.y + b.h;
+// Where its SILHOUETTE's baseline runs, which is a different question. The far
+// range's foot used to land within three pixels of the top of the bridge's far
+// handrail, straight across the middle of the frame: two edges that merely
+// touch, which is the oldest amateur tell there is. It now carries on down
+// behind the deck, so the range passes BEHIND the bridge instead of kissing
+// it. Only the outline moved; the haze pool and the fog did not.
+const ridgeFoot = (b) => b.y + b.h + (b.foot || 0);
 // The haze pools were a hard-edged fillRect, which drew a straight line across
 // the mountains at the exact height it was supposed to be dissolving them.
 // Same colour, pulled apart into a soft band, and the two ends parsed once
@@ -4998,12 +5023,13 @@ function skyRoll(c){
   const ridgeX = (i, d) => ((i * 230 - cam.x * LS() * d) % (LW + 690) + LW + 690) % (LW + 690) - 230;
   for (let k = 0; k < BANDS.length; k++){
     const b = BANDS[k];
-    c.fillStyle = b.col;
+    const base = LH * ridgeFoot(b);        // where this outline's feet land
+    c.fillStyle = b.col;                   // opaque: see BANDS
     c.beginPath();
     c.moveTo(-40, LH);
     for (let i = -1; i < 9; i++){
       const bx = ridgeX(i, b.d);
-      c.lineTo(bx, LH * (b.y + b.h));
+      c.lineTo(bx, base);
       c.lineTo(bx + RIDGE_RIM, LH * b.y - ridgeTop(i, k));
       c.lineTo(bx + 128, LH * (b.y + b.h * (.40 + ridgeMid(i, k) * .32)));
       c.lineTo(bx + 172, LH * b.y - ridgeTop(i + 5, k) * .62);
@@ -5029,13 +5055,16 @@ function skyRoll(c){
       const bx = ridgeX(i, b.d);
       if (bx < -240 || bx > LW + 60) continue;
       c.beginPath();
-      c.moveTo(bx, LH * (b.y + b.h));
+      c.moveTo(bx, base);
       c.lineTo(bx + RIDGE_RIM, LH * b.y - ridgeTop(i, k));
       c.stroke();
     }
     c.lineCap = 'butt';
-    // haze pooling at the foot of the band, so the next one reads as further
-    const hy = LH * (b.y + b.h), h0 = LH * .10;
+    // haze pooling at the foot of the band, so the next one reads as further.
+    // bandFoot, NOT ridgeFoot: air lies at the height air lies at, and if this
+    // followed the outline down behind the bridge the far range would lose the
+    // one thing that puts it behind the middle one.
+    const hy = LH * bandFoot(b), h0 = LH * .10;
     const hg = c.createLinearGradient(0, hy - h0, 0, hy + LH * .05);
     hg.addColorStop(0, BAND_FX[k].haze0);
     hg.addColorStop(.62, BAND_FX[k].haze1);
@@ -13551,6 +13580,7 @@ window.IB = {
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
   SKY, plateKey, skyRoll, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
+  BAND_FX, bandFoot, ridgeFoot, HORIZON, ridgeTop, ridgeMid,
   get LW(){ return LW; }, get LH(){ return LH; },
 };
 
