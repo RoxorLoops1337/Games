@@ -163,6 +163,17 @@ export function buildLevel(G, engine, materials) {
   const FLOOD = 0xffe6c8;         // metal-halide apron floods
   const WORK = 0xfff0dc;          // portable work lights, near white
   const SODIUM = 0xffb24a;        // the bunker's emergency circuit
+
+  // What a mast puts on the ground where its beam lands. The sun at six degrees
+  // delivers about 0.36 to a flat apron and the apron is dark cast concrete, so
+  // a pool has to sit well over the sun's grazing term before it reads as a
+  // pool at all — three and a half times it is where an unlit bay stops being a
+  // hole in the frame. That is not a floodlight beating daylight: the key is
+  // still 3.5 against a 1.3 fill on the one surface that receives both, and a
+  // wall turned to the sun gets ten times what the ground does, which is the
+  // ratio the open compound survives on. One number rather than eight — the
+  // mast loop derives each lamp's intensity from it and its own throw.
+  const FLOOD_POOL = 1.30;
   const quality = Math.max(0, Math.min(3, G.settings.quality | 0));
   const practicalDefs = [];
   const practical = (d) => { practicalDefs.push(d); return d; };
@@ -178,11 +189,15 @@ export function buildLevel(G, engine, materials) {
     if (!light) return;
     // The beam leaves along the lens normal, worked out from the way the
     // housing was hung rather than typed in a second time — so a fitting that
-    // gets nudged takes its light with it.
-    const c = Math.cos(rx);
+    // gets nudged takes its light with it. The source sits 14 cm out in front
+    // of the glass, which is far enough that the fitting does not light its own
+    // guard bars from the inside and near enough to still be the same object.
+    const c = Math.cos(rx), s = Math.sin(rx);
+    const d = [c * Math.sin(ry), -s, c * Math.cos(ry)];
     practical({
-      ...light, pos: [x, y, z],
-      aim: light.aim || [x + c * Math.sin(ry) * 4, y - Math.sin(rx) * 4, z + c * Math.cos(ry) * 4],
+      ...light,
+      pos: [x + d[0] * 0.14, y + d[1] * 0.14, z + d[2] * 0.14],
+      aim: light.aim || [x + d[0] * 4, y + d[1] * 4, z + d[2] * 4],
     });
   }
 
@@ -296,7 +311,7 @@ export function buildLevel(G, engine, materials) {
     practical({
       pos: [8.2, PY + 1.74, 3.6],
       aim: [8.2 + c * Math.sin(ry) * 6, PY + 1.74 - Math.sin(0.30) * 6, 3.6 + c * Math.cos(ry) * 6],
-      color: WORK, intensity: 22, distance: 16, angle: 0.72, penumbra: 0.5,
+      color: WORK, intensity: 96, distance: 16, angle: 0.86, penumbra: 0.5,
     });
   }
 
@@ -597,8 +612,17 @@ export function buildLevel(G, engine, materials) {
     // alley wall is what tells you where the next step is. Everything else on
     // this site is lit well enough by a shadowless pool.
     bulkheadLamp(8.02, ROOF + 0.55, -15.4, Math.PI / 2, 0.88, {
-      color: WORK, intensity: 26, distance: 13, angle: 0.85, penumbra: 0.45,
-      shadow: true, shadowQ: 1,
+      color: WORK, intensity: 72, distance: 13, angle: 0.66, penumbra: 0.45,
+      // The shadow frustum stops well short of the light's own reach. Nothing
+      // past nine metres of this fitting is a caster worth the depth precision,
+      // and a tighter pyramid throws more of the level out of the pass.
+      shadowFar: 9,
+      // One extra depth pass over whatever is inside a 13 m cone, which on a
+      // level merged into thirty-odd chunk meshes is about two dozen draw
+      // calls. Worth it on the tiers that can spend it and the first thing to
+      // go on the two that cannot — the stair is still lit down there, it just
+      // stops telling you where each nosing is.
+      shadow: true, shadowQ: 2,
     });
     // Its neighbour twenty metres up the alley is dark, and the contrast is the
     // point: one working fitting reads as a facility on a trickle of emergency
@@ -819,12 +843,12 @@ export function buildLevel(G, engine, materials) {
     // hanging over an unlit apron either.
     if (quality >= 1) {
       bulkheadLamp(1.6, DECK - 0.30, CW.zN, 0, Math.PI / 2, {
-        color: WORK, intensity: 20, distance: 15, angle: 1.18, penumbra: 0.85,
+        color: WORK, intensity: 78, distance: 15, angle: 1.18, penumbra: 0.85,
       }, 'pad');
     }
     if (quality >= 2) {
       bulkheadLamp(CW.x, DECK - 0.30, 8.0, 0, Math.PI / 2, {
-        color: WORK, intensity: 15, distance: 13, angle: 1.18, penumbra: 0.85,
+        color: WORK, intensity: 58, distance: 13, angle: 1.18, penumbra: 0.85,
       }, 'pad');
     }
 
@@ -932,20 +956,25 @@ export function buildLevel(G, engine, materials) {
   // Floodlight masts. Nine metres of nothing, and they are load-bearing: a flat
   // apron with no vertical elements has no sense of scale at all.
   //
-  // The last column says whether the mast still has power, and it is the only
-  // place that decision is made: a live one gets emissive lenses *and* a light
-  // in §10, a dead one gets cold glass and nothing. Four of eight are dead on
-  // purpose. A row of identical lit masts reads as a lighting rig; a lit one
-  // standing next to a dark one reads as a place where somebody stopped paying
-  // the bill, and it costs a material swap to say so. The live four are the
-  // four the player walks under — the road, the west pad, the motor pool and
-  // the silo apron; the dead four are the ones you only ever see from 30 m.
-  for (const [x, z, ry, ch, live] of [
-    [-25, 45, 0.2, 'approach', false], [26, 44, -0.3, 'approach', false],
-    [-28.5, 8, 1.2, 'pad', true], [-8.5, 24, 0.35, 'approach', true],
-    [22.5, 26, -0.5, 'approach', true], [26.5, 15, -0.8, 'approach', false],
-    [27, -30, 0.4, 'silo', true], [-6, -37, 0.9, 'bunker', false],
+  // The last column is the tier at which this mast still has power: −1 is dead
+  // outright, 0 survives even on a potato, 2 only appears on the top two tiers.
+  // Four of the eight are dead however fast your machine is. A row of identical
+  // lit masts reads as a lighting rig; a lit one standing next to a dark one
+  // reads as a place where somebody stopped paying the bill, and it costs a
+  // material swap to say so.
+  //
+  // The tier number drives the lens material *and* the light, out of one test
+  // below, which is the only honest way to have both: budgeting the lights
+  // alone would leave a glowing lens over an unlit apron on the cheap tiers.
+  // What a low tier loses is therefore the two peripheral masts — the motor
+  // pool and the silo apron — never the two the player walks under first.
+  for (const [x, z, ry, ch, tier, ax, az] of [
+    [-25, 45, 0.2, 'approach', -1], [11.5, 42.5, -0.3, 'approach', 0, 0, 41],
+    [-28.5, 8, 1.2, 'pad', 0, -21, 6], [-8.5, 24, 0.35, 'approach', 0, -3, 27],
+    [22.5, 26, -0.5, 'approach', 1, 24, 20], [26.5, 15, -0.8, 'approach', -1],
+    [27, -30, 0.4, 'silo', 2, 22, -28], [-6, -37, 0.9, 'bunker', -1],
   ]) {
+    const live = tier >= 0 && quality >= tier;
     const m = PR.floodMast(9, {});
     putAll(m.parts, 'metal', x, GY, z, ry, 0, 0, ch);
     for (let i = 0; i < m.lamps.length; i++) {
@@ -963,9 +992,28 @@ export function buildLevel(G, engine, materials) {
       // apron from within half a metre of each other, so four lights would be
       // four times the fragment cost of a difference nobody can see. The cone
       // is wide and heavily feathered because that is the union of four beams.
+      //
+      // Aimed off the base, never straight down. The housings on the real prop
+      // are visibly raked over and a flood that lit its own feet would be a
+      // strange thing to erect nine metres in the air; each of these throws its
+      // pool onto the route it was put there to cover, which also keeps the
+      // mast itself out of the middle of its own highlight.
+      //
+      // Intensity is derived from the throw instead of typed in per mast. These
+      // are the same fitting on the same circuit; the only thing that differs
+      // between them is how far each one is aimed, and inverse-square plus the
+      // cosine at the ground is exactly what that difference costs. Tuning the
+      // pool once therefore tunes all of them, and a mast that gets moved
+      // re-lights itself correctly instead of quietly going dim.
+      const th = Math.hypot(x - ax, 8.95, z - az);
       practical({
-        pos: [x, 8.95, z], aim: [x, 0, z],
-        angle: 0.98, penumbra: 0.75, intensity: 62, distance: 34, color: FLOOD,
+        pos: [x, 8.95, z], aim: [ax, 0, az],
+        angle: 0.90, penumbra: 0.7, color: FLOOD,
+        intensity: FLOOD_POOL * th * th * th / 8.95,
+        // Cut off a little past where the beam lands. Past that the pool is
+        // already down by a factor of four and the only thing left to light is
+        // a berm the player will never stand on.
+        distance: th * 2.2,
       });
     }
     S(boxFromCenter(x, GY + 4.5, z, 0.4, 9.0, 0.4, SURFACE.METAL, { thickness: 40 }));
@@ -1030,9 +1078,17 @@ export function buildLevel(G, engine, materials) {
   // the approach and guessing at it. The west one is dead; a gate with one lamp
   // out is a gate somebody stopped maintaining, and it costs nothing to say so.
   bulkheadLamp(4.5, GY + 2.55, 50, -2.611, 0.28, {
-    color: FLOOD, intensity: 110, distance: 26, angle: 0.68, penumbra: 0.55,
+    color: FLOOD, intensity: 330, distance: 26, angle: 0.95, penumbra: 0.6,
   }, 'approach');
   bulkheadLamp(-4.5, GY + 2.55, 50, 2.611, 0.28, null, 'edge');
+  // And one on the guard post's canopy, throwing the other diagonal. Two lamps
+  // crossing over the same forty metres of road is not redundancy — a single
+  // source at this height puts a hard edge down the middle of the lane and
+  // leaves the other half of it black; the crossing is what makes the road read
+  // as one surface you can walk on rather than two.
+  bulkheadLamp(-11.7, GY + 3.42, 45.6, 2.296, 0.258, {
+    color: FLOOD, intensity: 480, distance: 30, angle: 0.85, penumbra: 0.6,
+  });
 
   // Spools, crates, drums — the scatter that turns a plan into a place.
   for (const [x, z, ry, ch] of [[-10.5, 27, 0.3, 'approach'], [21.5, 12.5, 1.1, 'approach'], [-3.5, -35.5, 0.6, 'bunker'], [13.5, -6.5, 2.0, 'pad']]) {
@@ -1158,6 +1214,44 @@ export function buildLevel(G, engine, materials) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
+  // 8b · THE EMERGENCY CIRCUIT
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // A six-degree sun gives the bunker two shafts through the roof and nothing
+  // else, so what is left in there is whatever is still on the batteries. It is
+  // sodium and it is deliberately the warmest light on the site: outside is a
+  // cold-ish white on a warm sky, in here is orange, and that difference is
+  // what makes walking through the south door feel like changing buildings.
+  //
+  // Budgeted by tier, and the fitting is installed inside the same test as the
+  // light — a machine that cannot afford the sixth lamp does not get a sixth
+  // glowing lens hanging over an unlit corridor either.
+  const SODIUM_LAMPS = [
+    // The order is the order they get dropped in, so it runs from the ones a
+    // player cannot do without to the ones that are only atmosphere.
+    [0, 3.30, -12.5, SODIUM, 20.0, 13, false],     // the spine, inside the south door
+    [-18.0, 3.26, -26.0, SODIUM, 18.0, 14, false], // generator hall, past the blast door
+    [0, 3.30, -25.5, SODIUM, 16.5, 13, true],      // the spine's north half, on a dying ballast
+    [-16.5, 3.18, -12.0, 0xbfe2ff, 14.0, 12, false], // control room — a different circuit, and
+    [4.8, 3.18, -18.0, SODIUM, 13.0, 10, true],     //   a cold tube among the orange says so
+    [-13.0, 3.08, -20.0, SODIUM, 11.5, 11, false],
+  ];
+  for (let i = 0; i < Math.min([2, 3, 4, 6][quality], SODIUM_LAMPS.length); i++) {
+    const [x, y, z, color, intensity, distance, flicker] = SODIUM_LAMPS[i];
+    // Hung face-down off the soffit. No cone: a bare lamp in a 4 m room throws
+    // as much along the corridor as it does at the floor, and pretending
+    // otherwise is what makes an interior look like a stage set.
+    bulkheadLamp(x, y, z, 0, Math.PI / 2, { color, intensity, distance, flicker }, 'bunker');
+  }
+  // The one under the gantry, over the silo throat. It is 8.4 m up and it is
+  // the only thing that separates the collar's hazard banding from the sand
+  // once the sun is off it — which matters, because that banding is how you
+  // know from 40 m that the thing is a hole.
+  bulkheadLamp(SILO.x, 8.4, -14.0, 0, Math.PI / 2, {
+    color: 0xffd6a0, intensity: 180, distance: 22, angle: 1.05, penumbra: 0.7,
+  }, 'silo');
+
+  // ═══════════════════════════════════════════════════════════════════════════
   // 9 · MERGE
   // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1212,34 +1306,58 @@ export function buildLevel(G, engine, materials) {
   // 10 · PRACTICAL LIGHTS
   // ═══════════════════════════════════════════════════════════════════════════
   //
-  // The sun is 24° above the horizon and coming from the north-west, which means
-  // the bunker interior gets nothing but two shafts through the roof. These are
-  // the emergency circuit: sodium, dim, and just enough to shape the corridor
-  // without lifting it out of silhouette. Budgeted by tier because every one of
-  // these is a per-fragment cost on every material in range.
-  const lightBudget = [2, 3, 5, 7][G.settings.quality] || 5;
+  // The sun sits about six degrees over the north-west berm. It is a beautiful
+  // key and it is a hopeless fill: everything it does not strike directly falls
+  // to whatever the sky can put back, and that is not enough to walk by. The
+  // fix is not to raise ambient — ambient at parity with the key erases every
+  // cast shadow on the site, which is the one thing this level has that a flat
+  // apron badly needs. The fix is sources inside the world, so the lift lands
+  // where a fixture is pointing and nowhere else.
+  //
+  // Everything here was declared next to the fitting it comes out of; this loop
+  // only turns the list into Object3Ds. Three rules it obeys:
+  //
+  //   • Bounded. Every one carries a `distance` and decays quadratically. An
+  //     unbounded point light in a 210 m level lights the far berm at a
+  //     fifteenth of its brightness at the lamp, which is both a cost you are
+  //     paying for nothing and a look — a whole desert faintly orange — that no
+  //     floodlight has ever produced.
+  //   • Directional where the fitting is. A mast head or an under-deck bulkhead
+  //     points somewhere; a spot costs the same per fragment as a point and
+  //     keeps the light off the sky, off the deck above and out of the frame.
+  //   • Shadowed almost nowhere. One caster, and it is a spot, so its shadow is
+  //     one 2D map rather than the six cube faces a point light would need.
   const practicals = [];
-  const LAMPS = [
-    [0, 3.35, -12.5, 0xffb24a, 7.5, 11],
-    [0, 3.35, -25.5, 0xffb24a, 6.0, 11],
-    [-16.5, 3.20, -12.0, 0xbfe2ff, 5.0, 10],
-    [-18.0, 3.30, -26.0, 0xffa838, 6.5, 12],
-    [4.8, 3.20, -18.0, 0xffb24a, 4.5, 8],
-    [SILO.x, 8.4, -14.0, 0xffd6a0, 9.0, 16],
-    [-13.0, 3.10, -20.0, 0xffb24a, 4.0, 9],
-  ];
-  for (let i = 0; i < Math.min(lightBudget, LAMPS.length); i++) {
-    const [x, y, z, col, intensity, dist] = LAMPS[i];
-    const l = new THREE.PointLight(col, intensity, dist, 2);
-    l.position.set(x, y, z);
-    l.castShadow = false;
+  const shadowSize = quality >= 3 ? 1024 : 512;
+  for (let i = 0; i < practicalDefs.length; i++) {
+    const d = practicalDefs[i];
+    let l;
+    if (d.angle) {
+      l = new THREE.SpotLight(d.color, d.intensity, d.distance, d.angle,
+        d.penumbra == null ? 0.6 : d.penumbra, 2);
+      l.target.position.set(d.aim[0], d.aim[1], d.aim[2]);
+      group.add(l.target);
+    } else {
+      l = new THREE.PointLight(d.color, d.intensity, d.distance, 2);
+    }
+    l.position.set(d.pos[0], d.pos[1], d.pos[2]);
+    l.castShadow = !!d.shadow && quality >= (d.shadowQ || 1) && (engine.tier.shadow | 0) > 0;
+    if (l.castShadow) {
+      l.shadow.mapSize.set(shadowSize, shadowSize);
+      // The far plane is the light's own cutoff distance: past it the light
+      // contributes nothing, so anything out there is depth precision spent on
+      // a shadow that cannot be seen. Near is short because the caster nearest
+      // this fitting is a handrail about a metre off the lens.
+      l.shadow.camera.near = 0.35;
+      l.shadow.camera.far = d.shadowFar || d.distance;
+      l.shadow.bias = -0.0011;
+      l.shadow.normalBias = 0.035;
+    }
     group.add(l);
-    practicals.push({ light: l, base: intensity, phase: i * 1.7, flicker: i === 4 || i === 6 });
-    // The fitting itself, so the light has a visible source.
-    putAll([chamferBox(0.46, 0.09, 0.16, 0.012)], 'lamp', x, y + 0.12, z, 0, 0, 0);
+    practicals.push({ light: l, base: d.intensity, phase: i * 1.7, flicker: !!d.flicker });
   }
-  // The lamp geometry above went into a bucket that has already been merged, so
-  // fold any late arrivals in as their own small mesh rather than losing them.
+  // Fitting geometry all goes in before the merge, so this should find nothing;
+  // it stays as the safety net for anything a later edit adds late.
   flushLate();
   function flushLate() {
     for (const [key, geos] of buckets) {

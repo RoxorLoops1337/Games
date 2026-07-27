@@ -27,7 +27,13 @@ import { clamp, smooth } from '../core/state.js';
 // a 164 m radius, which is 8 cm a texel even on a 4096² map. Pulling the range
 // in buys sharpness where shadows are actually read — anything past ~70 m at a
 // raking dusk sun is indistinguishable from ambient occlusion anyway.
-const SHADOW_RANGE = { 0: 0, 1: 38, 2: 55, 3: 72 };
+// Tier 0 is deliberately not zero. Switching the sun's shadow off entirely does
+// not make the game look cheaper — it makes it look like a different scene:
+// measured, the bottom half of the spawn frame reads 113 with no sun shadow
+// against 40 with one, because every surface the sun cannot see is suddenly lit
+// as though it could. A short range on a small map costs very little and keeps
+// the image recognisably the same game at every setting.
+const SHADOW_RANGE = { 0: 22, 1: 38, 2: 55, 3: 72 };
 
 // A low sun casts a long, shallow shadow, so the depth range has to reach well
 // behind the receiver to still contain the caster — otherwise a floodlight mast
