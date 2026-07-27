@@ -2577,6 +2577,160 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'and both share the shield/burn/stun/health marks, so a cannon can still catch fire');
 }
 
+/* ------------------------------------------------ status: how much, how long
+   Six marks can sit on a body — a shield, burning, slowed, marked, stunned,
+   and a hero's buff ring. Walked as a table with G.t PINNED, because they
+   animate off sin(G.t * k) and left running every row looks distinct for a
+   reason that has nothing to do with the status:
+
+     stun    1.8s left ... 0.1s left     1 distinct picture of 4
+     slow    30%/3.0s ... 80%/0.3s       1 of 4
+     burn    6dps/4.0s ... 48dps/4.0s    1 of 3
+     mark    3.0s ... 0.3s               1 of 2
+     buffs   1 buff ... 5 buffs          1 of 3
+     shield  20s ... 0.3s                3 of 4   <- the control
+
+   A 1.8-second ultimate stun and its last tenth were byte-identical. A 30%
+   slow looked exactly like an 80% one. Five stacked buffs drew the same single
+   ring as one. The shield is the odd one out and has been right since it was
+   written: `clamp(u.shT / 2, .35, 1)`.                                       */
+{
+  const st = CTX.__stats;
+  const shot = (u) => {
+    IB.newMatch({ diff:'veteran', seed:9300 });
+    G.units.length = 0;
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.4;
+    return u;
+  };
+  const mark = (set, mk) => {
+    IB.newMatch({ diff:'veteran', seed:9300 });
+    G.units.length = 0;
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.4;
+    const u = mk ? mk() : IB.spawnUnit(1, 'melee', { x:60, y:0, paid:true });
+    IB.rebuildGrid();
+    set(u);
+    G.t = 4;                                   // pinned: these marks animate off it
+    st.ellipses = []; st.lines = []; st.ops = 0;
+    const p = IB.lp(u.x, u.y);
+    IB.drawUnitMarks(CTX, u, p[0], p[1], p, 1.2);
+    const es = st.ellipses.slice(), ls = st.lines.slice();
+    // The cross-hair over a marked body is strokes, not ellipses, so both
+    // buffers count — reading only one reported an alpha of zero for it.
+    const all = es.concat(ls);
+    const xs = all.map(e => e.x);
+    return { u, n:es.length, ops:st.ops,
+      alpha:+all.reduce((a, e) => a + (e.alpha || 0), 0).toFixed(3),
+      // how far the marks sit FROM the body — the orbit, not the dot
+      wide:+(xs.length ? Math.max(...xs) - Math.min(...xs) : 0).toFixed(2),
+      pic:all.map(e => [e.x, e.y, e.rx, e.ry, e.alpha].map(v => +Number(v || 0).toFixed(2)).join(',')).join('|') };
+  };
+  const spread = (rows) => new Set(rows.map(r => r.pic)).size;
+
+  // ---- the helper every one of them now reads
+  t.ok(IB.statusFade(99) === 1, 'a status just applied is at full strength');
+  t.ok(IB.statusFade(0) === IB.STATUS.fade.lo, 'and one about to lift is at the floor, not invisible');
+  t.ok(IB.STATUS.fade.lo > 0 && IB.STATUS.fade.lo < 1, 'which is a floor, not zero (' + IB.STATUS.fade.lo + ')');
+  t.ok(IB.statusFade(1) > IB.statusFade(.2), 'and it falls the whole way down');
+
+  // ---- being unable to act at all, which had ONE picture
+  const stuns = [1.8, 1.0, 0.4, 0.1].map(t2 => ({ t2, ...mark((u) => { u.stunT = t2; }) }));
+  t.ok(stuns.every(r => r.n > 0), 'a stunned body is marked at all (' + stuns.map(r => r.n).join(',') + ')');
+  t.ok(spread(stuns) === stuns.length,
+    'and an ultimate stun does not look like its last tenth (' + spread(stuns) + ' of ' + stuns.length + ')');
+  let back = 0;
+  for (let i = 1; i < stuns.length; i++) if (stuns[i].alpha > stuns[i - 1].alpha) back++;
+  t.ok(back === 0, 'it fades as it lifts, never the other way (' + back + ' steps that rose)');
+  t.ok(stuns[0].wide > stuns[stuns.length - 1].wide,
+    'and the dots close in (' + stuns[0].wide + ' → ' + stuns[stuns.length - 1].wide + ')');
+  // Timed by the stun, not by the wall clock. The first version of this
+  // compared two rows' whole pictures and passed with the wall clock put back,
+  // because the RADIUS differs between them for its own reason. Isolate the
+  // angle: advance G.t by a fixed amount and measure how far a dot travelled
+  // as a fraction of its own orbit, which cancels the radius out.
+  const swept = (left) => {
+    const seen = [];
+    for (const at of [4, 4.25]){
+      IB.newMatch({ diff:'veteran', seed:9300 });
+      G.units.length = 0;
+      IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.4;
+      const u = IB.spawnUnit(1, 'melee', { x:60, y:0, paid:true });
+      IB.rebuildGrid();
+      u.stunT = left;
+      G.t = at;
+      st.ellipses = [];
+      const p = IB.lp(u.x, u.y);
+      IB.drawUnitMarks(CTX, u, p[0], p[1], p, 1.2);
+      const d = st.ellipses[0];
+      seen.push({ dx:d.x - p[0], dy:d.y - (p[1] - 17 * 1.2) });
+    }
+    const r = Math.hypot(seen[0].dx, seen[0].dy) || 1;
+    return Math.hypot(seen[1].dx - seen[0].dx, seen[1].dy - seen[0].dy) / r;
+  };
+  const fresh = swept(1.8), lifting = swept(0.15);
+  t.ok(fresh > lifting * 1.3,
+    'the orbit runs on the stun’s own clock and slows as it lifts (' +
+    fresh.toFixed(3) + ' vs ' + lifting.toFixed(3) + ' of a turn)');
+
+  // ---- a 30% slow and an 80% one are very different things to walk into
+  const slows = [[.3, 3], [.3, .3], [.8, 3], [.8, .3]]
+    .map(([p2, t2]) => ({ p2, t2, ...mark((u) => { u.slowP = p2; u.slowT = t2; }) }));
+  t.ok(spread(slows) === slows.length,
+    'four different slows draw four different marks (' + spread(slows) + ' of ' + slows.length + ')');
+  t.ok(slows[2].n > slows[0].n,
+    'a deeper slow drags more round it (' + slows[0].n + ' vs ' + slows[2].n + ')');
+  t.ok(slows[2].wide > slows[0].wide,
+    'in a wider ring (' + slows[0].wide + ' vs ' + slows[2].wide + ')');
+  t.ok(slows[0].alpha > slows[1].alpha,
+    'and it fades as it runs out (' + slows[0].alpha + ' vs ' + slows[1].alpha + ')');
+
+  // ---- a smoulder and a pyre
+  const burns = [[6, 4], [6, .3], [48, 4]]
+    .map(([dps, t2]) => ({ dps, t2, ...mark((u) => { u.burn = { dps, t:t2, dur:4 }; }) }));
+  t.ok(spread(burns) === burns.length, 'three different burns, three different fires');
+  t.ok(burns[2].n > burns[0].n,
+    'a harder burn shows more flame (' + burns[0].n + ' vs ' + burns[2].n + ')');
+  t.ok(burns[0].alpha > burns[1].alpha, 'and one going out is dimmer');
+
+  // ---- marked for extra damage
+  const marks = [3, .3].map(t2 => ({ t2, ...mark((u) => { u.markT = t2; }) }));
+  t.ok(marks[0].alpha > marks[1].alpha,
+    'a mark about to lapse is dimmer than a fresh one (' + marks[0].alpha + ' vs ' + marks[1].alpha + ')');
+
+  // ---- a hero carrying one buff or five
+  const heroMk = () => {
+    const s2 = G.sides[1];
+    if (!s2.heroes.length){ const nh = IB.makeHero(1, Object.keys(IB.CLS)[0]); s2.heroes.push(nh); IB.enterLane(nh); }
+    const h = s2.heroes[0];
+    IB.recalcHero(h);
+    h.dead = false; h.inLane = true; h.x = 60; h.y = 0;
+    return h;
+  };
+  const one = mark((h) => { h.buffs = [{ t:20, dur:20 }]; }, heroMk);
+  const five = mark((h) => { h.buffs = [1,2,3,4,5].map(() => ({ t:20, dur:20 })); }, heroMk);
+  const going = mark((h) => { h.buffs = [{ t:.3, dur:20 }]; }, heroMk);
+  t.ok(five.n > one.n, 'five buffs are more ring than one (' + one.n + ' vs ' + five.n + ')');
+  t.ok(one.alpha > going.alpha, 'and one about to fall off is dimmer (' + one.alpha + ' vs ' + going.alpha + ')');
+
+  // ---- the CONTROL, untouched: the shield already read its own clock
+  const shields = [20, 2, 1, .3].map(t2 => ({ t2, ...mark((u) => { u.shield = 200; u.shT = t2; }) }));
+  t.ok(spread(shields) >= 3,
+    'the shield still varies with its own clock, as it always did (' + spread(shields) + ' of ' + shields.length + ')');
+  t.ok(/clamp\(u\.shT \/ 2/.test(SRC), 'off the line it has used since it was written');
+
+  // ---- drawing must not touch the simulation. None of this added a field.
+  const probe = mark((u) => { u.stunT = 1.2; u.slowP = .5; u.slowT = 2; u.burn = { dps:20, t:3, dur:4 }; u.markT = 2; u.shield = 50; u.shT = 5; });
+  const keep = ['hp', 'stunT', 'slowT', 'slowP', 'markT', 'shield', 'shT', 'x', 'y'];
+  const before = keep.map(k => probe.u[k]).join(',');
+  const h0 = IB.netHash();
+  const p2 = IB.lp(probe.u.x, probe.u.y);
+  IB.drawUnitMarks(CTX, probe.u, p2[0], p2[1], p2, 1.2);
+  IB.drawUnitMarks(CTX, probe.u, p2[0], p2[1], p2, 1.2);
+  t.ok(keep.map(k => probe.u[k]).join(',') === before, 'drawing the marks does not move the body');
+  t.ok(IB.netHash() === h0, 'nor the lockstep hash');
+  G.units.length = 0;
+  void shot;
+}
+
 /* ------------------------------------------------------------ health bars */
 {
   IB.newMatch({ diff:'veteran', seed:829 });

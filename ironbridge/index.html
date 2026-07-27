@@ -5696,6 +5696,33 @@ function drawUnit(c, u){
 
 // Shields, burns, stuns, the health bar and everything a hero carries — shared
 // by the three silhouettes so a cannon can catch fire like anybody else.
+/* Six marks can sit on a body — a shield, burning, slowed, marked, stunned, and
+   a hero's buff ring. Walked as a table with G.t PINNED (they animate off
+   sin(G.t * k), and left running every row looks distinct for a reason that has
+   nothing to do with the status):
+
+     stun    1.8s left ... 0.1s left     1 distinct picture of 4
+     slow    30%/3.0s ... 80%/0.3s       1 of 4
+     burn    6dps/4.0s ... 48dps/4.0s    1 of 3
+     mark    3.0s ... 0.3s               1 of 2
+     buffs   1 buff ... 5 buffs          1 of 3
+     shield  20s ... 0.3s                3 of 4   <- the control
+
+   So a 1.8-second ultimate stun and its last tenth were byte-identical, a 30%
+   slow looked exactly like an 80% one, and five stacked buffs drew the same
+   single ring as one. The shield is the odd one out and it has been right since
+   it was written: `fade = clamp(u.shT / 2, .35, 1)`. Every other mark now reads
+   its own clock the same way.
+
+   The rotations were the same bug in a second form: every one of them spun on
+   `G.t`, the wall clock, so the motion carried no information either. A stun's
+   orbit slows as it lifts now — timed by the thing it animates. */
+const STATUS = { fade:{ lo:.30, win:1.2 }, slowMotes:{ min:2, max:6 },
+                 burnFlames:{ min:2, max:5 }, buffMotes:{ min:0, max:4 } };
+// What is left of a timed status. One helper, six readers, so they cannot drift.
+const statusFade = (left, win) => clamp(left / (win || STATUS.fade.win), STATUS.fade.lo, 1);
+const spanN = (a, b, f) => Math.round(a + (b - a) * clamp(f, 0, 1));
+
 function drawUnitMarks(c, u, bx, by, p, sc){
   const col = SIDE_COL[u.side];
   // A shield is a thing that BREAKS, so it reads as a surface rather than a
@@ -5710,11 +5737,16 @@ function drawUnitMarks(c, u, bx, by, p, sc){
     c.globalAlpha = 1;
   }
   if (u.burn){
-    c.globalAlpha = .45; ell(c, bx, by - 6 * sc, 5 * sc, 8 * sc, '#ff8a3d');
-    // flames rather than a wash, so burning reads as burning
-    for (let i = 0; i < 3; i++){
+    // How hard it bites decides how many flames; how long is left decides how
+    // brightly they burn. A six-a-second smoulder and a forty-eight-a-second
+    // pyre drew the same three.
+    const bite = hitWeight(u.burn.dps || 0, u.mhp);
+    const bf = statusFade(u.burn.t === undefined ? 1 : u.burn.t);
+    const n = spanN(STATUS.burnFlames.min, STATUS.burnFlames.max, bite);
+    c.globalAlpha = .45 * bf; ell(c, bx, by - 6 * sc, (4 + 2 * bite) * sc, (7 + 2 * bite) * sc, '#ff8a3d');
+    for (let i = 0; i < n; i++){
       const a = G.t * 9 + i * 2.1, lift = (Math.sin(a) * .5 + .5);
-      c.globalAlpha = .5 - lift * .3;
+      c.globalAlpha = (.5 - lift * .3) * bf;
       ell(c, bx + Math.cos(a * .7 + i) * 3 * sc, by - (7 + lift * 7) * sc, 1.9 * sc, 2.8 * sc, i & 1 ? '#ffd06a' : '#ff8a3d');
     }
     c.globalAlpha = 1;
@@ -5722,20 +5754,27 @@ function drawUnitMarks(c, u, bx, by, p, sc){
   // Slowed. There was no sign of this at all, and it is half of what crowd
   // control does — a body walking at 40% looked exactly like one walking.
   if (u.slowT > 0 && u.slowP > 0){
-    c.globalAlpha = .35 + .2 * Math.sin(G.t * 4);
-    c.strokeStyle = '#9ad8ff'; c.lineWidth = Math.max(1, 1.4 * cam.z);
-    c.beginPath(); c.ellipse(bx, p[1], 8 * sc, 3.6 * sc, 0, 0, 6.2832); c.stroke();
-    for (let i = 0; i < 3; i++){
-      const a = -G.t * 2 + i * 2.1;
-      c.globalAlpha = .5;
-      ell(c, bx + Math.cos(a) * 7 * sc, p[1] + Math.sin(a) * 3 * sc, 1.1 * sc, 1.1 * sc, '#9ad8ff');
+    // A 30% slow and an 80% one are very different things to walk into and drew
+    // the same ring. How deep it bites is the ring's weight and how many motes
+    // drag round it; how long is left is how brightly.
+    const deep = clamp(u.slowP, 0, 1);
+    const sf = statusFade(u.slowT);
+    const n = spanN(STATUS.slowMotes.min, STATUS.slowMotes.max, deep);
+    c.globalAlpha = (.35 + .2 * Math.sin(G.t * 4)) * sf;
+    c.strokeStyle = '#9ad8ff'; c.lineWidth = Math.max(1, (1 + 1.4 * deep) * cam.z);
+    c.beginPath(); c.ellipse(bx, p[1], (7 + 2.5 * deep) * sc, (3.2 + 1.1 * deep) * sc, 0, 0, 6.2832); c.stroke();
+    for (let i = 0; i < n; i++){
+      // slower motes for a deeper slow: the mark moves like the body does
+      const a = -G.t * (2.6 - 1.6 * deep) + i * (6.2832 / n);
+      c.globalAlpha = .5 * sf;
+      ell(c, bx + Math.cos(a) * (7 + 2.5 * deep) * sc, p[1] + Math.sin(a) * 3 * sc, 1.1 * sc, 1.1 * sc, '#9ad8ff');
     }
     c.globalAlpha = 1;
   }
   // Marked for extra damage — the reason a hero suddenly evaporates.
   if (u.markT > 0){
     const puls = .6 + .4 * Math.sin(G.t * 8);
-    c.globalAlpha = puls;
+    c.globalAlpha = puls * statusFade(u.markT);
     c.strokeStyle = '#ff7ad9'; c.lineWidth = Math.max(1.2, 2 * cam.z);
     const my = by - 26 * sc, r = 4 * sc;
     c.beginPath(); c.arc(bx, my, r, 0, 6.2832); c.stroke();
@@ -5748,11 +5787,20 @@ function drawUnitMarks(c, u, bx, by, p, sc){
     c.globalAlpha = 1;
   }
   if (u.stunT > 0){
+    // Being unable to act at all is the loudest thing that can happen to a
+    // body, and a 1.8-second ultimate stun looked exactly like its last tenth:
+    // the same three dots at the same radius at the same speed. They close in
+    // and slow down as it lifts, so the mark runs on the stun's clock rather
+    // than the wall's.
+    const f = statusFade(u.stunT);
     c.fillStyle = '#ffcf4d';
+    const rad = 6 * sc * (.55 + .45 * f);
     for (let i = 0; i < 3; i++){
-      const a = G.t * 6 + i * 2.1;
-      ell(c, bx + Math.cos(a) * 6 * sc, by - 17 * sc + Math.sin(a) * 2 * sc, 1.5 * sc, 1.5 * sc, '#ffcf4d');
+      const a = G.t * (2 + 4 * f) + i * 2.1;
+      c.globalAlpha = f;
+      ell(c, bx + Math.cos(a) * rad, by - 17 * sc + Math.sin(a) * 2 * sc, 1.5 * sc, 1.5 * sc, '#ffcf4d');
     }
+    c.globalAlpha = 1;
   }
   if (showsBar(u)){
     const barY = by - (u.isHero ? 22 : u.kind === 'super' ? 21 : 18) * sc;
@@ -5761,9 +5809,20 @@ function drawUnitMarks(c, u, bx, by, p, sc){
     if (u.isHero) mpBar(c, bx, barY + 5 * cam.z + MPBAR.gap * cam.z, u, barW);
   }
   if (u.isHero && u.buffs && u.buffs.some(b => b.t > 0)){
-    c.globalAlpha = .5 + .2 * Math.sin(G.t * 5);
-    c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.2, 2 * cam.z);
+    // One ring whether you were carrying one buff or five, and the same ring a
+    // tenth of a second before they all fell off. A pip per buff around it, and
+    // the whole thing fades on whichever is about to go.
+    const live = u.buffs.filter(b => b.t > 0);
+    const bf = statusFade(Math.min(...live.map(b => b.t)));
+    c.globalAlpha = (.5 + .2 * Math.sin(G.t * 5)) * bf;
+    c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.2, (1.4 + .5 * Math.min(live.length, 4)) * cam.z);
     c.beginPath(); c.ellipse(bx, p[1], 13 * sc, 6 * sc, 0, 0, 6.2832); c.stroke();
+    const pips = Math.min(live.length, STATUS.buffMotes.max + 1);
+    for (let i = 0; i < pips; i++){
+      const a = G.t * 1.4 + i * (6.2832 / pips);
+      c.globalAlpha = .75 * bf;
+      ell(c, bx + Math.cos(a) * 13 * sc, p[1] + Math.sin(a) * 6 * sc, 1.3 * sc, 1.3 * sc, '#ffcf4d');
+    }
     c.globalAlpha = 1;
   }
   if (u.isHero){
@@ -9541,6 +9600,7 @@ window.IB = {
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor,
+  STATUS, statusFade, spanN,
   HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX,
