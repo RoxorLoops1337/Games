@@ -70,7 +70,7 @@ function loadGame(store, srcOverride){
   // alpha back leaves every later shape in the frame translucent, and an
   // unbalanced save() leaks a clip or a transform into whatever draws next.
   // Neither is visible to a per-call check, because no single call is wrong.
-  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = [];
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null;
   const TEXT0 = { lineCap:'butt', textAlign:'start', textBaseline:'alphabetic' };
   Object.assign(stats, TEXT0);
   stats.__text0 = TEXT0;
@@ -101,11 +101,29 @@ function loadGame(store, srcOverride){
       for (const v of a) if (v < 0) throw new RangeError('setLineDash(): negative dash ' + v);
       stats.dash = a.length;
     };
+    // Where the ellipses actually landed. Reading a table tells you what a
+    // shadow was configured to be; this tells you where it was put, which is
+    // the only way to check it leans the way the sun says.
+    if (k === 'ellipse') return (...a) => {
+      stats.ops++; numCheck(k, a); radCheck(k, a);
+      if (stats.ellipses.length < 4000)
+        stats.ellipses.push({ x:a[0], y:a[1], rx:a[2], ry:a[3], fill:null, alpha:stats.alpha });
+    };
+    // ell() lays the path down, THEN sets fillStyle, THEN fills — so the
+    // colour has to be read at the fill, not at the ellipse. Reading it early
+    // gives every shape the colour of the one before it, which is a very
+    // convincing way to test nothing at all.
+    if (k === 'fill') return (...a) => {
+      stats.ops++;
+      const last = stats.ellipses[stats.ellipses.length - 1];
+      if (last && last.fill === null){ last.fill = stats.fill; last.alpha = stats.alpha; }
+    };
     return (...a) => { stats.ops++; numCheck(k, a); radCheck(k, a); };
   }, set(_t, k, v){
     stats.ops++;
     if (k === 'fillStyle' || k === 'strokeStyle' || k === 'shadowColor') checkColour(k)(v);
     if (k === 'strokeStyle') stats.strokes.push(v);
+    if (k === 'fillStyle') stats.fill = v;
     if (typeof v === 'number' && !Number.isFinite(v)) throw new TypeError('ctx.' + k + ' = ' + v);
     if (k === 'globalAlpha'){
       if (!(v >= 0 && v <= 1)) throw new RangeError('globalAlpha = ' + v + ' is outside 0..1');
@@ -3916,6 +3934,72 @@ t.ok(true, 'drawing an empty bridge is harmless');
   const big = IB.shadowOff(40, 15), small = IB.shadowOff(4, 1.5);
   t.ok(Math.abs(big[0]) > Math.abs(small[0]) * 5, 'a big thing throws a longer shadow than a small one');
   t.ok(IB.shadowOff(0, 0)[0] === 0, 'and something with no footprint throws nothing');
+
+  // The one solid thing in the game that threw nothing: an arrow in flight.
+  // A projectile carries a real height — a shaft leaves a body at .8, a turret
+  // lobs one from 2.6, and it falls the whole way — and none of that was in
+  // the picture, so both drew as the same streak in the same place and neither
+  // looked like it was over the boards at all.
+  IB.newMatch({ diff:'veteran', seed:433 });
+  IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+  const shadowOf = (z) => {
+    CTX.__stats.ellipses = [];
+    IB.projShadow(CTX, { x:60, y:0, z, kind:'shaft', col:'#fff' });
+    return CTX.__stats.ellipses[0];
+  };
+  // A missing shadow must REPORT, not throw — the whole point of this block is
+  // to describe the state the game was already in, and a crash there takes the
+  // remaining assertions with it and tells you less than a red line would.
+  const NOSHADOW = { x:0, y:0, rx:0, ry:0, fill:'rgba(0,0,0,0)' };
+  const low = shadowOf(.6) || NOSHADOW, high = shadowOf(2.6) || NOSHADOW;
+  t.ok(low !== NOSHADOW && high !== NOSHADOW, 'a projectile puts a shadow on the deck');
+  const alphaOf = (e) => Number((String(e.fill).match(/([\d.]+)\)$/) || [0, 0])[1]);
+  t.ok(alphaOf(high) < alphaOf(low), 'and it fades as the thing climbs (' +
+    alphaOf(low) + ' → ' + alphaOf(high) + ')');
+  t.ok(high.rx < low.rx, 'and tightens (' + low.rx.toFixed(2) + ' → ' + high.rx.toFixed(2) + ')');
+  t.ok(alphaOf(high) >= IB.PROJ_SHADOW.min, 'but never fades out entirely');
+  // It goes through the same shadow() as everything else, so it has to lean
+  // the way the sun says without being told separately.
+  const ground = IB.lp(60, 0, 0);
+  t.ok(Math.sign(low.x - ground[0]) === Math.sign(IB.shadowOff(1, 1)[0]),
+    'and it leans the same way every other shadow on the board does');
+  t.ok(low.y > ground[1], 'and downward, the sun being above the horizon');
+  // The separation between a thing and its shadow is what reads as height.
+  const sep = (z) => IB.lp(60, 0, 0)[1] - IB.lp(60, 0, z)[1];
+  t.ok(sep(2.6) > sep(.6) && sep(.6) > 0, 'a higher shaft sits further off its own shadow');
+  // Rule out the settings that draw a shadow saying nothing about height.
+  t.ok(IB.PROJ_SHADOW.fade > 0, 'the fade with height is not flat');
+  t.ok(IB.PROJ_SHADOW.shrink > 0, 'nor the shrink');
+  t.ok(IB.PROJ_SHADOW.a > IB.PROJ_SHADOW.min, 'and there is room between full and faintest');
+  t.ok(IB.PROJ_SHADOW.floor > 0 && IB.PROJ_SHADOW.floor < 1, 'a shadow never shrinks to nothing');
+
+  // Then a real volley, and every shaft in it accounted for. Without the count
+  // guard this passes just as well with no projectiles in the air at all —
+  // which is exactly the state the bug was in.
+  {
+    IB.newMatch({ diff:'veteran', seed:437 });
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+    const a = IB.makeHero(0, 'marksman', 'Volley');
+    a.pend.length = 0; G.sides[0].heroes.push(a); IB.enterLane(a); a.x = 58; a.y = 0;
+    const b = IB.makeHero(1, 'fighter', 'Target');
+    b.pend.length = 0; G.sides[1].heroes.push(b); IB.enterLane(b); b.x = 66; b.y = 0;
+    G.projs.length = 0;
+    for (let i = 0; i < 5; i++) IB.shoot(a, b, () => {}, '#ffe08a', 'shaft');
+    G.projs.push({ x:60, y:0, z:2.6, tgt:b, onHit:() => {}, col:'#ffe08a', sp:34,
+                   dead:false, tr:[], kind:'shaft', ax:1, ay:0, src:null });
+    for (let i = 0; i < 3; i++) IB.projStep(1 / 30);
+    t.ok(G.projs.length >= 5, 'there are shafts in the air (' + G.projs.length + ')');
+    const heights = new Set(G.projs.map(p => Math.round(p.z * 10)));
+    t.ok(heights.size > 1, 'and they are not all at the same height (' + heights.size + ')');
+    CTX.__stats.ellipses = [];
+    for (const p of G.projs) IB.projShadow(CTX, p);
+    t.ok(CTX.__stats.ellipses.length === G.projs.length,
+      'every one of them marks the deck (' + CTX.__stats.ellipses.length + '/' + G.projs.length + ')');
+    const alphas = new Set(CTX.__stats.ellipses.map(e => e.fill));
+    t.ok(alphas.size > 1, 'and the shadow of the high one differs from the low ones (' + alphas.size + ')');
+    G.projs.length = 0;
+  }
+  IB.cam.x = 26; IB.cam.z = IB.cam.tz = 1;
 
   // The whole board, both seats, at both ends of the zoom — every shadow in
   // the game goes through this one function now and there are eighteen of them.
