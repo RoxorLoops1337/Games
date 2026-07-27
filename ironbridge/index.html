@@ -3547,13 +3547,97 @@ function drawDeck(c){
       poly(c, [lp(bxx - d * 5, k * 2), lp(bxx + d * 5, k * 2), lp(bxx + d * 5, k * 2 + .5), lp(bxx - d * 5, k * 2 + .5)], '#3f392f');
     c.globalAlpha = 1;
   }
-  // arches under the span
-  c.fillStyle = 'rgba(46,42,36,.75)';
-  for (let x = 8; x < C.LANE_LEN; x += 16){
-    const p = lp(x, W, -1.6);
-    if (p[0] < -60 || p[0] > LW + 60) continue;
-    c.beginPath(); c.ellipse(p[0], p[1] + 6 * cam.z, 22 * cam.z, 30 * cam.z, 0, 0, Math.PI); c.fill();
+}
+
+/* ------------------------------------------------------------- under the span
+   The gap used to be a flat wash of dark teal over about a quarter of the
+   screen, and the only thing in it was three filled half-ellipses hanging
+   under the deck — "arches" that sprang from nothing and rested on nothing.
+   The bridge stands on piers now, with the spandrels between them, and the
+   canyon has rock in it and a floor you cannot quite see. */
+const PIER_SPAN = 16, PIER_HW = 3.2, PIER_TOP = -1.6, PIER_BOT = -30, PIER_SEGS = 7;
+function drawPiers(c){
+  const W = C.LANE_W / 2 + .6;
+  const z = cam.z;
+  for (let x = PIER_SPAN / 2; x < C.LANE_LEN; x += PIER_SPAN){
+    const p = lp(x, W, PIER_TOP);
+    if (p[0] < -170 || p[0] > LW + 170) continue;
+    // Drawn in bands rather than as one quad so the foot can dissolve into the
+    // gorge. A pier that runs solid to the bottom of the screen is a bar, not
+    // a thing standing in a canyon whose floor you never see.
+    for (let k = 0; k < PIER_SEGS; k++){
+      const t0 = k / PIER_SEGS, t1 = (k + 1) / PIER_SEGS;
+      const z0 = lerp(PIER_TOP, PIER_BOT, t0), z1 = lerp(PIER_TOP, PIER_BOT, t1);
+      const w0 = lerp(PIER_HW, PIER_HW * .58, t0), w1 = lerp(PIER_HW, PIER_HW * .58, t1);
+      c.globalAlpha = clamp(1.15 - t0 * 1.25, 0, 1);
+      poly(c, [lp(x - w0, W, z0), lp(x + w0, W, z0), lp(x + w1, W, z1), lp(x - w1, W, z1)],
+        k % 2 ? '#3e3a32' : '#443f36');
+      poly(c, [lp(x - w0, W, z0), lp(x - w0, -W, z0), lp(x - w1, -W, z1), lp(x - w1, W, z1)], '#2b2922');
+    }
+    c.globalAlpha = 1;
+    // a corbel where it takes the deck
+    poly(c, [lp(x - PIER_HW * 1.2, W, PIER_TOP + .2), lp(x + PIER_HW * 1.2, W, PIER_TOP + .2),
+             lp(x + PIER_HW * 1.2, W, PIER_TOP - 1.5), lp(x - PIER_HW * 1.2, W, PIER_TOP - 1.5)], '#4e4a3e');
+    c.globalAlpha = .26; c.strokeStyle = '#7a7161'; c.lineWidth = Math.max(1, 1.2 * z);
+    for (let k = 1; k < 4; k++){
+      const t = k / 6, zz = lerp(PIER_TOP, PIER_BOT, t), hwk = lerp(PIER_HW, PIER_HW * .58, t);
+      const a = lp(x - hwk, W, zz), b = lp(x + hwk, W, zz);
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+    }
+    c.globalAlpha = 1;
   }
+  // the spandrels: the solid stone between one arch and the next
+  c.fillStyle = 'rgba(32,30,25,.88)';
+  for (let x = PIER_SPAN / 2; x + PIER_SPAN < C.LANE_LEN; x += PIER_SPAN){
+    const a = lp(x + PIER_HW, W, PIER_TOP), b = lp(x + PIER_SPAN - PIER_HW, W, PIER_TOP);
+    if (b[0] < -80 || a[0] > LW + 80) continue;
+    const m = lp(x + PIER_SPAN / 2, W, PIER_TOP - 11);
+    c.beginPath();
+    c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]);
+    c.quadraticCurveTo(m[0], m[1], a[0], a[1]);
+    c.closePath(); c.fill();
+  }
+}
+
+// Rock standing up out of the gorge, and the mist it disappears into. Laid
+// out once from the same fixed hash the clouds use — no RNG the simulation
+// can see — and only ever culled.
+let SPIRES = null;
+function spires(){
+  if (SPIRES) return SPIRES;
+  SPIRES = [];
+  for (let i = 0; i < 11; i++){
+    const r = hash2(i * 7.1, 3.3), r2 = hash2(i * 2.3, 19.7), r3 = hash2(i * 4.7, 31.1);
+    SPIRES.push({
+      x:4 + i * 12 + r * 7, y:-22 - r2 * 30, zb:-52 - r3 * 10,
+      h:20 + r * 26, w:3.4 + r2 * 4.2, near:r3 > .55,
+    });
+  }
+  return SPIRES;
+}
+function drawChasm(c){
+  const S = LS();
+  for (const s of spires()){
+    const b = lp(s.x, s.y, s.zb), t = lp(s.x, s.y, s.zb + s.h);
+    if (b[0] < -110 || b[0] > LW + 110 || t[1] > LH + 40) continue;
+    const w = s.w * .96 * S;
+    poly(c, [[b[0] - w, b[1]], [t[0], t[1]], [b[0] + w, b[1]]], s.near ? '#1b2a28' : '#22322f');
+    poly(c, [[t[0], t[1]], [b[0] + w, b[1]], [b[0] + w * .3, b[1]]], s.near ? '#263733' : '#2c403b');
+  }
+}
+
+// Mist banked across the gorge, anchored to the world so it drifts past with
+// everything else instead of sitting at a fixed fraction of the canvas.
+function gorgeDepth(c){
+  const W = C.LANE_W / 2 + .6, S = LS();
+  for (let i = 0; i < 4; i++){
+    const a = lp(cam.x, W, -13 - i * 7), h = (4 + i * 2.4) * .95 * S;
+    if (a[1] < -20 || a[1] > LH + 60) continue;
+    c.globalAlpha = .055 + .03 * Math.sin(G.t * .3 + i * 1.4);
+    c.fillStyle = '#cfe2e6';
+    c.fillRect(0, a[1] - h * .5, LW, h);
+  }
+  c.globalAlpha = 1;
 }
 
 function drawEnds(c){
@@ -4826,9 +4910,12 @@ function draw(){
   BSC = LS() * TILE;
   c.save();
   drawSky(c);
+  drawChasm(c);            // rock and mist in the gap, behind everything solid
   drawHold(c, 0);
   drawHold(c, 1);
   drawEnds(c);
+  drawPiers(c);            // what the deck stands on, so the deck can cap them
+  gorgeDepth(c);           // and everything below it falling away into the dark
   drawDeck(c);
   drawLane(c);
   if (sel.struct && !sel.struct.dead){
@@ -7005,6 +7092,7 @@ window.IB = {
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
+  drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,

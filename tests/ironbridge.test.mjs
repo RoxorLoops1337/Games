@@ -2665,6 +2665,39 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.cam.shake === 0, 'a blow off the edge of the screen does not rattle the camera');
 }
 {
+  // What holds the bridge up. There used to be three filled half-ellipses
+  // hanging under the deck — arches that sprang from nothing and rested on
+  // nothing — over a gap that was otherwise a flat wash of dark teal.
+  IB.newMatch({ diff:'veteran', seed:109 });
+  t.ok(IB.PIER_TOP < 0 && IB.PIER_BOT < IB.PIER_TOP, 'the piers hang below the deck, not above it');
+  const xs = [];
+  for (let x = IB.PIER_SPAN / 2; x < C.LANE_LEN; x += IB.PIER_SPAN) xs.push(x);
+  t.ok(xs.length >= 5, 'the span stands on more than a token pier or two (' + xs.length + ')');
+  // A pier standing inside an abutment, or off the end of the span, is a pier
+  // holding up nothing.
+  t.ok(xs.every(x => x > 5 && x < C.LANE_LEN - 5), 'every pier is clear of both abutments');
+  // ...and the spandrels are only drawn BETWEEN piers, so the last one has to
+  // have a neighbour to spring to.
+  const gaps = xs.slice(1).map((x, i) => x - xs[i]);
+  t.ok(gaps.every(g => Math.abs(g - IB.PIER_SPAN) < 1e-9), 'and they are evenly spaced, so every arch has two feet');
+  t.ok(IB.PIER_HW * 2 < IB.PIER_SPAN, 'a pier is narrower than the gap it leaves');
+
+  const sp = IB.spires();
+  t.ok(sp.length > 6 && IB.spires() === sp, 'the rock in the gorge is laid out once and reused');
+  let bad = 0;
+  for (const s of sp){
+    if (s.zb + s.h > IB.PIER_TOP) bad++;            // poking up through the deck
+    if (s.y > -C.LANE_W / 2) bad++;                 // standing in front of the bridge
+    if (s.x < -10 || s.x > C.LANE_LEN + 10) bad++;  // outside the gorge entirely
+  }
+  t.ok(bad === 0, 'no spire pokes through the deck or stands in front of it (' + bad + ')');
+  // The whole under-bridge path has to survive being drawn at both extremes of
+  // the zoom, because the gorge is mostly off screen at one of them.
+  for (const z of [.4, 1, 2.4]){ IB.cam.z = IB.cam.tz = z; IB.draw(); }
+  IB.cam.z = IB.cam.tz = 1;
+  t.ok(true, 'and the gorge draws at every zoom without throwing');
+}
+{
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
   IB.newMatch({ diff:'veteran', seed:107 });
   G.sides[0].ai = true;
