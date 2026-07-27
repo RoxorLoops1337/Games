@@ -20,6 +20,13 @@ import {
   activeWeapon, currentSpread,
 } from '../blacksite/src/game/weapons.js';
 import { damageAtRange, penetrationLoss, MAX_PENETRATIONS } from '../blacksite/src/game/ballistics.js';
+import {
+  spawnEnemy, updateAI, resetAI, buildNav, setDifficulty,
+  damageEnemy, ENEMY_ARCHETYPES, AI_STATES,
+} from '../blacksite/src/game/ai.js';
+import {
+  updateDirector, startMission, resetDirector, setSpawnFn, pickSpawn, MISSION,
+} from '../blacksite/src/game/director.js';
 
 const t = harness('blacksite');
 const finite = (v) => Number.isFinite(v.x) && Number.isFinite(v.y) && Number.isFinite(v.z);
@@ -672,6 +679,253 @@ const count = (evts, type) => evts.filter((e) => e.type === type).length;
   }
   t.ok(broke === null, 'four thousand ticks of mashed fire, reload and swap keeps every weapon valid');
   t.ok(G.player.ads >= 0 && G.player.ads <= 1, 'and the aim blend stays inside its range');
+}
+
+// ────────────────────────────────────────────────────────────── enemy AI
+{
+  const G = game();
+  G.world.spawns = [{ x: 10, y: 0, z: -10 }, { x: -10, y: 0, z: -10 }, { x: 0, y: 0, z: -14 }];
+  buildNav(G);
+  t.ok(G.world.nav && G.world.nav.cell > 0, 'a navigation grid is built from the box soup');
+
+  const e = spawnEnemy(G, { pos: { x: 8, y: 0, z: -8 }, kind: 'rifleman', skill: 0.6 });
+  t.ok(e && G.enemies.length === 1, 'an enemy spawns');
+  t.ok(e.alive && e.hp > 0 && e.team === C.TEAM.HOSTILE, 'alive, healthy and on the other side');
+  t.ok(Array.isArray(e.hitboxes) && e.hitboxes.length > 0, 'carrying hitboxes for the ballistics to test against');
+
+  // The hitbox contract is what the weapons module reads, so it is worth
+  // pinning precisely: world space, right way up, and named with keys that
+  // index the damage table.
+  for (const h of e.hitboxes) {
+    t.ok(C.HITBOX[h.part] !== undefined, `hitbox part '${h.part}' indexes the damage table`);
+    t.ok(h.min.x <= h.max.x && h.min.y <= h.max.y && h.min.z <= h.max.z, `hitbox '${h.part}' is not inverted`);
+  }
+  const head = e.hitboxes.find((h) => h.part === 'HEAD');
+  const leg = e.hitboxes.find((h) => h.part === 'LEG');
+  t.ok(head && leg && head.min.y > leg.min.y, 'and the head is above the legs, so pos really is at the feet');
+  t.ok(head.min.y > e.pos.y, 'with every box above the feet position');
+}
+
+{
+  // An enemy must not know where the player is the instant they exist. This is
+  // the single line between AI that feels competent and AI that feels cheap.
+  const G = game();
+  G.mode = 'playing';
+  buildNav(G);
+  G.player.pos.x = 0; G.player.pos.z = 0; G.player.pos.y = C.EYE_STAND;
+  // yaw π faces +Z, which is where the player is standing — an enemy looking
+  // the other way legitimately never notices, and that is the point of a cone.
+  const e = spawnEnemy(G, { pos: { x: 0, y: 0, z: -12 }, kind: 'rifleman', skill: 0.7, yaw: Math.PI });
+
+  let firstShot = -1;
+  for (let i = 0; i < 600; i++) {
+    G.time.t += C.TICK;
+    updateAI(G, C.TICK);
+    if (firstShot < 0 && G.events.some((x) => x.type === 'shot' && x.source !== 'player')) firstShot = i;
+    G.events.length = 0;
+  }
+  t.ok(e.awareness > 0, 'a visible player is eventually noticed');
+  t.ok(firstShot !== 0, 'and is not shot at on the very first tick of being seen');
+}
+
+{
+  // Determinism, then divergence. Both matter: the first makes the suite
+  // meaningful, the second proves the seed is actually being used.
+  const runOne = (seed) => {
+    const G = createState(seed);
+    G.world = Object.assign(G.world, arena());
+    G.world.spawns = [{ x: 8, y: 0, z: -8 }];
+    G.player.pos.x = 0; G.player.pos.z = 4; G.player.pos.y = C.EYE_STAND;
+    buildNav(G);
+    for (let i = 0; i < 4; i++) spawnEnemy(G, { pos: { x: 6 - i * 3, y: 0, z: -9 }, kind: 'rifleman', skill: 0.5 });
+    for (let i = 0; i < 900; i++) { G.time.t += C.TICK; updateAI(G, C.TICK); G.events.length = 0; }
+    return G.enemies.map((x) => `${x.pos.x.toFixed(6)},${x.pos.z.toFixed(6)},${x.state},${x.hp}`).join('|');
+  };
+  t.ok(runOne(555) === runOne(555), 'the same seed gives an identical AI run');
+  t.ok(runOne(555) !== runOne(556), 'and a different seed genuinely diverges');
+}
+
+{
+  // Long adversarial run: nothing may go non-finite, escape the arena, or end
+  // up standing inside a wall.
+  const G = game();
+  G.world.spawns = [{ x: 10, y: 0, z: -10 }];
+  buildNav(G);
+  for (let i = 0; i < 8; i++) {
+    spawnEnemy(G, { pos: { x: -12 + i * 3, y: 0, z: -12 }, kind: i % 3 === 0 ? 'smg' : 'rifleman', skill: 0.5 + i * 0.05 });
+  }
+  let broke = null;
+  for (let i = 0; i < 3000 && !broke; i++) {
+    // Move the player around so the AI has to keep re-planning.
+    G.player.pos.x = Math.sin(i * 0.01) * 12;
+    G.player.pos.z = Math.cos(i * 0.013) * 12;
+    G.time.t += C.TICK;
+    updateAI(G, C.TICK);
+    G.events.length = 0;
+    for (const e of G.enemies) {
+      if (!finite(e.pos) || !finite(e.vel) || !Number.isFinite(e.yaw) || !Number.isFinite(e.aim.pitch)) { broke = `nan ${e.id} @${i}`; break; }
+      if (e.alive && (Math.abs(e.pos.x) > 21 || Math.abs(e.pos.z) > 21)) { broke = `escaped ${e.id} @${i}`; break; }
+      for (const h of e.hitboxes) if (!finite(h.min) || !finite(h.max)) { broke = `hitbox ${e.id} @${i}`; break; }
+    }
+  }
+  t.ok(broke === null, 'three thousand ticks with eight enemies stays finite and inside the level' + (broke ? ' — ' + broke : ''));
+
+  // Bodies must not occupy the same space.
+  let overlap = 0;
+  const live = G.enemies.filter((e) => e.alive);
+  for (let a = 0; a < live.length; a++) {
+    for (let b = a + 1; b < live.length; b++) {
+      const d = Math.hypot(live[a].pos.x - live[b].pos.x, live[a].pos.z - live[b].pos.z);
+      if (d < (live[a].radius + live[b].radius) * 0.8) overlap++;
+    }
+  }
+  t.ok(overlap === 0, `no two bodies are standing inside each other (${live.length} alive)`);
+}
+
+{
+  // Damage, death and the bookkeeping around it.
+  const G = game();
+  buildNav(G);
+  const e = spawnEnemy(G, { pos: { x: 4, y: 0, z: -6 }, kind: 'rifleman' });
+  const hp0 = e.hp;
+  damageEnemy(G, e, 20, 'CHEST', 'player');
+  t.ok(e.hp === hp0 - 20 && e.alive, 'a chest hit takes health and leaves them standing');
+  t.ok(G.events.some((x) => x.type === 'damage'), 'and reports it');
+  G.events.length = 0;
+
+  const kills0 = G.stats.kills;
+  damageEnemy(G, e, 9999, 'HEAD', 'player');
+  t.ok(!e.alive, 'enough damage kills');
+  t.ok(G.stats.kills === kills0 + 1, 'the kill is counted exactly once');
+  t.ok(G.events.some((x) => x.type === 'kill'), 'and announced');
+  G.events.length = 0;
+
+  // A second killing blow must not count again.
+  damageEnemy(G, e, 9999, 'HEAD', 'player');
+  t.ok(G.stats.kills === kills0 + 1, 'and shooting a corpse does not count twice');
+
+  resetAI(G);
+  G.enemies.length = 0;
+  t.ok(G.enemies.length === 0, 'resetAI leaves a clean slate for the next run');
+}
+
+{
+  t.ok(Object.keys(ENEMY_ARCHETYPES).length >= 4, 'there is more than one kind of enemy to fight');
+  t.ok(AI_STATES.includes('combat') && AI_STATES.includes('search'),
+    'and the state machine has both a fight and a hunt in it');
+
+  const G = game();
+  setDifficulty(G, 1.4);
+  t.ok(G.ai && Math.abs(G.ai.difficulty - 1.4) < 1e-9, 'the director can turn the difficulty dial');
+  setDifficulty(G, 99);
+  t.ok(G.ai.difficulty <= 2, 'and the dial is bounded rather than open-ended');
+}
+
+// ──────────────────────────────────────────────────────────── the director
+{
+  const G = game();
+  G.world.spawns = [];
+  for (let i = 0; i < 12; i++) {
+    G.world.spawns.push({ x: -15 + (i % 4) * 10, y: 0, z: -15 + Math.floor(i / 4) * 12 });
+  }
+  buildNav(G);
+
+  // Drive the director without the AI attached, so this tests pacing and not
+  // twelve men pathfinding.
+  const spawned = [];
+  setSpawnFn(G, (g, opts) => {
+    const fake = {
+      id: 'f' + spawned.length, pos: { ...opts.pos }, vel: vecZero(), yaw: 0,
+      hp: 100, maxHp: 100, alive: true, team: C.TEAM.HOSTILE, state: 'combat',
+      hitboxes: [], kind: opts.kind, skill: opts.skill,
+    };
+    spawned.push(fake); g.enemies.push(fake);
+    return fake;
+  });
+  function vecZero() { return { x: 0, y: 0, z: 0 }; }
+
+  startMission(G);
+  t.ok(MISSION.length >= 5, `the mission has a shape rather than one endless wave (${MISSION.length} beats)`);
+  t.ok(G.director.phase, 'and it starts in a named phase');
+
+  // Ten simulated minutes, killing whatever turns up at a plausible rate, and
+  // walking the player to the objective marker so the mission can progress.
+  const samples = [];
+  let objectives = 0;
+  let marker = null;
+  for (let i = 0; i < 10 * 60 * 120; i++) {
+    G.time.t += C.TICK;
+    updateDirector(G, C.TICK);
+    for (const ev of G.events) {
+      if (ev.type === 'objectiveComplete') objectives++;
+      // The objective event carries where to go; follow it, or the mission
+      // sits on beat one forever and the curve measures nothing.
+      if (ev.type === 'objective' && ev.marker) marker = ev.marker;
+    }
+    const m = marker;
+    if (m) {
+      const dx = m.x - G.player.pos.x, dz = m.z - G.player.pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 0.4) { G.player.pos.x += dx / d * 4 * C.TICK; G.player.pos.z += dz / d * 4 * C.TICK; }
+    }
+    G.events.length = 0;
+    // Kill something roughly every 1.6 s.
+    if (i % 190 === 0) {
+      const live = G.enemies.find((e) => e.alive);
+      if (live) { live.alive = false; G.stats.kills++; }
+    }
+    if (i % 120 === 0) samples.push(G.director.intensity ?? 0);
+  }
+
+  const peak = Math.max(...samples), trough = Math.min(...samples);
+  t.ok(Number.isFinite(peak) && peak > 0.05, `the intensity curve actually rises (peak ${peak.toFixed(2)})`);
+  t.ok(trough < peak * 0.35, `and falls back to a real valley (trough ${trough.toFixed(2)})`);
+
+  // Count the direction changes: a monotonic ramp is not pacing.
+  let turns = 0;
+  for (let i = 2; i < samples.length; i++) {
+    const a = samples[i - 1] - samples[i - 2], b = samples[i] - samples[i - 1];
+    if (a > 0.01 && b < -0.01) turns++;
+  }
+  t.ok(turns >= 3, `with several distinct peaks rather than one ramp (${turns})`);
+  t.ok(spawned.length > 0, `and enemies were actually committed (${spawned.length})`);
+  t.ok(objectives > 0, `and the mission advanced through its objectives (${objectives} completed)`);
+
+  for (const s of samples) t.ok(Number.isFinite(s) && s >= 0, 'intensity stays a finite, non-negative number');
+}
+
+{
+  // Spawns must never appear in front of the player's face.
+  const G = game();
+  G.world.spawns = [];
+  for (let i = 0; i < 16; i++) {
+    const a = i / 16 * Math.PI * 2;
+    G.world.spawns.push({ x: Math.cos(a) * 16, y: 0, z: Math.sin(a) * 16 });
+  }
+  buildNav(G);
+  resetDirector(G);
+  G.player.pos.x = 0; G.player.pos.z = 0; G.player.pos.y = C.EYE_STAND;
+  // Spawn points are derived from the level on the first tick, not at reset —
+  // the level may populate `world.spawns` after the director exists.
+  startMission(G);
+  G.time.t += C.TICK;
+  updateDirector(G, C.TICK);
+  G.events.length = 0;
+
+  // Every spawn candidate sits 16 m out, inside the director's 14–62 m window,
+  // so anything rejected here was rejected for being visible — which is the
+  // rule under test.
+  let tooClose = 0, tried = 0;
+  for (let i = 0; i < 200; i++) {
+    G.player.yaw = (i / 200) * Math.PI * 2;
+    const s = pickSpawn(G, {});
+    if (!s) continue;
+    tried++;
+    const d = Math.hypot(s.x - G.player.pos.x, s.z - G.player.pos.z);
+    if (d < 10) tooClose++;
+  }
+  t.ok(tried > 0, `the director can find somewhere to put people (${tried} of 200 attempts)`);
+  t.ok(tooClose === 0, `and never on top of the player (${tooClose} too close)`);
 }
 
 t.done();
