@@ -113,8 +113,10 @@ export async function boot(root) {
     // modules that own their own budgets have to be told separately, because
     // the engine deliberately knows nothing about them.
     quality(q) {
+      // `engine.setQuality` already forwards to the post chain, so it is not
+      // called again here. The rest do not hang off the engine and have to be
+      // told directly.
       engine.setQuality(q);
-      post.setQuality && post.setQuality(q);
       lighting.setQuality && lighting.setQuality(q);
       sky.setQuality && sky.setQuality(q);
       materials.setQuality && materials.setQuality(q);

@@ -642,8 +642,13 @@ export function createViewmodel(G, engine, materials) {
     // Never all the way off: bounce still reaches the gun indoors, and that
     // residual is what keeps the chamfers legible in a doorway.
     key.intensity *= 0.10 + 0.90 * sun.vis;
-    fill.intensity *= 0.45 + 0.55 * sun.sky;
-    gun.setEnvScale(0.22 + 0.78 * sun.sky);
+    fill.intensity *= 0.40 + 0.60 * sun.sky;
+    // Squared, because half the sky visible is much less than half the light:
+    // the openings that remain are narrow and most of what they admit is aimed
+    // somewhere other than the weapon. Linear leaves the gun a stop hot in every
+    // container bay in the level while costing nothing outdoors, where the term
+    // is 1 either way.
+    gun.setEnvScale(0.12 + 0.88 * sun.sky * sun.sky);
 
     const at = engine.viewCam.position;
     keyTarget.position.copy(at);
