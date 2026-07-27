@@ -4643,6 +4643,117 @@ t.ok(true, 'drawing an empty bridge is harmless');
     }
     IB.cam.x = 26;
   }
+  {
+    // Eight upgrades, five ranks each, bought with real iron and gold — and
+    // not one of them reached the board. Measured, a fully upgraded turret
+    // drew exactly the same 96 shapes as an unupgraded one, and a fully kitted
+    // minion the same 42 as a raw levy. Forty rank-purchases, invisible. The
+    // scoreboard had always counted them: the result card prints bsumUp.
+    const s = CTX.__stats;
+    const seat0c = IB.MY;
+    IB.newMatch({ diff:'veteran', seed:8001 });
+    IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+    // The two counters and the total the card asks for must agree.
+    {
+      const sd = G.sides[0];
+      for (const k of Object.keys(sd.towerUp)) sd.towerUp[k] = 2;
+      for (const k of Object.keys(sd.troopUp)) sd.troopUp[k] = 3;
+      t.ok(IB.towerRanks(sd) === Object.keys(sd.towerUp).length * 2, 'tower ranks are counted');
+      t.ok(IB.troopRanks(sd) === Object.keys(sd.troopUp).length * 3, 'and troop ranks are counted');
+      t.ok(IB.bsumUp(sd) === IB.towerRanks(sd) + IB.troopRanks(sd),
+        'and the card’s total is still the two of them');
+      for (const k of Object.keys(sd.towerUp)) sd.towerUp[k] = 0;
+      for (const k of Object.keys(sd.troopUp)) sd.troopUp[k] = 0;
+    }
+    // No saturating at the first purchase — the trap the crown fell into.
+    t.ok(IB.upBands(0) === 0, 'an unupgraded shaft is bare');
+    t.ok(IB.upBands(1) === 1, 'the first rank shows');
+    t.ok(IB.upBands(1) < IB.UPMARK.max, 'and does not finish the job on its own');
+    t.ok(IB.upBands(IB.TOWER_UPS.length * 5) === IB.UPMARK.max, 'a full forge fills the shaft');
+    t.ok(IB.upBands(999) === IB.UPMARK.max, 'and nothing goes past it');
+    let notUp = 0;
+    for (let r = 1; r <= IB.TOWER_UPS.length * 5; r++) if (IB.upBands(r) < IB.upBands(r - 1)) notUp++;
+    t.ok(notUp === 0, 'bands only ever go on (' + notUp + ')');
+    t.ok(IB.UPMARK.step > 1, 'and they arrive over the whole run of upgrades');
+    // The plate is continuous, so it has no tier to saturate at all.
+    t.ok(IB.upPlate(0) === 0, 'a raw levy wears nothing extra');
+    t.ok(IB.upPlate(IB.TROOP_UPS.length * 5) === 1, 'a fully kitted one wears all of it');
+    t.ok(IB.upPlate(3) > IB.upPlate(1) && IB.upPlate(9) > IB.upPlate(3), 'and it grows the whole way');
+
+    // Driven: the turret and the body actually change.
+    const drawOps = (fn) => { s.dropped = 0; const b = s.ops; fn(); return { n:s.ops - b, dropped:s.dropped }; };
+    const towerAt = (rank) => {
+      IB.newMatch({ diff:'veteran', seed:8001 });
+      IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+      const sd = G.sides[0], st = sd.structs.find(x => x.key === 't1');
+      for (const k of Object.keys(sd.towerUp)) sd.towerUp[k] = rank;
+      st.mhp = IB.structMaxHp(sd, st); st.hp = st.mhp; st.dead = false;
+      IB.cam.x = st.x;
+      return drawOps(() => IB.drawStructure(CTX, st));
+    };
+    const bare = towerAt(0), kitted = towerAt(5);
+    t.ok(bare.n > 20 && kitted.n > 20, 'the turret sweep drew a turret (' + bare.n + ')');
+    t.ok(bare.dropped === 0 && kitted.dropped === 0, 'and the capture held it');
+    t.ok(kitted.n > bare.n, 'a forge-fed turret shows it (' + bare.n + ' → ' + kitted.n + ')');
+    const bodyAt = (rank) => {
+      IB.newMatch({ diff:'veteran', seed:8003 });
+      IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+      const sd = G.sides[0];
+      for (const k of Object.keys(sd.troopUp)) sd.troopUp[k] = rank;
+      G.units.length = 0;
+      const u = IB.spawnUnit(0, 'grunt', { y:0 });
+      u.x = 40; IB.cam.x = 40;
+      return drawOps(() => IB.drawUnit(CTX, u));
+    };
+    const levy = bodyAt(0), armed = bodyAt(5);
+    t.ok(levy.n > 10, 'the body sweep drew a body (' + levy.n + ')');
+    t.ok(armed.n > levy.n, 'and a forge-fed minion shows it too (' + levy.n + ' → ' + armed.n + ')');
+
+    // Whose forge? A turret wears ITS OWN side's ranks, from either chair —
+    // the seat question asked before it could become the thirteenth bug.
+    {
+      let leaked = 0, showed = 0;
+      for (const seat of [0, 1]) for (const paid of [0, 1]){
+        IB.MY = seat;
+        IB.newMatch({ diff:'veteran', seed:8005 });
+        IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+        const sd = G.sides[paid];
+        for (const k of Object.keys(sd.towerUp)) sd.towerUp[k] = 5;
+        for (const side of [0, 1]){
+          const st = G.sides[side].structs.find(x => x.key === 't1');
+          st.mhp = IB.structMaxHp(G.sides[side], st); st.hp = st.mhp; st.dead = false;
+          IB.cam.x = st.x;
+          const n = drawOps(() => IB.drawStructure(CTX, st)).n;
+          if (side === paid && n > bare.n) showed++;
+          if (side !== paid && n > bare.n) leaked++;
+        }
+      }
+      IB.MY = seat0c;
+      t.ok(showed === 4, 'the hold that paid gets the bands, from either chair (' + showed + '/4)');
+      t.ok(leaked === 0, 'and the hold that did not, does not (' + leaked + ')');
+    }
+    // Read the neighbouring branch: a hero is not a levy and does not wear the
+    // minion plate, so the marker must not have leaked onto one.
+    {
+      IB.newMatch({ diff:'veteran', seed:8007 });
+      IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+      const sd = G.sides[0];
+      const heroOps = () => {
+        G.sides[0].heroes.length = 0;
+        const h = IB.makeHero(0, 'fighter', 'Kit');
+        h.pend.length = 0; G.sides[0].heroes.push(h); IB.enterLane(h); h.x = 60; h.y = 0;
+        return drawOps(() => IB.drawUnit(CTX, h)).n;
+      };
+      for (const k of Object.keys(sd.troopUp)) sd.troopUp[k] = 0;
+      const h0 = heroOps();
+      for (const k of Object.keys(sd.troopUp)) sd.troopUp[k] = 5;
+      const h5 = heroOps();
+      t.ok(h0 > 10, 'the hero sweep drew a hero (' + h0 + ')');
+      t.ok(h5 === h0, 'a hero does not put on levy kit (' + h0 + ' → ' + h5 + ')');
+    }
+    IB.cam.x = 26;
+    IB.MY = seat0c;
+  }
 
   // The sweep as a rule instead of a list. Anything the game does FOR the
   // person watching — a sound, a toast, a panel refresh — must never be gated
