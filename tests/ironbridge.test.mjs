@@ -1545,7 +1545,9 @@ t.ok(true, 'drawing an empty bridge is harmless');
   s.kills = 41; f.kills = 12; s.structsKilled = 5; f.structsKilled = 1;
   G.winner = 0; G.state = 'over'; G.wave = 22; G.t = 640;
   let h2 = IB.overHtml();
-  t.ok(/Ember gates are down/.test(h2), 'a win says so');
+  // Names the loser rather than a hardcoded faction: from seat two the loser
+  // is the Azure Pact, and the card used to congratulate you by your own name.
+  t.ok(/Ember Host’s gates are down/.test(h2), 'a win says whose gates went down');
   t.ok(/10:40/.test(h2), 'and how long it took');
   t.ok(/wave 22/.test(h2), 'and how far the waves got');
   const mineOn = (label) => {
@@ -3567,6 +3569,129 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
   IB.cam.z = IB.cam.tz = 1; G.t = 0;
   t.ok(true, 'clouds draw across a full wrap of the sky at every zoom');
+
+  // Birds. Three strokes each, three to a flock, all the same size on a
+  // straight diagonal stair, every one of them beating on `sin(G.t*5 + i + f)`
+  // — which is to say within a radian of its neighbour — and not one of them
+  // moving when the camera did. A flock in step reads as a decal.
+  //
+  // Depth first, and against the ridges rather than against itself: BANDS
+  // already decided that lower in the sky means nearer. The flocks have to
+  // agree, or the sky has two opinions about distance.
+  const bandDeep = Math.sign(IB.BANDS[1].y - IB.BANDS[0].y) * Math.sign(IB.BANDS[1].d - IB.BANDS[0].d);
+  t.ok(bandDeep > 0, 'the ridges say lower in the sky is nearer');
+  let dis = 0;
+  for (let i = 1; i < IB.FLOCKS.length; i++){
+    const a = IB.FLOCKS[i - 1], b = IB.FLOCKS[i];
+    if (!(b.y > a.y && b.sc > a.sc && b.d > a.d)) dis++;
+  }
+  t.ok(dis === 0, 'and the flocks agree: lower is bigger and parallaxes faster (' + dis + ')');
+  for (const fl of IB.FLOCKS){
+    t.ok(fl.d > 0, 'no flock is pinned to the glass (' + fl.d + ')');
+    t.ok(fl.n >= 3, 'and a flock is more than a pair (' + fl.n + ')');
+  }
+  t.ok(new Set(IB.FLOCKS.map(f => f.n)).size > 1, 'the flocks are not all the same size');
+  t.ok(new Set(IB.FLOCKS.map(f => f.sp)).size === IB.FLOCKS.length, 'and none of them fly at the same speed');
+
+  // The formation. A V has a point, and everything else falls back behind it.
+  t.ok(IB.birdSlot(0)[0] === 0 && IB.birdSlot(0)[1] === 0, 'the leader is the point of the V');
+  let ahead = 0, flat = 0, notmirror = 0;
+  const most = Math.max(...IB.FLOCKS.map(f => f.n));
+  for (let i = 1; i < most; i++){
+    const [dx, dy] = IB.birdSlot(i);
+    if (dx >= 0) ahead++;                                   // nobody outruns the leader
+    if (dy === 0) flat++;                                   // and nobody sits in its slipstream
+    if (i % 2 === 1 && i + 1 < most){
+      const [dx2, dy2] = IB.birdSlot(i + 1);
+      if (dx2 !== dx || dy2 !== -dy) notmirror++;           // the two arms match
+    }
+  }
+  t.ok(ahead === 0, 'every bird trails the leader (' + ahead + ')');
+  t.ok(flat === 0, 'and none of them is directly behind it (' + flat + ')');
+  t.ok(notmirror === 0, 'the two arms of the V mirror each other (' + notmirror + ')');
+  // A rank further back is further back AND further out — otherwise it is a
+  // line, which is what the stair was.
+  const r1 = IB.birdSlot(1), r3 = IB.birdSlot(3);
+  t.ok(Math.abs(r3[0]) > Math.abs(r1[0]) && Math.abs(r3[1]) > Math.abs(r1[1]),
+    'and each rank falls further back and further out');
+  t.ok(IB.BIRD.gapX > 0 && IB.BIRD.gapY > 0, 'the V has both of its dimensions');
+
+  // The wingbeat, which is the actual bug. Walk it over a real sweep.
+  t.ok(IB.BIRD.wMin < IB.BIRD.wMax, 'the wings are not frozen open');
+  // The separation is structural, not lucky: the rate steps per bird and the
+  // hash may only jitter it by a fraction of a step, so a step can never be
+  // closed. Leaving it to the hash alone left two pairs flying as one bird.
+  t.ok(IB.BIRD.drift > 0, 'the wingbeat rate steps from bird to bird');
+  t.ok(IB.BIRD.vary > 0, 'and the hash jitters it off the grid');
+  t.ok(IB.BIRD.vary < 1, 'but never by enough to close a step');
+  t.ok(IB.BIRD.stagger > 0, 'and the V ripples rather than pulsing');
+  let lockstep = 0, stuck = 0, pairs = 0, close = 0;
+  for (let f = 0; f < IB.FLOCKS.length; f++){
+    const n = IB.FLOCKS[f].n;
+    let spread = 0;
+    const lo = new Array(n).fill(9), hi = new Array(n).fill(-9);
+    for (let s = 0; s < 400; s++){
+      const tt = s * .05;
+      const vals = [];
+      for (let i = 0; i < n; i++){
+        const v = IB.birdBeat(f, i, tt);
+        vals.push(v);
+        lo[i] = Math.min(lo[i], v); hi[i] = Math.max(hi[i], v);
+      }
+      spread = Math.max(spread, Math.max(...vals) - Math.min(...vals));
+    }
+    // Every bird must actually flap through its whole range...
+    for (let i = 0; i < n; i++) if (hi[i] - lo[i] < .9) stuck++;
+    // ...and at some point in the sweep the flock must be visibly out of step.
+    if (spread < .8) lockstep++;
+    // No two birds may ever be the same bird.
+    for (let a = 0; a < n; a++) for (let b = a + 1; b < n; b++){
+      pairs++;
+      let far = 0;
+      for (let s = 0; s < 400; s++){
+        const tt = s * .05;
+        far = Math.max(far, Math.abs(IB.birdBeat(f, a, tt) - IB.birdBeat(f, b, tt)));
+      }
+      if (far < .5) close++;
+    }
+  }
+  t.ok(stuck === 0, 'every bird opens and closes its wings fully (' + stuck + ')');
+  t.ok(lockstep === 0, 'and no flock ever beats as one (' + lockstep + ')');
+  t.ok(pairs > 20 && close === 0, 'no two birds in a flock fly the same wingbeat (' + close + '/' + pairs + ')');
+  // The bob is a separate motion from the beat, or the whole bird pumps.
+  let same = 0;
+  for (let s = 0; s < 200; s++){
+    const tt = s * .05;
+    if (Math.abs((IB.birdBob(0, 1, tt) / IB.BIRD.bob) - (IB.birdBeat(0, 1, tt) * 2 - 1)) > .3) same = 1;
+  }
+  t.ok(same === 1, 'a bird bobs on a different clock from the one it flaps on');
+
+  // Parallax. They drift on their own, and they drift with the camera at the
+  // depth of their flock — the ridges and the clouds both do this and the
+  // birds were the one layer stuck to the glass.
+  IB.newMatch({ diff:'veteran', seed:1861 });
+  IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+  const driftAt = (fl, camX, t0) => { IB.cam.x = camX; G.t = t0; return IB.birdDrift(fl); };
+  let still = 0, order = 0;
+  for (const fl of IB.FLOCKS){
+    if (driftAt(fl, 0, 0) === driftAt(fl, 60, 0)) still++;             // moves with the camera
+    if (driftAt(fl, 0, 0) === driftAt(fl, 0, 4)) still++;              // and on its own
+  }
+  const near = IB.FLOCKS[IB.FLOCKS.length - 1], far = IB.FLOCKS[0];
+  const swing = (fl) => Math.abs(driftAt(fl, 60, 0) - driftAt(fl, 0, 0));
+  if (!(swing(near) > swing(far))) order++;
+  t.ok(still === 0, 'birds move with the camera and with time (' + still + ')');
+  t.ok(order === 0, 'and the near flock sweeps past faster than the far one');
+  IB.cam.x = 26; G.t = 0;
+
+  // Then draw them, across a wrap and both zoom ends, on the stub canvas that
+  // throws on a negative radius or a bad colour.
+  for (const z of [.42, 1, 2.4]){
+    IB.cam.z = IB.cam.tz = z;
+    for (let i = 0; i < 40; i++){ G.t = i * 3.7; IB.cam.x = IB.CAM_MIN + i * 4; IB.draw(); }
+  }
+  IB.cam.z = IB.cam.tz = 1; IB.cam.x = 26; G.t = 0;
+  t.ok(true, 'the flocks draw across a full wrap of the sky at every zoom');
 }
 {
   // Shadows. Every one in the game sat directly under its object, which was
@@ -3781,6 +3906,79 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(guilty.length === 0,
     'no sound, toast or panel refresh is gated on a bare side index' +
     (guilty.length ? ' — ' + guilty.map(o => o.n + ': ' + o.ln).join(' | ') : ''));
+
+  // The same bug wearing prose instead of a colour. Half the copy in this game
+  // says "the Host" where it means "the enemy", which is true from one chair
+  // and a lie from the other. The worst of them was the wave warning: pinned
+  // to kinds[1], so from seat two it described the army you had just sent
+  // yourself — in the colour that means danger — while the wave actually
+  // walking at you went unannounced. Every match, every wave.
+  for (const seat of [0, 1]){
+    IB.MY = seat;
+    t.ok(IB.foeName() === IB.SIDE_NAME[1 - seat], 'foeName() is the other faction from seat ' + seat);
+    t.ok(IB.foeName() !== IB.SIDE_NAME[seat], 'and never your own from seat ' + seat);
+  }
+  // Drive real waves from both chairs and read what the player was told. The
+  // announced army has to be the one coming AT you, which is the one that
+  // spawned on the other side of the bridge.
+  for (const seat of [0, 1]){
+    IB.newMatch({ diff:'veteran', seed:733 });
+    IB.MY = seat;
+    const kindName = (id) => IB.WAVE_KINDS.find(k => k.id === id).n;
+    let told = 0, wrong = 0, split = 0;
+    for (let w = 0; w < 24; w++){
+      G.log.length = 0;
+      IB.spawnWave();
+      const msg = (G.log.find(e => /^Wave /.test(e.msg)) || {}).msg || '';
+      if (!msg) continue;
+      told++;
+      const mineKind = G.sides[seat].waveKind, theirKind = G.sides[1 - seat].waveKind;
+      if (mineKind !== theirKind) split++;
+      if (msg.indexOf(IB.SIDE_NAME[1 - seat]) < 0) wrong++;          // names the enemy
+      if (msg.indexOf(IB.SIDE_NAME[seat]) >= 0) wrong++;             // and never you
+      if (msg.indexOf(kindName(theirKind)) < 0) wrong++;             // and their army
+      if (mineKind !== theirKind && msg.indexOf(kindName(mineKind)) >= 0) wrong++;   // never yours
+    }
+    t.ok(told === 24, 'every wave is announced from seat ' + seat + ' (' + told + ')');
+    t.ok(wrong === 0, 'and it is the wave coming AT you, by name, from seat ' + seat + ' (' + wrong + ')');
+    // Without this the two holds could roll the same wave kind every time and
+    // the check above would pass no matter which side it read.
+    t.ok(split >= 4, 'and the two holds sent different armies often enough to tell (' + split + '/24)');
+  }
+  IB.MY = seat0;
+
+  // And the card at the end of it. "The Ember gates are down" is a victory
+  // message that names the winner's own faction when the winner is seat two.
+  for (const seat of [0, 1]){
+    for (const win of [true, false]){
+      IB.newMatch({ diff:'veteran', seed:751 });
+      IB.MY = seat;
+      G.winner = win ? seat : 1 - seat;
+      G.state = 'over';
+      const html = IB.overHtml();
+      const head = html.slice(0, html.indexOf('</p>'));
+      const tag = 'seat ' + seat + (win ? ' winning' : ' losing');
+      t.ok(head.indexOf(IB.SIDE_NAME[seat]) < 0,
+        'the result headline never calls you the enemy — ' + tag);
+      if (win) t.ok(head.indexOf(IB.SIDE_NAME[1 - seat]) >= 0,
+        'and a win names whose gates went down — ' + tag);
+    }
+  }
+  IB.MY = seat0;
+
+  // Then the rule, so the next line of prose that pins a faction fails here.
+  // Only SIDE_NAME and the difficulty blurbs may say a faction out loud: the
+  // blurbs describe the AI handicap, which really is the Host and only the
+  // Host. Everything else asks foeName().
+  const prose = SRC.split('\n')
+    .map((ln, i) => ({ ln:ln.trim(), n:i + 1 }))
+    .filter(o => /'[^']*\b(Ember Host|Azure Pact|the Host)\b/.test(o.ln))
+    .filter(o => !/^\s*\/\//.test(o.ln))
+    .filter(o => !/^const SIDE_NAME/.test(o.ln))
+    .filter(o => !/\beco:|\bai:\s*\./.test(o.ln));            // the difficulty table
+  t.ok(prose.length === 0,
+    'no copy names a faction that the seat should have chosen' +
+    (prose.length ? ' — ' + prose.map(o => o.n + ': ' + o.ln.slice(0, 90)).join(' | ') : ''));
 }
 {
   // Juice must not be able to bury the frame: run a heavy fight and watch the pools.
@@ -5698,9 +5896,13 @@ t.ok(true, 'drawing an empty bridge is harmless');
 
   // The result card must call each seat's OWN victory a win.
   t.ok(/gates are down/.test(r0.over) && /gates are down/.test(r1.over), 'the result card renders for both seats');
-  t.ok(r0.over.indexOf(IB.SIDE_NAME[0]) < r0.over.indexOf(IB.SIDE_NAME[1]),
+  // Scoped to the tally header itself: the headline above it now names the
+  // LOSER, so searching the whole card finds the enemy first on a win and this
+  // read backwards. It was always meant to be about the two columns.
+  const tally = (h) => h.slice(h.indexOf('wr-head'));
+  t.ok(tally(r0.over).indexOf(IB.SIDE_NAME[0]) < tally(r0.over).indexOf(IB.SIDE_NAME[1]),
     'seat 0 sees its own hold named first in the tally');
-  t.ok(r1.over.indexOf(IB.SIDE_NAME[1]) < r1.over.indexOf(IB.SIDE_NAME[0]),
+  t.ok(tally(r1.over).indexOf(IB.SIDE_NAME[1]) < tally(r1.over).indexOf(IB.SIDE_NAME[0]),
     'seat 1 sees its own hold named first in the tally');
 
   // The timeline says whose walls fell, from the reader's point of view.

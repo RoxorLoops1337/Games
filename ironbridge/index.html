@@ -1007,6 +1007,12 @@ const foe = () => MY === 0 ? 1 : 0;
 // sheet's refresh after a pick, both of which only ever happened for player
 // one. Cosmetic reads only — see the note above about the simulation.
 const forMe = (side) => side === MY;
+// Whoever is across the bridge from the person watching. Copy that names a
+// faction out loud has to go through this: half the prose in the game said
+// "the Host" meaning "the enemy", which is true from one chair and a lie from
+// the other — player two spent whole matches being warned about their own
+// army. Cosmetic reads only, like the two above.
+const foeName = () => SIDE_NAME[foe()];
 
 function makeSide(i, ai){
   const s = {
@@ -1332,8 +1338,13 @@ function spawnWave(){
     s.muster.length = 0;
     if (s.superT > 0) for (let i = 0; i < 2; i++) spawnUnit(s.i, 'super', { y:i ? 1.6 : -1.6 });
   }
-  const foe = kinds[1];
-  fxToast('Wave ' + G.wave + ' — the Host sends ' + foe.n + '.', foe.id === 'levy' ? '' : 'bad');
+  // The wave warning is the one piece of copy in the game that has to be read
+  // and acted on, and it was pinned to kinds[1] — so from the second chair it
+  // described the army you had just sent yourself, in the colour that means
+  // danger, while the wave actually walking at you went unannounced. Every
+  // match, every wave. It reads the seat now, like the toast tone next to it.
+  const inc = kinds[foe()];
+  fxToast('Wave ' + G.wave + ' — the ' + foeName() + ' sends ' + inc.n + '.', inc.id === 'levy' ? '' : 'bad');
   sfx('wave');
 }
 
@@ -3651,24 +3662,82 @@ function drawClouds(c){
     c.restore();
   }
 }
-const FLOCKS = [{ y:.20, sp:11, ph:0 }, { y:.27, sp:8, ph:.45 }, { y:.16, sp:14, ph:.78 }];
+/* ------------------------------------------------------------------ birds
+   Three strokes each, three birds a flock, every one the same size on a
+   straight diagonal stair, all of them beating their wings within a radian of
+   each other and none of them moving when the camera did. A flock in step
+   reads as a decal, which is what these were. Now: a V that trails behind a
+   leader, flocks at three distances that agree with the rest of the sky about
+   what far away looks like, and beats that are close but never locked.       */
+const FLOCKS = [
+  // Lower in the sky is nearer — the same thing BANDS says about the ridges —
+  // so y, sc and d all rank together and a test can check they never disagree.
+  { y:.16, sp:14, ph:.78, n:4, sc:.70, d:.016 },
+  { y:.20, sp:11, ph:0,   n:5, sc:1.00, d:.030 },
+  { y:.27, sp:8,  ph:.45, n:7, sc:1.30, d:.044 },
+];
+const BIRD = {
+  gapX:12,          // how far behind the leader each rank sits
+  gapY:6.5,         // and how far out to the side
+  span:5,           // half the wingspan at sc 1
+  wMin:.9, wMax:4.4,// the glide and the top of the upstroke
+  // Every bird gets its own rate and its own phase. The rate STEPS by `drift`
+  // per bird so two in a flock can never share one, and the hash then jitters
+  // it by at most half a step so the steps don't read as a grid — a guaranteed
+  // difference plus an ungridded one. Leaving it to the hash alone was not
+  // enough: two of the thirty-seven pairs came out close enough to fly as one.
+  beat:5.2, drift:.31, vary:.5,
+  stagger:2.4,      // and a phase step down the arms, so the V ripples
+  bob:4.2, bobSp:.6,
+  a:.50, lw:1.15,
+};
+// Position within the V: the leader at the point, then pairs falling back and
+// out. Returned rather than inlined so a test can walk the whole formation.
+function birdSlot(i){
+  if (i === 0) return [0, 0];
+  const rank = Math.ceil(i / 2), side = (i % 2) ? -1 : 1;
+  return [-rank * BIRD.gapX, side * rank * BIRD.gapY];
+}
+// Where a flock is along the sky, and how far open one bird's wings are.
+// Both are pulled out of the draw so a test can walk them: the old version's
+// whole problem was an animation nothing could read — every bird beating on
+// `sin(G.t * 5 + i + f)` is in lockstep to within a radian and there was no
+// way to say so except by looking at it.
+const birdDrift = (fl) => G.t * fl.sp - cam.x * LS() * fl.d + fl.ph * (LW + 360);
+function birdBeat(f, i, t){
+  const seed = hash2(f * 3.1 + i * 7.7, 19.4), seed2 = hash2(i * 2.3 + f * 5.9, 3.2);
+  const rate = BIRD.beat + i * BIRD.drift + (seed - .5) * BIRD.drift * BIRD.vary;
+  return .5 + .5 * Math.sin(t * rate + i * BIRD.stagger + seed2 * 6.2832 * BIRD.vary);
+}
+const birdBob = (f, i, t) => Math.sin(t * BIRD.bobSp + hash2(i * 2.3 + f * 5.9, 3.2) * 6.2832) * BIRD.bob;
 function drawBirds(c){
-  c.strokeStyle = 'rgba(30,44,48,.42)';
-  c.lineWidth = Math.max(1, 1.2 * cam.z);
+  c.lineCap = 'round';
   for (let f = 0; f < FLOCKS.length; f++){
     const fl = FLOCKS[f];
     const span = LW + 360;
-    const x0 = (((G.t * fl.sp + fl.ph * span) % span) + span) % span - 180;
-    for (let i = 0; i < 3; i++){
-      const x = x0 - i * 15, y = LH * fl.y + Math.sin(G.t * .6 + f + i) * 5 + i * 7;
+    // Birds drift on their own AND with the camera, at the depth of their
+    // flock — the clouds and the ridges both do, and three birds pinned to the
+    // glass while the sky slid behind them was the tell.
+    const x0 = ((birdDrift(fl) % span) + span) % span - 180;
+    const sc = fl.sc * (.72 + cam.z * .34);
+    c.strokeStyle = 'rgba(30,44,48,' + (BIRD.a * (.55 + fl.sc * .40)).toFixed(3) + ')';
+    c.lineWidth = Math.max(.7, BIRD.lw * sc * cam.z);
+    for (let i = 0; i < fl.n; i++){
+      const [ox, oy] = birdSlot(i);
+      const x = x0 + ox * sc;
       if (x < -30 || x > LW + 30) continue;
-      const w = 4 + Math.sin(G.t * 5 + i + f) * 2.2;      // wingbeat
+      const y = LH * fl.y + oy * sc + birdBob(f, i, G.t) * sc;
+      // Each bird keeps its own rate and its own phase, so the flock breathes
+      // instead of pulsing. Both come off the fixed hash, never the RNG.
+      const w = (BIRD.wMin + (BIRD.wMax - BIRD.wMin) * birdBeat(f, i, G.t)) * sc;
+      const hw = BIRD.span * sc;
       c.beginPath();
-      c.moveTo(x - 5, y); c.quadraticCurveTo(x - 2, y - w, x, y);
-      c.quadraticCurveTo(x + 2, y - w, x + 5, y);
+      c.moveTo(x - hw, y); c.quadraticCurveTo(x - hw * .4, y - w, x, y);
+      c.quadraticCurveTo(x + hw * .4, y - w, x + hw, y);
       c.stroke();
     }
   }
+  c.lineCap = 'butt';
 }
 
 function drawDeck(c){
@@ -6718,8 +6787,8 @@ function overHtml(){
   const heroes = s.heroes.length
     ? '<div class="hcs">' + s.heroes.map(h => heroCard(h, h === star && h.kills > 0)).join('') + '</div>'
     : '<div class="wr-next">You never forged a hero. A Hero Factory pays for itself.</div>';
-  return '<h2>' + (win ? 'The Ember gates are down.' : 'Your gates are down.') + '</h2>' +
-    '<p class="sub">' + (win ? 'Ironbridge is yours' : 'The Host walks across your bridge') +
+  return '<h2>' + (win ? 'The ' + foeName() + '’s gates are down.' : 'Your gates are down.') + '</h2>' +
+    '<p class="sub">' + (win ? 'Ironbridge is yours' : 'The ' + foeName() + ' walks across your bridge') +
     ' — ' + mmss(G.t) + ', wave ' + G.wave + ' on ' + G.diff.n + '.' +
     (record ? ' <b style="color:var(--gold)">Your fastest win yet.</b>' : '') + '</p>' +
     timelineHtml() +
@@ -6753,7 +6822,7 @@ function showIntro(diff){
     '<p class="sub">Thirty seconds, then you can play.</p>' +
     '<div class="intro">' +
     '<div class="ib"><span class="ic">🏰</span><div><b>One world, one camera.</b> Your hold is at the near end, the ' +
-    'Ember Host at the far end, the bridge between. Drag to look along it, pinch or scroll to zoom, ' +
+    foeName() + ' at the far end, the bridge between. Drag to look along it, pinch or scroll to zoom, ' +
     'or use HOLD · GATES · MID · FOE.</div></div>' +
     '<div class="ib"><span class="ic">⛏️</span><div><b>Your hold pays for the war.</b> Workers gather gold, iron, wood ' +
     'and food. Farms raise your population. A Barracks turns an idle worker into a fighter, and everything ' +
@@ -7957,7 +8026,7 @@ window.IB = {
   recoilOf, RECOIL, RECOIL_T, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
-  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, AU, BAR_MINE, BAR_THEIRS,
+  floatScale, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
   WAVE_KINDS, waveKindFor, foeWarning, WAVE_ANSWER, huntRange, lowAlly, heroTarget, towerCovered, UP_EFFECT, upValue, upRate,
@@ -7983,7 +8052,7 @@ window.IB = {
   saveMatch, savedMatch, loadMatch, clearSave, packSide, packHero, seedNow, SAVE_KEY, SAVE_VER,
   seenIntro, markSeen, SEEN_KEY, pruneSel,
   keyAction, doAction, KEYS, setPaused, pauseHtml, keysHtml, gatherRate, laneArmy, lineOfBattle,
-  startZoom, ZOOM_MIN, ZOOM_MAX, camStep, demoCam, clouds, FLOCKS, drawClouds, drawBirds, CLOUD, CLOUD_PASSES, cloudLean, cloudRise, cloudPath, SKY_SPAN, heroMeters, heroDoing, showHeroSheet,
+  startZoom, ZOOM_MIN, ZOOM_MAX, camStep, demoCam, clouds, FLOCKS, drawClouds, drawBirds, CLOUD, CLOUD_PASSES, cloudLean, cloudRise, cloudPath, SKY_SPAN, BIRD, birdSlot, birdDrift, birdBeat, birdBob, heroMeters, heroDoing, showHeroSheet,
   classGlyph, overHtml, heroCard, wrRow, teamTargets, TEAM_CAP, freeName, HERO_NAMES, xpCatchup, CATCHUP_MAX, showsBar,
   WEAR, battleDamage, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
