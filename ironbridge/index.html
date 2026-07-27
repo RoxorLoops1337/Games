@@ -4755,46 +4755,84 @@ function drawEnds(c){
     c.globalAlpha = .22;
     shadow(c, kp[0], base + 2 * z, 92 * z, 15 * z, '#1d2a1c');
     c.globalAlpha = 1;
-    block(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 56 * z, STONE.mid);
-    block(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 3.5 * z, STONE.lit);
-    masonry(c, kp[0] - 46 * z, wallY - 40 * z, 92 * z, 46 * z, z, 41 + s.i);
-    // buttresses, so a wall this wide is not one unbroken face
+    /* The air between. The keep stands well behind the gate and the gate is the
+       thing you are actually looking at, but the two were painted in exactly
+       the same greys, so nothing in the picture said which was further off. A
+       thin wash of the sky's own colour, laid on each of the keep's own faces
+       — never as one rectangle over the scene, which paints a pale box on the
+       grass — puts it back where it belongs. Light: this is depth, not fog. */
+    const haze = (hx2, hy2, hw, hh) => {
+      c.globalAlpha = .14; c.fillStyle = '#8ba3b2';
+      c.fillRect(hx2, hy2, hw, hh); c.globalAlpha = 1;
+    };
+    masonry(c, kp[0] - 48 * z, wallY - 44 * z, 96 * z, 56 * z, z, 41 + s.i, { weather:1 });
+    haze(kp[0] - 48 * z, wallY - 44 * z, 96 * z, 56 * z);
+    aoSide(c, kp[0] - 48 * z, wallY - 44 * z, 30 * z, 56 * z, stoneLit(), .24);
+    // buttresses, so a wall this wide is not one unbroken face. Each one is a
+    // pier standing PROUD of the wall, which means it has a lit face, a shaded
+    // return, and a shadow it throws on the wall behind it.
+    const bL = stoneLit();
     for (const bxo of [-38, -20, 20, 38]){
-      block(c, kp[0] + bxo * z - 4 * z, wallY - 40 * z, 8 * z, 52 * z, STONE.mid2);
-      block(c, kp[0] + bxo * z - 4 * z, wallY - 40 * z, 3 * z, 52 * z, STONE.dark);
-      poly(c, [[kp[0] + bxo * z - 6 * z, wallY - 40 * z], [kp[0] + bxo * z + 6 * z, wallY - 40 * z],
-               [kp[0] + bxo * z, wallY - 47 * z]], STONE.mid2);
+      const bxx = kp[0] + bxo * z;
+      // The shadow a pier throws on the wall behind it: a HARD edge right
+      // against the stone that casts it, then a falloff. The soft half on its
+      // own read as a smear, and had its gradient running the wrong way — the
+      // dark ended up furthest from the thing making it.
+      c.globalAlpha = .3; c.fillStyle = '#242e2a';
+      c.fillRect(bxx - bL * 4 * z, wallY - 44 * z, 2.2 * z, 56 * z);
+      c.globalAlpha = 1;
+      aoSide(c, bxx - bL * 4 * z, wallY - 44 * z, 8 * z, 56 * z, bL, .30);
+      block(c, bxx - 4 * z, wallY - 40 * z, 8 * z, 52 * z, STONE.mid2);
+      masonry(c, bxx - 4 * z, wallY - 40 * z, 8 * z, 52 * z, z, 45 + bxo * .1);
+      haze(bxx - 4 * z, wallY - 40 * z, 8 * z, 52 * z);
+      c.fillStyle = STONE.dark; c.fillRect(bxx - bL * 4 * z - (bL < 0 ? 0 : 2.4 * z), wallY - 40 * z, 2.4 * z, 52 * z);
+      rimEdge(c, bxx - 4 * z, wallY - 40 * z, 8 * z, 52 * z, 1 * z, .4);
+      poly(c, [[bxx - 6 * z, wallY - 40 * z], [bxx + 6 * z, wallY - 40 * z],
+               [bxx, wallY - 47 * z]], STONE.mid2);
+      poly(c, [[bxx + bL * 6 * z, wallY - 40 * z], [bxx, wallY - 47 * z], [bxx, wallY - 40 * z]], STONE.lit);
     }
     // a plinth the whole thing stands on
+    aoBand(c, kp[0] - 56 * z, base - 5 * z, 112 * z, 6 * z, -1, .40);
     block(c, kp[0] - 52 * z, base - 8 * z, 104 * z, 8 * z, STONE.deep, STONE.dark);
+    // laid in a heavier course than the wall above it, the way a base always is
+    masonry(c, kp[0] - 52 * z, base - 8 * z, 104 * z, 8 * z, z, 47 + s.i, { scale:2.1 });
+    c.globalAlpha = .18; c.fillStyle = '#28322e';
+    c.fillRect(kp[0] - 52 * z, base - 8 * z, 104 * z, 8 * z);
+    c.globalAlpha = 1;
     block(c, kp[0] - 54 * z, base - 10 * z, 108 * z, 3 * z, STONE.mid2, STONE.lit);
-    crown(c, kp[0], wallY - 52 * z, 100 * z, z, 9);
+    crown(c, kp[0], wallY - 52 * z, 100 * z, z, 7);
     // the way in, with a timber gate in it rather than a painted hole
+    voussoirs(c, kp[0], wallY - 4 * z, 11 * z, 15 * z, z, 9);
     c.fillStyle = '#3a332b';
-    c.beginPath(); c.arc(kp[0], wallY - 4 * z, 14 * z, Math.PI, 0); c.fill();
-    c.fillRect(kp[0] - 14 * z, wallY - 4 * z, 28 * z, 16 * z);
-    c.fillStyle = WOOD.mid;
-    c.beginPath(); c.arc(kp[0], wallY - 3 * z, 11 * z, Math.PI, 0); c.fill();
-    c.fillRect(kp[0] - 11 * z, wallY - 3 * z, 22 * z, 15 * z);
-    c.strokeStyle = WOOD.dark; c.lineWidth = Math.max(1, 1.1 * z);
-    for (let i = -1; i <= 1; i++){
-      c.beginPath(); c.moveTo(kp[0] + i * 6 * z, wallY - 13 * z); c.lineTo(kp[0] + i * 6 * z, base); c.stroke();
-    }
-    block(c, kp[0] - 11 * z, wallY - 1 * z, 22 * z, 2.6 * z, '#6b7078');
-    block(c, kp[0] - 11 * z, wallY + 7 * z, 22 * z, 2.6 * z, '#6b7078');
+    c.beginPath(); c.arc(kp[0], wallY - 4 * z, 11 * z, Math.PI, 0); c.fill();
+    c.fillRect(kp[0] - 11 * z, wallY - 4 * z, 22 * z, 16 * z);
+    c.save();
+    c.beginPath(); c.arc(kp[0], wallY - 3 * z, 10.4 * z, Math.PI, 0);
+    c.lineTo(kp[0] + 10.4 * z, base); c.lineTo(kp[0] - 10.4 * z, base); c.closePath(); c.clip();
+    timber(c, kp[0] - 11 * z, wallY - 15 * z, 22 * z, 30 * z, z, 43 + s.i, true);
+    aoBand(c, kp[0] - 11 * z, wallY - 15 * z, 22 * z, 8 * z, 1, .5);
+    c.restore();
+    ironStrap(c, kp[0] - 11 * z, wallY - 1 * z, 22 * z, 2.6 * z, z, true);
+    ironStrap(c, kp[0] - 11 * z, wallY + 7 * z, 22 * z, 2.6 * z, z, true);
     for (const sx of [-1, 1]){
       const tx = kp[0] + sx * 58 * z;
       c.globalAlpha = .22;
       shadow(c, tx, base + 2 * z, 22 * z, 7 * z, '#1d2a1c');
       c.globalAlpha = 1;
-      block(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, STONE.mid);
-      block(c, tx - 16 * z, wallY - 74 * z, 32 * z, 4 * z, STONE.lit);
-      masonry(c, tx - 15 * z, wallY - 70 * z, 30 * z, 76 * z, z, 51 + sx * 3 + s.i);
+      masonry(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, z, 51 + sx * 3 + s.i, { weather:1 });
+      haze(tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z);
+      aoSide(c, tx - 16 * z, wallY - 74 * z, 12 * z, 86 * z, stoneLit(), .3);
+      rimEdge(c, tx - 16 * z, wallY - 74 * z, 32 * z, 86 * z, 1.2 * z, .4);
+      aoBand(c, tx - 18 * z, base - 9 * z, 36 * z, 9 * z, -1, .34);
       block(c, tx - 18 * z, base - 8 * z, 36 * z, 8 * z, STONE.deep, STONE.dark);
       poly(c, [[tx - 23 * z, wallY - 72 * z], [tx, wallY - 108 * z], [tx + 23 * z, wallY - 72 * z]], shade(col, .98));
       poly(c, [[tx, wallY - 108 * z], [tx + 23 * z, wallY - 72 * z], [tx + 8 * z, wallY - 72 * z]], shade(col, .72));
+      // the roof sits on the tower head, so the head is in its shade
+      aoBand(c, tx - 16 * z, wallY - 74 * z, 32 * z, 9 * z, 1, .40);
       block(c, tx - 24 * z, wallY - 74 * z, 48 * z, 3 * z, STONE.mid2, STONE.lit);   // the eaves course
       c.fillStyle = STONE.line; c.fillRect(tx - 3 * z, wallY - 56 * z, 6 * z, 14 * z);
+      c.fillStyle = STONE.lit;
+      c.fillRect(tx + stoneLit() * 3 * z - (stoneLit() < 0 ? .9 * z : 0), wallY - 56 * z, .9 * z, 14 * z);
     }
     // banners hung either side of the gateway
     for (const sx of [-1, 1]){
@@ -4828,12 +4866,132 @@ function drawEnds(c){
 /* Storybook masonry: pale blocks with a lit top edge, warm timber, a team
    roof and a lit eye. Everything is laid out in units around the ground
    anchor and multiplied by the zoom, so one set of numbers serves all sizes. */
-const STONE = { lit:'#dde2da', mid:'#c8cec6', mid2:'#b4bbb3', dark:'#9aa29a', deep:'#7f877f', line:'#69716a' };
-const WOOD = { lit:'#cda063', mid:'#ad8146', dark:'#8a6533' };
+/* The stone palette. Wider than it was — the old six ran from #dde2da to
+   #7f877f, a spread of about a third of the range, which is why a turret read
+   as one pale slab however it was shaded: there was no dark to shade INTO. It
+   also warms as it lightens and cools as it darkens, because a lit face takes
+   the colour of the sun and a shaded one the colour of the sky, and a stone
+   that greys off in both directions reads as plastic.
 
+   `mortar` and `mortarLo` are the bed the blocks are laid in: the lit side of
+   a joint and the occluded side of it. `moss` lives in the joints the sun
+   never reaches, `soot` around the hits.                                     */
+const STONE = {
+  lit:'#ece9d8', mid:'#cfcdbf', mid2:'#b1b3a7', dark:'#8e938c', deep:'#6d7570', line:'#535b58',
+  mortar:'#9ba099', mortarLo:'#6f746d', moss:'#6d7d4e', soot:'#33302c', rim:'#fbf7e2',
+};
+/* Timber, on the same principle: a lit face, the body, the shaded face, the
+   deep of a gap between planks, the paler END GRAIN of a cut, and the iron
+   that holds it together. Six values, because five of the things the game
+   builds out of wood were being drawn with three.                            */
+const WOOD = {
+  lit:'#cfa871', mid:'#a17c4c', dark:'#775a36', deep:'#4c3922',
+  end:'#c2a077', iron:'#464a4f', ironLit:'#8b929a',
+};
+/* WHICH WAY THE LIGHT COMES. SUN sits up and to the left of the viewer, so on
+   every stone face in the game the top and the LEFT edge take the chamfer
+   highlight and the bottom and the right edge take the occlusion. Read off
+   shadowSide(), the same call the ground shadows and the clouds use, so the
+   masonry cannot end up lit from one side of the sky while its own shadow
+   falls off the other — which is the bug the clouds had.                     */
+const stoneLit = () => -shadowSide();          // -1: the lit edge of a stone is its left one
+// The tones a course of blocks is picked out of. Precomputed: shade() parses a
+// hex string every call, and a wall lays down sixty blocks a frame.
+const STONE_TONE = ['#d5d2c3', '#c5c3b5', '#e0ddcc', '#b6b7aa', '#cecbbc', '#a9aa9f'];
+const STONE_TONE_LIT = STONE_TONE.map(h => shade(h, 1.10));
+const STONE_TONE_DARK = STONE_TONE.map(h => shade(h, .84));
+
+/* A stone block with a thickness. It was a rectangle with a pale stripe across
+   the top sixteenth of it, and at any size above a few pixels that stripe read
+   as a band painted on a flat card rather than as the lit face of an edge.
+
+   Three edges now, all agreeing with the sun: the chamfer on top, a thinner
+   one down the side the sun is on, and the occlusion down the far side and
+   along the foot. Below a few pixels the bevel IS the block, so it is skipped
+   — a turret at the far end of the bridge does not need it and cannot show it. */
+const BEVEL = { top:.17, side:.11, foot:.15, dark:.78, foot2:.62, min:3.2 };
 function block(c, x, y, w, h, face, top){
   c.fillStyle = face; c.fillRect(x, y, w, h);
-  if (top){ c.fillStyle = top; c.fillRect(x, y, w, Math.max(1, h * .16)); }
+  if (!top) return;
+  const t = Math.max(1, h * BEVEL.top);
+  c.fillStyle = top; c.fillRect(x, y, w, t);
+  if (w < BEVEL.min || h < BEVEL.min || typeof face !== 'string' || face[0] !== '#') return;
+  const s = Math.min(w * .42, Math.max(1, w * BEVEL.side));
+  const f = Math.min(h * .4, Math.max(1, h * BEVEL.foot));
+  c.fillStyle = shade(face, BEVEL.dark);
+  c.fillRect(stoneLit() < 0 ? x + w - s : x, y + t, s, h - t);
+  c.fillStyle = shade(face, BEVEL.foot2);
+  c.fillRect(x, y + h - f, w, f);
+}
+/* Ambient occlusion: the dark that gathers where two solids meet. Nothing in
+   this game had any, which is why every roof, every crown and every tower foot
+   read as pasted on. A gradient rather than a flat band, because the whole
+   point of the effect is that it FALLS OFF — a hard edge of dark is just
+   another painted stripe.
+
+   `dir` is which way the dark points: -1 up, 1 down. Cheap enough to run a few
+   times per structure; not cheap enough to run per block, which is why the
+   coursing does its own occlusion with flat rects instead.                   */
+function aoBand(c, x, y, w, h, dir, a){
+  if (!(w > 0) || !(h > 0)) return;
+  const g = c.createLinearGradient(0, dir > 0 ? y : y + h, 0, dir > 0 ? y + h : y);
+  g.addColorStop(0, 'rgba(24,28,26,' + (a || .34).toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(24,28,26,0)');
+  c.fillStyle = g; c.fillRect(x, y, w, h);
+}
+// The same, laid sideways — for the dark down the inside of a jamb or the far
+// side of a shaft. `dir` is 1 for dark-on-the-right, -1 for dark-on-the-left.
+function aoSide(c, x, y, w, h, dir, a){
+  if (!(w > 0) || !(h > 0)) return;
+  const g = c.createLinearGradient(dir > 0 ? x + w : x, 0, dir > 0 ? x : x + w, 0);
+  g.addColorStop(0, 'rgba(26,30,28,' + (a || .3).toFixed(3) + ')');
+  g.addColorStop(1, 'rgba(26,30,28,0)');
+  c.fillStyle = g; c.fillRect(x, y, w, h);
+}
+// The bounce of sky and sun down the silhouette edge that faces the light. One
+// thin bright line, at low alpha, on the sun side only — it is what lifts a
+// tower off the ridge behind it without touching its local shading.
+/* An arch, built the way an arch is built: wedges radiating off one centre
+   with a joint between each. It was a single flat pale horseshoe, which is a
+   painted hole. Which face of a voussoir the sun reaches depends on where
+   round the ring it sits, so the ring grades from bright on the sun side to
+   dark on the far one — and that gradation is the entire reason an arch reads
+   as a curved solid. `n` is fixed, not derived from anything about the
+   structure, so both holds build their arches out of the same count.        */
+const VOUSSOIR = { base:.70, gain:.44, joint:.055 };
+function voussoirs(c, cx, cy, r0, r1, u, n){
+  // where round the ring the sun strikes square on: up-left, or up-right if
+  // the sky is ever flipped
+  const key = stoneLit() < 0 ? Math.PI * 1.25 : Math.PI * 1.75;
+  for (let i = 0; i < n; i++){
+    const a0 = Math.PI * (1 + i / n), a1 = Math.PI * (1 + (i + 1) / n);
+    const g = (a0 + a1) * .5, j = Math.PI * VOUSSOIR.joint / n;
+    const f = VOUSSOIR.base + Math.max(0, Math.cos(g - key)) * VOUSSOIR.gain;
+    c.beginPath();
+    c.arc(cx, cy, r1, a0 + j, a1 - j);
+    c.arc(cx, cy, r0, a1 - j, a0 + j, true);
+    c.closePath();
+    c.fillStyle = shade(STONE.mid, f); c.fill();
+  }
+}
+// Confine what follows to a shape. Coursing laid over a TAPERED shaft used to
+// spill out past the silhouette at the top, because a wall of blocks is a
+// rectangle and a turret is not; clipped, the courses run out to the taper and
+// stop, which is what a batter does to a course of stone in real life.
+// Always paired with a restore() by its caller.
+function clipPoly(c, pts){
+  c.beginPath();
+  c.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) c.lineTo(pts[i][0], pts[i][1]);
+  c.closePath(); c.clip();
+}
+function rimEdge(c, x, y, w, h, t, a){
+  const th = Math.max(1, t || 1);
+  if (!(h > 0)) return;
+  c.globalAlpha = a === undefined ? .5 : a;
+  c.fillStyle = STONE.rim;
+  c.fillRect(stoneLit() < 0 ? x : x + w - th, y, th, h);
+  c.globalAlpha = 1;
 }
 // A crenellated crown: the solid band plus its merlons.
 /* Which stone a piece of wear belongs to. One seed, because two things ask —
@@ -4863,14 +5021,49 @@ const stSeed = (st) => st.ord * 3.3 + st.key.length * 2.9;
    it grades 0, 2, 4, 6 cracks and this now grades with it.                  */
 const CROWN_TIERS = 3;
 const merlonHolds = (i, wear, seed) => hash2(i * 5.1, seed) >= wear / CROWN_TIERS;
+/* The crown was a band and three slabs on top of it, all one colour, sitting
+   flush on a wall that was the same colour again — so the one silhouette in
+   the game that says "castle" was the least legible thing on the tower.
+
+   What it is now: the parapet band CORBELS OUT over the wall head (which is
+   what a real one does, and what puts a line of shadow under it), the band's
+   walking surface is dark where an embrasure opens onto it, and each merlon
+   carries a capstone that oversails on both sides and throws its own shadow
+   across that surface, away from the sun. Where wear has taken a merlon off,
+   a broken stump is left in its place: a tower that has been battered should
+   look chewed, not tidied.                                                  */
 function crown(c, cx, y, w, u, n, wear, seed){
-  block(c, cx - w / 2, y, w, 7 * u, STONE.mid, STONE.lit);
-  const step = w / n;
+  const x0 = cx - w / 2, bandH = 7 * u, over = 1.6 * u;
+  // the shadow the corbel throws down the wall it oversails
+  aoBand(c, x0 + over, y + bandH, w - over * 2, 6 * u, 1, .40);
+  block(c, x0, y, w, bandH, STONE.mid, STONE.lit);
+  // the underside of the oversail, dark all the way along
+  c.fillStyle = STONE.line; c.fillRect(x0, y + bandH - Math.max(1, .9 * u), w, Math.max(1, .9 * u));
+  const step = w / n, mh = 9 * u, cap = Math.max(1, 2 * u);
+  const L = stoneLit();
   for (let i = 0; i < n; i++){
-    if (i % 2) continue;
+    if (i % 2){
+      // an embrasure: the band's floor, in shade because it is a slot
+      c.fillStyle = STONE.dark;
+      c.fillRect(x0 + i * step, y, step, Math.max(1, 1.6 * u));
+      continue;
+    }
+    const mx = x0 + i * step, mw = step * 1.02;
     // the same places every frame — the wear is hashed, not rolled
-    if (wear > 0 && !merlonHolds(i, wear, seed || 0)) continue;
-    block(c, cx - w / 2 + i * step, y - 8 * u, step * 1.02, 9 * u, STONE.mid, STONE.lit);
+    if (wear > 0 && !merlonHolds(i, wear, seed || 0)){
+      // knocked off: a ragged stump and the scar under it
+      c.fillStyle = STONE.dark; c.fillRect(mx, y - 2.2 * u, mw, Math.max(1, 2.2 * u));
+      c.fillStyle = STONE.deep;
+      c.fillRect(mx + mw * .18, y - 3.4 * u, mw * .3, Math.max(1, 1.3 * u));
+      continue;
+    }
+    // the shadow the merlon casts along the parapet, away from the sun
+    c.fillStyle = 'rgba(40,46,44,.34)';
+    c.fillRect(L < 0 ? mx + mw : mx - mw * .34, y, mw * .34, Math.max(1, 2.2 * u));
+    block(c, mx, y - mh + cap, mw, mh - cap, STONE.mid, STONE.lit);
+    // the capstone, oversailing both ways
+    block(c, mx - over * .5, y - mh, mw + over, cap, STONE.mid2, STONE.lit);
+    rimEdge(c, mx - over * .5, y - mh, mw + over, mh, .9 * u, .38);
   }
 }
 
@@ -4886,27 +5079,99 @@ function battleDamage(c, st, X, top, w, h, u){
   const wear = WEAR(st);
   if (!wear) return;
   const seed = stSeed(st);
-  c.strokeStyle = 'rgba(38,34,30,.55)';
-  c.lineWidth = Math.max(1, 1.3 * u);
+  const L = stoneLit();
+  const seg = Math.min(7 * u, h * .3);
+  // Everything below this line is detail, and detail disappears at the zoom the
+  // game is actually played at — a turret at a fifth of its health read the
+  // same as a fresh one from across the bridge, which is the bug this whole
+  // function exists to fix. One dirty wash over the whole body, graded by tier,
+  // survives any size: a battered tower is a DARKER tower first, and a cracked
+  // one second.
+  c.globalAlpha = .07 * wear;
+  c.fillStyle = '#2e2a24';
+  c.fillRect(X - w / 2, top, w, h);
+  c.globalAlpha = 1;
+  // A crack was one thin brown polyline, which at any size reads as a pencil
+  // mark ON the wall rather than a split IN it. A real one is a dark opening
+  // with a bright lip where the sun catches the broken arris on its own side —
+  // two strokes, offset, and the offset is what gives it depth.
   for (let i = 0; i < wear * 2; i++){
     const r1 = hash2(i * 2.7, seed), r2 = hash2(i * 4.3, seed + 1), r3 = hash2(i * 6.1, seed + 2);
-    // a crack has to stay on the stone it is cracking
-    const seg = Math.min(7 * u, h * .3);
     const x0 = X - w / 2 + r1 * w, y0 = top + r2 * (h - seg * 2);
-    c.beginPath();
-    c.moveTo(x0, y0);
-    c.lineTo(x0 + (r3 - .5) * 8 * u, y0 + seg);
-    c.lineTo(x0 + (r1 - .5) * 10 * u, y0 + seg * 2);
-    c.stroke();
+    const path = () => {
+      c.beginPath();
+      c.moveTo(x0, y0);
+      c.lineTo(x0 + (r3 - .5) * 8 * u, y0 + seg);
+      c.lineTo(x0 + (r1 - .5) * 10 * u, y0 + seg * 2);
+      c.stroke();
+    };
+    c.strokeStyle = 'rgba(30,27,24,.72)';
+    c.lineWidth = Math.max(1, 1.5 * u);
+    path();
+    c.save();
+    c.translate(L * Math.max(1, .9 * u), -Math.max(1, .5 * u));
+    c.strokeStyle = 'rgba(248,246,228,.34)';
+    c.lineWidth = Math.max(1, .8 * u);
+    path();
+    c.restore();
   }
   if (wear >= 2){
+    // SPALLED STONE. A wall past half its life has lost material, not just
+    // gained lines — a face knocked off a block leaves a dark socket with a
+    // bright broken lip along its top edge, and that is the read the health
+    // bar was carrying on its own.
+    for (let i = 0; i < 3; i++){
+      const r = hash2(i * 3.3, seed + 7), r2 = hash2(i * 5.9, seed + 8);
+      const sw = (4 + r * 6) * u, sh = (2.6 + r2 * 3.4) * u;
+      const sx = X - w / 2 + r * (w - sw), sy = top + h * .12 + r2 * h * .62;
+      c.fillStyle = '#4b4a44'; c.fillRect(sx, sy, sw, sh);
+      c.fillStyle = '#726f64'; c.fillRect(sx, sy + sh * .55, sw, sh * .45);
+      c.fillStyle = 'rgba(250,247,226,.5)';
+      c.fillRect(sx, sy - Math.max(1, .7 * u), sw, Math.max(1, .7 * u));
+    }
     // soot around the hits, not stains stuck on the stone
-    c.globalAlpha = .16;
+    c.globalAlpha = .22;
     for (let i = 0; i < 4; i++){
       const r = hash2(i * 8.9, seed + 5);
       ell(c, X - w / 2 + r * w, top + h * (.35 + r * .55), (2.4 + r * 2.6) * u, (1.8 + r * 1.8) * u, '#2b2622');
     }
     c.globalAlpha = 1;
+  }
+  if (wear >= 3){
+    // Bites out of the silhouette, on the edges where a wall actually breaks
+    // away, and the stone that came off lying at the foot of it. A tower about
+    // to fall should look chewed.
+    for (let i = 0; i < 2; i++){
+      const r = hash2(i * 9.7, seed + 11), sxn = i ? 1 : -1;
+      const by = top + h * (.2 + r * .42), rows = 3;
+      const bh = Math.min(4 * u, h * .09);
+      for (let k = 0; k < rows; k++){
+        // ragged, course by course — a wall breaks along its beds, so the
+        // profile of a hole in one steps rather than being cut square
+        const bw = (2.4 + hash2(i * 3.1 + k, seed + 12) * 4.2) * u;
+        const bx = X + sxn * w * .46 - (sxn > 0 ? bw : 0);
+        c.fillStyle = '#3f4039'; c.fillRect(bx, by + k * bh, bw, bh);
+        c.fillStyle = '#6a675c';
+        c.fillRect(bx + (sxn > 0 ? 0 : bw * .6), by + k * bh, bw * .4, bh);
+        c.fillStyle = 'rgba(250,247,226,.44)';
+        c.fillRect(bx, by + k * bh, bw, Math.max(1, .7 * u));
+      }
+    }
+    // and the stone that came off it, lying at the foot. Broken stone is not
+    // brighter than the wall it fell out of: it is dirty, it sits in the dark
+    // the wall casts, and every piece of it has its own shadow.
+    c.globalAlpha = .34;
+    ell(c, X, top + h - .4 * u, w * .6, 2.2 * u, '#25261f');
+    c.globalAlpha = 1;
+    for (let i = 0; i < 5; i++){
+      const r = hash2(i * 4.1, seed + 13), r2 = hash2(i * 7.3, seed + 14);
+      const rw = (2 + r2 * 3) * u, rh = (1.3 + r * 1.7) * u;
+      const rx = X - w * .58 + r * w * 1.16, ry = top + h - rh - r2 * 1.2 * u;
+      c.globalAlpha = .3;
+      ell(c, rx + rw * .6, ry + rh, rw * .7, rh * .45, '#25261f');
+      c.globalAlpha = 1;
+      block(c, rx, ry, rw, rh, i % 2 ? STONE.dark : STONE.mid2, STONE.mid);
+    }
   }
   if (wear >= 3){
     // smoke, drifting the way the wind takes the clouds
@@ -4920,14 +5185,200 @@ function battleDamage(c, st, X, top, w, h, u){
     c.globalAlpha = 1;
   }
 }
-// Scattered raised blocks so a flat wall reads as masonry.
-function masonry(c, x, y, w, h, u, seed){
-  for (let i = 0; i < 7; i++){
-    const r = hash2(seed + i * 13, seed * 3 + i * 7);
-    const bw = (4 + r * 5) * u, bh = 3.2 * u;
-    const bx = x + r * (w - bw), by = y + hash2(seed + i, seed - i) * (h - bh);
-    c.fillStyle = i % 2 ? STONE.lit : STONE.mid2;
-    c.fillRect(bx, by, bw, bh);
+/* MASONRY. What it was: seven pale rectangles thrown at random over a flat
+   panel, at random sizes, overlapping nothing and lining up with nothing. At
+   the zoom the game is actually played at they read as smudges — and on the
+   keep's ninety-unit wall, seven of anything is not a texture.
+
+   What a wall is: COURSES. Rows of a fixed height, blocks of varied length
+   within a row, each row offset from the one above so the vertical joints
+   never stack (a wall that stacks its joints falls down, and the eye knows
+   it). The joints are a bed of dark mortar the blocks sit proud of, so every
+   stone gets a lit chamfer along its top and the mortar under it goes dark —
+   one light, from up and to the left, the same one the shadows use.
+
+   The layout is the expensive half: a hash per block, and a keep wall is a
+   couple of hundred blocks. It is worked out once per wall SHAPE (in world
+   units, so it survives every zoom) and read out of a map after that; only
+   the fills happen per frame. The keys are the handful of wall sizes the game
+   builds, so the map settles at a dozen entries and stops growing.          */
+// `detail` and `mid` are the two LOD gates, in SCREEN PIXELS per course: above
+// `detail` a stone gets its chamfer and its arris, above `mid` it gets a face
+// of its own, and below that the wall is drawn as coursing alone — which is all
+// the eye can resolve at that size, for a fifth of the ink. The bridge carries
+// forty structures and this runs every frame; the gates are what keep it cheap
+// at the zoom the game is actually played at.
+const COURSE = { h:3.5, wMin:4.4, wMax:9.6, joint:.42, capH:.7, detail:4.0, mid:1.8 };
+const COURSE_CACHE = new Map();
+function courses(uw, uh, seed, sc){
+  const s = sc || 1;
+  const key = uw.toFixed(2) + '|' + uh.toFixed(2) + '|' + seed.toFixed(3) + '|' + s;
+  const hit = COURSE_CACHE.get(key);
+  if (hit) return hit;
+  const rows = Math.max(1, Math.round(uh / (COURSE.h * s))), ch = uh / rows, out = [];
+  // How many stones a course is cut into is a function of the WALL, not of the
+  // seed: a wall that changed its block count with its seed would make a
+  // turret's ink depend on which hold it stood in, and one of the suites
+  // measures exactly that. The seed varies the widths and the tones — which is
+  // all the eye reads — and every course is partitioned differently, so the
+  // vertical joints never line up from row to row.
+  const n = Math.max(1, Math.round(uw / ((COURSE.wMin + COURSE.wMax) * .5 * s)));
+  for (let r = 0; r < rows; r++){
+    let sum = 0;
+    const wts = [];
+    for (let k = 0; k < n; k++){
+      const wt = .62 + hash2(r * 7.71 + k * 2.29, seed + r * .37) * .76;
+      wts.push(wt); sum += wt;
+    }
+    let x = 0;
+    for (let k = 0; k < n; k++){
+      const bw = uw * wts[k] / sum;
+      out.push({ x, y:r * ch, w:bw, h:ch,
+        t:Math.floor(hash2(k * 11.93 + r * 4.71, seed + k * .21) * STONE_TONE.length) % STONE_TONE.length });
+      x += bw;
+    }
+  }
+  if (COURSE_CACHE.size > 240) COURSE_CACHE.clear();
+  COURSE_CACHE.set(key, out);
+  return out;
+}
+/* And the weathering, which is what makes a wall look like it has stood
+   somewhere rather than been extruded: rain streaks running down from under
+   the ledge at the top, and moss in the joints at the foot on the side the
+   sun never reaches. Both hashed off the wall's own seed, so a given wall
+   weathers the same way every frame and its mirror across the bridge weathers
+   the same way as it.                                                       */
+const WEATHER = { streaks:5, mossRows:2 };
+function masonry(c, x, y, w, h, u, seed, opt){
+  if (!(w > 0) || !(h > 0) || !(u > 0)) return;
+  // A wall off the edge of the canvas still laid down every one of its blocks.
+  // Ten structures on the board and a camera parked at one hold means half of
+  // them are outside the frame at any moment; this is the cheapest test in the
+  // function and it skips the most work.
+  if (x + w < -40 || x > LW + 40 || y + h < -40 || y > LH + 40) return;
+  const sc = (opt && opt.scale) || 1;
+  const uw = w / u, uh = h / u, rows = courses(uw, uh, seed, sc);
+  const ch = rows.length ? rows[0].h : uh;
+  const px = ch * u;                                   // a course, in screen pixels
+  const j = COURSE.joint * sc;
+  // the mortar bed the blocks are set into
+  c.fillStyle = STONE.mortarLo; c.fillRect(x, y, w, h);
+  if (px < COURSE.mid){
+    // too far away for individual stones: the coursing alone, which is all the
+    // eye gets at this size anyway, and a fraction of the ink
+    c.fillStyle = STONE.mid; c.fillRect(x, y, w, h);
+    c.fillStyle = STONE.mortarLo;
+    for (let r = 1; r < rows.length; r += 2) c.fillRect(x, y + rows[r].y * u, w, Math.max(1, .5 * u));
+    return;
+  }
+  const fine = px >= COURSE.detail;
+  for (let i = 0; i < rows.length; i++){
+    const b = rows[i];
+    // asymmetric inset: a thin joint at the top where the light gets in, a
+    // fatter one at the foot where the stone above overhangs it
+    const bx = x + (b.x + j * .5) * u, bw = (b.w - j) * u;
+    const by = y + (b.y + j * .45) * u, bh = (b.h - j * 1.5) * u;
+    if (bw <= 0 || bh <= 0) continue;
+    c.fillStyle = STONE_TONE[b.t]; c.fillRect(bx, by, bw, bh);
+    if (!fine) continue;
+    const cap = Math.max(1, COURSE.capH * sc * u), ar = Math.max(1, .55 * sc * u);
+    c.fillStyle = STONE_TONE_LIT[b.t]; c.fillRect(bx, by, bw, cap);
+    // and the sun-side arris of the stone itself
+    c.fillStyle = STONE_TONE_DARK[b.t];
+    c.fillRect(stoneLit() < 0 ? bx + bw - ar : bx, by + cap, ar, bh - cap);
+  }
+  if (!opt || !opt.weather) return;
+  // rain off the ledge above, running down the joints. Two passes: the dirty
+  // wash itself and a paler edge where the run has washed the stone CLEAN
+  // beside it, which is what a real streak looks like and what stops this
+  // reading as a smudge.
+  c.globalAlpha = .20;
+  c.fillStyle = STONE.soot;
+  for (let i = 0; i < WEATHER.streaks; i++){
+    const r = hash2(i * 6.3, seed + 2.7);
+    const sw = Math.max(1, (.8 + r * 1.6) * u);
+    c.fillRect(x + r * (w - 2 * u), y, sw, h * (.28 + r * .62));
+  }
+  c.globalAlpha = .16; c.fillStyle = STONE.lit;
+  for (let i = 0; i < WEATHER.streaks; i++){
+    const r = hash2(i * 6.3, seed + 2.7);
+    c.fillRect(x + r * (w - 2 * u) + Math.max(1, (.8 + r * 1.6) * u), y, Math.max(1, .6 * u), h * (.28 + r * .62));
+  }
+  c.globalAlpha = 1;
+  // moss where the wall meets the ground and the sun never reaches
+  c.globalAlpha = .38;
+  c.fillStyle = STONE.moss;
+  for (let i = 0; i < rows.length; i++){
+    const b = rows[i];
+    if (b.y + b.h < uh - COURSE.h * sc * WEATHER.mossRows || i % 2) continue;
+    const g = hash2(b.x * 1.7 + b.y * 2.9, seed + 5.1);
+    c.fillRect(x + b.x * u, y + (b.y + b.h - j * 1.5) * u, b.w * u * (.35 + g * .65), Math.max(1, j * 1.7 * u));
+  }
+  c.globalAlpha = 1;
+}
+/* TIMBER. Every piece of wood in the game — the lintel over the gate, the
+   hoarding a turret fights from, the palisade, both sets of doors — was a flat
+   tan rectangle with a paler stripe across the top, which is the same drawing
+   as the stone with the hue changed. Wood does not look like stone: it comes
+   in PLANKS, it has grain running the length of the piece, the plank edges
+   catch light on one side and go dark into the gap on the other, and it is
+   held together with iron.
+
+   `vert` stacks the planks side by side instead of one above the other, which
+   is the difference between a door and a lintel.                            */
+const TIMBER = { plank:3.6, maxPlanks:6, grain:2, grainA:.24 };
+function timber(c, x, y, w, h, u, seed, vert){
+  if (!(w > 0) || !(h > 0)) return;
+  c.fillStyle = WOOD.deep; c.fillRect(x, y, w, h);
+  const across = vert ? w : h;
+  const n = clamp(Math.round(across / (TIMBER.plank * u)), 1, TIMBER.maxPlanks);
+  const t = across / n, lw = Math.max(1, .5 * u);
+  const fine = t > 3;
+  for (let i = 0; i < n; i++){
+    const o = i * t, g = hash2(i * 3.91, seed);
+    const px = vert ? x + o : x, py = vert ? y : y + o;
+    const pw = vert ? t : w, ph = vert ? h : t;
+    c.fillStyle = shade(WOOD.mid, .84 + g * .34); c.fillRect(px, py, pw, ph);
+    c.fillStyle = WOOD.lit;
+    if (vert) c.fillRect(px, py, lw, ph); else c.fillRect(px, py, pw, lw);
+    c.fillStyle = WOOD.deep;
+    if (vert) c.fillRect(px + pw - lw, py, lw, ph); else c.fillRect(px, py + ph - lw, pw, lw);
+    if (!fine) continue;
+    c.globalAlpha = TIMBER.grainA; c.fillStyle = WOOD.dark;
+    for (let k = 0; k < TIMBER.grain; k++){
+      const f = .22 + hash2(i * 5.31 + k * 1.77, seed + 1.1) * .5;
+      const l = .3 + hash2(k * 2.13 + i, seed + 2.2) * .5;
+      if (vert) c.fillRect(px + pw * f, py + ph * .08, Math.max(1, .4 * u), ph * l);
+      else c.fillRect(px + pw * (.05 + hash2(k, seed + i) * .4), py + ph * f, pw * l, Math.max(1, .4 * u));
+    }
+    c.globalAlpha = 1;
+  }
+}
+// The end grain of a cut piece — paler, and running the other way. A beam
+// sawn off square shows this and its long faces do not, which is most of what
+// tells the eye it is looking at a solid rather than a painted board.
+function endGrain(c, x, y, w, h, u){
+  if (!(w > 0) || !(h > 0)) return;
+  c.fillStyle = WOOD.end; c.fillRect(x, y, w, h);
+  c.globalAlpha = .3; c.fillStyle = WOOD.dark;
+  const n = Math.max(1, Math.min(3, Math.round(h / (2.2 * u))));
+  for (let i = 0; i < n; i++)
+    c.fillRect(x + w * .12, y + h * (i + .6) / (n + .4), w * .76, Math.max(1, .5 * u));
+  c.globalAlpha = 1;
+}
+// An iron strap across a timber, with its rivets. What actually holds a gate
+// together, and the one thing that stops "wood" reading as "orange".
+function ironStrap(c, x, y, w, h, u, horiz){
+  if (!(w > 0) || !(h > 0)) return;
+  block(c, x, y, w, h, WOOD.iron, WOOD.ironLit);
+  const r = Math.max(1, .85 * u);
+  if (r * 3 > (horiz ? h : w)) return;
+  c.fillStyle = WOOD.ironLit;
+  const n = clamp(Math.round((horiz ? w : h) / (8 * u)), 2, 6);
+  for (let i = 0; i < n; i++){
+    const f = (i + .5) / n;
+    c.fillRect(horiz ? x + w * f - r * .5 : x + w * .5 - r * .5,
+               horiz ? y + h * .5 - r * .5 : y + h * f - r * .5, r, r);
   }
 }
 function pennant(c, x, y, u, col, dir){
@@ -5051,17 +5502,35 @@ function drawStructure(c, st){
     } else {
       // outbuilding with a tall team-coloured pyramid roof, set behind
       const ox = X - dir * 78 * u;
-      block(c, ox - 20 * u, Y - 50 * u, 40 * u, 50 * u, STONE.mid, STONE.lit);
-      masonry(c, ox - 20 * u, Y - 50 * u, 40 * u, 50 * u, u, 11 + st.side);
+      masonry(c, ox - 20 * u, Y - 50 * u, 40 * u, 50 * u, u, 11 + st.side, { weather:1 });
+      // it stands behind everything else here, so it takes a wash of the air
+      // between: nothing at this distance is as bright as the thing in front
+      c.globalAlpha = .18; c.fillStyle = '#7f96a4';
+      c.fillRect(ox - 20 * u, Y - 50 * u, 40 * u, 50 * u);
+      c.globalAlpha = 1;
+      aoSide(c, ox - 20 * u, Y - 50 * u, 14 * u, 50 * u, stoneLit(), .26);
+      rimEdge(c, ox - 20 * u, Y - 50 * u, 40 * u, 50 * u, 1.1 * u, .3);
       poly(c, [[ox - 26 * u, Y - 48 * u], [ox, Y - 88 * u], [ox + 26 * u, Y - 48 * u]], shade(col, .95));
       poly(c, [[ox, Y - 88 * u], [ox + 26 * u, Y - 48 * u], [ox + 10 * u, Y - 48 * u]], shade(col, .74));
+      // the roof sits ON the wall, so the wall under its eaves is in shade
+      aoBand(c, ox - 20 * u, Y - 48 * u, 40 * u, 8 * u, 1, .38);
       c.fillStyle = STONE.line; c.fillRect(ox - 3 * u, Y - 40 * u, 6 * u, 14 * u);
-      // curtain wall between the towers
-      block(c, X - 30 * u, Y - 62 * u, 60 * u, 62 * u, STONE.mid, STONE.lit);
-      masonry(c, X - 30 * u, Y - 60 * u, 60 * u, 56 * u, u, 3 + st.side);
-      // timber lintel spanning both towers
-      block(c, X - 62 * u, Y - 70 * u, 124 * u, 8 * u, WOOD.mid, WOOD.lit);
-      block(c, X - 62 * u, Y - 62 * u, 124 * u, 3 * u, WOOD.dark);
+      // Curtain wall between the towers. It is SET BACK from them, and until
+      // the towers threw a shadow onto it the three read as one flat mass of
+      // the same grey — the single biggest reason the gate looked like a
+      // cardboard cutout. A recessed wall is in shade all over, and darker
+      // still where the tower in front of it stands between it and the sun.
+      masonry(c, X - 30 * u, Y - 62 * u, 60 * u, 62 * u, u, 3 + st.side, { weather:1 });
+      c.globalAlpha = .16; c.fillStyle = '#28322e';
+      c.fillRect(X - 30 * u, Y - 62 * u, 60 * u, 62 * u);
+      c.globalAlpha = 1;
+      aoSide(c, X - 30 * u, Y - 62 * u, 22 * u, 62 * u, stoneLit(), .40);
+      // timber lintel spanning both towers, with the straps that carry it
+      aoBand(c, X - 62 * u, Y - 59 * u, 124 * u, 7 * u, 1, .34);
+      timber(c, X - 62 * u, Y - 70 * u, 124 * u, 8 * u, u, 19 + st.side);
+      for (const bx2 of [-52, -18, 18, 52])
+        ironStrap(c, X + bx2 * u - 1.4 * u, Y - 71 * u, 2.8 * u, 10 * u, u, false);
+      block(c, X - 62 * u, Y - 62 * u, 124 * u, 3 * u, WOOD.deep);
       // ribbed roof over the gateway
       const ry = Y - 66 * u;
       poly(c, [[X - 34 * u, ry + 14 * u], [X - 26 * u, ry], [X + 26 * u, ry], [X + 34 * u, ry + 14 * u]], shade(col, 1.02));
@@ -5071,30 +5540,44 @@ function drawStructure(c, st){
         c.beginPath(); c.moveTo(X + t * 26 * u, ry); c.lineTo(X + t * 34 * u, ry + 14 * u); c.stroke();
       }
       block(c, X - 35 * u, ry + 13 * u, 70 * u, 4 * u, shade(col, .66));
-      // arched doorway: voussoir ring, then the doors
-      c.fillStyle = STONE.lit;
+      // Arched doorway. The ring was one flat pale shape: an arch is built of
+      // VOUSSOIRS, wedges radiating off the centre, and each one takes the
+      // light differently depending on which way it faces — which is the whole
+      // reason an arch reads as an arch and not as a painted hole.
+      c.fillStyle = STONE.mid2;
       c.beginPath(); c.arc(X, Y - 30 * u, 24 * u, Math.PI, 0); c.fill();
       c.fillRect(X - 24 * u, Y - 30 * u, 48 * u, 30 * u);
-      c.fillStyle = WOOD.mid;
+      voussoirs(c, X, Y - 30 * u, 18 * u, 24 * u, u, 11);
+      for (const sx2 of [-1, 1]){                        // the jambs under the springing
+        block(c, X + sx2 * 21 * u - 3 * u, Y - 30 * u, 6 * u, 30 * u, STONE.mid2, STONE.lit);
+        masonry(c, X + sx2 * 24 * u - 6 * u, Y - 30 * u, 6 * u, 30 * u, u, 31 + sx2);
+      }
+      // the reveal — the dark of a passage cut through eight feet of wall
+      c.fillStyle = STONE.line;
       c.beginPath(); c.arc(X, Y - 30 * u, 18 * u, Math.PI, 0); c.fill();
       c.fillRect(X - 18 * u, Y - 30 * u, 36 * u, 30 * u);
-      c.strokeStyle = WOOD.dark; c.lineWidth = Math.max(1, 1.2 * u);
-      for (let i = -2; i <= 2; i++){
-        c.beginPath(); c.moveTo(X + i * 7 * u, Y - 44 * u); c.lineTo(X + i * 7 * u, Y); c.stroke();
-      }
-      block(c, X - 18 * u, Y - 26 * u, 36 * u, 3.5 * u, '#6b7078');
-      block(c, X - 18 * u, Y - 11 * u, 36 * u, 3.5 * u, '#6b7078');
+      c.save();
+      c.beginPath(); c.arc(X, Y - 30 * u, 17 * u, Math.PI, 0);
+      c.lineTo(X + 17 * u, Y); c.lineTo(X - 17 * u, Y); c.closePath(); c.clip();
+      timber(c, X - 17 * u, Y - 47 * u, 34 * u, 47 * u, u, 23 + st.side, true);
+      aoBand(c, X - 17 * u, Y - 47 * u, 34 * u, 12 * u, 1, .5);
+      aoSide(c, X - 17 * u, Y - 47 * u, 9 * u, 47 * u, stoneLit(), .34);
+      c.restore();
+      ironStrap(c, X - 18 * u, Y - 26 * u, 36 * u, 3.5 * u, u, true);
+      ironStrap(c, X - 18 * u, Y - 11 * u, 36 * u, 3.5 * u, u, true);
       // the two gate towers
       for (const sx of [-1, 1]){
         const tx = X + sx * 46 * u;
-        block(c, tx - 16 * u, Y - 86 * u, 32 * u, 86 * u, STONE.mid, STONE.lit);
-        masonry(c, tx - 16 * u, Y - 84 * u, 32 * u, 80 * u, u, 21 + sx + st.side * 5);
+        masonry(c, tx - 16 * u, Y - 86 * u, 32 * u, 86 * u, u, 21 + sx + st.side * 5, { weather:1 });
+        aoSide(c, tx - 16 * u, Y - 86 * u, 11 * u, 86 * u, stoneLit(), .28);
+        rimEdge(c, tx - 16 * u, Y - 86 * u, 32 * u, 86 * u, 1.2 * u, .34);
         crown(c, tx, Y - 96 * u, 36 * u, u, 5, WEAR(st), stSeed(st));
         battleDamage(c, st, tx, Y - 82 * u, 30 * u, 70 * u, u);
         c.fillStyle = STONE.line; c.fillRect(tx - 3 * u, Y - 66 * u, 6 * u, 15 * u);
+        c.fillStyle = STONE.lit; c.fillRect(tx + stoneLit() * 3 * u - (stoneLit() < 0 ? .9 * u : 0), Y - 66 * u, .9 * u, 15 * u);
         // timber palisade skirting the base
-        for (let i = 0; i < 4; i++)
-          block(c, tx + (sx > 0 ? 14 : -30) * u + i * 4 * u, Y - 20 * u, 3.4 * u, 20 * u, i % 2 ? WOOD.mid : WOOD.lit);
+        timber(c, tx + (sx > 0 ? 14 : -30) * u, Y - 20 * u, 16 * u, 20 * u, u, 27 + sx, true);
+        aoBand(c, tx - 18 * u, Y - 9 * u, 36 * u, 9 * u, -1, .34);
         block(c, tx - 18 * u, Y - 8 * u, 36 * u, 8 * u, STONE.deep, STONE.dark);
       }
       pennant(c, X + dir * 62 * u, Y - 92 * u, u, col, dir);
@@ -5104,9 +5587,14 @@ function drawStructure(c, st){
     // and it was a flat diamond sitting dead still on a plain grey box, next
     // to a gate with masonry, timber and a pennant.
     const S = shardAt(G.t + st.side * 1.7);
-    block(c, X - 22 * u, Y - 12 * u, 44 * u, 12 * u, STONE.deep, STONE.dark);
-    masonry(c, X - 21 * u, Y - 11 * u, 42 * u, 10 * u, u, 61 + st.side);
+    aoBand(c, X - 26 * u, Y - 7 * u, 52 * u, 7 * u, -1, .38);
+    masonry(c, X - 22 * u, Y - 12 * u, 44 * u, 12 * u, u, 61 + st.side, { weather:1 });
+    aoSide(c, X - 22 * u, Y - 12 * u, 15 * u, 12 * u, stoneLit(), .26);
+    // the altar step, corbelled out over the plinth with its own shadow
+    aoBand(c, X - 17 * u, Y - 11 * u, 34 * u, 5 * u, 1, .34);
     block(c, X - 17 * u, Y - 20 * u, 34 * u, 9 * u, STONE.mid, STONE.lit);
+    masonry(c, X - 15 * u, Y - 19 * u, 30 * u, 7 * u, u, 63 + st.side);
+    rimEdge(c, X - 17 * u, Y - 20 * u, 34 * u, 9 * u, 1 * u, .34);
     if (!dead){
       const cy = Y - S.lift * u;
       c.globalAlpha = .30 - S.lift * .045;
@@ -5152,27 +5640,95 @@ function drawStructure(c, st){
       c.globalAlpha = .35; ell(c, X, Y - 6 * u, 26 * u, 8 * u, 'rgba(50,46,42,.8)'); c.globalAlpha = 1;
     } else {
       // flared footing → tapered shaft → crenellated crown → the eye
-      poly(c, [[X - 21 * u, Y], [X + 21 * u, Y], [X + 16 * u, Y - 13 * u], [X - 16 * u, Y - 13 * u]], STONE.deep);
-      block(c, X - 21 * u, Y - 5 * u, 42 * u, 5 * u, STONE.dark, STONE.mid2);
-      for (const sx of [-1, 1]) block(c, X + sx * 15 * u - 5 * u, Y - 11 * u, 10 * u, 11 * u, STONE.dark, STONE.mid2);
-      poly(c, [[X - 16 * u, Y - 12 * u], [X + 16 * u, Y - 12 * u], [X + 13 * u, Y - 58 * u], [X - 13 * u, Y - 58 * u]], STONE.mid);
-      poly(c, [[X - 16 * u, Y - 12 * u], [X - 13 * u, Y - 58 * u], [X - 7 * u, Y - 58 * u], [X - 9 * u, Y - 12 * u]], STONE.lit);
-      poly(c, [[X + 16 * u, Y - 12 * u], [X + 13 * u, Y - 58 * u], [X + 8 * u, Y - 58 * u], [X + 10 * u, Y - 12 * u]], STONE.mid2);
-      masonry(c, X - 12 * u, Y - 54 * u, 24 * u, 40 * u, u, st.ord * 7 + st.side * 3);
+      const L = stoneLit();                              // -1: the sun is off to the left
+      const foot = [[X - 21 * u, Y], [X + 21 * u, Y], [X + 16 * u, Y - 13 * u], [X - 16 * u, Y - 13 * u]];
+      poly(c, foot, STONE.dark);
+      // the footing is masonry too — it was the one untextured slab left on the
+      // tower once the shaft was coursed, and a plain block under a coursed
+      // wall reads as the wall floating on a shadow
+      c.save(); clipPoly(c, foot);
+      // Bigger stones at the foot than up the shaft. A plinth is laid in a
+      // heavier course than the wall it carries — same masonry drawn at the
+      // same size all the way up is what made the base and the shaft read as
+      // one continuous slab rather than as a tower standing on a base.
+      masonry(c, X - 22 * u, Y - 13 * u, 44 * u, 13 * u, u,
+        st.ord * 7 + st.side * 3 + 2.5, { weather:1, scale:1.7 });
+      c.globalAlpha = .20; c.fillStyle = '#232c28';
+      c.fillRect(X - 22 * u, Y - 13 * u, 44 * u, 13 * u);   // the base sits in its own shade
+      c.globalAlpha = .30;
+      c.fillRect(X + (L < 0 ? 2 : -22) * u, Y - 13 * u, 20 * u, 13 * u);
+      c.globalAlpha = 1;
+      c.restore();
+      // the dark that gathers where the tower meets the deck. It stood on the
+      // planking with a hard edge and nothing under it, which is what made a
+      // forty-foot tower read as a sticker.
+      aoBand(c, X - 25 * u, Y - 8 * u, 50 * u, 8 * u, -1, .40);
+      block(c, X - 21 * u, Y - 4 * u, 42 * u, 4 * u, STONE.deep, STONE.dark);
+      // Quoins: the dressed corner stones that hold a rubble wall's angle. They
+      // were two pale slabs of nothing, brighter than the coursing they stood
+      // in, which read as boxes parked against the tower.
+      for (const sx of [-1, 1]) for (let q = 0; q < 3; q++){
+        const qh = 3.7 * u, qy = Y - 11.4 * u + q * qh;
+        const wide = q % 2 === 0;
+        block(c, X + sx * 15 * u - (wide ? 5 : 3.4) * u, qy, (wide ? 10 : 6.8) * u, qh - .5 * u,
+          STONE_TONE[q === 1 ? 5 : 3], STONE_TONE_LIT[q === 1 ? 5 : 3]);
+      }
+      const shaft = [[X - 16 * u, Y - 12 * u], [X + 16 * u, Y - 12 * u],
+                     [X + 13 * u, Y - 58 * u], [X - 13 * u, Y - 58 * u]];
+      poly(c, shaft, STONE.mid);
+      c.save(); clipPoly(c, shaft);
+      masonry(c, X - 17 * u, Y - 58 * u, 34 * u, 46 * u, u, st.ord * 7 + st.side * 3, { weather:1 });
+      // The two long faces of the shaft, laid OVER the coursing rather than
+      // beside it — a round tower is one wall lit round its corner, not two
+      // walls of different colours that happen to touch. Clipped to the taper,
+      // so the shading runs out where the stone does.
+      c.globalAlpha = .16; c.fillStyle = '#232c28';
+      c.fillRect(X + (L < 0 ? 0 : -17) * u, Y - 58 * u, 17 * u, 46 * u);
+      c.globalAlpha = .26;
+      c.fillRect(X + (L < 0 ? 7 : -17) * u, Y - 58 * u, 10 * u, 46 * u);
+      c.globalAlpha = .16; c.fillStyle = '#fffbe4';
+      c.fillRect(X + (L < 0 ? -17 : 7) * u, Y - 58 * u, 10 * u, 46 * u);
+      c.globalAlpha = 1;
+      c.restore();
+      // the silhouette edge the sun actually strikes: one thin line, not a face
+      c.globalAlpha = .55;
+      poly(c, [[X + L * 16 * u, Y - 12 * u], [X + L * 13 * u, Y - 58 * u],
+               [X + L * 11.9 * u, Y - 58 * u], [X + L * 14.7 * u, Y - 12 * u]], STONE.rim);
+      c.globalAlpha = 1;
       // a string course round the shaft, and slits to shoot out of
+      aoBand(c, X - 15 * u, Y - 44 * u, 30 * u, 6 * u, 1, .34);
       block(c, X - 15 * u, Y - 48 * u, 30 * u, 4 * u, STONE.mid2, STONE.lit);
       for (const sx of [-1, 1]){
         const slx = X + sx * 8 * u;
         c.fillStyle = '#3f4440'; c.fillRect(slx - 1.5 * u, Y - 26 * u, 3 * u, 7 * u);
+        // the reveal: a slit is cut THROUGH a wall, so one jamb is lit and the
+        // far one is in shadow
+        c.fillStyle = STONE.lit; c.fillRect(slx + L * 1.5 * u - (L < 0 ? .8 * u : 0), Y - 26 * u, .8 * u, 7 * u);
         c.fillStyle = STONE.deep; c.fillRect(slx - 2.8 * u, Y - 27.4 * u, 5.6 * u, 1.4 * u);
       }
       // the timber hoarding it fights from, overhanging the side the enemy is on
       const hx = X + dir * 13 * u, hy = Y - 62 * u;
-      block(c, X - 14 * u, hy, 28 * u, 10 * u, WOOD.mid, WOOD.lit);
+      timber(c, X - 14 * u, hy, 28 * u, 10 * u, u, st.ord * 3.3 + 7);
+      ironStrap(c, X - 14 * u, hy + 6.6 * u, 28 * u, 1.8 * u, u, true);
+      // the overhang, in the same timber. It was two flat wedges of orange —
+      // the return face of a box of planks, so it gets the planks and the pale
+      // sawn ends of them.
       poly(c, [[hx, hy], [hx + dir * 9 * u, hy + 2 * u], [hx + dir * 9 * u, hy + 9 * u], [hx, hy + 10 * u]], WOOD.dark);
+      c.save();
+      clipPoly(c, [[hx, hy], [hx + dir * 9 * u, hy + 2 * u], [hx + dir * 9 * u, hy + 9 * u], [hx, hy + 10 * u]]);
+      timber(c, hx - (dir < 0 ? 9 * u : 0), hy + 1.4 * u, 9 * u, 8.2 * u, u, st.ord * 3.3 + 11);
+      c.globalAlpha = .30; c.fillStyle = '#241a0e';
+      c.fillRect(hx - (dir < 0 ? 9 * u : 0), hy, 9 * u, 11 * u);
+      c.globalAlpha = 1;
+      c.restore();
+      endGrain(c, hx + dir * 9 * u - (dir < 0 ? 0 : 1.6 * u), hy + 2.4 * u, 1.6 * u, 6.2 * u, u);
       poly(c, [[hx, hy], [hx + dir * 9 * u, hy + 2 * u], [hx + dir * 9 * u, hy + 3.5 * u], [hx, hy + 1.6 * u]], WOOD.lit);
-      for (let i = 0; i < 3; i++)                        // the props under it
+      // and the dark it casts on the stone it is bolted to
+      aoBand(c, X - 15 * u, hy + 9.6 * u, 30 * u, 3.4 * u, 1, .34);
+      for (let i = 0; i < 3; i++){                       // the props under it
         block(c, X - 11 * u + i * 9 * u, hy + 10 * u, 2.4 * u, 5 * u, WOOD.dark);
+        endGrain(c, X - 11 * u + i * 9 * u, hy + 14.2 * u, 2.4 * u, .9 * u, u);
+      }
       towerBands(c, X, Y, u, towerRanks(G.sides[st.side]));
       crown(c, X, Y - 68 * u, 32 * u, u, 5, WEAR(st), stSeed(st));
       battleDamage(c, st, X, Y - 56 * u, 26 * u, 44 * u, u);
