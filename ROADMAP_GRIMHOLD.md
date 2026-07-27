@@ -151,20 +151,27 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **The pedlar buys** — 190 gold for a boon you never use. Not the ones you paid
   for in blood; those are between you and the stone. *(batch 16)*
 
+- **The Warlock wants the bodies too** — while a caster lives, the nearest body
+  it can see starts to stir, and two turns later gets up wearing your friend's
+  name. Kill the caster or go back and lay them to rest; both stop it, and the
+  rites cost the same action the blade did. *(batch 17)*
+- **A liar that gets a second chance** — a sprung liar nobody is looking at, that
+  nobody has managed to wound, sinks back into being furniture on whatever
+  square it is standing on. Hurt it once and it has lost the trick. *(batch 17)*
+
 ---
 
 ## Next up
 
-1. **The Warlock should want the bodies too.** Taking a friend's blade back is
-   the party's half of it. A sorcerer raising one, after a turn or two of
-   warning, would make leaving them where they fell a real risk instead of just
-   a missed pickup.
-2. **A liar that gets a second chance.** Every liar springs once and is then an
-   ordinary monster. One that could sink back into being furniture if it lost
-   sight of you would be genuinely unsettling.
-3. **Gambler's Coffin.** A room feature: roll a die, skull pays, black shield
+1. **Gambler's Coffin.** A room feature: roll a die, skull pays, black shield
    opens it. Repeatable, stakes climbing each pull. The last unbuilt gamble on
    the list, and the board now has the vocabulary for it.
+2. **The pedlar wants his own screen.** He lifts curses, buys back blood tolls
+   and now buys boons. That is a coherent identity — the place regret gets
+   undone — and it has been accreting one row at a time inside the Coin tab.
+3. **More monsters.** The bestiary has not grown since batch 5 while everything
+   around it has. A spider that webs a square, a hellhound breathing down a
+   line, a chained thing that cannot leave its room.
 
 ## Backlog, roughly in order of value
 
@@ -174,9 +181,6 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 ### Roguelike depth
 - **Vault variants.** A vault that is trapped, or one whose key is held by a
   champion that flees.
-- **More monsters.** Giant rat swarm, hellhound (breath down a line), spider
-  (webs a square you must spend a turn cutting free of), a chained thing that
-  cannot leave its room but hits like the end of the world.
 - **Floor themes** beyond modifiers: a flooded floor (movement costs double in
   water), a collapsing floor (squares fall in over time), a lightless floor where
   only carried torches matter.
@@ -188,6 +192,16 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   saying `6/8 · BUTCHERY` would make the thing you are climbing toward concrete.
 
 ### New ideas the batch turned up
+- **A wired-up ticker needs a turn-loop test.** Both new tickers passed their
+  own tests with the `endZargonTurn` call deleted, because the tests called them
+  directly. Anything hung off the turn loop wants one test that drives
+  `endZargonTurn` and watches the effect — the same gap `drawBody` had.
+- **The dead are becoming a resource both sides want.** The party takes the
+  blade; the Warlock takes the body. A third claim — a hero who could be
+  carried out and revived between floors, at a price — would close the triangle.
+- **A liar that hides is a horror mechanic without a horror payoff.** It sinks
+  back silently. A footprint, a moved chest, something that says *it was not
+  there before* would be worth more than the hiding itself.
 - **Everything dangerous pulses; nothing safe does.** That fell out of the
   disarmed trap and is worth making a rule. The lying furniture is the one
   thing that breaks it deliberately, which is exactly why it works.
@@ -196,9 +210,6 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   `springTrap` mid-stride. It clears the room's traps and checks the hero's
   square before asserting anything else. Every test driving `heroWalk` wants
   both — a path derived from the room, and proof the hero got there.
-- **The pedlar is becoming the regret shop.** He lifts curses, buys back blood
-  and now buys boons. That is a coherent identity worth leaning into rather
-  than letting it accrete: he should probably have his own screen, not a row.
 - **The paint recorder is now the way art gets tested.** Four batches have used
   it. Anything drawn conditionally should be asserted through it rather than
   through "draw() did not throw", which passes either way.
