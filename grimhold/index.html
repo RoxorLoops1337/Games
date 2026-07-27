@@ -37,6 +37,8 @@
     padding:4px 10px;font-size:11.5px;letter-spacing:.08em;display:flex;align-items:center;gap:5px;color:var(--ink)}
   .pill.gold{color:var(--gold2);border-color:rgba(216,168,60,.45)}
   .pill.fate{color:#ccb8ff;border-color:rgba(154,134,224,.5)}
+  .pill.eye{color:#e8a99f;border-color:rgba(176,58,44,.45)}
+  .pill.eye.hot{color:#ffd9d1;border-color:rgba(224,80,60,.9);box-shadow:0 0 14px rgba(176,58,44,.5)}
   #menubtn{pointer-events:auto;width:34px;height:34px;border-radius:11px;display:grid;place-items:center;
     font-size:15px;background:rgba(20,17,13,.85);border:1px solid var(--line);color:var(--ink)}
 
@@ -193,6 +195,7 @@
     <div id="qname">Grimhold<b>The Trial</b></div>
     <div class="pill gold" id="goldpill">◈ <span id="goldn">0</span></div>
     <div class="pill fate" id="fatepill">✦ <span id="faten">0</span></div>
+  <div class="pill eye" id="wrathpill" style="display:none">👁</div>
   <div class="pill" id="turnpill">Turn <span id="turnn">1</span></div>
     <div id="menubtn">☰</div>
   </div>
@@ -743,6 +746,7 @@ function attackDice(h, target){
     if (boonHas('executioner') && target.bp <= 1) n += 2;
   }
   if (boonHas('bloodprice')) n += 2;
+  if (h.picks) n += h.picks.filter(p => p === 'hand').length;
   if (h.cursed) n = Math.max(1, n - 1);
   return n;
 }
@@ -752,7 +756,9 @@ function defendDice(h){
   for (const g in h.gear) if (h.gear[g] && GEAR[g] && GEAR[g].def) n += GEAR[g].def;
   if (h.buffs && h.buffs.rockskin) n += 2;
   if (boonHas('ironskin')) n += 1;
-  return n;
+  if (h.picks) n += h.picks.filter(p => p === 'guard').length;
+  if (curseHas('frail')) n -= 1;
+  return Math.max(0, n);
 }
 function moveSlow(h){
   let s = 0;
@@ -778,6 +784,7 @@ function startQuest(qi, def, seed){
     searched: new Array(ROOMS.length).fill(0), trapSearched: new Array(ROOMS.length).fill(0),
     deck: TREASURE_DECK.map((_,i)=>i), deckAt:0,
     itemsFound:[], collected:0, npcFreed:false, bossDead:false, carrier:null, pot:0, fate:1,
+    wrath:0, wrathAt:0, lastStriker:null,
     log:[], activeId:null, escaped:false,
   };
   // shuffle the treasure deck with the quest seed
@@ -870,7 +877,13 @@ function startQuest(qi, def, seed){
   const keyBearer = Q.actors.some(a => a.elite && roomAt(a.x, a.y) !== q.vault);
   if (q.vault !== undefined && q.vault >= 0 && keyBearer){
     Q.vault = q.vault;
-    for (const k in Q.doors) if (Q.doors[k].rid === Q.vault) Q.doors[k].locked = true;
+    // A vault is locked, not hidden: stacking a secret door on top of the lock
+    // is two obstacles wearing one door, and you can read neither of them.
+    for (const k in Q.doors){
+      const d = Q.doors[k];
+      if (d.rid !== Q.vault) continue;
+      d.locked = true; d.secret = false; d.found = true;
+    }
     // and it is worth breaking into
     const spots = roomTiles(Q.vault).filter(([x,y]) => !furnAt(x,y) && !actorAt(x,y));
     for (let i = 0; i < Math.min(3, spots.length); i++){
@@ -939,7 +952,8 @@ function torchRadius(){
   let r = TORCH;
   if (boonHas('torchbearer')) r += 3;
   if (modHas('dark')) r = Math.max(2, r - 4);
-  return r;
+  if (curseHas('blind')) r -= 2;
+  return Math.max(2, r);
 }
 
 function recomputeVision(){
@@ -3379,24 +3393,24 @@ function springTrap(h, tr, cont){
     if (h.gear.rope){
       say(`${h.name} drops into a pit — and is out again on the rope.`, 'bad');
       spark(h.x, h.y, 14, '#6b5a3c');
-      hurt(h, 1, () => later(220, cont));
+      hurt(h, 1 + (curseHas('thin')?1:0), () => later(220, cont));
       return;
     }
     say(`${h.name} falls into a pit! −1 Body Point, and there the movement ends.`, 'bad');
     spark(h.x, h.y, 18, '#4a3a28');
     h.moveLeft = 0;
-    hurt(h, 1, () => later(260, cont));
+    hurt(h, 1 + (curseHas('thin')?1:0), () => later(260, cont));
   } else if (tr.t === 'spear'){
     say(`Spears burst from the wall! ${h.name} loses 2 Body Points.`, 'bad');
     spark(h.x, h.y, 20, '#c8ccd2', { spd:.02 });
-    hurt(h, 2, () => later(260, cont));
+    hurt(h, 2 + (curseHas('thin')?1:0), () => later(260, cont));
   } else {
     say(`A block of stone crashes down — 3 Body Points, and the way is shut.`, 'bad');
     spark(h.x, h.y, 26, '#6a6258', { spd:.018 });
     const back = lastFreeNeighbour(h);
     h.moveLeft = 0;
     if (back) slide(h, back[0], back[1], 130, null);
-    hurt(h, 3, () => later(280, cont));
+    hurt(h, 3 + (curseHas('thin')?1:0), () => later(280, cont));
   }
 }
 function lastFreeNeighbour(h){
@@ -3453,6 +3467,7 @@ function strikeReason(h, m, code){
 function doAttack(h, m){
   if (!canStrike(h, m)) return false;
   h.acted = true;
+  G.q.lastStriker = h.id;
   h.facing = m.x > h.x ? 1 : m.x < h.x ? -1 : h.facing;
   setMood('fight');
   const n = attackDice(h, m);
@@ -3579,6 +3594,11 @@ function kill(a){
     hitStop(60);
     say(`${a.name} falls.`, 'good');
     G.q.kills = (G.q.kills || 0) + 1;
+    const slayer = G.q.lastStriker && livingHeroes().find(x => x.id === G.q.lastStriker);
+    if (slayer){
+      slayer.kills = (slayer.kills || 0) + 1;
+      if (G.run && lessonDue(slayer)) later(700, () => showLesson(slayer));
+    }
     if (a.elite){
       G.q.pot = (G.q.pot || 0) + 30;
       addFate(1, `${a.name} put down`);
@@ -3625,7 +3645,10 @@ function beginHeroActivation(h){
   focusOn(h.x, h.y);
   if (!h.rolled){
     const a = 1+ri(6), b = 1+ri(6);
-    const total = Math.max(1, a + b - moveSlow(h) + (boonHas('swiftboots') ? 1 : 0));
+    let total = a + b - moveSlow(h) + (boonHas('swiftboots') ? 1 : 0);
+    if (h.picks) total += h.picks.filter(p => p === 'fleet').length*2;
+    if (curseHas('heavy')) total -= 1;
+    total = Math.max(1, total);
     showMoveDice(a, b, () => {
       h.rolled = true; h.moveLeft = total;
       refreshField(); renderHUD();
@@ -3772,6 +3795,11 @@ function monsterAct(m, done){
 function endZargonTurn(){
   if (G.q.over) return;
   G.q.turn++;
+  stirWrath(1, 'time');
+  if (curseHas('watched') && G.q.turn % 6 === 0){
+    const hs2 = livingHeroes();
+    if (hs2.length){ say('Marked. Something finds you again.', 'bad'); spawnWanderer(hs2[ri(hs2.length)]); }
+  }
   if (modHas('hunted') && G.q.turn % 4 === 0){
     const hs = livingHeroes();
     if (hs.length){
@@ -3844,6 +3872,7 @@ function searchTreasure(){
   if (monstersOf().some(m => roomAt(m.x,m.y) === rid)){ say('Not with monsters in the room.', 'bad'); return; }
   if (G.q.searched[rid]){ say('This room has been picked over already.', 'bad'); return; }
   h.acted = true; G.q.searched[rid] = 1;
+  stirWrath(3, 'rummaging');
   sfx('search');
   const qf = G.q.furn.find(f => f.r === rid && f.quest && !f.taken);
   if (qf){
@@ -3956,7 +3985,9 @@ function applyTreasure(card, h){
     let n = card.n;
     if (boonHas('luckyfind')) n = Math.round(n*1.5);
     if (modHas('wealthy')) n *= 2;
+    if (curseHas('greedy')) n = Math.round(n*.75);
     card = Object.assign({}, card, { n });
+    stirWrath(Math.ceil(n/60), 'coin');
     G.q.pot = (G.q.pot || 0) + n;
     sfx('gold'); floatText(h.x, h.y, '+' + n, '#f3d488');
     spark(h.x, h.y, 16, '#d8a83c', { spd:.014, up:.004 });
@@ -4123,6 +4154,7 @@ const CURSES = [
   { id:'wake',  ic:'🔔', t:'The stone screams',               d:'Everything on this floor knows where you are.' },
   { id:'rot',   ic:'🐍', t:'The offering was not for you',    d:'The hero is poisoned.' },
   { id:'toll',  ic:'💀', t:'It takes its due',                d:'Half the coin in the pot, gone.' },
+  { id:'mark',  ic:'⛓',  t:'It puts a hand on you',            d:'A curse, and it travels with you.' },
 ];
 
 function altarTarget(){
@@ -4156,7 +4188,7 @@ function altarOutcome(kind, h, f){
       for (const tr of G.q.traps) tr.found = true;
       for (const k in G.q.doors) G.q.doors[k].found = true;
       break;
-    case 'clean': for (const x of heroes2){ x.poison = 0; delete x.cursed; } break;
+    case 'clean': for (const x of heroes2){ x.poison = 0; delete x.cursed; } liftCurse(); break;
     case 'coin':  G.q.pot = (G.q.pot || 0) + 150; break;
     case 'hoard': G.q.pot = (G.q.pot || 0) + 400; break;
     case 'boon': {
@@ -4172,11 +4204,26 @@ function altarOutcome(kind, h, f){
     }
     case 'wake':  for (const m of monstersOf()) m.awake = true; break;
     case 'rot':   h.poison = Math.max(h.poison || 0, 3); break;
+    case 'mark':  addCurse(); break;
     case 'toll':  G.q.pot = Math.floor((G.q.pot || 0)/2); break;
   }
   say(`${pick1.ic} ${pick1.t} — ${pick1.d}`, bad ? 'bad' : 'good');
   recomputeVision(); refreshField(); renderHUD(); checkQuestState();
   return { bad, outcome:pick1.id };
+}
+// A pact is the honest version of the curse: you know what you are taking.
+function altarPact(){
+  const h = activeHero(), f = altarTarget();
+  if (!h || !f || h.acted || busy() || !G.run) return false;
+  h.acted = true; f.used = true;
+  const id = addCurse();
+  if (!id){ say('The stone has nothing left to take from you.', ''); renderHUD(); return false; }
+  const opts = draftOptions();
+  if (opts.length) takeBoon(opts[0].id);
+  sfx('boss'); G.shake = 14;
+  spark(f.x, f.y, 28, '#9a86e0', { spd:.02, up:.004, glow:'rgba(154,134,224,.5)', r:1.8 });
+  renderHUD();
+  return true;
 }
 function useAltar(kind){
   const h = activeHero(), f = altarTarget();
@@ -4215,10 +4262,12 @@ function showAltar(){
     <div style="text-align:center">
       <button class="btn" id="mPray">Pray</button>
       <button class="btn red" id="mBleed" ${h.bp <= 2 ? 'disabled' : ''}>Bleed · 2 Body</button>
+      ${G.run ? `<button class="btn" id="mPact" style="border-color:rgba(154,134,224,.6);color:#ccb8ff">Make a pact · a curse for a boon</button>` : ''}
       <button class="btn ghost" id="mLeave">Leave it alone</button>
     </div>`);
   bindModal('#mPray',  () => { closeModal(); useAltar('pray'); });
   bindModal('#mBleed', () => { closeModal(); useAltar('bleed'); });
+  bindModal('#mPact',  () => { closeModal(); altarPact(); });
   bindModal('#mLeave', closeModal);
 }
 
@@ -4247,6 +4296,7 @@ function castSpell(h, key, target){
     return true;
   }
   if (sp.dice && target){
+    G.q.lastStriker = h.id;
     const atk = rollCombat(sp.dice);
     const skulls = countSkulls(atk);
     const def = sp.noDef ? [] : rollCombat(target.def);
@@ -4393,12 +4443,20 @@ function heroPortrait(id, w, h){
 function renderHUD(){
   if (HEADLESS || !G || !G.q) return;
   const q = questDef();
-  const mods = (q.mods || []).map(m => MOD(m).ic).join('');
+  const mods = (q.mods || []).map(m => MOD(m)).filter(Boolean).map(m => m.ic).join('');
   $('qname').innerHTML = `${q.name}${mods ? ' ' + mods : ''}<b>${q.sub}${
-    G.run && G.run.boons.length ? ' · ' + G.run.boons.map(b => BOON(b).ic).join('') : ''}</b>`;
+    G.run && G.run.boons.length ? ' · ' + G.run.boons.map(b => BOON(b).ic).join('') : ''}${
+    G.run && G.run.curses.length ? ' · ' + G.run.curses.map(c => CURSE_MARK(c).ic).join('') : ''}</b>`;
   $('goldn').textContent = (G.run ? G.run.gold : G.camp.gold) + (G.q.pot ? ' +' + G.q.pot : '');
   const fp = $('fatepill');
   if (fp){ fp.style.display = ''; $('faten').textContent = fateOf(); }
+  const wp = $('wrathpill');
+  if (wp){
+    const lvl = G.q.wrathAt || 0, next = WRATH_STEPS[lvl];
+    wp.style.display = ((G.q.wrath || 0) > 0 || next !== undefined) ? '' : 'none';
+    wp.textContent = '👁 ' + (next !== undefined ? Math.max(0, next - (G.q.wrath||0)) : '!');
+    wp.classList.toggle('hot', next !== undefined && (G.q.wrath||0) >= next - 4);
+  }
   $('turnn').textContent = G.q.turn + (q.turnLimit ? '/' + q.turnLimit : '');
   $('turnpill').classList.toggle('gold', !!q.turnLimit && G.q.turn > q.turnLimit - 6);
 
@@ -5093,6 +5151,136 @@ const META_UNLOCKS = [
   { id:'revive',    ic:'⚱',  cost:5, name:'Mentor’s Bargain',desc:'Once a run, a fallen hero returns at the next floor with 1 Body Point.' },
 ];
 
+/* ------------------------------------------------------------- 12e. CURSES */
+// A curse you carry, floor after floor, until you pay somebody to lift it.
+// Some of them are worth keeping — that is what makes taking one a decision.
+
+const CURSE_MARKS = [
+  { id:'frail',  ic:'🦴', name:'Brittle Bones', desc:'−1 defend die for every hero.' },
+  { id:'heavy',  ic:'⛓',  name:'Dragging Chain', desc:'−1 to every movement roll.' },
+  { id:'blind',  ic:'🕯', name:'Guttering Light', desc:'Your torches reach 2 squares less.' },
+  { id:'greedy', ic:'🪙', name:"Miser's Due",   desc:'Coin you find is worth a quarter less.' },
+  { id:'watched',ic:'👁', name:'Marked',        desc:'Something new arrives every sixth turn.' },
+  { id:'thin',   ic:'🩸', name:'Thin Skin',     desc:'Traps cut one Body Point deeper.' },
+];
+const CURSE_MARK = (id) => CURSE_MARKS.find(c => c.id === id);
+const curseHas = (id) => !!(G && G.run && G.run.curses && G.run.curses.includes(id));
+function addCurse(id){
+  if (!G.run) return null;
+  const free = CURSE_MARKS.filter(c => !G.run.curses.includes(c.id));
+  const c = id ? CURSE_MARK(id) : (free.length ? free[ri(free.length)] : null);
+  if (!c || G.run.curses.includes(c.id)) return null;
+  G.run.curses.push(c.id);
+  say(`${c.ic} ${c.name} — ${c.desc} It travels with you.`, 'bad');
+  return c.id;
+}
+function liftCurse(id){
+  if (!G.run || !G.run.curses.length) return null;
+  const which = id || G.run.curses[0];
+  const i = G.run.curses.indexOf(which);
+  if (i < 0) return null;
+  G.run.curses.splice(i, 1);
+  say(`${CURSE_MARK(which).name} is lifted.`, 'good');
+  return which;
+}
+
+/* ---------------------------------------------------- 12f. WHAT HEROES LEARN */
+// Kills buy a pick. Four floors deep the barbarian who has been doing the
+// killing is a different barbarian from the one who walked in.
+
+const LESSONS = [
+  { id:'hand',  ic:'🗡', name:'Weapon Hand', desc:'+1 attack die, always.' },
+  { id:'guard', ic:'🛡', name:'Guard',       desc:'+1 defend die, always.' },
+  { id:'vigour',ic:'❤',  name:'Vigour',      desc:'+2 maximum Body Points, and heal that much now.' },
+  { id:'fleet', ic:'👟', name:'Fleet',       desc:'+2 to your movement rolls.' },
+];
+const LESSON = (id) => LESSONS.find(l => l.id === id);
+const KILL_STEPS = [3, 7, 12, 18, 25];
+const lessonCount = (h) => (h.picks || []).length;
+function lessonDue(h){
+  const step = KILL_STEPS[lessonCount(h)];
+  return step !== undefined && (h.kills || 0) >= step;
+}
+function heroHas(h, id){ return !!(h.picks && h.picks.includes(id)); }
+function lessonOptions(h){
+  const pool = LESSONS.filter(l => (h.picks || []).filter(p => p === l.id).length < 2);
+  const out = [];
+  const c = pool.slice();
+  while (out.length < 3 && c.length) out.push(c.splice(ri(c.length), 1)[0]);
+  return out;
+}
+function takeLesson(h, id){
+  if (!LESSON(id) || !lessonDue(h)) return false;
+  h.picks = h.picks || [];
+  h.picks.push(id);
+  if (id === 'vigour'){ h.bpMax += 2; h.bp = Math.min(h.bpMax, h.bp + 2); }
+  say(`${h.name} learns ${LESSON(id).name}.`, 'good');
+  spark(h.x, h.y, 24, '#f3d488', { spd:.016, up:.005, glow:'rgba(243,212,136,.5)', r:1.6 });
+  sfx('win');
+  renderHUD();
+  return true;
+}
+function showLesson(h){
+  const opts = lessonOptions(h);
+  if (!opts.length) return;
+  G.q.lesson = { hero:h.id, opts:opts.map(o => o.id) };
+  modal(`<h2>${h.name} Has Been Busy</h2>
+    <div class="sub" style="margin:2px 0 0">${h.kills} kills</div>
+    <div class="rule"></div>
+    <p class="flavor">Something in the way they move has changed. Whatever they picked
+      up down here, they are keeping it.</p>
+    ${opts.map(o => `<div class="row">
+      <div class="ic">${o.ic}</div>
+      <div class="tx"><b>${o.name}</b><s>${o.desc}</s></div>
+      <button class="bu" data-lesson="${o.id}">Take</button>
+    </div>`).join('')}`);
+  bindAll('.bu[data-lesson]', el => { takeLesson(h, el.dataset.lesson); closeModal(); });
+}
+
+/* ----------------------------------------------- 12g. THE WARLOCK'S ATTENTION */
+// Time spent and coin taken both draw his eye. Greed should cost something.
+
+const WRATH_STEPS = [14, 28, 44];
+function stirWrath(n, why){
+  if (!G.q || G.q.over) return;
+  G.q.wrath = (G.q.wrath || 0) + n;
+  const step = WRATH_STEPS[G.q.wrathAt || 0];
+  if (step !== undefined && G.q.wrath >= step){
+    G.q.wrathAt = (G.q.wrathAt || 0) + 1;
+    warlockActs(G.q.wrathAt);
+  }
+  renderHUD();
+}
+function warlockActs(level){
+  const hs = livingHeroes();
+  if (!hs.length) return;
+  sfx('boss'); G.shake = 18;
+  if (level === 1){
+    say('The keep shifts. Something is sent for you.', 'bad');
+    const h = hs[ri(hs.length)];
+    spawnWanderer(h);
+    const born = monstersOf()[monstersOf().length - 1];
+    if (born) born.awake = true;
+  } else if (level === 2){
+    // seal the way you came
+    const open = Object.values(G.q.doors).filter(d => d.open);
+    if (open.length){
+      const d = open[ri(open.length)];
+      d.open = false; d.locked = false;
+      say('A door slams somewhere behind you, and the bolt goes across.', 'bad');
+      recomputeVision(); refreshField();
+    } else say('The stone groans. He knows where you are.', 'bad');
+  } else {
+    const h = hs.slice().sort((a,b) => b.bp - a.bp)[0];
+    say(`The Warlock's eye settles on ${h.name}.`, 'bad');
+    h.poison = Math.max(h.poison || 0, 2);
+    const born2 = hs[ri(hs.length)];
+    spawnWanderer(born2);
+    const m = monstersOf()[monstersOf().length - 1];
+    if (m && !m.affix){ applyAffix(m, AFFIXES[ri(AFFIXES.length)].id); m.awake = true; }
+  }
+}
+
 const boonHas = (id) => !!(G && G.run && G.run.boons && G.run.boons.includes(id));
 const modHas  = (id) => !!(G && G.q && G.q.def && G.q.def.mods && G.q.def.mods.includes(id));
 const metaHas = (id) => !!(G && G.meta && G.meta.unlocks && G.meta.unlocks.includes(id));
@@ -5205,8 +5393,10 @@ function makeFloor(depth, R){
   const mods = [];
   const modChance = Math.min(.85, .18 + depth*.07);
   const pool = MODIFIERS.filter(m => (m.from || 1) <= depth).map(m => m.id);
-  if (R() < modChance) mods.push(pool.splice(Math.floor(R()*pool.length),1)[0]);
-  if (depth >= 4 && R() < modChance*.5) mods.push(pool.splice(Math.floor(R()*pool.length),1)[0]);
+  // splice on an empty pool yields undefined — never let that reach the floor
+  const draw = () => pool.length ? pool.splice(Math.floor(R()*pool.length), 1)[0] : null;
+  if (R() < modChance){ const m = draw(); if (m) mods.push(m); }
+  if (depth >= 4 && R() < modChance*.5){ const m = draw(); if (m) mods.push(m); }
 
   // --- objective ---------------------------------------------------------
   const kinds = bossFloor ? ['slay']
@@ -5303,6 +5493,7 @@ function newRun(partyIds){
   return {
     heroes, party:partyIds.slice(), depth:0, boons:[], gold: metaHas('warchest') ? 250 : 0,
     kills:0, floorsCleared:0, revived:false, over:false, fate:1, nextDef:null, stake:0, doubles:0,
+    curses:[],
     seed: (Math.random()*1e9)|0,
   };
 }
@@ -5362,7 +5553,7 @@ function beginFloor(){
   if (!HEADLESS){ $('scTitle').classList.remove('on'); $('hud').classList.add('on'); }
   setMood('explore');
   say(`Depth ${G.run.depth}: ${def.name}.`, '');
-  for (const m of def.mods) say(`${MOD(m).ic} ${MOD(m).name} — ${MOD(m).desc}`, 'bad');
+  for (const m of def.mods){ const M = MOD(m); if (M) say(`${M.ic} ${M.name} — ${M.desc}`, 'bad'); }
   banner('DEPTH ' + G.run.depth, def.name);
   renderHUD(); renderLog();
   saveRun();
@@ -5471,6 +5662,7 @@ const PEDLAR = [
   { id:'holy',   ic:'⚱',  name:'Holy Water',     cost:170, desc:'Three dice against one undead thing.' },
   { id:'mend',   ic:'✚',  name:'Field Surgery',  cost:200, desc:'Restore 3 Body Points to every living hero, now.' },
   { id:'leather',ic:'🦺', name:'Leather Armour', cost:260, desc:'+1 defend die for one hero who has none.' },
+  { id:'absolve',ic:'⛓',  name:'Absolution',     cost:320, desc:'Lift one curse you are carrying.' },
 ];
 function buyPedlar(id){
   if (!G.run) return false;
@@ -5483,6 +5675,9 @@ function buyPedlar(id){
     who.items[id] = (who.items[id]||0) + 1;
   } else if (id === 'mend'){
     for (const h of alive) h.bp = Math.min(h.bpMax, h.bp + 3);
+  } else if (id === 'absolve'){
+    if (!G.run.curses.length) return false;
+    liftCurse();
   } else {
     const who = alive.find(h => !h.armour && h.id !== 'wizard');
     if (!who) return false;
@@ -5514,7 +5709,7 @@ function showDraft(){
         ${draftState.taken ? 'disabled' : ''}>${draftState.taken === b.id ? 'Taken' : 'Take'}</button>
     </div>`).join('');
   const stairs = draftState.stairs.map((d, i) => {
-    const mods = (d.mods || []).map(m => `${MOD(m).ic} ${MOD(m).name}`).join(' · ');
+    const mods = (d.mods || []).map(m => MOD(m)).filter(Boolean).map(m => `${m.ic} ${m.name}`).join(' · ');
     return `<div class="qrow" data-stair="${i}">
       <div class="n">⬇</div>
       <div class="tx"><b>${d.name}</b><s>${d.objective.label}<br>
@@ -5909,7 +6104,7 @@ globalThis.HQ = {
   idx, inB, isFloor, isRock, roomAt, roomTiles, dkey, doorAt, doorBetween, linked, linkedIgnoringDoors,
   hasLOS, walkField, walkFieldOpen, tracePath, actorAt, furnAt, blocked, trapAt, trapBlocks, bodyPassable,
   newG, newCampaign, mkHero, startQuest, launchQuest, boot, setRng,
-  BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes,
+  BOONS, MODIFIERS, META_UNLOCKS, PEDLAR, SPAWN_TABLE, BOSS_TABLE, questDef, partyHeroes, BOON, MOD,
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
   draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
   floorChoices, chooseFloor, dblStake, canDouble, doubleOrNothing, settleStake,
@@ -5922,7 +6117,10 @@ globalThis.HQ = {
   AFFIXES, AFFIX, applyAffix, isWarded, tickPoison, fateOf, addFate, canReroll, spendReroll, resolveDice, diceShape,
   castSpell, knownSpells, spellReady, searchTreasure, searchTraps, disarmTrap, disarmTarget,
   quaffPotion, useHolyWater, applyTreasure, spawnWanderer, openDoorAt, springTrap, giveQuestItem,
-  BLESSINGS, GREATER, CURSES, altarTarget, altarOutcome, useAltar, showAltar,
+  BLESSINGS, GREATER, CURSES, altarTarget, altarOutcome, useAltar, showAltar, altarPact,
+  CURSE_MARKS, CURSE_MARK, curseHas, addCurse, liftCurse,
+  LESSONS, LESSON, KILL_STEPS, lessonDue, lessonOptions, takeLesson, showLesson, heroHas,
+  WRATH_STEPS, stirWrath, warlockActs,
   pushOdds, canPush, pushLuck, bankPush, showPush,
   objectiveReady, needsEscape, onStairs, checkQuestState, questOver, showQuestEnd,
   recomputeVision, revealRoom, tileVisible, tileSeen, bakeDungeon, freeTile, freeFurnSpot,
