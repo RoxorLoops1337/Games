@@ -4561,6 +4561,120 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(Math.abs(big[0]) > Math.abs(small[0]) * 5, 'a big thing throws a longer shadow than a small one');
   t.ok(IB.shadowOff(0, 0)[0] === 0, 'and something with no footprint throws nothing');
 
+  // How big a body's shadow is, which was typed in at the call site as
+  // `(u.kind === 'cannon' ? 9 : 7) * sc` — two numbers for six kinds and a
+  // hero. Measured, driving every one of them through drawUnit:
+  //
+  //   what          collision r   shadow rx
+  //   Levy          .42           8.3
+  //   Footman       .48           8.3
+  //   Caster        .44           8.3
+  //   Cannon        .62           13.0
+  //   Siege Ogre    .70           11.2
+  //   a hero        .62           12.3
+  //
+  // The Siege Ogre has the biggest footprint in the game and is drawn bigger
+  // than anything else on the bridge, and it cast a SMALLER shadow than a
+  // Cannon. The three light bodies have three different footprints and one
+  // identical shadow. The control was projShadow, forty lines below, which
+  // computes from height and takes four distinct values across four heights.
+  {
+    IB.newMatch({ diff:'veteran', seed:9900 });
+    IB.MY = 0;
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+    const kinds = ['grunt', 'melee', 'caster', 'cannon', 'super'];
+    const rows = kinds.map(k => {
+      G.units.length = 0;
+      const u = IB.spawnUnit(0, k, { x:60, y:0, paid:true });
+      IB.rebuildGrid();
+      return { k, r:IB.UNITS[k].r, rx:IB.bodyShadowR(u), u };
+    });
+    t.ok(rows.every(r => r.rx > 0), 'every body on the bridge throws something');
+    t.ok(new Set(rows.map(r => +r.rx.toFixed(3))).size === kinds.length,
+      'and five kinds throw five different shadows (' +
+      new Set(rows.map(r => +r.rx.toFixed(1))).size + ' of ' + kinds.length + ')');
+    // The direction of the ladder, stated on its own — this is the one that was
+    // upside down at the top.
+    const byFoot = rows.slice().sort((a, b) => a.r - b.r);
+    let wrong = 0;
+    for (let i = 1; i < byFoot.length; i++) if (byFoot[i].rx <= byFoot[i - 1].rx) wrong++;
+    t.ok(wrong === 0, 'a bigger footprint is a bigger shadow, all the way up (' + wrong + ' that were not)');
+    const ogre = rows.find(r => r.k === 'super'), gun = rows.find(r => r.k === 'cannon');
+    t.ok(IB.UNITS.super.r > IB.UNITS.cannon.r, 'an ogre stands on more deck than a cannon');
+    t.ok(ogre.rx > gun.rx,
+      'so it casts the bigger shadow (' + ogre.rx.toFixed(1) + ' vs ' + gun.rx.toFixed(1) + ')');
+    // It reads the number the SIMULATION uses for where a body stands, so the
+    // picture and the separation push cannot disagree about a body's footprint.
+    t.ok(IB.bodyShadowR({ r:1 }) > IB.bodyShadowR({ r:.5 }) * 1.9,
+      'and it is proportional to that footprint, not a ladder of its own');
+    // A hero is a body too.
+    {
+      const s0 = G.sides[0];
+      if (!s0.heroes.length){ const nh = IB.makeHero(0, Object.keys(IB.CLS)[0]); s0.heroes.push(nh); IB.enterLane(nh); }
+      const h = s0.heroes[0];
+      t.ok(h.r > 0 && IB.bodyShadowR(h) > 0, 'a hero has a footprint and throws one too (' + h.r + ')');
+    }
+
+    // WIRED: what actually reached the canvas, not what the helper returns.
+    {
+      G.units.length = 0;
+      const u = IB.spawnUnit(0, 'super', { x:60, y:0, paid:true });
+      IB.rebuildGrid();
+      const st = CTX.__stats;
+      st.ellipses = [];
+      IB.drawUnit(CTX, u);
+      const dark = st.ellipses.filter(e => /rgba\(0, ?0, ?0/.test(String(e.fill)));
+      t.ok(dark.length > 0, 'the ogre really put a shadow on the canvas (' + dark.length + ')');
+      t.ok(Math.abs(dark[0].rx - IB.bodyShadowR(u)) < 1e-6,
+        'at exactly the size the footprint asks for (' + dark[0].rx.toFixed(2) + ')');
+      // Stated as a fact about the picture, not as the constant recomputed:
+      // the first version asserted ry === rx * BODY_SHADOW.squash, which is the
+      // same number on both sides and passed with squash set to 1.
+      t.ok(dark[0].ry > 0 && dark[0].ry < dark[0].rx * .7,
+        'and flattened onto the deck rather than drawn as a ball (' +
+        dark[0].rx.toFixed(1) + ' by ' + dark[0].ry.toFixed(1) + ')');
+      // It falls away from the sun, like everything else that throws one.
+      const p = IB.lp(u.x, u.y);
+      t.ok(Math.sign(dark[0].x - p[0]) === IB.shadowSide(),
+        'on the side the sun is not');
+      // and it is all in world scale — nothing pinned to a pixel
+      const was = IB.cam.z;
+      IB.cam.z = IB.cam.tz = 2;
+      const big = IB.bodyShadowR(u);
+      IB.cam.z = IB.cam.tz = 1;
+      t.ok(Math.abs(big - IB.bodyShadowR(u) * 2) < 1e-6, 'and it zooms with everything else');
+      IB.cam.z = IB.cam.tz = was;
+    }
+
+    // The control, untouched: the one shadow in the game that was already
+    // computed rather than typed in.
+    {
+      G.projs.length = 0;
+      IB.shoot({ x:58, y:0, magic:false }, { x:70, y:0, dead:false, r:.5, side:1 }, () => {}, '#12ff34', 'shaft');
+      const pr = G.projs[0];
+      const st = CTX.__stats;
+      const at = (z) => { pr.z = z; st.ellipses = []; IB.projShadow(CTX, pr);
+        return st.ellipses.length ? +st.ellipses[0].rx.toFixed(3) : 0; };
+      const seen = [0, 1, 3, 6].map(at);
+      t.ok(new Set(seen).size === seen.length,
+        'a shot still shrinks its shadow the higher it flies (' + seen.join(' → ') + ')');
+      G.projs.length = 0;
+    }
+
+    // Nothing new on a body, and drawing it moves nothing.
+    {
+      G.units.length = 0;
+      const u = IB.spawnUnit(0, 'melee', { x:60, y:0, paid:true });
+      IB.rebuildGrid();
+      const h0 = IB.netHash();
+      const before = [u.x, u.y, u.r, u.hp].join(',');
+      IB.drawUnit(CTX, u); IB.drawUnit(CTX, u);
+      t.ok([u.x, u.y, u.r, u.hp].join(',') === before, 'drawing a body does not move it');
+      t.ok(IB.netHash() === h0, 'nor the lockstep hash');
+    }
+    G.units.length = 0;
+  }
+
   // The one solid thing in the game that threw nothing: an arrow in flight.
   // A projectile carries a real height — a shaft leaves a body at .8, a turret
   // lobs one from 2.6, and it falls the whole way — and none of that was in
