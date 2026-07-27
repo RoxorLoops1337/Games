@@ -48,20 +48,25 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
 - **The Warlock's attention** — a meter in the HUD that fills with turns spent,
   coin taken and rooms rummaged. At 14/28/44 he sends something, bolts a door
   behind you, then marks your healthiest hero and sends a champion. *(batch 4)*
+- **Four new monsters** — Cave Troll (knits itself back together unless the wound
+  was fire), Wraith (steel goes straight through), Skeleton Archer (shoots and
+  keeps its distance), Cultist (screams and wakes its whole room, and makes
+  anything beside it braver). *(batch 5)*
+- **The Book** — the last ten descents: depth, party, boons, curses, and what
+  finally did it, by name. *(batch 5)*
 
 ---
 
 ## Next up
 
-1. **A run history screen.** The last ten runs — depth, party, boons, curses, and
-   what finally did it. Losing should still leave a story behind, and it is the
-   cheapest thing that makes a lost run feel like it counted.
-2. **New monsters.** The roster is the original eight. Add a cave troll that
-   regenerates unless the wound was fire, a wraith only magic and the Spirit
-   Blade can touch, a skeleton archer, and a cultist that wakes its whole room.
-3. **Trial rooms.** A door that announces its terms before you open it: survive
-   five turns, or kill everything without taking a wound, for a guaranteed relic.
-   Optional, so it is a decision rather than a tax.
+1. **Trial rooms.** A door that announces its terms before you open it: survive
+   five turns inside, or kill everything in it without taking a wound. Optional,
+   so it is a decision rather than a tax. Pays a boon and Fate.
+2. **Relics.** Found, not drafted — in vaults and from trials, with two visible
+   slots so taking one means dropping one. The first thing in the game you own
+   rather than roll.
+3. **Curses that pay.** Some marks should carry an upside so keeping one is a
+   real option: Marked draws monsters but doubles the Fate champions drop.
 
 ## Backlog, roughly in order of value
 
@@ -90,16 +95,14 @@ Keep batches to 2–3 items. A shipped, tested feature beats four half-built one
   guaranteed relic.
 - **Warlock's attention meter.** Fills with time spent and coin taken; at
   thresholds he intervenes — reinforcements, a sealed door, a curse on a hero.
-- **New monsters.** Giant rat swarm, cave troll (regenerates unless burned),
-  wraith (only magic and the Spirit Blade bite), hellhound (breath down a line),
-  spider (webs a square), cultist (buffs the room), skeleton archer (ranged).
+- **More monsters.** Giant rat swarm, hellhound (breath down a line), spider
+  (webs a square you must spend a turn cutting free of), a chained thing that
+  cannot leave its room but hits like the end of the world.
 - **Floor themes** beyond modifiers: a flooded floor (movement costs double in
   water), a collapsing floor (squares fall in over time), a lightless floor where
   only carried torches matter.
 
 ### Feel
-- **A run history screen** — the last ten runs, depth, party, boons, what killed
-  you. Losing should still produce a story.
 - **Kill-streak flourish** — consecutive kills without taking damage escalate the
   banner and the music.
 - **Boss intros** — a one-line title card when a boss's room opens.

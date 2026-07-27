@@ -325,6 +325,10 @@ const MONSTERS = {
   gargoyle:{ name:'Gargoyle',      move:6,  atk:4, def:5, bp:3, mind:4, gold:110, col:'#6a6459', col2:'#403c34', size:1.06 },
   sorcerer:{ name:'Chaos Sorcerer',move:6,  atk:3, def:3, bp:3, mind:4, gold:90,  col:'#5a2f5e', col2:'#331a36', size:.9, caster:true },
   ogre:    { name:'Ogre Champion', move:6,  atk:4, def:5, bp:4, mind:2, gold:130, col:'#9a7357', col2:'#63472f', size:1.14 },
+  troll:   { name:'Cave Troll',    move:6,  atk:4, def:4, bp:5, mind:2, gold:120, col:'#6f7a58', col2:'#454d33', size:1.10, regen:true },
+  wraith:  { name:'Wraith',        move:8,  atk:3, def:2, bp:2, mind:4, gold:100, col:'#8fa0b8', col2:'#4a5568', size:.95, undead:true, ethereal:true },
+  archer:  { name:'Skeleton Archer',move:6, atk:2, def:2, bp:1, mind:0, gold:35,  col:'#d8d0b8', col2:'#948a72', size:.8, undead:true, shooter:true },
+  cultist: { name:'Cultist',       move:8,  atk:2, def:2, bp:2, mind:3, gold:55,  col:'#6a2a3a', col2:'#3d1622', size:.88, herald:true },
 };
 
 /* ------------------------------------------------------------- the market */
@@ -2172,9 +2176,126 @@ function eyes(g, u, y, r, col){
   g.fillStyle = 'rgba(0,0,0,.7)';
   g.fillRect(-u*.10, y - r*1.1, u*.20, r*.6);
 }
+function drawTroll(g, u, m, t){
+  const d = MONSTERS.troll;
+  shadow(g, u, .36);
+  limb(g, -u*.13, u*.14, -u*.16, u*.32, u*.12, d.col2);
+  limb(g,  u*.13, u*.14,  u*.16, u*.32, u*.12, d.col2);
+  limb(g, -u*.24,-u*.04, -u*.34, u*.16, u*.10, d.col);      // long arms, knuckles down
+  limb(g,  u*.24,-u*.04,  u*.34, u*.16, u*.10, d.col);
+  torso(g, u, u*.27, u*.22, -u*.14, u*.18, d.col, d.col2);
+  g.fillStyle = 'rgba(255,255,255,.06)';
+  for (let i=0;i<3;i++) g.fillRect(-u*.18, -u*.08 + i*u*.08, u*.36, u*.02);
+  if (m && m.bp < m.bpMax){                                 // knitting back together
+    g.fillStyle = `rgba(140,220,120,${.10 + Math.sin(t*.006 + (m.bob||0))*.08})`;
+    g.beginPath(); g.arc(0, -u*.02, u*.30, 0, 6.284); g.fill();
+  }
+  headBall(g, u, -u*.24, u*.15, d.col);
+  g.fillStyle = d.col2;
+  g.beginPath(); g.arc(0,-u*.27, u*.15, Math.PI*1.02, Math.PI*1.98); g.fill();
+  eyes(g, u, -u*.25, u*.042, '#c8e070');
+  g.fillStyle = '#e8e0c8';                                   // underbite
+  g.beginPath(); g.moveTo(-u*.08,-u*.17); g.lineTo(-u*.05,-u*.07); g.lineTo(-u*.02,-u*.17); g.closePath(); g.fill();
+  g.beginPath(); g.moveTo( u*.08,-u*.17); g.lineTo( u*.05,-u*.07); g.lineTo( u*.02,-u*.17); g.closePath(); g.fill();
+  g.fillStyle = d.col2;                                      // hunched shoulders
+  g.beginPath(); g.ellipse(-u*.24,-u*.13, u*.10, u*.075, -.3, 0, 6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.24,-u*.13, u*.10, u*.075,  .3, 0, 6.284); g.fill();
+}
+function drawWraith(g, u, m, t){
+  const d = MONSTERS.wraith;
+  const drift = Math.sin(t*.0018 + (m.bob||0))*u*.05;
+  g.globalAlpha = .78;
+  g.fillStyle = 'rgba(0,0,0,.22)';
+  g.beginPath(); g.ellipse(0, u*.34, u*.24, u*.08, 0, 0, 6.284); g.fill();
+  g.save(); g.translate(0, drift);
+  // a shroud that frays into nothing at the hem
+  const grd = g.createLinearGradient(0, -u*.40, 0, u*.34);
+  grd.addColorStop(0, d.col); grd.addColorStop(.6, d.col2);
+  grd.addColorStop(1, 'rgba(40,50,66,0)');
+  g.fillStyle = grd;
+  g.beginPath();
+  g.moveTo(-u*.16, -u*.28);
+  g.quadraticCurveTo(-u*.30, u*.00, -u*.22, u*.34);
+  for (let i=0;i<4;i++){
+    const x = -u*.22 + i*u*.14;
+    g.quadraticCurveTo(x + u*.035, u*.24, x + u*.07, u*.34);
+    g.quadraticCurveTo(x + u*.105, u*.26, x + u*.14, u*.34);
+  }
+  g.quadraticCurveTo(u*.30, u*.00, u*.16, -u*.28);
+  g.closePath(); g.fill();
+  g.fillStyle = '#0c1018';                                   // an empty hood
+  g.beginPath(); g.ellipse(0, -u*.28, u*.15, u*.17, 0, 0, 6.284); g.fill();
+  const glow = .5 + Math.sin(t*.005 + (m.bob||0))*.5;
+  g.fillStyle = `rgba(150,200,255,${.5 + glow*.45})`;
+  g.beginPath(); g.ellipse(-u*.05,-u*.29, u*.032, u*.026, 0,0,6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.05,-u*.29, u*.032, u*.026, 0,0,6.284); g.fill();
+  g.restore();
+  g.globalAlpha = 1;
+}
+function drawArcher(g, u, m, t){
+  const d = MONSTERS.archer;
+  shadow(g, u, .24);
+  g.strokeStyle = d.col; g.lineWidth = u*.05; g.lineCap = 'round';
+  g.beginPath(); g.moveTo(-u*.06, u*.10); g.lineTo(-u*.10, u*.32); g.stroke();
+  g.beginPath(); g.moveTo( u*.06, u*.10); g.lineTo( u*.10, u*.32); g.stroke();
+  g.strokeStyle = '#6b4a2c'; g.lineWidth = u*.035;           // the bow
+  g.beginPath(); g.arc(u*.22, -u*.10, u*.24, -1.15, 1.15); g.stroke();
+  g.strokeStyle = 'rgba(240,236,220,.75)'; g.lineWidth = u*.014;
+  g.beginPath(); g.moveTo(u*.12, -u*.32); g.lineTo(u*.06,-u*.10); g.lineTo(u*.12, u*.12); g.stroke();
+  g.fillStyle = d.col;
+  g.beginPath(); g.moveTo(-u*.13,-u*.14); g.lineTo(u*.13,-u*.14);
+  g.quadraticCurveTo(u*.10, u*.10, 0, u*.14);
+  g.quadraticCurveTo(-u*.10, u*.10, -u*.13,-u*.14); g.closePath(); g.fill();
+  g.fillStyle = d.col2;
+  for (let i=0;i<3;i++) g.fillRect(-u*.11, -u*.09 + i*u*.055, u*.22, u*.02);
+  g.fillStyle = '#4a3a26';                                   // quiver
+  g.save(); g.rotate(-.4); g.fillRect(-u*.26,-u*.16, u*.09, u*.30); g.restore();
+  for (let i=0;i<3;i++){
+    g.strokeStyle = '#c8b088'; g.lineWidth = u*.02;
+    g.beginPath(); g.moveTo(-u*.22 + i*u*.03, -u*.26); g.lineTo(-u*.26 + i*u*.03, -u*.36); g.stroke();
+  }
+  headBall(g, u, -u*.27, u*.12, d.col, 'rgba(0,0,0,.10)');
+  g.fillStyle = '#141210';
+  g.beginPath(); g.ellipse(-u*.045,-u*.285, u*.034, u*.04, 0,0,6.284); g.fill();
+  g.beginPath(); g.ellipse( u*.045,-u*.285, u*.034, u*.04, 0,0,6.284); g.fill();
+  g.fillStyle = '#7fd8ff';
+  g.beginPath(); g.arc(-u*.045,-u*.285, u*.013, 0, 6.284); g.fill();
+  g.beginPath(); g.arc( u*.045,-u*.285, u*.013, 0, 6.284); g.fill();
+}
+function drawCultist(g, u, m, t){
+  const d = MONSTERS.cultist;
+  shadow(g, u, .27);
+  cloak(g, u, d.col2, .31);
+  torso(g, u, u*.15, u*.23, -u*.17, u*.32, d.col, d.col2);
+  const p = .5 + Math.sin(t*.004 + (m.bob||0))*.5;
+  g.strokeStyle = `rgba(255,120,90,${.20 + p*.30})`; g.lineWidth = u*.022;
+  g.beginPath(); g.arc(0, u*.06, u*.11, 0, 6.284); g.stroke();
+  g.beginPath();
+  for (let i=0;i<5;i++){
+    const a = -Math.PI/2 + i*6.284*2/5;
+    const x = Math.cos(a)*u*.11, y = u*.06 + Math.sin(a)*u*.11;
+    i ? g.lineTo(x,y) : g.moveTo(x,y);
+  }
+  g.closePath(); g.stroke();
+  limb(g, -u*.16,-u*.10, -u*.26,-u*.30, u*.06, d.col);       // both arms raised
+  limb(g,  u*.16,-u*.10,  u*.26,-u*.30, u*.06, d.col);
+  g.fillStyle = '#120a10';
+  g.beginPath(); g.moveTo(-u*.16,-u*.20);
+  g.quadraticCurveTo(-u*.18,-u*.46, 0,-u*.48);
+  g.quadraticCurveTo(u*.18,-u*.46, u*.16,-u*.20); g.closePath(); g.fill();
+  g.fillStyle = d.col;
+  g.beginPath(); g.moveTo(-u*.16,-u*.20);
+  g.quadraticCurveTo(-u*.21,-u*.48, 0,-u*.52);
+  g.quadraticCurveTo(u*.21,-u*.48, u*.16,-u*.20);
+  g.lineTo(u*.11,-u*.22); g.quadraticCurveTo(u*.14,-u*.43, 0,-u*.45);
+  g.quadraticCurveTo(-u*.14,-u*.43,-u*.11,-u*.22); g.closePath(); g.fill();
+  eyes(g, u, -u*.31, u*.04, '#ff7a5a');
+}
+
 const MON_ART = {
   goblin:drawGoblin, orc:drawOrc, fimir:drawFimir, skeleton:drawSkeleton, zombie:drawZombie,
   mummy:drawMummy, chaos:drawChaos, gargoyle:drawGargoyle, sorcerer:drawSorcerer, ogre:drawOgre,
+  troll:drawTroll, wraith:drawWraith, archer:drawArcher, cultist:drawCultist,
 };
 
 function drawNPC(g, u, t){
@@ -3388,6 +3509,7 @@ function walkFieldSafe(x, y, n, mover, flying){
 
 function springTrap(h, tr, cont){
   tr.sprung = true; tr.found = true;
+  if (G.q) G.q.lastKiller = tr.t === 'pit' ? 'a pit' : tr.t === 'spear' ? 'a spear trap' : 'a falling block';
   sfx('trap'); G.shake = 14;
   if (tr.t === 'pit'){
     if (h.gear.rope){
@@ -3471,7 +3593,8 @@ function doAttack(h, m){
   h.facing = m.x > h.x ? 1 : m.x < h.x ? -1 : h.facing;
   setMood('fight');
   const n = attackDice(h, m);
-  const immune = m.spirit && !weaponOf(h).spirit;
+  const ghost = MONSTERS[m.mt] && MONSTERS[m.mt].ethereal && !weaponOf(h).spirit;
+  const immune = (m.spirit && !weaponOf(h).spirit) || ghost;
   const calc = (a, d) => {
     const skulls = countSkulls(a), blocks = countShields(d, false);
     let dmg = immune ? 0 : Math.max(0, skulls - blocks);
@@ -3494,7 +3617,9 @@ function doAttack(h, m){
     lungeAt(h, m.x, m.y);
     const dir = [Math.sign(m.x - h.x), Math.sign(m.y - h.y)];
     if (immune){
-      say(`Your steel passes through ${m.name} like smoke. Only the Spirit Blade will bite.`, 'magic');
+      say(ghost
+        ? `Your steel goes through ${m.name} and out the other side. Only magic touches a thing like that.`
+        : `Your steel passes through ${m.name} like smoke. Only the Spirit Blade will bite.`, 'magic');
       spark(m.x, m.y, 14, '#9a86e0', { glow:'rgba(154,134,224,.4)', r:1.2 });
       sfx('block');
     } else if (dmg > 0){
@@ -3521,6 +3646,7 @@ function doAttack(h, m){
 }
 
 function monsterAttack(m, h, done){
+  if (G.q) G.q.lastKiller = m.name;
   if (h.buffs.veil){
     say(`The mist swallows ${h.name} — ${m.name} strikes at nothing.`, 'magic');
     later(300, done); return;
@@ -3530,7 +3656,10 @@ function monsterAttack(m, h, done){
     const dmg = Math.max(0, countSkulls(a) - countShields(d, true));
     return { dmg, sub: dmg > 0 ? `${h.name} loses ${dmg}` : `${h.name} holds` };
   };
-  const atk = rollCombat(m.atk), def = rollCombat(defendDice(h));
+  // a cultist beside it makes anything braver
+  const zeal = monstersOf().some(o => o !== m && MONSTERS[o.mt] && MONSTERS[o.mt].herald
+                                      && Math.abs(o.x-m.x) <= 1 && Math.abs(o.y-m.y) <= 1) ? 1 : 0;
+  const atk = rollCombat(m.atk + zeal), def = rollCombat(defendDice(h));
   let r = calc(atk, def);
   const reroll = (na, nd) => { r = calc(na, nd); if (G.dice) G.dice.sub = r.sub; };
   showDice('defend', atk, def, `${m.name} vs ${h.name}`, r.sub, () => {
@@ -3623,6 +3752,8 @@ function kill(a){
     const npc = null;
   } else if (a.kind === 'hero'){
     sfx('heroDie');
+    if (G.q) G.q.lastKiller = G.q.lastKiller || null;
+    if (G.run) G.run.lastFall = { who:a.name, by:(G.q && G.q.lastKiller) || 'the dark', depth:G.run.depth };
     say(`${a.name} falls, and does not get up.`, 'bad');
     spark(a.x, a.y, 30, '#7a1f14', { spd:.02, life:800 });
     a.done = true;
@@ -3705,6 +3836,7 @@ function zargonTurn(){
 
 // What each kind of thing does with its turn beyond walking at you.
 function monsterCast(m, h, done){
+  if (G.q) G.q.lastKiller = m.name;
   const atk = rollCombat(3);
   const skulls = countSkulls(atk);
   m.cast = (m.cast || 0) + 1;
@@ -3724,10 +3856,50 @@ function monsterCast(m, h, done){
   });
 }
 
+function monsterShoot(m, h, done){
+  if (G.q) G.q.lastKiller = m.name;
+  const atk = rollCombat(m.atk);
+  const def = rollCombat(defendDice(h));
+  const dmg = Math.max(0, countSkulls(atk) - countShields(def, true));
+  focusOn(m.x, m.y);
+  say(`${m.name} looses an arrow at ${h.name}.`, 'bad');
+  spark(m.x, m.y, 10, '#c8b088', { spd:.03, dir:[Math.sign(h.x-m.x), Math.sign(h.y-m.y)], life:420 });
+  showDice('defend', atk, def, `${m.name} shoots ${h.name}`,
+    dmg > 0 ? `${h.name} loses ${dmg}` : 'It goes wide', () => {
+    if (dmg > 0){
+      sfx('hit'); G.shake = 7 + dmg*3; hitStop(50);
+      spark(h.x, h.y, 8 + dmg*3, '#a01d14', { spd:.02, life:600 });
+      hurt(h, dmg, null);
+    } else { sfx('miss'); }
+    renderHUD();
+    later(220, done);
+  });
+}
+
 function monsterAct(m, done){
   if (m.sleep > 0){ done(); return; }
   if (m.stun > 0){ m.stun--; done(); return; }
   m.parried = 0;                                   // chaos warriors parry once a turn
+  // a troll closes up again unless the last wound was burned into it
+  if (m.alive && MONSTERS[m.mt] && MONSTERS[m.mt].regen && m.bp < m.bpMax && !m.burned){
+    m.bp++;
+    floatText(m.x, m.y, '+1', '#8fd86b');
+    if (tileVisible(m.x,m.y)) spark(m.x, m.y, 8, '#8fd86b', { spd:.01, up:.003 });
+  }
+  m.burned = 0;
+  // a cultist does not fight so much as tell everyone where you are
+  if (MONSTERS[m.mt] && MONSTERS[m.mt].herald && !m.heralded){
+    const seen = livingHeroes().some(h => hasLOS(m.x,m.y,h.x,h.y) && dist2(m.x,m.y,h.x,h.y) <= 9);
+    if (seen){
+      m.heralded = 1;
+      const rid = roomAt(m.x, m.y);
+      let n = 0;
+      for (const o of monstersOf()) if (!o.awake && (rid < 0 || roomAt(o.x,o.y) === rid)){ o.awake = true; n++; }
+      say(n ? `${m.name} throws its head back and screams. ${n} more thing${n>1?'s':''} wake${n>1?'':'s'} up.`
+            : `${m.name} screams. Nothing answers — this time.`, 'bad');
+      sfx('boss'); G.shake = 10;
+    }
+  }
   const targets = livingHeroes();
   if (!targets.length){ done(); return; }
   // A monster holds its room until it can actually see somebody. Without this
@@ -3746,6 +3918,15 @@ function monsterAct(m, done){
     if (adj){ focusOn(m.x,m.y); monsterAttack(m, best, done); }
     else done();
   };
+  // an archer would rather not be reached at all
+  if (MONSTERS[m.mt] && MONSTERS[m.mt].shooter){
+    const shot = targets.filter(h => dist2(m.x,m.y,h.x,h.y) >= 2 && dist2(m.x,m.y,h.x,h.y) <= 9
+                                     && hasLOS(m.x,m.y,h.x,h.y));
+    if (shot.length){
+      monsterShoot(m, shot.sort((a,b) => a.bp - b.bp)[0], done);
+      return;
+    }
+  }
   // a caster would rather burn you from across the room
   if (MONSTERS[m.mt] && MONSTERS[m.mt].caster && (m.cast || 0) < 3){
     const seen = targets.filter(h => dist2(m.x,m.y,h.x,h.y) <= 8 && hasLOS(m.x,m.y,h.x,h.y));
@@ -4304,7 +4485,11 @@ function castSpell(h, key, target){
     const dmg = Math.max(0, skulls - blocks);
     spark(target.x, target.y, 26, el.col, { spd:.022, glow:'rgba(255,180,90,.45)', r:1.6 });
     showDice('attack', atk, def, `${sp.name} → ${target.name}`, dmg ? `${dmg} Body Point${dmg>1?'s':''}` : 'No effect', () => {
-      if (dmg > 0){ G.shake = 12; target.sleep = 0; hurt(target, dmg, null); }
+      if (dmg > 0){
+        G.shake = 12; target.sleep = 0;
+        if (sp.el === 'fire') target.burned = 1;      // a burned troll does not knit
+        hurt(target, dmg, null);
+      }
       renderHUD(); checkQuestState();
     });
     say(`${h.name} casts ${sp.name}.`, 'magic');
@@ -5377,10 +5562,12 @@ const SPAWN_TABLE = [
   { t:'fimir',   cost:3, from:3 }, { t:'mummy',    cost:4, from:5 },
   { t:'chaos',   cost:5, from:5 }, { t:'gargoyle', cost:6, from:7 },
   { t:'sorcerer',cost:6, from:7 }, { t:'ogre',     cost:7, from:9 },
+  { t:'archer',  cost:2, from:2 }, { t:'cultist',  cost:3, from:4 },
+  { t:'wraith',  cost:4, from:6 }, { t:'troll',    cost:6, from:8 },
 ];
 const BOSS_TABLE = [
   { t:'gargoyle', from:1 }, { t:'chaos', from:3 }, { t:'ogre', from:5 },
-  { t:'sorcerer', from:5 },
+  { t:'sorcerer', from:5 }, { t:'troll', from:8 },
 ];
 const BOSS_NAMES = ['Verag','Gulthor','Ulag','Karlen','Balur','Torvin','Vess','Gorag','Skarn','Malgrim'];
 
@@ -5589,6 +5776,18 @@ function endRun(why){
   G.meta.best = Math.max(G.meta.best || 0, depth);
   G.meta.runs = (G.meta.runs || 0) + 1;
   G.meta.deepestKills = Math.max(G.meta.deepestKills || 0, G.run.kills);
+  // a lost run should still leave a story behind
+  G.meta.history = (G.meta.history || []);
+  G.meta.history.unshift({
+    n: G.meta.runs, depth, cleared: G.run.floorsCleared, kills: G.run.kills,
+    gold: G.run.gold, favour,
+    party: G.run.heroes.map(x => x.id),
+    lost: G.run.heroes.filter(x => !x.alive).map(x => x.id),
+    boons: G.run.boons.slice(), curses: G.run.curses.slice(),
+    fall: G.run.lastFall || null,
+    won: runAlive().length > 0,
+  });
+  G.meta.history = G.meta.history.slice(0, 10);
   saveMeta(); clearRun();
   const lost = G.run.heroes.filter(h => !h.alive).length;
   modal(`
@@ -5606,8 +5805,10 @@ function endRun(why){
     <div style="text-align:center">
       <button class="btn big" id="mAgain">Descend Again</button>
       <button class="btn ghost" id="mFavour">Mentor’s Table</button>
+      <button class="btn ghost" id="mBook">The Book</button>
       <button class="btn ghost" id="mTitle">Title Screen</button>
     </div>`);
+  bindModal('#mBook', () => { closeModal(); showHistory(); });
   bindModal('#mAgain', () => { closeModal(); G.run = null; showDescentSetup(); });
   bindModal('#mFavour', () => { closeModal(); showMentor(); });
   bindModal('#mTitle', () => { closeModal(); G.run = null; showTitle(); });
@@ -5788,7 +5989,7 @@ function showDraft(){
 /* ------------------------------------------------------ favour and setup */
 
 const K_META = 'grimhold_meta_v1';
-function newMeta(){ return { v:1, favour:0, unlocks:[], best:0, runs:0, deepestKills:0 }; }
+function newMeta(){ return { v:1, favour:0, unlocks:[], best:0, runs:0, deepestKills:0, history:[] }; }
 function saveMeta(){ try { localStorage.setItem(K_META, JSON.stringify(G.meta)); } catch(e){} }
 function loadMeta(){
   try {
@@ -5798,6 +5999,7 @@ function loadMeta(){
       m.favour = Math.max(0, raw.favour|0);
       m.unlocks = Array.isArray(raw.unlocks) ? raw.unlocks.filter(u => META_UNLOCKS.some(x => x.id === u)) : [];
       m.best = raw.best|0; m.runs = raw.runs|0; m.deepestKills = raw.deepestKills|0;
+      m.history = Array.isArray(raw.history) ? raw.history.filter(r => r && typeof r.depth === 'number').slice(0, 10) : [];
       return m;
     }
   } catch(e){}
@@ -5828,11 +6030,37 @@ function showMentor(){
     <div class="rule"></div>
     <div style="text-align:center">
       <button class="btn big" id="mGo">Descend</button>
+      <button class="btn ghost" id="mBook">The Book</button>
       <button class="btn ghost" id="mTitle">Title Screen</button>
     </div>`);
   bindAll('.bu[data-un]', el => { buyUnlock(el.dataset.un); showMentor(); });
+  bindModal('#mBook', () => { closeModal(); showHistory(); });
   bindModal('#mGo', () => { closeModal(); showDescentSetup(); });
   bindModal('#mTitle', () => { closeModal(); showTitle(); });
+}
+
+const HERO_IC = { barbarian:'🪓', dwarf:'⚒', elf:'🏹', wizard:'🔮' };
+function showHistory(){
+  const h = G.meta.history || [];
+  const rows = h.length ? h.map(r => `<div class="qrow" style="cursor:default">
+      <div class="n">${r.depth}</div>
+      <div class="tx">
+        <b>${r.party.map(p => HERO_IC[p] || '·').join(' ')} ${r.won ? 'walked away' : 'ended'} at depth ${r.depth}</b>
+        <s>${r.cleared} floor${r.cleared===1?'':'s'} cleared · ${r.kills} killed · ◈ ${r.gold} · 🕯 ${r.favour}
+        ${r.fall ? `<br>${r.fall.who} fell to ${r.fall.by} on depth ${r.fall.depth}.` : ''}
+        ${r.boons.length ? `<br>${r.boons.map(b => BOON(b) ? BOON(b).ic : '').join('')}` : ''}
+        ${r.curses.length ? ` ${r.curses.map(c => CURSE_MARK(c) ? CURSE_MARK(c).ic : '').join('')}` : ''}</s>
+      </div>
+    </div>`).join('')
+    : '<p class="flavor">Nothing written down yet. Go and give it something to write.</p>';
+  modal(`<h2>The Book</h2>
+    <div class="sub" style="margin:2px 0 0">The last ${Math.min(10, h.length) || 'few'} descents</div>
+    <div class="rule"></div>
+    <div class="qlist">${rows}</div>
+    <div class="rule"></div>
+    <div class="row"><div class="ic">⬇</div><div class="tx"><b>Deepest</b><s>${G.meta.runs} run${G.meta.runs===1?'':'s'} attempted</s></div><div style="color:#f3d488">${G.meta.best}</div></div>
+    <div style="text-align:center"><button class="btn ghost" id="mBack">Back</button></div>`);
+  bindModal('#mBack', () => { closeModal(); showMentor(); });
 }
 
 let descentPick = ['barbarian','dwarf','elf','wizard'];
@@ -6108,7 +6336,7 @@ globalThis.HQ = {
   makeFloor, newRun, startRun, beginFloor, runAlive, descentFloorEnd, endRun,
   draftOptions, takeBoon, buyPedlar, showDraft, boonHas, modHas, metaHas,
   floorChoices, chooseFloor, dblStake, canDouble, doubleOrNothing, settleStake,
-  newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius,
+  newMeta, loadMeta, saveMeta, buyUnlock, showMentor, showDescentSetup, torchRadius, showHistory, monsterShoot,
   activeHero, heroes, livingHeroes, monstersOf, busy, hudState, syncHUD, renderHUD,
   strikeBlocker, strikeReason,
   tapTile, selectHero, endHeroTurn, zargonTurn, monsterAct, heroWalk, refreshField,
