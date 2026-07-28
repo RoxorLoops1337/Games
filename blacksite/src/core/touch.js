@@ -22,6 +22,18 @@ export function isTouchCapable() {
     (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
 }
 
+// Touch-capable *and* with no mouse attached. This is the one that decides
+// whether to ask for pointer lock, and it has to be answerable before the
+// player has touched anything: waiting for the first touch means the game
+// requests a lock it cannot get, the request fails, and the failure handler
+// pauses the game before it has started. On a phone that is a coin flip
+// between "it works" and "it pauses itself the moment you press Engage".
+export function isTouchOnly() {
+  if (!isTouchCapable()) return false;
+  if (typeof window === 'undefined' || !window.matchMedia) return false;
+  return !window.matchMedia('(any-pointer: fine)').matches;
+}
+
 // Radians of view rotation per CSS pixel dragged. Deliberately not the mouse
 // sensitivity: a thumb drags perhaps 200 px before it runs out of screen, and
 // it has to be able to turn a full circle in two or three of those.
@@ -97,6 +109,12 @@ export function createTouch(G, root, hooks) {
 
   function onStart(e) {
     for (const t of e.changedTouches) {
+      // A finger already being tracked must not be claimed twice. A browser
+      // should not deliver that, but a re-registered identifier silently turns
+      // the movement thumb into a look thumb and the stick stops working —
+      // which is exactly the failure that made a synthetic test report movement
+      // as broken when it was not.
+      if (touches.has(t.identifier)) continue;
       const x = t.clientX, y = t.clientY;
       state.active = true;
 

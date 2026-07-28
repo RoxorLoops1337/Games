@@ -15,7 +15,7 @@ const DEFAULT_BINDS = {
   Tab: 'scores', Escape: 'pause', KeyP: 'pause',
 };
 
-import { createTouch, isTouchCapable } from './touch.js';
+import { createTouch, isTouchCapable, isTouchOnly } from './touch.js';
 
 export function createInput(G, canvas, opts = {}) {
   const doc = canvas.ownerDocument || document;
@@ -95,17 +95,24 @@ export function createInput(G, canvas, opts = {}) {
   const touch = isTouchCapable() && opts.root
     ? createTouch(G, opts.root, { press, release })
     : null;
+  // Decided once, at construction: a device with no fine pointer is in touch
+  // mode from the first frame, not from the first tap.
+  const touchOnly = !!touch && isTouchOnly();
 
   return {
     get locked() { return locked; },
     get touch() { return touch; },
-    get usingTouch() { return !!(touch && touch.active); },
+    get touchOnly() { return touchOnly; },
+    get usingTouch() { return !!(touch && (touch.active || touchOnly)); },
 
     // Pointer lock does not exist on a touchscreen, and asking for it there
     // either throws or silently never resolves — so the caller has to be told
     // that being "unlocked" is the normal state rather than a paused game.
     lock() {
-      if (touch && touch.active) { if (opts.onLock) opts.onLock(); return; }
+      // Never ask a touch-only device for a pointer it does not have. The
+      // request fails asynchronously, `pointerlockchange` reports unlocked, and
+      // the caller's lost-lock handler pauses a game that had just started.
+      if (touch && (touch.active || touchOnly)) { if (opts.onLock) opts.onLock(); return; }
       if (canvas.requestPointerLock) canvas.requestPointerLock();
     },
     unlock() { if (doc.exitPointerLock) doc.exitPointerLock(); },

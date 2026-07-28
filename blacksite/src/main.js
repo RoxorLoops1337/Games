@@ -112,11 +112,19 @@ export async function boot(root) {
     },
   });
 
-  // The controls appear on the first real touch rather than on capability, so a
-  // laptop with a touchscreen is not given thumb buttons it will never use.
+  // A device with no mouse gets the controls immediately — there is nothing
+  // else to play with, and hiding them until the first touch means hiding them
+  // until the player has guessed what to do. A laptop that merely has a
+  // touchscreen gets them only once a finger actually lands, so it is not
+  // handed thumb buttons it will never use.
+  if (input.touchOnly) root.classList.add('touch');
+  else if (input.touch) {
+    window.addEventListener('touchstart',
+      () => root.classList.add('touch'), { passive: true, once: true });
+  }
   if (input.touch) {
-    const reveal = () => { root.classList.add('touch', 'touched'); };
-    window.addEventListener('touchstart', reveal, { passive: true, once: true });
+    window.addEventListener('touchstart',
+      () => root.classList.add('touched'), { passive: true, once: true });
   }
 
   const menu = createMenu(G, root, {
