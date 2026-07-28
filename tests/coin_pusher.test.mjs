@@ -768,4 +768,62 @@ t.eq(CP3.S.prizes.cat, 1, 'v2 inventory migrates (bear -> cat)');
 t.eq(CP3.S.listings.length, 0, 'no stale coin-priced listings survive');
 t.eq(CP3.S.mach, 'penny', 'v2 machine choice survives');
 
+// -------- sim determinism: physics must not drift under refactoring --------
+// The pushers, pile and payout are one coupled float simulation, so an
+// "obviously equivalent" optimization can quietly change what the machine pays
+// out. Each machine is driven through a fixed script and the full state of
+// every piece is hashed. A changed hash means the physics moved: either the
+// change was not equivalent, or the constants below need a deliberate update.
+{
+  const fnv = (s) => {                     // small stable hash, no node deps
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return ('0000000' + h.toString(16)).slice(-8);
+  };
+  const snap = (S) => {
+    const out = [];
+    for (const c of S.coins) {
+      out.push([c.x, c.y, c.z, c.vx, c.vy, c.vz, c.st, c.lay, c.tier, c.kind,
+                c.onPush ? 1 : 0].join(','));
+    }
+    out.push('S|' + [S.score, S.wallet, S.collected, S.lost, S.trayPile,
+                     S.tray.coins, S.phase].join(','));
+    return fnv(out.join('\n'));
+  };
+  const runScript = (CPx, mach, frames) => {
+    const Sx = CPx.S;
+    Sx.unlocked = ['gold', 'penny', 'neon', 'bandit'];
+    CPx.setMachine(mach);
+    CPx.srand(20260728);
+    CPx.reset();
+    Sx.wallet = 5000; Sx.money = 100000;
+    Sx.score = 0; Sx.collected = 0; Sx.lost = 0; Sx.dropped = 0;
+    for (let i = 0; i < frames; i++) {
+      if (Sx.cd <= 0 && (i % 3) !== 2) CPx.drop(14 + ((i * 37) % 72));
+      if (i === 400) CPx.jackpot();
+      CPx.tick(1 / 60);
+    }
+    return snap(Sx);
+  };
+
+  // captured from the pre-optimization sim and re-verified after it
+  const GOLDEN = {
+    gold: 'e4d5b228', penny: '9ad209fb', neon: '832b1d52', bandit: '26c82f7c',
+  };
+  for (const mach of ['gold', 'penny', 'neon', 'bandit']) {
+    const CPd = loadGame({});
+    const got = runScript(CPd, mach, 600);
+    t.eq(got, GOLDEN[mach], 'sim is deterministic and unchanged: ' + mach);
+  }
+
+  // the same script twice in one process must agree — guards the harness
+  // itself against order-dependent state leaking between runs
+  const a = loadGame({}), b = loadGame({});
+  t.eq(runScript(a, 'penny', 300), runScript(b, 'penny', 300),
+       'two fresh instances agree frame for frame');
+}
+
 t.done();
