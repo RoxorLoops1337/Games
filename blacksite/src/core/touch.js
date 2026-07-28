@@ -140,13 +140,15 @@ export function createTouch(G, root, hooks) {
         touches.set(t.identifier, { kind: 'look', x, y, moved: 0, t0: performance.now() });
       }
     }
-    e.preventDefault();
+    if (touches.size) e.preventDefault();
   }
 
   function onMove(e) {
+    let handled = false;
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
       if (!rec) continue;
+      handled = true;
 
       if (rec.kind === 'move') {
         let dx = t.clientX - stickX, dy = t.clientY - stickY;
@@ -176,13 +178,18 @@ export function createTouch(G, root, hooks) {
         state.look.y += dy;
       }
     }
-    e.preventDefault();
+    // Only for fingers this layer actually owns. A blanket preventDefault here
+    // stops the page scrolling *and* stops the browser synthesising the click
+    // that every DOM button in the game depends on.
+    if (handled) e.preventDefault();
   }
 
   function onEnd(e) {
+    let handled = false;
     for (const t of e.changedTouches) {
       const rec = touches.get(t.identifier);
       if (!rec) continue;
+      handled = true;
       touches.delete(t.identifier);
 
       if (rec.kind === 'move') {
@@ -203,7 +210,11 @@ export function createTouch(G, root, hooks) {
         releaseButton(rec.el);
       }
     }
-    e.preventDefault();
+    // The important one. `preventDefault` on touchend cancels the click the
+    // browser would otherwise synthesise, so doing it unconditionally on a
+    // document-level listener kills every button on the page — the menu's
+    // Deploy included, which looks exactly like the game having frozen.
+    if (handled) e.preventDefault();
   }
 
   // A touch that is cancelled (a system gesture, a call arriving) must release

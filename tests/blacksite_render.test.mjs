@@ -288,6 +288,82 @@ async function boot(opts) {
   await page.close();
 }
 
+// ─────────────────────────────────── a touchscreen can start the game
+{
+  // The touch layer listens on the document with `passive:false`. Calling
+  // preventDefault there for a finger it does not own cancels the click the
+  // browser would otherwise synthesise, and every DOM button in the game dies
+  // — Deploy included. It shipped that way: no error, no context loss, the
+  // render loop still turning over, and completely unplayable. It reads as a
+  // crash because a menu that ignores you is indistinguishable from a freeze.
+  let ctx = null, page = null;
+  try {
+    ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true,
+    });
+    page = await ctx.newPage();
+  } catch {
+    t.ok(true, 'touch context unavailable in this browser build — skipped');
+  }
+
+  if (page) {
+    const logs = [];
+    page.on('pageerror', (e) => logs.push({ type: 'pageerror', text: String(e.stack || e) }));
+    page.on('console', (m) => { if (m.type() === 'error') logs.push({ type: 'error', text: m.text() }); });
+    await page.addInitScript(() => { window.__BS_TEST__ = true; });
+    await page.goto(`http://127.0.0.1:${port}/blacksite/`, { waitUntil: 'load', timeout: 60000 });
+    await page.waitForFunction(() => !!window.BLACKSITE, null, { timeout: 240000 });
+
+    const detected = await page.evaluate(() => ({
+      touchOnly: !!window.BLACKSITE.input.touchOnly,
+      controlsShown: document.getElementById('app').classList.contains('touch'),
+      mode: window.BLACKSITE.G.mode,
+    }));
+    t.ok(detected.touchOnly, 'a touch-only context is recognised without waiting for a tap');
+    t.ok(detected.controlsShown, 'and the on-screen controls are up before the first touch');
+
+    const box = await page.evaluate(() => {
+      const b = [...document.querySelectorAll('#menu button')].find((e) => /deploy/i.test(e.textContent));
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    t.ok(!!box, 'the main menu offers a Deploy button');
+
+    if (box) {
+      // A real finger, not element.click() — the synthetic path bypasses
+      // exactly the listeners that broke this.
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: box.x, y: box.y, id: 1 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      await page.waitForFunction(() => window.BLACKSITE.G.mode === 'playing', null, { timeout: 15000 })
+        .catch(() => {});
+      const after = await page.evaluate(() => window.BLACKSITE.G.mode);
+      t.ok(after === 'playing', `tapping Deploy starts the game (mode ${after})`);
+
+      // And the game is actually playable afterwards: the stick moves the player.
+      const walked = await page.evaluate(async () => {
+        const G = window.BLACKSITE.G;
+        G.player.pos.x = 0; G.player.pos.z = 44; G.player.yaw = 0;
+        G.player.vel.x = G.player.vel.y = G.player.vel.z = 0;
+        return G.player.pos.z;
+      });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: 78, y: 700, id: 2 }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: 78, y: 646, id: 2 }] });
+      await page.evaluate(async () => { for (let i = 0; i < 20; i++) await new Promise((r) => requestAnimationFrame(r)); });
+      const z = await page.evaluate(() => window.BLACKSITE.G.player.pos.z);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      t.ok(z < walked - 0.5, `the movement stick walks the player (${walked.toFixed(1)} → ${z.toFixed(1)})`);
+    }
+
+    const bad = logs.filter((l) => !noisy(l.text));
+    t.ok(bad.length === 0, 'and the touch path logged nothing' +
+      (bad.length ? ' — ' + bad[0].text.slice(0, 200) : ''));
+    await page.close();
+  }
+  if (ctx) await ctx.close();
+}
+
 // ──────────────────────────────────── every quality tier, and a resize
 {
   const { page, logs } = await boot({ w: 480, h: 270, quality: 2 });
