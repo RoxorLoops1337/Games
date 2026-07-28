@@ -681,6 +681,43 @@ const count = (evts, type) => evts.filter((e) => e.type === type).length;
   t.ok(G.player.ads >= 0 && G.player.ads <= 1, 'and the aim blend stays inside its range');
 }
 
+// ────────────────────────────────── every module actually parses and links
+{
+  // `node --check` is not enough, and this has caught two real breakages now:
+  // a backtick inside a GLSL comment in a template literal, and a duplicate
+  // `let` in a function scope. Both parse fine under `--check` and both stop
+  // the page dead at runtime, so the only symptom is a boot that never
+  // finishes — no error, no fatal panel, just a game that never appears.
+  //
+  // A dynamic import does full scope analysis and link-time checking. The
+  // browser resolves `three` through an importmap, so Node cannot follow that
+  // specifier and reports it as missing; that one error is expected and is the
+  // only one tolerated here.
+  const { readdirSync, statSync } = await import('node:fs');
+  const { join, relative } = await import('node:path');
+  const { pathToFileURL } = await import('node:url');
+  const root = new URL('../blacksite/src/', import.meta.url).pathname;
+
+  const walk = (dir, out = []) => {
+    for (const name of readdirSync(dir)) {
+      const full = join(dir, name);
+      if (statSync(full).isDirectory()) walk(full, out);
+      else if (name.endsWith('.js')) out.push(full);
+    }
+    return out;
+  };
+  const files = walk(root);
+  t.ok(files.length > 20, `the source tree is where it is expected (${files.length} modules)`);
+
+  const missingThree = /Cannot find package 'three'|Cannot find module .*three/;
+  for (const f of files) {
+    let err = null;
+    try { await import(pathToFileURL(f).href); }
+    catch (e) { if (!missingThree.test(e.message)) err = e.message.split('\n')[0].slice(0, 160); }
+    t.ok(!err, `${relative(root, f)} parses and links` + (err ? ` — ${err}` : ''));
+  }
+}
+
 // ───────────────────────────────────────────────── look is frame-rate free
 {
   // A look delta is an amount of movement that already happened. The player

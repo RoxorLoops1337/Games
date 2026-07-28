@@ -177,18 +177,24 @@ export function updatePlayer(G, dt) {
 
   // ── footsteps ──────────────────────────────────────────────────────────────
   const moved = Math.hypot(p.vel.x, p.vel.z);
+  const stride = p.sprinting ? 2.05 : p.stance === 'crouch' ? 1.35 : 1.72;
   if (p.grounded && p.stance !== 'slide') {
     p.stepDist += moved * dt;
-    const stride = p.sprinting ? 2.05 : p.stance === 'crouch' ? 1.35 : 1.72;
     if (p.stepDist >= stride) {
       p.stepDist = 0;
       emit(G, 'step', { pos: V.clone(p.pos), surface: p.groundSurface, sprint: p.sprinting });
     }
   } else p.stepDist = Math.min(p.stepDist, 1.2);
 
-  // Head bob phase advances with distance travelled, not with time, so it stays
-  // locked to the footsteps at every speed.
-  p.bobT += moved * dt * 1.9;
+  // Head bob phase advances with distance travelled rather than with time, and
+  // it is divided by the *actual* stride so it stays genuinely locked to the
+  // footsteps at every speed and stance.
+  //
+  // One full phase turn is one gait cycle — two footsteps — because the render
+  // side reads it as `abs(cos(2π·bobT))`, which dips once per foot. The old
+  // constant was 1.9 per metre against a 1.72 m stride: about six and a half
+  // bob cycles per footstep, which reads as a vibration rather than a walk.
+  p.bobT += (moved * dt) / (stride * 2);
 
   // ── regeneration ───────────────────────────────────────────────────────────
   if (G.time.t - p.lastHurt > C.REGEN_DELAY && p.hp < p.maxHp) {
