@@ -44,7 +44,14 @@ function loadGame(store, srcOverride){
   // noticed. And a non-finite number is refused wherever it appears: a real
   // canvas SILENTLY DROPS a call carrying NaN, so a shape lost that way is
   // invisible on the page and invisible to a colour check.
-  const CAP = 60000;
+  // How many path/fill/rect ops one capture will hold. It is a bound on the
+  // harness's memory, not a statement about the game — and when the hold grew
+  // a wandering coastline and a second shadow mark per object, one drawHold()
+  // went past it and started silently dropping. A truncated capture does not
+  // fail loudly; it makes every count taken from it quietly wrong, which is
+  // why `dropped === 0` is asserted rather than tolerated. Raise this when the
+  // world gets richer; do not relax the assertion.
+  const CAP = 200000;
   const stats = { ops:0 };
   const numCheck = (where, args) => {
     for (let i = 0; i < args.length; i++)
@@ -71,20 +78,35 @@ function loadGame(store, srcOverride){
   // alpha back leaves every later shape in the frame translucent, and an
   // unbalanced save() leaks a clip or a transform into whatever draws next.
   // Neither is visible to a per-call check, because no single call is wrong.
-  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.rects = []; stats.rectsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.grads = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.rects = []; stats.rectsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
   const TEXT0 = { lineCap:'butt', textAlign:'start', textBaseline:'alphabetic' };
   Object.assign(stats, TEXT0);
   stats.__text0 = TEXT0;
   const ctx = new Proxy({}, { get(_t, k){
     if (k === '__stats') return stats;
+    // A real context's state is READABLE, and this one's was not: every get
+    // handed back a callable, so `ctx.globalAlpha` came out as a function and
+    // any arithmetic on it as NaN. shadow() folds the caller's blanket alpha
+    // into its two marks rather than laying it over them, which means it has
+    // to read it back — and the whole reason a stub is worth having is that
+    // the thing it stands in for behaves like this.
+    if (k === 'globalAlpha') return stats.alpha;
     if (k === 'save') return () => { stats.ops++; stats.depth++; stats.maxDepth = Math.max(stats.maxDepth, stats.depth); };
     if (k === 'restore') return () => {
       stats.ops++;
       if (--stats.depth < 0) throw new RangeError('restore() with nothing saved');
     };
+    // What each gradient was actually built out of. Until now a gradient was a
+    // write-only object: the stub checked that every stop was a legal colour
+    // and then forgot it, so a band that graded dark-to-clear and a band that
+    // graded clear-to-clear were the same picture to every test here. The
+    // occlusion under a projecting course IS its stops.
     if (k === 'createLinearGradient' || k === 'createRadialGradient')
       return (...a) => { stats.ops++; numCheck(k, a);
-        return { addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); } }; };
+        const g = { __kind:k, __at:a.slice(), __stops:[],
+          addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); g.__stops.push([pos, col]); } };
+        if (stats.grads.length < CAP) stats.grads.push(g);
+        return g; };
     if (k === 'measureText') return (txt) => ({ width: Math.max(8, String(txt).length * 5.4) });
     // What state each piece of text was actually drawn under. The property
     // tracking above says what was SET; this says what reached the glyph,
@@ -972,21 +994,34 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // Then a real frame, with heroes and their roundels and bars in it, and
     // every plate checked against every reservation. Reading the tables alone
     // would not have caught it — the reservations were simply never made.
-    IB.cam.follow = false; IB.cam.x = 60;
-    let worst = null, overlaps = 0, pairs = 0;
-    for (const z of [1, 1.8, 2.4]){
-      IB.cam.z = IB.cam.tz = z;
-      IB.draw();
-      const plates = IB.labelPlaced, blocked = IB.labelBlocked;
-      for (const p of plates) for (const b of blocked){
-        pairs++;
-        if (IB.labelHits(p, b)){ overlaps++; worst = worst || ('zoom ' + z); }
+    IB.cam.follow = false;
+    let worst = null, overlaps = 0, pairs = 0, mostPlates = 0, mostBlocks = 0;
+    // Two framings, not one. The bridge's labels are tiered now — a turret
+    // that nothing is happening to carries a six-pixel diamond and no plate at
+    // all — so a sweep that only ever looked at mid-bridge had four plates to
+    // compare and was measuring almost nothing. The hold is where the
+    // plate-less names live, and it has to be in the sweep too.
+    for (const cx of [60, IB.HOLD_X])
+      for (const z of [1, 1.8, 2.4]){
+        IB.cam.x = cx;
+        IB.cam.z = IB.cam.tz = z;
+        IB.draw();
+        const plates = IB.labelPlaced, blocked = IB.labelBlocked;
+        mostPlates = Math.max(mostPlates, plates.length);
+        mostBlocks = Math.max(mostBlocks, blocked.length);
+        for (const p of plates) for (const b of blocked){
+          pairs++;
+          if (IB.labelHits(p, b)){ overlaps++; worst = worst || ('x ' + cx + ' zoom ' + z); }
+        }
       }
-    }
-    IB.cam.z = IB.cam.tz = 1;
+    IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
     t.ok(pairs > 200, 'the label sweep had plates and reservations to compare (' + pairs + ')');
-    t.ok(IB.labelPlaced.length > 4, 'and real labels on the board (' + IB.labelPlaced.length + ')');
-    t.ok(IB.labelBlocked.length > 4, 'and real bars and roundels under them (' + IB.labelBlocked.length + ')');
+    // Across the sweep rather than out of whichever frame happened to be last:
+    // at the tightest zoom over the hold most of the hold is off the picture,
+    // and reading one arbitrary frame made this an assertion about the framing
+    // rather than about the labels.
+    t.ok(mostPlates > 4, 'and real labels on the board (' + mostPlates + ')');
+    t.ok(mostBlocks > 4, 'and real bars and roundels under them (' + mostBlocks + ')');
     t.ok(overlaps === 0, 'no label lands on a health bar or a level roundel (' +
       overlaps + (worst ? ', first at ' + worst : '') + ')');
     // And they must not land on each other either — the thing that already
@@ -3036,6 +3071,352 @@ t.ok(true, 'drawing an empty bridge is harmless');
     'and not every one of them is drawing a bar (' + live.filter(IB.showsBar).length + ' of ' + live.length + ')');
 }
 
+/* ------------------------------------------- the loudest thing in the frame
+   Eleven saturated segmented bars and fourteen identical black pills, all of
+   them at full brightness whether anything was happening to what they named or
+   not, ran a dotted line of maximum chroma through the middle of every frame.
+   The information a player actually wants — WHICH of those eleven things is
+   being taken apart right now — was the one thing none of it said. */
+{
+  IB.newMatch({ diff:'veteran', seed:5507 });
+  const st = IB.frontStruct(0);
+  const B = IB.BAR;
+  // Rule out the do-nothing settings first: three states that are all the same
+  // brightness are three states in name only.
+  t.ok(B.hotA > B.dimA && B.dimA > 0 && B.dimA < 1,
+    'a bar being hit is brighter than one merely hurt, and neither is invisible (' + B.dimA + ' → ' + B.hotA + ')');
+  t.ok(B.hold > B.hot && B.hot > 0, 'and a bar lingers longer than a blow stays fresh (' + B.hot + 's, ' + B.hold + 's)');
+
+  // Three moments in one structure's life.
+  G.t = 100; st.hp = st.mhp * .4;
+  st.dmgTaken = G.t - B.hot * .2;
+  const hot = IB.barState(st);
+  st.dmgTaken = G.t - B.hold * 4;
+  const hurt = IB.barState(st);
+  st.hp = st.mhp;
+  const whole = IB.barState(st);
+  t.ok(hot.hot === true && hot.a === B.hotA, 'a structure hit a moment ago wears the loud bar');
+  t.ok(hurt.hot === false && hurt.a === B.dimA,
+    'one that is hurt but quiet keeps a bar, dimmer (' + hurt.a + ' against ' + hot.a + ')');
+  t.ok(hurt.a < hot.a, 'and it is genuinely dimmer rather than the same number twice');
+  t.ok(whole.a === 0, 'and a whole one that has been left alone shows nothing at all');
+  // The fade between the last two, so a tower mending back to full does not
+  // pop its bar off mid-frame.
+  st.dmgTaken = G.t - (B.hot + B.hold) / 2;
+  const fading = IB.barState(st);
+  t.ok(fading.a > 0 && fading.a < B.dimA,
+    'a bar on the way out is part-way, not on or off (' + fading.a.toFixed(3) + ')');
+
+  // The trap. A structure is built without a dmgTaken, a unit is built with 0,
+  // a hero with -99, and one arriving over the wire may have none — and
+  // `G.t - undefined` is NaN, which the canvas rejects and which would have
+  // taken every bar in the game off the board.
+  for (const [what, bad] of [['no stamp at all', undefined], ['a zero stamp', 0], ['the hero sentinel', -99]]){
+    const probe = { hp:10, mhp:10, shield:0, dmgTaken:bad };
+    t.ok(Number.isFinite(IB.dmgAge(probe)) && IB.dmgAge(probe) > B.hold,
+      'a structure with ' + what + ' reads as untouched long ago, not as NaN (' + IB.dmgAge(probe) + ')');
+    t.ok(Number.isFinite(IB.barState(probe).a), 'and its bar has a finite opacity');
+  }
+  t.ok(!IB.showsBar({ hp:10, mhp:10, shield:0, dmgTaken:undefined }),
+    'so a tower nothing has ever touched draws no bar');
+  t.ok(IB.showsBar({ hp:10, mhp:10, shield:0, dmgTaken:G.t - B.hold * .5 }),
+    'and one hit half a second ago still does, even at full health — a turret mends itself');
+
+  // A quarter of the chroma out of the fill, and it must actually come out.
+  const chroma = (hex) => {
+    const [r, g, b] = IB.hexRGB(hex);
+    return Math.max(r, g, b) - Math.min(r, g, b);
+  };
+  const flat = IB.chromaDown(IB.BAR_MINE, B.desat);
+  t.ok(B.desat > 0 && B.desat < 1, 'the desaturation is a real fraction (' + B.desat + ')');
+  t.ok(flat !== IB.BAR_MINE, 'the bar fill is not the raw team colour any more');
+  t.ok(chroma(flat) < chroma(IB.BAR_MINE),
+    'it carries less chroma than it did (' + chroma(flat) + ' against ' + chroma(IB.BAR_MINE) + ')');
+  t.ok(chroma(flat) > 0, 'and it is still green rather than grey — the bar still says whose it is');
+  t.ok(IB.chromaDown(IB.BAR_MINE, 0) === IB.BAR_MINE, 'at zero it is the colour it was handed');
+  t.ok(chroma(IB.chromaDown(IB.BAR_THEIRS, B.desat)) < chroma(IB.BAR_THEIRS), 'and the foe colour goes with it');
+  // #abc and #aabbcc both appear in this file, and the blender the gorge uses
+  // reads '#fff' as 0x000fff — a dark blue. The label and float tiers take
+  // whatever colour their caller wrote, so they use one that takes either.
+  t.ok(IB.tintTo('#fff', '#000', .5) === IB.tintTo('#ffffff', '#000000', .5),
+    'three-digit and six-digit hex mean the same colour (' + IB.tintTo('#fff', '#000', .5) + ')');
+  t.ok(IB.tintTo('#ffffff', '#000000', 0) === '#ffffff' && IB.tintTo('#ffffff', '#000000', 1) === '#000000',
+    'and a tint reaches both of its ends');
+  t.ok(IB.tintTo('rgba(1,2,3,.5)', '#000000', .5) === 'rgba(1,2,3,.5)',
+    'and something that is not a hex colour comes back untouched rather than as NaN');
+  // The gorge's own blender is still the gorge's: a second FUNCTION
+  // DECLARATION of the same name does not shadow, it replaces, and every call
+  // site in the file — including the ones written first — quietly gets the new
+  // one. That is exactly how this pair went in the first time.
+  t.ok(/function mixHex\(/.test(SRC) && SRC.split('function mixHex(').length === 2,
+    'and there is exactly one mixHex in the file');
+
+  // Capped in SCREEN pixels: a gate's bar was 5 * cam.z tall, which is ten
+  // pixels and eighty-four wide at the zoom the brawl is watched from.
+  t.ok(B.h > 2 && B.h < 5 * IB.ZOOM_MAX,
+    'a bar stops growing before the zoom does (' + B.h + 'px against ' + (5 * IB.ZOOM_MAX) + ')');
+
+  // Unsegmented, checked through the real draw: the notches were one extra
+  // rect per notch, so a 6-notch bar laid down five more rectangles than a
+  // 1-notch one. Same width, same everything else.
+  {
+    const s2 = CTX.__stats;
+    const barRects = (mhp) => {
+      s2.rects = []; s2.rectsDropped = 0;
+      IB.cam.z = IB.cam.tz = 1;
+      IB.hpBar(CTX, 200, 200, { hp:mhp * .5, mhp, shield:0, side:0, chipHp:mhp * .5, dmgTaken:G.t - .1 }, 60, true);
+      return s2.rects.length;
+    };
+    const many = barRects(IB.HP_TICK * IB.HP_TICKS), few = barRects(IB.HP_TICK);
+    t.ok(few > 2, 'a bar draws its plate, its track and its fill (' + few + ' rects)');
+    t.ok(many === few,
+      'and a bar worth six notches draws no more of them than one worth one (' + many + ' against ' + few + ')');
+  }
+
+  // WIRED. A whole frame of a real match: count the structures standing and
+  // the ones that drew a bar.
+  {
+    IB.newMatch({ diff:'veteran', seed:5511 });
+    IB.MY = 0;
+    step(40);
+    const standing = [].concat(...G.sides.map(sd => sd.structs)).filter(x => !x.dead);
+    const loud = standing.filter(x => IB.barState(x).hot);
+    const shown = standing.filter(IB.showsBar);
+    t.ok(standing.length >= 8, 'both sides of the bridge are standing (' + standing.length + ')');
+    t.ok(shown.length < standing.length,
+      'and not every one of them is wearing a bar (' + shown.length + ' of ' + standing.length + ')');
+    t.ok(loud.length < standing.length / 2,
+      'at most a couple are wearing the loud one (' + loud.length + ' of ' + standing.length + ')');
+  }
+}
+
+/* ------------------------------------------------- rationing the name pills */
+{
+  IB.newMatch({ diff:'veteran', seed:5519 });
+  IB.MY = 0;
+  IB.sel.struct = null;
+  const named = (st) => { const L = IB.structLabel(st); return !!(L && L.txt); };
+  const marked = (st) => { const L = IB.structLabel(st); return !!(L && L.tier === 'mark'); };
+  for (const side of [0, 1]){
+    const list = G.sides[side].structs.filter(x => !x.dead);
+    const names = list.filter(named), marks = list.filter(marked);
+    t.ok(names.length + marks.length === list.length,
+      'every standing structure on side ' + side + ' is either named or marked, never neither');
+    t.ok(names.length <= 3, 'no more than three of them get a plate (' + names.length + ' of ' + list.length + ')');
+    t.ok(marks.length > 0, 'and the rest are marks, so this is a ration and not a rename (' + marks.length + ')');
+    t.ok(named(G.sides[side].structs.find(x => x.key === 'gate')), 'the gates always say what they are');
+    t.ok(named(G.sides[side].structs.find(x => x.key === 'inhib')), 'so does the inhibitor');
+    t.ok(named(IB.frontStruct(side)), 'and so does whatever is in play');
+    t.ok(list.every(x => !!IB.structLabel(x).col), 'and a mark still knows its side colour');
+  }
+  // The three ways a plain turret earns its name back.
+  {
+    const quiet = G.sides[1].structs.filter(x => !x.dead && x !== IB.frontStruct(1) &&
+      x.key !== 'gate' && x.key !== 'inhib');
+    t.ok(quiet.length >= 2, 'there are plain turrets to test with (' + quiet.length + ')');
+    const one = quiet[0];
+    t.ok(marked(one), 'a turret nothing is happening to carries a mark');
+    G.t = 80; one.dmgTaken = G.t - IB.LABEL_HOT * .3;
+    t.ok(named(one), 'one being shot at right now says its name');
+    one.dmgTaken = G.t - IB.LABEL_HOT * 3;
+    t.ok(marked(one), 'and goes quiet again once the shooting moves on');
+    IB.sel.struct = one;
+    t.ok(named(one) && IB.structLabel(one).hot, 'one you have clicked says its name, and says it is the one you clicked');
+    IB.sel.struct = null;
+    t.ok(marked(one), 'and lets go when you click elsewhere');
+    one.dead = true;
+    t.ok(IB.structLabel(one) === null, 'rubble is neither — it is already printing its own countdown');
+    one.dead = false;
+  }
+  // WIRED: the marks have to actually reach the canvas, and they must not be
+  // counted as plates — a mark that quietly entered the placement pass would
+  // shove the names it was cut to make room for.
+  {
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+    IB.draw();
+    t.ok(IB.labelMarked > 0, 'a real frame draws marks (' + IB.labelMarked + ')');
+    t.ok(IB.labelPlaced.length > 0, 'and plates as well (' + IB.labelPlaced.length + ')');
+    t.ok(IB.LABEL_MARK.r > 1 && IB.LABEL_MARK.r * 2 <= 8,
+      'a mark is about six pixels across (' + (IB.LABEL_MARK.r * 2) + ')');
+  }
+  // The hold's own six. They keep their names — you still want to read them —
+  // and lose the black slab under them.
+  {
+    const s = P();
+    rich(s);
+    for (const [i, type] of [[0, 'farm'], [3, 'barracks'], [4, 'pit']]) s.plot[i] = { type, lvl:2, tile:i, raise:0 };
+    IB.sel.tile = -1; IB.sel.node = null;
+    IB.cam.follow = false; IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1.4;
+    const st2 = CTX.__stats;
+    // The plate is a fillRect in one of the three label-plate colours; the
+    // label still exists either way, so counting labels would measure nothing.
+    const PLATE = new Set(['rgba(9,13,20,.55)', 'rgba(9,13,20,.72)', 'rgba(30,66,110,.88)']);
+    const holdPlates = () => {
+      st2.rects = []; st2.texts = []; st2.rectsDropped = 0;
+      IB.drawHold(CTX, 0); IB.flushLabels(CTX);
+      return { plates:st2.rects.filter(r => PLATE.has(r.col)).length,
+               names:IB.labelPlaced.length, wrote:st2.texts.length, lost:st2.rectsDropped };
+    };
+    const idle = holdPlates();
+    t.ok(idle.lost === 0, 'the capture held the whole hold');
+    t.ok(idle.wrote > 3, 'the hold still writes its names (' + idle.wrote + ' pieces of text)');
+    t.ok(idle.names > 3, 'and lays out that many labels (' + idle.names + ')');
+    t.ok(idle.plates === 0, 'and not one of them sits on a black slab (' + idle.plates + ')');
+    IB.sel.tile = 0;
+    const picked = holdPlates();
+    t.ok(picked.plates === 1,
+      'the one you select gets its plate back, and only it (' + picked.plates + ')');
+    IB.sel.tile = -1;
+  }
+}
+
+/* ----------------------------------------------- tiering the damage numbers */
+{
+  IB.newMatch({ diff:'veteran', seed:5523 });
+  const T = IB.FLOAT_TIER;
+  t.ok(T.graze > 0 && T.heavy > T.graze && T.heavy < 1,
+    'the two thresholds cut the range into three real bands (' + T.graze + ', ' + T.heavy + ')');
+  // Read off the size, which is how every number in the game arrives.
+  const tierOf = (amt, mhp) => IB.floatTier({ sc:IB.floatScale(amt, mhp) });
+  t.ok(tierOf(150, 6400) === 0, 'a hit on the gates is a graze — it is a rounding error by fraction');
+  t.ok(tierOf(400, 600) === 2, 'and one that takes most of a body is not (' + tierOf(400, 600) + ')');
+  t.ok(tierOf(60, 600) === 1, 'with an ordinary blow between them');
+  {
+    let seen = new Set();
+    for (let a = 1; a <= 400; a += 3) seen.add(tierOf(a, 600));
+    t.ok(seen.size === 3, 'all three bands are reachable by a real hit (' + [...seen].sort() + ')');
+  }
+  let fell = 0, prev = -1;
+  for (let a = 1; a <= 900; a += 5){ const k = tierOf(a, 600); if (k < prev) fell++; prev = k; }
+  t.ok(fell === 0, 'and a harder hit never drops to a quieter tier');
+  // The graze has to look different from the blow above it, and still be a
+  // colour rather than a hole in the frame.
+  const graze = IB.tintTo('#ffffff', IB.FLOAT_GRAZE.col, IB.FLOAT_GRAZE.mix);
+  t.ok(graze !== '#ffffff', 'a graze does not print in the crit\'s own white');
+  t.ok(IB.FLOAT_GRAZE.a > .4 && IB.FLOAT_GRAZE.a < 1,
+    'it is quieter without being invisible (' + IB.FLOAT_GRAZE.a + ')');
+  t.ok(IB.FLOAT_GRAZE.lw > 0, 'and it keeps an outline, which is what makes a digit survive a pale body');
+
+  // Off the column. Four numbers on one body used to print in one vertical
+  // line, because the world fan only separates numbers on DIFFERENT bodies.
+  {
+    const wasForce = IB.fxForce; IB.fxForce = true;
+    G.floats.length = 0;
+    let near0 = 0, left = 0, right = 0;
+    for (let i = 0; i < 60; i++){
+      const j = IB.jitter();
+      if (Math.abs(j) < IB.FLOAT_JIT_MIN - 1e-9) near0++;
+      if (j < 0) left++; else right++;
+    }
+    t.ok(near0 === 0, 'no number is nudged by an amount too small to see (' + near0 + ' of 60)');
+    t.ok(left > 8 && right > 8, 'and they go both ways (' + left + ' left, ' + right + ' right)');
+    t.ok(IB.FLOAT_JIT > 4, 'and far enough to clear a digit (' + IB.FLOAT_JIT + 'px at zoom 1)');
+
+    // Wired, and ISOLATED. Four numbers on the SAME world point, so the world
+    // fan in floatSlot — which only ever separated numbers on different bodies
+    // — is out of the picture and what is left is the jitter on its own.
+    // Pushed straight onto the list rather than through addFloat for the same
+    // reason: addFloat fans them before the pass ever runs, and then this
+    // measures the fan.
+    IB.cam.follow = false; IB.cam.x = 70; IB.cam.z = IB.cam.tz = 1;
+    const planXs = (jits) => {
+      G.floats.length = 0;
+      for (let i = 0; i < 4; i++)
+        G.floats.push({ x:70, y:0, txt:String(11 + i), col:'#ffffff', t:.9 - i * .01, dur:.9,
+          sc:1, vy:-.6, jx:jits[i] });
+      return IB.floatPlan(CTX).map(p => p.q[0]);
+    };
+    const spread = (xs) => Math.max(...xs) - Math.min(...xs);
+    const column = planXs([0, 0, 0, 0]);
+    const fanned = planXs([IB.jitter(), IB.jitter(), IB.jitter(), IB.jitter()]);
+    t.ok(column.length === 4 && fanned.length === 4, 'four numbers landed on one body');
+    t.ok(spread(column) < .001, 'without the jitter all four print in one column of pixels (' +
+      spread(column).toFixed(2) + 'px across)');
+    t.ok(spread(fanned) > 6, 'and with it they do not (' + spread(fanned).toFixed(1) + 'px across)');
+    t.ok(column.every((x, i) => Math.abs(x - fanned[i]) > 1),
+      'every one of them is moved off the line, not just the outer two');
+    t.ok(new Set(fanned.map(x => x.toFixed(2))).size === 4, 'and no two of them share a column');
+    const plan = IB.floatPlan(CTX);
+    // ...and it is decoration. The jitter is spent in screen pixels at draw
+    // time precisely so it cannot move the world position floatSlot reads.
+    t.ok(plan.length === 4, 'the plan still has a place for each (' + plan.length + ')');
+    const h0 = IB.netHash();
+    const world = G.floats.map(f => f.x.toFixed(6)).join('|');
+    IB.floatPlan(CTX); IB.floatPlan(CTX);
+    t.ok(G.floats.map(f => f.x.toFixed(6)).join('|') === world, 'planning where they go does not move them');
+    t.ok(IB.netHash() === h0, 'nor the lockstep hash');
+    // A number that never went through addFloat has no jitter of its own and
+    // must still plan without one.
+    G.floats.length = 0;
+    G.floats.push({ x:70, y:0, txt:'9', col:'#ffffff', t:.9, dur:.9, sc:1, vy:-.5 });
+    t.ok(Number.isFinite(IB.floatPlan(CTX)[0].q[0]), 'and one with no jitter at all still lands somewhere finite');
+    G.floats.length = 0; G.units.length = 0;
+    IB.fxForce = wasForce;
+  }
+}
+
+/* ------------------------------------------------------- the default framing
+   The opening zoom was picked from the screen's WIDTH alone. On a 1440 laptop
+   that came out at .95, and once the dock had taken its share of the bottom
+   the whole fight — both sets of towers and every body between them — was a
+   forty-pixel band across the middle of the stage, with less contrast in it
+   than the empty grass beside it. */
+{
+  t.ok(IB.LANE_PX > 100, 'the lane band has a real height at zoom 1 (' + IB.LANE_PX.toFixed(0) + 'px)');
+  t.ok(IB.FRAME.laneShare > .1 && IB.FRAME.laneShare < .6,
+    'and it is asked for a sensible share of the frame (' + IB.FRAME.laneShare + ')');
+  // The rule binds where it was written to bind: a laptop.
+  const laptop = IB.startZoom(1440, 780);
+  t.ok(laptop * IB.LANE_PX >= .25 * 780 - 1,
+    'a 1440x780 stage opens with the lane filling a quarter of it (' +
+    (laptop * IB.LANE_PX / 780 * 100).toFixed(0) + '%)');
+  t.ok(laptop > .95, 'which is closer in than the width rule alone asked for (' + laptop.toFixed(2) + ')');
+  // ...and does not bind where the width rule is already the stricter of the
+  // two. A phone is short as well as narrow; pulling it back out to fit a
+  // quarter of a 470px stage would be the opposite of the fix.
+  t.ok(IB.startZoom(390, 470) === IB.startZoom(390, 100),
+    'a phone opens where its width says, whatever the stage height is (' + IB.startZoom(390, 470).toFixed(2) + ')');
+  t.ok(IB.startZoom(390, 470) >= .72, 'and still zoomed in enough to read the world');
+  // Taller frames ask for more, never less, and never past the range.
+  let dropped = 0, prev = 0;
+  for (const h of [400, 500, 600, 700, 800, 900, 1400, 2200]){
+    const z = IB.startZoom(1440, h);
+    if (z < prev - 1e-9) dropped++;
+    prev = z;
+    t.ok(z >= IB.ZOOM_MIN && z <= IB.ZOOM_MAX, 'a ' + h + 'px stage opens inside the zoom range (' + z.toFixed(2) + ')');
+  }
+  t.ok(dropped === 0, 'and a taller frame never opens further out than a shorter one');
+  t.ok(IB.laneFitZoom(0) > 0 && Number.isFinite(IB.laneFitZoom(undefined)),
+    'a degenerate stage height still gives a finite zoom');
+}
+
+/* -------------------------------------------- the paragraph that never left */
+{
+  IB.newMatch({ diff:'veteran', seed:5531 });
+  IB.dockHelpOn = null;
+  G.wave = 0;
+  t.ok(IB.dockHelp(), 'the beginner\'s paragraph is up at the beginning');
+  G.wave = IB.DOCK_TUTOR;
+  t.ok(!IB.dockHelp(), 'and gone by wave ' + IB.DOCK_TUTOR + ', where it is telling you what you have been doing for minutes');
+  t.ok(IB.DOCK_TUTOR > 0 && IB.DOCK_TUTOR < 8, 'which is early rather than never (' + IB.DOCK_TUTOR + ')');
+  IB.dockHelpOn = true;
+  t.ok(IB.dockHelp(), 'asking for it back at wave ' + G.wave + ' brings it back');
+  IB.dockHelpOn = false;
+  G.wave = 0;
+  t.ok(!IB.dockHelp(), 'and dismissing it at wave 0 keeps it away — the choice sticks in both directions');
+  IB.dockHelpOn = null;
+  // The dock still builds in every state, with and without it.
+  IB.MY = 0;
+  for (const w of [0, 9]){
+    G.wave = w;
+    const html = IB.dockHtml();
+    t.ok(html.length > 200, 'the dock builds at wave ' + w + ' (' + html.length + ' chars)');
+    t.ok(html.includes('On the bridge'), 'and always says what is walking at you');
+    t.ok(html.includes('Click a plot to build') === (w === 0),
+      'and carries the beginner\'s line only while it is the beginning');
+  }
+}
+
 /* ------------------------------------------------- naming the bridge */
 {
   // Every building in the hold carried its name. Nothing on the bridge did —
@@ -3844,6 +4225,234 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'both mesas draw from in front, from behind and from the middle');
 }
 {
+  /* The scatter decals were indistinguishable from cast shadows. Measured on
+     the enemy-gate framing: open grass H105 S.46 V.45, a scatter decal H106
+     S.46 V.49, a tree's CAST SHADOW H106 S.45 V.46. Three different kinds of
+     mark with one appearance, inside 0.03 luminance of each other — so
+     dark-on-ground meant nothing, and the one depth cue the renderer emits was
+     drowned by decoration that looked identical to it. */
+  IB.newMatch({ diff:'veteran', seed:2027 });
+  const hueOf = (c) => {
+    const M = Math.max(c[0], c[1], c[2]), m = Math.min(c[0], c[1], c[2]), d = M - m;
+    if (d < 1e-6) return 0;
+    const h = M === c[0] ? ((c[1] - c[2]) / d + 6) % 6
+            : (M === c[1] ? (c[2] - c[0]) / d + 2 : (c[0] - c[1]) / d + 4);
+    return h * 60;
+  };
+  const dHue = (a, b) => ((hueOf(a) - hueOf(b) + 540) % 360) - 180;
+  const T = IB.DECAL.tone, SL = IB.DECAL.slots;
+  let offHue = [], notLifted = [], washDark = [], gamut = [], swamped = [], naive = [];
+  for (let ti = 0; ti < T.length; ti++){
+    const [deg, , a] = T[ti];
+    for (let s = 0; s < SL; s++){
+      const t = s / (SL - 1);
+      const base = IB.rgbOf(IB.swardAt(t));
+      const wash = IB.rgbOf(IB.decalWash(ti, t));
+      const got = IB.composite(wash, base, a);
+      // 1. it lands on the hue it was asked for, and that is a real rotation
+      if (Math.abs(dHue(got, base) - deg) > 2) offHue.push(ti + '@' + s + ' ' + dHue(got, base).toFixed(1) + ' want ' + deg);
+      // 2. and ABOVE the ground it sits on. A decal darker than its own turf
+      //    is the bug: it is then a mark that looks exactly like a shadow.
+      const lift = IB.relLum(got) - IB.relLum(base);
+      if (!(lift > .015)) notLifted.push(ti + '@' + s + ' ' + lift.toFixed(4));
+      // 3. no alpha-black: the colour handed to the fill is itself lighter
+      //    than the ground, so nothing is being darkened on the way
+      if (!(IB.relLum(wash) > IB.relLum(base))) washDark.push(ti + '@' + s);
+      // 4. and the solve did not silently clamp on the way out — a wash that
+      //    leaves the gamut delivers a fraction of the shift it reported
+      const want = IB.decalTint(IB.swardAt(t), T[ti][0], T[ti][1]);
+      for (let i = 0; i < 3; i++){
+        const raw = base[i] + (want[i] - base[i]) / a;
+        if (raw < -.5 || raw > 255.5) gamut.push(ti + '@' + s + ' ch' + i + ' ' + raw.toFixed(0));
+      }
+      // 5. the ceiling. Lift a decal too far and a shadow that lands on it
+      //    comes back out at open-grass value and VANISHES where it crosses
+      //    the decoration — the same bug with the polarity flipped. Every
+      //    shadow strength the ground uses, over the brightest thing under it.
+      for (const sa of [IB.GROUND_SHADE.a, .34, .35]){
+        const shadowed = IB.composite(IB.rgbOf('#' + [20, 34, 18].map(v => v.toString(16).padStart(2, '0')).join('')), got, sa);
+        if (!(IB.relLum(base) - IB.relLum(shadowed) > .01))
+          swamped.push(ti + '@' + s + ' a' + sa + ' ' + (IB.relLum(base) - IB.relLum(shadowed)).toFixed(4));
+      }
+      // 6. and solving BACKWARDS is what makes it land. Washing the finished
+      //    tint straight over the ground — the obvious thing, and the thing
+      //    the first pass of this did — delivers a fraction of the shift.
+      const lazy = IB.composite(want, base, a);
+      if (!(Math.abs(IB.relLum(lazy) - IB.relLum(base)) < Math.abs(lift) * .6))
+        naive.push(ti + '@' + s);
+    }
+  }
+  t.ok(offHue.length === 0, 'every decal lands on the hue it was asked for (' + (offHue[0] || 'all ' + T.length * SL) + ')');
+  t.ok(T.every(x => Math.abs(x[0]) >= 5), 'and none of those rotations is a no-op');
+  t.ok(notLifted.length === 0, 'every decal is BRIGHTER than the turf it lies on (' + (notLifted[0] || 'all of them') + ')');
+  t.ok(washDark.length === 0, 'and no decal is painted with anything darker than the ground (' + (washDark[0] || 'none') + ')');
+  t.ok(gamut.length === 0, 'no wash is clamped on its way out of the solve (' + (gamut[0] || 'none') + ')');
+  t.ok(swamped.length === 0, 'a shadow still reads as a shadow where it crosses a decal (' + (swamped[0] || 'every one') + ')');
+  t.ok(naive.length === 0, 'and washing the finished tint straight over the ground would not have got there (' +
+    (naive[0] || 'all ' + T.length * SL) + ')');
+  // The three lobes of a decal have to compose to exactly the alpha its colour
+  // was solved for, or the middle of the patch is not the colour that was
+  // measured. Two ways to get this wrong: paint each lobe at the full alpha
+  // (too far) or paint one lobe (not far enough).
+  const p = IB.decalPass(.36);
+  const built = 1 - Math.pow(1 - p, IB.DECAL_LOBES.length);
+  t.ok(IB.PLOT_DETAIL > 0 && IB.DECAL_LOBES.length > 1,
+    'the tufts share the hold’s one detail gate rather than inventing a second');
+  t.ok(IB.PLOT_DETAIL > 0, 'the tufts share the hold’s one detail gate rather than inventing a second');
+  t.ok(Math.abs(built - .36) < 1e-9, 'a decal’s lobes compose to the alpha it was solved for (' + built.toFixed(4) + ')');
+  t.ok(p < .36 * .8 && p > 0, 'which means each lobe is painted well under it (' + p.toFixed(4) + ')');
+  t.ok(IB.DECAL_LOBES.length >= 2 && IB.DECAL_LOBES.some(l => l[0] !== 0 || l[1] !== 0),
+    'and the lobes are offset from each other, so a patch is not the rim of a coin');
+  // The dapple carries a TONE now, not a colour: the colour cannot be chosen
+  // until the ground underneath the patch is known.
+  const gr = IB.grassFor(0);
+  t.ok(gr.every(g => g.col === undefined && g.tone >= 0 && g.tone < T.length),
+    'the dapple names a tint, not a fill — the fill depends on the ground under it');
+  t.ok(new Set(gr.map(g => g.tone)).size >= 3, 'and it uses more than one of them');
+  // Every dark mark on this turf is a shadow, and they all clear the floor.
+  t.ok(IB.groundShadow(0).indexOf(',' + IB.GROUND_SHADE.a + ')') > 0,
+    'a ground shadow lighter than the floor is pulled up to it (' + IB.groundShadow(0) + ')');
+  t.ok(IB.groundShadow(.9).indexOf(',0.9)') > 0, 'and one deeper than it is left alone');
+}
+{
+  /* The plateau silhouette. In the hold framing the largest shape in the frame
+     was one dead straight stair-stepping line, corner to corner: grass at full
+     saturation running to a razor edge and stopping, with no thickness and no
+     visible side. A horizon that is one straight line is the tell. */
+  IB.newMatch({ diff:'veteran', seed:2029 });
+  IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+  t.ok(IB.edgeCache[0] === null, 'a new match forgets the old coastline');
+  const E0 = IB.edgeFor(0);
+  t.ok(IB.edgeFor(0) === E0, 'the coastline is built once and reused');
+  t.ok(IB.edgeFor(1) !== E0, 'and each hold gets its own');
+  const px = (dx, dy) => {                      // how far a world step moves on screen
+    const a = IB.lp(0, 0, 0), b = IB.lp(dx, dy, 0);
+    return Math.hypot(b[0] - a[0], b[1] - a[1]);
+  };
+  let flat = [], crowded = [], torn = [], skew = [], spacing = [], inward = [];
+  for (const side of [0, 1]){
+    const E = IB.edgeFor(side);
+    for (const f of IB.platFaces(side)){
+      const S = E[f.k], P = S.pts;
+      const ax = f.a[0], ay = f.a[1], bx = f.b[0], by = f.b[1];
+      // 1. the noise actually SPANS its range. Summed octaves of value noise
+      //    crowd their own mean, so an unstretched fBm is a straight line with
+      //    a tremble in it — which is the failure this edge exists to fix.
+      let lo = Infinity, hi = -Infinity, sum = 0;
+      for (const p of P){ if (p[2] < lo) lo = p[2]; if (p[2] > hi) hi = p[2]; sum += Math.abs(p[2]); }
+      if (!(hi > IB.EDGE.amp * .8)) crowded.push(side + f.k + ' hi ' + hi.toFixed(3));
+      if (!(lo < -IB.EDGE.amp * .8)) crowded.push(side + f.k + ' lo ' + lo.toFixed(3));
+      // and it is not one spike on an otherwise straight line
+      if (!(sum / P.length > IB.EDGE.amp * .18)) flat.push(side + f.k + ' mean|d| ' + (sum / P.length).toFixed(3));
+      // 2. in pixels, the displacement is the 5-9px the edge was specified at
+      const amp = px(S.nx * IB.EDGE.amp, S.ny * IB.EDGE.amp);
+      if (!(amp >= 5 && amp <= 9)) flat.push(side + f.k + ' amp ' + amp.toFixed(1) + 'px');
+      // 3. the corners meet the corners, or the island tears open there
+      const n = P.length - 1;
+      if (Math.hypot(P[0][0] - ax, P[0][1] - ay) > 1e-9) torn.push(side + f.k + ' head');
+      if (Math.hypot(P[n][0] - bx, P[n][1] - by) > 1e-9) torn.push(side + f.k + ' tail');
+      // 4. every point is displaced along the face's OWN normal, and that
+      //    normal points away from the island — the two holds mirror, and a
+      //    hard-coded direction turns one of the two coastlines inside out
+      for (let i = 0; i <= n; i++){
+        const t = i / n;
+        const ox = P[i][0] - (ax + (bx - ax) * t), oy = P[i][1] - (ay + (by - ay) * t);
+        if (Math.abs(ox * S.ny - oy * S.nx) > 1e-9) skew.push(side + f.k + '@' + i);
+        if (i > 0){
+          const gap = px(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+          if (!(gap > 6 && gap < 24)) spacing.push(side + f.k + '@' + i + ' ' + gap.toFixed(1) + 'px');
+        }
+      }
+      const inner = side === 0 ? 3 : C.LANE_LEN - 3;
+      const outer = inner - (side === 0 ? 1 : -1) * (IB.PLAT.back + 34);
+      const mx = (ax + bx) / 2 - (inner + outer) / 2, my = (ay + by) / 2 - (IB.PLAT.far + IB.PLAT.near) / 2;
+      if (!(S.nx * mx + S.ny * my > 0)) inward.push(side + f.k);
+      // 5. the roll under the lip is the 10-16px it was specified at
+      const roll = px(S.nx * IB.EDGE.roll, S.ny * IB.EDGE.roll);
+      if (!(roll >= 10 && roll <= 16)) flat.push(side + f.k + ' roll ' + roll.toFixed(1) + 'px');
+    }
+  }
+  t.ok(crowded.length === 0, 'the coastline noise spans its whole range instead of crowding its mean (' +
+    (crowded[0] || 'every face') + ')');
+  t.ok(flat.length === 0, 'and it wanders by the 5-9px it was drawn for, over its whole length (' + (flat[0] || 'every face') + ')');
+  t.ok(torn.length === 0, 'the coasts still meet at the corners of the island (' + (torn[0] || 'all six') + ')');
+  t.ok(skew.length === 0, 'every point moves along its own face’s normal (' + (skew[0] || 'all of them') + ')');
+  t.ok(inward.length === 0, 'and that normal points off the island, on both holds (' + (inward[0] || 'all six') + ')');
+  t.ok(spacing.length === 0, 'the edge is resampled about every 12px (' + (spacing[0] || 'evenly') + ')');
+  // A straight line is what this replaced, so say so: the finished coast has
+  // to be measurably not the chord it was cut from.
+  {
+    const S = IB.edgeFor(0).outer, P = S.pts, n = P.length - 1;
+    let worst = 0;
+    for (let i = 0; i <= n; i++) worst = Math.max(worst, Math.abs(P[i][2]));
+    t.ok(px(S.nx * worst, S.ny * worst) > 4,
+      'the biggest shape in the frame is no longer a straight line (' + px(S.nx * worst, S.ny * worst).toFixed(1) + 'px off it)');
+  }
+  // The tufts that straddle the line. Two tones, a few hundred of them, and
+  // every one within a pace of the coast — a tuft out in the field is not
+  // holding this join together.
+  let tufts = 0, tones = new Set(), stray = 0, flatT = 0;
+  for (const f of IB.platFaces(0)){
+    const S = IB.edgeFor(0)[f.k];
+    for (const T2 of S.tuft){
+      tufts++; tones.add(T2.dark);
+      if (!(T2.h > 0)) flatT++;
+      let near = Infinity;
+      for (const p of S.pts) near = Math.min(near, Math.hypot(p[0] - T2.x, p[1] - T2.y));
+      if (near > 1.2) stray++;
+    }
+  }
+  t.ok(tufts > 150 && tufts < 600, 'a few hundred tufts stand on the coast (' + tufts + ')');
+  t.ok(tones.size === 2, 'in two tones (' + tones.size + ')');
+  t.ok(stray === 0 && flatT === 0, 'and every one of them straddles the line and has some height (' + stray + ' adrift, ' + flatT + ' flat)');
+  // The sward is filled with the displaced ring, not with the four corners —
+  // otherwise the wander is a decoration painted near a straight edge.
+  const ring = IB.edgeRing(0, (x, y, z) => IB.lp(x, y, z));
+  let pts = 1;
+  for (const f of IB.platFaces(0)) pts += IB.edgeFor(0)[f.k].pts.length;
+  t.ok(ring.length === pts && ring.length > 100, 'the sward is filled with the whole coastline (' + ring.length + ' points)');
+  // ...and drawPlateau has to actually USE it. Filling the four corners and
+  // painting the wander on top leaves the green/rock boundary exactly as
+  // straight as it was, with a decoration beside it. The ring's first point is
+  // the far corner, which nothing else in the frame starts a path on.
+  {
+    IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1;
+    const st = CTX.__stats;
+    st.lines = []; st.dropped = 0;
+    IB.drawHold(CTX, 0);
+    const R = IB.edgeRing(0, (x, y, z) => IB.lp(x, y, z));
+    let run = -1;
+    for (let i = 0; i < st.lines.length; i++){
+      const L = st.lines[i];
+      if (L.k !== 'moveTo' || Math.abs(L.x - R[0][0]) > 1e-6 || Math.abs(L.y - R[0][1]) > 1e-6) continue;
+      let n = 0;
+      while (i + 1 + n < st.lines.length && st.lines[i + 1 + n].k === 'lineTo') n++;
+      if (n > run) run = n;
+    }
+    t.ok(st.dropped === 0, 'the capture held the whole hold (' + st.dropped + ' dropped)');
+    t.ok(run === R.length - 1, 'and the turf itself is laid down along it, not inside its four corners (' +
+      run + '/' + (R.length - 1) + ')');
+  }
+  // Cosmetic, and therefore invisible to the simulation.
+  const h0 = IB.netHash();
+  IB.edgeCache[0] = IB.edgeCache[1] = null;
+  IB.edgeFor(0); IB.edgeFor(1); IB.draw();
+  t.ok(IB.netHash() === h0, 'and none of it is anything the simulation can see');
+  // Rebuilt from the same hash, it comes back the same coastline.
+  const before = IB.edgeFor(0).outer.pts.map(p => p[2]).join(',');
+  IB.edgeCache[0] = null;
+  t.ok(IB.edgeFor(0).outer.pts.map(p => p[2]).join(',') === before, 'the coast is the same coast every time it is built');
+  // Off-screen coasts are not paid for: the lip is the most expensive thing on
+  // the mesa and from your own hold the far side of the island is behind you.
+  const e = (x, y, z) => IB.lp(x, y, z);
+  IB.cam.x = IB.HOLD_X;
+  const lit = IB.platFaces(0).filter(f => IB.edgeOnScreen(0, f.k, e)).length;
+  IB.cam.x = C.LANE_LEN / 2;
+  const dark = IB.platFaces(0).filter(f => IB.edgeOnScreen(0, f.k, e)).length;
+  t.ok(lit >= 1 && dark < lit, 'the coast is culled when it is out of shot (' + lit + ' in view at the hold, ' + dark + ' from the middle)');
+  IB.cam.x = IB.HOLD_X;
+}
+{
   // Doors and windows. Every plot building goes through drawHouse and only the
   // town hall and the forge ever had an opening cut into it — the rest were
   // blank boxes standing next to a hall with a door, four lit windows and a
@@ -4438,6 +5047,180 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'every building type draws with the new faces, from either seat');
 }
 {
+  // THE LIGHT LAW. The block above checks that the light comes from the left.
+  // This one checks that there is a light at all — that every number in LIT is
+  // the answer to one question asked of one light vector, rather than a value
+  // somebody picked and defended in isolation.
+  //
+  // The bug that names this test: LIT.roofNear was .86 while LIT.near was
+  // 1.02. roofNear is the gable end standing on the near wall — the same
+  // compass bearing, leaning BACK toward the open sky — so it was darker than
+  // the wall underneath it, which no light in the universe can arrange. Two
+  // roof planes ninety degrees apart shared a fill for the same reason. Every
+  // hand-set table drifts like this eventually; a derived one cannot.
+  const L = IB.LIT, LG = IB.LIGHT, pl = IB.planeLit;
+  t.ok(LG.z > 0, 'the sun is above the world rather than under it');
+  t.ok((LG.x < 0) === (IB.SUN.x < .5),
+    'and stands on the side of the world the sun disc is drawn on');
+  t.ok(Math.abs(Math.sqrt(LG.x * LG.x + LG.y * LG.y + LG.z * LG.z) - 1) < .02,
+    'the light vector is a direction, not a direction and a brightness at once');
+
+  // The law itself, asked of the shape rather than of the table: tilting any
+  // wall back toward the sky can only ever brighten it, whichever way it
+  // faces, because the sun is up there. This is the statement roofNear broke.
+  for (const [nx, ny, name] of [[0, 1, 'near'], [1, 0, 'right'], [-1, 0, 'left'], [0, -1, 'far']]){
+    const up = pl(nx * .7, ny * .7, .7);
+    t.ok(up > pl(nx, ny, 0) + .05,
+      'a ' + name + ' plane laid back toward the sky is brighter than the same plane stood upright (' +
+      up.toFixed(3) + ' vs ' + pl(nx, ny, 0).toFixed(3) + ')');
+  }
+  t.ok(pl(0, 0, 1) > pl(0, 0, -1) + .5, 'and a face turned at the sky beats one turned at the ground');
+
+  // The table is that law, cached. Every entry has to be the dot product of
+  // the plane it names — including the two that used to disagree.
+  const near = (a, b, why) => t.ok(Math.abs(a - b) < 1e-9, why + ' (' + a.toFixed(4) + ' vs ' + b.toFixed(4) + ')');
+  const R = IB.ROOF;
+  near(L.near, pl(0, 1, 0), 'the near wall is exactly what the light says a near wall is');
+  near(L.right, pl(1, 0, 0), 'and the right-hand wall what it says a right-hand wall is');
+  near(L.cap, pl(0, 0, 1), 'and the cap what it says of a face pointed at the sky');
+  near(L.roofLeft, pl(-R.rh, 0, R.over * R.w), 'the left slope is its own pitch, taken off the same light');
+  near(L.roofRight, pl(R.rh, 0, R.over * R.w), 'and the right slope its own');
+  near(L.roofNear, pl(0, R.rh, (R.over - R.ridge) * R.d), 'and the near gable its own');
+  near(L.roofFar, pl(0, -R.rh, (R.over - R.ridge) * R.d), 'and the far gable its own');
+  // The regression, stated as the impossibility it is.
+  t.ok(L.roofNear >= L.near,
+    'the gable leaning back off the near wall is never darker than the near wall (' +
+    L.roofNear.toFixed(3) + ' vs ' + L.near.toFixed(3) + ')');
+  t.ok(L.roofRight > L.right + .2,
+    'and the slope over the shaded wall is well clear of the wall itself — it still sees sky (' +
+    L.roofRight.toFixed(3) + ' vs ' + L.right.toFixed(3) + ')');
+  // Rule out the table that satisfies all of that by being flat.
+  t.ok(L.roofLeft - L.roofRight > .15 && L.near - L.right > .3,
+    'planes ninety degrees apart do not share a fill');
+  t.ok(new Set([L.near, L.right, L.cap, L.roofLeft, L.roofRight, L.roofNear, L.roofFar]).size === 7,
+    'and no two of the seven planes come out at the same number');
+  // A pitched roof is a pitched roof whatever building it is on: across the
+  // whole range the six buildings use, the sunward slope stays sunward.
+  for (const [w, rh] of [[.22, .30], [.40, .36], [.62, .55], [.38, .26]]){
+    t.ok(pl(-rh, 0, R.over * w) > pl(rh, 0, R.over * w) + .15,
+      'at pitch ' + (rh / w).toFixed(2) + ' the sunward slope still beats the other one');
+  }
+}
+{
+  // Two illuminants. shade() was a scalar multiply — every colour slid at
+  // black, so hue and saturation could not move and NO SHADOW IN THE GAME
+  // COULD CONTAIN COLOUR. There are two lights outdoors: a warm sun, and a
+  // blue sky that is the only thing lighting what the sun cannot reach.
+  const chan = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const lum = (c) => .2126 * c[0] + .7152 * c[1] + .0722 * c[2];
+  // Red over blue, as a FRACTION of the colour's own weight: a scalar multiply
+  // scales r and b together and cannot move this number at all, which is the
+  // whole complaint. An absolute red-minus-blue would drift with brightness
+  // and let the old function through.
+  const warmth = (c) => (c[0] - c[2]) / (c[0] + c[1] + c[2] || 1);
+  const stone = '#c4ab84';
+  const base = chan(stone), sun = chan(IB.shade(stone, 1.02)), sky = chan(IB.shade(stone, .34));
+
+  t.ok(warmth(sun) > warmth(base), 'a face in the sun is warmer than the paint it was mixed from');
+  t.ok(warmth(sky) < warmth(base), 'and a face the sun never reaches is cooler than it');
+  t.ok(warmth(sun) - warmth(sky) > .10,
+    'the two illuminants are far enough apart to see (' + warmth(sun).toFixed(3) + ' vs ' + warmth(sky).toFixed(3) + ')');
+  // The old function, ruled out: a scalar multiply leaves hue frozen exactly.
+  const hue = (c) => Math.atan2(1.732 * (c[1] - c[2]), 2 * c[0] - c[1] - c[2]);
+  t.ok(Math.abs(hue(sky) - hue(base)) > .02, 'the shadow is a different hue, not the same hue dimmed');
+  t.ok(Math.abs(hue(sun) - hue(base)) > .005, 'and so is the lit face');
+
+  // The floor. Nothing under an open sky is black — the sky is still up there
+  // lighting it — so shade() at nought is dim, not gone.
+  const dark = chan(IB.shade(stone, 0));
+  t.ok(lum(dark) > lum(base) * .2, 'a surface with no sun on it is still lit by the sky');
+  t.ok(lum(dark) < lum(base) * .5, 'but it is plainly in shadow');
+
+  // Brightness is still exactly what the call site asked for. 122 call sites
+  // were written against a scalar multiply; the tint must not smuggle value
+  // in with it, or a saturated blue in shadow comes out BRIGHTER than the
+  // same blue in the sun — which is how the minimap swapped its two holds.
+  for (const col of ['#4ea3ff', '#ff5a52', '#7a4a3c', '#8b8778']){
+    const c0 = chan(col);
+    for (const f of [.2, .5, .85]){
+      const got = lum(chan(IB.shade(col, f))), want = lum(c0) * (IB.SHADE.amb + (1 - IB.SHADE.amb) * f);
+      t.ok(Math.abs(got - want) < 2.5,
+        col + ' at ' + f + ' has the brightness the call site asked for (' + got.toFixed(1) + ' vs ' + want.toFixed(1) + ')');
+    }
+    t.ok(lum(chan(IB.shade(col, .3))) < lum(chan(IB.shade(col, .6))),
+      col + ' in shadow is darker than the same ' + col + ' half-lit');
+    t.ok(lum(chan(IB.shade(col, 1.25))) > lum(chan(IB.shade(col, 1))),
+      'and a rim on ' + col + ' is brighter than the face it sits on');
+  }
+  // A blue thing in shadow against a red thing in the light: the pair that
+  // caught it. The strip's own two blocks, from both seats.
+  for (const seat of [0, 1]){
+    const was = IB.MY; IB.MY = seat;
+    t.ok(lum(chan(IB.miniHoldCol(seat))) > lum(chan(IB.miniHoldCol(1 - seat))),
+      'from seat ' + seat + ' your hold is still the brighter block on the strip');
+    IB.MY = was;
+  }
+
+  // The sun's colour is the SUN's colour: move it and every lit surface in the
+  // world moves with it. This is the wire the old shade() did not have.
+  const wasWarm = IB.SUN.warm;
+  IB.SUN.warm = '190,215,255';
+  const cold = chan(IB.shade(stone, 1.1));
+  IB.SUN.warm = wasWarm;
+  const back = chan(IB.shade(stone, 1.1));
+  t.ok(warmth(cold) < warmth(back) - .05,
+    'paint the sun blue and the lit stone turns blue with it (' +
+    warmth(cold).toFixed(3) + ' vs ' + warmth(back).toFixed(3) + ')');
+  t.ok(back.join() === chan(IB.shade(stone, 1.1)).join(), 'and putting the sun back puts the stone back');
+}
+{
+  // Cones. There are four on the board, two on each keep, and each one was ONE
+  // TRIANGLE of one flat fill — the reddest shape in the picture with no light
+  // on it anywhere. A cone turns through the light: it always has a half that
+  // faces the sun and a half that cannot.
+  const lum = (hex) => { const n = parseInt(hex.slice(1), 16); return .2126 * ((n >> 16) & 255) + .7152 * ((n >> 8) & 255) + .0722 * (n & 255); };
+  // A context that keeps what it was asked to draw rather than drawing it.
+  const draw = (sunX) => {
+    const fills = [], rims = [];
+    let cur = [];
+    const c2 = {
+      fillStyle:'#000', strokeStyle:'#000', lineWidth:1,
+      beginPath(){ cur = []; },
+      moveTo(x, y){ cur.push([x, y]); },
+      lineTo(x, y){ cur.push([x, y]); },
+      closePath(){},
+      fill(){ fills.push({ col:c2.fillStyle, pts:cur }); },
+      stroke(){ rims.push({ col:c2.strokeStyle, pts:cur }); },
+    };
+    const wasX = IB.SUN.x;
+    if (sunX !== undefined) IB.SUN.x = sunX;
+    IB.coneRoof(c2, 100, 20, 60, 23, '#ff5a52', 1);
+    IB.SUN.x = wasX;
+    return { fills, rims };
+  };
+  const one = draw();
+  t.ok(one.fills.length === 2, 'a cone is drawn as two halves, not as one triangle (' + one.fills.length + ')');
+  t.ok(one.fills[0].col !== one.fills[1].col, 'and the two halves are not the same colour');
+  for (const h of one.fills) t.ok(/^#[0-9a-f]{6}$/i.test(h.col), 'each half is a colour a canvas can read (' + h.col + ')');
+  t.ok(lum(one.fills[0].col) > lum(one.fills[1].col) + 20,
+    'the half facing the sun is brighter than the half turned away (' +
+    lum(one.fills[0].col).toFixed(0) + ' vs ' + lum(one.fills[1].col).toFixed(0) + ')');
+  t.ok(IB.CONE.split > 0 && IB.CONE.split < 1,
+    'the terminator sits past the middle of the base, because the sun is high');
+  t.ok(one.rims.length === 1 && one.rims[0].col.indexOf(IB.SUN.warm) >= 0,
+    'and the sunward edge carries a hairline of the sun’s own colour');
+  const mid = (h) => (h.pts[0][0] + h.pts[1][0] + h.pts[2][0]) / 3;
+  // It turns with the sun, the same as the shadows and the clouds do — and the
+  // rim goes round with it, or the lit half ends up rimmed down its dark edge.
+  const left = draw(.17), right = draw(.83);
+  t.ok(mid(left.fills[0]) < 100 && mid(right.fills[0]) > 100,
+    'the lit half is on the sun’s side of the apex, whichever side of the sky the sun is on');
+  t.ok(left.rims[0].pts[1][0] < 100 && right.rims[0].pts[1][0] > 100,
+    'and the hairline runs down the sunward edge either way');
+  t.ok(Math.abs(mid(left.fills[0]) - 100) > 4,
+    'the split is a real split, not a seam down the middle (' + mid(left.fills[0]).toFixed(1) + ' from an apex at 100)');
+}
+{
   // The sky. Every object in this game is lit from the upper left and there
   // was nothing up there doing the lighting — and a sun on the WRONG side of
   // that sky would be the same bug drawHouse had, seen from the other end.
@@ -4450,6 +5233,47 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(IB.SUN.y > 0 && IB.SUN.y < IB.BANDS[0].y,
     'and above the furthest ridge rather than buried in it');
   t.ok(IB.SUN.r > 0 && IB.SUN.halo > 1, 'it has a disc, and a halo bigger than the disc');
+
+  // Plates. The sky is about twenty full-screen gradient fills, which measured
+  // as more than half the frame, so the parts of it that do not move are
+  // painted once and blitted after that. The one thing that would undo the
+  // whole idea is keying a plate on where the camera is: it would rebuild
+  // every frame of every pan, which is exactly the case it exists for.
+  const k0 = IB.plateKey(true), kz = IB.plateKey(false);
+  const camX = IB.cam.x;
+  IB.cam.x = camX + 137;
+  t.ok(IB.plateKey(true) === k0 && IB.plateKey(false) === kz,
+    'a plate key does not move with the camera along the bridge');
+  IB.cam.x = camX;
+  const camZ = IB.cam.z;
+  IB.cam.z = camZ * 1.7;
+  t.ok(IB.plateKey(true) !== k0, 'but a zoomed plate is rebuilt when the zoom changes');
+  t.ok(IB.plateKey(false) === kz, 'and one that does not care about zoom is not');
+  IB.cam.z = camZ;
+
+  // Dynamic sky resolution. The governor only ever goes one way — a two-way
+  // one hunts — so the steps have to be ordered worst-last, and the first of
+  // them has to be the full-resolution picture or a fast machine would never
+  // get it.
+  t.ok(IB.SKY.steps[0] === 1, 'the sky starts at full resolution');
+  let up = 0;
+  for (let i = 1; i < IB.SKY.steps.length; i++) if (IB.SKY.steps[i] >= IB.SKY.steps[i - 1]) up++;
+  t.ok(up === 0, 'and every step down is actually down (' + IB.SKY.steps.join(' > ') + ')');
+  t.ok(IB.SKY.steps[IB.SKY.steps.length - 1] >= .25,
+    'and never so far down that the sky stops being a picture');
+  t.ok(IB.SKY.steps.includes(IB.SKY.res), 'the resolution it is on is one of the steps it knows');
+  // A budget under a 60Hz frame would drop the sky on a machine that was
+  // keeping up perfectly well.
+  t.ok(IB.SKY.budget > 16.7, 'the frame budget leaves room for a 60Hz frame (' + IB.SKY.budget + 'ms)');
+  // The god rays are the expensive half of the sky and they are baked, so
+  // their shape must not read the clock — a plate that changed every frame
+  // would be a repaint with extra steps.
+  t.ok(IB.RAYS.length > 2 && IB.RAY_LOBES.length > 1, 'the shafts are stacked wedges, not a starburst');
+  t.ok(IB.RAY_H > 0 && IB.RAY_H < 1, 'and they stop above the valley floor (' + IB.RAY_H + ')');
+  t.ok(!/G\.t/.test(String(IB.skyRays)), 'the baked shaft plate does not read the clock');
+  // Whereas the layer that scrolls must, or the weather would freeze.
+  t.ok(/G\.t/.test(String(IB.skyRoll)) || /G\.t/.test(String(IB.drawClouds)),
+    'the scrolling half of the sky still moves with time');
   // The rim runs foot -> apex to the RIGHT, so the face it belongs to looks
   // left. Move the sun and this has to move with it.
   t.ok(Math.sign(IB.RIDGE_RIM) === (IB.SUN.x < .5 ? 1 : -1),
@@ -4469,6 +5293,62 @@ t.ok(true, 'drawing an empty bridge is harmless');
   for (let i = 1; i < IB.BANDS.length; i++)
     if (IB.BANDS[i].d <= IB.BANDS[i - 1].d || IB.BANDS[i].y <= IB.BANDS[i - 1].y) back++;
   t.ok(back === 0, 'the ridges are laid down furthest first (' + back + ' out of order)');
+
+  // A mountain is not made of glass. The three bands used to be filled at
+  // .66, .80 and .92, which made every one of them a window onto the ones
+  // behind it: pale spikes crossed peaks that were supposed to be in FRONT of
+  // them, and leaned in, the far range showed through the near one hard
+  // enough to be taken for a translucent cliff. Opaque now — the air in front
+  // of a ridge is the only thing allowed to lighten it.
+  const alphaOf = (s) => {
+    const m = s.match(/rgba\(\s*[\d.]+\s*,\s*[\d.]+\s*,\s*[\d.]+\s*,\s*([\d.]+)\s*\)/);
+    return m ? +m[1] : 1;
+  };
+  let glass = 0;
+  for (const b of IB.BANDS) if (alphaOf(b.col) < 1) glass++;
+  t.ok(glass === 0, 'no ridge is painted at an alpha for the range behind it to show through');
+  t.ok(new Set(IB.BANDS.map(b => b.col)).size === IB.BANDS.length,
+    'and the three did not all become the same opaque colour on the way');
+  // Which means `fog` is now carrying the recession on its own, so it has to
+  // thin as the ridges come nearer — three bands with one fog value would be
+  // three shades again rather than three distances.
+  let thick = 0;
+  for (let i = 1; i < IB.BANDS.length; i++) if (!(IB.BANDS[i].fog < IB.BANDS[i - 1].fog)) thick++;
+  t.ok(thick === 0, 'and each nearer ridge has less air in front of it than the one behind it');
+
+  // Where the far range's outline lands. Its baseline used to run straight
+  // across the top of the bridge's far handrail — two edges that merely touch,
+  // which is the oldest amateur tell there is — so the outline alone now
+  // carries on down behind the deck.
+  IB.newMatch({ diff:'veteran', seed:4242 });
+  IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = .62;
+  IB.draw();
+  const deckW = C.LANE_W / 2 + .6;
+  const railTop = IB.lp(60, -deckW, 1.35)[1], nearKerb = IB.lp(60, deckW)[1];
+  const pool = IB.LH * IB.bandFoot(IB.BANDS[0]);      // where its air still lies
+  const outline = IB.LH * IB.ridgeFoot(IB.BANDS[0]);  // where its silhouette ends
+  t.ok(pool > railTop - 14 && pool < nearKerb,
+    'the far range still has the bridge rail at its nominal foot — the artefact this exists for');
+  t.ok(outline > nearKerb,
+    'but its outline runs on past the near kerb, so the range passes behind the deck (' +
+    Math.round(outline) + ' vs ' + Math.round(nearKerb) + ')');
+  const drop = outline - pool;
+  t.ok(drop >= 55 && drop <= 100,
+    'dropped ' + Math.round(drop) + 'px: far enough to clear the rail, not so far the range is buried');
+  // And ONLY the outline moved. The haze pool and the fog gradient are the
+  // best-lit thing in this sky and they stay where they were — a haze that
+  // followed the outline down would go behind the bridge with it and the far
+  // range would lose the one thing putting it behind the middle one.
+  let dragged = 0;
+  for (let i = 1; i < IB.BANDS.length; i++)
+    if (IB.ridgeFoot(IB.BANDS[i]) !== IB.bandFoot(IB.BANDS[i])) dragged++;
+  t.ok(dragged === 0, 'no other band was moved with it');
+  t.ok(IB.ridgeFoot(IB.BANDS[0]) !== IB.bandFoot(IB.BANDS[0]),
+    'and the two heights are genuinely two heights, not one function twice');
+  t.ok(/bandFoot\(b\)/.test(String(IB.skyRoll)),
+    'the haze still pools at the band\'s own foot rather than at the outline\'s');
+  t.ok(/b\.y \+ b\.h \+ \.02/.test(String(IB.skyRoll)),
+    'and the fog gradient still ends exactly where it always did');
 
   // The halo is a radial gradient — a new call on this path — and the whole
   // sky has to survive every camera the game can reach.
@@ -4898,6 +5778,224 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
   IB.MY = 0; IB.cam.z = IB.cam.tz = 1;
   t.ok(true, 'everything that casts a shadow draws, from either seat, at every zoom');
+}
+{
+  /* GROUND CONTACT. One undirected ellipse was the whole shadow language of
+     this world, held under a radius on purpose so that no shadow ever cleared
+     its own footprint — which meant none of them resembled its caster, none
+     had a contact core, and a dozen bodies in a brawl pooled into one grey
+     smear. Six art directors, six lenses, one sentence back: nothing here is
+     attached to the ground. */
+  const st = CTX.__stats;
+  const alphaOf = (col) => Number((String(col).match(/([\d.]+)\)$/) || [0, 0])[1]);
+  // Everything shadow() lays down, with the colour each shape was filled in.
+  // ell() and smear() both set the fill AFTER the path, so the colour has to
+  // be read off the fill — and smear's first arc shares a fill with its
+  // second, which is why the pairing is done by walking the two lists.
+  const marksOf = (f) => {
+    st.ellipses = []; st.fills = []; st.fillsDropped = 0;
+    f();
+    const es = st.ellipses.slice();
+    // the run is: near cap (fill lands on the far cap), far cap, core
+    return { all:es, body:es.find(e => e.fill !== null), core:es[es.length - 1], n:es.length };
+  };
+  IB.newMatch({ diff:'veteran', seed:6101 });
+  IB.MY = 0;
+  IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+  {
+    const m = marksOf(() => IB.shadow(CTX, 100, 200, 40, 16, 'rgba(0,0,0,.28)'));
+    // A single mark is exactly what was there before, so it is the first thing
+    // ruled out — and three shapes, not two, because the thrown body is a hull
+    // spanning two caps rather than an ellipse parked to one side.
+    t.ok(m.n === 3, 'a thing on the ground puts down a thrown body and a contact core, not one oval (' + m.n + ' shapes)');
+    t.ok(m.core.x === 100 && m.core.y === 200,
+      'the core sits exactly under the object, which is what makes it read as touching');
+    t.ok(Math.sign(m.body.x - 100) === IB.shadowSide() && m.body.x !== 100,
+      'and the body is thrown clear of it, on the side the sun is not (' + (m.body.x - 100).toFixed(1) + ')');
+    // Both marks at the same place is a haze; both at the throw is a floating
+    // object. The pair only works if they differ.
+    t.ok(Math.abs(m.body.x - 100) > 40,
+      'the throw CLEARS the footprint now — the core is what holds the object down (' +
+      Math.abs(m.body.x - 100).toFixed(1) + ' vs a radius of 40)');
+    t.ok(m.core.rx > 0 && m.core.rx < 40 * .8,
+      'the core is a contact patch, not the whole footprint again (' + m.core.rx.toFixed(1) + ' of 40)');
+    t.ok(m.body.rx === 40 && m.body.ry === 16,
+      'while the body keeps the caster’s own footprint at both ends of the smear');
+    t.ok(alphaOf(m.core.fill) > alphaOf(m.body.fill) * 1.5,
+      'and the core is much the darker of the two (' + alphaOf(m.core.fill) +
+      ' vs ' + alphaOf(m.body.fill) + ')');
+    t.ok(alphaOf(m.core.fill) > .28 && alphaOf(m.body.fill) < .28,
+      'the caller’s alpha is a weight the pair is split out of, not a value either one takes');
+  }
+  {
+    // A caller that fades a whole shadow — drawEnds wrapped the keep's in .22
+    // for its whole life — must not flatten the two marks back into one haze.
+    // The RATIO is the thing: fold the blanket alpha in and it survives; lay it
+    // over the pair and it survives too, but then so does the old bug where a
+    // fade at the call site made the core invisible before the body.
+    const full = marksOf(() => IB.shadow(CTX, 100, 200, 40, 16, 'rgba(0,0,0,.28)'));
+    CTX.globalAlpha = .3;
+    const faded = marksOf(() => IB.shadow(CTX, 100, 200, 40, 16, 'rgba(0,0,0,.28)'));
+    CTX.globalAlpha = 1;
+    const rat = (m) => alphaOf(m.core.fill) / alphaOf(m.body.fill);
+    t.ok(Math.abs(rat(full) - rat(faded)) < .02,
+      'a caller that fades the whole shadow keeps the core dark relative to the throw (' +
+      rat(full).toFixed(2) + ' vs ' + rat(faded).toFixed(2) + ')');
+    t.ok(alphaOf(faded.core.fill) < alphaOf(full.core.fill),
+      'and it really did fade — the fold is not just ignoring the caller (' +
+      alphaOf(faded.core.fill) + ' vs ' + alphaOf(full.core.fill) + ')');
+    t.ok(alphaOf(faded.core.fill) > alphaOf(faded.body.fill),
+      'with the core still the darker mark at the far end of the fade');
+  }
+  {
+    // What is NOT standing on the ground keeps the single soft mark. A contact
+    // core under a shaft in mid-air is the loudest lie available in a picture
+    // whose whole subject is what touches what.
+    const m = marksOf(() => IB.softShadow(CTX, 100, 200, 40, 16, 'rgba(0,0,0,.28)'));
+    t.ok(m.n === 1, 'a thing in flight throws one soft mark and no core (' + m.n + ')');
+    t.ok(m.all[0].x !== 100, 'still leaning the way the sun says');
+    const s = IB.shadowOff(40, 16), b = IB.throwOff(40, 16);
+    t.ok(Math.sign(s[0]) === Math.sign(b[0]) && Math.abs(b[0]) > Math.abs(s[0]),
+      'the two share a bearing and only the reach differs (' + s[0].toFixed(1) + ' vs ' + b[0].toFixed(1) + ')');
+    t.ok(IB.SHADOW.reach > 1 / IB.SHADOW.dx,
+      'and the reach is set past the point where a throw stays inside its own footprint');
+    // And there is no size at which a thing on the ground quietly gives the
+    // pair up. A level of detail here was tried and taken out: sixty pieces of
+    // hold scatter sit within a few pixels of each other in size, so they all
+    // cross any threshold on the same wheel click and change shape together.
+    // The pair is the same rule from a pebble to a keep.
+    const sizes = [1, 3, 9, 40].map(r => marksOf(() => IB.shadow(CTX, 100, 200, r, r * .4, 'rgba(0,0,0,.28)')).n);
+    t.ok(sizes.every(n => n === sizes[0]) && sizes[0] === 3,
+      'a thing on the ground gets both marks at every size, so nothing pops as the zoom crosses a threshold (' +
+      sizes.join(',') + ')');
+  }
+  {
+    // COVERAGE, which was the panel's actual finding: not "the keep has no
+    // shadow" but that having one was a per-asset decision. The keep is the
+    // biggest object in its frame and it was the one that went without.
+    IB.newMatch({ diff:'veteran', seed:6107 });
+    IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+    const cores = (f) => {
+      st.ellipses = []; st.fills = [];
+      f();
+      return st.ellipses.filter(e => e.fill !== null && alphaOf(e.fill) > 0 &&
+        /^rgba\(/.test(String(e.fill)));
+    };
+    IB.cam.x = -58;
+    const keep = cores(() => IB.drawEnds(CTX));
+    t.ok(keep.length >= 4,
+      'the keep and its towers all mark the ground they stand on (' + keep.length + ' marks)');
+    // and every structure key, not just the ones somebody remembered
+    for (const s of G.sides) for (const stx of s.structs){
+      IB.cam.x = stx.x;
+      const n = cores(() => IB.drawStructure(CTX, stx)).length;
+      t.ok(n >= 2, stx.key + ' puts both marks on the deck (' + n + ')');
+    }
+    IB.cam.x = 26;
+  }
+  {
+    /* The deck railing. A hundred and twenty world units of handrail stood in
+       open daylight over the largest lit surface in the game and threw one
+       stub per post — no rails, nothing running the length of it at all. */
+    const W = C.LANE_W / 2 + .6;
+    const far = IB.deckFarY(W);
+    t.ok(IB.lp(0, far)[1] < IB.lp(0, -far)[1],
+      'the rail that throws is the one the projection puts further off, not the one that was typed in');
+    const o = IB.railShadowOff(IB.DECK_XS.railH, far);
+    t.ok(Math.sign(o[0]) === IB.shadowSide() && o[0] !== 0,
+      'its shadow runs down the span the way every other shadow leans (' + o[0].toFixed(2) + ')');
+    t.ok(Math.sign(o[1]) === -Math.sign(far) && o[1] !== 0,
+      'and ACROSS the deck, inward — a rail whose shadow lands under itself is a rail nobody lit');
+    const land = far + o[1];
+    t.ok(Math.abs(land) < IB.DECK_XS.kerb,
+      'it lands on the boards rather than off the edge (' + land.toFixed(2) +
+      ' inside a kerb at ' + IB.DECK_XS.kerb + ')');
+    t.ok(Math.abs(land - far) > .6,
+      'far enough in from the kerb to be a stripe rather than the kerb’s own shade (' +
+      Math.abs(land - far).toFixed(2) + ')');
+    // The sun is beyond the far edge, so everything on this deck throws the
+    // same way across it. Put the SAME offset on the near rail and its shadow
+    // lands past the fascia, thirty feet down in the gorge — which is why only
+    // one of the two is ever drawn, and why drawing both would be a lie the
+    // rest of the lighting could be checked against.
+    const nearLand = -far + o[1];
+    t.ok(Math.abs(nearLand) > IB.DECK_XS.kerb,
+      'the same throw puts the near rail’s shadow off the bridge entirely (' +
+      nearLand.toFixed(2) + ' past a kerb at ' + IB.DECK_XS.kerb + ')');
+    // WIRED: one fill in the rail shadow's own colour reached the canvas.
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.4;
+    st.fills = []; st.fillsDropped = 0;
+    IB.drawDeck(CTX);
+    const hits = st.fills.filter(f => f === IB.RAIL_SH.col).length;
+    t.ok(hits === 1 && st.fillsDropped === 0,
+      'and the whole railing costs the deck exactly one more fill (' + hits + ')');
+  }
+  {
+    /* FIX 6. Nothing that overhangs threw anything and no recess was dark. */
+    const stopsOf = (g) => (g && g.__stops) || [];
+    const aOf = (col) => Number((String(col).match(/([\d.]+)\)$/) || [0, 1])[1]);
+    st.grads = []; st.rects = [];
+    IB.underCourse(CTX, 10, 40, 60, 2, IB.STONE.mid);
+    const g = st.grads[st.grads.length - 1], ss = stopsOf(g);
+    t.ok(ss.length >= 2, 'a projecting course lays a graded band under itself (' + ss.length + ' stops)');
+    t.ok(aOf(ss[0][1]) > .4 && aOf(ss[ss.length - 1][1]) === 0,
+      'hard against the stone that overhangs and gone by the bottom (' +
+      aOf(ss[0][1]) + ' → ' + aOf(ss[ss.length - 1][1]) + ')');
+    // The band is the WALL in shade, not a grey laid over it — which is the
+    // difference between a shadow and a painted stripe, and the reason
+    // shade() had to learn about two illuminants first.
+    const bandHex = IB.shade(IB.STONE.mid, IB.UNDER.f);
+    const lum = (h) => { const n = parseInt(h.slice(1), 16);
+      return .2126 * ((n >> 16) & 255) + .7152 * ((n >> 8) & 255) + .0722 * (n & 255); };
+    t.ok(lum(bandHex) < lum(IB.STONE.mid) * .8,
+      'and it is genuinely darker than the wall it falls on (' +
+      Math.round(lum(bandHex)) + ' vs ' + Math.round(lum(IB.STONE.mid)) + ')');
+    t.ok(IB.UNDER.h > 0 && g.__at[3] - g.__at[1] === IB.UNDER.h * 2,
+      'five world units of it, in the scale it was drawn at, not a fixed pixel count');
+    // The guard: a course over nothing has nothing to shade.
+    st.grads = [];
+    IB.underCourse(CTX, 10, 40, 0, 2, IB.STONE.mid);
+    IB.underCourse(CTX, 10, 40, 60, 2, 'rgba(0,0,0,.3)');
+    t.ok(st.grads.length === 0, 'a course with no wall under it draws nothing at all');
+    // ...and block() carries it, so a call site says "this projects" and gets
+    // the band, rather than every wall in the game needing to remember.
+    st.grads = [];
+    IB.block(CTX, 0, 0, 40, 6, IB.STONE.mid2, IB.STONE.lit);
+    const plain = st.grads.length;
+    IB.block(CTX, 0, 0, 40, 6, IB.STONE.mid2, IB.STONE.lit, IB.STONE.mid, 1);
+    t.ok(plain === 0 && st.grads.length === 1,
+      'a block told what it projects over shades it, and one told nothing does not');
+  }
+  {
+    // The arch head. An opening is a hole through eight feet of wall: the
+    // light gets in at the threshold and dies going up, and every door in this
+    // game was lit right to its crown, which is a door painted on a wall.
+    const st2 = CTX.__stats;
+    st2.grads = [];
+    IB.archShade(CTX, 0, 100, 30, 50);
+    const g = st2.grads[st2.grads.length - 1];
+    const aOf = (col) => Number((String(col).match(/([\d.]+)\)$/) || [0, 1])[1]);
+    t.ok(g && g.__stops.length >= 2, 'the head of an opening is filled, not left lit');
+    t.ok(aOf(g.__stops[0][1]) > .3 && /rgba\(0,0,0/.test(g.__stops[0][1]),
+      'in black — this is the absence of light in a hole, not the grey where two lit solids meet');
+    t.ok(aOf(g.__stops[g.__stops.length - 1][1]) === 0,
+      'and it falls off downward, so the threshold is the lit part');
+    t.ok(IB.ARCH_SHADE.f > .2 && IB.ARCH_SHADE.f < .6,
+      'over the top of the opening rather than all of it (' + IB.ARCH_SHADE.f + ')');
+    t.ok(g.__at[3] - g.__at[1] === 50 * IB.ARCH_SHADE.f,
+      'measured off the opening it is in, so a tall gate is not shaded like a slit');
+    // WIRED: the gate really has one, and so does the keep.
+    IB.newMatch({ diff:'veteran', seed:6113 });
+    IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+    const black = () => st2.grads.filter(gr => gr.__stops.length &&
+      /rgba\(0,0,0,[.\d]+\)$/.test(gr.__stops[0][1]) && aOf(gr.__stops[0][1]) > .3).length;
+    const gate = G.sides[0].structs.find(s => s.key === 'gate');
+    IB.cam.x = gate.x; st2.grads = []; IB.drawStructure(CTX, gate);
+    t.ok(black() >= 1, 'the gate’s plank door is dark under its arch head (' + black() + ')');
+    IB.cam.x = -58; st2.grads = []; IB.drawEnds(CTX);
+    t.ok(black() >= 1, 'and so is the keep’s (' + black() + ')');
+    IB.cam.x = 26;
+  }
 }
 {
   // The strip along the bottom. Its two hold blocks were green and brown,
@@ -5870,6 +6968,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const s = CTX.__stats;
     const plotOps = (type, lvl) => {
       G.sides[0].plot[4] = lvl ? { type, lvl, tile:4, raise:0 } : null;
+      // Same as the mirror sweep above: the capture is a running log for the
+      // whole suite, and one hold — coastline, caprock and all — is more path
+      // than it has room for by the time this block runs. What it refuses is
+      // the buffer's limit, not the renderer's, so give each call a clean one.
+      s.lines = []; s.ellipses = [];
       s.dropped = 0;
       const b = s.ops;
       IB.drawHold(CTX, 0);
@@ -5878,6 +6981,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
       return { n, dropped:s.dropped };
     };
     const types = Object.keys(IB.BUILDINGS);
+    // Same as the mirror sweep above: the capture is a running log for the
+    // whole suite and eighteen full holds is more path than it has room for by
+    // the time this block runs, so it starts refusing entries mid-sweep and
+    // the loss it reports is the buffer's, not the renderer's.
+    CTX.__stats.lines = []; CTX.__stats.ellipses = [];
     t.ok(types.length >= 5, 'the level sweep covers every building (' + types.length + ')');
     let flat = [], lost = 0;
     for (const type of types){
@@ -10853,10 +11961,72 @@ t.ok(true, 'drawing an empty bridge is harmless');
   // treat it as a fresh start.
   const wiring = SRC.slice(SRC.indexOf('sock.onmessage'));
   t.ok(/m\.k === 'rejoin'/.test(wiring), 'the client handles a rejoin');
-  const rj = wiring.slice(wiring.indexOf("m.k === 'rejoin'"), wiring.indexOf("m.k === 'rejoin'") + 900);
+  // To the end of the handler, not a fixed number of characters — a window
+  // measured in bytes is a window that closes the next time somebody writes a
+  // comment, and it did.
+  const rj = wiring.slice(wiring.indexOf("m.k === 'rejoin'"), wiring.indexOf('netRecv(m);'));
   t.ok(/role === 'staying'/.test(rj) && /netSendSnap\(true\)/.test(rj),
     'the one that stayed hands the board over');
   t.ok(/awaitSync = true/.test(rj), 'and the one returning waits for it rather than playing a phantom match');
+
+  /* ------------------------------------------------ waiting for a board
+     The hang this whole protocol change is about. `awaitSync` stops the
+     simulation dead and had no clock on it, so a board that was never sent —
+     which is exactly what happened when the relay named a keeper that did not
+     have one — left the game frozen under a banner saying it was being picked
+     up. Whatever else goes wrong here, it must stop LOOKING like it works. */
+  IB.netEnd(); IB.netStart({ me:1, seed:9706 });
+  IB.NET.awaitSync = true; IB.NET.syncWait = 0; IB.NET.syncGaveUp = false;
+  const waiting = IB.netBanner();
+  t.ok(/picking the match up/i.test(waiting), 'waiting on a board reads as a wait (' + waiting + ')');
+  IB.NET.syncWait = IB.SYNC_WAIT + 1;
+  IB.netPump(); IB.netPump();
+  t.ok(IB.NET.syncGaveUp, 'a board that never comes is eventually admitted to (' + IB.NET.syncWait.toFixed(1) + 's)');
+  t.ok(IB.netBanner() !== waiting && /never sent/i.test(IB.netBanner()),
+    'and the bar stops claiming it is working (' + IB.netBanner() + ')');
+  t.ok(IB.NET.diary.some(e => e.kind === 'sync never came'), 'and it is written down');
+  // The wait has to be long enough that a big board in flight is not called a
+  // failure — a snapshot is twenty kilobytes in pieces.
+  t.ok(IB.SYNC_WAIT >= 10, 'the wait is long enough for a real snapshot to arrive (' + IB.SYNC_WAIT + 's)');
+  // And arriving clears it, or the second rejoin of a match would start out
+  // already having given up.
+  IB.netTakeSnap({ id:1, i:0, n:1, tick:5, part:JSON.stringify(IB.netSnap()) });
+  t.ok(!IB.NET.awaitSync && !IB.NET.syncGaveUp && IB.NET.syncWait === 0,
+    'and a board that does arrive clears the whole complaint');
+  IB.netEnd();
+
+  /* ------------------------------------------- what the client tells the room
+     The relay cannot see whether this browser still has a board, and when it
+     guessed — from a flag it set the first time a room filled and never
+     cleared — it hung two players who had both reloaded, each waiting for the
+     other to hand over a match neither had. So the client says. Twice: once in
+     the connect URL, which only covers the machine that is connecting, and
+     then on the wire, because the machine that STAYED made its claim before
+     the match existed.                                                       */
+  const conn = SRC.slice(SRC.indexOf('function lobbyConnect'), SRC.indexOf('function lobbyConnect') + 1400);
+  t.ok(/have=1/.test(conn) && /have=0/.test(conn),
+    'the connect URL declares whether this machine is bringing a board');
+  t.ok(/NET\.on/.test(conn) && /awaitSync/.test(conn),
+    'and a machine that is itself still waiting for a board does not claim to have one');
+  t.ok(IB.HAVE_EVERY > 0 && IB.HAVE_EVERY <= 60,
+    'the claim is refreshed at least once a second (' + IB.HAVE_EVERY + ' ticks)');
+  const pub = SRC.slice(SRC.indexOf('function netPublish'), SRC.indexOf('function netDeliver'));
+  t.ok(/'have:'/.test(pub), 'and it goes out with the batch that already goes out every tick');
+  t.ok(/awaitSync/.test(pub),
+    'and not while this machine is waiting for a board, or it would offer one it does not have');
+
+  // The one thing that made this unreportable: `peers` was parsed and thrown
+  // away, so "waiting for them to join" was the same screen whether nobody had
+  // typed the code or both of you were in and the room had failed to start.
+  t.ok(/m\.k === 'peers'/.test(wiring) && /LOBBY\.peers/.test(wiring),
+    'the room’s head count reaches the lobby instead of being dropped');
+  IB.LOBBY.peers = 0; t.ok(IB.lobbyWho() === '', 'an empty room says nothing extra');
+  IB.LOBBY.peers = 1;
+  t.ok(/1 of 2/.test(IB.lobbyWho()), 'one player in the room says so (' + IB.lobbyWho() + ')');
+  IB.LOBBY.peers = 2;
+  t.ok(/both/i.test(IB.lobbyWho()) && IB.lobbyWho() !== IB.lobbyHtml(),
+    'and two says so differently, which is the whole point (' + IB.lobbyWho() + ')');
+  IB.LOBBY.peers = 0;
 }
 
 /* ============================================ you can see what is happening
@@ -10994,7 +12164,189 @@ t.ok(true, 'drawing an empty bridge is harmless');
   IB.fxForce = false;
 }
 
+{
+  // THE GRADE. The picture had no ends to it: sampled off the real canvas, six
+  // in ten world pixels sat between luma .30 and .50, nothing reached black,
+  // nothing reached white — and the values were the wrong way round, the Ember
+  // Host's masonry measuring L .785 against a sky of L .633. Stonework cannot
+  // out-value the sky it stands in front of; that is not a look, it is a
+  // missing grade. Two halves: cap the stone family, then put a floor and a
+  // ceiling on the whole frame.
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    return (.2126 * ((n >> 16) & 255) + .7152 * ((n >> 8) & 255) + .0722 * (n & 255)) / 255;
+  };
+  // ---- the stone family. A lit face is the top eighth of a chamfer catching
+  // the sun, not a source of its own.
+  const rat = IB.STONE_TONE.map((h, i) => lum(IB.STONE_TONE_LIT[i]) / lum(h));
+  t.ok(Math.min(...rat) > 1.005,
+    'the lit face of a course is still brighter than its body (x' + Math.min(...rat).toFixed(3) + ')');
+  // The failure this replaces is x1.10, which put the peak of the family at
+  // #f6f3e0 — paper, in front of a sky that never gets near it. And the
+  // failure a cap could introduce instead is a lit face DARKER than the body
+  // it caps, which is an inverted bevel; the line above rules that one out.
+  t.ok(Math.max(...rat) < 1.08,
+    'and no brighter than a chamfer can honestly be (x' + Math.max(...rat).toFixed(3) + ')');
+  const peak = Math.max(...IB.STONE_TONE_LIT.map(lum));
+  t.ok(peak < lum('#f0ede0'), 'so the brightest masonry in the game is under paper white (' + peak.toFixed(3) + ')');
+  t.ok(Math.max(...IB.STONE_TONE_DARK.map(lum)) < peak, 'and the shaded family is under the lit one');
+
+  // ---- the frame's two ends. A black point that is heaviest at the bottom,
+  // where the gorge is, and a white point on the sun.
+  t.ok(IB.POST.floorA > .1, 'the frame is given a black point at the bottom (' + IB.POST.floorA + ')');
+  t.ok(IB.POST.sunA > .05, 'and a white point at the sun (' + IB.POST.sunA + ')');
+  t.ok(IB.POST.floorA > IB.POST.zenith, 'and the weight of it is at the bottom, not the top');
+  // The ramp goes to nothing at the horizon and comes back under it. Without
+  // the knee the masonry band gets almost none of the floor, and the masonry
+  // band is the thing this whole fix is about — a straight top-to-bottom ramp
+  // is the degenerate version and it measures 4% short of the target.
+  t.ok(IB.POST.horizon > 0 && IB.POST.horizon < IB.POST.knee && IB.POST.knee < 1,
+    'the ramp bottoms out at the horizon and comes back under it (' + IB.POST.horizon + ' -> ' + IB.POST.knee + ')');
+  t.ok(IB.POST.kneeA > 0 && IB.POST.kneeA < IB.POST.floorA,
+    'and keeps climbing after the knee (' + IB.POST.kneeA + ' -> ' + IB.POST.floorA + ')');
+  // The clouds were carrying more contrast and more internal detail than the
+  // midground standing in front of them, which is depth inverted. The lid on
+  // them is this one stop, and a zenith of zero is exactly the picture that
+  // had the problem.
+  t.ok(IB.POST.zenith > .05, 'the ramp comes back at the zenith, which is what caps the clouds (' + IB.POST.zenith + ')');
+  // A warm/cool axis, or it is a brightness change rather than a grade. Both
+  // halves painted the same colour would pass every test above.
+  const rgb = (s) => s.split(',').map(Number);
+  const [fr, , fb] = rgb(IB.POST.floor), [sr, , sb] = rgb(IB.POST.sun);
+  t.ok(fb > fr + 20, 'the shadow the frame falls into is cool (' + IB.POST.floor + ')');
+  t.ok(sr > sb + 20, 'and the light it is lifted by is warm (' + IB.POST.sun + ')');
+
+  // ---- where it sits on the quality ladder. It is two blits; the bright pass
+  // is eight multiplies and two blurs. So the grade has to outlive the bloom
+  // all the way down, or a slow machine loses the ends of the picture and
+  // keeps the dearest thing in the chain.
+  const chain = String(IB.postFx);
+  t.ok(/lvl >= 2 && POST\.bloom/.test(chain), 'the bright pass is gated at tier 2');
+  t.ok(/lvl >= 3 && POST\.ca/.test(chain), 'the aberration at tier 3');
+  t.ok(/\n\s*postGrade\(c, P, W, H, lvl\);/.test(chain),
+    'and the grade at no tier at all — it runs whenever the pass runs');
+
+  // And it really does lay both ends down at the bottom tier. Driven with a
+  // recording context, because a dial being set is not the same as a fill
+  // happening: the whole grade sat behind `lvl >= 1` once and nobody noticed.
+  {
+    const ops = [];
+    const cx = {
+      canvas:{ width:200, height:100 }, filter:'none', globalAlpha:1,
+      globalCompositeOperation:'source-over', fillStyle:'#000000',
+      fillRect(){ ops.push(['fill', cx.globalCompositeOperation, cx.fillStyle]); },
+      drawImage(img){ ops.push(['blit', cx.globalCompositeOperation, img]); },
+    };
+    const P = { soft:false, lit:'#808080', pat:[], gm:{ canvas:'FLOOR' }, gs:{ canvas:'SUN' } };
+    IB.postGrade(cx, P, 200, 100, 0);
+    const at = (m, img) => ops.findIndex(o => o[0] === 'blit' && o[1] === m && o[2] === img);
+    t.ok(at('multiply', 'FLOOR') >= 0, 'the black point is multiplied over the world at the lowest tier');
+    t.ok(at('screen', 'SUN') > at('multiply', 'FLOOR'),
+      'and the white point screened on top of it, in that order — a floor laid over a ceiling eats it');
+    t.ok(cx.globalCompositeOperation === 'source-over',
+      'and the pass hands the context back in a state the HUD can draw in');
+    // The grain is the tier above and must NOT have run here — if it had, the
+    // two assertions above would be true of a chain that never got cheaper.
+    t.ok(!ops.some(o => o[1] === 'overlay'), 'and no grain, which belongs a tier up');
+  }
+  // Frame cost. Both ends are ramps that only change when the frame does, so
+  // they are baked once and blitted — and a STRETCHED blit costs a software
+  // rasteriser more than the gradient fill it replaced, which is the whole
+  // reason this number is 1 and not 4.
+  t.ok(IB.POST.gDiv >= 1, 'the grade buffers are baked at frame scale or under (' + IB.POST.gDiv + ')');
+  t.ok(IB.POST.sunR > .4, 'and the sun lift reaches across the frame (' + IB.POST.sunR + ')');
+}
+
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
+
+/* ================================================ the dock could not scroll
+   The dock throws away its entire innerHTML and rebuilds it five times a
+   second. A scroll position is a property of the element that was thrown
+   away — so a column could not be scrolled at all: you dragged it down and
+   within a fifth of a second a brand new element with scrollTop 0 was
+   standing where it had been. On a phone, where the forge and the build panel
+   are taller than the dock, that made half the game unreachable.            */
+{
+  const dock = document.getElementById('dock');
+  // A stand-in for the columns the rebuild destroys. Only the five properties
+  // the save/restore actually touches, so nothing here can pass by accident
+  // through some richer behaviour of a real element.
+  const mkCol = (col, top, h, ch) => ({ dataset:{ col }, scrollTop:top, scrollHeight:h, clientHeight:ch });
+  const cols = [mkCol('jobs', 0, 300, 200), mkCol('forge', 140, 600, 200), mkCol('heroes', 0, 210, 200)];
+  const realQSA = dock.querySelectorAll;
+  dock.querySelectorAll = () => cols;
+  dock.scrollLeft = 37;
+
+  const at = IB.dockScroll();
+  t.ok(at && at.col.forge === 140, 'the scroll a column was left at is remembered (' + (at && at.col.forge) + ')');
+  t.ok(at.x === 37, 'and so is the dock’s own sideways scroll, which the same rebuild threw away');
+  t.ok(at.col.jobs === undefined,
+    'a column sitting at the top is not remembered, so nothing is restored that was never moved');
+
+  // The rebuild: brand new elements, every one of them at zero. This is
+  // exactly the state the bug left behind.
+  const fresh = [mkCol('jobs', 0, 300, 200), mkCol('forge', 0, 600, 200), mkCol('heroes', 0, 210, 200)];
+  dock.querySelectorAll = () => fresh;
+  dock.scrollLeft = 0;
+  IB.dockScrollTo(at);
+  t.ok(fresh[1].scrollTop === 140, 'and it is put back on the rebuilt column (' + fresh[1].scrollTop + ')');
+  t.ok(dock.scrollLeft === 37, 'along with the sideways one');
+
+  // Keyed by column, not by position. `sel` only exists while something is
+  // selected, so the columns come and go — restoring by index would hand the
+  // forge’s scroll to whatever had taken its place.
+  const shuffled = [mkCol('heroes', 0, 210, 200), mkCol('forge', 0, 600, 200)];
+  dock.querySelectorAll = () => shuffled;
+  IB.dockScrollTo(at);
+  t.ok(shuffled[1].scrollTop === 140 && shuffled[0].scrollTop === 0,
+    'a column that moved along the dock keeps its own scroll and takes nobody else’s');
+
+  // A column that got SHORTER between rebuilds — the build panel loses rows
+  // as things get built — must land at its new bottom rather than at a
+  // position that no longer exists.
+  const shrunk = [mkCol('forge', 0, 260, 200)];
+  dock.querySelectorAll = () => shrunk;
+  IB.dockScrollTo(at);
+  t.ok(shrunk[0].scrollTop === 60,
+    'and one that got shorter lands at its new bottom, not past it (' + shrunk[0].scrollTop + ')');
+
+  // The columns have to be labelled for any of this to work, and syncUI has
+  // to do the two halves either side of the rebuild rather than after it.
+  t.ok(/data-col="/.test(SRC), 'the dock’s columns carry the key this is all hung on');
+  const sync = SRC.slice(SRC.indexOf('function syncUI'), SRC.indexOf('function syncUI') + 400);
+  t.ok(sync.indexOf('dockScroll()') < sync.indexOf('innerHTML') &&
+       sync.indexOf('innerHTML') < sync.indexOf('dockScrollTo'),
+    'and the scroll is read before the rebuild and put back after it');
+
+  dock.querySelectorAll = realQSA;
+  dock.scrollLeft = 0;
+}
+
+/* ====================================== two people writing the same helper
+   Six agents worked this file in parallel and two of them wrote a `hexOf`.
+   One was `const`, one was `function`, and the pair is a hard SyntaxError —
+   which at least fails loudly. The dangerous version is two `function`
+   declarations: the later one silently REPLACES the earlier, so every call
+   site of the first quietly starts calling a stranger's implementation. That
+   nearly happened to `mixHex`, and the only thing that caught it was a colour
+   assertion noticing the gorge had gone blue.
+
+   So: nothing declared twice at the top level of the script, ever.          */
+{
+  const seen = new Map(), dup = [];
+  // Top level only — a `const` inside a function is a different scope and is
+  // nobody's business. Declarations in this file start at column zero.
+  const re = /^(?:function|const|let|class)\s+([A-Za-z_$][\w$]*)/gm;
+  let m;
+  while ((m = re.exec(SRC))){
+    const name = m[1];
+    if (seen.has(name)) dup.push(name);
+    else seen.set(name, m.index);
+  }
+  t.ok(seen.size > 400, 'the scan actually found the declarations (' + seen.size + ')');
+  t.ok(dup.length === 0, 'nothing is declared twice at the top level of the script' +
+    (dup.length ? ' — ' + [...new Set(dup)].join(', ') : ''));
+}
 
 t.done();
