@@ -60,6 +60,7 @@ const STATIC_PATHS = [
   'dungeon_pusher',
   'grimhold',
   'ironbridge',
+  'blacksite',
   'carmanager',
   'tools',
 ];
