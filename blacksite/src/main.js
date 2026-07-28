@@ -41,6 +41,23 @@ export async function boot(root) {
     // stuttering first impression the player has to go and fix. The menu's
     // saved settings are applied after this and override it.
     G.settings.quality = 1;
+
+    // Two effects off by default on a phone, both on their own merits and both
+    // suspects in a dark speckled pattern reported on a real device that does
+    // not reproduce under software GL.
+    //
+    // Grain is the stronger suspect. It is high-frequency by construction, and
+    // TAA is what normally averages it into something filmic — so while the
+    // view is still it reads as grain, and the moment you turn, TAA rejects its
+    // history and the raw pattern is left standing over everything. That is
+    // exactly "only when moving". On a small dense screen the effect was never
+    // buying much anyway.
+    //
+    // Motion blur is the other: it is the one pass that does nothing at all
+    // until you move, it costs fill rate a phone does not have, and smearing a
+    // 6-inch screen is not the same trade as smearing a monitor.
+    G.settings.filmGrain = false;
+    G.settings.motionBlur = false;
   }
   const loadStatus = root.querySelector('#load-status');
   const say = (s) => { if (loadStatus) loadStatus.textContent = s; };

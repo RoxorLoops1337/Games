@@ -280,10 +280,20 @@ export function createViewmodel(G, engine, materials) {
     const dYaw = wrap(p.yaw - st.lastYaw), dPitch = p.pitch - st.lastPitch;
     st.lastYaw = p.yaw; st.lastPitch = p.pitch;
     const k = 44, c = 2 * Math.sqrt(44) * 0.55;
-    st.lagVel.x += (-st.lag.x * k - st.lagVel.x * c) * dt + dYaw * 3.4;
-    st.lagVel.y += (-st.lag.y * k - st.lagVel.y * c) * dt + dPitch * 3.0;
-    st.lag.x = clamp(st.lag.x + st.lagVel.x * dt, -0.18, 0.18);
-    st.lag.y = clamp(st.lag.y + st.lagVel.y * dt, -0.16, 0.16);
+    // Sub-stepped for the same reason as the recoil spring below: this runs on
+    // the render delta, which on a slow device is whatever the frame took. The
+    // rotation impulse is delivered once rather than per sub-step, or a long
+    // frame would amplify the same view movement several times over.
+    let lagRem = dt, lagImpX = dYaw * 3.4, lagImpY = dPitch * 3.0;
+    while (lagRem > 1e-6) {
+      const h = Math.min(lagRem, 1 / 120);
+      lagRem -= h;
+      st.lagVel.x += (-st.lag.x * k - st.lagVel.x * c) * h + lagImpX;
+      st.lagVel.y += (-st.lag.y * k - st.lagVel.y * c) * h + lagImpY;
+      lagImpX = lagImpY = 0;
+      st.lag.x = clamp(st.lag.x + st.lagVel.x * h, -0.18, 0.18);
+      st.lag.y = clamp(st.lag.y + st.lagVel.y * h, -0.16, 0.16);
+    }
 
     const lagAmt = (1 - aim * 0.74) / Math.max(0.6, model.mass);
     const rigSway = engine.rig.sway;
@@ -370,10 +380,27 @@ export function createViewmodel(G, engine, materials) {
     // settle in two visible bounces rather than easing in like a slider.
     const rk = 240 * (1 + aim * 0.5), rc = 2 * Math.sqrt(240) * (0.52 + aim * 0.16);
     const R = st.rec;
-    R.vBack += (-R.back * rk - R.vBack * rc) * dt; R.back += R.vBack * dt;
-    R.vPitch += (-R.pitch * rk - R.vPitch * rc) * dt; R.pitch += R.vPitch * dt;
-    R.vYaw += (-R.yaw * rk * 0.7 - R.vYaw * rc) * dt; R.yaw += R.vYaw * dt;
-    R.vRoll += (-R.roll * rk * 0.6 - R.vRoll * rc) * dt; R.roll += R.vRoll * dt;
+    // Sub-stepped, because this spring is stiff enough to come apart at the
+    // frame times a phone actually delivers. Explicit Euler needs dt < 2/ω, and
+    // ω here is √360 ≈ 19 while aiming — a limit of 0.105 s against an update
+    // that clamps dt to 0.1. That is not a margin, it is a coin toss, and the
+    // way it loses is the weapon leaving the screen on the first shot.
+    let rem = dt;
+    while (rem > 1e-6) {
+      const h = Math.min(rem, 1 / 120);
+      rem -= h;
+      R.vBack += (-R.back * rk - R.vBack * rc) * h; R.back += R.vBack * h;
+      R.vPitch += (-R.pitch * rk - R.vPitch * rc) * h; R.pitch += R.vPitch * h;
+      R.vYaw += (-R.yaw * rk * 0.7 - R.vYaw * rc) * h; R.yaw += R.vYaw * h;
+      R.vRoll += (-R.roll * rk * 0.6 - R.vRoll * rc) * h; R.roll += R.vRoll * h;
+    }
+    // A weapon that has gone non-finite never comes back on its own, and an
+    // invisible gun is worse than a wrong one — so reset rather than persist.
+    if (!Number.isFinite(R.back) || !Number.isFinite(R.pitch) ||
+        !Number.isFinite(R.yaw) || !Number.isFinite(R.roll)) {
+      R.back = R.pitch = R.yaw = R.roll = 0;
+      R.vBack = R.vPitch = R.vYaw = R.vRoll = 0;
+    }
     // The simulation's own kick is folded in at low weight, so a scripted or
     // AI-driven recoil impulse still shows on the weapon even if it never went
     // through `fire()`.
