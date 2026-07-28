@@ -182,5 +182,126 @@ ok(j.top.find(e => e.name === 'Hax').v === 99, 'the version clamps at 99');
   ok(!j.top.some(e => e.name === 'p49'), 'the weakest entry falls off');
 }
 
+// ============================================================
+// WEEKLY + YEARLY: one carve feeds all five boards
+// ============================================================
+{
+  const env3 = { DPBOARD: mockKV() };
+  const now = Date.now();
+  const p2 = n => String(n).padStart(2, '0');
+  const d = new Date(now);
+  const mon = new Date(now);
+  mon.setUTCDate(mon.getUTCDate() - ((mon.getUTCDay() + 6) % 7));
+  const WEEK = mon.getUTCFullYear() + '-' + p2(mon.getUTCMonth() + 1) + '-' + p2(mon.getUTCDate());
+  const YEAR = String(d.getUTCFullYear());
+
+  r = await post(env3, { name: 'Deep', floor: 12, kills: 30 }, '20.0.0.1');
+  j = await r.json();
+  ok(r.status === 200, 'a carve lands');
+  ok(env3.DPBOARD._store.has('dp:week:' + WEEK), 'and feeds dp:week:<monday>');
+  ok(env3.DPBOARD._store.has('dp:year:' + YEAR), 'and dp:year:<YYYY>');
+  ok(env3.DPBOARD._ttls.get('dp:week:' + WEEK) === 16 * 86400, 'the weekly key carries its 16-day TTL');
+  ok(env3.DPBOARD._ttls.get('dp:year:' + YEAR) === 400 * 86400, 'the yearly key carries its 400-day TTL');
+  ok(j.weekly.length === 1 && j.yearly.length === 1, 'the response carries both new boards');
+
+  r = await get(env3, 'weekly');
+  j = await r.json();
+  ok(j.top.length === 1 && j.day === WEEK, 'GET ?board=weekly serves the week, dated by its Monday');
+  r = await get(env3, 'yearly');
+  j = await r.json();
+  ok(j.top.length === 1 && j.day === YEAR, 'GET ?board=yearly serves the year, dated as such');
+
+  // best-per-name holds on the new boards too
+  await post(env3, { name: 'Deep', floor: 4, kills: 1 }, '20.0.0.2');
+  const wk = JSON.parse(env3.DPBOARD._store.get('dp:week:' + WEEK));
+  ok(wk.length === 1 && wk[0].floor === 12, 'a worse run cannot demote a weekly best');
+}
+
+// ============================================================
+// THE PLAUSIBILITY CLAMPS (no secret needed)
+// ============================================================
+{
+  const env4 = { DPBOARD: mockKV() };
+  r = await post(env4, { name: 'Sky', floor: 301, kills: 1 }, '21.0.0.1');
+  ok(r.status === 400, 'a floor past the ceiling is refused');
+  r = await post(env4, { name: 'Sky', floor: 300, kills: 1 }, '21.0.0.2');
+  ok(r.status === 200, 'the ceiling itself is allowed');
+  r = await post(env4, { name: 'Grind', floor: 2, kills: 90000 }, '21.0.0.3');
+  ok(r.status === 422, 'more kills than the deep can field is refused');
+  r = await post(env4, { name: 'Grind', floor: 2, kills: 200 }, '21.0.0.4');
+  ok(r.status === 200, 'a believable kill count for the floor passes');
+}
+
+// ============================================================
+// THE TOKEN RAIL — only armed once DPBOARD_SECRET exists
+// ============================================================
+{
+  const SECRET = 'test-secret-value';
+  const env5 = { DPBOARD: mockKV(), DPBOARD_SECRET: SECRET };
+
+  // mint a token by hand so the test can control the run's START time
+  const b64url = bytes => Buffer.from(bytes).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  async function signTok(msg) {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SECRET),
+      { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    return b64url(new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(msg))));
+  }
+  const mint = async (nonce, iat) => {
+    const body = nonce + '.' + iat;
+    return body + '.' + await signTok(body);
+  };
+
+  // op:'start' hands out a real token
+  r = await post(env5, { op: 'start' }, '22.0.0.1');
+  j = await r.json();
+  ok(r.status === 200 && typeof j.tok === 'string' && j.tok.split('.').length === 3,
+    'op:start mints a three-part signed token');
+
+  // no token at all → refused
+  r = await post(env5, { name: 'Faker', floor: 40, kills: 20 }, '22.0.1.1');
+  ok(r.status === 403, 'with a secret configured, a carve with NO token is refused');
+
+  // a forged signature → refused
+  r = await post(env5, { name: 'Faker', floor: 40, kills: 20, tok: 'abc.' + Date.now() + '.deadbeef' }, '22.0.2.1');
+  ok(r.status === 403, 'a forged signature is refused');
+
+  // a real token, but the run was instant → refused
+  const fast = await mint('nonceFast', Date.now() - 1000);
+  r = await post(env5, { name: 'Faker', floor: 40, kills: 20, tok: fast }, '22.0.3.1');
+  ok(r.status === 422, 'a floor-40 run one second old is refused as too fast');
+
+  // the same token, aged past the pace gate → accepted
+  const good = await mint('nonceGood', Date.now() - 41 * 6000);
+  r = await post(env5, { name: 'Honest', floor: 40, kills: 20, tok: good }, '22.0.4.1');
+  j = await r.json();
+  ok(r.status === 200, 'a run old enough for its depth is carved');
+  ok(j.top.find(e => e.name === 'Honest').k === 1, 'and it is stamped as token-verified');
+
+  // that token is spent — it can never carve again
+  r = await post(env5, { name: 'Honest', floor: 41, kills: 21, tok: good }, '22.0.5.1');
+  ok(r.status === 409, 'a spent token cannot carve twice');
+
+  // an ancient token is refused
+  const old2 = await mint('nonceOld', Date.now() - 26 * 3600 * 1000);
+  r = await post(env5, { name: 'Stale', floor: 3, kills: 1, tok: old2 }, '22.0.6.1');
+  ok(r.status === 403, 'a token older than a day is refused');
+
+  // a token claiming to come from the future is refused
+  const future = await mint('nonceFuture', Date.now() + 3600 * 1000);
+  r = await post(env5, { name: 'Ahead', floor: 3, kills: 1, tok: future }, '22.0.7.1');
+  ok(r.status === 403, 'a token dated in the future is refused');
+
+  // without a secret the same tokenless carve still lands (legacy mode)
+  const env6 = { DPBOARD: mockKV() };
+  r = await post(env6, { name: 'Legacy', floor: 40, kills: 20 }, '23.0.0.1');
+  j = await r.json();
+  ok(r.status === 200, 'with NO secret configured a tokenless carve still lands');
+  ok(j.top.find(e => e.name === 'Legacy').k === 0, 'but it is NOT stamped as verified');
+  r = await post(env6, { op: 'start' }, '23.0.1.1');
+  j = await r.json();
+  ok(r.status === 200 && j.unsigned === 1, 'and op:start says plainly that it cannot sign');
+}
+
 console.log(`dungeon_pusher board fn: ${passed} passed, ${failed} failed`);
 if (failed) process.exit(1);
