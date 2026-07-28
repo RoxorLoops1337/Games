@@ -1200,7 +1200,6 @@ S.run.relics = [];
   t.ok(DP.hasRelic(off[2]), 'the claimed relic is owned');
   t.ok(!DP.pickRelicOffer(0), 'only one relic may be claimed');
   t.ok(!DP.hasRelic(off[0]), 'the unclaimed ones stay behind');
-  S.run.purse.coin = (S.run.purse.coin || 0) + C.STAIR_TOLL;   // afford the descent
   DP.leaveBattle();
   S.run.relics = [];
 }
@@ -1714,20 +1713,22 @@ DP.leaveBattle();
 t.eq(S.run.floor, 1, 'still floor 1 — the stairs are an invitation, not a shove');
 t.ok(S.run.room.ents.length === 1 && S.run.room.ents[0].kind === 'stairs',
      'the stairs down appear where the boss fell');
-// the stairwell toll: too broke to descend holds you on the floor
+// THE STAIRS ARE FREE: an all-but-empty purse still walks down
 {
   const stash = { ...S.run.purse };
   for (const k of COIN_KINDS) S.run.purse[k] = 0;
-  S.run.purse.coin = 1;                    // one short of the toll
-  t.ok(!DP.interact(0), 'a purse under the toll cannot descend');
-  t.eq(S.run.floor, 1, 'still floor 1 without the toll');
-  t.eq(DP.purseTotal(), 1, 'the toll is not skimmed on a failed descent');
-  S.run.purse = stash;                     // restore the hoard and pay properly
+  S.run.purse.coin = 1;                    // once, this was one short of the toll
+  t.ok(DP.interact(0), 'a near-empty purse descends anyway — no toll to pay');
+  t.eq(S.run.floor, 2, 'the stairs let it through');
+  t.eq(DP.purseTotal(), 1, 'and take nothing on the way');
+  S.run.floor = 1;                         // rewind for the ledger check below
+  S.run.purse = stash;
+  S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
 }
 const purseBefore = DP.purseTotal();
 DP.interact(0);
-DP.stairsAuto(); DP.stairsConfirm();          // the ledger posts; AUTO is the old hand
-t.eq(DP.purseTotal(), purseBefore - C.STAIR_TOLL, 'descending pays the ' + C.STAIR_TOLL + '-coin toll');
+if (S.stairsAsk) { DP.stairsAuto(); DP.stairsConfirm(); }   // only the over-cap melt still posts
+t.ok(DP.purseTotal() <= purseBefore, 'descending never charges for passage');
 t.eq(S.run.floor, 2, 'stepping onto the stairs descends');
 t.ok(S.run.map && S.run.map.cur === '0,0', 'a fresh floor map is carved');
 t.eq(S.run.depth, 1, 'next floor starts at the entrance');
@@ -1736,7 +1737,6 @@ t.eq(mapRooms().filter(r => r.visited).length, 1, 'the new floor is all fog agai
 // the key-carry cap: a bulging ring is trimmed on the way down
 {
   S.run.keys = 9;
-  S.run.purse.coin = (S.run.purse.coin || 0) + C.STAIR_TOLL;   // afford the toll
   DP.nextFloor();
   t.eq(S.run.keys, C.KEY_CARRY, 'only ' + C.KEY_CARRY + ' keys survive the descent');
   S.run.keys = 2;
@@ -3307,11 +3307,24 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.srand(31); D.newRun('knight');
   t.eq(DS.run.diff, 'easy', 'the door is stamped on the run');
   const soft = D.mkEnemy('battle', D.curRoster()[0].id);
+  DS.run.floor = 12;                        // deep enough that the bite separates
+  const softElite = D.mkEnemy('elite', D.curRoster()[0].id);
   DS.diffPick = 'hard';
   D.srand(31); D.newRun('knight');
   const cruel = D.mkEnemy('battle', D.curRoster()[0].id);
+  DS.run.floor = 12;
+  const cruelElite = D.mkEnemy('elite', D.curRoster()[0].id);
   t.ok(cruel.maxHp > soft.maxHp, 'NIGHTMARE foes out-muscle MERCIFUL ones');
-  t.ok(Math.abs(soft.maxHp / cruel.maxHp - 0.8 / 1.3) < 0.06, 'by the promised 0.8 vs 1.3');
+  t.ok(Math.abs(soft.maxHp / cruel.maxHp - 0.7 / 1.45) < 0.06, 'by the promised 0.7 vs 1.45');
+  t.ok(cruelElite.atk > softElite.atk, 'and they bite harder too');
+  t.eq(D.diffHexRate(), 0.55, 'NIGHTMARE elites hex relentlessly');
+  DS.diffPick = 'easy'; D.newRun('knight');
+  t.eq(D.diffHpK(), 0.7, 'MERCIFUL foes carry 70% health');
+  t.eq(D.diffAtkK(), 0.85, 'and bite 15% softer');
+  t.eq(D.diffHexRate(), 0.10, 'and its elites rarely hex');
+  DS.diffPick = 'normal'; D.newRun('knight');
+  t.eq(D.diffHpK(), 1, 'NORMAL is the honest machine');
+  t.eq(D.diffAtkK(), 1, 'in both halves of a fight');
   // the ENDLESS ladder
   DS.diffPick = 'normal';
   D.srand(32); D.newRun('knight');
@@ -5308,18 +5321,16 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("masteryPeak() >= 3 ? '★ '") >= 0, 'the master’s mark rides your board row');
 }
 
-// -------- THE LATE-GAME COIN SINK: scaling toll, the skim, sharper tricks --------
+// -------- THE LATE-GAME COIN SINK: the skim (the toll is abolished) --------
 {
   const { DP: D } = loadGame({}, false);
   D.srand(91); D.newRun('knight');
-  // the toll and the ceiling both deepen with the acts
-  t.eq(D.stairToll(), 2, 'act 0: the old 2-coin toll');
+  t.ok(typeof D.stairToll !== 'function', 'the stair toll is gone from the game entirely');
+  // the ceiling still deepens with the acts — it is a cap, not a fare
   t.eq(D.purseCap(), 20, 'act 0: a 20-coin ceiling');
   D.S.run.floor = 18;                       // act 3, the mint
-  t.eq(D.stairToll(), 5, 'act 3: the stairs demand 5');
   t.eq(D.purseCap(), 32, 'act 3: the ceiling rises to 32');
-  D.S.run.floor = 40;                       // deep endless — both clamp
-  t.eq(D.stairToll(), 8, 'the toll caps at 2+6');
+  D.S.run.floor = 40;                       // deep endless — it clamps
   t.eq(D.purseCap(), 44, 'the ceiling caps at 44');
   // the skim: overflow becomes gold, plainest pockets first
   D.S.run.floor = 18;
@@ -5964,18 +5975,22 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   B.dmgFoe(ch, 999);
   t.ok(B.S.run.gold >= bg0 + 40, 'the bounty pays its +40 on the champion');
   t.eq(B.S.run.bountyChamp, 0, 'and the poster is spent');
-  // the clerk's forms: toll-free descends free, the audit doubles the toll
+  // the clerk outlived his tolls: his refund pays COINS, his audit gambles gold
   const { DP: C } = loadGame({}, false);
   C.srand(205); C.newRun('knight');
-  C.S.run.tollDouble = 1;
-  t.eq(C.stairToll(), 4, 'a spiteful audit doubles the toll');
-  C.S.run.tollFree = 1;
+  const clerk = C.EVENTS.find(e => e.id === 'rebate');
+  t.ok(clerk && clerk.choices.length === 2, 'the clerk still keeps his desk');
+  C.S.run.gold = 40;
+  const coins0 = C.purseTotal();
+  clerk.choices[0].fx();
+  t.eq(C.S.run.gold, 30, 'the refund costs its 10 gold');
+  t.eq(C.purseTotal(), coins0 + 6, 'and comes back as six coins');
+  // a bare purse walks down the stairs untouched, every time
   C.S.run.purse = { coin: 1, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
   C.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   C.interact(0);
-  t.eq(C.S.run.floor, 2, 'a misfiled toll still descends');
-  t.eq(C.purseTotal(), 1, 'without touching the purse');
-  t.eq(C.S.run.tollDouble, 0, 'the audit’s spite expires at the stairs');
+  t.eq(C.S.run.floor, 2, 'the stairs take no fare');
+  t.eq(C.purseTotal(), 1, 'and never touch the purse');
   // the wager settles on the way down
   const { DP: W } = loadGame({}, false);
   W.srand(206); W.newRun('knight');
@@ -6216,42 +6231,33 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.purseTotal(), 14, 'the battle refill resets the hand');
   t.eq(D.S.run.purse.lucky, 0, 'windfall luckies melt');
   t.eq(D.S.run.gold, tg0 + 6, 'at the skim’s honest 2:1');
-  // banking prepays the toll (lootKey is the kind for plain pieces)
+  // with the tolls abolished, every piece he banks is STRUCK INTO GOLD
   D.S.battle.loot = [{ k: 'coin' }, { k: 'coin' }, { k: 'silver' }];
-  D.S.run.tollPaid = 0;
+  D.S.run.minted = 0;
+  const mg0 = D.S.run.gold;
   t.ok(D.bankLoot('coin'), 'a piece banks');
   t.ok(D.bankLoot('silver'), 'and another');
-  t.eq(D.S.run.tollPaid, 2, 'every banked piece prepays the toll');
-  D.S.run.tollPaid = D.TOLL_PREPAY_CAP;
-  D.bankLoot('coin');
-  t.eq(D.S.run.tollPaid, D.TOLL_PREPAY_CAP, 'the meter caps at ' + D.TOLL_PREPAY_CAP);
-  D.S.run.tollPaid = 5;
+  t.eq(D.S.run.minted, 2 * D.TOLL_MINT, 'every banked piece is struck into gold');
+  t.eq(D.S.run.gold, mg0 + 2 * D.TOLL_MINT, 'and the gold actually lands');
+  // the stairs take nothing from him either
   D.S.screen = 'dungeon'; D.S.room = null; D.S.victory = null; D.S.enemy = null; D.S.foes = []; D.S.battle = null;
   D.S.run.floor = 1;
   const pt0 = D.purseTotal();
   D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   D.interact(0);
-  t.eq(D.S.run.floor, 2, 'the prepaid stairs descend');
-  t.eq(D.S.run.tollPaid, 3, 'two of the five prepaid pieces spent');
+  t.eq(D.S.run.floor, 2, 'the keeper walks down free');
   t.eq(D.purseTotal(), pt0, 'the purse untouched');
-  // short prepay falls back to the purse
-  D.S.run.tollPaid = 0;
-  D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
-  D.interact(0);
-  D.stairsAuto(); D.stairsConfirm();
-  t.eq(D.S.run.floor, 3, 'an empty meter still descends the honest way');
-  t.ok(D.purseTotal() < 14, 'paid from the hand this time');
-  // the prepaid meter rides the save
-  D.S.run.tollPaid = 7;
+  // the mint tally rides the save
+  D.S.run.minted = 7;
   D.save();
   const { DP: R } = loadGame(store, false);
-  t.eq(R.S.run.tollPaid, 7, 'the meter survives a reload');
+  t.eq(R.S.run.minted, 7, 'the mint tally survives a reload');
   t.eq(R.S.run.hero, 'toll', 'still the keeper');
   // the wiring
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf('toll prepaid: ') >= 0, 'the battle HUD shows the meter');
-  t.ok(src.indexOf('S.run.tollPaid = Math.min(TOLL_PREPAY_CAP') >= 0, 'banking feeds it, capped');
+  t.ok(src.indexOf('minted: ') >= 0, 'the battle HUD shows the mint');
+  t.ok(src.indexOf('S.run.minted = (S.run.minted || 0) + TOLL_MINT') >= 0, 'banking feeds it');
 }
 
 // -------- TOAST TRIAGE: announcements take turns now --------
@@ -6313,7 +6319,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.TR('\u{1F381} STAKE'), '\u{1F381} INZET', 'the gift stake translates');
   t.eq(D.TR('Abandon the current run?'), 'De huidige run opgeven?', 'static confirm messages translate');
   t.eq(D.TR('ON'), 'AAN', 'the settings toggles translate');
-  t.eq(D.TR('\u{1F9FF} toll prepaid: '), '\u{1F9FF} tol vooruitbetaald: ', 'the tollkeeper gauge translates');
+  t.eq(D.TR('\u{1F9FF} minted: '), '\u{1F9FF} geslagen: ', 'the tollkeeper gauge translates');
   t.eq(D.TR('\u{1F4C5} THE DAILY — Knight'), '\u{1F4C5} THE DAILY — Knight', 'dynamic confirm titles fall through untouched');
   // the call sites are truly wrapped (source proof, escaped emoji forms)
   const here = dirname(fileURLToPath(import.meta.url));
@@ -6333,7 +6339,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     "TR('\\u{1F3C5} CARVE IT')",
     "TR('\\u{1F381} STAKE')",
     "TR(val ? 'ON' : 'OFF')",
-    "TR('\\u{1F9FF} toll prepaid: ')",
+    "TR('\\u{1F9FF} minted: ')",
   ]) t.ok(src.indexOf(site) >= 0, 'chrome site wrapped: ' + site.slice(0, 44));
   // the s29 lesson, enforced: the LANGS table itself never calls TR()
   const table = src.slice(src.indexOf('const LANGS = {'), src.indexOf("let LANG = 'en';"));
@@ -6510,9 +6516,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
       if (!fight('battle') || !fight('battle', S2.run.floor % 2 === 0) || !fight('boss')) break;
       shopStop();
       D.stairSkim();
-      if (!(D.tollRun() && (S2.run.tollPaid || 0) >= D.stairToll())) D.spendPurse(D.stairToll());
-      else S2.run.tollPaid -= D.stairToll();
-      D.nextFloor();
+      D.nextFloor();                        // the stairs charge nothing now
       if (S2.run.floor === f) break;       // never loop in place
     }
     const reached = S2.run ? S2.run.floor : ((S2.over && S2.over.floor) || 1);
@@ -6868,7 +6872,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.7', 'the five-ledger board ships as v1.7.7');
+  t.eq(D.VERSION, '1.7.8', 'the free stairs ship as v1.7.8');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STAIRS ARE FREE') >= 0)),
+       'and the notes retire the toll');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('FIVE LEDGERS') >= 0)),
        'and the notes carry the board');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('RUN TOKEN') >= 0)),
@@ -7435,8 +7441,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.interact(0);
   const ask = S2.stairsAsk;
   t.ok(ask, 'the ledger posts instead of auto-billing');
-  t.eq(ask.toll, 5, 'floor 18 demands its five');
-  t.eq(ask.over, 5, 'toll first, then the cap: 42 − 5 − 32 = 5 to melt');
+  t.ok(ask.toll === undefined, 'no toll line on the ledger any more');
+  t.eq(ask.over, 10, 'the cap alone decides it now: 42 − 32 = 10 to melt');
   t.ok(!D.stairsConfirm(), 'nothing picked, nothing descends');
   t.eq(S2.run.floor, 18, 'still on 18');
   // pick BY HAND: keep the luckies, spend the silvers first
@@ -7450,10 +7456,12 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(S2.run.purse.silver, 2, 'MY silvers paid first — my choice');
   t.eq(S2.run.purse.lucky, 2, 'MY luckies stayed — my choice');
   t.eq(S2.run.purse.ember, 1, 'the special never even appears on the ledger');
-  t.eq(S2.run.gold, g1 + 10, 'the five melted coins pay 2 gold apiece');
-  // STAY backs out with nothing spent
+  t.eq(S2.run.gold, g1 + 20, 'the ten melted coins pay 2 gold apiece');
+  // STAY backs out with nothing spent (fatten the purse so the cap posts again)
+  S2.run.purse.coin += 20;
   S2.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   D.interact(0);
+  t.ok(S2.stairsAsk, 'an over-cap purse still posts the melt ledger');
   const total1 = D.purseTotal();
   D.stairsCancel();
   t.ok(!S2.stairsAsk && S2.run.floor === 19 && D.purseTotal() === total1, 'STAY spends nothing, descends nowhere');

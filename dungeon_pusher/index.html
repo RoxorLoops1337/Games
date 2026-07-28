@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.8', notes: [
+    'THE STAIRS ARE FREE \u{1FA9C} — the coin TOLL for descending is abolished, everywhere. It taxed the exact resource a run is built on and turned every staircase into a chore. The purse\u2019s soft ceiling still posts at the stairs, but that one PAYS you 2 gold a coin for the overflow instead of charging for passage',
+    'the doors mean something now \u{2696}\u{FE0F} — MERCIFUL and NIGHTMARE used to bend enemy health alone. They now bend BOTH halves of a fight: MERCIFUL foes carry 70% health and bite 15% softer, NIGHTMARE foes carry 145% and bite 20% harder, and its elites reach for a hex more than half the time (was 45%)',
+    'THE TOLLKEEPER KEEPS HIS MINT \u{1F9FF} — with no tolls left to prepay, every piece he banks is struck straight into gold at his own 2:1. His clerk outlived the tolls too: the refund desk now pays out in COINS, and auditing him is a straight gold gamble',
+  ] },
   { v: '1.7.7', notes: [
     'THE DEEP BOARD KEEPS FIVE LEDGERS \u{1F3C5} — one carve now lands on TODAY, this WEEK, this MONTH, this YEAR and the ALL-TIME wall at once, each sweeping itself clean when its period turns. Every desk sits on one tab row behind the \u{1F3C5} button on the title screen',
     'THE RUN TOKEN \u{1F512} — the board hands out a signed token when a run begins and demands it back when the run is carved. One token, one carve, expiring in a day, and a score is refused unless the run actually lasted long enough for its depth — so a forged floor-200 descent has to sit for twenty real minutes before it will land',
@@ -228,6 +233,11 @@ const LANGS = {
     'TITLE': 'TITEL',
     '\u{1F392} BAG': '\u{1F392} TAS',
     'BAG': 'TAS',                 // the painted plate carries the icon itself
+    // the stairs went free (session 78) — the sheet only weighs the ceiling now
+    'over the purse ceiling': 'boven het beursplafond',
+    'pick the coins that melt — the specials never do':
+      'kies de munten die smelten — speciale nooit',
+    '\u{1F9FF} minted: ': '\u{1F9FF} geslagen: ',
     // the deep board's six desks (session 77)
     'WEEK': 'WEEK',
     'MONTH': 'MAAND',
@@ -300,7 +310,6 @@ const LANGS = {
     '\u{1F381} STAKE': '\u{1F381} INZET',
     'ON': 'AAN',
     'OFF': 'UIT',
-    '\u{1F9FF} toll prepaid: ': '\u{1F9FF} tol vooruitbetaald: ',
     // THE ALMANAC (session 77)
     'THE ALMANAC': 'DE ALMANAK',
     'COINS': 'MUNTEN',
@@ -324,9 +333,6 @@ const LANGS = {
     '\u{1FAE7} THE PRESSURE': '\u{1FAE7} DE DRUK',
     'THE TABLES': 'DE TAFELS',
     'THE STAIRS LEDGER': 'HET TRAPGROOTBOEK',
-    'toll': 'tol',
-    'toll waived': 'tol kwijtgescholden',
-    'toll prepaid': 'tol vooruitbetaald',
     'melt': 'omsmelten',
     'pick the coins that go — the specials never do': 'kies de munten die gaan — de specials nooit',
     'AUTO': 'AUTO',
@@ -429,7 +435,6 @@ const C = {
   KEY_KILL: 1, KEY_ELITE: 2, KEY_BOSS: 3,   // keys paid per slain foe
   P_CHEST_KEY: 0.2,
   KEY_CARRY: 3,                         // keys you may carry down to the next floor
-  STAIR_TOLL: 2,                        // purse coins owed to descend the stairs
   WHEEL_COST: 5,                        // coins the dungeon wheel ghost charges per spin
   FORGE_SCRAP_CHANCE: 0.22,             // odds the forge's third boon is MELT A PIECE DOWN
   // combat is played in ROUNDS: your PURSE is a deck of typed coins — you
@@ -1193,7 +1198,7 @@ const HEROES = [
   { id: 'crane',  name: 'Crane Keeper', icon: '\u{1F579}\u{FE0F}', coin: 'coin', perk: 'a real CLAW GAME ×2' },
   { id: 'rat',    name: 'Rat King',     icon: '\u{1F400}', coin: 'green', perk: 'no items — only RATS' },
   { id: 'alch',   name: 'Alchemist',    icon: '\u{2697}\u{FE0F}', coin: 'blue', perk: 'no potions — she BREWS' },
-  { id: 'toll',   name: 'Tollkeeper',   icon: '\u{1F9FF}', coin: 'silver', perk: 'no purse — the TOLL pays itself' },
+  { id: 'toll',   name: 'Tollkeeper',   icon: '\u{1F9FF}', coin: 'silver', perk: 'no purse — every piece he banks is struck into gold' },
 ];
 function heroById(id) { return HEROES.find(h => h.id === id); }
 // the Poltergeist is EARNED: it answers only to those who have carried a
@@ -1230,10 +1235,12 @@ function ratRun() { return !!(S.run && S.run.hero === 'rat'); }
 function alchRun() { return !!(S.run && S.run.hero === 'alch'); }
 // ...and the TOLLKEEPER's off this one: no purse growth, ever. His kit is a
 // fixed 14-coin hand refilled before every battle (surplus converts to gold
-// at the skim's own 2:1), and every piece he BANKS prepays the stair toll.
+// at the skim's own 2:1), and every piece he BANKS is struck into gold at the
+// same rate. He used to bank against the stair toll; with the tolls abolished
+// he simply keeps the mint, which is the same instinct with nothing to pay.
 function tollRun() { return !!(S.run && S.run.hero === 'toll'); }
 const TOLL_KIT = { coin: 6, silver: 4, green: 2, red: 2, blue: 0, lucky: 0 };
-const TOLL_PREPAY_CAP = 30;
+const TOLL_MINT = 2;            // gold struck per piece the keeper banks
 function tollRefill() {
   if (!tollRun()) return 0;
   let surplus = 0;
@@ -1545,7 +1552,7 @@ function save() {
         gauntlet: S.run.gauntlet || null,
         jar: S.run.jar || null,
         pegs: S.run.pegs || [], pegSeen: S.run.pegSeen ? 1 : 0,
-        tollPaid: S.run.tollPaid | 0,
+        minted: S.run.minted | 0,
       } : null,
     }));
   } catch (e) {}
@@ -1682,7 +1689,7 @@ function load() {
           : null,
         pegs: Array.isArray(d.run.pegs) ? d.run.pegs.filter(pg => pg && isFinite(pg.x)).map(pg => ({ x: +pg.x, y: +pg.y })).slice(0, 3) : [],
         pegSeen: d.run.pegSeen ? 1 : 0,
-        tollPaid: Math.min(30, Math.max(0, d.run.tollPaid | 0)),
+        minted: Math.max(0, d.run.minted | 0),
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -2744,7 +2751,10 @@ function bankLoot(key) {
   const i = B.loot.findIndex(l => lootKey(l) === key);
   if (i < 0) return false;
   B.banked.push(B.loot.splice(i, 1)[0]);
-  if (tollRun()) S.run.tollPaid = Math.min(TOLL_PREPAY_CAP, (S.run.tollPaid || 0) + 1);
+  if (tollRun()) {
+    addGold(TOLL_MINT);
+    S.run.minted = (S.run.minted || 0) + TOLL_MINT;
+  }
   questBump('bank', 1);
   questBump('bigbank', 1);
   SND.clink();
@@ -2814,7 +2824,7 @@ function mkEnemy(type, eid) {
     id: base.id, icon: base.icon,
     name: champ ? '\u{1F451} ' + base.name : (type === 'elite' ? 'ELITE ' : '') + base.name,
     hp, maxHp: hp,
-    atk: Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1)) + (mutOn('swiftdoom') ? 2 : 0),
+    atk: Math.max(1, Math.round(base.atk * mult * (type === 'elite' ? 1.5 : 1) * diffAtkK())) + (mutOn('swiftdoom') ? 2 : 0),
     trait: base.trait, def: base.def || null,
     gold: Math.round(base.gold * mult * (type === 'elite' ? 2.2 : 1) * C.GOLD_DROP_K),
     boss: type === 'boss', elite: type === 'elite', champ: champ ? 1 : 0,
@@ -2834,7 +2844,7 @@ function rollIntent(e) {
   // elites dabble in lesser hexes: frostbitten hands / lead purse /
   // blackout / rust — one in seven turns
   if (e.elite && (!e.intent || e.intent.t !== 'hex') &&
-      rng() < (S.run && S.run.diff === 'hard' ? 0.45 : 0.15)) { e.intent = { t: 'hex' }; return; }
+      rng() < diffHexRate()) { e.intent = { t: 'hex' }; return; }
   if (e.trait === 'ritual' && (e.chants | 0) > 0) { e.intent = { t: 'chant' }; return; }
   if ((e.sleep | 0) > 0) { e.intent = { t: 'sleep' }; return; }
   if (e.trait === 'curse' && rng() < 0.4) { e.intent = { t: 'curse' }; return; }
@@ -4100,13 +4110,26 @@ function questBump(id, n) {
 // three doors into the dungeon: MERCIFUL (-20% enemy HP), NORMAL, and
 // NIGHTMARE (+30% HP, elites hex three times as often)
 const DIFFS = [
-  { id: 'easy',   name: 'MERCIFUL',  desc: 'enemies −20% HP' },
+  { id: 'easy',   name: 'MERCIFUL',  desc: 'enemies −30% HP and −15% bite' },
   { id: 'normal', name: 'NORMAL',    desc: 'the honest machine' },
-  { id: 'hard',   name: 'NIGHTMARE', desc: 'enemies +30% HP, elites hex relentlessly' },
+  { id: 'hard',   name: 'NIGHTMARE', desc: 'enemies +45% HP and +20% bite, elites hex relentlessly' },
 ];
+// the doors used to differ by health alone, which barely moved the feel of a
+// run. They now bend BOTH halves of a fight — how long a foe lasts and how
+// hard it hits — so MERCIFUL is a genuinely gentler descent and NIGHTMARE a
+// genuinely meaner one. Single dials, safe to tune.
 function diffHpK() {
   const d = S.run && S.run.diff;
-  return d === 'easy' ? 0.8 : d === 'hard' ? 1.3 : 1;
+  return d === 'easy' ? 0.7 : d === 'hard' ? 1.45 : 1;
+}
+function diffAtkK() {
+  const d = S.run && S.run.diff;
+  return d === 'easy' ? 0.85 : d === 'hard' ? 1.2 : 1;
+}
+// how often an elite reaches for a lesser hex
+function diffHexRate() {
+  const d = S.run && S.run.diff;
+  return d === 'easy' ? 0.10 : d === 'hard' ? 0.55 : 0.15;
 }
 // past floor 25 the dungeon stops pretending: a MUTATOR stacks on every
 // third floor, in a fixed order the deep never varies
@@ -4785,7 +4808,7 @@ function newRun(heroId, force) {
   // prestige flask as brew instead)
   if (hero.id === 'alch') { S.run.potions = 0; S.run.brew = 3 * ng; S.run.reagents = 0; }
   // the TOLLKEEPER walks in with his fixed kit — bolt-ons convert to gold
-  if (hero.id === 'toll') { S.run.tollPaid = 0; tollRefill(); }
+  if (hero.id === 'toll') { S.run.minted = 0; tollRefill(); }
   // the WEEKLY DECREE rides every armed run (the daily carries its own law)
   if (S.weeklyPick && !force) {
     const wp = weeklyPlan(new Date().toISOString().slice(0, 10));
@@ -4807,11 +4830,11 @@ function newRun(heroId, force) {
   save();
   return S.run;
 }
-// the STAIR TOLL deepens with the acts — 2 coins near the sun, +1 per act
-function stairToll() {
-  return (C.STAIR_TOLL + Math.min(6, S.run ? actIdx(S.run.floor) : 0)) * ((S.run && S.run.tollDouble) ? 2 : 1);
-}
-// ...and the TOLLKEEPER'S SKIM is the real sink: the purse has a soft
+// THE STAIRS ARE FREE. The deep used to charge a coin toll to descend; it
+// taxed the exact resource a run is built on and made the staircase a chore,
+// so it is gone. The purse CAP below is the only thing the stairs still
+// touch — and it PAYS you for the overflow rather than charging for passage.
+// the TOLLKEEPER'S SKIM is the real sink: the purse has a soft
 // ceiling that rises slower than the income curve. Every descent, the
 // overflow is confiscated at 2 gold a coin — plainest pockets first — so
 // deep hands stay tense instead of drowning the machine in coins.
@@ -4825,7 +4848,7 @@ function stairsPicked() {
 function stairsAuto() {
   const a = S.stairsAsk;
   if (!a || !S.run) return false;
-  let need = a.toll + a.over - stairsPicked();
+  let need = a.over - stairsPicked();
   for (const k of COIN_KINDS) {
     if (SPECIAL_COINS[k]) continue;
     while (need > 0 && ((S.run.purse[k] | 0) - (a.pick[k] | 0)) > 0) {
@@ -4840,16 +4863,12 @@ function stairsCancel() { S.stairsAsk = null; }
 function stairsConfirm() {
   const a = S.stairsAsk;
   if (!a || !S.run) return false;
-  if (stairsPicked() !== a.toll + a.over) return false;
+  if (stairsPicked() !== a.over) return false;
   for (const k of COIN_KINDS) {
     const n = a.pick[k] | 0;
     if (n > (S.run.purse[k] | 0)) return false;   // the purse moved — repick
   }
-  if (a.waived) { S.run.tollFree = 0; toast('the stairs look the other way — toll waived'); }
-  else if (a.prepaid) { S.run.tollPaid -= stairToll(); toast('\u{1F9FF} toll prepaid — ' + S.run.tollPaid + ' banked ahead'); }
-  let picked = 0;
-  for (const k of COIN_KINDS) { const n = a.pick[k] | 0; if (n) { S.run.purse[k] -= n; picked += n; } }
-  if (picked - a.over > 0) purseLog(-(picked - a.over), 'the stair toll');
+  for (const k of COIN_KINDS) { const n = a.pick[k] | 0; if (n) S.run.purse[k] -= n; }
   if (a.over > 0) {
     const pay = a.over * 2;
     addGold(pay);
@@ -5213,7 +5232,6 @@ function nextFloor() {
     else toast('\u{1F37A} the innkeeper grins and keeps your stake');
     S.run.wager = null;
   }
-  S.run.tollDouble = 0;
   // boss-minted specials left on the OLD floor's bed find their way home
   if (S.run.pileSave && S.run.pileFloor === S.run.floor) {
     let home = 0;
@@ -5325,21 +5343,13 @@ function interact(i) {
     }
     // THE STAIRS LEDGER: the toll and the over-cap melt are posted, and
     // YOU pick which coins pay them (the old auto-fill is one button away)
-    const waived = !!S.run.tollFree;
-    const prepaid = !waived && tollRun() && (S.run.tollPaid || 0) >= stairToll();
-    const toll = (waived || prepaid) ? 0 : stairToll();
-    const over = Math.max(0, purseTotal() - toll - purseCap());   // toll first, THEN the cap
-    if (purseTotal() < toll) {
-      S.uiFlash = { msg: 'THE STAIRS DEMAND ' + stairToll() + ' COINS', t: 1.4 };
-      SND.deny();
-      return false;
-    }
-    if (toll + over > 0) {
-      S.stairsAsk = { toll, over, waived, prepaid, pick: {} };
+    // the stairs ask nothing to pass — only the purse's soft ceiling still
+    // bites, and it pays gold for what it takes
+    const over = Math.max(0, purseTotal() - purseCap());
+    if (over > 0) {
+      S.stairsAsk = { over, pick: {} };
       return true;                            // the ledger takes it from here
     }
-    if (waived) { S.run.tollFree = 0; toast('the stairs look the other way — toll waived'); }
-    else if (prepaid) { S.run.tollPaid -= stairToll(); toast('\u{1F9FF} toll prepaid — ' + S.run.tollPaid + ' banked ahead'); }
     nextFloor();
     return true;
   }
@@ -5516,15 +5526,18 @@ const EVENTS = [
         fx: () => { addGold(2); return 'ripped. Somewhere, a champion sighs in relief.'; } },
     ] },
   { id: 'rebate', icon: '\u{1FAAA}', name: 'THE TOLLKEEPER’S CLERK',
-    flavor: '\u201cForms, forms. For a fee I can… misfile this floor’s toll.\u201d',
+    flavor: '\u201cForms, forms. The stair tolls were abolished — the paperwork was not.\u201d',
     choices: [
-      { label: 'pay 10 gold', sub: 'this floor’s stairs go toll-free',
-        can: () => S.run.gold >= 10 && !S.run.tollFree,
-        fx: () => { S.run.gold -= 10; S.run.tollFree = 1; return 'misfiled. The stairs won’t say a word.'; } },
-      { label: 'audit HIM', sub: '50/50 — recover +15 gold, or the toll DOUBLES this floor',
+      { label: 'claim your refund', sub: 'file for 10 gold — he returns it in COINS, and then some',
+        can: () => S.run.gold >= 10,
+        fx: () => { S.run.gold -= 10; S.run.purse.coin = (S.run.purse.coin || 0) + 6;
+                    purseLog(6, 'the clerk’s back-dated refund');
+                    return 'back-dated to the first floor: six coins, stamped twice.'; } },
+      { label: 'audit HIM', sub: '50/50 — recover +15 gold, or he fines you 8',
         can: () => true,
         fx: () => { if (rng() < 0.5) { addGold(15); return 'his books were crooked: +15 gold recovered.'; }
-                    S.run.tollDouble = 1; return 'his books were clean. The toll doubles, out of spite.'; } },
+                    S.run.gold = Math.max(0, S.run.gold - 8);
+                    return 'his books were clean. He fines you 8 gold for the insult.'; } },
     ] },
   { id: 'auction', icon: '\u{1F528}', name: 'THE GREMLIN AUCTION',
     flavor: 'Three gremlins on a crate, hammering junk into “LOTS”.',
@@ -6155,14 +6168,14 @@ window.DP = {
   giftLink, parseGift, claimGift, boardFilter,
   petVet, petTag, legacyStamp, LEGACY_ACH,
   jarY, jarSmash,
-  tollRun, tollRefill, TOLL_KIT, TOLL_PREPAY_CAP, toast, toastTick, whisperOnce,
-  stairToll, purseCap, stairSkim, stairsAuto, stairsConfirm, stairsCancel, stairsPicked,
+  tollRun, tollRefill, TOLL_KIT, TOLL_MINT, toast, toastTick, whisperOnce,
+  purseCap, stairSkim, stairsAuto, stairsConfirm, stairsCancel, stairsPicked,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
   TALES, rollTale, habits,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
-  DIFFS, diffHpK, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
+  DIFFS, diffHpK, diffAtkK, diffHexRate, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
   masteryLvl, blackedOut,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
@@ -8821,7 +8834,7 @@ if (!HEADLESS) (function browser() {
         '900 13px Verdana, sans-serif', r.keys < 1 ? '#ff5a4e' : '#ffe9a3', 'left');
     // potion button — or the specialist gauges in its place
     if (tollRun()) {
-      txt(TR('\u{1F9FF} toll prepaid: ') + (r.tollPaid | 0) + ' / ' + stairToll(), 240, 762,
+      txt(TR('\u{1F9FF} minted: ') + (r.minted | 0) + ' gold', 240, 762,
           '900 12px Verdana, sans-serif', '#8fc8ff', 'left');
     } else if (alchRun()) {
       const rg = (r.reagents || 0) > 0 ? '  \u{1F4A0}+' + 2 * r.reagents : '';
@@ -11268,11 +11281,12 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = 'rgba(24,14,26,0.985)'; ctx.fill();
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
     txt('\u{2696}\u{FE0F} ' + TR('THE STAIRS LEDGER'), LW / 2, py + 30, '900 18px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
-    const owed = a.toll + a.over;
-    txt((a.toll > 0 ? TR('toll') + ': ' + a.toll + ' ●' : a.waived ? TR('toll waived') : TR('toll prepaid'))
-      + (a.over > 0 ? '   •   ' + TR('melt') + ': ' + a.over + ' ● \u{2192} +' + (a.over * 2) + ' \u{1FA99}' : ''),
+    // no toll line any more — the stairs are free. What posts here is the
+    // purse's soft ceiling, and it PAYS for what it takes
+    const owed = a.over;
+    txt(TR('over the purse ceiling') + ': ' + a.over + ' ● \u{2192} +' + (a.over * 2) + ' \u{1FA99}',
         LW / 2, py + 56, '800 12px Verdana, sans-serif', '#e8c877');
-    txt(TR('pick the coins that go — the specials never do'), LW / 2, py + 76, '600 10px Verdana, sans-serif', '#9a8aa0');
+    txt(TR('pick the coins that melt — the specials never do'), LW / 2, py + 76, '600 10px Verdana, sans-serif', '#9a8aa0');
     kinds.forEach((k, i) => {
       const ry = py + 96 + i * 46;
       const have = S.run.purse[k] | 0, picked = a.pick[k] | 0;
