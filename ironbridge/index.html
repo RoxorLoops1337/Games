@@ -153,19 +153,33 @@
 
   /* ---------------- command dock ----------------
      The mirror of the top bar: lit along its top edge, falling away into the
-     dark at the bottom, throwing a shadow UP onto the world. */
-  #dock{ flex:0 0 auto; display:flex; gap:0; align-items:stretch; padding:7px 12px;
+     dark at the bottom, throwing a shadow UP onto the world.
+
+     ...and at 200px on a 900px screen that mirror was 22% of the frame, with a
+     lit top edge and a hard border under it — a second horizon, drawn with
+     more contrast than the real one and running the full width of the picture.
+     The eye read the bottom of the world as ending there. It is one row of
+     DOCK_H now, its columns are one row of controls each rather than a stack
+     of them, and the lit edge is gone: in its place a band that fades from
+     nothing to the dock's own colour over the 40px ABOVE it, so the world
+     dissolves into the panel instead of stopping at it. The band overhangs
+     upward out of the dock's box, which costs the layout nothing. */
+  #dock{ flex:0 0 auto; display:flex; gap:0; align-items:stretch; padding:6px 12px;
     position:relative; z-index:5;
-    background:linear-gradient(180deg,#1b2334 0,#131a29 34%,#0a0f18 100%);
-    border-top:1px solid #05080e;
-    box-shadow:inset 0 1px 0 rgba(160,190,230,.1), inset 0 16px 26px -16px rgba(0,0,0,.55),
-      0 -8px 22px rgba(0,0,0,.45);
-    overflow-x:auto; overflow-y:hidden; height:200px; }
+    background:linear-gradient(180deg,#151c2c 0,#111827 34%,#0a0f18 100%);
+    box-shadow:inset 0 14px 24px -16px rgba(0,0,0,.5);
+    overflow-x:auto; overflow-y:hidden; height:76px; }
+  /* The band itself has to hang in the STAGE, not in the dock: the dock is a
+     scroll container (overflow-y:hidden) and would have clipped its own
+     overhang off at the pixel the ramp exists to soften. */
+  #stage::after{ content:''; position:absolute; left:0; right:0; bottom:0; height:40px;
+    pointer-events:none; z-index:2;
+    background:linear-gradient(180deg,rgba(13,19,30,0) 0,rgba(13,19,30,.30) 52%,rgba(19,26,41,.78) 100%); }
   /* Each column is a panel face in a rack, not a region of the same slab: a
      top-lit wash gives it a surface, so the room a column has not filled
      reads as space it was given rather than as a hole in the dock. */
-  .dsec{ flex:0 0 auto; display:flex; flex-direction:column; gap:4px; padding:0 13px;
-    border-right:none; min-width:150px; overflow-y:auto; overflow-x:hidden; position:relative;
+  .dsec{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; padding:0 11px;
+    border-right:none; min-width:120px; overflow:hidden; position:relative;
     background:linear-gradient(180deg,rgba(150,185,235,.028),rgba(150,185,235,0)); }
   .dsec:last-child{ border-right:none; }
   /* the divider is a hairline that fades out at both ends instead of a hard
@@ -173,20 +187,58 @@
   .dsec + .dsec::before{ content:''; position:absolute; left:0; top:4px; bottom:4px; width:1px;
     background:linear-gradient(180deg,rgba(150,180,220,0),rgba(150,180,220,.16) 18%,
       rgba(150,180,220,.16) 82%,rgba(150,180,220,0)); }
-  .dsec.grow{ flex:1 1 260px; min-width:240px; }
-  .ptitle{ font-size:var(--tt); letter-spacing:2.4px; text-transform:uppercase; color:#7b89a2; font-weight:700;
-    white-space:nowrap; padding-bottom:2px; margin-bottom:0;
+  /* The one column allowed to take the slack. It used to be BUILD, which is a
+     grid of fixed-size buttons and did not want it; the wave warning is a
+     sentence and does. */
+  .dsec.grow{ flex:1 1 210px; min-width:200px; }
+  /* A hero card in the dock is a status readout, not the hero sheet: at four
+     stacked rows plus a pip strip it was the one column that would not fit the
+     row. The class name and the experience hairline are both in the sheet a
+     click away; what belongs out here is who, what level, how hurt, and which
+     of their skills is ready. */
+  #dock .hcard{ width:148px; padding:2px 7px 3px; }
+  #dock .pips3{ margin-top:1px; }
+  #dock .pip{ height:15px; }
+  #dock .hcard .bar.hp{ height:5px; }
+  #dock .hcard .bar.mp{ height:3px; }
+  #dock .hcard .bar{ margin-top:2px; }
+  body.narrow #dock .hcard .bar.hp{ height:6px; }
+  body.narrow #dock .hcard .bar.mp{ height:4px; }
+  body.narrow #dock .pip{ height:19px; }
+  #dock .hcard .hn{ font-size:var(--t2); }
+  #dock .hcard .hc{ display:none; }
+  #dock .hcard .bar.xp{ display:none; }
+  body.narrow #dock .hcard .hc{ display:block; }
+  body.narrow #dock .hcard .bar.xp{ display:block; }
+  .ptitle{ font-size:var(--tt); letter-spacing:2.2px; text-transform:uppercase; color:#7b89a2; font-weight:700;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    padding-bottom:1px; margin-bottom:0; flex:0 0 auto;
     border-bottom:1px solid rgba(140,170,210,.1); }
   .ptitle::before{ content:''; display:inline-block; width:2px; height:8px; margin-right:7px;
     vertical-align:-1px; border-radius:1px; background:#405c85; }
   .ptitle ~ .ptitle{ margin-top:4px; }
+  /* the beginner's paragraph, and the question mark it folds into */
+  .dhelp{ font-size:var(--t1); color:var(--dim); line-height:1.35; max-width:300px;
+    position:relative; padding-right:20px; }
+  .qm{ width:18px; height:18px; padding:0; line-height:1; font-size:12px; font-weight:800;
+    border-radius:50%; background:var(--raise); border:1px solid var(--rim); color:var(--dim);
+    position:absolute; top:0; right:0; }
+  .qm.solo{ position:static; margin-top:3px; }
+  .qm:hover{ background:var(--raise-hi); border-color:var(--rim-hi); color:#fff; }
   .prow{ display:flex; align-items:center; gap:5px; }
   .pcol{ display:flex; flex-direction:column; gap:4px; }
-  .pgrid{ display:grid; grid-template-columns:repeat(2,minmax(96px,1fr)); gap:4px; }
+  /* Two across and as many rows as it takes is what made the dock 200px tall.
+     One row, as wide as it needs, and the dock scrolls sideways — which it has
+     always been able to do — so the panel's cost to the picture is fixed at its
+     height and does not grow with what is in it. */
+  .pgrid{ display:flex; flex-wrap:nowrap; gap:4px; align-items:stretch; min-height:0; }
+  .pgrid > *{ flex:0 0 auto; }
+  .pgrid > .abtn{ min-width:88px; }
   .job{ display:flex; align-items:center; gap:6px; padding:3px 4px 3px 8px; background:var(--well);
     border:1px solid #212b3c; border-radius:var(--r2); min-width:0;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.028), var(--d1); }
   .job .nm{ font-size:var(--t2); color:var(--dim); flex:1 1 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dsec .insp.note{ line-height:1.3; }
   .job .ct{ font-weight:700; font-size:var(--t3); color:#cfd9e9; font-variant-numeric:tabular-nums;
     flex:0 0 auto; text-align:right; white-space:nowrap; }
   .sq{ width:26px; height:26px; padding:0; font-size:15px; line-height:1; background:var(--raise);
@@ -555,10 +607,13 @@
   }
 
   .dtabs{ display:none; }
-  body.narrow #dock{ flex-direction:column; gap:6px; overflow-x:hidden; overflow-y:hidden; max-height:44vh;
-    padding:8px 10px 10px; }
+  /* The phone keeps its own shape: one tab at a time in a tall panel is the
+     right answer on a 390px screen and the wrong one on a laptop, so the
+     desktop's fixed 76px row is undone here rather than inherited. */
+  body.narrow #dock{ flex-direction:column; gap:6px; overflow-x:hidden; overflow-y:hidden;
+    height:200px; max-height:44vh; padding:8px 10px 10px; }
   /* the panel scrolls inside the dock; the dock itself does not grow past it */
-  body.narrow #dock .dsec{ flex:1 1 0; min-height:0; overflow-y:auto; }
+  body.narrow #dock .dsec{ flex:1 1 0; min-height:0; overflow-y:auto; overflow-x:hidden; }
   /* the tab row is the way out of a tab — it must never be the thing that
      gets squashed when the panel below it grows */
   body.narrow .dtabs{ display:flex; gap:5px; overflow-x:auto; padding-bottom:2px; flex:0 0 auto; }
@@ -572,7 +627,10 @@
     background:var(--gold); box-shadow:0 0 8px rgba(255,207,77,.6); }
   body.narrow .dsec{ border-right:none; padding:0; }
   body.narrow .dsec + .dsec::before{ display:none; }
-  body.narrow .pgrid{ grid-template-columns:repeat(2,minmax(120px,1fr)); }
+  body.narrow .pgrid{ display:grid; grid-template-columns:repeat(2,minmax(120px,1fr)); }
+  body.narrow .pgrid > *{ min-width:0; }
+  /* and the phone has no world behind the dock to dissolve into */
+  body.narrow #stage::after{ display:none; }
   @media (max-width:900px){
     #top{ flex-wrap:wrap; gap:5px; padding:6px 10px; }
     .res, #rGold, #rPop, .res + .res{ border-radius:var(--r2); border-left:1px solid #202a3a; }
@@ -1327,7 +1385,7 @@ function newMatch(opt){
   grassCache[0] = grassCache[1] = null;
   edgeCache[0] = edgeCache[1] = null;
   cam.shake = 0; cam.sx = 0; cam.sy = 0;
-  cam.follow = false; cam.z = cam.tz = startZoom(LW);
+  cam.follow = false; cam.z = cam.tz = startZoom(LW, LH);
   // Sit the hold a touch left of centre so the bridge is in shot too. In world
   // units that offset depends on how much world the screen is showing, or a
   // zoomed-in phone opens with half the plot grid off the left edge.
@@ -4263,6 +4321,36 @@ function floatSlot(x, y, sc){
   const k = Math.ceil(n / 2) * (n % 2 ? -1 : 1);
   return [k * FLOAT_GAP.step * s, -n * FLOAT_GAP.rise * s];
 }
+/* How hard the blow was, recovered from the size it was given. Every number in
+   the game reaches addFloat through floatScale, so this is that function read
+   backwards rather than a second opinion about the same hit — the alternative
+   was a sixth argument at seven call sites that could go out of step with the
+   fifth.
+
+   THREE TIERS. Every number on the bridge printed white, in one column, at
+   sizes .74 to 1.75 of each other — and against a gate with six thousand
+   health every hit in the game is a rounding error by fraction, so a siege on
+   the gates was a stack of identical white digits in the crit's own palette
+   with nothing in it to say which blow mattered. A graze goes cool and half
+   transparent and keeps a thin outline; an ordinary hit stays as it was; and
+   the top tier — the one the panel looked at and said leave alone — is
+   untouched, which is the entire point of tiering rather than restyling.   */
+const FLOAT_TIER = { graze:.22, heavy:.62 };
+const FLOAT_GRAZE = { col:'#bfcedd', mix:.62, a:.70, lw:1.7 };
+const floatW = (f) => clamp(((f.sc || 1) - FLOAT_SC.min) / (FLOAT_SC.max - FLOAT_SC.min), 0, 1);
+const floatTier = (f) => { const w = floatW(f); return w >= FLOAT_TIER.heavy ? 2 : (w > FLOAT_TIER.graze ? 1 : 0); };
+// How far off the column a number is allowed to wander, in screen pixels at
+// zoom 1. The fan in floatSlot only separates numbers on DIFFERENT bodies; a
+// body hit four times in a second still stacked its four numbers in one
+// perfectly vertical line, which is what made a brawl read as a column of
+// noise rather than as blows landing. Grazes scatter the most and a heavy hit
+// barely moves, so the big number stays over the body it belongs to.
+// Signed, and never near zero: a plain uniform -1..1 leaves half its numbers
+// within a couple of pixels of the line they were supposed to leave, which is
+// what a column of them looks like anyway. This picks a SIDE and then how far
+// out on it, so every number is off the axis and no two land together.
+const FLOAT_JIT = 13, FLOAT_JIT_MIN = .45;
+const jitter = () => (fxRnd() < .5 ? -1 : 1) * (FLOAT_JIT_MIN + (1 - FLOAT_JIT_MIN) * fxRnd());
 function addFloat(x, y, txt, col, sc){
   // Gated the same way the particles are rather than on HEADLESS alone: the
   // damage and heal NUMBERS were the one part of the feedback a headless test
@@ -4275,7 +4363,12 @@ function addFloat(x, y, txt, col, sc){
   // print on top of each other. Step each new one clear of whatever is still
   // rising near it, so a brawl reads as a column of numbers, not a smear.
   const [ox, oy] = floatSlot(x, y, sc || 1);
-  G.floats.push({ x:x + ox, y:y + oy + fxRr(-.15, .15), txt, col, t:.95, dur:.95, sc:sc || 1, vy:fxRr(-.5, -.9) });
+  // The jitter is carried as a unit-less -1..1 and spent in SCREEN pixels at
+  // draw time, not folded into the world x: floatSlot decides who is near whom
+  // in world units, and a number that had quietly moved half a metre sideways
+  // would answer that question differently from the hit that made it.
+  G.floats.push({ x:x + ox, y:y + oy + fxRr(-.15, .15), txt, col, t:.95, dur:.95, sc:sc || 1,
+    vy:fxRr(-.5, -.9), jx:jitter() });
 }
 const CAST_COL = { dmg:'#ffa96a', heal:'#7fdc8a', buff:'#ffcf4d', cc:'#9ad8ff', move:'#bfe0ff', summon:'#c9a6ff' };
 function castCol(s){ return s.magic ? '#b98bff' : (CAST_COL[s.tag] || '#ffa96a'); }
@@ -4922,7 +5015,32 @@ const LS = () => 9.4 * cam.z;
 // ribbon in a very large sky. A narrow screen starts closer in: you see less
 // of the bridge at once, but you can actually read what is on it.
 const ZOOM_MIN = .42, ZOOM_MAX = 2.2;
-const startZoom = (w) => w < 760 ? clamp(w / 520, .72, .95) : clamp(w / 1100, .55, .95);
+/* ...and the desktop got the opposite problem from the other direction. The
+   opening zoom was chosen from the screen's WIDTH alone, which on a 1440 laptop
+   came out at .95 and, once the dock had taken 200px off the bottom, put the
+   whole fight — the bridge, both sets of towers, every body on it — into a
+   40-pixel band across the middle of a 660-pixel stage. The empty grass beside
+   it had more contrast than the combat did.
+
+   The lane band on screen at zoom 1: the walkable width, foreshortened by the
+   projection's .60, plus a gate tower standing above the deck and the deck's
+   own thickness below it. Everything the fight happens in and nothing else. */
+const LANE_PX = C.LANE_W * 9.4 * .60 + 116 + 20;
+// What share of the frame that band has to fill. A quarter is the floor the
+// composition critic set: below it the fight stops being the subject of the
+// picture and becomes a detail in a landscape.
+const FRAME = { laneShare:.25 };
+const laneFitZoom = (h) => FRAME.laneShare * Math.max(80, h || LH) / LANE_PX;
+/* The width rule still has the last word where it is the STRICTER of the two —
+   a phone opens close in because it must, and the fit rule must not pull it
+   back out — so this is a max of the two, then the zoom range. Isometric x is
+   compressed .96 against y's .60, so buying the lane a quarter of the frame
+   vertically still leaves the whole span in shot horizontally: this does not
+   trade the wide view away, it stops throwing half of it at empty sky.     */
+const startZoom = (w, h) => {
+  const wide = w < 760 ? clamp(w / 520, .72, .95) : clamp(w / 1100, .55, .95);
+  return clamp(Math.max(wide, laneFitZoom(h)), ZOOM_MIN, ZOOM_MAX);
+};
 function lp(x, y, z){
   const S = LS();
   return [
@@ -7858,7 +7976,7 @@ function drawStructure(c, st){
   // Turret' is ~68px of 9px type. 'Inner' is ~34.
   const lab = structLabel(st);
   if (lab) labelQ.push({ x:X, y:Y - (st.key === 'gate' ? 128 : st.key === 'inhib' ? 84 : 96) * cam.z,
-    txt:lab.txt, col:lab.col, small:true });
+    txt:lab.txt, col:lab.col, small:true, tier:lab.tier, hot:lab.hot });
 }
 // The bridge is read at a glance and a full name is twice the width of the gap
 // between two towers, so the world gets the short form and the inspect panel
@@ -7867,10 +7985,32 @@ const STRUCT_SHORT = { gate:'Gates', inhib:'Inhibitor', t3:'Inner', t2:'Mid', t1
 // Kept out of the draw call so it can be checked without a canvas: a rubble
 // heap already prints its own rebuild countdown, so only standing structures
 // get a name.
+/* Fourteen of these went up every frame, in fourteen identical black pills,
+   and twelve of them were naming a tower nothing was happening to. A label is
+   a claim on the player's attention and there is a fixed amount of that, so
+   they are rationed into two tiers:
+
+     A NAME goes to the things losing which decides the match — both gates,
+     both inhibitors — to whatever is IN PLAY, because "only the outermost
+     standing structure may be attacked" is the rule the whole match turns on
+     and it is invisible without saying so, and to anything you have selected
+     or that is being hit right now.
+
+     A MARK — six pixels of diamond in the side's colour, no plate, no text —
+     goes to everything else. It is a tower. You can see that it is a tower.
+
+   Six pills instead of fourteen, and every one of the six is either an
+   objective or the thing you are looking for.                              */
+const STRUCT_KEEPS = { gate:1, inhib:1 };
+const LABEL_HOT = 3;              // a blow keeps a name up this long past it
 function structLabel(st){
   if (st.dead) return null;
-  return { txt:(STRUCT_SHORT[st.key] || st.n) + (st === frontStruct(st.side) ? ' · in play' : ''),
-    col:st.side === 0 ? '#bfe0ff' : '#ffc4bd' };
+  const col = st.side === 0 ? '#bfe0ff' : '#ffc4bd';
+  const play = st === frontStruct(st.side);
+  const pick = sel.struct === st;
+  if (STRUCT_KEEPS[st.key] || play || pick || dmgAge(st) < LABEL_HOT)
+    return { txt:(STRUCT_SHORT[st.key] || st.n) + (play ? ' · in play' : ''), col, hot:pick };
+  return { txt:'', col, tier:'mark' };
 }
 
 // A bar is a flat block of colour on a black block, twenty of them at once in
@@ -7895,11 +8035,103 @@ const BAR_MINE = '#54d06a', BAR_THEIRS = '#e0544a';
 const barCol = (side) => (forMe(side) ? BAR_MINE : BAR_THEIRS);
 const HP_TICK = 220;              // one notch per this much health, up to HP_TICKS
 const HP_TICKS = 6;
+/* Eleven saturated, segmented bars at full brightness, whether the thing under
+   one was being taken apart or standing untouched at the far end of the world,
+   ran a dotted line of maximum chroma straight through the optical centre of
+   every frame. A full-health, irrelevant tower shouted exactly as loud as the
+   one being shot to pieces — so the loudest object in the picture carried no
+   information at all, and finding what was under attack meant reading eleven
+   identical things and comparing their fill fractions.
+
+   A bar has three states now, and only one of them is loud:
+
+     HOT   hit inside the last BAR.hot seconds. Full ink, and a pale stroke
+           round the plate. This is "something is happening HERE", and at any
+           one moment two or three things on the bridge are.
+     DIM   hurt, but nothing is happening to it — BAR.dimA of the ink. Still
+           perfectly readable; no longer competing.
+     GONE  whole, and untouched for BAR.hold. Structures regenerate, so this
+           is the state most towers spend the match in, and the bar rides the
+           hold out and fades rather than popping.
+
+   And it is quieter in itself: capped at BAR.h SCREEN pixels however far you
+   lean in (a gate's bar was 84 wide and 10 tall at the brawl framing),
+   unsegmented, and with a quarter of the chroma taken out of the fill so that
+   green still reads as yours without being the brightest pixel in the frame.
+   HP_TICK and HP_TICKS survive as what a notch WOULD have been worth; nothing
+   draws them.                                                               */
+const BAR = {
+  hot:.8,        // a blow is fresh for this long
+  hold:1.2,      // and the bar lingers this long past it
+  hotA:1,        // ink while it is fresh...
+  dimA:.55,      // ...and while it is merely hurt
+  desat:.25,     // chroma taken out of the fill
+  h:8,           // the tallest a bar ever draws, in screen pixels
+  ring:'rgba(240,246,255,.92)',
+};
+/* Three different creation sites hand out three different "never been hit":
+   a unit gets 0, a hero and a structure get -99, and a structure rebuilt from
+   a net snapshot can arrive with none at all. All three mean the same thing,
+   and the one that bites is the missing one — `G.t - undefined` is NaN, which
+   propagates into an alpha and silently takes the bar off every tower on the
+   board. Nothing has ever been hit at t=0, so a non-positive stamp is "long
+   ago" too, and a unit does not spawn wearing a fresh wound. */
+const dmgAge = (u) => (u && u.dmgTaken > 0 ? G.t - u.dmgTaken : 1e9);
+/* Pull a colour toward its own luminance. shade() moves a colour's LIGHTNESS
+   and deliberately preserves its hue and chroma — that is what makes it safe
+   for 122 call sites — so there is nothing in the game that takes saturation
+   out, and the bars are the one place that wants to. */
+// #abc and #aabbcc both mean the same colour and the game writes both, so the
+// two helpers below read either rather than turning '#fff' into a dark blue.
+function hexRGB(hex){
+  let s = String(hex).slice(1);
+  if (s.length === 3) s = s[0] + s[0] + s[1] + s[1] + s[2] + s[2];
+  const n = parseInt(s, 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+const hexOf = (r, g, b) => '#' + ((1 << 24) | (clamp(Math.round(r), 0, 255) << 16) |
+  (clamp(Math.round(g), 0, 255) << 8) | clamp(Math.round(b), 0, 255)).toString(16).slice(1);
+/* Step a colour k of the way toward another. Not shade(): shade moves how LIT
+   a surface is and keeps its hue, which is exactly wrong when the thing you
+   want is a different hue.
+
+   Not mixHex() either, which does this for the gorge — deliberately a separate
+   name. mixHex is a FUNCTION DECLARATION further down the file, so a second one
+   up here does not shadow it, it REPLACES it: hoisting means the last
+   declaration wins and every call site in this file, including the ones written
+   before it, silently gets the other one. This pair went in that way and the
+   whole thing came out as a dark blue. Colours arriving here are not always the
+   gorge's tidy six digits — '#fff' is written in a dozen places, and mixHex
+   reads it as 0x000fff — so this one takes either. */
+function tintTo(a, b, k){
+  if (String(a)[0] !== '#' || String(b)[0] !== '#') return a;
+  const A = hexRGB(a), B = hexRGB(b);
+  return hexOf(A[0] + (B[0] - A[0]) * k, A[1] + (B[1] - A[1]) * k, A[2] + (B[2] - A[2]) * k);
+}
+function chromaDown(hex, k){
+  if (String(hex)[0] !== '#') return hex;
+  const [r, g, b] = hexRGB(hex);
+  const l = SHADE.lum[0] * r + SHADE.lum[1] * g + SHADE.lum[2] * b;
+  const m = (v) => v + (l - v) * k;
+  return hexOf(m(r), m(g), m(b));
+}
+// What a bar is worth right now, and whether it is one of the two or three
+// things being hit. Out of the draw call so the suite can ask without a canvas.
+function barState(u){
+  const age = dmgAge(u);
+  if (age < BAR.hot) return { a:BAR.hotA, hot:true };
+  if (u.hp < u.mhp - .5 || u.shield > 0 || u.isHero) return { a:BAR.dimA, hot:false };
+  const f = clamp((BAR.hold - age) / Math.max(.01, BAR.hold - BAR.hot), 0, 1);
+  return { a:BAR.dimA * f, hot:false };
+}
 function hpBar(c, x, y, u, w, big){
+  const st = barState(u);
+  if (!(st.a > .01)) return;
   const f = clamp(u.hp / u.mhp, 0, 1);
-  const h = big ? 5 * cam.z : 3.2 * cam.z;
+  const h = Math.min(BAR.h, (big ? 5 : 3.2) * cam.z);
   const x0 = x - w / 2;
   blockLabel(x, y + h / 2, w + 2.8, h + 2.8);      // a name must not land on it
+  c.globalAlpha = st.a;
   c.fillStyle = 'rgba(8,10,14,.82)'; c.fillRect(x0 - 1.4, y - 1.4, w + 2.8, h + 2.8);
   c.fillStyle = 'rgba(46,52,60,.9)'; c.fillRect(x0, y, w, h);
   const chip = clamp((u.chipHp === undefined ? u.hp : u.chipHp) / u.mhp, 0, 1);
@@ -7907,20 +8139,21 @@ function hpBar(c, x, y, u, w, big){
     c.fillStyle = 'rgba(255,226,168,.85)';
     c.fillRect(x0 + w * f, y, w * (chip - f), h);
   }
-  const col = barCol(u.side);
+  const col = chromaDown(barCol(u.side), BAR.desat);
   c.fillStyle = col; c.fillRect(x0, y, w * f, h);
   c.fillStyle = shade(col, 1.28); c.fillRect(x0, y, w * f, h * .38);
-  // notches, so a long bar reads as an amount rather than a length
-  const n = clamp(Math.round(u.mhp / HP_TICK), 0, HP_TICKS);
-  if (n > 1 && w > 14){
-    c.fillStyle = 'rgba(8,10,14,.42)';
-    for (let i = 1; i < n; i++) c.fillRect(x0 + (w * i / n) - .5, y, 1, h);
-  }
   if (u.shield > 0){
     const sf = clamp(u.shield / u.mhp, 0, 1);
     c.fillStyle = 'rgba(220,235,255,.85)';
     c.fillRect(x0, y, w * Math.min(1, sf), h * .45);
   }
+  // The one mark on the board allowed to shout, and it says exactly one thing:
+  // this, right here, is being hit. Nothing that is merely hurt wears it.
+  if (st.hot){
+    c.strokeStyle = BAR.ring; c.lineWidth = 1;
+    c.strokeRect(x0 - 1.9, y - 1.9, w + 3.8, h + 3.8);
+  }
+  c.globalAlpha = 1;
 }
 /* A hero's mana decides whether the next thing that happens is a Fireball or a
    poke with a stick. Four separate passives are bought with real gold to move
@@ -7937,23 +8170,34 @@ function hpBar(c, x, y, u, w, big){
    The tip lights when the hero is ARMED, which is skillArmed's question and
    not a second opinion about it: cooldowns are the other half of "can it cast
    now", and a bar that filled while every skill was still spent would be
-   telling you the wrong thing at exactly the moment you were reading it.    */
-const MPBAR = { h:.42, gap:1.6, col:'#5fa8ff', lit:1.32, back:'rgba(24,34,52,.9)', tip:2.2 };
+   telling you the wrong thing at exactly the moment you were reading it.
+
+   The bar above it went quiet in the same pass that quietened the health bars
+   and this one had to follow it, or the second-loudest object in the frame
+   would have been left standing where the loudest used to be. It is dim while
+   the answer is "not yet" and full while the answer is "now" — which is the
+   only moment a mana bar is worth looking at, and is the same question the tip
+   was already asking.                                                       */
+const MPBAR = { h:.42, gap:1.6, col:'#5fa8ff', lit:1.32, back:'rgba(24,34,52,.9)', tip:2.2,
+  dimA:.5, hotA:1 };
 function mpBar(c, x, y, u, w){
   if (!(u.mmana > 0)) return;
   const f = clamp(u.mana / u.mmana, 0, 1);
+  const armed = f > 0 && heroArmed(u);
   const h = Math.max(1, 5 * cam.z * MPBAR.h);
   const x0 = x - w / 2;
   blockLabel(x, y + h / 2, w + 2.8, h + 2.8);
+  c.globalAlpha = armed ? MPBAR.hotA : MPBAR.dimA;
   c.fillStyle = 'rgba(8,10,14,.82)'; c.fillRect(x0 - 1.4, y - 1.4, w + 2.8, h + 2.8);
   c.fillStyle = MPBAR.back; c.fillRect(x0, y, w, h);
   c.fillStyle = MPBAR.col; c.fillRect(x0, y, w * f, h);
   c.fillStyle = shade(MPBAR.col, MPBAR.lit); c.fillRect(x0, y, w * f, h * .5);
   // The tip: something is off cooldown and affordable right now.
-  if (f > 0 && heroArmed(u)){
+  if (armed){
     c.fillStyle = '#eaf4ff';
     c.fillRect(x0 + w * f - Math.min(MPBAR.tip * cam.z, w * f), y - .6, Math.min(MPBAR.tip * cam.z, w * f), h + 1.2);
   }
+  c.globalAlpha = 1;
 }
 // How fast the chip runs down to meet the bar. Named so a test can hold it to
 // what a chip is for: it has to LAG a hit (or it shows nothing) and it has to
@@ -7969,7 +8213,12 @@ function chipTick(u, dt){
 // bar, which turned the middle of the bridge into a staircase of green and
 // red. A minion earns its bar by being hurt or shielded; a hero always keeps
 // one, because a hero is the thing you are watching.
-const showsBar = (u) => !!u.isHero || u.hp < u.mhp - .5 || u.shield > 0;
+// The last clause is the structures' half of it: a turret mends itself five
+// seconds after the last blow, so without a hold on the far side a bar would
+// wink out the instant the fight moved on and wink back the instant it
+// returned. It reads dmgAge rather than a raw stamp so a struct that never
+// carried one is "nothing has happened here" rather than NaN.
+const showsBar = (u) => !!u.isHero || u.hp < u.mhp - .5 || u.shield > 0 || dmgAge(u) < BAR.hold;
 
 // A siege engine is worth about four bodies and used to look like a man
 // carrying a crate. Each kind gets its own silhouette, so what is walking at
@@ -9403,6 +9652,10 @@ function floatPlan(c){
     // size lets them grow back into each other a tenth of a second later.
     const px = f.cast ? Math.max(9, Math.round((f.ult ? 13 : 11) * cam.z))
                       : Math.max(9, Math.round(11 * f.sc * cam.z));
+    // Off the column, before anything is asked about who overlaps whom — so
+    // the pass below packs the numbers where they will actually be drawn. A
+    // cast name is a single word over a hero and stays put.
+    if (!f.cast) q[0] += (f.jx || 0) * FLOAT_JIT * cam.z * (1 - floatW(f));
     c.font = 'bold ' + px + 'px system-ui';
     rows.push({ f, q, w:c.measureText(String(f.txt)).width, h:px, cy:q[1] - rise });
   }
@@ -9488,7 +9741,13 @@ function drawLane(c){
   setText(c, '10px system-ui', 'center', 'middle');
   for (const slot of floatPlan(c)){
     const f = slot.f, q = slot.q, y = slot.cy;
-    c.globalAlpha = clamp(f.t / f.dur, 0, 1);
+    // The life fade, and the tier's own weighting of it, decided BEFORE the
+    // context is told: `globalAlpha *= k` reads the property back, and the
+    // strict stub does not hand it back, so a graze came out NaN and took the
+    // whole frame with it.
+    const life = clamp(f.t / (f.dur || 1), 0, 1);
+    const tier = f.cast ? 2 : floatTier(f);
+    c.globalAlpha = tier === 0 ? life * FLOAT_GRAZE.a : life;
     if (f.cast){
       c.font = 'bold ' + Math.max(9, Math.round((f.ult ? 13 : 11) * cam.z)) + 'px system-ui';
       c.lineWidth = Math.max(2, 3 * cam.z); c.strokeStyle = 'rgba(6,9,14,.85)';
@@ -9504,9 +9763,14 @@ function drawLane(c){
       const age = 1 - f.t / f.dur;
       const pop = age < FLOAT_POP ? .55 + .45 * (age / FLOAT_POP) : 1;
       c.font = 'bold ' + Math.max(9, Math.round(11 * f.sc * pop * cam.z)) + 'px system-ui';
-      c.lineWidth = Math.max(2, 2.6 * f.sc * cam.z); c.strokeStyle = 'rgba(6,9,14,.8)';
+      // A graze steps down a tier: it keeps its outline, because that is what
+      // makes a digit survive landing on a pale body, but it goes cool and
+      // half-present so it stops sharing a palette with the blow that mattered.
+      c.lineWidth = tier === 0 ? Math.max(1.2, FLOAT_GRAZE.lw * cam.z)
+                               : Math.max(2, 2.6 * f.sc * cam.z);
+      c.strokeStyle = 'rgba(6,9,14,.8)';
       c.strokeText(String(f.txt), q[0], y);
-      c.fillStyle = f.col;
+      c.fillStyle = tier === 0 ? tintTo(f.col, FLOAT_GRAZE.col, FLOAT_GRAZE.mix) : f.col;
       c.fillText(String(f.txt), q[0], y);
     }
     c.globalAlpha = 1;
@@ -10260,9 +10524,13 @@ function drawBuilding(c, b){
     const lp0 = bp(gx, gy, 1.55 + z);
     // A packed hold is six labels in a hand's width, so only the one you have
     // selected spells itself out; the rest carry a name and a level digit.
+    // ...and past that, the same tiering the bridge runs. Six identical black
+    // pills over one hold was the bridge's problem one screen over: the one
+    // you have selected keeps its plate and spells out what it is doing, and
+    // the rest are the name alone, outlined, with no slab under it.
     const hot = b.tile === sel.tile;
     const txt = BUILDINGS[t].n + (hot ? '  ' + sub : b.lvl > 1 ? '  ' + b.lvl : '');
-    labelQ.push({ x:lp0[0], y:lp0[1], txt, col:'#d8dee9', hot });
+    labelQ.push({ x:lp0[0], y:lp0[1], txt, col:'#d8dee9', hot, tier:hot ? undefined : 'quiet' });
   }
 }
 
@@ -10322,15 +10590,52 @@ const LABEL_TRIES = 14;
 let labelBlock = [];                       // reserved this frame, cleared on flush
 let labelPlaced = [], labelBlocked = [];   // where it all ended up, for the tests
 let labelSkipped = 0;                      // named something off the frame
+let labelMarked = 0;                       // demoted to a diamond, for the tests
 const blockLabel = (x, cy, w, h) => { labelBlock.push({ x, y:cy, w, h }); };
+
+/* THREE TIERS OF LABEL. The plate is what makes a label loud — a filled black
+   slab is a bigger, blacker shape than anything else in a frame of grass and
+   pale stone — and there were twenty of them up at once, fourteen on the
+   bridge and six over the hold, identical, most of them naming something that
+   nothing was happening to.
+
+     NAME   plate, type, leader line. The full claim on the eye. Reserved for
+            the objectives, for whatever is in play, for what you have
+            selected, and for what is being hit.
+     QUIET  the same type in the same place, outlined against the world
+            instead of sitting on a slab, a third of the way to the dark. The
+            hold's buildings and its pits: you still want to read them, you do
+            not need a black rectangle to find them.
+     MARK   six pixels of diamond in the thing's own colour, and nothing else.
+            For a thing whose entire message is "I am here and you can click
+            me" — which is what a turret at full health has to say.
+
+   Only MARK leaves the dodging pass: it sits ON its anchor, it is smaller than
+   the padding the dodge works in, and letting fourteen of them shove the names
+   about would put back exactly the crowding the tier exists to cut. QUIET is
+   still a box of text and still has to keep out of everything else's way.  */
+const LABEL_QUIET = { lw:2.6, rim:'rgba(6,10,17,.78)', into:'#0d1320', k:.30 };
+const LABEL_MARK = { r:3, a:.82, rim:'rgba(8,10,14,.62)' };
+function labelMark(c, L){
+  const r = LABEL_MARK.r;
+  c.globalAlpha = LABEL_MARK.a;
+  c.beginPath();
+  c.moveTo(L.x, L.y - r); c.lineTo(L.x + r, L.y); c.lineTo(L.x, L.y + r); c.lineTo(L.x - r, L.y);
+  c.closePath();
+  c.fillStyle = L.col; c.fill();
+  c.strokeStyle = LABEL_MARK.rim; c.lineWidth = 1; c.stroke();
+  c.globalAlpha = 1;
+}
 
 let labelQ = [];
 function flushLabels(c){
   const placed = labelBlock.slice();
   labelSkipped = 0;
+  labelMarked = 0;
   labelQ.sort((a, b) => a.y - b.y);
   for (const L of labelQ){
     if (!labelSeen(L)){ labelSkipped++; continue; }
+    if (L.tier === 'mark'){ labelMark(c, L); labelMarked++; continue; }
     // The offsets under here used to be `y + 8.5` and `y + 10`, tuned against
     // whichever baseline the previous draw had left behind — which meant the
     // whole plate sat differently depending on whether a hero was on screen.
@@ -10361,6 +10666,16 @@ function flushLabels(c){
     if (y < L.y - 12 || Math.abs(lx - L.x) > 1){
       c.strokeStyle = 'rgba(160,180,205,.30)'; c.lineWidth = 1;
       c.beginPath(); c.moveTo(lx + .5, y + h); c.lineTo(L.x + .5, L.y - 3); c.stroke();
+    }
+    if (L.tier === 'quiet'){
+      // No plate. The outline is what a plate was FOR — keeping type legible
+      // over grass, stone and sky at once — and it costs a shape the size of
+      // the word rather than a shape the size of the box round it.
+      c.lineWidth = LABEL_QUIET.lw; c.strokeStyle = LABEL_QUIET.rim;
+      c.strokeText(L.txt, lx, cy);
+      c.fillStyle = tintTo(L.col, LABEL_QUIET.into, LABEL_QUIET.k);
+      c.fillText(L.txt, lx, cy);
+      continue;
     }
     c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
     c.fillRect(lx - w / 2, y, w, h);
@@ -10587,7 +10902,13 @@ function drawNode(c, key){
     const x = lerp(p[0], home[0], tri), y = lerp(p[1] - 6 * B, home[1], tri);
     drawWorkerFig(c, x, y, N.col, ph >= .5, .9, ph * 12.6 + i);
   }
-  labelQ.push({ x:p[0], y:p[1] + (key === 'wood' ? 26 : 36) * B, txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col });
+  // The crew count is also the WORKERS column of the dock, digit for digit,
+  // with the buttons that change it — so out here it loses its plate and keeps
+  // its name, unless you have actually asked about this pit.
+  const picked = sel.node === key;
+  labelQ.push({ x:p[0], y:p[1] + (key === 'wood' ? 26 : 36) * B,
+    txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col,
+    hot:picked, tier:picked ? undefined : 'quiet' });
 }
 
 // The seat of the hold. It was one plain box with a flag on it, smaller than
@@ -10638,7 +10959,11 @@ function drawKeep(c){
   poly(c, [[p[0] + 1.6 * B, p[1] - 15.5 * B], [p[0] + 17 * B, p[1] - 15.5 * B], [p[0] + 1.6 * B, p[1] - 11 * B]], shade(sideCol(), .78));
   if (holdSide !== MY) return;
   const lb = bp(KEEP.gx, KEEP.gy, 2.7);
-  labelQ.push({ x:lb[0], y:lb[1], txt:'Town Hall · ' + s.workers.idle + ' idle', col:'#ffe7b0' });
+  // The idle count is the first thing the dock's own title says, so the hall
+  // goes plate-less with the rest of the hold rather than being the one black
+  // slab left standing in the middle of it.
+  labelQ.push({ x:lb[0], y:lb[1], txt:'Town Hall · ' + s.workers.idle + ' idle', col:'#ffe7b0',
+    tier:'quiet' });
   for (let i = 0; i < Math.min(6, s.workers.idle); i++){
     const a = G.t * .3 + i * 1.1;
     const q = bp(gx + Math.cos(a) * 1.15, gy + 1.15 + Math.sin(a) * .38);
@@ -10854,11 +11179,11 @@ function mixHex(a, b, t){
    Decoration moves round the hue circle and UP in value instead — a patch of
    longer grass is not a patch of darker grass, it is a different plant
    catching the same sun.                                                    */
-const rgbOf = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
-function hexOf(r, g, b){
-  const q = (v) => clamp(Math.round(v), 0, 255);
-  return '#' + ((1 << 24) | (q(r) << 16) | (q(g) << 8) | q(b)).toString(16).slice(1);
-}
+// hexRGB/hexOf already do both of these, forty lines up. Two agents writing
+// the same helper in the same file is how `mixHex` nearly got silently
+// replaced by a stranger's version — there is a test below that scans for it
+// now — so these are aliases rather than second opinions.
+const rgbOf = hexRGB;
 const relLum = (c) => (SHADE.lum[0] * c[0] + SHADE.lum[1] * c[1] + SHADE.lum[2] * c[2]) / 255;
 // Round the hue circle, keeping saturation and value. shade() cannot do this —
 // it can only take a tone up or down its own hue, which is exactly why every
@@ -12075,6 +12400,16 @@ function foeWarning(){
 }
 
 let dockTab = 'jobs';
+/* The instructional paragraph. It is right for the first two waves and dead
+   weight for the rest of the match, so it is shown while the beginning is
+   still going on and afterwards only if the player asks for it back. Wave 3 —
+   by then you have built, upgraded and moved the camera; if you have not, the
+   NEXT hint over the world is still saying so in your own situation's words.
+   `dockHelpOn` is a tri-state: null is "whatever the wave says", true and
+   false are a choice the player made, which sticks either way.             */
+const DOCK_TUTOR = 3;
+let dockHelpOn = null;
+const dockHelp = () => (dockHelpOn === null ? G.wave < DOCK_TUTOR : dockHelpOn);
 const NARROW = () => !HEADLESS && document.body.classList.contains('narrow');
 
 function dockHtml(){
@@ -12083,7 +12418,16 @@ function dockHtml(){
   const sec = {};
 
   // ---- jobs
-  let h = '<div class="ptitle">Workers — ' + s.workers.idle + ' idle</div><div class="pgrid">';
+  // What the hold is short of. It used to be two lines of prose under the
+  // grid; two lines of prose IS a 76px row, and the same sentence is already
+  // in the NEXT hint over the world, where a player is looking when they need
+  // it. So it rides on the section title instead.
+  const jobWhy = s.workers.idle > 0
+    ? s.workers.idle + ' idle — put them to work, or arm them'
+    : popUsed(s) >= popCap(s) ? 'population full — a farm raises the cap'
+    : barracksLvl(s) === 0 ? 'all busy — a barracks arms one'
+    : 'all busy — pull one off a job with −';
+  let h = '<div class="ptitle">Workers · ' + jobWhy + '</div><div class="pgrid">';
   for (const k of ['gold','iron','wood','food']){
     const cap = nodeCap(s, k);
     h += '<div class="job"><span>' + RES_ICON[k] + '</span>' +
@@ -12092,44 +12436,18 @@ function dockHtml(){
       '<button class="sq" data-act="job" data-node="' + k + '" data-d="1"' + (s.workers.idle && s.workers[k] < cap ? '' : ' disabled') + '>+</button></div>';
   }
   h += '</div>';
-  // What each pile is actually earning you, and what the hold is short of.
-  // On a phone this tab was four rows and a lot of empty panel.
-  {
-    // (no per-job rate row here: the top bar already prints those, and this
-    // panel has to fit a phone without scrolling)
-    const why = s.workers.idle > 0
-      ? s.workers.idle + ' worker' + (s.workers.idle === 1 ? '' : 's') + ' standing about — put them on a job, or arm them at the barracks.'
-      : popUsed(s) >= popCap(s) ? 'Population is full. A farm raises the cap and opens three field jobs.'
-      : barracksLvl(s) === 0 ? 'Every worker is busy. A Barracks turns one into a fighter that marches with the wave.'
-      : 'Every worker is busy. Pull one off a job with − to arm it.';
-    h += '<div class="insp note">' + why + '</div>';
-  }
   sec.jobs = h;
 
   // ---- training and the barracks
-  // A pending choice blocks the next drill, so while one is up nothing else in
-  // this column can be acted on — and the column is 200px tall. Measured, it
-  // was the only one of the four that did not fit its box in ANY state, and
-  // with a choice up the third option sat below the fold: at a tenth level
-  // that is the special, the one thing the whole tier is built toward. So a
-  // choice takes the column to itself.
   const pend0 = s.troopPend[0];
-  h = '';
-  if (!pend0){
-    h += '<div class="ptitle">Train</div><div class="pgrid">';
-    h += '<button class="abtn" data-act="worker"><span class="t">Worker</span><span class="c">' + costHtml(C.WORKER_COST) + '</span></button>';
-    h += '</div>';
-    const q = s.trainQ.map(x => {
-      const pc = Math.round(clamp(x.t / x.dur, 0, 1) * 100);
-      return '<span class="qchip"><i class="fill" style="width:' + pc + '%"></i><span>Worker</span></span>';
-    }).join('');
-    h += '<div id="queue">' + (q || '<span class="qchip"><span>pits idle</span></span>') + '</div>';
-  }
-
   const bl0 = barracksLvl(s);
+  h = '';
   if (pend0){
-    h += '<div class="ptitle">' + TRAIN[pend0.kind].n + ' — level ' + pend0.lvl + '</div>';
-    h += '<div class="insp note">Choose one. Nothing else drills until you do.</div><div class="pgrid">';
+    // A choice takes the column to itself: nothing else here can be acted on
+    // until it is answered, and its third option is the special the whole tier
+    // is built toward.
+    h += '<div class="ptitle">' + TRAIN[pend0.kind].n + ' lv ' + pend0.lvl +
+      ' · choose one — nothing drills until you do</div><div class="pgrid">';
     pend0.opts.forEach((id, i) => {
       const d = TROOP_PERK[id] || TROOP_SPECIAL[id];
       h += '<button class="abtn' + (TROOP_SPECIAL[id] ? ' hot' : '') + '" data-act="troopick" data-opt="' + i + '">' +
@@ -12137,7 +12455,16 @@ function dockHtml(){
     });
     h += '</div>';
   } else {
-    h += '<div class="ptitle">Barracks' + (bl0 ? '' : ' — none built') + '</div><div class="pgrid">';
+    // One title and ONE row. This column carried two of each — Train over the
+    // worker button, Barracks over the drills, and the pit queue between them —
+    // which is 96px of stack in a 64px panel. The queue rides the title, where
+    // it is a status and not a control, and the worker button joins the drills
+    // it belongs with.
+    const q = s.trainQ.map(x => Math.round(clamp(x.t / x.dur, 0, 1) * 100));
+    h += '<div class="ptitle">Train · ' +
+      (q.length ? 'pit ' + q[0] + '%' + (q.length > 1 ? ' +' + (q.length - 1) : '') : 'pits idle') +
+      (bl0 ? '' : ' · no barracks') + '</div><div class="pgrid">';
+    h += '<button class="abtn" data-act="worker"><span class="t">Worker</span><span class="c">' + costHtml(C.WORKER_COST) + '</span></button>';
     for (const k of TROOP_KINDS){
       const t = s.troop[k], cost = troopCost(s, k);
       const cap = troopCap(s), maxed = t.lvl >= TROOP.maxLvl, capped = t.lvl >= cap;
@@ -12158,8 +12485,14 @@ function dockHtml(){
   // one of the four that did not fit its box. The other copy is the older and
   // better-placed one — but it only rendered when nothing was selected, so
   // clicking a plot made the warning disappear. One copy now, always up.
-  sec.train = h + (pend0 || s.superT <= 0 ? '' :
-    '<div class="ptitle">Ogres</div><div class="insp note">' + Math.ceil(s.superT) + 's of siege ogres are marching.</div>');
+  sec.train = h;
+  // ---- what is walking at you
+  // It used to hang off the bottom of the BUILD column, which meant that
+  // column carried two subjects and two titles — and in a 76px dock a column
+  // gets one of each. It is its own thing, so it is its own column.
+  sec.bridge = '<div class="ptitle">On the bridge' +
+    (pend0 || s.superT <= 0 ? '' : ' · ogres in ' + Math.ceil(s.superT) + 's') +
+    '</div><div class="insp note">' + foeWarning() + '</div>';
 
   // ---- whatever is selected out on the plot
   const b = sel.tile >= 0 ? s.plot[sel.tile] : null;
@@ -12232,14 +12565,18 @@ function dockHtml(){
     } else h += '<div class="job"><span class="nm">Fully upgraded.</span></div>';
     h += '</div>';
   } else {
-    h += '<div class="ptitle">Your hold</div><div style="font-size:12px;color:var(--dim);max-width:250px;line-height:1.5">' +
-      'Click a plot to build, a building to upgrade it, or a mine to dig it deeper. Drag to look around, pinch or scroll to zoom.</div>';
+    // "Click a plot to build, a building to upgrade it, or a mine to dig it
+    // deeper. Drag to look around, pinch or scroll to zoom." — still sitting
+    // in the widest column of the dock at wave seven, telling somebody who has
+    // built four buildings and moved the camera two hundred times how to build
+    // a building and move the camera. It is a beginner's line, so it goes when
+    // the beginning does, and folds into a question mark that puts it back.
+    h += '<div class="ptitle">Your hold</div>' +
+      (dockHelp() ? '<div class="dhelp">Click a plot to build, a building to upgrade it, or a mine to' +
+          ' dig it deeper. Drag to look around, scroll to zoom.' +
+          (G.wave >= DOCK_TUTOR ? '<button class="qm" data-act="dockhelp">×</button>' : '') + '</div>'
+        : '<button class="qm solo" data-act="dockhelp" title="How this works">?</button>');
   }
-  // Whatever is in this column, what is walking at you goes under it. It used
-  // to live in the no-selection branch, so the one line that says what the
-  // next wave is made of vanished the moment you clicked a plot to answer it.
-  h += '<div class="ptitle" style="margin-top:8px">On the bridge</div>' +
-    '<div class="insp note" style="margin-top:2px">' + foeWarning() + '</div>';
   sec.sel = h;
 
   if (bLvl(s, 'forge') > 0){
@@ -12263,14 +12600,14 @@ function dockHtml(){
 
   sec.heroes = '<div class="ptitle">Heroes</div><div id="heroBar">' + heroBarHtml() + '</div>';
 
-  const order = ['jobs','train','sel','heroes','forge'].filter(k => sec[k] !== undefined);
+  const order = ['jobs','train','sel','bridge','heroes','forge'].filter(k => sec[k] !== undefined);
   if (!narrow)
-    return order.map(k => '<div class="dsec' + (k === 'sel' ? ' grow' : '') + '" data-col="' + k + '">' +
+    return order.map(k => '<div class="dsec' + (k === 'bridge' ? ' grow' : '') + '" data-col="' + k + '">' +
       sec[k] + '</div>').join('');
 
   // Narrow: one section at a time behind tabs, so nothing needs a sideways scroll.
   if (!sec[dockTab]) dockTab = 'jobs';
-  const label = { jobs:'JOBS', train:'TRAIN', sel:'BUILD', heroes:'HEROES', forge:'FORGE' };
+  const label = { jobs:'JOBS', train:'TRAIN', sel:'BUILD', bridge:'BRIDGE', heroes:'HEROES', forge:'FORGE' };
   const alert = { sel:sel.tile >= 0 || !!sel.node, heroes:s.heroes.some(x => x.pend.length) };
   const tabs = order.map(k => '<button class="dtab' + (k === dockTab ? ' on' : '') + '" data-tab="' + k + '">' +
     label[k] + (alert[k] && k !== dockTab ? '<span class="dot"></span>' : '') + '</button>').join('');
@@ -13464,6 +13801,10 @@ function wire(){
     else if (a === 'up') say(sendCmd('up', { up:b.dataset.up }));
     else if (a === 'nodeup') say(sendCmd('nodeup', { node:b.dataset.node }));
     else if (a === 'newhero'){ showHeroCreate(); return; }
+    // Cosmetic and local: which of the two machines wants the beginner's
+    // paragraph up is nobody else's business, so this one does not go near
+    // sendCmd.
+    else if (a === 'dockhelp') dockHelpOn = !dockHelp();
     syncUI();
   });
   $('modal').addEventListener('click', (e) => {
@@ -14375,6 +14716,10 @@ window.IB = {
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, RAIL_SH, deckFarY, railShadowOff, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
+  BAR, barState, dmgAge, chromaDown, tintTo, hexRGB, hexOf, STRUCT_KEEPS, LABEL_HOT,
+  FLOAT_TIER, FLOAT_GRAZE, floatW, floatTier, FLOAT_JIT, FLOAT_JIT_MIN, jitter,
+  LANE_PX, FRAME, laneFitZoom, LABEL_QUIET, LABEL_MARK, labelMark, DOCK_TUTOR, dockHelp,
+  get dockHelpOn(){ return dockHelpOn; }, set dockHelpOn(v){ dockHelpOn = v; },
   floatScale, hitWeight, HIT, hitTime, hitPush, HIT_SHAKE, hitShake, hitShakeAmt, minionWorth, DEATH, deathHeft, deathSparks, deathWave, deathMotes, deathShake, heroWorth, HERO_DEATH, heroHeft, heroSparks, heroRingR, heroShake, FALL, structHeft, fallSparks, fallRing, fallWave, fallShake, shake, get shakeAsked(){ return shakeAsked; }, set shakeAsked(v){ shakeAsked = v; }, FLOAT_SC, FLOAT_POP, addFloat, floatSlot, FLOAT_GAP, LIT, LIGHT, planeLit, SHADE, sunTint, ROOF, RIDGE, ridgeRim, CONE, coneRoof, drawHouse, STONE, SUN, BANDS, drawSky, RIDGE_RIM, SHADOW, shadowSide, shadow, shadowOff, throwOff, smear, softShadow, shadowParts, PROJ_SHADOW, projShadow, miniHoldCol, MINI_MINE, MINI_THEIRS, drawMinimap, goodFor, badFor, forMe, foeName, AU, BAR_MINE, BAR_THEIRS, barCol, HERO_RING, heroRing, ZONE, ZONE_LOUD, zoneLook,
   holdOnScreen, startDemo, timelineHtml, arnd,
   skillPipsHtml, castFx, castCol, heroBarHtml, effArmor, skOutput, skRate, skPower, apBase, adBase,
@@ -14413,7 +14758,7 @@ window.IB = {
   WEAR, battleDamage, crown, block, UNDER, underCourse, ARCH_SHADE, archShade, hash2, stSeed, merlonHolds, CROWN_TIERS, UPMARK, upBands, upPlate, towerBands, towerRanks, troopRanks, bsumUp, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
-  get labelSkipped(){ return labelSkipped; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
+  get labelSkipped(){ return labelSkipped; }, get labelMarked(){ return labelMarked; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
   SKY, plateKey, skyRoll, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
   POST, postFx, postCache, postGrade, STONE_TONE, STONE_TONE_LIT, STONE_TONE_DARK,
   BAND_FX, bandFoot, ridgeFoot, HORIZON, ridgeTop, ridgeMid,
