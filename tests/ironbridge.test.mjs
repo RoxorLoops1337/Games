@@ -71,20 +71,35 @@ function loadGame(store, srcOverride){
   // alpha back leaves every later shape in the frame translucent, and an
   // unbalanced save() leaks a clip or a transform into whatever draws next.
   // Neither is visible to a per-call check, because no single call is wrong.
-  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.rects = []; stats.rectsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.grads = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.rects = []; stats.rectsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
   const TEXT0 = { lineCap:'butt', textAlign:'start', textBaseline:'alphabetic' };
   Object.assign(stats, TEXT0);
   stats.__text0 = TEXT0;
   const ctx = new Proxy({}, { get(_t, k){
     if (k === '__stats') return stats;
+    // A real context's state is READABLE, and this one's was not: every get
+    // handed back a callable, so `ctx.globalAlpha` came out as a function and
+    // any arithmetic on it as NaN. shadow() folds the caller's blanket alpha
+    // into its two marks rather than laying it over them, which means it has
+    // to read it back — and the whole reason a stub is worth having is that
+    // the thing it stands in for behaves like this.
+    if (k === 'globalAlpha') return stats.alpha;
     if (k === 'save') return () => { stats.ops++; stats.depth++; stats.maxDepth = Math.max(stats.maxDepth, stats.depth); };
     if (k === 'restore') return () => {
       stats.ops++;
       if (--stats.depth < 0) throw new RangeError('restore() with nothing saved');
     };
+    // What each gradient was actually built out of. Until now a gradient was a
+    // write-only object: the stub checked that every stop was a legal colour
+    // and then forgot it, so a band that graded dark-to-clear and a band that
+    // graded clear-to-clear were the same picture to every test here. The
+    // occlusion under a projecting course IS its stops.
     if (k === 'createLinearGradient' || k === 'createRadialGradient')
       return (...a) => { stats.ops++; numCheck(k, a);
-        return { addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); } }; };
+        const g = { __kind:k, __at:a.slice(), __stops:[],
+          addColorStop: (pos, col) => { numCheck('addColorStop', [pos]); stopCheck(col); g.__stops.push([pos, col]); } };
+        if (stats.grads.length < CAP) stats.grads.push(g);
+        return g; };
     if (k === 'measureText') return (txt) => ({ width: Math.max(8, String(txt).length * 5.4) });
     // What state each piece of text was actually drawn under. The property
     // tracking above says what was SET; this says what reached the glyph,
@@ -5169,6 +5184,224 @@ t.ok(true, 'drawing an empty bridge is harmless');
   }
   IB.MY = 0; IB.cam.z = IB.cam.tz = 1;
   t.ok(true, 'everything that casts a shadow draws, from either seat, at every zoom');
+}
+{
+  /* GROUND CONTACT. One undirected ellipse was the whole shadow language of
+     this world, held under a radius on purpose so that no shadow ever cleared
+     its own footprint — which meant none of them resembled its caster, none
+     had a contact core, and a dozen bodies in a brawl pooled into one grey
+     smear. Six art directors, six lenses, one sentence back: nothing here is
+     attached to the ground. */
+  const st = CTX.__stats;
+  const alphaOf = (col) => Number((String(col).match(/([\d.]+)\)$/) || [0, 0])[1]);
+  // Everything shadow() lays down, with the colour each shape was filled in.
+  // ell() and smear() both set the fill AFTER the path, so the colour has to
+  // be read off the fill — and smear's first arc shares a fill with its
+  // second, which is why the pairing is done by walking the two lists.
+  const marksOf = (f) => {
+    st.ellipses = []; st.fills = []; st.fillsDropped = 0;
+    f();
+    const es = st.ellipses.slice();
+    // the run is: near cap (fill lands on the far cap), far cap, core
+    return { all:es, body:es.find(e => e.fill !== null), core:es[es.length - 1], n:es.length };
+  };
+  IB.newMatch({ diff:'veteran', seed:6101 });
+  IB.MY = 0;
+  IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+  {
+    const m = marksOf(() => IB.shadow(CTX, 100, 200, 40, 16, 'rgba(0,0,0,.28)'));
+    // A single mark is exactly what was there before, so it is the first thing
+    // ruled out — and three shapes, not two, because the thrown body is a hull
+    // spanning two caps rather than an ellipse parked to one side.
+    t.ok(m.n === 3, 'a thing on the ground puts down a thrown body and a contact core, not one oval (' + m.n + ' shapes)');
+    t.ok(m.core.x === 100 && m.core.y === 200,
+      'the core sits exactly under the object, which is what makes it read as touching');
+    t.ok(Math.sign(m.body.x - 100) === IB.shadowSide() && m.body.x !== 100,
+      'and the body is thrown clear of it, on the side the sun is not (' + (m.body.x - 100).toFixed(1) + ')');
+    // Both marks at the same place is a haze; both at the throw is a floating
+    // object. The pair only works if they differ.
+    t.ok(Math.abs(m.body.x - 100) > 40,
+      'the throw CLEARS the footprint now — the core is what holds the object down (' +
+      Math.abs(m.body.x - 100).toFixed(1) + ' vs a radius of 40)');
+    t.ok(m.core.rx > 0 && m.core.rx < 40 * .8,
+      'the core is a contact patch, not the whole footprint again (' + m.core.rx.toFixed(1) + ' of 40)');
+    t.ok(m.body.rx === 40 && m.body.ry === 16,
+      'while the body keeps the caster’s own footprint at both ends of the smear');
+    t.ok(alphaOf(m.core.fill) > alphaOf(m.body.fill) * 1.5,
+      'and the core is much the darker of the two (' + alphaOf(m.core.fill) +
+      ' vs ' + alphaOf(m.body.fill) + ')');
+    t.ok(alphaOf(m.core.fill) > .28 && alphaOf(m.body.fill) < .28,
+      'the caller’s alpha is a weight the pair is split out of, not a value either one takes');
+  }
+  {
+    // A caller that fades a whole shadow — drawEnds wrapped the keep's in .22
+    // for its whole life — must not flatten the two marks back into one haze.
+    // The RATIO is the thing: fold the blanket alpha in and it survives; lay it
+    // over the pair and it survives too, but then so does the old bug where a
+    // fade at the call site made the core invisible before the body.
+    const full = marksOf(() => IB.shadow(CTX, 100, 200, 40, 16, 'rgba(0,0,0,.28)'));
+    CTX.globalAlpha = .3;
+    const faded = marksOf(() => IB.shadow(CTX, 100, 200, 40, 16, 'rgba(0,0,0,.28)'));
+    CTX.globalAlpha = 1;
+    const rat = (m) => alphaOf(m.core.fill) / alphaOf(m.body.fill);
+    t.ok(Math.abs(rat(full) - rat(faded)) < .02,
+      'a caller that fades the whole shadow keeps the core dark relative to the throw (' +
+      rat(full).toFixed(2) + ' vs ' + rat(faded).toFixed(2) + ')');
+    t.ok(alphaOf(faded.core.fill) < alphaOf(full.core.fill),
+      'and it really did fade — the fold is not just ignoring the caller (' +
+      alphaOf(faded.core.fill) + ' vs ' + alphaOf(full.core.fill) + ')');
+    t.ok(alphaOf(faded.core.fill) > alphaOf(faded.body.fill),
+      'with the core still the darker mark at the far end of the fade');
+  }
+  {
+    // What is NOT standing on the ground keeps the single soft mark. A contact
+    // core under a shaft in mid-air is the loudest lie available in a picture
+    // whose whole subject is what touches what.
+    const m = marksOf(() => IB.softShadow(CTX, 100, 200, 40, 16, 'rgba(0,0,0,.28)'));
+    t.ok(m.n === 1, 'a thing in flight throws one soft mark and no core (' + m.n + ')');
+    t.ok(m.all[0].x !== 100, 'still leaning the way the sun says');
+    const s = IB.shadowOff(40, 16), b = IB.throwOff(40, 16);
+    t.ok(Math.sign(s[0]) === Math.sign(b[0]) && Math.abs(b[0]) > Math.abs(s[0]),
+      'the two share a bearing and only the reach differs (' + s[0].toFixed(1) + ' vs ' + b[0].toFixed(1) + ')');
+    t.ok(IB.SHADOW.reach > 1 / IB.SHADOW.dx,
+      'and the reach is set past the point where a throw stays inside its own footprint');
+    // And there is no size at which a thing on the ground quietly gives the
+    // pair up. A level of detail here was tried and taken out: sixty pieces of
+    // hold scatter sit within a few pixels of each other in size, so they all
+    // cross any threshold on the same wheel click and change shape together.
+    // The pair is the same rule from a pebble to a keep.
+    const sizes = [1, 3, 9, 40].map(r => marksOf(() => IB.shadow(CTX, 100, 200, r, r * .4, 'rgba(0,0,0,.28)')).n);
+    t.ok(sizes.every(n => n === sizes[0]) && sizes[0] === 3,
+      'a thing on the ground gets both marks at every size, so nothing pops as the zoom crosses a threshold (' +
+      sizes.join(',') + ')');
+  }
+  {
+    // COVERAGE, which was the panel's actual finding: not "the keep has no
+    // shadow" but that having one was a per-asset decision. The keep is the
+    // biggest object in its frame and it was the one that went without.
+    IB.newMatch({ diff:'veteran', seed:6107 });
+    IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+    const cores = (f) => {
+      st.ellipses = []; st.fills = [];
+      f();
+      return st.ellipses.filter(e => e.fill !== null && alphaOf(e.fill) > 0 &&
+        /^rgba\(/.test(String(e.fill)));
+    };
+    IB.cam.x = -58;
+    const keep = cores(() => IB.drawEnds(CTX));
+    t.ok(keep.length >= 4,
+      'the keep and its towers all mark the ground they stand on (' + keep.length + ' marks)');
+    // and every structure key, not just the ones somebody remembered
+    for (const s of G.sides) for (const stx of s.structs){
+      IB.cam.x = stx.x;
+      const n = cores(() => IB.drawStructure(CTX, stx)).length;
+      t.ok(n >= 2, stx.key + ' puts both marks on the deck (' + n + ')');
+    }
+    IB.cam.x = 26;
+  }
+  {
+    /* The deck railing. A hundred and twenty world units of handrail stood in
+       open daylight over the largest lit surface in the game and threw one
+       stub per post — no rails, nothing running the length of it at all. */
+    const W = C.LANE_W / 2 + .6;
+    const far = IB.deckFarY(W);
+    t.ok(IB.lp(0, far)[1] < IB.lp(0, -far)[1],
+      'the rail that throws is the one the projection puts further off, not the one that was typed in');
+    const o = IB.railShadowOff(IB.DECK_XS.railH, far);
+    t.ok(Math.sign(o[0]) === IB.shadowSide() && o[0] !== 0,
+      'its shadow runs down the span the way every other shadow leans (' + o[0].toFixed(2) + ')');
+    t.ok(Math.sign(o[1]) === -Math.sign(far) && o[1] !== 0,
+      'and ACROSS the deck, inward — a rail whose shadow lands under itself is a rail nobody lit');
+    const land = far + o[1];
+    t.ok(Math.abs(land) < IB.DECK_XS.kerb,
+      'it lands on the boards rather than off the edge (' + land.toFixed(2) +
+      ' inside a kerb at ' + IB.DECK_XS.kerb + ')');
+    t.ok(Math.abs(land - far) > .6,
+      'far enough in from the kerb to be a stripe rather than the kerb’s own shade (' +
+      Math.abs(land - far).toFixed(2) + ')');
+    // The sun is beyond the far edge, so everything on this deck throws the
+    // same way across it. Put the SAME offset on the near rail and its shadow
+    // lands past the fascia, thirty feet down in the gorge — which is why only
+    // one of the two is ever drawn, and why drawing both would be a lie the
+    // rest of the lighting could be checked against.
+    const nearLand = -far + o[1];
+    t.ok(Math.abs(nearLand) > IB.DECK_XS.kerb,
+      'the same throw puts the near rail’s shadow off the bridge entirely (' +
+      nearLand.toFixed(2) + ' past a kerb at ' + IB.DECK_XS.kerb + ')');
+    // WIRED: one fill in the rail shadow's own colour reached the canvas.
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.4;
+    st.fills = []; st.fillsDropped = 0;
+    IB.drawDeck(CTX);
+    const hits = st.fills.filter(f => f === IB.RAIL_SH.col).length;
+    t.ok(hits === 1 && st.fillsDropped === 0,
+      'and the whole railing costs the deck exactly one more fill (' + hits + ')');
+  }
+  {
+    /* FIX 6. Nothing that overhangs threw anything and no recess was dark. */
+    const stopsOf = (g) => (g && g.__stops) || [];
+    const aOf = (col) => Number((String(col).match(/([\d.]+)\)$/) || [0, 1])[1]);
+    st.grads = []; st.rects = [];
+    IB.underCourse(CTX, 10, 40, 60, 2, IB.STONE.mid);
+    const g = st.grads[st.grads.length - 1], ss = stopsOf(g);
+    t.ok(ss.length >= 2, 'a projecting course lays a graded band under itself (' + ss.length + ' stops)');
+    t.ok(aOf(ss[0][1]) > .4 && aOf(ss[ss.length - 1][1]) === 0,
+      'hard against the stone that overhangs and gone by the bottom (' +
+      aOf(ss[0][1]) + ' → ' + aOf(ss[ss.length - 1][1]) + ')');
+    // The band is the WALL in shade, not a grey laid over it — which is the
+    // difference between a shadow and a painted stripe, and the reason
+    // shade() had to learn about two illuminants first.
+    const bandHex = IB.shade(IB.STONE.mid, IB.UNDER.f);
+    const lum = (h) => { const n = parseInt(h.slice(1), 16);
+      return .2126 * ((n >> 16) & 255) + .7152 * ((n >> 8) & 255) + .0722 * (n & 255); };
+    t.ok(lum(bandHex) < lum(IB.STONE.mid) * .8,
+      'and it is genuinely darker than the wall it falls on (' +
+      Math.round(lum(bandHex)) + ' vs ' + Math.round(lum(IB.STONE.mid)) + ')');
+    t.ok(IB.UNDER.h > 0 && g.__at[3] - g.__at[1] === IB.UNDER.h * 2,
+      'five world units of it, in the scale it was drawn at, not a fixed pixel count');
+    // The guard: a course over nothing has nothing to shade.
+    st.grads = [];
+    IB.underCourse(CTX, 10, 40, 0, 2, IB.STONE.mid);
+    IB.underCourse(CTX, 10, 40, 60, 2, 'rgba(0,0,0,.3)');
+    t.ok(st.grads.length === 0, 'a course with no wall under it draws nothing at all');
+    // ...and block() carries it, so a call site says "this projects" and gets
+    // the band, rather than every wall in the game needing to remember.
+    st.grads = [];
+    IB.block(CTX, 0, 0, 40, 6, IB.STONE.mid2, IB.STONE.lit);
+    const plain = st.grads.length;
+    IB.block(CTX, 0, 0, 40, 6, IB.STONE.mid2, IB.STONE.lit, IB.STONE.mid, 1);
+    t.ok(plain === 0 && st.grads.length === 1,
+      'a block told what it projects over shades it, and one told nothing does not');
+  }
+  {
+    // The arch head. An opening is a hole through eight feet of wall: the
+    // light gets in at the threshold and dies going up, and every door in this
+    // game was lit right to its crown, which is a door painted on a wall.
+    const st2 = CTX.__stats;
+    st2.grads = [];
+    IB.archShade(CTX, 0, 100, 30, 50);
+    const g = st2.grads[st2.grads.length - 1];
+    const aOf = (col) => Number((String(col).match(/([\d.]+)\)$/) || [0, 1])[1]);
+    t.ok(g && g.__stops.length >= 2, 'the head of an opening is filled, not left lit');
+    t.ok(aOf(g.__stops[0][1]) > .3 && /rgba\(0,0,0/.test(g.__stops[0][1]),
+      'in black — this is the absence of light in a hole, not the grey where two lit solids meet');
+    t.ok(aOf(g.__stops[g.__stops.length - 1][1]) === 0,
+      'and it falls off downward, so the threshold is the lit part');
+    t.ok(IB.ARCH_SHADE.f > .2 && IB.ARCH_SHADE.f < .6,
+      'over the top of the opening rather than all of it (' + IB.ARCH_SHADE.f + ')');
+    t.ok(g.__at[3] - g.__at[1] === 50 * IB.ARCH_SHADE.f,
+      'measured off the opening it is in, so a tall gate is not shaded like a slit');
+    // WIRED: the gate really has one, and so does the keep.
+    IB.newMatch({ diff:'veteran', seed:6113 });
+    IB.MY = 0; IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+    const black = () => st2.grads.filter(gr => gr.__stops.length &&
+      /rgba\(0,0,0,[.\d]+\)$/.test(gr.__stops[0][1]) && aOf(gr.__stops[0][1]) > .3).length;
+    const gate = G.sides[0].structs.find(s => s.key === 'gate');
+    IB.cam.x = gate.x; st2.grads = []; IB.drawStructure(CTX, gate);
+    t.ok(black() >= 1, 'the gate’s plank door is dark under its arch head (' + black() + ')');
+    IB.cam.x = -58; st2.grads = []; IB.drawEnds(CTX);
+    t.ok(black() >= 1, 'and so is the keep’s (' + black() + ')');
+    IB.cam.x = 26;
+  }
 }
 {
   // The strip along the bottom. Its two hold blocks were green and brown,
