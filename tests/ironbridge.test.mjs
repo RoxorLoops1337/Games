@@ -12661,8 +12661,23 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(IB.PERF_TRIALS[0].k === null &&
        IB.PERF_TRIALS[IB.PERF_TRIALS.length - 1].k === null,
     'it measures the baseline first and again last, so drift is visible');
-  t.ok(IB.PERF_TRIALS[0].n !== IB.PERF_TRIALS[IB.PERF_TRIALS.length - 1].n,
-    'and the two are named apart, or the reader cannot tell which is which');
+  // Every ablation has a baseline on BOTH sides. The first version measured
+  // the baseline once at each end and they came back 4.5x apart on a real
+  // phone — which said, correctly, that the whole table was soft. A phone
+  // under sustained load throttles, and a run that does not account for that
+  // charges the drift to whichever layer happened to be off at the time.
+  let lonely = 0;
+  for (let i = 0; i < IB.PERF_TRIALS.length; i++){
+    if (IB.PERF_TRIALS[i].k === null) continue;
+    const before = i > 0 && IB.PERF_TRIALS[i - 1].k === null;
+    const after = i + 1 < IB.PERF_TRIALS.length && IB.PERF_TRIALS[i + 1].k === null;
+    if (!before || !after) lonely++;
+  }
+  t.ok(lonely === 0,
+    'and every ablation sits between two baselines, so drift is subtracted ' +
+    'rather than blamed on a layer (' + lonely + ' without)');
+  t.ok(IB.PERF_TRIALS.filter(x => x.k === null).length === IB.PERF_LAYERS.length + 1,
+    'which is exactly one baseline more than there are layers');
 
   // Long enough to mean something, short enough that somebody will sit
   // through it on a phone.
@@ -12699,8 +12714,24 @@ t.ok(true, 'a final draw on a live match is clean');
     t.ok(rep.includes(want), 'the report says ' + want);
   for (const T of IB.PERF_TRIALS)
     t.ok(rep.includes(T.n), 'and has a line for "' + T.n + '"');
-  t.ok(/work/.test(rep) && /gap/.test(rep),
-    'it reports both what the drawing costs and what the player feels, which are not the same number');
+  // The MEAN, not the median. A vsync-quantised gap has no other continuous
+  // statistic: every sample is 16.7 or 33.3 or 50, so a median can only ever
+  // be one of those and cannot resolve a difference smaller than a whole
+  // frame. The mean is the duty cycle between them.
+  t.ok(/mean/.test(rep) && /med/.test(rep),
+    'it reports the mean, which can attribute, beside the median, which is what you feel');
+  t.ok(/baselines/.test(rep),
+    'and prints the baselines themselves, because a set that climbs is the ' +
+    'phone throttling and makes everything else soft');
+  // The instrument must not be in the measurement. A readback per frame costs
+  // a fraction of a millisecond on a desktop and forces a full pipeline sync
+  // on a phone — the first version of this had one, and the baseline climbed
+  // from 27ms to 127ms across a single run.
+  const perfSrc = SRC.slice(SRC.indexOf('const PERF = {'), SRC.indexOf('function perfShow'));
+  t.ok(!/getImageData/.test(perfSrc),
+    'and the profiler never reads the canvas back, which is what made the first one lie');
+  t.ok(!/getImageData/.test(SRC.slice(SRC.indexOf('function draw(){'), SRC.indexOf('function draw(){') + 3000)),
+    'nor does the frame it is measuring');
 }
 
 t.done();
