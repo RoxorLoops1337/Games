@@ -12550,15 +12550,31 @@ const CAM_MIN = HOLD_X - 26, CAM_MAX = C.LANE_LEN - HOLD_X + 26;
    GPU it can force the tile to be resolved. Guessing across that gap does not
    work. This measures on the real device.
 
-   It attributes by ABLATION rather than by timing each stage in place. A
-   canvas queues its work, so timing a stage where it is called measures how
-   long it took to WRITE the commands; forcing the queue out per stage costs a
-   pipeline stall per stage and changes the thing being measured. Turning one
-   layer off for a couple of seconds and watching the whole frame is honest —
-   it is the same number the player is complaining about, with one thing gone.
+   It attributes by ABLATION: turn one layer off for a couple of seconds and
+   watch the whole frame. That is the same number the player is complaining
+   about, with one thing gone.
 
-   Open the game with ?perf on the end of the URL. It runs a fixed sequence of
-   trials, then prints a report with a button that copies it.               */
+   The first version of this also timed the drawing directly, forcing the GPU
+   queue out once a frame with a 1x1 readback so the number would not just be
+   how long it took to WRITE the commands. On a desktop that costs a fraction
+   of a millisecond. On the Android phone this was built for it forces a full
+   pipeline sync every frame and compounds as the pipeline saturates: the
+   baseline climbed from 27ms to 127ms across a single run and every row of
+   the table was measuring the instrument. The readback is gone. An
+   instrument that changes what it measures is not one.
+
+   What is left is the frame gap, and it snaps to whole vsyncs — so the MEAN
+   is reported, not the median. The mean of quantised gaps is continuous: at
+   40% dropped frames it reads 23ms, which no single gap ever is. The median
+   is reported beside it because that is the one you feel.
+
+   And the baseline is measured BETWEEN every pair of trials, not once at the
+   start. The first version measured it once at each end and the two came back
+   4.5x apart, which said — correctly — that the whole table was soft. A phone
+   under sustained load throttles, and a run that does not account for drift
+   attributes it to whichever layer happened to be off at the time.
+
+   Open the game with ?perf on the end of the URL.                          */
 const PERF = {
   on: false,
   off: {},            // which layers are suppressed right now
@@ -12574,18 +12590,23 @@ const PERF = {
 // The order matters: `everything` first so the baseline is measured before the
 // board has had time to change, and again LAST so a report can show whether it
 // drifted. A number that moved between the two is a number to distrust.
-const PERF_TRIALS = [
-  { k:null,   n:'everything' },
-  { k:'post', n:'no grade' },
-  { k:'sky',  n:'no sky' },
-  { k:'gap',  n:'no chasm' },
-  { k:'hold', n:'no islands' },
-  { k:'deck', n:'no deck' },
-  { k:'fx',   n:'no effects' },
-  { k:'lane', n:'no bodies' },
-  { k:'hud',  n:'no interface' },
-  { k:null,   n:'everything again' },
+const PERF_LAYERS = [
+  { k:'post', n:'grade' },
+  { k:'sky',  n:'sky' },
+  { k:'gap',  n:'chasm' },
+  { k:'hold', n:'islands' },
+  { k:'deck', n:'deck' },
+  { k:'fx',   n:'effects' },
+  { k:'lane', n:'bodies' },
+  { k:'hud',  n:'interface' },
 ];
+// base, layer, base, layer, base ... so every ablation has a baseline on each
+// side of it and drift is subtracted rather than blamed on a layer.
+const PERF_TRIALS = (() => {
+  const out = [{ k:null, n:'baseline' }];
+  for (const L of PERF_LAYERS){ out.push({ k:L.k, n:'no ' + L.n }); out.push({ k:null, n:'baseline' }); }
+  return out;
+})();
 const perfOff = (k) => PERF.on && !!PERF.off[k];
 
 function perfStart(){
@@ -12603,17 +12624,21 @@ function perfStep(raw){
   PERF.peak.fx = Math.max(PERF.peak.fx, G.fx.length);
   if (PERF.t > PERF.warm && raw > 0 && raw < .5) PERF.gaps.push(raw * 1000);
   if (PERF.t < PERF.secs) return;
-  const mid = (a) => { const q = a.slice().sort((x, y) => x - y); return q.length ? q[q.length >> 1] : 0; };
   const g = PERF.gaps.slice().sort((a, b) => a - b);
+  // The MEAN, because a vsync-quantised gap has no other continuous statistic.
+  // Every sample is 16.7 or 33.3 or 50; the median can only ever be one of
+  // those, and the mean is the duty cycle between them.
+  let sum = 0; for (const v of g) sum += v;
   PERF.rows.push({
     n: PERF_TRIALS[PERF.trial].n,
+    base: PERF_TRIALS[PERF.trial].k === null,
+    mean: g.length ? sum / g.length : 0,
     med: g.length ? g[g.length >> 1] : 0,
-    p90: g.length ? g[Math.floor(g.length * .9)] : 0,
     worst: g.length ? g[g.length - 1] : 0,
-    work: mid(PERF.work),
     frames: g.length,
+    post: postLvl, sky: SKY.res,
   });
-  PERF.trial++; PERF.t = 0; PERF.gaps = []; PERF.work = [];
+  PERF.trial++; PERF.t = 0; PERF.gaps = [];
   PERF.off = {};
   const T = PERF_TRIALS[PERF.trial];
   if (T && T.k) PERF.off[T.k] = 1;
@@ -12622,8 +12647,17 @@ function perfStep(raw){
 
 function perfPct(v){ return v > 0 ? v.toFixed(1) : '0'; }
 function perfReport(){
-  const base = PERF.rows[0] ? PERF.rows[0].med : 0;
-  const wbase = PERF.rows[0] ? PERF.rows[0].work : 0;
+  const bases = PERF.rows.filter(r => r.base && r.mean > 0);
+  // Each ablation against the mean of the baselines either side of it, so a
+  // machine that is getting slower under its own heat does not have that
+  // charged to whichever layer was off at the time.
+  const near = (i) => {
+    let a = null, b = null;
+    for (let j = i - 1; j >= 0; j--) if (PERF.rows[j].base && PERF.rows[j].mean > 0){ a = PERF.rows[j]; break; }
+    for (let j = i + 1; j < PERF.rows.length; j++) if (PERF.rows[j].base && PERF.rows[j].mean > 0){ b = PERF.rows[j]; break; }
+    if (a && b) return (a.mean + b.mean) / 2;
+    return (a || b || { mean:0 }).mean;
+  };
   const dpr = lcv && LW ? (lcv.width / LW).toFixed(2) : '?';
   const L = [];
   L.push('IRONBRIDGE PERF');
@@ -12636,22 +12670,33 @@ function perfReport(){
     ', zoom ' + cam.z.toFixed(2) + (cam.follow ? ', following' : ''));
   L.push('tuning  post ' + postLvl + ', skyRes ' + SKY.res + ', phone ' + (onPhone() ? 'yes' : 'no'));
   L.push('');
-  L.push('trial             work    gap    p90  worst    fps   saves');
-  for (const r of PERF.rows){
-    const save = wbase && r.work ? wbase - r.work : 0;
-    L.push(r.n.padEnd(17) +
-      perfPct(r.work).padStart(5) + perfPct(r.med).padStart(7) +
-      perfPct(r.p90).padStart(7) + perfPct(r.worst).padStart(7) +
-      (r.med ? (1000 / r.med).toFixed(0) : '?').padStart(7) +
-      (Math.abs(save) < .05 ? '' : (save > 0 ? '  -' + save.toFixed(1) + 'ms' : '  +' + (-save).toFixed(1) + 'ms')));
+  L.push('layer off        mean    med  worst    fps    saves');
+  for (let i = 0; i < PERF.rows.length; i++){
+    const r = PERF.rows[i];
+    const b = r.base ? 0 : near(i);
+    const save = b && r.mean ? b - r.mean : 0;
+    L.push(r.n.padEnd(15) +
+      perfPct(r.mean).padStart(6) + perfPct(r.med).padStart(7) + perfPct(r.worst).padStart(7) +
+      (r.mean ? (1000 / r.mean).toFixed(0) : '?').padStart(7) +
+      (r.base ? '' : (Math.abs(save) < .3 ? '      -' :
+        (save > 0 ? '  -' + save.toFixed(1) + 'ms' : '  +' + (-save).toFixed(1) + 'ms'))));
   }
   L.push('');
-  L.push('work = what the drawing costs, with the queue forced out, which is');
-  L.push('       the only number that attributes. gap = what you feel, and it');
-  L.push('       snaps to whole vsyncs (16.7 / 33.3), so it cannot.');
-  L.push('saves = work saved against the first trial. The big one is the one');
-  L.push('       to fix. If "everything again" is far off "everything", the');
-  L.push('       board changed under the run and the whole table is soft.');
+  // The baselines ARE a measurement. If they climb, the phone is throttling
+  // and nothing else in the table can be trusted very far.
+  if (bases.length > 1){
+    const first = bases[0].mean, last = bases[bases.length - 1].mean;
+    L.push('baselines ' + bases.map(r => r.mean.toFixed(0)).join(' ') +
+      '   drift ' + (last > first ? '+' : '') + (last - first).toFixed(1) + 'ms' +
+      (last > first * 1.4 ? '  <-- SLOWING UNDER LOAD, the rest is soft' : ''));
+  }
+  const gov = PERF.rows.filter(r => r.post !== PERF.rows[0].post || r.sky !== PERF.rows[0].sky);
+  if (gov.length) L.push('governors moved mid-run (post/sky), which is its own confound');
+  L.push('');
+  L.push('mean = the number that attributes. A frame gap snaps to whole');
+  L.push('       vsyncs, so only its MEAN is continuous. med = what you feel.');
+  L.push('saves = against the baselines either side of that trial, so drift is');
+  L.push('       subtracted rather than blamed on a layer. Biggest wins.');
   return L.join('\n');
 }
 
@@ -12728,16 +12773,6 @@ function draw(){
   }
   if (!perfOff('hud')){ flushLabels(c); drawMinimap(c); }
   c.restore();
-  // While profiling, force the queue out and time the whole thing. A canvas
-  // QUEUES, so a draw timed without this measures how long it took to WRITE
-  // the commands; the readback costs a pipeline stall, but it costs the same
-  // stall in every trial, so the differences between them stay honest. It is
-  // the only number in the report that can attribute anything — the frame gap
-  // snaps to whole vsyncs and cannot.
-  if (PERF.on && postNow){
-    try { c.getImageData(0, 0, 1, 1); } catch (e) {}
-    if (PERF.t > PERF.warm) PERF.work.push(postNow() - t0);
-  }
   skyStep(c, t0);
 }
 
@@ -15140,7 +15175,7 @@ window.IB = {
   OVER_HOLD, overStep, syncHud, MUSTER, mustering, musterPhase, waveSecs, musterMark,
   basicAttack, attackDamage, healUnit, healFx, HEAL, healSparks, healSfx, addBuff,
   fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
-  PERF, PERF_TRIALS, perfOff, perfStart, perfStep, perfReport,
+  PERF, PERF_TRIALS, PERF_LAYERS, perfOff, perfStart, perfStep, perfReport,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder, LANE_REACH, fxComp, fxBatchStart, fxBatchEnd, drawFx, fxOnDeck, DECK_FX, fxDeck, fxAir,
