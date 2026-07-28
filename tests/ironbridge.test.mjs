@@ -5357,10 +5357,15 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(dragged === 0, 'no other band was moved with it');
   t.ok(IB.ridgeFoot(IB.BANDS[0]) !== IB.bandFoot(IB.BANDS[0]),
     'and the two heights are genuinely two heights, not one function twice');
-  t.ok(/bandFoot\(b\)/.test(String(IB.skyRoll)),
+  // The mountains live in bandPaint now — one range is a strip that is painted
+  // once and then translated, rather than three silhouettes rebuilt every
+  // frame — but it is the same code, so it is the same two facts.
+  t.ok(/bandFoot\(b\)/.test(String(IB.bandPaint)),
     'the haze still pools at the band\'s own foot rather than at the outline\'s');
-  t.ok(/b\.y \+ b\.h \+ \.02/.test(String(IB.skyRoll)),
+  t.ok(/b\.y \+ b\.h \+ \.02/.test(String(IB.bandPaint)),
     'and the fog gradient still ends exactly where it always did');
+  t.ok(!/ridgeTop|ridgeMid/.test(String(IB.skyRoll)),
+    'and the scrolling layer no longer rebuilds a mountain at all');
 
   // The halo is a radial gradient — a new call on this path — and the whole
   // sky has to survive every camera the game can reach.
@@ -12467,6 +12472,83 @@ t.ok(true, 'a final draw on a live match is clean');
     f.pan.toFixed(3) + ' vs ' + dMax.toFixed(3) + ')');
   t.ok(f.drift > 0 && f.drift <= f.pan, 'and the weather drifts no faster than it parallaxes');
   IB.cam.x = IB.HOLD_X;
+}
+
+/* ====================================== the sky while you are watching a fight
+   The first pass at this cached the scrolling sky and repainted it when it had
+   moved a pixel, which made a still camera free and did nothing at all for the
+   case the game is actually for. Watching a fight is not watching a still
+   picture: the camera creeps along behind the front line, and at a fighting
+   zoom that creep moves the nearest ridge a shade over one pixel a frame —
+   just enough to miss the cache every single frame. Measured on a phone:
+
+     camera still        sky  2.9 ms   frame 18.2 ms
+     camera following    sky 10.1 ms   frame 29.7 ms                          */
+{
+  IB.newMatch({ diff:'veteran', seed:9780 });
+  IB.MY = 0;
+  IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.4; G.t = 10;
+
+  // ---- a moving sky gets fewer pixels, because motion hides softness. That
+  // is the trade every shipping renderer makes and it is the right way round:
+  // detail costs more than resolution to give up, and nobody can see either
+  // while it slides past.
+  t.ok(IB.SKY_MOVE.res < 1 && IB.SKY_MOVE.res > .3,
+    'a sliding sky is drawn small, but not so small it stops being a sky (' + IB.SKY_MOVE.res + ')');
+  t.ok(IB.SKY_MOVE.hold > 1,
+    'and it is sticky coming back, so a camera that stops and starts does not swap plates ' +
+    'several times a second (' + IB.SKY_MOVE.hold + ' frames)');
+  // The moving/still question is read off the SAME number as the cache key, so
+  // the two cannot disagree about whether the sky moved.
+  const a0 = IB.skyAt();
+  t.ok(typeof a0.pan === 'number' && typeof a0.drift === 'number',
+    'where the sky has got to is one number the key and the mover both read');
+  IB.cam.x = 60; IB.skyMoving();               // settle
+  for (let i = 0; i < IB.SKY_MOVE.hold + 2; i++) IB.skyMoving();
+  t.ok(!IB.skyMoving(), 'a parked camera reads as still');
+  IB.cam.x = 90;
+  t.ok(IB.skyMoving(), 'and one that jumped across the bridge reads as moving');
+  // A zoom moves the sky too, and the camera's own speed says nothing about
+  // that — which is why this is asked of the layer, not of the camera.
+  IB.cam.x = 90; for (let i = 0; i < IB.SKY_MOVE.hold + 2; i++) IB.skyMoving();
+  IB.cam.z = IB.cam.tz = 2.4;
+  t.ok(IB.skyMoving(), 'leaning in counts as movement, because it moves the sky');
+  IB.cam.z = IB.cam.tz = 1.4;
+
+  /* ---- the ridges are painted once and then translated.
+     Half the cost of the whole scrolling sky was three mountain ranges being
+     rebuilt every frame — thirty peaks, three clipped aerial gradients, thirty
+     rim strokes and three haze pools — to sit one pixel to the left of where
+     they had been. A range does not change; it TRANSLATES, at its own fixed
+     fraction of the camera. */
+  t.ok(IB.BAND_SLACK > 40,
+    'a band strip carries enough reserve to be worth having (' + IB.BAND_SLACK + 'px)');
+  t.ok(typeof IB.drawBands === 'function' && typeof IB.bandPaint === 'function',
+    'the mountains have a painter and a mover, and they are not the same function');
+  // The strip and the screen are the same code — there is no second copy of
+  // the mountains that could disagree with the first.
+  t.ok(/ridgeTop\(i, k\)/.test(String(IB.bandPaint)) && /RIDGE_RIM/.test(String(IB.bandPaint)),
+    'the strip is painted by the same code that used to paint the screen');
+  t.ok(!/ridgeTop|ridgeMid|RIDGE_RIM/.test(String(IB.skyRoll)),
+    'and nothing rebuilds a mountain in the per-frame path any more');
+  // Each band pays for its OWN distance. Band 2 moves 3.4x faster than band 0,
+  // so band 0 is repainted 3.4x less often — a shared clock would throw that
+  // away and land all three repaints on one frame.
+  let rising = 0;
+  for (let i = 1; i < IB.BANDS.length; i++) if (IB.BANDS[i].d <= IB.BANDS[i - 1].d) rising++;
+  t.ok(rising === 0,
+    'the three ranges travel at three different rates, which is why they are cached apart');
+  // Drawn through the real path at a spread of cameras, it must not throw and
+  // must still put mountains on the canvas.
+  const before = CTX.__stats.ops;
+  for (const x of [8, 60, 120]) for (const z of [.5, 1.4, 2.2]){
+    IB.cam.x = x; IB.cam.z = IB.cam.tz = z;
+    let err = null;
+    try { IB.drawBands(CTX); } catch (e){ err = e.message; }
+    t.ok(!err, 'the ranges draw at x ' + x + ' zoom ' + z + (err ? ' — ' + err : ''));
+  }
+  t.ok(CTX.__stats.ops > before, 'and they put something on the canvas');
+  IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1;
 }
 
 t.done();
