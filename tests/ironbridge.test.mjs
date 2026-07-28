@@ -78,7 +78,7 @@ function loadGame(store, srcOverride){
   // alpha back leaves every later shape in the frame translucent, and an
   // unbalanced save() leaks a clip or a transform into whatever draws next.
   // Neither is visible to a per-call check, because no single call is wrong.
-  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.grads = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.rects = []; stats.rectsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0;
+  stats.dash = 0; stats.alpha = 1; stats.depth = 0; stats.maxDepth = 0; stats.lw = 0; stats.lwMin = Infinity; stats.strokes = []; stats.texts = []; stats.ellipses = []; stats.grads = []; stats.fill = null; stats.lines = []; stats.fills = []; stats.fillsDropped = 0; stats.rects = []; stats.rectsDropped = 0; stats.lineWidth = 1; stats.stroke = null; stats.dropped = 0; stats.gco = 0; stats.comp = 'source-over';
   const TEXT0 = { lineCap:'butt', textAlign:'start', textBaseline:'alphabetic' };
   Object.assign(stats, TEXT0);
   stats.__text0 = TEXT0;
@@ -198,6 +198,11 @@ function loadGame(store, srcOverride){
     // under `middle`, so text that never changed moved on its own depending on
     // what had been drawn before it.
     if (k === 'lineCap' || k === 'textAlign' || k === 'textBaseline' || k === 'font') stats[k] = v;
+    // How many times the canvas was asked to change how it blends. Counted
+    // because on a tile-based GPU — every phone — a blend mode that has to
+    // read the destination back can force the tile to be resolved, so this
+    // number is a cost in its own right and not just a property write.
+    if (k === 'globalCompositeOperation'){ stats.gco++; stats.comp = v; }
     return true;
   } });
   CTX = ctx;
@@ -12548,6 +12553,72 @@ t.ok(true, 'a final draw on a live match is clean');
     t.ok(!err, 'the ranges draw at x ' + x + ' zoom ' + z + (err ? ' — ' + err : ''));
   }
   t.ok(CTX.__stats.ops > before, 'and they put something on the canvas');
+  IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1;
+}
+
+/* ================================== the effects, and what a blend mode costs
+   Reported: it drops when the minions are fighting. It did, and this was why.
+
+   Every hot particle set the canvas to `lighter`, drew three blobs, and set it
+   straight back — two composite changes each, for every spark in the air.
+   Counted on one phone frame at the effect cap: 588 of them. On a software
+   rasteriser a blend mode is just a different inner loop and that is nearly
+   free, which is exactly why it survived being measured here. On a tile-based
+   GPU — which is every phone — a blend mode that has to read the destination
+   back before it can write it can force the tile to be resolved, and 588 of
+   those in a frame is the drop.
+
+   Almost none of those changes changed anything: particles arrive in bursts,
+   and every spark in a burst wants the mode the one before it wanted.       */
+{
+  IB.newMatch({ diff:'veteran', seed:9790 });
+  IB.MY = 0;
+  IB.fxForce = true;
+  IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1.4;
+
+  const switches = (n) => {
+    G.fx.length = 0;
+    for (let i = 0; i < n; i++) IB.burstFx(59 + (i % 7) * .4, (i % 5 - 2) * .6, '#ffd08a', 6);
+    G.t = 12;
+    const st = CTX.__stats;
+    st.gco = 0;
+    IB.fxBatchStart();
+    for (const p of IB.fxAir()) IB.drawFx(CTX, p);
+    IB.fxBatchEnd(CTX);
+    return { fx:G.fx.length, gco:st.gco };
+  };
+  const few = switches(4), many = switches(40);
+  t.ok(few.fx > 10 && many.fx > 100,
+    'the probe actually put effects in the air (' + few.fx + ' and ' + many.fx + ')');
+  // THE assertion. Ten times the particles must not be ten times the state
+  // changes — that is the whole point, and it is the thing a future edit would
+  // silently undo by putting a reset back at the end of a block.
+  t.ok(many.gco <= few.gco + 4,
+    'ten times the sparks is not ten times the blend-mode changes (' +
+    few.fx + ' particles -> ' + few.gco + ' changes, ' +
+    many.fx + ' -> ' + many.gco + ')');
+  t.ok(many.gco < 12,
+    'a whole cap of effects costs a handful of blend-mode changes, not hundreds (' +
+    many.gco + ')');
+
+  // And the layer still hands the canvas back the way it was handed over,
+  // which is what makes it safe for the batch to span the whole pass.
+  t.ok(CTX.__stats.comp === 'source-over',
+    'the effects pass leaves the canvas composing normally (' + CTX.__stats.comp + ')');
+  // The tracker is only telling the truth between the brackets, so anything
+  // that draws effects has to use them.
+  const lane = SRC.slice(SRC.indexOf('function drawLane'), SRC.indexOf('function drawLane') + 4000);
+  t.ok((lane.match(/fxBatchStart\(\)/g) || []).length >= 2 &&
+       (lane.match(/fxBatchEnd\(c\)/g) || []).length >= 2,
+    'both effect passes bracket themselves, deck and air');
+  // No block may go back to setting the mode directly — that is what made the
+  // tracker lie in the first place.
+  const fx = SRC.slice(SRC.indexOf('function drawFx'), SRC.indexOf('function drawFx') + 9000);
+  t.ok(!/c\.globalCompositeOperation\s*=/.test(fx),
+    'and no effect sets the mode behind the tracker\'s back');
+
+  IB.fxForce = false;
+  G.fx.length = 0;
   IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1;
 }
 
