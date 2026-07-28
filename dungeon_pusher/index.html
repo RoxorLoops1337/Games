@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.6', notes: [
+    'THE KEEPER’S SCALES \u{2696}\u{FE0F} — the merchant now BUYS your coins. His shelf has two desks: BUY takes gold, SELL COINS weighs your purse and pays out by mint — a plain gold coin fetches least, a LUCKY most. He buys low, so the spread stings, and SPECIAL coins he will not touch at all',
+    'coins no longer buy wares directly \u{1FA99} — the shelf takes GOLD and only gold, so a fat purse reaches a relic the long way round: sell coins at the scales, then spend the gold. In exchange every ware now costs its TRUE worth (the old doubled gold tag is gone)',
+    'THE CRUCIBLE \u{1F525} — the keeper stopped taking junk off your hands when he stopped taking coins. Now the BLACKSMITH sometimes offers to melt a piece down instead of a boon: pick one item and the rack thins by one. It is the only door out of a clogged pack, and it does not open every visit',
+  ] },
   { v: '1.7.5', notes: [
     'THE PURSE LEDGER \u{1F9FE} — every coin that enters or leaves the purse writes a line, readable at the bottom of the INVENTORY\u2019s coins tab: tolls, melts, skims, wheel fees, mugger pockets (and their returns), spoils, mints and pouches — no coin vanishes unexplained again',
     'the wheel ghost NAMES HIS PRICE \u{1F3A1} — a confirm sheet quotes the ' + 5 + '-coin fee before a single coin moves (he used to swallow five on a tap, richest stack first — that was the owner\u2019s \u{201C}disappearing coins\u{201D})',
@@ -218,6 +223,17 @@ const LANGS = {
     'TITLE': 'TITEL',
     '\u{1F392} BAG': '\u{1F392} TAS',
     'BAG': 'TAS',                 // the painted plate carries the icon itself
+    // the keeper's two desks (session 76: coins are sold, never spent)
+    'BUY': 'KOPEN',
+    'SELL COINS': 'MUNTEN VERKOPEN',
+    'SELL 1': 'VERKOOP 1',
+    'ALL': 'ALLES',
+    'your purse is empty — nothing to weigh': 'je beurs is leeg — niets te wegen',
+    'the keeper buys low — specials he will not touch':
+      'de koopman biedt weinig — speciale munten raakt hij niet aan',
+    'feed the crucible — tap a piece to melt it down':
+      'voed de smeltkroes — tik een stuk aan om het om te smelten',
+    'your pack is already empty': 'je rugzak is al leeg',
     'END TURN ▶': 'EINDE BEURT ▶',
     // the tiers 7-10 catch-up (session 73): every button and tab since s29
     'SKIP ▼': 'SLA OVER ▼',
@@ -400,7 +416,7 @@ const C = {
   KEY_CARRY: 3,                         // keys you may carry down to the next floor
   STAIR_TOLL: 2,                        // purse coins owed to descend the stairs
   WHEEL_COST: 5,                        // coins the dungeon wheel ghost charges per spin
-  SHOP_REMOVE: 10,                      // coins the keeper takes to REMOVE an item from YOUR pack
+  FORGE_SCRAP_CHANCE: 0.22,             // odds the forge's third boon is MELT A PIECE DOWN
   // combat is played in ROUNDS: your PURSE is a deck of typed coins — you
   // choose which to insert — then the tray resolves and the foes act
   POUCH_COINS: 2,                       // shop pouch: +2 gold coins to the purse
@@ -460,6 +476,12 @@ const COIN_INFO = {
   leech:  { name: 'Leech',  what: '1 dmg — fattens +1 gold whenever a bedfellow tips over; pays out when IT does' },
   spikey: { name: 'Spikey', what: '1 dmg + 1 block — silver it touches grows SPIKES (blocks +1 and bites back 2)' },
 };
+// WHAT THE KEEPER PAYS for a coin, by kind — the rarer the mint, the more he
+// parts with. His spread is brutal on purpose: he sells a single typed coin
+// for far more than he will ever buy one back for. Coins are the machine's
+// ammunition, so every sale is ammunition traded for gold. SPECIAL coins are
+// treasures, not tender — he will not touch them. Single dials, safe to tune.
+const COIN_SELL = { coin: 6, silver: 7, green: 8, red: 9, blue: 12, lucky: 16 };
 // the after-battle coin offer draws from this bag
 const COIN_REWARD_W = [['coin', 24], ['silver', 22], ['green', 18], ['red', 16], ['blue', 12], ['lucky', 8]];
 // the order the tray resolves in: bank the loot, raise the guard, mend,
@@ -1416,7 +1438,7 @@ const S = {
   pets: [],                            // your summoned pack {iid, icon, name, hp, maxHp}
   foeInfo: null,                       // index of the foe whose bestiary card is open
   inv: null,                           // inventory overlay {tab: 'coins'|'items'|'relics'|'stats'}
-  coinPick: null,                      // shop coin-payment picker {slot, price}
+  shopTab: 'buy',                      // the keeper's open desk: 'buy' | 'sell'
   enemy: null,                         // the TARGETED foe (points into S.foes)
   battle: null,                        // round machine {round, phase, hand, loot, ...}
   victory: null,                       // battle-won overlay {t, gold, keys, offer}
@@ -5577,7 +5599,7 @@ function denyPrize() {
   return closeModal();
 }
 function closeModal() {
-  S.coinPick = null;
+  S.shopTab = 'buy';
   if (!S.room) return false;
   const rm = S.room;
   // a served shop and an opened chest both retire once you walk away
@@ -5591,8 +5613,8 @@ function closeModal() {
   return true;
 }
 function shopStock() {
-  // the keeper knows what his shelf is worth now — GOLD prices are DOUBLE
-  // what the wares are worth (coins stay the honest currency)
+  // the keeper knows what his shelf is worth now. GOLD is the only tender he
+  // takes — coins reach the shelf the long way round, through his SELL desk
   const st = [];
   const mult = (1 + 0.25 * (S.run.floor - 1)) * (1 - 0.10 * wsLvl('haggler')) * (mutOn('thinveins') ? 1.25 : 1)
              * (weeklyOn('market') ? 0.8 : 1);
@@ -5629,25 +5651,37 @@ function shopStock() {
                 price: Math.round(RARITY[rar].price * mult), sold: false });
     }
   }
-  // every ware also carries a COIN price (1/2/5 of a single kind, by its
-  // true worth) — then the gold tag doubles
-  for (const s of st) {
-    s.coinPrice = coinPriceFor(s.price);
-    s.price *= 2;
-  }
   return st;
 }
-// wares cost 1, 2, or 5 coins of a single kind depending on their gold worth
-function coinPriceFor(price) { return price < 45 ? 1 : price < 95 ? 2 : 5; }
-// the fattest single coin-kind that can cover n (null if none can)
-function coinKindWith(n) {
-  let best = null, bestN = -1;
-  for (const k of COIN_KINDS) { const c = S.run.purse[k] || 0; if (c >= n && c > bestN) { best = k; bestN = c; } }
-  return best;
+// THE SELL DESK — the keeper's buying rate for one coin of a kind. Floor
+// inflation lifts what he pays just as it lifts what he charges, and HAGGLER
+// now cuts both ways: a sharper tongue fattens his offer instead of only
+// shaving his price.
+function coinSellPrice(k) {
+  const base = COIN_SELL[k];
+  if (!base || !S.run) return 0;
+  const mult = (1 + 0.25 * (S.run.floor - 1)) * (1 + 0.10 * wsLvl('haggler'));
+  return Math.max(1, Math.round(base * mult));
 }
-// every purse pocket deep enough to cover n — the payment picker's options
-function payableKinds(n) {
-  return COIN_KINDS.filter(k => (S.run.purse[k] || 0) >= n);
+// every plain pocket the purse actually holds — the sell desk's rows
+function sellableKinds() {
+  if (!S.run) return [];
+  return COIN_KINDS.filter(k => !SPECIAL_COINS[k] && (S.run.purse[k] || 0) > 0);
+}
+// sell n coins of ONE kind across the desk. Specials are never tender, and
+// the desk never takes more than the pocket holds.
+function sellCoins(k, n) {
+  if (!S.run || !S.room || S.room.type !== 'shop') return false;
+  if (SPECIAL_COINS[k] || !COIN_SELL[k]) return false;
+  n = Math.min(n | 0, S.run.purse[k] || 0);
+  if (n <= 0) return false;
+  const paid = coinSellPrice(k) * n;
+  spendKind(k, n, 'sold to the keeper (+' + paid + ' gold)');
+  addGold(paid);
+  if (S.run.stats) S.run.stats.sold = (S.run.stats.sold || 0) + n;
+  SND.clink();
+  save();
+  return true;
 }
 function grantShopWare(it) {
   if (it.kind === 'item') grantItem(it.iid, 1);
@@ -5658,22 +5692,14 @@ function grantShopWare(it) {
   else if (it.kind === 'map') { S.run.mapFloor = S.run.floor; toast('the torn map bares this floor'); }
   else if (it.kind === 'relic' && S.run.relics.indexOf(it.rid) < 0) S.run.relics.push(it.rid);
 }
-// buy a ware with GOLD (pay omitted / 'gold') or COINS (pay === 'coins').
-// Coin buys take an explicit KIND — the picker menu chooses which purse
-// pocket pays; omitted, the fattest pocket that can cover it steps up.
-function buyShop(i, pay, kind) {
+// buy a ware. GOLD is the shelf's only tender now — a purse full of coins
+// reaches it through the SELL desk first.
+function buyShop(i) {
   if (!S.run || !S.room || S.room.type !== 'shop') return false;
   const it = S.room.stock[i];
   if (!it || it.sold) return false;
-  if (pay === 'coins') {
-    const k = kind || coinKindWith(it.coinPrice);
-    if (!k || !((S.run.purse[k] || 0) >= it.coinPrice)) { S.uiFlash = { msg: 'NOT ENOUGH COINS', t: 1 }; SND.deny(); return false; }
-    spendKind(k, it.coinPrice);
-    S.coinPick = null;
-  } else {
-    if (S.run.gold < it.price) { S.uiFlash = { msg: 'NOT ENOUGH GOLD', t: 1 }; SND.deny(); return false; }
-    S.run.gold -= it.price;
-  }
+  if (S.run.gold < it.price) { S.uiFlash = { msg: 'NOT ENOUGH GOLD', t: 1 }; SND.deny(); return false; }
+  S.run.gold -= it.price;
   it.sold = true;
   if (S.run.stats) S.run.stats.bought = (S.run.stats.bought || 0) + 1;
   grantShopWare(it);
@@ -5681,13 +5707,15 @@ function buyShop(i, pay, kind) {
   save();
   return true;
 }
-// pay 10 coins of any kind for the keeper to TAKE an item OFF YOUR HANDS —
-// the rack thins, so next battle's pile carries one piece less junk
+// THE SCRAP BOON — the blacksmith takes a piece off your hands and melts it
+// down. The rack thins, so next battle's pile carries one piece less junk.
+// This is the ONLY way to shed an item now: the keeper stopped taking them
+// when he stopped taking coins, and the forge only offers the choice now and
+// then, so a clogged pack is a real problem to plan around.
 function removeArsenal(iid) {
-  if (!S.run || !S.room || S.room.type !== 'shop') return false;
+  if (!S.run || !S.room || S.room.type !== 'forge' || !S.room.scrap || S.room.done) return false;
   const it = itemById(iid);
   if (!it || !(S.run.arsenal[iid] > 0)) return false;
-  if (!spendPurse(C.SHOP_REMOVE, 'the keeper\u2019s removal fee')) { S.uiFlash = { msg: 'REMOVING COSTS ' + C.SHOP_REMOVE + ' COINS', t: 1.2 }; SND.deny(); return false; }
   S.run.arsenal[iid]--;
   if (S.run.arsenal[iid] <= 0) delete S.run.arsenal[iid];
   // scrub one copy from wherever it waits: the drop-in queue first,
@@ -5698,7 +5726,14 @@ function removeArsenal(iid) {
     const idx = S.run.pileSave.findIndex(p => p.k === 'item' && p.iid === iid && !p.temp);
     if (idx >= 0) S.run.pileSave.splice(idx, 1);
   }
-  toast('the keeper takes the ' + it.name + ' off your hands');
+  toast('the forge swallows the ' + it.name + ' — your pack breathes easier');
+  // the boon is spent the moment a piece goes in the crucible
+  S.room.scrap = false;
+  S.room.done = true;
+  S.room.msg = 'The forge swallows it whole. Your pack is lighter.';
+  if (S.room.ent !== undefined && S.run.room.ents[S.room.ent]) {
+    S.run.room.ents[S.room.ent].done = true;   // the blacksmith packs up
+  }
   SND.clink();
   save();
   return true;
@@ -5715,16 +5750,31 @@ function boonOptions() {
             : r2 < 0.92 ? { kind: 'str', label: '\u{1F4AA} War Paint: +1 STRENGTH', sub: 'every gold, lucky and weapon hit deals +1 forever' }
             : { kind: 'dex', label: '\u{1F933} Sure Hands: +1 DEXTERITY', sub: 'every silver coin blocks +1 forever' });
   }
-  // the forge hones gear and grit, never relics — those come off the wheel
-  opts.push(rng() < 0.5
-    ? { kind: 'whet', label: '\u{1FA9A} Hone: all weapons +1 damage' }
-    : { kind: 'potion', label: '\u{1F9F4} A brace of potions (+2)' });
+  // the forge hones gear and grit, never relics — those come off the wheel.
+  // Now and then the crucible is lit instead: the SCRAP offer, the only door
+  // out of a clogged pack, and it only opens if you actually carry something
+  const canScrap = !!(S.run && Object.keys(S.run.arsenal || {}).some(id => S.run.arsenal[id] > 0));
+  // both rolls always happen, so a seeded run walks the same rng path whether
+  // or not the pack has anything worth melting
+  const r3 = rng(), r4 = rng();
+  opts.push(canScrap && r3 < C.FORGE_SCRAP_CHANCE
+      ? { kind: 'scrap', label: '\u{1F525} Melt a piece down', sub: 'pick one item from your pack — the rack thins by one' }
+    : r4 < 0.5
+      ? { kind: 'whet', label: '\u{1FA9A} Hone: all weapons +1 damage' }
+      : { kind: 'potion', label: '\u{1F9F4} A brace of potions (+2)' });
   return opts;
 }
 function pickBoon(i) {
   if (!S.run || !S.room || S.room.type !== 'forge' || S.room.done) return false;
   const o = S.room.opts[i];
   if (!o) return false;
+  // SCRAP doesn't grant — it opens the crucible and waits for you to feed it
+  if (o.kind === 'scrap') {
+    S.room.scrap = true;
+    S.room.msg = null;
+    SND.clink();
+    return true;
+  }
   if (o.kind === 'item') grantItem(o.iid, 1);
   else if (o.kind === 'maxhp') { S.run.maxHp += 12; S.run.hp = Math.min(S.run.maxHp, S.run.hp + 12); }
   else if (o.kind === 'pouch') { S.run.purse.coin += C.POUCH_COINS; purseLog(C.POUCH_COINS, 'the forge\u2019s pouch'); }
@@ -6075,7 +6125,7 @@ window.DP = {
   keyGuard, closeModal, leaveBattle,
   rollChestPrize, acceptPrize, denyPrize, spendPurse, spendKind,
   startBattle, mkEnemy, battleTick, winBattle, endRun,
-  buyShop, removeArsenal, coinPriceFor, pickBoon, shopStock, boonOptions, usePotion,
+  buyShop, removeArsenal, sellCoins, coinSellPrice, sellableKinds, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
   bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap, strTotal, dexTotal,
@@ -6103,7 +6153,7 @@ window.DP = {
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer, pickSpecialOffer,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
-  darkFloor, PRESSURE_MAX, payableKinds, coinKindWith, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
+  darkFloor, PRESSURE_MAX, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
   bankMax, goldDmg, resolveSpeed, resolveDelay, cycleSpeed, cycleTurbo, pushRate, pourStep, packWard, RARITY,
   COIN_KINDS, COIN_INFO, START_PURSE, DEF_TXT, SPECIALS, SPECIAL_COINS, BUNNY_CAP, ROT_CAP, LEECH_FAT_CAP, touchPass,
   coinFx, itemFx, runMods,
@@ -6811,7 +6861,7 @@ if (!HEADLESS) (function browser() {
     try { save(); } catch (e) {}
     try {
       S.confirm = null; S.inv = null; S.wheelAnim = null; S.relicPick = null; S.stairsAsk = null;
-      S.coinPick = null; S.foeInfo = null;
+      S.shopTab = 'buy'; S.foeInfo = null;
       SETTINGS = false; TROPHIES = false; RECORDS = false; CODEX = null; INTRO = null;
       WHATSNEW = null; WSHOP = false; BOARD = null; NAMEPAD = null; CLOUD = null;
       CREDITS = false; PHOTO = false; THEMES = false; SHARE = null; ALMANAC = null; OST = false;
@@ -10747,13 +10797,19 @@ if (!HEADLESS) (function browser() {
     const isShop = room.type === 'shop';
     const isForge = room.type === 'forge' && !room.done;
     const isChest = room.type === 'chest';
-    // the shelf grows with the stock — size the panel (and the LEAVE button
-    // below it) to fit however many wares the keeper is showing
-    const rows = isShop ? room.stock.length : 0;
-    // the pack-thinning strip sizes with YOUR arsenal (up to two rows)
-    const arsIds = isShop && S.run ? Object.keys(S.run.arsenal).filter(id => S.run.arsenal[id] > 0) : [];
-    const arsRows = Math.min(2, Math.ceil(arsIds.length / 8)) || 0;
-    const ph = isShop ? 84 + rows * 50 + (arsRows ? 30 + arsRows * 42 : 0) + 60 : isForge ? 330 : isChest ? 250 : isEvent ? 316 : 220;
+    // the keeper keeps two desks: his SHELF (buy) and his SCALES (sell). Each
+    // sizes its own panel — the shelf by his stock, the scales by how many
+    // pockets your purse actually has something in
+    const selling = isShop && S.shopTab === 'sell';
+    const sellKinds = selling ? sellableKinds() : [];
+    const rows = isShop ? (selling ? Math.max(1, sellKinds.length) : room.stock.length) : 0;
+    // the forge's crucible lists YOUR pack when the SCRAP boon is taken
+    const scrapIds = isForge && room.scrap && S.run
+      ? Object.keys(S.run.arsenal).filter(id => S.run.arsenal[id] > 0) : [];
+    const scrapRows = Math.min(3, Math.ceil(scrapIds.length / 5)) || 0;
+    const ph = isShop ? 116 + rows * 50 + (selling ? 84 : 60)
+             : isForge ? (room.scrap ? 108 + scrapRows * 52 + 34 : 330)
+             : isChest ? 250 : isEvent ? 316 : 220;
     const py = isShop ? 132 : 250;
     const mFrame = machArt('frame_tall');
     if (mFrame) {
@@ -10768,8 +10824,43 @@ if (!HEADLESS) (function browser() {
       txt('\u{1FA99} ' + S.run.gold + ' gold   •   \u{1FA99} ' + purseTotal() + ' coins',
           LW / 2, py + 60, '700 11px Verdana, sans-serif', '#fff0c0');
       const rx = LW - 54;                                   // right edge of the shelf
-      room.stock.forEach((it, i) => {
-        const y = py + 84 + i * 50;
+      // the two desks. GOLD buys the shelf; the scales turn coins INTO gold,
+      // which is the only road from a fat purse to a new relic
+      [['buy', TR('BUY')], ['sell', TR('SELL COINS')]].forEach(([tab, lbl], ti) => {
+        const on = (S.shopTab === 'sell') === (tab === 'sell');
+        const tw = 104, tx = LW / 2 - tw - 4 + ti * (tw + 8);
+        uiBtn(tx, py + 72, tw, 28, lbl, () => { S.shopTab = tab; },
+              { bg: on ? 'rgba(140,90,20,0.95)' : 'rgba(38,26,32,0.9)',
+                border: on ? '#ffd75e' : '#5a4048', col: on ? '#ffe9a3' : '#9a8a92',
+                font: '900 11px Verdana, sans-serif', r: 8 });
+      });
+      if (selling) {
+        if (!sellKinds.length) {
+          txt(TR('your purse is empty — nothing to weigh'), LW / 2, py + 148,
+              '700 11px Verdana, sans-serif', '#9a8a92');
+        }
+        sellKinds.forEach((k, i) => {
+          const y = py + 116 + i * 50;
+          const have = S.run.purse[k] || 0, unit = coinSellPrice(k);
+          rr(54, y, rx - 54, 44, 10);
+          ctx.fillStyle = 'rgba(46,32,38,0.92)'; ctx.fill();
+          ctx.lineWidth = 1.5; ctx.strokeStyle = '#5a4048'; ctx.stroke();
+          invCoinIcon(k, 76, y + 22, 13);
+          txt(COIN_INFO[k].name + ' × ' + have, 100, y + 17, '800 12px Verdana, sans-serif', COIN_UI[k], 'left');
+          txt(unit + ' gold each', 100, y + 32, '600 10px Verdana, sans-serif', '#b09a78', 'left');
+          const allX = rx - 8 - 52, oneX = allX - 4 - 44;
+          uiBtn(oneX, y + 7, 44, 30, TR('SELL 1'), () => sellCoins(k, 1),
+                { bg: 'rgba(40,90,120,0.95)', border: '#63c8ff', col: '#cfeeff',
+                  font: '900 10px Verdana, sans-serif', r: 8 });
+          uiBtn(allX, y + 7, 52, 30, TR('ALL') + ' ' + (unit * have), () => sellCoins(k, have),
+                { bg: 'rgba(40,90,120,0.95)', border: '#63c8ff', col: '#cfeeff',
+                  font: '900 10px Verdana, sans-serif', r: 8 });
+        });
+        txt(TR('the keeper buys low — specials he will not touch'), LW / 2,
+            py + 116 + rows * 50 + 14, '600 10px Verdana, sans-serif', '#8a7a84');
+      }
+      if (!selling) room.stock.forEach((it, i) => {
+        const y = py + 116 + i * 50;
         // the ware panel (label only — the buttons live to the right)
         rr(54, y, rx - 54, 44, 10);
         ctx.fillStyle = it.sold ? 'rgba(20,14,20,0.9)' : 'rgba(46,32,38,0.92)'; ctx.fill();
@@ -10792,41 +10883,30 @@ if (!HEADLESS) (function browser() {
             it.sold ? '#5a4a5a' : '#ffe9a3', 'left');
         if (it.sub) txt(it.sub, lx, y + 31, '600 10px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
         if (it.sold) { txt('SOLD', rx - 34, y + 26, '900 13px Verdana, sans-serif', '#5a4a5a'); return; }
-        // two chips: pay GOLD or pay COINS
+        // one chip now: GOLD is the shelf's only tender
         const goldOk = S.run.gold >= it.price;
-        const coinOk = !!coinKindWith(it.coinPrice);
-        const coinX = rx - 8 - 46, goldX = coinX - 4 - 56;
-        uiBtn(goldX, y + 7, 56, 30, it.price + ' G', () => buyShop(i, 'gold'),
+        uiBtn(rx - 8 - 66, y + 7, 66, 30, it.price + ' G', () => buyShop(i),
               { bg: goldOk ? 'rgba(140,90,20,0.95)' : 'rgba(40,30,36,0.9)', border: goldOk ? '#ffd75e' : '#5a4048',
                 col: goldOk ? '#ffe9a3' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
-        uiBtn(coinX, y + 7, 46, 30, it.coinPrice + ' ●', () => {
-          // one pocket deep enough? pay straight. More? YOU pick which.
-          const kinds = payableKinds(it.coinPrice);
-          if (kinds.length <= 1) buyShop(i, 'coins', kinds[0]);
-          else S.coinPick = { slot: i, price: it.coinPrice };
-        }, { bg: coinOk ? 'rgba(40,90,120,0.95)' : 'rgba(40,30,36,0.9)', border: coinOk ? '#63c8ff' : '#5a4048',
-             col: coinOk ? '#cfeeff' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
       });
-      // pack thinning: the keeper buys junk out of YOUR arsenal — every
-      // removal is one piece less clogging next battle's pile
-      if (arsIds.length) {
-        const sy = py + 84 + rows * 50 + 4;
-        const remOk = purseTotal() >= C.SHOP_REMOVE;
-        txt('sell the keeper your junk — tap an item to REMOVE it (' + C.SHOP_REMOVE + ' ●)',
-            LW / 2, sy + 10, '700 10px Verdana, sans-serif', remOk ? '#e0a8b0' : '#7a6a72');
-        arsIds.slice(0, 16).forEach((iid, i) => {
-          const it2 = itemById(iid);
-          if (!it2) return;
-          const bx = 56 + (i % 8) * 46, by2 = sy + 22 + ((i / 8) | 0) * 42;
-          uiBtn(bx, by2, 42, 36, '', () => removeArsenal(iid),
-                { bg: remOk ? 'rgba(90,40,44,0.95)' : 'rgba(40,30,36,0.9)',
-                  border: remOk ? '#e0707a' : '#5a4048', r: 9 });
-          const ja = itemArt(iid);
-          if (ja) { const hh = 30, ww = imW(ja, hh); ctx.drawImage(ja, bx + 16 - ww / 2, by2 + 3, ww, hh); }
-          else txt(it2.icon, bx + 16, by2 + 17, '15px serif', '#fff');
-          txt('×' + S.run.arsenal[iid], bx + 34, by2 + 24, '800 10px Verdana, sans-serif', '#ffd0d4');
-        });
+    } else if (isForge && room.scrap) {
+      // THE CRUCIBLE: the boon is taken, now choose what goes in it
+      txt(TR('feed the crucible — tap a piece to melt it down'), LW / 2, py + 62,
+          '700 11px Verdana, sans-serif', '#ffb07a');
+      if (!scrapIds.length) {
+        txt(TR('your pack is already empty'), LW / 2, py + 110, '700 11px Verdana, sans-serif', '#9a8a92');
       }
+      scrapIds.slice(0, 15).forEach((iid, i) => {
+        const it2 = itemById(iid);
+        if (!it2) return;
+        const bx = 62 + (i % 5) * 72, by2 = py + 84 + ((i / 5) | 0) * 52;
+        uiBtn(bx, by2, 62, 44, '', () => removeArsenal(iid),
+              { bg: 'rgba(90,40,44,0.95)', border: '#e0707a', r: 9 });
+        const ja = itemArt(iid);
+        if (ja) { const hh = 34, ww = imW(ja, hh); ctx.drawImage(ja, bx + 31 - ww / 2, by2 + 4, ww, hh); }
+        else txt(it2.icon, bx + 31, by2 + 21, '17px serif', '#fff');
+        txt('×' + S.run.arsenal[iid], bx + 52, by2 + 36, '800 10px Verdana, sans-serif', '#ffd0d4');
+      });
     } else if (isForge) {
       txt('choose a boon', LW / 2, py + 60, '700 12px Verdana, sans-serif', '#c8a8b0');
       room.opts.forEach((o, i) => {
@@ -10877,37 +10957,13 @@ if (!HEADLESS) (function browser() {
       lines.slice(0, 4).forEach((ln, i) =>
         txt(ln, LW / 2, py + 70 + i * 20, '700 12px Verdana, sans-serif', '#e8dce8'));
     }
-    if (!isForge && !isChest) {
+    if ((!isForge || (room.scrap && !scrapIds.length)) && !isChest) {
       uiBtn(LW / 2 - 90, py + ph - 52, 180, 38, TR('LEAVE'), () => closeModal(),
             { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 13 });
     }
     if (S.uiFlash) {
       txt(S.uiFlash.msg, LW / 2, py + ph + 24, '900 14px Verdana, sans-serif',
           Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e');
-    }
-    // the coin-payment picker: WHICH pocket pays?
-    if (S.coinPick && isShop) {
-      const cp = S.coinPick;
-      const ware = room.stock[cp.slot];
-      const kinds = ware && !ware.sold ? payableKinds(cp.price) : [];
-      if (!kinds.length) { S.coinPick = null; return; }
-      ctx.fillStyle = 'rgba(5,3,8,0.7)'; ctx.fillRect(0, 0, LW, LH);
-      uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { S.coinPick = null; } });
-      const kw = 74, kpw = Math.max(kinds.length * kw + 28, 220), kpx = LW / 2 - kpw / 2, kpy = 330;
-      rr(kpx, kpy, kpw, 132, 16);
-      ctx.fillStyle = 'rgba(24,14,26,0.98)'; ctx.fill();
-      ctx.lineWidth = 2.5; ctx.strokeStyle = '#63c8ff'; ctx.stroke();
-      uiButtons.push({ x: kpx, y: kpy, w: kpw, h: 132, cb: () => {} });
-      txt('PAY ' + cp.price + ' ● — from which pocket?', LW / 2, kpy + 22, '800 12px Verdana, sans-serif', '#cfeeff');
-      kinds.forEach((k, ki) => {
-        const kx = LW / 2 - (kinds.length * kw) / 2 + ki * kw + kw / 2;
-        uiBtn(kx - 31, kpy + 40, 62, 62, '', () => buyShop(cp.slot, 'coins', k),
-              { bg: 'rgba(40,60,80,0.9)', border: COIN_UI[k], r: 12 });
-        invCoinIcon(k, kx, kpy + 62, 14);
-        txt(COIN_INFO[k].name, kx, kpy + 84, '800 10px Verdana, sans-serif', COIN_UI[k]);
-        txt('× ' + (S.run.purse[k] || 0), kx, kpy + 95, '700 10px Verdana, sans-serif', '#d8c8dc');
-      });
-      txt('tap outside to cancel', LW / 2, kpy + 120, '600 10px Verdana, sans-serif', '#a08a94');
     }
   }
 
