@@ -1001,8 +1001,12 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // all — so a sweep that only ever looked at mid-bridge had four plates to
     // compare and was measuring almost nothing. The hold is where the
     // plate-less names live, and it has to be in the sweep too.
+    // A pulled-back framing as well as the leaned-in ones. The paint order is
+    // culled to what is on screen now, so a sweep made only of tight zooms has
+    // most of the board excluded before the labels are even asked for — and
+    // this assertion exists to prove the sweep had something to measure.
     for (const cx of [60, IB.HOLD_X])
-      for (const z of [1, 1.8, 2.4]){
+      for (const z of [.7, 1, 1.8, 2.4]){
         IB.cam.x = cx;
         IB.cam.z = IB.cam.tz = z;
         IB.draw();
@@ -2794,6 +2798,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const nearU = IB.spawnUnit(0, 'melee', { x:60, y:2.4, paid:true });
     farU.spd = nearU.spd = 0;
     IB.rebuildGrid();
+    // Say where the camera is. The paint order is only asked about what is on
+    // screen — off screen is not a cheap draw, it is no draw — and a rendering
+    // test that does not name its framing was always under-specified; it just
+    // happened not to matter while the list held the whole board.
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
     const order = IB.laneOrder();
     t.ok(at(order, nearU) > at(order, farU),
       'the near body is still painted over the far one, as it always was');
@@ -2812,6 +2821,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
       () => {}, '#12ff34', 'shell');
     for (let i = 0; i < 6; i++) IB.projStep(1 / 30);
     IB.rebuildGrid();
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
     const p = G.projs[0];
     const low = IB.laneOrder().findIndex(d => d.o === p);
     t.ok(low > 0, 'the shell is not already at the back of the list (' + low + ')');
@@ -2835,6 +2845,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
     IB.shoot({ x:st.x - 6, y:st.y, magic:false }, { x:st.x + 6, y:st.y, dead:false, r:.5, side:1 },
       () => {}, '#12ff34', 'shaft');
     G.projs[0].x = st.x; G.projs[0].y = st.y;
+    IB.cam.follow = false; IB.cam.x = st.x; IB.cam.z = IB.cam.tz = 1;
     const order = IB.laneOrder();
     const iS = at(order, st), iU = at(order, u), iP = at(order, G.projs[0]);
     t.ok(iS >= 0 && iU >= 0 && iP >= 0, 'all three are in the order');
@@ -2866,6 +2877,7 @@ t.ok(true, 'drawing an empty bridge is harmless');
       () => {}, '#12ff34', 'shaft');
     for (let i = 0; i < 6; i++) IB.projStep(1 / 30);
     IB.rebuildGrid();
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
     const ord = IB.laneOrder();
     let steps = 0;
     for (let i = 1; i < ord.length; i++) if (ord[i].y < ord[i - 1].y - 1e-9) steps++;
@@ -12347,6 +12359,114 @@ t.ok(true, 'a final draw on a live match is clean');
   t.ok(seen.size > 400, 'the scan actually found the declarations (' + seen.size + ')');
   t.ok(dup.length === 0, 'nothing is declared twice at the top level of the script' +
     (dup.length ? ' — ' + [...new Set(dup)].join(', ') : ''));
+}
+
+/* ================================================= what a phone is asked for
+   The game got slow on a phone, and the reason was not one expensive thing —
+   it was three cheap decisions that only cost anything on a small screen.   */
+{
+  IB.newMatch({ diff:'veteran', seed:9770 });
+  IB.MY = 0;
+
+  /* ---- 1. the paint order is culled to what is on screen.
+     The span is 128 world units and a phone at a fighting zoom sees about
+     thirty of them, and this list used to hand drawStructure every tower on
+     the bridge to build in full — masonry, coursing, arch shading, crowns,
+     banners — for the ones nobody could see. */
+  IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1.4;
+  IB.cam.x = 60;
+  const mid = IB.laneOrder();
+  IB.cam.x = 4;                                   // right down at one gate
+  const end = IB.laneOrder();
+  const all = G.sides.reduce((n, s) => n + s.structs.length, 0) + G.units.filter(u => !u.dead).length;
+  t.ok(mid.length < all,
+    'the paint order holds what is on screen, not the whole board (' + mid.length + ' of ' + all + ')');
+  t.ok(end.some(d => d.k === 'struct'), 'and what IS on screen is in it');
+  t.ok(!mid.some(d => d.o === end.find(x => x.k === 'struct' && x.o.x < 12)?.o) || mid.length !== end.length,
+    'and the two framings do not hold the same things');
+  // The margin is not a guess: every structure was drawn alone on a cleared
+  // canvas and the bbox of what it painted read back. The widest was a gate at
+  // 16.7 world units from its anchor. If this ever drops under that, a tower
+  // pops into existence at the edge of the screen.
+  t.ok(IB.LANE_REACH.struct > 16.7,
+    'the cull margin clears the widest thing on the board (' + IB.LANE_REACH.struct + ' > 16.7)');
+  t.ok(IB.LANE_REACH.unit > 3.6, 'and the widest body (' + IB.LANE_REACH.unit + ' > 3.6)');
+  t.ok(IB.LANE_REACH.struct > IB.LANE_REACH.unit,
+    'a structure reaches further than a body, which is why they are asked separately');
+  // Pulled all the way back, nothing should be culled — the cull is about what
+  // is off screen, not about drawing less.
+  IB.cam.x = 60; IB.cam.z = IB.cam.tz = .3;
+  t.ok(IB.laneOrder().length === all,
+    'and at a zoom that shows the whole bridge, nothing is culled (' +
+    IB.laneOrder().length + '/' + all + ')');
+  IB.cam.z = IB.cam.tz = 1;
+
+  /* ---- 2. a phone is told what it draws, rather than left to find out.
+     Two governors, each greedy and each blind to the other: the post one only
+     knows how to make post cheaper and the sky one only knows how to make the
+     sky cheaper. Between them they settled a phone on a full film grade over a
+     sky at 38% resolution, which is the worse half of the trade in both
+     directions — measured, 31.6ms against 26.1ms for no grade and a sharper
+     sky. */
+  t.ok(IB.PHONE_POST < 0, 'a phone is given no grade at all (' + IB.PHONE_POST + ')');
+  t.ok(IB.PHONE_W >= 600 && IB.PHONE_W <= 900,
+    'and the line is drawn where body.narrow draws it (' + IB.PHONE_W + ')');
+  t.ok(typeof IB.onPhone === 'function' && typeof IB.screenTier === 'function',
+    'the decision is a function two places can ask, not a constant one place set');
+  // It only ever takes quality away. A tier that could put it back would fight
+  // the governor underneath it, and the two would hunt.
+  const src = SRC.slice(SRC.indexOf('function screenTier'), SRC.indexOf('function screenTier') + 320);
+  t.ok(/postLvl > PHONE_POST/.test(src) && !/postLvl = 3/.test(src),
+    'and it only ever lowers, so it cannot fight the governor under it');
+  t.ok(/screenTier\(\)/.test(SRC.slice(SRC.indexOf('function postFx'), SRC.indexOf('function postFx') + 400)),
+    'postFx asks every frame, because a phone can arrive at that width by rotating');
+
+  /* ---- 3. the sky is repainted when it has MOVED, not when a frame happens.
+     Everything in that layer travels at a fraction of the camera — the nearest
+     ridge .34 of a world unit per world unit of pan, the weather a few pixels
+     a second — so it was costing twelve milliseconds of a thirty millisecond
+     phone frame to redraw a picture that had not changed. */
+  t.ok(IB.SKY_ROLL_PX <= 1,
+    'the sky is repainted when it has moved a pixel, which is the smallest ' +
+    'difference a screen can show (' + IB.SKY_ROLL_PX + ')');
+  IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1; G.t = 10;
+  const k0 = IB.skyRollKey();
+  t.ok(IB.skyRollKey() === k0, 'a still camera and a still clock ask for the same sky twice');
+  // A hair of camera movement must NOT repaint it...
+  IB.cam.x = 60 + .002;
+  t.ok(IB.skyRollKey() === k0, 'and a camera that moved a hundredth of a pixel still does');
+  // ...and a real pan must.
+  IB.cam.x = 75;
+  t.ok(IB.skyRollKey() !== k0, 'but a pan across the bridge asks for a new one');
+  IB.cam.x = 60;
+  // The clock alone moves the weather, eventually — and the number that
+  // matters is not whether one particular pair of instants differ, it is the
+  // RATE. Count the repaints over a second of frames with the camera parked:
+  // this is the whole saving, stated as the thing it saves.
+  const seen = new Set();
+  for (let i = 0; i < 60; i++){ G.t = 10 + i / 60; seen.add(IB.skyRollKey()); }
+  t.ok(seen.size <= 12,
+    'a parked camera repaints the sky a handful of times a second, not sixty (' +
+    seen.size + ')');
+  t.ok(seen.size >= 2, 'but the weather does keep moving (' + seen.size + ')');
+  G.t = 10;
+  // Zoom has to invalidate it too, or leaning in would blow up a stale sky.
+  const kz = IB.skyRollKey();
+  IB.cam.z = IB.cam.tz = 2.2;
+  t.ok(IB.skyRollKey() !== kz, 'and leaning in asks for a new one rather than magnifying the old');
+  IB.cam.z = IB.cam.tz = 1;
+  // The rates are READ from the tables, not written down beside them: add a
+  // cloud tier and a hardcoded number would quietly be measuring the wrong
+  // thing, and the symptom is weather that jumps rather than drifts.
+  const f = IB.skyFast();
+  let dMax = 0;
+  for (const b of IB.BANDS) dMax = Math.max(dMax, b.d);
+  for (const cl of IB.clouds()) dMax = Math.max(dMax, cl.d);
+  t.ok(Math.abs(f.pan - dMax) < 1e-9,
+    'the pace is set by the fastest thing in the sky, read from the table (' +
+    f.pan.toFixed(3) + ' vs ' + dMax.toFixed(3) + ')');
+  t.ok(f.drift > 0 && f.drift <= f.pan, 'and the weather drifts no faster than it parallaxes');
+  IB.cam.x = IB.HOLD_X;
 }
 
 t.done();
