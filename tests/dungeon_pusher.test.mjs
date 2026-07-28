@@ -912,9 +912,11 @@ t.eq(S.room.stock.filter(x => x.kind === 'relic').length, 1, 'ONE relic sits in 
 t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
 t.ok(S.room.stock.some(x => x.kind === 'coin' && COIN_KINDS.includes(x.cid)),
      'and a single typed coin for the purse');
-t.eq(S.room.stock.find(x => x.kind === 'potion').price, 90, 'potion gold price is DOUBLED');
-t.eq(S.room.stock.find(x => x.kind === 'pouch').price, 120, 'pouch too');
-t.eq(S.room.stock.find(x => x.kind === 'potion').coinPrice, 2, 'the COIN price stays honest (from the true worth)');
+// GOLD is the only tender now, so the shelf shows a ware's TRUE worth —
+// the old x2 gold tag went out with coin-paying
+t.eq(S.room.stock.find(x => x.kind === 'potion').price, 45, 'potion costs its true worth in gold');
+t.eq(S.room.stock.find(x => x.kind === 'pouch').price, 60, 'pouch too');
+t.ok(S.room.stock.every(x => x.coinPrice === undefined), 'no ware carries a coin price any more');
 S.run.gold = 0;
 t.ok(!DP.buyShop(0), 'cannot buy broke');
 S.run.gold = 10000;
@@ -939,55 +941,67 @@ const hpSlot = S.room.stock.findIndex(x => x.kind === 'maxhp');
 const mhp0 = S.run.maxHp;
 DP.buyShop(hpSlot);
 t.eq(S.run.maxHp, mhp0 + 10, 'max HP upgrade sticks');
-// -------- paying with COINS + removing a ware for 10 coins --------
+// -------- THE SELL DESK: coins become gold, never wares --------
 {
-  // every ware carries a coin price of 1, 2, or 5 of a single kind
-  t.ok(S.room.stock.every(x => [1, 2, 5].indexOf(x.coinPrice) >= 0), 'every ware has a 1/2/5 coin price');
-  t.eq(DP.coinPriceFor(30), 1, 'cheap wares cost 1 coin');
-  t.eq(DP.coinPriceFor(60), 2, 'mid wares cost 2 coins');
-  t.eq(DP.coinPriceFor(200), 5, 'dear wares cost 5 coins');
-  // buy an unsold item with coins of a single kind
+  // the shelf takes gold and only gold now
   const cSlot = S.room.stock.findIndex(x => !x.sold && x.kind === 'item');
-  const ware = S.room.stock[cSlot];
   for (const k of COIN_KINDS) S.run.purse[k] = 0;
-  S.run.purse.silver = ware.coinPrice;                     // exactly enough of ONE kind
-  const goldBefore = S.run.gold;
-  const armBefore = S.run.arsenal[ware.iid] || 0;
-  t.ok(DP.buyShop(cSlot, 'coins'), 'coins buy the ware');
-  t.eq(S.run.purse.silver, 0, 'the coin price is drawn from a single kind');
-  t.eq(S.run.gold, goldBefore, 'and no gold is spent when paying with coins');
-  t.eq(S.run.arsenal[ware.iid], armBefore + 1, 'the coin-bought ware is delivered');
-  t.ok(S.room.stock[cSlot].sold, 'a coin-bought slot is marked sold');
-  // too few coins in any single kind → refused
-  const cSlot2 = S.room.stock.findIndex(x => !x.sold && x.kind === 'item');
-  if (cSlot2 >= 0) {
-    for (const k of COIN_KINDS) S.run.purse[k] = 0;
-    S.run.purse.coin = S.room.stock[cSlot2].coinPrice - 1;
-    t.ok(!DP.buyShop(cSlot2, 'coins'), 'a purse short of the coin price is refused');
-    t.ok(!S.room.stock[cSlot2].sold, 'and the ware stays on the shelf');
-  }
-  // REMOVE an item from YOUR PACK for 10 coins — the shelf is untouched
-  const shelfBefore = S.room.stock.map(x => x.label).join('|');
+  S.run.purse.silver = 40;
+  S.run.gold = 0;
+  t.ok(!DP.buyShop(cSlot), 'a purse fat with coins still cannot buy — the shelf wants gold');
+  t.ok(!S.room.stock[cSlot].sold, 'and the ware stays on the shelf');
+
+  // rates climb with the rarity of the mint
+  t.ok(DP.coinSellPrice('lucky') > DP.coinSellPrice('coin'),
+       'the keeper pays more for a LUCKY coin than a plain gold one');
+  t.ok(DP.coinSellPrice('blue') > DP.coinSellPrice('silver'),
+       'and more for FROST than for silver');
+  t.eq(DP.coinSellPrice('bunny'), 0, 'a SPECIAL has no sale price at all');
+
+  // he buys low: a coin fetches far less than he charges for the same coin
+  const coinWare = S.room.stock.find(x => x.kind === 'coin');
+  t.ok(DP.coinSellPrice(coinWare.cid) < coinWare.price,
+       'the keeper buys a coin back for less than he sells it');
+
+  // sell one, then the pocket
+  for (const k of COIN_KINDS) S.run.purse[k] = 0;
+  S.run.purse.silver = 5;
+  S.run.gold = 0;
+  const unit = DP.coinSellPrice('silver');
+  t.ok(DP.sellCoins('silver', 1), 'one silver crosses the desk');
+  t.eq(S.run.purse.silver, 4, 'the pocket is one lighter');
+  t.eq(S.run.gold, unit, 'and the gold lands at the going rate');
+  t.ok(DP.sellCoins('silver', 99), 'SELL ALL takes only what the pocket holds');
+  t.eq(S.run.purse.silver, 0, 'the pocket empties');
+  t.eq(S.run.gold, unit * 5, 'paid for every coin, no more');
+  t.ok(!DP.sellCoins('silver', 1), 'an empty pocket has nothing to sell');
+
+  // specials are treasures, not tender
+  S.run.purse.bunny = 3;
+  t.ok(!DP.sellCoins('bunny', 1), 'the keeper refuses a SPECIAL coin');
+  t.eq(S.run.purse.bunny, 3, 'and it stays in the purse');
+  t.ok(DP.sellableKinds().indexOf('bunny') < 0, 'specials never reach the sell desk');
+  S.run.purse.red = 2;
+  t.ok(DP.sellableKinds().indexOf('red') >= 0, 'a pocket with coins in it does');
+  t.ok(DP.sellableKinds().indexOf('green') < 0, 'an empty pocket does not');
+
+  // the sale is a purse-ledger line, like every other coin movement
+  const led0 = (S.run.ledger || []).length;
+  DP.sellCoins('red', 1);
+  t.ok((S.run.ledger || []).length > led0, 'the sale writes a ledger line');
+
+  // gold now buys what coins used to
+  S.run.gold = 10000;
+  const gSlot = S.room.stock.findIndex(x => !x.sold && x.kind === 'item');
+  const gWare = S.room.stock[gSlot];
+  const armBefore = S.run.arsenal[gWare.iid] || 0;
+  t.ok(DP.buyShop(gSlot), 'gold buys the ware');
+  t.eq(S.run.arsenal[gWare.iid], armBefore + 1, 'and it is delivered');
+}
+// -------- the keeper no longer takes items; the FORGE melts them --------
+{
   S.run.arsenal.sword = (S.run.arsenal.sword || 0) + 1;
-  const swords = S.run.arsenal.sword;
-  for (const k of COIN_KINDS) S.run.purse[k] = 0;
-  S.run.purse.coin = 4;                                     // short of the removal fee
-  t.ok(!DP.removeArsenal('sword'), 'removing costs coins the purse cannot cover');
-  t.eq(S.run.arsenal.sword, swords, 'the refused sword stays in the pack');
-  S.run.purse.coin = 12;
-  t.ok(DP.removeArsenal('sword'), 'ten coins and the keeper takes the sword');
-  t.eq(DP.purseTotal(), 2, 'the removal skims exactly ' + C.SHOP_REMOVE + ' coins');
-  t.eq(S.run.arsenal.sword || 0, swords - 1, 'one copy left the pack');
-  t.eq(S.room.stock.map(x => x.label).join('|'), shelfBefore, 'the SHELF is untouched — removal thins YOUR pack');
-  t.ok(!DP.removeArsenal('hammer'), 'the keeper cannot take what you do not own');
-  // the racked pile forgets the removed copy too
-  S.run.purse.coin = 12;
-  S.run.arsenal.vial = 1;
-  S.run.pending = [];                                       // nothing queued — the pile holds the copy
-  S.run.pileSave = [{ k: 'item', x: 50, y: 40, lay: 0, iid: 'vial' }];
-  S.run.pileFloor = S.run.floor;
-  t.ok(DP.removeArsenal('vial'), 'the keeper takes the vial');
-  t.ok(!S.run.pileSave.some(p => p.iid === 'vial'), 'and scrubs it off this floor\'s racked pile');
+  t.ok(!DP.removeArsenal('sword'), 'the keeper will not take a piece off your hands any more');
 }
 t.ok(DP.closeModal(), 'LEAVE closes the shop');
 t.ok(S.run.room.ents[0].done, 'the merchant serves one visit, then leaves the room');
@@ -1005,6 +1019,53 @@ t.ok(S.room.done, 'forge is spent after one boon');
 t.ok(!DP.pickBoon(1), 'no double-dipping at the forge');
 t.ok(S.run.room.ents[0].done, 'the blacksmith packs up after one boon');
 DP.closeModal();
+
+// -------- THE CRUCIBLE: the forge is the only door out of a clogged pack --------
+{
+  // the SCRAP offer only exists when there is something to melt
+  S.run.arsenal = {};
+  let sawScrapEmpty = false;
+  for (let i = 0; i < 300; i++) if (DP.boonOptions().some(o => o.kind === 'scrap')) sawScrapEmpty = true;
+  t.ok(!sawScrapEmpty, 'an empty pack is never offered the crucible');
+
+  S.run.arsenal = { sword: 2, vial: 1 };
+  let scrapSeen = 0;
+  for (let i = 0; i < 400; i++) if (DP.boonOptions().some(o => o.kind === 'scrap')) scrapSeen++;
+  t.ok(scrapSeen > 0, 'a packed pack does get offered the crucible');
+  t.ok(scrapSeen < 400, 'but only sometimes — it is not the standing offer');
+
+  // taking the boon opens the crucible instead of spending the forge
+  S.run.room.ents = [{ kind: 'smith', done: false,
+                       opts: [{ kind: 'scrap', label: 'melt' },
+                              { kind: 'potion', label: 'potions' },
+                              { kind: 'whet', label: 'hone' }] }];
+  t.ok(DP.interact(0), 'the blacksmith opens');
+  t.ok(DP.pickBoon(0), 'the crucible boon is taken');
+  t.ok(S.room.scrap, 'the crucible is lit');
+  t.ok(!S.room.done, 'and the forge is NOT spent until something goes in it');
+
+  const swords = S.run.arsenal.sword;
+  t.ok(!DP.removeArsenal('hammer'), 'the forge cannot melt what you do not carry');
+  t.ok(DP.removeArsenal('sword'), 'a sword goes in the crucible');
+  t.eq(S.run.arsenal.sword, swords - 1, 'one copy left the pack');
+  t.ok(S.room.done, 'and THAT spends the forge');
+  t.ok(!S.room.scrap, 'the crucible closes behind it');
+  t.ok(!DP.removeArsenal('vial'), 'a spent forge melts nothing more');
+  t.ok(S.run.room.ents[0].done, 'the blacksmith packs up after the melt');
+  DP.closeModal();
+
+  // the racked pile forgets the melted copy too
+  S.run.room.ents = [{ kind: 'smith', done: false, opts: [{ kind: 'scrap', label: 'melt' }] }];
+  DP.interact(0);
+  DP.pickBoon(0);
+  S.run.arsenal.vial = 1;
+  S.run.pending = [];
+  S.run.pileSave = [{ k: 'item', x: 50, y: 40, lay: 0, iid: 'vial' }];
+  S.run.pileFloor = S.run.floor;
+  t.ok(DP.removeArsenal('vial'), 'the forge takes the vial');
+  t.ok(!S.run.pileSave.some(p => p.iid === 'vial'), 'and scrubs it off this floor\'s racked pile');
+  DP.closeModal();
+}
 
 // -------- potions --------
 S.run.hp = 10; S.run.maxHp = 60; S.run.potions = 1;
@@ -2505,26 +2566,23 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   const mapSlot = DS.room.stock.findIndex(x => x.kind === 'map');
   t.ok(mapSlot >= 0, 'the keeper sells a Torn Map');
   DS.run.gold = 10000;
-  t.ok(D2.buyShop(mapSlot, 'gold'), 'gold buys the map');
+  t.ok(D2.buyShop(mapSlot), 'gold buys the map');
   t.eq(DS.run.mapFloor, 1, 'it is stamped with THIS floor');
   DS.run.floor = 2;
   t.ok(DS.run.mapFloor !== DS.run.floor, 'and the next floor is blind again');
   DS.run.floor = 1;
 
-  // paying with coins asks WHICH pocket — and honors the choice
-  const itemSlot = DS.room.stock.findIndex(x => x.kind === 'item' && !x.sold);
-  const price = DS.room.stock[itemSlot].coinPrice;
+  // the sell desk empties ONE named pocket and leaves the rest alone
   for (const k of D2.COIN_KINDS) DS.run.purse[k] = 0;
-  DS.run.purse.coin = price + 1;
-  DS.run.purse.green = price + 2;
-  t.eq(D2.payableKinds(price).length, 2, 'two pockets can cover the price');
-  t.ok(D2.buyShop(itemSlot, 'coins', 'green'), 'the picker pays with the CHOSEN kind');
-  t.eq(DS.run.purse.green, 2, 'the venom pocket paid');
-  t.eq(DS.run.purse.coin, price + 1, 'the gold pocket was left alone');
-  // a kind too shallow to pay is refused
-  const slot2 = DS.room.stock.findIndex(x => !x.sold && x.coinPrice);
-  DS.run.purse.red = 0;
-  t.ok(!D2.buyShop(slot2, 'coins', 'red'), 'an empty pocket cannot pay');
+  DS.run.purse.coin = 4;
+  DS.run.purse.green = 3;
+  DS.run.gold = 0;
+  t.eq(D2.sellableKinds().length, 2, 'two pockets have something to weigh');
+  const greenUnit = D2.coinSellPrice('green');
+  t.ok(D2.sellCoins('green', 3), 'the venom pocket is sold off');
+  t.eq(DS.run.purse.green, 0, 'the venom pocket emptied');
+  t.eq(DS.run.purse.coin, 4, 'the gold pocket was left alone');
+  t.eq(DS.run.gold, greenUnit * 3, 'and the gold landed at the venom rate');
   D2.closeModal();
 }
 
@@ -4594,7 +4652,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.srand(11);
   const st44 = D.shopStock();
   const potion44 = st44.find(x => x.kind === 'potion').price;
-  t.eq(potion44, Math.round(45 * (1 + 0.25 * 43) * 1.25) * 2, 'floor-44 potions carry the +25% vein tax (gold prices double post-round)');
+  t.eq(potion44, Math.round(45 * (1 + 0.25 * 43) * 1.25), 'floor-44 potions carry the +25% vein tax');
   // GILDED AGE: elites flood the carve (statistical, 20 carves each)
   const eliteCount = (floor) => {
     let n = 0;
@@ -4779,7 +4837,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   P.srand(14);
   const shelf = P.shopStock();
   const potion = shelf.find(s => s.kind === 'potion');
-  t.eq(potion.price, Math.round(45 * 0.8) * 2, 'MARKET WEEK: wares 20% off (before the gold doubling)');
+  t.eq(potion.price, Math.round(45 * 0.8), 'MARKET WEEK: wares 20% off');
   // IRON WEEK: thinner blood, fatter cogs
   const { DP: I } = loadGame({}, false);
   I.S.weeklyPick = true;
@@ -6799,7 +6857,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.5', 'the ledger patch ships as v1.7.5');
+  t.eq(D.VERSION, '1.7.6', 'the keeper\'s scales ship as v1.7.6');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('KEEPER\u2019S SCALES') >= 0)),
+       'and the notes carry the sell desk');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REPLAY GHOST') >= 0)), 'and the notes carry the ghost');
   // roundtrip: the clock rides in base36, floors 2 up
   const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
