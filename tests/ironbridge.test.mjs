@@ -11423,4 +11423,67 @@ t.ok(true, 'drawing an empty bridge is harmless');
 IB.draw();
 t.ok(true, 'a final draw on a live match is clean');
 
+/* ================================================ the dock could not scroll
+   The dock throws away its entire innerHTML and rebuilds it five times a
+   second. A scroll position is a property of the element that was thrown
+   away — so a column could not be scrolled at all: you dragged it down and
+   within a fifth of a second a brand new element with scrollTop 0 was
+   standing where it had been. On a phone, where the forge and the build panel
+   are taller than the dock, that made half the game unreachable.            */
+{
+  const dock = document.getElementById('dock');
+  // A stand-in for the columns the rebuild destroys. Only the five properties
+  // the save/restore actually touches, so nothing here can pass by accident
+  // through some richer behaviour of a real element.
+  const mkCol = (col, top, h, ch) => ({ dataset:{ col }, scrollTop:top, scrollHeight:h, clientHeight:ch });
+  const cols = [mkCol('jobs', 0, 300, 200), mkCol('forge', 140, 600, 200), mkCol('heroes', 0, 210, 200)];
+  const realQSA = dock.querySelectorAll;
+  dock.querySelectorAll = () => cols;
+  dock.scrollLeft = 37;
+
+  const at = IB.dockScroll();
+  t.ok(at && at.col.forge === 140, 'the scroll a column was left at is remembered (' + (at && at.col.forge) + ')');
+  t.ok(at.x === 37, 'and so is the dock’s own sideways scroll, which the same rebuild threw away');
+  t.ok(at.col.jobs === undefined,
+    'a column sitting at the top is not remembered, so nothing is restored that was never moved');
+
+  // The rebuild: brand new elements, every one of them at zero. This is
+  // exactly the state the bug left behind.
+  const fresh = [mkCol('jobs', 0, 300, 200), mkCol('forge', 0, 600, 200), mkCol('heroes', 0, 210, 200)];
+  dock.querySelectorAll = () => fresh;
+  dock.scrollLeft = 0;
+  IB.dockScrollTo(at);
+  t.ok(fresh[1].scrollTop === 140, 'and it is put back on the rebuilt column (' + fresh[1].scrollTop + ')');
+  t.ok(dock.scrollLeft === 37, 'along with the sideways one');
+
+  // Keyed by column, not by position. `sel` only exists while something is
+  // selected, so the columns come and go — restoring by index would hand the
+  // forge’s scroll to whatever had taken its place.
+  const shuffled = [mkCol('heroes', 0, 210, 200), mkCol('forge', 0, 600, 200)];
+  dock.querySelectorAll = () => shuffled;
+  IB.dockScrollTo(at);
+  t.ok(shuffled[1].scrollTop === 140 && shuffled[0].scrollTop === 0,
+    'a column that moved along the dock keeps its own scroll and takes nobody else’s');
+
+  // A column that got SHORTER between rebuilds — the build panel loses rows
+  // as things get built — must land at its new bottom rather than at a
+  // position that no longer exists.
+  const shrunk = [mkCol('forge', 0, 260, 200)];
+  dock.querySelectorAll = () => shrunk;
+  IB.dockScrollTo(at);
+  t.ok(shrunk[0].scrollTop === 60,
+    'and one that got shorter lands at its new bottom, not past it (' + shrunk[0].scrollTop + ')');
+
+  // The columns have to be labelled for any of this to work, and syncUI has
+  // to do the two halves either side of the rebuild rather than after it.
+  t.ok(/data-col="/.test(SRC), 'the dock’s columns carry the key this is all hung on');
+  const sync = SRC.slice(SRC.indexOf('function syncUI'), SRC.indexOf('function syncUI') + 400);
+  t.ok(sync.indexOf('dockScroll()') < sync.indexOf('innerHTML') &&
+       sync.indexOf('innerHTML') < sync.indexOf('dockScrollTo'),
+    'and the scroll is read before the rebuild and put back after it');
+
+  dock.querySelectorAll = realQSA;
+  dock.scrollLeft = 0;
+}
+
 t.done();

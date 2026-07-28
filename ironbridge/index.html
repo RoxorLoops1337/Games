@@ -11771,7 +11771,8 @@ function dockHtml(){
 
   const order = ['jobs','train','sel','heroes','forge'].filter(k => sec[k] !== undefined);
   if (!narrow)
-    return order.map(k => '<div class="dsec' + (k === 'sel' ? ' grow' : '') + '">' + sec[k] + '</div>').join('');
+    return order.map(k => '<div class="dsec' + (k === 'sel' ? ' grow' : '') + '" data-col="' + k + '">' +
+      sec[k] + '</div>').join('');
 
   // Narrow: one section at a time behind tabs, so nothing needs a sideways scroll.
   if (!sec[dockTab]) dockTab = 'jobs';
@@ -11779,7 +11780,8 @@ function dockHtml(){
   const alert = { sel:sel.tile >= 0 || !!sel.node, heroes:s.heroes.some(x => x.pend.length) };
   const tabs = order.map(k => '<button class="dtab' + (k === dockTab ? ' on' : '') + '" data-tab="' + k + '">' +
     label[k] + (alert[k] && k !== dockTab ? '<span class="dot"></span>' : '') + '</button>').join('');
-  return '<div class="dtabs">' + tabs + '</div><div class="dsec">' + sec[dockTab] + '</div>';
+  return '<div class="dtabs">' + tabs + '</div><div class="dsec" data-col="' + dockTab + '">' +
+    sec[dockTab] + '</div>';
 }
 
 // The build, at a glance: one pip per skill with its rank, dimmed and filling
@@ -11965,10 +11967,40 @@ function syncAdvice(){
 function pruneSel(){
   if (sel.unit && sel.unit.dead) sel.unit = null;
 }
+/* The dock throws away its entire innerHTML and rebuilds it five times a
+   second, and a scroll position is a property of the element that was thrown
+   away. So a column could not be scrolled: you dragged it down, and within a
+   fifth of a second a brand new element with scrollTop 0 was standing where
+   it had been. On a phone, where the forge and the build panel are taller
+   than the dock and scrolling them is the only way to reach half the game,
+   this made those rows unreachable.
+
+   Keyed by column rather than by position, because the columns come and go —
+   `sel` only exists while something is selected, and restoring by index would
+   hand the forge's scroll to the heroes. The dock's own sideways scroll is
+   kept the same way. Measured against the fresh element's own limit, so a
+   column that got shorter lands at its new bottom instead of nowhere. */
+function dockScroll(){
+  const d = $('dock'); if (!d || !d.querySelectorAll) return null;
+  const at = { x:d.scrollLeft || 0, col:{} };
+  for (const el of d.querySelectorAll('.dsec[data-col]'))
+    if (el.scrollTop) at.col[el.dataset.col] = el.scrollTop;
+  return at;
+}
+function dockScrollTo(at){
+  const d = $('dock'); if (!at || !d || !d.querySelectorAll) return;
+  if (at.x) d.scrollLeft = at.x;
+  for (const el of d.querySelectorAll('.dsec[data-col]')){
+    const want = at.col[el.dataset.col];
+    if (want) el.scrollTop = Math.min(want, Math.max(0, el.scrollHeight - el.clientHeight));
+  }
+}
 function syncUI(){
   if (HEADLESS || !G.sides.length) return;      // resize can fire before the first match exists
   syncHud();
+  const at = dockScroll();
   $('dock').innerHTML = dockHtml();
+  dockScrollTo(at);
   syncAdvice();
 }
 // A click is a press AND a release on the same element. The dock throws away
@@ -13863,6 +13895,7 @@ window.IB = {
   HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
   get fxForce(){ return fxForce; }, set fxForce(v){ fxForce = v; }, FX_CAP, fxRoom, fxStep, castFx, burstFx, ringFx, dashFx,
   netSnap, netLoad, netBodies, netSendSnap, netTakeSnap, netResumeAt, SYNC_CHUNK, SYNC_MAX, SYNC_WAIT, lobbyWho, HAVE_EVERY,
+  dockScroll, dockScrollTo,
   netDiary, netReport, showNetReport, DIARY_MAX, esc, netRetry, RETRY_MAX, STALL_DEAD,
   get BSC(){ return BSC; }, set BSC(v){ BSC = v; },
   get holdSide(){ return holdSide; }, set holdSide(v){ holdSide = v; },
