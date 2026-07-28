@@ -972,21 +972,34 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // Then a real frame, with heroes and their roundels and bars in it, and
     // every plate checked against every reservation. Reading the tables alone
     // would not have caught it — the reservations were simply never made.
-    IB.cam.follow = false; IB.cam.x = 60;
-    let worst = null, overlaps = 0, pairs = 0;
-    for (const z of [1, 1.8, 2.4]){
-      IB.cam.z = IB.cam.tz = z;
-      IB.draw();
-      const plates = IB.labelPlaced, blocked = IB.labelBlocked;
-      for (const p of plates) for (const b of blocked){
-        pairs++;
-        if (IB.labelHits(p, b)){ overlaps++; worst = worst || ('zoom ' + z); }
+    IB.cam.follow = false;
+    let worst = null, overlaps = 0, pairs = 0, mostPlates = 0, mostBlocks = 0;
+    // Two framings, not one. The bridge's labels are tiered now — a turret
+    // that nothing is happening to carries a six-pixel diamond and no plate at
+    // all — so a sweep that only ever looked at mid-bridge had four plates to
+    // compare and was measuring almost nothing. The hold is where the
+    // plate-less names live, and it has to be in the sweep too.
+    for (const cx of [60, IB.HOLD_X])
+      for (const z of [1, 1.8, 2.4]){
+        IB.cam.x = cx;
+        IB.cam.z = IB.cam.tz = z;
+        IB.draw();
+        const plates = IB.labelPlaced, blocked = IB.labelBlocked;
+        mostPlates = Math.max(mostPlates, plates.length);
+        mostBlocks = Math.max(mostBlocks, blocked.length);
+        for (const p of plates) for (const b of blocked){
+          pairs++;
+          if (IB.labelHits(p, b)){ overlaps++; worst = worst || ('x ' + cx + ' zoom ' + z); }
+        }
       }
-    }
-    IB.cam.z = IB.cam.tz = 1;
+    IB.cam.z = IB.cam.tz = 1; IB.cam.x = IB.HOLD_X;
     t.ok(pairs > 200, 'the label sweep had plates and reservations to compare (' + pairs + ')');
-    t.ok(IB.labelPlaced.length > 4, 'and real labels on the board (' + IB.labelPlaced.length + ')');
-    t.ok(IB.labelBlocked.length > 4, 'and real bars and roundels under them (' + IB.labelBlocked.length + ')');
+    // Across the sweep rather than out of whichever frame happened to be last:
+    // at the tightest zoom over the hold most of the hold is off the picture,
+    // and reading one arbitrary frame made this an assertion about the framing
+    // rather than about the labels.
+    t.ok(mostPlates > 4, 'and real labels on the board (' + mostPlates + ')');
+    t.ok(mostBlocks > 4, 'and real bars and roundels under them (' + mostBlocks + ')');
     t.ok(overlaps === 0, 'no label lands on a health bar or a level roundel (' +
       overlaps + (worst ? ', first at ' + worst : '') + ')');
     // And they must not land on each other either — the thing that already
@@ -3034,6 +3047,352 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(live.length >= 6, 'a wave is a crowd (' + live.length + ')');
   t.ok(live.filter(IB.showsBar).length < live.length,
     'and not every one of them is drawing a bar (' + live.filter(IB.showsBar).length + ' of ' + live.length + ')');
+}
+
+/* ------------------------------------------- the loudest thing in the frame
+   Eleven saturated segmented bars and fourteen identical black pills, all of
+   them at full brightness whether anything was happening to what they named or
+   not, ran a dotted line of maximum chroma through the middle of every frame.
+   The information a player actually wants — WHICH of those eleven things is
+   being taken apart right now — was the one thing none of it said. */
+{
+  IB.newMatch({ diff:'veteran', seed:5507 });
+  const st = IB.frontStruct(0);
+  const B = IB.BAR;
+  // Rule out the do-nothing settings first: three states that are all the same
+  // brightness are three states in name only.
+  t.ok(B.hotA > B.dimA && B.dimA > 0 && B.dimA < 1,
+    'a bar being hit is brighter than one merely hurt, and neither is invisible (' + B.dimA + ' → ' + B.hotA + ')');
+  t.ok(B.hold > B.hot && B.hot > 0, 'and a bar lingers longer than a blow stays fresh (' + B.hot + 's, ' + B.hold + 's)');
+
+  // Three moments in one structure's life.
+  G.t = 100; st.hp = st.mhp * .4;
+  st.dmgTaken = G.t - B.hot * .2;
+  const hot = IB.barState(st);
+  st.dmgTaken = G.t - B.hold * 4;
+  const hurt = IB.barState(st);
+  st.hp = st.mhp;
+  const whole = IB.barState(st);
+  t.ok(hot.hot === true && hot.a === B.hotA, 'a structure hit a moment ago wears the loud bar');
+  t.ok(hurt.hot === false && hurt.a === B.dimA,
+    'one that is hurt but quiet keeps a bar, dimmer (' + hurt.a + ' against ' + hot.a + ')');
+  t.ok(hurt.a < hot.a, 'and it is genuinely dimmer rather than the same number twice');
+  t.ok(whole.a === 0, 'and a whole one that has been left alone shows nothing at all');
+  // The fade between the last two, so a tower mending back to full does not
+  // pop its bar off mid-frame.
+  st.dmgTaken = G.t - (B.hot + B.hold) / 2;
+  const fading = IB.barState(st);
+  t.ok(fading.a > 0 && fading.a < B.dimA,
+    'a bar on the way out is part-way, not on or off (' + fading.a.toFixed(3) + ')');
+
+  // The trap. A structure is built without a dmgTaken, a unit is built with 0,
+  // a hero with -99, and one arriving over the wire may have none — and
+  // `G.t - undefined` is NaN, which the canvas rejects and which would have
+  // taken every bar in the game off the board.
+  for (const [what, bad] of [['no stamp at all', undefined], ['a zero stamp', 0], ['the hero sentinel', -99]]){
+    const probe = { hp:10, mhp:10, shield:0, dmgTaken:bad };
+    t.ok(Number.isFinite(IB.dmgAge(probe)) && IB.dmgAge(probe) > B.hold,
+      'a structure with ' + what + ' reads as untouched long ago, not as NaN (' + IB.dmgAge(probe) + ')');
+    t.ok(Number.isFinite(IB.barState(probe).a), 'and its bar has a finite opacity');
+  }
+  t.ok(!IB.showsBar({ hp:10, mhp:10, shield:0, dmgTaken:undefined }),
+    'so a tower nothing has ever touched draws no bar');
+  t.ok(IB.showsBar({ hp:10, mhp:10, shield:0, dmgTaken:G.t - B.hold * .5 }),
+    'and one hit half a second ago still does, even at full health — a turret mends itself');
+
+  // A quarter of the chroma out of the fill, and it must actually come out.
+  const chroma = (hex) => {
+    const [r, g, b] = IB.hexRGB(hex);
+    return Math.max(r, g, b) - Math.min(r, g, b);
+  };
+  const flat = IB.chromaDown(IB.BAR_MINE, B.desat);
+  t.ok(B.desat > 0 && B.desat < 1, 'the desaturation is a real fraction (' + B.desat + ')');
+  t.ok(flat !== IB.BAR_MINE, 'the bar fill is not the raw team colour any more');
+  t.ok(chroma(flat) < chroma(IB.BAR_MINE),
+    'it carries less chroma than it did (' + chroma(flat) + ' against ' + chroma(IB.BAR_MINE) + ')');
+  t.ok(chroma(flat) > 0, 'and it is still green rather than grey — the bar still says whose it is');
+  t.ok(IB.chromaDown(IB.BAR_MINE, 0) === IB.BAR_MINE, 'at zero it is the colour it was handed');
+  t.ok(chroma(IB.chromaDown(IB.BAR_THEIRS, B.desat)) < chroma(IB.BAR_THEIRS), 'and the foe colour goes with it');
+  // #abc and #aabbcc both appear in this file, and the blender the gorge uses
+  // reads '#fff' as 0x000fff — a dark blue. The label and float tiers take
+  // whatever colour their caller wrote, so they use one that takes either.
+  t.ok(IB.tintTo('#fff', '#000', .5) === IB.tintTo('#ffffff', '#000000', .5),
+    'three-digit and six-digit hex mean the same colour (' + IB.tintTo('#fff', '#000', .5) + ')');
+  t.ok(IB.tintTo('#ffffff', '#000000', 0) === '#ffffff' && IB.tintTo('#ffffff', '#000000', 1) === '#000000',
+    'and a tint reaches both of its ends');
+  t.ok(IB.tintTo('rgba(1,2,3,.5)', '#000000', .5) === 'rgba(1,2,3,.5)',
+    'and something that is not a hex colour comes back untouched rather than as NaN');
+  // The gorge's own blender is still the gorge's: a second FUNCTION
+  // DECLARATION of the same name does not shadow, it replaces, and every call
+  // site in the file — including the ones written first — quietly gets the new
+  // one. That is exactly how this pair went in the first time.
+  t.ok(/function mixHex\(/.test(SRC) && SRC.split('function mixHex(').length === 2,
+    'and there is exactly one mixHex in the file');
+
+  // Capped in SCREEN pixels: a gate's bar was 5 * cam.z tall, which is ten
+  // pixels and eighty-four wide at the zoom the brawl is watched from.
+  t.ok(B.h > 2 && B.h < 5 * IB.ZOOM_MAX,
+    'a bar stops growing before the zoom does (' + B.h + 'px against ' + (5 * IB.ZOOM_MAX) + ')');
+
+  // Unsegmented, checked through the real draw: the notches were one extra
+  // rect per notch, so a 6-notch bar laid down five more rectangles than a
+  // 1-notch one. Same width, same everything else.
+  {
+    const s2 = CTX.__stats;
+    const barRects = (mhp) => {
+      s2.rects = []; s2.rectsDropped = 0;
+      IB.cam.z = IB.cam.tz = 1;
+      IB.hpBar(CTX, 200, 200, { hp:mhp * .5, mhp, shield:0, side:0, chipHp:mhp * .5, dmgTaken:G.t - .1 }, 60, true);
+      return s2.rects.length;
+    };
+    const many = barRects(IB.HP_TICK * IB.HP_TICKS), few = barRects(IB.HP_TICK);
+    t.ok(few > 2, 'a bar draws its plate, its track and its fill (' + few + ' rects)');
+    t.ok(many === few,
+      'and a bar worth six notches draws no more of them than one worth one (' + many + ' against ' + few + ')');
+  }
+
+  // WIRED. A whole frame of a real match: count the structures standing and
+  // the ones that drew a bar.
+  {
+    IB.newMatch({ diff:'veteran', seed:5511 });
+    IB.MY = 0;
+    step(40);
+    const standing = [].concat(...G.sides.map(sd => sd.structs)).filter(x => !x.dead);
+    const loud = standing.filter(x => IB.barState(x).hot);
+    const shown = standing.filter(IB.showsBar);
+    t.ok(standing.length >= 8, 'both sides of the bridge are standing (' + standing.length + ')');
+    t.ok(shown.length < standing.length,
+      'and not every one of them is wearing a bar (' + shown.length + ' of ' + standing.length + ')');
+    t.ok(loud.length < standing.length / 2,
+      'at most a couple are wearing the loud one (' + loud.length + ' of ' + standing.length + ')');
+  }
+}
+
+/* ------------------------------------------------- rationing the name pills */
+{
+  IB.newMatch({ diff:'veteran', seed:5519 });
+  IB.MY = 0;
+  IB.sel.struct = null;
+  const named = (st) => { const L = IB.structLabel(st); return !!(L && L.txt); };
+  const marked = (st) => { const L = IB.structLabel(st); return !!(L && L.tier === 'mark'); };
+  for (const side of [0, 1]){
+    const list = G.sides[side].structs.filter(x => !x.dead);
+    const names = list.filter(named), marks = list.filter(marked);
+    t.ok(names.length + marks.length === list.length,
+      'every standing structure on side ' + side + ' is either named or marked, never neither');
+    t.ok(names.length <= 3, 'no more than three of them get a plate (' + names.length + ' of ' + list.length + ')');
+    t.ok(marks.length > 0, 'and the rest are marks, so this is a ration and not a rename (' + marks.length + ')');
+    t.ok(named(G.sides[side].structs.find(x => x.key === 'gate')), 'the gates always say what they are');
+    t.ok(named(G.sides[side].structs.find(x => x.key === 'inhib')), 'so does the inhibitor');
+    t.ok(named(IB.frontStruct(side)), 'and so does whatever is in play');
+    t.ok(list.every(x => !!IB.structLabel(x).col), 'and a mark still knows its side colour');
+  }
+  // The three ways a plain turret earns its name back.
+  {
+    const quiet = G.sides[1].structs.filter(x => !x.dead && x !== IB.frontStruct(1) &&
+      x.key !== 'gate' && x.key !== 'inhib');
+    t.ok(quiet.length >= 2, 'there are plain turrets to test with (' + quiet.length + ')');
+    const one = quiet[0];
+    t.ok(marked(one), 'a turret nothing is happening to carries a mark');
+    G.t = 80; one.dmgTaken = G.t - IB.LABEL_HOT * .3;
+    t.ok(named(one), 'one being shot at right now says its name');
+    one.dmgTaken = G.t - IB.LABEL_HOT * 3;
+    t.ok(marked(one), 'and goes quiet again once the shooting moves on');
+    IB.sel.struct = one;
+    t.ok(named(one) && IB.structLabel(one).hot, 'one you have clicked says its name, and says it is the one you clicked');
+    IB.sel.struct = null;
+    t.ok(marked(one), 'and lets go when you click elsewhere');
+    one.dead = true;
+    t.ok(IB.structLabel(one) === null, 'rubble is neither — it is already printing its own countdown');
+    one.dead = false;
+  }
+  // WIRED: the marks have to actually reach the canvas, and they must not be
+  // counted as plates — a mark that quietly entered the placement pass would
+  // shove the names it was cut to make room for.
+  {
+    IB.cam.follow = false; IB.cam.x = 60; IB.cam.z = IB.cam.tz = 1;
+    IB.draw();
+    t.ok(IB.labelMarked > 0, 'a real frame draws marks (' + IB.labelMarked + ')');
+    t.ok(IB.labelPlaced.length > 0, 'and plates as well (' + IB.labelPlaced.length + ')');
+    t.ok(IB.LABEL_MARK.r > 1 && IB.LABEL_MARK.r * 2 <= 8,
+      'a mark is about six pixels across (' + (IB.LABEL_MARK.r * 2) + ')');
+  }
+  // The hold's own six. They keep their names — you still want to read them —
+  // and lose the black slab under them.
+  {
+    const s = P();
+    rich(s);
+    for (const [i, type] of [[0, 'farm'], [3, 'barracks'], [4, 'pit']]) s.plot[i] = { type, lvl:2, tile:i, raise:0 };
+    IB.sel.tile = -1; IB.sel.node = null;
+    IB.cam.follow = false; IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1.4;
+    const st2 = CTX.__stats;
+    // The plate is a fillRect in one of the three label-plate colours; the
+    // label still exists either way, so counting labels would measure nothing.
+    const PLATE = new Set(['rgba(9,13,20,.55)', 'rgba(9,13,20,.72)', 'rgba(30,66,110,.88)']);
+    const holdPlates = () => {
+      st2.rects = []; st2.texts = []; st2.rectsDropped = 0;
+      IB.drawHold(CTX, 0); IB.flushLabels(CTX);
+      return { plates:st2.rects.filter(r => PLATE.has(r.col)).length,
+               names:IB.labelPlaced.length, wrote:st2.texts.length, lost:st2.rectsDropped };
+    };
+    const idle = holdPlates();
+    t.ok(idle.lost === 0, 'the capture held the whole hold');
+    t.ok(idle.wrote > 3, 'the hold still writes its names (' + idle.wrote + ' pieces of text)');
+    t.ok(idle.names > 3, 'and lays out that many labels (' + idle.names + ')');
+    t.ok(idle.plates === 0, 'and not one of them sits on a black slab (' + idle.plates + ')');
+    IB.sel.tile = 0;
+    const picked = holdPlates();
+    t.ok(picked.plates === 1,
+      'the one you select gets its plate back, and only it (' + picked.plates + ')');
+    IB.sel.tile = -1;
+  }
+}
+
+/* ----------------------------------------------- tiering the damage numbers */
+{
+  IB.newMatch({ diff:'veteran', seed:5523 });
+  const T = IB.FLOAT_TIER;
+  t.ok(T.graze > 0 && T.heavy > T.graze && T.heavy < 1,
+    'the two thresholds cut the range into three real bands (' + T.graze + ', ' + T.heavy + ')');
+  // Read off the size, which is how every number in the game arrives.
+  const tierOf = (amt, mhp) => IB.floatTier({ sc:IB.floatScale(amt, mhp) });
+  t.ok(tierOf(150, 6400) === 0, 'a hit on the gates is a graze — it is a rounding error by fraction');
+  t.ok(tierOf(400, 600) === 2, 'and one that takes most of a body is not (' + tierOf(400, 600) + ')');
+  t.ok(tierOf(60, 600) === 1, 'with an ordinary blow between them');
+  {
+    let seen = new Set();
+    for (let a = 1; a <= 400; a += 3) seen.add(tierOf(a, 600));
+    t.ok(seen.size === 3, 'all three bands are reachable by a real hit (' + [...seen].sort() + ')');
+  }
+  let fell = 0, prev = -1;
+  for (let a = 1; a <= 900; a += 5){ const k = tierOf(a, 600); if (k < prev) fell++; prev = k; }
+  t.ok(fell === 0, 'and a harder hit never drops to a quieter tier');
+  // The graze has to look different from the blow above it, and still be a
+  // colour rather than a hole in the frame.
+  const graze = IB.tintTo('#ffffff', IB.FLOAT_GRAZE.col, IB.FLOAT_GRAZE.mix);
+  t.ok(graze !== '#ffffff', 'a graze does not print in the crit\'s own white');
+  t.ok(IB.FLOAT_GRAZE.a > .4 && IB.FLOAT_GRAZE.a < 1,
+    'it is quieter without being invisible (' + IB.FLOAT_GRAZE.a + ')');
+  t.ok(IB.FLOAT_GRAZE.lw > 0, 'and it keeps an outline, which is what makes a digit survive a pale body');
+
+  // Off the column. Four numbers on one body used to print in one vertical
+  // line, because the world fan only separates numbers on DIFFERENT bodies.
+  {
+    const wasForce = IB.fxForce; IB.fxForce = true;
+    G.floats.length = 0;
+    let near0 = 0, left = 0, right = 0;
+    for (let i = 0; i < 60; i++){
+      const j = IB.jitter();
+      if (Math.abs(j) < IB.FLOAT_JIT_MIN - 1e-9) near0++;
+      if (j < 0) left++; else right++;
+    }
+    t.ok(near0 === 0, 'no number is nudged by an amount too small to see (' + near0 + ' of 60)');
+    t.ok(left > 8 && right > 8, 'and they go both ways (' + left + ' left, ' + right + ' right)');
+    t.ok(IB.FLOAT_JIT > 4, 'and far enough to clear a digit (' + IB.FLOAT_JIT + 'px at zoom 1)');
+
+    // Wired, and ISOLATED. Four numbers on the SAME world point, so the world
+    // fan in floatSlot — which only ever separated numbers on different bodies
+    // — is out of the picture and what is left is the jitter on its own.
+    // Pushed straight onto the list rather than through addFloat for the same
+    // reason: addFloat fans them before the pass ever runs, and then this
+    // measures the fan.
+    IB.cam.follow = false; IB.cam.x = 70; IB.cam.z = IB.cam.tz = 1;
+    const planXs = (jits) => {
+      G.floats.length = 0;
+      for (let i = 0; i < 4; i++)
+        G.floats.push({ x:70, y:0, txt:String(11 + i), col:'#ffffff', t:.9 - i * .01, dur:.9,
+          sc:1, vy:-.6, jx:jits[i] });
+      return IB.floatPlan(CTX).map(p => p.q[0]);
+    };
+    const spread = (xs) => Math.max(...xs) - Math.min(...xs);
+    const column = planXs([0, 0, 0, 0]);
+    const fanned = planXs([IB.jitter(), IB.jitter(), IB.jitter(), IB.jitter()]);
+    t.ok(column.length === 4 && fanned.length === 4, 'four numbers landed on one body');
+    t.ok(spread(column) < .001, 'without the jitter all four print in one column of pixels (' +
+      spread(column).toFixed(2) + 'px across)');
+    t.ok(spread(fanned) > 6, 'and with it they do not (' + spread(fanned).toFixed(1) + 'px across)');
+    t.ok(column.every((x, i) => Math.abs(x - fanned[i]) > 1),
+      'every one of them is moved off the line, not just the outer two');
+    t.ok(new Set(fanned.map(x => x.toFixed(2))).size === 4, 'and no two of them share a column');
+    const plan = IB.floatPlan(CTX);
+    // ...and it is decoration. The jitter is spent in screen pixels at draw
+    // time precisely so it cannot move the world position floatSlot reads.
+    t.ok(plan.length === 4, 'the plan still has a place for each (' + plan.length + ')');
+    const h0 = IB.netHash();
+    const world = G.floats.map(f => f.x.toFixed(6)).join('|');
+    IB.floatPlan(CTX); IB.floatPlan(CTX);
+    t.ok(G.floats.map(f => f.x.toFixed(6)).join('|') === world, 'planning where they go does not move them');
+    t.ok(IB.netHash() === h0, 'nor the lockstep hash');
+    // A number that never went through addFloat has no jitter of its own and
+    // must still plan without one.
+    G.floats.length = 0;
+    G.floats.push({ x:70, y:0, txt:'9', col:'#ffffff', t:.9, dur:.9, sc:1, vy:-.5 });
+    t.ok(Number.isFinite(IB.floatPlan(CTX)[0].q[0]), 'and one with no jitter at all still lands somewhere finite');
+    G.floats.length = 0; G.units.length = 0;
+    IB.fxForce = wasForce;
+  }
+}
+
+/* ------------------------------------------------------- the default framing
+   The opening zoom was picked from the screen's WIDTH alone. On a 1440 laptop
+   that came out at .95, and once the dock had taken its share of the bottom
+   the whole fight — both sets of towers and every body between them — was a
+   forty-pixel band across the middle of the stage, with less contrast in it
+   than the empty grass beside it. */
+{
+  t.ok(IB.LANE_PX > 100, 'the lane band has a real height at zoom 1 (' + IB.LANE_PX.toFixed(0) + 'px)');
+  t.ok(IB.FRAME.laneShare > .1 && IB.FRAME.laneShare < .6,
+    'and it is asked for a sensible share of the frame (' + IB.FRAME.laneShare + ')');
+  // The rule binds where it was written to bind: a laptop.
+  const laptop = IB.startZoom(1440, 780);
+  t.ok(laptop * IB.LANE_PX >= .25 * 780 - 1,
+    'a 1440x780 stage opens with the lane filling a quarter of it (' +
+    (laptop * IB.LANE_PX / 780 * 100).toFixed(0) + '%)');
+  t.ok(laptop > .95, 'which is closer in than the width rule alone asked for (' + laptop.toFixed(2) + ')');
+  // ...and does not bind where the width rule is already the stricter of the
+  // two. A phone is short as well as narrow; pulling it back out to fit a
+  // quarter of a 470px stage would be the opposite of the fix.
+  t.ok(IB.startZoom(390, 470) === IB.startZoom(390, 100),
+    'a phone opens where its width says, whatever the stage height is (' + IB.startZoom(390, 470).toFixed(2) + ')');
+  t.ok(IB.startZoom(390, 470) >= .72, 'and still zoomed in enough to read the world');
+  // Taller frames ask for more, never less, and never past the range.
+  let dropped = 0, prev = 0;
+  for (const h of [400, 500, 600, 700, 800, 900, 1400, 2200]){
+    const z = IB.startZoom(1440, h);
+    if (z < prev - 1e-9) dropped++;
+    prev = z;
+    t.ok(z >= IB.ZOOM_MIN && z <= IB.ZOOM_MAX, 'a ' + h + 'px stage opens inside the zoom range (' + z.toFixed(2) + ')');
+  }
+  t.ok(dropped === 0, 'and a taller frame never opens further out than a shorter one');
+  t.ok(IB.laneFitZoom(0) > 0 && Number.isFinite(IB.laneFitZoom(undefined)),
+    'a degenerate stage height still gives a finite zoom');
+}
+
+/* -------------------------------------------- the paragraph that never left */
+{
+  IB.newMatch({ diff:'veteran', seed:5531 });
+  IB.dockHelpOn = null;
+  G.wave = 0;
+  t.ok(IB.dockHelp(), 'the beginner\'s paragraph is up at the beginning');
+  G.wave = IB.DOCK_TUTOR;
+  t.ok(!IB.dockHelp(), 'and gone by wave ' + IB.DOCK_TUTOR + ', where it is telling you what you have been doing for minutes');
+  t.ok(IB.DOCK_TUTOR > 0 && IB.DOCK_TUTOR < 8, 'which is early rather than never (' + IB.DOCK_TUTOR + ')');
+  IB.dockHelpOn = true;
+  t.ok(IB.dockHelp(), 'asking for it back at wave ' + G.wave + ' brings it back');
+  IB.dockHelpOn = false;
+  G.wave = 0;
+  t.ok(!IB.dockHelp(), 'and dismissing it at wave 0 keeps it away — the choice sticks in both directions');
+  IB.dockHelpOn = null;
+  // The dock still builds in every state, with and without it.
+  IB.MY = 0;
+  for (const w of [0, 9]){
+    G.wave = w;
+    const html = IB.dockHtml();
+    t.ok(html.length > 200, 'the dock builds at wave ' + w + ' (' + html.length + ' chars)');
+    t.ok(html.includes('On the bridge'), 'and always says what is walking at you');
+    t.ok(html.includes('Click a plot to build') === (w === 0),
+      'and carries the beginner\'s line only while it is the beginning');
+  }
 }
 
 /* ------------------------------------------------- naming the bridge */
