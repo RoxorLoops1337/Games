@@ -5306,6 +5306,99 @@ function skyFloor(c, w, h){
 // ridges move with the camera and the weather moves on its own — so this is
 // the part that gets paid for every frame, and the part dynamic resolution
 // is aimed at.
+/* --------------------------------------------------------- the ridge bands
+   Three mountain ranges receding into haze, and half the cost of the whole
+   scrolling sky: measured on a phone, 6.4ms of 12.9. They were rebuilt every
+   frame — three silhouettes of ten peaks each, three clipped aerial gradients,
+   thirty rim strokes and three haze pools — and every frame they were rebuilt
+   to sit a pixel to the left of where they had been.
+
+   A range does not change. It TRANSLATES, at its own fixed fraction of the
+   camera, and nothing else about it moves at all. So each one is painted once
+   into a strip a little wider than the screen and blitted at its own offset,
+   and only repainted when it has slid far enough that the strip has run out of
+   slack. Band 2 moves 3.4x faster than band 0, so band 0 is repainted 3.4x
+   less often — each pays for its own distance, which is the whole idea.
+
+   The three are deliberately NOT staggered onto the same clock: they fall out
+   of step by themselves within a second of panning, and three repaints landing
+   on one frame is the thing a shared clock would cause rather than prevent.  */
+const BAND_SLACK = 140;                  // px of pan a strip holds in reserve
+const bandOff = [];                      // what offset each strip was painted at
+
+// One band, into a surface whose left edge is at screen x `x0`, with the range
+// scrolled to `off`. The screen path and the strip path are the same code —
+// there is no second copy of the mountains to disagree with the first.
+function bandPaint(c, k, off, x0, w){
+  const b = BANDS[k];
+  const PER = LW + 690;
+  const ridgeX = (i) => ((i * 230 - off) % PER + PER) % PER - 230 - x0;
+  const base = LH * ridgeFoot(b);        // where this outline's feet land
+  c.fillStyle = b.col;                   // opaque: see BANDS
+  c.beginPath();
+  c.moveTo(-40 - x0, LH);
+  for (let i = -1; i < 9; i++){
+    const bx = ridgeX(i);
+    c.lineTo(bx, base);
+    c.lineTo(bx + RIDGE_RIM, LH * b.y - ridgeTop(i, k));
+    c.lineTo(bx + 128, LH * (b.y + b.h * (.40 + ridgeMid(i, k) * .32)));
+    c.lineTo(bx + 172, LH * b.y - ridgeTop(i + 5, k) * .62);
+    c.lineTo(bx + 215, LH * (b.y + .02 + ridgeMid(i + 3, k) * .05));
+  }
+  c.lineTo(LW + 60 - x0, LH); c.closePath(); c.fill();
+  // Aerial perspective, done where it actually happens: inside the band.
+  // The further the ridge the more of HORIZON is mixed into it, and most of
+  // all at its foot, where you are looking through the most air. Clipped to
+  // the silhouette that was just laid down, so it dissolves the mountain
+  // rather than painting a band of fog across the sky behind it.
+  c.save(); c.clip();
+  const ag = c.createLinearGradient(0, LH * (b.y - .06), 0, LH * (b.y + b.h + .02));
+  ag.addColorStop(0, 'rgba(' + HORIZON + ',0)');
+  ag.addColorStop(.55, 'rgba(' + HORIZON + ',' + (b.fog * .45).toFixed(3) + ')');
+  ag.addColorStop(1, 'rgba(' + HORIZON + ',' + b.fog.toFixed(3) + ')');
+  c.fillStyle = ag; c.fillRect(0, LH * (b.y - .08), w, LH * (b.h + .20));
+  c.restore();
+  // and the slope that faces the sun catches it, the same as every ridge of
+  // rock and every roof down on the island
+  c.strokeStyle = b.rim; c.lineWidth = Math.max(1, (1.5 + k * .6) * cam.z); c.lineCap = 'round';
+  for (let i = -1; i < 9; i++){
+    const bx = ridgeX(i);
+    if (bx < -240 || bx > w + 60) continue;
+    c.beginPath();
+    c.moveTo(bx, base);
+    c.lineTo(bx + RIDGE_RIM, LH * b.y - ridgeTop(i, k));
+    c.stroke();
+  }
+  c.lineCap = 'butt';
+  // haze pooling at the foot of the band, so the next one reads as further.
+  // bandFoot, NOT ridgeFoot: air lies at the height air lies at, and if this
+  // followed the outline down behind the bridge the far range would lose the
+  // one thing that puts it behind the middle one.
+  const hy = LH * bandFoot(b), h0 = LH * .10;
+  const hg = c.createLinearGradient(0, hy - h0, 0, hy + LH * .05);
+  hg.addColorStop(0, BAND_FX[k].haze0);
+  hg.addColorStop(.62, BAND_FX[k].haze1);
+  hg.addColorStop(1, BAND_FX[k].haze0);
+  c.fillStyle = hg; c.fillRect(0, hy - h0, w, h0 + LH * .05);
+}
+
+function drawBands(c){
+  const S = LS(), w = LW + BAND_SLACK * 2;
+  for (let k = 0; k < BANDS.length; k++){
+    const off = cam.x * S * BANDS[k].d;
+    // A strip is good for BAND_SLACK either side of where it was painted. Past
+    // that it is repainted at wherever the camera is now, which re-centres the
+    // reserve so a pan in either direction gets the full slack again.
+    let anchor = bandOff[k];
+    if (anchor === undefined || Math.abs(off - anchor) > BAND_SLACK) anchor = off;
+    const P = plate('band' + k, w, LH, plateKey(true) + '|' + Math.round(anchor),
+      (pc, pw) => bandPaint(pc, k, anchor, -BAND_SLACK, pw));
+    if (!P){ bandPaint(c, k, off, 0, LW); continue; }   // no offscreen canvas here
+    bandOff[k] = anchor;
+    blitPlate(c, P, -BAND_SLACK - (off - anchor), 0);
+  }
+}
+
 function skyRoll(c){
   // Weather, furthest first: cirrus at the top of the troposphere, then the
   // cumulus sheets. Both go down BEFORE the ridges, so a mountain occludes the
@@ -5313,58 +5406,7 @@ function skyRoll(c){
   // the one the old order threw away by painting clouds over everything.
   drawCirrus(c);
   drawClouds(c);
-  // three parallax ridges receding into haze
-  const ridgeX = (i, d) => ((i * 230 - cam.x * LS() * d) % (LW + 690) + LW + 690) % (LW + 690) - 230;
-  for (let k = 0; k < BANDS.length; k++){
-    const b = BANDS[k];
-    const base = LH * ridgeFoot(b);        // where this outline's feet land
-    c.fillStyle = b.col;                   // opaque: see BANDS
-    c.beginPath();
-    c.moveTo(-40, LH);
-    for (let i = -1; i < 9; i++){
-      const bx = ridgeX(i, b.d);
-      c.lineTo(bx, base);
-      c.lineTo(bx + RIDGE_RIM, LH * b.y - ridgeTop(i, k));
-      c.lineTo(bx + 128, LH * (b.y + b.h * (.40 + ridgeMid(i, k) * .32)));
-      c.lineTo(bx + 172, LH * b.y - ridgeTop(i + 5, k) * .62);
-      c.lineTo(bx + 215, LH * (b.y + .02 + ridgeMid(i + 3, k) * .05));
-    }
-    c.lineTo(LW + 60, LH); c.closePath(); c.fill();
-    // Aerial perspective, done where it actually happens: inside the band.
-    // The further the ridge the more of HORIZON is mixed into it, and most of
-    // all at its foot, where you are looking through the most air. Clipped to
-    // the silhouette that was just laid down, so it dissolves the mountain
-    // rather than painting a band of fog across the sky behind it.
-    c.save(); c.clip();
-    const ag = c.createLinearGradient(0, LH * (b.y - .06), 0, LH * (b.y + b.h + .02));
-    ag.addColorStop(0, 'rgba(' + HORIZON + ',0)');
-    ag.addColorStop(.55, 'rgba(' + HORIZON + ',' + (b.fog * .45).toFixed(3) + ')');
-    ag.addColorStop(1, 'rgba(' + HORIZON + ',' + b.fog.toFixed(3) + ')');
-    c.fillStyle = ag; c.fillRect(0, LH * (b.y - .08), LW, LH * (b.h + .20));
-    c.restore();
-    // and the slope that faces the sun catches it, the same as every ridge of
-    // rock and every roof down on the island
-    c.strokeStyle = b.rim; c.lineWidth = Math.max(1, (1.5 + k * .6) * cam.z); c.lineCap = 'round';
-    for (let i = -1; i < 9; i++){
-      const bx = ridgeX(i, b.d);
-      if (bx < -240 || bx > LW + 60) continue;
-      c.beginPath();
-      c.moveTo(bx, base);
-      c.lineTo(bx + RIDGE_RIM, LH * b.y - ridgeTop(i, k));
-      c.stroke();
-    }
-    c.lineCap = 'butt';
-    // haze pooling at the foot of the band, so the next one reads as further.
-    // bandFoot, NOT ridgeFoot: air lies at the height air lies at, and if this
-    // followed the outline down behind the bridge the far range would lose the
-    // one thing that puts it behind the middle one.
-    const hy = LH * bandFoot(b), h0 = LH * .10;
-    const hg = c.createLinearGradient(0, hy - h0, 0, hy + LH * .05);
-    hg.addColorStop(0, BAND_FX[k].haze0);
-    hg.addColorStop(.62, BAND_FX[k].haze1);
-    hg.addColorStop(1, BAND_FX[k].haze0);
-    c.fillStyle = hg; c.fillRect(0, hy - h0, LW, h0 + LH * .05);
-  }
+  drawBands(c);
   const W = plate('skyWash', LW, LH * WASH_H, plateKey(false), skyWash);
   if (W) blitPlate(c, W, 0, LH * WASH_Y); else skyWash(c, LW, LH * WASH_H);
   drawGodRays(c);
@@ -5440,8 +5482,37 @@ function skyStep(c, t0){
    time. A pixel is the smallest difference that can exist on the screen, so
    this cannot show; and standing still costs nothing while panning costs
    exactly what it always did. No frame is made slower — the worst case is the
-   old case.                                                                 */
+   old case.
+
+   Which left the worst case exactly where it hurts. Watching a fight is not
+   watching a still picture: the camera creeps along behind the front line, and
+   at a fighting zoom that creep moves the nearest ridge a shade over one pixel
+   a frame — just enough to miss the cache every single frame. Measured on a
+   phone, the same board:
+
+     camera still        sky  2.9 ms   frame 18.2 ms
+     camera following    sky 10.1 ms   frame 29.7 ms
+
+   So the cache bought nothing in the one situation the game is actually for.
+
+   What a moving sky gets instead is fewer pixels. Motion hides softness — it
+   is why every shipping renderer scales resolution rather than detail when the
+   camera swings — and this layer is gradients, haze and mountains dissolving
+   into air, which is the most forgiving thing in the frame to draw small and
+   blow back up. The sun is not in here; it is in its own sharp plate
+   underneath. So: full resolution when you are looking at it, and a little
+   under half the pixels while it is sliding past.
+
+   The two live in separate plates rather than one plate that resizes, because
+   a plate that changes size reallocates its canvas, and a camera that starts
+   and stops would do that several times a second. */
 const SKY_ROLL_PX = 1;
+const SKY_MOVE = {
+  px: 1,        // sky-pixels of movement a frame that counts as "moving"
+  res: .55,     // and what fraction of the pixels it gets while it does
+  hold: 12,     // frames of stillness before the sharp one comes back
+};
+let skyStillFor = 0;
 // The fastest thing in the layer sets the pace, and both maxima are READ from
 // the tables rather than written down beside them — a cloud tier added to
 // clouds() or a fourth ridge added to BANDS would otherwise leave this key
@@ -5457,18 +5528,41 @@ function skyFast(){
   SKY_FAST = { pan, drift };
   return SKY_FAST;
 }
-function skyRollKey(){
+// Where the scrolling layer has got to, in its own pixels. One number, and
+// both the cache key and the moving/still question are read off it — so they
+// cannot disagree about whether the sky moved.
+function skyAt(){
   const f = skyFast();
-  const pan = cam.x * LS() * f.pan;                   // ridges and cloud, in px
-  const drift = G.t * 3.5 * 8 * f.drift;              // the weather's own walk
+  return { pan: cam.x * LS() * f.pan, drift: G.t * 3.5 * 8 * f.drift };
+}
+function skyRollKey(){
+  const a = skyAt();
   const q = (v) => Math.round(v / SKY_ROLL_PX);
-  return plateKey(true) + '|' + q(pan) + '|' + q(drift);
+  return plateKey(true) + '|' + q(a.pan) + '|' + q(a.drift);
+}
+// Is the sky sliding past, or is it being looked at? Answered from how far it
+// actually moved since the last frame rather than from the camera's velocity,
+// because a zoom moves it too and the camera's own speed says nothing about
+// that. Sticky on the way back: a camera that stops and starts must not swap
+// plates several times a second.
+let skyWas = null;
+function skyMoving(){
+  const a = skyAt();
+  const d = skyWas ? Math.abs(a.pan - skyWas.pan) + Math.abs(a.drift - skyWas.drift) : 0;
+  skyWas = a;
+  if (d > SKY_MOVE.px) skyStillFor = 0; else skyStillFor++;
+  return skyStillFor < SKY_MOVE.hold;
 }
 function drawSky(c){
   const P = plate('skyBack', LW, LH, plateKey(true), skyBack);
   if (P) blitPlate(c, P, 0, 0); else skyBack(c);
-  const r = SKY.pin === null || SKY.pin === undefined ? SKY.res : SKY.pin;
-  const R = plate('skyRoll', LW, LH, skyRollKey(), skyRoll, r);
+  let r = SKY.pin === null || SKY.pin === undefined ? SKY.res : SKY.pin;
+  // Two plates, not one that resizes: a plate that changes size reallocates
+  // its canvas, and this question changes answer every time the camera stops.
+  const move = skyMoving();
+  const id = move ? 'skyRollFast' : 'skyRoll';
+  if (move) r *= SKY_MOVE.res;
+  const R = plate(id, LW, LH, skyRollKey(), skyRoll, r);
   if (R) blitPlate(c, R, 0, 0); else skyRoll(c);
   drawBirds(c);
 }
@@ -14865,9 +14959,9 @@ window.IB = {
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelMarked(){ return labelMarked; }, get labelCrowded(){ return labelCrowded; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
-  SKY, plateKey, skyRoll, skyRollKey, SKY_ROLL_PX, skyFast, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
+  SKY, plateKey, skyRoll, skyRollKey, SKY_ROLL_PX, skyFast, skyAt, skyMoving, SKY_MOVE, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
   POST, postFx, postCache, postGrade, screenTier, onPhone, PHONE_W, PHONE_POST, STONE_TONE, STONE_TONE_LIT, STONE_TONE_DARK,
-  BAND_FX, bandFoot, ridgeFoot, HORIZON, ridgeTop, ridgeMid,
+  BAND_FX, bandFoot, ridgeFoot, HORIZON, ridgeTop, ridgeMid, CIRRUS, drawBands, bandPaint, BAND_SLACK,
   get LW(){ return LW; }, get LH(){ return LH; },
 };
 
