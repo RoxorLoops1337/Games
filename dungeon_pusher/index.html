@@ -6369,10 +6369,10 @@ if (!HEADLESS) (function browser() {
   }
   // dungeon-crawl dwellers get a painted icon where the owner has drawn one
   // (art/icons/icon_<name>.png); the shopkeeper keeps his LPC sprite (better
-  // art already), and a handful of icons (dualsword/torch/boss/innkeeper)
-  // arrived without an obvious 1:1 slot — left unwired rather than guessed at
+  // art already), and a handful of icons (dualsword/torch/boss) arrived
+  // without an obvious 1:1 slot — left unwired rather than guessed at
   const ENT_ICON = { chest: 'chest', shrine: 'shrine', smith: 'blacksmith', wheel: 'wheellock' };
-  const EVENT_ICON = { well: 'wishingwell', auction: 'thegremlinauction' };
+  const EVENT_ICON = { well: 'wishingwell', auction: 'thegremlinauction', wager: 'innkeeper' };
   function entArt(kind, evId) {
     const name = evId ? EVENT_ICON[evId] : ENT_ICON[kind];
     if (!name) return null;
