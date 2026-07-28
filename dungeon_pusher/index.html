@@ -217,6 +217,7 @@ const LANGS = {
     '⚔\u{FE0F} AGAIN!': '⚔\u{FE0F} OPNIEUW!',
     'TITLE': 'TITEL',
     '\u{1F392} BAG': '\u{1F392} TAS',
+    'BAG': 'TAS',                 // the painted plate carries the icon itself
     'END TURN ▶': 'EINDE BEURT ▶',
     // the tiers 7-10 catch-up (session 73): every button and tab since s29
     'SKIP ▼': 'SLA OVER ▼',
@@ -6300,6 +6301,8 @@ if (!HEADLESS) (function browser() {
     pill: 'art/machine/pill_idle.png',
     pill_glow: 'art/machine/pill_glow.png',
     square: 'art/machine/btn_square.png',
+    btn_bag: 'art/machine/btn_bag.png',
+    btn_drink: 'art/machine/btn_drink.png',
     frame_wide: 'art/machine/frame_wide.png',
     frame_stage: 'art/machine/frame_stage.png',
     frame_tall: 'art/machine/frame_tall.png',
@@ -8678,6 +8681,33 @@ if (!HEADLESS) (function browser() {
       ctx.beginPath(); ctx.moveTo(28, 778); ctx.lineTo(LW - 28, 778); ctx.stroke();
     }
   }
+  // the two leather plates under the tray: DRINK pours a potion, BAG opens the
+  // pack. Each painted plate carries its own icon, so the label only has to
+  // ride the panel beside it — panelCx is that panel's centre as a fraction of
+  // the plate's width. Returns false when the art is missing (or still
+  // streaming in) so the caller can fall back to the drawn button.
+  function hudPlate(key, cx, panelCx, label, font, cb) {
+    const im = machArt(key);
+    if (!im) return false;
+    const h = 34, w = imW(im, h), x = Math.round(cx - w / 2), y = 743;
+    // shadowSprite caches on key+size, so the theme has to ride the key too —
+    // otherwise a re-skin keeps the previous wash
+    shadowImg(key + ':' + S.machTheme, im, x, y, w, h, 6, 3);
+    uiButtons.push({ x, y, w, h, cb: () => { SND.tick(); cb(); } });
+    if (label) {
+      txt(label, x + w * panelCx, y + h * 0.53, font, '#ffe9c8', 'center',
+          { w: 3, col: 'rgba(18,8,6,0.75)' });
+    }
+    return true;
+  }
+  function platePotion(n) {
+    return hudPlate('btn_drink', 291, 0.635, '×' + n, '900 14px Verdana, sans-serif',
+                    () => usePotion());
+  }
+  function platePack() {
+    return hudPlate('btn_bag', 410, 0.67, TR('BAG'), '900 12px Verdana, sans-serif',
+                    () => { S.inv = S.inv ? null : { tab: 'coins' }; });
+  }
   function drawHUD(t) {
     const r = S.run;
     if (!r) return;
@@ -8732,8 +8762,12 @@ if (!HEADLESS) (function browser() {
       txt('\u{2697}\u{FE0F} ' + (r.brew || 0) + '/' + ALCH_BREW_N + rg, 240, 762,
           '900 12px Verdana, sans-serif', '#8ef0ff', 'left');
     } else if (r.potions > 0) {
-      uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
-            { grad: ['#8c2f6b', '#4a1038'], border: '#ffb0e0', col: '#ffd9ee', font: '800 11px Verdana, sans-serif', r: 9 });
+      // the painted flask plate already carries its bottle, so only the count
+      // rides the leather panel beside it (art/machine/btn_drink.png)
+      if (!platePotion(r.potions)) {
+        uiBtn(238, 748, 106, 28, '\u{1F9F4} DRINK ×' + r.potions, () => usePotion(),
+              { grad: ['#8c2f6b', '#4a1038'], border: '#ffb0e0', col: '#ffd9ee', font: '800 11px Verdana, sans-serif', r: 9 });
+      }
     }
     // relic shelf: a peek at the first few — the BAG holds the full ledger
     r.relics.slice(0, 3).forEach((rid, i) => {
@@ -8744,9 +8778,11 @@ if (!HEADLESS) (function browser() {
       txt('+' + (r.relics.length - 3), 434, 726, '800 10px Verdana, sans-serif', '#c8a8b0', 'left');
     }
     // the BAG: coins, arsenal, relics and stats — everything you carry
-    uiBtn(354, 742, 112, 30, TR('\u{1F392} BAG'), () => { S.inv = S.inv ? null : { tab: 'coins' }; },
-          { grad: ['#5a4a7e', '#332448'], border: '#c8b8e0', col: '#f0e8ff',
-            font: '900 12px Verdana, sans-serif', r: 10 });
+    if (!platePack()) {
+      uiBtn(354, 742, 112, 30, TR('\u{1F392} BAG'), () => { S.inv = S.inv ? null : { tab: 'coins' }; },
+            { grad: ['#5a4a7e', '#332448'], border: '#c8b8e0', col: '#f0e8ff',
+              font: '900 12px Verdana, sans-serif', r: 10 });
+    }
     // arsenal strip
     const ids = Object.keys(r.arsenal);
     let ax = 34;
