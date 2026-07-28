@@ -115,6 +115,16 @@
   /* ---------------- one world, one camera ---------------- */
   #stage{ flex:1 1 auto; position:relative; min-height:0; overflow:hidden; }
   canvas{ position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  /* The profiler's report. Deliberately plain and deliberately selectable:
+     the whole point is getting the text off the device. */
+  #perfPanel{ position:fixed; inset:6px 6px auto 6px; z-index:200; background:#080d15f2;
+    border:1px solid #30363d; border-radius:10px; padding:10px; color:#e6edf3;
+    max-height:78vh; overflow:auto; }
+  #perfPanel pre{ margin:0 0 8px; font:11px/1.45 ui-monospace,Menlo,Consolas,monospace;
+    white-space:pre; overflow-x:auto; -webkit-user-select:text; user-select:text; }
+  #perfPanel .row{ display:flex; gap:8px; }
+  #perfPanel button{ flex:1 1 auto; min-height:44px; font:600 15px/1 system-ui;
+    background:#1b2433; color:#e6edf3; border:1px solid #30363d; border-radius:8px; }
   #viewbtns{ position:absolute; top:9px; left:10px; right:10px; display:flex; gap:4px; z-index:6;
     flex-wrap:wrap; justify-content:flex-end; pointer-events:none; }
   #viewbtns .vbtn{ pointer-events:auto; }
@@ -9866,7 +9876,7 @@ function floatPlan(c){
 
 function drawLane(c){
   // zones under everyone — and the ripples that share the deck with them
-  fxBatchStart(); for (const p of fxDeck()) drawFx(c, p); fxBatchEnd(c);
+  if (!perfOff('fx')){ fxBatchStart(); for (const p of fxDeck()) drawFx(c, p); fxBatchEnd(c); }
   for (const z of G.zones){
     const p = lp(z.x, z.y);
     const rx = z.r * LS() * .96, ry = z.r * LS() * .55;
@@ -9916,7 +9926,7 @@ function drawLane(c){
     else drawProj(c, d.o);
   }
   // ...and everything that is actually in the air, over them.
-  fxBatchStart(); for (const p of fxAir()) drawFx(c, p); fxBatchEnd(c);
+  if (!perfOff('fx')){ fxBatchStart(); for (const p of fxAir()) drawFx(c, p); fxBatchEnd(c); }
   // damage numbers. Their y is a world point, so they want the baseline sitting
   // ON that point rather than an em below it — which is what they were getting
   // by accident, and only whenever a hero happened to be on screen.
@@ -12530,22 +12540,181 @@ function postFx(c){
 }
 
 const CAM_MIN = HOLD_X - 26, CAM_MAX = C.LANE_LEN - HOLD_X + 26;
+/* =====================================================================
+   PERF — a profiler that runs on the machine that has the problem
+   =====================================================================
+   Every performance number in this repo has been measured on a software
+   rasteriser, and that is exactly why the effects layer's 588 blend-mode
+   changes a frame were invisible here and obvious on a phone: in software a
+   blend mode is a different inner loop and costs nothing, and on a tile-based
+   GPU it can force the tile to be resolved. Guessing across that gap does not
+   work. This measures on the real device.
+
+   It attributes by ABLATION rather than by timing each stage in place. A
+   canvas queues its work, so timing a stage where it is called measures how
+   long it took to WRITE the commands; forcing the queue out per stage costs a
+   pipeline stall per stage and changes the thing being measured. Turning one
+   layer off for a couple of seconds and watching the whole frame is honest —
+   it is the same number the player is complaining about, with one thing gone.
+
+   Open the game with ?perf on the end of the URL. It runs a fixed sequence of
+   trials, then prints a report with a button that copies it.               */
+const PERF = {
+  on: false,
+  off: {},            // which layers are suppressed right now
+  trial: -1,          // where we are in the sequence
+  t: 0,               // seconds spent in this trial
+  warm: .5,           // ignored at the start of each, while it settles
+  secs: 2.6,          // and how long each one runs for
+  gaps: [],           // the rAF gap: what the player feels
+  work: [],           // and what the drawing actually costs, flushed
+  rows: [],
+  peak: { units:0, fx:0 },
+};
+// The order matters: `everything` first so the baseline is measured before the
+// board has had time to change, and again LAST so a report can show whether it
+// drifted. A number that moved between the two is a number to distrust.
+const PERF_TRIALS = [
+  { k:null,   n:'everything' },
+  { k:'post', n:'no grade' },
+  { k:'sky',  n:'no sky' },
+  { k:'gap',  n:'no chasm' },
+  { k:'hold', n:'no islands' },
+  { k:'deck', n:'no deck' },
+  { k:'fx',   n:'no effects' },
+  { k:'lane', n:'no bodies' },
+  { k:'hud',  n:'no interface' },
+  { k:null,   n:'everything again' },
+];
+const perfOff = (k) => PERF.on && !!PERF.off[k];
+
+function perfStart(){
+  PERF.on = true; PERF.trial = 0; PERF.t = 0; PERF.gaps = []; PERF.work = [];
+  PERF.rows = []; PERF.off = {}; PERF.peak = { units:0, fx:0 };
+  const T = PERF_TRIALS[0];
+  if (T.k) PERF.off[T.k] = 1;
+}
+// One frame of the run. `raw` is the real gap, which is the only honest signal:
+// it includes the browser's own compositing, which no in-page timer can see.
+function perfStep(raw){
+  if (!PERF.on || PERF.trial < 0 || PERF.trial >= PERF_TRIALS.length) return;
+  PERF.t += raw;
+  PERF.peak.units = Math.max(PERF.peak.units, G.units.filter(u => !u.dead).length);
+  PERF.peak.fx = Math.max(PERF.peak.fx, G.fx.length);
+  if (PERF.t > PERF.warm && raw > 0 && raw < .5) PERF.gaps.push(raw * 1000);
+  if (PERF.t < PERF.secs) return;
+  const mid = (a) => { const q = a.slice().sort((x, y) => x - y); return q.length ? q[q.length >> 1] : 0; };
+  const g = PERF.gaps.slice().sort((a, b) => a - b);
+  PERF.rows.push({
+    n: PERF_TRIALS[PERF.trial].n,
+    med: g.length ? g[g.length >> 1] : 0,
+    p90: g.length ? g[Math.floor(g.length * .9)] : 0,
+    worst: g.length ? g[g.length - 1] : 0,
+    work: mid(PERF.work),
+    frames: g.length,
+  });
+  PERF.trial++; PERF.t = 0; PERF.gaps = []; PERF.work = [];
+  PERF.off = {};
+  const T = PERF_TRIALS[PERF.trial];
+  if (T && T.k) PERF.off[T.k] = 1;
+  if (!T){ PERF.on = false; perfShow(); }
+}
+
+function perfPct(v){ return v > 0 ? v.toFixed(1) : '0'; }
+function perfReport(){
+  const base = PERF.rows[0] ? PERF.rows[0].med : 0;
+  const wbase = PERF.rows[0] ? PERF.rows[0].work : 0;
+  const dpr = lcv && LW ? (lcv.width / LW).toFixed(2) : '?';
+  const L = [];
+  L.push('IRONBRIDGE PERF');
+  L.push('ua      ' + (typeof navigator !== 'undefined' ? navigator.userAgent : '?'));
+  L.push('screen  ' + Math.round(LW) + 'x' + Math.round(LH) + ' css, dpr ' + dpr +
+    ', canvas ' + (lcv ? lcv.width + 'x' + lcv.height : '?'));
+  L.push('cores   ' + ((typeof navigator !== 'undefined' && navigator.hardwareConcurrency) || '?') +
+    '   mem ' + ((typeof navigator !== 'undefined' && navigator.deviceMemory) || '?') + 'gb');
+  L.push('state   wave ' + G.wave + ', peak ' + PERF.peak.units + ' bodies, ' + PERF.peak.fx + ' fx' +
+    ', zoom ' + cam.z.toFixed(2) + (cam.follow ? ', following' : ''));
+  L.push('tuning  post ' + postLvl + ', skyRes ' + SKY.res + ', phone ' + (onPhone() ? 'yes' : 'no'));
+  L.push('');
+  L.push('trial             work    gap    p90  worst    fps   saves');
+  for (const r of PERF.rows){
+    const save = wbase && r.work ? wbase - r.work : 0;
+    L.push(r.n.padEnd(17) +
+      perfPct(r.work).padStart(5) + perfPct(r.med).padStart(7) +
+      perfPct(r.p90).padStart(7) + perfPct(r.worst).padStart(7) +
+      (r.med ? (1000 / r.med).toFixed(0) : '?').padStart(7) +
+      (Math.abs(save) < .05 ? '' : (save > 0 ? '  -' + save.toFixed(1) + 'ms' : '  +' + (-save).toFixed(1) + 'ms')));
+  }
+  L.push('');
+  L.push('work = what the drawing costs, with the queue forced out, which is');
+  L.push('       the only number that attributes. gap = what you feel, and it');
+  L.push('       snaps to whole vsyncs (16.7 / 33.3), so it cannot.');
+  L.push('saves = work saved against the first trial. The big one is the one');
+  L.push('       to fix. If "everything again" is far off "everything", the');
+  L.push('       board changed under the run and the whole table is soft.');
+  return L.join('\n');
+}
+
+function perfShow(){
+  if (HEADLESS || typeof document === 'undefined') return;
+  const txt = perfReport();
+  let el = document.getElementById('perfPanel');
+  if (!el){
+    el = document.createElement('div');
+    el.id = 'perfPanel';
+    document.body.appendChild(el);
+  }
+  el.innerHTML = '<pre id="perfTxt">' + esc(txt) + '</pre>' +
+    '<div class="row"><button id="perfCopy">Copy</button>' +
+    '<button id="perfAgain">Run again</button>' +
+    '<button id="perfClose">Close</button></div>';
+  const copy = () => {
+    const t = document.getElementById('perfTxt');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText)
+        return navigator.clipboard.writeText(txt).then(
+          () => { document.getElementById('perfCopy').textContent = 'Copied'; },
+          () => selectPerf(t));
+    } catch (e) {}
+    selectPerf(t);
+  };
+  document.getElementById('perfCopy').onclick = copy;
+  document.getElementById('perfAgain').onclick = () => { el.innerHTML = ''; perfStart(); };
+  document.getElementById('perfClose').onclick = () => { el.remove(); };
+}
+// Clipboard access needs a secure context and a user gesture, and a phone
+// browser may refuse it anyway. Select the text so a long-press can copy it —
+// a report you cannot get out of the device is not a report.
+function selectPerf(node){
+  try {
+    const r = document.createRange();
+    r.selectNodeContents(node);
+    const sel = window.getSelection();
+    sel.removeAllRanges(); sel.addRange(r);
+    document.getElementById('perfCopy').textContent = 'Long-press to copy';
+  } catch (e) {}
+}
+
 function draw(){
   const c = lctx;
   if (!c) return;
   const t0 = postNow ? postNow() : 0;
   BSC = LS() * TILE;
   c.save();
-  drawSky(c);
-  drawChasm(c);            // rock and mist in the gap, behind everything solid
-  drawHold(c, 0);
-  drawHold(c, 1);
-  drawEnds(c);
-  drawPiers(c);            // what the deck stands on, so the deck can cap them
-  gorgeDepth(c);           // and everything below it falling away into the dark
-  drawDeck(c);
-  drawLane(c);
-  postFx(c);               // the world is finished here — everything below is interface
+  // Each of these can be switched off for a couple of seconds by the profiler,
+  // which is the only way to find out what a layer costs on a real GPU. When
+  // the profiler is not running, every one of these reads a `false` field on a
+  // plain object and nothing else changes.
+  if (perfOff('sky')){ c.fillStyle = '#20303c'; c.fillRect(0, 0, LW, LH); } else drawSky(c);
+  if (!perfOff('gap')) drawChasm(c);   // rock and mist in the gap, behind everything solid
+  if (!perfOff('hold')){ drawHold(c, 0); drawHold(c, 1); drawEnds(c); }
+  if (!perfOff('gap')){
+    drawPiers(c);          // what the deck stands on, so the deck can cap them
+    gorgeDepth(c);         // and everything below it falling away into the dark
+  }
+  if (!perfOff('deck')) drawDeck(c);
+  if (!perfOff('lane')) drawLane(c);
+  if (!perfOff('post')) postFx(c);     // the world is finished here — below is interface
   if (sel.struct && !sel.struct.dead){
     const q = lp(sel.struct.x, sel.struct.y);
     c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.5, 2.2 * cam.z);
@@ -12557,9 +12726,18 @@ function draw(){
     c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.2, 1.8 * cam.z);
     c.beginPath(); c.ellipse(q[0], q[1], 9 * cam.z, 4.5 * cam.z, 0, 0, 6.2832); c.stroke();
   }
-  flushLabels(c);
-  drawMinimap(c);
+  if (!perfOff('hud')){ flushLabels(c); drawMinimap(c); }
   c.restore();
+  // While profiling, force the queue out and time the whole thing. A canvas
+  // QUEUES, so a draw timed without this measures how long it took to WRITE
+  // the commands; the readback costs a pipeline stall, but it costs the same
+  // stall in every trial, so the differences between them stay honest. It is
+  // the only number in the report that can attribute anything — the frame gap
+  // snaps to whole vsyncs and cannot.
+  if (PERF.on && postNow){
+    try { c.getImageData(0, 0, 1, 1); } catch (e) {}
+    if (PERF.t > PERF.warm) PERF.work.push(postNow() - t0);
+  }
   skyStep(c, t0);
 }
 
@@ -14892,12 +15070,17 @@ function frame(ts){
   const frozen = (G.state === 'over' || G.paused || G.held) && !G.demo && !holding;
   if (!frozen || ts - lastDraw > 90){ draw(); lastDraw = ts; }
   uiTick(raw);
+  perfStep(raw);
   requestAnimationFrame(frame);
 }
 
 function boot(){
   lcv = $('wcv');
   resize();
+  // ?perf on the URL. Deliberately a URL flag rather than a key or a gesture:
+  // the machine that needs this is a phone, and a phone has no keyboard and
+  // should not have a hidden gesture that a player can trip over.
+  try { if (/[?&]perf\b/.test(location.search)) setTimeout(perfStart, 1200); } catch (e) {}
   wire();
   startDemo();
   showMenu();
@@ -14957,6 +15140,7 @@ window.IB = {
   OVER_HOLD, overStep, syncHud, MUSTER, mustering, musterPhase, waveSecs, musterMark,
   basicAttack, attackDamage, healUnit, healFx, HEAL, healSparks, healSfx, addBuff,
   fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
+  PERF, PERF_TRIALS, perfOff, perfStart, perfStep, perfReport,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
   applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder, LANE_REACH, fxComp, fxBatchStart, fxBatchEnd, drawFx, fxOnDeck, DECK_FX, fxDeck, fxAir,
