@@ -6133,6 +6133,9 @@ if (!HEADLESS) (function browser() {
     if (key.indexOf('pc_') === 0) return 'coin & item faces';
     if (key.indexOf('floor_') === 0) return 'floor tiles';
     if (key.indexOf('rl_') === 0) return 'relic icons';
+    if (key.indexOf('th_') === 0) return 'trophy icons';
+    if (key.indexOf('ic_') === 0) return 'dungeon icons';
+    if (key.indexOf('sk_') === 0) return 'shopkeeper icons';
     return 'heroes & beasts';
   }
   function loadImg(src, pack) {
@@ -6153,8 +6156,10 @@ if (!HEADLESS) (function browser() {
   function art(key, src) {
     if (!ART_IMG[key]) {
       const pack = packOf(key);
-      // relic icons stream in lazily — they don't gate the boot bar
-      ART_IMG[key] = loadImg(src, pack === 'relic icons' ? null : pack);
+      // relic, trophy, dungeon and shopkeeper icons stream in lazily — they
+      // don't gate the boot bar
+      const lazy = pack === 'relic icons' || pack === 'trophy icons' || pack === 'dungeon icons' || pack === 'shopkeeper icons';
+      ART_IMG[key] = loadImg(src, lazy ? null : pack);
     }
     return ART_IMG[key];
   }
@@ -6350,6 +6355,38 @@ if (!HEADLESS) (function browser() {
   // every relic has a painted icon (art/relics/relic_<id>.png); emoji stand by
   function relicArt(rid) {
     const im = art('rl_' + rid, 'art/relics/relic_' + rid + '.png');
+    return im._ok ? im : null;
+  }
+  // every trophy has a painted plaque (art/trophies/trophy_<slug>.png); emoji
+  // stand by. the slug is the trophy's NAME lowercased and stripped to
+  // [a-z0-9] — matching the painter's file-naming convention means new
+  // trophies autowire the moment their art lands, no lookup table to keep in sync
+  function trophySlug(name) { return name.toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function trophyArt(a) {
+    const slug = trophySlug(a.name);
+    const im = art('th_' + slug, 'art/trophies/trophy_' + slug + '.png');
+    return im._ok ? im : null;
+  }
+  // dungeon-crawl dwellers get a painted icon where the owner has drawn one
+  // (art/icons/icon_<name>.png); the shopkeeper keeps his LPC sprite (better
+  // art already), and a handful of icons (dualsword/torch/boss/innkeeper)
+  // arrived without an obvious 1:1 slot — left unwired rather than guessed at
+  const ENT_ICON = { chest: 'chest', shrine: 'shrine', smith: 'blacksmith', wheel: 'wheellock' };
+  const EVENT_ICON = { well: 'wishingwell', auction: 'thegremlinauction' };
+  function entArt(kind, evId) {
+    const name = evId ? EVENT_ICON[evId] : ENT_ICON[kind];
+    if (!name) return null;
+    const im = art('ic_' + name, 'art/icons/icon_' + name + '.png');
+    return im._ok ? im : null;
+  }
+  // the keeper's shelf: potion/pouch/coin/maxhp/map wares get their painted
+  // icon (art/shopkeeper/shopkeeper_<name>.png); item and relic wares already
+  // ride itemArt/relicArt above
+  const SHOP_ICON = { potion: 'potion', pouch: 'coinpouch', coin: 'silvercoin', maxhp: 'maxhp+10', map: 'tornmap' };
+  function shopkeeperArt(kind) {
+    const name = SHOP_ICON[kind];
+    if (!name) return null;
+    const im = art('sk_' + kind, 'art/shopkeeper/shopkeeper_' + name + '.png');
     return im._ok ? im : null;
   }
   // coin edge + engraved face baked into one offscreen sprite per kind —
@@ -10266,7 +10303,9 @@ if (!HEADLESS) (function browser() {
         for (let i = -1; i <= 1; i++) {
           ctx.beginPath(); ctx.moveTo(x0 + 2, p.y + i * 16); ctx.lineTo(x0 + ROOM.sideW - 2, p.y + i * 16); ctx.stroke();
         }
-        txt('\u{1F512}', x0 + ROOM.sideW / 2, p.y - 8, '11px serif', '#fff');
+        const lockArt = art('ic_lock', 'art/icons/icon_lock.png');
+        if (lockArt._ok) { const hh = 14, ww = imW(lockArt, hh); ctx.drawImage(lockArt, x0 + ROOM.sideW / 2 - ww / 2, p.y - 15, ww, hh); }
+        else txt('\u{1F512}', x0 + ROOM.sideW / 2, p.y - 8, '11px serif', '#fff');
         txt(gold ? '1\u{1F511}' : '1\u{1F5DD}', x0 + ROOM.sideW / 2, p.y + 8, '800 9px Verdana, sans-serif', kcol);
       }
       if (sign) {
@@ -10336,6 +10375,13 @@ if (!HEADLESS) (function browser() {
       }
     } else if (e.kind === 'shop') {
       drewArt = drawArt('keeper', p.x, p.y + 4 + bob * 0.4, SHEETS.keeper.rh, 'd', t);
+    } else {
+      const ea = entArt(e.kind, e.kind === 'event' ? e.ev : null);
+      if (ea) {
+        const hh = size, ww = imW(ea, hh);
+        ctx.drawImage(ea, p.x - ww / 2, p.y - 14 + bob - hh / 2, ww, hh);
+        drewArt = true;
+      }
     }
     if (!drewArt) txt(icon, p.x, p.y - 14 + bob, size + 'px serif', '#fff');
     if (e.mtype === 'elite') txt('\u{1F525}', p.x + 20, p.y - 30 + bob, '14px serif', '#fff');
@@ -10694,7 +10740,7 @@ if (!HEADLESS) (function browser() {
         ctx.lineWidth = 1.5; ctx.strokeStyle = it.sold ? '#3a2f3a' : '#5a4048'; ctx.stroke();
         // painted ware icons when we have them; the label keeps its emoji otherwise
         const wArt = it.kind === 'relic' && it.rid ? relicArt(it.rid)
-                   : it.kind === 'item' && it.iid ? itemArt(it.iid) : null;
+                   : it.kind === 'item' && it.iid ? itemArt(it.iid) : shopkeeperArt(it.kind);
         let lx = 66, label = it.label;
         if (wArt) {
           const hh = 38, ww = imW(wArt, hh);
@@ -10702,8 +10748,9 @@ if (!HEADLESS) (function browser() {
           ctx.drawImage(wArt, 60 + 19 - ww / 2, y + 3, ww, hh);
           ctx.restore();
           lx = 102;
-          const def = it.kind === 'relic' ? relicById(it.rid) : itemById(it.iid);
+          const def = it.kind === 'relic' ? relicById(it.rid) : it.kind === 'item' ? itemById(it.iid) : null;
           if (def) label = def.name;
+          else if (it.kind !== 'relic' && it.kind !== 'item') label = it.label.replace(/^\S+\s+/, '');
         }
         txt(label, lx, y + (it.sub ? 16 : 25), '800 12px Verdana, sans-serif',
             it.sold ? '#5a4a5a' : '#ffe9a3', 'left');
@@ -10910,7 +10957,9 @@ if (!HEADLESS) (function browser() {
       ctx.lineWidth = 1.5; ctx.strokeStyle = on ? '#ffd75e' : '#3a3446'; ctx.stroke();
       ctx.save();
       if (!on) ctx.globalAlpha = 0.4;
-      txt(on ? a.icon : '\u{1F512}', x + 20, y + 26, '20px serif', '#fff');
+      const ta = on ? trophyArt(a) : null;
+      if (ta) { const hh = 40, ww = imW(ta, hh); ctx.drawImage(ta, x + 20 - ww / 2, y + 27 - hh / 2, ww, hh); }
+      else txt(on ? a.icon : '\u{1F512}', x + 20, y + 26, '20px serif', '#fff');
       ctx.restore();
       txt(a.name, x + 40, y + 18, '900 10px Verdana, sans-serif', on ? '#ffe9a3' : '#6a5f78', 'left');
       wrapLines(a.desc, 26, 2).forEach((ln, li) =>
@@ -11753,7 +11802,9 @@ if (!HEADLESS) (function browser() {
         if (own) { ctx.lineWidth = 1.2; ctx.strokeStyle = '#ffd75e'; ctx.stroke(); }
         ctx.save();
         if (!own) ctx.globalAlpha = 0.22;
-        txt(a.icon, x + (tw2 - 8) / 2, y + 22, '19px serif', '#fff');
+        const ta = own ? trophyArt(a) : null;
+        if (ta) { const hh = 26, ww = imW(ta, hh); ctx.drawImage(ta, x + (tw2 - 8) / 2 - ww / 2, y + 8, ww, hh); }
+        else txt(a.icon, x + (tw2 - 8) / 2, y + 22, '19px serif', '#fff');
         ctx.restore();
       });
       const wallEnd = 176 + Math.ceil(ACH.length / cols) * th2;
