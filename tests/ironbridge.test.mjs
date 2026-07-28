@@ -3859,6 +3859,234 @@ t.ok(true, 'drawing an empty bridge is harmless');
   t.ok(true, 'both mesas draw from in front, from behind and from the middle');
 }
 {
+  /* The scatter decals were indistinguishable from cast shadows. Measured on
+     the enemy-gate framing: open grass H105 S.46 V.45, a scatter decal H106
+     S.46 V.49, a tree's CAST SHADOW H106 S.45 V.46. Three different kinds of
+     mark with one appearance, inside 0.03 luminance of each other — so
+     dark-on-ground meant nothing, and the one depth cue the renderer emits was
+     drowned by decoration that looked identical to it. */
+  IB.newMatch({ diff:'veteran', seed:2027 });
+  const hueOf = (c) => {
+    const M = Math.max(c[0], c[1], c[2]), m = Math.min(c[0], c[1], c[2]), d = M - m;
+    if (d < 1e-6) return 0;
+    const h = M === c[0] ? ((c[1] - c[2]) / d + 6) % 6
+            : (M === c[1] ? (c[2] - c[0]) / d + 2 : (c[0] - c[1]) / d + 4);
+    return h * 60;
+  };
+  const dHue = (a, b) => ((hueOf(a) - hueOf(b) + 540) % 360) - 180;
+  const T = IB.DECAL.tone, SL = IB.DECAL.slots;
+  let offHue = [], notLifted = [], washDark = [], gamut = [], swamped = [], naive = [];
+  for (let ti = 0; ti < T.length; ti++){
+    const [deg, , a] = T[ti];
+    for (let s = 0; s < SL; s++){
+      const t = s / (SL - 1);
+      const base = IB.rgbOf(IB.swardAt(t));
+      const wash = IB.rgbOf(IB.decalWash(ti, t));
+      const got = IB.composite(wash, base, a);
+      // 1. it lands on the hue it was asked for, and that is a real rotation
+      if (Math.abs(dHue(got, base) - deg) > 2) offHue.push(ti + '@' + s + ' ' + dHue(got, base).toFixed(1) + ' want ' + deg);
+      // 2. and ABOVE the ground it sits on. A decal darker than its own turf
+      //    is the bug: it is then a mark that looks exactly like a shadow.
+      const lift = IB.relLum(got) - IB.relLum(base);
+      if (!(lift > .015)) notLifted.push(ti + '@' + s + ' ' + lift.toFixed(4));
+      // 3. no alpha-black: the colour handed to the fill is itself lighter
+      //    than the ground, so nothing is being darkened on the way
+      if (!(IB.relLum(wash) > IB.relLum(base))) washDark.push(ti + '@' + s);
+      // 4. and the solve did not silently clamp on the way out — a wash that
+      //    leaves the gamut delivers a fraction of the shift it reported
+      const want = IB.decalTint(IB.swardAt(t), T[ti][0], T[ti][1]);
+      for (let i = 0; i < 3; i++){
+        const raw = base[i] + (want[i] - base[i]) / a;
+        if (raw < -.5 || raw > 255.5) gamut.push(ti + '@' + s + ' ch' + i + ' ' + raw.toFixed(0));
+      }
+      // 5. the ceiling. Lift a decal too far and a shadow that lands on it
+      //    comes back out at open-grass value and VANISHES where it crosses
+      //    the decoration — the same bug with the polarity flipped. Every
+      //    shadow strength the ground uses, over the brightest thing under it.
+      for (const sa of [IB.GROUND_SHADE.a, .34, .35]){
+        const shadowed = IB.composite(IB.rgbOf('#' + [20, 34, 18].map(v => v.toString(16).padStart(2, '0')).join('')), got, sa);
+        if (!(IB.relLum(base) - IB.relLum(shadowed) > .01))
+          swamped.push(ti + '@' + s + ' a' + sa + ' ' + (IB.relLum(base) - IB.relLum(shadowed)).toFixed(4));
+      }
+      // 6. and solving BACKWARDS is what makes it land. Washing the finished
+      //    tint straight over the ground — the obvious thing, and the thing
+      //    the first pass of this did — delivers a fraction of the shift.
+      const lazy = IB.composite(want, base, a);
+      if (!(Math.abs(IB.relLum(lazy) - IB.relLum(base)) < Math.abs(lift) * .6))
+        naive.push(ti + '@' + s);
+    }
+  }
+  t.ok(offHue.length === 0, 'every decal lands on the hue it was asked for (' + (offHue[0] || 'all ' + T.length * SL) + ')');
+  t.ok(T.every(x => Math.abs(x[0]) >= 5), 'and none of those rotations is a no-op');
+  t.ok(notLifted.length === 0, 'every decal is BRIGHTER than the turf it lies on (' + (notLifted[0] || 'all of them') + ')');
+  t.ok(washDark.length === 0, 'and no decal is painted with anything darker than the ground (' + (washDark[0] || 'none') + ')');
+  t.ok(gamut.length === 0, 'no wash is clamped on its way out of the solve (' + (gamut[0] || 'none') + ')');
+  t.ok(swamped.length === 0, 'a shadow still reads as a shadow where it crosses a decal (' + (swamped[0] || 'every one') + ')');
+  t.ok(naive.length === 0, 'and washing the finished tint straight over the ground would not have got there (' +
+    (naive[0] || 'all ' + T.length * SL) + ')');
+  // The three lobes of a decal have to compose to exactly the alpha its colour
+  // was solved for, or the middle of the patch is not the colour that was
+  // measured. Two ways to get this wrong: paint each lobe at the full alpha
+  // (too far) or paint one lobe (not far enough).
+  const p = IB.decalPass(.36);
+  const built = 1 - Math.pow(1 - p, IB.DECAL_LOBES.length);
+  t.ok(IB.PLOT_DETAIL > 0 && IB.DECAL_LOBES.length > 1,
+    'the tufts share the hold’s one detail gate rather than inventing a second');
+  t.ok(IB.PLOT_DETAIL > 0, 'the tufts share the hold’s one detail gate rather than inventing a second');
+  t.ok(Math.abs(built - .36) < 1e-9, 'a decal’s lobes compose to the alpha it was solved for (' + built.toFixed(4) + ')');
+  t.ok(p < .36 * .8 && p > 0, 'which means each lobe is painted well under it (' + p.toFixed(4) + ')');
+  t.ok(IB.DECAL_LOBES.length >= 2 && IB.DECAL_LOBES.some(l => l[0] !== 0 || l[1] !== 0),
+    'and the lobes are offset from each other, so a patch is not the rim of a coin');
+  // The dapple carries a TONE now, not a colour: the colour cannot be chosen
+  // until the ground underneath the patch is known.
+  const gr = IB.grassFor(0);
+  t.ok(gr.every(g => g.col === undefined && g.tone >= 0 && g.tone < T.length),
+    'the dapple names a tint, not a fill — the fill depends on the ground under it');
+  t.ok(new Set(gr.map(g => g.tone)).size >= 3, 'and it uses more than one of them');
+  // Every dark mark on this turf is a shadow, and they all clear the floor.
+  t.ok(IB.groundShadow(0).indexOf(',' + IB.GROUND_SHADE.a + ')') > 0,
+    'a ground shadow lighter than the floor is pulled up to it (' + IB.groundShadow(0) + ')');
+  t.ok(IB.groundShadow(.9).indexOf(',0.9)') > 0, 'and one deeper than it is left alone');
+}
+{
+  /* The plateau silhouette. In the hold framing the largest shape in the frame
+     was one dead straight stair-stepping line, corner to corner: grass at full
+     saturation running to a razor edge and stopping, with no thickness and no
+     visible side. A horizon that is one straight line is the tell. */
+  IB.newMatch({ diff:'veteran', seed:2029 });
+  IB.cam.follow = false; IB.cam.z = IB.cam.tz = 1;
+  t.ok(IB.edgeCache[0] === null, 'a new match forgets the old coastline');
+  const E0 = IB.edgeFor(0);
+  t.ok(IB.edgeFor(0) === E0, 'the coastline is built once and reused');
+  t.ok(IB.edgeFor(1) !== E0, 'and each hold gets its own');
+  const px = (dx, dy) => {                      // how far a world step moves on screen
+    const a = IB.lp(0, 0, 0), b = IB.lp(dx, dy, 0);
+    return Math.hypot(b[0] - a[0], b[1] - a[1]);
+  };
+  let flat = [], crowded = [], torn = [], skew = [], spacing = [], inward = [];
+  for (const side of [0, 1]){
+    const E = IB.edgeFor(side);
+    for (const f of IB.platFaces(side)){
+      const S = E[f.k], P = S.pts;
+      const ax = f.a[0], ay = f.a[1], bx = f.b[0], by = f.b[1];
+      // 1. the noise actually SPANS its range. Summed octaves of value noise
+      //    crowd their own mean, so an unstretched fBm is a straight line with
+      //    a tremble in it — which is the failure this edge exists to fix.
+      let lo = Infinity, hi = -Infinity, sum = 0;
+      for (const p of P){ if (p[2] < lo) lo = p[2]; if (p[2] > hi) hi = p[2]; sum += Math.abs(p[2]); }
+      if (!(hi > IB.EDGE.amp * .8)) crowded.push(side + f.k + ' hi ' + hi.toFixed(3));
+      if (!(lo < -IB.EDGE.amp * .8)) crowded.push(side + f.k + ' lo ' + lo.toFixed(3));
+      // and it is not one spike on an otherwise straight line
+      if (!(sum / P.length > IB.EDGE.amp * .18)) flat.push(side + f.k + ' mean|d| ' + (sum / P.length).toFixed(3));
+      // 2. in pixels, the displacement is the 5-9px the edge was specified at
+      const amp = px(S.nx * IB.EDGE.amp, S.ny * IB.EDGE.amp);
+      if (!(amp >= 5 && amp <= 9)) flat.push(side + f.k + ' amp ' + amp.toFixed(1) + 'px');
+      // 3. the corners meet the corners, or the island tears open there
+      const n = P.length - 1;
+      if (Math.hypot(P[0][0] - ax, P[0][1] - ay) > 1e-9) torn.push(side + f.k + ' head');
+      if (Math.hypot(P[n][0] - bx, P[n][1] - by) > 1e-9) torn.push(side + f.k + ' tail');
+      // 4. every point is displaced along the face's OWN normal, and that
+      //    normal points away from the island — the two holds mirror, and a
+      //    hard-coded direction turns one of the two coastlines inside out
+      for (let i = 0; i <= n; i++){
+        const t = i / n;
+        const ox = P[i][0] - (ax + (bx - ax) * t), oy = P[i][1] - (ay + (by - ay) * t);
+        if (Math.abs(ox * S.ny - oy * S.nx) > 1e-9) skew.push(side + f.k + '@' + i);
+        if (i > 0){
+          const gap = px(P[i][0] - P[i - 1][0], P[i][1] - P[i - 1][1]);
+          if (!(gap > 6 && gap < 24)) spacing.push(side + f.k + '@' + i + ' ' + gap.toFixed(1) + 'px');
+        }
+      }
+      const inner = side === 0 ? 3 : C.LANE_LEN - 3;
+      const outer = inner - (side === 0 ? 1 : -1) * (IB.PLAT.back + 34);
+      const mx = (ax + bx) / 2 - (inner + outer) / 2, my = (ay + by) / 2 - (IB.PLAT.far + IB.PLAT.near) / 2;
+      if (!(S.nx * mx + S.ny * my > 0)) inward.push(side + f.k);
+      // 5. the roll under the lip is the 10-16px it was specified at
+      const roll = px(S.nx * IB.EDGE.roll, S.ny * IB.EDGE.roll);
+      if (!(roll >= 10 && roll <= 16)) flat.push(side + f.k + ' roll ' + roll.toFixed(1) + 'px');
+    }
+  }
+  t.ok(crowded.length === 0, 'the coastline noise spans its whole range instead of crowding its mean (' +
+    (crowded[0] || 'every face') + ')');
+  t.ok(flat.length === 0, 'and it wanders by the 5-9px it was drawn for, over its whole length (' + (flat[0] || 'every face') + ')');
+  t.ok(torn.length === 0, 'the coasts still meet at the corners of the island (' + (torn[0] || 'all six') + ')');
+  t.ok(skew.length === 0, 'every point moves along its own face’s normal (' + (skew[0] || 'all of them') + ')');
+  t.ok(inward.length === 0, 'and that normal points off the island, on both holds (' + (inward[0] || 'all six') + ')');
+  t.ok(spacing.length === 0, 'the edge is resampled about every 12px (' + (spacing[0] || 'evenly') + ')');
+  // A straight line is what this replaced, so say so: the finished coast has
+  // to be measurably not the chord it was cut from.
+  {
+    const S = IB.edgeFor(0).outer, P = S.pts, n = P.length - 1;
+    let worst = 0;
+    for (let i = 0; i <= n; i++) worst = Math.max(worst, Math.abs(P[i][2]));
+    t.ok(px(S.nx * worst, S.ny * worst) > 4,
+      'the biggest shape in the frame is no longer a straight line (' + px(S.nx * worst, S.ny * worst).toFixed(1) + 'px off it)');
+  }
+  // The tufts that straddle the line. Two tones, a few hundred of them, and
+  // every one within a pace of the coast — a tuft out in the field is not
+  // holding this join together.
+  let tufts = 0, tones = new Set(), stray = 0, flatT = 0;
+  for (const f of IB.platFaces(0)){
+    const S = IB.edgeFor(0)[f.k];
+    for (const T2 of S.tuft){
+      tufts++; tones.add(T2.dark);
+      if (!(T2.h > 0)) flatT++;
+      let near = Infinity;
+      for (const p of S.pts) near = Math.min(near, Math.hypot(p[0] - T2.x, p[1] - T2.y));
+      if (near > 1.2) stray++;
+    }
+  }
+  t.ok(tufts > 150 && tufts < 600, 'a few hundred tufts stand on the coast (' + tufts + ')');
+  t.ok(tones.size === 2, 'in two tones (' + tones.size + ')');
+  t.ok(stray === 0 && flatT === 0, 'and every one of them straddles the line and has some height (' + stray + ' adrift, ' + flatT + ' flat)');
+  // The sward is filled with the displaced ring, not with the four corners —
+  // otherwise the wander is a decoration painted near a straight edge.
+  const ring = IB.edgeRing(0, (x, y, z) => IB.lp(x, y, z));
+  let pts = 1;
+  for (const f of IB.platFaces(0)) pts += IB.edgeFor(0)[f.k].pts.length;
+  t.ok(ring.length === pts && ring.length > 100, 'the sward is filled with the whole coastline (' + ring.length + ' points)');
+  // ...and drawPlateau has to actually USE it. Filling the four corners and
+  // painting the wander on top leaves the green/rock boundary exactly as
+  // straight as it was, with a decoration beside it. The ring's first point is
+  // the far corner, which nothing else in the frame starts a path on.
+  {
+    IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1;
+    const st = CTX.__stats;
+    st.lines = []; st.dropped = 0;
+    IB.drawHold(CTX, 0);
+    const R = IB.edgeRing(0, (x, y, z) => IB.lp(x, y, z));
+    let run = -1;
+    for (let i = 0; i < st.lines.length; i++){
+      const L = st.lines[i];
+      if (L.k !== 'moveTo' || Math.abs(L.x - R[0][0]) > 1e-6 || Math.abs(L.y - R[0][1]) > 1e-6) continue;
+      let n = 0;
+      while (i + 1 + n < st.lines.length && st.lines[i + 1 + n].k === 'lineTo') n++;
+      if (n > run) run = n;
+    }
+    t.ok(st.dropped === 0, 'the capture held the whole hold (' + st.dropped + ' dropped)');
+    t.ok(run === R.length - 1, 'and the turf itself is laid down along it, not inside its four corners (' +
+      run + '/' + (R.length - 1) + ')');
+  }
+  // Cosmetic, and therefore invisible to the simulation.
+  const h0 = IB.netHash();
+  IB.edgeCache[0] = IB.edgeCache[1] = null;
+  IB.edgeFor(0); IB.edgeFor(1); IB.draw();
+  t.ok(IB.netHash() === h0, 'and none of it is anything the simulation can see');
+  // Rebuilt from the same hash, it comes back the same coastline.
+  const before = IB.edgeFor(0).outer.pts.map(p => p[2]).join(',');
+  IB.edgeCache[0] = null;
+  t.ok(IB.edgeFor(0).outer.pts.map(p => p[2]).join(',') === before, 'the coast is the same coast every time it is built');
+  // Off-screen coasts are not paid for: the lip is the most expensive thing on
+  // the mesa and from your own hold the far side of the island is behind you.
+  const e = (x, y, z) => IB.lp(x, y, z);
+  IB.cam.x = IB.HOLD_X;
+  const lit = IB.platFaces(0).filter(f => IB.edgeOnScreen(0, f.k, e)).length;
+  IB.cam.x = C.LANE_LEN / 2;
+  const dark = IB.platFaces(0).filter(f => IB.edgeOnScreen(0, f.k, e)).length;
+  t.ok(lit >= 1 && dark < lit, 'the coast is culled when it is out of shot (' + lit + ' in view at the hold, ' + dark + ' from the middle)');
+  IB.cam.x = IB.HOLD_X;
+}
+{
   // Doors and windows. Every plot building goes through drawHouse and only the
   // town hall and the forge ever had an opening cut into it — the rest were
   // blank boxes standing next to a hall with a door, four lit windows and a
@@ -6374,6 +6602,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
     const s = CTX.__stats;
     const plotOps = (type, lvl) => {
       G.sides[0].plot[4] = lvl ? { type, lvl, tile:4, raise:0 } : null;
+      // Same as the mirror sweep above: the capture is a running log for the
+      // whole suite, and one hold — coastline, caprock and all — is more path
+      // than it has room for by the time this block runs. What it refuses is
+      // the buffer's limit, not the renderer's, so give each call a clean one.
+      s.lines = []; s.ellipses = [];
       s.dropped = 0;
       const b = s.ops;
       IB.drawHold(CTX, 0);
@@ -6382,6 +6615,11 @@ t.ok(true, 'drawing an empty bridge is harmless');
       return { n, dropped:s.dropped };
     };
     const types = Object.keys(IB.BUILDINGS);
+    // Same as the mirror sweep above: the capture is a running log for the
+    // whole suite and eighteen full holds is more path than it has room for by
+    // the time this block runs, so it starts refusing entries mid-sweep and
+    // the loss it reports is the buffer's, not the renderer's.
+    CTX.__stats.lines = []; CTX.__stats.ellipses = [];
     t.ok(types.length >= 5, 'the level sweep covers every building (' + types.length + ')');
     let flat = [], lost = 0;
     for (const type of types){

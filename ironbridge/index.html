@@ -1325,6 +1325,7 @@ function newMatch(opt){
   sel.tile = -1; sel.node = null; sel.build = null; sel.struct = null; sel.unit = null;
   scatterCache[0] = scatterCache[1] = null;
   grassCache[0] = grassCache[1] = null;
+  edgeCache[0] = edgeCache[1] = null;
   cam.shake = 0; cam.sx = 0; cam.sy = 0;
   cam.follow = false; cam.z = cam.tz = startZoom(LW);
   // Sit the hold a touch left of centre so the bridge is in shot too. In world
@@ -10736,7 +10737,7 @@ function drawGround(c){
     const v2 = hash2(it.gx * 1.3 + 9, it.gy * 2.9 + 4);
     if (r < .16){                                     // tree
       const sc = .82 + v * .40, tall = 1 + v2 * .28;
-      shadow(c, p[0], p[1] + 1.5, 10 * s * sc, 4.2 * s * sc, 'rgba(20,34,18,.26)');
+      shadow(c, p[0], p[1] + 1.5, 10 * s * sc, 4.2 * s * sc, groundShadow(.34));
       // trunk, with the light down one side of it
       c.fillStyle = '#4a3819'; c.fillRect(p[0] - 1.7 * s * sc, p[1] - 9 * s * sc, 3.4 * s * sc, 9 * s * sc);
       c.fillStyle = '#69512a'; c.fillRect(p[0] - 1.7 * s * sc, p[1] - 9 * s * sc, 1.4 * s * sc, 9 * s * sc);
@@ -10758,7 +10759,7 @@ function drawGround(c){
       c.stroke();
     } else if (r < .26){                              // boulder
       const sc = .8 + v * .5;
-      shadow(c, p[0], p[1] + 1, 8.4 * s * sc, 3.6 * s * sc, 'rgba(20,30,18,.24)');
+      shadow(c, p[0], p[1] + 1, 8.4 * s * sc, 3.6 * s * sc, groundShadow(.32));
       const grey = v2 > .5 ? '#77796f' : '#6d6f66';
       poly(c, [[p[0] - 8 * s * sc, p[1]], [p[0] - 4.4 * s * sc, p[1] - 7 * s * sc],
                [p[0] + 4 * s * sc, p[1] - 8 * s * sc], [p[0] + 8 * s * sc, p[1]]], shade(grey, .86));
@@ -10773,16 +10774,14 @@ function drawGround(c){
       c.globalAlpha = 1;
     } else if (r < .34){                              // shrub
       const sc = .85 + v * .45;
-      shadow(c, p[0], p[1] + .6, 7 * s * sc, 2.6 * s * sc, 'rgba(20,34,18,.20)');
+      shadow(c, p[0], p[1] + .6, 7 * s * sc, 2.6 * s * sc, groundShadow(.30));
       const g2 = v2 > .5 ? '#3f6f38' : '#456f31';
       ell(c, p[0], p[1] - 3 * s * sc, 7 * s * sc, 5 * s * sc, shade(g2, .82));
       ell(c, p[0] - 1.4 * s * sc, p[1] - 4.4 * s * sc, 5.4 * s * sc, 4 * s * sc, g2);
       ell(c, p[0] - 3 * s * sc, p[1] - 5.4 * s * sc, 3.2 * s * sc, 2.6 * s * sc, shade(g2, 1.34));
     } else {                                          // grass tuft
       const sc = .8 + v * .5;
-      c.globalAlpha = .35;
-      ell(c, p[0] + 1.2 * s, p[1] + .5 * s, 4 * s * sc, 1.4 * s * sc, '#2f4f2b');
-      c.globalAlpha = 1;
+      shadow(c, p[0], p[1] + .5 * s, 4 * s * sc, 1.4 * s * sc, groundShadow(.35));
       c.lineWidth = Math.max(1, .9 * s * sc); c.lineCap = 'round';
       for (let i = -1; i <= 1; i++){
         c.strokeStyle = i < 0 ? 'rgba(168,206,124,.44)' : (i === 0 ? 'rgba(126,168,100,.40)' : 'rgba(84,124,74,.38)');
@@ -10842,6 +10841,235 @@ function mixHex(a, b, t){
   const l = Math.round(lerp(na & 255, nb & 255, u));
   return '#' + ((1 << 24) | (r << 16) | (g << 8) | l).toString(16).slice(1);
 }
+
+/* ------------------------------------------------------- ground decoration
+   Measured on the enemy-gate framing before this landed: open grass H105 S.46
+   V.45, a scatter decal H106 S.46 V.49, a tree's CAST SHADOW H106 S.45 V.46.
+   Three different kinds of mark with one appearance, inside 0.03 luminance of
+   each other. So dark-on-ground meant nothing in this game, and the one depth
+   cue the renderer emits was drowned by decoration that looked identical to
+   it.
+
+   The rule now: every dark mark on this turf is a shadow, and nothing else.
+   Decoration moves round the hue circle and UP in value instead — a patch of
+   longer grass is not a patch of darker grass, it is a different plant
+   catching the same sun.                                                    */
+const rgbOf = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+function hexOf(r, g, b){
+  const q = (v) => clamp(Math.round(v), 0, 255);
+  return '#' + ((1 << 24) | (q(r) << 16) | (q(g) << 8) | q(b)).toString(16).slice(1);
+}
+const relLum = (c) => (SHADE.lum[0] * c[0] + SHADE.lum[1] * c[1] + SHADE.lum[2] * c[2]) / 255;
+// Round the hue circle, keeping saturation and value. shade() cannot do this —
+// it can only take a tone up or down its own hue, which is exactly why every
+// decal came out as the same green at a different brightness.
+function hueRot(col, deg){
+  const M = Math.max(col[0], col[1], col[2]), m = Math.min(col[0], col[1], col[2]), d = M - m;
+  if (d < 1e-6 || M < 1e-6) return col.slice();
+  let h = M === col[0] ? ((col[1] - col[2]) / d + 6) % 6
+        : (M === col[1] ? (col[2] - col[0]) / d + 2 : (col[0] - col[1]) / d + 4);
+  h = ((h * 60 + deg) % 360 + 360) % 360;
+  const s = d / M, v = M / 255;
+  const i = Math.floor(h / 60), f = h / 60 - i;
+  const p = v * (1 - s), q = v * (1 - s * f), w = v * (1 - s * (1 - f));
+  const T = [[v, w, p], [q, v, p], [p, v, w], [p, q, v], [w, p, v], [v, p, q]][i % 6];
+  return [T[0] * 255, T[1] * 255, T[2] * 255];
+}
+// What a decal should LOOK like once it is finished: the ground's own colour,
+// rotated off the hue circle and lifted. The lift is proportional rather than
+// a flat number of stops, because +.04 on the bright corner of the sward and
+// +.04 on the dark one are not the same amount of daylight.
+function decalTint(hex, deg, lift){
+  const b = rgbOf(hex), r = hueRot(b, deg);
+  const l0 = relLum(b), l1 = relLum(r);
+  const k = l1 > 1e-6 ? l0 * (1 + lift) / l1 : 1;
+  return [r[0] * k, r[1] * k, r[2] * k];
+}
+// ...and what colour to actually hand the fill. These are painted as a WASH,
+// so at alpha a you only ever get a of the way from the ground to the colour
+// you named: pick the finished tint and wash it and you ship a third of the
+// shift you asked for. Solve backwards from the composite over the base.
+function washFor(base, target, a){
+  const f = (i) => base[i] + (target[i] - base[i]) / a;
+  return hexOf(f(0), f(1), f(2));
+}
+const composite = (over, under, a) => [0, 1, 2].map(i => under[i] * (1 - a) + over[i] * a);
+// The sward, as a table, so the gradient that paints it and the decals that
+// have to be solved against it read the SAME ground colour. They did not
+// before, which is half of why the decals landed nowhere near their target.
+const SWARD = [[0, '#6d9a52'], [.38, '#548046'], [.78, '#456839'], [1, '#33512f']];
+function swardAt(t){
+  const u = clamp(t, 0, 1);
+  for (let i = 1; i < SWARD.length; i++)
+    if (u <= SWARD[i][0])
+      return mixHex(SWARD[i - 1][1], SWARD[i][1], (u - SWARD[i - 1][0]) / (SWARD[i][0] - SWARD[i - 1][0]));
+  return SWARD[SWARD.length - 1][1];
+}
+// Every dark mark on the turf, at one strength. It is a FLOOR as much as a
+// colour: there is a ceiling on how far a decal may be lifted, because past it
+// a shadow that falls on a decal comes back out at exactly open-grass value
+// and vanishes where it lands — the same bug as before with the polarity
+// flipped. A test composites every shadow over every decal over every tone of
+// the sward and holds the margin open.
+const GROUND_SHADE = { col:'20,34,18', a:.30 };
+const groundShadow = (a) => 'rgba(' + GROUND_SHADE.col + ',' + Math.max(GROUND_SHADE.a, a || 0) + ')';
+// hue, proportional lift, and the alpha its wash composites to at the middle
+// of the patch. The last one is the bare scrape of dry earth: a long way round
+// the circle, so it needs a heavier wash to reach its target without leaving
+// the gamut.
+//
+// A decal is laid down as two overlapping lobes rather than one ellipse, so it
+// has a lumpy edge instead of the rim of a coin — a correctly measured tint in
+// the shape of a disc is still a disc, and the first pass of this came back
+// looking like lily pads. Both lobes are the same colour at the same alpha, so
+// where they overlap the patch composites at 1-(1-p)^n: that is the figure the
+// colour is solved for, and decalPass() is what each lobe is actually painted
+// at. Two and not three, and both of them small: this is the only thing on the
+// mesa that costs real time — one radial gradient each is prettier and costs
+// seven milliseconds a frame, and a third lobe costs one and a half.
+const DECAL = { tone:[[-12, .10, .36], [-17, .075, .36], [-7, .12, .36], [-34, .11, .45]], slots:8 };
+const DECAL_LOBES = [[0, 0, 1], [-.38, -.26, .68]];
+// Spelled as a root and not as Math.pow, for the reason hyp() exists: nothing
+// in this file may raise anything to a power where two machines could compare
+// notes. Nothing ever compares an alpha — but the rule is cheaper to keep than
+// to argue about.
+const decalPass = (a) => 1 - (DECAL_LOBES.length === 3 ? Math.cbrt(Math.max(0, 1 - a)) : Math.sqrt(Math.max(0, 1 - a)));
+let decalLut = null;
+function decalWash(tone, t){
+  if (!decalLut){
+    decalLut = DECAL.tone.map(([h, lift, a]) => {
+      const row = [];
+      for (let i = 0; i < DECAL.slots; i++){
+        const base = swardAt(i / (DECAL.slots - 1));
+        row.push(washFor(rgbOf(base), decalTint(base, h, lift), a));
+      }
+      return row;
+    });
+  }
+  const k = ((tone | 0) % DECAL.tone.length + DECAL.tone.length) % DECAL.tone.length;
+  return decalLut[k][clamp(Math.round(clamp(t, 0, 1) * (DECAL.slots - 1)), 0, DECAL.slots - 1)];
+}
+const rgbStr = (hex) => { const c = rgbOf(hex); return c[0] + ',' + c[1] + ',' + c[2]; };
+const decalAlpha = (tone) => DECAL.tone[((tone | 0) % DECAL.tone.length + DECAL.tone.length) % DECAL.tone.length][2];
+
+/* ---------------------------------------------------------------- the lip
+   The largest shape in the hold framing was one dead straight stair-stepping
+   diagonal, corner to corner: grass at full saturation running to a razor line
+   and stopping, with no thickness and no visible side. A horizon that is one
+   straight line is the tell — it says nothing in the picture is a place.
+
+   The edge is resampled every ~12px and displaced along its own outward normal
+   with fBm, off the game's stable hash2 and never Math.random or rnd(): this
+   is cosmetic and netHash() must never be able to see it.
+
+   Everything in here is in WORLD units and cached per hold, which is the whole
+   trade. The shape does not have to be rebuilt when the camera moves, and it
+   does not morph as you zoom — a coastline that reflows under a zoom is worse
+   than the straight line it replaced.                                       */
+const EDGE = { step:1.5, amp:.80, oct:4, roll:1.35, ao:3.4, tufts:2, lip:.55 };
+// Value noise on the game's own hash, smoothstepped between integers.
+function vnoise(t, seed){
+  const i = Math.floor(t), f = t - i, u = f * f * (3 - 2 * f);
+  return lerp(hash2(i, seed), hash2(i + 1, seed), u);
+}
+// Four octaves of it. A sum of octaves CROWDS ITS OWN MEAN — the tails cancel
+// — so an unstretched fBm is a straight line with a tremble in it, which is
+// precisely the failure this edge exists to fix. edgeFor() stretches the
+// finished run to span its full range before it displaces anything, and a test
+// holds it to that.
+function fbm1(t, seed){
+  let s = 0, a = 1, f = 1, n = 0;
+  for (let o = 0; o < EDGE.oct; o++){
+    s += a * (vnoise(t * f, seed + o * 37) - .5);
+    n += a * .5; a *= .55; f *= 2.13;
+  }
+  return n > 0 ? s / n : 0;
+}
+const edgeCache = [null, null];
+function edgeFor(side){
+  if (edgeCache[side]) return edgeCache[side];
+  const inner = side === 0 ? 3 : C.LANE_LEN - 3;
+  const outer = inner - (side === 0 ? 1 : -1) * (PLAT.back + 34);
+  const cx = (inner + outer) / 2, cy = (PLAT.far + PLAT.near) / 2;
+  const out = {};
+  const faces = platFaces(side);
+  for (let fi = 0; fi < faces.length; fi++){
+    const f = faces[fi];
+    const ax = f.a[0], ay = f.a[1], bx = f.b[0], by = f.b[1];
+    const L = hyp(bx - ax, by - ay) || 1;
+    const n = clamp(Math.round(L / EDGE.step), 8, 220);
+    // The outward normal, derived from where the mesa's middle is rather than
+    // from the face's name — the two holds mirror, and a hard-coded direction
+    // turns one island's coastline inside out.
+    let nx = -(by - ay) / L, ny = (bx - ax) / L;
+    if (nx * ((ax + bx) / 2 - cx) + ny * ((ay + by) / 2 - cy) < 0){ nx = -nx; ny = -ny; }
+    const seed = fi * 91 + side * 13 + 3;
+    const raw = [];
+    for (let i = 0; i <= n; i++) raw.push(fbm1(i * EDGE.step * .30, seed));
+    let lo = Infinity, hi = -Infinity;
+    for (const v of raw){ if (v < lo) lo = v; if (v > hi) hi = v; }
+    const mid = (lo + hi) / 2, half = Math.max(1e-6, (hi - lo) / 2);
+    const pts = [];
+    for (let i = 0; i <= n; i++){
+      const t = i / n;
+      // the corners have to meet the corners, or the island tears open there
+      const w = clamp(Math.min(t, 1 - t) / .07, 0, 1);
+      const dsp = (raw[i] - mid) / half * EDGE.amp * (w * w * (3 - 2 * w));
+      pts.push([lerp(ax, bx, t) + nx * dsp, lerp(ay, by, t) + ny * dsp, dsp]);
+    }
+    // Tufts straddling the line — half of every one of them hangs out over the
+    // drop, which is what stops the join reading as a cut.
+    const tuft = [];
+    for (let i = 0; i < n; i++) for (let j = 0; j < EDGE.tufts; j++){
+      const r = hash2(i * 2.7 + j * 13.1 + fi * 57, side * 7 + j * 3.3 + 1);
+      const r2 = hash2(i * 5.3 + j * 3.7, fi * 11 + side * 4 + 4.1);
+      const r3 = hash2(j * 9.1 + i * 1.7, fi * 3.3 + side * 21 + 2);
+      if (r3 < .20) continue;
+      const u = clamp((i + r) / n, 0, 1) * n;
+      const k0 = clamp(Math.floor(u), 0, n - 1), fr = u - k0;
+      const px = lerp(pts[k0][0], pts[k0 + 1][0], fr), py = lerp(pts[k0][1], pts[k0 + 1][1], fr);
+      const off = (r2 - .5) * 1.6;
+      tuft.push({ x:px + nx * off, y:py + ny * off, h:.26 + r2 * .44,
+                  w:.09 + r * .09, lean:(r3 - .5) * .55, dark:r > .48 });
+    }
+    out[f.k] = { pts, tuft, nx, ny, span:hi - lo };
+  }
+  edgeCache[side] = out;
+  return out;
+}
+// The mesa's silhouette as ONE closed ring: the far edge (straight, and buried
+// in the valley haze where nobody can see it) plus the three displaced coasts.
+// The sward is filled with this instead of with its four corners, so the
+// displacement moves the actual green/rock boundary rather than a decoration
+// painted near it.
+function edgeRing(side, e){
+  const inner = side === 0 ? 3 : C.LANE_LEN - 3;
+  const outer = inner - (side === 0 ? 1 : -1) * (PLAT.back + 34);
+  const E = edgeFor(side), ring = [e(outer, PLAT.far)];
+  const walk = (k, rev) => {
+    const P = E[k].pts;
+    for (let i = 0; i < P.length; i++){ const q = P[rev ? P.length - 1 - i : i]; ring.push(e(q[0], q[1])); }
+  };
+  walk('inner', false); walk('near', true); walk('outer', true);
+  return ring;
+}
+// Is this coast in shot? From your own hold the far side of the island is
+// always behind you, and the lip is the most expensive thing on the mesa —
+// three bands, two strokes and a hundred tufts for a stretch of ground that is
+// four hundred pixels off the left of the screen.
+function edgeOnScreen(side, k, e){
+  const P = edgeFor(side)[k].pts;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (let i = 0; i < P.length; i += 6){
+    const p = e(P[i][0], P[i][1]);
+    if (p[0] < x0) x0 = p[0];
+    if (p[0] > x1) x1 = p[0];
+    if (p[1] < y0) y0 = p[1];
+    if (p[1] > y1) y1 = p[1];
+  }
+  return x1 > -60 && x0 < LW + 60 && y1 > -60 && y0 < LH + 60;
+}
+
 function drawPlateau(c){
   const d = holdSide === 0 ? 1 : -1;
   const inner = holdSide === 0 ? 3 : C.LANE_LEN - 3;         // where it meets the bridge
@@ -10941,15 +11169,23 @@ function drawPlateau(c){
     // Where the turf stops and the rock starts: a weathered lip that catches
     // the light, and under it the hard shadow of the overhang. This join used
     // to be a single flat line, which is the one thing a cliff edge never is.
-    // The caprock: the band of soil and weathered stone the turf sits on. Its
-    // underside is ragged, because that is where the cliff is coming apart.
-    for (let j = 0; j < 6; j++){
-      const rj = hash2(j * 8.3 + holdSide * 29, 4.1);
-      const t0 = j / 6, t1 = (j + 1.03) / 6;
-      c.globalAlpha = .70;
-      q(t0, t1, .10, -.35 - rj * .35, shade(f.lip, f.lit * 1.42));
-      c.globalAlpha = .60;
-      q(t0, t1, -.35 - rj * .35, -1.6 - rj * 1.9, shade(f.lip, f.lit * .62));
+    // The caprock: the band of soil and weathered stone the turf sits on. It
+    // follows the displaced coastline rather than the straight face, so the
+    // island has a visible SIDE — the edge had no thickness at all, and a
+    // landmass with no thickness is a sticker. Two strips, walked once, with a
+    // ragged underside because that is where the cliff is coming apart.
+    if (edgeOnScreen(holdSide, f.k, e)) {
+      const P = edgeFor(holdSide)[f.k].pts;
+      const rag = (i) => hash2(i * .77 + holdSide * 29, f.k.length * 4.1 + 2);
+      const strip = (za, zb, col, a) => {
+        const g = [];
+        for (let i = 0; i < P.length; i++) g.push(e(P[i][0], P[i][1], za(i)));
+        for (let i = P.length - 1; i >= 0; i--) g.push(e(P[i][0], P[i][1], zb(i)));
+        c.globalAlpha = a; poly(c, g, col);
+      };
+      strip(() => .10, (i) => -.35 - rag(i) * .40, shade(f.lip, f.lit * 1.42), .70);
+      strip((i) => -.35 - rag(i) * .40, (i) => -1.6 - rag(i) * 2.0, shade(f.lip, f.lit * .62), .60);
+      c.globalAlpha = 1;
     }
     for (let i = 0; i < 3; i++){                     // ambient occlusion under the lip
       c.globalAlpha = .34 - i * .10;
@@ -10972,75 +11208,114 @@ function drawPlateau(c){
   // gradient over it is two fills of the largest quad in the game every frame,
   // for a result one fill can state.
   const K = [e(outer, F), e(inner, F), e(inner, N), e(outer, N)];
-  {
+  // The gradient still spans the mesa's four corners — a coastline that moved
+  // the light with it would be a different bug — but the FILL is the displaced
+  // ring, so the green/rock boundary itself wanders instead of a decoration
+  // painted along a straight one.
+  const gradT = (() => {
     const xs = K.map(p => p[0]), ys = K.map(p => p[1]);
     const x0 = Math.min(...xs), x1 = Math.max(...xs);
     const y0 = Math.min(...ys), y1 = Math.max(...ys);
-    // from the corner nearest the sun to the one furthest from it
-    const gg = c.createLinearGradient(lerp(x0, x1, SUN.x), y0, lerp(x1, x0, SUN.x), y1);
-    gg.addColorStop(0, '#6d9a52');
-    gg.addColorStop(.38, '#548046');
-    gg.addColorStop(.78, '#456839');
-    gg.addColorStop(1, '#33512f');
-    poly(c, K, gg);
-  }
-  // Dapple: patches of longer and shorter grass, each with the shaded side it
-  // would have if it were a real clump of anything.
+    const gx0 = lerp(x0, x1, SUN.x), gx1 = lerp(x1, x0, SUN.x);
+    const gg = c.createLinearGradient(gx0, y0, gx1, y1);
+    for (const [stop, col] of SWARD) gg.addColorStop(stop, col);
+    poly(c, edgeRing(holdSide, e), gg);
+    const vx = gx1 - gx0, vy = y1 - y0, len = vx * vx + vy * vy || 1;
+    return (px, py) => clamp(((px - gx0) * vx + (py - y0) * vy) / len, 0, 1);
+  })();
+  // Dapple. Every one of these used to be the ground's own green at a
+  // different brightness, which made it a mark that looked exactly like a cast
+  // shadow. Each is now solved BACKWARDS from what it has to composite to over
+  // the sward beneath it — hue-shifted and lifted, never darkened — so the
+  // only dark marks left on this turf are shadows.
   for (const g of grassFor(holdSide)){
     const p = e(g.x, g.y);
     if (p[0] < -90 || p[0] > LW + 90 || p[1] < -70 || p[1] > LH + 70) continue;
     const rw = g.rw * .96 * S, rh = g.rh * .60 * S;
+    const col = decalWash(g.tone, gradT(p[0], p[1]));
     if (g.k){
-      // a clump: a few overlapping heads, the sunward one brightest
-      c.globalAlpha = g.a * 1.5;
+      // a clump: a few overlapping heads, the sunward one brightest, and the
+      // shadow it throws — which is the one thing here allowed to be dark
       const o = shadowOff(rw, rh);
-      ell(c, p[0] + o[0], p[1] + o[1], rw * .9, rh * .9, '#33512e');
+      ell(c, p[0] + o[0], p[1] + o[1], rw * .9, rh * .9, groundShadow(GROUND_SHADE.a));
+      c.globalAlpha = decalAlpha(g.tone);
       for (let j = 0; j < 2; j++){
         const hx = p[0] + (j - .5) * rw * .62, hy = p[1] - j * rh * .2;
-        c.globalAlpha = g.a * 2.1;
-        ell(c, hx, hy, rw * .68, rh * .76, shade(g.col, j === 0 ? 1.18 : .86));
+        ell(c, hx, hy, rw * .68, rh * .76, shade(col, j === 0 ? 1.14 : .96));
       }
     } else {
-      // a tonal wash: no edge, no ring, just ground that is not all one green
-      c.globalAlpha = g.a;
-      ell(c, p[0], p[1], rw, rh, g.col);
-      c.globalAlpha = g.a * .5;
-      ell(c, p[0] - rw * .18, p[1] - rh * .22, rw * .68, rh * .64, shade(g.col, 1.14));
+      // a tonal wash: no edge, no ring, just ground that is not all one green.
+      // Soft-edged, because a flat ellipse at a measured tint is a measured
+      // tint in the shape of a coin. Its middle composites at exactly the
+      // alpha its colour was solved for — wash it at any other and it lands
+      // somewhere else entirely — and it falls off to nothing at the rim.
+      c.globalAlpha = decalPass(decalAlpha(g.tone));
+      for (const [ox, oy, k] of DECAL_LOBES)
+        ell(c, p[0] + rw * ox, p[1] + rh * oy, rw * k, rh * k, col);
     }
   }
   c.globalAlpha = 1;
+  // ---------------------------------------------------------------- the lip
   // The turf goes dark where the ground is about to drop away, because there
-  // is nothing under it bouncing light back up. Without it the grass ends on a
-  // razor line and the island reads as a sticker.
+  // is nothing under it bouncing light back up; then the rim catches the sun;
+  // then tufts straddle the line so the join is not a cut. All of it walks the
+  // displaced coastline. See EDGE.
   for (const f of platFaces(holdSide)){
-    const ax = f.a[0], ay = f.a[1], bx = f.b[0], by = f.b[1];
-    const inx = (ay === N && by === N) ? 0 : -d * 5, iny = (ay === N && by === N) ? -5 : 0;
-    for (let i = 0; i < 3; i++){
-      const u0 = i / 3, u1 = (i + 1) / 3;
-      c.globalAlpha = .13 + i * .15;
-      poly(c, [
-        e(ax + inx * (1 - u0), ay + iny * (1 - u0)), e(bx + inx * (1 - u0), by + iny * (1 - u0)),
-        e(bx + inx * (1 - u1), by + iny * (1 - u1)), e(ax + inx * (1 - u1), ay + iny * (1 - u1)),
-      ], '#25401f');
-    }
-    // The very rim of the turf, catching the light before the ground falls out
-    // from under it — and, hanging over it, the grass that grew past the edge.
-    // A cliff top that ends on a clean cut is a cut, not an edge.
-    c.globalAlpha = .5;
-    poly(c, [e(ax, ay), e(bx, by), e(bx + inx * .16, by + iny * .16), e(ax + inx * .16, ay + iny * .16)],
-      f.lit > 1 ? '#a8d47e' : '#7fa862');
+    if (!edgeOnScreen(holdSide, f.k, e)) continue;
+    const E = edgeFor(holdSide)[f.k], P = E.pts, nx = E.nx, ny = E.ny;
+    // The inward roll: the shadow the lip throws back on itself. Hard at the
+    // edge, gone a few paces in.
+    const roll = (o0, o1, a) => {
+      const g = [];
+      for (let i = 0; i < P.length; i++) g.push(e(P[i][0] - nx * o0, P[i][1] - ny * o0));
+      for (let i = P.length - 1; i >= 0; i--) g.push(e(P[i][0] - nx * o1, P[i][1] - ny * o1));
+      c.globalAlpha = a; poly(c, g, '#25401f');
+    };
+    roll(EDGE.roll * .55, EDGE.ao, .12);
+    roll(0, EDGE.roll * .55, .28);
     c.globalAlpha = 1;
-    for (let j = 0; j < 18; j++){
-      const rj = hash2(j * 3.9 + holdSide * 37, 8.6), rj2 = hash2(j * 6.7, 2.4);
-      if (rj2 < .34) continue;
-      const t = (j + rj) / 18;
-      const gx = lerp(ax, bx, t), gy2 = lerp(ay, by, t);
-      const p0 = e(gx, gy2, .05), p1 = e(gx, gy2, -.45 - rj2 * .7);
-      const w = (.6 + rj * .9) * LS() * .12;
-      c.globalAlpha = .55;
-      poly(c, [[p0[0] - w, p0[1]], [p0[0] + w, p0[1]], [p1[0] + w * .3, p1[1]], [p1[0] - w * .5, p1[1]]],
-        rj > .5 ? '#3f6b34' : '#4d7c3c');
-      c.globalAlpha = 1;
+    // The rim itself, stroked rather than filled — a stroke is anti-aliased
+    // along its whole length, and the thing this edge was accused of was being
+    // a stair-stepping line.
+    c.lineJoin = 'round'; c.lineCap = 'round';
+    c.beginPath();
+    for (let i = 0; i < P.length; i++){
+      const p = e(P[i][0], P[i][1]);
+      if (i === 0) c.moveTo(p[0], p[1]); else c.lineTo(p[0], p[1]);
+    }
+    c.strokeStyle = f.lit > 1 ? '#a8d47e' : '#7fa862';
+    c.globalAlpha = .20; c.lineWidth = Math.max(2, 3.2 * bu()); c.stroke();
+    c.globalAlpha = .55; c.lineWidth = Math.max(1, 1.2 * bu()); c.stroke();
+    c.globalAlpha = 1;
+    c.lineJoin = 'miter'; c.lineCap = 'butt';
+  }
+  // A few hundred tufts along the whole coastline, batched into two paths —
+  // one per tone. Canvas charges by the draw call, not by the point, so this
+  // is two fills for the lot of them rather than three hundred. Zoomed out
+  // past the point where a tuft is a pixel tall they are skipped outright:
+  // paying for three hundred sub-pixel triangles buys a slightly different
+  // shade of green. On PLOT_DETAIL and not on a threshold of its own — the
+  // hold already has one gate for "close enough to spell things out", and a
+  // second one a hundredth of a zoom away is how detail levels drift apart.
+  for (let k = 0; k < 2 && cam.z > PLOT_DETAIL; k++){
+    c.beginPath();
+    let any = false;
+    for (const f of platFaces(holdSide)){
+      if (!edgeOnScreen(holdSide, f.k, e)) continue;
+      for (const T of edgeFor(holdSide)[f.k].tuft){
+        if ((T.dark ? 1 : 0) !== k) continue;
+        const b0 = e(T.x, T.y), tp = e(T.x, T.y, T.h);
+        if (b0[0] < -40 || b0[0] > LW + 40 || b0[1] < -40 || b0[1] > LH + 40) continue;
+        const w = Math.max(.7, T.w * S);
+        c.moveTo(b0[0] - w, b0[1]); c.lineTo(b0[0] + w, b0[1]);
+        c.lineTo(tp[0] + T.lean * S * .18, tp[1]);
+        c.closePath(); any = true;
+      }
+    }
+    if (any){
+      c.globalAlpha = k ? .70 : .58;
+      c.fillStyle = k ? '#3d6a33' : '#93c86f';
+      c.fill();
     }
   }
   c.globalAlpha = 1;
@@ -11065,7 +11340,6 @@ function grassFor(side){
   const inner = side === 0 ? 3 : C.LANE_LEN - 3;
   const outer = inner - (side === 0 ? 1 : -1) * (PLAT.back + 34);
   const x0 = Math.min(inner, outer), x1 = Math.max(inner, outer);
-  const COLS = ['#54804a', '#436236', '#5b8a4e', '#6b6042'];
   const out = [];
   // Two things share this list. The big soft washes say the field is not all
   // one green; the clumps are the things actually growing in it. One flat fill
@@ -11074,12 +11348,14 @@ function grassFor(side){
   for (let i = 0; i < 34; i++){
     const hx = hash2(i * 3 + 1 + side * 97, 7), hy = hash2(11, i * 5 + 3 + side * 53);
     const k = hash2(i + side * 31, i * 2 + 5);
-    const ci = k > .90 ? 3 : (k > .58 ? 2 : (k > .28 ? 1 : 0));
+    // Which tint, not which brightness. The last one is the bare scrape of dry
+    // earth — the only decal that leaves the greens, and it goes YELLOWER and
+    // BRIGHTER, because dry earth in sunlight is not a dark patch.
+    const tone = k > .90 ? 3 : (k > .58 ? 2 : (k > .28 ? 1 : 0));
     const rw = 5 + hash2(i, 13) * 12;
     out.push({
       x:x0 + hx * (x1 - x0), y:PLAT.far + 4 + hy * (PLAT.near - PLAT.far - 8),
-      rw, rh:rw * (.5 + hash2(i, 19) * .3), k:0,
-      col:COLS[ci], a:ci === 3 ? .13 : .10 + hash2(i, 23) * .09,
+      rw, rh:rw * (.5 + hash2(i, 19) * .3), k:0, tone,
     });
   }
   for (let i = 0; i < 36; i++){
@@ -11089,7 +11365,7 @@ function grassFor(side){
     out.push({
       x:x0 + hx * (x1 - x0), y:PLAT.far + 4 + hy * (PLAT.near - PLAT.far - 8),
       rw, rh:rw * (.62 + hash2(i, 43) * .3), k:1,
-      col:COLS[k > .78 ? 2 : (k > .34 ? 0 : 1)], a:.10 + hash2(i, 47) * .07,
+      tone:k > .78 ? 2 : (k > .34 ? 0 : 1),
     });
   }
   grassCache[side] = out;
@@ -12966,6 +13242,7 @@ function loadMatch(pack){
   }
   scatterCache[0] = scatterCache[1] = null;
   grassCache[0] = grassCache[1] = null;
+  edgeCache[0] = edgeCache[1] = null;
   rebuildGrid();
   return null;
 }
@@ -13695,6 +13972,7 @@ function netLoad(p){
   G.state = p.state; G.winner = p.winner;
   scatterCache[0] = scatterCache[1] = null;
   grassCache[0] = grassCache[1] = null;
+  edgeCache[0] = edgeCache[1] = null;
   rebuildGrid();
   reseed(p.seed);                       // last, so nothing above can disturb it
   return true;
@@ -14090,6 +14368,8 @@ window.IB = {
   lp, unproject, holdWorld, HOLD_X, TILE, tileGX, tileGY, CAM_MIN, CAM_MAX, dockHtml,
   resolvePick, clickTargets, nodeLvl, nodeCap, nodeRate, upgradeNode, nodeUpCost, NODES, NODE_UPGRADABLE,
   adviceFor, drawPlateau, PLAT, shake, scatterFor, scatterCache, grassFor, grassCache, ROAD, KEEP, drawGround,
+  EDGE, edgeFor, edgeCache, edgeRing, edgeOnScreen, vnoise, fbm1, SWARD, swardAt, DECAL, decalWash, decalAlpha,
+  decalTint, washFor, composite, hueRot, rgbOf, hexOf, rgbStr, decalPass, DECAL_LOBES, relLum, GROUND_SHADE, groundShadow, mixHex,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
   abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, TRAINEE, trainCrew, trainSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
