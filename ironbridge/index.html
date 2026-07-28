@@ -9502,6 +9502,35 @@ const fxAir = () => G.fx.filter(p => !fxOnDeck(p));
 
    All of it is downstream of the simulation, reads only fields the spawners
    already wrote, and is never hashed.                                       */
+/* ------------------------------------------------- the effects, in batches
+   Every hot particle set the canvas to `lighter`, drew three blobs, and set it
+   straight back — two composite changes each, for every spark in the air.
+   Counted on one phone frame at the effect cap: 588 of them, plus 884 blits,
+   costing 14.7ms. That is the drop the moment the minions actually fight, and
+   a blend mode that has to read the destination back before it can write it is
+   the most expensive thing there is to ask a tile-based mobile GPU for — every
+   change can force it to resolve the tile it is working on.
+
+   Almost none of those changes changed anything. Particles arrive in bursts,
+   and every spark in a burst is the same kind of spark, so the mode it wants
+   is the mode the one before it wanted. Tracking what the canvas is actually
+   set to collapses a burst of six from twelve changes to one, and it does it
+   WITHOUT reordering anything — an additive pass sorted to the front would be
+   cheaper still and would change which sparks land on top of which.
+
+   The pass restores the mode when it is done, so the layer still hands the
+   canvas back the way it was handed over — a rule the suite checks.        */
+let fxMode = 'source-over';
+function fxComp(c, m){
+  if (fxMode === m) return;
+  c.globalCompositeOperation = m;
+  fxMode = m;
+}
+// Anything that draws effects has to bracket itself with these, because the
+// tracker is only telling the truth about the canvas between them.
+function fxBatchStart(){ fxMode = 'source-over'; }
+function fxBatchEnd(c){ if (fxMode !== 'source-over'){ c.globalCompositeOperation = 'source-over'; fxMode = 'source-over'; } }
+
 function drawFx(c, p){
   const a = clamp(p.t / p.dur, 0, 1);
   if (p.k === 'p'){
@@ -9517,7 +9546,7 @@ function drawFx(c, p){
     if (a > .9) pr *= 1 + (a - .9) * 2.4;         // the frame it is born in
     if (heat > .3){
       const f = fxFlick(p);
-      c.globalCompositeOperation = 'lighter';
+      fxComp(c, 'lighter');
       // the halo it throws — wide, weak, and streaked hardest, because the
       // glow of a moving coal smears further than the coal does
       c.globalAlpha = clamp(a * a * (.38 + .38 * f) * (.5 + .5 * heat), 0, 1);
@@ -9528,8 +9557,8 @@ function drawFx(c, p){
       // and the coal at the middle, hot enough to read as white
       c.globalAlpha = clamp(a * (.62 + .38 * f), 0, 1);
       fxBlob(c, q[0], q[1], pr * .46, fxMix(p.col, .8), 'glow', ang, 1 + (stretch - 1) * .35);
-      c.globalCompositeOperation = 'source-over';
     } else {
+      fxComp(c, 'source-over');
       // A solid fragment in a cloud of its own dust. The dust is slower than
       // the fragment — it is left behind rather than thrown — so it barely
       // streaks; the fragment does, and it is opaque, and it is LIT: one
@@ -9562,6 +9591,7 @@ function drawFx(c, p){
       }
     }
   } else if (p.k === 'ring'){
+    fxComp(c, 'source-over');
     // ---- a mark on the boards. Height is ignored on purpose: this is a
     // ripple ON the deck, not something in the air above it.
     const q = lp(p.x, p.y);
@@ -9569,6 +9599,7 @@ function drawFx(c, p){
     const rx = p.r * LS() * g;
     fxRipple(c, q[0], q[1], rx, rx * .55, p.col, a, rippleW(2.5, a), 1 - fxHeat(p.col));
   } else if (p.k === 'ghost'){
+    fxComp(c, 'source-over');
     // ---- where a hero was a fraction of a second ago. A soft silhouette and
     // not a hard oval: an afterimage is light left on the eye.
     const q = lp(p.x, p.y);
@@ -9578,21 +9609,19 @@ function drawFx(c, p){
     // ---- the pop. Nothing but light, and gone in two frames.
     const q = lp(p.x, p.y, p.z);
     const r = p.r * LS() * (1.35 - a * .35);
-    c.globalCompositeOperation = 'lighter';
+    fxComp(c, 'lighter');
     c.globalAlpha = a * a * .8;
     fxFlat(c, q[0], q[1], r * 1.15, r * .85, p.col, 'glow');
     c.globalAlpha = a * a;
     fxFlat(c, q[0], q[1], r * .45, r * .36, fxMix(p.col, .75), 'glow');
-    c.globalCompositeOperation = 'source-over';
   } else if (p.k === 'bolt'){
     const q = lp(p.x, p.y, .8), q2 = lp(p.x2, p.y2, .8);
     c.lineCap = 'round';
-    c.globalCompositeOperation = 'lighter';
+    fxComp(c, 'lighter');
     c.globalAlpha = a * .32; c.strokeStyle = p.col; c.lineWidth = 6 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
     c.globalAlpha = a; c.strokeStyle = fxMix(p.col, .7); c.lineWidth = 2.4 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
-    c.globalCompositeOperation = 'source-over';
     c.lineCap = 'butt';
   } else if (p.k === 'beam'){
     // ---- a thrown bolt, or a shaft falling out of the sky. Three weights of
@@ -9605,7 +9634,7 @@ function drawFx(c, p){
     const q = lp(p.x, p.y, .9), q2 = lp(p.x2, p.y2, .9);
     const w = p.w * cam.z;
     c.lineCap = 'round';
-    c.globalCompositeOperation = 'lighter';
+    fxComp(c, 'lighter');
     c.globalAlpha = a * a * .30; c.strokeStyle = fxMix(p.col, -.1); c.lineWidth = p.w * 4.4 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(q2[0], q2[1]); c.stroke();
     c.globalAlpha = a * .35; c.strokeStyle = p.col; c.lineWidth = p.w * 2.2 * cam.z;
@@ -9616,7 +9645,6 @@ function drawFx(c, p){
     fxFlat(c, q2[0], q2[1], w * 2.6, w * 2.6, p.col, 'glow');
     c.globalAlpha = a * a * .5;
     fxFlat(c, q[0], q[1], w * 1.5, w * 1.5, p.col, 'glow');
-    c.globalCompositeOperation = 'source-over';
     c.lineCap = 'butt';
   } else if (p.k === 'arc'){
     // ---- a swept slash. It opens out as it fades, and it is TAPERED: the
@@ -9626,10 +9654,10 @@ function drawFx(c, p){
     const rx = p.r * LS() * (.7 + (1 - a) * .8), ry = rx * .55;
     const w0 = rippleW(3.4, a);
     c.lineCap = 'round';
-    c.globalCompositeOperation = 'lighter';
+    fxComp(c, 'lighter');
     c.globalAlpha = a * a * .5; c.strokeStyle = fxMix(p.col, -.08); c.lineWidth = w0 * 3.2;
     c.beginPath(); c.ellipse(q[0], q[1], rx, ry, p.a, -1.15, 1.15); c.stroke();
-    c.globalCompositeOperation = 'source-over';
+    fxComp(c, 'source-over');
     // the dark side of the blade, half a line under the sweep, so a slash over
     // pale boards has an edge instead of dissolving into them
     c.globalAlpha = a * .45; c.strokeStyle = fxMix(p.col, -.66); c.lineWidth = w0 * 1.7;
@@ -9637,7 +9665,7 @@ function drawFx(c, p){
     c.globalAlpha = a * .95; c.strokeStyle = p.col; c.lineWidth = w0;
     c.beginPath(); c.ellipse(q[0], q[1], rx, ry, p.a, -1.15, 1.15); c.stroke();
     // the hot edge, four segments running back from the point of the swing
-    c.globalCompositeOperation = 'lighter';
+    fxComp(c, 'lighter');
     c.strokeStyle = fxMix(p.col, .75);
     for (let i = 0; i < 4; i++){
       const u0 = i / 4, u1 = (i + 1) / 4;
@@ -9648,9 +9676,9 @@ function drawFx(c, p){
       c.ellipse(q[0], q[1], rx * (1 - .04 * u0), ry * (1 - .04 * u0), p.a, 1.15 - u1 * 2.3, 1.15 - u0 * 2.3);
       c.stroke();
     }
-    c.globalCompositeOperation = 'source-over';
     c.lineCap = 'butt';
   } else if (p.k === 'wave'){
+    fxComp(c, 'source-over');
     // ---- a shockwave. It leaves fastest at the instant it is made and then
     // decelerates, which is the difference between a blast and a hoop being
     // scaled up at a constant rate.
@@ -9671,23 +9699,23 @@ function drawFx(c, p){
     const mx = q[0] + (q2[0] - q[0]) * g;
     const my = q[1] + (q2[1] - q[1]) * g;
     c.lineCap = 'round';
-    c.globalCompositeOperation = 'lighter';
+    fxComp(c, 'lighter');
     c.globalAlpha = a * a * .4; c.strokeStyle = fxMix(p.col, -.05); c.lineWidth = 9 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
-    c.globalCompositeOperation = 'source-over';
+    fxComp(c, 'source-over');
     c.globalAlpha = a * .55; c.strokeStyle = p.col; c.lineWidth = 4.5 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
     c.globalAlpha = a; c.strokeStyle = p.col; c.lineWidth = 1.6 * cam.z;
     c.beginPath(); c.moveTo(q[0], q[1]); c.lineTo(mx, my); c.stroke();
-    c.globalCompositeOperation = 'lighter';
+    fxComp(c, 'lighter');
     c.globalAlpha = a * .9;
     fxFlat(c, mx, my, 5.5 * cam.z, 5.5 * cam.z, p.col, 'glow');
-    c.globalCompositeOperation = 'source-over';
     c.lineCap = 'butt';
   } else if (p.k === 'mote'){
     const q = lp(p.x, p.y, p.z);
     const mr = sparkR(p.r, a) * cam.z;
     if (p.sm){
+      fxComp(c, 'source-over');
       // ---- smoke. It expands, turns, and thins on a curve that keeps it
       // around long after a spark of the same age has gone. fxStep already
       // moves it the way smoke moves; all that was missing was the coat.
@@ -9718,7 +9746,7 @@ function drawFx(c, p){
       // neighbours — a drift of identical dots reads as a texture, and a
       // handful of brighter ones among them reads as a swarm.
       const big = (fxPhase(p) % 3) === 0 ? 1.5 : 1;
-      c.globalCompositeOperation = 'lighter';
+      fxComp(c, 'lighter');
       c.globalAlpha = clamp(a * a * (.40 + .35 * f), 0, 1);
       fxBlob(c, q[0], q[1], mr * 3.6 * big, p.col, 'glow', ang, stretch);
       c.globalAlpha = clamp(a * (.6 + .4 * f), 0, 1);
@@ -9728,7 +9756,6 @@ function drawFx(c, p){
         c.globalAlpha = clamp(a * (.75 + .25 * f), 0, 1);
         fxBlob(c, q[0], q[1], mr * .55, fxMix(p.col, .85), 'glow', ang, 1);
       }
-      c.globalCompositeOperation = 'source-over';
     }
   }
   c.globalAlpha = 1;
@@ -9839,7 +9866,7 @@ function floatPlan(c){
 
 function drawLane(c){
   // zones under everyone — and the ripples that share the deck with them
-  for (const p of fxDeck()) drawFx(c, p);
+  fxBatchStart(); for (const p of fxDeck()) drawFx(c, p); fxBatchEnd(c);
   for (const z of G.zones){
     const p = lp(z.x, z.y);
     const rx = z.r * LS() * .96, ry = z.r * LS() * .55;
@@ -9889,7 +9916,7 @@ function drawLane(c){
     else drawProj(c, d.o);
   }
   // ...and everything that is actually in the air, over them.
-  for (const p of fxAir()) drawFx(c, p);
+  fxBatchStart(); for (const p of fxAir()) drawFx(c, p); fxBatchEnd(c);
   // damage numbers. Their y is a world point, so they want the baseline sitting
   // ON that point rather than an em below it — which is what they were getting
   // by accident, and only whenever a hero happened to be on screen.
@@ -14932,7 +14959,7 @@ window.IB = {
   fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
-  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder, LANE_REACH, drawFx, fxOnDeck, DECK_FX, fxDeck, fxAir,
+  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder, LANE_REACH, fxComp, fxBatchStart, fxBatchEnd, drawFx, fxOnDeck, DECK_FX, fxDeck, fxAir,
   BODY_SHADOW, bodyShadowR, FLOAT_PAD, floatPlan, MINI_BODY, miniBodyR,
   STATUS, statusFade, spanN,
   HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
