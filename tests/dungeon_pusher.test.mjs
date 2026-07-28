@@ -5540,7 +5540,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // browser wiring
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf("tabBtn(LW / 2 - 2, TR('THIS MONTH'), 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
+  t.ok(src.indexOf("['monthly', TR('MONTH')]") >= 0, 'the board carries a MONTH tab');
   t.ok(src.indexOf('?board=lastmonth') >= 0, 'the title asks for last month’s champion');
   t.ok(src.indexOf('’S DEEPEST: ') >= 0, 'and hangs the plaque');
   t.ok(src.indexOf('MAKE A WISH') >= 0, 'the birthday crate waits for its day');
@@ -6308,7 +6308,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.TR('TAKE THE LAW'), 'AANVAARD DE WET', 'the weekly decree button translates');
   t.eq(D.TR('THE BOOK'), 'HET BOEK', 'the records tabs translate');
   t.eq(D.TR('TALES'), 'VERHALEN', 'the codex tales shelf translates');
-  t.eq(D.TR('THIS MONTH'), 'DEZE MAAND', 'the monthly board tab translates');
+  t.eq(D.TR('MONTH'), 'MAAND', 'the monthly board tab translates');
   t.eq(D.TR('\u{1F4C5} DAILY'), '\u{1F4C5} DAGRUN', 'the daily chip translates');
   t.eq(D.TR('\u{1F381} STAKE'), '\u{1F381} INZET', 'the gift stake translates');
   t.eq(D.TR('Abandon the current run?'), 'De huidige run opgeven?', 'static confirm messages translate');
@@ -6326,7 +6326,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     "txt(TR(c.msg)",
     "full ? '✦' + TR(label) : TR(label)",
     "82, 30, TR(label)",
-    "TR('THIS MONTH'), 'monthly'",
+    "['monthly', TR('MONTH')]",
     "TR(spent ? '\\u{1F4C5} done!' : '\\u{1F4C5} DAILY')",
     "TR(S.weeklyPick ? '\\u{2696}\\u{FE0F} DECREE ON' : '\\u{2696}\\u{FE0F} THIS WEEK')",
     "TR('\\u{1F331} TODAY\\u2019S MAZE')",
@@ -6689,10 +6689,21 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const back = D.parseDuel(D.duelLink(seed, D.S.over.floor, 'Me'));
   t.ok(back && back.seed === (seed >>> 0) && back.floor === 9, 'the rematch link carries the SAME maze at the new bar');
   // the board grew its archive tab
-  t.ok(src.indexOf("tabBtn(LW / 2 + 94, TR('LAST MONTH'), 'lastmonth');") >= 0, 'the LAST MONTH tab stands');
-  t.ok(src.indexOf("mine.tab === 'lastmonth' ? '?board=lastmonth'") >= 0, 'and asks the API for the archive');
+  t.ok(src.indexOf("['lastmonth', TR('LAST MO.')]") >= 0, 'the LAST MONTH tab stands');
+  // the five rolling desks and the anti-cheat rail's client half
+  for (const tab of ["['daily', TR('TODAY')]", "['weekly', TR('WEEK')]",
+                     "['yearly', TR('YEAR')]", "['alltime', TR('ALL-TIME')]"]) {
+    t.ok(src.indexOf(tab) >= 0, 'the board carries the tab ' + tab);
+  }
+  t.ok(src.indexOf("weekly: '?board=weekly'") >= 0 && src.indexOf("yearly: '?board=yearly'") >= 0,
+       'and asks the API for the week and the year');
+  t.ok(src.indexOf("op: 'start'") >= 0, 'a fresh run asks the board for a RUN TOKEN');
+  t.ok(src.indexOf("op: 'carve'") >= 0 && src.indexOf("tok: run.tok") >= 0,
+       'and the carve presents it back');
+  t.ok(src.indexOf('tok: S.run.tok') >= 0, 'the token rides the run into the over screen');
+  t.ok(src.indexOf("lastmonth: '?board=lastmonth'") >= 0, 'and asks the API for the archive');
   D.setLang('nl');
-  t.eq(D.TR('LAST MONTH'), 'VORIGE MAAND', 'the archive tab speaks Dutch');
+  t.eq(D.TR('LAST MO.'), 'VORIGE MND', 'the archive tab speaks Dutch');
   t.eq(D.TR('\u{2694}\u{FE0F} REMATCH'), '\u{2694}\u{FE0F} REVANCHE', 'so does the rematch');
   D.setLang('en');
   // live: all four tabs stand on the sheet and the ring reaches them
@@ -6707,8 +6718,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   frames(6);
   t.ok(press('SKIP') || true, 'past the tale');
   t.ok(press('\u{1F3C5}', true), 'the board chip rings');
-  for (const tab of ['ALL-TIME', 'THIS MONTH', 'LAST MONTH']) {
-    t.ok(press(tab), 'board tab reachable: ' + tab);
+  for (const tab of ['TODAY', 'WEEK', 'MONTH', 'YEAR', 'ALL-TIME', 'LAST MO.']) {
+    t.ok(press(tab, true), 'board tab reachable: ' + tab);
   }
   K.kb.back(); frames(2);
 }
@@ -6839,7 +6850,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   K.kb.back(); frames(2);
   // the archive tab rings its bell
   press('\u{1F3C5}', true);
-  press('LAST MONTH');
+  press('LAST MO.', true);
   t.ok(K.S.ach.u.oldmoney, 'OLD MONEY rings on the archive tab');
   K.kb.back(); frames(2);
   // a rematch rings its bell (navigator is stubbed bare — the toast path)
@@ -6857,9 +6868,11 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.6', 'the keeper\'s scales ship as v1.7.6');
-  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('KEEPER\u2019S SCALES') >= 0)),
-       'and the notes carry the sell desk');
+  t.eq(D.VERSION, '1.7.7', 'the five-ledger board ships as v1.7.7');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('FIVE LEDGERS') >= 0)),
+       'and the notes carry the board');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('RUN TOKEN') >= 0)),
+       'and the anti-cheat rail');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REPLAY GHOST') >= 0)), 'and the notes carry the ghost');
   // roundtrip: the clock rides in base36, floors 2 up
   const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });

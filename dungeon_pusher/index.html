@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.7.7', notes: [
+    'THE DEEP BOARD KEEPS FIVE LEDGERS \u{1F3C5} — one carve now lands on TODAY, this WEEK, this MONTH, this YEAR and the ALL-TIME wall at once, each sweeping itself clean when its period turns. Every desk sits on one tab row behind the \u{1F3C5} button on the title screen',
+    'THE RUN TOKEN \u{1F512} — the board hands out a signed token when a run begins and demands it back when the run is carved. One token, one carve, expiring in a day, and a score is refused unless the run actually lasted long enough for its depth — so a forged floor-200 descent has to sit for twenty real minutes before it will land',
+    'the ledger throws out the impossible \u{1F6AB} — floors past 300 and kill counts no run could reach are refused outright, so the wall stays worth reading',
+  ] },
   { v: '1.7.6', notes: [
     'THE KEEPER’S SCALES \u{2696}\u{FE0F} — the merchant now BUYS your coins. His shelf has two desks: BUY takes gold, SELL COINS weighs your purse and pays out by mint — a plain gold coin fetches least, a LUCKY most. He buys low, so the spread stings, and SPECIAL coins he will not touch at all',
     'coins no longer buy wares directly \u{1FA99} — the shelf takes GOLD and only gold, so a fat purse reaches a relic the long way round: sell coins at the scales, then spend the gold. In exchange every ware now costs its TRUE worth (the old doubled gold tag is gone)',
@@ -223,6 +228,18 @@ const LANGS = {
     'TITLE': 'TITEL',
     '\u{1F392} BAG': '\u{1F392} TAS',
     'BAG': 'TAS',                 // the painted plate carries the icon itself
+    // the deep board's six desks (session 77)
+    'WEEK': 'WEEK',
+    'MONTH': 'MAAND',
+    'YEAR': 'JAAR',
+    'LAST MO.': 'VORIGE MND',
+    'week of': 'week van',
+    'the ledger would not take that carve': 'het grootboek weigerde die inkerving',
+    '(the run did not last long enough to be real)':
+      '(de run duurde te kort om echt te zijn)',
+    '(this run was already carved once)': '(deze run is al een keer ingekerfd)',
+    '(the run carried no valid token — reload and play a fresh run)':
+      '(de run had geen geldig teken — herlaad en speel een nieuwe run)',
     // the keeper's two desks (session 76: coins are sold, never spent)
     'BUY': 'KOPEN',
     'SELL COINS': 'MUNTEN VERKOPEN',
@@ -256,7 +273,6 @@ const LANGS = {
     '\u{1F30C} DEEP': '\u{1F30C} DIEP',
     '\u{1F3B2} HABITS': '\u{1F3B2} GEWOONTES',
     '\u{1F4D6} LEGACY': '\u{1F4D6} ERFENIS',
-    'THIS MONTH': 'DEZE MAAND',
     '(it lives on the real site — offline and local play can’t see it)':
       '(het bord leeft op de echte site — offline of lokaal spel ziet het niet)',
     'YES': 'JA',
@@ -302,7 +318,6 @@ const LANGS = {
     'the house arithmetic, in the open': 'het rekenwerk van het huis, open en bloot',
     // rematch + the months archive (session 78)
     '\u{2694}\u{FE0F} REMATCH': '\u{2694}\u{FE0F} REVANCHE',
-    'LAST MONTH': 'VORIGE MAAND',
     '\u{1F50D} SEARCH': '\u{1F50D} ZOEK',
     'no relic answers to': 'geen relikwie luistert naar',
     'LAKE': 'MEER',
@@ -4650,6 +4665,7 @@ function endRun(cause) {
     diff: S.run.diff || 'normal', muts: mutCount(),
     ng: S.run.ng || 0, seed: S.run.seed, daily: S.run.daily ? 1 : 0,
     pace: S.run.pace || null,
+    tok: S.run.tok || '',                 // the board's proof this run was actually played
     stats: st,
   };
   // COGS for the workshop: every run pays out, however it ends —
@@ -11437,13 +11453,29 @@ if (!HEADLESS) (function browser() {
   const CLIENT_BOARD_V = 2;           // stamped on every post — future filters key on it
   let BOARD = null;
   let NAMEPAD = null;                 // { val, then } — the on-canvas name carver
+  // THE RUN TOKEN: the board hands one out when a run begins and demands it
+  // back when the run is carved. It is the server's own clock in signed form,
+  // so a score cannot land faster than the deep allows. Silent everywhere —
+  // offline play, a missing binding and an unconfigured secret all just leave
+  // the token empty, and the server falls back to its plausibility clamps.
+  let tokRun = null;                  // the run object we last asked a token for
+  function boardTokenFetch() {
+    if (typeof fetch !== 'function' || !S.run) return;
+    const mine = S.run;
+    fetch(BOARD_API, { method: 'POST', headers: { 'content-type': 'application/json' },
+                       body: JSON.stringify({ op: 'start' }) })
+      .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then(j => { if (S.run === mine && j && j.tok) { S.run.tok = j.tok; save(); } })
+      .catch(() => {});
+  }
   function openBoard(tab) {
     if (tab === 'lastmonth') achUnlock('oldmoney');
     BOARD = { tab: tab || 'alltime', state: 'loading', top: [], day: '', page: 0 };
     const mine = BOARD;
     if (typeof fetch !== 'function') { mine.state = 'err'; return; }
-    fetch(BOARD_API + (mine.tab === 'daily' ? '?board=daily' : mine.tab === 'monthly' ? '?board=monthly'
-                     : mine.tab === 'lastmonth' ? '?board=lastmonth' : ''))
+    const q = { daily: '?board=daily', weekly: '?board=weekly', monthly: '?board=monthly',
+                yearly: '?board=yearly', lastmonth: '?board=lastmonth' }[mine.tab] || '';
+    fetch(BOARD_API + q)
       .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
       .then(j => {
         if (BOARD !== mine) return;
@@ -11503,7 +11535,8 @@ if (!HEADLESS) (function browser() {
     fetch(BOARD_API, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: S.boardName, floor: run.floor, kills: run.kills || 0,
+      body: JSON.stringify({ op: 'carve', tok: run.tok || '',
+                             name: S.boardName, floor: run.floor, kills: run.kills || 0,
                              hero: run.hero || 'knight', diff: run.diff || 'normal',
                              daily: run.daily ? 1 : 0, ng: run.ng | 0, v: CLIENT_BOARD_V }),
     })
@@ -11519,7 +11552,13 @@ if (!HEADLESS) (function browser() {
                             : 'the board’s midpoint is floor ' + p.median + ' — climb');
         }
       })
-      .catch(() => { if (BOARD === mine) mine.state = 'err'; });
+      .catch((st) => {
+        if (BOARD !== mine) return;
+        // 403/409/422 are the anti-cheat rail turning a carve away — say so
+        // plainly instead of blaming the network
+        mine.state = 'err';
+        mine.refused = (st === 403 || st === 409 || st === 422) ? st : 0;
+      });
   }
   const HERO_ICON = {};
   function drawBoard(t) {
@@ -11534,20 +11573,34 @@ if (!HEADLESS) (function browser() {
     uiButtons.push({ x: 28, y: py, w: LW - 56, h: ph, cb: () => {} });
     txt(TR('\u{1F3C5} THE DEEP BOARD'), LW / 2, py + 32, '900 20px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
     // tabs
-    const tabBtn = (x, label, tab) => {
+    // six desks now: the four rolling periods, the wall of record, and last
+    // month's champion. Narrow enough that all six sit on one row
+    const TABS = [['daily', TR('TODAY')], ['weekly', TR('WEEK')], ['monthly', TR('MONTH')],
+                  ['yearly', TR('YEAR')], ['alltime', TR('ALL-TIME')], ['lastmonth', TR('LAST MO.')]];
+    const tw3 = 70, tgap = 4, trow = TABS.length * tw3 + (TABS.length - 1) * tgap;
+    TABS.forEach(([tab, label], i) => {
       const on = BOARD.tab === tab;
-      uiBtn(x, py + 54, 92, 30, label, () => { if (!on) openBoard(tab); },
+      uiBtn(LW / 2 - trow / 2 + i * (tw3 + tgap), py + 54, tw3, 30, label,
+            () => { if (!on) openBoard(tab); },
             { grad: on ? ['#7d5a24', '#4a3410'] : ['#3a3440', '#262230'],
               border: on ? '#ffd75e' : '#55506a', col: on ? '#ffe9a3' : '#9a90a8',
               font: '900 9px Verdana, sans-serif', r: 10 });
-    };
-    tabBtn(LW / 2 - 194, TR('ALL-TIME'), 'alltime');
-    tabBtn(LW / 2 - 98, TR('TODAY') + (BOARD.tab === 'daily' && BOARD.day ? ' · ' + BOARD.day.slice(5) : ''), 'daily');
-    tabBtn(LW / 2 - 2, TR('THIS MONTH'), 'monthly');
-    tabBtn(LW / 2 + 94, TR('LAST MONTH'), 'lastmonth');
+    });
+    // the dated boards say WHICH day/week/month/year you are reading — the
+    // title row has the only clear space for it
+    if (BOARD.day && BOARD.tab !== 'alltime' && BOARD.state === 'ok') {
+      txt((BOARD.tab === 'weekly' ? TR('week of') + ' ' : '') + BOARD.day,
+          LW - 52, py + 34, '700 9px Verdana, sans-serif', '#8d7d95', 'right');
+    }
     if (BOARD.state === 'loading') {
       txt(TR('consulting the deep ledger') + '.'.repeat(1 + (Math.floor(t * 2) % 3)), LW / 2, py + 300,
           '700 13px Verdana, sans-serif', '#b8a8bc');
+    } else if (BOARD.state === 'err' && BOARD.refused) {
+      txt(TR('the ledger would not take that carve'), LW / 2, py + 290, '800 13px Verdana, sans-serif', '#ff9d3c');
+      txt(BOARD.refused === 422 ? TR('(the run did not last long enough to be real)')
+        : BOARD.refused === 409 ? TR('(this run was already carved once)')
+        : TR('(the run carried no valid token — reload and play a fresh run)'),
+          LW / 2, py + 312, '600 10px Verdana, sans-serif', '#9a8aa0');
     } else if (BOARD.state === 'err') {
       txt(TR('the board is unreachable from here'), LW / 2, py + 290, '800 13px Verdana, sans-serif', '#ff9d3c');
       txt(TR('(it lives on the real site — offline and local play can’t see it)'), LW / 2, py + 312,
@@ -11617,12 +11670,12 @@ if (!HEADLESS) (function browser() {
         const worst = BOARD.top[BOARD.top.length - 1];
         const mine = S.boardName && BOARD.top.some(e2 => e2.name === S.boardName);
         if (!mine) {
-          txt('the board\u2019s floor to beat is ' + worst.floor, LW / 2, py + ph - 108,
+          txt('the board\u2019s floor to beat is ' + worst.floor, LW / 2, py + ph - 120,
               '800 11px Verdana, sans-serif', '#e8d0a0');
         }
       }
       if (!(S.rival && S.rival.name)) {
-        txt('tap a name to mark your RIVAL \u{2694}\u{FE0F}', LW / 2, py + ph - 88,
+        txt('tap a name to mark your RIVAL \u{2694}\u{FE0F}', LW / 2, py + ph - 104,
             '600 10px Verdana, sans-serif', '#9a8aa0');
       }
       if (pages > 1) {
@@ -12866,6 +12919,9 @@ if (!HEADLESS) (function browser() {
     requestAnimationFrame(frame);
     let dt = Math.min((ts - last) / 1000 || 0.016, 0.05);
     last = ts;
+    // a fresh run wants a token before it can ever be carved. Asked for once
+    // per run object, so a reload mid-run re-asks only if the save has none
+    if (S.run && S.run !== tokRun && !S.run.tok) { tokRun = S.run; boardTokenFetch(); }
     // HITSTOP: the killing blow freezes the world for a breath
     if (S.hitstop > 0 && S.opts.shake !== false) {
       S.hitstop -= dt;

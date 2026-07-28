@@ -138,6 +138,24 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       cap 50, per-IP throttle; 🏅 THE DEEP BOARD screen with tabs/pager/medals,
       on-canvas name carver (12 chars, physical keys work too), CARVE IT chip on
       the fallen-run screen; sw.js never caches /api/ (session 27)
+- [x] **Global board: five periods + an anti-cheat rail** (session 77) — one carve
+      now feeds DAY / WEEK / MONTH / YEAR / ALL-TIME (`dp:day:` `dp:week:<monday>`
+      `dp:month:` `dp:year:` `dp:top`, each with its own sweeping TTL); all six
+      desks (plus LAST MONTH) sit on one tab row, reachable from the 🏅 button on
+      the home menu.
+      **ONE DASHBOARD STEP TO ARM THE ANTI-CHEAT:** Pages project → Settings →
+      Environment variables → add a **secret** named `DPBOARD_SECRET` (any long
+      random string; Cloudflare's "Encrypt" toggle). With it set, every carve
+      must present a RUN TOKEN the server signed (HMAC-SHA256) when the run
+      began — single-use, expiring in a day, and rejected unless at least
+      6s × floor has actually elapsed, so a fake floor-200 run must sit for
+      twenty minutes before it lands. Without the secret the boards still work
+      but only the plausibility clamps apply (floor ≤ 300, kills ≤ 60/floor),
+      so anyone reading the JS can POST a fake score. Entries carved behind the
+      rail carry `k:1`.
+      Honest limit: a browser client can always be tampered with — this stops
+      drive-by forgery and keeps the wall readable; it does not stop a patient
+      attacker who scripts the token dance.
 - [x] **Save migration hardening**: sv-versioned schema + migration ladder;
       corrupt blobs QUARANTINED under `<key>_quarantine` (never destroyed), clean
       start + title notice (session 22)
