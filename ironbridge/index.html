@@ -5457,24 +5457,44 @@ const SKY = {
   frameMax:400,                   // (a gap longer than this is a tab switch)
   pin:null,                       // a resolution, to hold a screenshot still
 };
-let skyFrames = 0, skySamples = 0, skyEma = 0;
-// The same bargain postFx makes, one layer further in. Measured rarely and
-// honestly: a canvas QUEUES, so a frame timed without forcing the queue out
-// measures how long it took to WRITE the commands rather than to run them —
-// and forcing it costs a pipeline stall, so it happens a few times a second
-// and no more. A governor that only ever goes one way does not need a fast
-// signal, and one that could go back up would hunt.
+let skyFrames = 0, skySamples = 0, skyEma = 0, skyLast = 0;
+/* The same bargain postFx makes, one layer further in — but it used to buy it
+   the expensive way. A canvas QUEUES, so a frame timed without forcing the
+   queue out measures how long it took to WRITE the commands rather than to run
+   them, and this forced the queue out with a 1x1 readback every twentieth
+   frame to get an honest number.
+
+   On a desktop that costs a fraction of a millisecond. On a phone it forces a
+   full GPU pipeline sync — three of them a second, for the whole match. The
+   profiler shipped with the same trick per frame and the baseline it was
+   measuring climbed four and a half times across one run before anybody
+   noticed the tool was the problem. Three a second is a hundredth of that and
+   still not free, and it was being paid by exactly the machines that could
+   least afford it.
+
+   There is a free signal sitting right there: the gap between one frame and
+   the next. It cannot be deferred out of, it includes everything — the
+   simulation, the interface, the browser's own compositing — and SKY.budget
+   was always written as a fraction of a WHOLE frame anyway, so it is the more
+   honest number as well as the cheaper one.
+
+   And the ladder only ever goes down, so at the bottom step there is nothing
+   left to decide. It stops measuring there. The machines that reach the bottom
+   are the ones that can least afford to keep paying for an answer that cannot
+   change anything.                                                          */
 function skyStep(c, t0){
   if (SKY.pin !== null && SKY.pin !== undefined) return;
-  if (!postNow || !t0) return;
-  if (++skyFrames % SKY.every) return;
-  try { c.getImageData(0, 0, 1, 1); } catch (e){ return; }
-  const dt = postNow() - t0;
-  if (!(dt > 0) || dt > SKY.frameMax) return;
-  skyEma = skySamples ? skyEma + (dt - skyEma) * .4 : dt;
-  if (++skySamples < SKY.warm0) return;
+  if (!postNow) return;
   const i = SKY.steps.indexOf(SKY.res);
-  if (skyEma > SKY.budget && i >= 0 && i < SKY.steps.length - 1){
+  if (i < 0 || i >= SKY.steps.length - 1) return;      // nowhere left to go
+  if (++skyFrames % SKY.every) return;
+  const now = postNow();
+  const gap = skyLast ? (now - skyLast) / SKY.every : 0;
+  skyLast = now;
+  if (!(gap > 0) || gap > SKY.frameMax) return;
+  skyEma = skySamples ? skyEma + (gap - skyEma) * .4 : gap;
+  if (++skySamples < SKY.warm0) return;
+  if (skyEma > SKY.budget){
     SKY.res = SKY.steps[i + 1];
     skySamples = 0; skyEma = 0;
   }
@@ -15205,7 +15225,7 @@ window.IB = {
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelMarked(){ return labelMarked; }, get labelCrowded(){ return labelCrowded; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
-  SKY, plateKey, skyRoll, skyRollKey, SKY_ROLL_PX, skyFast, skyAt, skyMoving, SKY_MOVE, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
+  SKY, skyStep, plateKey, skyRoll, skyRollKey, SKY_ROLL_PX, skyFast, skyAt, skyMoving, SKY_MOVE, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
   POST, postFx, postCache, postGrade, screenTier, onPhone, PHONE_W, PHONE_POST, STONE_TONE, STONE_TONE_LIT, STONE_TONE_DARK,
   BAND_FX, bandFoot, ridgeFoot, HORIZON, ridgeTop, ridgeMid, CIRRUS, drawBands, bandPaint, BAND_SLACK,
   get LW(){ return LW; }, get LH(){ return LH; },

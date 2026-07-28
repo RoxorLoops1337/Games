@@ -12734,4 +12734,51 @@ t.ok(true, 'a final draw on a live match is clean');
     'nor does the frame it is measuring');
 }
 
+/* ============================== the governor stopped paying to be told twice
+   The profiler shipped with a 1x1 readback per frame to force the GPU queue
+   out, and on a real phone that forces a full pipeline sync: the baseline it
+   was measuring climbed four and a half times across a single run before it
+   was clear the tool was the problem. The sky governor had the same trick,
+   three times a second, for the whole match — and it was being paid by
+   exactly the machines that could least afford it.                          */
+{
+  // Nothing in the drawing reads the canvas back any more. There is a free
+  // signal — the gap from one frame to the next — that cannot be deferred out
+  // of and costs nothing to look at.
+  // A call, not a mention: there is a comment explaining why the effects layer
+  // does not do this, and a scan that counted it would be measuring prose.
+  t.ok((SRC.match(/\.getImageData\s*\(/g) || []).length === 0,
+    'nothing in the game reads the canvas back to time itself');
+  const step = SRC.slice(SRC.indexOf('function skyStep'), SRC.indexOf('function skyStep') + 900);
+  t.ok(!/getImageData/.test(step), 'the sky governor times the frame gap instead of stalling the pipeline');
+
+  // The ladder is one-way, so at the bottom there is nothing left to decide —
+  // and a measurement that cannot change anything is pure cost.
+  const wasRes = IB.SKY.res, wasPin = IB.SKY.pin;
+  IB.SKY.pin = null;
+  IB.SKY.res = IB.SKY.steps[IB.SKY.steps.length - 1];
+  let calls = 0;
+  const realNow = performance.now;
+  performance.now = function(){ calls++; return realNow.call(performance); };
+  for (let i = 0; i < IB.SKY.every * 4; i++) IB.skyStep(CTX, 1);
+  performance.now = realNow;
+  t.ok(calls === 0,
+    'at the bottom of the ladder it stops measuring altogether (' + calls + ' clock reads)');
+  t.ok(IB.SKY.res === IB.SKY.steps[IB.SKY.steps.length - 1],
+    'and stays where it is rather than falling off the end');
+
+  // ...but it is still awake anywhere above the bottom.
+  IB.SKY.res = IB.SKY.steps[0];
+  calls = 0;
+  performance.now = function(){ calls++; return realNow.call(performance); };
+  for (let i = 0; i < IB.SKY.every * 4; i++) IB.skyStep(CTX, 1);
+  performance.now = realNow;
+  t.ok(calls > 0, 'and it is still watching while there is a step left to take');
+
+  // It measures rarely on purpose: a governor that only ever goes one way does
+  // not need a fast signal.
+  t.ok(IB.SKY.every >= 10, 'and it looks a few times a second, not every frame (' + IB.SKY.every + ')');
+  IB.SKY.res = wasRes; IB.SKY.pin = wasPin;
+}
+
 t.done();
