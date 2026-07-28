@@ -4762,6 +4762,7 @@ function resize(){
   const dpr = Math.min(window.innerWidth < 760 ? 1.6 : 2, window.devicePixelRatio || 1);
   const r = lcv.getBoundingClientRect();
   LW = Math.max(80, r.width); LH = Math.max(80, r.height);
+  screenTier();                    // a phone is told what it draws, not left to find out
   lcv.width = Math.round(LW * dpr); lcv.height = Math.round(LH * dpr);
   lctx = lcv.getContext('2d');
   lctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -5426,13 +5427,48 @@ function skyStep(c, t0){
     skySamples = 0; skyEma = 0;
   }
 }
+/* How far the scrolling half of the sky has to move before it is worth
+   painting again. Everything in it travels at a fraction of the camera: the
+   nearest ridge shifts .34 of a world unit per world unit of pan, the furthest
+   .10, and the weather drifts at a few pixels a second. So at a fighting zoom
+   the whole layer moves single-digit pixels a second while it is being redrawn
+   sixty times a second — measured, twelve milliseconds of a thirty millisecond
+   phone frame, more than the deck and the bridge and every body on it put
+   together, to produce a picture that had not changed.
+
+   Repainted when it has moved a device pixel, and blitted the rest of the
+   time. A pixel is the smallest difference that can exist on the screen, so
+   this cannot show; and standing still costs nothing while panning costs
+   exactly what it always did. No frame is made slower — the worst case is the
+   old case.                                                                 */
+const SKY_ROLL_PX = 1;
+// The fastest thing in the layer sets the pace, and both maxima are READ from
+// the tables rather than written down beside them — a cloud tier added to
+// clouds() or a fourth ridge added to BANDS would otherwise leave this key
+// quietly measuring the wrong thing, and the symptom would be weather that
+// jumps rather than drifts. Cached, because the tables never change.
+let SKY_FAST = null;
+function skyFast(){
+  if (SKY_FAST) return SKY_FAST;
+  let pan = 0, drift = 0;
+  for (const b of BANDS) pan = Math.max(pan, b.d);
+  for (const cl of clouds()){ pan = Math.max(pan, cl.d); drift = Math.max(drift, cl.d); }
+  for (const ci of CIRRUS){ pan = Math.max(pan, ci.d); drift = Math.max(drift, ci.d); }
+  SKY_FAST = { pan, drift };
+  return SKY_FAST;
+}
+function skyRollKey(){
+  const f = skyFast();
+  const pan = cam.x * LS() * f.pan;                   // ridges and cloud, in px
+  const drift = G.t * 3.5 * 8 * f.drift;              // the weather's own walk
+  const q = (v) => Math.round(v / SKY_ROLL_PX);
+  return plateKey(true) + '|' + q(pan) + '|' + q(drift);
+}
 function drawSky(c){
   const P = plate('skyBack', LW, LH, plateKey(true), skyBack);
   if (P) blitPlate(c, P, 0, 0); else skyBack(c);
   const r = SKY.pin === null || SKY.pin === undefined ? SKY.res : SKY.pin;
-  // `null` key: this plate is repainted every frame by design — what it saves
-  // is pixels, not repaints. Only the canvas behind it is reused.
-  const R = r < .995 ? plate('skyRoll', LW, LH, null, skyRoll, r) : null;
+  const R = plate('skyRoll', LW, LH, skyRollKey(), skyRoll, r);
   if (R) blitPlate(c, R, 0, 0); else skyRoll(c);
   drawBirds(c);
 }
@@ -9604,11 +9640,36 @@ function drawFx(c, p){
   c.globalAlpha = 1;
 }
 
+/* How far outside the frame a thing can sit and still have part of itself
+   inside it. Measured rather than guessed: every structure on the board was
+   drawn alone on a cleared canvas and the bounding box of what it actually
+   painted was read back. The widest is a gate — 9.1 world units left of its
+   anchor and 16.7 right — and a body is 3.6. These are those numbers with
+   slack, and a test walks every structure kind and checks the real extent
+   against what is claimed here, because the failure mode of getting this
+   wrong is a tower popping into existence at the edge of the screen.        */
+const LANE_REACH = { struct:20, unit:6, proj:6 };
+
 function laneOrder(){
+  // Off screen is not a cheap draw, it is a free one — and this list was
+  // handing drawStructure every tower on the bridge to build in full, masonry
+  // and coursing and arch shading and crowns and banners, for the ones that
+  // could not be seen. The span is 128 world units and a phone at a fighting
+  // zoom sees about thirty of them. Measured on a phone, drawLane alone was
+  // 56 gradients and 20 composite switches a frame, from twelve bodies — and
+  // a blend mode that has to read the destination is the single most
+  // expensive thing you can ask a tile-based mobile GPU for.
   const draws = [];
-  for (const s of G.sides) for (const st of s.structs) draws.push({ y:lp(st.x, st.y)[1], k:'struct', o:st });
-  for (const u of G.units) if (!u.dead) draws.push({ y:lp(u.x, u.y)[1], k:'unit', o:u });
-  for (const p of G.projs) draws.push({ y:lp(p.x, p.y)[1], k:'proj', o:p });
+  const S = LS() * .96;
+  const put = (o, k, x, y) => {
+    const p = lp(x, y);
+    const m = LANE_REACH[k] * S;
+    if (p[0] < -m || p[0] > LW + m) return;
+    draws.push({ y:p[1], k, o });
+  };
+  for (const s of G.sides) for (const st of s.structs) put(st, 'struct', st.x, st.y);
+  for (const u of G.units) if (!u.dead) put(u, 'unit', u.x, u.y);
+  for (const p of G.projs) put(p, 'proj', p.x, p.y);
   draws.sort((a, b) => a.y - b.y);
   return draws;
 }
@@ -10591,6 +10652,7 @@ let labelBlock = [];                       // reserved this frame, cleared on fl
 let labelPlaced = [], labelBlocked = [];   // where it all ended up, for the tests
 let labelSkipped = 0;                      // named something off the frame
 let labelMarked = 0;                       // demoted to a diamond, for the tests
+let labelCrowded = 0;                      // no room for it that was not a bar
 const blockLabel = (x, cy, w, h) => { labelBlock.push({ x, y:cy, w, h }); };
 
 /* THREE TIERS OF LABEL. The plate is what makes a label loud — a filled black
@@ -10632,6 +10694,7 @@ function flushLabels(c){
   const placed = labelBlock.slice();
   labelSkipped = 0;
   labelMarked = 0;
+  labelCrowded = 0;
   labelQ.sort((a, b) => a.y - b.y);
   for (const L of labelQ){
     if (!labelSeen(L)){ labelSkipped++; continue; }
@@ -10647,6 +10710,7 @@ function flushLabels(c){
     let cy = L.y - 11 + h / 2;
     // nudge upward until this label is clear of everything already down —
     // other labels AND the bars and roundels that reserved their own space
+    let clear = false;
     for (let guard = 0; guard < LABEL_TRIES; guard++){
       // Above the HIGHEST thing it is touching, not the first one found in the
       // array. Stepping over them one at a time climbs a crowded body a box
@@ -10655,9 +10719,15 @@ function flushLabels(c){
       let top = null;
       for (const r of placed)
         if (labelHits(r, { x:lx, y:cy, w, h }) && (!top || r.y - r.h / 2 < top.y - top.h / 2)) top = r;
-      if (!top) break;
+      if (!top){ clear = true; break; }
       cy = top.y - top.h / 2 - h / 2 - LABEL_PAD.y;
     }
+    // A label that could not find room used to be drawn anyway, on top of
+    // whatever it had failed to climb over — which at a pulled-back zoom meant
+    // a name sitting across a health bar, the one thing in the frame it must
+    // never cover. A name you cannot place is worth less than the bar it would
+    // hide, so it is dropped. Only ever at real density: the sweep counts them.
+    if (!clear){ labelCrowded++; continue; }
     const y = cy - h / 2;
     placed.push({ x:lx, y:cy, w, h, ax:L.x, ay:L.y });   // ax, ay: what it is pointing at
     // A label pushed clear of its neighbours has to keep pointing at the thing
@@ -12250,9 +12320,45 @@ const postNow = (typeof performance !== 'undefined' && performance && performanc
   ? () => performance.now() : null;
 let postLvl = 3, postEma = 0, postGap = 0, postSeen = 0, postT0 = 0;
 
+/* --------------------------------------------------- what a phone is given
+   A phone is not a small desktop. It has a fraction of the fill rate, and the
+   thing a mobile GPU charges most for is exactly what a film grade is made
+   of: a blend mode that has to read the destination back before it can write
+   it. Measured on one phone frame at a fighting zoom, the whole post chain is
+   28ms of a 59ms frame, and every stage in it is either a destination-reading
+   composite or a `filter`.
+
+   It is also nearly invisible. Chromatic aberration and grain at arm's length
+   on a six-inch screen are a rumour. So the phone does not buy it, and gets
+   to spend the saving on the sky instead — the largest thing on the screen,
+   and the one place softness actually shows.
+
+   This exists because the two governors are GREEDY AND INDEPENDENT. The post
+   one only knows how to make post cheaper; the sky one only knows how to make
+   the sky cheaper; neither can see that giving up the grade entirely would let
+   the sky stay sharp. Left to themselves on a phone they settled on a full
+   grade over a sky at 38% resolution — the worse half of the trade, in both
+   directions. Measured, same frame:
+
+     post 3, sky 100%     58.7 ms
+     post 0, sky  38%     31.6 ms      <- where the two of them landed
+     post -1, sky  62%    26.1 ms      <- faster AND sharper
+
+   A one-way choice, made once, before anything has had a chance to be slow. */
+const PHONE_W = 760;                    // the same line body.narrow is drawn at
+const PHONE_POST = -1;                  // no grade at all on a phone
+const onPhone = () => LW > 0 && LW < PHONE_W;
+function screenTier(){
+  if (POST.pin !== null && POST.pin !== undefined) return postLvl;
+  if (onPhone() && postLvl > PHONE_POST) postLvl = PHONE_POST;
+  return postLvl;
+}
+
 function postFx(c){
   if (!c || !c.canvas) return;
-  const lvl = POST.pin === null || POST.pin === undefined ? postLvl : POST.pin;
+  // Ask every frame rather than only on resize: a phone can arrive at this
+  // width by rotating, and the canvas the governor was tuned against is gone.
+  const lvl = POST.pin === null || POST.pin === undefined ? screenTier() : POST.pin;
   if (lvl < 0) return;
   const W = c.canvas.width | 0, H = c.canvas.height | 0;
   if (W < 16 || H < 16) return;
@@ -14732,7 +14838,7 @@ window.IB = {
   fxToast, TOAST, TOAST_W, toastLife, toastFallW, toastStep, toastRate, clearToasts, paintToasts,
   netPump, netClockStart, netClockStop, NET_BUDGET, NET_ARREARS, s0Plot, foeWarning, resize,
   beamFx, arcFx, waveFx, moteFx, life, SPARK, sparkR, LINK, linkReach, RIPPLE, rippleW, burstFx, healFx, ringFx, fxStep, ultFlourish, linkFx, shoot, projStep, drawUnitMarks,
-  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder, drawFx, fxOnDeck, DECK_FX, fxDeck, fxAir,
+  applyPull, pullStep, wantCast, ARC, arcH, arcZ, PROJ_LOOK, projLook, projKindFor, drawProj, laneOrder, LANE_REACH, drawFx, fxOnDeck, DECK_FX, fxDeck, fxAir,
   BODY_SHADOW, bodyShadowR, FLOAT_PAD, floatPlan, MINI_BODY, miniBodyR,
   STATUS, statusFade, spanN,
   HIT_FX, HIT_LOOK, hitSparks, hitKind, hitSfx, hitBurst, applyStun, applySlow, chainLine, hookSnapFx,
@@ -14758,9 +14864,9 @@ window.IB = {
   WEAR, battleDamage, crown, block, UNDER, underCourse, ARCH_SHADE, archShade, hash2, stSeed, merlonHolds, CROWN_TIERS, UPMARK, upBands, upPlate, towerBands, towerRanks, troopRanks, bsumUp, drawStructure,
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
-  get labelSkipped(){ return labelSkipped; }, get labelMarked(){ return labelMarked; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
-  SKY, plateKey, skyRoll, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
-  POST, postFx, postCache, postGrade, STONE_TONE, STONE_TONE_LIT, STONE_TONE_DARK,
+  get labelSkipped(){ return labelSkipped; }, get labelMarked(){ return labelMarked; }, get labelCrowded(){ return labelCrowded; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
+  SKY, plateKey, skyRoll, skyRollKey, SKY_ROLL_PX, skyFast, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
+  POST, postFx, postCache, postGrade, screenTier, onPhone, PHONE_W, PHONE_POST, STONE_TONE, STONE_TONE_LIT, STONE_TONE_DARK,
   BAND_FX, bandFoot, ridgeFoot, HORIZON, ridgeTop, ridgeMid,
   get LW(){ return LW; }, get LH(){ return LH; },
 };
