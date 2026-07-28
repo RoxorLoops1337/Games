@@ -1603,9 +1603,22 @@ finishFight();
   const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech', 'bleeder', 'burner',
                     'gremlin', 'rustmite', 'magnet', 'bell', 'chrono', 'coward', 'twin', 'gardener',
                     'magarmor', 'coinclone', 'jackthief',
-                    'ritual', 'curl', 'split', 'thorns', 'malleable', 'dormant', 'nob', 'summoner', 'constrict', 'fading'];
+                    'ritual', 'curl', 'split', 'thorns', 'malleable', 'dormant', 'nob', 'summoner', 'constrict', 'fading',
+                    // the deep's own hands (v1.7.9)
+                    'pincer', 'webber', 'swallow', 'sunder', 'shade', 'charger'];
   const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward', 'mirror', 'tar'];
   t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
+  // ...and every one of them SAYS what it does on the foe's panel. Without
+  // this a new trait ships reading "undefined" to the player.
+  {
+    const bossTraits = [].concat(DP.BOSSES, DP.BOSSES2).map(b => b.trait);
+    const missing = all.map(e => e.trait).concat(bossTraits)
+      .filter(tr => tr && !DP.TRAIT_TXT[tr]);
+    t.eq(missing.length, 0, 'every trait in the game explains itself (' + missing.join(',') + ')');
+    const missingDef = all.map(e => e.def).concat([].concat(DP.BOSSES, DP.BOSSES2).map(b => b.def))
+      .filter(d => d && !DP.DEF_TXT[d]);
+    t.eq(missingDef.length, 0, 'and so does every defence (' + missingDef.join(',') + ')');
+  }
   // act boundaries
   t.eq(DP.actIdx(1), 0, 'floor 1 is act 1');
   t.eq(DP.actIdx(5), 0, 'floor 5 still act 1');
@@ -3950,7 +3963,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 // -------- THE B-SIDE: a second boss per act --------
 {
   const { DP: D } = loadGame({}, false);
-  t.eq(D.BOSSES2.length, 3, 'three B-side lair-holders');
+  t.eq(D.BOSSES2.length, 4, 'four B-side lair-holders — DUROSKUL takes act 4');
+  t.ok(D.BOSSES2.some(b => b.id === 'duroskul'), 'the bone archivist keeps a lair');
   t.ok(D.BOSSES2.every(b => b.id && b.hp > 0 && b.atk > 0 && b.gold > 0), 'their statlines are whole');
   t.ok(D.BOSSES2.every(b => !D.BOSSES.some(a => a.id === b.id)), 'no id collides with the A-side');
   // parity: newRun bumps best.runs first, so even totals face the B-side
@@ -4003,7 +4017,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const { DP: D } = loadGame({}, false);
   const mint = D.ENEMY_TIERS[3];
-  t.eq(mint.length, 14, 'fourteen counting-house horrors (the creeper moved in)');
+  t.eq(mint.length, 17, 'seventeen counting-house horrors (the deep\'s hands moved in)');
   t.ok(mint.every(e => e.hp > 0 && e.atk > 0 && e.gold > 0 && e.icon && e.name), 'all fully statted');
   // the three minted traits live here and only here
   for (const tr of ['magarmor', 'coinclone', 'jackthief']) {
@@ -6260,6 +6274,156 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('S.run.minted = (S.run.minted || 0) + TOLL_MINT') >= 0, 'banking feeds it');
 }
 
+// ============================================================
+// THE DEEP'S OWN HANDS — six traits, each mauling a system nothing
+// else in the bestiary has ever touched
+// ============================================================
+{
+  const mk = (seed, eid, type) => {
+    const store = {};
+    const { DP: D } = loadGame(store, false);
+    D.srand(seed); D.newRun('knight');
+    D.S.run.room.ents = [{ kind: 'monster', mtype: type || 'battle', eid, done: false, px: 0.5, py: 0.4 }];
+    D.interact(0);
+    return D;
+  };
+
+  // ---- CAVE CRAB: it eats the bed and grows on it ----
+  {
+    const D = mk(401, 'cavecrab');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'pincer', 'the crab carries the pincer');
+    e.hp = Math.max(1, e.maxHp - 20);
+    const hp0 = e.hp, coins0 = D.S.coins.filter(c => c.st === 'plat').length;
+    D.enemyActFoe(e);
+    t.ok(D.S.coins.filter(c => c.st === 'plat').length < coins0, 'it crushes pieces off the bed');
+    t.ok(e.hp > hp0, 'and feeds on the metal');
+    // a bare bed starves it instead of erroring
+    D.S.coins.length = 0;
+    const hp1 = e.hp;
+    D.enemyActFoe(e);
+    t.eq(e.hp, hp1, 'a bare bed feeds it nothing');
+  }
+
+  // ---- WIDOW SPIDER: she webs the bank shut, one slot a turn ----
+  {
+    const D = mk(402, 'widowspider');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'webber', 'the widow spins');
+    const raw = D.bankSlotsRaw();
+    t.eq(D.bankMax(), raw, 'the bank starts whole');
+    D.enemyActFoe(e);
+    t.eq(D.bankMax(), raw - 1, 'a turn of webbing shuts one slot');
+    for (let i = 0; i < 8; i++) D.enemyActFoe(e);
+    t.ok(D.bankMax() >= 1, 'the web never shuts the bank completely');
+    // pieces already banked over the new cap spill back to the tray
+    const D2 = mk(403, 'widowspider');
+    D2.S.battle.banked = [{ k: 'coin' }, { k: 'coin' }, { k: 'coin' }];
+    D2.S.battle.loot = [];
+    D2.enemyActFoe(D2.S.enemy);
+    t.ok(D2.S.battle.banked.length <= D2.bankMax(), 'the overflow is spilled, never vanished');
+    t.ok(D2.S.battle.loot.length > 0, 'and it lands back in the tray');
+  }
+
+  // ---- BOG OGRE: it eats your KEYS, and gives them back when it dies ----
+  {
+    const D = mk(404, 'bogogre');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'swallow', 'the bog ogre swallows');
+    D.S.run.keys = 3;
+    D.enemyActFoe(e);
+    t.eq(D.S.run.keys, 2, 'it swallows a key off the ring');
+    D.enemyActFoe(e);
+    t.eq(D.S.run.keys, 1, 'and another');
+    t.eq(e.gullet, 2, 'both sit in its gullet');
+    const keysPre = D.S.run.keys;
+    D.dmgFoe(e, 9999);
+    // a slain foe drops its own key too, so the gullet's two ride on top
+    t.ok(D.S.run.keys >= keysPre + 2, 'cutting it open coughs the swallowed keys back');
+    t.eq(e.gullet, 0, 'and the gullet empties');
+    // an empty ring is not an error
+    const D2 = mk(405, 'bogogre');
+    D2.S.run.keys = 0;
+    D2.enemyActFoe(D2.S.enemy);
+    t.eq(D2.S.run.keys, 0, 'an empty ring simply gives it nothing');
+  }
+
+  // ---- BLADE FIEND: it shatters your gear into a skull ----
+  {
+    const D = mk(406, 'bladefiend');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'sunder', 'the fiend sunders');
+    D.S.run.arsenal = { sword: 2 };
+    D.S.rain.length = 0;
+    D.enemyActFoe(e);
+    t.eq(D.S.run.arsenal.sword, 1, 'a piece of the rack is shattered');
+    t.ok(D.S.rain.some(r => r.kind === 'skull'), 'and the shards rain as a skull');
+    // it empties the rack and then finds nothing to break
+    D.S.run.arsenal = {};
+    D.enemyActFoe(e);
+    t.ok(!D.S.run.arsenal.sword, 'an empty rack survives its edge');
+  }
+
+  // ---- THE SHADOW: the taint lands on the BED, not the hand ----
+  {
+    const D = mk(407, 'shadowstalker');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'shade', 'the shadow taints');
+    D.S.run.purse = { coin: 8, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+    D.enemyActFoe(e);
+    t.ok(D.S.shade && D.S.shade.k === 'coin' && D.S.shade.n > 0, 'a pocket is shadowed');
+    // the hand keeps its honest SIZE — the punishment is what lands
+    D.S.battle.phase = 'drop';
+    D.dealHand();
+    t.eq(D.S.battle.hand.coin, 8, 'the hand is dealt whole — nothing silently vanishes');
+    const n0 = D.S.shade.n;
+    D.S.battle.sel = 'coin';
+    D.S.cd = 0;
+    t.ok(D.drop(50, true), 'a shadowed coin drops');
+    t.ok(D.S.coins.some(c => c.kind === 'slug'), 'and lands on the bed as a SLUG');
+    t.ok(!D.S.shade || D.S.shade.n === n0 - 1, 'the taint is spent one coin at a time');
+  }
+
+  // ---- IRONTUSK: two paws then a gore, and TILT is the answer ----
+  {
+    const D = mk(408, 'irontusk');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'charger', 'the tusk charges');
+    D.enemyActFoe(e);
+    t.eq(e.wind, 1, 'one paw');
+    t.eq(e.intent.t, 'charge', 'and it telegraphs the wind-up');
+    D.enemyActFoe(e);
+    t.eq(e.intent.t, 'gore', 'two paws and the gore is loaded');
+    t.eq(e.intent.dmg, e.atk * 3, 'a gore is triple a blow');
+    // ...but a TILT breaks it
+    const D2 = mk(409, 'irontusk');
+    const e2 = D2.S.enemy;
+    D2.enemyActFoe(e2);
+    t.eq(e2.wind, 1, 'it is mid-wind');
+    D2.S.battle.phase = 'drop';
+    D2.S.battle.tilts = 3;
+    D2.S.noTiltT = 0;
+    t.ok(D2.tilt('f'), 'the machine shakes');
+    t.eq(e2.wind, 0, 'and the charge is BROKEN');
+    t.ok((e2.stunned | 0) >= 1, 'the tusk reels for a turn');
+  }
+
+  // ---- DUROSKUL: the first thing in the deep to reach the RELIC SHELF ----
+  {
+    const store = {};
+    const { DP: D } = loadGame(store, false);
+    D.srand(410); D.newRun('knight');
+    D.S.run.relics = ['plate'];
+    t.ok(D.hasRelic('plate'), 'the shelf answers normally');
+    D.S.sealed = 'plate'; D.S.sealT = 3;
+    t.ok(!D.hasRelic('plate'), 'a SEALED relic stops answering');
+    t.ok(D.S.run.relics.indexOf('plate') >= 0, 'but it is never taken from you');
+    D.S.sealT = 0; D.S.sealed = '';
+    t.ok(D.hasRelic('plate'), 'and it answers again when the seal lifts');
+    t.ok(D.BOSSES2.some(b => b.id === 'duroskul'), 'DUROSKUL holds a lair');
+  }
+}
+
 // -------- TOAST TRIAGE: announcements take turns now --------
 {
   const { DP: D } = loadGame({}, false);
@@ -6872,7 +7036,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.8', 'the free stairs ship as v1.7.8');
+  t.eq(D.VERSION, '1.7.9', 'the deep\'s own hands ship as v1.7.9');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('OWN HANDS') >= 0)),
+       'and the notes carry the new kin');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STAIRS ARE FREE') >= 0)),
        'and the notes retire the toll');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('FIVE LEDGERS') >= 0)),
@@ -6925,7 +7091,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.ENEMY_TIERS[4].length, 14, 'fourteen drowned kin in the lake (fortune floats through)');
+  t.eq(D.ENEMY_TIERS[4].length, 17, 'seventeen drowned kin in the lake');
   t.ok(D.ENEMY_TIERS[4].every(e => e.hp > 0 && e.atk > 0 && e.gold > 0), 'all fully statted');
   const ids = new Set();
   for (const tier of D.ENEMY_TIERS) for (const e of tier) { t.ok(!ids.has(e.id) || t.fail, ''); ids.add(e.id); }
@@ -6959,7 +7125,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the codex grew its fifth shelf
   t.ok(D.CODEX_TABS.indexOf('a5') >= 0, 'the codex owns an a5 shelf');
   const a5 = D.codexTabStat('a5');
-  t.eq(a5.all, 14 + 2, 'the lake shelf counts its kin and both lords');
+  t.eq(a5.all, 17 + 2, 'the lake shelf counts its kin and both lords');
   D.endRun('done');
 }
 
