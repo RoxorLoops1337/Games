@@ -681,6 +681,53 @@ const count = (evts, type) => evts.filter((e) => e.type === type).length;
   t.ok(G.player.ads >= 0 && G.player.ads <= 1, 'and the aim blend stays inside its range');
 }
 
+// ───────────────────────────────────────────────── look is frame-rate free
+{
+  // A look delta is an amount of movement that already happened. The player
+  // steps up to MAX_STEPS times per rendered frame, so a delta that is read
+  // without being cleared gets applied once per step and sensitivity becomes a
+  // function of frame rate — double at 60 fps, quadruple at 30, so the mouse
+  // speeds up exactly when the scene gets heavy. This shipped, and it was found
+  // on touch as a 100 px drag turning 149° instead of 30°.
+  const turnFor = (steps) => {
+    const G = game();
+    G.player.yaw = 0;
+    G.input.look.x = 100;                 // one frame's worth of movement
+    for (let i = 0; i < steps; i++) {
+      G.time.t += C.TICK;
+      updatePlayer(G, C.TICK);
+      G.events.length = 0;
+    }
+    return G.player.yaw;
+  };
+
+  const one = turnFor(1);
+  t.ok(Math.abs(one) > 1e-6, 'a look delta turns the view');
+  for (const steps of [2, 3, 5]) {
+    const many = turnFor(steps);
+    t.ok(Math.abs(many - one) < 1e-9,
+      `${steps} steps in a frame turn exactly as far as one (${(many * 180 / Math.PI).toFixed(2)}° vs ${(one * 180 / Math.PI).toFixed(2)}°)`);
+  }
+
+  // And the delta must be gone afterwards, or the next step re-applies it.
+  const G = game();
+  G.input.look.x = 50; G.input.look.y = 20;
+  updatePlayer(G, C.TICK);
+  t.ok(G.input.look.x === 0 && G.input.look.y === 0, 'the delta is consumed, not merely read');
+
+  // Pitch obeys the same rule, and inversion does not change the magnitude.
+  const pitchFor = (steps, invert) => {
+    const g = game();
+    g.settings.invertY = invert;
+    g.player.pitch = 0;
+    g.input.look.y = 60;
+    for (let i = 0; i < steps; i++) { g.time.t += C.TICK; updatePlayer(g, C.TICK); g.events.length = 0; }
+    return g.player.pitch;
+  };
+  t.ok(Math.abs(pitchFor(5, false) - pitchFor(1, false)) < 1e-9, 'pitch is frame-rate independent too');
+  t.ok(Math.abs(pitchFor(1, true) + pitchFor(1, false)) < 1e-9, 'and invert Y flips it without changing how far it goes');
+}
+
 // ────────────────────────────────────────────────────────────── enemy AI
 {
   const G = game();

@@ -45,9 +45,19 @@ export function updatePlayer(G, dt) {
   const world = G.world;
 
   // ── look ───────────────────────────────────────────────────────────────────
+  //
+  // The look delta is *consumed*, not merely read. It is an absolute amount of
+  // movement that happened once, whereas this function runs up to MAX_STEPS
+  // times per rendered frame — so reading it without clearing it applies the
+  // same mouse movement once per step, and aim sensitivity silently becomes a
+  // function of frame rate. At 60 fps against a 120 Hz simulation that is
+  // double sensitivity; at 30 fps it is quadruple, so the mouse appears to
+  // speed up exactly when the scene gets heavy. Measured on touch as a 100 px
+  // drag turning 149° where it should turn 30°.
   const sens = G.settings.sens * (1 - p.ads * (1 - G.settings.adsSensMul));
   p.yaw -= inp.look.x * sens;
   p.pitch -= inp.look.y * sens * (G.settings.invertY ? -1 : 1);
+  inp.look.x = 0; inp.look.y = 0;
   p.pitch = clamp(p.pitch, -1.54, 1.54);
   if (p.yaw > Math.PI) p.yaw -= Math.PI * 2; else if (p.yaw < -Math.PI) p.yaw += Math.PI * 2;
 
