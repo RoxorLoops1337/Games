@@ -12622,4 +12622,85 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1;
 }
 
+/* ======================================= a profiler that runs on the phone
+   Every performance number in this repo has been measured on a software
+   rasteriser, and that is exactly why the effects layer's 588 blend-mode
+   changes a frame were invisible here and obvious on a real device: in
+   software a blend mode is a different inner loop and costs nothing, and on a
+   tile-based GPU it can force the tile to be resolved. Guessing across that
+   gap does not work, so the profiler goes to the device.                    */
+{
+  // Off unless asked for, and costing one property read when off. A debug tool
+  // that slows the thing it measures is not a debug tool.
+  t.ok(IB.PERF.on === false, 'the profiler is off unless the URL asks for it');
+  t.ok(IB.perfOff('sky') === false && IB.perfOff('deck') === false,
+    'and nothing is suppressed while it is off');
+  t.ok(/\?perf/.test(SRC) || /perf\\b/.test(SRC), 'there is a URL flag that turns it on');
+
+  // THE assertion that matters. Every trial names a layer, and a layer nobody
+  // checks would run a full-cost frame and report "saves nothing" — which is
+  // not a null result, it is a lie that sends the next hour in the wrong
+  // direction. Every key must be honoured somewhere in the drawing.
+  const keys = IB.PERF_TRIALS.map(x => x.k).filter(Boolean);
+  t.ok(keys.length >= 6, 'the run ablates a useful number of layers (' + keys.length + ')');
+  const missing = keys.filter(k => !SRC.includes("perfOff('" + k + "')"));
+  t.ok(missing.length === 0,
+    'every layer the profiler claims to switch off is actually switched off somewhere' +
+    (missing.length ? ' — ' + missing.join(', ') + ' names nothing' : ''));
+  // ...and no dead switch the other way: a perfOff() for a layer no trial ever
+  // sets is a branch that can never be taken.
+  const used = (SRC.match(/perfOff\('(\w+)'\)/g) || []).map(x => x.slice(9, -2));
+  const orphan = [...new Set(used)].filter(k => !keys.includes(k));
+  t.ok(orphan.length === 0,
+    'and nothing is switched off that no trial ever asks for' +
+    (orphan.length ? ' — ' + orphan.join(', ') : ''));
+
+  // The first and last trials are the same thing, so the report can say
+  // whether the board changed underneath the run. Without that, a table taken
+  // across a wave break reads as an attribution.
+  t.ok(IB.PERF_TRIALS[0].k === null &&
+       IB.PERF_TRIALS[IB.PERF_TRIALS.length - 1].k === null,
+    'it measures the baseline first and again last, so drift is visible');
+  t.ok(IB.PERF_TRIALS[0].n !== IB.PERF_TRIALS[IB.PERF_TRIALS.length - 1].n,
+    'and the two are named apart, or the reader cannot tell which is which');
+
+  // Long enough to mean something, short enough that somebody will sit
+  // through it on a phone.
+  t.ok(IB.PERF.secs >= 1.5 && IB.PERF.secs <= 6,
+    'each trial runs long enough to be a measurement (' + IB.PERF.secs + 's)');
+  t.ok(IB.PERF.warm > 0 && IB.PERF.warm < IB.PERF.secs,
+    'and throws away the settling frames at the start of each');
+  const total = IB.PERF.secs * IB.PERF_TRIALS.length;
+  t.ok(total < 45, 'the whole run is under three quarters of a minute (' + total.toFixed(0) + 's)');
+
+  // A run, driven by hand. perfStep takes the real frame gap, so feeding it
+  // whole frames walks it through every trial to the end.
+  IB.newMatch({ diff:'veteran', seed:9800 });
+  IB.MY = 0;
+  IB.perfStart();
+  t.ok(IB.PERF.on, 'it starts');
+  const first = IB.PERF_TRIALS[0].k;
+  t.ok(!first || IB.perfOff(first), 'with the first trial already applied');
+  let guard = 0;
+  while (IB.PERF.on && guard++ < 40000) IB.perfStep(1 / 60);
+  t.ok(!IB.PERF.on, 'and it stops on its own rather than running forever');
+  t.ok(IB.PERF.rows.length === IB.PERF_TRIALS.length,
+    'with a row for every trial (' + IB.PERF.rows.length + '/' + IB.PERF_TRIALS.length + ')');
+  t.ok(Object.keys(IB.PERF.off).length === 0,
+    'and nothing left switched off behind it — a profiler that ends with the ' +
+    'grade disabled would look exactly like a fix');
+  t.ok(IB.perfOff('sky') === false && IB.perfOff('deck') === false,
+    'which the drawing agrees with');
+
+  // The report has to carry what the reader cannot ask for afterwards: which
+  // device, how big the canvas, and what the two governors had settled on.
+  const rep = IB.perfReport();
+  for (const want of ['screen', 'dpr', 'canvas', 'post', 'skyRes', 'wave'])
+    t.ok(rep.includes(want), 'the report says ' + want);
+  for (const T of IB.PERF_TRIALS)
+    t.ok(rep.includes(T.n), 'and has a line for "' + T.n + '"');
+  t.ok(/work/.test(rep) && /gap/.test(rep),
+    'it reports both what the drawing costs and what the player feels, which are not the same number');
+}
+
 t.done();
