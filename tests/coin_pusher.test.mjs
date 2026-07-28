@@ -76,6 +76,27 @@ t.eq(PRIZES.length, 17, 'seventeen real keychain prizes in the catalog');
   const art = new Set(readdirSync(join(here2, '..', 'coin_pusher', 'prizes')));
   t.ok(PRIZES.every(p => art.has(p.id + '.png')), 'every prize has its cut-out art on disk');
   t.ok(PRIZES.every(p => p.cost > 0 && p.base > 0 && p.icon), 'every prize has cost, base price, and an emoji fallback');
+
+  // ...and the other direction. Art that no catalog entry claims is dead
+  // weight: it ships in the build, downloads on the gallery, and shows up
+  // nowhere. This catches a renamed id that orphaned its file.
+  const ids = new Set(PRIZES.map(p => p.id));
+  const orphans = [...art].filter(f => f.endsWith('.png') && !ids.has(f.replace(/\.png$/, '')));
+  t.eq(orphans.length, 0, 'no prize art on disk goes unused' +
+       (orphans.length ? ': ' + orphans.join(', ') : ''));
+  const nonPng = [...art].filter(f => !f.endsWith('.png'));
+  t.eq(nonPng.length, 0, 'the prizes folder holds nothing but prize art' +
+       (nonPng.length ? ': ' + nonPng.join(', ') : ''));
+
+  // every catalog prize has to be obtainable somehow: either it rides a
+  // machine's pile or it is buyable in the shop (the shop lists the catalog,
+  // so this is really a check that the pile prizes are a subset of it)
+  const onPiles = new Set();
+  for (const id of Object.keys(MACHINES)) for (const pid of MACHINES[id].prizeIds) onPiles.add(pid);
+  t.ok([...onPiles].every(pid => ids.has(pid)), 'every pile prize is a catalog entry');
+  t.eq(onPiles.size, 12, 'twelve distinct prizes ride the four machines');
+  t.ok(PRIZES.every(p => onPiles.has(p.id) || p.cost > 0),
+       'catalog entries that never ride a pile are still buyable');
 }
 t.ok(['gold', 'penny', 'neon', 'bandit'].every(id =>
   MACHINES[id].prizeIds.length === 3 && MACHINES[id].prizeIds.every(pid => PRIZES.some(p => p.id === pid))),
