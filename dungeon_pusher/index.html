@@ -51,6 +51,10 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.8.1', notes: [
+    'THE BOARD GUARDS ITSELF NOW \u{1F512} — the anti-cheat rail no longer waits on anyone to flip a switch: the server mints its own signing key the first time it is asked and keeps it. Every carve must hand back the RUN TOKEN the board issued when that run began — one token, one carve, expiring in a day, and refused outright if the run did not last long enough for the depth it claims',
+    'YOUR NAME IS YOURS \u{270F}\u{FE0F} — the name you carve is claimed the first time you use it, and only your device can carve under it again. The board keeps a one-way proof, never the key itself, so nobody can stand on your row — and your cloud save carries the claim to a new phone. ANONYMOUS stays common ground for everyone',
+  ] },
   { v: '1.8.0', notes: [
     'THE ROOM SHEETS FIT THEIR FRAME \u{1F5BC}\u{FE0F} — every room panel (shopkeeper, blacksmith, chest, the strangers) was laying its content out across the carved border of its own frame art. The panels now measure the frame\u2019s inner opening and sit INSIDE it, and each one sizes itself to what it is actually showing, so no sheet ends in a slab of dead space',
     'the blacksmith stops speaking in emoji \u{1FA93} — his boons wear the same painted art the shop and the chest use: the item you would take, the potion, the pouch, the heart. Every room sheet also wears its own painted title icon',
@@ -257,7 +261,7 @@ const LANGS = {
     'the ledger would not take that carve': 'het grootboek weigerde die inkerving',
     '(the run did not last long enough to be real)':
       '(de run duurde te kort om echt te zijn)',
-    '(this run was already carved once)': '(deze run is al een keer ingekerfd)',
+    '(that name is already carved — pick another)': '(die naam is al ingekerfd — kies een andere)',
     '(the run carried no valid token — reload and play a fresh run)':
       '(de run had geen geldig teken — herlaad en speel een nieuwe run)',
     // the keeper's two desks (session 76: coins are sold, never spent)
@@ -1470,6 +1474,7 @@ const S = {
   seenVer: '',                                  // last VERSION whose patch notes were read
   seen: {},                                     // first-contact whispers already given
   boardName: '',                                // the name carved on the leaderboard
+  carveKey: '',                                 // ...and the private key that proves it is YOURS
   coach: { pick: 0, drop: 0, end: 0 },          // the first-battle pointers, killed once each
   streak: { last: '', days: 0 },                // consecutive days played (one grace day)
   yday: { on: '', floor: 0, name: '' },         // yesterday's deepest (fetched once a day)
@@ -1576,6 +1581,7 @@ function save() {
       rival: S.rival, wbRelic: S.wbRelic ? 1 : 0, tales: S.tales, gifted: S.gifted ? 1 : 0,
       petNames: S.petNames, contract: S.contract | 0, legacy: S.legacy,
       boardName: S.boardName || '',
+      carveKey: S.carveKey || '',
       run: S.run ? {
         hero: S.run.hero,
         floor: S.run.floor, depth: S.run.depth, hp: S.run.hp, maxHp: S.run.maxHp,
@@ -1683,6 +1689,7 @@ function load() {
     }
     if (d.tales && typeof d.tales === 'object') S.tales = d.tales;
     if (typeof d.boardName === 'string') S.boardName = d.boardName.slice(0, 12);
+    if (typeof d.carveKey === 'string') S.carveKey = d.carveKey.replace(/[^\w-]/g, '').slice(0, 64);
     if (typeof d.syncCode === 'string' && /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}$/.test(d.syncCode)) {
       S.syncCode = d.syncCode;
     }
@@ -11861,6 +11868,19 @@ if (!HEADLESS) (function browser() {
       })
       .catch(() => {});
   }
+  // YOUR NAME IS YOURS. The board keeps only an HMAC of this key, so nobody
+  // else can carve under your name — and losing the key only costs you the
+  // name, never the run. It rides the save, so a cloud restore carries it.
+  function carveKey() {
+    if (!S.carveKey) {
+      const b = new Uint8Array(18);
+      if (typeof crypto !== 'undefined' && crypto.getRandomValues) crypto.getRandomValues(b);
+      else for (let i = 0; i < b.length; i++) b[i] = (rng() * 256) | 0;
+      S.carveKey = Array.from(b).map(n => n.toString(36)).join('').slice(0, 32).replace(/[^\w-]/g, '') || 'k' + Date.now();
+      save();
+    }
+    return S.carveKey;
+  }
   function postScore(run) {
     if (typeof fetch !== 'function' || !run || !(run.floor >= 1)) return;
     BOARD = { tab: 'alltime', state: 'loading', top: [], day: '', page: 0 };
@@ -11868,7 +11888,7 @@ if (!HEADLESS) (function browser() {
     fetch(BOARD_API, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ op: 'carve', tok: run.tok || '',
+      body: JSON.stringify({ op: 'carve', tok: run.tok || '', ckey: carveKey(),
                              name: S.boardName, floor: run.floor, kills: run.kills || 0,
                              hero: run.hero || 'knight', diff: run.diff || 'normal',
                              daily: run.daily ? 1 : 0, ng: run.ng | 0, v: CLIENT_BOARD_V }),
@@ -11891,6 +11911,7 @@ if (!HEADLESS) (function browser() {
         // plainly instead of blaming the network
         mine.state = 'err';
         mine.refused = (st === 403 || st === 409 || st === 422) ? st : 0;
+        mine.taken = st === 409;
       });
   }
   const HERO_ICON = {};
@@ -11931,7 +11952,7 @@ if (!HEADLESS) (function browser() {
     } else if (BOARD.state === 'err' && BOARD.refused) {
       txt(TR('the ledger would not take that carve'), LW / 2, py + 290, '800 13px Verdana, sans-serif', '#ff9d3c');
       txt(BOARD.refused === 422 ? TR('(the run did not last long enough to be real)')
-        : BOARD.refused === 409 ? TR('(this run was already carved once)')
+        : BOARD.refused === 409 ? TR('(that name is already carved — pick another)')
         : TR('(the run carried no valid token — reload and play a fresh run)'),
           LW / 2, py + 312, '600 10px Verdana, sans-serif', '#9a8aa0');
     } else if (BOARD.state === 'err') {
