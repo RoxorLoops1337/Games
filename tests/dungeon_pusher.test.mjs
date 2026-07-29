@@ -7036,7 +7036,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.9', 'the deep\'s own hands ship as v1.7.9');
+  t.eq(D.VERSION, '1.8.0', 'the fitted room sheets ship as v1.8.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('FIT THEIR FRAME') >= 0)),
+       'and the notes carry the reflow');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('OWN HANDS') >= 0)),
        'and the notes carry the new kin');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STAIRS ARE FREE') >= 0)),
@@ -7636,6 +7638,10 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
   t.ok(src.indexOf('function drawStairsAsk') >= 0 && src.indexOf('drawStairsAsk(t);') >= 0, 'the ledger sheet draws');
+  // the room sheets lay out INSIDE the frame art's carved opening
+  t.ok(src.indexOf('const FRAME_IN =') >= 0 && src.indexOf('function frameAround(') >= 0,
+       'the modal measures its frame\'s inner panel');
+  t.ok(src.indexOf('function boonArt(') >= 0, 'and the forge boons carry painted art');
   t.ok(src.indexOf('if (S.stairsAsk) { stairsCancel(); return; }') >= 0, 'ESC stays on the floor');
   t.ok(src.indexOf('S.relicPick = null; S.stairsAsk = null;') >= 0, 'the crash net clears it');
   D.setLang('nl');
