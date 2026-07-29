@@ -12781,4 +12781,80 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.SKY.res = wasRes; IB.SKY.pin = wasPin;
 }
 
+/* ================================== the queue you could not see, and the room
+   Reported from a wide monitor: you cannot see what is being made. The pit
+   queue was there — compressed into a fragment of its own column title,
+   "Train · pit 47% +2", because the dock was a flat 76px and the column that
+   carries it had 64px to put a title, a queue and a row of buttons in.
+
+   76px was chosen against a laptop and then applied to every screen. On a
+   1440p monitor that hands eleven hundred pixels of spare height to the world
+   and squeezes the panel with the game's controls in it.                    */
+{
+  IB.newMatch({ diff:'veteran', seed:9810 });
+  IB.MY = 0;
+  const s = G.sides[0];
+  for (const k of ['gold','iron','wood','food']) s.res[k] = 99999;
+
+  // The dock takes the height a screen has spare, with a floor that is the
+  // laptop it was tuned on and a ceiling so a huge monitor does not hand half
+  // itself to a control panel.
+  const dockCss = SRC.slice(SRC.indexOf('#dock{'), SRC.indexOf('#dock{') + 1400);
+  const cl = dockCss.match(/height:clamp\(\s*(\d+)px\s*,\s*([\d.]+)vh\s*,\s*(\d+)px\s*\)/);
+  t.ok(!!cl, 'the dock is sized against the screen rather than pinned to one number');
+  if (cl){
+    const lo = +cl[1], vh = +cl[2], hi = +cl[3];
+    t.ok(lo >= 88, 'with a floor that fits its tallest column (' + lo + 'px)');
+    t.ok(hi > lo * 1.4, 'and a ceiling well above it, or the clamp does nothing (' + lo + '..' + hi + ')');
+    t.ok(hi < 260, 'but not so tall it becomes the game (' + hi + 'px)');
+    // The band has to actually move across the screens people use.
+    const at = (h) => Math.min(hi, Math.max(lo, h * vh / 100));
+    t.ok(at(1440) > at(720) + 30,
+      'a tall screen really does get more of it than a short one (' +
+      at(720).toFixed(0) + 'px at 720, ' + at(1440).toFixed(0) + 'px at 1440)');
+  }
+
+  // A safety zone: nothing sits flush against an edge it can be cut on, and a
+  // column that does overflow can be scrolled rather than silently truncated.
+  const secCss = SRC.slice(SRC.indexOf('.dsec{'), SRC.indexOf('.dsec{') + 320);
+  t.ok(/padding:0 \d+px \d+px/.test(secCss),
+    'and every column carries bottom padding, so its last row is not on the cut line');
+  t.ok(/overflow-y:auto/.test(secCss),
+    'a column with more in it than fits scrolls instead of hiding the rest');
+
+  // The queue itself. It is emitted as chips — one per pit, each filling as
+  // its worker comes up — AND as a fragment of the title, because one size of
+  // dock cannot carry both. What must never happen is neither.
+  for (let t2 = 0; t2 < 2; t2++) IB.build(s, t2, 'pit');
+  for (const k of ['gold','iron','wood','food']) s.res[k] = 99999;
+  for (let i = 0; i < 3; i++) IB.trainWorker(s);
+  t.ok(s.trainQ.length >= 2, 'the probe has a real queue (' + s.trainQ.length + ' in the pits)');
+  step(0.5);
+  const html = IB.dockHtml();
+  t.ok(/id="queue"/.test(html), 'the queue is in the dock as its own row');
+  const chips = (html.match(/class="qchip"/g) || []).length;
+  t.ok(chips === s.trainQ.length,
+    'with one chip per worker in the pits (' + chips + ' for ' + s.trainQ.length + ')');
+  t.ok(/class="fill" style="width:\d+%/.test(html),
+    'and each one shows how far along it is, rather than only that it exists');
+  // The title still carries it, for the screen that has no room for chips.
+  t.ok(/Train · pit \d+%/.test(html),
+    'and the title says the same thing for a dock too short to show them');
+
+  // An idle pit says so. A queue row that vanishes when empty is a row that
+  // moves the buttons under it every time a worker finishes.
+  s.trainQ.length = 0;
+  const idle = IB.dockHtml();
+  t.ok(/id="queue"/.test(idle) && /qchip idle/.test(idle),
+    'an empty queue still occupies its row, so nothing below it jumps');
+  t.ok(/pits? idle/.test(idle), 'and says it is idle rather than showing nothing');
+
+  // The chips are hidden on a dock too short for them — but only there, and
+  // the phone layout keeps them because it has a whole tab to itself.
+  t.ok(/@media \(min-height:\d+px\)\{ #queue\{ display:flex; \} \}/.test(SRC),
+    'the chips appear only when the dock is tall enough to hold them');
+  t.ok(/body\.narrow #queue\{ display:flex; \}/.test(SRC),
+    'and the phone keeps them, where the panel is a tab and has the room');
+}
+
 t.done();

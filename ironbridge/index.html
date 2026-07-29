@@ -178,7 +178,14 @@
     position:relative; z-index:5;
     background:linear-gradient(180deg,#151c2c 0,#111827 34%,#0a0f18 100%);
     box-shadow:inset 0 14px 24px -16px rgba(0,0,0,.5);
-    overflow-x:auto; overflow-y:hidden; height:76px; }
+    overflow-x:auto; overflow-y:hidden;
+    /* 76px was chosen against a laptop and then applied to every screen. On a
+       1440p monitor it hands eleven hundred pixels of spare height to the
+       world and squeezes the panel that carries the game's controls into
+       sixty-four — which is how the pit queue ended up compressed into its own
+       column title. The floor is the laptop number; the rest is height the
+       screen was not using. */
+    height:clamp(100px, 12vh, 172px); }
   /* The band itself has to hang in the STAGE, not in the dock: the dock is a
      scroll container (overflow-y:hidden) and would have clipped its own
      overhang off at the pixel the ramp exists to soften. */
@@ -188,10 +195,12 @@
   /* Each column is a panel face in a rack, not a region of the same slab: a
      top-lit wash gives it a surface, so the room a column has not filled
      reads as space it was given rather than as a hole in the dock. */
-  .dsec{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; padding:0 11px;
-    border-right:none; min-width:120px; overflow:hidden; position:relative;
+  .dsec{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; padding:0 11px 4px;
+    border-right:none; min-width:120px; overflow-y:auto; overflow-x:hidden; position:relative;
+    scrollbar-width:none;
     background:linear-gradient(180deg,rgba(150,185,235,.028),rgba(150,185,235,0)); }
   .dsec:last-child{ border-right:none; }
+  .dsec::-webkit-scrollbar{ display:none; }
   /* the divider is a hairline that fades out at both ends instead of a hard
      rule butting into the padding */
   .dsec + .dsec::before{ content:''; position:absolute; left:0; top:4px; bottom:4px; width:1px;
@@ -294,7 +303,13 @@
   .cost i{ font-style:normal; }
   .cost .g{ color:var(--gold); } .cost .i{ color:var(--iron); } .cost .w{ color:var(--wood); }
   .cost .bad{ color:var(--red); }
-  #queue{ display:flex; flex-wrap:wrap; gap:4px; }
+  /* Hidden until the dock is tall enough to hold it without pushing the
+     buttons out. The title fragment carries the same fact meanwhile, so
+     nothing is ever simply missing. */
+  #queue{ display:none; flex-wrap:wrap; gap:4px; flex:0 0 auto; }
+  @media (min-height:760px){ #queue{ display:flex; } }
+  body.narrow #queue{ display:flex; }
+  .qchip.idle{ opacity:.55; }
   .qchip{ padding:2px 8px; font-size:var(--t2); background:#0a1019; border:1px solid #212b3c;
     border-radius:999px; color:var(--dim); position:relative; overflow:hidden;
     box-shadow:inset 0 1px 2px rgba(0,0,0,.5); }
@@ -12920,10 +12935,22 @@ function dockHtml(){
     // which is 96px of stack in a 64px panel. The queue rides the title, where
     // it is a status and not a control, and the worker button joins the drills
     // it belongs with.
+    // The queue, twice, because one size of dock cannot carry both. On a short
+    // screen it is a fragment of the title — "pit 47% +2" — which is all that
+    // fits beside a row of buttons in a 64px panel. On anything taller it is
+    // the row of chips it should always have been: one per pit, each filling
+    // as its worker comes up. The chips are the truth; the fragment is what is
+    // left of it when there is nowhere to put them.
     const q = s.trainQ.map(x => Math.round(clamp(x.t / x.dur, 0, 1) * 100));
     h += '<div class="ptitle">Train · ' +
       (q.length ? 'pit ' + q[0] + '%' + (q.length > 1 ? ' +' + (q.length - 1) : '') : 'pits idle') +
-      (bl0 ? '' : ' · no barracks') + '</div><div class="pgrid">';
+      (bl0 ? '' : ' · no barracks') + '</div>';
+    h += '<div id="queue">' + (q.length
+      ? q.map(pc => '<span class="qchip"><i class="fill" style="width:' + pc + '%"></i>' +
+          '<span>Worker ' + pc + '%</span></span>').join('')
+      : '<span class="qchip idle"><span>' +
+        (trainSlots(s) > 1 ? trainSlots(s) + ' pits idle' : 'pit idle') + '</span></span>') + '</div>';
+    h += '<div class="pgrid">';
     h += '<button class="abtn" data-act="worker"><span class="t">Worker</span><span class="c">' + costHtml(C.WORKER_COST) + '</span></button>';
     for (const k of TROOP_KINDS){
       const t = s.troop[k], cost = troopCost(s, k);
