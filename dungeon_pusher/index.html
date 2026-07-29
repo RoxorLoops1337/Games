@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.8.2', notes: [
+    'THE EDGES STOP SMEARING \u{1F9F9} — on a phone the game sits in a letterbox, and the bands above and below the board belonged to nobody: any spark or coin that drifted out there was never painted over, so it sat and piled up until the screen had a crust of leftovers around it. The canvas is wiped every frame now and the stage is CLIPPED, so nothing can leak into the margins again',
+    'the last of the blanks are painted \u{1F3A8} — the eleven relics that still wore an emoji have their icons, so do the last four trophies; the OWL, TORTOISE and BEETLE carry their real faces on the bed; every stranger in the deep has a portrait; and the blacksmith\u2019s boons are all painted at last — WAR PAINT, SURE HANDS and HONE never had a face before',
+    'THE WHEEL GHOST CHARGES BY DEPTH \u{1F3A1} — his flat five-coin fee is gone. A spin now costs ONE coin per floor, capped at ' + 10 + ': nearly free near the sun, a real decision in the deep',
+  ] },
   { v: '1.8.1', notes: [
     'THE BOARD GUARDS ITSELF NOW \u{1F512} — the anti-cheat rail no longer waits on anyone to flip a switch: the server mints its own signing key the first time it is asked and keeps it. Every carve must hand back the RUN TOKEN the board issued when that run began — one token, one carve, expiring in a day, and refused outright if the run did not last long enough for the depth it claims',
     'YOUR NAME IS YOURS \u{270F}\u{FE0F} — the name you carve is claimed the first time you use it, and only your device can carve under it again. The board keeps a one-way proof, never the key itself, so nobody can stand on your row — and your cloud save carries the claim to a new phone. ANONYMOUS stays common ground for everyone',
@@ -449,7 +454,8 @@ const C = {
   KEY_KILL: 1, KEY_ELITE: 2, KEY_BOSS: 3,   // keys paid per slain foe
   P_CHEST_KEY: 0.2,
   KEY_CARRY: 3,                         // keys you may carry down to the next floor
-  WHEEL_COST: 5,                        // coins the dungeon wheel ghost charges per spin
+  WHEEL_COST: 5,                        // (legacy) the ghost's old flat fee — see wheelCost()
+  WHEEL_CAP: 10,                        // ...he never asks for more than this
   FORGE_SCRAP_CHANCE: 0.22,             // odds the forge's third boon is MELT A PIECE DOWN
   // combat is played in ROUNDS: your PURSE is a deck of typed coins — you
   // choose which to insert — then the tray resolves and the foes act
@@ -5041,6 +5047,11 @@ function newRun(heroId, force) {
 // ceiling that rises slower than the income curve. Every descent, the
 // overflow is confiscated at 2 gold a coin — plainest pockets first — so
 // deep hands stay tense instead of drowning the machine in coins.
+// THE GHOST'S FEE: one coin per floor, and he never asks for more than the
+// cap. Shallow spins are nearly free; deep ones are a real decision.
+function wheelCost() {
+  return Math.max(1, Math.min(C.WHEEL_CAP, S.run ? (S.run.floor | 0) : 1));
+}
 function purseCap() { return 20 + 4 * Math.min(6, S.run ? actIdx(S.run.floor) : 0); }
 // ---- the ledger's little arithmetic ----
 function stairsPicked() {
@@ -5569,19 +5580,19 @@ function interact(i) {
   } else if (e.kind === 'wheel') {
     // the carnival ghost NAMES his price up front now — the owner
     // watched five coins vanish on a tap; no more silent gulps
-    if (purseTotal() < C.WHEEL_COST) {
-      S.uiFlash = { msg: 'THE GHOST WANTS ' + C.WHEEL_COST + ' COINS', t: 1.4 };
+    if (purseTotal() < wheelCost()) {
+      S.uiFlash = { msg: 'THE GHOST WANTS ' + wheelCost() + ' COINS', t: 1.4 };
       SND.deny();
       return false;
     }
     S.confirm = {
       msg: '\u{1F3A1} THE WHEEL GHOST',
-      sub: 'a spin costs ' + C.WHEEL_COST + ' coins from your purse — richest stacks pay first',
-      yesLabel: 'SPIN (' + C.WHEEL_COST + ' \u{25CF})',
+      sub: 'a spin costs ' + wheelCost() + ' coins on this floor — richest stacks pay first',
+      yesLabel: 'SPIN (' + wheelCost() + ' \u{25CF})',
       yes: () => {
-        if (!spendPurse(C.WHEEL_COST, 'the wheel ghost\u2019s fee')) return;
+        if (!spendPurse(wheelCost(), 'the wheel ghost\u2019s fee')) return;
         spinWheel();
-        toast('you feed the ghost ' + C.WHEEL_COST + ' coins and spin the wheel');
+        toast('you feed the ghost ' + wheelCost() + ' coins and spin the wheel');
         e.done = true;
       },
     };
@@ -6373,7 +6384,7 @@ window.DP = {
   petVet, petTag, legacyStamp, LEGACY_ACH,
   jarY, jarSmash,
   tollRun, tollRefill, TOLL_KIT, TOLL_MINT, toast, toastTick, whisperOnce,
-  purseCap, stairSkim, stairsAuto, stairsConfirm, stairsCancel, stairsPicked,
+  wheelCost, purseCap, stairSkim, stairsAuto, stairsConfirm, stairsCancel, stairsPicked,
   CODEX_TABS, codexTabStat, codexFull, marqueeLine,
   masteryStars, masteryPeak,
   TALES, rollTale, habits,
@@ -6420,6 +6431,8 @@ if (!HEADLESS) (function browser() {
     if (key.indexOf('th_') === 0) return 'trophy icons';
     if (key.indexOf('ic_') === 0) return 'dungeon icons';
     if (key.indexOf('sk_') === 0) return 'shopkeeper icons';
+    if (key.indexOf('bn_') === 0) return 'boon plates';
+    if (key.indexOf('ev_') === 0) return 'stranger faces';
     return 'heroes & beasts';
   }
   function loadImg(src, pack) {
@@ -6442,7 +6455,8 @@ if (!HEADLESS) (function browser() {
       const pack = packOf(key);
       // relic, trophy, dungeon and shopkeeper icons stream in lazily — they
       // don't gate the boot bar
-      const lazy = pack === 'relic icons' || pack === 'trophy icons' || pack === 'dungeon icons' || pack === 'shopkeeper icons';
+      const lazy = pack === 'relic icons' || pack === 'trophy icons' || pack === 'dungeon icons'
+                || pack === 'shopkeeper icons' || pack === 'boon plates' || pack === 'stranger faces';
       ART_IMG[key] = loadImg(src, lazy ? null : pack);
     }
     return ART_IMG[key];
@@ -6681,7 +6695,8 @@ if (!HEADLESS) (function browser() {
     gem: 'piece_gem', bag: 'piece_bag', skull: 'piece_skull', chest: 'piece_chest',
   };
   const ITEM_ART = ['sword', 'shield', 'vial', 'axe', 'heart', 'frost', 'hammer',
-                    'bomb', 'razor', 'pup', 'newt', 'rat', 'horn', 'tonic', 'torch'];
+                    'bomb', 'razor', 'pup', 'newt', 'rat', 'horn', 'tonic', 'torch',
+                    'owl', 'tortoise', 'beetle'];
   function pieceImg(name) {
     const im = art('pc_' + name, 'art/machine/pieces/' + name + '.png');
     return im._ok ? im : null;
@@ -6710,6 +6725,12 @@ if (!HEADLESS) (function browser() {
   const ENT_ICON = { chest: 'chest', shrine: 'shrine', smith: 'blacksmith', wheel: 'wheellock' };
   const EVENT_ICON = { well: 'wishingwell', auction: 'thegremlinauction', wager: 'innkeeper' };
   function entArt(kind, evId) {
+    // a stranger's own painted face comes first (icon_ev_<id>.png); the two
+    // hand-mapped icons that predate them stay as the fallback
+    if (evId) {
+      const own = art('ev_' + evId, 'art/icons/icon_ev_' + evId + '.png');
+      if (own._ok) return own;
+    }
     const name = evId ? EVENT_ICON[evId] : ENT_ICON[kind];
     if (!name) return null;
     const im = art('ic_' + name, 'art/icons/icon_' + name + '.png');
@@ -11089,18 +11110,25 @@ if (!HEADLESS) (function browser() {
     const fh = ch / (1 - FRAME_IN.t - FRAME_IN.b);
     return { x: cx - fw * FRAME_IN.l, y: cy - fh * FRAME_IN.t, w: fw, h: fh };
   }
-  // a boon's face: real art where the game has it, emoji where it doesn't
+  // a boon's face. An ITEM boon shows the actual piece you would take; every
+  // other kind wears the smith's own painted plate (art/boons/boon_<kind>.png)
+  // — including WAR PAINT, SURE HANDS and HONE, which never had a face at all.
+  function boonPlate(kind) {
+    const im = art('bn_' + kind, 'art/boons/boon_' + kind + '.png');
+    return im._ok ? im : null;
+  }
   function boonArt(o) {
     if (!o) return null;
-    if (o.kind === 'item' && o.iid) return itemArt(o.iid);
-    if (o.kind === 'potion') return shopkeeperArt('potion');
-    if (o.kind === 'pouch') return shopkeeperArt('pouch');
-    if (o.kind === 'maxhp') return shopkeeperArt('maxhp');
-    return null;
+    if (o.kind === 'item' && o.iid) return itemArt(o.iid) || boonPlate('item');
+    return boonPlate(o.kind);
   }
   // the modal's own title icon, painted where the owner drew one
   const MODAL_ART = { forge: 'blacksmith', chest: 'chest' };
   function modalIcon(room, evDef) {
+    if (room.type === 'event' && room.ev) {
+      const own = art('ev_' + room.ev, 'art/icons/icon_ev_' + room.ev + '.png');
+      if (own._ok) return own;
+    }
     const name = room.type === 'event' ? (evDef && { well: 'wishingwell', auction: 'thegremlinauction', wager: 'innkeeper' }[room.ev])
                : MODAL_ART[room.type];
     if (!name) return null;
@@ -13313,7 +13341,19 @@ if (!HEADLESS) (function browser() {
       }
     }
     uiButtons = [];
+    // WIPE THE WHOLE CANVAS FIRST. Every screen paints its own backdrop, but
+    // only across the 480x840 stage — the letterbox bars beside it belong to
+    // nobody, so anything that strayed out there (the title's rising coins,
+    // sparks, floats) used to sit and pile up frame after frame. Clear the
+    // real pixels, then CLIP to the stage so nothing can spill out again.
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = '#05030a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(scale, 0, 0, scale, offX, offY);
+    ctx.save();
+    ctx.beginPath(); ctx.rect(0, 0, LW, LH); ctx.clip();
+    // the shake rides INSIDE the clip, so a hard jolt shows the bars rather
+    // than smearing the stage across them
     if (S.screen === 'battle' && S.shake > 0.1 && S.opts.shake) {
       ctx.translate((Math.random() - 0.5) * S.shake, (Math.random() - 0.5) * S.shake);
     }
@@ -13364,6 +13404,7 @@ if (!HEADLESS) (function browser() {
       rr(b.x - 3, b.y - 3, b.w + 6, b.h + 6, 12); ctx.stroke();
       ctx.setLineDash([]);
     }
+    ctx.restore();                     // release the stage clip
   }
   // a DUEL link plants its maze before the first frame (then cleans the URL
   // so a reload doesn't re-arm the same challenge)

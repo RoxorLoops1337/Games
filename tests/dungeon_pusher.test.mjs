@@ -876,15 +876,22 @@ S.run.room.ents = [{ kind: 'shrine', done: false }];
 DP.interact(0);
 t.eq(S.run.hp, 10 + Math.round(60 * 0.25), 'shrine heals 25% of max HP');
 t.eq(S.pPois, 0, 'shrine cleanses poison');
-// wheel ghost charges 5 coins of any kind for a spin
+// THE GHOST'S FEE scales with the depth: one coin a floor, capped
+t.eq(S.run.floor, 1, 'this stretch is floor 1');
+t.eq(DP.wheelCost(), 1, 'floor 1: a single coin');
+S.run.floor = 7;  t.eq(DP.wheelCost(), 7, 'floor 7: seven');
+S.run.floor = 10; t.eq(DP.wheelCost(), 10, 'floor 10: ten');
+S.run.floor = 44; t.eq(DP.wheelCost(), C.WHEEL_CAP, 'and it caps at ' + C.WHEEL_CAP + ', however deep');
+S.run.floor = 6;                                       // a six-coin spin to test with
 S.wheelAnim = null;
 for (const k of COIN_KINDS) S.run.purse[k] = 0;
-S.run.purse.coin = 4;                                  // one short of the fee
+S.run.purse.coin = 5;                                  // one short of the fee
 S.run.room.ents = [{ kind: 'wheel', done: false }];
 t.ok(!DP.interact(0), 'the ghost refuses a purse short of the fee');
 t.ok(S.wheelAnim === null, 'no spin without paying');
 t.ok(!S.run.room.ents[0].done, 'the ghost lingers until paid');
-S.run.purse.coin = 8;
+S.run.purse.coin = 12;
+const wheelFee = DP.wheelCost();
 const wheelPurse = DP.purseTotal();
 t.ok(DP.interact(0), 'the ghost now NAMES his price');
 t.ok(S.confirm && S.confirm.yes, 'a confirm sheet stands between tap and fee');
@@ -892,9 +899,10 @@ t.eq(DP.purseTotal(), wheelPurse, 'not a coin moves before you agree');
 t.ok(!S.wheelAnim, 'and no spin either');
 S.confirm.yes(); S.confirm = null;
 t.ok(S.wheelAnim !== null, 'agreed — the wheel of fortune turns');
-t.ok(DP.purseTotal() <= wheelPurse - C.WHEEL_COST, 'the ghost pockets ' + C.WHEEL_COST + ' coins');
+t.eq(DP.purseTotal(), wheelPurse - wheelFee, 'the ghost pockets exactly this floor\'s ' + wheelFee + ' coins');
 t.ok(S.run.room.ents[0].done, 'the ghost vanishes after the spin');
-t.ok(S.run.ledger.length > 0 && S.run.ledger[0].n === -C.WHEEL_COST, 'and the LEDGER wrote the fee down');
+t.ok(S.run.ledger.length > 0 && S.run.ledger[0].n === -wheelFee, 'and the LEDGER wrote the fee down');
+S.run.floor = 1;                                       // rewind for what follows
 
 // -------- the shopkeeper (pouches and single coins for the purse) --------
 DP.srand(23);
@@ -7041,7 +7049,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.8.1', 'the self-arming board ships as v1.8.1');
+  t.eq(D.VERSION, '1.8.2', 'the newest art drop ships as v1.8.2');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP SMEARING') >= 0)),
+       'and the notes carry the letterbox fix');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('YOUR NAME IS YOURS') >= 0)),
        'and the notes carry the name lock');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('FIT THEIR FRAME') >= 0)),
@@ -7649,6 +7659,14 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf('const FRAME_IN =') >= 0 && src.indexOf('function frameAround(') >= 0,
        'the modal measures its frame\'s inner panel');
   t.ok(src.indexOf('function boonArt(') >= 0, 'and the forge boons carry painted art');
+  // the letterbox bars are wiped and the stage is clipped, so strays cannot pile up
+  t.ok(src.indexOf('ctx.fillRect(0, 0, canvas.width, canvas.height)') >= 0, 'the whole canvas is wiped each frame');
+  t.ok(src.indexOf('ctx.rect(0, 0, LW, LH); ctx.clip()') >= 0, 'and drawing is clipped to the stage');
+  t.ok(src.indexOf('release the stage clip') >= 0, 'and the clip is released again');
+  // the newest art drop
+  t.ok(src.indexOf("'owl', 'tortoise', 'beetle'") >= 0, 'the three pets carry real faces');
+  t.ok(src.indexOf('function boonPlate(') >= 0, 'every boon KIND has a painted plate');
+  t.ok(src.indexOf("'art/icons/icon_ev_'") >= 0, 'and every stranger has a portrait');
   t.ok(src.indexOf('if (S.stairsAsk) { stairsCancel(); return; }') >= 0, 'ESC stays on the floor');
   t.ok(src.indexOf('S.relicPick = null; S.stairsAsk = null;') >= 0, 'the crash net clears it');
   D.setLang('nl');
