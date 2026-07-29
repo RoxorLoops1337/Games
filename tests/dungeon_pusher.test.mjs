@@ -1613,7 +1613,9 @@ finishFight();
                     'magarmor', 'coinclone', 'jackthief',
                     'ritual', 'curl', 'split', 'thorns', 'malleable', 'dormant', 'nob', 'summoner', 'constrict', 'fading',
                     // the deep's own hands (v1.7.9)
-                    'pincer', 'webber', 'swallow', 'sunder', 'shade', 'charger'];
+                    'pincer', 'webber', 'swallow', 'sunder', 'shade', 'charger',
+                    // the owner's own bestiary (v1.9.0)
+                    'golem', 'bloom', 'sower', 'hounds', 'tally', 'snatch', 'emberskin', 'mimicry'];
   const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward', 'mirror', 'tar'];
   t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
   // ...and every one of them SAYS what it does on the foe's panel. Without
@@ -1660,7 +1662,7 @@ finishFight();
   S.run.floor = 16; t.eq(DP.mkEnemy('boss').id, 'auditor', 'act 4: THE AUDITOR holds the mint');
   S.run.bside = 0;
   S.run.floor = 21; t.eq(DP.mkEnemy('boss').id, 'drownedbanker', 'THE UNDERLAKE holds its own lair');
-  S.run.floor = 26; t.eq(DP.mkEnemy('boss').id, 'lich', 'past the lake the rotation resumes, scaled up');
+  S.run.floor = 26; t.eq(DP.mkEnemy('boss').id, 'stonewarden', 'past the lake the rotation runs ON into the new lords');
   // an act-3 spawn at floor 11 out-muscles its act-2 kin at floor 10
   S.run.floor = 10; S.run.depth = 1;
   const late2 = DP.mkEnemy('battle', 'frostorc');
@@ -4025,7 +4027,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const { DP: D } = loadGame({}, false);
   const mint = D.ENEMY_TIERS[3];
-  t.eq(mint.length, 17, 'seventeen counting-house horrors (the deep\'s hands moved in)');
+  t.eq(mint.length, 20, 'twenty counting-house horrors');
   t.ok(mint.every(e => e.hp > 0 && e.atk > 0 && e.gold > 0 && e.icon && e.name), 'all fully statted');
   // the three minted traits live here and only here
   for (const tr of ['magarmor', 'coinclone', 'jackthief']) {
@@ -6432,6 +6434,303 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   }
 }
 
+// ============================================================
+// THE OWNER'S OWN BESTIARY (v1.9.0)
+// ============================================================
+{
+  const mk = (seed, eid, type) => {
+    const { DP: D } = loadGame({}, false);
+    D.srand(seed); D.newRun('knight');
+    D.S.run.room.ents = [{ kind: 'monster', mtype: type || 'battle', eid, done: false, px: 0.5, py: 0.4 }];
+    D.interact(0);
+    return D;
+  };
+
+  // ---- THE COIN GOLEM: the machine itself feeds it ----
+  {
+    const D = mk(601, 'coingolem');
+    const g = D.S.foes.find(f => f.trait === 'golem');
+    t.ok(g, 'the golem stands');
+    g.hp = Math.max(1, g.maxHp - 20); g.block = 0;
+    const hp0 = g.hp;
+    D.S.battle.hand = { coin: 9, silver: 9, lucky: 9, blue: 9, green: 9, red: 9 };
+    D.S.battle.sel = 'coin'; D.S.cd = 0;
+    t.ok(D.drop(50, true), 'a GOLD coin goes in');
+    t.eq(g.hp, hp0 + 1, 'and it MENDS the golem');
+    D.S.battle.sel = 'silver'; D.S.cd = 0;
+    const blk0 = g.block | 0;
+    D.drop(50, true);
+    t.eq(g.block, blk0 + 1, 'silver ARMOURS it');
+    const atk0 = g.atk;
+    D.S.battle.sel = 'lucky'; D.S.cd = 0; D.drop(50, true);
+    t.eq(g.atk, atk0 + 1, 'a LUCKY coin sharpens it');
+    D.S.battle.sel = 'blue'; D.S.cd = 0; D.drop(50, true);
+    D.S.battle.sel = 'green'; D.S.cd = 0; D.drop(50, true);
+    t.eq(g.atk, atk0 + 3, 'frost and venom sharpen it too');
+    // ...but only for the round
+    D.endRoundTicks();
+    t.eq(g.atk, atk0, 'and the edge dulls when the round turns');
+    // a RED coin is safe — it is none of the three
+    const atk1 = g.atk, hp1 = g.hp, blk1 = g.block | 0;
+    D.S.battle.hand = { red: 9 };
+    D.S.battle.sel = 'red'; D.S.cd = 0; D.drop(50, true);
+    t.ok(g.atk === atk1 && g.hp === hp1 && (g.block | 0) === blk1, 'a HEART coin feeds it nothing');
+  }
+
+  // ---- THE HOUNDMASTER: the pack is the threat ----
+  {
+    const D = mk(602, 'houndmaster');
+    const hm = D.S.foes.find(f => f.trait === 'hounds');
+    const atk0 = hm.atk;
+    D.enemyActFoe(hm);
+    const pack = D.S.foes.filter(f => f.hp > 0 && f.houndOf === hm.id);
+    t.eq(pack.length, 1, 'he looses a hound');
+    t.eq(hm.atk, atk0 + 2, 'and every hound at heel sharpens him');
+    D.enemyActFoe(hm);
+    t.eq(D.S.foes.filter(f => f.hp > 0 && f.houndOf === hm.id).length, 2, 'another hound joins');
+    t.eq(hm.atk, atk0 + 4, 'and he grows again');
+    // cull the pack and he shrinks back
+    for (const h of D.S.foes) if (h.houndOf === hm.id) h.hp = 0;
+    D.enemyActFoe(hm);
+    t.ok(hm.atk < atk0 + 6, 'culling the pack takes his teeth back');
+    // and the hounds scale with the deep
+    const D2 = mk(603, 'houndmaster');
+    D2.S.run.floor = 18;
+    const hm2 = D2.S.foes.find(f => f.trait === 'hounds');
+    D2.enemyActFoe(hm2);
+    const deep = D2.S.foes.find(f => f.houndOf === hm2.id);
+    t.ok(deep.maxHp > 20, 'a deep hound is no puppy (' + deep.maxHp + ' HP)');
+  }
+
+  // ---- GRAVEBLOOM + its sowers ----
+  {
+    const D = mk(604, 'gravebloom');
+    // it never grows alone: two gardeners come with the flower
+    t.eq(D.S.foes.filter(f => f.trait === 'sower').length, 2,
+         'the bloom brings two BONE SOWERS with it');
+    t.ok(D.S.foes.filter(f => f.trait === 'sower').every(f => f.intent),
+         'and both come with a plan of their own');
+    const b = D.S.foes.find(f => f.trait === 'bloom');
+    b.hp = Math.max(1, b.maxHp - 30);
+    const hp0 = b.hp;
+    D.enemyActFoe(b);
+    t.eq(b.hp, hp0, 'a clean bed feeds the bloom nothing');
+    D.S.coins.push({ st: 'plat', kind: 'skull', x: 40, y: 40 },
+                   { st: 'plat', kind: 'skull', x: 60, y: 40 });
+    D.enemyActFoe(b);
+    t.eq(b.hp, hp0 + 6, 'but every skull left on the bed feeds it 3');
+    // its gardeners sow the crop it drinks
+    const D2 = mk(605, 'bonesower');
+    const sw = D2.S.foes.find(f => f.trait === 'sower');
+    D2.S.rain.length = 0;
+    D2.enemyActFoe(sw);
+    t.ok(D2.S.rain.filter(r => r.kind === 'skull').length >= 2, 'the sower seeds skulls every turn');
+  }
+
+  // ---- THE TALLY MAN: every third shake bills you ----
+  {
+    const D = mk(606, 'tallyman');
+    const tm = D.S.foes.find(f => f.trait === 'tally');
+    D.S.battle.phase = 'drop'; D.S.battle.tilts = 9; D.S.noTiltT = 0;
+    const hp0 = D.S.run.hp;
+    D.tilt('f'); D.tilt('f');
+    t.eq(D.S.run.hp, hp0, 'two shakes cost nothing but the count');
+    t.eq(tm.tally, 2, 'though he is counting');
+    D.tilt('f');
+    t.ok(D.S.run.hp < hp0, 'the THIRD comes due');
+    const hp1 = D.S.run.hp;
+    D.tilt('f'); D.tilt('f'); D.tilt('f');
+    t.ok(hp1 - D.S.run.hp > hp0 - hp1, 'and the next tally bills HARDER');
+  }
+
+  // ---- THE PET SNATCHER ----
+  {
+    const D = mk(607, 'petsnatcher');
+    const ps = D.S.foes.find(f => f.trait === 'snatch');
+    D.summonPet('pup');
+    const pet = D.S.pets.find(p => p.hp > 0);
+    t.ok(pet, 'a companion is at your side');
+    D.enemyActFoe(ps);
+    t.ok(ps.stolenPet, 'it snatches the companion');
+    t.eq(D.S.pets.filter(p => p.hp > 0).length, 0, 'and your bench is empty');
+    D.dmgFoe(ps, 9999);
+    t.ok(D.S.pets.some(p => p.hp > 0), 'cutting it down brings them home');
+    // an empty bench is not an error
+    const D2 = mk(608, 'petsnatcher');
+    D2.S.pets = [];
+    D2.enemyActFoe(D2.S.foes.find(f => f.trait === 'snatch'));
+    t.ok(!D2.S.foes.find(f => f.trait === 'snatch').stolenPet, 'with no pets there is nothing to take');
+  }
+
+  // ---- THE ASHWRIGHT: its skin burns whoever strikes it ----
+  {
+    const D = mk(609, 'ashwright');
+    const aw = D.S.foes.find(f => f.trait === 'emberskin');
+    D.S.pBurn = 0;
+    D.dmgFoe(aw, 3);
+    t.ok(D.S.pBurn >= 2, 'landing a blow sets YOU alight');
+    const b1 = D.S.pBurn;
+    D.dmgFoe(aw, 3);
+    t.ok(D.S.pBurn > b1, 'and every further blow stokes it');
+  }
+
+  // ---- THE UNDERSTUDY: it plays back the last lord you felled ----
+  {
+    const D = mk(610, 'understudy');
+    D.S.run.lastBoss = 'demon';                 // the Pit Boss: venom
+    const u = D.S.foes.find(f => f.trait === 'mimicry');
+    D.enemyActFoe(u);
+    t.eq(u.trait, 'venom', 'it wears the Pit Boss\'s trait');
+    t.ok(/Pit Boss/.test(u.name), 'and takes his name (' + u.name + ')');
+    t.ok(/ELITE/.test(u.name), 'always billed as an ELITE');
+    // an empty playbill still gives a real fight
+    const D2 = mk(611, 'understudy');
+    D2.S.run.lastBoss = '';
+    const u2 = D2.S.foes.find(f => f.trait === 'mimicry');
+    D2.enemyActFoe(u2);
+    t.eq(u2.trait, 'fast', 'with no lord to copy it merely improvises');
+    // and felling a lord fills the playbill
+    const D3 = mk(612, 'dragon', 'boss');
+    D3.dmgFoe(D3.S.foes[0], 99999);
+    t.eq(D3.S.run.lastBoss, 'dragon', 'a felled lord is remembered');
+  }
+
+  // ---- BONEGUARD: a bonded pair, felled together or not at all ----
+  {
+    const D = mk(613, 'boneguard');
+    const pair = D.S.foes.filter(f => f.trait === 'twin');
+    t.eq(pair.length, 2, 'the boneguard meets you as a PAIR');
+    t.ok(pair[0].hp === pair[1].hp, 'each with its own health');
+    pair[0].hp = 0;
+    D.endRoundTicks();
+    t.ok(pair[0].hp > 0, 'fell one alone and its partner raises it');
+    pair[0].hp = 0; pair[1].hp = 0;
+    D.endRoundTicks();
+    t.ok(pair[0].hp <= 0 && pair[1].hp <= 0, 'fell BOTH in a round and they stay down');
+  }
+
+  // ---- THE STORMKNIGHT + THE STONEWARDEN ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(614); D.newRun('knight');
+    t.ok(D.BOSSES_A.some(b => b.id === 'stormknight'), 'THE STORMKNIGHT holds a lair');
+    t.ok(D.BOSSES_A.some(b => b.id === 'stonewarden'), 'and so does THE STONEWARDEN');
+    // OVERCHARGE doubles what the meter takes
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    D.S.battle.hand = { coin: 40 }; D.S.battle.sel = 'coin';
+    D.S.meter = 0; D.S.overT = 0; D.S.cd = 0;
+    D.drop(50, true);
+    t.eq(D.S.meter, 1, 'a plain drop feeds the meter one');
+    D.S.overT = 3; D.S.meter = 0; D.S.cd = 0;
+    D.drop(50, true);
+    t.eq(D.S.meter, 2, 'OVERCHARGED it takes two');
+  }
+
+  // ---- THE DEBT COLLECTOR: he robs you, runs, and hides in the fog ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(615); D.newRun('knight');
+    const S3 = D.S;
+    S3.run.floor = 4;
+    t.eq(D.dcCount(), 8, 'he lifts two coins per floor');
+    // plant him across the room from us and fill the purse
+    const r0 = D.curRoom();
+    r0.ents = [{ kind: 'collector', done: false, robbed: false, px: 0.9, py: 0.4 }];
+    for (const k of D.COIN_KINDS) S3.run.purse[k] = 0;
+    S3.run.purse.coin = 6; S3.run.purse.silver = 5;
+    const purse0 = D.purseTotal();
+    // he walks to you — no theft until he ARRIVES
+    D.dcTick(0.05, 0.2, 0.4);
+    t.ok(r0.ents[0].px < 0.9, 'he starts walking at you');
+    t.eq(D.purseTotal(), purse0, 'and takes nothing on the way');
+    for (let i = 0; i < 120 && !r0.ents[0].robbed; i++) D.dcTick(0.05, 0.2, 0.4);
+    t.ok(r0.ents[0].robbed, 'he reaches you and helps himself');
+    t.eq(D.purseTotal(), purse0 - 8, 'eight coins — two per floor of the four');
+    const loot = r0.ents[0].loot;
+    t.eq(Object.values(loot).reduce((a, b) => a + b, 0), 8, 'and every one is in his hands');
+    t.eq(loot.coin, 6, 'he takes the FAT stack first');
+    // ...then he bolts, and turns up in a room you have NOT opened
+    const before = D.curRoom().ents.length;
+    for (let i = 0; i < 200 && D.curRoom().ents.length === before; i++) D.dcTick(0.05, 0.2, 0.4);
+    t.ok(D.curRoom().ents.length < before, 'he runs out of the room');
+    const hole = S3.run.dcRoom;
+    t.ok(hole && S3.run.map.rooms[hole], 'and goes to ground somewhere on the floor');
+    t.ok(!S3.run.map.rooms[hole].visited, 'in a room you have never opened');
+    t.ok(!S3.run.map.rooms[hole].boss, 'and never the lair — there is always a floor left to catch him');
+    t.ok(S3.run.map.rooms[hole].ents.some(e2 => e2.kind === 'collector' && e2.robbed),
+         'he is really there, purse and all');
+    // corner him: the fight hands back every coin, with a tip on top
+    S3.run.map.cur = hole;
+    S3.run.room = S3.run.map.rooms[hole];
+    const ci = S3.run.room.ents.findIndex(e2 => e2.kind === 'collector');
+    D.interact(ci);
+    t.eq(S3.screen, 'battle', 'cornered, he fights');
+    t.eq(S3.foes[0].id, 'debtcollector', 'and it is the collector himself');
+    const purseMid = D.purseTotal();
+    D.dmgFoe(S3.foes[0], 99999);
+    t.eq(D.purseTotal(), purseMid + 8 + 2, 'felled: all eight coins back, plus two for your trouble');
+    t.ok(!S3.run.dcRoom, 'and the map forgets him');
+  }
+
+  // ---- ...and when there is nowhere left to run ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(616); D.newRun('knight');
+    for (const k of Object.keys(D.S.run.map.rooms)) D.S.run.map.rooms[k].visited = true;
+    const r0 = D.curRoom();
+    r0.ents = [{ kind: 'collector', done: false, robbed: true, loot: { coin: 2 }, px: 0.5, py: 0.4 }];
+    const key = D.dcHide(0);
+    t.eq(key, D.S.run.map.cur, 'a walked-out floor leaves him cornered where he stands');
+    t.eq(D.curRoom().ents.length, 1, 'he does not vanish');
+  }
+
+  // ---- THE MIMIC CHEST: the lid has teeth ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(617); D.newRun('knight');
+    const S3 = D.S;
+    S3.run.room.ents = [{ kind: 'chest', done: false, mimic: true, px: 0.5, py: 0.4 }];
+    D.interact(0);
+    t.ok(!S3.room, 'the lid never opens on a prize');
+    t.eq(S3.screen, 'battle', 'it bites instead');
+    t.eq(S3.foes[0].id, 'mimicchest', 'the chest WAS the monster');
+    // the ambush: the first blow doubles, and only the first
+    const m = S3.foes[0];
+    m.intent = { t: 'atk' };
+    S3.run.block = 0; S3.run.hp = S3.run.maxHp = 400; S3.pets = [];
+    const hp0 = S3.run.hp;
+    D.enemyActFoe(m);
+    const first = hp0 - S3.run.hp;
+    t.eq(first, m.atk * 2, 'the lid SNAPS — double on the ambush');
+    m.intent = { t: 'atk' };
+    const hp1 = S3.run.hp;
+    D.enemyActFoe(m);
+    t.eq(hp1 - S3.run.hp, m.atk, 'after that it is only a box with teeth');
+    // and it coughs up a key when it dies
+    const keys0 = S3.run.keys;
+    D.dmgFoe(m, 99999);
+    t.ok(S3.run.keys > keys0, 'the false lid splits on a key');
+  }
+
+  // ---- neither one is ever rolled into a room's line-up ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(618); D.newRun('knight');
+    for (const tier of D.ENEMY_TIERS) {
+      t.ok(!tier.some(e2 => e2.id === 'debtcollector' || e2.id === 'mimicchest'),
+           'the odd foes stay out of the roster');
+    }
+    t.ok(D.enemyById('debtcollector') && D.enemyById('mimicchest'),
+         'but the deep can still name them');
+    // every trait and guard they wear explains itself on the panel
+    for (const f of D.ODD_FOES) {
+      t.ok(!f.trait || D.TRAIT_TXT[f.trait], f.name + ' explains its trait');
+      t.ok(!f.def || D.DEF_TXT[f.def], f.name + ' explains its guard');
+    }
+  }
+}
+
 // -------- TOAST TRIAGE: announcements take turns now --------
 {
   const { DP: D } = loadGame({}, false);
@@ -7049,7 +7348,13 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.8.2', 'the newest art drop ships as v1.8.2');
+  t.eq(D.VERSION, '1.9.0', 'the owner’s own bestiary ships as v1.9.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('DEBT COLLECTOR') >= 0)),
+       'and the notes carry the collector');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('COIN GOLEM') >= 0)),
+       'and the golem');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('MIMIC CHEST') >= 0)),
+       'and the false chest');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP SMEARING') >= 0)),
        'and the notes carry the letterbox fix');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('YOUR NAME IS YOURS') >= 0)),
@@ -7110,7 +7415,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.ENEMY_TIERS[4].length, 17, 'seventeen drowned kin in the lake');
+  t.eq(D.ENEMY_TIERS[4].length, 20, 'twenty drowned kin in the lake');
   t.ok(D.ENEMY_TIERS[4].every(e => e.hp > 0 && e.atk > 0 && e.gold > 0), 'all fully statted');
   const ids = new Set();
   for (const tier of D.ENEMY_TIERS) for (const e of tier) { t.ok(!ids.has(e.id) || t.fail, ''); ids.add(e.id); }
@@ -7131,20 +7436,30 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.S.run.bside = 1;
   t.eq(D.bossFor(23).id, 'siltqueen', 'THE SILT QUEEN holds the B-side');
   D.S.run.bside = 0;
-  t.eq(D.bossFor(26).id, 'lich', 'past the lake the old rotation resumes');
+  // the A-side rotation now runs SIX deep: the four founders hold floors 1-20
+  // exactly as before, and the two newcomers take the endless lairs beyond
+  t.eq(D.bossFor(1).id, 'dragon', 'act 1 still opens on the Vault Dragon');
+  t.eq(D.bossFor(6).id, 'lich', 'act 2 still keeps the Coin Lich');
+  t.eq(D.bossFor(11).id, 'demon', 'act 3 still keeps the Pit Boss');
   t.eq(D.bossFor(18).id, 'auditor', 'and the mint keeps THE AUDITOR');
+  // ...and past the lake the rotation runs ON into them rather than looping
+  // straight back onto the founders
+  t.eq(D.bossFor(26).id, 'stonewarden', 'floors 26-30 belong to THE STONEWARDEN');
+  t.eq(D.bossFor(31).id, 'dragon', 'and only THEN does the wheel come round again');
   // prestige never skips a soul into the lake early — every old tuning stands
   D.S.run.ng = 2;
   D.S.run.floor = 11;
   t.ok(D.curRoster() === D.ENEMY_TIERS[3], 'NG++ floor 11 still fields the MINT, not the lake');
-  t.eq(D.bossFor(11).id, 'dragon', 'and its boss rotation is untouched');
+  // THE STORMKNIGHT is the prestige lord: act 4 is only ever reached by a
+  // NEW GAME+ run, since a plain run's floors 21-25 are the lake instead
+  t.eq(D.bossFor(11).id, 'stormknight', 'a legend meets a NEW lord, not a repeat founder');
   D.S.run.floor = 21;
   t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'but floor 21 takes even a legend into the water');
   D.S.run.ng = 0;
   // the codex grew its fifth shelf
   t.ok(D.CODEX_TABS.indexOf('a5') >= 0, 'the codex owns an a5 shelf');
   const a5 = D.codexTabStat('a5');
-  t.eq(a5.all, 17 + 2, 'the lake shelf counts its kin and both lords');
+  t.eq(a5.all, 20 + 2, 'the lake shelf counts its kin and both lords');
   D.endRun('done');
 }
 
