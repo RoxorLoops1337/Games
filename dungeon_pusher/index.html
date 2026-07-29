@@ -51,6 +51,15 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.9.0', notes: [
+    'THE DEBT COLLECTOR \u{1F4BC} — a thief who does not fight you for your coins. He walks up, lifts TWO PER FLOOR and RUNS, and hides in a room you have never opened; the map keeps a rumour of where. Corner him and every coin comes back — “alright, alright, I was just keeping them safe for you” — with two gold on top for the trouble',
+    'THE COIN GOLEM \u{1FA99} — the fight where everything the machine taught you is wrong. Gold coins MEND it, silver ARMOURS it, and lucky, frost and venom only SHARPEN it for the round. Beat it on items, pets and poison — or feed it nothing but slugs',
+    'THE MIMIC CHEST \u{1F9F0} — one chest a floor may have teeth. Same icon, same silhouette, same lid. Its first blow lands DOUBLE, and its false belly coughs up a key when it dies',
+    'THE HOUNDMASTER \u{1F415} looses a hound every turn and grows +2 attack for each one still breathing — cull the pack or drown in it. THE TALLY MAN \u{1F9EE} counts your TILTs and bills you on every third, harder each time. THE PET SNATCHER \u{1F9DA} steals a companion and fights beside it. THE ASHWRIGHT \u{1F525} is live coal: every blow YOU land sets you alight',
+    'THE UNDERSTUDY \u{1F3AD} — an ELITE that plays back the last LORD you felled: its trait, its guard, its name. Kill a dragon and the next act hands you a smaller one',
+    'THE GRAVEBLOOM \u{1F940} never grows alone — two BONE SOWERS seed the bed it drinks from (+3 HP a skull). Cut the gardeners first. And THE BONEGUARD \u{1F9B4} stand as a bonded pair: separate health, but fell one alone and its partner simply raises it',
+    'TWO NEW LORDS \u{26A1} — THE STORMKNIGHT OVERCHARGES your jackpot meter so it fills double and EARTHS in him; THE STONEWARDEN petrifies a whole pile on the bed into dead stone that does nothing at all when it falls',
+  ] },
   { v: '1.8.2', notes: [
     'THE EDGES STOP SMEARING \u{1F9F9} — on a phone the game sits in a letterbox, and the bands above and below the board belonged to nobody: any spark or coin that drifted out there was never painted over, so it sat and piled up until the screen had a crust of leftovers around it. The canvas is wiped every frame now and the stage is CLIPPED, so nothing can leak into the margins again',
     'the last of the blanks are painted \u{1F3A8} — the eleven relics that still wore an emoji have their icons, so do the last four trophies; the OWL, TORTOISE and BEETLE carry their real faces on the bed; every stranger in the deep has a portrait; and the blacksmith\u2019s boons are all painted at last — WAR PAINT, SURE HANDS and HONE never had a face before',
@@ -456,6 +465,9 @@ const C = {
   KEY_CARRY: 3,                         // keys you may carry down to the next floor
   WHEEL_COST: 5,                        // (legacy) the ghost's old flat fee — see wheelCost()
   WHEEL_CAP: 10,                        // ...he never asks for more than this
+  DC_CHANCE: 0.5,                       // odds a floor hides THE DEBT COLLECTOR
+  DC_PER_FLOOR: 2,                      // ...and how many coins he lifts per floor
+  MIMIC_CHANCE: 0.28,                   // odds one of a floor's chests has teeth
   FORGE_SCRAP_CHANCE: 0.22,             // odds the forge's third boon is MELT A PIECE DOWN
   // combat is played in ROUNDS: your PURSE is a deck of typed coins — you
   // choose which to insert — then the tray resolves and the foes act
@@ -1080,6 +1092,10 @@ const ENEMY_TIERS = [
     // ---- the deep's own hands (v1.7.9): each of these attacks a system
     // nothing else in the bestiary has ever touched ----
     { id: 'cavecrab',    icon: '\u{1F980}', name: 'Cave Crab',     hp: 32, atk: 2, trait: 'pincer',  def: null,  gold: 15 },
+    // ---- the owner's own bestiary (v1.9.0) ----
+    { id: 'coingolem',   icon: '\u{1FA99}', name: 'Coin Golem',    hp: 40, atk: 3, trait: 'golem',   def: null,  gold: 20 },
+    { id: 'gravebloom',  icon: '\u{1F940}', name: 'Gravebloom',    hp: 34, atk: 2, trait: 'bloom',   def: null,  gold: 18 },
+    { id: 'bonesower',   icon: '\u{1F480}', name: 'Bone Sower',    hp: 18, atk: 1, trait: 'sower',   def: null,  gold: 8 },
   ],
   // ---- ACT 2 (floors 6-10): the Deep Halls — frost-touched kin ----
   [
@@ -1104,6 +1120,9 @@ const ENEMY_TIERS = [
     { id: 'slumberhulk', icon: '\u{1F43B}', name: 'Slumbering Hulk', hp: 62, atk: 5, trait: 'dormant',   def: null, gold: 30 },
     { id: 'widowspider', icon: '\u{1F577}\u{FE0F}', name: 'Widow Spider', hp: 44, atk: 3, trait: 'webber',  def: null, gold: 26 },
     { id: 'bogogre',     icon: '\u{1FAB5}', name: 'Bog Ogre',      hp: 56, atk: 4, trait: 'swallow', def: 'tar', gold: 28 },
+    { id: 'houndmaster', icon: '\u{1F415}', name: 'Houndmaster',   hp: 50, atk: 3, trait: 'hounds',  def: null,  gold: 30 },
+    { id: 'tallyman',    icon: '\u{1F9EE}', name: 'The Tally Man', hp: 48, atk: 3, trait: 'tally',   def: null,  gold: 28 },
+    { id: 'boneguard',   icon: '\u{1F9B4}', name: 'Boneguard',     hp: 60, atk: 4, trait: 'twin',    def: 'armor', gold: 30 },
   ],
   // ---- ACT 3 (floors 11+): the Abyss — ember-wreathed horrors ----
   [
@@ -1126,6 +1145,9 @@ const ENEMY_TIERS = [
     { id: 'bladefiend',  icon: '\u{1F5E1}\u{FE0F}', name: 'Blade Fiend', hp: 58, atk: 6, trait: 'sunder',  def: null, gold: 38 },
     { id: 'shadowstalker', icon: '\u{1F571}\u{FE0F}', name: 'The Shadow', hp: 54, atk: 5, trait: 'shade', def: null, gold: 36 },
     { id: 'irontusk',    icon: '\u{1F417}', name: 'Irontusk',      hp: 68, atk: 5, trait: 'charger', def: null, gold: 40 },
+    { id: 'petsnatcher', icon: '\u{1F9DA}', name: 'The Pet Snatcher', hp: 56, atk: 5, trait: 'snatch', def: null, gold: 38 },
+    { id: 'ashwright',   icon: '\u{1F525}', name: 'The Ashwright', hp: 66, atk: 5, trait: 'emberskin', def: null, gold: 40 },
+    { id: 'understudy',  icon: '\u{1F3AD}', name: 'The Understudy', hp: 62, atk: 5, trait: 'mimicry', def: null, gold: 44 },
   ],
   // ---- ACT 4 (floors 16-20): THE MINT — gilded constructs & counting-house horrors ----
   [
@@ -1147,6 +1169,9 @@ const ENEMY_TIERS = [
     { id: 'coffercrab',   icon: '\u{1F980}', name: 'Coffer Crab',       hp: 88,  atk: 8, trait: 'pincer',  def: 'armor', gold: 48 },
     { id: 'giltwidow',    icon: '\u{1F577}\u{FE0F}', name: 'Gilt Widow',  hp: 84,  atk: 8, trait: 'webber', def: null,   gold: 46 },
     { id: 'assayerfiend', icon: '\u{1F5E1}\u{FE0F}', name: 'Assayer Fiend', hp: 90, atk: 9, trait: 'sunder', def: null, gold: 50 },
+    { id: 'bulliongolem', icon: '\u{1FA99}', name: 'Bullion Golem',    hp: 96,  atk: 9, trait: 'golem',  def: 'armor', gold: 52 },
+    { id: 'mintwarden',   icon: '\u{1F415}', name: 'Mint Houndmaster', hp: 92,  atk: 8, trait: 'hounds', def: null,   gold: 54 },
+    { id: 'ledgerman',    icon: '\u{1F9EE}', name: 'The Ledger Man',   hp: 88,  atk: 8, trait: 'tally',  def: null,   gold: 52 },
   ],
   // ---- ACT 5 (floors 21-25): THE UNDERLAKE — the drowned vaults. The old
   // beyond-ramp used to carry these floors; it now lives in the base stats
@@ -1169,6 +1194,9 @@ const ENEMY_TIERS = [
     { id: 'drownedwidow', icon: '\u{1F577}\u{FE0F}', name: 'Drowned Widow', hp: 112, atk: 10, trait: 'webber', def: 'regen', gold: 60 },
     { id: 'lakestalker',  icon: '\u{1F571}\u{FE0F}', name: 'The Lake Shadow', hp: 108, atk: 10, trait: 'shade', def: null, gold: 62 },
     { id: 'drownedtusk',  icon: '\u{1F417}', name: 'Drowned Tusk',    hp: 132, atk: 10, trait: 'charger', def: 'armor', gold: 68 },
+    { id: 'drownedgolem', icon: '\u{1FA99}', name: 'Drowned Golem',   hp: 138, atk: 11, trait: 'golem',    def: 'regen', gold: 70 },
+    { id: 'lakebloom',    icon: '\u{1F940}', name: 'Lake Bloom',      hp: 118, atk: 10, trait: 'bloom',    def: null,   gold: 66 },
+    { id: 'silthound',    icon: '\u{1F415}', name: 'Silt Houndmaster', hp: 124, atk: 10, trait: 'hounds',  def: null,   gold: 72 },
   ],
 ];
 // back-compat alias: the act-1 roster (tests and old references)
@@ -1185,12 +1213,20 @@ function curRoster() {
   if (rawAct(f) >= 4) return ENEMY_TIERS[4];             // the lake takes everyone
   return ENEMY_TIERS[Math.min(3, actIdx(f))];            // prestige ladders as tuned
 }
+// TWO FOES THE ROSTER NEVER ROLLS. The deep places these itself, on the MAP
+// rather than in a room's line-up: the Debt Collector robs you and runs, the
+// Mimic Chest sits in plain sight wearing a chest's face. Keeping them out of
+// ENEMY_TIERS keeps the roster's own weights (and its census) honest.
+const ODD_FOES = [
+  { id: 'debtcollector', icon: '\u{1F4BC}', name: 'The Debt Collector', hp: 44, atk: 4, trait: 'ledger', def: null,    gold: 26 },
+  { id: 'mimicchest',    icon: '\u{1F9F0}', name: 'The Mimic Chest',    hp: 52, atk: 4, trait: 'ambush', def: 'armor', gold: 34 },
+];
 function enemyById(id) {
   for (const tier of ENEMY_TIERS) {
     const e = tier.find(x => x.id === id);
     if (e) return e;
   }
-  return null;
+  return ODD_FOES.find(x => x.id === id) || null;
 }
 const BOSSES = [
   { id: 'dragon', icon: '\u{1F409}', name: 'Vault Dragon', hp: 130, atk: 7, trait: 'curse', def: 'armor', gold: 70 },
@@ -1210,13 +1246,20 @@ const BOSSES2 = [
   // run has always been safe. Act 4's B-side lair is his.
   { id: 'duroskul', icon: '\u{1F480}', name: 'DUROSKUL', hp: 190, atk: 9, trait: 'sunder', def: 'armor', gold: 140 },
 ];
+// THE STORMKNIGHT overcharges your own meter until it earths itself in HIM;
+// THE STONEWARDEN turns a whole pile of your bed to worthless stone. Both
+// ride the A-side, one act apart.
+const BOSS_STORM = { id: 'stormknight', icon: '\u{26A1}', name: 'THE STORMKNIGHT', hp: 176, atk: 9, trait: null, def: 'ward',  gold: 135 };
+const BOSS_STONE = { id: 'stonewarden', icon: '\u{1F5FF}', name: 'THE STONEWARDEN', hp: 198, atk: 9, trait: null, def: 'armor', gold: 145 };
+// the A-side's full rotation: the four founders, then the two newcomers
+const BOSSES_A = [].concat(BOSSES, [BOSS_STORM, BOSS_STONE]);
 // THE UNDERLAKE's lair-holders — floors 21-25 only, both sides of the coin
 const BOSS5  = { id: 'drownedbanker', icon: '\u{1F9DC}', name: 'THE DROWNED BANKER', hp: 165, atk: 8, trait: 'gremlin', def: 'gel',   gold: 140 };
 const BOSS5B = { id: 'siltqueen',     icon: '\u{1F419}', name: 'THE SILT QUEEN',     hp: 158, atk: 8, trait: 'curse',   def: 'regen', gold: 130 };
 // which boss holds this floor's lair — the run's B-SIDE flag decides
 function bossFor(floor) {
   if (rawAct(floor) === 4) return (S.run && S.run.bside) ? BOSS5B : BOSS5;
-  const side = (S.run && S.run.bside) ? BOSSES2 : BOSSES;
+  const side = (S.run && S.run.bside) ? BOSSES2 : BOSSES_A;
   return side[actIdx(floor) % side.length];
 };
 // NAMED CHAMPIONS: one per act, hiding in the elite pool from floor 4 on —
@@ -1431,6 +1474,17 @@ const TRAIT_TXT = {
   sunder: 'shatters a piece of your ARSENAL into a skull on the bed',
   shade: 'shadows a purse pocket — those coins land as worthless SLUGS',
   charger: 'winds up 2 turns, then GORES for triple — a TILT staggers it',
+  // the owner's own bestiary (v1.9.0)
+  golem: 'gold MENDS it, silver ARMOURS it, sharp coins SHARPEN it for the round',
+  bloom: 'drinks every skull left on the bed (+3 HP each)',
+  sower: 'sows skulls onto the bed every turn — the bloom\u2019s gardener',
+  hounds: 'looses a hound a turn: +2 attack for every one still breathing',
+  tally: 'counts your TILTs — every third one bills you, harder each time',
+  snatch: 'steals a companion and fights beside it — cut it down to get them back',
+  emberskin: 'live coal: every blow you land sets YOU alight (+2 burn)',
+  mimicry: 'plays back the last LORD you felled — its trait, its guard, its name',
+  ledger: 'holds your stolen coins — cut him down and every one comes back',
+  ambush: 'the false lid: its FIRST blow lands double',
 };
 // the defensive mechanic, spelled out on the foe's panel
 const DEF_TXT = {
@@ -1456,6 +1510,7 @@ const ENT_INFO = {
   wheel:   { icon: '\u{1F3A1}', name: 'WHEEL GHOST' },
   stairs:  { icon: '\u{1FA9C}', name: 'STAIRS DOWN' },
   event:   { icon: '❔', name: 'A STRANGER' },
+  collector: { icon: '\u{1F4BC}', name: 'THE DEBT COLLECTOR' },
 };
 
 // ------------------------------------------------------------------- state
@@ -1517,6 +1572,7 @@ const S = {
   shade: null,                         // THE SHADOW's taint {k, n} — coins land as slugs
   sealed: '',                          // DUROSKUL's filed relic id
   sealT: 0,                            // ...and the rounds it stays quiet
+  overT: 0,                            // the STORMKNIGHT's overcharge, in rounds
   enemy: null,                         // the TARGETED foe (points into S.foes)
   battle: null,                        // round machine {round, phase, hand, loot, ...}
   victory: null,                       // battle-won overlay {t, gold, keys, offer}
@@ -1610,6 +1666,7 @@ function save() {
         jar: S.run.jar || null,
         pegs: S.run.pegs || [], pegSeen: S.run.pegSeen ? 1 : 0,
         minted: S.run.minted | 0,
+        dcRoom: S.run.dcRoom || null, lastBoss: S.run.lastBoss || null,
       } : null,
     }));
   } catch (e) {}
@@ -1748,6 +1805,8 @@ function load() {
         pegs: Array.isArray(d.run.pegs) ? d.run.pegs.filter(pg => pg && isFinite(pg.x)).map(pg => ({ x: +pg.x, y: +pg.y })).slice(0, 3) : [],
         pegSeen: d.run.pegSeen ? 1 : 0,
         minted: Math.max(0, d.run.minted | 0),
+        dcRoom: (typeof d.run.dcRoom === 'string') ? d.run.dcRoom : null,
+        lastBoss: (typeof d.run.lastBoss === 'string') ? d.run.lastBoss : null,
         block: 0, windUsed: false, battleEnt: null,
         pileSave: Array.isArray(d.run.pileSave) ? d.run.pileSave : null,
         pileFloor: d.run.pileFloor || 0,
@@ -2027,6 +2086,11 @@ function dmgFoe(e, n, src, pierce) {
     S.battle.tilts--;
     floatAnchor('⌛ it devours a TILT', 'enemy', '#c8a8ff');
   }
+  // THE ASHWRIGHT: its skin is live coal — every blow you land sets you alight
+  if (!dot && e.trait === 'emberskin' && e.hp > 0 && S.run && S.battle && !S.victory) {
+    S.pBurn += 2;
+    floatAnchor('\u{1F525} its skin CATCHES you', 'hero', '#ff9d3c');
+  }
   // the Spire's schooling (v1.7.4): how the new blood answers a blow
   if (e.hp > 0) {
     // VAULT LOUSE: first blood makes it curl tight
@@ -2134,6 +2198,16 @@ function foeDown(e) {
   }
   S.shake += 6;
   // whatever it swallowed — the gremlin's stash, the tar's coins — spills back
+  // THE PET SNATCHER: cut it down and your companion comes home
+  if (e.stolenPet && S.run) {
+    const sp = e.stolenPet;
+    e.stolenPet = null;
+    (S.pets = S.pets || []).push({ iid: sp.iid, hp: Math.max(1, sp.hp), maxHp: sp.maxHp,
+                                   name: sp.name, whistled: 1 });
+    floatAnchor('\u{1F9DA} your ' + (sp.name || 'companion') + ' bounds back to you!', 'hero', '#7ee787', true);
+  }
+  // ...and the deep remembers which lord fell last, for the UNDERSTUDY
+  if (e.boss && S.run) S.run.lastBoss = e.id;
   // BOG OGRE: cut it open and the ring comes back
   if ((e.gullet | 0) > 0 && S.run) {
     S.run.keys += e.gullet;
@@ -2157,6 +2231,19 @@ function foeDown(e) {
       purseLog(back, 'the ' + (e.name || 'mugger') + '\u2019s pocket returned');
       floatAnchor('\u{1F4B0} your ' + back + ' stolen coins return!', 'hero', '#ffd75e', true);
     }
+  }
+  // THE DEBT COLLECTOR settles up \u2014 and has the nerve to tip you for it
+  if (e.id === 'debtcollector' && S.run) {
+    S.run.purse.coin = (S.run.purse.coin || 0) + 2;
+    purseLog(2, 'the debt collector\u2019s apology');
+    S.run.dcRoom = null;
+    floatAnchor('\u{1F4BC} +2 \u{1FA99} for your trouble', 'hero', '#ffd75e', true);
+    toast('\u{1F4BC} \u201calright, alright \u2014 here are your coins back. I was just keeping them safe for you. Here, have some extra.\u201d');
+  }
+  // the false chest coughs up what it swallowed to look the part
+  if (e.id === 'mimicchest' && S.run) {
+    S.run.keys += 1;
+    floatAnchor('\u{1F9F0} the false lid splits \u2014 +1 \u{1F5DD}', 'hero', '#ffd75e', true);
   }
   retarget();
   if (!S.foes.some(f => f.hp > 0)) winBattle();
@@ -2755,7 +2842,18 @@ function drop(x, force) {
   syncWallet();
   autoSel();
   S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 / ×20 shortens the cooldown to match
-  S.dropped++; S.meter++;
+  S.dropped++;
+  // OVERCHARGE: the STORMKNIGHT doubles what the meter takes, then collects it
+  S.meter += (S.overT > 0) ? 2 : 1;
+  if (S.overT > 0 && S.meter >= C.METER_MAX) {
+    const knight = (S.foes || []).find(f => f.hp > 0 && f.id === 'stormknight');
+    S.meter = 0;
+    if (knight) {
+      knight.block = (knight.block || 0) + 12;
+      knight.hp = Math.min(knight.maxHp, knight.hp + 10);
+      floatAnchor('\u{26A1} the charge EARTHS in the Stormknight!', 'enemy', '#8be7ff', true);
+    }
+  }
   S.coach.pick = 1; S.coach.drop = 1;   // a fired coin proves both lessons
   B.fired = (B.fired || 0) + 1;
   if (hasRelic('coinpress') && B.fired % 25 === 0) {
@@ -2763,6 +2861,24 @@ function drop(x, force) {
     floatAnchor('\u{1F3ED} the press mints +5 gold', 'hero', '#ffd75e');
   }
   if (S.run.stats) S.run.stats.fired++;
+  // THE COIN GOLEM eats the machine itself: gold MENDS it, silver ARMOURS it,
+  // and the sharp coins only sharpen it back at you for the round. Every
+  // instinct the game has trained is wrong in this fight — win it on items,
+  // pets and poison, or feed it nothing but slugs.
+  for (const gf of S.foes || []) {
+    if (gf.hp <= 0 || gf.trait !== 'golem') continue;
+    if (kind === 'coin') {
+      gf.hp = Math.min(gf.maxHp, gf.hp + 1);
+      floatAnchor('\u{1FA99} +1', 'enemy', '#ffd75e');
+    } else if (kind === 'silver') {
+      gf.block = (gf.block || 0) + 1;
+      floatAnchor('\u{1F6E1} +1 block', 'enemy', '#c8d6e8');
+    } else if (kind === 'lucky' || kind === 'blue' || kind === 'green') {
+      gf.golemRage = (gf.golemRage | 0) + 1;
+      gf.atk = (gf.baseAtk || (gf.baseAtk = gf.atk)) + gf.golemRage;
+      floatAnchor('\u{26A1} it sharpens (+' + gf.golemRage + ' atk this round)', 'enemy', '#ff5a4e');
+    }
+  }
   // the mastery ledger: 500 lifetime fires of a kind upgrade its face
   S.codex.coins = S.codex.coins || {};
   S.codex.coins[kind] = (S.codex.coins[kind] || 0) + 1;
@@ -2799,6 +2915,20 @@ function tilt(dir) {
   B.tilts--;
   B.tiltsUsed = (B.tiltsUsed || 0) + 1;
   B.tilted = true;                        // the no-tilt quest saw that
+  // THE TALLY MAN keeps the count. Every third shake of the machine he
+  // collects — six a tally, and he has been telegraphing it the whole time.
+  for (const tm of S.foes || []) {
+    if (tm.hp <= 0 || tm.trait !== 'tally') continue;
+    tm.tally = (tm.tally | 0) + 1;
+    if (tm.tally % 3 === 0) {
+      const due = 6 * (tm.tally / 3);
+      floatAnchor('\u{1F9EE} THE TALLY COMES DUE — ' + due, 'enemy', '#ff5a4e', true);
+      const took = petSoak(due, tm);
+      if (took > 0) hurtPlayer(took, 'billed by ' + (tm.name || 'the tally man'));
+    } else {
+      floatAnchor('\u{1F9EE} tally ' + (tm.tally % 3) + '/3', 'enemy', '#c8b8e0');
+    }
+  }
   // the shake STAGGERS anything mid-charge: the wind-up is lost and it
   // reels for a turn. This is the whole counter-play to a gore.
   for (const f of S.foes || []) {
@@ -3024,7 +3154,7 @@ function startBattle(type, entIdx, eid, extras) {
   S.foeInfo = null;
   S.run.windUsed = false;
   S.pPois = 0; S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
-  S.shade = null; S.sealed = ''; S.sealT = 0;
+  S.shade = null; S.sealed = ''; S.sealT = 0; S.overT = 0;
   S.noTiltT = 0; S.leadT = 0; S.blackT = 0; S.rustT = 0;
   S.tempStr = 0; S.tempDex = 0;
   S.pets = [];
@@ -3043,6 +3173,16 @@ function startBattle(type, entIdx, eid, extras) {
     a.hp = a.maxHp = half;
     const b = { ...a };
     S.foes.push(b);
+  }
+  // A BLOOM NEVER GROWS ALONE: two BONE SOWERS come with it, and their whole
+  // trade is seeding the bed the flower feeds on. Cut the gardeners first.
+  if (S.foes.some(f => f.trait === 'bloom')) {
+    while (S.foes.filter(f => f.trait === 'sower').length < 2 && S.foes.length < 4) {
+      const g = mkEnemy('battle', 'bonesower');
+      g.entIdx = null;
+      S.foes.push(g);
+      rollIntent(g);
+    }
   }
   // FULL DEPTH: the lake's pressure stiffens whatever meets you down here
   if (rawAct(S.run.floor) === 4 && (S.run.pressure | 0) >= PRESSURE_MAX) {
@@ -3531,6 +3671,83 @@ function enemyActFoe(e) {
     (e.belly = e.belly || []).push(S.battle.loot.splice(idx, 1)[0]);
     floatAnchor('the gremlin filches from your tray!', 'hero', '#ff9d3c', true);
   }
+  // ---------------- THE OWNER'S OWN BESTIARY (v1.9.0) ----------------
+  // THE HOUNDMASTER: a hound a turn, and every hound still breathing makes
+  // him hit harder. Cull the pack or he grows into the real threat.
+  if (e.trait === 'hounds') {
+    const pack = (S.foes || []).filter(f => f.hp > 0 && f.houndOf === e.id);
+    if (pack.length < 4 && S.foes.filter(f => f.hp > 0).length < 5) {
+      const act = Math.min(6, actIdx(S.run.floor));
+      const h = mkEnemy('battle', curRoster()[0].id);
+      h.name = 'Hound';
+      h.icon = '\u{1F415}';
+      h.hp = h.maxHp = Math.max(6, 8 + act * 5);      // the pack scales with the deep
+      h.atk = Math.max(1, 1 + act);
+      h.gold = (h.gold / 4) | 0;
+      h.trait = 'fast';
+      h.def = null;
+      h.houndOf = e.id;
+      h.entIdx = null;
+      S.foes.push(h);
+      rollIntent(h);
+      floatAnchor('\u{1F415} he looses another hound!', 'enemy', '#ff9d3c', true);
+    }
+    const live = (S.foes || []).filter(f => f.hp > 0 && f.houndOf === e.id).length;
+    if (live > 0) {
+      e.atk = (e.baseAtk || (e.baseAtk = e.atk)) + 2 * live;
+      floatAnchor('\u{1F415} ' + live + ' at his heel — +' + (2 * live) + ' attack', 'enemy', '#ff5a4e');
+    } else if (e.baseAtk) {
+      e.atk = e.baseAtk;
+    }
+  }
+  // GRAVEBLOOM: it eats the bone crop. Every skull left on the bed feeds it.
+  if (e.trait === 'bloom') {
+    const skulls = S.coins.filter(c => c.st === 'plat' && c.kind === 'skull');
+    if (skulls.length) {
+      const fed = Math.min(18, skulls.length * 3);
+      e.hp = Math.min(e.maxHp, e.hp + fed);
+      floatAnchor('\u{1F940} it drinks the bone crop (+' + fed + ' HP)', 'enemy', '#c86bff', true);
+    } else {
+      floatAnchor('\u{1F940} no bone left to drink', 'enemy', '#9a8aa0');
+    }
+  }
+  // BONE SOWER: the bloom's gardeners — their whole trade is seeding skulls
+  if (e.trait === 'sower') {
+    for (let h = 0; h < 2; h++) {
+      S.rain.push({ t: 0.25 + h * 0.2, x: 15 + rng() * 70,
+                    y: MACH.tiers[0].slotY + 4 + rng() * 10, kind: 'skull' });
+    }
+    floatAnchor('\u{1F480} it sows for the bloom', 'enemy', '#c86bff');
+  }
+  // THE PET SNATCHER: it takes a companion off your bench and fights BESIDE
+  // it. Cut the snatcher down and the pet comes home.
+  if (e.trait === 'snatch' && !e.stolenPet) {
+    const mine = (S.pets || []).filter(p => p.hp > 0);
+    if (mine.length) {
+      const p2 = mine[(rng() * mine.length) | 0];
+      e.stolenPet = { iid: p2.iid, hp: p2.hp, maxHp: p2.maxHp, name: p2.name || null };
+      p2.hp = 0;
+      e.atk += 2;
+      floatAnchor('\u{1F9DA} it SNATCHES your ' + (p2.name || 'companion') + '!', 'hero', '#ff5a4e', true);
+    }
+  }
+  // THE UNDERSTUDY: it has watched every lord you have felled, and plays the
+  // last one back at you. An empty playbill leaves it merely quick.
+  if (e.trait === 'mimicry' && !e.studied) {
+    e.studied = 1;
+    const role = S.run && S.run.lastBoss;
+    const lord = role && [].concat(BOSSES, BOSSES2, [BOSS5, BOSS5B, BOSS_STORM, BOSS_STONE])
+      .find(b => b.id === role);
+    if (lord) {
+      e.trait = lord.trait || 'fast';
+      e.def = lord.def || null;
+      e.name = 'ELITE ' + lord.name + '\u2019s Understudy';
+      floatAnchor('\u{1F3AD} it plays ' + lord.name + ' back at you!', 'enemy', '#c8a8ff', true);
+    } else {
+      e.trait = 'fast';
+      floatAnchor('\u{1F3AD} no lord in its playbill — it improvises', 'enemy', '#c8a8ff');
+    }
+  }
   // ---------------- THE DEEP'S OWN HANDS (v1.7.9) ----------------
   // CAVE CRAB: it reaches ONTO the bed and crushes the smallest pieces it
   // can find, feeding on the metal. A rich bed feeds it; a bare one starves.
@@ -3684,6 +3901,23 @@ function enemyActFoe(e) {
           S.leadT = Math.max(S.leadT, 2);
           floatAnchor('AN EMPTY SHELF — it weighs your purse instead', 'hero', '#c8c8d6', true);
         }
+      } else if (e.id === 'stormknight') {
+        // OVERCHARGE: your own meter is turned into a lightning rod
+        S.overT = 3;
+        floatAnchor('OVERCHARGED! your meter fills double — and EARTHS in him', 'hero', '#8be7ff', true);
+      } else if (e.id === 'stonewarden') {
+        // PETRIFY: a whole quarter of the bed is turned to worthless stone
+        const live = S.coins.filter(c => c.st === 'plat' && !SPECIAL_COINS[c.kind]
+                                      && c.kind !== 'skull' && c.kind !== 'slug');
+        let turned = 0;
+        if (live.length) {
+          // a PILE, not a scatter: pick a spot and petrify everything near it
+          const seed = live[(rng() * live.length) | 0];
+          for (const c of live) {
+            if (Math.abs(c.x - seed.x) < 26 && Math.abs(c.y - seed.y) < 26) { c.kind = 'slug'; turned++; }
+          }
+        }
+        floatAnchor('PETRIFIED! ' + turned + ' pieces are dead stone now', 'hero', '#c8c8d6', true);
       } else if (e.id === 'spinedrake') {
         // SPINE STORM: the whole bed is salted, and the tray is robbed
         let salted = 0;
@@ -3750,9 +3984,16 @@ function enemyActFoe(e) {
           floatAnchor('\u{1F4B0} it pockets ' + took + ' of your coins — cut it down!', 'hero', '#ff9d3c', true);
         }
       }
+      // THE MIMIC CHEST: you reached in. Its FIRST blow is the ambush —
+      // double, once, and then it is only a box with teeth.
+      let raw = it.t === 'heavy' ? e.atk * 2 : e.atk;
+      if (e.trait === 'ambush' && !e.sprung) {
+        e.sprung = 1; raw *= 2;
+        floatAnchor('\u{1F9F0} THE LID SNAPS SHUT!', 'hero', '#ff5a4e', true);
+      }
       // your pack stands in the way: pets chew the blow down before it
       // reaches you — and a fully-soaked hit spares you its venom too
-      let blow = petSoak(it.t === 'heavy' ? e.atk * 2 : e.atk, e);
+      let blow = petSoak(raw, e);
       if (blow <= 0) continue;
       if (e.trait === 'venom') {
         S.pPois += 2;
@@ -3843,6 +4084,13 @@ function endRoundTicks() {
     const s = S.pBurn; S.pBurn = Math.max(0, S.pBurn - 2);
     hpHit(s, 'burning alive', '#ff9d3c');
   }
+  // the COIN GOLEM's edge dulls when the round turns
+  for (const gf of S.foes || []) {
+    if (gf.trait === 'golem' && (gf.golemRage | 0) > 0) {
+      gf.golemRage = 0;
+      if (gf.baseAtk) gf.atk = gf.baseAtk;
+    }
+  }
   // the hexes wear off round by round
   if (S.weakT > 0) S.weakT--;
   if (S.taxT > 0) S.taxT--;
@@ -3850,6 +4098,7 @@ function endRoundTicks() {
   if (S.leadT > 0) S.leadT--;
   if (S.blackT > 0) S.blackT--;
   if (S.rustT > 0) S.rustT--;
+  if (S.overT > 0) S.overT--;
   // ...and DUROSKUL's filed relic finds its voice again
   if (S.sealT > 0 && --S.sealT <= 0) {
     const rl = relicById(S.sealed);
@@ -5027,7 +5276,7 @@ function newRun(heroId, force) {
   S.heroPick = hero.id;
   S.foes = []; S.pets = []; S.enemy = null; S.victory = null; S.room = null; S.over = null; S.inv = null;
   S.meter = 0; S.pPois = 0; S.pBleed = 0; S.pBurn = 0; S.weakT = 0; S.taxT = 0;
-  S.shade = null; S.sealed = ''; S.sealT = 0;
+  S.shade = null; S.sealed = ''; S.sealT = 0; S.overT = 0;
   S.noTiltT = 0; S.leadT = 0; S.blackT = 0; S.rustT = 0; S.tempStr = 0; S.tempDex = 0;
   S.coins.length = 0; S.floats.length = 0; S.rain.length = 0;
   genFloor();
@@ -5327,6 +5576,36 @@ function genFloor() {
       if (links[lk]) links[lk] = { open: false, gold: true };
     }
   }
+  // The two placements below roll off a SIDE stream, saved and restored, so
+  // adding them never shifts a shared seed's fights by a single draw.
+  const rngKeep = rngState;
+  srand((((S.run.seed | 0) ^ (S.run.floor * 40503)) >>> 0) || 7);
+  // THE MIMIC CHEST wears a chest's face — same icon, same silhouette, same
+  // '?' on the door. Only the bite tells you. One per floor at most, and
+  // never the vault's pair (that hoard is honest).
+  {
+    const chests = [];
+    for (const k of keys2) {
+      if (k === vaultK) continue;
+      (rooms[k].ents || []).forEach((e, i2) => { if (e.kind === 'chest') chests.push([k, i2]); });
+    }
+    if (chests.length && rng() < C.MIMIC_CHANCE) {
+      const [k, i2] = chests[(rng() * chests.length) | 0];
+      rooms[k].ents[i2].mimic = true;
+    }
+  }
+  // THE DEBT COLLECTOR waits somewhere off the entrance. He is not part of
+  // the room's line-up — he stands alone, robs you, and runs (see dcTick).
+  S.run.dcRoom = null;
+  {
+    const cands = keys2.filter(k => k !== '0,0' && k !== bossK && k !== vaultK && rooms[k].dist >= 1);
+    if (cands.length && rng() < C.DC_CHANCE) {
+      const k = cands[(rng() * cands.length) | 0];
+      rooms[k].ents.push(placeEnts([{ kind: 'collector', done: false, robbed: false }])[0]);
+      S.run.dcRoom = null;               // no rumour until he actually runs
+    }
+  }
+  rngState = rngKeep;                    // ...and the floor's own stream resumes
   S.run.quest = rollQuest(S.run.floor);   // one optional job per floor
   S.run.map = { v: 3, rooms, links, cur: '0,0' };
   S.run.room = rooms['0,0'];
@@ -5375,6 +5654,95 @@ function keyGuard() {
   const eid = curRoster()[(rng() * enemyPool(r.dist + 1)) | 0].id;
   r.ents.push(placeEnts([{ kind: 'monster', mtype: 'battle', eid, done: false }])[0]);
   toast('something crawls out of the dark…');
+}
+// -------------------------------------------------- THE DEBT COLLECTOR
+// He does not fight you for your coins. He walks up, helps himself to two
+// per floor and RUNS — into a room you have not opened yet, where the map
+// carries nothing but a rumour of him. Corner him there and every coin comes
+// back, with a sweetener for the trouble.
+//
+// The three pieces below are pure LOGIC in room fractions (0..1), so the
+// chase can be driven headless; the drawing layer only feeds it the hero's
+// position each frame (see dcTick's callers).
+function dcCount() { return C.DC_PER_FLOOR * (S.run ? (S.run.floor | 0) : 1); }
+// he takes the FAT stacks first — you feel this one
+function dcSteal(i) {
+  const r = curRoom();
+  const e = r && r.ents[i];
+  if (!S.run || !e || e.kind !== 'collector' || e.robbed) return 0;
+  e.robbed = true;
+  e.loot = {};
+  let took = 0;
+  const want = dcCount();
+  const kinds = COIN_KINDS.filter(k => !SPECIAL_COINS[k])
+    .sort((a, b) => (S.run.purse[b] || 0) - (S.run.purse[a] || 0));
+  for (const k of kinds) {
+    if (took >= want) break;
+    const n = Math.min(want - took, S.run.purse[k] || 0);
+    if (!n) continue;
+    S.run.purse[k] -= n;
+    e.loot[k] = (e.loot[k] || 0) + n;
+    took += n;
+  }
+  if (took) {
+    purseLog(-took, 'lifted by the debt collector (fell him → returned)');
+    floatAnchor('\u{1F4BC} he lifts ' + took + ' coins and BOLTS!', 'hero', '#ff9d3c', true);
+    toast('\u{1F4BC} the DEBT COLLECTOR takes his cut and runs for the dark');
+  } else {
+    toast('\u{1F4BC} the collector finds your purse empty and slinks off');
+  }
+  SND.deny();
+  return took;
+}
+// ...and out the door. He hides in a room you have NOT opened — never the
+// lair, so there is always a floor left to catch him on. If every other room
+// is already walked he has nowhere to run, and stands his ground right here.
+function dcHide(i) {
+  const rooms = S.run.map.rooms, cur = curRoom();
+  const e = cur && cur.ents[i];
+  if (!e || e.kind !== 'collector') return null;
+  const pool = Object.keys(rooms).filter(k => !rooms[k].visited && !rooms[k].boss);
+  if (!pool.length) {                    // cornered on the spot
+    e.fleeing = null;
+    S.run.dcRoom = rkey(cur.gx, cur.gy);
+    toast('\u{1F4BC} nowhere left to run — he turns to face you');
+    return S.run.dcRoom;
+  }
+  const k = pool[(rng() * pool.length) | 0];
+  const moved = { ...e, fleeing: null };
+  cur.ents.splice(i, 1);
+  rooms[k].ents.push(placeEnts([moved])[0]);
+  S.run.dcRoom = k;
+  save();
+  return k;
+}
+// the chase itself: he closes on you, takes his cut, then bolts for the
+// nearest wall and is gone. hx/hy are the hero's position in room fractions.
+function dcTick(dt, hx, hy) {
+  if (!S.run || S.room || S.screen !== 'dungeon') return;
+  const r = curRoom();
+  if (!r) return;
+  const i = r.ents.findIndex(o => o.kind === 'collector' && !o.done);
+  if (i < 0) return;
+  const e = r.ents[i];
+  if (e.fleeing) {
+    const dx = e.fleeing.x - e.px, dy = e.fleeing.y - e.py;
+    const d = Math.hypot(dx, dy) || 1;
+    const step = Math.min(1, (dt * 1.1) / d);
+    e.px += dx * step; e.py += dy * step;
+    if (e.px < -0.1 || e.px > 1.1) dcHide(i);
+    return;
+  }
+  if (e.robbed) return;                  // this IS his bolt-hole — he fights
+  const dx = hx - e.px, dy = hy - e.py;
+  const d = Math.hypot(dx, dy);
+  if (d > 0.09) {
+    const step = Math.min(1, (dt * 0.5) / (d || 1));
+    e.px += dx * step; e.py += dy * step;
+    return;
+  }
+  dcSteal(i);
+  e.fleeing = { x: e.px < 0.5 ? -0.2 : 1.2, y: Math.max(0.05, Math.min(0.9, e.py)) };
 }
 // walk into a doorway. Locked -> spend a key to unlock (it STAYS open);
 // open -> step through into the next room
@@ -5567,7 +5935,22 @@ function interact(i) {
     nextFloor();
     return true;
   }
+  if (e.kind === 'collector') {
+    // cornered at last: the ledger settles in blood. His purse rides into the
+    // fight as a thief's POCKET, so felling him hands every coin straight back.
+    SND.door();
+    startBattle('battle', i, 'debtcollector');
+    if (S.foes[0] && e.loot) S.foes[0].pocket = { ...e.loot };
+    return true;
+  }
   if (e.kind === 'chest') {
+    // ...unless the chest has teeth
+    if (e.mimic) {
+      toast('\u{1F9F0} the lid GRINS — it was never a chest');
+      SND.deny();
+      startBattle('battle', i, 'mimicchest');
+      return true;
+    }
     // a gamble: the lid lifts on ONE prize — take it or leave it
     S.room = { type: 'chest', prize: rollChestPrize(), taken: false, ent: i };
     SND.gem();
@@ -6366,6 +6749,7 @@ window.DP = {
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
   newRun, genFloor, genEnts, interact, tryDoor, curRoom, doorTo, nextFloor,
   keyGuard, closeModal, leaveBattle,
+  ODD_FOES, dcCount, dcSteal, dcHide, dcTick,
   rollChestPrize, acceptPrize, denyPrize, spendPurse, spendKind,
   startBattle, mkEnemy, battleTick, winBattle, endRun,
   buyShop, removeArsenal, sellCoins, coinSellPrice, sellableKinds, pickBoon, shopStock, boonOptions, usePotion,
@@ -6390,7 +6774,7 @@ window.DP = {
   TALES, rollTale, habits,
   bossArena, QUEST_DEFS, rollQuest, questTxt, questBump,
   ratRun, ratRecruit, mkRat, ratScurry, RAT_CAP: 8,
-  DIFFS, diffHpK, diffAtkK, diffHexRate, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
+  DIFFS, diffHpK, diffAtkK, diffHexRate, BOSSES_A, MUTS, mutCount, mutOn, EVENTS, eventById, eventChoose,
   masteryLvl, blackedOut,
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
@@ -10846,6 +11230,9 @@ if (!HEADLESS) (function browser() {
         if (nb && nb.visited) { seen[k] = 1; break; }
       }
     }
+    // the RUMOUR: a thief who ran off with your coins does not stay hidden.
+    // His bolt-hole shows through the fog even where no door has been opened.
+    if (S.run.dcRoom && rooms[S.run.dcRoom] && !seen[S.run.dcRoom]) seen[S.run.dcRoom] = 1;
     return seen;
   }
   // room footprint in map units (matches the real room proportions)
@@ -10904,6 +11291,11 @@ if (!HEADLESS) (function browser() {
         ctx.restore();
       }
       if (r.boss && seen[k] === 2) txt('\u{1F451}', rc.cx, rc.cy, Math.max(8, pitch * 0.3) + 'px serif', '#fff');
+      // where the thief went to ground — the one mark the fog cannot keep
+      if (k === S.run.dcRoom && r.ents.some(e2 => e2.kind === 'collector' && !e2.done)) {
+        txt('\u{1F4BC}', rc.cx, rc.cy - (r.boss ? pitch * 0.26 : 0),
+            Math.max(8, pitch * 0.3) + 'px serif', '#fff');
+      }
       if (!r.boss && k === '0,0' && ink) txt('1', rc.cx, rc.cy, '700 ' + Math.max(9, pitch * 0.3) + 'px Georgia, serif', '#4a3a2a');
       if (isCur) {
         const pulse = 0.5 + 0.5 * Math.sin(S.time * 5 + performance.now() / 200);
@@ -11008,6 +11400,11 @@ if (!HEADLESS) (function browser() {
     updateRoomRect();
     if (!S.room && !mapView) avTick(dt);
     if (S.screen !== 'dungeon') return;   // a bump may have started a battle
+    // the collector walks HIS own line — straight at your purse
+    if (!S.room && !mapView) {
+      dcTick(dt, (AV.x - FR.x0) / Math.max(1, FR.x1 - FR.x0),
+                 (AV.y - FR.y0 - 26) / Math.max(1, (FR.y1 - FR.y0) - 46));
+    }
     // heading
     ctx.font = '900 26px Georgia, serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
