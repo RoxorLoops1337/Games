@@ -6,13 +6,11 @@
 // WWBOARD). Until the binding exists this returns 503 and the game shows the
 // board as unreachable instead of breaking.
 //
-// STRONGLY RECOMMENDED second step: add an environment SECRET named
-// DPBOARD_SECRET (any long random string). With it set, every carve must
-// present a signed RUN TOKEN this server issued at the start of the run —
-// see "the anti-cheat rail" below. Without it the boards still work, but
-// only the plausibility clamps apply, so anyone who can read the JS can POST
-// a fake score. The secret is the difference between "annoying to cheat" and
-// "trivial to cheat", and costs one dashboard field.
+// NO SECOND STEP. The anti-cheat rail signs with a key this worker mints
+// itself on first use and keeps in the same KV namespace (dp:secret), so the
+// rail is armed the moment the binding exists. Setting an environment secret
+// named DPBOARD_SECRET still overrides it — useful if you ever want to rotate
+// the key by hand or share one across environments — but nothing waits on it.
 //
 // FIVE boards, ranked by floor desc then kills desc, best-per-name:
 //   all      dp:top                  (no TTL — the wall of record)
@@ -48,6 +46,10 @@
 //   4. tokens expire after a day, so none can be stockpiled
 //   5. plausibility clamps (floor ceiling, kills-per-floor ceiling) throw out
 //      the absurd entries that make a board worthless to read
+//   6. a NAME belongs to whoever carved it first. The client holds a private
+//      carve key; the server keeps only an HMAC of it, so a leak of the KV
+//      never hands anyone your name. Carve under a taken name without its key
+//      and you are turned away — no more standing on someone else's row.
 // Deliberately NOT claimed: this does not stop a patient, determined attacker
 // who scripts the token dance. It stops drive-by cheating and keeps the wall
 // readable, which is what a leaderboard actually needs.
@@ -59,7 +61,29 @@ const json = (o, s) => new Response(JSON.stringify(o), {
 
 // binding variable names are case-sensitive in the dashboard — accept any casing
 const kv = env => env.DPBOARD || env.dpboard || env.DpBoard || env.Dpboard || null;
-const secretOf = env => env.DPBOARD_SECRET || env.dpboard_secret || env.DpboardSecret || null;
+const envSecret = env => env.DPBOARD_SECRET || env.dpboard_secret || env.DpboardSecret || null;
+// the signing key. An env secret wins; otherwise the worker mints one on its
+// very first request and keeps it in KV forever after. Cached per isolate so
+// the common path is a plain memory read — keyed on the BINDING, so two
+// namespaces served by one isolate can never end up sharing a key.
+const SECRET_CACHE = new WeakMap();
+async function getSecret(env, KV) {
+  const fromEnv = envSecret(env);
+  if (fromEnv) return fromEnv;
+  const cached = SECRET_CACHE.get(KV);
+  if (cached) return cached;
+  let sec = await KV.get('dp:secret');
+  if (!sec) {
+    const minted = b64url(crypto.getRandomValues(new Uint8Array(32)));
+    // another isolate may have minted first — theirs wins, so every worker
+    // ends up signing with the same key
+    const raced = await KV.get('dp:secret');
+    if (raced) sec = raced;
+    else { await KV.put('dp:secret', minted); sec = minted; }
+  }
+  SECRET_CACHE.set(KV, sec);
+  return sec;
+}
 
 const TOP_KEY = 'dp:top';
 const CAP = 50;
@@ -190,8 +214,8 @@ export async function onRequestGet({ request, env }) {
 export async function onRequestPost({ request, env }) {
   const KV = kv(env);
   if (!KV) return json({ error: 'not configured' }, 503);
-  const secret = secretOf(env);
   const now = Date.now();
+  const secret = await getSecret(env, KV);   // minted on first use — never unarmed
 
   let b; try { b = await request.json(); } catch (_) { return json({ error: 'bad json' }, 400); }
 
@@ -199,7 +223,6 @@ export async function onRequestPost({ request, env }) {
   // rail (a token is worthless on its own), but still rate-limited per IP so
   // it can't be used to hammer the worker.
   if (b && b.op === 'start') {
-    if (!secret) return json({ tok: '', unsigned: 1 });   // legacy mode: nothing to sign with
     const ip = request.headers.get('cf-connecting-ip') || '?';
     const lastTok = await KV.get('rlt:' + ip);
     if (lastTok && now - +lastTok < 3000) return json({ error: 'slow down' }, 429);
@@ -224,23 +247,33 @@ export async function onRequestPost({ request, env }) {
   const hero = String(b.hero || '').replace(/[^a-z]/g, '').slice(0, 12) || 'knight';
   const diff = ['merciful', 'normal', 'nightmare'].indexOf(b.diff) >= 0 ? b.diff : 'normal';
 
-  // ---- the token rail. Only enforced once a secret is configured, so the
-  // board keeps working on a fresh deploy; add DPBOARD_SECRET to switch it on.
-  let verified = 0;
-  if (secret) {
-    const t = await readToken(secret, b.tok, now);
-    if (!t.ok) return json({ error: t.why }, 403);
-    // one token, one carve, ever
-    const usedKey = 'dp:used:' + t.nonce;
-    if (await KV.get(usedKey)) return json({ error: 'token already spent' }, 409);
-    // a run to floor N cannot be faster than the deep allows
-    const elapsed = now - t.iat;
-    if (elapsed < Math.max(MIN_RUN_MS, floor * MS_PER_FLOOR)) {
-      return json({ error: 'run too fast to be real' }, 422);
-    }
-    await KV.put(usedKey, '1', { expirationTtl: USED_TTL });
-    verified = 1;
+  // ---- the token rail, always armed
+  const t = await readToken(secret, b.tok, now);
+  if (!t.ok) return json({ error: t.why }, 403);
+  // one token, one carve, ever
+  const usedKey = 'dp:used:' + t.nonce;
+  if (await KV.get(usedKey)) return json({ error: 'token already spent' }, 409);
+  // a run to floor N cannot be faster than the deep allows
+  if (now - t.iat < Math.max(MIN_RUN_MS, floor * MS_PER_FLOOR)) {
+    return json({ error: 'run too fast to be real' }, 422);
   }
+
+  // ---- THE NAME LOCK. A name belongs to whoever carved it first. We keep an
+  // HMAC of the client's private carve key, never the key itself, so the KV
+  // can leak without handing anyone a name. 'Anonymous' is common ground and
+  // is never claimed.
+  if (name !== 'Anonymous') {
+    const ck = String(b.ckey || '');
+    if (!/^[\w-]{8,64}$/.test(ck)) return json({ error: 'name needs its carve key' }, 403);
+    const ownKey = 'dp:own:' + name.toLowerCase();
+    const proof = await sign(secret, 'own:' + name.toLowerCase() + ':' + ck);
+    const held = await KV.get(ownKey);
+    if (held && !sameSig(held, proof)) return json({ error: 'that name is taken' }, 409);
+    if (!held) await KV.put(ownKey, proof);          // first carve claims it, forever
+  }
+
+  await KV.put(usedKey, '1', { expirationTtl: USED_TTL });
+  const verified = 1;
 
   const entry = { name, floor, kills, hero, diff, d: b.daily ? 1 : 0,
                   ng: clamp(b.ng | 0, 0, 2),                    // 0 plain, 1 NG+ ♟, 2 LEGEND ♛

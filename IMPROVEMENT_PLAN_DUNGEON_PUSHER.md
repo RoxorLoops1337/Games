@@ -143,16 +143,21 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       `dp:month:` `dp:year:` `dp:top`, each with its own sweeping TTL); all six
       desks (plus LAST MONTH) sit on one tab row, reachable from the 🏅 button on
       the home menu.
-      **ONE DASHBOARD STEP TO ARM THE ANTI-CHEAT:** Pages project → Settings →
-      Environment variables → add a **secret** named `DPBOARD_SECRET` (any long
-      random string; Cloudflare's "Encrypt" toggle). With it set, every carve
-      must present a RUN TOKEN the server signed (HMAC-SHA256) when the run
-      began — single-use, expiring in a day, and rejected unless at least
-      6s × floor has actually elapsed, so a fake floor-200 run must sit for
-      twenty minutes before it lands. Without the secret the boards still work
-      but only the plausibility clamps apply (floor ≤ 300, kills ≤ 60/floor),
-      so anyone reading the JS can POST a fake score. Entries carved behind the
-      rail carry `k:1`.
+      **NO SECOND DASHBOARD STEP** (session 79): the rail signs with a key the
+      worker mints itself on first use and keeps in the same KV namespace
+      (`dp:secret`), so it is armed the moment the binding exists. An env
+      secret named `DPBOARD_SECRET` still overrides it if you ever want to
+      rotate by hand. Every carve must present a RUN TOKEN the server signed
+      (HMAC-SHA256) when the run began — single-use, expiring in a day, and
+      rejected unless at least 6s × floor has actually elapsed, so a fake
+      floor-200 run must sit for twenty minutes before it lands. Plausibility
+      clamps ride alongside (floor ≤ 300, kills ≤ 60/floor). Entries carry `k:1`.
+      **THE NAME LOCK** (session 79): a name belongs to whoever carved it
+      first. The client holds a private carve key (`S.carveKey`, in the save so
+      a cloud restore carries it); KV keeps only an HMAC of it under
+      `dp:own:<lcname>`, so a leak never hands anyone a name. Carving under a
+      taken name without its key returns 409. `Anonymous` is common ground and
+      is never claimed.
       Honest limit: a browser client can always be tampered with — this stops
       drive-by forgery and keeps the wall readable; it does not stop a patient
       attacker who scripts the token dance.

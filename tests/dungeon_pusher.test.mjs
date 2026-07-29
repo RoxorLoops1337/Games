@@ -6866,6 +6866,11 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("weekly: '?board=weekly'") >= 0 && src.indexOf("yearly: '?board=yearly'") >= 0,
        'and asks the API for the week and the year');
   t.ok(src.indexOf("op: 'start'") >= 0, 'a fresh run asks the board for a RUN TOKEN');
+  // YOUR NAME IS YOURS: a private carve key proves it, and rides the save
+  t.ok(src.indexOf('function carveKey()') >= 0, 'the client holds a private carve key');
+  t.ok(src.indexOf('ckey: carveKey()') >= 0, 'and presents it with every carve');
+  t.ok(src.indexOf('carveKey: S.carveKey') >= 0, 'the key is persisted');
+  t.ok(src.indexOf("if (typeof d.carveKey === 'string')") >= 0, 'and restored — so a cloud save carries your name');
   t.ok(src.indexOf("op: 'carve'") >= 0 && src.indexOf("tok: run.tok") >= 0,
        'and the carve presents it back');
   t.ok(src.indexOf('tok: S.run.tok') >= 0, 'the token rides the run into the over screen');
@@ -7036,7 +7041,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.8.0', 'the fitted room sheets ship as v1.8.0');
+  t.eq(D.VERSION, '1.8.1', 'the self-arming board ships as v1.8.1');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('YOUR NAME IS YOURS') >= 0)),
+       'and the notes carry the name lock');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('FIT THEIR FRAME') >= 0)),
        'and the notes carry the reflow');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('OWN HANDS') >= 0)),
