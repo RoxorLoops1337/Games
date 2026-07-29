@@ -184,8 +184,15 @@
        world and squeezes the panel that carries the game's controls into
        sixty-four — which is how the pit queue ended up compressed into its own
        column title. The floor is the laptop number; the rest is height the
-       screen was not using. */
-    height:clamp(100px, 12vh, 172px); }
+       screen was not using.
+
+       The floor went up again when the columns started wrapping. 100px holds
+       exactly one row, so at a laptop's 12vh the wrap had nowhere to go and
+       every column scrolled DOWN instead — which is the old complaint turned
+       through ninety degrees. Two rows of 26px controls plus a title is 81px of
+       content, so the floor is what two rows actually need; the world gives up
+       another thirty pixels of a seven-hundred-pixel picture for it. */
+    height:clamp(134px, 16vh, 196px); }
   /* The band itself has to hang in the STAGE, not in the dock: the dock is a
      scroll container (overflow-y:hidden) and would have clipped its own
      overhang off at the pixel the ramp exists to soften. */
@@ -195,8 +202,13 @@
   /* Each column is a panel face in a rack, not a region of the same slab: a
      top-lit wash gives it a surface, so the room a column has not filled
      reads as space it was given rather than as a hole in the dock. */
-  .dsec{ flex:0 0 auto; display:flex; flex-direction:column; gap:3px; padding:0 11px 4px;
-    border-right:none; min-width:120px; overflow-y:auto; overflow-x:hidden; position:relative;
+  /* `flex:0 0 auto` with a 120px floor meant a column took its max-content
+     width and kept it however little room the row had — so the wrapping above
+     would never have been reached, and the overflow went on going to the dock's
+     sideways scrollbar. A column yields now, down to whatever its own contents
+     can no longer be squeezed past. */
+  .dsec{ flex:0 1 auto; display:flex; flex-direction:column; gap:3px; padding:0 11px 4px;
+    border-right:none; min-width:112px; overflow-y:auto; overflow-x:hidden; position:relative;
     scrollbar-width:none;
     background:linear-gradient(180deg,rgba(150,185,235,.028),rgba(150,185,235,0)); }
   .dsec:last-child{ border-right:none; }
@@ -210,6 +222,31 @@
      grid of fixed-size buttons and did not want it; the wave warning is a
      sentence and does. */
   .dsec.grow{ flex:1 1 210px; min-width:200px; }
+  /* The floors are per-column because the columns are not made of the same
+     thing. Shrink is handed out in proportion to how wide a column WANTS to be,
+     so without these the greedy one — the forge, six upgrade buttons — kept
+     nearly four hundred pixels on a laptop while the hero cards, which have a
+     hard 148px width and nothing to give, were squeezed to sixty-two and
+     clipped inside their own panel. A column's floor is what its narrowest
+     honest row actually needs.
+
+     `.dsec` scrolls, and a scroll container's automatic minimum size is zero —
+     so min-width:auto would not have done this on its own however well the
+     contents wrap. It has to be said out loud. */
+  .dsec[data-col="heroes"]{ min-width:170px; }
+  /* WORKERS is the one column that is not a list. The forge's ranks and the
+     training options are things you scan and pick one of, so a column of them
+     that scrolls is a column of them that scrolls; the four job steppers are a
+     readout you want ALL of, all the time — which of your four jobs is short,
+     at a glance, without moving anything. So it is two across and two down by
+     construction rather than by whatever the flex row happened to have left,
+     and its floor is the width two of them need. */
+  .dsec[data-col="jobs"]{ min-width:288px; }
+  /* Prose, and prose in a 117px column is a ribbon of two-word lines. This is
+     the width at which a sentence reads as a sentence. */
+  .dsec[data-col="sel"]{ min-width:172px; }
+  .dsec[data-col="jobs"] .pgrid{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+    align-content:start; }
   /* A hero card in the dock is a status readout, not the hero sheet: at four
      stacked rows plus a pip strip it was the one column that would not fit the
      row. The class name and the experience hairline are both in the sheet a
@@ -247,12 +284,34 @@
   .prow{ display:flex; align-items:center; gap:5px; }
   .pcol{ display:flex; flex-direction:column; gap:4px; }
   /* Two across and as many rows as it takes is what made the dock 200px tall.
-     One row, as wide as it needs, and the dock scrolls sideways — which it has
-     always been able to do — so the panel's cost to the picture is fixed at its
-     height and does not grow with what is in it. */
-  .pgrid{ display:flex; flex-wrap:nowrap; gap:4px; align-items:stretch; min-height:0; }
-  .pgrid > *{ flex:0 0 auto; }
-  .pgrid > .abtn{ min-width:88px; }
+     So this became one row, as wide as it needed, with the dock scrolling
+     sideways — which fixed the panel's cost to the picture at its height.
+
+     And put the cost somewhere worse. Measured with everything unlocked, the
+     six columns come to 2822px of content: the forge alone is 1197 of it, six
+     upgrade buttons in a row that may not wrap. That does not fit a 2560px
+     monitor, let alone a laptop — so on EVERY desktop the last column or two
+     were off the right-hand edge and the only way to reach HEROES was to
+     scroll the panel sideways, which is what a player will never think to do
+     and should not have to.
+
+     The premise had also expired. `nowrap` was chosen against a 76px dock,
+     where one row was all there was room for; the dock is clamp(100px, 12vh,
+     172px) now, and two rows of 26px controls fit inside the floor of that
+     with room to spare. So the row wraps, and the height it costs the picture
+     is still fixed — by the clamp, which is the thing that should be deciding
+     it. A column that still cannot fit what it holds scrolls DOWN inside its
+     own panel face, which it has always been able to do and which does not
+     hide a whole column to do it. */
+  .pgrid{ display:flex; flex-wrap:wrap; gap:4px; align-items:stretch; min-height:0; }
+  .pgrid > *{ flex:0 1 auto; }
+  /* 88px was a floor for a row that never wrapped, where the buttons could
+     simply be as wide as their words. Now that they shrink, 88 is narrower than
+     the words: 'Reinforced Steel' came out as 'Reinforced S'. A rank button's
+     floor is the width of its own name, so it wraps to the next row rather than
+     losing the end of what it says. 166px is measured, not guessed: it is what
+     the widest rank button in the game asks for, title and cost line both. */
+  .pgrid > .abtn{ min-width:166px; }
   .job{ display:flex; align-items:center; gap:6px; padding:3px 4px 3px 8px; background:var(--well);
     border:1px solid #212b3c; border-radius:var(--r2); min-width:0;
     box-shadow:inset 0 1px 0 rgba(255,255,255,.028), var(--d1); }
@@ -1383,6 +1442,10 @@ function newMatch(opt){
   reseed(opt.seed || (HEADLESS ? 1337 : (Date.now() & 0x7fffffff)));
   G.diff = DIFFS.find(d => d.id === (opt.diff || 'veteran')) || DIFFS[1];
   G.state = 'play'; G.t = 0; G.wave = 0; G.waveT = C.FIRST_WAVE; G.winner = null; G.overHold = 0;
+  // Where the labels were sitting belonged to the last match, and a new board
+  // starting with the old board's rows would slide them all into place from
+  // wherever the old ones happened to be.
+  labelForget();
   // update() alternates which hold acts first on the parity of G.frame, and
   // this line was missing: the counter ran on across matches, so the SAME seed
   // replayed differently depending on how many frames the tab had already
@@ -8176,7 +8239,8 @@ function drawStructure(c, st){
   // Turret' is ~68px of 9px type. 'Inner' is ~34.
   const lab = structLabel(st);
   if (lab) labelQ.push({ x:X, y:Y - (st.key === 'gate' ? 128 : st.key === 'inhib' ? 84 : 96) * cam.z,
-    txt:lab.txt, col:lab.col, small:true, tier:lab.tier, hot:lab.hot });
+    txt:lab.txt, col:lab.col, small:true, tier:lab.tier, hot:lab.hot,
+    key:'st' + st.side + st.key + (st.i === undefined ? '' : st.i) });
 }
 // The bridge is read at a glance and a full name is twice the width of the gap
 // between two towers, so the world gets the short form and the inspect panel
@@ -10592,8 +10656,15 @@ function rankFlags(c, gx, gy, z, lvl){
     // A name must not land on the rank it is naming. Same reservation the bars
     // and the level roundels make — a standard is one more thing in the
     // airspace over a plot, and at three of them it reached the label.
-    blockLabel(head[0] - RANK.w * BSC * .5, (head[1] + tip[1]) / 2,
-      RANK.w * BSC + 2, Math.abs(tip[1] - head[1]) + 2);
+    //
+    // Only at full strength, though. The standards fade out with the names now,
+    // and while they were fading they went on reserving: fifteen boxes across
+    // five plots appearing the moment the band was entered, shoving every name
+    // up and squeezing two of them out of room altogether. Which is a thing
+    // worth keeping a name off is a question about a standard you can SEE.
+    if (!(c.globalAlpha < 1))
+      blockLabel(head[0] - RANK.w * BSC * .5, (head[1] + tip[1]) / 2,
+        RANK.w * BSC + 2, Math.abs(tip[1] - head[1]) + 2);
   }
 }
 
@@ -10808,7 +10879,7 @@ function drawBuilding(c, b){
     const hot = b.tile === sel.tile;
     const txt = BUILDINGS[t].n + (hot ? '  ' + sub : b.lvl > 1 ? '  ' + b.lvl : '');
     labelQ.push({ x:lp0[0], y:lp0[1], txt, col:'#d8dee9', hot, tier:hot ? undefined : 'quiet',
-      a:plotFade(b) });
+      a:plotFade(b), key:'plot' + holdSide + ':' + b.tile });
   }
 }
 
@@ -10843,7 +10914,51 @@ function endText(c){ c.textAlign = TEXT0.align; c.textBaseline = TEXT0.baseline;
    compared top edges and used only the NEW label's height, which was harmless
    while every box in the list was the same size and wrong as soon as it
    wasn't.                                                                   */
+/* ------------------------------------------------------- label steadiness
+   Two labels over a hold were reported flickering, worst on the spawn pit, and
+   the trace above caught it on the machine that has it. Over one zoom out and
+   back in:
+
+     Spawning Pit   drawn on 31 of 59 frames, went 6, came 6
+     Farm           worst single-frame move 20.6px
+     Gold Mine      worst single-frame move 23.3px
+     crowded        0 / 1 / 2
+
+   Both symptoms are the same cause. The dodge is recomputed from scratch every
+   frame with no memory of where it put a label last time, so:
+
+     - a label whose neighbour grew or shifted lands a whole row higher in one
+       frame — 20px, which at 8px type is two lines. That is the jump.
+     - a label that cannot find room at all is dropped. Whether there is room
+       changes as the world scales, and WHICH label loses changes with it, so
+       during a zoom the pit and the farm trade a slot back and forth. That is
+       the blink.
+
+   Neither is a decision that should be re-taken from nothing sixty times a
+   second, so the pass keeps a little memory of each label by name:
+
+     it slides to a new row instead of cutting to it, and
+     it keeps its last good place for LABEL_HOLD frames before giving up.
+
+   A label that has been squeezed out for two fifths of a second really is out
+   of room and goes; one that lost its slot for three frames during a zoom does
+   not. The memory is cosmetic — nothing in it reaches the simulation or the
+   hash — and it is cleared with the match.                                   */
+const LABEL_EASE = .34;        // how fast a label slides to a new row
+const LABEL_HOLD = 24;         // frames it keeps its last good place while crowded
+const LABEL_FORGET = 240;      // frames unseen before a name is forgotten
+const labelMem = new Map();
+let labelMemAge = 0;
+function labelForget(){ labelMem.clear(); labelMemAge = 0; }
+
 const LABEL_PAD = { x:3, y:4, edge:4 };
+// Is this box free of everything already down? The dodge walks upward looking
+// for one; this asks about one particular box, which is what a label keeping
+// the row it already had needs to know.
+const labelFree = (placed, x, y, w, h) => {
+  for (const r of placed) if (labelHits(r, { x, y, w, h })) return false;
+  return true;
+};
 const labelHits = (a, b) =>
   Math.abs(a.x - b.x) < (a.w + b.w) / 2 + LABEL_PAD.x &&
   Math.abs(a.y - b.y) < (a.h + b.h) / 2 + LABEL_PAD.y;
@@ -10906,6 +11021,147 @@ function labelMark(c, L){
   c.globalAlpha = 1;
 }
 
+/* ------------------------------------------------------- the label trace
+   A name over the hold was reported flickering on a real desktop, right after a
+   zoom, worst on the spawn pit and the farm. Everything that could account for
+   it was instrumented here and came back clean: presence, position, the
+   crowding drop and the leader lines are all provably stable across seven
+   zooms, three pan rates, four framings and both directions of the zoom ease —
+   0 flips, 0.0px of jitter. So whatever it is needs the machine that has it.
+
+   This is the `?labels` counterpart to `?perf`: watch it happen, then paste
+   back what the frames actually did. It records the last few seconds and says,
+   per name, how many times it came or went, how far it moved, and how its
+   alpha and the camera's zoom were behaving while it did — which between them
+   distinguish every remaining candidate:
+
+     came/went > 0     the name is being dropped and re-placed (crowding)
+     moved > 2px       the dodge is unstable frame to frame
+     alpha varying     it is mid-fade and the zoom has not settled
+     nothing at all    the LAYOUT is stable and what is moving is behind the
+                       type — the world showing through an outline that is not
+                       quite opaque, which no amount of layout work will fix.  */
+const LTRACE = { on:false, frames:0, cap:600, seen:new Map(), z0:0, z1:0, crowd:new Set() };
+function labelTraceStart(){
+  LTRACE.on = true; LTRACE.frames = 0; LTRACE.seen = new Map();
+  LTRACE.z0 = Infinity; LTRACE.z1 = 0; LTRACE.crowd = new Set();
+  labelTraceShow('recording — zoom in and out, then read this again');
+}
+/* Why a name was not drawn, said by the code that refused it. Presence alone
+   cannot tell a fade finishing from a name shoved off the top of the frame from
+   one squeezed out by its neighbours, and those want three different fixes. */
+function labelTraceMiss(key, why){
+  if (!LTRACE.on || !key) return;
+  const r = LTRACE.seen.get(key);
+  if (!r) return;
+  r.why = r.why || {};
+  r.why[why] = (r.why[why] || 0) + 1;
+  r.missNow = why;          // and which reason, THIS frame, for the verdict below
+}
+function labelTraceStep(){
+  if (!LTRACE.on) return;
+  LTRACE.z0 = Math.min(LTRACE.z0, cam.z); LTRACE.z1 = Math.max(LTRACE.z1, cam.z);
+  LTRACE.crowd.add(labelCrowded);
+  const here = new Set();
+  for (const p of labelPlaced){
+    if (!p.key) continue;
+    // Identified by the caller's key, reported under its NAME with the numbers
+    // stripped: 'Woodland  1/8' shows as 'Woodland', so a changing worker count
+    // is not read as a label coming and going — and two things that happen to
+    // share a name (the food node and the farm plot, both 'Farm') stay two.
+    const k = p.key;
+    here.add(k);
+    let r = LTRACE.seen.get(k);
+    if (!r){
+      r = { nm:String(p.txt || k).split(/\s{2,}|\s·\s|\s\d/)[0] || k,
+            on:0, off:0, n:0, dy:0, ay:p.y - p.ay, a0:1, a1:0 };
+      LTRACE.seen.set(k, r);
+    }
+    r.n++;
+    // How far the label sits above what it names, as DRAWN — the player sees
+    // the ink, not the row the layout picked for it.
+    const d = (p.ry === undefined ? p.y : p.ry) - p.ay;
+    if (r.n > 1) r.dy = Math.max(r.dy, Math.abs(d - r.ay));
+    r.ay = d;
+    const a = p.a === undefined ? 1 : p.a;
+    r.a0 = Math.min(r.a0, a); r.a1 = Math.max(r.a1, a);
+    r.aNow = a;                       // the LAST alpha, not the lowest ever
+    if (r.last === false && !r.excused) r.on++;
+    r.last = true;
+    r.excused = false;
+    r.aWas = r.aNow;
+    r.missNow = null;
+  }
+  /* A name that LEFT. Two of the ways it can leave are it doing its job, and a
+     tool that counts those as flicker says yes every time and so says nothing:
+
+       alpha under 1  it was inside the fade band, where leaving is the whole
+                      point. A wheel-driven zoom moves far between two sampled
+                      frames, so the last alpha anybody sees on the way out can
+                      be well above zero and it is still a fade finishing.
+       offscreen      it has gone off the side of the picture.
+
+     What is left is a name that was FULLY present, on screen, and stopped being
+     drawn. That is the only thing anybody would call a blink.                */
+  for (const [k, r] of LTRACE.seen){
+    if (here.has(k)) continue;
+    if (r.last === true){
+      r.excused = r.aNow < 1 - 1e-6 || r.missNow === 'offscreen';
+      if (!r.excused) r.off++;
+    }
+    r.last = false;
+    r.missNow = null;
+  }
+  if (++LTRACE.frames >= LTRACE.cap){ LTRACE.on = false; labelTraceShow(); }
+}
+function labelTraceReport(){
+  const L = [];
+  L.push('IRONBRIDGE LABELS');
+  L.push('frames ' + LTRACE.frames + '  zoom ' + LTRACE.z0.toFixed(3) + '..' + LTRACE.z1.toFixed(3) +
+    '  crowded ' + [...LTRACE.crowd].sort((a, b) => a - b).join('/'));
+  L.push('screen ' + LW + 'x' + LH + ' css, dpr ' + (lcv && LW ? (lcv.width / LW).toFixed(2) : '?') +
+    ', post ' + postLvl + ', skyRes ' + SKY.res);
+  L.push('');
+  L.push('name              frames  went  came  worst move  alpha           why it was refused');
+  const rows = [...LTRACE.seen.entries()]
+    .sort((a, b) => (b[1].off + b[1].on) - (a[1].off + a[1].on) || b[1].n - a[1].n);
+  for (const [, r] of rows)
+    L.push(String(r.nm).slice(0, 17).padEnd(18) + String(r.n).padStart(6) + String(r.off).padStart(6) +
+      String(r.on).padStart(6) + r.dy.toFixed(1).padStart(12) +
+      ('  ' + (r.a1 > r.a0 ? r.a0.toFixed(2) + '..' + r.a1.toFixed(2) : '1.00')).padEnd(16) +
+      (r.why ? Object.entries(r.why).map(([w, n]) => w + ' x' + n).join(' ') : ''));
+  L.push('');
+  const bad = rows.filter(([, r]) => r.off + r.on > 0);
+  const moved = rows.filter(([, r]) => r.dy > 2);
+  L.push(bad.length ? 'BLINKED: ' + bad.map(([, r]) => r.nm).join(', ')
+    : moved.length ? 'no blinking; these MOVED: ' + moved.map(([, r]) => r.nm).join(', ')
+    : 'every name held its place for every frame — the layout is not moving');
+  return L.join('\n');
+}
+function labelTraceShow(note){
+  if (HEADLESS || typeof document === 'undefined') return;
+  const txt = note ? 'IRONBRIDGE LABELS\n' + note : labelTraceReport();
+  let el = document.getElementById('perfPanel');
+  if (!el){ el = document.createElement('div'); el.id = 'perfPanel'; document.body.appendChild(el); }
+  el.innerHTML = '<pre id="perfTxt">' + esc(txt) + '</pre>' +
+    '<div class="row"><button id="perfCopy">Copy</button>' +
+    '<button id="perfAgain">Record again</button>' +
+    '<button id="perfClose">Close</button></div>';
+  const copy = () => {
+    const t = document.getElementById('perfTxt');
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText)
+        return navigator.clipboard.writeText(txt).then(
+          () => { document.getElementById('perfCopy').textContent = 'Copied'; },
+          () => selectPerf(t));
+    } catch (e) {}
+    selectPerf(t);
+  };
+  document.getElementById('perfCopy').onclick = copy;
+  document.getElementById('perfAgain').onclick = labelTraceStart;
+  document.getElementById('perfClose').onclick = () => { el.remove(); };
+}
+
 let labelQ = [];
 function flushLabels(c){
   const placed = labelBlock.slice();
@@ -10914,7 +11170,7 @@ function flushLabels(c){
   labelCrowded = 0;
   labelQ.sort((a, b) => a.y - b.y);
   for (const L of labelQ){
-    if (!labelSeen(L)){ labelSkipped++; continue; }
+    if (!labelSeen(L)){ labelSkipped++; labelTraceMiss(L.key, 'offscreen'); continue; }
     if (L.tier === 'mark'){ labelMark(c, L); labelMarked++; continue; }
     // The offsets under here used to be `y + 8.5` and `y + 10`, tuned against
     // whichever baseline the previous draw had left behind — which meant the
@@ -10925,10 +11181,25 @@ function flushLabels(c){
     const w = c.measureText(L.txt).width + 8, h = L.small ? 11 : 13;
     const lx = labelX(L.x, w);
     let cy = L.y - 11 + h / 2;
-    // nudge upward until this label is clear of everything already down —
-    // other labels AND the bars and roundels that reserved their own space
+    /* Nudge upward until this label is clear of everything already down — other
+       labels AND the bars and roundels that reserved their own space.
+
+       The budget is the number of boxes there are, because that is the number
+       of steps this can possibly take. Each step puts the label entirely above
+       the highest box it was touching, so it can never touch that box again and
+       it can never come back down onto one it has passed: the position falls
+       monotonically and the set of boxes still reachable strictly shrinks. At
+       most one step per box, therefore.
+
+       It used to be a flat 14, which is fewer boxes than a busy frame has — the
+       trace caught the spawn pit's name being dropped seven times across one
+       zoom, not because there was nowhere to put it but because the search gave
+       up before it got there, and WHICH label ran out of budget changed as the
+       world scaled. A cap below the provable bound is not a safety net, it is a
+       policy nobody chose.                                                   */
     let clear = false;
-    for (let guard = 0; guard < LABEL_TRIES; guard++){
+    const tries = Math.max(LABEL_TRIES, placed.length + 1);
+    for (let guard = 0; guard < tries; guard++){
       // Above the HIGHEST thing it is touching, not the first one found in the
       // array. Stepping over them one at a time climbs a crowded body a box
       // per try and runs out of tries before it is clear; this converges in
@@ -10937,27 +11208,97 @@ function flushLabels(c){
       for (const r of placed)
         if (labelHits(r, { x:lx, y:cy, w, h }) && (!top || r.y - r.h / 2 < top.y - top.h / 2)) top = r;
       if (!top){ clear = true; break; }
-      cy = top.y - top.h / 2 - h / 2 - LABEL_PAD.y;
+      /* A HAIR more than the padding, and the hair is the whole point. This put
+         the label exactly LABEL_PAD.y clear, and `labelHits` tests `<` against
+         exactly that distance — so whether the box it had just climbed over
+         still counted as touching came down to how the two sides of the
+         comparison happened to round. When it did, `top` came out the same box
+         on the next pass, the walk stopped moving, and it burned every try
+         standing still and reported no room. Which is how the spawn pit's name
+         was refused seven times across one zoom with two thirds of the frame
+         empty above it. */
+      cy = top.y - top.h / 2 - h / 2 - LABEL_PAD.y - .01;
     }
-    // A label that could not find room used to be drawn anyway, on top of
-    // whatever it had failed to climb over — which at a pulled-back zoom meant
-    // a name sitting across a health bar, the one thing in the frame it must
-    // never cover. A name you cannot place is worth less than the bar it would
-    // hide, so it is dropped. Only ever at real density: the sweep counts them.
-    if (!clear){ labelCrowded++; continue; }
-    const y = cy - h / 2;
-    placed.push({ x:lx, y:cy, w, h, ax:L.x, ay:L.y });   // ax, ay: what it is pointing at
+    // Room it found may still be off the top of the picture. That is the one
+    // honest reason left to refuse a label, and unlike running out of tries it
+    // is a stable fact about how crowded the airspace over that thing is rather
+    // than an artefact of the order the search happened to visit things in.
+    if (clear && cy - h / 2 < LABEL_PAD.edge) clear = false;
+    /* Where this label was last time, if it has been here before. The dodge
+       above is recomputed from nothing every frame, and a decision re-taken
+       from nothing sixty times a second is a decision that can disagree with
+       itself sixty times a second — see the note by LABEL_EASE for what that
+       looked like in the trace.
+
+       Keyed on what the caller SAYS it is, not on what it reads as. Two things
+       on one hold can carry the same words: the food node is called Farm and so
+       is the farm plot, and a hold with two pits has two Spawning Pits. Keyed
+       by text those shared one slot and took turns writing it, which showed up
+       as a label moving seventy pixels a frame — a worse flicker than the one
+       this was added to cure, invented by the cure. A label with no key gets no
+       memory, which is right for the ones that are transient anyway.        */
+    const mk = L.key || null;
+    let mem = mk ? labelMem.get(mk) : null;
+    if (mk && !mem){ mem = { dy:cy - L.y, miss:0, seen:labelMemAge }; labelMem.set(mk, mem); }
+    if (mem) mem.seen = labelMemAge;
+    if (clear){
+      if (mem) mem.miss = 0;
+    } else if (mem && mem.miss < LABEL_HOLD && labelFree(placed, lx, L.y + mem.dy, w, h)){
+      // No room THIS frame, where the walk ended up. Whether there is room
+      // changes as the world scales, so one bad frame is not evidence of
+      // anything — and the place it already had may well still be free.
+      //
+      // Which is CHECKED, not assumed. Holding a row that was clear last frame
+      // and is not clear now would put a name across a health bar for two
+      // fifths of a second, and not covering a bar is the reason the drop
+      // exists in the first place. A label only keeps a place that is still a
+      // place; if its own old row has been taken, it goes.
+      mem.miss++;
+      cy = L.y + mem.dy;
+    } else {
+      // Out of room for two fifths of a second running: it really is crowded
+      // out. A label that could not find room used to be drawn anyway, on top
+      // of whatever it had failed to climb over — which at a pulled-back zoom
+      // meant a name sitting across a health bar, the one thing in the frame it
+      // must never cover. A name you cannot place is worth less than the bar it
+      // would hide. Only ever at real density: the sweep counts them.
+      labelCrowded++;
+      labelTraceMiss(L.key, cy - h / 2 < LABEL_PAD.edge ? 'offtop' : 'crowded');
+      continue;
+    }
+    /* The row the layout chose, and the row it is DRAWN on, kept apart on
+       purpose. The glide must not feed back into the placement: an eased
+       position that also reserved its own space would change what the next
+       label collides with, which changes the next target, which changes the
+       ease — a layout arguing with itself, and measurably so. It showed up as a
+       parked camera reporting movement.
+
+       So the dodge, the reservation and everything that reads `labelPlaced`
+       keep the target — deterministic, and exactly what they were before this —
+       while the ink slides toward it over a few frames. */
+    const dcy = mem ? L.y + (mem.dy += ((cy - L.y) - mem.dy) * LABEL_EASE) : cy;
+    const y = dcy - h / 2;
     // `a` is how present this label is, for the callers that ration themselves
     // by zoom rather than popping (see plotFade). It multiplies the whole
     // label — leader line, outline and type together — because a name whose
     // text faded while its leader stayed put reads as a broken picture, not a
     // fading one.
     const A = L.a === undefined ? 1 : clamp(L.a, 0, 1);
+    // ax, ay: what it is pointing at. `txt` so a label has a NAME here — the
+    // record was anonymous, and a sweep asking "did that name come and go"
+    // could only guess at identity from coordinates that move with the camera.
+    // `ry` is where the ink went, which is what the trace should measure: the
+    // player sees the glide, not the target.
+    placed.push({ x:lx, y:cy, w, h, ax:L.x, ay:L.y, txt:L.txt, key:L.key, a:A, ry:dcy });
     c.globalAlpha = A;
     // A label pushed clear of its neighbours has to keep pointing at the thing
     // it names, or a packed plot reads as a pile of loose text. A plate slid
     // in off the edge has moved sideways rather than up, so the leader leans.
-    if (y < L.y - 12 || Math.abs(lx - L.x) > 1){
+    // Asked of the TARGET, not of where the ink has got to: a leader that
+    // appeared halfway through a glide and vanished again would be a hairline
+    // strobing on and off, which is the symptom this whole block is here to
+    // remove rather than a new place to create it.
+    if (cy - h / 2 < L.y - 12 || Math.abs(lx - L.x) > 1){
       c.strokeStyle = 'rgba(160,180,205,.30)'; c.lineWidth = 1;
       c.beginPath(); c.moveTo(lx + .5, y + h); c.lineTo(L.x + .5, L.y - 3); c.stroke();
     }
@@ -10966,14 +11307,14 @@ function flushLabels(c){
       // over grass, stone and sky at once — and it costs a shape the size of
       // the word rather than a shape the size of the box round it.
       c.lineWidth = LABEL_QUIET.lw; c.strokeStyle = LABEL_QUIET.rim;
-      c.strokeText(L.txt, lx, cy);
+      c.strokeText(L.txt, lx, dcy);
       c.fillStyle = tintTo(L.col, LABEL_QUIET.into, LABEL_QUIET.k);
-      c.fillText(L.txt, lx, cy);
+      c.fillText(L.txt, lx, dcy);
     } else {
       c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
       c.fillRect(lx - w / 2, y, w, h);
       if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(lx - w / 2 + .5, y + .5, w - 1, h - 1); }
-      c.fillStyle = L.col; c.fillText(L.txt, lx, cy);
+      c.fillStyle = L.col; c.fillText(L.txt, lx, dcy);
     }
     c.globalAlpha = 1;
   }
@@ -10982,6 +11323,13 @@ function flushLabels(c){
   labelBlocked = labelBlock;
   labelBlock = [];
   labelQ = [];
+  // The memory is bounded by being forgotten. Names come and go over a match —
+  // structures fall, plots get built — and swept rarely rather than every frame
+  // because the sweep is over the whole map and the entries are tiny.
+  labelMemAge++;
+  if (labelMemAge % 120 === 0)
+    for (const [k, m] of labelMem)
+      if (labelMemAge - m.seen > LABEL_FORGET) labelMem.delete(k);
 }
 
 // There are more of these on screen than anything else in the game — every
@@ -11203,7 +11551,7 @@ function drawNode(c, key){
   const picked = sel.node === key;
   labelQ.push({ x:p[0], y:p[1] + (key === 'wood' ? 26 : 36) * B,
     txt:N.n + '  ' + n + '/' + nodeCap(s, key), col:N.col,
-    hot:picked, tier:picked ? undefined : 'quiet' });
+    hot:picked, tier:picked ? undefined : 'quiet', key:'node' + holdSide + ':' + key });
 }
 
 // The seat of the hold. It was one plain box with a flag on it, smaller than
@@ -11258,7 +11606,7 @@ function drawKeep(c){
   // goes plate-less with the rest of the hold rather than being the one black
   // slab left standing in the middle of it.
   labelQ.push({ x:lb[0], y:lb[1], txt:'Town Hall · ' + s.workers.idle + ' idle', col:'#ffe7b0',
-    tier:'quiet' });
+    tier:'quiet', key:'hall' + holdSide });
   for (let i = 0; i < Math.min(6, s.workers.idle); i++){
     const a = G.t * .3 + i * 1.1;
     const q = bp(gx + Math.cos(a) * 1.15, gy + 1.15 + Math.sin(a) * .38);
@@ -12865,7 +13213,7 @@ function draw(){
     c.strokeStyle = '#ffcf4d'; c.lineWidth = Math.max(1.2, 1.8 * cam.z);
     c.beginPath(); c.ellipse(q[0], q[1], 9 * cam.z, 4.5 * cam.z, 0, 0, 6.2832); c.stroke();
   }
-  if (!perfOff('hud')){ flushLabels(c); drawMinimap(c); }
+  if (!perfOff('hud')){ flushLabels(c); labelTraceStep(); drawMinimap(c); }
   c.restore();
   skyStep(c, t0);
 }
@@ -15240,6 +15588,10 @@ function boot(){
   // the machine that needs this is a phone, and a phone has no keyboard and
   // should not have a hidden gesture that a player can trip over.
   try { if (/[?&]perf\b/.test(location.search)) setTimeout(perfStart, 1200); } catch (e) {}
+  // ?labels does the same for the label pass. It records rather than ablates,
+  // so it costs one map lookup per name per frame and can be left running while
+  // the player does the thing that goes wrong.
+  try { if (/[?&]labels\b/.test(location.search)) setTimeout(labelTraceStart, 1200); } catch (e) {}
   wire();
   startDemo();
   showMenu();
@@ -15329,6 +15681,8 @@ window.IB = {
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelMarked(){ return labelMarked; }, get labelCrowded(){ return labelCrowded; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
+  LTRACE, labelTraceStart, labelTraceStep, labelTraceReport,
+  LABEL_EASE, LABEL_HOLD, LABEL_FORGET, labelMem, labelForget, labelFree,
   SKY, skyStep, plateKey, skyRoll, skyRollKey, SKY_ROLL_PX, skyFast, skyAt, skyMoving, SKY_MOVE, skyBase, skySoft, skyRes, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
   POST, postFx, postCache, postGrade, screenTier, onPhone, PHONE_W, PHONE_POST, STONE_TONE, STONE_TONE_LIT, STONE_TONE_DARK,
   BAND_FX, bandFoot, ridgeFoot, HORIZON, ridgeTop, ridgeMid, CIRRUS, drawBands, bandPaint, BAND_SLACK,

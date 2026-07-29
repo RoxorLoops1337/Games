@@ -3316,6 +3316,144 @@ t.ok(true, 'drawing an empty bridge is harmless');
       t.ok(full.left === 1 && half.left === 1, 'and the alpha is handed back either way');
       IB.cam.z = IB.cam.tz = 1.4;
     }
+
+    /* ---- the trace.
+       A name over the hold was reported flickering on a real desktop, worst on
+       the spawn pit and the farm, and every candidate here came back clean:
+       presence, position, the crowding drop and the leader lines are stable
+       across seven zooms, three pan rates, four framings and both directions of
+       the zoom ease. So the remaining question needs the machine that has it,
+       and `?labels` is how it answers — the same shape as `?perf`.
+
+       What it has to get right is IDENTITY. A label whose text carries a
+       changing count ('Woodland 1/8') must not read as a different label every
+       time a worker arrives, or the report says everything blinked always.   */
+    {
+      IB.cam.follow = false; IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1.2;
+      // Rows remembered from the framings the blocks above were using are rows
+      // this framing has to glide away from, and the glide is real movement.
+      // Forget them and take one frame to settle, so what follows is a parked
+      // camera over a settled board rather than the tail of somebody else's.
+      IB.labelForget();
+      IB.draw();
+      IB.labelTraceStart();
+      t.ok(IB.LTRACE.on === true, 'the trace records when it is started');
+      for (let f = 0; f < 40; f++) IB.draw();
+      const rep = IB.labelTraceReport();
+      t.ok(/frames 40\b/.test(rep), 'and counts the frames it saw (' + (rep.match(/frames \d+/) || [])[0] + ')');
+      t.ok(/zoom 1\.200\.\.1\.200/.test(rep), 'and the zoom it saw them at');
+      // A parked camera over a still hold must report nothing moving — which is
+      // the reading the whole tool exists to make trustworthy.
+      t.ok(/every name held its place for every frame/.test(rep),
+        'a parked camera reports nothing moving, so a report that DOES say something means it');
+      const rows = rep.split('\n').filter(l => /^\S[^\n]*?\s{2,}\d+\s+\d+\s+\d+\s/.test(l));
+      t.ok(rows.length > 2, 'with a row per name (' + rows.length + ')');
+      // Identity, tested where it is hardest: the node labels carry a count.
+      const wood = rows.find(l => l.startsWith('Woodland'));
+      t.ok(!!wood, 'the node labels are named rather than counted');
+      if (wood) t.ok(/^Woodland\s+40\s+0\s+0\b/.test(wood),
+        'and a changing worker count does not read as a label coming and going (' + wood.trim() + ')');
+      // It must stop by itself. A trace that runs for the rest of the match is
+      // a cost on the machine that was already struggling.
+      IB.LTRACE.frames = IB.LTRACE.cap - 1;
+      IB.draw();
+      t.ok(IB.LTRACE.on === false, 'and it stops on its own after its window (' + IB.LTRACE.cap + ' frames)');
+      t.ok(IB.LTRACE.cap >= 120 && IB.LTRACE.cap <= 2000,
+        'which is long enough to catch a zoom and short enough to end (' + IB.LTRACE.cap + ')');
+      const before = IB.LTRACE.seen.size;
+      IB.draw();
+      t.ok(IB.LTRACE.seen.size === before, 'a stopped trace records nothing further');
+      t.ok(/\[\?&\]labels/.test(SRC),
+        'and it is reached the same way the profiler is, from the URL');
+    }
+
+    /* ---- and what the trace found, fixed.
+       Recorded on the machine that has it, over one zoom out and back in:
+
+         Spawning Pit   drawn on 31 of 59 frames, went 6, came 6
+         Farm           worst single-frame move 20.6px
+         Gold Mine      worst single-frame move 23.3px
+         crowded        0 / 1 / 2
+
+       One cause: the dodge was recomputed from nothing every frame. A label
+       whose neighbour shifted landed a row higher in one frame — 20px, two
+       lines of 8px type — and a label that could not find room was dropped,
+       with WHICH label lost changing as the world scaled, so the pit and the
+       farm traded a slot back and forth.                                    */
+    {
+      IB.labelForget();
+      IB.cam.follow = false; IB.cam.x = IB.HOLD_X; IB.cam.z = IB.cam.tz = 1.2;
+      t.ok(IB.LABEL_EASE > 0 && IB.LABEL_EASE < 1,
+        'a label slides toward a new row rather than cutting to it (' + IB.LABEL_EASE + ')');
+      t.ok(IB.LABEL_HOLD >= 6 && IB.LABEL_HOLD <= 90,
+        'and keeps its place for long enough to ride out a zoom, not a whole wave (' +
+        IB.LABEL_HOLD + ' frames)');
+      // The glide. Drop a label a long way by hand and watch the ink follow it
+      // over several frames instead of one, then land.
+      IB.draw();
+      const one = IB.labelPlaced.find(p => p.key);
+      t.ok(!!one, 'the probe has a label with an identity to move');
+      if (one){
+        // Keyed on what the caller says it IS, not on what it reads as: two
+        // things on one hold can carry the same words (the food node and the
+        // farm plot are both 'Farm'; a hold with two pits has two 'Spawning
+        // Pit'), and keyed by text they shared one memory slot and took turns
+        // writing it — a label moving 71px a frame, a worse flicker than the
+        // one the memory was added to cure.
+        const m = IB.labelMem.get(one.key);
+        t.ok(!!m, 'which the pass remembers by that identity');
+        t.ok(new Set(IB.labelPlaced.filter(p => p.key).map(p => p.key)).size ===
+             IB.labelPlaced.filter(p => p.key).length,
+          'and no two labels in a frame claim the same one');
+        if (m){
+          m.dy -= 40;                                  // shove the ink 40px off
+          const path = [];
+          for (let f = 0; f < 14; f++){
+            IB.draw();
+            const p = IB.labelPlaced.find(q => q.key === one.key);
+            if (p) path.push(p.ry - p.y);              // ink minus target
+          }
+          t.ok(path.length > 8, 'and it stays on the board while it moves back');
+          const steps = path.slice(1).map((v, i) => Math.abs(v - path[i]));
+          t.ok(Math.max(...steps) < 20,
+            'no frame of the glide is a jump (worst ' + Math.max(...steps).toFixed(1) + 'px)');
+          t.ok(Math.abs(path[path.length - 1]) < 1.5,
+            'and it arrives (' + path[path.length - 1].toFixed(2) + 'px off after ' +
+            path.length + ' frames)');
+          let mono = true;
+          for (let i = 1; i < path.length; i++) if (Math.abs(path[i]) > Math.abs(path[i - 1]) + 1e-9) mono = false;
+          t.ok(mono, 'closing the whole way rather than overshooting and coming back');
+        }
+      }
+      // A parked, settled board must be bit-stable: the glide may not feed back
+      // into the placement. An eased position that also RESERVED its own space
+      // would change what the next label collides with, which changes the next
+      // target, which changes the ease — a layout arguing with itself. It is
+      // why the reservation keeps the target and only the ink moves.
+      IB.labelForget();
+      IB.draw(); IB.draw();
+      const rowsOf = () => { IB.draw(); return IB.labelPlaced.map(p => p.key + '@' + p.y.toFixed(4) + '/' + p.ry.toFixed(4)).join('|'); };
+      const a1 = rowsOf(), a2 = rowsOf(), a3 = rowsOf();
+      t.ok(a1 === a2 && a2 === a3,
+        'a parked camera draws every label in exactly the same place every frame');
+      // And the hold is CHECKED, not assumed. A row that was clear last frame
+      // and is not clear now must not be kept: not covering a health bar is the
+      // reason the drop exists at all.
+      t.ok(typeof IB.labelFree === 'function' &&
+        IB.labelFree([{ x:10, y:10, w:8, h:8 }], 200, 200, 8, 8) === true &&
+        IB.labelFree([{ x:10, y:10, w:8, h:8 }], 10, 10, 8, 8) === false,
+        'and there is a way to ask whether one particular row is free');
+      t.ok(/labelFree\(placed, lx, L\.y \+ mem\.dy/.test(SRC),
+        'which the hold asks before keeping a row it used to have');
+      // The memory is bounded, and belongs to the match it was made in.
+      t.ok(IB.LABEL_FORGET > IB.LABEL_HOLD,
+        'a name is forgotten long after it stops being held (' + IB.LABEL_FORGET + ' > ' + IB.LABEL_HOLD + ')');
+      IB.draw();
+      t.ok(IB.labelMem.size > 0, 'the pass has remembered something');
+      IB.newMatch({ diff:'veteran', seed:9811 });
+      t.ok(IB.labelMem.size === 0,
+        'and a new match starts with none of the last one’s rows (' + IB.labelMem.size + ')');
+    }
   }
 }
 
@@ -12941,6 +13079,65 @@ t.ok(true, 'a final draw on a live match is clean');
     'and every column carries bottom padding, so its last row is not on the cut line');
   t.ok(/overflow-y:auto/.test(secCss),
     'a column with more in it than fits scrolls instead of hiding the rest');
+
+  /* ---- and the row has to FIT.
+     Reported from an ordinary desktop: the columns on the right are cut off and
+     reaching them means scrolling the panel sideways. Measured with everything
+     unlocked, the six columns came to 2822px of content — the forge alone 1197
+     of it, six upgrade buttons in a row that could not wrap — against a `.dsec`
+     that was `flex:0 0 auto` and so never gave a pixel back. That does not fit
+     a 2560px monitor, let alone a laptop, so on EVERY desktop the last column
+     or two were off the edge.
+
+     Three things have to hold together or it comes back: the rows wrap, the
+     columns yield, and the floors they yield to add up to less than a laptop. */
+  t.ok(/\.pgrid\{[^}]*flex-wrap:wrap/.test(SRC),
+    'a row of controls wraps rather than running off the side of its column');
+  t.ok(/\.pgrid > \*\{ flex:0 1 auto/.test(SRC),
+    'and the controls in it can be squeezed, or the wrap is never reached');
+  t.ok(/\.dsec\{[^}]*flex:0 1 auto/.test(secCss),
+    'a column yields width when the row is short of it');
+  {
+    // Every floor the dock declares, added up against the narrowest desktop
+    // anybody uses. `.dsec` scrolls, so its automatic minimum size is zero —
+    // these floors are the ONLY thing keeping a column from being squeezed to
+    // nothing, which is what happened to the hero cards (62px, and clipped)
+    // when shrink was first let in with none of them declared.
+    const cols = ['jobs', 'train', 'sel', 'bridge', 'heroes', 'forge'];
+    const base = +(secCss.match(/min-width:(\d+)px/) || [0, 0])[1];
+    const grow = +((SRC.match(/\.dsec\.grow\{[^}]*min-width:(\d+)px/) || [])[1] || base);
+    const floorOf = (k) => {
+      const m = SRC.match(new RegExp('\\.dsec\\[data-col="' + k + '"\\]\\{[^}]*min-width:(\\d+)px'));
+      if (m) return +m[1];
+      return k === 'bridge' ? grow : base;    // bridge is the .grow column
+    };
+    const floors = cols.map(floorOf);
+    const total = floors.reduce((a, b2) => a + b2, 0);
+    t.ok(base > 0, 'a column has a floor at all (' + base + 'px)');
+    t.ok(total < 1280,
+      'and all six floors together fit the narrowest desktop there is (' +
+      cols.map((k, i) => k + ' ' + floors[i]).join(', ') + ' = ' + total + 'px < 1280)');
+    // The two that cannot be starved, because what is in them has a hard width
+    // or is a sentence. Left to the proportional shrink they lost every time:
+    // the greedy column is the one with the most to give up and so keeps most.
+    t.ok(floorOf('heroes') >= 160,
+      'the hero column holds a whole 148px card (' + floorOf('heroes') + 'px)');
+    t.ok(floorOf('sel') >= 150,
+      'and the one carrying prose is wide enough for a sentence (' + floorOf('sel') + 'px)');
+    // WORKERS is the one column that is a readout rather than a list: you want
+    // all four jobs visible at once, so it is laid out rather than flowed.
+    t.ok(/\.dsec\[data-col="jobs"\] \.pgrid\{[^}]*grid-template-columns:repeat\(2/.test(SRC),
+      'the four job steppers are two across and two down, so none of them is below the fold');
+    t.ok(floorOf('jobs') >= 260,
+      'with room for two of them side by side and their buttons (' + floorOf('jobs') + 'px)');
+    // And a rank button's floor is what its own longest name needs, measured.
+    const ab = +((SRC.match(/\.pgrid > \.abtn\{ min-width:(\d+)px/) || [])[1] || 0);
+    t.ok(ab >= 160, 'a rank button is at least as wide as its longest label (' + ab + 'px)');
+    // The dock's floor has to hold two wrapped rows, or the wrap only moves the
+    // overflow from sideways to downwards.
+    if (cl) t.ok(+cl[1] >= 128,
+      'and the dock is tall enough for the two rows the wrap creates (' + cl[1] + 'px)');
+  }
 
   // The queue itself. It is emitted as chips — one per pit, each filling as
   // its worker comes up — AND as a fragment of the title, because one size of
