@@ -18,8 +18,13 @@ function loadGame(store, withCtx) {
   const code = html.match(/<script>\s*'use strict';([\s\S]*)<\/script>/)[1];
 
   const noop = () => {};
+  // the stub ctx COUNTS its save/restore pairs. An unbalanced pair leaks a
+  // clip (or a composite mode) into every later draw call of the frame — the
+  // kind of break that renders as "half the HUD vanished" and nothing else.
+  globalThis.__ctxDepth = 0;
   const ctx = new Proxy({}, { get(_t, k) {
-    if (k === 'save' || k === 'restore') return noop;
+    if (k === 'save') return () => { globalThis.__ctxDepth++; };
+    if (k === 'restore') return () => { globalThis.__ctxDepth--; };
     if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop: noop });
     if (k === 'measureText') return () => ({ width: 10 });
     return noop;
@@ -7348,7 +7353,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.9.0', 'the owner’s own bestiary ships as v1.9.0');
+  t.eq(D.VERSION, '1.9.1', 'the light pass ships as v1.9.1');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('THE DEEP GOES DARK') >= 0)),
+       'and the notes carry the lighting');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('DEBT COLLECTOR') >= 0)),
        'and the notes carry the collector');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('COIN GOLEM') >= 0)),
@@ -8171,6 +8178,43 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(E.S.run.ledger.some(en => /probe/.test(en.why)), 'old lines intact');
   E.endRun('done');
   D.endRun && 0;
+}
+
+// -------- THE LIGHT PASS: the dungeon's gloom leaves no clip behind --------
+// A room frame now stacks a floor clip, a fires clip, a darkness mask and a
+// handful of composite modes on top of each other. Drop ONE restore and the
+// clip leaks into everything painted after it — the HUD, the toasts, the
+// modals — which is exactly what happened while this was being written.
+{
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  D.srand(4242); D.newRun('knight');
+  D.S.screen = 'dungeon';
+  frames(3);
+  t.eq(globalThis.__ctxDepth, 0, 'a lit dungeon frame balances every save with a restore');
+  // ...and on a dark floor, where the torch-circle runs its own darkness
+  D.S.run.floor = 3;
+  t.ok(D.darkFloor(), 'floor 3 is a dark floor');
+  D.S.roomStamp++;
+  frames(3);
+  t.eq(globalThis.__ctxDepth, 0, 'and so does a dark one');
+  // every room shape, since the mask is baked per room geometry
+  for (const size of ['s', 'w', 't', 'b']) {
+    D.S.run.floor = 4;
+    D.curRoom().size = size;
+    D.S.roomStamp++;
+    frames(2);
+    t.eq(globalThis.__ctxDepth, 0, 'a ' + size + '-shaped room balances too');
+  }
+  // a room full of dwellers: every ent lays a contact shadow of its own
+  D.curRoom().ents = [
+    { kind: 'monster', mtype: 'boss', done: false, px: 0.3, py: 0.3 },
+    { kind: 'chest', done: false, px: 0.7, py: 0.3 },
+    { kind: 'collector', done: false, robbed: true, px: 0.5, py: 0.7 },
+  ];
+  frames(3);
+  t.eq(globalThis.__ctxDepth, 0, 'a crowded room balances too');
 }
 
 t.done();

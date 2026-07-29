@@ -51,6 +51,12 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.9.1', notes: [
+    'THE DEEP GOES DARK \u{1F56F}\u{FE0F} — the rooms were lit like a kitchen: one flat wash of grey over every stone, the same brightness in the middle as in the corners. Now the light comes from somewhere. Two sconces bracketed to the far wall throw a widening fan down it, two braziers burn by the near corners, an open door spills its own glow in — and everything between them is DARK. The darkness falls over the dwellers too, so a shape in the far corner has to be walked up to before it is a monster',
+    'you carry your own light \u{1F526} — a warm pool travels with you, so walking into an unlit flank is how you find what is standing in it',
+    'SHADOWS \u{1F311} — every dweller and the hero lay a soft contact shadow instead of a flat grey pill, and every wall lays a band of dark on the floor it stands over. Firelight breathes: light, glow and flame all flicker off the same pulse, so the whole room moves',
+    'and the deep got a little friendlier about being unfriendly \u{1F440} — cobwebs in the upper corners, fog drifting the length of the floor, and something in the dark that blinks at you and winks out when you get close',
+  ] },
   { v: '1.9.0', notes: [
     'THE DEBT COLLECTOR \u{1F4BC} — a thief who does not fight you for your coins. He walks up, lifts TWO PER FLOOR and RUNS, and hides in a room you have never opened; the map keeps a rumour of where. Corner him and every coin comes back — “alright, alright, I was just keeping them safe for you” — with two gold on top for the trouble',
     'THE COIN GOLEM \u{1FA99} — the fight where everything the machine taught you is wrong. Gold coins MEND it, silver ARMOURS it, and lucky, frost and venom only SHARPEN it for the round. Beat it on items, pets and poison — or feed it nothing but slugs',
@@ -10925,6 +10931,143 @@ if (!HEADLESS) (function browser() {
     }
   }
 
+  // ---------------------------------------------------------- THE LIGHT PASS
+  // A dungeon should be DARK, with warmth only where the fire is. So the room
+  // is painted bright, and then a DARKNESS MASK is laid over the whole thing —
+  // sprites included, so a monster standing in a far corner is a shape in the
+  // gloom, not a sticker on a wall. Holes are punched in that mask wherever a
+  // fixed light stands (four sconces, plus whatever spills through an open
+  // door), and since none of those ever move, the mask is baked ONCE per room
+  // and blitted. Only the flicker and the light you CARRY cost anything per
+  // frame. On a dark floor the torch-circle already does this job — the mask
+  // stands down rather than double-drowning the room.
+  //
+  // One unit gradient does all the soft round work: built at the origin with
+  // radius 1 and then translated/scaled to wherever it is needed, so a moving
+  // light never allocates a gradient.
+  function unitGlow(key, stops) { return rgr(key, 0, 0, 0, 0, 0, 1, stops); }
+  function blob(key, x, y, r, ry) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(r, ry === undefined ? r : ry);
+    ctx.fillStyle = unitGlow(key, GLOW_STOPS[key]);
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
+  }
+  const GLOW_STOPS = {
+    warm: [[0, 'rgba(255,176,86,0.20)'], [0.45, 'rgba(255,146,58,0.08)'], [1, 'rgba(255,140,50,0)']],
+    hero: [[0, 'rgba(255,226,168,0.20)'], [0.5, 'rgba(255,200,120,0.07)'], [1, 'rgba(255,190,110,0)']],
+    shade: [[0, 'rgba(6,3,9,0.55)'], [0.55, 'rgba(6,3,9,0.28)'], [1, 'rgba(6,3,9,0)']],
+    fog: [[0, 'rgba(150,160,200,0.055)'], [1, 'rgba(150,160,200,0)']],
+    // never a FULL hole: even under a sconce the deep keeps a little of its
+    // dark, so the room reads as lit-in-places instead of simply bright
+    cut: [[0, 'rgba(0,0,0,0.82)'], [0.5, 'rgba(0,0,0,0.34)'], [1, 'rgba(0,0,0,0)']],
+  };
+  // a soft contact shadow, squashed and thrown a little away from the fires
+  function castShadow(x, y, w) {
+    blob('shade', x, y + 5, w, w * 0.42);
+  }
+  // FOUR FIRES: two sconces bracketed high on the far wall, washing down it,
+  // and two braziers standing on the floor by the near corners. Between them
+  // the flanks of the room stay unlit — which is the whole point.
+  function roomTorches() {
+    return [
+      { x: FR.x0 + 42, y: ROOM.y + ROOM.wallH - 18, wall: 1 },
+      { x: FR.x1 - 42, y: ROOM.y + ROOM.wallH - 18, wall: 1 },
+      { x: FR.x0 + 24, y: FR.y1 - 34, wall: 0 },
+      { x: FR.x1 - 24, y: FR.y1 - 34, wall: 0 },
+    ];
+  }
+  // one shared flicker per sconce, so light, glow and flame all breathe together
+  function torchFlicker(t, tp) {
+    return 0.62 + 0.38 * Math.sin(t * 7.7 + tp.x * 0.31) * Math.sin(t * 3.3 + tp.y * 0.17);
+  }
+  function drawRoomGloom(t, dt) {
+    const room = curRoom();
+    if (!room || darkFloor()) return;
+    const x = ROOM.x, y = ROOM.y, w = ROOM.w, h = ROOM.h;
+    const sig = ['n', 's', 'e', 'w'].map(d => {
+      const nb = doorTo(d);
+      return nb ? (linkOpen(room, nb) ? 'o' : 'l') : '-';
+    }).join('');
+    layer('gloom', x, y, w, h, [fkey(), sig, ROOM.w + 'x' + ROOM.h], () => {
+      // NOTE: this paints into the layer's OWN context, so the hole gradients
+      // are built here rather than pulled from the shared cache
+      const hole = (hx, hy, r) => {
+        const g = ctx.createRadialGradient(hx, hy, 0, hx, hy, r);
+        for (const s of GLOW_STOPS.cut) g.addColorStop(s[0], s[1]);
+        ctx.fillStyle = g;
+        ctx.fillRect(hx - r, hy - r, r * 2, r * 2);
+      };
+      ctx.fillStyle = 'rgba(8,4,12,0.74)';
+      ctx.fillRect(x, y, w, h);
+      ctx.globalCompositeOperation = 'destination-out';
+      for (const tp of roomTorches()) hole(tp.x, tp.y, 88);
+      for (const d of ['n', 's', 'e', 'w']) {
+        const nb = doorTo(d);
+        if (nb && linkOpen(room, nb)) hole(doorCenter(d).x, doorCenter(d).y, 64);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    });
+    ctx.save();
+    ctx.beginPath(); ctx.rect(FR.x0, FR.y0, FR.x1 - FR.x0, FR.y1 - FR.y0); ctx.clip();
+    // the fires themselves, breathing over the mask
+    ctx.globalCompositeOperation = 'lighter';
+    for (const tp of roomTorches()) {
+      const fl = torchFlicker(t, tp);
+      ctx.globalAlpha = 0.55 + 0.45 * fl;
+      blob('warm', tp.x, tp.y + 6, 74 + fl * 20);
+    }
+    // ...and the light you carry with you
+    ctx.globalAlpha = 0.9;
+    blob('hero', AV.x, AV.y - 8, 86);
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
+    // LOW FOG: three slow banks of it, drifting the length of the room
+    for (let i = 0; i < 3; i++) {
+      const sp = 9 + i * 4;
+      const fx = FR.x0 - 60 + ((t * sp + i * 190) % ((FR.x1 - FR.x0) + 160));
+      blob('fog', fx, FR.y0 + (FR.y1 - FR.y0) * (0.42 + i * 0.21), 110, 30);
+    }
+    ctx.restore();
+  }
+  // EYES IN THE DARK — something is always watching from the unlit corner. It
+  // blinks, it never moves, and it winks out the moment you walk over.
+  const EYES = { stamp: -1, list: [] };
+  function drawEyes(t) {
+    const room = curRoom();
+    if (!room || darkFloor()) return;
+    if (EYES.stamp !== S.roomStamp) {
+      EYES.stamp = S.roomStamp;
+      EYES.list = [];
+      const old = rngState;
+      srand((((room.gx + 40) * 73856093) ^ ((room.gy + 40) * 19349663)
+             ^ (((S.run && S.run.floor) | 0) * 83492791)) >>> 0 || 5);
+      if (rng() < 0.62) {
+        EYES.list.push({ px: 0.1 + rng() * 0.8, py: 0.5 + rng() * 0.42,
+                         ph: rng() * 9, hue: rng() < 0.25 ? '#8bff9d' : '#ffcf5e' });
+      }
+      rngState = old;
+    }
+    for (const e of EYES.list) {
+      const x = FR.x0 + (FR.x1 - FR.x0) * e.px, y = FR.y0 + (FR.y1 - FR.y0) * e.py;
+      // it will not be looked at directly
+      const near = Math.max(0, 1 - Math.hypot(AV.x - x, AV.y - y) / 120);
+      const blink = Math.sin(t * 1.7 + e.ph) > -0.86 ? 1 : 0.06;
+      const a = (0.85 - near) * blink;
+      if (a <= 0.02) continue;
+      ctx.save();
+      ctx.globalAlpha = a;
+      ctx.globalCompositeOperation = 'lighter';
+      for (const dx of [-5, 5]) {
+        ctx.beginPath(); ctx.arc(x + dx, y, 7 * blink, 0, 7);
+        ctx.fillStyle = 'rgba(255,220,120,0.06)'; ctx.fill();
+        ctx.beginPath(); ctx.ellipse(x + dx, y, 2.9, 1.9 * blink, 0, 0, 7);
+        ctx.fillStyle = e.hue; ctx.fill();
+      }
+      ctx.restore();
+    }
+  }
   function drawRoomBox(t) {
     const T = theme();
     const room = curRoom();
@@ -10977,18 +11120,6 @@ if (!HEADLESS) (function browser() {
         }
       }
     }
-    // a dungeon floor is never that clean — sink the whole thing into gloom
-    ctx.fillStyle = 'rgba(16,10,20,0.42)';
-    ctx.fillRect(FR.x0, fy, FR.x1 - FR.x0, fh);
-    // pools of torchlight breathe against the dark
-    for (const tx of [FR.x0 + 16, FR.x1 - 16]) {
-      const fl2 = 0.16 + 0.05 * Math.sin(t * 9 + tx);
-      const lg2 = ctx.createRadialGradient(tx, fy + 14, 8, tx, fy + 14, 130);
-      lg2.addColorStop(0, 'rgba(255,170,80,' + fl2 + ')');
-      lg2.addColorStop(1, 'rgba(255,170,80,0)');
-      ctx.fillStyle = lg2;
-      ctx.fillRect(tx - 130, fy, 260, 200);
-    }
     // cracked-tile flavour
     ctx.globalAlpha = 0.12;
     ctx.strokeStyle = '#0d090d'; ctx.lineWidth = 1.5;
@@ -10997,14 +11128,74 @@ if (!HEADLESS) (function browser() {
       ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + (s.x2 - s.x1) * 1.5, y + (s.y2 - s.y1) * 1.5); ctx.stroke();
     }
     ctx.globalAlpha = 1;
-    // wall torches
-    for (const tx of [FR.x0 + 16, FR.x1 - 16]) {
-      const fl = 1 + Math.sin(t * 9 + tx) * 0.2;
-      ctx.globalAlpha = 0.32;
-      ctx.beginPath(); ctx.arc(tx, fy + 12, 20 * fl, 0, 7);
+    // AMBIENT OCCLUSION: stone meets stone in shadow. Every wall lays a soft
+    // band of dark on the floor it stands over — the cheapest depth there is.
+    const aoT = lgr('ao:t', 0, fy, 0, fy + 34, [[0, 'rgba(6,3,10,0.62)'], [1, 'rgba(6,3,10,0)']]);
+    ctx.fillStyle = aoT; ctx.fillRect(FR.x0, fy, FR.x1 - FR.x0, 34);
+    const aoB = lgr('ao:b', 0, FR.y1, 0, FR.y1 - 22, [[0, 'rgba(6,3,10,0.42)'], [1, 'rgba(6,3,10,0)']]);
+    ctx.fillStyle = aoB; ctx.fillRect(FR.x0, FR.y1 - 22, FR.x1 - FR.x0, 22);
+    const aoL = lgr('ao:l' + FR.x0, FR.x0, 0, FR.x0 + 26, 0, [[0, 'rgba(6,3,10,0.5)'], [1, 'rgba(6,3,10,0)']]);
+    ctx.fillStyle = aoL; ctx.fillRect(FR.x0, fy, 26, fh);
+    const aoR = lgr('ao:r' + FR.x1, FR.x1, 0, FR.x1 - 26, 0, [[0, 'rgba(6,3,10,0.5)'], [1, 'rgba(6,3,10,0)']]);
+    ctx.fillStyle = aoR; ctx.fillRect(FR.x1 - 26, fy, 26, fh);
+    // COBWEBS in the two upper corners — nobody has swept down here in an age
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = '#d8d0e8'; ctx.lineWidth = 1;
+    for (const sgn of [1, -1]) {
+      const cx = sgn > 0 ? FR.x0 : FR.x1, cy = fy;
+      for (let ri = 1; ri <= 3; ri++) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, ri * 13, sgn > 0 ? 0 : Math.PI / 2, sgn > 0 ? Math.PI / 2 : Math.PI);
+        ctx.stroke();
+      }
+      for (let a = 0; a <= 3; a++) {
+        const ang = (sgn > 0 ? 0 : Math.PI / 2) + (Math.PI / 2) * (a / 3);
+        ctx.beginPath(); ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + Math.cos(ang) * 40, cy + Math.sin(ang) * 40);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();                  // ...and the cobwebs are done
+    ctx.restore();                  // ...and so is the floor's clip
+    // THE FIRES, drawn over stone and floor alike: a wall sconce washes DOWN
+    // the wall it is bracketed to, a floor brazier pools around its own feet
+    ctx.save();
+    ctx.beginPath(); ctx.rect(ROOM.x, ROOM.y, ROOM.w, ROOM.h); ctx.clip();
+    for (const tp of roomTorches()) {
+      const fl = torchFlicker(t, tp);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.14 + 0.09 * fl;
+      if (tp.wall) {
+        // the wash spreads as it falls, the way firelight actually does
+        poly([{ x: tp.x - 9, y: tp.y },
+              { x: tp.x + 9, y: tp.y },
+              { x: tp.x + 46, y: tp.y + 92 },
+              { x: tp.x - 46, y: tp.y + 92 }]);
+      } else {
+        ctx.beginPath(); ctx.ellipse(tp.x, tp.y + 12, 54, 26, 0, 0, 7);
+      }
       ctx.fillStyle = '#ff9d3c'; ctx.fill();
-      ctx.globalAlpha = 1;
-      txt('\u{1F525}', tx, fy + 8, '18px serif', '#fff');
+      ctx.restore();
+      // the ironwork it sits in
+      if (tp.wall) {
+        ctx.fillStyle = '#241c24'; ctx.fillRect(tp.x - 3, tp.y + 3, 6, 10);
+        ctx.fillStyle = '#332833'; ctx.fillRect(tp.x - 7, tp.y + 11, 14, 3);
+      } else {
+        ctx.fillStyle = '#241c24';
+        poly([{ x: tp.x - 9, y: tp.y + 2 }, { x: tp.x + 9, y: tp.y + 2 },
+              { x: tp.x + 5, y: tp.y + 15 }, { x: tp.x - 5, y: tp.y + 15 }]);
+        ctx.fill();
+        ctx.fillStyle = '#332833'; ctx.fillRect(tp.x - 8, tp.y + 15, 16, 3);
+      }
+      // the flame
+      ctx.save();
+      ctx.globalAlpha = 0.28 + 0.16 * fl;
+      ctx.beginPath(); ctx.arc(tp.x, tp.y - 2, 12 + fl * 5, 0, 7);
+      ctx.fillStyle = '#ff9d3c'; ctx.fill();
+      ctx.restore();
+      txt('\u{1F525}', tp.x, tp.y - 4, (15 + fl * 3).toFixed(1) + 'px serif', '#fff');
     }
     ctx.restore();
     // seams
@@ -11125,8 +11316,7 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
       return;
     }
-    ctx.beginPath(); ctx.ellipse(p.x, p.y + 6, 20, 7, 0, 0, 7);
-    ctx.fillStyle = 'rgba(10,6,12,0.5)'; ctx.fill();
+    castShadow(p.x, p.y + 2, 22);
     const bob = Math.sin(t * 2.6 + i * 2.4) * 2.5;
     const size = e.kind === 'monster' && e.mtype === 'boss' ? 52 : e.kind === 'stairs' ? 44 : 34;
     if (e.kind === 'monster') {
@@ -11180,8 +11370,7 @@ if (!HEADLESS) (function browser() {
 
   function drawHero(t) {
     const hop = AV.moving ? Math.abs(Math.sin(AV.step)) * 4 : Math.sin(t * 2) * 1.5;
-    ctx.beginPath(); ctx.ellipse(AV.x, AV.y + 6, 15, 6, 0, 0, 7);
-    ctx.fillStyle = 'rgba(10,6,12,0.5)'; ctx.fill();
+    castShadow(AV.x, AV.y + 2, 17);
     // walk dust
     if (AV.moving && Math.random() < 0.25 && S.parts.length < 120) {
       S.parts.push({ x: AV.x - AV.fx * 10, y: AV.y + 4, vx: -AV.fx * 24 + (Math.random() - 0.5) * 12,
@@ -11434,6 +11623,10 @@ if (!HEADLESS) (function browser() {
       if (o.hero) drawHero(t);
       else drawEnt(o.i, o.e, t);
     }
+    // ...and the dark falls over ALL of it — stone and dwellers alike — so a
+    // shape in the far corner has to be walked up to before it is a monster
+    drawRoomGloom(t, dt);
+    drawEyes(t);
     // a DARK floor: the room drowns in black except your torch's circle
     if (darkFloor() && !S.room) {
       const flick = 118 + Math.sin(t * 7) * 4 + Math.sin(t * 13.7) * 2;
