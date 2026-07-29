@@ -117,7 +117,13 @@ function loadGame(store, srcOverride){
     // plate is sitting on it is to know where both of them are.
     if (k === 'fillText' || k === 'strokeText') return (...a) => {
       stats.ops++; numCheck(k, a);
+      // ...and how PRESENT it was. A label that rations itself by zoom fades
+      // rather than popping, and "it was written" is the same observation
+      // whether it went down at full strength or at a twentieth of it — so
+      // without this the whole fade could be missing and nothing here would
+      // notice.
       stats.texts.push({ txt: String(a[0]), x: a[1], y: a[2], col: stats.fill,
+        alpha: stats.alpha,
         baseline: stats.textBaseline, align: stats.textAlign, font: stats.font });
     };
     if (k === 'canvas') return { width: 900, height: 520 };
@@ -3284,6 +3290,32 @@ t.ok(true, 'drawing an empty bridge is harmless');
     t.ok(picked.plates === 1,
       'the one you select gets its plate back, and only it (' + picked.plates + ')');
     IB.sel.tile = -1;
+
+    /* WIRED, the other half: the fade has to reach the ink. plotFade can be
+       perfect and the label still pop, if flushLabels throws the number away —
+       which is exactly what it did before, because a label had no way to say
+       how present it was.                                                    */
+    {
+      const nameAlpha = (z) => {
+        IB.cam.z = IB.cam.tz = z;
+        st2.texts = []; st2.alpha = 1;
+        IB.drawHold(CTX, 0); IB.flushLabels(CTX);
+        // The plot names are the small ones; the node counts and the hall do
+        // not ration themselves and would mask the reading at full alpha.
+        const a = st2.texts.filter(x => x.alpha < 1).map(x => x.alpha);
+        return { faded:a.length, worst:a.length ? Math.min(...a) : 1, left:st2.alpha };
+      };
+      const full = nameAlpha(IB.PLOT_DETAIL + .2);
+      t.ok(full.faded === 0, 'above the band every name goes down at full strength');
+      const half = nameAlpha(IB.PLOT_DETAIL - IB.PLOT_FADE / 2);
+      t.ok(half.faded > 0, 'inside it they are written part-way (' + half.faded + ' of them)');
+      t.ok(half.worst > .2 && half.worst < .8,
+        'and part-way is part-way (' + half.worst.toFixed(2) + ')');
+      // The leak. An alpha set for a label and not put back tints every shape
+      // drawn after it for the rest of the frame, and no single call is wrong.
+      t.ok(full.left === 1 && half.left === 1, 'and the alpha is handed back either way');
+      IB.cam.z = IB.cam.tz = 1.4;
+    }
   }
 }
 
@@ -7896,8 +7928,12 @@ t.ok(true, 'drawing an empty bridge is harmless');
       const flagZ = firstAbove(r => r.n), textZ = firstAbove(r => r.texts);
       t.ok(flagZ !== null && textZ !== null, 'both the standards and the labels arrive somewhere in the sweep');
       t.ok(flagZ === textZ, 'and they arrive at the same zoom (' + flagZ + ' vs ' + textZ + ')');
-      t.ok(Math.abs(flagZ - IB.PLOT_DETAIL) <= .03, 'which is the threshold they share (' +
-        flagZ + ' vs ' + IB.PLOT_DETAIL + ')');
+      // They arrive at the BOTTOM of the fade band, not at PLOT_DETAIL: past
+      // that point they are on screen, on their way in. PLOT_DETAIL is where
+      // they reach full strength.
+      const arrive = IB.PLOT_DETAIL - IB.PLOT_FADE;
+      t.ok(Math.abs(flagZ - arrive) <= .03, 'which is the foot of the band they share (' +
+        flagZ + ' vs ' + arrive + ')');
     }
     // ISOLATED. Everything above measures the whole hold, where the labels
     // also recede — so it stays green with the flags left ungated, which is
@@ -7953,6 +7989,52 @@ t.ok(true, 'drawing an empty bridge is harmless');
     // never shows.
     t.ok(IB.PLOT_DETAIL > IB.ZOOM_MIN && IB.PLOT_DETAIL < IB.ZOOM_MAX,
       'the threshold sits inside the zoom range (' + IB.ZOOM_MIN + ' < ' + IB.PLOT_DETAIL + ' < ' + IB.ZOOM_MAX + ')');
+
+    /* ---- and it is a BAND, not an edge.
+       A hard threshold on a value that eases is a switch being thrown by a
+       continuous number, and it failed in both of the ways that always fail:
+       every name on the hold left the picture in one frame with nothing to say
+       it had happened, and a gesture that settled anywhere near .72 sat ON the
+       threshold and flipped six labels on and off. Reported as the names
+       flickering when zoomed out, and disappearing when zoomed out further.
+
+       There is no edge to sit on now, and that is the property worth holding:
+       between any two neighbouring zooms the answer may only creep.          */
+    {
+      const b = { tile:-99 };                         // never the selected one
+      IB.sel.tile = -1;
+      const at = (z) => { IB.cam.z = IB.cam.tz = z; return IB.plotFade(b); };
+      t.ok(IB.PLOT_FADE > 0, 'the band has width (' + IB.PLOT_FADE + ')');
+      t.ok(IB.PLOT_DETAIL - IB.PLOT_FADE > IB.ZOOM_MIN,
+        'and it finishes fading before the camera runs out of zoom, so pulling all the ' +
+        'way back is not the same picture as the band (' + (IB.PLOT_DETAIL - IB.PLOT_FADE) +
+        ' > ' + IB.ZOOM_MIN + ')');
+      t.ok(at(IB.PLOT_DETAIL) === 1 && at(IB.ZOOM_MAX) === 1,
+        'at the threshold and above, a name is fully itself');
+      t.ok(at(IB.PLOT_DETAIL - IB.PLOT_FADE) === 0 && at(IB.ZOOM_MIN) === 0,
+        'at the foot of the band and below, it is gone');
+      const mid = at(IB.PLOT_DETAIL - IB.PLOT_FADE / 2);
+      t.ok(mid > .3 && mid < .7, 'and halfway is halfway (' + mid.toFixed(2) + ')');
+      // The anti-flicker invariant, stated as a limit on the STEP rather than
+      // on the value: sweep the whole zoom range at a finer grain than any one
+      // frame of easing could cross, and nothing may ever jump.
+      let worst = 0, prev = at(IB.ZOOM_MIN), monotone = true;
+      for (let z = IB.ZOOM_MIN; z <= IB.ZOOM_MAX; z += .002){
+        const v = at(z);
+        worst = Math.max(worst, Math.abs(v - prev));
+        if (v < prev - 1e-9) monotone = false;
+        prev = v;
+      }
+      t.ok(worst < .05, 'nothing in the whole zoom range steps (worst jump ' + worst.toFixed(4) + ')');
+      t.ok(monotone, 'and pulling back only ever fades a name further, never brings it part-way back');
+      // The escape hatch is exempt from all of it: what you asked about is
+      // shown, at any zoom, at full strength.
+      IB.sel.tile = 4;
+      t.ok(IB.plotFade({ tile:4 }) === 1 && (IB.cam.z = IB.cam.tz = IB.ZOOM_MIN, IB.plotFade({ tile:4 })) === 1,
+        'the plot you selected never fades');
+      IB.sel.tile = -1;
+      IB.cam.z = IB.cam.tz = 1;
+    }
     // And round 39's invariant still holds where it matters — close up, every
     // level of every building still puts more on the plot than the one below.
     {
@@ -12519,6 +12601,44 @@ t.ok(true, 'a final draw on a live match is clean');
   IB.cam.z = IB.cam.tz = 2.4;
   t.ok(IB.skyMoving(), 'leaning in counts as movement, because it moves the sky');
   IB.cam.z = IB.cam.tz = 1.4;
+
+  /* ---- ...but only on a machine that asked for it.
+     The discount was applied to everyone, and it was the wrong thing to give
+     away on a machine that was keeping up. Every other thing in this layer is
+     gradient, haze and cloud — which is what makes dynamic resolution safe
+     here — but the RIDGES are hard silhouettes with a rim stroke a pixel or
+     two wide, and a hard edge drawn at .55 and blown back up is the one thing
+     in the frame that shows it. On a retina desktop it landed at about half
+     the device pixels: a legible staircase, on a machine holding sixty frames
+     a second with nothing to spend them on. `SKY.res < 1` is the governor
+     saying the machine is struggling, and it is the only thing that may buy
+     softness.                                                               */
+  {
+    const res0 = IB.SKY.res, pin0 = IB.SKY.pin;
+    IB.SKY.pin = null;
+    IB.SKY.res = 1;
+    t.ok(IB.skyRes(false) === 1, 'a comfortable machine draws a still sky at full resolution');
+    t.ok(IB.skyRes(true) === 1,
+      'and a MOVING sky too — it never asked for the trade (' + IB.skyRes(true) + ')');
+    t.ok(IB.skySoft(true) === false,
+      'so it stays on the sharp plate rather than swapping to the soft one');
+    // ...and the moment the governor gives a step up, the discount is back.
+    IB.SKY.res = IB.SKY.steps[1];
+    t.ok(IB.skySoft(true) === true, 'a struggling machine does take the trade');
+    t.ok(Math.abs(IB.skyRes(true) - IB.SKY.steps[1] * IB.SKY_MOVE.res) < 1e-9,
+      'and the two discounts compound as they always did (' + IB.skyRes(true) + ')');
+    t.ok(IB.skyRes(false) === IB.SKY.steps[1],
+      'while a still sky on the same machine keeps the governor’s resolution and no less');
+    // The plate id and the scale are decided by ONE function, so a frame can
+    // never blit the sharp plate at the soft scale or the other way round.
+    t.ok(/skySoft\(/.test(String(IB.drawSky)) && /skyRes\(/.test(String(IB.drawSky)),
+      'and drawSky asks both questions of the same pair rather than re-deriving them');
+    // A pinned resolution is a screenshot being held still, and pinning it to
+    // 1 must not be undone by the camera happening to move.
+    IB.SKY.pin = 1;
+    t.ok(IB.skyRes(true) === 1, 'a pin to full resolution survives a moving camera');
+    IB.SKY.pin = pin0; IB.SKY.res = res0;
+  }
 
   /* ---- the ridges are painted once and then translated.
      Half the cost of the whole scrolling sky was three mountain ranges being
