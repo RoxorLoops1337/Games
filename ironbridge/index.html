@@ -5598,16 +5598,41 @@ function skyMoving(){
   if (d > SKY_MOVE.px) skyStillFor = 0; else skyStillFor++;
   return skyStillFor < SKY_MOVE.hold;
 }
+/* Where the governor has settled, before the moving discount. `pin` overrides
+   it so a screenshot can be held at one resolution. */
+const skyBase = () => (SKY.pin === null || SKY.pin === undefined ? SKY.res : SKY.pin);
+/* Whether the rolling half of the sky gets the discount, and it takes TWO
+   things rather than one:
+
+     it is moving           — motion is what hides softness, and a sky being
+                              looked at is the one that must be sharp; and
+     the machine wants it   — `SKY.res` starts at 1 and the governor steps it
+                              down only when whole frames go over budget, so
+                              `res < 1` IS the machine saying it is struggling.
+
+   The second half was missing, and it cost the one thing in this layer that
+   cannot take being drawn small. Everything else here is gradient, haze and
+   cloud, which is what makes the whole dynamic-resolution bargain safe; the
+   RIDGES are not. They are hard silhouettes with a lit rim a pixel or two
+   wide, and a hard edge rendered at .55 and blown back up is the one thing in
+   the frame that shows it — on a retina desktop that lands at about half the
+   device pixels, which is exactly where a staircase becomes legible. Reported,
+   correctly, as the mountains looking pixelated, on a machine that was holding
+   sixty frames a second and had nothing to buy with them.
+
+   Kept out of drawSky so it can be asked without a canvas: under the test stub
+   a plate is never built, so a scale decided inside the draw call would go
+   unmeasured however wrong it was.                                          */
+const skySoft = (moving) => !!moving && skyBase() < 1;
+const skyRes = (moving) => skySoft(moving) ? skyBase() * SKY_MOVE.res : skyBase();
 function drawSky(c){
   const P = plate('skyBack', LW, LH, plateKey(true), skyBack);
   if (P) blitPlate(c, P, 0, 0); else skyBack(c);
-  let r = SKY.pin === null || SKY.pin === undefined ? SKY.res : SKY.pin;
   // Two plates, not one that resizes: a plate that changes size reallocates
   // its canvas, and this question changes answer every time the camera stops.
   const move = skyMoving();
-  const id = move ? 'skyRollFast' : 'skyRoll';
-  if (move) r *= SKY_MOVE.res;
-  const R = plate(id, LW, LH, skyRollKey(), skyRoll, r);
+  const R = plate(skySoft(move) ? 'skyRollFast' : 'skyRoll', LW, LH, skyRollKey(),
+    skyRoll, skyRes(move));
   if (R) blitPlate(c, R, 0, 0); else skyRoll(c);
   drawBirds(c);
 }
@@ -10527,7 +10552,28 @@ function houseTrim(c, gx, gy, w, d, wh, spec, base){
 
    One threshold, asked by both, so they cannot drift apart again.           */
 const PLOT_DETAIL = .72;
-const plotDetail = (b) => cam.z > PLOT_DETAIL || b.tile === sel.tile;
+/* And the band it fades across, BELOW that — a hard threshold on a number that
+   eases is a switch being thrown by a continuous value, and it went wrong in
+   both of the ways that always go wrong:
+
+     - the pop. Zoom out through .72 and every name on the hold left the picture
+       in a single frame, together, with nothing to say it had happened.
+     - the flicker. `cam.z` lerps toward `cam.tz` and a trackpad emits dozens of
+       small wheel events whose sign jitters, so a gesture that settles anywhere
+       near .72 sits ON the threshold and flips six labels on and off.
+
+   There is no edge to sit on now. Full strength at PLOT_DETAIL and above, gone
+   by PLOT_FADE below it, and the names survive a good deal further out than
+   they used to on the way — which was the other half of the complaint. What
+   you have SELECTED never fades: you asked about that one.                   */
+const PLOT_FADE = .18;
+// The top of the band is stated rather than arrived at. `(z - (a - b)) / b` is
+// not exactly 1 at z = a in binary floating point — it comes out a few parts in
+// 10^16 short — and "full strength above the threshold" is a promise worth
+// being able to make exactly rather than nearly.
+const plotFade = (b) => b.tile === sel.tile || cam.z >= PLOT_DETAIL ? 1
+  : clamp((cam.z - (PLOT_DETAIL - PLOT_FADE)) / PLOT_FADE, 0, 1);
+const plotDetail = (b) => plotFade(b) > 0;
 const RANK = { x:.30, y:-.40, gap:.15, h:.62, w:.17, lift:.55 };
 function rankFlags(c, gx, gy, z, lvl){
   const n = clamp(Math.round(lvl || 1), 1, 3), B = bu();
@@ -10738,7 +10784,11 @@ function drawBuilding(c, b){
       c.lineTo(g[0] + Math.cos(a) * 10 * B, g[1] + Math.sin(a) * 10 * B); c.stroke();
     }
   }
-  if (plotDetail(b)) rankFlags(c, gx, gy, z, b.lvl);
+  // Same fade as the name beside it, from the same call — the standards and
+  // the labels have to arrive and leave together or the de-cluttering reads as
+  // two unrelated things happening at slightly different zooms.
+  const rf = plotFade(b);
+  if (rf > 0){ c.globalAlpha = rf; rankFlags(c, gx, gy, z, b.lvl); }
   c.globalAlpha = 1;
   // Labels are queued and laid out after every building is drawn, so a packed
   // plot does not turn into a pile of overlapping text.
@@ -10757,7 +10807,8 @@ function drawBuilding(c, b){
     // the rest are the name alone, outlined, with no slab under it.
     const hot = b.tile === sel.tile;
     const txt = BUILDINGS[t].n + (hot ? '  ' + sub : b.lvl > 1 ? '  ' + b.lvl : '');
-    labelQ.push({ x:lp0[0], y:lp0[1], txt, col:'#d8dee9', hot, tier:hot ? undefined : 'quiet' });
+    labelQ.push({ x:lp0[0], y:lp0[1], txt, col:'#d8dee9', hot, tier:hot ? undefined : 'quiet',
+      a:plotFade(b) });
   }
 }
 
@@ -10896,6 +10947,13 @@ function flushLabels(c){
     if (!clear){ labelCrowded++; continue; }
     const y = cy - h / 2;
     placed.push({ x:lx, y:cy, w, h, ax:L.x, ay:L.y });   // ax, ay: what it is pointing at
+    // `a` is how present this label is, for the callers that ration themselves
+    // by zoom rather than popping (see plotFade). It multiplies the whole
+    // label — leader line, outline and type together — because a name whose
+    // text faded while its leader stayed put reads as a broken picture, not a
+    // fading one.
+    const A = L.a === undefined ? 1 : clamp(L.a, 0, 1);
+    c.globalAlpha = A;
     // A label pushed clear of its neighbours has to keep pointing at the thing
     // it names, or a packed plot reads as a pile of loose text. A plate slid
     // in off the edge has moved sideways rather than up, so the leader leans.
@@ -10911,12 +10969,13 @@ function flushLabels(c){
       c.strokeText(L.txt, lx, cy);
       c.fillStyle = tintTo(L.col, LABEL_QUIET.into, LABEL_QUIET.k);
       c.fillText(L.txt, lx, cy);
-      continue;
+    } else {
+      c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
+      c.fillRect(lx - w / 2, y, w, h);
+      if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(lx - w / 2 + .5, y + .5, w - 1, h - 1); }
+      c.fillStyle = L.col; c.fillText(L.txt, lx, cy);
     }
-    c.fillStyle = L.hot ? 'rgba(30,66,110,.88)' : (L.small ? 'rgba(9,13,20,.55)' : 'rgba(9,13,20,.72)');
-    c.fillRect(lx - w / 2, y, w, h);
-    if (L.hot){ c.strokeStyle = '#4ea3ff'; c.lineWidth = 1; c.strokeRect(lx - w / 2 + .5, y + .5, w - 1, h - 1); }
-    c.fillStyle = L.col; c.fillText(L.txt, lx, cy);
+    c.globalAlpha = 1;
   }
   endText(c);
   labelPlaced = placed.slice(labelBlock.length);
@@ -14409,9 +14468,27 @@ function wire(){
   lcv.addEventListener('pointerup', drop);
   lcv.addEventListener('pointercancel', drop);
   lcv.addEventListener('dblclick', () => { cam.follow = true; $('camFollow').classList.add('on'); });
+  /* A mouse wheel and a trackpad arrive as the same EVENT carrying wildly
+     different numbers — a notch is one event of about 100px, a two-finger
+     swipe is forty events of about 3px — and this read only the SIGN of it. So
+     the same gesture zoomed forty times as far on a trackpad, and worse, a
+     swipe whose delta jitters across zero flipped direction event by event:
+     .88, 1.14, .88, 1.14, sitting still and vibrating. That is what was
+     throwing the plot-label threshold on and off (see PLOT_FADE, which no
+     longer has a threshold to throw, but the input was wrong on its own).
+
+     Proportional, in log space, which is where zoom lives: a step and its
+     opposite cancel exactly — .88 and 1.14 did not, they drifted 0.3% per
+     round trip — and a small delta makes a small move. A Chrome notch of 100px
+     lands on .85, near enough the old feel that nothing has to be relearnt. */
+  const WHEEL_LINE = 16;      // px a deltaMode-1 "line" is worth
+  const WHEEL_K = .0016;      // zoom per pixel of wheel, in the exponent
+  const WHEEL_MAX = 400;      // and the most one event may be worth
   lcv.addEventListener('wheel', (e) => {
     e.preventDefault();
-    cam.tz = clamp(cam.tz * (e.deltaY > 0 ? .88 : 1.14), ZOOM_MIN, ZOOM_MAX);
+    const px = e.deltaY * (e.deltaMode === 1 ? WHEEL_LINE : e.deltaMode === 2 ? LH : 1);
+    cam.tz = clamp(cam.tz * Math.exp(-clamp(px, -WHEEL_MAX, WHEEL_MAX) * WHEEL_K),
+      ZOOM_MIN, ZOOM_MAX);
   }, { passive:false });
 
   const stash = () => { if (G.state === 'play' && !G.demo) saveMatch(); };
@@ -15204,7 +15281,7 @@ window.IB = {
   EDGE, edgeFor, edgeCache, edgeRing, edgeOnScreen, vnoise, fbm1, SWARD, swardAt, DECAL, decalWash, decalAlpha,
   decalTint, washFor, composite, hueRot, rgbOf, hexOf, rgbStr, decalPass, DECAL_LOBES, relLum, GROUND_SHADE, groundShadow, mixHex,
   drawPiers, drawChasm, gorgeDepth, spires, PIER_SPAN, PIER_HW, PIER_TOP, PIER_BOT, shade, drawNode, NODE_TIER, nodeHeaps,
-  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, plotDetail, TRAINEE, trainCrew, trainSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
+  abHw, abY, AB_N, AB_DZ, AB_CAP, WOOD_LOT, drawDeck, strideOf, BODY_STRIDE, drawUnit, FIT, drawBuilding, RANK, rankFlags, PLOT_DETAIL, PLOT_FADE, plotFade, plotDetail, TRAINEE, trainCrew, trainSlots, cyc, STEP_LEN, STEP_RATE, gaitOf, walking,
   recoilOf, swingPhase, RECOIL, RECOIL_T, SWING, swingTime, MANTLE, heroRanks, mantleOf, heroMantle, drawOgre, drawCannon, dirOf, platFaces, TRIM, houseOpenings, houseTrim,
   mpBar, MPBAR, skillArmed, heroArmed, drawWorkerFig, workerCoat, WORKER_STRIDE, sideCol, SIDE_NAME, shardAt, SHARD, drawStructure, ogreWindow, OGRE_MARK, DOWNSTACK, enemyOf, SIDE_COL2, turretShot, TURRET_KICK,
   KEEP_ART, keepBase, drawEnds, DECK, DECK_XS, RAIL_SH, deckFarY, railShadowOff, hpBar, chipTick, CHIP_RATE, CHIP_FLOOR, HP_TICK, HP_TICKS, showsBar,
@@ -15252,7 +15329,7 @@ window.IB = {
   sfx, SFX, AU, audioStart, setMuted, heroMul, minimapRect, minimapWorldX,
   drawSky, drawHold, drawEnds, drawDeck, drawLane, drawMinimap, MINI_MARK, MINI_DOWN, respawnDur, minimapRect, drawGround, flushLabels, setText, endText, TEXT0, labelHits, labelX, labelSeen, LABEL_PAD, LABEL_TRIES, blockLabel,
   get labelSkipped(){ return labelSkipped; }, get labelMarked(){ return labelMarked; }, get labelCrowded(){ return labelCrowded; }, get labelPlaced(){ return labelPlaced; }, get labelBlocked(){ return labelBlocked; },
-  SKY, skyStep, plateKey, skyRoll, skyRollKey, SKY_ROLL_PX, skyFast, skyAt, skyMoving, SKY_MOVE, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
+  SKY, skyStep, plateKey, skyRoll, skyRollKey, SKY_ROLL_PX, skyFast, skyAt, skyMoving, SKY_MOVE, skyBase, skySoft, skyRes, skyBack, skyWash, skyFloor, skyRays, drawGodRays, RAYS, RAY_LOBES, RAY_H, WASH_Y, WASH_H,
   POST, postFx, postCache, postGrade, screenTier, onPhone, PHONE_W, PHONE_POST, STONE_TONE, STONE_TONE_LIT, STONE_TONE_DARK,
   BAND_FX, bandFoot, ridgeFoot, HORIZON, ridgeTop, ridgeMid, CIRRUS, drawBands, bandPaint, BAND_SLACK,
   get LW(){ return LW; }, get LH(){ return LH; },
