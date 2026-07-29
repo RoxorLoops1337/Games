@@ -51,6 +51,10 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.8.0', notes: [
+    'THE ROOM SHEETS FIT THEIR FRAME \u{1F5BC}\u{FE0F} — every room panel (shopkeeper, blacksmith, chest, the strangers) was laying its content out across the carved border of its own frame art. The panels now measure the frame\u2019s inner opening and sit INSIDE it, and each one sizes itself to what it is actually showing, so no sheet ends in a slab of dead space',
+    'the blacksmith stops speaking in emoji \u{1FA93} — his boons wear the same painted art the shop and the chest use: the item you would take, the potion, the pouch, the heart. Every room sheet also wears its own painted title icon',
+  ] },
   { v: '1.7.9', notes: [
     'THE DEEP\u2019S OWN HANDS \u{1F980} — six new kin, and every one of them mauls a part of the game nothing has ever touched before. The CAVE CRAB reaches onto the BED and crushes your cheapest pieces to feed itself. The WIDOW SPIDER webs a BANK slot shut every single turn — bank early or lose the room. The BOG OGRE swallows the KEYS off your ring (cut it open and they come back up). The BLADE FIEND shatters a piece of your ARSENAL into a skull on the bed. THE SHADOW taints a purse pocket so those coins land as worthless SLUGS. And IRONTUSK paws the ground for two turns before goring you for triple — a TILT staggers it, and that shake is the whole answer',
     'DUROSKUL \u{1F480} — a new lair-holder, and the first thing in the deep that reaches your RELIC SHELF: his hex SEALS a relic shut for three rounds. It is never taken from you, it simply stops answering, and the shelf was the one place a run had always been safe',
@@ -7300,6 +7304,14 @@ if (!HEADLESS) (function browser() {
   // a centered label that SHRINKS to its box instead of spilling over the
   // neighbors — for tight chip rows (hero-card perk/seal lines). Starts at
   // the given size and scales down only as far as the string demands.
+  // the same shrink-to-fit, anchored LEFT — the shop/forge rows sit beside
+  // their art, so they need a hard right edge rather than a centre
+  function fitTxtL(s, x, y, maxW, size, col) {
+    ctx.font = '700 ' + size + 'px Verdana, sans-serif';
+    const tw = ctx.measureText(s).width;
+    if (tw > maxW && tw > 0) size = Math.max(6, size * maxW / tw);
+    txt(s, x, y, '800 ' + size + 'px Verdana, sans-serif', col, 'left');
+  }
   function fitTxt(s, cx, cy, maxW, size, col) {
     ctx.font = '700 ' + size + 'px Verdana, sans-serif';
     const tw = ctx.measureText(s).width;
@@ -11059,6 +11071,35 @@ if (!HEADLESS) (function browser() {
     forge: { icon: '\u{1F477}', name: 'BLACKSMITH' },
     chest: { icon: '\u{1F9F0}', name: 'A CHEST CREAKS OPEN' },
   };
+  // THE FRAME HAS A BORDER. frame_tall.png is a thick carved surround with a
+  // recessed panel in the middle — measured off the art, that opening sits at
+  // these fractions of the drawn rect. Content that ignores them ends up
+  // sprawled across the runes (which is exactly what it used to do).
+  const FRAME_IN = { l: 0.145, r: 0.155, t: 0.112, b: 0.105 };
+  // ...so lay out the CONTENT first and let the frame wrap around it
+  function frameAround(cx, cy, cw, ch) {
+    const fw = cw / (1 - FRAME_IN.l - FRAME_IN.r);
+    const fh = ch / (1 - FRAME_IN.t - FRAME_IN.b);
+    return { x: cx - fw * FRAME_IN.l, y: cy - fh * FRAME_IN.t, w: fw, h: fh };
+  }
+  // a boon's face: real art where the game has it, emoji where it doesn't
+  function boonArt(o) {
+    if (!o) return null;
+    if (o.kind === 'item' && o.iid) return itemArt(o.iid);
+    if (o.kind === 'potion') return shopkeeperArt('potion');
+    if (o.kind === 'pouch') return shopkeeperArt('pouch');
+    if (o.kind === 'maxhp') return shopkeeperArt('maxhp');
+    return null;
+  }
+  // the modal's own title icon, painted where the owner drew one
+  const MODAL_ART = { forge: 'blacksmith', chest: 'chest' };
+  function modalIcon(room, evDef) {
+    const name = room.type === 'event' ? (evDef && { well: 'wishingwell', auction: 'thegremlinauction', wager: 'innkeeper' }[room.ev])
+               : MODAL_ART[room.type];
+    if (!name) return null;
+    const im = art('ic_' + name, 'art/icons/icon_' + name + '.png');
+    return im._ok ? im : null;
+  }
   function drawRoomModal(t) {
     const room = S.room;
     if (!room) return;
@@ -11080,163 +11121,196 @@ if (!HEADLESS) (function browser() {
     // the forge's crucible lists YOUR pack when the SCRAP boon is taken
     const scrapIds = isForge && room.scrap && S.run
       ? Object.keys(S.run.arsenal).filter(id => S.run.arsenal[id] > 0) : [];
-    const scrapRows = Math.min(3, Math.ceil(scrapIds.length / 5)) || 0;
-    const ph = isShop ? 116 + rows * 50 + (selling ? 84 : 60)
-             : isForge ? (room.scrap ? 108 + scrapRows * 52 + 34 : 330)
-             : isChest ? 250 : isEvent ? 316 : 220;
-    const py = isShop ? 132 : 250;
+    const scrapRows = Math.min(3, Math.ceil(scrapIds.length / 4)) || 0;
+    // ---- the CONTENT box. 320 wide is the most the screen can carry once
+    // the frame's border is wrapped around it (320 / 0.70 = 457 of 480).
+    const CW = 320, CX = Math.round(LW / 2 - CW / 2);
+    const HEAD = 62;                       // title + subtitle band, inside the panel
+    const FOOT = 52;                       // the LEAVE / TAKE row
+    const CH = isShop ? HEAD + 34 + rows * 50 + (selling ? 22 : 0) + FOOT
+             : isForge ? (room.scrap ? HEAD + scrapRows * 54 + FOOT : HEAD + room.opts.length * 58 + 10)
+             : isChest ? 244
+             : isEvent ? (room.result ? 190 : 106 + evDef.choices.length * 74 + FOOT)
+             : 150;
+    const CY = Math.round((LH - CH) / 2) - 30;
+    const fr = frameAround(CX, CY, CW, CH);
     const mFrame = machArt('frame_tall');
     if (mFrame) {
-      shadowImg('modframe', mFrame, 28, py - 8, LW - 56, ph + 16, 18, 6, 'rgba(0,0,0,0.6)');
+      shadowImg('modframe', mFrame, fr.x, fr.y, fr.w, fr.h, 18, 6, 'rgba(0,0,0,0.6)');
     } else {
-      rr(36, py, LW - 72, ph, 18);
+      // no art: a plain plate drawn on the same footprint, thin border, so
+      // the content box still lands inside it
+      rr(CX - 14, CY - 14, CW + 28, CH + 28, 18);
       ctx.fillStyle = 'rgba(22,13,24,0.97)'; ctx.fill();
       ctx.lineWidth = 3; ctx.strokeStyle = '#ffd75e'; ctx.stroke();
     }
-    txt(info.icon + '  ' + info.name, LW / 2, py + 34, '900 22px Georgia, serif', '#ffd75e', 'center', { w: 4, col: '#3a1006' });
+    const CR = CX + CW;                    // the content box's right edge
+    const CMID = CX + CW / 2;
+    // the title, with its painted icon where one exists
+    const mi = modalIcon(room, evDef);
+    {
+      // shrink the title to the panel, then centre ICON + TEXT together so a
+      // painted icon never floats off on its own
+      let size = 19;
+      ctx.font = '900 ' + size + 'px Georgia, serif';
+      const room4 = CW - (mi ? 34 : 0) - 8;
+      let tw = ctx.measureText(info.name).width;
+      if (tw > room4) { size = Math.max(11, size * room4 / tw); ctx.font = '900 ' + size + 'px Georgia, serif'; tw = ctx.measureText(info.name).width; }
+      const ih = mi ? 26 : 0, iw = mi ? imW(mi, ih) : 0;
+      const whole = iw + (mi ? 8 : 0) + tw;
+      const x0 = CMID - whole / 2;
+      if (mi) ctx.drawImage(mi, x0, CY + 7, iw, ih);
+      txt(mi ? info.name : info.icon + '  ' + info.name,
+          mi ? x0 + iw + 8 : CMID, CY + 20,
+          '900 ' + size + 'px Georgia, serif', '#ffd75e', mi ? 'left' : 'center', { w: 4, col: '#3a1006' });
+    }
     if (isShop) {
       txt('\u{1FA99} ' + S.run.gold + ' gold   •   \u{1FA99} ' + purseTotal() + ' coins',
-          LW / 2, py + 60, '700 11px Verdana, sans-serif', '#fff0c0');
-      const rx = LW - 54;                                   // right edge of the shelf
+          CMID, CY + 42, '700 11px Verdana, sans-serif', '#fff0c0');
       // the two desks. GOLD buys the shelf; the scales turn coins INTO gold,
       // which is the only road from a fat purse to a new relic
       [['buy', TR('BUY')], ['sell', TR('SELL COINS')]].forEach(([tab, lbl], ti) => {
         const on = (S.shopTab === 'sell') === (tab === 'sell');
-        const tw = 104, tx = LW / 2 - tw - 4 + ti * (tw + 8);
-        uiBtn(tx, py + 72, tw, 28, lbl, () => { S.shopTab = tab; },
+        const tw = (CW - 8) / 2, tx = CX + ti * (tw + 8);
+        uiBtn(tx, CY + 54, tw, 28, lbl, () => { S.shopTab = tab; },
               { bg: on ? 'rgba(140,90,20,0.95)' : 'rgba(38,26,32,0.9)',
                 border: on ? '#ffd75e' : '#5a4048', col: on ? '#ffe9a3' : '#9a8a92',
                 font: '900 11px Verdana, sans-serif', r: 8 });
       });
+      const ry0 = CY + HEAD + 34;
       if (selling) {
         if (!sellKinds.length) {
-          txt(TR('your purse is empty — nothing to weigh'), LW / 2, py + 148,
+          txt(TR('your purse is empty — nothing to weigh'), CMID, ry0 + 24,
               '700 11px Verdana, sans-serif', '#9a8a92');
         }
         sellKinds.forEach((k, i) => {
-          const y = py + 116 + i * 50;
+          const y = ry0 + i * 50;
           const have = S.run.purse[k] || 0, unit = coinSellPrice(k);
-          rr(54, y, rx - 54, 44, 10);
+          rr(CX, y, CW, 44, 10);
           ctx.fillStyle = 'rgba(46,32,38,0.92)'; ctx.fill();
           ctx.lineWidth = 1.5; ctx.strokeStyle = '#5a4048'; ctx.stroke();
-          invCoinIcon(k, 76, y + 22, 13);
-          txt(COIN_INFO[k].name + ' × ' + have, 100, y + 17, '800 12px Verdana, sans-serif', COIN_UI[k], 'left');
-          txt(unit + ' gold each', 100, y + 32, '600 10px Verdana, sans-serif', '#b09a78', 'left');
-          const allX = rx - 8 - 52, oneX = allX - 4 - 44;
-          uiBtn(oneX, y + 7, 44, 30, TR('SELL 1'), () => sellCoins(k, 1),
+          invCoinIcon(k, CX + 20, y + 22, 12);
+          txt(COIN_INFO[k].name + ' × ' + have, CX + 38, y + 17, '800 11px Verdana, sans-serif', COIN_UI[k], 'left');
+          txt(unit + ' gold each', CX + 38, y + 32, '600 9px Verdana, sans-serif', '#b09a78', 'left');
+          const allX = CR - 6 - 50, oneX = allX - 4 - 42;
+          uiBtn(oneX, y + 7, 42, 30, TR('SELL 1'), () => sellCoins(k, 1),
                 { bg: 'rgba(40,90,120,0.95)', border: '#63c8ff', col: '#cfeeff',
-                  font: '900 10px Verdana, sans-serif', r: 8 });
-          uiBtn(allX, y + 7, 52, 30, TR('ALL') + ' ' + (unit * have), () => sellCoins(k, have),
+                  font: '900 9px Verdana, sans-serif', r: 8 });
+          uiBtn(allX, y + 7, 50, 30, TR('ALL') + ' ' + (unit * have), () => sellCoins(k, have),
                 { bg: 'rgba(40,90,120,0.95)', border: '#63c8ff', col: '#cfeeff',
-                  font: '900 10px Verdana, sans-serif', r: 8 });
+                  font: '900 9px Verdana, sans-serif', r: 8 });
         });
-        txt(TR('the keeper buys low — specials he will not touch'), LW / 2,
-            py + 116 + rows * 50 + 14, '600 10px Verdana, sans-serif', '#8a7a84');
+        txt(TR('the keeper buys low — specials he will not touch'), CMID,
+            ry0 + rows * 50 + 12, '600 9px Verdana, sans-serif', '#8a7a84');
       }
       if (!selling) room.stock.forEach((it, i) => {
-        const y = py + 116 + i * 50;
-        // the ware panel (label only — the buttons live to the right)
-        rr(54, y, rx - 54, 44, 10);
+        const y = ry0 + i * 50;
+        rr(CX, y, CW, 44, 10);
         ctx.fillStyle = it.sold ? 'rgba(20,14,20,0.9)' : 'rgba(46,32,38,0.92)'; ctx.fill();
         ctx.lineWidth = 1.5; ctx.strokeStyle = it.sold ? '#3a2f3a' : '#5a4048'; ctx.stroke();
         // painted ware icons when we have them; the label keeps its emoji otherwise
         const wArt = it.kind === 'relic' && it.rid ? relicArt(it.rid)
                    : it.kind === 'item' && it.iid ? itemArt(it.iid) : shopkeeperArt(it.kind);
-        let lx = 66, label = it.label;
+        let lx = CX + 10, label = it.label;
         if (wArt) {
-          const hh = 38, ww = imW(wArt, hh);
+          const hh = 36, ww = imW(wArt, hh);
           ctx.save(); if (it.sold) ctx.globalAlpha = 0.35;
-          ctx.drawImage(wArt, 60 + 19 - ww / 2, y + 3, ww, hh);
+          ctx.drawImage(wArt, CX + 6 + 18 - ww / 2, y + 4, ww, hh);
           ctx.restore();
-          lx = 102;
+          lx = CX + 44;
           const def = it.kind === 'relic' ? relicById(it.rid) : it.kind === 'item' ? itemById(it.iid) : null;
           if (def) label = def.name;
           else if (it.kind !== 'relic' && it.kind !== 'item') label = it.label.replace(/^\S+\s+/, '');
         }
-        txt(label, lx, y + (it.sub ? 16 : 25), '800 12px Verdana, sans-serif',
-            it.sold ? '#5a4a5a' : '#ffe9a3', 'left');
-        if (it.sub) txt(it.sub, lx, y + 31, '600 10px Verdana, sans-serif', it.sold ? '#4a3f4a' : '#b09a78', 'left');
-        if (it.sold) { txt('SOLD', rx - 34, y + 26, '900 13px Verdana, sans-serif', '#5a4a5a'); return; }
-        // one chip now: GOLD is the shelf's only tender
+        const lw = (it.sold ? CR - 40 : CR - 72) - lx;
+        fitTxtL(label, lx, y + (it.sub ? 16 : 25), lw, 11.5, it.sold ? '#5a4a5a' : '#ffe9a3');
+        if (it.sub) fitTxtL(it.sub, lx, y + 31, lw, 9.5, it.sold ? '#4a3f4a' : '#b09a78');
+        if (it.sold) { txt('SOLD', CR - 26, y + 26, '900 12px Verdana, sans-serif', '#5a4a5a'); return; }
         const goldOk = S.run.gold >= it.price;
-        uiBtn(rx - 8 - 66, y + 7, 66, 30, it.price + ' G', () => buyShop(i),
+        uiBtn(CR - 6 - 60, y + 7, 60, 30, it.price + ' G', () => buyShop(i),
               { bg: goldOk ? 'rgba(140,90,20,0.95)' : 'rgba(40,30,36,0.9)', border: goldOk ? '#ffd75e' : '#5a4048',
                 col: goldOk ? '#ffe9a3' : '#7a6a72', font: '900 12px Verdana, sans-serif', r: 8 });
       });
     } else if (isForge && room.scrap) {
       // THE CRUCIBLE: the boon is taken, now choose what goes in it
-      txt(TR('feed the crucible — tap a piece to melt it down'), LW / 2, py + 62,
-          '700 11px Verdana, sans-serif', '#ffb07a');
+      txt(TR('feed the crucible — tap a piece to melt it down'), CMID, CY + 44,
+          '700 10px Verdana, sans-serif', '#ffb07a');
       if (!scrapIds.length) {
-        txt(TR('your pack is already empty'), LW / 2, py + 110, '700 11px Verdana, sans-serif', '#9a8a92');
+        txt(TR('your pack is already empty'), CMID, CY + 90, '700 11px Verdana, sans-serif', '#9a8a92');
       }
-      scrapIds.slice(0, 15).forEach((iid, i) => {
+      scrapIds.slice(0, 12).forEach((iid, i) => {
         const it2 = itemById(iid);
         if (!it2) return;
-        const bx = 62 + (i % 5) * 72, by2 = py + 84 + ((i / 5) | 0) * 52;
-        uiBtn(bx, by2, 62, 44, '', () => removeArsenal(iid),
+        const bw = (CW - 12) / 4;
+        const bx = CX + (i % 4) * (bw + 4), by2 = CY + HEAD + ((i / 4) | 0) * 54;
+        uiBtn(bx, by2, bw, 46, '', () => removeArsenal(iid),
               { bg: 'rgba(90,40,44,0.95)', border: '#e0707a', r: 9 });
         const ja = itemArt(iid);
-        if (ja) { const hh = 34, ww = imW(ja, hh); ctx.drawImage(ja, bx + 31 - ww / 2, by2 + 4, ww, hh); }
-        else txt(it2.icon, bx + 31, by2 + 21, '17px serif', '#fff');
-        txt('×' + S.run.arsenal[iid], bx + 52, by2 + 36, '800 10px Verdana, sans-serif', '#ffd0d4');
+        if (ja) { const hh = 34, ww = imW(ja, hh); ctx.drawImage(ja, bx + bw / 2 - ww / 2, by2 + 5, ww, hh); }
+        else txt(it2.icon, bx + bw / 2, by2 + 22, '17px serif', '#fff');
+        txt('×' + S.run.arsenal[iid], bx + bw - 10, by2 + 38, '800 10px Verdana, sans-serif', '#ffd0d4');
       });
     } else if (isForge) {
-      txt('choose a boon', LW / 2, py + 60, '700 12px Verdana, sans-serif', '#c8a8b0');
+      txt(TR('choose a boon'), CMID, CY + 44, '700 11px Verdana, sans-serif', '#c8a8b0');
       room.opts.forEach((o, i) => {
-        const y = py + 80 + i * 56;
-        uiBtn(56, y, LW - 112, 46, '', () => pickBoon(i),
+        const y = CY + HEAD + i * 58;
+        uiBtn(CX, y, CW, 50, '', () => pickBoon(i),
               { bg: 'rgba(60,35,20,0.9)', border: '#ff9d3c', r: 10 });
-        txt(o.label, LW / 2, y + (o.sub ? 16 : 23), '800 13px Verdana, sans-serif', '#ffe9a3');
-        if (o.sub) txt(o.sub, LW / 2, y + 33, '600 10px Verdana, sans-serif', '#b09a78');
+        // the boon wears its own face where the game has painted one
+        const ba = boonArt(o);
+        let bx = CX + 12;
+        if (ba) {
+          const hh = 34, ww = imW(ba, hh);
+          ctx.drawImage(ba, CX + 8 + 17 - ww / 2, y + 8, ww, hh);
+          bx = CX + 46;
+        }
+        const label = ba ? o.label.replace(/^\S+\s+/, '') : o.label;
+        const lw = CR - 12 - bx;
+        fitTxtL(label, bx, y + (o.sub ? 18 : 26), lw, 12.5, '#ffe9a3');
+        if (o.sub) fitTxtL(o.sub, bx, y + 35, lw, 9.5, '#b09a78');
       });
     } else if (isChest) {
       const p = room.prize;
-      txt('the lid lifts on…', LW / 2, py + 66, '700 12px Verdana, sans-serif', '#c8a8b0');
+      txt(TR('the lid lifts on…'), CMID, CY + 46, '700 11px Verdana, sans-serif', '#c8a8b0');
       const pza = p.kind === 'item' ? itemArt(p.iid) : null;
-      if (pza) { const hh = 74, ww = imW(pza, hh); ctx.drawImage(pza, LW / 2 - ww / 2, py + 62, ww, hh); }
-      else txt(p.icon, LW / 2, py + 116, '900 46px Georgia, serif', '#ffe9a3');
-      txt(p.label, LW / 2, py + 150, '900 16px Verdana, sans-serif', '#ffd75e');
-      uiBtn(56, py + ph - 58, (LW - 128) / 2, 40, TR('TAKE IT'), () => acceptPrize(),
-            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 12 });
-      uiBtn(LW / 2 + 8, py + ph - 58, (LW - 128) / 2, 40, TR('LEAVE IT'), () => denyPrize(),
-            { bg: 'rgba(60,40,44,0.95)', border: '#a06a72', col: '#e8c8cc', font: '900 14px Verdana, sans-serif', r: 12 });
+      if (pza) { const hh = 72, ww = imW(pza, hh); ctx.drawImage(pza, CMID - ww / 2, CY + 60, ww, hh); }
+      else txt(p.icon, CMID, CY + 108, '900 44px Georgia, serif', '#ffe9a3');
+      fitTxt(p.label, CMID, CY + 152, CW - 8, 15, '#ffd75e');
+      const bw = (CW - 10) / 2;
+      uiBtn(CX, CY + CH - 46, bw, 40, TR('TAKE IT'), () => acceptPrize(),
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+      uiBtn(CX + bw + 10, CY + CH - 46, bw, 40, TR('LEAVE IT'), () => denyPrize(),
+            { bg: 'rgba(60,40,44,0.95)', border: '#a06a72', col: '#e8c8cc', font: '900 13px Verdana, sans-serif', r: 12 });
     } else if (isEvent && evDef) {
       // a stranger of the deep: flavor, two fateful buttons, then the tale
       if (!room.result) {
-        wrapLines(evDef.flavor, 42, 3).forEach((ln, i) =>
-          txt(ln, LW / 2, py + 62 + i * 18, '700 11px Verdana, sans-serif', '#d8c8dc'));
+        wrapLines(evDef.flavor, 38, 3).forEach((ln, i) =>
+          txt(ln, CMID, CY + 46 + i * 17, '700 10px Verdana, sans-serif', '#d8c8dc'));
         evDef.choices.forEach((ch, i) => {
           const ok = !ch.can || ch.can();
-          const y = py + 122 + i * 74;
-          uiBtn(56, y, LW - 112, 62, '', () => eventChoose(i),
+          const y = CY + 106 + i * 74;
+          uiBtn(CX, y, CW, 62, '', () => eventChoose(i),
                 { bg: ok ? 'rgba(46,32,52,0.95)' : 'rgba(26,22,30,0.9)',
                   border: ok ? '#c8a86a' : '#4a4055', r: 12 });
-          txt(ch.label, LW / 2, y + 22, '900 13px Verdana, sans-serif', ok ? '#ffe9a3' : '#6a5f78');
-          txt(ch.sub, LW / 2, y + 42, '600 10px Verdana, sans-serif', ok ? '#b8a8bc' : '#544a60');
+          fitTxt(ch.label, CMID, y + 22, CW - 20, 12.5, ok ? '#ffe9a3' : '#6a5f78');
+          fitTxt(ch.sub, CMID, y + 42, CW - 20, 9.5, ok ? '#b8a8bc' : '#544a60');
         });
       } else {
-        txt(evDef.icon, LW / 2, py + 90, '900 40px serif', '#fff');
-        wrapLines(room.result, 40, 4).forEach((ln, i) =>
-          txt(ln, LW / 2, py + 140 + i * 20, '800 12px Verdana, sans-serif', '#ffe9a3'));
+        txt(evDef.icon, CMID, CY + 66, '900 36px serif', '#fff');
+        wrapLines(room.result, 36, 4).forEach((ln, i) =>
+          txt(ln, CMID, CY + 108 + i * 19, '800 11px Verdana, sans-serif', '#ffe9a3'));
       }
     } else {
       // resolved rooms: shrine / treasure / wheel / forge-done — wrap the tale
-      const words = (room.msg || '').split(' ');
-      const lines = [''];
-      for (const w of words) {
-        if ((lines[lines.length - 1] + ' ' + w).length > 44) lines.push(w);
-        else lines[lines.length - 1] = (lines[lines.length - 1] + ' ' + w).trim();
-      }
-      lines.slice(0, 4).forEach((ln, i) =>
-        txt(ln, LW / 2, py + 70 + i * 20, '700 12px Verdana, sans-serif', '#e8dce8'));
+      wrapLines(room.msg || '', 38, 4).forEach((ln, i) =>
+        txt(ln, CMID, CY + 50 + i * 19, '700 11px Verdana, sans-serif', '#e8dce8'));
     }
     if ((!isForge || (room.scrap && !scrapIds.length)) && !isChest) {
-      uiBtn(LW / 2 - 90, py + ph - 52, 180, 38, TR('LEAVE'), () => closeModal(),
-            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 14px Verdana, sans-serif', r: 13 });
+      uiBtn(CMID - 84, CY + CH - 42, 168, 36, TR('LEAVE'), () => closeModal(),
+            { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 13 });
     }
     if (S.uiFlash) {
-      txt(S.uiFlash.msg, LW / 2, py + ph + 24, '900 14px Verdana, sans-serif',
+      txt(S.uiFlash.msg, CMID, CY + CH + 26, '900 14px Verdana, sans-serif',
           Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e');
     }
   }
