@@ -1,0 +1,1685 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0b0609">
+<title>Dungeon Pusher — Pinball Battles (prototype)</title>
+<meta name="description" content="Prototype: fight Dungeon Pusher's foes on a pinball table. One ball is one turn. What the ball hits fills your purse — gold strikes, silver shields, green rots.">
+<style>
+  /* ------------------------------------------------------------------
+     DUNGEON PUSHER — PINBALL BATTLES (prototype)
+     Same crypt palette as the main game (#0b0609 stone, brass, bone) so
+     this reads as the same cabinet, not a different one. The coin faces
+     and monster sprites are the game's real art, loaded from art/.
+  ------------------------------------------------------------------ */
+  :root{
+    --ink:#0b0609; --stone:#171017; --wood:#2a1a1c;
+    --brass:#ffcf4d; --bone:#e8dcc8; --dim:#8a7a72;
+    --gold:#ffcf4d; --silver:#c8d6e8; --red:#ff6b7a; --green:#b8f26b; --blue:#7ee7ff; --lucky:#ffa1e8;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:var(--ink);color:var(--bone);
+    font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    touch-action:none;-webkit-user-select:none;user-select:none;overscroll-behavior:none}
+  canvas#cv{display:block;position:fixed;inset:0;width:100%;height:100%}
+
+  /* ------------------------------------------------------------- HUD */
+  #hud{position:fixed;inset:0;pointer-events:none;padding:calc(env(safe-area-inset-top,0px) + 8px) 10px 10px;
+    display:flex;flex-direction:column;gap:6px;transition:opacity .25s}
+  .bar{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .side{flex:1;min-width:0}
+  .side.r{text-align:right}
+  .nm{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis}
+  .hp{position:relative;height:13px;border-radius:7px;background:rgba(255,255,255,.07);overflow:hidden;
+    border:1px solid rgba(232,220,200,.16);margin-top:3px}
+  .hp i{position:absolute;inset:0;width:100%;transform-origin:left;background:linear-gradient(90deg,#c8324a,#ff6b7a);
+    transition:transform .28s cubic-bezier(.2,.9,.3,1)}
+  .hp b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:9px;
+    font-weight:700;letter-spacing:.1em;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.9)}
+  .pips{display:flex;gap:4px;margin-top:4px;font-size:11px;align-items:center;flex-wrap:wrap}
+  .pips.r{justify-content:flex-end}
+  .pip{padding:1px 6px;border-radius:6px;background:rgba(255,255,255,.07);border:1px solid rgba(232,220,200,.14);
+    font-size:10px;letter-spacing:.06em;white-space:nowrap;max-width:42vw;overflow:hidden;text-overflow:ellipsis}
+  .pip.blk{color:var(--silver);border-color:rgba(200,214,232,.4)}
+  .pip.poi{color:var(--green);border-color:rgba(184,242,107,.4)}
+  .pip.int{color:#ff9d3c;border-color:rgba(255,157,60,.45);font-weight:700}
+
+  /* purse: the haul this ball has banked so far */
+  #purse{position:fixed;left:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);display:flex;flex-direction:column;
+    gap:5px;pointer-events:none;transition:opacity .25s}
+  #coins{display:flex;gap:5px;flex-wrap:wrap;max-width:64vw}
+  .cn{display:flex;align-items:center;gap:3px;padding:3px 7px;border-radius:8px;font-size:12px;font-weight:700;
+    background:rgba(15,9,12,.86);border:1px solid rgba(232,220,200,.18);transition:transform .1s cubic-bezier(.3,1.7,.5,1)}
+  .cn.bump{transform:scale(1.28)}
+  .cn.g{color:var(--gold);border-color:rgba(255,207,77,.5)}
+  .cn.s{color:var(--silver);border-color:rgba(200,214,232,.5)}
+  .cn.r{color:var(--red);border-color:rgba(255,107,122,.5)}
+  .cn.n{color:var(--green);border-color:rgba(184,242,107,.5)}
+  .cn.b{color:var(--blue);border-color:rgba(126,231,255,.5)}
+  .cn.l{color:var(--lucky);border-color:rgba(255,161,232,.5)}
+  #meta{display:flex;gap:6px;font-size:10px;color:var(--dim);letter-spacing:.1em}
+  #meta b{color:var(--bone);font-weight:400}
+  #meta .full{color:var(--brass)}
+  #hint{position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);font-size:10px;color:var(--dim);
+    text-align:right;line-height:1.6;letter-spacing:.08em;max-width:34vw;pointer-events:none;transition:opacity .25s}
+
+  /* --------------------------------------------------------- screens */
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
+    padding:22px;background:radial-gradient(120% 90% at 50% 30%,rgba(35,20,24,.95),rgba(6,3,5,.99));
+    z-index:20;overflow-y:auto}
+  .screen.on{display:flex}
+  h1{margin:0;font-size:min(12vw,52px);line-height:.95;font-weight:800;color:var(--brass);text-align:center;
+    letter-spacing:-.01em;text-shadow:0 0 26px rgba(255,207,77,.35)}
+  h1 small{display:block;font-size:13px;letter-spacing:.3em;color:var(--dim);margin-top:12px;font-weight:400}
+  h2{margin:0 0 4px;font-size:24px;font-weight:800;color:var(--bone);text-align:center}
+  .sub{color:var(--dim);font-size:11px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:18px;text-align:center}
+  .btn{pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 24px;
+    background:linear-gradient(180deg,#40272a,#241417);color:var(--bone);border:1px solid rgba(255,207,77,.45);
+    border-radius:9px;cursor:pointer;font-family:inherit;font-size:13px;letter-spacing:.16em;text-transform:uppercase;
+    font-weight:700;box-shadow:0 0 18px rgba(255,207,77,.14),inset 0 1px 0 rgba(255,255,255,.1)}
+  .btn:active{transform:translateY(2px)}
+  .btn.ghost{background:transparent;border-color:rgba(232,220,200,.24);box-shadow:none;font-size:11px;padding:9px 15px}
+  .cards{display:flex;gap:11px;flex-wrap:wrap;justify-content:center;max-width:720px}
+  .card{pointer-events:auto;width:196px;padding:15px 14px;border-radius:12px;cursor:pointer;text-align:center;
+    background:linear-gradient(180deg,rgba(52,32,36,.94),rgba(18,10,13,.96));border:1px solid rgba(255,207,77,.24);
+    box-shadow:0 8px 24px rgba(0,0,0,.55);transition:transform .12s,border-color .12s}
+  .card:hover{transform:translateY(-4px);border-color:var(--brass)}
+  .card .ico{font-size:30px;line-height:1;margin-bottom:8px}
+  .card .cn2{font-size:12px;font-weight:700;color:var(--brass);letter-spacing:.08em;text-transform:uppercase;margin-bottom:7px}
+  .card .ds{font-size:11px;color:var(--dim);line-height:1.55}
+  .keys{margin-top:18px;color:var(--dim);font-size:11px;line-height:2;text-align:center;letter-spacing:.08em}
+  .keys b{color:var(--bone);font-weight:400;background:rgba(255,255,255,.07);padding:2px 7px;border-radius:4px}
+  .stats{display:flex;gap:24px;margin:14px 0 20px;flex-wrap:wrap;justify-content:center}
+  .stat{text-align:center}
+  .stat b{display:block;font-size:24px;color:var(--brass);font-weight:800}
+  .stat i{font-style:normal;font-size:9px;color:var(--dim);letter-spacing:.18em;text-transform:uppercase}
+  .note{max-width:520px;font-size:11px;line-height:1.9;color:var(--dim);text-align:center;margin-top:16px}
+</style>
+</head>
+<body>
+<canvas id="cv"></canvas>
+
+<div id="hud">
+  <div class="bar">
+    <div class="side">
+      <div class="nm" id="pName">You</div>
+      <div class="hp"><i id="pHp"></i><b id="pHpT">60/60</b></div>
+      <div class="pips" id="pPips"></div>
+    </div>
+    <div class="side r">
+      <div class="nm" id="eName">—</div>
+      <div class="hp"><i id="eHp"></i><b id="eHpT">0/0</b></div>
+      <div class="pips r" id="ePips"></div>
+    </div>
+  </div>
+</div>
+
+<div id="purse">
+  <div id="coins"></div>
+  <div id="meta"></div>
+</div>
+<div id="hint"></div>
+
+<div class="screen on" id="scTitle">
+  <h1>PINBALL BATTLES<small>Dungeon Pusher · prototype</small></h1>
+  <div class="note" style="margin-bottom:20px">
+    One ball is one turn. What the ball hits fills your purse — gold strikes, silver shields,
+    green rots, blue freezes the room. When the ball drains the purse resolves, then the foe swings back.
+  </div>
+  <button class="btn" id="btnStart">Descend</button>
+  <div class="keys">
+    <b>&larr;</b> <b>&rarr;</b> flippers &nbsp;·&nbsp; <b>space</b> plunger &nbsp;·&nbsp; <b>&darr;</b> nudge<br>
+    on touch: tap left / right half, drag the plunger
+  </div>
+</div>
+
+<div class="screen" id="scFit">
+  <h2 id="fitTitle">FOE FELLED</h2>
+  <div class="sub" id="fitSub">Bolt one fitting to the table</div>
+  <div class="cards" id="fitCards"></div>
+</div>
+
+<div class="screen" id="scOver">
+  <h2 id="ovTitle">YOU FALL</h2>
+  <div class="sub" id="ovSub"></div>
+  <div class="stats" id="ovStats"></div>
+  <button class="btn" id="btnAgain">Again</button>
+  <button class="btn ghost" id="btnMenu" style="margin-top:10px">Title</button>
+</div>
+
+<script>
+/* ====================================================================
+   DUNGEON PUSHER — PINBALL BATTLES  (standalone prototype)
+
+   The pitch: swap the coin pusher for a pinball table without changing
+   what a fight IS. Dungeon Pusher already resolves a battle by taking a
+   list of typed pieces — gold, silver, red, green, blue, lucky — and
+   running each through applyLoot(). This prototype produces exactly that
+   list; it just earns it with a steel ball instead of a pusher bed.
+
+   ONE BALL = ONE TURN.
+     1. plunge, play, hit things. Hits fill your PURSE with typed coins.
+     2. the ball drains -> the purse RESOLVES, coin type by coin type.
+     3. the foe takes its telegraphed turn.
+     4. next ball.
+
+   THREE DIALS keep it from being overpowered on turn one, and each one
+   is a separate thing to earn (see FITTINGS):
+     - PURSE CAP  how many coins one ball may bank at all  (starts 8)
+     - COMBO CAP  the multiplier a clean ball can reach     (starts x2)
+     - THE TABLE  how many things there are to hit at all   (starts bare)
+   Per-hit values barely move across a run. What grows is how much table
+   there is to work with — your build is the playfield.
+
+   Physics is the solver from Flipper Crawl: sub-stepped, capsule
+   colliders, speed-scaled restitution, Coulomb friction with real
+   angular momentum, and flippers that impart contact-point velocity.
+
+   ---- FOLDING THIS INTO THE REAL GAME -------------------------------
+   Deliberately only three seams touch index.html:
+     earn(kind)     -> push { t: kind } onto S.battle.loot and let the
+                       existing applyLoot() spend it. Every relic,
+                       mastery and coin trait keeps working untouched,
+                       because they all hang off applyLoot, not off the
+                       pusher bed.
+     hurtFoe(n,src) -> dmgFoe(e, n, src) — the trait handling here
+                       (gel cap / ward DR / plate) is a small copy of
+                       what dmgFoe already does, and goes away.
+     foeTurn()      -> enemyActFoe(e), which already reads e.intent.
+   Everything else (the table, the purse, the fittings) is new surface
+   that sits beside the pusher rather than replacing anything, so the
+   two battle modes can coexist behind one toggle.
+   ==================================================================== */
+'use strict';
+
+const HEADLESS = typeof globalThis !== 'undefined' && !!globalThis.__DPB_HEADLESS__;
+
+/* ------------------------------------------------------------------ math */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const len = (x, y) => Math.hypot(x, y);
+function mulberry(seed){
+  let a = seed >>> 0;
+  return function(){
+    a = (a + 0x6D2B79F5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+let rng = mulberry(1);
+const rr = (a, b) => a + rng() * (b - a);
+const ri = (a, b) => Math.floor(rr(a, b + 1));
+const pick = arr => arr[Math.floor(rng() * arr.length)];
+
+/* -------------------------------------------------------------- constants */
+const T = { W: 440, H: 780 };
+const DRAIN_Y = 752;
+const LANE_X = 388;
+
+const P = {
+  GRAV: 1180, DRAG: 0.22, SPIN_DRAG: 1.1, R: 9, VMAX: 2700,
+  STEP: 1 / 120, MAX_SUB: 26,
+  REST_WALL: 0.36, REST_RUBBER: 0.78, REST_MIN_V: 190, FRIC: 0.19,
+  FLIP_LEN: 62, FLIP_R: 8, FLIP_SWEEP: 1.02, FLIP_UP: 26, FLIP_DOWN: 15,
+  BUMP_KICK: 760, SLING_KICK: 880, NUDGE: 165, TILT_MAX: 3,
+};
+
+// combat tuning — deliberately mirrors dungeon_pusher/index.html's C block
+// so numbers transfer 1:1 when this is folded into the real game
+const B = {
+  START_HP: 60,
+  DMG_GOLD: 1,        // C.DMG.gold
+  DMG_LUCKY: 4,       // C.DMG.lucky
+  DMG_BLUE: 1,        // C.DMG.blue — hits every foe, through block
+  RED_HEAL: 1,        // C.RED_HEAL
+  POISON: 1,          // green: 1 stack per coin
+  PURSE_CAP: 6,       // coins one ball may bank — this IS the turn length
+  COMBO_CAP: 2,       // multiplier ceiling
+  COMBO_STEP: 5,      // hits per multiplier step
+  CHIP: 1,            // body blow: unmultiplied chip damage, plus a gold coin
+  CHIP_CD: 0.45,
+  TURN_MAX: 34,       // the shot clock: no turn may outstay this
+  TARGET_CD: 0.35,    // a target will not pay twice inside this
+  HP_SCALE: 0.28,     // foe HP per floor beyond the first
+  ATK_SCALE: 0.16,
+};
+
+/* ------------------------------------------------------------ coin types */
+// the same six faces the pusher uses, with the same art
+const COINS = {
+  gold:   { ico:'\u{1FA99}', art:'coin_coin',   col:'#ffcf4d', cls:'g', nm:'gold',   ds:'strike' },
+  silver: { ico:'\u{1F6E1}', art:'coin_silver', col:'#c8d6e8', cls:'s', nm:'silver', ds:'block' },
+  red:    { ico:'\u{2764}',  art:'coin_red',    col:'#ff6b7a', cls:'r', nm:'red',    ds:'mend' },
+  green:  { ico:'\u{1F9EA}', art:'coin_green',  col:'#b8f26b', cls:'n', nm:'green',  ds:'rot' },
+  blue:   { ico:'\u{2744}',  art:'coin_blue',   col:'#7ee7ff', cls:'b', nm:'blue',   ds:'frost' },
+  lucky:  { ico:'\u{1F340}', art:'coin_lucky',  col:'#ffa1e8', cls:'l', nm:'lucky',  ds:'crit' },
+};
+const COIN_ORDER = ['gold', 'silver', 'red', 'green', 'blue', 'lucky'];
+
+/* ---------------------------------------------------------------- roster */
+// Act-1 foes lifted from the main game, traits and all. Each trait also
+// changes the TABLE — that is what makes a fight feel like this fight.
+const FOES = [
+  { id:'orc',     ico:'\u{1F9CC}', nm:'Orc Grunt',      hp:28, atk:2, trait:null },
+  { id:'smasher', ico:'\u{1F47A}', nm:'Goblin Smasher', hp:24, atk:2, trait:'fast' },
+  { id:'goblin',  ico:'\u{1F47A}', nm:'Goblin Mugger',  hp:34, atk:3, trait:'thief' },
+  { id:'slime',   ico:'\u{1F7E2}', nm:'Gel Cube',       hp:22, atk:2, trait:'gel' },
+  { id:'totem',   ico:'\u{1F5FF}', nm:'War Totem',      hp:28, atk:3, trait:'ward' },
+  { id:'skeleton',ico:'\u{1F480}', nm:'Bone Knight',    hp:30, atk:3, trait:'armor' },
+];
+const BOSS = { id:'dragon', ico:'\u{1F409}', nm:'Vault Dragon', hp:120, atk:6, trait:'armor', boss:true };
+
+// Sheet metadata copied verbatim from dungeon_pusher/index.html's SHEETS, so
+// the foes animate here exactly as they do in the room view.
+//   fw/fh frame size · n frames at fps · rows 4 = LPC directional (row 2
+//   faces the camera) · ay = feet line in source px · body = real body height
+const SHEETS = {
+  orc:      { src:'art/orc_idle.png',      fw:192, fh:192, n:2, fps:3, ay:125, body:36,  rows:1 },
+  smasher:  { src:'art/smasher_idle.png',  fw:64,  fh:64,  n:2, fps:4, ay:61,  body:40,  rows:4 },
+  goblin:   { src:'art/goblin_idle.png',   fw:64,  fh:64,  n:2, fps:4, ay:61,  body:40,  rows:4 },
+  slime:    { src:'art/slime_idle.png',    fw:178, fh:191, n:4, fps:5, ay:188, body:175, rows:1 },
+  totem:    { src:'art/totem_idle.png',    fw:64,  fh:64,  n:2, fps:4, ay:61,  body:40,  rows:4 },
+  skeleton: { src:'art/skeleton_idle.png', fw:64,  fh:64,  n:2, fps:4, ay:61,  body:40,  rows:4 },
+  dragon:   { src:'art/dragon_idle.png',   fw:149, fh:105, n:6, fps:7, ay:104, body:100, rows:1 },
+};
+
+const TRAIT_TXT = {
+  fast:  'swings twice',
+  thief: 'lifts a coin',
+  gel:   'caps hits at 2',
+  ward:  'shrugs off 2',
+  armor: 'plated',
+};
+
+/* -------------------------------------------------------------- fittings */
+// The draft. Note what is NOT here: "+1 damage per gold". Power comes from
+// more table, a bigger purse and a higher ceiling — never from inflating
+// the per-hit numbers, which is what makes turn one survivable and turn
+// twenty spectacular.
+const FITTINGS = [
+  { id:'t_gold',   ico:'\u{1FA99}', nm:'Gold Standup',  ds:'Bolt another GOLD target to the playfield.', add:'gold' },
+  { id:'t_silver', ico:'\u{1F6E1}', nm:'Silver Standup',ds:'Bolt another SILVER target on. Block is how you survive turn three.', add:'silver' },
+  { id:'t_red',    ico:'\u{2764}',  ico2:1, nm:'Heart Target', ds:'Bolt a RED target on. Each one mends a wound at resolve.', add:'red' },
+  { id:'t_green',  ico:'\u{1F9EA}', nm:'Venom Target',  ds:'Bolt a GREEN target on. Rot ticks every foe turn and ignores block.', add:'green' },
+  { id:'t_blue',   ico:'\u{2744}',  nm:'Frost Target',  ds:'Bolt a BLUE target on. Frost cuts through armour and plate.', add:'blue' },
+  { id:'t_lucky',  ico:'\u{1F340}', nm:'Lucky Saucer',  ds:'A saucer behind the bumpers. Hard shot — one coin, worth four strikes.', add:'lucky' },
+  { id:'purse',    ico:'\u{1F45B}', nm:'Deeper Purse',  ds:'+3 to the PURSE CAP. One ball can carry more home.', purse:3 },
+  { id:'combo',    ico:'\u{1F517}', nm:'Chain Links',   ds:'+1 to the COMBO CAP. A clean ball multiplies harder.', combo:1 },
+  { id:'step',     ico:'\u{26A1}',  nm:'Quick Tally',   ds:'The combo steps up every 4 hits instead of 5.', step:1 },
+  { id:'bumper',   ico:'\u{1F3AF}', nm:'Live Bumpers',  ds:'Pop bumpers pay a GOLD each. They only fed the combo before.', bumperPay:1 },
+  { id:'flip',     ico:'\u{1F4CF}', nm:'Long Flippers', ds:'Flippers 15% longer. The drain gap shrinks.', flip:1 },
+  { id:'saver',    ico:'\u{1F6DF}', nm:'Ball Saver',    ds:'The first drain of every battle hands the ball straight back.', saver:1 },
+  { id:'extra',    ico:'\u{1F3B1}', nm:'Second Ball',   ds:'Your turn plays with an extra ball at once. It ends when the last one drains.', extra:1 },
+];
+const FIT_BY_ID = Object.fromEntries(FITTINGS.map(f => [f.id, f]));
+
+/* ==================================================================== */
+/*  STATE                                                                */
+/* ==================================================================== */
+const S = {
+  screen: 'title',            // title | battle | fit | over
+  phase: 'aim',               // aim | ball | resolve | foe | done
+  seed: 1, floor: 1,
+  hp: B.START_HP, maxHp: B.START_HP, block: 0, pois: 0,
+  foe: null,
+  purse: {}, combo: 0, chipT: 0, cashT: 0, turnT: 0,
+  purseCap: B.PURSE_CAP, comboCap: B.COMBO_CAP, comboStep: B.COMBO_STEP,
+  fits: [], loadout: ['gold', 'gold', 'silver'],   // the bare starting table
+  saverUsed: false,
+  segs: [], posts: [], bumpers: [], targets: [], flippers: [], inplay: [],
+  res: [], resT: 0,
+  plunge: 0, plungeHold: false, launchReady: false,
+  tilt: 0, tiltT: 0, tiltLock: 0,
+  time: 0, freeze: 0, slow: 0, shake: 0, flash: 0,
+  parts: [], pops: [], msg: '', msgT: 0,
+  stats: { kills: 0, dealt: 0, floors: 0 },
+};
+const hasFit = id => S.fits.includes(id);
+const fitCount = id => S.fits.filter(f => f === id).length;
+
+/* ==================================================================== */
+/*  PHYSICS  (the Flipper Crawl solver — see flipper_crawl/index.html)   */
+/* ==================================================================== */
+function seg(ax, ay, bx, by, o = {}){
+  return { ax, ay, bx, by, r: o.r ?? 5, rest: o.rest ?? P.REST_WALL, fric: o.fric ?? P.FRIC,
+           kind: o.kind || 'wall', kick: o.kick || 0, oneWay: o.oneWay || null, lamp: 0 };
+}
+function arc(cx, cy, rad, a0, a1, n, o){
+  const out = [];
+  for (let i = 0; i < n; i++){
+    const t0 = a0 + (a1 - a0) * (i / n), t1 = a0 + (a1 - a0) * ((i + 1) / n);
+    out.push(seg(cx + Math.cos(t0) * rad, cy + Math.sin(t0) * rad,
+                 cx + Math.cos(t1) * rad, cy + Math.sin(t1) * rad, o));
+  }
+  return out;
+}
+function capsuleHit(b, s){
+  const abx = s.bx - s.ax, aby = s.by - s.ay;
+  const L2 = abx * abx + aby * aby;
+  const t = L2 > 0 ? clamp(((b.x - s.ax) * abx + (b.y - s.ay) * aby) / L2, 0, 1) : 0;
+  const px = s.ax + abx * t, py = s.ay + aby * t;
+  let nx = b.x - px, ny = b.y - py;
+  let d = len(nx, ny);
+  const R = b.r + s.r;
+  if (d > R) return null;
+  if (d < 1e-6){ nx = -aby; ny = abx; d = len(nx, ny) || 1; }
+  nx /= d; ny /= d;
+  return { nx, ny, pen: R - d, px, py };
+}
+function circleHit(b, o){
+  let nx = b.x - o.x, ny = b.y - o.y;
+  let d = len(nx, ny);
+  const R = b.r + o.r;
+  if (d > R) return null;
+  if (d < 1e-6){ nx = 0; ny = -1; d = 1; }
+  else { nx /= d; ny /= d; }
+  return { nx, ny, pen: R - d, px: o.x + nx * o.r, py: o.y + ny * o.r };
+}
+// speed-scaled restitution + Coulomb friction against the slip at the
+// contact patch. `sv` is the surface's own velocity — the term that lets a
+// swinging flipper fire the ball out faster than it arrived.
+function resolveHit(b, c, o){
+  const { nx, ny, pen } = c;
+  const svx = o.svx || 0, svy = o.svy || 0;
+  b.x += nx * (pen + 0.02);
+  b.y += ny * (pen + 0.02);
+  const rvx = b.vx - svx, rvy = b.vy - svy;
+  const vn = rvx * nx + rvy * ny;
+  if (vn > 0) return 0;
+  const speed = -vn;
+  const rest = o.rest * clamp(speed / P.REST_MIN_V, 0.05, 1);
+  const tx = -ny, ty = nx;
+  const vt = rvx * tx + rvy * ty;
+  const slip = vt - b.w * b.r;
+  const jn = (1 + rest) * speed;
+  let jt = -slip / 3.5;                      // exactly kills slip on a solid sphere
+  const maxF = o.fric * jn;
+  jt = clamp(jt, -maxF, maxF);
+  b.vx += nx * jn + tx * jt;
+  b.vy += ny * jn + ty * jt;
+  b.w += -2.5 * jt / b.r;
+  if (o.kick){ b.vx += nx * o.kick; b.vy += ny * o.kick; }
+  return speed;
+}
+
+/* ------------------------------------------------------------- flippers */
+function buildFlippers(){
+  const L = P.FLIP_LEN * (hasFit('flip') ? 1.15 : 1);
+  S.flippers = [
+    { side:-1, px:126, py:672, len:L, r:P.FLIP_R, rest:0.50, ang:0.50, w:0, up:false, hit:0 },
+    { side: 1, px:282, py:672, len:L, r:P.FLIP_R, rest:Math.PI - 0.50, ang:Math.PI - 0.50, w:0, up:false, hit:0 },
+  ];
+}
+const flipTarget = f => f.up ? f.rest + f.side * P.FLIP_SWEEP : f.rest;
+const flipTip = f => ({ x: f.px + Math.cos(f.ang) * f.len, y: f.py + Math.sin(f.ang) * f.len });
+function stepFlippers(h){
+  for (const f of S.flippers){
+    const d = flipTarget(f) - f.ang;
+    const rate = f.up ? P.FLIP_UP : P.FLIP_DOWN;
+    const move = clamp(d, -rate * h, rate * h);
+    f.ang += move;
+    f.w = Math.abs(d) < 1e-4 ? 0 : move / h;
+    f.hit = Math.max(0, f.hit - h * 4);
+  }
+}
+
+/* ==================================================================== */
+/*  TABLE                                                                */
+/* ==================================================================== */
+function buildStatic(){
+  const S2 = [];
+  S2.push(seg(20, 250, 20, 556, { r: 6 }));
+  S2.push(seg(420, 250, 420, 700, { r: 6 }));
+  S2.push(...arc(220, 250, 200, Math.PI, TAU, 26, { r: 6, rest: 0.30 }));
+  S2.push(seg(LANE_X, 262, LANE_X, 700, { r: 5 }));
+  S2.push(seg(LANE_X - 2, 258, 412, 250, { r: 5, oneWay: { nx: -0.42, ny: -0.91 } }));
+  S2.push(seg(20, 556, 112, 668, { r: 6, kind: 'rail' }));
+  S2.push(seg(LANE_X, 556, 296, 668, { r: 6, kind: 'rail' }));
+  // slingshots: both feet planted on the drain wall so nothing can wedge behind
+  for (const side of [-1, 1]){
+    const ax = side < 0 ? 20 : LANE_X, dx = side < 0 ? 92 : -92;
+    const W = t => ({ x: ax + dx * t, y: 556 + 112 * t });
+    const v1 = W(0.10), v2 = W(0.80), mid = W(0.45);
+    const apex = { x: mid.x - side * 35.6, y: mid.y - 29.2 };
+    S2.push(seg(v1.x, v1.y, apex.x, apex.y, { r: 7, kind: 'sling', rest: P.REST_RUBBER, kick: P.SLING_KICK }));
+    S2.push(seg(apex.x, apex.y, v2.x, v2.y, { r: 7, rest: P.REST_RUBBER }));
+  }
+  return S2;
+}
+function clearOf(c, gap, extra){
+  if (S.foe && len(c.x - S.foe.x, c.y - S.foe.y) < c.r + S.foe.r + gap) return false;
+  for (const o of S.bumpers) if (len(c.x - o.x, c.y - o.y) < c.r + o.r + gap) return false;
+  for (const o of S.posts) if (len(c.x - o.x, c.y - o.y) < c.r + o.r + gap) return false;
+  for (const o of S.targets) if (len(c.x - o.x, c.y - o.y) < c.r + o.r + gap) return false;
+  for (const o of extra || []) if (len(c.x - o.x, c.y - o.y) < c.r + o.r + gap) return false;
+  return true;
+}
+
+// The loadout is the build: an array of coin types, one entry per target
+// bolted to the table. Layout is deterministic per (seed, floor) so the
+// same run always presents the same playfield.
+function buildTable(){
+  rng = mulberry(S.seed * 7919 + S.floor * 104729);
+  S.segs = buildStatic();
+  S.posts = []; S.bumpers = []; S.targets = [];
+  buildFlippers();
+
+  // the foe stands at the top of the playfield and is itself a collider —
+  // a body blow chips it for free, which keeps a full purse from feeling dead
+  const f = S.foe;
+  f.x = 204; f.y = 214; f.r = f.boss ? 40 : 32; f.hitT = 0; f.knock = 0;
+
+  // three pop bumpers under the foe: they build the COMBO, and pay gold
+  // only once Live Bumpers is fitted
+  for (let i = 0; i < 3; i++){
+    const a = -Math.PI / 2 + (i - 1) * 0.95 + rr(-0.1, 0.1);
+    S.bumpers.push({ x: 204 + Math.cos(a) * 84 + rr(-10, 10), y: 336 + Math.sin(a) * 40 + rr(-8, 8),
+                     r: 21, lamp: 0, hits: 0 });
+  }
+  // the coin targets — the build itself
+  const slots = [];
+  const n = S.loadout.length;
+  for (let i = 0; i < n; i++){
+    const kind = S.loadout[i];
+    // each target owns a horizontal band and alternates between two rows, so
+    // a fat loadout spreads over the playfield instead of piling in a corner
+    const w = 296 / n;
+    const x0 = 56 + i * w, x1 = x0 + w;
+    const row = i % 2 ? [472, 552] : [384, 452];
+    let placed = null;
+    for (let tries = 0; tries < 50; tries++){
+      const cand = { x: rr(x0, x1), y: rr(row[0], row[1]), r: 17, kind, cd: 0, lamp: 0 };
+      if (clearOf(cand, 20, slots)){ placed = cand; break; }
+    }
+    // widen the search rather than drop a target the player paid for
+    for (let tries = 0; !placed && tries < 60; tries++){
+      const cand = { x: rr(56, 352), y: rr(384, 552), r: 17, kind, cd: 0, lamp: 0 };
+      if (clearOf(cand, 18, slots)) placed = cand;
+    }
+    slots.push(placed || { x: clamp(x0 + w / 2, 56, 352), y: row[0], r: 17, kind, cd: 0, lamp: 0 });
+  }
+  // the lucky saucer sits high and behind the bumpers — the hardest shot
+  for (const t of slots) if (t.kind === 'lucky'){ t.x = 204 + rr(-52, 52); t.y = 292; t.r = 16; t.saucer = true; }
+  S.targets = slots;
+
+  // a couple of rubber posts for deflection
+  for (let i = 0; i < 2; i++){
+    for (let tries = 0; tries < 40; tries++){
+      const p = { x: rr(56, 352), y: rr(548, 586), r: rr(8, 11), lamp: 0 };
+      if (clearOf(p, 22)){ S.posts.push(p); break; }
+    }
+  }
+  // TRAIT: the WARD posts a stone guard in front of the lucky saucer
+  if (f.trait === 'ward'){
+    const lucky = S.targets.find(t => t.saucer);
+    if (lucky) S.posts.push({ x: lucky.x, y: lucky.y + 40, r: 13, lamp: 0, ward: true });
+  }
+  // TRAIT: the GEL CUBE smears the inlanes — a sticky pad that eats speed
+  S.gel = f.trait === 'gel' ? { x: 204, y: 600, r: 76 } : null;
+}
+
+/* ==================================================================== */
+/*  BALL                                                                 */
+/* ==================================================================== */
+function newBall(x, y, vx = 0, vy = 0){
+  return { x, y, vx, vy, w: 0, rot: 0, r: P.R, trail: [], live: true,
+           inLane: x > LANE_X, restT: 0, searched: 0, hot: 0 };
+}
+function spawnInLane(){
+  S.inplay.push(newBall(404, 682));
+  S.launchReady = true;
+  S.plunge = 0;
+}
+
+/* ==================================================================== */
+/*  PHYSICS STEP                                                         */
+/* ==================================================================== */
+function physics(dt){
+  let vmax = 0;
+  for (const b of S.inplay) vmax = Math.max(vmax, len(b.vx, b.vy));
+  for (const f of S.flippers) vmax = Math.max(vmax, Math.abs(f.w) * f.len);
+  const n = clamp(Math.ceil((vmax * dt) / (P.R * 0.45)) || 1, 1, P.MAX_SUB);
+  const h = dt / n;
+  for (let i = 0; i < n; i++) sub(h);
+}
+function sub(h){
+  stepFlippers(h);
+  for (const b of S.inplay){
+    if (!b.live) continue;
+    b.vy += P.GRAV * h;
+    let drag = P.DRAG;
+    // the gel smear: a wide patch of dead felt over the lower field
+    if (S.gel && len(b.x - S.gel.x, b.y - S.gel.y) < S.gel.r && !b.inLane) drag = 4.2;
+    const d = Math.exp(-drag * h);
+    b.vx *= d; b.vy *= d;
+    b.w *= Math.exp(-P.SPIN_DRAG * h);
+    const sp = len(b.vx, b.vy);
+    if (sp > P.VMAX){ b.vx *= P.VMAX / sp; b.vy *= P.VMAX / sp; }
+    b.x += b.vx * h; b.y += b.vy * h; b.rot += b.w * h;
+
+    if (b.x > LANE_X && b.y > 640){
+      b.inLane = true;
+      if (b.y > 682){ b.y = 682; if (b.vy > 0){ b.vy *= -0.2; if (Math.abs(b.vy) < 40) b.vy = 0; } S.launchReady = true; }
+    } else if (b.x < LANE_X - 12) b.inLane = false;
+
+    if (!b.inLane && len(b.vx, b.vy) < 26) b.restT += h; else { b.restT = 0; b.searched = 0; }
+    collide(b);
+  }
+}
+
+function collide(b){
+  for (let pass = 0; pass < 2; pass++){
+    for (const s of S.segs){
+      const c = capsuleHit(b, s);
+      if (!c) continue;
+      if (s.oneWay){
+        const mx = (s.ax + s.bx) / 2, my = (s.ay + s.by) / 2;
+        if ((b.x - mx) * s.oneWay.nx + (b.y - my) * s.oneWay.ny < 0) continue;
+      }
+      let kick = s.kick;
+      if (s.kind === 'sling' && -(b.vx * c.nx + b.vy * c.ny) < 55) kick = 0;
+      const imp = resolveHit(b, c, { rest: s.rest, fric: s.fric, kick });
+      if (pass === 0 && imp > 60 && s.kind === 'sling' && kick) onSling(s);
+    }
+    for (const p of S.posts){
+      const c = circleHit(b, p);
+      if (!c) continue;
+      const imp = resolveHit(b, c, { rest: P.REST_RUBBER, fric: P.FRIC });
+      if (pass === 0 && imp > 120){ p.lamp = 1; sfx('post', 0.14, 420); }
+    }
+    for (const bp of S.bumpers){
+      const c = circleHit(b, bp);
+      if (!c) continue;
+      const imp = resolveHit(b, c, { rest: 0.5, fric: 0.1, kick: P.BUMP_KICK });
+      if (pass === 0 && imp > 20) onBumper(bp);
+    }
+    for (const t of S.targets){
+      const c = circleHit(b, t);
+      if (!c) continue;
+      const imp = resolveHit(b, c, { rest: t.saucer ? 0.2 : 0.55, fric: 0.25 });
+      if (pass === 0 && imp > 30) onTarget(t, b);
+    }
+    // the flippers: kinematic capsules that hand the ball their contact-point
+    // velocity (v = omega x r) — the term that makes a flipper a weapon
+    for (const f of S.flippers){
+      const tip = flipTip(f);
+      const c = capsuleHit(b, { ax: f.px, ay: f.py, bx: tip.x, by: tip.y, r: f.r });
+      if (!c) continue;
+      const rx = c.px - f.px, ry = c.py - f.py;
+      const driving = f.up && f.w !== 0;
+      const imp = resolveHit(b, c, {
+        rest: driving ? 0.52 : 0.32, fric: 0.42,
+        svx: -f.w * ry, svy: f.w * rx,
+      });
+      if (pass === 0 && imp > 90){
+        f.hit = 1;
+        sfx('post', 0.16, 90);
+        burst(c.px, c.py, 4, '#e8dcc8');
+      }
+    }
+    if (S.foe && S.foe.hp > 0){
+      const c = circleHit(b, S.foe);
+      if (c){
+        const imp = resolveHit(b, c, { rest: 0.5, fric: 0.28 });
+        if (pass === 0 && imp > 40) onFoeHit(b, c, imp);
+      }
+    }
+  }
+  if (b.x < 12){ b.x = 12; b.vx = Math.abs(b.vx) * 0.4; }
+  if (b.x > T.W - 12){ b.x = T.W - 12; b.vx = -Math.abs(b.vx) * 0.4; }
+  if (b.y < 12){ b.y = 12; b.vy = Math.abs(b.vy) * 0.4; }
+  b.trail.push(b.x, b.y);
+  if (b.trail.length > 24) b.trail.splice(0, 2);
+  if (b.y > DRAIN_Y && !b.inLane) drain(b);
+}
+
+/* ==================================================================== */
+/*  EARNING COINS                                                        */
+/* ==================================================================== */
+const purseTotal = () => COIN_ORDER.reduce((n, k) => n + (S.purse[k] | 0), 0);
+const purseFull = () => purseTotal() >= S.purseCap;
+const comboMult = () => Math.min(S.comboCap, 1 + Math.floor(S.combo / S.comboStep));
+
+// Every coin the ball earns lands here. This is the seam: in the real game
+// this pushes {t:<kind>} onto the battle's loot list and applyLoot() does
+// the rest — relics, masteries and traits all keep working untouched.
+function earn(kind, x, y){
+  S.combo++;
+  if (purseFull()){
+    pop(x, y, 'PURSE FULL', '#8a7a72');
+    return false;
+  }
+  S.purse[kind] = (S.purse[kind] | 0) + 1;
+  // A FULL PURSE ENDS THE TURN. This is what stops a good player stalling
+  // forever on one ball, and it is why Deeper Purse reads as "longer turns"
+  // as well as "bigger hauls" — the cap IS the turn length.
+  if (purseFull() && S.cashT <= 0){
+    S.cashT = 1.15;
+    floatMsg('PURSE FULL \u{2014} CASHING OUT');
+    S.flash = Math.max(S.flash, 0.35);
+  }
+  const C2 = COINS[kind];
+  pop(x, y, C2.ico, C2.col, true);
+  burst(x, y, 7, C2.col);
+  bumpCoin(kind);
+  sfx('coin', 0.28, 380 + Math.min(S.combo, 24) * 22);
+  shake(2);
+  hitstop(0.012);
+  return true;
+}
+
+// The bumper rack is the thing a ball rattles around in most, so it is the
+// baseline income: every third pop mints a gold. Live Bumpers makes it every
+// pop, which is why that fitting reads as such a jump.
+function onBumper(bp){
+  bp.lamp = 1;
+  bp.hits = (bp.hits | 0) + 1;
+  S.combo++;
+  burst(bp.x, bp.y, 6, '#ffcf4d');
+  shake(1.8);
+  sfx('bump', 0.22, 260 + Math.min(S.combo, 20) * 26);
+  if (hasFit('bumper') || bp.hits % 3 === 0) earn('gold', bp.x, bp.y);
+}
+function onSling(s){
+  s.lamp = 1;
+  S.combo++;
+  burst((s.ax + s.bx) / 2, (s.ay + s.by) / 2, 5, '#ffcf4d');
+  shake(2.2);
+  sfx('sling', 0.24, 190);
+}
+function onTarget(t, b){
+  if (t.cd > 0) return;
+  t.cd = B.TARGET_CD;
+  t.lamp = 1;
+  earn(t.kind, t.x, t.y - t.r - 6);
+  if (t.saucer){ b.vx *= 0.25; b.vy = -Math.abs(b.vy) * 0.4 - 260; }   // the saucer spits it back out
+}
+// a body blow: unmultiplied chip damage straight off the ball, so a full
+// purse still has something worth doing
+function onFoeHit(b, c, imp){
+  const f = S.foe;
+  f.knock = 1;
+  f.hitT = 0.2;
+  b.hot = 0.3;
+  burst(c.px, c.py, 10, '#ff6b7a');
+  shake(4);
+  hitstop(0.02);
+  sfx('thud', 0.3, 150);
+  // Chip rides the purse: once the purse is full the foe is "already paid",
+  // so total chip in a turn can never exceed the purse cap. Without this the
+  // body blow is an uncapped damage source and the three dials stop meaning
+  // anything on a long ball.
+  if (S.chipT > 0 || purseFull()) return;
+  S.chipT = B.CHIP_CD;
+  // A BODY BLOW IS THE BREAD AND BUTTER: it chips the foe on the spot AND
+  // mints a gold coin. The foe is the biggest, most obvious thing on the
+  // table, so a player who only ever shoots the monster still earns; the
+  // coin targets are how you specialise that income into shields and rot.
+  const dealt = hurtFoe(B.CHIP, 'chip');
+  if (dealt) pop(f.x, f.y - f.r - 10, '-' + dealt, '#ff6b7a', true);
+  earn('gold', f.x, f.y + f.r * 0.6);
+}
+
+/* ==================================================================== */
+/*  COMBAT RESOLUTION                                                    */
+/* ==================================================================== */
+// One place decides what a hit actually removes, so every defensive trait
+// in the roster keeps behaving the way it does in the pusher.
+function hurtFoe(n, src){
+  const f = S.foe;
+  if (!f || f.hp <= 0) return 0;
+  let d = n;
+  if (src !== 'poison' && src !== 'blue'){
+    if (f.trait === 'ward') d -= 2;                        // flat DR
+    if (f.trait === 'armor' && f.plate > 0){               // the plate soaks first
+      const soak = Math.min(f.plate, d);
+      f.plate -= soak; d -= soak;
+      if (f.plate <= 0) floatMsg('the plate splits!');
+    }
+    if (f.trait === 'gel') d = Math.min(d, 2);             // ooze caps each hit
+  }
+  d = Math.max(0, Math.round(d));
+  if (!d) return 0;
+  f.hp -= d;
+  S.stats.dealt += d;
+  f.hitT = Math.max(f.hitT, 0.18);
+  if (f.hp <= 0){ f.hp = 0; foeDown(); }
+  return d;
+}
+function foeDown(){
+  if (S.phase === 'done') return;
+  S.phase = 'done';
+  S.stats.kills++;
+  burst(S.foe.x, S.foe.y, 46, '#ffcf4d', 2);
+  shake(16); S.flash = 0.7; S.slow = 0.5;
+  sfx('kill', 0.42, 90);
+  floatMsg('THE FOE FALLS');
+  if (!HEADLESS) setTimeout(() => { if (S.screen === 'battle') showFit(); }, 1100);
+}
+function addBlock(n){ S.block += n; }
+function healSelf(n){
+  const before = S.hp;
+  S.hp = Math.min(S.maxHp, S.hp + n);
+  return S.hp - before;
+}
+function hurtSelf(n){
+  const soak = Math.min(S.block, n);
+  S.block -= soak;
+  const through = n - soak;
+  if (through > 0){
+    S.hp -= through;
+    shake(7); S.flash = Math.max(S.flash, 0.3);
+    sfx('hurt', 0.36, 120);
+    if (S.hp <= 0){ S.hp = 0; gameOver(); }
+  } else {
+    sfx('block', 0.28, 300);
+  }
+  return { soak, through };
+}
+
+/* --------------------------------------------------------- the resolve */
+// The purse is spent one coin type at a time, on a beat, so the player can
+// read what each face did. Order matters: shields go up before the foe
+// swings, and rot lands before its tick.
+function startResolve(){
+  S.phase = 'resolve';
+  // THE MUGGER's tax: it lifts the best coin off the haul before it is spent.
+  // Cracking it open early is worth real coin.
+  if (S.foe && S.foe.hp > 0 && S.foe.trait === 'thief'){
+    for (const k of ['lucky', 'gold', 'blue', 'green', 'silver', 'red']){
+      if ((S.purse[k] | 0) > 0){
+        S.purse[k]--;
+        floatMsg('\u{1F45B} the mugger lifts a ' + COINS[k].nm + ' coin');
+        break;
+      }
+    }
+  }
+  const m = comboMult();
+  const steps = [];
+  const n = k => (S.purse[k] | 0);
+  if (n('silver')) steps.push({ k:'silver', n: n('silver') * m });
+  if (n('red'))    steps.push({ k:'red',    n: n('red') * m * B.RED_HEAL });
+  if (n('green'))  steps.push({ k:'green',  n: n('green') * m * B.POISON });
+  if (n('blue'))   steps.push({ k:'blue',   n: n('blue') * m * B.DMG_BLUE });
+  if (n('gold'))   steps.push({ k:'gold',   n: n('gold') * m * B.DMG_GOLD });
+  if (n('lucky'))  steps.push({ k:'lucky',  n: n('lucky') * m * B.DMG_LUCKY });
+  S.res = steps;
+  S.resT = 0;
+  S.resMult = m;
+  if (!steps.length) endResolve();
+}
+function applyResStep(st){
+  const C2 = COINS[st.k];
+  if (st.k === 'silver'){ addBlock(st.n); floatMsg('\u{1F6E1} +' + st.n + ' block'); }
+  else if (st.k === 'red'){ const g = healSelf(st.n); floatMsg('\u{2764} +' + g + ' HP'); }
+  else if (st.k === 'green'){ S.foe.pois = (S.foe.pois | 0) + st.n; floatMsg('\u{1F9EA} ' + st.n + ' rot'); }
+  else if (st.k === 'blue'){ const d = hurtFoe(st.n, 'blue'); floatMsg('\u{2744} ' + d + ' frost'); }
+  else { const d = hurtFoe(st.n, st.k); floatMsg((st.k === 'lucky' ? '\u{1F340} ' : '\u{1FA99} ') + d + ' damage'); }
+  burst(S.foe.x, S.foe.y, 10, C2.col);
+  shake(3.5);
+  hitstop(0.03);
+  sfx('coin', 0.32, st.k === 'lucky' ? 620 : 420);
+}
+function endResolve(){
+  S.res = [];
+  S.purse = {};
+  S.combo = 0;
+  if (S.foe.hp <= 0) return;
+  foeTurn();
+}
+
+/* ------------------------------------------------------------ foe turn */
+const INTENTS = {
+  hit:   { ico:'\u{1F5E1}', txt: n => n + ' DMG' },
+  heavy: { ico:'\u{1F480}', txt: n => n + ' HEAVY' },
+  guard: { ico:'\u{1F6E1}', txt: n => '+' + n + ' PLATE' },
+  venom: { ico:'\u{1F9EA}', txt: n => n + ' ROT' },
+};
+function rollIntent(){
+  const f = S.foe;
+  const r = rng();
+  if (f.trait === 'armor' && r < 0.22) f.intent = { t:'guard', n: 4 + S.floor };
+  else if (r < 0.2) f.intent = { t:'heavy', n: f.atk * 2 };
+  else if (r < 0.3 && f.trait !== 'gel') f.intent = { t:'venom', n: 2 };
+  else f.intent = { t:'hit', n: f.atk };
+}
+function foeTurn(){
+  S.phase = 'foe';
+  const f = S.foe;
+  // rot ticks first, and it ignores plate and block alike
+  if (f.pois > 0){
+    const d = f.pois;
+    f.hp -= d;
+    S.stats.dealt += d;
+    f.pois--;
+    pop(f.x, f.y - f.r - 12, '\u{1F9EA} -' + d, '#b8f26b', true);
+    if (f.hp <= 0){ f.hp = 0; foeDown(); return; }
+  }
+  if (S.pois > 0){ S.hp -= S.pois; S.pois--; if (S.hp <= 0){ S.hp = 0; gameOver(); return; } }
+
+  const acts = f.trait === 'fast' ? 2 : 1;      // the smasher swings twice
+  for (let i = 0; i < acts; i++){
+    if (S.hp <= 0) return;
+    const it = f.intent || { t:'hit', n: f.atk };
+    if (it.t === 'guard'){ f.plate = (f.plate | 0) + it.n; floatMsg('the foe plates up (+' + it.n + ')'); }
+    else if (it.t === 'venom'){ S.pois += it.n; floatMsg('\u{1F9EA} rot takes hold (' + it.n + ')'); }
+    else {
+      const r = hurtSelf(it.n);
+      floatMsg(r.through ? '\u{1F5E1} you take ' + r.through : '\u{1F6E1} blocked');
+    }
+    if (i === 0 && acts > 1) rollIntent();
+  }
+  S.block = 0;                     // block never carries — same as the pusher
+  rollIntent();
+  nextTurn();
+}
+
+/* ------------------------------------------------------------ ball flow */
+function drain(b){
+  b.live = false;
+  S.inplay = S.inplay.filter(x => x.live);
+  if (hasFit('saver') && !S.saverUsed){
+    S.saverUsed = true;
+    spawnInLane();
+    floatMsg('BALL SAVED');
+    sfx('save', 0.3, 420);
+    return;
+  }
+  if (S.inplay.length) return;
+  sfx('drain', 0.3, 150);
+  if (S.phase !== 'ball') return;
+  startResolve();
+}
+// a TURN is a ball — or, once Second Ball is fitted, every ball at once.
+// The turn ends when the last one drains, so multiball is straightforwardly
+// more purse per turn: the honest pinball way to scale a build.
+function nextTurn(){
+  if (S.foe.hp <= 0 || S.hp <= 0) return;
+  S.phase = 'aim';
+  S.chipT = 0; S.cashT = 0; S.turnT = 0;
+  S.inplay = [];
+  spawnInLane();
+}
+const ballsPerTurn = () => 1 + fitCount('extra');
+
+/* ==================================================================== */
+/*  RUN FLOW                                                             */
+/* ==================================================================== */
+function mkFoe(floor){
+  const boss = floor % 5 === 0;
+  const base = boss ? BOSS : FOES[Math.floor(rng() * FOES.length)];
+  const k = 1 + (floor - 1) * B.HP_SCALE;
+  const f = {
+    ...base,
+    hp: Math.round(base.hp * k), maxHp: Math.round(base.hp * k),
+    atk: Math.max(1, Math.round(base.atk * (1 + (floor - 1) * B.ATK_SCALE))),
+    pois: 0, plate: 0, x: 204, y: 214, r: 32, hitT: 0, knock: 0, intent: null,
+  };
+  if (f.trait === 'armor') f.plate = 4 + floor;
+  return f;
+}
+function startRun(seed){
+  S.seed = seed || (HEADLESS ? 1 : (Date.now() % 100000) | 0);
+  rng = mulberry(S.seed);
+  S.floor = 1;
+  S.hp = S.maxHp = B.START_HP;
+  S.block = 0; S.pois = 0;
+  S.purseCap = B.PURSE_CAP; S.comboCap = B.COMBO_CAP; S.comboStep = B.COMBO_STEP;
+  S.fits = [];
+  S.loadout = ['gold', 'gold', 'silver'];
+  S.stats = { kills: 0, dealt: 0, floors: 0 };
+  S.parts = []; S.pops = [];
+  enterFloor(1);
+  S.screen = 'battle';
+}
+function enterFloor(n){
+  S.floor = n;
+  rng = mulberry(S.seed * 31 + n * 977);
+  S.foe = mkFoe(n);
+  rollIntent();
+  S.purse = {}; S.combo = 0; S.block = 0; S.pois = 0;
+  S.res = []; S.saverUsed = false; S.cashT = 0; S.turnT = 0;
+  S.phase = 'aim';
+  S.inplay = [];
+  buildTable();
+  spawnInLane();
+  floatMsg('B' + n + ' \u{2014} ' + S.foe.nm);
+}
+function rollFittings(){
+  const local = mulberry(S.seed * 131 + S.floor * 7717);
+  const pool = FITTINGS.filter(f => {
+    if (f.add === 'lucky' && S.loadout.includes('lucky')) return false;   // one saucer is enough
+    if (f.id === 'saver' && hasFit('saver')) return false;
+    if (f.id === 'bumper' && hasFit('bumper')) return false;
+    if (f.id === 'flip' && hasFit('flip')) return false;
+    if (f.id === 'step' && S.comboStep <= 3) return false;
+    return true;
+  });
+  const out = [];
+  while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(local() * pool.length), 1)[0]);
+  return out;
+}
+function takeFitting(id){
+  const f = FIT_BY_ID[id];
+  if (!f) return;
+  S.fits.push(id);
+  if (f.add) S.loadout.push(f.add);
+  if (f.purse) S.purseCap += f.purse;
+  if (f.combo) S.comboCap += f.combo;
+  if (f.step) S.comboStep = Math.max(3, S.comboStep - 1);
+  S.stats.floors++;
+  enterFloor(S.floor + 1);
+  S.screen = 'battle';
+  sfx('pick', 0.34, 520);
+}
+function gameOver(){
+  S.screen = 'over';
+  S.phase = 'done';
+  sfx('over', 0.4, 70);
+  if (!HEADLESS) showOver();
+}
+
+/* ==================================================================== */
+/*  TICK                                                                 */
+/* ==================================================================== */
+function update(dt){
+  S.time += dt;
+  if (S.screen !== 'battle') return;
+
+  if (S.tiltLock > 0){ S.tiltLock -= dt; for (const f of S.flippers) f.up = false; }
+  if (S.tiltT > 0){ S.tiltT = Math.max(0, S.tiltT - dt); if (!S.tiltT) S.tilt = Math.max(0, S.tilt - 1); }
+  if (S.msgT > 0) S.msgT = Math.max(0, S.msgT - dt);
+  if (S.chipT > 0) S.chipT = Math.max(0, S.chipT - dt);
+  if (S.foe){ if (S.foe.hitT > 0) S.foe.hitT -= dt; if (S.foe.knock > 0) S.foe.knock = Math.max(0, S.foe.knock - dt * 3); }
+  for (const t of S.targets) if (t.cd > 0) t.cd = Math.max(0, t.cd - dt);
+
+  if (S.phase === 'resolve'){
+    S.resT -= dt;
+    if (S.resT <= 0){
+      if (S.res.length){ applyResStep(S.res.shift()); S.resT = 0.42; }
+      else endResolve();
+    }
+    return;
+  }
+  if (S.phase === 'foe' || S.phase === 'done') return;
+
+  // THE SHOT CLOCK: a turn that will not end gets ended. Keeps a fight
+  // moving and stops a good player farming one ball forever.
+  if (S.phase === 'ball'){
+    S.turnT += dt;
+    if (S.turnT >= B.TURN_MAX && S.cashT <= 0){
+      S.cashT = 1.15;
+      floatMsg('THE FOE CLOSES IN');
+    }
+  }
+  // the cash-out: the machine captures the balls and pays the purse out
+  if (S.cashT > 0){
+    S.cashT -= dt;
+    if (S.cashT <= 0 && S.phase === 'ball'){
+      for (const b of S.inplay) burst(b.x, b.y, 14, '#ffcf4d');
+      S.inplay = [];
+      shake(6);
+      startResolve();
+      return;
+    }
+  }
+  if (S.plungeHold && S.launchReady) S.plunge = Math.min(1, S.plunge + dt / 1.05);
+  physics(dt);
+  ballSearch(dt);
+}
+// escalating rescue for a ball that has stopped: shove at 3s, return at 11s
+function ballSearch(dt){
+  for (const b of S.inplay){
+    if (!b.live || b.restT < 3) continue;
+    if (b.restT > 11){ drain(b); floatMsg('BALL RETURNED'); continue; }
+    if (b.restT - 3 >= b.searched * 2){
+      b.searched++;
+      b.vx += (rng() < 0.5 ? -1 : 1) * 250;
+      b.vy -= 280;
+      shake(4);
+      floatMsg('BALL SEARCH');
+    }
+  }
+}
+function launch(){
+  if (!S.launchReady) return;
+  const b = S.inplay.find(x => x.inLane);
+  if (!b) return;
+  b.vy = -(620 + 980 * S.plunge);
+  b.vx = rr(-10, 10);
+  b.w = rr(-6, 6);
+  S.launchReady = false;
+  S.plunge = 0;
+  S.phase = 'ball';
+  // the rest of the turn's balls spill onto the field alongside it
+  for (let i = S.inplay.length; i < ballsPerTurn(); i++){
+    const nb = newBall(rr(90, 320), rr(300, 380), rr(-160, 160), rr(-40, 60));
+    nb.inLane = false;
+    S.inplay.push(nb);
+  }
+  shake(3);
+  sfx('plunge', 0.3, 90);
+}
+function nudge(dir){
+  if (S.screen !== 'battle' || S.tiltLock > 0) return;
+  for (const b of S.inplay){ b.vx += dir * P.NUDGE; b.vy -= P.NUDGE * 0.45; }
+  S.tilt++; S.tiltT = 2.2;
+  shake(4);
+  if (S.tilt > P.TILT_MAX){ S.tiltLock = 2.4; S.tilt = 0; S.combo = 0; floatMsg('TILT'); }
+}
+
+/* ==================================================================== */
+/*  FX                                                                   */
+/* ==================================================================== */
+const shake = v => { S.shake = Math.min(24, S.shake + v); };
+const hitstop = s => { S.freeze = Math.max(S.freeze, s); };
+function floatMsg(t){ S.msg = t; S.msgT = 1.5; }
+function pop(x, y, txt, col, big){
+  S.pops.push({ x, y, txt, col: col || '#fff', t: 0, life: big ? 1 : 0.7, big: !!big });
+  if (S.pops.length > 40) S.pops.shift();
+}
+function burst(x, y, n, col, pw = 1){
+  for (let i = 0; i < n; i++){
+    const a = rr(0, TAU), s = rr(60, 300) * pw;
+    S.parts.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, t: 0, life: rr(0.25, 0.7), col, r: rr(1.2, 3) });
+  }
+  if (S.parts.length > 420) S.parts.splice(0, S.parts.length - 420);
+}
+function fxStep(dt){
+  S.shake *= Math.exp(-9 * dt);
+  if (S.shake < 0.05) S.shake = 0;
+  S.flash = Math.max(0, S.flash - dt * 2.6);
+  for (let i = S.parts.length - 1; i >= 0; i--){
+    const p = S.parts[i];
+    p.t += dt;
+    if (p.t >= p.life){ S.parts.splice(i, 1); continue; }
+    p.vy += 640 * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.98;
+  }
+  for (let i = S.pops.length - 1; i >= 0; i--){
+    S.pops[i].t += dt;
+    if (S.pops[i].t >= S.pops[i].life) S.pops.splice(i, 1);
+  }
+  for (const b of S.bumpers) b.lamp = Math.max(0, b.lamp - dt * 3.2);
+  for (const p of S.posts) p.lamp = Math.max(0, p.lamp - dt * 3);
+  for (const t of S.targets) t.lamp = Math.max(0, t.lamp - dt * 3);
+  for (const s of S.segs) if (s.lamp) s.lamp = Math.max(0, s.lamp - dt * 4);
+  for (const b of S.inplay) if (b.hot > 0) b.hot -= dt;
+}
+
+/* ==================================================================== */
+/*  AUDIO                                                                */
+/* ==================================================================== */
+let AC = null;
+function ac(){
+  if (HEADLESS) return null;
+  if (!AC){
+    const Ctor = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!Ctor) return null;
+    try { AC = new Ctor(); } catch (e){ return null; }
+  }
+  if (AC.state === 'suspended') AC.resume?.();
+  return AC;
+}
+const VOICE = {
+  coin:{ type:'square', dur:0.11, drop:2.0 }, bump:{ type:'square', dur:0.09, drop:1.6 },
+  sling:{ type:'sawtooth', dur:0.08, drop:0.4 }, post:{ type:'sine', dur:0.06, drop:0.6 },
+  thud:{ type:'sawtooth', dur:0.14, drop:0.35 }, kill:{ type:'sawtooth', dur:0.4, drop:0.28 },
+  hurt:{ type:'sawtooth', dur:0.26, drop:0.3 }, block:{ type:'triangle', dur:0.14, drop:1.5 },
+  drain:{ type:'sine', dur:0.45, drop:0.3 }, save:{ type:'square', dur:0.2, drop:1.8 },
+  plunge:{ type:'sawtooth', dur:0.2, drop:2.2 }, pick:{ type:'square', dur:0.18, drop:2 },
+  over:{ type:'sawtooth', dur:1.0, drop:0.2 },
+};
+let sfxN = 0, sfxT = 0;
+function sfx(name, gain, freq){
+  const C2 = ac();
+  if (!C2) return;
+  const now = C2.currentTime;
+  if (now - sfxT > 0.05){ sfxT = now; sfxN = 0; }
+  if (++sfxN > 6) return;
+  const V = VOICE[name] || VOICE.coin;
+  try {
+    const o = C2.createOscillator(), g = C2.createGain();
+    o.type = V.type;
+    o.frequency.setValueAtTime(freq, now);
+    o.frequency.exponentialRampToValueAtTime(Math.max(24, freq / V.drop), now + V.dur);
+    g.gain.setValueAtTime(gain * 0.32, now);
+    g.gain.exponentialRampToValueAtTime(0.0006, now + V.dur);
+    o.connect(g); g.connect(C2.destination);
+    o.start(now); o.stop(now + V.dur + 0.02);
+  } catch (e){ /* audio is a nicety */ }
+}
+
+/* ==================================================================== */
+/*  ART  (graceful fallback everywhere — missing art never breaks play)  */
+/* ==================================================================== */
+const IMGS = {};
+function art(key, src){
+  if (IMGS[key]) return IMGS[key];
+  const im = { _ok: false };
+  if (typeof Image !== 'undefined'){
+    const el2 = new Image();
+    el2.onload = () => { im._ok = true; im.el = el2; };
+    el2.onerror = () => { im._ok = false; };
+    el2.src = src;
+    im.el = el2;
+  }
+  IMGS[key] = im;
+  return im;
+}
+const coinArt = k => art('c_' + k, 'art/machine/pieces/' + COINS[k].art + '.png');
+const foeArt = f => { const sh = SHEETS[f.id]; return sh ? art('f_' + f.id, sh.src) : null; };
+
+/* ==================================================================== */
+/*  RENDER                                                               */
+/* ==================================================================== */
+const cv = typeof document !== 'undefined' ? document.getElementById('cv') : null;
+const ctx = cv ? cv.getContext('2d') : null;
+let VIEW = { s: 1, ox: 0, oy: 0, w: 440, h: 780, dpr: 1 };
+function fit(){
+  if (!cv) return;
+  const dpr = Math.min(globalThis.devicePixelRatio || 1, 2.5);
+  const w = globalThis.innerWidth || 440, h = globalThis.innerHeight || 780;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  cv.style.width = w + 'px'; cv.style.height = h + 'px';
+  const s = Math.min(w / T.W, h / T.H);
+  VIEW = { s: s * dpr, ox: (w * dpr - T.W * s * dpr) / 2, oy: (h * dpr - T.H * s * dpr) / 2, w, h, dpr };
+}
+function capsule(c, ax, ay, bx, by, r){
+  c.lineCap = 'round'; c.lineWidth = r * 2;
+  c.beginPath(); c.moveTo(ax, ay); c.lineTo(bx, by); c.stroke();
+}
+function draw(){
+  if (!ctx) return;
+  const c = ctx;
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.fillStyle = '#0b0609';
+  c.fillRect(0, 0, cv.width, cv.height);
+  const sx = S.shake ? (Math.random() - 0.5) * S.shake : 0;
+  const sy = S.shake ? (Math.random() - 0.5) * S.shake : 0;
+  c.setTransform(VIEW.s, 0, 0, VIEW.s, VIEW.ox + sx * VIEW.s, VIEW.oy + sy * VIEW.s);
+
+  drawField(c);
+  drawFoe(c);
+  drawTargets(c);
+  drawPosts(c);
+  drawBumpers(c);
+  drawSegs(c);
+  drawFlippers(c);
+  drawPlunger(c);
+  drawBalls(c);
+  drawParts(c);
+  drawPops(c);
+  drawMsg(c);
+  if (S.flash > 0){
+    c.globalAlpha = S.flash * 0.5;
+    c.fillStyle = '#fff';
+    c.fillRect(0, 0, T.W, T.H);
+    c.globalAlpha = 1;
+  }
+}
+function drawField(c){
+  const g = c.createLinearGradient(0, 60, 0, T.H);
+  g.addColorStop(0, '#2a1a1c'); g.addColorStop(0.45, '#171017'); g.addColorStop(1, '#0d080b');
+  c.fillStyle = g;
+  c.fillRect(8, 40, T.W - 16, T.H - 48);
+  c.globalCompositeOperation = 'lighter';
+  for (const b of S.bumpers) glow(c, b.x, b.y, 70, '255,207,77', b.lamp * 0.4);
+  for (const t of S.targets) glow(c, t.x, t.y, 52, hexRgb(COINS[t.kind].col), 0.14 + t.lamp * 0.5);
+  for (const b of S.inplay) if (b.live) glow(c, b.x, b.y, 56, '255,255,255', b.hot > 0 ? 0.26 : 0.1);
+  c.globalCompositeOperation = 'source-over';
+  // the gel smear
+  if (S.gel){
+    const gg = c.createRadialGradient(S.gel.x, S.gel.y, 4, S.gel.x, S.gel.y, S.gel.r);
+    gg.addColorStop(0, 'rgba(126,231,110,.22)');
+    gg.addColorStop(1, 'rgba(126,231,110,0)');
+    c.fillStyle = gg;
+    c.beginPath(); c.arc(S.gel.x, S.gel.y, S.gel.r, 0, TAU); c.fill();
+  }
+  c.strokeStyle = 'rgba(232,220,200,.05)';
+  c.lineWidth = 1;
+  for (let y = 120; y < 720; y += 40){ c.beginPath(); c.moveTo(24, y); c.lineTo(T.W - 24, y); c.stroke(); }
+  const dg = c.createRadialGradient(204, 772, 4, 204, 772, 128);
+  dg.addColorStop(0, 'rgba(255,77,93,.4)'); dg.addColorStop(1, 'rgba(255,77,93,0)');
+  c.fillStyle = dg;
+  c.beginPath(); c.arc(204, 772, 128, Math.PI, TAU); c.fill();
+}
+function glow(c, x, y, r, rgb, a){
+  if (a <= 0.001) return;
+  const g = c.createRadialGradient(x, y, 0, x, y, r);
+  g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`);
+  c.fillStyle = g;
+  c.beginPath(); c.arc(x, y, r, 0, TAU); c.fill();
+}
+function hexRgb(h){
+  const n = parseInt(h.slice(1), 16);
+  return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+}
+function drawFoe(c){
+  const f = S.foe;
+  if (!f || f.hp <= 0) return;
+  const k = 1 + f.knock * 0.12;
+  c.fillStyle = 'rgba(0,0,0,.4)';
+  c.beginPath(); c.ellipse(f.x, f.y + f.r * 0.92, f.r * 0.9, f.r * 0.26, 0, 0, TAU); c.fill();
+  const im = foeArt(f), sh = SHEETS[f.id];
+  c.save();
+  c.translate(f.x, f.y);
+  c.scale(k, 2 - k);
+  if (f.hitT > 0) c.filter = 'brightness(3)';
+  if (im && im._ok && im.el && sh){
+    // one frame out of the strip: LPC sheets face the camera on row 2
+    const frame = Math.floor(S.time * sh.fps) % sh.n;
+    const row = sh.rows === 4 ? 2 : 0;
+    const sc = (f.r * 2.1) / sh.body;
+    c.imageSmoothingEnabled = false;
+    c.drawImage(im.el, frame * sh.fw, row * sh.fh, sh.fw, sh.fh,
+      -sh.fw * sc / 2, f.r * 1.05 - sh.ay * sc, sh.fw * sc, sh.fh * sc);
+    c.imageSmoothingEnabled = true;
+  } else {
+    c.font = (f.r * 2) + 'px system-ui,sans-serif';
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(f.ico, 0, 0);
+    c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+  }
+  c.filter = 'none';
+  c.restore();
+  // the plate: the armour you must split before the blows land
+  if (f.plate > 0){
+    c.strokeStyle = 'rgba(200,214,232,.8)';
+    c.lineWidth = 3;
+    c.beginPath(); c.arc(f.x, f.y, f.r + 6, 0, TAU); c.stroke();
+    c.fillStyle = '#c8d6e8';
+    c.font = '700 12px ui-monospace,monospace';
+    c.textAlign = 'center';
+    c.fillText('\u{1F6E1} ' + f.plate, f.x, f.y + f.r + 22);
+    c.textAlign = 'left';
+  }
+  if (f.pois > 0){
+    c.fillStyle = '#b8f26b';
+    c.font = '700 12px ui-monospace,monospace';
+    c.textAlign = 'center';
+    c.fillText('\u{1F9EA} ' + f.pois, f.x, f.y - f.r - 14);
+    c.textAlign = 'left';
+  }
+}
+function drawTargets(c){
+  for (const t of S.targets){
+    const C2 = COINS[t.kind];
+    const ready = t.cd <= 0;
+    const im = coinArt(t.kind);
+    c.save();
+    c.translate(t.x, t.y);
+    const s = t.r * 2 * (ready ? 1 : 0.78);
+    if (im && im._ok && im.el){
+      c.globalAlpha = ready ? 1 : 0.4;
+      c.drawImage(im.el, -s / 2, -s / 2, s, s);
+      c.globalAlpha = 1;
+    } else {
+      c.fillStyle = ready ? C2.col : 'rgba(120,110,100,.5)';
+      c.beginPath(); c.arc(0, 0, t.r * (ready ? 1 : 0.8), 0, TAU); c.fill();
+      c.fillStyle = '#0b0609';
+      c.font = '700 ' + (t.r) + 'px ui-monospace,monospace';
+      c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText(C2.ico, 0, 0);
+      c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+    }
+    c.restore();
+    c.strokeStyle = `rgba(${hexRgb(C2.col)},${0.35 + t.lamp * 0.65})`;
+    c.lineWidth = t.saucer ? 3 : 2;
+    c.beginPath(); c.arc(t.x, t.y, t.r + 3, 0, TAU); c.stroke();
+  }
+}
+function drawPosts(c){
+  for (const p of S.posts){
+    c.strokeStyle = p.ward ? `rgba(126,231,224,${0.7 + p.lamp * 0.3})` : `rgba(255,207,77,${0.5 + p.lamp * 0.5})`;
+    c.lineWidth = p.r * 0.5;
+    c.beginPath(); c.arc(p.x, p.y, p.r * 0.75, 0, TAU); c.stroke();
+    c.fillStyle = '#171017';
+    c.beginPath(); c.arc(p.x, p.y, p.r * 0.5, 0, TAU); c.fill();
+  }
+}
+function drawBumpers(c){
+  for (const b of S.bumpers){
+    const pulse = 1 + b.lamp * 0.14;
+    c.strokeStyle = `rgba(255,207,77,${0.35 + b.lamp * 0.65})`;
+    c.lineWidth = 3;
+    c.beginPath(); c.arc(b.x, b.y, b.r * pulse, 0, TAU); c.stroke();
+    const g = c.createRadialGradient(b.x, b.y - b.r * 0.3, 2, b.x, b.y, b.r);
+    g.addColorStop(0, `rgba(255,240,200,${0.45 + b.lamp * 0.5})`);
+    g.addColorStop(0.6, `rgba(255,207,77,${0.2 + b.lamp * 0.4})`);
+    g.addColorStop(1, 'rgba(23,16,23,.9)');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(b.x, b.y, b.r * pulse * 0.9, 0, TAU); c.fill();
+    // the pip counts down to the pop that pays, so the rack reads as income
+    const toPay = hasFit('bumper') ? 0 : 2 - ((b.hits | 0) % 3);
+    c.fillStyle = toPay ? 'rgba(232,220,200,.45)' : 'rgba(255,207,77,.95)';
+    c.font = '700 11px ui-monospace,monospace';
+    c.textAlign = 'center';
+    c.fillText(toPay ? String(toPay + 1) : '\u{1FA99}', b.x, b.y + 4);
+    c.textAlign = 'left';
+  }
+}
+function drawSegs(c){
+  for (const s of S.segs){
+    if (s.kind === 'sling'){
+      c.strokeStyle = `rgba(255,207,77,${0.5 + s.lamp * 0.5})`;
+      capsule(c, s.ax, s.ay, s.bx, s.by, s.r);
+      c.strokeStyle = `rgba(255,255,255,${0.12 + s.lamp * 0.5})`;
+      capsule(c, s.ax, s.ay, s.bx, s.by, s.r * 0.45);
+    } else if (s.oneWay){
+      c.strokeStyle = 'rgba(232,220,200,.28)';
+      capsule(c, s.ax, s.ay, s.bx, s.by, s.r * 0.6);
+    } else {
+      c.strokeStyle = '#3a2830';
+      capsule(c, s.ax, s.ay, s.bx, s.by, s.r);
+      c.strokeStyle = 'rgba(232,220,200,.14)';
+      capsule(c, s.ax, s.ay, s.bx, s.by, s.r * 0.3);
+    }
+  }
+}
+function drawFlippers(c){
+  for (const f of S.flippers){
+    const tip = flipTip(f);
+    c.strokeStyle = `rgba(255,207,77,${0.6 + f.hit * 0.4})`;
+    capsule(c, f.px, f.py, tip.x, tip.y, f.r);
+    c.strokeStyle = `rgba(255,255,255,${0.15 + f.hit * 0.7})`;
+    capsule(c, f.px, f.py, tip.x, tip.y, f.r * 0.4);
+    c.fillStyle = '#2a1a1c';
+    c.beginPath(); c.arc(f.px, f.py, f.r * 0.7, 0, TAU); c.fill();
+  }
+}
+function drawPlunger(c){
+  if (!S.launchReady) return;
+  const y = 700 + S.plunge * 26;
+  c.strokeStyle = 'rgba(255,207,77,.8)';
+  c.lineWidth = 8; c.lineCap = 'round';
+  c.beginPath(); c.moveTo(404, y); c.lineTo(404, 748); c.stroke();
+}
+function drawBalls(c){
+  for (const b of S.inplay){
+    if (!b.live) continue;
+    const n = b.trail.length / 2;
+    for (let i = 0; i < n; i++){
+      c.fillStyle = `rgba(232,220,200,${(i / n) * 0.3})`;
+      c.beginPath(); c.arc(b.trail[i * 2], b.trail[i * 2 + 1], b.r * (0.3 + (i / n) * 0.6), 0, TAU); c.fill();
+    }
+    const g = c.createRadialGradient(b.x - b.r * 0.35, b.y - b.r * 0.4, b.r * 0.1, b.x, b.y, b.r);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, '#e8dcc8');
+    g.addColorStop(0.75, '#9a8a80'); g.addColorStop(1, '#3a2f2c');
+    c.fillStyle = g;
+    c.beginPath(); c.arc(b.x, b.y, b.r, 0, TAU); c.fill();
+    c.save();
+    c.beginPath(); c.arc(b.x, b.y, b.r, 0, TAU); c.clip();
+    c.translate(b.x, b.y); c.rotate(b.rot);
+    c.fillStyle = 'rgba(60,45,42,.55)';
+    c.beginPath(); c.arc(b.r * 0.42, 0, b.r * 0.24, 0, TAU); c.fill();
+    c.restore();
+  }
+}
+function drawParts(c){
+  for (const p of S.parts){
+    const a = 1 - p.t / p.life;
+    if (a <= 0) continue;
+    c.globalAlpha = a;
+    c.fillStyle = p.col;
+    c.beginPath(); c.arc(p.x, p.y, p.r * a, 0, TAU); c.fill();
+    c.globalAlpha = 1;
+  }
+}
+function drawPops(c){
+  c.textAlign = 'center';
+  for (const p of S.pops){
+    const t = p.t / p.life;
+    c.globalAlpha = 1 - t * t;
+    c.font = (p.big ? 700 : 400) + ' ' + (p.big ? 22 : 14) + 'px ui-monospace,monospace';
+    c.fillStyle = p.col;
+    c.fillText(p.txt, p.x, p.y - t * 40);
+    c.globalAlpha = 1;
+  }
+  c.textAlign = 'left';
+}
+function drawMsg(c){
+  if (S.msgT <= 0) return;
+  c.globalAlpha = clamp(S.msgT / 0.5, 0, 1);
+  c.textAlign = 'center';
+  c.font = '700 24px ui-monospace,monospace';
+  c.fillStyle = '#e8dcc8';
+  c.fillText(S.msg, T.W / 2, 620);
+  c.globalAlpha = 1;
+  c.textAlign = 'left';
+}
+
+/* ==================================================================== */
+/*  DOM HUD                                                              */
+/* ==================================================================== */
+const $ = id => (typeof document !== 'undefined' ? document.getElementById(id) : null);
+const el = {};
+let lastPurse = '';
+function bumpCoin(kind){
+  const n = el['cn_' + kind];
+  if (!n) return;
+  n.classList.add('bump');
+  clearTimeout(n._t);
+  n._t = setTimeout(() => n.classList.remove('bump'), 110);
+}
+function hud(){
+  if (!el.pHp) return;
+  const on = S.screen === 'battle' ? '1' : '0';
+  el.hud.style.opacity = on; el.purse.style.opacity = on; el.hint.style.opacity = on;
+
+  el.pHp.style.transform = 'scaleX(' + clamp(S.hp / S.maxHp, 0, 1) + ')';
+  el.pHpT.textContent = S.hp + '/' + S.maxHp;
+  let pp = '';
+  if (S.block) pp += '<span class="pip blk">\u{1F6E1} ' + S.block + '</span>';
+  if (S.pois) pp += '<span class="pip poi">\u{1F9EA} ' + S.pois + '</span>';
+  pp += '<span class="pip">\u{1F3B1} \u{00D7}' + ballsPerTurn() + '</span>';
+  const left = B.TURN_MAX - S.turnT;
+  if (S.phase === 'ball' && left < 10) pp += '<span class="pip int">\u{23F1} ' + Math.max(0, Math.ceil(left)) + 's</span>';
+  el.pPips.innerHTML = pp;
+
+  const f = S.foe;
+  if (f){
+    el.eName.textContent = f.nm;
+    el.eHp.style.transform = 'scaleX(' + clamp(f.hp / f.maxHp, 0, 1) + ')';
+    el.eHpT.textContent = f.hp + '/' + f.maxHp;
+    let ep = '';
+    if (TRAIT_TXT[f.trait]) ep += '<span class="pip">' + TRAIT_TXT[f.trait] + '</span>';
+    if (f.intent){
+      const I = INTENTS[f.intent.t];
+      ep += '<span class="pip int">' + I.ico + ' ' + I.txt(f.intent.n) + '</span>';
+    }
+    if (f.plate) ep += '<span class="pip blk">\u{1F6E1} ' + f.plate + '</span>';
+    if (f.pois) ep += '<span class="pip poi">\u{1F9EA} ' + f.pois + '</span>';
+    el.ePips.innerHTML = ep;
+  }
+  el.pName.textContent = 'B' + S.floor + ' \u{00B7} you';
+
+  // the purse: only the faces this table can actually earn
+  const kinds = COIN_ORDER.filter(k => S.loadout.includes(k) || (k === 'gold' && hasFit('bumper')));
+  const key = kinds.join(',') + '|' + kinds.map(k => S.purse[k] | 0).join(',');
+  if (key !== lastPurse){
+    if (!el.coins.dataset.k || el.coins.dataset.k !== kinds.join(',')){
+      el.coins.innerHTML = '';
+      for (const k of kinds){
+        const d = document.createElement('div');
+        d.className = 'cn ' + COINS[k].cls;
+        d.innerHTML = COINS[k].ico + ' <span>0</span>';
+        el.coins.appendChild(d);
+        el['cn_' + k] = d;
+      }
+      el.coins.dataset.k = kinds.join(',');
+    }
+    for (const k of kinds){
+      const n = el['cn_' + k];
+      if (n) n.querySelector('span').textContent = String(S.purse[k] | 0);
+    }
+    lastPurse = key;
+  }
+  const full = purseTotal() >= S.purseCap;
+  el.meta.innerHTML = '<span class="' + (full ? 'full' : '') + '">PURSE <b>' + purseTotal() + '/' + S.purseCap + '</b></span>'
+    + '<span>COMBO <b>' + S.combo + '</b></span>'
+    + '<span>\u{00D7}<b>' + comboMult() + '</b> / \u{00D7}' + S.comboCap + '</span>';
+  el.hint.textContent = S.cashT > 0 ? 'cashing out\u{2026}'
+    : S.phase === 'aim' ? 'hold SPACE — plunge'
+    : S.phase === 'resolve' ? 'the purse pays out\u{2026}'
+    : S.phase === 'foe' ? 'the foe answers'
+    : '';
+}
+
+/* ==================================================================== */
+/*  SCREENS                                                              */
+/* ==================================================================== */
+function showScreen(id){
+  for (const s of ['scTitle', 'scFit', 'scOver']) $(s)?.classList.toggle('on', s === id);
+}
+function showFit(){
+  S.screen = 'fit';
+  const wrap = $('fitCards');
+  wrap.innerHTML = '';
+  $('fitTitle').textContent = S.foe.nm.toUpperCase() + ' FALLS';
+  $('fitSub').textContent = 'Bolt one fitting to the table before B' + (S.floor + 1);
+  for (const f of rollFittings()){
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.innerHTML = `<div class="ico">${f.ico}</div><div class="cn2">${f.nm}</div><div class="ds">${f.ds}</div>`;
+    d.addEventListener('click', () => { takeFitting(f.id); showScreen(null); });
+    wrap.appendChild(d);
+  }
+  showScreen('scFit');
+}
+function showOver(){
+  $('ovSub').textContent = 'The ' + (S.foe ? S.foe.nm : 'dark') + ' put you down on B' + S.floor;
+  $('ovStats').innerHTML = `
+    <div class="stat"><b>B${S.floor}</b><i>Depth</i></div>
+    <div class="stat"><b>${S.stats.kills}</b><i>Felled</i></div>
+    <div class="stat"><b>${S.stats.dealt}</b><i>Damage</i></div>
+    <div class="stat"><b>${S.fits.length}</b><i>Fittings</i></div>`;
+  showScreen('scOver');
+}
+function showTitle(){ S.screen = 'title'; showScreen('scTitle'); }
+
+/* ==================================================================== */
+/*  INPUT                                                                */
+/* ==================================================================== */
+function setFlipper(side, on){
+  if (S.tiltLock > 0) return;
+  for (const f of S.flippers) if (f.side === side) f.up = on;
+}
+function bindInput(){
+  const down = e => {
+    if (S.screen !== 'battle') return;
+    const k = e.key;
+    if (k === 'ArrowLeft' || k === 'a'){ setFlipper(-1, true); e.preventDefault(); }
+    else if (k === 'ArrowRight' || k === 'd'){ setFlipper(1, true); e.preventDefault(); }
+    else if (k === ' '){ S.plungeHold = true; e.preventDefault(); }
+    else if (k === 'ArrowDown' || k === 's'){ nudge(0); e.preventDefault(); }
+    else if (k === 'z'){ nudge(-1); }
+    else if (k === 'x'){ nudge(1); }
+  };
+  const up = e => {
+    const k = e.key;
+    if (k === 'ArrowLeft' || k === 'a') setFlipper(-1, false);
+    else if (k === 'ArrowRight' || k === 'd') setFlipper(1, false);
+    else if (k === ' '){ S.plungeHold = false; launch(); }
+  };
+  globalThis.addEventListener('keydown', down);
+  globalThis.addEventListener('keyup', up);
+
+  const touches = new Map();
+  const zone = (x) => {
+    const tx = (x * (VIEW.dpr || 1) - VIEW.ox) / VIEW.s;
+    if (tx > LANE_X - 30) return 'plunge';
+    return x < (VIEW.w || 440) / 2 ? 'left' : 'right';
+  };
+  const pd = e => {
+    if (S.screen !== 'battle') return;
+    for (const t of e.changedTouches || [e]){
+      const z = zone(t.clientX);
+      touches.set(t.identifier ?? 'm', z);
+      if (z === 'left') setFlipper(-1, true);
+      else if (z === 'right') setFlipper(1, true);
+      else S.plungeHold = true;
+    }
+    e.preventDefault();
+  };
+  const pu = e => {
+    for (const t of e.changedTouches || [e]){
+      const id = t.identifier ?? 'm';
+      const z = touches.get(id);
+      touches.delete(id);
+      if (z === 'left') setFlipper(-1, false);
+      else if (z === 'right') setFlipper(1, false);
+      else if (z === 'plunge'){ S.plungeHold = false; launch(); }
+    }
+  };
+  if (cv){
+    cv.addEventListener('touchstart', pd, { passive: false });
+    cv.addEventListener('touchend', pu);
+    cv.addEventListener('touchcancel', pu);
+    cv.addEventListener('mousedown', pd);
+    globalThis.addEventListener('mouseup', pu);
+  }
+}
+
+/* ==================================================================== */
+/*  BOOT                                                                 */
+/* ==================================================================== */
+let acc = 0, last = 0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  if (!last) last = ts;
+  let dt = (ts - last) / 1000;
+  last = ts;
+  dt = Math.min(dt, 0.05);
+  if (S.freeze > 0) S.freeze -= dt;
+  else {
+    const scale = S.slow > 0 ? 0.32 : 1;
+    S.slow = Math.max(0, S.slow - dt);
+    acc += dt * scale;
+    let guard = 0;
+    while (acc >= P.STEP && guard++ < 8){ update(P.STEP); acc -= P.STEP; }
+    if (acc > P.STEP * 8) acc = 0;
+  }
+  fxStep(dt);
+  draw();
+  hud();
+}
+function boot(){
+  rng = mulberry(1);
+  S.foe = mkFoe(1);
+  rollIntent();
+  buildTable();
+  spawnInLane();
+  if (HEADLESS) return;
+  for (const id of ['hud', 'purse', 'hint', 'pName', 'pHp', 'pHpT', 'pPips', 'eName', 'eHp', 'eHpT', 'ePips', 'coins', 'meta'])
+    el[id] = $(id);
+  fit();
+  globalThis.addEventListener('resize', fit);
+  globalThis.addEventListener('orientationchange', () => setTimeout(fit, 120));
+  bindInput();
+  $('btnStart').addEventListener('click', () => { ac(); startRun(); showScreen(null); });
+  $('btnAgain').addEventListener('click', () => { startRun(); showScreen(null); });
+  $('btnMenu').addEventListener('click', showTitle);
+  showTitle();
+  requestAnimationFrame(loop);
+}
+
+/* test surface */
+globalThis.DPB = {
+  S, P, B, T, COINS, COIN_ORDER, FOES, BOSS, FITTINGS, INTENTS, TRAIT_TXT, DRAIN_Y, LANE_X,
+  update, draw, hud, fit, physics, startRun, enterFloor, buildTable, buildFlippers, mkFoe, rollIntent, SHEETS,
+  newBall, spawnInLane, launch, nudge, drain, earn, onTarget, onBumper, hurtFoe, hurtSelf, healSelf,
+  addBlock, foeDown, foeTurn, startResolve, endResolve, nextTurn, takeFitting, rollFittings, gameOver,
+  setFlipper, flipTip, flipTarget, capsuleHit, circleHit, resolveHit, purseTotal, purseFull, comboMult,
+  ballsPerTurn, hasFit, mulberry, boot,
+  // drive a whole resolve instantly (the animated version pays out on a beat)
+  resolveNow(){ startResolve(); while (S.res.length) applyResStep(S.res.shift()); endResolve(); },
+};
+
+boot();
+</script>
+</body>
+</html>
