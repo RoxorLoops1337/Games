@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dungeon Pusher — Cabinet Scene Builder</title>
+<style>
+  :root {
+    --ink: #f0e6dc; --dim: #a2949c; --line: #40313c; --panel: #1a1119;
+    --hot: #ffd75e; --sel: #57e0ff; --anchor: #ff7ad0;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: #100a10; color: var(--ink); overflow: hidden;
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Verdana, sans-serif;
+    display: flex;
+  }
+  #stagewrap {
+    flex: 1 1 auto; overflow: auto; display: flex; align-items: flex-start;
+    justify-content: center; padding: 18px;
+    background:
+      linear-gradient(45deg, #17101a 25%, transparent 25%) -10px 0/20px 20px,
+      linear-gradient(-45deg, #17101a 25%, transparent 25%) -10px 0/20px 20px,
+      linear-gradient(45deg, transparent 75%, #17101a 75%) -10px 0/20px 20px,
+      linear-gradient(-45deg, transparent 75%, #17101a 75%) -10px 0/20px 20px,
+      #100a10;
+  }
+  canvas { display: block; cursor: default; touch-action: none; box-shadow: 0 0 0 1px #3a2b36, 0 18px 60px #000a; }
+  #side {
+    flex: 0 0 336px; height: 100%; overflow-y: auto; background: var(--panel);
+    border-left: 1px solid var(--line); padding: 12px 12px 60px;
+  }
+  h1 { font-size: 14px; margin: 0 0 2px; letter-spacing: 0.06em; color: var(--hot); }
+  .sub { color: var(--dim); font-size: 11px; margin: 0 0 12px; }
+  h2 {
+    font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--dim); margin: 16px 0 6px; border-bottom: 1px solid var(--line); padding-bottom: 4px;
+  }
+  button {
+    font: inherit; font-size: 11px; color: var(--ink); background: #2a1c28;
+    border: 1px solid #4c3a48; border-radius: 6px; padding: 5px 8px; cursor: pointer;
+  }
+  button:hover { background: #3a2836; border-color: #6d5568; }
+  button:active { transform: translateY(1px); }
+  button.on { background: #4a3320; border-color: var(--hot); color: var(--hot); }
+  button.wide { width: 100%; }
+  .row { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 5px; }
+  .row > button { flex: 1 1 auto; }
+  .grid6 { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; margin-bottom: 5px; }
+  .grid6 button { padding: 6px 0; font-size: 14px; line-height: 1; }
+  ul#els { list-style: none; margin: 0; padding: 0; }
+  ul#els li {
+    display: flex; align-items: center; gap: 6px; padding: 3px 5px; border-radius: 5px;
+    cursor: pointer; font-size: 11.5px; border: 1px solid transparent;
+  }
+  ul#els li:hover { background: #241722; }
+  ul#els li.sel { background: #143440; border-color: var(--sel); }
+  ul#els li.anchor { background: #3a1430; border-color: var(--anchor); }
+  ul#els li .nm { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  ul#els li .lk { font-size: 12px; opacity: 0.5; }
+  ul#els li .lk.on { opacity: 1; color: var(--hot); }
+  ul#els li .dims { color: var(--dim); font-size: 10px; font-variant-numeric: tabular-nums; }
+  .nums { display: grid; grid-template-columns: 14px 1fr 14px 1fr; gap: 4px; align-items: center; margin-bottom: 6px; }
+  .nums label { color: var(--dim); font-size: 11px; }
+  .nums input {
+    width: 100%; font: inherit; font-size: 11px; background: #0e0810; color: var(--ink);
+    border: 1px solid #4c3a48; border-radius: 5px; padding: 3px 5px; font-variant-numeric: tabular-nums;
+  }
+  textarea {
+    width: 100%; height: 168px; font: 11px/1.4 ui-monospace, Menlo, Consolas, monospace;
+    background: #0e0810; color: #cfe4b0; border: 1px solid #4c3a48; border-radius: 6px; padding: 7px;
+    resize: vertical;
+  }
+  .opt { display: flex; align-items: center; gap: 6px; margin: 4px 0; font-size: 11.5px; color: var(--dim); }
+  .opt input[type=range] { flex: 1 1 auto; }
+  select {
+    font: inherit; font-size: 11px; background: #0e0810; color: var(--ink);
+    border: 1px solid #4c3a48; border-radius: 5px; padding: 3px 5px;
+  }
+  kbd {
+    font: 10px ui-monospace, monospace; background: #2a1c28; border: 1px solid #4c3a48;
+    border-radius: 3px; padding: 0 3px;
+  }
+  .help { color: var(--dim); font-size: 10.5px; line-height: 1.6; }
+  #msg { color: var(--hot); font-size: 11px; min-height: 15px; margin-top: 5px; }
+</style>
+</head>
+<body>
+
+<div id="stagewrap"><canvas id="c"></canvas></div>
+
+<div id="side">
+  <h1>CABINET SCENE BUILDER</h1>
+  <p class="sub">Drag every piece of the machine over the real art. Everything is measured in
+  the shell's own pixels, so the numbers you export are the numbers the game uses.</p>
+
+  <h2>View</h2>
+  <div class="opt"><span>zoom</span><input id="zoom" type="range" min="50" max="260" value="100"><span id="zoomv">100%</span></div>
+  <div class="opt"><span>shell</span><input id="shellop" type="range" min="0" max="100" value="100"><span id="shellopv">100%</span></div>
+  <div class="row">
+    <button id="tArt" class="on">art</button>
+    <button id="tBox" class="on">boxes</button>
+    <button id="tSnap" class="on">snap</button>
+    <button id="tRule">rulers</button>
+  </div>
+  <div class="opt"><span>grid</span>
+    <select id="grid"><option>1</option><option>2</option><option selected>4</option><option>8</option><option>16</option></select>
+    <span>px &nbsp;·&nbsp; 1 stage px = 2.45 shell px</span>
+  </div>
+
+  <h2>Pieces</h2>
+  <ul id="els"></ul>
+
+  <h2>Anchor <span id="anm" style="color:var(--anchor)"></span></h2>
+  <div class="nums">
+    <label>X</label><input id="nx" type="number"><label>Y</label><input id="ny" type="number">
+    <label>W</label><input id="nw" type="number"><label>H</label><input id="nh" type="number">
+  </div>
+  <div class="row">
+    <button id="bAspect">fit art aspect</button>
+    <button id="bCx">centre in shell ↔</button>
+  </div>
+
+  <h2>Align to anchor</h2>
+  <div class="grid6">
+    <button data-al="l" title="align left">⇤</button>
+    <button data-al="cx" title="centre horizontally">↔</button>
+    <button data-al="r" title="align right">⇥</button>
+    <button data-al="t" title="align top">⤒</button>
+    <button data-al="cy" title="centre vertically">↕</button>
+    <button data-al="b" title="align bottom">⤓</button>
+  </div>
+  <div class="row">
+    <button data-sz="w">same width</button>
+    <button data-sz="h">same height</button>
+    <button data-sz="wh">same size</button>
+  </div>
+  <div class="row">
+    <button data-di="h">spread ↔ evenly</button>
+    <button data-di="v">spread ↕ evenly</button>
+  </div>
+  <div class="row">
+    <button data-rowfit="1">fill the row edge to edge</button>
+  </div>
+
+  <h2>History</h2>
+  <div class="row">
+    <button id="bUndo">↶ undo</button>
+    <button id="bRedo">↷ redo</button>
+    <button id="bReset">reset to shipped</button>
+  </div>
+
+  <h2>Output</h2>
+  <div class="row">
+    <button id="bCopy">copy JSON</button>
+    <button id="bDl">download layout.json</button>
+    <button id="bApply">apply pasted JSON</button>
+  </div>
+  <textarea id="json" spellcheck="false"></textarea>
+  <div id="msg"></div>
+  <p class="help">
+    Drop the downloaded file at <b>dungeon_pusher/art/cab/layout.json</b> and the game picks it
+    up on load — or just paste the JSON to me and I'll bake it in.<br><br>
+    <kbd>click</kbd> select · <kbd>shift</kbd>+click add · drag on empty space to box-select ·
+    <kbd>↑↓←→</kbd> nudge (<kbd>shift</kbd> ×10) · <kbd>⌘/ctrl Z</kbd> undo ·
+    <kbd>shift</kbd> while resizing keeps the aspect · <kbd>alt</kbd> while dragging turns snapping off ·
+    <kbd>esc</kbd> deselect. The <span style="color:var(--anchor)">anchor</span> is whichever piece you
+    picked first — align and same-size work against it.
+  </p>
+</div>
+
+<script>
+'use strict';
+
+// ---------------------------------------------------------------------------
+// The cabinet is a flat table of rects in the SHELL's own pixel space. This
+// tool never invents its own copy of that table: it reads the shipped one out
+// of the game's source, so the two can't drift apart. Priority when loading:
+// a draft you were in the middle of > art/cab/layout.json > the game's source.
+// ---------------------------------------------------------------------------
+const SHELL = { w: 1176, h: 2058 };
+const STAGE = { w: 480, h: 840 };            // what the game actually renders at
+const DRAFT_KEY = 'dp_cab_builder_v1';
+
+// what each slot is, what art stands in for it, and where it sits in the stack
+const ELS = [
+  { k: 'hole',         nm: 'GLASS — the screen hole', paint: 'glass', lock: true },
+  { k: 'play',         nm: 'room / playfield',        art: 'playfield',    under: true },
+  { k: 'head',         nm: 'floor name plate',        art: 'level_header', under: true },
+  { k: 'map',          nm: 'minimap',                 art: 'minimap',      under: true },
+  { k: 'marquee',      nm: 'marquee plate',           art: 'marquee' },
+  { k: 'joystick',     nm: 'joystick',                art: 'joystick' },
+  { k: 'btn_map',      nm: 'MAP button',              art: 'button_red',    cap: 'MAP' },
+  { k: 'btn_purse',    nm: 'PURSE button',            art: 'button_yellow', cap: 'PURSE' },
+  { k: 'btn_menu',     nm: 'MENU button',             art: 'button_blue',   cap: 'MENU' },
+  { k: 'btn_exit',     nm: 'EXIT plate',              paint: 'exit',        cap: 'EXIT' },
+  { k: 'panel_hp',     nm: 'HP plate',                art: 'panel_hp',     val: 'bar' },
+  { k: 'panel_gold',   nm: 'GOLD plate',              art: 'panel_gold',   val: '128' },
+  { k: 'panel_purse',  nm: 'PURSE plate',             art: 'panel_purse',  val: '12' },
+  { k: 'panel_potion', nm: 'POTION plate',            art: 'panel_potion', val: '2' },
+  { k: 'panel_bag',    nm: 'BAG plate',               art: 'panel_bag',    val: '3' },
+];
+const BY_KEY = {};
+for (const e of ELS) BY_KEY[e.k] = e;
+const KEYS = ELS.map((e) => e.k);
+
+// the last-resort copy, only used if both the game's source and layout.json
+// are unreachable (opening this file straight off disk, say)
+const FALLBACK = {
+  hole: [139, 404, 898, 1008], marquee: [60, 38, 1015, 250], head: [166, 424, 566, 136],
+  map: [759, 429, 251, 141], play: [157, 590, 862, 806], joystick: [92, 1502, 178, 226],
+  btn_map: [405, 1551, 102, 99], btn_purse: [573, 1551, 104, 99], btn_menu: [741, 1551, 105, 99],
+  btn_exit: [954, 1554, 121, 93], panel_hp: [55, 1820, 236, 125], panel_gold: [291, 1820, 207, 125],
+  panel_purse: [498, 1820, 206, 125], panel_potion: [704, 1820, 206, 125], panel_bag: [909, 1820, 201, 125],
+};
+
+let R = clone(FALLBACK);          // the live table
+let SHIPPED = clone(FALLBACK);    // what the game ships, for "reset"
+let sel = [];                     // selected keys, first one is the anchor
+let locked = { hole: true };
+let undoS = [], redoS = [];
+
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+const opt = { zoom: 1, shellOp: 1, art: true, box: true, snap: true, rule: false, grid: 4 };
+const IMG = {};
+let shellImg = null;
+
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function msg(s) { document.getElementById('msg').textContent = s || ''; }
+
+// ---------------------------------------------------------------------------
+// art
+// ---------------------------------------------------------------------------
+function loadArt(name) {
+  if (IMG[name] !== undefined) return IMG[name];
+  IMG[name] = null;
+  const im = new Image();
+  im.onload = () => { IMG[name] = im; draw(); };
+  im.onerror = () => { IMG[name] = false; };
+  im.src = 'art/cab/' + name + '.png';
+  return null;
+}
+function art(name) { const v = IMG[name]; return v === undefined ? loadArt(name) : (v || null); }
+
+(function loadShell() {
+  const im = new Image();
+  im.onload = () => {
+    shellImg = im;
+    if (im.naturalWidth && im.naturalHeight) { SHELL.w = im.naturalWidth; SHELL.h = im.naturalHeight; }
+    fitWindow(); dump(); draw();
+  };
+  im.src = 'art/cab/shell.png';
+})();
+
+// ---------------------------------------------------------------------------
+// where the shipped table comes from: the game's own source
+// ---------------------------------------------------------------------------
+function parseTable(src) {
+  const i = src.indexOf('const CAB_R = {');
+  if (i < 0) return null;
+  const chunk = src.slice(i, src.indexOf('};', i));
+  const out = {};
+  const re = /(\w+):\s*\[\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\]/g;
+  let m;
+  while ((m = re.exec(chunk))) out[m[1]] = [+m[2], +m[3], +m[4], +m[5]];
+  return Object.keys(out).length ? out : null;
+}
+function adopt(tbl) {
+  for (const k of KEYS) if (Array.isArray(tbl[k]) && tbl[k].length === 4) R[k] = tbl[k].slice();
+}
+
+(async function boot() {
+  try {
+    const r = await fetch('index.html');
+    if (r.ok) {
+      const tbl = parseTable(await r.text());
+      if (tbl) { SHIPPED = clone(tbl); adopt(tbl); }
+    }
+  } catch (e) { /* file:// — the fallback stands */ }
+  try {
+    const r = await fetch('art/cab/layout.json', { cache: 'no-store' });
+    if (r.ok) { const j = await r.json(); adopt(j.rects || j); msg('loaded art/cab/layout.json'); }
+  } catch (e) { /* none yet, which is the normal case */ }
+  try {
+    const d = localStorage.getItem(DRAFT_KEY);
+    if (d) { adopt(JSON.parse(d)); msg('restored your unsaved draft — "reset to shipped" throws it away'); }
+  } catch (e) {}
+  relist(); dump(); draw();
+})();
+
+// ---------------------------------------------------------------------------
+// view maths: s = screen pixels per SHELL pixel
+// ---------------------------------------------------------------------------
+function scale() { return (STAGE.w / SHELL.w) * opt.zoom; }
+function fit() {
+  const s = scale();
+  cv.width = Math.round(SHELL.w * s);
+  cv.height = Math.round(SHELL.h * s);
+}
+// open at whatever fills the window, not at the phone's own 480x840 — you are
+// nudging single pixels in here, and 100% is too small to aim at
+function fitWindow() {
+  const room = document.getElementById('stagewrap').clientHeight - 36;
+  const z = Math.max(0.5, Math.min(2.6, room / STAGE.h));
+  opt.zoom = Math.round(z * 100) / 100;
+  const sl = document.getElementById('zoom');
+  sl.value = Math.round(opt.zoom * 100);
+  document.getElementById('zoomv').textContent = sl.value + '%';
+  fit();
+}
+function toScreen(a) { const s = scale(); return { x: a[0] * s, y: a[1] * s, w: a[2] * s, h: a[3] * s }; }
+function fromEvent(ev) {
+  const b = cv.getBoundingClientRect(), s = scale();
+  return { x: (ev.clientX - b.left) / s, y: (ev.clientY - b.top) / s };
+}
+
+// ---------------------------------------------------------------------------
+// painting the preview — same stack the game uses
+// ---------------------------------------------------------------------------
+function rrect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function label(s, x, y, font, col, align) {
+  ctx.font = font; ctx.textAlign = align || 'center'; ctx.textBaseline = 'middle';
+  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(6,3,8,0.95)'; ctx.strokeText(s, x, y);
+  ctx.fillStyle = col; ctx.fillText(s, x, y);
+}
+
+function paintEl(e) {
+  const r = toScreen(R[e.k]);
+  if (opt.art) {
+    if (e.art) {
+      const im = art(e.art);
+      if (im) ctx.drawImage(im, r.x, r.y, r.w, r.h);
+      else { ctx.fillStyle = 'rgba(120,90,140,0.30)'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+    } else if (e.paint === 'exit') {
+      ctx.fillStyle = 'rgba(14,9,8,0.86)';
+      ctx.strokeStyle = 'rgba(196,158,84,0.85)'; ctx.lineWidth = 1.5;
+      rrect(r.x, r.y, r.w, r.h, 4); ctx.fill(); ctx.stroke();
+      label('⌂', r.x + r.w / 2, r.y + r.h * 0.44, (r.h * 0.42) + 'px serif', '#e8c88a');
+    }
+    // the live bits the art was drawn without, exactly where the game puts them
+    if (e.cap) label(e.cap, r.x + r.w / 2, r.y + r.h * (e.paint === 'exit' ? 1.20 : 1.42),
+                     '800 ' + Math.max(8, r.h * 0.20) + 'px Verdana, sans-serif', '#d8b8a8');
+    if (e.val === 'bar') {
+      const bx = r.x + r.w * 0.10, by = r.y + r.h * 0.50, bw = r.w * 0.80, bh = r.h * 0.30;
+      ctx.fillStyle = 'rgba(8,4,8,0.8)'; ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = '#7ed06a'; ctx.fillRect(bx, by, bw, bh);
+      label('60 / 60', bx + bw / 2, by + bh / 2, '900 ' + Math.max(8, bh * 0.62) + 'px Verdana, sans-serif', '#fff6e0');
+    } else if (e.val) {
+      label(e.val, r.x + r.w * 0.62, r.y + r.h * 0.62,
+            '900 ' + Math.max(9, r.h * 0.24) + 'px Verdana, sans-serif', '#ffe9a3');
+    }
+  }
+}
+
+function draw() {
+  const s = scale();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.imageSmoothingEnabled = true;
+
+  // 1. the glass is black behind everything the machine shows
+  const g = toScreen(R.hole);
+  ctx.fillStyle = '#07060c'; ctx.fillRect(g.x, g.y, g.w, g.h);
+
+  // 2. what the machine shows, clipped to the glass
+  ctx.save();
+  ctx.beginPath(); ctx.rect(g.x, g.y, g.w, g.h); ctx.clip();
+  for (const e of ELS) if (e.under) paintEl(e);
+  ctx.restore();
+
+  // 3. the shell, corner to corner, laid over the picture
+  if (shellImg) {
+    ctx.globalAlpha = opt.shellOp;
+    ctx.drawImage(shellImg, 0, 0, SHELL.w * s, SHELL.h * s);
+    ctx.globalAlpha = 1;
+  }
+
+  // 4. and the machine's own furniture on top of that
+  for (const e of ELS) if (!e.under && e.k !== 'hole') paintEl(e);
+
+  if (opt.rule) {
+    // ticks in SHELL pixels, so you can read a rect straight off the edge
+    ctx.font = '9px ui-monospace, monospace'; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+    for (let x = 0; x <= SHELL.w; x += 50) {
+      const big = x % 200 === 0;
+      ctx.fillStyle = big ? 'rgba(255,215,94,0.75)' : 'rgba(255,215,94,0.30)';
+      ctx.fillRect(x * s, 0, 1, big ? 12 : 6);
+      if (big) ctx.fillText(x, x * s + 2, 13);
+    }
+    for (let y = 0; y <= SHELL.h; y += 50) {
+      const big = y % 200 === 0;
+      ctx.fillStyle = big ? 'rgba(255,215,94,0.75)' : 'rgba(255,215,94,0.30)';
+      ctx.fillRect(0, y * s, big ? 12 : 6, 1);
+      if (big) ctx.fillText(y, 2, y * s + 2);
+    }
+  }
+
+  // 5. the editor's own chrome
+  if (opt.box) {
+    for (const e of ELS) {
+      const r = toScreen(R[e.k]);
+      const isSel = sel.indexOf(e.k) >= 0;
+      ctx.lineWidth = isSel ? 2 : 1;
+      ctx.strokeStyle = isSel
+        ? (sel[0] === e.k ? '#ff7ad0' : '#57e0ff')
+        : (locked[e.k] ? 'rgba(255,215,94,0.22)' : 'rgba(255,255,255,0.16)');
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1);
+      if (isSel) {
+        label(e.k, r.x + r.w / 2, r.y - 8, '700 11px Verdana, sans-serif',
+              sel[0] === e.k ? '#ff7ad0' : '#57e0ff');
+      }
+    }
+  }
+  for (const gd of guides) {
+    ctx.strokeStyle = '#ff7ad0'; ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    if (gd.v) { ctx.moveTo(gd.p * s + 0.5, 0); ctx.lineTo(gd.p * s + 0.5, cv.height); }
+    else { ctx.moveTo(0, gd.p * s + 0.5); ctx.lineTo(cv.width, gd.p * s + 0.5); }
+    ctx.stroke(); ctx.setLineDash([]);
+  }
+  if (sel.length) {
+    const b = selBox(), r = { x: b.x * s, y: b.y * s, w: b.w * s, h: b.h * s };
+    if (sel.length > 1) {
+      ctx.strokeStyle = 'rgba(87,224,255,0.5)'; ctx.setLineDash([5, 4]); ctx.lineWidth = 1;
+      ctx.strokeRect(r.x, r.y, r.w, r.h); ctx.setLineDash([]);
+    }
+    ctx.fillStyle = '#57e0ff';
+    for (const h of handles(r)) { ctx.fillRect(h.x - 4, h.y - 4, 8, 8); }
+  }
+  if (band) {
+    ctx.strokeStyle = '#57e0ff'; ctx.setLineDash([4, 3]);
+    ctx.strokeRect(band.x * s, band.y * s, band.w * s, band.h * s);
+    ctx.setLineDash([]);
+  }
+}
+
+function handles(r) {
+  return [
+    { n: 'nw', x: r.x, y: r.y }, { n: 'n', x: r.x + r.w / 2, y: r.y }, { n: 'ne', x: r.x + r.w, y: r.y },
+    { n: 'w', x: r.x, y: r.y + r.h / 2 }, { n: 'e', x: r.x + r.w, y: r.y + r.h / 2 },
+    { n: 'sw', x: r.x, y: r.y + r.h }, { n: 's', x: r.x + r.w / 2, y: r.y + r.h }, { n: 'se', x: r.x + r.w, y: r.y + r.h },
+  ];
+}
+function selBox() {
+  let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+  for (const k of sel) {
+    const a = R[k];
+    x0 = Math.min(x0, a[0]); y0 = Math.min(y0, a[1]);
+    x1 = Math.max(x1, a[0] + a[2]); y1 = Math.max(y1, a[1] + a[3]);
+  }
+  return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+}
+
+// ---------------------------------------------------------------------------
+// history
+// ---------------------------------------------------------------------------
+function push() { undoS.push(clone(R)); if (undoS.length > 120) undoS.shift(); redoS.length = 0; }
+function commit() {
+  try { localStorage.setItem(DRAFT_KEY, JSON.stringify(R)); } catch (e) {}
+  relist(); dump(); draw();
+}
+document.getElementById('bUndo').onclick = () => {
+  if (!undoS.length) return; redoS.push(clone(R)); R = undoS.pop(); commit();
+};
+document.getElementById('bRedo').onclick = () => {
+  if (!redoS.length) return; undoS.push(clone(R)); R = redoS.pop(); commit();
+};
+document.getElementById('bReset').onclick = () => {
+  push(); R = clone(SHIPPED); msg('back to the table the game ships'); commit();
+};
+
+// ---------------------------------------------------------------------------
+// hit testing — small things win over the big containers they sit on
+// ---------------------------------------------------------------------------
+function hit(p) {
+  const cand = ELS.filter((e) => !locked[e.k] && inside(p, R[e.k]));
+  if (!cand.length) return null;
+  cand.sort((a, b) => (R[a.k][2] * R[a.k][3]) - (R[b.k][2] * R[b.k][3]));
+  return cand[0].k;
+}
+function inside(p, a) { return p.x >= a[0] && p.y >= a[1] && p.x <= a[0] + a[2] && p.y <= a[1] + a[3]; }
+
+// ---------------------------------------------------------------------------
+// snapping: the grid first, then the edges and centres of everything else
+// ---------------------------------------------------------------------------
+let guides = [];
+function anchorsFor(skip) {
+  const vs = [0, SHELL.w / 2, SHELL.w], hs = [0, SHELL.h / 2, SHELL.h];
+  for (const k of KEYS) {
+    if (skip.indexOf(k) >= 0) continue;
+    const a = R[k];
+    vs.push(a[0], a[0] + a[2] / 2, a[0] + a[2]);
+    hs.push(a[1], a[1] + a[3] / 2, a[1] + a[3]);
+  }
+  return { vs, hs };
+}
+function snapDelta(box, dx, dy, skip) {
+  guides = [];
+  if (!opt.snap) return { dx: gridr(dx), dy: gridr(dy) };
+  const tol = 7 / scale();
+  const { vs, hs } = anchorsFor(skip);
+  const mine = [box.x + dx, box.x + dx + box.w / 2, box.x + dx + box.w];
+  const miny = [box.y + dy, box.y + dy + box.h / 2, box.y + dy + box.h];
+  let bx = null, by = null;
+  for (const m of mine) for (const v of vs) {
+    const d = v - m;
+    if (Math.abs(d) < tol && (bx === null || Math.abs(d) < Math.abs(bx.d))) bx = { d, p: v };
+  }
+  for (const m of miny) for (const v of hs) {
+    const d = v - m;
+    if (Math.abs(d) < tol && (by === null || Math.abs(d) < Math.abs(by.d))) by = { d, p: v };
+  }
+  if (bx) guides.push({ v: true, p: bx.p });
+  if (by) guides.push({ v: false, p: by.p });
+  return { dx: bx ? dx + bx.d : gridr(dx), dy: by ? dy + by.d : gridr(dy) };
+}
+function gridr(v) { return opt.grid > 1 ? Math.round(v / opt.grid) * opt.grid : v; }
+
+// ---------------------------------------------------------------------------
+// pointer: move, resize, box-select
+// ---------------------------------------------------------------------------
+let drag = null, band = null;
+cv.addEventListener('pointerdown', (ev) => {
+  cv.setPointerCapture(ev.pointerId);
+  const p = fromEvent(ev), s = scale();
+  if (sel.length) {
+    const b = selBox();
+    for (const h of handles({ x: b.x * s, y: b.y * s, w: b.w * s, h: b.h * s })) {
+      if (Math.abs(h.x - p.x * s) <= 6 && Math.abs(h.y - p.y * s) <= 6) {
+        push();
+        drag = { mode: 'size', h: h.n, p0: p, box: b, start: clone(R) };
+        return;
+      }
+    }
+  }
+  const k = hit(p);
+  if (!k) {
+    if (!ev.shiftKey) { sel = []; relist(); }
+    drag = { mode: 'band', p0: p };
+    draw();
+    return;
+  }
+  if (ev.shiftKey) {
+    const i = sel.indexOf(k);
+    if (i >= 0) sel.splice(i, 1); else sel.push(k);
+  } else if (sel.indexOf(k) < 0) {
+    sel = [k];
+  }
+  relist();
+  push();
+  drag = { mode: 'move', p0: p, start: clone(R), box: selBox() };
+  draw();
+});
+cv.addEventListener('pointermove', (ev) => {
+  const p = fromEvent(ev);
+  if (!drag) {
+    const s = scale();
+    let cur = hit(p) ? 'move' : 'default';
+    if (sel.length) {
+      const b = selBox();
+      for (const h of handles({ x: b.x * s, y: b.y * s, w: b.w * s, h: b.h * s })) {
+        if (Math.abs(h.x - p.x * s) <= 6 && Math.abs(h.y - p.y * s) <= 6) {
+          cur = (h.n.length === 2 ? h.n : h.n === 'n' || h.n === 's' ? 'ns' : 'ew') + '-resize';
+        }
+      }
+    }
+    cv.style.cursor = cur;
+    return;
+  }
+  if (drag.mode === 'band') {
+    band = { x: Math.min(drag.p0.x, p.x), y: Math.min(drag.p0.y, p.y),
+             w: Math.abs(p.x - drag.p0.x), h: Math.abs(p.y - drag.p0.y) };
+    draw();
+    return;
+  }
+  if (drag.mode === 'move') {
+    const wantSnap = !ev.altKey;
+    const old = opt.snap; if (!wantSnap) opt.snap = false;
+    const d = snapDelta(drag.box, p.x - drag.p0.x, p.y - drag.p0.y, sel);
+    opt.snap = old;
+    for (const k of sel) {
+      R[k][0] = Math.round(drag.start[k][0] + d.dx);
+      R[k][1] = Math.round(drag.start[k][1] + d.dy);
+    }
+    relist(); dump(); draw();
+    return;
+  }
+  if (drag.mode === 'size') {
+    const b = drag.box, h = drag.h;
+    let nx = b.x, ny = b.y, nw = b.w, nh = b.h;
+    const dx = gridr(p.x - drag.p0.x), dy = gridr(p.y - drag.p0.y);
+    if (h.indexOf('w') >= 0) { nx = b.x + dx; nw = b.w - dx; }
+    if (h.indexOf('e') >= 0) { nw = b.w + dx; }
+    if (h.indexOf('n') >= 0) { ny = b.y + dy; nh = b.h - dy; }
+    if (h.indexOf('s') >= 0) { nh = b.h + dy; }
+    if (ev.shiftKey && nw > 0 && nh > 0) {              // keep the aspect honest
+      const f = Math.max(nw / b.w, nh / b.h);
+      if (h.indexOf('w') >= 0) nx = b.x + b.w - b.w * f; else nx = b.x;
+      if (h.indexOf('n') >= 0) ny = b.y + b.h - b.h * f; else ny = b.y;
+      nw = b.w * f; nh = b.h * f;
+    }
+    if (nw < 4 || nh < 4) return;
+    const fx = nw / b.w, fy = nh / b.h;
+    for (const k of sel) {
+      const a = drag.start[k];
+      R[k][0] = Math.round(nx + (a[0] - b.x) * fx);
+      R[k][1] = Math.round(ny + (a[1] - b.y) * fy);
+      R[k][2] = Math.max(2, Math.round(a[2] * fx));
+      R[k][3] = Math.max(2, Math.round(a[3] * fy));
+    }
+    relist(); dump(); draw();
+  }
+});
+cv.addEventListener('pointerup', () => {
+  if (drag && drag.mode === 'band' && band) {
+    const add = [];
+    for (const e of ELS) {
+      if (locked[e.k]) continue;
+      const a = R[e.k];
+      if (a[0] >= band.x && a[1] >= band.y && a[0] + a[2] <= band.x + band.w && a[1] + a[3] <= band.y + band.h) add.push(e.k);
+    }
+    for (const k of add) if (sel.indexOf(k) < 0) sel.push(k);
+  }
+  if (drag && drag.mode !== 'band') commit();
+  drag = null; band = null; guides = [];
+  relist(); draw();
+});
+
+// ---------------------------------------------------------------------------
+// keyboard
+// ---------------------------------------------------------------------------
+window.addEventListener('keydown', (ev) => {
+  if (/^(INPUT|TEXTAREA|SELECT)$/.test((ev.target.tagName || '').toUpperCase())) return;
+  const z = (ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === 'z';
+  if (z) {
+    ev.preventDefault();
+    document.getElementById(ev.shiftKey ? 'bRedo' : 'bUndo').click();
+    return;
+  }
+  if (ev.key === 'Escape') { sel = []; relist(); draw(); return; }
+  if (ev.key === 'a' && (ev.metaKey || ev.ctrlKey)) {
+    ev.preventDefault(); sel = KEYS.filter((k) => !locked[k]); relist(); draw(); return;
+  }
+  const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[ev.key];
+  if (!d || !sel.length) return;
+  ev.preventDefault();
+  const n = ev.shiftKey ? 10 : 1;
+  push();
+  for (const k of sel) { R[k][0] += d[0] * n; R[k][1] += d[1] * n; }
+  commit();
+});
+
+// ---------------------------------------------------------------------------
+// the ops: align / match / spread, all against the ANCHOR (first selected)
+// ---------------------------------------------------------------------------
+function anchorRect() { return sel.length ? R[sel[0]] : null; }
+for (const b of document.querySelectorAll('[data-al]')) {
+  b.onclick = () => {
+    const a = anchorRect();
+    if (!a || sel.length < 2) return msg('pick the anchor first, then shift-click the others');
+    push();
+    for (const k of sel.slice(1)) {
+      const r = R[k];
+      if (b.dataset.al === 'l') r[0] = a[0];
+      if (b.dataset.al === 'r') r[0] = a[0] + a[2] - r[2];
+      if (b.dataset.al === 'cx') r[0] = Math.round(a[0] + a[2] / 2 - r[2] / 2);
+      if (b.dataset.al === 't') r[1] = a[1];
+      if (b.dataset.al === 'b') r[1] = a[1] + a[3] - r[3];
+      if (b.dataset.al === 'cy') r[1] = Math.round(a[1] + a[3] / 2 - r[3] / 2);
+    }
+    msg(sel.length - 1 + ' moved to ' + sel[0]);
+    commit();
+  };
+}
+for (const b of document.querySelectorAll('[data-sz]')) {
+  b.onclick = () => {
+    const a = anchorRect();
+    if (!a || sel.length < 2) return msg('pick the anchor first, then shift-click the others');
+    push();
+    for (const k of sel.slice(1)) {
+      const r = R[k], cx = r[0] + r[2] / 2, cy = r[1] + r[3] / 2;
+      if (b.dataset.sz.indexOf('w') >= 0) { r[2] = a[2]; r[0] = Math.round(cx - r[2] / 2); }
+      if (b.dataset.sz.indexOf('h') >= 0) { r[3] = a[3]; r[1] = Math.round(cy - r[3] / 2); }
+    }
+    msg('sized to ' + sel[0]);
+    commit();
+  };
+}
+for (const b of document.querySelectorAll('[data-di]')) {
+  b.onclick = () => {
+    if (sel.length < 3) return msg('spreading needs three or more');
+    const h = b.dataset.di === 'h', i = h ? 0 : 1, j = h ? 2 : 3;
+    const ks = sel.slice().sort((p, q) => R[p][i] - R[q][i]);
+    const lo = R[ks[0]][i], hi = R[ks[ks.length - 1]][i] + R[ks[ks.length - 1]][j];
+    let used = 0;
+    for (const k of ks) used += R[k][j];
+    const gap = (hi - lo - used) / (ks.length - 1);
+    push();
+    let at = lo;
+    for (const k of ks) { R[k][i] = Math.round(at); at += R[k][j] + gap; }
+    msg('gaps evened to ' + Math.round(gap) + 'px');
+    commit();
+  };
+}
+document.querySelector('[data-rowfit]').onclick = () => {
+  if (sel.length < 2) return msg('select the row you want stretched');
+  const ks = sel.slice().sort((p, q) => R[p][0] - R[q][0]);
+  const lo = R[ks[0]][0], hi = R[ks[ks.length - 1]][0] + R[ks[ks.length - 1]][2];
+  let used = 0;
+  for (const k of ks) used += R[k][2];
+  const f = (hi - lo) / used;
+  push();
+  let at = lo;
+  for (const k of ks) { R[k][0] = Math.round(at); R[k][2] = Math.round(R[k][2] * f); at += R[k][2]; }
+  R[ks[ks.length - 1]][2] = hi - R[ks[ks.length - 1]][0];
+  msg('the row now fills ' + lo + '→' + hi);
+  commit();
+};
+document.getElementById('bAspect').onclick = () => {
+  const k = sel[0];
+  if (!k) return msg('nothing selected');
+  const e = BY_KEY[k], im = e.art && art(e.art);
+  if (!im) return msg(k + ' has no art to take an aspect from');
+  push();
+  R[k][3] = Math.round(R[k][2] * im.naturalHeight / im.naturalWidth);
+  msg(k + ' set to the art\'s own ' + im.naturalWidth + '×' + im.naturalHeight);
+  commit();
+};
+document.getElementById('bCx').onclick = () => {
+  if (!sel.length) return;
+  push();
+  const b = selBox(), dx = Math.round((SHELL.w - b.w) / 2 - b.x);
+  for (const k of sel) R[k][0] += dx;
+  commit();
+};
+
+// ---------------------------------------------------------------------------
+// the side panel
+// ---------------------------------------------------------------------------
+function relist() {
+  const ul = document.getElementById('els');
+  ul.innerHTML = '';
+  for (const e of ELS) {
+    const li = document.createElement('li');
+    const i = sel.indexOf(e.k);
+    if (i === 0) li.className = 'anchor'; else if (i > 0) li.className = 'sel';
+    const a = R[e.k];
+    li.innerHTML = '<span class="lk' + (locked[e.k] ? ' on' : '') + '">' + (locked[e.k] ? '\u{1F512}' : '\u{1F513}')
+      + '</span><span class="nm">' + e.nm + '</span><span class="dims">' + a[2] + '×' + a[3] + '</span>';
+    li.querySelector('.lk').onclick = (ev) => {
+      ev.stopPropagation();
+      locked[e.k] = !locked[e.k];
+      if (locked[e.k]) { const j = sel.indexOf(e.k); if (j >= 0) sel.splice(j, 1); }
+      relist(); draw();
+    };
+    li.onclick = (ev) => {
+      if (locked[e.k]) return msg(e.k + ' is locked — click the padlock to free it');
+      if (ev.shiftKey) { const j = sel.indexOf(e.k); if (j >= 0) sel.splice(j, 1); else sel.push(e.k); }
+      else sel = [e.k];
+      relist(); draw();
+    };
+    ul.appendChild(li);
+  }
+  const a = anchorRect();
+  document.getElementById('anm').textContent = sel.length ? sel[0] : '';
+  for (const [id, idx] of [['nx', 0], ['ny', 1], ['nw', 2], ['nh', 3]]) {
+    const el = document.getElementById(id);
+    el.value = a ? a[idx] : '';
+    el.disabled = !a;
+  }
+}
+for (const [id, idx] of [['nx', 0], ['ny', 1], ['nw', 2], ['nh', 3]]) {
+  document.getElementById(id).onchange = (ev) => {
+    if (!sel.length) return;
+    const v = Math.round(+ev.target.value);
+    if (!isFinite(v)) return;
+    push();
+    R[sel[0]][idx] = idx >= 2 ? Math.max(2, v) : v;
+    commit();
+  };
+}
+
+function dump() {
+  const rects = {};
+  for (const k of KEYS) rects[k] = R[k].map((n) => Math.round(n));
+  const body = KEYS.map((k) => '    "' + k + '": [' + rects[k].join(', ') + ']').join(',\n');
+  document.getElementById('json').value =
+    '{\n  "shell": { "w": ' + SHELL.w + ', "h": ' + SHELL.h + ' },\n  "rects": {\n' + body + '\n  }\n}\n';
+}
+document.getElementById('bCopy').onclick = async () => {
+  const ta = document.getElementById('json');
+  try { await navigator.clipboard.writeText(ta.value); msg('copied — paste it back to me'); }
+  catch (e) { ta.select(); msg('select-all is done, hit copy'); }
+};
+document.getElementById('bDl').onclick = () => {
+  const blob = new Blob([document.getElementById('json').value], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'layout.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  msg('saved — drop it at dungeon_pusher/art/cab/layout.json');
+};
+document.getElementById('bApply').onclick = () => {
+  try {
+    const j = JSON.parse(document.getElementById('json').value);
+    push();
+    adopt(j.rects || j);
+    msg('applied');
+    commit();
+  } catch (e) { msg('that is not JSON I can read: ' + e.message); }
+};
+
+// view toggles
+const tog = (id, key, after) => {
+  const b = document.getElementById(id);
+  b.onclick = () => { opt[key] = !opt[key]; b.classList.toggle('on', opt[key]); if (after) after(); draw(); };
+};
+tog('tArt', 'art'); tog('tBox', 'box'); tog('tSnap', 'snap'); tog('tRule', 'rule');
+document.getElementById('zoom').oninput = (ev) => {
+  opt.zoom = +ev.target.value / 100;
+  document.getElementById('zoomv').textContent = ev.target.value + '%';
+  fit(); draw();
+};
+document.getElementById('shellop').oninput = (ev) => {
+  opt.shellOp = +ev.target.value / 100;
+  document.getElementById('shellopv').textContent = ev.target.value + '%';
+  draw();
+};
+document.getElementById('grid').onchange = (ev) => { opt.grid = +ev.target.value; };
+
+fitWindow();
+relist();
+dump();
+draw();
+window.addEventListener('resize', () => { fitWindow(); draw(); });
+</script>
+</body>
+</html>
