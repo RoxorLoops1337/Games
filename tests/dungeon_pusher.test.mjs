@@ -7369,7 +7369,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.11.2', 'the boss-coin fix ships as v1.11.2');
+  t.eq(D.VERSION, '1.12.0', 'the remembering map ships as v1.12.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('MAP REMEMBERS') >= 0)),
+       'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('WERE BREEDING') >= 0)),
        'and the notes carry the fix');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('NEAR MISS') >= 0)),
@@ -8728,6 +8730,39 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   E.newRound();
   t.eq(plain, 2, 'without the relic the bank hands back exactly what went in');
   t.eq(C2.loot.length, 4, 'with it, the bank hands back double — once');
+}
+
+// ---------- THE MAP REMEMBERS WHAT IS IN A ROOM YOU HAVE WALKED ----------
+{
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  D.srand(202); D.newRun('knight');
+  const rooms = D.S.run.map.rooms;
+  const keys = Object.keys(rooms);
+  keys.forEach((k, i) => { if (i % 6 !== 3) rooms[k].visited = true; });   // most of the floor walked
+  keys.forEach((k, i) => { if (rooms[k].visited && i % 5 === 0) rooms[k].ents.forEach(e => { e.done = true; }); });
+  D.S.screen = 'dungeon';
+  frames(4);
+  t.eq(globalThis.__ctxDepth, 0, 'the dungeon still balances with a half-walked floor');
+  D.kb.buttons().forEach(() => {});
+  // the marks are rules, not decoration — hold them to all three
+  const here3 = dirname(fileURLToPath(import.meta.url));
+  const src3 = readFileSync(join(here3, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const at = src3.indexOf('// WHAT IS STILL IN IT.');
+  t.ok(at > 0, 'the map draws a walked room’s contents');
+  const blk = src3.slice(at, at + 1800);
+  t.ok(/if \(ink && seen\[k\] === 2 && !r\.boss\)/.test(blk),
+       'only on the BIG map, and only for rooms actually walked');
+  t.ok(blk.indexOf('.filter(e2 => !e2.done)') >= 0,
+       'and only for dwellers still standing — a spent shop is not a shop');
+  t.ok(blk.indexOf("kind === 'monster' ? 1 : 0") >= 0,
+       'services sort ahead of foes — you backtrack for a keeper, not a fight');
+  // ...and the minimap chip is left alone, which is the whole reason for the gate
+  const mini = src3.slice(src3.indexOf('function drawMinimap'), src3.indexOf('function drawMapView'));
+  t.ok(mini.indexOf('drawMapRooms') >= 0, 'the minimap shares the room painter');
+  t.ok(mini.indexOf(', true)') < 0 || /drawMapRooms\([^)]*false\)/.test(mini),
+       'but never passes the ink flag, so it stays a clean chip');
 }
 
 t.done();
