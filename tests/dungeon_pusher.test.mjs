@@ -4991,9 +4991,11 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // against every peg, and a pawl-rock at the very end
   t.ok(src.indexOf('const bite = WH_PEG * decay * Math.sin(wheelPhase(rot) * Math.PI);') >= 0,
        'each peg stalls the wheel as the flapper climbs it');
-  t.ok(src.indexOf('let rot = a.target * (1 - decay);') >= 0,
+  t.ok(src.indexOf('let rot = (a.target + dr) * (1 - decay);') >= 0,
        'and the wheel spins DOWN like a bearing, not along an ease curve');
-  t.ok(src.indexOf("if (over > 0 && S.opts.shake !== false) rot += 0.055") >= 0,
+  t.ok(src.indexOf('rot -= dr * pinEase((st - WH_CREEP0) / WH_CREEP);') >= 0,
+       'the last pin gives, and takes the near-miss back');
+  t.ok(src.indexOf("if (over > 0 && S.opts.shake !== false) rot += 0.05") >= 0,
        'reduced motion skips the settle-rock');
   t.ok(src.indexOf("if (RECORDS === true) RECORDS = { tab: 'book' };   // old openers still work") >= 0,
     'old openers still reach the book');
@@ -7367,7 +7369,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.11.0', 'the arcade wheel ships as v1.11.0');
+  t.eq(D.VERSION, '1.11.1', 'the near miss ships as v1.11.1');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('NEAR MISS') >= 0)),
+       'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('HONEST WHEEL') >= 0)),
        'and the notes carry the wheel');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('OWN CHARACTER AGAIN') >= 0)),
@@ -8502,8 +8506,58 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     D.S.wheelAnim = null;
   }
   t.ok(true, 'a hundred spins all came to rest on the prize they paid');
+  // ---- THE NEAR MISS: it has to happen, and it has to be a LIE that resolves
+  D.srand(31); D.newRun('knight');
+  let dram = 0, clean = 0, wrongSlice = 0;
+  for (let i = 0; i < 300; i++) {
+    const won = D.spinWheel('coin');
+    const a = D.S.wheelAnim;
+    const g = D.WHEEL_SEGS[a.seg];
+    // where it RESTS is always well clear of both pins
+    let rest = (-Math.PI / 2 - a.target) % (Math.PI * 2);
+    if (rest < 0) rest += Math.PI * 2;
+    const into = (rest - g.a0) / g.arc;
+    if (!(into > 0.2 && into < 0.8)) {
+      t.ok(false, 'spin ' + i + ' never comes to rest on a pin (' + into.toFixed(3) + ' of the slice)');
+      break;
+    }
+    if (a.drama) {
+      dram++;
+      // the FALSE rest — where it hangs before the pin gives — is a different prize
+      let fake = (-Math.PI / 2 - (a.target + a.drama)) % (Math.PI * 2);
+      if (fake < 0) fake += Math.PI * 2;
+      const fg = D.WHEEL_SEGS.find(q => fake >= q.a0 && fake < q.a1);
+      if (fg && fg.i !== a.seg) wrongSlice++;
+    } else clean++;
+    if (!won) break;
+    D.S.wheelAnim = null;
+  }
+  t.ok(true, 'three hundred spins all rest clear of the pins');
+  t.ok(dram > 90 && dram < 250, 'the near miss happens often, not always (' + dram + '/300)');
+  t.ok(clean > 60, 'and plenty of spins still just arrive (' + clean + '/300)');
+  t.eq(wrongSlice, dram, 'every near miss hangs on the WRONG prize before the pin gives');
+  // ---- THE BOUNCY PIN: hold, let go, overshoot, rock back — and close on
+  // EXACTLY 1. A creep that does not close on 1 drags the landing off the
+  // prize that was already paid out, which is the one thing it must not do.
+  t.eq(D.pinEase(0), 0, 'the pin has not given at all yet');
+  t.eq(D.pinEase(1), 1, 'and has given exactly all of it by the end');
+  t.ok(D.pinEase(0.25) < 0.45, 'it holds against the pin at first');
+  t.ok(D.pinEase(0.7) > 1, 'then lets go and carries PAST the peg');
+  t.ok(D.pinEase(0.95) > 1 && D.pinEase(0.95) < 1.06, 'and rocks back down onto it');
+  let flung = null;
+  for (let x = 0; x <= 1.0001; x += 0.02) {
+    const v = D.pinEase(x);
+    if (!(v >= -0.001 && v < 1.2)) { flung = x + '->' + v.toFixed(3); break; }
+  }
+  t.ok(!flung, 'the creep never flings the wheel anywhere (' + flung + ')');
+  // ...and the rotation really does come to rest on the target it was given
+  for (const dr of [0, 0.6, -0.9]) {
+    const wa = { t: 999, target: Math.PI * 9.37, drama: dr, seg: 0, lastRot: 0 };
+    t.ok(Math.abs(D.wheelRot(wa) - wa.target) < 1e-6,
+         'drama ' + dr + ' is handed back in full — the landing is untouched');
+  }
   // the overlay outlives the spin, so the prize can actually be read
-  t.ok(D.WHEEL_LIFE > 1.0 + 3.6, 'the cabinet holds the prize up after the wheel stops');
+  t.ok(D.WHEEL_LIFE > 1.0 + D.WH_END, 'the cabinet holds the prize up after the wheel stops');
   // a free spin (an elite's gift) drops no coin
   D.spinWheel();
   t.eq(D.S.wheelAnim.coin, null, 'a free spin puts nothing down the slot');
