@@ -51,6 +51,10 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.13.0', notes: [
+    'THE CABINET SKINS ARE PAINTED \u{1F3B0} — they used to be one brown machine with a colour wash laid over it, which is exactly what they looked like. Every skin is a whole carved set now: STONE\u2019s oak and rune-work, EMERALD\u2019s cold green stone, LAVA\u2019s black rock with the fire still running in the cracks, and the CRYPT\u2019s own amethyst PURPLE. The frame, the back wall, the tray face, the rails, the TILT keys, the END TURN scroll and the bag and flask buttons all change with it',
+    'the rack shows you the real thing \u{1F441}\u{FE0F} — each row wears a slice of its own cabinet instead of a painted square, so you pick with your eyes. Every unlock is where it was: the skin you already earned is the skin you still have, just repainted',
+  ] },
   { v: '1.12.0', notes: [
     'THE MAP REMEMBERS \u{1F5FA}\u{FE0F} — a room you have walked now shows what is STILL in it: the shopkeeper, the blacksmith, the shrine, the chest, the wheel ghost, the stranger, and \u2694\u{FE0F} for a foe or \u{1F480} for an elite. A room with nothing left wears a \u2713. So the keeper you passed on the way down is findable on the way back, which is the whole reason to keep a map at all',
     'services sort ahead of foes on each room, a busy room shows three and a +count, and a dweller you have already dealt with drops off the moment it is spent',
@@ -426,12 +430,22 @@ function setLang(l) { LANG = LANGS[l] ? l : 'en'; return LANG; }
 // ---------------------------------------------------------- machine themes
 // Cabinet skins as pure draw-palette washes over the machine art — no new
 // assets. Each unlocks at a best-descent milestone; CLASSIC is the raw art.
+// MACHINE SKINS. These used to be one brown cabinet with a colour wash laid
+// over it, which is exactly what they looked like. They are PAINTED now — a
+// whole carved set apiece — so a skin changes the runes, the stonework and the
+// light in the tray, not just the hue. The ids are unchanged so a profile that
+// already wears one keeps wearing it; only the faces behind them are new.
+// `swatch` is the rack's little sample chip, `dir` the folder the set lives in.
 const MACH_THEMES = {
-  classic: { name: 'CLASSIC', desc: 'oak, iron and honest rust', tint: null, alpha: 0, floor: 0 },
-  bone:    { name: 'BONE',    desc: 'bleached by the deep', tint: '#d8d0be', alpha: 0.42, floor: 5 },
-  gilded:  { name: 'GILDED',  desc: 'the house always wins', tint: '#ffce4a', alpha: 0.4, floor: 10 },
-  neon:    { name: 'NEON',    desc: 'the dungeon after dark', tint: '#b45aff', alpha: 0.44, floor: 15 },
+  classic: { name: 'STONE',   desc: 'carved oak and old rune-work',   dir: 'brown',   swatch: '#8a5a30', floor: 0 },
+  bone:    { name: 'EMERALD', desc: 'green stone, deep and cold',     dir: 'emerald', swatch: '#1e8a4a', floor: 5 },
+  gilded:  { name: 'LAVA',    desc: 'black rock with the fire still in it', dir: 'lava', swatch: '#d2401a', floor: 10 },
+  neon:    { name: 'PURPLE',  desc: 'the crypt\u2019s own amethyst',      dir: 'purple',  swatch: '#8a3ad0', floor: 15 },
 };
+// the thirteen pieces every skin repaints; everything else in art/machine is
+// shared, so a set only has to carry what actually changes colour
+const SKINNED = ['fascia', 'backwall', 'tray', 'tilt_l', 'tilt_f', 'tilt_r', 'end_turn',
+                 'btn_bag', 'btn_drink', 'frame_wide', 'frame_stage', 'frame_tall', 'rail'];
 // MACHINE LAYOUTS: the bed itself, separate from the skins — they compose.
 // THE TILTED TABLE unseals at lifetime best floor 30: the bed leans LEFT
 // (a constant drift fights your aim), a side gutter pays a gold for every
@@ -7428,30 +7442,31 @@ if (!HEADLESS) (function browser() {
   };
   // the active MACHINE THEME washes every cabinet piece once into a cached
   // canvas (same trick as the enemy palette-swaps); CLASSIC passes raw art
-  const MACH_TINT = {};
+  // the worn skin's own painted piece, with the shared art behind it — a skin
+  // that is missing a file simply shows the house one, like every other art
+  // path in this game
   function machArt(key) {
-    const im = art('mach_' + key, MACH_ART[key]);
-    if (!im._ok) return null;
     const th = MACH_THEMES[S.machTheme];
-    if (!th || !th.tint) return im;
-    const ck = S.machTheme + ':' + key;
-    let cv = MACH_TINT[ck];
-    if (!cv) {
-      cv = document.createElement('canvas');
-      const w = im.naturalWidth || im.width || 1, h = im.naturalHeight || im.height || 1;
-      cv.width = w; cv.height = h;
-      const g = cv.getContext('2d');
-      if (!g) return im;
-      g.drawImage(im, 0, 0);
-      g.globalCompositeOperation = 'source-atop';
-      g.globalAlpha = th.alpha;
-      g.fillStyle = th.tint;
-      g.fillRect(0, 0, w, h);
-      // imAspect reads naturalWidth/Height — carry them onto the canvas
-      cv.naturalWidth = w; cv.naturalHeight = h;
-      MACH_TINT[ck] = cv;
+    if (th && th.dir && SKINNED.indexOf(key) >= 0) {
+      const file = MACH_ART[key].split('/').pop();
+      const sk = art('mach_' + th.dir + '_' + key, 'art/machine/skins/' + th.dir + '/' + file);
+      if (sk._ok) { sk._skin = th.dir; return sk; }
     }
-    return cv;
+    const im = art('mach_' + key, MACH_ART[key]);
+    return im._ok ? im : null;
+  }
+  // THE DEP STRING a cached layer has to carry: WHICH art is resolved right
+  // now, not merely whether something is. A skin's pieces stream in after the
+  // first frame, and a layer keyed on "is there a fascia" answers yes both
+  // before and after — so it never rebuilds, and you stare at the house
+  // cabinet for the rest of the session with the painted one sitting in cache.
+  function machStamp() {
+    let out = '';
+    for (let i = 0; i < arguments.length; i++) {
+      const k = arguments[i], im = machArt(k);
+      out += k + (im ? (im._skin ? ':' + im._skin : ':base') : ':none') + ',';
+    }
+    return out;
   }
   function imAspect(im, fallback) {
     return (im.naturalHeight || 0) > 0 ? im.naturalHeight / im.naturalWidth : fallback;
@@ -9158,7 +9173,7 @@ if (!HEADLESS) (function browser() {
     const front = tierFront(0);
     const l = w2s(0, front, 0), r = w2s(100, front, 0);
     layer('front', 0, l.y - 14, LW, 716 - (l.y - 14),
-      ['f' + fkey(), S.machTheme, machArt('fascia') ? 1 : 0, machArt('tray') ? 1 : 0],
+      ['f' + fkey(), S.machTheme, machStamp('fascia', 'tray')],
       frontStatic);
     // hazard chevrons, slowly marching toward the tray
     ctx.save();
@@ -10022,7 +10037,7 @@ if (!HEADLESS) (function browser() {
     const r = S.run;
     if (!r) return;
     layer('hud', 0, 682, LW, LH - 682,
-      [S.machTheme, machArt('frame_wide') ? 1 : 0], hudChrome);
+      [S.machTheme, machStamp('frame_wide')], hudChrome);
     // HP + status ribbon — only DOWN IN THE DUNGEON. In battle the hero's
     // card up top (beside the foe he faces) owns his health and status.
     if (S.screen !== 'battle') {
@@ -10313,10 +10328,7 @@ if (!HEADLESS) (function browser() {
   function battleBase() {
     layer('battle', 0, 0, LW, LH, [
       'f' + fkey(), S.machTheme,
-      machArt('frame_stage') ? 1 : 0, machArt('torch_l') ? 1 : 0,
-      machArt('rail') ? 1 : 0, machArt('cab') ? 1 : 0,
-      machArt('backwall') ? 1 : 0, machArt('jackpot') ? 1 : 0,
-      machArt('plat') ? 1 : 0, machArt('rail_run') ? 1 : 0,
+      machStamp('frame_stage', 'torch_l', 'rail', 'cab', 'backwall', 'jackpot', 'plat', 'rail_run'),
     ], () => {
       bgBase(0);
       stageChrome();
@@ -14064,15 +14076,18 @@ if (!HEADLESS) (function browser() {
       rr(52, ry, LW - 104, 64, 12);
       ctx.fillStyle = on ? 'rgba(66,50,26,0.6)' : 'rgba(255,255,255,0.03)'; ctx.fill();
       ctx.lineWidth = 2; ctx.strokeStyle = on ? '#ffd75e' : open ? '#5a5068' : '#3a3442'; ctx.stroke();
-      // the swatch: a slice of cabinet in that wash
+      // the swatch: a real slice of THAT cabinet, so you pick with your eyes
       ctx.save();
       ctx.globalAlpha = open ? 1 : 0.35;
       rr(64, ry + 12, 40, 40, 8);
-      ctx.fillStyle = '#6b4a26'; ctx.fill();
-      if (th.tint) {
-        rr(64, ry + 12, 40, 40, 8);
-        ctx.globalAlpha *= th.alpha + 0.25;
-        ctx.fillStyle = th.tint; ctx.fill();
+      ctx.fillStyle = th.swatch || '#6b4a26'; ctx.fill();
+      const sw = art('mach_' + th.dir + '_fascia', 'art/machine/skins/' + th.dir + '/fascia.png');
+      if (sw._ok) {
+        ctx.save();
+        rr(64, ry + 12, 40, 40, 8); ctx.clip();
+        const sh = 40 * (sw.naturalHeight || sw.height || 1) / (sw.naturalWidth || sw.width || 1);
+        ctx.drawImage(sw, 64, ry + 32 - sh / 2, 40, sh);
+        ctx.restore();
       }
       ctx.restore();
       txt(th.name, 118, ry + 22, '900 13px Verdana, sans-serif', open ? (on ? '#ffe9a3' : '#e8d8ec') : '#7a7086', 'left');
