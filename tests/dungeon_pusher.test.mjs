@@ -10,7 +10,44 @@
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { harness } from './no_room_for_heroes_lib.mjs';
+
+// A tiny 8-bit RGBA PNG reader, so a test can ask the ART what it looks like
+// instead of trusting a number somebody typed twice. Returns un-filtered rows.
+function pngRGBA(file) {
+  const b = readFileSync(file);
+  const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
+  if (b[24] !== 8 || b[25] !== 6 || b[28] !== 0) return null;   // 8-bit RGBA, no interlace
+  const parts = [];
+  for (let p = 8; p + 8 <= b.length;) {
+    const len = b.readUInt32BE(p), type = b.toString('ascii', p + 4, p + 8);
+    if (type === 'IDAT') parts.push(b.subarray(p + 8, p + 8 + len));
+    p += 12 + len;
+  }
+  const z = inflateSync(Buffer.concat(parts));
+  const out = Buffer.alloc(w * h * 4), bpp = 4, stride = w * 4;
+  for (let y = 0, q = 0; y < h; y++) {
+    const f = z[q++], row = y * stride, prev = row - stride;
+    for (let i = 0; i < stride; i++) {
+      const raw = z[q + i];
+      const a = i >= bpp ? out[row + i - bpp] : 0;
+      const c = y > 0 ? out[prev + i] : 0;
+      const d = y > 0 && i >= bpp ? out[prev + i - bpp] : 0;
+      let v = raw;
+      if (f === 1) v = raw + a;
+      else if (f === 2) v = raw + c;
+      else if (f === 3) v = raw + ((a + c) >> 1);
+      else if (f === 4) {
+        const pp = a + c - d, pa = Math.abs(pp - a), pb = Math.abs(pp - c), pc = Math.abs(pp - d);
+        v = raw + (pa <= pb && pa <= pc ? a : pb <= pc ? c : d);
+      }
+      out[row + i] = v & 255;
+    }
+    q += stride;
+  }
+  return { w, h, data: out };
+}
 
 function loadGame(store, withCtx) {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -7389,7 +7426,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.13.1', 'the wired-up foes ship as v1.13.1');
+  t.eq(D.VERSION, '1.15.0', 'the cabinet ships as v1.15.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
+       'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
        'and the notes carry them');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SKINS ARE PAINTED') >= 0)),
@@ -8825,6 +8864,192 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const spare = dirs.filter(d => !used.has(d)).sort();
   console.log('# painted sets with no foe yet: ' + (spare.join(', ') || 'none'));
   t.ok(spare.length <= 9, 'the unused pile does not grow unnoticed (' + spare.length + ')');
+}
+
+// ================= THE CABINET around the dungeon =================
+{
+  const here5 = dirname(fileURLToPath(import.meta.url));
+  const src5 = readFileSync(join(here5, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const cabDir = join(here5, '..', 'dungeon_pusher', 'art', 'cab');
+  // every module the layout measures against must be ON DISK at the size the
+  // code claims — a re-export at a different size silently slides the live
+  // title, the live map and the room off the windows they were measured into
+  const png = (f) => {
+    const b = readFileSync(join(cabDir, f));
+    return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  };
+  const want = { 'marquee.png': [762, 212], 'game_screen_full.png': [708, 784],
+                 'controls_panel_full.png': [768, 143], 'status_strip_full.png': [762, 111],
+                 'playfield.png': [652, 596], 'level_header.png': [337, 99], 'minimap.png': [167, 116],
+                 'joystick.png': [115, 146], 'panel_hp.png': [150, 100], 'panel_bag.png': [128, 100] };
+  for (const f of Object.keys(want)) {
+    t.ok(existsSync(join(cabDir, f)), 'the cabinet ships ' + f);
+    const got = png(f);
+    t.ok(got[0] === want[f][0] && got[1] === want[f][1],
+         f + ' is still ' + want[f].join('x') + ' (got ' + got.join('x') + ')');
+  }
+  // the SHELL is the cabinet, and the game is painted through its hole. The
+  // hole's rect is measured in the shell's own pixels, so it has to fit it.
+  const shell = png('shell.png');
+  t.ok(shell[0] === 1176 && shell[1] === 2058, 'the shell is 1176x2058 (got ' + shell.join('x') + ')');
+  // the shell is the BASE TEMPLATE: it is cut to the stage's own shape so it
+  // can be blitted corner to corner. Any other aspect either letterboxes the
+  // machine onto a black page or crops its plinth off mid-band.
+  t.ok(Math.abs(shell[0] / shell[1] - 480 / 840) < 1e-6,
+       'the shell is cut to the stage 480x840 exactly, so it fills the screen');
+  const sz = src5.match(/const CAB_SHELL = \{ w: (\d+), h: (\d+) \}/);
+  t.ok(!!sz, 'the shell names its own size');
+  // every piece of the machine is one flat rect in the shell's pixels, and the
+  // scene builder round-trips exactly this table — so read it, don't trust it
+  const tbl = src5.slice(src5.indexOf('const CAB_R = {'), src5.indexOf('const CAB = { on: false'));
+  const R5 = {};
+  for (const mm of tbl.matchAll(/(\w+):\s*\[\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]/g)) {
+    R5[mm[1]] = [Number(mm[2]), Number(mm[3]), Number(mm[4]), Number(mm[5])];
+  }
+  const SLOTS = ['hole', 'marquee', 'head', 'map', 'play', 'joystick', 'btn_map', 'btn_purse',
+                 'btn_menu', 'btn_exit', 'panel_hp', 'panel_gold', 'panel_purse',
+                 'panel_potion', 'panel_bag'];
+  t.eq(Object.keys(R5).length, SLOTS.length, 'the rect table has one entry per piece of the machine');
+  const m = sz && R5.hole ? [null, sz[1], sz[2], R5.hole[0], R5.hole[1], R5.hole[2], R5.hole[3]] : null;
+  t.ok(!!m, 'the shell names its own size and its screen hole');
+  if (m) {
+    const [sw, sh] = [Number(sz[1]), Number(sz[2])];
+    t.ok(sw === shell[0] && sh === shell[1], 'the code and the file agree on the shell size');
+    for (const s of SLOTS) {
+      const a = R5[s];
+      t.ok(!!a, 'the table places ' + s);
+      if (a) {
+        t.ok(a[2] > 0 && a[3] > 0, s + ' has a real size');
+        t.ok(a[0] >= 0 && a[1] >= 0 && a[0] + a[2] <= sw && a[1] + a[3] <= sh,
+             s + ' lands inside the shell (' + a.join(',') + ')');
+      }
+    }
+    const [hx, hy, hw, hh] = R5.hole;
+    t.ok(hw > sw * 0.5 && hh > sh * 0.3, 'and the hole is a screen, not a keyhole');
+    // the glass furniture has to be ON the glass, or it is painted onto wood
+    for (const s of ['head', 'map', 'play']) {
+      const a = R5[s];
+      t.ok(a[0] >= hx - 1 && a[1] >= hy - 1 && a[0] + a[2] <= hx + hw + 1 && a[1] + a[3] <= hy + hh + 1,
+           s + ' rides inside the glass, not on the woodwork');
+    }
+    // the panels are a row, not a pile: each one starts after the last began
+    const row = ['panel_hp', 'panel_gold', 'panel_purse', 'panel_potion', 'panel_bag'];
+    for (let i = 1; i < row.length; i++) {
+      t.ok(R5[row[i]][0] >= R5[row[i - 1]][0] + R5[row[i - 1]][2] - 2,
+           row[i] + ' sits beside ' + row[i - 1] + ', not on top of it');
+    }
+  }
+  // a layout.json from the scene builder overrides the shipped table, and a
+  // missing or half-written one must leave it alone
+  t.ok(/fetch\('art\/cab\/layout\.json'\)/.test(src5), 'the cabinet reads the builder\'s layout.json');
+  t.ok(/a\.length === 4 && a\.every\(\(n\) => typeof n === 'number' && isFinite\(n\)\)/.test(src5),
+       'and it only takes rects that are four real numbers');
+  // and it really is drawn full-bleed, not fitted into a rect that leaves a bar
+  t.ok(/drawImage\(sh, 0, 0, LW, LH\)/.test(src5),
+       'the shell is painted corner to corner over the whole stage');
+  // the hole must land on the shell's ACTUAL transparent window, or the game
+  // is painted onto woodwork. Read the alpha out of the PNG and compare.
+  if (m) {
+    const im = pngRGBA(join(cabDir, 'shell.png'));
+    t.ok(!!im, 'the shell decodes as 8-bit RGBA');
+    if (im) {
+      let x0 = im.w, x1 = -1, y0 = im.h, y1 = -1;
+      for (let y = 0; y < im.h; y++) {
+        for (let x = 0; x < im.w; x++) {
+          if (im.data[(y * im.w + x) * 4 + 3] < 16) {
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            if (y > y1) y1 = y;
+          }
+        }
+      }
+      const [hx, hy, hw, hh] = m.slice(3).map(Number);
+      t.ok(Math.abs(x0 - hx) <= 4 && Math.abs(y0 - hy) <= 4,
+           'the coded hole starts where the shell is really cut out (art says ' + x0 + ',' + y0 + ')');
+      t.ok(Math.abs(x1 - (hx + hw - 1)) <= 4 && Math.abs(y1 - (hy + hh - 1)) <= 4,
+           'and it ends there too (art says ' + x1 + ',' + y1 + ')');
+      // the shell's own edges must be cabinet, not the black page it was cut
+      // from — that surround is exactly what made it read as a pasted picture
+      const edge = (x, y) => {
+        const i = (y * im.w + x) * 4;
+        return im.data[i + 3] > 200 ? (im.data[i] + im.data[i + 1] + im.data[i + 2]) / 3 : -1;
+      };
+      let neutral = 0, n = 0;
+      for (let y = 40; y < im.h - 40; y += 17) {
+        for (const x of [1, 3, im.w - 4, im.w - 2]) {
+          const i = (y * im.w + x) * 4;
+          const r = im.data[i], g = im.data[i + 1], bl = im.data[i + 2];
+          const mean = (r + g + bl) / 3;
+          if (Math.abs(r - g) < 4 && Math.abs(g - bl) < 4 && mean > 24 && mean < 40) neutral++;
+          n++;
+        }
+      }
+      t.ok(n > 0 && neutral / n < 0.15,
+           'no flat grey page left along the shell edges (' + neutral + '/' + n + ' samples)');
+      t.ok(edge(im.w >> 1, im.h - 2) >= 0, 'and the shell is still solid at the very bottom row');
+    }
+  }
+  // the hole is really knocked out — a shell with an opaque screen would hide
+  // the whole game behind it
+  const shellPx = readFileSync(join(cabDir, 'shell.png'));
+  t.ok(shellPx[25] === 6, 'the shell is RGBA — it has an alpha channel to be a hole with');
+  // ORDER IS THE WHOLE TRICK: the picture is painted first, the machine is
+  // laid over it. Draw the shell first and the game covers the bezel.
+  const dd = src5.slice(src5.indexOf('function drawDungeon'), src5.indexOf('function drawRoomModal'));
+  const iClip = dd.indexOf('ctx.rect(CAB.hole.x');
+  const iRoom = dd.indexOf('drawRoomBox(t)');
+  const iShell = dd.indexOf('drawCabShell(t)');
+  const iPlates = dd.indexOf('drawCabStatus(t)');
+  t.ok(iClip > 0 && iRoom > iClip, 'the glass is clipped before the room is painted into it');
+  t.ok(iShell > iRoom, 'the shell is laid over the picture, not under it');
+  t.ok(iPlates > iShell, 'and the stat plates ride on top of the shell');
+  t.ok(/S\.screen === 'dungeon' && !!cabArt\('shell'\)/.test(src5),
+       'no shell, no cabinet — the dungeon keeps the screen it always had');
+
+  // ---- the scene builder has to stay honest about the same table ----
+  // cab.html reads CAB_R straight out of the game's source so the two can't
+  // drift. That only works while its parser actually matches, so run the
+  // builder's own regex against the game and check what falls out.
+  const cabHtml = join(here5, '..', 'dungeon_pusher', 'cab.html');
+  t.ok(existsSync(cabHtml), 'the cabinet ships its scene builder');
+  if (existsSync(cabHtml)) {
+    const bsrc = readFileSync(cabHtml, 'utf8');
+    // the builder's parser, lifted verbatim from the tool
+    const chunk = src5.slice(src5.indexOf('const CAB_R = {'), src5.indexOf('};', src5.indexOf('const CAB_R = {')));
+    const parsed = {};
+    for (const mm of chunk.matchAll(/(\w+):\s*\[\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\]/g)) {
+      parsed[mm[1]] = [+mm[2], +mm[3], +mm[4], +mm[5]];
+    }
+    t.eq(Object.keys(parsed).sort().join(','), SLOTS.slice().sort().join(','),
+         'the builder\'s parser pulls exactly the game\'s table out of the game');
+    for (const s of SLOTS) t.eq(parsed[s].join(','), R5[s].join(','), 'and ' + s + ' comes back unchanged');
+    // its slot list and its offline fallback must name the same pieces too
+    const els = [...bsrc.matchAll(/\{ k: '(\w+)'/g)].map((x) => x[1]);
+    t.eq(els.slice().sort().join(','), SLOTS.slice().sort().join(','),
+         'the builder edits every piece the game places, and no ghost ones');
+    const fb = bsrc.slice(bsrc.indexOf('const FALLBACK = {'), bsrc.indexOf('};', bsrc.indexOf('const FALLBACK = {')));
+    const fbk = [...fb.matchAll(/(\w+): \[/g)].map((x) => x[1]);
+    t.eq(fbk.slice().sort().join(','), SLOTS.slice().sort().join(','),
+         'and its offline fallback covers them all');
+    t.ok(/"shell": \{ "w": ' \+ SHELL\.w/.test(bsrc) && /"rects"/.test(bsrc),
+         'the builder exports the shape the game reads back');
+  }
+
+  // it draws, and it balances
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  D.srand(404); D.newRun('knight');
+  D.S.run.floor = 4; D.S.run.gold = 128; D.S.run.potions = 2;
+  D.S.screen = 'dungeon';
+  frames(6);
+  t.eq(globalThis.__ctxDepth, 0, 'a cabinet dungeon frame balances every save with a restore');
+  for (const size of ['s', 'w', 't', 'b']) {
+    D.curRoom().size = size; D.S.roomStamp++;
+    frames(3);
+    t.eq(globalThis.__ctxDepth, 0, 'and so does a ' + size + '-shaped room in the glass');
+  }
 }
 
 t.done();

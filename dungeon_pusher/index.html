@@ -51,6 +51,16 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.15.0', notes: [
+    'A SCENE BUILDER FOR THE WHOLE MACHINE \u{1F9F0} \u2014 cab.html opens the cabinet as an editor. Drag every plate, button, plaque and the glass itself over the real art; box-select a row; align, match and spread them against an anchor; nudge single pixels with the arrows; snap to the grid or to anything else\u2019s edges; undo as far back as you like',
+    'and the machine now takes its layout from a FILE \u{1F4D0} \u2014 every piece of the cabinet is one flat rect in the shell\u2019s own pixels, and art/cab/layout.json overrides any of them. The builder writes exactly that file, so the whole thing can be re-tuned without touching a line of code',
+  ] },
+  { v: '1.14.0', notes: [
+    'THE DUNGEON IS AN ARCADE MACHINE \u{1F579}\u{FE0F} — the whole crawl is played inside a cabinet, and the cabinet IS the screen. The SHELL is cut to the stage exactly and painted corner to corner as the base of the picture; its glass is knocked out, the game is painted THROUGH that hole, and the machine is laid back over the top so the bezel\u2019s own shadow falls across the room the way glass does',
+    'a lit marquee overhead, a real control panel underneath \u{1F3AE} — the stick leans the way you walk, and MAP, PURSE and MENU are three plastic buttons with a brass EXIT plate at the end of the row. No loose chips floating on the woodwork any more',
+    'the plates read live \u{1F4CA} — HP with a real bar in its slot, GOLD, PURSE, POTION and BAG, each with the number the art was drawn without. POTION drinks, BAG opens your gear',
+    'the floor name and the map ride INSIDE the glass, where a real machine would put them \u{1F5FA}\u{FE0F} — and every rect is measured in the shell\u2019s own pixels, so nothing is eyeballed onto the art',
+  ] },
   { v: '1.13.1', notes: [
     'FOUR FOES STOP WEARING EMOJI \u{1F5FF} — the BONEGUARD pair, THE STONEWARDEN, THE STORMKNIGHT and THE ASHWRIGHT all had painted art sitting in the repo since the day they were built, and all four were drawing as emoji because nothing ever pointed at it. They wear it now',
     'and the repo counts its own art \u{1F9FE} — every painted set the code names must exist with the frames it claims, and the ones with no foe yet are listed out loud on every test run. Art nobody can see is the quietest bug there is',
@@ -11184,6 +11194,77 @@ if (!HEADLESS) (function browser() {
   // Rooms persist — backtrack freely — and the minimap uncovers as you go.
   // rooms come in SIZES, like a real blueprint: small cells, wide halls,
   // long galleries, big chambers. ROOM/FR are refit to the current room.
+  // ====================== THE CABINET =========================
+  // The SHELL is the base template for the whole picture: one image, cut to
+  // the stage's exact 480x840 shape, painted corner to corner. Its screen is
+  // knocked transparent, the game is painted through that hole, and the shell
+  // is laid back OVER it so the bezel's own shadow falls across the picture
+  // the way glass does. Every other piece — the marquee plate, the stick and
+  // buttons, the stat plates — is measured in the SHELL's own pixels against
+  // the bands the art already has, then scaled once by the same k. Nothing is
+  // positioned against the page any more; the machine IS the page.
+  const CAB_SHELL = { w: 1176, h: 2058 };  // 1176 x 2058 == 480 x 840, to the pixel
+  // EVERY piece of the machine is one flat rect [x, y, w, h] in the shell's
+  // own pixels — no fractions of parents, no nesting. That is what makes the
+  // scene builder (cab.html) possible: it drags these exact numbers over the
+  // real art and hands back the same table. These are the shipped defaults;
+  // art/cab/layout.json, if it exists, overrides any subset of them.
+  const CAB_R = {
+    hole:         [139,  404,  898, 1008],   // the screen, knocked transparent
+    marquee:      [ 60,   38, 1015,  250],   // the plaque up top
+    head:         [166,  424,  566,  136],   // the floor name, inside the glass
+    map:          [759,  429,  251,  141],   // the minimap, inside the glass
+    play:         [157,  590,  862,  806],   // where the room is fitted
+    joystick:     [ 92, 1502,  178,  226],
+    btn_map:      [405, 1551,  102,   99],
+    btn_purse:    [573, 1551,  104,   99],
+    btn_menu:     [741, 1551,  105,   99],
+    btn_exit:     [954, 1554,  121,   93],
+    panel_hp:     [ 55, 1820,  236,  125],
+    panel_gold:   [291, 1820,  207,  125],
+    panel_purse:  [498, 1820,  206,  125],
+    panel_potion: [704, 1820,  206,  125],
+    panel_bag:    [909, 1820,  201,  125],
+  };
+  const CAB = { on: false, r: {} };
+  function cabLayout() {
+    const k = LW / CAB_SHELL.w;          // one scale, and the shell fills the stage
+    CAB.k = k;
+    CAB.shell = { x: 0, y: 0, w: LW, h: LH };
+    for (const key in CAB_R) {
+      const a = CAB_R[key];
+      CAB.r[key] = { x: a[0] * k, y: a[1] * k, w: a[2] * k, h: a[3] * k };
+    }
+    CAB.hole = CAB.r.hole; CAB.mq = CAB.r.marquee;
+    CAB.head = CAB.r.head; CAB.map = CAB.r.map; CAB.play = CAB.r.play;
+    return CAB;
+  }
+  cabLayout();
+  // the builder's output, if the owner has dropped one in. Graceful like all
+  // the art: a missing, stale or half-written file leaves the defaults alone.
+  if (typeof fetch !== 'undefined') {
+    try {
+      fetch('art/cab/layout.json').then((r) => (r.ok ? r.json() : null)).then((j) => {
+        if (!j) return;
+        if (j.shell && j.shell.w > 0 && j.shell.h > 0) { CAB_SHELL.w = j.shell.w; CAB_SHELL.h = j.shell.h; }
+        const rc = j.rects || j;
+        for (const key in CAB_R) {
+          const a = rc[key];
+          if (Array.isArray(a) && a.length === 4 && a.every((n) => typeof n === 'number' && isFinite(n))) {
+            CAB_R[key] = [a[0], a[1], a[2], a[3]];
+          }
+        }
+        cabLayout();
+      }).catch(() => {});
+    } catch (e) {}
+  }
+  function cabArt(name) {
+    const im = art('cab_' + name, 'art/cab/' + name + '.png');
+    return im._ok ? im : null;
+  }
+  // the cabinet stands only where its art does — no shell, no cabinet, and the
+  // dungeon falls back to the screen it has always had
+  function cabOn() { return S.screen === 'dungeon' && !!cabArt('shell'); }
   const SIZE_DIMS = {
     s: { w: 300, h: 330 }, w: { w: 412, h: 330 },
     t: { w: 310, h: 464 }, b: { w: 412, h: 464 },
@@ -11193,9 +11274,24 @@ if (!HEADLESS) (function browser() {
   function updateRoomRect() {
     const r = curRoom();
     const d = (r && SIZE_DIMS[r.size]) || SIZE_DIMS.b;
-    ROOM.w = d.w; ROOM.h = d.h;
-    ROOM.x = (LW - d.w) / 2;
-    ROOM.y = 168 + (464 - d.h) / 2;
+    if (cabOn()) {
+      // inside the cabinet the room lives in the SCREEN, so the room shapes
+      // keep their proportions but are fitted to the glass rather than the
+      // page. A small room is still visibly smaller than a big one.
+      // a small room still reads as smaller than a big one, but the glass is
+      // not left three-quarters black to prove it: the spread is squeezed so
+      // the tightest room still fills most of the screen
+      const p = CAB.play;
+      const fw = 0.84 + 0.16 * (d.w / SIZE_DIMS.b.w);
+      const fh = 0.84 + 0.16 * (d.h / SIZE_DIMS.b.h);
+      ROOM.w = Math.round(p.w * fw); ROOM.h = Math.round(p.h * fh);
+      ROOM.x = Math.round(p.x + (p.w - ROOM.w) / 2);
+      ROOM.y = Math.round(p.y + (p.h - ROOM.h) / 2);
+    } else {
+      ROOM.w = d.w; ROOM.h = d.h;
+      ROOM.x = (LW - d.w) / 2;
+      ROOM.y = 168 + (464 - d.h) / 2;
+    }
     FR.x0 = ROOM.x + ROOM.sideW; FR.x1 = ROOM.x + ROOM.w - ROOM.sideW;
     FR.y0 = ROOM.y + ROOM.wallH; FR.y1 = ROOM.y + ROOM.h - ROOM.botH;
   }
@@ -11845,7 +11941,7 @@ if (!HEADLESS) (function browser() {
     return [parseInt(h.slice(0, 2), 16) || 90, parseInt(h.slice(2, 4), 16) || 100,
             parseInt(h.slice(4, 6), 16) || 120];
   }
-  function paintStone(T) {
+  function paintStone(T, bare) {
     const [br, bg, bb] = stoneTone(T.door);
     const cl = (v) => Math.max(0, Math.min(255, v | 0));
     const tone = (k) => 'rgb(' + cl(br * k) + ',' + cl(bg * k) + ',' + cl(bb * k) + ')';
@@ -11860,6 +11956,11 @@ if (!HEADLESS) (function browser() {
     srand((((ROOM.w * 73856093) ^ (ROOM.h * 19349663) ^ (br * 2654435761)) >>> 0) || 11);
 
     // ---- the carved surround, laid down first; the walls cover its middle
+    if (bare) {
+      // in the cabinet: no surround at all, just the dark the walls sit in
+      ctx.fillStyle = '#0a070c';
+      ctx.fillRect(ROOM.x - 3, ROOM.y - 3, ROOM.w + 6, ROOM.h + 6);
+    } else {
     rr(fx, fy, fw, fh, 16);
     ctx.fillStyle = lin(0, fy, 0, fy + fh,
       [[0, tone(1.05)], [0.16, tone(0.72)], [0.5, tone(0.5)], [0.84, tone(0.66)], [1, tone(0.95)]]);
@@ -11884,6 +11985,7 @@ if (!HEADLESS) (function browser() {
     rr(ROOM.x - 3, ROOM.y - 3, ROOM.w + 6, ROOM.h + 6, 6);
     ctx.fillStyle = '#0a070c'; ctx.fill();
     ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.stroke();
+    }
 
     // ---- one cut block. The chamfers are HAIRLINES: a block ringed in a
     // heavy dark border stops being stone and becomes a cartoon brick, which
@@ -11994,7 +12096,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(ROOM.x, FR.y1, ROOM.w, ROOM.botH);
 
     // ---- the corner bosses, last, riding on top of the band
-    for (const c of [[fx + BAND, fy + BAND], [fx + fw - BAND, fy + BAND],
+    if (!bare) for (const c of [[fx + BAND, fy + BAND], [fx + fw - BAND, fy + BAND],
                      [fx + BAND, fy + fh - BAND], [fx + fw - BAND, fy + fh - BAND]]) {
       const g = ctx.createRadialGradient(c[0] - 2.5, c[1] - 3, 1, c[0], c[1], 10);
       g.addColorStop(0, tone(1.35)); g.addColorStop(0.55, tone(0.86)); g.addColorStop(1, tone(0.42));
@@ -12005,7 +12107,7 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = '#0c0910'; ctx.fill();
     }
     // rivets down the long sides of the band
-    for (let y = fy + 34; y < fy + fh - 30; y += 46) {
+    if (!bare) for (let y = fy + 34; y < fy + fh - 30; y += 46) {
       for (const x of [fx + BAND * 0.52, fx + fw - BAND * 0.52]) {
         ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 7);
         ctx.fillStyle = tone(1.15); ctx.fill();
@@ -12041,11 +12143,14 @@ if (!HEADLESS) (function browser() {
     const room = curRoom();
     const has = (dir) => doorTo(dir);
     const open = (dir) => has(dir) && linkOpen(room, has(dir));
-    // the whole surround and every wall of it, baked once per room shape
+    // the whole surround and every wall of it, baked once per room shape.
+    // Inside the cabinet the SCREEN BEZEL is the frame, so the carved one
+    // stands down rather than framing a frame.
+    const cab = cabOn();
     const pad = BAND + 6;
     layer('stone', ROOM.x - pad, ROOM.y - pad, ROOM.w + pad * 2, ROOM.h + pad * 2,
-          [fkey(), ROOM.w + 'x' + ROOM.h], () => paintStone(T));
-    drawFrameGems(t);
+          [fkey(), ROOM.w + 'x' + ROOM.h, cab ? 'cab' : 'page'], () => paintStone(T, cab));
+    if (!cab) drawFrameGems(t);
     // tiled floor: real Frietkot stone when it loads, painted checker till then
     const fy = FR.y0;
     const fh = FR.y1 - FR.y0;
@@ -12505,10 +12610,13 @@ if (!HEADLESS) (function browser() {
     const pitch = 16;
     const mw = (b.maxX - b.minX + 1) * pitch + 12;
     const mh = (b.maxY - b.minY + 1) * pitch + 12;
-    const mx = LW - 14 - mw, my = 56;
+    // inside the cabinet the map has its own painted window in the bezel
+    const cab = cabOn();
+    const mx = cab ? CAB.map.x + (CAB.map.w - mw) / 2 : LW - 14 - mw;
+    const my = cab ? CAB.map.y + (CAB.map.h - mh) / 2 : 56;
     rr(mx, my, mw, mh, 8);
-    ctx.fillStyle = 'rgba(10,6,12,0.82)'; ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(232,220,232,0.35)'; ctx.stroke();
+    ctx.fillStyle = cab ? 'rgba(8,5,10,0.55)' : 'rgba(10,6,12,0.82)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = cab ? 'rgba(232,220,232,0.18)' : 'rgba(232,220,232,0.35)'; ctx.stroke();
     drawMapRooms(mx + 6 - b.minX * pitch, my + 6 - b.minY * pitch, pitch, seen, false);
     txt(TR('tap for map'), mx + mw / 2, my + mh + 8, '600 9px Verdana, sans-serif', '#a08a94');
     if (!S.room) uiButtons.push({ x: mx - 6, y: my - 6, w: mw + 12, h: mh + 24, cb: () => { mapView = true; } });
@@ -12574,6 +12682,99 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
+  // ---- the machine, laid OVER the picture once the picture is painted ----
+  function drawCabShell(t) {
+    const sh = cabArt('shell');
+    if (sh) ctx.drawImage(sh, 0, 0, LW, LH);   // corner to corner, no letterbox
+    // the marquee plate goes on the empty plaque, and its torches breathe
+    const mq = cabArt('marquee');
+    if (mq) {
+      const r = CAB.mq, hh = Math.min(r.h, imW(mq, 0) ? r.w * (mq.naturalHeight || mq.height) / (mq.naturalWidth || mq.width) : r.h);
+      ctx.drawImage(mq, r.x, r.y + (r.h - hh) / 2, r.w, hh);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      for (const fx of [r.x + r.w * 0.075, r.x + r.w * 0.925]) {
+        const fl = fireNoise(t, fx * 0.1);
+        ctx.globalAlpha = 0.09 + 0.09 * fl;
+        blob('halo', fx, r.y + r.h * 0.5, 34 + fl * 10);
+      }
+      ctx.restore();
+    }
+  }
+  // the live floor name where the glass has room for it
+  function drawCabHead(t) {
+    const h = CAB.head, r = S.run;
+    txt(theme().name, h.x + h.w / 2, h.y + h.h * 0.38,
+        '900 ' + Math.max(10, Math.round(h.h * 0.46)) + 'px Georgia, serif', '#cfe4f5', 'center',
+        { w: 3, col: 'rgba(6,10,20,0.95)' });
+    txt('FLOOR ' + r.floor + '   •   ' + r.keys + ' KEYS', h.x + h.w / 2, h.y + h.h * 0.82,
+        '800 ' + Math.max(9, Math.round(h.h * 0.26)) + 'px Verdana, sans-serif',
+        r.keys < 1 ? '#ff8a7a' : '#e8b8c4', 'center', { w: 3, col: 'rgba(6,10,20,0.95)' });
+  }
+  // the stick leans the way you walk; the three buttons are real, and the
+  // brass EXIT plate at the end of the panel is the way out of the machine
+  function drawCabControls(t) {
+    const R = CAB.r;
+    const im = cabArt('joystick');
+    if (im) {
+      const j = R.joystick;
+      ctx.save();
+      ctx.translate(j.x + j.w / 2, j.y + j.h * 0.46);
+      ctx.rotate((AV.moving ? AV.fx : 0) * 0.22);
+      ctx.drawImage(im, -j.w / 2, -j.h * 0.46, j.w, j.h);
+      ctx.restore();
+    }
+    const btns = [['btn_map', 'button_red', 'MAP', () => { mapView = !mapView; }],
+                  ['btn_purse', 'button_yellow', 'PURSE', () => { S.inv = S.inv ? null : { tab: 'coins' }; }],
+                  ['btn_menu', 'button_blue', 'MENU', () => { SETTINGS = true; }]];
+    for (const [slot, name, label, cb] of btns) {
+      const b = R[slot], bi = cabArt(name);
+      if (bi) ctx.drawImage(bi, b.x, b.y, b.w, b.h);
+      txt(label, b.x + b.w / 2, b.y + b.h * 1.42, '800 9px Verdana, sans-serif', '#d8b8a8');
+      uiButtons.push({ x: b.x, y: b.y - b.h * 0.2, w: b.w, h: b.h * 1.4, cb });
+    }
+    // a real cabinet has no home key, so the way out is a brass plate screwed
+    // to the end of the panel
+    const e = R.btn_exit;
+    ctx.save();
+    ctx.fillStyle = 'rgba(14,9,8,0.86)';
+    ctx.strokeStyle = 'rgba(196,158,84,0.85)'; ctx.lineWidth = 1.5;
+    rr(e.x, e.y, e.w, e.h, 4); ctx.fill(); ctx.stroke();
+    ctx.restore();
+    txt('\u{2302}', e.x + e.w / 2, e.y + e.h * 0.44, '16px serif', '#e8c88a');
+    txt('EXIT', e.x + e.w / 2, e.y + e.h * 1.20, '800 9px Verdana, sans-serif', '#d8b8a8');
+    uiButtons.push({ x: e.x, y: e.y, w: e.w, h: e.h,
+                     cb: () => { S.screen = 'title'; save(); } });
+  }
+  // HP / GOLD / PURSE / POTION / BAG — the owner's plates, with the numbers
+  // that were stripped out of the art put back live
+  function drawCabStatus(t) {
+    const r = S.run;
+    const names = ['panel_hp', 'panel_gold', 'panel_purse', 'panel_potion', 'panel_bag'];
+    const vals = [Math.max(0, r.hp) + ' / ' + r.maxHp, fmt(r.gold), '' + purseTotal(),
+                  '' + (r.potions | 0),
+                  '' + Object.values(r.arsenal || {}).reduce((a2, n) => a2 + n, 0)];
+    names.forEach((img, i) => {
+      const p = CAB.r[img];
+      const im = cabArt(img);
+      if (im) ctx.drawImage(im, p.x, p.y, p.w, p.h);
+      if (i === 0) {
+        const bx = p.x + p.w * 0.10, by = p.y + p.h * 0.50, bw = p.w * 0.80, bh = p.h * 0.30;
+        const frac = Math.max(0, Math.min(1, r.hp / Math.max(1, r.maxHp)));
+        ctx.fillStyle = 'rgba(8,4,8,0.8)'; ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = frac > 0.5 ? '#7ed06a' : frac > 0.25 ? '#e8c04a' : '#e0503c';
+        ctx.fillRect(bx, by, bw * frac, bh);
+        txt(vals[i], bx + bw / 2, by + bh / 2, '900 9px Verdana, sans-serif', '#fff6e0',
+            'center', { w: 3, col: 'rgba(6,3,8,0.95)' });
+      } else {
+        txt(vals[i], p.x + p.w * 0.62, p.y + p.h * 0.62,
+            '900 ' + Math.max(10, Math.round(p.h * 0.24)) + 'px Verdana, sans-serif', '#ffe9a3',
+            'center', { w: 3, col: 'rgba(6,3,8,0.9)' });
+      }
+      if (img === 'panel_potion') uiButtons.push({ x: p.x, y: p.y, w: p.w, h: p.h, cb: () => usePotion() });
+      if (img === 'panel_bag') uiButtons.push({ x: p.x, y: p.y, w: p.w, h: p.h, cb: () => { S.inv = S.inv ? null : { tab: 'gear' }; } });
+    });
+  }
   function drawDungeon(t, dt) {
     const T = theme();
     layer('dbg', 0, 0, LW, LH, ['f' + fkey()], () => bgBase(0));
@@ -12586,25 +12787,40 @@ if (!HEADLESS) (function browser() {
       dcTick(dt, (AV.x - FR.x0) / Math.max(1, FR.x1 - FR.x0),
                  (AV.y - FR.y0 - 26) / Math.max(1, (FR.y1 - FR.y0) - 46));
     }
-    // heading
-    ctx.font = '900 26px Georgia, serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 7; ctx.strokeStyle = '#2a1030';
-    ctx.strokeText(T.name, LW / 2 - 30, 44);
-    ctx.fillStyle = lgr('dtt:' + fkey(), 0, 30, 0, 60, [[0, '#fff4d6'], [1, T.accent]]);
-    ctx.fillText(T.name, LW / 2 - 30, 44);
-    txt('FLOOR ' + S.run.floor, LW / 2 - 30, 74, '800 12px Verdana, sans-serif', '#c8a8b0');
-    if (darkFloor()) {
-      txt('\u{1F56F}\u{FE0F} THE TORCHES ARE DEAD — follow your light', LW / 2 - 30, 89,
-          '700 10px Verdana, sans-serif', '#ff9d3c');
-    } else if (rawAct(S.run.floor) === 4) {
-      const pr = S.run.pressure | 0;
-      txt(TR('\u{1FAE7} THE PRESSURE') + ': ' + pr + ' / ' + PRESSURE_MAX
-          + (pr >= PRESSURE_MAX ? ' — ' + TR('foes strike +1 at full depth') : ''),
-          LW / 2 - 30, 89, '700 10px Verdana, sans-serif', pr >= PRESSURE_MAX ? '#7ee7e0' : '#8ab8c0');
+    const CABIN = cabOn();
+    if (CABIN) cabLayout();
+    if (!CABIN) {
+      // heading
+      ctx.font = '900 26px Georgia, serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 7; ctx.strokeStyle = '#2a1030';
+      ctx.strokeText(T.name, LW / 2 - 30, 44);
+      ctx.fillStyle = lgr('dtt:' + fkey(), 0, 30, 0, 60, [[0, '#fff4d6'], [1, T.accent]]);
+      ctx.fillText(T.name, LW / 2 - 30, 44);
+      txt('FLOOR ' + S.run.floor, LW / 2 - 30, 74, '800 12px Verdana, sans-serif', '#c8a8b0');
+      if (darkFloor()) {
+        txt('\u{1F56F}\u{FE0F} THE TORCHES ARE DEAD — follow your light', LW / 2 - 30, 89,
+            '700 10px Verdana, sans-serif', '#ff9d3c');
+      } else if (rawAct(S.run.floor) === 4) {
+        const pr = S.run.pressure | 0;
+        txt(TR('\u{1FAE7} THE PRESSURE') + ': ' + pr + ' / ' + PRESSURE_MAX
+            + (pr >= PRESSURE_MAX ? ' — ' + TR('foes strike +1 at full depth') : ''),
+            LW / 2 - 30, 89, '700 10px Verdana, sans-serif', pr >= PRESSURE_MAX ? '#7ee7e0' : '#8ab8c0');
+      }
+      txt('\u{1F5DD} × ' + S.run.keys, LW / 2 - 30, 104, '900 16px Verdana, sans-serif',
+          S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
     }
-    txt('\u{1F5DD} × ' + S.run.keys, LW / 2 - 30, 104, '900 16px Verdana, sans-serif',
-        S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
+    // the room is painted INTO the glass, so nothing of it can spill onto the
+    // cabinet's own woodwork — and the mock-up floor under it is blacked out
+    // first, or its painted torches burn away behind the real room
+    // everything the machine SHOWS is painted inside the glass, and the shell
+    // is laid over it afterwards — so the bezel's shadow falls on the picture
+    if (CABIN) {
+      ctx.fillStyle = '#07060c';
+      ctx.fillRect(CAB.hole.x, CAB.hole.y, CAB.hole.w, CAB.hole.h);
+      ctx.save();
+      ctx.beginPath(); ctx.rect(CAB.hole.x, CAB.hole.y, CAB.hole.w, CAB.hole.h); ctx.clip();
+    }
     drawRoomBox(t);
     // dwellers + hero, back-to-front
     const ents = (curRoom() && curRoom().ents) || [];
@@ -12639,35 +12855,51 @@ if (!HEADLESS) (function browser() {
     }
     drawMotes(dt, 1);
     drawParticles(dt);
+    if (CABIN) {
+      drawCabHead(t);
+      drawMinimap(t);
+      ctx.restore();                   // ...the glass ends here...
+      drawCabShell(t);                 // ...and the machine closes over it
+      drawCabControls(t);
+      drawCabStatus(t);
+    }
     drawToast();
-    drawJoystick();
-    drawHUD(t);
-    drawVignette(0.35);
-    drawMinimap(t);
+    if (!CABIN) {
+      drawJoystick();
+      drawHUD(t);
+      drawVignette(0.35);
+      drawMinimap(t);
+    }
     drawBanner(t);
     if (S.uiFlash && !S.room) {
-      txt(S.uiFlash.msg, LW / 2, ROOM.y + ROOM.wallH + 60, '900 15px Verdana, sans-serif',
+      txt(S.uiFlash.msg, LW / 2, CABIN ? CAB.play.y + CAB.play.h * 0.5 : ROOM.y + ROOM.wallH + 60, '900 15px Verdana, sans-serif',
           Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
     }
-    uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'title'; save(); }, { r: 10, font: '20px serif' });
-    uiBtn(LW - 52, 12, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
-    // deep in the ENDLESS, the standing decrees are posted at the gate
+    // outside the machine these float over the heading; inside it the panel's
+    // own EXIT plate and blue MENU button already do both jobs, and two loose
+    // chips floating on the marquee would break the illusion cold
+    if (!CABIN) {
+      uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'title'; save(); }, { r: 10, font: '20px serif' });
+      uiBtn(LW - 52, 12, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
+    }
+    // the standing decrees and the floor's optional JOB are posted on the
+    // bezel below the glass in the cabinet, and under the title without it
+    const postY = CABIN ? CAB.hole.y + CAB.hole.h - 12 : 134;
     if (mutCount() > 0) {
       const mn = mutCount();
       const mi = Math.floor(t / 2.5) % mn;         // the posted laws take turns
       txt('\u{1F30C} ENDLESS +' + mn + ' • ' + MUTS[mi].name + ' — ' + MUTS[mi].desc,
-          LW / 2, 134, '700 9px Verdana, sans-serif', '#c8a8ff', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
+          LW / 2, postY, '700 9px Verdana, sans-serif', '#c8a8ff', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
     }
-    // the floor's optional JOB, posted under the floor title
     const q = S.run.quest;
     if (q) {
       const rIcon = q.reward === 'goldkey' ? '\u{1F511}' : '\u{1F4FF}';
       txt(q.done ? '✓ quest done — ' + rIcon + ' claimed'
                  : '\u{1F4DC} ' + questTxt(q) + '  (' + Math.min(q.got, q.need) + '/' + q.need + ')  →  ' + rIcon,
-          LW / 2, 120, '700 10px Verdana, sans-serif', q.done ? '#7ee787' : '#e8c877',
-          'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
+          LW / 2, postY - (mutCount() > 0 ? 13 : 0), '700 10px Verdana, sans-serif',
+          q.done ? '#7ee787' : '#e8c877', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
     }
-    txt('drag to walk • WASD works too', LW / 2, 704, '600 10px Verdana, sans-serif', '#8d7d95');
+    if (!CABIN) txt('drag to walk • WASD works too', LW / 2, 704, '600 10px Verdana, sans-serif', '#8d7d95');
     drawStairsAsk(t);
     drawRoomModal(t);
     drawMapView(t);
