@@ -51,6 +51,12 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.11.1', notes: [
+    'THE NEAR MISS \u{1F62C} — more than half of all spins no longer simply ARRIVE. The wheel runs down into the wrong slice, hangs there on a pin with \u2026 almost \u2026 and the prize you did not win written under it, and then the pin gives — one click on, or one click back — into the prize the odds actually drew. Come on\u2026 come on\u2026 NO. Or: come on\u2026 come on\u2026 YES',
+    'THE PIN IS SPRUNG \u{1F4CD} — the last click is not a glide. It holds against the peg, gives all at once, carries PAST it and rocks back down onto it, the way a sprung flapper actually behaves',
+    'and it never comes to rest ON a pin \u{1F3AF} — every landing keeps a good fifth of the slice clear of both pegs, so the pointer can never come down straddling two prizes and leave you squinting at which one it meant',
+    'the drama is only ever theatre: the creep hands back exactly what the spin-down borrowed, so the wheel still stops on the prize its own odds drew — three hundred spins are checked for that, and for never landing on a pin',
+  ] },
   { v: '1.11.0', notes: [
     'YOU CHOOSE WHAT GOES DOWN THE SLOT \u{1FA99} — the wheel ghost used to take his fee off your richest stack without asking. Now he holds out his palm: pick the coins yourself, one kind or five, and the piece you feed him FIRST is the one you watch tumble into the machine. AUTO still fills it the old way in one tap',
     'THE GHOST HAS A CABINET NOW \u{1F3A1} — a lit marquee with bulbs chasing round it while the wheel runs and every one of them blazing when it lands, a coin slot your own piece drops into, and the prize on its own lit plate',
@@ -2779,8 +2785,8 @@ const WHEEL = [
 // odds — a GOLD RUSH slice is a third the width of a +GOLD slice because it
 // pays a third as often — so the thing you are looking at IS the probability
 // table. Nothing is hidden behind a weighted draw and a fixed-width pie.
-// coin-in (1.0s) + spin-down (3.6s) + a few seconds to read the prize
-const WHEEL_LIFE = 8.4;
+// coin-in (1.0s) + spin-down and the near-miss creep (4.7s) + time to read it
+const WHEEL_LIFE = 10.2;
 const WHEEL_TOTAL = WHEEL.reduce((a, s) => a + s.w, 0);
 const WHEEL_SEGS = (() => {
   const out = [];
@@ -2833,6 +2839,55 @@ function wheelConfirm() {
   spinWheel(shown);
   return true;
 }
+const WH_IN = 1.0;                      // the coin's journey into the slot
+const WH_LAM = 1.15;                    // how fast the bearing gives up
+const WH_PEG = 0.055;                   // how hard each pin bites, in radians
+const WH_CREEP0 = 2.5, WH_CREEP = 1.7;  // when the last pin gives, and for how long
+const WH_END = WH_CREEP0 + WH_CREEP + 0.5;
+// which slice the pointer is over, and how far into it (0..1)
+function wheelAt(rot) {
+  let a = (-Math.PI / 2 - rot) % (Math.PI * 2);
+  if (a < 0) a += Math.PI * 2;
+  for (const g of WHEEL_SEGS) if (a >= g.a0 && a < g.a1) return g;
+  return WHEEL_SEGS[0];
+}
+function wheelPhase(rot) {
+  let a = (-Math.PI / 2 - rot) % (Math.PI * 2);
+  if (a < 0) a += Math.PI * 2;
+  const g = wheelAt(rot);
+  return (a - g.a0) / g.arc;
+}
+// THE PIN IS BOUNCY. The creep off the last peg does not glide — it holds,
+// gives all at once, overshoots the pin and rocks back onto it. That is what
+// a sprung flapper does, and it is the difference between "it moved" and
+// "come ON… YES". Ends at exactly 1, so the landing is still the landing.
+// x*x holds it against the pin at first; the back-ease then lets go, carries
+// PAST the peg and rocks onto it. Both ends are exact — 0 at 0, 1 at 1 — or
+// the creep would move the landing, which is the one thing it must not do.
+function pinEase(x) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const b = x * x, p = b - 1;
+  return 1 + 2.70158 * p * p * p + 1.70158 * p * p;
+}
+function wheelRot(a) {
+  if (!(a.target > 0 || a.target < 0)) a.target = Math.PI * 8;   // a hand-made anim still turns
+  const dr = a.drama || 0;
+  const st = Math.max(0, a.t - WH_IN);
+  const decay = Math.exp(-WH_LAM * st);
+  // the spin-down aims at the WRONG slice when there is drama to be had...
+  let rot = (a.target + dr) * (1 - decay);
+  // THE PEGS: a stall against each pin, fading as the wheel tires. Zero at
+  // both ends of every slice, so the wheel still comes to rest where it must
+  const bite = WH_PEG * decay * Math.sin(wheelPhase(rot) * Math.PI);
+  rot -= bite;
+  // ...and then the last pin gives, and takes the drama back — bouncily
+  rot -= dr * pinEase((st - WH_CREEP0) / WH_CREEP);
+  // the final tooth: the pawl catches, the wheel rocks and settles
+  const over = Math.max(0, st - WH_END);
+  if (over > 0 && S.opts.shake !== false) rot += 0.05 * Math.exp(-over * 2.6) * Math.sin(over * 8);
+  return rot;
+}
 // spin it. The prize is drawn on its honest odds and the wheel is then thrown
 // hard enough to coast to exactly that slice — so the motion is a real
 // spin-down and the odds are still the odds.
@@ -2841,14 +2896,41 @@ function spinWheel(coin) {
   let r = rng() * WHEEL_TOTAL, idx = 0;
   for (let i = 0; i < WHEEL.length; i++) { r -= WHEEL[i].w; if (r <= 0) { idx = i; break; } }
   WHEEL[idx].fx();
+  const N = WHEEL_SEGS.length;
   const sg2 = WHEEL_SEGS[idx];
-  // land anywhere inside the slice, not always dead centre
-  const land = sg2.a0 + sg2.arc * (0.25 + rng() * 0.5);
+  // NEVER ON A PIN. The rest angle keeps a good quarter of the slice clear of
+  // both pegs, so the pointer can never come down straddling two prizes and
+  // leave you squinting at which one it means.
+  const edge = 0.26 + rng() * 0.06;
+  // ...and THE NEAR MISS. Better than half the time the wheel does not simply
+  // arrive: it runs down into the WRONG slice, hangs there on a pin while you
+  // read the wrong prize, and then the pin gives — one click on, or one click
+  // back — into the prize the odds actually drew. It is theatre, and it is the
+  // whole reason a wheel of fortune is fun. The drama is a rotation offset the
+  // spin-down aims at and the creep takes back, so the landing is untouched.
+  const roll = rng();
+  let land, drama = 0, tale = '';
+  if (roll < 0.30) {
+    // it stops one pin SHORT, in the slice behind — then crawls over. "…yes!"
+    land = sg2.a0 + sg2.arc * edge;
+    const nx = WHEEL_SEGS[(idx + 1) % N];
+    drama = land - (sg2.a1 + nx.arc * (0.30 + rng() * 0.35));
+    tale = WHEEL[nx.i].label;
+  } else if (roll < 0.58) {
+    // it runs one pin PAST, into the slice ahead — then rocks back. "…nooo"
+    land = sg2.a1 - sg2.arc * edge;
+    const pv = WHEEL_SEGS[(idx + N - 1) % N];
+    drama = land - (sg2.a0 - pv.arc * (0.30 + rng() * 0.35));
+    tale = WHEEL[pv.i].label;
+  } else {
+    land = sg2.a0 + sg2.arc * (0.30 + rng() * 0.40);     // a clean arrival
+  }
   const turns = 4 + ((rng() * 3) | 0);
   S.wheelAnim = { t: 0, seg: idx, label: WHEEL[idx].label,
                   coin: coin || null,                    // null = a free spin, no coin drops
                   target: Math.PI * 2 * turns + (-Math.PI / 2) - land,
-                  lit: 0, notch: -1, flap: 0, flapV: 0 };
+                  drama, tale,
+                  lit: 0, seg0: -1, flap: 0, flapV: 0, lastRot: 0 };
   SND.clink();
   save();
   return WHEEL[idx];
@@ -7012,6 +7094,7 @@ window.DP = {
   buyShop, removeArsenal, sellCoins, coinSellPrice, sellableKinds, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   WHEEL_SEGS, WHEEL_TOTAL, WHEEL_LIFE, wheelPicked, wheelAuto, wheelConfirm, wheelCancel,
+  pinEase, wheelRot, wheelAt, wheelPhase, WH_END,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
   enemyActFoe, rollIntent, bankSlotsRaw, bankMax, bankLoot,   // the deep's own hands read these
   bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap, strTotal, dexTotal,
@@ -9569,35 +9652,11 @@ if (!HEADLESS) (function browser() {
   // speed against it, then snaps past. The stall term is a sine over the
   // segment, so it is exactly zero at every peg crossing and cannot drift the
   // landing; the prize the odds drew is still the prize you get.
-  const WH_IN = 1.0;                      // the coin's journey into the slot
-  const WH_LAM = 1.15;                    // how fast the bearing gives up
-  const WH_PEG = 0.055;                   // how hard each pin bites, in radians
-  function wheelPhase(rot) {
-    // where the pointer sits inside whichever slice it is over, 0..1
-    let a = (-Math.PI / 2 - rot) % (Math.PI * 2);
-    if (a < 0) a += Math.PI * 2;
-    for (const g of WHEEL_SEGS) if (a >= g.a0 && a < g.a1) return (a - g.a0) / g.arc;
-    return 0;
-  }
-  function wheelRot(a) {
-    if (!(a.target > 0 || a.target < 0)) a.target = Math.PI * 8;   // a hand-made anim still turns
-    const st = Math.max(0, a.t - WH_IN);
-    const decay = Math.exp(-WH_LAM * st);
-    let rot = a.target * (1 - decay);
-    // THE PEGS: a stall against each pin, fading as the wheel tires. Zero at
-    // both ends of every slice, so the wheel still comes to rest where it must
-    const bite = WH_PEG * decay * Math.sin(wheelPhase(rot) * Math.PI);
-    rot -= bite;
-    // and the last tooth: the pawl catches, the wheel rocks back and settles
-    const over = Math.max(0, st - 3.4);
-    if (over > 0 && S.opts.shake !== false) rot += 0.055 * Math.exp(-over * 2.4) * Math.sin(over * 7.5);
-    return rot;
-  }
   function drawWheel(dt) {
     if (!S.wheelAnim) return;
     const a = S.wheelAnim;
     const st = Math.max(0, a.t - WH_IN);
-    const done = st > 3.6;
+    const done = st > WH_END;
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { if (done) dismissWheel(); } });
     ctx.fillStyle = 'rgba(4,2,7,0.90)';
     ctx.fillRect(0, 0, LW, LH);
@@ -9691,9 +9750,13 @@ if (!HEADLESS) (function browser() {
     ctx.lineWidth = 3; ctx.strokeStyle = '#7d5a24'; ctx.stroke();
 
     // ---- THE FLAPPER: it rides the pegs, and it BENDS when it hits one ----
+    // driven off how far the wheel ACTUALLY moved this frame, so it still
+    // strains against the pin during the slow creep — which is the whole show
     const ph = wheelPhase(rot);
-    const speed = Math.abs(a.target) * WH_LAM * Math.exp(-WH_LAM * st);
-    const want = speed > 0.25 ? Math.sin(ph * Math.PI) * 0.85 : 0;
+    const moved = Math.abs(rot - (a.lastRot || 0));
+    a.lastRot = rot;
+    const speed = moved / Math.max(0.001, dt || 0.016);
+    const want = speed > 0.10 ? Math.sin(ph * Math.PI) * 0.85 : 0;
     a.flapV += (want - a.flap) * 34 * Math.min(0.05, dt || 0.016);
     a.flapV *= 0.72;
     a.flap += a.flapV;
@@ -9708,9 +9771,10 @@ if (!HEADLESS) (function browser() {
     ctx.beginPath(); ctx.arc(0, -12, 4.5, 0, 7);
     ctx.fillStyle = '#c8a04a'; ctx.fill();
     ctx.restore();
-    // the tick: one per peg over the flapper, while it still has speed
-    const notch = Math.floor((-Math.PI / 2 - rot) / 0.32);
-    if (a.notch !== notch) { a.notch = notch; if (speed > 0.3) SND.ratchet(); }
+    // the tick: one per REAL peg over the flapper — the pegs are unevenly
+    // spaced now, so counting a fixed angle would clack in the wrong places
+    const segNow = wheelAt(rot).i;
+    if (a.seg0 !== segNow) { a.seg0 = segNow; if (speed > 0.12) SND.ratchet(); }
 
     // ---- THE COIN SLOT, and your own piece going into it ----
     const slotX = cabX + 62, slotY = cabY + cabH - 62;
@@ -9738,6 +9802,16 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
     }
 
+    // ---- "…almost…" — the line the near miss earns ----
+    if (!done && a.drama && st > WH_CREEP0 - 0.35) {
+      const k3 = Math.min(1, (st - (WH_CREEP0 - 0.35)) / 0.4);
+      ctx.save();
+      ctx.globalAlpha = k3 * (0.7 + 0.3 * Math.sin(a.t * 9));
+      txt('\u2026 almost \u2026', cx, cy + R + 44, '900 17px Georgia, serif', '#ffb47a');
+      if (a.tale) txt(String(a.tale).replace('\n', ' '), cx, cy + R + 66,
+                      '800 11px Verdana, sans-serif', '#c8a8b0');
+      ctx.restore();
+    }
     // ---- the prize ----
     if (done) {
       const pop = 1 + Math.sin((st - 3.6) * 8) * 0.05;
