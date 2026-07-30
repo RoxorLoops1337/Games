@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.12.0', notes: [
+    'THE MAP REMEMBERS \u{1F5FA}\u{FE0F} — a room you have walked now shows what is STILL in it: the shopkeeper, the blacksmith, the shrine, the chest, the wheel ghost, the stranger, and \u2694\u{FE0F} for a foe or \u{1F480} for an elite. A room with nothing left wears a \u2713. So the keeper you passed on the way down is findable on the way back, which is the whole reason to keep a map at all',
+    'services sort ahead of foes on each room, a busy room shows three and a +count, and a dweller you have already dealt with drops off the moment it is spent',
+    'the minimap chip is deliberately left alone \u{1F50D} — it is thirty pixels across and this would turn it to mush. The big map is where the reading happens',
+  ] },
   { v: '1.11.2', notes: [
     'THE BOSS COINS WERE BREEDING \u{1FA99} — a run could open with HUNDREDS of them. Your purse is a DECK: firing a coin never takes it out, the hand is a fresh copy every round. But the settlement pocketed every special sitting in the tray as though it had just been minted, so a boss coin you FIRED came home a second time. One king became two, two became four; eight fights of playing your specials turned eleven coins into five hundred and sixty-six. Only a coin the deep actually MADE — a bred kit, a rotted gold, a mimic that turned — is a new coin now, and the machine keeps the books to prove it',
     'THE BOSS MINT IS PAINTED \u{1F3A8} — all eleven special coins wear the owner\u2019s own faces on the bed, in the tray and in the purse: the bunny, the twins, the ember, the piper, the rime, the lode, the king, the rot, the mimic, the leech and spikey',
@@ -12409,15 +12414,48 @@ if (!HEADLESS) (function browser() {
         ctx.restore();
       }
       if (r.boss && seen[k] === 2) txt('\u{1F451}', rc.cx, rc.cy, Math.max(8, pitch * 0.3) + 'px serif', '#fff');
+      // WHAT IS STILL IN IT. Once a room has been walked, the map remembers
+      // its dwellers — the whole point being the shopkeeper you passed on the
+      // way down and want to find again on the way back. Only on the big map:
+      // the minimap chip has no room for this and would just turn to mush.
+      if (ink && seen[k] === 2 && !r.boss) {
+        const live = (r.ents || []).filter(e2 => !e2.done);
+        if (live.length) {
+          // services first, monsters last — you go back for a keeper, not a fight
+          const marks = live.slice()
+            .sort((p2, q2) => (p2.kind === 'monster' ? 1 : 0) - (q2.kind === 'monster' ? 1 : 0))
+            .map(e2 => e2.kind === 'monster'
+              ? (e2.mtype === 'elite' ? '\u{1F480}' : '\u{2694}\u{FE0F}')
+              : (ENT_INFO[e2.kind] || {}).icon || '?');
+          const show = marks.slice(0, 3);
+          const extra = marks.length - show.length;
+          const slots = show.length + (extra ? 1 : 0);
+          // emoji draw WIDER than their nominal size, so the row is budgeted
+          // against the room's real width with a glyph's worth of slack
+          const sz = Math.max(9, Math.min(16, Math.round(rc.w / (slots + 0.95))));
+          const step = sz * 1.06;
+          const x0 = rc.cx - (slots - 1) * step / 2;
+          const iy = rc.cy - rc.h * 0.08;
+          show.forEach((m, i2) => txt(m, x0 + i2 * step, iy, sz + 'px serif', '#fff'));
+          if (extra) txt('+' + extra, x0 + show.length * step, iy,
+                         '800 ' + Math.max(9, sz - 4) + 'px Verdana, sans-serif', '#4a3a2a');
+        } else {
+          txt('\u2713', rc.cx, rc.cy - rc.h * 0.06,
+              '800 ' + Math.max(9, Math.round(pitch * 0.26)) + 'px Verdana, sans-serif', 'rgba(74,58,42,0.45)');
+        }
+      }
       // where the thief went to ground — the one mark the fog cannot keep
       if (k === S.run.dcRoom && r.ents.some(e2 => e2.kind === 'collector' && !e2.done)) {
         txt('\u{1F4BC}', rc.cx, rc.cy - (r.boss ? pitch * 0.26 : 0),
             Math.max(8, pitch * 0.3) + 'px serif', '#fff');
       }
-      if (!r.boss && k === '0,0' && ink) txt('1', rc.cx, rc.cy, '700 ' + Math.max(9, pitch * 0.3) + 'px Georgia, serif', '#4a3a2a');
+      if (!r.boss && k === '0,0' && ink) {
+        txt('1', rc.x + rc.w * 0.16, rc.y + rc.h * 0.2,
+            '700 ' + Math.max(9, Math.round(pitch * 0.24)) + 'px Georgia, serif', '#4a3a2a');
+      }
       if (isCur) {
         const pulse = 0.5 + 0.5 * Math.sin(S.time * 5 + performance.now() / 200);
-        ctx.beginPath(); ctx.arc(rc.cx, rc.cy, Math.max(3, pitch * 0.1), 0, 7);
+        ctx.beginPath(); ctx.arc(rc.cx, ink ? rc.cy + rc.h * 0.32 : rc.cy, Math.max(3, pitch * 0.1), 0, 7);
         ctx.fillStyle = ink ? 'rgba(168,33,58,' + (0.6 + 0.4 * pulse) + ')' : 'rgba(255,255,255,' + (0.6 + 0.4 * pulse) + ')';
         ctx.fill();
       }
@@ -12489,8 +12527,10 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
     txt(theme().name + ' — FLOOR ' + S.run.floor, LW / 2, 118, '900 20px Georgia, serif', '#4a3a2a');
     const seenN = Object.values(seen).filter(v => v === 2).length;
-    txt(seenN + ' / ' + Object.keys(S.run.map.rooms).length + ' rooms walked • \u{1F512} locked corridors • tap to close',
-        LW / 2, 688, '700 10px Verdana, sans-serif', '#6a5138');
+    txt(seenN + ' / ' + Object.keys(S.run.map.rooms).length + ' rooms walked • \u{1F512} locked corridors',
+        LW / 2, 682, '700 10px Verdana, sans-serif', '#6a5138');
+    txt('a walked room shows what is still in it — \u2694\u{FE0F} foe • \u{1F480} elite • \u2713 nothing left',
+        LW / 2, 698, '700 10px Verdana, sans-serif', '#6a5138');
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { mapView = false; } });
   }
 
