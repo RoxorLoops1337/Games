@@ -51,6 +51,9 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.15.1', notes: [
+    'THE MACHINE, TUNED BY HAND \u{1F527} \u2014 the owner took the new scene builder to the cabinet and moved everything: a taller marquee sitting higher on its plaque, the whole control panel lifted up under the glass, the stick standing proud of the bezel, and the five stat plates closed up into a tight row right beneath the buttons. Nothing about it was typed \u2014 it was dragged',
+  ] },
   { v: '1.15.0', notes: [
     'A SCENE BUILDER FOR THE WHOLE MACHINE \u{1F9F0} \u2014 cab.html opens the cabinet as an editor. Drag every plate, button, plaque and the glass itself over the real art; box-select a row; align, match and spread them against an anchor; nudge single pixels with the arrows; snap to the grid or to anything else\u2019s edges; undo as far back as you like',
     'and the machine now takes its layout from a FILE \u{1F4D0} \u2014 every piece of the cabinet is one flat rect in the shell\u2019s own pixels, and art/cab/layout.json overrides any of them. The builder writes exactly that file, so the whole thing can be re-tuned without touching a line of code',
@@ -11211,20 +11214,20 @@ if (!HEADLESS) (function browser() {
   // art/cab/layout.json, if it exists, overrides any subset of them.
   const CAB_R = {
     hole:         [139,  404,  898, 1008],   // the screen, knocked transparent
-    marquee:      [ 60,   38, 1015,  250],   // the plaque up top
+    marquee:      [ 81,   26, 1015,  282],   // the plaque up top
     head:         [166,  424,  566,  136],   // the floor name, inside the glass
     map:          [759,  429,  251,  141],   // the minimap, inside the glass
     play:         [157,  590,  862,  806],   // where the room is fitted
-    joystick:     [ 92, 1502,  178,  226],
-    btn_map:      [405, 1551,  102,   99],
-    btn_purse:    [573, 1551,  104,   99],
-    btn_menu:     [741, 1551,  105,   99],
-    btn_exit:     [954, 1554,  121,   93],
-    panel_hp:     [ 55, 1820,  236,  125],
-    panel_gold:   [291, 1820,  207,  125],
-    panel_purse:  [498, 1820,  206,  125],
-    panel_potion: [704, 1820,  206,  125],
-    panel_bag:    [909, 1820,  201,  125],
+    joystick:     [139, 1363,  178,  226],
+    btn_map:      [369, 1473,  102,   99],
+    btn_purse:    [537, 1473,  104,   99],
+    btn_menu:     [705, 1473,  105,   99],
+    btn_exit:     [898, 1496,  121,   93],
+    panel_hp:     [ 61, 1644,  236,  125],
+    panel_gold:   [297, 1644,  207,  125],
+    panel_purse:  [504, 1644,  206,  125],
+    panel_potion: [710, 1644,  206,  125],
+    panel_bag:    [915, 1644,  201,  125],
   };
   const CAB = { on: false, r: {} };
   function cabLayout() {
