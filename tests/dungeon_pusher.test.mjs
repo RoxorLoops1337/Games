@@ -7369,7 +7369,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.11.1', 'the near miss ships as v1.11.1');
+  t.eq(D.VERSION, '1.11.2', 'the boss-coin fix ships as v1.11.2');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('WERE BREEDING') >= 0)),
+       'and the notes carry the fix');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('NEAR MISS') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('HONEST WHEEL') >= 0)),
@@ -8561,6 +8563,171 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // a free spin (an elite's gift) drops no coin
   D.spinWheel();
   t.eq(D.S.wheelAnim.coin, null, 'a free spin puts nothing down the slot');
+}
+
+// ============ THE BOSS COINS WERE BREEDING ============
+// The owner opened a run and found HUNDREDS of boss coins. The purse is a
+// DECK — firing a coin never takes it out, the hand is a fresh copy every
+// round — but the settlement pocketed every special sitting in the tray as
+// though it were newly minted. So a special you FIRED came home a second
+// time: one king becomes two, two become four, and a long run ends in a
+// hoard. Only a coin the deep actually MADE (a bred kit, a rotted gold, a
+// mimic that turned) is a new coin.
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(11); D.newRun('knight');
+  for (const k of D.COIN_KINDS) D.S.run.purse[k] = 0;
+  D.S.run.purse.coin = 6;
+  D.S.run.purse.king = 1;                       // one boss coin, minted once
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+  D.interact(0);
+  const B = D.S.battle;
+  t.eq(B.hand.king, 1, 'the deck deals the king into your hand');
+  D.S.battle.sel = 'king'; D.S.cd = 0;
+  t.ok(D.drop(50, true), 'and you fire it');
+  t.eq(D.S.run.purse.king, 1, 'the deck still holds it — firing never spends the purse');
+  // it works its way across the bed and into the tray
+  B.loot.push({ k: 'king' });
+  D.S.foes.forEach(f => D.dmgFoe(f, 99999));
+  D.leaveBattle();
+  t.eq(D.S.run.purse.king, 1, 'and it comes home as the SAME coin, not a second one');
+
+  // ...but a coin the deep actually made IS a new coin
+  const { DP: E } = loadGame({}, false);
+  E.srand(12); E.newRun('knight');
+  for (const k of E.COIN_KINDS) E.S.run.purse[k] = 0;
+  E.S.run.purse.coin = 6;
+  E.S.run.purse.bunny = 2;
+  E.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+  E.interact(0);
+  E.S.battle.sel = 'bunny'; E.S.cd = 0; E.drop(40, true);
+  E.S.cd = 0; E.drop(60, true);
+  E.S.battle.loot.push({ k: 'bunny' }, { k: 'bunny' }, { k: 'bunny' });   // the pair bred a kit
+  E.S.foes.forEach(f => E.dmgFoe(f, 99999));
+  E.leaveBattle();
+  t.eq(E.S.run.purse.bunny, 3, 'the two you fired come home once, and the KIT is a third');
+
+  // ...and the same at the staircase, where the BED is emptied into the purse
+  const { DP: F } = loadGame({}, false);
+  F.srand(13); F.newRun('knight');
+  for (const k of F.COIN_KINDS) F.S.run.purse[k] = 0;
+  F.S.run.purse.coin = 6;
+  F.S.run.purse.lode = 1;
+  F.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+  F.interact(0);
+  F.S.battle.sel = 'lode'; F.S.cd = 0; F.drop(50, true);
+  F.S.foes.forEach(f2 => F.dmgFoe(f2, 99999));
+  F.leaveBattle();                               // it stays on the BED, not the tray
+  F.S.run.pileSave = [{ k: 'lode', x: 50, y: 40, lay: 0 }];
+  F.S.run.pileFloor = F.S.run.floor;
+  F.nextFloor();
+  t.eq(F.S.run.purse.lode, 1, 'a special left on the bed comes home as itself too');
+}
+
+// ---- and the guard that would have CAUGHT it: play the fight that did it ----
+// The unit checks above pin the mechanism; this one plays the actual game.
+// Eight battles across two floors, firing every special every round and
+// letting them settle. Under the old settlement this ran away exponentially.
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(14); D.newRun('knight');
+  for (const k of D.COIN_KINDS) D.S.run.purse[k] = 0;
+  D.S.run.purse.coin = 10;
+  for (const sp of D.SPECIALS) D.S.run.purse[sp] = 1;
+  const start = D.SPECIALS.reduce((a, k) => a + (D.S.run.purse[k] | 0), 0);
+  let fired = 0, settled = 0, trayEnd = 0;
+  t.eq(start, D.SPECIALS.length, 'one of every boss coin to begin with');
+  for (let b = 0; b < 8; b++) {
+    if (b === 4) { D.S.run.pileSave = null; D.nextFloor(); }
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    const B = D.S.battle;
+    for (let r = 0; r < 3; r++) {
+      for (const sp of D.SPECIALS) {
+        while ((B.hand[sp] | 0) > 0) { D.S.battle.sel = sp; D.S.cd = 0; if (!D.drop(20 + (r * 17) % 60, true)) break; fired++; }
+      }
+      // let the MACHINE actually run: the pusher has to carry them off the
+      // edge, or this probe never touches the settlement it is here to guard
+      for (let f2 = 0; f2 < 420; f2++) D.step(1 / 60);   // NOT quiet: quiet skips scoring
+      const inTray = (B.loot || []).filter(l => D.SPECIAL_COINS[l.k]).length;
+      settled += inTray;
+      // ...and the last round of each fight ends with the tray STILL FULL,
+      // which is the case that actually pays out: you win mid-round and the
+      // settlement sweeps whatever is sitting there
+      if (r === 2) { trayEnd += inTray; break; }
+      D.newRound();
+    }
+    D.S.foes.forEach(f => D.dmgFoe(f, 99999));
+    D.leaveBattle();
+  }
+  const end = D.SPECIALS.reduce((a, k) => a + (D.S.run.purse[k] | 0), 0);
+  console.log('# boss-coin sim: ' + start + ' -> ' + end + ' across 8 battles, '
+            + fired + ' specials fired, ' + settled + ' reached the tray, '
+            + trayEnd + ' still there at the bell');
+  t.ok(fired >= 20, 'the probe really did fire boss coins (' + fired + ')');
+  t.ok(settled >= 1, 'and at least some of them reached the tray (' + settled + ')');
+  t.ok(trayEnd >= 4, 'and the fights ended with boss coins still in the tray (' + trayEnd + ') — the case that pays');
+  t.ok(end <= start + D.BUNNY_CAP + D.ROT_CAP + 4,
+       'eight battles of firing every boss coin does not breed a hoard (' + start + ' -> ' + end + ')');
+  for (const k of D.SPECIALS) {
+    t.ok((D.S.run.purse[k] | 0) <= 8, 'no single boss coin runs away (' + k + ': ' + (D.S.run.purse[k] | 0) + ')');
+  }
+}
+
+// ============ THE GRAND BANK WAS PRINTING BOSS COINS ============
+// The owner opened a run and found HUNDREDS of boss coins in the purse. The
+// Grand Bank's line is "banked pieces come back duplicated" — once, on the way
+// out of the vault. What it actually did was rebuild the tray as banked×2 at
+// the top of EVERY round, so re-banking the doubled pile doubled it again:
+// 1, 2, 4, 8, 16… and every special still in the tray when the fight ended
+// walked into the purse. Nine rounds of a single banked boss coin is 256 of
+// them. This is that fight, and it must never pay more than double again.
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(5); D.newRun('knight');
+  D.S.run.relics.push('grandbank');
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'ogre', done: false, px: .5, py: .4 }];
+  D.interact(0);
+  const B = D.S.battle;
+  const key = (l) => l.k + (l.iid || '') + (l.up ? 'u' : '');
+  B.loot = [{ k: 'king' }];                        // one boss coin in the tray
+  B.banked = [];
+  const before = D.S.run.purse.king | 0;
+  const seen = [];
+  for (let r = 1; r <= 9; r++) {
+    B.phase = 'drop';
+    let guard = 0;
+    while (B.loot.length && B.banked.length < D.bankMax() && guard++ < 900) {
+      if (!D.bankLoot(key(B.loot[0]))) break;
+    }
+    D.newRound();
+    seen.push(B.loot.length);
+  }
+  t.ok(seen[8] <= 2 * D.bankMax(),
+       'nine rounds of banking one boss coin never breeds a hoard (tray held ' + seen.join(', ') + ')');
+  D.S.foes.forEach(f => D.dmgFoe(f, 99999));
+  D.leaveBattle();
+  const won = (D.S.run.purse.king | 0) - before;
+  t.ok(won <= 2 * D.bankMax(),
+       'and the purse takes home at most double the bank, not ' + won + ' boss coins');
+  // ...and the relic still does what it says: bank one, get two
+  const { DP: E } = loadGame({}, false);
+  E.srand(6); E.newRun('knight');
+  E.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'ogre', done: false, px: .5, py: .4 }];
+  E.interact(0);
+  const C2 = E.S.battle;
+  C2.loot = [{ k: 'coin' }, { k: 'coin' }];
+  C2.banked = []; C2.phase = 'drop';
+  E.bankLoot('coin'); E.bankLoot('coin');
+  E.newRound();
+  const plain = C2.loot.length;
+  E.S.run.relics.push('grandbank');
+  C2.loot = [{ k: 'coin' }, { k: 'coin' }];
+  C2.banked = []; C2.phase = 'drop';
+  E.bankLoot('coin'); E.bankLoot('coin');
+  E.newRound();
+  t.eq(plain, 2, 'without the relic the bank hands back exactly what went in');
+  t.eq(C2.loot.length, 4, 'with it, the bank hands back double — once');
 }
 
 t.done();

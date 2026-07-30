@@ -51,6 +51,10 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.11.2', notes: [
+    'THE BOSS COINS WERE BREEDING \u{1FA99} — a run could open with HUNDREDS of them. Your purse is a DECK: firing a coin never takes it out, the hand is a fresh copy every round. But the settlement pocketed every special sitting in the tray as though it had just been minted, so a boss coin you FIRED came home a second time. One king became two, two became four; eight fights of playing your specials turned eleven coins into five hundred and sixty-six. Only a coin the deep actually MADE — a bred kit, a rotted gold, a mimic that turned — is a new coin now, and the machine keeps the books to prove it',
+    'THE BOSS MINT IS PAINTED \u{1F3A8} — all eleven special coins wear the owner\u2019s own faces on the bed, in the tray and in the purse: the bunny, the twins, the ember, the piper, the rime, the lode, the king, the rot, the mimic, the leech and spikey',
+  ] },
   { v: '1.11.1', notes: [
     'THE NEAR MISS \u{1F62C} — more than half of all spins no longer simply ARRIVE. The wheel runs down into the wrong slice, hangs there on a pin with \u2026 almost \u2026 and the prize you did not win written under it, and then the pin gives — one click on, or one click back — into the prize the odds actually drew. Come on\u2026 come on\u2026 NO. Or: come on\u2026 come on\u2026 YES',
     'THE PIN IS SPRUNG \u{1F4CD} — the last click is not a glide. It holds against the peg, gives all at once, carries PAST it and rocks back down onto it, the way a sprung flapper actually behaves',
@@ -1706,6 +1710,7 @@ function save() {
         gauntlet: S.run.gauntlet || null,
         jar: S.run.jar || null,
         pegs: S.run.pegs || [], pegSeen: S.run.pegSeen ? 1 : 0,
+        fedSp: S.run.fedSp || {},
         minted: S.run.minted | 0,
         dcRoom: S.run.dcRoom || null, lastBoss: S.run.lastBoss || null,
       } : null,
@@ -1857,6 +1862,11 @@ function load() {
           : null,
         pegs: Array.isArray(d.run.pegs) ? d.run.pegs.filter(pg => pg && isFinite(pg.x)).map(pg => ({ x: +pg.x, y: +pg.y })).slice(0, 3) : [],
         pegSeen: d.run.pegSeen ? 1 : 0,
+        fedSp: (d.run.fedSp && typeof d.run.fedSp === 'object')
+          ? Object.keys(d.run.fedSp).reduce((o, k) => {
+              if (SPECIAL_COINS[k]) o[k] = Math.max(0, d.run.fedSp[k] | 0);
+              return o;
+            }, {}) : {},
         minted: Math.max(0, d.run.minted | 0),
         dcRoom: (typeof d.run.dcRoom === 'string') ? d.run.dcRoom : null,
         lastBoss: (typeof d.run.lastBoss === 'string') ? d.run.lastBoss : null,
@@ -3041,6 +3051,7 @@ function drop(x, force) {
     if ((S.shade.n | 0) <= 0) S.shade = null;
   }
   B.hand[kind]--;
+  feedSpecial(kind);                   // the deck keeps its own copy — remember that
   syncWallet();
   autoSel();
   S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 / ×20 shortens the cooldown to match
@@ -3325,6 +3336,29 @@ function dealHand() {
   syncWallet();
 }
 // remember this floor's machine exactly as you left it
+// THE DECK'S OWN BOOKKEEPING. Your purse is a deck: firing a coin never takes
+// it out, the hand is a fresh copy of the purse every round. So a special coin
+// that reaches the tray — or is still lying on the bed at the staircase — is
+// USUALLY one you already own, and pocketing it mints a duplicate. That is how
+// a single boss coin became hundreds.
+//
+// Only a coin the deep actually MADE is new: a bred kit, a rotted gold, a mimic
+// that turned. So every special fired off the deck is written down here, and
+// the two places that hand specials back settle against it first — one fired,
+// one forgiven. What is left over is genuinely new, and genuinely yours.
+function feedSpecial(k) {
+  if (!S.run || !SPECIAL_COINS[k]) return;
+  if (!S.run.fedSp) S.run.fedSp = {};
+  S.run.fedSp[k] = (S.run.fedSp[k] | 0) + 1;
+}
+function pocketSpecial(k, why) {
+  if (!S.run) return false;
+  if (!S.run.fedSp) S.run.fedSp = {};
+  if ((S.run.fedSp[k] | 0) > 0) { S.run.fedSp[k]--; return false; }   // this one is already yours
+  S.run.purse[k] = (S.run.purse[k] || 0) + 1;
+  purseLog(1, why);
+  return true;
+}
 function serializePile() {
   return S.coins
     .filter(c => c.st === 'plat')
@@ -4703,7 +4737,7 @@ function leaveBattle() {
     for (const l of left) {
       if (l.k === 'gem') gold += C.GEM_GOLD;
       else if (l.k === 'bag') gold += C.BAG_GOLD;
-      else if (SPECIAL_COINS[l.k]) { S.run.purse[l.k] = (S.run.purse[l.k] || 0) + 1; purseLog(1, 'special pocketed from the tray'); backS++; }
+      else if (SPECIAL_COINS[l.k]) { if (pocketSpecial(l.k, 'special pocketed from the tray')) backS++; }
       else if (COIN_KINDS.indexOf(l.k) >= 0) plain++;
     }
     gold += (plain / 2) | 0;
@@ -5563,7 +5597,7 @@ function newRun(heroId, force) {
   S.run = {
     hero: hero.id, ng, bside, seed,
     floor: 1, depth: 1, hp: C.START_HP, maxHp: C.START_HP,
-    gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS, goldKeys: 0, ledger: [],
+    gold: 0, purse: { ...START_PURSE }, wallet: 0, keys: C.START_KEYS, goldKeys: 0, ledger: [], fedSp: {},
     arsenal: { sword: 1, shield: 1, vial: 1 },
     relics: [], potions: C.START_POTIONS, whet: 0, str: 0, dex: 0,
     kills: 0, goldEarned: 0, map: null, room: null, block: 0, windUsed: false, battleEnt: null,
@@ -6153,7 +6187,7 @@ function nextFloor() {
   if (S.run.pileSave && S.run.pileFloor === S.run.floor) {
     let home = 0;
     S.run.pileSave = S.run.pileSave.filter(p => {
-      if (SPECIAL_COINS[p.k]) { S.run.purse[p.k] = (S.run.purse[p.k] || 0) + 1; home++; return false; }
+      if (SPECIAL_COINS[p.k]) { if (pocketSpecial(p.k, 'special carried down from the bed')) home++; return false; }
       return true;
     });
     if (home) toast('\u{1FA99} ' + home + ' special coin' + (home > 1 ? 's' : '') + ' climb back into your purse');
@@ -6173,6 +6207,7 @@ function nextFloor() {
   }
   S.run.pressure = 0;                    // the stairs vent the lake's squeeze
   S.run.bred = 0;                        // and the warren starts fresh
+  S.run.fedSp = {};                      // ...and the deck's specials are all home
   S.run.rotted = 0;                      // the rot's patience resets too
   if (rawAct(S.run.floor) === 4) {
     whisperOnce('lake', '\u{1F30A} THE UNDERLAKE — no dark down here: PRESSURE builds as you walk, and FULL DEPTH stiffens the packs (❓ the almanac knows)');
@@ -7422,6 +7457,9 @@ if (!HEADLESS) (function browser() {
     blue: 'coin_blue', lucky: 'coin_lucky',
     gem: 'piece_gem', bag: 'piece_bag', skull: 'piece_skull', chest: 'piece_chest',
   };
+  // the BOSS MINT's own faces — one painted coin per special, autowired off
+  // SPECIALS so a new special coin picks its art up the moment it lands
+  for (const k of SPECIALS) PIECE_ART[k] = 'coin_' + k;
   const ITEM_ART = ['sword', 'shield', 'vial', 'axe', 'heart', 'frost', 'hammer',
                     'bomb', 'razor', 'pup', 'newt', 'rat', 'horn', 'tonic', 'torch',
                     'owl', 'tortoise', 'beetle'];
