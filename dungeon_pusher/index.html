@@ -52,7 +52,7 @@ const HEADLESS = !ctx;
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
   { v: '1.9.1', notes: [
-    'THE DEEP GOES DARK \u{1F56F}\u{FE0F} — the rooms were lit like a kitchen: one flat wash of grey over every stone, the same brightness in the middle as in the corners. Now the light comes from somewhere. Two sconces bracketed to the far wall throw a widening fan down it, two braziers burn by the near corners, an open door spills its own glow in — and everything between them is DARK. The darkness falls over the dwellers too, so a shape in the far corner has to be walked up to before it is a monster',
+    'THE DEEP GOES DARK \u{1F56F}\u{FE0F} — the rooms were lit like a kitchen: one flat wash of grey over every stone, the same brightness in the middle as in the corners. Now the light comes from somewhere. Two sconces bracketed to the far wall throw a widening fan down it, two braziers burn by the near corners, an open door spills its own glow in — and the stone between them sits a step back in the gloom. The shade falls over the dwellers too, so the room has depth instead of being one flat sheet of dwellers on tile',
     'you carry your own light \u{1F526} — a warm pool travels with you, so walking into an unlit flank is how you find what is standing in it',
     'SHADOWS \u{1F311} — every dweller and the hero lay a soft contact shadow instead of a flat grey pill, and every wall lays a band of dark on the floor it stands over. Firelight breathes: light, glow and flame all flicker off the same pulse, so the whole room moves',
     'and the deep got a little friendlier about being unfriendly \u{1F440} — cobwebs in the upper corners, fog drifting the length of the floor, and something in the dark that blinks at you and winks out when you get close',
@@ -10999,13 +10999,15 @@ if (!HEADLESS) (function browser() {
         ctx.fillStyle = g;
         ctx.fillRect(hx - r, hy - r, r * 2, r * 2);
       };
-      ctx.fillStyle = 'rgba(8,4,12,0.74)';
+      // the deep is MOODY, not blind: unlit stone still reads clearly, it
+      // just sits a step behind the fires
+      ctx.fillStyle = 'rgba(8,4,12,0.38)';
       ctx.fillRect(x, y, w, h);
       ctx.globalCompositeOperation = 'destination-out';
-      for (const tp of roomTorches()) hole(tp.x, tp.y, 88);
+      for (const tp of roomTorches()) hole(tp.x, tp.y, 126);
       for (const d of ['n', 's', 'e', 'w']) {
         const nb = doorTo(d);
-        if (nb && linkOpen(room, nb)) hole(doorCenter(d).x, doorCenter(d).y, 64);
+        if (nb && linkOpen(room, nb)) hole(doorCenter(d).x, doorCenter(d).y, 92);
       }
       ctx.globalCompositeOperation = 'source-over';
     });
@@ -11016,11 +11018,11 @@ if (!HEADLESS) (function browser() {
     for (const tp of roomTorches()) {
       const fl = torchFlicker(t, tp);
       ctx.globalAlpha = 0.55 + 0.45 * fl;
-      blob('warm', tp.x, tp.y + 6, 74 + fl * 20);
+      blob('warm', tp.x, tp.y + 6, 96 + fl * 24);
     }
     // ...and the light you carry with you
     ctx.globalAlpha = 0.9;
-    blob('hero', AV.x, AV.y - 8, 86);
+    blob('hero', AV.x, AV.y - 8, 104);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     // LOW FOG: three slow banks of it, drifting the length of the room
