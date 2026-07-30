@@ -51,6 +51,13 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.9.2', notes: [
+    'THE FIRES ARE REAL FIRES NOW \u{1F525} — the first pass lit the rooms with three orange circles and an emoji, which is exactly what it looked like. Every torch is now a drawn flame: four nested tongues cooling outward from a near-white heart, leaning on the draught, and shedding EMBERS that rise, wander and die out as they cool from white to a dull red coal',
+    'light that behaves like light \u{1F56F}\u{FE0F} — each fire is a tight hot core inside a wide amber halo, falling off the way real light does (fast, then a long thin tail) instead of fading in a straight line. The wall shafts and floor pools lost their straight edges entirely — a wedge of orange with two clean sides was the loudest tell that a glow had been pasted on',
+    'nothing burns on a metronome \u{23F1}\u{FE0F} — flicker is four tones that never line up plus a slow draught, and the light itself SHIFTS a pixel or two as the flame leans. A light that never moves is a painted one',
+    'SHADOWS POINT SOMEWHERE \u{1F311} — every body sums the room’s fires by inverse square and throws its shadow along the answer: away from whichever fire owns that spot, longer and fainter the further off it is, and short when you stand right in the flames',
+    'and a whisper of grain over the stone, because wide gradients band into visible rings on a phone',
+  ] },
   { v: '1.9.1', notes: [
     'THE DEEP GOES DARK \u{1F56F}\u{FE0F} — the rooms were lit like a kitchen: one flat wash of grey over every stone, the same brightness in the middle as in the corners. Now the light comes from somewhere. Two sconces bracketed to the far wall throw a widening fan down it, two braziers burn by the near corners, an open door spills its own glow in — and the stone between them sits a step back in the gloom. The shade falls over the dwellers too, so the room has depth instead of being one flat sheet of dwellers on tile',
     'you carry your own light \u{1F526} — a warm pool travels with you, so walking into an unlit flank is how you find what is standing in it',
@@ -10954,18 +10961,90 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(-1, -1, 2, 2);
     ctx.restore();
   }
+  // Light does not fall off in a straight line. These ramps are shaped to
+  // roughly 1/d² — bright and tight at the source, then a long thin tail —
+  // which is the difference between "a glow was pasted here" and "something
+  // is burning there". Each fire is TWO of them: a small near-white core and
+  // a wide amber halo, because a flame's colour cools as it travels.
   const GLOW_STOPS = {
-    warm: [[0, 'rgba(255,176,86,0.20)'], [0.45, 'rgba(255,146,58,0.08)'], [1, 'rgba(255,140,50,0)']],
-    hero: [[0, 'rgba(255,226,168,0.20)'], [0.5, 'rgba(255,200,120,0.07)'], [1, 'rgba(255,190,110,0)']],
-    shade: [[0, 'rgba(6,3,9,0.55)'], [0.55, 'rgba(6,3,9,0.28)'], [1, 'rgba(6,3,9,0)']],
+    core: [[0, 'rgba(255,247,226,0.42)'], [0.30, 'rgba(255,214,142,0.20)'],
+           [0.62, 'rgba(255,170,84,0.06)'], [1, 'rgba(255,150,60,0)']],
+    halo: [[0, 'rgba(255,190,110,0.15)'], [0.22, 'rgba(255,158,70,0.093)'],
+           [0.48, 'rgba(240,120,48,0.040)'], [0.75, 'rgba(190,80,36,0.013)'],
+           [1, 'rgba(160,64,30,0)']],
+    hero: [[0, 'rgba(255,240,206,0.24)'], [0.28, 'rgba(255,214,150,0.125)'],
+           [0.58, 'rgba(250,180,110,0.045)'], [1, 'rgba(240,170,100,0)']],
+    shade: [[0, 'rgba(5,3,8,0.60)'], [0.42, 'rgba(5,3,8,0.34)'],
+            [0.74, 'rgba(5,3,8,0.11)'], [1, 'rgba(5,3,8,0)']],
+    // lit AIR — the stuff a shaft and a floor pool are made of. Soft to the
+    // very edge: a light with a visible outline is a light that was pasted on.
+    pool: [[0, 'rgba(255,186,104,0.58)'], [0.38, 'rgba(255,158,70,0.26)'],
+           [0.70, 'rgba(248,132,52,0.08)'], [1, 'rgba(240,124,48,0)']],
     fog: [[0, 'rgba(150,160,200,0.055)'], [1, 'rgba(150,160,200,0)']],
     // never a FULL hole: even under a sconce the deep keeps a little of its
     // dark, so the room reads as lit-in-places instead of simply bright
     cut: [[0, 'rgba(0,0,0,0.82)'], [0.5, 'rgba(0,0,0,0.34)'], [1, 'rgba(0,0,0,0)']],
   };
-  // a soft contact shadow, squashed and thrown a little away from the fires
+  // FLICKER. Real fire does not breathe on a sine — one sine reads as a pulsing
+  // lamp. Four incommensurate tones never line up, so the light never falls
+  // into a rhythm the eye can catch, and a slow fifth is the draught moving
+  // down the corridor. Everything a fire does — its light, its glow, its
+  // height, its lean — is driven from this one number, which is what makes it
+  // read as ONE object instead of three effects stacked on a spot.
+  function fireNoise(t, seed) {
+    return 0.5
+      + 0.20 * Math.sin(t * 11.3 + seed)
+      + 0.14 * Math.sin(t * 6.7 + seed * 2.3)
+      + 0.09 * Math.sin(t * 19.1 + seed * 3.7)
+      + 0.07 * Math.sin(t * 2.3 + seed * 1.7);
+  }
+  function torchFlicker(t, tp) { return fireNoise(t, tp.x * 0.13 + tp.y * 0.07); }
+  // GRAIN. Wide canvas gradients band into visible rings on a phone screen;
+  // a still, very faint noise tile over the room dithers those steps away and
+  // reads as the grain of the stone. Built once, blitted as a pattern.
+  let GRAIN = null;
+  function grainPattern() {
+    if (GRAIN !== null) return GRAIN;
+    GRAIN = false;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = 96;
+    const g = cv.getContext && cv.getContext('2d');
+    const img = g && g.createImageData && g.createImageData(96, 96);
+    if (!img || !img.data) return GRAIN;          // headless: no grain, no harm
+    const old = rngState; srand(20260730);
+    for (let i = 0; i < img.data.length; i += 4) {
+      const v = 118 + ((rng() * 74) | 0);
+      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
+      img.data[i + 3] = 255;
+    }
+    rngState = old;
+    g.putImageData(img, 0, 0);
+    GRAIN = ctx.createPattern(cv, 'repeat') || false;
+    return GRAIN;
+  }
+  // THE SHADOW A BODY THROWS. Not a grey pill under everything: the room's
+  // fires are summed by inverse square, and the shadow is thrown along the
+  // result — away from whichever fire owns this spot, longer and fainter the
+  // further away that fire is, and shortest when you are standing right in it.
   function castShadow(x, y, w) {
-    blob('shade', x, y + 5, w, w * 0.42);
+    let vx = 0, vy = 0, lit = 0;
+    for (const l of roomTorches()) {
+      const dx = x - l.x, dy = y - (l.y + 6);
+      const d = Math.max(26, Math.hypot(dx, dy));
+      const k = 4600 / (d * d);
+      vx += (dx / d) * k; vy += (dy / d) * k; lit += k;
+    }
+    const m = Math.hypot(vx, vy);
+    const dx = m > 1e-4 ? vx / m : 0, dy = m > 1e-4 ? vy / m : 1;
+    const len = Math.min(2.1, 0.75 + 3.4 / (1 + lit * 3));   // near a fire: short
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.28, Math.min(0.85, 0.3 + lit * 1.5));
+    ctx.translate(x + dx * w * 0.42 * len, y + 4 + dy * w * 0.26 * len);
+    ctx.rotate(Math.atan2(dy, dx));
+    ctx.scale(w * len, w * 0.44);
+    ctx.fillStyle = unitGlow('shade', GLOW_STOPS.shade);
+    ctx.fillRect(-1, -1, 2, 2);
+    ctx.restore();
   }
   // FOUR FIRES: two sconces bracketed high on the far wall, washing down it,
   // and two braziers standing on the floor by the near corners. Between them
@@ -10978,9 +11057,69 @@ if (!HEADLESS) (function browser() {
       { x: FR.x1 - 24, y: FR.y1 - 34, wall: 0 },
     ];
   }
-  // one shared flicker per sconce, so light, glow and flame all breathe together
-  function torchFlicker(t, tp) {
-    return 0.62 + 0.38 * Math.sin(t * 7.7 + tp.x * 0.31) * Math.sin(t * 3.3 + tp.y * 0.17);
+  // THE FLAME ITSELF: three nested tongues, outer to inner, cooling outward
+  // from a near-white heart. Each leans on the draught and stretches with the
+  // same noise that drives its light, so the shape and the glow are the same
+  // event. Drawn additively, so overlapping tongues bloom where they cross.
+  function drawFlame(x, y, s, seed, t) {
+    const n = fireNoise(t, seed);
+    const lean = Math.sin(t * 1.9 + seed) * 0.20 + Math.sin(t * 5.1 + seed * 2) * 0.09;
+    const tall = 0.82 + 0.34 * n;
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.globalCompositeOperation = 'lighter';
+    const tongue = (h, w, col, ph) => {
+      h *= s * tall; w *= s;
+      const tip = lean * h * 0.6 + Math.sin(t * 9.1 + ph) * w * 0.22;
+      ctx.beginPath();
+      ctx.moveTo(-w, 0);
+      ctx.bezierCurveTo(-w * 0.98, -h * 0.42, tip - w * 0.5, -h * 0.76, tip, -h);
+      ctx.bezierCurveTo(tip + w * 0.5, -h * 0.76, w * 0.98, -h * 0.42, w, 0);
+      ctx.quadraticCurveTo(0, w * 0.72, -w, 0);
+      ctx.closePath();
+      ctx.fillStyle = col;
+      ctx.fill();
+    };
+    tongue(25, 8.2, 'rgba(214,74,18,0.34)', seed);
+    tongue(19, 6.0, 'rgba(255,146,40,0.42)', seed + 1.9);
+    tongue(12, 3.8, 'rgba(255,214,120,0.52)', seed + 3.3);
+    tongue(6.5, 2.2, 'rgba(255,250,226,0.66)', seed + 5.1);
+    ctx.restore();
+  }
+  // EMBERS. A fire that only wobbles is a decal; a fire that SHEDS is alive.
+  // Each sconce lets a spark go now and then — it rises, cools from white to
+  // red, wanders on the draught and dies out. The whole budget is 40.
+  const EMB = { stamp: -1, p: [], acc: 0 };
+  function emberTick(dt, t, torches) {
+    if (EMB.stamp !== S.roomStamp) { EMB.stamp = S.roomStamp; EMB.p.length = 0; }
+    EMB.acc += dt;
+    if (EMB.acc > 0.11 && EMB.p.length < 40) {
+      EMB.acc = 0;
+      const tp = torches[(Math.random() * torches.length) | 0];
+      if (tp) {
+        EMB.p.push({ x: tp.x + (Math.random() - 0.5) * 7, y: tp.y - 4 - Math.random() * 6,
+                     vx: (Math.random() - 0.5) * 9, vy: -14 - Math.random() * 16,
+                     life: 0, max: 0.9 + Math.random() * 1.1, ph: Math.random() * 9,
+                     r: 0.7 + Math.random() * 0.9 });
+      }
+    }
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = EMB.p.length - 1; i >= 0; i--) {
+      const p = EMB.p[i];
+      p.life += dt;
+      if (p.life >= p.max) { EMB.p.splice(i, 1); continue; }
+      p.vy += 5 * dt;                                   // it slows as it cools
+      p.x += (p.vx + Math.sin(t * 3.4 + p.ph) * 7) * dt;
+      p.y += p.vy * dt;
+      const k = 1 - p.life / p.max;
+      ctx.globalAlpha = k * k * 0.85;
+      // white-hot, then amber, then a dull red coal
+      ctx.fillStyle = k > 0.66 ? '#fff3d2' : k > 0.33 ? '#ffb454' : '#c8461c';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r * (0.5 + k * 0.7), 0, 7);
+      ctx.fill();
+    }
+    ctx.restore();
   }
   function drawRoomGloom(t, dt) {
     const room = curRoom();
@@ -11013,15 +11152,21 @@ if (!HEADLESS) (function browser() {
     });
     ctx.save();
     ctx.beginPath(); ctx.rect(FR.x0, FR.y0, FR.x1 - FR.x0, FR.y1 - FR.y0); ctx.clip();
-    // the fires themselves, breathing over the mask
+    // the fires, breathing over the mask: a tight hot core inside a wide
+    // halo, and the whole light SHIFTS a pixel or two as the flame leans —
+    // a light that never moves is the tell of a painted one
     ctx.globalCompositeOperation = 'lighter';
-    for (const tp of roomTorches()) {
+    const torches = roomTorches();
+    for (const tp of torches) {
       const fl = torchFlicker(t, tp);
-      ctx.globalAlpha = 0.55 + 0.45 * fl;
-      blob('warm', tp.x, tp.y + 6, 96 + fl * 24);
+      const jx = Math.sin(t * 5.3 + tp.x * 0.2) * 1.6, jy = Math.sin(t * 4.1 + tp.y * 0.2) * 1.1;
+      ctx.globalAlpha = 0.72 + 0.28 * fl;
+      blob('halo', tp.x + jx, tp.y + 8 + jy, 104 + fl * 26);
+      ctx.globalAlpha = 0.80 + 0.20 * fl;
+      blob('core', tp.x + jx * 0.6, tp.y + 2 + jy * 0.6, 40 + fl * 12);
     }
-    // ...and the light you carry with you
-    ctx.globalAlpha = 0.9;
+    // ...and the light you carry with you, steadier than a fire on a wall
+    ctx.globalAlpha = 0.92 + 0.08 * fireNoise(t * 0.6, 4.2);
     blob('hero', AV.x, AV.y - 8, 104);
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
@@ -11030,6 +11175,17 @@ if (!HEADLESS) (function browser() {
       const sp = 9 + i * 4;
       const fx = FR.x0 - 60 + ((t * sp + i * 190) % ((FR.x1 - FR.x0) + 160));
       blob('fog', fx, FR.y0 + (FR.y1 - FR.y0) * (0.42 + i * 0.21), 110, 30);
+    }
+    emberTick(dt, t, torches);
+    // and the grain, last, over all of it — it dithers the gradient rings out
+    const gp = grainPattern();
+    if (gp) {
+      ctx.globalCompositeOperation = 'overlay';
+      ctx.globalAlpha = 0.05;
+      ctx.fillStyle = gp;
+      ctx.fillRect(FR.x0, FR.y0, FR.x1 - FR.x0, FR.y1 - FR.y0);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
   }
@@ -11166,38 +11322,46 @@ if (!HEADLESS) (function browser() {
     ctx.beginPath(); ctx.rect(ROOM.x, ROOM.y, ROOM.w, ROOM.h); ctx.clip();
     for (const tp of roomTorches()) {
       const fl = torchFlicker(t, tp);
+      const seed = tp.x * 0.13 + tp.y * 0.07;
+      // THE SHAFT: a wall sconce throws a cone of lit air down the stone, a
+      // brazier pools it around its own feet. Both are built from a SMEAR of
+      // soft blobs rather than a filled shape — a wedge of orange with two
+      // straight sides is the single loudest tell that a light was pasted on.
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.globalAlpha = 0.14 + 0.09 * fl;
       if (tp.wall) {
-        // the wash spreads as it falls, the way firelight actually does
-        poly([{ x: tp.x - 9, y: tp.y },
-              { x: tp.x + 9, y: tp.y },
-              { x: tp.x + 46, y: tp.y + 92 },
-              { x: tp.x - 46, y: tp.y + 92 }]);
+        for (let i = 0; i < 6; i++) {
+          const k = i / 5;
+          ctx.globalAlpha = (0.20 + 0.12 * fl) * (1 - k) * (1 - k * 0.55);
+          blob('pool', tp.x + Math.sin(t * 2.1 + seed) * k * 5,
+               tp.y + 6 + k * 88, 17 + k * 42, 24 + k * 40);
+        }
       } else {
-        ctx.beginPath(); ctx.ellipse(tp.x, tp.y + 12, 54, 26, 0, 0, 7);
+        ctx.globalAlpha = 0.34 + 0.16 * fl;
+        blob('pool', tp.x, tp.y + 13, 56 + fl * 7, 27 + fl * 3);
+        ctx.globalAlpha = 0.22 + 0.10 * fl;
+        blob('pool', tp.x, tp.y + 6, 26 + fl * 4, 18);
       }
-      ctx.fillStyle = '#ff9d3c'; ctx.fill();
       ctx.restore();
-      // the ironwork it sits in
+      // the ironwork it burns in: a bracket on the wall, a bowl on the floor
       if (tp.wall) {
-        ctx.fillStyle = '#241c24'; ctx.fillRect(tp.x - 3, tp.y + 3, 6, 10);
-        ctx.fillStyle = '#332833'; ctx.fillRect(tp.x - 7, tp.y + 11, 14, 3);
+        ctx.fillStyle = '#1c161c'; ctx.fillRect(tp.x - 3, tp.y + 2, 6, 11);
+        ctx.fillStyle = '#2c242c'; ctx.fillRect(tp.x - 8, tp.y + 11, 16, 3);
+        ctx.fillStyle = 'rgba(255,168,88,0.35)'; ctx.fillRect(tp.x - 8, tp.y + 11, 16, 1);
       } else {
-        ctx.fillStyle = '#241c24';
-        poly([{ x: tp.x - 9, y: tp.y + 2 }, { x: tp.x + 9, y: tp.y + 2 },
-              { x: tp.x + 5, y: tp.y + 15 }, { x: tp.x - 5, y: tp.y + 15 }]);
+        // the bowl is lit from INSIDE, so it is brightest at its lip and
+        // falls to black at its foot
+        poly([{ x: tp.x - 10, y: tp.y + 1 }, { x: tp.x + 10, y: tp.y + 1 },
+              { x: tp.x + 5, y: tp.y + 16 }, { x: tp.x - 5, y: tp.y + 16 }]);
+        ctx.fillStyle = lgr('bowl', 0, tp.y, 0, tp.y + 16,
+          [[0, '#61462f'], [0.45, '#2a2028'], [1, '#140f14']]);
         ctx.fill();
-        ctx.fillStyle = '#332833'; ctx.fillRect(tp.x - 8, tp.y + 15, 16, 3);
+        // the rim catches its own fire
+        ctx.strokeStyle = 'rgba(255,186,110,0.55)'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.moveTo(tp.x - 10, tp.y + 1.5); ctx.lineTo(tp.x + 10, tp.y + 1.5); ctx.stroke();
+        ctx.fillStyle = '#241c24'; ctx.fillRect(tp.x - 9, tp.y + 16, 18, 3);
       }
-      // the flame
-      ctx.save();
-      ctx.globalAlpha = 0.28 + 0.16 * fl;
-      ctx.beginPath(); ctx.arc(tp.x, tp.y - 2, 12 + fl * 5, 0, 7);
-      ctx.fillStyle = '#ff9d3c'; ctx.fill();
-      ctx.restore();
-      txt('\u{1F525}', tp.x, tp.y - 4, (15 + fl * 3).toFixed(1) + 'px serif', '#fff');
+      drawFlame(tp.x, tp.y + (tp.wall ? 2 : 1), tp.wall ? 0.95 : 1.15, seed, t);
     }
     ctx.restore();
     // seams
