@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.10.0', notes: [
+    'THE SIGIL SHEET \u{1F52F} — progression that OUTLIVES the run. Thirty-one marks cut into the machine\u2019s brass across six branches — THE PURSE, THE BODY, THE EDGE, THE MACHINE, THE PACK and THE DEEP — each with ranks you buy up over many runs, each branch shut until the mark above it has been struck once. Every run pays sigils however it ends: two for each floor cleared, one for every ten foes felled. A wipe on floor two still moves the sheet',
+    'FOUR MARKS PAY BY DEPTH \u{25BC} — DEEP ROOTS thickens you at every staircase, the VEIN TITHE pays a gold for every floor you have cleared, DEPTH CHARGE sharpens every blow by how far down you are, and the WARHORN calls companions that arrive tougher the deeper you blow it. They are worth almost nothing on floor one and a great deal on floor twenty — which is the whole argument for one more staircase',
+    'the sheet reads before it spends \u{1F4D6} — tap a mark to read exactly what it does and what it costs, tap again to strike it. The workshop\u2019s eight bolt-ons are still there and still stack; the sheet is the long game beside them',
+  ] },
   { v: '1.9.3', notes: [
     'THE WALLS ARE CUT STONE NOW \u{1F9F1} — every wall was one flat gradient with three scratched lines dragged across it. They are masonry: staggered courses of blocks, each with its own tone off the floor\u2019s palette, a lit chamfer along the top and a shadowed underside, so a wall reads as a thousand pieces of rock instead of one painted rectangle. The chamfers are HAIRLINES on purpose \u2014 ring a block in a heavy dark border and it stops being stone and becomes a cartoon brick',
     'the room got its architecture \u{1F3DB}\u{FE0F} — a CORNICE runs the ceiling line with dentils cut under it, PILASTERS stand proud of the far wall carrying the sconces and throwing their own shadow, the side walls turn away from you into the dark, and the stone has the cracks, damp streaks and bolted iron rings of somewhere very old',
@@ -1460,7 +1465,7 @@ function ratScurry() {
 function craneRun() { return !!(S.run && S.run.hero === 'crane'); }
 // claw drops per round: two, plus one per act survived (capped at four —
 // each drop hauls a whole CHUNK now)
-function grabCount() { return 2 + Math.min(2, (((S.run ? S.run.floor : 1) - 1) / 5) | 0); }
+function grabCount() { return 2 + Math.min(2, (((S.run ? S.run.floor : 1) - 1) / 5) | 0) + SB.grab; }
 const TRAIT_TXT = {
   fast: 'strikes twice a round', thief: 'steals coins from your purse',
   venom: 'poisons you on hit', curse: 'hurls cursed skulls onto the field',
@@ -1548,6 +1553,7 @@ const S = {
   hist: [],                                     // the last ten runs, newest first
   codex: { foes: {}, relics: {}, coins: {} },   // everything ever met, owned or fired
   cogs: 0, ws: {},                              // workshop currency + owned upgrades
+  sg: { pts: 0, ranks: {} },                    // THE SIGIL SHEET: points banked + marks struck
   scurryFx: [],                                 // rats mid-dash across the pile (visual)
   diffPick: 'normal',                           // the door you'll take next run
   seenVer: '',                                  // last VERSION whose patch notes were read
@@ -1652,7 +1658,7 @@ function save() {
       deep15: S.deep15, skins: S.skins, ngPick: S.ngPick | 0, ng2Open: S.ng2Open ? 1 : 0,
       v: 1, mute: S.mute, resolveMul: S.resolveMul, turbo: S.turbo, best: S.best, heroPick: S.heroPick,
       intro: S.introSeen ? 1 : 0, opts: S.opts, ach: S.ach, life: S.life, hist: S.hist,
-      codex: S.codex, cogs: S.cogs, ws: S.ws, daily: S.daily, diffPick: S.diffPick,
+      codex: S.codex, cogs: S.cogs, ws: S.ws, sg: S.sg, daily: S.daily, diffPick: S.diffPick,
       seenVer: S.seenVer || '',
       seen: S.seen || {},
       coach: S.coach, streak: S.streak, yday: S.yday, plaque: S.plaque,
@@ -1733,6 +1739,18 @@ function load() {
       S.codex = { foes: d.codex.foes || {}, relics: d.codex.relics || {}, coins: d.codex.coins || {} };
     }
     if (typeof d.cogs === 'number') S.cogs = Math.max(0, d.cogs);
+    // THE SIGIL SHEET: points and ranks, both scrubbed — an unknown mark or a
+    // rank past its cap is dropped rather than trusted
+    if (d.sg && typeof d.sg === 'object') {
+      const ranks = {};
+      const src = (d.sg.ranks && typeof d.sg.ranks === 'object') ? d.sg.ranks : {};
+      for (const id of Object.keys(src)) {
+        const n = SIG_NODES[id];
+        if (n) ranks[id] = Math.max(0, Math.min(n.max, src[id] | 0));
+      }
+      S.sg = { pts: Math.max(0, d.sg.pts | 0), ranks };
+    }
+    applySigils();
     if (d.ws && typeof d.ws === 'object') S.ws = d.ws;
     if (d.daily && typeof d.daily === 'object') S.daily = d.daily;
     if (DIFFS.some(x => x.id === d.diffPick)) S.diffPick = d.diffPick;
@@ -2051,6 +2069,8 @@ function dmgFoe(e, n, src, pierce) {
   // the daily's GLASS CANNON: everything you deal doubles (as does what lands on you)
   if (S.run && S.run.dailyMod === 'cannon') n *= 2;
   if (weeklyOn('brittle')) n *= 1.3;      // BRITTLE BLADES: both edges keen
+  // THE SIGILS: the flat marks, and DEPTH CHARGE paying by how deep you are
+  if (!dot) n *= 1 + SB.dmg + SB.dmgFloor * sigFloor();
   n = Math.max(1, Math.round(n));
   if (dot) {
     if (src === 'pois' && e.def === 'thick') { floatAnchor('IMMUNE', 'enemy', '#9aa0a8'); return 0; }
@@ -2159,6 +2179,7 @@ function goldDmg() {
   if (hasRelic('mintvein') && S.run) d += actIdx(S.run.floor);
   if (hasRelic('heatwave') && S.foes && S.foes.some(f => f.hp > 0 && f.burn > 0)) d += 1;
   d += strTotal();                     // STRENGTH: +1 per point, every strike
+  d += SB.goldDmg;                     // ...and the WHETSTONE mark, forever
   return d;
 }
 // blue coins: the frost bites EVERY foe at once
@@ -2200,6 +2221,7 @@ function foeDown(e) {
   S.run.keys += keys;
   addGold(gold);
   if (hasRelic('prospector')) { addGold(2); S.battle.goldWon += 2; }
+  if (SB.goldKill > 0) { addGold(SB.goldKill); S.battle.goldWon += SB.goldKill; }
   // its wounds splash onto whoever still stands
   if (hasRelic('exsanguinate') && e.bleed > 0) {
     for (const f of S.foes) if (f !== e && f.hp > 0) applyBleed(f, e.bleed, true);
@@ -2312,7 +2334,7 @@ function stunEnemy(rounds) {
 //   pup  (Rock Pup)    growls up +1 block
 //   newt (Cinder Newt) spits 1 BURN at your target
 //   rat  (Fang Rat)    gnaws 1 dmg and opens 1 BLEED
-function petCap() { return C.PET_CAP + (hasRelic('beastmaster') ? 2 : 0) + wsLvl('kennelup'); }
+function petCap() { return C.PET_CAP + (hasRelic('beastmaster') ? 2 : 0) + wsLvl('kennelup') + SB.petCap; }
 function summonPet(iid) {
   const it = itemById(iid);
   if (!S.run || !it || it.kind !== 'pet') return null;
@@ -2330,7 +2352,8 @@ function summonPet(iid) {
     floatAnchor('the pack is full — snacks all round', 'hero', '#c8b89a');
     return null;
   }
-  const hp = it.php + (petVet(iid) ? 1 : 0) + (hasRelic('kennel') ? 4 : 0) + (hasRelic('beastmaster') ? 2 : 0);
+  const hp = it.php + (petVet(iid) ? 1 : 0) + (hasRelic('kennel') ? 4 : 0) + (hasRelic('beastmaster') ? 2 : 0)
+           + SB.petHpFloor * sigFloor();      // the WARHORN carries further down
   const pet = { iid, icon: it.icon, name: petTag(iid, it.name), hp, maxHp: hp };
   S.pets.push(pet);
   floatAnchor(it.icon + ' ' + it.name + ' joins!', 'hero', '#ffd75e', true);
@@ -2486,6 +2509,7 @@ function hpHit(n, cause, col) {
 }
 function hurtPlayer(n, cause) {
   if (!S.run || S.run.hp <= 0) return;
+  if (SB.dr > 0 && n > 0) n = Math.max(1, n - SB.dr);   // IRONBOUND takes the edge off
   if (S.run.dailyMod === 'cannon') n *= 2;   // GLASS CANNON cuts both ways
   if (weeklyOn('goldfever')) n = Math.round(n * 1.2);   // the fever's tax
   if (weeklyOn('brittle')) n = Math.round(n * 1.3);     // brittle cuts back
@@ -2862,7 +2886,7 @@ function drop(x, force) {
   S.cd = C.DROP_CD / (S.turbo || 1);        // TURBO ×2 / ×5 / ×10 / ×20 shortens the cooldown to match
   S.dropped++;
   // OVERCHARGE: the STORMKNIGHT doubles what the meter takes, then collects it
-  S.meter += (S.overT > 0) ? 2 : 1;
+  S.meter += ((S.overT > 0) ? 2 : 1) * (1 + SB.meter);   // OVERWOUND winds it tighter
   if (S.overT > 0 && S.meter >= C.METER_MAX) {
     const knight = (S.foes || []).find(f => f.hp > 0 && f.id === 'stormknight');
     S.meter = 0;
@@ -2973,12 +2997,12 @@ function tilt(dir) {
 }
 // hold a caught piece back for next round (up to 3)
 function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
-function bankSlotsRaw() { return Math.max(1, C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 2 : 0) - (layoutTilted() ? 1 : 0)); }
+function bankSlotsRaw() { return Math.max(1, C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 2 : 0) + SB.bank - (layoutTilted() ? 1 : 0)); }
 // ...and the WIDOW's web draws them shut one at a time (never all of them)
 function bankMax() { return Math.max(1, bankSlotsRaw() - ((S.battle && S.battle.webbed) | 0)); }
 // the round-start guard from relics, stacked
-function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 4 : 0); }
-function tiltCount() { return C.TILTS * (ghostRun() ? 2 : 1) + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0) + (hasRelic('gildhour') ? 1 : 0) + wsLvl('tilt'); }
+function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 4 : 0) + SB.block0; }
+function tiltCount() { return C.TILTS * (ghostRun() ? 2 : 1) + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0) + (hasRelic('gildhour') ? 1 : 0) + wsLvl('tilt') + SB.tilt; }
 function bankLoot(key) {
   const B = S.battle;
   if (!B || B.phase !== 'drop' || B.banked.length >= bankMax()) return false;
@@ -3097,6 +3121,15 @@ function rollIntent(e) {
 function dealHand() {
   const B = S.battle;
   B.hand = { ...S.run.purse };
+  // WIDE HAND: the sheet's mark deals a few more of whatever you hold most of
+  for (let i = 0; i < SB.hand; i++) {
+    let best = null;
+    for (const k of COIN_KINDS) {
+      if (SPECIAL_COINS[k] || !(S.run.purse[k] > 0)) continue;
+      if (best === null || S.run.purse[k] > S.run.purse[best]) best = k;
+    }
+    if (best) B.hand[best] = (B.hand[best] || 0) + 1;
+  }
   // a thief's cut, plus the LEAD PURSE hex weighing the hand down
   // (and the endless deep's THICK AIR steals one more)
   let cut = (B.stolen || 0) + (S.leadT > 0 ? 3 : 0) + (mutOn('thickair') ? 1 : 0)
@@ -3488,7 +3521,7 @@ function applyLoot(q) {
   if (q.t === 'twin') { dmgEnemy(q.up ? 4 : 1); SND.collect(2); return; }
   if (q.t === 'ember') {
     dmgEnemy(2);
-    if (S.run && !S.victory && S.enemy && S.enemy.hp > 0) applyBurn(S.enemy, 2);
+    if (S.run && !S.victory && S.enemy && S.enemy.hp > 0) applyBurn(S.enemy, 2 + SB.burn);
     SND.hit();
     return;
   }
@@ -3583,7 +3616,7 @@ function applyLoot(q) {
     S.shake += it.splash ? 8 : 5;
     SND.hit();
   } else if (q.t === 'green') {
-    poisonEnemy((1 + (hasRelic('venomtip') ? 1 : 0) + (hasRelic('toxicology') ? 1 : 0) + masteryLvl('green')) * (hasRelic('twinfangs') ? 2 : 1));
+    poisonEnemy((1 + (hasRelic('venomtip') ? 1 : 0) + (hasRelic('toxicology') ? 1 : 0) + masteryLvl('green') + SB.pois) * (hasRelic('twinfangs') ? 2 : 1));
     if (hasRelic('rustfang') && S.enemy && S.enemy.hp > 0) applyBleed(S.enemy, 1, true);
     if (hasRelic('blightlord')) dmgEnemy(1);
     if (hasRelic('contagion')) for (const f of S.foes) { if (f.hp > 0 && f !== S.enemy) f.pois += 1; }
@@ -4350,6 +4383,7 @@ function winBattle() {
   if (hasRelic('piggy')) { const pg = 4 + 2 * actIdx(S.run.floor); addGold(pg); S.battle.goldWon += pg; }
   if (hasRelic('tithe')) { addGold(10); S.battle.goldWon += 10; }
   if (hasRelic('secondbreath')) healPlayer(8);
+  if (SB.heal > 0) healPlayer(SB.heal);       // SECOND WIND closes what the fight opened
   // A BOSS lets you choose one relic from a spread of two commons + a rare.
   let relicOffer = null;
   if (anyBoss) {
@@ -4977,6 +5011,118 @@ const WORKSHOP = [
   { id: 'tilt',      icon: '\u{1F91C}', name: 'Iron Wrists', desc: '+1 TILT every round',           max: 1, cost: [90] },
 ];
 function wsLvl(id) { return (S.ws && S.ws[id]) || 0; }
+
+// ==================== THE SIGIL SHEET (meta progression) ====================
+// The WORKSHOP above sells eight flat bolt-ons and then it is finished. THE
+// SIGILS are the long game: a branching sheet of marks cut into the machine's
+// own brass, each with RANKS you buy up over many runs, each branch opening
+// only once the mark above it has been struck at least once.
+//
+// Points are paid out by every run, however it ends — two for each floor you
+// cleared plus one for every ten foes felled — so a bad run still moves the
+// sheet. Four of the marks (one per side of the sheet, flagged PER FLOOR in
+// the sheet itself) pay by DEPTH rather than flat: they are worth almost
+// nothing on floor one and a great deal on floor twenty, which is the whole
+// argument for pushing one more staircase.
+function sg(id, name, icon, desc, col, row, max, cost, eff, req, perFloor) {
+  return { id, name, icon, desc, col, row, max, cost, eff, req: req || null, perFloor: !!perFloor };
+}
+const SIGILS = [
+  sg('root', 'The First Mark', '\u{1F4DC}', '+2% damage, everything you deal', 2.5, 0, 2, 1, { dmg: 0.02 }, null),
+  // 🪙 THE PURSE — the deck you play with
+  sg('p1', 'Seed Coins',   '\u{1FA99}', '+1 coin in the starting purse',  0, 1, 5, 1, { coin0: 1 }, 'root'),
+  sg('p2', 'Prospector',   '\u{26CF}\u{FE0F}', '+1 gold for every foe felled', 0, 2, 5, 1, { goldKill: 1 }, 'p1'),
+  sg('p3', 'Deep Pockets', '\u{1F45B}', '+2 purse capacity',              0, 3, 5, 2, { purseCap: 2 }, 'p2'),
+  sg('p4', 'Haggler',      '\u{1F91D}', 'the keeper’s gold prices 5% lower', 0, 4, 4, 2, { shopDisc: 0.05 }, 'p3'),
+  sg('p5', 'Vein Tithe',   '\u{1F4B0}', 'every staircase pays 1 gold per floor cleared', 0, 5, 1, 6, { goldFloor: 1 }, 'p4', true),
+  // 🛡 THE BODY — what carries you down
+  sg('b1', 'Tough Hide',   '\u{1F9FF}', '+4 max HP',                      1, 1, 5, 1, { hp0: 4 }, 'root'),
+  sg('b2', 'Padded Coat',  '\u{1F9E5}', '+1 block at the start of every round', 1, 2, 5, 1, { block0: 1 }, 'b1'),
+  sg('b3', 'Second Wind',  '\u{1F49A}', 'heal 3 after every battle won',  1, 3, 5, 2, { heal: 3 }, 'b2'),
+  sg('b4', 'Ironbound',    '\u{26D3}\u{FE0F}', 'every blow that lands on you is 1 lighter', 1, 4, 3, 3, { dr: 1 }, 'b3'),
+  sg('b5', 'Deep Roots',   '\u{1F311}', '+2 max HP at every staircase',   1, 5, 3, 4, { hpFloor: 2 }, 'b4', true),
+  // ⚔️ THE EDGE — what you hit with
+  sg('e1', 'Whetstone',    '\u{1FAA8}', '+1 damage on every gold coin',   2, 1, 5, 1, { goldDmg: 1 }, 'root'),
+  sg('e2', 'Venomcraft',   '\u{1F9EA}', '+1 poison from every venom coin', 2, 2, 3, 2, { pois: 1 }, 'e1'),
+  sg('e3', 'Kindling',     '\u{1F525}', '+1 burn from every ember',       2, 3, 3, 2, { burn: 1 }, 'e2'),
+  sg('e4', 'Heavy Hands',  '\u{1F4AA}', '+4% damage, everything you deal', 2, 4, 5, 2, { dmg: 0.04 }, 'e3'),
+  sg('e5', 'Depth Charge', '\u{1F30A}', '+1.5% damage for every floor you have reached', 2, 5, 2, 5, { dmgFloor: 0.015 }, 'e4', true),
+  // 🎰 THE MACHINE — the table itself
+  sg('m1', 'Iron Wrists',  '\u{1F91C}', '+1 TILT every round',            3, 1, 2, 2, { tilt: 1 }, 'root'),
+  sg('m2', 'Long Arm',     '\u{1F9BE}', '+1 claw grab every round',       3, 2, 2, 2, { grab: 1 }, 'm1'),
+  sg('m3', 'Deep Tray',    '\u{1F5C4}\u{FE0F}', '+1 bank slot',           3, 3, 2, 3, { bank: 1 }, 'm2'),
+  sg('m4', 'Wide Hand',    '\u{1F590}\u{FE0F}', '+1 coin dealt into every hand', 3, 4, 3, 2, { hand: 1 }, 'm3'),
+  sg('m5', 'Overwound',    '\u{26A1}', 'the jackpot meter fills 10% faster', 3, 5, 4, 3, { meter: 0.10 }, 'm4'),
+  // 🐾 THE PACK — everything that walks in with you
+  sg('k1', 'Keyring',      '\u{1F5DD}\u{FE0F}', '+1 key on the ring at the door', 4, 1, 3, 1, { key0: 1 }, 'root'),
+  sg('k2', 'Deep Flask',   '\u{1F9F4}', '+1 potion in the pack',          4, 2, 2, 2, { potion0: 1 }, 'k1'),
+  sg('k3', 'Kennel',       '\u{1F415}', '+1 companion slot',              4, 3, 2, 3, { petCap: 1 }, 'k2'),
+  sg('k4', 'Lockpick',     '\u{1F513}', '+8% chance a chest hides a key', 4, 4, 3, 2, { chestKey: 0.08 }, 'k3'),
+  sg('k5', 'Warhorn',      '\u{1F4EF}', 'companions arrive with +1 HP per floor reached', 4, 5, 2, 4, { petHpFloor: 1 }, 'k4', true),
+  // 🌑 THE DEEP — the marks that ask for everything
+  sg('d1', 'Delver',       '\u{1F56F}\u{FE0F}', '+2% damage and +2 max HP', 5, 1, 5, 2, { dmg: 0.02, hp0: 2 }, 'root'),
+  sg('d2', 'Fortune',      '\u{1F340}', '+1 gold per kill and +1 starting coin', 5, 2, 5, 2, { goldKill: 1, coin0: 1 }, 'd1'),
+  sg('d3', 'Heirloom',     '\u{1F4FF}', 'a common relic waits at every dungeon door', 5, 3, 1, 6, { heirloom: 1 }, 'd2'),
+  sg('d4', 'Juggernaut',   '\u{1F98F}', '+15 max HP, and every blow is 1 lighter', 5, 4, 3, 4, { hp0: 15, dr: 1 }, 'd3'),
+  sg('d5', 'SOVEREIGN',    '\u{1F451}', '+10% damage, +30 max HP, +2 block, +1 TILT', 5, 5, 1, 10,
+     { dmg: 0.10, hp0: 30, block0: 2, tilt: 1 }, 'd4'),
+];
+const SIG_NODES = {};
+for (const n of SIGILS) SIG_NODES[n.id] = n;
+const SIG_BRANCHES = [
+  { col: 0, icon: '\u{1FA99}', name: 'THE PURSE',   c: '#ffd75e' },
+  { col: 1, icon: '\u{1F6E1}\u{FE0F}', name: 'THE BODY', c: '#7ed6a0' },
+  { col: 2, icon: '\u{2694}\u{FE0F}', name: 'THE EDGE',  c: '#ff8a7a' },
+  { col: 3, icon: '\u{1F3B0}', name: 'THE MACHINE', c: '#8be7ff' },
+  { col: 4, icon: '\u{1F43E}', name: 'THE PACK',    c: '#c8a8ff' },
+  { col: 5, icon: '\u{1F311}', name: 'THE DEEP',    c: '#ffb47a' },
+];
+function blankSB() {
+  return { dmg: 0, dmgFloor: 0, goldDmg: 0, pois: 0, burn: 0,
+           hp0: 0, hpFloor: 0, block0: 0, heal: 0, dr: 0,
+           coin0: 0, goldKill: 0, purseCap: 0, shopDisc: 0, goldFloor: 0,
+           tilt: 0, grab: 0, bank: 0, hand: 0, meter: 0,
+           key0: 0, potion0: 0, petCap: 0, chestKey: 0, petHpFloor: 0, heirloom: 0 };
+}
+let SB = blankSB();
+function sigLvl(id) { return (S.sg && S.sg.ranks && S.sg.ranks[id]) || 0; }
+// a mark is only offered once the one above it has been struck at least once
+function sigOpen(id) {
+  const n = SIG_NODES[id];
+  if (!n) return false;
+  return !n.req || sigLvl(n.req) > 0;
+}
+function sigBonus() {
+  const b = blankSB();
+  for (const n of SIGILS) {
+    const r = sigLvl(n.id);
+    if (!r) continue;
+    for (const k in n.eff) b[k] = (b[k] || 0) + n.eff[k] * r;
+  }
+  b.shopDisc = Math.min(0.5, b.shopDisc);       // the keeper is not a charity
+  return b;
+}
+function applySigils() { SB = sigBonus(); }
+function sigBuy(id) {
+  const n = SIG_NODES[id];
+  if (!n || !S.sg) return false;
+  const lv = sigLvl(id);
+  if (lv >= n.max || !sigOpen(id) || S.sg.pts < n.cost) { SND.deny(); return false; }
+  S.sg.pts -= n.cost;
+  S.sg.ranks[id] = lv + 1;
+  applySigils();
+  SND.buy();
+  save();
+  return true;
+}
+// what a finished run is worth on the sheet: every floor cleared pays two,
+// every ten foes felled pays one, and nothing ever pays nothing
+function sigEarned(floor, kills) {
+  return Math.max(1, ((floor | 0) - 1) * 2 + Math.floor((kills | 0) / 10));
+}
+// the depth term the four PER FLOOR marks read from
+function sigFloor() { return S.run ? (S.run.floor | 0) : 1; }
+
 function wsBuy(i) {
   const u = WORKSHOP[i];
   if (!u) return false;
@@ -5189,6 +5335,11 @@ function endRun(cause) {
                              * (S.run.weekly === 'ironweek' ? 1.4 : 1));
   S.cogs += cogsWon;
   S.over.cogsWon = cogsWon;
+  // ...and THE SIGIL SHEET takes its cut of the same run
+  const sigWon = sigEarned(S.run.floor, S.run.kills);
+  if (!S.sg) S.sg = { pts: 0, ranks: {} };
+  S.sg.pts += sigWon;
+  S.over.sigWon = sigWon;
   // a DAILY run files its result on the calendar
   if (S.run.daily && S.daily && S.daily.date === S.run.daily) {
     if (!S.daily.best || S.run.floor > S.daily.best.floor) {
@@ -5279,6 +5430,12 @@ function newRun(heroId, force) {
   S.run.purse.coin += 2 * wsLvl('purse');
   S.run.keys += wsLvl('key');
   S.run.potions += wsLvl('potion');
+  // ...and THE SIGIL SHEET's marks on top of them
+  applySigils();
+  S.run.maxHp += SB.hp0; S.run.hp = S.run.maxHp;
+  S.run.purse.coin += SB.coin0;
+  S.run.keys += SB.key0;
+  S.run.potions += SB.potion0;
   // the ALCHEMIST owns no flasks — the STILL starts cold (NG+ banks the
   // prestige flask as brew instead)
   if (hero.id === 'alch') { S.run.potions = 0; S.run.brew = 3 * ng; S.run.reagents = 0; }
@@ -5302,7 +5459,7 @@ function newRun(heroId, force) {
   // the HEIRLOOM: a family relic waits at the dungeon door — unless the
   // WELCOME-BACK crate left something rarer there
   if (S.wbRelic) { S.wbRelic = 0; openRelicPick('r', 1); }
-  else if (wsLvl('relicstart')) openRelicPick('c', 1);
+  else if (wsLvl('relicstart') || SB.heirloom) openRelicPick('c', 1);
   save();
   return S.run;
 }
@@ -5319,7 +5476,7 @@ function newRun(heroId, force) {
 function wheelCost() {
   return Math.max(1, Math.min(C.WHEEL_CAP, S.run ? (S.run.floor | 0) : 1));
 }
-function purseCap() { return 20 + 4 * Math.min(6, S.run ? actIdx(S.run.floor) : 0); }
+function purseCap() { return 20 + 4 * Math.min(6, S.run ? actIdx(S.run.floor) : 0) + SB.purseCap; }
 // ---- the ledger's little arithmetic ----
 function stairsPicked() {
   const a = S.stairsAsk;
@@ -5842,6 +5999,18 @@ function nextFloor() {
     if (home) toast('\u{1FA99} ' + home + ' special coin' + (home > 1 ? 's' : '') + ' climb back into your purse');
   }
   S.run.floor++;
+  // THE PER-FLOOR MARKS settle at the staircase: DEEP ROOTS thickens you for
+  // the floor ahead, the VEIN TITHE pays out on the one behind
+  if (SB.hpFloor > 0) {
+    S.run.maxHp += SB.hpFloor;
+    S.run.hp = Math.min(S.run.maxHp, S.run.hp + SB.hpFloor);
+    floatAnchor('\u{1F311} DEEP ROOTS +' + SB.hpFloor + ' max HP', 'hero', '#7ee787');
+  }
+  if (SB.goldFloor > 0) {
+    const tithe = SB.goldFloor * (S.run.floor - 1);
+    addGold(tithe);
+    toast('\u{1F4B0} the VEIN TITHE pays ' + tithe + ' gold for floor ' + (S.run.floor - 1));
+  }
   S.run.pressure = 0;                    // the stairs vent the lake's squeeze
   S.run.bred = 0;                        // and the warren starts fresh
   S.run.rotted = 0;                      // the rot's patience resets too
@@ -6204,7 +6373,7 @@ function eventChoose(ci) {
 // roll a single chest prize: gold, an item, a coin, or a key
 function rollChestPrize() {
   const r = rng();
-  if (r < C.P_CHEST_KEY) {
+  if (r < C.P_CHEST_KEY + SB.chestKey) {
     return { kind: 'key', n: 1, icon: '\u{1F5DD}', label: 'a KEY' };
   } else if (r < 0.5) {
     const plain = COIN_KINDS.filter(k2 => !SPECIAL_COINS[k2]);
@@ -6260,7 +6429,7 @@ function shopStock() {
   // the keeper knows what his shelf is worth now. GOLD is the only tender he
   // takes — coins reach the shelf the long way round, through his SELL desk
   const st = [];
-  const mult = (1 + 0.25 * (S.run.floor - 1)) * (1 - 0.10 * wsLvl('haggler')) * (mutOn('thinveins') ? 1.25 : 1)
+  const mult = (1 + 0.25 * (S.run.floor - 1)) * (1 - 0.10 * wsLvl('haggler')) * (1 - SB.shopDisc) * (mutOn('thinveins') ? 1.25 : 1)
              * (weeklyOn('market') ? 0.8 : 1);
   // three distinct items
   const ids = ITEMS.map(i => i.id);
@@ -6777,6 +6946,8 @@ window.DP = {
   bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap, strTotal, dexTotal,
   addGold, addCoins, weaponDmg, theme, scaleMult, bestify, floatAt, floatAnchor,
   ACH, achUnlock, achPoll, achById, WORKSHOP, wsLvl, wsBuy, tiltCount,
+  SIGILS, SIG_NODES, SIG_BRANCHES, sigLvl, sigOpen, sigBuy, sigBonus, sigEarned, applySigils,
+  blankSB, sigFloor,
   DAILY_MODS, dailySeed, dailyPlan, newDaily, dailyK, heroLockText, HERO_LOCKS,
   streakTouch, streakK, plantToday,
   WEEKLY_DECREES, weekOf, weeklyPlan, weeklyOn, weeklyFoeK,
@@ -6797,6 +6968,7 @@ window.DP = {
   startResolve, endRoundNow, buildQueue, applyLoot, enemyActFoe, endRoundTicks,
   newRound, rollPileKind, purseTotal, dealHand, selectCoin, tilt,
   bankLoot, unbankLoot, setTarget, pickCoin, rollIntent, rollOffer, pickRelicOffer, pickSpecialOffer,
+  startBlock, petCap, nextFloor,
   dismissWheel, openRelicPick, pickWheelRelic, rollRelicPool,
   rollRelicDrop, rollRelicByRar, grantRelic, itemRar, itemsByRar,
   darkFloor, PRESSURE_MAX, ghostRun, heroUnlocked, craneRun, craneDrop, grabCount,
@@ -12444,6 +12616,111 @@ if (!HEADLESS) (function browser() {
     uiBtn(LW / 2 - 70, 104 + WORKSHOP.length * 74 + 8, 140, 40, TR('CLOSE ✕'), () => { WSHOP = false; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
   }
+  // ---- THE SIGIL SHEET: six branches of marks, bought a rank at a time ----
+  let SHEET = false;
+  let sheetSel = null;
+  const SHEET_X0 = 14, SHEET_COL = (LW - 28) / 6, SHEET_Y0 = 136, SHEET_ROW = 74;
+  function sheetPos(n) {
+    return { x: SHEET_X0 + SHEET_COL * (n.col + 0.5), y: SHEET_Y0 + SHEET_ROW * n.row };
+  }
+  function drawSheet(t) {
+    if (!SHEET) return;
+    const pts = (S.sg && S.sg.pts) | 0;
+    ctx.fillStyle = '#070310';
+    ctx.fillRect(0, 0, LW, LH);
+    ctx.fillStyle = rgr('sheetbg', LW / 2, 300, 40, LW / 2, 300, 460,
+      [[0, 'rgba(60,34,92,0.40)'], [1, 'rgba(60,34,92,0)']]);
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { SHEET = false; sheetSel = null; } });
+    txt('\u{1F52F} THE SIGIL SHEET', LW / 2, 40, '900 21px Georgia, serif', '#c8a8ff', 'center', { w: 4, col: '#1a0a2a' });
+    txt(pts + ' sigils unspent — every run pays, however it ends',
+        LW / 2, 64, '800 10px Verdana, sans-serif', '#b8a8d0');
+    // the branch headers
+    for (const b of SIG_BRANCHES) {
+      const x = SHEET_X0 + SHEET_COL * (b.col + 0.5);
+      txt(b.icon, x, 88, '15px serif', '#fff');
+      txt(b.name.replace('THE ', ''), x, 104, '900 9px Verdana, sans-serif', b.c);
+    }
+    // the veins between the marks, lit where the branch is already awake
+    ctx.save();
+    ctx.lineWidth = 2;
+    for (const n of SIGILS) {
+      if (!n.req) continue;
+      const a = sheetPos(SIG_NODES[n.req]), b = sheetPos(n);
+      ctx.strokeStyle = sigLvl(n.req) > 0 ? 'rgba(200,168,255,0.42)' : 'rgba(120,110,140,0.16)';
+      ctx.beginPath(); ctx.moveTo(a.x, a.y + 20); ctx.lineTo(b.x, b.y - 20); ctx.stroke();
+    }
+    ctx.restore();
+    // the marks themselves
+    for (const n of SIGILS) {
+      const p = sheetPos(n);
+      const lv = sigLvl(n.id), maxed = lv >= n.max, open = sigOpen(n.id);
+      const can = open && !maxed && pts >= n.cost;
+      const w = SHEET_COL - 8, h = 44;
+      rr(p.x - w / 2, p.y - h / 2, w, h, 9);
+      ctx.fillStyle = !open ? 'rgba(18,14,24,0.85)' : maxed ? 'rgba(38,52,40,0.95)'
+                    : can ? 'rgba(46,32,64,0.97)' : 'rgba(26,20,32,0.95)';
+      ctx.fill();
+      ctx.lineWidth = 1.4;
+      ctx.strokeStyle = !open ? '#332c40' : maxed ? '#7ed6a0' : can ? '#c8a8ff' : '#4a4055';
+      ctx.stroke();
+      ctx.save();
+      ctx.globalAlpha = open ? 1 : 0.30;
+      txt(n.icon, p.x, p.y - 8, '17px serif', '#fff');
+      // the rank pips: what you have struck, out of what the mark allows
+      const pw = Math.min(7, (w - 10) / n.max);
+      for (let i = 0; i < n.max; i++) {
+        const px = p.x - (n.max - 1) * pw / 2 + i * pw;
+        ctx.beginPath(); ctx.arc(px, p.y + 9, 2.3, 0, 7);
+        ctx.fillStyle = i < lv ? (maxed ? '#7ed6a0' : '#c8a8ff') : 'rgba(255,255,255,0.14)';
+        ctx.fill();
+      }
+      ctx.restore();
+      // PER FLOOR marks wear a depth tick so the sheet says which ones scale
+      if (n.perFloor) txt('\u{25BC}', p.x + w / 2 - 7, p.y - h / 2 + 9, '9px serif', '#8be7ff');
+      if (open && !maxed) {
+        txt(n.cost + '', p.x - w / 2 + 8, p.y - h / 2 + 9, '900 9px Verdana, sans-serif',
+            pts >= n.cost ? '#ffd75e' : '#7a7088');
+      }
+      uiButtons.push({ x: p.x - w / 2, y: p.y - h / 2, w, h, cb: () => {
+        if (sheetSel === n.id && can) sigBuy(n.id);
+        else { sheetSel = n.id; SND.tick(); }
+      } });
+    }
+    // the reading desk: what the selected mark does, and the button to strike it
+    const sel = sheetSel && SIG_NODES[sheetSel];
+    const by = SHEET_Y0 + SHEET_ROW * 5 + 42;
+    rr(14, by, LW - 28, 84, 12);
+    ctx.fillStyle = 'rgba(20,14,28,0.96)'; ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = '#4a4055'; ctx.stroke();
+    if (!sel) {
+      txt('tap a mark to read it — tap it again to strike it',
+          LW / 2, by + 34, '700 11px Verdana, sans-serif', '#9a90a8');
+      txt('\u{25BC} marks pay by DEPTH: little on floor 1, a great deal on floor 20',
+          LW / 2, by + 54, '700 9px Verdana, sans-serif', '#8be7ff');
+    } else {
+      const lv = sigLvl(sel.id), maxed = lv >= sel.max;
+      txt(sel.icon + '  ' + sel.name.toUpperCase(), 28, by + 20, '900 13px Verdana, sans-serif', '#e8d8ff', 'left');
+      txt('rank ' + lv + ' / ' + sel.max, LW - 28, by + 20, '900 10px Verdana, sans-serif',
+          maxed ? '#7ed6a0' : '#b8a8d0', 'right');
+      fitTxtL(sel.desc + (sel.perFloor ? '  (\u{25BC} per floor)' : ''), 28, by + 40, LW - 56,
+              '700 10px Verdana, sans-serif', '#c8b8d8');
+      if (!sigOpen(sel.id)) {
+        txt('strike ' + SIG_NODES[sel.req].name.toUpperCase() + ' first', 28, by + 62,
+            '800 10px Verdana, sans-serif', '#ff9d3c', 'left');
+      } else if (maxed) {
+        txt('this mark is finished', 28, by + 62, '800 10px Verdana, sans-serif', '#7ed6a0', 'left');
+      } else {
+        const can = pts >= sel.cost;
+        uiBtn(LW - 150, by + 48, 122, 28, 'STRIKE — ' + sel.cost + ' \u{1F52F}', () => { sigBuy(sel.id); },
+              { grad: can ? ['#6a4a9a', '#3a2058'] : ['#3a3440', '#262230'],
+                border: can ? '#c8a8ff' : '#4a4055', col: can ? '#e8d8ff' : '#7a7088',
+                font: '900 11px Verdana, sans-serif', r: 9 });
+      }
+    }
+    uiBtn(LW / 2 - 70, by + 96, 140, 38, TR('CLOSE ✕'), () => { SHEET = false; sheetSel = null; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Verdana, sans-serif', r: 12 });
+  }
   // ---- the CODEX: every foe met, every relic ever owned ----
   let CODEX = null;
   function drawCodex(t) {
@@ -13999,6 +14276,15 @@ if (!HEADLESS) (function browser() {
     // the workshop: prominent, with the cog balance on the door
     uiBtn(14, 12, 108, 36, '\u{1F6E0}\u{FE0F} ⚙ ' + fmt(S.cogs), () => { WSHOP = true; },
           { grad: ['#5a4a2a', '#38290f'], border: '#c8a86a', col: '#ffe9a3', font: '900 12px Verdana, sans-serif', r: 10 });
+    // ...and the SIGIL SHEET beside it, lit whenever a mark is affordable
+    {
+      const pts = (S.sg && S.sg.pts) | 0;
+      const canBuy = SIGILS.some(n => sigOpen(n.id) && sigLvl(n.id) < n.max && pts >= n.cost);
+      uiBtn(130, 12, 112, 36, '\u{1F52F} ' + fmt(pts) + ' SIGILS', () => { SHEET = true; },
+            { grad: canBuy ? ['#5a3a7a', '#331f4a'] : ['#3a3440', '#262230'],
+              border: canBuy ? '#c8a8ff' : '#55506a', col: canBuy ? '#e8d8ff' : '#9a90a8',
+              font: '900 11px Verdana, sans-serif', r: 10 });
+    }
     // the DAILY: one seeded run, one attempt, a guest hero if fate says so
     const today = new Date().toISOString().slice(0, 10);
     // the ANNIVERSARY: a candle on the door and one crate a year
@@ -14174,6 +14460,8 @@ if (!HEADLESS) (function browser() {
     });
     if (o.cogsWon) txt('+' + o.cogsWon + ' ⚙ cogs for the WORKSHOP', LW / 2, 352 + rows.length * 26 + 6,
                        '900 12px Verdana, sans-serif', '#c8d6e8');
+    if (o.sigWon) txt('+' + o.sigWon + ' \u{1F52F} sigils for THE SHEET', LW / 2, 352 + rows.length * 26 + 24,
+                      '900 12px Verdana, sans-serif', '#c8a8ff');
     if (S.best.floor > 0) {
       txt('best: floor ' + S.best.floor + ' room ' + S.best.depth + ' • ' + S.best.kills + ' kills',
           LW / 2, 614, '700 11px Verdana, sans-serif', '#a08a94');
@@ -14319,6 +14607,7 @@ if (!HEADLESS) (function browser() {
     drawRecords(t);
     drawCodex(t);
     drawWorkshop(t);
+    drawSheet(t);
     drawSettings(t);
     drawWhatsNew(t);
     drawBoard(t);

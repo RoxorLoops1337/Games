@@ -7353,7 +7353,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.9.3', 'the stonework ships as v1.9.3');
+  t.eq(D.VERSION, '1.10.0', 'the sigil sheet ships as v1.10.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SIGIL SHEET') >= 0)),
+       'and the notes carry the sheet');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('CUT STONE') >= 0)),
        'and the notes carry the masonry');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REAL FIRES') >= 0)),
@@ -8219,6 +8221,211 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   ];
   frames(3);
   t.eq(globalThis.__ctxDepth, 0, 'a crowded room balances too');
+}
+
+// ================= THE SIGIL SHEET: progression between runs =================
+{
+  // ---- the sheet itself has to be a well-formed tree ----
+  {
+    const { DP: D } = loadGame({}, false);
+    const seen = new Set();
+    const keys = Object.keys(D.blankSB());
+    for (const n of D.SIGILS) {
+      t.ok(!seen.has(n.id), 'every mark has its own id (' + n.id + ')');
+      seen.add(n.id);
+      t.ok(n.max >= 1 && n.cost >= 1, n.id + ' costs something and can be struck');
+      t.ok(n.name && n.desc && n.icon, n.id + ' says what it is');
+      // a mark whose effect key is not in the bonus sheet does NOTHING, silently
+      for (const k of Object.keys(n.eff)) {
+        t.ok(keys.indexOf(k) >= 0, n.id + ' pays into a real stat (' + k + ')');
+      }
+      if (n.req) {
+        t.ok(D.SIG_NODES[n.req], n.id + ' hangs off a mark that exists');
+        t.ok(D.SIG_NODES[n.req].row < n.row, n.id + ' hangs BELOW its prerequisite');
+      }
+    }
+    t.ok(D.SIGILS.filter(n => !n.req).length === 1, 'exactly one root');
+    t.ok(D.SIGILS.filter(n => n.perFloor).length >= 3, 'the sheet carries PER FLOOR marks');
+    // every branch column is represented, and every branch has a header
+    for (const b of D.SIG_BRANCHES) {
+      t.ok(D.SIGILS.some(n => n.col === b.col), 'branch ' + b.name + ' has marks');
+    }
+  }
+
+  // ---- striking marks: the gate, the cost, the cap ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.S.sg = { pts: 3, ranks: {} };
+    D.applySigils();
+    t.ok(!D.sigOpen('p1'), 'a branch is shut until the root is struck');
+    t.ok(!D.sigBuy('p1'), 'and cannot be bought through the fog');
+    t.ok(D.sigBuy('root'), 'the root takes one sigil');
+    t.eq(D.S.sg.pts, 2, 'and the sigil is spent');
+    t.eq(D.sigLvl('root'), 1, 'the mark is struck once');
+    t.ok(D.sigOpen('p1'), 'which opens every branch below it');
+    t.ok(D.sigBuy('root'), 'the root takes a second rank');
+    t.ok(!D.sigBuy('root'), 'but never a third — it caps at two');
+    t.eq(D.sigLvl('root'), 2, 'the cap holds');
+    t.eq(D.sigBonus().dmg, 0.04, 'two ranks stack their effect');
+    // ...and you cannot strike what you cannot pay for
+    D.S.sg.pts = 0;
+    t.ok(!D.sigBuy('p1'), 'an empty purse strikes nothing');
+  }
+
+  // ---- the kit a marked profile walks in with ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(900); D.newRun('knight');
+    const base = { hp: D.S.run.maxHp, coin: D.S.run.purse.coin, keys: D.S.run.keys,
+                   pot: D.S.run.potions, cap: D.purseCap(), tilts: D.tiltCount(),
+                   grabs: D.grabCount(), bank: D.bankSlotsRaw(), block: D.startBlock(),
+                   pets: D.petCap() };
+    D.S.sg = { pts: 0, ranks: { root: 1, p1: 3, p3: 2, b1: 5, b2: 2, m1: 2, m2: 1, m3: 1,
+                               k1: 2, k2: 1, k3: 1, d1: 1 } };
+    D.applySigils();
+    D.srand(900); D.newRun('knight');
+    t.eq(D.S.run.maxHp, base.hp + 20 + 2, 'TOUGH HIDE and DELVER thicken the hero');
+    t.eq(D.S.run.hp, D.S.run.maxHp, 'and he walks in whole');
+    t.eq(D.S.run.purse.coin, base.coin + 3 + 0, 'SEED COINS ride in the purse');
+    t.eq(D.S.run.keys, base.keys + 2, 'KEYRING hangs two more keys');
+    t.eq(D.S.run.potions, base.pot + 1, 'the DEEP FLASK is packed');
+    t.eq(D.purseCap(), base.cap + 4, 'DEEP POCKETS widens the purse');
+    t.eq(D.tiltCount(), base.tilts + 2, 'IRON WRISTS buys two shakes');
+    t.eq(D.grabCount(), base.grabs + 1, 'the LONG ARM grabs once more');
+    t.eq(D.bankSlotsRaw(), base.bank + 1, 'the DEEP TRAY banks one more');
+    t.eq(D.startBlock(), base.block + 2, 'the PADDED COAT opens every round');
+    t.eq(D.petCap(), base.pets + 1, 'the KENNEL takes one more companion');
+  }
+
+  // ---- the marks that bite in a fight ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(901); D.newRun('knight');
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'ogre', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    const foe = D.S.foes[0];
+    foe.def = null;
+    // damage: flat first
+    D.S.sg = { pts: 0, ranks: {} }; D.applySigils();
+    foe.hp = foe.maxHp = 900;
+    D.dmgFoe(foe, 100);
+    const plain = 900 - foe.hp;
+    D.S.sg = { pts: 0, ranks: { root: 2, e4: 5 } }; D.applySigils();   // +4% +20%
+    foe.hp = 900;
+    D.dmgFoe(foe, 100);
+    t.eq(900 - foe.hp, Math.round(plain * 1.24), 'HEAVY HANDS sharpens every blow');
+    // ...then the one that pays by DEPTH
+    D.S.sg = { pts: 0, ranks: { root: 1, e1: 1, e2: 1, e3: 1, e4: 1, e5: 2 } }; D.applySigils();
+    D.S.run.floor = 1; foe.hp = 900;
+    D.dmgFoe(foe, 100);
+    const shallow = 900 - foe.hp;
+    D.S.run.floor = 20; foe.hp = 900;
+    D.dmgFoe(foe, 100);
+    const deep = 900 - foe.hp;
+    t.ok(deep > shallow * 1.4, 'DEPTH CHARGE is worth far more twenty floors down');
+    t.eq(D.sigFloor(), 20, 'and it reads the floor it is standing on');
+    // IRONBOUND takes the edge off what lands on you
+    D.S.sg = { pts: 0, ranks: {} }; D.applySigils();
+    D.S.run.hp = D.S.run.maxHp = 400; D.S.run.block = 0; D.S.pets = [];
+    D.hurtPlayer(10, 'probe');
+    const bare = 400 - D.S.run.hp;
+    D.S.sg = { pts: 0, ranks: { root: 1, b1: 1, b2: 1, b3: 1, b4: 3 } }; D.applySigils();
+    D.S.run.hp = 400; D.S.run.block = 0;
+    D.hurtPlayer(10, 'probe');
+    t.eq(400 - D.S.run.hp, bare - 3, 'IRONBOUND shaves 3 off every blow');
+    // ...but never all of it
+    D.S.run.hp = 400;
+    D.hurtPlayer(1, 'probe');
+    t.ok(D.S.run.hp < 400, 'a blow always lands for at least one');
+  }
+
+  // ---- PROSPECTOR pays per corpse ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(902); D.newRun('knight');
+    D.S.sg = { pts: 0, ranks: { root: 1, p1: 1, p2: 3 } };
+    D.applySigils();
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    const g0 = D.S.run.gold;
+    D.dmgFoe(D.S.foes[0], 99999);
+    t.ok(D.S.run.gold >= g0 + 3, 'three ranks of PROSPECTOR pay three gold on the kill');
+  }
+
+  // ---- the two marks that settle at the staircase ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(903); D.newRun('knight');
+    D.S.sg = { pts: 0, ranks: { root: 1, b1: 1, b2: 1, b3: 1, b4: 1, b5: 3,
+                                p1: 1, p2: 1, p3: 1, p4: 1, p5: 1 } };
+    D.applySigils();
+    D.S.run.floor = 7;
+    const hp0 = D.S.run.maxHp, gold0 = D.S.run.gold;
+    D.nextFloor();
+    t.eq(D.S.run.floor, 8, 'the stairs are taken');
+    t.eq(D.S.run.maxHp, hp0 + 6, 'DEEP ROOTS thickens you by 2 per rank at the staircase');
+    t.eq(D.S.run.gold, gold0 + 7, 'the VEIN TITHE pays a gold for each floor cleared');
+    // ...and it pays MORE the next time
+    const gold1 = D.S.run.gold;
+    D.nextFloor();
+    t.eq(D.S.run.gold, gold1 + 8, 'and more again one floor deeper');
+  }
+
+  // ---- WARHORN: the pack arrives harder the deeper it is called ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(904); D.newRun('knight');
+    D.S.sg = { pts: 0, ranks: {} }; D.applySigils();
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    D.S.pets = [];
+    const bare = D.summonPet('tortoise');
+    const bareHp = bare ? bare.maxHp : 0;
+    t.ok(bareHp > 0, 'a companion answers');
+    D.S.sg = { pts: 0, ranks: { root: 1, k1: 1, k2: 1, k3: 1, k4: 1, k5: 2 } }; D.applySigils();
+    D.S.run.floor = 9;
+    D.S.pets = [];
+    const horn = D.summonPet('tortoise');
+    t.eq(horn.maxHp, bareHp + 18, 'the WARHORN adds 1 HP per floor per rank');
+  }
+
+  // ---- every run pays the sheet, however it ends ----
+  {
+    const { DP: D } = loadGame({}, false);
+    t.eq(D.sigEarned(1, 0), 1, 'even a floor-one wipe pays one sigil');
+    t.eq(D.sigEarned(6, 0), 10, 'five floors cleared pay two each');
+    t.eq(D.sigEarned(6, 35), 13, 'and every ten foes felled pays one more');
+    t.ok(D.sigEarned(20, 200) > D.sigEarned(10, 100), 'a deeper run always pays better');
+    D.srand(905); D.newRun('knight');
+    D.S.sg = { pts: 0, ranks: {} };
+    D.S.run.floor = 9; D.S.run.kills = 40;
+    D.endRun('probe');
+    t.eq(D.S.sg.pts, D.sigEarned(9, 40), 'the run banks its sigils on the way out');
+    t.ok(D.S.over.sigWon > 0, 'and the death screen says how many');
+  }
+
+  // ---- the sheet survives a reload, and refuses nonsense ----
+  {
+    const st = {};
+    const { DP: D } = loadGame(st, false);
+    D.S.sg = { pts: 12, ranks: { root: 2, b1: 3 } };
+    D.applySigils();
+    D.save();
+    const { DP: R } = loadGame(st, false);
+    R.load();
+    t.eq(R.S.sg.pts, 12, 'the unspent sigils survive a reload');
+    t.eq(R.sigLvl('b1'), 3, 'and so do the marks');
+    t.eq(R.sigBonus().hp0, 12, 'the bonuses rebuild themselves on load');
+    // a hand-edited save cannot invent marks or over-strike them
+    const blob = JSON.parse(st['dungeonpusher_v1'] || st[Object.keys(st)[0]]);
+    blob.sg = { pts: 5, ranks: { root: 99, notamark: 4, b1: -3 } };
+    st[Object.keys(st)[0]] = JSON.stringify(blob);
+    const { DP: X } = loadGame(st, false);
+    X.load();
+    t.eq(X.sigLvl('root'), 2, 'a rank past the cap is clamped to it');
+    t.eq(X.sigLvl('notamark'), 0, 'a mark that does not exist is dropped');
+    t.eq(X.sigLvl('b1'), 0, 'and a negative rank is floored at zero');
+  }
 }
 
 t.done();
