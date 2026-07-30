@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.10.1', notes: [
+    'YOU CAN SEE YOUR OWN CHARACTER AGAIN \u{1F526} — the room\u2019s darkness was being laid over the sprites as well as the stone. It read well in a screenshot and was useless to play: measured on a phone, the shopkeeper came out exactly as bright as the floor he was standing on. The dark now goes DOWN FIRST, on the stone, and everyone who walks on it is painted on top at full strength',
+    'and everything you can walk up to carries a light \u{1F4A1} — your own lantern reaches further and burns with a hot core, and every dweller stands in a small pool of its own, so a shopkeeper is never lost in a dead corner. The middle of a room keeps a little light of its own too — it used to go black between the sconces above and the braziers below',
+    'the room keeps its mood: the stone is no brighter than it was, the corners are still dark and the fires still do the shaping. Only the people came up',
+  ] },
   { v: '1.10.0', notes: [
     'THE SIGIL SHEET \u{1F52F} — progression that OUTLIVES the run. Thirty-one marks cut into the machine\u2019s brass across six branches — THE PURSE, THE BODY, THE EDGE, THE MACHINE, THE PACK and THE DEEP — each with ranks you buy up over many runs, each branch shut until the mark above it has been struck once. Every run pays sigils however it ends: two for each floor cleared, one for every ten foes felled. A wipe on floor two still moves the sheet',
     'FOUR MARKS PAY BY DEPTH \u{25BC} — DEEP ROOTS thickens you at every staircase, the VEIN TITHE pays a gold for every floor you have cleared, DEPTH CHARGE sharpens every blow by how far down you are, and the WARHORN calls companions that arrive tougher the deeper you blow it. They are worth almost nothing on floor one and a great deal on floor twenty — which is the whole argument for one more staircase',
@@ -11298,7 +11303,12 @@ if (!HEADLESS) (function browser() {
     }
     ctx.restore();
   }
-  function drawRoomGloom(t, dt) {
+  // THE DARKNESS goes UNDER the dwellers, not over them. It shapes the stone —
+  // dark corners, pools where the fires are — and then the hero and everyone
+  // else are painted on top of it at full strength. Laying it over the sprites
+  // was atmospheric for about a second and then you could not see your own
+  // character standing in the middle of his own room.
+  function drawRoomDark() {
     const room = curRoom();
     if (!room || darkFloor()) return;
     const x = ROOM.x, y = ROOM.y, w = ROOM.w, h = ROOM.h;
@@ -11317,16 +11327,28 @@ if (!HEADLESS) (function browser() {
       };
       // the deep is MOODY, not blind: unlit stone still reads clearly, it
       // just sits a step behind the fires
-      ctx.fillStyle = 'rgba(8,4,12,0.38)';
+      ctx.fillStyle = 'rgba(8,4,12,0.42)';
       ctx.fillRect(x, y, w, h);
       ctx.globalCompositeOperation = 'destination-out';
-      for (const tp of roomTorches()) hole(tp.x, tp.y, 126);
+      for (const tp of roomTorches()) hole(tp.x, tp.y, 152);
+      // the middle of a room had no light of its own and went dead between the
+      // sconces above and the braziers below — the room itself keeps a little
+      hole((FR.x0 + FR.x1) / 2, (FR.y0 + FR.y1) / 2, 150);
       for (const d of ['n', 's', 'e', 'w']) {
         const nb = doorTo(d);
         if (nb && linkOpen(room, nb)) hole(doorCenter(d).x, doorCenter(d).y, 92);
       }
       ctx.globalCompositeOperation = 'source-over';
     });
+  }
+  // ...and THE AIR goes over everything: the light the fires and your lantern
+  // actually throw, the fog it hangs in, the embers, the grain. Additive, so
+  // it can only ever make the room brighter — never swallow what is standing
+  // in it. Every dweller also carries a small light of its own, so nothing you
+  // can walk up to and talk to is ever lost in a dead corner.
+  function drawRoomAir(t, dt) {
+    const room = curRoom();
+    if (!room || darkFloor()) return;
     ctx.save();
     ctx.beginPath(); ctx.rect(FR.x0, FR.y0, FR.x1 - FR.x0, FR.y1 - FR.y0); ctx.clip();
     // the fires, breathing over the mask: a tight hot core inside a wide
@@ -11344,7 +11366,16 @@ if (!HEADLESS) (function browser() {
     }
     // ...and the light you carry with you, steadier than a fire on a wall
     ctx.globalAlpha = 0.92 + 0.08 * fireNoise(t * 0.6, 4.2);
-    blob('hero', AV.x, AV.y - 8, 104);
+    blob('hero', AV.x, AV.y - 10, 118);
+    blob('core', AV.x, AV.y - 10, 52);
+    // every dweller stands in a little light of its own — a shopkeeper you
+    // cannot read is a shopkeeper you walk past
+    ctx.globalAlpha = 0.85;
+    for (const e of (room.ents || [])) {
+      if (e.done) continue;
+      const p = entPos(e);
+      blob('hero', p.x, p.y - 12, 62);
+    }
     ctx.globalCompositeOperation = 'source-over';
     ctx.globalAlpha = 1;
     // LOW FOG: three slow banks of it, drifting the length of the room
@@ -11354,6 +11385,10 @@ if (!HEADLESS) (function browser() {
       blob('fog', fx, FR.y0 + (FR.y1 - FR.y0) * (0.42 + i * 0.21), 110, 30);
     }
     emberTick(dt, t, torches);
+    // one last whisper of the dark over the whole picture — enough to bed the
+    // sprites into the room, nowhere near enough to hide them
+    ctx.fillStyle = 'rgba(8,4,12,0.10)';
+    ctx.fillRect(FR.x0, FR.y0, FR.x1 - FR.x0, FR.y1 - FR.y0);
     // and the grain, last, over all of it — it dithers the gradient rings out
     const gp = grainPattern();
     if (gp) {
@@ -11680,6 +11715,8 @@ if (!HEADLESS) (function browser() {
     }
     ctx.restore();                  // ...and the cobwebs are done
     ctx.restore();                  // ...and so is the floor's clip
+    // the DARKNESS lands here — on the stone, under everything that walks on it
+    drawRoomDark();
     // THE FIRES, drawn over stone and floor alike: a wall sconce washes DOWN
     // the wall it is bracketed to, a floor brazier pools around its own feet
     ctx.save();
@@ -12153,9 +12190,7 @@ if (!HEADLESS) (function browser() {
       if (o.hero) drawHero(t);
       else drawEnt(o.i, o.e, t);
     }
-    // ...and the dark falls over ALL of it — stone and dwellers alike — so a
-    // shape in the far corner has to be walked up to before it is a monster
-    drawRoomGloom(t, dt);
+    drawRoomAir(t, dt);
     drawEyes(t);
     // a DARK floor: the room drowns in black except your torch's circle
     if (darkFloor() && !S.room) {
