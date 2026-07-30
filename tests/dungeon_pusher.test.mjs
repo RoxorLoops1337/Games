@@ -7353,7 +7353,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.9.2', 'the polished fires ship as v1.9.2');
+  t.eq(D.VERSION, '1.9.3', 'the stonework ships as v1.9.3');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('CUT STONE') >= 0)),
+       'and the notes carry the masonry');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REAL FIRES') >= 0)),
        'and the notes carry the fire pass');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('THE DEEP GOES DARK') >= 0)),

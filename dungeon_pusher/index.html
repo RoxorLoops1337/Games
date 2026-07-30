@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.9.3', notes: [
+    'THE WALLS ARE CUT STONE NOW \u{1F9F1} — every wall was one flat gradient with three scratched lines dragged across it. They are masonry: staggered courses of blocks, each with its own tone off the floor\u2019s palette, a lit chamfer along the top and a shadowed underside, so a wall reads as a thousand pieces of rock instead of one painted rectangle. The chamfers are HAIRLINES on purpose \u2014 ring a block in a heavy dark border and it stops being stone and becomes a cartoon brick',
+    'the room got its architecture \u{1F3DB}\u{FE0F} — a CORNICE runs the ceiling line with dentils cut under it, PILASTERS stand proud of the far wall carrying the sconces and throwing their own shadow, the side walls turn away from you into the dark, and the stone has the cracks, damp streaks and bolted iron rings of somewhere very old',
+    'A FRAME WORTH LOOKING AT \u{1FA9F} — the plain rounded box around the dungeon is now a carved surround banded in the floor\u2019s own metal: fluted with chisel marks the whole way round, bevelled so it catches light, rivetted down both long sides, and set with a GEM in each corner that breathes on the floor\u2019s accent colour. THE MINT\u2019s is gold, THE UNDERLAKE\u2019s is verdigris — every act wears its own',
+  ] },
   { v: '1.9.2', notes: [
     'THE FIRES ARE REAL FIRES NOW \u{1F525} — the first pass lit the rooms with three orange circles and an emoji, which is exactly what it looked like. Every torch is now a drawn flame: four nested tongues cooling outward from a near-white heart, leaning on the draught, and shedding EMBERS that rise, wander and die out as they cool from white to a dull red coal',
     'light that behaves like light \u{1F56F}\u{FE0F} — each fire is a tight hot core inside a wide amber halo, falling off the way real light does (fast, then a long thin tail) instead of fading in a straight line. The wall shafts and floor pools lost their straight edges entirely — a wedge of orange with two clean sides was the loudest tell that a glow had been pasted on',
@@ -11226,37 +11231,224 @@ if (!HEADLESS) (function browser() {
       ctx.restore();
     }
   }
+  // ---------------------------------------------------------------- STONEWORK
+  // The walls used to be one flat gradient with three scratched lines across
+  // it. These are CUT STONE: staggered courses, every block carrying its own
+  // tone with a lit chamfer along the top and a shadowed underside, a cornice
+  // running the ceiling line, pilasters carrying the sconces, and the cracks,
+  // damp and iron of somewhere very old. The surround is a carved frame banded
+  // in the floor's own metal, bevelled so it catches light, with a gem set in
+  // each corner.
+  //
+  // None of it ever moves, so the whole thing — walls and frame together — is
+  // baked once per room shape and blitted. Only the gems breathe.
+  const BAND = 13;
+  function stoneTone(hex) {
+    const h = String(hex || '#5d6478').replace('#', '');
+    return [parseInt(h.slice(0, 2), 16) || 90, parseInt(h.slice(2, 4), 16) || 100,
+            parseInt(h.slice(4, 6), 16) || 120];
+  }
+  function paintStone(T) {
+    const [br, bg, bb] = stoneTone(T.door);
+    const cl = (v) => Math.max(0, Math.min(255, v | 0));
+    const tone = (k) => 'rgb(' + cl(br * k) + ',' + cl(bg * k) + ',' + cl(bb * k) + ')';
+    const lin = (x0, y0, x1, y1, stops) => {
+      const g = ctx.createLinearGradient(x0, y0, x1, y1);
+      for (const s of stops) g.addColorStop(s[0], s[1]);
+      return g;
+    };
+    const fx = ROOM.x - BAND, fy = ROOM.y - BAND;
+    const fw = ROOM.w + BAND * 2, fh = ROOM.h + BAND * 2;
+    const old = rngState;
+    srand((((ROOM.w * 73856093) ^ (ROOM.h * 19349663) ^ (br * 2654435761)) >>> 0) || 11);
+
+    // ---- the carved surround, laid down first; the walls cover its middle
+    rr(fx, fy, fw, fh, 16);
+    ctx.fillStyle = lin(0, fy, 0, fy + fh,
+      [[0, tone(1.05)], [0.16, tone(0.72)], [0.5, tone(0.5)], [0.84, tone(0.66)], [1, tone(0.95)]]);
+    ctx.fill();
+    ctx.lineWidth = 1.4; ctx.strokeStyle = 'rgba(255,240,214,0.20)'; ctx.stroke();
+    rr(fx + 2.5, fy + 2.5, fw - 5, fh - 5, 14);
+    ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.stroke();
+    // the fluting: a run of chisel marks down every side of the band
+    ctx.save();
+    ctx.globalAlpha = 0.22;
+    ctx.strokeStyle = '#000'; ctx.lineWidth = 1;
+    for (let x = fx + 12; x < fx + fw - 10; x += 9) {
+      ctx.beginPath(); ctx.moveTo(x, fy + 4); ctx.lineTo(x, fy + BAND - 2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x, fy + fh - BAND + 2); ctx.lineTo(x, fy + fh - 4); ctx.stroke();
+    }
+    for (let y = fy + 12; y < fy + fh - 10; y += 9) {
+      ctx.beginPath(); ctx.moveTo(fx + 4, y); ctx.lineTo(fx + BAND - 2, y); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(fx + fw - BAND + 2, y); ctx.lineTo(fx + fw - 4, y); ctx.stroke();
+    }
+    ctx.restore();
+    // the channel the room drops away into
+    rr(ROOM.x - 3, ROOM.y - 3, ROOM.w + 6, ROOM.h + 6, 6);
+    ctx.fillStyle = '#0a070c'; ctx.fill();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.stroke();
+
+    // ---- one cut block. The chamfers are HAIRLINES: a block ringed in a
+    // heavy dark border stops being stone and becomes a cartoon brick, which
+    // is the difference between masonry and a tablecloth pattern.
+    const block = (x, y, w, h, k) => {
+      ctx.fillStyle = tone(k);
+      ctx.fillRect(x, y, w, h);
+      ctx.fillStyle = 'rgba(255,242,222,0.10)';
+      ctx.fillRect(x, y, w, 0.8);
+      ctx.fillStyle = 'rgba(0,0,0,0.24)';
+      ctx.fillRect(x, y + h - 0.8, w, 0.8);
+      ctx.fillStyle = 'rgba(0,0,0,0.14)';
+      ctx.fillRect(x + w - 0.7, y, 0.7, h);
+    };
+    // ---- courses of it, staggered, filling a run of wall
+    const courses = (x, y, w, h, ch, minW, maxW) => {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+      for (let cy = y; cy < y + h; cy += ch) {
+        let cx = x - (rng() * maxW * 0.8);
+        while (cx < x + w) {
+          const bw = minW + rng() * (maxW - minW);
+          block(cx + 0.6, cy + 0.6, bw - 1.2, ch - 1.2, 0.74 + rng() * 0.34);
+          cx += bw;
+        }
+      }
+      ctx.restore();
+    };
+    // ---- the mortar behind it all: packed grit, not a black void
+    ctx.fillStyle = tone(0.34);
+    ctx.fillRect(ROOM.x, ROOM.y, ROOM.w, ROOM.h);
+
+    // THE FAR WALL
+    courses(ROOM.x, ROOM.y + 8, ROOM.w, ROOM.wallH - 8, 17, 30, 54);
+    // PILASTERS: the columns the sconces are bolted to, proud of the wall
+    for (const px of [FR.x0 + 42, FR.x1 - 42]) {
+      const pw = 26;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(px - pw / 2, ROOM.y + 4, pw, ROOM.wallH - 4); ctx.clip();
+      for (let cy = ROOM.y + 6; cy < ROOM.y + ROOM.wallH; cy += 15) {
+        block(px - pw / 2 + 1, cy, pw - 2, 14, 0.84 + rng() * 0.3);
+      }
+      ctx.restore();
+      // it stands proud of the wall, so it throws its own soft shadow
+      ctx.fillStyle = lin(px + pw / 2, 0, px + pw / 2 + 7, 0,
+        [[0, 'rgba(0,0,0,0.38)'], [1, 'rgba(0,0,0,0)']]);
+      ctx.fillRect(px + pw / 2, ROOM.y + 6, 7, ROOM.wallH - 6);
+      ctx.fillStyle = 'rgba(255,242,222,0.13)';
+      ctx.fillRect(px - pw / 2 - 0.8, ROOM.y + 6, 1.2, ROOM.wallH - 6);
+    }
+    // the wall recedes into the dark up by the ceiling...
+    ctx.fillStyle = lin(0, ROOM.y + 8, 0, ROOM.y + ROOM.wallH,
+      [[0, 'rgba(6,4,10,0.58)'], [0.5, 'rgba(6,4,10,0.14)'], [1, 'rgba(6,4,10,0)']]);
+    ctx.fillRect(ROOM.x, ROOM.y + 8, ROOM.w, ROOM.wallH - 8);
+    // ...and the CORNICE caps it, laid over that dark so the ceiling line
+    // still reads as cut stone catching the light rather than a black bar
+    ctx.fillStyle = lin(0, ROOM.y, 0, ROOM.y + 8, [[0, tone(1.18)], [0.7, tone(0.9)], [1, tone(0.62)]]);
+    ctx.fillRect(ROOM.x, ROOM.y, ROOM.w, 8);
+    ctx.fillStyle = 'rgba(255,242,222,0.20)';
+    ctx.fillRect(ROOM.x, ROOM.y, ROOM.w, 1.2);
+    ctx.fillStyle = lin(0, ROOM.y + 8, 0, ROOM.y + 15,
+      [[0, 'rgba(0,0,0,0.40)'], [1, 'rgba(0,0,0,0)']]);
+    ctx.fillRect(ROOM.x, ROOM.y + 8, ROOM.w, 7);          // its shadow on the wall
+    // the dentils under it: the little teeth that make a cornice a cornice
+    ctx.fillStyle = 'rgba(0,0,0,0.30)';
+    for (let dx2 = ROOM.x + 4; dx2 < ROOM.x + ROOM.w - 4; dx2 += 11) ctx.fillRect(dx2, ROOM.y + 6, 5, 2.4);
+    // DAMP: water has been finding its way down this wall for a long time
+    for (let i = 0; i < 4; i++) {
+      const sx = ROOM.x + 20 + rng() * (ROOM.w - 40), sw = 7 + rng() * 13;
+      ctx.fillStyle = lin(0, ROOM.y + 4, 0, ROOM.y + ROOM.wallH,
+        [[0, 'rgba(10,16,20,0.36)'], [1, 'rgba(10,16,20,0)']]);
+      ctx.fillRect(sx, ROOM.y + 4, sw, ROOM.wallH - 4);
+    }
+    // CRACKS
+    ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1.1;
+    for (let i = 0; i < 3; i++) {
+      let cx2 = ROOM.x + 30 + rng() * (ROOM.w - 60), cy2 = ROOM.y + 10;
+      ctx.beginPath(); ctx.moveTo(cx2, cy2);
+      for (let s = 0; s < 4; s++) {
+        cx2 += (rng() - 0.5) * 16; cy2 += 6 + rng() * 8;
+        ctx.lineTo(cx2, cy2);
+      }
+      ctx.stroke();
+    }
+    // IRON: two rings bolted into the stone, for whatever used to be chained
+    for (const rx of [ROOM.x + ROOM.w * 0.33, ROOM.x + ROOM.w * 0.67]) {
+      const ry = ROOM.y + ROOM.wallH * 0.52;
+      ctx.strokeStyle = '#171319'; ctx.lineWidth = 2.6;
+      ctx.beginPath(); ctx.arc(rx, ry + 5, 4.6, 0, 7); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255,236,208,0.16)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.arc(rx, ry + 4.4, 4.6, Math.PI * 1.15, Math.PI * 1.85); ctx.stroke();
+      ctx.fillStyle = '#211b22'; ctx.fillRect(rx - 2, ry - 3, 4, 5);
+    }
+
+    // THE SIDE WALLS: slabs on edge, turning away from you into the room
+    for (const side of [0, 1]) {
+      const sx = side ? FR.x1 : ROOM.x;
+      courses(sx, FR.y0, ROOM.sideW, FR.y1 - FR.y0, 34, 30, 40);
+      ctx.fillStyle = side
+        ? lin(sx + ROOM.sideW, 0, sx, 0, [[0, 'rgba(6,4,10,0.10)'], [1, 'rgba(6,4,10,0.62)']])
+        : lin(sx, 0, sx + ROOM.sideW, 0, [[0, 'rgba(6,4,10,0.10)'], [1, 'rgba(6,4,10,0.62)']]);
+      ctx.fillRect(sx, FR.y0, ROOM.sideW, FR.y1 - FR.y0);
+    }
+    // THE NEAR WALL, the low one you look over
+    courses(ROOM.x, FR.y1, ROOM.w, ROOM.botH, 13, 26, 46);
+    ctx.fillStyle = lin(0, FR.y1, 0, FR.y1 + ROOM.botH,
+      [[0, 'rgba(6,4,10,0)'], [1, 'rgba(6,4,10,0.55)']]);
+    ctx.fillRect(ROOM.x, FR.y1, ROOM.w, ROOM.botH);
+
+    // ---- the corner bosses, last, riding on top of the band
+    for (const c of [[fx + BAND, fy + BAND], [fx + fw - BAND, fy + BAND],
+                     [fx + BAND, fy + fh - BAND], [fx + fw - BAND, fy + fh - BAND]]) {
+      const g = ctx.createRadialGradient(c[0] - 2.5, c[1] - 3, 1, c[0], c[1], 10);
+      g.addColorStop(0, tone(1.35)); g.addColorStop(0.55, tone(0.86)); g.addColorStop(1, tone(0.42));
+      ctx.beginPath(); ctx.arc(c[0], c[1], 9.5, 0, 7);
+      ctx.fillStyle = g; ctx.fill();
+      ctx.lineWidth = 1; ctx.strokeStyle = 'rgba(0,0,0,0.55)'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(c[0], c[1], 4.2, 0, 7);
+      ctx.fillStyle = '#0c0910'; ctx.fill();
+    }
+    // rivets down the long sides of the band
+    for (let y = fy + 34; y < fy + fh - 30; y += 46) {
+      for (const x of [fx + BAND * 0.52, fx + fw - BAND * 0.52]) {
+        ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 7);
+        ctx.fillStyle = tone(1.15); ctx.fill();
+        ctx.beginPath(); ctx.arc(x + 0.6, y + 0.7, 2.4, 0.6, 2.6);
+        ctx.strokeStyle = 'rgba(0,0,0,0.5)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+    }
+    rngState = old;
+  }
+  // the gems set in the four corners: the only part of the stonework alive,
+  // breathing on the floor's own accent so the frame reads as lit, not printed
+  function drawFrameGems(t) {
+    const T = theme();
+    const fx = ROOM.x - BAND, fy = ROOM.y - BAND;
+    const fw = ROOM.w + BAND * 2, fh = ROOM.h + BAND * 2;
+    const cs = [[fx + BAND, fy + BAND], [fx + fw - BAND, fy + BAND],
+                [fx + BAND, fy + fh - BAND], [fx + fw - BAND, fy + fh - BAND]];
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    cs.forEach((c, i) => {
+      const p = 0.5 + 0.5 * Math.sin(t * 1.5 - i * 0.7);
+      ctx.globalAlpha = 0.30 + 0.34 * p;
+      ctx.beginPath(); ctx.arc(c[0], c[1], 3.1, 0, 7);
+      ctx.fillStyle = T.accent; ctx.fill();
+      ctx.globalAlpha = 0.10 + 0.14 * p;
+      ctx.beginPath(); ctx.arc(c[0], c[1], 9 + p * 4, 0, 7);
+      ctx.fillStyle = T.accent; ctx.fill();
+    });
+    ctx.restore();
+  }
   function drawRoomBox(t) {
     const T = theme();
     const room = curRoom();
     const has = (dir) => doorTo(dir);
     const open = (dir) => has(dir) && linkOpen(room, has(dir));
-    // outer dark + frame
-    rr(ROOM.x - 10, ROOM.y - 10, ROOM.w + 20, ROOM.h + 20, 14);
-    ctx.fillStyle = '#0d090d'; ctx.fill();
-    ctx.lineWidth = 3; ctx.strokeStyle = T.cabB; ctx.stroke();
-    // far wall
-    ctx.fillStyle = lgr('wall:' + fkey(), 0, ROOM.y, 0, ROOM.y + ROOM.wallH,
-      [[0, '#171019'], [1, T.door]]);
-    ctx.fillRect(ROOM.x, ROOM.y, ROOM.w, ROOM.wallH);
-    ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.strokeStyle = '#0d090d'; ctx.lineWidth = 1.5;
-    for (let r = 1; r < 3; r++) {
-      const y = ROOM.y + (ROOM.wallH / 3) * r;
-      ctx.beginPath(); ctx.moveTo(ROOM.x, y); ctx.lineTo(ROOM.x + ROOM.w, y); ctx.stroke();
-      for (let x = ROOM.x + ((r % 2) * 28); x < ROOM.x + ROOM.w; x += 56) {
-        ctx.beginPath(); ctx.moveTo(x, y - ROOM.wallH / 3); ctx.lineTo(x, y); ctx.stroke();
-      }
-    }
-    ctx.restore();
-    // side + bottom walls
-    ctx.fillStyle = lgr('sw:' + fkey(), ROOM.x, 0, ROOM.x + ROOM.sideW, 0, [[0, '#171019'], [1, T.door]]);
-    ctx.fillRect(ROOM.x, FR.y0, ROOM.sideW, FR.y1 - FR.y0);
-    ctx.fillStyle = lgr('se:' + fkey(), ROOM.x + ROOM.w, 0, ROOM.x + ROOM.w - ROOM.sideW, 0, [[0, '#171019'], [1, T.door]]);
-    ctx.fillRect(FR.x1, FR.y0, ROOM.sideW, FR.y1 - FR.y0);
-    ctx.fillStyle = lgr('bw:' + fkey(), 0, ROOM.y + ROOM.h, 0, FR.y1, [[0, '#171019'], [1, T.door]]);
-    ctx.fillRect(ROOM.x, FR.y1, ROOM.w, ROOM.botH);
+    // the whole surround and every wall of it, baked once per room shape
+    const pad = BAND + 6;
+    layer('stone', ROOM.x - pad, ROOM.y - pad, ROOM.w + pad * 2, ROOM.h + pad * 2,
+          [fkey(), ROOM.w + 'x' + ROOM.h], () => paintStone(T));
+    drawFrameGems(t);
     // tiled floor: real Frietkot stone when it loads, painted checker till then
     const fy = FR.y0;
     const fh = FR.y1 - FR.y0;
@@ -11298,8 +11490,8 @@ if (!HEADLESS) (function browser() {
     ctx.fillStyle = aoR; ctx.fillRect(FR.x1 - 26, fy, 26, fh);
     // COBWEBS in the two upper corners — nobody has swept down here in an age
     ctx.save();
-    ctx.globalAlpha = 0.22;
-    ctx.strokeStyle = '#d8d0e8'; ctx.lineWidth = 1;
+    ctx.globalAlpha = 0.13;
+    ctx.strokeStyle = '#cfc6c0'; ctx.lineWidth = 0.9;
     for (const sgn of [1, -1]) {
       const cx = sgn > 0 ? FR.x0 : FR.x1, cy = fy;
       for (let ri = 1; ri <= 3; ri++) {
