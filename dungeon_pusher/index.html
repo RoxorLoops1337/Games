@@ -51,6 +51,10 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.13.1', notes: [
+    'FOUR FOES STOP WEARING EMOJI \u{1F5FF} — the BONEGUARD pair, THE STONEWARDEN, THE STORMKNIGHT and THE ASHWRIGHT all had painted art sitting in the repo since the day they were built, and all four were drawing as emoji because nothing ever pointed at it. They wear it now',
+    'and the repo counts its own art \u{1F9FE} — every painted set the code names must exist with the frames it claims, and the ones with no foe yet are listed out loud on every test run. Art nobody can see is the quietest bug there is',
+  ] },
   { v: '1.13.0', notes: [
     'THE CABINET SKINS ARE PAINTED \u{1F3B0} — they used to be one brown machine with a colour wash laid over it, which is exactly what they looked like. Every skin is a whole carved set now: STONE\u2019s oak and rune-work, EMERALD\u2019s cold green stone, LAVA\u2019s black rock with the fire still running in the cracks, and the CRYPT\u2019s own amethyst PURPLE. The frame, the back wall, the tray face, the rails, the TILT keys, the END TURN scroll and the bag and flask buttons all change with it',
     'the rack shows you the real thing \u{1F441}\u{FE0F} — each row wears a slice of its own cabinet instead of a painted square, so you pick with your eyes. Every unlock is where it was: the skin you already earned is the skin you still have, just repainted',
@@ -7294,6 +7298,13 @@ if (!HEADLESS) (function browser() {
     // ...and the two new lair-holders
     duroskul:      { dir: 'boss/duroskul/idle',       stem: 'duroskul_idle',      n: 3, fps: 3, scale: 1.0 },
     spinedrake:    { dir: 'boss/spinedrake/idle',     stem: 'spinedrake_idle',    n: 3, fps: 3, scale: 1.35 },
+    // the owner's own bestiary (v1.9.0). Their art has been sitting in the
+    // repo since they were built and they were all four drawing as EMOJI —
+    // the census guard below now fails if that ever happens again.
+    boneguard:     { dir: 'boss/boneguard/idle',      stem: 'boneguard_idle',     n: 3, fps: 3, scale: 1.05 },
+    stonewarden:   { dir: 'boss/stonewarden/idle',    stem: 'stonewarden_idle',   n: 3, fps: 3, scale: 1.2 },
+    stormknight:   { dir: 'boss/stormknight/idle',    stem: 'stormknight_idle',   n: 3, fps: 3, scale: 1.3 },
+    ashwright:     { dir: 'boss/inferno_brute/idle',  stem: 'infernobrute_idle',  n: 3, fps: 4, scale: 1.1 },
   };
   const FRAME_PAD = k => (k < 10 ? '0' : '') + k;
   function frameImg(key, fa, i) {
