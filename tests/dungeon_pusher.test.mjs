@@ -3825,7 +3825,12 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(ids[0], 'classic', 'CLASSIC leads the rack');
   t.ok(ids.every(id => D.MACH_THEMES[id].name && typeof D.MACH_THEMES[id].floor === 'number'),
        'every theme carries a name and a milestone');
-  t.ok(!D.MACH_THEMES.classic.tint && D.MACH_THEMES.neon.tint, 'classic is raw art, the others wash');
+  // the skins are PAINTED sets now, not a colour wash over one brown cabinet
+  t.ok(ids.every(id => !D.MACH_THEMES[id].tint), 'no skin is a colour wash any more');
+  t.ok(ids.every(id => D.MACH_THEMES[id].dir), 'every skin names the set it is painted in');
+  t.eq(new Set(ids.map(id => D.MACH_THEMES[id].dir)).size, ids.length, 'and no two share a set');
+  t.ok(ids.every(id => /^#[0-9a-f]{6}$/i.test(D.MACH_THEMES[id].swatch || '')),
+       'every skin carries a swatch for the rack');
   // unlocks follow the best descent
   t.eq(D.S.machTheme, 'classic', 'a fresh profile wears CLASSIC');
   t.ok(D.themeUnlocked('classic') && !D.themeUnlocked('bone'), 'only CLASSIC opens at floor 0');
@@ -3846,8 +3851,23 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the render caches re-key on the theme
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.eq((src.match(/S\.machTheme,/g) || []).length >= 3, true, 'all three machArt layers re-key on the theme');
-  t.ok(src.indexOf('const MACH_TINT = {}') >= 0, 'tinted cabinets are baked once and cached');
+  t.ok(src.indexOf('const MACH_TINT') < 0, 'the tint bakery is gone with the washes');
+  // the art cache must key on the SKIN, or wearing a new one shows the old set
+  t.ok(src.indexOf("art('mach_' + th.dir + '_' + key, 'art/machine/skins/' + th.dir + '/' + file)") >= 0,
+       'each skin caches its pieces under its own key');
+  t.ok(src.indexOf('const im = art(\'mach_\' + key, MACH_ART[key]);\n    return im._ok ? im : null;') >= 0,
+       'and the shared art stands behind a skin that is missing a piece');
+  // THE CACHE TRAP. A skin's pieces stream in AFTER the first frame is drawn.
+  // A cached layer keyed on "machArt('fascia') ? 1 : 0" answers 1 both before
+  // and after the painted one lands, so it never rebuilds — you wear LAVA and
+  // stare at the house cabinet all session. Every machine layer must key on
+  // WHICH art is resolved, not whether any is.
+  t.ok(!/machArt\('[a-z_]+'\) \? 1 : 0/.test(src),
+       'no machine layer keys on merely HAVING art — that never rebuilds when a skin lands');
+  t.ok(src.indexOf('function machStamp()') >= 0, 'they key on the stamp of what is resolved');
+  t.ok(/out \+= k \+ \(im \? \(im\._skin \? ':' \+ im\._skin : ':base'\) : ':none'\)/.test(src),
+       'and the stamp tells a skin piece from the house one');
+  t.eq((src.match(/machStamp\(/g) || []).length, 4, 'all three machine layers carry it, plus the helper');
 }
 
 // -------- HERO SKINS + SEASONS: deep clears, alt palettes, clock windows --------
@@ -7369,7 +7389,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.12.0', 'the remembering map ships as v1.12.0');
+  t.eq(D.VERSION, '1.13.0', 'the painted cabinets ship as v1.13.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SKINS ARE PAINTED') >= 0)),
+       'and the notes carry them');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('MAP REMEMBERS') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('WERE BREEDING') >= 0)),
