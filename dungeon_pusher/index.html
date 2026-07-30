@@ -51,6 +51,10 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.15.0', notes: [
+    'A SCENE BUILDER FOR THE WHOLE MACHINE \u{1F9F0} \u2014 cab.html opens the cabinet as an editor. Drag every plate, button, plaque and the glass itself over the real art; box-select a row; align, match and spread them against an anchor; nudge single pixels with the arrows; snap to the grid or to anything else\u2019s edges; undo as far back as you like',
+    'and the machine now takes its layout from a FILE \u{1F4D0} \u2014 every piece of the cabinet is one flat rect in the shell\u2019s own pixels, and art/cab/layout.json overrides any of them. The builder writes exactly that file, so the whole thing can be re-tuned without touching a line of code',
+  ] },
   { v: '1.14.0', notes: [
     'THE DUNGEON IS AN ARCADE MACHINE \u{1F579}\u{FE0F} — the whole crawl is played inside a cabinet, and the cabinet IS the screen. The SHELL is cut to the stage exactly and painted corner to corner as the base of the picture; its glass is knocked out, the game is painted THROUGH that hole, and the machine is laid back over the top so the bezel\u2019s own shadow falls across the room the way glass does',
     'a lit marquee overhead, a real control panel underneath \u{1F3AE} — the stick leans the way you walk, and MAP, PURSE and MENU are three plastic buttons with a brass EXIT plate at the end of the row. No loose chips floating on the woodwork any more',
@@ -11199,32 +11203,61 @@ if (!HEADLESS) (function browser() {
   // buttons, the stat plates — is measured in the SHELL's own pixels against
   // the bands the art already has, then scaled once by the same k. Nothing is
   // positioned against the page any more; the machine IS the page.
-  const CAB_SHELL = {
-    w: 1176, h: 2058,                    // 1176 x 2058 == 480 x 840, to the pixel
-    hole:     [139,  404, 898, 1008],    // the screen, knocked transparent
-    marquee:  [ 60,   38, 1015, 250],    // the empty plaque up top
-    controls: [ 55, 1490, 1055, 290],    // the sloped panel under the glass
-    apron:    [ 55, 1810, 1055, 240],    // the plinth below that
+  const CAB_SHELL = { w: 1176, h: 2058 };  // 1176 x 2058 == 480 x 840, to the pixel
+  // EVERY piece of the machine is one flat rect [x, y, w, h] in the shell's
+  // own pixels — no fractions of parents, no nesting. That is what makes the
+  // scene builder (cab.html) possible: it drags these exact numbers over the
+  // real art and hands back the same table. These are the shipped defaults;
+  // art/cab/layout.json, if it exists, overrides any subset of them.
+  const CAB_R = {
+    hole:         [139,  404,  898, 1008],   // the screen, knocked transparent
+    marquee:      [ 60,   38, 1015,  250],   // the plaque up top
+    head:         [166,  424,  566,  136],   // the floor name, inside the glass
+    map:          [759,  429,  251,  141],   // the minimap, inside the glass
+    play:         [157,  590,  862,  806],   // where the room is fitted
+    joystick:     [ 92, 1502,  178,  226],
+    btn_map:      [405, 1551,  102,   99],
+    btn_purse:    [573, 1551,  104,   99],
+    btn_menu:     [741, 1551,  105,   99],
+    btn_exit:     [954, 1554,  121,   93],
+    panel_hp:     [ 55, 1820,  236,  125],
+    panel_gold:   [291, 1820,  207,  125],
+    panel_purse:  [498, 1820,  206,  125],
+    panel_potion: [704, 1820,  206,  125],
+    panel_bag:    [909, 1820,  201,  125],
   };
-  const CAB = { on: false };
+  const CAB = { on: false, r: {} };
   function cabLayout() {
     const k = LW / CAB_SHELL.w;          // one scale, and the shell fills the stage
-    const R = (r) => ({ x: r[0] * k, y: r[1] * k, w: r[2] * k, h: r[3] * k });
     CAB.k = k;
     CAB.shell = { x: 0, y: 0, w: LW, h: LH };
-    CAB.hole = R(CAB_SHELL.hole);
-    CAB.mq   = R(CAB_SHELL.marquee);
-    CAB.co   = R(CAB_SHELL.controls);
-    CAB.ap   = R(CAB_SHELL.apron);
-    // ...and the screen's own furniture, in fractions of the glass: the floor
-    // name across the top left, the map in the top right, the room below both
-    const g = CAB.hole;
-    CAB.head = { x: g.x + g.w * 0.03, y: g.y + g.h * 0.02, w: g.w * 0.63, h: g.h * 0.135 };
-    CAB.map  = { x: g.x + g.w * 0.69, y: g.y + g.h * 0.025, w: g.w * 0.28, h: g.h * 0.14 };
-    CAB.play = { x: g.x + g.w * 0.02, y: g.y + g.h * 0.185, w: g.w * 0.96, h: g.h * 0.80 };
+    for (const key in CAB_R) {
+      const a = CAB_R[key];
+      CAB.r[key] = { x: a[0] * k, y: a[1] * k, w: a[2] * k, h: a[3] * k };
+    }
+    CAB.hole = CAB.r.hole; CAB.mq = CAB.r.marquee;
+    CAB.head = CAB.r.head; CAB.map = CAB.r.map; CAB.play = CAB.r.play;
     return CAB;
   }
   cabLayout();
+  // the builder's output, if the owner has dropped one in. Graceful like all
+  // the art: a missing, stale or half-written file leaves the defaults alone.
+  if (typeof fetch !== 'undefined') {
+    try {
+      fetch('art/cab/layout.json').then((r) => (r.ok ? r.json() : null)).then((j) => {
+        if (!j) return;
+        if (j.shell && j.shell.w > 0 && j.shell.h > 0) { CAB_SHELL.w = j.shell.w; CAB_SHELL.h = j.shell.h; }
+        const rc = j.rects || j;
+        for (const key in CAB_R) {
+          const a = rc[key];
+          if (Array.isArray(a) && a.length === 4 && a.every((n) => typeof n === 'number' && isFinite(n))) {
+            CAB_R[key] = [a[0], a[1], a[2], a[3]];
+          }
+        }
+        cabLayout();
+      }).catch(() => {});
+    } catch (e) {}
+  }
   function cabArt(name) {
     const im = art('cab_' + name, 'art/cab/' + name + '.png');
     return im._ok ? im : null;
@@ -12681,59 +12714,52 @@ if (!HEADLESS) (function browser() {
   // the stick leans the way you walk; the three buttons are real, and the
   // brass EXIT plate at the end of the panel is the way out of the machine
   function drawCabControls(t) {
-    const co = CAB.co;
+    const R = CAB.r;
     const im = cabArt('joystick');
     if (im) {
-      const jh = co.h * 0.78, jw = imW(im, jh);
+      const j = R.joystick;
       ctx.save();
-      ctx.translate(co.x + co.w * 0.12, co.y + co.h * 0.40);
+      ctx.translate(j.x + j.w / 2, j.y + j.h * 0.46);
       ctx.rotate((AV.moving ? AV.fx : 0) * 0.22);
-      ctx.drawImage(im, -jw / 2, -jh * 0.46, jw, jh);
+      ctx.drawImage(im, -j.w / 2, -j.h * 0.46, j.w, j.h);
       ctx.restore();
     }
-    const btns = [['button_red', 'MAP', () => { mapView = !mapView; }],
-                  ['button_yellow', 'PURSE', () => { S.inv = S.inv ? null : { tab: 'coins' }; }],
-                  ['button_blue', 'MENU', () => { SETTINGS = true; }]];
-    btns.forEach(([name, label, cb], i) => {
-      const bx = co.x + co.w * (0.38 + i * 0.16), by = co.y + co.h * 0.38;
-      const bi = cabArt(name);
-      const bh = co.h * 0.34, bw = bi ? imW(bi, bh) : bh;
-      if (bi) ctx.drawImage(bi, bx - bw / 2, by - bh / 2, bw, bh);
-      txt(label, bx, by + bh * 0.92, '800 9px Verdana, sans-serif', '#d8b8a8');
-      uiButtons.push({ x: bx - bw / 2, y: by - bh * 0.7, w: bw, h: bh * 1.4, cb });
-    });
-    // the coin door doubles as the exit — a real cabinet has no home key
-    const ex = co.x + co.w * 0.91, ey = co.y + co.h * 0.38, ew = co.w * 0.115, eh = co.h * 0.32;
+    const btns = [['btn_map', 'button_red', 'MAP', () => { mapView = !mapView; }],
+                  ['btn_purse', 'button_yellow', 'PURSE', () => { S.inv = S.inv ? null : { tab: 'coins' }; }],
+                  ['btn_menu', 'button_blue', 'MENU', () => { SETTINGS = true; }]];
+    for (const [slot, name, label, cb] of btns) {
+      const b = R[slot], bi = cabArt(name);
+      if (bi) ctx.drawImage(bi, b.x, b.y, b.w, b.h);
+      txt(label, b.x + b.w / 2, b.y + b.h * 1.42, '800 9px Verdana, sans-serif', '#d8b8a8');
+      uiButtons.push({ x: b.x, y: b.y - b.h * 0.2, w: b.w, h: b.h * 1.4, cb });
+    }
+    // a real cabinet has no home key, so the way out is a brass plate screwed
+    // to the end of the panel
+    const e = R.btn_exit;
     ctx.save();
     ctx.fillStyle = 'rgba(14,9,8,0.86)';
     ctx.strokeStyle = 'rgba(196,158,84,0.85)'; ctx.lineWidth = 1.5;
-    rr(ex - ew / 2, ey - eh / 2, ew, eh, 4); ctx.fill(); ctx.stroke();
+    rr(e.x, e.y, e.w, e.h, 4); ctx.fill(); ctx.stroke();
     ctx.restore();
-    txt('\u{2302}', ex, ey - eh * 0.06, '16px serif', '#e8c88a');
-    txt('EXIT', ex, ey + eh * 0.70, '800 9px Verdana, sans-serif', '#d8b8a8');
-    uiButtons.push({ x: ex - ew / 2, y: ey - eh / 2, w: ew, h: eh,
+    txt('\u{2302}', e.x + e.w / 2, e.y + e.h * 0.44, '16px serif', '#e8c88a');
+    txt('EXIT', e.x + e.w / 2, e.y + e.h * 1.20, '800 9px Verdana, sans-serif', '#d8b8a8');
+    uiButtons.push({ x: e.x, y: e.y, w: e.w, h: e.h,
                      cb: () => { S.screen = 'title'; save(); } });
   }
   // HP / GOLD / PURSE / POTION / BAG — the owner's plates, with the numbers
   // that were stripped out of the art put back live
   function drawCabStatus(t) {
-    const r = S.run, ap = CAB.ap;
-    const defs = [['panel_hp', 150], ['panel_gold', 132], ['panel_purse', 131],
-                  ['panel_potion', 131], ['panel_bag', 128]];
-    const tot = defs.reduce((a2, d) => a2 + d[1], 0);
-    const k = ap.w / tot;
-    const ph = Math.min(ap.h * 0.62, 100 * k * 1.25);
-    const py = ap.y + 4;
-    let px = ap.x;
+    const r = S.run;
+    const names = ['panel_hp', 'panel_gold', 'panel_purse', 'panel_potion', 'panel_bag'];
     const vals = [Math.max(0, r.hp) + ' / ' + r.maxHp, fmt(r.gold), '' + purseTotal(),
                   '' + (r.potions | 0),
                   '' + Object.values(r.arsenal || {}).reduce((a2, n) => a2 + n, 0)];
-    defs.forEach(([img, dw], i) => {
-      const w = dw * k;
+    names.forEach((img, i) => {
+      const p = CAB.r[img];
       const im = cabArt(img);
-      if (im) ctx.drawImage(im, px, py, w, ph);
+      if (im) ctx.drawImage(im, p.x, p.y, p.w, p.h);
       if (i === 0) {
-        const bx = px + w * 0.10, by = py + ph * 0.50, bw = w * 0.80, bh = ph * 0.30;
+        const bx = p.x + p.w * 0.10, by = p.y + p.h * 0.50, bw = p.w * 0.80, bh = p.h * 0.30;
         const frac = Math.max(0, Math.min(1, r.hp / Math.max(1, r.maxHp)));
         ctx.fillStyle = 'rgba(8,4,8,0.8)'; ctx.fillRect(bx, by, bw, bh);
         ctx.fillStyle = frac > 0.5 ? '#7ed06a' : frac > 0.25 ? '#e8c04a' : '#e0503c';
@@ -12741,13 +12767,12 @@ if (!HEADLESS) (function browser() {
         txt(vals[i], bx + bw / 2, by + bh / 2, '900 9px Verdana, sans-serif', '#fff6e0',
             'center', { w: 3, col: 'rgba(6,3,8,0.95)' });
       } else {
-        txt(vals[i], px + w * 0.62, py + ph * 0.62,
-            '900 ' + Math.max(10, Math.round(ph * 0.24)) + 'px Verdana, sans-serif', '#ffe9a3',
+        txt(vals[i], p.x + p.w * 0.62, p.y + p.h * 0.62,
+            '900 ' + Math.max(10, Math.round(p.h * 0.24)) + 'px Verdana, sans-serif', '#ffe9a3',
             'center', { w: 3, col: 'rgba(6,3,8,0.9)' });
       }
-      if (img === 'panel_potion') uiButtons.push({ x: px, y: py, w, h: ph, cb: () => usePotion() });
-      if (img === 'panel_bag') uiButtons.push({ x: px, y: py, w, h: ph, cb: () => { S.inv = S.inv ? null : { tab: 'gear' }; } });
-      px += w;
+      if (img === 'panel_potion') uiButtons.push({ x: p.x, y: p.y, w: p.w, h: p.h, cb: () => usePotion() });
+      if (img === 'panel_bag') uiButtons.push({ x: p.x, y: p.y, w: p.w, h: p.h, cb: () => { S.inv = S.inv ? null : { tab: 'gear' }; } });
     });
   }
   function drawDungeon(t, dt) {
