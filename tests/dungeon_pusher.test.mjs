@@ -7353,7 +7353,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.10.0', 'the sigil sheet ships as v1.10.0');
+  t.eq(D.VERSION, '1.10.1', 'the readability fix ships as v1.10.1');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('OWN CHARACTER AGAIN') >= 0)),
+       'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SIGIL SHEET') >= 0)),
        'and the notes carry the sheet');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('CUT STONE') >= 0)),
@@ -8221,6 +8223,27 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   ];
   frames(3);
   t.eq(globalThis.__ctxDepth, 0, 'a crowded room balances too');
+
+  // ---- and the dark stays UNDER the people standing in it ----
+  // The first cut of the light pass laid the darkness over the sprites too. It
+  // read beautifully in a still and was useless to play: measured on a phone,
+  // the shopkeeper came out at luma 55.8 standing on a floor of 50.3 — the
+  // same brightness as the stone. The mask now goes down inside drawRoomBox,
+  // under everyone; the only thing allowed over the dwellers is light and one
+  // whisper of tint. This guard keeps it that way.
+  const here2 = dirname(fileURLToPath(import.meta.url));
+  const src2 = readFileSync(join(here2, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const box = src2.slice(src2.indexOf('function drawRoomBox'), src2.indexOf('function drawRoomModal'));
+  t.ok(box.indexOf('drawRoomDark();') >= 0, 'the darkness is laid inside drawRoomBox, under the dwellers');
+  const airAt = src2.indexOf('function drawRoomAir');
+  t.ok(airAt > 0, 'and the light rides its own pass over them');
+  const air = src2.slice(airAt, src2.indexOf('function drawEyes'));
+  const washes = [...air.matchAll(/fillStyle = 'rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\)'/g)]
+                   .map(m => +m[1]);
+  t.ok(washes.length > 0, 'the air pass paints something');
+  t.ok(washes.every(a => a <= 0.15),
+       'nothing painted OVER the dwellers is more than a whisper (max ' + Math.max(...washes) + ')');
+  t.ok(air.indexOf("'lighter'") >= 0, 'the fires over the dwellers only ever ADD light');
 }
 
 // ================= THE SIGIL SHEET: progression between runs =================
