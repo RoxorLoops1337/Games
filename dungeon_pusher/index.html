@@ -51,6 +51,11 @@ const HEADLESS = !ctx;
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.14.0', notes: [
+    'THE DUNGEON IS AN ARCADE MACHINE \u{1F579}\u{FE0F} — the whole crawl is played inside a cabinet now: a lit marquee with the game\u2019s name and its own torches, the room behind glass in a bezel, a control panel with a stick that LEANS the way you walk and three real buttons, and a row of brass plates along the bottom. It is the owner\u2019s own art, module for module',
+    'the plates read live \u{1F4CA} — HP with a real bar in its slot, GOLD, PURSE, POTION and BAG, each with the number the art was drawn without. POTION drinks, BAG opens your gear, and the three buttons are MAP, PURSE and MENU',
+    'the title, the map and the floor are LIVE where they were painted \u{1F5FA}\u{FE0F} — the three windows in the bezel were measured off the art pixel for pixel, so the real floor name, the real map and the real room land exactly where the mock-up put them',
+  ] },
   { v: '1.13.1', notes: [
     'FOUR FOES STOP WEARING EMOJI \u{1F5FF} — the BONEGUARD pair, THE STONEWARDEN, THE STORMKNIGHT and THE ASHWRIGHT all had painted art sitting in the repo since the day they were built, and all four were drawing as emoji because nothing ever pointed at it. They wear it now',
     'and the repo counts its own art \u{1F9FE} — every painted set the code names must exist with the frames it claims, and the ones with no foe yet are listed out loud on every test run. Art nobody can see is the quietest bug there is',
@@ -11184,6 +11189,42 @@ if (!HEADLESS) (function browser() {
   // Rooms persist — backtrack freely — and the minimap uncovers as you go.
   // rooms come in SIZES, like a real blueprint: small cells, wide halls,
   // long galleries, big chambers. ROOM/FR are refit to the current room.
+  // ====================== THE CABINET =========================
+  // Down in the dungeon the game is played inside an actual arcade machine:
+  // a lit marquee, a screen in a bezel, a control panel and a row of brass
+  // stat plates. Every rect below is measured off the owner's art rather than
+  // eyeballed — the sub-rects inside the screen module were found by matching
+  // playfield.png, minimap.png and level_header.png against it pixel for
+  // pixel, so the live room, the live map and the live title land exactly
+  // where they were painted to land.
+  const CAB_SRC = {                       // native size of each module
+    marquee:  [762, 212], screen: [708, 784], controls: [768, 143], status: [762, 111],
+    hpbar:    [125, 44],  joy: [115, 146],  btn: [90, 86],
+  };
+  // where the three live regions sit INSIDE screen.png (708x784)
+  const CAB_IN = { play: [29, 153, 652, 596], head: [138, 38, 337, 99], map: [493, 37, 167, 116] };
+  const CAB = { on: false };
+  function cabLayout() {
+    const x = 6, w = LW - 12, k = w / CAB_SRC.screen[0];
+    const mq = { x, y: 4, w, h: w * CAB_SRC.marquee[1] / CAB_SRC.marquee[0] };
+    const sc = { x, y: mq.y + mq.h + 4, w, h: w * CAB_SRC.screen[1] / CAB_SRC.screen[0] };
+    const co = { x, y: sc.y + sc.h + 3, w, h: w * CAB_SRC.controls[1] / CAB_SRC.controls[0] };
+    const st = { x, y: co.y + co.h + 3, w, h: w * CAB_SRC.status[1] / CAB_SRC.status[0] };
+    const sub = (r) => ({ x: sc.x + r[0] * k, y: sc.y + r[1] * k, w: r[2] * k, h: r[3] * k });
+    CAB.mq = mq; CAB.sc = sc; CAB.co = co; CAB.st = st; CAB.k = k;
+    CAB.play = sub(CAB_IN.play); CAB.head = sub(CAB_IN.head); CAB.map = sub(CAB_IN.map);
+    return CAB;
+  }
+  cabLayout();
+  function cabArt(name) {
+    const im = art('cab_' + name, 'art/cab/' + name + '.png');
+    return im._ok ? im : null;
+  }
+  // the cabinet stands only where its art does — no art, no cabinet, and the
+  // dungeon falls back to the screen it has always had
+  function cabOn() {
+    return S.screen === 'dungeon' && !!cabArt('game_screen_full') && !!cabArt('marquee');
+  }
   const SIZE_DIMS = {
     s: { w: 300, h: 330 }, w: { w: 412, h: 330 },
     t: { w: 310, h: 464 }, b: { w: 412, h: 464 },
@@ -11193,9 +11234,24 @@ if (!HEADLESS) (function browser() {
   function updateRoomRect() {
     const r = curRoom();
     const d = (r && SIZE_DIMS[r.size]) || SIZE_DIMS.b;
-    ROOM.w = d.w; ROOM.h = d.h;
-    ROOM.x = (LW - d.w) / 2;
-    ROOM.y = 168 + (464 - d.h) / 2;
+    if (cabOn()) {
+      // inside the cabinet the room lives in the SCREEN, so the room shapes
+      // keep their proportions but are fitted to the glass rather than the
+      // page. A small room is still visibly smaller than a big one.
+      // a small room still reads as smaller than a big one, but the glass is
+      // not left three-quarters black to prove it: the spread is squeezed so
+      // the tightest room still fills most of the screen
+      const p = CAB.play;
+      const fw = 0.84 + 0.16 * (d.w / SIZE_DIMS.b.w);
+      const fh = 0.84 + 0.16 * (d.h / SIZE_DIMS.b.h);
+      ROOM.w = Math.round(p.w * fw); ROOM.h = Math.round(p.h * fh);
+      ROOM.x = Math.round(p.x + (p.w - ROOM.w) / 2);
+      ROOM.y = Math.round(p.y + (p.h - ROOM.h) / 2);
+    } else {
+      ROOM.w = d.w; ROOM.h = d.h;
+      ROOM.x = (LW - d.w) / 2;
+      ROOM.y = 168 + (464 - d.h) / 2;
+    }
     FR.x0 = ROOM.x + ROOM.sideW; FR.x1 = ROOM.x + ROOM.w - ROOM.sideW;
     FR.y0 = ROOM.y + ROOM.wallH; FR.y1 = ROOM.y + ROOM.h - ROOM.botH;
   }
@@ -11845,7 +11901,7 @@ if (!HEADLESS) (function browser() {
     return [parseInt(h.slice(0, 2), 16) || 90, parseInt(h.slice(2, 4), 16) || 100,
             parseInt(h.slice(4, 6), 16) || 120];
   }
-  function paintStone(T) {
+  function paintStone(T, bare) {
     const [br, bg, bb] = stoneTone(T.door);
     const cl = (v) => Math.max(0, Math.min(255, v | 0));
     const tone = (k) => 'rgb(' + cl(br * k) + ',' + cl(bg * k) + ',' + cl(bb * k) + ')';
@@ -11860,6 +11916,11 @@ if (!HEADLESS) (function browser() {
     srand((((ROOM.w * 73856093) ^ (ROOM.h * 19349663) ^ (br * 2654435761)) >>> 0) || 11);
 
     // ---- the carved surround, laid down first; the walls cover its middle
+    if (bare) {
+      // in the cabinet: no surround at all, just the dark the walls sit in
+      ctx.fillStyle = '#0a070c';
+      ctx.fillRect(ROOM.x - 3, ROOM.y - 3, ROOM.w + 6, ROOM.h + 6);
+    } else {
     rr(fx, fy, fw, fh, 16);
     ctx.fillStyle = lin(0, fy, 0, fy + fh,
       [[0, tone(1.05)], [0.16, tone(0.72)], [0.5, tone(0.5)], [0.84, tone(0.66)], [1, tone(0.95)]]);
@@ -11884,6 +11945,7 @@ if (!HEADLESS) (function browser() {
     rr(ROOM.x - 3, ROOM.y - 3, ROOM.w + 6, ROOM.h + 6, 6);
     ctx.fillStyle = '#0a070c'; ctx.fill();
     ctx.lineWidth = 1.2; ctx.strokeStyle = 'rgba(0,0,0,0.8)'; ctx.stroke();
+    }
 
     // ---- one cut block. The chamfers are HAIRLINES: a block ringed in a
     // heavy dark border stops being stone and becomes a cartoon brick, which
@@ -11994,7 +12056,7 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(ROOM.x, FR.y1, ROOM.w, ROOM.botH);
 
     // ---- the corner bosses, last, riding on top of the band
-    for (const c of [[fx + BAND, fy + BAND], [fx + fw - BAND, fy + BAND],
+    if (!bare) for (const c of [[fx + BAND, fy + BAND], [fx + fw - BAND, fy + BAND],
                      [fx + BAND, fy + fh - BAND], [fx + fw - BAND, fy + fh - BAND]]) {
       const g = ctx.createRadialGradient(c[0] - 2.5, c[1] - 3, 1, c[0], c[1], 10);
       g.addColorStop(0, tone(1.35)); g.addColorStop(0.55, tone(0.86)); g.addColorStop(1, tone(0.42));
@@ -12005,7 +12067,7 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = '#0c0910'; ctx.fill();
     }
     // rivets down the long sides of the band
-    for (let y = fy + 34; y < fy + fh - 30; y += 46) {
+    if (!bare) for (let y = fy + 34; y < fy + fh - 30; y += 46) {
       for (const x of [fx + BAND * 0.52, fx + fw - BAND * 0.52]) {
         ctx.beginPath(); ctx.arc(x, y, 2.4, 0, 7);
         ctx.fillStyle = tone(1.15); ctx.fill();
@@ -12041,11 +12103,14 @@ if (!HEADLESS) (function browser() {
     const room = curRoom();
     const has = (dir) => doorTo(dir);
     const open = (dir) => has(dir) && linkOpen(room, has(dir));
-    // the whole surround and every wall of it, baked once per room shape
+    // the whole surround and every wall of it, baked once per room shape.
+    // Inside the cabinet the SCREEN BEZEL is the frame, so the carved one
+    // stands down rather than framing a frame.
+    const cab = cabOn();
     const pad = BAND + 6;
     layer('stone', ROOM.x - pad, ROOM.y - pad, ROOM.w + pad * 2, ROOM.h + pad * 2,
-          [fkey(), ROOM.w + 'x' + ROOM.h], () => paintStone(T));
-    drawFrameGems(t);
+          [fkey(), ROOM.w + 'x' + ROOM.h, cab ? 'cab' : 'page'], () => paintStone(T, cab));
+    if (!cab) drawFrameGems(t);
     // tiled floor: real Frietkot stone when it loads, painted checker till then
     const fy = FR.y0;
     const fh = FR.y1 - FR.y0;
@@ -12505,10 +12570,14 @@ if (!HEADLESS) (function browser() {
     const pitch = 16;
     const mw = (b.maxX - b.minX + 1) * pitch + 12;
     const mh = (b.maxY - b.minY + 1) * pitch + 12;
-    const mx = LW - 14 - mw, my = 56;
+    // inside the cabinet the map has its own painted window in the bezel
+    const cab = cabOn();
+    if (cab) cabBlank({ x: CAB.map.x, y: CAB.map.y, w: CAB.map.w, h: CAB.map.h }, 8);
+    const mx = cab ? CAB.map.x + (CAB.map.w - mw) / 2 : LW - 14 - mw;
+    const my = cab ? CAB.map.y + (CAB.map.h - mh) / 2 : 56;
     rr(mx, my, mw, mh, 8);
-    ctx.fillStyle = 'rgba(10,6,12,0.82)'; ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(232,220,232,0.35)'; ctx.stroke();
+    ctx.fillStyle = cab ? 'rgba(8,5,10,0.55)' : 'rgba(10,6,12,0.82)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = cab ? 'rgba(232,220,232,0.18)' : 'rgba(232,220,232,0.35)'; ctx.stroke();
     drawMapRooms(mx + 6 - b.minX * pitch, my + 6 - b.minY * pitch, pitch, seen, false);
     txt(TR('tap for map'), mx + mw / 2, my + mh + 8, '600 9px Verdana, sans-serif', '#a08a94');
     if (!S.room) uiButtons.push({ x: mx - 6, y: my - 6, w: mw + 12, h: mh + 24, cb: () => { mapView = true; } });
@@ -12574,6 +12643,125 @@ if (!HEADLESS) (function browser() {
     ctx.restore();
   }
 
+  // ---- the machine itself: marquee, bezel, controls, and the brass plates
+  // whose numbers are the only part of it that is alive
+  function cabPanels() {
+    return [
+      { img: 'panel_hp',     w: 150 }, { img: 'panel_gold',   w: 132 },
+      { img: 'panel_purse',  w: 131 }, { img: 'panel_potion', w: 131 },
+      { img: 'panel_bag',    w: 128 },
+    ];
+  }
+  function drawCabinet(t) {
+    cabLayout();
+    const put = (name, r) => { const im = cabArt(name); if (im) ctx.drawImage(im, r.x, r.y, r.w, r.h); };
+    put('marquee', CAB.mq);
+    put('game_screen_full', CAB.sc);
+    put('controls_panel_full', CAB.co);
+    put('status_strip_full', CAB.st);
+    // the marquee's torches breathe with the same fire the rooms burn
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const fx of [CAB.mq.x + CAB.mq.w * 0.135, CAB.mq.x + CAB.mq.w * 0.865]) {
+      const fl = fireNoise(t, fx * 0.1);
+      ctx.globalAlpha = 0.10 + 0.10 * fl;
+      blob('halo', fx, CAB.mq.y + CAB.mq.h * 0.42, 44 + fl * 12);
+    }
+    ctx.restore();
+  }
+  // the three windows in the bezel are painted SHUT — a title, a map and a
+  // floor, all mock-ups. Black them out before the live ones go in, or you
+  // read two floor names at once and two maps on top of each other.
+  function cabBlank(r, rad) {
+    rr(r.x, r.y, r.w, r.h, rad === undefined ? 6 : rad);
+    ctx.fillStyle = '#10141c'; ctx.fill();
+  }
+  // the live title where the painted one was, and the live map beside it
+  function drawCabHead(t) {
+    const h = CAB.head, r = S.run;
+    cabBlank({ x: h.x - 6, y: h.y - 4, w: h.w + 12, h: h.h + 8 });
+    txt(theme().name, h.x + h.w / 2, h.y + h.h * 0.36,
+        '900 ' + Math.max(9, Math.round(h.h * 0.30)) + 'px Georgia, serif', '#cfe4f5', 'center',
+        { w: 3, col: 'rgba(6,10,20,0.9)' });
+    const sub = 'FLOOR ' + r.floor + '   •   ' + r.keys + ' KEYS';
+    txt(sub, h.x + h.w / 2, h.y + h.h * 0.72,
+        '800 ' + Math.max(9, Math.round(h.h * 0.17)) + 'px Verdana, sans-serif',
+        r.keys < 1 ? '#ff8a7a' : '#e8b8c4');
+    if (darkFloor()) {
+      txt('\u{1F56F}\u{FE0F} THE TORCHES ARE DEAD', LW / 2, CAB.sc.y + CAB.sc.h * 0.175,
+          '800 9px Verdana, sans-serif', '#ff9d3c');
+    }
+  }
+  // HP / GOLD / PURSE / POTION / BAG — the plates the owner drew, with the
+  // numbers that were stripped out of them put back live
+  function drawCabStatus(t) {
+    const r = S.run, st = CAB.st;
+    const defs = cabPanels();
+    const tot = defs.reduce((a, d) => a + d.w, 0);
+    const k = (st.w * 0.955) / tot;
+    let px = st.x + st.w * 0.0225;
+    const py = st.y + st.h * 0.11, ph = st.h * 0.78;
+    const vals = [
+      Math.max(0, r.hp) + ' / ' + r.maxHp,
+      fmt(r.gold),
+      '' + purseTotal(),
+      '' + (r.potions | 0),
+      '' + Object.values(r.arsenal || {}).reduce((a, n) => a + n, 0),
+    ];
+    defs.forEach((d, i) => {
+      const w = d.w * k;
+      const im = cabArt(d.img);
+      if (im) ctx.drawImage(im, px, py, w, ph);
+      // the HP plate carries a real bar in its slot
+      if (i === 0) {
+        const bx = px + w * 0.10, by = py + ph * 0.50, bw = w * 0.80, bh = ph * 0.30;
+        const frac = Math.max(0, Math.min(1, r.hp / Math.max(1, r.maxHp)));
+        ctx.fillStyle = 'rgba(8,4,8,0.75)';
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.fillStyle = frac > 0.5 ? '#7ed06a' : frac > 0.25 ? '#e8c04a' : '#e0503c';
+        ctx.fillRect(bx, by, bw * frac, bh);
+        txt(vals[i], bx + bw / 2, by + bh / 2, '900 9px Verdana, sans-serif', '#fff6e0',
+            'center', { w: 3, col: 'rgba(6,3,8,0.95)' });
+      } else {
+        txt(vals[i], px + w * 0.62, py + ph * 0.63,
+            '900 ' + Math.max(9, Math.round(ph * 0.24)) + 'px Verdana, sans-serif', '#ffe9a3',
+            'center', { w: 3, col: 'rgba(6,3,8,0.9)' });
+      }
+      // the last two plates are the buttons they look like
+      if (d.img === 'panel_potion') uiButtons.push({ x: px, y: py, w, h: ph, cb: () => usePotion() });
+      if (d.img === 'panel_bag') uiButtons.push({ x: px, y: py, w, h: ph, cb: () => { S.inv = S.inv ? null : { tab: 'gear' }; } });
+      px += w;
+    });
+  }
+  // the stick leans where you are walking, and the three buttons are real
+  function drawCabControls(t) {
+    const co = CAB.co;
+    const jx = co.x + co.w * 0.115, jy = co.y + co.h * 0.34;
+    const im = cabArt('joystick');
+    if (im) {
+      const jh = co.h * 1.02, jw = imW(im, jh);
+      ctx.save();
+      ctx.translate(jx, jy);
+      ctx.rotate((AV.moving ? AV.fx : 0) * 0.22);
+      ctx.drawImage(im, -jw / 2, -jh * 0.42, jw, jh);
+      ctx.restore();
+    }
+    const btns = [
+      ['button_red',    () => { mapView = !mapView; }],
+      ['button_yellow', () => { S.inv = S.inv ? null : { tab: 'coins' }; }],
+      ['button_blue',   () => { SETTINGS = true; }],
+    ];
+    btns.forEach(([name, cb], i) => {
+      const bx = co.x + co.w * (0.44 + i * 0.145), by = co.y + co.h * 0.44;
+      const bi = cabArt(name);
+      const bh = co.h * 0.62, bw = bi ? imW(bi, bh) : bh;
+      if (bi) ctx.drawImage(bi, bx - bw / 2, by - bh / 2, bw, bh);
+      uiButtons.push({ x: bx - bw / 2, y: by - bh / 2, w: bw, h: bh, cb });
+    });
+    txt('MAP', co.x + co.w * 0.44, co.y + co.h * 0.94, '800 9px Verdana, sans-serif', '#c8a89a');
+    txt('PURSE', co.x + co.w * 0.585, co.y + co.h * 0.94, '800 9px Verdana, sans-serif', '#c8a89a');
+    txt('MENU', co.x + co.w * 0.73, co.y + co.h * 0.94, '800 9px Verdana, sans-serif', '#c8a89a');
+  }
   function drawDungeon(t, dt) {
     const T = theme();
     layer('dbg', 0, 0, LW, LH, ['f' + fkey()], () => bgBase(0));
@@ -12586,25 +12774,39 @@ if (!HEADLESS) (function browser() {
       dcTick(dt, (AV.x - FR.x0) / Math.max(1, FR.x1 - FR.x0),
                  (AV.y - FR.y0 - 26) / Math.max(1, (FR.y1 - FR.y0) - 46));
     }
-    // heading
-    ctx.font = '900 26px Georgia, serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 7; ctx.strokeStyle = '#2a1030';
-    ctx.strokeText(T.name, LW / 2 - 30, 44);
-    ctx.fillStyle = lgr('dtt:' + fkey(), 0, 30, 0, 60, [[0, '#fff4d6'], [1, T.accent]]);
-    ctx.fillText(T.name, LW / 2 - 30, 44);
-    txt('FLOOR ' + S.run.floor, LW / 2 - 30, 74, '800 12px Verdana, sans-serif', '#c8a8b0');
-    if (darkFloor()) {
-      txt('\u{1F56F}\u{FE0F} THE TORCHES ARE DEAD — follow your light', LW / 2 - 30, 89,
-          '700 10px Verdana, sans-serif', '#ff9d3c');
-    } else if (rawAct(S.run.floor) === 4) {
-      const pr = S.run.pressure | 0;
-      txt(TR('\u{1FAE7} THE PRESSURE') + ': ' + pr + ' / ' + PRESSURE_MAX
-          + (pr >= PRESSURE_MAX ? ' — ' + TR('foes strike +1 at full depth') : ''),
-          LW / 2 - 30, 89, '700 10px Verdana, sans-serif', pr >= PRESSURE_MAX ? '#7ee7e0' : '#8ab8c0');
+    const CABIN = cabOn();
+    if (CABIN) {
+      drawCabinet(t);
+      drawCabHead(t);
+    } else {
+      // heading
+      ctx.font = '900 26px Georgia, serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 7; ctx.strokeStyle = '#2a1030';
+      ctx.strokeText(T.name, LW / 2 - 30, 44);
+      ctx.fillStyle = lgr('dtt:' + fkey(), 0, 30, 0, 60, [[0, '#fff4d6'], [1, T.accent]]);
+      ctx.fillText(T.name, LW / 2 - 30, 44);
+      txt('FLOOR ' + S.run.floor, LW / 2 - 30, 74, '800 12px Verdana, sans-serif', '#c8a8b0');
+      if (darkFloor()) {
+        txt('\u{1F56F}\u{FE0F} THE TORCHES ARE DEAD — follow your light', LW / 2 - 30, 89,
+            '700 10px Verdana, sans-serif', '#ff9d3c');
+      } else if (rawAct(S.run.floor) === 4) {
+        const pr = S.run.pressure | 0;
+        txt(TR('\u{1FAE7} THE PRESSURE') + ': ' + pr + ' / ' + PRESSURE_MAX
+            + (pr >= PRESSURE_MAX ? ' — ' + TR('foes strike +1 at full depth') : ''),
+            LW / 2 - 30, 89, '700 10px Verdana, sans-serif', pr >= PRESSURE_MAX ? '#7ee7e0' : '#8ab8c0');
+      }
+      txt('\u{1F5DD} × ' + S.run.keys, LW / 2 - 30, 104, '900 16px Verdana, sans-serif',
+          S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
     }
-    txt('\u{1F5DD} × ' + S.run.keys, LW / 2 - 30, 104, '900 16px Verdana, sans-serif',
-        S.run.keys < 1 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
+    // the room is painted INTO the glass, so nothing of it can spill onto the
+    // cabinet's own woodwork — and the mock-up floor under it is blacked out
+    // first, or its painted torches burn away behind the real room
+    if (CABIN) {
+      ctx.fillStyle = '#0a0810';
+      ctx.fillRect(CAB.play.x, CAB.play.y, CAB.play.w, CAB.play.h);
+      ctx.save(); ctx.beginPath(); ctx.rect(CAB.play.x, CAB.play.y, CAB.play.w, CAB.play.h); ctx.clip();
+    }
     drawRoomBox(t);
     // dwellers + hero, back-to-front
     const ents = (curRoom() && curRoom().ents) || [];
@@ -12639,35 +12841,43 @@ if (!HEADLESS) (function browser() {
     }
     drawMotes(dt, 1);
     drawParticles(dt);
+    if (CABIN) ctx.restore();          // ...and the glass ends here
     drawToast();
-    drawJoystick();
-    drawHUD(t);
-    drawVignette(0.35);
-    drawMinimap(t);
+    if (CABIN) {
+      drawCabControls(t);
+      drawCabStatus(t);
+      drawMinimap(t);
+    } else {
+      drawJoystick();
+      drawHUD(t);
+      drawVignette(0.35);
+      drawMinimap(t);
+    }
     drawBanner(t);
     if (S.uiFlash && !S.room) {
-      txt(S.uiFlash.msg, LW / 2, ROOM.y + ROOM.wallH + 60, '900 15px Verdana, sans-serif',
+      txt(S.uiFlash.msg, LW / 2, CABIN ? CAB.play.y + CAB.play.h * 0.5 : ROOM.y + ROOM.wallH + 60, '900 15px Verdana, sans-serif',
           Math.floor(S.uiFlash.t * 8) % 2 ? '#ff5a4e' : '#ffd75e', 'center', { w: 4, col: 'rgba(10,5,12,0.9)' });
     }
     uiBtn(14, 12, 38, 36, '⌂', () => { S.screen = 'title'; save(); }, { r: 10, font: '20px serif' });
     uiBtn(LW - 52, 12, 38, 36, '⚙', () => { SETTINGS = true; }, { r: 10, font: '17px serif' });
-    // deep in the ENDLESS, the standing decrees are posted at the gate
+    // the standing decrees and the floor's optional JOB are posted on the
+    // bezel below the glass in the cabinet, and under the title without it
+    const postY = CABIN ? CAB.sc.y + CAB.sc.h - 22 : 134;
     if (mutCount() > 0) {
       const mn = mutCount();
       const mi = Math.floor(t / 2.5) % mn;         // the posted laws take turns
       txt('\u{1F30C} ENDLESS +' + mn + ' • ' + MUTS[mi].name + ' — ' + MUTS[mi].desc,
-          LW / 2, 134, '700 9px Verdana, sans-serif', '#c8a8ff', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
+          LW / 2, postY, '700 9px Verdana, sans-serif', '#c8a8ff', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
     }
-    // the floor's optional JOB, posted under the floor title
     const q = S.run.quest;
     if (q) {
       const rIcon = q.reward === 'goldkey' ? '\u{1F511}' : '\u{1F4FF}';
       txt(q.done ? '✓ quest done — ' + rIcon + ' claimed'
                  : '\u{1F4DC} ' + questTxt(q) + '  (' + Math.min(q.got, q.need) + '/' + q.need + ')  →  ' + rIcon,
-          LW / 2, 120, '700 10px Verdana, sans-serif', q.done ? '#7ee787' : '#e8c877',
-          'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
+          LW / 2, postY - (mutCount() > 0 ? 13 : 0), '700 10px Verdana, sans-serif',
+          q.done ? '#7ee787' : '#e8c877', 'center', { w: 3, col: 'rgba(10,5,12,0.85)' });
     }
-    txt('drag to walk • WASD works too', LW / 2, 704, '600 10px Verdana, sans-serif', '#8d7d95');
+    if (!CABIN) txt('drag to walk • WASD works too', LW / 2, 704, '600 10px Verdana, sans-serif', '#8d7d95');
     drawStairsAsk(t);
     drawRoomModal(t);
     drawMapView(t);

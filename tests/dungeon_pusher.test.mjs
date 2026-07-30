@@ -7389,7 +7389,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.13.1', 'the wired-up foes ship as v1.13.1');
+  t.eq(D.VERSION, '1.14.0', 'the cabinet ships as v1.14.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
+       'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
        'and the notes carry them');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SKINS ARE PAINTED') >= 0)),
@@ -8825,6 +8827,70 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const spare = dirs.filter(d => !used.has(d)).sort();
   console.log('# painted sets with no foe yet: ' + (spare.join(', ') || 'none'));
   t.ok(spare.length <= 9, 'the unused pile does not grow unnoticed (' + spare.length + ')');
+}
+
+// ================= THE CABINET around the dungeon =================
+{
+  const here5 = dirname(fileURLToPath(import.meta.url));
+  const src5 = readFileSync(join(here5, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const cabDir = join(here5, '..', 'dungeon_pusher', 'art', 'cab');
+  // every module the layout measures against must be ON DISK at the size the
+  // code claims — a re-export at a different size silently slides the live
+  // title, the live map and the room off the windows they were measured into
+  const png = (f) => {
+    const b = readFileSync(join(cabDir, f));
+    return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  };
+  const want = { 'marquee.png': [762, 212], 'game_screen_full.png': [708, 784],
+                 'controls_panel_full.png': [768, 143], 'status_strip_full.png': [762, 111],
+                 'playfield.png': [652, 596], 'level_header.png': [337, 99], 'minimap.png': [167, 116] };
+  for (const f of Object.keys(want)) {
+    t.ok(existsSync(join(cabDir, f)), 'the cabinet ships ' + f);
+    const got = png(f);
+    t.ok(got[0] === want[f][0] && got[1] === want[f][1],
+         f + ' is still ' + want[f].join('x') + ' (got ' + got.join('x') + ')');
+  }
+  // the three live windows have to sit INSIDE the screen module
+  const m = src5.match(/CAB_IN = \{ play: \[(\d+), (\d+), (\d+), (\d+)\], head: \[(\d+), (\d+), (\d+), (\d+)\], map: \[(\d+), (\d+), (\d+), (\d+)\] \}/);
+  t.ok(!!m, 'the live windows are measured, not guessed');
+  if (m) {
+    const n = m.slice(1).map(Number);
+    const [sw, sh] = want['game_screen_full.png'];
+    for (let i = 0; i < 12; i += 4) {
+      t.ok(n[i] + n[i + 2] <= sw && n[i + 1] + n[i + 3] <= sh,
+           'window at ' + n[i] + ',' + n[i + 1] + ' fits the screen');
+    }
+    t.ok(n[2] === want['playfield.png'][0] && n[3] === want['playfield.png'][1],
+         'the play window is exactly the playfield module');
+    t.ok(n[10] === want['minimap.png'][0] && n[11] === want['minimap.png'][1],
+         'and the map window is exactly the minimap module');
+  }
+  // the screen art has a PAINTED title, map and floor baked in. Draw the live
+  // ones over them without blanking first and you read two floor names at
+  // once — which is exactly what the first build did.
+  t.ok(src5.indexOf('function cabBlank(') >= 0, 'the painted windows are blanked before the live ones land');
+  t.ok((src5.match(/cabBlank\(/g) || []).length >= 3,
+       'the title and the map windows both get blanked (the floor uses its own fill)');
+  t.ok(/ctx\.fillStyle = '#0a0810';\s*\n\s*ctx\.fillRect\(CAB\.play/.test(src5),
+       'the mock-up floor is blacked out before the real room goes in');
+  // the cabinet only stands where its art does
+  t.ok(/S\.screen === 'dungeon' && !!cabArt\('game_screen_full'\) && !!cabArt\('marquee'\)/.test(src5),
+       'no art, no cabinet — the dungeon keeps the screen it always had');
+
+  // it draws, and it balances
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  D.srand(404); D.newRun('knight');
+  D.S.run.floor = 4; D.S.run.gold = 128; D.S.run.potions = 2;
+  D.S.screen = 'dungeon';
+  frames(6);
+  t.eq(globalThis.__ctxDepth, 0, 'a cabinet dungeon frame balances every save with a restore');
+  for (const size of ['s', 'w', 't', 'b']) {
+    D.curRoom().size = size; D.S.roomStamp++;
+    frames(3);
+    t.eq(globalThis.__ctxDepth, 0, 'and so does a ' + size + '-shaped room in the glass');
+  }
 }
 
 t.done();
