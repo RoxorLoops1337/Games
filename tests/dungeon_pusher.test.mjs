@@ -898,13 +898,22 @@ t.ok(!S.run.room.ents[0].done, 'the ghost lingers until paid');
 S.run.purse.coin = 12;
 const wheelFee = DP.wheelCost();
 const wheelPurse = DP.purseTotal();
-t.ok(DP.interact(0), 'the ghost now NAMES his price');
-t.ok(S.confirm && S.confirm.yes, 'a confirm sheet stands between tap and fee');
-t.eq(DP.purseTotal(), wheelPurse, 'not a coin moves before you agree');
+t.ok(DP.interact(0), 'the ghost now HOLDS OUT HIS PALM');
+t.ok(S.wheelAsk && S.wheelAsk.need === wheelFee, 'the slot asks which coins go in');
+t.eq(DP.purseTotal(), wheelPurse, 'not a coin moves before you choose');
 t.ok(!S.wheelAnim, 'and no spin either');
-S.confirm.yes(); S.confirm = null;
-t.ok(S.wheelAnim !== null, 'agreed — the wheel of fortune turns');
-t.eq(DP.purseTotal(), wheelPurse - wheelFee, 'the ghost pockets exactly this floor\'s ' + wheelFee + ' coins');
+t.ok(!DP.wheelConfirm(), 'an empty palm buys no spin');
+t.eq(DP.purseTotal(), wheelPurse, 'and still takes nothing');
+// YOUR coins, YOUR pick: two silver and the rest gold
+S.run.purse.silver = 4;
+S.wheelAsk.pick = { silver: 2, coin: wheelFee - 2 };
+S.wheelAsk.first = 'silver';
+t.eq(DP.wheelPicked(), wheelFee, 'the palm is full');
+t.ok(DP.wheelConfirm(), 'and the coin goes down the slot');
+t.ok(S.wheelAnim !== null, 'the wheel of fortune turns');
+t.eq(S.wheelAnim.coin, 'silver', 'the piece you see drop is the one you chose first');
+t.eq(S.run.purse.silver, 2, 'exactly the silver you picked is gone');
+t.eq(DP.purseTotal(), wheelPurse + 4 - wheelFee, 'and exactly this floor\'s ' + wheelFee + ' coins in total');
 t.ok(S.run.room.ents[0].done, 'the ghost vanishes after the spin');
 t.ok(S.run.ledger.length > 0 && S.run.ledger[0].n === -wheelFee, 'and the LEDGER wrote the fee down');
 S.run.floor = 1;                                       // rewind for what follows
@@ -4972,15 +4981,20 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const frames = n => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
   frames(3);
   W.srand(23); W.newRun('knight');
-  W.S.wheelAnim = { t: 0, seg: 2, label: 'x' };
+  W.S.wheelAnim = { t: 0, seg: 2, label: 'x', coin: 'coin', target: Math.PI * 9, notch: -1, flap: 0, flapV: 0 };
   frames(220);                                      // ≈3.7s: deep into the wobble
   t.ok(W.S.wheelAnim && W.S.wheelAnim.t > 3.2, 'the wheel survives its own wobble');
   // source truth for the pure-draw bits
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf('the NEAR MISS: fully eased') >= 0, 'the near-miss wobble lives in the draw code');
-  t.ok(src.indexOf('Math.exp(-st * 2.1) * Math.sin(st * 6.5)') >= 0, 'a damped rock, not a snap');
-  t.ok(src.indexOf('S.opts.shake === false || k < 1) ? 0') >= 0, 'reduced motion skips the wobble');
+  // the wheel runs on real physics now: an exponential spin-down with a stall
+  // against every peg, and a pawl-rock at the very end
+  t.ok(src.indexOf('const bite = WH_PEG * decay * Math.sin(wheelPhase(rot) * Math.PI);') >= 0,
+       'each peg stalls the wheel as the flapper climbs it');
+  t.ok(src.indexOf('let rot = a.target * (1 - decay);') >= 0,
+       'and the wheel spins DOWN like a bearing, not along an ease curve');
+  t.ok(src.indexOf("if (over > 0 && S.opts.shake !== false) rot += 0.055") >= 0,
+       'reduced motion skips the settle-rock');
   t.ok(src.indexOf("if (RECORDS === true) RECORDS = { tab: 'book' };   // old openers still work") >= 0,
     'old openers still reach the book');
   t.ok(src.indexOf('THE DECREE WALL') >= 0, 'the endless page hangs the decree wall');
@@ -7353,7 +7367,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.10.1', 'the readability fix ships as v1.10.1');
+  t.eq(D.VERSION, '1.11.0', 'the arcade wheel ships as v1.11.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('HONEST WHEEL') >= 0)),
+       'and the notes carry the wheel');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('OWN CHARACTER AGAIN') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SIGIL SHEET') >= 0)),
@@ -8449,6 +8465,48 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     t.eq(X.sigLvl('notamark'), 0, 'a mark that does not exist is dropped');
     t.eq(X.sigLvl('b1'), 0, 'and a negative rank is floored at zero');
   }
+}
+
+// ---------- THE GHOST'S CABINET: an honest wheel, and a real spin-down ----------
+{
+  const { DP: D } = loadGame({}, false);
+  // the slices are cut to the size of their odds — the picture IS the table
+  const tot = D.WHEEL.reduce((a, s2) => a + s2.w, 0);
+  t.eq(D.WHEEL_SEGS.length, D.WHEEL.length, 'every prize gets a slice');
+  t.eq(D.WHEEL_TOTAL, tot, 'and the wheel knows what it all weighs');
+  let span = 0;
+  for (const g of D.WHEEL_SEGS) {
+    const want = (D.WHEEL[g.i].w / tot) * Math.PI * 2;
+    t.ok(Math.abs(g.arc - want) < 1e-9, D.WHEEL[g.i].label.replace('\n', ' ') + ' is cut to its own odds');
+    span += g.arc;
+  }
+  t.ok(Math.abs(span - Math.PI * 2) < 1e-9, 'and the slices close the circle exactly');
+  // ...and the throw always coasts to the slice the odds actually drew. A
+  // physics wheel that stops somewhere other than the prize it paid out is a
+  // wheel that lies to your face, so this is checked on a hundred spins.
+  D.srand(4242); D.newRun('knight');
+  for (let i = 0; i < 100; i++) {
+    const won = D.spinWheel('coin');
+    const a = D.S.wheelAnim;
+    t.ok(!!won && !!a, 'spin ' + i + ' turns');
+    let rest = (-Math.PI / 2 - a.target) % (Math.PI * 2);
+    if (rest < 0) rest += Math.PI * 2;
+    const g = D.WHEEL_SEGS[a.seg];
+    if (!(rest >= g.a0 && rest < g.a1)) {
+      t.ok(false, 'spin ' + i + ' rests on the slice it paid out (' + rest.toFixed(3) +
+                  ' not in ' + g.a0.toFixed(3) + '..' + g.a1.toFixed(3) + ')');
+      break;
+    }
+    // ...and never dead centre every time — it lands ACROSS the slice
+    t.ok(a.target < 0 || a.target > 0, 'and it is thrown somewhere');
+    D.S.wheelAnim = null;
+  }
+  t.ok(true, 'a hundred spins all came to rest on the prize they paid');
+  // the overlay outlives the spin, so the prize can actually be read
+  t.ok(D.WHEEL_LIFE > 1.0 + 3.6, 'the cabinet holds the prize up after the wheel stops');
+  // a free spin (an elite's gift) drops no coin
+  D.spinWheel();
+  t.eq(D.S.wheelAnim.coin, null, 'a free spin puts nothing down the slot');
 }
 
 t.done();
