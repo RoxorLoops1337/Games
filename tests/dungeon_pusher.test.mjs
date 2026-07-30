@@ -7,7 +7,7 @@
 // runs and is driven through window.DP.
 // A second pass loads the game WITH a stub canvas ctx and drives the real
 // requestAnimationFrame loop across every screen to catch render-time errors.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { harness } from './no_room_for_heroes_lib.mjs';
@@ -7389,7 +7389,9 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.13.0', 'the painted cabinets ship as v1.13.0');
+  t.eq(D.VERSION, '1.13.1', 'the wired-up foes ship as v1.13.1');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
+       'and the notes carry them');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SKINS ARE PAINTED') >= 0)),
        'and the notes carry them');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('MAP REMEMBERS') >= 0)),
@@ -8785,6 +8787,44 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(mini.indexOf('drawMapRooms') >= 0, 'the minimap shares the room painter');
   t.ok(mini.indexOf(', true)') < 0 || /drawMapRooms\([^)]*false\)/.test(mini),
        'but never passes the ink flag, so it stays a clean chip');
+}
+
+// ======= NO PAINTED SET SITS IN THE REPO UNUSED =======
+// The owner asked whether the mimic chest had art. It does not — but the
+// asking turned up four sets that DID exist and were never wired: boneguard,
+// stonewarden, stormknight and the inferno brute (the Ashwright), all four
+// of them foes this game already ships, all four drawing as emoji with their
+// art on disk. Art that nobody can see is the quietest bug there is, so the
+// repo now has to account for every painted set it carries.
+{
+  const here4 = dirname(fileURLToPath(import.meta.url));
+  const artDir = join(here4, '..', 'dungeon_pusher', 'art', 'monsters', 'boss');
+  const src4 = readFileSync(join(here4, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const dirs = readdirSync(artDir).filter(d => statSync(join(artDir, d)).isDirectory());
+  t.ok(dirs.length >= 15, 'the painted bestiary is on disk (' + dirs.length + ' sets)');
+  // every set the code names must actually exist, with the frames it claims
+  const wired = [...src4.matchAll(/dir: '(boss\/[a-z_]+)\/idle',\s*stem: '([a-z_]+)',\s*n: (\d+)/g)]
+    .map(m => ({ dir: m[1], stem: m[2], n: +m[3] }));
+  t.ok(wired.length >= 16, 'and the code wires a good many of them (' + wired.length + ')');
+  for (const w of wired) {
+    for (let i = 1; i <= w.n; i++) {
+      const f = join(here4, '..', 'dungeon_pusher', 'art', 'monsters', w.dir, 'idle',
+                     w.stem + '_' + (i < 10 ? '0' : '') + i + '.png');
+      if (!existsSync(f)) { t.ok(false, 'wired frame exists: ' + w.dir + ' #' + i); break; }
+    }
+  }
+  t.ok(true, 'every frame the code asks for is on disk');
+  // ...and the four that were missed stay wired
+  for (const id of ['boneguard', 'stonewarden', 'stormknight', 'ashwright']) {
+    t.ok(new RegExp("\\n\\s*" + id + ":\\s*\\{ dir: 'boss/").test(src4),
+         id + ' wears its painted set, not an emoji');
+  }
+  // the ones still spare are LISTED here on purpose: this is the standing
+  // inventory of art the game has not found a home for yet
+  const used = new Set(wired.map(w => w.dir.replace('boss/', '')));
+  const spare = dirs.filter(d => !used.has(d)).sort();
+  console.log('# painted sets with no foe yet: ' + (spare.join(', ') || 'none'));
+  t.ok(spare.length <= 9, 'the unused pile does not grow unnoticed (' + spare.length + ')');
 }
 
 t.done();
