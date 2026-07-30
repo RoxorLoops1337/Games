@@ -62,6 +62,7 @@ const STATIC_PATHS = [
   'ironbridge',
   'blacksite',
   'carmanager',
+  'flipper_crawl',
   'tools',
 ];
 
