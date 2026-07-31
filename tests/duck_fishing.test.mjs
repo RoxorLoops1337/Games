@@ -39,6 +39,7 @@ const EXPOSE = `__out.api = {
   getT: () => T, setT: (v) => { T = v; },
   _resize: (w, h) => { window.innerWidth = w; window.innerHeight = h; fit(); },
   _dpr: () => DPR, _tier: () => Q.tier, _autoQuality: autoQuality,
+  _ctx: () => ctx, _setCtx: (c) => { ctx = c; },
   _setTier: (t) => { Q.tier = t; fit(); },
   C: { CHAN_HZ, LOOP_LEN, X0, X1, VIEW_HALF, GATE_X, N_DUCKS, CURRENT, GRAV,
        FLOAT_Y, BODY_HH, BUOY, RING_LOCAL, RING_R, CATCH_R, MAX_HOOK,
@@ -682,6 +683,46 @@ test('the reveal presents the numbered base squarely at the player', () => {
   const p = a.proj(d.x, d.y, d.z);
   assert(p.x > 0 && p.x < 960 && p.y > 0 && p.y < 600,
     `the reveal should sit on screen, got ${p.x.toFixed(0)},${p.y.toFixed(0)}`);
+});
+
+test('the number on the base reads upright and unmirrored', () => {
+  /* Catch the transform the game actually hands to the canvas. A flipped
+     axis here is invisible to every logic test but shows on screen as an
+     upside-down, mirrored number. */
+  const mats = [];
+  const a = boot();
+  const real = a._ctx();
+  a._setCtx(new Proxy({}, { get(t, p){
+    if (p === 'measureText') return () => ({ width: 30 });
+    if (p === 'createLinearGradient' || p === 'createRadialGradient') return () => ({ addColorStop(){} });
+    if (p === 'setTransform') return (...v) => { mats.push(v); };
+    if (p === 'canvas') return { width: 960, height: 600 };
+    return () => {};
+  } }));
+
+  const d = a.ducks[0];
+  rigCatch(a, d);
+  d.num = 8; d.gold = false;
+  plungeHook(a, d, 0);
+  a.input.down = false;
+  step(a, 1.2);
+  a.draw();
+  a._setCtx(real);
+
+  const dpr = a._dpr();
+  // the per-frame DPR reset translates to the origin; the glyph transform is
+  // anchored on the plug, so it always carries a translation
+  const stamp = mats.filter(m => m.length === 6 && (m[4] !== 0 || m[5] !== 0));
+  assert(stamp.length > 0, 'the base number should have been drawn');
+  const [ax, ay, bx, by] = stamp[0];
+  // text +x must run left-to-right across the screen
+  assert(ax > Math.abs(ay), `text baseline should run rightwards, got (${ax.toFixed(1)}, ${ay.toFixed(1)})`);
+  // text +y is DOWN in canvas space, so it must map to increasing screen y
+  assert(by > Math.abs(bx), `text should run downwards, got (${bx.toFixed(1)}, ${by.toFixed(1)})`);
+  // a negative determinant means the glyph comes out mirrored
+  const det = ax * by - bx * ay;
+  assert(det > 0, `the number is mirrored (determinant ${det.toFixed(1)})`);
+  assert(Math.abs(ax) > 2 * dpr, 'the glyph should be big enough to read');
 });
 
 test('a landed duck is replaced so the stream never thins out', () => {
