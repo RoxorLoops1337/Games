@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grimcut — the Dungeon Pusher typeface</title>
+<style>
+  html,body{margin:0;background:#120c10;color:#cbbfae;font:13px/1.5 ui-monospace,Menlo,Consolas,monospace}
+  canvas{display:block;margin:0 auto;image-rendering:auto}
+</style>
+</head>
+<body>
+<canvas id="c" width="1240" height="1720"></canvas>
+<script src="font.js"></script>
+<script>
+'use strict';
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+Grimcut.install(ctx);
+
+function wall(x, y, w, h) {
+  const g = ctx.createLinearGradient(0, y, 0, y + h);
+  g.addColorStop(0, '#241a1c'); g.addColorStop(1, '#150e11');
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = 2;
+  for (let by = y + 26; by < y + h; by += 26) {
+    ctx.beginPath(); ctx.moveTo(x, by); ctx.lineTo(x + w, by); ctx.stroke();
+  }
+  ctx.strokeStyle = 'rgba(255,220,170,.05)';
+  for (let bx = x; bx < x + w; bx += 54) {
+    ctx.beginPath(); ctx.moveTo(bx, y); ctx.lineTo(bx, y + h); ctx.stroke();
+  }
+}
+
+function rule(y, label) {
+  ctx.fillStyle = 'rgba(255,220,170,.13)'; ctx.fillRect(40, y, 1160, 1);
+  ctx.font = '11px ui-monospace, monospace';
+  ctx.fillStyle = 'rgba(255,220,170,.42)';
+  ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText(label, 40, y - 6);
+}
+
+function line(s, x, y, px, fam, col, align) {
+  ctx.font = '900 ' + px + 'px ' + fam + ', Georgia, serif';
+  ctx.textAlign = align || 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = col || '#e6ded0';
+  ctx.fillText(s, x, y);
+}
+
+ctx.fillStyle = '#120c10'; ctx.fillRect(0, 0, cv.width, cv.height);
+
+// ---- the logo lockup, the thing the whole face is answering to
+wall(40, 30, 1160, 150);
+line('DUNGEON', 66, 138, 96, 'Grimcut Silver');
+ctx.font = '900 96px Grimcut Silver, Georgia, serif';
+const dw = ctx.measureText('DUNGEON ').width;
+line('PUSHER', 66 + dw, 138, 96, 'Grimcut Gold');
+
+rule(226, 'CAPITALS · 54px');
+line('ABCDEFGHIJKLM', 40, 292, 54, 'Grimcut Ink');
+line('NOPQRSTUVWXYZ', 40, 356, 54, 'Grimcut Ink');
+
+rule(392, 'SMALL CAPS (lowercase) · 54px');
+line('abcdefghijklm', 40, 452, 54, 'Grimcut Ink');
+line('nopqrstuvwxyz', 40, 512, 54, 'Grimcut Ink');
+
+rule(548, 'FIGURES & PUNCTUATION · 48px');
+line('0123456789', 40, 610, 48, 'Grimcut Ink');
+line('. , : ; ! ? ’ “ ” ( ) [ ] - – — / \\ + = % & @ # $ * < > × • …', 40, 668, 34, 'Grimcut Ink');
+
+rule(704, 'MIXED CASE — how the game actually writes');
+line('The Stonewarden guards Floor 7', 40, 762, 44, 'Grimcut Ink');
+line('Pushed 12,480 gold into the tray', 40, 818, 44, 'Grimcut Ink');
+
+rule(854, 'FINISHES');
+wall(40, 866, 1160, 240);
+line('GOLD — Purse 24', 62, 930, 46, 'Grimcut Gold');
+line('SILVER — Shield 9', 62, 990, 46, 'Grimcut Silver');
+line('BLOOD — Hero down', 62, 1050, 46, 'Grimcut Blood');
+line('EMBER — Boss wakes', 640, 930, 46, 'Grimcut Ember');
+line('STONE — Floor 12', 640, 990, 46, 'Grimcut Stone');
+line('PLAIN — any colour', 640, 1050, 46, 'Grimcut', '#8fd4a2');
+
+rule(1142, 'OPTICAL SIZES — 11 / 13 / 16 / 20 / 26 / 34 px');
+let yy = 1176;
+for (const p of [11, 13, 16, 20, 26, 34]) {
+  line('Cursed Skull deals 4 damage — Floor 3, Room 12 (0123456789)', 40, yy, p, 'Grimcut Ink');
+  yy += p + 16;
+}
+
+rule(1360, 'EMOJI FALL THROUGH UNTOUCHED');
+line('\u{1F5DD}️ Keys 2   \u{1FA99} Gold 1,240   \u{1F9EA} Potion 3   ⚔️ Attack 14', 40, 1412, 34, 'Grimcut Ink');
+
+rule(1448, 'AGAINST THE OLD FACE (Georgia 900 above, Grimcut below)');
+ctx.font = '900 38px Georgia, serif'; ctx.fillStyle = '#8b8177';
+ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+ctx.fillText('END TURN — Bank 7 coins', 40, 1500);
+line('END TURN — Bank 7 coins', 40, 1556, 38, 'Grimcut Ink');
+
+rule(1596, 'CENTRED / RIGHT ALIGNMENT + LONG STRING');
+line('YOU DIED ON FLOOR 9', 620, 1650, 44, 'Grimcut Blood', 'center');
+line('right-aligned tally 9,999', 1200, 1700, 30, 'Grimcut Ink', 'right');
+
+window.__ready = true;
+</script>
+</body>
+</html>

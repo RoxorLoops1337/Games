@@ -7,8 +7,8 @@
 // one full session the whole run works in airplane mode.
 //
 // Bump CACHE to force a clean slate; activate() sweeps every older dp- cache.
-const CACHE = 'dp-v1';
-const CORE = ['./', './index.html', './manifest.webmanifest', './icon_192.png', './icon_512.png'];
+const CACHE = 'dp-v2';
+const CORE = ['./', './index.html', './font.js', './manifest.webmanifest', './icon_192.png', './icon_512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(
