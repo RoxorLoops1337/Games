@@ -229,7 +229,7 @@ const B = {
   COMBO_CAP: 2,       // multiplier ceiling
   COMBO_STEP: 5,      // hits per multiplier step
   CHIP: 2,            // body blow: unmultiplied chip damage, plus a gold coin
-  WARD: 2,            // the totem's shrug — per TURN, not per coin (see hurtFoe)
+  WARD: 2,            // the totem's flat shrug, off every blow
   CHIP_CD: 0.45,
   TURN_MAX: 34,       // the shot clock: no turn may outstay this
   TARGET_CD: 0.35,    // a target will not pay twice inside this
@@ -290,7 +290,7 @@ const TRAIT_TXT = {
   fast:  'swings twice',
   thief: 'lifts a coin',
   gel:   'caps hits at 2',
-  ward:  'shrugs off the first 2',
+  ward:  'shrugs off 2',
   armor: 'plated',
 };
 
@@ -813,7 +813,7 @@ function onFoeHit(b, c, imp){
   // table, so a player who only ever shoots the monster still earns; the
   // coin targets are how you specialise that income into shields and rot.
   const dealt = hurtFoe(B.CHIP, 'chip');
-  if (dealt) pop(f.x, f.y - f.r - 10, '-' + dealt, '#ff6b7a', true);
+  pop(f.x, f.y - f.r - 10, dealt ? '-' + dealt : 'BLOCKED', dealt ? '#ff6b7a' : '#c8d6e8', true);
   earn('gold', f.x, f.y + f.r * 0.6);
 }
 
@@ -827,17 +827,12 @@ function hurtFoe(n, src){
   if (!f || f.hp <= 0) return 0;
   let d = n;
   if (src !== 'poison' && src !== 'blue'){
-    // THE TOTEM'S WARD is an allowance it spends over the turn, not a tax on
-    // every single coin. The pusher resolves coin by coin too, but there gold
-    // damage climbs with strength and relics, so a flat -2 is a speed bump.
-    // Here per-hit values never move by design — so per-coin DR would leave it
-    // flatly immune to gold forever. It soaks the turn's first WARD damage
-    // instead, which is the arithmetic the aggregate resolve used to give.
-    if (f.trait === 'ward' && f.wardLeft > 0){
-      const soak = Math.min(f.wardLeft, d);
-      f.wardLeft -= soak;
-      d -= soak;
-    }
+    // THE TOTEM'S WARD shrugs a flat 2 off EVERY blow, exactly as the pusher
+    // writes it. Gold alone will not scratch it and neither will a body blow —
+    // that is the point. The lucky saucer (4), frost and rot are the answers,
+    // and a dungeon lets you pick which door to open. Bring the tool or bring
+    // a different fight.
+    if (f.trait === 'ward') d -= B.WARD;
     if (f.trait === 'armor' && f.plate > 0){               // the plate soaks first
       const soak = Math.min(f.plate, d);
       f.plate -= soak; d -= soak;
@@ -960,9 +955,9 @@ function applyCoin(kind, m, x, y){
   if (kind === 'silver'){ addBlock(m); txt = '\u{1F6E1} +' + m; }
   else if (kind === 'red'){ const g = healSelf(m * B.RED_HEAL); txt = '\u{2764} +' + g; }
   else if (kind === 'green'){ S.foe.pois = (S.foe.pois | 0) + m * B.POISON; txt = '\u{1F9EA} +' + (m * B.POISON); }
-  else if (kind === 'blue'){ const d = hurtFoe(m * B.DMG_BLUE, 'blue'); txt = '-' + d; }
-  else if (kind === 'lucky'){ const d = hurtFoe(m * B.DMG_LUCKY, 'lucky'); txt = '-' + d; }
-  else { const d = hurtFoe(m * B.DMG_GOLD, 'gold'); txt = '-' + d; }
+  else if (kind === 'blue'){ const d = hurtFoe(m * B.DMG_BLUE, 'blue'); txt = d ? '-' + d : 'BLOCKED'; }
+  else if (kind === 'lucky'){ const d = hurtFoe(m * B.DMG_LUCKY, 'lucky'); txt = d ? '-' + d : 'BLOCKED'; }
+  else { const d = hurtFoe(m * B.DMG_GOLD, 'gold'); txt = d ? '-' + d : 'BLOCKED'; }
   pop(x, y - 16, txt, C2.col, true);
   burst(x, y, 9, C2.col);
   shake(kind === 'lucky' ? 5 : 3);
@@ -1045,7 +1040,6 @@ function nextTurn(){
   if (S.foe.hp <= 0 || S.hp <= 0) return;
   S.phase = 'aim';
   S.chipT = 0; S.cashT = 0; S.turnT = 0;
-  if (S.foe.trait === 'ward') S.foe.wardLeft = B.WARD;
   S.inplay = [];
   spawnInLane();
 }
@@ -1062,10 +1056,9 @@ function mkFoe(floor){
     ...base,
     hp: Math.round(base.hp * k), maxHp: Math.round(base.hp * k),
     atk: Math.max(1, Math.round(base.atk * (1 + (floor - 1) * B.ATK_SCALE))),
-    pois: 0, plate: 0, wardLeft: 0, x: 204, y: 214, r: 32, hitT: 0, knock: 0, intent: null,
+    pois: 0, plate: 0, x: 204, y: 214, r: 32, hitT: 0, knock: 0, intent: null,
   };
   if (f.trait === 'armor') f.plate = 4 + floor;
-  if (f.trait === 'ward') f.wardLeft = B.WARD;
   return f;
 }
 function startRun(seed){

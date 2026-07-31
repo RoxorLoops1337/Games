@@ -395,35 +395,28 @@ const stage = (trait, hp) => {
   return S.foe;
 };
 {
-  // THE WARD is an allowance the totem spends over a turn, not a tax on every
-  // coin. Per-coin flat DR would leave it permanently immune to gold, which
-  // only ever deals 1 by design.
+  // THE WARD shrugs a flat 2 off EVERY blow, as the pusher writes it. Gold
+  // alone cannot scratch it — that is the monster, not a bug. You answer it
+  // with the lucky saucer, with frost, with rot, or you pick another door.
   const f = stage('ward');
-  f.wardLeft = B.WARD;
   const before = f.hp;
   DPB.hurtFoe(5, 'gold');
-  ok(before - f.hp === 5 - B.WARD, 'the WAR TOTEM shrugs the turn\'s first 2 off');
+  ok(before - f.hp === 5 - B.WARD, 'the WAR TOTEM shrugs 2 off a blow');
   const b2 = f.hp;
   DPB.hurtFoe(1, 'gold');
-  ok(b2 - f.hp === 1, 'once the allowance is spent, even a single gold lands');
-  // ...and a stream of 1-damage coins is not free damage either: the first
-  // two of them are still eaten
+  ok(f.hp === b2, 'a blow under its ward does nothing at all');
+  DPB.hurtFoe(B.CHIP, 'chip');
+  ok(f.hp === b2, 'and a body blow bounces off it too — bring a better tool');
   const g = stage('ward');
-  g.wardLeft = B.WARD;
   const g0 = g.hp;
-  for (let i = 0; i < 5; i++) DPB.hurtFoe(1, 'gold');
-  ok(g0 - g.hp === 5 - B.WARD, 'five single-gold coins land three, exactly as the aggregate used to');
-  ok(g.wardLeft === 0, 'the allowance is spent');
-}
-{
-  // the allowance refills at the top of each turn
-  DPB.startRun(4050);
-  S.foe.trait = 'ward';
-  S.foe.wardLeft = 0;
-  S.foe.hp = S.foe.maxHp = 200;
-  S.foe.intent = { t:'hit', n: 0 };
-  DPB.nextTurn();
-  ok(S.foe.wardLeft === B.WARD, 'a new turn restores the totem\'s shrug');
+  DPB.hurtFoe(B.DMG_LUCKY, 'lucky');
+  ok(g0 - g.hp === B.DMG_LUCKY - B.WARD, 'a lucky coin is heavy enough to get through');
+  const g1 = g.hp;
+  DPB.hurtFoe(3, 'blue');
+  ok(g1 - g.hp === 3, 'frost ignores the ward entirely');
+  const g2 = g.hp;
+  DPB.hurtFoe(3, 'poison');
+  ok(g2 - g.hp === 3, 'and so does rot');
 }
 {
   const f = stage('gel');
@@ -639,21 +632,24 @@ const stage = (trait, hp) => {
   const b2 = onlyBall(S.foe.x, S.foe.y + S.foe.r + P.R + 4, 0, 700);
   step(0.25);
   ok(hp0 - S.foe.hp === B.CHIP, `a body blow chips ${B.CHIP}`);
-  ok(B.CHIP >= 2, 'which is enough to get through a flat shrug');
 }
 {
-  // the point of the change: the WAR TOTEM can no longer stonewall you
+  // the answer to a warded foe is the saucer, and the saucer is standard now
   DPB.startRun(7021);
   S.foe.trait = 'ward';
-  S.foe.wardLeft = B.WARD;
   S.foe.hp = S.foe.maxHp = 200;
   S.foe.intent = { t:'hit', n: 0 };
   S.combo = 0;
   for (let i = 0; i < 4; i++) DPB.earn('gold', 200, 400);
   const hp0 = S.foe.hp;
   DPB.resolveNow();
-  ok(hp0 - S.foe.hp > 0, 'four plain gold coins DO hurt a warded foe');
-  ok(hp0 - S.foe.hp === 4 - B.WARD, 'for the haul minus its one allowance');
+  ok(hp0 - S.foe.hp === 0, 'a purse of plain gold bounces off a warded foe');
+  S.foe.intent = { t:'hit', n: 0 };
+  S.combo = 0;
+  for (let i = 0; i < 2; i++) DPB.earn('lucky', 200, 300);
+  const hp1 = S.foe.hp;
+  DPB.resolveNow();
+  ok(hp1 - S.foe.hp === (B.DMG_LUCKY - B.WARD) * 2, 'two lucky coins off the saucer do');
 }
 
 /* -------------------------------------------- the lucky saucer shot */
@@ -670,14 +666,13 @@ const stage = (trait, hp) => {
   // one lucky coin beats a warded foe on its own
   DPB.startRun(7031);
   S.foe.trait = 'ward';
-  S.foe.wardLeft = B.WARD;
   S.foe.hp = S.foe.maxHp = 200;
   S.foe.intent = { t:'hit', n: 0 };
   S.combo = 0;
   DPB.earn('lucky', 200, 300);
   const hp0 = S.foe.hp;
   DPB.resolveNow();
-  ok(hp0 - S.foe.hp === B.DMG_LUCKY - B.WARD, 'a single lucky coin punches straight through the ward');
+  ok(hp0 - S.foe.hp === B.DMG_LUCKY - B.WARD, 'a single lucky coin punches through the ward');
 }
 {
   // ...but the saucer captures and reloads slowly, so it cannot be farmed
