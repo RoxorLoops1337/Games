@@ -94,8 +94,10 @@ ok(true, 'draw() and hud() survive the title state');
 DPB.startRun(1234);
 ok(S.screen === 'battle' && S.floor === 1, 'startRun opens B1');
 ok(S.hp === B.START_HP, 'you start on ' + B.START_HP + ' HP, same as the pusher');
-ok(S.loadout.join(',') === 'gold,gold,silver', 'the starting table is bare: two gold, one silver');
-ok(S.targets.length === 3, 'three targets are bolted on at the start');
+ok(S.loadout.join(',') === 'gold,gold,silver,lucky',
+  'the cabinet ships with two gold, a silver and the lucky saucer');
+ok(S.targets.length === 4, 'four targets are bolted on at the start');
+ok(S.targets.some(t => t.saucer), 'and one of them is the saucer');
 ok(S.purseCap === B.PURSE_CAP && S.comboCap === B.COMBO_CAP, 'the dials start at their floor values');
 ok(S.targets.every(t => finite(t.x) && finite(t.y)), 'targets are placed at finite positions');
 ok(S.launchReady, 'a ball waits on the plunger');
@@ -393,13 +395,35 @@ const stage = (trait, hp) => {
   return S.foe;
 };
 {
+  // THE WARD is an allowance the totem spends over a turn, not a tax on every
+  // coin. Per-coin flat DR would leave it permanently immune to gold, which
+  // only ever deals 1 by design.
   const f = stage('ward');
+  f.wardLeft = B.WARD;
   const before = f.hp;
   DPB.hurtFoe(5, 'gold');
-  ok(before - f.hp === 3, 'the WAR TOTEM shrugs 2 off every hit');
+  ok(before - f.hp === 5 - B.WARD, 'the WAR TOTEM shrugs the turn\'s first 2 off');
   const b2 = f.hp;
   DPB.hurtFoe(1, 'gold');
-  ok(f.hp === b2, 'a hit under its ward does nothing at all');
+  ok(b2 - f.hp === 1, 'once the allowance is spent, even a single gold lands');
+  // ...and a stream of 1-damage coins is not free damage either: the first
+  // two of them are still eaten
+  const g = stage('ward');
+  g.wardLeft = B.WARD;
+  const g0 = g.hp;
+  for (let i = 0; i < 5; i++) DPB.hurtFoe(1, 'gold');
+  ok(g0 - g.hp === 5 - B.WARD, 'five single-gold coins land three, exactly as the aggregate used to');
+  ok(g.wardLeft === 0, 'the allowance is spent');
+}
+{
+  // the allowance refills at the top of each turn
+  DPB.startRun(4050);
+  S.foe.trait = 'ward';
+  S.foe.wardLeft = 0;
+  S.foe.hp = S.foe.maxHp = 200;
+  S.foe.intent = { t:'hit', n: 0 };
+  DPB.nextTurn();
+  ok(S.foe.wardLeft === B.WARD, 'a new turn restores the totem\'s shrug');
 }
 {
   const f = stage('gel');
@@ -603,6 +627,79 @@ const stage = (trait, hp) => {
   onlyBall(S.foe.x, S.foe.y + S.foe.r + P.R + 4, 0, 700);
   step(0.3);
   ok(S.foe.hp === hp0, 'a body blow on a full purse chips nothing');
+}
+
+/* ------------------------------------- a body blow is worth two now */
+{
+  DPB.startRun(7020);
+  muteFoe();
+  S.foe.hp = S.foe.maxHp = 200;
+  S.chipT = 0;
+  const hp0 = S.foe.hp;
+  const b2 = onlyBall(S.foe.x, S.foe.y + S.foe.r + P.R + 4, 0, 700);
+  step(0.25);
+  ok(hp0 - S.foe.hp === B.CHIP, `a body blow chips ${B.CHIP}`);
+  ok(B.CHIP >= 2, 'which is enough to get through a flat shrug');
+}
+{
+  // the point of the change: the WAR TOTEM can no longer stonewall you
+  DPB.startRun(7021);
+  S.foe.trait = 'ward';
+  S.foe.wardLeft = B.WARD;
+  S.foe.hp = S.foe.maxHp = 200;
+  S.foe.intent = { t:'hit', n: 0 };
+  S.combo = 0;
+  for (let i = 0; i < 4; i++) DPB.earn('gold', 200, 400);
+  const hp0 = S.foe.hp;
+  DPB.resolveNow();
+  ok(hp0 - S.foe.hp > 0, 'four plain gold coins DO hurt a warded foe');
+  ok(hp0 - S.foe.hp === 4 - B.WARD, 'for the haul minus its one allowance');
+}
+
+/* -------------------------------------------- the lucky saucer shot */
+{
+  DPB.startRun(7030);
+  const sc = S.targets.find(t => t.saucer);
+  ok(!!sc, 'the saucer is on the standard table');
+  ok(sc.y < 320, 'sitting high, past the bumper rack');
+  for (const o of [...S.bumpers, ...S.posts, ...S.targets.filter(t => t !== sc)])
+    ok(Math.hypot(sc.x - o.x, sc.y - o.y) >= sc.r + o.r, 'the saucer never lands on another collider');
+  ok(Math.hypot(sc.x - S.foe.x, sc.y - S.foe.y) >= sc.r + S.foe.r, 'nor on the foe');
+}
+{
+  // one lucky coin beats a warded foe on its own
+  DPB.startRun(7031);
+  S.foe.trait = 'ward';
+  S.foe.wardLeft = B.WARD;
+  S.foe.hp = S.foe.maxHp = 200;
+  S.foe.intent = { t:'hit', n: 0 };
+  S.combo = 0;
+  DPB.earn('lucky', 200, 300);
+  const hp0 = S.foe.hp;
+  DPB.resolveNow();
+  ok(hp0 - S.foe.hp === B.DMG_LUCKY - B.WARD, 'a single lucky coin punches straight through the ward');
+}
+{
+  // ...but the saucer captures and reloads slowly, so it cannot be farmed
+  DPB.startRun(7032);
+  const sc = S.targets.find(t => t.saucer);
+  sc.cd = 0;
+  const b2 = DPB.newBall(sc.x, sc.y - 20, 0, 0);
+  DPB.onTarget(sc, b2);
+  ok(sc.cd === B.SAUCER_CD, 'the saucer reloads on its own long timer');
+  ok(B.SAUCER_CD > B.TARGET_CD * 3, 'far slower than a standup — a 4-damage face has to be earned');
+  ok(b2.vy < 0, 'and it spits the ball back up the table');
+}
+{
+  // Loaded Saucer doubles the prize shot
+  DPB.startRun(7033);
+  DPB.takeFitting('saucer2');
+  const sc = S.targets.find(t => t.saucer);
+  sc.cd = 0;
+  const before = DPB.purseTotal();
+  DPB.onTarget(sc, DPB.newBall(sc.x, sc.y - 20, 0, 0));
+  ok(DPB.purseTotal() === before + 2, 'Loaded Saucer pays two lucky coins a shot');
+  ok(!DPB.rollFittings().some(f => f.id === 'saucer2'), 'and is never offered twice');
 }
 
 /* --------------------------------------------------- target recharge */
