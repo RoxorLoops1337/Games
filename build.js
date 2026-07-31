@@ -63,6 +63,7 @@ const STATIC_PATHS = [
   'blacksite',
   'carmanager',
   'flipper_crawl',
+  'duck_fishing',
   'tools',
 ];
 
