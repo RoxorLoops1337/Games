@@ -7426,7 +7426,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.18.0', 'the cabinet ships as v1.18.0');
+  t.eq(D.VERSION, '1.18.1', 'the cabinet ships as v1.18.1');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -8929,11 +8929,20 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const src7 = readFileSync(join(here7, '..', 'dungeon_pusher', 'index.html'), 'utf8');
   const sheen = src7.slice(src7.indexOf('function drawSideSheen'), src7.indexOf('function drawBattle'));
   t.ok(sheen.length > 200, 'the sides have a sheen pass');
+  // the inner wedges are glass, and they must reflect what is ON the bed
+  const mir = src7.slice(src7.indexOf('function drawSideMirrors'), src7.indexOf('function drawSideSheen'));
+  t.ok(mir.length > 200, 'the inner walls have a mirror pass');
+  t.ok(/for \(const c of S\.coins\)/.test(mir), 'the glass reflects the pieces on the bed, not a canned texture');
+  t.ok(/MIRROR_SQUASH/.test(mir), 'and squashes them, because the wall is seen near edge-on');
+  t.ok(/ctx\.clip\(\)/.test(mir), 'and it is clipped to the wedge, so nothing spills onto the table');
+  const ms = (mir.match(/ctx\.save\(\)/g) || []).length;
+  const mr = (mir.match(/ctx\.restore\(\)/g) || []).length;
+  t.eq(ms, mr, 'every save in the mirror pass is matched by a restore');
   // it has to land ON the cached base, not under it — the base is one blit and
   // anything drawn before it is simply gone
   const order = src7.slice(src7.indexOf('function drawBattle'), src7.indexOf('function drawSideRails') + 1);
-  t.ok(/battleBase\(\);\s*\n\s*drawSideSheen\(t\);/.test(src7),
-       'the sheen is laid over the cached base, not baked under it');
+  t.ok(/battleBase\(\);\s*\n\s*drawSideMirrors\(t\);\s*\n\s*drawSideSheen\(t\);/.test(src7),
+       'the mirrors and the sheen are laid over the cached base, not baked under it');
   // a mirror that never moves is paint: the streak must read the clock AND
   // the machine's own shake
   t.ok(/t \* 20/.test(sheen) && /jolt/.test(sheen), 'the streak travels with time and jolts with the machine');
