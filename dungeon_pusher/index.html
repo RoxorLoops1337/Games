@@ -59,6 +59,10 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.16.1', notes: [
+    'A REAL SIGN OVER THE MACHINE \u{1FAA7} \u2014 the owner painted a proper DUNGEON PUSHER marquee \u2014 barred gate, brick, four lit torches and a drift of coins piled along the bottom \u2014 and it now hangs in the cabinet\u2019s plaque. Its four torches carry live flame on top of the painted ones, each on its own flicker so they never breathe in step',
+    'and the sign is never stretched \u{1F4D0} \u2014 the marquee is contain-fitted now, so lettering keeps its own proportions whatever rect it is given. Drag it to another shape in the scene builder and the sign fits inside instead of going wide-faced',
+  ] },
   { v: '1.16.0', notes: [
     'THE GAME HAS ITS OWN ALPHABET \u{1F5DE}\u{FE0F} — every word in Dungeon Pusher is now set in GRIMCUT, a typeface drawn for this game and nothing else. Carved-stone bowls with the round cut off them, heavy flared stems, wedge serifs struck like chisel marks, and the three spurs the wordmark lives on: the D’s flag, the P’s foot spike and the R’s kicked leg. Nothing on screen is Georgia or Verdana any more',
     'lowercase is TRUE SMALL CAPS \u{1F3DB}\u{FE0F} — not the capitals shrunk, but redrawn shorter, wider and proportionally fatter, so a mixed-case line keeps one even colour instead of going pale where the lowercase is',
@@ -11233,7 +11237,7 @@ if (!HEADLESS) (function browser() {
   // art/cab/layout.json, if it exists, overrides any subset of them.
   const CAB_R = {
     hole:         [139,  404,  898, 1008],   // the screen, knocked transparent
-    marquee:      [ 81,   26, 1015,  282],   // the plaque up top
+    marquee:      [145,   26,  888,  282],   // the plaque up top
     head:         [166,  424,  566,  136],   // the floor name, inside the glass
     map:          [759,  429,  251,  141],   // the minimap, inside the glass
     play:         [157,  590,  862,  806],   // where the room is fitted
@@ -12711,14 +12715,25 @@ if (!HEADLESS) (function browser() {
     // the marquee plate goes on the empty plaque, and its torches breathe
     const mq = cabArt('marquee');
     if (mq) {
-      const r = CAB.mq, hh = Math.min(r.h, imW(mq, 0) ? r.w * (mq.naturalHeight || mq.height) / (mq.naturalWidth || mq.width) : r.h);
-      ctx.drawImage(mq, r.x, r.y + (r.h - hh) / 2, r.w, hh);
+      // CONTAIN, never stretch: a sign with lettering on it must keep its own
+      // proportions whatever rect the scene builder hands it. The shipped rect
+      // already matches the art, so this fills exactly — drag it to some other
+      // shape and the sign letterboxes inside instead of going wide-faced.
+      const r = CAB.mq;
+      const nw = mq.naturalWidth || mq.width || 1, nh = mq.naturalHeight || mq.height || 1;
+      const s = Math.min(r.w / nw, r.h / nh);
+      const dw = nw * s, dh = nh * s;
+      const dx = r.x + (r.w - dw) / 2, dy = r.y + (r.h - dh) / 2;
+      ctx.drawImage(mq, dx, dy, dw, dh);
+      // and the four painted torches get a live flame on top of them, each on
+      // its own noise phase so they never breathe in lockstep
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      for (const fx of [r.x + r.w * 0.075, r.x + r.w * 0.925]) {
-        const fl = fireNoise(t, fx * 0.1);
-        ctx.globalAlpha = 0.09 + 0.09 * fl;
-        blob('halo', fx, r.y + r.h * 0.5, 34 + fl * 10);
+      for (const f of MQ_TORCH) {
+        const cx = dx + dw * f, cy = dy + dh * MQ_TORCH_Y;
+        const fl = fireNoise(t, cx * 0.1);
+        ctx.globalAlpha = 0.10 + 0.10 * fl;
+        blob('halo', cx, cy, dh * (0.20 + fl * 0.07));
       }
       ctx.restore();
     }
@@ -12773,6 +12788,10 @@ if (!HEADLESS) (function browser() {
   // How far the button captions sit below their button, and the shorter EXIT
   // plate's own factor, tuned so both land on one line across the panel.
   const CAB_CAP = 1.28, CAB_CAP_EXIT = 1.12;
+  // Where the marquee art's four torches actually are, as fractions of the
+  // sign — measured off marquee.png by its own flame cores, so the live glow
+  // lands on the painted flame instead of near it.
+  const MQ_TORCH = [0.0928, 0.3592, 0.6320, 0.8976], MQ_TORCH_Y = 0.37;
   // The HP plate's art has a rounded WELL cut into it, and these are its edges
   // as fractions of the plate — measured off panel_hp.png, not eyeballed. The
   // liquid is poured inside that, so it reads as filling the plate's own tube.
