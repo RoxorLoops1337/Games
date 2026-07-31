@@ -46,24 +46,9 @@
   .pip.poi{color:var(--green);border-color:rgba(184,242,107,.4)}
   .pip.int{color:#ff9d3c;border-color:rgba(255,157,60,.45);font-weight:700}
 
-  /* purse: the haul this ball has banked so far */
-  #purse{position:fixed;left:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 10px);display:flex;flex-direction:column;
-    gap:5px;pointer-events:none;transition:opacity .25s}
-  #coins{display:flex;gap:5px;flex-wrap:wrap;max-width:64vw}
-  .cn{display:flex;align-items:center;gap:3px;padding:3px 7px;border-radius:8px;font-size:12px;font-weight:700;
-    background:rgba(15,9,12,.86);border:1px solid rgba(232,220,200,.18);transition:transform .1s cubic-bezier(.3,1.7,.5,1)}
-  .cn.bump{transform:scale(1.28)}
-  .cn.g{color:var(--gold);border-color:rgba(255,207,77,.5)}
-  .cn.s{color:var(--silver);border-color:rgba(200,214,232,.5)}
-  .cn.r{color:var(--red);border-color:rgba(255,107,122,.5)}
-  .cn.n{color:var(--green);border-color:rgba(184,242,107,.5)}
-  .cn.b{color:var(--blue);border-color:rgba(126,231,255,.5)}
-  .cn.l{color:var(--lucky);border-color:rgba(255,161,232,.5)}
-  #meta{display:flex;gap:6px;font-size:10px;color:var(--dim);letter-spacing:.1em}
-  #meta b{color:var(--bone);font-weight:400}
-  #meta .full{color:var(--brass)}
-  #hint{position:fixed;right:10px;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);font-size:10px;color:var(--dim);
-    text-align:right;line-height:1.6;letter-spacing:.08em;max-width:34vw;pointer-events:none;transition:opacity .25s}
+  /* the purse readout lives in the tray, painted on the canvas */
+  #hint{position:fixed;right:10px;top:calc(env(safe-area-inset-top,0px) + 82px);font-size:10px;color:var(--dim);
+    text-align:right;line-height:1.6;letter-spacing:.08em;max-width:44vw;pointer-events:none;transition:opacity .25s}
 
   /* --------------------------------------------------------- screens */
   .screen{position:fixed;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;
@@ -116,10 +101,6 @@
   </div>
 </div>
 
-<div id="purse">
-  <div id="coins"></div>
-  <div id="meta"></div>
-</div>
 <div id="hint"></div>
 
 <div class="screen on" id="scTitle">
@@ -219,6 +200,13 @@ const pick = arr => arr[Math.floor(rng() * arr.length)];
 const T = { W: 440, H: 780 };
 const DRAIN_Y = 752;
 const LANE_X = 388;
+// The cabinet is taller than the playfield: below the drain sits the COIN
+// TRAY, exactly like the pusher's. Physics never sees this band — it is
+// rendered space only, so every playfield constant above is untouched.
+const TRAY_H = 104;
+const TRAY_TOP = T.H + 8;
+const TRAY_FLOOR = T.H + TRAY_H - 32;
+const VIEW_H = T.H + TRAY_H;
 
 const P = {
   GRAV: 1180, DRAG: 0.22, SPIN_DRAG: 1.1, R: 9, VMAX: 2700,
@@ -259,6 +247,15 @@ const COINS = {
   lucky:  { ico:'\u{1F340}', art:'coin_lucky',  col:'#ffa1e8', cls:'l', nm:'lucky',  ds:'crit' },
 };
 const COIN_ORDER = ['gold', 'silver', 'red', 'green', 'blue', 'lucky'];
+// RESOLVE_ORDER and RESOLVE_DELAY are the pusher's own, trimmed to the six
+// faces this table mints. Shields go up first, rot lands last. The delays are
+// deliberately unhurried so each piece gets its moment.
+const RESOLVE_ORDER = ['silver', 'red', 'gold', 'lucky', 'blue', 'green'];
+const RESOLVE_DELAY = { silver: 0.45, red: 0.5, gold: 0.42, lucky: 0.7, blue: 0.75, green: 0.5 };
+// ...and the pusher's ramp: each next piece of the SAME type fires 10% quicker
+// than the last, the count resetting the moment the type changes, floored so
+// a long barrage never blurs into a machine-gun.
+const resolveSpeed = n => Math.max(0.4, Math.pow(0.9, n || 0));
 
 /* ---------------------------------------------------------------- roster */
 // Act-1 foes lifted from the main game, traits and all. Each trait also
@@ -331,7 +328,7 @@ const S = {
   fits: [], loadout: ['gold', 'gold', 'silver'],   // the bare starting table
   saverUsed: false,
   segs: [], posts: [], bumpers: [], targets: [], flippers: [], inplay: [],
-  res: [], resT: 0,
+  tray: [], queue: [], shots: [], rampType: null, rampN: 0, resT: 0, resMult: 1,
   plunge: 0, plungeHold: false, launchReady: false,
   tilt: 0, tiltT: 0, tiltLock: 0,
   time: 0, freeze: 0, slow: 0, shake: 0, flash: 0,
@@ -663,13 +660,85 @@ function earn(kind, x, y){
     S.flash = Math.max(S.flash, 0.35);
   }
   const C2 = COINS[kind];
-  pop(x, y, C2.ico, C2.col, true);
+  trayAdd(kind, x, y);
   burst(x, y, 7, C2.col);
-  bumpCoin(kind);
   sfx('coin', 0.28, 380 + Math.min(S.combo, 24) * 22);
   shake(2);
   hitstop(0.012);
   return true;
+}
+
+/* ==================================================================== */
+/*  THE TRAY                                                             */
+/* ==================================================================== */
+// A struck target does not hand you a number — it knocks a coin loose, and
+// the coin FALLS. It tumbles out of the playfield, drops the length of the
+// cabinet, clatters into the tray and settles into the row with its fellows.
+// The tray is the purse made physical: what you can see down there is
+// exactly what is about to resolve.
+const traySlot = i => ({
+  x: 44 + (i % 9) * 39,
+  y: TRAY_FLOOR - Math.floor(i / 9) * 22,
+});
+function trayAdd(kind, x, y){
+  const slot = traySlot(S.tray.length);
+  S.tray.push({
+    kind, x, y,
+    vx: (slot.x - x) * 0.55 + rr(-40, 40),
+    vy: rr(-320, -180),          // knocked upward first, so it arcs
+    rot: rr(0, TAU), vr: rr(-14, 14),
+    slot, settled: false, land: 0, bounces: 0,
+  });
+}
+// Ballistic fall, a bounce off the tray floor, then a short slide home. The
+// bounce is what sells it — a coin that just stops dead reads as a sprite.
+function stepTray(dt){
+  for (const c of S.tray){
+    if (c.settled){
+      c.land = Math.max(0, c.land - dt * 4);
+      c.x += (c.slot.x - c.x) * Math.min(1, dt * 9);
+      c.y += (c.slot.y - c.y) * Math.min(1, dt * 9);
+      c.rot += (0 - c.rot) * Math.min(1, dt * 6);
+      continue;
+    }
+    c.vy += 1500 * dt;
+    c.x += c.vx * dt;
+    c.y += c.vy * dt;
+    c.rot += c.vr * dt;
+    c.vx *= Math.exp(-1.4 * dt);
+    if (c.y >= c.slot.y && c.vy > 0){
+      c.y = c.slot.y;
+      c.bounces++;
+      c.land = 1;
+      shake(0.7);
+      sfx('coin', 0.14, 900 - c.bounces * 120);
+      if (c.bounces >= 2 || Math.abs(c.vy) < 190){
+        c.settled = true;
+        c.vy = 0; c.vx = 0; c.vr = 0;
+      } else {
+        c.vy *= -0.42;
+        c.vr *= 0.5;
+        c.vx += (c.slot.x - c.x) * 1.6;
+      }
+    }
+  }
+}
+// coins in flight from the tray to whatever they are about to do
+function stepShots(dt){
+  for (let i = S.shots.length - 1; i >= 0; i--){
+    const sh = S.shots[i];
+    sh.t += dt / sh.dur;
+    if (sh.t >= 1){
+      S.shots.splice(i, 1);
+      sh.hit();
+      continue;
+    }
+    // a lobbed arc reads better than a straight line
+    const t = sh.t;
+    sh.x = lerp(sh.x0, sh.tx, t);
+    sh.y = lerp(sh.y0, sh.ty, t) - Math.sin(t * Math.PI) * sh.arc;
+    sh.rot += dt * 16;
+  }
 }
 
 // The bumper rack is the thing a ball rattles around in most, so it is the
@@ -793,40 +862,81 @@ function startResolve(){
     for (const k of ['lucky', 'gold', 'blue', 'green', 'silver', 'red']){
       if ((S.purse[k] | 0) > 0){
         S.purse[k]--;
+        const i = S.tray.findIndex(co => co.kind === k);
+        if (i >= 0){
+          const stolen = S.tray.splice(i, 1)[0];
+          burst(stolen.x, stolen.y, 10, '#8a7a72');
+          reflowTray();
+        }
         floatMsg('\u{1F45B} the mugger lifts a ' + COINS[k].nm + ' coin');
         break;
       }
     }
   }
+  // The queue is the tray, piece by piece, in the pusher's own resolve order:
+  // shields go up before the foe can swing, rot lands last. Nothing is
+  // aggregated — six gold coins are six separate strikes, because watching
+  // the bar drop six times is the whole point.
   const m = comboMult();
-  const steps = [];
-  const n = k => (S.purse[k] | 0);
-  if (n('silver')) steps.push({ k:'silver', n: n('silver') * m });
-  if (n('red'))    steps.push({ k:'red',    n: n('red') * m * B.RED_HEAL });
-  if (n('green'))  steps.push({ k:'green',  n: n('green') * m * B.POISON });
-  if (n('blue'))   steps.push({ k:'blue',   n: n('blue') * m * B.DMG_BLUE });
-  if (n('gold'))   steps.push({ k:'gold',   n: n('gold') * m * B.DMG_GOLD });
-  if (n('lucky'))  steps.push({ k:'lucky',  n: n('lucky') * m * B.DMG_LUCKY });
-  S.res = steps;
-  S.resT = 0;
   S.resMult = m;
-  if (!steps.length) endResolve();
+  const q = [];
+  for (const k of RESOLVE_ORDER){
+    for (let i = 0; i < (S.purse[k] | 0); i++) q.push({ k, m });
+  }
+  S.queue = q;
+  S.purse = {};
+  S.rampType = null;
+  S.rampN = 0;
+  S.resT = 0.5;                       // a breath before the first piece flies
+  if (!q.length) endResolve();
 }
-function applyResStep(st){
-  const C2 = COINS[st.k];
-  if (st.k === 'silver'){ addBlock(st.n); floatMsg('\u{1F6E1} +' + st.n + ' block'); }
-  else if (st.k === 'red'){ const g = healSelf(st.n); floatMsg('\u{2764} +' + g + ' HP'); }
-  else if (st.k === 'green'){ S.foe.pois = (S.foe.pois | 0) + st.n; floatMsg('\u{1F9EA} ' + st.n + ' rot'); }
-  else if (st.k === 'blue'){ const d = hurtFoe(st.n, 'blue'); floatMsg('\u{2744} ' + d + ' frost'); }
-  else { const d = hurtFoe(st.n, st.k); floatMsg((st.k === 'lucky' ? '\u{1F340} ' : '\u{1FA99} ') + d + ' damage'); }
-  burst(S.foe.x, S.foe.y, 10, C2.col);
-  shake(3.5);
-  hitstop(0.03);
-  sfx('coin', 0.32, st.k === 'lucky' ? 620 : 420);
+// pull the next piece out of the tray and throw it at whatever it acts on
+function fireNext(){
+  const q = S.queue.shift();
+  if (!q) return;
+  // ramp within a same-type run; restart the count when the type flips
+  if (q.k === S.rampType) S.rampN++;
+  else { S.rampType = q.k; S.rampN = 0; }
+  S.resT = (RESOLVE_DELAY[q.k] || 0.5) * resolveSpeed(S.rampN);
+
+  // take the matching coin out of the tray so the pile visibly empties
+  const idx = S.tray.findIndex(c => c.kind === q.k);
+  const from = idx >= 0 ? S.tray.splice(idx, 1)[0] : { x: 204, y: TRAY_FLOOR };
+  reflowTray();
+
+  const toFoe = q.k !== 'silver' && q.k !== 'red';
+  const tx = toFoe ? S.foe.x : 60;
+  const ty = toFoe ? S.foe.y : 90;
+  sfx('coin', 0.3, q.k === 'lucky' ? 620 : 460);
+  S.shots.push({
+    kind: q.k, x0: from.x, y0: from.y, x: from.x, y: from.y,
+    tx, ty, t: 0, dur: 0.34, arc: 90, rot: 0,
+    hit: () => applyCoin(q.k, q.m, tx, ty),
+  });
+}
+// slots shift down as the tray empties, so the pile stays tidy
+function reflowTray(){
+  for (let i = 0; i < S.tray.length; i++) S.tray[i].slot = traySlot(i);
+}
+// what one coin does when it lands. Same values as the pusher's applyLoot,
+// multiplied by the ball's combo.
+function applyCoin(kind, m, x, y){
+  const C2 = COINS[kind];
+  let txt = '';
+  if (kind === 'silver'){ addBlock(m); txt = '\u{1F6E1} +' + m; }
+  else if (kind === 'red'){ const g = healSelf(m * B.RED_HEAL); txt = '\u{2764} +' + g; }
+  else if (kind === 'green'){ S.foe.pois = (S.foe.pois | 0) + m * B.POISON; txt = '\u{1F9EA} +' + (m * B.POISON); }
+  else if (kind === 'blue'){ const d = hurtFoe(m * B.DMG_BLUE, 'blue'); txt = '-' + d; }
+  else if (kind === 'lucky'){ const d = hurtFoe(m * B.DMG_LUCKY, 'lucky'); txt = '-' + d; }
+  else { const d = hurtFoe(m * B.DMG_GOLD, 'gold'); txt = '-' + d; }
+  pop(x, y - 16, txt, C2.col, true);
+  burst(x, y, 9, C2.col);
+  shake(kind === 'lucky' ? 5 : 3);
+  hitstop(0.025);
+  sfx('thud', 0.24, kind === 'lucky' ? 300 : 200);
 }
 function endResolve(){
-  S.res = [];
-  S.purse = {};
+  S.queue = [];
   S.combo = 0;
   if (S.foe.hp <= 0) return;
   foeTurn();
@@ -942,7 +1052,7 @@ function enterFloor(n){
   S.foe = mkFoe(n);
   rollIntent();
   S.purse = {}; S.combo = 0; S.block = 0; S.pois = 0;
-  S.res = []; S.saverUsed = false; S.cashT = 0; S.turnT = 0;
+  S.queue = []; S.shots = []; S.tray = []; S.saverUsed = false; S.cashT = 0; S.turnT = 0;
   S.phase = 'aim';
   S.inplay = [];
   buildTable();
@@ -998,10 +1108,13 @@ function update(dt){
   for (const t of S.targets) if (t.cd > 0) t.cd = Math.max(0, t.cd - dt);
 
   if (S.phase === 'resolve'){
+    stepTray(dt);
+    stepShots(dt);
     S.resT -= dt;
     if (S.resT <= 0){
-      if (S.res.length){ applyResStep(S.res.shift()); S.resT = 0.42; }
-      else endResolve();
+      if (S.queue.length) fireNext();
+      // the turn does not pass until the last coin has actually landed
+      else if (!S.shots.length) endResolve();
     }
     return;
   }
@@ -1028,6 +1141,8 @@ function update(dt){
     }
   }
   if (S.plungeHold && S.launchReady) S.plunge = Math.min(1, S.plunge + dt / 1.05);
+  stepTray(dt);
+  stepShots(dt);
   physics(dt);
   ballSearch(dt);
 }
@@ -1185,8 +1300,8 @@ function fit(){
   const w = globalThis.innerWidth || 440, h = globalThis.innerHeight || 780;
   cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
   cv.style.width = w + 'px'; cv.style.height = h + 'px';
-  const s = Math.min(w / T.W, h / T.H);
-  VIEW = { s: s * dpr, ox: (w * dpr - T.W * s * dpr) / 2, oy: (h * dpr - T.H * s * dpr) / 2, w, h, dpr };
+  const s = Math.min(w / T.W, h / VIEW_H);
+  VIEW = { s: s * dpr, ox: (w * dpr - T.W * s * dpr) / 2, oy: (h * dpr - VIEW_H * s * dpr) / 2, w, h, dpr };
 }
 function capsule(c, ax, ay, bx, by, r){
   c.lineCap = 'round'; c.lineWidth = r * 2;
@@ -1211,6 +1326,8 @@ function draw(){
   drawFlippers(c);
   drawPlunger(c);
   drawBalls(c);
+  drawTray(c);
+  drawShots(c);
   drawParts(c);
   drawPops(c);
   drawMsg(c);
@@ -1419,6 +1536,85 @@ function drawBalls(c){
     c.restore();
   }
 }
+// one coin face, drawn from the pusher's own art with an emoji standing by
+function drawCoinFace(c, kind, x, y, r, rot){
+  const C2 = COINS[kind];
+  const im = coinArt(kind);
+  c.save();
+  c.translate(x, y);
+  c.rotate(rot || 0);
+  if (im && im._ok && im.el){
+    c.drawImage(im.el, -r, -r, r * 2, r * 2);
+  } else {
+    c.fillStyle = C2.col;
+    c.beginPath(); c.arc(0, 0, r, 0, TAU); c.fill();
+    c.fillStyle = '#0b0609';
+    c.font = '700 ' + Math.round(r * 1.1) + 'px ui-monospace,monospace';
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.fillText(C2.ico, 0, 0);
+    c.textAlign = 'left'; c.textBaseline = 'alphabetic';
+  }
+  c.restore();
+}
+// THE TRAY: a brass trough under the cabinet holding everything this ball
+// has knocked loose. It is the purse, and you can count it at a glance.
+function drawTray(c){
+  const g = c.createLinearGradient(0, TRAY_TOP, 0, TRAY_TOP + TRAY_H);
+  g.addColorStop(0, '#1c1216');
+  g.addColorStop(0.3, '#2a1a1c');
+  g.addColorStop(1, '#140c10');
+  c.fillStyle = g;
+  c.fillRect(8, TRAY_TOP, T.W - 16, TRAY_H - 8);
+  // lip highlight + a shadowed well, so the trough reads as a trough
+  c.strokeStyle = 'rgba(255,207,77,.35)';
+  c.lineWidth = 2;
+  c.beginPath();
+  c.moveTo(8, TRAY_TOP + 1); c.lineTo(T.W - 8, TRAY_TOP + 1);
+  c.stroke();
+  c.fillStyle = 'rgba(0,0,0,.35)';
+  c.fillRect(20, TRAY_FLOOR + 9, T.W - 40, 6);
+
+  const held = S.tray.length;
+  const full = held >= S.purseCap;
+  c.fillStyle = full ? 'rgba(255,207,77,.85)' : 'rgba(232,220,200,.4)';
+  c.font = '700 11px ui-monospace,monospace';
+  c.fillText('TRAY ' + held + '/' + S.purseCap, 20, TRAY_TOP + 20);
+  if (S.combo > 1){
+    c.fillStyle = 'rgba(255,207,77,.75)';
+    c.textAlign = 'right';
+    c.fillText('COMBO ' + S.combo + '  \u{00D7}' + comboMult(), T.W - 20, TRAY_TOP + 20);
+    c.textAlign = 'left';
+  }
+  for (const co of S.tray){
+    // a falling coin trails, so it never reads as a second ball loose on
+    // the playfield; a landed one squashes and springs back
+    if (!co.settled){
+      const C2 = COINS[co.kind];
+      for (let i = 1; i <= 3; i++){
+        c.globalAlpha = 0.16 * (4 - i);
+        c.fillStyle = C2.col;
+        c.beginPath(); c.arc(co.x - co.vx * 0.012 * i, co.y - co.vy * 0.012 * i, 12 - i * 2.4, 0, TAU); c.fill();
+      }
+      c.globalAlpha = 1;
+    }
+    const sq = co.land > 0 ? co.land : 0;
+    c.save();
+    c.translate(co.x, co.y);
+    c.scale(1 + sq * 0.22, 1 - sq * 0.22);
+    c.fillStyle = 'rgba(0,0,0,.4)';
+    c.beginPath(); c.ellipse(2, 12, 11, 3.5, 0, 0, TAU); c.fill();
+    c.restore();
+    drawCoinFace(c, co.kind, co.x, co.y, 12, co.rot);
+  }
+}
+function drawShots(c){
+  for (const sh of S.shots){
+    c.globalAlpha = 0.35;
+    drawCoinFace(c, sh.kind, sh.x, sh.y + 6, 13, sh.rot * 0.5);
+    c.globalAlpha = 1;
+    drawCoinFace(c, sh.kind, sh.x, sh.y, 13, sh.rot);
+  }
+}
 function drawParts(c){
   for (const p of S.parts){
     const a = 1 - p.t / p.life;
@@ -1457,18 +1653,10 @@ function drawMsg(c){
 /* ==================================================================== */
 const $ = id => (typeof document !== 'undefined' ? document.getElementById(id) : null);
 const el = {};
-let lastPurse = '';
-function bumpCoin(kind){
-  const n = el['cn_' + kind];
-  if (!n) return;
-  n.classList.add('bump');
-  clearTimeout(n._t);
-  n._t = setTimeout(() => n.classList.remove('bump'), 110);
-}
 function hud(){
   if (!el.pHp) return;
   const on = S.screen === 'battle' ? '1' : '0';
-  el.hud.style.opacity = on; el.purse.style.opacity = on; el.hint.style.opacity = on;
+  el.hud.style.opacity = on; el.hint.style.opacity = on;
 
   el.pHp.style.transform = 'scaleX(' + clamp(S.hp / S.maxHp, 0, 1) + ')';
   el.pHpT.textContent = S.hp + '/' + S.maxHp;
@@ -1497,31 +1685,6 @@ function hud(){
   }
   el.pName.textContent = 'B' + S.floor + ' \u{00B7} you';
 
-  // the purse: only the faces this table can actually earn
-  const kinds = COIN_ORDER.filter(k => S.loadout.includes(k) || (k === 'gold' && hasFit('bumper')));
-  const key = kinds.join(',') + '|' + kinds.map(k => S.purse[k] | 0).join(',');
-  if (key !== lastPurse){
-    if (!el.coins.dataset.k || el.coins.dataset.k !== kinds.join(',')){
-      el.coins.innerHTML = '';
-      for (const k of kinds){
-        const d = document.createElement('div');
-        d.className = 'cn ' + COINS[k].cls;
-        d.innerHTML = COINS[k].ico + ' <span>0</span>';
-        el.coins.appendChild(d);
-        el['cn_' + k] = d;
-      }
-      el.coins.dataset.k = kinds.join(',');
-    }
-    for (const k of kinds){
-      const n = el['cn_' + k];
-      if (n) n.querySelector('span').textContent = String(S.purse[k] | 0);
-    }
-    lastPurse = key;
-  }
-  const full = purseTotal() >= S.purseCap;
-  el.meta.innerHTML = '<span class="' + (full ? 'full' : '') + '">PURSE <b>' + purseTotal() + '/' + S.purseCap + '</b></span>'
-    + '<span>COMBO <b>' + S.combo + '</b></span>'
-    + '<span>\u{00D7}<b>' + comboMult() + '</b> / \u{00D7}' + S.comboCap + '</span>';
   el.hint.textContent = S.cashT > 0 ? 'cashing out\u{2026}'
     : S.phase === 'aim' ? 'hold SPACE — plunge'
     : S.phase === 'resolve' ? 'the purse pays out\u{2026}'
@@ -1654,7 +1817,7 @@ function boot(){
   buildTable();
   spawnInLane();
   if (HEADLESS) return;
-  for (const id of ['hud', 'purse', 'hint', 'pName', 'pHp', 'pHpT', 'pPips', 'eName', 'eHp', 'eHpT', 'ePips', 'coins', 'meta'])
+  for (const id of ['hud', 'hint', 'pName', 'pHp', 'pHpT', 'pPips', 'eName', 'eHp', 'eHpT', 'ePips'])
     el[id] = $(id);
   fit();
   globalThis.addEventListener('resize', fit);
@@ -1673,10 +1836,24 @@ globalThis.DPB = {
   update, draw, hud, fit, physics, startRun, enterFloor, buildTable, buildFlippers, mkFoe, rollIntent, SHEETS,
   newBall, spawnInLane, launch, nudge, drain, earn, onTarget, onBumper, hurtFoe, hurtSelf, healSelf,
   addBlock, foeDown, foeTurn, startResolve, endResolve, nextTurn, takeFitting, rollFittings, gameOver,
+  fireNext, applyCoin, trayAdd, stepTray, stepShots, traySlot, RESOLVE_ORDER, RESOLVE_DELAY,
   setFlipper, flipTip, flipTarget, capsuleHit, circleHit, resolveHit, purseTotal, purseFull, comboMult,
   ballsPerTurn, hasFit, mulberry, boot,
-  // drive a whole resolve instantly (the animated version pays out on a beat)
-  resolveNow(){ startResolve(); while (S.res.length) applyResStep(S.res.shift()); endResolve(); },
+  // fire every queued coin and land it where it was thrown, leaving the turn
+  // itself unfinished — lets a test read block/heal before the foe swings
+  flushResolve(){
+    let guard = 0;
+    while ((S.queue.length || S.shots.length) && guard++ < 900){
+      if (S.queue.length) fireNext();
+      while (S.shots.length) S.shots.shift().hit();
+    }
+  },
+  // ...and the whole thing at once (the played version pays out on a beat)
+  resolveNow(){
+    startResolve();
+    this.flushResolve();
+    if (S.phase === 'resolve') endResolve();
+  },
 };
 
 boot();
