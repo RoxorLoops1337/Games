@@ -128,9 +128,11 @@ const BODY_HH    = 0.42;   // body half-height, used for the submerged fraction
    fraction (BODY_HH - FLOAT_Y) / (2*BODY_HH).  Deriving it means the float
    height and the spring can never drift apart when either is tuned.      */
 const BUOY       = GRAV * (BODY_HH * 2) / (BODY_HH - FLOAT_Y);
-const RING_LOCAL = [0.40, 1.00, 0];  // ring centre in duck space
+/* Hoop centre in duck space. The head's crown is at y = 0.62 + 0.295, so
+   this puts the bottom of the hoop just inside it. */
+const RING_LOCAL = [0.42, 1.05, 0];
 const RING_R     = 0.17;   // ring major radius
-const CATCH_R    = 0.52;   // how close to the ring axis the hook must pass
+const CATCH_R    = 0.52;   // how near the hoop's centre the shank must pass
 /* Vertical window, measured as (hook anchor - ring centre) along the ring's
    own axis.  It spans the hook's shank: the ring counts as threaded anywhere
    from just under the bend up to the top of the wire.  Horizontal precision
@@ -354,15 +356,19 @@ function ellipsoid(m, cx, cy, cz, rx, ry, rz, seg, rings, part){
       mbQuad(m, a + j, a + j2, b + j2, b + j, part);
     }
 }
-/* torus lying in the X-Z plane (axis = +Y) */
-function torus(m, cx, cy, cz, R, r, nu, nv, part){
+/* Torus. upright=false lies flat in the X-Z plane (axis +Y); upright=true
+   stands in the X-Y plane (axis +Z), which is how a duck's hoop is fitted —
+   a wire loop along the length of the head, seen face-on from the side. */
+function torus(m, cx, cy, cz, R, r, nu, nv, part, upright){
   const base = m.v.length / 3;
   for (let i = 0; i < nu; i++){
     const u = i / nu * TAU, cu = Math.cos(u), su = Math.sin(u);
     for (let j = 0; j < nv; j++){
       const vv = j / nv * TAU;
       const rr2 = R + r * Math.cos(vv);
-      mbVert(m, cx + rr2 * cu, cy + r * Math.sin(vv), cz + rr2 * su);
+      const t = r * Math.sin(vv);
+      if (upright) mbVert(m, cx + rr2 * cu, cy + rr2 * su, cz + t);
+      else         mbVert(m, cx + rr2 * cu, cy + t, cz + rr2 * su);
     }
   }
   for (let i = 0; i < nu; i++)
@@ -407,9 +413,8 @@ function buildDuck(lod){
   // numbered plug under the belly
   latheX(m, [[-0.17, 0.001, -0.30, PART.BASE], [-0.16, 0.190, -0.36, PART.BASE],
              [ 0.14, 0.190, -0.36, PART.BASE], [ 0.15, 0.001, -0.30, PART.BASE]], [9, 7, 5][lod], 1.0, 1.0);
-  // ring + post
-  torus(m, RING_LOCAL[0], RING_LOCAL[1], 0, RING_R, 0.033, nu, nv, PART.RING);
-  box(m, RING_LOCAL[0] - 0.21, 0.84, -0.035, RING_LOCAL[0] - 0.14, RING_LOCAL[1] + 0.02, 0.035, PART.RING);
+  // the upright wire hoop, its foot sunk into the top of the head
+  torus(m, RING_LOCAL[0], RING_LOCAL[1], 0, RING_R, 0.032, nu, nv, PART.RING, true);
   return mbBake(m);
 }
 /* merge src into dst, rotating about +Z by `rot` then translating */
@@ -812,10 +817,11 @@ function stepHook(dt){
   if (wet && rng() < 0.4) addRing(hook.p[0], hook.p[2], 0.10, 0.35);
 }
 
-/* Catch test: the ring's bore is a cylinder about the duck's local +Y at
-   RING_LOCAL.  We track how far the hook sits along that axis; when it
-   crosses zero going *up* while inside the bore, the ring has slid down
-   onto the hook — exactly what happens on the real stall.               */
+/* Catch test.  The hoop stands upright, so its opening is a vertical disc
+   and the hook's shank threads it by passing down through the top of the
+   loop and out the bottom.  That makes the test a cylinder about the duck's
+   own up-axis through the hoop's centre: CATCH_R is how near the shank has
+   to come horizontally, and the vertical window below is the shank itself.  */
 function stepCatch(dt){
   const hp = hook.p;
   for (let i = 0; i < ducks.length; i++){
@@ -827,7 +833,7 @@ function stepCatch(dt){
     euler(d.yaw, d.pitch, d.roll, d.m);
     xf(d.m, RING_LOCAL[0], RING_LOCAL[1], RING_LOCAL[2], _t3);
     const rx = d.x + _t3[0], ry = d.y + _t3[1], rz = d.z + _t3[2];
-    xf(d.m, 0, 1, 0, _t3b);                       // ring axis in world space
+    xf(d.m, 0, 1, 0, _t3b);                       // the duck's up-axis, in world space
     const ax = hp[0] - rx, ay = hp[1] - ry, az = hp[2] - rz;
     const along = ax * _t3b[0] + ay * _t3b[1] + az * _t3b[2];
     const px2 = ax - along * _t3b[0], py2 = ay - along * _t3b[1], pz2 = az - along * _t3b[2];
@@ -1222,7 +1228,13 @@ function drawBaseNumber(d){
   xf(d.m, BASE_CENTRE[0] + 0.16, BASE_CENTRE[1], BASE_CENTRE[2], _t3);
   const A = proj(d.x + _t3[0], d.y + _t3[1], d.z + _t3[2]);
   const axx = A.x - ox, axy = A.y - oy;
-  xf(d.m, BASE_CENTRE[0], BASE_CENTRE[1], BASE_CENTRE[2] - 0.16, _t3);
+  /* Canvas text runs +x right and +y DOWN, so we need the local direction
+     that appears as "down" to someone looking at the base. The base faces
+     local -Y, so the viewer is on that side and screen-right x screen-up
+     must give the away direction +Y: (1,0,0) x U = (0,1,0) puts screen-up at
+     local -Z, and therefore the text's down axis at local +Z. Taking -Z here
+     flips exactly one axis, which reads as upside down AND mirrored. */
+  xf(d.m, BASE_CENTRE[0], BASE_CENTRE[1], BASE_CENTRE[2] + 0.16, _t3);
   const B = proj(d.x + _t3[0], d.y + _t3[1], d.z + _t3[2]);
   const bxx = B.x - ox, bxy = B.y - oy;
   if (Math.hypot(axx, axy) < 5) return;
