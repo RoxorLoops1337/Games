@@ -53,8 +53,9 @@
         <b>Hold</b> the button (or&nbsp;Space) to lower the hook.<br>
         <b>Release</b> to reel it back up &mdash; if the hook slid<br>
         through a ring, the duck comes up with it.<br>
-        The hook holds <b>two</b> ducks at a time.<br>
-        Every duck has a number stamped underneath.
+        The hook holds <b>two</b> ducks at a time &mdash; a pair pays double.<br>
+        Every duck has a number stamped underneath, and keeping<br>
+        the rhythm going builds a <b>streak multiplier</b>.
       </div>
       <button class="btn" id="bStart">START &mdash; 90s</button>
       <button class="btn alt" id="bRelax">RELAXED</button>
@@ -132,21 +133,46 @@ const BUOY       = GRAV * (BODY_HH * 2) / (BODY_HH - FLOAT_Y);
 /* Hoop centre in duck space. The head's crown is at y = 0.62 + 0.295, so
    this puts the bottom of the hoop just inside it. */
 const RING_LOCAL = [0.42, 1.05, 0];
-const RING_R     = 0.17;   // ring major radius
-const CATCH_R    = 0.52;   // how near the hoop's centre the shank must pass
-/* Vertical window, measured as (hook anchor - ring centre) along the ring's
-   own axis.  It spans the hook's shank: the ring counts as threaded anywhere
-   from just under the bend up to the top of the wire.  Horizontal precision
-   (CATCH_R) is the skill; this is just "the ring is on the wire". */
-const BORE_LOW   = -1.30;
-const BORE_HIGH  =  0.30;
+const RING_R     = 0.17;   // hoop radius
+const CATCH_R    = 0.52;   // how near the hoop's centre the wire must pass
 const MAX_HOOK   = 2;      // ducks the hook can carry
 const ROD_TIP_Y  = 5.2;
+
+/* The hook's wire, measured from the end of the line: it rises HOOK_TOP_Y
+   above that anchor and its bend hangs HOOK_BOT_Y below. Everything about
+   where a hoop can sit on the hook follows from these two, so they are
+   declared here rather than left implied by the drawing code. */
+const HOOK_SCALE = 1.85;
+const HOOK_TOP_Y =  0.80 * HOOK_SCALE;
+const HOOK_BOT_Y = -0.21 * HOOK_SCALE;
+
+/* Vertical catch window, measured as (hook anchor - hoop centre). A hoop is
+   on the wire when it sits between the bend and the top, so the window is
+   just the wire's own span, negated, plus a little slack. Deriving it means
+   it cannot drift out of step with the hook's shape. */
+const BORE_LOW   = -HOOK_TOP_Y - 0.05;
+const BORE_HIGH  = -HOOK_BOT_Y + 0.05;
+
 const HOOK_MIN   = 1.35;   // shortest line (hook parked high)
-const HOOK_MAX   = 5.35;   // longest line (hook dips into the water)
+/* Where the hoop sits on the wire once the line is all the way out, and the
+   number that made the pond nearly unfishable. HOOK_MAX used to be picked by
+   eye so the bend dipped in the water, which left the resting hoop at -1.25
+   against a hand-written BORE_LOW of -1.30 — five hundredths of margin. A
+   duck bobs more than that, so holding the button (the obvious thing to do)
+   put the hook out of reach on all but a handful of frames. Deriving the
+   window from the wire's real span is what actually fixed it; this then
+   picks a rest depth with margin to spare, low enough that the bend still
+   breaks the surface. */
+const HOOK_REST  = -0.90;
+const HOOK_MAX   = ROD_TIP_Y - (FLOAT_Y + RING_LOCAL[1] + HOOK_REST);
 const LOWER_SPD  = 2.35;   // line pays out, units/s
 const RAISE_SPD  = 4.10;   // line reels in, units/s
 const ROUND_TIME = 90;
+/* Keep landing ducks and the multiplier climbs. A catch cycle is roughly
+   three seconds, so the window is generous enough that staying in rhythm
+   holds the streak, and short enough that dithering loses it. */
+const STREAK_WINDOW = 6.5;
+const STREAK_MAX    = 4;
 
 /* -------------------------------------------------------------- canvas */
 const cv = document.getElementById('c');
@@ -638,8 +664,9 @@ const G = {
   relaxed: false,
   score: 0, landed: 0, best: 0,
   time: ROUND_TIME,
-  combo: 0,
+  streak: 0, streakT: 0,
 };
+function streakMult(){ return Math.min(STREAK_MAX, 1 + Math.floor(G.streak / 3)); }
 const ducks = [];
 const reveals = [];
 const pops = [];
@@ -785,6 +812,7 @@ function stepHook(dt){
   // current line length — swings when you sweep the rod, settles when
   // you hold still, and hangs heavier with ducks on it.
   const tip = rodTip();
+  const vx0 = hook.p[0], vy0 = hook.p[1], vz0 = hook.p[2];
   const damp = hook.caught.length ? 0.988 : 0.975;
   // Verlet carries velocity as (p - q); cap it so a single bad frame (a tab
   // resume, a resize) can never fling the pendulum into orbit.
@@ -805,9 +833,14 @@ function stepHook(dt){
     const k2 = hook.len / L;
     hook.p[0] = tip[0] + dx * k2; hook.p[1] = tip[1] + dy * k2; hook.p[2] = tip[2] + dz * k2;
   }
-  hook.v[0] = (hook.p[0] - hook.q[0]) / dt;
-  hook.v[1] = (hook.p[1] - hook.q[1]) / dt;
-  hook.v[2] = (hook.p[2] - hook.q[2]) / dt;
+  /* Velocity over the WHOLE frame, not the last Verlet sub-step. The line
+     length changes once per frame, so the first sub-step absorbs almost all
+     of the reel-in and the last one barely moves — reading (p - q) there
+     reported roughly zero while the hook was climbing at full speed, and the
+     "is it being lifted?" catch test could essentially never fire. */
+  hook.v[0] = (hook.p[0] - vx0) / dt;
+  hook.v[1] = (hook.p[1] - vy0) / dt;
+  hook.v[2] = (hook.p[2] - vz0) / dt;
 
   // entering / leaving the water
   const wh = waveH(hook.p[0], hook.p[2], T);
@@ -948,11 +981,13 @@ function stepReveals(dt){
     d.yaw   = lerp(v.y0, 0, s);
     if (a >= 1 && !v.paid){
       v.paid = true;
-      const pts = d.num * v.mult;
+      G.streak++; G.streakT = STREAK_WINDOW;
+      const mult = v.mult * streakMult();
+      const pts = d.num * mult;
       G.score += pts; G.landed++;
       const p = proj(d.x, d.y + 0.9, d.z);
-      pops.push({ x: p.x, y: p.y, t: 0, txt: '+' + pts, big: v.mult > 1 || d.gold });
-      sfxScore(d.num);
+      pops.push({ x: p.x, y: p.y, t: 0, txt: '+' + pts, big: mult > 1 || d.gold });
+      sfxScore(d.num + mult * 3);
     }
     if (t > 2.10){
       reveals.splice(i, 1);
@@ -1402,7 +1437,6 @@ function drawRod(){
 
 /* the hook itself: a swept J in 3D, stroked as a polyline so it keeps
    its shape from every angle without costing a mesh                    */
-const HOOK_SCALE = 1.85;
 const HOOK_PATH = (() => {
   const pts = [[0, 0.80, 0], [0, 0.45, 0], [0, 0.10, 0], [0, -0.02, 0]];
   for (let i = 0; i <= 12; i++){
@@ -1486,6 +1520,22 @@ function drawHUD(){
     ctx.fillText(fmtTime(G.time), W - 28, 38);
   }
 
+  const mult = streakMult();
+  if (mult > 1){
+    const pulse = 0.72 + 0.28 * Math.sin(T * 7);
+    ctx.fillStyle = 'rgba(10,6,18,.55)';
+    roundRect(14, 78, 168, 44, 12); ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(120,255,170,' + pulse + ')';
+    ctx.font = 'bold 22px "Segoe UI",system-ui,sans-serif';
+    ctx.fillText('STREAK x' + mult, 28, 86);
+    // the bar drains as the window runs out
+    ctx.fillStyle = 'rgba(120,255,170,.22)';
+    ctx.fillRect(28, 110, 140, 4);
+    ctx.fillStyle = 'rgba(120,255,170,.85)';
+    ctx.fillRect(28, 110, 140 * clamp(G.streakT / STREAK_WINDOW, 0, 1), 4);
+  }
+
   ctx.textAlign = 'center';
   ctx.fillStyle = 'rgba(232,226,244,.55)';
   ctx.font = '13px "Segoe UI",system-ui,sans-serif';
@@ -1543,6 +1593,10 @@ function update(dt){
   }
   stepReveals(dt);
   stepFx(dt);
+  if (G.streakT > 0){
+    G.streakT -= dt;
+    if (G.streakT <= 0){ G.streakT = 0; G.streak = 0; }
+  }
   if (G.mode === 'play' && !G.relaxed){
     G.time -= dt;
     if (G.time <= 0){ G.time = 0; endRound(); }
@@ -1613,6 +1667,7 @@ function startRound(relaxed){
   G.relaxed = !!relaxed;
   G.mode = 'play';
   G.score = 0; G.landed = 0; G.time = ROUND_TIME;
+  G.streak = 0; G.streakT = 0;
   reveals.length = 0; pops.length = 0; drops.length = 0; rings.length = 0;
   hook.caught.length = 0;
   hook.len = HOOK_MIN;

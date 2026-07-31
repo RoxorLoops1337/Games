@@ -44,7 +44,8 @@ const EXPOSE = `__out.api = {
   C: { CHAN_HZ, LOOP_LEN, X0, X1, VIEW_HALF, GATE_X, N_DUCKS, CURRENT, GRAV,
        FLOAT_Y, BODY_HH, BUOY, RING_LOCAL, RING_R, CATCH_R, MAX_HOOK,
        ROD_TIP_Y, HOOK_MIN, HOOK_MAX, LOWER_SPD, RAISE_SPD, ROUND_TIME,
-       BORE_LOW, BORE_HIGH },
+       BORE_LOW, BORE_HIGH, STREAK_WINDOW, STREAK_MAX },
+  streakMult,
 };
 `;
 
@@ -621,6 +622,118 @@ test('playing it properly — aim, hold, release — lands a duck', () => {
   assert(a.G.landed === 1, 'and it should be scored');
 });
 
+/* A competent player: track a duck's hoop, lead it by the descent time,
+   pull the moment the hook arms, and stay up until the catch is banked.
+   aimErr is how far off the aim is, in world units. */
+function botPlay(a, seconds, aimErr = 0, seed = 7){
+  a.startRound(true);
+  let sd = seed >>> 0 || 1;
+  const rnd = () => { sd = (sd * 1664525 + 1013904223) >>> 0; return sd / 4294967296; };
+  const m = new Float64Array(9), o = [0, 0, 0];
+  const ringOf = (d) => {
+    a.euler(d.yaw, d.pitch, d.roll, m);
+    a.xf(m, a.C.RING_LOCAL[0], a.C.RING_LOCAL[1], a.C.RING_LOCAL[2], o);
+    return [d.x + o[0], d.y + o[1], d.z + o[2]];
+  };
+  let target = null, ex = 0, ez = 0;
+  const dt = 1 / 60;
+  for (let i = 0; i < Math.round(seconds / dt); i++){
+    if (!target || target.state !== 'float' || target.x > a.C.GATE_X - 2.5){
+      let best = null, bs = 1e9;
+      for (const d of a.ducks){
+        if (d.state !== 'float' || d.x < -a.C.GATE_X + 2 || d.x > 4) continue;
+        const sc = Math.abs(d.x + 2) + Math.abs(d.z) * 0.3;
+        if (sc < bs){ bs = sc; best = d; }
+      }
+      target = best;
+      if (target){ ex = (rnd() * 2 - 1) * aimErr; ez = (rnd() * 2 - 1) * aimErr; }
+    }
+    if (target){
+      const r = ringOf(target);
+      const lead = (a.C.HOOK_MAX - a.hook.len) / a.C.LOWER_SPD;
+      a.aim.x = clampN(r[0] + a.C.CURRENT * lead + ex, -a.C.GATE_X + 1, a.C.GATE_X - 1);
+      a.aim.z = clampN(r[2] + ez, -a.C.CHAN_HZ + 0.7, a.C.CHAN_HZ - 0.7);
+      a.input.down = a.hook.caught.length ? false : !(target.threadT > 0);
+    } else a.input.down = false;
+    a.update(dt);
+  }
+  return { landed: a.G.landed, score: a.G.score };
+}
+const clampN = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+
+/* The test that matters most in this file. Two silent bugs once made the
+   pond nearly unfishable while every other test stayed green: the line paid
+   out further than the hook could reach a hoop, and the hook's reported
+   velocity was sampled from a Verlet sub-step that barely moved, so the
+   "is it being lifted?" check never fired. Neither is visible from any
+   single-function test — only from actually playing. */
+test('a competent player lands ducks at a decent rate', () => {
+  const a = boot();
+  const r = botPlay(a, 60, 0);
+  assert(r.landed >= 18, `good play should land plenty of ducks, got ${r.landed} in 60s`);
+  assert(r.score > 0, 'and score for them');
+});
+
+test('sloppier aim lands fewer ducks, but still lands them', () => {
+  const good = botPlay(boot(), 60, 0).landed;
+  const ok = botPlay(boot(), 60, 0.6, 11).landed;
+  const poor = botPlay(boot(), 60, 1.2, 23).landed;
+  assert(ok >= 8, `a decent player should still do well, got ${ok}`);
+  assert(poor >= 3, `even sloppy play should catch something, got ${poor}`);
+  assert(poor < good, `aim should matter: poor ${poor} vs good ${good}`);
+});
+
+test('with the line fully out, the hoops are inside the catch window', () => {
+  /* The bug: HOOK_MAX was picked so the bend dipped in the water, which put
+     the entire wire below every hoop. Holding the button — the obvious
+     thing to do — parked the hook out of reach. */
+  const a = boot();
+  a.startRound(true);
+  const d = a.ducks[0];
+  a.aim.x = a.C.RING_LOCAL[0]; a.aim.z = 0;
+  a.rod.x = a.aim.x; a.rod.z = a.aim.z;
+  a.input.down = true;
+  for (let i = 0; i < 300; i++){ d.x = 0; d.z = 0; a.update(1 / 60); }
+  near(a.hook.len, a.C.HOOK_MAX, 1e-6, 'the line should be all the way out');
+  const m = new Float64Array(9), o = [0, 0, 0], n = [0, 0, 0];
+  a.euler(d.yaw, d.pitch, d.roll, m);
+  a.xf(m, a.C.RING_LOCAL[0], a.C.RING_LOCAL[1], a.C.RING_LOCAL[2], o);
+  a.xf(m, 0, 1, 0, n);
+  const ax = a.hook.p[0] - (d.x + o[0]), ay = a.hook.p[1] - (d.y + o[1]), az = a.hook.p[2] - (d.z + o[2]);
+  const along = ax * n[0] + ay * n[1] + az * n[2];
+  assert(along > a.C.BORE_LOW && along < a.C.BORE_HIGH,
+    `resting hook must be able to take a hoop: along=${along.toFixed(2)} vs window ${a.C.BORE_LOW.toFixed(2)}..${a.C.BORE_HIGH.toFixed(2)}`);
+  // and with margin at both ends, so a bobbing duck stays catchable
+  /* Margin matters more than mere membership: the original bug left 0.05 of
+     room, and a duck bobs several times that, so the hook was technically
+     in the window and practically never in it. */
+  const margin = Math.min(along - a.C.BORE_LOW, a.C.BORE_HIGH - along);
+  assert(margin > 0.5, `too close to the edge of the window, margin ${margin.toFixed(2)}`);
+});
+
+test("the hook's reported velocity matches how far it actually moved", () => {
+  /* It used to be read off the last Verlet sub-step. The line length changes
+     once per frame, so that sub-step barely moves and the hook reported
+     roughly zero while climbing at full speed. */
+  const a = boot();
+  a.startRound(true);
+  a.input.down = true;
+  step(a, 3);
+  a.input.down = false;
+  let checked = 0;
+  for (let i = 0; i < 30; i++){
+    const before = a.hook.p[1];
+    a.update(1 / 60);
+    const actual = (a.hook.p[1] - before) * 60;
+    if (Math.abs(actual) > 0.5){
+      near(a.hook.v[1], actual, Math.abs(actual) * 0.25 + 0.2,
+        'reported hook velocity should track its real motion');
+      checked++;
+    }
+  }
+  assert(checked > 5, 'the hook should have been moving while reeling in');
+});
+
 test('the hook carries at most two ducks', () => {
   const a = boot();
   a.startRound(false);
@@ -685,6 +798,42 @@ test('reeling a duck all the way in scores its number', () => {
   assert(a.pops.length > 0, 'a score popup should appear');
   settle(a);
   assert(a.G.score === 5, 'a duck should only ever pay once');
+});
+
+test('a streak builds a multiplier, and lapses when the rhythm stops', () => {
+  const a = boot();
+  a.startRound(true);
+  assert(a.streakMult() === 1, 'no streak to begin with');
+  a.G.streak = 2; assert(a.streakMult() === 1, 'two in a row is not yet a multiplier');
+  a.G.streak = 3; assert(a.streakMult() === 2, 'three should double');
+  a.G.streak = 6; assert(a.streakMult() === 3, 'six should triple');
+  a.G.streak = 99;
+  assert(a.streakMult() === a.C.STREAK_MAX, 'the multiplier should cap');
+
+  // the window drains, and taking too long resets it
+  a.G.streak = 5; a.G.streakT = a.C.STREAK_WINDOW;
+  step(a, a.C.STREAK_WINDOW * 0.5);
+  assert(a.G.streak === 5, 'the streak should survive inside the window');
+  assert(a.G.streakT > 0 && a.G.streakT < a.C.STREAK_WINDOW, 'and the window should be draining');
+  step(a, a.C.STREAK_WINDOW);
+  assert(a.G.streak === 0, 'the streak should lapse once the window runs out');
+  assert(a.G.streakT === 0, 'and the timer should settle at zero');
+});
+
+test('the streak multiplies what a duck pays, and a fresh round clears it', () => {
+  const a = boot();
+  const d = a.ducks[0];
+  rigCatch(a, d);
+  d.num = 4; d.gold = false;
+  a.G.streak = 5;                      // already on a x2 run
+  a.G.streakT = a.C.STREAK_WINDOW;
+  plungeHook(a, d, 0);
+  a.input.down = false;
+  step(a, 1.0);
+  assert(a.G.score === 12, `a 4 landed on a x2 streak (now 6, x3) should pay 12, got ${a.G.score}`);
+  a.startRound(false);
+  assert(a.G.streak === 0 && a.G.streakT === 0, 'a new round starts with no streak');
+  assert(a.streakMult() === 1, 'and no multiplier');
 });
 
 test('a double catch pays twice', () => {
@@ -873,6 +1022,8 @@ test('draws every game state, including a full hook and a reveal in flight', () 
   for (let i = 0; i < 40; i++){ a.update(1 / 60); a.draw(); }   // mid-reveal
   a.G.score = 123; a.G.time = 8;
   a.draw();                       // low-time HUD
+  a.G.streak = 7; a.G.streakT = a.C.STREAK_WINDOW * 0.4;
+  a.draw();                       // streak banner + draining window bar
   a.endRound();
   a.draw();                       // game over
 });
