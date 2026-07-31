@@ -33,6 +33,16 @@
   .stat{ min-width:104px; padding:10px 8px; border-radius:12px; background:#0f0a18; border:2px solid #33253f; }
   .stat .k{ font-size:11px; letter-spacing:2px; color:#9b8fae; text-transform:uppercase; }
   .stat .v{ font-size:26px; font-weight:900; color:#ffd34d; }
+  .shelfline{ margin:0 0 14px; font-size:13px; color:#b6a9c6; letter-spacing:.5px; }
+  .shelfline b{ color:#ffd34d; }
+  .prize{ margin:2px 0 14px; min-height:52px; }
+  .prize .pwon{ font-size:13px; letter-spacing:3px; color:#8effb0; font-weight:800; }
+  .prize .pname{ font-size:22px; font-weight:900; color:#ffd34d; margin:2px 0 4px; }
+  .prize .pnext{ font-size:13px; color:#b6a9c6; }
+  .prize .pnext b{ color:#e8e2f4; }
+  .prize .pbar{ height:7px; margin:7px auto; width:min(300px,80%); border-radius:4px;
+    background:#0f0a18; border:1px solid #33253f; overflow:hidden; }
+  .prize .pbar i{ display:block; height:100%; background:linear-gradient(90deg,#e8a91f,#ffd85e); }
   #mute{ position:absolute; right:10px; bottom:10px; width:40px; height:40px; border-radius:10px;
     border:2px solid #3a2a4d; background:rgba(12,8,20,.6); color:#ffd34d; font-size:17px;
     cursor:pointer; font-family:inherit; }
@@ -48,15 +58,14 @@
       <h1>HOOK&#8209;A&#8209;DUCK</h1>
       <p class="sub">Fairground duck pond</p>
       <div class="rules">
-        <b>Move</b> the pointer &mdash; you hold the rod by its grip,<br>
-        and the hook hangs on the line ahead of it.<br>
-        <b>Hold</b> the button (or&nbsp;Space) to lower the hook.<br>
-        <b>Release</b> to reel it back up &mdash; if the hook slid<br>
-        through a ring, the duck comes up with it.<br>
-        The hook holds <b>two</b> ducks at a time &mdash; a pair pays double.<br>
-        Every duck has a number stamped underneath, and keeping<br>
-        the rhythm going builds a <b>streak multiplier</b>.
+        <b>Move</b> the pointer &mdash; you hold the rod by its grip.<br>
+        <b>Hold</b> to lower the hook, <b>release</b> to reel it in.<br>
+        Slide the wire through a hoop and lift.<br>
+        Two ducks at once pays <b>double</b>.<br>
+        Keep the rhythm and the <b>streak</b> multiplies.<br>
+        The last 15 seconds are the <b>final rush</b>.
       </div>
+      <div class="shelfline" id="mShelf"></div>
       <button class="btn" id="bStart">START &mdash; 90s</button>
       <button class="btn alt" id="bRelax">RELAXED</button>
     </div>
@@ -70,6 +79,7 @@
         <div class="stat"><div class="k">Ducks</div><div class="v" id="ovDucks">0</div></div>
         <div class="stat"><div class="k">Best</div><div class="v" id="ovBest">0</div></div>
       </div>
+      <div id="ovPrize" class="prize"></div>
       <button class="btn" id="bAgain">PLAY AGAIN</button>
       <button class="btn alt" id="bMenu">MENU</button>
     </div>
@@ -173,6 +183,33 @@ const ROUND_TIME = 90;
    holds the streak, and short enough that dithering loses it. */
 const STREAK_WINDOW = 6.5;
 const STREAK_MAX    = 4;
+
+/* The last stretch of a round pays double and the stream picks up. A round
+   needs somewhere to build to, or the final twenty seconds are the least
+   interesting part of it. */
+const RUSH_TIME  = 15;
+const RUSH_FLOW  = 1.28;
+const RUSH_MULT  = 2;
+
+/* ------------------------------------------------------------ the shelf
+   The stall's sign promises every duck a prize, so there had better be
+   prizes. Score banks into tickets that persist between rounds, and the
+   shelf on the back wall fills up permanently as the total passes each
+   threshold — visible in every frame you play, which is the point. The
+   thresholds are lifetime totals, not a wallet to spend: nothing to
+   manage, just a row of things you have not won yet. */
+const PRIZES = [
+  { n: 'Duckling',    c:   70, body: [252, 205,  42], acc: [240, 124,  34], ear: 'none',  s: 0.72 },
+  { n: 'Goldfish',    c:  200, body: [255, 142,  60], acc: [255, 208, 130], ear: 'fin',   s: 0.74 },
+  { n: 'Teddy',       c:  420, body: [178, 122,  74], acc: [230, 192, 152], ear: 'round', s: 0.86 },
+  { n: 'Bunny',       c:  720, body: [242, 240, 246], acc: [248, 186, 200], ear: 'long',  s: 0.90 },
+  { n: 'Frog',        c: 1100, body: [110, 196,  96], acc: [232, 250, 220], ear: 'eyes',  s: 0.86 },
+  { n: 'Unicorn',     c: 1600, body: [248, 214, 238], acc: [255, 214,  90], ear: 'horn',  s: 0.96 },
+  { n: 'Panda',       c: 2300, body: [242, 242, 246], acc: [ 42,  42,  50], ear: 'round', s: 1.00 },
+  { n: 'Dragon',      c: 3300, body: [122, 112, 222], acc: [255, 120,  90], ear: 'spike', s: 1.06 },
+  { n: 'Giant Bear',  c: 4700, body: [212, 152,  92], acc: [242, 212, 172], ear: 'round', s: 1.22 },
+  { n: 'Golden Duck', c: 6600, body: [255, 196,  60], acc: [255, 238, 176], ear: 'crown', s: 1.10 },
+];
 
 /* -------------------------------------------------------------- canvas */
 const cv = document.getElementById('c');
@@ -653,18 +690,28 @@ function noise(dur, freq, gain){
 }
 const sfxSplash = () => noise(0.32, 1150, 0.16);
 const sfxPlip   = () => { tone(880, 0.09, 'sine', 0.05, 420); };
-const sfxCatch  = () => { tone(520, 0.10, 'triangle', 0.09, 880); noise(0.18, 1800, 0.07); };
+const sfxCatch  = (step) => {
+  const f = 520 * Math.pow(1.09, Math.min(12, step || 0));
+  tone(f, 0.10, 'triangle', 0.09, f * 1.7);
+  noise(0.20, 1700, 0.09);
+};
 const sfxScore  = (n) => { tone(660 + n * 22, 0.13, 'square', 0.06, 990 + n * 30); };
 const sfxHorn   = () => { tone(330, 0.5, 'sawtooth', 0.07, 180); };
+const sfxRush   = () => { tone(220, 0.20, 'square', 0.07, 440); setTimeout(() => tone(330, 0.28, 'square', 0.07, 660), 150); };
+const sfxFanfare = () => {
+  [0, 120, 240, 400].forEach((d, i) => setTimeout(() => tone(392 * Math.pow(1.26, i), 0.34, 'triangle', 0.08), d));
+};
 </script>
 <script>
 /* ================================================================ STATE */
 const G = {
   mode: 'menu',          // menu | play | over
   relaxed: false,
-  score: 0, landed: 0, best: 0,
+  score: 0, landed: 0, best: 0, shown: 0,
   time: ROUND_TIME,
   streak: 0, streakT: 0,
+  rush: false,
+  tickets: 0, prizes: 0, rounds: 0, won: [],
 };
 function streakMult(){ return Math.min(STREAK_MAX, 1 + Math.floor(G.streak / 3)); }
 const ducks = [];
@@ -672,6 +719,10 @@ const reveals = [];
 const pops = [];
 const drops = [];        // falling water droplets
 const rings = [];        // expanding surface ripples
+
+/* Screen kick on a catch. Decays fast — long shakes read as a bug. */
+const fx = { shake: 0 };
+function kick(a){ fx.shake = Math.min(16, fx.shake + a); }
 
 const aim = { x: 0, z: 0 };
 const rod = { x: 0, z: 0, tipY: ROD_TIP_Y, bend: 0 };
@@ -754,7 +805,7 @@ function stepDucks(dt){
     d.roll  += d.wr * dt;
 
     // ---- downstream drift + lazy spin + a little lateral wander
-    d.x += (CURRENT + d.drift) * dt;
+    d.x += (CURRENT * (G.rush ? RUSH_FLOW : 1) + d.drift) * dt;
     d.phase += dt * 0.55;
     d.vz += (Math.sin(d.phase) * 0.30 - d.vz * 1.8) * dt;
     // keep off the trough walls
@@ -909,9 +960,13 @@ function catchDuck(d){
   d.swing = rr(-0.5, 0.5);
   d.wetT = 1;
   hook.caught.push(d);
-  sfxCatch();
+  sfxCatch(G.streak);
   addRing(d.x, d.z, 0.5, 1.0);
-  for (let i = 0; i < 10; i++) addDrop(d.x + rr(-0.4, 0.4), d.y, d.z + rr(-0.4, 0.4), rr(1.5, 4));
+  addRing(d.x, d.z, 0.2, 0.7);
+  kick(hook.caught.length > 1 ? 11 : 6.5);
+  // a proper splash: the duck comes out of the water, so the water goes up
+  for (let i = 0; i < 26; i++)
+    addDrop(d.x + rr(-0.45, 0.45), d.y - rr(0, 0.3), d.z + rr(-0.4, 0.4), rr(2.5, 7.5));
 }
 
 /* hooked ducks hang from the ring and swing like the pendulum they are */
@@ -982,11 +1037,12 @@ function stepReveals(dt){
     if (a >= 1 && !v.paid){
       v.paid = true;
       G.streak++; G.streakT = STREAK_WINDOW;
-      const mult = v.mult * streakMult();
+      const mult = v.mult * streakMult() * (G.rush ? RUSH_MULT : 1);
       const pts = d.num * mult;
       G.score += pts; G.landed++;
       const p = proj(d.x, d.y + 0.9, d.z);
       pops.push({ x: p.x, y: p.y, t: 0, txt: '+' + pts, big: mult > 1 || d.gold });
+      kick(d.gold ? 12 : 4 + Math.min(8, mult * 1.6));
       sfxScore(d.num + mult * 3);
     }
     if (t > 2.10){
@@ -1012,6 +1068,7 @@ function stepFx(dt){
     r.t += dt; r.r = r.r0 + r.t * 1.9;
     if (r.t > r.life) rings.splice(i, 1);
   }
+  if (fx.shake > 0) fx.shake = Math.max(0, fx.shake - dt * 46);
   for (let i = pops.length - 1; i >= 0; i--){
     pops[i].t += dt; pops[i].y -= dt * 34;
     if (pops[i].t > 1.25) pops.splice(i, 1);
@@ -1090,7 +1147,7 @@ function drawBulbs(){
   const aH = Math.max(46, H * 0.11);
   for (let i = 0; i <= 18; i++){
     const x = i / 18 * W, y = aH + 20 + Math.sin(x / W * Math.PI) * 16;
-    const on = 0.55 + 0.45 * Math.sin(T * 3 + i * 0.9);
+    const on = 0.55 + 0.45 * Math.sin(T * (G.rush ? 11 : 3) + i * 0.9);
     ctx.fillStyle = 'rgba(255,214,130,' + (0.13 * on) + ')';
     ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fill();
     ctx.fillStyle = 'rgb(255,' + (200 + 40 * on | 0) + ',' + (120 + 80 * on | 0) + ')';
@@ -1120,6 +1177,118 @@ function drawSign(){
   ctx.font = 'bold ' + Math.max(7, h * 0.20) + 'px "Segoe UI",system-ui,sans-serif';
   ctx.fillStyle = 'rgba(226,214,240,.72)';
   ctx.fillText('EVERY  DUCK  A  PRIZE', 0, h * 0.28);
+  ctx.restore();
+}
+
+/* A plush toy, built from a handful of primitives with a per-prize palette
+   and ear shape. Unwon ones show as dark silhouettes, so the shelf reads as
+   a row of things you have not got yet rather than empty space. */
+function drawPlush(x, y, r, p, won){
+  const col = (c, k) => won
+    ? 'rgb(' + (c[0] * k | 0) + ',' + (c[1] * k | 0) + ',' + (c[2] * k | 0) + ')'
+    : 'rgba(16,12,26,' + (0.55 * k) + ')';
+  const body = col(p.body, 1), dark = col(p.body, 0.72), acc = col(p.acc, 1);
+  ctx.save();
+  ctx.translate(x, y);
+  // body
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.ellipse(0, r * 0.45, r * 0.62, r * 0.55, 0, 0, TAU); ctx.fill();
+  // ears / crest, behind the head
+  ctx.fillStyle = dark;
+  if (p.ear === 'round'){
+    ctx.beginPath(); ctx.arc(-r * 0.42, -r * 0.52, r * 0.24, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc( r * 0.42, -r * 0.52, r * 0.24, 0, TAU); ctx.fill();
+  } else if (p.ear === 'long'){
+    ctx.beginPath(); ctx.ellipse(-r * 0.30, -r * 0.86, r * 0.15, r * 0.44, 0.2, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( r * 0.30, -r * 0.86, r * 0.15, r * 0.44, -0.2, 0, TAU); ctx.fill();
+  } else if (p.ear === 'spike'){
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55, -r * 0.30); ctx.lineTo(-r * 0.20, -r * 0.95); ctx.lineTo(0, -r * 0.35);
+    ctx.lineTo(r * 0.20, -r * 0.95); ctx.lineTo(r * 0.55, -r * 0.30);
+    ctx.closePath(); ctx.fill();
+  } else if (p.ear === 'fin'){
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55, r * 0.45); ctx.lineTo(-r * 1.05, r * 0.05); ctx.lineTo(-r * 1.05, r * 0.9);
+    ctx.closePath(); ctx.fill();
+  }
+  // head
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(0, -r * 0.28, r * 0.48, 0, TAU); ctx.fill();
+  if (p.ear === 'horn' || p.ear === 'crown'){
+    ctx.fillStyle = acc;
+    if (p.ear === 'horn'){
+      ctx.beginPath(); ctx.moveTo(-r * 0.12, -r * 0.62); ctx.lineTo(0, -r * 1.18); ctx.lineTo(r * 0.12, -r * 0.62);
+      ctx.closePath(); ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.34, -r * 0.66); ctx.lineTo(-r * 0.34, -r * 1.02); ctx.lineTo(-r * 0.11, -r * 0.80);
+      ctx.lineTo(0, -r * 1.10); ctx.lineTo(r * 0.11, -r * 0.80); ctx.lineTo(r * 0.34, -r * 1.02);
+      ctx.lineTo(r * 0.34, -r * 0.66);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  // muzzle + eyes
+  ctx.fillStyle = won ? 'rgba(255,255,255,.55)' : 'rgba(40,32,58,.5)';
+  ctx.beginPath(); ctx.ellipse(0, -r * 0.10, r * 0.24, r * 0.17, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = won ? '#1b1520' : 'rgba(8,6,14,.7)';
+  const ey = p.ear === 'eyes' ? -r * 0.62 : -r * 0.36;
+  ctx.beginPath(); ctx.arc(-r * 0.19, ey, r * 0.085, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc( r * 0.19, ey, r * 0.085, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* Two shelf boards on the back wall, flanking the sign, five prizes each.
+   On a narrow screen the camera crops those corners away entirely, so fall
+   back to a compact row across the top — the shelf is the reason to keep
+   playing and it has to be on screen to do that job. */
+function drawShelf(){
+  const visHalf = (W * 0.5) * cam.d0 / cam.s;
+  if (visHalf < 9.5){ drawShelfStrip(); return; }
+  for (const side of [-1, 1]){
+    const x0 = side < 0 ? -12.6 : 7.7, x1 = side < 0 ? -7.7 : 12.6;
+    const zb = CHAN_HZ + 0.5, yb = 1.62;
+    quad3(x0, yb, zb, x1, yb, zb, x1, yb - 0.30, zb - 0.02, x0, yb - 0.30, zb - 0.02, '#6b4524');
+    quad3(x0, yb, zb, x1, yb, zb, x1, yb, zb - 0.55, x0, yb, zb - 0.55, '#8a5a30');
+    for (let i = 0; i < 5; i++){
+      const idx = side < 0 ? i : i + 5;
+      const p = PRIZES[idx];
+      const t = (i + 0.5) / 5;
+      const wx = x0 + (x1 - x0) * t;
+      const pr = projC(wx, yb + 0.05, zb - 0.28);
+      const r = Math.max(8, 0.60 * p.s * pr.s);
+      const won = idx < G.prizes;
+      if (won){
+        const g = ctx.createRadialGradient(pr.x, pr.y - r * 0.2, 0, pr.x, pr.y - r * 0.2, r * 2.1);
+        g.addColorStop(0, 'rgba(255,214,120,.20)'); g.addColorStop(1, 'rgba(255,200,90,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(pr.x, pr.y - r * 0.2, r * 2.1, 0, TAU); ctx.fill();
+      }
+      drawPlush(pr.x, pr.y - r * 0.55, r, p, won);
+    }
+  }
+}
+
+function drawShelfStrip(){
+  const n = PRIZES.length;
+  const r = Math.min(15, W / (n * 3.1));
+  const gap = r * 2.6;
+  // clear of the score / streak plates, which occupy the top-left to y=122
+  const y = Math.min(H * 0.30, 134 + r);
+  const x0 = W * 0.5 - gap * (n - 1) * 0.5;
+  ctx.save();
+  ctx.fillStyle = 'rgba(10,6,18,.42)';
+  roundRect(x0 - gap * 0.7, y - r * 1.7, gap * (n - 1) + gap * 1.4, r * 3.1, r * 0.7);
+  ctx.fill();
+  for (let i = 0; i < n; i++){
+    const px = x0 + gap * i, won = i < G.prizes;
+    if (won){
+      const g = ctx.createRadialGradient(px, y, 0, px, y, r * 1.9);
+      g.addColorStop(0, 'rgba(255,214,120,.22)'); g.addColorStop(1, 'rgba(255,200,90,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(px, y, r * 1.9, 0, TAU); ctx.fill();
+    }
+    drawPlush(px, y + r * 0.45, r, PRIZES[i], won);
+  }
   ctx.restore();
 }
 
@@ -1507,7 +1676,7 @@ function drawHUD(){
   ctx.font = 'bold 11px "Segoe UI",system-ui,sans-serif';
   ctx.fillText('SCORE', 28, 24);
   ctx.fillStyle = '#ffd34d'; ctx.font = 'bold 28px "Segoe UI",system-ui,sans-serif';
-  ctx.fillText(String(G.score), 28, 38);
+  ctx.fillText(String(Math.round(G.shown)), 28, 38);
 
   if (!G.relaxed){
     ctx.fillStyle = 'rgba(10,6,18,.55)';
@@ -1515,9 +1684,38 @@ function drawHUD(){
     ctx.fillStyle = '#9b8fae'; ctx.textAlign = 'right';
     ctx.font = 'bold 11px "Segoe UI",system-ui,sans-serif';
     ctx.fillText('TIME', W - 28, 24);
-    ctx.fillStyle = G.time < 11 ? '#ff6b6b' : '#e9e2f4';
+    ctx.fillStyle = G.rush ? '#ff6b6b' : '#e9e2f4';
     ctx.font = 'bold 28px "Segoe UI",system-ui,sans-serif';
     ctx.fillText(fmtTime(G.time), W - 28, 38);
+  }
+
+  // how close the next prize is, live, so the shelf is never out of mind
+  const nx = nextPrize();
+  if (nx){
+    const prev = G.prizes > 0 ? PRIZES[G.prizes - 1].c : 0;
+    const have = G.tickets + G.score;
+    const pct = clamp((have - prev) / Math.max(1, nx.c - prev), 0, 1);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(232,226,244,.5)';
+    ctx.font = 'bold 11px "Segoe UI",system-ui,sans-serif';
+    ctx.fillText(nx.n.toUpperCase() + '  ' + Math.max(0, nx.c - have) + ' TO GO', W - 28, H - 62);
+    const bw = 150;
+    ctx.fillStyle = 'rgba(255,211,77,.20)'; ctx.fillRect(W - 28 - bw, H - 46, bw, 5);
+    ctx.fillStyle = pct > 0.999 ? '#8effb0' : '#ffd34d';
+    ctx.fillRect(W - 28 - bw, H - 46, bw * pct, 5);
+  }
+
+  if (G.rush){
+    const pulse = 0.6 + 0.4 * Math.sin(T * 9);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold ' + (27 + pulse * 5) + 'px "Segoe UI",system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,90,90,' + (0.75 + 0.25 * pulse) + ')';
+    ctx.strokeStyle = 'rgba(40,0,0,.6)'; ctx.lineWidth = 5;
+    // low and centred: the sign owns the top of the frame
+    ctx.strokeText('FINAL RUSH  x2', W * 0.5, H - 88);
+    ctx.fillText('FINAL RUSH  x2', W * 0.5, H - 88);
+    ctx.textBaseline = 'top';
   }
 
   const mult = streakMult();
@@ -1567,8 +1765,14 @@ function roundRect(x, y, w, h, r){
 /* ================================================================ FRAME */
 function draw(){
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (fx.shake > 0.05){
+    // rotate the offset so successive kicks do not all shove the same way
+    const a = T * 41;
+    ctx.translate(Math.sin(a) * fx.shake, Math.cos(a * 1.37) * fx.shake * 0.6);
+  }
   drawBackdrop();
   drawSign();
+  drawShelf();
   drawBank(CHAN_HZ, false);
   drawWater();
   drawRipples();
@@ -1599,8 +1803,15 @@ function update(dt){
   }
   if (G.mode === 'play' && !G.relaxed){
     G.time -= dt;
+    const wasRush = G.rush;
+    G.rush = G.time <= RUSH_TIME;
+    if (G.rush && !wasRush) sfxRush();
     if (G.time <= 0){ G.time = 0; endRound(); }
   }
+  // the counter chases the score rather than snapping, so a big catch reads
+  // as a run of numbers rather than a jump
+  G.shown += (G.score - G.shown) * Math.min(1, dt * 7);
+  if (Math.abs(G.score - G.shown) < 0.6) G.shown = G.score;
 }
 
 /* Move between quality tiers on measured cost. Drops quickly — a couple of
@@ -1655,19 +1866,54 @@ function show(el, on){ const e = $(el); if (on) e.removeAttribute ? e.removeAttr
 function loadBest(){
   try { G.best = parseInt(localStorage.getItem('duck_fishing_best_v1') || '0', 10) || 0; }
   catch (e) { G.best = 0; }
+  // the shelf lives in its own key; the best-score one predates it and stays
+  G.tickets = 0; G.prizes = 0; G.rounds = 0;
+  try {
+    const raw = localStorage.getItem('duck_fishing_prizes_v1');
+    if (raw){
+      const j = JSON.parse(raw);
+      G.tickets = Math.max(0, j.tickets | 0);
+      G.rounds  = Math.max(0, j.rounds | 0);
+      G.prizes  = clamp(j.prizes | 0, 0, PRIZES.length);
+    }
+  } catch (e) { /* a corrupt shelf just means an empty one */ }
+  // never show fewer prizes than the tickets have already earned
+  G.prizes = Math.max(G.prizes, prizesFor(G.tickets));
 }
+function prizesFor(tickets){
+  let n = 0;
+  while (n < PRIZES.length && tickets >= PRIZES[n].c) n++;
+  return n;
+}
+function nextPrize(){ return G.prizes < PRIZES.length ? PRIZES[G.prizes] : null; }
 function saveBest(){
   try { localStorage.setItem('duck_fishing_best_v1', String(G.best)); } catch (e) {}
 }
+function saveMeta(){
+  try {
+    localStorage.setItem('duck_fishing_prizes_v1',
+      JSON.stringify({ tickets: G.tickets, prizes: G.prizes, rounds: G.rounds }));
+  } catch (e) {}
+}
 function toMenu(){
   G.mode = 'menu';
+  const el = $('mShelf');
+  const nx = nextPrize();
+  if (G.rounds > 0 || G.prizes > 0){
+    el.innerHTML = '<b>' + G.prizes + '/' + PRIZES.length + '</b> prizes on the shelf'
+      + (nx ? ' &middot; next: <b>' + nx.n + '</b>, ' + Math.max(0, nx.c - G.tickets) + ' tickets'
+            : ' &middot; the shelf is cleared');
+  } else {
+    el.innerHTML = 'Ten prizes on the shelf. Every point is a ticket.';
+  }
   show('menu', true); show('over', false);
 }
 function startRound(relaxed){
   G.relaxed = !!relaxed;
   G.mode = 'play';
-  G.score = 0; G.landed = 0; G.time = ROUND_TIME;
+  G.score = 0; G.landed = 0; G.shown = 0; G.time = ROUND_TIME;
   G.streak = 0; G.streakT = 0;
+  G.rush = false; G.won = [];
   reveals.length = 0; pops.length = 0; drops.length = 0; rings.length = 0;
   hook.caught.length = 0;
   hook.len = HOOK_MIN;
@@ -1680,13 +1926,45 @@ function startRound(relaxed){
 }
 function endRound(){
   G.mode = 'over';
+  G.rush = false;
   if (G.score > G.best){ G.best = G.score; saveBest(); }
+
+  // every point is a ticket, and tickets are what the shelf runs on
+  G.tickets += G.score;
+  G.rounds++;
+  const before = G.prizes;
+  G.prizes = Math.max(G.prizes, prizesFor(G.tickets));
+  G.won = PRIZES.slice(before, G.prizes);
+  saveMeta();
+
   $('ovScore').textContent = String(G.score);
   $('ovDucks').textContent = String(G.landed);
   $('ovBest').textContent = String(G.best);
   $('ovTitle').textContent = "TIME'S UP";
+  renderPrizePanel();
   show('over', true);
-  sfxHorn();
+  if (G.won.length) sfxFanfare(); else sfxHorn();
+}
+
+/* The shelf on the game-over card: what you just won, or how far off the
+   next one is. This is the reason to press PLAY AGAIN. */
+function renderPrizePanel(){
+  const el = $('ovPrize');
+  const nx = nextPrize();
+  if (G.won.length){
+    const names = G.won.map(p => p.n).join(' + ');
+    el.innerHTML = '<div class="pwon">PRIZE WON!</div><div class="pname">' + names + '</div>' +
+      (nx ? '<div class="pnext">Next: ' + nx.n + ' &mdash; ' + (nx.c - G.tickets) + ' more tickets</div>'
+          : '<div class="pnext">Every prize on the shelf is yours.</div>');
+  } else if (nx){
+    const prev = G.prizes > 0 ? PRIZES[G.prizes - 1].c : 0;
+    const pct = clamp((G.tickets - prev) / Math.max(1, nx.c - prev), 0, 1);
+    el.innerHTML = '<div class="pnext">Next prize: <b>' + nx.n + '</b></div>' +
+      '<div class="pbar"><i style="width:' + (pct * 100).toFixed(1) + '%"></i></div>' +
+      '<div class="pnext">' + (nx.c - G.tickets) + ' tickets to go</div>';
+  } else {
+    el.innerHTML = '<div class="pnext">Shelf cleared &mdash; ' + G.tickets + ' tickets all told.</div>';
+  }
 }
 
 /* ================================================================ INPUT */
