@@ -7426,7 +7426,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.16.3', 'the cabinet ships as v1.16.3');
+  t.eq(D.VERSION, '1.17.0', 'the cabinet ships as v1.17.0');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -8921,6 +8921,106 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const spare = dirs.filter(d => !used.has(d)).sort();
   console.log('# painted sets with no foe yet: ' + (spare.join(', ') || 'none'));
   t.ok(spare.length <= 9, 'the unused pile does not grow unnoticed (' + spare.length + ')');
+}
+
+// ============== THE BLACK BOX: a bug report worth reading ==============
+// A player on a phone can hand back a screenshot and nothing else, and a
+// screenshot cannot say whether a coin was PAID for. The watchdog tags every
+// piece on the bed and reports anything that leaves without either scoring or
+// being claimed by a mechanic allowed to eat it. Its whole value is that it
+// stays QUIET during normal play — a log that cries wolf is not a log.
+{
+  const { DP: Db } = loadGame({}, true);
+  t.ok(!!Db.bug, 'the game carries a black box');
+  Db.srand(404); Db.newRun('knight');
+  Db.S.run.floor = 4;
+  Db.startBattle();
+  for (let i = 0; i < 300; i++) Db.step(1 / 60, false);
+  const box = Db.bug.box();
+  t.eq(box.lost.length, 0, 'a settled bed loses nothing');
+
+  // the legitimate exit: tilt pieces over the front. They score, so the box
+  // must stay silent — this is the case that decides whether it is usable.
+  Db.S.battle.tilts = 9;
+  let over = 0;
+  for (let k = 0; k < 3; k++) {
+    Db.tilt('d');
+    for (let i = 0; i < 300; i++) Db.step(1 / 60, false);
+  }
+  over = Db.S.battle.loot.length;
+  t.ok(over > 0, 'the tilts actually pushed pieces over (' + over + ')');
+  t.eq(box.lost.length, 0, 'and every one of them scored — nothing reported');
+
+  // now the reported bug, staged: a piece deleted behind the game's back
+  const victim = Db.S.coins.find(c => c.st === 'plat');
+  const at = { x: Math.round(victim.x), y: Math.round(victim.y), kind: victim.kind };
+  Db.S.coins.splice(Db.S.coins.indexOf(victim), 1);
+  Db.bug.watch();
+  t.eq(box.lost.length, 1, 'a piece deleted behind the game\'s back IS caught');
+  if (box.lost[0]) {
+    t.eq(box.lost[0].kind, at.kind, 'and the box names what it was');
+    t.ok(Math.abs(box.lost[0].x - at.x) <= 1 && Math.abs(box.lost[0].y - at.y) <= 1,
+         'and where it stood (' + box.lost[0].x + ',' + box.lost[0].y + ' vs ' + at.x + ',' + at.y + ')');
+  }
+
+  // a mechanic that owns up stays silent — and the crab, the gutter and the
+  // claw all mark and splice inside ONE frame, so the marker has to land
+  // immediately rather than waiting for the next scan
+  const eaten = Db.S.coins.find(c => c.st === 'plat');
+  Db.bug.take(eaten, 'crab');
+  Db.S.coins.splice(Db.S.coins.indexOf(eaten), 1);
+  Db.bug.watch();
+  t.eq(box.lost.length, 1, 'a declared eat is NOT reported as a disappearance');
+  t.eq(box.taken.crab, 1, 'it is tallied against the mechanic that ate it');
+
+  // THE PIPER scores its whole haul and splices it in the SAME frame — the
+  // one path where waiting for the next scan would report a paid haul as
+  // vanished. Stage one and check the box keeps its mouth shut.
+  {
+    const before = box.lost.length;
+    const plats = Db.S.coins.filter(c => c.st === 'plat').sort((a, b) => b.y - a.y);
+    const pip = plats[0];
+    pip.kind = 'piper';
+    let neighbours = 0;
+    for (const n of plats.slice(1)) {
+      if (neighbours >= 4) break;
+      n.x = pip.x + (neighbours - 1.5) * 2; n.y = pip.y - 1; n.lay = 0;
+      neighbours++;
+    }
+    for (let i = 0; i < 240; i++) Db.step(1 / 60, false);   // let the box see them
+    pip.y = 200; pip.vy = 60;                                // over the front it goes
+    for (let i = 0; i < 300; i++) Db.step(1 / 60, false);
+    t.ok(neighbours > 0, 'the piper had company on the bed (' + neighbours + ')');
+    t.eq(box.lost.length, before,
+         'the piper leads its haul over and the box stays quiet — it was all paid for');
+  }
+
+  // the report itself
+  const rep = Db.bug.report();
+  for (const k of ['v', 'screen', 'run', 'machine', 'battle', 'coins', 'unaccounted', 'eatenBy', 'log']) {
+    t.ok(k in rep, 'the report carries ' + k);
+  }
+  t.eq(rep.unaccounted.count, box.lost.length, 'the report leads with the unaccounted count');
+  t.eq(rep.coins.total, Db.S.coins.length, 'and counts the bed honestly');
+  t.ok(rep.machine.layout !== undefined && 'tilted' in rep.machine,
+       'and says which machine it was — the tilted table eats the left column by design');
+  const size = JSON.stringify(rep).length;
+  t.ok(size > 400 && size < 60000, 'the report is small enough to paste (' + size + ' bytes)');
+
+  // the rolling log must not grow without bound
+  for (let i = 0; i < 500; i++) Db.bug.log('spam', i);
+  t.ok(box.log.length <= box.cap, 'the log is a ring buffer, not a leak (' + box.log.length + ' <= ' + box.cap + ')');
+  t.ok(box.lost.length <= box.lostCap, 'and so is the unaccounted list');
+
+  // the button is reachable without a keyboard, from the settings sheet
+  const srcB = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(/REPORT A BUG/.test(srcB), 'the settings sheet carries a REPORT A BUG button');
+  t.ok(/openBugSheet\(\)/.test(srcB), 'and it opens the sheet');
+  t.ok(/drawBugSheet\(t\);/.test(srcB), 'and the sheet is actually drawn');
+  t.ok(/clipboard\.writeText/.test(srcB) && /a\.download = 'dungeon-pusher-bug/.test(srcB),
+       'and the log can leave the phone by COPY or by SAVE');
+  Db.bug.open();
+  t.ok(!!Db.bug.sheet() && Db.bug.sheet().txt.length > 100, 'opening it builds the payload');
 }
 
 // ================= THE CABINET around the dungeon =================
