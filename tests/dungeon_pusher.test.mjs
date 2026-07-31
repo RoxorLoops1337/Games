@@ -7426,7 +7426,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.15.1', 'the cabinet ships as v1.15.1');
+  t.eq(D.VERSION, '1.16.1', 'the cabinet ships as v1.16.1');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -8878,7 +8878,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     const b = readFileSync(join(cabDir, f));
     return [b.readUInt32BE(16), b.readUInt32BE(20)];
   };
-  const want = { 'marquee.png': [762, 212], 'game_screen_full.png': [708, 784],
+  const want = { 'marquee.png': [1250, 397], 'game_screen_full.png': [708, 784],
                  'controls_panel_full.png': [768, 143], 'status_strip_full.png': [762, 111],
                  'playfield.png': [652, 596], 'level_header.png': [337, 99], 'minimap.png': [167, 116],
                  'joystick.png': [115, 146], 'panel_hp.png': [150, 100], 'panel_bag.png': [128, 100] };
@@ -8926,6 +8926,15 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     }
     const [hx, hy, hw, hh] = R5.hole;
     t.ok(hw > sw * 0.5 && hh > sh * 0.3, 'and the hole is a screen, not a keyhole');
+    // the marquee is CONTAIN-fitted, so a rect of the wrong shape does not
+    // stretch the sign — it letterboxes it, and the plaque shows a dark band
+    // nobody asked for. The shipped rect has to match the art it holds.
+    const mqArt = png('marquee.png');
+    const ra = R5.marquee[2] / R5.marquee[3], aa = mqArt[0] / mqArt[1];
+    t.ok(Math.abs(ra - aa) / aa < 0.01,
+         'the marquee rect matches the sign it holds (rect ' + ra.toFixed(3) + ' vs art ' + aa.toFixed(3) + ')');
+    t.ok(/Math\.min\(r\.w \/ nw, r\.h \/ nh\)/.test(src5),
+         'and the sign is contain-fitted, never stretched to the rect');
     // the glass furniture has to be ON the glass, or it is painted onto wood
     for (const s of ['head', 'map', 'play']) {
       const a = R5[s];
@@ -9034,6 +9043,31 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
          'and its offline fallback covers them all');
     t.ok(/"shell": \{ "w": ' \+ SHELL\.w/.test(bsrc) && /"rects"/.test(bsrc),
          'the builder exports the shape the game reads back');
+    // the tool mirrors a few of the game's drawing constants so its preview is
+    // TRUE and not merely close. Copies drift silently, so compare them.
+    const num = (src, re, what) => {
+      const mm = src.match(re);
+      t.ok(!!mm, what + ' is findable');
+      return mm ? mm.slice(1).join('|') : null;
+    };
+    t.eq(num(bsrc, /const CAP = ([\d.]+), CAP_EXIT = ([\d.]+)/, 'the builder\'s caption drop'),
+         num(src5, /const CAB_CAP = ([\d.]+), CAB_CAP_EXIT = ([\d.]+)/, 'the game\'s caption drop'),
+         'the builder drops the button captions exactly as far as the game does');
+    const well = /HP_WELL = \{ x: ([\d.]+), y: ([\d.]+), w: ([\d.]+), h: ([\d.]+) \}/;
+    t.eq(num(bsrc, well, 'the builder\'s HP well'), num(src5, well, 'the game\'s HP well'),
+         'and it pours the health bar into the same well');
+    const ramp = (s) => (s.slice(s.indexOf('HP_RAMP = ['), s.indexOf(']]', s.indexOf('HP_RAMP = ['))).match(/\d+/g) || []).join(',');
+    t.eq(ramp(bsrc), ramp(src5), 'and mixes it from the same colour ramp');
+    // this is the bug that actually happened: game code pasted into the tool
+    // still calling the GAME's rounded-rect helper, which the tool doesn't have
+    t.ok(!/[^a-zA-Z_]rr\(/.test(bsrc),
+         'the builder calls its own rrect(), never the game\'s rr() by accident');
+    // the game contain-fits the marquee; a preview that stretches it would be
+    // a lie you then line the rect up against
+    t.ok(/k: 'marquee'[^\n]*contain: true/.test(bsrc),
+         'the builder knows the marquee is contain-fitted too');
+    t.ok(/Math\.min\(r\.w \/ im\.naturalWidth, r\.h \/ im\.naturalHeight\)/.test(bsrc),
+         'and actually contain-fits it in the preview');
   }
 
   // it draws, and it balances
