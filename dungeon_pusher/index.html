@@ -59,6 +59,10 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.17.0', notes: [
+    'A BLACK BOX, AND A BUTTON TO HAND IT OVER \u{1F41E} \u2014 REPORT A BUG in the settings. Every piece on the bed is tagged, and anything that leaves without either being paid for or claimed by something allowed to eat it \u2014 the claw, the crab, the tilted table\u2019s gutter \u2014 is recorded with what it was and where it stood. COPY or SAVE hands the whole log over',
+    'and it stays QUIET when nothing is wrong \u{1F910} \u2014 tilting a pile over the front edge, the piper leading its haul over, a claw hoisting six at once: all of it is accounted for and none of it is reported. A log that cries wolf is not a log',
+  ] },
   { v: '1.16.3', notes: [
     'THE MINIMAP KEEPS ITS SHAPE \u{1F5FA}\u{FE0F} \u2014 the little map used to be sized by whatever you had explored, so a tall floor turned it portrait, a wide one turned it landscape, and a big one shoved the whole frame off the glass. The window is fixed 16:9 now and the floor is fitted INTO it, clipped so nothing can spill',
     'and when a floor is too big to read whole, the window follows you \u{1F9ED} \u2014 rooms stop shrinking at the size they still read at, and the map centres on the room you are standing in instead of turning the whole level to mush. The full blueprint is still one tap away',
@@ -2644,6 +2648,130 @@ function usePotion() {
   return true;
 }
 
+// ------------------------------------------------------------- black box
+// A player who hits a bug on a phone has nothing to hand back but a
+// screenshot, and a screenshot cannot say whether a coin was PAID for. This
+// keeps a short rolling log plus a live watchdog on coin accounting: every
+// piece on the bed is tagged, and anything that leaves without either
+// scoring or being claimed by a mechanic that is allowed to eat it is
+// recorded with where it stood. REPORT BUG in the settings hands the lot over.
+const BUG = {
+  on: true,
+  log: [], cap: 200,                     // rolling breadcrumbs
+  errs: [],                              // uncaught errors, deduped
+  lost: [], lostCap: 40,                 // pieces that left unaccounted for
+  taken: {},                             // tallies per legitimate eater
+  live: new Map(), seen: new Set(), seq: 0,
+  started: null,
+};
+function bugLog(tag, d) {
+  if (!BUG.on) return;
+  BUG.log.push({ t: Math.round((S.time || 0) * 10) / 10, tag, d });
+  if (BUG.log.length > BUG.cap) BUG.log.shift();
+}
+// A mechanic that is ALLOWED to take a piece off the bed says so here, or the
+// watchdog reports its work as a disappearance. It has to write straight into
+// the live record and not just onto the coin: the crab, the gutter and the
+// claw all mark and splice within one frame, so waiting for the next scan
+// would flag every legitimate eat as a bug and bury the real one.
+function bugAccount(c, why) {
+  if (!c || c.__bid === undefined) { if (c) c.__took = why; return; }
+  c.__took = why;
+  const rec = BUG.live.get(c.__bid);
+  if (rec) rec.ok = why;
+}
+function bugTake(c, why) {
+  bugAccount(c, why);
+  BUG.taken[why] = (BUG.taken[why] | 0) + 1;
+}
+// The audit walks the whole bed, so it does NOT run every frame — at 320
+// coins that doubled the frame cost on its own. Every 10th frame catches a
+// disappearance inside a sixth of a second, which is far finer than anything
+// a player could see, and leaves the sim's budget alone.
+const BUG_EVERY = 20;
+function bugWatch(quiet) {
+  if (!BUG.on || quiet) return;
+  if (!S.battle) { if (BUG.live.size) BUG.live.clear(); return; }
+  if ((BUG.tick = (BUG.tick | 0) + 1) % BUG_EVERY) return;
+  const seen = BUG.seen;
+  seen.clear();
+  for (const c of S.coins) {
+    if (c.__bid === undefined) c.__bid = ++BUG.seq;
+    seen.add(c.__bid);
+    const rec = BUG.live.get(c.__bid);
+    if (rec) {
+      rec.x = c.x; rec.y = c.y; rec.st = c.st; rec.lay = c.lay;
+      if (c.scored) rec.ok = 'scored';
+      else if (c.__took) rec.ok = c.__took;
+    } else {
+      BUG.live.set(c.__bid, { x: c.x, y: c.y, kind: c.kind, st: c.st, lay: c.lay,
+                              ok: c.scored ? 'scored' : (c.__took || null) });
+    }
+  }
+  for (const [id, rec] of BUG.live) {
+    if (seen.has(id)) continue;
+    BUG.live.delete(id);
+    if (rec.ok) continue;                // somebody owned up to it
+    if (BUG.lost.length < BUG.lostCap) {
+      BUG.lost.push({ kind: rec.kind, x: Math.round(rec.x), y: Math.round(rec.y),
+                      st: rec.st, lay: rec.lay | 0, at: Math.round((S.time || 0) * 10) / 10 });
+    }
+    bugLog('LOST', rec.kind + '@' + Math.round(rec.x) + ',' + Math.round(rec.y) + ' ' + rec.st);
+  }
+}
+// uncaught errors go in the box too, deduped — the same throw every frame
+// would otherwise bury everything else in the log
+if (typeof window !== 'undefined' && window.addEventListener) {
+  try {
+    window.addEventListener('error', (ev) => {
+      const line = (ev && (ev.message || ev.type)) + ' @' + ((ev && ev.lineno) || '?');
+      const hit = BUG.errs.find(e => e.line === line);
+      if (hit) { hit.n++; return; }
+      if (BUG.errs.length < 10) BUG.errs.push({ line, n: 1, t: Math.round((S.time || 0) * 10) / 10 });
+    });
+  } catch (e) {}
+}
+function bugReport() {
+  const r = S.run || {};
+  const B = S.battle;
+  const census = {}, kinds = {};
+  for (const c of S.coins) {
+    census[c.st] = (census[c.st] | 0) + 1;
+    kinds[c.kind] = (kinds[c.kind] | 0) + 1;
+  }
+  let when = '';
+  try { when = new Date().toISOString(); } catch (e) {}
+  // Only ~30 lines of this are readable on the sheet itself, so the answer
+  // goes at the TOP: what went missing, who admits to eating what, and the
+  // last thing that happened. The inventory dumps can scroll off.
+  const thin = (o) => {
+    const out = {};
+    for (const k in o) if (o[k]) out[k] = o[k];
+    return out;
+  };
+  return {
+    v: VERSION, when, screen: S.screen,
+    // THE POINT OF ALL THIS: pieces that left the bed unaccounted for
+    unaccounted: { count: BUG.lost.length, sample: BUG.lost.slice(0, 20) },
+    eatenBy: BUG.taken,
+    errors: BUG.errs.slice(0, 10),
+    machine: { theme: S.machTheme, layout: S.machLayout, tilted: layoutTilted(), turbo: S.turbo },
+    battle: B ? {
+      phase: B.phase, tilts: B.tilts, tiltsUsed: B.tiltsUsed | 0,
+      loot: B.loot.length, banked: (B.banked || []).length, hand: thin(B.hand),
+      foes: (S.foes || []).map(f => f.id + ':' + f.hp),
+    } : null,
+    coins: { total: S.coins.length, byState: census, byKind: kinds,
+             cap: MACH.maxCoins, trayShown: S.tray.items.length },
+    log: BUG.log.slice(-120),
+    seed: S.seed36 ? S.seed36() : (r.seed || null),
+    run: r.hero ? {
+      hero: r.hero, floor: r.floor, hp: r.hp, maxHp: r.maxHp, gold: r.gold,
+      keys: r.keys, purse: thin(r.purse || {}), relics: (r.relics || []).slice(0, 40),
+    } : null,
+    ua: ((typeof navigator !== 'undefined' && navigator.userAgent) || '').slice(0, 120),
+  };
+}
 // --------------------------------------------------------------- scoring
 // Nothing fires on impact any more: the tray COLLECTS. Everything that
 // lands there joins the round's loot and resolves when your purse is spent.
@@ -2653,6 +2781,7 @@ function trayAdd(kind, extra) {
   if (S.tray.items.length > 24) S.tray.items.shift();
 }
 function scoreCoin(c, quiet) {
+  if (c) { c.scored = true; bugAccount(c, 'scored'); }   // paid for, says the box
   S.collected++;
   if (c.kind === 'chip') {
     floatAt('WHEEL SPIN!', c.x, '#63e7ff', true);
@@ -3066,6 +3195,7 @@ function craneDrop(x, y) {
   const caught = [], slipped = [];
   for (const o of near) {
     S.coins.splice(S.coins.indexOf(o.c), 1);
+    bugTake(o.c, 'claw');
     if (rng() < 0.35) slipped.push(o.c);
     else caught.push(o.c);
   }
@@ -3228,6 +3358,8 @@ function tilt(dir) {
     else if (dir === 'r') c.vx += (10 + rng() * 4) * gm;
     else { c.vy += (6 + rng() * 3) * gm; c.vx += (rng() - 0.5) * 4 * gm; }
   }
+  bugLog('tilt', dir + ' plat=' + S.coins.filter(c => c.st === 'plat').length
+                     + ' loot=' + (B.loot ? B.loot.length : 0));
   S.shake += 2.5;
   SND.thud();
   return true;
@@ -3656,6 +3788,7 @@ function endRoundNow() {
       if (c.st === 'plat' && c.lay === 0 && c.kind !== 'item' && c.x <= GUTTER_X) {
         if (c.kind !== 'slug' && c.kind !== 'skull') paid++;
         drained++;
+        bugTake(c, 'gutter');
         S.coins.splice(i, 1);
       }
     }
@@ -4070,7 +4203,7 @@ function enemyActFoe(e) {
       .sort((a, b) => (worth[a.c.kind] | 0) - (worth[b.c.kind] | 0))
       .slice(0, 2);
     if (grabs.length) {
-      for (const o of grabs.sort((a, b) => b.i - a.i)) S.coins.splice(o.i, 1);
+      for (const o of grabs.sort((a, b) => b.i - a.i)) { bugTake(o.c, 'crab'); S.coins.splice(o.i, 1); }
       const fed = grabs.length * 4;
       e.hp = Math.min(e.maxHp, e.hp + fed);
       floatAnchor('\u{1F980} it crushes ' + grabs.length + ' piece' + (grabs.length > 1 ? 's' : '') +
@@ -6945,6 +7078,7 @@ function landCoin(c, lay) {
 }
 function step(dt, quiet) {
   S.time += dt;
+  bugWatch(quiet);                        // the black box audits the bed
   if (S.cd > 0) S.cd -= dt;
   if (S.denyT > 0) S.denyT -= dt;
   if (S.walletHitT > 0) S.walletHitT -= dt;
@@ -11432,6 +11566,7 @@ if (!HEADLESS) (function browser() {
     if (S.foeInfo !== null) { S.foeInfo = null; return; }
     if (S.inv) { S.inv = null; return; }
     if (WHATSNEW) { if (WHATSNEW.auto) whatsNewSeen(); WHATSNEW = null; return; }
+    if (BUGSHEET) { BUGSHEET = null; return; }
     if (SETTINGS) { SETTINGS = false; return; }
     if (WSHOP) { WSHOP = false; return; }
     if (TROPHIES) { TROPHIES = false; return; }
@@ -11447,6 +11582,11 @@ if (!HEADLESS) (function browser() {
   };
   // the minimap's fit is pure maths, so the suite checks it straight rather
   // than by squinting at a canvas
+  if (window.DP) window.DP.bug = {
+    box: () => BUG, report: () => bugReport(), log: (a, b) => bugLog(a, b),
+    take: (c, w) => bugTake(c, w), watch: () => { BUG.tick = -1; bugWatch(false); },
+    open: () => openBugSheet(), sheet: () => BUGSHEET,
+  };
   if (window.DP) window.DP.mini = {
     fit: (box, cols, rows, cur) => minimapFit(box, cols, rows, cur),
     box: () => minimapBox(),
@@ -14812,10 +14952,91 @@ if (!HEADLESS) (function browser() {
     uiBtn(64 + half + 8, py + 438, half, 38, TR('\u{1F3AC} CREDITS'), () => {
       SETTINGS = false; CREDITS = true;
     }, { bg: 'rgba(44,34,50,0.95)', border: '#c8a8b0', col: '#f0dce2', font: '800 11px Grimcut, Verdana, sans-serif', r: 12 });
-    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 500, '700 10px Grimcut, Verdana, sans-serif', '#9a8aa0');
-    txt(TR('arrows move · SPACE fires · TAB + ENTER press · ESC backs out'), LW / 2, py + 516, '600 10px Grimcut, Verdana, sans-serif', '#8d7d95');
-    txt('painted relics by the owner — code forged with Claude Code', LW / 2, py + 530, '600 10px Grimcut, Verdana, sans-serif', '#8d7d95');
+    // the black box, handed over in one tap
+    uiBtn(64, py + 482, LW - 128, 36, TR('\u{1F41E} REPORT A BUG')
+          + (BUG.lost.length ? '  \u2014 ' + BUG.lost.length + ' UNACCOUNTED' : ''), () => {
+      SETTINGS = false; openBugSheet();
+    }, { bg: BUG.lost.length ? 'rgba(74,26,30,0.96)' : 'rgba(40,34,44,0.95)',
+         border: BUG.lost.length ? '#ff8a7a' : '#a89aae',
+         col: BUG.lost.length ? '#ffd9d0' : '#e8dcec',
+         font: '800 11px Grimcut, Verdana, sans-serif', r: 12 });
+    txt('DUNGEON PUSHER v' + VERSION, LW / 2, py + 530, '700 10px Grimcut, Verdana, sans-serif', '#9a8aa0');
+    txt(TR('arrows move · SPACE fires · TAB + ENTER press · ESC backs out'), LW / 2, py + 546, '600 10px Grimcut, Verdana, sans-serif', '#8d7d95');
+    txt('painted relics by the owner — code forged with Claude Code', LW / 2, py + 560, '600 10px Grimcut, Verdana, sans-serif', '#8d7d95');
     uiBtn(LW / 2 - 70, py + ph - 34, 140, 40, TR('CLOSE ✕'), () => { SETTINGS = false; },
+          { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Grimcut, Verdana, sans-serif', r: 12 });
+  }
+  // ---- THE BLACK BOX SHEET: hand the log over in one tap ----
+  let BUGSHEET = null;
+  function openBugSheet() {
+    let body;
+    try { body = JSON.stringify(bugReport(), null, 1); }
+    catch (e) { body = '{"reportFailed":"' + (e && e.message) + '"}'; }
+    BUGSHEET = { txt: body, msg: '' };
+    bugLog('report', 'opened');
+  }
+  function drawBugSheet(t) {
+    if (!BUGSHEET) return;
+    ctx.fillStyle = 'rgba(5,2,8,0.86)';
+    ctx.fillRect(0, 0, LW, LH);
+    uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => {} });
+    const py = 120, ph = 600;
+    rr(34, py, LW - 68, ph, 16);
+    ctx.fillStyle = 'rgba(22,13,24,0.99)'; ctx.fill();
+    ctx.lineWidth = 3; ctx.strokeStyle = '#ff8a7a'; ctx.stroke();
+    txt(TR('\u{1F41E} BUG REPORT'), LW / 2, py + 32, '900 18px Grimcut Ink, Georgia, serif', '#ffd9d0', 'center', { w: 4, col: '#3a1006' });
+    const r = S.run || {};
+    const head = [
+      'v' + VERSION + '  ·  ' + (S.screen || '?') + (S.battle ? '  ·  ' + S.battle.phase : ''),
+      r.hero ? (r.hero + '  ·  floor ' + r.floor + '  ·  ' + r.hp + '/' + r.maxHp + ' hp') : 'no run',
+      'machine: ' + (S.machTheme || 'base') + '  ·  ' + (S.machLayout || 'flat') + (layoutTilted() ? '  (TILTED)' : ''),
+      'pieces on the bed: ' + S.coins.length + ' / ' + MACH.maxCoins,
+    ];
+    head.forEach((ln, i) => txt(ln, LW / 2, py + 62 + i * 16, '700 11px Grimcut, Verdana, sans-serif', '#d8c8dc'));
+    // the headline number: what the watchdog could not account for
+    const lost = BUG.lost.length;
+    rr(52, py + 128, LW - 104, 46, 10);
+    ctx.fillStyle = lost ? 'rgba(74,26,30,0.9)' : 'rgba(26,44,32,0.9)'; ctx.fill();
+    ctx.lineWidth = 1.5; ctx.strokeStyle = lost ? '#ff8a7a' : '#8ed67e'; ctx.stroke();
+    txt(lost ? lost + ' PIECE' + (lost > 1 ? 'S' : '') + ' LEFT THE BED UNACCOUNTED FOR'
+             : 'every piece accounted for so far',
+        LW / 2, py + 145, '900 11px Grimcut, Verdana, sans-serif', lost ? '#ffd9d0' : '#d8f0dc');
+    txt(lost ? 'that is the bug — send this log' : 'nothing has vanished since this page loaded',
+        LW / 2, py + 162, '600 10px Grimcut, Verdana, sans-serif', lost ? '#ffb4a8' : '#a8c8ae');
+    // a readable slice, so the log survives even as a screenshot
+    ctx.save();
+    rr(52, py + 186, LW - 104, 300, 8);
+    ctx.fillStyle = 'rgba(8,5,10,0.9)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(180,160,190,0.3)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.clip();
+    const lines = BUGSHEET.txt.split('\n');
+    for (let i = 0; i < Math.min(lines.length, 30); i++) {
+      txt(lines[i].slice(0, 52), 60, py + 200 + i * 10, '9px ui-monospace, monospace', '#bfe0a8', 'left');
+    }
+    ctx.restore();
+    if (lines.length > 30) {
+      txt('\u2026 ' + (lines.length - 30) + ' more lines \u2014 COPY takes all of it',
+          LW / 2, py + 496, '600 10px Grimcut, Verdana, sans-serif', '#9a8aa0');
+    }
+    if (BUGSHEET.msg) txt(BUGSHEET.msg, LW / 2, py + 512, '800 11px Grimcut, Verdana, sans-serif', '#ffd75e');
+    const half = (LW - 104 - 8) / 2;
+    uiBtn(52, py + 524, half, 38, TR('\u{1F4CB} COPY'), () => {
+      try {
+        navigator.clipboard.writeText(BUGSHEET.txt);
+        BUGSHEET.msg = 'copied \u2014 paste it to the owner';
+      } catch (e) { BUGSHEET.msg = 'copy blocked \u2014 use SAVE'; }
+    }, { bg: 'rgba(34,44,66,0.95)', border: '#8fc8ff', col: '#d8ecff', font: '900 12px Grimcut, Verdana, sans-serif', r: 12 });
+    uiBtn(52 + half + 8, py + 524, half, 38, TR('\u{1F4BE} SAVE'), () => {
+      try {
+        const blob = new Blob([BUGSHEET.txt], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'dungeon-pusher-bug-v' + VERSION + '.json';
+        a.click();
+        BUGSHEET.msg = 'saved to your downloads';
+      } catch (e) { BUGSHEET.msg = 'save blocked \u2014 use COPY'; }
+    }, { bg: 'rgba(44,34,50,0.95)', border: '#c8a8b0', col: '#f0dce2', font: '900 12px Grimcut, Verdana, sans-serif', r: 12 });
+    uiBtn(LW / 2 - 70, py + ph - 34, 140, 38, TR('CLOSE \u2715'), () => { BUGSHEET = null; },
           { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24', font: '900 13px Grimcut, Verdana, sans-serif', r: 12 });
   }
   // ---- the CONFIRM sheet: one question, two honest buttons ----
@@ -15501,6 +15722,7 @@ if (!HEADLESS) (function browser() {
     drawWorkshop(t);
     drawSheet(t);
     drawSettings(t);
+    drawBugSheet(t);
     drawWhatsNew(t);
     drawBoard(t);
     drawCloud(t);
