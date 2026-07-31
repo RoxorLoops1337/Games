@@ -5364,7 +5364,14 @@ const CRACK_TURNS = 2;
 function stillWhole(hx, hy){
   const seen = new Uint8Array(W*H);
   const [sx,sy] = STAIRS[0];
-  if ((sx === hx && sy === hy) || holeAt(sx,sy)) return false;
+  // A square counts as GONE if it has already fallen OR is cracking, because
+  // a crack is a promise: CRACK_TURNS later it drops. Weighing a candidate
+  // against a board that still counted every cracking square as solid meant
+  // two cracks could each pass on their own and then sever a corridor
+  // together when they both went — the floor sealing off a wing with the
+  // party in it, which is exactly what this guard exists to prevent.
+  const gone = (x,y) => holeAt(x,y) || G.q.crack[idx(x,y)] > 0;
+  if ((sx === hx && sy === hy) || gone(sx,sy)) return false;
   const stack = [[sx,sy]];
   seen[idx(sx,sy)] = 1;
   let n = 1;
@@ -5375,7 +5382,7 @@ function stillWhole(hx, hy){
       if (!inB(nx,ny) || seen[ni]) continue;
       if (!isFloor(nx,ny)) continue;
       if (nx === hx && ny === hy) continue;      // the square under test is gone
-      if (holeAt(nx,ny)) continue;
+      if (gone(nx,ny)) continue;
       // doors may be shut and still count — you can always open one
       if (!linkedIgnoringDoors(x,y,nx,ny)) continue;
       seen[ni] = 1; n++; stack.push([nx,ny]);
@@ -5383,7 +5390,7 @@ function stillWhole(hx, hy){
   }
   let want = 0;
   for (let y=0;y<H;y++) for (let x=0;x<W;x++){
-    if (!isFloor(x,y) || holeAt(x,y)) continue;
+    if (!isFloor(x,y) || gone(x,y)) continue;
     if (x === hx && y === hy) continue;
     want++;
   }
