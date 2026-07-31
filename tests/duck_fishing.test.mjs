@@ -35,9 +35,11 @@ const EXPOSE = `__out.api = {
   stepDucks, stepHook, stepCatch, stepHooked, stepReveals, stepFx,
   catchDuck, startReveal, update, draw, drawHUD,
   startRound, endRound, toMenu, loadBest, saveBest, fmtTime,
-  setAim, rodTip, DUCK_HI, DUCK_LO, PALS, PAL_GOLD, NUM_TABLE, revealRoll,
+  setAim, rodTip, DUCK_HI, DUCK_LO, DUCK_MIN, PALS, PAL_GOLD, NUM_TABLE, revealRoll,
   getT: () => T, setT: (v) => { T = v; },
   _resize: (w, h) => { window.innerWidth = w; window.innerHeight = h; fit(); },
+  _dpr: () => DPR, _tier: () => Q.tier, _autoQuality: autoQuality,
+  _setTier: (t) => { Q.tier = t; fit(); },
   C: { CHAN_HZ, LOOP_LEN, X0, X1, VIEW_HALF, GATE_X, N_DUCKS, CURRENT, GRAV,
        FLOAT_Y, BODY_HH, BUOY, RING_LOCAL, RING_R, CATCH_R, MAX_HOOK,
        ROD_TIP_Y, HOOK_MIN, HOOK_MAX, LOWER_SPD, RAISE_SPD, ROUND_TIME,
@@ -92,6 +94,155 @@ function boot(seedSave){
 
 const step = (api, secs, dt = 1 / 60) => { for (let i = 0; i < Math.round(secs / dt); i++) api.update(dt); };
 
+/* Boot with a context that tallies every 2d call, so the draw path's cost is
+   measurable rather than a matter of opinion. The first version of this game
+   ran at under a frame a second: ~11k fills AND ~11k strokes (a per-quad
+   seam stroke) plus 66 clip() calls, because every near duck drew its whole
+   mesh twice through two clipped passes. The budgets below are what keeps
+   that from creeping back in. */
+function bootCounting(w = 1920, h = 1080, dpr = 2){
+  const counts = {};
+  const gradient = { addColorStop(){} };
+  const ctxStub = new Proxy({}, { get(t, p){
+    if (p === 'measureText') return () => ({ width: 30 });
+    if (p === 'createLinearGradient' || p === 'createRadialGradient')
+      return () => { counts[p] = (counts[p] || 0) + 1; return gradient; };
+    if (p === 'canvas') return { width: w, height: h };
+    if (typeof p === 'string' && p !== 'then')
+      return () => { counts[p] = (counts[p] || 0) + 1; };
+    return () => {};
+  }, set(){ return true; } });
+  const el = () => ({
+    style: {}, textContent: '', width: 0, height: 0,
+    getContext: () => ctxStub,
+    getBoundingClientRect: () => ({ left: 0, top: 0, width: w, height: h }),
+    addEventListener(){}, removeAttribute(){}, setAttribute(){},
+    setPointerCapture(){}, classList: { add(){}, remove(){}, toggle(){} },
+  });
+  const canvas = el(), nodes = {}, store = {};
+  const sandbox = {
+    document: { getElementById: id => id === 'c' ? canvas : (nodes[id] || (nodes[id] = el())), createElement: () => el() },
+    window: { innerWidth: w, innerHeight: h, devicePixelRatio: dpr, addEventListener(){} },
+    localStorage: { getItem: () => null, setItem(){}, removeItem(){} },
+    requestAnimationFrame: () => {},
+    __out: {},
+  };
+  const html = fs.readFileSync(HTML, 'utf8');
+  const src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n')
+    .replace(BOOT_TAIL, EXPOSE + BOOT_TAIL);
+  new Function('window', 'document', 'localStorage', 'navigator', 'requestAnimationFrame', '__out', src)(
+    sandbox.window, sandbox.document, sandbox.localStorage, undefined, sandbox.requestAnimationFrame, sandbox.__out);
+  const api = sandbox.__out.api;
+  api._counts = counts;
+  api._reset = () => { for (const k in counts) delete counts[k]; };
+  return api;
+}
+
+/* ops averaged per frame over N frames of the busiest state: full pond,
+   hook down, on the largest viewport */
+function frameCost(w, h, dpr, frames = 10){
+  const a = bootCounting(w, h, dpr);
+  a.startRound(true);
+  a.input.down = true;
+  a.setAim(w * 0.5, h * 0.55);
+  step(a, 1.0);
+  a._reset();
+  for (let i = 0; i < frames; i++){ a.update(1 / 60); a.draw(); }
+  const per = {};
+  for (const k in a._counts) per[k] = a._counts[k] / frames;
+  per._dpr = a._dpr();
+  per._backing = w * h * per._dpr * per._dpr;
+  return per;
+}
+
+test('the frame stays inside its draw budget on a large viewport', () => {
+  const c = frameCost(1920, 1080, 2);
+  const fill = c.fill || 0, stroke = c.stroke || 0, clip = c.clip || 0;
+  // clip() is the expensive one — it used to force a second full mesh pass
+  assert(clip === 0, `the draw path should not clip at all, got ${clip}/frame`);
+  // strokes cost far more than fills; only a handful of outlines are legit
+  assert(stroke < 120, `too many strokes: ${stroke}/frame`);
+  assert(fill < 6000, `too many fills: ${fill}/frame`);
+  assert(fill + stroke < 6200, `total path rasterisations too high: ${(fill + stroke).toFixed(0)}/frame`);
+  // the static backdrop is baked, so only the twinkling bulbs may allocate
+  assert((c.createRadialGradient || 0) < 10, `backdrop gradients not cached: ${c.createRadialGradient}/frame`);
+  // and a hi-dpi panel must not blow the fill rate out
+  assert(c._backing <= 3.3e6, `backing store too large: ${(c._backing / 1e6).toFixed(1)}M px`);
+});
+
+test('quality tiers actually shed work, and the lowest is cheap', () => {
+  const a = bootCounting(1920, 1080, 2);
+  a.startRound(true);
+  a.input.down = true;
+  step(a, 1.0);
+  const at = (tier) => {
+    a._setTier(tier);
+    a._reset();
+    for (let i = 0; i < 8; i++){ a.update(1 / 60); a.draw(); }
+    return (a._counts.fill || 0) / 8;
+  };
+  const hi = at(2), mid = at(1), lo = at(0);
+  assert(mid < hi, `tier 1 should cost less than tier 2 (${mid.toFixed(0)} vs ${hi.toFixed(0)})`);
+  assert(lo < mid, `tier 0 should cost less than tier 1 (${lo.toFixed(0)} vs ${mid.toFixed(0)})`);
+  assert(lo < hi * 0.62, `the low tier should be a real saving, got ${(lo / hi * 100).toFixed(0)}% of full`);
+});
+
+test('a slow frame drops the quality tier, a fast one earns it back', () => {
+  const a = boot();
+  assert(a._tier() === 2, 'should start at full quality');
+  for (let i = 0; i < 200; i++) a._autoQuality(40, 45);   // 40ms of work, 22fps
+  assert(a._tier() < 2, 'sustained slow frames should shed quality');
+  const dropped = a._tier();
+  for (let i = 0; i < 40; i++) a._autoQuality(5, 16);
+  assert(a._tier() === dropped, 'a brief fast patch should not immediately promote');
+  // recovery is deliberately unhurried — each demotion makes the return trip
+  // cost more clean time, so this takes tens of seconds of good frames
+  for (let i = 0; i < 30000; i++) a._autoQuality(5, 16);
+  assert(a._tier() > dropped, 'a long clean stretch should restore quality');
+});
+
+test('a vsync-locked but idle machine still earns its quality back', () => {
+  // 16.7ms between frames however fast the machine is, so the promotion has
+  // to key off work done rather than wall time or it can never recover
+  const a = boot();
+  for (let i = 0; i < 300; i++) a._autoQuality(40, 45);
+  assert(a._tier() === 0, 'should have bottomed out');
+  for (let i = 0; i < 60000; i++) a._autoQuality(4, 16.7);
+  assert(a._tier() === 2, 'a machine with headroom should climb back to full quality');
+});
+
+test('quality settles instead of oscillating between tiers', () => {
+  /* The trap: the low tier runs fast, which looks like a reason to promote —
+     but the speed IS the low tier, so a naive rule climbs, stalls, drops and
+     repeats forever. Simulate a machine that can only afford tier 0 and
+     assert the flapping dies out. */
+  const a = boot();
+  let changes = 0, prev = a._tier();
+  for (let i = 0; i < 40000; i++){
+    const cheap = a._tier() === 0;
+    a._autoQuality(cheap ? 5 : 32, cheap ? 16.7 : 34);
+    if (a._tier() !== prev){ changes++; prev = a._tier(); }
+  }
+  assert(a._tier() === 0, 'should end up on the tier the machine can afford');
+  assert(changes < 12, `quality should stop flapping, saw ${changes} changes`);
+  // and the last stretch must be quiet
+  let lateChanges = 0; prev = a._tier();
+  for (let i = 0; i < 20000; i++){
+    const cheap = a._tier() === 0;
+    a._autoQuality(cheap ? 5 : 32, cheap ? 16.7 : 34);
+    if (a._tier() !== prev){ lateChanges++; prev = a._tier(); }
+  }
+  assert(lateChanges <= 2, `should have settled, saw ${lateChanges} late changes`);
+});
+
+test('a single hitch does not knock the quality down', () => {
+  const a = boot();
+  for (let i = 0; i < 60; i++) a._autoQuality(5, 16.7);
+  a._autoQuality(180, 200);                                // one long stall
+  for (let i = 0; i < 30; i++) a._autoQuality(5, 16.7);
+  assert(a._tier() === 2, 'a one-off stall should be smoothed away, not acted on');
+});
+
 // ---- boot -----------------------------------------------------------------
 test('boots into the menu with a full pond', () => {
   const a = boot();
@@ -110,7 +261,7 @@ test('draws the menu frame without throwing', () => {
 // ---- geometry -------------------------------------------------------------
 test('duck meshes are closed and indices are in range', () => {
   const a = boot();
-  for (const mesh of [a.DUCK_HI, a.DUCK_LO]){
+  for (const mesh of [a.DUCK_HI, a.DUCK_LO, a.DUCK_MIN]){
     assert(mesh.n > 100, 'mesh should have real geometry');
     assert(mesh.q * 4 === mesh.f.length, 'face buffer should be quads');
     for (let i = 0; i < mesh.f.length; i++)
@@ -119,6 +270,7 @@ test('duck meshes are closed and indices are in range', () => {
       assert(Number.isFinite(mesh.v[i]), 'mesh vertex must be finite');
   }
   assert(a.DUCK_LO.q < a.DUCK_HI.q, 'the LOD mesh should be cheaper than the full one');
+  assert(a.DUCK_MIN.q < a.DUCK_LO.q, 'the minimal mesh should be cheaper still');
 });
 
 test('the pond fills a sensible band of the canvas at any aspect ratio', () => {
