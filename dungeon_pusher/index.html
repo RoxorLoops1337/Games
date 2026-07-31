@@ -59,6 +59,10 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.16.3', notes: [
+    'THE MINIMAP KEEPS ITS SHAPE \u{1F5FA}\u{FE0F} \u2014 the little map used to be sized by whatever you had explored, so a tall floor turned it portrait, a wide one turned it landscape, and a big one shoved the whole frame off the glass. The window is fixed 16:9 now and the floor is fitted INTO it, clipped so nothing can spill',
+    'and when a floor is too big to read whole, the window follows you \u{1F9ED} \u2014 rooms stop shrinking at the size they still read at, and the map centres on the room you are standing in instead of turning the whole level to mush. The full blueprint is still one tap away',
+  ] },
   { v: '1.16.2', notes: [
     'THE SIGN GOES FULL WIDTH \u{1F3AF} \u2014 dragged out in the scene builder until it spans the whole head of the cabinet, edge to edge, covering the old plaque instead of sitting inside it',
   ] },
@@ -11441,6 +11445,13 @@ if (!HEADLESS) (function browser() {
     cycle: kbCycle, press: kbPress, back: kbBack, fire: kbFire,
     targets: kbTargets, focus: () => kbFocus, buttons: () => uiButtons,
   };
+  // the minimap's fit is pure maths, so the suite checks it straight rather
+  // than by squinting at a canvas
+  if (window.DP) window.DP.mini = {
+    fit: (box, cols, rows, cur) => minimapFit(box, cols, rows, cur),
+    box: () => minimapBox(),
+    lim: () => ({ max: MAP_PITCH_MAX, min: MAP_PITCH_MIN, pad: MAP_PAD }),
+  };
   // gamepad, polled each frame: stick/dpad move & aim, A fires/presses,
   // B backs out, LB/RB hop the ring
   const PAD = { prev: {} };
@@ -12522,6 +12533,9 @@ if (!HEADLESS) (function browser() {
     const map = S.run.map;
     const rooms = map.rooms;
     const cell = pitch * 0.82;
+    // the corner rounds WITH the room, or a squeezed minimap chip turns into
+    // a lozenge and every room reads the same shape
+    const rad = Math.max(1, Math.min(3, pitch * 0.2));
     const roomRect = (r) => {
       const f = MAP_FOOT[r.size] || MAP_FOOT.b;
       const w = cell * f[0], h = cell * f[1];
@@ -12536,7 +12550,9 @@ if (!HEADLESS) (function browser() {
       const ra = roomRect(a), rb = roomRect(b);
       const open = map.links[lk].open;
       ctx.save();
-      ctx.lineWidth = Math.max(3, pitch * 0.16);
+      // the corridor stays a hairline when the map is squeezed small, instead
+      // of a 3px rope drawn between two 5px rooms
+      ctx.lineWidth = Math.max(Math.min(3, pitch * 0.28), pitch * 0.16);
       ctx.strokeStyle = ink
         ? (open ? 'rgba(74,58,42,0.9)' : 'rgba(74,58,42,0.45)')
         : (open ? 'rgba(255,215,94,0.6)' : 'rgba(180,160,190,0.3)');
@@ -12552,7 +12568,7 @@ if (!HEADLESS) (function browser() {
       const rc = roomRect(r);
       const isCur = k === map.cur;
       if (seen[k] === 2) {
-        rr(rc.x, rc.y, rc.w, rc.h, 3);
+        rr(rc.x, rc.y, rc.w, rc.h, rad);
         if (ink) {
           ctx.fillStyle = isCur ? '#d8c49a' : '#cfc4b2';
           ctx.fill();
@@ -12562,7 +12578,7 @@ if (!HEADLESS) (function browser() {
           ctx.fill();
         }
       } else {
-        rr(rc.x, rc.y, rc.w, rc.h, 3);
+        rr(rc.x, rc.y, rc.w, rc.h, rad);
         ctx.save();
         ctx.setLineDash([3, 3]);
         ctx.lineWidth = ink ? 2 : 1.2;
@@ -12570,7 +12586,9 @@ if (!HEADLESS) (function browser() {
         ctx.stroke();
         ctx.restore();
       }
-      if (r.boss && seen[k] === 2) txt('\u{1F451}', rc.cx, rc.cy, Math.max(8, pitch * 0.3) + 'px serif', '#fff');
+      // the crown cannot go below 8px and 8px is bigger than a squeezed room,
+      // so below that the boss keeps its gold chip and drops the glyph
+      if (r.boss && seen[k] === 2 && pitch >= 14) txt('\u{1F451}', rc.cx, rc.cy, Math.max(8, pitch * 0.3) + 'px serif', '#fff');
       // WHAT IS STILL IN IT. Once a room has been walked, the map remembers
       // its dwellers — the whole point being the shopkeeper you passed on the
       // way down and want to find again on the way back. Only on the big map:
@@ -12630,25 +12648,62 @@ if (!HEADLESS) (function browser() {
   }
   // the corner minimap — tap it to unroll the full blueprint
   let mapView = false;
+  // The window is FIXED and the floor is fitted INTO it. It used to be the
+  // other way round: the frame was sized from whatever you had explored, so a
+  // tall floor turned the map portrait, a wide one turned it landscape, and a
+  // big one pushed the frame clean off the glass it was supposed to sit in.
+  const MAP_PITCH_MAX = 16, MAP_PITCH_MIN = 5, MAP_PAD = 6;
+  function minimapBox() {
+    if (cabOn()) return CAB.map;              // the painted window in the glass
+    const w = 150, h = Math.round(w * 9 / 16);
+    return { x: LW - 14 - w, y: 56, w, h };
+  }
+  // Pure, so it can be checked without a canvas: given the fixed window and the
+  // explored extent, what scale do the rooms get and where does grid 0,0 land?
+  // Returns { pitch, ox, oy, follow } — screenX = ox + gx * pitch.
+  function minimapFit(box, cols, rows, cur) {
+    let pitch = Math.min(MAP_PITCH_MAX, (box.w - MAP_PAD * 2) / cols, (box.h - MAP_PAD * 2) / rows);
+    if (pitch >= MAP_PITCH_MIN) {
+      return {
+        pitch, follow: false,
+        ox: box.x + (box.w - cols * pitch) / 2,
+        oy: box.y + (box.h - rows * pitch) / 2,
+      };
+    }
+    // too big to read whole: hold the rooms at the floor and centre on you
+    pitch = MAP_PITCH_MIN;
+    return {
+      pitch, follow: true,
+      ox: box.x + box.w / 2 - ((cur ? cur.gx : 0) + 0.5) * pitch,
+      oy: box.y + box.h / 2 - ((cur ? cur.gy : 0) + 0.5) * pitch,
+    };
+  }
   function drawMinimap(t) {
     if (!S.run.map) return;
     const seen = mapKnowledge();
     const ks = Object.keys(seen);
     if (!ks.length) return;
     const b = mapBounds(seen);
-    const pitch = 16;
-    const mw = (b.maxX - b.minX + 1) * pitch + 12;
-    const mh = (b.maxY - b.minY + 1) * pitch + 12;
-    // inside the cabinet the map has its own painted window in the bezel
     const cab = cabOn();
-    const mx = cab ? CAB.map.x + (CAB.map.w - mw) / 2 : LW - 14 - mw;
-    const my = cab ? CAB.map.y + (CAB.map.h - mh) / 2 : 56;
-    rr(mx, my, mw, mh, 8);
+    const box = minimapBox();
+    // shrink the floor until it fits the window — but only down to the size a
+    // room still reads at. Past that, hold the rooms and let the window follow
+    // you instead, which is what a minimap is for.
+    const f = minimapFit(box, b.maxX - b.minX + 1, b.maxY - b.minY + 1, S.run.map.rooms[S.run.map.cur]);
+    const pitch = f.pitch;
+    const ox = f.ox - (f.follow ? 0 : b.minX * pitch);
+    const oy = f.oy - (f.follow ? 0 : b.minY * pitch);
+    rr(box.x, box.y, box.w, box.h, 8);
     ctx.fillStyle = cab ? 'rgba(8,5,10,0.55)' : 'rgba(10,6,12,0.82)'; ctx.fill();
-    ctx.lineWidth = 1.5; ctx.strokeStyle = cab ? 'rgba(232,220,232,0.18)' : 'rgba(232,220,232,0.35)'; ctx.stroke();
-    drawMapRooms(mx + 6 - b.minX * pitch, my + 6 - b.minY * pitch, pitch, seen, false);
-    txt(TR('tap for map'), mx + mw / 2, my + mh + 8, '600 9px Grimcut, Verdana, sans-serif', '#a08a94');
-    if (!S.room) uiButtons.push({ x: mx - 6, y: my - 6, w: mw + 12, h: mh + 24, cb: () => { mapView = true; } });
+    ctx.save();
+    rr(box.x, box.y, box.w, box.h, 8); ctx.clip();   // nothing leaves the frame
+    drawMapRooms(ox, oy, pitch, seen, false);
+    ctx.restore();
+    rr(box.x, box.y, box.w, box.h, 8);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = cab ? 'rgba(232,220,232,0.18)' : 'rgba(232,220,232,0.35)'; ctx.stroke();
+    txt(TR('tap for map'), box.x + box.w / 2, box.y + box.h + 8, '600 9px Grimcut, Verdana, sans-serif', '#a08a94');
+    if (!S.room) uiButtons.push({ x: box.x - 6, y: box.y - 6, w: box.w + 12, h: box.h + 24, cb: () => { mapView = true; } });
   }
   // the full blueprint, unrolled like a tabletop dungeon chart
   function drawMapView(t) {

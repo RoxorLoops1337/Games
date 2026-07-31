@@ -7426,7 +7426,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.16.2', 'the cabinet ships as v1.16.2');
+  t.eq(D.VERSION, '1.16.3', 'the cabinet ships as v1.16.3');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -8826,6 +8826,63 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(mini.indexOf('drawMapRooms') >= 0, 'the minimap shares the room painter');
   t.ok(mini.indexOf(', true)') < 0 || /drawMapRooms\([^)]*false\)/.test(mini),
        'but never passes the ink flag, so it stays a clean chip');
+
+  // ---- THE MINIMAP WINDOW IS FIXED, AND THE FLOOR FITS INTO IT ----
+  // It used to be the other way round: the frame was sized from the explored
+  // extent, so a tall floor turned the map portrait, a wide one landscape, and
+  // a big one shoved the frame off the glass it was supposed to sit inside.
+  {
+    const { DP: Dm } = loadGame({}, true);
+    Dm.srand(404); Dm.newRun('knight');
+    const lim = Dm.mini.lim();
+    const box = { x: 300, y: 170, w: 102.4, h: 57.6 };     // the painted window, 16:9
+    const inner = { w: box.w - lim.pad * 2, h: box.h - lim.pad * 2 };
+    const cur = { gx: 3, gy: 3 };
+    const shapes = [[1, 1], [3, 2], [6, 4], [6, 6], [5, 9], [9, 5], [14, 14], [30, 30]];
+    for (const [cols, rows] of shapes) {
+      const f = Dm.mini.fit(box, cols, rows, cur);
+      const tag = cols + 'x' + rows;
+      t.ok(f.pitch <= lim.max + 1e-9, tag + ': never zooms past the max pitch');
+      t.ok(f.pitch >= lim.min - 1e-9, tag + ': never shrinks past what a room reads at');
+      if (!f.follow) {
+        // the whole floor is shown, so it must actually be inside the window
+        t.ok(cols * f.pitch <= inner.w + 1e-6 && rows * f.pitch <= inner.h + 1e-6,
+             tag + ': the whole floor fits inside the window (' + (cols * f.pitch).toFixed(1)
+             + 'x' + (rows * f.pitch).toFixed(1) + ' in ' + inner.w.toFixed(1) + 'x' + inner.h.toFixed(1) + ')');
+        t.ok(f.ox >= box.x - 1e-6 && f.oy >= box.y - 1e-6, tag + ': and is centred inside it, not hanging off');
+      } else {
+        // too big to read whole: it holds the room size and centres on YOU
+        t.eq(Math.round(f.pitch), lim.min, tag + ': falls back to the legibility floor');
+        t.ok(Math.abs((f.ox + (cur.gx + 0.5) * f.pitch) - (box.x + box.w / 2)) < 1e-6
+             && Math.abs((f.oy + (cur.gy + 0.5) * f.pitch) - (box.y + box.h / 2)) < 1e-6,
+             tag + ': and puts you dead centre of the window');
+      }
+    }
+    // a portrait floor and a landscape one both fit the SAME window — the old
+    // code let each one reshape the frame instead
+    for (const [c, r2] of [[3, 9], [9, 3]]) {
+      const f = Dm.mini.fit(box, c, r2, cur);
+      t.ok(f.follow || (c * f.pitch <= inner.w + 1e-6 && r2 * f.pitch <= inner.h + 1e-6),
+           c + 'x' + r2 + ' fits the same window without reshaping it');
+    }
+    // EVERY rounded rect in here has to be the box itself. Checking that one
+    // such call merely exists is no guard at all — there are three, and the
+    // bug is one of them quietly going back to the content size.
+    const frames = mini.match(/rr\([^)]*\)/g) || [];
+    t.ok(frames.length > 0, 'the minimap draws a frame');
+    t.ok(frames.every((c) => /^rr\(box\.x, box\.y, box\.w, box\.h,/.test(c)),
+         'every frame rect is the fixed box, none computed from the content ('
+         + frames.filter((c) => !/^rr\(box\.x, box\.y, box\.w, box\.h,/.test(c)).join(' ') + ')');
+    t.ok(/ctx\.clip\(\)/.test(mini), 'and the rooms are clipped to it, so nothing spills');
+    // the floor has to be an ABSOLUTE size, not whatever the constant says —
+    // read it back from the game and the guard just follows it down
+    t.ok(lim.min >= 4 && lim.min <= 8, 'the legibility floor is a real floor (' + lim.min + ')');
+    t.ok(lim.max >= 12 && lim.max <= 24, 'and a small floor is still drawn big (' + lim.max + ')');
+    // the box the game hands it really is 16:9
+    const gb = Dm.mini.box();
+    t.ok(Math.abs(gb.w / gb.h - 16 / 9) < 0.02,
+         'the minimap window is 16:9 (' + (gb.w / gb.h).toFixed(3) + ')');
+  }
 }
 
 // ======= NO PAINTED SET SITS IN THE REPO UNUSED =======
