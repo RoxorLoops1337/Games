@@ -432,6 +432,49 @@ test('the hook hangs the line length below the rod tip and swings when swept', (
   assert(maxLag > 0.12, `the hook should swing behind the rod, lag=${maxLag.toFixed(3)}`);
 });
 
+test('the hook hangs clear of the pointer, so a fingertip never covers it', () => {
+  /* The whole point of gripping the rod rather than the hook: on a phone the
+     finger sits on the shaft and the hook is well above it. */
+  for (const [w, h] of [[1280, 760], [430, 860], [1920, 1080]]){
+    const a = boot();
+    a._resize(w, h);
+    a.startRound(true);
+    for (const fy of [0.50, 0.60, 0.70]){
+      a.setAim(w * 0.5, h * fy);
+      step(a, 0.6);                       // let the rod catch up to the aim
+      const p = a.proj(a.hook.p[0], 0, a.hook.p[2]);
+      const gap = (h * fy) - p.y;
+      assert(gap > h * 0.09,
+        `hook too close to the pointer at ${w}x${h}, y=${(h * fy) | 0}: ${gap.toFixed(0)}px`);
+    }
+  }
+});
+
+test('the whole channel is still reachable from on-screen pointer positions', () => {
+  const a = boot();
+  a._resize(1280, 760);
+  let near = 99, far = -99;
+  for (let y = 0; y <= 760; y += 10){
+    a.setAim(640, y);
+    near = Math.min(near, a.aim.z);
+    far = Math.max(far, a.aim.z);
+  }
+  // both the near and far rows of ducks have to be aimable without the
+  // pointer leaving the canvas
+  assert(near < -a.C.CHAN_HZ + 1.4, `cannot reach the near row, closest ${near.toFixed(2)}`);
+  assert(far > a.C.CHAN_HZ - 1.4, `cannot reach the far row, furthest ${far.toFixed(2)}`);
+
+  // the sideways part of the grip offset must not cost reach across the pond
+  let left = 99, right = -99;
+  for (let x = 0; x <= 1280; x += 10){
+    a.setAim(x, 500);
+    left = Math.min(left, a.aim.x);
+    right = Math.max(right, a.aim.x);
+  }
+  assert(left < -a.C.GATE_X + 2.0, `cannot reach the left of the pond, ${left.toFixed(2)}`);
+  assert(right > a.C.GATE_X - 2.0, `cannot reach the right of the pond, ${right.toFixed(2)}`);
+});
+
 test('aiming clamps to the water the player can actually reach', () => {
   const a = boot();
   a.setAim(-4000, 400);
