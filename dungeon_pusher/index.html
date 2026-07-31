@@ -59,6 +59,9 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.16.2', notes: [
+    'THE SIGN GOES FULL WIDTH \u{1F3AF} \u2014 dragged out in the scene builder until it spans the whole head of the cabinet, edge to edge, covering the old plaque instead of sitting inside it',
+  ] },
   { v: '1.16.1', notes: [
     'A REAL SIGN OVER THE MACHINE \u{1FAA7} \u2014 the owner painted a proper DUNGEON PUSHER marquee \u2014 barred gate, brick, four lit torches and a drift of coins piled along the bottom \u2014 and it now hangs in the cabinet\u2019s plaque. Its four torches carry live flame on top of the painted ones, each on its own flicker so they never breathe in step',
     'and the sign is never stretched \u{1F4D0} \u2014 the marquee is contain-fitted now, so lettering keeps its own proportions whatever rect it is given. Drag it to another shape in the scene builder and the sign fits inside instead of going wide-faced',
@@ -11237,7 +11240,7 @@ if (!HEADLESS) (function browser() {
   // art/cab/layout.json, if it exists, overrides any subset of them.
   const CAB_R = {
     hole:         [139,  404,  898, 1008],   // the screen, knocked transparent
-    marquee:      [145,   26,  888,  282],   // the plaque up top
+    marquee:      [ 39,    0, 1099,  350],   // the sign across the whole head
     head:         [166,  424,  566,  136],   // the floor name, inside the glass
     map:          [759,  429,  251,  141],   // the minimap, inside the glass
     play:         [157,  590,  862,  806],   // where the room is fitted
