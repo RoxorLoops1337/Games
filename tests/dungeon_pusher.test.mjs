@@ -7426,7 +7426,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.17.0', 'the cabinet ships as v1.17.0');
+  t.eq(D.VERSION, '1.18.0', 'the cabinet ships as v1.18.0');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -8921,6 +8921,56 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const spare = dirs.filter(d => !used.has(d)).sort();
   console.log('# painted sets with no foe yet: ' + (spare.join(', ') || 'none'));
   t.ok(spare.length <= 9, 'the unused pile does not grow unnoticed (' + spare.length + ')');
+}
+
+// ============== THE SIDES ARE POLISHED METAL ==============
+{
+  const here7 = dirname(fileURLToPath(import.meta.url));
+  const src7 = readFileSync(join(here7, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const sheen = src7.slice(src7.indexOf('function drawSideSheen'), src7.indexOf('function drawBattle'));
+  t.ok(sheen.length > 200, 'the sides have a sheen pass');
+  // it has to land ON the cached base, not under it — the base is one blit and
+  // anything drawn before it is simply gone
+  const order = src7.slice(src7.indexOf('function drawBattle'), src7.indexOf('function drawSideRails') + 1);
+  t.ok(/battleBase\(\);\s*\n\s*drawSideSheen\(t\);/.test(src7),
+       'the sheen is laid over the cached base, not baked under it');
+  // a mirror that never moves is paint: the streak must read the clock AND
+  // the machine's own shake
+  t.ok(/t \* 20/.test(sheen) && /jolt/.test(sheen), 'the streak travels with time and jolts with the machine');
+  t.ok(/S\.shake/.test(sheen), 'and the jolt really comes from the shake');
+  // composite modes are global state — leaking one out of here would wreck
+  // every later draw call in the frame
+  const saves = (sheen.match(/ctx\.save\(\)/g) || []).length;
+  const restores = (sheen.match(/ctx\.restore\(\)/g) || []).length;
+  t.eq(saves, restores, 'every save in the sheen is matched by a restore');
+  t.ok(/ctx\.globalCompositeOperation = 'source-over'/.test(sheen) || saves > 0,
+       'and the composite mode is put back');
+  // the band table drives a gradient, so its stops must climb 0..1 or
+  // addColorStop throws and the whole battle screen goes with it
+  const tbl = src7.slice(src7.indexOf('const SIDE_BANDS = ['), src7.indexOf('];', src7.indexOf('const SIDE_BANDS = [')));
+  const rows = [...tbl.matchAll(/\[([\d.]+), ([\d.]+), ([\d.]+)\]/g)].map(m => m.slice(1).map(Number));
+  t.ok(rows.length >= 8, 'the room is banded onto the metal (' + rows.length + ' bands)');
+  let climbs = true, inRange = true;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i][0] < 0 || rows[i][0] > 1) inRange = false;
+    if (i && rows[i][0] < rows[i - 1][0]) climbs = false;
+    if (rows[i][1] > 1 || rows[i][2] > 1) inRange = false;
+  }
+  t.ok(climbs, 'the band stops climb, so createLinearGradient will take them');
+  t.ok(inRange, 'and every stop and alpha is inside 0..1');
+  t.eq(rows[0][0], 0, 'the first band starts at the top of the rail');
+  t.eq(rows[rows.length - 1][0], 1, 'and the last one reaches the bottom');
+  // it draws, on both sides, without unbalancing the frame
+  const { DP: Ds, raf: rafS } = loadGame({}, true);
+  let ts7 = 0;
+  Ds.srand(404); Ds.newRun('knight');
+  Ds.S.run.floor = 5;
+  Ds.startBattle();
+  for (let i = 0; i < 8; i++) { ts7 += 16.7; const cb = rafS(); if (cb) cb(ts7); }
+  t.eq(globalThis.__ctxDepth, 0, 'a battle frame with the polished sides still balances');
+  Ds.S.shake = 8;
+  for (let i = 0; i < 4; i++) { ts7 += 16.7; const cb = rafS(); if (cb) cb(ts7); }
+  t.eq(globalThis.__ctxDepth, 0, 'and so does one mid-thump, when the reflection jolts');
 }
 
 // ============== THE BLACK BOX: a bug report worth reading ==============

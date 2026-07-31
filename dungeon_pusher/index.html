@@ -59,6 +59,10 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.18.0', notes: [
+    'THE MACHINE\u2019S SIDES ARE POLISHED METAL \u{1FA9E} \u2014 the rails flanking the bed are mirrors now. The room is banded onto them the way steel really reads it \u2014 near-black horizon cutting hard into a bright ceiling, no soft gradients \u2014 with the bed\u2019s own torchlight catching the inner face and the runes still engraved through it',
+    'and the reflection MOVES \u2728 \u2014 a specular streak slides down each rail, out of step with the other, and every thump the machine takes knocks it off its stride. A reflection that never moves is just paint, and the eye knows it',
+  ] },
   { v: '1.17.0', notes: [
     'A BLACK BOX, AND A BUTTON TO HAND IT OVER \u{1F41E} \u2014 REPORT A BUG in the settings. Every piece on the bed is tagged, and anything that leaves without either being paid for or claimed by something allowed to eat it \u2014 the claw, the crab, the tilted table\u2019s gutter \u2014 is recorded with what it was and where it stood. COPY or SAVE hands the whole log over',
     'and it stays QUIET when nothing is wrong \u{1F910} \u2014 tilting a pile over the front edge, the piper leading its haul over, a claw hoisting six at once: all of it is accounted for and none of it is reported. A log that cries wolf is not a log',
@@ -10591,8 +10595,81 @@ if (!HEADLESS) (function browser() {
     }
     ctx.restore();
   }
+  // ---- THE SIDES ARE POLISHED METAL ----
+  // Additive white over warm bronze does not make a mirror, it makes a glowing
+  // bronze pillar. A mirror is a MATERIAL first: the rail is desaturated and
+  // pulled cold to steel, and only then does it get the room banded onto it —
+  // near-black horizon against near-white ceiling, with step edges, because
+  // polished metal has no soft gradients. The streak on top is live and jolts
+  // with the machine; a reflection that never moves is just paint.
+  const SIDE_X = 4, SIDE_W = 22, SIDE_Y = 170, SIDE_H = 540;
+  // [stop, dark, light] — the room as a vertical mirror reads it. Pairs sit
+  // ~0.015 apart on purpose: that is the step edge that says "polished".
+  const SIDE_BANDS = [
+    [0.00, 0.40, 0.00], [0.06, 0.34, 0.00], [0.075, 0.00, 0.20], [0.20, 0.00, 0.25],
+    [0.215, 0.46, 0.00], [0.34, 0.38, 0.00], [0.355, 0.00, 0.10], [0.46, 0.00, 0.14],
+    [0.475, 0.42, 0.00], [0.60, 0.35, 0.00], [0.615, 0.00, 0.18], [0.72, 0.00, 0.15],
+    [0.735, 0.44, 0.00], [0.88, 0.36, 0.00], [0.895, 0.00, 0.08], [1.00, 0.46, 0.00],
+  ];
+  function sideGrad(key, chan) {
+    return lgr(key, 0, SIDE_Y, 0, SIDE_Y + SIDE_H, SIDE_BANDS.map((b) => {
+      const a = b[chan];
+      if (!a) return [b[0], chan === 1 ? 'rgba(3,4,8,0)' : 'rgba(214,232,255,0)'];
+      return [b[0], chan === 1 ? 'rgba(3,4,8,' + a + ')' : 'rgba(214,232,255,' + a + ')'];
+    }));
+  }
+  function drawSideSheen(t) {
+    const jolt = Math.min(8, S.shake || 0);
+    for (let i = 0; i < 2; i++) {
+      const x = i ? LW - SIDE_X - SIDE_W : SIDE_X;
+      ctx.save();
+      ctx.beginPath(); ctx.rect(x, SIDE_Y, SIDE_W, SIDE_H); ctx.clip();
+      // 1. STRIP THE COLOUR. Bronze can never read as a mirror, whatever is
+      //    painted over it, so the rail is taken to grey and then to steel.
+      ctx.globalCompositeOperation = 'saturation';
+      ctx.fillStyle = 'hsl(0,0%,50%)';
+      ctx.fillRect(x, SIDE_Y, SIDE_W, SIDE_H);
+      ctx.globalCompositeOperation = 'multiply';
+      ctx.fillStyle = '#bcc9da';                       // cold steel, not blue
+      ctx.fillRect(x, SIDE_Y, SIDE_W, SIDE_H);
+      // 2. THE ROOM, BANDED — darks first so the brights have something to cut
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = sideGrad('sideDark2', 1);
+      ctx.fillRect(x, SIDE_Y, SIDE_W, SIDE_H);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = sideGrad('sideLit2', 2);
+      ctx.fillRect(x, SIDE_Y, SIDE_W, SIDE_H);
+      // 3. THE STREAK: one hot highlight sliding the column, knocked out of
+      //    step by every thump the machine takes
+      const span = SIDE_H + 300;
+      const sy = SIDE_Y - 150 + ((t * 20 + i * 197 + jolt * 11) % span);
+      const st = ctx.createLinearGradient(0, sy - 60, 0, sy + 60);
+      st.addColorStop(0, 'rgba(255,255,255,0)');
+      st.addColorStop(0.46, 'rgba(226,240,255,0.10)');
+      st.addColorStop(0.5, 'rgba(255,255,255,0.30)');
+      st.addColorStop(0.54, 'rgba(226,240,255,0.10)');
+      st.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = st;
+      ctx.fillRect(x, SIDE_Y, SIDE_W, SIDE_H);
+      // 4. the bed's warm light catching the inner face — the ONE warm note,
+      //    kept narrow so it reads as a reflection and not as a glow
+      const bg = ctx.createLinearGradient(i ? x + SIDE_W : x, 0, i ? x + SIDE_W - 7 : x + 7, 0);
+      bg.addColorStop(0, 'rgba(255,196,120,0.20)');
+      bg.addColorStop(1, 'rgba(255,196,120,0)');
+      ctx.fillStyle = bg;
+      ctx.fillRect(x, SIDE_Y, SIDE_W, SIDE_H);
+      ctx.restore();
+      // 5. the bevels. A mirror has no soft edges — that is what separates it
+      //    from plastic — so these are hard 1px lines, not gradients.
+      ctx.fillStyle = 'rgba(255,255,255,0.72)';
+      ctx.fillRect(i ? x + SIDE_W - 1.2 : x, SIDE_Y, 1.2, SIDE_H);
+      ctx.fillStyle = 'rgba(10,14,22,0.55)';
+      ctx.fillRect(i ? x : x + SIDE_W - 1, SIDE_Y, 1, SIDE_H);
+    }
+  }
   function drawBattle(t, dt) {
     battleBase();
+    drawSideSheen(t);
     drawEnemyPanel(t, dt);
     drawBackWall(t);
     drawMeter(t);
