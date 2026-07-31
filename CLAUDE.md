@@ -41,7 +41,17 @@ track to a mood slot, asset filenames/paths, small additions to align.html.
 - anything requiring >~60 changed lines in index.html
 
 **Hard rules for every session, every size:**
-1. `npm run check` green before push. If you can't make it green, STOP and report.
+1. `npm run check` green before push — but the bar is YOUR work, not the whole repo.
+   If a suite fails in a game you did NOT touch:
+   - do not go and fix it. `check` runs every game, so one red suite elsewhere must
+     never turn a small change into a patch to a different codebase. Staying out is
+     the right call even when the fix looks easy.
+   - re-run that one suite by itself first. Several are randomised (grimhold and
+     dungeon_pusher build boards from a fresh seed each run) and fail on maybe one
+     board in five, so a single red run proves nothing.
+   - if it still fails: push your own work anyway and SAY SO in the reply — name the
+     game and the assertion. Whether it gets fixed is the owner's call, not yours.
+   If the failure is in a game you DID touch, it is yours: fix it or STOP and report.
 2. After any merge of origin/main into the branch, RE-GREP for the feature you just added
    (squash-merges resurrect old code; resolve conflicts by keeping HEAD, then verify).
    Known zombie to grep for and kill: `awardTownResources` must have 0 hits in index.html.

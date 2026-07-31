@@ -228,10 +228,12 @@ const B = {
   PURSE_CAP: 6,       // coins one ball may bank — this IS the turn length
   COMBO_CAP: 2,       // multiplier ceiling
   COMBO_STEP: 5,      // hits per multiplier step
-  CHIP: 1,            // body blow: unmultiplied chip damage, plus a gold coin
+  CHIP: 2,            // body blow: unmultiplied chip damage, plus a gold coin
+  WARD: 2,            // the totem's flat shrug, off every blow
   CHIP_CD: 0.45,
   TURN_MAX: 34,       // the shot clock: no turn may outstay this
   TARGET_CD: 0.35,    // a target will not pay twice inside this
+  SAUCER_CD: 1.6,     // ...and the lucky saucer takes far longer to reload
   HP_SCALE: 0.28,     // foe HP per floor beyond the first
   ATK_SCALE: 0.16,
 };
@@ -303,7 +305,7 @@ const FITTINGS = [
   { id:'t_red',    ico:'\u{2764}',  ico2:1, nm:'Heart Target', ds:'Bolt a RED target on. Each one mends a wound at resolve.', add:'red' },
   { id:'t_green',  ico:'\u{1F9EA}', nm:'Venom Target',  ds:'Bolt a GREEN target on. Rot ticks every foe turn and ignores block.', add:'green' },
   { id:'t_blue',   ico:'\u{2744}',  nm:'Frost Target',  ds:'Bolt a BLUE target on. Frost cuts through armour and plate.', add:'blue' },
-  { id:'t_lucky',  ico:'\u{1F340}', nm:'Lucky Saucer',  ds:'A saucer behind the bumpers. Hard shot — one coin, worth four strikes.', add:'lucky' },
+  { id:'saucer2',  ico:'\u{1F340}', nm:'Loaded Saucer', ds:'The lucky saucer pays TWO coins a shot. The hardest shot on the table, doubled.', saucer2:1 },
   { id:'purse',    ico:'\u{1F45B}', nm:'Deeper Purse',  ds:'+3 to the PURSE CAP. One ball can carry more home.', purse:3 },
   { id:'combo',    ico:'\u{1F517}', nm:'Chain Links',   ds:'+1 to the COMBO CAP. A clean ball multiplies harder.', combo:1 },
   { id:'step',     ico:'\u{26A1}',  nm:'Quick Tally',   ds:'The combo steps up every 4 hits instead of 5.', step:1 },
@@ -325,7 +327,7 @@ const S = {
   foe: null,
   purse: {}, combo: 0, chipT: 0, cashT: 0, turnT: 0,
   purseCap: B.PURSE_CAP, comboCap: B.COMBO_CAP, comboStep: B.COMBO_STEP,
-  fits: [], loadout: ['gold', 'gold', 'silver'],   // the bare starting table
+  fits: [], loadout: ['gold', 'gold', 'silver', 'lucky'],   // the starting cabinet
   saverUsed: false,
   segs: [], posts: [], bumpers: [], targets: [], flippers: [], inplay: [],
   tray: [], queue: [], shots: [], rampType: null, rampN: 0, resT: 0, resMult: 1,
@@ -499,8 +501,23 @@ function buildTable(){
     }
     slots.push(placed || { x: clamp(x0 + w / 2, 56, 352), y: row[0], r: 17, kind, cd: 0, lamp: 0 });
   }
-  // the lucky saucer sits high and behind the bumpers — the hardest shot
-  for (const t of slots) if (t.kind === 'lucky'){ t.x = 204 + rr(-52, 52); t.y = 292; t.r = 16; t.saucer = true; }
+  // the lucky saucer sits high, past the bumper rack — the hardest shot on
+  // the table. It gets the same rejection sampling as everything else; when
+  // it shipped as a rare fitting a fixed spot was survivable, but as standard
+  // furniture it landed straight on top of a bumper.
+  for (const t of slots){
+    if (t.kind !== 'lucky') continue;
+    t.r = 16; t.saucer = true;
+    const others = slots.filter(o => o !== t);
+    let put = null;
+    for (let tries = 0; tries < 80; tries++){
+      const cand = { x: rr(56, 352), y: rr(258, 306), r: 16 };
+      if (clearOf(cand, 14, others)){ put = cand; break; }
+    }
+    // failing that, tuck it down the side of the rack where it is always clear
+    if (!put) put = { x: rng() < 0.5 ? 62 : 346, y: 300 };
+    t.x = put.x; t.y = put.y;
+  }
   S.targets = slots;
 
   // a couple of rubber posts for deflection
@@ -513,7 +530,8 @@ function buildTable(){
   // TRAIT: the WARD posts a stone guard in front of the lucky saucer
   if (f.trait === 'ward'){
     const lucky = S.targets.find(t => t.saucer);
-    if (lucky) S.posts.push({ x: lucky.x, y: lucky.y + 40, r: 13, lamp: 0, ward: true });
+    const guard = lucky && { x: lucky.x, y: lucky.y + 42, r: 13, lamp: 0, ward: true };
+    if (guard && clearOf(guard, 6)) S.posts.push(guard);
   }
   // TRAIT: the GEL CUBE smears the inlanes — a sticky pad that eats speed
   S.gel = f.trait === 'gel' ? { x: 204, y: 600, r: 76 } : null;
@@ -765,7 +783,13 @@ function onTarget(t, b){
   t.cd = B.TARGET_CD;
   t.lamp = 1;
   earn(t.kind, t.x, t.y - t.r - 6);
-  if (t.saucer){ b.vx *= 0.25; b.vy = -Math.abs(b.vy) * 0.4 - 260; }   // the saucer spits it back out
+  // a saucer CAPTURES: it spits the ball back up the table and reloads slowly.
+  // That is what keeps a 4-damage face from being farmed.
+  if (t.saucer){
+    if (hasFit('saucer2')) earn(t.kind, t.x, t.y - t.r - 6);
+    t.cd = B.SAUCER_CD;
+    b.vx *= 0.25; b.vy = -Math.abs(b.vy) * 0.4 - 260;
+  }
 }
 // a body blow: unmultiplied chip damage straight off the ball, so a full
 // purse still has something worth doing
@@ -789,7 +813,7 @@ function onFoeHit(b, c, imp){
   // table, so a player who only ever shoots the monster still earns; the
   // coin targets are how you specialise that income into shields and rot.
   const dealt = hurtFoe(B.CHIP, 'chip');
-  if (dealt) pop(f.x, f.y - f.r - 10, '-' + dealt, '#ff6b7a', true);
+  pop(f.x, f.y - f.r - 10, dealt ? '-' + dealt : 'BLOCKED', dealt ? '#ff6b7a' : '#c8d6e8', true);
   earn('gold', f.x, f.y + f.r * 0.6);
 }
 
@@ -803,7 +827,12 @@ function hurtFoe(n, src){
   if (!f || f.hp <= 0) return 0;
   let d = n;
   if (src !== 'poison' && src !== 'blue'){
-    if (f.trait === 'ward') d -= 2;                        // flat DR
+    // THE TOTEM'S WARD shrugs a flat 2 off EVERY blow, exactly as the pusher
+    // writes it. Gold alone will not scratch it and neither will a body blow —
+    // that is the point. The lucky saucer (4), frost and rot are the answers,
+    // and a dungeon lets you pick which door to open. Bring the tool or bring
+    // a different fight.
+    if (f.trait === 'ward') d -= B.WARD;
     if (f.trait === 'armor' && f.plate > 0){               // the plate soaks first
       const soak = Math.min(f.plate, d);
       f.plate -= soak; d -= soak;
@@ -926,9 +955,9 @@ function applyCoin(kind, m, x, y){
   if (kind === 'silver'){ addBlock(m); txt = '\u{1F6E1} +' + m; }
   else if (kind === 'red'){ const g = healSelf(m * B.RED_HEAL); txt = '\u{2764} +' + g; }
   else if (kind === 'green'){ S.foe.pois = (S.foe.pois | 0) + m * B.POISON; txt = '\u{1F9EA} +' + (m * B.POISON); }
-  else if (kind === 'blue'){ const d = hurtFoe(m * B.DMG_BLUE, 'blue'); txt = '-' + d; }
-  else if (kind === 'lucky'){ const d = hurtFoe(m * B.DMG_LUCKY, 'lucky'); txt = '-' + d; }
-  else { const d = hurtFoe(m * B.DMG_GOLD, 'gold'); txt = '-' + d; }
+  else if (kind === 'blue'){ const d = hurtFoe(m * B.DMG_BLUE, 'blue'); txt = d ? '-' + d : 'BLOCKED'; }
+  else if (kind === 'lucky'){ const d = hurtFoe(m * B.DMG_LUCKY, 'lucky'); txt = d ? '-' + d : 'BLOCKED'; }
+  else { const d = hurtFoe(m * B.DMG_GOLD, 'gold'); txt = d ? '-' + d : 'BLOCKED'; }
   pop(x, y - 16, txt, C2.col, true);
   burst(x, y, 9, C2.col);
   shake(kind === 'lucky' ? 5 : 3);
@@ -1040,7 +1069,7 @@ function startRun(seed){
   S.block = 0; S.pois = 0;
   S.purseCap = B.PURSE_CAP; S.comboCap = B.COMBO_CAP; S.comboStep = B.COMBO_STEP;
   S.fits = [];
-  S.loadout = ['gold', 'gold', 'silver'];
+  S.loadout = ['gold', 'gold', 'silver', 'lucky'];
   S.stats = { kills: 0, dealt: 0, floors: 0 };
   S.parts = []; S.pops = [];
   enterFloor(1);
@@ -1062,7 +1091,7 @@ function enterFloor(n){
 function rollFittings(){
   const local = mulberry(S.seed * 131 + S.floor * 7717);
   const pool = FITTINGS.filter(f => {
-    if (f.add === 'lucky' && S.loadout.includes('lucky')) return false;   // one saucer is enough
+    if (f.id === 'saucer2' && hasFit('saucer2')) return false;   // one upgrade is enough
     if (f.id === 'saver' && hasFit('saver')) return false;
     if (f.id === 'bumper' && hasFit('bumper')) return false;
     if (f.id === 'flip' && hasFit('flip')) return false;
