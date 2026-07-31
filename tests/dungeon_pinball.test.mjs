@@ -182,7 +182,7 @@ ok(S.launchReady, 'a ball waits on the plunger');
   S.combo = 0;
   DPB.earn('silver', 0, 0); DPB.earn('silver', 0, 0); DPB.earn('silver', 0, 0);
   DPB.startResolve();
-  while (S.res.length) DPB.update(P.STEP), S.resT = -1;
+  DPB.flushResolve();          // land every coin, but stop short of the foe turn
   ok(S.block >= 3, `silver raises block (got ${S.block})`);
 }
 {
@@ -240,6 +240,148 @@ ok(S.launchReady, 'a ball waits on the plunger');
   ok(DPB.purseTotal() === 0, 'the purse empties at resolve');
   ok(S.combo === 0, 'and the combo resets for the next ball');
   ok(S.block === 0, 'block never carries into your next turn — same as the pusher');
+}
+
+/* ======================================================== THE TRAY */
+// A struck target knocks a coin loose and the coin FALLS into the tray.
+// The tray is the purse made physical, so the two must never disagree.
+{
+  DPB.startRun(3100);
+  muteFoe();
+  ok(S.tray.length === 0, 'a fresh floor starts with an empty tray');
+  DPB.earn('gold', 200, 400);
+  ok(S.tray.length === 1, 'earning a coin drops one into the tray');
+  const co = S.tray[0];
+  ok(co.kind === 'gold', 'and it wears the right face');
+  ok(co.y < DPB.S.tray[0].slot.y, 'it starts above its slot — it has to fall');
+  ok(!co.settled, 'and it is not settled yet');
+  ok(co.vy < 0, 'knocked upward first, so it arcs rather than teleports');
+}
+{
+  // the fall: gravity, a bounce off the tray floor, then it settles home
+  DPB.startRun(3101);
+  muteFoe();
+  DPB.earn('gold', 200, 400);
+  const co = S.tray[0];
+  let bounced = false;
+  for (let i = 0; i < 240; i++){
+    DPB.stepTray(P.STEP);
+    if (co.bounces > 0) bounced = true;
+    if (co.settled) break;
+  }
+  ok(bounced, 'the coin bounces when it hits the tray floor');
+  ok(co.settled, 'and then settles');
+  for (let i = 0; i < 120; i++) DPB.stepTray(P.STEP);
+  ok(Math.abs(co.x - co.slot.x) < 1 && Math.abs(co.y - co.slot.y) < 1,
+    'coming to rest exactly in its slot');
+}
+{
+  // the tray and the purse are the same thing counted two ways
+  DPB.startRun(3102);
+  muteFoe();
+  for (const k of ['gold', 'silver', 'red', 'gold']) DPB.earn(k, 200, 400);
+  ok(S.tray.length === DPB.purseTotal(), 'tray and purse always agree');
+  for (let i = 0; i < 40; i++) DPB.earn('gold', 200, 400);
+  ok(S.tray.length === S.purseCap, 'and the tray honours the purse cap too');
+}
+{
+  // coins stack into rows rather than piling on one spot
+  DPB.startRun(3103);
+  const a2 = DPB.traySlot(0), b2 = DPB.traySlot(1), c2 = DPB.traySlot(9);
+  ok(b2.x > a2.x && b2.y === a2.y, 'the second coin sits beside the first');
+  ok(c2.y < a2.y, 'the tenth starts a second row on top');
+}
+
+/* --------------------------------------- the resolve empties the tray */
+// Dungeon Pusher fires the tray ONE PIECE AT A TIME, in RESOLVE_ORDER, each
+// with its own delay that quickens within a run of the same face. This is
+// that, so the cadence carries over.
+{
+  DPB.startRun(3110);
+  muteFoe();
+  S.combo = 0;
+  for (const k of ['green', 'gold', 'silver', 'gold']) DPB.earn(k, 200, 400);
+  DPB.startResolve();
+  ok(S.queue.length === 4, 'every coin queues separately — nothing is lumped together');
+  ok(S.queue[0].k === 'silver', 'shields go up first');
+  ok(S.queue[S.queue.length - 1].k === 'green', 'and rot lands last');
+  const order = S.queue.map(q => q.k).join(',');
+  ok(order === 'silver,gold,gold,green', `the queue follows RESOLVE_ORDER (${order})`);
+  ok(DPB.purseTotal() === 0, 'the purse is spent the moment the queue is built');
+  ok(S.tray.length === 4, 'but the coins stay in the tray until they fire');
+}
+{
+  // firing takes coins OUT of the tray, one per beat
+  DPB.startRun(3111);
+  muteFoe();
+  S.combo = 0;
+  for (let i = 0; i < 4; i++) DPB.earn('gold', 200, 400);
+  DPB.startResolve();
+  DPB.fireNext();
+  ok(S.tray.length === 3, 'firing a coin lifts it out of the tray');
+  ok(S.shots.length === 1, 'and throws it at its target');
+  const hp0 = S.foe.hp;
+  ok(S.foe.hp === hp0, 'nothing lands while it is still in the air');
+  while (S.shots.length) S.shots.shift().hit();
+  ok(S.foe.hp < hp0, 'the damage lands when the coin arrives');
+}
+{
+  // the pusher's ramp: same face in a row fires quicker each time
+  DPB.startRun(3112);
+  muteFoe();
+  S.combo = 0;
+  for (let i = 0; i < 3; i++) DPB.earn('gold', 200, 400);
+  DPB.earn('silver', 200, 400);
+  DPB.startResolve();
+  DPB.fireNext();                       // silver — first of its run
+  const dSilver = S.resT;
+  DPB.fireNext();                       // gold — type flipped, ramp resets
+  const d1 = S.resT;
+  DPB.fireNext();
+  const d2 = S.resT;
+  DPB.fireNext();
+  const d3 = S.resT;
+  ok(Math.abs(dSilver - DPB.RESOLVE_DELAY.silver) < 1e-9, 'the first of a face fires at its full delay');
+  ok(Math.abs(d1 - DPB.RESOLVE_DELAY.gold) < 1e-9, 'a new face restarts the count');
+  ok(d2 < d1 && d3 < d2, `each next coin of the same face is quicker (${d1.toFixed(3)} > ${d2.toFixed(3)} > ${d3.toFixed(3)})`);
+  ok(d3 >= DPB.RESOLVE_DELAY.gold * 0.4 - 1e-9, 'but never below the floor — no machine-gun');
+}
+{
+  // the turn does not pass until the last coin has actually landed
+  DPB.startRun(3113);
+  muteFoe();
+  S.combo = 0;
+  DPB.earn('gold', 200, 400);
+  DPB.startResolve();
+  DPB.fireNext();
+  ok(S.queue.length === 0 && S.shots.length === 1, 'queue empty, one coin still flying');
+  S.resT = -1;
+  DPB.update(P.STEP);
+  ok(S.phase === 'resolve', 'the foe does not get its turn while a coin is in the air');
+  while (S.shots.length) S.shots.shift().hit();
+  S.resT = -1;
+  DPB.update(P.STEP);
+  ok(S.phase !== 'resolve', 'once it lands, the turn moves on');
+}
+{
+  // ...and the tray is empty afterwards, ready for the next ball
+  DPB.startRun(3114);
+  muteFoe();
+  S.combo = 0;
+  for (let i = 0; i < 3; i++) DPB.earn('gold', 200, 400);
+  DPB.resolveNow();
+  ok(S.tray.length === 0, 'the tray is empty when the turn is done');
+  ok(S.queue.length === 0 && S.shots.length === 0, 'nothing left queued or in flight');
+}
+{
+  // the mugger takes a real coin off the pile
+  DPB.startRun(3115);
+  S.foe.trait = 'thief';
+  S.foe.intent = { t:'hit', n: 0 };
+  for (let i = 0; i < 3; i++) DPB.earn('gold', 200, 400);
+  DPB.startResolve();
+  ok(S.tray.length === 2, 'the mugger physically lifts a coin out of the tray');
+  ok(S.queue.length === 2, 'and it never reaches the queue');
 }
 
 /* ================================================== DEFENSIVE TRAITS */
@@ -378,7 +520,8 @@ const stage = (trait, hp) => {
   const b = onlyBall(204, 700, 0, 900);
   DPB.earn('gold', 0, 0);
   const hp0 = S.foe.hp;
-  step(0.6);
+  // the resolve is a beat, not an instant: a breath, then the coin flies
+  step(2);
   ok(S.foe.hp < hp0, 'draining the ball resolves the purse against the foe');
   ok(S.launchReady, 'and racks the next ball up on the plunger');
 }
@@ -419,7 +562,7 @@ const stage = (trait, hp) => {
   ok(S.cashT === 0, 'a part-filled purse does not trigger the cash-out');
   const hp0 = S.foe.hp;
   onlyBall(204, 700, 0, 900);
-  step(0.6);
+  step(2);
   ok(S.foe.hp < hp0, 'draining still resolves the turn');
 }
 

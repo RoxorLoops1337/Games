@@ -9034,6 +9034,25 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
          'and its offline fallback covers them all');
     t.ok(/"shell": \{ "w": ' \+ SHELL\.w/.test(bsrc) && /"rects"/.test(bsrc),
          'the builder exports the shape the game reads back');
+    // the tool mirrors a few of the game's drawing constants so its preview is
+    // TRUE and not merely close. Copies drift silently, so compare them.
+    const num = (src, re, what) => {
+      const mm = src.match(re);
+      t.ok(!!mm, what + ' is findable');
+      return mm ? mm.slice(1).join('|') : null;
+    };
+    t.eq(num(bsrc, /const CAP = ([\d.]+), CAP_EXIT = ([\d.]+)/, 'the builder\'s caption drop'),
+         num(src5, /const CAB_CAP = ([\d.]+), CAB_CAP_EXIT = ([\d.]+)/, 'the game\'s caption drop'),
+         'the builder drops the button captions exactly as far as the game does');
+    const well = /HP_WELL = \{ x: ([\d.]+), y: ([\d.]+), w: ([\d.]+), h: ([\d.]+) \}/;
+    t.eq(num(bsrc, well, 'the builder\'s HP well'), num(src5, well, 'the game\'s HP well'),
+         'and it pours the health bar into the same well');
+    const ramp = (s) => (s.slice(s.indexOf('HP_RAMP = ['), s.indexOf(']]', s.indexOf('HP_RAMP = ['))).match(/\d+/g) || []).join(',');
+    t.eq(ramp(bsrc), ramp(src5), 'and mixes it from the same colour ramp');
+    // this is the bug that actually happened: game code pasted into the tool
+    // still calling the GAME's rounded-rect helper, which the tool doesn't have
+    t.ok(!/[^a-zA-Z_]rr\(/.test(bsrc),
+         'the builder calls its own rrect(), never the game\'s rr() by accident');
   }
 
   // it draws, and it balances
