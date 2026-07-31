@@ -59,6 +59,9 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.18.1', notes: [
+    'THE INNER WALLS REFLECT THE BED \u{1FA9E} \u2014 the wedges either side of the table are dark glass now, and what sits near the table\u2019s edge is mirrored into them: squashed hard, because a wall seen this close to edge-on compresses everything it shows, and fading out as it goes. The table\u2019s own lit surface lands as a pale smear hugging the join, with one highlight travelling the glass',
+  ] },
   { v: '1.18.0', notes: [
     'THE MACHINE\u2019S SIDES ARE POLISHED METAL \u{1FA9E} \u2014 the rails flanking the bed are mirrors now. The room is banded onto them the way steel really reads it \u2014 near-black horizon cutting hard into a bright ceiling, no soft gradients \u2014 with the bed\u2019s own torchlight catching the inner face and the runes still engraved through it',
     'and the reflection MOVES \u2728 \u2014 a specular streak slides down each rail, out of step with the other, and every thump the machine takes knocks it off its stride. A reflection that never moves is just paint, and the eye knows it',
@@ -10618,6 +10621,89 @@ if (!HEADLESS) (function browser() {
       return [b[0], chan === 1 ? 'rgba(3,4,8,' + a + ')' : 'rgba(214,232,255,' + a + ')'];
     }));
   }
+  // ---- THE INNER WALLS ARE MIRRORS ----
+  // This projection has no side wall to reflect in: screen x depends only on
+  // world x, so a plane at x=0 is a LINE, zero pixels wide. What is actually
+  // beside the bed is a wedge of bare backdrop — wide at the back where the
+  // table is narrow, closing to nothing at the front. So the wall is built
+  // rather than found: the wedge becomes dark glass, and what sits near the
+  // bed's edge is mirrored into it, squashed, because a wall seen this close
+  // to edge-on compresses everything it shows.
+  const MIRROR_SQUASH = 0.34;             // how hard the grazing angle compresses
+  const MIRROR_REACH = 26;                // how far onto the bed the glass sees
+  function mirrorWedge(i) {
+    const back = MACH.tiers[0].back, front = tierFront(0);
+    const wallX = i ? 100 : 0;
+    const a = w2s(wallX, back, 0), b = w2s(wallX, front, 0);
+    const outer = i ? LW - 26 : 26;
+    return { a, b, outer, wallX, back, front };
+  }
+  function drawSideMirrors(t) {
+    for (let i = 0; i < 2; i++) {
+      const m = mirrorWedge(i);
+      if ((i ? m.outer - m.a.x : m.a.x - m.outer) < 6) continue;   // no wedge, no wall
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(m.a.x, m.a.y); ctx.lineTo(m.b.x, m.b.y);
+      ctx.lineTo(m.outer, m.b.y); ctx.lineTo(m.outer, m.a.y);
+      ctx.closePath();
+      ctx.clip();
+      // the glass itself: darker than the room, and darkest where it meets
+      // the bed, so the wedge reads as a surface rather than a hole
+      const gg = ctx.createLinearGradient(0, m.a.y, 0, m.b.y);
+      gg.addColorStop(0, 'rgba(6,8,14,0.55)');
+      gg.addColorStop(0.55, 'rgba(10,12,20,0.42)');
+      gg.addColorStop(1, 'rgba(4,5,10,0.62)');
+      ctx.fillStyle = gg;
+      ctx.fillRect(Math.min(m.outer, m.a.x) - 4, m.a.y - 4,
+                   Math.abs(m.a.x - m.outer) + 8, (m.b.y - m.a.y) + 8);
+      // WHAT IT SHOWS. A soft blob per piece, not the piece itself: a wall
+      // this close to edge-on never gives you a crisp coin, and a crisp coin
+      // there would read as a second bed rather than as a reflection.
+      ctx.globalCompositeOperation = 'lighter';
+      for (const c of S.coins) {
+        if (c.st !== 'plat' && c.st !== 'air') continue;
+        const d = i ? m.wallX - c.x : c.x - m.wallX;
+        if (d < 0 || d > MIRROR_REACH) continue;
+        const mx = i ? m.wallX + d * MIRROR_SQUASH : m.wallX - d * MIRROR_SQUASH;
+        const p = w2s(mx, c.y, c.z);
+        const fade = (1 - d / MIRROR_REACH);
+        const rx = Math.max(1.8, c.r * p.u * 0.62), ry = rx * 1.9;    // smeared upright
+        ctx.globalAlpha = 0.52 * fade * fade;
+        ctx.fillStyle = COIN_UI[c.kind] || '#cfd8e6';
+        ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7); ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+      // the BED itself is the brightest thing the glass can see, so it lands
+      // as a pale smear hugging the join and dying off within a few pixels
+      const eg = ctx.createLinearGradient(m.a.x, 0, m.outer, 0);
+      eg.addColorStop(0, 'rgba(206,222,242,0.42)');
+      eg.addColorStop(0.18, 'rgba(178,196,224,0.20)');
+      eg.addColorStop(0.5, 'rgba(150,168,196,0.05)');
+      eg.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = eg;
+      ctx.fillRect(Math.min(m.outer, m.a.x) - 4, m.a.y - 4,
+                   Math.abs(m.a.x - m.outer) + 8, (m.b.y - m.a.y) + 8);
+      // and one travelling highlight, so the glass is never dead
+      const span = (m.b.y - m.a.y) + 260;
+      const sy = m.a.y - 130 + ((t * 26 + i * 151) % span);
+      const st2 = ctx.createLinearGradient(0, sy - 70, 0, sy + 70);
+      st2.addColorStop(0, 'rgba(255,255,255,0)');
+      st2.addColorStop(0.5, 'rgba(226,240,255,0.16)');
+      st2.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = st2;
+      ctx.fillRect(Math.min(m.outer, m.a.x) - 4, m.a.y - 4,
+                   Math.abs(m.a.x - m.outer) + 8, (m.b.y - m.a.y) + 8);
+      ctx.restore();
+      // the hard join where the glass meets the bed — a mirror has an edge
+      ctx.save();
+      ctx.strokeStyle = 'rgba(226,240,255,0.34)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(m.a.x, m.a.y); ctx.lineTo(m.b.x, m.b.y); ctx.stroke();
+      ctx.restore();
+    }
+  }
   function drawSideSheen(t) {
     const jolt = Math.min(8, S.shake || 0);
     for (let i = 0; i < 2; i++) {
@@ -10669,6 +10755,7 @@ if (!HEADLESS) (function browser() {
   }
   function drawBattle(t, dt) {
     battleBase();
+    drawSideMirrors(t);
     drawSideSheen(t);
     drawEnemyPanel(t, dt);
     drawBackWall(t);
