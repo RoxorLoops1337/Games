@@ -7426,7 +7426,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.15.2', 'the cabinet ships as v1.15.2');
+  t.eq(D.VERSION, '1.16.0', 'the cabinet ships as v1.16.0');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
