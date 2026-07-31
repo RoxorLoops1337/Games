@@ -189,7 +189,7 @@ const ELS = [
   { k: 'play',         nm: 'room / playfield',        art: 'playfield',    under: true },
   { k: 'head',         nm: 'floor name plate',        art: 'level_header', under: true },
   { k: 'map',          nm: 'minimap',                 art: 'minimap',      under: true },
-  { k: 'marquee',      nm: 'marquee plate',           art: 'marquee' },
+  { k: 'marquee',      nm: 'marquee sign',            art: 'marquee', contain: true },
   { k: 'joystick',     nm: 'joystick',                art: 'joystick' },
   { k: 'btn_map',      nm: 'MAP button',              art: 'button_red',    cap: 'MAP' },
   { k: 'btn_purse',    nm: 'PURSE button',            art: 'button_yellow', cap: 'PURSE' },
@@ -382,8 +382,17 @@ function paintEl(e) {
   if (opt.art) {
     if (e.art) {
       const im = art(e.art);
-      if (im) ctx.drawImage(im, r.x, r.y, r.w, r.h);
-      else { ctx.fillStyle = 'rgba(120,90,140,0.30)'; ctx.fillRect(r.x, r.y, r.w, r.h); }
+      if (im) {
+        if (e.contain) {
+          // the game never stretches this one, so neither does the preview —
+          // otherwise you would line the rect up against a lie
+          const s2 = Math.min(r.w / im.naturalWidth, r.h / im.naturalHeight);
+          const dw = im.naturalWidth * s2, dh = im.naturalHeight * s2;
+          ctx.drawImage(im, r.x + (r.w - dw) / 2, r.y + (r.h - dh) / 2, dw, dh);
+        } else {
+          ctx.drawImage(im, r.x, r.y, r.w, r.h);
+        }
+      } else { ctx.fillStyle = 'rgba(120,90,140,0.30)'; ctx.fillRect(r.x, r.y, r.w, r.h); }
     } else if (e.paint === 'exit') {
       ctx.fillStyle = 'rgba(14,9,8,0.86)';
       ctx.strokeStyle = 'rgba(196,158,84,0.85)'; ctx.lineWidth = 1.5;

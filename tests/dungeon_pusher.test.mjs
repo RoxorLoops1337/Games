@@ -7426,7 +7426,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.16.0', 'the cabinet ships as v1.16.0');
+  t.eq(D.VERSION, '1.16.1', 'the cabinet ships as v1.16.1');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -8878,7 +8878,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     const b = readFileSync(join(cabDir, f));
     return [b.readUInt32BE(16), b.readUInt32BE(20)];
   };
-  const want = { 'marquee.png': [762, 212], 'game_screen_full.png': [708, 784],
+  const want = { 'marquee.png': [1250, 397], 'game_screen_full.png': [708, 784],
                  'controls_panel_full.png': [768, 143], 'status_strip_full.png': [762, 111],
                  'playfield.png': [652, 596], 'level_header.png': [337, 99], 'minimap.png': [167, 116],
                  'joystick.png': [115, 146], 'panel_hp.png': [150, 100], 'panel_bag.png': [128, 100] };
@@ -8926,6 +8926,15 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     }
     const [hx, hy, hw, hh] = R5.hole;
     t.ok(hw > sw * 0.5 && hh > sh * 0.3, 'and the hole is a screen, not a keyhole');
+    // the marquee is CONTAIN-fitted, so a rect of the wrong shape does not
+    // stretch the sign — it letterboxes it, and the plaque shows a dark band
+    // nobody asked for. The shipped rect has to match the art it holds.
+    const mqArt = png('marquee.png');
+    const ra = R5.marquee[2] / R5.marquee[3], aa = mqArt[0] / mqArt[1];
+    t.ok(Math.abs(ra - aa) / aa < 0.01,
+         'the marquee rect matches the sign it holds (rect ' + ra.toFixed(3) + ' vs art ' + aa.toFixed(3) + ')');
+    t.ok(/Math\.min\(r\.w \/ nw, r\.h \/ nh\)/.test(src5),
+         'and the sign is contain-fitted, never stretched to the rect');
     // the glass furniture has to be ON the glass, or it is painted onto wood
     for (const s of ['head', 'map', 'play']) {
       const a = R5[s];
@@ -9053,6 +9062,12 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     // still calling the GAME's rounded-rect helper, which the tool doesn't have
     t.ok(!/[^a-zA-Z_]rr\(/.test(bsrc),
          'the builder calls its own rrect(), never the game\'s rr() by accident');
+    // the game contain-fits the marquee; a preview that stretches it would be
+    // a lie you then line the rect up against
+    t.ok(/k: 'marquee'[^\n]*contain: true/.test(bsrc),
+         'the builder knows the marquee is contain-fitted too');
+    t.ok(/Math\.min\(r\.w \/ im\.naturalWidth, r\.h \/ im\.naturalHeight\)/.test(bsrc),
+         'and actually contain-fits it in the preview');
   }
 
   // it draws, and it balances
