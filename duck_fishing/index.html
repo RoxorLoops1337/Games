@@ -48,7 +48,8 @@
       <h1>HOOK&#8209;A&#8209;DUCK</h1>
       <p class="sub">Fairground duck pond</p>
       <div class="rules">
-        <b>Move</b> the pointer over the water to aim the rod.<br>
+        <b>Move</b> the pointer &mdash; you hold the rod by its grip,<br>
+        and the hook hangs on the line ahead of it.<br>
         <b>Hold</b> the button (or&nbsp;Space) to lower the hook.<br>
         <b>Release</b> to reel it back up &mdash; if the hook slid<br>
         through a ring, the duck comes up with it.<br>
@@ -1328,10 +1329,29 @@ function drawRod(){
   const tip = rodTip();
   // the player stands off to the right of the stall, so the rod sweeps in
   // from the bottom corner instead of standing up like a mast
-  const hand = [6.8 + rod.x * 0.28, -3.6, -CHAN_HZ - 4.0];
-  const a = proj(hand[0], hand[1], hand[2]); const ax2 = a.x, ay2 = a.y;
   const b = proj(tip[0], tip[1], tip[2]); const bx2 = b.x, by2 = b.y;
-  const mx = (ax2 + bx2) * 0.5 + 18, my = (ay2 + by2) * 0.5 - 40 - rod.bend * 46;
+  /* Run the shaft from the tip out through the pointer and on past it, so
+     the rod is visibly in the player's hand. Without a pointer (keyboard)
+     fall back to a fixed stance off the bottom right. */
+  let ax2, ay2;
+  if (input.has){
+    /* Carry the butt of the rod past the bottom edge, so it reads as coming
+       from the player rather than floating in the middle of the pond. */
+    const dx = input.px - bx2, dy = input.py - by2;
+    let t = 1.55;
+    if (dy > 1) t = Math.max(t, (H + 70 - by2) / dy);
+    ax2 = bx2 + dx * t; ay2 = by2 + dy * t;
+  } else {
+    const hand = [6.8 + rod.x * 0.28, -3.6, -CHAN_HZ - 4.0];
+    const a = proj(hand[0], hand[1], hand[2]); ax2 = a.x; ay2 = a.y;
+  }
+  /* Bow the shaft across its own length rather than along a fixed screen
+     axis — the rod now swings with the pointer, so a hardcoded offset would
+     bend it the wrong way half the time. */
+  let rdx = bx2 - ax2, rdy = by2 - ay2;
+  const rl = Math.hypot(rdx, rdy) || 1; rdx /= rl; rdy /= rl;
+  const bow = 26 + rod.bend * 46;
+  const mx = (ax2 + bx2) * 0.5 + rdy * bow, my = (ay2 + by2) * 0.5 - rdx * bow;
 
   // tapered rod drawn as a quad strip along a quadratic bezier
   const N = 14;
@@ -1356,9 +1376,20 @@ function drawRod(){
   gr.addColorStop(0, '#3a2a1c'); gr.addColorStop(0.35, '#6b4a2c'); gr.addColorStop(1, '#c8a878');
   ctx.fillStyle = gr; ctx.fill();
   ctx.strokeStyle = 'rgba(255,230,190,.25)'; ctx.lineWidth = 1; ctx.stroke();
-  // grip
-  ctx.strokeStyle = '#231710'; ctx.lineWidth = 13; ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(ax2, ay2); ctx.lineTo(L[2][0], L[2][1]); ctx.stroke();
+  // cork grip, centred on the pointer — this is the bit you are holding
+  const gx = input.has ? input.px : (ax2 + bx2) * 0.5;
+  const gy = input.has ? input.py : (ay2 + by2) * 0.5;
+  const glen = Math.max(34, Math.hypot(ax2 - bx2, ay2 - by2) * 0.10);
+  ctx.strokeStyle = '#231710'; ctx.lineWidth = 15; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(gx - rdx * glen * 0.45, gy - rdy * glen * 0.45);
+  ctx.lineTo(gx + rdx * glen * 0.75, gy + rdy * glen * 0.75);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(214,176,120,.30)'; ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(gx - rdx * glen * 0.35, gy - rdy * glen * 0.35);
+  ctx.lineTo(gx + rdx * glen * 0.62, gy + rdy * glen * 0.62);
+  ctx.stroke();
   ctx.lineCap = 'butt';
 
   // line
@@ -1604,9 +1635,25 @@ function endRound(){
 }
 
 /* ================================================================ INPUT */
+/* You hold the rod, not the hook. The pointer sits on the shaft and the
+   hook hangs a fixed screen distance further up the rod, so a fingertip
+   never covers the duck being aimed at. The offset runs along the rod's own
+   on-screen direction (up and to the left, since the grip is off the bottom
+   right), which keeps the touch point sitting naturally on the stick. */
+const GRIP_DIR_X = -0.46, GRIP_DIR_Y = -0.89;   // hook direction from the grip
+const GRIP_REACH = 0.155;                       // as a fraction of canvas height
+
+function aimOffset(){
+  const r = GRIP_REACH * H;
+  return [GRIP_DIR_X * r, GRIP_DIR_Y * r];
+}
 function setAim(px, py){
   input.px = px; input.py = py; input.has = true;
-  const w = unproject(px, py);
+  const o = aimOffset();
+  // Never let the shifted point climb past the far bank: above the horizon
+  // the ray misses the water plane entirely and the aim would go nowhere.
+  const ty = Math.max(py + o[1], H * 0.06);
+  const w = unproject(px + o[0], ty);
   if (!w) return;
   aim.x = clamp(w[0], -GATE_X + 1.0, GATE_X - 1.0);
   aim.z = clamp(w[1], -CHAN_HZ + 0.7, CHAN_HZ - 0.7);
