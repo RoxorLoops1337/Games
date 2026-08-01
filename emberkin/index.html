@@ -2121,7 +2121,13 @@ function startBattle(opt) {
   G.mode = 'battle';
   const who = opt.npc ? `${opt.npc.name} wants to battle!` : `A wild ${opt.foe.name} bristles!`;
   playCue('battle');
-  battleSay([who, `Go, ${dispName(mine)}!`], () => openBattleMenu());
+  const lines = [who, `Go, ${dispName(mine)}!`];
+  // One-time nudge, the first time a wild kin shows up with orbs in the bag.
+  if (opt.wild && !G.flags.taughtCatch && (G.bag.bloomorb > 0 || G.bag.gleamorb > 0 || G.bag.prismorb > 0)) {
+    G.flags.taughtCatch = 1;
+    lines.push('Knock it down first, then reach for an orb — Bag, then the orb. A hurt kin holds.');
+  }
+  battleSay(lines, () => openBattleMenu());
   return true;
 }
 
