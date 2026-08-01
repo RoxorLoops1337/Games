@@ -6,3 +6,7 @@ beatbox_story/beatbox-story.bundle.js.map
 .claude/*
 !.claude/commands/
 
+
+# Polish-loop scratch: keep the screenshot rig, drop agents' throwaway probes
+.polish/*
+!.polish/shots.mjs

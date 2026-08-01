@@ -275,6 +275,13 @@ const BB = loadGame();
   eq(BB.breedLitter(f, b, 'big').length, 4, 'and stacks with a big clutch');
   const lit = BB.breedLitter(a, b, 'natural');
   ok(lit[0].child.id !== lit[1].child.id, 'chicks in one clutch are distinct animals');
+  // you are choosing between them, so they must be tellable apart at a glance
+  for (let i = 0; i < 200; i++){
+    const l = BB.breedLitter(a, b, 'big');
+    const names = l.map((r) => r.child.name);
+    eq(new Set(names).size, names.length, 'no two siblings in a clutch share a name');
+    for (const r of l) eq(BB.STUD[r.child.id].name, r.child.name, 'the stud book agrees with the card');
+  }
 
   // line-breeding really does tilt the favoured stat
   let plain = 0, tilted = 0;
