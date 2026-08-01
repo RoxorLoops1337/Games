@@ -107,16 +107,90 @@ const BB = loadGame();
 /* ================================= cost =================================== */
 {
   eq(BB.deriveCost(6, 3, 'none'), 1, 'a modest beast costs 1');
-  eq(BB.deriveCost(20, 12, 'none'), 6 > 5 ? 5 : 6, 'cost is capped at 5');
-  eq(BB.deriveCost(30, 30, 'frenzy'), 5, 'huge stats + keyword still cap at 5');
+  eq(BB.deriveCost(200, 200, 'none'), 5, 'cost is capped at 5');
+  eq(BB.deriveCost(30, 30, 'frenzy'), 5, 'huge stats + an expensive keyword cap at 5');
   eq(BB.deriveCost(18, 4, 'runt'), 0, 'Runt is always free');
   ge(BB.deriveCost(14, 8, 'none'), BB.deriveCost(6, 3, 'none'), 'better stats cost more');
   ge(BB.deriveCost(8, 4, 'frenzy'), BB.deriveCost(8, 4, 'none'), 'a keyword adds to the cost');
   eq(BB.deriveCost(0, 0, 'none'), 0, 'cost never goes negative');
+  eq(BB.statPower(10, 5), 13, 'stat power weighs Hide at 0.6 of Might');
   ok(BB.power({ might: 10, hide: 5, trait: 'none' }) > BB.power({ might: 6, hide: 3, trait: 'none' }),
     'power tracks stats');
   ok(BB.power({ might: 10, hide: 5, trait: 'cursed' }) < BB.power({ might: 10, hide: 5, trait: 'none' }),
     'bad traits drag power down');
+
+  // The curve must be MONOTONE — never cheaper for being bigger.
+  let prev = 0;
+  for (let sp = 0; sp <= 120; sp++){
+    const c = BB.deriveCost(sp, 0, 'none');
+    ge(c, prev, 'cost never falls as stat power rises (at sp ' + sp + ')');
+    prev = c;
+  }
+
+  // ...and CONCAVE, which is the whole point of it. A beast twice the size of
+  // another must cost LESS than twice as much Feed, or breeding up makes your
+  // deck worse per Feed and the game eats itself.
+  // (integer costs mean the very smallest step can only manage "no worse" —
+  //  1 Feed cannot be subdivided — but from a real beast upwards it must gain.)
+  for (const sp of [10, 14, 20, 26, 34, 44]){
+    const small = BB.deriveCost(sp, 0, 'none');
+    const big = BB.deriveCost(sp * 2, 0, 'none');
+    ok(big <= small * 2, `doubling stat power from ${sp} never costs more than double Feed (${small} -> ${big})`);
+    if (sp >= 14) ok(big < small * 2, `doubling stat power from ${sp} costs strictly less than double Feed (${small} -> ${big})`);
+  }
+
+  // Value per Feed must never go DOWN as a lineage grows, comparing the top of
+  // one price band with the top of the next.
+  const bandTop = {};
+  for (let sp = 1; sp <= 130; sp++){
+    const c = BB.deriveCost(sp, 0, 'none');
+    if (c > 0) bandTop[c] = sp;
+  }
+  const costs = Object.keys(bandTop).map(Number).sort((x, y) => x - y);
+  for (let i = 1; i < costs.length; i++){
+    const lo = bandTop[costs[i - 1]] / costs[i - 1];
+    const hi = bandTop[costs[i]] / costs[i];
+    ok(hi > lo, `a ${costs[i]}-Feed beast can be better value than a ${costs[i - 1]}-Feed one (${lo.toFixed(1)} -> ${hi.toFixed(1)} sp/Feed)`);
+  }
+  ok(BB.deriveCost(45, 30, 'none') < 5, 'the curve does not saturate before the late game');
+}
+
+/* --------- the bug that made breeding feel pointless (regression) --------- */
+{
+  // Crossing two cost-1 beasts used to produce a cost-2 chick 62% of the time,
+  // for ~12% more animal — so 96% of chicks came out worse per Feed than their
+  // parents and breeding actively degraded your deck.
+  BB.newRun(1);
+  BB.srand(31);
+  const a = BB.R.deck.find((c) => c.name === 'Bogsnout');
+  const b = BB.R.deck.find((c) => c.name === 'Grunthide');
+  eq(a.cost, 1, 'Bogsnout costs 1');
+  eq(b.cost, 1, 'Grunthide costs 1');
+  const pSp = (BB.statPower(a.might, a.hide) + BB.statPower(b.might, b.hide)) / 2;
+
+  const N = 2000;
+  let stayedCheap = 0, grewAndPunished = 0, grew = 0;
+  for (let i = 0; i < N; i++){
+    const c = BB.breed(a, b).child;
+    const sp = BB.statPower(c.might, c.hide);
+    if (c.cost <= 1) stayedCheap++;
+    if (sp > pSp){
+      grew++;
+      if (sp / Math.max(1, c.cost) < pSp) grewAndPunished++;
+    }
+  }
+  ge(stayedCheap / N, 0.60, `most chicks of two cost-1 parents still cost 1 (${(stayedCheap/N*100).toFixed(0)}%)`);
+  le(grewAndPunished / grew, 0.30,
+    `a chick that grew is rarely punished by the price bracket (${(grewAndPunished/grew*100).toFixed(0)}%)`);
+
+  // and the chick you actually keep should usually be better value than its parents
+  let keptBetter = 0;
+  for (let i = 0; i < 500; i++){
+    const lit = BB.breedLitter(a, b, 'natural');
+    const best = lit.map((r) => r.child).sort((x, y) => BB.power(y) - BB.power(x))[0];
+    if (BB.statPower(best.might, best.hide) / Math.max(1, best.cost) >= pSp) keptBetter++;
+  }
+  ge(keptBetter / 500, 0.50, `the chick you keep is usually better value per Feed (${(keptBetter/5).toFixed(0)}%)`);
 }
 
 /* ================================ breeding ================================ */
