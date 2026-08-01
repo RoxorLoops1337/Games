@@ -1,0 +1,31 @@
+{
+  "id": "water",
+  "name": "Water",
+  "tile": true,
+  "palette": {
+    "d": "#1f5fae",
+    "m": "#2a86c6",
+    "b": "#35a8dd",
+    "l": "#5cc7ec",
+    "h": "#7fe0f5",
+    "w": "#d8fbff"
+  },
+  "rows": [
+    "bbmdddbbmmmbbbbb",
+    "bbbbbbbbllllmbbb",
+    "lmmmmmmmddddblll",
+    "dbmmmmhwhbbbmddd",
+    "bbbbbbblbmmmmmmm",
+    "bblllllmbbmmmmmb",
+    "bmdddddbbbbbbbbb",
+    "bbbbbbbbbbbbbbbb",
+    "bbbbmmmmmmllllmb",
+    "bbbbbmmmmmddddbb",
+    "lllmbbbbbbbbbbbb",
+    "dddbbbbbbbbbmmmm",
+    "mbbbblllllmbbhhm",
+    "mmmmmdddddbbbbbb",
+    "llmmbbbbbbbbbbll",
+    "ddblllmmmmmmbmdd"
+  ]
+}

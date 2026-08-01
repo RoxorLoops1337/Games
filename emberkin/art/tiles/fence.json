@@ -1,0 +1,35 @@
+{
+  "id": "fence",
+  "name": "Fence rail",
+  "tile": true,
+  "palette": {
+    "d": "#2f7a3a",
+    "m": "#3f8f3a",
+    "g": "#4aa03d",
+    "l": "#5cb340",
+    "t": "#7cc851",
+    "K": "#3d2a1b",
+    "s": "#5c4028",
+    "b": "#8a5f38",
+    "h": "#a87b4c",
+    "w": "#c69a68"
+  },
+  "rows": [
+    "ggddmdggtgggggmm",
+    "mgtggdmglgggggmg",
+    "gglgggwhKdgdgtgm",
+    "glldgghbKdgdmlgg",
+    "hhhhwhhbKhhwhhhh",
+    "bbwbbbbsKbbbwbbb",
+    "sssssshbKsssssss",
+    "ddddddhbKddddddd",
+    "ldggdmhbKgmgdggt",
+    "hhhhwhhbKhhwhhhh",
+    "bbwbbbbsKbbbwbbb",
+    "sssssshbKsssssss",
+    "ddddddhbKddddddd",
+    "gtmgmghbKgdmlggg",
+    "glgmglhbKdgllddg",
+    "llddgdsKgdgggddm"
+  ]
+}

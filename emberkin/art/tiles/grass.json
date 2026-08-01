@@ -1,0 +1,30 @@
+{
+  "id": "grass",
+  "name": "Meadow grass",
+  "tile": true,
+  "palette": {
+    "d": "#2f7a3a",
+    "m": "#3f8f3a",
+    "g": "#4aa03d",
+    "l": "#5cb340",
+    "t": "#7cc851"
+  },
+  "rows": [
+    "ggddmdggtgggggmm",
+    "mgtggdmglgggggmg",
+    "gglgggglldgdgtgm",
+    "glldggmmgdgdmlgg",
+    "gdgdgtmgdggglldg",
+    "gdmgglgmdmgtggdg",
+    "tggglldggmmlggdm",
+    "lgggdgdggmlldggg",
+    "ldggdmgdggmgdggt",
+    "gdgtgggdmtggdmgl",
+    "dgglggggglggmmll",
+    "dglldggglldgmgmg",
+    "dmmmdgtgggdgtmgg",
+    "gtmgmglgggdmlggg",
+    "glgmglldgggllddg",
+    "llddgggdgggggddm"
+  ]
+}
