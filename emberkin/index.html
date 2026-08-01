@@ -98,6 +98,8 @@
   .dexcell.unseen{ opacity:.35; }
   .dexcell small{ color:var(--dim); font-size:.65em; }
   .types{ display:flex; gap:4px; justify-content:center; margin-top:3px; }
+  .hud .types{ justify-content:flex-start; margin:3px 0 1px; }
+  .hud .tp{ font-size:.55em; padding:0 4px; }
   .tp{ font-size:.58em; letter-spacing:1px; text-transform:uppercase; padding:1px 5px; border-radius:3px; color:#120d18; font-weight:700; }
 
   /* ---------------- title ---------------- */
@@ -2395,6 +2397,7 @@ function doTurn(action) {
   const b = B();
   const log = [];
   b.turn++;
+  b.over = null;          // recomputed below; never inherit last turn's verdict
 
   // Non-move player actions happen first, then the foe still gets its turn.
   let playerMoved = false;
@@ -2714,8 +2717,9 @@ function renderHUD() {
   if (!b) { show(els.hudFoe, false); show(els.hudMine, false); return; }
   const box = (m, disp, mine) => {
     const f = clamp(disp / m.max, 0, 1);
-    const xpNow = m.xp - xpFor(m.lvl), xpNeed = Math.max(1, xpFor(m.lvl + 1) - xpFor(m.lvl));
+    const xpNeed = Math.max(1, xpFor(m.lvl + 1) - xpFor(m.lvl));
     return `<div class="nm"><span>${dispName(m)}${m.status ? `<span class="st">${STATUS[m.status].tag}</span>` : ''}</span><span class="lv">Lv${m.lvl}</span></div>
+      <div class="types">${typeChips(m.types)}</div>
       <div class="bar"><i style="width:${f * 100}%;background:${hpColor(f)}"></i></div>
       ${mine ? `<div class="bar xp"><i style="width:${clamp((m.xp - xpFor(m.lvl)) / xpNeed, 0, 1) * 100}%"></i></div>
       <div class="hpnum">${Math.round(disp)}/${m.max}</div>` : ''}`;
@@ -2903,6 +2907,20 @@ function closeScreen() {
 
 const typeChips = (types) => types.map((t) => `<span class="tp" style="background:${TYPES[t]}">${t}</span>`).join('');
 
+/** Where a species can be found — read straight off the encounter tables. */
+function habitat(id) {
+  const where = [];
+  for (const [mapId, map] of Object.entries(MAPS)) {
+    const row = ((map.enc && map.enc.table) || []).find((e) => e[0] === id);
+    if (row) where.push(`${map.name} (Lv${row[1]}–${row[2]})`);
+  }
+  if (where.length) return 'Found in ' + where.join(' · ');
+  const from = DEX_ORDER.find((p) => DEX[p].evo && DEX[p].evo[0] === id);
+  if (from) return `Evolves from ${DEX[from].name} at level ${DEX[from].evo[1]}.`;
+  if (STARTERS.includes(id)) return 'A kin Elder Rowan hands out.';
+  return 'Not found in the wild. Not anywhere, really.';
+}
+
 function renderScreen() {
   if (HEADLESS || !G.screen) return;
   const s = G.screen, el = els.screen;
@@ -2936,7 +2954,10 @@ function renderScreen() {
           ${st ? `<div class="types">${typeChips(DEX[id].types)}</div>` : '<small>not seen</small>'}</div>`;
       }).join('') + '</div>';
     const id = DEX_ORDER[s.i];
-    if ((G.dex[id] || 0) > 0) html += `<p style="font-size:13px;max-width:520px">${DEX[id].dex}</p>`;
+    if ((G.dex[id] || 0) > 0) {
+      html += `<p style="font-size:.82em;max-width:520px">${DEX[id].dex}</p>`;
+      html += `<p style="font-size:.75em;color:var(--dim)">${habitat(id)}</p>`;
+    }
   } else if (s.kind === 'box') {
     // Party and box are one list, so a swap is just two indices.
     const monCard = (m, i) => {
@@ -3383,7 +3404,7 @@ if (typeof window !== 'undefined') {
     enterMap, passable, warpAt, tileAt, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
-    newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect,
+    newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
     talkTo, rowanScript, sprite, artBottom, drawSpr,
     pressKey, releaseKey, keys, fired,
     setCtx: (c) => { ctx = c; },

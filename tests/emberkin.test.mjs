@@ -114,12 +114,15 @@ EK.startBattle({ foe: EK.mkMon('magmane', 50), wild: true });
 let over = null, g2 = 0;
 while (!over && g2++ < 20) over = EK.doTurn({ kind: 'move', id: G.party[0].moves[0].id }).length ? EK.B().over : null;
 eq(over, 'switch', 'one fainted but the bench is not empty');
-G.party[1].hp = 0;
 G.party[0].hp = 0;
+// Same thing the forced-switch screen does when the player sends out the next one.
 EK.B().mine = G.party[1];
+EK.B().over = null;
 G.party[1].hp = 1;
-const wipe = EK.doTurn({ kind: 'move', id: G.party[1].moves[0].id });
-ok(wipe.length > 0, 'the last stand still logs');
+let lastStand = [], g2b = 0;
+// The foe may buff or miss, so give the last stand a few turns to actually end.
+while (!EK.B().over && g2b++ < 20) lastStand = EK.doTurn({ kind: 'move', id: G.party[1].moves[0].id });
+ok(lastStand.length > 0, 'the last stand still logs');
 eq(EK.B().over, 'lose', 'the whole party down ends the battle');
 
 section('trainer battles chain their team and refuse capture');
@@ -298,6 +301,17 @@ for (const id of ['cindercub', 'dewdrip', 'sproutle']) spawnable.add(id);   // s
 for (const id of DEX_ORDER) {
   const viaEvo = DEX_ORDER.some((p) => DEX[p].evo && DEX[p].evo[0] === id && spawnable.has(p));
   ok(spawnable.has(id) || viaEvo, `${id} is catchable or evolvable`);
+}
+
+section('the dex tells you where to look');
+for (const id of DEX_ORDER) {
+  const h = EK.habitat(id);
+  ok(h.length > 10, `${id} has a habitat line`);
+  const wild = Object.values(MAPS).some((m) => ((m.enc && m.enc.table) || []).some((e) => e[0] === id));
+  const viaEvo = DEX_ORDER.some((p) => DEX[p].evo && DEX[p].evo[0] === id);
+  if (wild) ok(h.startsWith('Found in'), `${id} lists where it spawns`);
+  else if (viaEvo) ok(/Evolves from/.test(h), `${id} points at its pre-evolution`);
+  else ok(id === 'vespyr' || /Rowan/.test(h), `${id} explains how else to get it`);
 }
 
 section('movement, collision and warps');
