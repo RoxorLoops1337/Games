@@ -2154,14 +2154,15 @@ function drawTile(g, ch, sx, sy) {
   g.fillRect(sx, sy, TILE, TILE);
 }
 
-function drawActor(g, sprite_id, dir, step, sx, sy, moving) {
-  const base = sprite_id === 'player' ? 'player_' + dir : sprite_id;
-  let id = sprite_id === 'player' ? base + '_' + (moving ? step : 0) : sprite_id;
+/** The player's walk frame for a direction, with a mirrored fallback. */
+function drawPlayer(g, dir, step, sx, sy, moving) {
+  const frame = moving ? step : 0;
+  let id = `player_${dir}_${frame}`;
   let flip = false;
-  if (sprite_id === 'player' && !hasArt('actor', id) && (dir === 'right')) {
-    id = 'player_left_' + (moving ? step : 0); flip = true;   // mirror if right frames are missing
+  if (!hasArt('actor', id) && dir === 'right') {
+    id = `player_left_${frame}`; flip = true;      // mirror if right frames are missing
   }
-  if (!hasArt('actor', id)) id = sprite_id === 'player' ? 'player_down_0' : id;
+  if (!hasArt('actor', id)) id = 'player_down_0';
   drawSpr(g, 'actor', id, sx, sy, 1, { flip });
 }
 
@@ -2214,7 +2215,7 @@ function drawWorld(g) {
     const hop = p.hop ? Math.sin(clamp(1 - p.moveT / (STEP_TIME * 1.6), 0, 1) * Math.PI) * 7 : 0;
     const sx = Math.round(p.px * TILE - cam.x), sy = Math.round(p.py * TILE - cam.y - 6 - hop);
     if (hop > 0) { g.fillStyle = 'rgba(0,0,0,.28)'; g.fillRect(sx + 3, sy + 21 + hop, 10, 3); }
-    drawActor(g, 'player', p.dir, p.step, sx, sy, p.moveT > 0);
+    drawPlayer(g, p.dir, p.step, sx, sy, p.moveT > 0);
   } });
   ents.sort((a, b) => a.y - b.y).forEach((e) => e.draw());
 

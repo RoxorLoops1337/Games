@@ -162,4 +162,43 @@ ok(guard < 400, `the battle resolved through button mashing (${guard} frames)`);
 eq(fresh.G.battle, null, 'and handed control back to the world');
 eq(fresh.G.mode, 'world', 'the player is walking again');
 
+section('a monkey on the keyboard cannot break it');
+// Random input for thousands of frames, drawing every one. This is the cheapest
+// way to find the state a hand-written test would never think to reach.
+const monkey = loadGame({});
+monkey.setCtx(mkCtx());
+monkey.newGame();
+monkey.G.party = [monkey.mkMon('cindercub', 8), monkey.mkMon('dewdrip', 7)];
+monkey.G.bag = { bloomorb: 20, salve: 5, revive: 2, elixir: 2 };
+monkey.G.flags = { gotStarter: 1, starter: 'cindercub' };
+monkey.enterMap('route_one', 9, 10, 'down');   // drop it where there is grass to walk into
+monkey.G.mode = 'world'; monkey.G.dialogue = null;
+const KEYS = ['up', 'down', 'left', 'right', 'a', 'b', 'a', 'a'];
+const MODES = new Set(['world', 'battle', 'dialogue', 'menu', 'screen', 'title']);
+let crashed = null, modesSeen = new Set(), battles = 0, wasBattle = false;
+for (let i = 0; i < 6000 && !crashed; i++) {
+  const k = KEYS[Math.floor(Math.random() * KEYS.length)];
+  try {
+    monkey.pressKey(k);
+    monkey.step(.05 + Math.random() * .05);
+    monkey.releaseKey(k);
+    monkey.fired.clear();
+    monkey.draw();
+  } catch (e) { crashed = `frame ${i}, key ${k}: ${e && e.stack ? e.stack.split('\n')[0] : e}`; }
+  modesSeen.add(monkey.G.mode);
+  if (monkey.G.battle && !wasBattle) battles++;
+  wasBattle = !!monkey.G.battle;
+  // Keep it alive so it goes on finding new states rather than sitting in a wipe.
+  if (!monkey.G.party.some((m) => m.hp > 0)) monkey.healParty();
+}
+ok(!crashed, `6000 random frames survived${crashed ? ' — ' + crashed : ''}`);
+ok([...modesSeen].every((m) => MODES.has(m)), `only valid modes reached (${[...modesSeen].join(', ')})`);
+ok(modesSeen.has('world'), 'it walked around');
+ok(battles > 0, `it stumbled into ${battles} battles`);
+ok(monkey.G.party.length >= 1, 'it still has a party');
+ok(monkey.G.party.every((m) => m.hp >= 0 && m.hp <= m.max), 'HP never went out of bounds');
+ok(monkey.G.party.every((m) => m.moves.every((mv) => mv.pp >= 0 && mv.pp <= mv.max)), 'PP never went out of bounds');
+ok(monkey.G.money >= 0, 'shards never went negative');
+ok(monkey.G.party.length <= 6, 'the party never overflowed');
+
 done('emberkin_render');
