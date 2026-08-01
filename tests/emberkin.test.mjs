@@ -38,7 +38,9 @@ for (const id of DEX_ORDER) {
 }
 for (const [id, m] of Object.entries(MOVES)) {
   ok(!!TYPES[m.type], `${id} has a real type`);
-  ok(m.pp >= 5 && m.pp <= 40, `${id} pp sane`);
+  // Falter is the out-of-PP fallback: it never occupies a slot, so its own PP
+  // is never spent and the usual floor does not apply to it.
+  if (id !== 'falter') ok(m.pp >= 5 && m.pp <= 40, `${id} pp sane`);
   ok(m.pow >= 0 && m.pow <= 130, `${id} power sane`);
   ok(m.pow > 0 || !!m.fx, `${id} either hits or does something`);
 }
@@ -139,6 +141,20 @@ let g3 = 0;
 while (!EK.B().over && g3++ < 30) EK.doTurn({ kind: 'move', id: G.party[0].moves[0].id });
 eq(EK.B().over, 'win', 'beating the whole team wins');
 ok(g3 > 1, 'the second team member was sent out');
+
+section('running out of PP never locks the battle');
+ok(!!MOVES.falter, 'there is a last-resort move');
+ok(!DEX_ORDER.some((id) => DEX[id].learn.some((e) => e[1] === 'falter')), 'nobody learns Falter');
+G.party = [EK.mkMon('gargolem', 30)];
+EK.startBattle({ foe: EK.mkMon('pebblet', 30), wild: false, team: [['pebblet', 30]], npc: { name: 'T', id: 't_pp', trainer: { team: [['pebblet', 30]], prize: 1 } } });
+const dry = EK.B().mine;
+dry.moves.forEach((m) => { m.pp = 0; });
+const foeHp = EK.B().foe.hp;
+const faltered = EK.doTurn({ kind: 'move', id: 'falter' });
+ok(faltered.some((e) => /Falter/.test(e.t)), 'Falter can still be used');
+ok(EK.B().foe.hp < foeHp, 'and it does damage');
+ok(dry.hp < dry.max, 'at a cost to yourself');
+ok(dry.moves.every((m) => m.pp === 0), 'Falter does not consume a move slot');
 
 section('capture maths');
 const weak = EK.mkMon('zaplet', 5); weak.hp = 1;
