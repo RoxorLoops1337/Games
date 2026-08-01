@@ -79,6 +79,7 @@
   .btn:hover{ filter:brightness(1.07); }
   .btn:active{ transform:translateY(3px); box-shadow:inset 0 1px 0 rgba(255,255,255,.35), 0 1px 0 #4e8020; }
   .btn[disabled]{ filter:grayscale(.8) brightness(.6); cursor:not-allowed; box-shadow:0 4px 0 #2a2a2a; }
+  .btn.busy{ filter:grayscale(.55) brightness(.78); }   /* mid-turn: tap = skip, not end */
   .btn.alt{ color:#f0ffe6; background:linear-gradient(180deg,#445c46,#26362a);
     box-shadow:inset 0 1px 0 rgba(190,255,150,.16), 0 4px 0 #16211a, 0 8px 16px rgba(0,0,0,.4); }
   .btn.pinky{ color:#2a0c1e; background:linear-gradient(180deg,#ffb0e0,#ff69c0);
@@ -242,7 +243,7 @@
   .bdg.psn{ color:#b6ff8a; border-color:#4f7a33; }
   .bdg.blk{ color:var(--blue); border-color:#2f5b7a; }
   .bdg.thn{ color:#ffb0e0; border-color:#7a3a63; }
-  .flyer{ position:absolute; font-size:34px; font-weight:900; pointer-events:none;
+  .flyer{ position:fixed; font-size:34px; font-weight:900; pointer-events:none;
     -webkit-text-stroke:1.5px rgba(10,18,10,.9); paint-order:stroke fill;
     text-shadow:0 2px 8px #000; animation:fly 1s ease-out forwards; z-index:9; }
   @keyframes fly{ 0%{opacity:1; transform:translateY(0) scale(.4)}
@@ -256,9 +257,11 @@
     border-top:1px solid rgba(166,255,94,.10); }
   .penlbl{ position:absolute; left:10px; bottom:6px; font-size:var(--t-label); letter-spacing:3px;
     font-weight:800; color:#6d8a5e; text-transform:uppercase; }
-  .slot{ width:112px; height:118px; border-radius:12px; border:2px dashed #2b3f26;
-    background:rgba(8,14,8,.35);
-    display:flex; align-items:center; justify-content:center; color:#3f5836; font-size:22px; }
+  /* an empty stall, not a wireframe box */
+  .slot{ width:112px; height:118px; border-radius:12px; border:1px dashed rgba(120,170,95,.22);
+    background:linear-gradient(180deg,rgba(8,14,8,.15),rgba(8,14,8,.5));
+    box-shadow:inset 0 8px 18px -10px #000;
+    display:flex; align-items:center; justify-content:center; color:#33482c; font-size:22px; }
   .pb{ position:relative; width:112px; border-radius:12px; overflow:hidden; cursor:help;
     background:linear-gradient(180deg,#22331f,#101a10); border:2px solid #4a7a34;
     box-shadow:inset 0 1px 0 rgba(190,255,150,.18), 0 2px 0 #0a120a, 0 9px 16px -6px rgba(0,0,0,.7);
@@ -376,6 +379,10 @@
   .keepsake b{ color:var(--gold); }
   .keepsake[hidden]{ display:none; }
   #oTitle{ font-size:clamp(24px,4.6vw,34px); letter-spacing:-.2px; }
+  /* On the busiest clutch (three chicks, long banners) the card scrolls; the
+     verdict button must stay reachable without discovering that it scrolls. */
+  #hatch .tcard .footer{ position:sticky; bottom:-2px; z-index:4; margin-top:2px;
+    padding:10px 0 4px; background:linear-gradient(180deg, rgba(14,24,16,0) 0%, #0e1810 42%); }
   #over.win #oTitle{ color:var(--lime); text-shadow:0 0 20px rgba(150,255,90,.35), 0 3px 0 #33591a; }
   /* a loss must not be dressed as a win */
   #over.lose #oTitle{ color:#ff7b7b; text-shadow:0 0 18px rgba(255,90,90,.35), 0 3px 0 #6b1f1f; }
@@ -387,6 +394,189 @@
     border:1px solid #2e4530; background:rgba(10,18,10,.7); color:var(--lime); font-size:14px;
     cursor:pointer; font-family:inherit; z-index:20; }
   .scrollcap{ overflow-y:auto; }
+
+  /* ==========================================================================
+     JUICE — anticipation, impact, follow-through.
+     Everything below is presentation only: no rule in the game depends on a
+     timer having fired. Heavy motion is neutralised by the reduced-motion
+     block at the bottom of this sheet.
+     ========================================================================== */
+
+  /* a fixed layer for particles, flying cards and resemblance lines */
+  #fxlayer{ position:fixed; inset:0; pointer-events:none; z-index:30; overflow:hidden; }
+  .fxp{ position:fixed; width:7px; height:7px; border-radius:2px; will-change:transform,opacity; }
+  .fxdust{ position:fixed; border-radius:50%; background:rgba(190,220,160,.30); will-change:transform,opacity; }
+  .ghostcard{ position:fixed; z-index:32; pointer-events:none; transform-origin:50% 50%;
+    will-change:transform; filter:drop-shadow(0 12px 18px rgba(0,0,0,.7)); }
+
+  /* --- the hand card: press, travel, land --- */
+  .card{ transition:transform .16s cubic-bezier(.2,.9,.3,1.25), box-shadow .16s ease, filter .06s linear; }
+  #fight .handrow .card:active{ transform:translateY(-10px) scale(1.04); filter:brightness(1.25); }
+  .card.nope{ animation:nope .26s ease; }
+  @keyframes nope{ 0%,100%{transform:translateX(0)} 20%{transform:translateX(-8px)}
+    55%{transform:translateX(8px)} 80%{transform:translateX(-4px)} }
+  .feed i{ transition:background .12s ease, border-color .12s ease, transform .12s ease; }
+  .feed i.spend{ animation:pipspend .26s ease-out both; }
+  @keyframes pipspend{ 0%{ transform:scale(1.35); background:#ffe793; border-color:#fff0b0;
+      box-shadow:0 0 10px rgba(255,211,77,.9) } 100%{ transform:scale(1) } }
+  .feed i.fill{ animation:pipfill .3s cubic-bezier(.2,1.5,.4,1) both; }
+  @keyframes pipfill{ from{ transform:scale(.2); opacity:.2 } to{ transform:scale(1); opacity:1 } }
+
+  /* --- the pen: four animals that breathe, lunge, flinch and fall --- */
+  .pb canvas{ animation:bob 2.4s ease-in-out infinite; will-change:transform; }
+  @keyframes bob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-3px)} }
+  .pb.lunge{ animation:lunge .23s cubic-bezier(.25,.9,.3,1.4); z-index:3; }
+  @keyframes lunge{ 0%{transform:translateY(0) scale(1)} 38%{transform:translateY(-14px) scale(1.06)}
+    74%{transform:translateY(4px) scale(.985)} 100%{transform:translateY(0) scale(1)} }
+  .pb.flash{ filter:brightness(2.4) saturate(0);
+    box-shadow:0 0 0 2px #fff, 0 0 22px 3px rgba(255,70,70,.7); }
+  .pb.dying{ animation:dying .46s ease-in forwards; pointer-events:none; z-index:1; }
+  @keyframes dying{ 0%{transform:none; opacity:1}
+    to{ transform:rotate(-14deg) translateY(26px) scale(.86); opacity:0; filter:grayscale(1) } }
+  .pb.arriving{ opacity:0; }
+  .pb.landing{ animation:land .18s ease-out; }
+  @keyframes land{ 0%{transform:scaleY(.82) scaleX(1.08)} 55%{transform:scaleY(1.08) scaleX(.96)}
+    100%{transform:none} }
+  .slot.lit{ animation:slotlit .3s ease-out; }
+  @keyframes slotlit{ 0%{ background:rgba(166,255,94,.35); border-color:var(--lime);
+      box-shadow:0 0 20px rgba(166,255,94,.5) } 100%{} }
+  .pb .ph i{ transition:width .22s cubic-bezier(.3,.9,.4,1); }
+
+  /* --- the foe: wind-up, impact, follow-through --- */
+  .foe.windup .em{ animation:windup .3s ease-in forwards; }
+  @keyframes windup{ from{transform:none} to{ transform:translateX(-18px) scale(.92) } }
+  .foe.lunging .em{ animation:foelunge .3s cubic-bezier(.2,.9,.3,1.4); }
+  @keyframes foelunge{ 0%{transform:translateX(-18px) scale(.92)}
+    26%{transform:translateX(14px) scale(1.12)} 100%{transform:translateX(0) scale(1)} }
+  #arena.shk{ animation:ashake .13s steps(2) 3; }
+  @keyframes ashake{ 0%{transform:translateX(-5px)} 50%{transform:translateX(5px)} 100%{transform:none} }
+  .foe.dying .em{ animation:foedie .5s ease-in forwards; }
+  @keyframes foedie{ to{ transform:translateY(30px) rotate(18deg) scale(.7); opacity:0;
+    filter:grayscale(1) brightness(.5) } }
+
+  /* --- the intent pill: what is about to happen to you, typed --- */
+  .intent{ display:inline-flex; align-items:center; gap:7px; padding:3px 12px; border-radius:999px;
+    border:1px solid #4d6b3f; background:rgba(6,12,6,.55); color:#cfe0c2;
+    font-size:11px; font-weight:800; letter-spacing:1.3px; text-transform:uppercase;
+    max-width:92vw; }
+  .intent .n{ font-size:19px; font-weight:900; letter-spacing:0; line-height:1; }
+  .intent .x{ font-size:11px; opacity:.8; letter-spacing:0; }
+  .intent.atk{ border-color:#c9503f; color:#ffb9a6; background:rgba(48,14,10,.55); }
+  .intent.atk .n{ color:#ff8f6b; }
+  .intent.rush{ border-color:var(--pink); color:#ffc9ea; background:rgba(52,10,38,.6); }
+  .intent.rush .n{ color:var(--pink); }
+  .intent.def{ border-color:#3d6f96; color:#bfe2ff; background:rgba(9,22,34,.55); }
+  .intent.def .n{ color:var(--blue); }
+  .intent.buf{ border-color:#8a7126; color:#ffe6a4; background:rgba(38,30,6,.5); }
+  .intent.buf .n{ color:var(--gold); }
+  .intent.danger{ animation:dpulse .84s ease-in-out infinite; }
+  @keyframes dpulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(255,60,60,0) }
+    50%{ box-shadow:0 0 0 5px rgba(255,60,60,.30) } }
+  .hpbar.danger{ animation:barpulse .84s ease-in-out infinite; }
+  @keyframes barpulse{ 0%,100%{ box-shadow:inset 0 2px 4px rgba(0,0,0,.6) }
+    50%{ box-shadow:inset 0 2px 4px rgba(0,0,0,.6), 0 0 0 3px rgba(255,60,60,.35) } }
+  .hpbar i.heal{ transition:width .5s cubic-bezier(.2,.9,.3,1); }
+
+  /* --- numbers that move --- */
+  .flyer.crit{ color:#ffffff !important; -webkit-text-stroke:2px rgba(120,10,10,.9); }
+  .bump{ animation:numbump .22s ease-out; display:inline-block; }
+  @keyframes numbump{ 0%{transform:scale(1.25)} 100%{transform:scale(1)} }
+  .bdg.lit{ animation:bdglit .34s ease-out; }
+  @keyframes bdglit{ 0%{ transform:scale(1.22); color:#0e1a0c; background:var(--lime);
+      box-shadow:0 0 16px rgba(166,255,94,.75) } 100%{} }
+  .slopbox.lit{ animation:sloplit .4s ease-out; }
+  @keyframes sloplit{ 0%{ transform:scale(1.12); background:#3a3212; box-shadow:0 0 18px rgba(255,211,77,.6) }
+    100%{ transform:scale(1) } }
+
+  /* --- the streak: the only thing in the game that compounds on screen --- */
+  .streak{ display:inline-flex; align-items:center; gap:3px; font-size:var(--t-label);
+    letter-spacing:2px; font-weight:800; color:#6d8a5e; text-transform:uppercase; }
+  .streak b{ display:flex; gap:3px; }
+  .streak b i{ width:8px; height:8px; border-radius:50%; background:#7cc93a; display:block;
+    box-shadow:0 0 7px rgba(166,255,94,.75); animation:pop .3s ease both; }
+  .streak b i:nth-child(2){ animation-delay:.05s } .streak b i:nth-child(3){ animation-delay:.1s }
+  .streak b i:nth-child(4){ animation-delay:.15s } .streak b i:nth-child(5){ animation-delay:.2s }
+  .streak.brk{ color:#ff7b7b; animation:nope .34s ease; }
+  .streak.brk b i{ background:#6b2a2a; box-shadow:none; }
+
+  /* --- the clutch: tension, crack, payoff --- */
+  .pickwrap{ position:relative; }
+  .pickwrap.sealed > .card, .pickwrap.sealed > .tagline{ opacity:0; }
+  .pickwrap.sealed{ animation:none !important; }
+  .shell{ position:absolute; inset:0; z-index:4; display:flex; align-items:center; justify-content:center;
+    pointer-events:none; }
+  .shell::before{ content:''; position:absolute; left:50%; top:44%; width:190px; height:190px;
+    transform:translate(-50%,-50%); border-radius:50%; opacity:var(--glow,0);
+    background:radial-gradient(circle, rgba(166,255,94,.55), transparent 66%); }
+  .shell .half{ position:absolute; top:44%; left:50%; transform:translate(-50%,-50%);
+    font-size:104px; line-height:1; filter:drop-shadow(0 10px 12px rgba(0,0,0,.6)); }
+  .shell .half.b{ clip-path:inset(50% 0 0 0); }
+  .shell .half.a{ clip-path:inset(0 0 50% 0); }
+  .shell.wob{ animation:wob 1.1s ease-in-out infinite; }
+  .pickwrap.jit .shell{ animation:jit .07s linear infinite; }
+  @keyframes jit{ 0%{transform:translate(-2px,1px) rotate(-2deg)} 50%{transform:translate(2px,-1px) rotate(2deg)}
+    100%{transform:translate(-2px,0) rotate(-1deg)} }
+  .pickwrap.crk .shell{ animation:none; }
+  .pickwrap.crk .half.a{ animation:shellA .44s cubic-bezier(.4,.1,.8,.6) forwards; }
+  .pickwrap.crk .half.b{ animation:shellB .44s cubic-bezier(.4,.1,.8,.6) forwards; }
+  @keyframes shellA{ to{ transform:translate(calc(-50% - 16px),-16px) rotate(-44deg); opacity:0 } }
+  @keyframes shellB{ to{ transform:translate(calc(-50% + 16px),22px) rotate(44deg); opacity:0 } }
+  /* the chicks you did not keep, on their way to market */
+  .card.tomarket{ animation:tomarket .5s ease-in forwards; pointer-events:none; }
+  @keyframes tomarket{ to{ transform:translate(30vw,-40vh) scale(.4) rotate(12deg);
+    opacity:0; filter:grayscale(.7) } }
+  .banner.slam{ animation:slam .3s cubic-bezier(.2,1.7,.4,1) both; }
+  @keyframes slam{ from{ transform:scale(2.2); opacity:0 } to{ transform:scale(1); opacity:1 } }
+  .banner.gold2{ background:linear-gradient(180deg,#fff0b0,#ffc32d); color:#2a1c00;
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 0 22px rgba(255,211,77,.8); }
+  #app.shk{ animation:appshake .07s steps(2) 4; }
+  @keyframes appshake{ 0%{transform:translate(-4px,2px)} 50%{transform:translate(4px,-2px)} 100%{transform:none} }
+  #app.sick::before{ opacity:0; animation:sickwipe .7s ease-out;
+    background:linear-gradient(120deg, transparent, rgba(120,190,110,.5) 45%, transparent 70%); }
+  @keyframes sickwipe{ 0%{opacity:0} 35%{opacity:.85} 100%{opacity:0} }
+  #app.close::after{ animation:closeflash .6s ease-out; }
+  @keyframes closeflash{ 0%{ background:radial-gradient(ellipse 118% 88% at 50% 44%, transparent 20%, rgba(90,0,0,.7)) }
+    100%{} }
+
+  /* --- resemblance: the one thing this game has that nothing else has --- */
+  .rline{ position:fixed; height:2px; transform-origin:0 50%; pointer-events:none; z-index:31;
+    background:linear-gradient(90deg, rgba(255,138,212,0), var(--pink));
+    box-shadow:0 0 10px rgba(255,138,212,.7); }
+  .rlab{ position:fixed; z-index:31; pointer-events:none; font-size:10.5px; font-weight:800;
+    letter-spacing:1.4px; text-transform:uppercase; color:var(--pink); white-space:nowrap;
+    text-shadow:0 2px 6px #000; animation:pop .26s ease both; }
+  .rlab.nw{ color:#fff; background:var(--pink); color:#2a0c1e; padding:1px 6px; border-radius:6px; }
+
+  /* --- the pairing preview: the ghost of the chick you have not bred yet --- */
+  .pairprev{ flex:0 0 auto; display:flex; align-items:center; justify-content:center; gap:14px;
+    padding:6px 10px 8px; }
+  .pairprev .pp{ text-align:center; }
+  .pairprev canvas{ display:block; width:96px; height:70px; border-radius:10px;
+    background:radial-gradient(ellipse at 50% 80%, #17261b, #060c06 80%); }
+  .pairprev .pp.gh canvas{ opacity:.5; filter:blur(.4px); border:1px dashed rgba(255,138,212,.4); }
+  .pairprev .lbl{ font-size:9.5px; letter-spacing:1.6px; text-transform:uppercase; color:#6d8a5e;
+    font-weight:800; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    max-width:104px; }
+  .pairprev .pp.gh .lbl{ color:var(--pink); }
+  .pairprev[hidden]{ display:none; }
+
+  /* --- the cull: a ceremony, not a re-render --- */
+  .card.leaving{ animation:leaving .7s ease-in forwards; z-index:5; position:relative; }
+  @keyframes leaving{ 0%{ transform:none; filter:none }
+    22%{ transform:translateY(-40px) rotate(5deg); filter:grayscale(.5) }
+    100%{ transform:translateY(-70vh) rotate(7deg); opacity:0; filter:grayscale(1) } }
+  .grid.mourning > .card:not(.leaving){ transform:translateY(4px); opacity:.42;
+    transition:transform .3s ease, opacity .3s ease; }
+  .receipt{ position:fixed; left:50%; top:38%; transform:translate(-50%,-50%); z-index:33;
+    pointer-events:none; padding:12px 20px; border-radius:6px; max-width:86vw;
+    background:linear-gradient(180deg,#efeade,#d9d2c2); color:#2b2a22;
+    font-family:'Courier New',ui-monospace,monospace; font-size:13px; letter-spacing:.3px;
+    box-shadow:0 18px 40px rgba(0,0,0,.7); animation:receipt 2s ease-out forwards; text-align:center; }
+  .receipt b{ display:block; font-size:15px; letter-spacing:1px; }
+  .receipt small{ display:block; margin-top:3px; color:#6b6759; font-size:11px; }
+  @keyframes receipt{ 0%{ transform:translate(-50%,-50%) scale(.85) rotate(-1.5deg); opacity:0 }
+    14%{ transform:translate(-50%,-50%) scale(1) rotate(-1.5deg); opacity:1 }
+    76%{ opacity:1 } 100%{ transform:translate(-50%,-64%) scale(.98) rotate(-1.5deg); opacity:0 } }
 
   @media (max-width:520px){
     /* the nest header was shredding into seven lines */
@@ -400,6 +590,16 @@
     .scrhead h2{ font-size:19px; }
     .scrhead .count{ font-size:22px; }
     .penlbl{ display:none; }        /* no room for it once the pen fills the width */
+    /* the top bar has no room for the record or the streak on a phone */
+    #nBest{ white-space:nowrap; }
+    #nBest .recpart{ display:none; }
+    #nStreak{ display:none; }
+    .pairprev{ gap:7px; padding:4px 6px 6px; }
+    .pairprev canvas{ width:74px; height:56px; }
+    .pairprev .lbl{ max-width:78px; font-size:8.5px; letter-spacing:1px; }
+    .pairprev .plus{ width:16px; height:16px; }
+    .pairprev .plus::before{ width:16px; height:4px; }
+    .pairprev .plus::after{ width:4px; height:16px; }
   }
   @media (max-width:420px){
     .grid{ grid-template-columns:repeat(auto-fill,minmax(100px,1fr)); gap:10px 8px; }
@@ -413,6 +613,7 @@
     #nestNote{ display:none; }        /* the nest pair is on the previous screen anyway */
     .fbar .pile{ font-size:10px; }
     .hpbar{ width:56px; }
+    #nBest{ display:none; }   /* the bar is full; the pairing preview carries the run */
     .pen{ gap:7px; min-height:132px; }
     .pb,.slot{ width:96px; }
     .slot{ height:108px; }
@@ -425,6 +626,9 @@
     *,*::before,*::after{ animation-duration:.001s !important; animation-iteration-count:1 !important;
       transition-duration:.001s !important; }
     .foe .em{ animation:none; }
+    .pb canvas{ animation:none; }
+    #fxlayer{ display:none; }       /* particles carry no information */
+    .grid.mourning > .card:not(.leaving){ transform:none; }
   }
 
   .delta .i{ margin:0 0 0 2px; }
@@ -469,6 +673,8 @@
 </svg>
 <div id="app">
   <button id="mute" title="Sound">&#9835;</button>
+  <!-- particles, flying cards, resemblance lines. Never hit-tested. -->
+  <div id="fxlayer"></div>
 
   <!-- ================= TITLE ================= -->
   <div class="scr on" id="title">
@@ -498,8 +704,10 @@
     <div class="bar">
       <div class="hpbox"><svg class="i"><use href="#i-hp"/></svg><span id="nHp">40</span>
         <div class="hpbar"><i id="nHpBar" style="width:100%"></i></div></div>
-      <div class="slopbox" id="nSlop"><svg class="i"><use href="#i-slop"/></svg> 2</div>
+      <div class="slopbox" id="nSlop"><svg class="i"><use href="#i-slop"/></svg> <span id="nSlopN" class="num">2</span></div>
+      <div class="tiny" id="nBest" style="letter-spacing:1.6px"></div>
       <div class="grow"></div>
+      <div class="streak" id="nStreak"></div>
       <div class="pip" id="nPips"></div>
     </div>
     <div class="panel foeprev" style="margin-bottom:8px">
@@ -516,6 +724,9 @@
     <div class="instr" style="text-align:center; padding:8px 0 8px" id="nHint">
       Pick <b class="pink">two</b> beasts for the Nest &mdash; they skip this fight and breed after it.
     </div>
+    <!-- the pairing preview: both parents drawn large with the chick you would
+         expect ghosted between them. The gene system, before the fight. -->
+    <div class="pairprev" id="nPair" hidden></div>
     <div class="deckwrap"><div class="grid" id="nGrid"></div></div>
     <div class="footer">
       <button class="btn alt sm" id="bBook"><svg class="i"><use href="#i-book"/></svg> STUD BOOK</button>
@@ -561,7 +772,7 @@
       <h2 id="hTitle" style="font-size:24px; color:#ff8ad4">THE NEST STIRS</h2>
       <div class="parents" id="hParents" style="margin:12px 0 6px"></div>
       <div class="instr" id="hSub">Keep <b class="pink">one</b>. The rest go to market.</div>
-      <div class="hatchrow" id="hChild" style="margin:12px 0 6px"></div>
+      <div class="hatchrow" id="hChild" style="margin:20px 0 6px"></div>
       <div id="hBanners" style="min-height:30px"></div>
       <div id="hDeltas" class="instr" style="min-height:20px; font-size:13px"></div>
       <div class="footer"><button class="btn" id="bHatchNext" disabled>KEEP IT</button></div>
@@ -792,12 +1003,19 @@ function blendHue(a, b, t){ // shortest way round the wheel, so kids land betwee
   return (a + d * t + 360) % 360;
 }
 function breedVis(a, b, wild){
+  // `prov` records which parent won each coin flip. Purely cosmetic — nothing
+  // in the rules reads it — but it is what lets the hatch screen point at the
+  // chick's horns and say whose they are. The rng call ORDER below is load
+  // bearing: every recorder draws exactly one number, exactly where the old
+  // expression did, so a seeded run replays identically.
   const t = rng();
-  const p = (k) => rng() < 0.5 ? a.vis[k] : b.vis[k];
+  const prov = {};
+  const p = (k) => { const r = rng(); prov[k] = r < 0.5 ? 'a' : 'b'; return r < 0.5 ? a.vis[k] : b.vis[k]; };
+  const lean = (k, r) => { prov[k] = r < 0.5 ? 'a' : 'b'; return r; };
   const v = {
-    hue: Math.round(blendHue(a.vis.hue, b.vis.hue, t)),
+    hue: Math.round(blendHue(a.vis.hue, b.vis.hue, lean('hue', t))),
     hue2: Math.round(blendHue(a.vis.hue2, b.vis.hue2, rng())),
-    body: a.vis.body + (b.vis.body - a.vis.body) * rng(),
+    body: (function(){ const r = lean('body', rng()); return a.vis.body + (b.vis.body - a.vis.body) * r; })(),
     eyes: p('eyes'), horns: p('horns'), wings: p('wings'),
     spots: a.vis.spots + (b.vis.spots - a.vis.spots) * rng(),
     tail: p('tail'),
@@ -805,10 +1023,11 @@ function breedVis(a, b, wild){
   };
   // a visual mutation, more likely when the blood is odd
   const mc = 0.14 * wild;
-  if (rng() < mc) v.hue = (v.hue + ri(40, 320)) % 360;
-  if (rng() < mc) v.horns = ri(0, 3);
-  if (rng() < mc) v.wings = ri(0, 2);
-  if (rng() < mc) v.eyes = ri(1, 3);
+  if (rng() < mc){ v.hue = (v.hue + ri(40, 320)) % 360; prov.hue = 'new'; }
+  if (rng() < mc){ v.horns = ri(0, 3); prov.horns = 'new'; }
+  if (rng() < mc){ v.wings = ri(0, 2); prov.wings = 'new'; }
+  if (rng() < mc){ v.eyes = ri(1, 3); prov.eyes = 'new'; }
+  v.prov = prov;
   return v;
 }
 function childName(a, b, tags){
@@ -857,7 +1076,12 @@ function breed(a, b, opts){
   const avgM = (a.might + b.might) / 2, avgH = (a.hide + b.hide) / 2;
   const tags = [];
   const ratio = (might + hide + 1) / (avgM + avgH + 1);
-  if (ratio >= 1.20) tags.push('prodigy');
+  // 1.20 crowned the top quarter of completely ordinary rolls (the middle band
+  // alone tops out at 1.23), so PRODIGY fired about half the time and meant
+  // nothing. 1.32 needs the roll to have actually gone to the good tail, and
+  // 1.60 is the once-in-a-few-runs animal that deserves the gold border.
+  if (ratio >= 1.32) tags.push('prodigy');
+  if (ratio >= 1.60) tags.push('champion');
   if (ratio <= 0.86) tags.push('runt');
   if (inbred) tags.push('inbred');
   if (fertile) tags.push('fertile');
@@ -888,7 +1112,15 @@ function breedLitter(a, b, ritual){
   const n = 2 + (a.trait === 'fertile' || b.trait === 'fertile' ? 1 : 0) + (r.extra || 0);
   const opts = { focus: r.focus, strange: !!r.strange };
   const out = [];
-  for (let i = 0; i < n; i++) out.push(breed(a, b, opts));
+  const brood = [];
+  for (let i = 0; i < n; i++){
+    const res = breed(a, b, opts);
+    // Two cards called Fenmaw side by side is not a choice, it is a bug.
+    res.child.name = uniquifyName(res.child, brood.concat([res.child]));
+    if (STUD[res.child.id]) STUD[res.child.id].name = res.child.name;
+    brood.push(res.child);
+    out.push(res);
+  }
   return out;
 }
 
@@ -1031,6 +1263,9 @@ function newRun(seed){
     slop: 2, ritual: 'natural', hazard: null, litter: null,
     log: [], born: 0, retired: 0, wins: 0, sold: 0,
     lastHatch: null, wildOffer: null, over: null,
+    // cosmetic spine: fights won without losing a beast. Pays nothing — it is
+    // a thing to look at and a thing to lose, not an economy.
+    streak: 0, bestStreak: 0, streakBroke: 0,
   };
   rollHazard();
   return R;
@@ -1097,9 +1332,18 @@ function startFight(mods){
     feed: fm, feedMax: fm,
     turn: 1, over: null, hit: 0, log: [], uid: 1,
     mods: mods || {},
+    events: [],            // presentation transcript, drained by doEnd()
   };
   drawCards(handSize());
   return F;
+}
+/** The rules stay synchronous and authoritative; as they resolve they leave a
+ *  breadcrumb trail here so the UI can replay the turn one beat at a time.
+ *  Nothing reads F.events to decide anything — it is a transcript, not state. */
+function ev(k, o){
+  if (!F || !F.events) return;
+  if (F.events.length > 200) return;   // a runaway loop must not eat memory
+  F.events.push(Object.assign({ k }, o));
 }
 function handSize(){ return HAND_SIZE + ((F && F.mods && F.mods.hand) || 0); }
 function drawCards(n){
@@ -1150,6 +1394,7 @@ function damagePlayer(v){
   if (v <= 0) return 0;
   R.hp -= v;
   if (R.hp <= 0){ R.hp = 0; F.over = 'lose'; }
+  ev('you', { v, hp: R.hp });
   return v;
 }
 /** Hurt one beast in the pen. Returns how much of the blow it actually soaked —
@@ -1159,11 +1404,15 @@ function hurtBeast(b, v){
   const soaked = Math.min(v, Math.ceil(b.hp / mult));
   b.hp -= Math.ceil(v * mult);
   if (b.c.trait === 'thorns') damageFoe(3);
+  ev('hit', { uid: b.uid, v: Math.ceil(v * mult), hp: Math.max(0, b.hp), max: b.max,
+    thorns: b.c.trait === 'thorns', fhp: F ? F.foe.hp : 0 });
   if (b.hp <= 0){
     const i = F.pen.indexOf(b);
     if (i >= 0) F.pen.splice(i, 1);
     F.disc.push(b.c);
     fLog(b.c.name + ' goes down');
+    F.lost = (F.lost || 0) + 1;
+    ev('die', { uid: b.uid, name: b.c.name, hue: (b.c.vis && b.c.vis.hue) || 90 });
   }
   return soaked;
 }
@@ -1196,8 +1445,14 @@ function strike(b){
   let dealt = 0;
   for (let k = 0; k < hits && !F.over; k++) dealt += damageFoe(d);
   if (b.c.trait === 'venom') F.foe.poison += Math.max(1, Math.floor(b.c.might / 3));
-  if (b.c.trait === 'leech' && dealt > 0) R.hp = Math.min(R.maxHp, R.hp + Math.floor(dealt / 2));
+  let healed = 0;
+  if (b.c.trait === 'leech' && dealt > 0){
+    healed = Math.min(R.maxHp - R.hp, Math.floor(dealt / 2));
+    R.hp = Math.min(R.maxHp, R.hp + Math.floor(dealt / 2));
+  }
   b.struck = 1;
+  ev('strike', { uid: b.uid, dmg: dealt, hits, per: d, healed,
+    venom: b.c.trait === 'venom', fhp: F.foe.hp, killed: F.over === 'win' });
   return dealt;
 }
 function penStrike(){
@@ -1235,22 +1490,25 @@ function foeAct(){
   const m = nextMove();
   f.mi++;
   f.block = 0;
-  const swing = (v) => swingAt(v + f.bonus);
+  const swing = (v) => { ev('swing', {}); swingAt(v + f.bonus); };
+  ev('foe', { s: m.s, t: m.t, v: m.v == null ? 0 : m.v + (m.t === 'atk' || m.t === 'atkx' || m.t === 'hit' ? f.bonus : 0) });
   if (m.t === 'atk') swing(m.v);
   else if (m.t === 'atkx'){ for (let k = 0; k < m.n && !F.over; k++) swing(m.v); }
-  else if (m.t === 'hit') damagePlayer(m.v + f.bonus);            // straight past the pen
-  else if (m.t === 'sweep'){ for (const b of F.pen.slice()) hurtBeast(b, m.v); }
+  else if (m.t === 'hit'){ ev('swing', {}); damagePlayer(m.v + f.bonus); }   // straight past the pen
+  else if (m.t === 'sweep'){ ev('swing', {}); for (const b of F.pen.slice()) hurtBeast(b, m.v); }
   else if (m.t === 'def') f.block += m.v;
   else if (m.t === 'buff') f.bonus += m.v;
-  else if (m.t === 'heal') f.hp = Math.min(f.maxHp, f.hp + m.v);
+  else if (m.t === 'heal'){ f.hp = Math.min(f.maxHp, f.hp + m.v); ev('foeheal', { fhp: f.hp, v: m.v }); }
   else if (m.t === 'curse') F.disc.push(junkCard());
   fLog(f.name + ': ' + m.s);
 }
 function endTurn(){
   if (!F || F.over) return;
+  F.events = [];                                  // one turn, one transcript
   if (F.foe.poison > 0){                          // yesterday's venom bites first
-    damageFoe(F.foe.poison);
+    const dealt = damageFoe(F.foe.poison);
     F.foe.poison = Math.max(0, F.foe.poison - 1);
+    ev('poison', { v: dealt, fhp: F.foe.hp, killed: F.over === 'win' });
     if (F.over) return;
   }
   penStrike();                                    // then the pen goes to work
@@ -1263,12 +1521,16 @@ function endTurn(){
   for (const c of F.hand) F.disc.push(c);
   F.hand = [];
   drawCards(handSize());
+  ev('draw', {});
 }
 
 /* ============================ AFTER THE FIGHT ============================= */
 /** Win bookkeeping: heal a little, breed the nest, queue a wild offer. */
 function winFight(){
   R.wins++;
+  R.streakBroke = 0;
+  if (F && F.lost){ R.streakBroke = R.streak; R.streak = 0; }
+  else { R.streak++; R.bestStreak = Math.max(R.bestStreak, R.streak); }
   if (FOES[R.idx] && FOES[R.idx].boss) R.maxHp += 5; // bosses pay for themselves
   R.maxHp += 2;
   R.hp = Math.min(R.maxHp, R.hp + Math.ceil(R.maxHp * 0.30) + 4);
@@ -1385,29 +1647,304 @@ const ICO = (n) => '<svg class="i"><use href="#i-' + n + '"/></svg>';
 const SCREENS = ['title', 'nest', 'fight', 'hatch', 'wild', 'cull', 'book', 'over'];
 let cur = 'title';
 function show(id){
+  clearTimers();          // a sequence must never fire into the screen after it
+  const L = $('fxlayer'); // …and no particle outlives the screen it belongs to
+  if (L) L.innerHTML = '';
+  // A few screens hand the player a list of cards and then leave on a short
+  // delay (the cull ceremony, the clutch going to market, the win hold). Tear
+  // those lists down on the way out so nothing is left clickable-but-invisible
+  // behind the new screen — a hidden live node is a trap for anything, human
+  // or harness, that grabbed a handle on it a moment ago.
+  if (cur !== id){
+    const drop = { fight: 'hand', cull: 'cGrid', hatch: 'hChild' }[cur];
+    if (drop){ const g = $(drop); if (g) g.innerHTML = ''; }
+  }
   cur = id;
   for (const s of SCREENS){ const el = $(s); if (el) el.classList.toggle('on', s === id); }
 }
 
-/* ------------------------------------------------------------- sound ----- */
-let AC = null, muted = false;
-function beep(f, d, type, vol){
-  if (muted || HEADLESS) return;
+/* ==========================================================================
+   JUICE KIT — timers, particles, tweens.
+
+   HARD RULE for everything in this section: no game state may depend on a
+   timer or a frame having run. Every one of these is presentation. `at()`
+   does nothing at all headlessly, and every chain re-checks that its screen
+   is still up before it touches a node.
+   ========================================================================== */
+let TGEN = 0;                  // bumped on every screen change; stale chains die
+const TIMERS = [];
+function clearTimers(){
+  TGEN++;
+  for (const t of TIMERS){ try { clearTimeout(t); } catch (e){} }
+  TIMERS.length = 0;
+}
+/** setTimeout that is a no-op headlessly and cancels itself on a screen change. */
+function at(ms, fn){
+  if (HEADLESS) return 0;
+  const g = TGEN;
+  const h = setTimeout(() => { if (g !== TGEN) return; try { fn(); } catch (e){} }, ms);
+  TIMERS.push(h);
+  if (TIMERS.length > 400) TIMERS.splice(0, 200);   // a long fight must not hoard ids
+  return h;
+}
+let _rm = null;
+function RM(){    // prefers-reduced-motion, asked once
+  if (_rm !== null) return _rm;
+  try { _rm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches); }
+  catch (e){ _rm = false; }
+  return _rm;
+}
+const now = () => { try { return performance.now(); } catch (e){ return Date.now(); } };
+/** Restart a CSS animation class on a node that may already be wearing it. */
+function anim(el, cls, ms){
+  if (!el || !el.classList) return;
+  el.classList.remove(cls);
+  void el.offsetWidth;                 // reflow, so the same class re-fires
+  el.classList.add(cls);
+  if (ms) at(ms, () => { if (el.classList) el.classList.remove(cls); });
+}
+function fxLayer(){ return $('fxlayer'); }
+function rectOf(el){
+  if (!el || !el.getBoundingClientRect) return null;
+  const r = el.getBoundingClientRect();
+  if (!r || (!r.width && !r.height)) return null;
+  return r;
+}
+/** A short spray of small squares from a point. Cheap: no blur, no shadow. */
+function burst(x, y, n, color, opts){
+  if (HEADLESS || RM()) return;
+  const L = fxLayer(); if (!L || !L.appendChild) return;
+  const o = opts || {};
+  for (let i = 0; i < n; i++){
+    const p = document.createElement('div');
+    p.className = 'fxp';
+    const s = (o.size || 7) * (0.6 + Math.random() * 0.8);
+    p.style.width = p.style.height = s.toFixed(1) + 'px';
+    p.style.background = typeof color === 'function' ? color(i) : color;
+    p.style.left = (x - s / 2) + 'px';
+    p.style.top = (y - s / 2) + 'px';
+    p.style.opacity = '1';
+    L.appendChild(p);
+    const a = (o.a0 == null ? -Math.PI : o.a0) + (i / n) * (o.spread == null ? Math.PI : o.spread)
+      + (Math.random() - 0.5) * 0.4;
+    const sp = (o.speed || 60) * (0.6 + Math.random() * 0.9);
+    const dx = Math.cos(a) * sp, dy = Math.sin(a) * sp - (o.lift || 26);
+    p.animate
+      ? p.animate([{ transform: 'translate(0,0) rotate(0deg)', opacity: 1 },
+                   { transform: 'translate(' + dx.toFixed(0) + 'px,' + (dy + 44).toFixed(0) + 'px) rotate(' +
+                     ((Math.random() - .5) * 320).toFixed(0) + 'deg)', opacity: 0 }],
+                  { duration: o.dur || 520, easing: 'cubic-bezier(.2,.7,.5,1)', fill: 'forwards' })
+      : (p.style.opacity = '0');
+    at((o.dur || 520) + 40, () => p.remove && p.remove());
+  }
+}
+/** Four low dust ellipses along the ground where something landed. */
+function dust(x, y){
+  if (HEADLESS || RM()) return;
+  const L = fxLayer(); if (!L || !L.appendChild) return;
+  for (let i = 0; i < 4; i++){
+    const d = document.createElement('div');
+    d.className = 'fxdust';
+    const w = 12 + Math.random() * 14;
+    d.style.width = w + 'px'; d.style.height = (w * 0.45) + 'px';
+    d.style.left = (x - w / 2) + 'px'; d.style.top = y + 'px';
+    L.appendChild(d);
+    const dx = (i < 2 ? -1 : 1) * (16 + Math.random() * 26);
+    d.animate
+      ? d.animate([{ transform: 'translate(0,0) scale(.4)', opacity: .55 },
+                   { transform: 'translate(' + dx.toFixed(0) + 'px,-7px) scale(1.5)', opacity: 0 }],
+                  { duration: 420, easing: 'ease-out', fill: 'forwards' })
+      : (d.style.opacity = '0');
+    at(470, () => d.remove && d.remove());
+  }
+}
+/** Count a number to its new value. The final value is written FIRST, so a
+ *  stubbed rAF (tests) still leaves the right text on screen. */
+function countUp(el, to, opts){
+  if (!el) return;
+  const o = opts || {};
+  const fmt = o.fmt || ((v) => '' + v);
+  // read back what WE last wrote, not the rendered string — "24 / 24" parses
+  // to 2424 and the tween counts down from four figures
+  let from = o.from;
+  if (from == null){
+    if (el._cv != null) from = el._cv;
+    else { const m = String(el.textContent || '').match(/-?\d+(\.\d+)?/); from = m ? parseFloat(m[0]) : NaN; }
+  }
+  el._cv = to;
+  el.textContent = fmt(to);
+  if (el.classList) anim(el, 'bump', 260);
+  if (HEADLESS || RM() || !isFinite(from) || from === to) return;
+  const t0 = now(), dur = o.dur || 260;
+  const step = () => {
+    const t = Math.min(1, (now() - t0) / dur);
+    el.textContent = fmt(Math.round(from + (to - from) * (1 - Math.pow(1 - t, 3))));
+    if (t < 1) requestAnimationFrame(step); else el.textContent = fmt(to);
+  };
+  requestAnimationFrame(step);
+}
+/** Fly a glyph from one element to another — a coin leaving the Slop pill. */
+function flyGlyph(fromEl, toEl, html, ms){
+  if (HEADLESS || RM()) return;
+  const L = fxLayer(); const a = rectOf(fromEl), b = rectOf(toEl);
+  if (!L || !L.appendChild || !a || !b) return;
+  const g = document.createElement('div');
+  g.className = 'ghostcard';
+  g.style.left = (a.left + a.width / 2 - 10) + 'px';
+  g.style.top = (a.top + a.height / 2 - 10) + 'px';
+  g.style.font = '900 18px inherit';
+  g.style.color = '#ffd34d';
+  g.innerHTML = html;
+  L.appendChild(g);
+  const dx = (b.left + b.width / 2) - (a.left + a.width / 2);
+  const dy = (b.top + b.height / 2) - (a.top + a.height / 2);
+  g.animate
+    ? g.animate([{ transform: 'translate(0,0) scale(1)' },
+                 { transform: 'translate(' + dx.toFixed(0) + 'px,' + dy.toFixed(0) + 'px) scale(.5)', opacity: .2 }],
+                { duration: ms || 380, easing: 'cubic-bezier(.4,0,.6,1)', fill: 'forwards' })
+    : (g.style.opacity = '0');
+  at((ms || 380) + 40, () => g.remove && g.remove());
+}
+
+/* ------------------------------------------------------------- sound -----
+   One WebAudio graph: a master gain (so a punch can duck everything else),
+   one 0.5s white-noise buffer generated once, and three voices — tone(),
+   noise() and chord(). Every beat in the game gets its own colour: a nibble
+   and a hammer are different pitches, a death is not a hit, and taking one
+   yourself ducks the mix. Still tiny, still procedural, still behind #mute. */
+let AC = null, MASTER = null, NOISE = null, muted = false;
+function ac(){
+  if (muted || HEADLESS) return null;
   try {
-    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
-    const o = AC.createOscillator(), g = AC.createGain();
-    o.type = type || 'square'; o.frequency.value = f;
-    g.gain.setValueAtTime((vol == null ? 0.06 : vol), AC.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + d);
-    o.connect(g); g.connect(AC.destination); o.start(); o.stop(AC.currentTime + d);
+    if (!AC){
+      const C = window.AudioContext || window.webkitAudioContext;
+      if (!C) return null;
+      AC = new C();
+      MASTER = AC.createGain();
+      MASTER.gain.value = 0.9;
+      MASTER.connect(AC.destination);
+    }
+    if (AC.state === 'suspended' && AC.resume) AC.resume();
+    return AC;
+  } catch (e){ return null; }
+}
+function noiseBuf(){
+  if (NOISE || !AC) return NOISE;
+  try {
+    const n = Math.floor(AC.sampleRate * 0.5);
+    NOISE = AC.createBuffer(1, n, AC.sampleRate);
+    const d = NOISE.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+  } catch (e){ NOISE = null; }
+  return NOISE;
+}
+/** A pitched voice. `glide` bends the frequency over the note. */
+function tone(f, dur, o){
+  const c = ac(); if (!c) return;
+  o = o || {};
+  try {
+    const osc = c.createOscillator(), g = c.createGain();
+    osc.type = o.type || 'square';
+    const t = c.currentTime + (o.at || 0);
+    osc.frequency.setValueAtTime(Math.max(20, f), t);
+    if (o.glide) osc.frequency.exponentialRampToValueAtTime(Math.max(20, o.glide), t + dur);
+    const v = o.vol == null ? 0.06 : o.vol;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(v, t + Math.min(0.012, dur * 0.3));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    let node = g;
+    if (o.trem){ // a fast wobble, for a blow that lands on you
+      const lfo = c.createOscillator(), lg = c.createGain();
+      lfo.frequency.value = o.trem; lg.gain.value = v * 0.6;
+      lfo.connect(lg); lg.connect(g.gain); lfo.start(t); lfo.stop(t + dur);
+    }
+    osc.connect(g); node.connect(MASTER);
+    osc.start(t); osc.stop(t + dur + 0.02);
   } catch (e){}
 }
-const sfxHit = () => { beep(180, 0.09, 'square'); setTimeout(() => beep(120, 0.12, 'sawtooth'), 40); };
-const sfxPlay = () => beep(420, 0.07, 'triangle', 0.05);
-const sfxHurt = () => beep(90, 0.18, 'sawtooth', 0.07);
-const sfxHatch = () => { beep(520, 0.08, 'triangle'); setTimeout(() => beep(700, 0.1, 'triangle'), 90);
-  setTimeout(() => beep(900, 0.16, 'triangle'), 190); };
-const sfxWin = () => [0, 120, 240, 400].forEach((t, i) => setTimeout(() => beep([440, 550, 660, 880][i], 0.16, 'triangle'), t));
+/** An unpitched impact. hp/lp shape it from a thump into a click. */
+function noise(dur, o){
+  const c = ac(); if (!c) return;
+  o = o || {};
+  const buf = noiseBuf(); if (!buf) return;
+  try {
+    const s = c.createBufferSource(), g = c.createGain();
+    s.buffer = buf;
+    const t = c.currentTime + (o.at || 0);
+    const v = o.vol == null ? 0.07 : o.vol;
+    g.gain.setValueAtTime(v, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    let head = s;
+    if (o.hp){ const f = c.createBiquadFilter(); f.type = o.bp ? 'bandpass' : 'highpass';
+      f.frequency.value = o.hp; if (o.bp) f.Q.value = 2.5; head.connect(f); head = f; }
+    if (o.lp){ const f = c.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = o.lp;
+      head.connect(f); head = f; }
+    head.connect(g); g.connect(MASTER);
+    s.start(t); s.stop(t + dur + 0.02);
+  } catch (e){}
+}
+function chord(freqs, dur, o){ freqs.forEach((f, i) => tone(f, dur, Object.assign({ at: i * 0.008 }, o))); }
+/** Pull the whole mix down for a moment, so one event owns the room. */
+function duck(amt, ms){
+  const c = ac(); if (!c || !MASTER) return;
+  try {
+    const t = c.currentTime;
+    MASTER.gain.cancelScheduledValues(t);
+    MASTER.gain.setValueAtTime(0.9, t);
+    MASTER.gain.linearRampToValueAtTime(0.9 * (1 - amt), t + 0.02);
+    MASTER.gain.linearRampToValueAtTime(0.9, t + ms / 1000);
+  } catch (e){}
+}
+/** The old one-liner, kept so every existing call site still means something. */
+function beep(f, d, type, vol){ tone(f, d, { type: type || 'square', vol: vol == null ? 0.06 : vol }); }
+
+const sfxLift   = () => tone(900, 0.03, { type: 'sine', vol: 0.03 });
+const sfxLand   = () => { tone(110, 0.09, { type: 'triangle', vol: 0.075, glide: 70 });
+                          noise(0.06, { lp: 420, vol: 0.06 }); };
+const sfxDeny   = () => { tone(150, 0.09, { type: 'square', vol: 0.045, glide: 110 });
+                          noise(0.04, { hp: 900, vol: 0.03 }); };
+/** Pitch falls with the size of the blow, so a nibble and a hammer differ. */
+const sfxStrike = (dmg) => {
+  const d = Math.max(1, dmg | 0);
+  tone(440 - Math.min(240, d * 6), 0.07, { type: 'square', vol: 0.055 });
+  noise(Math.min(0.22, (40 + d * 3) / 1000), { hp: 380, lp: 5200, vol: 0.05 });
+};
+const sfxDie    = () => { tone(300, 0.38, { type: 'sawtooth', vol: 0.06, glide: 70 });
+                          noise(0.2, { lp: 900, vol: 0.05 }); };
+const sfxHurt   = () => { tone(55, 0.3, { type: 'sine', vol: 0.11, trem: 17 });
+                          noise(0.1, { lp: 300, vol: 0.07 }); duck(0.25, 200); };
+const sfxCrack  = () => { noise(0.012, { hp: 3000, bp: 1, vol: 0.12 });
+                          noise(0.012, { at: 0.06, hp: 3000, bp: 1, vol: 0.1 });
+                          tone(180, 0.07, { at: 0.02, type: 'triangle', vol: 0.04, glide: 90 }); };
+const sfxCoin   = () => { tone(1200, 0.05, { type: 'sine', vol: 0.05 });
+                          tone(1600, 0.07, { at: 0.05, type: 'sine', vol: 0.045 }); };
+const sfxToll   = () => { tone(150, 0.9, { type: 'sine', vol: 0.1 });
+                          tone(75, 0.9, { at: 0.01, type: 'sine', vol: 0.06 });
+                          noise(0.5, { lp: 260, vol: 0.03 }); };
+const sfxHeart  = () => { tone(48, 0.14, { type: 'sine', vol: 0.12 });
+                          tone(44, 0.18, { at: 0.22, type: 'sine', vol: 0.1 }); };
+const sfxHeal   = () => { chord([520, 660, 780], 0.24, { type: 'sine', vol: 0.04 }); };
+/** The clutch payoff. What comes out of the shell decides the key. */
+function sfxHatch(tags){
+  const t = tags || [];
+  if (t.indexOf('cursed') >= 0 || t.indexOf('runt') >= 0){
+    [415, 494, 587].forEach((f, i) => tone(f * 0.985, 0.3, { at: i * 0.09, type: 'triangle', vol: 0.05 }));
+    return;
+  }
+  const base = [440, 550, 660];
+  base.forEach((f, i) => tone(f, 0.26, { at: i * 0.075, type: 'triangle', vol: 0.055 }));
+  if (t.indexOf('champion') >= 0){
+    [880, 1320, 1760].forEach((f, i) => tone(f, 0.5, { at: 0.24 + i * 0.07, type: 'triangle', vol: 0.055 }));
+    noise(0.5, { hp: 5000, vol: 0.035 });
+  } else if (t.indexOf('prodigy') >= 0){
+    [880, 1320].forEach((f, i) => tone(f, 0.36, { at: 0.24 + i * 0.08, type: 'triangle', vol: 0.05 }));
+    noise(0.35, { hp: 6000, vol: 0.022 });
+  }
+}
+const sfxHit = (d) => sfxStrike(d == null ? 12 : d);
+const sfxPlay = sfxLift;
+const sfxWin = () => [0, 120, 240, 400].forEach((t, i) =>
+  tone([440, 550, 660, 880][i], 0.18, { at: t / 1000, type: 'triangle', vol: 0.055 }));
 
 /* ---------------------------------------------------- creature portrait -- */
 /** Draws a beast from its visual genes. A chick's hue, build, horns and wings
@@ -1437,6 +1974,15 @@ function drawBeast(cv, c){
     ctx.beginPath(); ctx.ellipse(x, y, a, b, 0, 0, Math.PI * 2);
     ctx.fillStyle = fill; ctx.fill();
   };
+  // contact shadow — without it every beast floats in its own frame
+  try {
+    const gr = ctx.createRadialGradient(0, 0, 0, 0, 0, rx * 1.1);
+    gr.addColorStop(0, 'rgba(0,0,0,.55)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save(); ctx.translate(0, 1.5); ctx.scale(1, 0.34);
+    ctx.beginPath(); ctx.arc(0, 0, rx * 1.1, 0, Math.PI * 2);
+    ctx.fillStyle = gr; ctx.fill(); ctx.restore();
+  } catch (e){}
   // legs
   ctx.fillStyle = dark;
   ctx.fillRect(-rx * 0.5 - 3, 0, 6, 10);
@@ -1530,7 +2076,7 @@ function pips(el, boss){
   }
 }
 function hpBar(txtEl, barEl){
-  txtEl.textContent = R.hp;
+  countUp(txtEl, R.hp);
   barEl.style.width = (100 * R.hp / R.maxHp) + '%';
 }
 
@@ -1562,11 +2108,62 @@ function renderRituals(){
     el.className = 'rit' + (on ? ' on' : '') + (afford ? '' : ' no');
     el.innerHTML = '<span class="c">' + (r.cost ? r.cost + ' &#129699;' : 'free') + '</span>' +
       '<b>' + r.name + '</b><i>' + r.desc + '</i>';
-    if (afford) el.onclick = () => { if (setRitual(id)){ beep(520, 0.05, 'triangle', 0.04); renderNest(); } };
+    if (afford) el.onclick = () => {
+      const before = R.slop;
+      if (!setRitual(id)) return;
+      // a purchase should look like a purchase: coins leave the pill
+      if (R.slop < before){ flyGlyph($('nSlop'), el, '&#129699;'); sfxCoin(); }
+      else if (R.slop > before) sfxCoin();
+      renderNest();
+    };
     row.appendChild(el);
   }
 }
 function hz0desc(){ return R.hazardOffer ? R.hazardOffer.desc : ''; }
+/** Slop is a discrete resource in a pill. Count it, flash it, chime it. */
+function setSlop(v){
+  const n = $('nSlopN');
+  if (!n){ const p = $('nSlop'); if (p) p.innerHTML = ICO('slop') + ' ' + v; return; }
+  const before = parseFloat(String(n.textContent || '').replace(/[^0-9.\-]/g, ''));
+  countUp(n, v);
+  if (isFinite(before) && before !== v){
+    anim($('nSlop'), 'lit', 460);
+    if (before < v) sfxCoin();
+  }
+}
+/** The pairing preview: both parents drawn large with the chick you would
+ *  expect ghosted between them, straight off the midpoint of their genes.
+ *  It fills the dead space under the grid AND shows off the gene system
+ *  before the fight instead of after it. */
+function renderPair(a, b){
+  const w = $('nPair');
+  if (!w) return;
+  if (!a || !b){ w.hidden = true; w.innerHTML = ''; return; }
+  w.hidden = false;
+  w.innerHTML = '';
+  const one = (card, cls, label) => {
+    const d = document.createElement('div');
+    d.className = 'pp' + (cls ? ' ' + cls : '');
+    d.innerHTML = '<canvas width="240" height="176"></canvas><div class="lbl">' + label + '</div>';
+    const cv = d.querySelector('canvas');
+    if (cv) drawBeast(cv, card);
+    w.appendChild(d);
+  };
+  one(a, '', a.name);
+  const p1 = document.createElement('div'); p1.className = 'plus'; w.appendChild(p1);
+  one(b, '', b.name);
+  const eq = document.createElement('div');
+  eq.className = 'lbl'; eq.style.color = '#6d8a5e'; eq.textContent = '→';
+  w.appendChild(eq);
+  const mid = {
+    hue: Math.round(blendHue(a.vis.hue, b.vis.hue, 0.5)),
+    hue2: Math.round(blendHue(a.vis.hue2, b.vis.hue2, 0.5)),
+    body: (a.vis.body + b.vis.body) / 2, spots: (a.vis.spots + b.vis.spots) / 2,
+    size: (a.vis.size + b.vis.size) / 2,
+    eyes: a.vis.eyes, horns: b.vis.horns, wings: a.vis.wings, tail: b.vis.tail,
+  };
+  one({ vis: mid, trait: 'none', might: Math.round((a.might + b.might) / 2) }, 'gh', 'expected');
+}
 function renderNest(){
   const foe = FOES[R.idx];
   $('nFoeEm').innerHTML = foe.em;
@@ -1582,9 +2179,24 @@ function renderNest(){
   hb.className = 'btn sm ' + (hz ? 'pinky' : 'alt');
   hb.innerHTML = hz ? 'CALL IT OFF' : 'TAKE ON ' + R.hazardOffer.name.toUpperCase() +
     '<br><span style="color:#ffd34d">+' + HAZARD_PAY + ' ' + ICO('slop') + '</span>';
-  $('nSlop').innerHTML = ICO('slop') + ' ' + R.slop;
+  setSlop(R.slop);
   hpBar($('nHp'), $('nHpBar'));
   pips($('nPips'));
+  // the number the player is actually optimising, visible DURING the run
+  const bb0 = bestBeast();
+  const hall = loadHall();
+  $('nBest').innerHTML = bb0
+    ? 'BEST ' + ICO('might') + '<b style="color:#cfe0c2">' + power(bb0) + '</b>' +
+      (hall ? ' <span class="recpart" style="color:#5c7050">/ REC ' + hall.pow + '</span>' : '')
+    : '';
+  const st = $('nStreak');
+  if (R.streakBroke > 0){
+    st.className = 'streak brk';
+    st.innerHTML = 'STREAK BROKEN &mdash; ' + R.streakBroke + ' lost';
+  } else if (R.streak > 0){
+    st.className = 'streak';
+    st.innerHTML = R.streak + ' CLEAN <b>' + '<i></i>'.repeat(Math.min(R.streak, 5)) + '</b>';
+  } else { st.className = 'streak'; st.innerHTML = ''; }
   renderRituals();
   const vet = $('bVet');
   vet.disabled = R.slop < VET_COST || R.hp >= R.maxHp;
@@ -1601,7 +2213,7 @@ function renderNest(){
       if (i >= 0) R.nest.splice(i, 1);
       else if (R.nest.length < 2) R.nest.push(c.id);
       else { R.nest.shift(); R.nest.push(c.id); }
-      beep(500, 0.05, 'triangle', 0.04);
+      tone(R.nest.indexOf(c.id) >= 0 ? 620 : 440, 0.05, { type: 'triangle', vol: 0.04 });
       renderNest();
     };
     g.appendChild(el);
@@ -1614,31 +2226,46 @@ function renderNest(){
     const n = 2 + (a.trait === 'fertile' || bb.trait === 'fertile' ? 1 : 0) +
       ((RITUALS[R.ritual || 'natural'].extra) || 0);
     bt.textContent = 'FIGHT WITH ' + (R.deck.length - 2) + ' BEASTS';
+    renderPair(a, bb);
     $('nHint').innerHTML = (shareBlood(a, bb)
       ? '<b class="pink">' + a.name + '</b> and <b class="pink">' + bb.name + '</b> are <b>related</b> — this will get weird. '
       : '<b class="pink">' + a.name + '</b> × <b class="pink">' + bb.name + '</b>. ') +
       'Expect <b>' + n + '</b> chicks; you keep one.';
   } else {
     bt.textContent = 'SEND 2 TO THE NEST';
+    renderPair(null, null);
     $('nHint').innerHTML = 'Pick <b class="pink">two</b> beasts for the Nest &mdash; they skip this fight and breed after it.';
   }
 }
 
 /* ------------------------------------------------------------- fight ----- */
-function flyer(txt, color){
+/** A number that belongs to the thing it happened to. Anchored to a target's
+ *  rect, sized by magnitude, and flagged .crit when a single blow takes a
+ *  quarter of what it hit. Lives in the fixed fx layer so a pen beast and the
+ *  foe can both own one. */
+function flyer(txt, color, target, opts){
   if (HEADLESS) return;
-  const a = $('arena');
+  const L = fxLayer(); if (!L || !L.appendChild) return;
+  const o = opts || {};
   const e = document.createElement('div');
-  e.className = 'flyer';
+  e.className = 'flyer' + (o.crit ? ' crit' : '');
   e.textContent = txt;
   e.style.color = color || '#ff9d6b';
-  // kept off the foe's name (44–56%) and pinned to the beast, not to the arena,
-  // so a short arena can never fling it up into the top bar
-  e.style.left = (44 + Math.random() * 12) + '%';
-  const em = $('fEm');
-  e.style.top = (em && em.offsetTop != null ? Math.max(0, em.offsetTop + em.offsetHeight * 0.3) : 40) + 'px';
-  a.appendChild(e);
-  setTimeout(() => e.remove(), 1000);
+  if (o.dmg != null) e.style.fontSize = (18 + Math.min(26, o.dmg)) + 'px';
+  const r = rectOf(target || $('fEm'));
+  if (r){
+    e.style.left = (r.left + r.width * (0.32 + Math.random() * 0.36)) + 'px';
+    e.style.top = (r.top + r.height * 0.22) + 'px';
+  } else {
+    e.style.left = '46%'; e.style.top = '30%';
+  }
+  e.style.transform = 'translateX(-50%)';
+  L.appendChild(e);
+  at(1000, () => e.remove && e.remove());
+}
+/** Damage big enough to matter gets a white, oversized number. */
+function fly(txt, color, target, v, max){
+  flyer(txt, color, target, { dmg: v, crit: max ? v >= max * 0.25 : false });
 }
 function intentText(){
   const m = nextMove(), f = F.foe;
@@ -1652,10 +2279,36 @@ function intentText(){
   if (m.t === 'curse') return m.s + ' (junk in your deck)';
   return m.s;
 }
+/** The intent as a typed pill: red for a swing at the pen, PINK when the blow
+ *  goes straight past it and lands on you, blue for block, gold for a buff —
+ *  with the number as the biggest thing in it. */
+function intentHTML(){
+  const m = nextMove(), f = F.foe;
+  const big = (v) => '<span class="n">' + v + '</span>';
+  if (m.t === 'atk') return { cls: 'atk', v: m.v + f.bonus,
+    html: '<span>' + m.s + '</span>' + big(m.v + f.bonus) };
+  if (m.t === 'atkx') return { cls: 'atk', v: (m.v + f.bonus) * m.n,
+    html: '<span>' + m.s + '</span>' + big(m.v + f.bonus) + '<span class="x">&times;' + m.n + '</span>' };
+  if (m.t === 'hit') return { cls: 'rush', v: m.v + f.bonus, you: 1,
+    html: '<span>' + m.s + ' &mdash; past the pen</span>' + big(m.v + f.bonus) };
+  if (m.t === 'sweep') return { cls: 'atk', v: m.v, sweep: 1,
+    html: '<span>' + m.s + ' &mdash; whole pen</span>' + big(m.v) };
+  if (m.t === 'def') return { cls: 'def', v: 0, html: '<span>' + m.s + ' &mdash; block</span>' + big(m.v) };
+  if (m.t === 'buff') return { cls: 'buf', v: 0, html: '<span>' + m.s + '</span>' + big('+' + m.v) };
+  if (m.t === 'heal') return { cls: 'buf', v: 0, html: '<span>' + m.s + ' &mdash; heals</span>' + big(m.v) };
+  if (m.t === 'curse') return { cls: 'buf', v: 0, html: '<span>' + m.s + ' &mdash; junk in your deck</span>' };
+  return { cls: 'buf', v: 0, html: '<span>' + m.s + '</span>' };
+}
+function penNode(uid){
+  const p = $('pen');
+  if (!p || !p.querySelector) return null;
+  try { return p.querySelector('.pb[data-uid="' + uid + '"]'); } catch (e){ return null; }
+}
 function penEl(b){
   const d = document.createElement('div');
   const t = TRAITS[b.c.trait] || TRAITS.none;
   d.className = 'pb' + (b.fresh ? ' fresh' : '') + (b.c.trait === 'bulwark' ? ' bulw' : '');
+  d.dataset.uid = b.uid;
   d.innerHTML =
     '<canvas width="216" height="148"></canvas>' +
     (b.c.trait === 'none' ? '' : '<div class="tag">' + t.name + '</div>') +
@@ -1664,7 +2317,11 @@ function penEl(b){
       ' <span class="hh">' + ICO('hide') + b.hp + '</span></div>' +
     '<div class="ph"><i style="width:' + (100 * b.hp / b.max) + '%"></i></div>';
   const cv = d.querySelector('canvas');
-  if (cv) drawBeast(cv, b.c);
+  if (cv){
+    drawBeast(cv, b.c);
+    // desynced idle bob, so four animals never breathe in lockstep
+    if (cv.style) cv.style.animationDelay = (((b.uid || 1) * 0.37) % 2.4).toFixed(2) + 's';
+  }
   d.title = b.c.name + ' — ' + b.hp + '/' + b.max + ' Hide, hits for ' + beastMight(b) +
     (b.c.trait === 'none' ? '' : '\n' + t.name + ': ' + t.desc);
   // No hover on a phone, so a tap explains the animal instead.
@@ -1687,17 +2344,26 @@ function renderPen(){
     p.appendChild(e);
   }
 }
+let penOut = -1;         // last drawn pen ⚔ total, so a rise can be flashed
 function renderFight(){
   const f = F.foe;
   hpBar($('fHp'), $('fHpBar'));
   pips($('fPips'));
   $('fEm').innerHTML = f.em;
   $('fName').textContent = f.name;
-  const pct = (100 * f.hp / f.maxHp) + '%';
-  $('fHpFill').style.width = pct;
-  $('fHpGhost').style.width = pct;   // trails behind, so you see the chunk you took off
-  $('fHpTxt').textContent = f.hp + ' / ' + f.maxHp;
-  $('fIntent').textContent = 'Intends: ' + intentText();
+  const box = $('foeBox');
+  if (box && box.classList) box.classList.remove('dying', 'windup', 'lunging');
+  setFoeHp(f.hp, true);
+  const it = intentHTML();
+  const ie = $('fIntent');
+  ie.className = 'intent ' + it.cls;
+  ie.innerHTML = it.html;
+  // if this would kill you, or clear the pen outright, say so in red and in time
+  const lethal = (it.you && it.v >= R.hp) || (!F.pen.length && it.v >= R.hp);
+  const wipes = it.sweep && F.pen.length && F.pen.every((b) => b.hp <= it.v);
+  if (ie.classList) ie.classList.toggle('danger', !!(lethal || wipes));
+  const hb = $('fHpBar') && $('fHpBar').parentNode;
+  if (hb && hb.classList) hb.classList.toggle('danger', !!lethal);
 
   const fb = $('fBadges'); fb.innerHTML = '';
   if (f.block > 0) fb.innerHTML += '<span class="bdg blk">' + ICO('hide') + f.block + '</span>';
@@ -1705,8 +2371,12 @@ function renderFight(){
   if (f.bonus > 0) fb.innerHTML += '<span class="bdg">' + ICO('might') + '+' + f.bonus + '</span>';
   const pb = $('pBadges'); pb.innerHTML = '';
   const out = F.pen.reduce((a, b) => a + beastMight(b) * (b.c.trait === 'frenzy' ? 2 : 1), 0);
-  if (out > 0) pb.innerHTML += '<span class="bdg">pen ' + ICO('might') + out + '</span>';
+  if (out > 0) pb.innerHTML += '<span class="bdg" id="penOut">pen ' + ICO('might') + out + '</span>';
+  if (R.streak > 0) pb.innerHTML += '<span class="bdg psn">' + streakPips(R.streak) + '</span>';
   if (F.mods && F.mods.label) pb.innerHTML += '<span class="bdg thn">' + F.mods.label + '</span>';
+  // the closest thing this game has to a combo counter — flash it when it grows
+  if (out > penOut && penOut >= 0) anim($('penOut'), 'lit', 400);
+  penOut = out;
 
   renderPen();
   const co = $('coach');
@@ -1728,71 +2398,303 @@ function renderFight(){
     const el = cardEl(c);
     const blocked = c.cost > F.feed || (!c.dud && penFull());
     if (blocked) el.classList.add('dead');
-    else el.onclick = () => doPlay(i);
+    else el.onclick = () => doPlay(i, el, c);
     h.appendChild(el);
   });
+}
+function streakPips(n){
+  let s = '<span class="streak">' + Math.min(n, 9) + ' clean <b>';
+  for (let i = 0; i < Math.min(n, 5); i++) s += '<i></i>';
+  return s + '</b></span>';
 }
 /** A hit reads as: white blowout, then the shake. Two classes, both cheap. */
 function foeHit(){
   const box = $('foeBox');
   if (!box || !box.classList) return;
   box.classList.add('hit', 'flash');
-  setTimeout(() => box.classList.remove('flash'), 100);
-  setTimeout(() => box.classList.remove('hit'), 320);
+  at(100, () => box.classList.remove('flash'));
+  at(320, () => box.classList.remove('hit'));
 }
-function doPlay(i){
+
+/* --------------------------------------------------- direct node pokes ----
+   During a turn drain we must NOT call renderFight() — it repaints nine
+   canvases. Everything below mutates the nodes that are already on screen. */
+function setFoeHp(hp, snap){
+  const f = F.foe;
+  const pct = (100 * Math.max(0, hp) / f.maxHp) + '%';
+  const fill = $('fHpFill'), gh = $('fHpGhost'), txt = $('fHpTxt');
+  if (fill && fill.style) fill.style.width = pct;
+  // the ghost carries the same number but its transition is delayed, so the
+  // pale strip left behind IS the chunk that strike just took off
+  if (gh && gh.style) gh.style.width = pct;
+  if (txt) countUp(txt, Math.max(0, hp), { fmt: (v) => v + ' / ' + f.maxHp, dur: snap ? 0 : 260 });
+}
+function setYouHp(){
+  const t = $('fHp'), b = $('fHpBar');
+  if (t) countUp(t, R.hp);
+  if (b && b.style) b.style.width = (100 * R.hp / R.maxHp) + '%';
+}
+function setBeastHp(uid, hp, max){
+  const n = penNode(uid); if (!n || !n.querySelector) return n;
+  const bar = n.querySelector('.ph i');
+  if (bar && bar.style) bar.style.width = (100 * Math.max(0, hp) / max) + '%';
+  const pm = n.querySelector('.pm .hh');
+  if (pm) pm.innerHTML = ICO('hide') + Math.max(0, hp);
+  return n;
+}
+function killPenNode(uid, hue){
+  const n = penNode(uid);
+  if (!n){ return; }
+  const r = rectOf(n);
+  if (n.classList) n.classList.add('dying');
+  if (r) burst(r.left + r.width / 2, r.top + r.height * 0.45, 6,
+    (i) => 'hsl(' + ((hue + i * 14) % 360) + ',60%,' + (40 + i * 5) + '%)',
+    { speed: 90, spread: Math.PI * 0.9, a0: -Math.PI * 0.95 });
+  at(RM() ? 20 : 470, () => { if (n.remove) n.remove(); });
+}
+function hurtSelf(){
+  const app = $('app');
+  if (app && app.classList) anim(app, 'hurt', 300);
+}
+
+/* ------------------------------------------------------- the turn drain ---
+   endTurn() has ALREADY resolved everything, synchronously. What follows only
+   replays its transcript so the player can see which blow did what. Tapping
+   anywhere flushes the rest instantly; leaving the screen kills it dead. */
+const BEAT = { poison: 200, strike: 230, foe: 380, swing: 190, hit: 170, die: 340,
+  you: 260, foeheal: 220, draw: 0 };
+const SEQ_BUDGET = 1150;      // hard ceiling: input is never blocked for longer
+let seq = null;
+function applyEv(e, quick){
+  if (!F) return;
+  const f = F.foe;
+  const sub = (ms, fn) => { if (quick || RM()) fn(); else at(ms, fn); };
+  if (e.k === 'poison'){
+    setFoeHp(e.fhp);
+    if (!quick){ foeHit(); sfxStrike(e.v); fly('-' + e.v, '#b6ff8a', $('fEm'), e.v, f.maxHp); }
+  } else if (e.k === 'strike'){
+    const n = penNode(e.uid);
+    if (!quick && n) anim(n, 'lunge', 260);
+    sub(quick ? 0 : 90, () => {
+      setFoeHp(e.fhp);
+      if (quick) return;
+      foeHit(); sfxStrike(e.per);
+      fly('-' + e.dmg, '#ff9d6b', $('fEm'), e.dmg, f.maxHp);
+      if (e.venom) fly('venom', '#b6ff8a', $('fBadges'), 8);
+    });
+    if (!quick && e.hits > 1) sub(220, () => { if (n) anim(n, 'lunge', 260); sfxStrike(e.per); foeHit(); });
+    if (e.healed){ sub(quick ? 0 : 150, () => { setYouHp(); if (!quick){ sfxHeal();
+      fly('+' + e.healed, '#a6ff5e', $('fHpBar'), e.healed); } }); }
+  } else if (e.k === 'foe'){
+    const box = $('foeBox');
+    if (!quick && box && box.classList){ box.classList.remove('lunging'); box.classList.add('windup'); }
+  } else if (e.k === 'swing'){
+    const box = $('foeBox');
+    if (!quick && box && box.classList){ box.classList.remove('windup'); anim(box, 'lunging', 320); }
+    if (!quick) anim($('arena'), 'shk', 400);
+  } else if (e.k === 'hit'){
+    const n = setBeastHp(e.uid, e.hp, e.max);
+    if (!quick && n){
+      anim(n, 'hurt', 320);
+      if (n.classList){ n.classList.add('flash'); at(120, () => n.classList.remove('flash')); }
+      fly('-' + e.v, '#ff7b7b', n, e.v, e.max);
+      sfxStrike(e.v);
+      if (e.thorns) fly('thorns', '#b6ff8a', $('fEm'), 6);
+    }
+  } else if (e.k === 'die'){
+    if (quick){ const n = penNode(e.uid); if (n && n.remove) n.remove(); }
+    else { killPenNode(e.uid, e.hue); sfxDie(); }
+  } else if (e.k === 'you'){
+    setYouHp();
+    if (!quick){
+      sfxHurt(); hurtSelf();
+      fly('-' + e.v + ' YOU', '#ff5d5d', $('fHpBar'), e.v, R.maxHp);
+      anim($('arena'), 'shk', 400);
+    }
+  } else if (e.k === 'foeheal'){
+    setFoeHp(e.fhp);
+    if (!quick){ sfxHeal(); fly('+' + e.v, '#a6ff5e', $('fEm'), e.v); }
+  }
+}
+function seqStep(){
+  if (!seq) return;
+  if (!F || F !== seq.F || cur !== 'fight'){ seq = null; return; }
+  if (seq.i >= seq.list.length){ finishSeq(); return; }
+  const e = seq.list[seq.i++];
+  applyEv(e, false);
+  at(Math.max(1, Math.round((BEAT[e.k] == null ? 120 : BEAT[e.k]) * seq.sc)), seqStep);
+}
+function seqFlush(){
+  if (!seq) return true;
+  const s = seq; seq = null;
+  if (F && F === s.F && cur === 'fight'){
+    for (let i = s.i; i < s.list.length; i++) applyEv(s.list[i], true);
+  }
+  finishSeq();
+  return true;
+}
+function finishSeq(){
+  seq = null;
+  const bt = $('bEnd'); if (bt && bt.classList) bt.classList.remove('busy');
+  if (!F || cur !== 'fight') return;
+  renderFight();
+  if (!F.over) pipRefill();
+  if (F.over) at(F.over === 'win' ? 380 : 320, resolveFight);
+}
+function playSeq(list){
+  if (HEADLESS || !list || !list.length){ finishSeq(); return; }
+  let sum = 0;
+  for (const e of list) sum += (BEAT[e.k] == null ? 120 : BEAT[e.k]);
+  const sc = RM() ? 0.01 : Math.min(1, SEQ_BUDGET / Math.max(1, sum));
+  seq = { list, i: 0, F, sc };
+  const bt = $('bEnd'); if (bt && bt.classList) bt.classList.add('busy');
+  seqStep();
+}
+
+/* ------------------------------------------------------------ feed pips --- */
+function pipSpend(after, before){
+  const fd = $('feed'); if (!fd || !fd.children) return;
+  let d = 0;
+  for (let i = before - 1; i >= after; i--){
+    const p = fd.children[i];
+    if (!p || !p.style) continue;
+    p.style.animationDelay = (d * 90) + 'ms';
+    if (p.classList) p.classList.add('spend');
+    d++;
+  }
+}
+function pipRefill(){
+  const fd = $('feed'); if (!fd || !fd.children) return;
+  for (let i = 0; i < fd.children.length; i++){
+    const p = fd.children[i];
+    if (!p || !p.className || p.className.indexOf('on') < 0 || !p.style) continue;
+    p.style.animationDelay = (i * 60) + 'ms';
+    if (p.classList) p.classList.add('fill');
+  }
+}
+
+/* --------------------------------------------------------- playing a card - */
+/** Land the beast: reveal it, squash it, kick up dust, thump. */
+function landPen(uid){
+  const n = penNode(uid);
+  if (!n) return;
+  if (n.classList){ n.classList.remove('arriving'); anim(n, 'landing', 220); n.classList.add('fresh'); }
+  const r = rectOf(n);
+  if (r) dust(r.left + r.width / 2, r.top + r.height - 8);
+  sfxLand();
+}
+/** FLIP the card from the hand into its stall: read both rects, fly a clone,
+ *  then hand over to the real pen node. */
+function flipInto(src, c, uid){
+  const pn = penNode(uid);
+  if (HEADLESS || RM() || !src || !pn){ landPen(uid); return; }
+  const L = fxLayer();
+  const dst = rectOf(pn);
+  if (!L || !L.appendChild || !dst){ landPen(uid); return; }
+  const g = cardEl(c);
+  g.className = 'card ghostcard';
+  g.style.left = src.left + 'px';
+  g.style.top = src.top + 'px';
+  g.style.width = src.width + 'px';
+  g.style.margin = '0';
+  L.appendChild(g);
+  if (pn.classList) pn.classList.add('arriving');
+  const sc = dst.width / Math.max(1, src.width);
+  const dx = (dst.left + dst.width / 2) - (src.left + src.width / 2);
+  const dy = (dst.top + dst.height / 2) - (src.top + src.height / 2);
+  if (g.animate) g.animate(
+    [{ transform: 'translate(0,0) scale(1) rotate(-6deg)' },
+     { transform: 'translate(' + dx.toFixed(0) + 'px,' + dy.toFixed(0) + 'px) scale(' + sc.toFixed(3) + ') rotate(0deg)' }],
+    { duration: 220, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' });
+  at(215, () => { if (g.remove) g.remove(); landPen(uid); });
+}
+function doPlay(i, node, card){
+  if (!F || F.over) return;
+  if (seq) seqFlush();                       // a tap mid-drain skips, never queues
   const c = F.hand[i];
+  if (!c || (card && c !== card)) return;    // the hand moved under us; do nothing
   const wasFull = penFull();
+  const feedBefore = F.feed;
+  const src = rectOf(node);
   if (!playCard(i)){
-    beep(140, 0.08, 'square', 0.05);
-    if (wasFull && !c.dud) flyer('PEN IS FULL', '#ffd34d');
+    sfxDeny();
+    if (node) anim(node, 'nope', 320);
+    if (wasFull && !c.dud) flyer('PEN IS FULL', '#ffd34d', $('pen'));
     return;
   }
-  sfxPlay();
-  if (c.trait === 'swift'){ sfxHit(); flyer('-' + cardDamage(c)); foeHit(); }
+  sfxLift();
+  const b = F.pen.length ? F.pen[F.pen.length - 1] : null;
+  const uid = (b && b.c === c) ? b.uid : 0;
+  // playCard may already have resolved things — a Cursed card bites you the
+  // moment it lands, Swift swings on arrival. Replay those as their own beats.
+  const made = (F.events || []).slice();
+  if (F.events) F.events = [];
   renderFight();
-  if (F.over) setTimeout(resolveFight, 480);
+  pipSpend(F.feed, feedBefore);
+  if (uid) flipInto(src, c, uid);
+  else if (c.dud) sfxDeny();
+  for (const e of made){
+    if (e.k === 'you'){ applyEv(e, false); continue; }
+    if (e.k !== 'strike') continue;
+    at(RM() ? 1 : 300, () => {
+      if (!F || cur !== 'fight') return;
+      applyEv(e, false);
+      at(320, () => { if (F && cur === 'fight') renderFight(); });
+    });
+  }
+  if (F.over) at(420, resolveFight);
 }
 function doEnd(){
+  if (seq){ seqFlush(); return; }            // first tap skips the last one
   if (!F || F.over) return;
-  const hpBefore = R.hp, foeBefore = F.foe.hp, penBefore = F.pen.length;
-  endTurn();
-  if (F.foe.hp < foeBefore){
-    sfxHit();
-    flyer('-' + (foeBefore - F.foe.hp));
-    foeHit();
-  }
-  if (R.hp < hpBefore){
-    sfxHurt();
-    flyer('-' + (hpBefore - R.hp) + ' YOU', '#ff5d5d');
-    const app = $('app');
-    if (app && app.classList){
-      app.classList.remove('hurt');
-      // reflow, so a second hit in a row re-fires the flash
-      void app.offsetWidth;
-      app.classList.add('hurt');
-      setTimeout(() => app.classList.remove('hurt'), 260);
-    }
-  }
-  else if (F.pen.length < penBefore) sfxHurt();
-  renderFight();
-  if (F.over) setTimeout(resolveFight, 480);
+  endTurn();                                 // authoritative, synchronous
+  const list = (F && F.events) ? F.events.slice() : [];
+  if (F && F.events) F.events = [];
+  playSeq(list);
 }
 function resolveFight(){
   if (!F) return;
   if (R.idx === 0) markTaught();
   if (F.over === 'lose'){ F = null; goOver(false); return; }
+  // hold the corpse a beat before the screen changes
+  const box = $('foeBox');
+  if (box && box.classList) box.classList.add('dying');
+  const r = rectOf($('fEm'));
+  if (r) burst(r.left + r.width / 2, r.top + r.height / 2, 8, '#ffd0a0', { speed: 130, lift: 40 });
   sfxWin();
+  // a fight finished on fumes deserves to be felt
+  const close = R.hp / R.maxHp <= 0.15;
   winFight();
-  goHatch();
+  const app = $('app');
+  if (close && app && app.classList){
+    anim(app, 'close', 700);
+    sfxHeart();
+    flyer('THAT WAS CLOSE', '#ff7b7b', $('fHpBar'));
+  }
+  if (HEADLESS) goHatch(); else at(close ? 780 : 380, goHatch);
 }
 
-/* ------------------------------------------------------------- hatch ----- */
+/* ------------------------------------------------------------- hatch -----
+   The clutch is what the whole loop exists to deliver, so it gets a drumroll:
+   the eggs shudder faster and faster, then crack ONE AT A TIME, rarest last,
+   and each banner lands a beat after its card. Tap anywhere to skip it all. */
 let pickedChick = -1;
+let hatchSeq = null, hatching = false;
+/** How loud is this chick? Used only to decide what cracks last. */
+function chickRank(res){
+  const t = res.tags;
+  if (t.indexOf('champion') >= 0) return 5;
+  if (t.indexOf('cursed') >= 0) return 4;
+  if (t.indexOf('prodigy') >= 0) return 3;
+  if (t.indexOf('mutation') >= 0) return 2;
+  if (t.indexOf('runt') >= 0) return 1;
+  return 0;
+}
 function goHatch(){
   show('hatch');
   const h = R.lastHatch;
-  const { a, b } = h;
+  if (!h) return;
+  const a = h.a, b = h.b;
   $('hTitle').textContent = 'THE NEST STIRS';
   const p = $('hParents'); p.innerHTML = '';
   p.appendChild(cardEl(a));
@@ -1804,60 +2706,245 @@ function goHatch(){
   $('hSub').innerHTML = shareBlood(a, b)
     ? 'Same blood. Brace yourself.'
     : 'Keep <b class="pink">one</b>. The rest go to market for Slop.';
-  const ch = $('hChild');
-  ch.innerHTML = '';
-  for (let i = 0; i < h.litter.length; i++){
-    const e = document.createElement('div');
-    e.className = 'egg2'; e.innerHTML = '&#129370;';
-    ch.appendChild(e);
-  }
   pickedChick = -1;
+  hatching = false;
   $('bHatchNext').disabled = true;
-  beep(300, 0.1, 'triangle', 0.05);
-  setTimeout(revealLitter, 850);
+  revealLitter();          // the cards exist immediately; the shells hide them
+  startHatchSeq();
+}
+/** Wind the eggs up, then crack them in order. Presentation only: the whole
+ *  clutch already exists in R.litter and every card is already in the DOM. */
+function startHatchSeq(){
+  if (HEADLESS) return;
+  const h = R.lastHatch;
+  if (!h) return;
+  const ch = $('hChild');
+  if (!ch || !ch.children) return;
+  const order = h.litter.map((res, i) => i)
+    .sort((x, y) => chickRank(h.litter[x]) - chickRank(h.litter[y]));
+  hatchSeq = { order: order };
+  const shells = [];
+  for (let i = 0; i < ch.children.length; i++){
+    const s = ch.children[i].querySelector ? ch.children[i].querySelector('.shell') : null;
+    if (s) shells.push(s);
+  }
+  if (RM()){ hatchFlush(); return; }
+  // tension: the wobble tightens into a shudder and a lime glow comes up
+  const steps = 6, span = 680;
+  for (let k = 1; k <= steps; k++){
+    at((span / steps) * k, () => {
+      const d = 1.1 - (1.1 - 0.28) * (k / steps);
+      for (const s of shells){
+        if (!s.style) continue;
+        s.style.animationDuration = d.toFixed(2) + 's';
+        s.style.setProperty('--glow', ((k / steps) * 0.55).toFixed(2));
+      }
+      tone(180 + k * 55, 0.13, { type: 'triangle', vol: 0.028 });
+    });
+  }
+  order.forEach((idx, n) => at(span + 110 + n * 360, () => crackEgg(idx)));
+}
+/** One egg: 140ms of hard jitter, a crack, two shell halves falling away, and
+ *  the chick popping up out of it. Its banner lands 260ms later, on its own. */
+function crackEgg(idx){
+  if (cur !== 'hatch' || !hatchSeq) return;
+  const ch = $('hChild');
+  const w = ch && ch.children ? ch.children[idx] : null;
+  if (!w || !w.classList || w.classList.contains('crk')) return;
+  const res = R.lastHatch && R.lastHatch.litter[idx];
+  w.classList.add('jit');
+  at(140, () => {
+    if (cur !== 'hatch') return;
+    w.classList.remove('jit', 'sealed');
+    w.classList.add('crk');
+    clutchTitle();
+    sfxCrack();
+    const sh = w.querySelector && w.querySelector('.shell');
+    const r = rectOf(sh || w);
+    if (r) burst(r.left + r.width / 2, r.top + r.height * 0.38, 6, '#f3ecd8',
+      { speed: 100, spread: Math.PI * 1.1, a0: -Math.PI * 1.05, size: 6 });
+    // the portrait starts as the midpoint of its parents and diverges to what
+    // it actually is, so a wild hue mutation is SEEN leaving the bloodline
+    if (res) tweenChick(w, res);
+    at(430, () => { if (sh && sh.remove) sh.remove(); });
+    at(260, () => {
+      if (cur !== 'hatch') return;
+      const tl = w.querySelector && w.querySelector('.tagline');
+      if (tl && tl.style) tl.style.visibility = 'visible';
+      const bans = tl && tl.querySelectorAll ? tl.querySelectorAll('.banner') : [];
+      for (let i = 0; i < bans.length; i++) anim(bans[i], 'slam', 400);
+      sfxHatch(res ? res.tags : []);
+      const app = $('app');
+      if (!res || !app) return;
+      if (res.tags.indexOf('champion') >= 0) anim(app, 'shk', 400);
+      else if (res.tags.indexOf('prodigy') >= 0) anim(app, 'shk', 260);
+      if (res.tags.indexOf('cursed') >= 0) anim(app, 'sick', 800);
+    });
+  });
+}
+/** Skip the drumroll: every remaining egg opens now. */
+function hatchFlush(){
+  if (cur !== 'hatch' || !hatchSeq) return;
+  hatchSeq = null;
+  clutchTitle();
+  const ch = $('hChild');
+  if (!ch || !ch.children) return;
+  for (let i = 0; i < ch.children.length; i++){
+    const w = ch.children[i];
+    if (!w.classList) continue;
+    w.classList.remove('sealed', 'jit');
+    w.classList.add('crk');
+    const sh = w.querySelector && w.querySelector('.shell');
+    if (sh && sh.remove) sh.remove();
+    const tl = w.querySelector && w.querySelector('.tagline');
+    if (tl && tl.style) tl.style.visibility = 'visible';
+  }
+}
+/** Redraw one chick's portrait from the midpoint of its parents out to its own
+ *  genes. One canvas, ~400ms. */
+function tweenChick(wrap, res){
+  if (HEADLESS || RM()) return;
+  const cv = wrap.querySelector && wrap.querySelector('canvas');
+  const h = R.lastHatch;
+  if (!cv || !h || !h.a || !h.b) return;
+  const A = h.a.vis, B = h.b.vis, T = res.child.vis;
+  const mid = { hue: blendHue(A.hue, B.hue, 0.5), hue2: blendHue(A.hue2, B.hue2, 0.5),
+    body: (A.body + B.body) / 2, spots: (A.spots + B.spots) / 2, size: (A.size + B.size) / 2,
+    eyes: A.eyes, horns: A.horns, wings: A.wings, tail: A.tail };
+  const t0 = now(), ms = 400;
+  const step = () => {
+    if (cur !== 'hatch') return;
+    const k = Math.min(1, (now() - t0) / ms);
+    const v = {
+      hue: Math.round(blendHue(mid.hue, T.hue, k)), hue2: Math.round(blendHue(mid.hue2, T.hue2, k)),
+      body: mid.body + (T.body - mid.body) * k, spots: mid.spots + (T.spots - mid.spots) * k,
+      size: mid.size + (T.size - mid.size) * k,
+      eyes: k < 0.5 ? mid.eyes : T.eyes, horns: k < 0.5 ? mid.horns : T.horns,
+      wings: k < 0.5 ? mid.wings : T.wings, tail: k < 0.5 ? mid.tail : T.tail,
+    };
+    drawBeast(cv, { vis: v, trait: res.child.trait, might: res.child.might });
+    if (k < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
 }
 /** Lay the whole clutch out and let the player choose. The banners are per
  *  chick, because "one of these is a runt" is the interesting sentence. */
+function clutchTitle(){ $('hTitle').innerHTML = 'THE CLUTCH — <span class="gold">PICK ONE</span>'; }
 function revealLitter(){
   const h = R.lastHatch;
-  // one beep per chick, timed to the stagger, so the reveal lands as three beats
-  h.litter.forEach((_, i) => setTimeout(sfxHatch, i * 150));
-  $('hTitle').innerHTML = 'THE CLUTCH — <span class="gold">PICK ONE</span>';
+  if (HEADLESS) clutchTitle();
   const ch = $('hChild');
   ch.className = 'litter';
   ch.innerHTML = '';
   h.litter.forEach((res, i) => {
     const wrap = document.createElement('div');
-    wrap.className = 'pickwrap';
+    wrap.className = 'pickwrap' + (HEADLESS ? '' : ' sealed');
     const card = cardEl(res.child, { big: true });
     wrap.appendChild(card);
     const tagline = document.createElement('div');
     // reserved height, so a lone PRODIGY tag can never shunt its column out of line
     tagline.className = 'tagline';
+    if (!HEADLESS && tagline.style) tagline.style.visibility = 'hidden';
     const d = (v, l) => '<span class="delta ' + (v >= 0 ? 'up' : 'dn') + '">' +
-      (v >= 0 ? '\u25b2' : '\u25bc') + Math.abs(Math.round(v * 10) / 10) + ICO(l) + '</span>';
+      (v >= 0 ? '▲' : '▼') + Math.abs(Math.round(v * 10) / 10) + ICO(l) + '</span>';
     tagline.innerHTML = '<div style="margin-bottom:4px">' +
       d(res.dM, 'might') + ' ' + d(res.dH, 'hide') + '</div>' + chickBanners(res);
     wrap.appendChild(tagline);
+    if (!HEADLESS){
+      const shell = document.createElement('div');
+      shell.className = 'shell wob';
+      shell.innerHTML = '<span class="half a">&#129370;</span><span class="half b">&#129370;</span>';
+      wrap.appendChild(shell);
+    }
     wrap.onclick = () => {
+      if (hatchSeq) hatchFlush();
       pickedChick = i;
       [...ch.children].forEach((x, j) => {
         const c = x.querySelector('.card');
         if (c) c.classList.toggle('sel', j === i);
       });
       showChickDetail(res);
+      resemblance(wrap, res);
       $('bHatchNext').disabled = false;
-      beep(560, 0.05, 'triangle', 0.04);
+      tone(560, 0.05, { type: 'triangle', vol: 0.04 });
     };
     ch.appendChild(wrap);
   });
   $('bHatchNext').disabled = true;
 }
+/* --------------------------------------------------- showing inheritance --
+   breedVis already decided, gene by gene, which parent won. This draws that
+   decision: a pink thread from the parent that contributed to the feature it
+   contributed, one at a time, with the word for it. */
+const GENE_SPOTS = {
+  hue:   { x: 0.50, y: 0.62, lbl: 'hue' },
+  horns: { x: 0.50, y: 0.20, lbl: 'horns' },
+  wings: { x: 0.17, y: 0.52, lbl: 'wings' },
+  eyes:  { x: 0.52, y: 0.46, lbl: 'eyes' },
+  tail:  { x: 0.15, y: 0.66, lbl: 'tail' },
+  body:  { x: 0.72, y: 0.60, lbl: 'build' },
+};
+function rline(x1, y1, x2, y2, label, isNew, row){
+  const L = fxLayer(); if (!L || !L.appendChild) return;
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  const a = Math.atan2(dy, dx) * 180 / Math.PI;
+  const d = document.createElement('div');
+  d.className = 'rline';
+  d.style.left = x1 + 'px'; d.style.top = y1 + 'px';
+  d.style.transform = 'rotate(' + a.toFixed(1) + 'deg)';
+  d.style.width = '0px';
+  L.appendChild(d);
+  if (d.animate) d.animate([{ width: '0px' }, { width: len.toFixed(0) + 'px' }],
+    { duration: 260, easing: 'cubic-bezier(.2,.8,.3,1)', fill: 'forwards' });
+  else d.style.width = len.toFixed(0) + 'px';
+  const lab = document.createElement('div');
+  lab.className = 'rlab' + (isNew ? ' nw' : '');
+  lab.textContent = label;
+  // fan the labels down the thread so six of them cannot pile on one line
+  const f = 0.42 + 0.11 * ((row || 0) % 4);
+  // the generation chip lives at the card's top-right, so pull NEW away from it
+  lab.style.left = (x1 + dx * f - (isNew ? 46 : 0)) + 'px';
+  lab.style.top = (y1 + dy * f - 17 + ((row || 0) % 2 ? 15 : -4)) + 'px';
+  L.appendChild(lab);
+  at(2000, () => { if (d.remove) d.remove(); if (lab.remove) lab.remove(); });
+}
+/** 900ms of "here is where this animal came from". */
+function resemblance(wrap, res){
+  if (HEADLESS || RM()) return;
+  const L = fxLayer(); if (L) L.innerHTML = '';
+  const h = R.lastHatch; if (!h) return;
+  const prov = res.child.vis && res.child.vis.prov;
+  if (!prov) return;
+  const cards = $('hParents') && $('hParents').querySelectorAll
+    ? $('hParents').querySelectorAll('.card') : null;
+  if (!cards || cards.length < 2) return;
+  const pr = [rectOf(cards[0]), rectOf(cards[1])];
+  const cv = wrap.querySelector && wrap.querySelector('canvas');
+  const cr = rectOf(cv);
+  if (!cr || !pr[0] || !pr[1]) return;
+  const keys = Object.keys(GENE_SPOTS).filter((k) => prov[k]);
+  keys.forEach((k, i) => {
+    const who = prov[k], sp = GENE_SPOTS[k];
+    at(i * 190, () => {
+      if (cur !== 'hatch') return;
+      const src = who === 'new'
+        ? { left: cr.left + cr.width / 2 - 1, top: cr.top - 30, width: 2, height: 2 }
+        : pr[who === 'a' ? 0 : 1];
+      const nm = who === 'new' ? 'NEW' : shortName(who === 'a' ? h.a.name : h.b.name) + '’s ' + sp.lbl;
+      rline(src.left + src.width / 2, src.top + src.height / 2,
+        cr.left + cr.width * sp.x, cr.top + cr.height * sp.y, nm, who === 'new', i);
+      tone(who === 'new' ? 980 : 620 + i * 60, 0.07, { type: 'sine', vol: 0.035 });
+    });
+  });
+}
+function shortName(s){ return String(s).split(' ')[0]; }
 function chickBanners(res){
   const t = res.tags;
   const b = (txt, cls) => '<span class="banner ' + cls + '">' + txt + '</span>';
   let out = '';
-  if (t.indexOf('prodigy') >= 0) out += b('PRODIGY', 'good');
+  if (t.indexOf('champion') >= 0) out += b('CHAMPION STOCK', 'gold2');
+  else if (t.indexOf('prodigy') >= 0) out += b('PRODIGY', 'good');
   if (t.indexOf('runt') >= 0) out += b('RUNT', 'bad');
   if (t.indexOf('mutation') >= 0) out += b(TRAITS[res.child.trait].name.toUpperCase(), 'wild');
   if (t.indexOf('cursed') >= 0) out += b('BAD BLOOD', 'bad');
@@ -1874,13 +2961,25 @@ function showChickDetail(res){
     ' &nbsp; <span class="dim">' + TRAITS[c.trait].desc + '</span>';
 }
 function afterHatch(){
-  if (pickedChick < 0) return;
+  if (pickedChick < 0 || !R.litter || hatching) return;   // one clutch, one keep
+  hatching = 1;
   const sold = R.litter.length - 1;
-  keepChick(pickedChick);
+  const keep = pickedChick;
+  // the ones you did not keep go to market — send them off screen toward where
+  // the Slop pill lives, then let the pill count up on the next screen
+  const ch = $('hChild');
+  if (!HEADLESS && !RM() && ch && ch.children){
+    for (let i = 0; i < ch.children.length; i++){
+      if (i === keep) continue;
+      const c = ch.children[i].querySelector && ch.children[i].querySelector('.card');
+      if (c && c.classList) c.classList.add('tomarket');
+    }
+  }
+  keepChick(keep);                 // state change: synchronous, always
   pickedChick = -1;
-  if (sold > 0) beep(700, 0.08, 'triangle', 0.05);
-  if (R.wildOffer){ goWild(); return; }
-  goCullOrNext();
+  if (sold > 0) sfxCoin();
+  const go = () => { hatching = false; if (R.wildOffer){ goWild(); return; } goCullOrNext(); };
+  if (HEADLESS || RM() || !sold) go(); else at(330, go);
 }
 
 /* -------------------------------------------------------------- wild ----- */
@@ -1903,7 +3002,7 @@ function goWild(){
 }
 
 /* -------------------------------------------------------------- cull ----- */
-let cullPick = -1;
+let cullPick = -1, culling = false;
 function goCullOrNext(){
   if (mustCull() > 0 || R.deck.length > 4){ goCull(); return; }
   nextRound();
@@ -1911,6 +3010,7 @@ function goCullOrNext(){
 function goCull(){
   show('cull');
   cullPick = -1;
+  culling = false;
   const need = mustCull();
   $('cHint').innerHTML = need > 0
     ? '<span class="pink">' + need + ' MUST GO</span>'
@@ -1918,7 +3018,9 @@ function goCull(){
   $('cCount').innerHTML = R.deck.length + '<small>/' + MAX_DECK + '</small>';
   $('bCullSkip').style.display = need > 0 ? 'none' : '';
   $('bCull').disabled = true;
+  if ($('bCull').classList) $('bCull').classList.remove('busy');
   const g = $('cGrid'); g.innerHTML = '';
+  if (g.classList) g.classList.remove('mourning');
   const sorted = R.deck.slice().sort((a, b) => power(a) - power(b)); // worst first
   sorted.forEach((c) => {
     const el = cardEl(c);
@@ -1930,12 +3032,55 @@ function goCull(){
     g.appendChild(el);
   });
 }
+/** How many animals still in the barn came out of this one? Walks the stud
+ *  book, so a great-grandchild counts even after `blood` has been trimmed. */
+function descendantsOf(id){
+  const seen = {};
+  const isDesc = (x) => {
+    if (x == null) return false;
+    if (seen[x] != null) return seen[x];
+    const e = STUD[x];
+    if (!e || !e.p) return (seen[x] = false);
+    seen[x] = false;                                  // cycle guard
+    const r = e.p.indexOf(id) >= 0 || e.p.some(isDesc);
+    return (seen[x] = r);
+  };
+  let n = 0;
+  for (const x of R.deck) if (x.id !== id && isDesc(x.id)) n++;
+  return n;
+}
+/** The printed line the barn keeps. This is where 'someone has to go to the
+ *  farm upstate' stops being a checkbox. */
+function receipt(c, n){
+  const L = fxLayer(); if (!L || !L.appendChild || !c) return;
+  const d = document.createElement('div');
+  d.className = 'receipt';
+  d.innerHTML = '<b>' + c.name + ', G' + c.gen + '</b>&mdash; sold on &mdash;' +
+    '<small>' + (n > 0 ? 'leaves ' + n + ' descendant' + (n > 1 ? 's' : '') + ' in the barn'
+                       : 'the line ends here') + '</small>';
+  L.appendChild(d);
+  at(2100, () => { if (d.remove) d.remove(); });
+}
 function doCull(){
-  if (cullPick < 0) return;
-  retire(cullPick);
-  beep(200, 0.16, 'sawtooth', 0.05);
-  if (mustCull() > 0){ goCull(); return; }
-  nextRound();
+  if (cullPick < 0 || culling) return;
+  const c = cardById(cullPick);
+  const g = $('cGrid');
+  let node = null;
+  if (g && g.children) for (let i = 0; i < g.children.length; i++){
+    if (+g.children[i].dataset.id === cullPick) node = g.children[i];
+  }
+  const kin = c ? descendantsOf(cullPick) : 0;
+  const gone = retire(cullPick);   // state change: synchronous, always
+  const after = () => { culling = false; if (mustCull() > 0){ goCull(); return; } nextRound(); };
+  if (!gone){ after(); return; }
+  sfxToll();
+  culling = 1;                     // one ceremony at a time
+  const bt = $('bCull'); if (bt && bt.classList) bt.classList.add('busy');
+  if (HEADLESS || RM() || !node || !node.classList){ after(); return; }
+  if (g && g.classList) g.classList.add('mourning');
+  node.classList.add('leaving');
+  receipt(c, kin);
+  at(760, after);
 }
 
 /* ------------------------------------------------------------ rounds ----- */
@@ -2085,8 +3230,23 @@ function bind(){
   $('bEnd').onclick = doEnd;
   $('coach').onclick = () => { markTaught(); $('coach').hidden = true; };
   $('mute').title = 'Sound on/off';
-  $('bHazard').onclick = () => { toggleHazard(); beep(300, 0.07, 'square', 0.05); renderNest(); };
-  $('bVet').onclick = () => { if (vetVisit()){ beep(760, 0.12, 'triangle', 0.05); renderNest(); } };
+  $('bHazard').onclick = () => {
+    const on = toggleHazard();
+    if (on){ tone(150, 0.22, { type: 'sawtooth', vol: 0.06, glide: 90 }); noise(0.14, { lp: 700, vol: 0.05 }); }
+    else tone(420, 0.09, { type: 'triangle', vol: 0.045 });
+    renderNest();
+  };
+  $('bVet').onclick = () => {
+    const before = R.hp;
+    if (!vetVisit()) return;
+    // healing must not look like being hurt: forward fill, green number, chime
+    const bar = $('nHpBar');
+    if (bar && bar.classList){ bar.classList.add('heal'); at(620, () => bar.classList.remove('heal')); }
+    flyGlyph($('nSlop'), $('bVet'), '&#129699;');
+    renderNest();
+    sfxHeal();
+    flyer('+' + (R.hp - before), '#a6ff5e', $('nHpBar'));
+  };
   $('bHatchNext').onclick = afterHatch;
   $('bWildTake').onclick = () => { if (wildPick >= 0){ takeWild(wildPick); goCullOrNext(); } };
   $('bWildSkip').onclick = () => { R.wildOffer = null; goCullOrNext(); };
@@ -2100,6 +3260,16 @@ function bind(){
     $('mute').innerHTML = muted ? '&#128263;' : '&#9835;';
     $('mute').style.opacity = muted ? '.5' : '1';
   };
+  // An iOS context suspends the moment you look away, so wake it on ANY touch,
+  // not just on #bStart. The same tap flushes whatever sequence is playing —
+  // by fight ten, skipping the show is mandatory.
+  try {
+    document.addEventListener('pointerdown', () => {
+      ac();
+      if (seq) seqFlush();
+      else if (cur === 'hatch' && hatchSeq) hatchFlush();
+    }, true);
+  } catch (e){}
   window.addEventListener('keydown', (e) => {
     if (cur !== 'fight' || !F || F.over) return;
     if (e.key >= '1' && e.key <= '9'){ const i = +e.key - 1; if (i < F.hand.length) doPlay(i); }
