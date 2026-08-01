@@ -102,6 +102,39 @@ to two off-ramp colors per creature for a signature detail.
 Minimum three render-and-look cycles per creature. A creature that was never
 rendered is not finished.
 
+## Common failures (these are the ones that actually happened)
+
+Every rejected sprite in this project failed in one of these ways. Check your
+render against this list before you call anything done.
+
+1. **The fuzz-ball.** A round mass of one hue with a face sunk into it. If you
+   cannot point at the head, the body, and the limbs as separate shapes in the
+   silhouette, it is a blob — rebuild the silhouette, do not paint over it.
+2. **Floating parts.** A tail, an arm, a held object or a plug drawn beside the
+   creature with a gap of transparency between them. Every part must physically
+   connect to the body, or be so close it obviously belongs.
+3. **One value everywhere.** Base and shade only a step apart, so the form is
+   flat. Push the deep shade *much* darker and keep the highlight small.
+4. **Face soup.** Eyes, nose, mouth and teeth all crowded into six rows with no
+   clean skin between them. Give the face air: eyes with a gap between them,
+   a mouth two or three rows below, not touching.
+5. **Teeth that eat the face.** Big white rectangles read as a grill. Keep fangs
+   to 1–2px, pointing down from the upper lip, with dark around them.
+6. **Legs that dissolve.** Limbs that fade into the ground or end in a smear.
+   Each leg needs an outline, a lit side and a foot.
+7. **Wrong element.** Spark drawn as flame, Verdant drawn as generic green mass.
+   The type's shape language matters: Spark is angular and jagged, Ember is
+   licking and curved, Tide is smooth and finned, Verdant is leaf-and-thorn,
+   Stone is blocky and cracked, Gloom is soft-edged and furred.
+
+## Match the roster
+
+Six sprites in this folder are finished and set the bar: `cindercub`,
+`pyrelynx`, `magmane`, `brookite`, `mothrix`, `nocthorn`. Render them, look at
+them, and match their level of finish — the way they separate head from body,
+how dark the deep shade goes, how small the highlights are, how much air the
+face gets. New work that looks softer or flatter than those is not done yet.
+
 ## Evolution lines
 
 Within a line, keep a shared **design DNA** — the same eye shape, the same marking
