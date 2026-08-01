@@ -1,0 +1,31 @@
+{
+  "id": "path",
+  "name": "Dirt path",
+  "tile": true,
+  "palette": {
+    "s": "#7a5a3a",
+    "d": "#96754a",
+    "m": "#ac8a5c",
+    "p": "#bd9c70",
+    "l": "#cfb287",
+    "h": "#e2caa2"
+  },
+  "rows": [
+    "ppppppppppppphlp",
+    "ppmmmppsdppppmsp",
+    "ppmmpppppddppppp",
+    "pppplllpppdhlppp",
+    "ppphllpppppmsppp",
+    "mppmspppsdpppmmm",
+    "dlppppmpppppppps",
+    "llpppmmpppsdpppp",
+    "sdlppphlppppllpp",
+    "ppppppmsllllplhl",
+    "pdddpsdppplpppms",
+    "pddppppppppmmppp",
+    "pppppplllhlpmmpp",
+    "mphlppllpmsppmpp",
+    "mpmspppddddpsdpm",
+    "mmpsdppppdpppppp"
+  ]
+}

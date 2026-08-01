@@ -5367,7 +5367,9 @@ const CRACK_TURNS = 2;
 // each safe on their own can cut a pocket off once both have fallen, so every
 // pending collapse counts as gone here. Pessimistic in the only direction that
 // is safe — it refuses candidates it did not have to, never accepts one it
-// should not have.
+// should not have. A crack is a promise: CRACK_TURNS later it drops, so weighing
+// a candidate against a board that still counts every cracking square as solid
+// lets two cracks each pass on their own and sever a corridor together.
 const goingOrGone = (x,y) => holeAt(x,y) || crackAt(x,y) > 0;
 
 function stillWhole(hx, hy){

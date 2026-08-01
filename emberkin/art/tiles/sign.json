@@ -1,0 +1,36 @@
+{
+  "id": "sign",
+  "name": "Signpost",
+  "tile": false,
+  "palette": {
+    "d": "#2f7a3a",
+    "m": "#3f8f3a",
+    "g": "#4aa03d",
+    "l": "#5cb340",
+    "t": "#7cc851",
+    "K": "#3d2a1b",
+    "s": "#5c4028",
+    "b": "#8a5f38",
+    "h": "#a87b4c",
+    "w": "#c69a68",
+    "i": "#d8bb8c"
+  },
+  "rows": [
+    "ggddmdggtgggggmm",
+    "mKKKKKKKKKKKKKKg",
+    "gKwhhhhhhhhhhsKm",
+    "gKhwbbbbbbbbbsKg",
+    "gKhbiiiiiibbbsKg",
+    "gKhbbbbbbbbbssKg",
+    "tKhbiiiiiiiibsKm",
+    "lKssssssssssssKg",
+    "lKKKKKKKKKKKKKKt",
+    "gdgtggghbKggdmgl",
+    "dgglggghbKggmmll",
+    "dglldgghbKdgmgmg",
+    "dmmmdgthbKdgtmgg",
+    "gtmgmgdhbKdmlggg",
+    "glgmgllddggllddg",
+    "llddgggdgggggddm"
+  ]
+}

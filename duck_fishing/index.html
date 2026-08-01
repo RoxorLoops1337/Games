@@ -1,0 +1,2040 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Hook-a-Duck</title>
+<style>
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; background:#07070d; overflow:hidden;
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif; color:#f2eee4; }
+  #wrap{ position:fixed; inset:0; }
+  canvas{ display:block; width:100%; height:100%; touch-action:none; cursor:crosshair; }
+  .ov{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background:radial-gradient(900px 500px at 50% 40%, rgba(24,12,40,.72), rgba(4,4,10,.92));
+    backdrop-filter:blur(3px); }
+  .ov[hidden]{ display:none; }
+  .card{ width:min(560px,92vw); padding:26px 28px 24px; border-radius:18px; text-align:center;
+    background:linear-gradient(180deg,#1b1426,#120d1c); border:3px solid #3a2a4d;
+    box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 0 40px rgba(255,180,60,.06); }
+  .card h1{ margin:0 0 4px; font-size:clamp(30px,7vw,46px); letter-spacing:3px; font-weight:900;
+    color:#ffd34d; text-shadow:0 0 10px rgba(255,190,60,.55), 0 3px 0 #8a5a12; }
+  .card h2{ margin:0 0 10px; font-size:clamp(24px,6vw,34px); letter-spacing:2px; color:#ffd34d; }
+  .sub{ margin:0 0 16px; color:#b6a9c6; font-size:14px; letter-spacing:2px; text-transform:uppercase; }
+  .rules{ text-align:left; margin:0 auto 18px; max-width:420px; color:#d8cfe4; font-size:15px; line-height:1.65; }
+  .rules b{ color:#ffd34d; }
+  .btn{ display:inline-block; margin:6px 5px 0; padding:13px 26px; font-size:16px; font-weight:800;
+    letter-spacing:1.5px; border:none; border-radius:12px; cursor:pointer; font-family:inherit;
+    color:#241704; background:linear-gradient(180deg,#ffd85e,#e8a91f);
+    box-shadow:0 5px 0 #96690d, 0 10px 22px rgba(0,0,0,.4); transition:transform .1s ease; }
+  .btn:active{ transform:translateY(3px); box-shadow:0 2px 0 #96690d; }
+  .btn.alt{ color:#f0e8ff; background:linear-gradient(180deg,#5b4a76,#3d3153); box-shadow:0 5px 0 #241c33; }
+  .stats{ display:flex; gap:18px; justify-content:center; margin:4px 0 14px; }
+  .stat{ min-width:104px; padding:10px 8px; border-radius:12px; background:#0f0a18; border:2px solid #33253f; }
+  .stat .k{ font-size:11px; letter-spacing:2px; color:#9b8fae; text-transform:uppercase; }
+  .stat .v{ font-size:26px; font-weight:900; color:#ffd34d; }
+  .shelfline{ margin:0 0 14px; font-size:13px; color:#b6a9c6; letter-spacing:.5px; }
+  .shelfline b{ color:#ffd34d; }
+  .prize{ margin:2px 0 14px; min-height:52px; }
+  .prize .pwon{ font-size:13px; letter-spacing:3px; color:#8effb0; font-weight:800; }
+  .prize .pname{ font-size:22px; font-weight:900; color:#ffd34d; margin:2px 0 4px; }
+  .prize .pnext{ font-size:13px; color:#b6a9c6; }
+  .prize .pnext b{ color:#e8e2f4; }
+  .prize .pbar{ height:7px; margin:7px auto; width:min(300px,80%); border-radius:4px;
+    background:#0f0a18; border:1px solid #33253f; overflow:hidden; }
+  .prize .pbar i{ display:block; height:100%; background:linear-gradient(90deg,#e8a91f,#ffd85e); }
+  #mute{ position:absolute; right:10px; bottom:10px; width:40px; height:40px; border-radius:10px;
+    border:2px solid #3a2a4d; background:rgba(12,8,20,.6); color:#ffd34d; font-size:17px;
+    cursor:pointer; font-family:inherit; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+  <button id="mute" title="Sound on/off">&#9835;</button>
+
+  <div class="ov" id="menu">
+    <div class="card">
+      <h1>HOOK&#8209;A&#8209;DUCK</h1>
+      <p class="sub">Fairground duck pond</p>
+      <div class="rules">
+        <b>Move</b> the pointer &mdash; you hold the rod by its grip.<br>
+        <b>Hold</b> to lower the hook, <b>release</b> to reel it in.<br>
+        Slide the wire through a hoop and lift.<br>
+        Two ducks at once pays <b>double</b>.<br>
+        Keep the rhythm and the <b>streak</b> multiplies.<br>
+        The last 15 seconds are the <b>final rush</b>.
+      </div>
+      <div class="shelfline" id="mShelf"></div>
+      <button class="btn" id="bStart">START &mdash; 90s</button>
+      <button class="btn alt" id="bRelax">RELAXED</button>
+    </div>
+  </div>
+
+  <div class="ov" id="over" hidden>
+    <div class="card">
+      <h2 id="ovTitle">TIME&rsquo;S UP</h2>
+      <div class="stats">
+        <div class="stat"><div class="k">Score</div><div class="v" id="ovScore">0</div></div>
+        <div class="stat"><div class="k">Ducks</div><div class="v" id="ovDucks">0</div></div>
+        <div class="stat"><div class="k">Best</div><div class="v" id="ovBest">0</div></div>
+      </div>
+      <div id="ovPrize" class="prize"></div>
+      <button class="btn" id="bAgain">PLAY AGAIN</button>
+      <button class="btn alt" id="bMenu">MENU</button>
+    </div>
+  </div>
+</div>
+<script>
+/* =====================================================================
+   HOOK-A-DUCK  —  a fairground duck pond, rendered with a small
+   software 3D pipeline on a 2D canvas.
+
+   Everything you see is real geometry: the ducks are procedurally built
+   low-poly meshes (lathed body, ellipsoid head, torus ring, numbered
+   base plug) transformed by a per-duck rotation matrix, back-face
+   culled, painter-sorted and flat-shaded against one key light.
+
+   The floating is real too — a travelling wave field drives buoyancy
+   (submerged fraction -> upward force), and the wave's local gradient
+   drives the pitch/roll torque, so a duck rides up a swell nose-first
+   and rolls when a wave passes under its flank.  Ducks jostle each
+   other, drift downstream, and spin lazily like the real ones.
+
+   The hook is a Verlet pendulum hanging off the rod tip; a duck is
+   caught when its ring slides down over the hook — detected as the
+   hook crossing the ring's plane upward while inside the ring's bore.
+   ===================================================================== */
+
+/* ---------------------------------------------------------------- util */
+const TAU = Math.PI * 2;
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = (t) => t * t * (3 - 2 * t);
+
+let _seed = 20240707;
+function reseed(s){ _seed = s >>> 0 || 1; }
+function rng(){
+  _seed |= 0; _seed = _seed + 0x6D2B79F5 | 0;
+  let t = Math.imul(_seed ^ _seed >>> 15, 1 | _seed);
+  t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+  return ((t ^ t >>> 14) >>> 0) / 4294967296;
+}
+const rr = (a, b) => a + rng() * (b - a);
+
+/* --------------------------------------------------------------- world
+   1 world unit = 10 cm.  A duck is ~1.5 units (15 cm) long, which is
+   about right for a fairground duck.                                    */
+const CHAN_HZ    = 6.2;    // channel half-width in z (1.24 m across)
+const LOOP_LEN   = 44;     // ducks wrap over this span of x
+const X0         = -LOOP_LEN / 2, X1 = LOOP_LEN / 2;
+const VIEW_HALF  = 13.5;     // world half-width fitted to the canvas width
+const GATE_X     = 12.2;   // inner face of the side panels the loop hides behind
+const N_DUCKS    = 46;
+const CURRENT    = 2.55;   // downstream speed, units/s
+const GRAV       = 98.1;   // 9.81 m/s^2 in world units
+const FLOAT_Y    = -0.05;   // duck origin height above the local water line
+const BODY_HH    = 0.42;   // body half-height, used for the submerged fraction
+/* Buoyancy at full submersion, solved so the duck's resting equilibrium is
+   exactly FLOAT_Y: at rest BUOY*frac == GRAV, and frac is the submerged
+   fraction (BODY_HH - FLOAT_Y) / (2*BODY_HH).  Deriving it means the float
+   height and the spring can never drift apart when either is tuned.      */
+const BUOY       = GRAV * (BODY_HH * 2) / (BODY_HH - FLOAT_Y);
+/* Hoop centre in duck space. The head's crown is at y = 0.62 + 0.295, so
+   this puts the bottom of the hoop just inside it. */
+const RING_LOCAL = [0.42, 1.05, 0];
+const RING_R     = 0.17;   // hoop radius
+const CATCH_R    = 0.52;   // how near the hoop's centre the wire must pass
+const MAX_HOOK   = 2;      // ducks the hook can carry
+const ROD_TIP_Y  = 5.2;
+
+/* The hook's wire, measured from the end of the line: it rises HOOK_TOP_Y
+   above that anchor and its bend hangs HOOK_BOT_Y below. Everything about
+   where a hoop can sit on the hook follows from these two, so they are
+   declared here rather than left implied by the drawing code. */
+const HOOK_SCALE = 1.85;
+const HOOK_TOP_Y =  0.80 * HOOK_SCALE;
+const HOOK_BOT_Y = -0.21 * HOOK_SCALE;
+
+/* Vertical catch window, measured as (hook anchor - hoop centre). A hoop is
+   on the wire when it sits between the bend and the top, so the window is
+   just the wire's own span, negated, plus a little slack. Deriving it means
+   it cannot drift out of step with the hook's shape. */
+const BORE_LOW   = -HOOK_TOP_Y - 0.05;
+const BORE_HIGH  = -HOOK_BOT_Y + 0.05;
+
+const HOOK_MIN   = 1.35;   // shortest line (hook parked high)
+/* Where the hoop sits on the wire once the line is all the way out, and the
+   number that made the pond nearly unfishable. HOOK_MAX used to be picked by
+   eye so the bend dipped in the water, which left the resting hoop at -1.25
+   against a hand-written BORE_LOW of -1.30 — five hundredths of margin. A
+   duck bobs more than that, so holding the button (the obvious thing to do)
+   put the hook out of reach on all but a handful of frames. Deriving the
+   window from the wire's real span is what actually fixed it; this then
+   picks a rest depth with margin to spare, low enough that the bend still
+   breaks the surface. */
+const HOOK_REST  = -0.90;
+const HOOK_MAX   = ROD_TIP_Y - (FLOAT_Y + RING_LOCAL[1] + HOOK_REST);
+const LOWER_SPD  = 2.35;   // line pays out, units/s
+const RAISE_SPD  = 4.10;   // line reels in, units/s
+const ROUND_TIME = 90;
+/* Keep landing ducks and the multiplier climbs. A catch cycle is roughly
+   three seconds, so the window is generous enough that staying in rhythm
+   holds the streak, and short enough that dithering loses it. */
+const STREAK_WINDOW = 6.5;
+const STREAK_MAX    = 4;
+
+/* The last stretch of a round pays double and the stream picks up. A round
+   needs somewhere to build to, or the final twenty seconds are the least
+   interesting part of it. */
+const RUSH_TIME  = 15;
+const RUSH_FLOW  = 1.28;
+const RUSH_MULT  = 2;
+
+/* ------------------------------------------------------------ the shelf
+   The stall's sign promises every duck a prize, so there had better be
+   prizes. Score banks into tickets that persist between rounds, and the
+   shelf on the back wall fills up permanently as the total passes each
+   threshold — visible in every frame you play, which is the point. The
+   thresholds are lifetime totals, not a wallet to spend: nothing to
+   manage, just a row of things you have not won yet. */
+const PRIZES = [
+  { n: 'Duckling',    c:   70, body: [252, 205,  42], acc: [240, 124,  34], ear: 'none',  s: 0.72 },
+  { n: 'Goldfish',    c:  200, body: [255, 142,  60], acc: [255, 208, 130], ear: 'fin',   s: 0.74 },
+  { n: 'Teddy',       c:  420, body: [178, 122,  74], acc: [230, 192, 152], ear: 'round', s: 0.86 },
+  { n: 'Bunny',       c:  720, body: [242, 240, 246], acc: [248, 186, 200], ear: 'long',  s: 0.90 },
+  { n: 'Frog',        c: 1100, body: [110, 196,  96], acc: [232, 250, 220], ear: 'eyes',  s: 0.86 },
+  { n: 'Unicorn',     c: 1600, body: [248, 214, 238], acc: [255, 214,  90], ear: 'horn',  s: 0.96 },
+  { n: 'Panda',       c: 2300, body: [242, 242, 246], acc: [ 42,  42,  50], ear: 'round', s: 1.00 },
+  { n: 'Dragon',      c: 3300, body: [122, 112, 222], acc: [255, 120,  90], ear: 'spike', s: 1.06 },
+  { n: 'Giant Bear',  c: 4700, body: [212, 152,  92], acc: [242, 212, 172], ear: 'round', s: 1.22 },
+  { n: 'Golden Duck', c: 6600, body: [255, 196,  60], acc: [255, 238, 176], ear: 'crown', s: 1.10 },
+];
+
+/* -------------------------------------------------------------- canvas */
+const cv = document.getElementById('c');
+let ctx = cv.getContext('2d');   // retargeted while baking the backdrop cache
+let W = 960, H = 600, DPR = 1;
+
+/* Rendering quality, driven by measured frame time.  Tier 2 is the full
+   thing; 1 and 0 shed water tesselation, mesh detail and the see-through
+   pass.  A canvas this fill-heavy has to be able to back off on its own —
+   the alternative is a slideshow on any machine slower than the one it was
+   written on. */
+/* work = time actually spent in update+draw; frame = wall time between
+   frames. They answer different questions: a vsync-locked 60Hz frame is
+   16.7ms however idle the machine is, so only `work` can tell us there is
+   headroom to spend, while only `frame` can tell us we are dropping frames. */
+const Q = { tier: 2, work: 10, frame: 16, hold: 0, bad: 0, penalty: 420 };
+const QT = [
+  { wgx: 22, wgz:  7, hiPx: 1e9, near: 2, far: 2, wet: false, fx: false, dprCap: 1.0  },
+  { wgx: 28, wgz:  9, hiPx: 1e9, near: 1, far: 1, wet: false, fx: true,  dprCap: 1.25 },
+  { wgx: 34, wgz: 10, hiPx: 105, near: 0, far: 1, wet: true,  fx: true,  dprCap: 1.5  },
+];
+/* Total backing pixels, not device ratio, is what costs: a 4K panel at
+   DPR 2 is 33M pixels of fill per frame. */
+const MAX_BACKING = 3.1e6;
+
+function fit(){
+  const win = typeof window !== 'undefined' ? window : { innerWidth: 960, innerHeight: 600 };
+  W = Math.max(320, win.innerWidth | 0);
+  H = Math.max(240, win.innerHeight | 0);
+  DPR = Math.min(QT[Q.tier].dprCap, win.devicePixelRatio || 1);
+  DPR = Math.min(DPR, Math.sqrt(MAX_BACKING / (W * H)));
+  DPR = Math.max(0.75, DPR);
+  cv.width = (W * DPR) | 0;
+  cv.height = (H * DPR) | 0;
+  cv.style.width = W + 'px';
+  cv.style.height = H + 'px';
+  camFit();
+}
+
+/* -------------------------------------------------------------- camera
+   A fixed camera above the near bank looking down across the channel.
+   projScale is solved every resize so VIEW_HALF world units of channel
+   exactly fill the canvas width.                                        */
+const cam = { p: [0, 16, -14], t: [0, 0, 1], fwd: [0, 0, 1], rgt: [1, 0, 0], up: [0, 1, 0], s: 700, d0: 21 };
+
+function camFit(){
+  const d = [cam.t[0] - cam.p[0], cam.t[1] - cam.p[1], cam.t[2] - cam.p[2]];
+  const L = Math.hypot(d[0], d[1], d[2]);
+  cam.fwd = [d[0] / L, d[1] / L, d[2] / L];
+  // right = normalize(worldUp x fwd)
+  const r = [cam.fwd[2], 0, -cam.fwd[0]];
+  const rl = Math.hypot(r[0], r[1], r[2]) || 1;
+  cam.rgt = [r[0] / rl, r[1] / rl, r[2] / rl];
+  // up = fwd x right
+  cam.up = [
+    cam.fwd[1] * cam.rgt[2] - cam.fwd[2] * cam.rgt[1],
+    cam.fwd[2] * cam.rgt[0] - cam.fwd[0] * cam.rgt[2],
+    cam.fwd[0] * cam.rgt[1] - cam.fwd[1] * cam.rgt[0],
+  ];
+  cam.d0 = view(0, 0, 0)[2];
+  /* Fit on both axes.  Fitting width alone leaves the pond as a thin ribbon
+     on a portrait phone, so also solve for the scale that gives the trough a
+     decent slice of the height and take whichever is larger — on a wide
+     screen the width wins, on a tall one the band does and the channel simply
+     runs off the sides (it is a loop, there is nothing to see there).  The
+     projected band height is linear in cam.s, so it solves in closed form. */
+  const f = view(0, 0, CHAN_HZ), yf = f[1] / f[2];
+  const n = view(0, 0, -CHAN_HZ), yn = n[1] / n[2];
+  const K = yf - yn || 1;
+  const scaleW = (W * 0.5) * cam.d0 / VIEW_HALF;
+  const scaleH = (H * 0.46) / K;
+  cam.s = Math.min(Math.max(scaleW, scaleH), scaleW * 2.8);
+}
+
+const _v = [0, 0, 0];
+function view(x, y, z){
+  const dx = x - cam.p[0], dy = y - cam.p[1], dz = z - cam.p[2];
+  _v[0] = dx * cam.rgt[0] + dy * cam.rgt[1] + dz * cam.rgt[2];
+  _v[1] = dx * cam.up[0]  + dy * cam.up[1]  + dz * cam.up[2];
+  _v[2] = dx * cam.fwd[0] + dy * cam.fwd[1] + dz * cam.fwd[2];
+  return _v;
+}
+/* screen X / Y / depth of a world point (depth clamped so nothing behind
+   the camera ever explodes into NaN territory) */
+const _p = { x: 0, y: 0, d: 1, s: 1 };
+function proj(x, y, z){
+  const v = view(x, y, z);
+  const d = v[2] < 0.35 ? 0.35 : v[2];
+  const s = cam.s / d;
+  _p.x = W * 0.5 + v[0] * s;
+  _p.y = H * 0.5 - v[1] * s;
+  _p.d = d; _p.s = s;
+  return _p;
+}
+/* copying variant, for the handful of callers that need two projected
+   points alive at once (proj reuses one scratch object) */
+function projC(x, y, z){ const p = proj(x, y, z); return { x: p.x, y: p.y, d: p.d, s: p.s }; }
+
+/* pointer -> point on the water plane (y = 0) */
+function unproject(sx, sy){
+  const nx = (sx - W * 0.5) / cam.s, ny = -(sy - H * 0.5) / cam.s;
+  // ray dir = fwd + nx*right + ny*up
+  const dx = cam.fwd[0] + nx * cam.rgt[0] + ny * cam.up[0];
+  const dy = cam.fwd[1] + nx * cam.rgt[1] + ny * cam.up[1];
+  const dz = cam.fwd[2] + nx * cam.rgt[2] + ny * cam.up[2];
+  if (dy > -0.001) return null;
+  const t = -cam.p[1] / dy;
+  return [cam.p[0] + dx * t, cam.p[2] + dz * t];
+}
+
+/* --------------------------------------------------------------- waves
+   Three travelling components.  Analytic gradient -> surface normal and
+   the torque that tips the ducks.                                       */
+let T = 0;
+function waveH(x, z, t){
+  return 0.105 * Math.sin(0.55 * x + 0.30 * z - 2.10 * t)
+       + 0.070 * Math.sin(0.31 * x - 0.62 * z + 1.55 * t)
+       + 0.038 * Math.sin(1.10 * x + 0.85 * z - 3.30 * t);
+}
+function waveDx(x, z, t){
+  return 0.105 * 0.55 * Math.cos(0.55 * x + 0.30 * z - 2.10 * t)
+       + 0.070 * 0.31 * Math.cos(0.31 * x - 0.62 * z + 1.55 * t)
+       + 0.038 * 1.10 * Math.cos(1.10 * x + 0.85 * z - 3.30 * t);
+}
+function waveDz(x, z, t){
+  return  0.105 * 0.30 * Math.cos(0.55 * x + 0.30 * z - 2.10 * t)
+       -  0.070 * 0.62 * Math.cos(0.31 * x - 0.62 * z + 1.55 * t)
+       +  0.038 * 0.85 * Math.cos(1.10 * x + 0.85 * z - 3.30 * t);
+}
+
+/* -------------------------------------------------------------- matrix
+   Duck orientation: yaw about +Y, pitch about +Z (nose up), roll about
+   +X.  M = Ry * Rz * Rx, written out flat (row-major, 9 floats).        */
+function euler(yaw, pitch, roll, out){
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const cr = Math.cos(roll), sr = Math.sin(roll);
+  // Rz*Rx
+  const a00 = cp,       a01 = -sp * cr,            a02 =  sp * sr;
+  const a10 = sp,       a11 =  cp * cr,            a12 = -cp * sr;
+  const a20 = 0,        a21 =  sr,                 a22 =  cr;
+  // Ry * (Rz*Rx)
+  out[0] = cy * a00 + sy * a20; out[1] = cy * a01 + sy * a21; out[2] = cy * a02 + sy * a22;
+  out[3] = a10;                 out[4] = a11;                 out[5] = a12;
+  out[6] = -sy * a00 + cy * a20; out[7] = -sy * a01 + cy * a21; out[8] = -sy * a02 + cy * a22;
+  return out;
+}
+const _m = new Float64Array(9);
+function xf(m, x, y, z, out){
+  out[0] = m[0] * x + m[1] * y + m[2] * z;
+  out[1] = m[3] * x + m[4] * y + m[5] * z;
+  out[2] = m[6] * x + m[7] * y + m[8] * z;
+  return out;
+}
+const _t3 = [0, 0, 0], _t3b = [0, 0, 0];
+</script>
+<script>
+/* ================================================================ MESH
+   Tiny mesh kit.  A mesh is { v: Float32Array(3n), f: Int32Array(4m),
+   p: Uint8Array(m) } — quads only (a triangle is a quad with a repeated
+   index), p = part id used to look a colour up in the duck's palette.   */
+const PART = { BODY: 0, BELLY: 1, HEAD: 2, BEAK: 3, RING: 4, BASE: 5, WING: 6 };
+
+function MB(){ return { v: [], f: [], p: [] }; }
+function mbQuad(m, a, b, c, d, part){ m.f.push(a, b, c, d); m.p.push(part); }
+function mbVert(m, x, y, z){ m.v.push(x, y, z); return m.v.length / 3 - 1; }
+function mbBake(m){
+  return { v: new Float32Array(m.v), f: new Int32Array(m.f), p: new Uint8Array(m.p), n: m.v.length / 3, q: m.p.length };
+}
+/* surface of revolution about the local +X axis.
+   prof = [[x, r, yShift, part], ...]                                     */
+function latheX(m, prof, seg, ys, zs){
+  const base = m.v.length / 3;
+  for (let i = 0; i < prof.length; i++){
+    const px = prof[i][0], pr = prof[i][1], py = prof[i][2] || 0;
+    for (let j = 0; j < seg; j++){
+      const a = j / seg * TAU;
+      let vy = pr * Math.sin(a) * ys;
+      if (vy < 0) vy *= 0.80;                       // flattened, float-like belly
+      mbVert(m, px, vy + py, pr * Math.cos(a) * zs);
+    }
+  }
+  for (let i = 0; i < prof.length - 1; i++){
+    for (let j = 0; j < seg; j++){
+      const j2 = (j + 1) % seg;
+      const a = base + i * seg, b = base + (i + 1) * seg;
+      // side/upper faces of the body get a subtly different tone (wing hint)
+      const ang = j / seg * TAU;
+      const wing = (prof[i][3] === PART.BODY && Math.abs(Math.sin(ang)) < 0.62 && prof[i][0] > -0.42 && prof[i][0] < 0.34)
+        ? PART.WING : (prof[i][3] === PART.BODY && Math.sin(ang) < -0.3 ? PART.BELLY : prof[i][3]);
+      mbQuad(m, a + j, a + j2, b + j2, b + j, wing);
+    }
+  }
+}
+/* UV ellipsoid, poles on +/-Y */
+function ellipsoid(m, cx, cy, cz, rx, ry, rz, seg, rings, part){
+  const base = m.v.length / 3;
+  for (let i = 0; i <= rings; i++){
+    const phi = i / rings * Math.PI, sp = Math.sin(phi), cp = Math.cos(phi);
+    for (let j = 0; j < seg; j++){
+      const th = j / seg * TAU;
+      mbVert(m, cx + rx * sp * Math.cos(th), cy + ry * cp, cz + rz * sp * Math.sin(th));
+    }
+  }
+  for (let i = 0; i < rings; i++)
+    for (let j = 0; j < seg; j++){
+      const j2 = (j + 1) % seg, a = base + i * seg, b = base + (i + 1) * seg;
+      mbQuad(m, a + j, a + j2, b + j2, b + j, part);
+    }
+}
+/* Torus. upright=false lies flat in the X-Z plane (axis +Y); upright=true
+   stands in the X-Y plane (axis +Z), which is how a duck's hoop is fitted —
+   a wire loop along the length of the head, seen face-on from the side. */
+function torus(m, cx, cy, cz, R, r, nu, nv, part, upright){
+  const base = m.v.length / 3;
+  for (let i = 0; i < nu; i++){
+    const u = i / nu * TAU, cu = Math.cos(u), su = Math.sin(u);
+    for (let j = 0; j < nv; j++){
+      const vv = j / nv * TAU;
+      const rr2 = R + r * Math.cos(vv);
+      const t = r * Math.sin(vv);
+      if (upright) mbVert(m, cx + rr2 * cu, cy + rr2 * su, cz + t);
+      else         mbVert(m, cx + rr2 * cu, cy + t, cz + rr2 * su);
+    }
+  }
+  for (let i = 0; i < nu; i++)
+    for (let j = 0; j < nv; j++){
+      const i2 = (i + 1) % nu, j2 = (j + 1) % nv;
+      mbQuad(m, base + i * nv + j, base + i2 * nv + j, base + i2 * nv + j2, base + i * nv + j2, part);
+    }
+}
+function box(m, x0, y0, z0, x1, y1, z1, part){
+  const b = m.v.length / 3;
+  mbVert(m, x0, y0, z0); mbVert(m, x1, y0, z0); mbVert(m, x1, y0, z1); mbVert(m, x0, y0, z1);
+  mbVert(m, x0, y1, z0); mbVert(m, x1, y1, z0); mbVert(m, x1, y1, z1); mbVert(m, x0, y1, z1);
+  mbQuad(m, b + 3, b + 2, b + 1, b + 0, part); mbQuad(m, b + 4, b + 5, b + 6, b + 7, part);
+  mbQuad(m, b + 0, b + 1, b + 5, b + 4, part); mbQuad(m, b + 2, b + 3, b + 7, b + 6, part);
+  mbQuad(m, b + 1, b + 2, b + 6, b + 5, part); mbQuad(m, b + 3, b + 0, b + 4, b + 7, part);
+}
+
+/* --------------------------------------------------------- duck meshes
+   The classic silhouette: fat middle, tapered flicked-up tail, breast
+   rolling forward into a head that sits high and forward, a stubby
+   beak, the wire ring on its post, and the numbered plug underneath.    */
+const BODY_PROFILE = [
+  [-0.66, 0.030, 0.40], [-0.58, 0.170, 0.29], [-0.48, 0.295, 0.16],
+  [-0.31, 0.425, 0.05], [-0.11, 0.492, 0.00], [ 0.10, 0.500, 0.00],
+  [ 0.28, 0.470, 0.01], [ 0.43, 0.395, 0.03], [ 0.55, 0.262, 0.06],
+  [ 0.62, 0.075, 0.10],
+];
+/* Three levels of duck: full, reduced, and a bare-bones one the emergency
+   quality tier uses so a slow machine still gets a moving pond. */
+function buildDuck(lod){
+  const seg  = [10, 7, 5][lod];
+  const hseg = [10, 7, 5][lod], hring = [6, 4, 3][lod];
+  const nu   = [10, 7, 5][lod], nv = [5, 4, 3][lod];
+  const m = MB();
+  const prof = BODY_PROFILE.map(p => [p[0], p[1], p[2], PART.BODY]);
+  latheX(m, prof, seg, 0.90, 1.0);
+  ellipsoid(m, 0.44, 0.62, 0, 0.305, 0.295, 0.285, hseg, hring, PART.HEAD);
+  // beak: a squashed lathe pointing +x, nose dipped slightly
+  const bk = MB();
+  latheX(bk, [[0, 0.115, 0, PART.BEAK], [0.14, 0.128, 0, PART.BEAK], [0.26, 0.098, 0, PART.BEAK], [0.32, 0.030, 0, PART.BEAK]], [6, 5, 4][lod], 0.42, 1.0);
+  bakeInto(m, bk, 0.66, 0.575, 0, -0.17);
+  // numbered plug under the belly
+  latheX(m, [[-0.17, 0.001, -0.30, PART.BASE], [-0.16, 0.190, -0.36, PART.BASE],
+             [ 0.14, 0.190, -0.36, PART.BASE], [ 0.15, 0.001, -0.30, PART.BASE]], [9, 7, 5][lod], 1.0, 1.0);
+  // the upright wire hoop, its foot sunk into the top of the head
+  torus(m, RING_LOCAL[0], RING_LOCAL[1], 0, RING_R, 0.032, nu, nv, PART.RING, true);
+  return mbBake(m);
+}
+/* merge src into dst, rotating about +Z by `rot` then translating */
+function bakeInto(dst, src, tx, ty, tz, rot){
+  const base = dst.v.length / 3;
+  const c = Math.cos(rot), s = Math.sin(rot);
+  for (let i = 0; i < src.v.length; i += 3){
+    const x = src.v[i], y = src.v[i + 1], z = src.v[i + 2];
+    dst.v.push(c * x - s * y + tx, s * x + c * y + ty, z + tz);
+  }
+  for (let i = 0; i < src.f.length; i++) dst.f.push(src.f[i] + base);
+  for (let i = 0; i < src.p.length; i++) dst.p.push(src.p[i]);
+}
+const DUCK_HI = buildDuck(0);
+const DUCK_LO = buildDuck(1);
+const DUCK_MIN = buildDuck(2);
+const DUCK_LOD = [DUCK_HI, DUCK_LO, DUCK_MIN];
+
+/* eyes are billboarded dots — cheaper and they read better than geometry */
+const EYE_L = [0.61, 0.71,  0.190], EYE_R = [0.61, 0.71, -0.190];
+const BASE_CENTRE = [-0.01, -0.37, 0];   // centre of the flat numbered face
+
+/* ------------------------------------------------------------ palettes */
+const PAL_CLASSIC = { body:[252,205,42], belly:[236,182,30], wing:[255,219,80], head:[253,210,52],
+                      beak:[240,124,34], ring:[196,203,214], base:[224,176,30], spec:0.85 };
+function palVariant(body, belly, wing, head, beak, spec){
+  return { body, belly, wing, head, beak, ring:[196,203,214], base:[
+    (body[0]*0.86)|0, (body[1]*0.86)|0, (body[2]*0.86)|0], spec };
+}
+const PALS = [
+  PAL_CLASSIC, PAL_CLASSIC, PAL_CLASSIC, PAL_CLASSIC, PAL_CLASSIC, PAL_CLASSIC,
+  palVariant([240,242,247],[214,218,228],[252,253,255],[242,244,249],[240,150,60],0.9),
+  palVariant([ 78,196,196],[ 56,164,166],[104,216,214],[ 80,198,198],[242,124,34],0.85),
+  palVariant([244,138,180],[218,110,152],[252,166,200],[246,142,184],[242,124,34],0.85),
+  palVariant([226, 84, 70],[196, 62, 52],[240,116, 98],[228, 88, 74],[244,180, 60],0.85),
+];
+const PAL_GOLD = { body:[255,196,60], belly:[214,152,26], wing:[255,224,120], head:[255,200,66],
+                   beak:[255,232,150], ring:[255,236,170], base:[214,152,26], spec:1.6 };
+
+const NUM_TABLE = [[1,32],[2,24],[3,18],[5,13],[8,8],[12,5]];
+const NUM_TOTAL = NUM_TABLE.reduce((s, r) => s + r[1], 0);
+function rollNumber(){
+  let r = rng() * NUM_TOTAL;
+  for (const [n, w] of NUM_TABLE){ r -= w; if (r <= 0) return n; }
+  return 1;
+}
+</script>
+<script>
+/* ============================================================== SHADING */
+const LIGHT = (() => { const l = [-0.42, 0.84, -0.34]; const n = Math.hypot(l[0], l[1], l[2]); return [l[0]/n, l[1]/n, l[2]/n]; })();
+const AMB = 0.70, DIF = 0.74;
+
+/* scratch buffers, sized for the biggest mesh */
+const MAXV = Math.max(DUCK_HI.n, 1200);
+const sx = new Float32Array(MAXV), sy = new Float32Array(MAXV), sd = new Float32Array(MAXV);
+const wx = new Float32Array(MAXV), wy = new Float32Array(MAXV), wz = new Float32Array(MAXV);
+const fOrder = new Int32Array(Math.max(DUCK_HI.q, 900));
+const fDepth = new Float32Array(Math.max(DUCK_HI.q, 900));
+
+/* Every face assigns fillStyle from a string, which means an allocation and
+   a colour parse per polygon — thousands per frame. Quantising to 4 levels
+   per channel (invisible on a shaded surface) makes the same handful of
+   strings come back over and over. */
+const _cssCache = new Map();
+function css(r, g, b){
+  r = r < 0 ? 0 : r > 255 ? 252 : r & 0xFC;
+  g = g < 0 ? 0 : g > 255 ? 252 : g & 0xFC;
+  b = b < 0 ? 0 : b > 255 ? 252 : b & 0xFC;
+  const k = (r << 16) | (g << 8) | b;
+  let v = _cssCache.get(k);
+  if (v === undefined){
+    v = 'rgb(' + r + ',' + g + ',' + b + ')';
+    if (_cssCache.size < 6000) _cssCache.set(k, v);
+  }
+  return v;
+}
+
+function shade(col, nx, ny, nz, specK, ex, ey, ez, tint){
+  let d = nx * LIGHT[0] + ny * LIGHT[1] + nz * LIGHT[2];
+  if (d < 0) d = 0;
+  let l = AMB + DIF * d;
+  // specular (Blinn-Phong) — this is what sells "moulded plastic"
+  let hx = LIGHT[0] + ex, hy = LIGHT[1] + ey, hz = LIGHT[2] + ez;
+  const hl = Math.hypot(hx, hy, hz) || 1; hx /= hl; hy /= hl; hz /= hl;
+  let s = nx * hx + ny * hy + nz * hz;
+  s = s > 0 ? Math.pow(s, 26) * specK * 210 : 0;
+  // cool rim light picks the silhouette out of the night
+  let rim = 1 - Math.abs(nx * ex + ny * ey + nz * ez);
+  rim = rim * rim * rim * 46;
+  let r = col[0] * l + s + rim * 0.45;
+  let g = col[1] * l + s + rim * 0.62;
+  let b = col[2] * l + s + rim * 1.0;
+  if (tint){
+    r = r * tint[3] + tint[0] * (1 - tint[3]);
+    g = g * tint[3] + tint[1] * (1 - tint[3]);
+    b = b * tint[3] + tint[2] * (1 - tint[3]);
+  }
+  return css(r | 0, g | 0, b | 0);
+}
+
+/* Transform + project a mesh, then draw its visible quads back-to-front.
+   `pal` maps part ids to colours; `tint` optionally washes the result
+   toward a colour (used for the submerged half).                        */
+/* Screen-space y of the local water line, or +Infinity for anything out of
+   the water.  Faces whose centroid falls below it are washed toward the
+   water colour — which is what the two clipped passes used to do, at two
+   full mesh draws and two clip() calls per duck. */
+let MESH_WATER_Y = Infinity;
+
+function drawMesh(mesh, m, px0, py0, pz0, pal, tint, scale){
+  const v = mesh.v, n = mesh.n, sc = scale || 1;
+  for (let i = 0, k = 0; i < n; i++, k += 3){
+    const lx = v[k] * sc, ly = v[k + 1] * sc, lz = v[k + 2] * sc;
+    const X = m[0] * lx + m[1] * ly + m[2] * lz + px0;
+    const Y = m[3] * lx + m[4] * ly + m[5] * lz + py0;
+    const Z = m[6] * lx + m[7] * ly + m[8] * lz + pz0;
+    wx[i] = X; wy[i] = Y; wz[i] = Z;
+    const p = proj(X, Y, Z);
+    sx[i] = p.x; sy[i] = p.y; sd[i] = p.d;
+  }
+  const f = mesh.f, parts = mesh.p, q = mesh.q;
+  let cnt = 0;
+  for (let i = 0; i < q; i++){
+    const a = f[i * 4], b = f[i * 4 + 1], c = f[i * 4 + 2];
+    // screen-space winding test = back-face cull (cheap, no normals yet)
+    const area = (sx[b] - sx[a]) * (sy[c] - sy[a]) - (sy[b] - sy[a]) * (sx[c] - sx[a]);
+    if (area >= 0) continue;
+    fOrder[cnt] = i;
+    fDepth[cnt] = sd[a] + sd[b] + sd[c];
+    cnt++;
+  }
+  drawFaces(mesh, cnt, pal, tint);
+}
+/* Painter pass. The sort runs over slot indices into the parallel
+   fOrder/fDepth arrays, so no per-face object ever gets allocated. */
+const _idx = [];
+function drawFaces(mesh, cnt, pal, tint){
+  const idx = _idx;
+  idx.length = cnt;
+  for (let i = 0; i < cnt; i++) idx[i] = i;
+  idx.sort((a, b) => fDepth[b] - fDepth[a]);
+  const f = mesh.f, parts = mesh.p;
+  const ex0 = -cam.fwd[0], ey0 = -cam.fwd[1], ez0 = -cam.fwd[2];
+  const wl = MESH_WATER_Y;
+  for (let ii = 0; ii < cnt; ii++){
+    const i = fOrder[idx[ii]];
+    const a = f[i * 4], b = f[i * 4 + 1], c = f[i * 4 + 2], d = f[i * 4 + 3];
+    const ux = wx[b] - wx[a], uy = wy[b] - wy[a], uz = wz[b] - wz[a];
+    const vx2 = wx[c] - wx[a], vy2 = wy[c] - wy[a], vz2 = wz[c] - wz[a];
+    let nx = uy * vz2 - uz * vy2, ny = uz * vx2 - ux * vz2, nz = ux * vy2 - uy * vx2;
+    const nl = Math.hypot(nx, ny, nz);
+    if (nl < 1e-9) continue;
+    nx /= nl; ny /= nl; nz /= nl;
+    const p = parts[i];
+    const col = p === PART.BODY ? pal.body : p === PART.BELLY ? pal.belly : p === PART.WING ? pal.wing
+              : p === PART.HEAD ? pal.head : p === PART.BEAK ? pal.beak
+              : p === PART.RING ? pal.ring : pal.base;
+    const spec = p === PART.RING ? 2.4 : pal.spec;
+    // centroid decides which side of the water line this face is on
+    const cx4 = (sx[a] + sx[b] + sx[c] + sx[d]) * 0.25;
+    const cy4 = (sy[a] + sy[b] + sy[c] + sy[d]) * 0.25;
+    ctx.fillStyle = shade(col, nx, ny, nz, spec, ex0, ey0, ez0, cy4 > wl ? SUBMERGED : tint);
+    /* Nudge each corner out from the centroid by a fraction of a pixel.
+       Adjacent quads share their edges exactly, and two antialiased edges
+       meeting at 50% coverage leave a dark seam; overlapping them hides it
+       without a second rasterising pass over every polygon. */
+    ctx.beginPath();
+    ctx.moveTo(cx4 + (sx[a] - cx4) * OUTSET, cy4 + (sy[a] - cy4) * OUTSET);
+    ctx.lineTo(cx4 + (sx[b] - cx4) * OUTSET, cy4 + (sy[b] - cy4) * OUTSET);
+    ctx.lineTo(cx4 + (sx[c] - cx4) * OUTSET, cy4 + (sy[c] - cy4) * OUTSET);
+    ctx.lineTo(cx4 + (sx[d] - cx4) * OUTSET, cy4 + (sy[d] - cy4) * OUTSET);
+    ctx.closePath(); ctx.fill();
+  }
+}
+const OUTSET = 1.06;
+const SUBMERGED = [18, 78, 96, 0.34];
+</script>
+<script>
+/* ================================================================ AUDIO */
+const snd = { on: true, ac: null };
+function ac(){
+  if (snd.ac) return snd.ac;
+  const AC = typeof window !== 'undefined' && (window.AudioContext || window.webkitAudioContext);
+  if (!AC) return null;
+  try { snd.ac = new AC(); } catch (e) { snd.ac = null; }
+  return snd.ac;
+}
+function tone(f, dur, type, gain, slide){
+  if (!snd.on) return;
+  const a = ac(); if (!a) return;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(f, a.currentTime);
+  if (slide) o.frequency.exponentialRampToValueAtTime(Math.max(40, slide), a.currentTime + dur);
+  g.gain.setValueAtTime(0.0001, a.currentTime);
+  g.gain.exponentialRampToValueAtTime(gain || 0.08, a.currentTime + 0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001, a.currentTime + dur);
+  o.connect(g); g.connect(a.destination); o.start(); o.stop(a.currentTime + dur + 0.02);
+}
+function noise(dur, freq, gain){
+  if (!snd.on) return;
+  const a = ac(); if (!a) return;
+  const n = (a.sampleRate * dur) | 0;
+  const buf = a.createBuffer(1, n, a.sampleRate), ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.2);
+  const s = a.createBufferSource(); s.buffer = buf;
+  const f = a.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 900; f.Q.value = 0.9;
+  const g = a.createGain(); g.gain.value = gain || 0.14;
+  s.connect(f); f.connect(g); g.connect(a.destination); s.start();
+}
+const sfxSplash = () => noise(0.32, 1150, 0.16);
+const sfxPlip   = () => { tone(880, 0.09, 'sine', 0.05, 420); };
+const sfxCatch  = (step) => {
+  const f = 520 * Math.pow(1.09, Math.min(12, step || 0));
+  tone(f, 0.10, 'triangle', 0.09, f * 1.7);
+  noise(0.20, 1700, 0.09);
+};
+const sfxScore  = (n) => { tone(660 + n * 22, 0.13, 'square', 0.06, 990 + n * 30); };
+const sfxHorn   = () => { tone(330, 0.5, 'sawtooth', 0.07, 180); };
+const sfxRush   = () => { tone(220, 0.20, 'square', 0.07, 440); setTimeout(() => tone(330, 0.28, 'square', 0.07, 660), 150); };
+const sfxFanfare = () => {
+  [0, 120, 240, 400].forEach((d, i) => setTimeout(() => tone(392 * Math.pow(1.26, i), 0.34, 'triangle', 0.08), d));
+};
+</script>
+<script>
+/* ================================================================ STATE */
+const G = {
+  mode: 'menu',          // menu | play | over
+  relaxed: false,
+  score: 0, landed: 0, best: 0, shown: 0,
+  time: ROUND_TIME,
+  streak: 0, streakT: 0,
+  rush: false,
+  tickets: 0, prizes: 0, rounds: 0, won: [],
+};
+function streakMult(){ return Math.min(STREAK_MAX, 1 + Math.floor(G.streak / 3)); }
+const ducks = [];
+const reveals = [];
+const pops = [];
+const drops = [];        // falling water droplets
+const rings = [];        // expanding surface ripples
+
+/* Screen kick on a catch. Decays fast — long shakes read as a bug. */
+const fx = { shake: 0 };
+function kick(a){ fx.shake = Math.min(16, fx.shake + a); }
+
+const aim = { x: 0, z: 0 };
+const rod = { x: 0, z: 0, tipY: ROD_TIP_Y, bend: 0 };
+const hook = {
+  len: HOOK_MIN,
+  p: [0, ROD_TIP_Y - HOOK_MIN, 0],
+  q: [0, ROD_TIP_Y - HOOK_MIN, 0],   // previous position (Verlet)
+  v: [0, 0, 0],
+  caught: [],
+  wet: false,
+};
+const input = { down: false, px: 0, py: 0, has: false };
+
+function newDuck(x, z){
+  const gold = rng() < 0.045;
+  return {
+    x, y: FLOAT_Y, z,
+    vx: 0, vy: 0, vz: 0,
+    yaw: rr(-0.6, 0.6), pitch: 0, roll: 0,
+    wy: rr(-0.35, 0.35), wp: 0, wr: 0,
+    drift: rr(-0.14, 0.14), phase: rr(0, TAU),
+    num: gold ? 25 : rollNumber(),
+    gold,
+    pal: gold ? PAL_GOLD : PALS[(rng() * PALS.length) | 0],
+    state: 'float',        // float | hooked | reveal
+    along: 1, near: false, threadT: 0,
+    m: new Float64Array(9),
+  };
+}
+function seedPond(){
+  ducks.length = 0;
+  const rows = 3;
+  for (let i = 0; i < N_DUCKS; i++){
+    const row = i % rows;
+    const x = X0 + (i / N_DUCKS) * LOOP_LEN + rr(-0.55, 0.55);
+    const z = -CHAN_HZ + 1.5 + row * ((CHAN_HZ * 2 - 3.0) / (rows - 1)) + rr(-0.7, 0.7);
+    ducks.push(newDuck(x, clamp(z, -CHAN_HZ + 0.9, CHAN_HZ - 0.9)));
+  }
+  // let the pond settle so it never starts with every duck at the same height
+  for (let i = 0; i < 90; i++){ T += 1 / 60; stepDucks(1 / 60); }
+}
+function respawnDuck(d){
+  d.x = X0 - rr(0.2, 2.4);
+  d.z = clamp(rr(-CHAN_HZ + 1.1, CHAN_HZ - 1.1), -CHAN_HZ + 0.9, CHAN_HZ - 0.9);
+  d.y = FLOAT_Y; d.vx = d.vy = d.vz = 0;
+  d.yaw = rr(-0.6, 0.6); d.pitch = d.roll = 0; d.wy = rr(-0.35, 0.35); d.wp = d.wr = 0;
+  d.gold = rng() < 0.045;
+  d.num = d.gold ? 25 : rollNumber();
+  d.pal = d.gold ? PAL_GOLD : PALS[(rng() * PALS.length) | 0];
+  d.state = 'float'; d.along = 1; d.near = false; d.threadT = 0;
+}
+</script>
+<script>
+/* =========================================================== DUCK PHYSICS
+   Buoyancy from the submerged fraction, torque from the wave gradient,
+   soft body-to-body collisions, lazy yaw drift, downstream current.     */
+function stepDucks(dt){
+  for (let i = 0; i < ducks.length; i++){
+    const d = ducks[i];
+    if (d.state !== 'float') continue;
+
+    const wh = waveH(d.x, d.z, T);
+
+    // ---- vertical: buoyancy vs gravity, heavily damped by the water
+    const bottom = d.y - BODY_HH;
+    let frac = (wh - bottom) / (BODY_HH * 2);
+    frac = frac < 0 ? 0 : frac > 1 ? 1 : frac;
+    const ay = BUOY * frac - GRAV - d.vy * (frac > 0 ? 9.0 : 0.6);
+    d.vy += ay * dt;
+    d.y += d.vy * dt;
+
+    // ---- attitude: ride the local surface, but bottom-weighted so it
+    //      always argues its way back upright
+    const gx = waveDx(d.x, d.z, T), gz = waveDz(d.x, d.z, T);
+    const tgtP = Math.atan(gx) * 0.62 * frac;
+    const tgtR = -Math.atan(gz) * 0.62 * frac;
+    d.wp += ((tgtP - d.pitch) * 34 - d.wp * 7.4) * dt;
+    d.wr += ((tgtR - d.roll)  * 30 - d.wr * 7.0) * dt;
+    d.pitch += d.wp * dt;
+    d.roll  += d.wr * dt;
+
+    // ---- downstream drift + lazy spin + a little lateral wander
+    d.x += (CURRENT * (G.rush ? RUSH_FLOW : 1) + d.drift) * dt;
+    d.phase += dt * 0.55;
+    d.vz += (Math.sin(d.phase) * 0.30 - d.vz * 1.8) * dt;
+    // keep off the trough walls
+    const wall = CHAN_HZ - 0.85;
+    if (d.z > wall) d.vz -= (d.z - wall) * 6 * dt;
+    if (d.z < -wall) d.vz -= (d.z + wall) * 6 * dt;
+    d.z += d.vz * dt;
+    d.wy -= d.wy * 0.6 * dt;
+    d.yaw += d.wy * dt * 0.5;
+
+    if (d.x > X1){ d.x -= LOOP_LEN; }
+  }
+
+  // ---- jostling.  O(n^2) over 34 ducks is nothing, and the bumping is
+  //      most of what makes the stream look alive.
+  for (let i = 0; i < ducks.length; i++){
+    const a = ducks[i];
+    if (a.state !== 'float') continue;
+    for (let j = i + 1; j < ducks.length; j++){
+      const b = ducks[j];
+      if (b.state !== 'float') continue;
+      let dx = b.x - a.x;
+      if (dx > LOOP_LEN * 0.5) dx -= LOOP_LEN; else if (dx < -LOOP_LEN * 0.5) dx += LOOP_LEN;
+      const dz = b.z - a.z;
+      const d2 = dx * dx + dz * dz;
+      const R = 1.14;
+      if (d2 > R * R || d2 < 1e-6) continue;
+      const dd = Math.sqrt(d2);
+      const push = (R - dd) * 0.5;
+      const nx = dx / dd, nz = dz / dd;
+      a.x -= nx * push; a.z -= nz * push;
+      b.x += nx * push; b.z += nz * push;
+      const spin = (nx * 0.5 + nz * 0.5) * push * 2.2;
+      a.wy -= spin; b.wy += spin;
+      a.vz -= nz * push * 3; b.vz += nz * push * 3;
+    }
+  }
+}
+
+/* ------------------------------------------------------------ the hook */
+function rodTip(){ return [rod.x, rod.tipY - rod.bend, rod.z]; }
+
+function stepHook(dt){
+  // aim: the rod tip chases the pointer with a bit of lag
+  rod.x += (aim.x - rod.x) * Math.min(1, dt * 7.5);
+  rod.z += (aim.z - rod.z) * Math.min(1, dt * 7.5);
+  rod.bend += ((0.10 + hook.caught.length * 0.30) - rod.bend) * Math.min(1, dt * 6);
+
+  const want = input.down ? HOOK_MAX : HOOK_MIN;
+  const spd = input.down ? LOWER_SPD : RAISE_SPD;
+  const before = hook.len;
+  hook.len += clamp(want - hook.len, -spd * dt, spd * dt);
+
+  // Verlet pendulum hanging off the tip, then hard-constrained to the
+  // current line length — swings when you sweep the rod, settles when
+  // you hold still, and hangs heavier with ducks on it.
+  const tip = rodTip();
+  const vx0 = hook.p[0], vy0 = hook.p[1], vz0 = hook.p[2];
+  const damp = hook.caught.length ? 0.988 : 0.975;
+  // Verlet carries velocity as (p - q); cap it so a single bad frame (a tab
+  // resume, a resize) can never fling the pendulum into orbit.
+  const MAXSTEP = 0.9;
+  for (let i = 0; i < 3; i++){
+    const e = hook.p[i] - hook.q[i];
+    if (e > MAXSTEP) hook.q[i] = hook.p[i] - MAXSTEP;
+    else if (e < -MAXSTEP) hook.q[i] = hook.p[i] + MAXSTEP;
+  }
+  for (let k = 0; k < 3; k++){
+    const nx = hook.p[0] + (hook.p[0] - hook.q[0]) * damp;
+    const ny = hook.p[1] + (hook.p[1] - hook.q[1]) * damp - GRAV * dt * dt / 3;
+    const nz = hook.p[2] + (hook.p[2] - hook.q[2]) * damp;
+    hook.q[0] = hook.p[0]; hook.q[1] = hook.p[1]; hook.q[2] = hook.p[2];
+    hook.p[0] = nx; hook.p[1] = ny; hook.p[2] = nz;
+    let dx = hook.p[0] - tip[0], dy = hook.p[1] - tip[1], dz = hook.p[2] - tip[2];
+    const L = Math.hypot(dx, dy, dz) || 1e-6;
+    const k2 = hook.len / L;
+    hook.p[0] = tip[0] + dx * k2; hook.p[1] = tip[1] + dy * k2; hook.p[2] = tip[2] + dz * k2;
+  }
+  /* Velocity over the WHOLE frame, not the last Verlet sub-step. The line
+     length changes once per frame, so the first sub-step absorbs almost all
+     of the reel-in and the last one barely moves — reading (p - q) there
+     reported roughly zero while the hook was climbing at full speed, and the
+     "is it being lifted?" catch test could essentially never fire. */
+  hook.v[0] = (hook.p[0] - vx0) / dt;
+  hook.v[1] = (hook.p[1] - vy0) / dt;
+  hook.v[2] = (hook.p[2] - vz0) / dt;
+
+  // entering / leaving the water
+  const wh = waveH(hook.p[0], hook.p[2], T);
+  const wet = hook.p[1] < wh + 0.02;
+  if (wet && !hook.wet){ sfxPlip(); addRing(hook.p[0], hook.p[2], 0.15, 0.5); }
+  if (wet !== hook.wet && Math.abs(before - hook.len) > 1e-6) hook.wet = wet;
+  hook.wet = wet;
+  if (wet && rng() < 0.4) addRing(hook.p[0], hook.p[2], 0.10, 0.35);
+}
+
+/* Catch test.  The hoop stands upright, so its opening is a vertical disc
+   and the hook's shank threads it by passing down through the top of the
+   loop and out the bottom.  That makes the test a cylinder about the duck's
+   own up-axis through the hoop's centre: CATCH_R is how near the shank has
+   to come horizontally, and the vertical window below is the shank itself.  */
+function stepCatch(dt){
+  const hp = hook.p;
+  for (let i = 0; i < ducks.length; i++){
+    const d = ducks[i];
+    if (d.state !== 'float'){ continue; }
+    const dx = hp[0] - d.x, dz = hp[2] - d.z;
+    if (dx * dx + dz * dz > 4.4){ d.near = false; d.along = 1; d.threadT = 0; continue; }
+
+    euler(d.yaw, d.pitch, d.roll, d.m);
+    xf(d.m, RING_LOCAL[0], RING_LOCAL[1], RING_LOCAL[2], _t3);
+    const rx = d.x + _t3[0], ry = d.y + _t3[1], rz = d.z + _t3[2];
+    xf(d.m, 0, 1, 0, _t3b);                       // the duck's up-axis, in world space
+    const ax = hp[0] - rx, ay = hp[1] - ry, az = hp[2] - rz;
+    const along = ax * _t3b[0] + ay * _t3b[1] + az * _t3b[2];
+    const px2 = ax - along * _t3b[0], py2 = ay - along * _t3b[1], pz2 = az - along * _t3b[2];
+    const radial = Math.hypot(px2, py2, pz2);
+
+    // the hook barges the duck around when it hits the body
+    const bx = hp[0] - d.x, by = hp[1] - d.y, bz = hp[2] - d.z;
+    const bd = Math.hypot(bx, by, bz);
+    if (bd < 0.46 && bd > 1e-4 && !d.threadT){
+      const push = (0.46 - bd) * 1.4;
+      d.x -= bx / bd * push * dt;
+      d.z -= bz / bd * push * dt;
+      d.wy += (bz / bd) * push * dt * 3;
+    }
+
+    const prev = d.near ? d.along : 1;
+    d.near = true; d.along = along;
+
+    /* Two ways to land one, both of them the real motion:
+       - the hook is sitting in the bore *below* the ring: that arms it, and
+         the moment you start reeling up, the ring slides onto the hook;
+       - or the ring itself rides up over a still hook (a duck bobbing on a
+         swell hooks itself), caught as an upward crossing of the plane.
+       BORE_LOW keeps it honest — the hook has to be beside the head, not a
+       hand's width under the belly. */
+    if (radial < CATCH_R && along < BORE_HIGH && along > BORE_LOW) d.threadT = 0.5;
+    else if (d.threadT > 0) d.threadT = Math.max(0, d.threadT - dt);
+
+    if (hook.caught.length >= MAX_HOOK) continue;
+    const lifted = d.threadT > 0 && radial < CATCH_R * 1.5 && along > BORE_LOW && hook.v[1] > 0.10;
+    const rodeUp = radial < CATCH_R && prev < 0 && along >= 0;
+    if (lifted || rodeUp) catchDuck(d);
+  }
+}
+function catchDuck(d){
+  d.state = 'hooked';
+  d.slot = hook.caught.length;
+  d.hangP = 0.455;                 // ring is forward of the centre of mass
+  d.swing = rr(-0.5, 0.5);
+  d.wetT = 1;
+  hook.caught.push(d);
+  sfxCatch(G.streak);
+  addRing(d.x, d.z, 0.5, 1.0);
+  addRing(d.x, d.z, 0.2, 0.7);
+  kick(hook.caught.length > 1 ? 11 : 6.5);
+  // a proper splash: the duck comes out of the water, so the water goes up
+  for (let i = 0; i < 26; i++)
+    addDrop(d.x + rr(-0.45, 0.45), d.y - rr(0, 0.3), d.z + rr(-0.4, 0.4), rr(2.5, 7.5));
+}
+
+/* hooked ducks hang from the ring and swing like the pendulum they are */
+function stepHooked(dt){
+  for (let i = 0; i < hook.caught.length; i++){
+    const d = hook.caught[i];
+    const side = hook.caught.length > 1 ? (i === 0 ? -0.26 : 0.26) : 0;
+    d.slot = i;
+    // swing driven by how hard the hook is being dragged sideways
+    const drive = -hook.v[0] * 0.055;
+    d.wp += ((d.hangP + drive - d.pitch) * 26 - d.wp * 3.4) * dt;
+    d.pitch += d.wp * dt;
+    d.wr += ((side * 0.9 - d.roll) * 20 - d.wr * 3.0) * dt;
+    d.roll += d.wr * dt;
+    d.wy += (-hook.v[2] * 0.04 - d.wy * 2.2) * dt;
+    d.yaw += d.wy * dt;
+
+    euler(d.yaw, d.pitch, d.roll, d.m);
+    xf(d.m, RING_LOCAL[0], RING_LOCAL[1], RING_LOCAL[2], _t3);
+    d.x = hook.p[0] + side * 0.7 - _t3[0];
+    d.y = hook.p[1] + 0.06 - _t3[1];
+    d.z = hook.p[2] - _t3[2];
+
+    // dripping while it is still wet
+    if (d.wetT > 0){
+      d.wetT -= dt * 0.42;
+      if (rng() < dt * 14 * d.wetT) addDrop(d.x + rr(-0.35, 0.35), d.y - 0.35, d.z + rr(-0.3, 0.3), 0);
+    }
+  }
+  // landed: line fully reeled in
+  if (hook.caught.length && hook.len <= HOOK_MIN + 0.02){
+    let mult = hook.caught.length > 1 ? 2 : 1;
+    let idx = 0;
+    for (const d of hook.caught.slice()) startReveal(d, idx++, mult);
+    hook.caught.length = 0;
+  }
+}
+/* Roll that turns the plug's face back along the camera axis.  Rolling the
+   duck about +X sends its base normal (local -Y) to (0, -cos r, -sin r); set
+   that equal to the direction back to the eye (-cam.fwd) and solve.  Read
+   from the live camera rather than baked at load, since camFit() runs later
+   and re-runs on every resize. */
+function revealRoll(){ return Math.atan2(cam.fwd[2], cam.fwd[1]); }
+
+function startReveal(d, idx, mult){
+  d.state = 'reveal';
+  d.rv = { t: 0, mult, idx, from: [d.x, d.y, d.z], p0: d.pitch, r0: d.roll, y0: d.yaw };
+  reveals.push(d);
+}
+function stepReveals(dt){
+  for (let i = reveals.length - 1; i >= 0; i--){
+    const d = reveals[i], v = d.rv;
+    v.t += dt;
+    const t = v.t - v.idx * 0.28;
+    if (t < 0) continue;
+    const a = clamp(t / 0.55, 0, 1), s = smooth(a);
+    /* Float in toward the player and roll the plug round to face them.
+       REVEAL_ROLL is solved so the base's own normal (local -Y, rolled about
+       +X) points back up the camera axis — otherwise the number ends up
+       stamped on a face turned away from the viewer. */
+    const tx = -1.5 + v.idx * 3.0, ty = 8.5, tz = -7.5;
+    d.x = lerp(v.from[0], tx, s);
+    d.y = lerp(v.from[1], ty, s);
+    d.z = lerp(v.from[2], tz, s);
+    d.pitch = lerp(v.p0, 0, s);
+    d.roll  = lerp(v.r0, revealRoll(), s);
+    d.yaw   = lerp(v.y0, 0, s);
+    if (a >= 1 && !v.paid){
+      v.paid = true;
+      G.streak++; G.streakT = STREAK_WINDOW;
+      const mult = v.mult * streakMult() * (G.rush ? RUSH_MULT : 1);
+      const pts = d.num * mult;
+      G.score += pts; G.landed++;
+      const p = proj(d.x, d.y + 0.9, d.z);
+      pops.push({ x: p.x, y: p.y, t: 0, txt: '+' + pts, big: mult > 1 || d.gold });
+      kick(d.gold ? 12 : 4 + Math.min(8, mult * 1.6));
+      sfxScore(d.num + mult * 3);
+    }
+    if (t > 2.10){
+      reveals.splice(i, 1);
+      respawnDuck(d);
+    }
+  }
+}
+
+/* ------------------------------------------------------------- fx bits */
+function addDrop(x, y, z, vy){ if (drops.length < 240) drops.push({ x, y, z, vy: vy || rr(-0.5, 0.5), t: 0 }); }
+function addRing(x, z, r, life){ if (rings.length < 90) rings.push({ x, z, r, r0: r, t: 0, life: life || 0.8 }); }
+function stepFx(dt){
+  for (let i = drops.length - 1; i >= 0; i--){
+    const p = drops[i];
+    p.vy -= GRAV * dt * 0.32; p.y += p.vy * dt; p.t += dt;
+    const wh = waveH(p.x, p.z, T);
+    if (p.y < wh){ addRing(p.x, p.z, 0.06, 0.45); drops.splice(i, 1); }
+    else if (p.t > 3) drops.splice(i, 1);
+  }
+  for (let i = rings.length - 1; i >= 0; i--){
+    const r = rings[i];
+    r.t += dt; r.r = r.r0 + r.t * 1.9;
+    if (r.t > r.life) rings.splice(i, 1);
+  }
+  if (fx.shake > 0) fx.shake = Math.max(0, fx.shake - dt * 46);
+  for (let i = pops.length - 1; i >= 0; i--){
+    pops[i].t += dt; pops[i].y -= dt * 34;
+    if (pops[i].t > 1.25) pops.splice(i, 1);
+  }
+}
+</script>
+<script>
+/* ================================================================ SCENE
+   Painter order: backdrop, far bank, water, ducks (far to near),
+   surface sparkle, near bank, side panels, rod + hook, reveals, HUD.    */
+const WATER_DEEP = [10, 46, 62], WATER_SKY = [92, 186, 214];
+
+/* The sky, its bokeh and the awning never change between frames, but they
+   cost ~45 gradient objects each time. Bake them once per resize. */
+let bdCanvas = null, bdW = 0, bdH = 0, bdD = 0;
+function backdropCache(){
+  if (bdCanvas && bdW === W && bdH === H && bdD === DPR) return bdCanvas;
+  bdW = W; bdH = H; bdD = DPR;
+  bdCanvas = document.createElement('canvas');
+  bdCanvas.width = Math.max(1, (W * DPR) | 0);
+  bdCanvas.height = Math.max(1, (H * DPR) | 0);
+  const g2 = bdCanvas.getContext('2d');
+  const real = ctx;
+  ctx = g2;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  paintBackdrop();
+  ctx = real;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  return bdCanvas;
+}
+function drawBackdrop(){
+  const c = backdropCache();
+  if (c && c.width) ctx.drawImage(c, 0, 0, W, H);
+  else paintBackdrop();
+  drawBulbs();
+}
+
+function paintBackdrop(){
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#150c26'); g.addColorStop(0.45, '#241546'); g.addColorStop(1, '#0d1a2a');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // bokeh from the rest of the fair
+  for (let i = 0; i < 26; i++){
+    const a = i * 2.399;
+    const bx = (Math.sin(a * 3.1) * 0.5 + 0.5) * W;
+    const by = (Math.cos(a * 1.7) * 0.5 + 0.5) * H * 0.42;
+    const r = 8 + (i % 5) * 6;
+    const gg = ctx.createRadialGradient(bx, by, 0, bx, by, r);
+    const hue = (i * 47) % 360;
+    gg.addColorStop(0, 'hsla(' + hue + ',90%,72%,0.16)');
+    gg.addColorStop(1, 'hsla(' + hue + ',90%,72%,0)');
+    ctx.fillStyle = gg; ctx.beginPath(); ctx.arc(bx, by, r, 0, TAU); ctx.fill();
+  }
+
+  // striped awning
+  const aH = Math.max(46, H * 0.11);
+  for (let i = 0; i < 22; i++){
+    const w = W / 22;
+    ctx.fillStyle = i % 2 ? '#c8203a' : '#f2ead8';
+    ctx.beginPath();
+    ctx.moveTo(i * w, 0); ctx.lineTo((i + 1) * w, 0);
+    ctx.lineTo((i + 1) * w, aH - 8); ctx.lineTo(i * w + w * 0.5, aH + 8); ctx.lineTo(i * w, aH - 8);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.fillRect(0, aH - 10, W, 12);
+
+  // bulb string (the wire is static; the bulbs twinkle, see drawBulbs)
+  ctx.strokeStyle = 'rgba(20,10,30,.8)'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let x = 0; x <= W; x += 12) ctx.lineTo(x, aH + 14 + Math.sin(x / W * Math.PI) * 16);
+  ctx.stroke();
+}
+
+function drawBulbs(){
+  const aH = Math.max(46, H * 0.11);
+  for (let i = 0; i <= 18; i++){
+    const x = i / 18 * W, y = aH + 20 + Math.sin(x / W * Math.PI) * 16;
+    const on = 0.55 + 0.45 * Math.sin(T * (G.rush ? 11 : 3) + i * 0.9);
+    ctx.fillStyle = 'rgba(255,214,130,' + (0.13 * on) + ')';
+    ctx.beginPath(); ctx.arc(x, y, 15, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgb(255,' + (200 + 40 * on | 0) + ',' + (120 + 80 * on | 0) + ')';
+    ctx.beginPath(); ctx.arc(x, y, 3.2, 0, TAU); ctx.fill();
+  }
+}
+
+/* painted board on the back wall of the stall — drawn in world space so it
+   sits in the same perspective as the trough */
+function drawSign(){
+  const z = CHAN_HZ + 0.55, y0 = 3.55, y1 = 1.35, x = 7.4;
+  quad3(-x - 0.35, y0 + 0.3, z, x + 0.35, y0 + 0.3, z, x + 0.35, y1 - 0.3, z, -x - 0.35, y1 - 0.3, z, '#5b2f1c');
+  quad3(-x, y0, z - 0.02, x, y0, z - 0.02, x, y1, z - 0.02, -x, y1, z - 0.02, '#12233c');
+  const a = projC(-x, y0, z - 0.03), b = projC(x, y0, z - 0.03);
+  const c = projC(-x, y1, z - 0.03);
+  const w = b.x - a.x, h = c.y - a.y;
+  if (!(w > 20)) return;
+  ctx.save();
+  ctx.translate(a.x + w * 0.5, a.y + h * 0.5);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = 'bold ' + Math.max(10, h * 0.46) + 'px "Courier New",monospace';
+  const glow = 0.68 + 0.32 * Math.sin(T * 2.3);
+  ctx.shadowColor = 'rgba(255,190,70,' + (0.75 * glow) + ')'; ctx.shadowBlur = 18;
+  ctx.fillStyle = '#ffd34d';
+  ctx.fillText('HOOK-A-DUCK', 0, -h * 0.10);
+  ctx.shadowBlur = 0;
+  ctx.font = 'bold ' + Math.max(7, h * 0.20) + 'px "Segoe UI",system-ui,sans-serif';
+  ctx.fillStyle = 'rgba(226,214,240,.72)';
+  ctx.fillText('EVERY  DUCK  A  PRIZE', 0, h * 0.28);
+  ctx.restore();
+}
+
+/* A plush toy, built from a handful of primitives with a per-prize palette
+   and ear shape. Unwon ones show as dark silhouettes, so the shelf reads as
+   a row of things you have not got yet rather than empty space. */
+function drawPlush(x, y, r, p, won){
+  const col = (c, k) => won
+    ? 'rgb(' + (c[0] * k | 0) + ',' + (c[1] * k | 0) + ',' + (c[2] * k | 0) + ')'
+    : 'rgba(16,12,26,' + (0.55 * k) + ')';
+  const body = col(p.body, 1), dark = col(p.body, 0.72), acc = col(p.acc, 1);
+  ctx.save();
+  ctx.translate(x, y);
+  // body
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.ellipse(0, r * 0.45, r * 0.62, r * 0.55, 0, 0, TAU); ctx.fill();
+  // ears / crest, behind the head
+  ctx.fillStyle = dark;
+  if (p.ear === 'round'){
+    ctx.beginPath(); ctx.arc(-r * 0.42, -r * 0.52, r * 0.24, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.arc( r * 0.42, -r * 0.52, r * 0.24, 0, TAU); ctx.fill();
+  } else if (p.ear === 'long'){
+    ctx.beginPath(); ctx.ellipse(-r * 0.30, -r * 0.86, r * 0.15, r * 0.44, 0.2, 0, TAU); ctx.fill();
+    ctx.beginPath(); ctx.ellipse( r * 0.30, -r * 0.86, r * 0.15, r * 0.44, -0.2, 0, TAU); ctx.fill();
+  } else if (p.ear === 'spike'){
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55, -r * 0.30); ctx.lineTo(-r * 0.20, -r * 0.95); ctx.lineTo(0, -r * 0.35);
+    ctx.lineTo(r * 0.20, -r * 0.95); ctx.lineTo(r * 0.55, -r * 0.30);
+    ctx.closePath(); ctx.fill();
+  } else if (p.ear === 'fin'){
+    ctx.beginPath();
+    ctx.moveTo(-r * 0.55, r * 0.45); ctx.lineTo(-r * 1.05, r * 0.05); ctx.lineTo(-r * 1.05, r * 0.9);
+    ctx.closePath(); ctx.fill();
+  }
+  // head
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.arc(0, -r * 0.28, r * 0.48, 0, TAU); ctx.fill();
+  if (p.ear === 'horn' || p.ear === 'crown'){
+    ctx.fillStyle = acc;
+    if (p.ear === 'horn'){
+      ctx.beginPath(); ctx.moveTo(-r * 0.12, -r * 0.62); ctx.lineTo(0, -r * 1.18); ctx.lineTo(r * 0.12, -r * 0.62);
+      ctx.closePath(); ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.34, -r * 0.66); ctx.lineTo(-r * 0.34, -r * 1.02); ctx.lineTo(-r * 0.11, -r * 0.80);
+      ctx.lineTo(0, -r * 1.10); ctx.lineTo(r * 0.11, -r * 0.80); ctx.lineTo(r * 0.34, -r * 1.02);
+      ctx.lineTo(r * 0.34, -r * 0.66);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+  // muzzle + eyes
+  ctx.fillStyle = won ? 'rgba(255,255,255,.55)' : 'rgba(40,32,58,.5)';
+  ctx.beginPath(); ctx.ellipse(0, -r * 0.10, r * 0.24, r * 0.17, 0, 0, TAU); ctx.fill();
+  ctx.fillStyle = won ? '#1b1520' : 'rgba(8,6,14,.7)';
+  const ey = p.ear === 'eyes' ? -r * 0.62 : -r * 0.36;
+  ctx.beginPath(); ctx.arc(-r * 0.19, ey, r * 0.085, 0, TAU); ctx.fill();
+  ctx.beginPath(); ctx.arc( r * 0.19, ey, r * 0.085, 0, TAU); ctx.fill();
+  ctx.restore();
+}
+
+/* Two shelf boards on the back wall, flanking the sign, five prizes each.
+   On a narrow screen the camera crops those corners away entirely, so fall
+   back to a compact row across the top — the shelf is the reason to keep
+   playing and it has to be on screen to do that job. */
+function drawShelf(){
+  const visHalf = (W * 0.5) * cam.d0 / cam.s;
+  if (visHalf < 9.5){ drawShelfStrip(); return; }
+  for (const side of [-1, 1]){
+    const x0 = side < 0 ? -12.6 : 7.7, x1 = side < 0 ? -7.7 : 12.6;
+    const zb = CHAN_HZ + 0.5, yb = 1.62;
+    quad3(x0, yb, zb, x1, yb, zb, x1, yb - 0.30, zb - 0.02, x0, yb - 0.30, zb - 0.02, '#6b4524');
+    quad3(x0, yb, zb, x1, yb, zb, x1, yb, zb - 0.55, x0, yb, zb - 0.55, '#8a5a30');
+    for (let i = 0; i < 5; i++){
+      const idx = side < 0 ? i : i + 5;
+      const p = PRIZES[idx];
+      const t = (i + 0.5) / 5;
+      const wx = x0 + (x1 - x0) * t;
+      const pr = projC(wx, yb + 0.05, zb - 0.28);
+      const r = Math.max(8, 0.60 * p.s * pr.s);
+      const won = idx < G.prizes;
+      if (won){
+        const g = ctx.createRadialGradient(pr.x, pr.y - r * 0.2, 0, pr.x, pr.y - r * 0.2, r * 2.1);
+        g.addColorStop(0, 'rgba(255,214,120,.20)'); g.addColorStop(1, 'rgba(255,200,90,0)');
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(pr.x, pr.y - r * 0.2, r * 2.1, 0, TAU); ctx.fill();
+      }
+      drawPlush(pr.x, pr.y - r * 0.55, r, p, won);
+    }
+  }
+}
+
+function drawShelfStrip(){
+  const n = PRIZES.length;
+  const r = Math.min(15, W / (n * 3.1));
+  const gap = r * 2.6;
+  // clear of the score / streak plates, which occupy the top-left to y=122
+  const y = Math.min(H * 0.30, 134 + r);
+  const x0 = W * 0.5 - gap * (n - 1) * 0.5;
+  ctx.save();
+  ctx.fillStyle = 'rgba(10,6,18,.42)';
+  roundRect(x0 - gap * 0.7, y - r * 1.7, gap * (n - 1) + gap * 1.4, r * 3.1, r * 0.7);
+  ctx.fill();
+  for (let i = 0; i < n; i++){
+    const px = x0 + gap * i, won = i < G.prizes;
+    if (won){
+      const g = ctx.createRadialGradient(px, y, 0, px, y, r * 1.9);
+      g.addColorStop(0, 'rgba(255,214,120,.22)'); g.addColorStop(1, 'rgba(255,200,90,0)');
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(px, y, r * 1.9, 0, TAU); ctx.fill();
+    }
+    drawPlush(px, y + r * 0.45, r, PRIZES[i], won);
+  }
+  ctx.restore();
+}
+
+function quad3(ax, ay, az, bx, by, bz, cx, cy, cz, dx, dy, dz, fill){
+  let p = proj(ax, ay, az); const x0 = p.x, y0 = p.y;
+  p = proj(bx, by, bz); const x1 = p.x, y1 = p.y;
+  p = proj(cx, cy, cz); const x2 = p.x, y2 = p.y;
+  p = proj(dx, dy, dz); const x3 = p.x, y3 = p.y;
+  ctx.fillStyle = fill;
+  ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y2); ctx.lineTo(x3, y3);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawBank(z, near){
+  const XA = -VIEW_HALF - 4, XB = VIEW_HALF + 4;
+  const top = 1.05, bot = -1.9;
+  // the far bank shows its inner (wet) face; on the near bank we are looking
+  // at the outside of the stall, so that gets painted boards instead
+  quad3(XA, top, z, XB, top, z, XB, bot, z, XA, bot, z, near ? '#2a4d63' : '#0d2c42');
+  // top rim (wood)
+  const t = near ? -0.55 : 0.55;
+  quad3(XA, top, z, XB, top, z, XB, top, z + t, XA, top, z + t, near ? '#8a5a30' : '#6b4524');
+  quad3(XA, top, z + t, XB, top, z + t, XB, top - 0.55, z + t, XA, top - 0.55, z + t, near ? '#6d4423' : '#53331a');
+  // painted stripe along the rim
+  ctx.save();
+  const p0 = proj(XA, top, z + t * 0.5), p1 = proj(XB, top, z + t * 0.5);
+  ctx.strokeStyle = near ? 'rgba(255,220,150,.20)' : 'rgba(255,220,150,.10)';
+  ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+  ctx.restore();
+}
+
+function drawSidePanels(){
+  for (const s of [-1, 1]){
+    const x0 = s * GATE_X, x1 = s * (GATE_X + 1.4);
+    const lo = s < 0 ? x1 : x0, hi = s < 0 ? x0 : x1;
+    quad3(lo, 2.0, -CHAN_HZ - 0.2, hi, 2.0, -CHAN_HZ - 0.2, hi, -2.0, -CHAN_HZ - 0.2, lo, -2.0, -CHAN_HZ - 0.2, '#3a2418');
+    quad3(lo, 2.0, -CHAN_HZ - 0.2, lo, 2.0, CHAN_HZ + 0.6, lo, -2.0, CHAN_HZ + 0.6, lo, -2.0, -CHAN_HZ - 0.2, '#2b1a12');
+    quad3(hi, 2.0, -CHAN_HZ - 0.2, hi, 2.0, CHAN_HZ + 0.6, hi, -2.0, CHAN_HZ + 0.6, hi, -2.0, -CHAN_HZ - 0.2, '#2b1a12');
+    quad3(lo, 2.0, -CHAN_HZ - 0.2, hi, 2.0, -CHAN_HZ - 0.2, hi, 2.0, CHAN_HZ + 0.6, lo, 2.0, CHAN_HZ + 0.6, '#4a2f1e');
+  }
+}
+
+/* the water: a displaced grid, fresnel-blended between deep water and
+   the sky, with a specular glitter that tracks the key light           */
+function drawWater(){
+  const XA = -VIEW_HALF - 4, XB = VIEW_HALF + 4;
+  const nx = QT[Q.tier].wgx, nz = QT[Q.tier].wgz;
+  const px = [], py = [], hh = [], gx = [], gz = [];
+  for (let j = 0; j <= nz; j++){
+    const z = -CHAN_HZ + (CHAN_HZ * 2) * j / nz;
+    for (let i = 0; i <= nx; i++){
+      const x = XA + (XB - XA) * i / nx;
+      const h = waveH(x, z, T);
+      const p = proj(x, h, z);
+      const k = j * (nx + 1) + i;
+      px[k] = p.x; py[k] = p.y; hh[k] = h;
+      gx[k] = waveDx(x, z, T); gz[k] = waveDz(x, z, T);
+    }
+  }
+  const ex = -cam.fwd[0], ey = -cam.fwd[1], ez = -cam.fwd[2];
+  for (let j = 0; j < nz; j++){
+    for (let i = 0; i < nx; i++){
+      const a = j * (nx + 1) + i, b = a + 1, c = a + nx + 1 + 1, d = a + nx + 1;
+      const ggx = (gx[a] + gx[c]) * 0.5, ggz = (gz[a] + gz[c]) * 0.5;
+      let Nx = -ggx, Ny = 1, Nz = -ggz;
+      const nl = Math.hypot(Nx, Ny, Nz); Nx /= nl; Ny /= nl; Nz /= nl;
+      let fres = 1 - (Nx * ex + Ny * ey + Nz * ez);
+      fres = clamp(fres, 0, 1); fres = fres * fres * fres * fres;
+      const mix = 0.20 + 0.62 * fres;
+      let hx = LIGHT[0] + ex, hy = LIGHT[1] + ey, hz = LIGHT[2] + ez;
+      const hl = Math.hypot(hx, hy, hz); hx /= hl; hy /= hl; hz /= hl;
+      let sp = Nx * hx + Ny * hy + Nz * hz;
+      sp = sp > 0 ? Math.pow(sp, 140) * 230 : 0;
+      // fade out toward the far bank so the trough reads as deep
+      const dep = 1 - j / nz * 0.30;
+      const r = (lerp(WATER_DEEP[0], WATER_SKY[0], mix) * dep + sp) | 0;
+      const g = (lerp(WATER_DEEP[1], WATER_SKY[1], mix) * dep + sp) | 0;
+      const bl = (lerp(WATER_DEEP[2], WATER_SKY[2], mix) * dep + sp) | 0;
+      ctx.fillStyle = css(r, g, bl);
+      // grow each cell a hair about its own centre so neighbours overlap and
+      // the antialiased seam disappears — no second stroking pass
+      const gcx = (px[a] + px[b] + px[c] + px[d]) * 0.25;
+      const gcy = (py[a] + py[b] + py[c] + py[d]) * 0.25;
+      ctx.beginPath();
+      ctx.moveTo(gcx + (px[a] - gcx) * OUTSET, gcy + (py[a] - gcy) * OUTSET);
+      ctx.lineTo(gcx + (px[b] - gcx) * OUTSET, gcy + (py[b] - gcy) * OUTSET);
+      ctx.lineTo(gcx + (px[c] - gcx) * OUTSET, gcy + (py[c] - gcy) * OUTSET);
+      ctx.lineTo(gcx + (px[d] - gcx) * OUTSET, gcy + (py[d] - gcy) * OUTSET);
+      ctx.closePath(); ctx.fill();
+    }
+  }
+}
+
+function drawRipples(){
+  ctx.save();
+  ctx.lineWidth = 1.6;
+  for (const r of rings){
+    const a = (1 - r.t / r.life) * 0.5;
+    if (a <= 0) continue;
+    const p = projC(r.x, waveH(r.x, r.z, T) + 0.01, r.z);
+    const p2 = proj(r.x + r.r, waveH(r.x, r.z, T) + 0.01, r.z);
+    const rad = Math.abs(p2.x - p.x);
+    ctx.strokeStyle = 'rgba(220,245,255,' + a + ')';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, rad, rad * 0.34, 0, 0, TAU); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawDuckAt(d, mesh){
+  euler(d.yaw, d.pitch, d.roll, d.m);
+  drawMesh(mesh, d.m, d.x, d.y, d.z, d.pal, null, 1);
+  drawEyes(d);
+  drawBaseNumber(d);
+}
+
+function drawEyes(d){
+  const ex = -cam.fwd[0], ey = -cam.fwd[1], ez = -cam.fwd[2];
+  for (const e of [EYE_L, EYE_R]){
+    xf(d.m, e[0] - 0.44, e[1] - 0.62, e[2], _t3);
+    const nl = Math.hypot(_t3[0], _t3[1], _t3[2]) || 1;
+    if ((_t3[0] * ex + _t3[1] * ey + _t3[2] * ez) / nl < 0.12) continue;
+    xf(d.m, e[0], e[1], e[2], _t3b);
+    const p = proj(d.x + _t3b[0], d.y + _t3b[1], d.z + _t3b[2]);
+    const r = Math.max(1.1, 0.055 * p.s);
+    ctx.fillStyle = '#17130f';
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, TAU); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,.85)';
+    ctx.beginPath(); ctx.arc(p.x - r * 0.3, p.y - r * 0.35, r * 0.36, 0, TAU); ctx.fill();
+  }
+}
+
+/* the number stamped on the flat plug — drawn straight onto the face by
+   solving the affine map from the plug's own axes to the screen        */
+function drawBaseNumber(d){
+  const ex = -cam.fwd[0], ey = -cam.fwd[1], ez = -cam.fwd[2];
+  xf(d.m, 0, -1, 0, _t3);
+  const facing = _t3[0] * ex + _t3[1] * ey + _t3[2] * ez;
+  if (facing < 0.22) return;
+  xf(d.m, BASE_CENTRE[0], BASE_CENTRE[1], BASE_CENTRE[2], _t3b);
+  const O = proj(d.x + _t3b[0], d.y + _t3b[1], d.z + _t3b[2]);
+  const ox = O.x, oy = O.y;
+  xf(d.m, BASE_CENTRE[0] + 0.16, BASE_CENTRE[1], BASE_CENTRE[2], _t3);
+  const A = proj(d.x + _t3[0], d.y + _t3[1], d.z + _t3[2]);
+  const axx = A.x - ox, axy = A.y - oy;
+  /* Canvas text runs +x right and +y DOWN, so we need the local direction
+     that appears as "down" to someone looking at the base. The base faces
+     local -Y, so the viewer is on that side and screen-right x screen-up
+     must give the away direction +Y: (1,0,0) x U = (0,1,0) puts screen-up at
+     local -Z, and therefore the text's down axis at local +Z. Taking -Z here
+     flips exactly one axis, which reads as upside down AND mirrored. */
+  xf(d.m, BASE_CENTRE[0], BASE_CENTRE[1], BASE_CENTRE[2] + 0.16, _t3);
+  const B = proj(d.x + _t3[0], d.y + _t3[1], d.z + _t3[2]);
+  const bxx = B.x - ox, bxy = B.y - oy;
+  if (Math.hypot(axx, axy) < 5) return;
+  ctx.save();
+  ctx.setTransform(axx * DPR, axy * DPR, bxx * DPR, bxy * DPR, ox * DPR, oy * DPR);
+  ctx.globalAlpha = clamp(facing * 1.6, 0, 1);
+  ctx.fillStyle = d.gold ? '#4a3005' : '#3a2a08';
+  ctx.font = 'bold 1.5px "Courier New",monospace';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(d.num), 0, 0.05);
+  ctx.restore();
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+}
+
+function drawFloatingDucks(){
+  const list = [];
+  for (const d of ducks){
+    if (d.state !== 'float') continue;
+    let x = d.x;
+    if (x > GATE_X + 3.6 || x < -GATE_X - 3.6) continue;
+    const v = view(d.x, d.y, d.z);
+    list.push([v[2], d]);
+  }
+  list.sort((a, b) => b[0] - a[0]);
+  const q = QT[Q.tier];
+  for (const [depth, d] of list){
+    const scr = cam.s / depth;
+    const big = scr * 1.5 > q.hiPx;
+    const mesh = DUCK_LOD[big ? q.near : q.far];
+    euler(d.yaw, d.pitch, d.roll, d.m);
+    const wh = waveH(d.x, d.z, T);
+
+    // contact shadow + wake on the surface
+    const p = proj(d.x, wh + 0.005, d.z);
+    const rx = 0.72 * scr, ry = 0.30 * scr;
+    ctx.fillStyle = 'rgba(4,26,36,.36)';
+    ctx.beginPath(); ctx.ellipse(p.x, p.y + ry * 0.18, rx, ry, 0, 0, TAU); ctx.fill();
+    if (q.fx){
+      ctx.strokeStyle = 'rgba(214,242,252,.20)'; ctx.lineWidth = Math.max(1, scr * 0.012);
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, rx * 1.12, ry * 1.05, 0, 0, TAU); ctx.stroke();
+    }
+
+    // one pass; the water line is handed to the shader as a screen y
+    MESH_WATER_Y = q.wet ? proj(d.x, waveH(d.x, d.z - 0.30, T), d.z - 0.30).y : Infinity;
+    drawMesh(mesh, d.m, d.x, d.y, d.z, d.pal, null, 1);
+    MESH_WATER_Y = Infinity;
+    if (big) drawEyes(d);
+  }
+}
+
+/* --------------------------------------------------------------- rod */
+function armedDuck(){
+  for (const d of ducks) if (d.state === 'float' && d.threadT > 0) return d;
+  return null;
+}
+function drawAim(){
+  if (G.mode !== 'play') return;
+  const x = hook.p[0], z = hook.p[2];
+  const p = projC(x, waveH(x, z, T) + 0.02, z);
+  const q = proj(x + 0.5, waveH(x, z, T) + 0.02, z);
+  const r = Math.abs(q.x - p.x);
+  const pulse = 0.55 + 0.45 * Math.sin(T * 4.5);
+  const lock = armedDuck();
+  ctx.save();
+  if (lock){
+    // the wire is through a ring — say so loudly, this is the moment to pull
+    ctx.strokeStyle = 'rgba(120,255,170,' + (0.55 + 0.35 * pulse) + ')';
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, r * 1.1, r * 0.38, 0, 0, TAU); ctx.stroke();
+    const lp = projC(lock.x, lock.y + 1.35, lock.z);
+    const rr2 = Math.max(9, r * 0.55);
+    ctx.strokeStyle = 'rgba(120,255,170,' + (0.5 + 0.4 * pulse) + ')';
+    ctx.lineWidth = 2.4;
+    ctx.beginPath(); ctx.arc(lp.x, lp.y, rr2, 0, TAU); ctx.stroke();
+    ctx.fillStyle = 'rgba(150,255,190,' + (0.75 + 0.25 * pulse) + ')';
+    ctx.font = 'bold 13px "Segoe UI",system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText('PULL!', lp.x, lp.y - rr2 - 5);
+  } else {
+    ctx.strokeStyle = 'rgba(255,226,140,' + (0.34 + 0.24 * pulse) + ')';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.ellipse(p.x, p.y, r, r * 0.34, 0, 0, TAU); ctx.stroke();
+    ctx.strokeStyle = 'rgba(255,226,140,.24)';
+    ctx.beginPath(); ctx.moveTo(p.x - r * 1.5, p.y); ctx.lineTo(p.x - r * 1.05, p.y);
+    ctx.moveTo(p.x + r * 1.05, p.y); ctx.lineTo(p.x + r * 1.5, p.y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRod(){
+  const tip = rodTip();
+  // the player stands off to the right of the stall, so the rod sweeps in
+  // from the bottom corner instead of standing up like a mast
+  const b = proj(tip[0], tip[1], tip[2]); const bx2 = b.x, by2 = b.y;
+  /* Run the shaft from the tip out through the pointer and on past it, so
+     the rod is visibly in the player's hand. Without a pointer (keyboard)
+     fall back to a fixed stance off the bottom right. */
+  let ax2, ay2;
+  if (input.has){
+    /* Carry the butt of the rod past the bottom edge, so it reads as coming
+       from the player rather than floating in the middle of the pond. */
+    const dx = input.px - bx2, dy = input.py - by2;
+    let t = 1.55;
+    if (dy > 1) t = Math.max(t, (H + 70 - by2) / dy);
+    ax2 = bx2 + dx * t; ay2 = by2 + dy * t;
+  } else {
+    const hand = [6.8 + rod.x * 0.28, -3.6, -CHAN_HZ - 4.0];
+    const a = proj(hand[0], hand[1], hand[2]); ax2 = a.x; ay2 = a.y;
+  }
+  /* Bow the shaft across its own length rather than along a fixed screen
+     axis — the rod now swings with the pointer, so a hardcoded offset would
+     bend it the wrong way half the time. */
+  let rdx = bx2 - ax2, rdy = by2 - ay2;
+  const rl = Math.hypot(rdx, rdy) || 1; rdx /= rl; rdy /= rl;
+  const bow = 26 + rod.bend * 46;
+  const mx = (ax2 + bx2) * 0.5 + rdy * bow, my = (ay2 + by2) * 0.5 - rdx * bow;
+
+  // tapered rod drawn as a quad strip along a quadratic bezier
+  const N = 14;
+  const L = [], R = [];
+  for (let i = 0; i <= N; i++){
+    const t = i / N, it = 1 - t;
+    const x = it * it * ax2 + 2 * it * t * mx + t * t * bx2;
+    const y = it * it * ay2 + 2 * it * t * my + t * t * by2;
+    const t2 = Math.min(1, t + 0.03), it2 = 1 - t2;
+    const x2 = it2 * it2 * ax2 + 2 * it2 * t2 * mx + t2 * t2 * bx2;
+    const y2 = it2 * it2 * ay2 + 2 * it2 * t2 * my + t2 * t2 * by2;
+    let dx = x2 - x, dy = y2 - y; const dl = Math.hypot(dx, dy) || 1; dx /= dl; dy /= dl;
+    const w = lerp(7.5, 1.3, t);
+    L.push([x - dy * w, y + dx * w]); R.push([x + dy * w, y - dx * w]);
+  }
+  ctx.beginPath();
+  ctx.moveTo(L[0][0], L[0][1]);
+  for (let i = 1; i <= N; i++) ctx.lineTo(L[i][0], L[i][1]);
+  for (let i = N; i >= 0; i--) ctx.lineTo(R[i][0], R[i][1]);
+  ctx.closePath();
+  const gr = ctx.createLinearGradient(ax2, ay2, bx2, by2);
+  gr.addColorStop(0, '#3a2a1c'); gr.addColorStop(0.35, '#6b4a2c'); gr.addColorStop(1, '#c8a878');
+  ctx.fillStyle = gr; ctx.fill();
+  ctx.strokeStyle = 'rgba(255,230,190,.25)'; ctx.lineWidth = 1; ctx.stroke();
+  // cork grip, centred on the pointer — this is the bit you are holding
+  const gx = input.has ? input.px : (ax2 + bx2) * 0.5;
+  const gy = input.has ? input.py : (ay2 + by2) * 0.5;
+  const glen = Math.max(34, Math.hypot(ax2 - bx2, ay2 - by2) * 0.10);
+  ctx.strokeStyle = '#231710'; ctx.lineWidth = 15; ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(gx - rdx * glen * 0.45, gy - rdy * glen * 0.45);
+  ctx.lineTo(gx + rdx * glen * 0.75, gy + rdy * glen * 0.75);
+  ctx.stroke();
+  ctx.strokeStyle = 'rgba(214,176,120,.30)'; ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(gx - rdx * glen * 0.35, gy - rdy * glen * 0.35);
+  ctx.lineTo(gx + rdx * glen * 0.62, gy + rdy * glen * 0.62);
+  ctx.stroke();
+  ctx.lineCap = 'butt';
+
+  // line
+  const hp = proj(hook.p[0], hook.p[1], hook.p[2]); const hx2 = hp.x, hy2 = hp.y;
+  ctx.strokeStyle = 'rgba(236,246,255,.55)'; ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(bx2, by2); ctx.lineTo(hx2, hy2); ctx.stroke();
+
+  drawHook(hp.s);
+}
+
+/* the hook itself: a swept J in 3D, stroked as a polyline so it keeps
+   its shape from every angle without costing a mesh                    */
+const HOOK_PATH = (() => {
+  const pts = [[0, 0.80, 0], [0, 0.45, 0], [0, 0.10, 0], [0, -0.02, 0]];
+  for (let i = 0; i <= 12; i++){
+    const a = Math.PI * (i / 12);
+    pts.push([Math.sin(a) * 0.115, -0.05 - (1 - Math.cos(a)) * 0.080, 0]);
+  }
+  pts.push([0.228, 0.13, 0]);
+  return pts.map(q => [q[0] * HOOK_SCALE, q[1] * HOOK_SCALE, q[2] * HOOK_SCALE]);
+})();
+function drawHook(scr){
+  const sway = Math.atan2(hook.p[0] - rodTip()[0], hook.len) ;
+  const c = Math.cos(sway), s = Math.sin(sway);
+  const pts = [];
+  for (const q of HOOK_PATH){
+    const x = q[0] * c - q[1] * s, y = q[0] * s + q[1] * c;
+    const p = proj(hook.p[0] + x, hook.p[1] + y, hook.p[2] + q[2]);
+    pts.push([p.x, p.y]);
+  }
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#3d444e'; ctx.lineWidth = Math.max(3.0, 0.075 * scr);
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke();
+  ctx.strokeStyle = '#e8eef7'; ctx.lineWidth = Math.max(1.3, 0.034 * scr);
+  ctx.beginPath(); ctx.moveTo(pts[0][0], pts[0][1]);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.stroke();
+  ctx.lineCap = 'butt'; ctx.lineJoin = 'miter';
+}
+
+function drawHooked(){
+  const list = hook.caught.slice().sort((a, b) => view(b.x, b.y, b.z)[2] - view(a.x, a.y, a.z)[2]);
+  for (const d of list) drawDuckAt(d, DUCK_LOD[QT[Q.tier].near]);
+}
+function drawRevealDucks(){
+  for (const d of reveals){
+    const s = 1 + clamp(d.rv.t / 0.55, 0, 1) * 0.30;
+    euler(d.yaw, d.pitch, d.roll, d.m);
+    drawMesh(DUCK_LOD[QT[Q.tier].near], d.m, d.x, d.y, d.z, d.pal, null, s);
+    drawBaseNumber(d);
+  }
+}
+function drawDrops(){
+  ctx.fillStyle = 'rgba(200,235,250,.8)';
+  for (const p of drops){
+    const q = proj(p.x, p.y, p.z);
+    const r = Math.max(0.8, 0.02 * q.s);
+    ctx.beginPath(); ctx.ellipse(q.x, q.y, r, r * 1.7, 0, 0, TAU); ctx.fill();
+  }
+}
+</script>
+<script>
+/* ================================================================== HUD */
+function fmtTime(t){
+  const m = Math.floor(Math.max(0, t) / 60), s = Math.floor(Math.max(0, t) % 60);
+  return m + ':' + (s < 10 ? '0' : '') + s;
+}
+function drawHUD(){
+  if (G.mode !== 'play') return;
+  ctx.save();
+  ctx.font = 'bold 15px "Segoe UI",system-ui,sans-serif';
+  ctx.textBaseline = 'top';
+
+  // score plate
+  ctx.fillStyle = 'rgba(10,6,18,.55)';
+  roundRect(14, 14, 168, 56, 12); ctx.fill();
+  ctx.fillStyle = '#9b8fae'; ctx.textAlign = 'left';
+  ctx.font = 'bold 11px "Segoe UI",system-ui,sans-serif';
+  ctx.fillText('SCORE', 28, 24);
+  ctx.fillStyle = '#ffd34d'; ctx.font = 'bold 28px "Segoe UI",system-ui,sans-serif';
+  ctx.fillText(String(Math.round(G.shown)), 28, 38);
+
+  if (!G.relaxed){
+    ctx.fillStyle = 'rgba(10,6,18,.55)';
+    roundRect(W - 182, 14, 168, 56, 12); ctx.fill();
+    ctx.fillStyle = '#9b8fae'; ctx.textAlign = 'right';
+    ctx.font = 'bold 11px "Segoe UI",system-ui,sans-serif';
+    ctx.fillText('TIME', W - 28, 24);
+    ctx.fillStyle = G.rush ? '#ff6b6b' : '#e9e2f4';
+    ctx.font = 'bold 28px "Segoe UI",system-ui,sans-serif';
+    ctx.fillText(fmtTime(G.time), W - 28, 38);
+  }
+
+  // how close the next prize is, live, so the shelf is never out of mind
+  const nx = nextPrize();
+  if (nx){
+    const prev = G.prizes > 0 ? PRIZES[G.prizes - 1].c : 0;
+    const have = G.tickets + G.score;
+    const pct = clamp((have - prev) / Math.max(1, nx.c - prev), 0, 1);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(232,226,244,.5)';
+    ctx.font = 'bold 11px "Segoe UI",system-ui,sans-serif';
+    ctx.fillText(nx.n.toUpperCase() + '  ' + Math.max(0, nx.c - have) + ' TO GO', W - 28, H - 62);
+    const bw = 150;
+    ctx.fillStyle = 'rgba(255,211,77,.20)'; ctx.fillRect(W - 28 - bw, H - 46, bw, 5);
+    ctx.fillStyle = pct > 0.999 ? '#8effb0' : '#ffd34d';
+    ctx.fillRect(W - 28 - bw, H - 46, bw * pct, 5);
+  }
+
+  if (G.rush){
+    const pulse = 0.6 + 0.4 * Math.sin(T * 9);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = 'bold ' + (27 + pulse * 5) + 'px "Segoe UI",system-ui,sans-serif';
+    ctx.fillStyle = 'rgba(255,90,90,' + (0.75 + 0.25 * pulse) + ')';
+    ctx.strokeStyle = 'rgba(40,0,0,.6)'; ctx.lineWidth = 5;
+    // low and centred: the sign owns the top of the frame
+    ctx.strokeText('FINAL RUSH  x2', W * 0.5, H - 88);
+    ctx.fillText('FINAL RUSH  x2', W * 0.5, H - 88);
+    ctx.textBaseline = 'top';
+  }
+
+  const mult = streakMult();
+  if (mult > 1){
+    const pulse = 0.72 + 0.28 * Math.sin(T * 7);
+    ctx.fillStyle = 'rgba(10,6,18,.55)';
+    roundRect(14, 78, 168, 44, 12); ctx.fill();
+    ctx.textAlign = 'left';
+    ctx.fillStyle = 'rgba(120,255,170,' + pulse + ')';
+    ctx.font = 'bold 22px "Segoe UI",system-ui,sans-serif';
+    ctx.fillText('STREAK x' + mult, 28, 86);
+    // the bar drains as the window runs out
+    ctx.fillStyle = 'rgba(120,255,170,.22)';
+    ctx.fillRect(28, 110, 140, 4);
+    ctx.fillStyle = 'rgba(120,255,170,.85)';
+    ctx.fillRect(28, 110, 140 * clamp(G.streakT / STREAK_WINDOW, 0, 1), 4);
+  }
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = 'rgba(232,226,244,.55)';
+  ctx.font = '13px "Segoe UI",system-ui,sans-serif';
+  ctx.fillText(input.down ? 'release to reel in' : 'hold to lower the hook', W * 0.5, H - 34);
+  if (hook.caught.length){
+    ctx.fillStyle = '#ffd34d'; ctx.font = 'bold 13px "Segoe UI",system-ui,sans-serif';
+    ctx.fillText(hook.caught.length + ' on the hook' + (hook.caught.length > 1 ? '  —  DOUBLE!' : ''), W * 0.5, H - 54);
+  }
+
+  for (const p of pops){
+    const a = 1 - clamp((p.t - 0.7) / 0.55, 0, 1);
+    ctx.globalAlpha = a;
+    ctx.font = 'bold ' + (p.big ? 34 : 26) + 'px "Segoe UI",system-ui,sans-serif';
+    ctx.fillStyle = p.big ? '#ffe27a' : '#fff4c8';
+    ctx.strokeStyle = 'rgba(40,20,0,.65)'; ctx.lineWidth = 4;
+    ctx.strokeText(p.txt, p.x, p.y); ctx.fillText(p.txt, p.x, p.y);
+    ctx.globalAlpha = 1;
+  }
+  ctx.restore();
+}
+function roundRect(x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* ================================================================ FRAME */
+function draw(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  if (fx.shake > 0.05){
+    // rotate the offset so successive kicks do not all shove the same way
+    const a = T * 41;
+    ctx.translate(Math.sin(a) * fx.shake, Math.cos(a * 1.37) * fx.shake * 0.6);
+  }
+  drawBackdrop();
+  drawSign();
+  drawShelf();
+  drawBank(CHAN_HZ, false);
+  drawWater();
+  drawRipples();
+  drawFloatingDucks();
+  drawAim();
+  drawBank(-CHAN_HZ, true);
+  drawSidePanels();
+  drawRod();
+  drawHooked();
+  drawDrops();
+  drawRevealDucks();
+  drawHUD();
+}
+
+function update(dt){
+  T += dt;
+  stepDucks(dt);
+  if (G.mode === 'play'){
+    stepHook(dt);
+    stepCatch(dt);
+    stepHooked(dt);
+  }
+  stepReveals(dt);
+  stepFx(dt);
+  if (G.streakT > 0){
+    G.streakT -= dt;
+    if (G.streakT <= 0){ G.streakT = 0; G.streak = 0; }
+  }
+  if (G.mode === 'play' && !G.relaxed){
+    G.time -= dt;
+    const wasRush = G.rush;
+    G.rush = G.time <= RUSH_TIME;
+    if (G.rush && !wasRush) sfxRush();
+    if (G.time <= 0){ G.time = 0; endRound(); }
+  }
+  // the counter chases the score rather than snapping, so a big catch reads
+  // as a run of numbers rather than a jump
+  G.shown += (G.score - G.shown) * Math.min(1, dt * 7);
+  if (Math.abs(G.score - G.shown) < 0.6) G.shown = G.score;
+}
+
+/* Move between quality tiers on measured cost. Drops quickly — a couple of
+   bad seconds is already miserable — and climbs back only after a long clean
+   stretch, so it settles instead of oscillating. */
+function autoQuality(workMs, frameMs){
+  // A GC pause, a tab switch or a resize produces one enormous sample that
+  // says nothing about steady-state cost. Drop those on the floor.
+  if (frameMs < 100 && workMs < 100){
+    Q.work += (workMs - Q.work) * 0.06;
+    Q.frame += (frameMs - Q.frame) * 0.06;
+  }
+  // Demote only on slowness that persists — a run of bad frames, not one.
+  // ~45fps is the line below which the pond stops reading as floating.
+  const slow = frameMs > 22 || workMs > 20;
+  Q.bad = slow ? Q.bad + 1 : Math.max(0, Q.bad - 2);
+  if (Q.bad > 45 && Q.tier > 0){
+    Q.tier--; Q.bad = 0; Q.hold = -240; Q.work = 8; Q.frame = 15;
+    /* Naively, running well at the lower tier is evidence to promote — but
+       the reason we are running well IS the lower tier, so the loop would
+       climb, stall, and drop again forever. Make each return trip cost
+       progressively more clean time, so it probes once or twice and then
+       settles for good. */
+    Q.penalty = Math.min(Q.penalty * 3 + 600, 60000);
+    fit();
+    return;
+  }
+  // Promote on measured headroom, and only after a long clean stretch.
+  if (Q.work < 9 && Q.frame < 18 && Q.tier < 2){
+    if (++Q.hold > Q.penalty){ Q.tier++; Q.hold = 0; Q.work = 12; Q.frame = 16; fit(); }
+  } else if (Q.hold < 0) Q.hold++;
+  else Q.hold = 0;
+}
+
+let last = 0;
+function loop(ts){
+  const t = ts || 0;
+  let dt = (t - last) / 1000;
+  last = t;
+  if (!(dt > 0) || dt > 0.1) dt = 1 / 60;
+  const t0 = (typeof performance !== 'undefined' && performance.now) ? performance.now() : 0;
+  update(dt);
+  draw();
+  if (t0) autoQuality(performance.now() - t0, 1000 * dt);
+  requestAnimationFrame(loop);
+}
+
+/* ================================================================= FLOW */
+const $ = (id) => document.getElementById(id) || { style: {}, textContent: '' };
+function show(el, on){ const e = $(el); if (on) e.removeAttribute ? e.removeAttribute('hidden') : 0; else e.setAttribute ? e.setAttribute('hidden', '') : 0; e.style.display = on ? '' : 'none'; }
+
+function loadBest(){
+  try { G.best = parseInt(localStorage.getItem('duck_fishing_best_v1') || '0', 10) || 0; }
+  catch (e) { G.best = 0; }
+  // the shelf lives in its own key; the best-score one predates it and stays
+  G.tickets = 0; G.prizes = 0; G.rounds = 0;
+  try {
+    const raw = localStorage.getItem('duck_fishing_prizes_v1');
+    if (raw){
+      const j = JSON.parse(raw);
+      G.tickets = Math.max(0, j.tickets | 0);
+      G.rounds  = Math.max(0, j.rounds | 0);
+      G.prizes  = clamp(j.prizes | 0, 0, PRIZES.length);
+    }
+  } catch (e) { /* a corrupt shelf just means an empty one */ }
+  // never show fewer prizes than the tickets have already earned
+  G.prizes = Math.max(G.prizes, prizesFor(G.tickets));
+}
+function prizesFor(tickets){
+  let n = 0;
+  while (n < PRIZES.length && tickets >= PRIZES[n].c) n++;
+  return n;
+}
+function nextPrize(){ return G.prizes < PRIZES.length ? PRIZES[G.prizes] : null; }
+function saveBest(){
+  try { localStorage.setItem('duck_fishing_best_v1', String(G.best)); } catch (e) {}
+}
+function saveMeta(){
+  try {
+    localStorage.setItem('duck_fishing_prizes_v1',
+      JSON.stringify({ tickets: G.tickets, prizes: G.prizes, rounds: G.rounds }));
+  } catch (e) {}
+}
+function toMenu(){
+  G.mode = 'menu';
+  const el = $('mShelf');
+  const nx = nextPrize();
+  if (G.rounds > 0 || G.prizes > 0){
+    el.innerHTML = '<b>' + G.prizes + '/' + PRIZES.length + '</b> prizes on the shelf'
+      + (nx ? ' &middot; next: <b>' + nx.n + '</b>, ' + Math.max(0, nx.c - G.tickets) + ' tickets'
+            : ' &middot; the shelf is cleared');
+  } else {
+    el.innerHTML = 'Ten prizes on the shelf. Every point is a ticket.';
+  }
+  show('menu', true); show('over', false);
+}
+function startRound(relaxed){
+  G.relaxed = !!relaxed;
+  G.mode = 'play';
+  G.score = 0; G.landed = 0; G.shown = 0; G.time = ROUND_TIME;
+  G.streak = 0; G.streakT = 0;
+  G.rush = false; G.won = [];
+  reveals.length = 0; pops.length = 0; drops.length = 0; rings.length = 0;
+  hook.caught.length = 0;
+  hook.len = HOOK_MIN;
+  const tip = rodTip();
+  hook.p = [tip[0], tip[1] - HOOK_MIN, tip[2]];
+  hook.q = [tip[0], tip[1] - HOOK_MIN, tip[2]];
+  for (const d of ducks) if (d.state !== 'float'){ d.state = 'float'; d.pitch = d.roll = 0; }
+  show('menu', false); show('over', false);
+  ac();
+}
+function endRound(){
+  G.mode = 'over';
+  G.rush = false;
+  if (G.score > G.best){ G.best = G.score; saveBest(); }
+
+  // every point is a ticket, and tickets are what the shelf runs on
+  G.tickets += G.score;
+  G.rounds++;
+  const before = G.prizes;
+  G.prizes = Math.max(G.prizes, prizesFor(G.tickets));
+  G.won = PRIZES.slice(before, G.prizes);
+  saveMeta();
+
+  $('ovScore').textContent = String(G.score);
+  $('ovDucks').textContent = String(G.landed);
+  $('ovBest').textContent = String(G.best);
+  $('ovTitle').textContent = "TIME'S UP";
+  renderPrizePanel();
+  show('over', true);
+  if (G.won.length) sfxFanfare(); else sfxHorn();
+}
+
+/* The shelf on the game-over card: what you just won, or how far off the
+   next one is. This is the reason to press PLAY AGAIN. */
+function renderPrizePanel(){
+  const el = $('ovPrize');
+  const nx = nextPrize();
+  if (G.won.length){
+    const names = G.won.map(p => p.n).join(' + ');
+    el.innerHTML = '<div class="pwon">PRIZE WON!</div><div class="pname">' + names + '</div>' +
+      (nx ? '<div class="pnext">Next: ' + nx.n + ' &mdash; ' + (nx.c - G.tickets) + ' more tickets</div>'
+          : '<div class="pnext">Every prize on the shelf is yours.</div>');
+  } else if (nx){
+    const prev = G.prizes > 0 ? PRIZES[G.prizes - 1].c : 0;
+    const pct = clamp((G.tickets - prev) / Math.max(1, nx.c - prev), 0, 1);
+    el.innerHTML = '<div class="pnext">Next prize: <b>' + nx.n + '</b></div>' +
+      '<div class="pbar"><i style="width:' + (pct * 100).toFixed(1) + '%"></i></div>' +
+      '<div class="pnext">' + (nx.c - G.tickets) + ' tickets to go</div>';
+  } else {
+    el.innerHTML = '<div class="pnext">Shelf cleared &mdash; ' + G.tickets + ' tickets all told.</div>';
+  }
+}
+
+/* ================================================================ INPUT */
+/* You hold the rod, not the hook. The pointer sits on the shaft and the
+   hook hangs a fixed screen distance further up the rod, so a fingertip
+   never covers the duck being aimed at. The offset runs along the rod's own
+   on-screen direction (up and to the left, since the grip is off the bottom
+   right), which keeps the touch point sitting naturally on the stick. */
+const GRIP_DIR_X = -0.46, GRIP_DIR_Y = -0.89;   // hook direction from the grip
+const GRIP_REACH = 0.155;                       // as a fraction of canvas height
+
+function aimOffset(){
+  const r = GRIP_REACH * H;
+  return [GRIP_DIR_X * r, GRIP_DIR_Y * r];
+}
+function setAim(px, py){
+  input.px = px; input.py = py; input.has = true;
+  const o = aimOffset();
+  // Never let the shifted point climb past the far bank: above the horizon
+  // the ray misses the water plane entirely and the aim would go nowhere.
+  const ty = Math.max(py + o[1], H * 0.06);
+  const w = unproject(px + o[0], ty);
+  if (!w) return;
+  aim.x = clamp(w[0], -GATE_X + 1.0, GATE_X - 1.0);
+  aim.z = clamp(w[1], -CHAN_HZ + 0.7, CHAN_HZ - 0.7);
+}
+function bindInput(){
+  if (!cv.addEventListener) return;
+  const pos = (e) => {
+    const r = cv.getBoundingClientRect ? cv.getBoundingClientRect() : { left: 0, top: 0 };
+    const t = e.touches && e.touches[0] ? e.touches[0] : e;
+    return [t.clientX - r.left, t.clientY - r.top];
+  };
+  cv.addEventListener('pointermove', (e) => { const p = pos(e); setAim(p[0], p[1]); });
+  cv.addEventListener('pointerdown', (e) => {
+    const p = pos(e); setAim(p[0], p[1]);
+    input.down = true; ac();
+    if (cv.setPointerCapture && e.pointerId != null) { try { cv.setPointerCapture(e.pointerId); } catch (err) {} }
+    e.preventDefault();
+  });
+  const up = () => { input.down = false; };
+  cv.addEventListener('pointerup', up);
+  cv.addEventListener('pointercancel', up);
+  cv.addEventListener('pointerleave', up);
+  window.addEventListener('keydown', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowDown'){ input.down = true; e.preventDefault(); }
+    if (e.code === 'ArrowLeft')  { aim.x = clamp(aim.x - 0.9, -GATE_X + 1, GATE_X - 1); }
+    if (e.code === 'ArrowRight') { aim.x = clamp(aim.x + 0.9, -GATE_X + 1, GATE_X - 1); }
+    if (e.code === 'ArrowUp')    { input.down = false; }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code === 'Space' || e.code === 'ArrowDown') input.down = false;
+  });
+  window.addEventListener('resize', fit);
+  const on = (id, fn) => { const el = document.getElementById(id); if (el && el.addEventListener) el.addEventListener('click', fn); };
+  on('bStart', () => startRound(false));
+  on('bRelax', () => startRound(true));
+  on('bAgain', () => startRound(G.relaxed));
+  on('bMenu', toMenu);
+  on('mute', () => { snd.on = !snd.on; const m = document.getElementById('mute'); if (m) m.style.opacity = snd.on ? 1 : 0.4; });
+}
+
+/* ================================================================= BOOT */
+reseed(20240707);
+seedPond();
+bindInput();
+fit();
+loadBest();
+toMenu();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "id": "tree",
+  "name": "Forest canopy",
+  "tile": true,
+  "palette": {
+    "K": "#0d2a1a",
+    "k": "#143d26",
+    "g": "#256434",
+    "m": "#2f7a3a",
+    "l": "#3f9139",
+    "h": "#57ab41",
+    "w": "#7cc851"
+  },
+  "rows": [
+    "kkhlmkkgghwllmkK",
+    "khwllmkklhhllmkk",
+    "hhhllmKkllllmgkm",
+    "llllmmKmmmmmmgkm",
+    "mllmmgKmgmmggkmm",
+    "KKKmgkmmgmkkkmmm",
+    "wlmmkmhlmmKmmmmh",
+    "hlmmmhwllmKmmllh",
+    "llmgkhhllmKghwll",
+    "mmmkllllmgklhhlm",
+    "ggkkmmmmmgkllllg",
+    "gkmmKKKggkmmmmmm",
+    "kmmmgkkkkmmmKmgg",
+    "mmmgkmmmmmmmgKkk",
+    "mmggkmmmmmmggkKK",
+    "kgkkkkmmKKKlmkkK"
+  ]
+}

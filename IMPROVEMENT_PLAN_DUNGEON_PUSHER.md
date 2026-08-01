@@ -138,6 +138,29 @@ the next session. Ordered by impact ÷ effort inside each tier. Items marked
       cap 50, per-IP throttle; 🏅 THE DEEP BOARD screen with tabs/pager/medals,
       on-canvas name carver (12 chars, physical keys work too), CARVE IT chip on
       the fallen-run screen; sw.js never caches /api/ (session 27)
+- [x] **Global board: five periods + an anti-cheat rail** (session 77) — one carve
+      now feeds DAY / WEEK / MONTH / YEAR / ALL-TIME (`dp:day:` `dp:week:<monday>`
+      `dp:month:` `dp:year:` `dp:top`, each with its own sweeping TTL); all six
+      desks (plus LAST MONTH) sit on one tab row, reachable from the 🏅 button on
+      the home menu.
+      **NO SECOND DASHBOARD STEP** (session 79): the rail signs with a key the
+      worker mints itself on first use and keeps in the same KV namespace
+      (`dp:secret`), so it is armed the moment the binding exists. An env
+      secret named `DPBOARD_SECRET` still overrides it if you ever want to
+      rotate by hand. Every carve must present a RUN TOKEN the server signed
+      (HMAC-SHA256) when the run began — single-use, expiring in a day, and
+      rejected unless at least 6s × floor has actually elapsed, so a fake
+      floor-200 run must sit for twenty minutes before it lands. Plausibility
+      clamps ride alongside (floor ≤ 300, kills ≤ 60/floor). Entries carry `k:1`.
+      **THE NAME LOCK** (session 79): a name belongs to whoever carved it
+      first. The client holds a private carve key (`S.carveKey`, in the save so
+      a cloud restore carries it); KV keeps only an HMAC of it under
+      `dp:own:<lcname>`, so a leak never hands anyone a name. Carving under a
+      taken name without its key returns 409. `Anonymous` is common ground and
+      is never claimed.
+      Honest limit: a browser client can always be tampered with — this stops
+      drive-by forgery and keeps the wall readable; it does not stop a patient
+      attacker who scripts the token dance.
 - [x] **Save migration hardening**: sv-versioned schema + migration ladder;
       corrupt blobs QUARANTINED under `<key>_quarantine` (never destroyed), clean
       start + title notice (session 22)

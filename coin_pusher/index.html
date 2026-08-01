@@ -61,6 +61,8 @@ const C = {
   START_WALLET: 45, START_MONEY: 700,   // money is stored in cents
   PITY_T: 4,                            // broke bailout: +1 coin per 4s
   DROP_CD: 0.28, DROP_CD_TURBO: 0.09, COMBO_WIN: 1.4, COMBO_CAP: 5,
+  CASCADE_WIN: 0.45,       // coins landing this close together read as one win
+  SHAKE_CAP: 13,           // a big cascade shakes hard, never sickeningly
   METER_MAX: 20,
   PTS: { coin: 15, lucky: 75, gem: 750 },
   PAY: { coin: 1, lucky: 2, gem: 5 },   // coins returned to the TRAY, not the wallet
@@ -218,6 +220,7 @@ const S = {
   dropped: 0, collected: 0, lost: 0, jackpots: 0,
   coinsSpent: 0, coinsBack: 0,   // house-edge bookkeeping
   banner: null, trayPile: 0, denyT: 0, fever: 0,
+  runFloat: null,          // the running "+N" a cascade counts up into
   tray: { coins: 0, prizes: [], items: [] },  // your winnings pile up here
   prizeDebt: 0,            // won prizes owed back to the pile
   screen: 'lobby', mach: 'gold',
@@ -327,13 +330,17 @@ function kindM(kind) {
 function mkCoin(x, y, kind, lay, st, tier) {
   tier = tier || 0;
   const td = M().tiers[tier];
+  const mass = kindM(kind);
   return {
     x, y, z: td.z + (lay || 0) * C.COIN_H, vx: 0, vy: 0, vz: 0,
-    r: kindR(kind), m: kindM(kind),
+    // im is the inverse mass the collision solver needs on every pair; mass
+    // never changes, so pay for the division once here
+    r: kindR(kind), m: mass, im: 1 / mass,
     kind, st: st || 'plat', lay: lay || 0, tier,
     rot: rng() * 6.28, vrot: 0, glint: rng() * 7,
     bounces: 0, ttl: 0, scored: false, chk1: false, chk2: false, chkP: false,
     val: 0, col: null, pid: null, onPush: false, pegHits: 0,
+    ck: 0,   // solver bucket key, recomputed each step from tier/lay/onPush
   };
 }
 function place(x, y, kind, lay, st, tier) {
@@ -456,9 +463,27 @@ function scoreCoin(c) {
   addPts(pts);
   S.tray.coins += C.PAY[c.kind];
   trayAdd(c.kind, { x: c.x });
-  S.floats.push({ txt: '+' + pts, wx: c.x, wy: 96, age: 0, max: 1.1,
-                  col: c.kind === 'gem' ? '#7be9ff' : c.kind === 'lucky' ? '#ffe066' : '#ffd24a',
-                  big: c.kind !== 'coin' || mult >= 3 });
+  // A cascade — the moment the whole game is built around — used to arrive as
+  // a dozen "+15" labels stacked on the same pixel, each unreadable and gone
+  // before the next landed. Coins that fall together now count up into ONE
+  // label that keeps growing and re-pops, so a big wave reads as a big number.
+  const col = c.kind === 'gem' ? '#7be9ff' : c.kind === 'lucky' ? '#ffe066' : '#ffd24a';
+  const run = S.runFloat;
+  if (run && S.time - run.born < C.CASCADE_WIN && S.floats.indexOf(run.f) >= 0) {
+    run.sum += pts;
+    run.n++;
+    run.f.txt = '+' + run.sum;
+    run.f.age = 0;                       // re-pop: the label pulses per coin
+    run.f.max = 1.1;
+    run.f.big = true;
+    run.f.wx += (c.x - run.f.wx) * 0.35;  // drifts toward where coins are landing
+    if (run.n >= 3) run.f.col = '#ffb03a';
+  } else {
+    const f = { txt: '+' + pts, wx: c.x, wy: 96, age: 0, max: 1.1, col: col,
+                big: c.kind !== 'coin' || mult >= 3 };
+    S.floats.push(f);
+    S.runFloat = { f, sum: pts, n: 1, born: S.time };
+  }
   if (mult > 1) S.floats.push({ txt: 'COMBO ×' + mult, wx: 50, wy: 60, age: 0, max: 0.9, col: '#ff9d3c', big: mult >= 4 });
   S.shake += c.kind === 'gem' ? 5 : mult > 2 ? 2 : 1;
   if (c.kind === 'gem') SND.gem(); else SND.collect(mult);
@@ -814,6 +839,7 @@ function reset() {
   S.combo = 0; S.lastCollect = -99; S.time = 0; S.phase = 0; S.cd = 0;
   S.floats.length = 0; S.parts.length = 0; S.rain.length = 0;
   S.banner = null; S.slotAnim = null; S.trayPile = 0; S.shake = 0;
+  S.runFloat = null;
   initPile();
   save();
 }
@@ -841,15 +867,30 @@ function landCoin(c, lay) {
   SND.clink();
 }
 
+// scratch buffers reused across steps — the sim runs 120 substeps a second and
+// allocating these fresh every substep was pure GC pressure
+const PF_ = [], PV_ = [], TF_ = [], plats_ = [];
+
 function step(dt, quiet) {
   S.time += dt;
   if (S.cd > 0) S.cd -= dt;
   if (S.denyT > 0) S.denyT -= dt;
   S.phase += dt * 2 * Math.PI / M().pushPeriod;
-  S.shake = Math.max(0, S.shake - dt * 12);
+  // shake is additive per scoring coin, so a wave of twenty used to stack into
+  // a screen that lurched for a second solid. Cap it: a cascade still hits
+  // hard, it just stops climbing past what reads as impact.
+  S.shake = Math.max(0, Math.min(S.shake, C.SHAKE_CAP) - dt * 12);
   if (S.fever > 0) S.fever -= dt;
   const Mv = M();
   const lt = lastTier();
+  // Pusher kinematics depend only on S.phase, which is fixed for the whole
+  // step — resolve front/velocity once per tier instead of re-deriving a
+  // cos and a sin for every single coin.
+  const nT = Mv.tiers.length;
+  for (let ti = 0; ti < nT; ti++) { PF_[ti] = pusherFront(ti); PV_[ti] = pusherVel(ti); }
+  for (let ti = 0; ti < nT; ti++) {
+    TF_[ti] = Mv.tiers[ti].front === 'dyn' ? PF_[ti + 1] : Mv.tiers[ti].front;
+  }
 
   // the house always wins — coins only come from money. But when you're flat
   // broke (no coins, can't afford the smallest pack, nothing in the tray)
@@ -944,7 +985,7 @@ function step(dt, quiet) {
       }
       // land ON the moving pusher shelf when it is underneath — the real
       // two-stage pusher action: ride the shelf, get scraped off later
-      const pfA = pusherFront(c.tier);
+      const pfA = PF_[c.tier];
       if (!c.chkP && c.z <= td.z + C.PUSH_H && c.z > td.z + C.PUSH_H - 3) {
         c.chkP = true;
         if (c.y < pfA - c.r * 0.3) {
@@ -970,8 +1011,8 @@ function step(dt, quiet) {
       // back wall stops it riding back, so a retracting shelf slides out
       // from underneath until the coin tips off the front edge
       const td = Mv.tiers[c.tier];
-      const pf = pusherFront(c.tier);
-      const pv = pusherVel(c.tier);
+      const pf = PF_[c.tier];
+      const pv = PV_[c.tier];
       if (pv > 0) c.y += pv * dt;
       const fr = Math.exp(-C.FRICTION * dt);
       c.vx *= fr; c.vy *= fr;
@@ -992,8 +1033,8 @@ function step(dt, quiet) {
     } else if (c.st === 'plat') {
       const td = Mv.tiers[c.tier];
       const isLast = c.tier === lt;
-      const pf = pusherFront(c.tier);
-      const pv = pusherVel(c.tier);
+      const pf = PF_[c.tier];
+      const pv = PV_[c.tier];
       if (c.y - c.r < pf) {
         c.y = pf + c.r;
         if (pv > 0) c.vy = Math.max(c.vy, pv);
@@ -1004,7 +1045,7 @@ function step(dt, quiet) {
       const st = c.kind === 'ball' ? 0.15 : C.SETTLE;
       if (Math.abs(c.vx) < st) c.vx = 0;
       if (Math.abs(c.vy) < st) c.vy = 0;
-      const front = tierFront(c.tier);
+      const front = TF_[c.tier];
       // the incline lip: forward motion is resisted on the last stretch, so
       // coins stall teetering at the brink until the pile shoves them over
       if (isLast && c.lay === 0 && c.vy > 0 && c.y > front - Mv.lipW && c.y <= front) {
@@ -1078,25 +1119,44 @@ function step(dt, quiet) {
   // Sweep-and-prune: sorted by x, the inner loop breaks as soon as the gap
   // exceeds the biggest possible pair radius — O(n·k) instead of O(n²).
   const cs = S.coins;
-  const plats = [];
-  for (const c of cs) if (c.st === 'plat') plats.push(c);
+  const plats = plats_;
+  plats.length = 0;
+  // Only pieces sharing a tier, a layer and a shelf/field footing can touch.
+  // Packing those three into one integer up front turns the inner-loop reject
+  // — which most candidate pairs take — into a single compare. None of the
+  // three can change while the solver runs, so the key stays valid.
+  for (const c of cs) {
+    if (c.st !== 'plat') continue;
+    c.ck = (c.tier << 3) | (c.lay << 1) | (c.onPush ? 1 : 0);
+    plats.push(c);
+  }
   plats.sort((a, b) => a.x - b.x);
   const REACH = C.PRIZE_R * 2 + 0.5;
+  const np = plats.length;
+  // Three relaxation passes, but a pass that resolves nothing leaves the field
+  // bit-identical — so every later pass would be a no-op too and we can stop.
+  // A settled pile therefore costs one pass instead of three.
   for (let iter = 0; iter < 3; iter++) {
-    for (let i = 0; i < plats.length; i++) {
+    let touched = false;
+    for (let i = 0; i < np; i++) {
+      // hoisting a's fields out of the inner loop turns per-pair property
+      // loads into register reads; the values cannot change while it runs
       const a = plats[i];
-      for (let j = i + 1; j < plats.length; j++) {
+      const ak = a.ck, ar = a.r, ima = a.im;
+      for (let j = i + 1; j < np; j++) {
         const b = plats[j];
+        // a.x stays live here: corrections below move it mid-loop, and the
+        // sweep bound has to see that
         if (b.x - a.x > REACH) break;
-        if (a.lay !== b.lay || a.tier !== b.tier || a.onPush !== b.onPush) continue;
-        let dx = b.x - a.x, dy = b.y - a.y;
-        const rr = a.r + b.r;
+        if (ak !== b.ck) continue;
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const rr = ar + b.r;
         const d2 = dx * dx + dy * dy;
         if (d2 >= rr * rr || d2 === 0) continue;
         const d = Math.sqrt(d2);
         const nx = dx / d, ny = dy / d;
         const overlap = rr - d;
-        const ima = 1 / a.m, imb = 1 / b.m, ims = ima + imb;
+        const imb = b.im, ims = ima + imb;
         const corr = overlap * 0.8 / ims;
         a.x -= nx * corr * ima; a.y -= ny * corr * ima;
         b.x += nx * corr * imb; b.y += ny * corr * imb;
@@ -1107,8 +1167,10 @@ function step(dt, quiet) {
           a.vx -= nx * jimp * ima; a.vy -= ny * jimp * ima;
           b.vx += nx * jimp * imb; b.vy += ny * jimp * imb;
         }
+        touched = true;
       }
     }
+    if (!touched) break;
   }
 
   // cleanup
@@ -1700,6 +1762,42 @@ if (!HEADLESS) (function browser() {
     }
   }
 
+  // The payout floor, its gutters and the front lip are the same picture in
+  // every frame: nothing in them follows the pusher or the clock. They were
+  // costing ~90 path ops a frame — the largest block of draw work outside the
+  // coins themselves. Render them once into an offscreen layer at device
+  // resolution and blit that instead. The group is kept together and drawn in
+  // its original slot, after the back wall, so the z-order is untouched.
+  let fieldCv = null, fieldKey = '';
+  function drawFieldLayer() {
+    const Mv = M();
+    const lt = lastTier();
+    const tdL = Mv.tiers[lt];
+    // scale is part of the key: a resize has to re-render at the new density
+    const key = S.mach + '|' + S.side + '|' + Math.round(scale * 1000);
+    if (fieldKey !== key || !fieldCv) {
+      const cv = document.createElement('canvas');
+      cv.width = Math.max(1, Math.ceil(LW * scale));
+      cv.height = Math.max(1, Math.ceil(LH * scale));
+      const g = cv.getContext('2d');
+      if (!g) { // no offscreen context: fall back to drawing straight through
+        drawTierFloor(tdL.back, tierFront(lt), tdL.z, true);
+        drawGutters(); drawLip();
+        return;
+      }
+      g.setTransform(scale, 0, 0, scale, 0, 0);
+      const main = ctx;
+      ctx = g;                    // every draw helper reads this binding
+      try {
+        drawTierFloor(tdL.back, tierFront(lt), tdL.z, true);
+        drawGutters();
+        drawLip();
+      } finally { ctx = main; }
+      fieldCv = cv; fieldKey = key;
+    }
+    ctx.drawImage(fieldCv, 0, 0, LW, LH);
+  }
+
   function drawGutters() {
     const Mv = M();
     const lt = lastTier();
@@ -1798,13 +1896,25 @@ if (!HEADLESS) (function browser() {
     medal: { edge: '#8a5f10', f0: '#fff8cf', f1: '#ffd75e', f2: '#c78f18', ring: 'rgba(122,84,14,0.55)', sym: 'rgba(150,96,10,0.9)' },
   };
 
+  // Per-frame constants for the coin pass. drawCoin runs once per piece — up
+  // to a few hundred times a frame — and every one of these used to be
+  // re-derived inside it; on Penny Falls tierFront() is a cosine per call.
+  let cfM = null, cfLT = 0;
+  const cfTF = [];
+  function coinFrameSetup() {
+    cfM = M();
+    cfLT = lastTier();
+    cfTF.length = 0;
+    for (let ti = 0; ti < cfM.tiers.length; ti++) cfTF[ti] = tierFront(ti);
+  }
+
   function drawCoin(c, t) {
-    const Mv = M();
+    const Mv = cfM;
     const inGut = c.st === 'gutter';
     // incline lip: visually climb the last stretch
     let zv = c.z;
-    if (c.st === 'plat' && c.tier === lastTier()) {
-      const front = tierFront(c.tier);
+    if (c.st === 'plat' && c.tier === cfLT) {
+      const front = cfTF[c.tier];
       const p = (c.y - (front - Mv.lipW)) / Mv.lipW;
       if (p > 0) zv += Math.min(p, 1) * Mv.lipH;
     }
@@ -1825,7 +1935,7 @@ if (!HEADLESS) (function browser() {
       ry += (rx - ry) * face;
     }
     if (c.st === 'plat') {
-      const front = tierFront(c.tier);
+      const front = cfTF[c.tier];
       const over = (c.y - (front - c.r)) / c.r;
       if (over > 0) ry *= 1 + Math.min(over, 1) * 0.18;
     }
@@ -1974,13 +2084,21 @@ if (!HEADLESS) (function browser() {
     ctx.globalAlpha = 1;
   }
 
+  // the lit-from-the-upper-left sheen shared by the wheel token and the bonus
+  // ball; not cached, because both are one-off pieces rather than pile coins
+  function orbGrad(x, y, ox, oy, r, stops) {
+    const g = ctx.createRadialGradient(x - ox, y - oy, r * 0.1, x, y, r * 1.2);
+    for (const s of stops) g.addColorStop(s[0], s[1]);
+    return g;
+  }
+
   function drawChip(c, p, rx, ry, t, face) {
     const edgeH = Math.max(1.5, C.COIN_H * p.u * 0.5) * (1 - (face || 0));
     ctx.beginPath(); ctx.ellipse(p.x, p.y + edgeH, rx, ry, 0, 0, 7);
     ctx.fillStyle = '#0c4a5e'; ctx.fill();
     ctx.fillRect(p.x - rx, p.y, rx * 2, edgeH);
-    const g = ctx.createRadialGradient(p.x - rx * 0.3, p.y - ry * 0.4, rx * 0.1, p.x, p.y, rx * 1.2);
-    g.addColorStop(0, '#e8fdff'); g.addColorStop(0.5, '#57d8f0'); g.addColorStop(1, '#1a7ca0');
+    const g = orbGrad(p.x, p.y, rx * 0.3, ry * 0.4, rx,
+      [[0, '#e8fdff'], [0.5, '#57d8f0'], [1, '#1a7ca0']]);
     ctx.beginPath(); ctx.ellipse(p.x, p.y, rx, ry, 0, 0, 7);
     ctx.fillStyle = g; ctx.fill();
     // spinning rainbow rim marks it as a wheel token
@@ -1994,8 +2112,8 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawBall(c, p, rx, t) {
-    const g = ctx.createRadialGradient(p.x - rx * 0.3, p.y - rx * 0.3, rx * 0.1, p.x, p.y, rx * 1.2);
-    g.addColorStop(0, '#ffffff'); g.addColorStop(0.4, '#63e7ff'); g.addColorStop(1, '#7a2ce8');
+    const g = orbGrad(p.x, p.y, rx * 0.3, rx * 0.3, rx,
+      [[0, '#ffffff'], [0.4, '#63e7ff'], [1, '#7a2ce8']]);
     ctx.beginPath(); ctx.arc(p.x, p.y, rx * 0.95, 0, 7);
     ctx.fillStyle = g; ctx.fill();
     ctx.globalAlpha = 0.4 + 0.25 * Math.sin(t * 6 + c.glint);
@@ -2398,6 +2516,7 @@ if (!HEADLESS) (function browser() {
   }
 
   function drawGame(t, dt) {
+    coinFrameSetup();
     drawBackground();
     drawMarquee(t);
     drawMeter(t);
@@ -2405,11 +2524,8 @@ if (!HEADLESS) (function browser() {
     drawBackWall(t);
     const Mv = M();
     const lt = lastTier();
-    // payout tier floor + gutters + lip
-    const tdL = Mv.tiers[lt];
-    drawTierFloor(tdL.back, tierFront(lt), tdL.z, true);
-    drawGutters();
-    drawLip();
+    // payout tier floor + gutters + lip, as one cached layer
+    drawFieldLayer();
     if (lt > 0) drawShelf(t);
     else drawPusherBlock(0, t);
     const onPlat = [], offEdge = [];

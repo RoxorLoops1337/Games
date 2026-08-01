@@ -60,7 +60,12 @@ const STATIC_PATHS = [
   'dungeon_pusher',
   'grimhold',
   'ironbridge',
+  'blacksite',
   'carmanager',
+  'flipper_crawl',
+  'duck_fishing',
+  'emberkin',
+  'birds_and_beasts',
   'tools',
 ];
 

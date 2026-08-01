@@ -1,0 +1,31 @@
+{
+  "id": "sand",
+  "name": "Sand",
+  "tile": true,
+  "palette": {
+    "s": "#96773f",
+    "d": "#bd9a63",
+    "m": "#d2b47e",
+    "b": "#e0c898",
+    "l": "#eedcb4",
+    "w": "#f8efd6"
+  },
+  "rows": [
+    "bbwlbbdlllllbbbb",
+    "bbbbbbbddmddlbbb",
+    "dlllllllbsbsdbbb",
+    "sdddddddlbbbbbbb",
+    "lbbbbsdbbbbbmbbw",
+    "bbbbbbbbdlllsllb",
+    "dbbsdbbbbdddddds",
+    "bbbbmbbbbbbbbbbb",
+    "bbbbsbbbsdbbbbsd",
+    "bbbdlllllllbbbbb",
+    "bbbbddddddwlbbbb",
+    "bsdbbbbsdbbbbbbb",
+    "lbbbbbbbbbbdllll",
+    "dlbbbbsdbbbbdddd",
+    "llmlbbbbbbsdbbbd",
+    "ddsdlbbbbbbbbsdb"
+  ]
+}

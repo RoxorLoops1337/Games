@@ -7,10 +7,47 @@
 // runs and is driven through window.DP.
 // A second pass loads the game WITH a stub canvas ctx and drives the real
 // requestAnimationFrame loop across every screen to catch render-time errors.
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { harness } from './no_room_for_heroes_lib.mjs';
+
+// A tiny 8-bit RGBA PNG reader, so a test can ask the ART what it looks like
+// instead of trusting a number somebody typed twice. Returns un-filtered rows.
+function pngRGBA(file) {
+  const b = readFileSync(file);
+  const w = b.readUInt32BE(16), h = b.readUInt32BE(20);
+  if (b[24] !== 8 || b[25] !== 6 || b[28] !== 0) return null;   // 8-bit RGBA, no interlace
+  const parts = [];
+  for (let p = 8; p + 8 <= b.length;) {
+    const len = b.readUInt32BE(p), type = b.toString('ascii', p + 4, p + 8);
+    if (type === 'IDAT') parts.push(b.subarray(p + 8, p + 8 + len));
+    p += 12 + len;
+  }
+  const z = inflateSync(Buffer.concat(parts));
+  const out = Buffer.alloc(w * h * 4), bpp = 4, stride = w * 4;
+  for (let y = 0, q = 0; y < h; y++) {
+    const f = z[q++], row = y * stride, prev = row - stride;
+    for (let i = 0; i < stride; i++) {
+      const raw = z[q + i];
+      const a = i >= bpp ? out[row + i - bpp] : 0;
+      const c = y > 0 ? out[prev + i] : 0;
+      const d = y > 0 && i >= bpp ? out[prev + i - bpp] : 0;
+      let v = raw;
+      if (f === 1) v = raw + a;
+      else if (f === 2) v = raw + c;
+      else if (f === 3) v = raw + ((a + c) >> 1);
+      else if (f === 4) {
+        const pp = a + c - d, pa = Math.abs(pp - a), pb = Math.abs(pp - c), pc = Math.abs(pp - d);
+        v = raw + (pa <= pb && pa <= pc ? a : pb <= pc ? c : d);
+      }
+      out[row + i] = v & 255;
+    }
+    q += stride;
+  }
+  return { w, h, data: out };
+}
 
 function loadGame(store, withCtx) {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -18,8 +55,13 @@ function loadGame(store, withCtx) {
   const code = html.match(/<script>\s*'use strict';([\s\S]*)<\/script>/)[1];
 
   const noop = () => {};
+  // the stub ctx COUNTS its save/restore pairs. An unbalanced pair leaks a
+  // clip (or a composite mode) into every later draw call of the frame — the
+  // kind of break that renders as "half the HUD vanished" and nothing else.
+  globalThis.__ctxDepth = 0;
   const ctx = new Proxy({}, { get(_t, k) {
-    if (k === 'save' || k === 'restore') return noop;
+    if (k === 'save') return () => { globalThis.__ctxDepth++; };
+    if (k === 'restore') return () => { globalThis.__ctxDepth--; };
     if (k === 'createLinearGradient' || k === 'createRadialGradient') return () => ({ addColorStop: noop });
     if (k === 'measureText') return () => ({ width: 10 });
     return noop;
@@ -876,25 +918,60 @@ S.run.room.ents = [{ kind: 'shrine', done: false }];
 DP.interact(0);
 t.eq(S.run.hp, 10 + Math.round(60 * 0.25), 'shrine heals 25% of max HP');
 t.eq(S.pPois, 0, 'shrine cleanses poison');
-// wheel ghost charges 5 coins of any kind for a spin
+// THE GHOST'S FEE scales with the depth: one coin a floor, capped
+t.eq(S.run.floor, 1, 'this stretch is floor 1');
+t.eq(DP.wheelCost(), 1, 'floor 1: a single coin');
+S.run.floor = 7;  t.eq(DP.wheelCost(), 7, 'floor 7: seven');
+S.run.floor = 10; t.eq(DP.wheelCost(), 10, 'floor 10: ten');
+S.run.floor = 44; t.eq(DP.wheelCost(), C.WHEEL_CAP, 'and it caps at ' + C.WHEEL_CAP + ', however deep');
+S.run.floor = 6;                                       // a six-coin spin to test with
 S.wheelAnim = null;
 for (const k of COIN_KINDS) S.run.purse[k] = 0;
-S.run.purse.coin = 4;                                  // one short of the fee
+S.run.purse.coin = 5;                                  // one short of the fee
 S.run.room.ents = [{ kind: 'wheel', done: false }];
 t.ok(!DP.interact(0), 'the ghost refuses a purse short of the fee');
 t.ok(S.wheelAnim === null, 'no spin without paying');
 t.ok(!S.run.room.ents[0].done, 'the ghost lingers until paid');
-S.run.purse.coin = 8;
+S.run.purse.coin = 12;
+const wheelFee = DP.wheelCost();
 const wheelPurse = DP.purseTotal();
-t.ok(DP.interact(0), 'the ghost now NAMES his price');
-t.ok(S.confirm && S.confirm.yes, 'a confirm sheet stands between tap and fee');
-t.eq(DP.purseTotal(), wheelPurse, 'not a coin moves before you agree');
+t.ok(DP.interact(0), 'the ghost now HOLDS OUT HIS PALM');
+t.ok(S.wheelAsk && S.wheelAsk.need === wheelFee, 'the slot asks which coins go in');
+t.eq(DP.purseTotal(), wheelPurse, 'not a coin moves before you choose');
 t.ok(!S.wheelAnim, 'and no spin either');
-S.confirm.yes(); S.confirm = null;
-t.ok(S.wheelAnim !== null, 'agreed — the wheel of fortune turns');
-t.ok(DP.purseTotal() <= wheelPurse - C.WHEEL_COST, 'the ghost pockets ' + C.WHEEL_COST + ' coins');
+t.ok(!DP.wheelConfirm(), 'an empty palm buys no spin');
+t.eq(DP.purseTotal(), wheelPurse, 'and still takes nothing');
+// YOUR coins, YOUR pick: two silver and the rest gold
+S.run.purse.silver = 4;
+S.wheelAsk.pick = { silver: 2, coin: wheelFee - 2 };
+S.wheelAsk.first = 'silver';
+t.eq(DP.wheelPicked(), wheelFee, 'the palm is full');
+t.ok(DP.wheelConfirm(), 'and the coins go down the slot');
+// PAYING IS NOT SPINNING any more. Every piece you paid falls in, and then
+// the machine WAITS — the prize is not drawn until your own second press.
+t.ok(!S.wheelAnim, 'the wheel does not start on its own');
+t.ok(S.wheelFeed && S.wheelFeed.ph === 'feed', 'the slot is swallowing your pieces');
+t.eq(S.wheelFeed.coins.length, wheelFee, 'every piece you paid goes in, not just one');
+t.eq(S.wheelFeed.coins[0], 'silver', 'and the kind you chose first leads');
+t.eq(S.wheelFeed.coins.filter(k => k === 'silver').length, 2, 'both silver among them');
+t.eq(S.run.purse.silver, 2, 'exactly the silver you picked is gone');
+t.eq(DP.purseTotal(), wheelPurse + 4 - wheelFee, 'and exactly this floor\'s ' + wheelFee + ' coins in total');
+// the feed runs out, and the SPIN button arms
+for (let i = 0; i < 400 && S.wheelFeed.ph === 'feed'; i++) DP.wheelFeedTick(1 / 60);
+t.eq(S.wheelFeed.ph, 'armed', 'the pieces are in and the machine arms');
+t.ok(!S.wheelAnim, 'and STILL nothing has been drawn');
+t.ok(DP.wheelPress(), 'you press SPIN...');
+t.eq(S.wheelFeed.ph, 'power', '...and the needle starts running');
+t.ok(!S.wheelAnim, 'the prize is still not drawn while you aim');
+for (let i = 0; i < 12; i++) DP.wheelFeedTick(1 / 60);
+t.ok(S.wheelFeed.pw > 0 && S.wheelFeed.pw <= 1, 'the needle has travelled (' + S.wheelFeed.pw.toFixed(2) + ')');
+t.ok(DP.wheelPress(), 'you press again to lock it in');
+t.ok(S.wheelAnim !== null, 'and NOW the wheel of fortune turns');
+t.ok(!S.wheelFeed, 'the feed is done with');
+t.eq(S.wheelAnim.lead, 0, 'it starts the instant you press, with no lead-in');
 t.ok(S.run.room.ents[0].done, 'the ghost vanishes after the spin');
-t.ok(S.run.ledger.length > 0 && S.run.ledger[0].n === -C.WHEEL_COST, 'and the LEDGER wrote the fee down');
+t.ok(S.run.ledger.length > 0 && S.run.ledger[0].n === -wheelFee, 'and the LEDGER wrote the fee down');
+S.run.floor = 1;                                       // rewind for what follows
 
 // -------- the shopkeeper (pouches and single coins for the purse) --------
 DP.srand(23);
@@ -912,9 +989,11 @@ t.eq(S.room.stock.filter(x => x.kind === 'relic').length, 1, 'ONE relic sits in 
 t.ok(S.room.stock.some(x => x.kind === 'pouch'), 'a coin pouch hangs on the shelf');
 t.ok(S.room.stock.some(x => x.kind === 'coin' && COIN_KINDS.includes(x.cid)),
      'and a single typed coin for the purse');
-t.eq(S.room.stock.find(x => x.kind === 'potion').price, 90, 'potion gold price is DOUBLED');
-t.eq(S.room.stock.find(x => x.kind === 'pouch').price, 120, 'pouch too');
-t.eq(S.room.stock.find(x => x.kind === 'potion').coinPrice, 2, 'the COIN price stays honest (from the true worth)');
+// GOLD is the only tender now, so the shelf shows a ware's TRUE worth —
+// the old x2 gold tag went out with coin-paying
+t.eq(S.room.stock.find(x => x.kind === 'potion').price, 45, 'potion costs its true worth in gold');
+t.eq(S.room.stock.find(x => x.kind === 'pouch').price, 60, 'pouch too');
+t.ok(S.room.stock.every(x => x.coinPrice === undefined), 'no ware carries a coin price any more');
 S.run.gold = 0;
 t.ok(!DP.buyShop(0), 'cannot buy broke');
 S.run.gold = 10000;
@@ -939,55 +1018,67 @@ const hpSlot = S.room.stock.findIndex(x => x.kind === 'maxhp');
 const mhp0 = S.run.maxHp;
 DP.buyShop(hpSlot);
 t.eq(S.run.maxHp, mhp0 + 10, 'max HP upgrade sticks');
-// -------- paying with COINS + removing a ware for 10 coins --------
+// -------- THE SELL DESK: coins become gold, never wares --------
 {
-  // every ware carries a coin price of 1, 2, or 5 of a single kind
-  t.ok(S.room.stock.every(x => [1, 2, 5].indexOf(x.coinPrice) >= 0), 'every ware has a 1/2/5 coin price');
-  t.eq(DP.coinPriceFor(30), 1, 'cheap wares cost 1 coin');
-  t.eq(DP.coinPriceFor(60), 2, 'mid wares cost 2 coins');
-  t.eq(DP.coinPriceFor(200), 5, 'dear wares cost 5 coins');
-  // buy an unsold item with coins of a single kind
+  // the shelf takes gold and only gold now
   const cSlot = S.room.stock.findIndex(x => !x.sold && x.kind === 'item');
-  const ware = S.room.stock[cSlot];
   for (const k of COIN_KINDS) S.run.purse[k] = 0;
-  S.run.purse.silver = ware.coinPrice;                     // exactly enough of ONE kind
-  const goldBefore = S.run.gold;
-  const armBefore = S.run.arsenal[ware.iid] || 0;
-  t.ok(DP.buyShop(cSlot, 'coins'), 'coins buy the ware');
-  t.eq(S.run.purse.silver, 0, 'the coin price is drawn from a single kind');
-  t.eq(S.run.gold, goldBefore, 'and no gold is spent when paying with coins');
-  t.eq(S.run.arsenal[ware.iid], armBefore + 1, 'the coin-bought ware is delivered');
-  t.ok(S.room.stock[cSlot].sold, 'a coin-bought slot is marked sold');
-  // too few coins in any single kind → refused
-  const cSlot2 = S.room.stock.findIndex(x => !x.sold && x.kind === 'item');
-  if (cSlot2 >= 0) {
-    for (const k of COIN_KINDS) S.run.purse[k] = 0;
-    S.run.purse.coin = S.room.stock[cSlot2].coinPrice - 1;
-    t.ok(!DP.buyShop(cSlot2, 'coins'), 'a purse short of the coin price is refused');
-    t.ok(!S.room.stock[cSlot2].sold, 'and the ware stays on the shelf');
-  }
-  // REMOVE an item from YOUR PACK for 10 coins — the shelf is untouched
-  const shelfBefore = S.room.stock.map(x => x.label).join('|');
+  S.run.purse.silver = 40;
+  S.run.gold = 0;
+  t.ok(!DP.buyShop(cSlot), 'a purse fat with coins still cannot buy — the shelf wants gold');
+  t.ok(!S.room.stock[cSlot].sold, 'and the ware stays on the shelf');
+
+  // rates climb with the rarity of the mint
+  t.ok(DP.coinSellPrice('lucky') > DP.coinSellPrice('coin'),
+       'the keeper pays more for a LUCKY coin than a plain gold one');
+  t.ok(DP.coinSellPrice('blue') > DP.coinSellPrice('silver'),
+       'and more for FROST than for silver');
+  t.eq(DP.coinSellPrice('bunny'), 0, 'a SPECIAL has no sale price at all');
+
+  // he buys low: a coin fetches far less than he charges for the same coin
+  const coinWare = S.room.stock.find(x => x.kind === 'coin');
+  t.ok(DP.coinSellPrice(coinWare.cid) < coinWare.price,
+       'the keeper buys a coin back for less than he sells it');
+
+  // sell one, then the pocket
+  for (const k of COIN_KINDS) S.run.purse[k] = 0;
+  S.run.purse.silver = 5;
+  S.run.gold = 0;
+  const unit = DP.coinSellPrice('silver');
+  t.ok(DP.sellCoins('silver', 1), 'one silver crosses the desk');
+  t.eq(S.run.purse.silver, 4, 'the pocket is one lighter');
+  t.eq(S.run.gold, unit, 'and the gold lands at the going rate');
+  t.ok(DP.sellCoins('silver', 99), 'SELL ALL takes only what the pocket holds');
+  t.eq(S.run.purse.silver, 0, 'the pocket empties');
+  t.eq(S.run.gold, unit * 5, 'paid for every coin, no more');
+  t.ok(!DP.sellCoins('silver', 1), 'an empty pocket has nothing to sell');
+
+  // specials are treasures, not tender
+  S.run.purse.bunny = 3;
+  t.ok(!DP.sellCoins('bunny', 1), 'the keeper refuses a SPECIAL coin');
+  t.eq(S.run.purse.bunny, 3, 'and it stays in the purse');
+  t.ok(DP.sellableKinds().indexOf('bunny') < 0, 'specials never reach the sell desk');
+  S.run.purse.red = 2;
+  t.ok(DP.sellableKinds().indexOf('red') >= 0, 'a pocket with coins in it does');
+  t.ok(DP.sellableKinds().indexOf('green') < 0, 'an empty pocket does not');
+
+  // the sale is a purse-ledger line, like every other coin movement
+  const led0 = (S.run.ledger || []).length;
+  DP.sellCoins('red', 1);
+  t.ok((S.run.ledger || []).length > led0, 'the sale writes a ledger line');
+
+  // gold now buys what coins used to
+  S.run.gold = 10000;
+  const gSlot = S.room.stock.findIndex(x => !x.sold && x.kind === 'item');
+  const gWare = S.room.stock[gSlot];
+  const armBefore = S.run.arsenal[gWare.iid] || 0;
+  t.ok(DP.buyShop(gSlot), 'gold buys the ware');
+  t.eq(S.run.arsenal[gWare.iid], armBefore + 1, 'and it is delivered');
+}
+// -------- the keeper no longer takes items; the FORGE melts them --------
+{
   S.run.arsenal.sword = (S.run.arsenal.sword || 0) + 1;
-  const swords = S.run.arsenal.sword;
-  for (const k of COIN_KINDS) S.run.purse[k] = 0;
-  S.run.purse.coin = 4;                                     // short of the removal fee
-  t.ok(!DP.removeArsenal('sword'), 'removing costs coins the purse cannot cover');
-  t.eq(S.run.arsenal.sword, swords, 'the refused sword stays in the pack');
-  S.run.purse.coin = 12;
-  t.ok(DP.removeArsenal('sword'), 'ten coins and the keeper takes the sword');
-  t.eq(DP.purseTotal(), 2, 'the removal skims exactly ' + C.SHOP_REMOVE + ' coins');
-  t.eq(S.run.arsenal.sword || 0, swords - 1, 'one copy left the pack');
-  t.eq(S.room.stock.map(x => x.label).join('|'), shelfBefore, 'the SHELF is untouched — removal thins YOUR pack');
-  t.ok(!DP.removeArsenal('hammer'), 'the keeper cannot take what you do not own');
-  // the racked pile forgets the removed copy too
-  S.run.purse.coin = 12;
-  S.run.arsenal.vial = 1;
-  S.run.pending = [];                                       // nothing queued — the pile holds the copy
-  S.run.pileSave = [{ k: 'item', x: 50, y: 40, lay: 0, iid: 'vial' }];
-  S.run.pileFloor = S.run.floor;
-  t.ok(DP.removeArsenal('vial'), 'the keeper takes the vial');
-  t.ok(!S.run.pileSave.some(p => p.iid === 'vial'), 'and scrubs it off this floor\'s racked pile');
+  t.ok(!DP.removeArsenal('sword'), 'the keeper will not take a piece off your hands any more');
 }
 t.ok(DP.closeModal(), 'LEAVE closes the shop');
 t.ok(S.run.room.ents[0].done, 'the merchant serves one visit, then leaves the room');
@@ -1005,6 +1096,53 @@ t.ok(S.room.done, 'forge is spent after one boon');
 t.ok(!DP.pickBoon(1), 'no double-dipping at the forge');
 t.ok(S.run.room.ents[0].done, 'the blacksmith packs up after one boon');
 DP.closeModal();
+
+// -------- THE CRUCIBLE: the forge is the only door out of a clogged pack --------
+{
+  // the SCRAP offer only exists when there is something to melt
+  S.run.arsenal = {};
+  let sawScrapEmpty = false;
+  for (let i = 0; i < 300; i++) if (DP.boonOptions().some(o => o.kind === 'scrap')) sawScrapEmpty = true;
+  t.ok(!sawScrapEmpty, 'an empty pack is never offered the crucible');
+
+  S.run.arsenal = { sword: 2, vial: 1 };
+  let scrapSeen = 0;
+  for (let i = 0; i < 400; i++) if (DP.boonOptions().some(o => o.kind === 'scrap')) scrapSeen++;
+  t.ok(scrapSeen > 0, 'a packed pack does get offered the crucible');
+  t.ok(scrapSeen < 400, 'but only sometimes — it is not the standing offer');
+
+  // taking the boon opens the crucible instead of spending the forge
+  S.run.room.ents = [{ kind: 'smith', done: false,
+                       opts: [{ kind: 'scrap', label: 'melt' },
+                              { kind: 'potion', label: 'potions' },
+                              { kind: 'whet', label: 'hone' }] }];
+  t.ok(DP.interact(0), 'the blacksmith opens');
+  t.ok(DP.pickBoon(0), 'the crucible boon is taken');
+  t.ok(S.room.scrap, 'the crucible is lit');
+  t.ok(!S.room.done, 'and the forge is NOT spent until something goes in it');
+
+  const swords = S.run.arsenal.sword;
+  t.ok(!DP.removeArsenal('hammer'), 'the forge cannot melt what you do not carry');
+  t.ok(DP.removeArsenal('sword'), 'a sword goes in the crucible');
+  t.eq(S.run.arsenal.sword, swords - 1, 'one copy left the pack');
+  t.ok(S.room.done, 'and THAT spends the forge');
+  t.ok(!S.room.scrap, 'the crucible closes behind it');
+  t.ok(!DP.removeArsenal('vial'), 'a spent forge melts nothing more');
+  t.ok(S.run.room.ents[0].done, 'the blacksmith packs up after the melt');
+  DP.closeModal();
+
+  // the racked pile forgets the melted copy too
+  S.run.room.ents = [{ kind: 'smith', done: false, opts: [{ kind: 'scrap', label: 'melt' }] }];
+  DP.interact(0);
+  DP.pickBoon(0);
+  S.run.arsenal.vial = 1;
+  S.run.pending = [];
+  S.run.pileSave = [{ k: 'item', x: 50, y: 40, lay: 0, iid: 'vial' }];
+  S.run.pileFloor = S.run.floor;
+  t.ok(DP.removeArsenal('vial'), 'the forge takes the vial');
+  t.ok(!S.run.pileSave.some(p => p.iid === 'vial'), 'and scrubs it off this floor\'s racked pile');
+  DP.closeModal();
+}
 
 // -------- potions --------
 S.run.hp = 10; S.run.maxHp = 60; S.run.potions = 1;
@@ -1139,7 +1277,6 @@ S.run.relics = [];
   t.ok(DP.hasRelic(off[2]), 'the claimed relic is owned');
   t.ok(!DP.pickRelicOffer(0), 'only one relic may be claimed');
   t.ok(!DP.hasRelic(off[0]), 'the unclaimed ones stay behind');
-  S.run.purse.coin = (S.run.purse.coin || 0) + C.STAIR_TOLL;   // afford the descent
   DP.leaveBattle();
   S.run.relics = [];
 }
@@ -1543,9 +1680,24 @@ finishFight();
   const okTraits = [null, 'fast', 'thief', 'venom', 'curse', 'enrage', 'leech', 'bleeder', 'burner',
                     'gremlin', 'rustmite', 'magnet', 'bell', 'chrono', 'coward', 'twin', 'gardener',
                     'magarmor', 'coinclone', 'jackthief',
-                    'ritual', 'curl', 'split', 'thorns', 'malleable', 'dormant', 'nob', 'summoner', 'constrict', 'fading'];
+                    'ritual', 'curl', 'split', 'thorns', 'malleable', 'dormant', 'nob', 'summoner', 'constrict', 'fading',
+                    // the deep's own hands (v1.7.9)
+                    'pincer', 'webber', 'swallow', 'sunder', 'shade', 'charger',
+                    // the owner's own bestiary (v1.9.0)
+                    'golem', 'bloom', 'sower', 'hounds', 'tally', 'snatch', 'emberskin', 'mimicry'];
   const okDefs = [null, 'gel', 'armor', 'thick', 'regen', 'ward', 'mirror', 'tar'];
   t.ok(all.every(e => okTraits.includes(e.trait) && okDefs.includes(e.def)), 'all traits/defs are real mechanics');
+  // ...and every one of them SAYS what it does on the foe's panel. Without
+  // this a new trait ships reading "undefined" to the player.
+  {
+    const bossTraits = [].concat(DP.BOSSES, DP.BOSSES2).map(b => b.trait);
+    const missing = all.map(e => e.trait).concat(bossTraits)
+      .filter(tr => tr && !DP.TRAIT_TXT[tr]);
+    t.eq(missing.length, 0, 'every trait in the game explains itself (' + missing.join(',') + ')');
+    const missingDef = all.map(e => e.def).concat([].concat(DP.BOSSES, DP.BOSSES2).map(b => b.def))
+      .filter(d => d && !DP.DEF_TXT[d]);
+    t.eq(missingDef.length, 0, 'and so does every defence (' + missingDef.join(',') + ')');
+  }
   // act boundaries
   t.eq(DP.actIdx(1), 0, 'floor 1 is act 1');
   t.eq(DP.actIdx(5), 0, 'floor 5 still act 1');
@@ -1579,7 +1731,7 @@ finishFight();
   S.run.floor = 16; t.eq(DP.mkEnemy('boss').id, 'auditor', 'act 4: THE AUDITOR holds the mint');
   S.run.bside = 0;
   S.run.floor = 21; t.eq(DP.mkEnemy('boss').id, 'drownedbanker', 'THE UNDERLAKE holds its own lair');
-  S.run.floor = 26; t.eq(DP.mkEnemy('boss').id, 'lich', 'past the lake the rotation resumes, scaled up');
+  S.run.floor = 26; t.eq(DP.mkEnemy('boss').id, 'stonewarden', 'past the lake the rotation runs ON into the new lords');
   // an act-3 spawn at floor 11 out-muscles its act-2 kin at floor 10
   S.run.floor = 10; S.run.depth = 1;
   const late2 = DP.mkEnemy('battle', 'frostorc');
@@ -1653,20 +1805,22 @@ DP.leaveBattle();
 t.eq(S.run.floor, 1, 'still floor 1 — the stairs are an invitation, not a shove');
 t.ok(S.run.room.ents.length === 1 && S.run.room.ents[0].kind === 'stairs',
      'the stairs down appear where the boss fell');
-// the stairwell toll: too broke to descend holds you on the floor
+// THE STAIRS ARE FREE: an all-but-empty purse still walks down
 {
   const stash = { ...S.run.purse };
   for (const k of COIN_KINDS) S.run.purse[k] = 0;
-  S.run.purse.coin = 1;                    // one short of the toll
-  t.ok(!DP.interact(0), 'a purse under the toll cannot descend');
-  t.eq(S.run.floor, 1, 'still floor 1 without the toll');
-  t.eq(DP.purseTotal(), 1, 'the toll is not skimmed on a failed descent');
-  S.run.purse = stash;                     // restore the hoard and pay properly
+  S.run.purse.coin = 1;                    // once, this was one short of the toll
+  t.ok(DP.interact(0), 'a near-empty purse descends anyway — no toll to pay');
+  t.eq(S.run.floor, 2, 'the stairs let it through');
+  t.eq(DP.purseTotal(), 1, 'and take nothing on the way');
+  S.run.floor = 1;                         // rewind for the ledger check below
+  S.run.purse = stash;
+  S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.4 }];
 }
 const purseBefore = DP.purseTotal();
 DP.interact(0);
-DP.stairsAuto(); DP.stairsConfirm();          // the ledger posts; AUTO is the old hand
-t.eq(DP.purseTotal(), purseBefore - C.STAIR_TOLL, 'descending pays the ' + C.STAIR_TOLL + '-coin toll');
+if (S.stairsAsk) { DP.stairsAuto(); DP.stairsConfirm(); }   // only the over-cap melt still posts
+t.ok(DP.purseTotal() <= purseBefore, 'descending never charges for passage');
 t.eq(S.run.floor, 2, 'stepping onto the stairs descends');
 t.ok(S.run.map && S.run.map.cur === '0,0', 'a fresh floor map is carved');
 t.eq(S.run.depth, 1, 'next floor starts at the entrance');
@@ -1675,7 +1829,6 @@ t.eq(mapRooms().filter(r => r.visited).length, 1, 'the new floor is all fog agai
 // the key-carry cap: a bulging ring is trimmed on the way down
 {
   S.run.keys = 9;
-  S.run.purse.coin = (S.run.purse.coin || 0) + C.STAIR_TOLL;   // afford the toll
   DP.nextFloor();
   t.eq(S.run.keys, C.KEY_CARRY, 'only ' + C.KEY_CARRY + ' keys survive the descent');
   S.run.keys = 2;
@@ -2505,26 +2658,23 @@ t.ok(S.coins.length <= DP.MACH.maxCoins, 'coin count respects the machine cap');
   const mapSlot = DS.room.stock.findIndex(x => x.kind === 'map');
   t.ok(mapSlot >= 0, 'the keeper sells a Torn Map');
   DS.run.gold = 10000;
-  t.ok(D2.buyShop(mapSlot, 'gold'), 'gold buys the map');
+  t.ok(D2.buyShop(mapSlot), 'gold buys the map');
   t.eq(DS.run.mapFloor, 1, 'it is stamped with THIS floor');
   DS.run.floor = 2;
   t.ok(DS.run.mapFloor !== DS.run.floor, 'and the next floor is blind again');
   DS.run.floor = 1;
 
-  // paying with coins asks WHICH pocket — and honors the choice
-  const itemSlot = DS.room.stock.findIndex(x => x.kind === 'item' && !x.sold);
-  const price = DS.room.stock[itemSlot].coinPrice;
+  // the sell desk empties ONE named pocket and leaves the rest alone
   for (const k of D2.COIN_KINDS) DS.run.purse[k] = 0;
-  DS.run.purse.coin = price + 1;
-  DS.run.purse.green = price + 2;
-  t.eq(D2.payableKinds(price).length, 2, 'two pockets can cover the price');
-  t.ok(D2.buyShop(itemSlot, 'coins', 'green'), 'the picker pays with the CHOSEN kind');
-  t.eq(DS.run.purse.green, 2, 'the venom pocket paid');
-  t.eq(DS.run.purse.coin, price + 1, 'the gold pocket was left alone');
-  // a kind too shallow to pay is refused
-  const slot2 = DS.room.stock.findIndex(x => !x.sold && x.coinPrice);
-  DS.run.purse.red = 0;
-  t.ok(!D2.buyShop(slot2, 'coins', 'red'), 'an empty pocket cannot pay');
+  DS.run.purse.coin = 4;
+  DS.run.purse.green = 3;
+  DS.run.gold = 0;
+  t.eq(D2.sellableKinds().length, 2, 'two pockets have something to weigh');
+  const greenUnit = D2.coinSellPrice('green');
+  t.ok(D2.sellCoins('green', 3), 'the venom pocket is sold off');
+  t.eq(DS.run.purse.green, 0, 'the venom pocket emptied');
+  t.eq(DS.run.purse.coin, 4, 'the gold pocket was left alone');
+  t.eq(DS.run.gold, greenUnit * 3, 'and the gold landed at the venom rate');
   D2.closeModal();
 }
 
@@ -3249,11 +3399,24 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.srand(31); D.newRun('knight');
   t.eq(DS.run.diff, 'easy', 'the door is stamped on the run');
   const soft = D.mkEnemy('battle', D.curRoster()[0].id);
+  DS.run.floor = 12;                        // deep enough that the bite separates
+  const softElite = D.mkEnemy('elite', D.curRoster()[0].id);
   DS.diffPick = 'hard';
   D.srand(31); D.newRun('knight');
   const cruel = D.mkEnemy('battle', D.curRoster()[0].id);
+  DS.run.floor = 12;
+  const cruelElite = D.mkEnemy('elite', D.curRoster()[0].id);
   t.ok(cruel.maxHp > soft.maxHp, 'NIGHTMARE foes out-muscle MERCIFUL ones');
-  t.ok(Math.abs(soft.maxHp / cruel.maxHp - 0.8 / 1.3) < 0.06, 'by the promised 0.8 vs 1.3');
+  t.ok(Math.abs(soft.maxHp / cruel.maxHp - 0.7 / 1.45) < 0.06, 'by the promised 0.7 vs 1.45');
+  t.ok(cruelElite.atk > softElite.atk, 'and they bite harder too');
+  t.eq(D.diffHexRate(), 0.55, 'NIGHTMARE elites hex relentlessly');
+  DS.diffPick = 'easy'; D.newRun('knight');
+  t.eq(D.diffHpK(), 0.7, 'MERCIFUL foes carry 70% health');
+  t.eq(D.diffAtkK(), 0.85, 'and bite 15% softer');
+  t.eq(D.diffHexRate(), 0.10, 'and its elites rarely hex');
+  DS.diffPick = 'normal'; D.newRun('knight');
+  t.eq(D.diffHpK(), 1, 'NORMAL is the honest machine');
+  t.eq(D.diffAtkK(), 1, 'in both halves of a fight');
   // the ENDLESS ladder
   DS.diffPick = 'normal';
   D.srand(32); D.newRun('knight');
@@ -3717,7 +3880,12 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(ids[0], 'classic', 'CLASSIC leads the rack');
   t.ok(ids.every(id => D.MACH_THEMES[id].name && typeof D.MACH_THEMES[id].floor === 'number'),
        'every theme carries a name and a milestone');
-  t.ok(!D.MACH_THEMES.classic.tint && D.MACH_THEMES.neon.tint, 'classic is raw art, the others wash');
+  // the skins are PAINTED sets now, not a colour wash over one brown cabinet
+  t.ok(ids.every(id => !D.MACH_THEMES[id].tint), 'no skin is a colour wash any more');
+  t.ok(ids.every(id => D.MACH_THEMES[id].dir), 'every skin names the set it is painted in');
+  t.eq(new Set(ids.map(id => D.MACH_THEMES[id].dir)).size, ids.length, 'and no two share a set');
+  t.ok(ids.every(id => /^#[0-9a-f]{6}$/i.test(D.MACH_THEMES[id].swatch || '')),
+       'every skin carries a swatch for the rack');
   // unlocks follow the best descent
   t.eq(D.S.machTheme, 'classic', 'a fresh profile wears CLASSIC');
   t.ok(D.themeUnlocked('classic') && !D.themeUnlocked('bone'), 'only CLASSIC opens at floor 0');
@@ -3738,8 +3906,23 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // the render caches re-key on the theme
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.eq((src.match(/S\.machTheme,/g) || []).length >= 3, true, 'all three machArt layers re-key on the theme');
-  t.ok(src.indexOf('const MACH_TINT = {}') >= 0, 'tinted cabinets are baked once and cached');
+  t.ok(src.indexOf('const MACH_TINT') < 0, 'the tint bakery is gone with the washes');
+  // the art cache must key on the SKIN, or wearing a new one shows the old set
+  t.ok(src.indexOf("art('mach_' + th.dir + '_' + key, 'art/machine/skins/' + th.dir + '/' + file)") >= 0,
+       'each skin caches its pieces under its own key');
+  t.ok(src.indexOf('const im = art(\'mach_\' + key, MACH_ART[key]);\n    return im._ok ? im : null;') >= 0,
+       'and the shared art stands behind a skin that is missing a piece');
+  // THE CACHE TRAP. A skin's pieces stream in AFTER the first frame is drawn.
+  // A cached layer keyed on "machArt('fascia') ? 1 : 0" answers 1 both before
+  // and after the painted one lands, so it never rebuilds — you wear LAVA and
+  // stare at the house cabinet all session. Every machine layer must key on
+  // WHICH art is resolved, not whether any is.
+  t.ok(!/machArt\('[a-z_]+'\) \? 1 : 0/.test(src),
+       'no machine layer keys on merely HAVING art — that never rebuilds when a skin lands');
+  t.ok(src.indexOf('function machStamp()') >= 0, 'they key on the stamp of what is resolved');
+  t.ok(/out \+= k \+ \(im \? \(im\._skin \? ':' \+ im\._skin : ':base'\) : ':none'\)/.test(src),
+       'and the stamp tells a skin piece from the house one');
+  t.eq((src.match(/machStamp\(/g) || []).length, 4, 'all three machine layers carry it, plus the helper');
 }
 
 // -------- HERO SKINS + SEASONS: deep clears, alt palettes, clock windows --------
@@ -3879,7 +4062,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 // -------- THE B-SIDE: a second boss per act --------
 {
   const { DP: D } = loadGame({}, false);
-  t.eq(D.BOSSES2.length, 3, 'three B-side lair-holders');
+  t.eq(D.BOSSES2.length, 4, 'four B-side lair-holders — DUROSKUL takes act 4');
+  t.ok(D.BOSSES2.some(b => b.id === 'duroskul'), 'the bone archivist keeps a lair');
   t.ok(D.BOSSES2.every(b => b.id && b.hp > 0 && b.atk > 0 && b.gold > 0), 'their statlines are whole');
   t.ok(D.BOSSES2.every(b => !D.BOSSES.some(a => a.id === b.id)), 'no id collides with the A-side');
   // parity: newRun bumps best.runs first, so even totals face the B-side
@@ -3932,7 +4116,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const { DP: D } = loadGame({}, false);
   const mint = D.ENEMY_TIERS[3];
-  t.eq(mint.length, 14, 'fourteen counting-house horrors (the creeper moved in)');
+  t.eq(mint.length, 20, 'twenty counting-house horrors');
   t.ok(mint.every(e => e.hp > 0 && e.atk > 0 && e.gold > 0 && e.icon && e.name), 'all fully statted');
   // the three minted traits live here and only here
   for (const tr of ['magarmor', 'coinclone', 'jackthief']) {
@@ -4594,7 +4778,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.srand(11);
   const st44 = D.shopStock();
   const potion44 = st44.find(x => x.kind === 'potion').price;
-  t.eq(potion44, Math.round(45 * (1 + 0.25 * 43) * 1.25) * 2, 'floor-44 potions carry the +25% vein tax (gold prices double post-round)');
+  t.eq(potion44, Math.round(45 * (1 + 0.25 * 43) * 1.25), 'floor-44 potions carry the +25% vein tax');
   // GILDED AGE: elites flood the carve (statistical, 20 carves each)
   const eliteCount = (floor) => {
     let n = 0;
@@ -4779,7 +4963,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   P.srand(14);
   const shelf = P.shopStock();
   const potion = shelf.find(s => s.kind === 'potion');
-  t.eq(potion.price, Math.round(45 * 0.8) * 2, 'MARKET WEEK: wares 20% off (before the gold doubling)');
+  t.eq(potion.price, Math.round(45 * 0.8), 'MARKET WEEK: wares 20% off');
   // IRON WEEK: thinner blood, fatter cogs
   const { DP: I } = loadGame({}, false);
   I.S.weeklyPick = true;
@@ -4872,15 +5056,22 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const frames = n => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
   frames(3);
   W.srand(23); W.newRun('knight');
-  W.S.wheelAnim = { t: 0, seg: 2, label: 'x' };
+  W.S.wheelAnim = { t: 0, seg: 2, label: 'x', coin: 'coin', target: Math.PI * 9, notch: -1, flap: 0, flapV: 0 };
   frames(220);                                      // ≈3.7s: deep into the wobble
   t.ok(W.S.wheelAnim && W.S.wheelAnim.t > 3.2, 'the wheel survives its own wobble');
   // source truth for the pure-draw bits
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf('the NEAR MISS: fully eased') >= 0, 'the near-miss wobble lives in the draw code');
-  t.ok(src.indexOf('Math.exp(-st * 2.1) * Math.sin(st * 6.5)') >= 0, 'a damped rock, not a snap');
-  t.ok(src.indexOf('S.opts.shake === false || k < 1) ? 0') >= 0, 'reduced motion skips the wobble');
+  // the wheel runs on real physics now: an exponential spin-down with a stall
+  // against every peg, and a pawl-rock at the very end
+  t.ok(src.indexOf('const bite = WH_PEG * decay * Math.sin(wheelPhase(rot) * Math.PI);') >= 0,
+       'each peg stalls the wheel as the flapper climbs it');
+  t.ok(src.indexOf('let rot = (a.target + dr) * (1 - decay);') >= 0,
+       'and the wheel spins DOWN like a bearing, not along an ease curve');
+  t.ok(src.indexOf('rot -= dr * pinEase((st - WH_CREEP0) / WH_CREEP);') >= 0,
+       'the last pin gives, and takes the near-miss back');
+  t.ok(src.indexOf("if (over > 0 && S.opts.shake !== false) rot += 0.05") >= 0,
+       'reduced motion skips the settle-rock');
   t.ok(src.indexOf("if (RECORDS === true) RECORDS = { tab: 'book' };   // old openers still work") >= 0,
     'old openers still reach the book');
   t.ok(src.indexOf('THE DECREE WALL') >= 0, 'the endless page hangs the decree wall');
@@ -5250,18 +5441,16 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(src.indexOf("masteryPeak() >= 3 ? '★ '") >= 0, 'the master’s mark rides your board row');
 }
 
-// -------- THE LATE-GAME COIN SINK: scaling toll, the skim, sharper tricks --------
+// -------- THE LATE-GAME COIN SINK: the skim (the toll is abolished) --------
 {
   const { DP: D } = loadGame({}, false);
   D.srand(91); D.newRun('knight');
-  // the toll and the ceiling both deepen with the acts
-  t.eq(D.stairToll(), 2, 'act 0: the old 2-coin toll');
+  t.ok(typeof D.stairToll !== 'function', 'the stair toll is gone from the game entirely');
+  // the ceiling still deepens with the acts — it is a cap, not a fare
   t.eq(D.purseCap(), 20, 'act 0: a 20-coin ceiling');
   D.S.run.floor = 18;                       // act 3, the mint
-  t.eq(D.stairToll(), 5, 'act 3: the stairs demand 5');
   t.eq(D.purseCap(), 32, 'act 3: the ceiling rises to 32');
-  D.S.run.floor = 40;                       // deep endless — both clamp
-  t.eq(D.stairToll(), 8, 'the toll caps at 2+6');
+  D.S.run.floor = 40;                       // deep endless — it clamps
   t.eq(D.purseCap(), 44, 'the ceiling caps at 44');
   // the skim: overflow becomes gold, plainest pockets first
   D.S.run.floor = 18;
@@ -5482,7 +5671,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   // browser wiring
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf("tabBtn(LW / 2 - 2, TR('THIS MONTH'), 'monthly')") >= 0, 'the board grew a THIS MONTH tab');
+  t.ok(src.indexOf("['monthly', TR('MONTH')]") >= 0, 'the board carries a MONTH tab');
   t.ok(src.indexOf('?board=lastmonth') >= 0, 'the title asks for last month’s champion');
   t.ok(src.indexOf('’S DEEPEST: ') >= 0, 'and hangs the plaque');
   t.ok(src.indexOf('MAKE A WISH') >= 0, 'the birthday crate waits for its day');
@@ -5906,18 +6095,22 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   B.dmgFoe(ch, 999);
   t.ok(B.S.run.gold >= bg0 + 40, 'the bounty pays its +40 on the champion');
   t.eq(B.S.run.bountyChamp, 0, 'and the poster is spent');
-  // the clerk's forms: toll-free descends free, the audit doubles the toll
+  // the clerk outlived his tolls: his refund pays COINS, his audit gambles gold
   const { DP: C } = loadGame({}, false);
   C.srand(205); C.newRun('knight');
-  C.S.run.tollDouble = 1;
-  t.eq(C.stairToll(), 4, 'a spiteful audit doubles the toll');
-  C.S.run.tollFree = 1;
+  const clerk = C.EVENTS.find(e => e.id === 'rebate');
+  t.ok(clerk && clerk.choices.length === 2, 'the clerk still keeps his desk');
+  C.S.run.gold = 40;
+  const coins0 = C.purseTotal();
+  clerk.choices[0].fx();
+  t.eq(C.S.run.gold, 30, 'the refund costs its 10 gold');
+  t.eq(C.purseTotal(), coins0 + 6, 'and comes back as six coins');
+  // a bare purse walks down the stairs untouched, every time
   C.S.run.purse = { coin: 1, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
   C.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   C.interact(0);
-  t.eq(C.S.run.floor, 2, 'a misfiled toll still descends');
-  t.eq(C.purseTotal(), 1, 'without touching the purse');
-  t.eq(C.S.run.tollDouble, 0, 'the audit’s spite expires at the stairs');
+  t.eq(C.S.run.floor, 2, 'the stairs take no fare');
+  t.eq(C.purseTotal(), 1, 'and never touch the purse');
   // the wager settles on the way down
   const { DP: W } = loadGame({}, false);
   W.srand(206); W.newRun('knight');
@@ -6158,42 +6351,480 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.purseTotal(), 14, 'the battle refill resets the hand');
   t.eq(D.S.run.purse.lucky, 0, 'windfall luckies melt');
   t.eq(D.S.run.gold, tg0 + 6, 'at the skim’s honest 2:1');
-  // banking prepays the toll (lootKey is the kind for plain pieces)
+  // with the tolls abolished, every piece he banks is STRUCK INTO GOLD
   D.S.battle.loot = [{ k: 'coin' }, { k: 'coin' }, { k: 'silver' }];
-  D.S.run.tollPaid = 0;
+  D.S.run.minted = 0;
+  const mg0 = D.S.run.gold;
   t.ok(D.bankLoot('coin'), 'a piece banks');
   t.ok(D.bankLoot('silver'), 'and another');
-  t.eq(D.S.run.tollPaid, 2, 'every banked piece prepays the toll');
-  D.S.run.tollPaid = D.TOLL_PREPAY_CAP;
-  D.bankLoot('coin');
-  t.eq(D.S.run.tollPaid, D.TOLL_PREPAY_CAP, 'the meter caps at ' + D.TOLL_PREPAY_CAP);
-  D.S.run.tollPaid = 5;
+  t.eq(D.S.run.minted, 2 * D.TOLL_MINT, 'every banked piece is struck into gold');
+  t.eq(D.S.run.gold, mg0 + 2 * D.TOLL_MINT, 'and the gold actually lands');
+  // the stairs take nothing from him either
   D.S.screen = 'dungeon'; D.S.room = null; D.S.victory = null; D.S.enemy = null; D.S.foes = []; D.S.battle = null;
   D.S.run.floor = 1;
   const pt0 = D.purseTotal();
   D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   D.interact(0);
-  t.eq(D.S.run.floor, 2, 'the prepaid stairs descend');
-  t.eq(D.S.run.tollPaid, 3, 'two of the five prepaid pieces spent');
+  t.eq(D.S.run.floor, 2, 'the keeper walks down free');
   t.eq(D.purseTotal(), pt0, 'the purse untouched');
-  // short prepay falls back to the purse
-  D.S.run.tollPaid = 0;
-  D.S.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
-  D.interact(0);
-  D.stairsAuto(); D.stairsConfirm();
-  t.eq(D.S.run.floor, 3, 'an empty meter still descends the honest way');
-  t.ok(D.purseTotal() < 14, 'paid from the hand this time');
-  // the prepaid meter rides the save
-  D.S.run.tollPaid = 7;
+  // the mint tally rides the save
+  D.S.run.minted = 7;
   D.save();
   const { DP: R } = loadGame(store, false);
-  t.eq(R.S.run.tollPaid, 7, 'the meter survives a reload');
+  t.eq(R.S.run.minted, 7, 'the mint tally survives a reload');
   t.eq(R.S.run.hero, 'toll', 'still the keeper');
   // the wiring
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
-  t.ok(src.indexOf('toll prepaid: ') >= 0, 'the battle HUD shows the meter');
-  t.ok(src.indexOf('S.run.tollPaid = Math.min(TOLL_PREPAY_CAP') >= 0, 'banking feeds it, capped');
+  t.ok(src.indexOf('minted: ') >= 0, 'the battle HUD shows the mint');
+  t.ok(src.indexOf('S.run.minted = (S.run.minted || 0) + TOLL_MINT') >= 0, 'banking feeds it');
+}
+
+// ============================================================
+// THE DEEP'S OWN HANDS — six traits, each mauling a system nothing
+// else in the bestiary has ever touched
+// ============================================================
+{
+  const mk = (seed, eid, type) => {
+    const store = {};
+    const { DP: D } = loadGame(store, false);
+    D.srand(seed); D.newRun('knight');
+    D.S.run.room.ents = [{ kind: 'monster', mtype: type || 'battle', eid, done: false, px: 0.5, py: 0.4 }];
+    D.interact(0);
+    return D;
+  };
+
+  // ---- CAVE CRAB: it eats the bed and grows on it ----
+  {
+    const D = mk(401, 'cavecrab');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'pincer', 'the crab carries the pincer');
+    e.hp = Math.max(1, e.maxHp - 20);
+    const hp0 = e.hp, coins0 = D.S.coins.filter(c => c.st === 'plat').length;
+    D.enemyActFoe(e);
+    t.ok(D.S.coins.filter(c => c.st === 'plat').length < coins0, 'it crushes pieces off the bed');
+    t.ok(e.hp > hp0, 'and feeds on the metal');
+    // a bare bed starves it instead of erroring
+    D.S.coins.length = 0;
+    const hp1 = e.hp;
+    D.enemyActFoe(e);
+    t.eq(e.hp, hp1, 'a bare bed feeds it nothing');
+  }
+
+  // ---- WIDOW SPIDER: she webs the bank shut, one slot a turn ----
+  {
+    const D = mk(402, 'widowspider');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'webber', 'the widow spins');
+    const raw = D.bankSlotsRaw();
+    t.eq(D.bankMax(), raw, 'the bank starts whole');
+    D.enemyActFoe(e);
+    t.eq(D.bankMax(), raw - 1, 'a turn of webbing shuts one slot');
+    for (let i = 0; i < 8; i++) D.enemyActFoe(e);
+    t.ok(D.bankMax() >= 1, 'the web never shuts the bank completely');
+    // pieces already banked over the new cap spill back to the tray
+    const D2 = mk(403, 'widowspider');
+    D2.S.battle.banked = [{ k: 'coin' }, { k: 'coin' }, { k: 'coin' }];
+    D2.S.battle.loot = [];
+    D2.enemyActFoe(D2.S.enemy);
+    t.ok(D2.S.battle.banked.length <= D2.bankMax(), 'the overflow is spilled, never vanished');
+    t.ok(D2.S.battle.loot.length > 0, 'and it lands back in the tray');
+  }
+
+  // ---- BOG OGRE: it eats your KEYS, and gives them back when it dies ----
+  {
+    const D = mk(404, 'bogogre');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'swallow', 'the bog ogre swallows');
+    D.S.run.keys = 3;
+    D.enemyActFoe(e);
+    t.eq(D.S.run.keys, 2, 'it swallows a key off the ring');
+    D.enemyActFoe(e);
+    t.eq(D.S.run.keys, 1, 'and another');
+    t.eq(e.gullet, 2, 'both sit in its gullet');
+    const keysPre = D.S.run.keys;
+    D.dmgFoe(e, 9999);
+    // a slain foe drops its own key too, so the gullet's two ride on top
+    t.ok(D.S.run.keys >= keysPre + 2, 'cutting it open coughs the swallowed keys back');
+    t.eq(e.gullet, 0, 'and the gullet empties');
+    // an empty ring is not an error
+    const D2 = mk(405, 'bogogre');
+    D2.S.run.keys = 0;
+    D2.enemyActFoe(D2.S.enemy);
+    t.eq(D2.S.run.keys, 0, 'an empty ring simply gives it nothing');
+  }
+
+  // ---- BLADE FIEND: it shatters your gear into a skull ----
+  {
+    const D = mk(406, 'bladefiend');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'sunder', 'the fiend sunders');
+    D.S.run.arsenal = { sword: 2 };
+    D.S.rain.length = 0;
+    D.enemyActFoe(e);
+    t.eq(D.S.run.arsenal.sword, 1, 'a piece of the rack is shattered');
+    t.ok(D.S.rain.some(r => r.kind === 'skull'), 'and the shards rain as a skull');
+    // it empties the rack and then finds nothing to break
+    D.S.run.arsenal = {};
+    D.enemyActFoe(e);
+    t.ok(!D.S.run.arsenal.sword, 'an empty rack survives its edge');
+  }
+
+  // ---- THE SHADOW: the taint lands on the BED, not the hand ----
+  {
+    const D = mk(407, 'shadowstalker');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'shade', 'the shadow taints');
+    D.S.run.purse = { coin: 8, silver: 0, green: 0, red: 0, blue: 0, lucky: 0 };
+    D.enemyActFoe(e);
+    t.ok(D.S.shade && D.S.shade.k === 'coin' && D.S.shade.n > 0, 'a pocket is shadowed');
+    // the hand keeps its honest SIZE — the punishment is what lands
+    D.S.battle.phase = 'drop';
+    D.dealHand();
+    t.eq(D.S.battle.hand.coin, 8, 'the hand is dealt whole — nothing silently vanishes');
+    const n0 = D.S.shade.n;
+    D.S.battle.sel = 'coin';
+    D.S.cd = 0;
+    t.ok(D.drop(50, true), 'a shadowed coin drops');
+    t.ok(D.S.coins.some(c => c.kind === 'slug'), 'and lands on the bed as a SLUG');
+    t.ok(!D.S.shade || D.S.shade.n === n0 - 1, 'the taint is spent one coin at a time');
+  }
+
+  // ---- IRONTUSK: two paws then a gore, and TILT is the answer ----
+  {
+    const D = mk(408, 'irontusk');
+    const e = D.S.enemy;
+    t.eq(e.trait, 'charger', 'the tusk charges');
+    D.enemyActFoe(e);
+    t.eq(e.wind, 1, 'one paw');
+    t.eq(e.intent.t, 'charge', 'and it telegraphs the wind-up');
+    D.enemyActFoe(e);
+    t.eq(e.intent.t, 'gore', 'two paws and the gore is loaded');
+    t.eq(e.intent.dmg, e.atk * 3, 'a gore is triple a blow');
+    // ...but a TILT breaks it
+    const D2 = mk(409, 'irontusk');
+    const e2 = D2.S.enemy;
+    D2.enemyActFoe(e2);
+    t.eq(e2.wind, 1, 'it is mid-wind');
+    D2.S.battle.phase = 'drop';
+    D2.S.battle.tilts = 3;
+    D2.S.noTiltT = 0;
+    t.ok(D2.tilt('f'), 'the machine shakes');
+    t.eq(e2.wind, 0, 'and the charge is BROKEN');
+    t.ok((e2.stunned | 0) >= 1, 'the tusk reels for a turn');
+  }
+
+  // ---- DUROSKUL: the first thing in the deep to reach the RELIC SHELF ----
+  {
+    const store = {};
+    const { DP: D } = loadGame(store, false);
+    D.srand(410); D.newRun('knight');
+    D.S.run.relics = ['plate'];
+    t.ok(D.hasRelic('plate'), 'the shelf answers normally');
+    D.S.sealed = 'plate'; D.S.sealT = 3;
+    t.ok(!D.hasRelic('plate'), 'a SEALED relic stops answering');
+    t.ok(D.S.run.relics.indexOf('plate') >= 0, 'but it is never taken from you');
+    D.S.sealT = 0; D.S.sealed = '';
+    t.ok(D.hasRelic('plate'), 'and it answers again when the seal lifts');
+    t.ok(D.BOSSES2.some(b => b.id === 'duroskul'), 'DUROSKUL holds a lair');
+  }
+}
+
+// ============================================================
+// THE OWNER'S OWN BESTIARY (v1.9.0)
+// ============================================================
+{
+  const mk = (seed, eid, type) => {
+    const { DP: D } = loadGame({}, false);
+    D.srand(seed); D.newRun('knight');
+    D.S.run.room.ents = [{ kind: 'monster', mtype: type || 'battle', eid, done: false, px: 0.5, py: 0.4 }];
+    D.interact(0);
+    return D;
+  };
+
+  // ---- THE COIN GOLEM: the machine itself feeds it ----
+  {
+    const D = mk(601, 'coingolem');
+    const g = D.S.foes.find(f => f.trait === 'golem');
+    t.ok(g, 'the golem stands');
+    g.hp = Math.max(1, g.maxHp - 20); g.block = 0;
+    const hp0 = g.hp;
+    D.S.battle.hand = { coin: 9, silver: 9, lucky: 9, blue: 9, green: 9, red: 9 };
+    D.S.battle.sel = 'coin'; D.S.cd = 0;
+    t.ok(D.drop(50, true), 'a GOLD coin goes in');
+    t.eq(g.hp, hp0 + 1, 'and it MENDS the golem');
+    D.S.battle.sel = 'silver'; D.S.cd = 0;
+    const blk0 = g.block | 0;
+    D.drop(50, true);
+    t.eq(g.block, blk0 + 1, 'silver ARMOURS it');
+    const atk0 = g.atk;
+    D.S.battle.sel = 'lucky'; D.S.cd = 0; D.drop(50, true);
+    t.eq(g.atk, atk0 + 1, 'a LUCKY coin sharpens it');
+    D.S.battle.sel = 'blue'; D.S.cd = 0; D.drop(50, true);
+    D.S.battle.sel = 'green'; D.S.cd = 0; D.drop(50, true);
+    t.eq(g.atk, atk0 + 3, 'frost and venom sharpen it too');
+    // ...but only for the round
+    D.endRoundTicks();
+    t.eq(g.atk, atk0, 'and the edge dulls when the round turns');
+    // a RED coin is safe — it is none of the three
+    const atk1 = g.atk, hp1 = g.hp, blk1 = g.block | 0;
+    D.S.battle.hand = { red: 9 };
+    D.S.battle.sel = 'red'; D.S.cd = 0; D.drop(50, true);
+    t.ok(g.atk === atk1 && g.hp === hp1 && (g.block | 0) === blk1, 'a HEART coin feeds it nothing');
+  }
+
+  // ---- THE HOUNDMASTER: the pack is the threat ----
+  {
+    const D = mk(602, 'houndmaster');
+    const hm = D.S.foes.find(f => f.trait === 'hounds');
+    const atk0 = hm.atk;
+    D.enemyActFoe(hm);
+    const pack = D.S.foes.filter(f => f.hp > 0 && f.houndOf === hm.id);
+    t.eq(pack.length, 1, 'he looses a hound');
+    t.eq(hm.atk, atk0 + 2, 'and every hound at heel sharpens him');
+    D.enemyActFoe(hm);
+    t.eq(D.S.foes.filter(f => f.hp > 0 && f.houndOf === hm.id).length, 2, 'another hound joins');
+    t.eq(hm.atk, atk0 + 4, 'and he grows again');
+    // cull the pack and he shrinks back
+    for (const h of D.S.foes) if (h.houndOf === hm.id) h.hp = 0;
+    D.enemyActFoe(hm);
+    t.ok(hm.atk < atk0 + 6, 'culling the pack takes his teeth back');
+    // and the hounds scale with the deep
+    const D2 = mk(603, 'houndmaster');
+    D2.S.run.floor = 18;
+    const hm2 = D2.S.foes.find(f => f.trait === 'hounds');
+    D2.enemyActFoe(hm2);
+    const deep = D2.S.foes.find(f => f.houndOf === hm2.id);
+    t.ok(deep.maxHp > 20, 'a deep hound is no puppy (' + deep.maxHp + ' HP)');
+  }
+
+  // ---- GRAVEBLOOM + its sowers ----
+  {
+    const D = mk(604, 'gravebloom');
+    // it never grows alone: two gardeners come with the flower
+    t.eq(D.S.foes.filter(f => f.trait === 'sower').length, 2,
+         'the bloom brings two BONE SOWERS with it');
+    t.ok(D.S.foes.filter(f => f.trait === 'sower').every(f => f.intent),
+         'and both come with a plan of their own');
+    const b = D.S.foes.find(f => f.trait === 'bloom');
+    b.hp = Math.max(1, b.maxHp - 30);
+    const hp0 = b.hp;
+    D.enemyActFoe(b);
+    t.eq(b.hp, hp0, 'a clean bed feeds the bloom nothing');
+    D.S.coins.push({ st: 'plat', kind: 'skull', x: 40, y: 40 },
+                   { st: 'plat', kind: 'skull', x: 60, y: 40 });
+    D.enemyActFoe(b);
+    t.eq(b.hp, hp0 + 6, 'but every skull left on the bed feeds it 3');
+    // its gardeners sow the crop it drinks
+    const D2 = mk(605, 'bonesower');
+    const sw = D2.S.foes.find(f => f.trait === 'sower');
+    D2.S.rain.length = 0;
+    D2.enemyActFoe(sw);
+    t.ok(D2.S.rain.filter(r => r.kind === 'skull').length >= 2, 'the sower seeds skulls every turn');
+  }
+
+  // ---- THE TALLY MAN: every third shake bills you ----
+  {
+    const D = mk(606, 'tallyman');
+    const tm = D.S.foes.find(f => f.trait === 'tally');
+    D.S.battle.phase = 'drop'; D.S.battle.tilts = 9; D.S.noTiltT = 0;
+    const hp0 = D.S.run.hp;
+    D.tilt('f'); D.tilt('f');
+    t.eq(D.S.run.hp, hp0, 'two shakes cost nothing but the count');
+    t.eq(tm.tally, 2, 'though he is counting');
+    D.tilt('f');
+    t.ok(D.S.run.hp < hp0, 'the THIRD comes due');
+    const hp1 = D.S.run.hp;
+    D.tilt('f'); D.tilt('f'); D.tilt('f');
+    t.ok(hp1 - D.S.run.hp > hp0 - hp1, 'and the next tally bills HARDER');
+  }
+
+  // ---- THE PET SNATCHER ----
+  {
+    const D = mk(607, 'petsnatcher');
+    const ps = D.S.foes.find(f => f.trait === 'snatch');
+    D.summonPet('pup');
+    const pet = D.S.pets.find(p => p.hp > 0);
+    t.ok(pet, 'a companion is at your side');
+    D.enemyActFoe(ps);
+    t.ok(ps.stolenPet, 'it snatches the companion');
+    t.eq(D.S.pets.filter(p => p.hp > 0).length, 0, 'and your bench is empty');
+    D.dmgFoe(ps, 9999);
+    t.ok(D.S.pets.some(p => p.hp > 0), 'cutting it down brings them home');
+    // an empty bench is not an error
+    const D2 = mk(608, 'petsnatcher');
+    D2.S.pets = [];
+    D2.enemyActFoe(D2.S.foes.find(f => f.trait === 'snatch'));
+    t.ok(!D2.S.foes.find(f => f.trait === 'snatch').stolenPet, 'with no pets there is nothing to take');
+  }
+
+  // ---- THE ASHWRIGHT: its skin burns whoever strikes it ----
+  {
+    const D = mk(609, 'ashwright');
+    const aw = D.S.foes.find(f => f.trait === 'emberskin');
+    D.S.pBurn = 0;
+    D.dmgFoe(aw, 3);
+    t.ok(D.S.pBurn >= 2, 'landing a blow sets YOU alight');
+    const b1 = D.S.pBurn;
+    D.dmgFoe(aw, 3);
+    t.ok(D.S.pBurn > b1, 'and every further blow stokes it');
+  }
+
+  // ---- THE UNDERSTUDY: it plays back the last lord you felled ----
+  {
+    const D = mk(610, 'understudy');
+    D.S.run.lastBoss = 'demon';                 // the Pit Boss: venom
+    const u = D.S.foes.find(f => f.trait === 'mimicry');
+    D.enemyActFoe(u);
+    t.eq(u.trait, 'venom', 'it wears the Pit Boss\'s trait');
+    t.ok(/Pit Boss/.test(u.name), 'and takes his name (' + u.name + ')');
+    t.ok(/ELITE/.test(u.name), 'always billed as an ELITE');
+    // an empty playbill still gives a real fight
+    const D2 = mk(611, 'understudy');
+    D2.S.run.lastBoss = '';
+    const u2 = D2.S.foes.find(f => f.trait === 'mimicry');
+    D2.enemyActFoe(u2);
+    t.eq(u2.trait, 'fast', 'with no lord to copy it merely improvises');
+    // and felling a lord fills the playbill
+    const D3 = mk(612, 'dragon', 'boss');
+    D3.dmgFoe(D3.S.foes[0], 99999);
+    t.eq(D3.S.run.lastBoss, 'dragon', 'a felled lord is remembered');
+  }
+
+  // ---- BONEGUARD: a bonded pair, felled together or not at all ----
+  {
+    const D = mk(613, 'boneguard');
+    const pair = D.S.foes.filter(f => f.trait === 'twin');
+    t.eq(pair.length, 2, 'the boneguard meets you as a PAIR');
+    t.ok(pair[0].hp === pair[1].hp, 'each with its own health');
+    pair[0].hp = 0;
+    D.endRoundTicks();
+    t.ok(pair[0].hp > 0, 'fell one alone and its partner raises it');
+    pair[0].hp = 0; pair[1].hp = 0;
+    D.endRoundTicks();
+    t.ok(pair[0].hp <= 0 && pair[1].hp <= 0, 'fell BOTH in a round and they stay down');
+  }
+
+  // ---- THE STORMKNIGHT + THE STONEWARDEN ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(614); D.newRun('knight');
+    t.ok(D.BOSSES_A.some(b => b.id === 'stormknight'), 'THE STORMKNIGHT holds a lair');
+    t.ok(D.BOSSES_A.some(b => b.id === 'stonewarden'), 'and so does THE STONEWARDEN');
+    // OVERCHARGE doubles what the meter takes
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    D.S.battle.hand = { coin: 40 }; D.S.battle.sel = 'coin';
+    D.S.meter = 0; D.S.overT = 0; D.S.cd = 0;
+    D.drop(50, true);
+    t.eq(D.S.meter, 1, 'a plain drop feeds the meter one');
+    D.S.overT = 3; D.S.meter = 0; D.S.cd = 0;
+    D.drop(50, true);
+    t.eq(D.S.meter, 2, 'OVERCHARGED it takes two');
+  }
+
+  // ---- THE DEBT COLLECTOR: he robs you, runs, and hides in the fog ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(615); D.newRun('knight');
+    const S3 = D.S;
+    S3.run.floor = 4;
+    t.eq(D.dcCount(), 8, 'he lifts two coins per floor');
+    // plant him across the room from us and fill the purse
+    const r0 = D.curRoom();
+    r0.ents = [{ kind: 'collector', done: false, robbed: false, px: 0.9, py: 0.4 }];
+    for (const k of D.COIN_KINDS) S3.run.purse[k] = 0;
+    S3.run.purse.coin = 6; S3.run.purse.silver = 5;
+    const purse0 = D.purseTotal();
+    // he walks to you — no theft until he ARRIVES
+    D.dcTick(0.05, 0.2, 0.4);
+    t.ok(r0.ents[0].px < 0.9, 'he starts walking at you');
+    t.eq(D.purseTotal(), purse0, 'and takes nothing on the way');
+    for (let i = 0; i < 120 && !r0.ents[0].robbed; i++) D.dcTick(0.05, 0.2, 0.4);
+    t.ok(r0.ents[0].robbed, 'he reaches you and helps himself');
+    t.eq(D.purseTotal(), purse0 - 8, 'eight coins — two per floor of the four');
+    const loot = r0.ents[0].loot;
+    t.eq(Object.values(loot).reduce((a, b) => a + b, 0), 8, 'and every one is in his hands');
+    t.eq(loot.coin, 6, 'he takes the FAT stack first');
+    // ...then he bolts, and turns up in a room you have NOT opened
+    const before = D.curRoom().ents.length;
+    for (let i = 0; i < 200 && D.curRoom().ents.length === before; i++) D.dcTick(0.05, 0.2, 0.4);
+    t.ok(D.curRoom().ents.length < before, 'he runs out of the room');
+    const hole = S3.run.dcRoom;
+    t.ok(hole && S3.run.map.rooms[hole], 'and goes to ground somewhere on the floor');
+    t.ok(!S3.run.map.rooms[hole].visited, 'in a room you have never opened');
+    t.ok(!S3.run.map.rooms[hole].boss, 'and never the lair — there is always a floor left to catch him');
+    t.ok(S3.run.map.rooms[hole].ents.some(e2 => e2.kind === 'collector' && e2.robbed),
+         'he is really there, purse and all');
+    // corner him: the fight hands back every coin, with a tip on top
+    S3.run.map.cur = hole;
+    S3.run.room = S3.run.map.rooms[hole];
+    const ci = S3.run.room.ents.findIndex(e2 => e2.kind === 'collector');
+    D.interact(ci);
+    t.eq(S3.screen, 'battle', 'cornered, he fights');
+    t.eq(S3.foes[0].id, 'debtcollector', 'and it is the collector himself');
+    const purseMid = D.purseTotal();
+    D.dmgFoe(S3.foes[0], 99999);
+    t.eq(D.purseTotal(), purseMid + 8 + 2, 'felled: all eight coins back, plus two for your trouble');
+    t.ok(!S3.run.dcRoom, 'and the map forgets him');
+  }
+
+  // ---- ...and when there is nowhere left to run ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(616); D.newRun('knight');
+    for (const k of Object.keys(D.S.run.map.rooms)) D.S.run.map.rooms[k].visited = true;
+    const r0 = D.curRoom();
+    r0.ents = [{ kind: 'collector', done: false, robbed: true, loot: { coin: 2 }, px: 0.5, py: 0.4 }];
+    const key = D.dcHide(0);
+    t.eq(key, D.S.run.map.cur, 'a walked-out floor leaves him cornered where he stands');
+    t.eq(D.curRoom().ents.length, 1, 'he does not vanish');
+  }
+
+  // ---- THE MIMIC CHEST: the lid has teeth ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(617); D.newRun('knight');
+    const S3 = D.S;
+    S3.run.room.ents = [{ kind: 'chest', done: false, mimic: true, px: 0.5, py: 0.4 }];
+    D.interact(0);
+    t.ok(!S3.room, 'the lid never opens on a prize');
+    t.eq(S3.screen, 'battle', 'it bites instead');
+    t.eq(S3.foes[0].id, 'mimicchest', 'the chest WAS the monster');
+    // the ambush: the first blow doubles, and only the first
+    const m = S3.foes[0];
+    m.intent = { t: 'atk' };
+    S3.run.block = 0; S3.run.hp = S3.run.maxHp = 400; S3.pets = [];
+    const hp0 = S3.run.hp;
+    D.enemyActFoe(m);
+    const first = hp0 - S3.run.hp;
+    t.eq(first, m.atk * 2, 'the lid SNAPS — double on the ambush');
+    m.intent = { t: 'atk' };
+    const hp1 = S3.run.hp;
+    D.enemyActFoe(m);
+    t.eq(hp1 - S3.run.hp, m.atk, 'after that it is only a box with teeth');
+    // and it coughs up a key when it dies
+    const keys0 = S3.run.keys;
+    D.dmgFoe(m, 99999);
+    t.ok(S3.run.keys > keys0, 'the false lid splits on a key');
+  }
+
+  // ---- neither one is ever rolled into a room's line-up ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(618); D.newRun('knight');
+    for (const tier of D.ENEMY_TIERS) {
+      t.ok(!tier.some(e2 => e2.id === 'debtcollector' || e2.id === 'mimicchest'),
+           'the odd foes stay out of the roster');
+    }
+    t.ok(D.enemyById('debtcollector') && D.enemyById('mimicchest'),
+         'but the deep can still name them');
+    // every trait and guard they wear explains itself on the panel
+    for (const f of D.ODD_FOES) {
+      t.ok(!f.trait || D.TRAIT_TXT[f.trait], f.name + ' explains its trait');
+      t.ok(!f.def || D.DEF_TXT[f.def], f.name + ' explains its guard');
+    }
+  }
 }
 
 // -------- TOAST TRIAGE: announcements take turns now --------
@@ -6250,12 +6881,12 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(D.TR('TAKE THE LAW'), 'AANVAARD DE WET', 'the weekly decree button translates');
   t.eq(D.TR('THE BOOK'), 'HET BOEK', 'the records tabs translate');
   t.eq(D.TR('TALES'), 'VERHALEN', 'the codex tales shelf translates');
-  t.eq(D.TR('THIS MONTH'), 'DEZE MAAND', 'the monthly board tab translates');
+  t.eq(D.TR('MONTH'), 'MAAND', 'the monthly board tab translates');
   t.eq(D.TR('\u{1F4C5} DAILY'), '\u{1F4C5} DAGRUN', 'the daily chip translates');
   t.eq(D.TR('\u{1F381} STAKE'), '\u{1F381} INZET', 'the gift stake translates');
   t.eq(D.TR('Abandon the current run?'), 'De huidige run opgeven?', 'static confirm messages translate');
   t.eq(D.TR('ON'), 'AAN', 'the settings toggles translate');
-  t.eq(D.TR('\u{1F9FF} toll prepaid: '), '\u{1F9FF} tol vooruitbetaald: ', 'the tollkeeper gauge translates');
+  t.eq(D.TR('\u{1F9FF} minted: '), '\u{1F9FF} geslagen: ', 'the tollkeeper gauge translates');
   t.eq(D.TR('\u{1F4C5} THE DAILY — Knight'), '\u{1F4C5} THE DAILY — Knight', 'dynamic confirm titles fall through untouched');
   // the call sites are truly wrapped (source proof, escaped emoji forms)
   const here = dirname(fileURLToPath(import.meta.url));
@@ -6268,14 +6899,14 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     "txt(TR(c.msg)",
     "full ? '✦' + TR(label) : TR(label)",
     "82, 30, TR(label)",
-    "TR('THIS MONTH'), 'monthly'",
+    "['monthly', TR('MONTH')]",
     "TR(spent ? '\\u{1F4C5} done!' : '\\u{1F4C5} DAILY')",
     "TR(S.weeklyPick ? '\\u{2696}\\u{FE0F} DECREE ON' : '\\u{2696}\\u{FE0F} THIS WEEK')",
     "TR('\\u{1F331} TODAY\\u2019S MAZE')",
     "TR('\\u{1F3C5} CARVE IT')",
     "TR('\\u{1F381} STAKE')",
     "TR(val ? 'ON' : 'OFF')",
-    "TR('\\u{1F9FF} toll prepaid: ')",
+    "TR('\\u{1F9FF} minted: ')",
   ]) t.ok(src.indexOf(site) >= 0, 'chrome site wrapped: ' + site.slice(0, 44));
   // the s29 lesson, enforced: the LANGS table itself never calls TR()
   const table = src.slice(src.indexOf('const LANGS = {'), src.indexOf("let LANG = 'en';"));
@@ -6452,9 +7083,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
       if (!fight('battle') || !fight('battle', S2.run.floor % 2 === 0) || !fight('boss')) break;
       shopStop();
       D.stairSkim();
-      if (!(D.tollRun() && (S2.run.tollPaid || 0) >= D.stairToll())) D.spendPurse(D.stairToll());
-      else S2.run.tollPaid -= D.stairToll();
-      D.nextFloor();
+      D.nextFloor();                        // the stairs charge nothing now
       if (S2.run.floor === f) break;       // never loop in place
     }
     const reached = S2.run ? S2.run.floor : ((S2.over && S2.over.floor) || 1);
@@ -6631,10 +7260,26 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const back = D.parseDuel(D.duelLink(seed, D.S.over.floor, 'Me'));
   t.ok(back && back.seed === (seed >>> 0) && back.floor === 9, 'the rematch link carries the SAME maze at the new bar');
   // the board grew its archive tab
-  t.ok(src.indexOf("tabBtn(LW / 2 + 94, TR('LAST MONTH'), 'lastmonth');") >= 0, 'the LAST MONTH tab stands');
-  t.ok(src.indexOf("mine.tab === 'lastmonth' ? '?board=lastmonth'") >= 0, 'and asks the API for the archive');
+  t.ok(src.indexOf("['lastmonth', TR('LAST MO.')]") >= 0, 'the LAST MONTH tab stands');
+  // the five rolling desks and the anti-cheat rail's client half
+  for (const tab of ["['daily', TR('TODAY')]", "['weekly', TR('WEEK')]",
+                     "['yearly', TR('YEAR')]", "['alltime', TR('ALL-TIME')]"]) {
+    t.ok(src.indexOf(tab) >= 0, 'the board carries the tab ' + tab);
+  }
+  t.ok(src.indexOf("weekly: '?board=weekly'") >= 0 && src.indexOf("yearly: '?board=yearly'") >= 0,
+       'and asks the API for the week and the year');
+  t.ok(src.indexOf("op: 'start'") >= 0, 'a fresh run asks the board for a RUN TOKEN');
+  // YOUR NAME IS YOURS: a private carve key proves it, and rides the save
+  t.ok(src.indexOf('function carveKey()') >= 0, 'the client holds a private carve key');
+  t.ok(src.indexOf('ckey: carveKey()') >= 0, 'and presents it with every carve');
+  t.ok(src.indexOf('carveKey: S.carveKey') >= 0, 'the key is persisted');
+  t.ok(src.indexOf("if (typeof d.carveKey === 'string')") >= 0, 'and restored — so a cloud save carries your name');
+  t.ok(src.indexOf("op: 'carve'") >= 0 && src.indexOf("tok: run.tok") >= 0,
+       'and the carve presents it back');
+  t.ok(src.indexOf('tok: S.run.tok') >= 0, 'the token rides the run into the over screen');
+  t.ok(src.indexOf("lastmonth: '?board=lastmonth'") >= 0, 'and asks the API for the archive');
   D.setLang('nl');
-  t.eq(D.TR('LAST MONTH'), 'VORIGE MAAND', 'the archive tab speaks Dutch');
+  t.eq(D.TR('LAST MO.'), 'VORIGE MND', 'the archive tab speaks Dutch');
   t.eq(D.TR('\u{2694}\u{FE0F} REMATCH'), '\u{2694}\u{FE0F} REVANCHE', 'so does the rematch');
   D.setLang('en');
   // live: all four tabs stand on the sheet and the ring reaches them
@@ -6649,8 +7294,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   frames(6);
   t.ok(press('SKIP') || true, 'past the tale');
   t.ok(press('\u{1F3C5}', true), 'the board chip rings');
-  for (const tab of ['ALL-TIME', 'THIS MONTH', 'LAST MONTH']) {
-    t.ok(press(tab), 'board tab reachable: ' + tab);
+  for (const tab of ['TODAY', 'WEEK', 'MONTH', 'YEAR', 'ALL-TIME', 'LAST MO.']) {
+    t.ok(press(tab, true), 'board tab reachable: ' + tab);
   }
   K.kb.back(); frames(2);
 }
@@ -6781,7 +7426,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   K.kb.back(); frames(2);
   // the archive tab rings its bell
   press('\u{1F3C5}', true);
-  press('LAST MONTH');
+  press('LAST MO.', true);
   t.ok(K.S.ach.u.oldmoney, 'OLD MONEY rings on the archive tab');
   K.kb.back(); frames(2);
   // a rematch rings its bell (navigator is stubbed bare — the toast path)
@@ -6799,7 +7444,51 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.7.5', 'the ledger patch ships as v1.7.5');
+  t.eq(D.VERSION, '1.19.0', 'the cabinet ships as v1.19.0');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
+       'and the notes carry it');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
+       'and the notes carry them');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SKINS ARE PAINTED') >= 0)),
+       'and the notes carry them');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('MAP REMEMBERS') >= 0)),
+       'and the notes carry it');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('WERE BREEDING') >= 0)),
+       'and the notes carry the fix');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('NEAR MISS') >= 0)),
+       'and the notes carry it');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('HONEST WHEEL') >= 0)),
+       'and the notes carry the wheel');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('OWN CHARACTER AGAIN') >= 0)),
+       'and the notes carry it');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('SIGIL SHEET') >= 0)),
+       'and the notes carry the sheet');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('CUT STONE') >= 0)),
+       'and the notes carry the masonry');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REAL FIRES') >= 0)),
+       'and the notes carry the fire pass');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('THE DEEP GOES DARK') >= 0)),
+       'and the notes carry the lighting');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('DEBT COLLECTOR') >= 0)),
+       'and the notes carry the collector');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('COIN GOLEM') >= 0)),
+       'and the golem');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('MIMIC CHEST') >= 0)),
+       'and the false chest');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP SMEARING') >= 0)),
+       'and the notes carry the letterbox fix');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('YOUR NAME IS YOURS') >= 0)),
+       'and the notes carry the name lock');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('FIT THEIR FRAME') >= 0)),
+       'and the notes carry the reflow');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('OWN HANDS') >= 0)),
+       'and the notes carry the new kin');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STAIRS ARE FREE') >= 0)),
+       'and the notes retire the toll');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('FIVE LEDGERS') >= 0)),
+       'and the notes carry the board');
+  t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('RUN TOKEN') >= 0)),
+       'and the anti-cheat rail');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('REPLAY GHOST') >= 0)), 'and the notes carry the ghost');
   // roundtrip: the clock rides in base36, floors 2 up
   const link = D.duelLink(123456, 9, 'Rox', { 2: 30, 3: 75, 4: 130 });
@@ -6846,7 +7535,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.ENEMY_TIERS[4].length, 14, 'fourteen drowned kin in the lake (fortune floats through)');
+  t.eq(D.ENEMY_TIERS[4].length, 20, 'twenty drowned kin in the lake');
   t.ok(D.ENEMY_TIERS[4].every(e => e.hp > 0 && e.atk > 0 && e.gold > 0), 'all fully statted');
   const ids = new Set();
   for (const tier of D.ENEMY_TIERS) for (const e of tier) { t.ok(!ids.has(e.id) || t.fail, ''); ids.add(e.id); }
@@ -6867,20 +7556,30 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.S.run.bside = 1;
   t.eq(D.bossFor(23).id, 'siltqueen', 'THE SILT QUEEN holds the B-side');
   D.S.run.bside = 0;
-  t.eq(D.bossFor(26).id, 'lich', 'past the lake the old rotation resumes');
+  // the A-side rotation now runs SIX deep: the four founders hold floors 1-20
+  // exactly as before, and the two newcomers take the endless lairs beyond
+  t.eq(D.bossFor(1).id, 'dragon', 'act 1 still opens on the Vault Dragon');
+  t.eq(D.bossFor(6).id, 'lich', 'act 2 still keeps the Coin Lich');
+  t.eq(D.bossFor(11).id, 'demon', 'act 3 still keeps the Pit Boss');
   t.eq(D.bossFor(18).id, 'auditor', 'and the mint keeps THE AUDITOR');
+  // ...and past the lake the rotation runs ON into them rather than looping
+  // straight back onto the founders
+  t.eq(D.bossFor(26).id, 'stonewarden', 'floors 26-30 belong to THE STONEWARDEN');
+  t.eq(D.bossFor(31).id, 'dragon', 'and only THEN does the wheel come round again');
   // prestige never skips a soul into the lake early — every old tuning stands
   D.S.run.ng = 2;
   D.S.run.floor = 11;
   t.ok(D.curRoster() === D.ENEMY_TIERS[3], 'NG++ floor 11 still fields the MINT, not the lake');
-  t.eq(D.bossFor(11).id, 'dragon', 'and its boss rotation is untouched');
+  // THE STORMKNIGHT is the prestige lord: act 4 is only ever reached by a
+  // NEW GAME+ run, since a plain run's floors 21-25 are the lake instead
+  t.eq(D.bossFor(11).id, 'stormknight', 'a legend meets a NEW lord, not a repeat founder');
   D.S.run.floor = 21;
   t.ok(D.curRoster() === D.ENEMY_TIERS[4], 'but floor 21 takes even a legend into the water');
   D.S.run.ng = 0;
   // the codex grew its fifth shelf
   t.ok(D.CODEX_TABS.indexOf('a5') >= 0, 'the codex owns an a5 shelf');
   const a5 = D.codexTabStat('a5');
-  t.eq(a5.all, 14 + 2, 'the lake shelf counts its kin and both lords');
+  t.eq(a5.all, 20 + 2, 'the lake shelf counts its kin and both lords');
   D.endRun('done');
 }
 
@@ -7362,8 +8061,8 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   D.interact(0);
   const ask = S2.stairsAsk;
   t.ok(ask, 'the ledger posts instead of auto-billing');
-  t.eq(ask.toll, 5, 'floor 18 demands its five');
-  t.eq(ask.over, 5, 'toll first, then the cap: 42 − 5 − 32 = 5 to melt');
+  t.ok(ask.toll === undefined, 'no toll line on the ledger any more');
+  t.eq(ask.over, 10, 'the cap alone decides it now: 42 − 32 = 10 to melt');
   t.ok(!D.stairsConfirm(), 'nothing picked, nothing descends');
   t.eq(S2.run.floor, 18, 'still on 18');
   // pick BY HAND: keep the luckies, spend the silvers first
@@ -7377,10 +8076,12 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.eq(S2.run.purse.silver, 2, 'MY silvers paid first — my choice');
   t.eq(S2.run.purse.lucky, 2, 'MY luckies stayed — my choice');
   t.eq(S2.run.purse.ember, 1, 'the special never even appears on the ledger');
-  t.eq(S2.run.gold, g1 + 10, 'the five melted coins pay 2 gold apiece');
-  // STAY backs out with nothing spent
+  t.eq(S2.run.gold, g1 + 20, 'the ten melted coins pay 2 gold apiece');
+  // STAY backs out with nothing spent (fatten the purse so the cap posts again)
+  S2.run.purse.coin += 20;
   S2.run.room.ents = [{ kind: 'stairs', done: false, px: 0.5, py: 0.5 }];
   D.interact(0);
+  t.ok(S2.stairsAsk, 'an over-cap purse still posts the melt ledger');
   const total1 = D.purseTotal();
   D.stairsCancel();
   t.ok(!S2.stairsAsk && S2.run.floor === 19 && D.purseTotal() === total1, 'STAY spends nothing, descends nowhere');
@@ -7389,6 +8090,18 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const here = dirname(fileURLToPath(import.meta.url));
   const src = readFileSync(join(here, '..', 'dungeon_pusher', 'index.html'), 'utf8');
   t.ok(src.indexOf('function drawStairsAsk') >= 0 && src.indexOf('drawStairsAsk(t);') >= 0, 'the ledger sheet draws');
+  // the room sheets lay out INSIDE the frame art's carved opening
+  t.ok(src.indexOf('const FRAME_IN =') >= 0 && src.indexOf('function frameAround(') >= 0,
+       'the modal measures its frame\'s inner panel');
+  t.ok(src.indexOf('function boonArt(') >= 0, 'and the forge boons carry painted art');
+  // the letterbox bars are wiped and the stage is clipped, so strays cannot pile up
+  t.ok(src.indexOf('ctx.fillRect(0, 0, canvas.width, canvas.height)') >= 0, 'the whole canvas is wiped each frame');
+  t.ok(src.indexOf('ctx.rect(0, 0, LW, LH); ctx.clip()') >= 0, 'and drawing is clipped to the stage');
+  t.ok(src.indexOf('release the stage clip') >= 0, 'and the clip is released again');
+  // the newest art drop
+  t.ok(src.indexOf("'owl', 'tortoise', 'beetle'") >= 0, 'the three pets carry real faces');
+  t.ok(src.indexOf('function boonPlate(') >= 0, 'every boon KIND has a painted plate');
+  t.ok(src.indexOf("'art/icons/icon_ev_'") >= 0, 'and every stranger has a portrait');
   t.ok(src.indexOf('if (S.stairsAsk) { stairsCancel(); return; }') >= 0, 'ESC stays on the floor');
   t.ok(src.indexOf('S.relicPick = null; S.stairsAsk = null;') >= 0, 'the crash net clears it');
   D.setLang('nl');
@@ -7578,6 +8291,1134 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   t.ok(E.S.run.ledger.some(en => /probe/.test(en.why)), 'old lines intact');
   E.endRun('done');
   D.endRun && 0;
+}
+
+// -------- THE LIGHT PASS: the dungeon's gloom leaves no clip behind --------
+// A room frame now stacks a floor clip, a fires clip, a darkness mask and a
+// handful of composite modes on top of each other. Drop ONE restore and the
+// clip leaks into everything painted after it — the HUD, the toasts, the
+// modals — which is exactly what happened while this was being written.
+{
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  D.srand(4242); D.newRun('knight');
+  D.S.screen = 'dungeon';
+  frames(3);
+  t.eq(globalThis.__ctxDepth, 0, 'a lit dungeon frame balances every save with a restore');
+  // ...and on a dark floor, where the torch-circle runs its own darkness
+  D.S.run.floor = 3;
+  t.ok(D.darkFloor(), 'floor 3 is a dark floor');
+  D.S.roomStamp++;
+  frames(3);
+  t.eq(globalThis.__ctxDepth, 0, 'and so does a dark one');
+  // every room shape, since the mask is baked per room geometry
+  for (const size of ['s', 'w', 't', 'b']) {
+    D.S.run.floor = 4;
+    D.curRoom().size = size;
+    D.S.roomStamp++;
+    frames(2);
+    t.eq(globalThis.__ctxDepth, 0, 'a ' + size + '-shaped room balances too');
+  }
+  // a room full of dwellers: every ent lays a contact shadow of its own
+  D.curRoom().ents = [
+    { kind: 'monster', mtype: 'boss', done: false, px: 0.3, py: 0.3 },
+    { kind: 'chest', done: false, px: 0.7, py: 0.3 },
+    { kind: 'collector', done: false, robbed: true, px: 0.5, py: 0.7 },
+  ];
+  frames(3);
+  t.eq(globalThis.__ctxDepth, 0, 'a crowded room balances too');
+
+  // ---- and the dark stays UNDER the people standing in it ----
+  // The first cut of the light pass laid the darkness over the sprites too. It
+  // read beautifully in a still and was useless to play: measured on a phone,
+  // the shopkeeper came out at luma 55.8 standing on a floor of 50.3 — the
+  // same brightness as the stone. The mask now goes down inside drawRoomBox,
+  // under everyone; the only thing allowed over the dwellers is light and one
+  // whisper of tint. This guard keeps it that way.
+  const here2 = dirname(fileURLToPath(import.meta.url));
+  const src2 = readFileSync(join(here2, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const box = src2.slice(src2.indexOf('function drawRoomBox'), src2.indexOf('function drawRoomModal'));
+  t.ok(box.indexOf('drawRoomDark();') >= 0, 'the darkness is laid inside drawRoomBox, under the dwellers');
+  const airAt = src2.indexOf('function drawRoomAir');
+  t.ok(airAt > 0, 'and the light rides its own pass over them');
+  const air = src2.slice(airAt, src2.indexOf('function drawEyes'));
+  const washes = [...air.matchAll(/fillStyle = 'rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\)'/g)]
+                   .map(m => +m[1]);
+  t.ok(washes.length > 0, 'the air pass paints something');
+  t.ok(washes.every(a => a <= 0.15),
+       'nothing painted OVER the dwellers is more than a whisper (max ' + Math.max(...washes) + ')');
+  t.ok(air.indexOf("'lighter'") >= 0, 'the fires over the dwellers only ever ADD light');
+}
+
+// ================= THE SIGIL SHEET: progression between runs =================
+{
+  // ---- the sheet itself has to be a well-formed tree ----
+  {
+    const { DP: D } = loadGame({}, false);
+    const seen = new Set();
+    const keys = Object.keys(D.blankSB());
+    for (const n of D.SIGILS) {
+      t.ok(!seen.has(n.id), 'every mark has its own id (' + n.id + ')');
+      seen.add(n.id);
+      t.ok(n.max >= 1 && n.cost >= 1, n.id + ' costs something and can be struck');
+      t.ok(n.name && n.desc && n.icon, n.id + ' says what it is');
+      // a mark whose effect key is not in the bonus sheet does NOTHING, silently
+      for (const k of Object.keys(n.eff)) {
+        t.ok(keys.indexOf(k) >= 0, n.id + ' pays into a real stat (' + k + ')');
+      }
+      if (n.req) {
+        t.ok(D.SIG_NODES[n.req], n.id + ' hangs off a mark that exists');
+        t.ok(D.SIG_NODES[n.req].row < n.row, n.id + ' hangs BELOW its prerequisite');
+      }
+    }
+    t.ok(D.SIGILS.filter(n => !n.req).length === 1, 'exactly one root');
+    t.ok(D.SIGILS.filter(n => n.perFloor).length >= 3, 'the sheet carries PER FLOOR marks');
+    // every branch column is represented, and every branch has a header
+    for (const b of D.SIG_BRANCHES) {
+      t.ok(D.SIGILS.some(n => n.col === b.col), 'branch ' + b.name + ' has marks');
+    }
+  }
+
+  // ---- striking marks: the gate, the cost, the cap ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.S.sg = { pts: 3, ranks: {} };
+    D.applySigils();
+    t.ok(!D.sigOpen('p1'), 'a branch is shut until the root is struck');
+    t.ok(!D.sigBuy('p1'), 'and cannot be bought through the fog');
+    t.ok(D.sigBuy('root'), 'the root takes one sigil');
+    t.eq(D.S.sg.pts, 2, 'and the sigil is spent');
+    t.eq(D.sigLvl('root'), 1, 'the mark is struck once');
+    t.ok(D.sigOpen('p1'), 'which opens every branch below it');
+    t.ok(D.sigBuy('root'), 'the root takes a second rank');
+    t.ok(!D.sigBuy('root'), 'but never a third — it caps at two');
+    t.eq(D.sigLvl('root'), 2, 'the cap holds');
+    t.eq(D.sigBonus().dmg, 0.04, 'two ranks stack their effect');
+    // ...and you cannot strike what you cannot pay for
+    D.S.sg.pts = 0;
+    t.ok(!D.sigBuy('p1'), 'an empty purse strikes nothing');
+  }
+
+  // ---- the kit a marked profile walks in with ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(900); D.newRun('knight');
+    const base = { hp: D.S.run.maxHp, coin: D.S.run.purse.coin, keys: D.S.run.keys,
+                   pot: D.S.run.potions, cap: D.purseCap(), tilts: D.tiltCount(),
+                   grabs: D.grabCount(), bank: D.bankSlotsRaw(), block: D.startBlock(),
+                   pets: D.petCap() };
+    D.S.sg = { pts: 0, ranks: { root: 1, p1: 3, p3: 2, b1: 5, b2: 2, m1: 2, m2: 1, m3: 1,
+                               k1: 2, k2: 1, k3: 1, d1: 1 } };
+    D.applySigils();
+    D.srand(900); D.newRun('knight');
+    t.eq(D.S.run.maxHp, base.hp + 20 + 2, 'TOUGH HIDE and DELVER thicken the hero');
+    t.eq(D.S.run.hp, D.S.run.maxHp, 'and he walks in whole');
+    t.eq(D.S.run.purse.coin, base.coin + 3 + 0, 'SEED COINS ride in the purse');
+    t.eq(D.S.run.keys, base.keys + 2, 'KEYRING hangs two more keys');
+    t.eq(D.S.run.potions, base.pot + 1, 'the DEEP FLASK is packed');
+    t.eq(D.purseCap(), base.cap + 4, 'DEEP POCKETS widens the purse');
+    t.eq(D.tiltCount(), base.tilts + 2, 'IRON WRISTS buys two shakes');
+    t.eq(D.grabCount(), base.grabs + 1, 'the LONG ARM grabs once more');
+    t.eq(D.bankSlotsRaw(), base.bank + 1, 'the DEEP TRAY banks one more');
+    t.eq(D.startBlock(), base.block + 2, 'the PADDED COAT opens every round');
+    t.eq(D.petCap(), base.pets + 1, 'the KENNEL takes one more companion');
+  }
+
+  // ---- the marks that bite in a fight ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(901); D.newRun('knight');
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'ogre', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    const foe = D.S.foes[0];
+    foe.def = null;
+    // damage: flat first
+    D.S.sg = { pts: 0, ranks: {} }; D.applySigils();
+    foe.hp = foe.maxHp = 900;
+    D.dmgFoe(foe, 100);
+    const plain = 900 - foe.hp;
+    D.S.sg = { pts: 0, ranks: { root: 2, e4: 5 } }; D.applySigils();   // +4% +20%
+    foe.hp = 900;
+    D.dmgFoe(foe, 100);
+    t.eq(900 - foe.hp, Math.round(plain * 1.24), 'HEAVY HANDS sharpens every blow');
+    // ...then the one that pays by DEPTH
+    D.S.sg = { pts: 0, ranks: { root: 1, e1: 1, e2: 1, e3: 1, e4: 1, e5: 2 } }; D.applySigils();
+    D.S.run.floor = 1; foe.hp = 900;
+    D.dmgFoe(foe, 100);
+    const shallow = 900 - foe.hp;
+    D.S.run.floor = 20; foe.hp = 900;
+    D.dmgFoe(foe, 100);
+    const deep = 900 - foe.hp;
+    t.ok(deep > shallow * 1.4, 'DEPTH CHARGE is worth far more twenty floors down');
+    t.eq(D.sigFloor(), 20, 'and it reads the floor it is standing on');
+    // IRONBOUND takes the edge off what lands on you
+    D.S.sg = { pts: 0, ranks: {} }; D.applySigils();
+    D.S.run.hp = D.S.run.maxHp = 400; D.S.run.block = 0; D.S.pets = [];
+    D.hurtPlayer(10, 'probe');
+    const bare = 400 - D.S.run.hp;
+    D.S.sg = { pts: 0, ranks: { root: 1, b1: 1, b2: 1, b3: 1, b4: 3 } }; D.applySigils();
+    D.S.run.hp = 400; D.S.run.block = 0;
+    D.hurtPlayer(10, 'probe');
+    t.eq(400 - D.S.run.hp, bare - 3, 'IRONBOUND shaves 3 off every blow');
+    // ...but never all of it
+    D.S.run.hp = 400;
+    D.hurtPlayer(1, 'probe');
+    t.ok(D.S.run.hp < 400, 'a blow always lands for at least one');
+  }
+
+  // ---- PROSPECTOR pays per corpse ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(902); D.newRun('knight');
+    D.S.sg = { pts: 0, ranks: { root: 1, p1: 1, p2: 3 } };
+    D.applySigils();
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    const g0 = D.S.run.gold;
+    D.dmgFoe(D.S.foes[0], 99999);
+    t.ok(D.S.run.gold >= g0 + 3, 'three ranks of PROSPECTOR pay three gold on the kill');
+  }
+
+  // ---- the two marks that settle at the staircase ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(903); D.newRun('knight');
+    D.S.sg = { pts: 0, ranks: { root: 1, b1: 1, b2: 1, b3: 1, b4: 1, b5: 3,
+                                p1: 1, p2: 1, p3: 1, p4: 1, p5: 1 } };
+    D.applySigils();
+    D.S.run.floor = 7;
+    const hp0 = D.S.run.maxHp, gold0 = D.S.run.gold;
+    D.nextFloor();
+    t.eq(D.S.run.floor, 8, 'the stairs are taken');
+    t.eq(D.S.run.maxHp, hp0 + 6, 'DEEP ROOTS thickens you by 2 per rank at the staircase');
+    t.eq(D.S.run.gold, gold0 + 7, 'the VEIN TITHE pays a gold for each floor cleared');
+    // ...and it pays MORE the next time
+    const gold1 = D.S.run.gold;
+    D.nextFloor();
+    t.eq(D.S.run.gold, gold1 + 8, 'and more again one floor deeper');
+  }
+
+  // ---- WARHORN: the pack arrives harder the deeper it is called ----
+  {
+    const { DP: D } = loadGame({}, false);
+    D.srand(904); D.newRun('knight');
+    D.S.sg = { pts: 0, ranks: {} }; D.applySigils();
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    D.S.pets = [];
+    const bare = D.summonPet('tortoise');
+    const bareHp = bare ? bare.maxHp : 0;
+    t.ok(bareHp > 0, 'a companion answers');
+    D.S.sg = { pts: 0, ranks: { root: 1, k1: 1, k2: 1, k3: 1, k4: 1, k5: 2 } }; D.applySigils();
+    D.S.run.floor = 9;
+    D.S.pets = [];
+    const horn = D.summonPet('tortoise');
+    t.eq(horn.maxHp, bareHp + 18, 'the WARHORN adds 1 HP per floor per rank');
+  }
+
+  // ---- every run pays the sheet, however it ends ----
+  {
+    const { DP: D } = loadGame({}, false);
+    t.eq(D.sigEarned(1, 0), 1, 'even a floor-one wipe pays one sigil');
+    t.eq(D.sigEarned(6, 0), 10, 'five floors cleared pay two each');
+    t.eq(D.sigEarned(6, 35), 13, 'and every ten foes felled pays one more');
+    t.ok(D.sigEarned(20, 200) > D.sigEarned(10, 100), 'a deeper run always pays better');
+    D.srand(905); D.newRun('knight');
+    D.S.sg = { pts: 0, ranks: {} };
+    D.S.run.floor = 9; D.S.run.kills = 40;
+    D.endRun('probe');
+    t.eq(D.S.sg.pts, D.sigEarned(9, 40), 'the run banks its sigils on the way out');
+    t.ok(D.S.over.sigWon > 0, 'and the death screen says how many');
+  }
+
+  // ---- the sheet survives a reload, and refuses nonsense ----
+  {
+    const st = {};
+    const { DP: D } = loadGame(st, false);
+    D.S.sg = { pts: 12, ranks: { root: 2, b1: 3 } };
+    D.applySigils();
+    D.save();
+    const { DP: R } = loadGame(st, false);
+    R.load();
+    t.eq(R.S.sg.pts, 12, 'the unspent sigils survive a reload');
+    t.eq(R.sigLvl('b1'), 3, 'and so do the marks');
+    t.eq(R.sigBonus().hp0, 12, 'the bonuses rebuild themselves on load');
+    // a hand-edited save cannot invent marks or over-strike them
+    const blob = JSON.parse(st['dungeonpusher_v1'] || st[Object.keys(st)[0]]);
+    blob.sg = { pts: 5, ranks: { root: 99, notamark: 4, b1: -3 } };
+    st[Object.keys(st)[0]] = JSON.stringify(blob);
+    const { DP: X } = loadGame(st, false);
+    X.load();
+    t.eq(X.sigLvl('root'), 2, 'a rank past the cap is clamped to it');
+    t.eq(X.sigLvl('notamark'), 0, 'a mark that does not exist is dropped');
+    t.eq(X.sigLvl('b1'), 0, 'and a negative rank is floored at zero');
+  }
+}
+
+// ---------- THE GHOST'S CABINET: an honest wheel, and a real spin-down ----------
+{
+  const { DP: D } = loadGame({}, false);
+  // the slices are cut to the size of their odds — the picture IS the table
+  const tot = D.WHEEL.reduce((a, s2) => a + s2.w, 0);
+  t.eq(D.WHEEL_SEGS.length, D.WHEEL.length, 'every prize gets a slice');
+  t.eq(D.WHEEL_TOTAL, tot, 'and the wheel knows what it all weighs');
+  let span = 0;
+  for (const g of D.WHEEL_SEGS) {
+    const want = (D.WHEEL[g.i].w / tot) * Math.PI * 2;
+    t.ok(Math.abs(g.arc - want) < 1e-9, D.WHEEL[g.i].label.replace('\n', ' ') + ' is cut to its own odds');
+    span += g.arc;
+  }
+  t.ok(Math.abs(span - Math.PI * 2) < 1e-9, 'and the slices close the circle exactly');
+  // ...and the throw always coasts to the slice the odds actually drew. A
+  // physics wheel that stops somewhere other than the prize it paid out is a
+  // wheel that lies to your face, so this is checked on a hundred spins.
+  D.srand(4242); D.newRun('knight');
+  for (let i = 0; i < 100; i++) {
+    const won = D.spinWheel('coin');
+    const a = D.S.wheelAnim;
+    t.ok(!!won && !!a, 'spin ' + i + ' turns');
+    let rest = (-Math.PI / 2 - a.target) % (Math.PI * 2);
+    if (rest < 0) rest += Math.PI * 2;
+    const g = D.WHEEL_SEGS[a.seg];
+    if (!(rest >= g.a0 && rest < g.a1)) {
+      t.ok(false, 'spin ' + i + ' rests on the slice it paid out (' + rest.toFixed(3) +
+                  ' not in ' + g.a0.toFixed(3) + '..' + g.a1.toFixed(3) + ')');
+      break;
+    }
+    // ...and never dead centre every time — it lands ACROSS the slice
+    t.ok(a.target < 0 || a.target > 0, 'and it is thrown somewhere');
+    D.S.wheelAnim = null;
+  }
+  t.ok(true, 'a hundred spins all came to rest on the prize they paid');
+  // ---- THE NEAR MISS: it has to happen, and it has to be a LIE that resolves
+  D.srand(31); D.newRun('knight');
+  let dram = 0, clean = 0, wrongSlice = 0;
+  for (let i = 0; i < 300; i++) {
+    const won = D.spinWheel('coin');
+    const a = D.S.wheelAnim;
+    const g = D.WHEEL_SEGS[a.seg];
+    // where it RESTS is always well clear of both pins
+    let rest = (-Math.PI / 2 - a.target) % (Math.PI * 2);
+    if (rest < 0) rest += Math.PI * 2;
+    const into = (rest - g.a0) / g.arc;
+    if (!(into > 0.2 && into < 0.8)) {
+      t.ok(false, 'spin ' + i + ' never comes to rest on a pin (' + into.toFixed(3) + ' of the slice)');
+      break;
+    }
+    if (a.drama) {
+      dram++;
+      // the FALSE rest — where it hangs before the pin gives — is a different prize
+      let fake = (-Math.PI / 2 - (a.target + a.drama)) % (Math.PI * 2);
+      if (fake < 0) fake += Math.PI * 2;
+      const fg = D.WHEEL_SEGS.find(q => fake >= q.a0 && fake < q.a1);
+      if (fg && fg.i !== a.seg) wrongSlice++;
+    } else clean++;
+    if (!won) break;
+    D.S.wheelAnim = null;
+  }
+  t.ok(true, 'three hundred spins all rest clear of the pins');
+  t.ok(dram > 90 && dram < 250, 'the near miss happens often, not always (' + dram + '/300)');
+  t.ok(clean > 60, 'and plenty of spins still just arrive (' + clean + '/300)');
+  t.eq(wrongSlice, dram, 'every near miss hangs on the WRONG prize before the pin gives');
+  // ---- THE BOUNCY PIN: hold, let go, overshoot, rock back — and close on
+  // EXACTLY 1. A creep that does not close on 1 drags the landing off the
+  // prize that was already paid out, which is the one thing it must not do.
+  t.eq(D.pinEase(0), 0, 'the pin has not given at all yet');
+  t.eq(D.pinEase(1), 1, 'and has given exactly all of it by the end');
+  t.ok(D.pinEase(0.25) < 0.45, 'it holds against the pin at first');
+  t.ok(D.pinEase(0.7) > 1, 'then lets go and carries PAST the peg');
+  t.ok(D.pinEase(0.95) > 1 && D.pinEase(0.95) < 1.06, 'and rocks back down onto it');
+  let flung = null;
+  for (let x = 0; x <= 1.0001; x += 0.02) {
+    const v = D.pinEase(x);
+    if (!(v >= -0.001 && v < 1.2)) { flung = x + '->' + v.toFixed(3); break; }
+  }
+  t.ok(!flung, 'the creep never flings the wheel anywhere (' + flung + ')');
+  // ...and the rotation really does come to rest on the target it was given
+  for (const dr of [0, 0.6, -0.9]) {
+    const wa = { t: 999, target: Math.PI * 9.37, drama: dr, seg: 0, lastRot: 0 };
+    t.ok(Math.abs(D.wheelRot(wa) - wa.target) < 1e-6,
+         'drama ' + dr + ' is handed back in full — the landing is untouched');
+  }
+  // the overlay outlives the spin, so the prize can actually be read
+  t.ok(D.WHEEL_LIFE > 1.0 + D.WH_END, 'the cabinet holds the prize up after the wheel stops');
+  // a free spin (an elite's gift) drops no coin
+  D.spinWheel();
+  t.eq(D.S.wheelAnim.coin, null, 'a free spin puts nothing down the slot');
+}
+
+// ============ THE BOSS COINS WERE BREEDING ============
+// The owner opened a run and found HUNDREDS of boss coins. The purse is a
+// DECK — firing a coin never takes it out, the hand is a fresh copy every
+// round — but the settlement pocketed every special sitting in the tray as
+// though it were newly minted. So a special you FIRED came home a second
+// time: one king becomes two, two become four, and a long run ends in a
+// hoard. Only a coin the deep actually MADE (a bred kit, a rotted gold, a
+// mimic that turned) is a new coin.
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(11); D.newRun('knight');
+  for (const k of D.COIN_KINDS) D.S.run.purse[k] = 0;
+  D.S.run.purse.coin = 6;
+  D.S.run.purse.king = 1;                       // one boss coin, minted once
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+  D.interact(0);
+  const B = D.S.battle;
+  t.eq(B.hand.king, 1, 'the deck deals the king into your hand');
+  D.S.battle.sel = 'king'; D.S.cd = 0;
+  t.ok(D.drop(50, true), 'and you fire it');
+  t.eq(D.S.run.purse.king, 1, 'the deck still holds it — firing never spends the purse');
+  // it works its way across the bed and into the tray
+  B.loot.push({ k: 'king' });
+  D.S.foes.forEach(f => D.dmgFoe(f, 99999));
+  D.leaveBattle();
+  t.eq(D.S.run.purse.king, 1, 'and it comes home as the SAME coin, not a second one');
+
+  // ...but a coin the deep actually made IS a new coin
+  const { DP: E } = loadGame({}, false);
+  E.srand(12); E.newRun('knight');
+  for (const k of E.COIN_KINDS) E.S.run.purse[k] = 0;
+  E.S.run.purse.coin = 6;
+  E.S.run.purse.bunny = 2;
+  E.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+  E.interact(0);
+  E.S.battle.sel = 'bunny'; E.S.cd = 0; E.drop(40, true);
+  E.S.cd = 0; E.drop(60, true);
+  E.S.battle.loot.push({ k: 'bunny' }, { k: 'bunny' }, { k: 'bunny' });   // the pair bred a kit
+  E.S.foes.forEach(f => E.dmgFoe(f, 99999));
+  E.leaveBattle();
+  t.eq(E.S.run.purse.bunny, 3, 'the two you fired come home once, and the KIT is a third');
+
+  // ...and the same at the staircase, where the BED is emptied into the purse
+  const { DP: F } = loadGame({}, false);
+  F.srand(13); F.newRun('knight');
+  for (const k of F.COIN_KINDS) F.S.run.purse[k] = 0;
+  F.S.run.purse.coin = 6;
+  F.S.run.purse.lode = 1;
+  F.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+  F.interact(0);
+  F.S.battle.sel = 'lode'; F.S.cd = 0; F.drop(50, true);
+  F.S.foes.forEach(f2 => F.dmgFoe(f2, 99999));
+  F.leaveBattle();                               // it stays on the BED, not the tray
+  F.S.run.pileSave = [{ k: 'lode', x: 50, y: 40, lay: 0 }];
+  F.S.run.pileFloor = F.S.run.floor;
+  F.nextFloor();
+  t.eq(F.S.run.purse.lode, 1, 'a special left on the bed comes home as itself too');
+}
+
+// ---- and the guard that would have CAUGHT it: play the fight that did it ----
+// The unit checks above pin the mechanism; this one plays the actual game.
+// Eight battles across two floors, firing every special every round and
+// letting them settle. Under the old settlement this ran away exponentially.
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(14); D.newRun('knight');
+  for (const k of D.COIN_KINDS) D.S.run.purse[k] = 0;
+  D.S.run.purse.coin = 10;
+  for (const sp of D.SPECIALS) D.S.run.purse[sp] = 1;
+  const start = D.SPECIALS.reduce((a, k) => a + (D.S.run.purse[k] | 0), 0);
+  let fired = 0, settled = 0, trayEnd = 0;
+  t.eq(start, D.SPECIALS.length, 'one of every boss coin to begin with');
+  for (let b = 0; b < 8; b++) {
+    if (b === 4) { D.S.run.pileSave = null; D.nextFloor(); }
+    D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'orc', done: false, px: .5, py: .4 }];
+    D.interact(0);
+    const B = D.S.battle;
+    for (let r = 0; r < 3; r++) {
+      for (const sp of D.SPECIALS) {
+        while ((B.hand[sp] | 0) > 0) { D.S.battle.sel = sp; D.S.cd = 0; if (!D.drop(20 + (r * 17) % 60, true)) break; fired++; }
+      }
+      // let the MACHINE actually run: the pusher has to carry them off the
+      // edge, or this probe never touches the settlement it is here to guard
+      for (let f2 = 0; f2 < 420; f2++) D.step(1 / 60);   // NOT quiet: quiet skips scoring
+      const inTray = (B.loot || []).filter(l => D.SPECIAL_COINS[l.k]).length;
+      settled += inTray;
+      // ...and the last round of each fight ends with the tray STILL FULL,
+      // which is the case that actually pays out: you win mid-round and the
+      // settlement sweeps whatever is sitting there
+      if (r === 2) { trayEnd += inTray; break; }
+      D.newRound();
+    }
+    D.S.foes.forEach(f => D.dmgFoe(f, 99999));
+    D.leaveBattle();
+  }
+  const end = D.SPECIALS.reduce((a, k) => a + (D.S.run.purse[k] | 0), 0);
+  console.log('# boss-coin sim: ' + start + ' -> ' + end + ' across 8 battles, '
+            + fired + ' specials fired, ' + settled + ' reached the tray, '
+            + trayEnd + ' still there at the bell');
+  t.ok(fired >= 20, 'the probe really did fire boss coins (' + fired + ')');
+  t.ok(settled >= 1, 'and at least some of them reached the tray (' + settled + ')');
+  t.ok(trayEnd >= 4, 'and the fights ended with boss coins still in the tray (' + trayEnd + ') — the case that pays');
+  t.ok(end <= start + D.BUNNY_CAP + D.ROT_CAP + 4,
+       'eight battles of firing every boss coin does not breed a hoard (' + start + ' -> ' + end + ')');
+  for (const k of D.SPECIALS) {
+    t.ok((D.S.run.purse[k] | 0) <= 8, 'no single boss coin runs away (' + k + ': ' + (D.S.run.purse[k] | 0) + ')');
+  }
+}
+
+// ============ THE GRAND BANK WAS PRINTING BOSS COINS ============
+// The owner opened a run and found HUNDREDS of boss coins in the purse. The
+// Grand Bank's line is "banked pieces come back duplicated" — once, on the way
+// out of the vault. What it actually did was rebuild the tray as banked×2 at
+// the top of EVERY round, so re-banking the doubled pile doubled it again:
+// 1, 2, 4, 8, 16… and every special still in the tray when the fight ended
+// walked into the purse. Nine rounds of a single banked boss coin is 256 of
+// them. This is that fight, and it must never pay more than double again.
+{
+  const { DP: D } = loadGame({}, false);
+  D.srand(5); D.newRun('knight');
+  D.S.run.relics.push('grandbank');
+  D.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'ogre', done: false, px: .5, py: .4 }];
+  D.interact(0);
+  const B = D.S.battle;
+  const key = (l) => l.k + (l.iid || '') + (l.up ? 'u' : '');
+  B.loot = [{ k: 'king' }];                        // one boss coin in the tray
+  B.banked = [];
+  const before = D.S.run.purse.king | 0;
+  const seen = [];
+  for (let r = 1; r <= 9; r++) {
+    B.phase = 'drop';
+    let guard = 0;
+    while (B.loot.length && B.banked.length < D.bankMax() && guard++ < 900) {
+      if (!D.bankLoot(key(B.loot[0]))) break;
+    }
+    D.newRound();
+    seen.push(B.loot.length);
+  }
+  t.ok(seen[8] <= 2 * D.bankMax(),
+       'nine rounds of banking one boss coin never breeds a hoard (tray held ' + seen.join(', ') + ')');
+  D.S.foes.forEach(f => D.dmgFoe(f, 99999));
+  D.leaveBattle();
+  const won = (D.S.run.purse.king | 0) - before;
+  t.ok(won <= 2 * D.bankMax(),
+       'and the purse takes home at most double the bank, not ' + won + ' boss coins');
+  // ...and the relic still does what it says: bank one, get two
+  const { DP: E } = loadGame({}, false);
+  E.srand(6); E.newRun('knight');
+  E.S.run.room.ents = [{ kind: 'monster', mtype: 'battle', eid: 'ogre', done: false, px: .5, py: .4 }];
+  E.interact(0);
+  const C2 = E.S.battle;
+  C2.loot = [{ k: 'coin' }, { k: 'coin' }];
+  C2.banked = []; C2.phase = 'drop';
+  E.bankLoot('coin'); E.bankLoot('coin');
+  E.newRound();
+  const plain = C2.loot.length;
+  E.S.run.relics.push('grandbank');
+  C2.loot = [{ k: 'coin' }, { k: 'coin' }];
+  C2.banked = []; C2.phase = 'drop';
+  E.bankLoot('coin'); E.bankLoot('coin');
+  E.newRound();
+  t.eq(plain, 2, 'without the relic the bank hands back exactly what went in');
+  t.eq(C2.loot.length, 4, 'with it, the bank hands back double — once');
+}
+
+// ---------- THE MAP REMEMBERS WHAT IS IN A ROOM YOU HAVE WALKED ----------
+{
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  D.srand(202); D.newRun('knight');
+  const rooms = D.S.run.map.rooms;
+  const keys = Object.keys(rooms);
+  keys.forEach((k, i) => { if (i % 6 !== 3) rooms[k].visited = true; });   // most of the floor walked
+  keys.forEach((k, i) => { if (rooms[k].visited && i % 5 === 0) rooms[k].ents.forEach(e => { e.done = true; }); });
+  D.S.screen = 'dungeon';
+  frames(4);
+  t.eq(globalThis.__ctxDepth, 0, 'the dungeon still balances with a half-walked floor');
+  D.kb.buttons().forEach(() => {});
+  // the marks are rules, not decoration — hold them to all three
+  const here3 = dirname(fileURLToPath(import.meta.url));
+  const src3 = readFileSync(join(here3, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const at = src3.indexOf('// WHAT IS STILL IN IT.');
+  t.ok(at > 0, 'the map draws a walked room’s contents');
+  const blk = src3.slice(at, at + 1800);
+  t.ok(/if \(ink && seen\[k\] === 2 && !r\.boss\)/.test(blk),
+       'only on the BIG map, and only for rooms actually walked');
+  t.ok(blk.indexOf('.filter(e2 => !e2.done)') >= 0,
+       'and only for dwellers still standing — a spent shop is not a shop');
+  t.ok(blk.indexOf("kind === 'monster' ? 1 : 0") >= 0,
+       'services sort ahead of foes — you backtrack for a keeper, not a fight');
+  // ...and the minimap chip is left alone, which is the whole reason for the gate
+  const mini = src3.slice(src3.indexOf('function drawMinimap'), src3.indexOf('function drawMapView'));
+  t.ok(mini.indexOf('drawMapRooms') >= 0, 'the minimap shares the room painter');
+  t.ok(mini.indexOf(', true)') < 0 || /drawMapRooms\([^)]*false\)/.test(mini),
+       'but never passes the ink flag, so it stays a clean chip');
+
+  // ---- THE MINIMAP WINDOW IS FIXED, AND THE FLOOR FITS INTO IT ----
+  // It used to be the other way round: the frame was sized from the explored
+  // extent, so a tall floor turned the map portrait, a wide one landscape, and
+  // a big one shoved the frame off the glass it was supposed to sit inside.
+  {
+    const { DP: Dm } = loadGame({}, true);
+    Dm.srand(404); Dm.newRun('knight');
+    const lim = Dm.mini.lim();
+    const box = { x: 300, y: 170, w: 102.4, h: 57.6 };     // the painted window, 16:9
+    const inner = { w: box.w - lim.pad * 2, h: box.h - lim.pad * 2 };
+    const cur = { gx: 3, gy: 3 };
+    const shapes = [[1, 1], [3, 2], [6, 4], [6, 6], [5, 9], [9, 5], [14, 14], [30, 30]];
+    for (const [cols, rows] of shapes) {
+      const f = Dm.mini.fit(box, cols, rows, cur);
+      const tag = cols + 'x' + rows;
+      t.ok(f.pitch <= lim.max + 1e-9, tag + ': never zooms past the max pitch');
+      t.ok(f.pitch >= lim.min - 1e-9, tag + ': never shrinks past what a room reads at');
+      if (!f.follow) {
+        // the whole floor is shown, so it must actually be inside the window
+        t.ok(cols * f.pitch <= inner.w + 1e-6 && rows * f.pitch <= inner.h + 1e-6,
+             tag + ': the whole floor fits inside the window (' + (cols * f.pitch).toFixed(1)
+             + 'x' + (rows * f.pitch).toFixed(1) + ' in ' + inner.w.toFixed(1) + 'x' + inner.h.toFixed(1) + ')');
+        t.ok(f.ox >= box.x - 1e-6 && f.oy >= box.y - 1e-6, tag + ': and is centred inside it, not hanging off');
+      } else {
+        // too big to read whole: it holds the room size and centres on YOU
+        t.eq(Math.round(f.pitch), lim.min, tag + ': falls back to the legibility floor');
+        t.ok(Math.abs((f.ox + (cur.gx + 0.5) * f.pitch) - (box.x + box.w / 2)) < 1e-6
+             && Math.abs((f.oy + (cur.gy + 0.5) * f.pitch) - (box.y + box.h / 2)) < 1e-6,
+             tag + ': and puts you dead centre of the window');
+      }
+    }
+    // a portrait floor and a landscape one both fit the SAME window — the old
+    // code let each one reshape the frame instead
+    for (const [c, r2] of [[3, 9], [9, 3]]) {
+      const f = Dm.mini.fit(box, c, r2, cur);
+      t.ok(f.follow || (c * f.pitch <= inner.w + 1e-6 && r2 * f.pitch <= inner.h + 1e-6),
+           c + 'x' + r2 + ' fits the same window without reshaping it');
+    }
+    // EVERY rounded rect in here has to be the box itself. Checking that one
+    // such call merely exists is no guard at all — there are three, and the
+    // bug is one of them quietly going back to the content size.
+    const frames = mini.match(/rr\([^)]*\)/g) || [];
+    t.ok(frames.length > 0, 'the minimap draws a frame');
+    t.ok(frames.every((c) => /^rr\(box\.x, box\.y, box\.w, box\.h,/.test(c)),
+         'every frame rect is the fixed box, none computed from the content ('
+         + frames.filter((c) => !/^rr\(box\.x, box\.y, box\.w, box\.h,/.test(c)).join(' ') + ')');
+    t.ok(/ctx\.clip\(\)/.test(mini), 'and the rooms are clipped to it, so nothing spills');
+    // the floor has to be an ABSOLUTE size, not whatever the constant says —
+    // read it back from the game and the guard just follows it down
+    t.ok(lim.min >= 4 && lim.min <= 8, 'the legibility floor is a real floor (' + lim.min + ')');
+    t.ok(lim.max >= 12 && lim.max <= 24, 'and a small floor is still drawn big (' + lim.max + ')');
+    // the box the game hands it really is 16:9
+    const gb = Dm.mini.box();
+    t.ok(Math.abs(gb.w / gb.h - 16 / 9) < 0.02,
+         'the minimap window is 16:9 (' + (gb.w / gb.h).toFixed(3) + ')');
+  }
+}
+
+// ======= NO PAINTED SET SITS IN THE REPO UNUSED =======
+// The owner asked whether the mimic chest had art. It does not — but the
+// asking turned up four sets that DID exist and were never wired: boneguard,
+// stonewarden, stormknight and the inferno brute (the Ashwright), all four
+// of them foes this game already ships, all four drawing as emoji with their
+// art on disk. Art that nobody can see is the quietest bug there is, so the
+// repo now has to account for every painted set it carries.
+{
+  const here4 = dirname(fileURLToPath(import.meta.url));
+  const artDir = join(here4, '..', 'dungeon_pusher', 'art', 'monsters', 'boss');
+  const src4 = readFileSync(join(here4, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const dirs = readdirSync(artDir).filter(d => statSync(join(artDir, d)).isDirectory());
+  t.ok(dirs.length >= 15, 'the painted bestiary is on disk (' + dirs.length + ' sets)');
+  // every set the code names must actually exist, with the frames it claims
+  const wired = [...src4.matchAll(/dir: '(boss\/[a-z_]+)\/idle',\s*stem: '([a-z_]+)',\s*n: (\d+)/g)]
+    .map(m => ({ dir: m[1], stem: m[2], n: +m[3] }));
+  t.ok(wired.length >= 16, 'and the code wires a good many of them (' + wired.length + ')');
+  for (const w of wired) {
+    for (let i = 1; i <= w.n; i++) {
+      const f = join(here4, '..', 'dungeon_pusher', 'art', 'monsters', w.dir, 'idle',
+                     w.stem + '_' + (i < 10 ? '0' : '') + i + '.png');
+      if (!existsSync(f)) { t.ok(false, 'wired frame exists: ' + w.dir + ' #' + i); break; }
+    }
+  }
+  t.ok(true, 'every frame the code asks for is on disk');
+  // ...and the four that were missed stay wired
+  for (const id of ['boneguard', 'stonewarden', 'stormknight', 'ashwright']) {
+    t.ok(new RegExp("\\n\\s*" + id + ":\\s*\\{ dir: 'boss/").test(src4),
+         id + ' wears its painted set, not an emoji');
+  }
+  // the ones still spare are LISTED here on purpose: this is the standing
+  // inventory of art the game has not found a home for yet
+  const used = new Set(wired.map(w => w.dir.replace('boss/', '')));
+  const spare = dirs.filter(d => !used.has(d)).sort();
+  console.log('# painted sets with no foe yet: ' + (spare.join(', ') || 'none'));
+  t.ok(spare.length <= 9, 'the unused pile does not grow unnoticed (' + spare.length + ')');
+}
+
+// ====== THE POWER METER IS THEATRE, AND THE ODDS MUST PROVE IT ======
+// A meter that changes what you win is a rigged wheel wearing a skill mask.
+// Power sets how HARD the wheel is thrown and nothing else, so the same seed
+// must draw the same prize at every power — and the wheel must still land
+// exactly where it was drawn to land.
+{
+  const { DP: Dw } = loadGame({}, false);
+  const seeds = [7, 91, 404, 1234, 55555];
+  const byPower = {};
+  for (const pw of [0, 0.25, 0.5, 0.75, 1]) {
+    byPower[pw] = seeds.map((sd) => {
+      Dw.srand(sd); Dw.newRun('knight');
+      const won = Dw.spinWheel(null, pw);
+      return won ? won.label : '?';
+    });
+  }
+  const base = seeds.map((sd) => { Dw.srand(sd); Dw.newRun('knight'); const w = Dw.spinWheel('coin'); return w ? w.label : '?'; });
+  for (const pw of [0, 0.25, 0.5, 0.75, 1]) {
+    t.eq(byPower[pw].join('|'), base.join('|'),
+         'power ' + pw + ' draws exactly what no power draws — the meter cannot touch the odds');
+  }
+  // ...and over a real sample the distribution is unmoved
+  const tally = (pw) => {
+    const c = {};
+    Dw.srand(20260731);
+    for (let i = 0; i < 400; i++) {
+      Dw.newRun('knight');
+      const w = pw === null ? Dw.spinWheel('coin') : Dw.spinWheel(null, pw);
+      c[w ? w.label : '?'] = (c[w ? w.label : '?'] | 0) + 1;
+    }
+    return Object.keys(c).sort().map(k => k + ':' + c[k]).join(' ');
+  };
+  const flat = tally(null), weak = tally(0), hard = tally(1);
+  t.eq(weak, flat, 'a limp flick pays the same spread as no meter at all');
+  t.eq(hard, flat, 'and so does a full-power throw');
+  console.log('# wheel spread, unmoved by power: ' + flat.slice(0, 110));
+
+  // AND THE STREAM MUST NOT SHIFT. spinWheel keeps its turns draw even when
+  // power overrides it; drop that draw and every roll AFTER a spin slides by
+  // one, which a single-spin comparison can never see.
+  const chain = (pw) => {
+    Dw.srand(8675309); Dw.newRun('knight');
+    const out = [];
+    for (let i = 0; i < 6; i++) {
+      const w = pw === null ? Dw.spinWheel('coin') : Dw.spinWheel(null, pw);
+      out.push(w ? w.label : '?');
+    }
+    return out.join('|');
+  };
+  const chainFlat = chain(null);
+  t.eq(chain(0), chainFlat, 'six spins at zero power run the same seeded stream');
+  t.eq(chain(1), chainFlat, 'and so do six at full power — the draw count is unchanged');
+  // ...and pinned, because the comparison above moves with BOTH sides. A spin
+  // must consume a fixed number of rolls: change that and every seeded thing
+  // after a spin slides, which no relative check can see. If this fails and
+  // the wheel's prizes were deliberately changed, re-pin it — otherwise
+  // something quietly altered how much of the stream a spin eats.
+  t.eq(chainFlat, '+GOLD|COMMON\nRELIC|+10 HP|\u22125 HP|COMMON\nRELIC|+5 HP',
+       'a spin eats exactly its fixed share of the seeded stream');
+
+  // what power DOES change: how far the wheel travels in the same time
+  Dw.srand(404); Dw.newRun('knight'); Dw.spinWheel(null, 0);
+  const soft = Math.abs(Dw.S.wheelAnim.target);
+  Dw.srand(404); Dw.newRun('knight'); Dw.spinWheel(null, 1);
+  const full = Math.abs(Dw.S.wheelAnim.target);
+  t.ok(full > soft * 1.6, 'a hard throw carries the wheel much further (' + soft.toFixed(1) + ' vs ' + full.toFixed(1) + ')');
+  // ...but it still comes to rest exactly where the draw said
+  for (const pw of [0, 0.5, 1]) {
+    Dw.srand(404); Dw.newRun('knight');
+    const won = Dw.spinWheel(null, pw);
+    const a = Dw.S.wheelAnim;
+    a.t = 1e6;
+    const at = Dw.wheelAt(Dw.wheelRot(a));
+    t.eq(Dw.WHEEL[at.i].label, won.label, 'at power ' + pw + ' it comes to rest on the prize it drew');
+  }
+
+  // the needle itself: it must actually sweep, and turn round at both ends
+  Dw.S.wheelFeed = { coins: ['coin', 'silver'], t: 0, ph: 'power', pw: 0, dir: 1 };
+  let hi = 0, lo = 1, turns = 0, last = 1;
+  for (let i = 0; i < 600; i++) {
+    Dw.wheelFeedTick(1 / 60);
+    const v = Dw.S.wheelFeed.pw;
+    hi = Math.max(hi, v); lo = Math.min(lo, v);
+    if (Dw.S.wheelFeed.dir !== last) { turns++; last = Dw.S.wheelFeed.dir; }
+  }
+  t.ok(hi > 0.98 && lo < 0.02, 'the needle uses the whole meter (' + lo.toFixed(2) + '..' + hi.toFixed(2) + ')');
+  t.ok(turns >= 2, 'and runs back and forth rather than off the end (' + turns + ' turns)');
+  t.ok(Dw.S.wheelFeed.pw >= 0 && Dw.S.wheelFeed.pw <= 1, 'and never leaves the bar');
+
+  // the feed: every piece falls before the machine arms, and pressing early
+  // must not draw a prize
+  Dw.S.wheelAnim = null;
+  Dw.S.wheelFeed = { coins: ['coin', 'coin', 'silver', 'lucky'], t: 0, ph: 'feed', pw: 0, dir: 1 };
+  const end = Dw.wheelFeedEnd(Dw.S.wheelFeed);
+  t.ok(end > Dw.WH_FEED, 'four pieces take longer to swallow than one (' + end.toFixed(2) + 's)');
+  t.ok(!Dw.wheelPress(), 'you cannot spin while the slot is still eating');
+  t.ok(!Dw.S.wheelAnim, 'and nothing is drawn by trying');
+  for (let i = 0; i < 600 && Dw.S.wheelFeed.ph === 'feed'; i++) Dw.wheelFeedTick(1 / 60);
+  t.eq(Dw.S.wheelFeed.ph, 'armed', 'once they are all in, it arms');
+}
+
+// ============== THE SIDES ARE POLISHED METAL ==============
+{
+  const here7 = dirname(fileURLToPath(import.meta.url));
+  const src7 = readFileSync(join(here7, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const sheen = src7.slice(src7.indexOf('function drawSideSheen'), src7.indexOf('function drawBattle'));
+  t.ok(sheen.length > 200, 'the sides have a sheen pass');
+  // the inner wedges are glass, and they must reflect what is ON the bed
+  const mir = src7.slice(src7.indexOf('function drawSideMirrors'), src7.indexOf('function drawSideSheen'));
+  t.ok(mir.length > 200, 'the inner walls have a mirror pass');
+  t.ok(/for \(const c of S\.coins\)/.test(mir), 'the glass reflects the pieces on the bed, not a canned texture');
+  t.ok(/MIRROR_SQUASH/.test(mir), 'and squashes them, because the wall is seen near edge-on');
+  t.ok(/ctx\.clip\(\)/.test(mir), 'and it is clipped to the wedge, so nothing spills onto the table');
+  const ms = (mir.match(/ctx\.save\(\)/g) || []).length;
+  const mr = (mir.match(/ctx\.restore\(\)/g) || []).length;
+  t.eq(ms, mr, 'every save in the mirror pass is matched by a restore');
+  // it has to land ON the cached base, not under it — the base is one blit and
+  // anything drawn before it is simply gone
+  const order = src7.slice(src7.indexOf('function drawBattle'), src7.indexOf('function drawSideRails') + 1);
+  t.ok(/battleBase\(\);\s*\n\s*drawSideMirrors\(t\);\s*\n\s*drawSideSheen\(t\);/.test(src7),
+       'the mirrors and the sheen are laid over the cached base, not baked under it');
+  // a mirror that never moves is paint: the streak must read the clock AND
+  // the machine's own shake
+  t.ok(/t \* 20/.test(sheen) && /jolt/.test(sheen), 'the streak travels with time and jolts with the machine');
+  t.ok(/S\.shake/.test(sheen), 'and the jolt really comes from the shake');
+  // composite modes are global state — leaking one out of here would wreck
+  // every later draw call in the frame
+  const saves = (sheen.match(/ctx\.save\(\)/g) || []).length;
+  const restores = (sheen.match(/ctx\.restore\(\)/g) || []).length;
+  t.eq(saves, restores, 'every save in the sheen is matched by a restore');
+  t.ok(/ctx\.globalCompositeOperation = 'source-over'/.test(sheen) || saves > 0,
+       'and the composite mode is put back');
+  // the band table drives a gradient, so its stops must climb 0..1 or
+  // addColorStop throws and the whole battle screen goes with it
+  const tbl = src7.slice(src7.indexOf('const SIDE_BANDS = ['), src7.indexOf('];', src7.indexOf('const SIDE_BANDS = [')));
+  const rows = [...tbl.matchAll(/\[([\d.]+), ([\d.]+), ([\d.]+)\]/g)].map(m => m.slice(1).map(Number));
+  t.ok(rows.length >= 8, 'the room is banded onto the metal (' + rows.length + ' bands)');
+  let climbs = true, inRange = true;
+  for (let i = 0; i < rows.length; i++) {
+    if (rows[i][0] < 0 || rows[i][0] > 1) inRange = false;
+    if (i && rows[i][0] < rows[i - 1][0]) climbs = false;
+    if (rows[i][1] > 1 || rows[i][2] > 1) inRange = false;
+  }
+  t.ok(climbs, 'the band stops climb, so createLinearGradient will take them');
+  t.ok(inRange, 'and every stop and alpha is inside 0..1');
+  t.eq(rows[0][0], 0, 'the first band starts at the top of the rail');
+  t.eq(rows[rows.length - 1][0], 1, 'and the last one reaches the bottom');
+  // it draws, on both sides, without unbalancing the frame
+  const { DP: Ds, raf: rafS } = loadGame({}, true);
+  let ts7 = 0;
+  Ds.srand(404); Ds.newRun('knight');
+  Ds.S.run.floor = 5;
+  Ds.startBattle();
+  for (let i = 0; i < 8; i++) { ts7 += 16.7; const cb = rafS(); if (cb) cb(ts7); }
+  t.eq(globalThis.__ctxDepth, 0, 'a battle frame with the polished sides still balances');
+  Ds.S.shake = 8;
+  for (let i = 0; i < 4; i++) { ts7 += 16.7; const cb = rafS(); if (cb) cb(ts7); }
+  t.eq(globalThis.__ctxDepth, 0, 'and so does one mid-thump, when the reflection jolts');
+}
+
+// ============== THE BLACK BOX: a bug report worth reading ==============
+// A player on a phone can hand back a screenshot and nothing else, and a
+// screenshot cannot say whether a coin was PAID for. The watchdog tags every
+// piece on the bed and reports anything that leaves without either scoring or
+// being claimed by a mechanic allowed to eat it. Its whole value is that it
+// stays QUIET during normal play — a log that cries wolf is not a log.
+{
+  const { DP: Db } = loadGame({}, true);
+  t.ok(!!Db.bug, 'the game carries a black box');
+  Db.srand(404); Db.newRun('knight');
+  Db.S.run.floor = 4;
+  Db.startBattle();
+  for (let i = 0; i < 300; i++) Db.step(1 / 60, false);
+  const box = Db.bug.box();
+  t.eq(box.lost.length, 0, 'a settled bed loses nothing');
+
+  // the legitimate exit: tilt pieces over the front. They score, so the box
+  // must stay silent — this is the case that decides whether it is usable.
+  Db.S.battle.tilts = 9;
+  let over = 0;
+  for (let k = 0; k < 3; k++) {
+    Db.tilt('d');
+    for (let i = 0; i < 300; i++) Db.step(1 / 60, false);
+  }
+  over = Db.S.battle.loot.length;
+  t.ok(over > 0, 'the tilts actually pushed pieces over (' + over + ')');
+  t.eq(box.lost.length, 0, 'and every one of them scored — nothing reported');
+
+  // now the reported bug, staged: a piece deleted behind the game's back
+  const victim = Db.S.coins.find(c => c.st === 'plat');
+  const at = { x: Math.round(victim.x), y: Math.round(victim.y), kind: victim.kind };
+  Db.S.coins.splice(Db.S.coins.indexOf(victim), 1);
+  Db.bug.watch();
+  t.eq(box.lost.length, 1, 'a piece deleted behind the game\'s back IS caught');
+  if (box.lost[0]) {
+    t.eq(box.lost[0].kind, at.kind, 'and the box names what it was');
+    t.ok(Math.abs(box.lost[0].x - at.x) <= 1 && Math.abs(box.lost[0].y - at.y) <= 1,
+         'and where it stood (' + box.lost[0].x + ',' + box.lost[0].y + ' vs ' + at.x + ',' + at.y + ')');
+  }
+
+  // a mechanic that owns up stays silent — and the crab, the gutter and the
+  // claw all mark and splice inside ONE frame, so the marker has to land
+  // immediately rather than waiting for the next scan
+  const eaten = Db.S.coins.find(c => c.st === 'plat');
+  Db.bug.take(eaten, 'crab');
+  Db.S.coins.splice(Db.S.coins.indexOf(eaten), 1);
+  Db.bug.watch();
+  t.eq(box.lost.length, 1, 'a declared eat is NOT reported as a disappearance');
+  t.eq(box.taken.crab, 1, 'it is tallied against the mechanic that ate it');
+
+  // THE PIPER scores its whole haul and splices it in the SAME frame — the
+  // one path where waiting for the next scan would report a paid haul as
+  // vanished. Stage one and check the box keeps its mouth shut.
+  {
+    const before = box.lost.length;
+    const plats = Db.S.coins.filter(c => c.st === 'plat').sort((a, b) => b.y - a.y);
+    const pip = plats[0];
+    pip.kind = 'piper';
+    let neighbours = 0;
+    for (const n of plats.slice(1)) {
+      if (neighbours >= 4) break;
+      n.x = pip.x + (neighbours - 1.5) * 2; n.y = pip.y - 1; n.lay = 0;
+      neighbours++;
+    }
+    for (let i = 0; i < 240; i++) Db.step(1 / 60, false);   // let the box see them
+    pip.y = 200; pip.vy = 60;                                // over the front it goes
+    for (let i = 0; i < 300; i++) Db.step(1 / 60, false);
+    t.ok(neighbours > 0, 'the piper had company on the bed (' + neighbours + ')');
+    t.eq(box.lost.length, before,
+         'the piper leads its haul over and the box stays quiet — it was all paid for');
+  }
+
+  // the report itself
+  const rep = Db.bug.report();
+  for (const k of ['v', 'screen', 'run', 'machine', 'battle', 'coins', 'unaccounted', 'eatenBy', 'log']) {
+    t.ok(k in rep, 'the report carries ' + k);
+  }
+  t.eq(rep.unaccounted.count, box.lost.length, 'the report leads with the unaccounted count');
+  t.eq(rep.coins.total, Db.S.coins.length, 'and counts the bed honestly');
+  t.ok(rep.machine.layout !== undefined && 'tilted' in rep.machine,
+       'and says which machine it was — the tilted table eats the left column by design');
+  const size = JSON.stringify(rep).length;
+  t.ok(size > 400 && size < 60000, 'the report is small enough to paste (' + size + ' bytes)');
+
+  // the rolling log must not grow without bound
+  for (let i = 0; i < 500; i++) Db.bug.log('spam', i);
+  t.ok(box.log.length <= box.cap, 'the log is a ring buffer, not a leak (' + box.log.length + ' <= ' + box.cap + ')');
+  t.ok(box.lost.length <= box.lostCap, 'and so is the unaccounted list');
+
+  // the button is reachable without a keyboard, from the settings sheet
+  const srcB = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  t.ok(/REPORT A BUG/.test(srcB), 'the settings sheet carries a REPORT A BUG button');
+  t.ok(/openBugSheet\(\)/.test(srcB), 'and it opens the sheet');
+  t.ok(/drawBugSheet\(t\);/.test(srcB), 'and the sheet is actually drawn');
+  t.ok(/clipboard\.writeText/.test(srcB) && /a\.download = 'dungeon-pusher-bug/.test(srcB),
+       'and the log can leave the phone by COPY or by SAVE');
+  Db.bug.open();
+  t.ok(!!Db.bug.sheet() && Db.bug.sheet().txt.length > 100, 'opening it builds the payload');
+}
+
+// ================= THE CABINET around the dungeon =================
+{
+  const here5 = dirname(fileURLToPath(import.meta.url));
+  const src5 = readFileSync(join(here5, '..', 'dungeon_pusher', 'index.html'), 'utf8');
+  const cabDir = join(here5, '..', 'dungeon_pusher', 'art', 'cab');
+  // every module the layout measures against must be ON DISK at the size the
+  // code claims — a re-export at a different size silently slides the live
+  // title, the live map and the room off the windows they were measured into
+  const png = (f) => {
+    const b = readFileSync(join(cabDir, f));
+    return [b.readUInt32BE(16), b.readUInt32BE(20)];
+  };
+  const want = { 'marquee.png': [1250, 397], 'game_screen_full.png': [708, 784],
+                 'controls_panel_full.png': [768, 143], 'status_strip_full.png': [762, 111],
+                 'playfield.png': [652, 596], 'level_header.png': [337, 99], 'minimap.png': [167, 116],
+                 'joystick.png': [115, 146], 'panel_hp.png': [150, 100], 'panel_bag.png': [128, 100] };
+  for (const f of Object.keys(want)) {
+    t.ok(existsSync(join(cabDir, f)), 'the cabinet ships ' + f);
+    const got = png(f);
+    t.ok(got[0] === want[f][0] && got[1] === want[f][1],
+         f + ' is still ' + want[f].join('x') + ' (got ' + got.join('x') + ')');
+  }
+  // the SHELL is the cabinet, and the game is painted through its hole. The
+  // hole's rect is measured in the shell's own pixels, so it has to fit it.
+  const shell = png('shell.png');
+  t.ok(shell[0] === 1176 && shell[1] === 2058, 'the shell is 1176x2058 (got ' + shell.join('x') + ')');
+  // the shell is the BASE TEMPLATE: it is cut to the stage's own shape so it
+  // can be blitted corner to corner. Any other aspect either letterboxes the
+  // machine onto a black page or crops its plinth off mid-band.
+  t.ok(Math.abs(shell[0] / shell[1] - 480 / 840) < 1e-6,
+       'the shell is cut to the stage 480x840 exactly, so it fills the screen');
+  const sz = src5.match(/const CAB_SHELL = \{ w: (\d+), h: (\d+) \}/);
+  t.ok(!!sz, 'the shell names its own size');
+  // every piece of the machine is one flat rect in the shell's pixels, and the
+  // scene builder round-trips exactly this table — so read it, don't trust it
+  const tbl = src5.slice(src5.indexOf('const CAB_R = {'), src5.indexOf('const CAB = { on: false'));
+  const R5 = {};
+  for (const mm of tbl.matchAll(/(\w+):\s*\[\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\]/g)) {
+    R5[mm[1]] = [Number(mm[2]), Number(mm[3]), Number(mm[4]), Number(mm[5])];
+  }
+  const SLOTS = ['hole', 'marquee', 'head', 'map', 'play', 'joystick', 'btn_map', 'btn_purse',
+                 'btn_menu', 'btn_exit', 'panel_hp', 'panel_gold', 'panel_purse',
+                 'panel_potion', 'panel_bag'];
+  t.eq(Object.keys(R5).length, SLOTS.length, 'the rect table has one entry per piece of the machine');
+  const m = sz && R5.hole ? [null, sz[1], sz[2], R5.hole[0], R5.hole[1], R5.hole[2], R5.hole[3]] : null;
+  t.ok(!!m, 'the shell names its own size and its screen hole');
+  if (m) {
+    const [sw, sh] = [Number(sz[1]), Number(sz[2])];
+    t.ok(sw === shell[0] && sh === shell[1], 'the code and the file agree on the shell size');
+    for (const s of SLOTS) {
+      const a = R5[s];
+      t.ok(!!a, 'the table places ' + s);
+      if (a) {
+        t.ok(a[2] > 0 && a[3] > 0, s + ' has a real size');
+        t.ok(a[0] >= 0 && a[1] >= 0 && a[0] + a[2] <= sw && a[1] + a[3] <= sh,
+             s + ' lands inside the shell (' + a.join(',') + ')');
+      }
+    }
+    const [hx, hy, hw, hh] = R5.hole;
+    t.ok(hw > sw * 0.5 && hh > sh * 0.3, 'and the hole is a screen, not a keyhole');
+    // the marquee is CONTAIN-fitted, so a rect of the wrong shape does not
+    // stretch the sign — it letterboxes it, and the plaque shows a dark band
+    // nobody asked for. The shipped rect has to match the art it holds.
+    const mqArt = png('marquee.png');
+    const ra = R5.marquee[2] / R5.marquee[3], aa = mqArt[0] / mqArt[1];
+    t.ok(Math.abs(ra - aa) / aa < 0.01,
+         'the marquee rect matches the sign it holds (rect ' + ra.toFixed(3) + ' vs art ' + aa.toFixed(3) + ')');
+    t.ok(/Math\.min\(r\.w \/ nw, r\.h \/ nh\)/.test(src5),
+         'and the sign is contain-fitted, never stretched to the rect');
+    // the glass furniture has to be ON the glass, or it is painted onto wood
+    for (const s of ['head', 'map', 'play']) {
+      const a = R5[s];
+      t.ok(a[0] >= hx - 1 && a[1] >= hy - 1 && a[0] + a[2] <= hx + hw + 1 && a[1] + a[3] <= hy + hh + 1,
+           s + ' rides inside the glass, not on the woodwork');
+    }
+    // the panels are a row, not a pile: each one starts after the last began
+    const row = ['panel_hp', 'panel_gold', 'panel_purse', 'panel_potion', 'panel_bag'];
+    for (let i = 1; i < row.length; i++) {
+      t.ok(R5[row[i]][0] >= R5[row[i - 1]][0] + R5[row[i - 1]][2] - 2,
+           row[i] + ' sits beside ' + row[i - 1] + ', not on top of it');
+    }
+  }
+  // a layout.json from the scene builder overrides the shipped table, and a
+  // missing or half-written one must leave it alone
+  t.ok(/fetch\('art\/cab\/layout\.json'\)/.test(src5), 'the cabinet reads the builder\'s layout.json');
+  t.ok(/a\.length === 4 && a\.every\(\(n\) => typeof n === 'number' && isFinite\(n\)\)/.test(src5),
+       'and it only takes rects that are four real numbers');
+  // and it really is drawn full-bleed, not fitted into a rect that leaves a bar
+  t.ok(/drawImage\(sh, 0, 0, LW, LH\)/.test(src5),
+       'the shell is painted corner to corner over the whole stage');
+  // the hole must land on the shell's ACTUAL transparent window, or the game
+  // is painted onto woodwork. Read the alpha out of the PNG and compare.
+  if (m) {
+    const im = pngRGBA(join(cabDir, 'shell.png'));
+    t.ok(!!im, 'the shell decodes as 8-bit RGBA');
+    if (im) {
+      let x0 = im.w, x1 = -1, y0 = im.h, y1 = -1;
+      for (let y = 0; y < im.h; y++) {
+        for (let x = 0; x < im.w; x++) {
+          if (im.data[(y * im.w + x) * 4 + 3] < 16) {
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            if (y > y1) y1 = y;
+          }
+        }
+      }
+      const [hx, hy, hw, hh] = m.slice(3).map(Number);
+      t.ok(Math.abs(x0 - hx) <= 4 && Math.abs(y0 - hy) <= 4,
+           'the coded hole starts where the shell is really cut out (art says ' + x0 + ',' + y0 + ')');
+      t.ok(Math.abs(x1 - (hx + hw - 1)) <= 4 && Math.abs(y1 - (hy + hh - 1)) <= 4,
+           'and it ends there too (art says ' + x1 + ',' + y1 + ')');
+      // the shell's own edges must be cabinet, not the black page it was cut
+      // from — that surround is exactly what made it read as a pasted picture
+      const edge = (x, y) => {
+        const i = (y * im.w + x) * 4;
+        return im.data[i + 3] > 200 ? (im.data[i] + im.data[i + 1] + im.data[i + 2]) / 3 : -1;
+      };
+      let neutral = 0, n = 0;
+      for (let y = 40; y < im.h - 40; y += 17) {
+        for (const x of [1, 3, im.w - 4, im.w - 2]) {
+          const i = (y * im.w + x) * 4;
+          const r = im.data[i], g = im.data[i + 1], bl = im.data[i + 2];
+          const mean = (r + g + bl) / 3;
+          if (Math.abs(r - g) < 4 && Math.abs(g - bl) < 4 && mean > 24 && mean < 40) neutral++;
+          n++;
+        }
+      }
+      t.ok(n > 0 && neutral / n < 0.15,
+           'no flat grey page left along the shell edges (' + neutral + '/' + n + ' samples)');
+      t.ok(edge(im.w >> 1, im.h - 2) >= 0, 'and the shell is still solid at the very bottom row');
+    }
+  }
+  // the hole is really knocked out — a shell with an opaque screen would hide
+  // the whole game behind it
+  const shellPx = readFileSync(join(cabDir, 'shell.png'));
+  t.ok(shellPx[25] === 6, 'the shell is RGBA — it has an alpha channel to be a hole with');
+  // ORDER IS THE WHOLE TRICK: the picture is painted first, the machine is
+  // laid over it. Draw the shell first and the game covers the bezel.
+  const dd = src5.slice(src5.indexOf('function drawDungeon'), src5.indexOf('function drawRoomModal'));
+  const iClip = dd.indexOf('ctx.rect(CAB.hole.x');
+  const iRoom = dd.indexOf('drawRoomBox(t)');
+  const iShell = dd.indexOf('drawCabShell(t)');
+  const iPlates = dd.indexOf('drawCabStatus(t)');
+  t.ok(iClip > 0 && iRoom > iClip, 'the glass is clipped before the room is painted into it');
+  t.ok(iShell > iRoom, 'the shell is laid over the picture, not under it');
+  t.ok(iPlates > iShell, 'and the stat plates ride on top of the shell');
+  t.ok(/S\.screen === 'dungeon' && !!cabArt\('shell'\)/.test(src5),
+       'no shell, no cabinet — the dungeon keeps the screen it always had');
+
+  // ---- the scene builder has to stay honest about the same table ----
+  // cab.html reads CAB_R straight out of the game's source so the two can't
+  // drift. That only works while its parser actually matches, so run the
+  // builder's own regex against the game and check what falls out.
+  const cabHtml = join(here5, '..', 'dungeon_pusher', 'cab.html');
+  t.ok(existsSync(cabHtml), 'the cabinet ships its scene builder');
+  if (existsSync(cabHtml)) {
+    const bsrc = readFileSync(cabHtml, 'utf8');
+    // the builder's parser, lifted verbatim from the tool
+    const chunk = src5.slice(src5.indexOf('const CAB_R = {'), src5.indexOf('};', src5.indexOf('const CAB_R = {')));
+    const parsed = {};
+    for (const mm of chunk.matchAll(/(\w+):\s*\[\s*(-?\d+),\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)\s*\]/g)) {
+      parsed[mm[1]] = [+mm[2], +mm[3], +mm[4], +mm[5]];
+    }
+    t.eq(Object.keys(parsed).sort().join(','), SLOTS.slice().sort().join(','),
+         'the builder\'s parser pulls exactly the game\'s table out of the game');
+    for (const s of SLOTS) t.eq(parsed[s].join(','), R5[s].join(','), 'and ' + s + ' comes back unchanged');
+    // its slot list and its offline fallback must name the same pieces too
+    const els = [...bsrc.matchAll(/\{ k: '(\w+)'/g)].map((x) => x[1]);
+    t.eq(els.slice().sort().join(','), SLOTS.slice().sort().join(','),
+         'the builder edits every piece the game places, and no ghost ones');
+    const fb = bsrc.slice(bsrc.indexOf('const FALLBACK = {'), bsrc.indexOf('};', bsrc.indexOf('const FALLBACK = {')));
+    const fbk = [...fb.matchAll(/(\w+): \[/g)].map((x) => x[1]);
+    t.eq(fbk.slice().sort().join(','), SLOTS.slice().sort().join(','),
+         'and its offline fallback covers them all');
+    t.ok(/"shell": \{ "w": ' \+ SHELL\.w/.test(bsrc) && /"rects"/.test(bsrc),
+         'the builder exports the shape the game reads back');
+    // the tool mirrors a few of the game's drawing constants so its preview is
+    // TRUE and not merely close. Copies drift silently, so compare them.
+    const num = (src, re, what) => {
+      const mm = src.match(re);
+      t.ok(!!mm, what + ' is findable');
+      return mm ? mm.slice(1).join('|') : null;
+    };
+    t.eq(num(bsrc, /const CAP = ([\d.]+), CAP_EXIT = ([\d.]+)/, 'the builder\'s caption drop'),
+         num(src5, /const CAB_CAP = ([\d.]+), CAB_CAP_EXIT = ([\d.]+)/, 'the game\'s caption drop'),
+         'the builder drops the button captions exactly as far as the game does');
+    const well = /HP_WELL = \{ x: ([\d.]+), y: ([\d.]+), w: ([\d.]+), h: ([\d.]+) \}/;
+    t.eq(num(bsrc, well, 'the builder\'s HP well'), num(src5, well, 'the game\'s HP well'),
+         'and it pours the health bar into the same well');
+    const ramp = (s) => (s.slice(s.indexOf('HP_RAMP = ['), s.indexOf(']]', s.indexOf('HP_RAMP = ['))).match(/\d+/g) || []).join(',');
+    t.eq(ramp(bsrc), ramp(src5), 'and mixes it from the same colour ramp');
+    // this is the bug that actually happened: game code pasted into the tool
+    // still calling the GAME's rounded-rect helper, which the tool doesn't have
+    t.ok(!/[^a-zA-Z_]rr\(/.test(bsrc),
+         'the builder calls its own rrect(), never the game\'s rr() by accident');
+    // the game contain-fits the marquee; a preview that stretches it would be
+    // a lie you then line the rect up against
+    t.ok(/k: 'marquee'[^\n]*contain: true/.test(bsrc),
+         'the builder knows the marquee is contain-fitted too');
+    t.ok(/Math\.min\(r\.w \/ im\.naturalWidth, r\.h \/ im\.naturalHeight\)/.test(bsrc),
+         'and actually contain-fits it in the preview');
+  }
+
+  // it draws, and it balances
+  const { DP: D, raf } = loadGame({}, true);
+  let ts = 0;
+  const frames = (n) => { for (let i = 0; i < n; i++) { ts += 16.7; const cb = raf(); if (cb) cb(ts); } };
+  D.srand(404); D.newRun('knight');
+  D.S.run.floor = 4; D.S.run.gold = 128; D.S.run.potions = 2;
+  D.S.screen = 'dungeon';
+  frames(6);
+  t.eq(globalThis.__ctxDepth, 0, 'a cabinet dungeon frame balances every save with a restore');
+  for (const size of ['s', 'w', 't', 'b']) {
+    D.curRoom().size = size; D.S.roomStamp++;
+    frames(3);
+    t.eq(globalThis.__ctxDepth, 0, 'and so does a ' + size + '-shaped room in the glass');
+  }
 }
 
 t.done();

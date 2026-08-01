@@ -1,0 +1,199 @@
+// EMBERKIN — the whole story, start to end, driven through the real game.
+//
+// The other suites test pieces. This one plays: take a starter from Rowan, get
+// called out by the rival, beat every trainer on every route, get past the
+// Warden, catch the legendary on the shrine grass, beat the rival's last team,
+// and hear Rowan's closing line. If any beat of the story stops being
+// reachable — a flag that never sets, a gate that never opens, an NPC that
+// never appears — this suite deadlocks and fails rather than quietly skipping.
+//
+// Run: node tests/emberkin_story.test.mjs
+import { loadGame, mkCtx, ok, eq, done, section } from './emberkin_lib.mjs';
+
+const EK = loadGame({});
+EK.setCtx(mkCtx());
+const G = EK.G;
+
+const tap = (k, n = 1) => {
+  for (let i = 0; i < n; i++) { EK.pressKey(k); EK.step(.2); EK.releaseKey(k); EK.fired.clear(); }
+};
+/**
+ * Clear whatever dialogue or menu is on screen. Stops at a battle rather than
+ * mashing through one — button-mashing a fight is how you lose it.
+ */
+const clear = (limit = 40) => {
+  for (let i = 0; i < limit && G.mode !== 'world' && G.mode !== 'battle'; i++) tap('a');
+  return G.mode;
+};
+/** Fight the current battle to the end, always picking the strongest legal move. */
+function fightToEnd(limit = 200) {
+  let guard = 0;
+  while (G.battle && guard++ < limit) {
+    const b = EK.B();
+    // A faint hands control to the party screen; pick whoever can still stand.
+    if (G.screen && G.screen.kind === 'party') {
+      const next = G.party.findIndex((m) => m.hp > 0);
+      if (next < 0) break;
+      G.screen.i = next;
+      tap('a', 2);
+      continue;
+    }
+    if (b.over) { tap('a', 6); continue; }
+    const usable = b.mine.moves.filter((m) => m.pp > 0);
+    const best = usable.sort((a, c) =>
+      EK.damageOf(b.mine, b.foe, c.id, { crit: false, roll: 1 }).dmg -
+      EK.damageOf(b.mine, b.foe, a.id, { crit: false, roll: 1 }).dmg)[0];
+    EK.doTurn({ kind: 'move', id: best ? best.id : 'falter' });
+    tap('a', 3);
+  }
+  clear();
+  return guard < limit;
+}
+/** A party strong enough that story progress is never a balance question. */
+const stack = (lvl, ids = ['tsunaga', 'magmane', 'bramblor']) => {
+  G.party = ids.filter((id) => EK.DEX[id]).map((id) => EK.mkMon(id, lvl));
+  EK.healParty();
+};
+const talkAndFight = (mapId, id, lvl) => {
+  const npc = EK.MAPS[mapId].npcs.find((n) => n.id === id);
+  stack(lvl);
+  EK.enterMap(mapId, npc.x, npc.y + 1, 'up');
+  G.mode = 'world';
+  EK.talkTo(npc);
+  clear();
+  ok(!!G.battle, `${npc.name} accepted the challenge`);
+  ok(fightToEnd(), `${npc.name}'s battle resolved`);
+  return npc;
+};
+
+// ---------------------------------------------------------------- opening --
+section('the study');
+EK.newGame();
+eq(G.mapId, 'lab', 'a new journey starts in Rowan\'s study');
+clear();
+const rowan = EK.MAPS.lab.npcs[0];
+G.player.x = rowan.x; G.player.y = rowan.y + 1; G.player.px = rowan.x; G.player.py = rowan.y + 1;
+G.player.dir = 'up';
+tap('a');
+clear(20);                                   // speech, then the starter menu
+eq(G.party.length, 1, 'Rowan hands over a kin');
+eq(G.party[0].species, 'cindercub', 'the first option is Cindercub');
+eq(G.flags.starter, 'cindercub', 'the game remembers which one');
+ok(G.bag.bloomorb >= 5, 'and some orbs to go with it');
+
+section('the rival, on the way out of town');
+const wick1 = EK.MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+ok(EK.npcActive(wick1), 'Wick is waiting on the path now');
+const DIR = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] };
+const [wdx, wdy] = DIR[wick1.dir];
+EK.enterMap('hollowbrook', wick1.x + wdx * 2, wick1.y + wdy * 2, 'up');
+G.mode = 'world'; G.alert = null;
+ok(EK.trainerSight(), 'he calls you out');
+clear();
+ok(!!G.battle, 'and the battle starts');
+eq(EK.B().foe.species, EK.RIVAL_PICK.cindercub, 'with the starter that beats yours');
+stack(20);
+EK.B().mine = G.party[0];
+ok(fightToEnd(), 'the rival battle resolved');
+eq(G.flags.t_wick1, 1, 'beating him is recorded');
+ok(G.money > 500, 'and paid for');
+
+// ----------------------------------------------------------------- routes --
+section('Route One');
+talkAndFight('route_one', 't_pell', 16);
+eq(G.flags.t_pell, 1, 'Forager Pell is beaten');
+talkAndFight('route_one', 't_dorn', 16);
+eq(G.flags.t_dorn, 1, 'Hiker Dorn is beaten');
+
+section('Stillmere Shore');
+talkAndFight('stillmere', 't_mio', 20);
+eq(G.flags.t_mio, 1, 'Tide-hand Mio is beaten');
+
+section('Emberwood');
+talkAndFight('emberwood', 't_ivo', 22);
+talkAndFight('emberwood', 't_coll', 22);
+const wick2 = EK.MAPS.emberwood.npcs.find((n) => n.id === 't_wick2');
+ok(EK.npcActive(wick2), 'the rival turned up again — he said he would');
+talkAndFight('emberwood', 't_wick2', 24);
+eq(G.flags.t_wick2, 1, 'the rematch is won');
+
+section('the Warden opens the pass');
+const hale = EK.MAPS.emberwood.npcs.find((n) => n.id === 't_hale');
+ok(!hale.gone, 'the Warden is still standing in the corridor');
+ok(!EK.passable(EK.MAPS.emberwood, hale.x, hale.y, hale.y + 1), 'and blocks it');
+talkAndFight('emberwood', 't_hale', 30);
+eq(G.flags.t_hale, 1, 'the Warden is beaten');
+ok(hale.gone, 'and steps off the path');
+ok(EK.passable(EK.MAPS.emberwood, hale.x, hale.y, hale.y + 1), 'the corridor is walkable now');
+
+// -------------------------------------------------------------- the hunt --
+section('Crown Hollow');
+stack(34);
+G.bag = { prismorb: 60, greatsalve: 20 };
+EK.enterMap('crown_hollow', 8, 10, 'up');
+G.mode = 'world';
+// Walk a real patch of shrine grass until the legendary shows itself.
+let shrine = null;
+for (let y = 2; y <= 8 && !shrine; y++) {
+  for (let x = 2; x < EK.MAPS.crown_hollow.rows[y].length - 2; x++) {
+    if (EK.MAPS.crown_hollow.rows[y][x] === ',') { shrine = [x, y]; break; }
+  }
+}
+ok(!!shrine, 'the shrine has grass to walk');
+let appeared = false;
+for (let i = 0; i < 400 && !appeared; i++) {
+  G.battle = null; G.mode = 'world'; G.dialogue = null;
+  G.flags.vespyrSeenAt = -100;
+  G.player.x = shrine[0]; G.player.y = shrine[1];
+  EK.onArrive();
+  clear();
+  appeared = !!G.battle && G.battle.foe.species === 'vespyr';
+  if (G.battle && !appeared) { G.battle = null; G.mode = 'world'; }
+}
+ok(appeared, 'Vespyr turns up on the shrine grass');
+eq(G.dex.vespyr, 1, 'and is registered as seen');
+
+section('catching it');
+let caught = false;
+for (let round = 0; round < 120 && !caught; round++) {
+  if (!G.battle) {                                 // knocked it out — it comes back
+    G.mode = 'world';
+    ok(!G.flags.beatVespyr, 'losing it is not permanent');
+    G.flags.vespyrSeenAt = -100;
+    EK.startBattle({ foe: EK.mkMon('vespyr', 26), wild: true, legendary: true });
+    clear();
+  }
+  const b = EK.B();
+  if (!b) break;
+  b.foe.hp = 1;                                    // stand in for whittling it down
+  EK.doTurn({ kind: 'item', id: 'prismorb' });
+  if (EK.B() && EK.B().over === 'caught') { tap('a', 8); caught = G.dex.vespyr === 2; }
+  else if (EK.B() && EK.B().over) { tap('a', 8); }
+  if (G.party.some((m) => m.hp <= 0)) EK.healParty();
+  if (G.mode !== 'world' && !G.battle) clear();
+}
+ok(caught, 'the legendary can be caught');
+eq(G.flags.beatVespyr, 1, 'and that closes the hunt');
+ok(G.party.concat(G.box).some((m) => m.species === 'vespyr'), 'it is actually yours');
+
+section('the last word');
+const wick3 = EK.MAPS.crown_hollow.npcs.find((n) => n.id === 't_wick3');
+ok(EK.npcActive(wick3), 'Wick is waiting at the shrine');
+talkAndFight('crown_hollow', 't_wick3', 38);
+eq(G.flags.t_wick3, 1, 'the last rival battle is won');
+
+EK.enterMap('lab', rowan.x, rowan.y + 1, 'up');
+G.mode = 'world';
+EK.rowanScript();
+ok(!!G.dialogue, 'Rowan has something to say');
+ok(G.dialogue.lines.join(' ').includes('So it went with you'), 'and it is the ending, not the briefing');
+clear();
+
+section('the run holds together afterwards');
+ok(EK.saveGame(), 'the finished run saves');
+ok(G.money > 0, 'you finished with shards in hand');
+ok(EK.dexCount(1) >= 8, `you met most of the valley on the way (${EK.dexCount(1)} seen)`);
+EK.draw();
+ok(true, 'and it still renders');
+
+done('emberkin_story');

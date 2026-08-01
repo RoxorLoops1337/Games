@@ -76,6 +76,27 @@ t.eq(PRIZES.length, 17, 'seventeen real keychain prizes in the catalog');
   const art = new Set(readdirSync(join(here2, '..', 'coin_pusher', 'prizes')));
   t.ok(PRIZES.every(p => art.has(p.id + '.png')), 'every prize has its cut-out art on disk');
   t.ok(PRIZES.every(p => p.cost > 0 && p.base > 0 && p.icon), 'every prize has cost, base price, and an emoji fallback');
+
+  // ...and the other direction. Art that no catalog entry claims is dead
+  // weight: it ships in the build, downloads on the gallery, and shows up
+  // nowhere. This catches a renamed id that orphaned its file.
+  const ids = new Set(PRIZES.map(p => p.id));
+  const orphans = [...art].filter(f => f.endsWith('.png') && !ids.has(f.replace(/\.png$/, '')));
+  t.eq(orphans.length, 0, 'no prize art on disk goes unused' +
+       (orphans.length ? ': ' + orphans.join(', ') : ''));
+  const nonPng = [...art].filter(f => !f.endsWith('.png'));
+  t.eq(nonPng.length, 0, 'the prizes folder holds nothing but prize art' +
+       (nonPng.length ? ': ' + nonPng.join(', ') : ''));
+
+  // every catalog prize has to be obtainable somehow: either it rides a
+  // machine's pile or it is buyable in the shop (the shop lists the catalog,
+  // so this is really a check that the pile prizes are a subset of it)
+  const onPiles = new Set();
+  for (const id of Object.keys(MACHINES)) for (const pid of MACHINES[id].prizeIds) onPiles.add(pid);
+  t.ok([...onPiles].every(pid => ids.has(pid)), 'every pile prize is a catalog entry');
+  t.eq(onPiles.size, 12, 'twelve distinct prizes ride the four machines');
+  t.ok(PRIZES.every(p => onPiles.has(p.id) || p.cost > 0),
+       'catalog entries that never ride a pile are still buyable');
 }
 t.ok(['gold', 'penny', 'neon', 'bandit'].every(id =>
   MACHINES[id].prizeIds.length === 3 && MACHINES[id].prizeIds.every(pid => PRIZES.some(p => p.id === pid))),
@@ -767,5 +788,102 @@ t.eq(CP3.S.prizes.boba, 2, 'v2 listings map to the new catalog (duck -> boba)');
 t.eq(CP3.S.prizes.cat, 1, 'v2 inventory migrates (bear -> cat)');
 t.eq(CP3.S.listings.length, 0, 'no stale coin-priced listings survive');
 t.eq(CP3.S.mach, 'penny', 'v2 machine choice survives');
+
+// -------- juice: a cascade reads as one growing number --------
+{
+  CP.srand(3); CP.reset();
+  S.floats.length = 0; S.runFloat = null;
+  S.combo = 0; S.lastCollect = -99; S.fever = 0; S.time = 100;
+  const num = () => S.floats.filter(f => /^\+\d+$/.test(f.txt));
+  const mk = (x) => ({ kind: 'coin', x, y: 90, val: 0 });
+
+  CP.scoreCoin(mk(40));
+  t.eq(num().length, 1, 'first coin of a wave opens a label');
+  const firstVal = parseInt(num()[0].txt.slice(1), 10);
+
+  CP.scoreCoin(mk(52));
+  CP.scoreCoin(mk(60));
+  t.eq(num().length, 1, 'coins landing together share one label, not three');
+  const summed = parseInt(num()[0].txt.slice(1), 10);
+  t.ok(summed > firstVal, 'the shared label counts up (' + firstVal + ' -> ' + summed + ')');
+  t.ok(num()[0].big, 'a cascade label is emphasised');
+  t.ok(num()[0].wx > 40 && num()[0].wx <= 60, 'the label drifts toward the landings');
+
+  // past the window, a new wave starts its own label
+  S.time += C.CASCADE_WIN + 0.1;
+  CP.scoreCoin(mk(30));
+  t.eq(num().length, 2, 'a later wave opens a fresh label');
+}
+
+// -------- juice: screen shake is capped --------
+{
+  CP.srand(3); CP.reset();
+  S.shake = 0;
+  for (let i = 0; i < 40; i++) CP.scoreCoin({ kind: 'coin', x: 50, y: 90, val: 0 });
+  t.ok(S.shake > 0, 'a big wave does shake the cabinet');
+  CP.tick(1 / 60);
+  t.ok(S.shake <= C.SHAKE_CAP, 'shake never compounds past the cap (' + S.shake.toFixed(1) + ')');
+  S.shake = 500;
+  CP.tick(1 / 60);
+  t.ok(S.shake <= C.SHAKE_CAP, 'even an absurd accumulation is clamped');
+}
+
+// -------- sim determinism: physics must not drift under refactoring --------
+// The pushers, pile and payout are one coupled float simulation, so an
+// "obviously equivalent" optimization can quietly change what the machine pays
+// out. Each machine is driven through a fixed script and the full state of
+// every piece is hashed. A changed hash means the physics moved: either the
+// change was not equivalent, or the constants below need a deliberate update.
+{
+  const fnv = (s) => {                     // small stable hash, no node deps
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i++) {
+      h ^= s.charCodeAt(i);
+      h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;
+    }
+    return ('0000000' + h.toString(16)).slice(-8);
+  };
+  const snap = (S) => {
+    const out = [];
+    for (const c of S.coins) {
+      out.push([c.x, c.y, c.z, c.vx, c.vy, c.vz, c.st, c.lay, c.tier, c.kind,
+                c.onPush ? 1 : 0].join(','));
+    }
+    out.push('S|' + [S.score, S.wallet, S.collected, S.lost, S.trayPile,
+                     S.tray.coins, S.phase].join(','));
+    return fnv(out.join('\n'));
+  };
+  const runScript = (CPx, mach, frames) => {
+    const Sx = CPx.S;
+    Sx.unlocked = ['gold', 'penny', 'neon', 'bandit'];
+    CPx.setMachine(mach);
+    CPx.srand(20260728);
+    CPx.reset();
+    Sx.wallet = 5000; Sx.money = 100000;
+    Sx.score = 0; Sx.collected = 0; Sx.lost = 0; Sx.dropped = 0;
+    for (let i = 0; i < frames; i++) {
+      if (Sx.cd <= 0 && (i % 3) !== 2) CPx.drop(14 + ((i * 37) % 72));
+      if (i === 400) CPx.jackpot();
+      CPx.tick(1 / 60);
+    }
+    return snap(Sx);
+  };
+
+  // captured from the pre-optimization sim and re-verified after it
+  const GOLDEN = {
+    gold: 'e4d5b228', penny: '9ad209fb', neon: '832b1d52', bandit: '26c82f7c',
+  };
+  for (const mach of ['gold', 'penny', 'neon', 'bandit']) {
+    const CPd = loadGame({});
+    const got = runScript(CPd, mach, 600);
+    t.eq(got, GOLDEN[mach], 'sim is deterministic and unchanged: ' + mach);
+  }
+
+  // the same script twice in one process must agree — guards the harness
+  // itself against order-dependent state leaking between runs
+  const a = loadGame({}), b = loadGame({});
+  t.eq(runScript(a, 'penny', 300), runScript(b, 'penny', 300),
+       'two fresh instances agree frame for frame');
+}
 
 t.done();

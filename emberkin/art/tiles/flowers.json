@@ -1,0 +1,36 @@
+{
+  "id": "flowers",
+  "name": "Flowering grass",
+  "tile": true,
+  "palette": {
+    "d": "#2f7a3a",
+    "m": "#3f8f3a",
+    "g": "#4aa03d",
+    "l": "#5cb340",
+    "t": "#7cc851",
+    "R": "#a32b28",
+    "r": "#d84a3c",
+    "p": "#ef8a6a",
+    "W": "#cbb9a6",
+    "w": "#f7e6cf",
+    "Y": "#ffc21e"
+  },
+  "rows": [
+    "ggddmdggtgggggmm",
+    "mgtggdmglgggggmg",
+    "gglgggglwdgdgtgm",
+    "glldggmwYwgdmwgg",
+    "gdgpgtmgwWggwYwg",
+    "gdpYrlgmdmgtgwWg",
+    "tggrRldggmmlggdm",
+    "lgggdgdggmlldggg",
+    "ldggdmgdggmgdggt",
+    "gdgwgggdmtggpmgl",
+    "dgwYwgggglgpYrll",
+    "dglwWggglldgrRmg",
+    "dmmmdgtpggdgtmgg",
+    "gtmgmgpYrgdmlggg",
+    "glgmgllrRggllddg",
+    "llddgggdgggggddm"
+  ]
+}
