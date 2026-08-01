@@ -4324,6 +4324,40 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
     t.eq(K.S.run.potions, plainPot + 1, 'and +1 potion');
     t.eq(K.S.run.gold, 20, 'and 20 gold for the first shop');
   }
+  // rail 3b: THE BLADE RAMPS. Attack used to step only when the ACT did, so
+  // the same foe hit for the same damage on floor 1 and floor 5 and the deep
+  // got harder only by taking longer to chew through. Now it climbs per floor.
+  {
+    const foeAt = (f) => {
+      DS.run.floor = f;
+      DS.run.depth = 1;
+      D.srand(4242);
+      const e = D.mkEnemy('mob', 'orc');
+      return { hp: e.hp, atk: e.atk };
+    };
+    const rows = [1, 5, 10, 15, 20].map(f => ({ f, ...foeAt(f) }));
+    console.log('# orc curve: ' + rows.map(r => r.f + ':' + r.hp + 'hp/' + r.atk + 'atk').join(' '));
+    for (let i = 1; i < rows.length; i++) {
+      t.ok(rows[i].atk >= rows[i - 1].atk,
+           'the floor-' + rows[i].f + ' blade is no softer than the last');
+      t.ok(rows[i].hp > rows[i - 1].hp,
+           'and the floor-' + rows[i].f + ' hide is thicker');
+    }
+    // THE RAMP MUST BE REAL, not the act curve wearing a new name. scaleMult
+    // is the act curve on its own, so anything the blade gains BEYOND its
+    // ratio is the per-floor ramp — and if the ramp is removed this collapses
+    // to 1.00 however steep the acts are.
+    const sm = (f) => { DS.run.floor = f; DS.run.depth = 1; return D.scaleMult(); };
+    const actOnly = sm(20) / sm(1);
+    const gained = (rows[4].atk / rows[0].atk) / actOnly;
+    t.ok(gained > 1.35,
+         'the blade climbs well beyond the act curve (x' + gained.toFixed(2) + ' on top of x' + actOnly.toFixed(2) + ')');
+    // ...and it is a ramp, not a cliff: twenty floors must not make a grunt
+    // hit like a boss
+    t.ok(gained < 2.6, 'but it is a ramp, not a cliff (x' + gained.toFixed(2) + ')');
+    t.ok(rows[4].atk <= rows[0].atk * 9,
+         'a floor-20 grunt still swings like a grunt (' + rows[0].atk + ' -> ' + rows[4].atk + ')');
+  }
   // rail 4: the bosses climb in order, and THE AUDITOR crowns them sanely
   const bossPow = (f) => {
     DS.run.floor = f;
@@ -7444,7 +7478,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.19.0', 'the cabinet ships as v1.19.0');
+  t.eq(D.VERSION, '1.20.0', 'the cabinet ships as v1.20.0');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
