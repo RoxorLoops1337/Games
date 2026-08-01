@@ -938,9 +938,27 @@ function pedigree(id, depth){
   }
   return node;
 }
+/**
+ * Feed cost from a beast's own genes.
+ *
+ * This curve is CONCAVE on purpose, and that is the whole point of it. Cost used
+ * to be linear in stat power — (might + 0.6*hide - 2) / 5 — which put a price
+ * boundary every 5 points. A chick gains ~12% on its parents, so crossing two
+ * cost-1 beasts produced a cost-2 chick 62% of the time: double the Feed for a
+ * tenth more animal. Measured, 96% of chicks came out WORSE per Feed than their
+ * parents, which means breeding — the entire game — made your deck worse.
+ *
+ * With sqrt, the bands widen as they climb (1 up to ~13 stat power, 2 to ~30,
+ * 3 to ~55, 4 to ~89), so a herd grows a long way inside one price bracket and
+ * a bigger beast is always better VALUE, not just bigger. It also stops the old
+ * curve saturating: everything past 25 stat power used to cost 5, which flattened
+ * the entire late game into one-beast-per-turn.
+ */
+function statPower(might, hide){ return might + hide * 0.6; }
 function deriveCost(might, hide, trait){
   if (trait === 'runt') return 0;
-  const raw = (might + hide * 0.6 - 2) / 5 + (TRAITS[trait] ? TRAITS[trait].cost : 0);
+  const raw = Math.sqrt(Math.max(0, statPower(might, hide) - 4)) / 2.05
+    + (TRAITS[trait] ? TRAITS[trait].cost : 0);
   return clamp(Math.round(raw), 0, 5);
 }
 function power(c){ // one number for "how good is this beast", used for sorting + the hall
@@ -1179,37 +1197,37 @@ const FOES = [
   { name: 'Hedge Ogre', em: '👹', hp: 30, moves: [
     { t: 'atk', v: 11, s: 'Club' }, { t: 'def', v: 4, s: 'Brace' },
     { t: 'atk', v: 14, s: 'Smash' } ] },
-  { name: 'Cousin Merle', em: '🤠', hp: 36, moves: [
-    { t: 'atkx', v: 6, n: 3, s: 'Whip' }, { t: 'buff', v: 3, s: 'Boast' },
+  { name: 'Cousin Merle', em: '🤠', hp: 39, moves: [
+    { t: 'atkx', v: 7, n: 3, s: 'Whip' }, { t: 'buff', v: 3, s: 'Boast' },
     { t: 'hit', v: 8, s: 'Spit at you' } ] },
-  { name: 'The Inspector', em: '📋', hp: 52, boss: 1, moves: [
-    { t: 'curse', s: 'File a form' }, { t: 'atk', v: 15, s: 'Fine you' },
-    { t: 'sweep', v: 6, s: 'Audit the pen' }, { t: 'hit', v: 11, s: 'Condemn' } ] },
-  { name: 'Poacher Gang', em: '🏹', hp: 55, moves: [
-    { t: 'atkx', v: 8, n: 3, s: 'Volley' }, { t: 'atk', v: 19, s: 'Snare' },
+  { name: 'The Inspector', em: '📋', hp: 56, boss: 1, moves: [
+    { t: 'curse', s: 'File a form' }, { t: 'atk', v: 17, s: 'Fine you' },
+    { t: 'sweep', v: 7, s: 'Audit the pen' }, { t: 'hit', v: 13, s: 'Condemn' } ] },
+  { name: 'Poacher Gang', em: '🏹', hp: 62, moves: [
+    { t: 'atkx', v: 9, n: 3, s: 'Volley' }, { t: 'atk', v: 22, s: 'Snare' },
     { t: 'buff', v: 4, s: 'Regroup' } ] },
-  { name: 'Prize Bull \"Meatlocker\"', em: '🐂', hp: 68, moves: [
-    { t: 'atk', v: 25, s: 'Charge' }, { t: 'def', v: 10, s: 'Snort' },
-    { t: 'sweep', v: 10, s: 'Stampede' } ] },
-  { name: 'Barn Fire', em: '🔥', hp: 83, moves: [
-    { t: 'sweep', v: 13, s: 'Spread' }, { t: 'atk', v: 26, s: 'Roar' },
+  { name: 'Prize Bull \"Meatlocker\"', em: '🐂', hp: 79, moves: [
+    { t: 'atk', v: 29, s: 'Charge' }, { t: 'def', v: 12, s: 'Snort' },
+    { t: 'sweep', v: 11, s: 'Stampede' } ] },
+  { name: 'Barn Fire', em: '🔥', hp: 101, moves: [
+    { t: 'sweep', v: 14, s: 'Spread' }, { t: 'atk', v: 30, s: 'Roar' },
     { t: 'buff', v: 5, s: 'Catch wind' } ] },
-  { name: 'The Vet', em: '💉', hp: 117, boss: 1, moves: [
-    { t: 'atk', v: 30, s: 'Jab' }, { t: 'heal', v: 11, s: 'Self-medicate' },
-    { t: 'hit', v: 20, s: 'Bill you' }, { t: 'sweep', v: 16, s: 'Sedate the pen' } ] },
-  { name: 'Rustlers', em: '🚚', hp: 126, moves: [
-    { t: 'atkx', v: 14, n: 3, s: 'Round up' }, { t: 'atk', v: 43, s: 'Haul off' },
-    { t: 'def', v: 19, s: 'Lock up' } ] },
-  { name: 'Grand Champion Sir Loin', em: '🏆', hp: 155, moves: [
-    { t: 'buff', v: 6, s: 'Pose' }, { t: 'atk', v: 49, s: 'Trample' },
-    { t: 'sweep', v: 21, s: 'Rosette rush' }, { t: 'def', v: 25, s: 'Preen' } ] },
-  { name: 'The Repo Man', em: '🏦', hp: 190, moves: [
-    { t: 'curse', s: 'Serve papers' }, { t: 'hit', v: 37, s: 'Repossess' },
-    { t: 'atkx', v: 23, n: 3, s: 'Itemise' }, { t: 'atk', v: 64, s: 'Foreclose' } ] },
-  { name: 'THE UR-MOTHER', em: '🥚', hp: 269, boss: 1, moves: [
-    { t: 'atk', v: 59, s: 'Birth a horror' }, { t: 'sweep', v: 32, s: 'Brood swarm' },
-    { t: 'buff', v: 7, s: 'Swell' }, { t: 'heal', v: 22, s: 'Reabsorb' },
-    { t: 'atk', v: 89, s: 'THE CLUTCH' } ] },
+  { name: 'The Vet', em: '💉', hp: 147, boss: 1, moves: [
+    { t: 'atk', v: 35, s: 'Jab' }, { t: 'heal', v: 13, s: 'Self-medicate' },
+    { t: 'hit', v: 24, s: 'Bill you' }, { t: 'sweep', v: 19, s: 'Sedate the pen' } ] },
+  { name: 'Rustlers', em: '🚚', hp: 162, moves: [
+    { t: 'atkx', v: 18, n: 3, s: 'Round up' }, { t: 'atk', v: 53, s: 'Haul off' },
+    { t: 'def', v: 23, s: 'Lock up' } ] },
+  { name: 'Grand Champion Sir Loin', em: '🏆', hp: 206, moves: [
+    { t: 'buff', v: 6, s: 'Pose' }, { t: 'atk', v: 62, s: 'Trample' },
+    { t: 'sweep', v: 26, s: 'Rosette rush' }, { t: 'def', v: 31, s: 'Preen' } ] },
+  { name: 'The Repo Man', em: '🏦', hp: 262, moves: [
+    { t: 'curse', s: 'Serve papers' }, { t: 'hit', v: 46, s: 'Repossess' },
+    { t: 'atkx', v: 29, n: 3, s: 'Itemise' }, { t: 'atk', v: 81, s: 'Foreclose' } ] },
+  { name: 'THE UR-MOTHER', em: '🥚', hp: 383, boss: 1, moves: [
+    { t: 'atk', v: 78, s: 'Birth a horror' }, { t: 'sweep', v: 43, s: 'Brood swarm' },
+    { t: 'buff', v: 7, s: 'Swell' }, { t: 'heal', v: 31, s: 'Reabsorb' },
+    { t: 'atk', v: 117, s: 'THE CLUTCH' } ] },
 ];
 const RUN_LEN = FOES.length;
 const MAX_DECK = 10;
@@ -2847,8 +2865,16 @@ function revealLitter(){
     if (!HEADLESS && tagline.style) tagline.style.visibility = 'hidden';
     const d = (v, l) => '<span class="delta ' + (v >= 0 ? 'up' : 'dn') + '">' +
       (v >= 0 ? '▲' : '▼') + Math.abs(Math.round(v * 10) / 10) + ICO(l) + '</span>';
+    // A bigger chick can land in a higher Feed bracket. That is a real price and
+    // the player is choosing RIGHT NOW, so say it here rather than let them find
+    // out in the next fight.
+    const pc = (h.a.cost + h.b.cost) / 2;
+    const dc = res.child.cost - pc;
+    const costTag = Math.abs(dc) < 0.5 ? ''
+      : ' <span class="delta ' + (dc < 0 ? 'up' : 'dn') + '">' + (dc > 0 ? '+' : '\u2212') +
+        (Math.abs(Math.round(dc * 10) / 10)) + ' Feed</span>';
     tagline.innerHTML = '<div style="margin-bottom:4px">' +
-      d(res.dM, 'might') + ' ' + d(res.dH, 'hide') + '</div>' + chickBanners(res);
+      d(res.dM, 'might') + ' ' + d(res.dH, 'hide') + costTag + '</div>' + chickBanners(res);
     wrap.appendChild(tagline);
     if (!HEADLESS){
       const shell = document.createElement('div');
@@ -3293,7 +3319,7 @@ window.BB = {
   get STUD(){ return STUD; },
   beastMight, cardHide, penFull, penHas, foeTarget, hurtBeast, swingAt, strike, penStrike, handSize, SPILL,
   breed, shareBlood, geneRoll, blendHue, wildCard, makeCard, starterDeck,
-  spawnCard, junkCard, deriveCost, power, cardDamage, makeFoe, nextMove, feedFor,
+  spawnCard, junkCard, deriveCost, statPower, power, cardDamage, makeFoe, nextMove, feedFor,
   srand, rng, shuffle,
   TRAITS, FOES, MUT_TRAITS, BAD_TRAITS, SYL_A, SYL_B, RITUALS, RITUAL_IDS, HAZARDS,
   C: { RUN_LEN, MAX_DECK, START_HP, FEED, HAND_SIZE, WILD_AFTER, MAX_PEN,
