@@ -1648,7 +1648,6 @@ const MAPS = {
         lines: ['The Wayhouse patches your kin up for free.', 'Elder Rowan says that is because she wants us out there getting hurt.'] },
       { x: 12, y: 5, dir: 'left', sprite: 'npc_rival', name: 'Wick', id: 't_wick1', requires: 'gotStarter',
         lines: ['She gave you one too? Of course she did.', 'I took the one that beats yours. Nothing personal — it was just there.'],
-        before: ['Rowan is in the study. Go on, she has been waiting all morning.'],
         dynamic: 'rival1',
         trainer: { team: [['dewdrip', 7]], prize: 300,
           lose: ['Fine. First one is free.'], win: ['Told you. It was just there.'] },
@@ -1828,15 +1827,26 @@ const MAPS = {
       '########==##########',
     ],
     warps: [{ x: 8, y: 11, to: 'emberwood', tx: 8, ty: 1 }, { x: 9, y: 11, to: 'emberwood', tx: 9, ty: 1 }],
-    npcs: [],
+    npcs: [
+      { x: 9, y: 9, dir: 'down', sprite: 'npc_rival', name: 'Wick', id: 't_wick3', requires: 'beatVespyr',
+        lines: ['You got it. Of course you did.', 'I have been up here three days waiting to lose to you properly. Go on.'],
+        dynamic: 'rival3',
+        trainer: { team: [['tsunaga', 30], ['nocthorn', 29], ['gargolem', 29]], prize: 3000,
+          lose: ['There. Now I can go home.', 'Rowan will want to hear it from you, not me.'],
+          win: ['Ha! Not today.'] },
+        after: ['Go and see Rowan. She has been pretending not to wait.'] },
+    ],
     enc: { rate: .14, table: [['nocthorn', 20, 24, 20], ['voltyx', 20, 24, 20], ['thornip', 20, 24, 20], ['pyrelynx', 20, 24, 20], ['gargolem', 20, 24, 20]] },
   },
 };
 
 const tileAt = (map, x, y) => (x < 0 || y < 0 || y >= map.rows.length || x >= map.rows[0].length) ? '#' : map.rows[y][x];
 
+/** An NPC is on the map once its story beat is live and until it walks off. */
+const npcActive = (n) => !n.gone && (!n.requires || !!G.flags[n.requires]);
+
 function npcAt(map, x, y) {
-  return (map.npcs || []).find((n) => n.x === x && n.y === y && !(n.gone)) || null;
+  return (map.npcs || []).find((n) => n.x === x && n.y === y && npcActive(n)) || null;
 }
 
 /** Can the player step from (fx,fy) to (x,y)? Ledges are one-way, downward. */
@@ -2068,8 +2078,7 @@ const SIGHT = 4;                       // how far down their own line a trainer 
 function trainerSight() {
   const p = G.player;
   for (const n of (G.map.npcs || [])) {
-    if (!n.trainer || n.gone || G.flags[n.id]) continue;
-    if (n.requires && !G.flags[n.requires]) continue;
+    if (!n.trainer || !npcActive(n) || G.flags[n.id]) continue;
     const [dx, dy] = DIRS[n.dir] || [0, 1];
     for (let i = 1; i <= SIGHT; i++) {
       const x = n.x + dx * i, y = n.y + dy * i;
@@ -2187,7 +2196,7 @@ function drawWorld(g) {
 
   // Entities, back to front by tile row.
   const ents = [];
-  for (const n of (map.npcs || [])) if (!n.gone) ents.push({ y: n.y, draw: () => {
+  for (const n of (map.npcs || [])) if (npcActive(n)) ents.push({ y: n.y, draw: () => {
     const sx = Math.round(n.x * TILE - cam.x), sy = Math.round(n.y * TILE - cam.y - 6);
     drawSpr(g, 'actor', n.sprite, sx, sy, 1);
     if (n.trainer && !G.flags[n.id]) {
@@ -2210,7 +2219,7 @@ function drawWorld(g) {
   ents.sort((a, b) => a.y - b.y).forEach((e) => e.draw());
 
   // Tall grass draws over feet so the player wades through it.
-  for (const e of [p, ...(map.npcs || []).filter((n) => !n.gone)]) {
+  for (const e of [p, ...(map.npcs || []).filter(npcActive)]) {
     const ex = e.px != null ? e.px : e.x, ey = e.py != null ? e.py : e.y;
     if (!GRASSY.has(tileAt(map, Math.round(ex), Math.round(ey)))) continue;
     const sx = Math.round(Math.round(ex) * TILE - cam.x), sy = Math.round(Math.round(ey) * TILE - cam.y);
@@ -2743,12 +2752,17 @@ function trainerTeam(npc) {
     const evo = DEX[pick].evo ? DEX[pick].evo[0] : pick;
     return [['kindlark', 15], [evo, 16]];
   }
+  if (npc.dynamic === 'rival3') {
+    // Three days up a mountain with the same kin: it is fully grown by now.
+    let top = pick;
+    while (DEX[top].evo) top = DEX[top].evo[0];
+    return [['voltyx', 28], ['nocthorn', 29], [top, 31]];
+  }
   return npc.trainer.team.map((e) => [e[0], e[1]]);
 }
 
 function talkTo(npc) {
   if (npc.script === 'rowan') { rowanScript(); return; }
-  if (npc.requires && !G.flags[npc.requires]) { say(npc.name, npc.before || npc.lines); return; }
   if (npc.trainer && !G.flags[npc.id]) {
     say(npc.name, npc.lines, () => {
       const team = trainerTeam(npc);
@@ -3546,7 +3560,7 @@ if (typeof window !== 'undefined') {
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     doTurn, startBattle, foeChoose, captureChance, tryCatch, addCaught,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn,
-    enterMap, passable, warpAt, tileAt, rollEncounter, tryMove, onArrive, interact, trainerSight,
+    enterMap, passable, warpAt, tileAt, npcAt, npcActive, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,

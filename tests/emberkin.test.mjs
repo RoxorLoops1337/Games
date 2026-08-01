@@ -333,8 +333,30 @@ for (const [mine, theirs] of Object.entries(EK.RIVAL_PICK)) {
   ok(t2.some((e) => e[0] === evo), `the rematch team has grown into ${evo}`);
   ok(t2.every(([sp, lv]) => DEX[sp] && lv > 0), 'the rematch team is real');
 }
+const wick3 = MAPS.crown_hollow.npcs.find((n) => n.id === 't_wick3');
+for (const [mine] of Object.entries(EK.RIVAL_PICK)) {
+  EK.G.flags = { gotStarter: 1, starter: mine, beatVespyr: 1 };
+  const t3 = EK.trainerTeam(wick3);
+  let top = EK.RIVAL_PICK[mine];
+  while (DEX[top].evo) top = DEX[top].evo[0];
+  ok(t3.some((e) => e[0] === top), `the final rival team has the fully grown ${top}`);
+  ok(t3.every(([sp, lv]) => DEX[sp] && lv >= 25), 'the final team is endgame level');
+}
 EK.G.flags = {};
 eq(EK.trainerTeam(MAPS.route_one.npcs.find((n) => n.id === 't_pell'))[0][0], 'sproutle', 'ordinary trainers keep their fixed team');
+
+section('story NPCs are absent until their beat is live');
+EK.G.flags = {};
+ok(!EK.npcActive(wick1), 'the rival is not in town before you have a kin');
+ok(!EK.npcAt(MAPS.hollowbrook, wick1.x, wick1.y), 'and does not block the path');
+ok(!EK.npcActive(wick3), 'the final rival is not on the mountain yet');
+EK.G.flags = { gotStarter: 1 };
+ok(EK.npcActive(wick1), 'once Rowan hands one over, he is there');
+ok(!!EK.npcAt(MAPS.hollowbrook, wick1.x, wick1.y), 'and stands in the way');
+wick1.gone = true;
+ok(!EK.npcActive(wick1), 'a departed NPC stays gone');
+wick1.gone = false;
+EK.G.flags = {};
 // Prerequisites: the rival must not challenge before Rowan hands out a starter.
 EK.enterMap('hollowbrook', wick1.x - 1, wick1.y, 'right');
 EK.G.alert = null;
