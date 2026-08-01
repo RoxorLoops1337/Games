@@ -1,0 +1,32 @@
+{
+  "id": "roof",
+  "name": "Shingle roof",
+  "tile": true,
+  "palette": {
+    "K": "#4a1512",
+    "k": "#6d1a1c",
+    "d": "#8f2a1e",
+    "b": "#b8371f",
+    "m": "#cf4a2c",
+    "l": "#e0603a",
+    "h": "#ef8050"
+  },
+  "rows": [
+    "hhhlhhhlhhhlhhhl",
+    "dmmlllmmdmmmdmmm",
+    "dbbmmmbbdbbbdbbb",
+    "KkkKKkkKKkkKKkkK",
+    "hlhhhlhhhlhhhlhh",
+    "mmdmmmdmbbbmmmdm",
+    "bbdbbbdbdddbbbdb",
+    "kKKkkKKkkKKkkKKk",
+    "hhhlhhhlhhhlhhhl",
+    "dmmmdmmmdmmmdlll",
+    "dbbbdbbbdbbbdmmm",
+    "KkkKKkkKKkkKKkkK",
+    "hlhhhlhhhlhhhlhh",
+    "mmbbbmdmmmdmmmdm",
+    "bbdddbdbbbdbbbdb",
+    "kKKkkKKkkKKkkKKk"
+  ]
+}

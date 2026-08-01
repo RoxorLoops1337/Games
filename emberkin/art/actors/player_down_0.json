@@ -1,0 +1,43 @@
+{
+  "id": "player_down_0",
+  "name": "Wren — facing down (stand)",
+  "w": 16,
+  "h": 22,
+  "palette": {
+    "K": "#2a1b2e",
+    "d": "#b8371f",
+    "r": "#ef6a2b",
+    "l": "#ffa33c",
+    "f": "#f2c396",
+    "g": "#c9885d",
+    "H": "#5a3846",
+    "v": "#7a9c3f",
+    "s": "#4d6b28",
+    "t": "#6a5560",
+    "b": "#453243"
+  },
+  "rows": [
+    "................",
+    ".....KKKKKK.....",
+    "....KllrrrdK....",
+    "...KlrrrrrrdK...",
+    "...KlHHHHHHdK...",
+    "...KlHffffHdK...",
+    "...KlfKffKfdK...",
+    "...KlffffffdK...",
+    "...KlKfggfKdK...",
+    "...KddKggKddK...",
+    "...KlvrrrrrdK...",
+    "..KlrvsrrrrrdK..",
+    "..KlrrvsrrrrdK..",
+    "..KdrrrvsrrrdK..",
+    "..KfrrrrvsrrfK..",
+    "..KfrrrrrvsrfK..",
+    "...KddrKKrddK...",
+    "...KttK..KttK...",
+    "...KttK..KttK...",
+    "...KbbK..KbbK...",
+    "...KbbK..KbbK...",
+    "...KKKK..KKKK..."
+  ]
+}

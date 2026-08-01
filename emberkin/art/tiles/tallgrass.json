@@ -1,0 +1,32 @@
+{
+  "id": "tallgrass",
+  "name": "Tall grass",
+  "tile": true,
+  "palette": {
+    "k": "#1a5228",
+    "d": "#24682f",
+    "m": "#2f7a3a",
+    "g": "#3d8f38",
+    "l": "#4ea33d",
+    "t": "#69bd45",
+    "b": "#8fd455"
+  },
+  "rows": [
+    "kmgkklklkmmmmlkl",
+    "kmgklkmmlkmmglkl",
+    "mgkmlkmmlkmdgklk",
+    "mgkmdgkmmmmgkdlk",
+    "dkmdkgkmbkdgkddk",
+    "tkmdkmdktkdkmdkk",
+    "lkdkmmllklkmmlkk",
+    "mlkkmlglklkmdgkm",
+    "mlkmmglkkmlkdkgk",
+    "kmlkgklkkmlkkggk",
+    "kmlkgkdkgkmdkgkg",
+    "kkmgkddkgkmdgkmg",
+    "dkmgkdkdkmmdgkmm",
+    "kdkmdkmdkmdkmdkt",
+    "bkkmdktkmmdkmdlk",
+    "lkmlklklkmdkmmlk"
+  ]
+}

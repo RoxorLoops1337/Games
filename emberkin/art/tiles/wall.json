@@ -1,0 +1,33 @@
+{
+  "id": "wall",
+  "name": "Timbered wall",
+  "tile": true,
+  "palette": {
+    "K": "#3a2718",
+    "s": "#5c4028",
+    "b": "#7d5734",
+    "h": "#9c7047",
+    "P": "#c3ae87",
+    "d": "#d6c49e",
+    "p": "#e3d3ae",
+    "w": "#f2e7ca"
+  },
+  "rows": [
+    "hhhhhhhhhhhhhhhh",
+    "bbKhbbbbbhbbbbbh",
+    "ssKsssssssssssss",
+    "hbsPPPPPPPPPPPPP",
+    "hbsPpppppppppppp",
+    "hbsPpwwpppdddpPp",
+    "hbsPpppdddpdpppp",
+    "hhsPppppdppppppp",
+    "hbsPpppppppPpppp",
+    "hbsPpdddpppppwwp",
+    "hbsPppdppppppppp",
+    "hbsPpppppppppppp",
+    "hhsPppppwwpppppp",
+    "hbsPppPpppppdddp",
+    "hbsPpppppppppdpp",
+    "hbsPpppppppppppp"
+  ]
+}

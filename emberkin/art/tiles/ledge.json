@@ -1,0 +1,36 @@
+{
+  "id": "ledge",
+  "name": "Grass ledge",
+  "tile": true,
+  "palette": {
+    "d": "#2f7a3a",
+    "m": "#3f8f3a",
+    "g": "#4aa03d",
+    "l": "#5cb340",
+    "t": "#7cc851",
+    "S": "#4a3324",
+    "D": "#6b4f33",
+    "B": "#8f7048",
+    "M": "#a6845a",
+    "L": "#c2a274",
+    "H": "#d8bd91"
+  },
+  "rows": [
+    "ggddmdggtgggggmm",
+    "mgtggdmglgggggmg",
+    "gglgggglldgdgtgm",
+    "glldggmmgdgdmlgg",
+    "gdgdgtmgdggglldg",
+    "gdmgglgmdmgtggdg",
+    "tggglldggmmlggdm",
+    "lgggdgdggmlldggg",
+    "ltlldltlldltldll",
+    "ddldSdlddSdldSld",
+    "SSddSSdSSSddSSdS",
+    "HMHDLHHMHHDLHHMH",
+    "LMHBMLLMLHBMLLML",
+    "SDMMDHBDMMMDMHBM",
+    "DDDSDDDDSDDDSDDD",
+    "SSSSSSSSSSSSSSSS"
+  ]
+}

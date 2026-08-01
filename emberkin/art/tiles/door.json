@@ -1,0 +1,36 @@
+{
+  "id": "door",
+  "name": "Door",
+  "tile": false,
+  "palette": {
+    "K": "#2a1b2e",
+    "s": "#4a2f1c",
+    "b": "#6b4326",
+    "m": "#8a5a33",
+    "h": "#a87243",
+    "w": "#c08f5c",
+    "S": "#6f6a63",
+    "G": "#8d887f",
+    "L": "#b0aaa0",
+    "d": "#cbb392",
+    "Y": "#ffc21e"
+  },
+  "rows": [
+    "hhhhhhhhhhhhhhhh",
+    "mmmhmmmmmhmmmmhm",
+    "ssssssssssssssss",
+    "dhmswwwhhhhbsbsd",
+    "dhmhbsmbsmbssbsd",
+    "dhmhbsmbsmbssbsd",
+    "dhmhLGGGGGGSsbsd",
+    "dhmhbsmbsmbssbsd",
+    "dhmhbsmbsmYSsbsd",
+    "dhmhbsmbsmSssbsd",
+    "dhmhLGGGGGGSsbsd",
+    "dhmhbsmbsmbssbsd",
+    "dhmhbsmbsmbssbsd",
+    "dhmKKKKKKKKKKbsd",
+    "dGGLLLLGLLLLLGSd",
+    "SGGGGSGGGSGGSGGS"
+  ]
+}

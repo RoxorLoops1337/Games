@@ -1,0 +1,35 @@
+{
+  "id": "rock",
+  "name": "Boulders",
+  "tile": true,
+  "palette": {
+    "d": "#2f7a3a",
+    "m": "#3f8f3a",
+    "g": "#4aa03d",
+    "l": "#5cb340",
+    "t": "#7cc851",
+    "k": "#463d3a",
+    "s": "#635850",
+    "b": "#847a70",
+    "h": "#a49a8f",
+    "w": "#c6bdb1"
+  },
+  "rows": [
+    "ggddmdggtgggggmm",
+    "mgtggdmglgggggmg",
+    "gglgggglldgdgtgm",
+    "glldggmmgdgdmlgg",
+    "gdgdbbbbdggglldg",
+    "gdmbhhhbbmgtggdg",
+    "tgbhhwhbbmmlggdm",
+    "lgbhhhbbsmbbbggg",
+    "ldbhhbbbsbhhbsgt",
+    "gdkbbbbssbhbssgl",
+    "dggkbbssskbsssll",
+    "dgllkkssllkksgmg",
+    "dmmddddddddddhbg",
+    "gtmgddddddddlbsg",
+    "glgmglldgggllddg",
+    "llddgggdgggggddm"
+  ]
+}
