@@ -68,7 +68,10 @@ for (const id of DEX_ORDER) {
   ok(st.h >= 18, `${id} is at least 18 rows tall (${st.h})`);
   ok(st.bottom >= 30 && st.bottom <= 38, `${id} stands on the ground line (bottom row ${st.bottom})`);
   ok(st.left >= 1 && st.right <= 38, `${id} keeps a margin (cols ${st.left}-${st.right})`);
-  ok(st.strays <= 8, `${id} has few floating pixels (${st.strays})`);
+  // Loose pixels are a defect everywhere except Vespyr's tail, where the brief
+  // asks for the body to break up into vapour rather than end on an outline.
+  const strayCap = id === 'vespyr' ? 20 : 8;
+  ok(st.strays <= strayCap, `${id} has few floating pixels (${st.strays})`);
   ok(st.darkBorder / st.border >= .8, `${id} is outlined (${Math.round(100 * st.darkBorder / st.border)}% of its edge is dark)`);
   // Some tonal range — a flat two-tone fill reads as programmer art.
   const lums = cols.map(lum).sort((a, b) => a - b);
