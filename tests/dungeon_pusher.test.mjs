@@ -9421,4 +9421,103 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   }
 }
 
+// ------------------------------------------------------------- ROOM TRAITS
+// A trait is one line on a door that changes how the room is fought. It has to
+// be readable before you spend the key, and it has to actually bite in the
+// fight held there.
+{
+  const S = DP.S;
+  t.eq(DP.ROOM_TRAITS.length >= 4, true, 'there are traits to draw from');
+  for (const tr of DP.ROOM_TRAITS) {
+    t.ok(tr.id && tr.ic && tr.name && tr.desc, tr.id + ' says what it is');
+    t.eq(typeof tr.good, 'boolean', tr.id + ' knows whether it tempts or warns');
+  }
+  t.ok(DP.ROOM_TRAITS.some(x => x.good) && DP.ROOM_TRAITS.some(x => !x.good),
+       'some tempt and some warn — a trait you always want is not a decision');
+
+  // they land on floors, and never where they would make no choice
+  DP.newRun();
+  let withTrait = 0, rooms = 0, badPlace = 0;
+  for (let i = 0; i < 10; i++) {
+    S.run.floor = i + 1;
+    DP.genFloor();
+    for (const k of Object.keys(S.run.map.rooms)) {
+      const r = S.run.map.rooms[k];
+      rooms++;
+      if (!r.trait) continue;
+      withTrait++;
+      if (!DP.TRAIT(r.trait)) badPlace++;                 // must be a real trait
+      if (k === '0,0' || r.boss || r.vault) badPlace++;    // never these three
+    }
+  }
+  t.ok(withTrait > 0, 'traits turn up on floors');
+  t.ok(withTrait < rooms, 'but not on every room');
+  t.eq(badPlace, 0, 'never the entrance, the lair or the vault');
+
+  // adding them must not shift a shared seed's fights — same discipline the
+  // mimic and the collector keep
+  const layout = () => Object.keys(S.run.map.rooms).sort().join('|') + '#' +
+                       Object.keys(S.run.map.links).sort().join('|');
+  S.run.seed = 12345; S.run.floor = 3;
+  DP.genFloor(); const a = layout(); const tA = Object.keys(S.run.map.rooms).map(k => S.run.map.rooms[k].trait || '-').join();
+  DP.genFloor(); const b = layout(); const tB = Object.keys(S.run.map.rooms).map(k => S.run.map.rooms[k].trait || '-').join();
+  t.eq(a, b, 'the same seed and floor rebuild the same maze');
+  t.eq(tA, tB, 'and lay the same traits on it');
+}
+
+// each trait actually bites, and only in the room that carries it
+{
+  const S = DP.S;
+  const roomWith = (id) => {                 // stand in a room carrying this trait
+    DP.newRun();
+    DP.genFloor();
+    const k = Object.keys(S.run.map.rooms).find(x => x !== '0,0' && !S.run.map.rooms[x].boss);
+    S.run.map.rooms[k].trait = id;
+    S.run.map.cur = k;
+    S.run.room = S.run.map.rooms[k];
+    return S.run.map.rooms[k];
+  };
+  const roomPlain = () => roomWith(null);
+
+  // CRAMPED: one fewer bank slot
+  roomPlain(); DP.startBattle('battle');
+  const bankPlain = DP.bankMax();
+  roomWith('cramped'); DP.startBattle('battle');
+  t.eq(DP.bankMax(), Math.max(1, bankPlain - 1), 'CRAMPED costs a bank slot');
+  t.eq(DP.inTrait('cramped'), true, 'and the room knows it is cramped');
+
+  // BLESSED: +3 block a round
+  roomPlain();
+  const blockPlain = DP.startBlock();
+  roomWith('blessed');
+  t.eq(DP.startBlock(), blockPlain + 3, 'BLESSED opens every round with +3 block');
+
+  // GILDED: a prize pays double gold, and only here
+  roomPlain();
+  const p0 = S.run.gold | 0;
+  DP.grantPrize({ kind: 'gold', n: 20 });
+  t.eq((S.run.gold | 0) - p0, 20, 'a plain room pays a prize at face value');
+  roomWith('gilded');
+  const p1 = S.run.gold | 0;
+  DP.grantPrize({ kind: 'gold', n: 20 });
+  t.eq((S.run.gold | 0) - p1, 40, 'GILDED pays it double');
+  // and it is gold it doubles, not everything
+  const k0 = S.run.keys | 0;
+  DP.grantPrize({ kind: 'key', n: 1 });
+  t.eq((S.run.keys | 0) - k0, 1, 'a key is still just a key');
+
+  // WARDED: the guard opens each round behind block
+  roomWith('warded'); DP.startBattle('battle');
+  for (const f of DP.S.foes) f.block = 0;
+  DP.newRound();
+  t.ok(DP.S.foes.some(f => f.hp > 0 && (f.block | 0) >= 3), 'WARDED arms the foe with block');
+
+  // and a plain room does none of it
+  roomPlain(); DP.startBattle('battle');
+  for (const f of DP.S.foes) f.block = 0;
+  DP.newRound();
+  t.eq(DP.inTrait('warded'), false, 'a plain room is not warded');
+  t.ok(!DP.S.foes.some(f => f.hp > 0 && (f.block | 0) >= 3), 'and its foe gets no free guard');
+}
+
 t.done();

@@ -708,6 +708,27 @@ function theme() {
 // every 3rd floor the torches are DEAD: you carry your own light and only
 // a small circle around you is lit — find the doors in the dark
 const PRESSURE_MAX = 5;                 // rooms walked before the lake leans on you
+// ---------------------------------------------------------- ROOM TRAITS
+// Every room used to be an interchangeable bag of dice, and every fight played
+// the same wherever you had it. A trait is one line of text on the door that
+// changes how the room is fought — so reading the door before you spend a key
+// is a decision, and no two fights on a floor feel alike.
+// Two tempt, two warn. Each reuses a mechanism the game already proves.
+const ROOM_TRAITS = [
+  { id: 'gilded',  ic: '\u2728', name: 'GILDED',  good: true,
+    desc: 'Every prize in here pays double gold.' },
+  { id: 'blessed', ic: '\u{1F56F}', name: 'BLESSED', good: true,
+    desc: 'You open every round with +3 block.' },
+  { id: 'cramped', ic: '\u{1F9F1}', name: 'CRAMPED', good: false,
+    desc: 'No room to stack — one fewer bank slot.' },
+  { id: 'warded',  ic: '\u{1F6E1}', name: 'WARDED',  good: false,
+    desc: 'Whatever guards it opens every round with +3 block.' },
+];
+const TRAIT = (id) => ROOM_TRAITS.find(t => t.id === id) || null;
+// the trait of the room being stood in — battles are always fought where you are
+function roomTraitId() { const r = curRoom(); return r ? (r.trait || null) : null; }
+function inTrait(id) { return roomTraitId() === id; }
+
 function darkFloor() {
   if (!S.run) return false;
   // THE UNDERLAKE never darkens — the PRESSURE is its weather
@@ -3424,9 +3445,9 @@ function tilt(dir) {
 function lootKey(l) { return l.k === 'item' ? l.iid : l.k; }
 function bankSlotsRaw() { return Math.max(1, C.BANK_MAX + (hasRelic('strongbox') ? 2 : 0) + (hasRelic('vault') ? 2 : 0) + SB.bank - (layoutTilted() ? 1 : 0)); }
 // ...and the WIDOW's web draws them shut one at a time (never all of them)
-function bankMax() { return Math.max(1, bankSlotsRaw() - ((S.battle && S.battle.webbed) | 0)); }
+function bankMax() { return Math.max(1, bankSlotsRaw() - ((S.battle && S.battle.webbed) | 0) - (inTrait('cramped') ? 1 : 0)); }
 // the round-start guard from relics, stacked
-function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 4 : 0) + SB.block0; }
+function startBlock() { return (hasRelic('plate') ? 4 : 0) + (hasRelic('ironhide') ? 2 : 0) + (hasRelic('barricade') ? 4 : 0) + SB.block0 + (inTrait('blessed') ? 3 : 0); }
 function tiltCount() { return C.TILTS * (ghostRun() ? 2 : 1) + (hasRelic('crowbar') ? 1 : 0) + (hasRelic('prybar') ? 1 : 0) + (hasRelic('gildhour') ? 1 : 0) + wsLvl('tilt') + SB.tilt; }
 function bankLoot(key) {
   const B = S.battle;
@@ -4741,6 +4762,7 @@ function newRound() {
   }
   // the endless deep's decrees
   if (mutOn('armoredage')) for (const f of S.foes) if (f.hp > 0) f.block = (f.block || 0) + 2;
+  if (inTrait('warded')) for (const f of S.foes) if (f.hp > 0) f.block = (f.block || 0) + 3;
   if (mutOn('bonerain')) S.rain.push({ t: 0.8, x: 12 + rng() * 76, y: MACH.tiers[0].slotY + rng() * 12, kind: 'skull' });
   S.banner = { txt: TR('ROUND') + ' ' + B.round, ttl: 1.3, max: 1.3 };
   bossArena();
@@ -6190,6 +6212,21 @@ function genFloor() {
       r.ents = placeEnts(genEnts(r.dist));
     }
   }
+  // A trait on some rooms: never the entrance (you start there with no choice),
+  // never the boss (the lair has its own arena rules) and never the vault (the
+  // golden lock is already the whole story of that door).
+  // Rolled off a SIDE stream, saved and restored, so adding traits never shifts
+  // a shared seed's fights by a single draw — same discipline as the mimic below.
+  {
+    const keep = rngState;
+    srand((((S.run.seed | 0) ^ (S.run.floor * 22697)) >>> 0) || 11);
+    for (const k of keys2) {
+      const r = rooms[k];
+      if (k === '0,0' || r.boss || r.vault) continue;
+      if (rng() < 0.32) r.trait = ROOM_TRAITS[(rng() * ROOM_TRAITS.length) | 0].id;
+    }
+    rngState = keep;
+  }
   // the vault's own doors bear the golden lock
   if (vaultK) {
     const vr = rooms[vaultK];
@@ -6417,6 +6454,11 @@ function tryDoor(dir) {
   if (!nb.visited && rawAct(S.run.floor) === 4) {
     S.run.pressure = Math.min(PRESSURE_MAX, (S.run.pressure | 0) + 1);
     if (S.run.pressure === PRESSURE_MAX) toast('\u{1FAE7} FULL DEPTH — the lake leans on every blade down here');
+  }
+  // say what the ground is before the first fight starts on it
+  if (!nb.visited && nb.trait) {
+    const tr = TRAIT(nb.trait);
+    if (tr) toast(tr.ic + ' ' + tr.name + ' — ' + tr.desc);
   }
   nb.visited = true;
   S.run.room = nb;
@@ -6833,7 +6875,7 @@ function grantPrize(p) {
   if (!S.run || !p) return;
   if (p.kind === 'key') S.run.keys += p.n;
   else if (p.kind === 'coin') S.run.purse[p.coin] = (S.run.purse[p.coin] || 0) + p.n;
-  else if (p.kind === 'gold') addGold(p.n);
+  else if (p.kind === 'gold') addGold(inTrait('gilded') ? p.n * 2 : p.n);
   else if (p.kind === 'item') grantItem(p.iid, 1);
 }
 // ACCEPT the chest's offer — pocket the prize, then the chest is spent
@@ -7379,9 +7421,10 @@ window.DP = {
   tick, step, drop, reset, srand, place, spawnDrop, scoreCoin, save, load,
   pusherFront, pusherVel, tierFront, M, HEADLESS, initPile,
   newRun, genFloor, genEnts, interact, tryDoor, curRoom, doorTo, nextFloor,
+  ROOM_TRAITS, TRAIT, roomTraitId, inTrait, bankMax, startBlock, newRound,
   keyGuard, closeModal, leaveBattle,
   ODD_FOES, dcCount, dcSteal, dcHide, dcTick,
-  rollChestPrize, acceptPrize, denyPrize, spendPurse, spendKind,
+  rollChestPrize, acceptPrize, denyPrize, spendPurse, spendKind, grantPrize,
   startBattle, mkEnemy, battleTick, winBattle, endRun,
   buyShop, removeArsenal, sellCoins, coinSellPrice, sellableKinds, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
@@ -12753,13 +12796,16 @@ if (!HEADLESS) (function browser() {
     if (!nb) return null;
     if (nb.boss) return { s: bossFor(S.run.floor).icon + ' BOSS', col: '#ffd75e' };
     if (nb.vault) return { s: '\u{1F511} VAULT', col: '#ffd75e' };
-    if (nb.myst && !nb.visited) return { s: '\u{2753}', col: '#c8b8d0' };
+    // the trait shows even through a '?' — the room keeps its dwellers secret,
+    // never the ground you would be fighting on
+    const tr = TRAIT(nb.trait);
+    if (nb.myst && !nb.visited) return { s: '\u{2753}' + (tr ? ' ' + tr.ic : ''), col: '#c8b8d0' };
     const live = nb.ents.filter(e => !e.done);
-    if (!live.length) return { s: nb.visited ? '✓ cleared' : 'empty', col: '#9a8aa0' };
+    if (!live.length) return { s: (tr ? tr.ic + ' ' : '') + (nb.visited ? '✓ cleared' : 'empty'), col: '#9a8aa0' };
     const s = live.slice(0, 4).map(e =>
       e.kind === 'monster' ? (e.mtype === 'elite' ? '\u{1F451}' : '\u{2694}\u{FE0F}')
         : (ENT_INFO[e.kind] || {}).icon || '?').join(' ');
-    return { s, col: '#e8d0a0' };
+    return { s: (tr ? tr.ic + ' ' : '') + s, col: tr ? (tr.good ? '#8fe08f' : '#ff9a7a') : '#e8d0a0' };
   }
   function drawDoorway(dir, isOpen, t) {
     const p = doorCenter(dir);
