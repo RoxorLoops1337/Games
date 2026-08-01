@@ -946,11 +946,29 @@ S.run.purse.silver = 4;
 S.wheelAsk.pick = { silver: 2, coin: wheelFee - 2 };
 S.wheelAsk.first = 'silver';
 t.eq(DP.wheelPicked(), wheelFee, 'the palm is full');
-t.ok(DP.wheelConfirm(), 'and the coin goes down the slot');
-t.ok(S.wheelAnim !== null, 'the wheel of fortune turns');
-t.eq(S.wheelAnim.coin, 'silver', 'the piece you see drop is the one you chose first');
+t.ok(DP.wheelConfirm(), 'and the coins go down the slot');
+// PAYING IS NOT SPINNING any more. Every piece you paid falls in, and then
+// the machine WAITS — the prize is not drawn until your own second press.
+t.ok(!S.wheelAnim, 'the wheel does not start on its own');
+t.ok(S.wheelFeed && S.wheelFeed.ph === 'feed', 'the slot is swallowing your pieces');
+t.eq(S.wheelFeed.coins.length, wheelFee, 'every piece you paid goes in, not just one');
+t.eq(S.wheelFeed.coins[0], 'silver', 'and the kind you chose first leads');
+t.eq(S.wheelFeed.coins.filter(k => k === 'silver').length, 2, 'both silver among them');
 t.eq(S.run.purse.silver, 2, 'exactly the silver you picked is gone');
 t.eq(DP.purseTotal(), wheelPurse + 4 - wheelFee, 'and exactly this floor\'s ' + wheelFee + ' coins in total');
+// the feed runs out, and the SPIN button arms
+for (let i = 0; i < 400 && S.wheelFeed.ph === 'feed'; i++) DP.wheelFeedTick(1 / 60);
+t.eq(S.wheelFeed.ph, 'armed', 'the pieces are in and the machine arms');
+t.ok(!S.wheelAnim, 'and STILL nothing has been drawn');
+t.ok(DP.wheelPress(), 'you press SPIN...');
+t.eq(S.wheelFeed.ph, 'power', '...and the needle starts running');
+t.ok(!S.wheelAnim, 'the prize is still not drawn while you aim');
+for (let i = 0; i < 12; i++) DP.wheelFeedTick(1 / 60);
+t.ok(S.wheelFeed.pw > 0 && S.wheelFeed.pw <= 1, 'the needle has travelled (' + S.wheelFeed.pw.toFixed(2) + ')');
+t.ok(DP.wheelPress(), 'you press again to lock it in');
+t.ok(S.wheelAnim !== null, 'and NOW the wheel of fortune turns');
+t.ok(!S.wheelFeed, 'the feed is done with');
+t.eq(S.wheelAnim.lead, 0, 'it starts the instant you press, with no lead-in');
 t.ok(S.run.room.ents[0].done, 'the ghost vanishes after the spin');
 t.ok(S.run.ledger.length > 0 && S.run.ledger[0].n === -wheelFee, 'and the LEDGER wrote the fee down');
 S.run.floor = 1;                                       // rewind for what follows
@@ -7426,7 +7444,7 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
 {
   const st = {};
   const { DP: D } = loadGame(st, false);
-  t.eq(D.VERSION, '1.18.1', 'the cabinet ships as v1.18.1');
+  t.eq(D.VERSION, '1.19.0', 'the cabinet ships as v1.19.0');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('ARCADE MACHINE') >= 0)),
        'and the notes carry it');
   t.ok(D.CHANGELOG.some(e => e.notes.some(n => n.indexOf('STOP WEARING EMOJI') >= 0)),
@@ -8921,6 +8939,107 @@ function WORKSHOP_IDX(id, D) { return D.WORKSHOP.findIndex(u => u.id === id); }
   const spare = dirs.filter(d => !used.has(d)).sort();
   console.log('# painted sets with no foe yet: ' + (spare.join(', ') || 'none'));
   t.ok(spare.length <= 9, 'the unused pile does not grow unnoticed (' + spare.length + ')');
+}
+
+// ====== THE POWER METER IS THEATRE, AND THE ODDS MUST PROVE IT ======
+// A meter that changes what you win is a rigged wheel wearing a skill mask.
+// Power sets how HARD the wheel is thrown and nothing else, so the same seed
+// must draw the same prize at every power — and the wheel must still land
+// exactly where it was drawn to land.
+{
+  const { DP: Dw } = loadGame({}, false);
+  const seeds = [7, 91, 404, 1234, 55555];
+  const byPower = {};
+  for (const pw of [0, 0.25, 0.5, 0.75, 1]) {
+    byPower[pw] = seeds.map((sd) => {
+      Dw.srand(sd); Dw.newRun('knight');
+      const won = Dw.spinWheel(null, pw);
+      return won ? won.label : '?';
+    });
+  }
+  const base = seeds.map((sd) => { Dw.srand(sd); Dw.newRun('knight'); const w = Dw.spinWheel('coin'); return w ? w.label : '?'; });
+  for (const pw of [0, 0.25, 0.5, 0.75, 1]) {
+    t.eq(byPower[pw].join('|'), base.join('|'),
+         'power ' + pw + ' draws exactly what no power draws — the meter cannot touch the odds');
+  }
+  // ...and over a real sample the distribution is unmoved
+  const tally = (pw) => {
+    const c = {};
+    Dw.srand(20260731);
+    for (let i = 0; i < 400; i++) {
+      Dw.newRun('knight');
+      const w = pw === null ? Dw.spinWheel('coin') : Dw.spinWheel(null, pw);
+      c[w ? w.label : '?'] = (c[w ? w.label : '?'] | 0) + 1;
+    }
+    return Object.keys(c).sort().map(k => k + ':' + c[k]).join(' ');
+  };
+  const flat = tally(null), weak = tally(0), hard = tally(1);
+  t.eq(weak, flat, 'a limp flick pays the same spread as no meter at all');
+  t.eq(hard, flat, 'and so does a full-power throw');
+  console.log('# wheel spread, unmoved by power: ' + flat.slice(0, 110));
+
+  // AND THE STREAM MUST NOT SHIFT. spinWheel keeps its turns draw even when
+  // power overrides it; drop that draw and every roll AFTER a spin slides by
+  // one, which a single-spin comparison can never see.
+  const chain = (pw) => {
+    Dw.srand(8675309); Dw.newRun('knight');
+    const out = [];
+    for (let i = 0; i < 6; i++) {
+      const w = pw === null ? Dw.spinWheel('coin') : Dw.spinWheel(null, pw);
+      out.push(w ? w.label : '?');
+    }
+    return out.join('|');
+  };
+  const chainFlat = chain(null);
+  t.eq(chain(0), chainFlat, 'six spins at zero power run the same seeded stream');
+  t.eq(chain(1), chainFlat, 'and so do six at full power — the draw count is unchanged');
+  // ...and pinned, because the comparison above moves with BOTH sides. A spin
+  // must consume a fixed number of rolls: change that and every seeded thing
+  // after a spin slides, which no relative check can see. If this fails and
+  // the wheel's prizes were deliberately changed, re-pin it — otherwise
+  // something quietly altered how much of the stream a spin eats.
+  t.eq(chainFlat, '+GOLD|COMMON\nRELIC|+10 HP|\u22125 HP|COMMON\nRELIC|+5 HP',
+       'a spin eats exactly its fixed share of the seeded stream');
+
+  // what power DOES change: how far the wheel travels in the same time
+  Dw.srand(404); Dw.newRun('knight'); Dw.spinWheel(null, 0);
+  const soft = Math.abs(Dw.S.wheelAnim.target);
+  Dw.srand(404); Dw.newRun('knight'); Dw.spinWheel(null, 1);
+  const full = Math.abs(Dw.S.wheelAnim.target);
+  t.ok(full > soft * 1.6, 'a hard throw carries the wheel much further (' + soft.toFixed(1) + ' vs ' + full.toFixed(1) + ')');
+  // ...but it still comes to rest exactly where the draw said
+  for (const pw of [0, 0.5, 1]) {
+    Dw.srand(404); Dw.newRun('knight');
+    const won = Dw.spinWheel(null, pw);
+    const a = Dw.S.wheelAnim;
+    a.t = 1e6;
+    const at = Dw.wheelAt(Dw.wheelRot(a));
+    t.eq(Dw.WHEEL[at.i].label, won.label, 'at power ' + pw + ' it comes to rest on the prize it drew');
+  }
+
+  // the needle itself: it must actually sweep, and turn round at both ends
+  Dw.S.wheelFeed = { coins: ['coin', 'silver'], t: 0, ph: 'power', pw: 0, dir: 1 };
+  let hi = 0, lo = 1, turns = 0, last = 1;
+  for (let i = 0; i < 600; i++) {
+    Dw.wheelFeedTick(1 / 60);
+    const v = Dw.S.wheelFeed.pw;
+    hi = Math.max(hi, v); lo = Math.min(lo, v);
+    if (Dw.S.wheelFeed.dir !== last) { turns++; last = Dw.S.wheelFeed.dir; }
+  }
+  t.ok(hi > 0.98 && lo < 0.02, 'the needle uses the whole meter (' + lo.toFixed(2) + '..' + hi.toFixed(2) + ')');
+  t.ok(turns >= 2, 'and runs back and forth rather than off the end (' + turns + ' turns)');
+  t.ok(Dw.S.wheelFeed.pw >= 0 && Dw.S.wheelFeed.pw <= 1, 'and never leaves the bar');
+
+  // the feed: every piece falls before the machine arms, and pressing early
+  // must not draw a prize
+  Dw.S.wheelAnim = null;
+  Dw.S.wheelFeed = { coins: ['coin', 'coin', 'silver', 'lucky'], t: 0, ph: 'feed', pw: 0, dir: 1 };
+  const end = Dw.wheelFeedEnd(Dw.S.wheelFeed);
+  t.ok(end > Dw.WH_FEED, 'four pieces take longer to swallow than one (' + end.toFixed(2) + 's)');
+  t.ok(!Dw.wheelPress(), 'you cannot spin while the slot is still eating');
+  t.ok(!Dw.S.wheelAnim, 'and nothing is drawn by trying');
+  for (let i = 0; i < 600 && Dw.S.wheelFeed.ph === 'feed'; i++) Dw.wheelFeedTick(1 / 60);
+  t.eq(Dw.S.wheelFeed.ph, 'armed', 'once they are all in, it arms');
 }
 
 // ============== THE SIDES ARE POLISHED METAL ==============
