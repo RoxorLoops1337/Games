@@ -94,9 +94,27 @@
   .foeprev .fe{ font-size:34px; line-height:1; }
   .footer{ flex:0 0 auto; display:flex; align-items:center; gap:10px; padding-top:8px; justify-content:center; flex-wrap:wrap; }
 
+  .slopbox{ font-size:14px; font-weight:900; color:#ffd34d; background:#17210f;
+    border:2px solid #3d4d22; border-radius:9px; padding:3px 9px; white-space:nowrap; }
+  .ritrow{ flex:0 0 auto; display:flex; gap:6px; overflow-x:auto; padding:2px 2px 4px; scrollbar-width:thin; }
+  .rit{ flex:0 0 auto; min-width:118px; padding:6px 9px; border-radius:10px; cursor:pointer;
+    background:#111c11; border:2px solid #26361f; text-align:left; font-family:inherit; color:#cfe0c2; }
+  .rit b{ display:block; font-size:11.5px; color:#eaf6df; }
+  .rit i{ display:block; font-size:9.5px; font-style:normal; color:#8fa285; line-height:1.25; margin-top:1px; }
+  .rit .c{ float:right; font-size:11px; font-weight:900; color:#ffd34d; }
+  .rit.on{ border-color:#ff8ad4; background:#1b1420; box-shadow:0 0 0 2px rgba(255,130,200,.18); }
+  .rit.no{ opacity:.42; cursor:not-allowed; }
+  .haz{ border-color:#a0552a !important; color:#ffc48a !important; }
+  .litter{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .pickwrap{ position:relative; }
+  .egg2{ font-size:52px; line-height:1; animation:wob 1.1s ease-in-out infinite; }
   /* ---------- fight ---------- */
   #fight .arena{ flex:1 1 auto; display:flex; flex-direction:column; align-items:center;
     justify-content:center; gap:8px; min-height:0; position:relative; }
+  /* the ring: a lit patch of dirt so the empty middle reads as a place */
+  #fight .arena::before{ content:''; position:absolute; left:50%; top:50%; width:min(660px,92%);
+    height:min(360px,86%); transform:translate(-50%,-50%); border-radius:50%; pointer-events:none;
+    background:radial-gradient(ellipse at 50% 42%, rgba(150,220,110,.07), rgba(150,220,110,.02) 55%, transparent 72%); }
   .foe{ text-align:center; }
   .foe .em{ font-size:clamp(54px,13vw,86px); line-height:1; display:inline-block;
     filter:drop-shadow(0 8px 14px rgba(0,0,0,.6)); transition:transform .12s ease; }
@@ -110,7 +128,7 @@
     font-size:11px; font-weight:900; text-shadow:0 1px 3px #000; }
   .intent{ font-size:13px; font-weight:800; color:#ffd34d; }
   .badges{ display:flex; gap:6px; justify-content:center; margin-top:4px; flex-wrap:wrap; }
-  .bdg{ font-size:11px; font-weight:800; padding:3px 8px; border-radius:8px;
+  .bdg{ font-size:11px; font-weight:800; padding:3px 8px; border-radius:8px; white-space:nowrap;
     background:#1a2718; border:1px solid #33492c; color:#cfe0c2; }
   .bdg.psn{ color:#b6ff8a; border-color:#4f7a33; }
   .bdg.blk{ color:#7ec8ff; border-color:#2f5b7a; }
@@ -119,6 +137,35 @@
     text-shadow:0 2px 6px #000; animation:fly 1s ease-out forwards; z-index:9; }
   @keyframes fly{ 0%{opacity:1; transform:translateY(0) scale(.7)} 20%{transform:translateY(-14px) scale(1.2)}
     100%{opacity:0; transform:translateY(-64px) scale(1)} }
+  /* the pen — your beasts, alive on the field */
+  .pen{ position:relative; flex:0 0 auto; display:flex; gap:7px; justify-content:center;
+    align-items:flex-end; padding:10px 4px 6px; min-height:104px; }
+  .pen::before{ content:''; position:absolute; left:6%; right:6%; bottom:4px; height:2px;
+    background:linear-gradient(90deg, transparent, #2f4a28 12%, #2f4a28 88%, transparent); }
+  .penlbl{ position:absolute; left:8px; bottom:6px; font-size:9px; letter-spacing:2px;
+    color:#3f5836; text-transform:uppercase; }
+  .slot{ width:84px; height:88px; border-radius:12px; border:2px dashed #2b3f26;
+    display:flex; align-items:center; justify-content:center; color:#3f5836; font-size:22px; }
+  .pb{ position:relative; width:84px; border-radius:12px; overflow:hidden; cursor:help;
+    background:linear-gradient(180deg,#1d2c1c,#101a10); border:2px solid #4a7a34;
+    box-shadow:0 5px 12px rgba(0,0,0,.45); animation:pop .22s ease; }
+  .pb.fresh{ border-color:#a6ff5e; box-shadow:0 0 0 2px rgba(166,255,94,.25), 0 5px 12px rgba(0,0,0,.45); }
+  .pb.bulw{ border-color:#7ec8ff; }
+  .pb.hurt{ animation:shake .3s ease; }
+  .pb canvas{ display:block; width:100%; height:48px; background:#0a120a; }
+  .pb .pn{ font-size:9.5px; font-weight:800; text-align:center; padding:2px 2px 0; line-height:1.1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .pb .pm{ font-size:11px; font-weight:900; color:#ff8f6b; text-align:center; }
+  .pb .hh{ color:#7ec8ff; }
+  .pb .ph{ height:6px; margin:2px 4px 4px; border-radius:3px; background:#2a1414; overflow:hidden; }
+  .pb .ph i{ display:block; height:100%; background:linear-gradient(90deg,#7cc93a,#bcff6e); transition:width .25s ease; }
+  .pb .tag{ position:absolute; top:2px; right:3px; font-size:8px; letter-spacing:.5px; font-weight:800;
+    padding:1px 4px; border-radius:5px; background:rgba(6,12,6,.75); color:#a6ff5e; }
+  .coach{ flex:0 0 auto; margin:0 auto; padding:6px 12px; border-radius:10px; cursor:pointer;
+    background:#1b1420; border:2px solid #6b3355; color:#ffd0ee; font-size:12px; text-align:center;
+    max-width:640px; animation:pop .3s ease; }
+  .coach[hidden]{ display:none; }
+  .coach b{ color:#ff8ad4; }
   .handrow{ flex:0 0 auto; display:flex; gap:8px; padding:8px 4px 2px; overflow-x:auto; overflow-y:hidden;
     justify-content:safe center; scrollbar-width:thin; }
   .fbar{ flex:0 0 auto; display:flex; align-items:center; gap:10px; padding-top:6px; }
@@ -144,6 +191,20 @@
   .parents{ display:flex; gap:10px; align-items:center; justify-content:center; }
   .plus{ font-size:26px; color:#ff8ad4; font-weight:900; }
 
+  .booktop{ display:flex; gap:14px; align-items:center; justify-content:center; flex-wrap:wrap;
+    padding:6px 0; }
+  .bkinfo{ max-width:330px; text-align:left; font-size:13px; color:#cfe0c2; line-height:1.6; }
+  .bkinfo h2{ font-size:19px; color:#a6ff5e; margin-bottom:3px; }
+  .bkinfo .row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:4px; }
+  .tree{ display:flex; flex-direction:column; align-items:center; gap:5px; flex:0 0 auto; }
+  .tlvl{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; }
+  .tn{ display:flex; align-items:center; gap:5px; padding:3px 7px 3px 3px; border-radius:9px;
+    background:#111c11; border:1px solid #26361f; font-size:10.5px; color:#cfe0c2; cursor:pointer; }
+  .tn canvas{ width:26px; height:22px; border-radius:5px; background:#0a120a; display:block; }
+  .tn b{ color:#eaf6df; font-size:11px; }
+  .tn.root{ border-color:#a6ff5e; }
+  .tn .st2{ color:#8fa285; }
+  .tline{ font-size:10px; color:#5c7050; letter-spacing:2px; }
   #over{ align-items:center; justify-content:center; text-align:center; }
   .logbox{ max-height:150px; overflow-y:auto; text-align:left; font-size:12px; line-height:1.55;
     color:#a9bda0; background:#0a120a; border:1px solid #24361f; border-radius:10px; padding:8px 10px; }
@@ -174,13 +235,17 @@
       <h1>THE BIRDS<br>&amp; <em>THE BEASTS</em></h1>
       <p class="sub">Two cards enter. Three cards leave.</p>
       <div class="rules">
-        You are a monster breeder with a deck full of livestock.<br><br>
-        <b>Before every fight</b> you send <i>two</i> cards to the Nest &mdash; they sit the
-        battle out, so you fight short-handed.<br>
-        <b>After you win</b>, they breed. The chick inherits a blend of both parents,
-        plus whatever the dice do to it: a <i>prodigy</i>, a <i>runt</i>, a fresh mutation.<br>
-        <b>Your barn only holds 12.</b> Someone has to go to the farm upstate.<br>
-        Breed two relatives and the gene pool gets... <i>interesting</i>.
+        You breed monsters for a living. Your barn is your deck.<br><br>
+        <b>Before each fight</b> you put <i>two</i> beasts in the Nest. They skip the
+        battle &mdash; so you fight short-handed &mdash; and afterwards they breed.<br>
+        <b>In the ring</b>, a beast you play <i>stays</i> in the pen. It strikes every
+        turn and it is what stands between the thing you are fighting and you.
+        <span class="dim">Might is what it hits for. Hide is how long it lasts.</span><br>
+        <b>Every clutch throws two chicks</b> (three from a Fertile parent) and you keep
+        <i>one</i>. The rest go to market for Slop, which buys you a thumb on the scale
+        next time.<br>
+        <b>The barn holds ten.</b> Someone has to go to the farm upstate.<br>
+        Breed two relatives and the gene pool gets&hellip; <i>interesting</i>.
       </div>
       <div class="hall" id="hallBox"></div>
       <button class="btn" id="bStart">START THE HERD</button>
@@ -192,26 +257,27 @@
     <div class="bar">
       <div class="hpbox"><span>&#10084;</span><span id="nHp">40</span>
         <div class="hpbar"><i id="nHpBar" style="width:100%"></i></div></div>
+      <div class="slopbox" id="nSlop">&#129699; 2</div>
       <div class="grow"></div>
       <div class="pip" id="nPips"></div>
     </div>
-    <div class="panel foeprev" style="margin-bottom:8px">
+    <div class="panel foeprev" style="margin-bottom:6px">
       <div class="fe" id="nFoeEm">&#128020;</div>
       <div style="flex:1; min-width:0">
         <div class="tiny">Next in the ring</div>
         <h3 id="nFoeName">Feral Chicken</h3>
         <div class="tiny" id="nFoeStats">22 HP</div>
       </div>
-      <div style="text-align:right">
-        <div class="tiny">Barn</div>
-        <h3 id="nDeckCount">8/12</h3>
-      </div>
+      <button class="btn alt sm" id="bHazard">TAKE IT ON</button>
     </div>
-    <div class="tiny" style="text-align:center; padding:2px 0 6px" id="nHint">
+    <div class="ritrow" id="nRituals"></div>
+    <div class="tiny" style="text-align:center; padding:4px 0 4px" id="nHint">
       Pick <b class="pink">two</b> beasts for the Nest &mdash; they skip this fight and breed after it.
     </div>
     <div class="deckwrap"><div class="grid" id="nGrid"></div></div>
     <div class="footer">
+      <button class="btn alt sm" id="bBook">&#128214; STUD BOOK</button>
+      <button class="btn alt sm" id="bVet">&#128137; VET &mdash; 2 &#129699;</button>
       <button class="btn" id="bFight" disabled>SEND 2 TO THE NEST</button>
     </div>
   </div>
@@ -234,6 +300,8 @@
         <div class="badges" id="fBadges"></div>
       </div>
     </div>
+    <div class="coach" id="coach" hidden></div>
+    <div class="pen" id="pen"></div>
     <div class="handrow" id="hand"></div>
     <div class="fbar">
       <div class="feed" id="feed"></div>
@@ -246,14 +314,15 @@
 
   <!-- ================= HATCH ================= -->
   <div class="scr" id="hatch">
-    <div class="tcard scrollcap" style="max-height:96vh">
+    <div class="tcard scrollcap" style="max-height:96vh; width:min(760px,96vw)">
       <div class="tiny">The Nest</div>
-      <h2 id="hTitle" style="font-size:22px; color:#ff8ad4">SOMETHING IS HAPPENING</h2>
-      <div class="parents" id="hParents" style="margin:12px 0"></div>
-      <div id="hBanners" style="min-height:34px"></div>
-      <div class="hatchrow" id="hChild" style="margin:6px 0 10px"></div>
+      <h2 id="hTitle" style="font-size:20px; color:#ff8ad4">THE NEST STIRS</h2>
+      <div class="parents" id="hParents" style="margin:10px 0"></div>
+      <div class="tiny" id="hSub" style="letter-spacing:1px">Keep <b class="pink">one</b>. The rest go to market.</div>
+      <div class="hatchrow" id="hChild" style="margin:8px 0 6px"></div>
+      <div id="hBanners" style="min-height:30px"></div>
       <div id="hDeltas" class="tiny" style="min-height:18px; letter-spacing:1px"></div>
-      <div class="footer"><button class="btn" id="bHatchNext">TAKE IT HOME</button></div>
+      <div class="footer"><button class="btn" id="bHatchNext" disabled>KEEP IT</button></div>
     </div>
   </div>
 
@@ -282,7 +351,22 @@
     <div class="footer">
       <button class="btn pinky" id="bCull" disabled>SEND TO THE FARM UPSTATE</button>
       <button class="btn alt" id="bCullSkip">KEEP THEM ALL</button>
+      <button class="btn alt sm" id="bCullBook">&#128214; STUD BOOK</button>
     </div>
+  </div>
+
+  <!-- ================= STUD BOOK ================= -->
+  <div class="scr" id="book">
+    <div class="bar">
+      <h3>&#128214; THE STUD BOOK</h3>
+      <div class="grow"></div>
+      <button class="btn alt sm" id="bBookBack">BACK</button>
+    </div>
+    <div class="booktop" id="bkTop"></div>
+    <div class="tiny" style="text-align:center; padding:6px 0 2px">Ancestry</div>
+    <div class="tree" id="bkTree"></div>
+    <div class="tiny" style="text-align:center; padding:8px 0 2px">The whole herd, living and retired</div>
+    <div class="deckwrap"><div class="grid" id="bkList"></div></div>
   </div>
 
   <!-- ================= OVER ================= -->
@@ -295,6 +379,7 @@
       <div class="logbox" id="oLog"></div>
       <div class="footer">
         <button class="btn" id="bAgain">BREED AGAIN</button>
+        <button class="btn alt" id="bOverBook">&#128214; STUD BOOK</button>
         <a class="btn alt" href="/" style="text-decoration:none; display:inline-block">BACK TO GAMES</a>
       </div>
     </div>
@@ -337,24 +422,28 @@ function shuffle(a){
 /* -------------------------------------------------------------- traits --- */
 // cost: added to the derived Feed cost, so a strong keyword is paid for.
 const TRAITS = {
-  none:    { name: '—',       cost: 0,  desc: 'A perfectly ordinary animal.' },
-  frenzy:  { name: 'Frenzy',  cost: 1,  desc: 'Strikes twice.' },
-  thorns:  { name: 'Thorns',  cost: 0,  desc: 'Foe takes 3 back when it hits you.' },
-  leech:   { name: 'Leech',   cost: 1,  desc: 'Heals you for half the damage.' },
-  swift:   { name: 'Swift',   cost: 0,  desc: 'Draw a card.' },
-  venom:   { name: 'Venom',   cost: 1,  desc: 'Applies poison.' },
-  runt:    { name: 'Runt',    cost: 0,  desc: 'Free. Might halved.' },
-  feral:   { name: 'Feral',   cost: 1,  desc: '+50% Might, gives no Hide.' },
+  none:    { name: '\u2014',   cost: 0,  desc: 'A perfectly ordinary animal.' },
+  frenzy:  { name: 'Frenzy',  cost: 2,  desc: 'Strikes twice every turn.' },
+  thorns:  { name: 'Thorns',  cost: 1,  desc: 'Whatever hits it takes 3 back.' },
+  leech:   { name: 'Leech',   cost: 1,  desc: 'Heals you for half of its damage.' },
+  swift:   { name: 'Swift',   cost: 1,  desc: 'Strikes the moment it enters the pen.' },
+  venom:   { name: 'Venom',   cost: 1,  desc: 'Its bite leaves poison behind.' },
+  runt:    { name: 'Runt',    cost: 0,  desc: 'Free to field. Might halved.' },
+  feral:   { name: 'Feral',   cost: 1,  desc: '+50% Might, but takes +50% damage.' },
   fertile: { name: 'Fertile', cost: 0,  desc: 'Its young mutate wildly.' },
-  brood:   { name: 'Brood',   cost: 1,  desc: 'Adds a Spawn to your hand.' },
-  plump:   { name: 'Plump',   cost: 0,  desc: '+4 Hide.' },
-  regal:   { name: 'Regal',   cost: 1,  desc: '+1 Feed next turn.' },
-  cursed:  { name: 'Cursed',  cost: -1, desc: 'Costs you 2 HP to play.' },
+  brood:   { name: 'Brood',   cost: 1,  desc: 'Puts a Spawn in your hand.' },
+  plump:   { name: 'Plump',   cost: 1,  desc: '+5 Hide.' },
+  regal:   { name: 'Regal',   cost: 1,  desc: '+1 Feed every turn it lives.' },
+  bulwark: { name: 'Bulwark', cost: 1,  desc: 'Blows land on it before anything else.' },
+  elusive: { name: 'Elusive', cost: 1,  desc: 'Hit only when nothing else is left.' },
+  rally:   { name: 'Rally',   cost: 2,  desc: '+2 Might to every other beast in the pen.' },
+  cursed:  { name: 'Cursed',  cost: -1, desc: 'Costs you 2 health to field.' },
   hollow:  { name: 'Hollow',  cost: -1, desc: 'Might halved. Bad blood.' },
 };
 const BAD_TRAITS = ['cursed', 'hollow', 'runt'];
 // Traits a random mutation may roll. The bad ones only come from inbreeding.
-const MUT_TRAITS = ['frenzy', 'thorns', 'leech', 'swift', 'venom', 'feral', 'fertile', 'brood', 'plump', 'regal', 'runt'];
+const MUT_TRAITS = ['frenzy', 'thorns', 'leech', 'swift', 'venom', 'feral', 'fertile', 'brood',
+  'plump', 'regal', 'bulwark', 'elusive', 'rally', 'runt'];
 
 /* --------------------------------------------------------------- names --- */
 const SYL_A = ['Bog', 'Cinder', 'Grunt', 'Mud', 'Sky', 'Gloom', 'Thistle', 'Rot', 'Bram', 'Snot',
@@ -368,14 +457,35 @@ const TITLES = ['the Adequate', 'the Damp', 'the Unwell', 'III', 'Jr.', 'the Lou
 
 /* ---------------------------------------------------------------- card --- */
 let _nid = 1;
+// Every beast that has ever drawn breath this run, so a pedigree can be walked
+// long after the animal itself has gone to the farm upstate.
+let STUD = {};
+function studAdd(c, parentIds){
+  STUD[c.id] = { id: c.id, name: c.name, might: c.might, hide: c.hide, trait: c.trait,
+    gen: c.gen, vis: c.vis, p: parentIds || null };
+}
+/** Walk a beast's ancestry `depth` generations up. Returns null past the root. */
+function pedigree(id, depth){
+  const e = STUD[id];
+  if (!e) return null;
+  const node = { id: e.id, name: e.name, might: e.might, hide: e.hide, trait: e.trait,
+    gen: e.gen, vis: e.vis, up: [] };
+  if (depth > 0 && e.p){
+    for (const pid of e.p){
+      const n = pedigree(pid, depth - 1);
+      if (n) node.up.push(n);
+    }
+  }
+  return node;
+}
 function deriveCost(might, hide, trait){
   if (trait === 'runt') return 0;
-  const raw = (might + hide * 0.8 - 2) / 5 + (TRAITS[trait] ? TRAITS[trait].cost : 0);
+  const raw = (might + hide * 0.6 - 2) / 5 + (TRAITS[trait] ? TRAITS[trait].cost : 0);
   return clamp(Math.round(raw), 0, 5);
 }
 function power(c){ // one number for "how good is this beast", used for sorting + the hall
   const t = TRAITS[c.trait] ? TRAITS[c.trait].cost : 0;
-  let p = c.might + c.hide * 0.8 + t * 2.5;
+  let p = c.might + c.hide * 0.6 + t * 2.5;
   if (BAD_TRAITS.indexOf(c.trait) >= 0) p -= 3;
   return Math.round(p * 10) / 10;
 }
@@ -393,9 +503,10 @@ function makeCard(o){
     blood: o.blood ? o.blood.slice(0, 10) : [],
     parents: o.parents || null,
     vis: o.vis || randVis(),
-    junk: !!o.junk,
+    junk: !!o.junk, dud: !!o.dud,
   };
   c.blood = [c.id].concat(c.blood).slice(0, 10);
+  if (!c.junk) studAdd(c, o.parentIds || null);
   return c;
 }
 function randVis(){
@@ -468,21 +579,26 @@ function childName(a, b, tags){
  * The heart of the game. Two parents in, one chick out, plus the tags the
  * hatch screen shouts at you. Pure — no DOM, no globals beyond the rng.
  */
-function breed(a, b){
+function breed(a, b, opts){
+  const o = opts || {};
   const inbred = shareBlood(a, b);
   const fertile = a.trait === 'fertile' || b.trait === 'fertile';
   let wild = 1;
   if (inbred) wild *= 1.85;
   if (fertile) wild *= 1.6;
 
-  const might = geneRoll(a.might, b.might, wild);
-  const hide = geneRoll(a.hide, b.hide, wild);
+  // Line-breeding: the favoured stat gets the better of two rolls. That is what
+  // the Slop buys you — a thumb on the scale, not a guarantee.
+  const roll2 = (x, y) => Math.max(geneRoll(x, y, wild), geneRoll(x, y, wild));
+  const might = o.focus === 'might' ? roll2(a.might, b.might) : geneRoll(a.might, b.might, wild);
+  const hide = o.focus === 'hide' ? roll2(a.hide, b.hide) : geneRoll(a.hide, b.hide, wild);
 
   // trait: mostly from a parent, sometimes brand new
   let trait;
   const tr = rng();
   const mutChance = fertile ? 0.26 : 0.13;
-  if (tr < mutChance) trait = pick(MUT_TRAITS);
+  if (o.strange) trait = pick(MUT_TRAITS);
+  else if (tr < mutChance) trait = pick(MUT_TRAITS);
   else trait = rng() < 0.5 ? a.trait : b.trait;
   if (trait === 'none' && rng() < 0.10) trait = pick(MUT_TRAITS);
   // bad blood tells
@@ -507,66 +623,148 @@ function breed(a, b){
     trait,
     gen: Math.max(a.gen, b.gen) + 1,
     blood: [a.id, b.id].concat(a.blood, b.blood),
+    parentIds: [a.id, b.id],
     parents: [a.name, b.name],
     vis: breedVis(a, b, wild),
   });
   return { child, tags, inbred, dM: child.might - avgM, dH: child.hide - avgH };
 }
 
+/** A clutch, not a single egg: every pairing throws 2 chicks (3 if either
+ *  parent is Fertile) and you keep exactly one. Selection — not a fatter
+ *  average — is what makes a herd compound, and it puts the choice in your
+ *  hands instead of leaving you to watch a slot machine. */
+function breedLitter(a, b, ritual){
+  const r = RITUALS[ritual] || RITUALS.natural;
+  const n = 2 + (a.trait === 'fertile' || b.trait === 'fertile' ? 1 : 0) + (r.extra || 0);
+  const opts = { focus: r.focus, strange: !!r.strange };
+  const out = [];
+  for (let i = 0; i < n; i++) out.push(breed(a, b, opts));
+  return out;
+}
+
 /* ------------------------------------------------------------ wild stock - */
 function wildCard(tier){
-  const might = ri(4, 7) + Math.round(tier * 1.5);
-  const hide = ri(0, 5) + Math.round(tier * 0.9);
+  // Deliberately behind the curve: a stranger at the fence is an outcross, not
+  // a shortcut. If wild stock kept pace with bred stock, breeding would be
+  // optional — and breeding is the game.
+  const might = ri(4, 7) + Math.round(tier * 0.85);
+  const hide = ri(3, 8) + Math.round(tier * 1.05);
   const trait = rng() < 0.65 ? pick(MUT_TRAITS) : 'none';
   return makeCard({ pre: pick(SYL_A), suf: pick(SYL_B), might, hide, trait, gen: 1 });
 }
+/** Slot last run's champion into the herd, in place of its weakest member. */
+function applyFounder(deck){
+  const f = loadFounder();
+  if (!f || !f.pre) return deck;
+  const c = makeCard({ pre: f.pre, suf: f.suf, name: f.name, might: f.might, hide: f.hide,
+    trait: f.trait, gen: 1, vis: f.vis });
+  c.founder = true;
+  let worst = 0;
+  for (let i = 1; i < deck.length; i++) if (power(deck[i]) < power(deck[worst])) worst = i;
+  deck[worst] = c;
+  return deck;
+}
 function starterDeck(){
   const s = [
-    ['Bog', 'snout', 6, 3, 'none'],
-    ['Mud', 'wart', 4, 5, 'plump'],
-    ['Grunt', 'hide', 5, 4, 'none'],
-    ['Sky', 'wing', 6, 2, 'swift'],
-    ['Thistle', 'tooth', 7, 1, 'none'],
-    ['Fen', 'belly', 3, 6, 'none'],
-    ['Gob', 'maw', 6, 0, 'feral'],
-    ['Rot', 'rump', 5, 3, 'none'],
+    ['Bog', 'snout', 5, 7, 'none'],
+    ['Mud', 'wart', 3, 6, 'plump'],
+    ['Grunt', 'hide', 4, 9, 'none'],
+    ['Sky', 'wing', 5, 4, 'swift'],
+    ['Thistle', 'tooth', 7, 3, 'none'],
+    ['Fen', 'belly', 2, 12, 'bulwark'],
+    ['Gob', 'maw', 6, 4, 'feral'],
+    ['Rot', 'rump', 4, 6, 'none'],
   ];
-  return s.map((x) => makeCard({ pre: x[0], suf: x[1], might: x[2], hide: x[3], trait: x[4], gen: 1 }));
+  return applyFounder(s.map((x) => makeCard({ pre: x[0], suf: x[1], might: x[2], hide: x[3],
+    trait: x[4], gen: 1 })));
 }
 function spawnCard(){
-  return makeCard({ pre: 'Spa', suf: 'wn', name: 'Spawn', might: 3, hide: 0, trait: 'none', cost: 0, junk: true });
+  return makeCard({ pre: 'Spa', suf: 'wn', name: 'Spawn', might: 3, hide: 2, trait: 'none', cost: 0, junk: true });
 }
 function junkCard(){
-  return makeCard({ pre: 'Paper', suf: 'work', name: 'Paperwork', might: 0, hide: 0, trait: 'none', cost: 1, junk: true });
+  const c = makeCard({ pre: 'Paper', suf: 'work', name: 'Paperwork', might: 0, hide: 0,
+    trait: 'none', cost: 1, junk: true });
+  c.dud = true;   // takes no pen slot; it just costs you a Feed to be rid of
+  return c;
 }
 
 /* ---------------------------------------------------------------- foes --- */
 // v: attack value, n: hit count. Moves cycle; the next one is telegraphed.
 const FOES = [
-  { name: 'Feral Chicken', em: '🐓', hp: 22, moves: [{ t: 'atk', v: 6, s: 'Peck' }, { t: 'atk', v: 7, s: 'Flap' }, { t: 'def', v: 5, s: 'Fluff up' }] },
-  { name: 'Hedge Ogre', em: '👹', hp: 30, moves: [{ t: 'atk', v: 9, s: 'Club' }, { t: 'def', v: 6, s: 'Brace' }, { t: 'atk', v: 11, s: 'Smash' }] },
-  { name: 'Cousin Merle', em: '🤠', hp: 36, moves: [{ t: 'atkx', v: 4, n: 3, s: 'Whip' }, { t: 'buff', v: 3, s: 'Boast' }, { t: 'atk', v: 10, s: 'Backhand' }] },
-  { name: 'The Inspector', em: '📋', hp: 46, boss: 1, moves: [{ t: 'curse', s: 'File a form' }, { t: 'atk', v: 12, s: 'Fine you' }, { t: 'def', v: 10, s: 'Red tape' }, { t: 'atk', v: 14, s: 'Condemn' }] },
-  { name: 'Poacher Gang', em: '🏹', hp: 52, moves: [{ t: 'atkx', v: 5, n: 3, s: 'Volley' }, { t: 'atk', v: 13, s: 'Snare' }, { t: 'buff', v: 4, s: 'Regroup' }] },
-  { name: 'Prize Bull "Meatlocker"', em: '🐂', hp: 62, moves: [{ t: 'atk', v: 15, s: 'Charge' }, { t: 'def', v: 12, s: 'Snort' }, { t: 'atk', v: 18, s: 'Gore' }] },
-  { name: 'Barn Fire', em: '🔥', hp: 68, moves: [{ t: 'atkx', v: 6, n: 3, s: 'Spread' }, { t: 'atk', v: 16, s: 'Roar' }, { t: 'buff', v: 5, s: 'Catch wind' }] },
-  { name: 'The Vet', em: '💉', hp: 76, boss: 1, moves: [{ t: 'atk', v: 15, s: 'Jab' }, { t: 'heal', v: 14, s: 'Self-medicate' }, { t: 'curse', s: 'Bill you' }, { t: 'atk', v: 19, s: 'Sedate' }] },
-  { name: 'Rustlers', em: '🚚', hp: 84, moves: [{ t: 'atkx', v: 7, n: 3, s: 'Round up' }, { t: 'atk', v: 20, s: 'Haul off' }, { t: 'def', v: 14, s: 'Lock up' }] },
-  { name: 'Grand Champion Sir Loin', em: '🏆', hp: 92, moves: [{ t: 'buff', v: 6, s: 'Pose' }, { t: 'atk', v: 22, s: 'Trample' }, { t: 'def', v: 16, s: 'Preen' }, { t: 'atkx', v: 9, n: 3, s: 'Rosette rush' }] },
-  { name: 'The Repo Man', em: '🏦', hp: 100, moves: [{ t: 'curse', s: 'Serve papers' }, { t: 'atk', v: 24, s: 'Repossess' }, { t: 'atkx', v: 10, n: 3, s: 'Itemise' }, { t: 'def', v: 18, s: 'Small print' }] },
-  { name: 'THE UR-MOTHER', em: '🥚', hp: 128, boss: 1, moves: [{ t: 'atk', v: 20, s: 'Birth a horror' }, { t: 'buff', v: 7, s: 'Swell' }, { t: 'atkx', v: 11, n: 3, s: 'Brood swarm' }, { t: 'heal', v: 18, s: 'Reabsorb' }, { t: 'atk', v: 30, s: 'THE CLUTCH' }] },
+  { name: 'Feral Chicken', em: '🐓', hp: 24, moves: [
+    { t: 'atk', v: 7, s: 'Peck' }, { t: 'atkx', v: 4, n: 2, s: 'Flap' },
+    { t: 'def', v: 4, s: 'Fluff up' } ] },
+  { name: 'Hedge Ogre', em: '👹', hp: 30, moves: [
+    { t: 'atk', v: 11, s: 'Club' }, { t: 'def', v: 4, s: 'Brace' },
+    { t: 'atk', v: 14, s: 'Smash' } ] },
+  { name: 'Cousin Merle', em: '🤠', hp: 36, moves: [
+    { t: 'atkx', v: 6, n: 3, s: 'Whip' }, { t: 'buff', v: 3, s: 'Boast' },
+    { t: 'hit', v: 8, s: 'Spit at you' } ] },
+  { name: 'The Inspector', em: '📋', hp: 52, boss: 1, moves: [
+    { t: 'curse', s: 'File a form' }, { t: 'atk', v: 15, s: 'Fine you' },
+    { t: 'sweep', v: 6, s: 'Audit the pen' }, { t: 'hit', v: 11, s: 'Condemn' } ] },
+  { name: 'Poacher Gang', em: '🏹', hp: 55, moves: [
+    { t: 'atkx', v: 8, n: 3, s: 'Volley' }, { t: 'atk', v: 19, s: 'Snare' },
+    { t: 'buff', v: 4, s: 'Regroup' } ] },
+  { name: 'Prize Bull \"Meatlocker\"', em: '🐂', hp: 68, moves: [
+    { t: 'atk', v: 25, s: 'Charge' }, { t: 'def', v: 10, s: 'Snort' },
+    { t: 'sweep', v: 10, s: 'Stampede' } ] },
+  { name: 'Barn Fire', em: '🔥', hp: 83, moves: [
+    { t: 'sweep', v: 13, s: 'Spread' }, { t: 'atk', v: 26, s: 'Roar' },
+    { t: 'buff', v: 5, s: 'Catch wind' } ] },
+  { name: 'The Vet', em: '💉', hp: 117, boss: 1, moves: [
+    { t: 'atk', v: 30, s: 'Jab' }, { t: 'heal', v: 11, s: 'Self-medicate' },
+    { t: 'hit', v: 20, s: 'Bill you' }, { t: 'sweep', v: 16, s: 'Sedate the pen' } ] },
+  { name: 'Rustlers', em: '🚚', hp: 126, moves: [
+    { t: 'atkx', v: 14, n: 3, s: 'Round up' }, { t: 'atk', v: 43, s: 'Haul off' },
+    { t: 'def', v: 19, s: 'Lock up' } ] },
+  { name: 'Grand Champion Sir Loin', em: '🏆', hp: 155, moves: [
+    { t: 'buff', v: 6, s: 'Pose' }, { t: 'atk', v: 49, s: 'Trample' },
+    { t: 'sweep', v: 21, s: 'Rosette rush' }, { t: 'def', v: 25, s: 'Preen' } ] },
+  { name: 'The Repo Man', em: '🏦', hp: 190, moves: [
+    { t: 'curse', s: 'Serve papers' }, { t: 'hit', v: 37, s: 'Repossess' },
+    { t: 'atkx', v: 23, n: 3, s: 'Itemise' }, { t: 'atk', v: 64, s: 'Foreclose' } ] },
+  { name: 'THE UR-MOTHER', em: '🥚', hp: 269, boss: 1, moves: [
+    { t: 'atk', v: 59, s: 'Birth a horror' }, { t: 'sweep', v: 32, s: 'Brood swarm' },
+    { t: 'buff', v: 7, s: 'Swell' }, { t: 'heal', v: 22, s: 'Reabsorb' },
+    { t: 'atk', v: 89, s: 'THE CLUTCH' } ] },
 ];
 const RUN_LEN = FOES.length;
-const MAX_DECK = 12;
+const MAX_DECK = 10;
 const START_HP = 40;
 const FEED = 3;
 const HAND_SIZE = 5;
 const WILD_AFTER = [0, 3, 6, 8]; // 0-based fight index; win it, get a fresh-bloodline offer
 
-function makeFoe(i){
+/* The Slop economy. Rejected chicks go to market; that is what pays for the
+   next round's thumb on the scale. */
+const SLOP_PER_WIN = 2;
+const SLOP_PER_CHICK = 1;
+const VET_COST = 2, VET_HEAL = 12;
+const RITUALS = {
+  natural: { name: 'Let nature have it', cost: 0, desc: 'Two chicks. No thumb on the scale.' },
+  big:     { name: 'Big clutch', cost: 2, extra: 1, desc: 'One extra chick to choose from.' },
+  might:   { name: 'Line-breed for Might', cost: 2, focus: 'might', desc: 'Might takes the better of two rolls.' },
+  hide:    { name: 'Line-breed for Hide', cost: 2, focus: 'hide', desc: 'Hide takes the better of two rolls.' },
+  strange: { name: 'Strange feed', cost: 3, strange: 1, desc: 'Every chick comes out with a mutated trait.' },
+};
+const RITUAL_IDS = ['natural', 'big', 'might', 'hide', 'strange'];
+// Take a hazard into the ring and the market pays you extra for the trouble.
+const HAZARDS = [
+  { id: 'muzzled', name: 'Muzzled', desc: 'Every beast hits for 2 less.', mods: { might: -2 } },
+  { id: 'lean', name: 'Lean season', desc: 'One less Feed each turn.', mods: { feed: -1 } },
+  { id: 'crowded', name: 'Crowded barn', desc: 'You draw one card fewer.', mods: { hand: -1 } },
+  { id: 'rabid', name: 'Rabid', desc: 'It hits 4 harder.', mods: { foeMight: 4 } },
+  { id: 'fat', name: 'Well fed', desc: 'It has a quarter more health.', mods: { hpMul: 1.25 } },
+];
+const HAZARD_PAY = 3;
+
+function makeFoe(i, mods){
   const f = FOES[clamp(i, 0, FOES.length - 1)];
-  return { name: f.name, em: f.em, hp: f.hp, maxHp: f.hp, moves: f.moves, mi: 0,
-    block: 0, poison: 0, bonus: 0, boss: !!f.boss };
+  const hp = Math.round(f.hp * ((mods && mods.hpMul) || 1));
+  return { name: f.name, em: f.em, hp, maxHp: hp, moves: f.moves, mi: 0,
+    block: 0, poison: 0, bonus: ((mods && mods.foeMight) || 0), boss: !!f.boss };
 }
 /* ============================== RUN STATE ================================= */
 let R = null;   // the run
@@ -575,14 +773,17 @@ let F = null;   // the current fight (null outside combat)
 function newRun(seed){
   srand(seed == null ? (Date.now() % 1e9) : seed);
   _nid = 1;
+  STUD = {};
   R = {
     hp: START_HP, maxHp: START_HP,
     deck: starterDeck(),
     idx: 0,                 // which foe is next
     nest: [],               // ids of the two in the nest
-    log: [], born: 0, retired: 0, wins: 0,
+    slop: 2, ritual: 'natural', hazard: null, litter: null,
+    log: [], born: 0, retired: 0, wins: 0, sold: 0,
     lastHatch: null, wildOffer: null, over: null,
   };
+  rollHazard();
   return R;
 }
 function cardById(id){ return R.deck.find((c) => c.id === id) || null; }
@@ -594,23 +795,64 @@ function setNest(ids){
   R.nest = ids.slice();
   return true;
 }
+/** One hazard is on the table each round; taking it is the player's call. */
+function rollHazard(){
+  const h = HAZARDS[Math.floor(rng() * HAZARDS.length)];
+  R.hazardOffer = h;
+  R.hazard = null;
+  return h;
+}
+function toggleHazard(){
+  R.hazard = R.hazard ? null : R.hazardOffer;
+  return !!R.hazard;
+}
+function ritualCost(id){ return (RITUALS[id] || RITUALS.natural).cost; }
+/** Pick a breeding ritual. Slop is charged now and refunded if you change. */
+function setRitual(id){
+  if (!RITUALS[id]) return false;
+  const now = ritualCost(R.ritual || 'natural');
+  const want = ritualCost(id);
+  if (want > R.slop + now) return false;
+  R.slop += now - want;
+  R.ritual = id;
+  return true;
+}
+function vetVisit(){
+  if (R.slop < VET_COST || R.hp >= R.maxHp) return false;
+  R.slop -= VET_COST;
+  R.hp = Math.min(R.maxHp, R.hp + VET_HEAL);
+  return true;
+}
+function fightMods(){
+  const m = R.hazard ? Object.assign({}, R.hazard.mods) : {};
+  if (R.hazard) m.label = R.hazard.name.toUpperCase();
+  return m;
+}
 function deckForFight(){ return R.deck.filter((c) => R.nest.indexOf(c.id) < 0); }
 
-/* ================================ FIGHT =================================== */
+/* ================================ FIGHT ===================================
+   Beasts do not evaporate when you play them. A card puts a live animal in
+   the PEN, where it stays: it strikes every turn, and it is what the foe has
+   to chew through before it can reach you. Might is what it hits for, Hide is
+   how long it lasts. That is the whole reason breeding for both matters.
+   ========================================================================== */
+const MAX_PEN = 4;
 /** Feed grows every 3 rounds, because bred stats (and so card costs) inflate. */
 function feedFor(idx){ return FEED + Math.floor(idx / 3); }
-function startFight(){
+function startFight(mods){
   const cards = deckForFight().map((c) => Object.assign({}, c)); // fight copies, so
-  const fm = feedFor(R.idx);                                     // Paperwork etc. never
+  const fm = feedFor(R.idx) + ((mods && mods.feed) || 0);        // Paperwork never
   F = {                                                          // sticks to the barn
-    foe: makeFoe(R.idx),
-    draw: shuffle(cards), hand: [], disc: [],
-    feed: fm, feedMax: fm, bonusFeed: 0,
-    block: 0, thorns: 0, turn: 1, over: null, hit: 0, log: [],
+    foe: makeFoe(R.idx, mods),
+    draw: shuffle(cards), hand: [], disc: [], pen: [],
+    feed: fm, feedMax: fm,
+    turn: 1, over: null, hit: 0, log: [], uid: 1,
+    mods: mods || {},
   };
-  drawCards(HAND_SIZE);
+  drawCards(handSize());
   return F;
 }
+function handSize(){ return HAND_SIZE + ((F && F.mods && F.mods.hand) || 0); }
 function drawCards(n){
   for (let i = 0; i < n; i++){
     if (!F.draw.length){
@@ -622,6 +864,27 @@ function drawCards(n){
   }
 }
 function fLog(s){ F.log.push(s); if (F.log.length > 60) F.log.shift(); }
+
+/* ------------------------------------------------------------ the beasts -- */
+/** A card's Hide as a pool of health. Never zero — everything can take a hit. */
+function cardHide(c){ return Math.max(1, c.hide + (c.trait === 'plump' ? 5 : 0)); }
+/** A card's own damage, before the pen's Rally bonuses. */
+function cardDamage(c){
+  let d = c.might;
+  if (c.trait === 'runt' || c.trait === 'hollow') d = Math.ceil(d / 2);
+  if (c.trait === 'feral') d = Math.floor(d * 1.5);
+  if (F && F.mods && F.mods.might) d = Math.max(0, d + F.mods.might);
+  return Math.max(0, d);
+}
+/** What a beast standing in the pen actually hits for, Rally included. */
+function beastMight(b){
+  let d = cardDamage(b.c);
+  if (d <= 0) return 0;
+  if (F && F.pen) for (const o of F.pen) if (o !== b && o.c.trait === 'rally') d += 2;
+  return d;
+}
+function penFull(){ return F.pen.length >= MAX_PEN; }
+function penHas(trait){ return F.pen.some((b) => b.c.trait === trait); }
 
 function damageFoe(v){
   if (v <= 0) return 0;
@@ -636,64 +899,98 @@ function damageFoe(v){
 }
 function damagePlayer(v){
   if (v <= 0) return 0;
-  const soak = Math.min(F.block, v);
-  F.block -= soak;
-  const real = v - soak;
-  R.hp -= real;
+  R.hp -= v;
   if (R.hp <= 0){ R.hp = 0; F.over = 'lose'; }
-  return real;
+  return v;
 }
-/** Damage a card actually deals, after its trait math. */
-function cardDamage(c){
-  let d = c.might;
-  if (c.trait === 'runt' || c.trait === 'hollow') d = Math.ceil(d / 2);
-  if (c.trait === 'feral') d = Math.floor(d * 1.5);
-  return d;
+/** Hurt one beast in the pen. Returns how much of the blow it actually soaked —
+ *  anything left over rolls on to whatever is standing behind it. */
+function hurtBeast(b, v){
+  const mult = b.c.trait === 'feral' ? 1.5 : 1;
+  const soaked = Math.min(v, Math.ceil(b.hp / mult));
+  b.hp -= Math.ceil(v * mult);
+  if (b.c.trait === 'thorns') damageFoe(3);
+  if (b.hp <= 0){
+    const i = F.pen.indexOf(b);
+    if (i >= 0) F.pen.splice(i, 1);
+    F.disc.push(b.c);
+    fLog(b.c.name + ' goes down');
+  }
+  return soaked;
 }
-function cardHide(c){
-  if (c.trait === 'feral') return 0;
-  return c.hide + (c.trait === 'plump' ? 4 : 0);
+/** A blow lands on the front of the pen and carries through anything it kills —
+ *  but a body in the way blunts it: overkill only carries at half. A line that
+ *  is merely outmatched bends; one that is hopelessly outmatched breaks. */
+const SPILL = 0.5;
+function swingAt(v){
+  let left = v;
+  for (let guard = 0; left > 0 && guard < 8; guard++){
+    const t = foeTarget();
+    if (!t){ damagePlayer(left); return; }
+    const soaked = hurtBeast(t, left);
+    left = Math.floor((left - soaked) * SPILL);
+  }
 }
-/** Play hand[i]. Returns false if it can't be played. */
+/** Who eats the next blow: a Bulwark first, anything ordinary next, Elusive last. */
+function foeTarget(){
+  if (!F.pen.length) return null;
+  const bul = F.pen.filter((b) => b.c.trait === 'bulwark');
+  if (bul.length) return bul[0];
+  const plain = F.pen.filter((b) => b.c.trait !== 'elusive');
+  return plain.length ? plain[0] : F.pen[0];
+}
+/** One beast's attack for the turn. Frenzy swings twice, Venom leaves poison. */
+function strike(b){
+  const d = beastMight(b);
+  if (d <= 0) return 0;
+  const hits = b.c.trait === 'frenzy' ? 2 : 1;
+  let dealt = 0;
+  for (let k = 0; k < hits && !F.over; k++) dealt += damageFoe(d);
+  if (b.c.trait === 'venom') F.foe.poison += Math.max(1, Math.floor(b.c.might / 3));
+  if (b.c.trait === 'leech' && dealt > 0) R.hp = Math.min(R.maxHp, R.hp + Math.floor(dealt / 2));
+  b.struck = 1;
+  return dealt;
+}
+function penStrike(){
+  let total = 0;
+  for (const b of F.pen.slice()){
+    if (F.over) break;
+    total += strike(b);
+  }
+  return total;
+}
+
+/** Play hand[i]: a beast walks into the pen, a dud just gets filed away. */
 function playCard(i){
   if (!F || F.over) return false;
   const c = F.hand[i];
   if (!c || c.cost > F.feed) return false;
+  if (!c.dud && penFull()) return false;   // nowhere to put it
   F.feed -= c.cost;
   F.hand.splice(i, 1);
-  F.disc.push(c);
+  if (c.dud){ F.disc.push(c); fLog('Filed ' + c.name + ' away'); return true; }
 
-  if (c.trait === 'cursed'){ R.hp -= 2; if (R.hp <= 0){ R.hp = 0; F.over = 'lose'; return true; } }
-
-  const hits = c.trait === 'frenzy' ? 2 : 1;
-  let dealt = 0;
-  for (let k = 0; k < hits && !F.over; k++) dealt += damageFoe(cardDamage(c));
-  if (c.trait === 'leech' && dealt > 0) R.hp = Math.min(R.maxHp, R.hp + Math.floor(dealt / 2));
-  if (c.trait === 'venom') F.foe.poison += Math.max(1, Math.floor(c.might / 3));
-
-  F.block += cardHide(c);
-  if (c.trait === 'thorns') F.thorns += 3;
-  if (c.trait === 'regal') F.bonusFeed += 1;
-  if (c.trait === 'swift') drawCards(1);
+  if (c.trait === 'cursed'){ damagePlayer(2); if (F.over){ F.disc.push(c); return true; } }
+  const b = { c, hp: cardHide(c), max: cardHide(c), uid: F.uid++, fresh: 1 };
+  F.pen.push(b);
   if (c.trait === 'brood' && F.hand.length < 10) F.hand.push(spawnCard());
-
-  fLog(c.name + (dealt ? ' hits for ' + dealt : ' braces'));
+  if (c.trait === 'regal') F.feed += 1;                  // pays out the turn it lands too
+  if (c.trait === 'swift') strike(b);                    // straight into the fray
+  fLog(c.name + ' enters the pen');
   return true;
 }
 function nextMove(){ return F.foe.moves[F.foe.mi % F.foe.moves.length]; }
-/** Resolve the foe's telegraphed move. */
+/** Resolve the foe's telegraphed move against the pen (or you, if it is empty). */
 function foeAct(){
   const f = F.foe;
   const m = nextMove();
   f.mi++;
   f.block = 0;
-  const swing = (v) => {
-    const real = damagePlayer(v + f.bonus);
-    if (F.thorns > 0 && real >= 0) damageFoe(F.thorns);
-    return real;
-  };
+  const swing = (v) => swingAt(v + f.bonus);
   if (m.t === 'atk') swing(m.v);
   else if (m.t === 'atkx'){ for (let k = 0; k < m.n && !F.over; k++) swing(m.v); }
+  else if (m.t === 'hit') damagePlayer(m.v + f.bonus);            // straight past the pen
+  else if (m.t === 'sweep'){ for (const b of F.pen.slice()) hurtBeast(b, m.v); }
   else if (m.t === 'def') f.block += m.v;
   else if (m.t === 'buff') f.bonus += m.v;
   else if (m.t === 'heal') f.hp = Math.min(f.maxHp, f.hp + m.v);
@@ -702,46 +999,58 @@ function foeAct(){
 }
 function endTurn(){
   if (!F || F.over) return;
-  // poison bites at the end of your turn, then wears off by one
-  if (F.foe.poison > 0){
+  if (F.foe.poison > 0){                          // yesterday's venom bites first
     damageFoe(F.foe.poison);
     F.foe.poison = Math.max(0, F.foe.poison - 1);
     if (F.over) return;
   }
+  penStrike();                                    // then the pen goes to work
+  if (F.over) return;
   foeAct();
   if (F.over) return;
-  // new turn
   F.turn++;
-  F.block = 0; F.thorns = 0;
-  F.feed = F.feedMax + F.bonusFeed; F.bonusFeed = 0;
+  for (const b of F.pen){ b.fresh = 0; b.struck = 0; }
+  F.feed = F.feedMax + F.pen.filter((b) => b.c.trait === 'regal').length;
   for (const c of F.hand) F.disc.push(c);
   F.hand = [];
-  drawCards(HAND_SIZE);
+  drawCards(handSize());
 }
 
 /* ============================ AFTER THE FIGHT ============================= */
 /** Win bookkeeping: heal a little, breed the nest, queue a wild offer. */
 function winFight(){
   R.wins++;
-  // the herd toughens as it grows: every win adds a little ceiling, bosses more
+  if (FOES[R.idx] && FOES[R.idx].boss) R.maxHp += 5; // bosses pay for themselves
   R.maxHp += 2;
-  if (FOES[R.idx] && FOES[R.idx].boss) R.maxHp += 5;
-  R.hp = Math.min(R.maxHp, R.hp + Math.ceil(R.maxHp * 0.22) + 2);
+  R.hp = Math.min(R.maxHp, R.hp + Math.ceil(R.maxHp * 0.30) + 4);
   const a = cardById(R.nest[0]), b = cardById(R.nest[1]);
-  const res = breed(a, b);
+  R.litter = breedLitter(a, b, R.ritual);
+  R.lastHatch = { a, b, litter: R.litter };
+  F = null;
+  return R.litter;
+}
+/** Keep one chick out of the clutch. The rest go to market for Slop. */
+function keepChick(i){
+  if (!R.litter || !R.litter[i]) return false;
+  const res = R.litter[i];
   R.deck.push(res.child);
   res.child.name = uniquifyName(res.child, R.deck);
+  if (STUD[res.child.id]) STUD[res.child.id].name = res.child.name;
   R.born++;
-  R.lastHatch = { a, b, res };
-  R.log.push(res.child.name + ' (gen ' + res.child.gen + ') out of ' + a.name + ' × ' + b.name +
-    (res.tags.length ? ' — ' + res.tags.join(', ') : ''));
+  R.sold += R.litter.length - 1;
+  R.slop += (R.litter.length - 1) * SLOP_PER_CHICK;
+  R.log.push(res.child.name + ' (gen ' + res.child.gen + ') out of ' + R.lastHatch.a.name +
+    ' \u00d7 ' + R.lastHatch.b.name + (res.tags.length ? ' \u2014 ' + res.tags.join(', ') : ''));
+  R.litter = null;
   R.nest = [];
+  R.ritual = null;
+  R.slop += SLOP_PER_WIN + (FOES[R.idx] && FOES[R.idx].boss ? 2 : 0) + (R.hazard ? HAZARD_PAY : 0);
   R.wildOffer = WILD_AFTER.indexOf(R.idx) >= 0
     ? [wildCard(R.idx), wildCard(R.idx), wildCard(R.idx)] : null;
+  rollHazard();
   R.idx++;
   if (R.idx >= RUN_LEN) R.over = 'win';
-  F = null;
-  return res;
+  return true;
 }
 function takeWild(i){
   if (!R.wildOffer) return false;
@@ -749,6 +1058,7 @@ function takeWild(i){
   if (!c) return false;
   R.deck.push(c);
   c.name = uniquifyName(c, R.deck);
+  if (STUD[c.id]) STUD[c.id].name = c.name;
   R.log.push('Took in ' + c.name + ' from outside the fence.');
   R.wildOffer = null;
   return true;
@@ -782,6 +1092,26 @@ function bestBeast(){
 
 /* =============================== SAVE ===================================== */
 const K_HALL = 'bb_hall';
+const K_TAUGHT = 'bb_taught';
+const K_FOUNDER = 'bb_founder';
+// Caps on what a beast may carry into the next run. It is a keepsake and a
+// head start, not a snowball: roughly as good as the best animal you start with.
+const FOUNDER_CAP_M = 9, FOUNDER_CAP_H = 13;
+function taught(){ try { return !!localStorage.getItem(K_TAUGHT); } catch (e){ return false; } }
+function markTaught(){ try { localStorage.setItem(K_TAUGHT, '1'); } catch (e){} }
+/** The best beast of a finished run retires to stud and opens the next one. */
+function saveFounder(c){
+  if (!c) return null;
+  const e = { pre: c.pre, suf: c.suf, name: c.name,
+    might: Math.min(FOUNDER_CAP_M, c.might), hide: Math.min(FOUNDER_CAP_H, c.hide),
+    trait: c.trait, vis: c.vis };
+  if (BAD_TRAITS.indexOf(e.trait) >= 0) e.trait = 'none';   // no cursed heirlooms
+  try { localStorage.setItem(K_FOUNDER, JSON.stringify(e)); } catch (err){}
+  return e;
+}
+function loadFounder(){
+  try { return JSON.parse(localStorage.getItem(K_FOUNDER) || 'null'); } catch (e){ return null; }
+}
 function loadHall(){
   try { return JSON.parse(localStorage.getItem(K_HALL) || 'null'); } catch (e){ return null; }
 }
@@ -800,7 +1130,7 @@ function saveHall(c, round){
    UI LAYER — everything below touches the DOM. The rules above never do.
    ========================================================================== */
 const $ = (id) => document.getElementById(id);
-const SCREENS = ['title', 'nest', 'fight', 'hatch', 'wild', 'cull', 'over'];
+const SCREENS = ['title', 'nest', 'fight', 'hatch', 'wild', 'cull', 'book', 'over'];
 let cur = 'title';
 function show(id){
   cur = id;
@@ -924,7 +1254,7 @@ function cardEl(c, opts){
   const bad = BAD_TRAITS.indexOf(c.trait) >= 0;
   d.innerHTML =
     '<div class="cost">' + c.cost + '</div>' +
-    (c.junk ? '' : '<div class="gen">G' + c.gen + '</div>') +
+    (c.junk ? '' : '<div class="gen">' + (c.founder ? 'FOUNDER' : 'G' + c.gen) + '</div>') +
     '<canvas class="art" width="' + (o.big ? 300 : 236) + '" height="' + (o.big ? 212 : 164) + '"></canvas>' +
     '<div class="nm">' + c.name + '</div>' +
     '<div class="st"><span class="m">&#9876;' + c.might + '</span><span class="h">&#128737;' + c.hide + '</span></div>' +
@@ -952,22 +1282,52 @@ function hpBar(txtEl, barEl){
 /* ------------------------------------------------------------- title ----- */
 function renderTitle(){
   const h = loadHall();
+  const f = loadFounder();
   $('hallBox').innerHTML = h
     ? '<b class="pink">HALL OF FAME</b><br>' + h.name + ' &mdash; gen ' + h.gen + ', &#9876;' + h.might +
       ' &#128737;' + h.hide + (h.trait !== 'none' ? ' &middot; ' + TRAITS[h.trait].name : '') +
       '<br><span class="tiny">bred on round ' + h.round + '</span>'
     : '<span class="tiny">No prize stock yet. Go make some.</span>';
+  if (f && f.pre) $('hallBox').innerHTML += '<br><span class="tiny">In the barn: <b class="gold">' +
+    f.name + '</b> (&#9876;' + f.might + ' &#128737;' + f.hide + ') — your line continues.</span>';
 }
 
 /* -------------------------------------------------------------- nest ----- */
+function renderRituals(){
+  const row = $('nRituals');
+  row.innerHTML = '';
+  for (const id of RITUAL_IDS){
+    const r = RITUALS[id];
+    const on = (R.ritual || 'natural') === id;
+    const afford = r.cost <= R.slop + ritualCost(R.ritual || 'natural');
+    const el = document.createElement('button');
+    el.className = 'rit' + (on ? ' on' : '') + (afford ? '' : ' no');
+    el.innerHTML = '<span class="c">' + (r.cost ? r.cost + ' &#129699;' : 'free') + '</span>' +
+      '<b>' + r.name + '</b><i>' + r.desc + '</i>';
+    if (afford) el.onclick = () => { if (setRitual(id)){ beep(520, 0.05, 'triangle', 0.04); renderNest(); } };
+    row.appendChild(el);
+  }
+}
 function renderNest(){
   const foe = FOES[R.idx];
   $('nFoeEm').innerHTML = foe.em;
   $('nFoeName').textContent = foe.name;
-  $('nFoeStats').textContent = foe.hp + ' HP' + (foe.boss ? ' · BOSS' : '');
-  $('nDeckCount').textContent = R.deck.length + '/' + MAX_DECK;
+  const hz = R.hazard;
+  $('nFoeStats').innerHTML = Math.round(foe.hp * (hz && hz.mods.hpMul ? hz.mods.hpMul : 1)) + ' HP' +
+    (foe.boss ? ' &middot; BOSS' : '') +
+    (hz ? ' &middot; <span style="color:#ffc48a">' + hz.name + ': ' + hz.desc + '</span>'
+        : ' &middot; <span class="dim">' + R.hazardOffer.name + ' on offer (+' + HAZARD_PAY + ' &#129699;)</span>');
+  const hb = $('bHazard');
+  hb.className = 'btn sm ' + (hz ? 'pinky' : 'alt');
+  hb.innerHTML = hz ? 'CALL IT OFF' : 'TAKE ON ' + R.hazardOffer.name.toUpperCase() + '<br>+' + HAZARD_PAY + ' &#129699;';
+  $('nSlop').innerHTML = '&#129699; ' + R.slop;
   hpBar($('nHp'), $('nHpBar'));
   pips($('nPips'));
+  renderRituals();
+  const vet = $('bVet');
+  vet.disabled = R.slop < VET_COST || R.hp >= R.maxHp;
+  vet.innerHTML = '&#128137; VET +' + VET_HEAL + ' &mdash; ' + VET_COST + ' &#129699;';
+
   const g = $('nGrid');
   g.innerHTML = '';
   const sorted = R.deck.slice().sort((a, b) => power(b) - power(a));
@@ -985,16 +1345,19 @@ function renderNest(){
     g.appendChild(el);
   }
   const ok = R.nest.length === 2;
-  const b = $('bFight');
-  b.disabled = !ok;
+  const bt = $('bFight');
+  bt.disabled = !ok;
   if (ok){
     const a = cardById(R.nest[0]), bb = cardById(R.nest[1]);
-    b.textContent = 'FIGHT WITH ' + (R.deck.length - 2) + ' CARDS';
-    $('nHint').innerHTML = shareBlood(a, bb)
-      ? '<b class="pink">' + a.name + '</b> and <b class="pink">' + bb.name + '</b> are <b>related</b>. This will get weird.'
-      : '<b class="pink">' + a.name + '</b> × <b class="pink">' + bb.name + '</b> &mdash; they sit this one out.';
+    const n = 2 + (a.trait === 'fertile' || bb.trait === 'fertile' ? 1 : 0) +
+      ((RITUALS[R.ritual || 'natural'].extra) || 0);
+    bt.textContent = 'FIGHT WITH ' + (R.deck.length - 2) + ' BEASTS';
+    $('nHint').innerHTML = (shareBlood(a, bb)
+      ? '<b class="pink">' + a.name + '</b> and <b class="pink">' + bb.name + '</b> are <b>related</b> — this will get weird. '
+      : '<b class="pink">' + a.name + '</b> × <b class="pink">' + bb.name + '</b>. ') +
+      'Expect <b>' + n + '</b> chicks; you keep one.';
   } else {
-    b.textContent = 'SEND 2 TO THE NEST';
+    bt.textContent = 'SEND 2 TO THE NEST';
     $('nHint').innerHTML = 'Pick <b class="pink">two</b> beasts for the Nest &mdash; they skip this fight and breed after it.';
   }
 }
@@ -1016,11 +1379,47 @@ function intentText(){
   const m = nextMove(), f = F.foe;
   if (m.t === 'atk') return m.s + ' ' + (m.v + f.bonus);
   if (m.t === 'atkx') return m.s + ' ' + (m.v + f.bonus) + '×' + m.n;
+  if (m.t === 'hit') return m.s + ' ' + (m.v + f.bonus) + ' \u2014 straight at you';
+  if (m.t === 'sweep') return m.s + ' ' + m.v + ' to the whole pen';
   if (m.t === 'def') return m.s + ' (block ' + m.v + ')';
   if (m.t === 'buff') return m.s + ' (+' + m.v + ' damage)';
   if (m.t === 'heal') return m.s + ' (heal ' + m.v + ')';
   if (m.t === 'curse') return m.s + ' (junk in your deck)';
   return m.s;
+}
+function penEl(b){
+  const d = document.createElement('div');
+  const t = TRAITS[b.c.trait] || TRAITS.none;
+  d.className = 'pb' + (b.fresh ? ' fresh' : '') + (b.c.trait === 'bulwark' ? ' bulw' : '');
+  d.innerHTML =
+    '<canvas width="168" height="96"></canvas>' +
+    (b.c.trait === 'none' ? '' : '<div class="tag">' + t.name + '</div>') +
+    '<div class="pn">' + b.c.name + '</div>' +
+    '<div class="pm">&#9876;' + beastMight(b) + ' <span class="hh">&#128737;' + b.hp + '</span></div>' +
+    '<div class="ph"><i style="width:' + (100 * b.hp / b.max) + '%"></i></div>';
+  const cv = d.querySelector('canvas');
+  if (cv) drawBeast(cv, b.c);
+  d.title = b.c.name + ' — ' + b.hp + '/' + b.max + ' Hide, hits for ' + beastMight(b) +
+    (b.c.trait === 'none' ? '' : '\n' + t.name + ': ' + t.desc);
+  // No hover on a phone, so a tap explains the animal instead.
+  d.onclick = () => {
+    const co = $('coach');
+    co.hidden = false;
+    co.innerHTML = '<b>' + b.c.name + '</b> — ' + b.hp + '/' + b.max + ' Hide, hits for ' +
+      beastMight(b) + (b.c.trait === 'none' ? '' : '. <b>' + t.name + ':</b> ' + t.desc);
+  };
+  return d;
+}
+function renderPen(){
+  const p = $('pen');
+  p.innerHTML = '<div class="penlbl">the pen</div>';
+  for (const b of F.pen) p.appendChild(penEl(b));
+  for (let i = F.pen.length; i < MAX_PEN; i++){
+    const e = document.createElement('div');
+    e.className = 'slot';
+    e.innerHTML = '&#183;';
+    p.appendChild(e);
+  }
 }
 function renderFight(){
   const f = F.foe;
@@ -1037,9 +1436,18 @@ function renderFight(){
   if (f.poison > 0) fb.innerHTML += '<span class="bdg psn">&#9763; poison ' + f.poison + '</span>';
   if (f.bonus > 0) fb.innerHTML += '<span class="bdg">&#9876; +' + f.bonus + '</span>';
   const pb = $('pBadges'); pb.innerHTML = '';
-  if (F.block > 0) pb.innerHTML += '<span class="bdg blk">&#128737; ' + F.block + '</span>';
-  if (F.thorns > 0) pb.innerHTML += '<span class="bdg thn">&#127799; ' + F.thorns + '</span>';
+  const out = F.pen.reduce((a, b) => a + beastMight(b) * (b.c.trait === 'frenzy' ? 2 : 1), 0);
+  if (out > 0) pb.innerHTML += '<span class="bdg">pen &#9876;' + out + '</span>';
+  if (F.mods && F.mods.label) pb.innerHTML += '<span class="bdg thn">' + F.mods.label + '</span>';
 
+  renderPen();
+  const co = $('coach');
+  if (R.idx === 0 && F.turn <= 2 && !taught() && !F.over){
+    co.hidden = false;
+    co.innerHTML = F.pen.length
+      ? 'It <b>stays there</b>. It strikes at the end of every turn, and blows land on it before they land on you. Keep it alive.'
+      : 'Play a beast: it walks into <b>the pen</b> and stays. Might is what it hits for, Hide is how long it lasts.';
+  } else if (!co.dataset.sticky){ co.hidden = true; }
   const fd = $('feed'); fd.innerHTML = '';
   const total = Math.max(F.feedMax, F.feed);
   for (let i = 0; i < total; i++) fd.innerHTML += '<i class="' + (i < F.feed ? 'on' : '') + '"></i>';
@@ -1050,35 +1458,43 @@ function renderFight(){
   const h = $('hand'); h.innerHTML = '';
   F.hand.forEach((c, i) => {
     const el = cardEl(c);
-    if (c.cost > F.feed) el.classList.add('dead');
+    const blocked = c.cost > F.feed || (!c.dud && penFull());
+    if (blocked) el.classList.add('dead');
     else el.onclick = () => doPlay(i);
     h.appendChild(el);
   });
 }
 function doPlay(i){
   const c = F.hand[i];
-  if (!playCard(i)) { beep(140, 0.08, 'square', 0.05); return; }
-  sfxPlay();
-  if (cardDamage(c) > 0){
-    sfxHit();
-    flyer('-' + cardDamage(c) * (c.trait === 'frenzy' ? 2 : 1));
-    $('foeBox').classList.add('hit');
-    setTimeout(() => $('foeBox').classList.remove('hit'), 320);
+  const wasFull = penFull();
+  if (!playCard(i)){
+    beep(140, 0.08, 'square', 0.05);
+    if (wasFull && !c.dud) flyer('PEN IS FULL', '#ffd34d');
+    return;
   }
-  if (cardHide(c) > 0) flyer('+' + cardHide(c) + ' hide', '#7ec8ff');
+  sfxPlay();
+  if (c.trait === 'swift'){ sfxHit(); flyer('-' + cardDamage(c)); }
   renderFight();
   if (F.over) setTimeout(resolveFight, 480);
 }
 function doEnd(){
   if (!F || F.over) return;
-  const hpBefore = R.hp;
+  const hpBefore = R.hp, foeBefore = F.foe.hp, penBefore = F.pen.length;
   endTurn();
-  if (R.hp < hpBefore){ sfxHurt(); flyer('-' + (hpBefore - R.hp), '#ff5d5d'); }
+  if (F.foe.hp < foeBefore){
+    sfxHit();
+    flyer('-' + (foeBefore - F.foe.hp));
+    $('foeBox').classList.add('hit');
+    setTimeout(() => $('foeBox').classList.remove('hit'), 320);
+  }
+  if (R.hp < hpBefore){ sfxHurt(); flyer('-' + (hpBefore - R.hp) + ' YOU', '#ff5d5d'); }
+  else if (F.pen.length < penBefore) sfxHurt();
   renderFight();
   if (F.over) setTimeout(resolveFight, 480);
 }
 function resolveFight(){
   if (!F) return;
+  if (R.idx === 0) markTaught();
   if (F.over === 'lose'){ F = null; goOver(false); return; }
   sfxWin();
   winFight();
@@ -1086,10 +1502,11 @@ function resolveFight(){
 }
 
 /* ------------------------------------------------------------- hatch ----- */
+let pickedChick = -1;
 function goHatch(){
   show('hatch');
   const h = R.lastHatch;
-  const { a, b, res } = h;
+  const { a, b } = h;
   $('hTitle').textContent = 'THE NEST STIRS';
   const p = $('hParents'); p.innerHTML = '';
   p.appendChild(cardEl(a));
@@ -1098,36 +1515,83 @@ function goHatch(){
   p.appendChild(cardEl(b));
   $('hBanners').innerHTML = '';
   $('hDeltas').innerHTML = '';
-  const ch = $('hChild');
-  ch.innerHTML = '<div class="egg">&#129370;</div>';
-  $('bHatchNext').disabled = true;
-  beep(300, 0.1, 'triangle', 0.05);
-  setTimeout(() => revealChild(res), 900);
-}
-function revealChild(res){
-  const c = res.child;
-  sfxHatch();
-  $('hTitle').innerHTML = 'MEET <span class="gold">' + c.name.toUpperCase() + '</span>';
+  $('hSub').innerHTML = shareBlood(a, b)
+    ? 'Same blood. Brace yourself.'
+    : 'Keep <b class="pink">one</b>. The rest go to market for Slop.';
   const ch = $('hChild');
   ch.innerHTML = '';
-  ch.appendChild(cardEl(c, { big: true }));
-  const bn = $('hBanners');
-  const add = (txt, cls) => { bn.innerHTML += '<span class="banner ' + cls + '">' + txt + '</span>'; };
-  if (res.tags.indexOf('prodigy') >= 0) add('PRODIGY', 'good');
-  if (res.tags.indexOf('runt') >= 0) add('RUNT OF THE LITTER', 'bad');
-  if (res.tags.indexOf('mutation') >= 0) add('MUTATION: ' + TRAITS[c.trait].name, 'wild');
-  if (res.tags.indexOf('inbred') >= 0) add('THAT WAS ITS COUSIN', 'warn');
-  if (res.tags.indexOf('cursed') >= 0) add('BAD BLOOD', 'bad');
-  if (!bn.innerHTML) add('A PERFECTLY NORMAL ANIMAL', 'good');
-  const dm = res.dM, dh = res.dH;
+  for (let i = 0; i < h.litter.length; i++){
+    const e = document.createElement('div');
+    e.className = 'egg2'; e.innerHTML = '&#129370;';
+    ch.appendChild(e);
+  }
+  pickedChick = -1;
+  $('bHatchNext').disabled = true;
+  beep(300, 0.1, 'triangle', 0.05);
+  setTimeout(revealLitter, 850);
+}
+/** Lay the whole clutch out and let the player choose. The banners are per
+ *  chick, because "one of these is a runt" is the interesting sentence. */
+function revealLitter(){
+  const h = R.lastHatch;
+  sfxHatch();
+  $('hTitle').innerHTML = 'THE CLUTCH — <span class="gold">PICK ONE</span>';
+  const ch = $('hChild');
+  ch.className = 'litter';
+  ch.innerHTML = '';
+  h.litter.forEach((res, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'pickwrap';
+    const card = cardEl(res.child, { big: true });
+    wrap.appendChild(card);
+    const tagline = document.createElement('div');
+    tagline.style.cssText = 'min-height:26px; margin-top:4px';
+    const d = (v, l) => '<span class="delta ' + (v >= 0 ? 'up' : 'dn') + '">' +
+      (v >= 0 ? '\u25b2' : '\u25bc') + Math.abs(Math.round(v * 10) / 10) + l + '</span>';
+    tagline.innerHTML = '<div class="tiny" style="letter-spacing:1px; margin-bottom:2px">' +
+      d(res.dM, '&#9876;') + ' ' + d(res.dH, '&#128737;') + '</div>' + chickBanners(res);
+    wrap.appendChild(tagline);
+    wrap.onclick = () => {
+      pickedChick = i;
+      [...ch.children].forEach((x, j) => {
+        const c = x.querySelector('.card');
+        if (c) c.classList.toggle('sel', j === i);
+      });
+      showChickDetail(res);
+      $('bHatchNext').disabled = false;
+      beep(560, 0.05, 'triangle', 0.04);
+    };
+    ch.appendChild(wrap);
+  });
+  $('bHatchNext').disabled = true;
+}
+function chickBanners(res){
+  const t = res.tags;
+  const b = (txt, cls) => '<span class="banner ' + cls + '">' + txt + '</span>';
+  let out = '';
+  if (t.indexOf('prodigy') >= 0) out += b('PRODIGY', 'good');
+  if (t.indexOf('runt') >= 0) out += b('RUNT', 'bad');
+  if (t.indexOf('mutation') >= 0) out += b(TRAITS[res.child.trait].name.toUpperCase(), 'wild');
+  if (t.indexOf('cursed') >= 0) out += b('BAD BLOOD', 'bad');
+  return out;
+}
+function showChickDetail(res){
+  const c = res.child;
   const fmt = (v, lbl) => '<span class="delta ' + (v >= 0 ? 'up' : 'dn') + '">' +
     (v >= 0 ? '▲' : '▼') + Math.abs(Math.round(v * 10) / 10) + ' ' + lbl + '</span>';
-  $('hDeltas').innerHTML = 'vs. the average parent: ' + fmt(dm, 'Might') + ' &nbsp; ' + fmt(dh, 'Hide') +
+  $('hBanners').innerHTML = res.tags.indexOf('inbred') >= 0
+    ? '<span class="banner warn">THAT WAS ITS COUSIN</span>' : '';
+  $('hDeltas').innerHTML = '<b>' + c.name + '</b> vs. the average parent: ' +
+    fmt(res.dM, 'Might') + ' &nbsp; ' + fmt(res.dH, 'Hide') +
     ' &nbsp; <span class="dim">' + TRAITS[c.trait].desc + '</span>';
-  $('bHatchNext').disabled = false;
 }
 function afterHatch(){
-  if (R.wildOffer) { goWild(); return; }
+  if (pickedChick < 0) return;
+  const sold = R.litter.length - 1;
+  keepChick(pickedChick);
+  pickedChick = -1;
+  if (sold > 0) beep(700, 0.08, 'triangle', 0.05);
+  if (R.wildOffer){ goWild(); return; }
   goCullOrNext();
 }
 
@@ -1197,6 +1661,7 @@ function goOver(won){
   show('over');
   const best = bestBeast();
   const hall = saveHall(best, R.idx);
+  const fnd = saveFounder(best);
   $('oTitle').innerHTML = won ? 'PRIZE HERD' : 'THE HERD IS SCATTERED';
   $('oSub').textContent = won
     ? 'You beat all ' + RUN_LEN + ' rounds with ' + R.deck.length + ' beasts standing.'
@@ -1204,12 +1669,94 @@ function goOver(won){
   const ob = $('oBest'); ob.innerHTML = '';
   if (best) ob.appendChild(cardEl(best, { big: true }));
   $('oBestLine').innerHTML = (best ? 'Best in show: <b>' + best.name + '</b> · gen ' + best.gen +
-    ' · power ' + power(best) : '') + ' &nbsp;|&nbsp; ' + R.born + ' bred, ' + R.retired + ' retired' +
-    (hall ? ' &nbsp;|&nbsp; record ' + hall.pow : '');
+    ' · power ' + power(best) : '') + '<br>' + R.born + ' kept, ' + R.sold + ' sold on, ' +
+    R.retired + ' retired' + (hall ? ' &nbsp;|&nbsp; record ' + hall.pow : '');
+  if (fnd) $('oSub').innerHTML += '<br><span class="gold">' + fnd.name +
+    '</span> retires to stud &mdash; it opens your next herd.';
   $('oLog').innerHTML = R.log.length
     ? R.log.slice().reverse().map((l) => '<div>' + l + '</div>').join('')
     : '<div>Nothing much happened.</div>';
   beep(won ? 660 : 160, 0.3, won ? 'triangle' : 'sawtooth', 0.06);
+}
+
+/* --------------------------------------------------------- stud book ----- */
+let bookId = 0, bookFrom = 'nest';
+function treeNode(n, root){
+  const d = document.createElement('div');
+  d.className = 'tn' + (root ? ' root' : '');
+  const t = TRAITS[n.trait] || TRAITS.none;
+  d.innerHTML = '<canvas width="72" height="60"></canvas><span><b>' + n.name + '</b><br>' +
+    '<span class="st2">G' + n.gen + ' &#9876;' + n.might + ' &#128737;' + n.hide +
+    (n.trait === 'none' ? '' : ' &middot; ' + t.name) + '</span></span>';
+  const cv = d.querySelector('canvas');
+  if (cv) drawBeast(cv, n);
+  d.onclick = () => { bookId = n.id; renderBook(); };
+  return d;
+}
+function renderBook(){
+  const node = pedigree(bookId, 2);
+  const top = $('bkTop');
+  top.innerHTML = '';
+  if (node){
+    const live = cardById(bookId);
+    const card = live || node;
+    top.appendChild(cardEl(Object.assign({ cost: deriveCost(node.might, node.hide, node.trait),
+      junk: false, parents: null }, card, { name: node.name }), { big: true }));
+    const t = TRAITS[node.trait] || TRAITS.none;
+    const info = document.createElement('div');
+    info.className = 'bkinfo';
+    const up = node.up.length ? 'Out of ' + node.up.map((x) => x.name).join(' &times; ')
+      : 'Founder stock — no papers on file.';
+    info.innerHTML = '<h2>' + node.name + '</h2>' +
+      '<div class="tiny">generation ' + node.gen + (live ? '' : ' &middot; no longer in the barn') + '</div>' +
+      '<div class="row"><span class="bdg">&#9876; Might ' + node.might + '</span>' +
+      '<span class="bdg">&#128737; Hide ' + node.hide + '</span>' +
+      '<span class="bdg">Feed ' + deriveCost(node.might, node.hide, node.trait) + '</span></div>' +
+      '<div style="margin-top:6px"><b class="gold">' + t.name + '</b> — ' + t.desc + '</div>' +
+      '<div style="margin-top:6px" class="dim">' + up + '</div>';
+    top.appendChild(info);
+  }
+  const tree = $('bkTree');
+  tree.innerHTML = '';
+  if (node){
+    const lvl2 = node.up.reduce((a, p) => a.concat(p.up), []);
+    if (lvl2.length){
+      const r = document.createElement('div'); r.className = 'tlvl';
+      lvl2.forEach((g) => r.appendChild(treeNode(g)));
+      tree.appendChild(r);
+      const l = document.createElement('div'); l.className = 'tline'; l.innerHTML = '&#9474;';
+      tree.appendChild(l);
+    }
+    if (node.up.length){
+      const r = document.createElement('div'); r.className = 'tlvl';
+      node.up.forEach((p) => r.appendChild(treeNode(p)));
+      tree.appendChild(r);
+      const l = document.createElement('div'); l.className = 'tline'; l.innerHTML = '&#9474;';
+      tree.appendChild(l);
+    }
+    const r0 = document.createElement('div'); r0.className = 'tlvl';
+    r0.appendChild(treeNode(node, true));
+    tree.appendChild(r0);
+  }
+  const list = $('bkList');
+  list.innerHTML = '';
+  const ids = Object.keys(STUD).map(Number).sort((a, b) => (STUD[b].gen - STUD[a].gen) || (b - a));
+  for (const id of ids){
+    const e = STUD[id];
+    const live = cardById(id);
+    const el = cardEl(Object.assign({}, e, {
+      cost: deriveCost(e.might, e.hide, e.trait), junk: false, parents: null, blood: [] }));
+    if (!live) el.style.opacity = '.55';
+    if (id === bookId) el.classList.add('sel');
+    el.onclick = () => { bookId = id; renderBook(); };
+    list.appendChild(el);
+  }
+}
+function goBook(id, from){
+  bookFrom = from || 'nest';
+  bookId = id || (R.deck.length ? R.deck[R.deck.length - 1].id : 0);
+  show('book');
+  renderBook();
 }
 
 /* -------------------------------------------------------------- boot ----- */
@@ -1221,18 +1768,26 @@ function startRun(){
 function bind(){
   $('bStart').onclick = () => { if (AC) AC.resume && AC.resume(); startRun(); };
   $('bAgain').onclick = startRun;
+  $('bOverBook').onclick = () => goBook(bestBeast() ? bestBeast().id : 0, 'over');
   $('bFight').onclick = () => {
     if (R.nest.length !== 2) return;
-    startFight();
+    startFight(fightMods());
     show('fight');
     renderFight();
   };
   $('bEnd').onclick = doEnd;
+  $('coach').onclick = () => { markTaught(); $('coach').hidden = true; };
+  $('mute').title = 'Sound on/off';
+  $('bHazard').onclick = () => { toggleHazard(); beep(300, 0.07, 'square', 0.05); renderNest(); };
+  $('bVet').onclick = () => { if (vetVisit()){ beep(760, 0.12, 'triangle', 0.05); renderNest(); } };
   $('bHatchNext').onclick = afterHatch;
   $('bWildTake').onclick = () => { if (wildPick >= 0){ takeWild(wildPick); goCullOrNext(); } };
   $('bWildSkip').onclick = () => { R.wildOffer = null; goCullOrNext(); };
+  $('bBook').onclick = () => goBook(R.nest.length ? R.nest[0] : 0, 'nest');
+  $('bBookBack').onclick = () => { show(bookFrom); if (bookFrom === 'nest') renderNest(); else if (bookFrom === 'cull') goCull(); };
   $('bCull').onclick = doCull;
   $('bCullSkip').onclick = nextRound;
+  $('bCullBook').onclick = () => goBook(cullPick > 0 ? cullPick : 0, 'cull');
   $('mute').onclick = () => {
     muted = !muted;
     $('mute').innerHTML = muted ? '&#128263;' : '&#9835;';
@@ -1255,14 +1810,22 @@ if (!HEADLESS) boot();
 window.BB = {
   get R(){ return R; }, get F(){ return F; },
   newRun, setNest, deckForFight, startFight, playCard, endTurn, drawCards,
-  winFight, takeWild, retire, mustCull, bestBeast, cardById, uniquifyName,
+  winFight, keepChick, breedLitter, takeWild, retire, mustCull, bestBeast, cardById, uniquifyName,
+  rollHazard, toggleHazard, setRitual, ritualCost, vetVisit, fightMods, pedigree, studAdd,
+  saveFounder, loadFounder, applyFounder,
+  get STUD(){ return STUD; },
+  beastMight, cardHide, penFull, penHas, foeTarget, hurtBeast, swingAt, strike, penStrike, handSize, SPILL,
   breed, shareBlood, geneRoll, blendHue, wildCard, makeCard, starterDeck,
-  spawnCard, junkCard, deriveCost, power, cardDamage, cardHide, makeFoe, nextMove, feedFor,
+  spawnCard, junkCard, deriveCost, power, cardDamage, makeFoe, nextMove, feedFor,
   srand, rng, shuffle,
-  TRAITS, FOES, MUT_TRAITS, BAD_TRAITS, SYL_A, SYL_B,
-  C: { RUN_LEN, MAX_DECK, START_HP, FEED, HAND_SIZE, WILD_AFTER },
-  ui: { drawBeast, cardEl, show, renderNest, renderFight, goHatch, revealChild, goWild,
+  TRAITS, FOES, MUT_TRAITS, BAD_TRAITS, SYL_A, SYL_B, RITUALS, RITUAL_IDS, HAZARDS,
+  C: { RUN_LEN, MAX_DECK, START_HP, FEED, HAND_SIZE, WILD_AFTER, MAX_PEN,
+       SLOP_PER_WIN, SLOP_PER_CHICK, VET_COST, VET_HEAL, HAZARD_PAY },
+  ui: { drawBeast, cardEl, penEl, renderPen, show, renderNest, renderFight, goHatch, goWild,
         goCull, goOver, renderTitle, boot, intentText, flyer, doPlay, doEnd, resolveFight,
+        taught, markTaught,
+        revealLitter, chickBanners, showChickDetail, renderRituals, get picked(){ return pickedChick; },
+        setPicked(i){ pickedChick = i; }, goBook, renderBook, treeNode,
         goCullOrNext, nextRound, afterHatch, doCull, startRun, bind, loadHall, saveHall,
         get cur(){ return cur; } },
 };

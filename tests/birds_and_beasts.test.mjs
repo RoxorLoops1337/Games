@@ -262,6 +262,51 @@ const BB = loadGame();
   eq(BB.uniquifyName(solo, deck), 'Sologob', 'a unique name is left alone');
 }
 
+
+/* ============================== the litter ================================ */
+{
+  BB.srand(1717);
+  const a = BB.makeCard({ pre: 'Bog', suf: 'snout', might: 8, hide: 6, trait: 'none' });
+  const b = BB.makeCard({ pre: 'Cinder', suf: 'fang', might: 7, hide: 7, trait: 'none' });
+  eq(BB.breedLitter(a, b, 'natural').length, 2, 'an ordinary pairing throws two chicks');
+  eq(BB.breedLitter(a, b, 'big').length, 3, 'a big clutch throws three');
+  const f = BB.makeCard({ pre: 'F', suf: 'ert', might: 7, hide: 7, trait: 'fertile' });
+  eq(BB.breedLitter(f, b, 'natural').length, 3, 'a Fertile parent throws an extra chick');
+  eq(BB.breedLitter(f, b, 'big').length, 4, 'and stacks with a big clutch');
+  const lit = BB.breedLitter(a, b, 'natural');
+  ok(lit[0].child.id !== lit[1].child.id, 'chicks in one clutch are distinct animals');
+
+  // line-breeding really does tilt the favoured stat
+  let plain = 0, tilted = 0;
+  for (let i = 0; i < 400; i++){
+    plain += BB.breed(a, b).child.might;
+    tilted += BB.breed(a, b, { focus: 'might' }).child.might;
+  }
+  ok(tilted > plain * 1.04, `line-breeding for Might raises it (${(tilted/plain).toFixed(3)}x)`);
+  let hidePlain = 0, hideTilt = 0;
+  for (let i = 0; i < 400; i++){
+    hidePlain += BB.breed(a, b).child.hide;
+    hideTilt += BB.breed(a, b, { focus: 'hide' }).child.hide;
+  }
+  ok(hideTilt > hidePlain * 1.04, 'line-breeding for Hide raises it');
+
+  // strange feed guarantees a keyword
+  for (let i = 0; i < 60; i++){
+    const c = BB.breed(a, b, { strange: true }).child;
+    ok(BB.MUT_TRAITS.indexOf(c.trait) >= 0, 'strange feed always yields a mutated trait');
+  }
+
+  // selection is the engine: best-of-litter must beat a blind single roll
+  BB.srand(24680);
+  let blind = 0, chosen = 0;
+  for (let i = 0; i < 300; i++){
+    blind += BB.power(BB.breed(a, b).child);
+    const l = BB.breedLitter(a, b, 'natural');
+    chosen += Math.max(...l.map((r) => BB.power(r.child)));
+  }
+  ok(chosen > blind * 1.08, `picking the better of a clutch compounds (${(chosen/blind).toFixed(3)}x)`);
+}
+
 /* ============================== the nest ================================== */
 {
   BB.newRun(555);
@@ -274,36 +319,118 @@ const BB = loadGame();
   ok(BB.deckForFight().every((c) => ids.indexOf(c.id) < 0), 'neither nested beast is in the fight deck');
 }
 
-/* ================================ fight =================================== */
+/* =========================== rituals and slop ============================= */
+{
+  BB.newRun(31);
+  eq(BB.R.slop, 2, 'you start with a little Slop');
+  eq(BB.R.ritual, 'natural', 'and on the free ritual');
+  ok(BB.setRitual('big'), 'a 2-Slop ritual is affordable at the start');
+  eq(BB.R.slop, 0, 'and is charged for');
+  ok(!BB.setRitual('strange'), 'a 3-Slop ritual is not affordable on 0');
+  eq(BB.R.ritual, 'big', 'a refused ritual leaves the choice alone');
+  ok(BB.setRitual('natural'), 'switching back is allowed');
+  eq(BB.R.slop, 2, 'and refunds what the old one cost');
+  ok(!BB.setRitual('nonsense'), 'an unknown ritual is refused');
+  for (const id of BB.RITUAL_IDS) ok(BB.RITUALS[id].name.length > 0, 'ritual ' + id + ' is named');
+
+  // the vet
+  BB.newRun(32);
+  BB.R.slop = 5; BB.R.hp = 10;
+  ok(BB.vetVisit(), 'the vet will see you');
+  eq(BB.R.hp, 10 + BB.C.VET_HEAL, 'and heals you');
+  eq(BB.R.slop, 5 - BB.C.VET_COST, 'for a fee');
+  BB.R.hp = BB.R.maxHp;
+  ok(!BB.vetVisit(), 'no point paying the vet at full health');
+  BB.R.hp = 5; BB.R.slop = 0;
+  ok(!BB.vetVisit(), 'and no Slop, no vet');
+  BB.R.hp = 5; BB.R.slop = 5; BB.R.maxHp = 10;
+  BB.vetVisit();
+  eq(BB.R.hp, 10, 'healing never overshoots the ceiling');
+}
+{
+  // hazards
+  BB.newRun(44);
+  ok(BB.R.hazardOffer && BB.R.hazardOffer.name, 'a hazard is on the table each round');
+  eq(BB.R.hazard, null, 'but not taken by default');
+  eq(Object.keys(BB.fightMods()).length, 0, 'so the fight is unmodified');
+  ok(BB.toggleHazard(), 'you can take it on');
+  ok(BB.fightMods().label, 'and the fight is labelled with it');
+  ok(!BB.toggleHazard(), 'and call it off again');
+  for (const h of BB.HAZARDS) ok(h.name && h.desc && h.mods, 'hazard ' + h.id + ' is complete');
+}
+{
+  // each hazard actually bites
+  const mk = (id) => {
+    BB.newRun(50);
+    BB.R.hazardOffer = BB.HAZARDS.find((h) => h.id === id);
+    BB.toggleHazard();
+    BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+    return BB.startFight(BB.fightMods());
+  };
+  eq(mk('lean').feed, BB.feedFor(0) - 1, 'Lean season really costs a Feed');
+  eq(mk('crowded').hand.length, BB.C.HAND_SIZE - 1, 'Crowded barn really costs a card');
+  ok(mk('fat').foe.hp > BB.FOES[0].hp, 'Well fed really is fatter');
+  eq(mk('rabid').foe.bonus, 4, 'Rabid really hits harder');
+  const F = mk('muzzled');
+  const c = BB.makeCard({ pre: 'M', suf: 'z', might: 9, hide: 5, trait: 'none' });
+  eq(BB.cardDamage(c), 7, 'Muzzled really blunts your beasts');
+}
+
+/* ================================ the pen ================================= */
 function freshFight(seed){
   BB.newRun(seed == null ? 2026 : seed);
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
   return BB.startFight();
 }
+const beast = (o) => BB.makeCard(Object.assign({ pre: 'T', suf: 'st', might: 5, hide: 5, trait: 'none' }, o));
+function penFight(cards, seed){
+  const F = freshFight(seed);
+  F.hand = cards;
+  F.feed = 20;
+  return F;
+}
 {
   const F = freshFight();
   eq(F.hand.length, 5, 'you open on five cards');
-  eq(F.draw.length, 1, 'the rest of the fight deck waits in the draw pile');
+  eq(F.pen.length, 0, 'the pen starts empty');
   eq(F.feed, BB.C.FEED, 'round 1 gives 3 feed');
-  eq(F.foe.hp, BB.FOES[0].hp, 'foe starts at full health');
   eq(BB.feedFor(0), 3, 'feed starts at 3');
-  eq(BB.feedFor(3), 4, 'feed grows every third round');
-  eq(BB.feedFor(11), 6, 'feed reaches 6 by the last round');
+  eq(BB.feedFor(11), 6, 'and reaches 6 by the last round');
   ok(typeof BB.nextMove().s === 'string', 'the foe telegraphs a named move');
 }
 {
-  // playing a card: costs feed, deals damage, gains hide
-  const F = freshFight();
-  const i = F.hand.findIndex((c) => c.cost <= F.feed && c.might > 0);
-  const c = F.hand[i];
-  const hp0 = F.foe.hp, feed0 = F.feed;
-  ok(BB.playCard(i), 'an affordable card plays');
-  eq(F.feed, feed0 - c.cost, 'feed is spent');
-  eq(F.foe.hp, hp0 - BB.cardDamage(c), 'the foe takes the damage');
-  eq(F.block, BB.cardHide(c), 'you gain its hide as block');
-  eq(F.hand.length, 4, 'the card leaves your hand');
-  eq(F.disc.length, 1, 'and lands in the discard');
-  ok(!BB.playCard(99), 'playing a card that is not there fails');
+  // a played beast stays on the field
+  const F = penFight([beast({ might: 6, hide: 7 })]);
+  ok(BB.playCard(0), 'a beast is fielded');
+  eq(F.pen.length, 1, 'and stands in the pen');
+  eq(F.pen[0].hp, 7, 'with its Hide as health');
+  eq(F.pen[0].max, 7, 'and that is its ceiling');
+  eq(F.hand.length, 0, 'it left your hand');
+  eq(F.disc.length, 0, 'and it is NOT in the discard — it is alive');
+  const hp0 = F.foe.hp;
+  BB.endTurn();
+  eq(F.foe.hp, hp0 - 6 - (F.foe.poison || 0), 'it strikes at the end of the turn');
+  ok(F.pen.length === 1 || F.pen.length === 0, 'and is still there unless it was killed');
+}
+{
+  // it keeps striking, turn after turn — that is why Hide matters
+  BB.newRun(9001);
+  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+  const F = BB.startFight();
+  F.hand = [beast({ might: 4, hide: 500 })];
+  F.feed = 20;
+  BB.playCard(0);
+  const hp0 = F.foe.hp;
+  BB.endTurn(); BB.endTurn(); BB.endTurn();
+  eq(F.foe.hp, hp0 - 12, 'three turns alive is three attacks');
+}
+{
+  // the pen is finite
+  const F = penFight([beast({}), beast({}), beast({}), beast({}), beast({})]);
+  for (let i = 0; i < 4; i++) ok(BB.playCard(0), 'beast ' + (i + 1) + ' fits in the pen');
+  ok(BB.penFull(), 'four fills the pen');
+  ok(!BB.playCard(0), 'a fifth has nowhere to stand');
+  eq(F.hand.length, 1, 'and stays in your hand');
 }
 {
   // feed is a real limit
@@ -313,166 +440,223 @@ function freshFight(seed){
   eq(F.hand.length, 5, 'a rejected play changes nothing');
 }
 {
-  // blocking, then the foe swings
-  const F = freshFight();
-  F.hand.push(BB.makeCard({ pre: 'W', suf: 'all', might: 0, hide: 30, trait: 'none', cost: 0 }));
-  BB.playCard(F.hand.length - 1);
-  eq(F.block, 30, 'block stacks up');
+  // the pen is what the foe has to get through
+  const F = penFight([beast({ might: 1, hide: 40 })]);
+  BB.playCard(0);
   const hp0 = BB.R.hp;
   BB.endTurn();
-  eq(BB.R.hp, hp0, 'a big enough block eats the whole hit');
-  eq(F.block, 0, 'block does not carry into the next turn');
-  eq(F.hand.length, 5, 'you redraw a fresh hand');
-  eq(F.feed, F.feedMax, 'feed refills');
-  eq(F.turn, 2, 'the turn counter advances');
+  eq(BB.R.hp, hp0, 'a beast in the way means you take nothing');
+  ok(F.pen[0].hp < 40, 'the beast took it instead');
 }
 {
-  // damage gets through when you do not block
+  // with an empty pen, it comes for you
   const F = freshFight();
+  F.hand = [];
   const hp0 = BB.R.hp;
   BB.endTurn();
-  ok(BB.R.hp < hp0, 'an unblocked foe hurts');
-  eq(BB.R.hp, hp0 - BB.FOES[0].moves[0].v, 'exactly its telegraphed damage');
+  eq(BB.R.hp, hp0 - BB.FOES[0].moves[0].v, 'an empty pen means you eat the hit');
+}
+{
+  // overkill only half-carries
+  const F = penFight([beast({ might: 0, hide: 2 })]);
+  BB.playCard(0);
+  const hp0 = BB.R.hp;
+  BB.swingAt(20);
+  eq(F.pen.length, 0, 'the chump dies');
+  eq(BB.R.hp, hp0 - Math.floor((20 - 2) * BB.SPILL), 'and blunts the blow on the way through');
+  eq(BB.SPILL, 0.5, 'overkill carries at half');
+}
+{
+  // a body in the way is worth putting there
+  const F = penFight([beast({ might: 0, hide: 1 }), beast({ might: 0, hide: 1 })]);
+  BB.playCard(0); BB.playCard(0);
+  const hp0 = BB.R.hp;
+  BB.swingAt(40);
+  eq(F.pen.length, 0, 'both go down to one big swing');
+  ok(BB.R.hp > hp0 - 40, 'but you take far less than the full blow');
 }
 
-/* ------------------------------- traits ----------------------------------- */
-function traitFight(card){
-  const F = freshFight();
-  F.hand = [card];
-  F.feed = 9;
+/* ------------------------------- targeting -------------------------------- */
+{
+  const F = penFight([beast({ trait: 'none', pre: 'Front', suf: 'er' }),
+                      beast({ trait: 'bulwark', pre: 'Wall', suf: 'y' })]);
+  BB.playCard(0); BB.playCard(0);
+  eq(BB.foeTarget().c.trait, 'bulwark', 'a Bulwark steps in front even from the back');
+}
+{
+  const F = penFight([beast({ trait: 'elusive', pre: 'Slip', suf: 'py' }),
+                      beast({ trait: 'none', pre: 'Plain', suf: 'ly' })]);
+  BB.playCard(0); BB.playCard(0);
+  eq(BB.foeTarget().c.trait, 'none', 'an Elusive beast is skipped while anything else stands');
+  F.pen = F.pen.filter((b) => b.c.trait === 'elusive');
+  eq(BB.foeTarget().c.trait, 'elusive', 'but is hit when it is all that is left');
+}
+{
+  const F = penFight([beast({ pre: 'A', suf: 'a' }), beast({ pre: 'B', suf: 'b' })]);
+  BB.playCard(0); BB.playCard(0);
+  eq(BB.foeTarget().c.name, 'Aa', 'otherwise blows land on the front of the pen');
+}
+
+/* -------------------------------- traits ---------------------------------- */
+function traitTurn(card, seed){
+  const F = penFight([card], seed);
+  BB.playCard(0);
   return F;
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'F', suf: 'r', might: 6, hide: 4, trait: 'frenzy' }));
+  const F = traitTurn(beast({ might: 6, trait: 'frenzy' }));
   const hp0 = F.foe.hp;
-  BB.playCard(0);
-  eq(F.foe.hp, hp0 - 12, 'Frenzy strikes twice');
+  BB.endTurn();
+  eq(F.foe.hp, hp0 - 12, 'Frenzy strikes twice a turn');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'F', suf: 'l', might: 6, hide: 4, trait: 'feral' }));
+  const F = traitTurn(beast({ might: 6, hide: 60, trait: 'feral' }));
   const hp0 = F.foe.hp;
-  BB.playCard(0);
+  BB.endTurn();
   eq(F.foe.hp, hp0 - 9, 'Feral hits for 150%');
-  eq(F.block, 0, 'Feral gives no block');
+  const b = F.pen[0];
+  const h0 = b.hp;
+  BB.hurtBeast(b, 4);
+  eq(b.hp, h0 - 6, 'and takes 150% back');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'R', suf: 't', might: 9, hide: 2, trait: 'runt' }));
-  const hp0 = F.foe.hp, feed0 = F.feed;
-  BB.playCard(0);
-  eq(F.foe.hp, hp0 - 5, 'Runt hits for half, rounded up');
-  eq(F.feed, feed0, 'Runt is free');
+  const F = traitTurn(beast({ might: 9, trait: 'runt' }));
+  eq(F.pen[0].c.cost, 0, 'Runt is free to field');
+  const hp0 = F.foe.hp;
+  BB.endTurn();
+  eq(F.foe.hp, hp0 - 5, 'and hits for half, rounded up');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'P', suf: 'p', might: 2, hide: 5, trait: 'plump' }));
-  BB.playCard(0);
-  eq(F.block, 9, 'Plump adds 4 hide');
+  const F = traitTurn(beast({ hide: 5, trait: 'plump' }));
+  eq(F.pen[0].max, 10, 'Plump adds 5 Hide');
 }
 {
   BB.newRun(11);
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
   const F = BB.startFight();
+  F.hand = [beast({ might: 10, hide: 30, trait: 'leech' })];
+  F.feed = 20;
   BB.R.hp = 20;
-  F.hand = [BB.makeCard({ pre: 'L', suf: 'ch', might: 10, hide: 0, trait: 'leech' })];
-  F.feed = 9;
   BB.playCard(0);
-  eq(BB.R.hp, 25, 'Leech heals half the damage dealt');
+  BB.endTurn();
+  eq(BB.R.hp, 25, 'Leech heals half of what it deals');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'V', suf: 'm', might: 9, hide: 0, trait: 'venom' }));
-  BB.playCard(0);
+  const F = traitTurn(beast({ might: 9, hide: 60, trait: 'venom' }));
+  BB.endTurn();
   eq(F.foe.poison, 3, 'Venom applies might/3 poison');
   const hp0 = F.foe.hp;
   BB.endTurn();
-  eq(F.foe.hp, hp0 - 3, 'poison bites at end of turn');
-  eq(F.foe.poison, 2, 'and then wears off by one');
+  eq(F.foe.hp, hp0 - 3 - 9, 'which bites the next turn, on top of its attack');
+  eq(F.foe.poison, 3 - 1 + 3, 'it wears off by one a turn, and restacks while the beast lives');
 }
 {
-  const F = freshFight();
-  F.hand = [BB.makeCard({ pre: 'S', suf: 'w', might: 1, hide: 0, trait: 'swift', cost: 0 })];
+  const F = penFight([beast({ might: 4, trait: 'swift' })]);
+  const hp0 = F.foe.hp;
   BB.playCard(0);
-  eq(F.hand.length, 1, 'Swift draws a replacement');
+  eq(F.foe.hp, hp0 - 4, 'Swift strikes the moment it lands');
+  BB.endTurn();
+  eq(F.foe.hp, hp0 - 8, 'and again at the end of the turn');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'B', suf: 'd', might: 1, hide: 0, trait: 'brood' }));
-  BB.playCard(0);
+  const F = traitTurn(beast({ trait: 'brood' }));
   eq(F.hand.length, 1, 'Brood leaves a Spawn behind');
   eq(F.hand[0].name, 'Spawn', 'and it is a Spawn');
   eq(F.hand[0].cost, 0, 'Spawn is free');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'C', suf: 'd', might: 5, hide: 0, trait: 'cursed' }));
+  const F = penFight([beast({ trait: 'cursed' })]);
   const hp0 = BB.R.hp;
   BB.playCard(0);
-  eq(BB.R.hp, hp0 - 2, 'Cursed bites the hand that plays it');
+  eq(BB.R.hp, hp0 - 2, 'Cursed bites the hand that fields it');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'T', suf: 'h', might: 0, hide: 0, trait: 'thorns' }));
-  BB.playCard(0);
-  eq(F.thorns, 3, 'Thorns arms a counter');
+  const F = traitTurn(beast({ hide: 30, trait: 'thorns' }));
   const fhp = F.foe.hp;
-  BB.endTurn();
-  eq(F.foe.hp, fhp - 3, 'the foe takes it on the way in');
-  eq(F.thorns, 0, 'thorns lapse after the turn');
+  BB.hurtBeast(F.pen[0], 5);
+  eq(F.foe.hp, fhp - 3, 'Thorns bites back every time it is hit');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'G', suf: 'l', might: 1, hide: 0, trait: 'regal' }));
+  const F = penFight([beast({ hide: 40, trait: 'regal' })]);
+  const feed0 = F.feed;
   BB.playCard(0);
+  eq(F.feed, feed0 - F.pen[0].c.cost + 1, 'Regal pays out the turn it lands');
   BB.endTurn();
-  eq(F.feed, F.feedMax + 1, 'Regal pays out next turn');
-  BB.endTurn();
-  eq(F.feed, F.feedMax, 'and only next turn');
+  eq(F.feed, F.feedMax + 1, 'and every turn it survives');
 }
 {
-  const F = traitFight(BB.makeCard({ pre: 'H', suf: 'w', might: 9, hide: 3, trait: 'hollow' }));
+  const F = penFight([beast({ might: 5, hide: 40, trait: 'rally' }), beast({ might: 5, hide: 40 })]);
+  BB.playCard(0); BB.playCard(0);
+  eq(BB.beastMight(F.pen[1]), 7, 'Rally lifts the beasts around it');
+  eq(BB.beastMight(F.pen[0]), 5, 'but not itself');
+}
+{
+  const F = traitTurn(beast({ might: 9, hide: 4, trait: 'hollow' }));
   const hp0 = F.foe.hp;
-  BB.playCard(0);
-  eq(F.foe.hp, hp0 - 5, 'Hollow halves its might too');
-  eq(F.block, 3, 'but it still blocks');
+  BB.endTurn();
+  eq(F.foe.hp, hp0 - 5, 'Hollow halves its might');
+  ok(BB.TRAITS.hollow.cost < 0, 'and is priced as the liability it is');
 }
 
 /* ----------------------------- foe behaviour ------------------------------ */
 {
-  // the foe blocks, so your hits get soaked
-  BB.newRun(77);
-  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
-  const F = BB.startFight();
+  const F = penFight([beast({ might: 10, hide: 40 })]);
+  BB.playCard(0);
   F.foe.block = 100;
   const hp0 = F.foe.hp;
-  F.hand = [BB.makeCard({ pre: 'X', suf: 'x', might: 10, hide: 0, trait: 'none', cost: 0 })];
-  BB.playCard(0);
-  eq(F.foe.hp, hp0, 'foe block soaks the hit');
-  eq(F.foe.block, 90, 'and is spent doing it');
+  BB.endTurn();
+  eq(F.foe.hp, hp0, 'foe block soaks your pen');
+  ok(F.foe.block < 100, 'and is spent doing it');
 }
 {
-  // The Inspector files paperwork into your discard, and it must not stick
+  // a sweep hits the whole pen, and does not spill
   BB.newRun(88);
   BB.R.idx = 3;
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
   const F = BB.startFight();
   eq(F.foe.name, 'The Inspector', 'round 4 is the Inspector');
-  const before = F.disc.length;
+  F.hand = [beast({ hide: 30 }), beast({ hide: 30 })];
+  F.feed = 20;
+  BB.playCard(0); BB.playCard(0);
+  F.foe.mi = 2;                       // its sweep
+  const before = F.pen.map((b) => b.hp);
   BB.endTurn();
-  const junkAnywhere = (f) => [].concat(f.disc, f.hand, f.draw).filter((c) => c.name === 'Paperwork').length;
-  eq(junkAnywhere(F), 1, 'the Inspector shoves one piece of junk into your deck');
-  ge(F.disc.length + F.hand.length + F.draw.length, before, 'the junk is really added');
-  ok(!BB.R.deck.some((c) => c.name === 'Paperwork'), 'junk never follows you home');
+  ok(F.pen[0].hp < before[0] && F.pen[1].hp < before[1], 'a sweep catches every beast in the pen');
 }
 {
-  // multi-hit and buff moves
-  const foe = BB.makeFoe(2);
-  eq(foe.name, 'Cousin Merle', 'round 3 is Cousin Merle');
-  BB.newRun(90);
+  // a direct hit goes straight past the pen
+  BB.newRun(89);
   BB.R.idx = 2;
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
   const F = BB.startFight();
-  const hp0 = BB.R.hp;
+  F.hand = [beast({ hide: 90 })];
+  F.feed = 20;
+  BB.playCard(0);
+  F.foe.mi = 2;                       // 'Spit at you'
+  const hp0 = BB.R.hp, pen0 = F.pen[0].hp;
   BB.endTurn();
-  eq(BB.R.hp, hp0 - 12, 'a 4x3 volley lands all three hits');
-  BB.endTurn();
-  eq(F.foe.bonus, 3, 'a buff move raises the foe damage');
+  ok(BB.R.hp < hp0, 'a direct hit reaches you through a full pen');
+  eq(F.pen[0].hp, pen0, 'and leaves the pen untouched');
 }
 {
-  // every foe move type resolves without throwing, for every foe
+  // paperwork is a dud: it costs a Feed to file and never takes a pen slot
+  BB.newRun(90);
+  BB.R.idx = 3;
+  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+  const F = BB.startFight();
+  BB.endTurn();
+  const junk = [].concat(F.disc, F.hand, F.draw).filter((c) => c.name === 'Paperwork');
+  eq(junk.length, 1, 'the Inspector files one piece of junk into your deck');
+  ok(junk[0].dud, 'and it is a dud');
+  F.hand = [junk[0]];
+  F.feed = 5;
+  const pen0 = F.pen.length;
+  ok(BB.playCard(0), 'you can pay to file it away');
+  eq(F.pen.length, pen0, 'it never takes a pen slot');
+  ok(!BB.R.deck.some((c) => c.name === 'Paperwork'), 'and junk never follows you home');
+}
+{
+  // every foe cycles its whole move list without throwing
   for (let i = 0; i < BB.C.RUN_LEN; i++){
     BB.newRun(1000 + i);
     BB.R.idx = i;
@@ -482,19 +666,25 @@ function traitFight(card){
     for (let t = 0; t < BB.FOES[i].moves.length + 1; t++) BB.endTurn();
   }
   ok(true, 'every foe cycles its whole move list cleanly');
+  // and the roster is a sane curve
+  for (let i = 1; i < BB.C.RUN_LEN; i++){
+    ok(BB.FOES[i].hp > BB.FOES[i - 1].hp * 1.05, 'foe ' + i + ' is meaningfully tougher than the last');
+  }
+  ok(BB.FOES[BB.C.RUN_LEN - 1].hp > BB.FOES[0].hp * 8, 'the last foe is an order of magnitude past the first');
 }
 
 /* ------------------------------ win / lose -------------------------------- */
 {
-  const F = freshFight();
-  F.hand = [BB.makeCard({ pre: 'K', suf: 'o', might: 999, hide: 0, trait: 'none', cost: 0 })];
+  const F = penFight([beast({ might: 999 })]);
   BB.playCard(0);
+  BB.endTurn();
   eq(F.over, 'win', 'dropping the foe wins the fight');
   eq(F.foe.hp, 0, 'health floors at zero');
   ok(!BB.playCard(0), 'you cannot play into a finished fight');
 }
 {
   const F = freshFight();
+  F.hand = [];
   BB.R.hp = 1;
   BB.endTurn();
   eq(F.over, 'lose', 'running out of health loses');
@@ -508,22 +698,41 @@ function traitFight(card){
   BB.setNest(ids);
   BB.startFight();
   BB.R.hp = 20;
-  const mx0 = BB.R.maxHp;
-  const n0 = BB.R.deck.length;
-  const res = BB.winFight();
-  eq(BB.R.deck.length, n0 + 1, 'the chick joins the barn');
+  const mx0 = BB.R.maxHp, n0 = BB.R.deck.length, slop0 = BB.R.slop;
+  const litter = BB.winFight();
+  eq(litter.length, 2, 'winning hatches the clutch');
+  eq(BB.R.deck.length, n0, 'but nothing joins the barn until you choose');
   eq(BB.R.maxHp, mx0 + 2, 'every win raises the ceiling a little');
-  eq(BB.R.hp, 20 + Math.ceil(BB.R.maxHp * 0.22) + 2, 'winning heals a share of the ceiling');
-  ok(BB.R.hp <= BB.R.maxHp, 'healing never overshoots the ceiling');
+  eq(BB.R.hp, 20 + Math.ceil(BB.R.maxHp * 0.30) + 4, 'winning heals a share of the ceiling');
+  ok(BB.R.hp <= BB.R.maxHp, 'healing never overshoots');
+  eq(BB.F, null, 'the fight is torn down');
+
+  ok(BB.keepChick(0), 'you keep one chick');
+  eq(BB.R.deck.length, n0 + 1, 'and it joins the barn');
+  eq(BB.R.slop, slop0 + BB.C.SLOP_PER_WIN + BB.C.SLOP_PER_CHICK, 'the rejected chick is sold on');
+  eq(BB.R.sold, 1, 'and the sale is counted');
+  eq(BB.R.born, 1, 'the keeper is counted too');
   eq(BB.R.nest.length, 0, 'the nest empties');
   eq(BB.R.idx, 1, 'the run advances a round');
-  eq(BB.R.born, 1, 'the birth is counted');
-  eq(BB.F, null, 'the fight is torn down');
-  ok(BB.R.deck.some((c) => c.id === res.child.id), 'the chick is really in the deck');
+  eq(BB.R.litter, null, 'the clutch is done');
+  ok(!BB.keepChick(0), 'and cannot be picked from twice');
   ok(BB.R.log.length > 0, 'the run log records the birth');
+  ok(BB.R.hazardOffer, 'a fresh hazard is on the table');
+}
+{
+  BB.newRun(4322);
+  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+  BB.startFight();
+  BB.winFight();
+  BB.keepChick(0);
   ok(BB.R.wildOffer !== null, 'round 2 offers fresh bloodlines');
   eq(BB.R.wildOffer.length, 3, 'three wild beasts on offer');
   ok(BB.R.wildOffer.every((c) => !BB.shareBlood(c, BB.R.deck[0])), 'wild stock is unrelated');
+  // and it is deliberately behind the curve — an outcross, not a shortcut
+  BB.srand(5);
+  let wild = 0;
+  for (let i = 0; i < 200; i++) wild += BB.power(BB.wildCard(9));
+  ok(wild / 200 < 30, `late wild stock stays modest (avg power ${(wild/200).toFixed(1)})`);
   const w0 = BB.R.deck.length;
   ok(BB.takeWild(0), 'you can take one in');
   eq(BB.R.deck.length, w0 + 1, 'and it joins the barn');
@@ -531,7 +740,6 @@ function traitFight(card){
   ok(!BB.takeWild(0), 'and cannot be taken twice');
 }
 {
-  // bosses raise your ceiling
   BB.newRun(6060);
   BB.R.idx = 3;
   BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
@@ -539,6 +747,19 @@ function traitFight(card){
   const mx = BB.R.maxHp;
   BB.winFight();
   eq(BB.R.maxHp, mx + 7, 'beating a boss raises max health more than a normal round');
+}
+{
+  // taking a hazard pays out
+  BB.newRun(6061);
+  BB.toggleHazard();
+  BB.setNest(BB.R.deck.slice(0, 2).map((c) => c.id));
+  BB.startFight(BB.fightMods());
+  const slop0 = BB.R.slop;
+  BB.winFight();
+  BB.keepChick(0);
+  eq(BB.R.slop, slop0 + BB.C.SLOP_PER_WIN + BB.C.SLOP_PER_CHICK + BB.C.HAZARD_PAY,
+    'a hazard pays extra on the way out');
+  eq(BB.R.hazard, null, 'and does not follow you to the next round');
 }
 {
   // culling
@@ -561,16 +782,53 @@ function traitFight(card){
   eq(BB.bestBeast().id, BB.R.deck[3].id, 'best in show is the strongest beast');
 }
 
+/* ============================== the stud book ============================= */
+{
+  BB.newRun(700);
+  eq(Object.keys(BB.STUD).length, 8, 'the book opens with the starting herd');
+  const a = BB.R.deck[0], b = BB.R.deck[1];
+  BB.setNest([a.id, b.id]);
+  BB.startFight();
+  BB.winFight();
+  BB.keepChick(0);
+  const kid = BB.R.deck[BB.R.deck.length - 1];
+  const ped = BB.pedigree(kid.id, 2);
+  ok(ped, 'a kept chick has papers');
+  eq(ped.name, kid.name, 'under its final name');
+  eq(ped.up.length, 2, 'with both parents recorded');
+  const names = ped.up.map((x) => x.name).sort();
+  eq(names.join('|'), [a.name, b.name].sort().join('|'), 'and they are the right two');
+  eq(BB.pedigree(a.id, 2).up.length, 0, 'founder stock has no papers above it');
+  eq(BB.pedigree(999999, 2), null, 'an unknown beast has no pedigree');
+
+  // three generations deep
+  const c2 = BB.R.deck[0];
+  BB.setNest([kid.id, c2.id]);
+  BB.startFight();
+  BB.winFight();
+  BB.keepChick(0);
+  const g3 = BB.R.deck[BB.R.deck.length - 1];
+  const t3 = BB.pedigree(g3.id, 2);
+  const grand = t3.up.reduce((acc, p) => acc.concat(p.up), []);
+  ge(grand.length, 2, 'grandparents are reachable two levels up');
+  ok(BB.STUD[a.id], 'and a beast stays in the book after it leaves the barn');
+  BB.retire(a.id);
+  ok(BB.STUD[a.id], 'even once it has gone to the farm upstate');
+}
+
 /* ============================== full run ================================== */
-/** A greedy autoplayer: dump the biggest affordable card, then end the turn. */
+/** A reasonable player: put the wall in first, then the damage. */
 function autoFight(){
   const F = BB.F;
-  for (let turn = 0; turn < 80 && !F.over; turn++){
+  for (let turn = 0; turn < 60 && !F.over; turn++){
     for (let guard = 0; guard < 20; guard++){
-      let best = -1, bestScore = -1;
+      let best = -1, bestScore = -1e9;
       F.hand.forEach((c, i) => {
-        if (c.cost > F.feed) return;
-        const s = BB.cardDamage(c) + BB.cardHide(c) * 0.6;
+        if (c.cost > F.feed || c.dud) return;
+        if (BB.penFull()) return;
+        const wall = F.pen.length === 0 ? 1.6 : 0.7;
+        const s = BB.cardDamage(c) * 1.4 + BB.cardHide(c) * wall +
+          (c.trait === 'bulwark' ? 6 : 0) + (c.trait === 'rally' ? 5 : 0) - c.cost * 1.5;
         if (s > bestScore){ bestScore = s; best = i; }
       });
       if (best < 0) break;
@@ -582,44 +840,48 @@ function autoFight(){
   }
   return F.over;
 }
-/** Play a whole run headlessly: nest the two weakest, fight, breed, cull. */
 function autoRun(seed){
   BB.newRun(seed);
   let rounds = 0;
   while (!BB.R.over && rounds < 40){
     const sorted = BB.R.deck.slice().sort((a, b) => BB.power(a) - BB.power(b));
-    // nest the two best — they are the ones worth breeding, and it hurts
-    const nest = sorted.slice(-2).map((c) => c.id);
-    if (!BB.setNest(nest)) break;
-    BB.startFight();
-    const out = autoFight();
-    if (out !== 'win') return { round: BB.R.idx, won: false, deck: BB.R.deck.length };
+    if (!BB.setNest(sorted.slice(-2).map((c) => c.id))) break;
+    BB.startFight(BB.fightMods());
+    if (autoFight() !== 'win') return { round: BB.R.idx + 1, won: false, deck: BB.R.deck.length,
+      pow: BB.R.deck.reduce((a, c) => a + BB.power(c), 0) / BB.R.deck.length,
+      gen: Math.max(...BB.R.deck.map((c) => c.gen)) };
     BB.winFight();
+    const best = BB.R.litter.map((r, i) => [BB.power(r.child), i]).sort((x, y) => y[0] - x[0]);
+    BB.keepChick(best[0][1]);
     if (BB.R.wildOffer) BB.takeWild(0);
     while (BB.mustCull() > 0){
-      const worst = BB.R.deck.slice().sort((a, b) => BB.power(a) - BB.power(b))[0];
-      BB.retire(worst.id);
+      BB.retire(BB.R.deck.slice().sort((a, b) => BB.power(a) - BB.power(b))[0].id);
     }
     rounds++;
   }
-  return { round: BB.R.idx, won: BB.R.over === 'win', deck: BB.R.deck.length, hp: BB.R.hp };
+  return { round: BB.R.idx, won: BB.R.over === 'win', deck: BB.R.deck.length,
+           pow: BB.R.deck.reduce((a, c) => a + BB.power(c), 0) / BB.R.deck.length,
+           gen: Math.max(...BB.R.deck.map((c) => c.gen)) };
 }
 {
-  let deepest = 0, wins = 0, gens = 0;
-  const seeds = [1, 2, 3, 4, 5, 6, 7, 8];
+  let deepest = 0, wins = 0, bestGen = 0, bestPow = 0;
+  const seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
   for (const s of seeds){
-    const r = autoRun(s);
+    const r = autoRun(s * 7);
     deepest = Math.max(deepest, r.round);
+    bestGen = Math.max(bestGen, r.gen || 0);
+    bestPow = Math.max(bestPow, r.pow || 0);
     if (r.won) wins++;
     le(r.deck, BB.C.MAX_DECK, 'seed ' + s + ': the barn never exceeds the cap');
-    gens = Math.max(gens, Math.max(...BB.R.deck.map((c) => c.gen)));
   }
-  ge(deepest, 4, 'a greedy player gets at least four rounds deep');
-  ge(gens, 4, 'bloodlines actually reach later generations');
-  ok(deepest < BB.C.RUN_LEN || wins < seeds.length, 'the run is not a walkover for a greedy bot');
+  ge(deepest, 8, 'a decent player gets deep into the run');
+  ok(wins >= 1, 'and the run is winnable');
+  ok(wins < seeds.length, 'but not a walkover');
+  ge(bestGen, 7, 'bloodlines reach late generations');
+  ge(bestPow, 20, 'and a bred herd ends up far stronger than the one you started with');
 }
 {
-  // fight 1 is winnable with the plain starter deck, on every seed we try
+  // round 1 is winnable with the plain starter herd, on every seed we try
   let won = 0;
   for (let s = 1; s <= 12; s++){
     BB.newRun(s * 31);
@@ -631,19 +893,12 @@ function autoRun(seed){
   ge(won, 12, 'the starter herd clears round 1 on every seed');
 }
 {
-  // stats really do inflate across a run, which is why feed grows
-  BB.srand(5150);
-  let a = BB.makeCard({ pre: 'A', suf: 'a', might: 6, hide: 3, trait: 'none' });
-  let b = BB.makeCard({ pre: 'B', suf: 'b', might: 5, hide: 4, trait: 'none' });
-  for (let i = 0; i < 12; i++){
-    const kids = [];
-    for (let k = 0; k < 3; k++) kids.push(BB.breed(a, b).child); // keep the best of a litter
-    kids.sort((x, y) => BB.power(y) - BB.power(x));
-    a = kids[0]; b = kids[1];
-  }
-  ge(BB.power(a), 14, 'twelve generations of selection produces a real beast');
-  le(BB.power(a), 200, 'but not an infinite one');
-  eq(a.gen, 13, 'generation counter tracks the lineage depth');
+  // breeding, not hoarding, is what carries a run: a deck that never breeds up
+  // should be visibly weaker than one that does
+  const bred = autoRun(77);
+  BB.newRun(77);
+  const startPow = BB.R.deck.reduce((a, c) => a + BB.power(c), 0) / BB.R.deck.length;
+  ok(bred.pow > startPow * 1.5, `a bred herd outgrows the starting one (${bred.pow.toFixed(1)} vs ${startPow.toFixed(1)})`);
 }
 
 /* ============================= save / hall ================================ */
@@ -665,6 +920,49 @@ function autoRun(seed){
   eq(G2.ui.loadHall(), null, 'a corrupt save degrades to no record');
 }
 
+/* ============================ founder stock =============================== */
+{
+  const store = {};
+  const G = loadGame(store);
+  G.newRun(500);
+  eq(G.R.deck.length, 8, 'a first-ever run starts on plain stock');
+  ok(!G.R.deck.some((c) => c.founder), 'with no founder in it');
+  const pristine = G.R.deck.map((c) => ({ name: c.name, pow: G.power(c) }));
+  G.R.deck[2].might = 40; G.R.deck[2].hide = 40;
+  const champ = G.bestBeast();
+  G.ui.goOver(false);
+  ok(store.bb_founder, 'the best beast of a finished run retires to stud');
+  const f = JSON.parse(store.bb_founder);
+  eq(f.name, champ.name, 'under its own name');
+  le(f.might, 9, 'its Might is capped on the way in');
+  le(f.hide, 13, 'and so is its Hide — a keepsake, not a snowball');
+
+  const G2 = loadGame(store);
+  G2.newRun(500);
+  eq(G2.R.deck.length, 8, 'the next run is still eight head');
+  const kept = G2.R.deck.filter((c) => c.founder);
+  eq(kept.length, 1, 'exactly one of them is the founder');
+  eq(kept[0].name, f.name, 'and it is last run\'s champion');
+  eq(kept[0].gen, 1, 'it starts the new line at generation 1');
+  const plain = G2.R.deck.filter((c) => !c.founder).map((c) => c.name);
+  eq(plain.length, 7, 'it took a starter\'s place rather than joining them');
+  const dropped = pristine.filter((n) => plain.indexOf(n.name) < 0);
+  eq(dropped.length, 1, 'exactly one starter made way');
+  ok(pristine.every((x) => x.pow >= dropped[0].pow), 'and it was the weakest one');
+
+  // a cursed champion does not hand its curse down
+  const store2 = {};
+  const G3 = loadGame(store2);
+  G3.newRun(501);
+  G3.R.deck[0].trait = 'cursed'; G3.R.deck[0].might = 60;
+  G3.ui.goOver(false);
+  eq(JSON.parse(store2.bb_founder).trait, 'none', 'a cursed champion loses the curse at stud');
+  const G4 = loadGame({ bb_founder: 'not json at all' });
+  eq(G4.loadFounder(), null, 'a corrupt founder save degrades to none');
+  G4.newRun(1);
+  eq(G4.R.deck.length, 8, 'and the run starts normally anyway');
+}
+
 /* =============================== the UI =================================== */
 // Drive every screen through the real render path. A typo in a template or a
 // missing element blows up here rather than in front of a player.
@@ -674,17 +972,21 @@ function autoRun(seed){
   eq(G.ui.cur, 'title', 'the game opens on the title screen');
   G.ui.startRun();
   eq(G.ui.cur, 'nest', 'starting a run lands on the nest screen');
+  G.ui.renderRituals();
   G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
   G.ui.renderNest();
-  ok(true, 'the nest screen renders with a chosen pair');
+  G.toggleHazard();
+  G.ui.renderNest();
+  ok(true, 'the nest screen renders with a pair, a ritual row and a hazard');
 
-  G.startFight();
+  G.startFight(G.fightMods());
   G.ui.renderFight();
   G.ui.doPlay(0);
+  G.ui.renderPen();
   G.ui.doEnd();
-  ok(true, 'the fight screen renders, plays and ends a turn');
+  ok(true, 'the fight screen renders, fields a beast and ends a turn');
 
-  // every intent string formats
+  // every intent string formats, for every foe and every move
   for (let i = 0; i < G.C.RUN_LEN; i++){
     G.newRun(i + 1);
     G.R.idx = i;
@@ -697,21 +999,32 @@ function autoRun(seed){
     }
   }
 
-  // hatch, wild, cull, over
+  // hatch → pick → wild → cull
   G.newRun(24);
   G.setNest(G.R.deck.slice(0, 2).map((c) => c.id));
   G.startFight();
   G.F.foe.hp = 0; G.F.over = 'win';
   G.ui.resolveFight();
   eq(G.ui.cur, 'hatch', 'a win goes to the hatch screen');
-  G.ui.revealChild(G.R.lastHatch.res);
-  ok(true, 'the chick reveals');
+  G.ui.revealLitter();
+  ok(G.ui.picked < 0, 'nothing is chosen for you');
+  G.ui.setPicked(0);
+  G.ui.showChickDetail(G.R.lastHatch.litter[0]);
+  ok(G.ui.chickBanners(G.R.lastHatch.litter[0]).length >= 0, 'a chick renders its banners');
+  const n0 = G.R.deck.length;
   G.ui.afterHatch();
+  eq(G.R.deck.length, n0 + 1, 'choosing a chick takes it home');
   eq(G.ui.cur, 'wild', 'round 2 offers wild stock');
   G.takeWild(1);
   G.ui.goCullOrNext();
   ok(G.ui.cur === 'cull' || G.ui.cur === 'nest', 'then culling or straight back to the nest');
-  if (G.ui.cur === 'cull'){ G.ui.nextRound(); eq(G.ui.cur, 'nest', 'skipping the cull returns to the nest'); }
+
+  // the stud book
+  G.ui.goBook(G.R.deck[G.R.deck.length - 1].id, 'nest');
+  eq(G.ui.cur, 'book', 'the stud book opens');
+  G.ui.renderBook();
+  for (const c of G.R.deck){ G.ui.goBook(c.id, 'nest'); }
+  ok(true, 'every beast in the barn renders a pedigree');
 
   // a forced cull loops until the barn fits
   while (G.R.deck.length < G.C.MAX_DECK + 2) G.R.deck.push(G.wildCard(2));
@@ -722,9 +1035,8 @@ function autoRun(seed){
   G.ui.goOver(false);
   eq(G.ui.cur, 'over', 'a loss ends the run');
   G.ui.goOver(true);
-  ok(true, 'the victory screen renders too');
   G.ui.renderTitle();
-  ok(true, 'the title screen renders with a hall record');
+  ok(true, 'the victory and title screens render');
 
   // the portrait painter survives every gene combination
   for (let i = 0; i < 60; i++){
@@ -732,6 +1044,7 @@ function autoRun(seed){
     c.vis.eyes = (i % 3) + 1; c.vis.horns = i % 4; c.vis.wings = i % 3; c.vis.tail = i % 2;
     c.vis.spots = (i % 7) / 6; c.vis.body = (i % 5) / 4;
     G.ui.cardEl(c, { big: i % 2 === 0 });
+    G.ui.penEl({ c, hp: 3, max: 5, uid: i });
   }
   ok(true, 'every gene combination paints without throwing');
 }
