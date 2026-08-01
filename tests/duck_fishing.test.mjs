@@ -44,8 +44,9 @@ const EXPOSE = `__out.api = {
   C: { CHAN_HZ, LOOP_LEN, X0, X1, VIEW_HALF, GATE_X, N_DUCKS, CURRENT, GRAV,
        FLOAT_Y, BODY_HH, BUOY, RING_LOCAL, RING_R, CATCH_R, MAX_HOOK,
        ROD_TIP_Y, HOOK_MIN, HOOK_MAX, LOWER_SPD, RAISE_SPD, ROUND_TIME,
-       BORE_LOW, BORE_HIGH, STREAK_WINDOW, STREAK_MAX },
-  streakMult,
+       BORE_LOW, BORE_HIGH, STREAK_WINDOW, STREAK_MAX,
+       RUSH_TIME, RUSH_FLOW, RUSH_MULT },
+  streakMult, PRIZES, prizesFor, nextPrize, saveMeta, fx,
 };
 `;
 
@@ -273,6 +274,35 @@ test('duck meshes are closed and indices are in range', () => {
   }
   assert(a.DUCK_LO.q < a.DUCK_HI.q, 'the LOD mesh should be cheaper than the full one');
   assert(a.DUCK_MIN.q < a.DUCK_LO.q, 'the minimal mesh should be cheaper still');
+});
+
+test('the shelf is on screen at every aspect ratio', () => {
+  /* On a phone the camera crops the back corners away, so the world-space
+     shelf boards vanish — and with them the only visible reason to keep
+     playing. The narrow layout has to fall back to something on screen. */
+  for (const [w, h] of [[1920, 1080], [1280, 760], [430, 860], [360, 640]]){
+    const a = boot();
+    a._resize(w, h);
+    a.G.prizes = 4;
+    const visHalf = (w * 0.5) * a.cam.d0 / a.cam.s;
+    if (visHalf < 9.5){
+      // the strip is drawn in screen space; check it fits the canvas
+      const n = a.PRIZES.length;
+      const r = Math.min(15, w / (n * 3.1));
+      const gap = r * 2.6;
+      const x0 = w * 0.5 - gap * (n - 1) * 0.5;
+      assert(x0 - gap > 0, `shelf strip runs off the left at ${w}x${h}`);
+      assert(x0 + gap * (n - 1) + gap < w, `shelf strip runs off the right at ${w}x${h}`);
+      const y = Math.min(h * 0.30, 134 + r);
+      assert(y - r * 1.7 > 122, `shelf strip overlaps the score/streak plates at ${w}x${h}`);
+      assert(y + r * 1.4 < h * 0.42, `shelf strip drifts into the pond at ${w}x${h}`);
+    } else {
+      // the boards are world-space; both ends must project inside the canvas
+      const inner = a.proj(7.7, 1.62, a.C.CHAN_HZ + 0.5).x;
+      assert(inner < w, `shelf board starts off-screen at ${w}x${h}`);
+    }
+    a.draw();
+  }
 });
 
 test('the pond fills a sensible band of the canvas at any aspect ratio', () => {
@@ -945,6 +975,146 @@ test('numbers roll inside the published table and gold ducks are worth 25', () =
   assert(sawGold, 'gold ducks should turn up occasionally');
 });
 
+// ---- the shelf ------------------------------------------------------------
+test('prize thresholds climb, so the shelf always has a next rung', () => {
+  const a = boot();
+  assert(a.PRIZES.length >= 6, 'the shelf should be worth filling');
+  for (let i = 1; i < a.PRIZES.length; i++)
+    assert(a.PRIZES[i].c > a.PRIZES[i - 1].c,
+      `prize ${i} (${a.PRIZES[i].n}) must cost more than the one before it`);
+  assert(a.PRIZES.every(p => p.n && p.body && p.acc), 'every prize needs a name and a palette');
+});
+
+test('a round banks its score as tickets and takes prizes off the shelf', () => {
+  const a = boot();
+  a.startRound(false);
+  a.G.score = a.PRIZES[0].c + 5;
+  a.endRound();
+  assert(a.G.tickets === a.PRIZES[0].c + 5, `tickets should bank the score, got ${a.G.tickets}`);
+  assert(a.G.prizes === 1, `the first prize should be won, got ${a.G.prizes}`);
+  assert(a.G.won.length === 1 && a.G.won[0].n === a.PRIZES[0].n, 'and be reported as won this round');
+  assert(a.G.rounds === 1, 'rounds played should count');
+
+  // a second round adds to the lifetime total rather than replacing it
+  a.startRound(false);
+  a.G.score = 10;
+  a.endRound();
+  assert(a.G.tickets === a.PRIZES[0].c + 15, 'tickets should accumulate across rounds');
+  assert(a.G.won.length === 0, 'a round that wins nothing should say so');
+});
+
+test('one huge round can clear several rungs at once', () => {
+  const a = boot();
+  a.startRound(false);
+  a.G.score = a.PRIZES[2].c;
+  a.endRound();
+  assert(a.G.prizes === 3, `should have won three, got ${a.G.prizes}`);
+  assert(a.G.won.length === 3, 'and all three should be announced');
+});
+
+test('the shelf persists, and never gives a prize back', () => {
+  const a = boot();
+  a.startRound(false);
+  a.G.score = a.PRIZES[1].c;
+  a.endRound();
+  const saved = a._store['duck_fishing_prizes_v1'];
+  assert(saved, 'the shelf should be saved');
+  const j = JSON.parse(saved);
+  assert(j.prizes === 2 && j.tickets === a.PRIZES[1].c, 'saved shelf should match');
+
+  // a later, smaller session must not shrink the shelf
+  const b = boot();
+  b._store['duck_fishing_prizes_v1'] = JSON.stringify({ tickets: a.PRIZES[1].c, prizes: 0, rounds: 3 });
+  b.loadBest();
+  assert(b.G.prizes === 2, 'prizes are re-derived from tickets if the count lags');
+  assert(a.prizesFor(0) === 0, 'no tickets, no prizes');
+  assert(a.prizesFor(a.PRIZES[a.PRIZES.length - 1].c + 1e6) === a.PRIZES.length, 'and the shelf caps out');
+});
+
+test('a corrupt shelf just means an empty one', () => {
+  const a = boot();
+  a._store['duck_fishing_prizes_v1'] = '{{{not json';
+  a.loadBest();
+  assert(a.G.prizes === 0 && a.G.tickets === 0, 'junk should not poison the shelf');
+  a._store['duck_fishing_prizes_v1'] = JSON.stringify({ tickets: -5, prizes: 999, rounds: -1 });
+  a.loadBest();
+  assert(a.G.tickets === 0, 'negative tickets should clamp');
+  assert(a.G.prizes <= a.PRIZES.length, 'a bogus prize count should clamp to the shelf');
+});
+
+// ---- the finish -----------------------------------------------------------
+test('the last stretch pays double and quickens the stream', () => {
+  const a = boot();
+  a.startRound(false);
+  assert(!a.G.rush, 'a round should not open in the rush');
+  a.G.time = a.C.RUSH_TIME + 0.5;
+  step(a, 1.0);
+  assert(a.G.rush, 'the rush should start inside the final stretch');
+
+  /* Drive the clock rather than the flag — update() derives the rush from
+     the time remaining, so poking G.rush would test nothing. */
+  const d = a.ducks[0];
+  for (const o of a.ducks) if (o !== d) o.x = a.C.X0 - 60;   // no jostling
+  d.drift = 0; d.z = 0;
+
+  d.x = 0; a.G.time = a.C.RUSH_TIME - 2;
+  step(a, 1.0);
+  const rushed = d.x;
+  assert(a.G.rush, 'still inside the rush for that measurement');
+
+  d.x = 0; a.G.time = a.C.ROUND_TIME;
+  step(a, 1.0);
+  const calm = d.x;
+  assert(!a.G.rush, 'and outside it for this one');
+  assert(rushed > calm * 1.1,
+    `the rush should quicken the stream: ${rushed.toFixed(2)} vs ${calm.toFixed(2)}`);
+  near(rushed / calm, a.C.RUSH_FLOW, 0.08, 'and by about the stated factor');
+});
+
+test('a rushed duck pays the multiplier', () => {
+  const a = boot();
+  const d = a.ducks[0];
+  rigCatch(a, d);
+  d.num = 3; d.gold = false;
+  a.G.time = a.C.RUSH_TIME - 5;        // the clock is what turns the rush on
+  plungeHook(a, d, 0);
+  a.input.down = false;
+  step(a, 1.0);
+  assert(a.G.rush, 'the round should be in its final stretch');
+  assert(a.G.score === 3 * a.C.RUSH_MULT,
+    `a 3 in the rush should pay ${3 * a.C.RUSH_MULT}, got ${a.G.score}`);
+});
+
+test('relaxed play never enters the rush', () => {
+  const a = boot();
+  a.startRound(true);
+  step(a, 30);
+  assert(!a.G.rush, 'there is no clock to run down in relaxed mode');
+});
+
+// ---- juice ----------------------------------------------------------------
+test('the score counter rolls up to the real score and settles exactly', () => {
+  const a = boot();
+  a.startRound(true);
+  a.G.score = 250;
+  a.update(1 / 60);
+  assert(a.G.shown > 0 && a.G.shown < 250, 'it should chase, not snap');
+  step(a, 3);
+  assert(a.G.shown === 250, `it must land exactly on the score, got ${a.G.shown}`);
+});
+
+test('a catch kicks the screen, and the kick dies down quickly', () => {
+  const a = boot();
+  const d = a.ducks[0];
+  rigCatch(a, d);
+  assert(a.fx.shake === 0, 'no kick at rest');
+  plungeHook(a, d, 0);
+  assert(a.fx.shake > 0, 'landing one should kick the screen');
+  a.input.down = true;
+  step(a, 1.0);
+  assert(a.fx.shake === 0, 'and it should settle within a second, not judder on');
+});
+
 // ---- round flow -----------------------------------------------------------
 test('a timed round counts down and ends', () => {
   const a = boot();
@@ -1024,6 +1194,12 @@ test('draws every game state, including a full hook and a reveal in flight', () 
   a.draw();                       // low-time HUD
   a.G.streak = 7; a.G.streakT = a.C.STREAK_WINDOW * 0.4;
   a.draw();                       // streak banner + draining window bar
+  a.G.rush = true; a.fx.shake = 9;
+  a.draw();                       // final-rush banner, shaken frame
+  a.G.rush = false; a.fx.shake = 0;
+  a.G.prizes = 4; a.draw();       // part-filled shelf
+  a.G.prizes = a.PRIZES.length;
+  a.draw();                       // shelf cleared: no "next prize" to show
   a.endRound();
   a.draw();                       // game over
 });
