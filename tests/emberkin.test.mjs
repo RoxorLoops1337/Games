@@ -364,6 +364,22 @@ const blocked = (() => {                       // same fill, but his tile is a w
 ok(!blocked.has(`${north.x},${north.y}`), 'you cannot slip past the Warden to Crown Hollow');
 ok(reachable(wood, south.x, south.y).has(`${north.x},${north.y}`), 'once he steps aside the path opens');
 
+section('the difficulty curve never asks for a grind');
+// Each trainer should be beatable by a party levelled on the grass around them:
+// no trainer may outlevel the local encounter band by more than a few levels.
+const ROUTE_ORDER = ['route_one', 'emberwood', 'stillmere', 'crown_hollow'];
+for (const id of ROUTE_ORDER) {
+  const map = MAPS[id];
+  const wildMax = Math.max(...map.enc.table.map((e) => e[2]));
+  for (const n of (map.npcs || [])) {
+    if (!n.trainer) continue;
+    const lead = Math.max(...n.trainer.team.map((t) => t[1]));
+    ok(lead <= wildMax + 8, `${n.name} (Lv${lead}) is within reach of ${id} wilds (Lv${wildMax})`);
+  }
+}
+// And the legendary must not outclass the region it guards.
+ok(26 <= Math.max(...MAPS.crown_hollow.enc.table.map((e) => e[2])) + 8, 'Vespyr sits close to Crown Hollow levels');
+
 section('encounters only fire in tall grass');
 EK.G.party = [EK.mkMon('cindercub', 5)];
 EK.enterMap('route_one', 9, 10, 'down');

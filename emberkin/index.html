@@ -1671,7 +1671,7 @@ const MAPS = {
           lose: ['Fair. Well fought.'], win: ['Thorns win again.'] } },
       { x: 8, y: 2, dir: 'down', sprite: 'npc_ranger', name: 'Warden Hale', id: 't_hale', block: true,
         lines: ['Crown Hollow is up this path. I do not open it for tourists.', 'Show me you can hold a kin together and I will step aside.'],
-        trainer: { team: [['gargolem', 24], ['voltyx', 25], ['nocthorn', 26]], prize: 1800,
+        trainer: { team: [['gargolem', 17], ['voltyx', 18], ['nocthorn', 19]], prize: 1800,
           lose: ['Then it is yours to walk. Quietly, mind.'], win: ['Not yet. Come back when they trust you.'] },
         after: ['Quietly, up there. It knows when you are loud.'] },
     ],
@@ -1730,7 +1730,7 @@ const MAPS = {
     ],
     warps: [{ x: 8, y: 11, to: 'emberwood', tx: 8, ty: 1 }, { x: 9, y: 11, to: 'emberwood', tx: 9, ty: 1 }],
     npcs: [],
-    enc: { rate: .14, table: [['nocthorn', 24, 28, 20], ['voltyx', 24, 28, 20], ['thornip', 24, 28, 20], ['pyrelynx', 24, 28, 20], ['gargolem', 24, 28, 20]] },
+    enc: { rate: .14, table: [['nocthorn', 20, 24, 20], ['voltyx', 20, 24, 20], ['thornip', 20, 24, 20], ['pyrelynx', 20, 24, 20], ['gargolem', 20, 24, 20]] },
   },
 };
 
@@ -1942,11 +1942,13 @@ function onArrive() {
   if (w) { doWarp(w); return; }
   if (!GRASSY.has(tileAt(G.map, p.x, p.y)) || !G.map.enc) return;
 
-  // The legendary shows up on the shrine grass, once, and gets first refusal.
-  if (G.mapId === 'crown_hollow' && !G.flags.sawVespyr && p.y <= 8 && chance(.18)) {
-    G.flags.sawVespyr = 1;
+  // The legendary haunts the shrine grass and gets first refusal. Losing it is
+  // not permanent — it comes back around, so a wipe never ends the hunt.
+  if (G.mapId === 'crown_hollow' && !G.flags.beatVespyr && p.y <= 8
+      && G.steps > (G.flags.vespyrSeenAt || 0) + 25 && chance(.18)) {
+    G.flags.vespyrSeenAt = G.steps;
     say('', ['The air goes thin and bright. Something old has noticed you.'], () => {
-      startBattle({ foe: mkMon('vespyr', 40), wild: true, legendary: true });
+      startBattle({ foe: mkMon('vespyr', 26), wild: true, legendary: true });
     });
     return;
   }
@@ -2745,6 +2747,7 @@ function finishBattle() {
     saveGame();
   };
   if (over === 'win') {
+    if (!b.npc) { done(); return; }        // the log already narrated a wild win
     const lines = [];
     if (b.npc) {
       lines.push(...(b.npc.trainer.lose || []));
@@ -2780,10 +2783,12 @@ function finishBattle() {
 }
 
 function runEvolution(m) {
-  const before = m.species;
+  const from = m.species;
+  G.evoAnim = { from, to: DEX[from].evo[0], t: 0, swapped: false };
   say('', [`${dispName(m)} is changing shape!`], () => {
     const r = evolveMon(m);
-    G.evoAnim = { id: before, to: m.species, t: 0 };
+    G.evoAnim.swapped = true; G.evoAnim.t = 0;
+    playCue('level');
     say('', [`${r.oldName} became ${r.newName}!`], () => {
       G.evoAnim = null;
       const next = checkEvolve();
@@ -3142,14 +3147,9 @@ function draw() {
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, VIEW_W, VIEW_H);
   if (G.mode === 'title') return;
-  if (G.battle) drawBattle(ctx);
+  if (G.evoAnim) drawEvolution(ctx);
+  else if (G.battle) drawBattle(ctx);
   else if (G.map) drawWorld(ctx);
-
-  if (G.evoAnim) {                       // white-out flash over the evolving kin
-    const k = Math.min(1, G.evoAnim.t * 1.6);
-    ctx.fillStyle = `rgba(255,255,255,${.65 * (1 - Math.abs(.5 - k) * 2)})`;
-    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-  }
   if (G.fade > 0) {
     ctx.fillStyle = `rgba(8,5,12,${clamp(G.fade * 2.4, 0, 1)})`;
     ctx.fillRect(0, 0, VIEW_W, VIEW_H);
@@ -3164,6 +3164,37 @@ function draw() {
       const w = VIEW_W * cover;
       ctx.fillRect(i % 2 ? VIEW_W - w : 0, i * bh, w, bh + 1);
     }
+  }
+}
+
+/** The evolution payoff: spokes of light, a shimmer, then the new shape. */
+function drawEvolution(g) {
+  const a = G.evoAnim, t = a.t;
+  g.fillStyle = '#120b1a';
+  g.fillRect(0, 0, VIEW_W, VIEW_H);
+  g.save();
+  g.translate(VIEW_W / 2, 92);
+  g.rotate((a.swapped ? -t : t) * .6);          // the whole wheel spins…
+  g.globalAlpha = .16;
+  g.fillStyle = '#ffc94d';
+  for (let i = 0; i < 12; i++) {
+    g.rotate(Math.PI / 6);                      // …spokes stay 30° apart
+    g.beginPath(); g.moveTo(0, 0); g.lineTo(-10, -220); g.lineTo(10, -220); g.closePath(); g.fill();
+  }
+  g.restore();
+
+  const id = a.swapped ? a.to : a.from;
+  const s = 3;
+  const bottom = artBottom(id) * s;
+  // Before the change it shivers and glows; after, it lands and the glow fades.
+  const flash = a.swapped ? Math.max(0, 1 - t * 1.4)
+    : Math.min(.85, t * .25 + (Math.sin(t * 16) * .5 + .5) * .4);
+  const jitter = a.swapped ? 0 : Math.round(Math.sin(t * 30) * 1.5);
+  drawSpr(g, 'creature', id, VIEW_W / 2 - 20 * s + jitter, 128 - bottom, s, { flash });
+
+  if (a.swapped && t < .45) {
+    g.fillStyle = `rgba(255,255,255,${(1 - t / .45) * .85})`;
+    g.fillRect(0, 0, VIEW_W, VIEW_H);
   }
 }
 
