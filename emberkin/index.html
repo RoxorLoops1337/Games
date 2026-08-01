@@ -1208,7 +1208,7 @@ const G = {
   t: 0, dt: 0,
   map: null, mapId: '',
   player: { x: 5, y: 8, dir: 'down', px: 5, py: 8, moveT: 0, moveLen: 1, step: 0, bump: 0, hop: false },
-  fade: 0, wipe: 0, evoAnim: null, prevMode: 'world',
+  fade: 0, wipe: 0, evoAnim: null, alert: null, prevMode: 'world',
   party: [], box: [], bag: {}, money: 500,
   dex: {},                 // id -> 1 seen, 2 caught
   flags: {},               // story progress
@@ -1757,6 +1757,7 @@ function enterMap(id, x, y, dir) {
   G.map = m;
   G.player.x = G.player.px = x; G.player.y = G.player.py = y;
   G.player.dir = dir || G.player.dir; G.player.moveT = 0;
+  G.alert = null;
   return m;
 }
 
@@ -1940,6 +1941,7 @@ function onArrive() {
   G.steps++;
   const w = warpAt(G.map, p.x, p.y);
   if (w) { doWarp(w); return; }
+  if (trainerSight()) return;
   if (!GRASSY.has(tileAt(G.map, p.x, p.y)) || !G.map.enc) return;
 
   // The legendary haunts the shrine grass and gets first refusal. Losing it is
@@ -1956,6 +1958,32 @@ function onArrive() {
     const foe = rollEncounter(G.map);
     if (foe) startBattle({ foe, wild: true });
   }
+}
+
+const SIGHT = 4;                       // how far down their own line a trainer looks
+
+/**
+ * Did an unbeaten trainer just see the player walk into their line? Sight is
+ * blocked by anything solid, so you can sneak behind a tree.
+ */
+function trainerSight() {
+  const p = G.player;
+  for (const n of (G.map.npcs || [])) {
+    if (!n.trainer || n.gone || G.flags[n.id]) continue;
+    const [dx, dy] = DIRS[n.dir] || [0, 1];
+    for (let i = 1; i <= SIGHT; i++) {
+      const x = n.x + dx * i, y = n.y + dy * i;
+      if (SOLID.has(tileAt(G.map, x, y))) break;
+      if (x === p.x && y === p.y) {
+        // Turn and face whoever just called you out.
+        p.dir = dx ? (dx > 0 ? 'left' : 'right') : (dy > 0 ? 'up' : 'down');
+        G.alert = { npc: n, t: 0 };
+        say(n.name, ['…'], () => { G.alert = null; talkTo(n); });
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function doWarp(w) {
@@ -2063,10 +2091,13 @@ function drawWorld(g) {
     const sx = Math.round(n.x * TILE - cam.x), sy = Math.round(n.y * TILE - cam.y - 6);
     drawSpr(g, 'actor', n.sprite, sx, sy, 1);
     if (n.trainer && !G.flags[n.id]) {
-      g.fillStyle = '#ffc94d';
-      const bob = Math.sin(G.t * 4) * 1.5;
-      g.fillRect(sx + 7, sy - 8 + bob, 2, 5);
-      g.fillRect(sx + 7, sy - 2 + bob, 2, 2);
+      // A quiet marker normally; a big jolt on the frame they spot you.
+      const spotted = G.alert && G.alert.npc === n;
+      const bob = spotted ? -Math.abs(Math.sin(G.t * 14)) * 4 : Math.sin(G.t * 4) * 1.5;
+      const s = spotted ? 2 : 1;
+      g.fillStyle = spotted ? '#fff' : '#ffc94d';
+      g.fillRect(sx + 8 - s, sy - 8 - 3 * s + bob, s * 2, s * 5);
+      g.fillRect(sx + 8 - s, sy - 2 + bob, s * 2, s * 2);
     }
   } });
   const p = G.player;
@@ -3349,7 +3380,7 @@ if (typeof window !== 'undefined') {
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     doTurn, startBattle, foeChoose, captureChance, tryCatch, addCaught,
     grantXP, checkEvolve, evolveMon, useMove, endOfTurn,
-    enterMap, passable, warpAt, tileAt, rollEncounter, tryMove, onArrive, interact,
+    enterMap, passable, warpAt, tileAt, rollEncounter, tryMove, onArrive, interact, trainerSight,
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect,

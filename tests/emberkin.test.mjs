@@ -396,6 +396,35 @@ for (let i = 0; i < 400; i++) {
 ok(started > 10, `tall grass produces encounters (${started}/400)`);
 EK.G.battle = null; EK.G.mode = 'world';
 
+section('trainers spot you down their own line');
+const spot = (mapId, x, y) => {
+  EK.enterMap(mapId, x, y, 'down');
+  EK.G.battle = null; EK.G.mode = 'world'; EK.G.dialogue = null; EK.G.alert = null;
+  const hit = EK.trainerSight();
+  return hit ? EK.G.alert.npc.name : null;
+};
+const pell = MAPS.route_one.npcs.find((n) => n.id === 't_pell');   // faces down
+EK.G.flags = {};
+eq(spot('route_one', pell.x, pell.y + 1), pell.name, 'one tile ahead is seen');
+eq(spot('route_one', pell.x, pell.y + 4), pell.name, 'four tiles ahead is seen');
+eq(spot('route_one', pell.x, pell.y + 5), null, 'five tiles is too far');
+eq(spot('route_one', pell.x, pell.y - 1), null, 'behind them is safe');
+eq(spot('route_one', pell.x + 1, pell.y + 2), null, 'beside the line is safe');
+EK.G.flags[pell.id] = 1;
+eq(spot('route_one', pell.x, pell.y + 1), null, 'a beaten trainer does not re-challenge');
+EK.G.flags = {};
+// Sight must not pass through walls.
+const coll = MAPS.emberwood.npcs.find((n) => n.id === 't_coll');    // faces left
+const [cdx, cdy] = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[coll.dir];
+let blockedAt = 0;
+for (let i = 1; i <= 4; i++) if (EK.SOLID.has(MAPS.emberwood.rows[coll.y + cdy * i][coll.x + cdx * i])) { blockedAt = i; break; }
+if (blockedAt) {
+  eq(spot('emberwood', coll.x + cdx * blockedAt + cdx, coll.y + cdy * blockedAt + cdy), null, 'sight does not pass through solid tiles');
+} else {
+  eq(spot('emberwood', coll.x + cdx * 3, coll.y + cdy * 3), coll.name, 'an open line is seen');
+}
+EK.G.flags = {}; EK.G.alert = null; EK.G.battle = null; EK.G.mode = 'world';
+
 section('encounter tables roll inside their level bands');
 for (let i = 0; i < 300; i++) {
   const mon = EK.rollEncounter(MAPS.stillmere);
