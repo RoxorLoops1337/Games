@@ -1560,8 +1560,15 @@ const MAPS = {
     npcs: [
       { x: 3, y: 7, dir: 'down', sprite: 'npc_ranger', name: 'Old Tam',
         lines: ['The tall grass out on the route is thick with kin.', 'Walk it long enough and something will jump you. That is the whole hobby, really.'] },
-      { x: 19, y: 15, dir: 'down', sprite: 'npc_rival', name: 'Kid',
+      { x: 19, y: 15, dir: 'down', sprite: 'npc_ranger', name: 'Bly',
         lines: ['The Wayhouse patches your kin up for free.', 'Elder Rowan says that is because she wants us out there getting hurt.'] },
+      { x: 12, y: 5, dir: 'left', sprite: 'npc_rival', name: 'Wick', id: 't_wick1', requires: 'gotStarter',
+        lines: ['She gave you one too? Of course she did.', 'I took the one that beats yours. Nothing personal — it was just there.'],
+        before: ['Rowan is in the study. Go on, she has been waiting all morning.'],
+        dynamic: 'rival1',
+        trainer: { team: [['dewdrip', 7]], prize: 300,
+          lose: ['Fine. First one is free.'], win: ['Told you. It was just there.'] },
+        after: ['I am going north. Try to keep up.'] },
     ],
     signs: { '2,7': 'HOLLOWBROOK — where the valley narrows and the kin come down to drink.',
              '18,15': 'Rowan\'s Study, north end. Knock loudly. She is always mid-thought.' },
@@ -1667,6 +1674,12 @@ const MAPS = {
         lines: ['I live here now. Ask the trees.'],
         trainer: { team: [['thornip', 14], ['lanterneel', 13]], prize: 620,
           lose: ['The trees are disappointed.'], win: ['Told you. Ask them.'] } },
+      { x: 12, y: 12, dir: 'down', sprite: 'npc_rival', name: 'Wick', id: 't_wick2', requires: 't_wick1',
+        lines: ['Kept up, then.', 'Mine has changed since the study. Yours had better have.'],
+        dynamic: 'rival2',
+        trainer: { team: [['brookite', 16], ['kindlark', 15]], prize: 900,
+          lose: ['…Right. North it is, for both of us.'], win: ['Still me. Go and train.'] },
+        after: ['The Warden will not let either of us up. Not yet.'] },
       { x: 15, y: 6, dir: 'left', sprite: 'npc_ranger', name: 'Ranger Coll', id: 't_coll',
         lines: ['Everything in here has thorns. Including me.'],
         trainer: { team: [['cindercub', 13], ['frillamb', 14], ['mothrix', 13]], prize: 700,
@@ -1972,6 +1985,7 @@ function trainerSight() {
   const p = G.player;
   for (const n of (G.map.npcs || [])) {
     if (!n.trainer || n.gone || G.flags[n.id]) continue;
+    if (n.requires && !G.flags[n.requires]) continue;
     const [dx, dy] = DIRS[n.dir] || [0, 1];
     for (let i = 1; i <= SIGHT; i++) {
       const x = n.x + dx * i, y = n.y + dy * i;
@@ -2634,11 +2648,26 @@ function openMainMenu() {
 function closeWorldMenu() { closeMenu(); G.mode = 'world'; }
 
 // ---- NPCs --------------------------------------------------------------
+// The rival always shows up with the starter that beats yours, and keeps it.
+const RIVAL_PICK = { cindercub: 'dewdrip', dewdrip: 'sproutle', sproutle: 'cindercub' };
+
+/** A trainer's team, resolved at challenge time so the rival can react to you. */
+function trainerTeam(npc) {
+  const pick = RIVAL_PICK[G.flags.starter] || 'dewdrip';
+  if (npc.dynamic === 'rival1') return [[pick, 7]];
+  if (npc.dynamic === 'rival2') {
+    const evo = DEX[pick].evo ? DEX[pick].evo[0] : pick;
+    return [['kindlark', 15], [evo, 16]];
+  }
+  return npc.trainer.team.map((e) => [e[0], e[1]]);
+}
+
 function talkTo(npc) {
   if (npc.script === 'rowan') { rowanScript(); return; }
+  if (npc.requires && !G.flags[npc.requires]) { say(npc.name, npc.before || npc.lines); return; }
   if (npc.trainer && !G.flags[npc.id]) {
     say(npc.name, npc.lines, () => {
-      const team = npc.trainer.team.map((e) => [e[0], e[1]]);
+      const team = trainerTeam(npc);
       const foe = mkMon(team[0][0], team[0][1]);
       startBattle({ foe, team, npc, wild: false });
     });
@@ -2697,6 +2726,7 @@ function chooseStarter() {
       G.party.push(m);
       catchMon(id);
       G.flags.gotStarter = 1;
+      G.flags.starter = id;
       G.bag.bloomorb = (G.bag.bloomorb || 0) + 5;
       G.bag.salve = (G.bag.salve || 0) + 3;
       G.mode = 'world';
@@ -3427,7 +3457,7 @@ if (typeof window !== 'undefined') {
     updateWorld, updateBattle, step, draw, drawWorld, drawBattle,
     saveGame, loadGame, hasSave, wipeSave, healParty, seeMon, catchMon, dexCount,
     newGame, boot, say, openScreen, closeScreen, renderScreen, screenInput, screenSelect, boxSelect, habitat,
-    talkTo, rowanScript, sprite, artBottom, drawSpr,
+    talkTo, rowanScript, trainerTeam, RIVAL_PICK, sprite, artBottom, drawSpr,
     pressKey, releaseKey, keys, fired,
     setCtx: (c) => { ctx = c; },
     B,

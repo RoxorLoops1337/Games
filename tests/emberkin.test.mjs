@@ -303,6 +303,32 @@ for (const id of DEX_ORDER) {
   ok(spawnable.has(id) || viaEvo, `${id} is catchable or evolvable`);
 }
 
+section('the rival brings the starter that beats yours');
+const wick1 = MAPS.hollowbrook.npcs.find((n) => n.id === 't_wick1');
+const wick2 = MAPS.emberwood.npcs.find((n) => n.id === 't_wick2');
+ok(!!wick1 && !!wick2, 'the rival shows up twice');
+for (const [mine, theirs] of Object.entries(EK.RIVAL_PICK)) {
+  EK.G.flags = { gotStarter: 1, starter: mine };
+  const t1 = EK.trainerTeam(wick1);
+  eq(t1[0][0], theirs, `against ${mine} the rival leads ${theirs}`);
+  ok(EK.effect(DEX[theirs].types[0], DEX[mine].types) === 2, `${theirs} actually beats ${mine}`);
+  const t2 = EK.trainerTeam(wick2);
+  const evo = DEX[theirs].evo ? DEX[theirs].evo[0] : theirs;
+  ok(t2.some((e) => e[0] === evo), `the rematch team has grown into ${evo}`);
+  ok(t2.every(([sp, lv]) => DEX[sp] && lv > 0), 'the rematch team is real');
+}
+EK.G.flags = {};
+eq(EK.trainerTeam(MAPS.route_one.npcs.find((n) => n.id === 't_pell'))[0][0], 'sproutle', 'ordinary trainers keep their fixed team');
+// Prerequisites: the rival must not challenge before Rowan hands out a starter.
+EK.enterMap('hollowbrook', wick1.x - 1, wick1.y, 'right');
+EK.G.alert = null;
+eq(EK.trainerSight(), false, 'no starter, no challenge');
+EK.G.flags = { gotStarter: 1, starter: 'cindercub' };
+EK.enterMap('hollowbrook', wick1.x - 1, wick1.y, 'right');
+EK.G.alert = null;
+eq(EK.trainerSight(), true, 'with a starter in hand, the rival calls you out');
+EK.G.flags = {}; EK.G.alert = null; EK.G.dialogue = null; EK.G.mode = 'world'; EK.G.battle = null;
+
 section('the dex tells you where to look');
 for (const id of DEX_ORDER) {
   const h = EK.habitat(id);
