@@ -2672,9 +2672,11 @@ function battleSay(lines, done) {
   G.battleMsg = { lines: Array.isArray(lines) ? lines : [lines], i: 0, done, hold: .12 };
   renderDialogue();
 }
+const liveBattleMsg = () => (G.battle ? G.battleMsg : null);
+
 function renderDialogue() {
   if (HEADLESS) return;
-  const d = G.dialogue || G.battleMsg;
+  const d = G.dialogue || liveBattleMsg();
   if (!d) { show(els.dialogue, false); return; }
   const line = d.lines[d.i] || '';
   els.dialogue.innerHTML = (d.who ? `<span class="who">${d.who}</span>` : '') +
@@ -2683,7 +2685,7 @@ function renderDialogue() {
   show(els.dialogue, true);
 }
 function advanceDialogue() {
-  const inBattle = !!G.battleMsg;
+  const inBattle = !!liveBattleMsg();
   const d = inBattle ? G.battleMsg : G.dialogue;
   if (!d) return;
   if (d.hold > 0) return;
@@ -2929,7 +2931,7 @@ function finishBattle() {
     return;
   }
   const done = () => {
-    G.battle = null;
+    G.battle = null; G.battleMsg = null;
     if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); show(els.dialogue, false); }
     G.mode = 'world';
     playCue('world');
@@ -2961,7 +2963,7 @@ function finishBattle() {
       const lost = Math.floor(G.money * .25);
       G.money -= lost;
       healParty();
-      G.battle = null;
+      G.battle = null; G.battleMsg = null;
       if (!HEADLESS) { show(els.hudFoe, false); show(els.hudMine, false); }
       enterMap('wayhouse', 5, 5, 'down');
       G.mode = 'world';
@@ -3558,6 +3560,7 @@ if (!HEADLESS) boot();
 if (typeof window !== 'undefined') {
   window.EK = {
     G, DEX, DEX_ORDER, MOVES, ITEMS, MAPS, TYPES, CHART, STATUS, TILE_ART, SOLID,
+    advanceDialogue, liveBattleMsg,
     ART_CREATURES, ART_TILES, ART_ACTORS,
     mkMon, refresh, movesAt, xpFor, statAt, hpAt, effect, effStat, damageOf,
     doTurn, startBattle, foeChoose, captureChance, tryCatch, addCaught,

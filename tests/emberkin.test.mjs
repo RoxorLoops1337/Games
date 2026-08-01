@@ -550,6 +550,21 @@ eq(EK4.loadGame(), false, 'garbage is rejected');
 const EK5 = loadGame({ emberkin_save_v1: JSON.stringify({ v: 1, party: [{ s: 'nonexistent', l: 5, mv: [] }] }) });
 eq(EK5.loadGame(), false, 'an unknown species is dropped rather than loaded');
 
+section('a battle message never outlives its battle');
+// A pending battle line used to hijack every world dialogue that followed it,
+// which silently froze story beats — the legendary stopped being catchable.
+EK.G.party = [EK.mkMon('cindercub', 10)];
+EK.startBattle({ foe: EK.mkMon('zaplet', 5), wild: true });
+ok(!!EK.G.battleMsg, 'a battle opens with a message pending');
+EK.G.battle = null;                                   // battle torn down mid-message
+EK.G.mode = 'world';
+EK.say('Someone', ['A line in the world.'], () => { EK.G.flags.spoke = 1; });
+eq(EK.G.mode, 'dialogue', 'world dialogue opens');
+for (let i = 0; i < 6 && EK.G.mode === 'dialogue'; i++) { EK.pressKey('a'); EK.step(.2); EK.releaseKey('a'); EK.fired.clear(); }
+eq(EK.G.mode, 'world', 'and can be advanced past');
+eq(EK.G.flags.spoke, 1, 'its callback runs');
+EK.G.battleMsg = null; EK.G.flags = {};
+
 section('healing restores the whole party');
 EK.G.party = [EK.mkMon('bramblor', 30), EK.mkMon('voltyx', 25)];
 EK.G.party[0].hp = 1; EK.G.party[0].status = 'burn'; EK.G.party[0].moves[0].pp = 0;
