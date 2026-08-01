@@ -2043,6 +2043,16 @@ function drawWorld(g) {
       const sx = Math.round(x * TILE + ox), sy = Math.round(y * TILE + oy);
       // Buildings and props sit on ground, so paint grass under them first.
       if (ch === 'R' || ch === 'W' || ch === 'D' || ch === 'S' || ch === 'o' || ch === 'f' || ch === '|') drawTile(g, '.', sx, sy);
+      if (ch === '~') {
+        // Water bobs: scroll the tile a pixel and wrap it inside its own cell.
+        const dy = Math.round(Math.sin(G.t * 1.6 + mx * .8 + my * .5) * 1.2);
+        g.save();
+        g.beginPath(); g.rect(sx, sy, TILE, TILE); g.clip();
+        drawTile(g, ch, sx, sy + dy);
+        drawTile(g, ch, sx, sy + dy - TILE * (dy < 0 ? -1 : 1));
+        g.restore();
+        continue;
+      }
       drawTile(g, ch, sx, sy);
     }
   }
@@ -2073,8 +2083,11 @@ function drawWorld(g) {
     const ex = e.px != null ? e.px : e.x, ey = e.py != null ? e.py : e.y;
     if (!GRASSY.has(tileAt(map, Math.round(ex), Math.round(ey)))) continue;
     const sx = Math.round(Math.round(ex) * TILE - cam.x), sy = Math.round(Math.round(ey) * TILE - cam.y);
+    // The blades sway while whoever is standing in them is moving.
+    const moving = e.moveT > 0;
+    const sway = moving ? Math.round(Math.sin(G.t * 22) * 1.2) : 0;
     g.save(); g.beginPath(); g.rect(sx, sy + 7, TILE, 9); g.clip();
-    drawTile(g, ',', sx, sy);
+    drawTile(g, ',', sx + sway, sy);
     g.restore();
   }
 
