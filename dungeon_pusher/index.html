@@ -59,6 +59,11 @@ if (ctx && typeof Grimcut !== 'undefined') Grimcut.install(ctx);
 // game's VERSION is simply the top entry's stamp. Add a new entry up top
 // whenever a session ships something a player would notice.
 const CHANGELOG = [
+  { v: '1.19.0', notes: [
+    'YOU SPIN THE WHEEL NOW \u{1F3A1} \u2014 paying no longer starts it. EVERY piece you paid falls down the slot one after another and stacks up on the rail where you can count them, the machine goes READY, and then it waits for your hand',
+    'AND YOU THROW IT YOURSELF \u{1F4AA} \u2014 press SPIN and a needle runs the power meter, slow to fast and back. Press again to stop it where you like: a limp flick barely gets the wheel round, a full throw sends it whirling',
+    'the meter cannot touch the odds \u{2696}\u{FE0F} \u2014 it sets how HARD the wheel is thrown and nothing else. The prize is drawn on your press, from the same table at every power, and the wheel still comes to rest exactly where the draw said. The tests spin two thousand times to prove the spread does not move',
+  ] },
   { v: '1.18.1', notes: [
     'THE INNER WALLS REFLECT THE BED \u{1FA9E} \u2014 the wedges either side of the table are dark glass now, and what sits near the table\u2019s edge is mirrored into them: squashed hard, because a wall seen this close to edge-on compresses everything it shows, and fading out as it goes. The table\u2019s own lit surface lands as a pale smear hugging the join, with one highlight travelling the glass',
   ] },
@@ -1701,7 +1706,7 @@ const S = {
   room: null,                          // open non-battle room {type, ...}
   over: null,                          // run-ended summary {cause, floor, depth, kills, gold}
   best: { floor: 0, depth: 0, kills: 0, gold: 0, runs: 0, pace: {} },
-  wheelAnim: null, pendingPick: null, relicPick: null, uiFlash: null, toast: null,
+  wheelAnim: null, wheelFeed: null, pendingPick: null, relicPick: null, uiFlash: null, toast: null,
   pPois: 0, pBleed: 0, pBurn: 0,       // what the dungeon left festering on YOU
   weakT: 0,                            // WEAKNESS rounds: your damage halves
   taxT: 0,                             // MISER'S CURSE rounds: every coin fired burns 1 HP
@@ -3036,20 +3041,56 @@ function wheelConfirm() {
   for (const k of COIN_KINDS) {
     if ((a.pick[k] | 0) > (S.run.purse[k] | 0)) return false;   // the purse moved — repick
   }
-  // the piece that actually goes down the slot is the first kind you chose:
-  // that is the one the machine shows you swallowing
-  let shown = 'coin';
+  // EVERY piece you paid goes down the slot, one after another — you watched
+  // yourself pick them, so you get to watch the machine swallow them. The
+  // first kind you chose leads, because that is the one you committed to.
+  const fed = [];
+  if (a.first && (a.pick[a.first] | 0) > 0) for (let n = 0; n < (a.pick[a.first] | 0); n++) fed.push(a.first);
   for (const k of COIN_KINDS) {
-    if ((a.pick[k] | 0) > 0) { shown = k; break; }
-    if (a.first === k) { shown = k; break; }
+    if (k === a.first) continue;
+    for (let n = 0; n < (a.pick[k] | 0); n++) fed.push(k);
   }
-  if (a.first && (a.pick[a.first] | 0) > 0) shown = a.first;
   for (const k of COIN_KINDS) { const n = a.pick[k] | 0; if (n) S.run.purse[k] -= n; }
   purseLog(-a.need, 'fed to the wheel ghost');
   S.wheelAsk = null;
   if (a.ent !== undefined && S.run.room && S.run.room.ents[a.ent]) S.run.room.ents[a.ent].done = true;
-  spinWheel(shown);
+  // ...and the wheel does NOT start. It waits for your hand.
+  S.wheelFeed = { coins: fed.length ? fed : ['coin'], t: 0, ph: 'feed', pw: 0, dir: 1 };
+  SND.clink();
   return true;
+}
+// The feed is its own little machine, and the prize is not drawn until the
+// player commits — spinWheel resolves the moment it is called, so keeping it
+// behind the second press is what stops a wheel that has already paid out
+// from sitting there waiting to be spun.
+const WH_FEED = 0.52, WH_FEED_GAP = 0.30;   // one piece's fall, and the stagger
+const WH_PW_SWEEP = 0.62;                   // seconds for the needle to cross
+function wheelFeedEnd(f) { return WH_FEED + WH_FEED_GAP * Math.max(0, f.coins.length - 1); }
+function wheelFeedTick(dt) {
+  const f = S.wheelFeed;
+  if (!f) return;
+  f.t += dt;
+  if (f.ph === 'feed' && f.t >= wheelFeedEnd(f)) { f.ph = 'armed'; f.t = 0; }
+  else if (f.ph === 'power') {
+    // the needle runs slow to fast and back, and you stop it where you like
+    f.pw += f.dir * dt / WH_PW_SWEEP;
+    if (f.pw >= 1) { f.pw = 1; f.dir = -1; }
+    else if (f.pw <= 0) { f.pw = 0; f.dir = 1; }
+  }
+}
+// the SPIN button, and then the needle. Two presses, and the second one is
+// the only thing in the whole sequence that draws a prize.
+function wheelPress() {
+  const f = S.wheelFeed;
+  if (!f) return false;
+  if (f.ph === 'armed') { f.ph = 'power'; f.pw = 0; f.dir = 1; f.t = 0; SND.tick ? SND.tick() : SND.clink(); return true; }
+  if (f.ph === 'power') {
+    const pw = f.pw;
+    S.wheelFeed = null;
+    spinWheel(null, pw);                  // the pieces are already in the slot
+    return true;
+  }
+  return false;
 }
 const WH_IN = 1.0;                      // the coin's journey into the slot
 const WH_LAM = 1.15;                    // how fast the bearing gives up
@@ -3085,7 +3126,7 @@ function pinEase(x) {
 function wheelRot(a) {
   if (!(a.target > 0 || a.target < 0)) a.target = Math.PI * 8;   // a hand-made anim still turns
   const dr = a.drama || 0;
-  const st = Math.max(0, a.t - WH_IN);
+  const st = Math.max(0, a.t - (a.lead === undefined ? WH_IN : a.lead));
   const decay = Math.exp(-WH_LAM * st);
   // the spin-down aims at the WRONG slice when there is drama to be had...
   let rot = (a.target + dr) * (1 - decay);
@@ -3103,7 +3144,7 @@ function wheelRot(a) {
 // spin it. The prize is drawn on its honest odds and the wheel is then thrown
 // hard enough to coast to exactly that slice — so the motion is a real
 // spin-down and the odds are still the odds.
-function spinWheel(coin) {
+function spinWheel(coin, power) {
   if (!S.run) return null;
   let r = rng() * WHEEL_TOTAL, idx = 0;
   for (let i = 0; i < WHEEL.length; i++) { r -= WHEEL[i].w; if (r <= 0) { idx = i; break; } }
@@ -3137,10 +3178,18 @@ function spinWheel(coin) {
   } else {
     land = sg2.a0 + sg2.arc * (0.30 + rng() * 0.40);     // a clean arrival
   }
+  // THE DRAW IS ALREADY MADE. Power is theatre and nothing else: it sets how
+  // far the wheel travels in the same time — a limp flick barely gets round,
+  // a hard one whirls — and the landing is untouched. The rng draw below is
+  // kept even when power overrides it, because removing it would shift the
+  // seeded stream for everything that spins after.
   const turns = 4 + ((rng() * 3) | 0);
+  const spun = (power === undefined || power === null) ? turns : 2 + Math.round(power * 7);
   S.wheelAnim = { t: 0, seg: idx, label: WHEEL[idx].label,
                   coin: coin || null,                    // null = a free spin, no coin drops
-                  target: Math.PI * 2 * turns + (-Math.PI / 2) - land,
+                  lead: (power === undefined || power === null) ? WH_IN : 0,   // your press starts it NOW
+                  pw: (power === undefined || power === null) ? null : power,
+                  target: Math.PI * 2 * spun + (-Math.PI / 2) - land,
                   drama, tale,
                   lit: 0, seg0: -1, flap: 0, flapV: 0, lastRot: 0 };
   SND.clink();
@@ -7107,6 +7156,7 @@ function step(dt, quiet) {
     }
   }
   if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > WHEEL_LIFE) dismissWheel(); }
+  wheelFeedTick(dt);
 
   for (const c of S.coins) {
     if (c.st === 'air') {
@@ -7336,7 +7386,8 @@ window.DP = {
   buyShop, removeArsenal, sellCoins, coinSellPrice, sellableKinds, pickBoon, shopStock, boonOptions, usePotion,
   spinWheel, frenzy, openChest, grantItem, itemById, relicById, hasRelic,
   WHEEL_SEGS, WHEEL_TOTAL, WHEEL_LIFE, wheelPicked, wheelAuto, wheelConfirm, wheelCancel,
-  pinEase, wheelRot, wheelAt, wheelPhase, WH_END,
+  pinEase, wheelRot, wheelAt, wheelPhase, WH_END, WH_IN,
+  wheelFeedTick, wheelPress, wheelFeedEnd, WH_FEED, WH_FEED_GAP, WH_PW_SWEEP,
   dmgEnemy, dmgFoe, dmgAll, hurtPlayer, hpHit, healPlayer, addBlock, poisonEnemy, stunEnemy,
   enemyActFoe, rollIntent, bankSlotsRaw, bankMax, bankLoot,   // the deep's own hands read these
   bleedEnemy, burnEnemy, applyBleed, applyBurn, summonPet, petSoak, petsAct, petCap, strTotal, dexTotal,
@@ -9906,10 +9957,15 @@ if (!HEADLESS) (function browser() {
   // segment, so it is exactly zero at every peg crossing and cannot drift the
   // landing; the prize the odds drew is still the prize you get.
   function drawWheel(dt) {
-    if (!S.wheelAnim) return;
-    const a = S.wheelAnim;
-    const st = Math.max(0, a.t - WH_IN);
-    const done = st > WH_END;
+    const f = S.wheelFeed;
+    if (!S.wheelAnim && !f) return;
+    // the cabinet is the same whether the wheel is waiting for your hand or
+    // already running, so the feed borrows a still one
+    const a = S.wheelAnim || { t: f.t, seg: 0, label: '', coin: null, lead: 0,
+                               target: 0, drama: 0, tale: '', lit: 0, seg0: -1,
+                               flap: 0, flapV: 0, lastRot: 0, still: true };
+    const st = a.still ? -1 : Math.max(0, a.t - (a.lead === undefined ? WH_IN : a.lead));
+    const done = !a.still && st > WH_END;
     uiButtons.push({ x: 0, y: 0, w: LW, h: LH, cb: () => { if (done) dismissWheel(); } });
     ctx.fillStyle = 'rgba(4,2,7,0.90)';
     ctx.fillRect(0, 0, LW, LH);
@@ -9958,7 +10014,7 @@ if (!HEADLESS) (function browser() {
     // ---- the wheel, set into the cabinet face ----
     ctx.beginPath(); ctx.arc(cx, cy, R + 16, 0, 7);
     ctx.fillStyle = '#120a1c'; ctx.fill();
-    const rot = wheelRot(a);
+    const rot = a.still ? 0 : wheelRot(a);
     ctx.save();
     ctx.translate(cx, cy);
     ctx.rotate(rot);
@@ -10038,9 +10094,37 @@ if (!HEADLESS) (function browser() {
     ctx.fillRect(slotX - 3, slotY + 6, 6, 18);
     ctx.fillStyle = 'rgba(255,214,120,' + (0.25 + 0.25 * Math.sin(a.t * 6)) + ')';
     ctx.fillRect(slotX - 3, slotY + 6, 6, 2);
-    txt('INSERT COIN', slotX, slotY + 42, '900 9px Grimcut, Verdana, sans-serif',
-        a.t < WH_IN ? '#ffd75e' : '#6a5a70');
-    if (a.coin && a.t < WH_IN + 0.1) {
+    txt(f ? (f.ph === 'feed' ? 'INSERT COIN' : 'READY') : 'INSERT COIN',
+        slotX, slotY + 42, '900 9px Grimcut, Verdana, sans-serif',
+        (f ? f.ph === 'feed' : a.t < WH_IN) ? '#ffd75e' : '#6a5a70');
+    // EVERY piece you paid goes in, one after another, and the ones already
+    // swallowed stack up on the rail so you can count what you spent
+    if (f) {
+      for (let i = 0; i < f.coins.length; i++) {
+        const k4 = Math.min(1, Math.max(0, (f.ph === 'feed' ? f.t : 1e9) - i * WH_FEED_GAP) / WH_FEED);
+        if (k4 <= 0) continue;
+        if (k4 >= 1) {
+          // landed: it rests in the mouth of the slot, slightly overlapped
+          const rx4 = slotX - 26 + (i % 8) * 7;
+          ctx.beginPath(); ctx.ellipse(rx4, slotY + 15, 6, 3.4, 0, 0, 7);
+          ctx.fillStyle = COIN_UI[f.coins[i]] || '#ffd75e';
+          ctx.globalAlpha = 0.75; ctx.fill(); ctx.globalAlpha = 1;
+          continue;
+        }
+        const e4 = k4 * k4;
+        const sx4 = cx + 120 + (slotX - cx - 120) * e4;
+        const sy4 = LH - 60 + (slotY + 4 - (LH - 60)) * e4 - Math.sin(k4 * Math.PI) * 90;
+        ctx.save();
+        ctx.translate(sx4, sy4);
+        ctx.scale(1, Math.abs(Math.cos((f.t - i * WH_FEED_GAP) * 13)) * 0.75 + 0.25);
+        ctx.beginPath(); ctx.ellipse(0, 0, 11, 11, 0, 0, 7);
+        ctx.fillStyle = COIN_UI[f.coins[i]] || '#ffd75e'; ctx.fill();
+        ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.stroke();
+        ctx.restore();
+      }
+      txt('\u00d7' + f.coins.length, slotX + 44, slotY + 15, '900 12px Grimcut, Verdana, sans-serif', '#ffd75e');
+    }
+    if (!f && a.coin && a.t < WH_IN + 0.1) {
       // it arcs up out of your purse and drops down the slot
       const k2 = Math.min(1, a.t / WH_IN);
       const e2 = k2 * k2;
@@ -10053,6 +10137,54 @@ if (!HEADLESS) (function browser() {
       ctx.fillStyle = COIN_UI[a.coin] || '#ffd75e'; ctx.fill();
       ctx.lineWidth = 1.6; ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.stroke();
       ctx.restore();
+    }
+
+    // ---- THE SPIN BUTTON, and then the needle ----
+    if (f && f.ph !== 'feed') {
+      // everything lives INSIDE the cabinet: the band between the wheel's rim
+      // and the coin slot takes the meter, and the button sits beside the slot
+      const by = cy + R + 42;                 // 564 — level with the slot
+      const bx = cabX + 128, bw = cabW - 152;
+      if (f.ph === 'armed') {
+        const pulse = 1 + 0.03 * Math.sin(f.t * 6);
+        uiBtn(bx + bw / 2 - (bw / 2) * pulse, by, bw * pulse, 42, TR('SPIN'), () => wheelPress(),
+              { grad: ['#ffd75e', '#c8862a'], border: '#fff4d6', col: '#3a1c04',
+                font: '900 19px Grimcut Ink, Georgia, serif', r: 14 });
+        txt(TR('tap to start the needle'), bx + bw / 2, cy + R + 22,
+            '700 10px Grimcut, Verdana, sans-serif', '#c8b8e0');
+      } else {
+        // THE METER. The needle runs slow to fast and back; you stop it where
+        // you like. It sets how hard the wheel is thrown and NOTHING else —
+        // the prize is drawn on the press, from the same odds either way.
+        const mh = 24, mx = cabX + 26, mw = cabW - 52, my = cy + R + 6;
+        rr(mx, my, mw, mh, 8);
+        ctx.fillStyle = 'rgba(10,6,16,0.9)'; ctx.fill();
+        const pg = lgr('whpw', mx, 0, mx + mw, 0,
+          [[0, '#4a7ad6'], [0.5, '#7ed06a'], [0.8, '#ffd75e'], [1, '#ff5a4e']]);
+        ctx.save();
+        rr(mx + 2, my + 2, mw - 4, mh - 4, 6); ctx.clip();
+        ctx.globalAlpha = 0.55; ctx.fillStyle = pg;
+        ctx.fillRect(mx, my, mw, mh);
+        ctx.restore();
+        ctx.lineWidth = 2; ctx.strokeStyle = '#c8a8ff'; rr(mx, my, mw, mh, 8); ctx.stroke();
+        for (let i = 1; i < 5; i++) {
+          ctx.fillStyle = 'rgba(0,0,0,0.35)';
+          ctx.fillRect(mx + mw * i / 5, my + 3, 1, mh - 6);
+        }
+        const nx = mx + 3 + (mw - 6) * f.pw;
+        ctx.fillStyle = '#fff6e0';
+        ctx.fillRect(nx - 1.6, my - 5, 3.2, mh + 10);
+        ctx.beginPath();
+        ctx.moveTo(nx - 7, my - 5); ctx.lineTo(nx + 7, my - 5); ctx.lineTo(nx, my + 3);
+        ctx.closePath(); ctx.fill();
+        txt(TR('SLOW'), mx + 18, my - 7, '800 9px Grimcut, Verdana, sans-serif', '#8fb8ff', 'left');
+        txt(TR('FAST'), mx + mw - 18, my - 7, '800 9px Grimcut, Verdana, sans-serif', '#ff9d8a', 'right');
+        uiBtn(bx, by, bw, 42, TR('STOP'), () => wheelPress(),
+              { grad: ['#7ed6a0', '#3f9d5a'], border: '#eaffef', col: '#123a24',
+                font: '900 18px Grimcut Ink, Georgia, serif', r: 13 });
+        txt(TR('how hard you throw it — not what it pays'), cx, my - 7,
+            '700 9px Grimcut, Verdana, sans-serif', '#9a8aa0');
+      }
     }
 
     // ---- "…almost…" — the line the near miss earns ----
@@ -15844,6 +15976,7 @@ if (!HEADLESS) (function browser() {
       if (RFX.length) RFX.length = 0;
       if (S.uiFlash) { S.uiFlash.t -= dt; if (S.uiFlash.t <= 0) S.uiFlash = null; }
       if (S.wheelAnim) { S.wheelAnim.t += dt; if (S.wheelAnim.t > WHEEL_LIFE) dismissWheel(); }
+  wheelFeedTick(dt);
       if (S.banner) { S.banner.ttl -= dt; if (S.banner.ttl <= 0) S.banner = null; }
       toastTick(dt);
       for (let i = S.floats.length - 1; i >= 0; i--) {
