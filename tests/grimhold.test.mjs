@@ -143,6 +143,24 @@ const hero = (id) => HQ.G.q.actors.find(a => a.kind === 'hero' && a.id === id);
 function put(h, x, y){ h.x = x; h.y = y; h.px = x + .5; h.py = y + .5; HQ.recomputeVision(); HQ.refreshField(); }
 // make this hero the one the action buttons talk to
 function use(h){ HQ.G.q.activeId = h.id; h.acted = false; h.done = false; HQ.refreshField(); return h; }
+// A test that recycles a generated monster inherits whatever that monster was:
+// a fleeing key-bearer, a cultist that has already screamed, a hound that has
+// used its breath. Every one of those changes what monsterAct does. Scrub them
+// before you start measuring behaviour.
+function plain(m, mt){
+  if (!m) return m;
+  if (mt){
+    const d = HQ.MONSTERS[mt];
+    m.mt = mt; m.name = d.name;
+    m.atk = d.atk; m.def = d.def; m.mind = d.mind; m.mv = d.move;
+    m.bpMax = m.bp = d.bp;
+  }
+  delete m.affix; m.elite = false; m.boss = false;
+  m.runner = 0; m.cornered = 0; m.skittish = 0; m.fled = 0;
+  m.breathed = 0; m.heralded = 0; m.cast = 0; m.parried = 0;
+  m.risen = 0; m.webbed = 0; m.stun = 0; m.sleep = 0;
+  return m;
+}
 // clear a square of monsters and furniture so a test can rely on it
 function clearSquare(x, y){
   for (const a of HQ.G.q.actors) if (a.kind === 'monster' && a.x === x && a.y === y) a.alive = false;
@@ -869,7 +887,7 @@ t.test("the Warlock: a woken monster closes the distance and swings", () => {
   const h = hero('barbarian');
   put(h, 8, 10);
   for (const m of HQ.monstersOf()) m.alive = false;
-  const m = HQ.monstersOf.call(null) && HQ.G.q.actors.find(a => a.kind === 'monster');
+  const m = plain(HQ.G.q.actors.find(a => a.kind === 'monster'));
   m.alive = true; m.awake = true; m.x = 8; m.y = 6; m.mv = 6; m.atk = 3;
   m.sleep = 0; m.stun = 0;
   HQ.G.q.seen.fill(1); HQ.recomputeVision();
@@ -1907,7 +1925,8 @@ t.test('monsters: the Chaos Sorcerer finally casts', () => {
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
   const sorc = HQ.monstersOf().find(m => HQ.MONSTERS[m.mt].caster);
   t.ok(sorc, 'there is a caster on the board');
-  sorc.x = 11; sorc.y = 11; sorc.awake = true; sorc.sleep = 0; sorc.stun = 0;
+  plain(sorc);                                     // it may have been the vault's key-bearer
+  sorc.x = 11; sorc.y = 11; sorc.awake = true;
   for (const m of HQ.monstersOf()) if (m !== sorc) m.alive = false;
   HQ.recomputeVision();
   const bp = h.bp;
@@ -1990,8 +2009,8 @@ t.test('monsters: a bloodied goblin breaks off instead of trading blows', () => 
   const h = use(hero('barbarian'));
   put(h, 11, 8);
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
-  const g = HQ.monstersOf()[0];
-  g.mt = 'goblin'; g.x = 11; g.y = 7; g.bp = g.bpMax = 4; g.awake = true;
+  const g = plain(HQ.monstersOf()[0], 'goblin');
+  g.x = 11; g.y = 7; g.bp = g.bpMax = 4; g.awake = true;
   g.sleep = 0; g.stun = 0; g.mv = 6; g.skittish = 1; g.fled = 0;
   for (const m of HQ.monstersOf()) if (m !== g) m.alive = false;
   HQ.recomputeVision();
@@ -2480,8 +2499,8 @@ t.test('troll: it knits itself back together unless the wound was fire', () => {
   HQ.G.run.depth = 8;
   HQ.beginFloor();
   const m = HQ.monstersOf()[0];
-  m.mt = 'troll'; m.bpMax = 6; m.bp = 3; m.awake = true; m.sleep = 0; m.stun = 0; m.burned = 0;
-  delete m.affix; m.elite = false;                 // a warded champion would eat the spell
+  plain(m, 'troll');                               // a warded champion would eat the spell
+  m.bpMax = 6; m.bp = 3; m.awake = true; m.burned = 0;
   m.x = 20; m.y = 3;
   for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
   HQ.monsterAct(m, () => {});
@@ -2516,8 +2535,8 @@ t.test('archer: it shoots from range instead of walking into reach', () => {
   h.x = 11; h.y = 11;
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
   const m = HQ.monstersOf()[0];
-  m.mt = 'archer'; m.atk = 4; m.x = 11; m.y = 7; m.awake = true; m.sleep = 0; m.stun = 0;
-  delete m.affix; m.elite = false;
+  plain(m, 'archer');
+  m.atk = 4; m.x = 11; m.y = 7; m.awake = true;
   for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
   HQ.recomputeVision();
   const bp = h.bp, at = [m.x, m.y].join();
@@ -2536,8 +2555,8 @@ t.test('cultist: it wakes the room it is standing in, once', () => {
   const h = HQ.runAlive()[0];
   const rid = 6;
   const tiles = HQ.roomTiles(rid).filter(([x,y]) => !HQ.furnAt(x,y));
-  const c = HQ.monstersOf()[0];
-  c.mt = 'cultist'; [c.x, c.y] = tiles[0]; c.awake = true; c.sleep = 0; c.stun = 0; c.heralded = 0;
+  const c = plain(HQ.monstersOf()[0], 'cultist');
+  [c.x, c.y] = tiles[0]; c.awake = true;
   let sleepers = 0;
   HQ.monstersOf().forEach((o, i) => {
     if (o === c) return;
@@ -2778,9 +2797,8 @@ t.test('curses: a dim party is spotted later than a bright one', () => {
   // twelve squares apart: inside the normal twelve, outside the blind six
   h.x = 9; h.y = 6;
   HQ.G.q.seen.fill(1); HQ.G.q.roomSeen.fill(1);
-  const m = HQ.monstersOf()[0];
-  m.mt = 'orc'; m.x = 16; m.y = 11; m.awake = true; m.sleep = 0; m.stun = 0; m.mv = 1;
-  delete m.affix; m.elite = false;
+  const m = plain(HQ.monstersOf()[0], 'orc');
+  m.x = 16; m.y = 11; m.awake = true; m.mv = 1;
   for (const o of HQ.monstersOf()) if (o !== m) o.alive = false;
   HQ.G.q.furn = [];
   HQ.recomputeVision();
@@ -6104,8 +6122,8 @@ t.test('collapse: it never seals anything off', () => {
   collapseRun();
   HQ.G.q.furn = []; HQ.G.q.traps = [];
   for (const a of HQ.G.q.actors) if (a.kind === 'monster') a.alive = false;
-  // run the floor out for a long time and check the board stays whole
-  for (let turn = 0; turn < 40; turn++) HQ.tickCollapse();
+  // run the floor right out and check the board stays whole
+  for (let turn = 0; turn < 90; turn++) HQ.tickCollapse();
   t.ok(holes().length > 0, 'a lot of it has fallen in');
   // every remaining floor square is still reachable from the stair
   const { W, H, idx, STAIRS, linkedIgnoringDoors, isFloor } = HQ;
@@ -6126,6 +6144,25 @@ t.test('collapse: it never seals anything off', () => {
     if (isFloor(x, y) && !HQ.holeAt(x, y)) standing++;
   t.eq(seen.size, standing, 'and every square still there can be walked to');
   t.ok(!HQ.holeAt(STAIRS[0][0], STAIRS[0][1]), 'the stair never goes');
+});
+
+t.test('collapse: two squares that are each safe can be fatal together', () => {
+  collapseRun();
+  HQ.G.q.hole.fill(0); HQ.G.q.crack.fill(0);
+  // Room 0's corner at (1,1) hangs off exactly two squares. Either can go; both
+  // cannot. This is the case a one-candidate-at-a-time check waves through,
+  // because the first square has not fallen yet when the second is tested.
+  t.ok(HQ.stillWhole(2, 1), 'taking one of them alone leaves the board whole');
+  t.ok(HQ.stillWhole(1, 2), 'and so does taking the other');
+
+  HQ.G.q.crack[HQ.idx(2, 1)] = HQ.CRACK_TURNS;
+  t.ok(HQ.goingOrGone(2, 1), 'a cracked square is a hole with a delay on it');
+  t.ok(!HQ.goingOrGone(1, 2), 'and an untouched one is not');
+  t.ok(!HQ.stillWhole(1, 2), 'so with the first already cracking, the second is refused');
+
+  // and it comes back the moment the pending collapse is called off
+  HQ.G.q.crack[HQ.idx(2, 1)] = 0;
+  t.ok(HQ.stillWhole(1, 2), 'once nothing is pending it is fair game again');
 });
 
 t.test('collapse: the doorways and the doorstep are never taken', () => {
